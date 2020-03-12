@@ -98,10 +98,12 @@ endif
 
 ifeq ($(KATA_HYPERVISOR),firecracker)
 	./ginkgo -failFast -v -focus "${FOCUS}" -skip "${SKIP_FIRECRACKER}" \
-		./integration/docker/ -- -runtime=${RUNTIME} -timeout=${TIMEOUT}
+		./integration/docker/ -- -runtime=${RUNTIME} -timeout=${TIMEOUT} \
+		-hypervisor=$(KATA_HYPERVISOR)
 else ifeq ($(KATA_HYPERVISOR),cloud-hypervisor)
 	./ginkgo -failFast -v -focus "${FOCUS}" -skip "${SKIP_CLH}" \
-		./integration/docker/ -- -runtime=${RUNTIME} -timeout=${TIMEOUT}
+		./integration/docker/ -- -runtime=${RUNTIME} -timeout=${TIMEOUT} \
+		-hypervisor=$(KATA_HYPERVISOR)
 else ifeq ($(ARCH),$(filter $(ARCH), aarch64 s390x ppc64le))
 	./ginkgo -failFast -v -focus "${FOCUS}" -skip "${SKIP}" \
 		./integration/docker/ -- -runtime=${RUNTIME} -timeout=${TIMEOUT}

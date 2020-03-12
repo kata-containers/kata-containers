@@ -92,6 +92,7 @@ const (
 
 // KataConfig is the runtime configuration
 var KataConfig KataConfiguration
+var KataHypervisor string
 
 func init() {
 	var err error
@@ -112,6 +113,22 @@ func init() {
 	KataConfig, err = loadKataConfiguration(kataConfigPath)
 	if err != nil {
 		log.Fatalf("failed to load kata configuration: %v\n", err)
+	}
+
+	switch Hypervisor {
+	case "cloud-hypervisor":
+		KataHypervisor = CloudHypervisor
+	case "firecracker":
+		KataHypervisor = FirecrackerHypervisor
+	case "":
+		log.Printf("'-hypervisor' to ginkgo is not set, using 'DefaultHypervisor': '%v'\n", DefaultHypervisor)
+		KataHypervisor = DefaultHypervisor
+	default:
+		log.Fatalf("Invalid '-hypervisor' passed to ginkgo: '%v'\n", Hypervisor)
+	}
+
+	if _, ok := KataConfig.Hypervisor[KataHypervisor]; !ok {
+		log.Fatalf("No configuration found from 'KataConfig' for 'KataHypervisor': '%v'\n", KataHypervisor)
 	}
 }
 
