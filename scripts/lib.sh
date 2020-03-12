@@ -382,8 +382,8 @@ RUN ln -sf /usr/bin/g++ /bin/musl-g++
 detect_go_version()
 {
 	info "Detecting agent go version"
-	typeset -r yq=$(command -v yq || command -v ${GOPATH}/bin/yq)
-	if [ -z "$yq" ]; then
+	typeset yq=$(command -v yq || command -v ${GOPATH}/bin/yq || echo "${GOPATH}/bin/yq")
+	if [ ! -f "$yq" ]; then
 		source "$yq_file"
 	fi
 
@@ -428,8 +428,8 @@ detect_go_version()
 detect_rust_version()
 {
 	info "Detecting agent rust version"
-	typeset -r yq=$(command -v yq || command -v ${GOPATH}/bin/yq)
-	if [ -z "$yq" ]; then
+	typeset -r yq=$(command -v yq || command -v ${GOPATH}/bin/yq || echo "${GOPATH}/bin/yq")
+	if [ ! -f "$yq" ]; then
 		source "$yq_file"
 	fi
 
@@ -475,8 +475,8 @@ detect_cmake_version()
 {
 	info "Detecting cmake version"
 
-	typeset -r yq=$(command -v yq || command -v ${GOPATH}/bin/yq)
-	if [ -z "$yq" ]; then
+	typeset -r yq=$(command -v yq || command -v ${GOPATH}/bin/yq || echo "${GOPATH}/bin/yq")
+	if [ ! -f "$yq" ]; then
 		source "$yq_file"
 	fi
 
@@ -522,8 +522,8 @@ detect_musl_version()
 {
 	info "Detecting musl version"
 
-	typeset -r yq=$(command -v yq || command -v ${GOPATH}/bin/yq)
-	if [ -z "$yq" ]; then
+	typeset -r yq=$(command -v yq || command -v ${GOPATH}/bin/yq || echo "${GOPATH}/bin/yq")
+	if [ ! -f "$yq" ]; then
 		source "$yq_file"
 	fi
 
