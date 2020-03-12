@@ -47,7 +47,7 @@ func newClhConfig() (HypervisorConfig, error) {
 		BlockDeviceDriver: config.VirtioBlock,
 		MemorySize:        defaultMemSzMiB,
 		DefaultBridges:    defaultBridges,
-		DefaultMaxVCPUs:   MaxClhVCPUs(),
+		DefaultMaxVCPUs:   uint32(64),
 		SharedFS:          config.VirtioFS,
 		VirtioFSCache:     virtioFsCacheAlways,
 		VirtioFSDaemon:    testVirtiofsdPath,
