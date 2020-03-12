@@ -358,6 +358,9 @@ type HypervisorConfig struct {
 	// VirtioMem is used to enable/disable virtio-mem
 	VirtioMem bool
 
+	// IOMMU specifies if the VM should have a vIOMMU
+	IOMMU bool
+
 	// Realtime Used to enable/disable realtime
 	Realtime bool
 

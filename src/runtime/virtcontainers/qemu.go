@@ -409,6 +409,13 @@ func (q *qemu) buildDevices(initrdPath string) ([]govmmQemu.Device, *govmmQemu.I
 		}
 	}
 
+	if q.config.IOMMU {
+		devices, err = q.arch.appendIOMMU(devices)
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+
 	var ioThread *govmmQemu.IOThread
 	if q.config.BlockDeviceDriver == config.VirtioSCSI {
 		return q.arch.appendSCSIController(devices, q.config.EnableIOThreads)
