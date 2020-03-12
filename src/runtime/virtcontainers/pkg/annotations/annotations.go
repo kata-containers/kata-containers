@@ -148,6 +148,9 @@ const (
 	// HugePages is a sandbox annotation to specify if the memory should be pre-allocated from huge pages
 	HugePages = kataAnnotHypervisorPrefix + "enable_hugepages"
 
+	// Iommu is a sandbox annotation to specify if the VM should have a vIOMMU device
+	IOMMU = kataAnnotHypervisorPrefix + "enable_iommu"
+
 	// FileBackedMemRootDir is a sandbox annotation to soecify file based memory backend root directory
 	FileBackedMemRootDir = kataAnnotHypervisorPrefix + "file_mem_backend"
 
