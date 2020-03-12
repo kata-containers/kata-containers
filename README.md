@@ -20,6 +20,8 @@ For details of the other Kata Containers repositories, see the
 * [Architecture overview](#architecture-overview)
 * [Configuration](#configuration)
 * [Logging](#logging)
+    * [Kata OCI](#kata-oci)
+    * [Kata containerd shimv2](#kata-containerd-shimv2)
 * [Debugging](#debugging)
 * [Limitations](#limitations)
 * [Community](#community)
@@ -138,8 +140,17 @@ $ kata-runtime kata-env
 
 ## Logging
 
-The runtime provides `--log=` and `--log-format=` options. However, the
-runtime also always logs to the system log (`syslog` or `journald`).
+For detailed information and analysis on obtaining logs for other system
+components, see the documentation for the
+[`kata-log-parser`](https://github.com/kata-containers/tests/tree/master/cmd/log-parser)
+tool.
+
+For runtime logs, see the following sections for the CRI-O and containerd shimv2 based runtimes.
+
+### Kata OCI
+
+The Kata OCI runtime (including when used with CRI-O), provides `--log=` and `--log-format=` options.
+However, the runtime also always logs to the system log (`syslog` or `journald`).
 
 To view runtime log output:
 
@@ -147,10 +158,18 @@ To view runtime log output:
 $ sudo journalctl -t kata-runtime
 ```
 
-For detailed information and analysis on obtaining logs for other system
-components, see the documentation for the
-[`kata-log-parser`](https://github.com/kata-containers/tests/tree/master/cmd/log-parser)
-tool.
+### Kata containerd shimv2
+
+The Kata containerd shimv2 runtime logs through `containerd`, and its logs will be sent
+to wherever the `containerd` logs are directed. However, the
+shimv2 runtime also always logs to the system log (`syslog` or `journald`) under the
+identifier name of `kata`.
+
+To view the `shimv2` runtime log output:
+
+```bash
+$ sudo journalctl -t kata
+```
 
 ## Debugging
 
