@@ -331,19 +331,7 @@ func (fc *firecracker) fcInit(timeout int) error {
 	span, _ := fc.trace("fcInit")
 	defer span.Finish()
 
-	// Fetch sandbox network to be able to access it from the sandbox structure.
-	err := os.MkdirAll(fc.jailerRoot, DirMode)
-	if err != nil {
-		return err
-	}
-	defer func() {
-		if err != nil {
-			if err := os.RemoveAll(fc.vmPath); err != nil {
-				fc.Logger().WithError(err).Error("Fail to clean up vm directory")
-			}
-		}
-	}()
-
+	var err error
 	//FC version set and check
 	if fc.info.Version, err = fc.getVersionNumber(); err != nil {
 		return err
@@ -497,6 +485,24 @@ func (fc *firecracker) createJailedDrive(name string) (string, error) {
 	return r, nil
 }
 
+// when running with jailer, firecracker binary will firstly be copied into fc.jailerRoot,
+// and then being executed there. Therefore we need to ensure fc.JailerRoot has exec permissions.
+func (fc *firecracker) fcRemountJailerRootWithExec() error {
+	if err := bindMount(context.Background(), fc.jailerRoot, fc.jailerRoot, false, "shared"); err != nil {
+		fc.Logger().WithField("JailerRoot", fc.jailerRoot).Errorf("bindMount failed: %v", err)
+		return err
+	}
+
+	// /run is normally mounted with rw, nosuid(MS_NOSUID), relatime(MS_RELATIME), noexec(MS_NOEXEC).
+	// we re-mount jailerRoot to deliberately leave out MS_NOEXEC.
+	if err := remount(context.Background(), syscall.MS_NOSUID|syscall.MS_RELATIME, fc.jailerRoot); err != nil {
+		fc.Logger().WithField("JailerRoot", fc.jailerRoot).Errorf("Re-mount failed: %v", err)
+		return err
+	}
+
+	return nil
+}
+
 func (fc *firecracker) fcJailResource(src, dst string) (string, error) {
 	if src == "" || dst == "" {
 		return "", fmt.Errorf("fcJailResource: invalid jail locations: src:%v, dst:%v",
@@ -645,8 +651,23 @@ func (fc *firecracker) fcListenToFifo(fifoName string) (string, error) {
 }
 
 func (fc *firecracker) fcInitConfiguration() error {
+	err := os.MkdirAll(fc.jailerRoot, DirMode)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err != nil {
+			if err := os.RemoveAll(fc.vmPath); err != nil {
+				fc.Logger().WithError(err).Error("Fail to clean up vm directory")
+			}
+		}
+	}()
+
 	if fc.config.JailerPath != "" {
 		fc.jailed = true
+		if err := fc.fcRemountJailerRootWithExec(); err != nil {
+			return nil
+		}
 	}
 
 	fc.fcSetVMBaseConfig(int64(fc.config.MemorySize),
@@ -801,6 +822,12 @@ func (fc *firecracker) cleanupJail() {
 	fc.umountResource(fcLogFifo)
 	fc.umountResource(fcMetricsFifo)
 	fc.umountResource(defaultFcConfig)
+	// if running with jailer, we also need to umount fc.jailerRoot
+	if fc.config.JailerPath != "" {
+		if err := syscall.Unmount(fc.jailerRoot, syscall.MNT_DETACH); err != nil {
+			fc.Logger().WithField("JailerRoot", fc.jailerRoot).WithError(err).Error("Failed to umount")
+		}
+	}
 
 	fc.Logger().WithField("cleaningJail", fc.vmPath).Info()
 	if err := os.RemoveAll(fc.vmPath); err != nil {

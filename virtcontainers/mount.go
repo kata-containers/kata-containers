@@ -309,6 +309,24 @@ func bindMount(ctx context.Context, source, destination string, readonly bool, p
 	return nil
 }
 
+// An existing mount may be remounted by specifying `MS_REMOUNT` in
+// mountflags.
+// This allows you to change the mountflags of an existing mount.
+// The mountflags should match the values used in the original mount() call,
+// except for those parameters that you are trying to change.
+func remount(ctx context.Context, mountflags uintptr, src string) error {
+	absSrc, err := filepath.EvalSymlinks(src)
+	if err != nil {
+		return fmt.Errorf("Could not resolve symlink for %s", src)
+	}
+
+	if err := syscall.Mount(absSrc, absSrc, "", syscall.MS_REMOUNT|mountflags, ""); err != nil {
+		return fmt.Errorf("remount %s failed: %v", absSrc, err)
+	}
+
+	return nil
+}
+
 // bindMountContainerRootfs bind mounts a container rootfs into a 9pfs shared
 // directory between the guest and the host.
 func bindMountContainerRootfs(ctx context.Context, sharedDir, sandboxID, cID, cRootFs string, readonly bool) error {
