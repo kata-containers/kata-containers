@@ -180,46 +180,6 @@ func (fc *firecracker) trace(name string) (opentracing.Span, context.Context) {
 	return span, ctx
 }
 
-// bindMount bind mounts a source in to a destination. This will
-// do some bookkeeping:
-// * evaluate all symlinks
-// * ensure the source exists
-// * recursively create the destination
-func (fc *firecracker) bindMount(ctx context.Context, source, destination string, readonly bool) error {
-	span, _ := trace(ctx, "bindMount")
-	defer span.Finish()
-
-	if source == "" {
-		return fmt.Errorf("source must be specified")
-	}
-	if destination == "" {
-		return fmt.Errorf("destination must be specified")
-	}
-
-	absSource, err := filepath.EvalSymlinks(source)
-	if err != nil {
-		return fmt.Errorf("Could not resolve symlink for source %v", source)
-	}
-
-	if err := ensureDestinationExists(absSource, destination); err != nil {
-		return fmt.Errorf("Could not create destination mount point %v: %v", destination, err)
-	}
-
-	fc.Logger().WithFields(logrus.Fields{"src": absSource, "dst": destination}).Debug("Bind mounting resource")
-
-	if err := syscall.Mount(absSource, destination, "bind", syscall.MS_BIND|syscall.MS_SLAVE, ""); err != nil {
-		return fmt.Errorf("Could not bind mount %v to %v: %v", absSource, destination, err)
-	}
-
-	// For readonly bind mounts, we need to remount with the readonly flag.
-	// This is needed as only very recent versions of libmount/util-linux support "bind,ro"
-	if readonly {
-		return syscall.Mount(absSource, destination, "bind", uintptr(syscall.MS_BIND|syscall.MS_SLAVE|syscall.MS_REMOUNT|syscall.MS_RDONLY), "")
-	}
-
-	return nil
-}
-
 // For firecracker this call only sets the internal structure up.
 // The sandbox will be created and started through startSandbox().
 func (fc *firecracker) createSandbox(ctx context.Context, id string, networkNS NetworkNamespace, hypervisorConfig *HypervisorConfig, stateful bool) error {
@@ -543,7 +503,7 @@ func (fc *firecracker) fcJailResource(src, dst string) (string, error) {
 			src, dst)
 	}
 	jailedLocation := filepath.Join(fc.jailerRoot, dst)
-	if err := fc.bindMount(context.Background(), src, jailedLocation, false); err != nil {
+	if err := bindMount(context.Background(), src, jailedLocation, false, "slave"); err != nil {
 		fc.Logger().WithField("bindMount failed", err).Error()
 		return "", err
 	}

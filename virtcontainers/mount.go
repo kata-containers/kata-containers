@@ -31,6 +31,13 @@ var rootfsDir = "rootfs"
 
 var systemMountPrefixes = []string{"/proc", "/sys"}
 
+var propagationTypes = map[string]uintptr{
+	"shared":  syscall.MS_SHARED,
+	"private": syscall.MS_PRIVATE,
+	"slave":   syscall.MS_SLAVE,
+	"ubind":   syscall.MS_UNBINDABLE,
+}
+
 func isSystemMount(m string) bool {
 	for _, p := range systemMountPrefixes {
 		if m == p || strings.HasPrefix(m, p+"/") {
@@ -260,7 +267,8 @@ const mountPerm = os.FileMode(0755)
 // * evaluate all symlinks
 // * ensure the source exists
 // * recursively create the destination
-func bindMount(ctx context.Context, source, destination string, readonly bool) error {
+// pgtypes stands for propagation types, which are shared, private, slave, and ubind.
+func bindMount(ctx context.Context, source, destination string, readonly bool, pgtypes string) error {
 	span, _ := trace(ctx, "bindMount")
 	defer span.Finish()
 
@@ -284,8 +292,12 @@ func bindMount(ctx context.Context, source, destination string, readonly bool) e
 		return fmt.Errorf("Could not bind mount %v to %v: %v", absSource, destination, err)
 	}
 
-	if err := syscall.Mount("none", destination, "", syscall.MS_PRIVATE, ""); err != nil {
-		return fmt.Errorf("Could not make mount point %v private: %v", destination, err)
+	if pgtype, exist := propagationTypes[pgtypes]; exist {
+		if err := syscall.Mount("none", destination, "", pgtype, ""); err != nil {
+			return fmt.Errorf("Could not make mount point %v %s: %v", destination, pgtypes, err)
+		}
+	} else {
+		return fmt.Errorf("Wrong propagation type %s", pgtypes)
 	}
 
 	// For readonly bind mounts, we need to remount with the readonly flag.
@@ -305,7 +317,7 @@ func bindMountContainerRootfs(ctx context.Context, sharedDir, sandboxID, cID, cR
 
 	rootfsDest := filepath.Join(sharedDir, sandboxID, cID, rootfsDir)
 
-	return bindMount(ctx, cRootFs, rootfsDest, readonly)
+	return bindMount(ctx, cRootFs, rootfsDest, readonly, "private")
 }
 
 // Mount describes a container mount.
