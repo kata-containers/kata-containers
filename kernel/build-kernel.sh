@@ -376,14 +376,15 @@ install_kata() {
 		die "failed to find image"
 	fi
 
+	# Install compressed kernel
 	if [ "${arch_target}" = "powerpc" ]; then
 		install --mode 0644 -D "vmlinux" "${install_path}/${vmlinuz}"
 	else
 		install --mode 0644 -D "${bzImage}" "${install_path}/${vmlinuz}"
 	fi
 
-	if [ "${hypervisor_target}" == "firecracker" ] && [ "${arch_target}" == "arm64" ]; then
-		vmlinux="${vmlinux}-${hypervisor_target}"
+	# Install uncompressed kernel
+	if [ "${arch_target}" = "arm64" ]; then
 		install --mode 0644 -D "arch/${arch_target}/boot/Image" "${install_path}/${vmlinux}"
 	else
 		install --mode 0644 -D "vmlinux" "${install_path}/${vmlinux}"
