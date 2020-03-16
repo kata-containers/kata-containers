@@ -62,7 +62,6 @@ const (
 	supportedMinorVersion = 5
 	defaultClhPath        = "/usr/local/bin/cloud-hypervisor"
 	virtioFsCacheAlways   = "always"
-	maxClhVcpus           = uint32(64)
 )
 
 // Interface that hides the implementation of openAPI client
@@ -793,11 +792,6 @@ func (clh *cloudHypervisor) LaunchClh() (string, int, error) {
 	}
 
 	return errStr, cmd.Process.Pid, nil
-}
-
-// MaxClhVCPUs returns the maximum number of vCPUs supported
-func MaxClhVCPUs() uint32 {
-	return maxClhVcpus
 }
 
 //###########################################################################
