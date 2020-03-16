@@ -24,27 +24,22 @@ if [ "$docker_version" != "18.06" ]; then
 	die "Firecracker hypervisor only works with docker 18.06"
 fi
 
-
-
 install_fc() {
 	# Get url for firecracker from runtime/versions.yaml
 	firecracker_repo=$(get_version "assets.hypervisor.firecracker.url")
 	[ -n "$firecracker_repo" ] || die "failed to get firecracker repo"
-	firecracker_repo=${firecracker_repo/https:\/\//}
 
 	# Get version for firecracker from runtime/versions.yaml
 	firecracker_version=$(get_version "assets.hypervisor.firecracker.version")
 	[ -n "$firecracker_version" ] || die "failed to get firecracker version"
 
-	# Get firecracker repo
-	go get -d "${firecracker_repo}" || true
-	# Checkout to specific version
-	pushd "${GOPATH}/src/${firecracker_repo}"
-	git checkout "tags/${firecracker_version}"
-	./tools/devtool --unattended build --release
-	sudo install ${GOPATH}/src/${firecracker_repo}/build/cargo_target/${arch}-*-linux-musl/release/firecracker /usr/bin/
-	sudo install ${GOPATH}/src/${firecracker_repo}/build/cargo_target/${arch}-*-linux-musl/release/jailer /usr/bin/
-	popd
+	# Download firecracker and jailer
+	firecracker_binary="firecracker-${firecracker_version}-${arch}"
+	curl -fsL ${firecracker_repo}/releases/download/${firecracker_version}/${firecracker_binary} -o ${firecracker_binary}
+	sudo -E install -m 0755 -D ${firecracker_binary} /usr/bin/firecracker
+	jailer_binary="jailer-${firecracker_version}-${arch}"
+	curl -fsL ${firecracker_repo}/releases/download/${firecracker_version}/${jailer_binary} -o ${jailer_binary}
+	sudo -E install -m 0755 -D ${jailer_binary} /usr/bin/jailer
 }
 
 configure_fc_for_kata_and_docker() {
