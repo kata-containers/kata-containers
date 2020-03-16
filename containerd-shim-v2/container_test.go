@@ -6,15 +6,16 @@
 package containerdshim
 
 import (
+	"testing"
+
 	taskAPI "github.com/containerd/containerd/runtime/v2/task"
 	"github.com/stretchr/testify/assert"
-	"testing"
 )
 
 func TestNewContainer(t *testing.T) {
 	assert := assert.New(t)
 
-	_, err := newContainer(nil, nil, "", nil)
+	_, err := newContainer(nil, nil, "", nil, false)
 
 	assert.Error(err)
 }
@@ -24,7 +25,7 @@ func TestGetExec(t *testing.T) {
 
 	r := &taskAPI.CreateTaskRequest{}
 
-	c, err := newContainer(nil, r, "", nil)
+	c, err := newContainer(nil, r, "", nil, true)
 	assert.NoError(err)
 
 	_, err = c.getExec("")

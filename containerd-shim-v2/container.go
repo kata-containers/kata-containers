@@ -33,9 +33,10 @@ type container struct {
 	exit     uint32
 	status   task.Status
 	terminal bool
+	mounted  bool
 }
 
-func newContainer(s *service, r *taskAPI.CreateTaskRequest, containerType vc.ContainerType, spec *specs.Spec) (*container, error) {
+func newContainer(s *service, r *taskAPI.CreateTaskRequest, containerType vc.ContainerType, spec *specs.Spec, mounted bool) (*container, error) {
 	if r == nil {
 		return nil, errdefs.ToGRPCf(errdefs.ErrInvalidArgument, " CreateTaskRequest points to nil")
 	}
@@ -59,6 +60,7 @@ func newContainer(s *service, r *taskAPI.CreateTaskRequest, containerType vc.Con
 		status:   task.StatusCreated,
 		exitIOch: make(chan struct{}),
 		exitCh:   make(chan uint32, 1),
+		mounted:  mounted,
 	}
 	return c, nil
 }
