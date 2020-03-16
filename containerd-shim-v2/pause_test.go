@@ -57,7 +57,7 @@ func TestPauseContainerSuccess(t *testing.T) {
 	reqCreate := &taskAPI.CreateTaskRequest{
 		ID: testContainerID,
 	}
-	s.containers[testContainerID], err = newContainer(s, reqCreate, "", nil)
+	s.containers[testContainerID], err = newContainer(s, reqCreate, "", nil, true)
 	assert.NoError(err)
 
 	reqPause := &taskAPI.PauseRequest{
@@ -149,7 +149,7 @@ func TestResumeContainerSuccess(t *testing.T) {
 	reqCreate := &taskAPI.CreateTaskRequest{
 		ID: testContainerID,
 	}
-	s.containers[testContainerID], err = newContainer(s, reqCreate, "", nil)
+	s.containers[testContainerID], err = newContainer(s, reqCreate, "", nil, true)
 	assert.NoError(err)
 
 	reqResume := &taskAPI.ResumeRequest{

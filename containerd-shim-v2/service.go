@@ -82,7 +82,6 @@ func New(ctx context.Context, id string, publisher events.Publisher) (cdshim.Shi
 		events:     make(chan interface{}, chSize),
 		ec:         make(chan exit, bufferSize),
 		cancel:     cancel,
-		mount:      false,
 	}
 
 	go s.processExits()
@@ -109,10 +108,6 @@ type service struct {
 	// thus for the returned values needed pid, just return this shim's
 	// pid directly.
 	pid uint32
-
-	// if the container's rootfs is block device backed, kata shimv2
-	// will not do the rootfs mount.
-	mount bool
 
 	ctx        context.Context
 	sandbox    vc.VCSandbox

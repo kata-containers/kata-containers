@@ -20,6 +20,7 @@ import (
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
+
 	// only register the proto type
 	_ "github.com/containerd/containerd/runtime/linux/runctypes"
 	crioption "github.com/containerd/cri-containerd/pkg/api/runtimeoptions/v1"
@@ -31,7 +32,7 @@ import (
 )
 
 func create(ctx context.Context, s *service, r *taskAPI.CreateTaskRequest) (*container, error) {
-	rootFs := vc.RootFs{Mounted: s.mount}
+	rootFs := vc.RootFs{}
 	if len(r.Rootfs) == 1 {
 		m := r.Rootfs[0]
 		rootFs.Source = m.Source
@@ -64,20 +65,17 @@ func create(ctx context.Context, s *service, r *taskAPI.CreateTaskRequest) (*con
 			return nil, err
 		}
 
+		if rootFs.Mounted, err = checkAndMount(s, r); err != nil {
+			return nil, err
+		}
+
 		defer func() {
-			if err != nil && s.mount {
+			if err != nil && rootFs.Mounted {
 				if err2 := mount.UnmountAll(rootfs, 0); err2 != nil {
 					logrus.WithError(err2).Warn("failed to cleanup rootfs mount")
 				}
 			}
 		}()
-
-		s.mount = true
-		if err = checkAndMount(s, r); err != nil {
-			return nil, err
-		}
-
-		rootFs.Mounted = s.mount
 
 		katautils.HandleFactory(ctx, vci, s.config)
 
@@ -96,19 +94,17 @@ func create(ctx context.Context, s *service, r *taskAPI.CreateTaskRequest) (*con
 			return nil, fmt.Errorf("BUG: Cannot start the container, since the sandbox hasn't been created")
 		}
 
-		if s.mount {
-			defer func() {
-				if err != nil {
-					if err2 := mount.UnmountAll(rootfs, 0); err2 != nil {
-						logrus.WithError(err2).Warn("failed to cleanup rootfs mount")
-					}
-				}
-			}()
-
-			if err = doMount(r.Rootfs, rootfs); err != nil {
-				return nil, err
-			}
+		if rootFs.Mounted, err = checkAndMount(s, r); err != nil {
+			return nil, err
 		}
+
+		defer func() {
+			if err != nil && rootFs.Mounted {
+				if err2 := mount.UnmountAll(rootfs, 0); err2 != nil {
+					logrus.WithError(err2).Warn("failed to cleanup rootfs mount")
+				}
+			}
+		}()
 
 		_, err = katautils.CreateContainer(ctx, vci, s.sandbox, *ociSpec, rootFs, r.ID, bundlePath, "", disableOutput, true)
 		if err != nil {
@@ -116,7 +112,7 @@ func create(ctx context.Context, s *service, r *taskAPI.CreateTaskRequest) (*con
 		}
 	}
 
-	container, err := newContainer(s, r, containerType, ociSpec)
+	container, err := newContainer(s, r, containerType, ociSpec, rootFs.Mounted)
 	if err != nil {
 		return nil, err
 	}
@@ -184,20 +180,19 @@ func loadRuntimeConfig(s *service, r *taskAPI.CreateTaskRequest, anno map[string
 	return &runtimeConfig, nil
 }
 
-func checkAndMount(s *service, r *taskAPI.CreateTaskRequest) error {
+func checkAndMount(s *service, r *taskAPI.CreateTaskRequest) (bool, error) {
 	if len(r.Rootfs) == 1 {
 		m := r.Rootfs[0]
 
 		if katautils.IsBlockDevice(m.Source) && !s.config.HypervisorConfig.DisableBlockDeviceUse {
-			s.mount = false
-			return nil
+			return false, nil
 		}
 	}
 	rootfs := filepath.Join(r.Bundle, "rootfs")
 	if err := doMount(r.Rootfs, rootfs); err != nil {
-		return err
+		return false, err
 	}
-	return nil
+	return true, nil
 }
 
 func doMount(mounts []*containerd_types.Mount, rootfs string) error {
