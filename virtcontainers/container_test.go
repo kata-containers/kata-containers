@@ -174,15 +174,15 @@ func TestUnmountHostMountsRemoveBindHostPath(t *testing.T) {
 			ctx:    context.Background(),
 		}
 
-		if err := bindMount(c.ctx, src, hostPath, false); err != nil {
+		if err := bindMount(c.ctx, src, hostPath, false, "private"); err != nil {
 			t.Fatal(err)
 		}
 		defer syscall.Unmount(hostPath, 0)
-		if err := bindMount(c.ctx, src, nonEmptyHostpath, false); err != nil {
+		if err := bindMount(c.ctx, src, nonEmptyHostpath, false, "private"); err != nil {
 			t.Fatal(err)
 		}
 		defer syscall.Unmount(nonEmptyHostpath, 0)
-		if err := bindMount(c.ctx, src, devPath, false); err != nil {
+		if err := bindMount(c.ctx, src, devPath, false, "private"); err != nil {
 			t.Fatal(err)
 		}
 		defer syscall.Unmount(devPath, 0)
