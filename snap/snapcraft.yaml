@@ -196,7 +196,7 @@ parts:
       # install podman
       sudo add-apt-repository -y ppa:projectatomic/ppa
       sudo apt-get update
-      sudo apt-get --no-install-recommends install -y podman
+      sudo apt-get --no-install-recommends install -y apt-utils ca-certificates podman
 
       # Build and install cni plugings
       echo "Retrieve CNI plugins repository"
@@ -382,7 +382,7 @@ parts:
       done
 
       # Only x86_64 supports libpmem
-      [ "$(uname -m)" = "x86_64" ] && sudo apt-get --no-install-recommends install -y libpmem-dev
+      [ "$(uname -m)" = "x86_64" ] && sudo apt-get --no-install-recommends install -y apt-utils ca-certificates libpmem-dev
 
       chmod +x ${SNAPCRAFT_STAGE}/scripts/configure-hypervisor.sh
       # static build

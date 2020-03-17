@@ -17,7 +17,7 @@ Kata Containers can be installed in any Linux distribution that supports
 [snapd](https://docs.snapcraft.io/installing-snapd). For this example, we
 assume Ubuntu as your base distro.
 ```sh
-$ sudo apt-get --no-install-recommends install -y snapd snapcraft
+$ sudo apt-get --no-install-recommends install -y apt-utils ca-certificates snapd snapcraft
 ```
 
 ## Install snap
