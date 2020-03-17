@@ -28,7 +28,8 @@ Options:
 	-f                         : Force action. It will replace any installation
                                      or configuration that you may have.
 	-h                         : Help, show this information.
-	-r <runtime>               : Supported runtimes: runc and cc-runtime.
+	-r <runtime>               : Supported runtimes: runc and kata-runtime.
+	-s <storage_driver>        : Supported storage driver: overlay2(default), devicemapper, etc.
 	-t <tag>                   : Tags supported: swarm, latest. If you do not specify
                                      a tag, the script will use latest as default.
                                      With this tag you can install the correct version
@@ -60,13 +61,16 @@ log_message(){
 }
 
 parse_subcommand_options(){
-	while getopts ":fr:t:" opt; do
+	while getopts ":fr:s:t:" opt; do
 		case $opt in
 			f)
 				force=true
 				;;
 			r)
 				runtime="${OPTARG}"
+				;;
+			s)
+				storage_driver="${OPTARG}"
 				;;
 			t)
 				tag="${OPTARG}"
@@ -280,6 +284,9 @@ EOF
 configure_docker(){
 	[ -z "$runtime" ] && die "please specify a runtime with -r"
 
+	# Default storage driver is overlay2
+	[ -z "$storage_driver" ] && storage_driver="overlay2"
+
 	if [ ! "$(info_docker)" ]; then
 		die "Docker is not installed. Please install it before configuring the runtime"
 	fi
@@ -293,8 +300,6 @@ configure_docker(){
 			docker_http_proxy="HTTP_PROXY=$http_proxy"
 			docker_https_proxy="HTTPS_PROXY=$https_proxy"
 		fi
-
-		storage_driver="overlay2"
 
 		if [ "$tag" == "swarm" ] ; then
 			default_runtime=$runtime

@@ -44,48 +44,15 @@ install_fc() {
 
 configure_fc_for_kata_and_docker() {
 	echo "Configure docker"
-	docker_configuration_path="/etc/docker"
-	# Check if directory exists
-	[ -d "$docker_configuration_path" ] || sudo mkdir "$docker_configuration_path"
-
-	# Check if daemon.json exists
-	docker_configuration_file="${docker_configuration_path}/daemon.json"
-
 	# For Kata Containers and Firecracker a block based driver like devicemapper
 	# is required
-	driver="devicemapper"
-
-	path="/usr/local/bin/kata-runtime"
-
-	if [ -f $docker_configuration_file ]; then
-		# Check devicemapper flag
-		check_devicemapper=$(grep -cw '"storage-driver": "'${driver}'"' $docker_configuration_file)
-		[ "$check_devicemapper" -eq 0 ] && die "${driver} is not enabled at $docker_configuration_file"
-		# Check kata runtime flag
-		check_kata=$(grep -cw '"path": "'${path}'"' $docker_configuration_file)
-		[ "$check_kata" -eq 0 ] && die "Kata Runtime path not found at $docker_configuration_file"
-	else
-		cat <<-EOF | sudo tee "$docker_configuration_file"
-		{
-		 "runtimes": {
-		  "kata-runtime": {
-		   "path": "${path}"
-		  }
-		 },
-		 "storage-driver": "${driver}"
-		}
-		EOF
-	fi
-
-	echo "Restart docker"
-	sudo systemctl daemon-reload
-	sudo systemctl restart docker
+	storage_driver="devicemapper"
+	${cidir}/../cmd/container-manager/manage_ctr_mgr.sh docker configure -r kata-runtime -s ${storage_driver} -f
 
 	echo "Check vsock is supported"
 	if ! sudo modprobe vhost_vsock; then
 		die "vsock is not supported on your host system"
 	fi
-
 }
 
 main() {
