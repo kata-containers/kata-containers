@@ -470,7 +470,7 @@ packages in the rootfs, which would increase the size of the image used to
 boot the virtual machine.
 
 If you want to login to a virtual machine that hosts your containers, complete
-the following steps, which assume the use of a rootfs image.
+the following steps (using rootfs or initrd image).
 
 > **Note:** The following debug console instructions assume a systemd-based guest
 > O/S image. This means you must create a rootfs for a distro that supports systemd.
@@ -492,7 +492,7 @@ the following steps, which assume the use of a rootfs image.
 ### Create a custom image containing a shell
 
 To login to a virtual machine, you must
-[create a custom rootfs](#create-a-rootfs-image)
+[create a custom rootfs](#create-a-rootfs-image) or [custom initrd](#create-an-initrd-image---optional)
 containing a shell such as `bash(1)`. For Clear Linux, you will need
 an additional `coreutils` package.
 
@@ -536,11 +536,14 @@ $ sudo sed -i '$a Requires=kata-debug.service' ${ROOTFS_DIR}/lib/systemd/system/
 ### Build the debug image
 
 Follow the instructions in the [Build a rootfs image](#build-a-rootfs-image)
-section.
+section when using rootfs, or when using initrd, complete the steps in the [Build an initrd image](#build-an-initrd-image) section.
 
 ### Configure runtime for custom debug image
 
 Install the image:
+
+>**Note**: When using an initrd image, replace the below rootfs image name `kata-containers.img` 
+>with the initrd image name `kata-containers-initrd.img`.
 
 ```
 $ name="kata-containers-centos-with-debug-console.img"
