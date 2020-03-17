@@ -51,6 +51,7 @@ metadata
 miniOS
 nack/A
 namespace/ABCD
+Nvidia
 OS/AB
 parallelize/AC
 passthrough
@@ -60,6 +61,7 @@ portmapping/A
 prestart
 programmatically
 proxying
+Quadro
 ramdisk/A
 readonly
 rebase/ACD
@@ -89,6 +91,7 @@ userspace/B
 vendored
 vendoring
 versioning
+vGPU
 virtualization
 virtualized
 webhook/AB
