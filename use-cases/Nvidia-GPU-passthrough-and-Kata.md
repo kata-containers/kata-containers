@@ -12,20 +12,20 @@
 	- [References](#references)
 
 
-A Nvidia GPU device can be passed to a Kata Containers container using GPU passthrough
- (Nvidia GPU pass-through mode) as well as GPU mediated passthrough (Nvidia vGPU mode). 
+An Nvidia GPU device can be passed to a Kata Containers container using GPU passthrough
+(Nvidia GPU pass-through mode) as well as GPU mediated passthrough (Nvidia vGPU mode). 
 
 Nvidia GPU pass-through mode, an entire physical GPU is directly assigned to one VM,
- bypassing the Nvidia Virtual GPU Manager. In this mode of operation, the GPU is accessed
- exclusively by the Nvidia driver running in the VM to which it is assigned.
- The GPU is not shared among VMs.
+bypassing the Nvidia Virtual GPU Manager. In this mode of operation, the GPU is accessed
+exclusively by the Nvidia driver running in the VM to which it is assigned.
+The GPU is not shared among VMs.
 
 Nvidia Virtual GPU (vGPU) enables multiple virtual machines (VMs) to have simultaneous,
- direct access to a single physical GPU, using the same Nvidia graphics drivers that are
- deployed on non-virtualized operating systems. By doing this, Nvidia vGPU provides VMs
- with unparalleled graphics performance, compute performance, and application compatibility,
- together with the cost-effectiveness and scalability brought about by sharing a GPU
- among multiple workloads.
+direct access to a single physical GPU, using the same Nvidia graphics drivers that are
+deployed on non-virtualized operating systems. By doing this, Nvidia vGPU provides VMs
+with unparalleled graphics performance, compute performance, and application compatibility,
+together with the cost-effectiveness and scalability brought about by sharing a GPU
+among multiple workloads.
 
 | Technology | Description | Behaviour | Detail |
 | --- | --- | --- | --- |
@@ -35,7 +35,7 @@ Nvidia Virtual GPU (vGPU) enables multiple virtual machines (VMs) to have simult
 ## Hardware Requirements
 Nvidia GPUs Recommended for Virtualization:
 
-- Nvidia Tesla (T4, M10, P6, V100...)
+- Nvidia Tesla (T4, M10, P6, V100 or newer)
 - Nvidia Quadro RTX 6000/8000
 
 ## Host BIOS Requirements
@@ -49,7 +49,7 @@ $ lspci -s 04:00.0 -vv | grep Region
 ```
 
 For large BARs devices, MMIO mapping above 4G address space should be `enabled`
- in the PCI configuration of the BIOS.
+in the PCI configuration of the BIOS.
 
 Some hardware vendors use different name in BIOS, such as:
 
@@ -57,14 +57,13 @@ Some hardware vendors use different name in BIOS, such as:
 - Memory Hole for PCI MMIO
 - Memory Mapped I/O above 4GB
 
-
 The following steps outline the workflow for using an Nvidia GPU with Kata.
 
 ## Host Kernel Requirements
 The following configurations need to be enabled on your host kernel:
 
 - `CONFIG_VFIO`
-- `CONFIG_VFIO_IOMMU_TYPE`
+- `CONFIG_VFIO_IOMMU_TYPE1`
 - `CONFIG_VFIO_MDEV`
 - `CONFIG_VFIO_MDEV_DEVICE`
 - `CONFIG_VFIO_PCI`
@@ -73,8 +72,8 @@ Your host kernel needs to be booted with `intel_iommu=on` on the kernel command 
 
 ## Install and configure Kata Containers
 To use non-large BARs devices (for example, Nvidia Tesla T4), you need Kata version 1.3.0 or above.
- Follow the [Kata Containers setup instructions](https://github.com/kata-containers/documentation/blob/master/install/README.md)
- to install the latest version of Kata.
+Follow the [Kata Containers setup instructions](https://github.com/kata-containers/documentation/blob/master/install/README.md)
+to install the latest version of Kata.
 
 The following configuration in the Kata `configuration.toml` file as shown below can work:
 ```
@@ -84,7 +83,6 @@ hotplug_vfio_on_root_bus = true
 ```
 
 To use large BARs devices (for example, Nvidia Tesla P100), you need Kata version 1.11.0 or above.
- ([related PR](https://github.com/kata-containers/runtime/pull/2461))
 
 The following configuration in the Kata `configuration.toml` file as shown below can work:
 
@@ -96,7 +94,6 @@ hotplug_vfio_on_root_bus = false
 ```
 
 Hotplug for PCIe devices by `pciehp` (Linux's PCIe Hotplug driver):
- [related PR](https://github.com/kata-containers/runtime/pull/2410)
 ```
 machine_type = "q35"
 
@@ -106,8 +103,8 @@ pcie_root_port = 1
 
 ## Build Kata Containers kernel with GPU support
 The default guest kernel installed with Kata Containers does not provide GPU support.
- To use an Nvidia GPU with Kata Containers, you need to build a kernel with the
- necessary GPU support.
+To use an Nvidia GPU with Kata Containers, you need to build a kernel with the
+necessary GPU support.
 
 The following kernel config options need to be enabled:
 ```
@@ -130,15 +127,15 @@ The following kernel config options need to be disabled:
 CONFIG_DRM_NOUVEAU=n
 ```
 > **Note**: `CONFIG_DRM_NOUVEAU` is normally disabled by default.
- It is worth checking that it is not enabled in your kernel configuration to prevent any conflicts.
+It is worth checking that it is not enabled in your kernel configuration to prevent any conflicts.
 
 
 Build the Kata Containers kernel with the previous config options,
- using the instructions described in [Building Kata Containers kernel](https://github.com/kata-containers/packaging/tree/master/kernel).
- For further details on building and installing guest kernels,
- see [the developer guide](https://github.com/kata-containers/documentation/blob/master/Developer-Guide.md#install-guest-kernel-images).
+using the instructions described in [Building Kata Containers kernel](https://github.com/kata-containers/packaging/tree/master/kernel).
+For further details on building and installing guest kernels,
+see [the developer guide](https://github.com/kata-containers/documentation/blob/master/Developer-Guide.md#install-guest-kernel-images).
 
-There is an easy way to build a guest kernel that supports Nvidia GPU ([related PR](https://github.com/kata-containers/packaging/pull/938)):
+There is an easy way to build a guest kernel that supports Nvidia GPU:
 ```
 ## Build guest kernel with http://github.com/kata-containers/packaging
 
@@ -202,7 +199,7 @@ Use the following steps to pass an Nvidia GPU device in pass-through mode with K
 
 4. Start a Kata container with GPU device:
    ```
-   sudo docker run -it --runtime=kata-runtime --rm --device /dev/vfio/45 centos /bin/bash
+   $ sudo docker run -it --runtime=kata-runtime --rm --device /dev/vfio/45 centos /bin/bash
    ```
 
 5. Run `lspci` within the container to verify the GPU device is seen in the list
@@ -225,29 +222,29 @@ Use the following steps to pass an Nvidia GPU device in pass-through mode with K
 ## Nvidia vGPU mode with Kata Containers
 
 Nvidia vGPU is a licensed product on all supported GPU boards. A software license
- is required to enable all vGPU features within the guest VM.
+is required to enable all vGPU features within the guest VM.
 
 > **Note**: There is no suitable test environment, so it is not written here.
 
 
 ## Install Nvidia Driver in Kata Containers
 Download the official Nvidia driver from
- [https://www.nvidia.com/Download/index.aspx](https://www.nvidia.com/Download/index.aspx),
- for example `NVIDIA-Linux-x86_64-418.87.01.run`.
+[https://www.nvidia.com/Download/index.aspx](https://www.nvidia.com/Download/index.aspx),
+for example `NVIDIA-Linux-x86_64-418.87.01.run`.
 
 Install the `kernel-devel`(generated in the previous steps) for guest kernel:
 ```
-$ rpm -ivh kernel-devel-4.19.86_gpu-1.x86_64.rpm
+$ sudo rpm -ivh kernel-devel-4.19.86_gpu-1.x86_64.rpm
 ```
 
 Here is an example to extract, compile and install Nvidia driver:
 ```
 ## Extract
-$ ./NVIDIA-Linux-x86_64-418.87.01.run -x
+$ sh ./NVIDIA-Linux-x86_64-418.87.01.run -x
 
 ## Compile and install (It will take some time)
-$ cd NVIDIA-Linux-x86_64-418.87.01NVIDIA-Linux-x86_64-418.87.01
-$ ./nvidia-installer -a -q --ui=none \
+$ cd NVIDIA-Linux-x86_64-418.87.01
+$ sudo ./nvidia-installer -a -q --ui=none \
  --no-cc-version-check \
  --no-opengl-files --no-install-libglvnd \
  --kernel-source-path=/usr/src/kernels/`uname -r`
@@ -255,7 +252,7 @@ $ ./nvidia-installer -a -q --ui=none \
 
 Or just run one command line:
 ```
-$ ./NVIDIA-Linux-x86_64-418.87.01.run -a -q --ui=none \
+$ sudo sh ./NVIDIA-Linux-x86_64-418.87.01.run -a -q --ui=none \
  --no-cc-version-check \
  --no-opengl-files --no-install-libglvnd \
  --kernel-source-path=/usr/src/kernels/`uname -r`
@@ -269,10 +266,10 @@ $ tail -f /var/log/nvidia-installer.log
 Load Nvidia driver module manually
 ```
 # Optional（generate modules.dep and map files for Nvidia driver）
-$ depmod
+$ sudo depmod
 
 # Load module
-$ modprobe nvidia-drm
+$ sudo modprobe nvidia-drm
 
 # Check module
 $ lsmod | grep nvidia
