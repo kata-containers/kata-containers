@@ -75,7 +75,7 @@ assets:
       url: "https://github.com/cloud-hypervisor/cloud-hypervisor"
       uscan-url: >-
         https://github.com/cloud-hypervisor/cloud-hypervisor/tags.*/v?(\d\S+)\.tar\.gz
-      version: "df794993f8abe20f829275c77fb2a52ed485f70a"
+      version: "c1e6d0022b220ecba25a10f61d0025a408d90a94"
 
     firecracker:
       description: "Firecracker micro-VMM"

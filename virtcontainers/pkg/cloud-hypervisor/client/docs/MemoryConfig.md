@@ -5,6 +5,7 @@
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
 **Size** | **int64** |  | 
+**HotplugSize** | **int64** |  | [optional] 
 **File** | **string** |  | [optional] 
 **Mergeable** | **bool** |  | [optional] [default to false]
 

@@ -14,4 +14,5 @@ type PmemConfig struct {
 	Size int64 `json:"size"`
 	Iommu bool `json:"iommu,omitempty"`
 	Mergeable bool `json:"mergeable,omitempty"`
+	DiscardWrites bool `json:"discard_writes,omitempty"`
 }

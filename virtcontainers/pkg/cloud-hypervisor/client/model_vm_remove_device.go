@@ -8,9 +8,7 @@
  */
 
 package openapi
-// DeviceConfig struct for DeviceConfig
-type DeviceConfig struct {
-	Path string `json:"path"`
-	Iommu bool `json:"iommu,omitempty"`
+// VmRemoveDevice struct for VmRemoveDevice
+type VmRemoveDevice struct {
 	Id string `json:"id,omitempty"`
 }
