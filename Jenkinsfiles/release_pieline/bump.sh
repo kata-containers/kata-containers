@@ -47,7 +47,7 @@ install_go() {
 
 install_docker() {
 	echo "Installing docker"
-	sudo -E apt-get --no-install-recommends install -y apt-transport-https ca-certificates software-properties-common
+	sudo -E apt-get --no-install-recommends install -y apt-transport-https apt-utils ca-certificates software-properties-common
 	curl -sL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
 	arch=$(dpkg --print-architecture)
 	sudo -E add-apt-repository "deb [arch=${arch}] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"

@@ -9,10 +9,12 @@ ARG PREFIX
 WORKDIR /root/qemu
 RUN apt-get update && apt-get upgrade -y
 RUN apt-get --no-install-recommends install -y \
+	    apt-utils \
 	    autoconf \
 	    automake \
 	    bc \
 	    bison \
+	    ca-certificates \
 	    cpio \
 	    flex \
 	    gawk \
