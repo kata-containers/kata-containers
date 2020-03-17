@@ -11,11 +11,13 @@ from docker.io/ubuntu:@OS_VERSION@
 # Install any package need to create a rootfs (package manager, extra tools)
 
 # RUN commands
-RUN apt-get update && apt-get install -y \
+RUN apt-get update && apt-get --no-install-recommends install -y \
+    apt-utils \
     autoconf \
     automake \
     binutils \
     build-essential \
+    ca-certificates \
     chrony \
     cmake \
     coreutils \
