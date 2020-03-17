@@ -11,6 +11,7 @@ package openapi
 // MemoryConfig struct for MemoryConfig
 type MemoryConfig struct {
 	Size int64 `json:"size"`
+	HotplugSize int64 `json:"hotplug_size,omitempty"`
 	File string `json:"file,omitempty"`
 	Mergeable bool `json:"mergeable,omitempty"`
 }

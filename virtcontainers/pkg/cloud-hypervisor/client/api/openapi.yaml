@@ -143,6 +143,21 @@ paths:
         "404":
           description: The new device could not be added to the VM instance.
       summary: Add a new device to the VM
+  /vm.remove-device:
+    put:
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VmRemoveDevice'
+        description: The identifier of the device
+        required: true
+      responses:
+        "204":
+          description: The device was successfully removed from the VM instance.
+        "404":
+          description: The device could not be removed from the VM instance.
+      summary: Remove a device from the VM
 components:
   schemas:
     VmmPingResponse:
@@ -168,12 +183,13 @@ components:
             mergeable: false
             file: file
             size: 1
+            hotplug_size: 5
           disks:
           - path: path
             num_queues: 5
             readonly: false
             iommu: false
-            queue_size: 5
+            queue_size: 2
             vhost_socket: vhost_socket
             vhost_user: false
             direct: false
@@ -183,7 +199,7 @@ components:
             num_queues: 5
             readonly: false
             iommu: false
-            queue_size: 5
+            queue_size: 2
             vhost_socket: vhost_socket
             vhost_user: false
             direct: false
@@ -195,8 +211,10 @@ components:
           devices:
           - path: path
             iommu: false
+            id: id
           - path: path
             iommu: false
+            id: id
           kernel:
             path: path
           rng:
@@ -204,15 +222,15 @@ components:
             src: /dev/urandom
           fs:
           - sock: sock
-            num_queues: 9
-            queue_size: 3
-            cache_size: 2
+            num_queues: 3
+            queue_size: 2
+            cache_size: 4
             dax: true
             tag: tag
           - sock: sock
-            num_queues: 9
-            queue_size: 3
-            cache_size: 2
+            num_queues: 3
+            queue_size: 2
+            cache_size: 4
             dax: true
             tag: tag
           vsock:
@@ -225,12 +243,14 @@ components:
           pmem:
           - mergeable: false
             file: file
-            size: 4
+            size: 7
             iommu: false
+            discard_writes: false
           - mergeable: false
             file: file
-            size: 4
+            size: 7
             iommu: false
+            discard_writes: false
           cmdline:
             args: args
           iommu: false
@@ -240,18 +260,18 @@ components:
             iommu: false
           net:
           - tap: tap
-            num_queues: 2
+            num_queues: 7
             iommu: false
-            queue_size: 7
+            queue_size: 9
             vhost_socket: vhost_socket
             vhost_user: false
             ip: 192.168.249.1
             mac: mac
             mask: 255.255.255.0
           - tap: tap
-            num_queues: 2
+            num_queues: 7
             iommu: false
-            queue_size: 7
+            queue_size: 9
             vhost_socket: vhost_socket
             vhost_user: false
             ip: 192.168.249.1
@@ -282,12 +302,13 @@ components:
           mergeable: false
           file: file
           size: 1
+          hotplug_size: 5
         disks:
         - path: path
           num_queues: 5
           readonly: false
           iommu: false
-          queue_size: 5
+          queue_size: 2
           vhost_socket: vhost_socket
           vhost_user: false
           direct: false
@@ -297,7 +318,7 @@ components:
           num_queues: 5
           readonly: false
           iommu: false
-          queue_size: 5
+          queue_size: 2
           vhost_socket: vhost_socket
           vhost_user: false
           direct: false
@@ -309,8 +330,10 @@ components:
         devices:
         - path: path
           iommu: false
+          id: id
         - path: path
           iommu: false
+          id: id
         kernel:
           path: path
         rng:
@@ -318,15 +341,15 @@ components:
           src: /dev/urandom
         fs:
         - sock: sock
-          num_queues: 9
-          queue_size: 3
-          cache_size: 2
+          num_queues: 3
+          queue_size: 2
+          cache_size: 4
           dax: true
           tag: tag
         - sock: sock
-          num_queues: 9
-          queue_size: 3
-          cache_size: 2
+          num_queues: 3
+          queue_size: 2
+          cache_size: 4
           dax: true
           tag: tag
         vsock:
@@ -339,12 +362,14 @@ components:
         pmem:
         - mergeable: false
           file: file
-          size: 4
+          size: 7
           iommu: false
+          discard_writes: false
         - mergeable: false
           file: file
-          size: 4
+          size: 7
           iommu: false
+          discard_writes: false
         cmdline:
           args: args
         iommu: false
@@ -354,18 +379,18 @@ components:
           iommu: false
         net:
         - tap: tap
-          num_queues: 2
+          num_queues: 7
           iommu: false
-          queue_size: 7
+          queue_size: 9
           vhost_socket: vhost_socket
           vhost_user: false
           ip: 192.168.249.1
           mac: mac
           mask: 255.255.255.0
         - tap: tap
-          num_queues: 2
+          num_queues: 7
           iommu: false
-          queue_size: 7
+          queue_size: 9
           vhost_socket: vhost_socket
           vhost_user: false
           ip: 192.168.249.1
@@ -439,8 +464,12 @@ components:
         mergeable: false
         file: file
         size: 1
+        hotplug_size: 5
       properties:
         size:
+          format: int64
+          type: integer
+        hotplug_size:
           format: int64
           type: integer
         file:
@@ -475,7 +504,7 @@ components:
         num_queues: 5
         readonly: false
         iommu: false
-        queue_size: 5
+        queue_size: 2
         vhost_socket: vhost_socket
         vhost_user: false
         direct: false
@@ -516,9 +545,9 @@ components:
     NetConfig:
       example:
         tap: tap
-        num_queues: 2
+        num_queues: 7
         iommu: false
-        queue_size: 7
+        queue_size: 9
         vhost_socket: vhost_socket
         vhost_user: false
         ip: 192.168.249.1
@@ -568,9 +597,9 @@ components:
     FsConfig:
       example:
         sock: sock
-        num_queues: 9
-        queue_size: 3
-        cache_size: 2
+        num_queues: 3
+        queue_size: 2
+        cache_size: 4
         dax: true
         tag: tag
       properties:
@@ -598,8 +627,9 @@ components:
       example:
         mergeable: false
         file: file
-        size: 4
+        size: 7
         iommu: false
+        discard_writes: false
       properties:
         file:
           type: string
@@ -610,6 +640,9 @@ components:
           default: false
           type: boolean
         mergeable:
+          default: false
+          type: boolean
+        discard_writes:
           default: false
           type: boolean
       required:
@@ -641,12 +674,15 @@ components:
       example:
         path: path
         iommu: false
+        id: id
       properties:
         path:
           type: string
         iommu:
           default: false
           type: boolean
+        id:
+          type: string
       required:
       - path
       type: object
@@ -680,6 +716,8 @@ components:
           minimum: 1
           type: integer
         desired_ram:
+          description: desired memory ram in bytes
+          format: int64
           type: integer
       type: object
     VmAddDevice:
@@ -687,5 +725,12 @@ components:
         path: path
       properties:
         path:
+          type: string
+      type: object
+    VmRemoveDevice:
+      example:
+        id: id
+      properties:
+        id:
           type: string
       type: object
