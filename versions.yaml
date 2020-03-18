@@ -65,7 +65,7 @@ externals:
 
   podman:
     description: "An open-source Linux tool for working with containers"
-    version: "1.8.0"
+    version: "1.8.1"
 
   sonobuoy:
     description: "Tool to run kubernetes e2e conformance tests"
