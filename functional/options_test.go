@@ -14,13 +14,13 @@ import (
 )
 
 func withOption(option string, fail bool) TableEntry {
-	command := NewCommand(Runtime, option)
-	return Entry(fmt.Sprintf("with option '%s'", option), command, fail)
+	return Entry(fmt.Sprintf("with option '%s'", option), option, fail)
 }
 
 var _ = Describe("global options", func() {
 	DescribeTable("option",
-		func(command *Command, fail bool) {
+		func(option string, fail bool) {
+			command := NewCommand(Runtime, option)
 			stdout, stderr, exitCode := command.Run()
 
 			if fail {
