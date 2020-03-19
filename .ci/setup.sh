@@ -37,7 +37,7 @@ if [ "$SNAP_CI" == "true" ] && [ "$ID" == "ubuntu" ]; then
 	export INSTALL_KATA="no"
 
 	echo "Install snap dependencies"
-	sudo apt-get install -y snapd snapcraft make
+	sudo apt-get --no-install-recommends install -y snapd snapcraft make
 
 	echo "Building snap image"
 	make snap
