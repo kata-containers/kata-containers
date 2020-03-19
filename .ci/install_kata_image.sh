@@ -109,7 +109,13 @@ build_image() {
 
 	pushd "${osbuilder_path}" >/dev/null
 
-	readonly ROOTFS_DIR="${PWD}/rootfs"
+	# Verify rootfs dir
+	if [ "${TEST_CGROUPSV2}" == "true" ] && [ "${TEST_INITRD}" == "yes" ]; then
+		distro_name=$(echo "${distro}" | sed 's/./\u&/')
+		readonly ROOTFS_DIR="${osbuilder_path}/rootfs-builder/rootfs-${distro_name}"
+	else
+		readonly ROOTFS_DIR="${PWD}/rootfs"
+	fi
 	export ROOTFS_DIR
 	sudo rm -rf "${ROOTFS_DIR}"
 
