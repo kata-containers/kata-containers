@@ -58,8 +58,9 @@ type Device interface {
 
 	// GetDeviceInfo returns device specific data used for hotplugging by hypervisor
 	// Caller could cast the return value to device specific struct
-	// e.g. Block device returns *config.BlockDrive and
-	// vfio device returns []*config.VFIODev
+	// e.g. Block device returns *config.BlockDrive,
+	// vfio device returns []*config.VFIODev,
+	// VhostUser device returns []*config.VhostUserDeviceAttrs
 	GetDeviceInfo() interface{}
 
 	// GetAttachCount returns how many times the device has been attached

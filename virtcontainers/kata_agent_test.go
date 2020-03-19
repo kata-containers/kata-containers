@@ -391,6 +391,82 @@ func TestHandleLocalStorage(t *testing.T) {
 	assert.Equal(t, localMountPoint, expected)
 }
 
+func TestHandleBlockVolume(t *testing.T) {
+	k := kataAgent{}
+
+	c := &Container{
+		id: "100",
+	}
+	containers := map[string]*Container{}
+	containers[c.id] = c
+
+	// Create a VhostUserBlk device and a DeviceBlock device
+	vDevID := "MockVhostUserBlk"
+	bDevID := "MockDeviceBlock"
+	vDestination := "/VhostUserBlk/destination"
+	bDestination := "/DeviceBlock/destination"
+	vPCIAddr := "0001:01"
+	bPCIAddr := "0002:01"
+
+	vDev := drivers.NewVhostUserBlkDevice(&config.DeviceInfo{ID: vDevID})
+	bDev := drivers.NewBlockDevice(&config.DeviceInfo{ID: bDevID})
+
+	vDev.VhostUserDeviceAttrs = &config.VhostUserDeviceAttrs{PCIAddr: vPCIAddr}
+	bDev.BlockDrive = &config.BlockDrive{PCIAddr: bPCIAddr}
+
+	var devices []api.Device
+	devices = append(devices, vDev, bDev)
+
+	// Create a VhostUserBlk mount and a DeviceBlock mount
+	var mounts []Mount
+	vMount := Mount{
+		BlockDeviceID: vDevID,
+		Destination:   vDestination,
+	}
+	bMount := Mount{
+		BlockDeviceID: bDevID,
+		Destination:   bDestination,
+	}
+	mounts = append(mounts, vMount, bMount)
+
+	tmpDir := "/vhost/user/dir"
+	dm := manager.NewDeviceManager(manager.VirtioBlock, true, tmpDir, devices)
+
+	sConfig := SandboxConfig{}
+	sConfig.HypervisorConfig.BlockDeviceDriver = manager.VirtioBlock
+	sandbox := Sandbox{
+		id:         "100",
+		containers: containers,
+		hypervisor: &mockHypervisor{},
+		devManager: dm,
+		ctx:        context.Background(),
+		config:     &sConfig,
+	}
+	containers[c.id].sandbox = &sandbox
+	containers[c.id].mounts = mounts
+
+	volumeStorages, err := k.handleBlockVolumes(c)
+	assert.Nil(t, err, "Error while handling block volumes")
+
+	vStorage := &pb.Storage{
+		MountPoint: vDestination,
+		Fstype:     "bind",
+		Options:    []string{"bind"},
+		Driver:     kataBlkDevType,
+		Source:     vPCIAddr,
+	}
+	bStorage := &pb.Storage{
+		MountPoint: bDestination,
+		Fstype:     "bind",
+		Options:    []string{"bind"},
+		Driver:     kataBlkDevType,
+		Source:     bPCIAddr,
+	}
+
+	assert.Equal(t, vStorage, volumeStorages[0], "Error while handle VhostUserBlk type block volume")
+	assert.Equal(t, bStorage, volumeStorages[1], "Error while handle BlockDevice type block volume")
+}
+
 func TestAppendDevicesEmptyContainerDeviceList(t *testing.T) {
 	k := kataAgent{}
 
@@ -400,7 +476,7 @@ func TestAppendDevicesEmptyContainerDeviceList(t *testing.T) {
 
 	c := &Container{
 		sandbox: &Sandbox{
-			devManager: manager.NewDeviceManager("virtio-scsi", nil),
+			devManager: manager.NewDeviceManager("virtio-scsi", false, "", nil),
 		},
 		devices: ctrDevices,
 	}
@@ -433,7 +509,55 @@ func TestAppendDevices(t *testing.T) {
 
 	c := &Container{
 		sandbox: &Sandbox{
-			devManager: manager.NewDeviceManager("virtio-blk", ctrDevices),
+			devManager: manager.NewDeviceManager("virtio-blk", false, "", ctrDevices),
+			config:     sandboxConfig,
+		},
+	}
+	c.devices = append(c.devices, ContainerDevice{
+		ID:            id,
+		ContainerPath: testBlockDeviceCtrPath,
+	})
+
+	devList := []*pb.Device{}
+	expected := []*pb.Device{
+		{
+			Type:          kataBlkDevType,
+			ContainerPath: testBlockDeviceCtrPath,
+			Id:            testPCIAddr,
+		},
+	}
+	updatedDevList := k.appendDevices(devList, c)
+	assert.True(t, reflect.DeepEqual(updatedDevList, expected),
+		"Device lists didn't match: got %+v, expecting %+v",
+		updatedDevList, expected)
+}
+
+func TestAppendVhostUserBlkDevices(t *testing.T) {
+	k := kataAgent{}
+
+	id := "test-append-vhost-user-blk"
+	ctrDevices := []api.Device{
+		&drivers.VhostUserBlkDevice{
+			GenericDevice: &drivers.GenericDevice{
+				ID: id,
+			},
+			VhostUserDeviceAttrs: &config.VhostUserDeviceAttrs{
+				Type:    config.VhostUserBlk,
+				PCIAddr: testPCIAddr,
+			},
+		},
+	}
+
+	sandboxConfig := &SandboxConfig{
+		HypervisorConfig: HypervisorConfig{
+			BlockDeviceDriver: config.VirtioBlock,
+		},
+	}
+
+	testVhostUserStorePath := "/test/vhost/user/store/path"
+	c := &Container{
+		sandbox: &Sandbox{
+			devManager: manager.NewDeviceManager("virtio-blk", true, testVhostUserStorePath, ctrDevices),
 			config:     sandboxConfig,
 		},
 	}

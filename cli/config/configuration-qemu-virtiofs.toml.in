@@ -172,6 +172,17 @@ enable_iothreads = @DEFENABLEIOTHREADS@
 # result in memory pre allocation
 #enable_hugepages = true
 
+# Enable vhost-user storage device, default false
+# Enabling this will result in some Linux reserved block type
+# major range 240-254 being chosen to represent vhost-user devices.
+enable_vhost_user_store = @DEFENABLEVHOSTUSERSTORE@
+
+# The base directory specifically used for vhost-user devices.
+# Its sub-path "block" is used for block devices; "block/sockets" is
+# where we expect vhost-user sockets to live; "block/devices" is where
+# simulated block device nodes for vhost-user devices to live.
+vhost_user_store_path = "@DEFVHOSTUSERSTOREPATH@"
+
 # Enable file based guest memory support. The default is an empty string which
 # will disable this feature. In the case of virtio-fs, this is enabled
 # automatically and '/dev/shm' is used as the backing folder.

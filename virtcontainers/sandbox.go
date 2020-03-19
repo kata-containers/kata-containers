@@ -575,7 +575,9 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 		if err != nil {
 			s.Logger().WithError(err).WithField("sandboxid", s.id).Warning("load sandbox devices failed")
 		}
-		s.devManager = deviceManager.NewDeviceManager(sandboxConfig.HypervisorConfig.BlockDeviceDriver, devices)
+		s.devManager = deviceManager.NewDeviceManager(sandboxConfig.HypervisorConfig.BlockDeviceDriver,
+			sandboxConfig.HypervisorConfig.EnableVhostUserStore,
+			sandboxConfig.HypervisorConfig.VhostUserStorePath, devices)
 
 		// Load sandbox state. The hypervisor.createSandbox call, may need to access statei.
 		state, err := s.store.LoadState()
@@ -587,7 +589,9 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 			return nil, err
 		}
 	} else {
-		s.devManager = deviceManager.NewDeviceManager(sandboxConfig.HypervisorConfig.BlockDeviceDriver, nil)
+		s.devManager = deviceManager.NewDeviceManager(sandboxConfig.HypervisorConfig.BlockDeviceDriver,
+			sandboxConfig.HypervisorConfig.EnableVhostUserStore,
+			sandboxConfig.HypervisorConfig.VhostUserStorePath, nil)
 
 		// Ignore the error. Restore can fail for a new sandbox
 		if err := s.Restore(); err != nil {
@@ -1658,6 +1662,13 @@ func (s *Sandbox) HotplugAddDevice(device api.Device, devType config.DeviceType)
 		}
 		_, err := s.hypervisor.hotplugAddDevice(blockDevice.BlockDrive, blockDev)
 		return err
+	case config.VhostUserBlk:
+		vhostUserBlkDevice, ok := device.(*drivers.VhostUserBlkDevice)
+		if !ok {
+			return fmt.Errorf("device type mismatch, expect device type to be %s", devType)
+		}
+		_, err := s.hypervisor.hotplugAddDevice(vhostUserBlkDevice.VhostUserDeviceAttrs, vhostuserDev)
+		return err
 	case config.DeviceGeneric:
 		// TODO: what?
 		return nil
@@ -1694,6 +1705,13 @@ func (s *Sandbox) HotplugRemoveDevice(device api.Device, devType config.DeviceTy
 			return fmt.Errorf("device type mismatch, expect device type to be %s", devType)
 		}
 		_, err := s.hypervisor.hotplugRemoveDevice(blockDrive, blockDev)
+		return err
+	case config.VhostUserBlk:
+		vhostUserDeviceAttrs, ok := device.GetDeviceInfo().(*config.VhostUserDeviceAttrs)
+		if !ok {
+			return fmt.Errorf("device type mismatch, expect device type to be %s", devType)
+		}
+		_, err := s.hypervisor.hotplugRemoveDevice(vhostUserDeviceAttrs, vhostuserDev)
 		return err
 	case config.DeviceGeneric:
 		// TODO: what?
