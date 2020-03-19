@@ -44,7 +44,7 @@ use nix::unistd::{self, ForkResult, Gid, Pid, Uid};
 use nix::Error;
 
 use libc;
-use protobuf::{CachedSize, SingularPtrField, UnknownFields};
+use protobuf::SingularPtrField;
 
 use oci::State as OCIState;
 use std::collections::HashMap;
