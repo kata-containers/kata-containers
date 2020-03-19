@@ -180,46 +180,6 @@ func (fc *firecracker) trace(name string) (opentracing.Span, context.Context) {
 	return span, ctx
 }
 
-// bindMount bind mounts a source in to a destination. This will
-// do some bookkeeping:
-// * evaluate all symlinks
-// * ensure the source exists
-// * recursively create the destination
-func (fc *firecracker) bindMount(ctx context.Context, source, destination string, readonly bool) error {
-	span, _ := trace(ctx, "bindMount")
-	defer span.Finish()
-
-	if source == "" {
-		return fmt.Errorf("source must be specified")
-	}
-	if destination == "" {
-		return fmt.Errorf("destination must be specified")
-	}
-
-	absSource, err := filepath.EvalSymlinks(source)
-	if err != nil {
-		return fmt.Errorf("Could not resolve symlink for source %v", source)
-	}
-
-	if err := ensureDestinationExists(absSource, destination); err != nil {
-		return fmt.Errorf("Could not create destination mount point %v: %v", destination, err)
-	}
-
-	fc.Logger().WithFields(logrus.Fields{"src": absSource, "dst": destination}).Debug("Bind mounting resource")
-
-	if err := syscall.Mount(absSource, destination, "bind", syscall.MS_BIND|syscall.MS_SLAVE, ""); err != nil {
-		return fmt.Errorf("Could not bind mount %v to %v: %v", absSource, destination, err)
-	}
-
-	// For readonly bind mounts, we need to remount with the readonly flag.
-	// This is needed as only very recent versions of libmount/util-linux support "bind,ro"
-	if readonly {
-		return syscall.Mount(absSource, destination, "bind", uintptr(syscall.MS_BIND|syscall.MS_SLAVE|syscall.MS_REMOUNT|syscall.MS_RDONLY), "")
-	}
-
-	return nil
-}
-
 // For firecracker this call only sets the internal structure up.
 // The sandbox will be created and started through startSandbox().
 func (fc *firecracker) createSandbox(ctx context.Context, id string, networkNS NetworkNamespace, hypervisorConfig *HypervisorConfig, stateful bool) error {
@@ -371,19 +331,7 @@ func (fc *firecracker) fcInit(timeout int) error {
 	span, _ := fc.trace("fcInit")
 	defer span.Finish()
 
-	// Fetch sandbox network to be able to access it from the sandbox structure.
-	err := os.MkdirAll(fc.jailerRoot, DirMode)
-	if err != nil {
-		return err
-	}
-	defer func() {
-		if err != nil {
-			if err := os.RemoveAll(fc.vmPath); err != nil {
-				fc.Logger().WithError(err).Error("Fail to clean up vm directory")
-			}
-		}
-	}()
-
+	var err error
 	//FC version set and check
 	if fc.info.Version, err = fc.getVersionNumber(); err != nil {
 		return err
@@ -537,13 +485,31 @@ func (fc *firecracker) createJailedDrive(name string) (string, error) {
 	return r, nil
 }
 
+// when running with jailer, firecracker binary will firstly be copied into fc.jailerRoot,
+// and then being executed there. Therefore we need to ensure fc.JailerRoot has exec permissions.
+func (fc *firecracker) fcRemountJailerRootWithExec() error {
+	if err := bindMount(context.Background(), fc.jailerRoot, fc.jailerRoot, false, "shared"); err != nil {
+		fc.Logger().WithField("JailerRoot", fc.jailerRoot).Errorf("bindMount failed: %v", err)
+		return err
+	}
+
+	// /run is normally mounted with rw, nosuid(MS_NOSUID), relatime(MS_RELATIME), noexec(MS_NOEXEC).
+	// we re-mount jailerRoot to deliberately leave out MS_NOEXEC.
+	if err := remount(context.Background(), syscall.MS_NOSUID|syscall.MS_RELATIME, fc.jailerRoot); err != nil {
+		fc.Logger().WithField("JailerRoot", fc.jailerRoot).Errorf("Re-mount failed: %v", err)
+		return err
+	}
+
+	return nil
+}
+
 func (fc *firecracker) fcJailResource(src, dst string) (string, error) {
 	if src == "" || dst == "" {
 		return "", fmt.Errorf("fcJailResource: invalid jail locations: src:%v, dst:%v",
 			src, dst)
 	}
 	jailedLocation := filepath.Join(fc.jailerRoot, dst)
-	if err := fc.bindMount(context.Background(), src, jailedLocation, false); err != nil {
+	if err := bindMount(context.Background(), src, jailedLocation, false, "slave"); err != nil {
 		fc.Logger().WithField("bindMount failed", err).Error()
 		return "", err
 	}
@@ -685,8 +651,23 @@ func (fc *firecracker) fcListenToFifo(fifoName string) (string, error) {
 }
 
 func (fc *firecracker) fcInitConfiguration() error {
+	err := os.MkdirAll(fc.jailerRoot, DirMode)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err != nil {
+			if err := os.RemoveAll(fc.vmPath); err != nil {
+				fc.Logger().WithError(err).Error("Fail to clean up vm directory")
+			}
+		}
+	}()
+
 	if fc.config.JailerPath != "" {
 		fc.jailed = true
+		if err := fc.fcRemountJailerRootWithExec(); err != nil {
+			return nil
+		}
 	}
 
 	fc.fcSetVMBaseConfig(int64(fc.config.MemorySize),
@@ -841,6 +822,12 @@ func (fc *firecracker) cleanupJail() {
 	fc.umountResource(fcLogFifo)
 	fc.umountResource(fcMetricsFifo)
 	fc.umountResource(defaultFcConfig)
+	// if running with jailer, we also need to umount fc.jailerRoot
+	if fc.config.JailerPath != "" {
+		if err := syscall.Unmount(fc.jailerRoot, syscall.MNT_DETACH); err != nil {
+			fc.Logger().WithField("JailerRoot", fc.jailerRoot).WithError(err).Error("Failed to umount")
+		}
+	}
 
 	fc.Logger().WithField("cleaningJail", fc.vmPath).Info()
 	if err := os.RemoveAll(fc.vmPath); err != nil {
