@@ -16,7 +16,6 @@ extern crate regex;
 extern crate rustjail;
 extern crate serde_json;
 extern crate signal_hook;
-#[macro_use]
 extern crate scan_fmt;
 extern crate oci;
 

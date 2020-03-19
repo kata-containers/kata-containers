@@ -26,7 +26,6 @@ use crate::errors::*;
 use lazy_static;
 use std::string::ToString;
 
-use protobuf::{CachedSize, RepeatedField, UnknownFields};
 use slog::Logger;
 
 // Info reveals information about a particular mounted filesystem. This
