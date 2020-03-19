@@ -282,7 +282,7 @@ mod tests {
     use super::Sandbox;
     use crate::{mount::BareMount, skip_if_not_root};
     use nix::mount::MsFlags;
-    use protocols::oci::{Linux, Root, Spec};
+    use oci::{Linux, Root, Spec};
     use rustjail::container::LinuxContainer;
     use rustjail::specconv::CreateOpts;
     use slog::Logger;
@@ -489,13 +489,13 @@ mod tests {
     }
 
     fn create_dummy_opts() -> CreateOpts {
-        let mut root = Root::new();
-        root.Path = String::from("/");
+        let mut root = Root::default();
+        root.path = String::from("/");
 
-        let linux = Linux::new();
-        let mut spec = Spec::new();
-        spec.Root = Some(root).into();
-        spec.Linux = Some(linux).into();
+        let linux = Linux::default();
+        let mut spec = Spec::default();
+        spec.root = Some(root).into();
+        spec.linux = Some(linux).into();
 
         CreateOpts {
             cgroup_name: "".to_string(),
