@@ -6,6 +6,7 @@
 package tests
 
 import (
+	"flag"
 	"io/ioutil"
 	"log"
 	"os"
@@ -13,6 +14,15 @@ import (
 
 	"github.com/BurntSushi/toml"
 )
+
+// Runtime is the path of a Kata Containers Runtime
+var Runtime string
+
+// Timeout specifies the time limit in seconds for each test
+var Timeout int
+
+// Hypervisor is the hypervisor currently being used with Kata
+var Hypervisor string
 
 // KataConfiguration is the runtime configuration
 type KataConfiguration struct {
@@ -95,7 +105,21 @@ var KataConfig KataConfiguration
 var KataHypervisor string
 
 func init() {
+	flag.StringVar(&Runtime, "runtime", "", "Path of the desired Kata Runtime")
+	flag.IntVar(&Timeout, "timeout", 5, "Time limit in seconds for each test")
+	flag.StringVar(&Hypervisor, "hypervisor", "", "The hypervisor currently being used with Kata")
+}
+
+// KataInit initializes the kata test suite.
+// This function should be called as soon as possible
+// preferably from `TestMain`
+func KataInit() {
 	var err error
+
+	// Since golang 1.13 packages that call flag.Parse during package initialization
+	// may cause tests to fail. https://golang.org/doc/go1.13#testing
+	flag.Parse()
+
 	kataConfigPath := DefaultKataConfigPath
 
 	args := []string{"--kata-show-default-config-paths"}
