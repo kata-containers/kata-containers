@@ -87,6 +87,7 @@ Commands:
 Options:
 
 	-c <path>   : Path to config file to build a the kernel.
+	-d          : Enable bash debug.
 	-e          : Enable experimental kernel.
 	-g <vendor> : GPU vendor, intel or nvidia.
 	-h          : Display this help.
@@ -424,13 +425,17 @@ install_kata() {
 }
 
 main() {
-	while getopts "a:c:eg:hk:p:t:v:" opt; do
+	while getopts "a:c:deg:hk:p:t:v:" opt; do
 		case "$opt" in
 			a)
 				arch_target="${OPTARG}"
 				;;
 			c)
 				kernel_config_path="${OPTARG}"
+				;;
+			d)
+				PS4=' Line ${LINENO}: '
+				set -x
 				;;
 			e)
 				experimental_kernel="true"
