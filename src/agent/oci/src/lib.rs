@@ -27,7 +27,7 @@ where
     *d == T::default()
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq)]
 pub struct Spec {
     #[serde(
         default,
@@ -69,7 +69,7 @@ impl Spec {
 
 pub type LinuxRlimit = POSIXRlimit;
 
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq)]
 pub struct Process {
     #[serde(default)]
     pub terminal: bool,
@@ -112,7 +112,7 @@ pub struct Process {
     pub selinux_label: String,
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq)]
 pub struct LinuxCapabilities {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub bounding: Vec<String>,
@@ -126,7 +126,7 @@ pub struct LinuxCapabilities {
     pub ambient: Vec<String>,
 }
 
-#[derive(Default, Serialize, Deserialize, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq)]
 pub struct Box {
     #[serde(default)]
     pub height: u32,
@@ -134,7 +134,7 @@ pub struct Box {
     pub width: u32,
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq)]
 pub struct User {
     #[serde(default)]
     pub uid: u32,
@@ -150,7 +150,7 @@ pub struct User {
     pub username: String,
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq)]
 pub struct Root {
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub path: String,
@@ -158,7 +158,7 @@ pub struct Root {
     pub readonly: bool,
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq)]
 pub struct Mount {
     #[serde(default)]
     pub destination: String,
@@ -170,7 +170,7 @@ pub struct Mount {
     pub options: Vec<String>,
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq)]
 pub struct Hook {
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub path: String,
@@ -182,7 +182,7 @@ pub struct Hook {
     pub timeout: Option<i32>,
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq)]
 pub struct Hooks {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub prestart: Vec<Hook>,
@@ -192,7 +192,7 @@ pub struct Hooks {
     pub poststop: Vec<Hook>,
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq)]
 pub struct Linux {
     #[serde(default, rename = "uidMappings", skip_serializing_if = "Vec::is_empty")]
     pub uid_mappings: Vec<LinuxIDMapping>,
@@ -238,7 +238,7 @@ pub struct Linux {
     pub intel_rdt: Option<LinuxIntelRdt>,
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq)]
 pub struct LinuxNamespace {
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub r#type: LinuxNamespaceType,
@@ -256,7 +256,7 @@ pub const USERNAMESPACE: &str = "user";
 pub const UTSNAMESPACE: &str = "uts";
 pub const CGROUPNAMESPACE: &str = "cgroup";
 
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq)]
 pub struct LinuxIDMapping {
     #[serde(default, rename = "containerID")]
     pub container_id: u32,
@@ -266,7 +266,7 @@ pub struct LinuxIDMapping {
     pub size: u32,
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq)]
 pub struct POSIXRlimit {
     #[serde(default)]
     pub r#type: String,
@@ -276,7 +276,7 @@ pub struct POSIXRlimit {
     pub soft: u64,
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq)]
 pub struct LinuxHugepageLimit {
     #[serde(default, rename = "pageSize", skip_serializing_if = "String::is_empty")]
     pub page_size: String,
@@ -284,7 +284,7 @@ pub struct LinuxHugepageLimit {
     pub limit: u64,
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq)]
 pub struct LinuxInterfacePriority {
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub name: String,
@@ -292,7 +292,7 @@ pub struct LinuxInterfacePriority {
     pub priority: u32,
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq)]
 pub struct LinuxBlockIODevice {
     #[serde(default)]
     pub major: i64,
@@ -300,7 +300,7 @@ pub struct LinuxBlockIODevice {
     pub minor: i64,
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq)]
 pub struct LinuxWeightDevice {
     pub blk: LinuxBlockIODevice,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -313,14 +313,14 @@ pub struct LinuxWeightDevice {
     pub leaf_weight: Option<u16>,
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq)]
 pub struct LinuxThrottleDevice {
     pub blk: LinuxBlockIODevice,
     #[serde(default)]
     pub rate: u64,
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq)]
 pub struct LinuxBlockIO {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub weight: Option<u16>,
@@ -362,7 +362,7 @@ pub struct LinuxBlockIO {
     pub throttle_write_iops_device: Vec<LinuxThrottleDevice>,
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq)]
 pub struct LinuxMemory {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub limit: Option<i64>,
@@ -384,7 +384,7 @@ pub struct LinuxMemory {
     pub disable_oom_killer: Option<bool>,
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq)]
 pub struct LinuxCPU {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub shares: Option<u64>,
@@ -410,13 +410,13 @@ pub struct LinuxCPU {
     pub mems: String,
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq)]
 pub struct LinuxPids {
     #[serde(default)]
     pub limit: i64,
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq)]
 pub struct LinuxNetwork {
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "classID")]
     pub class_id: Option<u32>,
@@ -424,7 +424,7 @@ pub struct LinuxNetwork {
     pub priorities: Vec<LinuxInterfacePriority>,
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq)]
 pub struct LinuxRdma {
     #[serde(
         default,
@@ -440,7 +440,7 @@ pub struct LinuxRdma {
     pub hca_objects: Option<u32>,
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq)]
 pub struct LinuxResources {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub devices: Vec<LinuxDeviceCgroup>,
@@ -464,7 +464,7 @@ pub struct LinuxResources {
     pub rdma: HashMap<String, LinuxRdma>,
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq)]
 pub struct LinuxDevice {
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub path: String,
@@ -482,7 +482,7 @@ pub struct LinuxDevice {
     pub gid: Option<u32>,
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq)]
 pub struct LinuxDeviceCgroup {
     #[serde(default)]
     pub allow: bool,
@@ -496,7 +496,7 @@ pub struct LinuxDeviceCgroup {
     pub access: String,
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq)]
 pub struct Solaris {
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub milestone: String,
@@ -520,13 +520,13 @@ pub struct Solaris {
     pub capped_memory: Option<SolarisCappedMemory>,
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq)]
 pub struct SolarisCappedCPU {
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub ncpus: String,
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq)]
 pub struct SolarisCappedMemory {
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub physical: String,
@@ -534,7 +534,7 @@ pub struct SolarisCappedMemory {
     pub swap: String,
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq)]
 pub struct SolarisAnet {
     #[serde(default, skip_serializing_if = "String::is_empty", rename = "linkname")]
     pub link_name: String,
@@ -572,7 +572,7 @@ pub struct SolarisAnet {
     pub mac_address: String,
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq)]
 pub struct Windows<T> {
     #[serde(
         default,
@@ -594,7 +594,7 @@ pub struct Windows<T> {
     pub network: Option<WindowsNetwork>,
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq)]
 pub struct WindowsResources {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub memory: Option<WindowsMemoryResources>,
@@ -604,13 +604,13 @@ pub struct WindowsResources {
     pub storage: Option<WindowsStorageResources>,
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq)]
 pub struct WindowsMemoryResources {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub limit: Option<u64>,
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq)]
 pub struct WindowsCPUResources {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub count: Option<u64>,
@@ -620,7 +620,7 @@ pub struct WindowsCPUResources {
     pub maximum: Option<u64>,
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq)]
 pub struct WindowsStorageResources {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub iops: Option<u64>,
@@ -634,7 +634,7 @@ pub struct WindowsStorageResources {
     pub sandbox_size: Option<u64>,
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq)]
 pub struct WindowsNetwork {
     #[serde(
         default,
@@ -658,7 +658,7 @@ pub struct WindowsNetwork {
     pub network_shared_container_name: String,
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq)]
 pub struct WindowsHyperV {
     #[serde(
         default,
@@ -668,14 +668,14 @@ pub struct WindowsHyperV {
     pub utility_vm_path: String,
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq)]
 pub struct VM {
     pub hypervisor: VMHypervisor,
     pub kernel: VMKernel,
     pub image: VMImage,
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq)]
 pub struct VMHypervisor {
     #[serde(default)]
     pub path: String,
@@ -683,7 +683,7 @@ pub struct VMHypervisor {
     pub parameters: String,
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq)]
 pub struct VMKernel {
     #[serde(default)]
     pub path: String,
@@ -693,7 +693,7 @@ pub struct VMKernel {
     pub initrd: String,
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq)]
 pub struct VMImage {
     #[serde(default)]
     pub path: String,
@@ -701,7 +701,7 @@ pub struct VMImage {
     pub format: String,
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq)]
 pub struct LinuxSeccomp {
     #[serde(default, rename = "defaultAction")]
     pub default_action: LinuxSeccompAction,
@@ -750,7 +750,7 @@ pub const OPGREATEREQUAL: &str = "SCMP_CMP_GE";
 pub const OPGREATERTHAN: &str = "SCMP_CMP_GT";
 pub const OPMASKEDEQUAL: &str = "SCMP_CMP_MASKED_EQ";
 
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq)]
 pub struct LinuxSeccompArg {
     #[serde(default)]
     pub index: u32,
@@ -762,7 +762,7 @@ pub struct LinuxSeccompArg {
     pub op: LinuxSeccompOperator,
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq)]
 pub struct LinuxSyscall {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub names: Vec<String>,
@@ -772,7 +772,7 @@ pub struct LinuxSyscall {
     pub args: Vec<LinuxSeccompArg>,
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq)]
 pub struct LinuxIntelRdt {
     #[serde(
         default,
@@ -782,7 +782,7 @@ pub struct LinuxIntelRdt {
     pub l3_cache_schema: String,
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq)]
 pub struct State {
     #[serde(
         default,
