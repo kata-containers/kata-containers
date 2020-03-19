@@ -72,13 +72,20 @@ const (
 // The main purpose is to hide the client in an interface to allow mock testing.
 // This is an interface that has to match with OpenAPI CLH client
 type clhClient interface {
+	// Check for the REST API availability
 	VmmPingGet(ctx context.Context) (chclient.VmmPingResponse, *http.Response, error)
+	// Shut the VMM down
 	ShutdownVMM(ctx context.Context) (*http.Response, error)
+	// Create the VM
 	CreateVM(ctx context.Context, vmConfig chclient.VmConfig) (*http.Response, error)
+	// Dump the VM information
 	// No lint: golint suggest to rename to VMInfoGet.
 	VmInfoGet(ctx context.Context) (chclient.VmInfo, *http.Response, error) //nolint:golint
+	// Boot the VM
 	BootVM(ctx context.Context) (*http.Response, error)
+	// Add/remove CPUs to/from the VM
 	VmResizePut(ctx context.Context, vmResize chclient.VmResize) (*http.Response, error)
+	// Add VFIO PCI device to the VM
 	VmAddDevicePut(ctx context.Context, vmAddDevice chclient.VmAddDevice) (*http.Response, error)
 }
 
