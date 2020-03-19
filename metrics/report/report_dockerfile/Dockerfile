@@ -13,10 +13,12 @@
 # We would have used the 'verse' base, that already has some of the docs processing
 # installed, but I could not figure out how to add in the extra bits we needed to
 # the lite tex version is uses.
-FROM rocker/tidyverse
+# Here we specify a tag for base image instead of using latest to let it free from
+# the risk from the update of latest base image.
+FROM rocker/tidyverse:3.6.0
 
 # Version of the Dockerfile
-LABEL DOCKERFILE_VERSION="1.1"
+LABEL DOCKERFILE_VERSION="1.2"
 
 # Without this some of the package installs stop to try and ask questions...
 ENV DEBIAN_FRONTEND=noninteractive
