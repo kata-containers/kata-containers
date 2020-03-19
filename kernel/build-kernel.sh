@@ -47,6 +47,8 @@ readonly GV_NVIDIA="nvidia"
 kernel_path=""
 #Experimental kernel support. Pull from virtio-fs GitLab instead of kernel.org
 experimental_kernel="false"
+#Force generate config when setup
+force_setup_generate_config="false"
 #GPU kernel support
 gpu_vendor=""
 #
@@ -89,6 +91,7 @@ Options:
 	-c <path>   : Path to config file to build a the kernel.
 	-d          : Enable bash debug.
 	-e          : Enable experimental kernel.
+	-f          : Enable force generate config when setup.
 	-g <vendor> : GPU vendor, intel or nvidia.
 	-h          : Display this help.
 	-k <path>   : Path to kernel to build.
@@ -314,22 +317,26 @@ setup_kernel() {
 
 	if [ -d "$kernel_path" ]; then
 		info "${kernel_path} already exist"
-		return
+		if [[ "${force_setup_generate_config}" != "true" ]];then
+			return
+		else
+			info "Force generate config due to '-f'"
+		fi
+	else
+		info "kernel path does not exist, will download kernel"
+		download_kernel="true"
+		[ -n "$kernel_version" ] || die "failed to get kernel version: Kernel version is emtpy"
+
+		if [[ ${download_kernel} == "true" ]]; then
+			get_kernel "${kernel_version}" "${kernel_path}"
+		fi
+
+		[ -n "$kernel_path" ] || die "failed to find kernel source path"
+
+		get_config_and_patches
+
+		[ -d "${patches_path}" ] || die " patches path '${patches_path}' does not exist"
 	fi
-
-	info "kernel path does not exist, will download kernel"
-	download_kernel="true"
-	[ -n "$kernel_version" ] || die "failed to get kernel version: Kernel version is emtpy"
-
-	if [[ ${download_kernel} == "true" ]]; then
-		get_kernel "${kernel_version}" "${kernel_path}"
-	fi
-
-	[ -n "$kernel_path" ] || die "failed to find kernel source path"
-
-	get_config_and_patches
-
-	[ -d "${patches_path}" ] || die " patches path '${patches_path}' does not exist"
 
 	local major_kernel
 	major_kernel=$(get_major_kernel_version "${kernel_version}")
@@ -425,7 +432,7 @@ install_kata() {
 }
 
 main() {
-	while getopts "a:c:deg:hk:p:t:v:" opt; do
+	while getopts "a:c:defg:hk:p:t:v:" opt; do
 		case "$opt" in
 			a)
 				arch_target="${OPTARG}"
@@ -439,6 +446,9 @@ main() {
 				;;
 			e)
 				experimental_kernel="true"
+				;;
+			f)
+				force_setup_generate_config="true"
 				;;
 			g)
 				gpu_vendor="${OPTARG}"
