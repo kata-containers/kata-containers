@@ -17,6 +17,7 @@ import (
 	"syscall"
 	"testing"
 
+	ktu "github.com/kata-containers/runtime/pkg/katatestutils"
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
 	"github.com/kata-containers/runtime/virtcontainers/device/drivers"
 	"github.com/kata-containers/runtime/virtcontainers/device/manager"
@@ -28,6 +29,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/sys/unix"
 )
+
+// dirMode is the permission bits used for creating a directory
+const dirMode = os.FileMode(0750) | os.ModeDir
 
 func newHypervisorConfig(kernelParams []Param, hParams []Param) HypervisorConfig {
 	return HypervisorConfig{
@@ -696,7 +700,7 @@ func TestSandboxAttachDevicesVFIO(t *testing.T) {
 		config.SysIOMMUPath = savedIOMMUPath
 	}()
 
-	dm := manager.NewDeviceManager(manager.VirtioSCSI, nil)
+	dm := manager.NewDeviceManager(manager.VirtioSCSI, false, "", nil)
 	path := filepath.Join(vfioPath, testFDIOGroup)
 	deviceInfo := config.DeviceInfo{
 		HostPath:      path,
@@ -735,6 +739,101 @@ func TestSandboxAttachDevicesVFIO(t *testing.T) {
 
 	err = containers[c.id].detachDevices()
 	assert.Nil(t, err, "Error while detaching devices %s", err)
+}
+
+func TestSandboxAttachDevicesVhostUserBlk(t *testing.T) {
+	rootEnabled := true
+	tc := ktu.NewTestConstraint(false)
+	if tc.NotValid(ktu.NeedRoot()) {
+		rootEnabled = false
+	}
+
+	tmpDir, err := ioutil.TempDir("", "")
+	assert.Nil(t, err)
+	os.RemoveAll(tmpDir)
+	dm := manager.NewDeviceManager(manager.VirtioSCSI, true, tmpDir, nil)
+
+	vhostUserDevNodePath := filepath.Join(tmpDir, "/block/devices/")
+	vhostUserSockPath := filepath.Join(tmpDir, "/block/sockets/")
+	deviceNodePath := filepath.Join(vhostUserDevNodePath, "vhostblk0")
+	deviceSockPath := filepath.Join(vhostUserSockPath, "vhostblk0")
+
+	err = os.MkdirAll(vhostUserDevNodePath, dirMode)
+	assert.Nil(t, err)
+	err = os.MkdirAll(vhostUserSockPath, dirMode)
+	assert.Nil(t, err)
+	_, err = os.Create(deviceSockPath)
+	assert.Nil(t, err)
+
+	// mknod requires root privilege, call mock function for non-root to
+	// get VhostUserBlk device type.
+	if rootEnabled == true {
+		err = unix.Mknod(deviceNodePath, unix.S_IFBLK, int(unix.Mkdev(config.VhostUserBlkMajor, 0)))
+		assert.Nil(t, err)
+	} else {
+		savedFunc := config.GetVhostUserNodeStatFunc
+
+		_, err = os.Create(deviceNodePath)
+		assert.Nil(t, err)
+
+		config.GetVhostUserNodeStatFunc = func(devNodePath string,
+			devNodeStat *unix.Stat_t) error {
+			if deviceNodePath != devNodePath {
+				return fmt.Errorf("mock GetVhostUserNodeStatFunc error")
+			}
+
+			devNodeStat.Rdev = unix.Mkdev(config.VhostUserBlkMajor, 0)
+			return nil
+		}
+
+		defer func() {
+			config.GetVhostUserNodeStatFunc = savedFunc
+		}()
+	}
+
+	path := "/dev/vda"
+	deviceInfo := config.DeviceInfo{
+		HostPath:      deviceNodePath,
+		ContainerPath: path,
+		DevType:       "b",
+		Major:         config.VhostUserBlkMajor,
+		Minor:         0,
+	}
+
+	device, err := dm.NewDevice(deviceInfo)
+	assert.Nil(t, err)
+	_, ok := device.(*drivers.VhostUserBlkDevice)
+	assert.True(t, ok)
+
+	c := &Container{
+		id: "100",
+		devices: []ContainerDevice{
+			{
+				ID:            device.DeviceID(),
+				ContainerPath: path,
+			},
+		},
+	}
+
+	containers := map[string]*Container{}
+	containers[c.id] = c
+
+	sandbox := Sandbox{
+		id:         "100",
+		containers: containers,
+		hypervisor: &mockHypervisor{},
+		devManager: dm,
+		ctx:        context.Background(),
+		config:     &SandboxConfig{},
+	}
+
+	containers[c.id].sandbox = &sandbox
+
+	err = containers[c.id].attachDevices(c.devices)
+	assert.Nil(t, err, "Error while attaching vhost-user-blk devices %s", err)
+
+	err = containers[c.id].detachDevices()
+	assert.Nil(t, err, "Error while detaching vhost-user-blk devices %s", err)
 }
 
 var assetContent = []byte("FakeAsset fake asset FAKE ASSET")
@@ -1174,7 +1273,7 @@ func TestAttachBlockDevice(t *testing.T) {
 		DevType:       "b",
 	}
 
-	dm := manager.NewDeviceManager(config.VirtioBlock, nil)
+	dm := manager.NewDeviceManager(config.VirtioBlock, false, "", nil)
 	device, err := dm.NewDevice(deviceInfo)
 	assert.Nil(t, err)
 	_, ok := device.(*drivers.BlockDevice)
@@ -1230,7 +1329,7 @@ func TestPreAddDevice(t *testing.T) {
 		HypervisorConfig: hConfig,
 	}
 
-	dm := manager.NewDeviceManager(config.VirtioBlock, nil)
+	dm := manager.NewDeviceManager(config.VirtioBlock, false, "", nil)
 	// create a sandbox first
 	sandbox := &Sandbox{
 		id:         testSandboxID,

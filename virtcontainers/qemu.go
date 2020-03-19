@@ -522,6 +522,15 @@ func (q *qemu) createSandbox(ctx context.Context, id string, networkNS NetworkNa
 		}
 	}
 
+	// Vhost-user-blk/scsi process which can improve performance, like SPDK,
+	// requires shared-on hugepage to work with Qemu.
+	if q.config.EnableVhostUserStore {
+		if !q.config.HugePages {
+			return errors.New("Vhost-user-blk/scsi is enabled without HugePages. This configuration will not work")
+		}
+		knobs.MemShared = true
+	}
+
 	rtc := govmmQemu.RTC{
 		Base:     "utc",
 		DriftFix: "slew",
@@ -678,7 +687,7 @@ func (q *qemu) setupVirtiofsd() (err error) {
 	return err
 }
 
-func (q *qemu) getMemArgs() (bool, string, string) {
+func (q *qemu) getMemArgs() (bool, string, string, error) {
 	share := false
 	target := ""
 	memoryBack := "memory-backend-ram"
@@ -689,15 +698,24 @@ func (q *qemu) getMemArgs() (bool, string, string) {
 		target = "/dev/hugepages"
 		memoryBack = "memory-backend-file"
 		share = true
-	} else if q.config.SharedFS == config.VirtioFS || q.config.FileBackedMemRootDir != "" {
-		target = q.qemuConfig.Memory.Path
-		memoryBack = "memory-backend-file"
+	} else {
+		if q.config.EnableVhostUserStore {
+			// Vhost-user-blk/scsi process which can improve performance, like SPDK,
+			// requires shared-on hugepage to work with Qemu.
+			return share, target, "", fmt.Errorf("Vhost-user-blk/scsi requires hugepage memory")
+		}
+
+		if q.config.SharedFS == config.VirtioFS || q.config.FileBackedMemRootDir != "" {
+			target = q.qemuConfig.Memory.Path
+			memoryBack = "memory-backend-file"
+		}
 	}
+
 	if q.qemuConfig.Knobs.MemShared {
 		share = true
 	}
 
-	return share, target, memoryBack
+	return share, target, memoryBack, nil
 }
 
 func (q *qemu) setupVirtioMem() error {
@@ -708,7 +726,11 @@ func (q *qemu) setupVirtioMem() error {
 	// 1024 is size for nvdimm
 	sizeMB := int(maxMem) - int(q.config.MemorySize)
 
-	share, target, memoryBack := q.getMemArgs()
+	share, target, memoryBack, err := q.getMemArgs()
+	if err != nil {
+		return err
+	}
+
 	err = q.qmpSetup()
 	if err != nil {
 		return err
@@ -1123,6 +1145,40 @@ func (q *qemu) hotplugAddBlockDevice(drive *config.BlockDrive, op operation, dev
 	return nil
 }
 
+func (q *qemu) hotplugAddVhostUserBlkDevice(vAttr *config.VhostUserDeviceAttrs, op operation, devID string) (err error) {
+	err = q.qmpMonitorCh.qmp.ExecuteCharDevUnixSocketAdd(q.qmpMonitorCh.ctx, vAttr.DevID, vAttr.SocketPath, false, false)
+	if err != nil {
+		return err
+	}
+
+	defer func() {
+		if err != nil {
+			q.qmpMonitorCh.qmp.ExecuteChardevDel(q.qmpMonitorCh.ctx, vAttr.DevID)
+		}
+	}()
+
+	driver := "vhost-user-blk-pci"
+	addr, bridge, err := q.arch.addDeviceToBridge(vAttr.DevID, types.PCI)
+	if err != nil {
+		return err
+	}
+
+	defer func() {
+		if err != nil {
+			q.arch.removeDeviceFromBridge(vAttr.DevID)
+		}
+	}()
+
+	// PCI address is in the format bridge-addr/device-addr eg. "03/02"
+	vAttr.PCIAddr = fmt.Sprintf("%02x", bridge.Addr) + "/" + addr
+
+	if err = q.qmpMonitorCh.qmp.ExecutePCIVhostUserDevAdd(q.qmpMonitorCh.ctx, driver, devID, vAttr.DevID, addr, bridge.ID); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func (q *qemu) hotplugBlockDevice(drive *config.BlockDrive, op operation) error {
 	err := q.qmpSetup()
 	if err != nil {
@@ -1150,6 +1206,38 @@ func (q *qemu) hotplugBlockDevice(drive *config.BlockDrive, op operation) error 
 	}
 
 	return err
+}
+
+func (q *qemu) hotplugVhostUserDevice(vAttr *config.VhostUserDeviceAttrs, op operation) error {
+	err := q.qmpSetup()
+	if err != nil {
+		return err
+	}
+
+	devID := "virtio-" + vAttr.DevID
+
+	if op == addDevice {
+		switch vAttr.Type {
+		case config.VhostUserBlk:
+			return q.hotplugAddVhostUserBlkDevice(vAttr, op, devID)
+		default:
+			return fmt.Errorf("Incorrect vhost-user device type found")
+		}
+	} else {
+		if err := q.arch.removeDeviceFromBridge(vAttr.DevID); err != nil {
+			return err
+		}
+
+		if err := q.qmpMonitorCh.qmp.ExecuteDeviceDel(q.qmpMonitorCh.ctx, devID); err != nil {
+			return err
+		}
+
+		if err := q.qmpMonitorCh.qmp.ExecuteChardevDel(q.qmpMonitorCh.ctx, vAttr.DevID); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func (q *qemu) hotplugVFIODevice(device *config.VFIODev, op operation) (err error) {
@@ -1344,6 +1432,9 @@ func (q *qemu) hotplugDevice(devInfo interface{}, devType deviceType, op operati
 	case netDev:
 		device := devInfo.(Endpoint)
 		return nil, q.hotplugNetDevice(device, op)
+	case vhostuserDev:
+		vAttr := devInfo.(*config.VhostUserDeviceAttrs)
+		return nil, q.hotplugVhostUserDevice(vAttr, op)
 	default:
 		return nil, fmt.Errorf("cannot hotplug device: unsupported device type '%v'", devType)
 	}
@@ -1551,7 +1642,11 @@ func (q *qemu) hotplugAddMemory(memDev *memoryDevice) (int, error) {
 		memDev.slot = maxSlot + 1
 	}
 
-	share, target, memoryBack := q.getMemArgs()
+	share, target, memoryBack, err := q.getMemArgs()
+	if err != nil {
+		return 0, err
+	}
+
 	err = q.qmpMonitorCh.qmp.ExecHotplugMemory(q.qmpMonitorCh.ctx, memoryBack, "mem"+strconv.Itoa(memDev.slot), target, memDev.sizeMB, share)
 	if err != nil {
 		q.Logger().WithError(err).Error("hotplug memory")

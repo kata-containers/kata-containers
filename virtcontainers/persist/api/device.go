@@ -66,6 +66,13 @@ type VhostUserDeviceAttrs struct {
 
 	// MacAddress is only meaningful for vhost user net device
 	MacAddress string
+
+	// PCIAddr is the PCI address used to identify the slot at which the drive is attached.
+	// It is only meaningful for vhost user block devices
+	PCIAddr string
+
+	// Block index of the device if assigned
+	Index int
 }
 
 // DeviceState is sandbox level resource which represents host devices

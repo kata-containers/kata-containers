@@ -14,7 +14,7 @@ import (
 	persistapi "github.com/kata-containers/runtime/virtcontainers/persist/api"
 )
 
-// GenericDevice refers to a device that is neither a VFIO device or block device.
+// GenericDevice refers to a device that is neither a VFIO device, block device or VhostUserDevice.
 type GenericDevice struct {
 	ID         string
 	DeviceInfo *config.DeviceInfo
