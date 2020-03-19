@@ -39,6 +39,15 @@ install_qemu(){
 	fi
 }
 
+echo "Install shim"
+"${cidir}/install_shim.sh" "${tag}"
+
+echo "Install proxy"
+"${cidir}/install_proxy.sh" "${tag}"
+
+echo "Install runtime"
+"${cidir}/install_runtime.sh" "${tag}"
+
 case "${KATA_HYPERVISOR}" in
 	"cloud-hypervisor")
 		"${cidir}/install_cloud_hypervisor.sh"
@@ -57,16 +66,11 @@ case "${KATA_HYPERVISOR}" in
 		;;
 esac
 
-echo "Install shim"
-"${cidir}/install_shim.sh" "${tag}"
-
-echo "Install proxy"
-"${cidir}/install_proxy.sh" "${tag}"
-
-echo "Install runtime"
-"${cidir}/install_runtime.sh" "${tag}"
-
 if [ "${TEST_CGROUPSV2}" == "true" ]; then
 	echo "Configure podman with kata"
 	"${cidir}/configure_podman_for_kata.sh"
 fi
+
+# Check system supports running Kata Containers
+kata_runtime_path=$(command -v kata-runtime)
+sudo -E PATH=$PATH "$kata_runtime_path" kata-check
