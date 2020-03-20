@@ -105,8 +105,20 @@ func isLargeBarSpace(resourcePath string) (bool, error) {
 	suffix := []string{"", "K", "M", "G", "T"}
 	for rIdx, line := range strings.Split(string(buf), "\n") {
 		cols := strings.Fields(line)
+		// start and end columns are required to calculate the size
+		if len(cols) < 2 {
+			deviceLogger().WithField("resource-line", line).Debug("not enough columns to calculate PCI size")
+			continue
+		}
 		start, _ := strconv.ParseUint(cols[0], 0, 64)
 		end, _ := strconv.ParseUint(cols[1], 0, 64)
+		if start > end {
+			deviceLogger().WithFields(logrus.Fields{
+				"start": start,
+				"end":   end,
+			}).Debug("start is greater than end")
+			continue
+		}
 		size := end - start + 1
 		sIdx := 0
 		for i := range suffix {
