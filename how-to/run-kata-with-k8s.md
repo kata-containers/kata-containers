@@ -112,10 +112,17 @@ default_workload_trust = "untrusted"
 
 #### Network namespace management
 To enable networking for the workloads run by Kata, CRI-O needs to be configured to
-manage network namespaces, by setting the following key to `true`:
+manage network namespaces, by setting the following key to `true`.
+
+In CRI-O v1.16:
 ```toml
 manage_network_ns_lifecycle = true
 ```
+In CRI-O v1.17+:
+```toml
+manage_ns_lifecycle = true
+```
+
 
 ### containerd with CRI plugin
 
