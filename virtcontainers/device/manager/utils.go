@@ -102,7 +102,6 @@ func isLargeBarSpace(resourcePath string) (bool, error) {
 	// Refer:
 	// resource format: https://github.com/torvalds/linux/blob/63623fd44972d1ed2bfb6e0fb631dfcf547fd1e7/drivers/pci/pci-sysfs.c#L145
 	// calculate size : https://github.com/pciutils/pciutils/blob/61ecc14a327de030336f1ff3fea9c7e7e55a90ca/lspci.c#L388
-	suffix := []string{"", "K", "M", "G", "T"}
 	for rIdx, line := range strings.Split(string(buf), "\n") {
 		cols := strings.Fields(line)
 		// start and end columns are required to calculate the size
@@ -119,25 +118,18 @@ func isLargeBarSpace(resourcePath string) (bool, error) {
 			}).Debug("start is greater than end")
 			continue
 		}
-		size := end - start + 1
-		sIdx := 0
-		for i := range suffix {
-			if size/1024 < 1 {
-				break
-			}
-			size /= 1024
-			sIdx = i + 1
-		}
+		// Use right shift to convert Bytes to GBytes
+		// This is equivalent to ((end - start + 1) / 1024 / 1024 / 1024)
+		gbSize := (end - start + 1) >> 30
 		deviceLogger().WithFields(logrus.Fields{
 			"resource": resourcePath,
 			"region":   rIdx,
 			"start":    cols[0],
 			"end":      cols[1],
-			"size":     size,
-			"suffix":   suffix[sIdx],
+			"gb-size":  gbSize,
 		}).Debug("Check large bar space device")
 		//size is large than 4G
-		if (sIdx == 3 && size > 4) || sIdx > 3 {
+		if gbSize > 4 {
 			return true, nil
 		}
 	}
