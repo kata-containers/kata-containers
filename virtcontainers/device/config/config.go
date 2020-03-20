@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 
 	"github.com/go-ini/ini"
 	"golang.org/x/sys/unix"
@@ -90,6 +91,8 @@ var SysBusPciDevicesPath = "/sys/bus/pci/devices"
 
 // SysBusPciSlotsPath is static string of /sys/bus/pci/slots
 var SysBusPciSlotsPath = "/sys/bus/pci/slots"
+
+var getSysDevPath = getSysDevPathImpl
 
 // DeviceInfo is an embedded type that contains device data common to all types of devices.
 type DeviceInfo struct {
@@ -257,29 +260,14 @@ func GetHostPath(devInfo DeviceInfo, vhostUserStoreEnabled bool, vhostUserStoreP
 		return "", fmt.Errorf("Empty path provided for device")
 	}
 
-	var pathComp string
-
-	switch devInfo.DevType {
-	case "c", "u":
-		pathComp = "char"
-	case "b":
-		pathComp = "block"
-	default:
-		// Unsupported device types. Return nil error to ignore devices
-		// that cannot be handled currently.
-		return "", nil
-	}
-
 	// Filter out vhost-user storage devices by device Major numbers.
 	if vhostUserStoreEnabled && devInfo.DevType == "b" &&
 		(devInfo.Major == VhostUserSCSIMajor || devInfo.Major == VhostUserBlkMajor) {
 		return getVhostUserHostPath(devInfo, vhostUserStorePath)
 	}
 
-	format := strconv.FormatInt(devInfo.Major, 10) + ":" + strconv.FormatInt(devInfo.Minor, 10)
-	sysDevPath := filepath.Join(SysDevPrefix, pathComp, format, "uevent")
-
-	if _, err := os.Stat(sysDevPath); err != nil {
+	ueventPath := filepath.Join(getSysDevPath(devInfo), "uevent")
+	if _, err := os.Stat(ueventPath); err != nil {
 		// Some devices(eg. /dev/fuse, /dev/cuse) do not always implement sysfs interface under /sys/dev
 		// These devices are passed by default by docker.
 		//
@@ -293,7 +281,7 @@ func GetHostPath(devInfo DeviceInfo, vhostUserStoreEnabled bool, vhostUserStoreP
 		return "", err
 	}
 
-	content, err := ini.Load(sysDevPath)
+	content, err := ini.Load(ueventPath)
 	if err != nil {
 		return "", err
 	}
@@ -304,6 +292,35 @@ func GetHostPath(devInfo DeviceInfo, vhostUserStoreEnabled bool, vhostUserStoreP
 	}
 
 	return filepath.Join("/dev", devName.String()), nil
+}
+
+// getBackingFile is used to fetch the backing file for the device.
+func getBackingFile(devInfo DeviceInfo) (string, error) {
+	backingFilePath := filepath.Join(getSysDevPath(devInfo), "loop", "backing_file")
+	data, err := ioutil.ReadFile(backingFilePath)
+	if err != nil {
+		return "", err
+	}
+
+	return strings.TrimSpace(string(data)), nil
+}
+
+func getSysDevPathImpl(devInfo DeviceInfo) string {
+	var pathComp string
+
+	switch devInfo.DevType {
+	case "c", "u":
+		pathComp = "char"
+	case "b":
+		pathComp = "block"
+	default:
+		// Unsupported device types. Return nil error to ignore devices
+		// that cannot be handled currently.
+		return ""
+	}
+
+	format := strconv.FormatInt(devInfo.Major, 10) + ":" + strconv.FormatInt(devInfo.Minor, 10)
+	return filepath.Join(SysDevPrefix, pathComp, format)
 }
 
 // getVhostUserHostPath is used to fetch host path for the vhost-user device.
