@@ -98,11 +98,15 @@ func (dm *deviceManager) findDeviceByMajorMinor(major, minor int64) api.Device {
 
 // createDevice creates one device based on DeviceInfo
 func (dm *deviceManager) createDevice(devInfo config.DeviceInfo) (dev api.Device, err error) {
-	path, err := config.GetHostPathFunc(devInfo, dm.vhostUserStoreEnabled, dm.vhostUserStorePath)
-	if err != nil {
-		return nil, err
+	// pmem device may points to block devices or raw files,
+	// do not change its HostPath.
+	if !devInfo.Pmem {
+		path, err := config.GetHostPathFunc(devInfo, dm.vhostUserStoreEnabled, dm.vhostUserStorePath)
+		if err != nil {
+			return nil, err
+		}
+		devInfo.HostPath = path
 	}
-	devInfo.HostPath = path
 
 	defer func() {
 		if err == nil {
@@ -119,7 +123,7 @@ func (dm *deviceManager) createDevice(devInfo config.DeviceInfo) (dev api.Device
 	if devInfo.ID, err = dm.newDeviceID(); err != nil {
 		return nil, err
 	}
-	if isVFIO(path) {
+	if isVFIO(devInfo.HostPath) {
 		return drivers.NewVFIODevice(&devInfo), nil
 	} else if isVhostUserBlk(devInfo) {
 		if devInfo.DriverOptions == nil {
@@ -134,7 +138,7 @@ func (dm *deviceManager) createDevice(devInfo config.DeviceInfo) (dev api.Device
 		devInfo.DriverOptions["block-driver"] = dm.blockDriver
 		return drivers.NewBlockDevice(&devInfo), nil
 	} else {
-		deviceLogger().WithField("device", path).Info("Device has not been passed to the container")
+		deviceLogger().WithField("device", devInfo.HostPath).Info("Device has not been passed to the container")
 		return drivers.NewGenericDevice(&devInfo), nil
 	}
 }
