@@ -137,18 +137,18 @@ see [the developer guide](https://github.com/kata-containers/documentation/blob/
 
 There is an easy way to build a guest kernel that supports Nvidia GPU:
 ```
-## Build guest kernel with http://github.com/kata-containers/packaging
+## Build guest kernel with https://github.com/kata-containers/packaging/tree/master/kernel
 
 # Prepare (download guest kernel source, generate .config)
-$ ./build-kernel.sh -v 4.19.86 -g setup
+$ ./build-kernel.sh -v 4.19.86 -g nvidia -f setup
 
 # Build guest kernel
-$ ./build-kernel.sh -v 4.19.86 -g build
+$ ./build-kernel.sh -v 4.19.86 -g nvidia build
 
 # Install guest kernel
-$ sudo -E ./build-kernel.sh -v 4.19.86 -g install
-/usr/share/kata-containers/vmlinux-gpu.container -> vmlinux-4.19.86-69-gpu
-/usr/share/kata-containers/vmlinuz-gpu.container -> vmlinuz-4.19.86-69-gpu
+$ sudo -E ./build-kernel.sh -v 4.19.86 -g nvidia install
+/usr/share/kata-containers/vmlinux-nvidia-gpu.container -> vmlinux-4.19.86-70-nvidia-gpu
+/usr/share/kata-containers/vmlinuz-nvidia-gpu.container -> vmlinuz-4.19.86-70-nvidia-gpu
 ```
 
 To build Nvidia Driver in Kata container, `kernel-devel` is required.  
@@ -157,15 +157,15 @@ This is a way to generate rpm packages for `kernel-devel`:
 $ cd kata-linux-4.19.86-68
 $ make rpm-pkg
 Output RPMs:
-~/rpmbuild/RPMS/x86_64/kernel-devel-4.19.86_gpu-1.x86_64.rpm
+~/rpmbuild/RPMS/x86_64/kernel-devel-4.19.86_nvidia_gpu-1.x86_64.rpm
 ```
 > **Note**:
 > - `kernel-devel` should be installed in Kata container before run Nvidia driver installer.
 > - Run `make deb-pkg` to build the deb package.
 
-Before using the new guest kernel, please update the kernel parameters in `configuration.toml`.
+Before using the new guest kernel, please update the `kernel` parameters in `configuration.toml`.
 ```
-kernel = "/usr/share/kata-containers/vmlinuz-gpu.container"
+kernel = "/usr/share/kata-containers/vmlinuz-nvidia-gpu.container"
 ```
 
 ## Nvidia GPU pass-through mode with Kata Containers
