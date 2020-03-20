@@ -39,10 +39,18 @@ readonly default_kernel_config_dir="${GOPATH}/src/${kernel_config_repo}/kernel/c
 # Default path to search for kernel config fragments
 readonly default_config_frags_dir="${GOPATH}/src/${kernel_config_repo}/kernel/configs/fragments"
 readonly default_config_whitelist="${GOPATH}/src/${kernel_config_repo}/kernel/configs/fragments/whitelist.conf"
+# GPU vendor
+readonly GV_INTEL="intel"
+readonly GV_NVIDIA="nvidia"
+
 #Path to kernel directory
 kernel_path=""
 #Experimental kernel support. Pull from virtio-fs GitLab instead of kernel.org
 experimental_kernel="false"
+#Force generate config when setup
+force_setup_generate_config="false"
+#GPU kernel support
+gpu_vendor=""
 #
 patches_path=""
 #
@@ -80,13 +88,16 @@ Commands:
 
 Options:
 
-	-c <path>: Path to config file to build a the kernel.
-	-e       : Enable experimental kernel.
-	-h       : Display this help.
-	-k <path>: Path to kernel to build.
-	-p <path>: Path to a directory with patches to apply to kernel.
-	-t       : Hypervisor_target.
-	-v       : Kernel version to use if kernel path not provided.
+	-c <path>   : Path to config file to build a the kernel.
+	-d          : Enable bash debug.
+	-e          : Enable experimental kernel.
+	-f          : Enable force generate config when setup.
+	-g <vendor> : GPU vendor, intel or nvidia.
+	-h          : Display this help.
+	-k <path>   : Path to kernel to build.
+	-p <path>   : Path to a directory with patches to apply to kernel.
+	-t          : Hypervisor_target.
+	-v          : Kernel version to use if kernel path not provided.
 EOT
 	exit "$exit_code"
 }
@@ -167,6 +178,8 @@ get_major_kernel_version() {
 get_kernel_frag_path() {
 	local arch_path="$1"
 	local common_path="${arch_path}/../common"
+	local gpu_path="${arch_path}/../gpu"
+
 	local kernel_path="$2"
 	local cmdpath="${kernel_path}/scripts/kconfig/merge_config.sh"
 	local config_path="${arch_path}/.config"
@@ -188,6 +201,12 @@ get_kernel_frag_path() {
 	local all_configs="${common_configs} ${arch_configs}"
 	if [[ ${experimental_kernel} == "true" ]]; then
 		all_configs="${all_configs} ${experimental_configs}"
+	fi
+
+	if [[ "${gpu_vendor}" != "" ]];then
+		info "Add kernel config for GPU due to '-g ${gpu_vendor}'"
+		local gpu_configs="$(ls ${gpu_path}/${gpu_vendor}.conf)"
+		all_configs="${all_configs} ${gpu_configs}"
 	fi
 
 	info "Constructing config from fragments: ${config_path}"
@@ -298,22 +317,26 @@ setup_kernel() {
 
 	if [ -d "$kernel_path" ]; then
 		info "${kernel_path} already exist"
-		return
+		if [[ "${force_setup_generate_config}" != "true" ]];then
+			return
+		else
+			info "Force generate config due to '-f'"
+		fi
+	else
+		info "kernel path does not exist, will download kernel"
+		download_kernel="true"
+		[ -n "$kernel_version" ] || die "failed to get kernel version: Kernel version is emtpy"
+
+		if [[ ${download_kernel} == "true" ]]; then
+			get_kernel "${kernel_version}" "${kernel_path}"
+		fi
+
+		[ -n "$kernel_path" ] || die "failed to find kernel source path"
+
+		get_config_and_patches
+
+		[ -d "${patches_path}" ] || die " patches path '${patches_path}' does not exist"
 	fi
-
-	info "kernel path does not exist, will download kernel"
-	download_kernel="true"
-	[ -n "$kernel_version" ] || die "failed to get kernel version: Kernel version is emtpy"
-
-	if [[ ${download_kernel} == "true" ]]; then
-		get_kernel "${kernel_version}" "${kernel_path}"
-	fi
-
-	[ -n "$kernel_path" ] || die "failed to find kernel source path"
-
-	get_config_and_patches
-
-	[ -d "${patches_path}" ] || die " patches path '${patches_path}' does not exist"
 
 	local major_kernel
 	major_kernel=$(get_major_kernel_version "${kernel_version}")
@@ -365,8 +388,17 @@ install_kata() {
 	config_version=$(get_config_version)
 	[ -n "${config_version}" ] || die "failed to get config version"
 	install_path=$(readlink -m "${DESTDIR}/${PREFIX}/share/${project_name}")
-	vmlinuz="vmlinuz-${kernel_version}-${config_version}"
-	vmlinux="vmlinux-${kernel_version}-${config_version}"
+
+	suffix=""
+	if [[ ${experimental_kernel} == "true" ]]; then
+		suffix="-virtiofs"
+	fi
+	if [[ ${gpu_vendor} != "" ]];then
+		suffix="-${gpu_vendor}-gpu${suffix}"
+	fi
+
+	vmlinuz="vmlinuz-${kernel_version}-${config_version}${suffix}"
+	vmlinux="vmlinux-${kernel_version}-${config_version}${suffix}"
 
 	if [ -e "arch/${arch_target}/boot/bzImage" ]; then
 		bzImage="arch/${arch_target}/boot/bzImage"
@@ -392,21 +424,15 @@ install_kata() {
 
 	install --mode 0644 -D ./.config "${install_path}/config-${kernel_version}"
 
-	if [[ ${experimental_kernel} == "true" ]]; then
-		sufix="-virtiofs.container"
-	else
-		sufix=".container"
-	fi
-
-	ln -sf "${vmlinuz}" "${install_path}/vmlinuz${sufix}"
-	ln -sf "${vmlinux}" "${install_path}/vmlinux${sufix}"
-	ls -la "${install_path}/vmlinux${sufix}"
-	ls -la "${install_path}/vmlinuz${sufix}"
+	ln -sf "${vmlinuz}" "${install_path}/vmlinuz${suffix}.container"
+	ln -sf "${vmlinux}" "${install_path}/vmlinux${suffix}.container"
+	ls -la "${install_path}/vmlinux${suffix}.container"
+	ls -la "${install_path}/vmlinuz${suffix}.container"
 	popd >>/dev/null
 }
 
 main() {
-	while getopts "a:c:hk:p:t:v:e" opt; do
+	while getopts "a:c:defg:hk:p:t:v:" opt; do
 		case "$opt" in
 			a)
 				arch_target="${OPTARG}"
@@ -414,8 +440,19 @@ main() {
 			c)
 				kernel_config_path="${OPTARG}"
 				;;
+			d)
+				PS4=' Line ${LINENO}: '
+				set -x
+				;;
 			e)
 				experimental_kernel="true"
+				;;
+			f)
+				force_setup_generate_config="true"
+				;;
+			g)
+				gpu_vendor="${OPTARG}"
+				[[ "${gpu_vendor}" == "${GV_INTEL}" || "${gpu_vendor}" == "${GV_NVIDIA}" ]] || die "GPU vendor only support intel and nvidia"
 				;;
 			h)
 				usage 0
