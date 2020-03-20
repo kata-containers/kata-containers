@@ -14,8 +14,8 @@ use crate::linux_abi::*;
 use crate::mount::{DRIVERBLKTYPE, DRIVERMMIOBLKTYPE, DRIVERNVDIMMTYPE, DRIVERSCSITYPE};
 use crate::sandbox::Sandbox;
 use crate::{AGENT_CONFIG, GLOBAL_DEVICE_WATCHER};
-use protocols::agent::Device;
 use oci::Spec;
+use protocols::agent::Device;
 use rustjail::errors::*;
 
 // Convenience macro to obtain the scope logger

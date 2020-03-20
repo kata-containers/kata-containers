@@ -34,10 +34,8 @@ pub struct Process {
     pub extra_files: Vec<File>,
     //	pub caps: Capabilities,
     //	pub rlimits: Vec<Rlimit>,
-    pub console_socket: Option<RawFd>,
     pub term_master: Option<RawFd>,
-    // parent end of fds
-    pub parent_console_socket: Option<RawFd>,
+    pub tty: bool,
     pub parent_stdin: Option<RawFd>,
     pub parent_stdout: Option<RawFd>,
     pub parent_stderr: Option<RawFd>,
@@ -89,9 +87,8 @@ impl Process {
             exit_pipe_w: None,
             exit_pipe_r: None,
             extra_files: Vec::new(),
-            console_socket: None,
+            tty: ocip.terminal,
             term_master: None,
-            parent_console_socket: None,
             parent_stdin: None,
             parent_stdout: None,
             parent_stderr: None,
@@ -104,44 +101,21 @@ impl Process {
 
         info!(logger, "before create console socket!");
 
-        if ocip.terminal {
-            let (psocket, csocket) = match socket::socketpair(
-                AddressFamily::Unix,
-                SockType::Stream,
-                None,
-                SockFlag::SOCK_CLOEXEC,
-            ) {
-                Ok((u, v)) => (u, v),
-                Err(e) => {
-                    match e {
-                        Error::Sys(errno) => {
-                            info!(logger, "socketpair: {}", errno.desc());
-                        }
-                        _ => {
-                            info!(logger, "socketpair: other error!");
-                        }
-                    }
-                    return Err(e);
-                }
-            };
-            p.parent_console_socket = Some(psocket);
-            p.console_socket = Some(csocket);
+        if !p.tty {
+            info!(logger, "created console socket!");
+
+            let (stdin, pstdin) = unistd::pipe2(OFlag::O_CLOEXEC)?;
+            p.parent_stdin = Some(pstdin);
+            p.stdin = Some(stdin);
+
+            let (pstdout, stdout) = create_extended_pipe(OFlag::O_CLOEXEC, pipe_size)?;
+            p.parent_stdout = Some(pstdout);
+            p.stdout = Some(stdout);
+
+            let (pstderr, stderr) = create_extended_pipe(OFlag::O_CLOEXEC, pipe_size)?;
+            p.parent_stderr = Some(pstderr);
+            p.stderr = Some(stderr);
         }
-
-        info!(logger, "created console socket!");
-
-        let (stdin, pstdin) = unistd::pipe2(OFlag::O_CLOEXEC)?;
-        p.parent_stdin = Some(pstdin);
-        p.stdin = Some(stdin);
-
-        let (pstdout, stdout) = create_extended_pipe(OFlag::O_CLOEXEC, pipe_size)?;
-        p.parent_stdout = Some(pstdout);
-        p.stdout = Some(stdout);
-
-        let (pstderr, stderr) = create_extended_pipe(OFlag::O_CLOEXEC, pipe_size)?;
-        p.parent_stderr = Some(pstderr);
-        p.stderr = Some(stderr);
-
         Ok(p)
     }
 }

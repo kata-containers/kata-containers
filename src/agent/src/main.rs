@@ -10,14 +10,14 @@
 #![allow(non_snake_case)]
 #[macro_use]
 extern crate lazy_static;
+extern crate oci;
 extern crate prctl;
 extern crate protocols;
 extern crate regex;
 extern crate rustjail;
+extern crate scan_fmt;
 extern crate serde_json;
 extern crate signal_hook;
-extern crate scan_fmt;
-extern crate oci;
 
 #[macro_use]
 extern crate scopeguard;
@@ -100,6 +100,10 @@ fn announce(logger: &Logger) {
 
 fn main() -> Result<()> {
     let args: Vec<String> = env::args().collect();
+    if args.len() == 2 && args[1] == "init" {
+        rustjail::container::init_child();
+        exit(0);
+    }
 
     env::set_var("RUST_BACKTRACE", "full");
 
