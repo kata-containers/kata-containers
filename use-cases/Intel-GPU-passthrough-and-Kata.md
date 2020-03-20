@@ -85,6 +85,27 @@ Build the Kata Containers kernel with the previous config options, using the ins
 described in [Building Kata Containers kernel](https://github.com/kata-containers/packaging/tree/master/kernel).
 For further details on building and installing guest kernels, see [the developer guide](https://github.com/kata-containers/documentation/blob/master/Developer-Guide.md#install-guest-kernel-images).
 
+There is an easy way to build a guest kernel that supports Intel GPU:
+```
+## Build guest kernel with https://github.com/kata-containers/packaging/tree/master/kernel
+
+# Prepare (download guest kernel source, generate .config)
+$ ./build-kernel.sh -g intel -f setup
+
+# Build guest kernel
+$ ./build-kernel.sh -g intel build
+
+# Install guest kernel
+$ sudo -E ./build-kernel.sh -g intel install
+/usr/share/kata-containers/vmlinux-intel-gpu.container -> vmlinux-5.4.15-70-intel-gpu
+/usr/share/kata-containers/vmlinuz-intel-gpu.container -> vmlinuz-5.4.15-70-intel-gpu
+```
+
+Before using the new guest kernel, please update the `kernel` parameters in `configuration.toml`.
+```
+kernel = "/usr/share/kata-containers/vmlinuz-intel-gpu.container"
+```
+
 ## GVT-d with Kata Containers
 
 Use the following steps to pass an Intel Graphics device in GVT-d mode with Kata:
