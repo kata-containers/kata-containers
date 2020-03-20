@@ -70,7 +70,7 @@ var _ = Describe("[Serial Test] package manager update test", func() {
 
 	Context("check dnf update", func() {
 		It("should not fail", func() {
-			if KataConfig.Hypervisor[DefaultHypervisor].SharedFS == "virtio-fs" {
+			if KataConfig.Hypervisor[KataHypervisor].SharedFS == "virtio-fs" {
 				Skip("Skip issue: https://github.com/kata-containers/tests/issues/2008")
 			}
 
@@ -93,7 +93,7 @@ var _ = Describe("[Serial Test] package manager update test", func() {
 
 	Context("check yum update", func() {
 		It("should not fail", func() {
-			if KataConfig.Hypervisor[DefaultHypervisor].SharedFS == "virtio-fs" {
+			if KataConfig.Hypervisor[KataHypervisor].SharedFS == "virtio-fs" {
 				Skip("Skip issue: https://github.com/kata-containers/tests/issues/2008")
 			}
 			args = append(args, "--rm", "-td", "--name", id, CentosImage, "sh")

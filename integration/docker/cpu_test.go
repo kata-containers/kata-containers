@@ -68,7 +68,7 @@ var _ = Describe("Hot plug CPUs", func() {
 		waitTime = 5
 		maxTries = 5
 		args = []string{}
-		defaultVCPUs = int(KataConfig.Hypervisor[DefaultHypervisor].DefaultVCPUs)
+		defaultVCPUs = int(KataConfig.Hypervisor[KataHypervisor].DefaultVCPUs)
 		Expect(defaultVCPUs).To(BeNumerically(">", 0))
 	})
 
@@ -271,7 +271,7 @@ var _ = Describe("Update number of CPUs", func() {
 		waitTime = 5
 		maxTries = 5
 
-		defaultVCPUs = int(KataConfig.Hypervisor[DefaultHypervisor].DefaultVCPUs)
+		defaultVCPUs = int(KataConfig.Hypervisor[KataHypervisor].DefaultVCPUs)
 		Expect(defaultVCPUs).To(BeNumerically(">", 0))
 
 		runArgs = []string{}

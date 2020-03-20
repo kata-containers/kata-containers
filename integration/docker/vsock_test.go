@@ -30,7 +30,7 @@ var _ = Describe("vsock test", func() {
 
 	Context("when using vsock", func() {
 		It("should not create a kata-proxy process", func() {
-			if !KataConfig.Hypervisor[DefaultHypervisor].Vsock {
+			if !KataConfig.Hypervisor[KataHypervisor].Vsock {
 				Skip("Use of vsock not enabled")
 			}
 			args = []string{"--name", name, "-d", Image, "top"}
@@ -46,7 +46,7 @@ var _ = Describe("vsock test", func() {
 		})
 
 		It("should print the agent logs in the shim journal", func() {
-			if !KataConfig.Hypervisor[DefaultHypervisor].Vsock {
+			if !KataConfig.Hypervisor[KataHypervisor].Vsock {
 				Skip("Use of vsock not enabled")
 			}
 			if !KataConfig.Shim[DefaultShim].Debug {

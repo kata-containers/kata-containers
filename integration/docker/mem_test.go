@@ -59,7 +59,7 @@ var _ = Describe("Hotplug memory when create containers", func() {
 
 	BeforeEach(func() {
 		id = randomDockerName()
-		defaultMemSz = int64(KataConfig.Hypervisor[DefaultHypervisor].DefaultMemSz) << 20
+		defaultMemSz = int64(KataConfig.Hypervisor[KataHypervisor].DefaultMemSz) << 20
 		Expect(defaultMemSz).To(BeNumerically(">", int64(0)))
 	})
 
@@ -134,7 +134,7 @@ var _ = Describe("memory constraints", func() {
 
 		id = randomDockerName()
 
-		defaultMemSz = int(KataConfig.Hypervisor[DefaultHypervisor].DefaultMemSz)
+		defaultMemSz = int(KataConfig.Hypervisor[KataHypervisor].DefaultMemSz)
 		Expect(defaultMemSz).To(BeNumerically(">", 0))
 	})
 
