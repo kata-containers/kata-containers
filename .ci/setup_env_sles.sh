@@ -32,7 +32,7 @@ sudo -E zypper addrepo --no-gpgcheck ${moreutils_repo}
 sudo -E zypper refresh
 
 echo "Add repo for hunspell and pandoc packages"
-SUSEConnect -p PackageHub/${VERSION_ID}/${arch}
+sudo -E SUSEConnect -p PackageHub/${VERSION_ID}/${arch}
 
 echo "Install chronic"
 sudo -E zypper -n install moreutils
@@ -98,6 +98,7 @@ main()
 	crudini_repo="https://download.opensuse.org/repositories/Cloud:OpenStack:Liberty/SLE_${VERSIONID}/Cloud:OpenStack:Liberty.repo"
 	chronic sudo -E zypper addrepo --no-gpgcheck ${crudini_repo}
 	chronic sudo -E zypper refresh
+	chronic sudo -E zypper -n install crudini
 }
 
 main "$@"
