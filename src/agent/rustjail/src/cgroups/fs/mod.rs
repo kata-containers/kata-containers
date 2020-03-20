@@ -2,7 +2,6 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 //
-
 use crate::cgroups::FreezerState;
 use crate::cgroups::Manager as CgroupManager;
 use crate::container::DEFAULT_DEVICES;
@@ -19,6 +18,7 @@ use protocols::agent::{
 use regex::Regex;
 use std::collections::HashMap;
 use std::fs;
+use std::path::Path;
 
 // Convenience macro to obtain the scope logger
 macro_rules! sl {
@@ -207,7 +207,7 @@ fn parse_size(s: &str, m: &HashMap<String, u128>) -> Result<u128> {
 
 fn custom_size(mut size: f64, base: f64, m: &Vec<String>) -> String {
     let mut i = 0;
-    while size > base {
+    while size >= base && i < m.len() - 1 {
         size /= base;
         i += 1;
     }
@@ -307,7 +307,6 @@ where
     T: ToString,
 {
     let p = format!("{}/{}", dir, file);
-    info!(sl!(), "{}", p.as_str());
     fs::write(p.as_str(), v.to_string().as_bytes())?;
     Ok(())
 }
@@ -936,6 +935,11 @@ fn get_blkio_stat(dir: &str, file: &str) -> Result<RepeatedField<BlkioStatsEntry
     let p = format!("{}/{}", dir, file);
     let mut m = RepeatedField::new();
 
+    // do as runc
+    if !Path::new(&p).exists() {
+        return Ok(RepeatedField::new());
+    }
+
     for l in fs::read_to_string(p.as_str())?.lines() {
         let parts: Vec<&str> = l.split(' ').collect();
 
@@ -1224,7 +1228,7 @@ fn get_all_procs(dir: &str) -> Result<Vec<i32>> {
     Ok(m)
 }
 
-#[derive(Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Manager {
     pub paths: HashMap<String, String>,
     pub mounts: HashMap<String, String>,
@@ -1238,7 +1242,6 @@ pub const FROZEN: &'static str = "FROZEN";
 impl CgroupManager for Manager {
     fn apply(&self, pid: pid_t) -> Result<()> {
         for (key, value) in &self.paths {
-            info!(sl!(), "apply cgroup {}", key);
             apply(value, pid)?;
         }
 
@@ -1249,7 +1252,6 @@ impl CgroupManager for Manager {
         for (key, value) in &self.paths {
             let _ = fs::create_dir_all(value);
             let sub = get_subsystem(key)?;
-            info!(sl!(), "setting cgroup {}", key);
             sub.set(value, spec, update)?;
         }
 
@@ -1301,9 +1303,16 @@ impl CgroupManager for Manager {
         };
 
         // BlkioStats
+        // note that virtiofs has no blkio stats
         info!(sl!(), "blkio_stats");
         let blkio_stats = if self.paths.get("blkio").is_some() {
-            SingularPtrField::some(Blkio().get_stats(self.paths.get("blkio").unwrap())?)
+            match Blkio().get_stats(self.paths.get("blkio").unwrap()) {
+                Ok(stat) => SingularPtrField::some(stat),
+                Err(e) => {
+                    warn!(sl!(), "failed to get blkio stats");
+                    SingularPtrField::none()
+                }
+            }
         } else {
             SingularPtrField::none()
         };

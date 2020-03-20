@@ -578,11 +578,11 @@ impl protocols::agent_grpc::AgentService for agentService {
         req: protocols::agent::ExecProcessRequest,
         sink: ::grpcio::UnarySink<protocols::empty::Empty>,
     ) {
-        if let Err(_) = self.do_exec_process(req) {
+        if let Err(e) = self.do_exec_process(req) {
             let f = sink
                 .fail(RpcStatus::new(
                     RpcStatusCode::Internal,
-                    Some(String::from("fail to exec process!")),
+                    Some(format!("{}", e)),
                 ))
                 .map_err(|_e| error!(sl!(), "fail to exec process!"));
             ctx.spawn(f);

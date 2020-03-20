@@ -14,6 +14,7 @@ use oci::{LinuxDevice, Mount, Spec};
 use std::collections::{HashMap, HashSet};
 use std::fs::{self, OpenOptions};
 use std::os::unix;
+use std::os::unix::io::RawFd;
 use std::path::{Path, PathBuf};
 
 use path_absolutize::*;
@@ -23,10 +24,11 @@ use std::io::{BufRead, BufReader};
 
 use crate::container::DEFAULT_DEVICES;
 use crate::errors::*;
+use crate::sync::write_count;
 use lazy_static;
 use std::string::ToString;
 
-use slog::Logger;
+use crate::log_child;
 
 // Info reveals information about a particular mounted filesystem. This
 // struct is populated from the content in the /proc/<pid>/mountinfo file.
@@ -97,7 +99,7 @@ lazy_static! {
 }
 
 pub fn init_rootfs(
-    logger: &Logger,
+    cfd_log: RawFd,
     spec: &Spec,
     cpath: &HashMap<String, String>,
     mounts: &HashMap<String, String>,
@@ -133,13 +135,13 @@ pub fn init_rootfs(
             return Err(ErrorKind::Nix(nix::Error::Sys(Errno::EINVAL)).into());
         }
         if m.r#type == "cgroup" {
-            mount_cgroups(logger, &m, rootfs, flags, &data, cpath, mounts)?;
+            mount_cgroups(cfd_log, &m, rootfs, flags, &data, cpath, mounts)?;
         } else {
             if m.destination == "/dev" {
                 flags &= !MsFlags::MS_RDONLY;
             }
 
-            mount_from(&m, &rootfs, flags, &data, "")?;
+            mount_from(cfd_log, &m, &rootfs, flags, &data, "")?;
         }
     }
 
@@ -156,7 +158,7 @@ pub fn init_rootfs(
 }
 
 fn mount_cgroups(
-    logger: &Logger,
+    cfd_log: RawFd,
     m: &Mount,
     rootfs: &str,
     flags: MsFlags,
@@ -173,8 +175,8 @@ fn mount_cgroups(
     };
 
     let cflags = MsFlags::MS_NOEXEC | MsFlags::MS_NOSUID | MsFlags::MS_NODEV;
-    info!(logger, "tmpfs");
-    mount_from(&ctm, rootfs, cflags, "", "")?;
+    //  info!(logger, "tmpfs");
+    mount_from(cfd_log, &ctm, rootfs, cflags, "", "")?;
     let olddir = unistd::getcwd()?;
 
     unistd::chdir(rootfs)?;
@@ -183,7 +185,7 @@ fn mount_cgroups(
 
     // bind mount cgroups
     for (key, mount) in mounts.iter() {
-        info!(logger, "{}", key);
+        log_child!(cfd_log, "mount cgroup subsystem {}", key);
         let source = if cpath.get(key).is_some() {
             cpath.get(key).unwrap()
         } else {
@@ -210,7 +212,7 @@ fn mount_cgroups(
 
         srcs.insert(source.to_string());
 
-        info!(logger, "{}", destination.as_str());
+        log_child!(cfd_log, "mount destination: {}", destination.as_str());
 
         let bm = Mount {
             source: source.to_string(),
@@ -219,25 +221,24 @@ fn mount_cgroups(
             options: Vec::new(),
         };
 
-        mount_from(
-            &bm,
-            rootfs,
-            flags | MsFlags::MS_REC | MsFlags::MS_BIND,
-            "",
-            "",
-        )?;
+        let mut mount_flags: MsFlags = flags | MsFlags::MS_REC | MsFlags::MS_BIND;
+        if key.contains("systemd") {
+            mount_flags &= !MsFlags::MS_RDONLY;
+        }
+        mount_from(cfd_log, &bm, rootfs, mount_flags, "", "")?;
 
         if key != base {
             let src = format!("{}/{}", m.destination.as_str(), key);
             match unix::fs::symlink(destination.as_str(), &src[1..]) {
                 Err(e) => {
-                    info!(
-                        logger,
+                    log_child!(
+                        cfd_log,
                         "symlink: {} {} err: {}",
                         key,
                         destination.as_str(),
                         e.to_string()
                     );
+
                     return Err(e.into());
                 }
                 Ok(_) => {}
@@ -421,7 +422,14 @@ fn parse_mount(m: &Mount) -> (MsFlags, String) {
     (flags, data.join(","))
 }
 
-fn mount_from(m: &Mount, rootfs: &str, flags: MsFlags, data: &str, _label: &str) -> Result<()> {
+fn mount_from(
+    cfd_log: RawFd,
+    m: &Mount,
+    rootfs: &str,
+    flags: MsFlags,
+    data: &str,
+    _label: &str,
+) -> Result<()> {
     let d = String::from(data);
     let dest = format!("{}{}", rootfs, &m.destination);
 
@@ -437,8 +445,8 @@ fn mount_from(m: &Mount, rootfs: &str, flags: MsFlags, data: &str, _label: &str)
         match fs::create_dir_all(&dir) {
             Ok(_) => {}
             Err(e) => {
-                info!(
-                    sl!(),
+                log_child!(
+                    cfd_log,
                     "creat dir {}: {}",
                     dir.to_str().unwrap(),
                     e.to_string()
@@ -456,8 +464,6 @@ fn mount_from(m: &Mount, rootfs: &str, flags: MsFlags, data: &str, _label: &str)
         PathBuf::from(&m.source)
     };
 
-    info!(sl!(), "{}, {}", src.to_str().unwrap(), dest.as_str());
-
     // ignore this check since some mount's src didn't been a directory
     // such as tmpfs.
     /*
@@ -472,7 +478,12 @@ fn mount_from(m: &Mount, rootfs: &str, flags: MsFlags, data: &str, _label: &str)
     match stat::stat(dest.as_str()) {
         Ok(_) => {}
         Err(e) => {
-            info!(sl!(), "{}: {}", dest.as_str(), e.as_errno().unwrap().desc());
+            log_child!(
+                cfd_log,
+                "{}: {}",
+                dest.as_str(),
+                e.as_errno().unwrap().desc()
+            );
         }
     }
 
@@ -485,7 +496,7 @@ fn mount_from(m: &Mount, rootfs: &str, flags: MsFlags, data: &str, _label: &str)
     ) {
         Ok(_) => {}
         Err(e) => {
-            info!(sl!(), "mount error: {}", e.as_errno().unwrap().desc());
+            log_child!(cfd_log, "mount error: {}", e.as_errno().unwrap().desc());
             return Err(e.into());
         }
     }
@@ -508,8 +519,8 @@ fn mount_from(m: &Mount, rootfs: &str, flags: MsFlags, data: &str, _label: &str)
             None::<&str>,
         ) {
             Err(e) => {
-                info!(
-                    sl!(),
+                log_child!(
+                    cfd_log,
                     "remout {}: {}",
                     dest.as_str(),
                     e.as_errno().unwrap().desc()
@@ -616,9 +627,9 @@ fn bind_dev(dev: &LinuxDevice) -> Result<()> {
     Ok(())
 }
 
-pub fn finish_rootfs(spec: &Spec) -> Result<()> {
+pub fn finish_rootfs(cfd_log: RawFd, spec: &Spec) -> Result<()> {
     let olddir = unistd::getcwd()?;
-    info!(sl!(), "{}", olddir.to_str().unwrap());
+    log_child!(cfd_log, "old cwd: {}", olddir.to_str().unwrap());
     unistd::chdir("/")?;
     if spec.linux.is_some() {
         let linux = spec.linux.as_ref().unwrap();
