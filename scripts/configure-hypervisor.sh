@@ -283,13 +283,11 @@ generate_qemu_options() {
 		qemu_options+=(misc:--static)
 	fi
 
-	# Disable debug and "-uuid ..." is always passed to the qemu binary so not required.
+	# Disable debug is always passed to the qemu binary so not required.
 	case "$arch" in
 	aarch64)
-		qemu_options+=(size:--disable-uuid)
 		;;
 	x86_64)
-		qemu_options+=(size:--disable-uuid)
 		qemu_options+=(size:--disable-debug-tcg)
 		qemu_options+=(size:--disable-tcg-interpreter)
 		;;
@@ -298,7 +296,6 @@ generate_qemu_options() {
 		qemu_options+=(size:--disable-tcg-interpreter)
 		;;
 	s390x)
-		qemu_options+=(size:--disable-uuid)
 		qemu_options+=(size:--disable-debug-tcg)
 		qemu_options+=(size:--disable-tcg-interpreter)
 		;;
@@ -316,25 +313,38 @@ generate_qemu_options() {
 	# Don't build the qemu-io, qemu-nbd and qemu-image tools
 	qemu_options+=(size:--disable-tools)
 
+	# Don't build linux-user bsd-user
+	qemu_options+=(size:--disable-bsd-user)
+	qemu_options+=(size:--disable-linux-user)
+
+	# Don't build sparse check tool
+	qemu_options+=(size:--disable-sparse)
+
+	# Don't build VDE networking backend
+	qemu_options+=(size:--disable-vde)
+
+	# Don't build other options which can't be depent on build server.
+	qemu_options+=(size:--disable-xfsctl)
+	qemu_options+=(size:--disable-libxml2)
+	qemu_options+=(size:--disable-nettle)
+
 	# Disable XEN driver
-	case "$arch" in
-	aarch64) ;;
-	x86_64) qemu_options+=(size:--disable-xen) ;;
-	ppc64le) qemu_options+=(size:--disable-xen) ;;
-	s390x) qemu_options+=(size:--disable-xen) ;;
-	esac
+	qemu_options+=(size:--disable-xen)
 
 	# FIXME: why is this disabled?
 	# (for reference, it's explicitly enabled in Ubuntu 17.10 and
 	# implicitly enabled in Fedora 27).
 	qemu_options+=(size:--disable-linux-aio)
 
-	if [[ "${qemu_version_major}" -ge 4 || ( "${qemu_version_major}" -eq 3  &&  "${qemu_version_minor}" -ge 1 ) ]]; then
+	if [[ "${qemu_version_major}" -ge 3 ]]; then
 		# Disable graphics
 		qemu_options+=(size:--disable-virglrenderer)
 
-		# Disable block replication
-		qemu_options+=(size:--disable-replication)
+		# Due to qemu commit 3ebb9c4f52, we can't disable replication in v3.0
+		if [[ "${qemu_version_major}" -ge 4 || ( "${qemu_version_major}" -eq 3 && "${qemu_version_minor}" -ge 1 ) ]]; then
+			# Disable block replication
+			qemu_options+=(size:--disable-replication)
+		fi
 
 		# Disable USB smart card reader
 		qemu_options+=(size:--disable-smartcard)
@@ -409,6 +419,11 @@ generate_qemu_options() {
 		qemu_options+=(arch:"--target-list=${arch}-softmmu")
 	fi
 
+	# aarch64 need to explictly set --enable-pie
+	if [ "${arch}" = "aarch64" ]; then
+		qemu_options+=(arch:"--enable-pie")
+	fi
+
 	_qemu_cflags=""
 
 	# compile with high level of optimisation
@@ -432,7 +447,7 @@ generate_qemu_options() {
 	# and take advantage of ASLR, making ROP attacks much harder to perform.
 	# (https://wiki.debian.org/Hardening)
 	case "$arch" in
-	aarch64) _qemu_cflags+=" -fPIC" ;;
+	aarch64) _qemu_cflags+=" -fPIE" ;;
 	x86_64) _qemu_cflags+=" -fPIE" ;;
 	ppc64le) _qemu_cflags+=" -fPIE" ;;
 	s390x) _qemu_cflags+=" -fPIE" ;;
@@ -449,7 +464,7 @@ generate_qemu_options() {
 	# and take advantage of ASLR, making ROP attacks much harder to perform.
 	# (https://wiki.debian.org/Hardening)
 	case "$arch" in
-	aarch64) ;;
+	aarch64) [ -z "${static}" ] && _qemu_ldflags+=" -pie" ;;
 	x86_64) [ -z "${static}" ] && _qemu_ldflags+=" -pie" ;;
 	ppc64le) [ -z "${static}" ] && _qemu_ldflags+=" -pie" ;;
 	s390x) [ -z "${static}" ] && _qemu_ldflags+=" -pie" ;;
