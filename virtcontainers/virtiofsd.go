@@ -217,6 +217,10 @@ func (v *virtiofsd) kill() (err error) {
 	span, _ := v.trace("kill")
 	defer span.Finish()
 
+	if v.PID == 0 {
+		return errors.New("invalid virtiofsd PID(0)")
+	}
+
 	err = syscall.Kill(v.PID, syscall.SIGKILL)
 	if err != nil {
 		v.PID = 0
