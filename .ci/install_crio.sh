@@ -47,7 +47,6 @@ ghprbGhRepository="${ghprbGhRepository:-}"
 crio_repo=$(get_version "externals.crio.url")
 # remove https:// from the url
 crio_repo="${crio_repo#*//}"
-crio_config_file="/etc/crio/crio.conf"
 
 # Remove CRI-O repository if already exists on Fedora
 if [ "$ID" == "fedora" ]; then
@@ -112,6 +111,16 @@ popd
 echo "Installing CRI Tools"
 crictl_url="${crictl_repo}/releases/download/v${crictl_version}/crictl-${crictl_tag_prefix}${crictl_version}-linux-$(${cidir}/kata-arch.sh -g).tar.gz"
 curl -Ls "$crictl_url" | sudo tar xfz - -C /usr/local/bin
+
+# Change CRI-O configuration options
+crio_config_file="/etc/crio/crio.conf"
+
+# This commit contains changes regarding CRI-O’s default configuration files,
+# so we have to use a new default config path from here.
+# https://github.com/cri-o/cri-o/commit/0f1226b99685f95e83c94dc6668b6452df5056db
+if git merge-base --is-ancestor 0f1226b99685f95e83c94dc6668b6452df5056db HEAD; then
+    crio_config_file="/etc/crio/crio.conf.d/00-default.conf"
+fi
 
 # Change socket format and pause image used for infra containers
 # Needed for cri-o 1.10
