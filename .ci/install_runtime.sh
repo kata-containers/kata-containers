@@ -88,10 +88,6 @@ else
 	sudo sed -i -e '/^initrd =/d' ${runtime_config_path}
 fi
 
-# Check system supports running Kata Containers
-kata_runtime_path=$(command -v kata-runtime)
-sudo -E PATH=$PATH "$kata_runtime_path" kata-check
-
 if [ -z "${METRICS_CI}" ]; then
 	echo "Enabling all debug options in file ${runtime_config_path}"
 	sudo sed -i -e 's/^#\(enable_debug\).*=.*$/\1 = true/g' "${runtime_config_path}"
@@ -116,12 +112,12 @@ fi
 
 if [ "${TEST_CGROUPSV2}" == "false" ]; then
 	case "${KATA_HYPERVISOR}" in
-		"cloud-hypervisor" | "qemu")
-			echo "Add kata-runtime as a new/default Docker runtime."
+		"cloud-hypervisor" | "qemu" | "firecracker")
+			echo "Add kata-runtime as a new Docker runtime."
 			"${cidir}/../cmd/container-manager/manage_ctr_mgr.sh" docker configure -r kata-runtime -f
 			;;
 		*)
-			echo "Kata runtime will not set as a default in Docker"
+			echo "Kata runtime will not be set in Docker"
 			;;
 	esac
 fi
