@@ -50,7 +50,7 @@ func TestStartStartSandboxSuccess(t *testing.T) {
 	reqCreate := &taskAPI.CreateTaskRequest{
 		ID: testSandboxID,
 	}
-	s.containers[testSandboxID], err = newContainer(s, reqCreate, vc.PodSandbox, nil)
+	s.containers[testSandboxID], err = newContainer(s, reqCreate, vc.PodSandbox, nil, false)
 	assert.NoError(err)
 
 	reqStart := &taskAPI.StartRequest{
@@ -98,7 +98,7 @@ func TestStartMissingAnnotation(t *testing.T) {
 	reqCreate := &taskAPI.CreateTaskRequest{
 		ID: testSandboxID,
 	}
-	s.containers[testSandboxID], err = newContainer(s, reqCreate, "", nil)
+	s.containers[testSandboxID], err = newContainer(s, reqCreate, "", nil, false)
 	assert.NoError(err)
 
 	reqStart := &taskAPI.StartRequest{
@@ -164,7 +164,7 @@ func TestStartStartContainerSucess(t *testing.T) {
 	reqCreate := &taskAPI.CreateTaskRequest{
 		ID: testContainerID,
 	}
-	s.containers[testContainerID], err = newContainer(s, reqCreate, vc.PodContainer, nil)
+	s.containers[testContainerID], err = newContainer(s, reqCreate, vc.PodContainer, nil, false)
 	assert.NoError(err)
 
 	reqStart := &taskAPI.StartRequest{

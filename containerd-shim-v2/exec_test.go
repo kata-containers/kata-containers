@@ -36,7 +36,7 @@ func TestExecNoSpecFail(t *testing.T) {
 	}
 
 	var err error
-	s.containers[testContainerID], err = newContainer(s, reqCreate, "", nil)
+	s.containers[testContainerID], err = newContainer(s, reqCreate, "", nil, false)
 	assert.NoError(err)
 
 	reqExec := &taskAPI.ExecProcessRequest{
