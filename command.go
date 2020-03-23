@@ -6,21 +6,11 @@ package tests
 
 import (
 	"bytes"
-	"flag"
 	"fmt"
 	"os/exec"
 	"syscall"
 	"time"
 )
-
-// Runtime is the path of a Kata Containers Runtime
-var Runtime string
-
-// Timeout specifies the time limit in seconds for each test
-var Timeout int
-
-// Hypervisor is the hypervisor currently being used with Kata
-var Hypervisor string
 
 // Command contains the information of the command to run
 type Command struct {
@@ -29,14 +19,6 @@ type Command struct {
 
 	// Timeout is the time limit of seconds of the command
 	Timeout time.Duration
-}
-
-func init() {
-	flag.StringVar(&Runtime, "runtime", "", "Path of the desired Kata Runtime")
-	flag.IntVar(&Timeout, "timeout", 5, "Time limit in seconds for each test")
-	flag.StringVar(&Hypervisor, "hypervisor", "", "The hypervisor currently being used with Kata")
-
-	flag.Parse()
 }
 
 // NewCommand returns a new instance of Command

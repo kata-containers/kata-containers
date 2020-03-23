@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/kata-containers/tests"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
@@ -66,4 +67,9 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 func TestIntegration(t *testing.T) {
 	RegisterFailHandler(Fail)
 	RunSpecs(t, "Integration Suite")
+}
+
+func TestMain(m *testing.M) {
+	tests.KataInit()
+	os.Exit(m.Run())
 }
