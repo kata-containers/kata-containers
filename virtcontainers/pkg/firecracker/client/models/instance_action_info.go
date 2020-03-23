@@ -21,11 +21,8 @@ type InstanceActionInfo struct {
 
 	// Enumeration indicating what type of action is contained in the payload
 	// Required: true
-	// Enum: [BlockDeviceRescan FlushMetrics InstanceStart SendCtrlAltDel]
+	// Enum: [FlushMetrics InstanceStart SendCtrlAltDel]
 	ActionType *string `json:"action_type"`
-
-	// payload
-	Payload string `json:"payload,omitempty"`
 }
 
 // Validate validates this instance action info
@@ -46,7 +43,7 @@ var instanceActionInfoTypeActionTypePropEnum []interface{}
 
 func init() {
 	var res []string
-	if err := json.Unmarshal([]byte(`["BlockDeviceRescan","FlushMetrics","InstanceStart","SendCtrlAltDel"]`), &res); err != nil {
+	if err := json.Unmarshal([]byte(`["FlushMetrics","InstanceStart","SendCtrlAltDel"]`), &res); err != nil {
 		panic(err)
 	}
 	for _, v := range res {
@@ -55,9 +52,6 @@ func init() {
 }
 
 const (
-
-	// InstanceActionInfoActionTypeBlockDeviceRescan captures enum value "BlockDeviceRescan"
-	InstanceActionInfoActionTypeBlockDeviceRescan string = "BlockDeviceRescan"
 
 	// InstanceActionInfoActionTypeFlushMetrics captures enum value "FlushMetrics"
 	InstanceActionInfoActionTypeFlushMetrics string = "FlushMetrics"

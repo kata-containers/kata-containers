@@ -53,7 +53,7 @@ const (
 const (
 	//fcTimeout is the maximum amount of time in seconds to wait for the VMM to respond
 	fcTimeout = 10
-	fcSocket  = "api.socket"
+	fcSocket  = "firecracker.socket"
 	//Name of the files within jailer root
 	//Having predefined names helps with cleanup
 	fcKernel             = "vmlinux"
@@ -80,7 +80,7 @@ const (
 )
 
 // Specify the minimum version of firecracker supported
-var fcMinSupportedVersion = semver.MustParse("0.19.0")
+var fcMinSupportedVersion = semver.MustParse("0.21.1")
 
 var fcKernelParams = append(commonVirtioblkKernelRootParams, []Param{
 	// The boot source is the first partition of the first block device added
@@ -180,6 +180,19 @@ func (fc *firecracker) trace(name string) (opentracing.Span, context.Context) {
 	return span, ctx
 }
 
+//At some cases, when sandbox id is too long, it will incur error of overlong
+//firecracker API unix socket(fc.socketPath).
+//In Linux, sun_path could maximumly contains 108 bytes in size.
+//(http://man7.org/linux/man-pages/man7/unix.7.html)
+func (fc *firecracker) truncateID(id string) string {
+	if len(id) > 32 {
+		//truncate the id to only leave the size of UUID(128bit).
+		return id[:32]
+	}
+
+	return id
+}
+
 // For firecracker this call only sets the internal structure up.
 // The sandbox will be created and started through startSandbox().
 func (fc *firecracker) createSandbox(ctx context.Context, id string, networkNS NetworkNamespace, hypervisorConfig *HypervisorConfig, stateful bool) error {
@@ -190,7 +203,7 @@ func (fc *firecracker) createSandbox(ctx context.Context, id string, networkNS N
 
 	//TODO: check validity of the hypervisor config provided
 	//https://github.com/kata-containers/runtime/issues/1065
-	fc.id = id
+	fc.id = fc.truncateID(id)
 	fc.state.set(notReady)
 	fc.config = *hypervisorConfig
 	fc.stateful = stateful
@@ -210,7 +223,10 @@ func (fc *firecracker) createSandbox(ctx context.Context, id string, networkNS N
 
 	fc.vmPath = filepath.Join(fc.chrootBaseDir, hypervisorName, fc.id)
 	fc.jailerRoot = filepath.Join(fc.vmPath, "root") // auto created by jailer
-	fc.socketPath = filepath.Join(fc.jailerRoot, fcSocket)
+
+	// Firecracker and jailer automatically creates default API socket under /run
+	// with the name of "firecracker.socket"
+	fc.socketPath = filepath.Join(fc.jailerRoot, "run", fcSocket)
 
 	// So we need to repopulate this at startSandbox where it is valid
 	fc.netNSPath = networkNS.NetNsPath
@@ -284,7 +300,9 @@ func (fc *firecracker) getVersionNumber() (string, error) {
 	var version string
 	fields := strings.Split(string(data), " ")
 	if len(fields) > 1 {
-		version = strings.TrimSpace(fields[1])
+		// The output format of `Firecracker --verion` is as follows
+		// Firecracker v0.21.1
+		version = strings.TrimPrefix(strings.TrimSpace(fields[1]), "v")
 		return version, nil
 	}
 
@@ -361,7 +379,6 @@ func (fc *firecracker) fcInit(timeout int) error {
 		jailedArgs := []string{
 			"--id", fc.id,
 			"--node", "0", //FIXME: Comprehend NUMA topology or explicit ignore
-			"--seccomp-level", "2",
 			"--exec-file", fc.config.HypervisorPath,
 			"--uid", "0", //https://github.com/kata-containers/runtime/issues/1869
 			"--gid", "0",
@@ -612,7 +629,6 @@ func (fc *firecracker) fcSetLogger() error {
 		Level:       &fcLogLevel,
 		LogFifo:     &jailedLogFifo,
 		MetricsFifo: &jailedMetricsFifo,
-		Options:     []string{},
 	}
 
 	return err
@@ -651,7 +667,9 @@ func (fc *firecracker) fcListenToFifo(fifoName string) (string, error) {
 }
 
 func (fc *firecracker) fcInitConfiguration() error {
-	err := os.MkdirAll(fc.jailerRoot, DirMode)
+	// Firecracker API socket(firecracker.socket) is automatically created
+	// under /run dir.
+	err := os.MkdirAll(filepath.Join(fc.jailerRoot, "run"), DirMode)
 	if err != nil {
 		return err
 	}
@@ -666,7 +684,7 @@ func (fc *firecracker) fcInitConfiguration() error {
 	if fc.config.JailerPath != "" {
 		fc.jailed = true
 		if err := fc.fcRemountJailerRootWithExec(); err != nil {
-			return nil
+			return err
 		}
 	}
 
@@ -933,20 +951,6 @@ func (fc *firecracker) fcUpdateBlockDrive(path, id string) error {
 	driveParams.SetBody(driveFc)
 	if _, err := fc.client().Operations.PatchGuestDriveByID(driveParams); err != nil {
 		return err
-	}
-
-	// Rescan needs to used only if the VM is running
-	if fc.vmRunning() {
-		actionParams := ops.NewCreateSyncActionParams()
-		actionType := "BlockDeviceRescan"
-		actionInfo := &models.InstanceActionInfo{
-			ActionType: &actionType,
-			Payload:    id,
-		}
-		actionParams.SetInfo(actionInfo)
-		if _, err := fc.client().Operations.CreateSyncAction(actionParams); err != nil {
-			return err
-		}
 	}
 
 	return nil
