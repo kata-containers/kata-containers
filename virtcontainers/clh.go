@@ -514,15 +514,14 @@ func (clh *cloudHypervisor) resizeVCPUs(reqVCPUs uint32) (currentVCPUs uint32, n
 		clh.Logger().WithField("function", "resizeVCPUs").Debugf("Cannot resize vCPU to 0")
 		return currentVCPUs, newVCPUs, fmt.Errorf("Cannot resize vCPU to 0")
 	}
-	if reqVCPUs > clh.config.DefaultMaxVCPUs || reqVCPUs > uint32(info.Config.Cpus.MaxVcpus) {
+	if reqVCPUs > uint32(info.Config.Cpus.MaxVcpus) {
 		clh.Logger().WithFields(log.Fields{
-			"function":              "resizeVCPUs",
-			"reqVCPUs":              reqVCPUs,
-			"configDefaultMaxVCPUs": clh.config.DefaultMaxVCPUs,
-			"clhMaxVCPUs":           info.Config.Cpus.MaxVcpus,
-		}).Debug("exceeding the maxVCPUs")
-		return currentVCPUs, newVCPUs, fmt.Errorf("Cannot resize vCPU to %d: exceeding the maximum amount of vCPUs (%d or %d)",
-			reqVCPUs, clh.config.DefaultMaxVCPUs, info.Config.Cpus.MaxVcpus)
+			"function":    "resizeVCPUs",
+			"reqVCPUs":    reqVCPUs,
+			"clhMaxVCPUs": info.Config.Cpus.MaxVcpus,
+		}).Warn("exceeding the 'clhMaxVCPUs' (resizing to 'clhMaxVCPUs')")
+
+		reqVCPUs = uint32(info.Config.Cpus.MaxVcpus)
 	}
 
 	// Resize (hot-plug) vCPUs via HTTP API
