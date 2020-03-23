@@ -40,7 +40,7 @@ func TestDeleteContainerSuccessAndFail(t *testing.T) {
 	reqCreate := &taskAPI.CreateTaskRequest{
 		ID: testContainerID,
 	}
-	s.containers[testContainerID], err = newContainer(s, reqCreate, "", nil)
+	s.containers[testContainerID], err = newContainer(s, reqCreate, "", nil, true)
 	assert.NoError(err)
 }
 

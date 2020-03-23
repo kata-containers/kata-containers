@@ -112,13 +112,14 @@ func watchSandbox(s *service) {
 		logrus.WithError(err).Warn("delete sandbox failed")
 	}
 
-	if s.mount {
-		for _, c := range s.containers {
-			rootfs := path.Join(c.bundle, "rootfs")
-			logrus.WithField("rootfs", rootfs).WithField("id", c.id).Debug("container umount rootfs")
-			if err := mount.UnmountAll(rootfs, 0); err != nil {
-				logrus.WithError(err).Warn("failed to cleanup rootfs mount")
-			}
+	for _, c := range s.containers {
+		if !c.mounted {
+			continue
+		}
+		rootfs := path.Join(c.bundle, "rootfs")
+		logrus.WithField("rootfs", rootfs).WithField("id", c.id).Debug("container umount rootfs")
+		if err := mount.UnmountAll(rootfs, 0); err != nil {
+			logrus.WithError(err).Warn("failed to cleanup rootfs mount")
 		}
 	}
 
