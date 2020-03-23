@@ -374,7 +374,7 @@ create_rootfs_image() {
 	fi
 
 	info "Mounting root partition"
-	readonly mount_dir=$(mktemp -d osbuilder-mount-dir.XXXX)
+	readonly mount_dir=$(mktemp -p ${TMPDIR:-/tmp} -d osbuilder-mount-dir.XXXX)
 	mount "${device}p1" "${mount_dir}"
 	OK "root partition mounted"
 
