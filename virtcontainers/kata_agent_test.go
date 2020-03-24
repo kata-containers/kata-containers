@@ -9,7 +9,6 @@ import (
 	"bufio"
 	"context"
 	"fmt"
-	vcAnnotations "github.com/kata-containers/runtime/virtcontainers/pkg/annotations"
 	"io/ioutil"
 	"net"
 	"os"
@@ -19,6 +18,8 @@ import (
 	"strings"
 	"syscall"
 	"testing"
+
+	vcAnnotations "github.com/kata-containers/runtime/virtcontainers/pkg/annotations"
 
 	gpb "github.com/gogo/protobuf/types"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
@@ -611,6 +612,16 @@ func TestConstraintGRPCSpec(t *testing.T) {
 				Network:        &pb.LinuxNetwork{},
 			},
 			CgroupsPath: "system.slice:foo:bar",
+			Devices: []pb.LinuxDevice{
+				{
+					Path: "/dev/vfio/1",
+					Type: "c",
+				},
+				{
+					Path: "/dev/vfio/2",
+					Type: "c",
+				},
+			},
 		},
 		Process: &pb.Process{
 			SelinuxLabel: "foo",
@@ -641,6 +652,9 @@ func TestConstraintGRPCSpec(t *testing.T) {
 
 	// check cgroup path
 	assert.Equal(expectedCgroupPath, g.Linux.CgroupsPath)
+
+	// check Linux devices
+	assert.Empty(g.Linux.Devices)
 }
 
 func TestHandleShm(t *testing.T) {

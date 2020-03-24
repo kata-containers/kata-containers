@@ -51,6 +51,9 @@ const (
 	// KataLocalDevType creates a local directory inside the VM for sharing files between
 	// containers.
 	KataLocalDevType = "local"
+
+	// path to vfio devices
+	vfioPath = "/dev/vfio/"
 )
 
 var (
@@ -1067,6 +1070,18 @@ func (k *kataAgent) constraintGRPCSpec(grpcSpec *grpc.Spec, passSeccomp bool) {
 		}
 	}
 	grpcSpec.Linux.Namespaces = tmpNamespaces
+
+	// VFIO char device shouldn't not appear in the guest,
+	// the device driver should handle it and determinate its group.
+	var linuxDevices []grpc.LinuxDevice
+	for _, dev := range grpcSpec.Linux.Devices {
+		if dev.Type == "c" && strings.HasPrefix(dev.Path, vfioPath) {
+			k.Logger().WithField("vfio-dev", dev.Path).Debug("removing vfio device from grpcSpec")
+			continue
+		}
+		linuxDevices = append(linuxDevices, dev)
+	}
+	grpcSpec.Linux.Devices = linuxDevices
 }
 
 func (k *kataAgent) handleShm(grpcSpec *grpc.Spec, sandbox *Sandbox) {
