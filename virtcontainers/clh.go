@@ -214,7 +214,8 @@ func (clh *cloudHypervisor) createSandbox(ctx context.Context, id string, networ
 	clh.Logger().WithField("function", "createSandbox").WithError(err).Info("Sandbox not found creating ")
 
 	// Set initial memomory size of the virtual machine
-	clh.vmconfig.Memory.Size = int64(clh.config.MemorySize) << utils.MibToBytesShift
+	// Convert to int64 openApiClient only support int64
+	clh.vmconfig.Memory.Size = int64((utils.MemUnit(clh.config.MemorySize) * utils.MiB).ToBytes())
 	clh.vmconfig.Memory.File = "/dev/shm"
 	// Set initial amount of cpu's for the virtual machine
 	clh.vmconfig.Cpus = chclient.CpusConfig{
