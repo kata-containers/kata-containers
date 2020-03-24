@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use protocols::oci::Spec;
+use oci::Spec;
 // use crate::configs::namespaces;
 // use crate::configs::device::Device;
 

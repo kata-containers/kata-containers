@@ -16,11 +16,13 @@ error_chain! {
         Ffi(std::ffi::NulError);
         Caps(caps::errors::Error);
         Serde(serde_json::Error);
-        UTF8(std::string::FromUtf8Error);
+        FromUTF8(std::string::FromUtf8Error);
         Parse(std::num::ParseIntError);
         Scanfmt(scan_fmt::parse::ScanError);
         Ip(std::net::AddrParseError);
         Regex(regex::Error);
+        EnvVar(std::env::VarError);
+        UTF8(std::str::Utf8Error);
     }
     // define new errors
     errors {

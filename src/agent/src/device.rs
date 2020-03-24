@@ -14,8 +14,8 @@ use crate::linux_abi::*;
 use crate::mount::{DRIVERBLKTYPE, DRIVERMMIOBLKTYPE, DRIVERNVDIMMTYPE, DRIVERSCSITYPE};
 use crate::sandbox::Sandbox;
 use crate::{AGENT_CONFIG, GLOBAL_DEVICE_WATCHER};
+use oci::Spec;
 use protocols::agent::Device;
-use protocols::oci::Spec;
 use rustjail::errors::*;
 
 // Convenience macro to obtain the scope logger
@@ -207,7 +207,7 @@ fn update_spec_device_list(device: &Device, spec: &mut Spec) -> Result<()> {
         .into());
     }
 
-    let linux = match spec.Linux.as_mut() {
+    let linux = match spec.linux.as_mut() {
         None => {
             return Err(
                 ErrorKind::ErrorCode("Spec didn't container linux field".to_string()).into(),
@@ -232,14 +232,14 @@ fn update_spec_device_list(device: &Device, spec: &mut Spec) -> Result<()> {
         "got the device: dev_path: {}, major: {}, minor: {}\n", &device.vm_path, major_id, minor_id
     );
 
-    let devices = linux.Devices.as_mut_slice();
+    let devices = linux.devices.as_mut_slice();
     for dev in devices.iter_mut() {
-        if dev.Path == device.container_path {
-            let host_major = dev.Major;
-            let host_minor = dev.Minor;
+        if dev.path == device.container_path {
+            let host_major = dev.major;
+            let host_minor = dev.minor;
 
-            dev.Major = major_id as i64;
-            dev.Minor = minor_id as i64;
+            dev.major = major_id as i64;
+            dev.minor = minor_id as i64;
 
             info!(
                 sl!(),
@@ -252,12 +252,12 @@ fn update_spec_device_list(device: &Device, spec: &mut Spec) -> Result<()> {
 
             // Resources must be updated since they are used to identify the
             // device in the devices cgroup.
-            if let Some(res) = linux.Resources.as_mut() {
-                let ds = res.Devices.as_mut_slice();
+            if let Some(res) = linux.resources.as_mut() {
+                let ds = res.devices.as_mut_slice();
                 for d in ds.iter_mut() {
-                    if d.Major == host_major && d.Minor == host_minor {
-                        d.Major = major_id as i64;
-                        d.Minor = minor_id as i64;
+                    if d.major == Some(host_major) && d.minor == Some(host_minor) {
+                        d.major = Some(major_id as i64);
+                        d.minor = Some(minor_id as i64);
 
                         info!(
                             sl!(),

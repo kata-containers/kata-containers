@@ -42,14 +42,14 @@ macro_rules! sl {
     };
 }
 
+pub mod capabilities;
 pub mod cgroups;
 pub mod container;
 pub mod errors;
 pub mod mount;
 pub mod process;
 pub mod specconv;
-// pub mod sync;
-pub mod capabilities;
+pub mod sync;
 pub mod validator;
 
 // pub mod factory;
@@ -66,9 +66,6 @@ pub mod validator;
 // construtc ociSpec from grpcSpec, which is needed for hook
 // execution. since hooks read config.json
 
-use std::collections::HashMap;
-use std::mem::MaybeUninit;
-
 use oci::{
     Box as ociBox, Hooks as ociHooks, Linux as ociLinux, LinuxCapabilities as ociLinuxCapabilities,
     Mount as ociMount, POSIXRlimit as ociPOSIXRlimit, Process as ociProcess, Root as ociRoot,
@@ -78,8 +75,10 @@ use protocols::oci::{
     Hooks as grpcHooks, Linux as grpcLinux, Mount as grpcMount, Process as grpcProcess,
     Root as grpcRoot, Spec as grpcSpec,
 };
+use std::collections::HashMap;
+use std::mem::MaybeUninit;
 
-fn process_grpc_to_oci(p: &grpcProcess) -> ociProcess {
+pub fn process_grpc_to_oci(p: &grpcProcess) -> ociProcess {
     let console_size = if p.ConsoleSize.is_some() {
         let c = p.ConsoleSize.as_ref().unwrap();
         Some(ociBox {
@@ -296,7 +295,7 @@ fn blockio_grpc_to_oci(blk: &grpcLinuxBlockIO) -> ociLinuxBlockIO {
     }
 }
 
-fn resources_grpc_to_oci(res: &grpcLinuxResources) -> ociLinuxResources {
+pub fn resources_grpc_to_oci(res: &grpcLinuxResources) -> ociLinuxResources {
     let devices = {
         let mut d = Vec::new();
         for dev in res.Devices.iter() {

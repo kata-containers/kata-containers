@@ -5,8 +5,8 @@
 
 use crate::errors::*;
 // use crate::configs::{FreezerState, Config};
+use oci::LinuxResources;
 use protocols::agent::CgroupStats;
-use protocols::oci::LinuxResources;
 use std::collections::HashMap;
 
 pub mod fs;

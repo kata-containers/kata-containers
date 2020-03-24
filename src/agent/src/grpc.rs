@@ -8,6 +8,7 @@ use grpcio::{EnvBuilder, Server, ServerBuilder};
 use grpcio::{RpcStatus, RpcStatusCode};
 use std::sync::{Arc, Mutex};
 
+use oci::{LinuxNamespace, Spec};
 use protobuf::{RepeatedField, SingularPtrField};
 use protocols::agent::CopyFileRequest;
 use protocols::agent::{
@@ -16,7 +17,6 @@ use protocols::agent::{
 };
 use protocols::empty::Empty;
 use protocols::health::{HealthCheckResponse, HealthCheckResponse_ServingStatus};
-use protocols::oci::{LinuxNamespace, Spec};
 use rustjail;
 use rustjail::container::{BaseContainer, LinuxContainer};
 use rustjail::errors::*;
@@ -81,8 +81,8 @@ impl agentService {
         let sandbox;
         let mut s;
 
-        let oci = match oci_spec.as_mut() {
-            Some(spec) => spec,
+        let mut oci = match oci_spec.as_mut() {
+            Some(spec) => rustjail::grpc_to_oci(spec),
             None => {
                 error!(sl!(), "no oci spec in the create container request!");
                 return Err(
@@ -103,7 +103,7 @@ impl agentService {
         // updates the devices listed in the OCI spec, so that they actually
         // match real devices inside the VM. This step is necessary since we
         // cannot predict everything from the caller.
-        add_devices(&req.devices.to_vec(), oci, &self.sandbox)?;
+        add_devices(&req.devices.to_vec(), &mut oci, &self.sandbox)?;
 
         // Both rootfs and volumes (invoked with --volume for instance) will
         // be processed the same way. The idea is to always mount any provided
@@ -119,11 +119,11 @@ impl agentService {
             s.container_mounts.insert(cid.clone(), m);
         }
 
-        update_container_namespaces(&s, oci)?;
+        update_container_namespaces(&s, &mut oci)?;
 
         // write spec to bundle path, hooks might
         // read ocispec
-        let olddir = setup_bundle(oci)?;
+        let olddir = setup_bundle(&oci)?;
         // restore the cwd for kata-agent process.
         defer!(unistd::chdir(&olddir).unwrap());
 
@@ -141,8 +141,14 @@ impl agentService {
             LinuxContainer::new(cid.as_str(), CONTAINER_BASE, opts, &sl!())?;
 
         let pipe_size = AGENT_CONFIG.read().unwrap().container_pipe_size;
-        let p = if oci.Process.is_some() {
-            let tp = Process::new(&sl!(), oci.get_Process(), eid.as_str(), true, pipe_size)?;
+        let p = if oci.process.is_some() {
+            let tp = Process::new(
+                &sl!(),
+                &oci.process.as_ref().unwrap(),
+                eid.as_str(),
+                true,
+                pipe_size,
+            )?;
             tp
         } else {
             info!(sl!(), "no process configurations!");
@@ -270,14 +276,15 @@ impl agentService {
         let mut sandbox = s.lock().unwrap();
 
         // ignore string_user, not sure what it is
-        let ocip = if req.process.is_some() {
+        let process = if req.process.is_some() {
             req.process.as_ref().unwrap()
         } else {
             return Err(ErrorKind::Nix(nix::Error::from_errno(nix::errno::Errno::EINVAL)).into());
         };
 
         let pipe_size = AGENT_CONFIG.read().unwrap().container_pipe_size;
-        let p = Process::new(&sl!(), ocip, exec_id.as_str(), false, pipe_size)?;
+        let ocip = rustjail::process_grpc_to_oci(process);
+        let p = Process::new(&sl!(), &ocip, exec_id.as_str(), false, pipe_size)?;
 
         let ctr = match sandbox.get_container(cid.as_str()) {
             Some(v) => v,
@@ -571,11 +578,11 @@ impl protocols::agent_grpc::AgentService for agentService {
         req: protocols::agent::ExecProcessRequest,
         sink: ::grpcio::UnarySink<protocols::empty::Empty>,
     ) {
-        if let Err(_) = self.do_exec_process(req) {
+        if let Err(e) = self.do_exec_process(req) {
             let f = sink
                 .fail(RpcStatus::new(
                     RpcStatusCode::Internal,
-                    Some(String::from("fail to exec process!")),
+                    Some(format!("{}", e)),
                 ))
                 .map_err(|_e| error!(sl!(), "fail to exec process!"));
             ctx.spawn(f);
@@ -732,7 +739,7 @@ impl protocols::agent_grpc::AgentService for agentService {
         sink: ::grpcio::UnarySink<protocols::empty::Empty>,
     ) {
         let cid = req.container_id.clone();
-        let res = req.resources.clone();
+        let res = req.resources;
 
         let s = Arc::clone(&self.sandbox);
         let mut sandbox = s.lock().unwrap();
@@ -742,7 +749,8 @@ impl protocols::agent_grpc::AgentService for agentService {
         let resp = Empty::new();
 
         if res.is_some() {
-            match ctr.set(res.unwrap()) {
+            let ociRes = rustjail::resources_grpc_to_oci(&res.unwrap());
+            match ctr.set(ociRes) {
                 Err(_e) => {
                     let f = sink
                         .fail(RpcStatus::new(
@@ -1605,7 +1613,7 @@ pub fn start<S: Into<String>>(sandbox: Arc<Mutex<Sandbox>>, host: S, port: u16) 
 // sense to rely on the namespace path provided by the host since namespaces
 // are different inside the guest.
 fn update_container_namespaces(sandbox: &Sandbox, spec: &mut Spec) -> Result<()> {
-    let linux = match spec.Linux.as_mut() {
+    let linux = match spec.linux.as_mut() {
         None => {
             return Err(
                 ErrorKind::ErrorCode("Spec didn't container linux field".to_string()).into(),
@@ -1616,26 +1624,26 @@ fn update_container_namespaces(sandbox: &Sandbox, spec: &mut Spec) -> Result<()>
 
     let mut pidNs = false;
 
-    let namespaces = linux.Namespaces.as_mut_slice();
+    let namespaces = linux.namespaces.as_mut_slice();
     for namespace in namespaces.iter_mut() {
-        if namespace.Type == NSTYPEPID {
+        if namespace.r#type == NSTYPEPID {
             pidNs = true;
             continue;
         }
-        if namespace.Type == NSTYPEIPC {
-            namespace.Path = sandbox.shared_ipcns.path.clone();
+        if namespace.r#type == NSTYPEIPC {
+            namespace.path = sandbox.shared_ipcns.path.clone();
             continue;
         }
-        if namespace.Type == NSTYPEUTS {
-            namespace.Path = sandbox.shared_utsns.path.clone();
+        if namespace.r#type == NSTYPEUTS {
+            namespace.path = sandbox.shared_utsns.path.clone();
             continue;
         }
     }
 
     if !pidNs && !sandbox.sandbox_pid_ns {
-        let mut pid_ns = LinuxNamespace::new();
-        pid_ns.set_Type(NSTYPEPID.to_string());
-        linux.Namespaces.push(pid_ns);
+        let mut pid_ns = LinuxNamespace::default();
+        pid_ns.r#type = NSTYPEPID.to_string();
+        linux.namespaces.push(pid_ns);
     }
 
     Ok(())
@@ -1764,24 +1772,23 @@ fn do_copy_file(req: &CopyFileRequest) -> Result<()> {
     Ok(())
 }
 
-fn setup_bundle(gspec: &Spec) -> Result<PathBuf> {
-    if gspec.Root.is_none() {
+fn setup_bundle(spec: &Spec) -> Result<PathBuf> {
+    if spec.root.is_none() {
         return Err(nix::Error::Sys(Errno::EINVAL).into());
     }
-    let root = gspec.Root.as_ref().unwrap().Path.as_str();
+    let root = spec.root.as_ref().unwrap().path.as_str();
 
     let rootfs = fs::canonicalize(root)?;
     let bundle_path = rootfs.parent().unwrap().to_str().unwrap();
 
     let config = format!("{}/{}", bundle_path, "config.json");
 
-    let oci = rustjail::grpc_to_oci(gspec);
     info!(
         sl!(),
         "{:?}",
-        oci.process.as_ref().unwrap().console_size.as_ref()
+        spec.process.as_ref().unwrap().console_size.as_ref()
     );
-    let _ = oci.save(config.as_str());
+    let _ = spec.save(config.as_str());
 
     let olddir = unistd::getcwd().chain_err(|| "cannot getcwd")?;
     unistd::chdir(bundle_path)?;
