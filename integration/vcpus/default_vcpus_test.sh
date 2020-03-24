@@ -7,6 +7,7 @@
 # This will test the default_vcpus
 # feature is working properly
 
+[ -n "$DEBUG" ] && set -x
 set -o errexit
 set -o nounset
 set -o pipefail
