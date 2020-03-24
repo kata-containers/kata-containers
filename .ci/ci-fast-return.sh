@@ -127,7 +127,7 @@ can_we_skip() {
 		return 0
 	fi
 
-	filenames=$(get_pr_changed_file_details || true)
+	filenames=$(get_pr_changed_file_details_full || true)
 	# Strip off the leading status - just grab last column.
 	filenames=$(echo "$filenames"|awk '{print $NF}')
 
