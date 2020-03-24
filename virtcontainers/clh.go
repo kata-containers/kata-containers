@@ -432,14 +432,11 @@ func (clh *cloudHypervisor) resizeVCPUs(reqVCPUs uint32) (currentVCPUs uint32, n
 	cl := clh.client()
 
 	// Retrieve the number of current vCPUs via HTTP API
-	ctx, cancel := context.WithTimeout(context.Background(), clhAPITimeout*time.Second)
-	info, _, err := cl.VmInfoGet(ctx)
+	info, err := clh.vmInfo()
 	if err != nil {
-		clh.Logger().WithField("function", "resizeVCPUs").WithError(openAPIClientError(err)).Info("[clh] VmInfoGet failed")
+		clh.Logger().WithField("function", "resizeVCPUs").WithError(err).Info("[clh] vmInfo failed")
 		return 0, 0, openAPIClientError(err)
 	}
-	// Reset the timer after the first HTTP API call
-	cancel()
 
 	currentVCPUs = uint32(info.Config.Cpus.BootVcpus)
 	newVCPUs = currentVCPUs
@@ -461,7 +458,7 @@ func (clh *cloudHypervisor) resizeVCPUs(reqVCPUs uint32) (currentVCPUs uint32, n
 	}
 
 	// Resize (hot-plug) vCPUs via HTTP API
-	ctx, cancel = context.WithTimeout(context.Background(), clhAPITimeout*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), clhAPITimeout*time.Second)
 	defer cancel()
 	if _, err = cl.VmResizePut(ctx, chclient.VmResize{DesiredVcpus: int32(reqVCPUs)}); err != nil {
 		return currentVCPUs, newVCPUs, errors.Wrap(err, "[clh] VmResizePut failed")
@@ -960,10 +957,10 @@ func (clh *cloudHypervisor) bootVM(ctx context.Context) error {
 		return openAPIClientError(err)
 	}
 
-	info, _, err := cl.VmInfoGet(ctx)
+	info, err := clh.vmInfo()
 
 	if err != nil {
-		return openAPIClientError(err)
+		return err
 	}
 
 	clh.Logger().Debugf("VM state after create: %#v", info)
@@ -979,10 +976,10 @@ func (clh *cloudHypervisor) bootVM(ctx context.Context) error {
 		return openAPIClientError(err)
 	}
 
-	info, _, err = cl.VmInfoGet(ctx)
+	info, err = clh.vmInfo()
 
 	if err != nil {
-		return openAPIClientError(err)
+		return err
 	}
 
 	clh.Logger().Debugf("VM state after boot: %#v", info)
@@ -1119,4 +1116,18 @@ func (clh *cloudHypervisor) cleanupVM(force bool) error {
 	clh.reset()
 
 	return nil
+}
+
+// vmInfo ask to hypervisor for current VM status
+func (clh *cloudHypervisor) vmInfo() (chclient.VmInfo, error) {
+	cl := clh.client()
+	ctx, cancelInfo := context.WithTimeout(context.Background(), clhAPITimeout*time.Second)
+	defer cancelInfo()
+
+	info, _, err := cl.VmInfoGet(ctx)
+	if err != nil {
+		clh.Logger().WithError(openAPIClientError(err)).Warn("VmInfoGet failed")
+	}
+	return info, openAPIClientError(err)
+
 }
