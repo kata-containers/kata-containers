@@ -1,16 +1,21 @@
+// Copyright (c) 2019 Ant Financial
+//
+// SPDX-License-Identifier: Apache-2.0
+//
+
 use crate::container::Config;
 use crate::errors::*;
 use lazy_static;
 use nix::errno::Errno;
 use nix::Error;
+use oci::{LinuxIDMapping, LinuxNamespace, Spec};
 use protobuf::RepeatedField;
-use protocols::oci::{LinuxIDMapping, LinuxNamespace, Spec};
 use std::collections::HashMap;
 use std::path::{Component, PathBuf};
 
-fn contain_namespace(nses: &RepeatedField<LinuxNamespace>, key: &str) -> bool {
+fn contain_namespace(nses: &Vec<LinuxNamespace>, key: &str) -> bool {
     for ns in nses {
-        if ns.Type.as_str() == key {
+        if ns.r#type.as_str() == key {
             return true;
         }
     }
@@ -18,10 +23,10 @@ fn contain_namespace(nses: &RepeatedField<LinuxNamespace>, key: &str) -> bool {
     false
 }
 
-fn get_namespace_path(nses: &RepeatedField<LinuxNamespace>, key: &str) -> Result<String> {
+fn get_namespace_path(nses: &Vec<LinuxNamespace>, key: &str) -> Result<String> {
     for ns in nses {
-        if ns.Type.as_str() == key {
-            return Ok(ns.Path.clone());
+        if ns.r#type.as_str() == key {
+            return Ok(ns.path.clone());
         }
     }
 
@@ -71,15 +76,15 @@ fn network(_oci: &Spec) -> Result<()> {
 }
 
 fn hostname(oci: &Spec) -> Result<()> {
-    if oci.Hostname.is_empty() || oci.Hostname == "".to_string() {
+    if oci.hostname.is_empty() || oci.hostname == "".to_string() {
         return Ok(());
     }
 
-    if oci.Linux.is_none() {
+    if oci.linux.is_none() {
         return Err(ErrorKind::Nix(Error::from_errno(Errno::EINVAL)).into());
     }
-    let linux = oci.Linux.as_ref().unwrap();
-    if !contain_namespace(&linux.Namespaces, "uts") {
+    let linux = oci.linux.as_ref().unwrap();
+    if !contain_namespace(&linux.namespaces, "uts") {
         return Err(ErrorKind::Nix(Error::from_errno(Errno::EINVAL)).into());
     }
 
@@ -87,12 +92,12 @@ fn hostname(oci: &Spec) -> Result<()> {
 }
 
 fn security(oci: &Spec) -> Result<()> {
-    let linux = oci.Linux.as_ref().unwrap();
-    if linux.MaskedPaths.len() == 0 && linux.ReadonlyPaths.len() == 0 {
+    let linux = oci.linux.as_ref().unwrap();
+    if linux.masked_paths.len() == 0 && linux.readonly_paths.len() == 0 {
         return Ok(());
     }
 
-    if !contain_namespace(&linux.Namespaces, "mount") {
+    if !contain_namespace(&linux.namespaces, "mount") {
         return Err(ErrorKind::Nix(Error::from_errno(Errno::EINVAL)).into());
     }
 
@@ -101,9 +106,9 @@ fn security(oci: &Spec) -> Result<()> {
     Ok(())
 }
 
-fn idmapping(maps: &RepeatedField<LinuxIDMapping>) -> Result<()> {
+fn idmapping(maps: &Vec<LinuxIDMapping>) -> Result<()> {
     for map in maps {
-        if map.Size > 0 {
+        if map.size > 0 {
             return Ok(());
         }
     }
@@ -112,19 +117,19 @@ fn idmapping(maps: &RepeatedField<LinuxIDMapping>) -> Result<()> {
 }
 
 fn usernamespace(oci: &Spec) -> Result<()> {
-    let linux = oci.Linux.as_ref().unwrap();
-    if contain_namespace(&linux.Namespaces, "user") {
+    let linux = oci.linux.as_ref().unwrap();
+    if contain_namespace(&linux.namespaces, "user") {
         let user_ns = PathBuf::from("/proc/self/ns/user");
         if !user_ns.exists() {
             return Err(ErrorKind::ErrorCode("user namespace not supported!".to_string()).into());
         }
         // check if idmappings is correct, at least I saw idmaps
         // with zero size was passed to agent
-        idmapping(&linux.UIDMappings)?;
-        idmapping(&linux.GIDMappings)?;
+        idmapping(&linux.uid_mappings)?;
+        idmapping(&linux.gid_mappings)?;
     } else {
         // no user namespace but idmap
-        if linux.UIDMappings.len() != 0 || linux.GIDMappings.len() != 0 {
+        if linux.uid_mappings.len() != 0 || linux.gid_mappings.len() != 0 {
             return Err(ErrorKind::Nix(Error::from_errno(Errno::EINVAL)).into());
         }
     }
@@ -133,8 +138,8 @@ fn usernamespace(oci: &Spec) -> Result<()> {
 }
 
 fn cgroupnamespace(oci: &Spec) -> Result<()> {
-    let linux = oci.Linux.as_ref().unwrap();
-    if contain_namespace(&linux.Namespaces, "cgroup") {
+    let linux = oci.linux.as_ref().unwrap();
+    if contain_namespace(&linux.namespaces, "cgroup") {
         let path = PathBuf::from("/proc/self/ns/cgroup");
         if !path.exists() {
             return Err(ErrorKind::ErrorCode("cgroup unsupported!".to_string()).into());
@@ -178,10 +183,10 @@ fn check_host_ns(path: &str) -> Result<()> {
 }
 
 fn sysctl(oci: &Spec) -> Result<()> {
-    let linux = oci.Linux.as_ref().unwrap();
-    for (key, _) in linux.Sysctl.iter() {
+    let linux = oci.linux.as_ref().unwrap();
+    for (key, _) in linux.sysctl.iter() {
         if SYSCTLS.contains_key(key.as_str()) || key.starts_with("fs.mqueue.") {
-            if contain_namespace(&linux.Namespaces, "ipc") {
+            if contain_namespace(&linux.namespaces, "ipc") {
                 continue;
             } else {
                 return Err(ErrorKind::Nix(Error::from_errno(Errno::EINVAL)).into());
@@ -189,11 +194,11 @@ fn sysctl(oci: &Spec) -> Result<()> {
         }
 
         if key.starts_with("net.") {
-            if !contain_namespace(&linux.Namespaces, "network") {
+            if !contain_namespace(&linux.namespaces, "network") {
                 return Err(ErrorKind::Nix(Error::from_errno(Errno::EINVAL)).into());
             }
 
-            let net = get_namespace_path(&linux.Namespaces, "network")?;
+            let net = get_namespace_path(&linux.namespaces, "network")?;
             if net.is_empty() || net == "".to_string() {
                 continue;
             }
@@ -201,7 +206,7 @@ fn sysctl(oci: &Spec) -> Result<()> {
             check_host_ns(net.as_str())?;
         }
 
-        if contain_namespace(&linux.Namespaces, "uts") {
+        if contain_namespace(&linux.namespaces, "uts") {
             if key == "kernel.domainname" {
                 continue;
             }
@@ -217,21 +222,21 @@ fn sysctl(oci: &Spec) -> Result<()> {
 }
 
 fn rootless_euid_mapping(oci: &Spec) -> Result<()> {
-    let linux = oci.Linux.as_ref().unwrap();
-    if !contain_namespace(&linux.Namespaces, "user") {
+    let linux = oci.linux.as_ref().unwrap();
+    if !contain_namespace(&linux.namespaces, "user") {
         return Err(ErrorKind::Nix(Error::from_errno(Errno::EINVAL)).into());
     }
 
-    if linux.UIDMappings.len() == 0 || linux.GIDMappings.len() == 0 {
+    if linux.gid_mappings.len() == 0 || linux.gid_mappings.len() == 0 {
         return Err(ErrorKind::Nix(Error::from_errno(Errno::EINVAL)).into());
     }
 
     Ok(())
 }
 
-fn has_idmapping(maps: &RepeatedField<LinuxIDMapping>, id: u32) -> bool {
+fn has_idmapping(maps: &Vec<LinuxIDMapping>, id: u32) -> bool {
     for map in maps {
-        if id >= map.ContainerID && id < map.ContainerID + map.Size {
+        if id >= map.container_id && id < map.container_id + map.size {
             return true;
         }
     }
@@ -239,9 +244,9 @@ fn has_idmapping(maps: &RepeatedField<LinuxIDMapping>, id: u32) -> bool {
 }
 
 fn rootless_euid_mount(oci: &Spec) -> Result<()> {
-    let linux = oci.Linux.as_ref().unwrap();
+    let linux = oci.linux.as_ref().unwrap();
 
-    for mnt in oci.Mounts.iter() {
+    for mnt in oci.mounts.iter() {
         for opt in mnt.options.iter() {
             if opt.starts_with("uid=") || opt.starts_with("gid=") {
                 let fields: Vec<&str> = opt.split('=').collect();
@@ -253,13 +258,13 @@ fn rootless_euid_mount(oci: &Spec) -> Result<()> {
                 let id = fields[1].trim().parse::<u32>()?;
 
                 if opt.starts_with("uid=") {
-                    if !has_idmapping(&linux.UIDMappings, id) {
+                    if !has_idmapping(&linux.uid_mappings, id) {
                         return Err(ErrorKind::Nix(Error::from_errno(Errno::EINVAL)).into());
                     }
                 }
 
                 if opt.starts_with("gid=") {
-                    if !has_idmapping(&linux.GIDMappings, id) {
+                    if !has_idmapping(&linux.gid_mappings, id) {
                         return Err(ErrorKind::Nix(Error::from_errno(Errno::EINVAL)).into());
                     }
                 }
@@ -279,14 +284,14 @@ pub fn validate(conf: &Config) -> Result<()> {
     lazy_static::initialize(&SYSCTLS);
     let oci = conf.spec.as_ref().unwrap();
 
-    if oci.Linux.is_none() {
+    if oci.linux.is_none() {
         return Err(ErrorKind::Nix(Error::from_errno(Errno::EINVAL)).into());
     }
 
-    if oci.Root.is_none() {
+    if oci.root.is_none() {
         return Err(ErrorKind::Nix(Error::from_errno(Errno::EINVAL)).into());
     }
-    let root = oci.Root.get_ref().Path.as_str();
+    let root = oci.root.as_ref().unwrap().path.as_str();
 
     rootfs(root)?;
     network(oci)?;
