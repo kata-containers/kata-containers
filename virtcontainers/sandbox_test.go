@@ -675,8 +675,6 @@ func TestContainerStateSetFstype(t *testing.T) {
 	assert.Equal(cImpl.state.Fstype, newFstype)
 }
 
-const vfioPath = "/dev/vfio/"
-
 func TestSandboxAttachDevicesVFIO(t *testing.T) {
 	tmpDir, err := ioutil.TempDir("", "")
 	assert.Nil(t, err)
