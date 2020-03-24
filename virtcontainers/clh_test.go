@@ -10,13 +10,20 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
 	"github.com/kata-containers/runtime/virtcontainers/persist"
 	chclient "github.com/kata-containers/runtime/virtcontainers/pkg/cloud-hypervisor/client"
+	"github.com/kata-containers/runtime/virtcontainers/utils"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
+)
+
+const (
+	FAIL = true
+	PASS = !FAIL
 )
 
 func newClhConfig() (HypervisorConfig, error) {
@@ -254,4 +261,58 @@ func TestClooudHypervisorStartSandbox(t *testing.T) {
 
 	err = clh.startSandbox(10)
 	assert.NoError(err)
+}
+
+func TestCloudHypervisorResizeMemory(t *testing.T) {
+	assert := assert.New(t)
+	clhConfig, err := newClhConfig()
+	type args struct {
+		reqMemMB          uint32
+		memoryBlockSizeMB uint32
+	}
+	tests := []struct {
+		name           string
+		args           args
+		expectedMemDev memoryDevice
+		wantErr        bool
+	}{
+		{"Resize to zero", args{0, 128}, memoryDevice{probe: false, sizeMB: 0}, FAIL},
+		{"Resize to aligned size", args{clhConfig.MemorySize + 128, 128}, memoryDevice{probe: false, sizeMB: 128}, PASS},
+		{"Resize to aligned size", args{clhConfig.MemorySize + 129, 128}, memoryDevice{probe: false, sizeMB: 256}, PASS},
+		{"Resize to NOT aligned size", args{clhConfig.MemorySize + 125, 128}, memoryDevice{probe: false, sizeMB: 128}, PASS},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.NoError(err)
+			clh := cloudHypervisor{}
+
+			mockClient := &clhClientMock{}
+			mockClient.vmInfo.Config.Memory.Size = int64(utils.MemUnit(clhConfig.MemorySize) * utils.MiB)
+			mockClient.vmInfo.Config.Memory.HotplugSize = int64(40 * utils.GiB.ToBytes())
+
+			clh.APIClient = mockClient
+			clh.config = clhConfig
+
+			newMem, memDev, err := clh.resizeMemory(tt.args.reqMemMB, tt.args.memoryBlockSizeMB, false)
+
+			if (err != nil) != tt.wantErr {
+				t.Errorf("cloudHypervisor.resizeMemory() error = %v, expected to fail = %v", err, tt.wantErr)
+				return
+			}
+
+			if err != nil {
+				return
+			}
+
+			expectedMem := clhConfig.MemorySize + uint32(tt.expectedMemDev.sizeMB)
+
+			if newMem != expectedMem {
+				t.Errorf("cloudHypervisor.resizeMemory() got = %+v, want %+v", newMem, expectedMem)
+			}
+
+			if !reflect.DeepEqual(memDev, tt.expectedMemDev) {
+				t.Errorf("cloudHypervisor.resizeMemory() got = %+v, want %+v", memDev, tt.expectedMemDev)
+			}
+		})
+	}
 }
