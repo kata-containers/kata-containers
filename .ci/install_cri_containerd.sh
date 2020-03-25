@@ -30,7 +30,7 @@ cri_containerd_tarball_version=$(get_version "externals.cri-containerd.version")
 cri_containerd_repo=$(get_version "externals.cri-containerd.url")
 
 echo "Get cri_containerd version"
-cri_containerd_version_url="https://raw.githubusercontent.com/containerd/containerd/v${cri_containerd_tarball_version}/vendor.conf"
+cri_containerd_version_url="https://raw.githubusercontent.com/containerd/containerd/${cri_containerd_tarball_version}/vendor.conf"
 cri_containerd_version=$(curl -sL $cri_containerd_version_url | grep "github.com/containerd/cri" | awk '{print $2}')
 
 echo "Set up environment"
@@ -56,6 +56,7 @@ install_from_source() {
 install_from_static_tarball() {
 	echo "Trying to install containerd from static tarball"
 	local tarball_url=$(get_version "externals.cri-containerd.tarball_url")
+	cri_containerd_tarball_version="${cri_containerd_tarball_version/v/}"
 
 	local tarball_name="cri-containerd-${cri_containerd_tarball_version}.${CONTAINERD_OS}-${CONTAIENRD_ARCH}.tar.gz"
 	local url="${tarball_url}/${tarball_name}"
