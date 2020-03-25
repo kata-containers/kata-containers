@@ -5,7 +5,7 @@
    ```bash
    $ ARCH=$(arch)
    $ BRANCH="${BRANCH:-master}"
-   $ sudo -E zypper addrepo "http://download.opensuse.org/repositories/home:/katacontainers:/releases:/${ARCH}:/${BRANCH}/SLE_12_SP3/home:katacontainers:releases:${ARCH}:${BRANCH}.repo"
+   $ sudo -E zypper addrepo "http://download.opensuse.org/repositories/home:/katacontainers:/releases:/${ARCH}:/${BRANCH}/SLE_12_SP4/home:katacontainers:releases:${ARCH}:${BRANCH}.repo"
    $ sudo -E zypper -n --no-gpg-checks install kata-runtime kata-proxy kata-shim
    ```
 
