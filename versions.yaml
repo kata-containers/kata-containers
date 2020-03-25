@@ -199,7 +199,9 @@ externals:
       Containerd Plugin for Kubernetes Container Runtime Interface.
     url: "github.com/containerd/cri"
     tarball_url: "https://storage.googleapis.com/cri-containerd-release"
-    version: "1.3.0"
+    # Next commit from 1.3 branch contains fix to be able to run
+    # tests using go 1.13
+    version: "3a4acfbc99aa976849f51a8edd4af20ead51d8d7"
 
   critools:
     description: "CLI tool for Container Runtime Interface (CRI)"
