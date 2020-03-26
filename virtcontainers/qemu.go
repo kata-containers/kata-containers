@@ -1051,16 +1051,28 @@ func (q *qemu) qmpShutdown() {
 }
 
 func (q *qemu) hotplugAddBlockDevice(drive *config.BlockDrive, op operation, devID string) (err error) {
-	if q.config.BlockDeviceDriver == config.Nvdimm {
+	// drive can be a pmem device, in which case it's used as backing file for a nvdimm device
+	if q.config.BlockDeviceDriver == config.Nvdimm || drive.Pmem {
 		var blocksize int64
 		file, err := os.Open(drive.File)
 		if err != nil {
 			return err
 		}
-		if _, _, err := syscall.Syscall(syscall.SYS_IOCTL, file.Fd(), unix.BLKGETSIZE64, uintptr(unsafe.Pointer(&blocksize))); err != 0 {
+		defer file.Close()
+
+		st, err := file.Stat()
+		if err != nil {
+			return fmt.Errorf("failed to get information from nvdimm device %v: %v", drive.File, err)
+		}
+
+		// regular files do not support syscall BLKGETSIZE64
+		if st.Mode().IsRegular() {
+			blocksize = st.Size()
+		} else if _, _, err := syscall.Syscall(syscall.SYS_IOCTL, file.Fd(), unix.BLKGETSIZE64, uintptr(unsafe.Pointer(&blocksize))); err != 0 {
 			return err
 		}
-		if err = q.qmpMonitorCh.qmp.ExecuteNVDIMMDeviceAdd(q.qmpMonitorCh.ctx, drive.ID, drive.File, blocksize); err != nil {
+
+		if err = q.qmpMonitorCh.qmp.ExecuteNVDIMMDeviceAdd(q.qmpMonitorCh.ctx, drive.ID, drive.File, blocksize, &drive.Pmem); err != nil {
 			q.Logger().WithError(err).Errorf("Failed to add NVDIMM device %s", drive.File)
 			return err
 		}
