@@ -9,7 +9,7 @@ BuildRoot: %{_tmppath}/%{name}-%{version}-%{release}
 
 Summary  : OpenBIOS development utilities
 Group    : Development/Tools
-License  : BSD-2-Clause BSD-3-Clause GPL-2.0 GPL-2.0+ LGPL-2.0+ LGPL-2.1
+License  : BSD-2-Clause and BSD-3-Clause and GPL-2.0 and GPL-2.0+ and LGPL-2.0+ and LGPL-2.1
 
 Requires: qemu-vanilla-bin
 Requires: qemu-vanilla-data
@@ -58,7 +58,7 @@ QEMU is a generic and open source machine & userspace emulator and
 virtualizer.
 
 %package bin
-Summary: bin components for the qemu-vanilla package.
+Summary: Bin components for the qemu-vanilla package
 Group: Binaries
 Requires: qemu-vanilla-data
 
@@ -67,7 +67,7 @@ bin components for the qemu-vanilla package.
 
 
 %package data
-Summary: data components for the qemu-vanilla package.
+Summary: Data components for the qemu-vanilla package
 Group: Data
 
 %description data
