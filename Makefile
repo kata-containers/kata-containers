@@ -122,7 +122,7 @@ HYPERVISOR_CLH = cloud-hypervisor
 HYPERVISOR_QEMU_VIRTIOFS = qemu-virtiofs
 
 # Determines which hypervisor is specified in $(CONFIG_FILE).
-DEFAULT_HYPERVISOR = $(HYPERVISOR_QEMU)
+DEFAULT_HYPERVISOR ?= $(HYPERVISOR_QEMU)
 
 # List of hypervisors this build system can generate configuration for.
 HYPERVISORS := $(HYPERVISOR_ACRN) $(HYPERVISOR_FC) $(HYPERVISOR_QEMU) $(HYPERVISOR_QEMU_VIRTIOFS) $(HYPERVISOR_CLH)
@@ -749,6 +749,7 @@ else
 endif
 	@printf "\n"
 	@printf "• hypervisors:\n"
+	@printf "\tDefault: $(DEFAULT_HYPERVISOR)\n"
 	@printf "\tKnown: $(sort $(HYPERVISORS))\n"
 	@printf "\tAvailable for this architecture: $(sort $(KNOWN_HYPERVISORS))\n"
 	@printf "\n"
