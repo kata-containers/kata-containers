@@ -155,6 +155,22 @@ paths:
         404:
           description: The new device could not be added to the VM instance.
 
+  /vm.remove-device:
+    put:
+      summary: Remove a device from the VM
+      requestBody:
+        description: The identifier of the device
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VmRemoveDevice'
+        required: true
+      responses:
+        204:
+          description: The device was successfully removed from the VM instance.
+        404:
+          description: The device could not be removed from the VM instance.
+
 components:
   schemas:
 
@@ -253,6 +269,9 @@ components:
           type: integer
           format: int64
           default: 512 MB
+        hotplug_size:
+          type: integer
+          format: int64
         file:
           type: string
         mergeable:
@@ -391,6 +410,9 @@ components:
         mergeable:
           type: boolean
           default: false
+        discard_writes:
+          type: boolean
+          default: false
 
     ConsoleConfig:
       required:
@@ -416,6 +438,8 @@ components:
         iommu:
           type: boolean
           default: false
+        id:
+          type: string
 
     VsockConfig:
       required:
@@ -442,10 +466,18 @@ components:
           minimum: 1
           type: integer
         desired_ram:
+          description: desired memory ram in bytes
           type: integer
+          format: int64
 
     VmAddDevice:
       type: object
       properties:
         path:
+          type: string
+
+    VmRemoveDevice:
+      type: object
+      properties:
+        id:
           type: string

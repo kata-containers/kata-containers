@@ -214,8 +214,16 @@ func (clh *cloudHypervisor) createSandbox(ctx context.Context, id string, networ
 	clh.Logger().WithField("function", "createSandbox").WithError(err).Info("Sandbox not found creating ")
 
 	// Set initial memomory size of the virtual machine
-	clh.vmconfig.Memory.Size = int64(clh.config.MemorySize) << utils.MibToBytesShift
+	// Convert to int64 openApiClient only support int64
+	clh.vmconfig.Memory.Size = int64((utils.MemUnit(clh.config.MemorySize) * utils.MiB).ToBytes())
 	clh.vmconfig.Memory.File = "/dev/shm"
+	hostMemKb, err := getHostMemorySizeKb(procMemInfo)
+	if err != nil {
+		return nil
+	}
+
+	// OpenAPI only supports int64 values
+	clh.vmconfig.Memory.HotplugSize = int64((utils.MemUnit(hostMemKb) * utils.KiB).ToBytes())
 	// Set initial amount of cpu's for the virtual machine
 	clh.vmconfig.Cpus = chclient.CpusConfig{
 		// cast to int32, as openAPI has a limitation that it does not support unsigned values
@@ -424,22 +432,79 @@ func (clh *cloudHypervisor) hypervisorConfig() HypervisorConfig {
 }
 
 func (clh *cloudHypervisor) resizeMemory(reqMemMB uint32, memoryBlockSizeMB uint32, probe bool) (uint32, memoryDevice, error) {
-	clh.Logger().WithField("function", "resizeMemory").Warn("not supported")
-	return 0, memoryDevice{}, nil
+
+	// TODO: Add support for virtio-mem
+
+	if probe {
+		return 0, memoryDevice{}, errors.New("probe memory is not supported for cloud-hypervisor")
+	}
+
+	if reqMemMB == 0 {
+		// This is a corner case if requested to resize to 0 means something went really wrong.
+		return 0, memoryDevice{}, errors.New("Can not resize memory to 0")
+	}
+
+	info, err := clh.vmInfo()
+	if err != nil {
+		return 0, memoryDevice{}, err
+	}
+
+	currentMem := utils.MemUnit(info.Config.Memory.Size) * utils.Byte
+	newMem := utils.MemUnit(reqMemMB) * utils.MiB
+
+	// Early check to verify if boot memory is the same as requested
+	if currentMem == newMem {
+		clh.Logger().WithField("memory", reqMemMB).Debugf("VM already has requested memory")
+		return uint32(currentMem.ToMiB()), memoryDevice{}, nil
+	}
+
+	if currentMem > newMem {
+		clh.Logger().Warn("Remove memory is not supported, nothing to do")
+		return uint32(currentMem.ToMiB()), memoryDevice{}, nil
+	}
+
+	blockSize := utils.MemUnit(memoryBlockSizeMB) * utils.MiB
+	hotplugSize := (newMem - currentMem).AlignMem(blockSize)
+
+	// Update memory request to increase memory aligned block
+	alignedRequest := currentMem + hotplugSize
+	if newMem != alignedRequest {
+		clh.Logger().WithFields(log.Fields{"request": newMem, "aligned-request": alignedRequest}).Debug("aligning VM memory request")
+		newMem = alignedRequest
+	}
+
+	// Check if memory is the same as requested, a second check is done
+	// to consider the memory request now that is updated to be memory aligned
+	if currentMem == newMem {
+		clh.Logger().WithFields(log.Fields{"current-memory": currentMem, "new-memory": newMem}).Debug("VM already has requested memory(after alignment)")
+		return uint32(currentMem.ToMiB()), memoryDevice{}, nil
+	}
+
+	cl := clh.client()
+	ctx, cancelResize := context.WithTimeout(context.Background(), clhAPITimeout*time.Second)
+	defer cancelResize()
+
+	// OpenApi does not support uint64, convert to int64
+	resize := chclient.VmResize{DesiredRam: int64(newMem.ToBytes())}
+	clh.Logger().WithFields(log.Fields{"current-memory": currentMem, "new-memory": newMem}).Debug("updating VM memory")
+	if _, err = cl.VmResizePut(ctx, resize); err != nil {
+		clh.Logger().WithFields(log.Fields{"current-memory": currentMem, "new-memory": newMem}).Warnf("failed to update memory %s", openAPIClientError(err))
+		err = fmt.Errorf("Failed to resize memory from %d to %d: %s", currentMem, newMem, openAPIClientError(err))
+		return uint32(currentMem.ToMiB()), memoryDevice{}, openAPIClientError(err)
+	}
+
+	return uint32(newMem.ToMiB()), memoryDevice{sizeMB: int(hotplugSize.ToMiB())}, nil
 }
 
 func (clh *cloudHypervisor) resizeVCPUs(reqVCPUs uint32) (currentVCPUs uint32, newVCPUs uint32, err error) {
 	cl := clh.client()
 
 	// Retrieve the number of current vCPUs via HTTP API
-	ctx, cancel := context.WithTimeout(context.Background(), clhAPITimeout*time.Second)
-	info, _, err := cl.VmInfoGet(ctx)
+	info, err := clh.vmInfo()
 	if err != nil {
-		clh.Logger().WithField("function", "resizeVCPUs").WithError(openAPIClientError(err)).Info("[clh] VmInfoGet failed")
+		clh.Logger().WithField("function", "resizeVCPUs").WithError(err).Info("[clh] vmInfo failed")
 		return 0, 0, openAPIClientError(err)
 	}
-	// Reset the timer after the first HTTP API call
-	cancel()
 
 	currentVCPUs = uint32(info.Config.Cpus.BootVcpus)
 	newVCPUs = currentVCPUs
@@ -461,7 +526,7 @@ func (clh *cloudHypervisor) resizeVCPUs(reqVCPUs uint32) (currentVCPUs uint32, n
 	}
 
 	// Resize (hot-plug) vCPUs via HTTP API
-	ctx, cancel = context.WithTimeout(context.Background(), clhAPITimeout*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), clhAPITimeout*time.Second)
 	defer cancel()
 	if _, err = cl.VmResizePut(ctx, chclient.VmResize{DesiredVcpus: int32(reqVCPUs)}); err != nil {
 		return currentVCPUs, newVCPUs, errors.Wrap(err, "[clh] VmResizePut failed")
@@ -960,10 +1025,10 @@ func (clh *cloudHypervisor) bootVM(ctx context.Context) error {
 		return openAPIClientError(err)
 	}
 
-	info, _, err := cl.VmInfoGet(ctx)
+	info, err := clh.vmInfo()
 
 	if err != nil {
-		return openAPIClientError(err)
+		return err
 	}
 
 	clh.Logger().Debugf("VM state after create: %#v", info)
@@ -979,10 +1044,10 @@ func (clh *cloudHypervisor) bootVM(ctx context.Context) error {
 		return openAPIClientError(err)
 	}
 
-	info, _, err = cl.VmInfoGet(ctx)
+	info, err = clh.vmInfo()
 
 	if err != nil {
-		return openAPIClientError(err)
+		return err
 	}
 
 	clh.Logger().Debugf("VM state after boot: %#v", info)
@@ -1119,4 +1184,18 @@ func (clh *cloudHypervisor) cleanupVM(force bool) error {
 	clh.reset()
 
 	return nil
+}
+
+// vmInfo ask to hypervisor for current VM status
+func (clh *cloudHypervisor) vmInfo() (chclient.VmInfo, error) {
+	cl := clh.client()
+	ctx, cancelInfo := context.WithTimeout(context.Background(), clhAPITimeout*time.Second)
+	defer cancelInfo()
+
+	info, _, err := cl.VmInfoGet(ctx)
+	if err != nil {
+		clh.Logger().WithError(openAPIClientError(err)).Warn("VmInfoGet failed")
+	}
+	return info, openAPIClientError(err)
+
 }

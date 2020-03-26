@@ -42,6 +42,7 @@ Class | Method | HTTP request | Description
 *DefaultApi* | [**ShutdownVMM**](docs/DefaultApi.md#shutdownvmm) | **Put** /vmm.shutdown | Shuts the cloud-hypervisor VMM.
 *DefaultApi* | [**VmAddDevicePut**](docs/DefaultApi.md#vmadddeviceput) | **Put** /vm.add-device | Add a new device to the VM
 *DefaultApi* | [**VmInfoGet**](docs/DefaultApi.md#vminfoget) | **Get** /vm.info | Returns general information about the cloud-hypervisor Virtual Machine (VM) instance.
+*DefaultApi* | [**VmRemoveDevicePut**](docs/DefaultApi.md#vmremovedeviceput) | **Put** /vm.remove-device | Remove a device from the VM
 *DefaultApi* | [**VmResizePut**](docs/DefaultApi.md#vmresizeput) | **Put** /vm.resize | Resize the VM
 *DefaultApi* | [**VmmPingGet**](docs/DefaultApi.md#vmmpingget) | **Get** /vmm.ping | Ping the VMM to check for API server availability
 
@@ -62,6 +63,7 @@ Class | Method | HTTP request | Description
  - [VmAddDevice](docs/VmAddDevice.md)
  - [VmConfig](docs/VmConfig.md)
  - [VmInfo](docs/VmInfo.md)
+ - [VmRemoveDevice](docs/VmRemoveDevice.md)
  - [VmResize](docs/VmResize.md)
  - [VmmPingResponse](docs/VmmPingResponse.md)
  - [VsockConfig](docs/VsockConfig.md)
