@@ -207,8 +207,17 @@ generate_qemu_options() {
 
 	# Disabled options
 
-	# bluetooth support not required
-	qemu_options+=(size:--disable-bluez)
+	if [ "${qemu_version_major}" -ge 5 ]; then
+		# Disable sheepdog block driver support
+		qemu_options+=(size:--disable-sheepdog)
+
+		# Disable block migration in the main migration stream
+		qemu_options+=(size:--disable-live-block-migration)
+	else
+		# Starting from QEMU 5.0, the bluetooth code has been removed without replacement.
+		# bluetooth support not required
+		qemu_options+=(size:--disable-bluez)
+	fi
 
 	# braille support not required
 	qemu_options+=(size:--disable-brlapi)
@@ -397,6 +406,9 @@ generate_qemu_options() {
 		# for that architecture
 		if [ "$arch" == x86_64 ]; then
 			qemu_options+=(speed:--enable-avx2)
+			if [ "${qemu_version_major}" -ge 5 ]; then
+				qemu_options+=(speed:--enable-avx512f)
+			fi
 			# According to QEMU's nvdimm documentation: When 'pmem' is 'on' and QEMU is
 			# built with libpmem support, QEMU will take necessary operations to guarantee
 			# the persistence of its own writes to the vNVDIMM backend.
