@@ -240,3 +240,38 @@ func SupportsVsocks() bool {
 var StartCmd = func(c *exec.Cmd) error {
 	return c.Start()
 }
+
+// AlignMem align memory provided to a block size
+func (m MemUnit) AlignMem(blockSize MemUnit) MemUnit {
+	memSize := m
+	if m < blockSize {
+		memSize = blockSize
+
+	}
+
+	remainder := memSize % blockSize
+
+	if remainder != 0 {
+		// Align memory to memoryBlockSizeMB
+		memSize += blockSize - remainder
+
+	}
+	return memSize
+}
+
+type MemUnit uint64
+
+func (m MemUnit) ToMiB() uint64 {
+	return m.ToBytes() / (1 * MiB).ToBytes()
+}
+
+func (m MemUnit) ToBytes() uint64 {
+	return uint64(m)
+}
+
+const (
+	Byte MemUnit = 1
+	KiB          = Byte << 10
+	MiB          = KiB << 10
+	GiB          = MiB << 10
+)
