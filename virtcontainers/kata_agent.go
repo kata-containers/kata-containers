@@ -1114,6 +1114,13 @@ func (k *kataAgent) appendBlockDevice(dev ContainerDevice, c *Container) *grpc.D
 		return nil
 	}
 
+	if d.Pmem {
+		// block drive is a persistent memory device that
+		// was passed as volume (-v) not as device (--device).
+		// It shouldn't be visible in the container
+		return nil
+	}
+
 	kataDevice := &grpc.Device{
 		ContainerPath: dev.ContainerPath,
 	}
@@ -1476,6 +1483,12 @@ func (k *kataAgent) handleDeviceBlockVolume(c *Container, device api.Device) (*g
 		return nil, fmt.Errorf("malformed block drive")
 	}
 	switch {
+	// pmem volumes case
+	case blockDrive.Pmem:
+		vol.Driver = kataNvdimmDevType
+		vol.Source = fmt.Sprintf("/dev/pmem%s", blockDrive.NvdimmID)
+		vol.Fstype = blockDrive.Format
+		vol.Options = []string{"dax"}
 	case c.sandbox.config.HypervisorConfig.BlockDeviceDriver == config.VirtioBlockCCW:
 		vol.Driver = kataBlkCCWDevType
 		vol.Source = blockDrive.DevNo
@@ -1553,8 +1566,12 @@ func (k *kataAgent) handleBlockVolumes(c *Container) ([]*grpc.Storage, error) {
 		}
 
 		vol.MountPoint = m.Destination
-		vol.Fstype = "bind"
-		vol.Options = []string{"bind"}
+		if vol.Fstype == "" {
+			vol.Fstype = "bind"
+		}
+		if len(vol.Options) == 0 {
+			vol.Options = []string{"bind"}
+		}
 
 		volumeStorages = append(volumeStorages, vol)
 	}

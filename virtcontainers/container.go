@@ -643,6 +643,11 @@ func filterDevices(c *Container, devices []ContainerDevice) (ret []ContainerDevi
 }
 
 func (c *Container) createBlockDevices() error {
+	if !c.checkBlockDeviceSupport() {
+		c.Logger().Warn("Block device not supported")
+		return nil
+	}
+
 	// iterate all mounts and create block device if it's block based.
 	for i, m := range c.mounts {
 		if len(m.BlockDeviceID) > 0 || m.Type != "bind" {
@@ -657,18 +662,36 @@ func (c *Container) createBlockDevices() error {
 			return fmt.Errorf("stat %q failed: %v", m.Source, err)
 		}
 
+		var di *config.DeviceInfo
+		var err error
+
 		// Check if mount is a block device file. If it is, the block device will be attached to the host
 		// instead of passing this as a shared mount.
-		if c.checkBlockDeviceSupport() && stat.Mode&unix.S_IFBLK == unix.S_IFBLK {
-			b, err := c.sandbox.devManager.NewDevice(config.DeviceInfo{
+		if stat.Mode&unix.S_IFBLK == unix.S_IFBLK {
+			di = &config.DeviceInfo{
 				HostPath:      m.Source,
 				ContainerPath: m.Destination,
 				DevType:       "b",
 				Major:         int64(unix.Major(stat.Rdev)),
 				Minor:         int64(unix.Minor(stat.Rdev)),
-			})
+			}
+			// check whether source can be used as a pmem device
+		} else if di, err = config.PmemDeviceInfo(m.Source, m.Destination); err != nil {
+			c.Logger().WithError(err).
+				WithField("mount-source", m.Source).
+				Debug("no loop device")
+		}
+
+		if err == nil && di != nil {
+			b, err := c.sandbox.devManager.NewDevice(*di)
+
 			if err != nil {
-				return fmt.Errorf("device manager failed to create new device for %q: %v", m.Source, err)
+				// Do not return an error, try to create
+				// devices for other mounts
+				c.Logger().WithError(err).WithField("mount-source", m.Source).
+					Error("device manager failed to create new device")
+				continue
+
 			}
 
 			c.mounts[i].BlockDeviceID = b.DeviceID()
@@ -1323,7 +1346,7 @@ func (c *Container) hotplugDrive() error {
 			c.rootfsSuffix = ""
 		}
 		// If device mapper device, then fetch the full path of the device
-		devicePath, fsType, err = GetDevicePathAndFsType(dev.mountPoint)
+		devicePath, fsType, err = utils.GetDevicePathAndFsType(dev.mountPoint)
 		if err != nil {
 			return err
 		}

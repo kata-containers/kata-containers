@@ -33,3 +33,19 @@ func TestFindContextID(t *testing.T) {
 	assert.Zero(cid)
 	assert.Error(err)
 }
+
+func TestGetDevicePathAndFsTypeEmptyMount(t *testing.T) {
+	assert := assert.New(t)
+	_, _, err := GetDevicePathAndFsType("")
+	assert.Error(err)
+}
+
+func TestGetDevicePathAndFsTypeSuccessful(t *testing.T) {
+	assert := assert.New(t)
+
+	path, fstype, err := GetDevicePathAndFsType("/proc")
+	assert.NoError(err)
+
+	assert.Equal(path, "proc")
+	assert.Equal(fstype, "proc")
+}

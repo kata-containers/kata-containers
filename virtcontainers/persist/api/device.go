@@ -41,6 +41,10 @@ type BlockDrive struct {
 
 	// DevNo
 	DevNo string
+
+	// Pmem enabled persistent memory. Use File as backing file
+	// for a nvdimm device in the guest.
+	Pmem bool
 }
 
 // VFIODev represents a VFIO drive used for hotplugging

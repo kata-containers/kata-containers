@@ -1428,8 +1428,9 @@ func (q *QMP) ExecHotplugMemory(ctx context.Context, qomtype, id, mempath string
 // a NVDIMM driver with the device_add command.
 // id is the id of the device to add.  It must be a valid QMP identifier.
 // mempath is the path of the device to add, e.g., /dev/rdb0.  size is
-// the data size of the device.
-func (q *QMP) ExecuteNVDIMMDeviceAdd(ctx context.Context, id, mempath string, size int64) error {
+// the data size of the device. pmem is to guarantee the persistence of QEMU writes
+// to the vNVDIMM backend.
+func (q *QMP) ExecuteNVDIMMDeviceAdd(ctx context.Context, id, mempath string, size int64, pmem *bool) error {
 	args := map[string]interface{}{
 		"qom-type": "memory-backend-file",
 		"id":       "nvdimmbackmem" + id,
@@ -1439,6 +1440,14 @@ func (q *QMP) ExecuteNVDIMMDeviceAdd(ctx context.Context, id, mempath string, si
 			"share":    true,
 		},
 	}
+
+	if q.version.Major > 4 || (q.version.Major == 4 && q.version.Minor >= 1) {
+		if pmem != nil {
+			props := args["props"].(map[string]interface{})
+			props["pmem"] = *pmem
+		}
+	}
+
 	err := q.executeCommand(ctx, "object-add", args, nil)
 	if err != nil {
 		return err
