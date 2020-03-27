@@ -579,8 +579,8 @@ func (clh *cloudHypervisor) capabilities() types.Capabilities {
 
 	clh.Logger().WithField("function", "capabilities").Info("get Capabilities")
 	var caps types.Capabilities
+	caps.SetFsSharingSupport()
 	return caps
-
 }
 
 func (clh *cloudHypervisor) trace(name string) (opentracing.Span, context.Context) {
