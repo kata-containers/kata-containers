@@ -119,6 +119,7 @@ func (q *qemuAmd64) capabilities() types.Capabilities {
 	}
 
 	caps.SetMultiQueueSupport()
+	caps.SetFsSharingSupport()
 
 	return caps
 }
