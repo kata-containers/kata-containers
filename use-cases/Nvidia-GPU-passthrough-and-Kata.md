@@ -199,7 +199,7 @@ Use the following steps to pass an Nvidia GPU device in pass-through mode with K
 
 4. Start a Kata container with GPU device:
    ```
-   $ sudo docker run -it --runtime=kata-runtime --rm --device /dev/vfio/45 centos /bin/bash
+   $ sudo docker run -it --runtime=kata-runtime --cap-add=ALL --device /dev/vfio/45 centos /bin/bash
    ```
 
 5. Run `lspci` within the container to verify the GPU device is seen in the list
