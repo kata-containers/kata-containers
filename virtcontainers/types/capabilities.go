@@ -9,7 +9,7 @@ const (
 	blockDeviceSupport = 1 << iota
 	blockDeviceHotplugSupport
 	multiQueueSupport
-	fsSharingUnsupported
+	fsSharingSupported
 )
 
 // Capabilities describe a virtcontainers hypervisor capabilities
@@ -50,10 +50,10 @@ func (caps *Capabilities) SetMultiQueueSupport() {
 
 // IsFsSharingSupported tells if an hypervisor supports host filesystem sharing.
 func (caps *Capabilities) IsFsSharingSupported() bool {
-	return caps.flags&fsSharingUnsupported == 0
+	return caps.flags&fsSharingSupported != 0
 }
 
 // SetFsSharingUnsupported sets the host filesystem sharing capability to true.
-func (caps *Capabilities) SetFsSharingUnsupported() {
-	caps.flags |= fsSharingUnsupported
+func (caps *Capabilities) SetFsSharingSupport() {
+	caps.flags |= fsSharingSupported
 }

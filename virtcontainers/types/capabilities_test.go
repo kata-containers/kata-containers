@@ -30,7 +30,7 @@ func TestBlockDeviceHotplugCapability(t *testing.T) {
 func TestFsSharingCapability(t *testing.T) {
 	var caps Capabilities
 
-	assert.True(t, caps.IsFsSharingSupported())
-	caps.SetFsSharingUnsupported()
 	assert.False(t, caps.IsFsSharingSupported())
+	caps.SetFsSharingSupport()
+	assert.True(t, caps.IsFsSharingSupported())
 }
