@@ -40,6 +40,7 @@ systemctl is-active --quiet docker || sudo systemctl start docker
 K8S_TEST_UNION=("k8s-attach-handlers.bats" \
 	"k8s-configmap.bats" \
 	"k8s-copy-file.bats" \
+	"k8s-cpu-ns.bats" \
 	"k8s-credentials-secrets.bats" \
 	"k8s-custom-dns.bats" \
 	"k8s-empty-dirs.bats" \
@@ -49,6 +50,7 @@ K8S_TEST_UNION=("k8s-attach-handlers.bats" \
 	"k8s-limit-range.bats" \
 	"k8s-liveness-probes.bats" \
 	"k8s-memory.bats" \
+	"k8s-number-cpus.bats" \
 	"k8s-parallel.bats" \
 	"k8s-pid-ns.bats" \
 	"k8s-pod-quota.bats" \
@@ -66,17 +68,12 @@ K8S_TEST_UNION=("k8s-attach-handlers.bats" \
 
 if [ "${KATA_HYPERVISOR:-}" == "cloud-hypervisor" ]; then
 	blk_issue="https://github.com/kata-containers/tests/issues/2318"
-	cpu_issue="https://github.com/kata-containers/tests/issues/2325"
 	sysctl_issue="https://github.com/kata-containers/tests/issues/2324"
-	info "$KATA_HYPERVISOR hotplug is not implemented:"
 	info "blk ${blk_issue}"
-	info "cpu ${cpu_issue}"
 	info "$KATA_HYPERVISOR sysctl is failing:"
 	info "sysctls: ${sysctl_issue}"
 else
 	K8S_TEST_UNION+=("k8s-block-volume.bats")
-	K8S_TEST_UNION+=("k8s-cpu-ns.bats")
-	K8S_TEST_UNION+=("k8s-number-cpus.bats")
 	K8S_TEST_UNION+=("k8s-sysctls.bats")
 fi
 # we may need to skip a few test cases when running on non-x86_64 arch
