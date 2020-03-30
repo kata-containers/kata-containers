@@ -360,8 +360,6 @@ func (a *acrnArchBase) memoryTopology(memoryMb uint64) Memory {
 func (a *acrnArchBase) capabilities() types.Capabilities {
 	var caps types.Capabilities
 
-	// For devicemapper disable support for filesystem sharing
-	caps.SetFsSharingUnsupported()
 	caps.SetBlockDeviceSupport()
 	caps.SetBlockDeviceHotplugSupport()
 
