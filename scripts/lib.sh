@@ -355,7 +355,7 @@ RUN ln -sf /usr/bin/g++ /bin/musl-g++
 	# powerpc have no musl target, don't setup rust enviroment
 	# since we cannot static link agent. Besides, there is
 	# also long double representation problem when building musl-libc
-	if [ "${architecture}" == "ppc64le" ]; then
+	if [ "${architecture}" == "ppc64le" ] || [ "${architecture}" == "s390x" ]; then
 		sed \
 			-e "s|@GO_VERSION@|${GO_VERSION}|g" \
 			-e "s|@OS_VERSION@|${OS_VERSION:-}|g" \
