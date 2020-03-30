@@ -37,6 +37,8 @@ pub struct Namespace {
     pub path: String,
     persistent_ns_dir: String,
     ns_type: NamespaceType,
+    //only used for uts namespace
+    pub hostname: Option<String>,
 }
 
 impl Namespace {
@@ -46,6 +48,7 @@ impl Namespace {
             path: String::from(""),
             persistent_ns_dir: String::from(PERSISTENT_NS_DIR),
             ns_type: NamespaceType::IPC,
+            hostname: None,
         }
     }
 
@@ -54,8 +57,11 @@ impl Namespace {
         self
     }
 
-    pub fn as_uts(mut self) -> Self {
+    pub fn as_uts(mut self, hostname: &str) -> Self {
         self.ns_type = NamespaceType::UTS;
+        if hostname != "" {
+            self.hostname = Some(String::from(hostname));
+        }
         self
     }
 
@@ -82,6 +88,7 @@ impl Namespace {
         }
 
         self.path = new_ns_path.clone().into_os_string().into_string().unwrap();
+        let hostname = self.hostname.clone();
 
         let new_thread = thread::spawn(move || {
             let origin_ns_path = get_current_thread_ns_path(&ns_type.get());
@@ -98,6 +105,12 @@ impl Namespace {
                 return Err(err.to_string());
             }
 
+            if ns_type == NamespaceType::UTS && hostname.is_some() {
+                match nix::unistd::sethostname(hostname.unwrap()) {
+                    Err(err) => return Err(err.to_string()),
+                    Ok(_) => (),
+                }
+            }
             // Bind mount the new namespace from the current thread onto the mount point to persist it.
             let source: &str = origin_ns_path.as_str();
             let destination: &str = new_ns_path.as_path().to_str().unwrap_or("none");
@@ -136,7 +149,7 @@ impl Namespace {
 }
 
 /// Represents the Namespace type.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq)]
 enum NamespaceType {
     IPC,
     UTS,
@@ -201,7 +214,7 @@ mod tests {
         let tmpdir = Builder::new().prefix("ipc").tempdir().unwrap();
 
         let ns_uts = Namespace::new(&logger)
-            .as_uts()
+            .as_uts("test_hostname")
             .set_root_dir(tmpdir.path().to_str().unwrap())
             .setup();
 
