@@ -114,36 +114,31 @@ podman:
     - podman run bad ipc pid test
     - podman container mount
     - podman mount with json format
-    - podman run UID specified in container
     - podman run entrypoint and cmd test
-    - podman commit container check env variables
-    - podman commit container with pause flag
-    - podman attach to the latest container
     - podman create adds annotation
     - podman create using existing name
-    - podman init latest container
     - podman run with bad healthcheck timeout
     - podman search limit flag
     - podman start after signal kill
-    - podman run entrypoint with user cmd overrides image cmd
-    - podman run user entrypoint overrides image entrypoint and image cmd
-    - podman run user entrypoint with command overrides image entrypoint and image cmd
     - podman save to directory with docker format and compression
     - podman save to directory with v2s2 docker format
     - podman save oci flag
-    - podman kill latest container
-    - podman exec simple working directory test
     - podman mount many
-    - podman start multiple containers
     - podman umount many
-    - podman commit container with author
-    - podman kill a running container by id with a bogus signal
     - podman unpause a running pod by id
-    - podman start infra container different image
     - podman tag shortname image no tag
     - podman tag shortname
     - podman save quiet flag
     - podman init bogus container
     - podman rmi all images forcibly with short options
-    - podman rmi image that is a parent of another image
     - podman rmi all images
+    - podman run without group-add
+    - podman run device-write-iops test
+    - podman run with cgroups=enabled makes cgroups
+    - podman run network in user created network namespace
+    - podman run device-read-bps test
+    - podman run network expose port 222
+    - podman run with bad healthcheck retries
+    - podman run with FIPS mode secrets
+    - podman run with conflicting volumes errors
+    - podman run attach nonsense errors
