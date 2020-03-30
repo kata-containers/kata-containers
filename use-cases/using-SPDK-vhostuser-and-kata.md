@@ -7,6 +7,10 @@
 - [Host setup for vhost-user devices](#host-setup-for-vhost-user-devices)
 - [Launch a Kata container with SPDK vhost-user block device](#launch-a-kata-container-with-spdk-vhost-user-block-device)
 
+> **NOTE:** This guide only applies to QEMU, since the vhost-user storage
+> device is only available for QEMU now. The enablement work on other
+> hypervisors is still ongoing.
+
 ## SPDK vhost-user Target Overview
 
 The Storage Performance Development Kit (SPDK) provides a set of tools and
@@ -176,9 +180,29 @@ $ sudo scripts/rpc.py vhost_create_blk_controller vhostblk0 Malloc0
 Considering the OCI specification and characteristics of vhost-user device,
 Kata has chosen to use Linux reserved the block major range `240-254`
 to map each vhost-user block type to a major. Also a specific directory is
-used for vhost-user devices. The base directory is a configurable value,
+used for vhost-user devices.
+
+The base directory for vhost-user device is a configurable value,
 with the default being `/var/run/kata-containers/vhost-user`. It can be
 configured by parameter `vhost_user_store_path` in [Kata TOML configuration file](https://github.com/kata-containers/runtime/blob/master/README.md#configuration).
+
+Currently, the vhost-user storage device is not enabled by default, so
+the user should enable it explicitly inside the Kata TOML configuration
+file by setting `enable_vhost_user_store = true`. Since SPDK vhost-user target
+requires hugepages, hugepages should also be enabled inside the Kata TOML
+configuration file by setting `enable_hugepages = true`.
+Here is the conclusion of parameter setting for vhost-user storage device:
+
+```toml
+enable_hugepages = true
+enable_vhost_user_store = true
+vhost_user_store_path = "<Path of the base directory for vhost-user device>"
+```
+
+> **Note:** These parameters are under `[hypervisor.qemu]` section in Kata
+> TOML configuration file. If they are absent, users should still add them
+> under `[hypervisor.qemu]` section.
+
 
 For the subdirectories of `vhost_user_store_path`: `block` is used for block
 device; `block/sockets` is where we expect UNIX domain sockets for vhost-user
