@@ -648,9 +648,10 @@ impl BaseContainer for LinuxContainer {
     }
 
     fn start(&mut self, mut p: Process) -> Result<()> {
+        let logger = self.logger.new(o!("eid" => p.exec_id.clone()));
         let tty = p.tty;
         let fifo_file = format!("{}/{}", &self.root, EXEC_FIFO_FILENAME);
-        info!(self.logger, "enter container.start!");
+        info!(logger, "enter container.start!");
         let mut fifofd: RawFd = -1;
         if p.init {
             if let Ok(_) = stat::stat(fifo_file.as_str()) {
@@ -665,7 +666,7 @@ impl BaseContainer for LinuxContainer {
                 Mode::from_bits(0).unwrap(),
             )?;
         }
-        info!(self.logger, "exec fifo opened!");
+        info!(logger, "exec fifo opened!");
 
         fscgroup::init_static();
 
@@ -681,40 +682,34 @@ impl BaseContainer for LinuxContainer {
 
         let st = self.oci_state()?;
 
-        let execid = p.exec_id.clone();
         let (pfd_log, cfd_log) = unistd::pipe().chain_err(|| "failed to create pipe")?;
         fcntl::fcntl(pfd_log, FcntlArg::F_SETFD(FdFlag::FD_CLOEXEC));
 
-        let logger = self.logger.new(o!("action" => "child process log"));
+        let child_logger = logger.new(o!("action" => "child process log"));
         let log_handler = thread::spawn(move || {
             let log_file = unsafe { std::fs::File::from_raw_fd(pfd_log) };
             let mut reader = BufReader::new(log_file);
-            let execid = execid;
 
             loop {
                 let mut line = String::new();
                 match reader.read_line(&mut line) {
                     Err(e) => {
-                        info!(logger, "read child process log error: {:?}", e);
+                        info!(child_logger, "read child process log error: {:?}", e);
                         break;
                     }
                     Ok(count) => {
                         if count == 0 {
-                            info!(
-                                logger,
-                                "execid:{}, read child process log end",
-                                execid.as_str()
-                            );
+                            info!(child_logger, "read child process log end",);
                             break;
                         }
 
-                        info!(logger, "execid:{},{}", execid.as_str(), line);
+                        info!(child_logger, "{}", line);
                     }
                 }
             }
         });
 
-        info!(self.logger, "exec fifo opened!");
+        info!(logger, "exec fifo opened!");
         let (prfd, cwfd) = unistd::pipe().chain_err(|| "failed to create pipe")?;
         let (crfd, pwfd) = unistd::pipe().chain_err(|| "failed to create pipe")?;
         fcntl::fcntl(prfd, FcntlArg::F_SETFD(FdFlag::FD_CLOEXEC));
@@ -754,7 +749,7 @@ impl BaseContainer for LinuxContainer {
             Ok(v) => v,
             Err(e) => {
                 error!(
-                    self.logger,
+                    logger,
                     "cannot open pid ns path: {} with error: {:?}", PID_NS_PATH, e
                 );
                 return Err(e.into());
@@ -812,10 +807,10 @@ impl BaseContainer for LinuxContainer {
             unistd::close(fifofd);
         }
 
-        info!(self.logger, "execid: {}, child pid: {}", p.exec_id, p.pid);
+        info!(logger, "child pid: {}", p.pid);
 
         match join_namespaces(
-            &self.logger,
+            &logger,
             &spec,
             &p,
             self.cgroup_manager.as_ref().unwrap(),
@@ -826,23 +821,14 @@ impl BaseContainer for LinuxContainer {
         ) {
             Ok(_) => (),
             Err(e) => {
-                error!(
-                    self.logger,
-                    "execid:{},  create container process error {:?}",
-                    p.exec_id.as_str(),
-                    e
-                );
+                error!(logger, "create container process error {:?}", e);
                 // kill the child process.
                 signal::kill(Pid::from_raw(p.pid), Some(Signal::SIGKILL));
                 return Err(e);
             }
         };
 
-        info!(
-            self.logger,
-            "execid: {}, entered namespaces!",
-            p.exec_id.as_str()
-        );
+        info!(logger, "entered namespaces!");
 
         self.status = Some("created".to_string());
         self.created = SystemTime::now();
@@ -864,9 +850,9 @@ impl BaseContainer for LinuxContainer {
         }
         self.processes.insert(p.pid, p);
 
-        info!(self.logger, "wait on child log handler");
+        info!(logger, "wait on child log handler");
         log_handler.join();
-        info!(self.logger, "create process completed");
+        info!(logger, "create process completed");
         return Ok(());
     }
 
@@ -920,7 +906,7 @@ impl BaseContainer for LinuxContainer {
         let fd = fcntl::open(fifo.as_str(), OFlag::O_WRONLY, Mode::from_bits_truncate(0))?;
         let data: &[u8] = &[0];
         unistd::write(fd, &data)?;
-        info!(self.logger, "container {} stared", &self.id);
+        info!(self.logger, "container started");
         self.init_process_start_time = SystemTime::now()
             .duration_since(SystemTime::UNIX_EPOCH)
             .unwrap()
@@ -1071,55 +1057,31 @@ fn join_namespaces(
 
     let userns = is_userns_enabled(linux);
 
-    info!(
-        logger,
-        "execid: {}, try to send spec from parent to child",
-        p.exec_id.as_str()
-    );
+    info!(logger, "try to send spec from parent to child");
     let spec_str = serde_json::to_string(spec)?;
     write_sync(pwfd, SYNC_DATA, spec_str.as_str())?;
 
-    info!(
-        logger,
-        "execid: {}, wait child received oci spec",
-        p.exec_id.as_str()
-    );
+    info!(logger, "wait child received oci spec");
 
     //    child.try_wait()?;
     read_sync(prfd)?;
 
-    info!(
-        logger,
-        "execid: {}, send oci process from parent to child",
-        p.exec_id.as_str()
-    );
+    info!(logger, "send oci process from parent to child");
     let process_str = serde_json::to_string(&p.oci)?;
     write_sync(pwfd, SYNC_DATA, process_str.as_str())?;
 
-    info!(
-        logger,
-        "execid: {}, wait child received oci process",
-        p.exec_id.as_str()
-    );
+    info!(logger, "wait child received oci process");
     read_sync(prfd)?;
 
     let cm_str = serde_json::to_string(cm)?;
     write_sync(pwfd, SYNC_DATA, cm_str.as_str())?;
 
     //wait child setup user namespace
-    info!(
-        logger,
-        "execid: {}, wait child setup user namespace",
-        p.exec_id.as_str()
-    );
+    info!(logger, "wait child setup user namespace");
     read_sync(prfd)?;
 
     if userns {
-        info!(
-            logger,
-            "execid: {}, setup uid/gid mappings",
-            p.exec_id.as_str()
-        );
+        info!(logger, "setup uid/gid mappings");
         // setup uid/gid mappings
         write_mappings(
             &logger,
@@ -1145,31 +1107,19 @@ fn join_namespaces(
         cm.apply(p.pid)?;
     }
 
-    info!(
-        logger,
-        "execid: {}, notify child to continue",
-        p.exec_id.as_str()
-    );
+    info!(logger, "notify child to continue");
     // notify child to continue
     write_sync(pwfd, SYNC_SUCCESS, "")?;
 
     if p.init {
-        info!(
-            logger,
-            "execid:{},  notify child parent ready to run prestart hook!",
-            p.exec_id.as_str()
-        );
+        info!(logger, "notify child parent ready to run prestart hook!");
         let _ = read_sync(prfd)?;
 
-        info!(
-            logger,
-            "execid:{}, get ready to run prestart hook!",
-            p.exec_id.as_str()
-        );
+        info!(logger, "get ready to run prestart hook!");
 
         // run prestart hook
         if spec.hooks.is_some() {
-            info!(logger, "execid:{}, prestart", p.exec_id.as_str());
+            info!(logger, "prestart hook");
             let hooks = spec.hooks.as_ref().unwrap();
             for h in hooks.prestart.iter() {
                 execute_hook(&logger, h, st)?;
@@ -1177,29 +1127,17 @@ fn join_namespaces(
         }
 
         // notify child run prestart hooks completed
-        info!(
-            logger,
-            "execid:{}, notify child run prestart hook completed!",
-            p.exec_id.as_str()
-        );
+        info!(logger, "notify child run prestart hook completed!");
         write_sync(pwfd, SYNC_SUCCESS, "")?;
 
-        info!(
-            logger,
-            "execid:{}, notify child parent ready to run poststart hook!",
-            p.exec_id.as_str()
-        );
+        info!(logger, "notify child parent ready to run poststart hook!");
         // wait to run poststart hook
         read_sync(prfd)?;
-        info!(
-            logger,
-            "execid:{}, get ready to run poststart hook!",
-            p.exec_id.as_str()
-        );
+        info!(logger, "get ready to run poststart hook!");
 
         //run poststart hook
         if spec.hooks.is_some() {
-            info!(logger, "execid:{}, poststart", p.exec_id.as_str());
+            info!(logger, "poststart hook");
             let hooks = spec.hooks.as_ref().unwrap();
             for h in hooks.poststart.iter() {
                 execute_hook(&logger, h, st)?;
@@ -1207,11 +1145,7 @@ fn join_namespaces(
         }
     }
 
-    info!(
-        logger,
-        "execid:{}, wait for child process ready to run exec",
-        p.exec_id.as_str()
-    );
+    info!(logger, "wait for child process ready to run exec");
     read_sync(prfd)?;
 
     Ok(())
@@ -1315,7 +1249,7 @@ impl LinuxContainer {
         let cgroup_manager = FsManager::new(cpath.as_str())?;
 
         Ok(LinuxContainer {
-            id: id,
+            id: id.clone(),
             root,
             cgroup_manager: Some(cgroup_manager),
             status: Some("stopped".to_string()),
@@ -1329,7 +1263,7 @@ impl LinuxContainer {
                 .duration_since(SystemTime::UNIX_EPOCH)
                 .unwrap()
                 .as_secs(),
-            logger: logger.new(o!("module" => "rustjail", "subsystem" => "container")),
+            logger: logger.new(o!("module" => "rustjail", "subsystem" => "container", "cid" => id)),
         })
     }
 
