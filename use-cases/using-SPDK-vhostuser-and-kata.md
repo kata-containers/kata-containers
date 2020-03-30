@@ -229,6 +229,10 @@ minor `0` should be created for it, in order to be recognized by Kata runtime:
 $ sudo mknod /var/run/kata-containers/vhost-user/block/devices/vhostblk0 b 241 0
 ```
 
+> **Note:** The enablement of vhost-user block device in Kata containers
+> is supported by Kata Containers `1.11.0-alpha1` or newer.
+> Make sure you have updated your Kata containers before evaluation.
+
 ## Launch a Kata container with SPDK vhost-user block device
 
 To use `vhost-user-blk` device, use Docker to pass a host `vhost-user-blk`
