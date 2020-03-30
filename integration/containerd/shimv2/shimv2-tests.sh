@@ -10,7 +10,7 @@
 source /etc/os-release || source /usr/lib/os-release
 SCRIPT_PATH=$(dirname "$(readlink -f "$0")")
 
-if [ "$ID" == "centos" ] || [ "$ID" == sles ]; then
+if [ "$ID" == "centos" ] || [ "$ID" == sles ] || [[ "$ID" =~ ^opensuse.*$ ]]; then
 	issue="https://github.com/kata-containers/tests/issues/1251"
 	echo "Skip shimv2 on $ID, see: $issue"
 	exit
