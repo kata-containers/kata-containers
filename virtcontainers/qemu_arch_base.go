@@ -271,6 +271,7 @@ func (q *qemuArchBase) capabilities() types.Capabilities {
 	var caps types.Capabilities
 	caps.SetBlockDeviceHotplugSupport()
 	caps.SetMultiQueueSupport()
+	caps.SetFsSharingSupport()
 	return caps
 }
 
