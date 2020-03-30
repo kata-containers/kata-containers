@@ -171,7 +171,10 @@ impl Sandbox {
         };
 
         // // Set up shared UTS namespace
-        self.shared_utsns = match Namespace::new(&self.logger).as_uts().setup() {
+        self.shared_utsns = match Namespace::new(&self.logger)
+            .as_uts(self.hostname.as_str())
+            .setup()
+        {
             Ok(ns) => ns,
             Err(err) => {
                 return Err(ErrorKind::ErrorCode(format!(
