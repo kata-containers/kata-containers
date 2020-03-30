@@ -284,7 +284,7 @@ impl agentService {
 
         let pipe_size = AGENT_CONFIG.read().unwrap().container_pipe_size;
         let ocip = rustjail::process_grpc_to_oci(process);
-        let p = Process::new(&sl!(), &ocip, exec_id.as_str(), false, pipe_size)?;
+        let p = Process::new(&sl!(), &ocip, cid.as_str(), false, pipe_size)?;
 
         let ctr = match sandbox.get_container(cid.as_str()) {
             Some(v) => v,
@@ -1550,7 +1550,7 @@ fn find_process<'a>(
         None => return Err(ErrorKind::ErrorCode(String::from("Invalid container id")).into()),
     };
 
-    if init && eid == "" {
+    if init || eid == "" {
         let p = match ctr.processes.get_mut(&ctr.init_process_pid) {
             Some(v) => v,
             None => {
