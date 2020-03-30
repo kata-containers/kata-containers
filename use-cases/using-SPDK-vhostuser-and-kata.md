@@ -180,17 +180,26 @@ used for vhost-user devices. The base directory is a configurable value,
 with the default being `/var/run/kata-containers/vhost-user`. It can be
 configured by parameter `vhost_user_store_path` in [Kata TOML configuration file](https://github.com/kata-containers/runtime/blob/master/README.md#configuration).
 
-The reset of the path `block` is used for block device; `block/sockets` is where
-we expect vhost-user sockets to live; `block/sockets` is where simulated block
-device node for vhost-user devices to live.
+For the subdirectories of `vhost_user_store_path`: `block` is used for block
+device; `block/sockets` is where we expect UNIX domain sockets for vhost-user
+block devices to live; `block/devices` is where simulated block device nodes
+for vhost-user block devices are created.
+
+For the subdirectories of `vhost_user_store_path`:
+-  `block` is used for block device;
+-  `block/sockets` is where we expect UNIX domain sockets for vhost-user
+block devices to live;
+-  `block/devices` is where simulated block device nodes for vhost-user
+block devices are created.
 
 For example, if using the default directory `/var/run/kata-containers/vhost-user`,
-sockets for vhost-user device are under `/var/run/kata-containers/vhost-user/block/sockets/`.
-Device nodes for vhost-user device are under `/var/run/kata-containers/vhost-user/block/devices/`.
+UNIX domain sockets for vhost-user block device are under `/var/run/kata-containers/vhost-user/block/sockets/`.
+Device nodes for vhost-user block device are under `/var/run/kata-containers/vhost-user/block/devices/`.
 
 Currently, Kata has chosen major number 241 to map to `vhost-user-blk` devices.
-For `vhost-user-blk` device `vhostblk0`, create a block device node with major
-`241` and minor `0` for it in order to be recognized by Kata Containers runtime:
+For `vhost-user-blk` device named `vhostblk0`, a UNIX domain socket is already
+created by SPDK vhost target, and a block device node with major `241` and
+minor `0` should be created for it, in order to be recognized by Kata runtime:
 
 ```bash
 $ sudo mknod /var/run/kata-containers/vhost-user/block/devices/vhostblk0 b 241 0
