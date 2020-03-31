@@ -47,10 +47,12 @@ install_clh() {
 install_prebuilt_clh() {
 	local checksum_file="sha256sum-cloud-hypervisor"
 	go get -d "${go_cloud_hypervisor_repo}" || true
-	pushd  $(dirname "${GOPATH}/src/${go_cloud_hypervisor_repo}")
+	pushd  "${GOPATH}/src/${go_cloud_hypervisor_repo}"
 
-	curl -fsOL --progress-bar "${latest_build_url}/${clh_bin_name}" || return 1
-	curl -fsOL "${latest_build_url}/${checksum_file}" || return 1
+	info "Downloading hypervisor binary"
+	curl -fOL --progress-bar "${latest_build_url}/${clh_bin_name}" || return 1
+	info "Downloading hypervisor binary checksum"
+	curl -fOL --progress-bar "${latest_build_url}/${checksum_file}" || return 1
 
 	info "Verify download checksum"
 	sudo sha256sum -c "${checksum_file}" || return 1
