@@ -126,10 +126,10 @@ Following the SPDK [getting started guide](https://spdk.io/doc/getting_started.h
 First, run the SPDK `setup.sh` script to setup some hugepages for the SPDK vhost
 target application. We recommend you use a minimum of 4GiB, enough for the SPDK
 vhost target and the virtual machine.
-This will allocate 4096MiB (4GiB) of hugepages:
+This will allocate 4096MiB (4GiB) of hugepages, and avoid binding PCI devices:
 
 ```bash
-$ sudo HUGEMEM=4096 scripts/setup.sh
+$ sudo HUGEMEM=4096 PCI_WHITELIST="none" scripts/setup.sh
 ```
 
 Then, take directory `/var/run/kata-containers/vhost-user` as Kata's vhost-user
