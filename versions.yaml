@@ -56,7 +56,7 @@ externals:
   golangci-lint:
     description: "utility to run various golang linters"
     url: "github.com/golangci/golangci-lint"
-    version: "v1.16.0"
+    version: "v1.18.0"
 
   parallel:
     description: "GNU parallel tool"
