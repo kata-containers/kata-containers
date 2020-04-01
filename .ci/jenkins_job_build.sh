@@ -168,6 +168,16 @@ case "${CI_JOB}" in
 	export TEST_DOCKER="true"
 	export experimental_kernel="true"
 	;;
+"CLOUD-HYPERVISOR-DOCKER")
+	export CRIO="no"
+	export CRI_CONTAINERD="no"
+	export KATA_HYPERVISOR="cloud-hypervisor"
+	export KUBERNETES="no"
+	export OPENSHIFT="no"
+	export TEST_CRIO="false"
+	export TEST_DOCKER="true"
+	export experimental_kernel="true"
+	;;
 esac
 "${ci_dir_name}/setup.sh"
 

@@ -53,9 +53,6 @@ case "${CI_JOB}" in
 		echo "INFO: Running kubernetes tests"
 		sudo -E PATH="$PATH" bash -c "make kubernetes"
 
-		echo "INFO: Running docker integration tests"
-		sudo -E PATH="$PATH" bash -c "make docker"
-
 		echo "INFO: Running soak test"
 		sudo -E PATH="$PATH" bash -c "make docker-stability"
 
@@ -64,6 +61,10 @@ case "${CI_JOB}" in
 
 		echo "INFO: Running networking tests"
 		sudo -E PATH="$PATH" bash -c "make network"
+		;;
+	"CLOUD-HYPERVISOR-DOCKER")
+		echo "INFO: Running docker integration tests"
+		sudo -E PATH="$PATH" bash -c "make docker"
 		;;
 	"PODMAN")
 		export TRUSTED_GROUP="kvm"
