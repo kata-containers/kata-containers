@@ -12,7 +12,7 @@ docker:
   Describe:
     - Hotplug memory when create containers
     - docker volume
-    - package manager update test
     - run hot plug block devices
   Context:
+    - check yum update
   It:
