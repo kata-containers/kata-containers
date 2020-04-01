@@ -10,7 +10,6 @@ test:
   - docker
 docker:
   Describe:
-    - Hotplug memory when create containers
     - docker volume
     - run hot plug block devices
   Context:
