@@ -17,6 +17,7 @@ docker:
     - CPUs and CPU set
     - Hotplug memory
     - memory constraints
+    - check dnf update
   Context:
     - remove bind-mount source before container exits
     - run container exceeding memory constraints
