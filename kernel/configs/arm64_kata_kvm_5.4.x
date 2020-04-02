@@ -1704,7 +1704,7 @@ CONFIG_PPS=y
 # PTP clock support
 #
 CONFIG_PTP_1588_CLOCK=y
-
+CONFIG_PTP_1588_CLOCK_KVM=y
 #
 # Enable PHYLIB and NETWORK_PHY_TIMESTAMPING to see the additional clocks.
 #
