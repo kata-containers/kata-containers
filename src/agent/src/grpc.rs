@@ -305,6 +305,7 @@ impl agentService {
         let eid = req.exec_id.clone();
         let s = Arc::clone(&self.sandbox);
         let mut sandbox = s.lock().unwrap();
+        let mut init = false;
 
         info!(
             sl!(),
@@ -312,7 +313,12 @@ impl agentService {
             "container-id" => cid.clone(),
             "exec-id" => eid.clone()
         );
-        let p = find_process(&mut sandbox, cid.as_str(), eid.as_str(), true)?;
+
+        if eid == "" {
+            init = true;
+        }
+
+        let p = find_process(&mut sandbox, cid.as_str(), eid.as_str(), init)?;
 
         let mut signal = Signal::try_from(req.signal as i32).unwrap();
 
