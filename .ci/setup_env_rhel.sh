@@ -11,6 +11,9 @@ cidir=$(dirname "$0")
 source "/etc/os-release" || "source /usr/lib/os-release"
 source "${cidir}/lib.sh"
 
+echo "Get repo for perl-IPC-Run"
+sudo -E yum-config-manager --enable rhui-rhel-7-server-rhui-optional-rpms
+
 echo "Add epel repository"
 epel_url="https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm"
 sudo -E yum install -y "$epel_url"
