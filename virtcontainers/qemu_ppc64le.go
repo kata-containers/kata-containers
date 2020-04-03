@@ -95,6 +95,7 @@ func (q *qemuPPC64le) capabilities() types.Capabilities {
 	}
 
 	caps.SetMultiQueueSupport()
+	caps.SetFsSharingSupport()
 
 	return caps
 }
