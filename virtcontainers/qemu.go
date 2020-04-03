@@ -638,6 +638,10 @@ func (q *qemu) setupVirtiofsd() (err error) {
 	var listener *net.UnixListener
 	var fd *os.File
 
+	if _, err = os.Stat(q.config.VirtioFSDaemon); os.IsNotExist(err) {
+		return fmt.Errorf("virtiofsd path (%s) does not exist", q.config.VirtioFSDaemon)
+	}
+
 	sockPath, err := q.vhostFSSocketPath(q.id)
 	if err != nil {
 		return err
