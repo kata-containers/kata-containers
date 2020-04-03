@@ -19,6 +19,10 @@ matrix:
     - os: osx
 
 language: go
+# The Go compiler in travis ci testing environment should be 
+# consistent with the tested project.
+go:
+  - 1.13.x
 go_import_path: github.com/kata-containers/tests
 
 env:
@@ -27,7 +31,6 @@ env:
 before_install:
   - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then .ci/setup.sh; fi
   - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then travis_retry brew install bash yamllint gnu-getopt; fi
-  - bash .ci/install_go.sh -p -f
 
 script:
   - bash .ci/static-checks.sh github.com/kata-containers/tests
