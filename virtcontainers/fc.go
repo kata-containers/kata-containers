@@ -31,6 +31,7 @@ import (
 	"github.com/kata-containers/runtime/virtcontainers/pkg/firecracker/client"
 	models "github.com/kata-containers/runtime/virtcontainers/pkg/firecracker/client/models"
 	ops "github.com/kata-containers/runtime/virtcontainers/pkg/firecracker/client/operations"
+	"github.com/opencontainers/selinux/go-selinux/label"
 	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -773,6 +774,15 @@ func (fc *firecracker) startSandbox(timeout int) error {
 			fc.fcEnd()
 		}
 	}()
+
+	// This needs to be done as late as possible, since all processes that
+	// are executed by kata-runtime after this call, run with the SELinux
+	// label. If these processes require privileged, we do not want to run
+	// them under confinement.
+	if err := label.SetProcessLabel(fc.config.SELinuxProcessLabel); err != nil {
+		return err
+	}
+	defer label.SetProcessLabel("")
 
 	err = fc.fcInit(fcTimeout)
 	if err != nil {

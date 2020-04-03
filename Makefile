@@ -464,8 +464,11 @@ QUIET_GENERATE = $(Q:@=@echo    '     GENERATE '$@;)
 QUIET_INST     = $(Q:@=@echo    '     INSTALL  '$@;)
 QUIET_TEST     = $(Q:@=@echo    '     TEST     '$@;)
 
+SELINUXTAG := $(shell ./hack/selinux_tag.sh)
+BUILDTAGS := --tags "$(SELINUXTAG)"
+
 # go build common flags
-BUILDFLAGS := -buildmode=pie
+BUILDFLAGS := -buildmode=pie ${BUILDTAGS}
 
 # whether stipping the binary
 ifeq ($(STRIP),yes)
