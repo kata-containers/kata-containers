@@ -25,3 +25,4 @@
 - [Privileged Kata Containers](privileged.md)
 - [How to load kernel modules in Kata Containers](how-to-load-kernel-modules-with-kata.md)
 - [How to use Kata Containers with `virtio-mem`](how-to-use-virtio-mem-with-kata.md)
+- [How to set sandbox Kata Containers configurations with pod annotations](how-to-set-sandbox-config-kata.md)
