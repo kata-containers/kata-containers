@@ -302,7 +302,7 @@ languages:
       description: |
         'newest-version' is the latest version known to work when
         building Kata
-      newest-version: "1.13.8"
+      newest-version: "1.13.9"
 
   rust:
     description: "rust language"

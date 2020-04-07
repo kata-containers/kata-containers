@@ -9,6 +9,8 @@ sudo: required
 dist: xenial
 
 language: go
+go:
+  - 1.13.9
 
 os:
   - linux
@@ -30,7 +32,6 @@ before_install:
   - ".ci/versions_checker.sh"
 
 before_script:
-  - ".ci/install_go.sh"
   - ".ci/static-checks.sh"
   - ".ci/versions_checker.sh"
 
