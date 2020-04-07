@@ -32,7 +32,6 @@ generate_dockerfile() {
 	echo "Building dockerfile for ${OS_DISTRIBUTION}"
 	sed \
 		-e "s|@OS_DISTRIBUTION@|${OS_DISTRIBUTION}|g" \
-		-e "s|@UPDATE@|${UPDATE}|g" \
 		-e "s|@DEPENDENCIES@|${DEPENDENCIES}|g" \
 		"${DOCKERFILE_PATH}/FedoraDockerfile.in" > "${DOCKERFILE_PATH}"/Dockerfile
 }
