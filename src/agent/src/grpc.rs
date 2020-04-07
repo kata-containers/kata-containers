@@ -188,7 +188,12 @@ impl agentService {
         if req.timeout == 0 {
             let s = Arc::clone(&self.sandbox);
             let mut sandbox = s.lock().unwrap();
-            let ctr = sandbox.get_container(cid.as_str()).unwrap();
+            let ctr: &mut LinuxContainer = match sandbox.get_container(cid.as_str()) {
+                Some(cr) => cr,
+                None => {
+                    return Err(ErrorKind::Nix(nix::Error::from_errno(Errno::EINVAL)).into());
+                }
+            };
 
             ctr.destroy()?;
 
@@ -223,7 +228,12 @@ impl agentService {
 
         let handle = thread::spawn(move || {
             let mut sandbox = s.lock().unwrap();
-            let ctr = sandbox.get_container(cid2.as_str()).unwrap();
+            let ctr: &mut LinuxContainer = match sandbox.get_container(cid2.as_str()) {
+                Some(cr) => cr,
+                None => {
+                    return;
+                }
+            };
 
             ctr.destroy().unwrap();
             tx.send(1).unwrap();
@@ -305,6 +315,7 @@ impl agentService {
         let eid = req.exec_id.clone();
         let s = Arc::clone(&self.sandbox);
         let mut sandbox = s.lock().unwrap();
+        let mut init = false;
 
         info!(
             sl!(),
@@ -312,7 +323,12 @@ impl agentService {
             "container-id" => cid.clone(),
             "exec-id" => eid.clone()
         );
-        let p = find_process(&mut sandbox, cid.as_str(), eid.as_str(), true)?;
+
+        if eid == "" {
+            init = true;
+        }
+
+        let p = find_process(&mut sandbox, cid.as_str(), eid.as_str(), init)?;
 
         let mut signal = Signal::try_from(req.signal as i32).unwrap();
 
@@ -365,7 +381,13 @@ impl agentService {
         }
 
         let mut sandbox = s.lock().unwrap();
-        let ctr = sandbox.get_container(cid.as_str()).unwrap();
+        let ctr: &mut LinuxContainer = match sandbox.get_container(cid.as_str()) {
+            Some(cr) => cr,
+            None => {
+                return Err(ErrorKind::Nix(nix::Error::from_errno(Errno::EINVAL)).into());
+            }
+        };
+
         // need to close all fds
         let mut p = ctr.processes.get_mut(&pid).unwrap();
 
@@ -651,7 +673,20 @@ impl protocols::agent_grpc::AgentService for agentService {
         let s = Arc::clone(&self.sandbox);
         let mut sandbox = s.lock().unwrap();
 
-        let ctr = sandbox.get_container(cid.as_str()).unwrap();
+        let ctr: &mut LinuxContainer = match sandbox.get_container(cid.as_str()) {
+            Some(cr) => cr,
+            None => {
+                let f = sink
+                    .fail(RpcStatus::new(
+                        RpcStatusCode::InvalidArgument,
+                        Some(String::from("invalid container id")),
+                    ))
+                    .map_err(|_e| error!(sl!(), "invalid container id!"));
+                ctx.spawn(f);
+                return;
+            }
+        };
+
         let pids = ctr.processes().unwrap();
 
         match format.as_str() {
@@ -744,7 +779,19 @@ impl protocols::agent_grpc::AgentService for agentService {
         let s = Arc::clone(&self.sandbox);
         let mut sandbox = s.lock().unwrap();
 
-        let ctr = sandbox.get_container(cid.as_str()).unwrap();
+        let ctr: &mut LinuxContainer = match sandbox.get_container(cid.as_str()) {
+            Some(cr) => cr,
+            None => {
+                let f = sink
+                    .fail(RpcStatus::new(
+                        RpcStatusCode::Internal,
+                        Some("invalid container id".to_string()),
+                    ))
+                    .map_err(|_e| error!(sl!(), "invalid container id!"));
+                ctx.spawn(f);
+                return;
+            }
+        };
 
         let resp = Empty::new();
 
@@ -782,7 +829,19 @@ impl protocols::agent_grpc::AgentService for agentService {
         let s = Arc::clone(&self.sandbox);
         let mut sandbox = s.lock().unwrap();
 
-        let ctr = sandbox.get_container(cid.as_str()).unwrap();
+        let ctr: &mut LinuxContainer = match sandbox.get_container(cid.as_str()) {
+            Some(cr) => cr,
+            None => {
+                let f = sink
+                    .fail(RpcStatus::new(
+                        RpcStatusCode::Internal,
+                        Some("invalid container id!".to_string()),
+                    ))
+                    .map_err(|_e| error!(sl!(), "invalid container id!"));
+                ctx.spawn(f);
+                return;
+            }
+        };
 
         let resp = match ctr.stats() {
             Err(_e) => {
