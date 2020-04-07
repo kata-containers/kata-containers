@@ -84,8 +84,19 @@
     BUILD_HEAD=false
     OBS_BRANCH="the-kata-branch-that-is-release"
     ```
+    Note: If the release is `Alpha` , `Beta` , or `RC` (that is part of a `master` release), please use `OBS_BRANCH=master`.
+
     The above step shall create OBS packages for Kata for various distributions that Kata supports and test them as well.
   - Verify that the packages have built successfully by checking the [Kata OBS  project page](https://build.opensuse.org/project/subprojects/home:katacontainers).
+  - Make sure packages work correctly. This can be done manually or via the [package testing pipeline](http://jenkins.katacontainers.io/job/package-release-testing).
+    You have to make sure the packages are already published by OBS before this step.
+    It should prompt you for variables to be passed to the pipeline:
+
+    ```
+    BRANCH="<kata-branch-to-release>"
+    NEW_VERSION=<the-version-you-expect-to-be-packaged|latest>
+    ```
+    Note: `latest` will verify that a package provides the latest Kata tag in that branch.
 
 ### Create release notes
 
