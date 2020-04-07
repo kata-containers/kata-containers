@@ -63,14 +63,14 @@ func newTtyIO(ctx context.Context, stdin, stdout, stderr string, console bool) (
 	}
 
 	if stdout != "" {
-		outw, err = fifo.OpenFifo(ctx, stdout, syscall.O_WRONLY, 0)
+		outw, err = fifo.OpenFifo(ctx, stdout, syscall.O_RDWR, 0)
 		if err != nil {
 			return nil, err
 		}
 	}
 
 	if !console && stderr != "" {
-		errw, err = fifo.OpenFifo(ctx, stderr, syscall.O_WRONLY, 0)
+		errw, err = fifo.OpenFifo(ctx, stderr, syscall.O_RDWR, 0)
 		if err != nil {
 			return nil, err
 		}
