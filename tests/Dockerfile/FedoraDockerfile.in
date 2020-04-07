@@ -7,8 +7,6 @@ FROM @OS_DISTRIBUTION@
 
 ENV TESTS_REPO="github.com/kata-containers/tests"
 
-RUN @UPDATE@
-
 RUN @DEPENDENCIES@
 
 ENV PATH=$PATH:/usr/local/go/bin
