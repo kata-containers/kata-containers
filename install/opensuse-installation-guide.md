@@ -6,6 +6,7 @@
    $ source /etc/os-release
    $ DISTRO_REPO=$(sed "s/ /_/g" <<< "$NAME")
    $ [ -n "$VERSION" ] && DISTRO_REPO+="_${VERSION}"
+   $ DISTRO_REPO=$(echo $DISTRO_REPO | tr -d ' ')
    $ ARCH=$(arch)
    $ BRANCH="${BRANCH:-master}"
    $ REPO_ALIAS="kata-${BRANCH}"
