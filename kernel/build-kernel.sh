@@ -343,7 +343,20 @@ setup_kernel() {
 	local patches_dir_for_version="${patches_path}/${major_kernel}.x"
 	local kernel_patches=""
 	if [ -d "${patches_dir_for_version}" ]; then
-		kernel_patches=$(find "${patches_dir_for_version}" -name '*.patch' -type f)
+		# Patches are expected to be named in the standard
+		# git-format-patch(1) format where the first part of the
+		# filename represents the patch ordering
+		# (lowest numbers apply first):
+		#
+		#   "${number}-${dashed_description}"
+		#
+		# For example,
+		#
+		#   0001-fix-the-bad-thing.patch
+		#   0002-improve-the-fix-the-bad-thing-fix.patch
+		#   0003-correct-compiler-warnings.patch
+		kernel_patches=$(find "${patches_dir_for_version}" -name '*.patch' -type f |\
+			sort -t- -k1,1n)
 	else
 		info "kernel patches directory does not exit"
 	fi
