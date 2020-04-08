@@ -14,4 +14,5 @@ type MemoryConfig struct {
 	HotplugSize int64 `json:"hotplug_size,omitempty"`
 	File string `json:"file,omitempty"`
 	Mergeable bool `json:"mergeable,omitempty"`
+	HotplugMethod string `json:"hotplug_method,omitempty"`
 }

@@ -171,6 +171,88 @@ paths:
         404:
           description: The device could not be removed from the VM instance.
 
+  /vm.add-disk:
+    put:
+      summary: Add a new disk to the VM
+      requestBody:
+        description: The details of the new disk
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DiskConfig'
+        required: true
+      responses:
+        204:
+          description: The new disk was successfully added to the VM instance.
+        500:
+          description: The new disk could not be added to the VM instance.
+
+  /vm.add-pmem:
+    put:
+      summary: Add a new pmem device to the VM
+      requestBody:
+        description: The details of the new pmem device
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PmemConfig'
+        required: true
+      responses:
+        204:
+          description: The new device was successfully added to the VM instance.
+        500:
+          description: The new device could not be added to the VM instance.
+
+  /vm.add-net:
+    put:
+      summary: Add a new network device to the VM
+      requestBody:
+        description: The details of the new network device
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NetConfig'
+        required: true
+      responses:
+        204:
+          description: The new device was successfully added to the VM instance.
+        500:
+          description: The new device could not be added to the VM instance.
+
+  /vm.snapshot:
+    put:
+      summary: Returns a VM snapshot.
+      requestBody:
+        description: The snapshot configuration
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VmSnapshotConfig'
+        required: true
+      responses:
+        204:
+          description: The VM instance was successfully snapshotted.
+        404:
+          description: The VM instance could not be snapshotted because it is not created.
+        405:
+          description: The VM instance could not be snapshotted because it is not booted.
+
+  /vm.restore:
+    put:
+      summary: Restore a VM from a snapshot.
+      requestBody:
+        description: The restore configuration
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RestoreConfig'
+        required: true
+      responses:
+        204:
+          description: The VM instance was successfully restored.
+        404:
+          description: The VM instance could not be restored because it is already created.
+
 components:
   schemas:
 
@@ -208,6 +290,8 @@ components:
           $ref: '#/components/schemas/MemoryConfig'
         kernel:
           $ref: '#/components/schemas/KernelConfig'
+        initramfs:
+          $ref: '#/components/schemas/InitramfsConfig'
         cmdline:
           $ref: '#/components/schemas/CmdLineConfig'
         disks:
@@ -277,8 +361,20 @@ components:
         mergeable:
           type: boolean
           default: false
+        hotplug_method:
+          type: string
+          default: "acpi"
 
     KernelConfig:
+      required:
+      - path
+      type: object
+      properties:
+        path:
+          type: string
+
+    InitramfsConfig:
+      nullable: true
       required:
       - path
       type: object
@@ -481,3 +577,19 @@ components:
       properties:
         id:
           type: string
+
+    VmSnapshotConfig:
+      type: object
+      properties:
+        destination_url:
+          type: string
+
+    RestoreConfig:
+      required:
+      - source_url
+      type: object
+      properties:
+        source_url:
+          type: string
+        prefault:
+          type: boolean
