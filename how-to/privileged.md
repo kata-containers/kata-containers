@@ -27,6 +27,8 @@ The Containerd CRI allows configuring the privileged host devices behavior for e
 done with the `privileged_without_host_devices` option. Setting this to `true` will disable hot plugging of the host 
 devices into the guest, even when privileged is enabled.
 
+Support for configuring privileged host devices behaviour was added in containerd `1.3.0` version.
+
 See below example config:
 
 ```toml
@@ -52,6 +54,8 @@ Similar to containerd, CRI-O allows configuring the privileged host devices
 behavior for each runtime in the CRI config. This is done with the 
 `privileged_without_host_devices` option. Setting this to `true` will disable
  hot plugging of the host devices into the guest, even when privileged is enabled.
+
+Support for configuring privileged host devices behaviour was added in CRI-O `1.16.0` version.
 
 See below example config:
 
