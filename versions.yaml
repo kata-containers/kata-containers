@@ -158,9 +158,9 @@ assets:
     version: "v5.4.15"
 
   kernel-experimental:
-    description: "Linux kernel with virtiofs 3.0"
+    description: "Linux kernel with virtio-fs-dev branch"
     url: "https://gitlab.com/virtio-fs/linux.git"
-    tag: "virtio-fs-v0.3"
+    tag: "virtio-fs-dev"
 
 components:
   description: "Core system functionality"
