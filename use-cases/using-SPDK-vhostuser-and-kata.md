@@ -7,6 +7,10 @@
 - [Host setup for vhost-user devices](#host-setup-for-vhost-user-devices)
 - [Launch a Kata container with SPDK vhost-user block device](#launch-a-kata-container-with-spdk-vhost-user-block-device)
 
+> **NOTE:** This guide only applies to QEMU, since the vhost-user storage
+> device is only available for QEMU now. The enablement work on other
+> hypervisors is still ongoing.
+
 ## SPDK vhost-user Target Overview
 
 The Storage Performance Development Kit (SPDK) provides a set of tools and
@@ -122,10 +126,10 @@ Following the SPDK [getting started guide](https://spdk.io/doc/getting_started.h
 First, run the SPDK `setup.sh` script to setup some hugepages for the SPDK vhost
 target application. We recommend you use a minimum of 4GiB, enough for the SPDK
 vhost target and the virtual machine.
-This will allocate 4096MiB (4GiB) of hugepages:
+This will allocate 4096MiB (4GiB) of hugepages, and avoid binding PCI devices:
 
 ```bash
-$ sudo HUGEMEM=4096 scripts/setup.sh
+$ sudo HUGEMEM=4096 PCI_WHITELIST="none" scripts/setup.sh
 ```
 
 Then, take directory `/var/run/kata-containers/vhost-user` as Kata's vhost-user
@@ -176,25 +180,58 @@ $ sudo scripts/rpc.py vhost_create_blk_controller vhostblk0 Malloc0
 Considering the OCI specification and characteristics of vhost-user device,
 Kata has chosen to use Linux reserved the block major range `240-254`
 to map each vhost-user block type to a major. Also a specific directory is
-used for vhost-user devices. The base directory is a configurable value,
+used for vhost-user devices.
+
+The base directory for vhost-user device is a configurable value,
 with the default being `/var/run/kata-containers/vhost-user`. It can be
 configured by parameter `vhost_user_store_path` in [Kata TOML configuration file](https://github.com/kata-containers/runtime/blob/master/README.md#configuration).
 
-The reset of the path `block` is used for block device; `block/sockets` is where
-we expect vhost-user sockets to live; `block/sockets` is where simulated block
-device node for vhost-user devices to live.
+Currently, the vhost-user storage device is not enabled by default, so
+the user should enable it explicitly inside the Kata TOML configuration
+file by setting `enable_vhost_user_store = true`. Since SPDK vhost-user target
+requires hugepages, hugepages should also be enabled inside the Kata TOML
+configuration file by setting `enable_hugepages = true`.
+Here is the conclusion of parameter setting for vhost-user storage device:
+
+```toml
+enable_hugepages = true
+enable_vhost_user_store = true
+vhost_user_store_path = "<Path of the base directory for vhost-user device>"
+```
+
+> **Note:** These parameters are under `[hypervisor.qemu]` section in Kata
+> TOML configuration file. If they are absent, users should still add them
+> under `[hypervisor.qemu]` section.
+
+
+For the subdirectories of `vhost_user_store_path`: `block` is used for block
+device; `block/sockets` is where we expect UNIX domain sockets for vhost-user
+block devices to live; `block/devices` is where simulated block device nodes
+for vhost-user block devices are created.
+
+For the subdirectories of `vhost_user_store_path`:
+-  `block` is used for block device;
+-  `block/sockets` is where we expect UNIX domain sockets for vhost-user
+block devices to live;
+-  `block/devices` is where simulated block device nodes for vhost-user
+block devices are created.
 
 For example, if using the default directory `/var/run/kata-containers/vhost-user`,
-sockets for vhost-user device are under `/var/run/kata-containers/vhost-user/block/sockets/`.
-Device nodes for vhost-user device are under `/var/run/kata-containers/vhost-user/block/devices/`.
+UNIX domain sockets for vhost-user block device are under `/var/run/kata-containers/vhost-user/block/sockets/`.
+Device nodes for vhost-user block device are under `/var/run/kata-containers/vhost-user/block/devices/`.
 
 Currently, Kata has chosen major number 241 to map to `vhost-user-blk` devices.
-For `vhost-user-blk` device `vhostblk0`, create a block device node with major
-`241` and minor `0` for it in order to be recognized by Kata Containers runtime:
+For `vhost-user-blk` device named `vhostblk0`, a UNIX domain socket is already
+created by SPDK vhost target, and a block device node with major `241` and
+minor `0` should be created for it, in order to be recognized by Kata runtime:
 
 ```bash
 $ sudo mknod /var/run/kata-containers/vhost-user/block/devices/vhostblk0 b 241 0
 ```
+
+> **Note:** The enablement of vhost-user block device in Kata containers
+> is supported by Kata Containers `1.11.0-alpha1` or newer.
+> Make sure you have updated your Kata containers before evaluation.
 
 ## Launch a Kata container with SPDK vhost-user block device
 
