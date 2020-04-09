@@ -31,6 +31,11 @@ moreutils_repo="https://download.opensuse.org/repositories/utilities/SLE_${VERSI
 sudo -E zypper addrepo --no-gpgcheck ${moreutils_repo}
 sudo -E zypper refresh
 
+echo "Add repo for filesystems"
+filesystems_repo="https://download.opensuse.org/repositories/filesystems/SLE_${VERSION//-/_}/filesystems.repo"
+sudo -E zypper refresh
+sudo -E zypper -n install xfsprogs
+
 echo "Add repo for hunspell and pandoc packages"
 sudo -E SUSEConnect -p PackageHub/${VERSION_ID}/${arch}
 

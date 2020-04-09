@@ -15,6 +15,11 @@ source "${cidir}/lib.sh"
 echo "Remove openSUSE cloud repo"
 sudo zypper rr openSUSE-Leap-Cloud-Tools
 
+echo "Add filesystems repo"
+filesystem_repo="https://download.opensuse.org/repositories/filesystems/openSUSE_Leap_${VERSION_ID}/filesystems.repo"
+sudo -E zypper addrepo --no-gpgcheck "${filesystem_repo}"
+sudo -E zypper -n install xfsprogs
+
 echo "Install chronic"
 sudo -E zypper -n install moreutils
 
