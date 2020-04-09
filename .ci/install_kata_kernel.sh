@@ -133,6 +133,10 @@ main() {
 	kernel_version="$(get_current_kernel_version)"
 	kata_config_version="$(get_kata_config_version)"
 	current_kernel_version="${kernel_version}-${kata_config_version}"
+	if [ "${experimental_kernel}" == "true" ]; then
+		# Experimental has an extra suffix
+		current_kernel_version="${kernel_version}-${kata_config_version}-virtiofs"
+	fi
 	if [ "${experimental_kernel}" == "false" ]; then
 		cached_kernel_version=$(curl -sfL "${latest_build_url}/latest") || cached_kernel_version="none"
 	else
