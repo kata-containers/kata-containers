@@ -127,7 +127,7 @@ type cloudHypervisor struct {
 
 var clhKernelParams = []Param{
 
-	{"root", "/dev/vda1"},
+	{"root", "/dev/pmem0p1"},
 	{"panic", "1"},         // upon kernel panic wait 1 second before reboot
 	{"no_timer_check", ""}, // do not check broken timer IRQ resources
 	{"noreplace-smp", ""},  // do not replace SMP instructions
@@ -269,11 +269,17 @@ func (clh *cloudHypervisor) createSandbox(ctx context.Context, id string, networ
 		return errors.New("image path is empty")
 	}
 
-	disk := chclient.DiskConfig{
-		Path:     imagePath,
-		Readonly: true,
+	st, err := os.Stat(imagePath)
+	if err != nil {
+		return fmt.Errorf("Failed to get information for image file '%v': %v", imagePath, err)
 	}
-	clh.vmconfig.Disks = append(clh.vmconfig.Disks, disk)
+
+	pmem := chclient.PmemConfig{
+		File:          imagePath,
+		Size:          st.Size(),
+		DiscardWrites: true,
+	}
+	clh.vmconfig.Pmem = append(clh.vmconfig.Pmem, pmem)
 
 	// set the serial console to the cloud hypervisor
 	if clh.config.Debug {
