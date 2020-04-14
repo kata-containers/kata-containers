@@ -20,10 +20,14 @@ import (
 //
 // The value is true if receiving the signal should be fatal.
 var handledSignalsMap = map[syscall.Signal]bool{
-	syscall.SIGABRT:   true,
-	syscall.SIGBUS:    true,
-	syscall.SIGILL:    true,
-	syscall.SIGQUIT:   true,
+	syscall.SIGABRT: true,
+	syscall.SIGBUS:  true,
+	syscall.SIGILL:  true,
+	// Signals from the keyboard (INT and QUIT) *must not* be fatal
+	// otherwise the agent could be killed from the host through
+	// the console.sock.
+	syscall.SIGINT:    false,
+	syscall.SIGQUIT:   false,
 	syscall.SIGSEGV:   true,
 	syscall.SIGSTKFLT: true,
 	syscall.SIGSYS:    true,

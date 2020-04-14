@@ -33,7 +33,6 @@ import (
 	"github.com/opencontainers/runc/libcontainer/configs"
 	_ "github.com/opencontainers/runc/libcontainer/nsenter"
 	"github.com/opencontainers/runtime-spec/specs-go"
-	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/net/context"
 	"golang.org/x/sys/unix"
@@ -63,6 +62,10 @@ var (
 	cgroupMemoryPath             = cgroupPath + "/memory"
 	cgroupMemoryUseHierarchyPath = cgroupMemoryPath + "/memory.use_hierarchy"
 	cgroupMemoryUseHierarchyMode = os.FileMode(0400)
+
+	cgroupControllersPath    = cgroupPath + "/cgroup.controllers"
+	cgroupSubtreeControlPath = cgroupPath + "/cgroup.subtree_control"
+	cgroupSubtreeControlMode = os.FileMode(0644)
 
 	// Set by the build
 	seccompSupport string
@@ -172,6 +175,21 @@ var debugConsole = false
 // Specify a vsock port where logs are written.
 var logsVSockPort = uint32(0)
 
+// Specify a vsock port where debug console is attached.
+var debugConsoleVSockPort = uint32(0)
+
+// Timeout waiting for a device to be hotplugged
+var hotplugTimeout = 3 * time.Second
+
+// Specify the log level
+var logLevel = defaultLogLevel
+
+// Specify whether the agent has to use cgroups v2 or not.
+var unifiedCgroupHierarchy = false
+
+// Size in bytes of the stdout/stderr pipes created for each container.
+var containerPipeSize = uint32(0)
+
 // commType is used to denote the communication channel type used.
 type commType int
 
@@ -236,10 +254,11 @@ func (p *process) closePostExitFDs() {
 
 	if p.epoller != nil {
 		p.epoller.sockR.Close()
+		unix.Close(p.epoller.fd)
 	}
 }
 
-func (c *container) trace(name string) (opentracing.Span, context.Context) {
+func (c *container) trace(name string) (*agentSpan, context.Context) {
 	if c.ctx == nil {
 		agentLog.WithField("type", "bug").Error("trace called before context set")
 		c.ctx = context.Background()
@@ -256,8 +275,8 @@ func (c *container) setProcess(process *process) {
 
 func (c *container) deleteProcess(execID string) {
 	span, _ := c.trace("deleteProcess")
-	span.SetTag("exec-id", execID)
-	defer span.Finish()
+	span.setTag("exec-id", execID)
+	defer span.finish()
 	c.Lock()
 	delete(c.processes, execID)
 	c.Unlock()
@@ -265,7 +284,7 @@ func (c *container) deleteProcess(execID string) {
 
 func (c *container) removeContainer() error {
 	span, _ := c.trace("removeContainer")
-	defer span.Finish()
+	defer span.finish()
 	// This will terminates all processes related to this container, and
 	// destroy the container right after. But this will error in case the
 	// container in not in the right state.
@@ -288,7 +307,7 @@ func (c *container) getProcess(execID string) (*process, error) {
 	return proc, nil
 }
 
-func (s *sandbox) trace(name string) (opentracing.Span, context.Context) {
+func (s *sandbox) trace(name string) (*agentSpan, context.Context) {
 	if s.ctx == nil {
 		agentLog.WithField("type", "bug").Error("trace called before context set")
 		s.ctx = context.Background()
@@ -296,7 +315,7 @@ func (s *sandbox) trace(name string) (opentracing.Span, context.Context) {
 
 	span, ctx := trace(s.ctx, "sandbox", name)
 
-	span.SetTag("sandbox", s.id)
+	span.setTag("sandbox", s.id)
 
 	return span, ctx
 }
@@ -324,8 +343,8 @@ func (s *sandbox) setSandboxStorage(path string) bool {
 // for any OCI hooks
 func (s *sandbox) scanGuestHooks(guestHookPath string) {
 	span, _ := s.trace("scanGuestHooks")
-	span.SetTag("guest-hook-path", guestHookPath)
-	defer span.Finish()
+	span.setTag("guest-hook-path", guestHookPath)
+	defer span.finish()
 
 	fieldLogger := agentLog.WithField("oci-hook-path", guestHookPath)
 	fieldLogger.Info("Scanning guest filesystem for OCI hooks")
@@ -345,7 +364,7 @@ func (s *sandbox) scanGuestHooks(guestHookPath string) {
 // found to the OCI spec
 func (s *sandbox) addGuestHooks(spec *specs.Spec) {
 	span, _ := s.trace("addGuestHooks")
-	defer span.Finish()
+	defer span.finish()
 
 	if spec == nil {
 		return
@@ -371,8 +390,8 @@ func (s *sandbox) addGuestHooks(spec *specs.Spec) {
 // acquiring a lock on sandbox.
 func (s *sandbox) unSetSandboxStorage(path string) (bool, error) {
 	span, _ := s.trace("unSetSandboxStorage")
-	span.SetTag("path", path)
-	defer span.Finish()
+	span.setTag("path", path)
+	defer span.finish()
 
 	if sbs, ok := s.storages[path]; ok {
 		sbs.refCount--
@@ -394,8 +413,8 @@ func (s *sandbox) unSetSandboxStorage(path string) (bool, error) {
 // acquiring a lock on sandbox.
 func (s *sandbox) removeSandboxStorage(path string) error {
 	span, _ := s.trace("removeSandboxStorage")
-	span.SetTag("path", path)
-	defer span.Finish()
+	span.setTag("path", path)
+	defer span.finish()
 
 	err := removeMounts([]string{path})
 	if err != nil {
@@ -416,8 +435,8 @@ func (s *sandbox) removeSandboxStorage(path string) error {
 // acquiring a lock on sandbox.
 func (s *sandbox) unsetAndRemoveSandboxStorage(path string) error {
 	span, _ := s.trace("unsetAndRemoveSandboxStorage")
-	span.SetTag("path", path)
-	defer span.Finish()
+	span.setTag("path", path)
+	defer span.finish()
 
 	removeSbs, err := s.unSetSandboxStorage(path)
 	if err != nil {
@@ -452,9 +471,9 @@ func (s *sandbox) setContainer(ctx context.Context, id string, ctr *container) {
 	s.ctx = ctx
 
 	span, _ := s.trace("setContainer")
-	span.SetTag("id", id)
-	span.SetTag("container", ctr.id)
-	defer span.Finish()
+	span.setTag("id", id)
+	span.setTag("container", ctr.id)
+	defer span.finish()
 
 	s.Lock()
 	s.containers[id] = ctr
@@ -463,8 +482,8 @@ func (s *sandbox) setContainer(ctx context.Context, id string, ctr *container) {
 
 func (s *sandbox) deleteContainer(id string) {
 	span, _ := s.trace("deleteContainer")
-	span.SetTag("container", id)
-	defer span.Finish()
+	span.setTag("container", id)
+	defer span.finish()
 
 	s.Lock()
 
@@ -551,7 +570,7 @@ func (s *sandbox) readStdio(cid, execID string, length int, stdout bool) ([]byte
 
 func (s *sandbox) setupSharedNamespaces(ctx context.Context) error {
 	span, _ := trace(ctx, "sandbox", "setupSharedNamespaces")
-	defer span.Finish()
+	defer span.finish()
 
 	// Set up shared IPC namespace
 	ns, err := setupPersistentNs(nsTypeIPC)
@@ -572,7 +591,7 @@ func (s *sandbox) setupSharedNamespaces(ctx context.Context) error {
 
 func (s *sandbox) unmountSharedNamespaces() error {
 	span, _ := s.trace("unmountSharedNamespaces")
-	defer span.Finish()
+	defer span.finish()
 
 	if err := unix.Unmount(s.sharedIPCNs.path, unix.MNT_DETACH); err != nil {
 		return err
@@ -589,11 +608,11 @@ func (s *sandbox) unmountSharedNamespaces() error {
 // be destroyed if other processes are terminated.
 func (s *sandbox) setupSharedPidNs() error {
 	span, _ := s.trace("setupSharedPidNs")
-	defer span.Finish()
+	defer span.finish()
 
 	cmd := &exec.Cmd{
 		Path: selfBinPath,
-		Args: []string{os.Args[0], pauseBinArg},
+		Env:  []string{fmt.Sprintf("%s=%s", pauseBinKey, pauseBinValue)},
 	}
 
 	cmd.SysProcAttr = &syscall.SysProcAttr{
@@ -617,7 +636,7 @@ func (s *sandbox) setupSharedPidNs() error {
 
 func (s *sandbox) teardownSharedPidNs() error {
 	span, _ := s.trace("teardownSharedPidNs")
-	defer span.Finish()
+	defer span.finish()
 
 	if !s.sandboxPidNs {
 		// We are not in a case where we have created a pause process.
@@ -645,7 +664,7 @@ func (s *sandbox) teardownSharedPidNs() error {
 
 func (s *sandbox) waitForStopServer() {
 	span, _ := s.trace("waitForStopServer")
-	defer span.Finish()
+	defer span.finish()
 
 	fieldLogger := agentLog.WithField("subsystem", "stopserverwatcher")
 
@@ -682,7 +701,7 @@ func (s *sandbox) waitForStopServer() {
 
 	fieldLogger.Info("Force stopping the server now")
 
-	span.SetTag("forced", true)
+	span.setTag("forced", true)
 	s.stopGRPC()
 }
 
@@ -705,17 +724,12 @@ func (s *sandbox) listenToUdevEvents() {
 			continue
 		}
 
-		// We only care about add event
-		if uEv.Action != "add" {
-			continue
-		}
-
 		span, _ := trace(rootContext, "udev", "udev event")
-		span.SetTag("udev-action", uEv.Action)
-		span.SetTag("udev-name", uEv.DevName)
-		span.SetTag("udev-path", uEv.DevPath)
-		span.SetTag("udev-subsystem", uEv.SubSystem)
-		span.SetTag("udev-seqno", uEv.SeqNum)
+		span.setTag("udev-action", uEv.Action)
+		span.setTag("udev-name", uEv.DevName)
+		span.setTag("udev-path", uEv.DevPath)
+		span.setTag("udev-subsystem", uEv.SubSystem)
+		span.setTag("udev-seqno", uEv.SeqNum)
 
 		fieldLogger = fieldLogger.WithFields(logrus.Fields{
 			"uevent-action":    uEv.Action,
@@ -725,10 +739,23 @@ func (s *sandbox) listenToUdevEvents() {
 			"uevent-devname":   uEv.DevName,
 		})
 
+		if uEv.Action == "remove" {
+			fieldLogger.Infof("Remove dev from pciDeviceMap")
+			s.Lock()
+			delete(s.pciDeviceMap, uEv.DevPath)
+			s.Unlock()
+			goto FINISH_SPAN
+		}
+
+		if uEv.Action != "add" {
+			goto FINISH_SPAN
+		}
+
 		fieldLogger.Infof("Received add uevent")
 
 		// Check if device hotplug event results in a device node being created.
-		if uEv.DevName != "" && strings.HasPrefix(uEv.DevPath, rootBusPath) {
+		if uEv.DevName != "" &&
+			(strings.HasPrefix(uEv.DevPath, rootBusPath) || strings.HasPrefix(uEv.DevPath, acpiDevPath)) {
 			// Lock is needed to safey read and modify the pciDeviceMap and deviceWatchers.
 			// This makes sure that watchers do not access the map while it is being updated.
 			s.Lock()
@@ -747,6 +774,11 @@ func (s *sandbox) listenToUdevEvents() {
 
 				// blk driver case
 				if strings.HasPrefix(uEv.DevPath, filepath.Join(rootBusPath, devAddress)) {
+					goto OUT
+				}
+
+				// pmem/nvdimm case
+				if strings.Contains(uEv.DevPath, pfnDevPrefix) && strings.HasSuffix(uEv.DevPath, devAddress) {
 					goto OUT
 				}
 
@@ -777,8 +809,8 @@ func (s *sandbox) listenToUdevEvents() {
 				fieldLogger.WithError(err).Error("failed online device")
 			}
 		}
-
-		span.Finish()
+	FINISH_SPAN:
+		span.finish()
 	}
 }
 
@@ -829,7 +861,7 @@ func (s *sandbox) signalHandlerLoop(sigCh chan os.Signal, errCh chan error) {
 
 func (s *sandbox) setupSignalHandler() error {
 	span, _ := s.trace("setupSignalHandler")
-	defer span.Finish()
+	defer span.finish()
 
 	sigCh := make(chan os.Signal, 512)
 	signal.Notify(sigCh, unix.SIGCHLD)
@@ -972,12 +1004,7 @@ func logsToVPort() {
 func (s *sandbox) initLogger(ctx context.Context) error {
 	agentLog.Logger.Formatter = &logrus.TextFormatter{DisableColors: true, TimestampFormat: time.RFC3339Nano}
 
-	config := newConfig(defaultLogLevel)
-	if err := config.getConfig(kernelCmdlineFile); err != nil {
-		agentLog.WithError(err).Warn("Failed to get config from kernel cmdline")
-	}
-
-	agentLog.Logger.SetLevel(config.logLevel)
+	agentLog.Logger.SetLevel(logLevel)
 
 	agentLog = agentLog.WithField("debug_console", debugConsole)
 
@@ -1008,7 +1035,7 @@ func (s *sandbox) initLogger(ctx context.Context) error {
 
 func (s *sandbox) initChannel() error {
 	span, ctx := s.trace("initChannel")
-	defer span.Finish()
+	defer span.finish()
 
 	c, err := newChannel(ctx)
 	if err != nil {
@@ -1028,12 +1055,12 @@ func makeUnaryInterceptor() grpc.UnaryServerInterceptor {
 
 		grpcCall := info.FullMethod
 		var ctx context.Context
-		var span opentracing.Span
+		var span *agentSpan
 
 		if tracing {
 			ctx = getGRPCContext()
 			span, _ = trace(ctx, "gRPC", grpcCall)
-			span.SetTag("grpc-method-type", "unary")
+			span.setTag("grpc-method-type", "unary")
 
 			if strings.HasSuffix(grpcCall, "/ReadStdout") || strings.HasSuffix(grpcCall, "/WriteStdin") {
 				// Add a tag to allow filtering of those calls dealing
@@ -1041,7 +1068,7 @@ func makeUnaryInterceptor() grpc.UnaryServerInterceptor {
 				// being able to filter them out allows the
 				// performance of "core" calls to be determined
 				// without the "noise" of these calls.
-				span.SetTag("api-category", "interactive")
+				span.setTag("api-category", "interactive")
 			}
 		} else {
 			// Just log call details
@@ -1076,7 +1103,7 @@ func makeUnaryInterceptor() grpc.UnaryServerInterceptor {
 		// - Tracing was enabled but the handler (StopTracing()) disabled it.
 		// - Tracing was disabled but the handler (StartTracing()) enabled it.
 		if span != nil {
-			span.Finish()
+			span.finish()
 		}
 
 		if stopTracingCalled {
@@ -1089,7 +1116,7 @@ func makeUnaryInterceptor() grpc.UnaryServerInterceptor {
 
 func (s *sandbox) startGRPC() {
 	span, _ := s.trace("startGRPC")
-	defer span.Finish()
+	defer span.finish()
 
 	// Save the context for gRPC calls. They are provided with a different
 	// context, but we need them to use our context as it contains trace
@@ -1108,9 +1135,9 @@ func (s *sandbox) startGRPC() {
 	if collatedTrace {
 		// "collated" tracing (allow agent traces to be
 		// associated with runtime-initiated traces.
-		tracer := span.Tracer()
+		tracer := span.tracer()
 
-		serverOpts = append(serverOpts, grpc.UnaryInterceptor(otgrpc.OpenTracingServerInterceptor(tracer)))
+		serverOpts = append(serverOpts, grpc.UnaryInterceptor(otgrpc.OpenTracingServerInterceptor(tracer.tracer)))
 	} else {
 		// Enable interceptor whether tracing is enabled or not. This
 		// is necessary to support StartTracing() and StopTracing()
@@ -1205,6 +1232,12 @@ type initMount struct {
 }
 
 func getCgroupMounts(cgPath string) ([]initMount, error) {
+	if unifiedCgroupHierarchy {
+		return []initMount{
+			{"cgroup2", "cgroup2", cgroupPath, []string{"nosuid", "nodev", "noexec", "relatime", "nsdelegate"}},
+		}, nil
+	}
+
 	f, err := os.Open(cgPath)
 	if err != nil {
 		return []initMount{}, err
@@ -1283,14 +1316,95 @@ func cgroupsMount() error {
 		}
 	}
 
-	// Enable memory hierarchical account.
-	// For more information see https://www.kernel.org/doc/Documentation/cgroup-v1/memory.txt
-	return ioutil.WriteFile(cgroupMemoryUseHierarchyPath, []byte{'1'}, cgroupMemoryUseHierarchyMode)
+	if !unifiedCgroupHierarchy {
+		// Enable memory hierarchical account.
+		// For more information see https://www.kernel.org/doc/Documentation/cgroup-v1/memory.txt
+		return ioutil.WriteFile(cgroupMemoryUseHierarchyPath, []byte{'1'}, cgroupMemoryUseHierarchyMode)
+	}
+
+	// Enable all cgroup v2 controllers
+	rawControllers, err := ioutil.ReadFile(cgroupControllersPath)
+	if err != nil {
+		return err
+	}
+
+	var controllers string
+	for _, c := range strings.Fields(string(rawControllers)) {
+		controllers += fmt.Sprintf("+%v ", c)
+	}
+
+	// https://www.kernel.org/doc/Documentation/cgroup-v2.txt
+	return ioutil.WriteFile(cgroupSubtreeControlPath,
+		[]byte(strings.TrimSpace(controllers)), cgroupSubtreeControlMode)
+}
+
+func setupDebugConsoleForVsock(ctx context.Context) error {
+	var shellPath string
+	for _, s := range supportedShells {
+		var err error
+		if _, err = os.Stat(s); err == nil {
+			shellPath = s
+			break
+		}
+		agentLog.WithError(err).WithField("shell", s).Warn("Shell not found")
+	}
+
+	if shellPath == "" {
+		return fmt.Errorf("No available shells (checked %v)", supportedShells)
+	}
+
+	cmd := exec.Command(shellPath, "-i")
+	cmd.Env = os.Environ()
+	cmd.SysProcAttr = &syscall.SysProcAttr{
+		// Create Session
+		Setsid: true,
+	}
+
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				// stop the thread
+				return
+			default:
+				dcmd := *cmd
+
+				l, err := vsock.Listen(debugConsoleVSockPort)
+				if err != nil {
+					// nobody dialing
+					continue
+				}
+				c, err := l.Accept()
+				if err != nil {
+					l.Close()
+					// no connection
+					continue
+				}
+
+				dcmd.Stdin = c
+				dcmd.Stdout = c
+				dcmd.Stderr = c
+
+				if err := dcmd.Run(); err != nil {
+					agentLog.WithError(err).Warn("failed to start debug console")
+				}
+
+				c.Close()
+				l.Close()
+			}
+		}
+	}()
+
+	return nil
 }
 
 func setupDebugConsole(ctx context.Context, debugConsolePath string) error {
 	if !debugConsole {
 		return nil
+	}
+
+	if debugConsoleVSockPort != uint32(0) {
+		return setupDebugConsoleForVsock(ctx)
 	}
 
 	var shellPath string
@@ -1350,6 +1464,9 @@ func initAgentAsInit() error {
 	if err := generalMount(); err != nil {
 		return err
 	}
+	if err := parseKernelCmdline(); err != nil {
+		return err
+	}
 	if err := cgroupsMount(); err != nil {
 		return err
 	}
@@ -1396,6 +1513,8 @@ func realMain() error {
 		if err = initAgentAsInit(); err != nil {
 			panic(fmt.Sprintf("failed to setup agent as init: %v", err))
 		}
+	} else if err := parseKernelCmdline(); err != nil {
+		return err
 	}
 
 	r := &agentReaper{}

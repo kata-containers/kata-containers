@@ -27,7 +27,7 @@ import (
 
 const (
 	type9pFs       = "9p"
-	typeVirtioFS   = "virtio_fs"
+	typeVirtioFS   = "virtiofs"
 	typeRootfs     = "rootfs"
 	typeTmpFs      = "tmpfs"
 	procMountStats = "/proc/self/mountstats"
@@ -217,6 +217,7 @@ var storageHandlerList = map[string]storageHandler{
 	driverSCSIType:      virtioSCSIStorageHandler,
 	driverEphemeralType: ephemeralStorageHandler,
 	driverLocalType:     localStorageHandler,
+	driverNvdimmType:    nvdimmStorageHandler,
 }
 
 func ephemeralStorageHandler(_ context.Context, storage pb.Storage, s *sandbox) (string, error) {
@@ -303,6 +304,7 @@ func virtioBlkStorageHandler(_ context.Context, storage pb.Storage, s *sandbox) 
 		FileInfo, err := os.Stat(storage.Source)
 		if err != nil {
 			return "", err
+
 		}
 		// Make sure the virt path is valid
 		if FileInfo.Mode()&os.ModeDevice == 0 {
@@ -319,6 +321,22 @@ func virtioBlkStorageHandler(_ context.Context, storage pb.Storage, s *sandbox) 
 	}
 
 	return commonStorageHandler(storage)
+}
+
+func nvdimmStorageHandler(_ context.Context, storage pb.Storage, s *sandbox) (string, error) {
+	// waiting for a pmem device
+	if strings.HasPrefix(storage.Source, "/dev") && strings.HasPrefix(filepath.Base(storage.Source), "pmem") {
+		// Retrieve the device path from ACPI pmem address.
+		// for example: /devices/LNXSYSTM:00/LNXSYBUS:00/ACPI0012:00/ndbus0/region1/pfn1.1/block/pmem1
+		devPath, err := getPmemDevPath(s, storage.Source)
+		if err != nil {
+			return "", err
+		}
+		storage.Source = devPath
+		return commonStorageHandler(storage)
+	}
+
+	return "", fmt.Errorf("invalid nvdimm source path: %v", storage.Source)
 }
 
 // virtioSCSIStorageHandler handles the storage for scsi driver.
@@ -355,8 +373,8 @@ func mountStorage(storage pb.Storage) error {
 // each storage.
 func addStorages(ctx context.Context, storages []*pb.Storage, s *sandbox) (mounts []string, err error) {
 	span, ctx := trace(ctx, "mount", "addStorages")
-	span.SetTag("sandbox", s.id)
-	defer span.Finish()
+	span.setTag("sandbox", s.id)
+	defer span.finish()
 
 	var mountList []string
 	var storageList []string
@@ -392,7 +410,7 @@ func addStorages(ctx context.Context, storages []*pb.Storage, s *sandbox) (mount
 		// code to each driver.
 		handlerSpan, _ := trace(ctx, "mount", storage.Driver)
 		mountPoint, err := devHandler(ctx, *storage, s)
-		handlerSpan.Finish()
+		handlerSpan.finish()
 
 		if _, ok := s.storages[storage.MountPoint]; ok {
 			storageList = append([]string{storage.MountPoint}, storageList...)

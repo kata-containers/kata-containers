@@ -47,7 +47,7 @@ type channel interface {
 // If there are neither vsocks nor serial ports, an error is returned.
 func newChannel(ctx context.Context) (channel, error) {
 	span, _ := trace(ctx, "channel", "newChannel")
-	defer span.Finish()
+	defer span.finish()
 
 	var serialErr error
 	var vsockErr error
@@ -91,13 +91,13 @@ func newChannel(ctx context.Context) (channel, error) {
 
 func checkForSerialChannel(ctx context.Context) (*serialChannel, error) {
 	span, _ := trace(ctx, "channel", "checkForSerialChannel")
-	defer span.Finish()
+	defer span.finish()
 
 	// Check serial port path
 	serialPath, serialErr := findVirtualSerialPath(serialChannelName)
 	if serialErr == nil {
-		span.SetTag("channel-type", "serial")
-		span.SetTag("serial-path", serialPath)
+		span.setTag("channel-type", "serial")
+		span.setTag("serial-path", serialPath)
 		agentLog.Debug("Serial channel type detected")
 		return &serialChannel{serialPath: serialPath}, nil
 	}
@@ -107,7 +107,7 @@ func checkForSerialChannel(ctx context.Context) (*serialChannel, error) {
 
 func checkForVsockChannel(ctx context.Context) (*vSockChannel, error) {
 	span, _ := trace(ctx, "channel", "checkForVsockChannel")
-	defer span.Finish()
+	defer span.finish()
 
 	// check vsock path
 	if _, err := os.Stat(vSockDevPath); err != nil {
@@ -116,7 +116,7 @@ func checkForVsockChannel(ctx context.Context) (*vSockChannel, error) {
 
 	vSockSupported, vsockErr := isAFVSockSupportedFunc()
 	if vSockSupported && vsockErr == nil {
-		span.SetTag("channel-type", "vsock")
+		span.setTag("channel-type", "vsock")
 		agentLog.Debug("Vsock channel type detected")
 		return &vSockChannel{}, nil
 	}

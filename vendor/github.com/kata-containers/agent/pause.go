@@ -15,10 +15,13 @@ package main
 #include <string.h>
 #include <unistd.h>
 
-#define PAUSE_BIN "pause-bin"
+#define PAUSE_BIN_KEY "pause-bin-key"
+#define PAUSE_BIN_VALUE "pause-bin-value"
 
-void __attribute__((constructor)) sandbox_pause(int argc, const char **argv) {
-	if (argc != 2 || strcmp(argv[1], PAUSE_BIN)) {
+void __attribute__((constructor)) sandbox_pause() {
+	char *value = getenv(PAUSE_BIN_KEY);
+
+	if (value == NULL || strcmp(value, PAUSE_BIN_VALUE)) {
 		return;
 	}
 
@@ -31,5 +34,6 @@ void __attribute__((constructor)) sandbox_pause(int argc, const char **argv) {
 import "C"
 
 const (
-	pauseBinArg = string(C.PAUSE_BIN)
+	pauseBinKey   = string(C.PAUSE_BIN_KEY)
+	pauseBinValue = string(C.PAUSE_BIN_VALUE)
 )
