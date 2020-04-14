@@ -126,9 +126,11 @@ func (v *virtiofsd) args() ([]string, error) {
 
 	args := []string{
 		"-f",
-		"-o", "vhost_user_socket=" + v.socketPath,
+		"-o", "cache=" + v.cache,
+		"-o", "no_posix_lock",
 		"-o", "source=" + v.sourcePath,
-		"-o", "cache=" + v.cache}
+		"-o", "vhost_user_socket=" + v.socketPath,
+	}
 
 	if len(v.extraArgs) != 0 {
 		args = append(args, v.extraArgs...)
