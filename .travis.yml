@@ -18,13 +18,15 @@ matrix:
     - os: osx
 
 language: go
+go:
+  - 1.13.9
+
 go_import_path: github.com/kata-containers/proxy
 
 env:
   - target_branch=$TRAVIS_BRANCH
 
 before_script:
-  - ".ci/install_go.sh"
   - ".ci/static-checks.sh"
 
 before_install:
