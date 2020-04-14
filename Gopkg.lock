@@ -91,6 +91,14 @@
   revision = "32c87e75c2e4c014961f104c3c59b87f2aee3384"
 
 [[projects]]
+  digest = "1:58999a98719fddbac6303cb17e8d85b945f60b72f48e3a2df6b950b97fa926f1"
+  name = "github.com/konsorten/go-windows-terminal-sequences"
+  packages = ["."]
+  pruneopts = "NT"
+  revision = "f55edac94c9bbba5d6182a4be46d86a2c9b5b50e"
+  version = "v1.0.2"
+
+[[projects]]
   digest = "1:f0491ec759a06331ed36c81e8b0846058a36b4ae9d9b8ca4a60c46d223e4fcea"
   name = "github.com/kr/pty"
   packages = ["."]
@@ -149,15 +157,14 @@
   version = "v1.0.0"
 
 [[projects]]
-  digest = "1:87d2486e70b24aefe104d9ce5cdb0928385d86f5763ec938cc4d4c03a8a7724d"
+  digest = "1:efe8ddffa78bddbd1d826faf622cca77dbf7ddc72df04077d69a688cac657148"
   name = "github.com/sirupsen/logrus"
   packages = [
     ".",
     "hooks/syslog",
   ]
   pruneopts = "NT"
-  revision = "d682213848ed68c0a260ca37d6dd5ace8423f5ba"
-  version = "v1.0.4"
+  revision = "v1.4.2"
 
 [[projects]]
   digest = "1:76192bb31efa333288421ef0a5bafea6d803610f2f33678ab2aac4db6716bb27"
@@ -202,14 +209,6 @@
   version = "v1.5.0"
 
 [[projects]]
-  branch = "master"
-  digest = "1:c0127a099bffb96b4e8c3a5c9104df389fbc69ecdfce20fcd12c864e9419ce25"
-  name = "golang.org/x/crypto"
-  packages = ["ssh/terminal"]
-  pruneopts = "NT"
-  revision = "13931e22f9e72ea58bb73048bc752b48c6d4d4ac"
-
-[[projects]]
   digest = "1:439245ff2f6a128d4a6590c48ca1218a7fa4f57b8e7db2fd8221991207f96e58"
   name = "golang.org/x/net"
   packages = [
@@ -228,10 +227,7 @@
   branch = "master"
   digest = "1:ee1d60ddc5117221f974653c278894ba9e253d9d81dc5c0ee20b80d3bf537611"
   name = "golang.org/x/sys"
-  packages = [
-    "unix",
-    "windows",
-  ]
+  packages = ["unix"]
   pruneopts = "NT"
   revision = "810d7000345868fc619eb81f46307107118f4ae1"
 

@@ -29,8 +29,8 @@
   name = "github.com/kata-containers/agent"
 
 [[constraint]]
+  revision = "v1.4.2"
   name = "github.com/sirupsen/logrus"
-  version = "v1.0.4"
 
 [[constraint]]
   name = "github.com/stretchr/testify"
