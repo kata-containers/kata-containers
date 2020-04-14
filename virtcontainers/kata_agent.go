@@ -66,7 +66,7 @@ var (
 	mountGuestTag               = "kataShared"
 	defaultKataGuestSandboxDir  = "/run/kata-containers/sandbox/"
 	type9pFs                    = "9p"
-	typeVirtioFS                = "virtio_fs"
+	typeVirtioFS                = "virtiofs"
 	typeVirtioFSNoCache         = "none"
 	kata9pDevType               = "9p"
 	kataMmioBlkDevType          = "mmioblk"
@@ -76,7 +76,7 @@ var (
 	kataNvdimmDevType           = "nvdimm"
 	kataVirtioFSDevType         = "virtio-fs"
 	sharedDir9pOptions          = []string{"trans=virtio,version=9p2000.L,cache=mmap", "nodev"}
-	sharedDirVirtioFSOptions    = []string{"default_permissions,allow_other,rootmode=040000,user_id=0,group_id=0", "nodev"}
+	sharedDirVirtioFSOptions    = []string{}
 	sharedDirVirtioFSDaxOptions = "dax"
 	shmDir                      = "shm"
 	kataEphemeralDevType        = "ephemeral"
@@ -879,7 +879,10 @@ func setupStorages(sandbox *Sandbox) []*grpc.Storage {
 			// options should not contain 'dax' lest the virtio-fs daemon crashing
 			// with an invalid address reference.
 			if sandbox.config.HypervisorConfig.VirtioFSCache != typeVirtioFSNoCache {
-				sharedDirVirtioFSOptions = append(sharedDirVirtioFSOptions, sharedDirVirtioFSDaxOptions)
+				// If virtio_fs_cache_size = 0, dax should not be used.
+				if sandbox.config.HypervisorConfig.VirtioFSCacheSize != 0 {
+					sharedDirVirtioFSOptions = append(sharedDirVirtioFSOptions, sharedDirVirtioFSDaxOptions)
+				}
 			}
 			sharedVolume := &grpc.Storage{
 				Driver:     kataVirtioFSDevType,
