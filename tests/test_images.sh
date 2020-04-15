@@ -177,6 +177,7 @@ exit_handler()
 	if [ -d "${tmp_rootfs}" ]; then
 		info "rootfs:"
 		sudo -E ls -l "${tmp_rootfs}" >&2
+		sudo -E rm -rf "${tmp_rootfs}"
 	else
 		info "no rootfs created"
 		# If no rootfs are created, no need to dump other info
@@ -186,6 +187,7 @@ exit_handler()
 	if [ -d "${images_dir}" ]; then
 		info "images:"
 		sudo -E ls -l "${images_dir}" >&2
+		sudo -E rm -rf "${images_dir}"
 	else
 		info "no images created"
 		# If no images are created, no need to dump other info
