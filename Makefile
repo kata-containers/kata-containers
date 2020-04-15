@@ -537,6 +537,7 @@ endef
 
 
 GENERATED_FILES += $(CLI_DIR)/config-generated.go
+GENERATED_FILES += pkg/katautils/config-settings.go
 
 $(TARGET_OUTPUT): $(SOURCES) $(GENERATED_FILES) $(MAKEFILE_LIST) | show-summary
 	$(QUIET_BUILD)(cd $(CLI_DIR) && go build $(KATA_LDFLAGS) $(BUILDFLAGS) -o $@ .)

@@ -55,11 +55,11 @@ const defaultTemplatePath string = "/run/vc/vm/template"
 const defaultVMCacheEndpoint string = "/var/run/kata-containers/cache.sock"
 
 // Default config file used by stateless systems.
-var defaultRuntimeConfiguration = "/usr/share/defaults/kata-containers/configuration.toml"
+var defaultRuntimeConfiguration = "@CONFIG_PATH@"
 
 // Alternate config file that takes precedence over
 // defaultRuntimeConfiguration.
-var defaultSysConfRuntimeConfiguration = "/etc/kata-containers/configuration.toml"
+var defaultSysConfRuntimeConfiguration = "@SYSCONFIG@"
 
 var name = "kata"
 var defaultProxyPath = "/usr/libexec/kata-containers/kata-proxy"
