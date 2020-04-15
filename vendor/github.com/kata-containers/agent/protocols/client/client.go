@@ -7,10 +7,13 @@
 package client
 
 import (
+	"bufio"
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"net/url"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -19,6 +22,7 @@ import (
 	"github.com/hashicorp/yamux"
 	"github.com/mdlayher/vsock"
 	opentracing "github.com/opentracing/opentracing-go"
+	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	grpcStatus "google.golang.org/grpc/status"
@@ -36,6 +40,14 @@ var defaultDialTimeout = 15 * time.Second
 var defaultCloseTimeout = 5 * time.Second
 
 var hybridVSockPort uint32
+
+var agentClientFields = logrus.Fields{
+	"name":   "agent-client",
+	"pid":    os.Getpid(),
+	"source": "agent-client",
+}
+
+var agentClientLog = logrus.WithFields(agentClientFields)
 
 // AgentClient is an agent gRPC client connection wrapper for agentgrpc.AgentServiceClient
 type AgentClient struct {
@@ -389,6 +401,7 @@ func HybridVSockDialer(sock string, timeout time.Duration) (net.Conn, error) {
 	}
 
 	dialFunc := func() (net.Conn, error) {
+		handshakeTimeout := 10 * time.Second
 		conn, err := net.DialTimeout("unix", udsPath, timeout)
 		if err != nil {
 			return nil, err
@@ -407,15 +420,41 @@ func HybridVSockDialer(sock string, timeout time.Duration) (net.Conn, error) {
 			return nil, err
 		}
 
-		// Read EOT (End of transmission) byte
-		eot := make([]byte, 32)
-		if _, err = conn.Read(eot); err != nil {
-			// Just close the connection, gRPC will dial again
-			// without errors
-			conn.Close()
-		}
+		errChan := make(chan error)
 
-		return conn, nil
+		go func() {
+			reader := bufio.NewReader(conn)
+			response, err := reader.ReadString('\n')
+			if err != nil {
+				errChan <- err
+				return
+			}
+
+			agentClientLog.WithField("response", response).Debug("HybridVsock trivial handshake")
+
+			if strings.Contains(response, "OK") {
+				errChan <- nil
+			} else {
+				errChan <- errors.New("HybridVsock trivial handshake failed with malformed response code")
+			}
+		}()
+
+		select {
+		case err = <-errChan:
+			if err != nil {
+				conn.Close()
+				agentClientLog.WithField("Error", err).Debug("HybridVsock trivial handshake failed")
+				return nil, err
+
+			}
+			return conn, nil
+		case <-time.After(handshakeTimeout):
+			// Timeout: kernel vsock implementation has a race condition, where no response is given
+			// Instead of waiting forever for a response, timeout after a fair amount of time.
+			// See: https://lore.kernel.org/netdev/668b0eda8823564cd604b1663dc53fbaece0cd4e.camel@intel.com/
+			conn.Close()
+			return nil, errors.New("timeout waiting for hybrid vsocket handshake")
+		}
 	}
 
 	timeoutErr := grpcStatus.Errorf(codes.DeadlineExceeded, "timed out connecting to hybrid vsocket %s", sock)

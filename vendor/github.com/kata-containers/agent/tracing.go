@@ -20,11 +20,53 @@ const (
 	jaegerAgentPort = "6831"
 )
 
+// agentSpan implements opentracing.Span
+type agentSpan struct {
+	span opentracing.Span
+}
+
 // The first trace span
-var rootSpan opentracing.Span
+var rootSpan *agentSpan
 
 // Implements jaeger-client-go.Logger interface
 type traceLogger struct {
+}
+
+func (a *agentSpan) setTag(key string, value interface{}) *agentSpan {
+	a.span.SetTag(key, value)
+	return a
+}
+
+func (a *agentSpan) finish() {
+	a.span.Finish()
+}
+
+func (a *agentSpan) tracer() agentTracer {
+	return agentTracer{tracer: a.span.Tracer()}
+}
+
+type agentTracer struct {
+	tracer opentracing.Tracer
+}
+
+func (a *agentTracer) startSpan(name string) agentSpan {
+	return agentSpan{span: a.tracer.StartSpan(name)}
+}
+
+func spanFromContext(ctx context.Context) *agentSpan {
+	var a agentSpan
+	a.span = opentracing.SpanFromContext(ctx)
+	return &a
+}
+
+func spanStartFromContext(ctx context.Context, name string) (agentSpan, context.Context) {
+	var a agentSpan
+	a.span, ctx = opentracing.StartSpanFromContext(ctx, name)
+	return a, ctx
+}
+
+func contextWithSpan(ctx context.Context, a agentSpan) context.Context {
+	return opentracing.ContextWithSpan(ctx, a.span)
 }
 
 // tracerCloser contains a copy of the closer returned by createTracer() which
@@ -39,7 +81,7 @@ func (t traceLogger) Infof(msg string, args ...interface{}) {
 	agentLog.Infof(msg, args...)
 }
 
-func createTracer(name string) (opentracing.Tracer, error) {
+func createTracer(name string) (*agentTracer, error) {
 	cfg := &config.Configuration{
 		ServiceName: name,
 
@@ -79,10 +121,10 @@ func createTracer(name string) (opentracing.Tracer, error) {
 	// Seems to be essential to ensure non-root spans are logged
 	opentracing.SetGlobalTracer(tracer)
 
-	return tracer, nil
+	return &agentTracer{tracer: tracer}, nil
 }
 
-func setupTracing(rootSpanName string) (opentracing.Span, context.Context, error) {
+func setupTracing(rootSpanName string) (*agentSpan, context.Context, error) {
 	ctx := context.Background()
 
 	tracer, err := createTracer(agentName)
@@ -91,9 +133,9 @@ func setupTracing(rootSpanName string) (opentracing.Span, context.Context, error
 	}
 
 	// Create the root span (which is .Finish()'d by stopTracing())
-	span := tracer.StartSpan(rootSpanName)
-	span.SetTag("source", "agent")
-	span.SetTag("root-span", "true")
+	span := tracer.startSpan(rootSpanName)
+	span.setTag("source", "agent")
+	span.setTag("root-span", "true")
 
 	// See comment in trace().
 	if tracing {
@@ -101,9 +143,9 @@ func setupTracing(rootSpanName string) (opentracing.Span, context.Context, error
 	}
 
 	// Associate the root span with the context
-	ctx = opentracing.ContextWithSpan(ctx, span)
+	ctx = contextWithSpan(ctx, span)
 
-	return span, ctx, nil
+	return &span, ctx, nil
 }
 
 // stopTracing() ends all tracing, reporting the spans to the collector.
@@ -117,9 +159,9 @@ func stopTracing(ctx context.Context) {
 		return
 	}
 
-	span := opentracing.SpanFromContext(ctx)
+	span := spanFromContext(ctx)
 	if span != nil {
-		span.Finish()
+		span.finish()
 	}
 
 	// report all possible spans to the collector
@@ -132,10 +174,10 @@ func stopTracing(ctx context.Context) {
 
 // trace creates a new tracing span based on the specified contex, subsystem
 // and name.
-func trace(ctx context.Context, subsystem, name string) (opentracing.Span, context.Context) {
-	span, ctx := opentracing.StartSpanFromContext(ctx, name)
+func trace(ctx context.Context, subsystem, name string) (*agentSpan, context.Context) {
+	span, ctx := spanStartFromContext(ctx, name)
 
-	span.SetTag("subsystem", subsystem)
+	span.setTag("subsystem", subsystem)
 
 	// This is slightly confusing: when tracing is disabled, trace spans
 	// are still created - but the tracer used is a NOP. Therefore, only
@@ -144,5 +186,5 @@ func trace(ctx context.Context, subsystem, name string) (opentracing.Span, conte
 		agentLog.Debugf("created span %v", span)
 	}
 
-	return span, ctx
+	return &span, ctx
 }

@@ -16,7 +16,7 @@ import (
 
 // set function in variable to overwrite for testing.
 var getCpusetGuest = func() (string, error) {
-	cpusetGuestByte, err := ioutil.ReadFile("/sys/fs/cgroup/cpuset/cpuset.cpus")
+	cpusetGuestByte, err := ioutil.ReadFile("/sys/devices/system/cpu/online")
 	if err != nil {
 		return "", err
 	}
