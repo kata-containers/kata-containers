@@ -208,6 +208,10 @@ func TestSetKernelParams(t *testing.T) {
 	err := SetKernelParams(&config)
 	assert.NoError(err)
 
+	config.HypervisorConfig.BlockDeviceDriver = "virtio-scsi"
+	err = SetKernelParams(&config)
+	assert.NoError(err)
+
 	if needSystemd(config.HypervisorConfig) {
 		assert.NotEmpty(config.HypervisorConfig.KernelParams)
 	}
