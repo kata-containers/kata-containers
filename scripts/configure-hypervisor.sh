@@ -432,7 +432,7 @@ generate_qemu_options() {
 	fi
 
 	# aarch64 need to explictly set --enable-pie
-	if [ "${arch}" = "aarch64" ]; then
+	if [ -z "${static}" ] && [ "${arch}" = "aarch64" ]; then
 		qemu_options+=(arch:"--enable-pie")
 	fi
 
