@@ -977,7 +977,6 @@ func SetKernelParams(runtimeConfig *oci.RuntimeConfig) error {
 	if runtimeConfig.HypervisorConfig.Debug {
 		strParams := vc.SerializeParams(defaultKernelParams, "=")
 		formatted := strings.Join(strParams, " ")
-
 		kataUtilsLogger.WithField("default-kernel-parameters", formatted).Debug()
 	}
 
@@ -989,7 +988,18 @@ func SetKernelParams(runtimeConfig *oci.RuntimeConfig) error {
 
 	// first, add default values
 	for _, p := range defaultKernelParams {
-		if err := (runtimeConfig).AddKernelParam(p); err != nil {
+		if err := runtimeConfig.AddKernelParam(p); err != nil {
+			return err
+		}
+	}
+
+	// set the scsi scan mode to none for virtio-scsi
+	if runtimeConfig.HypervisorConfig.BlockDeviceDriver == config.VirtioSCSI {
+		p := vc.Param{
+			Key:   "scsi_mod.scan",
+			Value: "none",
+		}
+		if err := runtimeConfig.AddKernelParam(p); err != nil {
 			return err
 		}
 	}
@@ -1004,7 +1014,7 @@ func SetKernelParams(runtimeConfig *oci.RuntimeConfig) error {
 		params := vc.KataAgentKernelParams(agentConfig)
 
 		for _, p := range params {
-			if err := (runtimeConfig).AddKernelParam(p); err != nil {
+			if err := runtimeConfig.AddKernelParam(p); err != nil {
 				return err
 			}
 		}
@@ -1012,7 +1022,7 @@ func SetKernelParams(runtimeConfig *oci.RuntimeConfig) error {
 
 	// now re-add the user-specified values so that they take priority.
 	for _, p := range userKernelParams {
-		if err := (runtimeConfig).AddKernelParam(p); err != nil {
+		if err := runtimeConfig.AddKernelParam(p); err != nil {
 			return err
 		}
 	}
