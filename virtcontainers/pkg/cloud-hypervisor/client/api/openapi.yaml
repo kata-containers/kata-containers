@@ -158,6 +158,86 @@ paths:
         "404":
           description: The device could not be removed from the VM instance.
       summary: Remove a device from the VM
+  /vm.add-disk:
+    put:
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DiskConfig'
+        description: The details of the new disk
+        required: true
+      responses:
+        "204":
+          description: The new disk was successfully added to the VM instance.
+        "500":
+          description: The new disk could not be added to the VM instance.
+      summary: Add a new disk to the VM
+  /vm.add-pmem:
+    put:
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PmemConfig'
+        description: The details of the new pmem device
+        required: true
+      responses:
+        "204":
+          description: The new device was successfully added to the VM instance.
+        "500":
+          description: The new device could not be added to the VM instance.
+      summary: Add a new pmem device to the VM
+  /vm.add-net:
+    put:
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NetConfig'
+        description: The details of the new network device
+        required: true
+      responses:
+        "204":
+          description: The new device was successfully added to the VM instance.
+        "500":
+          description: The new device could not be added to the VM instance.
+      summary: Add a new network device to the VM
+  /vm.snapshot:
+    put:
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VmSnapshotConfig'
+        description: The snapshot configuration
+        required: true
+      responses:
+        "204":
+          description: The VM instance was successfully snapshotted.
+        "404":
+          description: The VM instance could not be snapshotted because it is not
+            created.
+        "405":
+          description: The VM instance could not be snapshotted because it is not
+            booted.
+      summary: Returns a VM snapshot.
+  /vm.restore:
+    put:
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RestoreConfig'
+        description: The restore configuration
+        required: true
+      responses:
+        "204":
+          description: The VM instance was successfully restored.
+        "404":
+          description: The VM instance could not be restored because it is already
+            created.
+      summary: Restore a VM from a snapshot.
 components:
   schemas:
     VmmPingResponse:
@@ -184,6 +264,7 @@ components:
             file: file
             size: 1
             hotplug_size: 5
+            hotplug_method: acpi
           disks:
           - path: path
             num_queues: 5
@@ -258,6 +339,8 @@ components:
             mode: "false"
             file: file
             iommu: false
+          initramfs:
+            path: path
           net:
           - tap: tap
             num_queues: 7
@@ -303,6 +386,7 @@ components:
           file: file
           size: 1
           hotplug_size: 5
+          hotplug_method: acpi
         disks:
         - path: path
           num_queues: 5
@@ -377,6 +461,8 @@ components:
           mode: "false"
           file: file
           iommu: false
+        initramfs:
+          path: path
         net:
         - tap: tap
           num_queues: 7
@@ -403,6 +489,8 @@ components:
           $ref: '#/components/schemas/MemoryConfig'
         kernel:
           $ref: '#/components/schemas/KernelConfig'
+        initramfs:
+          $ref: '#/components/schemas/InitramfsConfig'
         cmdline:
           $ref: '#/components/schemas/CmdLineConfig'
         disks:
@@ -465,6 +553,7 @@ components:
         file: file
         size: 1
         hotplug_size: 5
+        hotplug_method: acpi
       properties:
         size:
           format: int64
@@ -477,12 +566,25 @@ components:
         mergeable:
           default: false
           type: boolean
+        hotplug_method:
+          default: acpi
+          type: string
       required:
       - size
       type: object
     KernelConfig:
       example:
         path: path
+      properties:
+        path:
+          type: string
+      required:
+      - path
+      type: object
+    InitramfsConfig:
+      example:
+        path: path
+      nullable: true
       properties:
         path:
           type: string
@@ -733,4 +835,23 @@ components:
       properties:
         id:
           type: string
+      type: object
+    VmSnapshotConfig:
+      example:
+        destination_url: destination_url
+      properties:
+        destination_url:
+          type: string
+      type: object
+    RestoreConfig:
+      example:
+        prefault: true
+        source_url: source_url
+      properties:
+        source_url:
+          type: string
+        prefault:
+          type: boolean
+      required:
+      - source_url
       type: object

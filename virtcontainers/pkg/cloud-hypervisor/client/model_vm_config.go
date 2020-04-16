@@ -13,6 +13,7 @@ type VmConfig struct {
 	Cpus CpusConfig `json:"cpus,omitempty"`
 	Memory MemoryConfig `json:"memory,omitempty"`
 	Kernel KernelConfig `json:"kernel"`
+	Initramfs *InitramfsConfig `json:"initramfs,omitempty"`
 	Cmdline CmdLineConfig `json:"cmdline"`
 	Disks []DiskConfig `json:"disks,omitempty"`
 	Net []NetConfig `json:"net,omitempty"`

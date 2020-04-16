@@ -41,9 +41,14 @@ Class | Method | HTTP request | Description
 *DefaultApi* | [**ShutdownVM**](docs/DefaultApi.md#shutdownvm) | **Put** /vm.shutdown | Shut the VM instance down.
 *DefaultApi* | [**ShutdownVMM**](docs/DefaultApi.md#shutdownvmm) | **Put** /vmm.shutdown | Shuts the cloud-hypervisor VMM.
 *DefaultApi* | [**VmAddDevicePut**](docs/DefaultApi.md#vmadddeviceput) | **Put** /vm.add-device | Add a new device to the VM
+*DefaultApi* | [**VmAddDiskPut**](docs/DefaultApi.md#vmadddiskput) | **Put** /vm.add-disk | Add a new disk to the VM
+*DefaultApi* | [**VmAddNetPut**](docs/DefaultApi.md#vmaddnetput) | **Put** /vm.add-net | Add a new network device to the VM
+*DefaultApi* | [**VmAddPmemPut**](docs/DefaultApi.md#vmaddpmemput) | **Put** /vm.add-pmem | Add a new pmem device to the VM
 *DefaultApi* | [**VmInfoGet**](docs/DefaultApi.md#vminfoget) | **Get** /vm.info | Returns general information about the cloud-hypervisor Virtual Machine (VM) instance.
 *DefaultApi* | [**VmRemoveDevicePut**](docs/DefaultApi.md#vmremovedeviceput) | **Put** /vm.remove-device | Remove a device from the VM
 *DefaultApi* | [**VmResizePut**](docs/DefaultApi.md#vmresizeput) | **Put** /vm.resize | Resize the VM
+*DefaultApi* | [**VmRestorePut**](docs/DefaultApi.md#vmrestoreput) | **Put** /vm.restore | Restore a VM from a snapshot.
+*DefaultApi* | [**VmSnapshotPut**](docs/DefaultApi.md#vmsnapshotput) | **Put** /vm.snapshot | Returns a VM snapshot.
 *DefaultApi* | [**VmmPingGet**](docs/DefaultApi.md#vmmpingget) | **Get** /vmm.ping | Ping the VMM to check for API server availability
 
 
@@ -55,16 +60,19 @@ Class | Method | HTTP request | Description
  - [DeviceConfig](docs/DeviceConfig.md)
  - [DiskConfig](docs/DiskConfig.md)
  - [FsConfig](docs/FsConfig.md)
+ - [InitramfsConfig](docs/InitramfsConfig.md)
  - [KernelConfig](docs/KernelConfig.md)
  - [MemoryConfig](docs/MemoryConfig.md)
  - [NetConfig](docs/NetConfig.md)
  - [PmemConfig](docs/PmemConfig.md)
+ - [RestoreConfig](docs/RestoreConfig.md)
  - [RngConfig](docs/RngConfig.md)
  - [VmAddDevice](docs/VmAddDevice.md)
  - [VmConfig](docs/VmConfig.md)
  - [VmInfo](docs/VmInfo.md)
  - [VmRemoveDevice](docs/VmRemoveDevice.md)
  - [VmResize](docs/VmResize.md)
+ - [VmSnapshotConfig](docs/VmSnapshotConfig.md)
  - [VmmPingResponse](docs/VmmPingResponse.md)
  - [VsockConfig](docs/VsockConfig.md)
 
