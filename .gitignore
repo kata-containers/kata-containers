@@ -16,6 +16,7 @@
 /data/kata-collect-data.sh
 /kata-netmon
 /kata-runtime
+/pkg/katautils/config-settings.go
 /virtcontainers/hack/virtc/virtc
 /virtcontainers/hook/mock/hook
 /virtcontainers/profile.cov
