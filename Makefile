@@ -193,6 +193,9 @@ DEFPCIEROOTPORT := 0
 # Default cgroup model
 DEFSANDBOXCGROUPONLY ?= false
 
+# Features
+FEATURE_SELINUX ?= check
+
 SED = sed
 
 CLI_DIR = cli
@@ -452,6 +455,7 @@ USER_VARS += DEFHOTPLUGVFIOONROOTBUS
 USER_VARS += DEFPCIEROOTPORT
 USER_VARS += DEFENTROPYSOURCE
 USER_VARS += DEFSANDBOXCGROUPONLY
+USER_VARS += FEATURE_SELINUX
 USER_VARS += BUILDFLAGS
 
 
@@ -464,8 +468,22 @@ QUIET_GENERATE = $(Q:@=@echo    '     GENERATE '$@;)
 QUIET_INST     = $(Q:@=@echo    '     INSTALL  '$@;)
 QUIET_TEST     = $(Q:@=@echo    '     TEST     '$@;)
 
-SELINUXTAG := $(shell ./hack/selinux_tag.sh)
-BUILDTAGS := --tags "$(SELINUXTAG)"
+BUILDTAGS :=
+
+ifneq ($(FEATURE_SELINUX),no)
+    SELINUXTAG := $(shell ./hack/selinux_tag.sh)
+
+    ifneq ($(SELINUXTAG),)
+        override FEATURE_SELINUX = yes
+        BUILDTAGS += --tags "$(SELINUXTAG)"
+    else
+        ifeq ($(FEATURE_SELINUX),yes)
+            $(error "ERROR: SELinux support requested, but libselinux is not available")
+        endif
+
+        override FEATURE_SELINUX = no
+    endif
+endif
 
 # go build common flags
 BUILDFLAGS := -buildmode=pie ${BUILDTAGS}
@@ -640,6 +658,7 @@ $(GENERATED_FILES): %: %.in $(MAKEFILE_LIST) VERSION .git-commit
 		-e "s|@DEFPCIEROOTPORT@|$(DEFPCIEROOTPORT)|g" \
 		-e "s|@DEFENTROPYSOURCE@|$(DEFENTROPYSOURCE)|g" \
 		-e "s|@DEFSANDBOXCGROUPONLY@|$(DEFSANDBOXCGROUPONLY)|g" \
+		-e "s|@FEATURE_SELINUX@|$(FEATURE_SELINUX)|g" \
 		$< > $@
 
 generate-config: $(CONFIGS)
@@ -756,6 +775,9 @@ endif
 	@printf "\tDefault: $(DEFAULT_HYPERVISOR)\n"
 	@printf "\tKnown: $(sort $(HYPERVISORS))\n"
 	@printf "\tAvailable for this architecture: $(sort $(KNOWN_HYPERVISORS))\n"
+	@printf "\n"
+	@printf "• Features:\n"
+	@printf "\tSELinux (FEATURE_SELINUX): $(FEATURE_SELINUX)\n"
 	@printf "\n"
 	@printf "• Summary:\n"
 	@printf "\n"
