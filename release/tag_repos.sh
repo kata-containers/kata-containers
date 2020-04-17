@@ -69,6 +69,7 @@ info() {
 
 repos=(
 	"agent"
+	"documentation"
 	"ksm-throttler"
 	"osbuilder"
 	"packaging"
