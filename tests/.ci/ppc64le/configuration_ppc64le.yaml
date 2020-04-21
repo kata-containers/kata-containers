@@ -1,0 +1,32 @@
+#
+# Copyright (c) 2019 IBM
+#
+# SPDX-License-Identifier: Apache-2.0
+
+# for now, not all integration test suites are fully passed in ppc64le.
+# some need to be tested, and some need to be refined.
+# sequence of 'test' holds supported integration tests components.
+test:
+  - functional
+  - docker
+  - docker-compose
+
+# for now, not all test suites under docker integration are fully passed in ppc64le.
+# some need to be tested, and some need to be refined.
+# ginkgo offers '-skip=REGEXP' flag to skip specific ones.
+# you can use infos from docker.Describe, docker.Context or docker.It to point to
+# specific test specs or whole container of specs. Issue #1580 tracks all the tests
+# that currently fail on ppc64le.
+docker:
+  Describe:
+    - Update CPU set
+    - CPUs and CPU set
+    - Update CPU constraints
+    - Hotplug memory when create containers
+    - run container and update its memory constraints
+    - check dmesg logs errors
+    - memory constraints
+    - check yum update
+  Context:
+    - run container exceeding memory constraints
+  It:

@@ -1,0 +1,43 @@
+---
+
+#
+# Copyright (c) 2019 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+# List 'egrep' patterns of files that can:
+# - be skipped by the CI
+# - force the CI to always run (cannot be skipped), even if they match the 'can
+#   be skipped' patterns.
+#
+# Entries are of the form:
+#  repo_name:
+#    [skip_pattterns | check_patterns]: |
+#     (list of patterns, ideally one per line)
+#
+# The repo name 'common' is special, in that it will apply to all repos being checked.
+# The rules for 'common' and the repo under test are merged together before the checks
+# are carried out.
+#
+# Missing repo sections and missing pattern sections are handled correctly.
+#
+# 'yq' has a bug (https://github.com/mikefarah/yq/issues/188) whereby the yaml
+# parser tries to interpret '\.' as a special character expansion (like it would
+# for '\t') in many YAML string types (which in itself I think is another bug),
+# and explodes. Work around that by placing our pattern strings into a
+# ['literal block scalar'](https://yaml.org/spec/1.2/spec.html#id2793652),
+# that seems to work.
+
+common:
+        skip_patterns: |
+                ^CODEOWNERS$
+                ^LICENSE$
+                .*\.md
+                *\.travis\.yml
+                .*\.txt
+                ^VERSION$
+        check_patterns:
+
+documentation:
+        check_patterns: |
+                install/.*\.md

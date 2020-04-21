@@ -1,0 +1,14 @@
+#
+# Copyright (c) 2019 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+
+# We need to skip some e2e conformance tests as they
+# are not running correctly using kata-runtime.
+
+containerd:
+  - SchedulerPredicates
+  - Daemon set \[Serial\] should rollback without unnecessary restarts
+
+crio:
+  - Daemon set \[Serial\] should rollback without unnecessary restarts

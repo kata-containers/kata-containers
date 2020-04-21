@@ -1,0 +1,48 @@
+# Copyright (c) 2019 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+# This file contains baseline expectations
+# for checked results by checkmetrics tool.
+#
+# values set specifically for packet.com c1.small slave.
+
+[[metric]]
+name = "boot-times"
+type = "json"
+description = "measure container lifecycle timings"
+# Min and Max values to set a 'range' that
+# the median of the CSV Results data must fall
+# within (inclusive)
+checkvar = ".\"boot-times\".Results | .[] | .\"to-workload\".Result"
+checktype = "mean"
+midval = 0.80
+minpercent = 5.0
+maxpercent = 5.0
+
+[[metric]]
+name = "memory-footprint"
+type = "json"
+description = "measure container average footprint"
+# Min and Max values to set a 'range' that
+# the median of the CSV Results data must fall
+# within (inclusive)
+checkvar = ".\"memory-footprint\".Results | .[] | .average.Result"
+checktype = "mean"
+midval = 122904.0
+minpercent = 5.0
+maxpercent = 5.0
+
+[[metric]]
+name = "memory-footprint-ksm"
+type = "json"
+description = "measure container average footprint with KSM"
+# Min and Max values to set a 'range' that
+# the median of the CSV Results data must fall
+# within (inclusive)
+checkvar = ".\"memory-footprint-ksm\".Results | .[] | .average.Result"
+checktype = "mean"
+midval = 49821.0
+minpercent = 5.0
+maxpercent = 5.0
+

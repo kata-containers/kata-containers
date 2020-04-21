@@ -1,0 +1,13 @@
+# Copyright (c) 2019 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+# Description: List of words that are missing from Hunspell dictionaries
+# on some platforms.
+
+committer/AB	# Not available on Ubuntu 16.04 or CentOS 7
+plugin/AB	# Not available on Ubuntu 16.04
+regexp/AB	# Not available on Ubuntu 16.04
+screenshot/AB	# Not available on Ubuntu 16.04 or CentOS 7
+tarball/AB	# Not available on Ubuntu 16.04
+uninstall	# Not available on Ubuntu 16.04

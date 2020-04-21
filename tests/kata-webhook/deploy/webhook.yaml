@@ -1,0 +1,49 @@
+# Copyright (c) 2019 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pod-annotate-webhook
+  labels:
+    app: pod-annotate-webhook
+spec:
+  selector:
+    matchLabels:
+      app: pod-annotate-webhook
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: pod-annotate-webhook
+    spec:
+      containers:
+        - name: pod-annotate-webhook
+          image: katadocker/kata-webhook-example:latest
+          imagePullPolicy: Always
+          args:
+            - -tls-cert-file=/etc/webhook/certs/cert.pem
+            - -tls-key-file=/etc/webhook/certs/key.pem
+            - -exclude-namespaces=rook-ceph-system,rook-ceph
+          volumeMounts:
+            - name: webhook-certs
+              mountPath: /etc/webhook/certs
+              readOnly: true
+      volumes:
+        - name: webhook-certs
+          secret:
+            secretName: pod-annotate-webhook-certs
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: pod-annotate-webhook
+  labels:
+    app: pod-annotate-webhook
+spec:
+  ports:
+  - port: 443
+    targetPort: 8080
+  selector:
+    app: pod-annotate-webhook

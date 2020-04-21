@@ -1,0 +1,96 @@
+# Copyright (c) 2019 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+# Description: List of acronyms and abbreviations.
+
+ACPI/AB
+ACS/AB
+API/AB
+AWS/AB
+BDF/AB
+CFS/AB
+CLI/AB
+CNI/AB
+CNM/AB
+CPUID/AB
+CRI/AB
+CVE/AB
+DAX/AB
+DMA/AB
+DPDK/AB
+FS/AB
+fs/B	# For terms like "virtio-fs"
+GCE/AB
+GOPATH/AB
+GPG/AB
+GPU/AB
+gRPC/AB
+GVT/AB
+IOMMU/AB
+IoT/AB	# Internet of Things
+IOV/AB
+JSON/AB
+k8s/B
+KCSA/AB
+KSM/AB
+KVM/AB
+LTS/AB
+MACVTAP/AB
+mem/B	# For terms like "virtio-mem"
+MDEV/AB
+NEMU/AB
+NIC/AB
+NVDIMM/AB
+OCI/AB
+OVMF/AB
+PCDIMM/AB
+PCI/AB
+PCIe/AB
+PID/AB
+PNG/AB
+POD/AB
+PR/AB
+PSS/AB
+QA/AB
+QAT/AB
+QEMU/AB
+RBAC/AB
+RDMA/AB
+RNG/AB
+SCSI/AB
+SDK/AB
+SHA/AB
+SPDX/AB
+SRIOV/AB
+SVG/AB
+TBD/AB
+TOC/AB
+TOML/AB
+TTY/AB
+UI/AB
+UTS/AB
+UUID/AB
+vCPU/AB
+VETH/AB
+VF/AB
+VFIO/AB
+VGPU/AB
+vhost/AB
+VHOST/AB
+virtio/AB
+VirtIO/AB
+Virtio-fs/AB
+Virtio-mem/AB
+VLAN/AB
+VM/AB
+VMCache/AB
+VMM/AB
+VMX/AB
+VPP/AB
+VSOCK/AB
+VSS/AB
+WIP/AB	# Work In Progress
+WRT/AB	# With Respect To
+XIP/AB
+YAML/AB

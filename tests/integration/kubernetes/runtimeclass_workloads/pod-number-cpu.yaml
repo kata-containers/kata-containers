@@ -1,0 +1,26 @@
+#
+# Copyright (c) 2019 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+apiVersion: v1
+kind: Pod
+metadata:
+  name: cpu-test
+spec:
+  runtimeClassName: kata
+  containers:
+  - name: c1
+    image: busybox
+    command: ["tail", "-f", "/dev/null"]
+    resources:
+      limits:
+        cpu: "500m"
+  - name: c2
+    image: busybox
+    command:
+      - sleep
+      - "10"
+    resources:
+      limits:
+        cpu: "500m"

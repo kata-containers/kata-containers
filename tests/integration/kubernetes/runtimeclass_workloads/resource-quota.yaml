@@ -1,0 +1,12 @@
+#
+# Copyright (c) 2018 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: pod-quota
+spec:
+  hard:
+    pods: "2"

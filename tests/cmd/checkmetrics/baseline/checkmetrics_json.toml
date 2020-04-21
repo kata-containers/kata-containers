@@ -1,0 +1,47 @@
+# This file contains example configurations for the checkmetrics tool.
+# Each [[metric]] section represents one check.
+# Note, a .json results file can be referenced from more than one section,
+# enabling multiple different checks to be performed on a results file.
+
+[[metric]]
+# The name of the metrics test, must match
+# that of the generated JSON file
+name = "boot-times"
+type = "json"
+description = "measure container lifecycle timings"
+# Min and Max values to set a 'range' that
+# the mean of the Results data must fall
+# within (inclusive)
+checkvar = ".\"boot-times\".Results | .[] | .\"to-workload\".Result"
+checktype = "mean"
+minval = 0.5
+maxval = 0.7
+
+[[metric]]
+name = "memory-footprint"
+# If no Type set, then we default to json
+#type = "json"
+description = "measure container average footprint"
+# Min and Max values to set a 'range' that
+# the median of the CSV Results data must fall
+# within (inclusive)
+checkvar = ".\"memory-footprint\".Results | .[] | .average.Result"
+checktype = "mean"
+minval = 100000.0
+maxval = 110000.0
+
+[[metric]]
+name = "memory-footprint-ksm"
+type = "json"
+description = "measure container average footprint with KSM"
+# Min and Max values to set a 'range' that
+# the median of the CSV Results data must fall
+# within (inclusive)
+checkvar = ".\"memory-footprint-ksm\".Results | .[] | .average.Result"
+checktype = "mean"
+midval = 100000.0
+minpercent = 5.0
+maxpercent = 10.0
+
+
+# ... repeat this for each metric check ...

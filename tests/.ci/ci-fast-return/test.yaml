@@ -1,0 +1,33 @@
+---
+
+#
+# Copyright (c) 2019 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+# YAML file of test structures and patterns used in the ci-fast-return.sh
+# file unit tests.
+
+common:
+        skip_patterns: |
+                ^CODEOWNERS$
+                .*\.md
+        check_patterns: |
+                check1
+                .*check2$
+        empty_patterns:
+                # 'undefined_patterns' deliberately commented out to check
+                # we can correctly handle undefined patterns.
+        #undefined_patterns
+
+documentation:
+        doc_single_entry: |
+                single_pattern
+        doc_complex_patterns: |
+                ^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$
+                ^#?([a-f0-9]{6}|[a-f0-9]{3})$
+
+# Whole repo section and subsection deliberately commented out so unit tests can check we
+# do not pick it up.
+#nonrepo:
+        #nonrepo_pattern:

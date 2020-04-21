@@ -1,0 +1,24 @@
+#
+# Copyright (c) 2018 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: deploymenttest
+spec:
+  selector:
+    matchLabels:
+      purpose: quota-demo
+  replicas: 2
+  template:
+    metadata:
+      labels:
+        purpose: quota-demo
+    spec:
+      runtimeClassName: kata
+      containers:
+      - name: pod-quota-demo
+        image: busybox
+        command: ["tail", "-f", "/dev/null"]

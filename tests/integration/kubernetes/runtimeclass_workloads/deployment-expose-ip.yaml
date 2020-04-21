@@ -1,0 +1,28 @@
+#
+# Copyright (c) 2019 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hello-world
+spec:
+  selector:
+    matchLabels:
+      app: hello-world
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: hello-world
+        run: load-balancer-example
+    spec:
+      runtimeClassName: kata
+      containers:
+      - name: hello-world
+        image: gcr.io/kubernetes-e2e-test-images/agnhost:2.2
+        args:
+        - netexec
+        ports:
+        - containerPort: 8080
