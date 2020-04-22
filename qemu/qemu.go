@@ -51,6 +51,11 @@ type Machine struct {
 	Options string
 }
 
+const (
+	// MachineTypeMicrovm is the QEMU microvm machine type for amd64
+	MachineTypeMicrovm string = "microvm"
+)
+
 // Device is the qemu device interface.
 type Device interface {
 	Valid() bool
@@ -128,6 +133,10 @@ const (
 func isDimmSupported(config *Config) bool {
 	switch runtime.GOARCH {
 	case "amd64", "386":
+		if config != nil && config.Machine.Type == MachineTypeMicrovm {
+			// microvm does not support NUMA
+			return false
+		}
 		return true
 	default:
 		return false
@@ -153,6 +162,9 @@ const (
 func (transport VirtioTransport) defaultTransport(config *Config) VirtioTransport {
 	switch runtime.GOARCH {
 	case "amd64", "386":
+		if config != nil && config.Machine.Type == MachineTypeMicrovm {
+			return TransportMMIO
+		}
 		return TransportPCI
 	case "s390x":
 		return TransportCCW

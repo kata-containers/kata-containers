@@ -108,6 +108,14 @@ func TestAppendMachine(t *testing.T) {
 		Options:      "gic-version=host,usb=off",
 	}
 	testAppend(machine, machineString, t)
+
+	machineString = "-machine microvm,accel=kvm,pic=off,pit=off"
+	machine = Machine{
+		Type:         "microvm",
+		Acceleration: "kvm",
+		Options:      "pic=off,pit=off",
+	}
+	testAppend(machine, machineString, t)
 }
 
 func TestAppendEmptyMachine(t *testing.T) {
