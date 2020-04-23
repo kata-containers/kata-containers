@@ -1,0 +1,326 @@
+#
+# Copyright (c) 2018 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+
+---
+description: |
+  This file contains version details that are used by various
+  repositories for setting up the correct environment to run
+  tests and package components.
+
+format: |
+  Each entry in this file MUST conform to the following format:
+
+  <group>:
+   description: "<brief-description>"
+   notes: "<notes>"
+
+   <project>:
+     description: "<brief-description>"
+     notes: "<notes>"
+     url: "<project-url>"
+     issue: "<bug-url>"
+     commit: "<commit>"
+     version: "<version>"
+     uscan-opts: "<optional uscan options>"
+     uscan-url: "<url regex for uscan to list versions>"
+     release: "<version>"
+     branch: "<git-branch>"
+     meta:
+       <key-1>: "<value-1>"
+       <key-n>: "<value-n>"
+
+  Notes:
+
+  - All sections (except "meta") MUST include a description where
+    applicable. This is expected to be a brief summary.
+
+  - A section MAY specify a "notes" section which may be multi-line.
+    It is expected to be expand on the information specified in
+    "description".
+
+  - All sections (except "meta") MUST include a URL where applicable.
+
+  - A section MAY specify a bug URL using the "issue" field.
+
+  - A section MAY define a "meta" section to store additional
+    information about a project or group.
+
+  - Each entry MUST specify ATLEAST one of "commit", "version", "release"
+    and "branch".
+
+  - WARNING: Gotcha alert! Remember to double-quote all strings
+    (except multi-line strings)! This avoids the possibility of a
+    version containing a period being treated as a floating point
+    number (and truncated!)
+
+  - NOTE: For the uscan related entries, refer to the following uscan pages:
+    https://manpages.debian.org/stretch/devscripts/uscan.1.en.html
+    https://wiki.debian.org/debian/watch
+    Particularly note the 'Common mistakes' section.
+    Also note, if you place the uscan strings on single lines in this file then
+    '\'s need to be '\'d, so are replaced with '\\', but this does not apply
+    for '>-' multi line entries, which can then use the normal uscan syntax.
+
+assets:
+  description: "Additional required system elements"
+
+  hypervisor:
+    description: "Component used to create virtual machines"
+
+    cloud_hypervisor:
+      description: "Cloud Hypervisor is an open source Virtual Machine Monitor"
+      url: "https://github.com/cloud-hypervisor/cloud-hypervisor"
+      uscan-url: >-
+        https://github.com/cloud-hypervisor/cloud-hypervisor/tags.*/v?(\d\S+)\.tar\.gz
+      version: "a8ec8f3326628d34021ccae0f259a9509ff1e6da"
+
+    firecracker:
+      description: "Firecracker micro-VMM"
+      url: "https://github.com/firecracker-microvm/firecracker"
+      uscan-url: >-
+        https://github.com/firecracker-microvm/firecracker/tags
+        .*/v?(\d\S+)\.tar\.gz
+      version: "v0.21.1"
+
+    qemu:
+      description: "VMM that uses KVM"
+      url: "https://github.com/qemu/qemu"
+      version: "4.1.1"
+      tag: "v4.1.1"
+      # Do not include any non-full release versions
+      # Break the line *without CR or space being appended*, to appease
+      # yamllint, and note the deliberate ' ' at the end of the expression.
+      uscan-opts: "opts=uversionmangle=s/(\\d)[_\\.\\-\\+]?\
+        ((RC|rc|pre|dev|beta|alpha)\\d*)$/$1~$2/ "
+      uscan-url: >-
+        https://github.com/qemu/qemu/tags
+        .*/v?(\d\S+)\.tar\.gz
+      architecture:
+        aarch64:
+          version: "stable-2.11"
+          branch: "master"
+          tag: "v3.1.0-rc2"
+          commit: "47c1cc30e440860aa695358f7c2dd0b9d7b53d16"
+
+    qemu-experimental:
+      description: "QEMU with virtiofs 3.0"
+      url: "https://gitlab.com/virtio-fs/qemu.git"
+      tag: "virtio-fs-v0.3"
+
+  image:
+    description: |
+      Root filesystem disk image used to boot the guest virtual
+      machine.
+    url: "https://github.com/kata-containers/osbuilder"
+    architecture:
+      aarch64:
+        name: "ubuntu"
+        version: "latest"
+      ppc64le:
+        name: "centos"
+        version: "latest"
+      s390x:
+        name: "ubuntu"
+        version: "latest"
+      x86_64:
+        name: &default-image-name "clearlinux"
+        version: "latest"
+    meta:
+      image-type: *default-image-name
+
+  initrd:
+    description: |
+      Root filesystem initrd used to boot the guest virtual
+      machine.
+    url: "https://github.com/kata-containers/osbuilder"
+    architecture:
+      aarch64:
+        name: &default-initrd-name "alpine"
+        version: &default-initrd-version "3.7"
+      ppc64le:
+        name: *default-initrd-name
+        version: *default-initrd-version
+      s390x:
+        name: *default-initrd-name
+        version: *default-initrd-version
+      x86_64:
+        name: *default-initrd-name
+        version: *default-initrd-version
+
+  kernel:
+    description: "Linux kernel optimised for virtual machines"
+    url: "https://cdn.kernel.org/pub/linux/kernel/v4.x/"
+    uscan-url: >-
+      https://mirrors.edge.kernel.org/pub/linux/kernel/v5.x/linux-(5\.4\..+)\.tar\.gz
+    version: "v5.4.32"
+
+  kernel-experimental:
+    description: "Linux kernel with virtio-fs-dev branch"
+    url: "https://gitlab.com/virtio-fs/linux.git"
+    tag: "virtio-fs-dev"
+
+components:
+  description: "Core system functionality"
+
+  agent:
+    description: |
+      Container management service running in the guest virtual machines
+      root context.
+    url: "https://github.com/kata-containers/agent"
+    commit: "6f6e9ecd8aded0783c31968b304a9d6589114363"
+
+externals:
+  description: "Third-party projects used by the system"
+
+  cni-plugins:
+    description: "CNI network plugins"
+    url: "https://github.com/containernetworking/plugins"
+    commit: "485be65581341430f9106a194a98f0f2412245fb"
+
+  conmon:
+    description: "An OCI container runtime monitor"
+    url: "https://github.com/containers/conmon"
+    version: "v2.0.5"
+
+  crio:
+    description: |
+      OCI-based Kubernetes Container Runtime Interface implementation
+    url: "https://github.com/cri-o/cri-o"
+    version: "0eec454168e381e460b3d6de07bf50bfd9b0d082"
+    meta:
+      openshift: "6273bea4c9ed788aeb3d051ebf2d030060c05b6c"
+      crictl: 1.0.0-beta.2
+
+  cri-containerd:
+    description: |
+      Containerd Plugin for Kubernetes Container Runtime Interface.
+    url: "github.com/containerd/cri"
+    tarball_url: "https://storage.googleapis.com/cri-containerd-release"
+    # Next commit from 1.3 branch contains fix to be able to run
+    # tests using go 1.13
+    version: "3a4acfbc99aa976849f51a8edd4af20ead51d8d7"
+
+  critools:
+    description: "CLI tool for Container Runtime Interface (CRI)"
+    url: "https://github.com/kubernetes-sigs/cri-tools"
+    version: "1.17.0"
+
+  docker:
+    description: "Moby project container manager"
+    notes: "Docker Swarm requires an older version of Docker."
+    url: "https://github.com/moby/moby"
+    version: "v18.06-ce"
+    meta:
+      swarm-version: "1.12.1"
+
+  gometalinter:
+    description: "Utility to run various golang linters"
+    url: "https://github.com/alecthomas/gometalinter"
+    uscan-url: >-
+      https://github.com/alecthomas/gometalinter/tags
+      .*/v?([\d\.]+)\.tar\.gz
+    version: "v2.0.5"
+
+  golangci-lint:
+    description: "Utility to run various golang linters"
+    url: "https://install.goreleaser.com/github.com/golangci/golangci-lint.sh"
+    version: "v1.15.0"
+
+  kubernetes:
+    description: "Kubernetes project container manager"
+    url: "https://github.com/kubernetes/kubernetes"
+    # regexp formed to match 'd.tar.gz', deliberately to not match any alpha or
+    # beta type releases
+    uscan-url: >-
+      https://github.com/kubernetes/kubernetes/tags
+      .*/v?([\d\.]+)\.tar\.gz
+    version: "1.17.3-00"
+
+  openshift:
+    description: |
+      Distribution of Kubernetes optimized for continuous application
+      development and multi-tenant deployment.
+    url: "https://github.com/openshift/origin"
+    uscan-url: >-
+      https://github.com/openshift/origin/tags
+      .*/v?([\d\.]+)\.tar\.gz
+    version: "v3.10.0"
+    commit: "dd10d17"
+
+  runc:
+    description: "OCI CLI reference runtime implementation"
+    url: "https://github.com/opencontainers/runc"
+    # Oddly, here we do want rc versions, as there appears to be little else
+    # really for runc.
+    uscan-url: >-
+      https://github.com/opencontainers/runc/tags
+      .*/v?(\d\S+)\.tar\.gz
+    version: "v1.0.0-rc5"
+
+  cmake:
+    description: |
+      Build system, to build grpc-rs.
+    url: "https://github.com/Kitware/CMake"
+    uscan-url: >-
+      https://github.com/Kitware/CMake/releases/download/
+      v?([\d\.]+)/cmake-([\d\.]+)\.tar\.gz
+    version: "3.15.3"
+    meta:
+      description: |
+        'newest-version' is the latest version known to work.
+      newest-version: "3.15.3"
+
+  musl:
+    description: |
+      The musl library is used to build the rust agent.
+    url: "https://www.musl-libc.org/"
+    uscan-url: >-
+      https://www.musl-libc.org/releases/
+      musl-([\d\.]+)\.tar\.gz
+    version: "1.1.23"
+    meta:
+      description: |
+        'newest-version' is the latest version known to work.
+      newest-version: "1.1.23"
+
+languages:
+  description: |
+    Details of programming languages required to build system
+    components.
+
+  golang:
+    description: "Google's 'go' language"
+    notes: "'version' is the default minimum version used by this project."
+    issue: "https://github.com/golang/go/issues/20676"
+    uscan-url: >-
+      https://github.com/golang/go/tags .*/go?([\d\.]+)\.tar\.gz
+    version: "1.11.10"
+    meta:
+      description: |
+        'newest-version' is the latest version known to work when
+        building Kata
+      newest-version: "1.13.9"
+
+  rust:
+    description: "Rust language"
+    notes: "'version' is the default minimum version used by this project."
+    version: "1.38.0"
+    meta:
+      description: |
+        'newest-version' is the latest version known to work when
+        building Kata
+      newest-version: "stable"
+
+specs:
+  description: "Details of important specifications"
+
+  oci:
+    description: "Open Containers Initiative runtime specification"
+    url: "https://github.com/opencontainers/runtime-spec/releases"
+    uscan-url: >-
+      https://github.com/opencontainers/runtime-spec/tags
+      .*/v?(\d\S+)\.tar\.gz
+    version: "v1.0.0-rc5"
