@@ -76,6 +76,33 @@ There are several kinds of Kata configurations and they are listed below.
 | `io.katacontainers.config.hypervisor.virtio_fs_daemon` | string | virtio-fs `vhost-user` daemon path |
 | `io.katacontainers.config.hypervisor.virtio_fs_extra_args` | string | extra options passed to `virtiofs` daemon |
 
+# CRI Configuration
+
+In case of CRI-O, all annotations specified in the pod spec are passed down to Kata.
+For containerd, annotations specified in the pod spec are passed down to Kata
+starting with version `1.3.0`. Additionally, extra configuration is needed for containerd,
+by providing a `pod_annotations` field in the containerd config file.  The `pod_annotations`
+field is a list of annotations that can be passed down to Kata as OCI annotations. 
+It supports golang match patterns. Since annotations supported by Kata follow the pattern
+`io.katacontainers.*`, the following configuration would work for passing annotations to 
+Kata from containerd:
+
+```
+$ cat /etc/containerd/config
+....
+
+[plugins.cri.containerd.runtimes.kata]
+           runtime_type = "io.containerd.runc.v1"
+           pod_annotations = ["io.katacontainers.*"]
+           [plugins.cri.containerd.runtimes.kata.options]
+             BinaryName = "/usr/bin/kata-runtime"
+....
+
+```
+
+Additional documentation on the above configuration can be found in the 
+[containerd docs](https://github.com/containerd/cri/blob/8d5a8355d07783ba2f8f451209f6bdcc7c412346/docs/config.md).
+
 # Example - Using annotations
 
 As mentioned above, not all containers need the same modules, therefore using
