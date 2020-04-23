@@ -3,6 +3,7 @@
 package vsock
 
 import (
+	"os"
 	"syscall"
 	"time"
 
@@ -52,6 +53,19 @@ func (lfd *sysListenFD) accept4(flags int) (int, unix.Sockaddr, error) {
 
 func (lfd *sysListenFD) setDeadline(t time.Time) error { return lfd.f.SetDeadline(t) }
 
+func (lfd *sysListenFD) setNonblocking(name string) error {
+	// From now on, we must perform non-blocking I/O, so that our
+	// net.Listener.Accept method can be interrupted by closing the socket.
+	if err := unix.SetNonblock(lfd.fd, true); err != nil {
+		return err
+	}
+
+	// Transition from blocking mode to non-blocking mode.
+	lfd.f = os.NewFile(uintptr(lfd.fd), name)
+
+	return nil
+}
+
 func (cfd *sysConnFD) shutdown(how int) error {
 	rc, err := cfd.f.SyscallConn()
 	if err != nil {
@@ -69,3 +83,30 @@ func (cfd *sysConnFD) shutdown(how int) error {
 }
 
 func (cfd *sysConnFD) syscallConn() (syscall.RawConn, error) { return cfd.f.SyscallConn() }
+
+func (cfd *sysConnFD) setNonblocking(name string) error {
+	// From now on, we must perform non-blocking I/O, so that our deadline
+	// methods work, and the connection can be interrupted by net.Conn.Close.
+	if err := unix.SetNonblock(cfd.fd, true); err != nil {
+		return err
+	}
+
+	// Transition from blocking mode to non-blocking mode.
+	cfd.f = os.NewFile(uintptr(cfd.fd), name)
+
+	return nil
+}
+
+func (cfd *sysConnFD) setDeadline(t time.Time, typ deadlineType) error {
+	switch typ {
+	case deadline:
+		return cfd.f.SetDeadline(t)
+	case readDeadline:
+		return cfd.f.SetReadDeadline(t)
+	case writeDeadline:
+		return cfd.f.SetWriteDeadline(t)
+	}
+
+	panicf("vsock: sysConnFD.SetDeadline method invoked with invalid deadline type constant: %d", typ)
+	return nil
+}

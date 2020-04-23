@@ -40,10 +40,15 @@
 //     - CloseRead and CloseWrite are not supported and will always return an error
 //     - SyscallConn is not supported and will always return an error
 //
-// Go 1.10 and below are not supported. The runtime network poller integration
-// required by this package is not available in Go versions prior to Go 1.11.
-// Unsupported versions of Go will produce a compilation error when trying to
-// build this package.
+// Go 1.10 (not recommended):
+//   - *Listener:
+//     - Accept blocks until a connection is received
+//     - Close cannot unblock Accept
+//     - SetDeadline is not supported and will always return an error
+//   - *Conn:
+//     - SetDeadline is not supported and will always return an error
+//     - CloseRead and CloseWrite are not supported and will always return an error
+//     - SyscallConn is not supported and will always return an error
 //
 // Stability
 //
