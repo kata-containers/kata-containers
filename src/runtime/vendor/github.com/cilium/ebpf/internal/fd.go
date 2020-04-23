@@ -6,10 +6,10 @@ import (
 
 	"github.com/cilium/ebpf/internal/unix"
 
-	"github.com/pkg/errors"
+	"golang.org/x/xerrors"
 )
 
-var ErrClosedFd = errors.New("use of closed file descriptor")
+var ErrClosedFd = xerrors.New("use of closed file descriptor")
 
 type FD struct {
 	raw int64
@@ -56,7 +56,7 @@ func (fd *FD) Dup() (*FD, error) {
 
 	dup, err := unix.FcntlInt(uintptr(fd.raw), unix.F_DUPFD_CLOEXEC, 0)
 	if err != nil {
-		return nil, errors.Wrap(err, "can't dup fd")
+		return nil, xerrors.Errorf("can't dup fd: %v", err)
 	}
 
 	return NewFD(uint32(dup)), nil

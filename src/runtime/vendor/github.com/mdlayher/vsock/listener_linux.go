@@ -26,7 +26,14 @@ func (l *listener) SetDeadline(t time.Time) error { return l.fd.SetDeadline(t) }
 // Accept accepts a single connection from the listener, and sets up
 // a net.Conn backed by conn.
 func (l *listener) Accept() (net.Conn, error) {
-	cfd, sa, err := l.fd.Accept4(0)
+	// Mimic what internal/poll does and close on exec, but leave it up to
+	// newConn to set non-blocking mode.
+	// See: https://golang.org/src/internal/poll/sock_cloexec.go.
+	//
+	// TODO(mdlayher): acquire syscall.ForkLock.RLock here once the Go 1.11
+	// code can be removed and we're fully using the runtime network poller in
+	// non-blocking mode.
+	cfd, sa, err := l.fd.Accept4(unix.SOCK_CLOEXEC)
 	if err != nil {
 		return nil, err
 	}

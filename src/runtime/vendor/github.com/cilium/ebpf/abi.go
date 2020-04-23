@@ -10,7 +10,7 @@ import (
 
 	"github.com/cilium/ebpf/internal"
 
-	"github.com/pkg/errors"
+	"golang.org/x/xerrors"
 )
 
 // MapABI are the attributes of a Map which are available across all supported kernels.
@@ -35,7 +35,7 @@ func newMapABIFromSpec(spec *MapSpec) *MapABI {
 func newMapABIFromFd(fd *internal.FD) (string, *MapABI, error) {
 	info, err := bpfGetMapInfoByFD(fd)
 	if err != nil {
-		if errors.Cause(err) == syscall.EINVAL {
+		if xerrors.Is(err, syscall.EINVAL) {
 			abi, err := newMapABIFromProc(fd)
 			return "", abi, err
 		}
@@ -98,7 +98,7 @@ func newProgramABIFromSpec(spec *ProgramSpec) *ProgramABI {
 func newProgramABIFromFd(fd *internal.FD) (string, *ProgramABI, error) {
 	info, err := bpfGetProgInfoByFD(fd)
 	if err != nil {
-		if errors.Cause(err) == syscall.EINVAL {
+		if xerrors.Is(err, syscall.EINVAL) {
 			return newProgramABIFromProc(fd)
 		}
 
@@ -127,7 +127,7 @@ func newProgramABIFromProc(fd *internal.FD) (string, *ProgramABI, error) {
 		"prog_type": &abi.Type,
 		"prog_tag":  &name,
 	})
-	if errors.Cause(err) == errMissingFields {
+	if xerrors.Is(err, errMissingFields) {
 		return "", nil, &internal.UnsupportedFeatureError{
 			Name:           "reading ABI from /proc/self/fdinfo",
 			MinimumVersion: internal.Version{4, 11, 0},
@@ -152,10 +152,13 @@ func scanFdInfo(fd *internal.FD, fields map[string]interface{}) error {
 	}
 	defer fh.Close()
 
-	return errors.Wrap(scanFdInfoReader(fh, fields), fh.Name())
+	if err := scanFdInfoReader(fh, fields); err != nil {
+		return xerrors.Errorf("%s: %w", fh.Name(), err)
+	}
+	return nil
 }
 
-var errMissingFields = errors.New("missing fields")
+var errMissingFields = xerrors.New("missing fields")
 
 func scanFdInfoReader(r io.Reader, fields map[string]interface{}) error {
 	var (
@@ -176,7 +179,7 @@ func scanFdInfoReader(r io.Reader, fields map[string]interface{}) error {
 		}
 
 		if n, err := fmt.Fscanln(bytes.NewReader(parts[1]), field); err != nil || n != 1 {
-			return errors.Wrapf(err, "can't parse field %s", name)
+			return xerrors.Errorf("can't parse field %s: %v", name, err)
 		}
 
 		scanned++
