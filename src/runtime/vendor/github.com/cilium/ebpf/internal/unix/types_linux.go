@@ -14,6 +14,11 @@ const (
 	ENOSPC                   = linux.ENOSPC
 	EINVAL                   = linux.EINVAL
 	EPOLLIN                  = linux.EPOLLIN
+	EINTR                    = linux.EINTR
+	ESRCH                    = linux.ESRCH
+	ENODEV                   = linux.ENODEV
+	BPF_F_RDONLY_PROG        = linux.BPF_F_RDONLY_PROG
+	BPF_F_WRONLY_PROG        = linux.BPF_F_WRONLY_PROG
 	BPF_OBJ_NAME_LEN         = linux.BPF_OBJ_NAME_LEN
 	BPF_TAG_SIZE             = linux.BPF_TAG_SIZE
 	SYS_BPF                  = linux.SYS_BPF
@@ -124,4 +129,19 @@ type Utsname = linux.Utsname
 // Uname is a wrapper
 func Uname(buf *Utsname) (err error) {
 	return linux.Uname(buf)
+}
+
+// Getpid is a wrapper
+func Getpid() int {
+	return linux.Getpid()
+}
+
+// Gettid is a wrapper
+func Gettid() int {
+	return linux.Gettid()
+}
+
+// Tgkill is a wrapper
+func Tgkill(tgid int, tid int, sig syscall.Signal) (err error) {
+	return linux.Tgkill(tgid, tid, sig)
 }

@@ -1,0 +1,48 @@
+//
+// Copyright 2018 Intel Corporation.
+//
+// SPDX-License-Identifier: Apache-2.0
+//
+
+syntax = "proto3";
+
+package types;
+
+enum IPFamily {
+	v4 = 0;
+	v6 = 1;
+}
+
+message IPAddress {
+	IPFamily family = 1;
+	string address = 2;
+	string mask = 3;
+}
+
+message Interface {
+	string device = 1;
+	string name = 2;
+	repeated IPAddress IPAddresses = 3;
+	uint64 mtu = 4;
+	string hwAddr = 5;
+
+	// pciAddr is the PCI address in the format  "bridgeAddr/deviceAddr".
+	// Here, bridgeAddr is the address at which the bridge is attached on the root bus,
+	// while deviceAddr is the address at which the network device is attached on the bridge.
+	string pciAddr = 6;
+
+	// Type defines the type of interface described by this structure.
+	// The expected values are the one that are defined by the netlink
+	// library, regarding each type of link. Here is a non exhaustive
+	// list: "veth", "macvtap", "vlan", "macvlan", "tap", ...
+	string type = 7;
+	uint32 raw_flags = 8;
+}
+
+message Route {
+	string dest = 1;
+	string gateway = 2;
+	string device = 3;
+	string source = 4;
+	uint32 scope = 5;
+}
