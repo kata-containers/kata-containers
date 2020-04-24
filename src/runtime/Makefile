@@ -668,7 +668,7 @@ check: check-go-static
 test: go-test
 
 go-test: $(GENERATED_FILES)
-	$(QUIET_TEST).ci/go-test.sh
+	go test -v -mod=vendor ./...
 
 check-go-static:
 	$(QUIET_CHECK).ci/static-checks.sh
@@ -676,7 +676,8 @@ check-go-static:
 	$(QUIET_CHECK).ci/go-no-os-exit.sh ./virtcontainers
 
 coverage:
-	$(QUIET_TEST).ci/go-test.sh html-coverage
+	go test -v -mod=vendor -covermode=atomic -coverprofile=coverage.txt ./...
+	go tool cover -html=coverage.txt -o coverage.html
 
 install: default install-runtime install-containerd-shim-v2 install-netmon
 
