@@ -20,6 +20,7 @@ before_install:
     - "ci/setup.sh"
     - "ci/install_go.sh"
     - "ci/install_rust.sh"
+    - "ci/install_vc.sh"
     - "ci/static-checks.sh"
 
 # need to install rust from scratch?
@@ -27,7 +28,9 @@ before_install:
 # which is already installed?
 
 install:
+    - cd ${TRAVIS_BUILD_DIR}/src/runtime && make
     - cd ${TRAVIS_BUILD_DIR}/src/agent && make
 
 script:
+    - cd ${TRAVIS_BUILD_DIR}/src/runtime && make test
     - cd ${TRAVIS_BUILD_DIR}/src/agent && make check
