@@ -66,7 +66,7 @@ the first place to go if you want to use or contribute to the project.
 
 ##### Agent
 
-The [`kata-agent`](https://github.com/kata-containers/agent) runs inside the
+The [`kata-agent`](src/agent/README.md) runs inside the
 virtual machine and sets up the container environment.
 
 ##### KSM throttler
@@ -83,7 +83,7 @@ virtual machine.
 
 ##### Runtime
 
-The [`kata-runtime`](https://github.com/kata-containers/runtime) is usually
+The [`kata-runtime`](src/runtime/README.md) is usually
 invoked by a container manager and provides high-level verbs to manage
 containers.
 
