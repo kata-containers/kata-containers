@@ -27,7 +27,9 @@ before_install:
 # which is already installed?
 
 install:
+    - cd ${TRAVIS_BUILD_DIR}/src/runtime && make
     - cd ${TRAVIS_BUILD_DIR}/src/agent && make
 
 script:
+    - cd ${TRAVIS_BUILD_DIR}/src/runtime && make test
     - cd ${TRAVIS_BUILD_DIR}/src/agent && make check
