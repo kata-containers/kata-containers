@@ -1,6 +1,8 @@
 *.o
 *.patch
 *.swp
+coverage.txt
+coverage.html
 .git-commit
 .git-commit.tmp
 /cli/config/configuration-acrn.toml
