@@ -10,7 +10,6 @@ import (
 	"context"
 	"fmt"
 	"io/ioutil"
-	"net"
 	"os"
 	"path"
 	"path/filepath"
@@ -45,11 +44,6 @@ var (
 	testPCIAddr            = "04/02"
 )
 
-func proxyHandlerDiscard(c net.Conn) {
-	buf := make([]byte, 1024)
-	c.Read(buf)
-}
-
 func testGenerateKataProxySockDir() (string, error) {
 	dir, err := ioutil.TempDir("", "kata-proxy-test")
 	if err != nil {
@@ -61,8 +55,9 @@ func testGenerateKataProxySockDir() (string, error) {
 
 func TestKataAgentConnect(t *testing.T) {
 	assert := assert.New(t)
-	proxy := mock.ProxyUnixMock{
-		ClientHandler: proxyHandlerDiscard,
+	proxy := mock.ProxyGRPCMock{
+		GRPCImplementer: &gRPCProxy{},
+		GRPCRegister:    gRPCRegister,
 	}
 
 	sockDir, err := testGenerateKataProxySockDir()
@@ -88,8 +83,9 @@ func TestKataAgentConnect(t *testing.T) {
 
 func TestKataAgentDisconnect(t *testing.T) {
 	assert := assert.New(t)
-	proxy := mock.ProxyUnixMock{
-		ClientHandler: proxyHandlerDiscard,
+	proxy := mock.ProxyGRPCMock{
+		GRPCImplementer: &gRPCProxy{},
+		GRPCRegister:    gRPCRegister,
 	}
 
 	sockDir, err := testGenerateKataProxySockDir()
