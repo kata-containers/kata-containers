@@ -274,6 +274,7 @@ func TestAppendDeviceSerial(t *testing.T) {
 		ID:            "serial0",
 		DisableModern: true,
 		ROMFile:       romfile,
+		MaxPorts:      2,
 	}
 	if sdev.Transport.isVirtioCCW(nil) {
 		sdev.DevNo = DevNo

@@ -880,6 +880,9 @@ type SerialDevice struct {
 
 	// Transport is the virtio transport for this device.
 	Transport VirtioTransport
+
+	// MaxPorts is the maximum number of ports for this device.
+	MaxPorts uint
 }
 
 // Valid returns true if the SerialDevice structure is valid and complete.
@@ -903,6 +906,9 @@ func (dev SerialDevice) QemuParams(config *Config) []string {
 	deviceParams = append(deviceParams, fmt.Sprintf(",id=%s", dev.ID))
 	if dev.Transport.isVirtioPCI(config) {
 		deviceParams = append(deviceParams, fmt.Sprintf(",romfile=%s", dev.ROMFile))
+		if dev.Driver == VirtioSerial && dev.MaxPorts != 0 {
+			deviceParams = append(deviceParams, fmt.Sprintf(",max_ports=%d", dev.MaxPorts))
+		}
 	}
 
 	if dev.Transport.isVirtioCCW(config) {
