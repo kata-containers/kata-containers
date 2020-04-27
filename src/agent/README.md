@@ -1,6 +1,6 @@
 # Kata Agent in Rust
 
-This is a rust version of the [`kata-agent`](https://github.com/kata-containers/kata-agent).
+This is a rust version of the [`kata-agent`](https://github.com/kata-containers/kata-containers/src/agent).
 
 In Denver PTG, [we discussed about re-writing agent in rust](https://etherpad.openstack.org/p/katacontainers-2019-ptg-denver-agenda):
 
@@ -43,10 +43,9 @@ The `rust-agent` depends on [`grpc-rs`](https://github.com/pingcap/grpc-rs) by P
 - https://github.com/alipay/grpc-rs/tree/rust_agent
 
 ### Build from Source
-The rust-agent need to be built with rust nightly, and static linked with musl.
+The rust-agent need to be built with rust newer than 1.37, and static linked with musl.
 ```bash
 rustup target add x86_64-unknown-linux-musl
-git submodule update --init --recursive  
 sudo ln -s /usr/bin/g++ /bin/musl-g++  
 cargo build --target x86_64-unknown-linux-musl --release
 ```
