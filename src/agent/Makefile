@@ -23,7 +23,7 @@ COMMIT_MSG = $(if $(COMMIT),$(COMMIT),unknown)
 # Exported to allow cargo to see it
 export VERSION_COMMIT := $(if $(COMMIT),$(VERSION)-$(COMMIT),$(VERSION))
 
-BUILD_TYPE = debug
+BUILD_TYPE = release
 
 ARCH = $(shell uname -m)
 LIBC = musl
@@ -72,7 +72,7 @@ default: $(TARGET) show-header
 $(TARGET): $(TARGET_PATH)
 
 $(TARGET_PATH): $(SOURCES) | show-summary
-	@cargo build --target $(TRIPLE)
+	@cargo build --target $(TRIPLE) --$(BUILD_TYPE)
 
 show-header:
 	@printf "%s - version %s (commit %s)\n\n" "$(TARGET)" "$(VERSION)" "$(COMMIT_MSG)"
