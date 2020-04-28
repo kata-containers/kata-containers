@@ -1,0 +1,857 @@
+openapi: 3.0.1
+info:
+  description: Local HTTP based API for managing and inspecting a cloud-hypervisor
+    virtual machine.
+  license:
+    name: Apache 2.0
+    url: http://www.apache.org/licenses/LICENSE-2.0.html
+  title: Cloud Hypervisor API
+  version: 0.3.0
+servers:
+- url: http://localhost/api/v1
+paths:
+  /vmm.ping:
+    get:
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VmmPingResponse'
+          description: The VMM information
+      summary: Ping the VMM to check for API server availability
+  /vmm.shutdown:
+    put:
+      operationId: shutdownVMM
+      responses:
+        "204":
+          description: The VMM successfully shutdown.
+      summary: Shuts the cloud-hypervisor VMM.
+  /vm.info:
+    get:
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VmInfo'
+          description: The VM information
+      summary: Returns general information about the cloud-hypervisor Virtual Machine
+        (VM) instance.
+  /vm.create:
+    put:
+      operationId: createVM
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VmConfig'
+        description: The VM configuration
+        required: true
+      responses:
+        "204":
+          description: The VM instance was successfully created.
+      summary: Create the cloud-hypervisor Virtual Machine (VM) instance. The instance
+        is not booted, only created.
+  /vm.delete:
+    put:
+      operationId: deleteVM
+      responses:
+        "204":
+          description: The VM instance was successfully deleted.
+      summary: Delete the cloud-hypervisor Virtual Machine (VM) instance.
+  /vm.boot:
+    put:
+      operationId: bootVM
+      responses:
+        "204":
+          description: The VM instance successfully booted.
+        "404":
+          description: The VM instance could not boot because it is not created yet
+      summary: Boot the previously created VM instance.
+  /vm.pause:
+    put:
+      operationId: pauseVM
+      responses:
+        "204":
+          description: The VM instance successfully paused.
+        "404":
+          description: The VM instance could not pause because it is not created yet
+        "405":
+          description: The VM instance could not pause because it is not booted.
+      summary: Pause a previously booted VM instance.
+  /vm.resume:
+    put:
+      operationId: resumeVM
+      responses:
+        "204":
+          description: The VM instance successfully paused.
+        "404":
+          description: The VM instance could not resume because it is not booted yet
+        "405":
+          description: The VM instance could not resume because it is not paused.
+      summary: Resume a previously paused VM instance.
+  /vm.shutdown:
+    put:
+      operationId: shutdownVM
+      responses:
+        "204":
+          description: The VM instance successfully shut down.
+        "404":
+          description: The VM instance could not shut down because is not created.
+        "405":
+          description: The VM instance could not shut down because it is not started.
+      summary: Shut the VM instance down.
+  /vm.reboot:
+    put:
+      operationId: rebootVM
+      responses:
+        "204":
+          description: The VM instance successfully rebooted.
+        "404":
+          description: The VM instance could not reboot because it is not created.
+        "405":
+          description: The VM instance could not reboot because it is not booted.
+      summary: Reboot the VM instance.
+  /vm.resize:
+    put:
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VmResize'
+        description: The target size for the VM
+        required: true
+      responses:
+        "204":
+          description: The VM instance was successfully resized.
+        "404":
+          description: The VM instance could not be resized because it is not created.
+      summary: Resize the VM
+  /vm.add-device:
+    put:
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VmAddDevice'
+        description: The path of the new device
+        required: true
+      responses:
+        "204":
+          description: The new device was successfully added to the VM instance.
+        "404":
+          description: The new device could not be added to the VM instance.
+      summary: Add a new device to the VM
+  /vm.remove-device:
+    put:
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VmRemoveDevice'
+        description: The identifier of the device
+        required: true
+      responses:
+        "204":
+          description: The device was successfully removed from the VM instance.
+        "404":
+          description: The device could not be removed from the VM instance.
+      summary: Remove a device from the VM
+  /vm.add-disk:
+    put:
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DiskConfig'
+        description: The details of the new disk
+        required: true
+      responses:
+        "204":
+          description: The new disk was successfully added to the VM instance.
+        "500":
+          description: The new disk could not be added to the VM instance.
+      summary: Add a new disk to the VM
+  /vm.add-pmem:
+    put:
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PmemConfig'
+        description: The details of the new pmem device
+        required: true
+      responses:
+        "204":
+          description: The new device was successfully added to the VM instance.
+        "500":
+          description: The new device could not be added to the VM instance.
+      summary: Add a new pmem device to the VM
+  /vm.add-net:
+    put:
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NetConfig'
+        description: The details of the new network device
+        required: true
+      responses:
+        "204":
+          description: The new device was successfully added to the VM instance.
+        "500":
+          description: The new device could not be added to the VM instance.
+      summary: Add a new network device to the VM
+  /vm.snapshot:
+    put:
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VmSnapshotConfig'
+        description: The snapshot configuration
+        required: true
+      responses:
+        "204":
+          description: The VM instance was successfully snapshotted.
+        "404":
+          description: The VM instance could not be snapshotted because it is not
+            created.
+        "405":
+          description: The VM instance could not be snapshotted because it is not
+            booted.
+      summary: Returns a VM snapshot.
+  /vm.restore:
+    put:
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RestoreConfig'
+        description: The restore configuration
+        required: true
+      responses:
+        "204":
+          description: The VM instance was successfully restored.
+        "404":
+          description: The VM instance could not be restored because it is already
+            created.
+      summary: Restore a VM from a snapshot.
+components:
+  schemas:
+    VmmPingResponse:
+      description: Virtual Machine Monitor information
+      example:
+        version: version
+      properties:
+        version:
+          type: string
+      required:
+      - version
+      type: object
+    VmInfo:
+      description: Virtual Machine information
+      example:
+        state: Created
+        config:
+          console:
+            mode: "false"
+            file: file
+            iommu: false
+          memory:
+            mergeable: false
+            file: file
+            size: 1
+            hotplug_size: 5
+            hotplug_method: acpi
+          disks:
+          - path: path
+            num_queues: 5
+            readonly: false
+            iommu: false
+            queue_size: 2
+            vhost_socket: vhost_socket
+            vhost_user: false
+            direct: false
+            wce: true
+            poll_queue: true
+          - path: path
+            num_queues: 5
+            readonly: false
+            iommu: false
+            queue_size: 2
+            vhost_socket: vhost_socket
+            vhost_user: false
+            direct: false
+            wce: true
+            poll_queue: true
+          cpus:
+            boot_vcpus: 1
+            max_vcpus: 1
+          devices:
+          - path: path
+            iommu: false
+            id: id
+          - path: path
+            iommu: false
+            id: id
+          kernel:
+            path: path
+          rng:
+            iommu: false
+            src: /dev/urandom
+          fs:
+          - sock: sock
+            num_queues: 3
+            queue_size: 2
+            cache_size: 4
+            dax: true
+            tag: tag
+          - sock: sock
+            num_queues: 3
+            queue_size: 2
+            cache_size: 4
+            dax: true
+            tag: tag
+          vsock:
+          - sock: sock
+            iommu: false
+            cid: 3
+          - sock: sock
+            iommu: false
+            cid: 3
+          pmem:
+          - mergeable: false
+            file: file
+            size: 7
+            iommu: false
+            discard_writes: false
+          - mergeable: false
+            file: file
+            size: 7
+            iommu: false
+            discard_writes: false
+          cmdline:
+            args: args
+          iommu: false
+          serial:
+            mode: "false"
+            file: file
+            iommu: false
+          initramfs:
+            path: path
+          net:
+          - tap: tap
+            num_queues: 7
+            iommu: false
+            queue_size: 9
+            vhost_socket: vhost_socket
+            vhost_user: false
+            ip: 192.168.249.1
+            mac: mac
+            mask: 255.255.255.0
+          - tap: tap
+            num_queues: 7
+            iommu: false
+            queue_size: 9
+            vhost_socket: vhost_socket
+            vhost_user: false
+            ip: 192.168.249.1
+            mac: mac
+            mask: 255.255.255.0
+      properties:
+        config:
+          $ref: '#/components/schemas/VmConfig'
+        state:
+          enum:
+          - Created
+          - Running
+          - Shutdown
+          - Paused
+          type: string
+      required:
+      - config
+      - state
+      type: object
+    VmConfig:
+      description: Virtual machine configuration
+      example:
+        console:
+          mode: "false"
+          file: file
+          iommu: false
+        memory:
+          mergeable: false
+          file: file
+          size: 1
+          hotplug_size: 5
+          hotplug_method: acpi
+        disks:
+        - path: path
+          num_queues: 5
+          readonly: false
+          iommu: false
+          queue_size: 2
+          vhost_socket: vhost_socket
+          vhost_user: false
+          direct: false
+          wce: true
+          poll_queue: true
+        - path: path
+          num_queues: 5
+          readonly: false
+          iommu: false
+          queue_size: 2
+          vhost_socket: vhost_socket
+          vhost_user: false
+          direct: false
+          wce: true
+          poll_queue: true
+        cpus:
+          boot_vcpus: 1
+          max_vcpus: 1
+        devices:
+        - path: path
+          iommu: false
+          id: id
+        - path: path
+          iommu: false
+          id: id
+        kernel:
+          path: path
+        rng:
+          iommu: false
+          src: /dev/urandom
+        fs:
+        - sock: sock
+          num_queues: 3
+          queue_size: 2
+          cache_size: 4
+          dax: true
+          tag: tag
+        - sock: sock
+          num_queues: 3
+          queue_size: 2
+          cache_size: 4
+          dax: true
+          tag: tag
+        vsock:
+        - sock: sock
+          iommu: false
+          cid: 3
+        - sock: sock
+          iommu: false
+          cid: 3
+        pmem:
+        - mergeable: false
+          file: file
+          size: 7
+          iommu: false
+          discard_writes: false
+        - mergeable: false
+          file: file
+          size: 7
+          iommu: false
+          discard_writes: false
+        cmdline:
+          args: args
+        iommu: false
+        serial:
+          mode: "false"
+          file: file
+          iommu: false
+        initramfs:
+          path: path
+        net:
+        - tap: tap
+          num_queues: 7
+          iommu: false
+          queue_size: 9
+          vhost_socket: vhost_socket
+          vhost_user: false
+          ip: 192.168.249.1
+          mac: mac
+          mask: 255.255.255.0
+        - tap: tap
+          num_queues: 7
+          iommu: false
+          queue_size: 9
+          vhost_socket: vhost_socket
+          vhost_user: false
+          ip: 192.168.249.1
+          mac: mac
+          mask: 255.255.255.0
+      properties:
+        cpus:
+          $ref: '#/components/schemas/CpusConfig'
+        memory:
+          $ref: '#/components/schemas/MemoryConfig'
+        kernel:
+          $ref: '#/components/schemas/KernelConfig'
+        initramfs:
+          $ref: '#/components/schemas/InitramfsConfig'
+        cmdline:
+          $ref: '#/components/schemas/CmdLineConfig'
+        disks:
+          items:
+            $ref: '#/components/schemas/DiskConfig'
+          type: array
+        net:
+          items:
+            $ref: '#/components/schemas/NetConfig'
+          type: array
+        rng:
+          $ref: '#/components/schemas/RngConfig'
+        fs:
+          items:
+            $ref: '#/components/schemas/FsConfig'
+          type: array
+        pmem:
+          items:
+            $ref: '#/components/schemas/PmemConfig'
+          type: array
+        serial:
+          $ref: '#/components/schemas/ConsoleConfig'
+        console:
+          $ref: '#/components/schemas/ConsoleConfig'
+        devices:
+          items:
+            $ref: '#/components/schemas/DeviceConfig'
+          type: array
+        vsock:
+          items:
+            $ref: '#/components/schemas/VsockConfig'
+          type: array
+        iommu:
+          default: false
+          type: boolean
+      required:
+      - cmdline
+      - kernel
+      type: object
+    CpusConfig:
+      example:
+        boot_vcpus: 1
+        max_vcpus: 1
+      properties:
+        boot_vcpus:
+          default: 1
+          minimum: 1
+          type: integer
+        max_vcpus:
+          default: 1
+          minimum: 1
+          type: integer
+      required:
+      - boot_vcpus
+      - max_vcpus
+      type: object
+    MemoryConfig:
+      example:
+        mergeable: false
+        file: file
+        size: 1
+        hotplug_size: 5
+        hotplug_method: acpi
+      properties:
+        size:
+          format: int64
+          type: integer
+        hotplug_size:
+          format: int64
+          type: integer
+        file:
+          type: string
+        mergeable:
+          default: false
+          type: boolean
+        hotplug_method:
+          default: acpi
+          type: string
+      required:
+      - size
+      type: object
+    KernelConfig:
+      example:
+        path: path
+      properties:
+        path:
+          type: string
+      required:
+      - path
+      type: object
+    InitramfsConfig:
+      example:
+        path: path
+      nullable: true
+      properties:
+        path:
+          type: string
+      required:
+      - path
+      type: object
+    CmdLineConfig:
+      example:
+        args: args
+      properties:
+        args:
+          type: string
+      required:
+      - args
+      type: object
+    DiskConfig:
+      example:
+        path: path
+        num_queues: 5
+        readonly: false
+        iommu: false
+        queue_size: 2
+        vhost_socket: vhost_socket
+        vhost_user: false
+        direct: false
+        wce: true
+        poll_queue: true
+      properties:
+        path:
+          type: string
+        readonly:
+          default: false
+          type: boolean
+        direct:
+          default: false
+          type: boolean
+        iommu:
+          default: false
+          type: boolean
+        num_queues:
+          default: 1
+          type: integer
+        queue_size:
+          default: 128
+          type: integer
+        vhost_user:
+          default: false
+          type: boolean
+        vhost_socket:
+          type: string
+        wce:
+          default: true
+          type: boolean
+        poll_queue:
+          default: true
+          type: boolean
+      required:
+      - path
+      type: object
+    NetConfig:
+      example:
+        tap: tap
+        num_queues: 7
+        iommu: false
+        queue_size: 9
+        vhost_socket: vhost_socket
+        vhost_user: false
+        ip: 192.168.249.1
+        mac: mac
+        mask: 255.255.255.0
+      properties:
+        tap:
+          default: ""
+          type: string
+        ip:
+          default: 192.168.249.1
+          type: string
+        mask:
+          default: 255.255.255.0
+          type: string
+        mac:
+          type: string
+        iommu:
+          default: false
+          type: boolean
+        num_queues:
+          default: 2
+          type: integer
+        queue_size:
+          default: 256
+          type: integer
+        vhost_user:
+          default: false
+          type: boolean
+        vhost_socket:
+          type: string
+      type: object
+    RngConfig:
+      example:
+        iommu: false
+        src: /dev/urandom
+      properties:
+        src:
+          default: /dev/urandom
+          type: string
+        iommu:
+          default: false
+          type: boolean
+      required:
+      - src
+      type: object
+    FsConfig:
+      example:
+        sock: sock
+        num_queues: 3
+        queue_size: 2
+        cache_size: 4
+        dax: true
+        tag: tag
+      properties:
+        tag:
+          type: string
+        sock:
+          type: string
+        num_queues:
+          default: 1
+          type: integer
+        queue_size:
+          default: 1024
+          type: integer
+        dax:
+          default: true
+          type: boolean
+        cache_size:
+          format: int64
+          type: integer
+      required:
+      - sock
+      - tag
+      type: object
+    PmemConfig:
+      example:
+        mergeable: false
+        file: file
+        size: 7
+        iommu: false
+        discard_writes: false
+      properties:
+        file:
+          type: string
+        size:
+          format: int64
+          type: integer
+        iommu:
+          default: false
+          type: boolean
+        mergeable:
+          default: false
+          type: boolean
+        discard_writes:
+          default: false
+          type: boolean
+      required:
+      - file
+      - size
+      type: object
+    ConsoleConfig:
+      example:
+        mode: "false"
+        file: file
+        iommu: false
+      properties:
+        file:
+          type: string
+        mode:
+          enum:
+          - "false"
+          - Tty
+          - File
+          - null
+          type: string
+        iommu:
+          default: false
+          type: boolean
+      required:
+      - mode
+      type: object
+    DeviceConfig:
+      example:
+        path: path
+        iommu: false
+        id: id
+      properties:
+        path:
+          type: string
+        iommu:
+          default: false
+          type: boolean
+        id:
+          type: string
+      required:
+      - path
+      type: object
+    VsockConfig:
+      example:
+        sock: sock
+        iommu: false
+        cid: 3
+      properties:
+        cid:
+          description: Guest Vsock CID
+          format: int64
+          minimum: 3
+          type: integer
+        sock:
+          description: Path to UNIX domain socket, used to proxy vsock connections.
+          type: string
+        iommu:
+          default: false
+          type: boolean
+      required:
+      - cid
+      - sock
+      type: object
+    VmResize:
+      example:
+        desired_vcpus: 1
+        desired_ram: 6
+      properties:
+        desired_vcpus:
+          minimum: 1
+          type: integer
+        desired_ram:
+          description: desired memory ram in bytes
+          format: int64
+          type: integer
+      type: object
+    VmAddDevice:
+      example:
+        path: path
+      properties:
+        path:
+          type: string
+      type: object
+    VmRemoveDevice:
+      example:
+        id: id
+      properties:
+        id:
+          type: string
+      type: object
+    VmSnapshotConfig:
+      example:
+        destination_url: destination_url
+      properties:
+        destination_url:
+          type: string
+      type: object
+    RestoreConfig:
+      example:
+        prefault: true
+        source_url: source_url
+      properties:
+        source_url:
+          type: string
+        prefault:
+          type: boolean
+      required:
+      - source_url
+      type: object
