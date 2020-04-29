@@ -77,7 +77,7 @@ maximize container density on a host.
 
 ##### Proxy
 
-The [`kata-proxy`](https://github.com/kata-containers/proxy) is a process that
+The [`kata-proxy`](src/proxy/README.md) is a process that
 runs on the host and co-ordinates access to the agent running inside the
 virtual machine.
 
@@ -89,7 +89,7 @@ containers.
 
 ##### Shim
 
-The [`kata-shim`](https://github.com/kata-containers/shim) is a process that
+The [`kata-shim`](src/shim/README.md) is a process that
 runs on the host. It acts as though it is the workload (which actually runs
 inside the virtual machine). This shim is required to be compliant with the
 expectations of the [OCI runtime
