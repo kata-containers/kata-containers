@@ -14,6 +14,7 @@ import (
 	"regexp"
 	"testing"
 
+	ktu "github.com/kata-containers/runtime/pkg/katatestutils"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 )
@@ -44,6 +45,10 @@ func setupCheckHostIsVMContainerCapable(assert *assert.Assertions, cpuInfoFile s
 }
 
 func TestCCCheckCLIFunction(t *testing.T) {
+	if tc.NotValid(ktu.NeedRoot()) {
+		t.Skip(testDisabledAsNonRoot)
+	}
+
 	var cpuData []testCPUData
 	var moduleData []testModuleData
 
@@ -245,6 +250,10 @@ func TestCheckCheckKernelModulesNoUnrestrictedGuest(t *testing.T) {
 }
 
 func TestCheckHostIsVMContainerCapable(t *testing.T) {
+	if tc.NotValid(ktu.NeedRoot()) {
+		t.Skip(testDisabledAsNonRoot)
+	}
+
 	assert := assert.New(t)
 
 	dir, err := ioutil.TempDir("", "")
