@@ -24,7 +24,6 @@ qemu_black_list=(
 */share/*/openbios-sparc64
 */share/*/palcode-clipper
 */share/*/ppc_rom.bin
-*/share/*/pvh.bin
 */share/*/pxe-*
 */share/*/QEMU,*
 */share/*/qemu_vga.ndrv
