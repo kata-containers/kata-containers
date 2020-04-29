@@ -10,7 +10,7 @@ import (
 	"os"
 	"syscall"
 
-	"github.com/kata-containers/runtime/virtcontainers/utils"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
 )

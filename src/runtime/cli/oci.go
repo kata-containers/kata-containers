@@ -15,8 +15,8 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/kata-containers/runtime/pkg/katautils"
-	vc "github.com/kata-containers/runtime/virtcontainers"
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils"
+	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
 	"github.com/opencontainers/runc/libcontainer/utils"
 )
 

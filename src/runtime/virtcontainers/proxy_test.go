@@ -12,7 +12,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/kata-containers/runtime/virtcontainers/persist/fs"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist/fs"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 )

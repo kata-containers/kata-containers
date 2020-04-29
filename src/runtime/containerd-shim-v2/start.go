@@ -10,7 +10,7 @@ import (
 	"fmt"
 
 	"github.com/containerd/containerd/api/types/task"
-	"github.com/kata-containers/runtime/pkg/katautils"
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils"
 )
 
 func startContainer(ctx context.Context, s *service, c *container) error {

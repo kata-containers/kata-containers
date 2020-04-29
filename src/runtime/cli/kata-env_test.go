@@ -19,14 +19,14 @@ import (
 	"testing"
 
 	"github.com/BurntSushi/toml"
-	vc "github.com/kata-containers/runtime/virtcontainers"
-	vcUtils "github.com/kata-containers/runtime/virtcontainers/utils"
+	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
+	vcUtils "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/urfave/cli"
 
-	"github.com/kata-containers/runtime/pkg/katatestutils"
-	"github.com/kata-containers/runtime/pkg/katautils"
-	"github.com/kata-containers/runtime/virtcontainers/pkg/oci"
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/katatestutils"
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/oci"
 	"github.com/stretchr/testify/assert"
 )
 

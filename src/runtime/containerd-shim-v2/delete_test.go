@@ -15,8 +15,8 @@ import (
 	taskAPI "github.com/containerd/containerd/runtime/v2/task"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/kata-containers/runtime/virtcontainers/pkg/compatoci"
-	"github.com/kata-containers/runtime/virtcontainers/pkg/vcmock"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/compatoci"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/vcmock"
 )
 
 func TestDeleteContainerSuccessAndFail(t *testing.T) {

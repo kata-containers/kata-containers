@@ -8,7 +8,7 @@ package virtcontainers
 import (
 	"fmt"
 
-	persistapi "github.com/kata-containers/runtime/virtcontainers/persist/api"
+	persistapi "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist/api"
 )
 
 // Endpoint represents a physical or virtual network interface.

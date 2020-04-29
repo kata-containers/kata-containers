@@ -11,8 +11,8 @@ import (
 	"os"
 	"testing"
 
-	ktu "github.com/kata-containers/runtime/pkg/katatestutils"
-	. "github.com/kata-containers/runtime/virtcontainers/pkg/mock"
+	ktu "github.com/kata-containers/kata-containers/src/runtime/pkg/katatestutils"
+	. "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/mock"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/stretchr/testify/assert"
 )

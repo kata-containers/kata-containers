@@ -15,8 +15,8 @@ import (
 
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/containernetworking/plugins/pkg/testutils"
-	ktu "github.com/kata-containers/runtime/pkg/katatestutils"
-	vc "github.com/kata-containers/runtime/virtcontainers"
+	ktu "github.com/kata-containers/kata-containers/src/runtime/pkg/katatestutils"
+	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/sys/unix"
 )
