@@ -148,6 +148,9 @@ func loadSpec(r *taskAPI.CreateTaskRequest) (*specs.Spec, string, error) {
 // 2. shimv2 create task option
 // 3. environment
 func loadRuntimeConfig(s *service, r *taskAPI.CreateTaskRequest, anno map[string]string) (*oci.RuntimeConfig, error) {
+	if s.config != nil {
+		return s.config, nil
+	}
 	configPath := oci.GetSandboxConfigPath(anno)
 	if configPath == "" && r.Options != nil {
 		v, err := typeurl.UnmarshalAny(r.Options)
