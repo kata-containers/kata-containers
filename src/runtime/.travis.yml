@@ -1,0 +1,42 @@
+#
+# Copyright (c) 2018 Intel Corporation
+# Copyright (c) 2018 IBM
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+
+sudo: required
+dist: xenial
+
+language: go
+go:
+  - 1.13.9
+
+os:
+  - linux
+  - linux-ppc64le
+
+matrix:
+  allow_failures:
+    - os: linux-ppc64le
+
+go_import_path: github.com/kata-containers/runtime
+
+env:
+  - target_branch=$TRAVIS_BRANCH
+
+before_install:
+  - git remote set-branches --add origin "${TRAVIS_BRANCH}"
+  - git fetch
+  - ".ci/setup.sh"
+  - ".ci/versions_checker.sh"
+
+before_script:
+  - ".ci/static-checks.sh"
+  - ".ci/versions_checker.sh"
+
+install:
+  - cd ${TRAVIS_BUILD_DIR}
+  - ".ci/install-yq.sh"
+  - make
+  - sudo -E PATH=$PATH make install
