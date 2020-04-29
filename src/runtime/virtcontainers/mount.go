@@ -15,7 +15,7 @@ import (
 	"syscall"
 
 	merr "github.com/hashicorp/go-multierror"
-	"github.com/kata-containers/runtime/virtcontainers/utils"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
 	"github.com/sirupsen/logrus"
 )
 

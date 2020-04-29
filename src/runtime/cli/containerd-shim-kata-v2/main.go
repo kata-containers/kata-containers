@@ -7,7 +7,7 @@ package main
 
 import (
 	"github.com/containerd/containerd/runtime/v2/shim"
-	"github.com/kata-containers/runtime/containerd-shim-v2"
+	"github.com/kata-containers/kata-containers/src/runtime/containerd-shim-v2"
 )
 
 func shimConfig(config *shim.Config) {

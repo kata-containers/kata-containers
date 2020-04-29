@@ -6,7 +6,7 @@
 package main
 
 import (
-	"github.com/kata-containers/runtime/virtcontainers/pkg/mock"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/mock"
 )
 
 func main() {

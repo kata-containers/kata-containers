@@ -17,20 +17,20 @@ import (
 	"time"
 
 	"github.com/containerd/cgroups"
-	vccgroups "github.com/kata-containers/runtime/virtcontainers/pkg/cgroups"
-	vcTypes "github.com/kata-containers/runtime/virtcontainers/pkg/types"
-	"github.com/kata-containers/runtime/virtcontainers/types"
-	"github.com/kata-containers/runtime/virtcontainers/utils"
+	vccgroups "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/cgroups"
+	vcTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/types"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
 
-	"github.com/kata-containers/runtime/virtcontainers/device/config"
-	"github.com/kata-containers/runtime/virtcontainers/device/manager"
-	"github.com/kata-containers/runtime/virtcontainers/pkg/rootless"
-	"github.com/kata-containers/runtime/virtcontainers/store"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/manager"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/rootless"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/store"
 )
 
 // https://github.com/torvalds/linux/blob/master/include/uapi/linux/major.h
@@ -890,7 +890,7 @@ func (c *Container) create() (err error) {
 		normalAttachedDevs []ContainerDevice //for q35: normally attached devices
 		delayAttachedDevs  []ContainerDevice //for q35: delay attached devices, for example, large bar space device
 	)
-	// Fix: https://github.com/kata-containers/runtime/issues/2460
+	// Fix: https://github.com/kata-containers/kata-containers/src/runtime/issues/2460
 	if machineType == QemuQ35 {
 		// add Large Bar space device to delayAttachedDevs
 		for _, device := range c.devices {
@@ -1435,7 +1435,7 @@ func (c *Container) attachDevices(devices []ContainerDevice) error {
 
 	// since devices with large bar space require delayed attachment,
 	// the devices need to be split into two lists, normalAttachedDevs and delayAttachedDevs.
-	// so c.device is not used here. See issue https://github.com/kata-containers/runtime/issues/2460.
+	// so c.device is not used here. See issue https://github.com/kata-containers/kata-containers/src/runtime/issues/2460.
 	for _, dev := range devices {
 		if err := c.sandbox.devManager.AttachDevice(dev.ID, c.sandbox); err != nil {
 			return err
@@ -1473,7 +1473,7 @@ func (c *Container) cgroupsCreate() (err error) {
 		return errorMissingOCISpec
 	}
 
-	// https://github.com/kata-containers/runtime/issues/168
+	// https://github.com/kata-containers/kata-containers/src/runtime/issues/168
 	resources := specs.LinuxResources{
 		CPU: nil,
 	}
@@ -1559,7 +1559,7 @@ func (c *Container) cgroupsUpdate(resources specs.LinuxResources) error {
 		return fmt.Errorf("Could not load cgroup %v: %v", c.state.CgroupPath, err)
 	}
 
-	// Issue: https://github.com/kata-containers/runtime/issues/168
+	// Issue: https://github.com/kata-containers/kata-containers/src/runtime/issues/168
 	r := specs.LinuxResources{
 		CPU: validCPUResources(resources.CPU),
 	}

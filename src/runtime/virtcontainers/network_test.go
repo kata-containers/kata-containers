@@ -12,8 +12,8 @@ import (
 	"reflect"
 	"testing"
 
-	ktu "github.com/kata-containers/runtime/pkg/katatestutils"
-	vcTypes "github.com/kata-containers/runtime/virtcontainers/pkg/types"
+	ktu "github.com/kata-containers/kata-containers/src/runtime/pkg/katatestutils"
+	vcTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/vishvananda/netlink"
 )

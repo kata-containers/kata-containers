@@ -13,7 +13,7 @@ import (
 
 	strfmt "github.com/go-openapi/strfmt"
 
-	models "github.com/kata-containers/runtime/virtcontainers/pkg/firecracker/client/models"
+	models "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/firecracker/client/models"
 )
 
 // GetMmdsReader is a Reader for the GetMmds structure.

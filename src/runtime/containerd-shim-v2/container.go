@@ -13,7 +13,7 @@ import (
 	taskAPI "github.com/containerd/containerd/runtime/v2/task"
 	"github.com/opencontainers/runtime-spec/specs-go"
 
-	vc "github.com/kata-containers/runtime/virtcontainers"
+	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
 )
 
 type container struct {
