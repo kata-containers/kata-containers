@@ -1,0 +1,41 @@
+#
+# Copyright (c) 2018 HyperHQ Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
+From docker.io/golang:@GO_VERSION@-alpine
+
+RUN apk update && apk add \
+    apk-tools-static \
+    autoconf \
+    automake \
+    bash \
+    binutils \
+    cmake \
+    coreutils \
+    curl \
+    g++ \
+    gcc \
+    git \
+    libc-dev \
+    libseccomp \
+    libseccomp-dev \
+    linux-headers \
+    m4 \
+    make \
+    musl \
+    musl-dev \
+    tar \
+    vim
+# alpine doesn't support x86_64-unknown-linux-gnu
+# It only support x86_64-unknown-linux-musl. Even worse,
+# it doesn't support proc-macro, which is needed for serde_derive
+#
+# See issue: https://github.com/kata-containers/osbuilder/issues/386
+# -- FIXME
+#
+# Thus, we cannot build rust agent on alpine
+# The way to use alpine is to generate rootfs or build
+# go agent to get rootfs and then cp rust agent to rootfs.
+# pity..
+# RUN ln -svf /usr/bin/gcc /bin/musl-gcc; ln -svf /usr/bin/g++ /bin/musl-g++

@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 
+ Copyright (c) 2018 SUSE LLC
+ 
+ SPDX-License-Identifier: Apache-2.0
+-->
+<image schemaversion="6.8" name="openSUSE-rootfs-for-Kata-vm">
+    <description type="system">
+        <author>SUSE</author>
+        <contact>mvedovati@suse.com</contact>
+        <specification>openSUSE rootfs for Kata Containers guest vm</specification>
+    </description>
+    <preferences>
+        <version>1.0.0</version>
+        <packagemanager>zypper</packagemanager>
+        <locale>en_US</locale>
+        <keytable>us</keytable>
+        <rpm-excludedocs>true</rpm-excludedocs>
+        <type image="vmx" filesystem="ext4" />
+    </preferences>
+    <repository type="rpm-md">
+        <!-- NOTE: the following is a placeholder, specify the actual path with kiwi option set-repo=... -->
+        <source path="obs://"/>
+    </repository>
+    <packages type="image">
+        <package name=""/>
+    </packages>
+    <packages type="delete">
+        <package name="zypper"/>
+        <package name="rpm"/>
+    </packages>
+    <packages type="bootstrap" patternType="onlyRequired">
+        <package name="udev"/>
+        <package name="filesystem"/>
+        <package name="ca-certificates"/>
+        <package name="ca-certificates-mozilla"/>
+        <package name="openSUSE-release"/>
+    </packages>
+
+</image>
