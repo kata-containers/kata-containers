@@ -33,4 +33,5 @@ install:
 
 script:
     - cd ${TRAVIS_BUILD_DIR}/src/runtime && make test
+    - cd ${TRAVIS_BUILD_DIR}/src/runtime && sudo -E PATH=$PATH GOPATH=$GOPATH make test
     - cd ${TRAVIS_BUILD_DIR}/src/agent && make check
