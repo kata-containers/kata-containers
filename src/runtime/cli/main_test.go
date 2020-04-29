@@ -561,7 +561,6 @@ func TestMainBeforeSubCommands(t *testing.T) {
 		{[]string{"version"}, false},
 		{[]string{"sub-command", "-h"}, false},
 		{[]string{"sub-command", "--help"}, false},
-		{[]string{"kata-check"}, false},
 	}
 
 	for i, d := range data {
