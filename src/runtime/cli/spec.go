@@ -12,7 +12,7 @@ import (
 	"io/ioutil"
 	"os"
 
-	"github.com/kata-containers/runtime/pkg/katautils"
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils"
 	"github.com/opencontainers/runc/libcontainer/specconv"
 	"github.com/urfave/cli"
 )

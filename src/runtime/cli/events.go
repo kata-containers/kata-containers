@@ -13,10 +13,10 @@ import (
 	"sync"
 	"time"
 
-	vc "github.com/kata-containers/runtime/virtcontainers"
-	"github.com/kata-containers/runtime/virtcontainers/types"
+	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 
-	"github.com/kata-containers/runtime/pkg/katautils"
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli"
 )

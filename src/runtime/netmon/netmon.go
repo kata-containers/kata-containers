@@ -21,8 +21,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/kata-containers/runtime/pkg/signals"
-	vcTypes "github.com/kata-containers/runtime/virtcontainers/pkg/types"
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/signals"
+	vcTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/types"
 	"github.com/sirupsen/logrus"
 	lSyslog "github.com/sirupsen/logrus/hooks/syslog"
 	"github.com/vishvananda/netlink"

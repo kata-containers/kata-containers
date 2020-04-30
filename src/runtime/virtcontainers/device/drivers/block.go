@@ -9,10 +9,10 @@ package drivers
 import (
 	"path/filepath"
 
-	"github.com/kata-containers/runtime/virtcontainers/device/api"
-	"github.com/kata-containers/runtime/virtcontainers/device/config"
-	persistapi "github.com/kata-containers/runtime/virtcontainers/persist/api"
-	"github.com/kata-containers/runtime/virtcontainers/utils"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/api"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
+	persistapi "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist/api"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
 )
 
 const maxDevIDSize = 31
@@ -97,7 +97,7 @@ func (device *BlockDevice) Attach(devReceiver api.DeviceReceiver) (err error) {
 			//Longer term block based VM rootfs should be added
 			//as a regular block device which eliminates the
 			//offset.
-			//https://github.com/kata-containers/runtime/issues/1061
+			//https://github.com/kata-containers/kata-containers/src/runtime/issues/1061
 			globalIdx = index + 1
 		}
 

@@ -12,9 +12,9 @@ import (
 	"os"
 	"testing"
 
-	vc "github.com/kata-containers/runtime/virtcontainers"
-	vcAnnotations "github.com/kata-containers/runtime/virtcontainers/pkg/annotations"
-	"github.com/kata-containers/runtime/virtcontainers/pkg/vcmock"
+	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
+	vcAnnotations "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/annotations"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/vcmock"
 	"github.com/stretchr/testify/assert"
 	"github.com/urfave/cli"
 )

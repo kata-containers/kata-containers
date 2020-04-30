@@ -10,7 +10,7 @@ import (
 	"github.com/containerd/typeurl"
 
 	google_protobuf "github.com/gogo/protobuf/types"
-	vc "github.com/kata-containers/runtime/virtcontainers"
+	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
 )
 
 func marshalMetrics(s *service, containerID string) (*google_protobuf.Any, error) {

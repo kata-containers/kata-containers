@@ -13,6 +13,7 @@ HOOK_BIN := hook
 KATA_SHIM_DIR := shim/mock/kata-shim
 KATA_SHIM_BIN := kata-shim
 MK_DIR := $(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
+GOBUILD_FLAGS := -mod=vendor
 
 #
 # Pretty printing
@@ -29,13 +30,13 @@ QUIET_GOBUILD = $(Q:@=@echo    '     GOBUILD  '$@;)
 all: build binaries
 
 build:
-	$(QUIET_GOBUILD)go build $(go list ./... | grep -v /vendor/)
+	$(QUIET_GOBUILD)go build $(GOBUILD_FLAGS) $(go list ./... | grep -v /vendor/)
 
 hook:
-	$(QUIET_GOBUILD)go build -o $(HOOK_DIR)/$@ $(HOOK_DIR)/*.go
+	$(QUIET_GOBUILD)go build $(GOBUILD_FLAGS) -o $(HOOK_DIR)/$@ $(HOOK_DIR)/*.go
 
 kata-shim:
-	$(QUIET_GOBUILD)go build -o $(KATA_SHIM_DIR)/$@ $(KATA_SHIM_DIR)/*.go
+	$(QUIET_GOBUILD)go build $(GOBUILD_FLAGS) -o $(KATA_SHIM_DIR)/$@ $(KATA_SHIM_DIR)/*.go
 
 binaries: hook kata-shim
 

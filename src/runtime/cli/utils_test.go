@@ -12,7 +12,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/kata-containers/runtime/pkg/katautils"
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils"
 	"github.com/stretchr/testify/assert"
 )
 

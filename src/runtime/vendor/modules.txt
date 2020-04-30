@@ -141,45 +141,6 @@ github.com/intel/govmm/qemu
 github.com/kata-containers/agent/pkg/types
 github.com/kata-containers/agent/protocols/client
 github.com/kata-containers/agent/protocols/grpc
-# github.com/kata-containers/runtime v0.0.0-00010101000000-000000000000 => ./
-github.com/kata-containers/runtime/containerd-shim-v2
-github.com/kata-containers/runtime/pkg/katatestutils
-github.com/kata-containers/runtime/pkg/katautils
-github.com/kata-containers/runtime/pkg/signals
-github.com/kata-containers/runtime/protocols/cache
-github.com/kata-containers/runtime/virtcontainers
-github.com/kata-containers/runtime/virtcontainers/device/api
-github.com/kata-containers/runtime/virtcontainers/device/config
-github.com/kata-containers/runtime/virtcontainers/device/drivers
-github.com/kata-containers/runtime/virtcontainers/device/manager
-github.com/kata-containers/runtime/virtcontainers/experimental
-github.com/kata-containers/runtime/virtcontainers/factory
-github.com/kata-containers/runtime/virtcontainers/factory/base
-github.com/kata-containers/runtime/virtcontainers/factory/cache
-github.com/kata-containers/runtime/virtcontainers/factory/direct
-github.com/kata-containers/runtime/virtcontainers/factory/grpccache
-github.com/kata-containers/runtime/virtcontainers/factory/template
-github.com/kata-containers/runtime/virtcontainers/persist
-github.com/kata-containers/runtime/virtcontainers/persist/api
-github.com/kata-containers/runtime/virtcontainers/persist/fs
-github.com/kata-containers/runtime/virtcontainers/pkg/annotations
-github.com/kata-containers/runtime/virtcontainers/pkg/annotations/dockershim
-github.com/kata-containers/runtime/virtcontainers/pkg/cgroups
-github.com/kata-containers/runtime/virtcontainers/pkg/cloud-hypervisor/client
-github.com/kata-containers/runtime/virtcontainers/pkg/compatoci
-github.com/kata-containers/runtime/virtcontainers/pkg/firecracker/client
-github.com/kata-containers/runtime/virtcontainers/pkg/firecracker/client/models
-github.com/kata-containers/runtime/virtcontainers/pkg/firecracker/client/operations
-github.com/kata-containers/runtime/virtcontainers/pkg/mock
-github.com/kata-containers/runtime/virtcontainers/pkg/nsenter
-github.com/kata-containers/runtime/virtcontainers/pkg/oci
-github.com/kata-containers/runtime/virtcontainers/pkg/rootless
-github.com/kata-containers/runtime/virtcontainers/pkg/types
-github.com/kata-containers/runtime/virtcontainers/pkg/uuid
-github.com/kata-containers/runtime/virtcontainers/pkg/vcmock
-github.com/kata-containers/runtime/virtcontainers/store
-github.com/kata-containers/runtime/virtcontainers/types
-github.com/kata-containers/runtime/virtcontainers/utils
 # github.com/konsorten/go-windows-terminal-sequences v1.0.1
 github.com/konsorten/go-windows-terminal-sequences
 # github.com/mailru/easyjson v0.0.0-20180823135443-60711f1a8329
