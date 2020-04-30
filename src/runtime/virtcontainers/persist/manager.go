@@ -9,10 +9,10 @@ package persist
 import (
 	"fmt"
 
-	exp "github.com/kata-containers/runtime/virtcontainers/experimental"
-	persistapi "github.com/kata-containers/runtime/virtcontainers/persist/api"
-	"github.com/kata-containers/runtime/virtcontainers/persist/fs"
-	"github.com/kata-containers/runtime/virtcontainers/pkg/rootless"
+	exp "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/experimental"
+	persistapi "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist/api"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist/fs"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/rootless"
 )
 
 type initFunc (func() (persistapi.PersistDriver, error))

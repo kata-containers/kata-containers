@@ -10,7 +10,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/kata-containers/runtime/virtcontainers/pkg/annotations"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/annotations"
 	"github.com/stretchr/testify/assert"
 )
 

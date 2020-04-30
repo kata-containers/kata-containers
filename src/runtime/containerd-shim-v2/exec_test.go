@@ -13,7 +13,7 @@ import (
 	"github.com/containerd/containerd/namespaces"
 
 	taskAPI "github.com/containerd/containerd/runtime/v2/task"
-	"github.com/kata-containers/runtime/virtcontainers/pkg/vcmock"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/vcmock"
 
 	"github.com/stretchr/testify/assert"
 )

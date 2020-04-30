@@ -9,7 +9,7 @@ import (
 	"syscall"
 	"testing"
 
-	vc "github.com/kata-containers/runtime/virtcontainers/pkg/types"
+	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/types"
 	"github.com/stretchr/testify/assert"
 )
 

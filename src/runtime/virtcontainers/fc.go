@@ -27,10 +27,10 @@ import (
 	httptransport "github.com/go-openapi/runtime/client"
 	"github.com/go-openapi/strfmt"
 	kataclient "github.com/kata-containers/agent/protocols/client"
-	persistapi "github.com/kata-containers/runtime/virtcontainers/persist/api"
-	"github.com/kata-containers/runtime/virtcontainers/pkg/firecracker/client"
-	models "github.com/kata-containers/runtime/virtcontainers/pkg/firecracker/client/models"
-	ops "github.com/kata-containers/runtime/virtcontainers/pkg/firecracker/client/operations"
+	persistapi "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist/api"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/firecracker/client"
+	models "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/firecracker/client/models"
+	ops "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/firecracker/client/operations"
 	"github.com/opencontainers/selinux/go-selinux/label"
 	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/pkg/errors"
@@ -38,9 +38,9 @@ import (
 
 	"github.com/blang/semver"
 	"github.com/containerd/console"
-	"github.com/kata-containers/runtime/virtcontainers/device/config"
-	"github.com/kata-containers/runtime/virtcontainers/types"
-	"github.com/kata-containers/runtime/virtcontainers/utils"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
 )
 
 type vmmState uint8
@@ -203,7 +203,7 @@ func (fc *firecracker) createSandbox(ctx context.Context, id string, networkNS N
 	defer span.Finish()
 
 	//TODO: check validity of the hypervisor config provided
-	//https://github.com/kata-containers/runtime/issues/1065
+	//https://github.com/kata-containers/kata-containers/src/runtime/issues/1065
 	fc.id = fc.truncateID(id)
 	fc.state.set(notReady)
 	fc.config = *hypervisorConfig
@@ -233,7 +233,7 @@ func (fc *firecracker) createSandbox(ctx context.Context, id string, networkNS N
 	fc.netNSPath = networkNS.NetNsPath
 
 	// Till we create lower privileged kata user run as root
-	// https://github.com/kata-containers/runtime/issues/1869
+	// https://github.com/kata-containers/kata-containers/src/runtime/issues/1869
 	fc.uid = "0"
 	fc.gid = "0"
 
@@ -381,7 +381,7 @@ func (fc *firecracker) fcInit(timeout int) error {
 			"--id", fc.id,
 			"--node", "0", //FIXME: Comprehend NUMA topology or explicit ignore
 			"--exec-file", fc.config.HypervisorPath,
-			"--uid", "0", //https://github.com/kata-containers/runtime/issues/1869
+			"--uid", "0", //https://github.com/kata-containers/kata-containers/src/runtime/issues/1869
 			"--gid", "0",
 			"--chroot-base-dir", fc.chrootBaseDir,
 		}

@@ -11,7 +11,7 @@ import (
 
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/containernetworking/plugins/pkg/testutils"
-	ktu "github.com/kata-containers/runtime/pkg/katatestutils"
+	ktu "github.com/kata-containers/kata-containers/src/runtime/pkg/katatestutils"
 	"github.com/stretchr/testify/assert"
 	"github.com/vishvananda/netlink"
 	"github.com/vishvananda/netns"

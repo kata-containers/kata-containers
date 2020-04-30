@@ -13,10 +13,10 @@ import (
 	"context"
 	"syscall"
 
-	"github.com/kata-containers/runtime/virtcontainers/device/api"
-	"github.com/kata-containers/runtime/virtcontainers/device/config"
-	vcTypes "github.com/kata-containers/runtime/virtcontainers/pkg/types"
-	"github.com/kata-containers/runtime/virtcontainers/types"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/api"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
+	vcTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/types"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/sirupsen/logrus"
 )

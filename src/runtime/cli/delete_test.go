@@ -16,12 +16,12 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/urfave/cli"
 
-	ktu "github.com/kata-containers/runtime/pkg/katatestutils"
-	vc "github.com/kata-containers/runtime/virtcontainers"
-	vcAnnotations "github.com/kata-containers/runtime/virtcontainers/pkg/annotations"
-	"github.com/kata-containers/runtime/virtcontainers/pkg/compatoci"
-	"github.com/kata-containers/runtime/virtcontainers/pkg/vcmock"
-	"github.com/kata-containers/runtime/virtcontainers/types"
+	ktu "github.com/kata-containers/kata-containers/src/runtime/pkg/katatestutils"
+	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
+	vcAnnotations "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/annotations"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/compatoci"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/vcmock"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 )
 
 func testRemoveCgroupsPathSuccessful(t *testing.T, cgroupsPathList []string) {

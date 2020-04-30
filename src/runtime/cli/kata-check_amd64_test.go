@@ -14,7 +14,7 @@ import (
 	"regexp"
 	"testing"
 
-	ktu "github.com/kata-containers/runtime/pkg/katatestutils"
+	ktu "github.com/kata-containers/kata-containers/src/runtime/pkg/katatestutils"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 )

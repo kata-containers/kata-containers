@@ -15,10 +15,10 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/kata-containers/runtime/virtcontainers/persist"
-	"github.com/kata-containers/runtime/virtcontainers/persist/fs"
-	"github.com/kata-containers/runtime/virtcontainers/store"
-	"github.com/kata-containers/runtime/virtcontainers/utils"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist/fs"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/store"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
 	"github.com/sirupsen/logrus"
 )
 

@@ -13,11 +13,11 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	"github.com/kata-containers/runtime/virtcontainers/device/api"
-	"github.com/kata-containers/runtime/virtcontainers/device/config"
-	"github.com/kata-containers/runtime/virtcontainers/device/drivers"
-	persistapi "github.com/kata-containers/runtime/virtcontainers/persist/api"
-	"github.com/kata-containers/runtime/virtcontainers/utils"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/api"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/drivers"
+	persistapi "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist/api"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
 )
 
 const (

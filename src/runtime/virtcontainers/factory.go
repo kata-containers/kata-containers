@@ -8,7 +8,7 @@ package virtcontainers
 import (
 	"context"
 
-	pb "github.com/kata-containers/runtime/protocols/cache"
+	pb "github.com/kata-containers/kata-containers/src/runtime/protocols/cache"
 )
 
 // Factory controls how a new VM is created.

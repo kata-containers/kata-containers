@@ -14,8 +14,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/urfave/cli"
 
-	ktu "github.com/kata-containers/runtime/pkg/katatestutils"
-	vc "github.com/kata-containers/runtime/virtcontainers"
+	ktu "github.com/kata-containers/kata-containers/src/runtime/pkg/katatestutils"
+	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
 )
 
 const testDisabledAsNonRoot = "Test disabled as requires root privileges"

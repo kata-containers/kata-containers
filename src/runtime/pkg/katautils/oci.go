@@ -13,7 +13,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/kata-containers/runtime/virtcontainers/pkg/rootless"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/rootless"
 )
 
 const ctrsMappingDirMode = os.FileMode(0750)

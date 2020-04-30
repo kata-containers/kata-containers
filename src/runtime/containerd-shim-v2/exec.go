@@ -14,7 +14,7 @@ import (
 	"github.com/containerd/containerd/errdefs"
 	"github.com/containerd/typeurl"
 	googleProtobuf "github.com/gogo/protobuf/types"
-	"github.com/kata-containers/runtime/virtcontainers/types"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 )
 

@@ -25,10 +25,10 @@ import (
 	_ "github.com/containerd/containerd/runtime/linux/runctypes"
 	crioption "github.com/containerd/cri-containerd/pkg/api/runtimeoptions/v1"
 
-	"github.com/kata-containers/runtime/pkg/katautils"
-	vc "github.com/kata-containers/runtime/virtcontainers"
-	"github.com/kata-containers/runtime/virtcontainers/pkg/compatoci"
-	"github.com/kata-containers/runtime/virtcontainers/pkg/oci"
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils"
+	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/compatoci"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/oci"
 )
 
 func create(ctx context.Context, s *service, r *taskAPI.CreateTaskRequest) (*container, error) {
@@ -137,7 +137,7 @@ func loadSpec(r *taskAPI.CreateTaskRequest) (*specs.Spec, string, error) {
 	// remove the pidns to disable the sharePidNs temporarily,
 	// once kata fixed this issue, we can remove this line.
 	// For the bug, please see:
-	// https://github.com/kata-containers/runtime/issues/930
+	// https://github.com/kata-containers/kata-containers/src/runtime/issues/930
 	removeNamespace(&ociSpec, specs.PIDNamespace)
 
 	return &ociSpec, bundlePath, nil
@@ -148,6 +148,9 @@ func loadSpec(r *taskAPI.CreateTaskRequest) (*specs.Spec, string, error) {
 // 2. shimv2 create task option
 // 3. environment
 func loadRuntimeConfig(s *service, r *taskAPI.CreateTaskRequest, anno map[string]string) (*oci.RuntimeConfig, error) {
+	if s.config != nil {
+		return s.config, nil
+	}
 	configPath := oci.GetSandboxConfigPath(anno)
 	if configPath == "" && r.Options != nil {
 		v, err := typeurl.UnmarshalAny(r.Options)

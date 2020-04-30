@@ -12,10 +12,10 @@ import (
 	"strconv"
 	"syscall"
 
-	"github.com/kata-containers/runtime/pkg/katautils"
-	vc "github.com/kata-containers/runtime/virtcontainers"
-	"github.com/kata-containers/runtime/virtcontainers/pkg/oci"
-	"github.com/kata-containers/runtime/virtcontainers/types"
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils"
+	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/oci"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli"
 )

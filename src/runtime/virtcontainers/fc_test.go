@@ -8,7 +8,7 @@ package virtcontainers
 import (
 	"testing"
 
-	"github.com/kata-containers/runtime/virtcontainers/types"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	"github.com/stretchr/testify/assert"
 )
 

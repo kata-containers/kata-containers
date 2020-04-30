@@ -17,8 +17,8 @@ import (
 	"time"
 	"unsafe"
 
-	. "github.com/kata-containers/runtime/virtcontainers/pkg/mock"
-	"github.com/kata-containers/runtime/virtcontainers/utils"
+	. "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/mock"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
 	"github.com/stretchr/testify/assert"
 )
 

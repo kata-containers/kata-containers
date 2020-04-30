@@ -18,7 +18,7 @@ import (
 	"syscall"
 	"testing"
 
-	vcAnnotations "github.com/kata-containers/runtime/virtcontainers/pkg/annotations"
+	vcAnnotations "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/annotations"
 
 	gpb "github.com/gogo/protobuf/types"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
@@ -27,15 +27,15 @@ import (
 
 	aTypes "github.com/kata-containers/agent/pkg/types"
 	pb "github.com/kata-containers/agent/protocols/grpc"
-	"github.com/kata-containers/runtime/virtcontainers/device/api"
-	"github.com/kata-containers/runtime/virtcontainers/device/config"
-	"github.com/kata-containers/runtime/virtcontainers/device/drivers"
-	"github.com/kata-containers/runtime/virtcontainers/device/manager"
-	"github.com/kata-containers/runtime/virtcontainers/persist"
-	"github.com/kata-containers/runtime/virtcontainers/pkg/mock"
-	"github.com/kata-containers/runtime/virtcontainers/pkg/rootless"
-	vcTypes "github.com/kata-containers/runtime/virtcontainers/pkg/types"
-	"github.com/kata-containers/runtime/virtcontainers/types"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/api"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/drivers"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/manager"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/mock"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/rootless"
+	vcTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/types"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 )
 
 var (

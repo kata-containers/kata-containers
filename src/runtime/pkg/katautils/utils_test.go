@@ -18,7 +18,7 @@ import (
 	"syscall"
 	"testing"
 
-	"github.com/kata-containers/runtime/virtcontainers/pkg/compatoci"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/compatoci"
 	"github.com/stretchr/testify/assert"
 )
 

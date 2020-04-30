@@ -6,7 +6,7 @@
 package vcmock
 
 import (
-	vc "github.com/kata-containers/runtime/virtcontainers"
+	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
 )
 
 // ID implements the VCContainer function of the same name.
