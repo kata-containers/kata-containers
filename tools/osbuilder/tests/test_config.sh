@@ -17,7 +17,6 @@ test_distros+=("ubuntu")
 
 skipForRustDistros=()
 skipForRustDistros+=("alpine")
-skipForRustDistros+=("euleros")
 
 skipForRustArch=()
 skipForRustArch+=("ppc64le")
@@ -36,8 +35,6 @@ distro_in_set() {
 }
 
 if [ -n "${CI:-}" ]; then
-	# CI tests may timeout with euleros, see:
-	#  https://github.com/kata-containers/osbuilder/issues/46"
 	# Since too many distros timeout for now, we only test clearlinux and ubuntu. We can enable other distros when we fix timeout problem.
 	for distro in "${distros[@]}"; do
 		if distro_in_set "${distro}" "${test_distros[@]}"; then
