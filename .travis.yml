@@ -3,35 +3,43 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
-sudo: required
 dist: bionic
-
-os:
-    - linux
-
-language: rust
-rust:
-    - stable
-
-env:
-    - target_branch=$TRAVIS_BRANCH RUST_AGENT=yes
+os: linux
+language: go
+go: 1.13.9
+env: target_branch=$TRAVIS_BRANCH
 
 before_install:
-    - "ci/setup.sh"
-    - "ci/install_go.sh"
-    - "ci/install_rust.sh"
-    - "ci/install_vc.sh"
-    - "ci/static-checks.sh"
+  - git remote set-branches --add origin "${TRAVIS_BRANCH}"
+  - git fetch
+  - "ci/setup.sh"
 
-# need to install rust from scratch?
-# still need go to download github.com/kata-containers/tests
-# which is already installed?
-
+# we use install to run check agent
+# so that it is easy to skip for non-amd64 platform
 install:
-    - cd ${TRAVIS_BUILD_DIR}/src/runtime && make
-    - cd ${TRAVIS_BUILD_DIR}/src/agent && make
+  - "ci/install_rust.sh"
+  - export PATH=$PATH:"$HOME/.cargo/bin"
+  - export RUST_AGENT=yes
+  - make -C ${TRAVIS_BUILD_DIR}/src/agent
+  - make -C ${TRAVIS_BUILD_DIR}/src/agent check
+
+before_script:
+  - "ci/install_go.sh"
+  - "ci/install_vc.sh"
+  - make -C ${TRAVIS_BUILD_DIR}/src/runtime
+  - make -C ${TRAVIS_BUILD_DIR}/src/runtime test
+  - sudo -E PATH=$PATH GOPATH=$GOPATH make -C ${TRAVIS_BUILD_DIR}/src/runtime test
 
 script:
-    - cd ${TRAVIS_BUILD_DIR}/src/runtime && make test
-    - cd ${TRAVIS_BUILD_DIR}/src/runtime && sudo -E PATH=$PATH GOPATH=$GOPATH make test
-    - cd ${TRAVIS_BUILD_DIR}/src/agent && make check
+  - "ci/static-checks.sh"
+
+jobs:
+  include:
+  - name: x86_64 test
+    os: linux
+  - name: ppc64le test
+    os: linux-ppc64le
+    install: skip
+  allow_failures:
+    - name: ppc64le test
+  fast_finish: true
