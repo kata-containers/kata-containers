@@ -1,3 +1,8 @@
+#
+# Copyright (c) 2018-2020 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+#
 # - Arguments
 # rootfs_dir=$1
 #
