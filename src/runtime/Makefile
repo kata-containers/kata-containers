@@ -486,7 +486,7 @@ ifneq ($(FEATURE_SELINUX),no)
 endif
 
 # go build common flags
-BUILDFLAGS := -buildmode=pie ${BUILDTAGS}
+BUILDFLAGS := -buildmode=pie -mod=vendor ${BUILDTAGS}
 
 # whether stipping the binary
 ifeq ($(STRIP),yes)
@@ -561,7 +561,7 @@ $(TARGET_OUTPUT): $(SOURCES) $(GENERATED_FILES) $(MAKEFILE_LIST) | show-summary
 	$(QUIET_BUILD)(cd $(CLI_DIR) && go build $(KATA_LDFLAGS) $(BUILDFLAGS) -o $@ .)
 
 $(SHIMV2_OUTPUT): $(SOURCES) $(GENERATED_FILES) $(MAKEFILE_LIST)
-	$(QUIET_BUILD)(cd $(SHIMV2_DIR)/ && go build $(KATA_LDFLAGS) -i -o $@ .)
+	$(QUIET_BUILD)(cd $(SHIMV2_DIR)/ && go build $(KATA_LDFLAGS) $(BUILDFLAGS) -o $@ .)
 
 .PHONY: \
 	check \
