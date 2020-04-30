@@ -204,9 +204,9 @@ of the the osbuilder distributions.
 > Note: this table is not relevant for the dracut build method, since it supports
 any Linux distribution and architecture where dracut is available.
 
-|           |Alpine            |CentOS            |Clear Linux       |Debian/Ubuntu     |EulerOS           |Fedora            |openSUSE          |
-|--         |--                |--                |--                |--                |--                |--                |--                |
-|**ARM64**  |:heavy_check_mark:|:heavy_check_mark:|                  |                  |:heavy_check_mark:|:heavy_check_mark:|:heavy_check_mark:|
-|**PPC64le**|:heavy_check_mark:|:heavy_check_mark:|                  |:heavy_check_mark:|:heavy_check_mark:|:heavy_check_mark:|:heavy_check_mark:|
-|**s390x**  |:heavy_check_mark:|                  |                  |:heavy_check_mark:|                  |:heavy_check_mark:|                  |
-|**x86_64** |:heavy_check_mark:|:heavy_check_mark:|:heavy_check_mark:|:heavy_check_mark:|:heavy_check_mark:|:heavy_check_mark:|:heavy_check_mark:|
+|           |Alpine            |CentOS            |Clear Linux       |Debian/Ubuntu     |Fedora            |openSUSE          |
+|--         |--                |--                |--                |--                |--                |--                |
+|**ARM64**  |:heavy_check_mark:|:heavy_check_mark:|                  |                  |:heavy_check_mark:|:heavy_check_mark:|
+|**PPC64le**|:heavy_check_mark:|:heavy_check_mark:|                  |:heavy_check_mark:|:heavy_check_mark:|:heavy_check_mark:|
+|**s390x**  |:heavy_check_mark:|                  |                  |:heavy_check_mark:|:heavy_check_mark:|                  |
+|**x86_64** |:heavy_check_mark:|:heavy_check_mark:|:heavy_check_mark:|:heavy_check_mark:|:heavy_check_mark:|:heavy_check_mark:|

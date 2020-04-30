@@ -623,18 +623,11 @@ parse_arguments()
 	distro="$1"
 	arch=$(uname -m)
 
-	if [ "${distro}" == "alpine" -o "${distro}" == "euleros" ]; then
+	if [ "${distro}" == "alpine" ]; then
 		if [ "${RUST_AGENT}" == "yes" ]; then
 			die "rust agent cannot be built on ${distro}.
 alpine: only has stable/nightly-x86_64-unknown-linux-musl toolchain. It does not support proc-macro compilation.
-See issue: https://github.com/kata-containers/osbuilder/issues/386
-euleros: 1. Missing libstdc++.a
-         2. kernel is 3.10.x, there is no vsock support
-You can build rust agent on your host and then copy it into
-image's rootfs(eg. rootfs-builder/rootfs/usr/bin), and then
-use image_builder.sh to build image with the rootfs. Please
-refer to documentation for how to use customer agent.
-See issue: https://github.com/kata-containers/osbuilder/issues/387"
+See issue: https://github.com/kata-containers/osbuilder/issues/386"
 		fi
 	fi
 
