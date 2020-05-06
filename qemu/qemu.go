@@ -1876,6 +1876,9 @@ const (
 	// Host is for using the host clock as a reference.
 	Host RTCClock = "host"
 
+	// RT is for using the host monotonic clock as a reference.
+	RT RTCClock = "rt"
+
 	// VM is for using the guest clock as a reference
 	VM RTCClock = "vm"
 )
@@ -1902,7 +1905,7 @@ type RTC struct {
 
 // Valid returns true if the RTC structure is valid and complete.
 func (rtc RTC) Valid() bool {
-	if rtc.Clock != Host && rtc.Clock != VM {
+	if rtc.Clock != Host && rtc.Clock != RT && rtc.Clock != VM {
 		return false
 	}
 
