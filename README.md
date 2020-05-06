@@ -128,7 +128,7 @@ as the component it tests).
 
 #### OS builder
 
-The [osbuilder](https://github.com/kata-containers/osbuilder) tool can create
+The [osbuilder](tools/osbuilder/README.md) tool can create
 a rootfs and a "mini O/S" image. This image is used by the hypervisor to setup
 the environment before switching to the workload.
 
