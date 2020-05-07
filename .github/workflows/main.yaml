@@ -16,7 +16,7 @@ jobs:
          popd
          ./packaging/artifact-list.sh > artifact-list.txt
       - name: save-artifact-list
-        uses: actions/upload-artifact@master
+        uses: actions/upload-artifact@v1
         with:
           name: artifact-list
           path: artifact-list.txt
@@ -29,7 +29,7 @@ jobs:
     steps:
       - uses: actions/checkout@v1
       - name: get-artifact-list
-        uses: actions/download-artifact@master
+        uses: actions/download-artifact@v1
         with:
           name: artifact-list
       - run: |
@@ -44,7 +44,7 @@ jobs:
          fi
       - name: store-artifacts
         if: env.artifact-built == 'true'
-        uses: actions/upload-artifact@master
+        uses: actions/upload-artifact@v1
         with:
           name: kata-artifacts
           path: kata-static-kernel.tar.gz
@@ -57,7 +57,7 @@ jobs:
     steps:
       - uses: actions/checkout@v1
       - name: get-artifact-list
-        uses: actions/download-artifact@master
+        uses: actions/download-artifact@v1
         with:
           name: artifact-list
       - run: |
@@ -72,7 +72,7 @@ jobs:
          fi
       - name: store-artifacts
         if: env.artifact-built == 'true'
-        uses: actions/upload-artifact@master
+        uses: actions/upload-artifact@v1
         with:
           name: kata-artifacts
           path: kata-static-experimental-kernel.tar.gz
@@ -85,7 +85,7 @@ jobs:
     steps:
       - uses: actions/checkout@v1
       - name: get-artifact-list
-        uses: actions/download-artifact@master
+        uses: actions/download-artifact@v1
         with:
           name: artifact-list
       - name: build-qemu
@@ -98,7 +98,7 @@ jobs:
          fi
       - name: store-artifacts
         if: env.artifact-built == 'true'
-        uses: actions/upload-artifact@master
+        uses: actions/upload-artifact@v1
         with:
           name: kata-artifacts
           path: kata-static-qemu.tar.gz
@@ -111,7 +111,7 @@ jobs:
     steps:
       - uses: actions/checkout@v1
       - name: get-artifact-list
-        uses: actions/download-artifact@master
+        uses: actions/download-artifact@v1
         with:
           name: artifact-list
       - name: build-nemu
@@ -124,7 +124,7 @@ jobs:
          fi
       - name: store-artifacts
         if: env.artifact-built == 'true'
-        uses: actions/upload-artifact@master
+        uses: actions/upload-artifact@v1
         with:
           name: kata-artifacts
           path: kata-static-nemu.tar.gz
@@ -138,7 +138,7 @@ jobs:
     steps:
       - uses: actions/checkout@v1
       - name: get-artifact-list
-        uses: actions/download-artifact@master
+        uses: actions/download-artifact@v1
         with:
           name: artifact-list
       - name: build-qemu-virtiofsd
@@ -151,7 +151,7 @@ jobs:
          fi
       - name: store-artifacts
         if: env.artifact-built == 'true'
-        uses: actions/upload-artifact@master
+        uses: actions/upload-artifact@v1
         with:
           name: kata-artifacts
           path: kata-static-qemu-virtiofsd.tar.gz
@@ -165,7 +165,7 @@ jobs:
     steps:
       - uses: actions/checkout@v1
       - name: get-artifact-list
-        uses: actions/download-artifact@master
+        uses: actions/download-artifact@v1
         with:
           name: artifact-list
       - name: build-image
@@ -178,7 +178,7 @@ jobs:
          fi
       - name: store-artifacts
         if: env.artifact-built == 'true'
-        uses: actions/upload-artifact@master
+        uses: actions/upload-artifact@v1
         with:
           name: kata-artifacts
           path: kata-static-image.tar.gz
@@ -192,7 +192,7 @@ jobs:
     steps:
       - uses: actions/checkout@v1
       - name: get-artifact-list
-        uses: actions/download-artifact@master
+        uses: actions/download-artifact@v1
         with:
           name: artifact-list
       - name: build-firecracker
@@ -205,7 +205,7 @@ jobs:
          fi
       - name: store-artifacts
         if: env.artifact-built == 'true'
-        uses: actions/upload-artifact@master
+        uses: actions/upload-artifact@v1
         with:
           name: kata-artifacts
           path: kata-static-firecracker.tar.gz
@@ -219,7 +219,7 @@ jobs:
     steps:
       - uses: actions/checkout@v1
       - name: get-artifact-list
-        uses: actions/download-artifact@master
+        uses: actions/download-artifact@v1
         with:
           name: artifact-list
       - name: build-clh
@@ -232,7 +232,7 @@ jobs:
          fi
       - name: store-artifacts
         if: env.artifact-built == 'true'
-        uses: actions/upload-artifact@master
+        uses: actions/upload-artifact@v1
         with:
           name: kata-artifacts
           path: kata-static-clh.tar.gz
@@ -246,7 +246,7 @@ jobs:
     steps:
       - uses: actions/checkout@v1
       - name: get-artifact-list
-        uses: actions/download-artifact@master
+        uses: actions/download-artifact@v1
         with:
           name: artifact-list
       - name: build-kata-components
@@ -259,7 +259,7 @@ jobs:
          fi
       - name: store-artifacts
         if: env.artifact-built == 'true'
-        uses: actions/upload-artifact@master
+        uses: actions/upload-artifact@v1
         with:
           name: kata-artifacts
           path: kata-static-kata-components.tar.gz
@@ -270,14 +270,14 @@ jobs:
     steps:
       - uses: actions/checkout@v1
       - name: get-artifacts
-        uses: actions/download-artifact@master
+        uses: actions/download-artifact@v1
         with:
           name: kata-artifacts
       - name: colate-artifacts
         run: |
           $GITHUB_WORKSPACE/.github/workflows/gather-artifacts.sh
       - name: store-artifacts
-        uses: actions/upload-artifact@master
+        uses: actions/upload-artifact@v1
         with:
           name: release-candidate
           path: kata-static.tar.xz
@@ -287,7 +287,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: get-artifacts
-        uses: actions/download-artifact@master
+        uses: actions/download-artifact@v1
         with:
           name: release-candidate
       - name: build-and-push-kata-deploy-ci
@@ -328,7 +328,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: download-artifacts
-        uses: actions/download-artifact@master
+        uses: actions/download-artifact@v1
         with:
           name: release-candidate
       - name: install hub
