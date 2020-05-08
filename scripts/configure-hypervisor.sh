@@ -345,6 +345,9 @@ generate_qemu_options() {
 	# implicitly enabled in Fedora 27).
 	qemu_options+=(size:--disable-linux-aio)
 
+	# Disable Capstone
+	qemu_options+=(size:--disable-capstone)
+
 	if [[ "${qemu_version_major}" -ge 3 ]]; then
 		# Disable graphics
 		qemu_options+=(size:--disable-virglrenderer)
