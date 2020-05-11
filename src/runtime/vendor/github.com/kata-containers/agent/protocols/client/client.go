@@ -18,16 +18,16 @@ import (
 	"strings"
 	"time"
 
-	"github.com/grpc-ecosystem/grpc-opentracing/go/otgrpc"
 	"github.com/hashicorp/yamux"
 	"github.com/mdlayher/vsock"
-	opentracing "github.com/opentracing/opentracing-go"
+//	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/sirupsen/logrus"
-	"google.golang.org/grpc"
+//	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	grpcStatus "google.golang.org/grpc/status"
 
 	agentgrpc "github.com/kata-containers/agent/protocols/grpc"
+	"github.com/containerd/ttrpc"
 )
 
 const (
@@ -51,9 +51,9 @@ var agentClientLog = logrus.WithFields(agentClientFields)
 
 // AgentClient is an agent gRPC client connection wrapper for agentgrpc.AgentServiceClient
 type AgentClient struct {
-	agentgrpc.AgentServiceClient
-	agentgrpc.HealthClient
-	conn *grpc.ClientConn
+	AgentServiceClient agentgrpc.AgentServiceService                                                                            
+	HealthClient agentgrpc.HealthService                                                                                        
+	conn *ttrpc.Client 
 }
 
 type yamuxSessionStream struct {
@@ -100,6 +100,15 @@ func NewAgentClient(ctx context.Context, sock string, enableYamux bool) (*AgentC
 	if err != nil {
 		return nil, err
 	}
+
+	       var conn net.Conn                                                                                                           
+	       var d dialer                                                                                                                
+       d = agentDialer(parsedAddr, enableYamux)                                                                                    
+	       conn, err = d(grpcAddr, defaultDialTimeout)                                                                                 
+	       if err != nil {                                                                                                             
+		               return nil, err                                                                                                     
+		       }                              
+/*
 	dialOpts := []grpc.DialOption{grpc.WithInsecure(), grpc.WithBlock()}
 	dialOpts = append(dialOpts, grpc.WithDialer(agentDialer(parsedAddr, enableYamux)))
 
@@ -123,11 +132,13 @@ func NewAgentClient(ctx context.Context, sock string, enableYamux bool) (*AgentC
 	if err != nil {
 		return nil, err
 	}
+*/
+	client := ttrpc.NewClient(conn)
 
 	return &AgentClient{
-		AgentServiceClient: agentgrpc.NewAgentServiceClient(conn),
-		HealthClient:       agentgrpc.NewHealthClient(conn),
-		conn:               conn,
+		               AgentServiceClient: agentgrpc.NewAgentServiceClient(client),                                                        
+		               HealthClient:       agentgrpc.NewHealthClient(client),                                                              
+		               conn:               client,
 	}, nil
 }
 

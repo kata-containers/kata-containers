@@ -26,7 +26,7 @@ require (
 	github.com/go-openapi/strfmt v0.18.0
 	github.com/go-openapi/swag v0.18.0
 	github.com/go-openapi/validate v0.18.0
-	github.com/gogo/protobuf v1.2.0
+	github.com/gogo/protobuf v1.3.1
 	github.com/grpc-ecosystem/grpc-opentracing v0.0.0-20180507213350-8e809c8a8645 // indirect
 	github.com/hashicorp/go-multierror v1.0.0
 	github.com/hashicorp/yamux v0.0.0-20190923154419-df201c70410d // indirect
@@ -40,6 +40,7 @@ require (
 	github.com/opentracing/opentracing-go v1.1.0
 	github.com/pkg/errors v0.8.1
 	github.com/prometheus/procfs v0.0.0-20190328153300-af7bedc223fb
+	github.com/protocolbuffers/protobuf v3.11.4+incompatible // indirect
 	github.com/safchain/ethtool v0.0.0-20190326074333-42ed695e3de8
 	github.com/seccomp/libseccomp-golang v0.9.1 // indirect
 	github.com/sirupsen/logrus v1.4.2

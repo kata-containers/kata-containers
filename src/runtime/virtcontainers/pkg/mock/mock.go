@@ -6,6 +6,7 @@
 package mock
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -14,7 +15,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"google.golang.org/grpc"
+	"github.com/containerd/ttrpc"
 )
 
 // DefaultMockKataShimBinPath is populated at link time.
@@ -122,7 +123,7 @@ type ProxyGRPCMock struct {
 
 	// GRPCRegister is the registration routine for
 	// the GRPC service.
-	GRPCRegister func(s *grpc.Server, srv interface{})
+	GRPCRegister func(s *ttrpc.Server, srv interface{})
 
 	listener net.Listener
 }
@@ -194,11 +195,14 @@ func (p *ProxyGRPCMock) Start(URL string) error {
 
 	p.listener = l
 
-	grpcServer := grpc.NewServer()
+	grpcServer, err := ttrpc.NewServer()
+	if err != nil {
+		return err
+	}
 	p.GRPCRegister(grpcServer, p.GRPCImplementer)
 
 	go func() {
-		grpcServer.Serve(l)
+		grpcServer.Serve(context.Background(), l)
 	}()
 
 	return nil
