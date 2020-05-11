@@ -39,7 +39,6 @@ import (
 	"github.com/vishvananda/netlink"
 	"golang.org/x/net/context"
 	"golang.org/x/sys/unix"
-	golangGrpc "google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	grpcStatus "google.golang.org/grpc/status"
 )
@@ -1898,96 +1897,96 @@ func (k *kataAgent) reseedRNG(data []byte) error {
 	return err
 }
 
-type reqFunc func(context.Context, interface{}, ...golangGrpc.CallOption) (interface{}, error)
+type reqFunc func(context.Context, interface{}) (interface{}, error)
 
 func (k *kataAgent) installReqFunc(c *kataclient.AgentClient) {
 	k.reqHandlers = make(map[string]reqFunc)
-	k.reqHandlers[grpcCheckRequest] = func(ctx context.Context, req interface{}, opts ...golangGrpc.CallOption) (interface{}, error) {
-		return k.client.Check(ctx, req.(*grpc.CheckRequest), opts...)
+	k.reqHandlers[grpcCheckRequest] = func(ctx context.Context, req interface{}) (interface{}, error) {
+		return k.client.HealthClient.Check(ctx, req.(*grpc.CheckRequest))
 	}
-	k.reqHandlers[grpcExecProcessRequest] = func(ctx context.Context, req interface{}, opts ...golangGrpc.CallOption) (interface{}, error) {
-		return k.client.ExecProcess(ctx, req.(*grpc.ExecProcessRequest), opts...)
+	k.reqHandlers[grpcExecProcessRequest] = func(ctx context.Context, req interface{}) (interface{}, error) {
+		return k.client.AgentServiceClient.ExecProcess(ctx, req.(*grpc.ExecProcessRequest))
 	}
-	k.reqHandlers[grpcCreateSandboxRequest] = func(ctx context.Context, req interface{}, opts ...golangGrpc.CallOption) (interface{}, error) {
-		return k.client.CreateSandbox(ctx, req.(*grpc.CreateSandboxRequest), opts...)
+	k.reqHandlers[grpcCreateSandboxRequest] = func(ctx context.Context, req interface{}) (interface{}, error) {
+		return k.client.AgentServiceClient.CreateSandbox(ctx, req.(*grpc.CreateSandboxRequest))
 	}
-	k.reqHandlers[grpcDestroySandboxRequest] = func(ctx context.Context, req interface{}, opts ...golangGrpc.CallOption) (interface{}, error) {
-		return k.client.DestroySandbox(ctx, req.(*grpc.DestroySandboxRequest), opts...)
+	k.reqHandlers[grpcDestroySandboxRequest] = func(ctx context.Context, req interface{}) (interface{}, error) {
+		return k.client.AgentServiceClient.DestroySandbox(ctx, req.(*grpc.DestroySandboxRequest))
 	}
-	k.reqHandlers[grpcCreateContainerRequest] = func(ctx context.Context, req interface{}, opts ...golangGrpc.CallOption) (interface{}, error) {
-		return k.client.CreateContainer(ctx, req.(*grpc.CreateContainerRequest), opts...)
+	k.reqHandlers[grpcCreateContainerRequest] = func(ctx context.Context, req interface{}) (interface{}, error) {
+		return k.client.AgentServiceClient.CreateContainer(ctx, req.(*grpc.CreateContainerRequest))
 	}
-	k.reqHandlers[grpcStartContainerRequest] = func(ctx context.Context, req interface{}, opts ...golangGrpc.CallOption) (interface{}, error) {
-		return k.client.StartContainer(ctx, req.(*grpc.StartContainerRequest), opts...)
+	k.reqHandlers[grpcStartContainerRequest] = func(ctx context.Context, req interface{}) (interface{}, error) {
+		return k.client.AgentServiceClient.StartContainer(ctx, req.(*grpc.StartContainerRequest))
 	}
-	k.reqHandlers[grpcRemoveContainerRequest] = func(ctx context.Context, req interface{}, opts ...golangGrpc.CallOption) (interface{}, error) {
-		return k.client.RemoveContainer(ctx, req.(*grpc.RemoveContainerRequest), opts...)
+	k.reqHandlers[grpcRemoveContainerRequest] = func(ctx context.Context, req interface{}) (interface{}, error) {
+		return k.client.AgentServiceClient.RemoveContainer(ctx, req.(*grpc.RemoveContainerRequest))
 	}
-	k.reqHandlers[grpcSignalProcessRequest] = func(ctx context.Context, req interface{}, opts ...golangGrpc.CallOption) (interface{}, error) {
-		return k.client.SignalProcess(ctx, req.(*grpc.SignalProcessRequest), opts...)
+	k.reqHandlers[grpcSignalProcessRequest] = func(ctx context.Context, req interface{}) (interface{}, error) {
+		return k.client.AgentServiceClient.SignalProcess(ctx, req.(*grpc.SignalProcessRequest))
 	}
-	k.reqHandlers[grpcUpdateRoutesRequest] = func(ctx context.Context, req interface{}, opts ...golangGrpc.CallOption) (interface{}, error) {
-		return k.client.UpdateRoutes(ctx, req.(*grpc.UpdateRoutesRequest), opts...)
+	k.reqHandlers[grpcUpdateRoutesRequest] = func(ctx context.Context, req interface{}) (interface{}, error) {
+		return k.client.AgentServiceClient.UpdateRoutes(ctx, req.(*grpc.UpdateRoutesRequest))
 	}
-	k.reqHandlers[grpcUpdateInterfaceRequest] = func(ctx context.Context, req interface{}, opts ...golangGrpc.CallOption) (interface{}, error) {
-		return k.client.UpdateInterface(ctx, req.(*grpc.UpdateInterfaceRequest), opts...)
+	k.reqHandlers[grpcUpdateInterfaceRequest] = func(ctx context.Context, req interface{}) (interface{}, error) {
+		return k.client.AgentServiceClient.UpdateInterface(ctx, req.(*grpc.UpdateInterfaceRequest))
 	}
-	k.reqHandlers[grpcListInterfacesRequest] = func(ctx context.Context, req interface{}, opts ...golangGrpc.CallOption) (interface{}, error) {
-		return k.client.ListInterfaces(ctx, req.(*grpc.ListInterfacesRequest), opts...)
+	k.reqHandlers[grpcListInterfacesRequest] = func(ctx context.Context, req interface{}) (interface{}, error) {
+		return k.client.AgentServiceClient.ListInterfaces(ctx, req.(*grpc.ListInterfacesRequest))
 	}
-	k.reqHandlers[grpcListRoutesRequest] = func(ctx context.Context, req interface{}, opts ...golangGrpc.CallOption) (interface{}, error) {
-		return k.client.ListRoutes(ctx, req.(*grpc.ListRoutesRequest), opts...)
+	k.reqHandlers[grpcListRoutesRequest] = func(ctx context.Context, req interface{}) (interface{}, error) {
+		return k.client.AgentServiceClient.ListRoutes(ctx, req.(*grpc.ListRoutesRequest))
 	}
-	k.reqHandlers[grpcOnlineCPUMemRequest] = func(ctx context.Context, req interface{}, opts ...golangGrpc.CallOption) (interface{}, error) {
-		return k.client.OnlineCPUMem(ctx, req.(*grpc.OnlineCPUMemRequest), opts...)
+	k.reqHandlers[grpcOnlineCPUMemRequest] = func(ctx context.Context, req interface{}) (interface{}, error) {
+		return k.client.AgentServiceClient.OnlineCPUMem(ctx, req.(*grpc.OnlineCPUMemRequest))
 	}
-	k.reqHandlers[grpcListProcessesRequest] = func(ctx context.Context, req interface{}, opts ...golangGrpc.CallOption) (interface{}, error) {
-		return k.client.ListProcesses(ctx, req.(*grpc.ListProcessesRequest), opts...)
+	k.reqHandlers[grpcListProcessesRequest] = func(ctx context.Context, req interface{}) (interface{}, error) {
+		return k.client.AgentServiceClient.ListProcesses(ctx, req.(*grpc.ListProcessesRequest))
 	}
-	k.reqHandlers[grpcUpdateContainerRequest] = func(ctx context.Context, req interface{}, opts ...golangGrpc.CallOption) (interface{}, error) {
-		return k.client.UpdateContainer(ctx, req.(*grpc.UpdateContainerRequest), opts...)
+	k.reqHandlers[grpcUpdateContainerRequest] = func(ctx context.Context, req interface{}) (interface{}, error) {
+		return k.client.AgentServiceClient.UpdateContainer(ctx, req.(*grpc.UpdateContainerRequest))
 	}
-	k.reqHandlers[grpcWaitProcessRequest] = func(ctx context.Context, req interface{}, opts ...golangGrpc.CallOption) (interface{}, error) {
-		return k.client.WaitProcess(ctx, req.(*grpc.WaitProcessRequest), opts...)
+	k.reqHandlers[grpcWaitProcessRequest] = func(ctx context.Context, req interface{}) (interface{}, error) {
+		return k.client.AgentServiceClient.WaitProcess(ctx, req.(*grpc.WaitProcessRequest))
 	}
-	k.reqHandlers[grpcTtyWinResizeRequest] = func(ctx context.Context, req interface{}, opts ...golangGrpc.CallOption) (interface{}, error) {
-		return k.client.TtyWinResize(ctx, req.(*grpc.TtyWinResizeRequest), opts...)
+	k.reqHandlers[grpcTtyWinResizeRequest] = func(ctx context.Context, req interface{}) (interface{}, error) {
+		return k.client.AgentServiceClient.TtyWinResize(ctx, req.(*grpc.TtyWinResizeRequest))
 	}
-	k.reqHandlers[grpcWriteStreamRequest] = func(ctx context.Context, req interface{}, opts ...golangGrpc.CallOption) (interface{}, error) {
-		return k.client.WriteStdin(ctx, req.(*grpc.WriteStreamRequest), opts...)
+	k.reqHandlers[grpcWriteStreamRequest] = func(ctx context.Context, req interface{}) (interface{}, error) {
+		return k.client.AgentServiceClient.WriteStdin(ctx, req.(*grpc.WriteStreamRequest))
 	}
-	k.reqHandlers[grpcCloseStdinRequest] = func(ctx context.Context, req interface{}, opts ...golangGrpc.CallOption) (interface{}, error) {
-		return k.client.CloseStdin(ctx, req.(*grpc.CloseStdinRequest), opts...)
+	k.reqHandlers[grpcCloseStdinRequest] = func(ctx context.Context, req interface{}) (interface{}, error) {
+		return k.client.AgentServiceClient.CloseStdin(ctx, req.(*grpc.CloseStdinRequest))
 	}
-	k.reqHandlers[grpcStatsContainerRequest] = func(ctx context.Context, req interface{}, opts ...golangGrpc.CallOption) (interface{}, error) {
-		return k.client.StatsContainer(ctx, req.(*grpc.StatsContainerRequest), opts...)
+	k.reqHandlers[grpcStatsContainerRequest] = func(ctx context.Context, req interface{}) (interface{}, error) {
+		return k.client.AgentServiceClient.StatsContainer(ctx, req.(*grpc.StatsContainerRequest))
 	}
-	k.reqHandlers[grpcPauseContainerRequest] = func(ctx context.Context, req interface{}, opts ...golangGrpc.CallOption) (interface{}, error) {
-		return k.client.PauseContainer(ctx, req.(*grpc.PauseContainerRequest), opts...)
+	k.reqHandlers[grpcPauseContainerRequest] = func(ctx context.Context, req interface{}) (interface{}, error) {
+		return k.client.AgentServiceClient.PauseContainer(ctx, req.(*grpc.PauseContainerRequest))
 	}
-	k.reqHandlers[grpcResumeContainerRequest] = func(ctx context.Context, req interface{}, opts ...golangGrpc.CallOption) (interface{}, error) {
-		return k.client.ResumeContainer(ctx, req.(*grpc.ResumeContainerRequest), opts...)
+	k.reqHandlers[grpcResumeContainerRequest] = func(ctx context.Context, req interface{}) (interface{}, error) {
+		return k.client.AgentServiceClient.ResumeContainer(ctx, req.(*grpc.ResumeContainerRequest))
 	}
-	k.reqHandlers[grpcReseedRandomDevRequest] = func(ctx context.Context, req interface{}, opts ...golangGrpc.CallOption) (interface{}, error) {
-		return k.client.ReseedRandomDev(ctx, req.(*grpc.ReseedRandomDevRequest), opts...)
+	k.reqHandlers[grpcReseedRandomDevRequest] = func(ctx context.Context, req interface{}) (interface{}, error) {
+		return k.client.AgentServiceClient.ReseedRandomDev(ctx, req.(*grpc.ReseedRandomDevRequest))
 	}
-	k.reqHandlers[grpcGuestDetailsRequest] = func(ctx context.Context, req interface{}, opts ...golangGrpc.CallOption) (interface{}, error) {
-		return k.client.GetGuestDetails(ctx, req.(*grpc.GuestDetailsRequest), opts...)
+	k.reqHandlers[grpcGuestDetailsRequest] = func(ctx context.Context, req interface{}) (interface{}, error) {
+		return k.client.AgentServiceClient.GetGuestDetails(ctx, req.(*grpc.GuestDetailsRequest))
 	}
-	k.reqHandlers[grpcMemHotplugByProbeRequest] = func(ctx context.Context, req interface{}, opts ...golangGrpc.CallOption) (interface{}, error) {
-		return k.client.MemHotplugByProbe(ctx, req.(*grpc.MemHotplugByProbeRequest), opts...)
+	k.reqHandlers[grpcMemHotplugByProbeRequest] = func(ctx context.Context, req interface{}) (interface{}, error) {
+		return k.client.AgentServiceClient.MemHotplugByProbe(ctx, req.(*grpc.MemHotplugByProbeRequest))
 	}
-	k.reqHandlers[grpcCopyFileRequest] = func(ctx context.Context, req interface{}, opts ...golangGrpc.CallOption) (interface{}, error) {
-		return k.client.CopyFile(ctx, req.(*grpc.CopyFileRequest), opts...)
+	k.reqHandlers[grpcCopyFileRequest] = func(ctx context.Context, req interface{}) (interface{}, error) {
+		return k.client.AgentServiceClient.CopyFile(ctx, req.(*grpc.CopyFileRequest))
 	}
-	k.reqHandlers[grpcSetGuestDateTimeRequest] = func(ctx context.Context, req interface{}, opts ...golangGrpc.CallOption) (interface{}, error) {
-		return k.client.SetGuestDateTime(ctx, req.(*grpc.SetGuestDateTimeRequest), opts...)
+	k.reqHandlers[grpcSetGuestDateTimeRequest] = func(ctx context.Context, req interface{}) (interface{}, error) {
+		return k.client.AgentServiceClient.SetGuestDateTime(ctx, req.(*grpc.SetGuestDateTimeRequest))
 	}
-	k.reqHandlers[grpcStartTracingRequest] = func(ctx context.Context, req interface{}, opts ...golangGrpc.CallOption) (interface{}, error) {
-		return k.client.StartTracing(ctx, req.(*grpc.StartTracingRequest), opts...)
+	k.reqHandlers[grpcStartTracingRequest] = func(ctx context.Context, req interface{}) (interface{}, error) {
+		return k.client.AgentServiceClient.StartTracing(ctx, req.(*grpc.StartTracingRequest))
 	}
-	k.reqHandlers[grpcStopTracingRequest] = func(ctx context.Context, req interface{}, opts ...golangGrpc.CallOption) (interface{}, error) {
-		return k.client.StopTracing(ctx, req.(*grpc.StopTracingRequest), opts...)
+	k.reqHandlers[grpcStopTracingRequest] = func(ctx context.Context, req interface{}) (interface{}, error) {
+		return k.client.AgentServiceClient.StopTracing(ctx, req.(*grpc.StopTracingRequest))
 	}
 }
 
@@ -2041,7 +2040,7 @@ func (k *kataAgent) readProcessStdout(c *Container, processID string, data []byt
 		defer k.disconnect()
 	}
 
-	return k.readProcessStream(c.id, processID, data, k.client.ReadStdout)
+	return k.readProcessStream(c.id, processID, data, k.client.AgentServiceClient.ReadStdout) 
 }
 
 // readStdout and readStderr are special that we cannot differentiate them with the request types...
@@ -2053,10 +2052,10 @@ func (k *kataAgent) readProcessStderr(c *Container, processID string, data []byt
 		defer k.disconnect()
 	}
 
-	return k.readProcessStream(c.id, processID, data, k.client.ReadStderr)
+	return k.readProcessStream(c.id, processID, data, k.client.AgentServiceClient.ReadStderr)
 }
 
-type readFn func(context.Context, *grpc.ReadStreamRequest, ...golangGrpc.CallOption) (*grpc.ReadStreamResponse, error)
+type readFn func(context.Context, *grpc.ReadStreamRequest) (*grpc.ReadStreamResponse, error)
 
 func (k *kataAgent) readProcessStream(containerID, processID string, data []byte, read readFn) (int, error) {
 	resp, err := read(k.ctx, &grpc.ReadStreamRequest{

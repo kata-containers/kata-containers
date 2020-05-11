@@ -20,10 +20,10 @@ import (
 
 	vcAnnotations "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/annotations"
 
+	"github.com/containerd/ttrpc"
 	gpb "github.com/gogo/protobuf/types"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/stretchr/testify/assert"
-	"google.golang.org/grpc"
 
 	aTypes "github.com/kata-containers/agent/pkg/types"
 	pb "github.com/kata-containers/agent/protocols/grpc"
@@ -242,11 +242,11 @@ func (p *gRPCProxy) MemHotplugByProbe(ctx context.Context, req *pb.MemHotplugByP
 	return &gpb.Empty{}, nil
 }
 
-func gRPCRegister(s *grpc.Server, srv interface{}) {
+func gRPCRegister(s *ttrpc.Server, srv interface{}) {
 	switch g := srv.(type) {
 	case *gRPCProxy:
-		pb.RegisterAgentServiceServer(s, g)
-		pb.RegisterHealthServer(s, g)
+		pb.RegisterAgentServiceService(s, g)
+		pb.RegisterHealthService(s, g)
 	}
 }
 
@@ -358,7 +358,7 @@ func TestHandleEphemeralStorage(t *testing.T) {
 	ociMounts = append(ociMounts, mount)
 	epheStorages := k.handleEphemeralStorage(ociMounts)
 
-	epheMountPoint := epheStorages[0].GetMountPoint()
+	epheMountPoint := epheStorages[0].MountPoint
 	expected := filepath.Join(ephemeralPath(), filepath.Base(mountSource))
 	assert.Equal(t, epheMountPoint, expected,
 		"Ephemeral mount point didn't match: got %s, expecting %s", epheMountPoint, expected)
@@ -383,7 +383,7 @@ func TestHandleLocalStorage(t *testing.T) {
 	assert.NotNil(t, localStorages)
 	assert.Equal(t, len(localStorages), 1)
 
-	localMountPoint := localStorages[0].GetMountPoint()
+	localMountPoint := localStorages[0].MountPoint
 	expected := filepath.Join(kataGuestSharedDir(), sandboxID, rootfsSuffix, KataLocalDevType, filepath.Base(mountSource))
 	assert.Equal(t, localMountPoint, expected)
 }
