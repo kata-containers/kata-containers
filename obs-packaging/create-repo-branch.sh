@@ -177,6 +177,7 @@ main() {
 	info "Creating/Updating project with name ${project_branch}"
 	# Update /Create project metadata.
 	docker_run osc meta prj "${project_branch}" -F meta_project.xml
+	docker_run osc meta prjconf "${project_branch}" -F projectconfig
 	for pkg in "${OBS_PKGS_PROJECTS[@]}"; do
 		if ! pkg_exist "${project_branch}" "${pkg}"; then
 			echo "Package ${pkg} does not exit in ${project_branch}, creating ..."

@@ -43,8 +43,14 @@ BuildRequires : libnuma-devel
 %else
 BuildRequires : numactl-devel
 %endif
+
+%if 0%{?centos} < 8
 BuildRequires : python
 BuildRequires : python-devel
+%else
+BuildRequires : python3
+BuildRequires : python3-devel
+%endif
 BuildRequires : zlib-devel
 BuildRequires : pkgconfig(pixman-1)
 BuildRequires : libpmem-devel
