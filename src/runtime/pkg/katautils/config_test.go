@@ -85,6 +85,7 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (config testRuntimeConf
 	pcieRootPort := uint32(2)
 	disableNewNetNs := false
 	sharedFS := "virtio-9p"
+	virtioFSdaemon := path.Join(dir, "virtiofsd")
 
 	configFileOptions := ktu.RuntimeConfigOptions{
 		Hypervisor:           "qemu",
@@ -117,6 +118,7 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (config testRuntimeConf
 		AgentDebug:           agentDebug,
 		AgentTrace:           agentTrace,
 		SharedFS:             sharedFS,
+		VirtioFSDaemon:       virtioFSdaemon,
 	}
 
 	runtimeConfigFileData := ktu.MakeRuntimeConfigFileData(configFileOptions)
@@ -167,7 +169,7 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (config testRuntimeConf
 		GuestHookPath:         defaultGuestHookPath,
 		VhostUserStorePath:    defaultVhostUserStorePath,
 		SharedFS:              sharedFS,
-		VirtioFSDaemon:        "/path/to/virtiofsd",
+		VirtioFSDaemon:        virtioFSdaemon,
 		VirtioFSCache:         defaultVirtioFSCacheMode,
 	}
 
