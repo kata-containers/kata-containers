@@ -30,8 +30,12 @@ BuildRequires:  libelf-devel
 BuildRequires: fdupes
 %endif
 
-%if 0%{?fedora} || 0%{?centos_version}
+%if 0%{?fedora} || 0%{?centos} <= 7
 BuildRequires:  pkgconfig(libelf)
+%endif
+
+%if 0%{?centos} >= 8
+BuildRequires: elfutils-libelf-devel
 %endif
 
 BuildRequires:  make >= 3.78
