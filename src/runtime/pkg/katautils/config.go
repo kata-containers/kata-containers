@@ -71,9 +71,12 @@ type factory struct {
 
 type hypervisor struct {
 	Path                    string   `toml:"path"`
+	PathList                []string `toml:"path_list"`
 	JailerPath              string   `toml:"jailer_path"`
+	JailerPathList          []string `toml:"jailer_path_list"`
 	Kernel                  string   `toml:"kernel"`
 	CtlPath                 string   `toml:"ctlpath"`
+	CtlPathList             []string `toml:"ctlpath_list"`
 	Initrd                  string   `toml:"initrd"`
 	Image                   string   `toml:"image"`
 	Firmware                string   `toml:"firmware"`
@@ -85,6 +88,7 @@ type hypervisor struct {
 	EntropySource           string   `toml:"entropy_source"`
 	SharedFS                string   `toml:"shared_fs"`
 	VirtioFSDaemon          string   `toml:"virtio_fs_daemon"`
+	VirtioFSDaemonList      []string `toml:"virtio_fs_daemon_list"`
 	VirtioFSCache           string   `toml:"virtio_fs_cache"`
 	VirtioFSExtraArgs       []string `toml:"virtio_fs_extra_args"`
 	VirtioFSCacheSize       uint32   `toml:"virtio_fs_cache_size"`
@@ -93,6 +97,7 @@ type hypervisor struct {
 	BlockDeviceCacheNoflush bool     `toml:"block_device_cache_noflush"`
 	EnableVhostUserStore    bool     `toml:"enable_vhost_user_store"`
 	VhostUserStorePath      string   `toml:"vhost_user_store_path"`
+	VhostUserStorePathList  []string `toml:"vhost_user_store_path_list"`
 	NumVCPUs                int32    `toml:"default_vcpus"`
 	DefaultMaxVCPUs         uint32   `toml:"default_maxvcpus"`
 	MemorySize              uint32   `toml:"default_memory"`
@@ -108,6 +113,7 @@ type hypervisor struct {
 	IOMMU                   bool     `toml:"enable_iommu"`
 	IOMMUPlatform           bool     `toml:"enable_iommu_platform"`
 	FileBackedMemRootDir    string   `toml:"file_mem_backend"`
+	FileBackedMemRootList   []string `toml:"file_mem_backend_list"`
 	Swap                    bool     `toml:"enable_swap"`
 	Debug                   bool     `toml:"enable_debug"`
 	DisableNestingChecks    bool     `toml:"disable_nesting_checks"`
@@ -647,6 +653,7 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		DisableBlockDeviceUse:   h.DisableBlockDeviceUse,
 		SharedFS:                sharedFS,
 		VirtioFSDaemon:          h.VirtioFSDaemon,
+		VirtioFSDaemonList:      h.VirtioFSDaemonList,
 		VirtioFSCacheSize:       h.VirtioFSCacheSize,
 		VirtioFSCache:           h.defaultVirtioFSCache(),
 		VirtioFSExtraArgs:       h.VirtioFSExtraArgs,
