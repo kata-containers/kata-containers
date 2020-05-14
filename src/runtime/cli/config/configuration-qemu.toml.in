@@ -101,10 +101,10 @@ default_memory = @DEFMEMSZ@
 #enable_virtio_mem = true
 
 # Disable block device from being used for a container's rootfs.
-# In case of a storage driver like devicemapper where a container's 
+# In case of a storage driver like devicemapper where a container's
 # root file system is backed by a block device, the block device is passed
-# directly to the hypervisor for performance reasons. 
-# This flag prevents the block device from being passed to the hypervisor, 
+# directly to the hypervisor for performance reasons.
+# This flag prevents the block device from being passed to the hypervisor,
 # 9pfs is used instead to pass the rootfs.
 disable_block_device_use = @DEFDISABLEBLOCK@
 
@@ -115,6 +115,9 @@ shared_fs = "@DEFSHAREDFS@"
 
 # Path to vhost-user-fs daemon.
 virtio_fs_daemon = "@DEFVIRTIOFSDAEMON@"
+
+# List of valid annotations values for the virtiofs daemon (default: empty)
+# virtio_fs_daemon_list = [ "/opt/kata/bin/virtiofsd", "/usr/.*/virtiofsd" ]
 
 # Default size of DAX cache in MiB
 virtio_fs_cache_size = @DEFVIRTIOFSCACHESIZE@
@@ -180,7 +183,7 @@ enable_iothreads = @DEFENABLEIOTHREADS@
 # Enabling this will result in the VM memory
 # being allocated using huge pages.
 # This is useful when you want to use vhost-user network
-# stacks within the container. This will automatically 
+# stacks within the container. This will automatically
 # result in memory pre allocation
 #enable_hugepages = true
 
@@ -236,9 +239,9 @@ vhost_user_store_path = "@DEFVHOSTUSERSTOREPATH@"
 # Default is false
 #disable_image_nvdimm = true
 
-# VFIO devices are hotplugged on a bridge by default. 
+# VFIO devices are hotplugged on a bridge by default.
 # Enable hotplugging on root bus. This may be required for devices with
-# a large PCI bar, as this is a current limitation with hotplugging on 
+# a large PCI bar, as this is a current limitation with hotplugging on
 # a bridge. This value is valid for "pc" machine type.
 # Default false
 #hotplug_vfio_on_root_bus = true
@@ -251,7 +254,7 @@ vhost_user_store_path = "@DEFVHOSTUSERSTOREPATH@"
 #pcie_root_port = 2
 
 # If vhost-net backend for virtio-net is not desired, set to true. Default is false, which trades off
-# security (vhost-net runs ring0) for network I/O performance. 
+# security (vhost-net runs ring0) for network I/O performance.
 #disable_vhost_net = true
 
 #
