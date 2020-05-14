@@ -151,7 +151,11 @@ function configure_containerd_runtime() {
 		runtime+="-$1"
 		configuration+="-$1"
 	fi
-	local runtime_table="plugins.cri.containerd.runtimes.$runtime"
+	local pluginid=cri
+	if grep -q "version = 2\>" $containerd_conf_file; then
+		pluginid=\"io.containerd.grpc.v1.cri\"
+	fi
+	local runtime_table="plugins.${pluginid}.containerd.runtimes.$runtime"
 	local runtime_type="io.containerd.$runtime.v2"
 	local options_table="$runtime_table.options"
 	local config_path="/opt/kata/share/defaults/kata-containers/$configuration.toml"
