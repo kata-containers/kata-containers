@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"regexp"
 	goruntime "runtime"
 	"strconv"
 	"strings"
@@ -190,6 +191,15 @@ func contains(s []string, e string) bool {
 	return false
 }
 
+func regexpContains(s []string, e string) bool {
+	for _, a := range s {
+		if matched, _ := regexp.MatchString(a, e); matched {
+			return true
+		}
+	}
+	return false
+}
+
 func newLinuxDeviceInfo(d specs.LinuxDevice) (*config.DeviceInfo, error) {
 	allowedDeviceTypes := []string{"c", "b", "u", "p"}
 
@@ -322,13 +332,13 @@ func SandboxID(spec specs.Spec) (string, error) {
 	return "", fmt.Errorf("Could not find sandbox ID")
 }
 
-func addAnnotations(ocispec specs.Spec, config *vc.SandboxConfig) error {
+func addAnnotations(ocispec specs.Spec, config *vc.SandboxConfig, runtime RuntimeConfig) error {
 	addAssetAnnotations(ocispec, config)
-	if err := addHypervisorConfigOverrides(ocispec, config); err != nil {
+	if err := addHypervisorConfigOverrides(ocispec, config, runtime); err != nil {
 		return err
 	}
 
-	if err := addRuntimeConfigOverrides(ocispec, config); err != nil {
+	if err := addRuntimeConfigOverrides(ocispec, config, runtime); err != nil {
 		return err
 	}
 
@@ -361,7 +371,7 @@ func addAssetAnnotations(ocispec specs.Spec, config *vc.SandboxConfig) {
 	}
 }
 
-func addHypervisorConfigOverrides(ocispec specs.Spec, config *vc.SandboxConfig) error {
+func addHypervisorConfigOverrides(ocispec specs.Spec, config *vc.SandboxConfig, runtime RuntimeConfig) error {
 	if err := addHypervisorCPUOverrides(ocispec, config); err != nil {
 		return err
 	}
@@ -374,7 +384,7 @@ func addHypervisorConfigOverrides(ocispec specs.Spec, config *vc.SandboxConfig) 
 		return err
 	}
 
-	if err := addHypervisporVirtioFsOverrides(ocispec, config); err != nil {
+	if err := addHypervisporVirtioFsOverrides(ocispec, config, runtime); err != nil {
 		return err
 	}
 
@@ -646,7 +656,7 @@ func addHypervisorBlockOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig)
 	return nil
 }
 
-func addHypervisporVirtioFsOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig) error {
+func addHypervisporVirtioFsOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig, runtime RuntimeConfig) error {
 	if value, ok := ocispec.Annotations[vcAnnotations.SharedFS]; ok {
 		supportedSharedFS := []string{config.Virtio9P, config.VirtioFS}
 		valid := false
@@ -663,6 +673,9 @@ func addHypervisporVirtioFsOverrides(ocispec specs.Spec, sbConfig *vc.SandboxCon
 	}
 
 	if value, ok := ocispec.Annotations[vcAnnotations.VirtioFSDaemon]; ok {
+		if !regexpContains(runtime.HypervisorConfig.VirtioFSDaemonList, value) {
+			return fmt.Errorf("virtiofs daemon %v required from annotation is not valid", value)
+		}
 		sbConfig.HypervisorConfig.VirtioFSDaemon = value
 	}
 
@@ -730,7 +743,7 @@ func addHypervisporNetworkOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConf
 	return nil
 }
 
-func addRuntimeConfigOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig) error {
+func addRuntimeConfigOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig, runtime RuntimeConfig) error {
 	if value, ok := ocispec.Annotations[vcAnnotations.DisableGuestSeccomp]; ok {
 		disableGuestSeccomp, err := strconv.ParseBool(value)
 		if err != nil {
@@ -870,7 +883,7 @@ func SandboxConfig(ocispec specs.Spec, runtime RuntimeConfig, bundlePath, cid, c
 		Experimental: runtime.Experimental,
 	}
 
-	if err := addAnnotations(ocispec, &sandboxConfig); err != nil {
+	if err := addAnnotations(ocispec, &sandboxConfig, runtime); err != nil {
 		return vc.SandboxConfig{}, err
 	}
 
