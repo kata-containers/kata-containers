@@ -110,6 +110,9 @@ shared_fs = "@DEFSHAREDFS_QEMU_VIRTIOFS@"
 # Path to vhost-user-fs daemon.
 virtio_fs_daemon = "@DEFVIRTIOFSDAEMON@"
 
+# List of valid annotations values for the virtiofs daemon (default: empty)
+# virtio_fs_daemon_list = [ "/opt/kata/bin/virtiofsd", "/usr/.*/virtiofsd" ]
+
 # Default size of DAX cache in MiB
 virtio_fs_cache_size = @DEFVIRTIOFSCACHESIZE@
 
@@ -238,7 +241,7 @@ vhost_user_store_path = "@DEFVHOSTUSERSTOREPATH@"
 #hotplug_vfio_on_root_bus = true
 
 # If vhost-net backend for virtio-net is not desired, set to true. Default is false, which trades off
-# security (vhost-net runs ring0) for network I/O performance. 
+# security (vhost-net runs ring0) for network I/O performance.
 #disable_vhost_net = true
 
 #
