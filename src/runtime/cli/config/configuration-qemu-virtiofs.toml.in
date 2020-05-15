@@ -212,6 +212,9 @@ vhost_user_store_path = "@DEFVHOSTUSERSTOREPATH@"
 # Enabling this will result in the VM device having iommu_platform=on set
 #enable_iommu_platform = true
 
+# List of valid annotations values for the virtiofs daemon (default: empty)
+# vhost_user_store_path_list = [ "/empty/space", "/multiverse/quantum-foam" ]
+
 # Enable file based guest memory support. The default is an empty string which
 # will disable this feature. In the case of virtio-fs, this is enabled
 # automatically and '/dev/shm' is used as the backing folder.

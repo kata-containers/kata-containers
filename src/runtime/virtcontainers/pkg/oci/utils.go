@@ -435,6 +435,13 @@ func addHypervisorConfigOverrides(ocispec specs.Spec, config *vc.SandboxConfig, 
 		}
 	}
 
+	if value, ok := ocispec.Annotations[vcAnnotations.VhostUserStorePath]; ok {
+		if !regexpContains(runtime.HypervisorConfig.VhostUserStorePathList, value) {
+			return fmt.Errorf("vhost store path %v required from annotation is not valid", value)
+		}
+		config.HypervisorConfig.VhostUserStorePath = value
+	}
+
 	if value, ok := ocispec.Annotations[vcAnnotations.GuestHookPath]; ok {
 		if value != "" {
 			config.HypervisorConfig.GuestHookPath = value
