@@ -44,6 +44,9 @@ const (
 	// JailerPath is a sandbox annotation for passing a per container path pointing at the jailer that will constrain the container VM.
 	JailerPath = kataAnnotHypervisorPrefix + "jailer_path"
 
+	// CtlPath is a sandbox annotation for passing a per container path pointing at the acrn ctl binary
+	CtlPath = kataAnnotHypervisorPrefix + "ctlpath"
+
 	// FirmwarePath is a sandbox annotation for passing a per container path pointing at the guest firmware that will run the container VM.
 	FirmwarePath = kataAnnotHypervisorPrefix + "firmware"
 
