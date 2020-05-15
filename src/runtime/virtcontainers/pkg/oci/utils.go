@@ -384,7 +384,7 @@ func addHypervisorConfigOverrides(ocispec specs.Spec, config *vc.SandboxConfig, 
 		return err
 	}
 
-	if err := addHypervisporVirtioFsOverrides(ocispec, config, runtime); err != nil {
+	if err := addHypervisorVirtioFsOverrides(ocispec, config, runtime); err != nil {
 		return err
 	}
 
@@ -656,7 +656,7 @@ func addHypervisorBlockOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig)
 	return nil
 }
 
-func addHypervisporVirtioFsOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig, runtime RuntimeConfig) error {
+func addHypervisorVirtioFsOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig, runtime RuntimeConfig) error {
 	if value, ok := ocispec.Annotations[vcAnnotations.SharedFS]; ok {
 		supportedSharedFS := []string{config.Virtio9P, config.VirtioFS}
 		valid := false
