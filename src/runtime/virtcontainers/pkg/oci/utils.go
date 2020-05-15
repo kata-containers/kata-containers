@@ -393,6 +393,13 @@ func addHypervisorConfigOverrides(ocispec specs.Spec, config *vc.SandboxConfig, 
 		return err
 	}
 
+	if value, ok := ocispec.Annotations[vcAnnotations.HypervisorPath]; ok {
+		if !regexpContains(runtime.HypervisorConfig.HypervisorPathList, value) {
+			return fmt.Errorf("hypervisor %v required from annotation is not valid", value)
+		}
+		config.HypervisorConfig.HypervisorPath = value
+	}
+
 	if value, ok := ocispec.Annotations[vcAnnotations.KernelParams]; ok {
 		if value != "" {
 			params := vc.DeserializeParams(strings.Fields(value))
