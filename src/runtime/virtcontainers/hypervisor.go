@@ -284,6 +284,9 @@ type HypervisorConfig struct {
 	// JailerPath is the jailer executable host path.
 	JailerPath string
 
+	// JailerPathList is the list of jailer paths names allowed in annotations
+	JailerPathList []string
+
 	// BlockDeviceDriver specifies the driver to be used for block device
 	// either VirtioSCSI or VirtioBlock with the default driver being defaultBlockDriver
 	BlockDeviceDriver string

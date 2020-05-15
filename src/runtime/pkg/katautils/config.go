@@ -535,6 +535,7 @@ func newFirecrackerHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		HypervisorPath:        hypervisor,
 		HypervisorPathList:    h.HypervisorPathList,
 		JailerPath:            jailer,
+		JailerPathList:        h.JailerPathList,
 		KernelPath:            kernel,
 		InitrdPath:            initrd,
 		ImagePath:             image,
