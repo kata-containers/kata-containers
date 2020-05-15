@@ -12,11 +12,18 @@
 
 [hypervisor.clh]
 path = "@CLHPATH@"
-# List of valid annotations values for the hypervisor (default: empty)
-# Each member of the list can be a regular expression
-# path_list = [ "@CLHPATH@.*" ]
 kernel = "@KERNELPATH_CLH@"
 image = "@IMAGEPATH@"
+
+# List of valid annotations values for the hypervisor (default: empty)
+# Each member of the list can be a regular expression, but prefer names.
+# Otherwise, please read and understand the following carefully.
+# SECURITY WARNING: If you use regular expressions, be mindful that
+# an attacker could craft an annotation that uses .. to escape the paths
+# you gave. For example, if your regexp is /bin/qemu.* then if there is
+# a directory named /bin/qemu.d/, then an attacker can pass an annotation
+# containing /bin/qemu.d/../put-any-binary-name-here and attack your host.
+# path_list = [ "@CLHPATH@.*" ]
 
 # Optional space-separated list of options to pass to the guest kernel.
 # For example, use `kernel_params = "vsyscall=emulate"` if you are having
