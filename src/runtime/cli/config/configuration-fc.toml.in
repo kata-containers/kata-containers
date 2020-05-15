@@ -27,6 +27,10 @@ image = "@IMAGEPATH@"
 # for this feature today.
 #jailer_path = "@FCJAILERPATH@"
 
+# List of valid jailer path values for the hypervisor (default: empty)
+# Each member of the list can be a regular expression
+# jailer_path_list = [ "@FCJAILERPATH@.*" ]
+
 
 # Optional space-separated list of options to pass to the guest kernel.
 # For example, use `kernel_params = "vsyscall=emulate"` if you are having
