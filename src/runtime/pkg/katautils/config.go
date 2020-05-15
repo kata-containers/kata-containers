@@ -680,6 +680,7 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		DisableVhostNet:         h.DisableVhostNet,
 		EnableVhostUserStore:    h.EnableVhostUserStore,
 		VhostUserStorePath:      h.vhostUserStorePath(),
+		VhostUserStorePathList:  h.VhostUserStorePathList,
 		GuestHookPath:           h.guestHookPath(),
 		RxRateLimiterMaxRate:    rxRateLimiterMaxRate,
 		TxRateLimiterMaxRate:    txRateLimiterMaxRate,
