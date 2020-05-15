@@ -363,11 +363,9 @@ func addAssetAnnotations(ocispec specs.Spec, config *vc.SandboxConfig) {
 
 	for _, a := range assetAnnotations {
 		value, ok := ocispec.Annotations[a]
-		if !ok {
-			continue
+		if ok {
+			config.Annotations[a] = value
 		}
-
-		config.Annotations[a] = value
 	}
 }
 
