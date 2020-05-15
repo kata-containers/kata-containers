@@ -116,6 +116,9 @@ type HypervisorConfig struct {
 	// File based memory backend root directory
 	FileBackedMemRootDir string
 
+	// FileBackedMemRootList is the list of valid root directories values for annotations
+	FileBackedMemRootList []string
+
 	// BlockDeviceCacheSet specifies cache-related options will be set to block devices or not.
 	BlockDeviceCacheSet bool
 
