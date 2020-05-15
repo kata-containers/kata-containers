@@ -20,6 +20,9 @@ image = "@IMAGEPATH@"
 # Each member of the list can be a regular expression
 # path_list = [ "@ACRNPATH@.*" ]
 
+# List of valid annotations values for ctlpath (default: empty)
+# ctlpath_list = [ "@ACRNCTLPATH@.*" ]
+
 # Optional space-separated list of options to pass to the guest kernel.
 # For example, use `kernel_params = "vsyscall=emulate"` if you are having
 # trouble running pre-2.15 glibc.
