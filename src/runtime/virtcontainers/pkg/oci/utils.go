@@ -374,7 +374,7 @@ func addHypervisorConfigOverrides(ocispec specs.Spec, config *vc.SandboxConfig, 
 		return err
 	}
 
-	if err := addHypervisorMemoryOverrides(ocispec, config); err != nil {
+	if err := addHypervisorMemoryOverrides(ocispec, config, runtime); err != nil {
 		return err
 	}
 
@@ -482,7 +482,7 @@ func addHypervisorConfigOverrides(ocispec specs.Spec, config *vc.SandboxConfig, 
 	return nil
 }
 
-func addHypervisorMemoryOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig) error {
+func addHypervisorMemoryOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig, runtime RuntimeConfig) error {
 	if value, ok := ocispec.Annotations[vcAnnotations.DefaultMemory]; ok {
 		memorySz, err := strconv.ParseUint(value, 10, 32)
 		if err != nil {
@@ -546,6 +546,9 @@ func addHypervisorMemoryOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig
 	}
 
 	if value, ok := ocispec.Annotations[vcAnnotations.FileBackedMemRootDir]; ok {
+		if !regexpContains(runtime.HypervisorConfig.FileBackedMemRootList, value) {
+			return fmt.Errorf("file_mem_backend value %v required from annotation is not valid", value)
+		}
 		sbConfig.HypervisorConfig.FileBackedMemRootDir = value
 	}
 

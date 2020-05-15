@@ -221,6 +221,9 @@ vhost_user_store_path = "@DEFVHOSTUSERSTOREPATH@"
 # This option will be ignored if VM templating is enabled.
 #file_mem_backend = ""
 
+# List of valid annotations values for the file_mem_backend annotation (default: empty)
+# file_mem_backend_list = [ "/dev/shm" ]
+
 # Enable swap of vm memory. Default false.
 # The behaviour is undefined if mem_prealloc is also set to true
 #enable_swap = true
