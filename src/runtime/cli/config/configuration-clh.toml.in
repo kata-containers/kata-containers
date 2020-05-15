@@ -12,6 +12,9 @@
 
 [hypervisor.clh]
 path = "@CLHPATH@"
+# List of valid annotations values for the hypervisor (default: empty)
+# Each member of the list can be a regular expression
+# path_list = [ "@CLHPATH@.*" ]
 kernel = "@KERNELPATH_CLH@"
 image = "@IMAGEPATH@"
 
