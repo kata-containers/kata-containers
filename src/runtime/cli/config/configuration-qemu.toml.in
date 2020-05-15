@@ -12,6 +12,15 @@
 
 [hypervisor.qemu]
 path = "@QEMUPATH@"
+# List of valid annotations values for the hypervisor (default: empty)
+# Each member of the list can be a regular expression, but prefer names.
+# Otherwise, please read and understand the following carefully.
+# SECURITY WARNING: If you use regular expressions, be mindful that
+# an attacker could craft an annotation that uses .. to escape the paths
+# you gave. For example, if your regexp is /bin/qemu.* then if there is
+# a directory named /bin/qemu.d/, then an attacker can pass an annotation
+# containing /bin/qemu.d/../put-any-binary-name-here and attack your host.
+# path_list = [ "@QEMUPATH@.*" ]
 kernel = "@KERNELPATH@"
 image = "@IMAGEPATH@"
 machine_type = "@MACHINETYPE@"
@@ -220,17 +229,17 @@ vhost_user_store_path = "@DEFVHOSTUSERSTOREPATH@"
 
 # This option changes the default hypervisor and kernel parameters
 # to enable debug output where available.
-# 
+#
 # Default false
 #enable_debug = true
 
 # Disable the customizations done in the runtime when it detects
 # that it is running on top a VMM. This will result in the runtime
 # behaving as it would when running on bare metal.
-# 
+#
 #disable_nesting_checks = true
 
-# This is the msize used for 9p shares. It is the number of bytes 
+# This is the msize used for 9p shares. It is the number of bytes
 # used for 9p packet payload.
 #msize_9p = @DEFMSIZE9P@
 
