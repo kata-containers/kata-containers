@@ -12,6 +12,13 @@
 
 [hypervisor.firecracker]
 path = "@FCPATH@"
+kernel = "@KERNELPATH_FC@"
+image = "@IMAGEPATH@"
+
+# List of valid annotations values for the hypervisor (default: empty)
+# Each member of the list can be a regular expression
+# path_list = [ "@FCPATH@.*" ]
+
 # Path for the jailer specific to firecracker
 # If the jailer path is not set kata will launch firecracker
 # without a jail. If the jailer is set firecracker will be
@@ -19,8 +26,7 @@ path = "@FCPATH@"
 # This is disabled by default as additional setup is required
 # for this feature today.
 #jailer_path = "@FCJAILERPATH@"
-kernel = "@KERNELPATH_FC@"
-image = "@IMAGEPATH@"
+
 
 # Optional space-separated list of options to pass to the guest kernel.
 # For example, use `kernel_params = "vsyscall=emulate"` if you are having
@@ -87,10 +93,10 @@ default_memory = @DEFMEMSZ@
 #memory_offset = 0
 
 # Disable block device from being used for a container's rootfs.
-# In case of a storage driver like devicemapper where a container's 
+# In case of a storage driver like devicemapper where a container's
 # root file system is backed by a block device, the block device is passed
-# directly to the hypervisor for performance reasons. 
-# This flag prevents the block device from being passed to the hypervisor, 
+# directly to the hypervisor for performance reasons.
+# This flag prevents the block device from being passed to the hypervisor,
 # 9pfs is used instead to pass the rootfs.
 disable_block_device_use = @DEFDISABLEBLOCK@
 
@@ -126,7 +132,7 @@ block_device_driver = "@DEFBLOCKSTORAGEDRIVER_FC@"
 # Enabling this will result in the VM memory
 # being allocated using huge pages.
 # This is useful when you want to use vhost-user network
-# stacks within the container. This will automatically 
+# stacks within the container. This will automatically
 # result in memory pre allocation
 #enable_hugepages = true
 
