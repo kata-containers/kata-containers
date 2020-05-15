@@ -16,6 +16,10 @@ ctlpath = "@ACRNCTLPATH@"
 kernel = "@KERNELPATH_ACRN@"
 image = "@IMAGEPATH@"
 
+# List of valid annotations values for the hypervisor (default: empty)
+# Each member of the list can be a regular expression
+# path_list = [ "@ACRNPATH@.*" ]
+
 # Optional space-separated list of options to pass to the guest kernel.
 # For example, use `kernel_params = "vsyscall=emulate"` if you are having
 # trouble running pre-2.15 glibc.
