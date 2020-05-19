@@ -204,6 +204,9 @@ type HypervisorConfig struct {
 
 	// TxRateLimiterMaxRate is used to control network I/O outbound bandwidth on VM level.
 	TxRateLimiterMaxRate uint64
+
+	// Enable annotations by name
+	EnableAnnotations []string
 }
 
 // KataAgentConfig is a structure storing information needed

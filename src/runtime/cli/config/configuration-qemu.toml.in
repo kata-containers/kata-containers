@@ -16,6 +16,11 @@ kernel = "@KERNELPATH@"
 image = "@IMAGEPATH@"
 machine_type = "@MACHINETYPE@"
 
+# List of valid annotation names for the hypervisor
+# Each member of the list is a regular expression, which is the base name
+# of the annotation, e.g. "path" for io.katacontainers.config.hypervisor.path"
+enable_annotations = @DEFENABLEANNOTATIONS@
+
 # List of valid annotations values for the hypervisor (default: empty)
 # Each member of the list is a path pattern as described by glob(3).
 path_list = @QEMUPATHLIST@

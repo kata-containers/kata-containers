@@ -433,6 +433,9 @@ type HypervisorConfig struct {
 
 	// TxRateLimiterMaxRate is used to control network I/O outbound bandwidth on VM level.
 	TxRateLimiterMaxRate uint64
+
+	// Enable annotations by name
+	EnableAnnotations []string
 }
 
 // vcpu mapping from vcpu number to thread number
