@@ -124,6 +124,7 @@ type hypervisor struct {
 	GuestHookPath           string   `toml:"guest_hook_path"`
 	RxRateLimiterMaxRate    uint64   `toml:"rx_rate_limiter_max_rate"`
 	TxRateLimiterMaxRate    uint64   `toml:"tx_rate_limiter_max_rate"`
+	EnableAnnotations       []string `toml:"enable_annotations"`
 }
 
 type runtime struct {
@@ -558,6 +559,7 @@ func newFirecrackerHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		GuestHookPath:         h.guestHookPath(),
 		RxRateLimiterMaxRate:  rxRateLimiterMaxRate,
 		TxRateLimiterMaxRate:  txRateLimiterMaxRate,
+		EnableAnnotations:     h.EnableAnnotations,
 	}, nil
 }
 
@@ -685,6 +687,7 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		GuestHookPath:           h.guestHookPath(),
 		RxRateLimiterMaxRate:    rxRateLimiterMaxRate,
 		TxRateLimiterMaxRate:    txRateLimiterMaxRate,
+		EnableAnnotations:       h.EnableAnnotations,
 	}, nil
 }
 
@@ -748,6 +751,7 @@ func newAcrnHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		BlockDeviceDriver:     blockDriver,
 		DisableVhostNet:       h.DisableVhostNet,
 		GuestHookPath:         h.guestHookPath(),
+		EnableAnnotations:     h.EnableAnnotations,
 	}, nil
 }
 
@@ -840,6 +844,7 @@ func newClhHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		DisableVhostNet:         true,
 		VirtioFSExtraArgs:       h.VirtioFSExtraArgs,
 		SGXEPCSize:              defaultSGXEPCSize,
+		EnableAnnotations:     h.EnableAnnotations,
 	}, nil
 }
 

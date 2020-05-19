@@ -28,6 +28,7 @@ const (
 	//
 	// Assets
 	//
+	KataAnnotationHypervisorPrefix = kataAnnotHypervisorPrefix
 
 	// KernelPath is a sandbox annotation for passing a per container path pointing at the kernel needed to boot the container VM.
 	KernelPath = kataAnnotHypervisorPrefix + "kernel"
