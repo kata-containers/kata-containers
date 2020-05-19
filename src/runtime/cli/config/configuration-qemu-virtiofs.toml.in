@@ -17,14 +17,8 @@ image = "@IMAGEPATH@"
 machine_type = "@MACHINETYPE@"
 
 # List of valid annotations values for the hypervisor (default: empty)
-# Each member of the list can be a regular expression, but prefer names.
-# Otherwise, please read and understand the following carefully.
-# SECURITY WARNING: If you use regular expressions, be mindful that
-# an attacker could craft an annotation that uses .. to escape the paths
-# you gave. For example, if your regexp is /bin/qemu.* then if there is
-# a directory named /bin/qemu.d/, then an attacker can pass an annotation
-# containing /bin/qemu.d/../put-any-binary-name-here and attack your host.
-# path_list = [ "@QEMUPATH@.*" ]
+# Each member of the list is a path pattern as described by glob(3).
+path_list = @QEMUVIRTIOFSPATHLIST@
 
 # Optional space-separated list of options to pass to the guest kernel.
 # For example, use `kernel_params = "vsyscall=emulate"` if you are having
@@ -121,7 +115,7 @@ shared_fs = "@DEFSHAREDFS_QEMU_VIRTIOFS@"
 virtio_fs_daemon = "@DEFVIRTIOFSDAEMON@"
 
 # List of valid annotations values for the virtiofs daemon (default: empty)
-# virtio_fs_daemon_list = [ "/opt/kata/bin/virtiofsd", "/usr/.*/virtiofsd" ]
+virtio_fs_daemon_list = @DEFVIRTIOFSDAEMONLIST@
 
 # Default size of DAX cache in MiB
 virtio_fs_cache_size = @DEFVIRTIOFSCACHESIZE@
@@ -213,16 +207,16 @@ vhost_user_store_path = "@DEFVHOSTUSERSTOREPATH@"
 #enable_iommu_platform = true
 
 # List of valid annotations values for the virtiofs daemon (default: empty)
-# vhost_user_store_path_list = [ "/empty/space", "/multiverse/quantum-foam" ]
+vhost_user_store_path_list = @DEFVHOSTUSERSTOREPATHLIST@
 
 # Enable file based guest memory support. The default is an empty string which
 # will disable this feature. In the case of virtio-fs, this is enabled
 # automatically and '/dev/shm' is used as the backing folder.
 # This option will be ignored if VM templating is enabled.
-#file_mem_backend = ""
+#file_mem_backend = "@DEFFILEMEMBACKEND@"
 
 # List of valid annotations values for the file_mem_backend annotation (default: empty)
-# file_mem_backend_list = [ "/dev/shm" ]
+#file_mem_backend_list = @DEFFILEMEMBACKENDLIST@
 
 # Enable swap of vm memory. Default false.
 # The behaviour is undefined if mem_prealloc is also set to true
