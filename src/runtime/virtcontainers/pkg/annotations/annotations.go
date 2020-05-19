@@ -214,7 +214,7 @@ const (
 	TxRateLimiterMaxRate = kataAnnotHypervisorPrefix + "tx_rate_limiter_max_rate"
 )
 
-// Agent related annotations
+// Runtime related annotations
 const (
 	kataAnnotRuntimePrefix = kataConfAnnotationsPrefix + "runtime."
 
@@ -238,6 +238,7 @@ const (
 	DisableNewNetNs = kataAnnotRuntimePrefix + "disable_new_netns"
 )
 
+// Agent related annotations
 const (
 	kataAnnotAgentPrefix = kataConfAnnotationsPrefix + "agent."
 
