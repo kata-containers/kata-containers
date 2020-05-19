@@ -254,6 +254,7 @@ func (s *Sandbox) dumpConfig(ss *persistapi.SandboxState) {
 		RxRateLimiterMaxRate:    sconfig.HypervisorConfig.RxRateLimiterMaxRate,
 		TxRateLimiterMaxRate:    sconfig.HypervisorConfig.TxRateLimiterMaxRate,
 		SGXEPCSize:              sconfig.HypervisorConfig.SGXEPCSize,
+		EnableAnnotations:       sconfig.HypervisorConfig.EnableAnnotations,
 	}
 
 	ss.Config.KataAgentConfig = &persistapi.KataAgentConfig{
@@ -522,6 +523,7 @@ func loadSandboxConfig(id string) (*SandboxConfig, error) {
 		RxRateLimiterMaxRate:    hconf.RxRateLimiterMaxRate,
 		TxRateLimiterMaxRate:    hconf.TxRateLimiterMaxRate,
 		SGXEPCSize:              hconf.SGXEPCSize,
+		EnableAnnotations:       hconf.EnableAnnotations,
 	}
 
 	sconfig.AgentConfig = KataAgentConfig{

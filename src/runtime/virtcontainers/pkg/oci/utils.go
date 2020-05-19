@@ -213,6 +213,14 @@ func checkPathIsInGlobList(list []string, path string) bool {
 	return false
 }
 
+// Check if an annotation name either belongs to another prefix, matches regexp list
+func checkAnnotationNameIsValid(list []string, name string, prefix string) bool {
+	if strings.HasPrefix(name, prefix) {
+		return regexpContains(list, strings.TrimPrefix(name, prefix))
+	}
+	return true
+}
+
 func newLinuxDeviceInfo(d specs.LinuxDevice) (*config.DeviceInfo, error) {
 	allowedDeviceTypes := []string{"c", "b", "u", "p"}
 
@@ -346,6 +354,11 @@ func SandboxID(spec specs.Spec) (string, error) {
 }
 
 func addAnnotations(ocispec specs.Spec, config *vc.SandboxConfig, runtime RuntimeConfig) error {
+	for key := range ocispec.Annotations {
+		if !checkAnnotationNameIsValid(runtime.HypervisorConfig.EnableAnnotations, key, vcAnnotations.KataAnnotationHypervisorPrefix) {
+			return fmt.Errorf("annotation %v is not enabled", key)
+		}
+	}
 	addAssetAnnotations(ocispec, config)
 	if err := addHypervisorConfigOverrides(ocispec, config, runtime); err != nil {
 		return err

@@ -208,6 +208,9 @@ type HypervisorConfig struct {
 	// SGXEPCSize specifies the size in bytes for the EPC Section.
 	// Enable SGX. Hardware-based isolation and memory encryption.
 	SGXEPCSize int64
+
+	// Enable annotations by name
+	EnableAnnotations []string
 }
 
 // KataAgentConfig is a structure storing information needed
