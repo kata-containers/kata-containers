@@ -132,6 +132,11 @@ The [osbuilder](tools/osbuilder/README.md) tool can create
 a rootfs and a "mini O/S" image. This image is used by the hypervisor to setup
 the environment before switching to the workload.
 
+#### `kata-agent-ctl`
+
+[`kata-agent-ctl`](tools/agent-ctl) is a low-level test tool for
+interacting with the agent.
+
 ### Web content
 
 The
