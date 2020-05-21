@@ -127,7 +127,7 @@ fn main() -> Result<()> {
 
     // once parsed cmdline and set the config, release the write lock
     // as soon as possible in case other thread would get read lock on
-    // it.
+    // it
     {
         let mut config = agentConfig.write().unwrap();
         config.parse_cmdline(KERNEL_CMDLINE_FILE)?;
