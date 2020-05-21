@@ -72,6 +72,9 @@ default: $(TARGET) show-header
 $(TARGET): $(TARGET_PATH)
 
 $(TARGET_PATH): $(SOURCES) | show-summary
+	@rustup default 1.42.0
+	@rustup toolchain install 1.42.0-musl
+	@rustup target add $(ARCH)-unknown-linux-musl
 	@cargo build --target $(TRIPLE)
 
 show-header:
