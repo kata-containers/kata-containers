@@ -8,8 +8,8 @@ syntax = "proto3";
 
 package grpc;
 
-import "github.com/kata-containers/agent/protocols/grpc/oci.proto";
-import "github.com/kata-containers/agent/pkg/types/types.proto";
+import "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols/grpc/oci.proto";
+import "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols/types.proto";
 import "google/protobuf/empty.proto";
 
 // unstable

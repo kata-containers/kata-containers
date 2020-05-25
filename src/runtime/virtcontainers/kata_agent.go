@@ -18,13 +18,12 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/gogo/protobuf/proto"
-	aTypes "github.com/kata-containers/agent/pkg/types"
-	kataclient "github.com/kata-containers/agent/protocols/client"
-	"github.com/kata-containers/agent/protocols/grpc"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/api"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
 	persistapi "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist/api"
+	kataclient "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols/client"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols/grpc"
+	aTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols"
 	vcAnnotations "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/annotations"
 	vccgroups "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/cgroups"
 	ns "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/nsenter"
@@ -33,6 +32,8 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/uuid"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/store"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
+
+	"github.com/gogo/protobuf/proto"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/sirupsen/logrus"
@@ -2040,7 +2041,7 @@ func (k *kataAgent) readProcessStdout(c *Container, processID string, data []byt
 		defer k.disconnect()
 	}
 
-	return k.readProcessStream(c.id, processID, data, k.client.AgentServiceClient.ReadStdout) 
+	return k.readProcessStream(c.id, processID, data, k.client.AgentServiceClient.ReadStdout)
 }
 
 // readStdout and readStderr are special that we cannot differentiate them with the request types...
