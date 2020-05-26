@@ -123,9 +123,6 @@ type SandboxConfig struct {
 
 	DisableGuestSeccomp bool
 
-	// HasCRIContainerType specifies whether container type was set explicitly through annotations or not.
-	HasCRIContainerType bool
-
 	// Experimental features enabled
 	Experimental []exp.Feature
 
@@ -2134,8 +2131,6 @@ func (s *Sandbox) setupSandboxCgroup() error {
 		s.Logger().WithField("sandboxid", s.id).Warning("no cgroup path provided for pod sandbox, not creating sandbox cgroup")
 		return nil
 	}
-
-	s.Logger().WithField("hasCRIContainerType", s.config.HasCRIContainerType).Debug("Setting sandbox cgroup")
 
 	s.state.CgroupPath, err = vccgroups.ValidCgroupPath(spec.Linux.CgroupsPath, s.config.SystemdCgroup)
 	if err != nil {
