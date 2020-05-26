@@ -26,7 +26,7 @@ the installation has been successful.
 ## Prerequisites
 
 This installation guide has only been verified under a Minikube Linux installation, using the
-[`kvm2`](https://github.com/kubernetes/minikube/blob/master/docs/drivers.md#kvm2-driver) driver.
+[`kvm2`](https://minikube.sigs.k8s.io/docs/drivers/kvm2/) driver.
 
 > **Notes:**
 > - This installation guide may not work for macOS installations of Minikube, due to the lack of
@@ -61,8 +61,9 @@ command can be used *inside Minikube* once Kata has been installed, to check for
 
 To enable Kata Containers under Minikube, you need to add a few configuration options to the
 default Minikube setup. You can easily accomplish this as Minikube supports them on the setup commandline.
+Minikube can be set up to use either CRI-O or containerd.
 
-Here are the features, and why you need them:
+Here are the features to set up a CRI-O based Minikube, and why you need them:
 
 | what | why |
 | ---- | --- |
@@ -73,12 +74,15 @@ Here are the features, and why you need them:
 | `--network-plugin=cni` | As recommended for [minikube CRI-o](https://kubernetes.io/docs/setup/minikube/#cri-o) |
 | `--vm-driver kvm2` | The host VM driver |
 
+To use containerd, modify the `--container-runtime` argument:
+
+| what | why |
+| ---- | --- |
+| `--container-runtime=containerd` | Using containerd for Kata |
+
 > **Notes:**
 > - Adjust the `--memory 6144` line to suit your environment and requirements. Kata Containers default to
 > requesting 2048MB per container. We recommended you supply more than that to the Minikube node.
-> - This example deploys Kata Containers using CRI-O. The same procedure should also work
-> for a `containerd` based Kubernetes installation, but we do not cover that in this document.
->
 > - Prior to Minikube/Kubernetes v1.14, the beta `RuntimeClass` feature also needed enabling with
 > the following.
 >
