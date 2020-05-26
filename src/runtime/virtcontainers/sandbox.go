@@ -641,11 +641,22 @@ func (s *Sandbox) createCgroupManager() error {
 	if spec != nil {
 		cgroupPath = spec.Linux.CgroupsPath
 
-		// kata should rely on the cgroup created and configured by
-		// container engine *only* if actual container was
-		// marked *explicitly* as sandbox through annotations.
-		if !s.config.HasCRIContainerType {
-			resources = *spec.Linux.Resources
+		// Kata relies on the cgroup parent created and configured by the container
+		// engine, but sometimes the sandbox cgroup is not configured and the container
+		// may have access to all the resources, hence the runtime must constrain the
+		// sandbox and update the list of devices with the devices hotplugged in the
+		// hypervisor.
+		resources = *spec.Linux.Resources
+	}
+
+	if s.devManager != nil {
+		for _, d := range s.devManager.GetAllDevices() {
+			dev, err := vccgroups.DeviceToLinuxDevice(d.GetHostPath())
+			if err != nil {
+				s.Logger().WithError(err).WithField("device", d.GetHostPath()).Warn("Could not add device to sandbox resources")
+				continue
+			}
+			resources.Devices = append(resources.Devices, dev)
 		}
 	}
 
