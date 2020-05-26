@@ -14,6 +14,7 @@ Name | Type | Description | Notes
 **VhostSocket** | **string** |  | [optional] 
 **Wce** | **bool** |  | [optional] [default to true]
 **PollQueue** | **bool** |  | [optional] [default to true]
+**Id** | **string** |  | [optional]
 
 [[Back to Model list]](../README.md#documentation-for-models) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to README]](../README.md)
 

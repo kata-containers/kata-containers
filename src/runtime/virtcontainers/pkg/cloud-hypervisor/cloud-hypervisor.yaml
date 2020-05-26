@@ -235,6 +235,23 @@ paths:
         500:
           description: The new device could not be added to the VM instance.
 
+  /vm.add-vsock:
+    put:
+      summary: Add a new vsock device to the VM
+      requestBody:
+        description: The details of the new vsock device
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VsockConfig'
+        required: true
+      responses:
+        204:
+          description: The new device was successfully added to the VM instance.
+        500:
+          description: The new device could not be added to the VM instance.
+
+
   /vm.snapshot:
     put:
       summary: Returns a VM snapshot.
@@ -337,8 +354,6 @@ components:
           items:
             $ref: '#/components/schemas/DeviceConfig'
         vsock:
-          type: array
-          items:
             $ref: '#/components/schemas/VsockConfig'
         iommu:
           type: boolean
@@ -445,6 +460,8 @@ components:
         poll_queue:
           type: boolean
           default: true
+        id:
+          type: string
 
     NetConfig:
       type: object
@@ -473,6 +490,8 @@ components:
           type: boolean
           default: false
         vhost_socket:
+          type: string
+        id:
           type: string
 
     RngConfig:
@@ -510,6 +529,8 @@ components:
           type: integer
           format: int64
           default: 8589934592
+        id:
+          type: string
 
     PmemConfig:
       required:
@@ -530,6 +551,8 @@ components:
         discard_writes:
           type: boolean
           default: false
+        id:
+          type: string
 
     ConsoleConfig:
       required:
@@ -575,6 +598,8 @@ components:
         iommu:
           type: boolean
           default: false
+        id:
+          type: string
 
     VmResize:
       type: object
