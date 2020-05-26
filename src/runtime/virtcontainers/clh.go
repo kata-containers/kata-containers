@@ -1076,7 +1076,7 @@ func (clh *cloudHypervisor) addVSock(cid int64, path string) {
 		"cid":  cid,
 	}).Info("Adding HybridVSock")
 
-	clh.vmconfig.Vsock = append(clh.vmconfig.Vsock, chclient.VsockConfig{Cid: cid, Sock: path})
+	clh.vmconfig.Vsock = chclient.VsockConfig{Cid: cid, Sock: path}
 }
 
 func (clh *cloudHypervisor) addNet(e Endpoint) error {
