@@ -1648,6 +1648,17 @@ func (s *Sandbox) HotplugAddDevice(device api.Device, devType config.DeviceType)
 	span, _ := s.trace("HotplugAddDevice")
 	defer span.Finish()
 
+	if s.config.SandboxCgroupOnly {
+		// We are about to add a device to the hypervisor,
+		// the device cgroup MUST be updated since the hypervisor
+		// will need access to such device
+		hdev := device.GetHostPath()
+		if err := s.cgroupMgr.AddDevice(hdev); err != nil {
+			s.Logger().WithError(err).WithField("device", hdev).
+				Warn("Could not add device to cgroup")
+		}
+	}
+
 	switch devType {
 	case config.DeviceVFIO:
 		vfioDevices, ok := device.GetDeviceInfo().([]*config.VFIODev)
@@ -1692,6 +1703,18 @@ func (s *Sandbox) HotplugAddDevice(device api.Device, devType config.DeviceType)
 // HotplugRemoveDevice is used for removing a device from sandbox
 // Sandbox implement DeviceReceiver interface from device/api/interface.go
 func (s *Sandbox) HotplugRemoveDevice(device api.Device, devType config.DeviceType) error {
+	defer func() {
+		if s.config.SandboxCgroupOnly {
+			// Remove device from cgroup, the hypervisor
+			// should not have access to such device anymore.
+			hdev := device.GetHostPath()
+			if err := s.cgroupMgr.RemoveDevice(hdev); err != nil {
+				s.Logger().WithError(err).WithField("device", hdev).
+					Warn("Could not remove device from cgroup")
+			}
+		}
+	}()
+
 	switch devType {
 	case config.DeviceVFIO:
 		vfioDevices, ok := device.GetDeviceInfo().([]*config.VFIODev)
