@@ -57,6 +57,7 @@ use std::os::unix::fs::FileExt;
 use std::path::PathBuf;
 
 const CONTAINER_BASE: &str = "/run/kata-containers";
+const MODPROBE_PATH: &str = "/sbin/modprobe";
 
 // Convenience macro to obtain the scope logger
 macro_rules! sl {
@@ -871,6 +872,7 @@ impl protocols::agent_ttrpc::AgentService for agentService {
 
         Ok(Empty::new())
     }
+
     fn update_interface(
         &self,
         _ctx: &ttrpc::TtrpcContext,
@@ -1022,6 +1024,18 @@ impl protocols::agent_ttrpc::AgentService for agentService {
 
             if req.sandbox_id.len() > 0 {
                 s.id = req.sandbox_id.clone();
+            }
+
+            for m in req.kernel_modules.iter() {
+                match load_kernel_module(m) {
+                    Ok(_) => (),
+                    Err(e) => {
+                        return Err(ttrpc::Error::RpcStatus(ttrpc::get_status(
+                            ttrpc::Code::INTERNAL,
+                            e.to_string(),
+                        )))
+                    }
+                }
             }
 
             match s.setup_shared_namespaces() {
@@ -1545,4 +1559,72 @@ fn setup_bundle(spec: &Spec) -> Result<PathBuf> {
     unistd::chdir(bundle_path)?;
 
     Ok(olddir)
+}
+
+fn load_kernel_module(module: &protocols::agent::KernelModule) -> Result<()> {
+    if module.name == "" {
+        return Err(ErrorKind::ErrorCode("Kernel module name is empty".to_string()).into());
+    }
+
+    info!(
+        sl!(),
+        "load_kernel_module {}: {:?}", module.name, module.parameters
+    );
+
+    let mut args = vec!["-v".to_string(), module.name.clone()];
+
+    if module.parameters.len() > 0 {
+        args.extend(module.parameters.to_vec())
+    }
+
+    let output = Command::new(MODPROBE_PATH)
+        .args(args.as_slice())
+        .stdout(Stdio::piped())
+        .output()?;
+
+    let status = output.status;
+    if status.success() {
+        return Ok(());
+    }
+
+    match status.code() {
+        Some(code) => {
+            let std_out: String = String::from_utf8(output.stdout).unwrap();
+            let std_err: String = String::from_utf8(output.stderr).unwrap();
+            let msg = format!(
+                "load_kernel_module return code: {} stdout:{} stderr:{}",
+                code, std_out, std_err
+            );
+            return Err(ErrorKind::ErrorCode(msg).into());
+        }
+        None => {
+            return Err(ErrorKind::ErrorCode("Process terminated by signal".to_string()).into())
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_load_kernel_module() {
+        let mut m = protocols::agent::KernelModule::default();
+
+        // case 1: module not exists
+        m.name = "module_not_exists".to_string();
+        let result = load_kernel_module(&m);
+        assert!(result.is_err(), "load module should failed");
+
+        // case 2: module name is empty
+        m.name = "".to_string();
+        let result = load_kernel_module(&m);
+        assert!(result.is_err(), "load module should failed");
+
+        // case 3: normal module.
+        // normally this module should eixsts...
+        m.name = "bridge".to_string();
+        let result = load_kernel_module(&m);
+        assert!(result.is_ok(), "load module should success");
+    }
 }

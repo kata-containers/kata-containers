@@ -271,6 +271,14 @@ message TtyWinResizeRequest {
 	uint32 column = 4;
 }
 
+message KernelModule {
+	// This field is the name of the kernel module.
+	string name = 1;
+	// This field are the parameters for the kernel module which are
+	// whitespace-delimited key=value pairs passed to modprobe(8).
+	repeated string parameters = 2;
+}
+
 message CreateSandboxRequest {
 	string hostname = 1;
 	repeated string dns = 2;
@@ -288,6 +296,8 @@ message CreateSandboxRequest {
 	// This field, if non-empty, designates an absolute path to a directory
 	// that the agent will search for OCI hooks to run within the guest.
 	string guest_hook_path = 6;
+	// This field is the list of kernel modules to be loaded in the guest kernel.
+	repeated KernelModule kernel_modules = 7;
 }
 
 message DestroySandboxRequest {
