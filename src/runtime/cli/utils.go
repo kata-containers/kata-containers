@@ -161,7 +161,13 @@ func constructVersionInfo(version string) VersionInfo {
 		return unknownVersionInfo
 	}
 
-	pres := strings.Split(sv.Pre[0].VersionStr, "-")
+	var pres string
+	if len(sv.Pre) > 0 {
+		presSplit := strings.Split(sv.Pre[0].VersionStr, "-")
+		if len(presSplit) > 2 {
+			pres = presSplit[1]
+		}
+	}
 
 	// version contains Commit info.
 	if len(pres) > 1 {
@@ -170,7 +176,7 @@ func constructVersionInfo(version string) VersionInfo {
 			Major:  sv.Major,
 			Minor:  sv.Minor,
 			Patch:  sv.Patch,
-			Commit: pres[1],
+			Commit: pres,
 		}
 	}
 
