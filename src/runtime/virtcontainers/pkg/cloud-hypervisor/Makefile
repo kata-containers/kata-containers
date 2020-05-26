@@ -7,7 +7,7 @@
 all: | update-yaml generate-client-code
 MK_DIR := $(dir $(realpath $(firstword $(MAKEFILE_LIST))))
 YQ_INSTALLER := "$(MK_DIR)/../../../.ci/install-yq.sh"
-VERSIONS_FILE := "$(MK_DIR)/../../../versions.yaml"
+VERSIONS_FILE := "$(MK_DIR)/../../../../../versions.yaml"
 YQ := $(shell command -v yq 2> /dev/null)
 
 generate-client-code: clean-generated-code
