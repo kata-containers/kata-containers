@@ -5,7 +5,7 @@
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
 **File** | **string** |  | 
-**Size** | **int64** |  | 
+**Size** | **int64** |  | [optional]
 **Iommu** | **bool** |  | [optional] [default to false]
 **Mergeable** | **bool** |  | [optional] [default to false]
 **DiscardWrites** | **bool** |  | [optional] [default to false]
