@@ -218,6 +218,21 @@ paths:
         "500":
           description: The new device could not be added to the VM instance.
       summary: Add a new network device to the VM
+  /vm.add-vsock:
+    put:
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VsockConfig'
+        description: The details of the new vsock device
+        required: true
+      responses:
+        "204":
+          description: The new device was successfully added to the VM instance.
+        "500":
+          description: The new device could not be added to the VM instance.
+      summary: Add a new vsock device to the VM
   /vm.snapshot:
     put:
       requestBody:
@@ -293,6 +308,7 @@ components:
             direct: false
             wce: true
             poll_queue: true
+            id: id
           - path: path
             num_queues: 5
             readonly: false
@@ -303,6 +319,7 @@ components:
             direct: false
             wce: true
             poll_queue: true
+            id: id
           cpus:
             boot_vcpus: 1
             max_vcpus: 1
@@ -325,29 +342,31 @@ components:
             cache_size: 4
             dax: true
             tag: tag
+            id: id
           - sock: sock
             num_queues: 3
             queue_size: 2
             cache_size: 4
             dax: true
             tag: tag
+            id: id
           vsock:
-          - sock: sock
+            sock: sock
             iommu: false
-            cid: 3
-          - sock: sock
-            iommu: false
+            id: id
             cid: 3
           pmem:
           - mergeable: false
             file: file
             size: 7
             iommu: false
+            id: id
             discard_writes: false
           - mergeable: false
             file: file
             size: 7
             iommu: false
+            id: id
             discard_writes: false
           cmdline:
             args: args
@@ -366,6 +385,7 @@ components:
             vhost_socket: vhost_socket
             vhost_user: false
             ip: 192.168.249.1
+            id: id
             mac: mac
             mask: 255.255.255.0
           - tap: tap
@@ -375,6 +395,7 @@ components:
             vhost_socket: vhost_socket
             vhost_user: false
             ip: 192.168.249.1
+            id: id
             mac: mac
             mask: 255.255.255.0
       properties:
@@ -417,6 +438,7 @@ components:
           direct: false
           wce: true
           poll_queue: true
+          id: id
         - path: path
           num_queues: 5
           readonly: false
@@ -427,6 +449,7 @@ components:
           direct: false
           wce: true
           poll_queue: true
+          id: id
         cpus:
           boot_vcpus: 1
           max_vcpus: 1
@@ -449,29 +472,31 @@ components:
           cache_size: 4
           dax: true
           tag: tag
+          id: id
         - sock: sock
           num_queues: 3
           queue_size: 2
           cache_size: 4
           dax: true
           tag: tag
+          id: id
         vsock:
-        - sock: sock
+          sock: sock
           iommu: false
-          cid: 3
-        - sock: sock
-          iommu: false
+          id: id
           cid: 3
         pmem:
         - mergeable: false
           file: file
           size: 7
           iommu: false
+          id: id
           discard_writes: false
         - mergeable: false
           file: file
           size: 7
           iommu: false
+          id: id
           discard_writes: false
         cmdline:
           args: args
@@ -490,6 +515,7 @@ components:
           vhost_socket: vhost_socket
           vhost_user: false
           ip: 192.168.249.1
+          id: id
           mac: mac
           mask: 255.255.255.0
         - tap: tap
@@ -499,6 +525,7 @@ components:
           vhost_socket: vhost_socket
           vhost_user: false
           ip: 192.168.249.1
+          id: id
           mac: mac
           mask: 255.255.255.0
       properties:
@@ -539,9 +566,7 @@ components:
             $ref: '#/components/schemas/DeviceConfig'
           type: array
         vsock:
-          items:
-            $ref: '#/components/schemas/VsockConfig'
-          type: array
+          $ref: '#/components/schemas/VsockConfig'
         iommu:
           default: false
           type: boolean
@@ -639,6 +664,7 @@ components:
         direct: false
         wce: true
         poll_queue: true
+        id: id
       properties:
         path:
           type: string
@@ -668,6 +694,8 @@ components:
         poll_queue:
           default: true
           type: boolean
+        id:
+          type: string
       required:
       - path
       type: object
@@ -680,6 +708,7 @@ components:
         vhost_socket: vhost_socket
         vhost_user: false
         ip: 192.168.249.1
+        id: id
         mac: mac
         mask: 255.255.255.0
       properties:
@@ -708,6 +737,8 @@ components:
           type: boolean
         vhost_socket:
           type: string
+        id:
+          type: string
       type: object
     RngConfig:
       example:
@@ -731,6 +762,7 @@ components:
         cache_size: 4
         dax: true
         tag: tag
+        id: id
       properties:
         tag:
           type: string
@@ -748,6 +780,8 @@ components:
         cache_size:
           format: int64
           type: integer
+        id:
+          type: string
       required:
       - sock
       - tag
@@ -758,6 +792,7 @@ components:
         file: file
         size: 7
         iommu: false
+        id: id
         discard_writes: false
       properties:
         file:
@@ -774,6 +809,8 @@ components:
         discard_writes:
           default: false
           type: boolean
+        id:
+          type: string
       required:
       - file
       type: object
@@ -818,6 +855,7 @@ components:
       example:
         sock: sock
         iommu: false
+        id: id
         cid: 3
       properties:
         cid:
@@ -831,6 +869,8 @@ components:
         iommu:
           default: false
           type: boolean
+        id:
+          type: string
       required:
       - cid
       - sock

@@ -15,4 +15,5 @@ type PmemConfig struct {
 	Iommu bool `json:"iommu,omitempty"`
 	Mergeable bool `json:"mergeable,omitempty"`
 	DiscardWrites bool `json:"discard_writes,omitempty"`
+	Id string `json:"id,omitempty"`
 }
