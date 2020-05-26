@@ -843,8 +843,6 @@ func SandboxConfig(ocispec specs.Spec, runtime RuntimeConfig, bundlePath, cid, c
 		// Spec: &ocispec,
 
 		Experimental: runtime.Experimental,
-
-		HasCRIContainerType: HasCRIContainerType(ocispec.Annotations),
 	}
 
 	if err := addAnnotations(ocispec, &sandboxConfig); err != nil {
@@ -1012,15 +1010,4 @@ func GetOCIConfig(status vc.ContainerStatus) (specs.Spec, error) {
 	}
 
 	return *status.Spec, nil
-}
-
-// HasCRIContainerType returns true if annottations contain
-// a CRI container type annotation
-func HasCRIContainerType(annotations map[string]string) bool {
-	for _, key := range CRIContainerTypeKeyList {
-		if _, ok := annotations[key]; ok {
-			return true
-		}
-	}
-	return false
 }
