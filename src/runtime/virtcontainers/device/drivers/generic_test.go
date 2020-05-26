@@ -8,6 +8,7 @@ package drivers
 import (
 	"testing"
 
+	"github.com/kata-containers/runtime/virtcontainers/device/config"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -41,4 +42,16 @@ func TestBumpAttachCount(t *testing.T) {
 			assert.Nil(t, err)
 		}
 	}
+}
+
+func TestGetHostPath(t *testing.T) {
+	assert := assert.New(t)
+	dev := &GenericDevice{}
+	assert.Empty(dev.GetHostPath())
+
+	expectedHostPath := "/dev/null"
+	dev.DeviceInfo = &config.DeviceInfo{
+		HostPath: expectedHostPath,
+	}
+	assert.Equal(expectedHostPath, dev.GetHostPath())
 }
