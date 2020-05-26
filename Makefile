@@ -3,5 +3,18 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
-test:
-	bash ci/go-test.sh
+default: runtime agent
+
+runtime:
+	make -C src/runtime
+
+agent:
+	make -C src/agent
+
+test-runtime:
+	make -C src/runtime test
+
+test-agent:
+	make -C src/agent check
+
+test: test-runtime test-agent

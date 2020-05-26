@@ -23,24 +23,24 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/containerd/fifo"
-	httptransport "github.com/go-openapi/runtime/client"
-	"github.com/go-openapi/strfmt"
-	kataclient "github.com/kata-containers/agent/protocols/client"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
 	persistapi "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist/api"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/firecracker/client"
 	models "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/firecracker/client/models"
 	ops "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/firecracker/client/operations"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
+	kataclient "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols/client"
+
+	"github.com/blang/semver"
+	"github.com/containerd/console"
+	"github.com/containerd/fifo"
+	httptransport "github.com/go-openapi/runtime/client"
+	"github.com/go-openapi/strfmt"
 	"github.com/opencontainers/selinux/go-selinux/label"
 	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
-
-	"github.com/blang/semver"
-	"github.com/containerd/console"
-	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
-	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
-	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
 )
 
 type vmmState uint8

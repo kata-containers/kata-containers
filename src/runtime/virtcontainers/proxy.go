@@ -13,8 +13,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	kataclient "github.com/kata-containers/agent/protocols/client"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist"
+	kataclient "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols/client"
 	"github.com/sirupsen/logrus"
 )
 
