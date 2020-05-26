@@ -6,6 +6,8 @@
 package cgroups
 
 import (
+	"io/ioutil"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -101,4 +103,61 @@ func TestValidCgroupPath(t *testing.T) {
 		}
 	}
 
+}
+
+func TestDeviceToCgroupDevice(t *testing.T) {
+	assert := assert.New(t)
+
+	f, err := ioutil.TempFile("", "device")
+	assert.NoError(err)
+	f.Close()
+
+	// fail: regular file to device
+	dev, err := DeviceToCgroupDevice(f.Name())
+	assert.Error(err)
+	assert.Nil(dev)
+
+	// fail: no such file
+	os.Remove(f.Name())
+	dev, err = DeviceToCgroupDevice(f.Name())
+	assert.Error(err)
+	assert.Nil(dev)
+
+	devPath := "/dev/null"
+	if _, err := os.Stat(devPath); os.IsNotExist(err) {
+		t.Skipf("no such device: %v", devPath)
+		return
+	}
+	dev, err = DeviceToCgroupDevice(devPath)
+	assert.NoError(err)
+	assert.NotNil(dev)
+	assert.Equal(dev.Type, 'c')
+	assert.Equal(dev.Path, devPath)
+	assert.NotZero(dev.Major)
+	assert.NotZero(dev.Minor)
+	assert.NotEmpty(dev.Permissions)
+	assert.NotZero(dev.FileMode)
+	assert.Zero(dev.Uid)
+	assert.Zero(dev.Gid)
+	assert.True(dev.Allow)
+}
+
+func TestDeviceToLinuxDevice(t *testing.T) {
+	assert := assert.New(t)
+
+	devPath := "/dev/null"
+	if _, err := os.Stat(devPath); os.IsNotExist(err) {
+		t.Skipf("no such device: %v", devPath)
+		return
+	}
+	dev, err := DeviceToLinuxDevice(devPath)
+	assert.NoError(err)
+	assert.NotNil(dev)
+	assert.Equal(dev.Type, "c")
+	assert.NotNil(dev.Major)
+	assert.NotZero(*dev.Major)
+	assert.NotNil(dev.Minor)
+	assert.NotZero(*dev.Minor)
+	assert.NotEmpty(dev.Access)
+	assert.True(dev.Allow)
 }
