@@ -271,14 +271,8 @@ func (clh *cloudHypervisor) createSandbox(ctx context.Context, id string, networ
 		return errors.New("image path is empty")
 	}
 
-	st, err := os.Stat(imagePath)
-	if err != nil {
-		return fmt.Errorf("Failed to get information for image file '%v': %v", imagePath, err)
-	}
-
 	pmem := chclient.PmemConfig{
 		File:          imagePath,
-		Size:          st.Size(),
 		DiscardWrites: true,
 	}
 	clh.vmconfig.Pmem = append(clh.vmconfig.Pmem, pmem)
