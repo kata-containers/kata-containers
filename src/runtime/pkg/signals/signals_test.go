@@ -126,8 +126,6 @@ func TestSignalBacktrace(t *testing.T) {
 	// determine name of *this* function
 	pc := make([]uintptr, 1)
 	goruntime.Callers(1, pc)
-	fn := goruntime.FuncForPC(pc[0])
-	name := fn.Name()
 
 	Backtrace()
 
@@ -136,5 +134,4 @@ func TestSignalBacktrace(t *testing.T) {
 	// very basic tests to check if a backtrace was produced
 	assert.True(strings.Contains(b, "contention:"))
 	assert.True(strings.Contains(b, `level=error`))
-	assert.True(strings.Contains(b, name))
 }

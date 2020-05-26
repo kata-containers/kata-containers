@@ -14,7 +14,7 @@ require (
 	github.com/containerd/cri-containerd v1.11.1-0.20190125013620-4dd6735020f5
 	github.com/containerd/fifo v0.0.0-20190226154929-a9fb20d87448
 	github.com/containerd/go-runc v0.0.0-20200220073739-7016d3ce2328 // indirect
-	github.com/containerd/ttrpc v1.0.0 // indirect
+	github.com/containerd/ttrpc v1.0.0
 	github.com/containerd/typeurl v1.0.1-0.20190228175220-2a93cfde8c20
 	github.com/containernetworking/plugins v0.8.2
 	github.com/cri-o/cri-o v1.0.0-rc2.0.20170928185954-3394b3b2d6af
@@ -27,12 +27,10 @@ require (
 	github.com/go-openapi/swag v0.18.0
 	github.com/go-openapi/validate v0.18.0
 	github.com/gogo/protobuf v1.3.1
-	github.com/grpc-ecosystem/grpc-opentracing v0.0.0-20180507213350-8e809c8a8645 // indirect
 	github.com/hashicorp/go-multierror v1.0.0
-	github.com/hashicorp/yamux v0.0.0-20190923154419-df201c70410d // indirect
+	github.com/hashicorp/yamux v0.0.0-20190923154419-df201c70410d
 	github.com/intel/govmm v0.0.0-20200304142514-e969afbec52c
-	github.com/kata-containers/agent v0.0.0-20200220202609-d26a505efd33
-	github.com/mdlayher/vsock v0.0.0-20191108225356-d9c65923cb8f // indirect
+	github.com/mdlayher/vsock v0.0.0-20191108225356-d9c65923cb8f
 	github.com/mitchellh/mapstructure v1.1.2
 	github.com/opencontainers/runc v1.0.0-rc9.0.20200102164712-2b52db75279c
 	github.com/opencontainers/runtime-spec v1.0.2-0.20190408193819-a1b50f621a48
@@ -40,7 +38,6 @@ require (
 	github.com/opentracing/opentracing-go v1.1.0
 	github.com/pkg/errors v0.8.1
 	github.com/prometheus/procfs v0.0.0-20190328153300-af7bedc223fb
-	github.com/protocolbuffers/protobuf v3.11.4+incompatible // indirect
 	github.com/safchain/ethtool v0.0.0-20190326074333-42ed695e3de8
 	github.com/seccomp/libseccomp-golang v0.9.1 // indirect
 	github.com/sirupsen/logrus v1.4.2
