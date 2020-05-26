@@ -319,3 +319,41 @@ func (m *Manager) Destroy() error {
 	defer m.Unlock()
 	return m.mgr.Destroy()
 }
+
+// AddDevice adds a device to the device cgroup
+func (m *Manager) AddDevice(device string) error {
+	cgroups, err := m.GetCgroups()
+	if err != nil {
+		return err
+	}
+
+	ld, err := DeviceToCgroupDevice(device)
+	if err != nil {
+		return err
+	}
+
+	m.Lock()
+	cgroups.Devices = append(cgroups.Devices, ld)
+	m.Unlock()
+
+	return m.Apply()
+}
+
+// RemoceDevice removed a device from the device cgroup
+func (m *Manager) RemoveDevice(device string) error {
+	cgroups, err := m.GetCgroups()
+	if err != nil {
+		return err
+	}
+
+	m.Lock()
+	for i, d := range cgroups.Devices {
+		if d.Path == device {
+			cgroups.Devices = append(cgroups.Devices[:i], cgroups.Devices[i+1:]...)
+			m.Unlock()
+			return m.Apply()
+		}
+	}
+	m.Unlock()
+	return fmt.Errorf("device %v not found in the cgroup", device)
+}
