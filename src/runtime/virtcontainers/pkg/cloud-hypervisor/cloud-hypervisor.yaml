@@ -187,6 +187,22 @@ paths:
         500:
           description: The new disk could not be added to the VM instance.
 
+  /vm.add-fs:
+    put:
+      summary: Add a new virtio-fs device to the VM
+      requestBody:
+        description: The details of the new virtio-fs
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FsConfig'
+        required: true
+      responses:
+        204:
+          description: The new device was successfully added to the VM instance.
+        500:
+          description: The new device could not be added to the VM instance.
+
   /vm.add-pmem:
     put:
       summary: Add a new pmem device to the VM
@@ -364,6 +380,12 @@ components:
         hotplug_method:
           type: string
           default: "acpi"
+        shared:
+          type: boolean
+          default: false
+        hugepages:
+          type: boolean
+          default: false
 
     KernelConfig:
       required:
@@ -492,7 +514,6 @@ components:
     PmemConfig:
       required:
       - file
-      - size
       type: object
       properties:
         file:
