@@ -18,3 +18,6 @@ test-agent:
 	make -C src/agent check
 
 test: test-runtime test-agent
+
+generate-protocols:
+	make -C src/agent generate-protocols
