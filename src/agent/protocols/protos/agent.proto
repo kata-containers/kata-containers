@@ -50,6 +50,7 @@ service AgentService {
 	rpc UpdateRoutes(UpdateRoutesRequest) returns (Routes);
 	rpc ListInterfaces(ListInterfacesRequest) returns(Interfaces);
 	rpc ListRoutes(ListRoutesRequest) returns (Routes);
+	rpc AddARPNeighbors(AddARPNeighborsRequest) returns (google.protobuf.Empty);
 
 	// tracing
 	rpc StartTracing(StartTracingRequest) returns (google.protobuf.Empty);
@@ -326,6 +327,14 @@ message ListInterfacesRequest {
 }
 
 message ListRoutesRequest {
+}
+
+message ARPNeighbors {
+       repeated types.ARPNeighbor ARPNeighbors = 1;
+}
+
+message AddARPNeighborsRequest {
+       ARPNeighbors neighbors = 1;
 }
 
 message OnlineCPUMemRequest {
