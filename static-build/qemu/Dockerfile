@@ -1,4 +1,4 @@
-from ubuntu:18.04
+from ubuntu:20.04
 
 ARG QEMU_REPO
 # commit/tag/branch
@@ -19,6 +19,7 @@ RUN apt-get --no-install-recommends install -y \
 	    flex \
 	    gawk \
 	    libaudit-dev \
+	    libblkid-dev \
 	    libcap-dev \
 	    libcap-ng-dev \
 	    libdw-dev \
@@ -33,6 +34,7 @@ RUN apt-get --no-install-recommends install -y \
 	    libpmem-dev \
 	    libselinux1-dev \
 	    libtool \
+	    make \
 	    pkg-config \
 	    pkg-config \
 	    python \
