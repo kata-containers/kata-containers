@@ -1861,6 +1861,52 @@ func (b BalloonDevice) deviceName(config *Config) string {
 	return BalloonDeviceTransport[b.Transport]
 }
 
+// IommuDev represents a Intel IOMMU Device
+type IommuDev struct {
+	Intremap    bool
+	DeviceIotlb bool
+	CachingMode bool
+}
+
+// Valid returns true if the IommuDev is valid
+func (dev IommuDev) Valid() bool {
+	return true
+}
+
+// deviceName the qemu device name
+func (dev IommuDev) deviceName() string {
+	return "intel-iommu"
+}
+
+// QemuParams returns the qemu parameters built out of the IommuDev.
+func (dev IommuDev) QemuParams(_ *Config) []string {
+	var qemuParams []string
+	var deviceParams []string
+
+	deviceParams = append(deviceParams, dev.deviceName())
+	if dev.Intremap {
+		deviceParams = append(deviceParams, "intremap=on")
+	} else {
+		deviceParams = append(deviceParams, "intremap=off")
+	}
+
+	if dev.DeviceIotlb {
+		deviceParams = append(deviceParams, "device-iotlb=on")
+	} else {
+		deviceParams = append(deviceParams, "device-iotlb=off")
+	}
+
+	if dev.CachingMode {
+		deviceParams = append(deviceParams, "caching-mode=on")
+	} else {
+		deviceParams = append(deviceParams, "caching-mode=off")
+	}
+
+	qemuParams = append(qemuParams, "-device")
+	qemuParams = append(qemuParams, strings.Join(deviceParams, ","))
+	return qemuParams
+}
+
 // RTCBaseType is the qemu RTC base time type.
 type RTCBaseType string
 
