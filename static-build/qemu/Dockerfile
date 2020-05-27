@@ -23,12 +23,15 @@ RUN apt-get --no-install-recommends install -y \
 	    libcap-ng-dev \
 	    libdw-dev \
 	    libelf-dev \
+	    libffi-dev \
 	    libglib2.0-0 \
 	    libglib2.0-dev \
 	    libglib2.0-dev git \
 	    libltdl-dev \
+	    libmount-dev \
 	    libpixman-1-dev \
 	    libpmem-dev \
+	    libselinux1-dev \
 	    libtool \
 	    pkg-config \
 	    pkg-config \
