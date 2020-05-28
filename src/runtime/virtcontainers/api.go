@@ -76,13 +76,6 @@ func createSandboxFromConfig(ctx context.Context, sandboxConfig SandboxConfig, f
 		return nil, err
 	}
 
-	// Move runtime to sandbox cgroup so all process are created there.
-	if s.config.SandboxCgroupOnly {
-		if err := s.setupSandboxCgroup(); err != nil {
-			return nil, err
-		}
-	}
-
 	// cleanup sandbox resources in case of any failure
 	defer func() {
 		if err != nil {
@@ -101,6 +94,13 @@ func createSandboxFromConfig(ctx context.Context, sandboxConfig SandboxConfig, f
 			s.removeNetwork()
 		}
 	}()
+
+	// Move runtime to sandbox cgroup so all process are created there.
+	if s.config.SandboxCgroupOnly {
+		if err := s.setupSandboxCgroup(); err != nil {
+			return nil, err
+		}
+	}
 
 	// Start the VM
 	if err = s.startVM(); err != nil {

@@ -218,6 +218,8 @@ func (clh *cloudHypervisor) createSandbox(ctx context.Context, id string, networ
 	// Convert to int64 openApiClient only support int64
 	clh.vmconfig.Memory.Size = int64((utils.MemUnit(clh.config.MemorySize) * utils.MiB).ToBytes())
 	clh.vmconfig.Memory.File = "/dev/shm"
+	// shared memory should be enabled if using vhost-user(kata uses virtiofsd)
+	clh.vmconfig.Memory.Shared = true
 	hostMemKb, err := getHostMemorySizeKb(procMemInfo)
 	if err != nil {
 		return nil
@@ -269,14 +271,8 @@ func (clh *cloudHypervisor) createSandbox(ctx context.Context, id string, networ
 		return errors.New("image path is empty")
 	}
 
-	st, err := os.Stat(imagePath)
-	if err != nil {
-		return fmt.Errorf("Failed to get information for image file '%v': %v", imagePath, err)
-	}
-
 	pmem := chclient.PmemConfig{
 		File:          imagePath,
-		Size:          st.Size(),
 		DiscardWrites: true,
 	}
 	clh.vmconfig.Pmem = append(clh.vmconfig.Pmem, pmem)
@@ -1080,7 +1076,7 @@ func (clh *cloudHypervisor) addVSock(cid int64, path string) {
 		"cid":  cid,
 	}).Info("Adding HybridVSock")
 
-	clh.vmconfig.Vsock = append(clh.vmconfig.Vsock, chclient.VsockConfig{Cid: cid, Sock: path})
+	clh.vmconfig.Vsock = chclient.VsockConfig{Cid: cid, Sock: path}
 }
 
 func (clh *cloudHypervisor) addNet(e Endpoint) error {

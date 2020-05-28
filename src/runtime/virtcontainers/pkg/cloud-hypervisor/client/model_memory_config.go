@@ -15,4 +15,6 @@ type MemoryConfig struct {
 	File string `json:"file,omitempty"`
 	Mergeable bool `json:"mergeable,omitempty"`
 	HotplugMethod string `json:"hotplug_method,omitempty"`
+	Shared bool `json:"shared,omitempty"`
+	Hugepages bool `json:"hugepages,omitempty"`
 }

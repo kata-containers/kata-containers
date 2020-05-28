@@ -68,6 +68,14 @@ func (device *GenericDevice) GetMajorMinor() (int64, int64) {
 	return device.DeviceInfo.Major, device.DeviceInfo.Minor
 }
 
+// GetHostPath return the device path in the host
+func (device *GenericDevice) GetHostPath() string {
+	if device.DeviceInfo != nil {
+		return device.DeviceInfo.HostPath
+	}
+	return ""
+}
+
 // Reference adds one reference to device
 func (device *GenericDevice) Reference() uint {
 	if device.RefCount != intMax {

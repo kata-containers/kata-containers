@@ -20,4 +20,5 @@ type DiskConfig struct {
 	VhostSocket string `json:"vhost_socket,omitempty"`
 	Wce bool `json:"wce,omitempty"`
 	PollQueue bool `json:"poll_queue,omitempty"`
+	Id string `json:"id,omitempty"`
 }

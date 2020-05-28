@@ -123,9 +123,6 @@ type SandboxConfig struct {
 
 	DisableGuestSeccomp bool
 
-	// HasCRIContainerType specifies whether container type was set explicitly through annotations or not.
-	HasCRIContainerType bool
-
 	// Experimental features enabled
 	Experimental []exp.Feature
 
@@ -641,11 +638,22 @@ func (s *Sandbox) createCgroupManager() error {
 	if spec != nil {
 		cgroupPath = spec.Linux.CgroupsPath
 
-		// kata should rely on the cgroup created and configured by
-		// container engine *only* if actual container was
-		// marked *explicitly* as sandbox through annotations.
-		if !s.config.HasCRIContainerType {
-			resources = *spec.Linux.Resources
+		// Kata relies on the cgroup parent created and configured by the container
+		// engine, but sometimes the sandbox cgroup is not configured and the container
+		// may have access to all the resources, hence the runtime must constrain the
+		// sandbox and update the list of devices with the devices hotplugged in the
+		// hypervisor.
+		resources = *spec.Linux.Resources
+	}
+
+	if s.devManager != nil {
+		for _, d := range s.devManager.GetAllDevices() {
+			dev, err := vccgroups.DeviceToLinuxDevice(d.GetHostPath())
+			if err != nil {
+				s.Logger().WithError(err).WithField("device", d.GetHostPath()).Warn("Could not add device to sandbox resources")
+				continue
+			}
+			resources.Devices = append(resources.Devices, dev)
 		}
 	}
 
@@ -1640,6 +1648,17 @@ func (s *Sandbox) HotplugAddDevice(device api.Device, devType config.DeviceType)
 	span, _ := s.trace("HotplugAddDevice")
 	defer span.Finish()
 
+	if s.config.SandboxCgroupOnly {
+		// We are about to add a device to the hypervisor,
+		// the device cgroup MUST be updated since the hypervisor
+		// will need access to such device
+		hdev := device.GetHostPath()
+		if err := s.cgroupMgr.AddDevice(hdev); err != nil {
+			s.Logger().WithError(err).WithField("device", hdev).
+				Warn("Could not add device to cgroup")
+		}
+	}
+
 	switch devType {
 	case config.DeviceVFIO:
 		vfioDevices, ok := device.GetDeviceInfo().([]*config.VFIODev)
@@ -1684,6 +1703,18 @@ func (s *Sandbox) HotplugAddDevice(device api.Device, devType config.DeviceType)
 // HotplugRemoveDevice is used for removing a device from sandbox
 // Sandbox implement DeviceReceiver interface from device/api/interface.go
 func (s *Sandbox) HotplugRemoveDevice(device api.Device, devType config.DeviceType) error {
+	defer func() {
+		if s.config.SandboxCgroupOnly {
+			// Remove device from cgroup, the hypervisor
+			// should not have access to such device anymore.
+			hdev := device.GetHostPath()
+			if err := s.cgroupMgr.RemoveDevice(hdev); err != nil {
+				s.Logger().WithError(err).WithField("device", hdev).
+					Warn("Could not remove device from cgroup")
+			}
+		}
+	}()
+
 	switch devType {
 	case config.DeviceVFIO:
 		vfioDevices, ok := device.GetDeviceInfo().([]*config.VFIODev)
@@ -2123,8 +2154,6 @@ func (s *Sandbox) setupSandboxCgroup() error {
 		s.Logger().WithField("sandboxid", s.id).Warning("no cgroup path provided for pod sandbox, not creating sandbox cgroup")
 		return nil
 	}
-
-	s.Logger().WithField("hasCRIContainerType", s.config.HasCRIContainerType).Debug("Setting sandbox cgroup")
 
 	s.state.CgroupPath, err = vccgroups.ValidCgroupPath(spec.Linux.CgroupsPath, s.config.SystemdCgroup)
 	if err != nil {

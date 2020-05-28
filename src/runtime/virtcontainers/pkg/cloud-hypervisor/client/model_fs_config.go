@@ -16,4 +16,5 @@ type FsConfig struct {
 	QueueSize int32 `json:"queue_size,omitempty"`
 	Dax bool `json:"dax,omitempty"`
 	CacheSize int64 `json:"cache_size,omitempty"`
+	Id string `json:"id,omitempty"`
 }
