@@ -7,6 +7,8 @@
 
 syntax = "proto3";
 
+option go_package = "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols/grpc";
+
 package grpc;
 
 import "github.com/gogo/protobuf/gogoproto/gogo.proto";

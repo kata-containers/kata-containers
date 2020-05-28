@@ -25,6 +25,11 @@ export VERSION_COMMIT := $(if $(COMMIT),$(VERSION)-$(COMMIT),$(VERSION))
 
 BUILD_TYPE = release
 
+# set proto file to generate
+ifdef proto
+  PROTO_FILE=${proto}
+endif
+
 ARCH = $(shell uname -m)
 LIBC = musl
 TRIPLE = $(ARCH)-unknown-linux-$(LIBC)
@@ -122,3 +127,6 @@ help: show-summary
 	help \
 	show-header \
 	show-summary
+
+generate-protocols:
+	protocols/hack/update-generated-proto.sh "${PROTO_FILE}"
