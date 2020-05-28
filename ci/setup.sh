@@ -5,6 +5,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 set -e
+echo "Testing CI"
 
 cidir=$(dirname "$0")
 source "${cidir}/lib.sh"
