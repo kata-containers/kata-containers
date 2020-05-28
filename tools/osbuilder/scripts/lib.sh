@@ -1,14 +1,13 @@
 #!/bin/bash
 #
-# Copyright (c) 2018 Intel Corporation
+# Copyright (c) 2018-2020 Intel Corporation
 #
 # SPDX-License-Identifier: Apache-2.0
 
 set -e
 
-GO_AGENT_PKG=${GO_AGENT_PKG:-github.com/kata-containers/agent}
-GO_RUNTIME_PKG=${GO_RUNTIME_PKG:-github.com/kata-containers/runtime}
-RUST_AGENT_PKG=${RUST_AGENT_PKG:-github.com/kata-containers/kata-rust-agent}
+KATA_REPO=${KATA_REPO:-github.com/kata-containers/kata-containers}
+KATA_REPO_DIR="${GOPATH}/src/${KATA_REPO}"
 CMAKE_VERSION=${CMAKE_VERSION:-"null"}
 MUSL_VERSION=${MUSL_VERSION:-"null"}
 #https://github.com/kata-containers/tests/blob/master/.ci/jenkins_job_build.sh
@@ -16,6 +15,7 @@ MUSL_VERSION=${MUSL_VERSION:-"null"}
 KATA_BRANCH=${branch:-}
 KATA_BRANCH=${KATA_BRANCH:-master}
 yq_file="${script_dir}/../scripts/install-yq.sh"
+kata_versions_file="${KATA_REPO_DIR}/versions.yaml"
 
 error()
 {
@@ -98,7 +98,7 @@ EOF
 
 	if [ -n "$GPG_KEY_URL" ]; then
 		if [ ! -f "${CONFIG_DIR}/${GPG_KEY_FILE}" ]; then
-			curl -L ${GPG_KEY_URL} -o ${CONFIG_DIR}/${GPG_KEY_FILE}
+			curl -L "${GPG_KEY_URL}" -o "${CONFIG_DIR}/${GPG_KEY_FILE}"
 		fi
 		cat >> "${DNF_CONF}" << EOF
 gpgcheck=1
@@ -108,7 +108,7 @@ EOF
 
 	if [ -n "$GPG_KEY_ARCH_URL" ]; then
 		if [ ! -f "${CONFIG_DIR}/${GPG_KEY_ARCH_FILE}" ]; then
-			 curl -L ${GPG_KEY_ARCH_URL} -o ${CONFIG_DIR}/${GPG_KEY_ARCH_FILE}
+			 curl -L "${GPG_KEY_ARCH_URL}" -o "${CONFIG_DIR}/${GPG_KEY_ARCH_FILE}"
 		fi
 		cat >> "${DNF_CONF}" << EOF
        file://${CONFIG_DIR}/${GPG_KEY_ARCH_FILE}
@@ -190,7 +190,7 @@ create_summary_file()
 	# XXX: Increment every time the format of the summary file changes!
 	local -r format_version="0.0.2"
 
-	local -r osbuilder_url="https://github.com/kata-containers/osbuilder"
+	local -r osbuilder_url="https://github.com/kata-containers/kata-containers/tools/osbuilder"
 
 	local agent="${AGENT_DEST}"
 	[ "$AGENT_INIT" = yes ] && agent="${init}"
@@ -199,17 +199,10 @@ create_summary_file()
 	if [ "${RUST_AGENT}" == "no" ]; then
 		agent_version=$("$agent" --version|awk '{print $NF}')
 	else
-		local -r agentdir="${GOPATH}/src/${RUST_AGENT_PKG}/src/agent"
+		local -r agentdir="${GOPATH}/src/${KATA_REPO}/src/agent"
 		agent_version=$(cat ${agentdir}/VERSION)
 	fi
 
-	local REAL_AGENT_PKG
-
-	if [ "$RUST_AGENT" == "no" ]; then
-		REAL_AGENT_PKG=${GO_AGENT_PKG}
-	else
-		REAL_AGENT_PKG=${RUST_AGENT_PKG}
-	fi
 
 	cat >"$file"<<-EOT
 	---
@@ -229,7 +222,7 @@ ${packages}
 	    extra:
 ${extra}
 	agent:
-	  url: "https://${REAL_AGENT_PKG}"
+	  url: "https://${KATA_REPO}"
 	  name: "${AGENT_BIN}"
 	  version: "${agent_version}"
 	  agent-is-init-daemon: "${AGENT_INIT}"
@@ -342,7 +335,7 @@ RUN ln -sf /usr/bin/g++ /bin/musl-g++
 "
 	# rust agent still need go to build
 	# because grpc-sys need go to build
-	pushd ${dir}
+	pushd "${dir}"
 	dockerfile_template="Dockerfile.in"
 	dockerfile_arch_template="Dockerfile-${architecture}.in"
 	# if arch-specific docker file exists, swap the univesal one with it.
@@ -364,7 +357,7 @@ RUN ln -sf /usr/bin/g++ /bin/musl-g++
 			-e "s|@INSTALL_GO@|${install_go//$'\n'/\\n}|g" \
 			-e "s|@INSTALL_RUST@||g" \
 			-e "s|@SET_PROXY@|${set_proxy:-}|g" \
-			${dockerfile_template} > Dockerfile
+			"${dockerfile_template}" > Dockerfile
 	else
 		sed \
 			-e "s|@GO_VERSION@|${GO_VERSION}|g" \
@@ -374,51 +367,19 @@ RUN ln -sf /usr/bin/g++ /bin/musl-g++
 			-e "s|@INSTALL_GO@|${install_go//$'\n'/\\n}|g" \
 			-e "s|@INSTALL_RUST@|${install_rust//$'\n'/\\n}|g" \
 			-e "s|@SET_PROXY@|${set_proxy:-}|g" \
-			${dockerfile_template} > Dockerfile
+			"${dockerfile_template}" > Dockerfile
 	fi
 	popd
 }
 
 detect_go_version()
 {
-	info "Detecting agent go version"
-	typeset yq=$(command -v yq || command -v ${GOPATH}/bin/yq || echo "${GOPATH}/bin/yq")
+	info "Detecting go version"
+	typeset -r yq=$(command -v yq || command -v "${GOPATH}/bin/yq" || echo "${GOPATH}/bin/yq")
 	if [ ! -f "$yq" ]; then
 		source "$yq_file"
 	fi
 
-	local runtimeRevision=""
-
-	# Detect runtime revision by fetching the agent's VERSION file
-	local runtime_version_url="https://raw.githubusercontent.com/kata-containers/agent/${AGENT_VERSION:-master}/VERSION"
-	info "Detecting runtime version using ${runtime_version_url}"
-
-	if runtimeRevision="$(curl -fsSL ${runtime_version_url})"; then
-		[ -n "${runtimeRevision}" ] || die "failed to get agent version"
-		typeset -r runtimeVersionsURL="https://raw.githubusercontent.com/kata-containers/runtime/${runtimeRevision}/versions.yaml"
-		info "Getting golang version from ${runtimeVersionsURL}"
-		# This may fail if we are a kata bump.
-		if GO_VERSION="$(curl -fsSL "$runtimeVersionsURL" | $yq r - "languages.golang.version")"; then
-			[ "$GO_VERSION" != "null" ]
-			return 0
-		fi
-	fi
-
-	info "Agent version has not match with a runtime version, assumming it is a PR"
-	local kata_runtime_pkg_dir="${GOPATH}/src/${GO_RUNTIME_PKG}"
-	if [ ! -d "${kata_runtime_pkg_dir}" ];then
-		info "There is not runtime repository in filesystem (${kata_runtime_pkg_dir})"
-		local runtime_versions_url="https://raw.githubusercontent.com/kata-containers/runtime/${KATA_BRANCH}/versions.yaml"
-		info "Get versions file from ${runtime_versions_url}"
-		GO_VERSION="$(curl -fsSL "${runtime_versions_url}" | $yq r - "languages.golang.version")"
-		if [ "$?" == "0" ] && [ "$GO_VERSION" != "null" ]; then
-			return 0
-		fi
-
-		return 1
-	fi
-
-	local kata_versions_file="${kata_runtime_pkg_dir}/versions.yaml"
 	info "Get Go version from ${kata_versions_file}"
 	GO_VERSION="$(cat "${kata_versions_file}"  | $yq r - "languages.golang.version")"
 
@@ -428,45 +389,13 @@ detect_go_version()
 detect_rust_version()
 {
 	info "Detecting agent rust version"
-	typeset -r yq=$(command -v yq || command -v ${GOPATH}/bin/yq || echo "${GOPATH}/bin/yq")
+	typeset -r yq=$(command -v yq || command -v "${GOPATH}/bin/yq" || echo "${GOPATH}/bin/yq")
 	if [ ! -f "$yq" ]; then
 		source "$yq_file"
 	fi
 
-	local runtimeRevision=""
-
-	# Detect runtime revision by fetching the agent's VERSION file
-	local runtime_version_url="https://raw.githubusercontent.com/kata-containers/agent/${AGENT_VERSION:-master}/VERSION"
-	info "Detecting runtime version using ${runtime_version_url}"
-
-	if runtimeRevision="$(curl -fsSL ${runtime_version_url})"; then
-		[ -n "${runtimeRevision}" ] || die "failed to get agent version"
-		typeset -r runtimeVersionsURL="https://raw.githubusercontent.com/kata-containers/runtime/${runtimeRevision}/versions.yaml"
-		info "Getting rust version from ${runtimeVersionsURL}"
-		# This may fail if we are a kata bump.
-		if RUST_VERSION="$(curl -fsSL "$runtimeVersionsURL" | $yq r - "languages.rust.version")"; then
-			[ "$RUST_VERSION" != "null" ]
-			return 0
-		fi
-	fi
-
-	info "Agent version has not match with a runtime version, assumming it is a PR"
-	local kata_runtime_pkg_dir="${GOPATH}/src/${GO_RUNTIME_PKG}"
-	if [ ! -d "${kata_runtime_pkg_dir}" ];then
-		info "There is not runtime repository in filesystem (${kata_runtime_pkg_dir})"
-		local runtime_versions_url="https://raw.githubusercontent.com/kata-containers/runtime/${KATA_BRANCH}/versions.yaml"
-		info "Get versions file from ${runtime_versions_url}"
-		RUST_VERSION="$(curl -fsSL "${runtime_versions_url}" | $yq r - "languages.rust.version")"
-		if [ "$?" == "0" ] && [ "$RUST_VERSION" != "null" ]; then
-			return 0
-		fi
-
-		return 1
-	fi
-
-	local kata_versions_file="${kata_runtime_pkg_dir}/versions.yaml"
 	info "Get rust version from ${kata_versions_file}"
-	RUST_VERSION="$(cat "${kata_versions_file}"  | $yq r - "languages.rust.version")"
+	RUST_VERSION="$(cat "${kata_versions_file}"  | $yq r - "languages.rust.meta.newest-version")"
 
 	[ "$?" == "0" ] && [ "$RUST_VERSION" != "null" ]
 }
@@ -474,44 +403,11 @@ detect_rust_version()
 detect_cmake_version()
 {
 	info "Detecting cmake version"
-
-	typeset -r yq=$(command -v yq || command -v ${GOPATH}/bin/yq || echo "${GOPATH}/bin/yq")
+	typeset -r yq=$(command -v yq || command -v "${GOPATH}/bin/yq" || echo "${GOPATH}/bin/yq")
 	if [ ! -f "$yq" ]; then
 		source "$yq_file"
 	fi
 
-	local runtimeRevision=""
-
-	# Detect runtime revision by fetching the agent's VERSION file
-	local runtime_version_url="https://raw.githubusercontent.com/kata-containers/agent/${AGENT_VERSION:-master}/VERSION"
-	info "Detecting runtime version using ${runtime_version_url}"
-
-	if runtimeRevision="$(curl -fsSL ${runtime_version_url})"; then
-		[ -n "${runtimeRevision}" ] || die "failed to get agent version"
-		typeset -r runtimeVersionsURL="https://raw.githubusercontent.com/kata-containers/runtime/${runtimeRevision}/versions.yaml"
-		info "Getting cmake version from ${runtimeVersionsURL}"
-		# This may fail if we are a kata bump.
-		if CMAKE_VERSION="$(curl -fsSL "$runtimeVersionsURL" | $yq r - "externals.cmake.version")"; then
-			[ "$CMAKE_VERSION" != "null" ]
-			return 0
-		fi
-	fi
-
-	info "Agent version has not match with a runtime version, assumming it is a PR"
-	local kata_runtime_pkg_dir="${GOPATH}/src/${GO_RUNTIME_PKG}"
-	if [ ! -d "${kata_runtime_pkg_dir}" ];then
-		info "There is not runtime repository in filesystem (${kata_runtime_pkg_dir})"
-		local runtime_versions_url="https://raw.githubusercontent.com/kata-containers/runtime/${KATA_BRANCH}/versions.yaml"
-		info "Get versions file from ${runtime_versions_url}"
-		CMAKE_VERSION="$(curl -fsSL "${runtime_versions_url}" | $yq r - "externals.cmake.version")"
-		if [ "$?" == "0" ] && [ "$CMAKE_VERSION" != "null" ]; then
-			return 0
-		fi
-
-		return 1
-	fi
-
-	local kata_versions_file="${kata_runtime_pkg_dir}/versions.yaml"
 	info "Get cmake version from ${kata_versions_file}"
 	CMAKE_VERSION="$(cat "${kata_versions_file}"  | $yq r - "externals.cmake.version")"
 
@@ -521,44 +417,11 @@ detect_cmake_version()
 detect_musl_version()
 {
 	info "Detecting musl version"
-
-	typeset -r yq=$(command -v yq || command -v ${GOPATH}/bin/yq || echo "${GOPATH}/bin/yq")
+	typeset -r yq=$(command -v yq || command -v "${GOPATH}/bin/yq" || echo "${GOPATH}/bin/yq")
 	if [ ! -f "$yq" ]; then
 		source "$yq_file"
 	fi
 
-	local runtimeRevision=""
-
-	# Detect runtime revision by fetching the agent's VERSION file
-	local runtime_version_url="https://raw.githubusercontent.com/kata-containers/agent/${AGENT_VERSION:-master}/VERSION"
-	info "Detecting runtime version using ${runtime_version_url}"
-
-	if runtimeRevision="$(curl -fsSL ${runtime_version_url})"; then
-		[ -n "${runtimeRevision}" ] || die "failed to get agent version"
-		typeset -r runtimeVersionsURL="https://raw.githubusercontent.com/kata-containers/runtime/${runtimeRevision}/versions.yaml"
-		info "Getting musl version from ${runtimeVersionsURL}"
-		# This may fail if we are a kata bump.
-		if MUSL_VERSION="$(curl -fsSL "$runtimeVersionsURL" | $yq r - "externals.musl.version")"; then
-			[ "$MUSL_VERSION" != "null" ]
-			return 0
-		fi
-	fi
-
-	info "Agent version has not match with a runtime version, assumming it is a PR"
-	local kata_runtime_pkg_dir="${GOPATH}/src/${GO_RUNTIME_PKG}"
-	if [ ! -d "${kata_runtime_pkg_dir}" ];then
-		info "There is not runtime repository in filesystem (${kata_runtime_pkg_dir})"
-		local runtime_versions_url="https://raw.githubusercontent.com/kata-containers/runtime/${KATA_BRANCH}/versions.yaml"
-		info "Get versions file from ${runtime_versions_url}"
-		MUSL_VERSION="$(curl -fsSL "${runtime_versions_url}" | $yq r - "externals.musl.version")"
-		if [ "$?" == "0" ] && [ "$MUSL_VERSION" != "null" ]; then
-			return 0
-		fi
-
-		return 1
-	fi
-
-	local kata_versions_file="${kata_runtime_pkg_dir}/versions.yaml"
 	info "Get musl version from ${kata_versions_file}"
 	MUSL_VERSION="$(cat "${kata_versions_file}"  | $yq r - "externals.musl.version")"
 
