@@ -258,7 +258,7 @@ func main() {
 		logrus.WithFields(logrus.Fields{
 			"OBS project":       proj.Name,
 			"Packagecloud Repo": pc.Repo,
-		}).Infof("Sucessfully transferred %d files", totalXferred)
+		}).Infof("Successfully transferred %d files", totalXferred)
 	}
 
 	if !*pcDelete {
