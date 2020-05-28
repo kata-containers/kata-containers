@@ -959,6 +959,13 @@ func TestCheckVersionConsistencyInComponents(t *testing.T) {
 			"",
 			"0.2.0-rc0",
 		},
+		{
+			false,
+			false,
+			"kata-shim version 0.2.0-xxxxxxxxxxxxx",
+			"",
+			"0.2.0",
+		},
 	}
 
 	origVersion := version

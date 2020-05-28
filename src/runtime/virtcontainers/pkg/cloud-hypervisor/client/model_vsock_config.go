@@ -15,4 +15,5 @@ type VsockConfig struct {
 	// Path to UNIX domain socket, used to proxy vsock connections.
 	Sock string `json:"sock"`
 	Iommu bool `json:"iommu,omitempty"`
+	Id string `json:"id,omitempty"`
 }

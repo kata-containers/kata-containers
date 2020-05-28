@@ -23,7 +23,6 @@ import (
 	"github.com/opencontainers/runc/libcontainer/specconv"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/sirupsen/logrus"
-	"golang.org/x/sys/unix"
 )
 
 type Config struct {
@@ -74,21 +73,7 @@ func UseSystemdCgroup() bool {
 
 // returns the list of devices that a hypervisor may need
 func hypervisorDevices() []specs.LinuxDeviceCgroup {
-	wildcard := int64(-1)
-	devicemapperMajor := int64(253)
-
 	devices := []specs.LinuxDeviceCgroup{}
-
-	devices = append(devices,
-		// hypervisor needs access to all devicemapper devices,
-		// since they can be hotplugged in the VM.
-		specs.LinuxDeviceCgroup{
-			Allow:  true,
-			Type:   "b",
-			Major:  &devicemapperMajor,
-			Minor:  &wildcard,
-			Access: "rwm",
-		})
 
 	// Processes running in a device-cgroup are constrained, they have acccess
 	// only to the devices listed in the devices.list file.
@@ -97,33 +82,16 @@ func hypervisorDevices() []specs.LinuxDeviceCgroup {
 	hypervisorDevices := []string{
 		"/dev/kvm",       // To run virtual machines
 		"/dev/vhost-net", // To create virtqueues
+		"/dev/vfio/vfio", // To access VFIO devices
 	}
 
 	for _, device := range hypervisorDevices {
-		var st unix.Stat_t
-		linuxDevice := specs.LinuxDeviceCgroup{
-			Allow:  true,
-			Access: "rwm",
-		}
-
-		if err := unix.Stat(device, &st); err != nil {
-			cgroupsLogger.WithError(err).WithField("device", device).Warn("Could not get device information")
+		ldevice, err := DeviceToLinuxDevice(device)
+		if err != nil {
+			cgroupsLogger.WithError(err).Warnf("Could not get device information")
 			continue
 		}
-
-		switch st.Mode & unix.S_IFMT {
-		case unix.S_IFCHR:
-			linuxDevice.Type = "c"
-		case unix.S_IFBLK:
-			linuxDevice.Type = "b"
-		}
-
-		major := int64(unix.Major(st.Rdev))
-		minor := int64(unix.Minor(st.Rdev))
-		linuxDevice.Major = &major
-		linuxDevice.Minor = &minor
-
-		devices = append(devices, linuxDevice)
+		devices = append(devices, ldevice)
 	}
 
 	return devices
@@ -134,8 +102,7 @@ func New(config *Config) (*Manager, error) {
 	var err error
 	useSystemdCgroup := UseSystemdCgroup()
 
-	devices := []specs.LinuxDeviceCgroup{}
-	copy(devices, config.Resources.Devices)
+	devices := config.Resources.Devices
 	devices = append(devices, hypervisorDevices()...)
 	// Do not modify original devices
 	config.Resources.Devices = devices
@@ -318,4 +285,42 @@ func (m *Manager) Destroy() error {
 	m.Lock()
 	defer m.Unlock()
 	return m.mgr.Destroy()
+}
+
+// AddDevice adds a device to the device cgroup
+func (m *Manager) AddDevice(device string) error {
+	cgroups, err := m.GetCgroups()
+	if err != nil {
+		return err
+	}
+
+	ld, err := DeviceToCgroupDevice(device)
+	if err != nil {
+		return err
+	}
+
+	m.Lock()
+	cgroups.Devices = append(cgroups.Devices, ld)
+	m.Unlock()
+
+	return m.Apply()
+}
+
+// RemoceDevice removed a device from the device cgroup
+func (m *Manager) RemoveDevice(device string) error {
+	cgroups, err := m.GetCgroups()
+	if err != nil {
+		return err
+	}
+
+	m.Lock()
+	for i, d := range cgroups.Devices {
+		if d.Path == device {
+			cgroups.Devices = append(cgroups.Devices[:i], cgroups.Devices[i+1:]...)
+			m.Unlock()
+			return m.Apply()
+		}
+	}
+	m.Unlock()
+	return fmt.Errorf("device %v not found in the cgroup", device)
 }

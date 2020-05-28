@@ -23,6 +23,6 @@ type VmConfig struct {
 	Serial ConsoleConfig `json:"serial,omitempty"`
 	Console ConsoleConfig `json:"console,omitempty"`
 	Devices []DeviceConfig `json:"devices,omitempty"`
-	Vsock []VsockConfig `json:"vsock,omitempty"`
+	Vsock VsockConfig `json:"vsock,omitempty"`
 	Iommu bool `json:"iommu,omitempty"`
 }
