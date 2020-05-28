@@ -27,7 +27,7 @@ ifeq (,$(not_check_version))
     ifneq (,$(install_yq))
         $(error "ERROR: install yq failed")
     endif
-    golang_version_min=$(shell $(GOPATH)/bin/yq r versions.yaml languages.golang.version)
+    golang_version_min=$(shell $(GOPATH)/bin/yq r ../../versions.yaml languages.golang.version)
 
     ifeq (,$(golang_version_min))
         $(error "ERROR: cannot determine minimum golang version")
