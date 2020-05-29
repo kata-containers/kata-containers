@@ -1,4 +1,4 @@
-// Copyright (c) 2019 Ant Financial
+// Copyright (c) 2020 Ant Financial
 //
 // SPDX-License-Identifier: Apache-2.0
 //
@@ -21,7 +21,7 @@
 #![allow(unsafe_code)]
 #![allow(unused_imports)]
 #![allow(unused_results)]
-//! Generated file from `github.com/kata-containers/agent/pkg/types/types.proto`
+//! Generated file from `github.com/kata-containers/kata-containers/src/agent/protocols/protos/github.com/kata-containers/agent/pkg/types/types.proto`
 
 use protobuf::Message as Message_imported_for_functions;
 use protobuf::ProtobufEnum as ProtobufEnum_imported_for_functions;
@@ -1040,6 +1040,338 @@ impl ::protobuf::reflect::ProtobufValue for Route {
     }
 }
 
+#[derive(PartialEq,Clone,Default)]
+pub struct ARPNeighbor {
+    // message fields
+    pub toIPAddress: ::protobuf::SingularPtrField<IPAddress>,
+    pub device: ::std::string::String,
+    pub lladdr: ::std::string::String,
+    pub state: i32,
+    pub flags: i32,
+    // special fields
+    pub unknown_fields: ::protobuf::UnknownFields,
+    pub cached_size: ::protobuf::CachedSize,
+}
+
+impl<'a> ::std::default::Default for &'a ARPNeighbor {
+    fn default() -> &'a ARPNeighbor {
+        <ARPNeighbor as ::protobuf::Message>::default_instance()
+    }
+}
+
+impl ARPNeighbor {
+    pub fn new() -> ARPNeighbor {
+        ::std::default::Default::default()
+    }
+
+    // .types.IPAddress toIPAddress = 1;
+
+
+    pub fn get_toIPAddress(&self) -> &IPAddress {
+        self.toIPAddress.as_ref().unwrap_or_else(|| IPAddress::default_instance())
+    }
+    pub fn clear_toIPAddress(&mut self) {
+        self.toIPAddress.clear();
+    }
+
+    pub fn has_toIPAddress(&self) -> bool {
+        self.toIPAddress.is_some()
+    }
+
+    // Param is passed by value, moved
+    pub fn set_toIPAddress(&mut self, v: IPAddress) {
+        self.toIPAddress = ::protobuf::SingularPtrField::some(v);
+    }
+
+    // Mutable pointer to the field.
+    // If field is not initialized, it is initialized with default value first.
+    pub fn mut_toIPAddress(&mut self) -> &mut IPAddress {
+        if self.toIPAddress.is_none() {
+            self.toIPAddress.set_default();
+        }
+        self.toIPAddress.as_mut().unwrap()
+    }
+
+    // Take field
+    pub fn take_toIPAddress(&mut self) -> IPAddress {
+        self.toIPAddress.take().unwrap_or_else(|| IPAddress::new())
+    }
+
+    // string device = 2;
+
+
+    pub fn get_device(&self) -> &str {
+        &self.device
+    }
+    pub fn clear_device(&mut self) {
+        self.device.clear();
+    }
+
+    // Param is passed by value, moved
+    pub fn set_device(&mut self, v: ::std::string::String) {
+        self.device = v;
+    }
+
+    // Mutable pointer to the field.
+    // If field is not initialized, it is initialized with default value first.
+    pub fn mut_device(&mut self) -> &mut ::std::string::String {
+        &mut self.device
+    }
+
+    // Take field
+    pub fn take_device(&mut self) -> ::std::string::String {
+        ::std::mem::replace(&mut self.device, ::std::string::String::new())
+    }
+
+    // string lladdr = 3;
+
+
+    pub fn get_lladdr(&self) -> &str {
+        &self.lladdr
+    }
+    pub fn clear_lladdr(&mut self) {
+        self.lladdr.clear();
+    }
+
+    // Param is passed by value, moved
+    pub fn set_lladdr(&mut self, v: ::std::string::String) {
+        self.lladdr = v;
+    }
+
+    // Mutable pointer to the field.
+    // If field is not initialized, it is initialized with default value first.
+    pub fn mut_lladdr(&mut self) -> &mut ::std::string::String {
+        &mut self.lladdr
+    }
+
+    // Take field
+    pub fn take_lladdr(&mut self) -> ::std::string::String {
+        ::std::mem::replace(&mut self.lladdr, ::std::string::String::new())
+    }
+
+    // int32 state = 4;
+
+
+    pub fn get_state(&self) -> i32 {
+        self.state
+    }
+    pub fn clear_state(&mut self) {
+        self.state = 0;
+    }
+
+    // Param is passed by value, moved
+    pub fn set_state(&mut self, v: i32) {
+        self.state = v;
+    }
+
+    // int32 flags = 5;
+
+
+    pub fn get_flags(&self) -> i32 {
+        self.flags
+    }
+    pub fn clear_flags(&mut self) {
+        self.flags = 0;
+    }
+
+    // Param is passed by value, moved
+    pub fn set_flags(&mut self, v: i32) {
+        self.flags = v;
+    }
+}
+
+impl ::protobuf::Message for ARPNeighbor {
+    fn is_initialized(&self) -> bool {
+        for v in &self.toIPAddress {
+            if !v.is_initialized() {
+                return false;
+            }
+        };
+        true
+    }
+
+    fn merge_from(&mut self, is: &mut ::protobuf::CodedInputStream<'_>) -> ::protobuf::ProtobufResult<()> {
+        while !is.eof()? {
+            let (field_number, wire_type) = is.read_tag_unpack()?;
+            match field_number {
+                1 => {
+                    ::protobuf::rt::read_singular_message_into(wire_type, is, &mut self.toIPAddress)?;
+                },
+                2 => {
+                    ::protobuf::rt::read_singular_proto3_string_into(wire_type, is, &mut self.device)?;
+                },
+                3 => {
+                    ::protobuf::rt::read_singular_proto3_string_into(wire_type, is, &mut self.lladdr)?;
+                },
+                4 => {
+                    if wire_type != ::protobuf::wire_format::WireTypeVarint {
+                        return ::std::result::Result::Err(::protobuf::rt::unexpected_wire_type(wire_type));
+                    }
+                    let tmp = is.read_int32()?;
+                    self.state = tmp;
+                },
+                5 => {
+                    if wire_type != ::protobuf::wire_format::WireTypeVarint {
+                        return ::std::result::Result::Err(::protobuf::rt::unexpected_wire_type(wire_type));
+                    }
+                    let tmp = is.read_int32()?;
+                    self.flags = tmp;
+                },
+                _ => {
+                    ::protobuf::rt::read_unknown_or_skip_group(field_number, wire_type, is, self.mut_unknown_fields())?;
+                },
+            };
+        }
+        ::std::result::Result::Ok(())
+    }
+
+    // Compute sizes of nested messages
+    #[allow(unused_variables)]
+    fn compute_size(&self) -> u32 {
+        let mut my_size = 0;
+        if let Some(ref v) = self.toIPAddress.as_ref() {
+            let len = v.compute_size();
+            my_size += 1 + ::protobuf::rt::compute_raw_varint32_size(len) + len;
+        }
+        if !self.device.is_empty() {
+            my_size += ::protobuf::rt::string_size(2, &self.device);
+        }
+        if !self.lladdr.is_empty() {
+            my_size += ::protobuf::rt::string_size(3, &self.lladdr);
+        }
+        if self.state != 0 {
+            my_size += ::protobuf::rt::value_size(4, self.state, ::protobuf::wire_format::WireTypeVarint);
+        }
+        if self.flags != 0 {
+            my_size += ::protobuf::rt::value_size(5, self.flags, ::protobuf::wire_format::WireTypeVarint);
+        }
+        my_size += ::protobuf::rt::unknown_fields_size(self.get_unknown_fields());
+        self.cached_size.set(my_size);
+        my_size
+    }
+
+    fn write_to_with_cached_sizes(&self, os: &mut ::protobuf::CodedOutputStream<'_>) -> ::protobuf::ProtobufResult<()> {
+        if let Some(ref v) = self.toIPAddress.as_ref() {
+            os.write_tag(1, ::protobuf::wire_format::WireTypeLengthDelimited)?;
+            os.write_raw_varint32(v.get_cached_size())?;
+            v.write_to_with_cached_sizes(os)?;
+        }
+        if !self.device.is_empty() {
+            os.write_string(2, &self.device)?;
+        }
+        if !self.lladdr.is_empty() {
+            os.write_string(3, &self.lladdr)?;
+        }
+        if self.state != 0 {
+            os.write_int32(4, self.state)?;
+        }
+        if self.flags != 0 {
+            os.write_int32(5, self.flags)?;
+        }
+        os.write_unknown_fields(self.get_unknown_fields())?;
+        ::std::result::Result::Ok(())
+    }
+
+    fn get_cached_size(&self) -> u32 {
+        self.cached_size.get()
+    }
+
+    fn get_unknown_fields(&self) -> &::protobuf::UnknownFields {
+        &self.unknown_fields
+    }
+
+    fn mut_unknown_fields(&mut self) -> &mut ::protobuf::UnknownFields {
+        &mut self.unknown_fields
+    }
+
+    fn as_any(&self) -> &dyn (::std::any::Any) {
+        self as &dyn (::std::any::Any)
+    }
+    fn as_any_mut(&mut self) -> &mut dyn (::std::any::Any) {
+        self as &mut dyn (::std::any::Any)
+    }
+    fn into_any(self: Box<Self>) -> ::std::boxed::Box<dyn (::std::any::Any)> {
+        self
+    }
+
+    fn descriptor(&self) -> &'static ::protobuf::reflect::MessageDescriptor {
+        Self::descriptor_static()
+    }
+
+    fn new() -> ARPNeighbor {
+        ARPNeighbor::new()
+    }
+
+    fn descriptor_static() -> &'static ::protobuf::reflect::MessageDescriptor {
+        static mut descriptor: ::protobuf::lazy::Lazy<::protobuf::reflect::MessageDescriptor> = ::protobuf::lazy::Lazy::INIT;
+        unsafe {
+            descriptor.get(|| {
+                let mut fields = ::std::vec::Vec::new();
+                fields.push(::protobuf::reflect::accessor::make_singular_ptr_field_accessor::<_, ::protobuf::types::ProtobufTypeMessage<IPAddress>>(
+                    "toIPAddress",
+                    |m: &ARPNeighbor| { &m.toIPAddress },
+                    |m: &mut ARPNeighbor| { &mut m.toIPAddress },
+                ));
+                fields.push(::protobuf::reflect::accessor::make_simple_field_accessor::<_, ::protobuf::types::ProtobufTypeString>(
+                    "device",
+                    |m: &ARPNeighbor| { &m.device },
+                    |m: &mut ARPNeighbor| { &mut m.device },
+                ));
+                fields.push(::protobuf::reflect::accessor::make_simple_field_accessor::<_, ::protobuf::types::ProtobufTypeString>(
+                    "lladdr",
+                    |m: &ARPNeighbor| { &m.lladdr },
+                    |m: &mut ARPNeighbor| { &mut m.lladdr },
+                ));
+                fields.push(::protobuf::reflect::accessor::make_simple_field_accessor::<_, ::protobuf::types::ProtobufTypeInt32>(
+                    "state",
+                    |m: &ARPNeighbor| { &m.state },
+                    |m: &mut ARPNeighbor| { &mut m.state },
+                ));
+                fields.push(::protobuf::reflect::accessor::make_simple_field_accessor::<_, ::protobuf::types::ProtobufTypeInt32>(
+                    "flags",
+                    |m: &ARPNeighbor| { &m.flags },
+                    |m: &mut ARPNeighbor| { &mut m.flags },
+                ));
+                ::protobuf::reflect::MessageDescriptor::new_pb_name::<ARPNeighbor>(
+                    "ARPNeighbor",
+                    fields,
+                    file_descriptor_proto()
+                )
+            })
+        }
+    }
+
+    fn default_instance() -> &'static ARPNeighbor {
+        static mut instance: ::protobuf::lazy::Lazy<ARPNeighbor> = ::protobuf::lazy::Lazy::INIT;
+        unsafe {
+            instance.get(ARPNeighbor::new)
+        }
+    }
+}
+
+impl ::protobuf::Clear for ARPNeighbor {
+    fn clear(&mut self) {
+        self.toIPAddress.clear();
+        self.device.clear();
+        self.lladdr.clear();
+        self.state = 0;
+        self.flags = 0;
+        self.unknown_fields.clear();
+    }
+}
+
+impl ::std::fmt::Debug for ARPNeighbor {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        ::protobuf::text_format::fmt(self, f)
+    }
+}
+
+impl ::protobuf::reflect::ProtobufValue for ARPNeighbor {
+    fn as_ref(&self) -> ::protobuf::reflect::ReflectValueRef {
+        ::protobuf::reflect::ReflectValueRef::Message(self)
+    }
+}
+
 #[derive(Clone,PartialEq,Eq,Debug,Hash)]
 pub enum IPFamily {
     v4 = 0,
@@ -1093,99 +1425,127 @@ impl ::protobuf::reflect::ProtobufValue for IPFamily {
 }
 
 static file_descriptor_proto_data: &'static [u8] = b"\
-    \n6github.com/kata-containers/agent/pkg/types/types.proto\x12\x05types\"\
-    b\n\tIPAddress\x12'\n\x06family\x18\x01\x20\x01(\x0e2\x0f.types.IPFamily\
-    R\x06family\x12\x18\n\x07address\x18\x02\x20\x01(\tR\x07address\x12\x12\
-    \n\x04mask\x18\x03\x20\x01(\tR\x04mask\"\xe0\x01\n\tInterface\x12\x16\n\
+    \n|github.com/kata-containers/kata-containers/src/agent/protocols/protos\
+    /github.com/kata-containers/agent/pkg/types/types.proto\x12\x05types\"b\
+    \n\tIPAddress\x12'\n\x06family\x18\x01\x20\x01(\x0e2\x0f.types.IPFamilyR\
+    \x06family\x12\x18\n\x07address\x18\x02\x20\x01(\tR\x07address\x12\x12\n\
+    \x04mask\x18\x03\x20\x01(\tR\x04mask\"\xe0\x01\n\tInterface\x12\x16\n\
     \x06device\x18\x01\x20\x01(\tR\x06device\x12\x12\n\x04name\x18\x02\x20\
     \x01(\tR\x04name\x122\n\x0bIPAddresses\x18\x03\x20\x03(\x0b2\x10.types.I\
-    PAddressR\x0biPAddresses\x12\x10\n\x03mtu\x18\x04\x20\x01(\x04R\x03mtu\
+    PAddressR\x0bIPAddresses\x12\x10\n\x03mtu\x18\x04\x20\x01(\x04R\x03mtu\
     \x12\x16\n\x06hwAddr\x18\x05\x20\x01(\tR\x06hwAddr\x12\x18\n\x07pciAddr\
     \x18\x06\x20\x01(\tR\x07pciAddr\x12\x12\n\x04type\x18\x07\x20\x01(\tR\
     \x04type\x12\x1b\n\traw_flags\x18\x08\x20\x01(\rR\x08rawFlags\"{\n\x05Ro\
     ute\x12\x12\n\x04dest\x18\x01\x20\x01(\tR\x04dest\x12\x18\n\x07gateway\
     \x18\x02\x20\x01(\tR\x07gateway\x12\x16\n\x06device\x18\x03\x20\x01(\tR\
     \x06device\x12\x16\n\x06source\x18\x04\x20\x01(\tR\x06source\x12\x14\n\
-    \x05scope\x18\x05\x20\x01(\rR\x05scope*\x1a\n\x08IPFamily\x12\x06\n\x02v\
-    4\x10\0\x12\x06\n\x02v6\x10\x01J\x8c\x0f\n\x06\x12\x04\x07\00\x01\nw\n\
-    \x01\x0c\x12\x03\x07\0\x122m\n\x20Copyright\x202018\x20Intel\x20Corporat\
-    ion.\n\x20Copyright\x20(c)\x202019\x20Ant\x20Financial\n\n\x20SPDX-Licen\
-    se-Identifier:\x20Apache-2.0\n\n\n\x08\n\x01\x02\x12\x03\t\x08\r\n\n\n\
-    \x02\x05\0\x12\x04\x0b\0\x0e\x01\n\n\n\x03\x05\0\x01\x12\x03\x0b\x05\r\n\
-    \x0b\n\x04\x05\0\x02\0\x12\x03\x0c\x08\x0f\n\x0c\n\x05\x05\0\x02\0\x01\
-    \x12\x03\x0c\x08\n\n\x0c\n\x05\x05\0\x02\0\x02\x12\x03\x0c\r\x0e\n\x0b\n\
-    \x04\x05\0\x02\x01\x12\x03\r\x08\x0f\n\x0c\n\x05\x05\0\x02\x01\x01\x12\
-    \x03\r\x08\n\n\x0c\n\x05\x05\0\x02\x01\x02\x12\x03\r\r\x0e\n\n\n\x02\x04\
-    \0\x12\x04\x10\0\x14\x01\n\n\n\x03\x04\0\x01\x12\x03\x10\x08\x11\n\x0b\n\
-    \x04\x04\0\x02\0\x12\x03\x11\x08\x1c\n\r\n\x05\x04\0\x02\0\x04\x12\x04\
-    \x11\x08\x10\x13\n\x0c\n\x05\x04\0\x02\0\x06\x12\x03\x11\x08\x10\n\x0c\n\
-    \x05\x04\0\x02\0\x01\x12\x03\x11\x11\x17\n\x0c\n\x05\x04\0\x02\0\x03\x12\
-    \x03\x11\x1a\x1b\n\x0b\n\x04\x04\0\x02\x01\x12\x03\x12\x08\x1b\n\r\n\x05\
-    \x04\0\x02\x01\x04\x12\x04\x12\x08\x11\x1c\n\x0c\n\x05\x04\0\x02\x01\x05\
-    \x12\x03\x12\x08\x0e\n\x0c\n\x05\x04\0\x02\x01\x01\x12\x03\x12\x0f\x16\n\
-    \x0c\n\x05\x04\0\x02\x01\x03\x12\x03\x12\x19\x1a\n\x0b\n\x04\x04\0\x02\
-    \x02\x12\x03\x13\x08\x18\n\r\n\x05\x04\0\x02\x02\x04\x12\x04\x13\x08\x12\
-    \x1b\n\x0c\n\x05\x04\0\x02\x02\x05\x12\x03\x13\x08\x0e\n\x0c\n\x05\x04\0\
-    \x02\x02\x01\x12\x03\x13\x0f\x13\n\x0c\n\x05\x04\0\x02\x02\x03\x12\x03\
-    \x13\x16\x17\n\n\n\x02\x04\x01\x12\x04\x16\0(\x01\n\n\n\x03\x04\x01\x01\
-    \x12\x03\x16\x08\x11\n\x0b\n\x04\x04\x01\x02\0\x12\x03\x17\x08\x1a\n\r\n\
-    \x05\x04\x01\x02\0\x04\x12\x04\x17\x08\x16\x13\n\x0c\n\x05\x04\x01\x02\0\
-    \x05\x12\x03\x17\x08\x0e\n\x0c\n\x05\x04\x01\x02\0\x01\x12\x03\x17\x0f\
-    \x15\n\x0c\n\x05\x04\x01\x02\0\x03\x12\x03\x17\x18\x19\n\x0b\n\x04\x04\
-    \x01\x02\x01\x12\x03\x18\x08\x18\n\r\n\x05\x04\x01\x02\x01\x04\x12\x04\
-    \x18\x08\x17\x1a\n\x0c\n\x05\x04\x01\x02\x01\x05\x12\x03\x18\x08\x0e\n\
-    \x0c\n\x05\x04\x01\x02\x01\x01\x12\x03\x18\x0f\x13\n\x0c\n\x05\x04\x01\
-    \x02\x01\x03\x12\x03\x18\x16\x17\n\x0b\n\x04\x04\x01\x02\x02\x12\x03\x19\
-    \x08+\n\x0c\n\x05\x04\x01\x02\x02\x04\x12\x03\x19\x08\x10\n\x0c\n\x05\
-    \x04\x01\x02\x02\x06\x12\x03\x19\x11\x1a\n\x0c\n\x05\x04\x01\x02\x02\x01\
-    \x12\x03\x19\x1b&\n\x0c\n\x05\x04\x01\x02\x02\x03\x12\x03\x19)*\n\x0b\n\
-    \x04\x04\x01\x02\x03\x12\x03\x1a\x08\x17\n\r\n\x05\x04\x01\x02\x03\x04\
-    \x12\x04\x1a\x08\x19+\n\x0c\n\x05\x04\x01\x02\x03\x05\x12\x03\x1a\x08\
-    \x0e\n\x0c\n\x05\x04\x01\x02\x03\x01\x12\x03\x1a\x0f\x12\n\x0c\n\x05\x04\
-    \x01\x02\x03\x03\x12\x03\x1a\x15\x16\n\x0b\n\x04\x04\x01\x02\x04\x12\x03\
-    \x1b\x08\x1a\n\r\n\x05\x04\x01\x02\x04\x04\x12\x04\x1b\x08\x1a\x17\n\x0c\
-    \n\x05\x04\x01\x02\x04\x05\x12\x03\x1b\x08\x0e\n\x0c\n\x05\x04\x01\x02\
-    \x04\x01\x12\x03\x1b\x0f\x15\n\x0c\n\x05\x04\x01\x02\x04\x03\x12\x03\x1b\
-    \x18\x19\n\xfc\x01\n\x04\x04\x01\x02\x05\x12\x03\x20\x08\x1b\x1a\xee\x01\
-    \x20pciAddr\x20is\x20the\x20PCI\x20address\x20in\x20the\x20format\x20\
-    \x20\"bridgeAddr/deviceAddr\".\n\x20Here,\x20bridgeAddr\x20is\x20the\x20\
-    address\x20at\x20which\x20the\x20bridge\x20is\x20attached\x20on\x20the\
-    \x20root\x20bus,\n\x20while\x20deviceAddr\x20is\x20the\x20address\x20at\
-    \x20which\x20the\x20network\x20device\x20is\x20attached\x20on\x20the\x20\
-    bridge.\n\n\r\n\x05\x04\x01\x02\x05\x04\x12\x04\x20\x08\x1b\x1a\n\x0c\n\
-    \x05\x04\x01\x02\x05\x05\x12\x03\x20\x08\x0e\n\x0c\n\x05\x04\x01\x02\x05\
-    \x01\x12\x03\x20\x0f\x16\n\x0c\n\x05\x04\x01\x02\x05\x03\x12\x03\x20\x19\
-    \x1a\n\x88\x02\n\x04\x04\x01\x02\x06\x12\x03&\x08\x18\x1a\xfa\x01\x20Typ\
-    e\x20defines\x20the\x20type\x20of\x20interface\x20described\x20by\x20thi\
-    s\x20structure.\n\x20The\x20expected\x20values\x20are\x20the\x20one\x20t\
-    hat\x20are\x20defined\x20by\x20the\x20netlink\n\x20library,\x20regarding\
-    \x20each\x20type\x20of\x20link.\x20Here\x20is\x20a\x20non\x20exhaustive\
-    \n\x20list:\x20\"veth\",\x20\"macvtap\",\x20\"vlan\",\x20\"macvlan\",\
-    \x20\"tap\",\x20...\n\n\r\n\x05\x04\x01\x02\x06\x04\x12\x04&\x08\x20\x1b\
-    \n\x0c\n\x05\x04\x01\x02\x06\x05\x12\x03&\x08\x0e\n\x0c\n\x05\x04\x01\
-    \x02\x06\x01\x12\x03&\x0f\x13\n\x0c\n\x05\x04\x01\x02\x06\x03\x12\x03&\
-    \x16\x17\n\x0b\n\x04\x04\x01\x02\x07\x12\x03'\x08\x1d\n\r\n\x05\x04\x01\
-    \x02\x07\x04\x12\x04'\x08&\x18\n\x0c\n\x05\x04\x01\x02\x07\x05\x12\x03'\
-    \x08\x0e\n\x0c\n\x05\x04\x01\x02\x07\x01\x12\x03'\x0f\x18\n\x0c\n\x05\
-    \x04\x01\x02\x07\x03\x12\x03'\x1b\x1c\n\n\n\x02\x04\x02\x12\x04*\00\x01\
-    \n\n\n\x03\x04\x02\x01\x12\x03*\x08\r\n\x0b\n\x04\x04\x02\x02\0\x12\x03+\
-    \x08\x18\n\r\n\x05\x04\x02\x02\0\x04\x12\x04+\x08*\x0f\n\x0c\n\x05\x04\
-    \x02\x02\0\x05\x12\x03+\x08\x0e\n\x0c\n\x05\x04\x02\x02\0\x01\x12\x03+\
-    \x0f\x13\n\x0c\n\x05\x04\x02\x02\0\x03\x12\x03+\x16\x17\n\x0b\n\x04\x04\
-    \x02\x02\x01\x12\x03,\x08\x1b\n\r\n\x05\x04\x02\x02\x01\x04\x12\x04,\x08\
-    +\x18\n\x0c\n\x05\x04\x02\x02\x01\x05\x12\x03,\x08\x0e\n\x0c\n\x05\x04\
-    \x02\x02\x01\x01\x12\x03,\x0f\x16\n\x0c\n\x05\x04\x02\x02\x01\x03\x12\
-    \x03,\x19\x1a\n\x0b\n\x04\x04\x02\x02\x02\x12\x03-\x08\x1a\n\r\n\x05\x04\
-    \x02\x02\x02\x04\x12\x04-\x08,\x1b\n\x0c\n\x05\x04\x02\x02\x02\x05\x12\
-    \x03-\x08\x0e\n\x0c\n\x05\x04\x02\x02\x02\x01\x12\x03-\x0f\x15\n\x0c\n\
-    \x05\x04\x02\x02\x02\x03\x12\x03-\x18\x19\n\x0b\n\x04\x04\x02\x02\x03\
-    \x12\x03.\x08\x1a\n\r\n\x05\x04\x02\x02\x03\x04\x12\x04.\x08-\x1a\n\x0c\
-    \n\x05\x04\x02\x02\x03\x05\x12\x03.\x08\x0e\n\x0c\n\x05\x04\x02\x02\x03\
-    \x01\x12\x03.\x0f\x15\n\x0c\n\x05\x04\x02\x02\x03\x03\x12\x03.\x18\x19\n\
-    \x0b\n\x04\x04\x02\x02\x04\x12\x03/\x08\x19\n\r\n\x05\x04\x02\x02\x04\
-    \x04\x12\x04/\x08.\x1a\n\x0c\n\x05\x04\x02\x02\x04\x05\x12\x03/\x08\x0e\
-    \n\x0c\n\x05\x04\x02\x02\x04\x01\x12\x03/\x0f\x14\n\x0c\n\x05\x04\x02\
-    \x02\x04\x03\x12\x03/\x17\x18b\x06proto3\
+    \x05scope\x18\x05\x20\x01(\rR\x05scope\"\x9d\x01\n\x0bARPNeighbor\x122\n\
+    \x0btoIPAddress\x18\x01\x20\x01(\x0b2\x10.types.IPAddressR\x0btoIPAddres\
+    s\x12\x16\n\x06device\x18\x02\x20\x01(\tR\x06device\x12\x16\n\x06lladdr\
+    \x18\x03\x20\x01(\tR\x06lladdr\x12\x14\n\x05state\x18\x04\x20\x01(\x05R\
+    \x05state\x12\x14\n\x05flags\x18\x05\x20\x01(\x05R\x05flags*\x1a\n\x08IP\
+    Family\x12\x06\n\x02v4\x10\0\x12\x06\n\x02v6\x10\x01B[ZYgithub.com/kata-\
+    containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocol\
+    sJ\xd4\x12\n\x06\x12\x04\x07\0:\x01\nw\n\x01\x0c\x12\x03\x07\0\x122m\n\
+    \x20Copyright\x202018\x20Intel\x20Corporation.\n\x20Copyright\x20(c)\x20\
+    2019\x20Ant\x20Financial\n\n\x20SPDX-License-Identifier:\x20Apache-2.0\n\
+    \n\n\x08\n\x01\x08\x12\x03\t\0p\n\x0b\n\x04\x08\xe7\x07\0\x12\x03\t\0p\n\
+    \x0c\n\x05\x08\xe7\x07\0\x02\x12\x03\t\x07\x11\n\r\n\x06\x08\xe7\x07\0\
+    \x02\0\x12\x03\t\x07\x11\n\x0e\n\x07\x08\xe7\x07\0\x02\0\x01\x12\x03\t\
+    \x07\x11\n\x0c\n\x05\x08\xe7\x07\0\x07\x12\x03\t\x14o\n\x08\n\x01\x02\
+    \x12\x03\x0b\x08\r\n\n\n\x02\x05\0\x12\x04\r\0\x10\x01\n\n\n\x03\x05\0\
+    \x01\x12\x03\r\x05\r\n\x0b\n\x04\x05\0\x02\0\x12\x03\x0e\x08\x0f\n\x0c\n\
+    \x05\x05\0\x02\0\x01\x12\x03\x0e\x08\n\n\x0c\n\x05\x05\0\x02\0\x02\x12\
+    \x03\x0e\r\x0e\n\x0b\n\x04\x05\0\x02\x01\x12\x03\x0f\x08\x0f\n\x0c\n\x05\
+    \x05\0\x02\x01\x01\x12\x03\x0f\x08\n\n\x0c\n\x05\x05\0\x02\x01\x02\x12\
+    \x03\x0f\r\x0e\n\n\n\x02\x04\0\x12\x04\x12\0\x16\x01\n\n\n\x03\x04\0\x01\
+    \x12\x03\x12\x08\x11\n\x0b\n\x04\x04\0\x02\0\x12\x03\x13\x08\x1c\n\r\n\
+    \x05\x04\0\x02\0\x04\x12\x04\x13\x08\x12\x13\n\x0c\n\x05\x04\0\x02\0\x06\
+    \x12\x03\x13\x08\x10\n\x0c\n\x05\x04\0\x02\0\x01\x12\x03\x13\x11\x17\n\
+    \x0c\n\x05\x04\0\x02\0\x03\x12\x03\x13\x1a\x1b\n\x0b\n\x04\x04\0\x02\x01\
+    \x12\x03\x14\x08\x1b\n\r\n\x05\x04\0\x02\x01\x04\x12\x04\x14\x08\x13\x1c\
+    \n\x0c\n\x05\x04\0\x02\x01\x05\x12\x03\x14\x08\x0e\n\x0c\n\x05\x04\0\x02\
+    \x01\x01\x12\x03\x14\x0f\x16\n\x0c\n\x05\x04\0\x02\x01\x03\x12\x03\x14\
+    \x19\x1a\n\x0b\n\x04\x04\0\x02\x02\x12\x03\x15\x08\x18\n\r\n\x05\x04\0\
+    \x02\x02\x04\x12\x04\x15\x08\x14\x1b\n\x0c\n\x05\x04\0\x02\x02\x05\x12\
+    \x03\x15\x08\x0e\n\x0c\n\x05\x04\0\x02\x02\x01\x12\x03\x15\x0f\x13\n\x0c\
+    \n\x05\x04\0\x02\x02\x03\x12\x03\x15\x16\x17\n\n\n\x02\x04\x01\x12\x04\
+    \x18\0*\x01\n\n\n\x03\x04\x01\x01\x12\x03\x18\x08\x11\n\x0b\n\x04\x04\
+    \x01\x02\0\x12\x03\x19\x08\x1a\n\r\n\x05\x04\x01\x02\0\x04\x12\x04\x19\
+    \x08\x18\x13\n\x0c\n\x05\x04\x01\x02\0\x05\x12\x03\x19\x08\x0e\n\x0c\n\
+    \x05\x04\x01\x02\0\x01\x12\x03\x19\x0f\x15\n\x0c\n\x05\x04\x01\x02\0\x03\
+    \x12\x03\x19\x18\x19\n\x0b\n\x04\x04\x01\x02\x01\x12\x03\x1a\x08\x18\n\r\
+    \n\x05\x04\x01\x02\x01\x04\x12\x04\x1a\x08\x19\x1a\n\x0c\n\x05\x04\x01\
+    \x02\x01\x05\x12\x03\x1a\x08\x0e\n\x0c\n\x05\x04\x01\x02\x01\x01\x12\x03\
+    \x1a\x0f\x13\n\x0c\n\x05\x04\x01\x02\x01\x03\x12\x03\x1a\x16\x17\n\x0b\n\
+    \x04\x04\x01\x02\x02\x12\x03\x1b\x08+\n\x0c\n\x05\x04\x01\x02\x02\x04\
+    \x12\x03\x1b\x08\x10\n\x0c\n\x05\x04\x01\x02\x02\x06\x12\x03\x1b\x11\x1a\
+    \n\x0c\n\x05\x04\x01\x02\x02\x01\x12\x03\x1b\x1b&\n\x0c\n\x05\x04\x01\
+    \x02\x02\x03\x12\x03\x1b)*\n\x0b\n\x04\x04\x01\x02\x03\x12\x03\x1c\x08\
+    \x17\n\r\n\x05\x04\x01\x02\x03\x04\x12\x04\x1c\x08\x1b+\n\x0c\n\x05\x04\
+    \x01\x02\x03\x05\x12\x03\x1c\x08\x0e\n\x0c\n\x05\x04\x01\x02\x03\x01\x12\
+    \x03\x1c\x0f\x12\n\x0c\n\x05\x04\x01\x02\x03\x03\x12\x03\x1c\x15\x16\n\
+    \x0b\n\x04\x04\x01\x02\x04\x12\x03\x1d\x08\x1a\n\r\n\x05\x04\x01\x02\x04\
+    \x04\x12\x04\x1d\x08\x1c\x17\n\x0c\n\x05\x04\x01\x02\x04\x05\x12\x03\x1d\
+    \x08\x0e\n\x0c\n\x05\x04\x01\x02\x04\x01\x12\x03\x1d\x0f\x15\n\x0c\n\x05\
+    \x04\x01\x02\x04\x03\x12\x03\x1d\x18\x19\n\xfc\x01\n\x04\x04\x01\x02\x05\
+    \x12\x03\"\x08\x1b\x1a\xee\x01\x20pciAddr\x20is\x20the\x20PCI\x20address\
+    \x20in\x20the\x20format\x20\x20\"bridgeAddr/deviceAddr\".\n\x20Here,\x20\
+    bridgeAddr\x20is\x20the\x20address\x20at\x20which\x20the\x20bridge\x20is\
+    \x20attached\x20on\x20the\x20root\x20bus,\n\x20while\x20deviceAddr\x20is\
+    \x20the\x20address\x20at\x20which\x20the\x20network\x20device\x20is\x20a\
+    ttached\x20on\x20the\x20bridge.\n\n\r\n\x05\x04\x01\x02\x05\x04\x12\x04\
+    \"\x08\x1d\x1a\n\x0c\n\x05\x04\x01\x02\x05\x05\x12\x03\"\x08\x0e\n\x0c\n\
+    \x05\x04\x01\x02\x05\x01\x12\x03\"\x0f\x16\n\x0c\n\x05\x04\x01\x02\x05\
+    \x03\x12\x03\"\x19\x1a\n\x88\x02\n\x04\x04\x01\x02\x06\x12\x03(\x08\x18\
+    \x1a\xfa\x01\x20Type\x20defines\x20the\x20type\x20of\x20interface\x20des\
+    cribed\x20by\x20this\x20structure.\n\x20The\x20expected\x20values\x20are\
+    \x20the\x20one\x20that\x20are\x20defined\x20by\x20the\x20netlink\n\x20li\
+    brary,\x20regarding\x20each\x20type\x20of\x20link.\x20Here\x20is\x20a\
+    \x20non\x20exhaustive\n\x20list:\x20\"veth\",\x20\"macvtap\",\x20\"vlan\
+    \",\x20\"macvlan\",\x20\"tap\",\x20...\n\n\r\n\x05\x04\x01\x02\x06\x04\
+    \x12\x04(\x08\"\x1b\n\x0c\n\x05\x04\x01\x02\x06\x05\x12\x03(\x08\x0e\n\
+    \x0c\n\x05\x04\x01\x02\x06\x01\x12\x03(\x0f\x13\n\x0c\n\x05\x04\x01\x02\
+    \x06\x03\x12\x03(\x16\x17\n\x0b\n\x04\x04\x01\x02\x07\x12\x03)\x08\x1d\n\
+    \r\n\x05\x04\x01\x02\x07\x04\x12\x04)\x08(\x18\n\x0c\n\x05\x04\x01\x02\
+    \x07\x05\x12\x03)\x08\x0e\n\x0c\n\x05\x04\x01\x02\x07\x01\x12\x03)\x0f\
+    \x18\n\x0c\n\x05\x04\x01\x02\x07\x03\x12\x03)\x1b\x1c\n\n\n\x02\x04\x02\
+    \x12\x04,\02\x01\n\n\n\x03\x04\x02\x01\x12\x03,\x08\r\n\x0b\n\x04\x04\
+    \x02\x02\0\x12\x03-\x08\x18\n\r\n\x05\x04\x02\x02\0\x04\x12\x04-\x08,\
+    \x0f\n\x0c\n\x05\x04\x02\x02\0\x05\x12\x03-\x08\x0e\n\x0c\n\x05\x04\x02\
+    \x02\0\x01\x12\x03-\x0f\x13\n\x0c\n\x05\x04\x02\x02\0\x03\x12\x03-\x16\
+    \x17\n\x0b\n\x04\x04\x02\x02\x01\x12\x03.\x08\x1b\n\r\n\x05\x04\x02\x02\
+    \x01\x04\x12\x04.\x08-\x18\n\x0c\n\x05\x04\x02\x02\x01\x05\x12\x03.\x08\
+    \x0e\n\x0c\n\x05\x04\x02\x02\x01\x01\x12\x03.\x0f\x16\n\x0c\n\x05\x04\
+    \x02\x02\x01\x03\x12\x03.\x19\x1a\n\x0b\n\x04\x04\x02\x02\x02\x12\x03/\
+    \x08\x1a\n\r\n\x05\x04\x02\x02\x02\x04\x12\x04/\x08.\x1b\n\x0c\n\x05\x04\
+    \x02\x02\x02\x05\x12\x03/\x08\x0e\n\x0c\n\x05\x04\x02\x02\x02\x01\x12\
+    \x03/\x0f\x15\n\x0c\n\x05\x04\x02\x02\x02\x03\x12\x03/\x18\x19\n\x0b\n\
+    \x04\x04\x02\x02\x03\x12\x030\x08\x1a\n\r\n\x05\x04\x02\x02\x03\x04\x12\
+    \x040\x08/\x1a\n\x0c\n\x05\x04\x02\x02\x03\x05\x12\x030\x08\x0e\n\x0c\n\
+    \x05\x04\x02\x02\x03\x01\x12\x030\x0f\x15\n\x0c\n\x05\x04\x02\x02\x03\
+    \x03\x12\x030\x18\x19\n\x0b\n\x04\x04\x02\x02\x04\x12\x031\x08\x19\n\r\n\
+    \x05\x04\x02\x02\x04\x04\x12\x041\x080\x1a\n\x0c\n\x05\x04\x02\x02\x04\
+    \x05\x12\x031\x08\x0e\n\x0c\n\x05\x04\x02\x02\x04\x01\x12\x031\x0f\x14\n\
+    \x0c\n\x05\x04\x02\x02\x04\x03\x12\x031\x17\x18\n\n\n\x02\x04\x03\x12\
+    \x044\0:\x01\n\n\n\x03\x04\x03\x01\x12\x034\x08\x13\n\x0b\n\x04\x04\x03\
+    \x02\0\x12\x035\x08\"\n\r\n\x05\x04\x03\x02\0\x04\x12\x045\x084\x15\n\
+    \x0c\n\x05\x04\x03\x02\0\x06\x12\x035\x08\x11\n\x0c\n\x05\x04\x03\x02\0\
+    \x01\x12\x035\x12\x1d\n\x0c\n\x05\x04\x03\x02\0\x03\x12\x035\x20!\n\x0b\
+    \n\x04\x04\x03\x02\x01\x12\x036\x08\x1a\n\r\n\x05\x04\x03\x02\x01\x04\
+    \x12\x046\x085\"\n\x0c\n\x05\x04\x03\x02\x01\x05\x12\x036\x08\x0e\n\x0c\
+    \n\x05\x04\x03\x02\x01\x01\x12\x036\x0f\x15\n\x0c\n\x05\x04\x03\x02\x01\
+    \x03\x12\x036\x18\x19\n\x0b\n\x04\x04\x03\x02\x02\x12\x037\x08\x1a\n\r\n\
+    \x05\x04\x03\x02\x02\x04\x12\x047\x086\x1a\n\x0c\n\x05\x04\x03\x02\x02\
+    \x05\x12\x037\x08\x0e\n\x0c\n\x05\x04\x03\x02\x02\x01\x12\x037\x0f\x15\n\
+    \x0c\n\x05\x04\x03\x02\x02\x03\x12\x037\x18\x19\n\x0b\n\x04\x04\x03\x02\
+    \x03\x12\x038\x08\x18\n\r\n\x05\x04\x03\x02\x03\x04\x12\x048\x087\x1a\n\
+    \x0c\n\x05\x04\x03\x02\x03\x05\x12\x038\x08\r\n\x0c\n\x05\x04\x03\x02\
+    \x03\x01\x12\x038\x0e\x13\n\x0c\n\x05\x04\x03\x02\x03\x03\x12\x038\x16\
+    \x17\n\x0b\n\x04\x04\x03\x02\x04\x12\x039\x08\x18\n\r\n\x05\x04\x03\x02\
+    \x04\x04\x12\x049\x088\x18\n\x0c\n\x05\x04\x03\x02\x04\x05\x12\x039\x08\
+    \r\n\x0c\n\x05\x04\x03\x02\x04\x01\x12\x039\x0e\x13\n\x0c\n\x05\x04\x03\
+    \x02\x04\x03\x12\x039\x16\x17b\x06proto3\
 ";
 
 static mut file_descriptor_proto_lazy: ::protobuf::lazy::Lazy<::protobuf::descriptor::FileDescriptorProto> = ::protobuf::lazy::Lazy::INIT;

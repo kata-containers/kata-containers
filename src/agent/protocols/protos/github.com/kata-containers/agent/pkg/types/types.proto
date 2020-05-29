@@ -49,3 +49,11 @@ message Route {
 	string source = 4;
 	uint32 scope = 5;
 }
+
+message ARPNeighbor {
+	IPAddress toIPAddress = 1;
+	string device = 2;
+	string lladdr = 3;
+	int32 state = 4;
+	int32 flags = 5;
+}

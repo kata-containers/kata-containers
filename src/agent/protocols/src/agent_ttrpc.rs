@@ -1,4 +1,4 @@
-// Copyright (c) 2019 Ant Financial
+// Copyright (c) 2020 Ant Financial
 //
 // SPDX-License-Identifier: Apache-2.0
 //
@@ -154,6 +154,12 @@ impl AgentServiceClient {
     pub fn list_routes(&self, req: &super::agent::ListRoutesRequest, timeout_nano: i64) -> ::ttrpc::Result<super::agent::Routes> {
         let mut cres = super::agent::Routes::new();
         ::ttrpc::client_request!(self, req, timeout_nano, "grpc.AgentService", "ListRoutes", cres);
+        Ok(cres)
+    }
+
+    pub fn add_arp_neighbors(&self, req: &super::agent::AddARPNeighborsRequest, timeout_nano: i64) -> ::ttrpc::Result<super::empty::Empty> {
+        let mut cres = super::empty::Empty::new();
+        ::ttrpc::client_request!(self, req, timeout_nano, "grpc.AgentService", "AddARPNeighbors", cres);
         Ok(cres)
     }
 
@@ -438,6 +444,17 @@ impl ::ttrpc::MethodHandler for ListRoutesMethod {
     }
 }
 
+struct AddArpNeighborsMethod {
+    service: Arc<std::boxed::Box<dyn AgentService + Send + Sync>>,
+}
+
+impl ::ttrpc::MethodHandler for AddArpNeighborsMethod {
+    fn handler(&self, ctx: ::ttrpc::TtrpcContext, req: ::ttrpc::Request) -> ::ttrpc::Result<()> {
+        ::ttrpc::request_handler!(self, ctx, req, agent, AddARPNeighborsRequest, add_arp_neighbors);
+        Ok(())
+    }
+}
+
 struct StartTracingMethod {
     service: Arc<std::boxed::Box<dyn AgentService + Send + Sync>>,
 }
@@ -609,6 +626,9 @@ pub trait AgentService {
     fn list_routes(&self, _ctx: &::ttrpc::TtrpcContext, _req: super::agent::ListRoutesRequest) -> ::ttrpc::Result<super::agent::Routes> {
         Err(::ttrpc::Error::RpcStatus(::ttrpc::get_status(::ttrpc::Code::NOT_FOUND, "/grpc.AgentService/ListRoutes is not supported".to_string())))
     }
+    fn add_arp_neighbors(&self, _ctx: &::ttrpc::TtrpcContext, _req: super::agent::AddARPNeighborsRequest) -> ::ttrpc::Result<super::empty::Empty> {
+        Err(::ttrpc::Error::RpcStatus(::ttrpc::get_status(::ttrpc::Code::NOT_FOUND, "/grpc.AgentService/AddARPNeighbors is not supported".to_string())))
+    }
     fn start_tracing(&self, _ctx: &::ttrpc::TtrpcContext, _req: super::agent::StartTracingRequest) -> ::ttrpc::Result<super::empty::Empty> {
         Err(::ttrpc::Error::RpcStatus(::ttrpc::get_status(::ttrpc::Code::NOT_FOUND, "/grpc.AgentService/StartTracing is not supported".to_string())))
     }
@@ -703,6 +723,9 @@ pub fn create_agent_service(service: Arc<std::boxed::Box<dyn AgentService + Send
 
     methods.insert("/grpc.AgentService/ListRoutes".to_string(),
                     std::boxed::Box::new(ListRoutesMethod{service: service.clone()}) as std::boxed::Box<dyn ::ttrpc::MethodHandler + Send + Sync>);
+
+    methods.insert("/grpc.AgentService/AddARPNeighbors".to_string(),
+                    std::boxed::Box::new(AddArpNeighborsMethod{service: service.clone()}) as std::boxed::Box<dyn ::ttrpc::MethodHandler + Send + Sync>);
 
     methods.insert("/grpc.AgentService/StartTracing".to_string(),
                     std::boxed::Box::new(StartTracingMethod{service: service.clone()}) as std::boxed::Box<dyn ::ttrpc::MethodHandler + Send + Sync>);

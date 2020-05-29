@@ -9,6 +9,8 @@
 #![allow(unused_parens)]
 #![allow(unused_unsafe)]
 
+mod neigh;
+
 extern crate libc;
 extern crate nix;
 extern crate protobuf;
