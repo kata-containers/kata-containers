@@ -181,11 +181,13 @@ get_kernel_frag_path() {
 	local gpu_path="${arch_path}/../gpu"
 
 	local kernel_path="$2"
+	local arch="$3"
 	local cmdpath="${kernel_path}/scripts/kconfig/merge_config.sh"
 	local config_path="${arch_path}/.config"
 
 	local arch_configs="$(ls ${arch_path}/*.conf)"
-	local common_configs="$(ls ${common_path}/*.conf)"
+	# Exclude configs if they have !$arch tag in the header
+	local common_configs="$(grep "\!${arch}" ${common_path}/*.conf -L)"
 	local experimental_configs="$(ls ${common_path}/experimental/*.conf)"
 
 	# These are the strings that the kernel merge_config.sh script kicks out
@@ -275,7 +277,7 @@ get_default_kernel_config() {
 
 	archfragdir="${default_config_frags_dir}/${kernel_arch}"
 	if [ -d "${archfragdir}" ]; then
-		config="$(get_kernel_frag_path ${archfragdir} ${kernel_path})"
+		config="$(get_kernel_frag_path ${archfragdir} ${kernel_path} ${kernel_arch})"
 	else
 		[ "${hypervisor}" == "firecracker" ] && hypervisor="kvm"
 		config="${default_kernel_config_dir}/${kernel_arch}_kata_${hypervisor}_${major_kernel}.x"
