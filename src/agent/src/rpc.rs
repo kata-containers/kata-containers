@@ -1081,6 +1081,31 @@ impl protocols::agent_ttrpc::AgentService for agentService {
 
         Ok(Empty::new())
     }
+    fn add_arp_neighbors(
+        &self,
+        _ctx: &ttrpc::TtrpcContext,
+        req: protocols::agent::AddARPNeighborsRequest,
+    ) -> ttrpc::Result<Empty> {
+        let neighs = req.neighbors.clone().unwrap().ARPNeighbors.into_vec();
+
+        let s = Arc::clone(&self.sandbox);
+        let mut sandbox = s.lock().unwrap();
+
+        if sandbox.rtnl.is_none() {
+            sandbox.rtnl = Some(RtnlHandle::new(NETLINK_ROUTE, 0).unwrap());
+        }
+
+        let rtnl = sandbox.rtnl.as_mut().unwrap();
+
+        if let Err(e) = rtnl.add_arp_neighbors(neighs.as_ref()) {
+            return Err(ttrpc::Error::RpcStatus(ttrpc::get_status(
+                ttrpc::Code::INTERNAL,
+                e.to_string(),
+            )));
+        }
+
+        Ok(Empty::new())
+    }
     fn online_cpu_mem(
         &self,
         _ctx: &ttrpc::TtrpcContext,

@@ -28,8 +28,8 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/drivers"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/manager"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist"
-	pb "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols/grpc"
 	aTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols"
+	pb "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols/grpc"
 	vcAnnotations "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/annotations"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/mock"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/rootless"
@@ -186,6 +186,10 @@ func (p *gRPCProxy) ListInterfaces(ctx context.Context, req *pb.ListInterfacesRe
 
 func (p *gRPCProxy) ListRoutes(ctx context.Context, req *pb.ListRoutesRequest) (*pb.Routes, error) {
 	return &pb.Routes{}, nil
+}
+
+func (p *gRPCProxy) AddARPNeighbors(ctx context.Context, req *pb.AddARPNeighborsRequest) (*gpb.Empty, error) {
+	return emptyResp, nil
 }
 
 func (p *gRPCProxy) OnlineCPUMem(ctx context.Context, req *pb.OnlineCPUMemRequest) (*gpb.Empty, error) {
