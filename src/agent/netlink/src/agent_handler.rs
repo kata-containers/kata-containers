@@ -9,6 +9,7 @@
 use protobuf::RepeatedField;
 use protocols::types::{ARPNeighbor, IPAddress, IPFamily, Interface, Route};
 
+#[cfg(feature = "with-log")]
 // Convenience macro to obtain the scope logger
 macro_rules! sl {
     () => {

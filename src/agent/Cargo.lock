@@ -257,8 +257,6 @@ dependencies = [
  "protocols",
  "scan_fmt",
  "slog",
- "slog-async",
- "slog-json",
  "slog-scope",
 ]
 
