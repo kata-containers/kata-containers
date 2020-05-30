@@ -5,7 +5,7 @@ authors = ["The Kata Containers community <kata-dev@lists.katacontainers.io>"]
 edition = "2018"
 
 [dependencies]
-ttrpc = { git = "https://github.com/containerd/ttrpc-rust.git", branch="0.3.0" }
+ttrpc = "0.3.0"
 protobuf = "=2.14.0"
 futures = "0.1.27"
 
