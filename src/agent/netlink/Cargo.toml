@@ -10,7 +10,6 @@ edition = "2018"
 libc = "0.2.58"
 nix = "0.17.0"
 protobuf = "=2.14.0"
-rustjail = { path = "../rustjail" }
 protocols = { path = "../protocols" }
 slog = { version = "2.5.2", features = ["dynamic-keys", "max_level_trace", "release_max_level_info"] }
 slog-json = "2.3.0"

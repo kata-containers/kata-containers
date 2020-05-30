@@ -15,7 +15,6 @@ extern crate libc;
 extern crate nix;
 extern crate protobuf;
 extern crate protocols;
-extern crate rustjail;
 
 #[macro_use]
 extern crate slog;
@@ -29,13 +28,14 @@ extern crate scan_fmt;
 use nix::errno::Errno;
 use protobuf::RepeatedField;
 use protocols::types::{IPAddress, IPFamily, Interface, Route};
-use rustjail::errors::*;
 use std::clone::Clone;
 use std::default::Default;
 use std::fmt;
 use std::mem;
 use std::net::{Ipv4Addr, Ipv6Addr};
 use std::str::FromStr;
+
+type Result<T> = std::result::Result<T, nix::Error>;
 
 // Convenience macro to obtain the scope logger
 macro_rules! sl {
@@ -1169,7 +1169,7 @@ impl RtnlHandle {
                 mem::size_of::<libc::sockaddr_nl>() as libc::socklen_t;
 
             if tmpfd < 0 {
-                return Err(ErrorKind::Nix(nix::Error::Sys(Errno::last())).into());
+                return nix_last_os_err();
             }
 
             let mut err = libc::setsockopt(
@@ -1182,7 +1182,7 @@ impl RtnlHandle {
 
             if err < 0 {
                 libc::close(tmpfd);
-                return Err(ErrorKind::Nix(nix::Error::Sys(Errno::last())).into());
+                return nix_last_os_err();
             }
 
             err = libc::setsockopt(
@@ -1195,7 +1195,7 @@ impl RtnlHandle {
 
             if err < 0 {
                 libc::close(tmpfd);
-                return Err(ErrorKind::Nix(nix::Error::Sys(Errno::last())).into());
+                return nix_last_os_err();
             }
 
             libc::setsockopt(
@@ -1216,7 +1216,7 @@ impl RtnlHandle {
             );
             if err < 0 {
                 libc::close(tmpfd);
-                return Err(ErrorKind::Nix(nix::Error::Sys(Errno::last())).into());
+                return nix_last_os_err();
             }
 
             err = libc::getsockname(
@@ -1226,14 +1226,14 @@ impl RtnlHandle {
             );
             if err < 0 {
                 libc::close(tmpfd);
-                return Err(ErrorKind::Nix(nix::Error::Sys(Errno::last())).into());
+                return nix_last_os_err();
             }
 
             if sa.nl_family as i32 != libc::AF_NETLINK
                 || addrlen as usize != mem::size_of::<libc::sockaddr_nl>()
             {
                 libc::close(tmpfd);
-                return Err(ErrorKind::Nix(nix::Error::Sys(Errno::EINVAL)).into());
+                return nix_errno(Errno::EINVAL);
             }
 
             tmpfd
@@ -1268,9 +1268,10 @@ impl RtnlHandle {
             let err = libc::sendmsg(self.fd, &h as *const libc::msghdr, 0);
 
             if err < 0 {
-                return Err(ErrorKind::Nix(nix::Error::Sys(Errno::last())).into());
+                return nix_last_os_err();
             }
         }
+
         Ok(())
     }
 
@@ -1296,7 +1297,7 @@ impl RtnlHandle {
             );
 
             if rlen < 0 {
-                return Err(ErrorKind::Nix(nix::Error::Sys(Errno::last())).into());
+                return nix_last_os_err();
             }
 
             // if rlen < 32768 {
@@ -1311,16 +1312,16 @@ impl RtnlHandle {
 
             rlen = libc::recvmsg(self.fd, &mut h as *mut libc::msghdr, 0);
             if rlen < 0 {
-                return Err(ErrorKind::Nix(nix::Error::Sys(Errno::last())).into());
+                return nix_last_os_err();
             }
 
             if sa.nl_pid != 0 {
                 // not our netlink message
-                return Err(ErrorKind::Nix(nix::Error::Sys(Errno::EBADMSG)).into());
+                return nix_errno(Errno::EBADMSG);
             }
 
             if h.msg_flags & libc::MSG_TRUNC != 0 {
-                return Err(ErrorKind::Nix(nix::Error::Sys(Errno::EBADMSG)).into());
+                return nix_errno(Errno::EBADMSG);
             }
 
             v.resize(rlen as usize, 0);
@@ -1362,13 +1363,11 @@ impl RtnlHandle {
 
                     if (*nlh).nlmsg_len < NLMSG_LENGTH!(mem::size_of::<nlmsgerr>()) {
                         // truncated
-                        return Err(ErrorKind::ErrorCode("truncated message".to_string()).into());
+                        return nix_errno(Errno::EBADMSG);
                     }
 
                     let el: *const nlmsgerr = NLMSG_DATA!(nlh) as *const nlmsgerr;
-                    return Err(
-                        ErrorKind::Nix(nix::Error::Sys(Errno::from_i32(-(*el).error))).into(),
-                    );
+                    return nix_errno(Errno::from_i32(-(*el).error));
                 }
 
                 lv.push(nlh);
@@ -1393,9 +1392,10 @@ impl RtnlHandle {
             // still remain some bytes?
 
             if msglen != 0 {
-                return Err(ErrorKind::Nix(nix::Error::Sys(Errno::EINVAL)).into());
+                return nix_errno(Errno::EINVAL);
             }
         }
+
         Ok((slv, lv))
     }
 
@@ -1563,20 +1563,10 @@ impl RtnlHandle {
     }
 
     fn find_link_by_hwaddr(&mut self, hwaddr: &str) -> Result<ifinfomsg> {
-        let mut hw: Vec<u8> = vec![0; 6];
+        let hw = parse_mac(hwaddr)?;
+        let p = hw.as_ptr() as *const u8 as *const libc::c_void;
         unsafe {
             //parse out hwaddr in request
-            let p = hw.as_mut_ptr() as *mut u8;
-            let (hw0, hw1, hw2, hw3, hw4, hw5) = scan_fmt!(hwaddr, "{x}:{x}:{x}:{x}:{x}:{x}", 
-				[hex u8], [hex u8], [hex u8], [hex u8], [hex u8],
-				[hex u8])?;
-
-            hw[0] = hw0;
-            hw[1] = hw1;
-            hw[2] = hw2;
-            hw[3] = hw3;
-            hw[4] = hw4;
-            hw[5] = hw5;
 
             // dump out all links
             let (_slv, lv) = self.dump_all_links()?;
@@ -1608,7 +1598,7 @@ impl RtnlHandle {
                 if attrs[IFLA_ADDRESS as usize] as i64 != 0 {
                     let a = RTA_DATA!(attrs[IFLA_ADDRESS as usize]) as *const libc::c_void;
                     if libc::memcmp(
-                        p as *const libc::c_void,
+                        p,
                         a,
                         RTA_PAYLOAD!(attrs[IFLA_ADDRESS as usize]) as libc::size_t,
                     ) == 0
@@ -1619,7 +1609,7 @@ impl RtnlHandle {
             }
         }
 
-        return Err(ErrorKind::Nix(nix::Error::Sys(Errno::ENODEV)).into());
+        nix_errno(Errno::ENODEV)
     }
 
     fn find_link_by_name(&mut self, name: &str) -> Result<ifinfomsg> {
@@ -1688,9 +1678,7 @@ impl RtnlHandle {
 
                         if (*nlh).nlmsg_len < NLMSG_LENGTH!(mem::size_of::<nlmsgerr>()) {
                             // truncated
-                            return Err(
-                                ErrorKind::ErrorCode("truncated message".to_string()).into()
-                            );
+                            return nix_errno(Errno::EBADMSG);
                         }
 
                         let el: *const nlmsgerr = NLMSG_DATA!(nlh) as *const nlmsgerr;
@@ -1700,9 +1688,7 @@ impl RtnlHandle {
                             return Ok(Vec::new());
                         }
 
-                        return Err(
-                            ErrorKind::Nix(nix::Error::Sys(Errno::from_i32(-(*el).error))).into(),
-                        );
+                        return nix_errno(Errno::from_i32(-(*el).error));
                     }
 
                     // good message
@@ -1723,7 +1709,7 @@ impl RtnlHandle {
                 }
 
                 if !(NLMSG_OK!(nlh, msglen)) {
-                    return Err(ErrorKind::Nix(nix::Error::Sys(Errno::EINVAL)).into());
+                    return nix_errno(Errno::EINVAL);
                 }
             }
         }
@@ -2042,7 +2028,7 @@ impl RtnlHandle {
             }
         }
 
-        Err(ErrorKind::ErrorCode("no name".to_string()).into())
+        nix_errno(Errno::ENOENT)
     }
 
     pub fn list_routes(&mut self) -> Result<Vec<Route>> {
@@ -2711,7 +2697,7 @@ unsafe fn format_address(addr: *const u8, len: u32) -> Result<String> {
         */
     }
 
-    return Err(ErrorKind::Nix(nix::Error::Sys(Errno::EINVAL)).into());
+    nix_errno(Errno::EINVAL)
 }
 
 impl Drop for RtnlHandle {
@@ -2740,13 +2726,15 @@ impl Default for RtRoute {
 }
 
 fn parse_cidripv4(s: &str) -> Result<(Vec<u8>, u8)> {
-    let (a0, a1, a2, a3, len) = scan_fmt!(s, "{}.{}.{}.{}/{}", u8, u8, u8, u8, u8)?;
+    let (a0, a1, a2, a3, len) = scan_fmt!(s, "{}.{}.{}.{}/{}", u8, u8, u8, u8, u8)
+        .map_err(|_| nix::Error::Sys(Errno::EINVAL))?;
     let ip: Vec<u8> = vec![a0, a1, a2, a3];
     Ok((ip, len))
 }
 
 fn parse_ipv4(s: &str) -> Result<Vec<u8>> {
-    let (a0, a1, a2, a3) = scan_fmt!(s, "{}.{}.{}.{}", u8, u8, u8, u8)?;
+    let (a0, a1, a2, a3) =
+        scan_fmt!(s, "{}.{}.{}.{}", u8, u8, u8, u8).map_err(|_| nix::Error::Sys(Errno::EINVAL))?;
     let ip: Vec<u8> = vec![a0, a1, a2, a3];
 
     Ok(ip)
@@ -2758,17 +2746,38 @@ fn parse_ipaddr(s: &str) -> Result<Vec<u8>> {
     }
 
     // v4
-    Ok(Vec::from(Ipv4Addr::from_str(s)?.octets().as_ref()))
+    match Ipv4Addr::from_str(s) {
+        Ok(v) => Ok(Vec::from(v.octets().as_ref())),
+        Err(_e) => nix_errno(Errno::EINVAL),
+    }
 }
 
 fn parse_cider(s: &str) -> Result<(Vec<u8>, u8)> {
     let (addr, mask) = if s.contains("/") {
-        scan_fmt!(s, "{}/{}", String, u8)?
+        scan_fmt!(s, "{}/{}", String, u8).map_err(|_| nix::Error::Sys(Errno::EINVAL))?
     } else {
         (s.to_string(), 0)
     };
 
     Ok((parse_ipaddr(addr.as_str())?, mask))
+}
+
+fn parse_mac(hwaddr: &str) -> Result<Vec<u8>> {
+    let mut hw: Vec<u8> = vec![0; 6];
+
+    let (hw0, hw1, hw2, hw3, hw4, hw5) = scan_fmt!(hwaddr, "{x}:{x}:{x}:{x}:{x}:{x}",
+        [hex u8], [hex u8], [hex u8], [hex u8], [hex u8],
+        [hex u8])
+    .map_err(|_| nix::Error::Sys(Errno::EINVAL))?;
+
+    hw[0] = hw0;
+    hw[1] = hw1;
+    hw[2] = hw2;
+    hw[3] = hw3;
+    hw[4] = hw4;
+    hw[5] = hw5;
+
+    Ok(hw)
 }
 
 impl From<Route> for RtRoute {
@@ -2847,6 +2856,16 @@ impl From<IPAddress> for RtIPAddr {
             addr,
         }
     }
+}
+
+#[inline]
+fn nix_last_os_err<T>() -> Result<T> {
+    Err(nix::Error::Sys(Errno::last()))
+}
+
+#[inline]
+fn nix_errno<T>(err: Errno) -> Result<T> {
+    Err(nix::Error::Sys(err))
 }
 
 #[cfg(test)]
