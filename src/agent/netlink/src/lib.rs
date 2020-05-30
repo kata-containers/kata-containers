@@ -44,8 +44,7 @@ macro_rules! sl {
     };
 }
 
-// define the struct, const, etc needed by
-// netlink operations
+// define the struct, const, etc needed by netlink operations
 
 pub type __s8 = libc::c_char;
 pub type __u8 = libc::c_uchar;
@@ -1248,7 +1247,6 @@ impl RtnlHandle {
         })
     }
 
-    // implement update{interface,routes}, list{interface, routes}
     fn send_message(&self, data: &mut [u8]) -> Result<()> {
         let mut sa: libc::sockaddr_nl = unsafe { mem::zeroed::<libc::sockaddr_nl>() };
 
@@ -1340,22 +1338,22 @@ impl RtnlHandle {
 
             let mut msglen = buf.len() as u32;
             let mut nlh = buf.as_ptr() as *const nlmsghdr;
-            let mut dump_intr = 0;
-            let mut done = 0;
+            let mut dump_intr = false;
+            let mut done = false;
 
             while NLMSG_OK!(nlh, msglen) {
+                // Make sure we are interested in the message first.
                 if (*nlh).nlmsg_pid != self.local.nl_pid || (*nlh).nlmsg_seq != self.dump {
                     nlh = NLMSG_NEXT!(nlh, msglen);
                     continue;
                 }
 
-                // got one nlmsg
                 if (*nlh).nlmsg_flags & NLM_F_DUMP_INTR > 0 {
-                    dump_intr = 1;
+                    dump_intr = true;
                 }
 
                 if (*nlh).nlmsg_type == NLMSG_DONE {
-                    done = 1;
+                    done = true;
                 }
 
                 if (*nlh).nlmsg_type == NLMSG_ERROR {
@@ -1375,7 +1373,7 @@ impl RtnlHandle {
 
                 lv.push(nlh);
 
-                if done == 1 {
+                if done {
                     break;
                 }
 
@@ -1384,9 +1382,9 @@ impl RtnlHandle {
 
             slv.push(buf);
 
-            if done == 1 {
-                if dump_intr == 1 {
-                    info!(sl!(), "dump interuppted, maybe incomplete");
+            if done {
+                if dump_intr {
+                    info!(sl!(), "dump interrupted, maybe incomplete");
                 }
 
                 break;
@@ -1412,7 +1410,7 @@ impl RtnlHandle {
             let (_sav, av) = self.dump_all_addresses(0)?;
 
             // got all the link message and address message
-            // into lv and av repectively, parse attributes
+            // into lv and av respectively, parse attributes
             for link in &lv {
                 let nlh: *const nlmsghdr = *link;
                 let ifi: *const ifinfomsg = NLMSG_DATA!(nlh) as *const ifinfomsg;
@@ -1707,7 +1705,7 @@ impl RtnlHandle {
                         );
                     }
 
-                    // goog message
+                    // good message
                     if answer {
                         // need to copy out data
 
@@ -2474,6 +2472,7 @@ impl RtnlHandle {
 
         Ok(rt.clone())
     }
+
     pub fn handle_localhost(&mut self) -> Result<()> {
         let ifi = self.find_link_by_name("lo")?;
 
