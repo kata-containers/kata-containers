@@ -9,17 +9,18 @@
 #![allow(unused_parens)]
 #![allow(unused_unsafe)]
 
-mod agent_handler;
-
 extern crate libc;
 extern crate nix;
+
+#[cfg(feature = "with-agent-handler")]
 extern crate protobuf;
+#[cfg(feature = "with-agent-handler")]
 extern crate protocols;
 
+#[cfg(feature = "with-log")]
 #[macro_use]
 extern crate slog;
-extern crate slog_async;
-extern crate slog_json;
+#[cfg(feature = "with-log")]
 extern crate slog_scope;
 
 #[macro_use]
@@ -33,14 +34,26 @@ use std::mem;
 use std::net::{Ipv4Addr, Ipv6Addr};
 use std::str::FromStr;
 
-type Result<T> = std::result::Result<T, nix::Error>;
-
+#[cfg(feature = "with-log")]
 // Convenience macro to obtain the scope logger
 macro_rules! sl {
     () => {
         slog_scope::logger().new(o!("subsystem" => "netlink"))
     };
 }
+
+#[cfg(not(feature = "with-log"))]
+#[macro_export]
+macro_rules! info {
+    ($l:expr, #$tag:expr, $($args:tt)*) => {};
+    ($l:expr, $($args:tt)*) => {};
+}
+
+#[cfg(feature = "with-agent-handler")]
+mod agent_handler;
+
+/// Specialized version of std::result::Result for Netlink related operations.
+pub type Result<T> = std::result::Result<T, nix::Error>;
 
 // define the struct, const, etc needed by netlink operations
 
