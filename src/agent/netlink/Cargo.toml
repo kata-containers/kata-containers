@@ -14,7 +14,6 @@ protobuf = { version = "=2.14.0", optional = true }
 protocols = { path = "../protocols", optional = true }
 slog = { version = "2.5.2", features = ["dynamic-keys", "max_level_trace", "release_max_level_info"], optional = true }
 slog-scope = { version = "4.1.2", optional = true }
-scan_fmt = "0.2.3"
 
 [features]
 with-log = ["slog", "slog-scope"]

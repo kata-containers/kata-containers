@@ -428,7 +428,7 @@ impl super::RtnlHandle {
 
             // process lladdr
             if neigh.lladdr != "" {
-                let llabuf = parse_mac(&neigh.lladdr)?;
+                let llabuf = parse_mac_addr(&neigh.lladdr)?;
 
                 addattr_var(nlh, NDA_LLADDR, llabuf.as_ptr() as *const u8, llabuf.len());
             }
