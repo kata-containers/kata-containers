@@ -1174,7 +1174,8 @@ dependencies = [
 [[package]]
 name = "ttrpc"
 version = "0.3.0"
-source = "git+https://github.com/containerd/ttrpc-rust.git?branch=0.3.0#ba1efe3bbb8f8af4895b7623ed1d11561e70e566"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bfa9da24c351f0feef5e66c0b28c18373a7ef3e1bfdfd5852170de494f9bf870"
 dependencies = [
  "byteorder",
  "libc",
