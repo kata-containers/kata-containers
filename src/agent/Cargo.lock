@@ -325,8 +325,9 @@ dependencies = [
 
 [[package]]
 name = "path-absolutize"
-version = "1.2.0"
-source = "git+git://github.com/magiclen/path-absolutize.git?tag=v1.2.0#a8fea23c20192218bdbb141a0940d13ffba7ec86"
+version = "1.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ceeedc827d9a758b4641457683ced2f02d4252cc1bd8794c415ed20256114290"
 dependencies = [
  "path-dedot",
  "slash-formatter",
