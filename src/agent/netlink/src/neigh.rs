@@ -3,13 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use crate::{
-    __s32, __u16, __u8, addattr_var, ifinfomsg, nlmsghdr, parse_ipaddr, IFA_F_PERMANENT,
-    NLMSG_ALIGNTO, NLM_F_CREATE, NLM_F_EXCL, NLM_F_REQUEST, RTM_NEWNEIGH,
-};
-use crate::{NLMSG_ALIGN, NLMSG_DATA, NLMSG_HDRLEN, NLMSG_LENGTH};
+use super::*;
 use protocols::types::ARPNeighbor;
-use rustjail::errors::*;
 use std::mem;
 
 #[repr(C)]
@@ -58,28 +53,18 @@ impl crate::RtnlHandle {
 
         Ok(())
     }
+
     pub fn add_one_arp_neighbor(&mut self, neigh: &ARPNeighbor) -> Result<()> {
-        let dev: ifinfomsg;
-
-        match self.find_link_by_name(&neigh.device) {
-            Ok(d) => dev = d,
-            Err(e) => {
-                return Err(ErrorKind::ErrorCode(format!(
-                    "Could not find link from device {}: {}",
-                    neigh.device, e
-                ))
-                .into());
-            }
-        }
-
         if neigh.toIPAddress.is_none() {
-            return Err(ErrorKind::ErrorCode("toIPAddress is required".to_string()).into());
+            return nix_errno(Errno::EINVAL);
         }
 
         let to_ip = &neigh.toIPAddress.as_ref().unwrap().address;
         if to_ip.is_empty() {
-            return Err(ErrorKind::ErrorCode("toIPAddress.address is required".to_string()).into());
+            return nix_errno(Errno::EINVAL);
         }
+
+        let dev = self.find_link_by_name(&neigh.device)?;
 
         let mut v: Vec<u8> = vec![0; 2048];
         unsafe {
@@ -127,23 +112,6 @@ impl crate::RtnlHandle {
 
         Ok(())
     }
-}
-
-fn parse_mac(hwaddr: &str) -> Result<Vec<u8>> {
-    let mut hw: Vec<u8> = vec![0; 6];
-
-    let (hw0, hw1, hw2, hw3, hw4, hw5) = scan_fmt!(hwaddr, "{x}:{x}:{x}:{x}:{x}:{x}",
-        [hex u8], [hex u8], [hex u8], [hex u8], [hex u8],
-        [hex u8])?;
-
-    hw[0] = hw0;
-    hw[1] = hw1;
-    hw[2] = hw2;
-    hw[3] = hw3;
-    hw[4] = hw4;
-    hw[5] = hw5;
-
-    Ok(hw)
 }
 
 fn parse_addr(ip_address: &str) -> Result<(__u8, Vec<u8>)> {
