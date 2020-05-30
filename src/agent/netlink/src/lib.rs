@@ -23,12 +23,7 @@ extern crate slog;
 #[cfg(feature = "with-log")]
 extern crate slog_scope;
 
-#[macro_use]
-extern crate scan_fmt;
-
 use nix::errno::Errno;
-use std::clone::Clone;
-use std::default::Default;
 use std::fmt;
 use std::mem;
 use std::net::{Ipv4Addr, Ipv6Addr};
@@ -1496,7 +1491,7 @@ impl RtnlHandle {
     }
 
     fn find_link_by_hwaddr(&mut self, hwaddr: &str) -> Result<ifinfomsg> {
-        let hw = parse_mac(hwaddr)?;
+        let hw = parse_mac_addr(hwaddr)?;
         let p = hw.as_ptr() as *const u8 as *const libc::c_void;
         unsafe {
             //parse out hwaddr in request
@@ -2404,79 +2399,79 @@ impl Default for RtRoute {
     }
 }
 
-fn parse_cidripv4(s: &str) -> Result<(Vec<u8>, u8)> {
-    let (a0, a1, a2, a3, len) = scan_fmt!(s, "{}.{}.{}.{}/{}", u8, u8, u8, u8, u8)
-        .map_err(|_| nix::Error::Sys(Errno::EINVAL))?;
-    let ip: Vec<u8> = vec![a0, a1, a2, a3];
-    Ok((ip, len))
+pub struct RtIPAddr {
+    pub ip_family: __u8,
+    pub ip_mask: __u8,
+    pub addr: Vec<u8>,
 }
 
-fn parse_ipv4(s: &str) -> Result<Vec<u8>> {
-    let (a0, a1, a2, a3) =
-        scan_fmt!(s, "{}.{}.{}.{}", u8, u8, u8, u8).map_err(|_| nix::Error::Sys(Errno::EINVAL))?;
-    let ip: Vec<u8> = vec![a0, a1, a2, a3];
-
-    Ok(ip)
-}
-
-fn parse_ipaddr(s: &str) -> Result<Vec<u8>> {
-    if let Ok(v6) = Ipv6Addr::from_str(s) {
-        return Ok(Vec::from(v6.octets().as_ref()));
+#[inline]
+fn parse_u8(s: &str, radix: u32) -> Result<u8> {
+    if radix >= 2 && radix <= 36 {
+        u8::from_str_radix(s, radix).map_err(|_| nix::Error::Sys(Errno::EINVAL))
+    } else {
+        u8::from_str(s).map_err(|_| nix::Error::Sys(Errno::EINVAL))
     }
+}
 
-    // v4
+pub fn parse_ipv4_addr(s: &str) -> Result<Vec<u8>> {
     match Ipv4Addr::from_str(s) {
         Ok(v) => Ok(Vec::from(v.octets().as_ref())),
         Err(_e) => nix_errno(Errno::EINVAL),
     }
 }
 
-fn parse_cider(s: &str) -> Result<(Vec<u8>, u8)> {
-    let (addr, mask) = if s.contains("/") {
-        scan_fmt!(s, "{}/{}", String, u8).map_err(|_| nix::Error::Sys(Errno::EINVAL))?
+pub fn parse_ip_addr(s: &str) -> Result<Vec<u8>> {
+    if let Ok(v6) = Ipv6Addr::from_str(s) {
+        Ok(Vec::from(v6.octets().as_ref()))
     } else {
-        (s.to_string(), 0)
-    };
-
-    Ok((parse_ipaddr(addr.as_str())?, mask))
-}
-
-fn parse_addr(ip_address: &str) -> Result<(__u8, Vec<u8>)> {
-    let ip_data = parse_ipaddr(ip_address)?;
-    let family: __u8;
-
-    // ipv6
-    if ip_data.len() == 16 {
-        family = libc::AF_INET6 as __u8;
-    } else {
-        family = libc::AF_INET as __u8;
+        parse_ipv4_addr(s)
     }
-
-    Ok((family, ip_data))
 }
 
-fn parse_mac(hwaddr: &str) -> Result<Vec<u8>> {
-    let mut hw: Vec<u8> = vec![0; 6];
-
-    let (hw0, hw1, hw2, hw3, hw4, hw5) = scan_fmt!(hwaddr, "{x}:{x}:{x}:{x}:{x}:{x}",
-        [hex u8], [hex u8], [hex u8], [hex u8], [hex u8],
-        [hex u8])
-    .map_err(|_| nix::Error::Sys(Errno::EINVAL))?;
-
-    hw[0] = hw0;
-    hw[1] = hw1;
-    hw[2] = hw2;
-    hw[3] = hw3;
-    hw[4] = hw4;
-    hw[5] = hw5;
-
-    Ok(hw)
+pub fn parse_ip_addr_with_family(ip_address: &str) -> Result<(__u8, Vec<u8>)> {
+    if let Ok(v6) = Ipv6Addr::from_str(ip_address) {
+        Ok((libc::AF_INET6 as __u8, Vec::from(v6.octets().as_ref())))
+    } else {
+        parse_ipv4_addr(ip_address).map(|v| ((libc::AF_INET as __u8, v)))
+    }
 }
 
-pub struct RtIPAddr {
-    pub ip_family: __u8,
-    pub ip_mask: __u8,
-    pub addr: Vec<u8>,
+pub fn parse_ipv4_cidr(s: &str) -> Result<(Vec<u8>, u8)> {
+    let fields: Vec<&str> = s.split("/").collect();
+
+    if fields.len() != 2 {
+        nix_errno(Errno::EINVAL)
+    } else {
+        Ok((parse_ipv4_addr(fields[0])?, parse_u8(fields[1], 10)?))
+    }
+}
+
+pub fn parse_cidr(s: &str) -> Result<(Vec<u8>, u8)> {
+    let fields: Vec<&str> = s.split("/").collect();
+
+    if fields.len() != 2 {
+        nix_errno(Errno::EINVAL)
+    } else {
+        Ok((parse_ip_addr(fields[0])?, parse_u8(fields[1], 10)?))
+    }
+}
+
+pub fn parse_mac_addr(hwaddr: &str) -> Result<Vec<u8>> {
+    let fields: Vec<&str> = hwaddr.split(":").collect();
+
+    if fields.len() != 6 {
+        nix_errno(Errno::EINVAL)
+    } else {
+        Ok(vec![
+            parse_u8(fields[0], 16)?,
+            parse_u8(fields[1], 16)?,
+            parse_u8(fields[2], 16)?,
+            parse_u8(fields[3], 16)?,
+            parse_u8(fields[4], 16)?,
+            parse_u8(fields[5], 16)?,
+        ])
+    }
 }
 
 #[inline]
@@ -2491,9 +2486,10 @@ fn nix_errno<T>(err: Errno) -> Result<T> {
 
 #[cfg(test)]
 mod tests {
-    use crate::{nlmsghdr, NLMSG_ALIGNTO, RTA_ALIGNTO, RTM_BASE};
+    use super::*;
     use libc;
     use std::mem;
+
     #[test]
     fn test_macro() {
         println!("{}", RTA_ALIGN!(10));
@@ -2503,5 +2499,58 @@ mod tests {
             NLMSG_HDRLEN!(),
             NLMSG_ALIGN!(mem::size_of::<nlmsghdr>() as libc::c_uint)
         );
+    }
+
+    #[test]
+    fn test_ip_addr() {
+        let ip = parse_ipv4_addr("1.2.3.4").unwrap();
+        assert_eq!(ip, vec![0x1u8, 0x2u8, 0x3u8, 0x4u8]);
+        parse_ipv4_addr("1.2.3.4.5").unwrap_err();
+        parse_ipv4_addr("1.2.3-4").unwrap_err();
+        parse_ipv4_addr("1.2.3.a").unwrap_err();
+        parse_ipv4_addr("1.2.3.x").unwrap_err();
+        parse_ipv4_addr("-1.2.3.4").unwrap_err();
+        parse_ipv4_addr("+1.2.3.4").unwrap_err();
+
+        let (family, _) = parse_ip_addr_with_family("192.168.1.1").unwrap();
+        assert_eq!(family, libc::AF_INET as __u8);
+
+        let (family, ip) =
+            parse_ip_addr_with_family("2001:0db8:85a3:0000:0000:8a2e:0370:7334").unwrap();
+        assert_eq!(family, libc::AF_INET6 as __u8);
+        assert_eq!(ip.len(), 16);
+        parse_ip_addr_with_family("2001:0db8:85a3:0000:0000:8a2e:0370:73345").unwrap_err();
+
+        let ip = parse_ip_addr("::1").unwrap();
+        assert_eq!(ip[0], 0x0);
+        assert_eq!(ip[15], 0x1);
+    }
+
+    #[test]
+    fn test_parse_cidr() {
+        let (_, mask) = parse_ipv4_cidr("1.2.3.4/31").unwrap();
+        assert_eq!(mask, 31);
+
+        parse_ipv4_cidr("1.2.3/4/31").unwrap_err();
+        parse_ipv4_cidr("1.2.3.4/f").unwrap_err();
+        parse_ipv4_cidr("1.2.3/8").unwrap_err();
+        parse_ipv4_cidr("1.2.3.4.8").unwrap_err();
+
+        let (ip, mask) = parse_cidr("2001:db8:a::123/64").unwrap();
+        assert_eq!(mask, 64);
+        assert_eq!(ip[0], 0x20);
+        assert_eq!(ip[15], 0x23);
+    }
+
+    #[test]
+    fn test_parse_mac_addr() {
+        let mac = parse_mac_addr("FF:FF:FF:FF:FF:FE").unwrap();
+        assert_eq!(mac.len(), 6);
+        assert_eq!(mac[0], 0xff);
+        assert_eq!(mac[5], 0xfe);
+
+        parse_mac_addr("FF:FF:FF:FF:FF:FE:A0").unwrap_err();
+        parse_mac_addr("FF:FF:FF:FF:FF:FX").unwrap_err();
+        parse_mac_addr("FF:FF:FF:FF:FF").unwrap_err();
     }
 }

@@ -255,7 +255,6 @@ dependencies = [
  "nix 0.17.0",
  "protobuf",
  "protocols",
- "scan_fmt",
  "slog",
  "slog-scope",
 ]
