@@ -6,8 +6,12 @@
 
 //! Dedicated Netlink interfaces for Kata agent protocol handler.
 
+use std::convert::TryFrom;
+
 use protobuf::RepeatedField;
 use protocols::types::{ARPNeighbor, IPAddress, IPFamily, Interface, Route};
+
+use super::*;
 
 #[cfg(feature = "with-log")]
 // Convenience macro to obtain the scope logger
@@ -16,8 +20,6 @@ macro_rules! sl {
         slog_scope::logger().new(o!("subsystem" => "netlink"))
     };
 }
-
-use super::*;
 
 impl super::RtnlHandle {
     pub fn update_interface(&mut self, iface: &Interface) -> Result<Interface> {
@@ -41,7 +43,7 @@ impl super::RtnlHandle {
 
         // add new ip addresses in request
         for grpc_addr in &iface.IPAddresses {
-            let rtip = RtIPAddr::from(grpc_addr.clone());
+            let rtip = RtIPAddr::try_from(grpc_addr.clone())?;
             self.add_one_address(&ifinfo, &rtip)?;
         }
 
@@ -225,7 +227,7 @@ impl super::RtnlHandle {
 
         for grpcroute in rt {
             if grpcroute.gateway.as_str() == "" {
-                let r = RtRoute::from(grpcroute.clone());
+                let r = RtRoute::try_from(grpcroute.clone())?;
                 if r.index == -1 {
                     continue;
                 }
@@ -235,7 +237,7 @@ impl super::RtnlHandle {
 
         for grpcroute in rt {
             if grpcroute.gateway.as_str() != "" {
-                let r = RtRoute::from(grpcroute.clone());
+                let r = RtRoute::try_from(grpcroute.clone())?;
                 if r.index == -1 {
                     continue;
                 }
@@ -414,31 +416,35 @@ impl super::RtnlHandle {
     }
 }
 
-impl From<IPAddress> for RtIPAddr {
-    fn from(ipi: IPAddress) -> Self {
+impl TryFrom<IPAddress> for RtIPAddr {
+    type Error = nix::Error;
+
+    fn try_from(ipi: IPAddress) -> std::result::Result<Self, Self::Error> {
         let ip_family = if ipi.family == IPFamily::v4 {
             libc::AF_INET
         } else {
             libc::AF_INET6
         } as __u8;
 
-        let ip_mask = parser::parse_u8(ipi.mask.as_str(), 10).unwrap();
-        let addr = parser::parse_ip_addr(ipi.address.as_ref()).unwrap();
+        let ip_mask = parser::parse_u8(ipi.mask.as_str(), 10)?;
+        let addr = parser::parse_ip_addr(ipi.address.as_ref())?;
 
-        Self {
+        Ok(Self {
             ip_family,
             ip_mask,
             addr,
-        }
+        })
     }
 }
 
-impl From<Route> for RtRoute {
-    fn from(r: Route) -> Self {
+impl TryFrom<Route> for RtRoute {
+    type Error = nix::Error;
+
+    fn try_from(r: Route) -> std::result::Result<Self, Self::Error> {
         // only handle ipv4
 
         let index = {
-            let mut rh = RtnlHandle::new(NETLINK_ROUTE, 0).unwrap();
+            let mut rh = RtnlHandle::new(NETLINK_ROUTE, 0)?;
             match rh.find_link_by_name(r.device.as_str()) {
                 Ok(ifi) => ifi.ifi_index,
                 Err(_) => -1,
@@ -448,21 +454,21 @@ impl From<Route> for RtRoute {
         let (dest, dst_len) = if r.dest.is_empty() {
             (Some(vec![0 as u8; 4]), 0)
         } else {
-            let (dst, mask) = parser::parse_cidr(r.dest.as_str()).unwrap();
+            let (dst, mask) = parser::parse_cidr(r.dest.as_str())?;
             (Some(dst), mask)
         };
 
         let (source, src_len) = if r.source.is_empty() {
             (None, 0)
         } else {
-            let (src, mask) = parser::parse_cidr(r.source.as_str()).unwrap();
+            let (src, mask) = parser::parse_cidr(r.source.as_str())?;
             (Some(src), mask)
         };
 
         let gateway = if r.gateway.is_empty() {
             None
         } else {
-            Some(parser::parse_ip_addr(r.gateway.as_str()).unwrap())
+            Some(parser::parse_ip_addr(r.gateway.as_str())?)
         };
 
         /*
@@ -472,7 +478,8 @@ impl From<Route> for RtRoute {
                     (tdest, tdst_len)
                 };
         */
-        Self {
+
+        Ok(Self {
             dest,
             source,
             src_len,
@@ -481,7 +488,7 @@ impl From<Route> for RtRoute {
             gateway,
             scope: r.scope as u8,
             protocol: RTPROTO_UNSPEC,
-        }
+        })
     }
 }
 
