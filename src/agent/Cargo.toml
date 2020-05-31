@@ -9,7 +9,7 @@ oci = { path = "oci" }
 logging = { path = "logging" }
 rustjail = { path = "rustjail" }
 protocols = { path = "protocols" }
-netlink = { path = "netlink" }
+netlink = { path = "netlink", features = ["with-log", "with-agent-handler"] }
 lazy_static = "1.3.0"
 error-chain = "0.12.1"
 ttrpc = { git = "https://github.com/containerd/ttrpc-rust.git", branch="0.3.0" }

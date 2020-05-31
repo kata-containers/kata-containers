@@ -31,14 +31,12 @@ impl super::RtnlHandle {
         let ifinfo = self.find_link_by_hwaddr(iface.hwAddr.as_str())?;
 
         // bring down interface if it is up
-
         if ifinfo.ifi_flags & libc::IFF_UP as u32 != 0 {
             self.set_link_status(&ifinfo, false)?;
         }
 
         // delete all addresses associated with the link
         let del_addrs: Vec<RtIPAddr> = self.get_link_addresses(&ifinfo)?;
-
         self.delete_all_addrs(&ifinfo, del_addrs.as_ref())?;
 
         // add new ip addresses in request
@@ -47,191 +45,175 @@ impl super::RtnlHandle {
             self.add_one_address(&ifinfo, &rtip)?;
         }
 
+        let mut v: Vec<u8> = vec![0; DEFAULT_NETLINK_BUF_SIZE];
+        // Safe because we have allocated enough buffer space.
+        let nlh = unsafe { &mut *(v.as_mut_ptr() as *mut nlmsghdr) };
+        let ifi = unsafe { &mut *(NLMSG_DATA!(nlh) as *mut ifinfomsg) };
+
         // set name, set mtu, IFF_NOARP. in one rtnl_talk.
-        let mut v: Vec<u8> = vec![0; 2048];
+        nlh.nlmsg_len = NLMSG_LENGTH!(mem::size_of::<ifinfomsg>() as u32) as __u32;
+        nlh.nlmsg_type = RTM_NEWLINK;
+        nlh.nlmsg_flags = NLM_F_REQUEST;
+        self.assign_seqnum(nlh);
+
+        ifi.ifi_family = ifinfo.ifi_family;
+        ifi.ifi_type = ifinfo.ifi_type;
+        ifi.ifi_index = ifinfo.ifi_index;
+        if iface.raw_flags & libc::IFF_NOARP as u32 != 0 {
+            ifi.ifi_change |= libc::IFF_NOARP as u32;
+            ifi.ifi_flags |= libc::IFF_NOARP as u32;
+        }
+
+        // Safe because we have allocated enough buffer space.
         unsafe {
-            let p: *mut u8 = v.as_mut_ptr() as *mut u8;
-            let mut nlh: *mut nlmsghdr = p as *mut nlmsghdr;
-            let mut ifi: *mut ifinfomsg = NLMSG_DATA!(nlh) as *mut ifinfomsg;
+            nlh.addattr32(IFLA_MTU, iface.mtu as u32);
 
-            (*nlh).nlmsg_len = NLMSG_LENGTH!(mem::size_of::<ifinfomsg>() as u32) as __u32;
-            (*nlh).nlmsg_type = RTM_NEWLINK;
-            (*nlh).nlmsg_flags = NLM_F_REQUEST;
-
-            self.seq += 1;
-            (*nlh).nlmsg_seq = self.seq;
-
-            (*ifi).ifi_family = ifinfo.ifi_family;
-            (*ifi).ifi_type = ifinfo.ifi_type;
-            (*ifi).ifi_index = ifinfo.ifi_index;
-
-            if iface.raw_flags & libc::IFF_NOARP as u32 != 0 {
-                (*ifi).ifi_change |= libc::IFF_NOARP as u32;
-                (*ifi).ifi_flags |= libc::IFF_NOARP as u32;
-            }
-
-            addattr32(nlh, IFLA_MTU, iface.mtu as u32);
-
-            // if str is null terminated, use addattr_var
+            // if str is null terminated, use addattr_var.
             // otherwise, use addattr_str
-            addattr_var(
-                nlh,
+            nlh.addattr_var(
                 IFLA_IFNAME,
                 iface.name.as_ptr() as *const u8,
                 iface.name.len(),
             );
-            // addattr_str(nlh, IFLA_IFNAME, iface.name.as_str());
         }
 
         self.rtnl_talk(v.as_mut_slice(), false)?;
 
+        // TODO: why the result is ignored here?
         let _ = self.set_link_status(&ifinfo, true);
-        // test remove this link
-        // let _ = self.remove_interface(iface)?;
 
         Ok(iface.clone())
-        //return Err(ErrorKind::Nix(nix::Error::Sys(
-        //	Errno::EOPNOTSUPP)).into());
     }
 
+    /// Delete this interface/link per request
     pub fn remove_interface(&mut self, iface: &Interface) -> Result<Interface> {
         let ifinfo = self.find_link_by_hwaddr(iface.hwAddr.as_str())?;
+
         self.set_link_status(&ifinfo, false)?;
 
-        // delete this link per request
-        let mut v: Vec<u8> = vec![0; 2048];
-        unsafe {
-            let mut nlh: *mut nlmsghdr = v.as_mut_ptr() as *mut nlmsghdr;
-            let mut ifi: *mut ifinfomsg = NLMSG_DATA!(nlh) as *mut ifinfomsg;
-            // No attributes needed?
-            (*nlh).nlmsg_len = NLMSG_LENGTH!(mem::size_of::<ifinfomsg>()) as __u32;
-            (*nlh).nlmsg_type = RTM_DELLINK;
-            (*nlh).nlmsg_flags = NLM_F_REQUEST;
+        let mut v: Vec<u8> = vec![0; DEFAULT_NETLINK_BUF_SIZE];
+        // Safe because we have allocated enough buffer space.
+        let nlh = unsafe { &mut *(v.as_mut_ptr() as *mut nlmsghdr) };
+        let ifi = unsafe { &mut *(NLMSG_DATA!(nlh) as *mut ifinfomsg) };
 
-            self.seq += 1;
-            (*nlh).nlmsg_seq = self.seq;
+        // No attributes needed?
+        nlh.nlmsg_len = NLMSG_LENGTH!(mem::size_of::<ifinfomsg>()) as __u32;
+        nlh.nlmsg_type = RTM_DELLINK;
+        nlh.nlmsg_flags = NLM_F_REQUEST;
+        self.assign_seqnum(nlh);
 
-            (*ifi).ifi_family = ifinfo.ifi_family;
-            (*ifi).ifi_index = ifinfo.ifi_index;
-            (*ifi).ifi_type = ifinfo.ifi_type;
+        ifi.ifi_family = ifinfo.ifi_family;
+        ifi.ifi_index = ifinfo.ifi_index;
+        ifi.ifi_type = ifinfo.ifi_type;
 
-            self.rtnl_talk(v.as_mut_slice(), false)?;
-        }
+        self.rtnl_talk(v.as_mut_slice(), false)?;
 
         Ok(iface.clone())
     }
 
     pub fn list_interfaces(&mut self) -> Result<Vec<Interface>> {
         let mut ifaces: Vec<Interface> = Vec::new();
+        let (_slv, lv) = self.dump_all_links()?;
+        let (_sav, av) = self.dump_all_addresses(0)?;
 
-        unsafe {
-            // get link info
-            let (_slv, lv) = self.dump_all_links()?;
+        for link in &lv {
+            // Safe because dump_all_links() returns valid pointers.
+            let nlh = unsafe { &**link };
+            if nlh.nlmsg_type != RTM_NEWLINK && nlh.nlmsg_type != RTM_DELLINK {
+                continue;
+            }
 
-            // get addrinfo
-            let (_sav, av) = self.dump_all_addresses(0)?;
+            if nlh.nlmsg_len < NLMSG_SPACE!(mem::size_of::<ifinfomsg>()) {
+                info!(
+                    sl!(),
+                    "invalid nlmsg! nlmsg_len: {}, nlmsg_space: {}",
+                    nlh.nlmsg_len,
+                    NLMSG_SPACE!(mem::size_of::<ifinfomsg>())
+                );
+                break;
+            }
 
-            // got all the link message and address message
-            // into lv and av respectively, parse attributes
-            for link in &lv {
-                let nlh: *const nlmsghdr = *link;
-                let ifi: *const ifinfomsg = NLMSG_DATA!(nlh) as *const ifinfomsg;
+            // Safe because we have just validated available buffer space above.
+            let ifi = unsafe { &*(NLMSG_DATA!(nlh) as *const ifinfomsg) };
+            let rta: *mut rtattr = IFLA_RTA!(ifi as *const ifinfomsg) as *mut rtattr;
+            let rtalen = IFLA_PAYLOAD!(nlh) as u32;
+            let attrs = unsafe { parse_attrs(rta, rtalen, (IFLA_MAX + 1) as usize)? };
 
-                if (*nlh).nlmsg_type != RTM_NEWLINK && (*nlh).nlmsg_type != RTM_DELLINK {
-                    continue;
-                }
+            // fill out some fields of Interface,
+            let mut iface: Interface = Interface::default();
 
-                if (*nlh).nlmsg_len < NLMSG_SPACE!(mem::size_of::<ifinfomsg>()) {
-                    info!(
-                        sl!(),
-                        "invalid nlmsg! nlmsg_len: {}, nlmsg_space: {}",
-                        (*nlh).nlmsg_len,
-                        NLMSG_SPACE!(mem::size_of::<ifinfomsg>())
-                    );
-                    break;
-                }
-
-                let rta: *mut rtattr = IFLA_RTA!(ifi) as *mut rtattr;
-                let rtalen = IFLA_PAYLOAD!(nlh) as u32;
-
-                let attrs = parse_attrs(rta, rtalen, (IFLA_MAX + 1) as usize)?;
-
-                // fill out some fields of Interface,
-                let mut iface: Interface = Interface::default();
-
-                if attrs[IFLA_IFNAME as usize] as i64 != 0 {
+            // Safe because parse_attrs() returns valid pointers.
+            unsafe {
+                if !attrs[IFLA_IFNAME as usize].is_null() {
                     let t = attrs[IFLA_IFNAME as usize];
                     iface.name = String::from_utf8(getattr_var(t as *const rtattr))?;
                 }
 
-                if attrs[IFLA_MTU as usize] as i64 != 0 {
+                if !attrs[IFLA_MTU as usize].is_null() {
                     let t = attrs[IFLA_MTU as usize];
                     iface.mtu = getattr32(t) as u64;
                 }
 
-                if attrs[IFLA_ADDRESS as usize] as i64 != 0 {
+                if !attrs[IFLA_ADDRESS as usize].is_null() {
                     let alen = RTA_PAYLOAD!(attrs[IFLA_ADDRESS as usize]);
                     let a: *const u8 = RTA_DATA!(attrs[IFLA_ADDRESS as usize]) as *const u8;
-                    iface.hwAddr = format_address(a, alen as u32)?;
+                    iface.hwAddr = parser::format_address(a, alen as u32)?;
+                }
+            }
+
+            // get ip address info from av
+            let mut ads: Vec<IPAddress> = Vec::new();
+            for address in &av {
+                // Safe because dump_all_addresses() returns valid pointers.
+                let alh = unsafe { &**address };
+                if alh.nlmsg_type != RTM_NEWADDR {
+                    continue;
                 }
 
-                // get ip address info from av
-                let mut ads: Vec<IPAddress> = Vec::new();
+                let tlen = NLMSG_SPACE!(mem::size_of::<ifaddrmsg>());
+                if alh.nlmsg_len < tlen {
+                    info!(
+                        sl!(),
+                        "invalid nlmsg! nlmsg_len: {}, nlmsg_space: {}", alh.nlmsg_len, tlen
+                    );
+                    break;
+                }
 
-                for address in &av {
-                    let alh: *const nlmsghdr = *address;
-                    let ifa: *const ifaddrmsg = NLMSG_DATA!(alh) as *const ifaddrmsg;
-                    let arta: *mut rtattr = IFA_RTA!(ifa) as *mut rtattr;
+                // Safe becahse we have checked avialable buffer space by NLMSG_SPACE above.
+                let ifa = unsafe { &*(NLMSG_DATA!(alh) as *const ifaddrmsg) };
+                let arta: *mut rtattr = IFA_RTA!(ifa) as *mut rtattr;
+                let artalen = IFA_PAYLOAD!(alh) as u32;
 
-                    if (*alh).nlmsg_type != RTM_NEWADDR {
-                        continue;
+                if ifa.ifa_index as u32 == ifi.ifi_index as u32 {
+                    // found target addresses, parse attributes and fill out Interface
+                    let addrs = unsafe { parse_attrs(arta, artalen, (IFA_MAX + 1) as usize)? };
+
+                    // fill address field of Interface
+                    let mut one: IPAddress = IPAddress::default();
+                    let mut tattr: *const rtattr = addrs[IFA_LOCAL as usize];
+                    if !addrs[IFA_ADDRESS as usize].is_null() {
+                        tattr = addrs[IFA_ADDRESS as usize];
                     }
 
-                    let tlen = NLMSG_SPACE!(mem::size_of::<ifaddrmsg>());
-                    if (*alh).nlmsg_len < tlen {
-                        info!(
-                            sl!(),
-                            "invalid nlmsg! nlmsg_len: {}, nlmsg_space: {}",
-                            (*alh).nlmsg_len,
-                            tlen
-                        );
-                        break;
+                    one.mask = format!("{}", ifa.ifa_prefixlen);
+                    one.family = IPFamily::v4;
+                    if ifa.ifa_family == libc::AF_INET6 as u8 {
+                        one.family = IPFamily::v6;
                     }
 
-                    let artalen = IFA_PAYLOAD!(alh) as u32;
-
-                    if (*ifa).ifa_index as u32 == (*ifi).ifi_index as u32 {
-                        // found target addresses
-                        // parse attributes and fill out Interface
-                        let addrs = parse_attrs(arta, artalen, (IFA_MAX + 1) as usize)?;
-                        // fill address field of Interface
-                        let mut one: IPAddress = IPAddress::default();
-                        let mut tattr: *const rtattr = addrs[IFA_LOCAL as usize];
-                        if addrs[IFA_ADDRESS as usize] as i64 != 0 {
-                            tattr = addrs[IFA_ADDRESS as usize];
-                        }
-
-                        one.mask = format!("{}", (*ifa).ifa_prefixlen);
+                    // Safe because parse_attrs() returns valid pointers.
+                    unsafe {
                         let a: *const u8 = RTA_DATA!(tattr) as *const u8;
                         let alen = RTA_PAYLOAD!(tattr);
-                        one.family = IPFamily::v4;
-
-                        if (*ifa).ifa_family == libc::AF_INET6 as u8 {
-                            one.family = IPFamily::v6;
-                        }
-
-                        // only handle IPv4 for now
-                        // if (*ifa).ifa_family == libc::AF_INET as u8{
-                        one.address = format_address(a, alen as u32)?;
-                        //}
-
-                        ads.push(one);
+                        one.address = parser::format_address(a, alen as u32)?;
                     }
-                }
 
-                iface.IPAddresses = RepeatedField::from_vec(ads);
-                ifaces.push(iface);
+                    ads.push(one);
+                }
             }
+
+            iface.IPAddresses = RepeatedField::from_vec(ads);
+            ifaces.push(iface);
         }
 
         Ok(ifaces)
@@ -270,67 +252,63 @@ impl super::RtnlHandle {
         // attribute in dump request
         // Fix Me: think about othe tables, ipv6..
         let mut rs: Vec<Route> = Vec::new();
+        let (_srv, rv) = self.dump_all_routes()?;
 
-        unsafe {
-            let (_srv, rv) = self.dump_all_route_msgs()?;
+        // parse out routes and store in rs
+        for r in &rv {
+            // Safe because dump_all_routes() returns valid pointers.
+            let nlh = unsafe { &**r };
+            if nlh.nlmsg_type != RTM_NEWROUTE && nlh.nlmsg_type != RTM_DELROUTE {
+                info!(sl!(), "not route message!");
+                continue;
+            }
+            let tlen = NLMSG_SPACE!(mem::size_of::<rtmsg>());
+            if nlh.nlmsg_len < tlen {
+                info!(
+                    sl!(),
+                    "invalid nlmsg! nlmsg_len: {}, nlmsg_spae: {}", nlh.nlmsg_len, tlen
+                );
+                break;
+            }
 
-            // parse out routes and store in rs
-            for r in &rv {
-                let nlh: *const nlmsghdr = *r;
-                let rtm: *const rtmsg = NLMSG_DATA!(nlh) as *const rtmsg;
+            // Safe because we have just validated available buffer space above.
+            let rtm = unsafe { &mut *(NLMSG_DATA!(nlh) as *mut rtmsg) };
+            if rtm.rtm_table != RT_TABLE_MAIN as u8 {
+                continue;
+            }
+            let rta: *mut rtattr = RTM_RTA!(rtm) as *mut rtattr;
+            let rtalen = RTM_PAYLOAD!(nlh) as u32;
+            let attrs = unsafe { parse_attrs(rta, rtalen, (RTA_MAX + 1) as usize)? };
 
-                if (*nlh).nlmsg_type != RTM_NEWROUTE && (*nlh).nlmsg_type != RTM_DELROUTE {
-                    info!(sl!(), "not route message!");
+            let t = attrs[RTA_TABLE as usize];
+            if !t.is_null() {
+                // Safe because parse_attrs() returns valid pointers
+                let table = unsafe { getattr32(t) };
+                if table != RT_TABLE_MAIN {
                     continue;
                 }
+            }
 
-                let tlen = NLMSG_SPACE!(mem::size_of::<rtmsg>());
-                if (*nlh).nlmsg_len < tlen {
-                    info!(
-                        sl!(),
-                        "invalid nlmsg! nlmsg_len: {}, nlmsg_spae: {}",
-                        (*nlh).nlmsg_len,
-                        tlen
-                    );
-                    break;
-                }
+            // find source, destination, gateway, scope, and and device name
+            let mut t = attrs[RTA_DST as usize];
+            let mut rte: Route = Route::default();
 
-                let rta: *mut rtattr = RTM_RTA!(rtm) as *mut rtattr;
-
-                if (*rtm).rtm_table != RT_TABLE_MAIN as u8 {
-                    continue;
-                }
-
-                let rtalen = RTM_PAYLOAD!(nlh) as u32;
-
-                let attrs = parse_attrs(rta, rtalen, (RTA_MAX + 1) as usize)?;
-
-                let t = attrs[RTA_TABLE as usize];
-                if t as i64 != 0 {
-                    let table = getattr32(t);
-                    if table != RT_TABLE_MAIN {
-                        continue;
-                    }
-                }
-                // find source, destination, gateway, scope, and
-                // and device name
-
-                let mut t = attrs[RTA_DST as usize];
-                let mut rte: Route = Route::default();
-
+            // Safe because parse_attrs() returns valid pointers
+            unsafe {
                 // destination
-                if t as i64 != 0 {
+                if !t.is_null() {
                     let data: *const u8 = RTA_DATA!(t) as *const u8;
                     let len = RTA_PAYLOAD!(t) as u32;
-                    rte.dest = format!("{}/{}", format_address(data, len)?, (*rtm).rtm_dst_len);
+                    rte.dest =
+                        format!("{}/{}", parser::format_address(data, len)?, rtm.rtm_dst_len);
                 }
 
                 // gateway
                 t = attrs[RTA_GATEWAY as usize];
-                if t as i64 != 0 {
+                if !t.is_null() {
                     let data: *const u8 = RTA_DATA!(t) as *const u8;
                     let len = RTA_PAYLOAD!(t) as u32;
-                    rte.gateway = format_address(data, len)?;
+                    rte.gateway = parser::format_address(data, len)?;
 
                     // for gateway, destination is 0.0.0.0
                     rte.dest = "0.0.0.0".to_string();
@@ -338,53 +316,35 @@ impl super::RtnlHandle {
 
                 // source
                 t = attrs[RTA_SRC as usize];
-
-                if t as i64 == 0 {
+                if t.is_null() {
                     t = attrs[RTA_PREFSRC as usize];
                 }
-
-                if t as i64 != 0 {
+                if !t.is_null() {
                     let data: *const u8 = RTA_DATA!(t) as *const u8;
                     let len = RTA_PAYLOAD!(t) as u32;
+                    rte.source = parser::format_address(data, len)?;
 
-                    rte.source = format_address(data, len)?;
-
-                    if (*rtm).rtm_src_len != 0 {
-                        rte.source = format!("{}/{}", rte.source.as_str(), (*rtm).rtm_src_len);
+                    if rtm.rtm_src_len != 0 {
+                        rte.source = format!("{}/{}", rte.source.as_str(), rtm.rtm_src_len);
                     }
                 }
 
                 // scope
-                rte.scope = (*rtm).rtm_scope as u32;
+                rte.scope = rtm.rtm_scope as u32;
 
                 // oif
                 t = attrs[RTA_OIF as usize];
-                if t as i64 != 0 {
-                    let data: *const i32 = RTA_DATA!(t) as *const i32;
+                if !t.is_null() {
+                    let data = &*(RTA_DATA!(t) as *const i32);
                     assert_eq!(RTA_PAYLOAD!(t), 4);
-
-                    /*
-
-                    let mut n: Vec<u8> = vec![0; libc::IF_NAMESIZE];
-                    let np: *mut libc::c_char = n.as_mut_ptr() as *mut libc::c_char;
-                    let tn = libc::if_indextoname(*data as u32,
-                        np);
-
-                    if tn as i64 == 0 {
-                        info!(sl!(), "no name?");
-                    } else {
-                        info!(sl!(), "name(indextoname): {}", String::from_utf8(n)?);
-                    }
-                    // std::process::exit(-1);
-                    */
 
                     rte.device = self
                         .get_name_by_index(*data)
                         .unwrap_or("unknown".to_string());
                 }
-
-                rs.push(rte);
             }
+
+            rs.push(rte);
         }
 
         Ok(rs)
@@ -399,59 +359,56 @@ impl super::RtnlHandle {
     }
 
     pub fn add_one_arp_neighbor(&mut self, neigh: &ARPNeighbor) -> Result<()> {
-        if neigh.toIPAddress.is_none() {
-            return nix_errno(Errno::EINVAL);
-        }
-        let to_ip = &neigh.toIPAddress.as_ref().unwrap().address;
-        if to_ip.is_empty() {
-            return nix_errno(Errno::EINVAL);
-        }
+        let to_ip = match neigh.toIPAddress.as_ref() {
+            None => return nix_errno(Errno::EINVAL),
+            Some(v) => {
+                if v.address.is_empty() {
+                    return nix_errno(Errno::EINVAL);
+                }
+                v.address.as_ref()
+            }
+        };
 
         let dev = self.find_link_by_name(&neigh.device)?;
 
-        let mut v: Vec<u8> = vec![0; 2048];
-        unsafe {
-            // init
-            let mut nlh: *mut nlmsghdr = v.as_mut_ptr() as *mut nlmsghdr;
-            let mut ndm: *mut ndmsg = NLMSG_DATA!(nlh) as *mut ndmsg;
+        let mut v: Vec<u8> = vec![0; DEFAULT_NETLINK_BUF_SIZE];
+        // Safe because we have allocated enough buffer space.
+        let nlh = unsafe { &mut *(v.as_mut_ptr() as *mut nlmsghdr) };
+        let ndm = unsafe { &mut *(NLMSG_DATA!(nlh) as *mut ndmsg) };
 
-            (*nlh).nlmsg_len = NLMSG_LENGTH!(std::mem::size_of::<ndmsg>()) as u32;
-            (*nlh).nlmsg_type = RTM_NEWNEIGH;
-            (*nlh).nlmsg_flags = NLM_F_REQUEST | NLM_F_CREATE | NLM_F_EXCL;
+        nlh.nlmsg_len = NLMSG_LENGTH!(std::mem::size_of::<ndmsg>()) as u32;
+        nlh.nlmsg_type = RTM_NEWNEIGH;
+        nlh.nlmsg_flags = NLM_F_REQUEST | NLM_F_CREATE | NLM_F_EXCL;
+        self.assign_seqnum(nlh);
 
-            self.seq += 1;
-            self.dump = self.seq;
-            (*nlh).nlmsg_seq = self.seq;
+        ndm.ndm_family = libc::AF_UNSPEC as __u8;
+        ndm.ndm_state = IFA_F_PERMANENT as __u16;
+        // process lladdr
+        if neigh.lladdr != "" {
+            let llabuf = parser::parse_mac_addr(&neigh.lladdr)?;
 
-            (*ndm).ndm_family = libc::AF_UNSPEC as __u8;
-            (*ndm).ndm_state = IFA_F_PERMANENT as __u16;
-
-            // process lladdr
-            if neigh.lladdr != "" {
-                let llabuf = parse_mac_addr(&neigh.lladdr)?;
-
-                addattr_var(nlh, NDA_LLADDR, llabuf.as_ptr() as *const u8, llabuf.len());
-            }
-
-            // process destination
-            let (family, ip_data) = parse_addr(&to_ip)?;
-            (*ndm).ndm_family = family;
-            addattr_var(nlh, NDA_DST, ip_data.as_ptr() as *const u8, ip_data.len());
-
-            // process state
-            if neigh.state != 0 {
-                (*ndm).ndm_state = neigh.state as __u16;
-            }
-
-            // process flags
-            (*ndm).ndm_flags = (*ndm).ndm_flags | neigh.flags as __u8;
-
-            // process dev
-            (*ndm).ndm_ifindex = dev.ifi_index;
-
-            // send
-            self.rtnl_talk(v.as_mut_slice(), false)?;
+            // Safe because we have allocated enough buffer space.
+            unsafe { nlh.addattr_var(NDA_LLADDR, llabuf.as_ptr() as *const u8, llabuf.len()) };
         }
+
+        let (family, ip_data) = parser::parse_ip_addr_with_family(&to_ip)?;
+        ndm.ndm_family = family;
+        // Safe because we have allocated enough buffer space.
+        unsafe { nlh.addattr_var(NDA_DST, ip_data.as_ptr() as *const u8, ip_data.len()) };
+
+        // process state
+        if neigh.state != 0 {
+            ndm.ndm_state = neigh.state as __u16;
+        }
+
+        // process flags
+        ndm.ndm_flags = (*ndm).ndm_flags | neigh.flags as __u8;
+
+        // process dev
+        ndm.ndm_ifindex = dev.ifi_index;
+
+        // send
+        self.rtnl_talk(v.as_mut_slice(), false)?;
 
         Ok(())
     }
@@ -465,9 +422,8 @@ impl From<IPAddress> for RtIPAddr {
             libc::AF_INET6
         } as __u8;
 
-        let ip_mask = scan_fmt!(ipi.mask.as_str(), "{}", u8).unwrap();
-
-        let addr = parse_ipaddr(ipi.address.as_ref()).unwrap();
+        let ip_mask = parser::parse_u8(ipi.mask.as_str(), 10).unwrap();
+        let addr = parser::parse_ip_addr(ipi.address.as_ref()).unwrap();
 
         Self {
             ip_family,
@@ -492,21 +448,21 @@ impl From<Route> for RtRoute {
         let (dest, dst_len) = if r.dest.is_empty() {
             (Some(vec![0 as u8; 4]), 0)
         } else {
-            let (dst, mask) = parse_cider(r.dest.as_str()).unwrap();
+            let (dst, mask) = parser::parse_cidr(r.dest.as_str()).unwrap();
             (Some(dst), mask)
         };
 
         let (source, src_len) = if r.source.is_empty() {
             (None, 0)
         } else {
-            let (src, mask) = parse_cider(r.source.as_str()).unwrap();
+            let (src, mask) = parser::parse_cidr(r.source.as_str()).unwrap();
             (Some(src), mask)
         };
 
         let gateway = if r.gateway.is_empty() {
             None
         } else {
-            Some(parse_ipaddr(r.gateway.as_str()).unwrap())
+            Some(parser::parse_ip_addr(r.gateway.as_str()).unwrap())
         };
 
         /*
@@ -618,4 +574,3 @@ mod tests {
         clean_env_for_test_add_one_arp_neighbor(dummy_name, to_ip);
     }
 }
-//>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
