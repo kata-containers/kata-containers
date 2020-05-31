@@ -104,11 +104,11 @@ pub unsafe fn format_address(addr: *const u8, len: u32) -> Result<String> {
         let mut i = 1;
         let mut p = addr as i64;
 
-        a = format!("{:0<2X}", *(p as *const u8));
+        a = format!("{:0>2X}", *(p as *const u8));
         while i < len {
             p += 1;
             i += 1;
-            a.push_str(format!(":{:0<2X}", *(p as *const u8)).as_str());
+            a.push_str(format!(":{:0>2X}", *(p as *const u8)).as_str());
         }
 
         return Ok(a);
@@ -188,7 +188,6 @@ mod tests {
         parse_mac_addr("FF:FF:FF:FF:FF").unwrap_err();
     }
 
-    /*
     #[test]
     fn test_format_address() {
         let buf = [1u8, 2u8, 3u8, 4u8];
@@ -199,5 +198,4 @@ mod tests {
         let addr = unsafe { format_address(&buf as *const u8, 6).unwrap() };
         assert_eq!(addr, "01:02:03:04:05:06");
     }
-     */
 }
