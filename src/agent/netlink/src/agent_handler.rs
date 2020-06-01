@@ -72,11 +72,7 @@ impl super::RtnlHandle {
 
             // if str is null terminated, use addattr_var.
             // otherwise, use addattr_str
-            nlh.addattr_var(
-                IFLA_IFNAME,
-                iface.name.as_ptr() as *const u8,
-                iface.name.len(),
-            );
+            nlh.addattr_var(IFLA_IFNAME, iface.name.as_ref());
         }
 
         self.rtnl_talk(v.as_mut_slice(), false)?;
@@ -192,10 +188,11 @@ impl super::RtnlHandle {
 
                     // fill address field of Interface
                     let mut one: IPAddress = IPAddress::default();
-                    let mut tattr: *const rtattr = addrs[IFA_LOCAL as usize];
-                    if !addrs[IFA_ADDRESS as usize].is_null() {
-                        tattr = addrs[IFA_ADDRESS as usize];
-                    }
+                    let tattr: *const rtattr = if !addrs[IFA_ADDRESS as usize].is_null() {
+                        addrs[IFA_ADDRESS as usize]
+                    } else {
+                        addrs[IFA_LOCAL as usize]
+                    };
 
                     one.mask = format!("{}", ifa.ifa_prefixlen);
                     one.family = IPFamily::v4;
@@ -221,7 +218,7 @@ impl super::RtnlHandle {
         Ok(ifaces)
     }
 
-    pub fn update_routes(&mut self, rt: &Vec<Route>) -> Result<Vec<Route>> {
+    pub fn update_routes(&mut self, rt: &[Route]) -> Result<Vec<Route>> {
         let rs = self.get_all_routes()?;
         self.delete_all_routes(&rs)?;
 
@@ -245,7 +242,7 @@ impl super::RtnlHandle {
             }
         }
 
-        Ok(rt.clone())
+        Ok(rt.to_owned())
     }
 
     pub fn list_routes(&mut self) -> Result<Vec<Route>> {
@@ -342,7 +339,7 @@ impl super::RtnlHandle {
 
                     rte.device = self
                         .get_name_by_index(*data)
-                        .unwrap_or("unknown".to_string());
+                        .unwrap_or_else(|_| "unknown".to_string());
                 }
             }
 
@@ -352,7 +349,7 @@ impl super::RtnlHandle {
         Ok(rs)
     }
 
-    pub fn add_arp_neighbors(&mut self, neighs: &Vec<ARPNeighbor>) -> Result<()> {
+    pub fn add_arp_neighbors(&mut self, neighs: &[ARPNeighbor]) -> Result<()> {
         for neigh in neighs {
             self.add_one_arp_neighbor(&neigh)?;
         }
@@ -390,13 +387,13 @@ impl super::RtnlHandle {
             let llabuf = parser::parse_mac_addr(&neigh.lladdr)?;
 
             // Safe because we have allocated enough buffer space.
-            unsafe { nlh.addattr_var(NDA_LLADDR, llabuf.as_ptr() as *const u8, llabuf.len()) };
+            unsafe { nlh.addattr_var(NDA_LLADDR, llabuf.as_ref()) };
         }
 
         let (family, ip_data) = parser::parse_ip_addr_with_family(&to_ip)?;
         ndm.ndm_family = family;
         // Safe because we have allocated enough buffer space.
-        unsafe { nlh.addattr_var(NDA_DST, ip_data.as_ptr() as *const u8, ip_data.len()) };
+        unsafe { nlh.addattr_var(NDA_DST, ip_data.as_ref()) };
 
         // process state
         if neigh.state != 0 {
@@ -470,14 +467,6 @@ impl TryFrom<Route> for RtRoute {
         } else {
             Some(parser::parse_ip_addr(r.gateway.as_str())?)
         };
-
-        /*
-                let (dest, dst_len) = if gateway.is_some() {
-                    (vec![0 as u8; 4], 0)
-                } else {
-                    (tdest, tdst_len)
-                };
-        */
 
         Ok(Self {
             dest,

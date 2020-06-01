@@ -37,12 +37,12 @@ pub fn parse_ip_addr_with_family(ip_address: &str) -> Result<(__u8, Vec<u8>)> {
     if let Ok(v6) = Ipv6Addr::from_str(ip_address) {
         Ok((libc::AF_INET6 as __u8, Vec::from(v6.octets().as_ref())))
     } else {
-        parse_ipv4_addr(ip_address).map(|v| ((libc::AF_INET as __u8, v)))
+        parse_ipv4_addr(ip_address).map(|v| (libc::AF_INET as __u8, v))
     }
 }
 
 pub fn parse_ipv4_cidr(s: &str) -> Result<(Vec<u8>, u8)> {
-    let fields: Vec<&str> = s.split("/").collect();
+    let fields: Vec<&str> = s.split('/').collect();
 
     if fields.len() != 2 {
         nix_errno(Errno::EINVAL)
@@ -52,7 +52,7 @@ pub fn parse_ipv4_cidr(s: &str) -> Result<(Vec<u8>, u8)> {
 }
 
 pub fn parse_cidr(s: &str) -> Result<(Vec<u8>, u8)> {
-    let fields: Vec<&str> = s.split("/").collect();
+    let fields: Vec<&str> = s.split('/').collect();
 
     if fields.len() != 2 {
         nix_errno(Errno::EINVAL)
@@ -62,7 +62,7 @@ pub fn parse_cidr(s: &str) -> Result<(Vec<u8>, u8)> {
 }
 
 pub fn parse_mac_addr(hwaddr: &str) -> Result<Vec<u8>> {
-    let fields: Vec<&str> = hwaddr.split(":").collect();
+    let fields: Vec<&str> = hwaddr.split(':').collect();
 
     if fields.len() != 6 {
         nix_errno(Errno::EINVAL)
@@ -80,8 +80,8 @@ pub fn parse_mac_addr(hwaddr: &str) -> Result<Vec<u8>> {
 
 /// Format an IPv4/IPv6/MAC address.
 ///
-/// Safety:
-/// Caller needs to ensure addr and len are valid.
+/// # Safety
+/// Caller needs to ensure that addr and len are valid.
 pub unsafe fn format_address(addr: *const u8, len: u32) -> Result<String> {
     let mut a: String;
     if len == 4 {
