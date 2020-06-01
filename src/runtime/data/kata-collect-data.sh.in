@@ -184,7 +184,7 @@ show_runtime_configs()
 	local configs config
 
 	heading "Runtime config files"
-	
+
 	configs=$($runtime --@PROJECT_TYPE@-show-default-config-paths)
 	if [ $? -ne 0 ]; then
 		version=$($runtime --version|tr '\n' ' ')
@@ -624,7 +624,7 @@ show_image_details()
 {
 	local image
 	local details
-	
+
 	image=$(get_image_file)
 
 	heading "Image details"
@@ -646,7 +646,7 @@ show_initrd_details()
 {
 	local initrd
 	local details
-	
+
 	initrd=$(get_initrd_file)
 
 	heading "Initrd details"
