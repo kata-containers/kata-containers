@@ -83,7 +83,7 @@ func create(ctx context.Context, s *service, r *taskAPI.CreateTaskRequest) (*con
 		// ctx will be canceled after this rpc service call, but the sandbox will live
 		// across multiple rpc service calls.
 		//
-		sandbox, _, err := katautils.CreateSandbox(s.ctx, vci, *ociSpec, *s.config, rootFs, r.ID, bundlePath, "", disableOutput, false, true)
+		sandbox, _, err := katautils.CreateSandbox(s.ctx, vci, *ociSpec, *s.config, rootFs, r.ID, bundlePath, "", disableOutput, false)
 		if err != nil {
 			return nil, err
 		}
@@ -107,7 +107,7 @@ func create(ctx context.Context, s *service, r *taskAPI.CreateTaskRequest) (*con
 			}
 		}()
 
-		_, err = katautils.CreateContainer(ctx, vci, s.sandbox, *ociSpec, rootFs, r.ID, bundlePath, "", disableOutput, true)
+		_, err = katautils.CreateContainer(ctx, s.sandbox, *ociSpec, rootFs, r.ID, bundlePath, "", disableOutput)
 		if err != nil {
 			return nil, err
 		}

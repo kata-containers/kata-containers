@@ -6,6 +6,7 @@
 package vcmock
 
 import (
+	"fmt"
 	"io"
 	"syscall"
 
@@ -95,7 +96,10 @@ func (s *Sandbox) Delete() error {
 
 // CreateContainer implements the VCSandbox function of the same name.
 func (s *Sandbox) CreateContainer(conf vc.ContainerConfig) (vc.VCContainer, error) {
-	return &Container{}, nil
+	if s.CreateContainerFunc != nil {
+		return s.CreateContainerFunc(conf)
+	}
+	return nil, fmt.Errorf("%s: %s (%+v): sandboxID: %v, containerConfig: %v", mockErrorPrefix, getSelf(), s, s.MockID, conf)
 }
 
 // DeleteContainer implements the VCSandbox function of the same name.
