@@ -11,6 +11,18 @@
 //! - all fields have been correctly aligned
 
 #![allow(non_camel_case_types)]
+// NOTE!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+// By default, there are many warnings for incorrect alignment like:
+//      casting from `*mut u8` to a more-strictly-aligned pointer (`*mut nlmsghdr`) (1 < 4 bytes)
+//
+// The root cause is that we use a Vec<u8> buffer to receive netlink message from the kernel.
+// The data buffer for a Vec<u8> may be 1-byte aligned, which doesn't match the alignment
+// requirement for netlink message fields. The reason it works without failure now is that
+// rust memory allocation is 16-byte aligned by default.
+//
+// But please do pay attention here, it's no guarantee that it will be 16-byte aligned, just works
+// in this way. For safety, we should use something like the FamStruct from the vmm-sys-util crate.
+#![allow(clippy::cast_ptr_alignment)]
 
 extern crate libc;
 extern crate nix;
@@ -28,6 +40,7 @@ extern crate slog_scope;
 
 use nix::errno::Errno;
 use std::borrow::Borrow;
+use std::ffi::CString;
 use std::fmt;
 use std::mem;
 use std::os::unix::io::RawFd;
@@ -246,7 +259,7 @@ pub const RT_TABLE_COMPAT: libc::c_uint = 252;
 pub const RT_TABLE_DEFAULT: libc::c_uint = 253;
 pub const RT_TABLE_MAIN: libc::c_uint = 254;
 pub const RT_TABLE_LOCAL: libc::c_uint = 255;
-pub const RT_TABLE_MAX: libc::c_uint = 0xffffffff;
+pub const RT_TABLE_MAX: libc::c_uint = 0xffff_ffff;
 
 // rat_type c_ushort
 pub const RTA_UNSPEC: libc::c_ushort = 0;
@@ -456,10 +469,10 @@ pub const RTAX_FASTOPEN_NO_COOKIE: libc::c_ushort = 17;
 pub const __RTAX_MAX: libc::c_ushort = 18;
 
 pub const RTAX_MAX: libc::c_ushort = __RTAX_MAX - 1;
-pub const RTAX_FEATURE_ECN: libc::c_ushort = 1 << 0;
-pub const RTAX_FEATURE_SACK: libc::c_ushort = 1 << 1;
-pub const RTAX_FEATURE_TIMESTAMP: libc::c_ushort = 1 << 2;
-pub const RTAX_FEATURE_ALLFRAG: libc::c_ushort = 1 << 3;
+pub const RTAX_FEATURE_ECN: libc::c_ushort = 0x1;
+pub const RTAX_FEATURE_SACK: libc::c_ushort = 0x2;
+pub const RTAX_FEATURE_TIMESTAMP: libc::c_ushort = 0x4;
+pub const RTAX_FEATURE_ALLFRAG: libc::c_ushort = 0x8;
 pub const RTAX_FEATURE_MASK: libc::c_ushort =
     RTAX_FEATURE_ECN | RTAX_FEATURE_SACK | RTAX_FEATURE_TIMESTAMP | RTAX_FEATURE_ALLFRAG;
 
@@ -1005,10 +1018,10 @@ pub const NLMSG_OVERRUN: __u16 = 0x4;
 pub const NLMSG_MIN_TYPE: __u16 = 0x10;
 
 // IFLA_EXT_MASK
-pub const RTEXT_FILTER_VF: __u32 = 1 << 0;
-pub const RTEXT_FILTER_BRVLAN: __u32 = 1 << 1;
-pub const RTEXT_FILTER_BRVLAN_COMPRESSED: __u32 = 1 << 2;
-pub const RTEXT_FILTER_SKIP_STATS: __u32 = 1 << 3;
+pub const RTEXT_FILTER_VF: __u32 = 0x1;
+pub const RTEXT_FILTER_BRVLAN: __u32 = 0x2;
+pub const RTEXT_FILTER_BRVLAN_COMPRESSED: __u32 = 0x4;
+pub const RTEXT_FILTER_SKIP_STATS: __u32 = 0x8;
 
 // IFLA attr
 pub const IFLA_UNSPEC: __u16 = 0;
@@ -1302,7 +1315,7 @@ impl RtnlHandle {
         Ok(Self {
             fd,
             local: sa,
-            seq: unsafe { libc::time(0 as *mut libc::time_t) } as __u32,
+            seq: unsafe { libc::time(std::ptr::null_mut::<libc::time_t>()) } as __u32,
             dump: 0,
         })
     }
@@ -1412,7 +1425,7 @@ impl RtnlHandle {
         let mut sa: libc::sockaddr_nl = unsafe { mem::zeroed::<libc::sockaddr_nl>() };
         let mut h = unsafe { mem::zeroed::<libc::msghdr>() };
         let mut iov = libc::iovec {
-            iov_base: 0 as *mut libc::c_void,
+            iov_base: std::ptr::null_mut::<libc::c_void>(),
             iov_len: 0 as libc::size_t,
         };
 
@@ -1649,7 +1662,11 @@ impl RtnlHandle {
 
         // Safe because the data buffer should be big enough.
         unsafe {
-            nlh.addattr_var(IFLA_IFNAME, name.as_ptr() as *const u8, name.len() + 1);
+            if let Ok(cname) = CString::new(name.as_bytes()) {
+                nlh.addattr_var(IFLA_IFNAME, cname.as_bytes());
+            } else {
+                return nix_errno(Errno::EINVAL);
+            }
             nlh.addattr32(IFLA_EXT_MASK, RTEXT_FILTER_VF | RTEXT_FILTER_SKIP_STATS);
         }
 
@@ -1761,11 +1778,7 @@ impl RtnlHandle {
 
         // Safe because we have allocated a big enough data buffer.
         unsafe {
-            nlh.addattr_var(
-                IFA_ADDRESS,
-                addr.addr.as_ptr() as *const u8,
-                addr.addr.len(),
-            );
+            nlh.addattr_var(IFA_ADDRESS, addr.addr.as_ref());
         }
 
         // ignore EADDRNOTAVAIL here..
@@ -1774,7 +1787,7 @@ impl RtnlHandle {
         Ok(())
     }
 
-    pub fn delete_all_addrs(&mut self, ifinfo: &ifinfomsg, addrs: &Vec<RtIPAddr>) -> Result<()> {
+    pub fn delete_all_addrs(&mut self, ifinfo: &ifinfomsg, addrs: &[RtIPAddr]) -> Result<()> {
         for a in addrs {
             self.delete_one_addr(ifinfo, a)?;
         }
@@ -1799,9 +1812,9 @@ impl RtnlHandle {
 
         // Safe because we have allocated a big enough data buffer.
         unsafe {
-            nlh.addattr_var(IFA_ADDRESS, ip.addr.as_ptr() as *const u8, ip.addr.len());
+            nlh.addattr_var(IFA_ADDRESS, ip.addr.as_ref());
             // don't know why need IFA_LOCAL, without it kernel returns -EINVAL...
-            nlh.addattr_var(IFA_LOCAL, ip.addr.as_ptr() as *const u8, ip.addr.len());
+            nlh.addattr_var(IFA_LOCAL, ip.addr.as_ref());
         }
 
         self.rtnl_talk(v.as_mut_slice(), false)?;
@@ -1950,7 +1963,7 @@ impl RtnlHandle {
         Ok(rs)
     }
 
-    pub fn delete_all_routes(&mut self, rs: &Vec<RtRoute>) -> Result<()> {
+    pub fn delete_all_routes(&mut self, rs: &[RtRoute]) -> Result<()> {
         for r in rs {
             let name = self.get_name_by_index(r.index)?;
             if name.as_str().contains("lo") || name.as_str().contains("::1") {
@@ -1991,22 +2004,19 @@ impl RtnlHandle {
 
         unsafe {
             if let Some(source) = r.source.as_ref() {
-                let len = source.len();
                 if r.src_len > 0 {
-                    nlh.addattr_var(RTA_SRC, source.as_ptr() as *const u8, len);
+                    nlh.addattr_var(RTA_SRC, source.as_ref());
                 } else {
-                    nlh.addattr_var(RTA_PREFSRC, source.as_ptr() as *const u8, len);
+                    nlh.addattr_var(RTA_PREFSRC, source.as_ref());
                 }
             }
 
             if let Some(dest) = r.dest.as_ref() {
-                let len = dest.len();
-                nlh.addattr_var(RTA_DST, dest.as_ptr() as *const u8, len);
+                nlh.addattr_var(RTA_DST, dest.as_ref());
             }
 
             if let Some(gateway) = r.gateway.as_ref() {
-                let len = gateway.len();
-                nlh.addattr_var(RTA_GATEWAY, gateway.as_ptr() as *const u8, len);
+                nlh.addattr_var(RTA_GATEWAY, gateway.as_ref());
             }
 
             nlh.addattr32(RTA_OIF, r.index as u32);
@@ -2040,22 +2050,19 @@ impl RtnlHandle {
         // Safe because we have allocated a big enough data buffer.
         unsafe {
             if let Some(source) = r.source.as_ref() {
-                let len = source.len();
                 if r.src_len > 0 {
-                    nlh.addattr_var(RTA_SRC, source.as_ptr() as *const u8, len);
+                    nlh.addattr_var(RTA_SRC, source.as_ref());
                 } else {
-                    nlh.addattr_var(RTA_PREFSRC, source.as_ptr() as *const u8, len);
+                    nlh.addattr_var(RTA_PREFSRC, source.as_ref());
                 }
             }
 
             if let Some(dest) = r.dest.as_ref() {
-                let len = dest.len();
-                nlh.addattr_var(RTA_DST, dest.as_ptr() as *const u8, len);
+                nlh.addattr_var(RTA_DST, dest.as_ref());
             }
 
             if let Some(gateway) = r.gateway.as_ref() {
-                let len = gateway.len();
-                nlh.addattr_var(RTA_GATEWAY, gateway.as_ptr() as *const u8, len);
+                nlh.addattr_var(RTA_GATEWAY, gateway.as_ref());
             }
 
             nlh.addattr32(RTA_OIF, r.index as u32);
@@ -2092,8 +2099,8 @@ impl Drop for RtnlHandle {
 
 /// Parse netlink attributes from raw buffer.
 ///
-/// Safety:
-/// Caller needs to ensure rta and rtalen are valid.
+/// # Safety
+/// Caller needs to ensure that rta and rtalen are valid.
 pub unsafe fn parse_attrs(
     mut rta: *const rtattr,
     mut rtalen: u32,
@@ -2115,24 +2122,32 @@ pub unsafe fn parse_attrs(
 }
 
 impl nlmsghdr {
-    pub unsafe fn addattr_var(&mut self, cat: u16, data: *const u8, len: usize) {
+    /// Add an variable attribute to the netlink message.
+    ///
+    /// # Safety
+    /// Caller needs to ensure that there are enough space after `self` to store the attribute.
+    pub unsafe fn addattr_var(&mut self, cat: u16, data: &[u8]) {
         let mut rta: *mut rtattr = NLMSG_TAIL!(self) as *mut rtattr;
-        let alen = RTA_LENGTH!(len) as u16;
+        let alen = RTA_LENGTH!(data.len()) as u16;
 
         (*rta).rta_type = cat;
         (*rta).rta_len = alen;
 
-        if len > 0 {
+        if !data.is_empty() {
             libc::memcpy(
                 RTA_DATA!(rta) as *mut libc::c_void,
-                data as *const libc::c_void,
-                len,
+                data.as_ptr() as *const libc::c_void,
+                data.len(),
             );
         }
 
         self.nlmsg_len = NLMSG_ALIGN!(self.nlmsg_len) + RTA_ALIGN!(alen);
     }
 
+    /// Add a string attribute to the netlink message.
+    ///
+    /// # Safety
+    /// Caller needs to ensure that there are enough space after `self` to store the attribute.
     pub unsafe fn addattr_str(&mut self, cat: u16, data: &str) {
         let mut rta: *mut rtattr = NLMSG_TAIL!(self) as *mut rtattr;
         let len = data.len();
@@ -2151,6 +2166,10 @@ impl nlmsghdr {
         self.nlmsg_len = NLMSG_ALIGN!(self.nlmsg_len) + RTA_ALIGN!(alen);
     }
 
+    /// Add an 1/2/4/8 bytes attribute to the netlink message.
+    ///
+    /// # Safety
+    /// Caller needs to ensure that there are enough space after `self` to store the attribute.
     pub unsafe fn addattr_size(&mut self, cat: u16, val: u64, size: u8) {
         assert_eq!(size == 1 || size == 2 || size == 4 || size == 8, true);
 
@@ -2190,32 +2209,32 @@ impl nlmsghdr {
 
     /// Add a 8-bit attribute.
     ///
-    /// Safety:
-    /// Caller needs to ensure there's enough space to store the attribute.
+    /// # Safety
+    /// Caller needs to ensure that there are enough space after `self` to store the attribute.
     pub unsafe fn addattr8(&mut self, cat: u16, val: u8) {
         self.addattr_size(cat, val as u64, 1);
     }
 
     /// Add a 16-bit attribute.
     ///
-    /// Safety:
-    /// Caller needs to ensure there's enough space to store the attribute.
+    /// # Safety
+    /// Caller needs to ensure that there are enough space after `self` to store the attribute.
     pub unsafe fn addattr16(&mut self, cat: u16, val: u16) {
         self.addattr_size(cat, val as u64, 2);
     }
 
     /// Add a 32-bit attribute.
     ///
-    /// Safety:
-    /// Caller needs to ensure there's enough space to store the attribute.
+    /// # Safety
+    /// Caller needs to ensure that there are enough space after `self` to store the attribute.
     pub unsafe fn addattr32(&mut self, cat: u16, val: u32) {
         self.addattr_size(cat, val as u64, 4);
     }
 
     /// Add a 64-bit attribute.
     ///
-    /// Safety:
-    /// Caller needs to ensure there's enough space to store the attribute.
+    /// # Safety
+    /// Caller needs to ensure that there are enough space after `self` to store the attribute.
     pub unsafe fn addattr64(&mut self, cat: u16, val: u64) {
         self.addattr_size(cat, val, 8);
     }
@@ -2249,30 +2268,50 @@ unsafe fn getattr_size(rta: *const rtattr) -> u64 {
     panic!("impossible!");
 }
 
+/// Get a 8-bit attribute.
+///
+/// # Safety
+/// Caller needs to ensure that there are enough space after `rta` to read the attribute.
 pub unsafe fn getattr8(rta: *const rtattr) -> u8 {
     let alen = RTA_PAYLOAD!(rta);
-    assert!(alen == 1);
+    assert_eq!(alen, 1);
     getattr_size(rta) as u8
 }
 
+/// Get a 16-bit attribute.
+///
+/// # Safety
+/// Caller needs to ensure that there are enough space after `rta` to read the attribute.
 pub unsafe fn getattr16(rta: *const rtattr) -> u16 {
     let alen = RTA_PAYLOAD!(rta);
-    assert!(alen == 2);
+    assert_eq!(alen, 2);
     getattr_size(rta) as u16
 }
 
+/// Get a 32-bit attribute.
+///
+/// # Safety
+/// Caller needs to ensure that there are enough space after `rta` to read the attribute.
 pub unsafe fn getattr32(rta: *const rtattr) -> u32 {
     let alen = RTA_PAYLOAD!(rta);
-    assert!(alen == 4);
+    assert_eq!(alen, 4);
     getattr_size(rta) as u32
 }
 
+/// Get a 64-bit attribute.
+///
+/// # Safety
+/// Caller needs to ensure that there are enough space after `rta` to read the attribute.
 pub unsafe fn getattr64(rta: *const rtattr) -> u64 {
     let alen = RTA_PAYLOAD!(rta);
-    assert!(alen == 8);
+    assert_eq!(alen, 8);
     getattr_size(rta)
 }
 
+/// Get a variable length attribute.
+///
+/// # Safety
+/// Caller needs to ensure that there are enough space after `rta` to read the attribute.
 pub unsafe fn getattr_var(rta: *const rtattr) -> Vec<u8> {
     assert_ne!(rta as i64, 0);
     let data: *const libc::c_void = RTA_DATA!(rta) as *const libc::c_void;
