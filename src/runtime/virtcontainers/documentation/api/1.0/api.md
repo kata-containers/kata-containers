@@ -873,11 +873,17 @@ func Example_createAndStartSandbox() {
 		Containers: []vc.ContainerConfig{container},
 	}
 
-	_, err := vc.RunSandbox(sandboxConfig)
+	// Create the sandbox
+	s, err := vc.CreateSandbox(context.Background(), sandboxConfig, nil)
 	if err != nil {
-		fmt.Printf("Could not run sandbox: %s", err)
+		fmt.Printf("Could not create sandbox: %s", err)
+		return
 	}
 
-	return
+	// Start the sandbox
+	err = s.Start()
+	if err != nil {
+		fmt.Printf("Could not start sandbox: %s", err)
+	}
 }
 ```

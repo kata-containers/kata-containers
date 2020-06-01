@@ -104,7 +104,7 @@ func SetEphemeralStorageType(ociSpec specs.Spec) specs.Spec {
 
 // CreateSandbox create a sandbox container
 func CreateSandbox(ctx context.Context, vci vc.VC, ociSpec specs.Spec, runtimeConfig oci.RuntimeConfig, rootFs vc.RootFs,
-	containerID, bundlePath, console string, disableOutput, systemdCgroup, builtIn bool) (_ vc.VCSandbox, _ vc.Process, err error) {
+	containerID, bundlePath, console string, disableOutput, systemdCgroup bool) (_ vc.VCSandbox, _ vc.Process, err error) {
 	span, ctx := Trace(ctx, "createSandbox")
 	defer span.Finish()
 
@@ -113,9 +113,7 @@ func CreateSandbox(ctx context.Context, vci vc.VC, ociSpec specs.Spec, runtimeCo
 		return nil, vc.Process{}, err
 	}
 
-	if builtIn {
-		sandboxConfig.Stateful = true
-	}
+	sandboxConfig.Stateful = true
 
 	if err := checkForFIPS(&sandboxConfig); err != nil {
 		return nil, vc.Process{}, err
@@ -171,13 +169,6 @@ func CreateSandbox(ctx context.Context, vci vc.VC, ociSpec specs.Spec, runtimeCo
 		return nil, vc.Process{}, fmt.Errorf("BUG: Container list from sandbox is wrong, expecting only one container, found %d containers", len(containers))
 	}
 
-	if !builtIn {
-		err = AddContainerIDMapping(ctx, containerID, sandbox.ID())
-		if err != nil {
-			return nil, vc.Process{}, err
-		}
-	}
-
 	return sandbox, containers[0].Process(), nil
 }
 
@@ -211,7 +202,7 @@ func checkForFIPS(sandboxConfig *vc.SandboxConfig) error {
 }
 
 // CreateContainer create a container
-func CreateContainer(ctx context.Context, vci vc.VC, sandbox vc.VCSandbox, ociSpec specs.Spec, rootFs vc.RootFs, containerID, bundlePath, console string, disableOutput, builtIn bool) (vc.Process, error) {
+func CreateContainer(ctx context.Context, sandbox vc.VCSandbox, ociSpec specs.Spec, rootFs vc.RootFs, containerID, bundlePath, console string, disableOutput bool) (vc.Process, error) {
 	var c vc.VCContainer
 
 	span, ctx := Trace(ctx, "createContainer")
@@ -242,22 +233,9 @@ func CreateContainer(ctx context.Context, vci vc.VC, sandbox vc.VCSandbox, ociSp
 
 	span.SetTag("sandbox", sandboxID)
 
-	if builtIn {
-		c, err = sandbox.CreateContainer(contConfig)
-		if err != nil {
-			return vc.Process{}, err
-		}
-	} else {
-		kataUtilsLogger = kataUtilsLogger.WithField("sandbox", sandboxID)
-
-		sandbox, c, err = vci.CreateContainer(ctx, sandboxID, contConfig)
-		if err != nil {
-			return vc.Process{}, err
-		}
-
-		if err := AddContainerIDMapping(ctx, containerID, sandboxID); err != nil {
-			return vc.Process{}, err
-		}
+	c, err = sandbox.CreateContainer(contConfig)
+	if err != nil {
+		return vc.Process{}, err
 	}
 
 	// Run pre-start OCI hooks.
