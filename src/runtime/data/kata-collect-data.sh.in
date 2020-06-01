@@ -356,6 +356,11 @@ show_container_mgr_details()
 		run_cmd_and_show_quoted_output "" "cat /etc/containerd/config.toml"
 	fi
 
+	if have_cmd "podman"; then
+		subheading "podman"
+		run_cmd_and_show_quoted_output "" "podman --version"
+	fi
+
 	separator
 }
 
