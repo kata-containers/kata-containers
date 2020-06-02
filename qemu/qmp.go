@@ -993,7 +993,7 @@ func (q *QMP) ExecuteNetdevAddByFds(ctx context.Context, netdevType, netdevID st
 	}
 	if len(vhostFdNames) > 0 {
 		vhostFdNameStr := strings.Join(vhostFdNames, ":")
-		args["vhost"] = "on"
+		args["vhost"] = true
 		args["vhostfds"] = vhostFdNameStr
 	}
 
