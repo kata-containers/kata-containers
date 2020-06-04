@@ -1,9 +1,7 @@
-// Copyright (c) 2019 Intel Corporation
+// Copyright (c) 2019-2020 Intel Corporation
 //
 // SPDX-License-Identifier: Apache-2.0
 //
-#[macro_use]
-extern crate slog;
 
 use slog::{BorrowedKV, Drain, Key, OwnedKV, OwnedKVList, Record, KV};
 use std::collections::HashMap;
@@ -125,8 +123,8 @@ where
             .log(&new_record, &OwnedKVList::from(logger_owned_kv));
 
         match result {
-            Ok(_t) => Ok(()),
-            Err(_e) => Err(std::io::Error::new(
+            Ok(_) => Ok(()),
+            Err(_) => Err(std::io::Error::new(
                 std::io::ErrorKind::Other,
                 "failed to drain log".to_string(),
             )),
