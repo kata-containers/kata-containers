@@ -6,7 +6,7 @@ edition = "2018"
 
 [dependencies]
 oci = { path = "oci" }
-logging = { path = "logging" }
+logging = { path = "../../pkg/logging" }
 rustjail = { path = "rustjail" }
 protocols = { path = "protocols" }
 netlink = { path = "netlink" }
@@ -33,7 +33,6 @@ tempfile = "3.1.0"
 
 [workspace]
 members = [
-    "logging",
     "netlink",
     "oci",
     "protocols",
