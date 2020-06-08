@@ -1,17 +1,24 @@
-// Copyright (c) 2019 Intel Corporation
+// Copyright (c) 2019-2020 Intel Corporation
 //
 // SPDX-License-Identifier: Apache-2.0
 //
-#[macro_use]
-extern crate slog;
 
-use slog::{BorrowedKV, Drain, Key, OwnedKV, OwnedKVList, Record, KV};
+use slog::{o, record_static, BorrowedKV, Drain, Key, OwnedKV, OwnedKVList, Record, KV};
 use std::collections::HashMap;
 use std::io;
 use std::io::Write;
 use std::process;
 use std::result;
 use std::sync::Mutex;
+
+const LOG_LEVELS: &[(&str, slog::Level)] = &[
+    ("trace", slog::Level::Trace),
+    ("debug", slog::Level::Debug),
+    ("info", slog::Level::Info),
+    ("warn", slog::Level::Warning),
+    ("error", slog::Level::Error),
+    ("critical", slog::Level::Critical),
+];
 
 // XXX: 'writer' param used to make testing possible.
 pub fn create_logger<W>(name: &str, source: &str, level: slog::Level, writer: W) -> slog::Logger
@@ -43,7 +50,34 @@ where
     )
 }
 
+pub fn get_log_levels() -> Vec<&'static str> {
+    let result: Vec<&str> = LOG_LEVELS.iter().map(|value| value.0).collect();
+
+    result
+}
+
+pub fn level_name_to_slog_level(level_name: &str) -> Result<slog::Level, String> {
+    for tuple in LOG_LEVELS {
+        if tuple.0 == level_name {
+            return Ok(tuple.1);
+        }
+    }
+
+    Err("invalid level name".to_string())
+}
+
+pub fn slog_level_to_level_name(level: slog::Level) -> Result<&'static str, &'static str> {
+    for tuple in LOG_LEVELS {
+        if tuple.1 == level {
+            return Ok(tuple.0);
+        }
+    }
+
+    Err("invalid slog level")
+}
+
 // Used to convert an slog::OwnedKVList into a hash map.
+#[derive(Debug)]
 struct HashSerializer {
     fields: HashMap<String, String>,
 }
@@ -125,8 +159,8 @@ where
             .log(&new_record, &OwnedKVList::from(logger_owned_kv));
 
         match result {
-            Ok(_t) => Ok(()),
-            Err(_e) => Err(std::io::Error::new(
+            Ok(_) => Ok(()),
+            Err(_) => Err(std::io::Error::new(
                 std::io::ErrorKind::Other,
                 "failed to drain log".to_string(),
             )),
@@ -147,6 +181,12 @@ impl<D> RuntimeLevelFilter<D> {
             drain,
             level: Mutex::new(level),
         }
+    }
+
+    fn set_level(&self, level: slog::Level) {
+        let mut log_level = self.level.lock().unwrap();
+
+        *log_level = level;
     }
 }
 
@@ -176,8 +216,148 @@ where
 mod tests {
     use super::*;
     use serde_json::Value;
+    use slog::info;
     use std::io::prelude::*;
     use tempfile::NamedTempFile;
+
+    #[test]
+    fn test_get_log_levels() {
+        let expected = vec!["trace", "debug", "info", "warn", "error", "critical"];
+
+        let log_levels = get_log_levels();
+        assert_eq!(log_levels, expected);
+    }
+
+    #[test]
+    fn test_level_name_to_slog_level() {
+        #[derive(Debug)]
+        struct TestData<'a> {
+            name: &'a str,
+            result: Result<slog::Level, &'a str>,
+        }
+
+        let invalid_msg = "invalid level name";
+
+        let tests = &[
+            TestData {
+                name: "",
+                result: Err(invalid_msg),
+            },
+            TestData {
+                name: "foo",
+                result: Err(invalid_msg),
+            },
+            TestData {
+                name: "x",
+                result: Err(invalid_msg),
+            },
+            TestData {
+                name: ".",
+                result: Err(invalid_msg),
+            },
+            TestData {
+                name: "trace",
+                result: Ok(slog::Level::Trace),
+            },
+            TestData {
+                name: "debug",
+                result: Ok(slog::Level::Debug),
+            },
+            TestData {
+                name: "info",
+                result: Ok(slog::Level::Info),
+            },
+            TestData {
+                name: "warn",
+                result: Ok(slog::Level::Warning),
+            },
+            TestData {
+                name: "error",
+                result: Ok(slog::Level::Error),
+            },
+            TestData {
+                name: "critical",
+                result: Ok(slog::Level::Critical),
+            },
+        ];
+
+        for (i, d) in tests.iter().enumerate() {
+            let msg = format!("test[{}]: {:?}", i, d);
+
+            let result = level_name_to_slog_level(d.name);
+
+            let msg = format!("{}, result: {:?}", msg, result);
+
+            if d.result.is_ok() {
+                assert!(result.is_ok());
+
+                let result_level = result.unwrap();
+                let expected_level = d.result.unwrap();
+
+                assert!(result_level == expected_level, msg);
+                continue;
+            } else {
+                assert!(result.is_err(), msg);
+            }
+
+            let expected_error = format!("{}", d.result.as_ref().unwrap_err());
+            let actual_error = format!("{}", result.unwrap_err());
+            assert!(actual_error == expected_error, msg);
+        }
+    }
+
+    #[test]
+    fn test_slog_level_to_level_name() {
+        #[derive(Debug)]
+        struct TestData<'a> {
+            level: slog::Level,
+            result: Result<&'a str, &'a str>,
+        }
+
+        let tests = &[
+            TestData {
+                level: slog::Level::Trace,
+                result: Ok("trace"),
+            },
+            TestData {
+                level: slog::Level::Debug,
+                result: Ok("debug"),
+            },
+            TestData {
+                level: slog::Level::Info,
+                result: Ok("info"),
+            },
+            TestData {
+                level: slog::Level::Warning,
+                result: Ok("warn"),
+            },
+            TestData {
+                level: slog::Level::Error,
+                result: Ok("error"),
+            },
+            TestData {
+                level: slog::Level::Critical,
+                result: Ok("critical"),
+            },
+        ];
+
+        for (i, d) in tests.iter().enumerate() {
+            let msg = format!("test[{}]: {:?}", i, d);
+
+            let result = slog_level_to_level_name(d.level);
+
+            let msg = format!("{}, result: {:?}", msg, result);
+
+            if d.result.is_ok() {
+                assert!(result == d.result, msg);
+                continue;
+            }
+
+            let expected_error = format!("{}", d.result.as_ref().unwrap_err());
+            let actual_error = format!("{}", result.unwrap_err());
+            assert!(actual_error == expected_error, msg);
+        }
+    }
 
     #[test]
     fn test_create_logger_write_to_tmpfile() {
