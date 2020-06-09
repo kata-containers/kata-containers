@@ -280,6 +280,16 @@ vhost_user_store_path = "@DEFVHOSTUSERSTOREPATH@"
 # Warnings will be logged if any error is encountered will scanning for hooks,
 # but it will not abort container execution.
 #guest_hook_path = "/usr/share/oci/hooks"
+#
+# Use rx Rate Limiter to control network I/O inbound bandwidth(size in bits/sec for SB/VM).
+# In Qemu, we use classful qdiscs HTB(Hierarchy Token Bucket) to discipline traffic.
+# Default 0-sized value means unlimited rate.
+#rx_rate_limiter_max_rate = 0
+# Use tx Rate Limiter to control network I/O outbound bandwidth(size in bits/sec for SB/VM).
+# In Qemu, we use classful qdiscs HTB(Hierarchy Token Bucket) and ifb(Intermediate Functional Block)
+# to discipline traffic.
+# Default 0-sized value means unlimited rate.
+#tx_rate_limiter_max_rate = 0
 
 [factory]
 # VM templating support. Once enabled, new VMs are created from template

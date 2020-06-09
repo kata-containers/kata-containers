@@ -196,6 +196,17 @@ use_vsock = true
 # Warnings will be logged if any error is encountered will scanning for hooks,
 # but it will not abort container execution.
 #guest_hook_path = "/usr/share/oci/hooks"
+#
+# Use rx Rate Limiter to control network I/O inbound bandwidth(size in bits/sec for SB/VM).
+# In Firecracker, it provides a built-in rate limiter, which is based on TBF(Token Bucket Filter)
+# queueing discipline.
+# Default 0-sized value means unlimited rate.
+#rx_rate_limiter_max_rate = 0
+# Use tx Rate Limiter to control network I/O outbound bandwidth(size in bits/sec for SB/VM).
+# In Firecracker, it provides a built-in rate limiter, which is based on TBF(Token Bucket Filter)
+# queueing discipline.
+# Default 0-sized value means unlimited rate.
+#tx_rate_limiter_max_rate = 0
 
 [factory]
 # VM templating support. Once enabled, new VMs are created from template
