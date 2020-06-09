@@ -281,10 +281,56 @@ pub struct SyncPC {
 pub trait Container: BaseContainer {
     //	fn checkpoint(&self, opts: &CriuOpts) -> Result<()>;
     //	fn restore(&self, p: &Process, opts: &CriuOpts) -> Result<()>;
-    fn pause(&self) -> Result<()>;
-    fn resume(&self) -> Result<()>;
+    fn pause(&mut self) -> Result<()>;
+    fn resume(&mut self) -> Result<()>;
     //	fn notify_oom(&self) -> Result<(Sender, Receiver)>;
     //	fn notify_memory_pressure(&self, lvl: PressureLevel) -> Result<(Sender, Receiver)>;
+}
+
+impl Container for LinuxContainer {
+    fn pause(&mut self) -> Result<()> {
+        let status = self.status();
+        if status != Status::RUNNING && status != Status::CREATED {
+            return Err(ErrorKind::ErrorCode(format!(
+                "failed to pause container: current status is: {:?}",
+                status
+            ))
+            .into());
+        }
+
+        if self.cgroup_manager.is_some() {
+            self.cgroup_manager
+                .as_ref()
+                .unwrap()
+                .freeze(fscgroup::FROZEN)?;
+
+            self.status.transition(Status::PAUSED);
+            return Ok(());
+        }
+        Err(ErrorKind::ErrorCode(String::from("failed to get container's cgroup manager")).into())
+    }
+
+    fn resume(&mut self) -> Result<()> {
+        let status = self.status();
+        if status != Status::PAUSED {
+            return Err(ErrorKind::ErrorCode(format!(
+                "container status is: {:?}, not paused",
+                status
+            ))
+            .into());
+        }
+
+        if self.cgroup_manager.is_some() {
+            self.cgroup_manager
+                .as_ref()
+                .unwrap()
+                .freeze(fscgroup::THAWED)?;
+
+            self.status.transition(Status::RUNNING);
+            return Ok(());
+        }
+        Err(ErrorKind::ErrorCode(String::from("failed to get container's cgroup manager")).into())
+    }
 }
 
 pub fn init_child() {
