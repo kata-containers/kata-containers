@@ -786,6 +786,9 @@ func TestNewQemuHypervisorConfig(t *testing.T) {
 		utils.VHostVSockDevicePath = orgVHostVSockDevicePath
 	}()
 	utils.VHostVSockDevicePath = "/dev/abc/xyz"
+	// 10Mbits/sec
+	rxRateLimiterMaxRate := uint64(10000000)
+	txRateLimiterMaxRate := uint64(10000000)
 
 	hypervisor := hypervisor{
 		Path:                  hypervisorPath,
@@ -797,6 +800,8 @@ func TestNewQemuHypervisorConfig(t *testing.T) {
 		HotplugVFIOOnRootBus:  hotplugVFIOOnRootBus,
 		PCIeRootPort:          pcieRootPort,
 		UseVSock:              true,
+		RxRateLimiterMaxRate:  rxRateLimiterMaxRate,
+		TxRateLimiterMaxRate:  txRateLimiterMaxRate,
 	}
 
 	files := []string{hypervisorPath, kernelPath, imagePath}
@@ -856,6 +861,14 @@ func TestNewQemuHypervisorConfig(t *testing.T) {
 
 	if config.PCIeRootPort != pcieRootPort {
 		t.Errorf("Expected value for PCIeRootPort %v, got %v", pcieRootPort, config.PCIeRootPort)
+	}
+
+	if config.RxRateLimiterMaxRate != rxRateLimiterMaxRate {
+		t.Errorf("Expected value for rx rate limiter %v, got %v", rxRateLimiterMaxRate, config.RxRateLimiterMaxRate)
+	}
+
+	if config.TxRateLimiterMaxRate != txRateLimiterMaxRate {
+		t.Errorf("Expected value for tx rate limiter %v, got %v", txRateLimiterMaxRate, config.TxRateLimiterMaxRate)
 	}
 }
 
