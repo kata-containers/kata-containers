@@ -811,3 +811,7 @@ func (a *Acrn) loadInfo() error {
 	}
 	return nil
 }
+
+func (a *Acrn) isRateLimiterBuiltin() bool {
+	return false
+}

@@ -802,4 +802,7 @@ type hypervisor interface {
 
 	// generate the socket to communicate the host and guest
 	generateSocket(id string, useVsock bool) (interface{}, error)
+
+	// check if hypervisor supports built-in rate limiter.
+	isRateLimiterBuiltin() bool
 }

@@ -2266,3 +2266,7 @@ func (q *qemu) check() error {
 func (q *qemu) generateSocket(id string, useVsock bool) (interface{}, error) {
 	return generateVMSocket(id, useVsock, q.store.RunVMStoragePath())
 }
+
+func (q *qemu) isRateLimiterBuiltin() bool {
+	return false
+}
