@@ -1257,6 +1257,17 @@ func (n *Network) Add(ctx context.Context, config *NetworkConfig, hypervisor hyp
 					return err
 				}
 			}
+
+			if !hypervisor.isRateLimiterBuiltin() {
+				rxRateLimiterMaxRate := hypervisor.hypervisorConfig().RxRateLimiterMaxRate
+				if rxRateLimiterMaxRate > 0 {
+					networkLogger().Info("Add Rx Rate Limiter")
+					if err := addRxRateLimiter(endpoint, rxRateLimiterMaxRate); err != nil {
+						return err
+					}
+				}
+			}
+
 		}
 
 		return nil
@@ -1316,6 +1327,109 @@ func (n *Network) Remove(ctx context.Context, ns *NetworkNamespace, hypervisor h
 	if ns.NetNsCreated {
 		networkLogger().Infof("Network namespace %q deleted", ns.NetNsPath)
 		return deleteNetNS(ns.NetNsPath)
+	}
+
+	return nil
+}
+
+// func addRxRateLmiter implements tc-based rx rate limiter to control network I/O inbound traffic
+// on VM level for hypervisors which don't implement rate limiter in itself, like qemu, etc.
+func addRxRateLimiter(endpoint Endpoint, maxRate uint64) error {
+	var linkName string
+	switch ep := endpoint.(type) {
+	case *VethEndpoint, *IPVlanEndpoint, *TuntapEndpoint, *BridgedMacvlanEndpoint:
+		netPair := endpoint.NetworkPair()
+		linkName = netPair.TapInterface.TAPIface.Name
+	case *MacvtapEndpoint, *TapEndpoint:
+		linkName = endpoint.Name()
+	default:
+		return fmt.Errorf("Unsupported endpointType %s for adding rx rate limiter", ep.Type())
+	}
+
+	if err := endpoint.SetRxRateLimiter(); err != nil {
+		return nil
+	}
+
+	link, err := netlink.LinkByName(linkName)
+	if err != nil {
+		return err
+	}
+	linkIndex := link.Attrs().Index
+
+	return addHTBQdisc(linkIndex, maxRate)
+}
+
+// func addHTBQdisc uses HTB(Hierarchical Token Bucket) qdisc shaping schemes to control interface traffic.
+// HTB (Hierarchical Token Bucket) shapes traffic based on the Token Bucket Filter algorithm.
+// A fundamental part of the HTB qdisc is the borrowing mechanism. Children classes borrow tokens
+// from their parents once they have exceeded rate. A child class will continue to attempt to borrow until
+// it reaches ceil. See more details in https://tldp.org/HOWTO/Traffic-Control-HOWTO/classful-qdiscs.html.
+//
+//         * +-----+     +---------+     +-----------+      +-----------+
+//         * |     |     |  qdisc  |     | class 1:1 |      | class 1:2 |
+//         * | NIC |     |   htb   |     |   rate    |      |   rate    |
+//         * |     | --> | def 1:2 | --> |   ceil    | -+-> |   ceil    |
+//         * +-----+     +---------+     +-----------+  |   +-----------+
+//         *                                            |
+//         *                                            |   +-----------+
+//         *                                            |   | class 1:n |
+//         *                                            |   |   rate    |
+//         *                                            +-> |   ceil    |
+//         *                                            |   +-----------+
+// Seeing from pic, after the routing decision, all packets will be sent to the interface root htb qdisc.
+// This root qdisc has only one direct child class (with id 1:1) which shapes the overall maximum rate
+// that will be sent through interface. Then, this class has at least one default child (1:2) meant to control all
+// non-privileged traffic.
+// e.g.
+// if we try to set VM bandwidth with maximum 10Mbit/s, we should give
+// classid 1:2 rate 10Mbit/s, ceil 10Mbit/s and classid 1:1 rate 10Mbit/s, ceil 10Mbit/s.
+// To-do:
+// Later, if we want to do limitation on some dedicated traffic(special process running in VM), we could create
+// a separate class (1:n) with guarantee throughput.
+func addHTBQdisc(linkIndex int, maxRate uint64) error {
+	// we create a new htb root qdisc for network interface with the specified network index
+	qdiscAttrs := netlink.QdiscAttrs{
+		LinkIndex: linkIndex,
+		Handle:    netlink.MakeHandle(1, 0),
+		Parent:    netlink.HANDLE_ROOT,
+	}
+	qdisc := netlink.NewHtb(qdiscAttrs)
+	// all non-priviledged traffic go to classid 1:2.
+	qdisc.Defcls = 2
+
+	err := netlink.QdiscAdd(qdisc)
+	if err != nil {
+		return fmt.Errorf("Failed to add htb qdisc: %v", err)
+	}
+
+	// root htb qdisc has only one direct child class (with id 1:1) to control overall rate.
+	classAttrs := netlink.ClassAttrs{
+		LinkIndex: linkIndex,
+		Parent:    netlink.MakeHandle(1, 0),
+		Handle:    netlink.MakeHandle(1, 1),
+	}
+	htbClassAttrs := netlink.HtbClassAttrs{
+		Rate: maxRate,
+		Ceil: maxRate,
+	}
+	class := netlink.NewHtbClass(classAttrs, htbClassAttrs)
+	if err := netlink.ClassAdd(class); err != nil {
+		return fmt.Errorf("Failed to add htb classid 1:1 : %v", err)
+	}
+
+	// above class has at least one default child class(1:2) for all non-priviledged traffic.
+	classAttrs = netlink.ClassAttrs{
+		LinkIndex: linkIndex,
+		Parent:    netlink.MakeHandle(1, 1),
+		Handle:    netlink.MakeHandle(1, 2),
+	}
+	htbClassAttrs = netlink.HtbClassAttrs{
+		Rate: maxRate,
+		Ceil: maxRate,
+	}
+	class = netlink.NewHtbClass(classAttrs, htbClassAttrs)
+	if err := netlink.ClassAdd(class); err != nil {
+		return fmt.Errorf("Failed to add htb class 1:2 : %v", err)
 	}
 
 	return nil
