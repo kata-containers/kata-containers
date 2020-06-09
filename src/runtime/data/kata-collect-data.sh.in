@@ -221,7 +221,6 @@ find_system_journal_problems()
 {
 	local name="$1"
 	local program="$2"
-	local unit="$3"
 
 	# select by identifier
 	local selector="-t"
@@ -246,28 +245,28 @@ show_proxy_log_details()
 {
 	subheading "Proxy logs"
 
-	find_system_journal_problems "proxy" "@PROJECT_TYPE@-proxy" ""
+	find_system_journal_problems "proxy" "@PROJECT_TYPE@-proxy"
 }
 
 show_runtime_log_details()
 {
 	subheading "Runtime logs"
 
-	find_system_journal_problems "runtime" "@RUNTIME_NAME@" ""
+	find_system_journal_problems "runtime" "@RUNTIME_NAME@"
 }
 
 show_shim_log_details()
 {
 	subheading "Shim logs"
 
-	find_system_journal_problems "shim" "@PROJECT_TYPE@-shim" ""
+	find_system_journal_problems "shim" "@PROJECT_TYPE@-shim"
 }
 
 show_throttler_log_details()
 {
 	subheading "Throttler logs"
 
-	find_system_journal_problems "throttler" "" "@PROJECT_TYPE@-ksm-throttler"
+	find_system_journal_problems "throttler" "@PROJECT_TYPE@-ksm-throttler"
 }
 
 show_log_details()
