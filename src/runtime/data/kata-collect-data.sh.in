@@ -241,6 +241,14 @@ find_system_journal_problems()
 	fi
 }
 
+show_containerd_shimv2_log_details()
+{
+	local name="Kata Containerd Shim v2"
+	subheading "$name logs"
+
+	find_system_journal_problems "$name" "kata"
+}
+
 show_proxy_log_details()
 {
 	subheading "Proxy logs"
@@ -277,6 +285,7 @@ show_log_details()
 	show_proxy_log_details
 	show_shim_log_details
 	show_throttler_log_details
+	show_containerd_shimv2_log_details
 
 	separator
 }
