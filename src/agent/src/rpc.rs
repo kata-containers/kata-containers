@@ -18,7 +18,7 @@ use protocols::health::{
 };
 use protocols::types::Interface;
 use rustjail;
-use rustjail::container::{BaseContainer, LinuxContainer};
+use rustjail::container::{BaseContainer, Container, LinuxContainer};
 use rustjail::errors::*;
 use rustjail::process::Process;
 use rustjail::specconv::CreateOpts;
@@ -754,6 +754,59 @@ impl protocols::agent_ttrpc::AgentService for agentService {
             Ok(resp) => Ok(resp),
         }
     }
+
+    fn pause_container(
+        &self,
+        ctx: &ttrpc::TtrpcContext,
+        req: protocols::agent::PauseContainerRequest,
+    ) -> ttrpc::Result<protocols::empty::Empty> {
+        let cid = req.get_container_id();
+        let s = Arc::clone(&self.sandbox);
+        let mut sandbox = s.lock().unwrap();
+        if let Some(ctr) = sandbox.get_container(cid) {
+            match ctr.pause() {
+                Err(e) => {
+                    return Err(ttrpc::Error::RpcStatus(ttrpc::get_status(
+                        ttrpc::Code::INTERNAL,
+                        e.to_string(),
+                    )))
+                }
+                Ok(_) => return Ok(Empty::new()),
+            }
+        };
+
+        Err(ttrpc::Error::RpcStatus(ttrpc::get_status(
+            ttrpc::Code::INVALID_ARGUMENT,
+            "invalid argument".to_string(),
+        )))
+    }
+
+    fn resume_container(
+        &self,
+        ctx: &ttrpc::TtrpcContext,
+        req: protocols::agent::ResumeContainerRequest,
+    ) -> ttrpc::Result<protocols::empty::Empty> {
+        let cid = req.get_container_id();
+        let s = Arc::clone(&self.sandbox);
+        let mut sandbox = s.lock().unwrap();
+        if let Some(ctr) = sandbox.get_container(cid) {
+            match ctr.resume() {
+                Err(e) => {
+                    return Err(ttrpc::Error::RpcStatus(ttrpc::get_status(
+                        ttrpc::Code::INTERNAL,
+                        e.to_string(),
+                    )))
+                }
+                Ok(_) => return Ok(Empty::new()),
+            }
+        };
+
+        Err(ttrpc::Error::RpcStatus(ttrpc::get_status(
+            ttrpc::Code::INVALID_ARGUMENT,
+            "invalid argument: ".to_string(),
+        )))
+    }
+
     fn write_stdin(
         &self,
         _ctx: &ttrpc::TtrpcContext,
