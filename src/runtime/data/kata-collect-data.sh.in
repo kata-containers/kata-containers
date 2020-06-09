@@ -217,25 +217,6 @@ show_runtime_configs()
 	separator
 }
 
-show_log_details()
-{
-	heading "Logfiles"
-
-	show_runtime_log_details
-	show_proxy_log_details
-	show_shim_log_details
-	show_throttler_log_details
-
-	separator
-}
-
-show_runtime_log_details()
-{
-	subheading "Runtime logs"
-
-	find_system_journal_problems "runtime" "@RUNTIME_NAME@" ""
-}
-
 find_system_journal_problems()
 {
 	local name="$1"
@@ -268,6 +249,13 @@ show_proxy_log_details()
 	find_system_journal_problems "proxy" "@PROJECT_TYPE@-proxy" ""
 }
 
+show_runtime_log_details()
+{
+	subheading "Runtime logs"
+
+	find_system_journal_problems "runtime" "@RUNTIME_NAME@" ""
+}
+
 show_shim_log_details()
 {
 	subheading "Shim logs"
@@ -280,6 +268,18 @@ show_throttler_log_details()
 	subheading "Throttler logs"
 
 	find_system_journal_problems "throttler" "" "@PROJECT_TYPE@-ksm-throttler"
+}
+
+show_log_details()
+{
+	heading "Logfiles"
+
+	show_runtime_log_details
+	show_proxy_log_details
+	show_shim_log_details
+	show_throttler_log_details
+
+	separator
 }
 
 show_package_versions()
