@@ -553,14 +553,16 @@ define MAKE_KERNEL_VIRTIOFS_NAME
 $(if $(findstring uncompressed,$1),vmlinux-virtiofs.container,vmlinuz-virtiofs.container)
 endef
 
+GENERATED_CONFIG = $(abspath $(CLI_DIR)/config-generated.go)
 
-GENERATED_FILES += $(CLI_DIR)/config-generated.go
+GENERATED_FILES += $(GENERATED_CONFIG)
 GENERATED_FILES += pkg/katautils/config-settings.go
 
 $(TARGET_OUTPUT): $(SOURCES) $(GENERATED_FILES) $(MAKEFILE_LIST) | show-summary
 	$(QUIET_BUILD)(cd $(CLI_DIR) && go build $(KATA_LDFLAGS) $(BUILDFLAGS) -o $@ .)
 
 $(SHIMV2_OUTPUT): $(SOURCES) $(GENERATED_FILES) $(MAKEFILE_LIST)
+	$(QUIET_BUILD)(cd $(SHIMV2_DIR)/ && ln -fs $(GENERATED_CONFIG))
 	$(QUIET_BUILD)(cd $(SHIMV2_DIR)/ && go build $(KATA_LDFLAGS) $(BUILDFLAGS) -o $@ .)
 
 .PHONY: \
@@ -705,7 +707,14 @@ install-completions:
 	$(QUIET_INST)install --mode 0644 -D  $(BASH_COMPLETIONS) $(DESTDIR)/$(BASH_COMPLETIONSDIR)/$(notdir $(BASH_COMPLETIONS));
 
 clean:
-	$(QUIET_CLEAN)rm -f $(TARGET) $(SHIMV2) $(NETMON_TARGET) $(CONFIGS) $(GENERATED_FILES) .git-commit .git-commit.tmp
+	$(QUIET_CLEAN)rm -f \
+		$(CONFIGS) \
+		$(GENERATED_FILES) \
+		$(NETMON_TARGET) \
+		$(SHIMV2) \
+		$(SHIMV2_DIR)/$(notdir $(GENERATED_CONFIG)) \
+		$(TARGET) \
+		.git-commit .git-commit.tmp
 
 show-usage: show-header
 	@printf "• Overview:\n"
