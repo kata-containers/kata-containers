@@ -10,7 +10,8 @@ use oci::{LinuxNamespace, Spec};
 use protobuf::{RepeatedField, SingularPtrField};
 use protocols::agent::{
     AgentDetails, CopyFileRequest, GuestDetailsResponse, Interfaces, ListProcessesResponse,
-    ReadStreamResponse, Routes, StatsContainerResponse, WaitProcessResponse, WriteStreamResponse,
+    Metrics, ReadStreamResponse, Routes, StatsContainerResponse, WaitProcessResponse,
+    WriteStreamResponse,
 };
 use protocols::empty::Empty;
 use protocols::health::{
@@ -31,6 +32,7 @@ use rustjail::process::ProcessOperations;
 
 use crate::device::{add_devices, rescan_pci_bus, update_device_cgroup};
 use crate::linux_abi::*;
+use crate::metrics::get_metrics;
 use crate::mount::{add_storages, remove_mounts, STORAGEHANDLERLIST};
 use crate::namespace::{NSTYPEIPC, NSTYPEPID, NSTYPEUTS};
 use crate::random;
@@ -1264,6 +1266,24 @@ impl protocols::agent_ttrpc::AgentService for agentService {
         }
 
         Ok(Empty::new())
+    }
+
+    fn get_metrics(
+        &self,
+        _ctx: &ttrpc::TtrpcContext,
+        req: protocols::agent::GetMetricsRequest,
+    ) -> ttrpc::Result<Metrics> {
+        match get_metrics(&req) {
+            Err(e) => Err(ttrpc::Error::RpcStatus(ttrpc::get_status(
+                ttrpc::Code::INTERNAL,
+                e.to_string(),
+            ))),
+            Ok(s) => {
+                let mut metrics = Metrics::new();
+                metrics.set_metrics(s);
+                Ok(metrics)
+            }
+        }
     }
 }
 
