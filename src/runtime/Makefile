@@ -705,7 +705,13 @@ install-completions:
 	$(QUIET_INST)install --mode 0644 -D  $(BASH_COMPLETIONS) $(DESTDIR)/$(BASH_COMPLETIONSDIR)/$(notdir $(BASH_COMPLETIONS));
 
 clean:
-	$(QUIET_CLEAN)rm -f $(TARGET) $(SHIMV2) $(NETMON_TARGET) $(CONFIGS) $(GENERATED_FILES) .git-commit .git-commit.tmp
+	$(QUIET_CLEAN)rm -f \
+		$(CONFIGS) \
+		$(GENERATED_FILES) \
+		$(NETMON_TARGET) \
+		$(SHIMV2) \
+		$(TARGET) \
+		.git-commit .git-commit.tmp
 
 show-usage: show-header
 	@printf "• Overview:\n"
