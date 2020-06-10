@@ -17,6 +17,7 @@ coverage.html
 /cli/coverage.html
 /containerd-shim-kata-v2
 /data/kata-collect-data.sh
+/kata-monitor
 /kata-netmon
 /kata-runtime
 /pkg/katautils/config-settings.go

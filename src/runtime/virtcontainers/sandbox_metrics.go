@@ -1,3 +1,8 @@
+// Copyright (c) 2020 Ant Financial
+//
+// SPDX-License-Identifier: Apache-2.0
+//
+
 package virtcontainers
 
 import (
@@ -57,7 +62,7 @@ var (
 
 	agentRpcDurationsHistogram = prometheus.NewHistogramVec(prometheus.HistogramOpts{
 		Namespace: namespaceKatashim,
-		Name:      "agent_rpc_durations_histogram_million_seconds",
+		Name:      "agent_rpc_durations_histogram_milliseconds",
 		Help:      "RPC latency distributions.",
 		Buckets:   prometheus.ExponentialBuckets(1, 2, 10),
 	},
@@ -65,7 +70,7 @@ var (
 	)
 )
 
-func RegMetrics() {
+func RegisterMetrics() {
 	prometheus.MustRegister(hypervisorThreads)
 	prometheus.MustRegister(hypervisorProcStatus)
 	prometheus.MustRegister(hypervisorProcStat)

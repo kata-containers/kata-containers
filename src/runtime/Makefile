@@ -208,6 +208,11 @@ SHIMV2 = containerd-shim-kata-v2
 SHIMV2_OUTPUT = $(CURDIR)/$(SHIMV2)
 SHIMV2_DIR = $(CLI_DIR)/$(SHIMV2)
 
+MONITOR = kata-monitor
+MONITOR_OUTPUT = $(CURDIR)/$(MONITOR)
+MONITOR_DIR = $(CLI_DIR)/kata-monitor
+
+
 SOURCES := $(shell find . 2>&1 | grep -E '.*\.(c|h|go)$$')
 VERSION := ${shell cat ./VERSION}
 
@@ -509,7 +514,7 @@ define SHOW_ARCH
   $(shell printf "\\t%s%s\\\n" "$(1)" $(if $(filter $(ARCH),$(1))," (default)",""))
 endef
 
-all: runtime containerd-shim-v2 netmon
+all: runtime containerd-shim-v2 netmon monitor
 
 # Targets that depend on .git-commit can use $(shell cat .git-commit) to get a
 # git revision string.  They will only be rebuilt if the revision string
@@ -522,6 +527,8 @@ all: runtime containerd-shim-v2 netmon
 	@test -n "$$(git status --porcelain --untracked-files=no)" && echo -n "-dirty" >>$@ || true
 
 containerd-shim-v2: $(SHIMV2_OUTPUT)
+
+monitor: $(MONITOR_OUTPUT)
 
 netmon: $(NETMON_TARGET_OUTPUT)
 
@@ -570,6 +577,9 @@ $(TARGET_OUTPUT): $(SOURCES) $(GENERATED_FILES) $(MAKEFILE_LIST) | show-summary
 $(SHIMV2_OUTPUT): $(SOURCES) $(GENERATED_FILES) $(MAKEFILE_LIST)
 	$(QUIET_BUILD)(cd $(SHIMV2_DIR)/ && ln -fs $(GENERATED_CONFIG))
 	$(QUIET_BUILD)(cd $(SHIMV2_DIR)/ && go build $(KATA_LDFLAGS) $(BUILDFLAGS) -o $@ .)
+
+$(MONITOR_OUTPUT): $(SOURCES) $(GENERATED_FILES) $(MAKEFILE_LIST)
+	$(QUIET_BUILD)(cd $(MONITOR_DIR)/ && go build $(KATA_LDFLAGS) $(BUILDFLAGS) -o $@ .)
 
 .PHONY: \
 	check \
@@ -688,7 +698,7 @@ coverage:
 	go test -v -mod=vendor -covermode=atomic -coverprofile=coverage.txt ./...
 	go tool cover -html=coverage.txt -o coverage.html
 
-install: default install-runtime install-containerd-shim-v2 install-netmon
+install: default install-runtime install-containerd-shim-v2 install-monitor install-netmon
 
 install-bin: $(BINLIST)
 	$(QUIET_INST)$(foreach f,$(BINLIST),$(call INSTALL_EXEC,$f,$(BINDIR)))
@@ -698,6 +708,9 @@ install-runtime: runtime install-scripts install-completions install-configs ins
 install-netmon: install-bin-libexec
 
 install-containerd-shim-v2: $(SHIMV2)
+	$(QUIET_INST)$(call INSTALL_EXEC,$<,$(BINDIR))
+
+install-monitor: $(MONITOR)
 	$(QUIET_INST)$(call INSTALL_EXEC,$<,$(BINDIR))
 
 install-bin-libexec: $(BINLIBEXECLIST)
@@ -718,6 +731,7 @@ clean:
 		$(CONFIGS) \
 		$(GENERATED_FILES) \
 		$(NETMON_TARGET) \
+		$(MONITOR) \
 		$(SHIMV2) \
 		$(SHIMV2_DIR)/$(notdir $(GENERATED_CONFIG)) \
 		$(TARGET) \
@@ -805,6 +819,8 @@ endif
           "$(foreach b,$(sort $(BINLIST)),$(shell printf "\\t - $(shell readlink -m $(DESTDIR)/$(BINDIR)/$(b))\\\n"))"
 	@printf \
           "$(foreach b,$(sort $(SHIMV2)),$(shell printf "\\t - $(shell readlink -m $(DESTDIR)/$(BINDIR)/$(b))\\\n"))"
+	@printf \
+          "$(foreach b,$(sort $(MONITOR)),$(shell printf "\\t - $(shell readlink -m $(DESTDIR)/$(BINDIR)/$(b))\\\n"))"
 	@printf \
           "$(foreach b,$(sort $(BINLIBEXECLIST)),$(shell printf "\\t - $(shell readlink -m $(DESTDIR)/$(PKGLIBEXECDIR)/$(b))\\\n"))"
 	@printf \
