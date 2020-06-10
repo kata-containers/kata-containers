@@ -553,14 +553,16 @@ define MAKE_KERNEL_VIRTIOFS_NAME
 $(if $(findstring uncompressed,$1),vmlinux-virtiofs.container,vmlinuz-virtiofs.container)
 endef
 
+GENERATED_CONFIG = $(abspath $(CLI_DIR)/config-generated.go)
 
-GENERATED_FILES += $(CLI_DIR)/config-generated.go
+GENERATED_FILES += $(GENERATED_CONFIG)
 GENERATED_FILES += pkg/katautils/config-settings.go
 
 $(TARGET_OUTPUT): $(SOURCES) $(GENERATED_FILES) $(MAKEFILE_LIST) | show-summary
 	$(QUIET_BUILD)(cd $(CLI_DIR) && go build $(KATA_LDFLAGS) $(BUILDFLAGS) -o $@ .)
 
 $(SHIMV2_OUTPUT): $(SOURCES) $(GENERATED_FILES) $(MAKEFILE_LIST)
+	$(QUIET_BUILD)(cd $(SHIMV2_DIR)/ && ln -fs $(GENERATED_CONFIG))
 	$(QUIET_BUILD)(cd $(SHIMV2_DIR)/ && go build $(KATA_LDFLAGS) $(BUILDFLAGS) -o $@ .)
 
 .PHONY: \
@@ -710,6 +712,7 @@ clean:
 		$(GENERATED_FILES) \
 		$(NETMON_TARGET) \
 		$(SHIMV2) \
+		$(SHIMV2_DIR)/$(notdir $(GENERATED_CONFIG)) \
 		$(TARGET) \
 		.git-commit .git-commit.tmp
 
