@@ -95,6 +95,11 @@ inside the virtual machine). This shim is required to be compliant with the
 expectations of the [OCI runtime
 specification](https://github.com/opencontainers/runtime-spec).
 
+##### Trace forwarder
+
+The [`kata-trace-forwarder`](src/trace-forwarder) is a component only used
+when tracing the [agent](#agent) process.
+
 #### Additional
 
 ##### Hypervisor
