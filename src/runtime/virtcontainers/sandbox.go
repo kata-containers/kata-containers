@@ -505,7 +505,7 @@ func createSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Fac
 	return s, nil
 }
 
-func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factory) (*Sandbox, error) {
+func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factory) (sb *Sandbox, retErr error) {
 	span, ctx := trace(ctx, "newSandbox")
 	defer span.Finish()
 
@@ -547,8 +547,8 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 	}
 
 	defer func() {
-		if err != nil {
-			s.Logger().WithError(err).WithField("sandboxid", s.id).Error("Create new sandbox failed")
+		if retErr != nil {
+			s.Logger().WithError(retErr).WithField("sandboxid", s.id).Error("Create new sandbox failed")
 			globalSandboxList.removeSandbox(s.id)
 			s.newStore.Destroy(s.id)
 		}
