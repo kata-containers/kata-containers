@@ -184,7 +184,7 @@ show_runtime_configs()
 	local configs config
 
 	heading "Runtime config files"
-	
+
 	configs=$($runtime --@PROJECT_TYPE@-show-default-config-paths)
 	if [ $? -ne 0 ]; then
 		version=$($runtime --version|tr '\n' ' ')
@@ -217,30 +217,10 @@ show_runtime_configs()
 	separator
 }
 
-show_log_details()
-{
-	heading "Logfiles"
-
-	show_runtime_log_details
-	show_proxy_log_details
-	show_shim_log_details
-	show_throttler_log_details
-
-	separator
-}
-
-show_runtime_log_details()
-{
-	subheading "Runtime logs"
-
-	find_system_journal_problems "runtime" "@RUNTIME_NAME@" ""
-}
-
 find_system_journal_problems()
 {
 	local name="$1"
 	local program="$2"
-	local unit="$3"
 
 	# select by identifier
 	local selector="-t"
@@ -261,25 +241,53 @@ find_system_journal_problems()
 	fi
 }
 
+show_containerd_shimv2_log_details()
+{
+	local name="Kata Containerd Shim v2"
+	subheading "$name logs"
+
+	find_system_journal_problems "$name" "kata"
+}
+
 show_proxy_log_details()
 {
 	subheading "Proxy logs"
 
-	find_system_journal_problems "proxy" "@PROJECT_TYPE@-proxy" ""
+	find_system_journal_problems "proxy" "@PROJECT_TYPE@-proxy"
+}
+
+show_runtime_log_details()
+{
+	subheading "Runtime logs"
+
+	find_system_journal_problems "runtime" "@RUNTIME_NAME@"
 }
 
 show_shim_log_details()
 {
 	subheading "Shim logs"
 
-	find_system_journal_problems "shim" "@PROJECT_TYPE@-shim" ""
+	find_system_journal_problems "shim" "@PROJECT_TYPE@-shim"
 }
 
 show_throttler_log_details()
 {
 	subheading "Throttler logs"
 
-	find_system_journal_problems "throttler" "" "@PROJECT_TYPE@-ksm-throttler"
+	find_system_journal_problems "throttler" "@PROJECT_TYPE@-ksm-throttler"
+}
+
+show_log_details()
+{
+	heading "Logfiles"
+
+	show_runtime_log_details
+	show_proxy_log_details
+	show_shim_log_details
+	show_throttler_log_details
+	show_containerd_shimv2_log_details
+
+	separator
 }
 
 show_package_versions()
@@ -292,8 +300,8 @@ show_package_versions()
 	# CC 2.x, 3.0 and runv runtimes. They shouldn't be installed but let's
 	# check anyway.
 	pattern+="cc-oci-runtime"
-	pattern+="cc-runtime"
-	pattern+="runv"
+	pattern+="|cc-runtime"
+	pattern+="|runv"
 
 	# core components
 	for project in @PROJECT_TYPE@
@@ -355,6 +363,11 @@ show_container_mgr_details()
 		run_cmd_and_show_quoted_output "" "containerd --version"
 		run_cmd_and_show_quoted_output "" "systemctl show containerd"
 		run_cmd_and_show_quoted_output "" "cat /etc/containerd/config.toml"
+	fi
+
+	if have_cmd "podman"; then
+		subheading "podman"
+		run_cmd_and_show_quoted_output "" "podman --version"
 	fi
 
 	separator
@@ -624,7 +637,7 @@ show_image_details()
 {
 	local image
 	local details
-	
+
 	image=$(get_image_file)
 
 	heading "Image details"
@@ -646,7 +659,7 @@ show_initrd_details()
 {
 	local initrd
 	local details
-	
+
 	initrd=$(get_initrd_file)
 
 	heading "Initrd details"
