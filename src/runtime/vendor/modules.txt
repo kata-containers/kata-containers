@@ -1,5 +1,4 @@
 # github.com/BurntSushi/toml v0.3.1
-## explicit
 github.com/BurntSushi/toml
 # github.com/Microsoft/go-winio v0.4.11
 github.com/Microsoft/go-winio
@@ -25,26 +24,23 @@ github.com/PuerkitoBio/purell
 github.com/PuerkitoBio/urlesc
 # github.com/asaskevich/govalidator v0.0.0-20180720115003-f9ffefc3facf
 github.com/asaskevich/govalidator
+# github.com/beorn7/perks v1.0.1
+github.com/beorn7/perks/quantile
 # github.com/blang/semver v0.0.0-20190414102917-ba2c2ddd8906
-## explicit
 github.com/blang/semver
+# github.com/cespare/xxhash/v2 v2.1.1
+github.com/cespare/xxhash/v2
 # github.com/cilium/ebpf v0.0.0-20200421083123-d05ecd062fb1
-## explicit
 github.com/cilium/ebpf
 github.com/cilium/ebpf/asm
 github.com/cilium/ebpf/internal
 github.com/cilium/ebpf/internal/btf
 github.com/cilium/ebpf/internal/unix
-# github.com/codahale/hdrhistogram v0.0.0-20161010025455-3a0bb77429bd
-## explicit
 # github.com/containerd/cgroups v0.0.0-20190717030353-c4b9ac5c7601
-## explicit
 github.com/containerd/cgroups
 # github.com/containerd/console v0.0.0-20191206165004-02ecf6a7291e
-## explicit
 github.com/containerd/console
 # github.com/containerd/containerd v1.2.1-0.20181210191522-f05672357f56
-## explicit
 github.com/containerd/containerd/api/events
 github.com/containerd/containerd/api/types
 github.com/containerd/containerd/api/types/task
@@ -58,23 +54,16 @@ github.com/containerd/containerd/runtime/linux/runctypes
 github.com/containerd/containerd/runtime/v2/shim
 github.com/containerd/containerd/runtime/v2/task
 github.com/containerd/containerd/sys
-# github.com/containerd/continuity v0.0.0-20200413184840-d3ef23f19fbb
-## explicit
 # github.com/containerd/cri-containerd v1.11.1-0.20190125013620-4dd6735020f5
-## explicit
 github.com/containerd/cri-containerd/pkg/annotations
 github.com/containerd/cri-containerd/pkg/api/runtimeoptions/v1
 # github.com/containerd/fifo v0.0.0-20190226154929-a9fb20d87448
-## explicit
 github.com/containerd/fifo
 # github.com/containerd/go-runc v0.0.0-20200220073739-7016d3ce2328
-## explicit
 github.com/containerd/go-runc
 # github.com/containerd/ttrpc v1.0.0
-## explicit
 github.com/containerd/ttrpc
 # github.com/containerd/typeurl v1.0.1-0.20190228175220-2a93cfde8c20
-## explicit
 github.com/containerd/typeurl
 # github.com/containernetworking/cni v0.7.0
 github.com/containernetworking/cni/pkg/skel
@@ -83,33 +72,27 @@ github.com/containernetworking/cni/pkg/types/020
 github.com/containernetworking/cni/pkg/types/current
 github.com/containernetworking/cni/pkg/version
 # github.com/containernetworking/plugins v0.8.2
-## explicit
 github.com/containernetworking/plugins/pkg/ns
 github.com/containernetworking/plugins/pkg/testutils
 # github.com/coreos/go-systemd v0.0.0-20180511133405-39ca1b05acc7
 github.com/coreos/go-systemd/dbus
 # github.com/cri-o/cri-o v1.0.0-rc2.0.20170928185954-3394b3b2d6af
-## explicit
 github.com/cri-o/cri-o/pkg/annotations
 # github.com/davecgh/go-spew v1.1.1
 github.com/davecgh/go-spew/spew
 # github.com/dlespiau/covertool v0.0.0-20180314162135-b0c4c6d0583a
-## explicit
 github.com/dlespiau/covertool/pkg/cover
 # github.com/docker/go-units v0.3.3
-## explicit
 github.com/docker/go-units
 # github.com/globalsign/mgo v0.0.0-20181015135952-eeefdecb41b8
 github.com/globalsign/mgo/bson
 github.com/globalsign/mgo/internal/json
 # github.com/go-ini/ini v1.28.2
-## explicit
 github.com/go-ini/ini
 # github.com/go-openapi/analysis v0.17.2
 github.com/go-openapi/analysis
 github.com/go-openapi/analysis/internal
 # github.com/go-openapi/errors v0.18.0
-## explicit
 github.com/go-openapi/errors
 # github.com/go-openapi/jsonpointer v0.17.2
 github.com/go-openapi/jsonpointer
@@ -118,7 +101,6 @@ github.com/go-openapi/jsonreference
 # github.com/go-openapi/loads v0.17.2
 github.com/go-openapi/loads
 # github.com/go-openapi/runtime v0.18.0
-## explicit
 github.com/go-openapi/runtime
 github.com/go-openapi/runtime/client
 github.com/go-openapi/runtime/logger
@@ -130,25 +112,21 @@ github.com/go-openapi/runtime/security
 # github.com/go-openapi/spec v0.17.2
 github.com/go-openapi/spec
 # github.com/go-openapi/strfmt v0.18.0
-## explicit
 github.com/go-openapi/strfmt
 # github.com/go-openapi/swag v0.18.0
-## explicit
 github.com/go-openapi/swag
 # github.com/go-openapi/validate v0.18.0
-## explicit
 github.com/go-openapi/validate
 # github.com/godbus/dbus v0.0.0-20180201030542-885f9cc04c9c
 github.com/godbus/dbus
 # github.com/gogo/protobuf v1.3.1
-## explicit
 github.com/gogo/protobuf/gogoproto
 github.com/gogo/protobuf/jsonpb
 github.com/gogo/protobuf/proto
 github.com/gogo/protobuf/protoc-gen-gogo/descriptor
 github.com/gogo/protobuf/sortkeys
 github.com/gogo/protobuf/types
-# github.com/golang/protobuf v1.3.1
+# github.com/golang/protobuf v1.4.2
 github.com/golang/protobuf/proto
 github.com/golang/protobuf/ptypes
 github.com/golang/protobuf/ptypes/any
@@ -157,13 +135,10 @@ github.com/golang/protobuf/ptypes/timestamp
 # github.com/hashicorp/errwrap v1.0.0
 github.com/hashicorp/errwrap
 # github.com/hashicorp/go-multierror v1.0.0
-## explicit
 github.com/hashicorp/go-multierror
 # github.com/hashicorp/yamux v0.0.0-20190923154419-df201c70410d
-## explicit
 github.com/hashicorp/yamux
 # github.com/intel/govmm v0.0.0-20200602145448-7cc469641b7b
-## explicit
 github.com/intel/govmm/qemu
 # github.com/konsorten/go-windows-terminal-sequences v1.0.1
 github.com/konsorten/go-windows-terminal-sequences
@@ -171,16 +146,15 @@ github.com/konsorten/go-windows-terminal-sequences
 github.com/mailru/easyjson/buffer
 github.com/mailru/easyjson/jlexer
 github.com/mailru/easyjson/jwriter
+# github.com/matttproud/golang_protobuf_extensions v1.0.1
+github.com/matttproud/golang_protobuf_extensions/pbutil
 # github.com/mdlayher/vsock v0.0.0-20191108225356-d9c65923cb8f
-## explicit
 github.com/mdlayher/vsock
 # github.com/mitchellh/mapstructure v1.1.2
-## explicit
 github.com/mitchellh/mapstructure
 # github.com/opencontainers/go-digest v1.0.0-rc1
 github.com/opencontainers/go-digest
 # github.com/opencontainers/runc v1.0.0-rc9.0.20200102164712-2b52db75279c
-## explicit
 github.com/opencontainers/runc/libcontainer/cgroups
 github.com/opencontainers/runc/libcontainer/cgroups/ebpf
 github.com/opencontainers/runc/libcontainer/cgroups/ebpf/devicefilter
@@ -193,43 +167,42 @@ github.com/opencontainers/runc/libcontainer/system
 github.com/opencontainers/runc/libcontainer/user
 github.com/opencontainers/runc/libcontainer/utils
 # github.com/opencontainers/runtime-spec v1.0.2-0.20190408193819-a1b50f621a48
-## explicit
 github.com/opencontainers/runtime-spec/specs-go
 # github.com/opencontainers/selinux v1.4.0
-## explicit
 github.com/opencontainers/selinux/go-selinux
 github.com/opencontainers/selinux/go-selinux/label
 github.com/opencontainers/selinux/pkg/pwalk
 # github.com/opentracing/opentracing-go v1.1.0
-## explicit
 github.com/opentracing/opentracing-go
 github.com/opentracing/opentracing-go/ext
 github.com/opentracing/opentracing-go/log
 # github.com/pkg/errors v0.8.1
-## explicit
 github.com/pkg/errors
 # github.com/pmezard/go-difflib v1.0.0
 github.com/pmezard/go-difflib/difflib
-# github.com/prometheus/procfs v0.0.0-20190328153300-af7bedc223fb
-## explicit
+# github.com/prometheus/client_golang v1.7.1
+github.com/prometheus/client_golang/prometheus
+github.com/prometheus/client_golang/prometheus/internal
+# github.com/prometheus/client_model v0.2.0
+github.com/prometheus/client_model/go
+# github.com/prometheus/common v0.10.0
+github.com/prometheus/common/expfmt
+github.com/prometheus/common/internal/bitbucket.org/ww/goautoneg
+github.com/prometheus/common/model
+# github.com/prometheus/procfs v0.1.3
 github.com/prometheus/procfs
+github.com/prometheus/procfs/internal/fs
+github.com/prometheus/procfs/internal/util
 # github.com/safchain/ethtool v0.0.0-20190326074333-42ed695e3de8
-## explicit
 github.com/safchain/ethtool
 # github.com/seccomp/libseccomp-golang v0.9.1
-## explicit
 github.com/seccomp/libseccomp-golang
 # github.com/sirupsen/logrus v1.4.2
-## explicit
 github.com/sirupsen/logrus
 github.com/sirupsen/logrus/hooks/syslog
-# github.com/smartystreets/goconvey v1.6.4
-## explicit
 # github.com/stretchr/testify v1.4.0
-## explicit
 github.com/stretchr/testify/assert
 # github.com/uber/jaeger-client-go v0.0.0-20200422204034-e1cd868603cb
-## explicit
 github.com/uber/jaeger-client-go
 github.com/uber/jaeger-client-go/config
 github.com/uber/jaeger-client-go/internal/baggage
@@ -249,23 +222,17 @@ github.com/uber/jaeger-client-go/thrift-gen/zipkincore
 github.com/uber/jaeger-client-go/transport
 github.com/uber/jaeger-client-go/utils
 # github.com/uber/jaeger-lib v2.2.0+incompatible
-## explicit
 github.com/uber/jaeger-lib/metrics
 # github.com/urfave/cli v1.20.1-0.20170926034118-ac249472b7de
-## explicit
 github.com/urfave/cli
 # github.com/vishvananda/netlink v1.0.1-0.20190604022042-c8c507c80ea2
-## explicit
 github.com/vishvananda/netlink
 github.com/vishvananda/netlink/nl
 # github.com/vishvananda/netns v0.0.0-20180720170159-13995c7128cc
-## explicit
 github.com/vishvananda/netns
 # go.uber.org/atomic v1.6.0
-## explicit
 go.uber.org/atomic
 # golang.org/x/net v0.0.0-20191108221443-4ba9e2ef068c
-## explicit
 golang.org/x/net/context
 golang.org/x/net/context/ctxhttp
 golang.org/x/net/http/httpguts
@@ -275,11 +242,10 @@ golang.org/x/net/idna
 golang.org/x/net/internal/timeseries
 golang.org/x/net/trace
 # golang.org/x/oauth2 v0.0.0-20191122200657-5d9234df094c
-## explicit
 golang.org/x/oauth2
 golang.org/x/oauth2/internal
-# golang.org/x/sys v0.0.0-20200420163511-1957bb5e6d1f
-## explicit
+# golang.org/x/sys v0.0.0-20200615200032-f1bc736245b1
+golang.org/x/sys/internal/unsafeheader
 golang.org/x/sys/unix
 golang.org/x/sys/windows
 # golang.org/x/text v0.3.0
@@ -302,7 +268,6 @@ google.golang.org/appengine/urlfetch
 # google.golang.org/genproto v0.0.0-20180817151627-c66870c02cf8
 google.golang.org/genproto/googleapis/rpc/status
 # google.golang.org/grpc v1.19.0
-## explicit
 google.golang.org/grpc
 google.golang.org/grpc/balancer
 google.golang.org/grpc/balancer/base
@@ -334,9 +299,36 @@ google.golang.org/grpc/resolver/passthrough
 google.golang.org/grpc/stats
 google.golang.org/grpc/status
 google.golang.org/grpc/tap
-# gopkg.in/yaml.v2 v2.2.2
+# google.golang.org/protobuf v1.23.0
+google.golang.org/protobuf/encoding/prototext
+google.golang.org/protobuf/encoding/protowire
+google.golang.org/protobuf/internal/descfmt
+google.golang.org/protobuf/internal/descopts
+google.golang.org/protobuf/internal/detrand
+google.golang.org/protobuf/internal/encoding/defval
+google.golang.org/protobuf/internal/encoding/messageset
+google.golang.org/protobuf/internal/encoding/tag
+google.golang.org/protobuf/internal/encoding/text
+google.golang.org/protobuf/internal/errors
+google.golang.org/protobuf/internal/fieldnum
+google.golang.org/protobuf/internal/fieldsort
+google.golang.org/protobuf/internal/filedesc
+google.golang.org/protobuf/internal/filetype
+google.golang.org/protobuf/internal/flags
+google.golang.org/protobuf/internal/genname
+google.golang.org/protobuf/internal/impl
+google.golang.org/protobuf/internal/mapsort
+google.golang.org/protobuf/internal/pragma
+google.golang.org/protobuf/internal/set
+google.golang.org/protobuf/internal/strs
+google.golang.org/protobuf/internal/version
+google.golang.org/protobuf/proto
+google.golang.org/protobuf/reflect/protoreflect
+google.golang.org/protobuf/reflect/protoregistry
+google.golang.org/protobuf/runtime/protoiface
+google.golang.org/protobuf/runtime/protoimpl
+google.golang.org/protobuf/types/known/anypb
+google.golang.org/protobuf/types/known/durationpb
+google.golang.org/protobuf/types/known/timestamppb
+# gopkg.in/yaml.v2 v2.2.5
 gopkg.in/yaml.v2
-# gotest.tools v2.2.0+incompatible
-## explicit
-# github.com/uber-go/atomic => go.uber.org/atomic v1.5.1
-# gotest.tools/v3 => gotest.tools v2.2.0+incompatible
