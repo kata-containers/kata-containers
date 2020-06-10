@@ -1,3 +1,8 @@
+// Copyright (c) 2020 Ant Financial
+//
+// SPDX-License-Identifier: Apache-2.0
+//
+
 package containerdshim
 
 import (
@@ -11,7 +16,7 @@ const namespaceKatashim = "kata_shim"
 var (
 	rpcDurationsHistogram = prometheus.NewHistogramVec(prometheus.HistogramOpts{
 		Namespace: namespaceKatashim,
-		Name:      "rpc_durations_histogram_million_seconds",
+		Name:      "rpc_durations_histogram_milliseconds",
 		Help:      "RPC latency distributions.",
 		Buckets:   prometheus.ExponentialBuckets(1, 2, 10),
 	},
@@ -35,7 +40,7 @@ var (
 	katashimProcStat = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Namespace: namespaceKatashim,
 		Name:      "proc_stat",
-		Help:      "Kata containerd shim v2 proc statistics.",
+		Help:      "Kata containerd shim v2 process statistics.",
 	},
 		[]string{"item"},
 	)
@@ -63,7 +68,7 @@ var (
 	})
 )
 
-func regMetrics() {
+func registerMetrics() {
 	prometheus.MustRegister(rpcDurationsHistogram)
 	prometheus.MustRegister(katashimThreads)
 	prometheus.MustRegister(katashimProcStatus)

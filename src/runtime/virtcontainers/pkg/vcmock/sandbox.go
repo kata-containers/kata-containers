@@ -219,10 +219,16 @@ func (s *Sandbox) GetOOMEvent() (string, error) {
 
 // UpdateRuntimeMetrics implements the VCSandbox function of the same name.
 func (s *Sandbox) UpdateRuntimeMetrics() error {
+	if s.UpdateRuntimeMetricsFunc != nil {
+		return s.UpdateRuntimeMetricsFunc()
+	}
 	return nil
 }
 
 // GetAgentMetrics implements the VCSandbox function of the same name.
 func (s *Sandbox) GetAgentMetrics() (string, error) {
+	if s.GetAgentMetricsFunc != nil {
+		return s.GetAgentMetricsFunc()
+	}
 	return "", nil
 }
