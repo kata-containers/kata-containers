@@ -254,6 +254,10 @@ func (p *gRPCProxy) GetOOMEvent(ctx context.Context, req *pb.GetOOMEventRequest)
 	return &pb.OOMEvent{}, nil
 }
 
+func (p *gRPCProxy) GetMetrics(ctx context.Context, req *pb.GetMetricsRequest) (*pb.Metrics, error) {
+	return &pb.Metrics{}, nil
+}
+
 func gRPCRegister(s *ttrpc.Server, srv interface{}) {
 	switch g := srv.(type) {
 	case *gRPCProxy:

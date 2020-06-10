@@ -129,6 +129,7 @@ const (
 	grpcStartTracingRequest      = "grpc.StartTracingRequest"
 	grpcStopTracingRequest       = "grpc.StopTracingRequest"
 	grpcGetOOMEventRequest       = "grpc.GetOOMEventRequest"
+	grpcGetMetricsRequest        = "grpc.GetMetricsRequest"
 )
 
 // The function is declared this way for mocking in unit tests
@@ -2089,6 +2090,9 @@ func (k *kataAgent) installReqFunc(c *kataclient.AgentClient) {
 	k.reqHandlers[grpcGetOOMEventRequest] = func(ctx context.Context, req interface{}) (interface{}, error) {
 		return k.client.AgentServiceClient.GetOOMEvent(ctx, req.(*grpc.GetOOMEventRequest))
 	}
+	k.reqHandlers[grpcGetMetricsRequest] = func(ctx context.Context, req interface{}) (interface{}, error) {
+		return k.client.AgentServiceClient.GetMetrics(ctx, req.(*grpc.GetMetricsRequest))
+	}
 }
 
 func (k *kataAgent) getReqContext(reqName string) (ctx context.Context, cancel context.CancelFunc) {
@@ -2106,6 +2110,7 @@ func (k *kataAgent) getReqContext(reqName string) (ctx context.Context, cancel c
 }
 
 func (k *kataAgent) sendReq(request interface{}) (interface{}, error) {
+	start := time.Now()
 	span, _ := k.trace("sendReq")
 	span.SetTag("request", request)
 	defer span.Finish()
@@ -2129,6 +2134,9 @@ func (k *kataAgent) sendReq(request interface{}) (interface{}, error) {
 	}
 	k.Logger().WithField("name", msgName).WithField("req", message.String()).Debug("sending request")
 
+	defer func() {
+		agentRpcDurationsHistogram.WithLabelValues(msgName).Observe(float64(time.Since(start).Nanoseconds() / int64(time.Millisecond)))
+	}()
 	return handler(ctx, request)
 }
 
@@ -2457,4 +2465,13 @@ func (k *kataAgent) getOOMEvent() (string, error) {
 		return oomEvent.ContainerId, nil
 	}
 	return "", err
+}
+
+func (k *kataAgent) getAgentMetrics(req *grpc.GetMetricsRequest) (*grpc.Metrics, error) {
+	resp, err := k.sendReq(req)
+	if err != nil {
+		return nil, err
+	}
+
+	return resp.(*grpc.Metrics), nil
 }
