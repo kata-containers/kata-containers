@@ -1267,6 +1267,14 @@ func (n *Network) Add(ctx context.Context, config *NetworkConfig, hypervisor hyp
 						return err
 					}
 				}
+				txRateLimiterMaxRate := hypervisor.hypervisorConfig().TxRateLimiterMaxRate
+				if txRateLimiterMaxRate > 0 {
+					networkLogger().Info("Add Tx Rate Limiter")
+					if err := addTxRateLimiter(endpoint, txRateLimiterMaxRate); err != nil {
+						return err
+					}
+				}
+
 			}
 
 		}
@@ -1482,4 +1490,59 @@ func addIFBRedirecting(sourceIndex int, ifbIndex int) error {
 	}
 
 	return nil
+}
+
+// func addTxRateLmiter implements tx rate limiter to control network I/O outbound traffic
+// on VM level for hypervisors which don't implement rate limiter in itself, like qemu, etc.
+// We adopt different actions, based on different inter-networking models.
+// For tcfilters as inter-networking model, we simply apply htb qdisc discipline to the virtual netpair.
+// For other inter-networking models, such as macvtap, we resort to ifb, by redirecting endpoint ingress traffic
+// to ifb egress, and then apply htb to ifb egress.
+func addTxRateLimiter(endpoint Endpoint, maxRate uint64) error {
+	var netPair *NetworkInterfacePair
+	var linkName string
+	switch ep := endpoint.(type) {
+	case *VethEndpoint, *IPVlanEndpoint, *TuntapEndpoint, *BridgedMacvlanEndpoint:
+		netPair = endpoint.NetworkPair()
+		switch netPair.NetInterworkingModel {
+		// For those endpoints we've already used tcfilter as their inter-networking model,
+		// another ifb redirect will be redundant and confused.
+		case NetXConnectTCFilterModel:
+			linkName = netPair.VirtIface.Name
+			link, err := netlink.LinkByName(linkName)
+			if err != nil {
+				return err
+			}
+			return addHTBQdisc(link.Attrs().Index, maxRate)
+		case NetXConnectMacVtapModel, NetXConnectNoneModel:
+			linkName = netPair.TapInterface.TAPIface.Name
+		default:
+			return fmt.Errorf("Unsupported inter-networking model %v for adding tx rate limiter", netPair.NetInterworkingModel)
+		}
+
+	case *MacvtapEndpoint, *TapEndpoint:
+		linkName = endpoint.Name()
+	default:
+		return fmt.Errorf("Unsupported endpointType %s for adding tx rate limiter", ep.Type())
+	}
+
+	if err := endpoint.SetTxRateLimiter(); err != nil {
+		return err
+	}
+
+	ifbIndex, err := addIFBDevice()
+	if err != nil {
+		return err
+	}
+
+	link, err := netlink.LinkByName(linkName)
+	if err != nil {
+		return err
+	}
+
+	if err := addIFBRedirecting(link.Attrs().Index, ifbIndex); err != nil {
+		return err
+	}
+
+	return addHTBQdisc(ifbIndex, maxRate)
 }
