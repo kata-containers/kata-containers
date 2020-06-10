@@ -13,6 +13,7 @@ import (
 	"math/rand"
 	"net"
 	"os"
+	"os/exec"
 	"runtime"
 	"sort"
 	"time"
@@ -1430,6 +1431,54 @@ func addHTBQdisc(linkIndex int, maxRate uint64) error {
 	class = netlink.NewHtbClass(classAttrs, htbClassAttrs)
 	if err := netlink.ClassAdd(class); err != nil {
 		return fmt.Errorf("Failed to add htb class 1:2 : %v", err)
+	}
+
+	return nil
+}
+
+// The Intermediate Functional Block (ifb) pseudo network interface is an alternative
+// to tc filters for handling ingress traffic,
+// By redirecting interface ingress traffic to ifb and treat it as egress traffic there,
+// we could do network shaping to interface inbound traffic.
+func addIFBDevice() (int, error) {
+	// check whether host supports ifb
+	if ok, err := utils.SupportsIfb(); !ok {
+		return -1, err
+	}
+
+	netHandle, err := netlink.NewHandle()
+	if err != nil {
+		return -1, err
+	}
+	defer netHandle.Delete()
+
+	// There exists error when using netlink library to create ifb interface
+	cmd := exec.Command("ip", "link", "add", "dev", "ifb0", "type", "ifb")
+	if output, err := cmd.CombinedOutput(); err != nil {
+		return -1, fmt.Errorf("Could not create link ifb0: %v, error %v", output, err)
+	}
+
+	ifbLink, err := netlink.LinkByName("ifb0")
+	if err != nil {
+		return -1, err
+	}
+
+	if err := netHandle.LinkSetUp(ifbLink); err != nil {
+		return -1, fmt.Errorf("Could not enable link ifb0 %v", err)
+	}
+
+	return ifbLink.Attrs().Index, nil
+}
+
+// This is equivalent to calling:
+// tc filter add dev source parent ffff: protocol all u32 match u8 0 0 action mirred egress redirect dev ifb
+func addIFBRedirecting(sourceIndex int, ifbIndex int) error {
+	if err := addQdiscIngress(sourceIndex); err != nil {
+		return err
+	}
+
+	if err := addRedirectTCFilter(sourceIndex, ifbIndex); err != nil {
+		return err
 	}
 
 	return nil

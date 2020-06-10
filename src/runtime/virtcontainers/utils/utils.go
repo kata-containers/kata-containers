@@ -29,6 +29,9 @@ const MaxSocketPathLen = 107
 // VHostVSockDevicePath path to vhost-vsock device
 var VHostVSockDevicePath = "/dev/vhost-vsock"
 
+// sysModuleDir is the directory where system modules locate.
+var sysModuleDir = "/sys/module"
+
 // FileCopy copys files from srcPath to dstPath
 func FileCopy(srcPath, dstPath string) error {
 	if srcPath == "" {
@@ -233,6 +236,25 @@ func SupportsVsocks() bool {
 	}
 
 	return true
+}
+
+// SupportsIfb returns true if ifb are supported, otherwise false
+func SupportsIfb() (bool, error) {
+	ifbModule := "ifb"
+	// First, check to see if the ifb module is already loaded
+	path := filepath.Join(sysModuleDir, ifbModule)
+	if _, err := os.Stat(path); err == nil {
+		return true, nil
+	}
+
+	// Try to load the ifb module.
+	// When inserting the ifb module, tell it the number of virtual interfaces you need, here, it's zero.
+	// The default is 2.
+	cmd := exec.Command("modprobe", ifbModule, "numifbs=0")
+	if output, err := cmd.CombinedOutput(); err != nil {
+		return false, fmt.Errorf("modprobe insert ifb module failed: %s", string(output))
+	}
+	return true, nil
 }
 
 // StartCmd pointer to a function to start a command.
