@@ -171,6 +171,12 @@ impl AgentServiceClient {
         Ok(cres)
     }
 
+    pub fn get_metrics(&self, req: &super::agent::GetMetricsRequest, timeout_nano: i64) -> ::ttrpc::Result<super::agent::Metrics> {
+        let mut cres = super::agent::Metrics::new();
+        ::ttrpc::client_request!(self, req, timeout_nano, "grpc.AgentService", "GetMetrics", cres);
+        Ok(cres)
+    }
+
     pub fn create_sandbox(&self, req: &super::agent::CreateSandboxRequest, timeout_nano: i64) -> ::ttrpc::Result<super::empty::Empty> {
         let mut cres = super::empty::Empty::new();
         ::ttrpc::client_request!(self, req, timeout_nano, "grpc.AgentService", "CreateSandbox", cres);
@@ -479,6 +485,17 @@ impl ::ttrpc::MethodHandler for StopTracingMethod {
     }
 }
 
+struct GetMetricsMethod {
+    service: Arc<std::boxed::Box<dyn AgentService + Send + Sync>>,
+}
+
+impl ::ttrpc::MethodHandler for GetMetricsMethod {
+    fn handler(&self, ctx: ::ttrpc::TtrpcContext, req: ::ttrpc::Request) -> ::ttrpc::Result<()> {
+        ::ttrpc::request_handler!(self, ctx, req, agent, GetMetricsRequest, get_metrics);
+        Ok(())
+    }
+}
+
 struct CreateSandboxMethod {
     service: Arc<std::boxed::Box<dyn AgentService + Send + Sync>>,
 }
@@ -648,6 +665,9 @@ pub trait AgentService {
     fn stop_tracing(&self, _ctx: &::ttrpc::TtrpcContext, _req: super::agent::StopTracingRequest) -> ::ttrpc::Result<super::empty::Empty> {
         Err(::ttrpc::Error::RpcStatus(::ttrpc::get_status(::ttrpc::Code::NOT_FOUND, "/grpc.AgentService/StopTracing is not supported".to_string())))
     }
+    fn get_metrics(&self, _ctx: &::ttrpc::TtrpcContext, _req: super::agent::GetMetricsRequest) -> ::ttrpc::Result<super::agent::Metrics> {
+        Err(::ttrpc::Error::RpcStatus(::ttrpc::get_status(::ttrpc::Code::NOT_FOUND, "/grpc.AgentService/GetMetrics is not supported".to_string())))
+    }
     fn create_sandbox(&self, _ctx: &::ttrpc::TtrpcContext, _req: super::agent::CreateSandboxRequest) -> ::ttrpc::Result<super::empty::Empty> {
         Err(::ttrpc::Error::RpcStatus(::ttrpc::get_status(::ttrpc::Code::NOT_FOUND, "/grpc.AgentService/CreateSandbox is not supported".to_string())))
     }
@@ -748,6 +768,9 @@ pub fn create_agent_service(service: Arc<std::boxed::Box<dyn AgentService + Send
 
     methods.insert("/grpc.AgentService/StopTracing".to_string(),
                     std::boxed::Box::new(StopTracingMethod{service: service.clone()}) as std::boxed::Box<dyn ::ttrpc::MethodHandler + Send + Sync>);
+
+    methods.insert("/grpc.AgentService/GetMetrics".to_string(),
+                    std::boxed::Box::new(GetMetricsMethod{service: service.clone()}) as std::boxed::Box<dyn ::ttrpc::MethodHandler + Send + Sync>);
 
     methods.insert("/grpc.AgentService/CreateSandbox".to_string(),
                     std::boxed::Box::new(CreateSandboxMethod{service: service.clone()}) as std::boxed::Box<dyn ::ttrpc::MethodHandler + Send + Sync>);
