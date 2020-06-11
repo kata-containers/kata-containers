@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Copyright (c) 2017-2018 Intel Corporation
+# Copyright (c) 2017-2020 Intel Corporation
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -11,6 +11,10 @@ typeset -r runtime_path=$(command -v "$runtime_name" 2>/dev/null)
 typeset -r runtime_snap_name="kata-containers.runtime"
 typeset -r runtime_snap_path=$(command -v "$runtime_snap_name" 2>/dev/null)
 typeset -r runtime=${runtime_path:-"$runtime_snap_path"}
+
+typeset -r containerd_shim_v2_name="containerd-shim-kata-v2"
+typeset -r containerd_shim_v2=$(command -v "$containerd_shim_v2_name" 2>/dev/null)
+
 typeset -r issue_url="@PROJECT_BUG_URL@"
 typeset -r script_version="@VERSION@ (commit @COMMIT@)"
 
@@ -398,6 +402,17 @@ show_runtime()
 	separator
 }
 
+show_containerd_shimv2()
+{
+	local cmd="${containerd_shim_v2_name} --version"
+
+	msg "Containerd shim v2 is \`$containerd_shim_v2\`."
+
+	run_cmd_and_show_quoted_output "" "$cmd"
+
+	separator
+}
+
 # Parameter 1: Path to disk image file.
 # Returns: Details of the image, or "$unknown" on error.
 get_image_details()
@@ -712,6 +727,7 @@ show_details()
 	show_meta
 	show_runtime
 	show_runtime_configs
+	show_containerd_shimv2
 	show_throttler_details
 	show_image_details
 	show_initrd_details
