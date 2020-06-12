@@ -132,6 +132,40 @@ separator()
 	echo -e '\n---\n'
 }
 
+# Create an unfoldable section.
+#
+# Note: end_section() must be called to terminate the fold.
+start_section()
+{
+	local title="$1"
+
+	cat <<EOT
+<details>
+<summary>${title}</summary>
+<p>
+
+EOT
+}
+
+end_section()
+{
+	cat <<EOT
+
+</p>
+</details>
+EOT
+}
+
+show_header()
+{
+	start_section "Show <tt>$script_name</tt> details"
+}
+
+show_footer()
+{
+	end_section
+}
+
 have_cmd()
 {
 	local cmd="$1"
@@ -701,23 +735,6 @@ read_osbuilder_file()
 	[ ! -e "$file" ] && return
 
 	cat "$file"
-}
-
-show_header()
-{
-	cat <<EOT
-<details>
-<summary>Show <tt>$script_name</tt> details</summary>
-<p>
-EOT
-}
-
-show_footer()
-{
-	cat <<EOT
-</p>
-</details>
-EOT
 }
 
 show_details()
