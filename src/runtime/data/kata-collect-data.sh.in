@@ -658,6 +658,8 @@ show_throttler_details()
 
 	echo "$throttlers" | while read throttler
 	do
+		[ -z "$throttler" ] && continue
+
 		local cmd
 		cmd="$throttler --version"
 		run_cmd_and_show_quoted_output "" "$cmd"
