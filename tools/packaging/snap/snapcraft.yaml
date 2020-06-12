@@ -338,6 +338,10 @@ parts:
       - curl
       - libcapstone-dev
       - bc
+      - libblkid-dev
+      - libffi-dev
+      - libmount-dev
+      - libselinux1-dev
     override-build: |
       kata_version=$(cat ${SNAPCRAFT_STAGE}/kata_version)
       yq=$(realpath ../../yq/build/yq)
