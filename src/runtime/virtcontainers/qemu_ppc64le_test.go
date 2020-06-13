@@ -7,16 +7,11 @@ package virtcontainers
 
 import (
 	"fmt"
-	"os/exec"
-	"regexp"
-	"strconv"
 	"testing"
 
 	govmmQemu "github.com/intel/govmm/qemu"
 	"github.com/stretchr/testify/assert"
 )
-
-var qemuVersionArgs = "--version"
 
 func newTestQemu(machineType string) qemuArch {
 	config := HypervisorConfig{
@@ -39,31 +34,6 @@ func TestQemuPPC64leCPUModel(t *testing.T) {
 	assert.Equal(expectedOut, model)
 }
 
-func getQemuVersion() (qemuMajorVersion int, qemuMinorVersion int) {
-
-	cmd := exec.Command(defaultQemuPath, qemuVersionArgs)
-	additionalEnv := "LANG=C"
-	cmd.Env = append(cmd.Env, additionalEnv)
-	out, err := cmd.Output()
-	if err != nil {
-		err = fmt.Errorf("Could not execute command %s %s", defaultQemuPath, qemuVersionArgs)
-		fmt.Println(err.Error())
-	}
-
-	re := regexp.MustCompile("[0-9]+")
-	qVer := re.FindAllString(string(out), -1)
-
-	qMajor, err := strconv.Atoi(qVer[0])
-	qMinor, err1 := strconv.Atoi(qVer[1])
-
-	if err != nil || err1 != nil {
-		err = fmt.Errorf("Could not convert string to int")
-		fmt.Println(err.Error())
-	}
-
-	return qMajor, qMinor
-}
-
 func TestQemuPPC64leMemoryTopology(t *testing.T) {
 	assert := assert.New(t)
 	ppc64le := newTestQemu(QemuPseries)
@@ -73,12 +43,7 @@ func TestQemuPPC64leMemoryTopology(t *testing.T) {
 	mem := uint64(120)
 	slots := uint8(10)
 
-	qemuMajorVersion, qemuMinorVersion = getQemuVersion()
 	m := ppc64le.memoryTopology(mem, hostMem, slots)
-
-	if qemuMajorVersion <= 2 && qemuMinorVersion < 10 {
-		hostMem = uint64(defaultMemMaxPPC64le)
-	}
 
 	expectedMemory := govmmQemu.Memory{
 		Size:   fmt.Sprintf("%dM", mem),
