@@ -335,10 +335,7 @@ func (q *qemu) qmpSocketPath(id string) (string, error) {
 }
 
 func (q *qemu) getQemuMachine() (govmmQemu.Machine, error) {
-	machine, err := q.arch.machine()
-	if err != nil {
-		return govmmQemu.Machine{}, err
-	}
+	machine := q.arch.machine()
 
 	accelerators := q.config.MachineAccelerators
 	if accelerators != "" {
@@ -1542,10 +1539,7 @@ func (q *qemu) hotplugAddCPUs(amount uint32) (uint32, error) {
 		return 0, fmt.Errorf("failed to query hotpluggable CPUs: %v", err)
 	}
 
-	machine, err := q.arch.machine()
-	if err != nil {
-		return 0, fmt.Errorf("failed to query machine type: %v", err)
-	}
+	machine := q.arch.machine()
 
 	var hotpluggedVCPUs uint32
 	for _, hc := range hotpluggableVCPUs {

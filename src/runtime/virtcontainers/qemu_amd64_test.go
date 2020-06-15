@@ -138,9 +138,7 @@ func TestQemuAmd64AppendImage(t *testing.T) {
 	cfg.DisableImageNvdimm = false
 	amd64, err := newQemuArch(cfg)
 	assert.NoError(err)
-	for _, m := range amd64.(*qemuAmd64).supportedQemuMachines {
-		assert.Contains(m.Options, qemuNvdimmOption)
-	}
+	assert.Contains(amd64.machine().Options, qemuNvdimmOption)
 
 	expectedOut := []govmmQemu.Device{
 		govmmQemu.Object{
@@ -163,9 +161,7 @@ func TestQemuAmd64AppendImage(t *testing.T) {
 	cfg.DisableImageNvdimm = true
 	amd64, err = newQemuArch(cfg)
 	assert.NoError(err)
-	for _, m := range amd64.(*qemuAmd64).supportedQemuMachines {
-		assert.NotContains(m.Options, qemuNvdimmOption)
-	}
+	assert.NotContains(amd64.machine().Options, qemuNvdimmOption)
 
 	found := false
 	devices, err = amd64.appendImage(nil, f.Name())
@@ -243,9 +239,7 @@ func TestQemuAmd64WithInitrd(t *testing.T) {
 	amd64, err := newQemuArch(cfg)
 	assert.NoError(err)
 
-	for _, m := range amd64.(*qemuAmd64).supportedQemuMachines {
-		assert.NotContains(m.Options, qemuNvdimmOption)
-	}
+	assert.NotContains(amd64.machine().Options, qemuNvdimmOption)
 }
 
 func TestQemuAmd64Iommu(t *testing.T) {
@@ -259,8 +253,6 @@ func TestQemuAmd64Iommu(t *testing.T) {
 	p := qemu.kernelParameters(false)
 	assert.Contains(p, Param{"intel_iommu", "on"})
 
-	m, err := qemu.machine()
-
-	assert.NoError(err)
+	m := qemu.machine()
 	assert.Contains(m.Options, "kernel_irqchip=split")
 }

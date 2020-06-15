@@ -152,9 +152,7 @@ func TestQemuArm64AppendImage(t *testing.T) {
 	cfg := qemuConfig(QemuVirt)
 	cfg.ImagePath = f.Name()
 	arm64 := newQemuArch(cfg)
-	for _, m := range arm64.(*qemuArm64).supportedQemuMachines {
-		assert.Contains(m.Options, qemuNvdimmOption)
-	}
+	assert.Contains(m.machine().Options, qemuNvdimmOption)
 
 	expectedOut := []govmmQemu.Device{
 		govmmQemu.Object{
@@ -182,7 +180,5 @@ func TestQemuArm64WithInitrd(t *testing.T) {
 	cfg.InitrdPath = "dummy-initrd"
 	arm64 := newQemuArch(cfg)
 
-	for _, m := range arm64.(*qemuArm64).supportedQemuMachines {
-		assert.NotContains(m.Options, qemuNvdimmOption)
-	}
+	assert.NotContains(m.machine().Options, qemuNvdimmOption)
 }
