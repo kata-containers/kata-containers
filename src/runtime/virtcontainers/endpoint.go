@@ -29,6 +29,11 @@ type Endpoint interface {
 
 	save() persistapi.NetworkEndpoint
 	load(persistapi.NetworkEndpoint)
+
+	GetRxRateLimiter() bool
+	SetRxRateLimiter() error
+	GetTxRateLimiter() bool
+	SetTxRateLimiter() error
 }
 
 // EndpointType identifies the type of the network endpoint.
