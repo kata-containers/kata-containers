@@ -40,11 +40,9 @@ var kernelParams = []Param{
 	{"net.ifnames", "0"},
 }
 
-var supportedQemuMachines = []govmmQemu.Machine{
-	{
-		Type:    QemuPseries,
-		Options: defaultQemuMachineOptions,
-	},
+var supportedQemuMachine = govmmQemu.Machine {
+	Type:    QemuPseries,
+	Options: defaultQemuMachineOptions,
 }
 
 // Logger returns a logrus logger appropriate for logging qemu messages
@@ -69,10 +67,9 @@ func newQemuArch(config HypervisorConfig) (qemuArch, error) {
 
 	q := &qemuPPC64le{
 		qemuArchBase{
-			machineType:           machineType,
+			qemuMachine:           supportedQemuMachine,
 			memoryOffset:          config.MemOffset,
 			qemuPaths:             qemuPaths,
-			supportedQemuMachines: supportedQemuMachines,
 			kernelParamsNonDebug:  kernelParamsNonDebug,
 			kernelParamsDebug:     kernelParamsDebug,
 			kernelParams:          kernelParams,
@@ -90,7 +87,7 @@ func (q *qemuPPC64le) capabilities() types.Capabilities {
 	var caps types.Capabilities
 
 	// pseries machine type supports hotplugging drives
-	if q.machineType == QemuPseries {
+	if q.qemuMachine.Type == QemuPseries {
 		caps.SetBlockDeviceHotplugSupport()
 	}
 
@@ -101,7 +98,7 @@ func (q *qemuPPC64le) capabilities() types.Capabilities {
 }
 
 func (q *qemuPPC64le) bridges(number uint32) {
-	q.Bridges = genericBridges(number, q.machineType)
+	q.Bridges = genericBridges(number, q.qemuMachine.Type)
 }
 
 func (q *qemuPPC64le) cpuModel() string {
@@ -117,7 +114,7 @@ func (q *qemuPPC64le) memoryTopology(memoryMb, hostMemoryMb uint64, slots uint8)
 
 // appendBridges appends to devices the given bridges
 func (q *qemuPPC64le) appendBridges(devices []govmmQemu.Device) []govmmQemu.Device {
-	return genericAppendBridges(devices, q.Bridges, q.machineType)
+	return genericAppendBridges(devices, q.Bridges, q.qemuMachine.Type)
 }
 
 func (q *qemuPPC64le) appendIOMMU(devices []govmmQemu.Device) ([]govmmQemu.Device, error) {

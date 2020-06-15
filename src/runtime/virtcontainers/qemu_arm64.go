@@ -40,11 +40,9 @@ var kernelParams = []Param{
 	{"iommu.passthrough", "0"},
 }
 
-var supportedQemuMachines = []govmmQemu.Machine{
-	{
-		Type:    QemuVirt,
-		Options: defaultQemuMachineOptions,
-	},
+var supportedQemuMachine = govmmQemu.Machine {
+	Type:    QemuVirt,
+	Options: defaultQemuMachineOptions,
 }
 
 // Logger returns a logrus logger appropriate for logging qemu-aarch64 messages
@@ -137,10 +135,9 @@ func newQemuArch(config HypervisorConfig) (qemuArch, error) {
 
 	q := &qemuArm64{
 		qemuArchBase{
-			machineType:           machineType,
+		        qemuMachine:           supportedQemuMachine,
 			memoryOffset:          config.MemOffset,
 			qemuPaths:             qemuPaths,
-			supportedQemuMachines: supportedQemuMachines,
 			kernelParamsNonDebug:  kernelParamsNonDebug,
 			kernelParamsDebug:     kernelParamsDebug,
 			kernelParams:          kernelParams,
@@ -154,12 +151,12 @@ func newQemuArch(config HypervisorConfig) (qemuArch, error) {
 }
 
 func (q *qemuArm64) bridges(number uint32) {
-	q.Bridges = genericBridges(number, q.machineType)
+	q.Bridges = genericBridges(number, q.qemuMachine.Type)
 }
 
 // appendBridges appends to devices the given bridges
 func (q *qemuArm64) appendBridges(devices []govmmQemu.Device) []govmmQemu.Device {
-	return genericAppendBridges(devices, q.Bridges, q.machineType)
+	return genericAppendBridges(devices, q.Bridges, q.qemuMachine.Type)
 }
 
 func (q *qemuArm64) appendImage(devices []govmmQemu.Device, path string) ([]govmmQemu.Device, error) {

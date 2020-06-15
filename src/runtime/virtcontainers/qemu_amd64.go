@@ -100,7 +100,6 @@ func newQemuArch(config HypervisorConfig) (qemuArch, error) {
 		factory = true
 	}
 
-	var qemuMachines = supportedQemuMachines
 	if config.IOMMU {
 		var q35QemuIOMMUOptions = "accel=kvm,kernel_irqchip=split"
 
@@ -109,22 +108,16 @@ func newQemuArch(config HypervisorConfig) (qemuArch, error) {
 		kernelParams = append(kernelParams,
 			Param{"iommu", "pt"})
 
-		for i, m := range qemuMachines {
-			if m.Type == QemuQ35 {
-				qemuMachines[i].Options = q35QemuIOMMUOptions
-			}
+		if mp.Type == QemuQ35 {
+			mp.Options = q35QemuIOMMUOptions
 		}
-	} else {
-		kernelParams = append(kernelParams,
-			Param{"iommu", "off"})
 	}
 
 	q := &qemuAmd64{
 		qemuArchBase: qemuArchBase{
-			machineType:           machineType,
+			qemuMachine:           *mp,
 			memoryOffset:          config.MemOffset,
 			qemuPaths:             qemuPaths,
-			supportedQemuMachines: qemuMachines,
 			kernelParamsNonDebug:  kernelParamsNonDebug,
 			kernelParamsDebug:     kernelParamsDebug,
 			kernelParams:          kernelParams,
@@ -142,9 +135,9 @@ func newQemuArch(config HypervisorConfig) (qemuArch, error) {
 func (q *qemuAmd64) capabilities() types.Capabilities {
 	var caps types.Capabilities
 
-	if q.machineType == QemuPC ||
-		q.machineType == QemuQ35 ||
-		q.machineType == QemuVirt {
+	if q.qemuMachine.Type == QemuPC ||
+		q.qemuMachine.Type == QemuQ35 ||
+		q.qemuMachine.Type == QemuVirt {
 		caps.SetBlockDeviceHotplugSupport()
 	}
 
@@ -155,7 +148,7 @@ func (q *qemuAmd64) capabilities() types.Capabilities {
 }
 
 func (q *qemuAmd64) bridges(number uint32) {
-	q.Bridges = genericBridges(number, q.machineType)
+	q.Bridges = genericBridges(number, q.qemuMachine.Type)
 }
 
 func (q *qemuAmd64) cpuModel() string {
@@ -187,5 +180,5 @@ func (q *qemuAmd64) appendImage(devices []govmmQemu.Device, path string) ([]govm
 
 // appendBridges appends to devices the given bridges
 func (q *qemuAmd64) appendBridges(devices []govmmQemu.Device) []govmmQemu.Device {
-	return genericAppendBridges(devices, q.Bridges, q.machineType)
+	return genericAppendBridges(devices, q.Bridges, q.qemuMachine.Type)
 }

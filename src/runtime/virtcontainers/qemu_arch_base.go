@@ -38,7 +38,7 @@ type qemuArch interface {
 	disableVhostNet()
 
 	// machine returns the machine type
-	machine() (govmmQemu.Machine, error)
+	machine() govmmQemu.Machine
 
 	// qemuPath returns the path to the QEMU binary
 	qemuPath() (string, error)
@@ -136,7 +136,7 @@ type qemuArch interface {
 }
 
 type qemuArchBase struct {
-	machineType           string
+	qemuMachine           govmmQemu.Machine
 	memoryOffset          uint32
 	nestedRun             bool
 	vhost                 bool
@@ -144,7 +144,6 @@ type qemuArchBase struct {
 	dax                   bool
 	networkIndex          int
 	qemuPaths             map[string]string
-	supportedQemuMachines []govmmQemu.Machine
 	kernelParamsNonDebug  []Param
 	kernelParamsDebug     []Param
 	kernelParams          []Param
@@ -239,20 +238,14 @@ func (q *qemuArchBase) disableVhostNet() {
 	q.vhost = false
 }
 
-func (q *qemuArchBase) machine() (govmmQemu.Machine, error) {
-	for _, m := range q.supportedQemuMachines {
-		if m.Type == q.machineType {
-			return m, nil
-		}
-	}
-
-	return govmmQemu.Machine{}, fmt.Errorf("unrecognised machine type: %v", q.machineType)
+func (q *qemuArchBase) machine() govmmQemu.Machine {
+	return q.qemuMachine
 }
 
 func (q *qemuArchBase) qemuPath() (string, error) {
-	p, ok := q.qemuPaths[q.machineType]
+	p, ok := q.qemuPaths[q.qemuMachine.Type]
 	if !ok {
-		return "", fmt.Errorf("Unknown machine type: %s", q.machineType)
+		return "", fmt.Errorf("Unknown machine type: %s", q.qemuMachine.Type)
 	}
 
 	return p, nil
@@ -681,12 +674,9 @@ func (q *qemuArchBase) handleImagePath(config HypervisorConfig) {
 	if config.ImagePath != "" {
 		kernelRootParams := commonVirtioblkKernelRootParams
 		if !q.disableNvdimm {
-			for i := range q.supportedQemuMachines {
-				q.supportedQemuMachines[i].Options = strings.Join([]string{
-					q.supportedQemuMachines[i].Options,
-					qemuNvdimmOption,
-				}, ",")
-			}
+			q.qemuMachine.Options = strings.Join([]string{
+				q.qemuMachine.Options, qemuNvdimmOption,
+			}, ",")
 			if q.dax {
 				kernelRootParams = commonNvdimmKernelRootParams
 			} else {
@@ -767,13 +757,12 @@ func (q *qemuArchBase) addBridge(b types.Bridge) {
 
 // appendPCIeRootPortDevice appends to devices the given pcie-root-port
 func (q *qemuArchBase) appendPCIeRootPortDevice(devices []govmmQemu.Device, number uint32) []govmmQemu.Device {
-	return genericAppendPCIeRootPort(devices, number, q.machineType)
-
+	return genericAppendPCIeRootPort(devices, number, q.qemuMachine.Type)
 }
 
 // appendIOMMU appends a virtual IOMMU device
 func (q *qemuArchBase) appendIOMMU(devices []govmmQemu.Device) ([]govmmQemu.Device, error) {
-	switch q.machineType {
+	switch q.qemuMachine.Type {
 	case QemuQ35:
 		iommu := govmmQemu.IommuDev{
 			Intremap:    true,
@@ -784,6 +773,6 @@ func (q *qemuArchBase) appendIOMMU(devices []govmmQemu.Device) ([]govmmQemu.Devi
 		devices = append(devices, iommu)
 		return devices, nil
 	default:
-		return devices, fmt.Errorf("Machine Type %s does not support vIOMMU", q.machineType)
+		return devices, fmt.Errorf("Machine Type %s does not support vIOMMU", q.qemuMachine.Type)
 	}
 }

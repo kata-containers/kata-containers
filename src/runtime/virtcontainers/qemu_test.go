@@ -342,7 +342,10 @@ func TestQemuQemuPath(t *testing.T) {
 	qemuConfig := newQemuConfig()
 	qemuConfig.HypervisorPath = expectedPath
 	qkvm := &qemuArchBase{
-		machineType: "pc",
+		qemuMachine: govmmQemu.Machine{
+			Type: "pc",
+			Options: "",
+		},
 		qemuPaths: map[string]string{
 			"pc": expectedPath,
 		},
@@ -371,7 +374,7 @@ func TestQemuQemuPath(t *testing.T) {
 	assert.Equal(path, expectedPath)
 
 	// bad machine type, arch should fail
-	qkvm.machineType = "rgb"
+	qkvm.qemuMachine.Type = "rgb"
 	q.arch = qkvm
 	path, err = q.qemuPath()
 	assert.Error(err)
