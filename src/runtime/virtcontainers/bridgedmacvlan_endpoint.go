@@ -18,6 +18,8 @@ type BridgedMacvlanEndpoint struct {
 	EndpointProperties NetworkInfo
 	EndpointType       EndpointType
 	PCIAddr            string
+	RxRateLimiter      bool
+	TxRateLimiter      bool
 }
 
 func createBridgedMacvlanNetworkEndpoint(idx int, ifName string, interworkingModel NetInterworkingModel) (*BridgedMacvlanEndpoint, error) {
@@ -135,4 +137,22 @@ func (endpoint *BridgedMacvlanEndpoint) load(s persistapi.NetworkEndpoint) {
 		netpair := loadNetIfPair(&s.BridgedMacvlan.NetPair)
 		endpoint.NetPair = *netpair
 	}
+}
+
+func (endpoint *BridgedMacvlanEndpoint) GetRxRateLimiter() bool {
+	return endpoint.RxRateLimiter
+}
+
+func (endpoint *BridgedMacvlanEndpoint) SetRxRateLimiter() error {
+	endpoint.RxRateLimiter = true
+	return nil
+}
+
+func (endpoint *BridgedMacvlanEndpoint) GetTxRateLimiter() bool {
+	return endpoint.TxRateLimiter
+}
+
+func (endpoint *BridgedMacvlanEndpoint) SetTxRateLimiter() error {
+	endpoint.TxRateLimiter = true
+	return nil
 }

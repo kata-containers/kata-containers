@@ -21,6 +21,8 @@ type TapEndpoint struct {
 	EndpointProperties NetworkInfo
 	EndpointType       EndpointType
 	PCIAddr            string
+	RxRateLimiter      bool
+	TxRateLimiter      bool
 }
 
 // Properties returns the properties of the tap interface.
@@ -206,4 +208,22 @@ func (endpoint *TapEndpoint) load(s persistapi.NetworkEndpoint) {
 		tapif := loadTapIf(&s.Tap.TapInterface)
 		endpoint.TapInterface = *tapif
 	}
+}
+
+func (endpoint *TapEndpoint) GetRxRateLimiter() bool {
+	return endpoint.RxRateLimiter
+}
+
+func (endpoint *TapEndpoint) SetRxRateLimiter() error {
+	endpoint.RxRateLimiter = true
+	return nil
+}
+
+func (endpoint *TapEndpoint) GetTxRateLimiter() bool {
+	return endpoint.TxRateLimiter
+}
+
+func (endpoint *TapEndpoint) SetTxRateLimiter() error {
+	endpoint.TxRateLimiter = true
+	return nil
 }

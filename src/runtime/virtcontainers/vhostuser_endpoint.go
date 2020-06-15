@@ -169,3 +169,21 @@ func (endpoint *VhostUserEndpoint) load(s persistapi.NetworkEndpoint) {
 		endpoint.PCIAddr = s.VhostUser.PCIAddr
 	}
 }
+
+// unsupported
+func (endpoint *VhostUserEndpoint) GetRxRateLimiter() bool {
+	return false
+}
+
+func (endpoint *VhostUserEndpoint) SetRxRateLimiter() error {
+	return fmt.Errorf("rx rate limiter is unsupported for vhost user endpoint")
+}
+
+// unsupported
+func (endpoint *VhostUserEndpoint) GetTxRateLimiter() bool {
+	return false
+}
+
+func (endpoint *VhostUserEndpoint) SetTxRateLimiter() error {
+	return fmt.Errorf("tx rate limiter is unsupported for vhost user endpoint")
+}
