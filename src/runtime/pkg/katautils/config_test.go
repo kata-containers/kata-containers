@@ -872,6 +872,104 @@ func TestNewQemuHypervisorConfig(t *testing.T) {
 	}
 }
 
+func TestNewFirecrackerHypervisorConfig(t *testing.T) {
+	dir, err := ioutil.TempDir(testDir, "hypervisor-config-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(dir)
+
+	hypervisorPath := path.Join(dir, "hypervisor")
+	kernelPath := path.Join(dir, "kernel")
+	imagePath := path.Join(dir, "image")
+	jailerPath := path.Join(dir, "jailer")
+	disableBlockDeviceUse := false
+	disableVhostNet := true
+	useVSock := true
+	blockDeviceDriver := "virtio-mmio"
+	// !0Mbits/sec
+	rxRateLimiterMaxRate := uint64(10000000)
+	txRateLimiterMaxRate := uint64(10000000)
+	orgVHostVSockDevicePath := utils.VHostVSockDevicePath
+	defer func() {
+		utils.VHostVSockDevicePath = orgVHostVSockDevicePath
+	}()
+	utils.VHostVSockDevicePath = "/dev/null"
+
+	hypervisor := hypervisor{
+		Path:                  hypervisorPath,
+		Kernel:                kernelPath,
+		Image:                 imagePath,
+		JailerPath:            jailerPath,
+		DisableBlockDeviceUse: disableBlockDeviceUse,
+		BlockDeviceDriver:     blockDeviceDriver,
+		RxRateLimiterMaxRate:  rxRateLimiterMaxRate,
+		TxRateLimiterMaxRate:  txRateLimiterMaxRate,
+	}
+
+	files := []string{hypervisorPath, kernelPath, imagePath, jailerPath}
+	filesLen := len(files)
+
+	for i, file := range files {
+		_, err := newFirecrackerHypervisorConfig(hypervisor)
+		if err == nil {
+			t.Fatalf("Expected newFirecrackerHypervisorConfig to fail as not all paths exist (not created %v)",
+				strings.Join(files[i:filesLen], ","))
+		}
+
+		// create the resource
+		err = createEmptyFile(file)
+		if err != nil {
+			t.Error(err)
+		}
+	}
+
+	config, err := newFirecrackerHypervisorConfig(hypervisor)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if config.HypervisorPath != hypervisor.Path {
+		t.Errorf("Expected hypervisor path %v, got %v", hypervisor.Path, config.HypervisorPath)
+	}
+
+	if config.KernelPath != hypervisor.Kernel {
+		t.Errorf("Expected kernel path %v, got %v", hypervisor.Kernel, config.KernelPath)
+	}
+
+	if config.ImagePath != hypervisor.Image {
+		t.Errorf("Expected image path %v, got %v", hypervisor.Image, config.ImagePath)
+	}
+
+	if config.JailerPath != hypervisor.JailerPath {
+		t.Errorf("Expected jailer path %v, got %v", hypervisor.JailerPath, config.JailerPath)
+	}
+
+	if config.DisableBlockDeviceUse != disableBlockDeviceUse {
+		t.Errorf("Expected value for disable block usage %v, got %v", disableBlockDeviceUse, config.DisableBlockDeviceUse)
+	}
+
+	if config.BlockDeviceDriver != blockDeviceDriver {
+		t.Errorf("Expected value for block device driver %v, got %v", blockDeviceDriver, config.BlockDeviceDriver)
+	}
+
+	if config.DisableVhostNet != disableVhostNet {
+		t.Errorf("Expected value for disable vhost net usage %v, got %v", disableVhostNet, config.DisableVhostNet)
+	}
+
+	if config.UseVSock != useVSock {
+		t.Errorf("Expected value for vsock usage %v, got %v", useVSock, config.UseVSock)
+	}
+
+	if config.RxRateLimiterMaxRate != rxRateLimiterMaxRate {
+		t.Errorf("Expected value for rx rate limiter %v, got %v", rxRateLimiterMaxRate, config.RxRateLimiterMaxRate)
+	}
+
+	if config.TxRateLimiterMaxRate != txRateLimiterMaxRate {
+		t.Errorf("Expected value for tx rate limiter %v, got %v", txRateLimiterMaxRate, config.TxRateLimiterMaxRate)
+	}
+}
+
 func TestNewQemuHypervisorConfigImageAndInitrd(t *testing.T) {
 	assert := assert.New(t)
 
