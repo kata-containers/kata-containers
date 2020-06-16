@@ -1323,6 +1323,22 @@ func (n *Network) Remove(ctx context.Context, ns *NetworkNamespace, hypervisor h
 	defer span.Finish()
 
 	for _, endpoint := range ns.Endpoints {
+		if endpoint.GetRxRateLimiter() {
+			networkLogger().WithField("endpoint-type", endpoint.Type()).Info("Deleting rx rate limiter")
+			// Deleting rx rate limiter should enter the network namespace.
+			if err := removeRxRateLimiter(endpoint, ns.NetNsPath); err != nil {
+				return err
+			}
+		}
+
+		if endpoint.GetTxRateLimiter() {
+			networkLogger().WithField("endpoint-type", endpoint.Type()).Info("Deleting tx rate limiter")
+			// Deleting tx rate limiter should enter the network namespace.
+			if err := removeTxRateLimiter(endpoint, ns.NetNsPath); err != nil {
+				return err
+			}
+		}
+
 		// Detach for an endpoint should enter the network namespace
 		// if required.
 		networkLogger().WithField("endpoint-type", endpoint.Type()).Info("Detaching endpoint")
@@ -1545,4 +1561,115 @@ func addTxRateLimiter(endpoint Endpoint, maxRate uint64) error {
 	}
 
 	return addHTBQdisc(ifbIndex, maxRate)
+}
+
+func removeHTBQdisc(linkName string) error {
+	link, err := netlink.LinkByName(linkName)
+	if err != nil {
+		return fmt.Errorf("Get link %s by name failed: %v", linkName, err)
+	}
+
+	qdiscs, err := netlink.QdiscList(link)
+	if err != nil {
+		return err
+	}
+
+	for _, qdisc := range qdiscs {
+		htb, ok := qdisc.(*netlink.Htb)
+		if !ok {
+			continue
+		}
+
+		if err := netlink.QdiscDel(htb); err != nil {
+			return fmt.Errorf("Failed to delete htb qdisc on link %s: %v", linkName, err)
+		}
+	}
+
+	return nil
+}
+
+func removeRxRateLimiter(endpoint Endpoint, networkNSPath string) error {
+	var linkName string
+	switch ep := endpoint.(type) {
+	case *VethEndpoint, *IPVlanEndpoint, *TuntapEndpoint, *BridgedMacvlanEndpoint:
+		netPair := endpoint.NetworkPair()
+		linkName = netPair.TapInterface.TAPIface.Name
+	case *MacvtapEndpoint, *TapEndpoint:
+		linkName = endpoint.Name()
+	default:
+		return fmt.Errorf("Unsupported endpointType %s for removing rx rate limiter", ep.Type())
+	}
+
+	if err := doNetNS(networkNSPath, func(_ ns.NetNS) error {
+		return removeHTBQdisc(linkName)
+	}); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func removeTxRateLimiter(endpoint Endpoint, networkNSPath string) error {
+	var linkName string
+	switch ep := endpoint.(type) {
+	case *VethEndpoint, *IPVlanEndpoint, *TuntapEndpoint, *BridgedMacvlanEndpoint:
+		netPair := endpoint.NetworkPair()
+		switch netPair.NetInterworkingModel {
+		case NetXConnectTCFilterModel:
+			linkName = netPair.VirtIface.Name
+			if err := doNetNS(networkNSPath, func(_ ns.NetNS) error {
+				return removeHTBQdisc(linkName)
+			}); err != nil {
+				return err
+			}
+			return nil
+		case NetXConnectMacVtapModel, NetXConnectNoneModel:
+			linkName = netPair.TapInterface.TAPIface.Name
+		}
+	case *MacvtapEndpoint, *TapEndpoint:
+		linkName = endpoint.Name()
+	default:
+		return fmt.Errorf("Unsupported endpointType %s for adding tx rate limiter", ep.Type())
+	}
+
+	if err := doNetNS(networkNSPath, func(_ ns.NetNS) error {
+		link, err := netlink.LinkByName(linkName)
+		if err != nil {
+			return fmt.Errorf("Get link %s by name failed: %v", linkName, err)
+		}
+
+		if err := removeRedirectTCFilter(link); err != nil {
+			return err
+		}
+
+		if err := removeQdiscIngress(link); err != nil {
+			return err
+		}
+
+		netHandle, err := netlink.NewHandle()
+		if err != nil {
+			return err
+		}
+		defer netHandle.Delete()
+
+		// remove ifb interface
+		ifbLink, err := netlink.LinkByName("ifb0")
+		if err != nil {
+			return fmt.Errorf("Get link %s by name failed: %v", linkName, err)
+		}
+
+		if err := netHandle.LinkSetDown(ifbLink); err != nil {
+			return fmt.Errorf("Could not disable ifb interface: %v", err)
+		}
+
+		if err := netHandle.LinkDel(ifbLink); err != nil {
+			return fmt.Errorf("Could not remove ifb interface: %v", err)
+		}
+
+		return nil
+	}); err != nil {
+		return err
+	}
+
+	return nil
 }
