@@ -29,7 +29,7 @@ use nix::sys::stat;
 use nix::unistd::{self, Pid};
 use rustjail::process::ProcessOperations;
 
-use crate::device::{add_devices, rescan_pci_bus};
+use crate::device::{add_devices, rescan_pci_bus, update_device_cgroup};
 use crate::linux_abi::*;
 use crate::mount::{add_storages, remove_mounts, STORAGEHANDLERLIST};
 use crate::namespace::{NSTYPEIPC, NSTYPEPID, NSTYPEUTS};
@@ -120,6 +120,9 @@ impl agentService {
         }
 
         update_container_namespaces(&s, &mut oci)?;
+
+        // Add the root partition to the device cgroup to prevent access
+        update_device_cgroup(&mut oci)?;
 
         // write spec to bundle path, hooks might
         // read ocispec

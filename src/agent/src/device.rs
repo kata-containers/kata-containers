@@ -4,6 +4,7 @@
 //
 
 use libc::{c_uint, major, minor};
+use nix::sys::stat;
 use std::collections::HashMap;
 use std::fs;
 use std::os::unix::fs::MetadataExt;
@@ -14,7 +15,7 @@ use crate::linux_abi::*;
 use crate::mount::{DRIVERBLKTYPE, DRIVERMMIOBLKTYPE, DRIVERNVDIMMTYPE, DRIVERSCSITYPE};
 use crate::sandbox::Sandbox;
 use crate::{AGENT_CONFIG, GLOBAL_DEVICE_WATCHER};
-use oci::Spec;
+use oci::{LinuxDeviceCgroup, LinuxResources, Spec};
 use protocols::agent::Device;
 use rustjail::errors::*;
 
@@ -24,6 +25,8 @@ macro_rules! sl {
         slog_scope::logger().new(o!("subsystem" => "device"))
     };
 }
+
+const VM_ROOTFS: &str = "/";
 
 // DeviceHandler is the type of callback to be defined to handle every type of device driver.
 type DeviceHandler = fn(&Device, &mut Spec, &Arc<Mutex<Sandbox>>) -> Result<()>;
@@ -358,5 +361,65 @@ fn add_device(device: &Device, spec: &mut Spec, sandbox: &Arc<Mutex<Sandbox>>) -
     match DEVICEHANDLERLIST.get(device.field_type.as_str()) {
         None => Err(ErrorKind::Msg(format!("Unknown device type {}", device.field_type)).into()),
         Some(dev_handler) => dev_handler(device, spec, sandbox),
+    }
+}
+
+// update_device_cgroup update the device cgroup for container
+// to not allow access to the guest root partition. This prevents
+// the container from being able to access the VM rootfs.
+pub fn update_device_cgroup(spec: &mut Spec) -> Result<()> {
+    let meta = fs::metadata(VM_ROOTFS)?;
+    let rdev = meta.dev();
+    let major = stat::major(rdev) as i64;
+    let minor = stat::minor(rdev) as i64;
+
+    let linux = match spec.linux.as_mut() {
+        None => {
+            return Err(
+                ErrorKind::ErrorCode("Spec didn't container linux field".to_string()).into(),
+            )
+        }
+        Some(l) => l,
+    };
+
+    if linux.resources.is_none() {
+        linux.resources = Some(LinuxResources::default());
+    }
+
+    let resources = linux.resources.as_mut().unwrap();
+    resources.devices.push(LinuxDeviceCgroup {
+        allow: false,
+        major: Some(major),
+        minor: Some(minor),
+        r#type: String::from("b"),
+        access: String::from("rwm"),
+    });
+
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use oci::Linux;
+
+    #[test]
+    fn test_update_device_cgroup() {
+        let mut spec = Spec::default();
+
+        spec.linux = Some(Linux::default());
+
+        update_device_cgroup(&mut spec).unwrap();
+
+        let devices = spec.linux.unwrap().resources.unwrap().devices;
+        assert_eq!(devices.len(), 1);
+
+        let meta = fs::metadata(VM_ROOTFS).unwrap();
+        let rdev = meta.dev();
+        let major = stat::major(rdev) as i64;
+        let minor = stat::minor(rdev) as i64;
+
+        assert_eq!(devices[0].major, Some(major));
+        assert_eq!(devices[0].minor, Some(minor));
     }
 }
