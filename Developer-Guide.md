@@ -9,6 +9,7 @@
         * [debug logs and shimv2](#debug-logs-and-shimv2)
             * [Enabling full `containerd` debug](#enabling-full-containerd-debug)
             * [Enabling just `containerd shim` debug](#enabling-just-containerd-shim-debug)
+            * [Enabling `CRI-O` and `shimv2` debug](#enabling-cri-o-and-shimv2-debug)
         * [journald rate limiting](#journald-rate-limiting)
             * [`systemd-journald` suppressing messages](#systemd-journald-suppressing-messages)
             * [Disabling `systemd-journald` rate limiting](#disabling-systemd-journald-rate-limiting)
@@ -175,6 +176,25 @@ option in the `plugins.linux` section of the `containerd` configuration file, su
   [plugins.linux]
     shim_debug = true
 ```
+
+#### Enabling `CRI-O` and `shimv2` debug
+
+Depending on the CRI-O version being used one of the following configuration files can
+be found: `/etc/crio/crio.conf` or `/etc/crio/crio.conf.d/00-default`.
+
+If the latter is found, the change must be done there as it'll take precedence, overriding
+`/etc/crio/crio.conf`.
+
+```toml
+# Changes the verbosity of the logs based on the level it is set to. Options
+# are fatal, panic, error, warn, info, debug and trace. This option supports
+# live configuration reload.
+log_level = "info"
+```
+
+Switching the default `log_level` from `info` to `debug` enables shimv2 debug logs.
+CRI-O logs can be found by using the `crio` identifier, and Kata specific logs can
+be found by using the `kata` identifier.
 
 ### journald rate limiting
 
