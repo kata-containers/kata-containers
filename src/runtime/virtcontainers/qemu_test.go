@@ -346,9 +346,7 @@ func TestQemuQemuPath(t *testing.T) {
 			Type: "pc",
 			Options: "",
 		},
-		qemuPaths: map[string]string{
-			"pc": expectedPath,
-		},
+		qemuExePath: expectedPath,
 	}
 
 	q := &qemu{
@@ -372,13 +370,6 @@ func TestQemuQemuPath(t *testing.T) {
 	path, err = q.qemuPath()
 	assert.NoError(err)
 	assert.Equal(path, expectedPath)
-
-	// bad machine type, arch should fail
-	qkvm.qemuMachine.Type = "rgb"
-	q.arch = qkvm
-	path, err = q.qemuPath()
-	assert.Error(err)
-	assert.Equal(path, "")
 }
 
 func TestHotplugUnsupportedDeviceType(t *testing.T) {

@@ -53,8 +53,8 @@ var qemuArchBaseKernelParams = []Param{
 func newQemuArchBase() *qemuArchBase {
 	return &qemuArchBase{
 		qemuMachine:           qemuArchBaseMachine,
+		qemuExePath:           qemuArchBaseQemuPaths[qemuArchBaseMachine.Type],
 		nestedRun:             false,
-		qemuPaths:             qemuArchBaseQemuPaths,
 		kernelParamsNonDebug:  qemuArchBaseKernelParamsNonDebug,
 		kernelParamsDebug:     qemuArchBaseKernelParamsDebug,
 		kernelParams:          qemuArchBaseKernelParams,
@@ -89,17 +89,8 @@ func TestQemuArchBaseQemuPath(t *testing.T) {
 	assert := assert.New(t)
 	qemuArchBase := newQemuArchBase()
 
-	p, err := qemuArchBase.qemuPath()
-	assert.NoError(err)
+	p := qemuArchBase.qemuPath()
 	assert.Equal(p, qemuArchBaseQemuPath)
-
-	paths := map[string]string{
-		"bad": qemuArchBaseQemuPath,
-	}
-	qemuArchBase.qemuPaths = paths
-	p, err = qemuArchBase.qemuPath()
-	assert.Error(err)
-	assert.Equal("", p)
 }
 
 func TestQemuArchBaseKernelParameters(t *testing.T) {

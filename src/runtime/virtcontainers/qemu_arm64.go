@@ -30,10 +30,6 @@ const qmpMigrationWaitTimeout = 10 * time.Second
 
 var defaultQemuMachineOptions = "usb=off,accel=kvm,gic-version=" + getGuestGICVersion()
 
-var qemuPaths = map[string]string{
-	QemuVirt: defaultQemuPath,
-}
-
 var kernelParams = []Param{
 	{"console", "hvc0"},
 	{"console", "hvc1"},
@@ -136,8 +132,8 @@ func newQemuArch(config HypervisorConfig) (qemuArch, error) {
 	q := &qemuArm64{
 		qemuArchBase{
 		        qemuMachine:           supportedQemuMachine,
+			qemuExePath:           defaultQemuPath,
 			memoryOffset:          config.MemOffset,
-			qemuPaths:             qemuPaths,
 			kernelParamsNonDebug:  kernelParamsNonDebug,
 			kernelParamsDebug:     kernelParamsDebug,
 			kernelParams:          kernelParams,

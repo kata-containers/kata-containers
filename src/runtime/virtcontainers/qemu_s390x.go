@@ -29,10 +29,6 @@ const virtioSerialCCW = "virtio-serial-ccw"
 
 const qmpMigrationWaitTimeout = 5 * time.Second
 
-var qemuPaths = map[string]string{
-	QemuCCWVirtio: defaultQemuPath,
-}
-
 // Verify needed parameters
 var kernelParams = []Param{
 	{"console", "ttysclp0"},
@@ -66,8 +62,8 @@ func newQemuArch(config HypervisorConfig) (qemuArch, error) {
 	q := &qemuS390x{
 		qemuArchBase{
 			qemuMachine:           supportedQemuMachine,
+			qemuExePath:           defaultQemuPath,
 			memoryOffset:          config.MemOffset,
-			qemuPaths:             qemuPaths,
 			kernelParamsNonDebug:  kernelParamsNonDebug,
 			kernelParamsDebug:     kernelParamsDebug,
 			kernelParams:          kernelParams,
