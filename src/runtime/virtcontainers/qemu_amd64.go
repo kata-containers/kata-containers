@@ -116,8 +116,8 @@ func newQemuArch(config HypervisorConfig) (qemuArch, error) {
 	q := &qemuAmd64{
 		qemuArchBase: qemuArchBase{
 			qemuMachine:           *mp,
+			qemuExePath:           qemuPaths[machineType],
 			memoryOffset:          config.MemOffset,
-			qemuPaths:             qemuPaths,
 			kernelParamsNonDebug:  kernelParamsNonDebug,
 			kernelParamsDebug:     kernelParamsDebug,
 			kernelParams:          kernelParams,

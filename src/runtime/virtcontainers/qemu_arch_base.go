@@ -41,7 +41,7 @@ type qemuArch interface {
 	machine() govmmQemu.Machine
 
 	// qemuPath returns the path to the QEMU binary
-	qemuPath() (string, error)
+	qemuPath() string
 
 	// kernelParameters returns the kernel parameters
 	// if debug is true then kernel debug parameters are included
@@ -137,13 +137,13 @@ type qemuArch interface {
 
 type qemuArchBase struct {
 	qemuMachine           govmmQemu.Machine
+	qemuExePath           string
 	memoryOffset          uint32
 	nestedRun             bool
 	vhost                 bool
 	disableNvdimm         bool
 	dax                   bool
 	networkIndex          int
-	qemuPaths             map[string]string
 	kernelParamsNonDebug  []Param
 	kernelParamsDebug     []Param
 	kernelParams          []Param
@@ -242,13 +242,8 @@ func (q *qemuArchBase) machine() govmmQemu.Machine {
 	return q.qemuMachine
 }
 
-func (q *qemuArchBase) qemuPath() (string, error) {
-	p, ok := q.qemuPaths[q.qemuMachine.Type]
-	if !ok {
-		return "", fmt.Errorf("Unknown machine type: %s", q.qemuMachine.Type)
-	}
-
-	return p, nil
+func (q *qemuArchBase) qemuPath() string {
+	return q.qemuExePath
 }
 
 func (q *qemuArchBase) kernelParameters(debug bool) []Param {

@@ -199,10 +199,7 @@ func (q *qemu) qemuPath() (string, error) {
 	}
 
 	if p == "" {
-		p, err = q.arch.qemuPath()
-		if err != nil {
-			return "", err
-		}
+		p = q.arch.qemuPath()
 	}
 
 	if _, err = os.Stat(p); os.IsNotExist(err) {

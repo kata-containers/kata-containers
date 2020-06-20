@@ -27,10 +27,6 @@ const defaultQemuMachineOptions = "accel=kvm,usb=off"
 
 const qmpMigrationWaitTimeout = 5 * time.Second
 
-var qemuPaths = map[string]string{
-	QemuPseries: defaultQemuPath,
-}
-
 var kernelParams = []Param{
 	{"rcupdate.rcu_expedited", "1"},
 	{"reboot", "k"},
@@ -68,8 +64,8 @@ func newQemuArch(config HypervisorConfig) (qemuArch, error) {
 	q := &qemuPPC64le{
 		qemuArchBase{
 			qemuMachine:           supportedQemuMachine,
+			qemuExePath:           defaultQemuPath,
 			memoryOffset:          config.MemOffset,
-			qemuPaths:             qemuPaths,
 			kernelParamsNonDebug:  kernelParamsNonDebug,
 			kernelParamsDebug:     kernelParamsDebug,
 			kernelParams:          kernelParams,
