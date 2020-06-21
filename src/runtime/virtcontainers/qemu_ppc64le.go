@@ -102,11 +102,7 @@ func (q *qemuPPC64le) bridges(number uint32) {
 }
 
 func (q *qemuPPC64le) cpuModel() string {
-	cpuModel := defaultCPUModel
-	if q.nestedRun {
-		cpuModel += ",pmu=off"
-	}
-	return cpuModel
+	return defaultCPUModel
 }
 
 func (q *qemuPPC64le) memoryTopology(memoryMb, hostMemoryMb uint64, slots uint8) govmmQemu.Memory {

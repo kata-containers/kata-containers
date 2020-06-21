@@ -32,11 +32,6 @@ func TestQemuPPC64leCPUModel(t *testing.T) {
 	expectedOut := defaultCPUModel
 	model := ppc64le.cpuModel()
 	assert.Equal(expectedOut, model)
-
-	ppc64le.enableNestingChecks()
-	expectedOut = defaultCPUModel + ",pmu=off"
-	model = ppc64le.cpuModel()
-	assert.Equal(expectedOut, model)
 }
 
 func getQemuVersion() (qemuMajorVersion int, qemuMinorVersion int) {
