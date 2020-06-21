@@ -33,10 +33,7 @@ var qemuPaths = map[string]string{
 }
 
 var kernelParams = []Param{
-	{"tsc", "reliable"},
-	{"no_timer_check", ""},
 	{"rcupdate.rcu_expedited", "1"},
-	{"noreplace-smp", ""},
 	{"reboot", "k"},
 	{"console", "hvc0"},
 	{"console", "hvc1"},
