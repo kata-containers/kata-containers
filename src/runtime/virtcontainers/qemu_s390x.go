@@ -55,10 +55,14 @@ func MaxQemuVCPUs() uint32 {
 	return uint32(248)
 }
 
-func newQemuArch(config HypervisorConfig) qemuArch {
+func newQemuArch(config HypervisorConfig) (qemuArch, error) {
 	machineType := config.HypervisorMachineType
 	if machineType == "" {
 		machineType = defaultQemuMachineType
+	}
+
+	if machineType != defaultQemuMachineType {
+		return nil, fmt.Errorf("unrecognised machinetype: %v", machineType)
 	}
 
 	q := &qemuS390x{
@@ -81,7 +85,7 @@ func newQemuArch(config HypervisorConfig) qemuArch {
 		q.kernelParamsDebug = append(q.kernelParamsDebug, kernelParamsSystemdDebug...)
 	}
 
-	return q
+	return q, nil
 }
 
 func (q *qemuS390x) bridges(number uint32) {

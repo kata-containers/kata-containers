@@ -125,10 +125,14 @@ func MaxQemuVCPUs() uint32 {
 	return uint32(runtime.NumCPU())
 }
 
-func newQemuArch(config HypervisorConfig) qemuArch {
+func newQemuArch(config HypervisorConfig) (qemuArch, error) {
 	machineType := config.HypervisorMachineType
 	if machineType == "" {
 		machineType = defaultQemuMachineType
+	}
+
+	if machineType != defaultQemuMachineType {
+		return nil, fmt.Errorf("unrecognised machinetype: %v", machineType)
 	}
 
 	q := &qemuArm64{
@@ -146,7 +150,7 @@ func newQemuArch(config HypervisorConfig) qemuArch {
 
 	q.handleImagePath(config)
 
-	return q
+	return q, nil
 }
 
 func (q *qemuArm64) bridges(number uint32) {

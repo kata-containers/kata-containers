@@ -23,14 +23,16 @@ func qemuConfig(machineType string) HypervisorConfig {
 	}
 }
 
-func newTestQemu(machineType string) qemuArch {
+func newTestQemu(assert *assert.Assertions, machineType string) qemuArch {
 	config := qemuConfig(machineType)
-	return newQemuArch(config)
+	arch, err := newQemuArch(config)
+	assert.NoError(err)
+	return arch
 }
 
 func TestQemuArm64CPUModel(t *testing.T) {
 	assert := assert.New(t)
-	arm64 := newTestQemu(QemuVirt)
+	arm64 := newTestQemu(assert, QemuVirt)
 
 	expectedOut := defaultCPUModel
 	model := arm64.cpuModel()
@@ -39,7 +41,7 @@ func TestQemuArm64CPUModel(t *testing.T) {
 
 func TestQemuArm64MemoryTopology(t *testing.T) {
 	assert := assert.New(t)
-	arm64 := newTestQemu(QemuVirt)
+	arm64 := newTestQemu(assert, QemuVirt)
 
 	hostMem := uint64(4096)
 	mem := uint64(1024)
@@ -107,7 +109,7 @@ func TestQemuArm64AppendBridges(t *testing.T) {
 	var devices []govmmQemu.Device
 	assert := assert.New(t)
 
-	arm64 := newTestQemu(QemuVirt)
+	arm64 := newTestQemu(assert, QemuVirt)
 
 	arm64.bridges(1)
 	bridges := arm64.getBridges()
