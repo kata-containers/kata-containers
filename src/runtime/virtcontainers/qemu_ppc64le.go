@@ -24,8 +24,6 @@ const defaultQemuMachineType = QemuPseries
 
 const defaultQemuMachineOptions = "accel=kvm,usb=off"
 
-const defaultMemMaxPPC64le = 32256 // Restrict MemMax to 32Gb on PPC64le
-
 const qmpMigrationWaitTimeout = 5 * time.Second
 
 var qemuPaths = map[string]string{
@@ -114,14 +112,8 @@ func (q *qemuPPC64le) cpuModel() string {
 
 func (q *qemuPPC64le) memoryTopology(memoryMb, hostMemoryMb uint64, slots uint8) govmmQemu.Memory {
 
-	if (qemuMajorVersion > 2) || (qemuMajorVersion == 2 && qemuMinorVersion >= 10) {
-		q.Logger().Debug("Aligning maxmem to multiples of 256MB. Assumption: Kernel Version >= 4.11")
-		hostMemoryMb -= (hostMemoryMb % 256)
-	} else {
-		q.Logger().Debug("Restricting maxmem to 32GB as Qemu Version < 2.10, Assumption: Kernel Version >= 4.11")
-		hostMemoryMb = defaultMemMaxPPC64le
-	}
-
+	q.Logger().Debug("Aligning maxmem to multiples of 256MB. Assumption: Kernel Version >= 4.11")
+	hostMemoryMb -= (hostMemoryMb % 256)
 	return genericMemoryTopology(memoryMb, hostMemoryMb, slots, q.memoryOffset)
 }
 
