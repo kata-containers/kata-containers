@@ -14,16 +14,18 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func newTestQemu(machineType string) qemuArch {
+func newTestQemu(assert *assert.Assertions, machineType string) qemuArch {
 	config := HypervisorConfig{
 		HypervisorMachineType: machineType,
 	}
-	return newQemuArch(config)
+	arch, err := newQemuArch(config)
+	assert.NoError(err)
+	return arch
 }
 
 func TestQemuS390xCPUModel(t *testing.T) {
 	assert := assert.New(t)
-	s390x := newTestQemu(QemuCCWVirtio)
+	s390x := newTestQemu(assert, QemuCCWVirtio)
 
 	expectedOut := defaultCPUModel
 	model := s390x.cpuModel()
@@ -37,7 +39,7 @@ func TestQemuS390xCPUModel(t *testing.T) {
 
 func TestQemuS390xMemoryTopology(t *testing.T) {
 	assert := assert.New(t)
-	s390x := newTestQemu(QemuCCWVirtio)
+	s390x := newTestQemu(assert, QemuCCWVirtio)
 
 	hostMem := uint64(1024)
 	mem := uint64(120)

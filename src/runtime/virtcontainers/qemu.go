@@ -238,7 +238,10 @@ func (q *qemu) setup(id string, hypervisorConfig *HypervisorConfig) error {
 
 	q.id = id
 	q.config = *hypervisorConfig
-	q.arch = newQemuArch(q.config)
+	q.arch, err = newQemuArch(q.config)
+	if err != nil {
+		return err
+	}
 
 	initrdPath, err := q.config.InitrdAssetPath()
 	if err != nil {
@@ -2172,7 +2175,10 @@ func (q *qemu) fromGrpc(ctx context.Context, hypervisorConfig *HypervisorConfig,
 	q.qmpMonitorCh.path = qp.QmpChannelpath
 	q.qemuConfig.Ctx = ctx
 	q.state = qp.State
-	q.arch = newQemuArch(q.config)
+	q.arch, err = newQemuArch(q.config)
+	if err != nil {
+		return err
+	}
 	q.ctx = ctx
 	q.nvdimmCount = qp.NvdimmCount
 

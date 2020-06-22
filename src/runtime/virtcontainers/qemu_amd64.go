@@ -6,6 +6,7 @@
 package virtcontainers
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
@@ -77,10 +78,21 @@ func MaxQemuVCPUs() uint32 {
 	return uint32(240)
 }
 
-func newQemuArch(config HypervisorConfig) qemuArch {
+func newQemuArch(config HypervisorConfig) (qemuArch, error) {
 	machineType := config.HypervisorMachineType
 	if machineType == "" {
 		machineType = defaultQemuMachineType
+	}
+
+	var mp *govmmQemu.Machine
+	for _, m := range supportedQemuMachines {
+		if m.Type == machineType {
+			mp = &m
+			break
+		}
+	}
+	if mp == nil {
+		return nil, fmt.Errorf("unrecognised machinetype: %v", machineType)
 	}
 
 	factory := false
@@ -124,7 +136,7 @@ func newQemuArch(config HypervisorConfig) qemuArch {
 
 	q.handleImagePath(config)
 
-	return q
+	return q, nil
 }
 
 func (q *qemuAmd64) capabilities() types.Capabilities {

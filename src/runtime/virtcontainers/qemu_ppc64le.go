@@ -57,10 +57,14 @@ func MaxQemuVCPUs() uint32 {
 	return uint32(128)
 }
 
-func newQemuArch(config HypervisorConfig) qemuArch {
+func newQemuArch(config HypervisorConfig) (qemuArch, error) {
 	machineType := config.HypervisorMachineType
 	if machineType == "" {
 		machineType = defaultQemuMachineType
+	}
+
+	if machineType != defaultQemuMachineType {
+		return nil, fmt.Errorf("unrecognised machinetype: %v", machineType)
 	}
 
 	q := &qemuPPC64le{
@@ -79,7 +83,7 @@ func newQemuArch(config HypervisorConfig) qemuArch {
 
 	q.memoryOffset = config.MemOffset
 
-	return q
+	return q, nil
 }
 
 func (q *qemuPPC64le) capabilities() types.Capabilities {
