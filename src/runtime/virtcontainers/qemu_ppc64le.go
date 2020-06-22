@@ -18,7 +18,7 @@ type qemuPPC64le struct {
 	qemuArchBase
 }
 
-const defaultQemuPath = "/usr/bin/qemu-system-ppc64le"
+const defaultQemuPath = "/usr/bin/qemu-system-ppc64"
 
 const defaultQemuMachineType = QemuPseries
 
