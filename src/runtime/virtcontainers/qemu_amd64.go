@@ -97,9 +97,9 @@ func newQemuArch(config HypervisorConfig) qemuArch {
 		kernelParams = append(kernelParams,
 			Param{"iommu", "pt"})
 
-		for _, m := range qemuMachines {
+		for i, m := range qemuMachines {
 			if m.Type == QemuQ35 {
-				m.Options = q35QemuIOMMUOptions
+				qemuMachines[i].Options = q35QemuIOMMUOptions
 			}
 		}
 	} else {

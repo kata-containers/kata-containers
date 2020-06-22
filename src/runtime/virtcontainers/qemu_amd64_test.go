@@ -239,3 +239,19 @@ func TestQemuAmd64WithInitrd(t *testing.T) {
 		assert.NotContains(m.Options, qemuNvdimmOption)
 	}
 }
+
+func TestQemuAmd64Iommu(t *testing.T) {
+	assert := assert.New(t)
+
+	config := qemuConfig(QemuQ35)
+	config.IOMMU = true
+	qemu := newQemuArch(config)
+
+	p := qemu.kernelParameters(false)
+	assert.Contains(p, Param{"intel_iommu", "on"})
+
+	m, err := qemu.machine()
+
+	assert.NoError(err)
+	assert.Contains(m.Options, "kernel_irqchip=split")
+}
