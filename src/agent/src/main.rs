@@ -31,6 +31,7 @@ use nix::fcntl::{self, OFlag};
 use nix::sys::socket::{self, AddressFamily, SockAddr, SockFlag, SockType};
 use nix::sys::wait::{self, WaitStatus};
 use nix::unistd;
+use nix::unistd::dup;
 use prctl::set_child_subreaper;
 use rustjail::errors::*;
 use signal_hook::{iterator::Signals, SIGCHLD};
@@ -117,6 +118,12 @@ fn main() -> Result<()> {
     let agentConfig = AGENT_CONFIG.clone();
 
     if unistd::getpid() == Pid::from_raw(1) {
+        // dup a new file descriptor for this temporary logger writer,
+        // since this logger would be dropped and it's writer would
+        // be closed out of this code block.
+        let newwfd = dup(wfd)?;
+        let writer = unsafe { File::from_raw_fd(newwfd) };
+
         // Init a temporary logger used by init agent as init process
         // since before do the base mount, it wouldn't access "/proc/cmdline"
         // to get the customzied debug level.
