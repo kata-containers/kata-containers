@@ -27,6 +27,15 @@ func newTestQemu(machineType string) qemuArch {
 	return newQemuArch(config)
 }
 
+func TestQemuAmd64BadMachineType(t *testing.T) {
+	assert := assert.New(t)
+
+	amd64 := newTestQemu("no-such-machine-type")
+	amd64.bridges(5)
+	bridges := amd64.getBridges()
+	assert.Nil(bridges)
+}
+
 func TestQemuAmd64Capabilities(t *testing.T) {
 	assert := assert.New(t)
 
@@ -66,11 +75,6 @@ func TestQemuAmd64Bridges(t *testing.T) {
 		assert.Equal(id, b.ID)
 		assert.NotNil(b.Devices)
 	}
-
-	amd64 = newTestQemu(QemuQ35 + QemuPC)
-	amd64.bridges(uint32(len))
-	bridges = amd64.getBridges()
-	assert.Nil(bridges)
 }
 
 func TestQemuAmd64CPUModel(t *testing.T) {
