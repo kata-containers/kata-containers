@@ -480,7 +480,7 @@ func (c *Container) shareFiles(m Mount, idx int, hostSharedDir, guestSharedDir s
 		}
 	} else {
 		// These mounts are created in the shared dir
-		mountDest := filepath.Join(hostSharedDir, c.sandbox.id, filename)
+		mountDest := filepath.Join(hostSharedDir, filename)
 		if err := bindMount(c.ctx, m.Source, mountDest, false, "private"); err != nil {
 			return "", false, err
 		}
@@ -850,7 +850,7 @@ func (c *Container) rollbackFailingContainerCreation() {
 	if err := c.unmountHostMounts(); err != nil {
 		c.Logger().WithError(err).Error("rollback failed unmountHostMounts()")
 	}
-	if err := bindUnmountContainerRootfs(c.ctx, kataHostSharedDir(), c.sandbox.id, c.id); err != nil {
+	if err := bindUnmountContainerRootfs(c.ctx, getMountPath(c.sandbox.id), c.id); err != nil {
 		c.Logger().WithError(err).Error("rollback failed bindUnmountContainerRootfs()")
 	}
 }
@@ -875,6 +875,7 @@ func (c *Container) create() (err error) {
 	// of rolling back all the actions previously performed.
 	defer func() {
 		if err != nil {
+			c.Logger().WithError(err).Error("container create failed")
 			c.rollbackFailingContainerCreation()
 		}
 	}()
@@ -1119,7 +1120,7 @@ func (c *Container) stop(force bool) error {
 		return err
 	}
 
-	if err := bindUnmountContainerRootfs(c.ctx, kataHostSharedDir(), c.sandbox.id, c.id); err != nil && !force {
+	if err := bindUnmountContainerRootfs(c.ctx, getMountPath(c.sandbox.id), c.id); err != nil && !force {
 		return err
 	}
 

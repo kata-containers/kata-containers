@@ -756,19 +756,6 @@ func TestHandlePidNamespace(t *testing.T) {
 	assert.False(testIsPidNamespacePresent(g))
 }
 
-func TestAgentPathAPI(t *testing.T) {
-	assert := assert.New(t)
-
-	k1 := &kataAgent{}
-	k2 := &kataAgent{}
-	id := "foobar"
-
-	// getSharePath
-	path1 := k1.getSharePath(id)
-	path2 := k2.getSharePath(id)
-	assert.Equal(path1, path2)
-}
-
 func TestAgentConfigure(t *testing.T) {
 	assert := assert.New(t)
 
