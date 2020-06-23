@@ -203,7 +203,7 @@ func (clh *cloudHypervisor) createSandbox(ctx context.Context, id string, networ
 		clh.Logger().WithField("function", "createSandbox").Info("Sandbox already exist, loading from state")
 		clh.virtiofsd = &virtiofsd{
 			PID:        clh.state.VirtiofsdPID,
-			sourcePath: filepath.Join(kataHostSharedDir(), clh.id),
+			sourcePath: filepath.Join(getSharePath(clh.id)),
 			debug:      clh.config.Debug,
 			socketPath: virtiofsdSocketPath,
 		}
@@ -308,7 +308,7 @@ func (clh *cloudHypervisor) createSandbox(ctx context.Context, id string, networ
 
 	clh.virtiofsd = &virtiofsd{
 		path:       clh.config.VirtioFSDaemon,
-		sourcePath: filepath.Join(kataHostSharedDir(), clh.id),
+		sourcePath: filepath.Join(getSharePath(clh.id)),
 		socketPath: virtiofsdSocketPath,
 		extraArgs:  clh.config.VirtioFSExtraArgs,
 		debug:      clh.config.Debug,

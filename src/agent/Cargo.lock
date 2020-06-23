@@ -232,7 +232,6 @@ dependencies = [
  "slog-async",
  "slog-json",
  "slog-scope",
- "tempfile",
 ]
 
 [[package]]
