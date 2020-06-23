@@ -59,6 +59,13 @@ var (
 	cgroupsLogger = logrus.WithField("source", "virtcontainers/pkg/cgroups")
 )
 
+// SetLogger sets up a logger for this pkg
+func SetLogger(logger *logrus.Entry) {
+	fields := cgroupsLogger.Data
+
+	cgroupsLogger = logger.WithFields(fields)
+}
+
 func EnableSystemdCgroup() {
 	systemd := true
 	systemdCgroup = &systemd
