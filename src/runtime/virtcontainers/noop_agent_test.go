@@ -156,13 +156,6 @@ func TestNoopAgentConfigure(t *testing.T) {
 	assert.NoError(err)
 }
 
-func TestNoopAgentGetSharePath(t *testing.T) {
-	n := &noopAgent{}
-	path := n.getSharePath("")
-	assert := assert.New(t)
-	assert.Empty(path)
-}
-
 func TestNoopAgentStartProxy(t *testing.T) {
 	assert := assert.New(t)
 	n := &noopAgent{}

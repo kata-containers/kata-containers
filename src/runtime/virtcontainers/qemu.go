@@ -617,7 +617,7 @@ func (q *qemu) virtiofsdArgs(fd uintptr) []string {
 	// The daemon will terminate when the vhost-user socket
 	// connection with QEMU closes.  Therefore we do not keep track
 	// of this child process after returning from this function.
-	sourcePath := filepath.Join(kataHostSharedDir(), q.id)
+	sourcePath := filepath.Join(getSharePath(q.id))
 	args := []string{
 		fmt.Sprintf("--fd=%v", fd),
 		"-o", "source=" + sourcePath,

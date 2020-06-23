@@ -29,6 +29,13 @@ var (
 	pmemLog = logrus.WithField("source", "virtcontainers/device/config")
 )
 
+// SetLogger sets up a logger for this pkg
+func SetLogger(logger *logrus.Entry) {
+	fields := pmemLog.Data
+
+	pmemLog = logger.WithFields(fields)
+}
+
 // PmemDeviceInfo returns a DeviceInfo if a loop device
 // is mounted on source, and the backing file of the loop device
 // has the PFN signature.
