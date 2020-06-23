@@ -29,7 +29,7 @@ require (
 	github.com/gogo/protobuf v1.3.1
 	github.com/hashicorp/go-multierror v1.0.0
 	github.com/hashicorp/yamux v0.0.0-20190923154419-df201c70410d
-	github.com/intel/govmm v0.0.0-20200304142514-e969afbec52c
+	github.com/intel/govmm v0.0.0-20200602145448-7cc469641b7b
 	github.com/mdlayher/vsock v0.0.0-20191108225356-d9c65923cb8f
 	github.com/mitchellh/mapstructure v1.1.2
 	github.com/opencontainers/runc v1.0.0-rc9.0.20200102164712-2b52db75279c

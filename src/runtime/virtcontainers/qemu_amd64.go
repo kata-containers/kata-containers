@@ -48,7 +48,6 @@ var kernelParams = []Param{
 	{"reboot", "k"},
 	{"console", "hvc0"},
 	{"console", "hvc1"},
-	{"iommu", "off"},
 	{"cryptomgr.notests", ""},
 	{"net.ifnames", "0"},
 	{"pci", "lastbus=0"},
@@ -89,12 +88,31 @@ func newQemuArch(config HypervisorConfig) qemuArch {
 		factory = true
 	}
 
+	var qemuMachines = supportedQemuMachines
+	if config.IOMMU {
+		var q35QemuIOMMUOptions = "accel=kvm,kernel_irqchip=split"
+
+		kernelParams = append(kernelParams,
+			Param{"intel_iommu", "on"})
+		kernelParams = append(kernelParams,
+			Param{"iommu", "pt"})
+
+		for i, m := range qemuMachines {
+			if m.Type == QemuQ35 {
+				qemuMachines[i].Options = q35QemuIOMMUOptions
+			}
+		}
+	} else {
+		kernelParams = append(kernelParams,
+			Param{"iommu", "off"})
+	}
+
 	q := &qemuAmd64{
 		qemuArchBase: qemuArchBase{
 			machineType:           machineType,
 			memoryOffset:          config.MemOffset,
 			qemuPaths:             qemuPaths,
-			supportedQemuMachines: supportedQemuMachines,
+			supportedQemuMachines: qemuMachines,
 			kernelParamsNonDebug:  kernelParamsNonDebug,
 			kernelParamsDebug:     kernelParamsDebug,
 			kernelParams:          kernelParams,

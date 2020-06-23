@@ -51,6 +51,11 @@ type Machine struct {
 	Options string
 }
 
+const (
+	// MachineTypeMicrovm is the QEMU microvm machine type for amd64
+	MachineTypeMicrovm string = "microvm"
+)
+
 // Device is the qemu device interface.
 type Device interface {
 	Valid() bool
@@ -127,7 +132,11 @@ const (
 
 func isDimmSupported(config *Config) bool {
 	switch runtime.GOARCH {
-	case "amd64", "386":
+	case "amd64", "386", "ppc64le":
+		if config != nil && config.Machine.Type == MachineTypeMicrovm {
+			// microvm does not support NUMA
+			return false
+		}
 		return true
 	default:
 		return false
@@ -153,6 +162,9 @@ const (
 func (transport VirtioTransport) defaultTransport(config *Config) VirtioTransport {
 	switch runtime.GOARCH {
 	case "amd64", "386":
+		if config != nil && config.Machine.Type == MachineTypeMicrovm {
+			return TransportMMIO
+		}
 		return TransportPCI
 	case "s390x":
 		return TransportCCW
@@ -868,6 +880,9 @@ type SerialDevice struct {
 
 	// Transport is the virtio transport for this device.
 	Transport VirtioTransport
+
+	// MaxPorts is the maximum number of ports for this device.
+	MaxPorts uint
 }
 
 // Valid returns true if the SerialDevice structure is valid and complete.
@@ -891,6 +906,9 @@ func (dev SerialDevice) QemuParams(config *Config) []string {
 	deviceParams = append(deviceParams, fmt.Sprintf(",id=%s", dev.ID))
 	if dev.Transport.isVirtioPCI(config) {
 		deviceParams = append(deviceParams, fmt.Sprintf(",romfile=%s", dev.ROMFile))
+		if dev.Driver == VirtioSerial && dev.MaxPorts != 0 {
+			deviceParams = append(deviceParams, fmt.Sprintf(",max_ports=%d", dev.MaxPorts))
+		}
 	}
 
 	if dev.Transport.isVirtioCCW(config) {
@@ -1843,6 +1861,52 @@ func (b BalloonDevice) deviceName(config *Config) string {
 	return BalloonDeviceTransport[b.Transport]
 }
 
+// IommuDev represents a Intel IOMMU Device
+type IommuDev struct {
+	Intremap    bool
+	DeviceIotlb bool
+	CachingMode bool
+}
+
+// Valid returns true if the IommuDev is valid
+func (dev IommuDev) Valid() bool {
+	return true
+}
+
+// deviceName the qemu device name
+func (dev IommuDev) deviceName() string {
+	return "intel-iommu"
+}
+
+// QemuParams returns the qemu parameters built out of the IommuDev.
+func (dev IommuDev) QemuParams(_ *Config) []string {
+	var qemuParams []string
+	var deviceParams []string
+
+	deviceParams = append(deviceParams, dev.deviceName())
+	if dev.Intremap {
+		deviceParams = append(deviceParams, "intremap=on")
+	} else {
+		deviceParams = append(deviceParams, "intremap=off")
+	}
+
+	if dev.DeviceIotlb {
+		deviceParams = append(deviceParams, "device-iotlb=on")
+	} else {
+		deviceParams = append(deviceParams, "device-iotlb=off")
+	}
+
+	if dev.CachingMode {
+		deviceParams = append(deviceParams, "caching-mode=on")
+	} else {
+		deviceParams = append(deviceParams, "caching-mode=off")
+	}
+
+	qemuParams = append(qemuParams, "-device")
+	qemuParams = append(qemuParams, strings.Join(deviceParams, ","))
+	return qemuParams
+}
+
 // RTCBaseType is the qemu RTC base time type.
 type RTCBaseType string
 
@@ -1863,6 +1927,9 @@ const (
 const (
 	// Host is for using the host clock as a reference.
 	Host RTCClock = "host"
+
+	// RT is for using the host monotonic clock as a reference.
+	RT RTCClock = "rt"
 
 	// VM is for using the guest clock as a reference
 	VM RTCClock = "vm"
@@ -1890,7 +1957,7 @@ type RTC struct {
 
 // Valid returns true if the RTC structure is valid and complete.
 func (rtc RTC) Valid() bool {
-	if rtc.Clock != Host && rtc.Clock != VM {
+	if rtc.Clock != Host && rtc.Clock != RT && rtc.Clock != VM {
 		return false
 	}
 

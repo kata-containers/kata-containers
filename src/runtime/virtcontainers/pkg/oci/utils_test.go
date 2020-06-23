@@ -771,6 +771,7 @@ func TestAddHypervisorAnnotations(t *testing.T) {
 	ocispec.Annotations[vcAnnotations.EnableSwap] = "true"
 	ocispec.Annotations[vcAnnotations.FileBackedMemRootDir] = "/dev/shm"
 	ocispec.Annotations[vcAnnotations.HugePages] = "true"
+	ocispec.Annotations[vcAnnotations.IOMMU] = "true"
 	ocispec.Annotations[vcAnnotations.BlockDeviceDriver] = "virtio-scsi"
 	ocispec.Annotations[vcAnnotations.DisableBlockDeviceUse] = "true"
 	ocispec.Annotations[vcAnnotations.EnableIOThreads] = "true"
@@ -802,6 +803,7 @@ func TestAddHypervisorAnnotations(t *testing.T) {
 	assert.Equal(config.HypervisorConfig.Mlock, false)
 	assert.Equal(config.HypervisorConfig.FileBackedMemRootDir, "/dev/shm")
 	assert.Equal(config.HypervisorConfig.HugePages, true)
+	assert.Equal(config.HypervisorConfig.IOMMU, true)
 	assert.Equal(config.HypervisorConfig.BlockDeviceDriver, "virtio-scsi")
 	assert.Equal(config.HypervisorConfig.DisableBlockDeviceUse, true)
 	assert.Equal(config.HypervisorConfig.EnableIOThreads, true)
