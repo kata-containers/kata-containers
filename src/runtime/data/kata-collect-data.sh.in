@@ -132,6 +132,40 @@ separator()
 	echo -e '\n---\n'
 }
 
+# Create an unfoldable section.
+#
+# Note: end_section() must be called to terminate the fold.
+start_section()
+{
+	local title="$1"
+
+	cat <<EOT
+<details>
+<summary>${title}</summary>
+<p>
+
+EOT
+}
+
+end_section()
+{
+	cat <<EOT
+
+</p>
+</details>
+EOT
+}
+
+show_header()
+{
+	start_section "Show <tt>$script_name</tt> details"
+}
+
+show_footer()
+{
+	end_section
+}
+
 have_cmd()
 {
 	local cmd="$1"
@@ -178,16 +212,21 @@ run_cmd_and_show_quoted_output()
 
 	local output
 
-	msg "Output of \"\`$cmd\`\":"
 	output=$(eval "$cmd" 2>&1)
+
+	start_section "<tt>$cmd</tt>"
 	show_quoted_text "${language}" "$output"
+	end_section
 }
 
 show_runtime_configs()
 {
-	local configs config
+	local title="Runtime config files"
+	start_section "$title"
 
-	heading "Runtime config files"
+	heading "$title"
+
+	local configs config
 
 	configs=$($runtime --@PROJECT_TYPE@-show-default-config-paths)
 	if [ $? -ne 0 ]; then
@@ -219,6 +258,8 @@ show_runtime_configs()
 	done
 
 	separator
+
+	end_section
 }
 
 find_system_journal_problems()
@@ -247,43 +288,63 @@ find_system_journal_problems()
 
 show_containerd_shimv2_log_details()
 {
-	local name="Kata Containerd Shim v2"
-	subheading "$name logs"
+	local title="Kata Containerd Shim v2"
+	subheading "$title logs"
 
+	start_section "$title"
 	find_system_journal_problems "$name" "kata"
+	end_section
 }
 
 show_proxy_log_details()
 {
-	subheading "Proxy logs"
+	local title="Proxy logs"
 
+	subheading "$title"
+
+	start_section "$title"
 	find_system_journal_problems "proxy" "@PROJECT_TYPE@-proxy"
+	end_section
 }
 
 show_runtime_log_details()
 {
-	subheading "Runtime logs"
+	local title="Runtime logs"
 
+	subheading "$title"
+
+	start_section "$title"
 	find_system_journal_problems "runtime" "@RUNTIME_NAME@"
+	end_section
 }
 
 show_shim_log_details()
 {
-	subheading "Shim logs"
+	local title="Shim logs"
 
+	subheading "$title"
+
+	start_section "$title"
 	find_system_journal_problems "shim" "@PROJECT_TYPE@-shim"
+	end_section
 }
 
 show_throttler_log_details()
 {
-	subheading "Throttler logs"
+	local title="Throttler logs"
+	subheading "$title"
 
+	start_section "$title"
 	find_system_journal_problems "throttler" "@PROJECT_TYPE@-ksm-throttler"
+	end_section
 }
 
 show_log_details()
 {
-	heading "Logfiles"
+	local title="Logfiles"
+	start_section "$title"
+
+	heading "$title"
 
 	show_runtime_log_details
 	show_proxy_log_details
@@ -292,11 +353,17 @@ show_log_details()
 	show_containerd_shimv2_log_details
 
 	separator
+
+	end_section
 }
 
 show_package_versions()
 {
-	heading "Packages"
+	local title="Packages"
+
+	start_section "$title"
+
+	heading "$title"
 
 	local pattern="("
 	local project
@@ -334,47 +401,104 @@ show_package_versions()
 	fi
 
 	separator
+
+	end_section
 }
 
 show_container_mgr_details()
 {
-	heading "Container manager details"
+	local title="Container manager details"
+	start_section "$title"
 
-	if have_cmd "docker"; then
+	heading "$title"
+
+	if have_cmd "docker" >/dev/null; then
+		start_section "Docker"
+
 		subheading "Docker"
-		run_cmd_and_show_quoted_output "" "docker version"
-		run_cmd_and_show_quoted_output "" "docker info"
-		run_cmd_and_show_quoted_output "" "systemctl show docker"
+
+		local -a cmds
+
+		cmds+=("docker version")
+		cmds+=("docker info")
+		cmds+=("systemctl show docker")
+
+		local cmd
+
+		for cmd in "${cmds[@]}"
+		do
+			run_cmd_and_show_quoted_output "" "$cmd"
+		done
+
+		end_section
 	fi
 
-	if have_cmd "kubectl"; then
-		subheading "Kubernetes"
+	if have_cmd "kubectl" >/dev/null; then
+		title="Kubernetes"
+
+		start_section "$title"
+
+		subheading "$title"
 		run_cmd_and_show_quoted_output "" "kubectl version"
 		run_cmd_and_show_quoted_output "" "kubectl config view"
-		run_cmd_and_show_quoted_output "" "systemctl show kubelet"
+
+		local cmd="systemctl show kubelet"
+		run_cmd_and_show_quoted_output "" "$cmd"
+
+		end_section
 	fi
 
-	if have_cmd "crio"; then
-		subheading "crio"
+	if have_cmd "crio" >/dev/null; then
+		title="crio"
+		start_section "$title"
+
+		subheading "$title"
+
 		run_cmd_and_show_quoted_output "" "crio --version"
-		run_cmd_and_show_quoted_output "" "systemctl show crio"
-		run_cmd_and_show_quoted_output "" "cat /etc/crio/crio.conf"
+
+		local cmd="systemctl show crio"
+		run_cmd_and_show_quoted_output "" "$cmd"
+
+		local file="/etc/crio/crio.conf"
+		cmd="cat $file"
+		run_cmd_and_show_quoted_output "" "$cmd"
+
+		end_section
 	fi
 
+	if have_cmd "containerd" >/dev/null; then
+		title="containerd"
+		start_section "$title"
 
-	if have_cmd "containerd"; then
-		subheading "containerd"
+		subheading "$title"
+
 		run_cmd_and_show_quoted_output "" "containerd --version"
-		run_cmd_and_show_quoted_output "" "systemctl show containerd"
-		run_cmd_and_show_quoted_output "" "cat /etc/containerd/config.toml"
+
+		local cmd="systemctl show containerd"
+		run_cmd_and_show_quoted_output "" "$cmd"
+
+		local file="/etc/containerd/config.toml"
+
+		cmd="cat $file"
+		run_cmd_and_show_quoted_output "toml" "$cmd"
+
+		end_section
 	fi
 
-	if have_cmd "podman"; then
-		subheading "podman"
+	if have_cmd "podman" >/dev/null; then
+		title="Podman"
+
+		start_section "$title"
+
+		subheading "$title"
 		run_cmd_and_show_quoted_output "" "podman --version"
+
+		end_section
 	fi
 
 	separator
+
+	end_section
 }
 
 show_meta()
@@ -393,17 +517,25 @@ show_runtime()
 {
 	local cmd
 
+	start_section "Runtime"
+
 	msg "Runtime is \`$runtime\`."
 
 	cmd="@PROJECT_TYPE@-env"
+
 	heading "\`$cmd\`"
+
 	run_cmd_and_show_quoted_output "toml" "$runtime $cmd"
 
 	separator
+
+	end_section
 }
 
 show_containerd_shimv2()
 {
+	start_section "Containerd shim v2"
+
 	local cmd="${containerd_shim_v2_name} --version"
 
 	msg "Containerd shim v2 is \`$containerd_shim_v2\`."
@@ -411,6 +543,8 @@ show_containerd_shimv2()
 	run_cmd_and_show_quoted_output "" "$cmd"
 
 	separator
+
+	end_section
 }
 
 # Parameter 1: Path to disk image file.
@@ -532,7 +666,7 @@ get_initrd_file()
 		tr -d '"')
 
 	echo "$initrd"
-} 
+}
 
 # Parameter 1: Path to disk image file.
 # Returns: Path to loop device.
@@ -610,6 +744,8 @@ release_device()
 
 show_throttler_details()
 {
+	start_section "KSM throttler"
+
 	heading "KSM throttler"
 
 	subheading "version"
@@ -624,6 +760,8 @@ show_throttler_details()
 
 	echo "$throttlers" | while read throttler
 	do
+		[ -z "$throttler" ] && continue
+
 		local cmd
 		cmd="$throttler --version"
 		run_cmd_and_show_quoted_output "" "$cmd"
@@ -644,18 +782,23 @@ show_throttler_details()
 		have_service "${unit}" && \
 			run_cmd_and_show_quoted_output "" "systemctl show ${unit}"
 	done
+
+	end_section
 }
 
 # Retrieve details of the image containing
 # the rootfs used to boot the virtual machine.
 show_image_details()
 {
+	local title="Image details"
+	start_section "$title"
+
+	heading "$title"
+
 	local image
 	local details
 
 	image=$(get_image_file)
-
-	heading "Image details"
 
 	if [ -n "$image" ]
 	then
@@ -666,12 +809,16 @@ show_image_details()
 	fi
 
 	separator
+
+	end_section
 }
 
 # Retrieve details of the initrd containing
 # the rootfs used to boot the virtual machine.
 show_initrd_details()
 {
+	start_section "Initrd details"
+
 	local initrd
 	local details
 
@@ -688,6 +835,8 @@ show_initrd_details()
 	fi
 
 	separator
+
+	end_section
 }
 
 read_osbuilder_file()
@@ -701,23 +850,6 @@ read_osbuilder_file()
 	[ ! -e "$file" ] && return
 
 	cat "$file"
-}
-
-show_header()
-{
-	cat <<EOT
-<details>
-<summary>Show <tt>$script_name</tt> details</summary>
-<p>
-EOT
-}
-
-show_footer()
-{
-	cat <<EOT
-</p>
-</details>
-EOT
 }
 
 show_details()
