@@ -138,6 +138,26 @@ var kataHostSharedDir = func() string {
 	return defaultKataHostSharedDir
 }
 
+// Shared path handling:
+// 1. create two directories for each sandbox:
+// -. /run/kata-containers/shared/sandboxes/$sbx_id/mounts/, a directory to hold all host/guest shared mounts
+// -. /run/kata-containers/shared/sandboxes/$sbx_id/shared/, a host/guest shared directory (9pfs/virtiofs source dir)
+//
+// 2. /run/kata-containers/shared/sandboxes/$sbx_id/mounts/ is bind mounted readonly to /run/kata-containers/shared/sandboxes/$sbx_id/shared/, so guest cannot modify it
+//
+// 3. host-guest shared files/directories are mounted one-level under /run/kata-containers/shared/sandboxes/$sbx_id/mounts/ and thus present to guest at one level under /run/kata-containers/shared/sandboxes/$sbx_id/shared/
+func getSharePath(id string) string {
+	return filepath.Join(kataHostSharedDir(), id, "shared")
+}
+
+func getMountPath(id string) string {
+	return filepath.Join(kataHostSharedDir(), id, "mounts")
+}
+
+func getSandboxPath(id string) string {
+	return filepath.Join(kataHostSharedDir(), id)
+}
+
 // The function is declared this way for mocking in unit tests
 var kataGuestSharedDir = func() string {
 	if rootless.IsRootless() {
@@ -154,6 +174,10 @@ var kataGuestSandboxDir = func() string {
 		return filepath.Join(rootless.GetRootlessDir(), defaultKataGuestSandboxDir) + "/"
 	}
 	return defaultKataGuestSandboxDir
+}
+
+var kataGuestSandboxStorageDir = func() string {
+	return filepath.Join(defaultKataGuestSandboxDir, "storage")
 }
 
 func ephemeralPath() string {
@@ -219,10 +243,6 @@ func (k *kataAgent) trace(name string) (opentracing.Span, context.Context) {
 
 func (k *kataAgent) Logger() *logrus.Entry {
 	return virtLog.WithField("subsystem", "kata_agent")
-}
-
-func (k *kataAgent) getSharePath(id string) string {
-	return filepath.Join(kataHostSharedDir(), id)
 }
 
 func (k *kataAgent) longLiveConn() bool {
@@ -354,7 +374,7 @@ func (k *kataAgent) capabilities() types.Capabilities {
 	return caps
 }
 
-func (k *kataAgent) internalConfigure(h hypervisor, id, sharePath string, builtin bool, config interface{}) error {
+func (k *kataAgent) internalConfigure(h hypervisor, id string, builtin bool, config interface{}) error {
 	var err error
 	if config != nil {
 		switch c := config.(type) {
@@ -376,7 +396,7 @@ func (k *kataAgent) internalConfigure(h hypervisor, id, sharePath string, builti
 }
 
 func (k *kataAgent) configure(h hypervisor, id, sharePath string, builtin bool, config interface{}) error {
-	err := k.internalConfigure(h, id, sharePath, builtin, config)
+	err := k.internalConfigure(h, id, builtin, config)
 	if err != nil {
 		return err
 	}
@@ -422,14 +442,36 @@ func (k *kataAgent) configure(h hypervisor, id, sharePath string, builtin bool, 
 }
 
 func (k *kataAgent) configureFromGrpc(h hypervisor, id string, builtin bool, config interface{}) error {
-	return k.internalConfigure(h, id, "", builtin, config)
+	return k.internalConfigure(h, id, builtin, config)
+}
+
+func (k *kataAgent) setupSharedPath(sandbox *Sandbox) error {
+	// create shared path structure
+	sharePath := getSharePath(sandbox.id)
+	mountPath := getMountPath(sandbox.id)
+	if err := os.MkdirAll(sharePath, DirMode); err != nil {
+		return err
+	}
+	if err := os.MkdirAll(mountPath, DirMode); err != nil {
+		return err
+	}
+
+	// slave mount so that future mountpoints under mountPath are shown in sharePath as well
+	if err := bindMount(context.Background(), mountPath, sharePath, true, "slave"); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (k *kataAgent) createSandbox(sandbox *Sandbox) error {
 	span, _ := k.trace("createSandbox")
 	defer span.Finish()
 
-	return k.configure(sandbox.hypervisor, sandbox.id, k.getSharePath(sandbox.id), k.proxyBuiltIn, sandbox.config.AgentConfig)
+	if err := k.setupSharedPath(sandbox); err != nil {
+		return err
+	}
+	return k.configure(sandbox.hypervisor, sandbox.id, getSharePath(sandbox.id), k.proxyBuiltIn, sandbox.config.AgentConfig)
 }
 
 func cmdToKataProcess(cmd types.Cmd) (process *grpc.Process, err error) {
@@ -1001,7 +1043,7 @@ func (k *kataAgent) replaceOCIMountsForStorages(spec *specs.Spec, volumeStorages
 			// Create a temporary location to mount the Storage. Mounting to the correct location
 			// will be handled by the OCI mount structure.
 			filename := fmt.Sprintf("%s-%s", uuid.Generate().String(), filepath.Base(m.Destination))
-			path := filepath.Join(kataGuestSharedDir(), filename)
+			path := filepath.Join(kataGuestSandboxStorageDir(), filename)
 
 			k.Logger().Debugf("Replacing OCI mount source (%s) with %s", m.Source, path)
 			ociMounts[index].Source = path
@@ -1206,7 +1248,7 @@ func (k *kataAgent) rollbackFailingContainerCreation(c *Container) {
 			k.Logger().WithError(err2).Error("rollback failed unmountHostMounts()")
 		}
 
-		if err2 := bindUnmountContainerRootfs(k.ctx, kataHostSharedDir(), c.sandbox.id, c.id); err2 != nil {
+		if err2 := bindUnmountContainerRootfs(k.ctx, getMountPath(c.sandbox.id), c.id); err2 != nil {
 			k.Logger().WithError(err2).Error("rollback failed bindUnmountContainerRootfs()")
 		}
 	}
@@ -1263,6 +1305,13 @@ func (k *kataAgent) buildContainerRootfs(sandbox *Sandbox, c *Container, rootPat
 			rootfs.Options = []string{"nouuid"}
 		}
 
+		// Ensure container mount destination exists
+		// TODO: remove dependency on shared fs path. shared fs is just one kind of storage sources.
+		// we should not always use shared fs path for all kinds of storage. Stead, all storage
+		// should be bind mounted to a tmpfs path for containers to use.
+		if err := os.MkdirAll(filepath.Join(getMountPath(c.sandbox.id), c.id, c.rootfsSuffix), DirMode); err != nil {
+			return nil, err
+		}
 		return rootfs, nil
 	}
 
@@ -1274,7 +1323,7 @@ func (k *kataAgent) buildContainerRootfs(sandbox *Sandbox, c *Container, rootPat
 	// (kataGuestSharedDir) is already mounted in the
 	// guest. We only need to mount the rootfs from
 	// the host and it will show up in the guest.
-	if err := bindMountContainerRootfs(k.ctx, kataHostSharedDir(), sandbox.id, c.id, c.rootFs.Target, false); err != nil {
+	if err := bindMountContainerRootfs(k.ctx, getMountPath(sandbox.id), c.id, c.rootFs.Target, false); err != nil {
 		return nil, err
 	}
 
@@ -1307,6 +1356,7 @@ func (k *kataAgent) createContainer(sandbox *Sandbox, c *Container) (p *Process,
 	// takes care of rolling back actions previously performed.
 	defer func() {
 		if err != nil {
+			k.Logger().WithError(err).Error("createContainer failed")
 			k.rollbackFailingContainerCreation(c)
 		}
 	}()
@@ -1327,7 +1377,7 @@ func (k *kataAgent) createContainer(sandbox *Sandbox, c *Container) (p *Process,
 	}
 
 	// Handle container mounts
-	newMounts, ignoredMounts, err := c.mountSharedDirMounts(kataHostSharedDir(), kataGuestSharedDir())
+	newMounts, ignoredMounts, err := c.mountSharedDirMounts(getMountPath(sandbox.id), kataGuestSharedDir())
 	if err != nil {
 		return nil, err
 	}
@@ -2290,13 +2340,20 @@ func (k *kataAgent) markDead() {
 }
 
 func (k *kataAgent) cleanup(s *Sandbox) {
-	path := k.getSharePath(s.id)
+	// Unmount shared path
+	path := getSharePath(s.id)
 	k.Logger().WithField("path", path).Infof("cleanup agent")
-	if err := bindUnmountAllRootfs(k.ctx, path, s); err != nil {
-		k.Logger().WithError(err).Errorf("failed to unmount container share path %s", path)
+	if err := syscall.Unmount(path, syscall.MNT_DETACH|UmountNoFollow); err != nil {
+		k.Logger().WithError(err).Errorf("failed to unmount vm share path %s", path)
 	}
-	if err := os.RemoveAll(path); err != nil {
-		k.Logger().WithError(err).Errorf("failed to cleanup vm share path %s", path)
+
+	// Unmount mount path
+	path = getMountPath(s.id)
+	if err := bindUnmountAllRootfs(k.ctx, path, s); err != nil {
+		k.Logger().WithError(err).Errorf("failed to unmount vm mount path %s", path)
+	}
+	if err := os.RemoveAll(getSandboxPath(s.id)); err != nil {
+		k.Logger().WithError(err).Errorf("failed to cleanup vm path %s", getSandboxPath(s.id))
 	}
 }
 

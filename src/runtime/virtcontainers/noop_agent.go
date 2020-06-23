@@ -185,11 +185,6 @@ func (n *noopAgent) configureFromGrpc(h hypervisor, id string, builtin bool, con
 	return nil
 }
 
-// getSharePath is the Noop agent share path getter. It does nothing.
-func (n *noopAgent) getSharePath(id string) string {
-	return ""
-}
-
 // reseedRNG is the Noop agent RND reseeder. It does nothing.
 func (n *noopAgent) reseedRNG(data []byte) error {
 	return nil

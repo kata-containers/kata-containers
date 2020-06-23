@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"syscall"
 	"testing"
 
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist"
@@ -59,6 +60,7 @@ func cleanUp() {
 	globalSandboxList.removeSandbox(testSandboxID)
 	os.RemoveAll(fs.MockRunStoragePath())
 	os.RemoveAll(fs.MockRunVMStoragePath())
+	syscall.Unmount(getSharePath(testSandboxID), syscall.MNT_DETACH|UmountNoFollow)
 	os.RemoveAll(testDir)
 	os.MkdirAll(testDir, DirMode)
 

@@ -412,7 +412,7 @@ func (v *VM) assignSandbox(s *Sandbox) error {
 
 	vmSharePath := buildVMSharePath(v.id, v.store.RunVMStoragePath())
 	vmSockDir := filepath.Join(v.store.RunVMStoragePath(), v.id)
-	sbSharePath := s.agent.getSharePath(s.id)
+	sbSharePath := getMountPath(s.id)
 	sbSockDir := filepath.Join(v.store.RunVMStoragePath(), s.id)
 
 	v.logger().WithFields(logrus.Fields{

@@ -386,7 +386,7 @@ func TestBindUnmountContainerRootfsENOENTNotError(t *testing.T) {
 		assert.NoError(os.Remove(testPath))
 	}
 
-	err := bindUnmountContainerRootfs(context.Background(), testMnt, sID, cID)
+	err := bindUnmountContainerRootfs(context.Background(), filepath.Join(testMnt, sID), cID)
 	assert.NoError(err)
 }
 
@@ -407,7 +407,7 @@ func TestBindUnmountContainerRootfsRemoveRootfsDest(t *testing.T) {
 	assert.NoError(err)
 	defer os.RemoveAll(filepath.Join(testDir, sID))
 
-	bindUnmountContainerRootfs(context.Background(), testDir, sID, cID)
+	bindUnmountContainerRootfs(context.Background(), filepath.Join(testDir, sID), cID)
 
 	if _, err := os.Stat(testPath); err == nil {
 		t.Fatal("empty rootfs dest should be removed")
