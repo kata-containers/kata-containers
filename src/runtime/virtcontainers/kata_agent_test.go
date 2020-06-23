@@ -663,33 +663,50 @@ func TestHandleShm(t *testing.T) {
 		shmSize: 8192,
 	}
 
-	g := &pb.Spec{
-		Hooks: &pb.Hooks{},
-		Mounts: []pb.Mount{
-			{Destination: "/dev/shm"},
-		},
+	var ociMounts []specs.Mount
+
+	mount := specs.Mount{
+		Type:        "bind",
+		Destination: "/dev/shm",
 	}
 
-	k.handleShm(g, sandbox)
+	ociMounts = append(ociMounts, mount)
+	k.handleShm(ociMounts, sandbox)
 
-	assert.Len(g.Mounts, 1)
-	assert.NotEmpty(g.Mounts[0].Destination)
-	assert.Equal(g.Mounts[0].Destination, "/dev/shm")
-	assert.Equal(g.Mounts[0].Type, "bind")
-	assert.NotEmpty(g.Mounts[0].Source, filepath.Join(kataGuestSharedDir(), shmDir))
-	assert.Equal(g.Mounts[0].Options, []string{"rbind"})
+	assert.Len(ociMounts, 1)
+	assert.NotEmpty(ociMounts[0].Destination)
+	assert.Equal(ociMounts[0].Destination, "/dev/shm")
+	assert.Equal(ociMounts[0].Type, "bind")
+	assert.NotEmpty(ociMounts[0].Source, filepath.Join(kataGuestSharedDir(), shmDir))
+	assert.Equal(ociMounts[0].Options, []string{"rbind"})
 
 	sandbox.shmSize = 0
-	k.handleShm(g, sandbox)
+	k.handleShm(ociMounts, sandbox)
 
-	assert.Len(g.Mounts, 1)
-	assert.NotEmpty(g.Mounts[0].Destination)
-	assert.Equal(g.Mounts[0].Destination, "/dev/shm")
-	assert.Equal(g.Mounts[0].Type, "tmpfs")
-	assert.Equal(g.Mounts[0].Source, "shm")
-
+	assert.Len(ociMounts, 1)
+	assert.Equal(ociMounts[0].Destination, "/dev/shm")
+	assert.Equal(ociMounts[0].Type, "tmpfs")
+	assert.Equal(ociMounts[0].Source, "shm")
 	sizeOption := fmt.Sprintf("size=%d", DefaultShmSize)
-	assert.Equal(g.Mounts[0].Options, []string{"noexec", "nosuid", "nodev", "mode=1777", sizeOption})
+	assert.Equal(ociMounts[0].Options, []string{"noexec", "nosuid", "nodev", "mode=1777", sizeOption})
+
+	// In case the type of mount is ephemeral, the container mount is not
+	// shared with the sandbox shm.
+	ociMounts[0].Type = KataEphemeralDevType
+	mountSource := "/tmp/mountPoint"
+	ociMounts[0].Source = mountSource
+	k.handleShm(ociMounts, sandbox)
+
+	assert.Len(ociMounts, 1)
+	assert.Equal(ociMounts[0].Type, KataEphemeralDevType)
+	assert.NotEmpty(ociMounts[0].Source, mountSource)
+
+	epheStorages := k.handleEphemeralStorage(ociMounts)
+	epheMountPoint := epheStorages[0].MountPoint
+	expected := filepath.Join(ephemeralPath(), filepath.Base(mountSource))
+	assert.Equal(epheMountPoint, expected,
+		"Ephemeral mount point didn't match: got %s, expecting %s", epheMountPoint, expected)
+
 }
 
 func testIsPidNamespacePresent(grpcSpec *pb.Spec) bool {
