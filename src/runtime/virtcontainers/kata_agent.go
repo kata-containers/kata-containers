@@ -1130,22 +1130,32 @@ func (k *kataAgent) constraintGRPCSpec(grpcSpec *grpc.Spec, passSeccomp bool) {
 	grpcSpec.Linux.Devices = linuxDevices
 }
 
-func (k *kataAgent) handleShm(grpcSpec *grpc.Spec, sandbox *Sandbox) {
-	for idx, mnt := range grpcSpec.Mounts {
+func (k *kataAgent) handleShm(mounts []specs.Mount, sandbox *Sandbox) {
+	for idx, mnt := range mounts {
 		if mnt.Destination != "/dev/shm" {
 			continue
 		}
 
+		// If /dev/shm for a container is backed by an ephemeral volume, skip
+		// bind-mounting it to the sandbox shm.
+		// A later call to handleEphemeralStorage should take care of setting up /dev/shm correctly.
+		if mnt.Type == KataEphemeralDevType {
+			continue
+		}
+
+		// A container shm mount is shared with sandbox shm mount.
 		if sandbox.shmSize > 0 {
-			grpcSpec.Mounts[idx].Type = "bind"
-			grpcSpec.Mounts[idx].Options = []string{"rbind"}
-			grpcSpec.Mounts[idx].Source = filepath.Join(kataGuestSandboxDir(), shmDir)
+			mounts[idx].Type = "bind"
+			mounts[idx].Options = []string{"rbind"}
+			mounts[idx].Source = filepath.Join(kataGuestSandboxDir(), shmDir)
 			k.Logger().WithField("shm-size", sandbox.shmSize).Info("Using sandbox shm")
 		} else {
+			// This should typically not happen, as a sandbox shm mount is always set up by the
+			// upper stack.
 			sizeOption := fmt.Sprintf("size=%d", DefaultShmSize)
-			grpcSpec.Mounts[idx].Type = "tmpfs"
-			grpcSpec.Mounts[idx].Source = "shm"
-			grpcSpec.Mounts[idx].Options = []string{"noexec", "nosuid", "nodev", "mode=1777", sizeOption}
+			mounts[idx].Type = "tmpfs"
+			mounts[idx].Source = "shm"
+			mounts[idx].Options = []string{"noexec", "nosuid", "nodev", "mode=1777", sizeOption}
 			k.Logger().WithField("shm-size", sizeOption).Info("Setting up a separate shm for container")
 		}
 	}
@@ -1382,6 +1392,8 @@ func (k *kataAgent) createContainer(sandbox *Sandbox, c *Container) (p *Process,
 		return nil, err
 	}
 
+	k.handleShm(ociSpec.Mounts, sandbox)
+
 	epheStorages := k.handleEphemeralStorage(ociSpec.Mounts)
 	ctrStorages = append(ctrStorages, epheStorages...)
 
@@ -1431,8 +1443,6 @@ func (k *kataAgent) createContainer(sandbox *Sandbox, c *Container) (p *Process,
 	// We need to constraint the spec to make sure we're not passing
 	// irrelevant information to the agent.
 	k.constraintGRPCSpec(grpcSpec, passSeccomp)
-
-	k.handleShm(grpcSpec, sandbox)
 
 	req := &grpc.CreateContainerRequest{
 		ContainerId:  c.id,
