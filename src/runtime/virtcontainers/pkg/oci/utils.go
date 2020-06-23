@@ -539,6 +539,15 @@ func addHypervisorMemoryOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig
 
 		sbConfig.HypervisorConfig.HugePages = hugePages
 	}
+
+	if value, ok := ocispec.Annotations[vcAnnotations.IOMMU]; ok {
+		iommu, err := strconv.ParseBool(value)
+		if err != nil {
+			return fmt.Errorf("Error parsing annotation for iommu: Please specify boolean value 'true|false'")
+		}
+
+		sbConfig.HypervisorConfig.IOMMU = iommu
+	}
 	return nil
 }
 

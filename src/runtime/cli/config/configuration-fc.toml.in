@@ -129,6 +129,12 @@ block_device_driver = "@DEFBLOCKSTORAGEDRIVER_FC@"
 # result in memory pre allocation
 #enable_hugepages = true
 
+# Enable vIOMMU, default false
+# Enabling this will result in the VM having a vIOMMU device
+# This will also add the following options to the kernel's
+# command line: intel_iommu=on,iommu=pt
+#enable_iommu = true
+
 # Enable swap of vm memory. Default false.
 # The behaviour is undefined if mem_prealloc is also set to true
 #enable_swap = true

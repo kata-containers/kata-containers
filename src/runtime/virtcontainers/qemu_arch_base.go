@@ -130,6 +130,9 @@ type qemuArch interface {
 
 	// appendPCIeRootPortDevice appends a pcie-root-port device to pcie.0 bus
 	appendPCIeRootPortDevice(devices []govmmQemu.Device, number uint32) []govmmQemu.Device
+
+	// append vIOMMU device
+	appendIOMMU(devices []govmmQemu.Device) ([]govmmQemu.Device, error)
 }
 
 type qemuArchBase struct {
@@ -765,4 +768,22 @@ func (q *qemuArchBase) addBridge(b types.Bridge) {
 // appendPCIeRootPortDevice appends to devices the given pcie-root-port
 func (q *qemuArchBase) appendPCIeRootPortDevice(devices []govmmQemu.Device, number uint32) []govmmQemu.Device {
 	return genericAppendPCIeRootPort(devices, number, q.machineType)
+
+}
+
+// appendIOMMU appends a virtual IOMMU device
+func (q *qemuArchBase) appendIOMMU(devices []govmmQemu.Device) ([]govmmQemu.Device, error) {
+	switch q.machineType {
+	case QemuQ35:
+		iommu := govmmQemu.IommuDev{
+			Intremap:    true,
+			DeviceIotlb: true,
+			CachingMode: true,
+		}
+
+		devices = append(devices, iommu)
+		return devices, nil
+	default:
+		return devices, fmt.Errorf("Machine Type %s does not support vIOMMU", q.machineType)
+	}
 }

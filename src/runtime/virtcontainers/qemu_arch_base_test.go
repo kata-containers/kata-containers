@@ -566,3 +566,27 @@ func TestQemuArchBaseAppendNetwork(t *testing.T) {
 	assert.NoError(err)
 	assert.Equal(expectedOut, devices)
 }
+
+func TestQemuArchBaseAppendIOMMU(t *testing.T) {
+	var devices []govmmQemu.Device
+	var err error
+	assert := assert.New(t)
+	qemuArchBase := newQemuArchBase()
+
+	expectedOut := []govmmQemu.Device{
+		govmmQemu.IommuDev{
+			Intremap:    true,
+			DeviceIotlb: true,
+			CachingMode: true,
+		},
+	}
+	// Test IOMMU is not appended to PC machine type
+	qemuArchBase.machineType = QemuPC
+	devices, err = qemuArchBase.appendIOMMU(devices)
+	assert.Error(err)
+
+	qemuArchBase.machineType = QemuQ35
+	devices, err = qemuArchBase.appendIOMMU(devices)
+	assert.NoError(err)
+	assert.Equal(expectedOut, devices)
+}
