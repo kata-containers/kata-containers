@@ -1,0 +1,20 @@
+Title: Docker Exec
+participant Docker
+participant kata-runtime
+participant virtcontainers
+participant shim
+participant hypervisor
+participant agent
+participant proxy
+
+#Docker Exec
+Docker->kata-runtime: exec
+kata-runtime->virtcontainers: EnterContainer()
+virtcontainers->agent: exec 
+agent->virtcontainers: Process started in the container
+virtcontainers->shim: start shim
+shim->agent: ReadStdout()
+shim->agent: ReadStderr()
+shim->agent: WaitProcess()
+virtcontainers->kata-runtime: End of EnterContainer()
+kata-runtime-->Docker: End of exec
