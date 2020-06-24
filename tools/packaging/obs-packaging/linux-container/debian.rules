@@ -1,0 +1,63 @@
+#!/usr/bin/make -f
+include /usr/share/dpkg/default.mk
+KernelDir=debian/kata-linux-container/usr/share/kata-containers
+DebugDir=debian/kata-linux-container-debug/usr/share/kata-containers
+KernelVer=${DEB_VERSION_UPSTREAM_REVISION}.container
+HOST_ARCH=$(shell arch)
+KATA_MULTIARCH="/usr/src/packages/SOURCES/kata-multiarch.sh"
+KERNEL_ARCH=$(shell /bin/bash $(KATA_MULTIARCH) -a $(HOST_ARCH))
+KERNEL_IMAGE=$(shell /bin/bash $(KATA_MULTIARCH) -i $(HOST_ARCH))
+KERNEL_CONFIGS=kata-kernel-configs
+KERNEL_FRAG_COMMON_DIR="$(KERNEL_CONFIGS)/fragments/common"
+KERNEL_FRAG_ARCH_DIR="$(KERNEL_CONFIGS)/fragments/$(KERNEL_ARCH)"
+
+# used in merge_config.sh
+export KCONFIG_CONFIG=.config
+export ARCH=$(KERNEL_ARCH)
+
+%:
+	dh $@
+
+override_dh_auto_build:
+	sed -i "s/^EXTRAVERSION.*/EXTRAVERSION = -$$(echo $(KernelVer) | cut -d'-' -f2)/" Makefile
+	tar xzf /usr/src/packages/SOURCES/$(KERNEL_CONFIGS).tar.gz
+	rm -f .config
+	find $(KERNEL_CONFIGS) -name "$(KERNEL_ARCH)_kata_kvm_*" -exec cp {} .config \;
+	if [ ! -f .config ]; then \
+		scripts/kconfig/merge_config.sh -r -n $(KERNEL_FRAG_COMMON_DIR)/*.conf $(KERNEL_FRAG_ARCH_DIR)/* ; \
+		if [ ! -f .config ]; then \
+			echo "ERROR: cannot find the kernel config file for the $(KERNEL_ARCH) architecture"; \
+			exit 1; \
+		fi \
+	fi
+
+	# https://github.com/kata-containers/packaging/issues/394 enable reproducible builds:
+	export KBUILD_BUILD_USER=katabuilduser
+	export KBUILD_BUILD_HOST=katabuildhost
+        # Default to zero seconds after midnight 1970-01-01 (the epoch)
+	export KBUILD_BUILD_TIMESTAMP="$(LANG=C date -u -d "@${SOURCE_DATE_EPOCH:-0}")"
+	make -s ARCH=$(KERNEL_ARCH) oldconfig > /dev/null
+	make -s CONFIG_DEBUG_SECTION_MISMATCH=y ARCH=$(KERNEL_ARCH)
+
+override_dh_auto_install:
+
+override_dh_auto_clean:
+
+override_dh_install:
+	dh_install
+	mkdir -p $(DebugDir)
+	mkdir -p $(KernelDir)
+	install -m 644 .config $(DebugDir)/config-$(KernelVer)
+	install -m 644 System.map $(DebugDir)/System.map-$(KernelVer)
+	if [ -n "$(KERNEL_IMAGE)" ]; then \
+		cp $$(realpath $(KERNEL_IMAGE))  $(KernelDir)/vmlinuz-$(KernelVer); \
+		chmod 755 $(KernelDir)/vmlinuz-$(KernelVer); \
+		ln -sf vmlinuz-$(KernelVer) $(KernelDir)/vmlinuz.container; \
+	fi
+	cp vmlinux $(KernelDir)/vmlinux-$(KernelVer)
+	chmod 755 $(KernelDir)/vmlinux-$(KernelVer)
+	ln -sf vmlinux-$(KernelVer) $(KernelDir)/vmlinux.container
+
+override_dh_strip:
+
+override_dh_shlibdeps:

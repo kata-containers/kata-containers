@@ -1,0 +1,13 @@
+# action.yml
+name: 'kata-deploy-aks'
+description: 'test Kata container image in AKS'
+inputs:
+  packaging-sha:
+    description: 'SHA we are using for pulling packaging manifests'
+    required: true
+    default: ''
+runs:
+  using: 'docker'
+  image: 'Dockerfile'
+  args:
+    - ${{ inputs.packaging-sha }}

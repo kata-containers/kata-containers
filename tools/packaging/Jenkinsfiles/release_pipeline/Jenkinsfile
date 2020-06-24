@@ -1,0 +1,40 @@
+// Copyright (c) 2019 Intel Corporation
+//
+// SPDX-License-Identifier: Apache-2.0
+//
+pipeline {
+  agent none
+  parameters {
+    string(
+      name: 'BRANCH',
+      defaultValue:"master",
+      description: "Kata Containers Branch"
+    )
+    string(
+      name: 'NEW_VERSION',
+      defaultValue:"",
+      description: "Kata Containers version"
+    )
+  }
+  environment {
+    PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+    BRANCH="${params.BRANCH}"
+    NEW_VERSION="${params.NEW_VERSION}"
+  }
+  stages {
+    stage('Bump repos') {
+      agent { label 'ubuntu-lts-latest-azure' }
+      steps {
+        sh 'git clone https://github.com/kata-containers/packaging.git'
+        withCredentials([string(credentialsId: 'katabuilder-git-bump', variable: 'GITHUB_TOKEN')]) {
+          dir("${WORKSPACE}/packaging/Jenkinsfiles/release_pipeline/") {
+            sh '''
+                ./git_credential_cache.sh
+                ./bump.sh "${NEW_VERSION}" "${BRANCH}"
+               '''
+          }
+        }
+      }
+    }
+  }
+}

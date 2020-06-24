@@ -1,0 +1,5 @@
+bases:
+- ../../base
+
+patchesStrategicMerge:
+- mount_k3s_conf.yaml

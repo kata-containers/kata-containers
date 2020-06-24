@@ -1,0 +1,49 @@
+From 267ca21784bb307babbbb2f5a4a111da4da4c015 Mon Sep 17 00:00:00 2001
+From: Sebastien Boeuf <sebastien.boeuf@intel.com>
+Date: Thu, 13 Feb 2020 08:50:38 +0100
+Subject: [PATCH] net: virtio_vsock: Fix race condition between bind and listen
+
+Whenever the vsock backend on the host sends a packet through the RX
+queue, it expects an answer on the TX queue. Unfortunately, there is one
+case where the host side will hang waiting for the answer and will
+effectively never recover.
+
+This issue happens when the guest side starts binding to the socket,
+which insert a new bound socket into the list of already bound sockets.
+At this time, we expect the guest to also start listening, which will
+trigger the sk_state to move from TCP_CLOSE to TCP_LISTEN. The problem
+occurs if the host side queued a RX packet and triggered an interrupt
+right between the end of the binding process and the beginning of the
+listening process. In this specific case, the function processing the
+packet virtio_transport_recv_pkt() will find a bound socket, which means
+it will hit the switch statement checking for the sk_state, but the
+state won't be changed into TCP_LISTEN yet, which leads the code to pick
+the default statement. This default statement will only free the buffer,
+while it should also respond to the host side, by sending a packet on
+its TX queue.
+
+In order to simply fix this unfortunate chain of events, it is important
+that in case the default statement is entered, and because at this stage
+we know the host side is waiting for an answer, we must send back a
+packet containing the operation VIRTIO_VSOCK_OP_RST.
+
+Signed-off-by: Sebastien Boeuf <sebastien.boeuf@intel.com>
+---
+ net/vmw_vsock/virtio_transport_common.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/net/vmw_vsock/virtio_transport_common.c b/net/vmw_vsock/virtio_transport_common.c
+index 2a8651aa90c8..7d83e2c80b15 100644
+--- a/net/vmw_vsock/virtio_transport_common.c
++++ b/net/vmw_vsock/virtio_transport_common.c
+@@ -1051,6 +1051,7 @@ void virtio_transport_recv_pkt(struct virtio_vsock_pkt *pkt)
+ 		virtio_transport_free_pkt(pkt);
+ 		break;
+ 	default:
++		(void)virtio_transport_reset_no_sock(pkt);
+ 		virtio_transport_free_pkt(pkt);
+ 		break;
+ 	}
+-- 
+2.20.1
+

@@ -1,0 +1,55 @@
+#
+# Copyright (c) 2019 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+
+trigger:
+- master
+
+jobs:
+- job: packages
+#timeout set to max
+  timeoutInMinutes: 0
+  pool:
+    vmImage: 'ubuntu-latest'
+  steps:
+# azure docker installation task
+# https://docs.microsoft.com/en-us/azure/devops/pipelines/tasks/tool/docker-installer?view=azure-devops 
+  - task: DockerInstaller@0
+    displayName: 'Install Docker'
+
+  - bash: |
+      sudo apt-get update -y -qq
+      sudo apt-get --no-install-recommends install -y git
+      git config --global user.email "azure-pipeline@kata.io"
+      git config --global user.name "azure-pipeline"
+      .ci/packaging/setup.sh
+    displayName: 'Setup'
+    env:
+      CI: true
+      branch: $(system.pullRequest.targetBranch)
+      GITHUB_PR: $(system.pullRequest.pullRequestNumber)
+
+  - bash: |
+      # This is set by azure, but we use the same variable
+      export AGENT_VERSION=""
+      script -qefc bash -c '.ci/packaging/request_to_obs.sh'
+      # Kata branch to build
+    displayName: 'Request build to OBS'
+
+    env:
+      CI: true
+      BRANCH: $(system.pullRequest.targetBranch)
+      OBS_USER: $(OBS_USER)
+      OBS_PASS: $(OBS_PASS)
+      GITHUB_PR: $(system.pullRequest.pullRequestNumber)
+
+  - bash: |
+      echo "Wait for packages from ${OBS_SUBPROJECT}"
+      [ "${OBS_SUBPROJECT}" != "" ] || { echo "OBS_SUBPROJECT"; exit 1; }
+      script -qefc bash -c './obs-packaging/wait-obs.sh --no-wait-publish'
+    displayName: 'Wait for packages are ready'
+    env:
+      USE_DOCKER: true
+      CI: $(CI)
