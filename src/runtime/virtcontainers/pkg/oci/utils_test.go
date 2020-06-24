@@ -791,6 +791,9 @@ func TestAddHypervisorAnnotations(t *testing.T) {
 	ocispec.Annotations[vcAnnotations.HotplugVFIOOnRootBus] = "true"
 	ocispec.Annotations[vcAnnotations.PCIeRootPort] = "2"
 	ocispec.Annotations[vcAnnotations.EntropySource] = "/dev/urandom"
+	// 10Mbit
+	ocispec.Annotations[vcAnnotations.RxRateLimiterMaxRate] = "10000000"
+	ocispec.Annotations[vcAnnotations.TxRateLimiterMaxRate] = "10000000"
 
 	addAnnotations(ocispec, &config)
 	assert.Equal(config.HypervisorConfig.NumVCPUs, uint32(1))
@@ -823,6 +826,8 @@ func TestAddHypervisorAnnotations(t *testing.T) {
 	assert.Equal(config.HypervisorConfig.HotplugVFIOOnRootBus, true)
 	assert.Equal(config.HypervisorConfig.PCIeRootPort, uint32(2))
 	assert.Equal(config.HypervisorConfig.EntropySource, "/dev/urandom")
+	assert.Equal(config.HypervisorConfig.RxRateLimiterMaxRate, uint64(10000000))
+	assert.Equal(config.HypervisorConfig.TxRateLimiterMaxRate, uint64(10000000))
 
 	// In case an absurd large value is provided, the config value if not over-ridden
 	ocispec.Annotations[vcAnnotations.DefaultVCPUs] = "655536"

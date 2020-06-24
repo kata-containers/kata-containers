@@ -412,6 +412,12 @@ type HypervisorConfig struct {
 
 	// SELinux label for the VM
 	SELinuxProcessLabel string
+
+	// RxRateLimiterMaxRate is used to control network I/O inbound bandwidth on VM level.
+	RxRateLimiterMaxRate uint64
+
+	// TxRateLimiterMaxRate is used to control network I/O outbound bandwidth on VM level.
+	TxRateLimiterMaxRate uint64
 }
 
 // vcpu mapping from vcpu number to thread number
@@ -796,4 +802,7 @@ type hypervisor interface {
 
 	// generate the socket to communicate the host and guest
 	generateSocket(id string, useVsock bool) (interface{}, error)
+
+	// check if hypervisor supports built-in rate limiter.
+	isRateLimiterBuiltin() bool
 }

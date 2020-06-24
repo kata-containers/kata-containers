@@ -19,6 +19,8 @@ type MacvtapEndpoint struct {
 	VMFds              []*os.File
 	VhostFds           []*os.File
 	PCIAddr            string
+	RxRateLimiter      bool
+	TxRateLimiter      bool
 }
 
 func createMacvtapNetworkEndpoint(netInfo NetworkInfo) (*MacvtapEndpoint, error) {
@@ -120,4 +122,22 @@ func (endpoint *MacvtapEndpoint) load(s persistapi.NetworkEndpoint) {
 	if s.Macvtap != nil {
 		endpoint.PCIAddr = s.Macvtap.PCIAddr
 	}
+}
+
+func (endpoint *MacvtapEndpoint) GetRxRateLimiter() bool {
+	return endpoint.RxRateLimiter
+}
+
+func (endpoint *MacvtapEndpoint) SetRxRateLimiter() error {
+	endpoint.RxRateLimiter = true
+	return nil
+}
+
+func (endpoint *MacvtapEndpoint) GetTxRateLimiter() bool {
+	return endpoint.TxRateLimiter
+}
+
+func (endpoint *MacvtapEndpoint) SetTxRateLimiter() error {
+	endpoint.TxRateLimiter = true
+	return nil
 }

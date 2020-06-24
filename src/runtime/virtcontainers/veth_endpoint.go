@@ -18,6 +18,8 @@ type VethEndpoint struct {
 	EndpointProperties NetworkInfo
 	EndpointType       EndpointType
 	PCIAddr            string
+	RxRateLimiter      bool
+	TxRateLimiter      bool
 }
 
 func createVethNetworkEndpoint(idx int, ifName string, interworkingModel NetInterworkingModel) (*VethEndpoint, error) {
@@ -161,4 +163,22 @@ func (endpoint *VethEndpoint) load(s persistapi.NetworkEndpoint) {
 		netpair := loadNetIfPair(&s.Veth.NetPair)
 		endpoint.NetPair = *netpair
 	}
+}
+
+func (endpoint *VethEndpoint) GetRxRateLimiter() bool {
+	return endpoint.RxRateLimiter
+}
+
+func (endpoint *VethEndpoint) SetRxRateLimiter() error {
+	endpoint.RxRateLimiter = true
+	return nil
+}
+
+func (endpoint *VethEndpoint) GetTxRateLimiter() bool {
+	return endpoint.TxRateLimiter
+}
+
+func (endpoint *VethEndpoint) SetTxRateLimiter() error {
+	endpoint.TxRateLimiter = true
+	return nil
 }

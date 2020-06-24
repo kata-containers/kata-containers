@@ -1210,3 +1210,7 @@ func (clh *cloudHypervisor) vmInfo() (chclient.VmInfo, error) {
 	return info, openAPIClientError(err)
 
 }
+
+func (clh *cloudHypervisor) isRateLimiterBuiltin() bool {
+	return false
+}

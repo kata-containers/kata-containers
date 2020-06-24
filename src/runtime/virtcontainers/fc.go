@@ -25,12 +25,12 @@ import (
 
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
 	persistapi "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist/api"
+	kataclient "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols/client"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/firecracker/client"
 	models "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/firecracker/client/models"
 	ops "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/firecracker/client/operations"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
-	kataclient "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols/client"
 
 	"github.com/blang/semver"
 	"github.com/containerd/console"
@@ -908,11 +908,52 @@ func (fc *firecracker) fcAddNetDevice(endpoint Endpoint) {
 	defer span.Finish()
 
 	ifaceID := endpoint.Name()
+
+	// The implementation of rate limiter is based on TBF.
+	// Rate Limiter defines a token bucket with a maximum capacity (size) to store tokens, and an interval for refilling purposes (refill_time).
+	// The refill-rate is derived from size and refill_time, and it is the constant rate at which the tokens replenish.
+	refillTime := uint64(1000)
+	var rxRateLimiter models.RateLimiter
+	rxSize := fc.config.RxRateLimiterMaxRate
+	if rxSize > 0 {
+		fc.Logger().Info("Add rx rate limiter")
+
+		// kata-defined rxSize is in bits with scaling factors of 1000, but firecracker-defined
+		// rxSize is in bytes with scaling factors of 1024, need reversion.
+		rxSize = revertBytes(rxSize / 8)
+		rxTokenBucket := models.TokenBucket{
+			RefillTime: &refillTime,
+			Size:       &rxSize,
+		}
+		rxRateLimiter = models.RateLimiter{
+			Bandwidth: &rxTokenBucket,
+		}
+	}
+
+	var txRateLimiter models.RateLimiter
+	txSize := fc.config.TxRateLimiterMaxRate
+	if txSize > 0 {
+		fc.Logger().Info("Add tx rate limiter")
+
+		// kata-defined txSize is in bits with scaling factors of 1000, but firecracker-defined
+		// txSize is in bytes with scaling factors of 1024, need reversion.
+		txSize = revertBytes(txSize / 8)
+		txTokenBucket := models.TokenBucket{
+			RefillTime: &refillTime,
+			Size:       &txSize,
+		}
+		txRateLimiter = models.RateLimiter{
+			Bandwidth: &txTokenBucket,
+		}
+	}
+
 	ifaceCfg := &models.NetworkInterface{
 		AllowMmdsRequests: false,
 		GuestMac:          endpoint.HardwareAddr(),
 		IfaceID:           &ifaceID,
 		HostDevName:       &endpoint.NetworkPair().TapInterface.TAPIface.Name,
+		RxRateLimiter:     &rxRateLimiter,
+		TxRateLimiter:     &txRateLimiter,
 	}
 
 	fc.fcConfig.NetworkInterfaces = append(fc.fcConfig.NetworkInterfaces, ifaceCfg)
@@ -1211,4 +1252,21 @@ func (fc *firecracker) watchConsole() (*os.File, error) {
 	}()
 
 	return stdio, nil
+}
+
+func (fc *firecracker) isRateLimiterBuiltin() bool {
+	return true
+}
+
+// In firecracker, it accepts the size of rate limiter in scaling factors of 2^10(1024)
+// But in kata-defined rate limiter, for better Human-readability, we prefer scaling factors of 10^3(1000).
+// func revertByte reverts num from scaling factors of 1000 to 1024, e.g. 10000000(10MB) to 10485760.
+func revertBytes(num uint64) uint64 {
+	a := num / 1000
+	b := num % 1000
+	if a == 0 {
+		return num
+	} else {
+		return 1024*revertBytes(a) + b
+	}
 }

@@ -23,6 +23,8 @@ type TuntapEndpoint struct {
 	EndpointProperties NetworkInfo
 	EndpointType       EndpointType
 	PCIAddr            string
+	RxRateLimiter      bool
+	TxRateLimiter      bool
 }
 
 // Properties returns the properties of the tap interface.
@@ -211,4 +213,22 @@ func (endpoint *TuntapEndpoint) load(s persistapi.NetworkEndpoint) {
 		tuntapif := loadTuntapIf(&s.Tuntap.TuntapInterface)
 		endpoint.TuntapInterface = *tuntapif
 	}
+}
+
+func (endpoint *TuntapEndpoint) GetRxRateLimiter() bool {
+	return endpoint.RxRateLimiter
+}
+
+func (endpoint *TuntapEndpoint) SetRxRateLimiter() error {
+	endpoint.RxRateLimiter = true
+	return nil
+}
+
+func (endpoint *TuntapEndpoint) GetTxRateLimiter() bool {
+	return endpoint.TxRateLimiter
+}
+
+func (endpoint *TuntapEndpoint) SetTxRateLimiter() error {
+	endpoint.TxRateLimiter = true
+	return nil
 }

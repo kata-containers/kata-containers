@@ -615,17 +615,17 @@ definitions:
     properties:
       size:
         type: integer
-        format: int64
+        format: uint64
         description: The total number of tokens this bucket can hold.
         minimum: 0
       one_time_burst:
         type: integer
-        format: int64
+        format: uint64
         description: The initial size of a token bucket.
         minimum: 0
       refill_time:
         type: integer
-        format: int64
+        format: uint64
         description: The amount of milliseconds it takes for the bucket to refill.
         minimum: 0
 

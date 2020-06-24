@@ -128,3 +128,7 @@ func (m *mockHypervisor) check() error {
 func (m *mockHypervisor) generateSocket(id string, useVsock bool) (interface{}, error) {
 	return types.Socket{HostPath: "/tmp/socket", Name: "socket"}, nil
 }
+
+func (m *mockHypervisor) isRateLimiterBuiltin() bool {
+	return false
+}

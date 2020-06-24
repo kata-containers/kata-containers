@@ -256,6 +256,8 @@ func (s *Sandbox) dumpConfig(ss *persistapi.SandboxState) {
 		VhostUserStorePath:      sconfig.HypervisorConfig.VhostUserStorePath,
 		GuestHookPath:           sconfig.HypervisorConfig.GuestHookPath,
 		VMid:                    sconfig.HypervisorConfig.VMid,
+		RxRateLimiterMaxRate:    sconfig.HypervisorConfig.RxRateLimiterMaxRate,
+		TxRateLimiterMaxRate:    sconfig.HypervisorConfig.TxRateLimiterMaxRate,
 	}
 
 	if sconfig.AgentType == "kata" {
@@ -545,6 +547,8 @@ func loadSandboxConfig(id string) (*SandboxConfig, error) {
 		VhostUserStorePath:      hconf.VhostUserStorePath,
 		GuestHookPath:           hconf.GuestHookPath,
 		VMid:                    hconf.VMid,
+		RxRateLimiterMaxRate:    hconf.RxRateLimiterMaxRate,
+		TxRateLimiterMaxRate:    hconf.TxRateLimiterMaxRate,
 	}
 
 	if savedConf.AgentType == "kata" {
