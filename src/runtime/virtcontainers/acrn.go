@@ -235,7 +235,9 @@ func (a *Acrn) appendImage(devices []Device, imagePath string) ([]Device, error)
 	if sandbox == nil && err != nil {
 		return nil, err
 	}
-	sandbox.GetAndSetSandboxBlockIndex()
+	if _, err = sandbox.GetAndSetSandboxBlockIndex(); err != nil {
+		return nil, err
+	}
 
 	devices, err = a.arch.appendImage(devices, imagePath)
 	if err != nil {

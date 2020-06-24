@@ -401,6 +401,7 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (config string, err err
 	pcieRootPort := uint32(2)
 	disableNewNetNs := false
 	sharedFS := "virtio-9p"
+	virtioFSdaemon := path.Join(dir, "virtiofsd")
 
 	configFileOptions := ktu.RuntimeConfigOptions{
 		Hypervisor:           "qemu",
@@ -420,6 +421,7 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (config string, err err
 		PCIeRootPort:         pcieRootPort,
 		DisableNewNetNs:      disableNewNetNs,
 		SharedFS:             sharedFS,
+		VirtioFSDaemon:       virtioFSdaemon,
 	}
 
 	runtimeConfigFileData := ktu.MakeRuntimeConfigFileData(configFileOptions)
