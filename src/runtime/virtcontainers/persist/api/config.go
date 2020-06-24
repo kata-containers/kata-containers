@@ -179,6 +179,12 @@ type HypervisorConfig struct {
 	// VMid is the id of the VM that create the hypervisor if the VM is created by the factory.
 	// VMid is "" if the hypervisor is not created by the factory.
 	VMid string
+
+	// RxRateLimiterMaxRate is used to control network I/O inbound bandwidth on VM level.
+	RxRateLimiterMaxRate uint64
+
+	// TxRateLimiterMaxRate is used to control network I/O outbound bandwidth on VM level.
+	TxRateLimiterMaxRate uint64
 }
 
 // KataAgentConfig is a structure storing information needed

@@ -231,3 +231,21 @@ func (endpoint *PhysicalEndpoint) load(s persistapi.NetworkEndpoint) {
 		endpoint.VendorDeviceID = s.Physical.VendorDeviceID
 	}
 }
+
+// unsupported
+func (endpoint *PhysicalEndpoint) GetRxRateLimiter() bool {
+	return false
+}
+
+func (endpoint *PhysicalEndpoint) SetRxRateLimiter() error {
+	return fmt.Errorf("rx rate limiter is unsupported for physical endpoint")
+}
+
+// unsupported
+func (endpoint *PhysicalEndpoint) GetTxRateLimiter() bool {
+	return false
+}
+
+func (endpoint *PhysicalEndpoint) SetTxRateLimiter() error {
+	return fmt.Errorf("tx rate limiter is unsupported for physical endpoint")
+}

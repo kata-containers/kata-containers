@@ -129,6 +129,8 @@ type hypervisor struct {
 	HotplugVFIOOnRootBus    bool     `toml:"hotplug_vfio_on_root_bus"`
 	DisableVhostNet         bool     `toml:"disable_vhost_net"`
 	GuestHookPath           string   `toml:"guest_hook_path"`
+	RxRateLimiterMaxRate    uint64   `toml:"rx_rate_limiter_max_rate"`
+	TxRateLimiterMaxRate    uint64   `toml:"tx_rate_limiter_max_rate"`
 }
 
 type proxy struct {
@@ -430,6 +432,22 @@ func (h hypervisor) getInitrdAndImage() (initrd string, image string, err error)
 	return
 }
 
+func (h hypervisor) getRxRateLimiterCfg() (uint64, error) {
+	if h.RxRateLimiterMaxRate < 0 {
+		return 0, fmt.Errorf("rx Rate Limiter configuration must be greater than or equal to 0, max_rate %v", h.RxRateLimiterMaxRate)
+	}
+
+	return h.RxRateLimiterMaxRate, nil
+}
+
+func (h hypervisor) getTxRateLimiterCfg() (uint64, error) {
+	if h.TxRateLimiterMaxRate < 0 {
+		return 0, fmt.Errorf("tx Rate Limiter configuration must be greater than or equal to 0, max_rate %v", h.TxRateLimiterMaxRate)
+	}
+
+	return h.TxRateLimiterMaxRate, nil
+}
+
 func (p proxy) path() (string, error) {
 	path := p.Path
 	if path == "" {
@@ -534,6 +552,16 @@ func newFirecrackerHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		return vc.HypervisorConfig{}, errors.New("No vsock support, firecracker cannot be used")
 	}
 
+	rxRateLimiterMaxRate, err := h.getRxRateLimiterCfg()
+	if err != nil {
+		return vc.HypervisorConfig{}, err
+	}
+
+	txRateLimiterMaxRate, err := h.getTxRateLimiterCfg()
+	if err != nil {
+		return vc.HypervisorConfig{}, err
+	}
+
 	return vc.HypervisorConfig{
 		HypervisorPath:        hypervisor,
 		JailerPath:            jailer,
@@ -558,6 +586,8 @@ func newFirecrackerHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		DisableVhostNet:       true, // vhost-net backend is not supported in Firecracker
 		UseVSock:              true,
 		GuestHookPath:         h.guestHookPath(),
+		RxRateLimiterMaxRate:  rxRateLimiterMaxRate,
+		TxRateLimiterMaxRate:  txRateLimiterMaxRate,
 	}, nil
 }
 
@@ -621,6 +651,16 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		}
 	}
 
+	rxRateLimiterMaxRate, err := h.getRxRateLimiterCfg()
+	if err != nil {
+		return vc.HypervisorConfig{}, err
+	}
+
+	txRateLimiterMaxRate, err := h.getTxRateLimiterCfg()
+	if err != nil {
+		return vc.HypervisorConfig{}, err
+	}
+
 	return vc.HypervisorConfig{
 		HypervisorPath:          hypervisor,
 		KernelPath:              kernel,
@@ -665,6 +705,8 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		EnableVhostUserStore:    h.EnableVhostUserStore,
 		VhostUserStorePath:      h.vhostUserStorePath(),
 		GuestHookPath:           h.guestHookPath(),
+		RxRateLimiterMaxRate:    rxRateLimiterMaxRate,
+		TxRateLimiterMaxRate:    txRateLimiterMaxRate,
 	}, nil
 }
 
@@ -1105,6 +1147,8 @@ func GetDefaultHypervisorConfig() vc.HypervisorConfig {
 		VhostUserStorePath:      defaultVhostUserStorePath,
 		VirtioFSCache:           defaultVirtioFSCacheMode,
 		DisableImageNvdimm:      defaultDisableImageNvdimm,
+		RxRateLimiterMaxRate:    defaultRxRateLimiterMaxRate,
+		TxRateLimiterMaxRate:    defaultTxRateLimiterMaxRate,
 	}
 }
 

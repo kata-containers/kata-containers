@@ -13,6 +13,7 @@ import (
 	"math/rand"
 	"net"
 	"os"
+	"os/exec"
 	"runtime"
 	"sort"
 	"time"
@@ -1257,6 +1258,25 @@ func (n *Network) Add(ctx context.Context, config *NetworkConfig, hypervisor hyp
 					return err
 				}
 			}
+
+			if !hypervisor.isRateLimiterBuiltin() {
+				rxRateLimiterMaxRate := hypervisor.hypervisorConfig().RxRateLimiterMaxRate
+				if rxRateLimiterMaxRate > 0 {
+					networkLogger().Info("Add Rx Rate Limiter")
+					if err := addRxRateLimiter(endpoint, rxRateLimiterMaxRate); err != nil {
+						return err
+					}
+				}
+				txRateLimiterMaxRate := hypervisor.hypervisorConfig().TxRateLimiterMaxRate
+				if txRateLimiterMaxRate > 0 {
+					networkLogger().Info("Add Tx Rate Limiter")
+					if err := addTxRateLimiter(endpoint, txRateLimiterMaxRate); err != nil {
+						return err
+					}
+				}
+
+			}
+
 		}
 
 		return nil
@@ -1303,6 +1323,22 @@ func (n *Network) Remove(ctx context.Context, ns *NetworkNamespace, hypervisor h
 	defer span.Finish()
 
 	for _, endpoint := range ns.Endpoints {
+		if endpoint.GetRxRateLimiter() {
+			networkLogger().WithField("endpoint-type", endpoint.Type()).Info("Deleting rx rate limiter")
+			// Deleting rx rate limiter should enter the network namespace.
+			if err := removeRxRateLimiter(endpoint, ns.NetNsPath); err != nil {
+				return err
+			}
+		}
+
+		if endpoint.GetTxRateLimiter() {
+			networkLogger().WithField("endpoint-type", endpoint.Type()).Info("Deleting tx rate limiter")
+			// Deleting tx rate limiter should enter the network namespace.
+			if err := removeTxRateLimiter(endpoint, ns.NetNsPath); err != nil {
+				return err
+			}
+		}
+
 		// Detach for an endpoint should enter the network namespace
 		// if required.
 		networkLogger().WithField("endpoint-type", endpoint.Type()).Info("Detaching endpoint")
@@ -1316,6 +1352,323 @@ func (n *Network) Remove(ctx context.Context, ns *NetworkNamespace, hypervisor h
 	if ns.NetNsCreated {
 		networkLogger().Infof("Network namespace %q deleted", ns.NetNsPath)
 		return deleteNetNS(ns.NetNsPath)
+	}
+
+	return nil
+}
+
+// func addRxRateLmiter implements tc-based rx rate limiter to control network I/O inbound traffic
+// on VM level for hypervisors which don't implement rate limiter in itself, like qemu, etc.
+func addRxRateLimiter(endpoint Endpoint, maxRate uint64) error {
+	var linkName string
+	switch ep := endpoint.(type) {
+	case *VethEndpoint, *IPVlanEndpoint, *TuntapEndpoint, *BridgedMacvlanEndpoint:
+		netPair := endpoint.NetworkPair()
+		linkName = netPair.TapInterface.TAPIface.Name
+	case *MacvtapEndpoint, *TapEndpoint:
+		linkName = endpoint.Name()
+	default:
+		return fmt.Errorf("Unsupported endpointType %s for adding rx rate limiter", ep.Type())
+	}
+
+	if err := endpoint.SetRxRateLimiter(); err != nil {
+		return nil
+	}
+
+	link, err := netlink.LinkByName(linkName)
+	if err != nil {
+		return err
+	}
+	linkIndex := link.Attrs().Index
+
+	return addHTBQdisc(linkIndex, maxRate)
+}
+
+// func addHTBQdisc uses HTB(Hierarchical Token Bucket) qdisc shaping schemes to control interface traffic.
+// HTB (Hierarchical Token Bucket) shapes traffic based on the Token Bucket Filter algorithm.
+// A fundamental part of the HTB qdisc is the borrowing mechanism. Children classes borrow tokens
+// from their parents once they have exceeded rate. A child class will continue to attempt to borrow until
+// it reaches ceil. See more details in https://tldp.org/HOWTO/Traffic-Control-HOWTO/classful-qdiscs.html.
+//
+//         * +-----+     +---------+     +-----------+      +-----------+
+//         * |     |     |  qdisc  |     | class 1:1 |      | class 1:2 |
+//         * | NIC |     |   htb   |     |   rate    |      |   rate    |
+//         * |     | --> | def 1:2 | --> |   ceil    | -+-> |   ceil    |
+//         * +-----+     +---------+     +-----------+  |   +-----------+
+//         *                                            |
+//         *                                            |   +-----------+
+//         *                                            |   | class 1:n |
+//         *                                            |   |   rate    |
+//         *                                            +-> |   ceil    |
+//         *                                            |   +-----------+
+// Seeing from pic, after the routing decision, all packets will be sent to the interface root htb qdisc.
+// This root qdisc has only one direct child class (with id 1:1) which shapes the overall maximum rate
+// that will be sent through interface. Then, this class has at least one default child (1:2) meant to control all
+// non-privileged traffic.
+// e.g.
+// if we try to set VM bandwidth with maximum 10Mbit/s, we should give
+// classid 1:2 rate 10Mbit/s, ceil 10Mbit/s and classid 1:1 rate 10Mbit/s, ceil 10Mbit/s.
+// To-do:
+// Later, if we want to do limitation on some dedicated traffic(special process running in VM), we could create
+// a separate class (1:n) with guarantee throughput.
+func addHTBQdisc(linkIndex int, maxRate uint64) error {
+	// we create a new htb root qdisc for network interface with the specified network index
+	qdiscAttrs := netlink.QdiscAttrs{
+		LinkIndex: linkIndex,
+		Handle:    netlink.MakeHandle(1, 0),
+		Parent:    netlink.HANDLE_ROOT,
+	}
+	qdisc := netlink.NewHtb(qdiscAttrs)
+	// all non-priviledged traffic go to classid 1:2.
+	qdisc.Defcls = 2
+
+	err := netlink.QdiscAdd(qdisc)
+	if err != nil {
+		return fmt.Errorf("Failed to add htb qdisc: %v", err)
+	}
+
+	// root htb qdisc has only one direct child class (with id 1:1) to control overall rate.
+	classAttrs := netlink.ClassAttrs{
+		LinkIndex: linkIndex,
+		Parent:    netlink.MakeHandle(1, 0),
+		Handle:    netlink.MakeHandle(1, 1),
+	}
+	htbClassAttrs := netlink.HtbClassAttrs{
+		Rate: maxRate,
+		Ceil: maxRate,
+	}
+	class := netlink.NewHtbClass(classAttrs, htbClassAttrs)
+	if err := netlink.ClassAdd(class); err != nil {
+		return fmt.Errorf("Failed to add htb classid 1:1 : %v", err)
+	}
+
+	// above class has at least one default child class(1:2) for all non-priviledged traffic.
+	classAttrs = netlink.ClassAttrs{
+		LinkIndex: linkIndex,
+		Parent:    netlink.MakeHandle(1, 1),
+		Handle:    netlink.MakeHandle(1, 2),
+	}
+	htbClassAttrs = netlink.HtbClassAttrs{
+		Rate: maxRate,
+		Ceil: maxRate,
+	}
+	class = netlink.NewHtbClass(classAttrs, htbClassAttrs)
+	if err := netlink.ClassAdd(class); err != nil {
+		return fmt.Errorf("Failed to add htb class 1:2 : %v", err)
+	}
+
+	return nil
+}
+
+// The Intermediate Functional Block (ifb) pseudo network interface is an alternative
+// to tc filters for handling ingress traffic,
+// By redirecting interface ingress traffic to ifb and treat it as egress traffic there,
+// we could do network shaping to interface inbound traffic.
+func addIFBDevice() (int, error) {
+	// check whether host supports ifb
+	if ok, err := utils.SupportsIfb(); !ok {
+		return -1, err
+	}
+
+	netHandle, err := netlink.NewHandle()
+	if err != nil {
+		return -1, err
+	}
+	defer netHandle.Delete()
+
+	// There exists error when using netlink library to create ifb interface
+	cmd := exec.Command("ip", "link", "add", "dev", "ifb0", "type", "ifb")
+	if output, err := cmd.CombinedOutput(); err != nil {
+		return -1, fmt.Errorf("Could not create link ifb0: %v, error %v", output, err)
+	}
+
+	ifbLink, err := netlink.LinkByName("ifb0")
+	if err != nil {
+		return -1, err
+	}
+
+	if err := netHandle.LinkSetUp(ifbLink); err != nil {
+		return -1, fmt.Errorf("Could not enable link ifb0 %v", err)
+	}
+
+	return ifbLink.Attrs().Index, nil
+}
+
+// This is equivalent to calling:
+// tc filter add dev source parent ffff: protocol all u32 match u8 0 0 action mirred egress redirect dev ifb
+func addIFBRedirecting(sourceIndex int, ifbIndex int) error {
+	if err := addQdiscIngress(sourceIndex); err != nil {
+		return err
+	}
+
+	if err := addRedirectTCFilter(sourceIndex, ifbIndex); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// func addTxRateLmiter implements tx rate limiter to control network I/O outbound traffic
+// on VM level for hypervisors which don't implement rate limiter in itself, like qemu, etc.
+// We adopt different actions, based on different inter-networking models.
+// For tcfilters as inter-networking model, we simply apply htb qdisc discipline to the virtual netpair.
+// For other inter-networking models, such as macvtap, we resort to ifb, by redirecting endpoint ingress traffic
+// to ifb egress, and then apply htb to ifb egress.
+func addTxRateLimiter(endpoint Endpoint, maxRate uint64) error {
+	var netPair *NetworkInterfacePair
+	var linkName string
+	switch ep := endpoint.(type) {
+	case *VethEndpoint, *IPVlanEndpoint, *TuntapEndpoint, *BridgedMacvlanEndpoint:
+		netPair = endpoint.NetworkPair()
+		switch netPair.NetInterworkingModel {
+		// For those endpoints we've already used tcfilter as their inter-networking model,
+		// another ifb redirect will be redundant and confused.
+		case NetXConnectTCFilterModel:
+			linkName = netPair.VirtIface.Name
+			link, err := netlink.LinkByName(linkName)
+			if err != nil {
+				return err
+			}
+			return addHTBQdisc(link.Attrs().Index, maxRate)
+		case NetXConnectMacVtapModel, NetXConnectNoneModel:
+			linkName = netPair.TapInterface.TAPIface.Name
+		default:
+			return fmt.Errorf("Unsupported inter-networking model %v for adding tx rate limiter", netPair.NetInterworkingModel)
+		}
+
+	case *MacvtapEndpoint, *TapEndpoint:
+		linkName = endpoint.Name()
+	default:
+		return fmt.Errorf("Unsupported endpointType %s for adding tx rate limiter", ep.Type())
+	}
+
+	if err := endpoint.SetTxRateLimiter(); err != nil {
+		return err
+	}
+
+	ifbIndex, err := addIFBDevice()
+	if err != nil {
+		return err
+	}
+
+	link, err := netlink.LinkByName(linkName)
+	if err != nil {
+		return err
+	}
+
+	if err := addIFBRedirecting(link.Attrs().Index, ifbIndex); err != nil {
+		return err
+	}
+
+	return addHTBQdisc(ifbIndex, maxRate)
+}
+
+func removeHTBQdisc(linkName string) error {
+	link, err := netlink.LinkByName(linkName)
+	if err != nil {
+		return fmt.Errorf("Get link %s by name failed: %v", linkName, err)
+	}
+
+	qdiscs, err := netlink.QdiscList(link)
+	if err != nil {
+		return err
+	}
+
+	for _, qdisc := range qdiscs {
+		htb, ok := qdisc.(*netlink.Htb)
+		if !ok {
+			continue
+		}
+
+		if err := netlink.QdiscDel(htb); err != nil {
+			return fmt.Errorf("Failed to delete htb qdisc on link %s: %v", linkName, err)
+		}
+	}
+
+	return nil
+}
+
+func removeRxRateLimiter(endpoint Endpoint, networkNSPath string) error {
+	var linkName string
+	switch ep := endpoint.(type) {
+	case *VethEndpoint, *IPVlanEndpoint, *TuntapEndpoint, *BridgedMacvlanEndpoint:
+		netPair := endpoint.NetworkPair()
+		linkName = netPair.TapInterface.TAPIface.Name
+	case *MacvtapEndpoint, *TapEndpoint:
+		linkName = endpoint.Name()
+	default:
+		return fmt.Errorf("Unsupported endpointType %s for removing rx rate limiter", ep.Type())
+	}
+
+	if err := doNetNS(networkNSPath, func(_ ns.NetNS) error {
+		return removeHTBQdisc(linkName)
+	}); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func removeTxRateLimiter(endpoint Endpoint, networkNSPath string) error {
+	var linkName string
+	switch ep := endpoint.(type) {
+	case *VethEndpoint, *IPVlanEndpoint, *TuntapEndpoint, *BridgedMacvlanEndpoint:
+		netPair := endpoint.NetworkPair()
+		switch netPair.NetInterworkingModel {
+		case NetXConnectTCFilterModel:
+			linkName = netPair.VirtIface.Name
+			if err := doNetNS(networkNSPath, func(_ ns.NetNS) error {
+				return removeHTBQdisc(linkName)
+			}); err != nil {
+				return err
+			}
+			return nil
+		case NetXConnectMacVtapModel, NetXConnectNoneModel:
+			linkName = netPair.TapInterface.TAPIface.Name
+		}
+	case *MacvtapEndpoint, *TapEndpoint:
+		linkName = endpoint.Name()
+	default:
+		return fmt.Errorf("Unsupported endpointType %s for adding tx rate limiter", ep.Type())
+	}
+
+	if err := doNetNS(networkNSPath, func(_ ns.NetNS) error {
+		link, err := netlink.LinkByName(linkName)
+		if err != nil {
+			return fmt.Errorf("Get link %s by name failed: %v", linkName, err)
+		}
+
+		if err := removeRedirectTCFilter(link); err != nil {
+			return err
+		}
+
+		if err := removeQdiscIngress(link); err != nil {
+			return err
+		}
+
+		netHandle, err := netlink.NewHandle()
+		if err != nil {
+			return err
+		}
+		defer netHandle.Delete()
+
+		// remove ifb interface
+		ifbLink, err := netlink.LinkByName("ifb0")
+		if err != nil {
+			return fmt.Errorf("Get link %s by name failed: %v", linkName, err)
+		}
+
+		if err := netHandle.LinkSetDown(ifbLink); err != nil {
+			return fmt.Errorf("Could not disable ifb interface: %v", err)
+		}
+
+		if err := netHandle.LinkDel(ifbLink); err != nil {
+			return fmt.Errorf("Could not remove ifb interface: %v", err)
+		}
+
+		return nil
+	}); err != nil {
+		return err
 	}
 
 	return nil

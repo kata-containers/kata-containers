@@ -18,6 +18,8 @@ type IPVlanEndpoint struct {
 	EndpointProperties NetworkInfo
 	EndpointType       EndpointType
 	PCIAddr            string
+	RxRateLimiter      bool
+	TxRateLimiter      bool
 }
 
 func createIPVlanNetworkEndpoint(idx int, ifName string) (*IPVlanEndpoint, error) {
@@ -138,4 +140,22 @@ func (endpoint *IPVlanEndpoint) load(s persistapi.NetworkEndpoint) {
 		netpair := loadNetIfPair(&s.IPVlan.NetPair)
 		endpoint.NetPair = *netpair
 	}
+}
+
+func (endpoint *IPVlanEndpoint) GetRxRateLimiter() bool {
+	return endpoint.RxRateLimiter
+}
+
+func (endpoint *IPVlanEndpoint) SetRxRateLimiter() error {
+	endpoint.RxRateLimiter = true
+	return nil
+}
+
+func (endpoint *IPVlanEndpoint) GetTxRateLimiter() bool {
+	return endpoint.TxRateLimiter
+}
+
+func (endpoint *IPVlanEndpoint) SetTxRateLimiter() error {
+	endpoint.TxRateLimiter = true
+	return nil
 }

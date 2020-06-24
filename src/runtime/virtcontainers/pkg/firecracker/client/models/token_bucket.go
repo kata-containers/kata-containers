@@ -19,17 +19,17 @@ type TokenBucket struct {
 
 	// The initial size of a token bucket.
 	// Minimum: 0
-	OneTimeBurst *int64 `json:"one_time_burst,omitempty"`
+	OneTimeBurst *uint64 `json:"one_time_burst,omitempty"`
 
 	// The amount of milliseconds it takes for the bucket to refill.
 	// Required: true
 	// Minimum: 0
-	RefillTime *int64 `json:"refill_time"`
+	RefillTime *uint64 `json:"refill_time"`
 
 	// The total number of tokens this bucket can hold.
 	// Required: true
 	// Minimum: 0
-	Size *int64 `json:"size"`
+	Size *uint64 `json:"size"`
 }
 
 // Validate validates this token bucket
