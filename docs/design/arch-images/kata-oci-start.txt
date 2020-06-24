@@ -1,0 +1,20 @@
+Title: Docker Start
+participant Docker
+participant Kata Runtime
+participant virtcontainers
+participant hypervisor
+participant agent
+participant shim-pod
+participant shim-ctr
+participant proxy
+
+#Docker Start
+Docker->Kata Runtime: start
+Kata Runtime->virtcontainers: StartSandbox()
+Note left of virtcontainers: Sandbox\nRunning
+virtcontainers->+agent: StartContainer()
+agent-->-virtcontainers: Container Started
+Note left of virtcontainers: Container-pod\nRunning
+virtcontainers->virtcontainers: Execute PostStart Hooks
+virtcontainers-->Kata Runtime: End of StartSandbox()
+Kata Runtime-->Docker: End of start

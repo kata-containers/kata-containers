@@ -1,0 +1,27 @@
+#
+# Copyright (c) 2019 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+
+trigger:
+- master
+
+jobs:
+- job: packages
+#timeout set to max
+  timeoutInMinutes: 0
+  pool:
+    vmImage: 'ubuntu-latest'
+  steps:
+# azure docker installation task
+# https://docs.microsoft.com/en-us/azure/devops/pipelines/tasks/tool/docker-installer?view=azure-devops
+  - task: DockerInstaller@0
+    displayName: 'Install Docker'
+
+  - bash: |
+      sudo apt-get update -y -qq
+      sudo apt-get --no-install-recommends install -y apt-utils ca-certificates git
+      git config --global user.email "azure-pipeline@kata.io"
+      git config --global user.name "azure-pipeline"
+    displayName: 'Setup'

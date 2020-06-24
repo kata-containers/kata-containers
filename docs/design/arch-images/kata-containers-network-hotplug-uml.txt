@@ -1,0 +1,47 @@
+@startuml
+
+User->CLI: network add-interface
+CLI->virtcontainers: AddInterface
+virtcontainers->QEMU:QMP-hot-add-network
+virtcontainers->agent:UpdateInterface
+note right
+the agent's UpdateInterface code will need to be augmented
+to have a timeout/wait associated with this for the network
+device to appear (ie, wait for qmp to complete)
+end note
+agent->User: err, interface detail
+
+User->CLI: network del-interface
+CLI->virtcontainers: DeleteInterface
+note right
+There will be no call to the agent. We rely on guest kernel
+to clean up any state associated with the interface.
+end note
+virtcontainers->QEMU:QMP-hot-delete-network
+virtcontainers->User: err, interface detail
+
+User->CLI: network list-interface
+CLI->virtcontainers: ListInterfaces
+virtcontainers->agent:ListInterfaces
+agent->User: err, list of interface details
+
+User->CLI: network update-routes
+CLI->virtcontainers: UpdateRoutes
+note right
+routes are handled in a 'one shot' basis,
+setting all of the routes for the network. This needs to
+be called after interfaces are added, and should be called
+after interfaces are removed. It should be fine to call once
+after adding all of the expected interfaces. If you know all
+the resulting routes, simply calling set routes with the
+complete list should suffice.
+end note
+virtcontainers->agent:UpdateRoutes
+agent->User: err, list of routes
+
+User->CLI: network list-routes
+CLI->virtcontainers: ListRoutes
+virtcontainers->agent:ListRoutes
+agent->User: err, list of routes
+
+@enduml

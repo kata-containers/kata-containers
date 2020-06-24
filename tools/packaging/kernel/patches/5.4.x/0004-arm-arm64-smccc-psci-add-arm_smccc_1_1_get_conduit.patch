@@ -1,0 +1,81 @@
+From b830806f5cd02119be9b25812b3ea56d97cd08f3 Mon Sep 17 00:00:00 2001
+From: Mark Rutland <mark.rutland@arm.com>
+Date: Fri, 9 Aug 2019 14:22:40 +0100
+Subject: [PATCH 2/9] arm/arm64: smccc/psci: add arm_smccc_1_1_get_conduit()
+
+SMCCC callers are currently amassing a collection of enums for the SMCCC
+conduit, and are having to dig into the PSCI driver's internals in order
+to figure out what to do.
+
+Let's clean this up, with common SMCCC_CONDUIT_* definitions, and an
+arm_smccc_1_1_get_conduit() helper that abstracts the PSCI driver's
+internal state.
+
+We can kill off the PSCI_CONDUIT_* definitions once we've migrated users
+over to the new interface.
+
+Signed-off-by: Mark Rutland <mark.rutland@arm.com>
+Acked-by: Lorenzo Pieralisi <lorenzo.pieralisi@arm.com>
+Acked-by: Will Deacon <will.deacon@arm.com>
+Signed-off-by: Catalin Marinas <catalin.marinas@arm.com>
+---
+ drivers/firmware/psci/psci.c | 15 +++++++++++++++
+ include/linux/arm-smccc.h    | 16 ++++++++++++++++
+ 2 files changed, 31 insertions(+)
+
+diff --git a/drivers/firmware/psci/psci.c b/drivers/firmware/psci/psci.c
+index 84f4ff351c62..eb797081d159 100644
+--- a/drivers/firmware/psci/psci.c
++++ b/drivers/firmware/psci/psci.c
+@@ -57,6 +57,21 @@ struct psci_operations psci_ops = {
+ 	.smccc_version = SMCCC_VERSION_1_0,
+ };
+ 
++enum arm_smccc_conduit arm_smccc_1_1_get_conduit(void)
++{
++	if (psci_ops.smccc_version < SMCCC_VERSION_1_1)
++		return SMCCC_CONDUIT_NONE;
++
++	switch (psci_ops.conduit) {
++	case PSCI_CONDUIT_SMC:
++		return SMCCC_CONDUIT_SMC;
++	case PSCI_CONDUIT_HVC:
++		return SMCCC_CONDUIT_HVC;
++	default:
++		return SMCCC_CONDUIT_NONE;
++	}
++}
++
+ typedef unsigned long (psci_fn)(unsigned long, unsigned long,
+ 				unsigned long, unsigned long);
+ static psci_fn *invoke_psci_fn;
+diff --git a/include/linux/arm-smccc.h b/include/linux/arm-smccc.h
+index 131edde5d37e..e6d4cb4f61f1 100644
+--- a/include/linux/arm-smccc.h
++++ b/include/linux/arm-smccc.h
+@@ -80,6 +80,22 @@
+ 
+ #include <linux/linkage.h>
+ #include <linux/types.h>
++
++enum arm_smccc_conduit {
++	SMCCC_CONDUIT_NONE,
++	SMCCC_CONDUIT_SMC,
++	SMCCC_CONDUIT_HVC,
++};
++
++/**
++ * arm_smccc_1_1_get_conduit()
++ *
++ * Returns the conduit to be used for SMCCCv1.1 or later.
++ *
++ * When SMCCCv1.1 is not present, returns SMCCC_CONDUIT_NONE.
++ */
++enum arm_smccc_conduit arm_smccc_1_1_get_conduit(void);
++
+ /**
+  * struct arm_smccc_res - Result from SMC/HVC call
+  * @a0-a3 result values from registers 0 to 3
+-- 
+2.17.1
+

@@ -1,0 +1,28 @@
+# Copyright (c) 2020 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+
+# Usage: FROM [image name]
+FROM @OS_DISTRIBUTION@
+
+ENV TESTS_REPO="github.com/kata-containers/tests"
+
+RUN @DEPENDENCIES@
+
+ENV PATH=$PATH:/usr/local/go/bin
+ENV GOPATH=/home/go
+ENV TESTS_REPOSITORY_PATH="${GOPATH}/src/${TESTS_REPO}"
+ENV AGENT_INIT=yes TEST_INITRD=yes OSBUILDER_DISTRO=alpine
+
+# Install packages
+RUN sudo dnf -y install kata-proxy kata-ksm-throttler kata-osbuilder kata-runtime kata-shim
+RUN sudo mkdir "${GOPATH}"
+RUN sudo dnf config-manager --add-repo https://download.docker.com/linux/fedora/docker-ce.repo
+RUN sudo dnf makecache
+RUN sudo dnf -y install docker-ce
+RUN go get -d "${TESTS_REPO}"
+RUN cd "${TESTS_REPOSITORY_PATH}" && .ci/install_kata_image.sh
+RUN cd "${TESTS_REPOSITORY_PATH}" && .ci/install_kata_kernel.sh
+RUN kata-runtime kata-env
+
+CMD ["/bin/bash"]
