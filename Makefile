@@ -3,21 +3,28 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
-default: runtime agent
+# List of available components
+COMPONENTS =
 
-runtime:
-	make -C src/runtime
+COMPONENTS += agent
+COMPONENTS += runtime
+COMPONENTS += trace-forwarder
 
-agent:
-	make -C src/agent
+# List of available tools
+TOOLS =
 
-test-runtime:
-	make -C src/runtime test
+TOOLS += agent-ctl
 
-test-agent:
-	make -C src/agent check
+STANDARD_TARGETS = build check clean install test
 
-test: test-runtime test-agent
+include utils.mk
+
+# Create the rules
+$(eval $(call create_all_rules,$(COMPONENTS),$(TOOLS),$(STANDARD_TARGETS)))
+
+# Non-standard rules
 
 generate-protocols:
 	make -C src/agent generate-protocols
+
+.PHONY: all default
