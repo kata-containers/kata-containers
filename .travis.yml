@@ -6,7 +6,7 @@
 dist: bionic
 os: linux
 language: go
-go: 1.13.9
+go: 1.14.4
 env: target_branch=$TRAVIS_BRANCH
 
 before_install:

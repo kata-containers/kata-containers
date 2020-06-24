@@ -162,7 +162,7 @@ github.com/hashicorp/go-multierror
 # github.com/hashicorp/yamux v0.0.0-20190923154419-df201c70410d
 ## explicit
 github.com/hashicorp/yamux
-# github.com/intel/govmm v0.0.0-20200304142514-e969afbec52c
+# github.com/intel/govmm v0.0.0-20200602145448-7cc469641b7b
 ## explicit
 github.com/intel/govmm/qemu
 # github.com/konsorten/go-windows-terminal-sequences v1.0.1
