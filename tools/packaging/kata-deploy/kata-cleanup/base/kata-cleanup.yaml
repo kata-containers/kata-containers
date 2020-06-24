@@ -1,0 +1,46 @@
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: kubelet-kata-cleanup
+  namespace: kube-system
+spec:
+  selector:
+      matchLabels:
+        name: kubelet-kata-cleanup
+  template:
+    metadata:
+        labels:
+          name: kubelet-kata-cleanup
+    spec:
+      serviceAccountName: kata-label-node
+      nodeSelector:
+          katacontainers.io/kata-runtime: cleanup
+      containers:
+      - name: kube-kata-cleanup
+        image: katadocker/kata-deploy
+        imagePullPolicy: Always
+        command: [ "bash", "-c", "/opt/kata-artifacts/scripts/kata-deploy.sh reset" ]
+        env:
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        securityContext:
+          privileged: false
+        volumeMounts:
+        - name: dbus
+          mountPath: /var/run/dbus
+        - name: systemd
+          mountPath: /run/systemd
+      volumes:
+        - name: dbus
+          hostPath:
+            path: /var/run/dbus
+        - name: systemd
+          hostPath:
+            path: /run/systemd
+  updateStrategy:
+    rollingUpdate:
+      maxUnavailable: 1
+    type: RollingUpdate

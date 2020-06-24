@@ -1,0 +1,98 @@
+From 33ffc9a93a1d9e72594d5eb3e4fc583a1a2911d1 Mon Sep 17 00:00:00 2001
+From: Jianyong Wu <jianyong.wu@arm.com>
+Date: Tue, 19 Feb 2019 01:15:32 -0500
+Subject: [PATCH 2/5] Enable memory-hotplug using probe for arm64
+
+---
+ arch/arm64/Kconfig   |  7 +++++++
+ arch/arm64/mm/init.c |  9 ++++++++-
+ arch/arm64/mm/mmu.c  | 17 +++++++++++++++++
+ arch/arm64/mm/numa.c | 10 ++++++++++
+ 4 files changed, 42 insertions(+), 1 deletion(-)
+
+diff --git a/arch/arm64/Kconfig b/arch/arm64/Kconfig
+index 1b1a0e95c751..881bea194d53 100644
+--- a/arch/arm64/Kconfig
++++ b/arch/arm64/Kconfig
+@@ -740,6 +740,13 @@ config NUMA
+ 	  local memory of the CPU and add some more
+ 	  NUMA awareness to the kernel.
+ 
++config ARCH_MEMORY_PROBE
++	def_bool y
++	depends on MEMORY_HOTPLUG
++
++config ARCH_ENABLE_MEMORY_HOTPLUG
++	def_bool y
++
+ config NODES_SHIFT
+ 	int "Maximum NUMA Nodes (as a power of 2)"
+ 	range 1 10
+diff --git a/arch/arm64/mm/init.c b/arch/arm64/mm/init.c
+index 787e27964ab9..e66e44b7bafe 100644
+--- a/arch/arm64/mm/init.c
++++ b/arch/arm64/mm/init.c
+@@ -288,9 +288,16 @@ static void __init zone_sizes_init(unsigned long min, unsigned long max)
+ int pfn_valid(unsigned long pfn)
+ {
+ 	phys_addr_t addr = pfn << PAGE_SHIFT;
+-
+ 	if ((addr >> PAGE_SHIFT) != pfn)
+ 		return 0;
++
++#ifdef CONFIG_SPARSEMEM
++	if (pfn_to_section_nr(pfn) >= NR_MEM_SECTIONS)
++		return 0;
++
++	if (!valid_section(__nr_to_section(pfn_to_section_nr(pfn))))
++		return 0;
++#endif
+ 	return memblock_is_map_memory(addr);
+ }
+ EXPORT_SYMBOL(pfn_valid);
+diff --git a/arch/arm64/mm/mmu.c b/arch/arm64/mm/mmu.c
+index 8080c9f489c3..c393b37597af 100644
+--- a/arch/arm64/mm/mmu.c
++++ b/arch/arm64/mm/mmu.c
+@@ -1028,3 +1028,20 @@ int pud_free_pmd_page(pud_t *pudp, unsigned long addr)
+ 	pmd_free(NULL, table);
+ 	return 1;
+ }
++
++#ifdef CONFIG_MEMORY_HOTPLUG
++int arch_add_memory(int nid, u64 start, u64 size, struct vmem_altmap *altmap,
++		    bool want_memblock)
++{
++	int flags = 0;
++
++	if (debug_pagealloc_enabled())
++		flags = NO_BLOCK_MAPPINGS | NO_CONT_MAPPINGS;
++
++	__create_pgd_mapping(swapper_pg_dir, start, __phys_to_virt(start),
++			     size, PAGE_KERNEL, pgd_pgtable_alloc, flags);
++
++	return __add_pages(nid, start >> PAGE_SHIFT, size >> PAGE_SHIFT,
++			   altmap, want_memblock);
++}
++#endif
+diff --git a/arch/arm64/mm/numa.c b/arch/arm64/mm/numa.c
+index 146c04ceaa51..d276bd4d38b5 100644
+--- a/arch/arm64/mm/numa.c
++++ b/arch/arm64/mm/numa.c
+@@ -464,3 +464,13 @@ void __init arm64_numa_init(void)
+ 
+ 	numa_init(dummy_numa_init);
+ }
++
++/*
++ * We hope that we will be hotplugging memory on nodes we already know about,
++ * such that acpi_get_node() succeeds and we never fall back to this...
++ */
++int memory_add_physaddr_to_nid(u64 addr)
++{
++	pr_warn("Unknown node for memory at 0x%llx, assuming node 0\n", addr);
++	return 0;
++}
+-- 
+2.20.1
+

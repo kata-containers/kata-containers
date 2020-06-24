@@ -1,0 +1,29 @@
+From d78297bf9d8e41711bddc6003f460e815340a214 Mon Sep 17 00:00:00 2001
+From: Arjan van de Ven <arjan@linux.intel.com>
+Date: Fri, 10 Aug 2018 13:22:08 +0000
+Subject: [PATCH 4/5] Compile in evged always
+
+We need evged for NEMU (and in general for hw reduced)
+
+The config option cannot be set normally since it breaks all
+regular systems, and hardware reduced is really a runtime choice.
+---
+ drivers/acpi/Makefile | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/drivers/acpi/Makefile b/drivers/acpi/Makefile
+index 6d59aa109a91..97f2fbbd5014 100644
+--- a/drivers/acpi/Makefile
++++ b/drivers/acpi/Makefile
+@@ -47,7 +47,7 @@ acpi-y				+= acpi_pnp.o
+ acpi-$(CONFIG_ARM_AMBA)	+= acpi_amba.o
+ acpi-y				+= power.o
+ acpi-y				+= event.o
+-acpi-$(CONFIG_ACPI_REDUCED_HARDWARE_ONLY) += evged.o
++acpi-y				+= evged.o
+ acpi-y				+= sysfs.o
+ acpi-y				+= property.o
+ acpi-$(CONFIG_X86)		+= acpi_cmos_rtc.o
+-- 
+2.20.1
+
