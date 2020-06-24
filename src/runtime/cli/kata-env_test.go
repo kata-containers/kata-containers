@@ -96,6 +96,7 @@ func makeRuntimeConfig(prefixDir string) (configFile string, config oci.RuntimeC
 	pcieRootPort := uint32(2)
 	disableNewNetNs := false
 	sharedFS := "virtio-9p"
+	virtioFSdaemon := filepath.Join(prefixDir, "virtiofsd")
 
 	filesToCreate := []string{
 		hypervisorPath,
@@ -168,6 +169,7 @@ func makeRuntimeConfig(prefixDir string) (configFile string, config oci.RuntimeC
 		AgentDebug:           agentDebug,
 		AgentTrace:           agentTrace,
 		SharedFS:             sharedFS,
+		VirtioFSDaemon:       virtioFSdaemon,
 	}
 
 	runtimeConfig := katatestutils.MakeRuntimeConfigFileData(configFileOptions)

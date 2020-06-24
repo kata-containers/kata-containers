@@ -1606,7 +1606,6 @@ const maxBlockIndex = 65535
 // the BlockIndexMap and marks it as used. This index is used to maintain the
 // index at which a block device is assigned to a container in the sandbox.
 func (s *Sandbox) getAndSetSandboxBlockIndex() (int, error) {
-	var err error
 	currentIndex := -1
 	for i := 0; i < maxBlockIndex; i++ {
 		if _, ok := s.state.BlockIndexMap[i]; !ok {
@@ -1618,11 +1617,6 @@ func (s *Sandbox) getAndSetSandboxBlockIndex() (int, error) {
 		return -1, errors.New("no available block index")
 	}
 	s.state.BlockIndexMap[currentIndex] = struct{}{}
-	defer func() {
-		if err != nil {
-			delete(s.state.BlockIndexMap, currentIndex)
-		}
-	}()
 
 	return currentIndex, nil
 }

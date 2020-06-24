@@ -28,6 +28,7 @@ type RuntimeConfigOptions struct {
 	AgentTraceMode       string
 	AgentTraceType       string
 	SharedFS             string
+	VirtioFSDaemon       string
 	PCIeRootPort         uint32
 	DisableBlock         bool
 	EnableIOThreads      bool
@@ -65,7 +66,7 @@ func MakeRuntimeConfigFileData(config RuntimeConfigOptions) string {
 	enable_debug = ` + strconv.FormatBool(config.HypervisorDebug) + `
 	guest_hook_path = "` + config.DefaultGuestHookPath + `"
 	shared_fs = "` + config.SharedFS + `"
-	virtio_fs_daemon = "/path/to/virtiofsd"
+	virtio_fs_daemon = "` + config.VirtioFSDaemon + `"
 
 	[proxy.kata]
 	enable_debug = ` + strconv.FormatBool(config.ProxyDebug) + `
