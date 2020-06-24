@@ -94,8 +94,10 @@ install: build-service
 clean:
 	@cargo clean
 
-check:
+test:
 	@cargo test --all --target $(TRIPLE)
+
+check: test
 
 run:
 	@cargo run --target $(TRIPLE)
