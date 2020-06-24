@@ -1,0 +1,40 @@
+---
+inherits: docker-xenial
+vm:
+  mem_mib: 8000
+  cpus: 8
+# Share GOPATH with VM
+{{with .GoPath}}
+  mounts:
+  - tag: hostgo
+    security_model: passthrough
+    path: {{.}}
+{{end}}
+...
+---
+#Export GOPATH
+{{ define "GOPATH" }}{{with .GoPath}}{{$.MountPath "hostgo"}}{{else}}/home/{{.User}}/go{{end}}{{end}}
+{{- define "ENV" -}}
+{{proxyVars .}}
+{{- print " DEBIAN_FRONTEND=noninteractive DEBCONF_NONINTERACTIVE_SEEN=true " -}}
+{{end}}
+#cloud-config
+write_files:
+# Add kata as default runtime
+ - content: |
+     [Service]
+     ExecStart=
+     ExecStart=/usr/bin/dockerd -D --add-runtime kata-runtime=/usr/bin/kata-runtime
+   path: /etc/systemd/system/docker.service.d/kata-containers.conf
+
+runcmd:
+
+ - {{beginTask . "Install kata"}}
+ - ARCH=$(uname -m)
+ - sudo sh -c "echo 'deb http://download.opensuse.org/repositories/home:/katacontainers:/releases:/${ARCH}:/master/xUbuntu_$(lsb_release -rs)/ /' > /etc/apt/sources.list.d/kata-containers.list"
+ - {{proxyVars .}} curl -sL  http://download.opensuse.org/repositories/home:/katacontainers:/releases:/${ARCH}:/master/xUbuntu_$(lsb_release -rs)/Release.key | sudo apt-key add -
+ - sudo -E apt-get update
+ - sudo -E apt-get --no-install-recommends install -y apt-utils ca-certificates kata-runtime
+ - {{endTaskCheck .}}
+
+...

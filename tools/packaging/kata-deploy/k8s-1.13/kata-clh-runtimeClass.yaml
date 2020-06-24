@@ -1,0 +1,7 @@
+---
+kind: RuntimeClass
+apiVersion: node.k8s.io/v1alpha1
+metadata:
+    name: kata-clh
+spec:
+    runtimeHandler: kata-clh

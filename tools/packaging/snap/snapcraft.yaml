@@ -1,0 +1,439 @@
+name: kata-containers
+summary: Build lightweight VMs that seamlessly plug into the containers ecosystem
+description: |
+  Kata Containers is an open source project and community working to build a
+  standard implementation of lightweight Virtual Machines (VMs) that feel and
+  perform like containers, but provide the workload isolation and security
+  advantages of VMs
+confinement: classic
+adopt-info: metadata
+
+parts:
+  metadata:
+    plugin: nil
+    prime:
+      - -*
+    build-packages:
+      - git
+      - git-extras
+    override-pull: |
+      branch="master"
+
+      # kata CI or launchpad snap-master, then build latest stable
+      if [ "${CI}" != "true" ] && ! echo "${SNAPCRAFT_IMAGE_INFO}" | egrep -o "build_url.*" | grep  -q "${branch}"; then
+        # Get the latest stable version
+        runtime_url="https://github.com/kata-containers/runtime"
+        branch=$(git ls-remote --tags ${runtime_url}  | egrep -o "refs.*" | egrep -v "\-alpha|\-rc|{}" | egrep -o "[[:digit:]]+\.[[:digit:]]+\.[[:digit:]]+" | sort -V -r | head -1)
+      fi
+
+      snapcraftctl set-grade "stable"
+      snapcraftctl set-version "${branch}"
+      echo "${branch}" | tee ${SNAPCRAFT_STAGE}/kata_version
+
+  yq:
+    after: [metadata]
+    plugin: nil
+    prime:
+      - -*
+    build-packages:
+      - curl
+    override-build: |
+      yq_path="yq"
+      yq_pkg="github.com/mikefarah/yq"
+      goos="linux"
+      case "$(uname -m)" in
+        aarch64) goarch="arm64";;
+        ppc64le) goarch="ppc64le";;
+        x86_64) goarch="amd64";;
+        s390x) goarch="s390x";;
+        *) echo "unsupported architecture: $(uname -m)"; exit 1;;
+      esac
+
+      # Workaround to get latest release from github (to not use github token).
+      # Get the redirection to latest release on github.
+      yq_latest_url=$(curl -Ls -o /dev/null -w %{url_effective} "https://${yq_pkg}/releases/latest")
+      # The redirected url should include the latest release version
+      # https://github.com/mikefarah/yq/releases/tag/<VERSION-HERE>
+      yq_version=$(basename "${yq_latest_url}")
+      yq_url="https://${yq_pkg}/releases/download/${yq_version}/yq_${goos}_${goarch}"
+      curl -o "${yq_path}" -LSsf ${yq_url}
+      chmod +x ${yq_path}
+
+  go:
+    after: [yq]
+    override-build: |
+      kata_version=$(cat ${SNAPCRAFT_STAGE}/kata_version)
+      yq=$(realpath ../../yq/build/yq)
+      versions_url=https://raw.githubusercontent.com/kata-containers/runtime/${kata_version}/versions.yaml
+      version="$(curl -sSL ${versions_url} | ${yq} r - languages.golang.version)"
+      curl -LO https://dl.google.com/go/go${version}.src.tar.gz
+      tar -xf go${version}.src.tar.gz --strip-components=1
+      cd src && env GOROOT_BOOTSTRAP=$(go env GOROOT | tr -d '\n') ./make.bash
+    build-packages:
+      - golang-go
+      - g++
+      - curl
+    plugin: nil
+    prime:
+      - -*
+
+  runtime:
+    after: [go, image]
+    plugin: nil
+    build-attributes: [no-patchelf]
+    override-build: |
+      kata_version=$(cat ${SNAPCRAFT_STAGE}/kata_version)
+      pkg_name=runtime
+
+      # set GOPATH
+      export GOPATH=$(realpath go)
+      # go was built in parts/go/build
+      export GOROOT=$(realpath ../../go/build)
+      export PATH="${GOROOT}/bin:${PATH}"
+      pkg_gopath=${GOPATH}/src/github.com/${SNAPCRAFT_PROJECT_NAME}/${pkg_name}
+      mkdir -p ${pkg_gopath}
+
+      # download source
+      git clone -b ${kata_version} https://github.com/kata-containers/${pkg_name} ${pkg_gopath}
+      cd ${pkg_gopath}
+
+      # build and install
+      arch=$(uname -m)
+      if [ ${arch} = "ppc64le" ]; then
+        arch="ppc64"
+      fi
+
+      make \
+        PREFIX=/snap/${SNAPCRAFT_PROJECT_NAME}/current/usr \
+        SKIP_GO_VERSION_CHECK=1 \
+        QEMUCMD=qemu-system-$arch
+      make install \
+        PREFIX=/usr \
+        DESTDIR=${SNAPCRAFT_PART_INSTALL} \
+        SKIP_GO_VERSION_CHECK=1 \
+        QEMUCMD=qemu-system-$arch
+
+      if [ -e ${SNAPCRAFT_STAGE}/kata-containers.img ]; then
+        # Use rootfs image by default
+        sed -i -e '/^initrd =/d' ${SNAPCRAFT_PART_INSTALL}/usr/share/defaults/${SNAPCRAFT_PROJECT_NAME}/configuration.toml
+      else
+        # Use initrd by default
+        sed -i -e '/^image =/d' ${SNAPCRAFT_PART_INSTALL}/usr/share/defaults/${SNAPCRAFT_PROJECT_NAME}/configuration.toml
+      fi
+
+  proxy:
+    after: [go]
+    plugin: nil
+    build-attributes: [no-patchelf]
+    override-build: |
+      kata_version=$(cat ${SNAPCRAFT_STAGE}/kata_version)
+      pkg_name=proxy
+
+      # set GOPATH
+      export GOPATH=$(realpath go)
+      # go was built in parts/go/build
+      export GOROOT=$(realpath ../../go/build)
+      export PATH="${GOROOT}/bin:${PATH}"
+      pkg_gopath=${GOPATH}/src/github.com/${SNAPCRAFT_PROJECT_NAME}/${pkg_name}
+      mkdir -p ${pkg_gopath}
+
+      # download source
+      git clone -b ${kata_version} https://github.com/kata-containers/${pkg_name} ${pkg_gopath}
+      cd ${pkg_gopath}
+
+      # build and install
+      make
+      make install DESTDIR=${SNAPCRAFT_PART_INSTALL}
+
+  shim:
+    after: [go]
+    plugin: nil
+    build-attributes: [no-patchelf]
+    override-build: |
+      kata_version=$(cat ${SNAPCRAFT_STAGE}/kata_version)
+      pkg_name=shim
+
+      # set GOPATH
+      export GOPATH=$(realpath go)
+      # go was built in parts/go/build
+      export GOROOT=$(realpath ../../go/build)
+      export PATH="${GOROOT}/bin:${PATH}"
+      pkg_gopath=${GOPATH}/src/github.com/${SNAPCRAFT_PROJECT_NAME}/${pkg_name}
+      mkdir -p ${pkg_gopath}
+
+      # download source
+      git clone -b ${kata_version} https://github.com/kata-containers/${pkg_name} ${pkg_gopath}
+      cd ${pkg_gopath}
+
+      # build and install
+      make
+      make install LIBEXECDIR=${SNAPCRAFT_PART_INSTALL}/usr/libexec
+
+  image:
+    after: [go]
+    plugin: nil
+    build-packages:
+      - cpio
+      - git
+      - iptables
+      - software-properties-common
+      - uidmap
+    override-build: |
+      kata_version=$(cat ${SNAPCRAFT_STAGE}/kata_version)
+      yq=$(realpath ../../yq/build/yq)
+      pkg_name=osbuilder
+      cni_plugings_repo="github.com/containernetworking/plugins"
+
+      # set GOPATH
+      export GOPATH=$(realpath go)
+      pkg_gopath=${GOPATH}/src/github.com/${SNAPCRAFT_PROJECT_NAME}/${pkg_name}
+      mkdir -p ${pkg_gopath}
+
+      # go was built in parts/go/build
+      export GOROOT=$(realpath ../../go/build)
+      export PATH="${GOROOT}/bin:${PATH}"
+
+      # install podman
+      sudo add-apt-repository -y ppa:projectatomic/ppa
+      sudo apt-get update
+      sudo apt-get --no-install-recommends install -y apt-utils ca-certificates podman
+
+      # Build and install cni plugings
+      echo "Retrieve CNI plugins repository"
+      go get -d ${cni_plugings_repo} || true
+      cd $GOPATH/src/${cni_plugings_repo}
+
+      echo "Build CNI plugins"
+      ./build_linux.sh
+
+      echo "Install CNI binaries"
+      cni_bin_path="/opt/cni"
+      sudo mkdir -p ${cni_bin_path}
+      sudo cp -a bin ${cni_bin_path}
+
+      # Copy yq binary. It's used in the container
+      mkdir -p "${GOPATH}/bin/"
+      cp -a "${yq}" "${GOPATH}/bin/"
+
+      # download source
+      git clone -b ${kata_version} https://github.com/kata-containers/${pkg_name} ${pkg_gopath}
+      cd ${pkg_gopath}
+
+      # build image
+      export AGENT_VERSION=${kata_version}
+      export AGENT_INIT=yes
+      export USE_PODMAN=1
+      export DEBUG=1
+      case "$(uname -m)" in
+        aarch64|ppc64le|s390x)
+          sudo -E PATH=$PATH make initrd DISTRO=alpine
+        ;;
+        x86_64)
+          # In some build systems it's impossible to build a rootfs image, try with the initrd image
+          sudo -E PATH=$PATH make image DISTRO=clearlinux || sudo -E PATH=$PATH make initrd DISTRO=alpine
+        ;;
+        *) echo "unsupported architecture: $(uname -m)"; exit 1;;
+      esac
+
+      # Install image
+      kata_image_dir=${SNAPCRAFT_PART_INSTALL}/usr/share/kata-containers
+      mkdir -p ${kata_image_dir}
+      cp kata-containers*.img ${kata_image_dir}
+      if [ -e kata-containers.img ]; then
+        touch ${SNAPCRAFT_STAGE}/kata-containers.img
+      else
+        touch ${SNAPCRAFT_STAGE}/kata-containers-initrd.img
+      fi
+
+  ksm-throttler:
+    after: [go]
+    plugin: nil
+    build-attributes: [no-patchelf]
+    override-build: |
+      kata_version=$(cat ${SNAPCRAFT_STAGE}/kata_version)
+      pkg_name=ksm-throttler
+
+      # set GOPATH
+      export GOPATH=$(realpath go)
+      # go was built in parts/go/build
+      export GOROOT=$(realpath ../../go/build)
+      export PATH="${GOROOT}/bin:${PATH}"
+      pkg_gopath=${GOPATH}/src/github.com/${SNAPCRAFT_PROJECT_NAME}/${pkg_name}
+      mkdir -p ${pkg_gopath}
+
+      # download source
+      git clone -b ${kata_version} https://github.com/kata-containers/${pkg_name} ${pkg_gopath}
+      cd ${pkg_gopath}
+
+      # build and install
+      make TARGET=kata-ksm-throttler
+      make install \
+        DESTDIR=${SNAPCRAFT_PART_INSTALL} \
+        TARGET=kata-ksm-throttler
+
+  kernel:
+    after: [kernel-dump, scripts-dump, yq]
+    plugin: nil
+    build-packages:
+      - libelf-dev
+      - curl
+      - build-essential
+      - bison
+      - flex
+    override-build: |
+      yq=$(realpath ../../yq/build/yq)
+
+      # Say 'no' to everithing, fix issues with incomplete .config files
+      yes "n" | ${SNAPCRAFT_STAGE}/kernel/build-kernel.sh setup
+      kernel_dir_prefix="kata-linux-"
+      cd ${kernel_dir_prefix}*
+      version=$(basename ${PWD} | sed 's|'"${kernel_dir_prefix}"'||' | cut -d- -f1)
+      make -j $(($(nproc)-1)) EXTRAVERSION=".container"
+
+      kernel_suffix=${version}.container
+      kata_kernel_dir=${SNAPCRAFT_PART_INSTALL}/usr/share/kata-containers
+      mkdir -p ${kata_kernel_dir}
+
+      # Install bz kernel
+      make install INSTALL_PATH=${kata_kernel_dir} EXTRAVERSION=".container" || true
+      vmlinuz_name=vmlinuz-${kernel_suffix}
+      ln -sf ${vmlinuz_name} ${kata_kernel_dir}/vmlinuz.container
+
+      # Install raw kernel
+      vmlinux_name=vmlinux-${kernel_suffix}
+      cp vmlinux ${kata_kernel_dir}/${vmlinux_name}
+      ln -sf ${vmlinux_name} ${kata_kernel_dir}/vmlinux.container
+
+  kernel-dump:
+    source: kernel
+    plugin: dump
+    organize:
+      '*' : kernel/
+    prime:
+      - -*
+
+  scripts-dump:
+    source: scripts
+    plugin: dump
+    organize:
+      '*' : scripts/
+    prime:
+      - -*
+
+  qemu:
+    plugin: make
+    after: [scripts-dump, qemu-patches-dump, qemu-aarch64-patches-dump, yq, qemu-configs-dump]
+    build-packages:
+      - gcc
+      - python
+      - zlib1g-dev
+      - libcap-ng-dev
+      - libglib2.0-dev
+      - libpixman-1-dev
+      - libnuma-dev
+      - libltdl-dev
+      - libcap-dev
+      - libattr1-dev
+      - libfdt-dev
+      - curl
+      - libcapstone-dev
+      - bc
+    override-build: |
+      kata_version=$(cat ${SNAPCRAFT_STAGE}/kata_version)
+      yq=$(realpath ../../yq/build/yq)
+      pkg_name="qemu"
+      configs_dir="${SNAPCRAFT_STAGE}/qemu/default-configs"
+
+      versions_url=https://raw.githubusercontent.com/kata-containers/runtime/${kata_version}/versions.yaml
+      # arch-specific definition
+      case "$(uname -m)" in
+        "aarch64")
+          branch="$(curl -sSL ${versions_url} | ${yq} r - assets.hypervisor.qemu.architecture.aarch64.branch)"
+          url="$(curl -sSL ${versions_url} | ${yq} r - assets.hypervisor.qemu.url)"
+          commit="$(curl -sSL ${versions_url} | ${yq} r - assets.hypervisor.qemu.architecture.aarch64.commit)"
+          patch_dir="${SNAPCRAFT_STAGE}/qemu-aarch64/patches/"
+        ;;
+
+        *)
+          branch="$(curl -sSL ${versions_url} | ${yq} r - assets.hypervisor.qemu.tag)"
+          url="$(curl -sSL ${versions_url} | ${yq} r - assets.hypervisor.qemu.url)"
+          patch_dir="${SNAPCRAFT_STAGE}/qemu/patches/$(echo ${branch} | cut -d. -f1-2 | tr -d v).x"
+          commit=""
+        ;;
+      esac
+
+      # download source
+      pkg_repo_dir="${pkg_name}-repo"
+      git clone --branch ${branch} --single-branch ${url} "${pkg_repo_dir}"
+      cd ${pkg_repo_dir}
+      [ -z "${commit}" ] || git checkout ${commit}
+
+      [ -n "$(ls -A ui/keycodemapdb)" ] || git clone https://github.com/qemu/keycodemapdb ui/keycodemapdb/
+      [ -n "$(ls -A capstone)" ] || git clone https://github.com/qemu/capstone capstone
+
+      # Apply patches
+      for patch in ${patch_dir}/*.patch; do
+        echo "Applying $(basename "$patch") ..."
+        patch \
+          --batch \
+          --forward \
+          --strip 1 \
+          --input "$patch"
+      done
+
+      # Only x86_64 supports libpmem
+      [ "$(uname -m)" = "x86_64" ] && sudo apt-get --no-install-recommends install -y apt-utils ca-certificates libpmem-dev
+
+      chmod +x ${SNAPCRAFT_STAGE}/scripts/configure-hypervisor.sh
+      # static build
+      echo "$(${SNAPCRAFT_STAGE}/scripts/configure-hypervisor.sh -s qemu) \
+        --disable-rbd
+        --prefix=/snap/${SNAPCRAFT_PROJECT_NAME}/current/usr \
+        --datadir=/snap/${SNAPCRAFT_PROJECT_NAME}/current/usr/share \
+        --libexecdir=/snap/${SNAPCRAFT_PROJECT_NAME}/current/usr/libexec/qemu" \
+        | xargs ./configure
+
+      # Copy QEMU configurations (Kconfigs)
+      cp -a ${configs_dir} .
+
+      # build and install
+      make -j $(($(nproc)-1))
+      make install DESTDIR=${SNAPCRAFT_PART_INSTALL}
+    prime:
+      - -snap/
+      - -usr/var/
+      - -usr/libexec/
+      - -usr/bin/qemu-ga
+      - -usr/bin/qemu-pr-helper
+      - -usr/bin/virtfs-proxy-helper
+      - usr/*
+      - lib/*
+    organize:
+      # Hack: move qemu to /
+      "snap/kata-containers/current/": "./"
+
+  qemu-patches-dump:
+    source: qemu/patches/
+    plugin: dump
+    organize:
+      '*' : qemu/patches/
+    prime:
+      - -*
+  qemu-aarch64-patches-dump:
+    source: obs-packaging/qemu-aarch64/patches/
+    plugin: dump
+    organize:
+      '*' : qemu-aarch64/patches/
+    prime:
+      - -*
+  qemu-configs-dump:
+    source: qemu/default-configs/
+    plugin: dump
+    organize:
+      '*' : qemu/default-configs/
+    prime:
+      - -*
+
+apps:
+  runtime:
+    command: usr/bin/kata-runtime

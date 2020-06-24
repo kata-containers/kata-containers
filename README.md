@@ -113,13 +113,11 @@ The hypervisor uses a [Linux\* kernel](https://github.com/kata-containers/linux)
 
 ### Documentation
 
-The [documentation](https://github.com/kata-containers/documentation)
-repository hosts documentation common to all code components.
+The [docs](docs/README.md) directory holds documentation common to all code components.
 
 ### Packaging
 
-We use the [packaging](https://github.com/kata-containers/packaging)
-repository to create packages for the [system
+We use the [packaging](tools/packaging/README.md) to create packages for the [system
 components](#kata-containers-developed-components) including
 [rootfs](#os-builder) and [kernel](#kernel) images.
 

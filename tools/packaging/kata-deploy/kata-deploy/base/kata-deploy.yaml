@@ -1,0 +1,69 @@
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: kata-deploy
+  namespace: kube-system
+spec:
+  selector:
+      matchLabels:
+        name: kata-deploy
+  template:
+    metadata:
+        labels:
+          name: kata-deploy
+    spec:
+      serviceAccountName: kata-label-node
+      containers:
+      - name: kube-kata
+        image: katadocker/kata-deploy
+        imagePullPolicy: Always
+        lifecycle:
+          preStop:
+            exec:
+              command: ["bash", "-c", "/opt/kata-artifacts/scripts/kata-deploy.sh cleanup"]
+        command: [ "bash", "-c", "/opt/kata-artifacts/scripts/kata-deploy.sh install" ]
+        env:
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        securityContext:
+          privileged: false
+        volumeMounts:
+        - name: crio-conf
+          mountPath: /etc/crio/
+        - name: containerd-conf
+          mountPath: /etc/containerd/
+        - name: kata-artifacts
+          mountPath: /opt/kata/
+        - name: dbus
+          mountPath: /var/run/dbus
+        - name: systemd
+          mountPath: /run/systemd
+        - name: local-bin
+          mountPath: /usr/local/bin/
+      volumes:
+        - name: crio-conf
+          hostPath:
+            path: /etc/crio/
+        - name: containerd-conf
+          hostPath:
+            path: /etc/containerd/
+        - name: kata-artifacts
+          hostPath:
+            path: /opt/kata/
+            type: DirectoryOrCreate
+        - name: dbus
+          hostPath:
+            path: /var/run/dbus
+        - name: systemd
+          hostPath:
+            path: /run/systemd
+        - name: local-bin
+          hostPath:
+            path: /usr/local/bin/
+  updateStrategy:
+    rollingUpdate:
+      maxUnavailable: 1
+    type: RollingUpdate
