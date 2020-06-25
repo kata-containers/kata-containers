@@ -19,7 +19,6 @@ import (
 	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/compatoci"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/oci"
-	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/sirupsen/logrus"
 )
 
@@ -123,13 +122,4 @@ func noNeedForOutput(detach bool, tty bool) bool {
 	}
 
 	return true
-}
-
-func removeNamespace(s *specs.Spec, nsType specs.LinuxNamespaceType) {
-	for i, n := range s.Linux.Namespaces {
-		if n.Type == nsType {
-			s.Linux.Namespaces = append(s.Linux.Namespaces[:i], s.Linux.Namespaces[i+1:]...)
-			return
-		}
-	}
 }
