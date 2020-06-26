@@ -381,7 +381,7 @@ detect_go_version()
 	fi
 
 	info "Get Go version from ${kata_versions_file}"
-	GO_VERSION="$(cat "${kata_versions_file}"  | $yq r - "languages.golang.version")"
+	GO_VERSION="$(cat "${kata_versions_file}"  | $yq r - "languages.golang.meta.newest-version")"
 
 	[ "$?" == "0" ] && [ "$GO_VERSION" != "null" ]
 }
