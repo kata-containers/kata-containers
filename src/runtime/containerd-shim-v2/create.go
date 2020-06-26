@@ -132,14 +132,6 @@ func loadSpec(r *taskAPI.CreateTaskRequest) (*specs.Spec, string, error) {
 		return nil, "", err
 	}
 
-	// Todo:
-	// Since there is a bug in kata for sharedPidNs, here to
-	// remove the pidns to disable the sharePidNs temporarily,
-	// once kata fixed this issue, we can remove this line.
-	// For the bug, please see:
-	// https://github.com/kata-containers/kata-containers/src/runtime/issues/930
-	removeNamespace(&ociSpec, specs.PIDNamespace)
-
 	return &ociSpec, bundlePath, nil
 }
 
