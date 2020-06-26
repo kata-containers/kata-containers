@@ -6,6 +6,7 @@
 package virtcontainers
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
@@ -77,10 +78,21 @@ func MaxQemuVCPUs() uint32 {
 	return uint32(240)
 }
 
-func newQemuArch(config HypervisorConfig) qemuArch {
+func newQemuArch(config HypervisorConfig) (qemuArch, error) {
 	machineType := config.HypervisorMachineType
 	if machineType == "" {
 		machineType = defaultQemuMachineType
+	}
+
+	var mp *govmmQemu.Machine
+	for _, m := range supportedQemuMachines {
+		if m.Type == machineType {
+			mp = &m
+			break
+		}
+	}
+	if mp == nil {
+		return nil, fmt.Errorf("unrecognised machinetype: %v", machineType)
 	}
 
 	factory := false
@@ -88,7 +100,6 @@ func newQemuArch(config HypervisorConfig) qemuArch {
 		factory = true
 	}
 
-	var qemuMachines = supportedQemuMachines
 	if config.IOMMU {
 		var q35QemuIOMMUOptions = "accel=kvm,kernel_irqchip=split"
 
@@ -97,22 +108,16 @@ func newQemuArch(config HypervisorConfig) qemuArch {
 		kernelParams = append(kernelParams,
 			Param{"iommu", "pt"})
 
-		for i, m := range qemuMachines {
-			if m.Type == QemuQ35 {
-				qemuMachines[i].Options = q35QemuIOMMUOptions
-			}
+		if mp.Type == QemuQ35 {
+			mp.Options = q35QemuIOMMUOptions
 		}
-	} else {
-		kernelParams = append(kernelParams,
-			Param{"iommu", "off"})
 	}
 
 	q := &qemuAmd64{
 		qemuArchBase: qemuArchBase{
-			machineType:           machineType,
+			qemuMachine:           *mp,
+			qemuExePath:           qemuPaths[machineType],
 			memoryOffset:          config.MemOffset,
-			qemuPaths:             qemuPaths,
-			supportedQemuMachines: qemuMachines,
 			kernelParamsNonDebug:  kernelParamsNonDebug,
 			kernelParamsDebug:     kernelParamsDebug,
 			kernelParams:          kernelParams,
@@ -124,15 +129,15 @@ func newQemuArch(config HypervisorConfig) qemuArch {
 
 	q.handleImagePath(config)
 
-	return q
+	return q, nil
 }
 
 func (q *qemuAmd64) capabilities() types.Capabilities {
 	var caps types.Capabilities
 
-	if q.machineType == QemuPC ||
-		q.machineType == QemuQ35 ||
-		q.machineType == QemuVirt {
+	if q.qemuMachine.Type == QemuPC ||
+		q.qemuMachine.Type == QemuQ35 ||
+		q.qemuMachine.Type == QemuVirt {
 		caps.SetBlockDeviceHotplugSupport()
 	}
 
@@ -143,7 +148,7 @@ func (q *qemuAmd64) capabilities() types.Capabilities {
 }
 
 func (q *qemuAmd64) bridges(number uint32) {
-	q.Bridges = genericBridges(number, q.machineType)
+	q.Bridges = genericBridges(number, q.qemuMachine.Type)
 }
 
 func (q *qemuAmd64) cpuModel() string {
@@ -175,5 +180,5 @@ func (q *qemuAmd64) appendImage(devices []govmmQemu.Device, path string) ([]govm
 
 // appendBridges appends to devices the given bridges
 func (q *qemuAmd64) appendBridges(devices []govmmQemu.Device) []govmmQemu.Device {
-	return genericAppendBridges(devices, q.Bridges, q.machineType)
+	return genericAppendBridges(devices, q.Bridges, q.qemuMachine.Type)
 }

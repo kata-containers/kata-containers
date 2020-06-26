@@ -29,10 +29,6 @@ const virtioSerialCCW = "virtio-serial-ccw"
 
 const qmpMigrationWaitTimeout = 5 * time.Second
 
-var qemuPaths = map[string]string{
-	QemuCCWVirtio: defaultQemuPath,
-}
-
 // Verify needed parameters
 var kernelParams = []Param{
 	{"console", "ttysclp0"},
@@ -40,11 +36,9 @@ var kernelParams = []Param{
 
 var ccwbridge = types.NewBridge(types.CCW, "", make(map[uint32]string, types.CCWBridgeMaxCapacity), 0)
 
-var supportedQemuMachines = []govmmQemu.Machine{
-	{
-		Type:    QemuCCWVirtio,
-		Options: defaultQemuMachineOptions,
-	},
+var supportedQemuMachine = govmmQemu.Machine {
+	Type:    QemuCCWVirtio,
+	Options: defaultQemuMachineOptions,
 }
 
 // MaxQemuVCPUs returns the maximum number of vCPUs supported
@@ -55,18 +49,21 @@ func MaxQemuVCPUs() uint32 {
 	return uint32(248)
 }
 
-func newQemuArch(config HypervisorConfig) qemuArch {
+func newQemuArch(config HypervisorConfig) (qemuArch, error) {
 	machineType := config.HypervisorMachineType
 	if machineType == "" {
 		machineType = defaultQemuMachineType
 	}
 
+	if machineType != defaultQemuMachineType {
+		return nil, fmt.Errorf("unrecognised machinetype: %v", machineType)
+	}
+
 	q := &qemuS390x{
 		qemuArchBase{
-			machineType:           machineType,
+			qemuMachine:           supportedQemuMachine,
+			qemuExePath:           defaultQemuPath,
 			memoryOffset:          config.MemOffset,
-			qemuPaths:             qemuPaths,
-			supportedQemuMachines: supportedQemuMachines,
 			kernelParamsNonDebug:  kernelParamsNonDebug,
 			kernelParamsDebug:     kernelParamsDebug,
 			kernelParams:          kernelParams,
@@ -81,11 +78,11 @@ func newQemuArch(config HypervisorConfig) qemuArch {
 		q.kernelParamsDebug = append(q.kernelParamsDebug, kernelParamsSystemdDebug...)
 	}
 
-	return q
+	return q, nil
 }
 
 func (q *qemuS390x) bridges(number uint32) {
-	q.Bridges = genericBridges(number, q.machineType)
+	q.Bridges = genericBridges(number, q.qemuMachine.Type)
 }
 
 // appendConsole appends a console to devices.
@@ -226,7 +223,7 @@ func (q *qemuS390x) append9PVolume(devices []govmmQemu.Device, volume types.Volu
 
 // appendBridges appends to devices the given bridges
 func (q *qemuS390x) appendBridges(devices []govmmQemu.Device) []govmmQemu.Device {
-	return genericAppendBridges(devices, q.Bridges, q.machineType)
+	return genericAppendBridges(devices, q.Bridges, q.qemuMachine.Type)
 }
 
 func (q *qemuS390x) appendSCSIController(devices []govmmQemu.Device, enableIOThreads bool) ([]govmmQemu.Device, *govmmQemu.IOThread, error) {
