@@ -23,12 +23,15 @@ import (
 )
 
 const (
-	qemuArchBaseMachineType = "pc"
 	qemuArchBaseQemuPath    = "/usr/bin/qemu-system-x86_64"
 )
 
+var qemuArchBaseMachine = govmmQemu.Machine{
+	Type: "pc",
+}
+
 var qemuArchBaseQemuPaths = map[string]string{
-	qemuArchBaseMachineType: qemuArchBaseQemuPath,
+	qemuArchBaseMachine.Type: qemuArchBaseQemuPath,
 }
 
 var qemuArchBaseKernelParamsNonDebug = []Param{
@@ -47,18 +50,11 @@ var qemuArchBaseKernelParams = []Param{
 	{"rootfstype", "ext4"},
 }
 
-var qemuArchBaseSupportedQemuMachines = []govmmQemu.Machine{
-	{
-		Type: qemuArchBaseMachineType,
-	},
-}
-
 func newQemuArchBase() *qemuArchBase {
 	return &qemuArchBase{
-		machineType:           qemuArchBaseMachineType,
+		qemuMachine:           qemuArchBaseMachine,
+		qemuExePath:           qemuArchBaseQemuPaths[qemuArchBaseMachine.Type],
 		nestedRun:             false,
-		qemuPaths:             qemuArchBaseQemuPaths,
-		supportedQemuMachines: qemuArchBaseSupportedQemuMachines,
 		kernelParamsNonDebug:  qemuArchBaseKernelParamsNonDebug,
 		kernelParamsDebug:     qemuArchBaseKernelParamsDebug,
 		kernelParams:          qemuArchBaseKernelParams,
@@ -85,36 +81,16 @@ func TestQemuArchBaseMachine(t *testing.T) {
 	assert := assert.New(t)
 	qemuArchBase := newQemuArchBase()
 
-	m, err := qemuArchBase.machine()
-	assert.NoError(err)
-	assert.Equal(m.Type, qemuArchBaseMachineType)
-
-	machines := []govmmQemu.Machine{
-		{
-			Type: "bad",
-		},
-	}
-	qemuArchBase.supportedQemuMachines = machines
-	m, err = qemuArchBase.machine()
-	assert.Error(err)
-	assert.Equal("", m.Type)
+	m := qemuArchBase.machine()
+	assert.Equal(m.Type, qemuArchBaseMachine.Type)
 }
 
 func TestQemuArchBaseQemuPath(t *testing.T) {
 	assert := assert.New(t)
 	qemuArchBase := newQemuArchBase()
 
-	p, err := qemuArchBase.qemuPath()
-	assert.NoError(err)
+	p := qemuArchBase.qemuPath()
 	assert.Equal(p, qemuArchBaseQemuPath)
-
-	paths := map[string]string{
-		"bad": qemuArchBaseQemuPath,
-	}
-	qemuArchBase.qemuPaths = paths
-	p, err = qemuArchBase.qemuPath()
-	assert.Error(err)
-	assert.Equal("", p)
 }
 
 func TestQemuArchBaseKernelParameters(t *testing.T) {
@@ -166,7 +142,7 @@ func TestQemuAddDeviceToBridge(t *testing.T) {
 
 	// addDeviceToBridge successfully
 	q := newQemuArchBase()
-	q.machineType = QemuPC
+	q.qemuMachine.Type = QemuPC
 
 	q.bridges(1)
 	for i := uint32(1); i <= types.PCIBridgeMaxCapacity; i++ {
@@ -181,7 +157,7 @@ func TestQemuAddDeviceToBridge(t *testing.T) {
 
 	// addDeviceToBridge fails cause q.Bridges == 0
 	q = newQemuArchBase()
-	q.machineType = QemuPCLite
+	q.qemuMachine.Type = QemuPCLite
 	q.bridges(0)
 	_, _, err = q.addDeviceToBridge("qemu-bridge", types.PCI)
 	if assert.Error(err) {
@@ -581,11 +557,11 @@ func TestQemuArchBaseAppendIOMMU(t *testing.T) {
 		},
 	}
 	// Test IOMMU is not appended to PC machine type
-	qemuArchBase.machineType = QemuPC
+	qemuArchBase.qemuMachine.Type = QemuPC
 	devices, err = qemuArchBase.appendIOMMU(devices)
 	assert.Error(err)
 
-	qemuArchBase.machineType = QemuQ35
+	qemuArchBase.qemuMachine.Type = QemuQ35
 	devices, err = qemuArchBase.appendIOMMU(devices)
 	assert.NoError(err)
 	assert.Equal(expectedOut, devices)

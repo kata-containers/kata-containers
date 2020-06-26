@@ -30,21 +30,15 @@ const qmpMigrationWaitTimeout = 10 * time.Second
 
 var defaultQemuMachineOptions = "usb=off,accel=kvm,gic-version=" + getGuestGICVersion()
 
-var qemuPaths = map[string]string{
-	QemuVirt: defaultQemuPath,
-}
-
 var kernelParams = []Param{
 	{"console", "hvc0"},
 	{"console", "hvc1"},
 	{"iommu.passthrough", "0"},
 }
 
-var supportedQemuMachines = []govmmQemu.Machine{
-	{
-		Type:    QemuVirt,
-		Options: defaultQemuMachineOptions,
-	},
+var supportedQemuMachine = govmmQemu.Machine {
+	Type:    QemuVirt,
+	Options: defaultQemuMachineOptions,
 }
 
 // Logger returns a logrus logger appropriate for logging qemu-aarch64 messages
@@ -125,18 +119,21 @@ func MaxQemuVCPUs() uint32 {
 	return uint32(runtime.NumCPU())
 }
 
-func newQemuArch(config HypervisorConfig) qemuArch {
+func newQemuArch(config HypervisorConfig) (qemuArch, error) {
 	machineType := config.HypervisorMachineType
 	if machineType == "" {
 		machineType = defaultQemuMachineType
 	}
 
+	if machineType != defaultQemuMachineType {
+		return nil, fmt.Errorf("unrecognised machinetype: %v", machineType)
+	}
+
 	q := &qemuArm64{
 		qemuArchBase{
-			machineType:           machineType,
+		        qemuMachine:           supportedQemuMachine,
+			qemuExePath:           defaultQemuPath,
 			memoryOffset:          config.MemOffset,
-			qemuPaths:             qemuPaths,
-			supportedQemuMachines: supportedQemuMachines,
 			kernelParamsNonDebug:  kernelParamsNonDebug,
 			kernelParamsDebug:     kernelParamsDebug,
 			kernelParams:          kernelParams,
@@ -146,16 +143,16 @@ func newQemuArch(config HypervisorConfig) qemuArch {
 
 	q.handleImagePath(config)
 
-	return q
+	return q, nil
 }
 
 func (q *qemuArm64) bridges(number uint32) {
-	q.Bridges = genericBridges(number, q.machineType)
+	q.Bridges = genericBridges(number, q.qemuMachine.Type)
 }
 
 // appendBridges appends to devices the given bridges
 func (q *qemuArm64) appendBridges(devices []govmmQemu.Device) []govmmQemu.Device {
-	return genericAppendBridges(devices, q.Bridges, q.machineType)
+	return genericAppendBridges(devices, q.Bridges, q.qemuMachine.Type)
 }
 
 func (q *qemuArm64) appendImage(devices []govmmQemu.Device, path string) ([]govmmQemu.Device, error) {

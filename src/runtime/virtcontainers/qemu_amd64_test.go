@@ -22,26 +22,36 @@ func qemuConfig(machineType string) HypervisorConfig {
 	}
 }
 
-func newTestQemu(machineType string) qemuArch {
+func newTestQemu(assert *assert.Assertions, machineType string) qemuArch {
 	config := qemuConfig(machineType)
-	return newQemuArch(config)
+	arch, err := newQemuArch(config)
+	assert.NoError(err)
+	return arch
+}
+
+func TestQemuAmd64BadMachineType(t *testing.T) {
+	assert := assert.New(t)
+
+	config := qemuConfig("no-such-machine-type")
+	_, err := newQemuArch(config)
+	assert.Error(err)
 }
 
 func TestQemuAmd64Capabilities(t *testing.T) {
 	assert := assert.New(t)
 
-	amd64 := newTestQemu(QemuPC)
+	amd64 := newTestQemu(assert, QemuPC)
 	caps := amd64.capabilities()
 	assert.True(caps.IsBlockDeviceHotplugSupported())
 
-	amd64 = newTestQemu(QemuQ35)
+	amd64 = newTestQemu(assert, QemuQ35)
 	caps = amd64.capabilities()
 	assert.True(caps.IsBlockDeviceHotplugSupported())
 }
 
 func TestQemuAmd64Bridges(t *testing.T) {
 	assert := assert.New(t)
-	amd64 := newTestQemu(QemuPC)
+	amd64 := newTestQemu(assert, QemuPC)
 	len := 5
 
 	amd64.bridges(uint32(len))
@@ -55,7 +65,7 @@ func TestQemuAmd64Bridges(t *testing.T) {
 		assert.NotNil(b.Devices)
 	}
 
-	amd64 = newTestQemu(QemuQ35)
+	amd64 = newTestQemu(assert, QemuQ35)
 	amd64.bridges(uint32(len))
 	bridges = amd64.getBridges()
 	assert.Len(bridges, len)
@@ -66,16 +76,11 @@ func TestQemuAmd64Bridges(t *testing.T) {
 		assert.Equal(id, b.ID)
 		assert.NotNil(b.Devices)
 	}
-
-	amd64 = newTestQemu(QemuQ35 + QemuPC)
-	amd64.bridges(uint32(len))
-	bridges = amd64.getBridges()
-	assert.Nil(bridges)
 }
 
 func TestQemuAmd64CPUModel(t *testing.T) {
 	assert := assert.New(t)
-	amd64 := newTestQemu(QemuPC)
+	amd64 := newTestQemu(assert, QemuPC)
 
 	expectedOut := defaultCPUModel
 	model := amd64.cpuModel()
@@ -97,7 +102,7 @@ func TestQemuAmd64CPUModel(t *testing.T) {
 
 func TestQemuAmd64MemoryTopology(t *testing.T) {
 	assert := assert.New(t)
-	amd64 := newTestQemu(QemuPC)
+	amd64 := newTestQemu(assert, QemuPC)
 	memoryOffset := 1024
 
 	hostMem := uint64(100)
@@ -131,10 +136,9 @@ func TestQemuAmd64AppendImage(t *testing.T) {
 	cfg := qemuConfig(QemuPC)
 	cfg.ImagePath = f.Name()
 	cfg.DisableImageNvdimm = false
-	amd64 := newQemuArch(cfg)
-	for _, m := range amd64.(*qemuAmd64).supportedQemuMachines {
-		assert.Contains(m.Options, qemuNvdimmOption)
-	}
+	amd64, err := newQemuArch(cfg)
+	assert.NoError(err)
+	assert.Contains(amd64.machine().Options, qemuNvdimmOption)
 
 	expectedOut := []govmmQemu.Device{
 		govmmQemu.Object{
@@ -155,10 +159,9 @@ func TestQemuAmd64AppendImage(t *testing.T) {
 	assert.Equal(len(supportedQemuMachines), copy(supportedQemuMachines, machinesCopy))
 
 	cfg.DisableImageNvdimm = true
-	amd64 = newQemuArch(cfg)
-	for _, m := range amd64.(*qemuAmd64).supportedQemuMachines {
-		assert.NotContains(m.Options, qemuNvdimmOption)
-	}
+	amd64, err = newQemuArch(cfg)
+	assert.NoError(err)
+	assert.NotContains(amd64.machine().Options, qemuNvdimmOption)
 
 	found := false
 	devices, err = amd64.appendImage(nil, f.Name())
@@ -181,7 +184,7 @@ func TestQemuAmd64AppendBridges(t *testing.T) {
 	assert := assert.New(t)
 
 	// check PC
-	amd64 := newTestQemu(QemuPC)
+	amd64 := newTestQemu(assert, QemuPC)
 
 	amd64.bridges(1)
 	bridges := amd64.getBridges()
@@ -204,7 +207,7 @@ func TestQemuAmd64AppendBridges(t *testing.T) {
 	assert.Equal(expectedOut, devices)
 
 	// Check Q35
-	amd64 = newTestQemu(QemuQ35)
+	amd64 = newTestQemu(assert, QemuQ35)
 
 	amd64.bridges(1)
 	bridges = amd64.getBridges()
@@ -233,11 +236,10 @@ func TestQemuAmd64WithInitrd(t *testing.T) {
 
 	cfg := qemuConfig(QemuPC)
 	cfg.InitrdPath = "dummy-initrd"
-	amd64 := newQemuArch(cfg)
+	amd64, err := newQemuArch(cfg)
+	assert.NoError(err)
 
-	for _, m := range amd64.(*qemuAmd64).supportedQemuMachines {
-		assert.NotContains(m.Options, qemuNvdimmOption)
-	}
+	assert.NotContains(amd64.machine().Options, qemuNvdimmOption)
 }
 
 func TestQemuAmd64Iommu(t *testing.T) {
@@ -245,13 +247,12 @@ func TestQemuAmd64Iommu(t *testing.T) {
 
 	config := qemuConfig(QemuQ35)
 	config.IOMMU = true
-	qemu := newQemuArch(config)
+	qemu, err := newQemuArch(config)
+	assert.NoError(err)
 
 	p := qemu.kernelParameters(false)
 	assert.Contains(p, Param{"intel_iommu", "on"})
 
-	m, err := qemu.machine()
-
-	assert.NoError(err)
+	m := qemu.machine()
 	assert.Contains(m.Options, "kernel_irqchip=split")
 }

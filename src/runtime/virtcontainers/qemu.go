@@ -199,10 +199,7 @@ func (q *qemu) qemuPath() (string, error) {
 	}
 
 	if p == "" {
-		p, err = q.arch.qemuPath()
-		if err != nil {
-			return "", err
-		}
+		p = q.arch.qemuPath()
 	}
 
 	if _, err = os.Stat(p); os.IsNotExist(err) {
@@ -238,7 +235,10 @@ func (q *qemu) setup(id string, hypervisorConfig *HypervisorConfig) error {
 
 	q.id = id
 	q.config = *hypervisorConfig
-	q.arch = newQemuArch(q.config)
+	q.arch, err = newQemuArch(q.config)
+	if err != nil {
+		return err
+	}
 
 	initrdPath, err := q.config.InitrdAssetPath()
 	if err != nil {
@@ -332,10 +332,7 @@ func (q *qemu) qmpSocketPath(id string) (string, error) {
 }
 
 func (q *qemu) getQemuMachine() (govmmQemu.Machine, error) {
-	machine, err := q.arch.machine()
-	if err != nil {
-		return govmmQemu.Machine{}, err
-	}
+	machine := q.arch.machine()
 
 	accelerators := q.config.MachineAccelerators
 	if accelerators != "" {
@@ -1536,10 +1533,7 @@ func (q *qemu) hotplugAddCPUs(amount uint32) (uint32, error) {
 		return 0, fmt.Errorf("failed to query hotpluggable CPUs: %v", err)
 	}
 
-	machine, err := q.arch.machine()
-	if err != nil {
-		return 0, fmt.Errorf("failed to query machine type: %v", err)
-	}
+	machine := q.arch.machine()
 
 	var hotpluggedVCPUs uint32
 	for _, hc := range hotpluggableVCPUs {
@@ -2169,7 +2163,10 @@ func (q *qemu) fromGrpc(ctx context.Context, hypervisorConfig *HypervisorConfig,
 	q.qmpMonitorCh.path = qp.QmpChannelpath
 	q.qemuConfig.Ctx = ctx
 	q.state = qp.State
-	q.arch = newQemuArch(q.config)
+	q.arch, err = newQemuArch(q.config)
+	if err != nil {
+		return err
+	}
 	q.ctx = ctx
 	q.nvdimmCount = qp.NvdimmCount
 
