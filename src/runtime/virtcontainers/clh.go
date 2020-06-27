@@ -221,7 +221,6 @@ func (clh *cloudHypervisor) createSandbox(ctx context.Context, id string, networ
 	// Set initial memomory size of the virtual machine
 	// Convert to int64 openApiClient only support int64
 	clh.vmconfig.Memory.Size = int64((utils.MemUnit(clh.config.MemorySize) * utils.MiB).ToBytes())
-	clh.vmconfig.Memory.File = "/dev/shm"
 	// shared memory should be enabled if using vhost-user(kata uses virtiofsd)
 	clh.vmconfig.Memory.Shared = true
 	hostMemKb, err := getHostMemorySizeKb(procMemInfo)
