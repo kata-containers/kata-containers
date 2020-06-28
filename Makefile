@@ -19,6 +19,8 @@ STANDARD_TARGETS = build check clean install test
 
 include utils.mk
 
+all: build
+
 # Create the rules
 $(eval $(call create_all_rules,$(COMPONENTS),$(TOOLS),$(STANDARD_TARGETS)))
 
