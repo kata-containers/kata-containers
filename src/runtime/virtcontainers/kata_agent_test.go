@@ -350,6 +350,9 @@ func TestKataAgentSendReq(t *testing.T) {
 
 	_, err = k.readProcessStderr(container, execid, []byte{})
 	assert.Nil(err)
+
+	_, err = k.getOOMEvent()
+	assert.Nil(err)
 }
 
 func TestHandleEphemeralStorage(t *testing.T) {

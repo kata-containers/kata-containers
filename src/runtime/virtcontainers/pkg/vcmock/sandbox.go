@@ -212,3 +212,7 @@ func (s *Sandbox) UpdateRoutes(routes []*vcTypes.Route) ([]*vcTypes.Route, error
 func (s *Sandbox) ListRoutes() ([]*vcTypes.Route, error) {
 	return nil, nil
 }
+
+func (s *Sandbox) GetOOMEvent() (string, error) {
+	return "", nil
+}
