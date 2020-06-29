@@ -1,2 +1,8 @@
 image-builder/nsdax
 dracut/Dockerfile
+/.*.done
+/*_rootfs
+/kata-Centos-dnf.conf
+/kata-containers-initrd.img
+/kata-containers.img
+rootfs-builder/centos/RPM-GPG-KEY-*
