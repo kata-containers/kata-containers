@@ -382,50 +382,54 @@ use std::path::PathBuf;
 use std::process::{exit, Command, Stdio};
 
 fn setup_debug_console(shells: Vec<String>, port: u32) -> Result<()> {
-    for shell in shells.iter() {
-        let binary = PathBuf::from(shell);
+    let mut shell: &str = "";
+    for sh in shells.iter() {
+        let binary = PathBuf::from(sh);
         if binary.exists() {
-            let f: RawFd = if port > 0 {
-                let listenfd = socket::socket(
-                    AddressFamily::Vsock,
-                    SockType::Stream,
-                    SockFlag::SOCK_CLOEXEC,
-                    None,
-                )?;
-                let addr = SockAddr::new_vsock(libc::VMADDR_CID_ANY, port);
-                socket::bind(listenfd, &addr)?;
-                socket::listen(listenfd, 1)?;
-                socket::accept4(listenfd, SockFlag::SOCK_CLOEXEC)?
-            } else {
-                let mut flags = OFlag::empty();
-                flags.insert(OFlag::O_RDWR);
-                flags.insert(OFlag::O_CLOEXEC);
-                fcntl::open(CONSOLE_PATH, flags, Mode::empty())?
-            };
-
-            let cmd = Command::new(shell)
-                .arg("-i")
-                .stdin(unsafe { Stdio::from_raw_fd(f) })
-                .stdout(unsafe { Stdio::from_raw_fd(f) })
-                .stderr(unsafe { Stdio::from_raw_fd(f) })
-                .spawn();
-
-            let mut cmd = match cmd {
-                Ok(c) => c,
-                Err(_) => {
-                    return Err(ErrorKind::ErrorCode("failed to spawn shell".to_string()).into())
-                }
-            };
-
-            cmd.wait()?;
-
-            return Ok(());
-        } else {
-            return Err(ErrorKind::ErrorCode("invalid shell".to_string()).into());
+            shell = sh;
+            break;
         }
     }
 
-    Err(ErrorKind::ErrorCode("no shell".to_string()).into())
+    if shell == "" {
+        return Err(
+            ErrorKind::ErrorCode("no shell found to launch debug console".to_string()).into(),
+        );
+    }
+
+    let f: RawFd = if port > 0 {
+        let listenfd = socket::socket(
+            AddressFamily::Vsock,
+            SockType::Stream,
+            SockFlag::SOCK_CLOEXEC,
+            None,
+        )?;
+        let addr = SockAddr::new_vsock(libc::VMADDR_CID_ANY, port);
+        socket::bind(listenfd, &addr)?;
+        socket::listen(listenfd, 1)?;
+        socket::accept4(listenfd, SockFlag::SOCK_CLOEXEC)?
+    } else {
+        let mut flags = OFlag::empty();
+        flags.insert(OFlag::O_RDWR);
+        flags.insert(OFlag::O_CLOEXEC);
+        fcntl::open(CONSOLE_PATH, flags, Mode::empty())?
+    };
+
+    let cmd = Command::new(shell)
+        .arg("-i")
+        .stdin(unsafe { Stdio::from_raw_fd(f) })
+        .stdout(unsafe { Stdio::from_raw_fd(f) })
+        .stderr(unsafe { Stdio::from_raw_fd(f) })
+        .spawn();
+
+    let mut cmd = match cmd {
+        Ok(c) => c,
+        Err(_) => return Err(ErrorKind::ErrorCode("failed to spawn shell".to_string()).into()),
+    };
+
+    cmd.wait()?;
+
+    return Ok(());
 }
 
 #[cfg(test)]
@@ -447,7 +451,10 @@ mod tests {
         let result = setup_debug_console(shells.to_vec(), 0);
 
         assert!(result.is_err());
-        assert_eq!(result.unwrap_err().to_string(), "Error Code: 'no shell'");
+        assert_eq!(
+            result.unwrap_err().to_string(),
+            "Error Code: 'no shell found to launch debug console'"
+        );
     }
 
     #[test]
@@ -472,7 +479,7 @@ mod tests {
         assert!(result.is_err());
         assert_eq!(
             result.unwrap_err().to_string(),
-            "Error Code: 'invalid shell'"
+            "Error Code: 'no shell found to launch debug console'"
         );
     }
 }
