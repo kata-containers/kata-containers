@@ -10,8 +10,10 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
@@ -58,6 +60,26 @@ type virtiofsd struct {
 	wait virtiofsdWaitFunc
 }
 
+// Open socket on behalf of virtiofsd
+// return file descriptor to be used by virtiofsd.
+func (v *virtiofsd) getSocketFD() (*os.File, error) {
+	var listener *net.UnixListener
+
+	if _, err := os.Stat(filepath.Dir(v.socketPath)); err != nil {
+		return nil, errors.Errorf("Socket directory does not exist %s", filepath.Dir(v.socketPath))
+	}
+
+	listener, err := net.ListenUnix("unix", &net.UnixAddr{Name: v.socketPath, Net: "unix"})
+	if err != nil {
+		return nil, err
+	}
+	defer listener.Close()
+
+	listener.SetUnlinkOnClose(false)
+
+	return listener.File()
+}
+
 // Start the virtiofsd daemon
 func (v *virtiofsd) Start(ctx context.Context) (int, error) {
 	span, _ := v.trace("Start")
@@ -68,19 +90,27 @@ func (v *virtiofsd) Start(ctx context.Context) (int, error) {
 		return pid, err
 	}
 
-	args, err := v.args()
+	cmd := exec.Command(v.path)
+
+	socketFD, err := v.getSocketFD()
+	if err != nil {
+		return 0, err
+	}
+
+	cmd.ExtraFiles = append(cmd.ExtraFiles, socketFD)
+
+	// Extra files start from 2 (0: stdin, 1: stdout, 2: stderr)
+	// Extra FDs for virtiofsd start from 3
+	// Get the FD number for previous added socketFD
+	socketFdNumber := 2 + uint(len(cmd.ExtraFiles))
+	args, err := v.args(socketFdNumber)
 	if err != nil {
 		return pid, err
 	}
+	cmd.Args = append(cmd.Args, args...)
 
 	v.Logger().WithField("path", v.path).Info()
 	v.Logger().WithField("args", strings.Join(args, " ")).Info()
-
-	cmd := exec.Command(v.path, args...)
-	stderr, err := cmd.StderrPipe()
-	if err != nil {
-		return pid, fmt.Errorf("failed to get stderr from virtiofsd command, error: %s", err)
-	}
 
 	if err = utils.StartCmd(cmd); err != nil {
 		return pid, err
@@ -96,7 +126,7 @@ func (v *virtiofsd) Start(ctx context.Context) (int, error) {
 		v.wait = waitVirtiofsReady
 	}
 
-	return cmd.Process.Pid, v.wait(cmd, stderr, v.debug)
+	return pid, socketFD.Close()
 }
 
 func (v *virtiofsd) Stop() error {
@@ -115,7 +145,7 @@ func (v *virtiofsd) Stop() error {
 	return nil
 }
 
-func (v *virtiofsd) args() ([]string, error) {
+func (v *virtiofsd) args(FdSocketNumber uint) ([]string, error) {
 	if v.sourcePath == "" {
 		return []string{}, errors.New("vitiofsd source path is empty")
 	}
@@ -125,11 +155,23 @@ func (v *virtiofsd) args() ([]string, error) {
 	}
 
 	args := []string{
+		// Send logs to syslog
+		"--syslog",
+		// foreground operation
 		"-f",
+		// cache mode for virtiofsd
 		"-o", "cache=" + v.cache,
+		// disable posix locking in daemon: bunch of basic posix locks properties are broken
+		// apt-get update is broken if enabled
 		"-o", "no_posix_lock",
+		// shared directory tree
 		"-o", "source=" + v.sourcePath,
-		"-o", "vhost_user_socket=" + v.socketPath,
+		// fd number of vhost-user socket
+		fmt.Sprintf("--fd=%v", FdSocketNumber),
+	}
+
+	if v.debug {
+		args = append(args, "-o", "debug")
 	}
 
 	if len(v.extraArgs) != 0 {
