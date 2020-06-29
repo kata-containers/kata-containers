@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"github.com/BurntSushi/toml"
+	govmmQemu "github.com/intel/govmm/qemu"
 	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
 	exp "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/experimental"
@@ -625,6 +626,14 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 	machineAccelerators := h.machineAccelerators()
 	kernelParams := h.kernelParams()
 	machineType := h.machineType()
+
+	// The "microvm" machine type doesn't support NVDIMM so override the
+	// config setting to explicitly disable it (i.e. don't require the
+	// user to add 'disable_image_nvdimm = true' in the .toml file).
+	if machineType == govmmQemu.MachineTypeMicrovm && !h.DisableImageNvdimm {
+		h.DisableImageNvdimm = true
+		kataUtilsLogger.Info("Setting 'disable_image_nvdimm = true' as microvm does not support NVDIMM")
+	}
 
 	blockDriver, err := h.blockDeviceDriver()
 	if err != nil {

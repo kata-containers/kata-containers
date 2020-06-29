@@ -177,6 +177,9 @@ const (
 	// QemuQ35 is the QEMU Q35 machine type for amd64
 	QemuQ35 = "q35"
 
+	// QemuMicrovm is the QEMU microvm machine type for amd64
+	QemuMicrovm = "microvm"
+
 	// QemuVirt is the QEMU virt machine type for aarch64 or amd64
 	QemuVirt = "virt"
 
