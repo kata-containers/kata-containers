@@ -259,4 +259,8 @@ type agent interface {
 
 	// load data from disk
 	load(persistapi.AgentState)
+
+	// getOOMEvent will wait on OOM events that occur in the sandbox.
+	// Will return the ID of the container where the event occurred.
+	getOOMEvent() (string, error)
 }
