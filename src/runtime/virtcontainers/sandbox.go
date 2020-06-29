@@ -1713,7 +1713,16 @@ func (s *Sandbox) AppendDevice(device api.Device) error {
 	switch device.DeviceType() {
 	case config.VhostUserSCSI, config.VhostUserNet, config.VhostUserBlk, config.VhostUserFS:
 		return s.hypervisor.addDevice(device.GetDeviceInfo().(*config.VhostUserDeviceAttrs), vhostuserDev)
+	case config.DeviceVFIO:
+		vfioDevs := device.GetDeviceInfo().([]*config.VFIODev)
+		for _, d := range vfioDevs {
+			return s.hypervisor.addDevice(*d, vfioDev)
+		}
+	default:
+		s.Logger().WithField("device-type", device.DeviceType()).
+			Warn("Could not append device: unsupported device type")
 	}
+
 	return fmt.Errorf("unsupported device type")
 }
 
