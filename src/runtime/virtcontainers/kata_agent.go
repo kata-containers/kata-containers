@@ -2389,9 +2389,8 @@ func (k *kataAgent) getOOMEvent() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	oomEvent, ok := result.(*grpc.OOMEvent)
-	if ok {
-		return oomEvent.ContainerId, err
+	if oomEvent, ok := result.(*grpc.OOMEvent); ok {
+		return oomEvent.ContainerId, nil
 	}
 	return "", err
 }
