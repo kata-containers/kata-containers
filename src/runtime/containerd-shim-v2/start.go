@@ -36,6 +36,9 @@ func startContainer(ctx context.Context, s *service, c *container) error {
 			return err
 		}
 		go watchSandbox(s)
+
+		// Start watching for oom events
+		go watchOOMEvents(s)
 	} else {
 		_, err := s.sandbox.StartContainer(c.id)
 		if err != nil {

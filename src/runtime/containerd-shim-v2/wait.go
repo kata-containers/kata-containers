@@ -9,6 +9,7 @@ import (
 	"path"
 	"time"
 
+	"github.com/containerd/containerd/api/events"
 	"github.com/containerd/containerd/api/types/task"
 	"github.com/containerd/containerd/mount"
 	"github.com/sirupsen/logrus"
@@ -125,4 +126,27 @@ func watchSandbox(s *service) {
 
 	// Existing container/exec will be cleaned up by its waiters.
 	// No need to send async events here.
+}
+
+func watchOOMEvents(s *service) {
+	if s.sandbox == nil {
+		return
+	}
+
+	for {
+		select {
+		case <-s.ctx.Done():
+			return
+		default:
+			containerID, err := s.sandbox.GetOOMEvent()
+			if err != nil {
+				logrus.WithError(err).Warn("failed to get oom event from sandbox")
+				continue
+			}
+
+			s.send(&events.TaskOOM{
+				ContainerID: containerID,
+			})
+		}
+	}
 }
