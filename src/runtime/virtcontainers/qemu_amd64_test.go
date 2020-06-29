@@ -47,6 +47,10 @@ func TestQemuAmd64Capabilities(t *testing.T) {
 	amd64 = newTestQemu(assert, QemuQ35)
 	caps = amd64.capabilities()
 	assert.True(caps.IsBlockDeviceHotplugSupported())
+
+	amd64 = newTestQemu(assert, QemuMicrovm)
+	caps = amd64.capabilities()
+	assert.False(caps.IsBlockDeviceHotplugSupported())
 }
 
 func TestQemuAmd64Bridges(t *testing.T) {
@@ -64,6 +68,11 @@ func TestQemuAmd64Bridges(t *testing.T) {
 		assert.Equal(id, b.ID)
 		assert.NotNil(b.Devices)
 	}
+
+	amd64 = newTestQemu(assert, QemuMicrovm)
+	amd64.bridges(uint32(len))
+	bridges = amd64.getBridges()
+	assert.Nil(bridges)
 
 	amd64 = newTestQemu(assert, QemuQ35)
 	amd64.bridges(uint32(len))
@@ -255,4 +264,19 @@ func TestQemuAmd64Iommu(t *testing.T) {
 
 	m := qemu.machine()
 	assert.Contains(m.Options, "kernel_irqchip=split")
+}
+
+func TestQemuAmd64Microvm(t *testing.T) {
+	assert := assert.New(t)
+
+	cfg := qemuConfig(QemuMicrovm)
+	amd64, err := newQemuArch(cfg)
+	assert.NoError(err)
+	assert.False(cfg.DisableImageNvdimm)
+
+	for _, m := range supportedQemuMachines {
+		assert.NotContains(m.Options, qemuNvdimmOption)
+	}
+
+	assert.False(amd64.supportGuestMemoryHotplug())
 }
