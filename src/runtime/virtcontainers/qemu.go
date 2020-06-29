@@ -1761,7 +1761,7 @@ func (q *qemu) addDevice(devInfo interface{}, devType deviceType) error {
 	case config.VFIODev:
 		q.qemuConfig.Devices = q.arch.appendVFIODevice(q.qemuConfig.Devices, v)
 	default:
-		break
+		q.Logger().WithField("dev-type", v).Warn("Could not append device: unsupported device type")
 	}
 
 	return err
