@@ -89,7 +89,8 @@ func (endpoint *IPVlanEndpoint) NetworkPair() *NetworkInterfacePair {
 
 // Attach for virtual endpoint bridges the network pair and adds the
 // tap interface of the network pair to the hypervisor.
-func (endpoint *IPVlanEndpoint) Attach(h hypervisor) error {
+func (endpoint *IPVlanEndpoint) Attach(s *Sandbox) error {
+	h := s.hypervisor
 	if err := xConnectVMNetwork(endpoint, h); err != nil {
 		networkLogger().WithError(err).Error("Error bridging virtual ep")
 		return err

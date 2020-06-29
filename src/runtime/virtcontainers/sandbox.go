@@ -824,7 +824,7 @@ func (s *Sandbox) createNetwork() error {
 	// after vm is started.
 	if s.factory == nil {
 		// Add the network
-		endpoints, err := s.network.Add(s.ctx, &s.config.NetworkConfig, s.hypervisor, false)
+		endpoints, err := s.network.Add(s.ctx, &s.config.NetworkConfig, s, false)
 		if err != nil {
 			return err
 		}
@@ -991,7 +991,7 @@ func (s *Sandbox) startVM() (err error) {
 	// In case of vm factory, network interfaces are hotplugged
 	// after vm is started.
 	if s.factory != nil {
-		endpoints, err := s.network.Add(s.ctx, &s.config.NetworkConfig, s.hypervisor, true)
+		endpoints, err := s.network.Add(s.ctx, &s.config.NetworkConfig, s, true)
 		if err != nil {
 			return err
 		}
