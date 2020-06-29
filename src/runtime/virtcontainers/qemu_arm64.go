@@ -138,6 +138,7 @@ func newQemuArch(config HypervisorConfig) (qemuArch, error) {
 			kernelParamsDebug:     kernelParamsDebug,
 			kernelParams:          kernelParams,
 			disableNvdimm:         config.DisableImageNvdimm,
+			dax:                   true,
 		},
 	}
 
