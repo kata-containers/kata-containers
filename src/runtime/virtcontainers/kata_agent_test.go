@@ -245,6 +245,10 @@ func (p *gRPCProxy) MemHotplugByProbe(ctx context.Context, req *pb.MemHotplugByP
 	return &gpb.Empty{}, nil
 }
 
+func (p *gRPCProxy) GetOOMEvent(ctx context.Context, req *pb.GetOOMEventRequest) (*pb.OOMEvent, error) {
+	return &pb.OOMEvent{}, nil
+}
+
 func gRPCRegister(s *ttrpc.Server, srv interface{}) {
 	switch g := srv.(type) {
 	case *gRPCProxy:
