@@ -37,7 +37,9 @@ use rustjail::errors::*;
 use signal_hook::{iterator::Signals, SIGCHLD};
 use std::collections::HashMap;
 use std::env;
+use std::ffi::OsStr;
 use std::fs::{self, File};
+use std::os::unix::ffi::OsStrExt;
 use std::os::unix::fs as unixfs;
 use std::os::unix::io::AsRawFd;
 use std::path::Path;
@@ -356,7 +358,28 @@ fn init_agent_as_init(logger: &Logger) -> Result<()> {
 
     env::set_var("PATH", "/bin:/sbin/:/usr/bin/:/usr/sbin/");
 
+    let contents = std::fs::read_to_string("/etc/hostname").unwrap_or(String::from("localhost"));
+    let contents_array: Vec<&str> = contents.split(' ').collect();
+    let hostname = contents_array[0].trim();
+
+    if sethostname(OsStr::new(hostname)).is_err() {
+        warn!(logger, "failed to set hostname");
+    }
+
     Ok(())
+}
+
+fn sethostname(hostname: &OsStr) -> Result<()> {
+    let size = hostname.len() as usize;
+
+    let result =
+        unsafe { libc::sethostname(hostname.as_bytes().as_ptr() as *const libc::c_char, size) };
+
+    if result != 0 {
+        Err(ErrorKind::ErrorCode("failed to set hostname".to_string()).into())
+    } else {
+        Ok(())
+    }
 }
 
 lazy_static! {
