@@ -22,7 +22,7 @@ type Endpoint interface {
 
 	SetProperties(NetworkInfo)
 	SetPciAddr(string)
-	Attach(hypervisor) error
+	Attach(*Sandbox) error
 	Detach(netNsCreated bool, netNsPath string) error
 	HotAttach(h hypervisor) error
 	HotDetach(h hypervisor, netNsCreated bool, netNsPath string) error

@@ -78,9 +78,11 @@ func TestVhostUserEndpointAttach(t *testing.T) {
 		EndpointType: VhostUserEndpointType,
 	}
 
-	h := &mockHypervisor{}
+	s := &Sandbox{
+		hypervisor: &mockHypervisor{},
+	}
 
-	err := v.Attach(h)
+	err := v.Attach(s)
 	assert.NoError(err)
 }
 
