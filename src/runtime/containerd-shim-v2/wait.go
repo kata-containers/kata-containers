@@ -6,6 +6,7 @@
 package containerdshim
 
 import (
+	"context"
 	"path"
 	"time"
 
@@ -128,14 +129,14 @@ func watchSandbox(s *service) {
 	// No need to send async events here.
 }
 
-func watchOOMEvents(s *service) {
+func watchOOMEvents(ctx context.Context, s *service) {
 	if s.sandbox == nil {
 		return
 	}
 
 	for {
 		select {
-		case <-s.ctx.Done():
+		case <-ctx.Done():
 			return
 		default:
 			containerID, err := s.sandbox.GetOOMEvent()
