@@ -140,6 +140,7 @@ func (device *GenericDevice) Save() persistapi.DeviceState {
 		dss.Major = info.Major
 		dss.Minor = info.Minor
 		dss.DriverOptions = info.DriverOptions
+		dss.ColdPlug = info.ColdPlug
 	}
 	return dss
 }
@@ -155,5 +156,6 @@ func (device *GenericDevice) Load(ds persistapi.DeviceState) {
 		Major:         ds.Major,
 		Minor:         ds.Minor,
 		DriverOptions: ds.DriverOptions,
+		ColdPlug:      ds.ColdPlug,
 	}
 }
