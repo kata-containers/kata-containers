@@ -60,3 +60,11 @@ func isNotFound(err error) bool {
 	return err == vc.ErrNoSuchContainer || err == syscall.ENOENT ||
 		strings.Contains(err.Error(), "not found") || strings.Contains(err.Error(), "not exist")
 }
+
+func isGRPCErrorCode(code codes.Code, err error) bool {
+	s, ok := status.FromError(err)
+	if !ok {
+		return false
+	}
+	return s != nil && s.Code() == code
+}

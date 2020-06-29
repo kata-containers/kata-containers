@@ -14,6 +14,7 @@ import (
 	"github.com/containerd/containerd/api/types/task"
 	"github.com/containerd/containerd/mount"
 	"github.com/sirupsen/logrus"
+	"google.golang.org/grpc/codes"
 )
 
 func wait(s *service, c *container, execID string) (int32, error) {
@@ -141,7 +142,12 @@ func watchOOMEvents(ctx context.Context, s *service) {
 		default:
 			containerID, err := s.sandbox.GetOOMEvent()
 			if err != nil {
-				logrus.WithError(err).Warn("failed to get oom event from sandbox")
+				logrus.WithField("sandbox", s.sandbox.ID()).WithError(err).Warn("failed to get OOM event from sandbox")
+				// If the GetOOMEvent call is not implemented, then the agent is most likely an older version,
+				// stop attempting to get OOM events.
+				if isGRPCErrorCode(codes.Unimplemented, err) {
+					return
+				}
 				continue
 			}
 

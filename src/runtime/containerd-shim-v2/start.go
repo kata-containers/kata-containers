@@ -37,8 +37,9 @@ func startContainer(ctx context.Context, s *service, c *container) error {
 		}
 		go watchSandbox(s)
 
-		// Start watching for oom events
-		go watchOOMEvents(ctx, s)
+		// We don't rely on the context passed to startContainer as it can be cancelled after
+		// this rpc call.
+		go watchOOMEvents(s.ctx, s)
 	} else {
 		_, err := s.sandbox.StartContainer(c.id)
 		if err != nil {
