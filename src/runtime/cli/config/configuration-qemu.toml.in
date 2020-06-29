@@ -59,6 +59,7 @@ default_vcpus = 1
 # `default_maxvcpus = 8` the memory footprint will be small, but 8 will be the maximum number of
 # vCPUs supported by the SB/VM. In general, we recommend that you do not edit this variable,
 # unless you know what are you doing.
+# NOTICE: on arm platform with gicv2 interrupt controller, set it to 8.
 default_maxvcpus = @DEFMAXVCPUS@
 
 # Bridges can be used to hot plug devices.
