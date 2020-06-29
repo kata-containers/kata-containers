@@ -202,7 +202,7 @@ func createPhysicalEndpoint(netInfo NetworkInfo) (*PhysicalEndpoint, error) {
 	return physicalEndpoint, nil
 }
 
-func bindNICToVFIO(endpoint *PhysicalEndpoint) error {
+func bindNICToVFIO(endpoint *PhysicalEndpoint) (string, error) {
 	return drivers.BindDevicetoVFIO(endpoint.BDF, endpoint.Driver, endpoint.VendorDeviceID)
 }
 

@@ -9,6 +9,7 @@ package drivers
 import (
 	"fmt"
 	"io/ioutil"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -27,6 +28,8 @@ const (
 	pciDriverBindPath   = "/sys/bus/pci/drivers/%s/bind"
 	vfioNewIDPath       = "/sys/bus/pci/drivers/vfio-pci/new_id"
 	vfioRemoveIDPath    = "/sys/bus/pci/drivers/vfio-pci/remove_id"
+	iommuGroupPath      = "/sys/bus/pci/devices/%s/iommu_group"
+	vfioDevPath         = "/dev/vfio/%s"
 	pcieRootPortPrefix  = "rp"
 )
 
@@ -242,7 +245,7 @@ func getSysfsDev(sysfsDevStr string) (string, error) {
 
 // BindDevicetoVFIO binds the device to vfio driver after unbinding from host.
 // Will be called by a network interface or a generic pcie device.
-func BindDevicetoVFIO(bdf, hostDriver, vendorDeviceID string) error {
+func BindDevicetoVFIO(bdf, hostDriver, vendorDeviceID string) (string, error) {
 
 	// Unbind from the host driver
 	unbindDriverPath := fmt.Sprintf(pciDriverUnbindPath, bdf)
@@ -252,7 +255,7 @@ func BindDevicetoVFIO(bdf, hostDriver, vendorDeviceID string) error {
 	}).Info("Unbinding device from driver")
 
 	if err := utils.WriteToFile(unbindDriverPath, []byte(bdf)); err != nil {
-		return err
+		return "", err
 	}
 
 	// Add device id to vfio driver.
@@ -262,7 +265,7 @@ func BindDevicetoVFIO(bdf, hostDriver, vendorDeviceID string) error {
 	}).Info("Writing vendor-device-id to vfio new-id path")
 
 	if err := utils.WriteToFile(vfioNewIDPath, []byte(vendorDeviceID)); err != nil {
-		return err
+		return "", err
 	}
 
 	// Bind to vfio-pci driver.
@@ -276,7 +279,12 @@ func BindDevicetoVFIO(bdf, hostDriver, vendorDeviceID string) error {
 	// Device may be already bound at this time because of earlier write to new_id, ignore error
 	utils.WriteToFile(bindDriverPath, []byte(bdf))
 
-	return nil
+	groupPath, err := os.Readlink(fmt.Sprintf(iommuGroupPath, bdf))
+	if err != nil {
+		return "", err
+	}
+
+	return fmt.Sprintf(vfioDevPath, filepath.Base(groupPath)), nil
 }
 
 // BindDevicetoHost binds the device to the host driver driver after unbinding from vfio-pci.
