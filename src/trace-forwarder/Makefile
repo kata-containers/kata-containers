@@ -11,6 +11,12 @@ build:
 clean:
 	cargo clean
 
+test:
+
+check:
+
 .PHONY: \
 	build \
+	test \
+	check \
 	clean
