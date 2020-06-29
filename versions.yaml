@@ -217,7 +217,7 @@ externals:
       swarm-version: "1.12.1"
 
   gometalinter:
-    description: "utility to run various golang linters"
+    description: "Utility to run various golang linters"
     url: "https://github.com/alecthomas/gometalinter"
     uscan-url: >-
       https://github.com/alecthomas/gometalinter/tags
@@ -225,7 +225,7 @@ externals:
     version: "v2.0.5"
 
   golangci-lint:
-    description: "utility to run various golang linters"
+    description: "Utility to run various golang linters"
     url: "https://install.goreleaser.com/github.com/golangci/golangci-lint.sh"
     version: "v1.15.0"
 
@@ -275,7 +275,7 @@ externals:
 
   musl:
     description: |
-      musl is used to build rust agent.
+      The musl library is used to build the rust agent.
     url: "https://www.musl-libc.org/"
     uscan-url: >-
       https://www.musl-libc.org/releases/
@@ -288,7 +288,7 @@ externals:
 
 languages:
   description: |
-    Details of programming languages requried to build system
+    Details of programming languages required to build system
     components.
 
   golang:
@@ -305,7 +305,7 @@ languages:
       newest-version: "1.14.4"
 
   rust:
-    description: "rust language"
+    description: "Rust language"
     notes: "'version' is the default minimum version used by this project."
     version: "1.38.0"
     meta:
