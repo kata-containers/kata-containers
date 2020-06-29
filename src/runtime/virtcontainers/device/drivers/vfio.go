@@ -98,10 +98,20 @@ func (device *VFIODevice) Attach(devReceiver api.DeviceReceiver) (retErr error) 
 		}
 	}
 
-	// hotplug a VFIO device is actually hotplugging a group of iommu devices
-	if err := devReceiver.HotplugAddDevice(device, config.DeviceVFIO); err != nil {
-		deviceLogger().WithError(err).Error("Failed to add device")
-		return err
+	coldPlug := device.DeviceInfo.ColdPlug
+	deviceLogger().WithField("cold-plug", coldPlug).Info("Attaching VFIO device")
+
+	if coldPlug {
+		if err := devReceiver.AppendDevice(device); err != nil {
+			deviceLogger().WithError(err).Error("Failed to append device")
+			return err
+		}
+	} else {
+		// hotplug a VFIO device is actually hotplugging a group of iommu devices
+		if err := devReceiver.HotplugAddDevice(device, config.DeviceVFIO); err != nil {
+			deviceLogger().WithError(err).Error("Failed to add device")
+			return err
+		}
 	}
 
 	deviceLogger().WithFields(logrus.Fields{
@@ -127,6 +137,15 @@ func (device *VFIODevice) Detach(devReceiver api.DeviceReceiver) (retErr error) 
 			device.bumpAttachCount(true)
 		}
 	}()
+
+	if device.GenericDevice.DeviceInfo.ColdPlug {
+		// nothing to detach, device was cold plugged
+		deviceLogger().WithFields(logrus.Fields{
+			"device-group": device.DeviceInfo.HostPath,
+			"device-type":  "vfio-passthrough",
+		}).Info("Nothing to detach. VFIO device was cold plugged")
+		return nil
+	}
 
 	// hotplug a VFIO device is actually hotplugging a group of iommu devices
 	if err := devReceiver.HotplugRemoveDevice(device, config.DeviceVFIO); err != nil {
