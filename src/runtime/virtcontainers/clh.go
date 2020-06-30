@@ -88,6 +88,8 @@ type clhClient interface {
 	VmResizePut(ctx context.Context, vmResize chclient.VmResize) (*http.Response, error)
 	// Add VFIO PCI device to the VM
 	VmAddDevicePut(ctx context.Context, vmAddDevice chclient.VmAddDevice) (*http.Response, error)
+	// Add a new disk device to the VM
+	VmAddDiskPut(ctx context.Context, diskConfig chclient.DiskConfig) (*http.Response, error)
 }
 
 type CloudHypervisorVersion struct {
@@ -410,6 +412,33 @@ func (clh *cloudHypervisor) getThreadIDs() (vcpuThreadIDs, error) {
 	return vcpuInfo, nil
 }
 
+func (clh *cloudHypervisor) hotplugBlockDevice(drive *config.BlockDrive) error {
+	cl := clh.client()
+	ctx, cancel := context.WithTimeout(context.Background(), clhHotPlugAPITimeout*time.Second)
+	defer cancel()
+
+	_, _, err := cl.VmmPingGet(ctx)
+	if err != nil {
+		return openAPIClientError(err)
+	}
+
+	if drive.Pmem {
+		err = fmt.Errorf("pmem device hotplug not supported")
+	} else {
+		blkDevice := chclient.DiskConfig{
+			Path:      drive.File,
+			Readonly:  drive.ReadOnly,
+			VhostUser: false,
+		}
+		_, err = cl.VmAddDiskPut(ctx, blkDevice)
+	}
+
+	if err != nil {
+		err = fmt.Errorf("failed to hotplug block device %+v %s", drive, openAPIClientError(err))
+	}
+	return err
+}
+
 func (clh *cloudHypervisor) hotPlugVFIODevice(device config.VFIODev) error {
 	cl := clh.client()
 	ctx, cancel := context.WithTimeout(context.Background(), clhHotPlugAPITimeout*time.Second)
@@ -432,6 +461,9 @@ func (clh *cloudHypervisor) hotplugAddDevice(devInfo interface{}, devType device
 	defer span.Finish()
 
 	switch devType {
+	case blockDev:
+		drive := devInfo.(*config.BlockDrive)
+		return nil, clh.hotplugBlockDevice(drive)
 	case vfioDev:
 		device := devInfo.(*config.VFIODev)
 		return nil, clh.hotPlugVFIODevice(*device)
@@ -663,6 +695,7 @@ func (clh *cloudHypervisor) capabilities() types.Capabilities {
 	clh.Logger().WithField("function", "capabilities").Info("get Capabilities")
 	var caps types.Capabilities
 	caps.SetFsSharingSupport()
+	caps.SetBlockDeviceHotplugSupport()
 	return caps
 }
 
