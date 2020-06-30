@@ -275,6 +275,9 @@ type HypervisorConfig struct {
 	// MachineAccelerators are machine specific accelerators
 	MachineAccelerators string
 
+	// CPUFeatures are cpu specific features
+	CPUFeatures string
+
 	// HypervisorPath is the hypervisor executable host path.
 	HypervisorPath string
 
