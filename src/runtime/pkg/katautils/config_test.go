@@ -1604,6 +1604,53 @@ func TestDefaultMachineAccelerators(t *testing.T) {
 	assert.Equal(machineAccelerators, h.machineAccelerators())
 }
 
+func TestDefaultCPUFeatures(t *testing.T) {
+	assert := assert.New(t)
+	cpuFeatures := "abc,123,rgb"
+	h := hypervisor{CPUFeatures: cpuFeatures}
+	assert.Equal(cpuFeatures, h.cpuFeatures())
+
+	cpuFeatures = ""
+	h.CPUFeatures = cpuFeatures
+	assert.Equal(cpuFeatures, h.cpuFeatures())
+
+	cpuFeatures = "abc"
+	h.CPUFeatures = cpuFeatures
+	assert.Equal(cpuFeatures, h.cpuFeatures())
+
+	cpuFeatures = "abc,123"
+	h.CPUFeatures = "abc,,123"
+	assert.Equal(cpuFeatures, h.cpuFeatures())
+
+	cpuFeatures = "abc,123"
+	h.CPUFeatures = ",,abc,,123,,,"
+	assert.Equal(cpuFeatures, h.cpuFeatures())
+
+	cpuFeatures = "abc,123"
+	h.CPUFeatures = "abc,,123,,,"
+	assert.Equal(cpuFeatures, h.cpuFeatures())
+
+	cpuFeatures = "abc"
+	h.CPUFeatures = ",,abc,"
+	assert.Equal(cpuFeatures, h.cpuFeatures())
+
+	cpuFeatures = "abc"
+	h.CPUFeatures = ", , abc , ,"
+	assert.Equal(cpuFeatures, h.cpuFeatures())
+
+	cpuFeatures = "abc"
+	h.CPUFeatures = " abc "
+	assert.Equal(cpuFeatures, h.cpuFeatures())
+
+	cpuFeatures = "abc,123"
+	h.CPUFeatures = ", abc , 123 ,"
+	assert.Equal(cpuFeatures, h.cpuFeatures())
+
+	cpuFeatures = "abc,123"
+	h.CPUFeatures = ",, abc ,,, 123 ,,"
+	assert.Equal(cpuFeatures, h.cpuFeatures())
+}
+
 func TestUpdateRuntimeConfiguration(t *testing.T) {
 	assert := assert.New(t)
 

@@ -556,6 +556,7 @@ func (q *qemu) createSandbox(ctx context.Context, id string, networkNS NetworkNa
 	}
 
 	cpuModel := q.arch.cpuModel()
+	cpuModel += "," + q.config.CPUFeatures
 
 	firmwarePath, err := q.config.FirmwareAssetPath()
 	if err != nil {

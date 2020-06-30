@@ -37,6 +37,11 @@ firmware = "@FIRMWAREPATH@"
 # For example, `machine_accelerators = "nosmm,nosmbus,nosata,nopit,static-prt,nofw"`
 machine_accelerators="@MACHINEACCELERATORS@"
 
+# CPU features
+# comma-separated list of cpu features to pass to the cpu
+# For example, `cpu_features = "pmu=off,vmx=off"
+cpu_features="@CPUFEATURES@"
+
 # Default number of vCPUs per SB/VM:
 # unspecified or 0                --> will be set to @DEFVCPUS@
 # < 0                             --> will be set to the actual number of physical cores
