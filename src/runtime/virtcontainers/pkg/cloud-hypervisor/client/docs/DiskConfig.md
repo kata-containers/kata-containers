@@ -12,7 +12,6 @@ Name | Type | Description | Notes
 **QueueSize** | **int32** |  | [optional] [default to 128]
 **VhostUser** | **bool** |  | [optional] [default to false]
 **VhostSocket** | **string** |  | [optional] 
-**Wce** | **bool** |  | [optional] [default to true]
 **PollQueue** | **bool** |  | [optional] [default to true]
 **Id** | **string** |  | [optional]
 

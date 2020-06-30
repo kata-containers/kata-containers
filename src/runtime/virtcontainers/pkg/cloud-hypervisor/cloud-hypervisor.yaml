@@ -454,9 +454,6 @@ components:
           default: false
         vhost_socket:
           type: string
-        wce:
-          type: boolean
-          default: true
         poll_queue:
           type: boolean
           default: true
@@ -509,12 +506,12 @@ components:
     FsConfig:
       required:
       - tag
-      - sock
+      - socket
       type: object
       properties:
         tag:
           type: string
-        sock:
+        socket:
           type: string
         num_queues:
           type: integer
@@ -584,7 +581,7 @@ components:
     VsockConfig:
       required:
       - cid
-      - sock
+      - socket
       type: object
       properties:
         cid:
@@ -592,7 +589,7 @@ components:
           format: int64
           minimum: 3
           description: Guest Vsock CID
-        sock:
+        socket:
           type: string
           description: Path to UNIX domain socket, used to proxy vsock connections.
         iommu:

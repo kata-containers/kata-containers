@@ -306,7 +306,6 @@ components:
             vhost_socket: vhost_socket
             vhost_user: false
             direct: false
-            wce: true
             poll_queue: true
             id: id
           - path: path
@@ -317,7 +316,6 @@ components:
             vhost_socket: vhost_socket
             vhost_user: false
             direct: false
-            wce: true
             poll_queue: true
             id: id
           cpus:
@@ -336,23 +334,23 @@ components:
             iommu: false
             src: /dev/urandom
           fs:
-          - sock: sock
-            num_queues: 3
+          - num_queues: 3
             queue_size: 2
             cache_size: 4
             dax: true
             tag: tag
+            socket: socket
             id: id
-          - sock: sock
-            num_queues: 3
+          - num_queues: 3
             queue_size: 2
             cache_size: 4
             dax: true
             tag: tag
+            socket: socket
             id: id
           vsock:
-            sock: sock
             iommu: false
+            socket: socket
             id: id
             cid: 3
           pmem:
@@ -436,7 +434,6 @@ components:
           vhost_socket: vhost_socket
           vhost_user: false
           direct: false
-          wce: true
           poll_queue: true
           id: id
         - path: path
@@ -447,7 +444,6 @@ components:
           vhost_socket: vhost_socket
           vhost_user: false
           direct: false
-          wce: true
           poll_queue: true
           id: id
         cpus:
@@ -466,23 +462,23 @@ components:
           iommu: false
           src: /dev/urandom
         fs:
-        - sock: sock
-          num_queues: 3
+        - num_queues: 3
           queue_size: 2
           cache_size: 4
           dax: true
           tag: tag
+          socket: socket
           id: id
-        - sock: sock
-          num_queues: 3
+        - num_queues: 3
           queue_size: 2
           cache_size: 4
           dax: true
           tag: tag
+          socket: socket
           id: id
         vsock:
-          sock: sock
           iommu: false
+          socket: socket
           id: id
           cid: 3
         pmem:
@@ -662,7 +658,6 @@ components:
         vhost_socket: vhost_socket
         vhost_user: false
         direct: false
-        wce: true
         poll_queue: true
         id: id
       properties:
@@ -688,9 +683,6 @@ components:
           type: boolean
         vhost_socket:
           type: string
-        wce:
-          default: true
-          type: boolean
         poll_queue:
           default: true
           type: boolean
@@ -756,17 +748,17 @@ components:
       type: object
     FsConfig:
       example:
-        sock: sock
         num_queues: 3
         queue_size: 2
         cache_size: 4
         dax: true
         tag: tag
+        socket: socket
         id: id
       properties:
         tag:
           type: string
-        sock:
+        socket:
           type: string
         num_queues:
           default: 1
@@ -783,7 +775,7 @@ components:
         id:
           type: string
       required:
-      - sock
+      - socket
       - tag
       type: object
     PmemConfig:
@@ -853,8 +845,8 @@ components:
       type: object
     VsockConfig:
       example:
-        sock: sock
         iommu: false
+        socket: socket
         id: id
         cid: 3
       properties:
@@ -863,7 +855,7 @@ components:
           format: int64
           minimum: 3
           type: integer
-        sock:
+        socket:
           description: Path to UNIX domain socket, used to proxy vsock connections.
           type: string
         iommu:
@@ -873,7 +865,7 @@ components:
           type: string
       required:
       - cid
-      - sock
+      - socket
       type: object
     VmResize:
       example:

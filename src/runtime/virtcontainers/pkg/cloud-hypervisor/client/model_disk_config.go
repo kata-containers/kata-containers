@@ -18,7 +18,6 @@ type DiskConfig struct {
 	QueueSize int32 `json:"queue_size,omitempty"`
 	VhostUser bool `json:"vhost_user,omitempty"`
 	VhostSocket string `json:"vhost_socket,omitempty"`
-	Wce bool `json:"wce,omitempty"`
 	PollQueue bool `json:"poll_queue,omitempty"`
 	Id string `json:"id,omitempty"`
 }
