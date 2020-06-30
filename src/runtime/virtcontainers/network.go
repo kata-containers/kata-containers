@@ -118,10 +118,11 @@ type NetlinkIface struct {
 // NetworkInfo gathers all information related to a network interface.
 // It can be used to store the description of the underlying network.
 type NetworkInfo struct {
-	Iface  NetlinkIface
-	Addrs  []netlink.Addr
-	Routes []netlink.Route
-	DNS    DNSInfo
+	Iface     NetlinkIface
+	Addrs     []netlink.Addr
+	Routes    []netlink.Route
+	DNS       DNSInfo
+	Neighbors []netlink.Neigh
 }
 
 // NetworkInterface defines a network interface.
@@ -942,14 +943,15 @@ func deleteNetNS(netNSPath string) error {
 	return nil
 }
 
-func generateInterfacesAndRoutes(networkNS NetworkNamespace) ([]*vcTypes.Interface, []*vcTypes.Route, error) {
+func generateVCNetworkStructures(networkNS NetworkNamespace) ([]*vcTypes.Interface, []*vcTypes.Route, []*vcTypes.ARPNeighbor, error) {
 
 	if networkNS.NetNsPath == "" {
-		return nil, nil, nil
+		return nil, nil, nil, nil
 	}
 
 	var routes []*vcTypes.Route
 	var ifaces []*vcTypes.Interface
+	var neighs []*vcTypes.ARPNeighbor
 
 	for _, endpoint := range networkNS.Endpoints {
 
@@ -1008,10 +1010,36 @@ func generateInterfacesAndRoutes(networkNS NetworkNamespace) ([]*vcTypes.Interfa
 			r.Device = endpoint.Name()
 			r.Scope = uint32(route.Scope)
 			routes = append(routes, &r)
+		}
 
+		for _, neigh := range endpoint.Properties().Neighbors {
+			var n vcTypes.ARPNeighbor
+
+			// We add only static ARP entries
+			if neigh.State != netlink.NUD_PERMANENT {
+				continue
+			}
+
+			n.Device = endpoint.Name()
+			n.State = neigh.State
+			n.Flags = neigh.Flags
+
+			if neigh.HardwareAddr != nil {
+				n.LLAddr = neigh.HardwareAddr.String()
+			}
+
+			n.ToIPAddress = &vcTypes.IPAddress{
+				Family:  netlink.FAMILY_V4,
+				Address: neigh.IP.String(),
+			}
+			if neigh.IP.To4() == nil {
+				n.ToIPAddress.Family = netlink.FAMILY_V6
+			}
+
+			neighs = append(neighs, &n)
 		}
 	}
-	return ifaces, routes, nil
+	return ifaces, routes, neighs, nil
 }
 
 func createNetworkInterfacePair(idx int, ifName string, interworkingModel NetInterworkingModel) (NetworkInterfacePair, error) {
@@ -1071,13 +1099,19 @@ func networkInfoFromLink(handle *netlink.Handle, link netlink.Link) (NetworkInfo
 		return NetworkInfo{}, err
 	}
 
+	neighbors, err := handle.NeighList(link.Attrs().Index, netlink.FAMILY_ALL)
+	if err != nil {
+		return NetworkInfo{}, err
+	}
+
 	return NetworkInfo{
 		Iface: NetlinkIface{
 			LinkAttrs: *(link.Attrs()),
 			Type:      link.Type(),
 		},
-		Addrs:  addrs,
-		Routes: routes,
+		Addrs:     addrs,
+		Routes:    routes,
+		Neighbors: neighbors,
 	}, nil
 }
 
