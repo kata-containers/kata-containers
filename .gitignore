@@ -1,2 +1,4 @@
 **/*.bk
+**/*.orig
+**/*.rej
 **/target

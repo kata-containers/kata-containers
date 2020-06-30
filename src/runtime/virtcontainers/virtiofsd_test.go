@@ -33,11 +33,19 @@ func TestVirtiofsdStart(t *testing.T) {
 	assert.NoError(err)
 	defer os.RemoveAll(sourcePath)
 
+	socketDir, err := ioutil.TempDir("", "")
+	assert.NoError(err)
+	defer os.RemoveAll(sourcePath)
+
+	socketPath := socketDir + "socket.s"
+
 	validConfig := fields{
-		path:       "/tmp/a/path",
-		socketPath: "/tmp/a/path/to/sock.sock",
+		path:       "/usr/bin/virtiofsd-path",
+		socketPath: socketPath,
 		sourcePath: sourcePath,
 	}
+	NoDirectorySocket := validConfig
+	NoDirectorySocket.socketPath = "/tmp/path/to/virtiofsd/socket.sock"
 
 	tests := []struct {
 		name    string
@@ -45,6 +53,7 @@ func TestVirtiofsdStart(t *testing.T) {
 		wantErr bool
 	}{
 		{"empty config", fields{}, true},
+		{"Directory socket does not exist", NoDirectorySocket, true},
 		{"valid config", validConfig, false},
 	}
 	for _, tt := range tests {

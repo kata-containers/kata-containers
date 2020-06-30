@@ -663,6 +663,7 @@ func (q *qemu) setupVirtiofsd() (err error) {
 	if err != nil {
 		return err
 	}
+	defer fd.Close()
 
 	const sockFd = 3 // Cmd.ExtraFiles[] fds are numbered starting from 3
 	cmd := exec.Command(q.config.VirtioFSDaemon, q.virtiofsdArgs(sockFd)...)
@@ -677,7 +678,6 @@ func (q *qemu) setupVirtiofsd() (err error) {
 		return fmt.Errorf("virtiofs daemon %v returned with error: %v", q.config.VirtioFSDaemon, err)
 	}
 	q.state.VirtiofsdPid = cmd.Process.Pid
-	fd.Close()
 
 	// Monitor virtiofsd's stderr and stop sandbox if virtiofsd quits
 	go func() {

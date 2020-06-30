@@ -65,6 +65,7 @@ service AgentService {
 	rpc MemHotplugByProbe(MemHotplugByProbeRequest) returns (google.protobuf.Empty);
 	rpc SetGuestDateTime(SetGuestDateTimeRequest) returns (google.protobuf.Empty);
 	rpc CopyFile(CopyFileRequest) returns (google.protobuf.Empty);
+	rpc GetOOMEvent(GetOOMEventRequest) returns (OOMEvent);
 }
 
 message CreateContainerRequest {
@@ -506,4 +507,10 @@ message StartTracingRequest {
 }
 
 message StopTracingRequest {
+}
+
+message GetOOMEventRequest {}
+
+message OOMEvent {
+	string container_id = 1;
 }

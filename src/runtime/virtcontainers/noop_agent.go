@@ -236,3 +236,7 @@ func (n *noopAgent) save() (s persistapi.AgentState) {
 
 // load is the Noop agent state loader. It does nothing.
 func (n *noopAgent) load(s persistapi.AgentState) {}
+
+func (n *noopAgent) getOOMEvent() (string, error) {
+	return "", nil
+}
