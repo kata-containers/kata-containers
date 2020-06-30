@@ -81,6 +81,9 @@ const (
 	// MachineAccelerators is a sandbox annotation to specify machine specific accelerators for the hypervisor.
 	MachineAccelerators = kataAnnotHypervisorPrefix + "machine_accelerators"
 
+	// CPUFeatures is a sandbox annotation to specify cpu specific features.
+	CPUFeatures = kataAnnotHypervisorPrefix + "cpu_features"
+
 	// DisableVhostNet is a sandbox annotation to specify if vhost-net is not available on the host.
 	DisableVhostNet = kataAnnotHypervisorPrefix + "disable_vhost_net"
 

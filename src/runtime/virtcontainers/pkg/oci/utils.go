@@ -700,6 +700,12 @@ func addHypervisporVirtioFsOverrides(ocispec specs.Spec, sbConfig *vc.SandboxCon
 }
 
 func addHypervisporNetworkOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig) error {
+	if value, ok := ocispec.Annotations[vcAnnotations.CPUFeatures]; ok {
+		if value != "" {
+			sbConfig.HypervisorConfig.CPUFeatures = value
+		}
+	}
+
 	if value, ok := ocispec.Annotations[vcAnnotations.DisableVhostNet]; ok {
 		disableVhostNet, err := strconv.ParseBool(value)
 		if err != nil {
