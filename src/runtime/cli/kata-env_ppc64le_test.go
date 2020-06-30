@@ -10,7 +10,7 @@ import "testing"
 func getExpectedHostDetails(tmpdir string) (HostInfo, error) {
 	expectedVendor := ""
 	expectedModel := "POWER8"
-	expectedVMContainerCapable := false
+	expectedVMContainerCapable := true
 	return genericGetExpectedHostDetails(tmpdir, expectedVendor, expectedModel, expectedVMContainerCapable)
 }
 
