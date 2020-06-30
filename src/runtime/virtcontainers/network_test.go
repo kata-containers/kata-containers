@@ -65,13 +65,20 @@ func TestGenerateInterfacesAndRoutes(t *testing.T) {
 		{LinkIndex: 329, Dst: nil, Src: nil, Gw: gatewayV6},
 	}
 
+	arpMAC, _ := net.ParseMAC("6a:92:3a:59:70:aa")
+
+	neighs := []netlink.Neigh{
+		{LinkIndex: 329, IP: net.IPv4(192, 168, 0, 101), State: netlink.NUD_PERMANENT, HardwareAddr: arpMAC},
+	}
+
 	networkInfo := NetworkInfo{
 		Iface: NetlinkIface{
 			LinkAttrs: netlink.LinkAttrs{MTU: 1500},
 			Type:      "",
 		},
-		Addrs:  addrs,
-		Routes: routes,
+		Addrs:     addrs,
+		Routes:    routes,
+		Neighbors: neighs,
 	}
 
 	ep0 := &PhysicalEndpoint{
@@ -84,7 +91,7 @@ func TestGenerateInterfacesAndRoutes(t *testing.T) {
 
 	nns := NetworkNamespace{NetNsPath: "foobar", NetNsCreated: true, Endpoints: endpoints}
 
-	resInterfaces, resRoutes, err := generateInterfacesAndRoutes(nns)
+	resInterfaces, resRoutes, resNeighs, err := generateVCNetworkStructures(nns)
 
 	//
 	// Build expected results:
@@ -106,6 +113,15 @@ func TestGenerateInterfacesAndRoutes(t *testing.T) {
 		{Dest: "", Gateway: "2001:db8:1::1", Device: "eth0", Source: ""},
 	}
 
+	expectedNeighs := []*vcTypes.ARPNeighbor{
+		{
+			Device:      "eth0",
+			State:       netlink.NUD_PERMANENT,
+			LLAddr:      "6a:92:3a:59:70:aa",
+			ToIPAddress: &vcTypes.IPAddress{Address: "192.168.0.101", Family: netlink.FAMILY_V4},
+		},
+	}
+
 	for _, r := range resRoutes {
 		fmt.Printf("resRoute: %+v\n", r)
 	}
@@ -115,7 +131,8 @@ func TestGenerateInterfacesAndRoutes(t *testing.T) {
 		"Interfaces returned didn't match: got %+v, expecting %+v", resInterfaces, expectedInterfaces)
 	assert.True(t, reflect.DeepEqual(resRoutes, expectedRoutes),
 		"Routes returned didn't match: got %+v, expecting %+v", resRoutes, expectedRoutes)
-
+	assert.True(t, reflect.DeepEqual(resNeighs, expectedNeighs),
+		"ARP Neighbors returned didn't match: got %+v, expecting %+v", resNeighs, expectedNeighs)
 }
 
 func TestNetInterworkingModelIsValid(t *testing.T) {
