@@ -2089,8 +2089,8 @@ func (k *kataAgent) installReqFunc(c *kataclient.AgentClient) {
 func (k *kataAgent) getReqContext(reqName string) (ctx context.Context, cancel context.CancelFunc) {
 	ctx = context.Background()
 	switch reqName {
-	case grpcWaitProcessRequest:
-		// Wait has no timeout
+	case grpcWaitProcessRequest, grpcGetOOMEventRequest:
+		// Wait and GetOOMEvent have no timeout
 	case grpcCheckRequest:
 		ctx, cancel = context.WithTimeout(ctx, checkRequestTimeout)
 	default:
