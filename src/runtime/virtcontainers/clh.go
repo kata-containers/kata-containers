@@ -412,6 +412,9 @@ func (clh *cloudHypervisor) hotplugBlockDevice(drive *config.BlockDrive) error {
 		return openAPIClientError(err)
 	}
 
+	//Explicitly set PCIAddr to NULL, so that VirtPath can be used
+	drive.PCIAddr = ""
+
 	if drive.Pmem {
 		err = fmt.Errorf("pmem device hotplug not supported")
 	} else {
