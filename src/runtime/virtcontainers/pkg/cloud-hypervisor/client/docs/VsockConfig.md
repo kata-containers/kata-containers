@@ -5,7 +5,7 @@
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
 **Cid** | **int64** | Guest Vsock CID | 
-**Sock** | **string** | Path to UNIX domain socket, used to proxy vsock connections. | 
+**Socket** | **string** | Path to UNIX domain socket, used to proxy vsock connections. |
 **Iommu** | **bool** |  | [optional] [default to false]
 **Id** | **string** |  | [optional]
 
