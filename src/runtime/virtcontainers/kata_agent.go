@@ -21,9 +21,9 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/api"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
 	persistapi "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist/api"
+	aTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols"
 	kataclient "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols/client"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols/grpc"
-	aTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols"
 	vcAnnotations "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/annotations"
 	vccgroups "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/cgroups"
 	ns "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/nsenter"
@@ -127,6 +127,7 @@ const (
 	grpcSetGuestDateTimeRequest  = "grpc.SetGuestDateTimeRequest"
 	grpcStartTracingRequest      = "grpc.StartTracingRequest"
 	grpcStopTracingRequest       = "grpc.StopTracingRequest"
+	grpcGetOOMEventRequest       = "grpc.GetOOMEventRequest"
 )
 
 // The function is declared this way for mocking in unit tests
@@ -2049,6 +2050,9 @@ func (k *kataAgent) installReqFunc(c *kataclient.AgentClient) {
 	k.reqHandlers[grpcStopTracingRequest] = func(ctx context.Context, req interface{}) (interface{}, error) {
 		return k.client.AgentServiceClient.StopTracing(ctx, req.(*grpc.StopTracingRequest))
 	}
+	k.reqHandlers[grpcGetOOMEventRequest] = func(ctx context.Context, req interface{}) (interface{}, error) {
+		return k.client.AgentServiceClient.GetOOMEvent(ctx, req.(*grpc.GetOOMEventRequest))
+	}
 }
 
 func (k *kataAgent) getReqContext(reqName string) (ctx context.Context, cancel context.CancelFunc) {
@@ -2377,4 +2381,16 @@ func (k *kataAgent) save() persistapi.AgentState {
 func (k *kataAgent) load(s persistapi.AgentState) {
 	k.state.ProxyPid = s.ProxyPid
 	k.state.URL = s.URL
+}
+
+func (k *kataAgent) getOOMEvent() (string, error) {
+	req := &grpc.GetOOMEventRequest{}
+	result, err := k.sendReq(req)
+	if err != nil {
+		return "", err
+	}
+	if oomEvent, ok := result.(*grpc.OOMEvent); ok {
+		return oomEvent.ContainerId, nil
+	}
+	return "", err
 }

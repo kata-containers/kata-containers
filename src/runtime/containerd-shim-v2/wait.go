@@ -6,12 +6,15 @@
 package containerdshim
 
 import (
+	"context"
 	"path"
 	"time"
 
+	"github.com/containerd/containerd/api/events"
 	"github.com/containerd/containerd/api/types/task"
 	"github.com/containerd/containerd/mount"
 	"github.com/sirupsen/logrus"
+	"google.golang.org/grpc/codes"
 )
 
 func wait(s *service, c *container, execID string) (int32, error) {
@@ -125,4 +128,32 @@ func watchSandbox(s *service) {
 
 	// Existing container/exec will be cleaned up by its waiters.
 	// No need to send async events here.
+}
+
+func watchOOMEvents(ctx context.Context, s *service) {
+	if s.sandbox == nil {
+		return
+	}
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+			containerID, err := s.sandbox.GetOOMEvent()
+			if err != nil {
+				logrus.WithField("sandbox", s.sandbox.ID()).WithError(err).Warn("failed to get OOM event from sandbox")
+				// If the GetOOMEvent call is not implemented, then the agent is most likely an older version,
+				// stop attempting to get OOM events.
+				if isGRPCErrorCode(codes.Unimplemented, err) {
+					return
+				}
+				continue
+			}
+
+			s.send(&events.TaskOOM{
+				ContainerID: containerID,
+			})
+		}
+	}
 }

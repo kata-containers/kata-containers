@@ -45,6 +45,7 @@ func TestStartStartSandboxSuccess(t *testing.T) {
 		id:         testSandboxID,
 		sandbox:    sandbox,
 		containers: make(map[string]*container),
+		ctx:        namespaces.WithNamespace(context.Background(), "UnitTest"),
 	}
 
 	reqCreate := &taskAPI.CreateTaskRequest{
@@ -93,6 +94,7 @@ func TestStartMissingAnnotation(t *testing.T) {
 		id:         testSandboxID,
 		sandbox:    sandbox,
 		containers: make(map[string]*container),
+		ctx:        namespaces.WithNamespace(context.Background(), "UnitTest"),
 	}
 
 	reqCreate := &taskAPI.CreateTaskRequest{
@@ -113,8 +115,7 @@ func TestStartMissingAnnotation(t *testing.T) {
 		testingImpl.StartSandboxFunc = nil
 	}()
 
-	ctx := namespaces.WithNamespace(context.Background(), "UnitTest")
-	_, err = s.Start(ctx, reqStart)
+	_, err = s.Start(s.ctx, reqStart)
 	assert.Error(err)
 	assert.False(vcmock.IsMockError(err))
 }
@@ -159,6 +160,7 @@ func TestStartStartContainerSucess(t *testing.T) {
 		id:         testSandboxID,
 		sandbox:    sandbox,
 		containers: make(map[string]*container),
+		ctx:        namespaces.WithNamespace(context.Background(), "UnitTest"),
 	}
 
 	reqCreate := &taskAPI.CreateTaskRequest{
