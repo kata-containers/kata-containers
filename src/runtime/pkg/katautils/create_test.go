@@ -107,7 +107,6 @@ func newTestRuntimeConfig(dir, consolePath string, create bool) (oci.RuntimeConf
 		HypervisorConfig: hypervisorConfig,
 		AgentType:        vc.KataContainersAgent,
 		ProxyType:        vc.KataProxyType,
-		ShimType:         vc.KataShimType,
 		Console:          consolePath,
 	}, nil
 }

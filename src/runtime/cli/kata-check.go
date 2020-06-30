@@ -362,16 +362,6 @@ var kataCheckCLICommand = cli.Command{
 			fmt.Println(successMessageCreate)
 		}
 
-		strict := context.Bool("strict")
-		if strict {
-			err = checkVersionConsistencyInComponents(runtimeConfig)
-			if err != nil {
-				return err
-			}
-
-			fmt.Println(successMessageVersion)
-		}
-
 		return nil
 	},
 }
@@ -468,36 +458,4 @@ func genericCheckKVMExtensions(extensions map[string]kvmExtension) (map[string]i
 	}
 
 	return results, nil
-}
-
-// checkVersionConsistencyInComponents checks version consistency in Kata Components.
-func checkVersionConsistencyInComponents(config oci.RuntimeConfig) error {
-	proxyInfo := getProxyInfo(config)
-
-	shimInfo, err := getShimInfo(config)
-	if err != nil {
-		return err
-	}
-	shimVersionInfo := shimInfo.Version
-
-	runtimeVersionInfo := constructVersionInfo(version)
-
-	// kata-proxy exists
-	if proxyInfo.Type != string(vc.NoProxyType) {
-		proxyVersionInfo := proxyInfo.Version
-		if !versionEqual(proxyVersionInfo, runtimeVersionInfo) || !versionEqual(shimVersionInfo, runtimeVersionInfo) {
-			return fmt.Errorf("there exists version inconsistency in kata components. kata-proxy: v%d.%d.%d, kata-shim: v%d.%d.%d, kata-runtime: v%d.%d.%d",
-				proxyVersionInfo.Major, proxyVersionInfo.Minor, proxyVersionInfo.Patch,
-				shimVersionInfo.Major, shimVersionInfo.Minor, shimVersionInfo.Patch,
-				runtimeVersionInfo.Major, runtimeVersionInfo.Minor, runtimeVersionInfo.Patch)
-		}
-	} else {
-		if !versionEqual(shimVersionInfo, runtimeVersionInfo) {
-			return fmt.Errorf("there exists version inconsistency in kata components. kata-shim: v%d.%d.%d, kata-runtime: v%d.%d.%d",
-				shimVersionInfo.Major, shimVersionInfo.Minor, shimVersionInfo.Patch,
-				runtimeVersionInfo.Major, runtimeVersionInfo.Minor, runtimeVersionInfo.Patch)
-		}
-	}
-
-	return nil
 }

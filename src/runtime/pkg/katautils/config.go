@@ -30,7 +30,6 @@ const (
 
 var (
 	defaultProxy = vc.KataProxyType
-	defaultShim  = vc.KataShimType
 
 	// if true, enable opentracing support.
 	tracing = false
@@ -42,7 +41,7 @@ var (
 //
 //   [<component>.<type>]
 //
-// The components are hypervisor, proxy, shim and agent. For example,
+// The components are hypervisor, proxy and agent. For example,
 //
 //   [proxy.kata]
 //
@@ -57,9 +56,6 @@ const (
 	// supported proxy component types
 	kataProxyTableType = "kata"
 
-	// supported shim component types
-	kataShimTableType = "kata"
-
 	// supported agent component types
 	kataAgentTableType = "kata"
 
@@ -70,7 +66,6 @@ const (
 type tomlConfig struct {
 	Hypervisor map[string]hypervisor
 	Proxy      map[string]proxy
-	Shim       map[string]shim
 	Agent      map[string]agent
 	Runtime    runtime
 	Factory    factory
@@ -147,12 +142,6 @@ type runtime struct {
 	SandboxCgroupOnly   bool     `toml:"sandbox_cgroup_only"`
 	Experimental        []string `toml:"experimental"`
 	InterNetworkModel   string   `toml:"internetworking_model"`
-}
-
-type shim struct {
-	Path    string `toml:"path"`
-	Debug   bool   `toml:"enable_debug"`
-	Tracing bool   `toml:"enable_tracing"`
 }
 
 type agent struct {
@@ -460,24 +449,6 @@ func (p proxy) path() (string, error) {
 
 func (p proxy) debug() bool {
 	return p.Debug
-}
-
-func (s shim) path() (string, error) {
-	p := s.Path
-
-	if p == "" {
-		p = defaultShimPath
-	}
-
-	return ResolvePath(p)
-}
-
-func (s shim) debug() bool {
-	return s.Debug
-}
-
-func (s shim) trace() bool {
-	return s.Tracing
 }
 
 func (a agent) debug() bool {
@@ -883,19 +854,6 @@ func newFactoryConfig(f factory) (oci.FactoryConfig, error) {
 	}, nil
 }
 
-func newShimConfig(s shim) (vc.ShimConfig, error) {
-	path, err := s.path()
-	if err != nil {
-		return vc.ShimConfig{}, err
-	}
-
-	return vc.ShimConfig{
-		Path:  path,
-		Debug: s.debug(),
-		Trace: s.trace(),
-	}, nil
-}
-
 func updateRuntimeConfigHypervisor(configPath string, tomlConf tomlConfig, config *oci.RuntimeConfig) error {
 	for k, hypervisor := range tomlConf.Hypervisor {
 		var err error
@@ -996,32 +954,6 @@ func updateRuntimeConfigAgent(configPath string, tomlConf tomlConfig, config *oc
 	return nil
 }
 
-func updateRuntimeConfigShim(configPath string, tomlConf tomlConfig, config *oci.RuntimeConfig, builtIn bool) error {
-	if builtIn {
-		config.ShimType = vc.KataBuiltInShimType
-		config.ShimConfig = vc.ShimConfig{}
-		return nil
-	}
-
-	for k, shim := range tomlConf.Shim {
-		switch k {
-		case kataShimTableType:
-			config.ShimType = vc.KataShimType
-		default:
-			return fmt.Errorf("%s shim is not supported", k)
-		}
-
-		shConfig, err := newShimConfig(shim)
-		if err != nil {
-			return fmt.Errorf("%v: %v", configPath, err)
-		}
-
-		config.ShimConfig = shConfig
-	}
-
-	return nil
-}
-
 // SetKernelParams adds the user-specified kernel parameters (from the
 // configuration file) to the defaults so that the former take priority.
 func SetKernelParams(runtimeConfig *oci.RuntimeConfig) error {
@@ -1093,10 +1025,6 @@ func updateRuntimeConfig(configPath string, tomlConf tomlConfig, config *oci.Run
 	}
 
 	if err := updateRuntimeConfigAgent(configPath, tomlConf, config, builtIn); err != nil {
-		return err
-	}
-
-	if err := updateRuntimeConfigShim(configPath, tomlConf, config, builtIn); err != nil {
 		return err
 	}
 
@@ -1177,7 +1105,6 @@ func initConfig() (config oci.RuntimeConfig, err error) {
 		AgentType:        defaultAgent,
 		AgentConfig:      defaultAgentConfig,
 		ProxyType:        defaultProxy,
-		ShimType:         defaultShim,
 	}
 
 	return config, nil
@@ -1320,11 +1247,6 @@ func checkNetNsConfig(config oci.RuntimeConfig) error {
 		if config.InterNetworkModel != vc.NetXConnectNoneModel {
 			return fmt.Errorf("config disable_new_netns only works with 'none' internetworking_model")
 		}
-	} else if shim, ok := config.ShimConfig.(vc.ShimConfig); ok && shim.Trace {
-		// Normally, the shim runs in a separate network namespace.
-		// But when tracing, the shim process needs to be able to talk
-		// to the Jaeger agent running in the host network namespace.
-		return errors.New("Shim tracing requires disable_new_netns for Jaeger agent communication")
 	}
 
 	return nil
