@@ -65,8 +65,28 @@ virtio_fs_daemon = "@DEFVIRTIOFSDAEMON@"
 # Default size of DAX cache in MiB
 virtio_fs_cache_size = @DEFVIRTIOFSCACHESIZE@
 
-# cloud-hypervisor prefers virtiofs caching (dax) for performance reasons
-virtio_fs_cache = "always"
+# Extra args for virtiofsd daemon
+#
+# Format example:
+#   ["-o", "arg1=xxx,arg2", "-o", "hello world", "--arg3=yyy"]
+#
+# see `virtiofsd -h` for possible options.
+virtio_fs_extra_args = @DEFVIRTIOFSEXTRAARGS@
+
+# Cache mode:
+#
+#  - none
+#    Metadata, data, and pathname lookup are not cached in guest. They are
+#    always fetched from host and any changes are immediately pushed to host.
+#
+#  - auto
+#    Metadata and pathname lookup cache expires after a configured amount of
+#    time (default is 1 second). Data is cached while the file is open (close
+#    to open consistency).
+#
+#  - always
+#    Metadata, data, and pathname lookup are cached in guest and never expire.
+virtio_fs_cache = "@DEFVIRTIOFSCACHE@"
 
 # Block storage driver to be used for the hypervisor in case the container
 # rootfs is backed by a block device. This is virtio-scsi, virtio-blk
