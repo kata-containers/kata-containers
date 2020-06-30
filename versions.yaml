@@ -299,7 +299,7 @@ languages:
       description: |
         'newest-version' is the latest version known to work when
         building Kata
-      newest-version: "stable"
+      newest-version: "1.44.1"
 
 specs:
   description: "Details of important specifications"
