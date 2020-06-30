@@ -95,11 +95,6 @@ func TestQemuAmd64CPUModel(t *testing.T) {
 	model := amd64.cpuModel()
 	assert.Equal(expectedOut, model)
 
-	amd64.enableNestingChecks()
-	expectedOut = defaultCPUModel + ",pmu=off"
-	model = amd64.cpuModel()
-	assert.Equal(expectedOut, model)
-
 	amd64.disableNestingChecks()
 	base, ok := amd64.(*qemuAmd64)
 	assert.True(ok)

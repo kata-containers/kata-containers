@@ -39,3 +39,11 @@ type Route struct {
 	Source  string
 	Scope   uint32
 }
+
+type ARPNeighbor struct {
+	ToIPAddress *IPAddress
+	Device      string
+	LLAddr      string
+	State       int
+	Flags       int
+}

@@ -110,6 +110,7 @@ const (
 	grpcUpdateInterfaceRequest   = "grpc.UpdateInterfaceRequest"
 	grpcListInterfacesRequest    = "grpc.ListInterfacesRequest"
 	grpcListRoutesRequest        = "grpc.ListRoutesRequest"
+	grpcAddARPNeighborsRequest   = "grpc.AddARPNeighborsRequest"
 	grpcOnlineCPUMemRequest      = "grpc.OnlineCPUMemRequest"
 	grpcListProcessesRequest     = "grpc.ListProcessesRequest"
 	grpcUpdateContainerRequest   = "grpc.UpdateContainerRequest"
@@ -638,6 +639,30 @@ func (k *kataAgent) updateRoutes(routes []*vcTypes.Route) ([]*vcTypes.Route, err
 	return nil, nil
 }
 
+func (k *kataAgent) addARPNeighbors(neighs []*vcTypes.ARPNeighbor) error {
+	if neighs != nil {
+		neighsReq := &grpc.AddARPNeighborsRequest{
+			Neighbors: &grpc.ARPNeighbors{
+				ARPNeighbors: k.convertToKataAgentNeighbors(neighs),
+			},
+		}
+		_, err := k.sendReq(neighsReq)
+		if err != nil {
+			if grpcStatus.Convert(err).Code() == codes.Unimplemented {
+				k.Logger().WithFields(logrus.Fields{
+					"arpneighbors-requested": fmt.Sprintf("%+v", neighs),
+				}).Warn("add ARP neighbors request failed due to old agent, please upgrade Kata Containers image version")
+				return nil
+			}
+			k.Logger().WithFields(logrus.Fields{
+				"arpneighbors-requested": fmt.Sprintf("%+v", neighs),
+			}).WithError(err).Error("add ARP neighbors request failed")
+		}
+		return err
+	}
+	return nil
+}
+
 func (k *kataAgent) listInterfaces() ([]*vcTypes.Interface, error) {
 	req := &grpc.ListInterfacesRequest{}
 	resultingInterfaces, err := k.sendReq(req)
@@ -843,7 +868,7 @@ func (k *kataAgent) startSandbox(sandbox *Sandbox) error {
 	//
 	// Setup network interfaces and routes
 	//
-	interfaces, routes, err := generateInterfacesAndRoutes(sandbox.networkNS)
+	interfaces, routes, neighs, err := generateVCNetworkStructures(sandbox.networkNS)
 	if err != nil {
 		return err
 	}
@@ -851,6 +876,9 @@ func (k *kataAgent) startSandbox(sandbox *Sandbox) error {
 		return err
 	}
 	if _, err = k.updateRoutes(routes); err != nil {
+		return err
+	}
+	if err = k.addARPNeighbors(neighs); err != nil {
 		return err
 	}
 
@@ -1193,6 +1221,7 @@ func (k *kataAgent) appendBlockDevice(dev ContainerDevice, c *Container) *grpc.D
 	case config.VirtioBlock:
 		kataDevice.Type = kataBlkDevType
 		kataDevice.Id = d.PCIAddr
+		kataDevice.VmPath = d.VirtPath
 	case config.VirtioSCSI:
 		kataDevice.Type = kataSCSIDevType
 		kataDevice.Id = d.SCSIAddr
@@ -1559,7 +1588,11 @@ func (k *kataAgent) handleDeviceBlockVolume(c *Container, device api.Device) (*g
 		vol.Source = blockDrive.DevNo
 	case c.sandbox.config.HypervisorConfig.BlockDeviceDriver == config.VirtioBlock:
 		vol.Driver = kataBlkDevType
-		vol.Source = blockDrive.PCIAddr
+		if blockDrive.PCIAddr == "" {
+			vol.Source = blockDrive.VirtPath
+		} else {
+			vol.Source = blockDrive.PCIAddr
+		}
 	case c.sandbox.config.HypervisorConfig.BlockDeviceDriver == config.VirtioMmio:
 		vol.Driver = kataMmioBlkDevType
 		vol.Source = blockDrive.VirtPath
@@ -1999,6 +2032,9 @@ func (k *kataAgent) installReqFunc(c *kataclient.AgentClient) {
 	k.reqHandlers[grpcListRoutesRequest] = func(ctx context.Context, req interface{}) (interface{}, error) {
 		return k.client.AgentServiceClient.ListRoutes(ctx, req.(*grpc.ListRoutesRequest))
 	}
+	k.reqHandlers[grpcAddARPNeighborsRequest] = func(ctx context.Context, req interface{}) (interface{}, error) {
+		return k.client.AgentServiceClient.AddARPNeighbors(ctx, req.(*grpc.AddARPNeighborsRequest))
+	}
 	k.reqHandlers[grpcOnlineCPUMemRequest] = func(ctx context.Context, req interface{}) (interface{}, error) {
 		return k.client.AgentServiceClient.OnlineCPUMem(ctx, req.(*grpc.OnlineCPUMemRequest))
 	}
@@ -2175,18 +2211,27 @@ func (k *kataAgent) convertToIPFamily(ipFamily aTypes.IPFamily) int {
 	return netlink.FAMILY_V4
 }
 
+func (k *kataAgent) convertToKataAgentIPAddress(ipAddr *vcTypes.IPAddress) (aIPAddr *aTypes.IPAddress) {
+	if ipAddr == nil {
+		return nil
+	}
+
+	aIPAddr = &aTypes.IPAddress{
+		Family:  k.convertToKataAgentIPFamily(ipAddr.Family),
+		Address: ipAddr.Address,
+		Mask:    ipAddr.Mask,
+	}
+
+	return aIPAddr
+}
+
 func (k *kataAgent) convertToKataAgentIPAddresses(ipAddrs []*vcTypes.IPAddress) (aIPAddrs []*aTypes.IPAddress) {
 	for _, ipAddr := range ipAddrs {
 		if ipAddr == nil {
 			continue
 		}
 
-		aIPAddr := &aTypes.IPAddress{
-			Family:  k.convertToKataAgentIPFamily(ipAddr.Family),
-			Address: ipAddr.Address,
-			Mask:    ipAddr.Mask,
-		}
-
+		aIPAddr := k.convertToKataAgentIPAddress(ipAddr)
 		aIPAddrs = append(aIPAddrs, aIPAddr)
 	}
 
@@ -2266,6 +2311,25 @@ func (k *kataAgent) convertToKataAgentRoutes(routes []*vcTypes.Route) (aRoutes [
 	}
 
 	return aRoutes
+}
+
+func (k *kataAgent) convertToKataAgentNeighbors(neighs []*vcTypes.ARPNeighbor) (aNeighs []*aTypes.ARPNeighbor) {
+	for _, neigh := range neighs {
+		if neigh == nil {
+			continue
+		}
+
+		aNeigh := &aTypes.ARPNeighbor{
+			ToIPAddress: k.convertToKataAgentIPAddress(neigh.ToIPAddress),
+			Device:      neigh.Device,
+			State:       int32(neigh.State),
+			Lladdr:      neigh.LLAddr,
+		}
+
+		aNeighs = append(aNeighs, aNeigh)
+	}
+
+	return aNeighs
 }
 
 func (k *kataAgent) convertToRoutes(aRoutes []*aTypes.Route) (routes []*vcTypes.Route) {

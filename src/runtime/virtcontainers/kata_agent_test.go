@@ -39,8 +39,13 @@ import (
 
 var (
 	testKataProxyURLTempl  = "unix://%s/kata-proxy-test.sock"
+	testBlkDriveFormat     = "testBlkDriveFormat"
 	testBlockDeviceCtrPath = "testBlockDeviceCtrPath"
+	testDevNo              = "testDevNo"
+	testNvdimmID           = "testNvdimmID"
 	testPCIAddr            = "04/02"
+	testSCSIAddr           = "testSCSIAddr"
+	testVirtPath           = "testVirtPath"
 )
 
 func testGenerateKataProxySockDir() (string, error) {
@@ -396,6 +401,110 @@ func TestHandleLocalStorage(t *testing.T) {
 	localMountPoint := localStorages[0].MountPoint
 	expected := filepath.Join(kataGuestSharedDir(), sandboxID, rootfsSuffix, KataLocalDevType, filepath.Base(mountSource))
 	assert.Equal(t, localMountPoint, expected)
+}
+
+func TestHandleDeviceBlockVolume(t *testing.T) {
+	k := kataAgent{}
+
+	tests := []struct {
+		BlockDeviceDriver string
+		inputDev          *drivers.BlockDevice
+		resultVol         *pb.Storage
+	}{
+		{
+			inputDev: &drivers.BlockDevice{
+				BlockDrive: &config.BlockDrive{
+					Pmem:     true,
+					NvdimmID: testNvdimmID,
+					Format:   testBlkDriveFormat,
+				},
+			},
+			resultVol: &pb.Storage{
+				Driver:  kataNvdimmDevType,
+				Source:  fmt.Sprintf("/dev/pmem%s", testNvdimmID),
+				Fstype:  testBlkDriveFormat,
+				Options: []string{"dax"},
+			},
+		},
+		{
+			BlockDeviceDriver: config.VirtioBlockCCW,
+			inputDev: &drivers.BlockDevice{
+				BlockDrive: &config.BlockDrive{
+					DevNo: testDevNo,
+				},
+			},
+			resultVol: &pb.Storage{
+				Driver: kataBlkCCWDevType,
+				Source: testDevNo,
+			},
+		},
+		{
+			BlockDeviceDriver: config.VirtioBlock,
+			inputDev: &drivers.BlockDevice{
+				BlockDrive: &config.BlockDrive{
+					PCIAddr:  testPCIAddr,
+					VirtPath: testVirtPath,
+				},
+			},
+			resultVol: &pb.Storage{
+				Driver: kataBlkDevType,
+				Source: testPCIAddr,
+			},
+		},
+		{
+			BlockDeviceDriver: config.VirtioBlock,
+			inputDev: &drivers.BlockDevice{
+				BlockDrive: &config.BlockDrive{
+					VirtPath: testVirtPath,
+				},
+			},
+			resultVol: &pb.Storage{
+				Driver: kataBlkDevType,
+				Source: testVirtPath,
+			},
+		},
+		{
+			BlockDeviceDriver: config.VirtioMmio,
+			inputDev: &drivers.BlockDevice{
+				BlockDrive: &config.BlockDrive{
+					VirtPath: testVirtPath,
+				},
+			},
+			resultVol: &pb.Storage{
+				Driver: kataMmioBlkDevType,
+				Source: testVirtPath,
+			},
+		},
+		{
+			BlockDeviceDriver: config.VirtioSCSI,
+			inputDev: &drivers.BlockDevice{
+				BlockDrive: &config.BlockDrive{
+					SCSIAddr: testSCSIAddr,
+				},
+			},
+			resultVol: &pb.Storage{
+				Driver: kataSCSIDevType,
+				Source: testSCSIAddr,
+			},
+		},
+	}
+
+	for _, test := range tests {
+		c := &Container{
+			sandbox: &Sandbox{
+				config: &SandboxConfig{
+					HypervisorConfig: HypervisorConfig{
+						BlockDeviceDriver: test.BlockDeviceDriver,
+					},
+				},
+			},
+		}
+
+		vol, _ := k.handleDeviceBlockVolume(c, test.inputDev)
+		assert.True(t, reflect.DeepEqual(vol, test.resultVol),
+			"Volume didn't match: got %+v, expecting %+v",
+			vol, test.resultVol)
+	}
 }
 
 func TestHandleBlockVolume(t *testing.T) {
