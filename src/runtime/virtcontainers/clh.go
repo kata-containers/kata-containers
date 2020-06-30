@@ -138,9 +138,7 @@ var clhKernelParams = []Param{
 var clhDebugKernelParams = []Param{
 
 	{"console", "ttyS0,115200n8"},     // enable serial console
-	{"systemd.log_level", "debug"},    // enable systemd debug output
 	{"systemd.log_target", "console"}, // send loggng to the console
-	{"initcall_debug", "1"},           // print init call timing information to the console
 }
 
 //###########################################################
