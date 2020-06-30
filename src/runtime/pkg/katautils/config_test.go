@@ -31,7 +31,6 @@ var (
 	proxyDebug      = false
 	runtimeDebug    = false
 	runtimeTrace    = false
-	shimDebug       = false
 	netmonDebug     = false
 	agentDebug      = false
 	agentTrace      = false
@@ -72,7 +71,6 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (config testRuntimeConf
 	kernelPath := path.Join(dir, "kernel")
 	kernelParams := "foo=bar xyz"
 	imagePath := path.Join(dir, "image")
-	shimPath := path.Join(dir, "shim")
 	proxyPath := path.Join(dir, "proxy")
 	netmonPath := path.Join(dir, "netmon")
 	logDir := path.Join(dir, "logs")
@@ -94,7 +92,6 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (config testRuntimeConf
 		ImagePath:            imagePath,
 		KernelParams:         kernelParams,
 		MachineType:          machineType,
-		ShimPath:             shimPath,
 		ProxyPath:            proxyPath,
 		NetmonPath:           netmonPath,
 		LogPath:              logPath,
@@ -113,7 +110,6 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (config testRuntimeConf
 		RuntimeDebug:         runtimeDebug,
 		RuntimeTrace:         runtimeTrace,
 		ProxyDebug:           proxyDebug,
-		ShimDebug:            shimDebug,
 		NetmonDebug:          netmonDebug,
 		AgentDebug:           agentDebug,
 		AgentTrace:           agentTrace,
@@ -137,7 +133,7 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (config testRuntimeConf
 		return config, err
 	}
 
-	files := []string{hypervisorPath, kernelPath, imagePath, shimPath, proxyPath}
+	files := []string{hypervisorPath, kernelPath, imagePath, proxyPath}
 
 	for _, file := range files {
 		// create the resource (which must be >0 bytes)
@@ -179,10 +175,6 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (config testRuntimeConf
 		Path: proxyPath,
 	}
 
-	shimConfig := vc.ShimConfig{
-		Path: shimPath,
-	}
-
 	netmonConfig := vc.NetmonConfig{
 		Path:   netmonPath,
 		Debug:  false,
@@ -203,9 +195,6 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (config testRuntimeConf
 
 		ProxyType:   defaultProxy,
 		ProxyConfig: proxyConfig,
-
-		ShimType:   defaultShim,
-		ShimConfig: shimConfig,
 
 		NetmonConfig:    netmonConfig,
 		DisableNewNetNs: disableNewNetNs,
@@ -410,28 +399,6 @@ func TestConfigLoadConfigurationFailMissingKernel(t *testing.T) {
 		})
 }
 
-func TestConfigLoadConfigurationFailMissingShim(t *testing.T) {
-	tmpdir, err := ioutil.TempDir(testDir, "runtime-config-")
-	assert.NoError(t, err)
-	defer os.RemoveAll(tmpdir)
-
-	testLoadConfiguration(t, tmpdir,
-		func(config testRuntimeConfig, configFile string, ignoreLogging bool) (bool, error) {
-			expectFail := true
-
-			shimConfig, ok := config.RuntimeConfig.ShimConfig.(vc.ShimConfig)
-			if !ok {
-				return expectFail, fmt.Errorf("cannot determine shim config")
-			}
-			err = os.Remove(shimConfig.Path)
-			if err != nil {
-				return expectFail, err
-			}
-
-			return expectFail, nil
-		})
-}
-
 func TestConfigLoadConfigurationFailUnreadableConfig(t *testing.T) {
 	if tc.NotValid(ktu.NeedNonRoot()) {
 		t.Skip(ktu.TestDisabledNeedNonRoot)
@@ -517,7 +484,6 @@ func TestMinimalRuntimeConfig(t *testing.T) {
 	}
 	defer os.RemoveAll(dir)
 
-	shimPath := path.Join(dir, "shim")
 	proxyPath := path.Join(dir, "proxy")
 	hypervisorPath := path.Join(dir, "hypervisor")
 	defaultHypervisorPath = hypervisorPath
@@ -565,9 +531,6 @@ func TestMinimalRuntimeConfig(t *testing.T) {
 	[proxy.kata]
 	path = "` + proxyPath + `"
 
-	[shim.kata]
-	path = "` + shimPath + `"
-
 	[agent.kata]
 
 	[netmon]
@@ -578,16 +541,6 @@ func TestMinimalRuntimeConfig(t *testing.T) {
 	err = createConfig(configPath, runtimeMinimalConfig)
 	if err != nil {
 		t.Fatal(err)
-	}
-
-	_, config, err := LoadConfiguration(configPath, false, false)
-	if err == nil {
-		t.Fatalf("Expected loadConfiguration to fail as shim path does not exist: %+v", config)
-	}
-
-	err = createEmptyFile(shimPath)
-	if err != nil {
-		t.Error(err)
 	}
 
 	err = createEmptyFile(proxyPath)
@@ -610,7 +563,7 @@ func TestMinimalRuntimeConfig(t *testing.T) {
 		t.Error(err)
 	}
 
-	_, config, err = LoadConfiguration(configPath, false, false)
+	_, config, err := LoadConfiguration(configPath, false, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -641,10 +594,6 @@ func TestMinimalRuntimeConfig(t *testing.T) {
 		Path: proxyPath,
 	}
 
-	expectedShimConfig := vc.ShimConfig{
-		Path: shimPath,
-	}
-
 	expectedNetmonConfig := vc.NetmonConfig{
 		Path:   netmonPath,
 		Debug:  false,
@@ -665,9 +614,6 @@ func TestMinimalRuntimeConfig(t *testing.T) {
 
 		ProxyType:   defaultProxy,
 		ProxyConfig: expectedProxyConfig,
-
-		ShimType:   defaultShim,
-		ShimConfig: expectedShimConfig,
 
 		NetmonConfig: expectedNetmonConfig,
 
@@ -693,7 +639,6 @@ func TestMinimalRuntimeConfigWithVsock(t *testing.T) {
 	imagePath := path.Join(dir, "image.img")
 	initrdPath := path.Join(dir, "initrd.img")
 	proxyPath := path.Join(dir, "proxy")
-	shimPath := path.Join(dir, "shim")
 	hypervisorPath := path.Join(dir, "hypervisor")
 	kernelPath := path.Join(dir, "kernel")
 
@@ -716,7 +661,7 @@ func TestMinimalRuntimeConfigWithVsock(t *testing.T) {
 	defaultHypervisorPath = hypervisorPath
 	defaultKernelPath = kernelPath
 
-	for _, file := range []string{proxyPath, shimPath, hypervisorPath, kernelPath, imagePath} {
+	for _, file := range []string{proxyPath, hypervisorPath, kernelPath, imagePath} {
 		err = WriteFile(file, "foo", testFileMode)
 		if err != nil {
 			t.Fatal(err)
@@ -732,9 +677,6 @@ func TestMinimalRuntimeConfigWithVsock(t *testing.T) {
 
 	[proxy.kata]
 	path = "` + proxyPath + `"
-
-	[shim.kata]
-	path = "` + shimPath + `"
 
 	[agent.kata]
 `
@@ -1073,39 +1015,6 @@ func TestNewClhHypervisorConfig(t *testing.T) {
 
 }
 
-func TestNewShimConfig(t *testing.T) {
-	dir, err := ioutil.TempDir(testDir, "shim-config-")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(dir)
-
-	shimPath := path.Join(dir, "shim")
-
-	shim := shim{
-		Path: shimPath,
-	}
-
-	_, err = newShimConfig(shim)
-	if err == nil {
-		t.Fatalf("Expected newShimConfig to fail as no paths exist")
-	}
-
-	err = createEmptyFile(shimPath)
-	if err != nil {
-		t.Error(err)
-	}
-
-	shConfig, err := newShimConfig(shim)
-	if err != nil {
-		t.Fatalf("newShimConfig failed unexpectedly: %v", err)
-	}
-
-	if shConfig.Path != shimPath {
-		t.Errorf("Expected shim path %v, got %v", shimPath, shConfig.Path)
-	}
-}
-
 func TestHypervisorDefaults(t *testing.T) {
 	assert := assert.New(t)
 
@@ -1366,50 +1275,6 @@ func TestProxyDefaults(t *testing.T) {
 	assert.False(p.debug())
 	p.Debug = true
 	assert.True(p.debug())
-}
-
-func TestShimDefaults(t *testing.T) {
-	assert := assert.New(t)
-
-	tmpdir, err := ioutil.TempDir(testDir, "")
-	assert.NoError(err)
-	defer os.RemoveAll(tmpdir)
-
-	testShimPath := filepath.Join(tmpdir, "shim")
-	testShimLinkPath := filepath.Join(tmpdir, "shim-link")
-
-	err = createEmptyFile(testShimPath)
-	assert.NoError(err)
-
-	err = syscall.Symlink(testShimPath, testShimLinkPath)
-	assert.NoError(err)
-
-	savedShimPath := defaultShimPath
-
-	defer func() {
-		defaultShimPath = savedShimPath
-	}()
-
-	defaultShimPath = testShimPath
-	s := shim{}
-	p, err := s.path()
-	assert.NoError(err)
-	assert.Equal(p, defaultShimPath, "default shim path wrong")
-
-	// test path resolution
-	defaultShimPath = testShimLinkPath
-	s = shim{}
-	p, err = s.path()
-	assert.NoError(err)
-	assert.Equal(p, testShimPath)
-
-	assert.False(s.debug())
-	s.Debug = true
-	assert.True(s.debug())
-
-	assert.False(s.trace())
-	s.Tracing = true
-	assert.True(s.trace())
 }
 
 func TestAgentDefaults(t *testing.T) {
@@ -1857,44 +1722,6 @@ func TestCheckFactoryConfig(t *testing.T) {
 		}
 
 		err := checkFactoryConfig(config)
-
-		if d.expectError {
-			assert.Error(err, "test %d (%+v)", i, d)
-		} else {
-			assert.NoError(err, "test %d (%+v)", i, d)
-		}
-	}
-}
-
-func TestCheckNetNsConfigShimTrace(t *testing.T) {
-	assert := assert.New(t)
-
-	type testData struct {
-		networkModel vc.NetInterworkingModel
-		disableNetNs bool
-		shimTrace    bool
-		expectError  bool
-	}
-
-	data := []testData{
-		{vc.NetXConnectMacVtapModel, false, false, false},
-		{vc.NetXConnectMacVtapModel, false, true, true},
-		{vc.NetXConnectMacVtapModel, true, true, true},
-		{vc.NetXConnectMacVtapModel, true, false, true},
-		{vc.NetXConnectNoneModel, true, false, false},
-		{vc.NetXConnectNoneModel, true, true, false},
-	}
-
-	for i, d := range data {
-		config := oci.RuntimeConfig{
-			DisableNewNetNs:   d.disableNetNs,
-			InterNetworkModel: d.networkModel,
-			ShimConfig: vc.ShimConfig{
-				Trace: d.shimTrace,
-			},
-		}
-
-		err := checkNetNsConfig(config)
 
 		if d.expectError {
 			assert.Error(err, "test %d (%+v)", i, d)

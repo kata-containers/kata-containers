@@ -113,14 +113,6 @@ type ProxyInfo struct {
 	Debug   bool
 }
 
-// ShimInfo stores shim details
-type ShimInfo struct {
-	Type    string
-	Version VersionInfo
-	Path    string
-	Debug   bool
-}
-
 // AgentInfo stores agent details
 type AgentInfo struct {
 	Type      string
@@ -166,7 +158,6 @@ type EnvInfo struct {
 	Kernel     KernelInfo
 	Initrd     InitrdInfo
 	Proxy      ProxyInfo
-	Shim       ShimInfo
 	Agent      AgentInfo
 	Host       HostInfo
 	Netmon     NetmonInfo
@@ -308,31 +299,6 @@ func getCommandVersion(cmd string) (string, error) {
 	return katautils.RunCommand([]string{cmd, "--version"})
 }
 
-func getShimInfo(config oci.RuntimeConfig) (ShimInfo, error) {
-	shimConfig, ok := config.ShimConfig.(vc.ShimConfig)
-	if !ok {
-		return ShimInfo{}, errors.New("cannot determine shim config")
-	}
-
-	shimPath := shimConfig.Path
-
-	var shimVersionInfo VersionInfo
-	if version, err := getCommandVersion(shimConfig.Path); err != nil {
-		shimVersionInfo = unknownVersionInfo
-	} else {
-		shimVersionInfo = constructVersionInfo(version)
-	}
-
-	shim := ShimInfo{
-		Type:    string(config.ShimType),
-		Version: shimVersionInfo,
-		Path:    shimPath,
-		Debug:   shimConfig.Debug,
-	}
-
-	return shim, nil
-}
-
 func getAgentInfo(config oci.RuntimeConfig) (AgentInfo, error) {
 	agent := AgentInfo{
 		Type: string(config.AgentType),
@@ -400,11 +366,6 @@ func getEnvInfo(configFile string, config oci.RuntimeConfig) (env EnvInfo, err e
 
 	netmon := getNetmonInfo(config)
 
-	shim, err := getShimInfo(config)
-	if err != nil {
-		return EnvInfo{}, err
-	}
-
 	agent, err := getAgentInfo(config)
 	if err != nil {
 		return EnvInfo{}, err
@@ -433,7 +394,6 @@ func getEnvInfo(configFile string, config oci.RuntimeConfig) (env EnvInfo, err e
 		Kernel:     kernel,
 		Initrd:     initrd,
 		Proxy:      proxy,
-		Shim:       shim,
 		Agent:      agent,
 		Host:       host,
 		Netmon:     netmon,

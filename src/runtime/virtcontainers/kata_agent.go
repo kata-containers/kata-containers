@@ -209,7 +209,6 @@ type KataAgentState struct {
 }
 
 type kataAgent struct {
-	shim  shim
 	proxy proxy
 
 	// lock protects the client pointer
@@ -333,11 +332,6 @@ func (k *kataAgent) init(ctx context.Context, sandbox *Sandbox, config interface
 	}
 
 	k.proxy, err = newProxy(sandbox.config.ProxyType)
-	if err != nil {
-		return false, err
-	}
-
-	k.shim, err = newShim(sandbox.config.ShimType)
 	if err != nil {
 		return false, err
 	}
@@ -573,19 +567,7 @@ func (k *kataAgent) exec(sandbox *Sandbox, c Container, cmd types.Cmd) (*Process
 		return nil, err
 	}
 
-	enterNSList := []ns.Namespace{
-		{
-			PID:  c.process.Pid,
-			Type: ns.NSTypeNet,
-		},
-		{
-			PID:  c.process.Pid,
-			Type: ns.NSTypePID,
-		},
-	}
-
-	return prepareAndStartShim(sandbox, k.shim, c.id, req.ExecId,
-		k.state.URL, "", cmd, []ns.NSType{}, enterNSList)
+	return buildProcessFromExecID(req.ExecId)
 }
 
 func (k *kataAgent) updateInterface(ifc *vcTypes.Interface) (*vcTypes.Interface, error) {
@@ -1458,8 +1440,6 @@ func (k *kataAgent) createContainer(sandbox *Sandbox, c *Container) (p *Process,
 		return nil, err
 	}
 
-	createNSList := []ns.NSType{ns.NSTypePID}
-
 	enterNSList := []ns.Namespace{}
 	if sandbox.networkNS.NetNsPath != "" {
 		enterNSList = append(enterNSList, ns.Namespace{
@@ -1468,20 +1448,15 @@ func (k *kataAgent) createContainer(sandbox *Sandbox, c *Container) (p *Process,
 		})
 	}
 
-	// Ask to the shim to print the agent logs, if it's the process who monitors the sandbox and use_vsock is true (no proxy)
-	// Don't read the console socket if agent debug console is enabled.
-	var consoleURL string
-	if sandbox.config.HypervisorConfig.UseVSock &&
-		c.GetAnnotations()[vcAnnotations.ContainerTypeKey] == string(PodSandbox) &&
-		!k.hasAgentDebugConsole(sandbox) {
-		consoleURL, err = sandbox.hypervisor.getSandboxConsole(sandbox.id)
-		if err != nil {
-			return nil, err
-		}
-	}
+	return buildProcessFromExecID(req.ExecId)
+}
 
-	return prepareAndStartShim(sandbox, k.shim, c.id, req.ExecId,
-		k.state.URL, consoleURL, c.config.Cmd, createNSList, enterNSList)
+func buildProcessFromExecID(token string) (*Process, error) {
+	return &Process{
+		Token:     token,
+		StartTime: time.Now().UTC(),
+		Pid:       -1,
+	}, nil
 }
 
 // handleEphemeralStorage handles ephemeral storages by
