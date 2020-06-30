@@ -1133,7 +1133,7 @@ func (clh *cloudHypervisor) addVSock(cid int64, path string) {
 		"cid":  cid,
 	}).Info("Adding HybridVSock")
 
-	clh.vmconfig.Vsock = chclient.VsockConfig{Cid: cid, Sock: path}
+	clh.vmconfig.Vsock = chclient.VsockConfig{Cid: cid, Socket: path}
 }
 
 func (clh *cloudHypervisor) addNet(e Endpoint) error {
@@ -1177,14 +1177,14 @@ func (clh *cloudHypervisor) addVolume(volume types.Volume) error {
 			{
 				Tag:       volume.MountTag,
 				CacheSize: int64(clh.config.VirtioFSCacheSize << 20),
-				Sock:      vfsdSockPath,
+				Socket:    vfsdSockPath,
 			},
 		}
 	} else {
 		clh.vmconfig.Fs = []chclient.FsConfig{
 			{
-				Tag:  volume.MountTag,
-				Sock: vfsdSockPath,
+				Tag:    volume.MountTag,
+				Socket: vfsdSockPath,
 			},
 		}
 
