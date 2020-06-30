@@ -1587,7 +1587,11 @@ func (k *kataAgent) handleDeviceBlockVolume(c *Container, device api.Device) (*g
 		vol.Source = blockDrive.DevNo
 	case c.sandbox.config.HypervisorConfig.BlockDeviceDriver == config.VirtioBlock:
 		vol.Driver = kataBlkDevType
-		vol.Source = blockDrive.PCIAddr
+		if blockDrive.PCIAddr == "" {
+			vol.Source = blockDrive.VirtPath
+		} else {
+			vol.Source = blockDrive.PCIAddr
+		}
 	case c.sandbox.config.HypervisorConfig.BlockDeviceDriver == config.VirtioMmio:
 		vol.Driver = kataMmioBlkDevType
 		vol.Source = blockDrive.VirtPath
