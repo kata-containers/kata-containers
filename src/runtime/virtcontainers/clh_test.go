@@ -110,7 +110,7 @@ func TestCloudHypervisorAddVSock(t *testing.T) {
 
 	clh.addVSock(1, "path")
 	assert.Equal(clh.vmconfig.Vsock.Cid, int64(1))
-	assert.Equal(clh.vmconfig.Vsock.Sock, "path")
+	assert.Equal(clh.vmconfig.Vsock.Socket, "path")
 }
 
 // Check addNet appends to the network config list new configurations.
