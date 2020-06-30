@@ -99,6 +99,11 @@ func (c *clhClientMock) VmAddDevicePut(ctx context.Context, vmAddDevice chclient
 	return nil, nil
 }
 
+//nolint:golint
+func (c *clhClientMock) VmAddDiskPut(ctx context.Context, diskConfig chclient.DiskConfig) (*http.Response, error) {
+	return nil, nil
+}
+
 func TestCloudHypervisorAddVSock(t *testing.T) {
 	assert := assert.New(t)
 	clh := cloudHypervisor{}
@@ -356,4 +361,26 @@ func TestCheckVersion(t *testing.T) {
 			assert.Error(err, msg)
 		}
 	}
+}
+
+func TestCloudHypervisorHotplugBlockDevice(t *testing.T) {
+	assert := assert.New(t)
+
+	clhConfig, err := newClhConfig()
+	assert.NoError(err)
+
+	clh := &cloudHypervisor{}
+	clh.config = clhConfig
+	clh.APIClient = &clhClientMock{}
+
+	clh.config.BlockDeviceDriver = config.VirtioBlock
+	err = clh.hotplugBlockDevice(&config.BlockDrive{Pmem: false})
+	assert.NoError(err, "Hotplug disk block device expected no error")
+
+	err = clh.hotplugBlockDevice(&config.BlockDrive{Pmem: true})
+	assert.Error(err, "Hotplug pmem block device expected error")
+
+	clh.config.BlockDeviceDriver = config.VirtioSCSI
+	err = clh.hotplugBlockDevice(&config.BlockDrive{Pmem: false})
+	assert.Error(err, "Hotplug block device not using 'virtio-blk' expected error")
 }
