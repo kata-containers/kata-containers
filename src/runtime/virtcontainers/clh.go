@@ -413,6 +413,11 @@ func (clh *cloudHypervisor) getThreadIDs() (vcpuThreadIDs, error) {
 }
 
 func (clh *cloudHypervisor) hotplugBlockDevice(drive *config.BlockDrive) error {
+	if clh.config.BlockDeviceDriver != config.VirtioBlock {
+		return fmt.Errorf("incorrect hypervisor configuration on 'block_device_driver':"+
+			" using '%v' but only support '%v'", clh.config.BlockDeviceDriver, config.VirtioBlock)
+	}
+
 	cl := clh.client()
 	ctx, cancel := context.WithTimeout(context.Background(), clhHotPlugAPITimeout*time.Second)
 	defer cancel()
