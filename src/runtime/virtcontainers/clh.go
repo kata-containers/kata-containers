@@ -131,8 +131,7 @@ var clhKernelParams = []Param{
 	{"panic", "1"},         // upon kernel panic wait 1 second before reboot
 	{"no_timer_check", ""}, // do not check broken timer IRQ resources
 	{"noreplace-smp", ""},  // do not replace SMP instructions
-	{"agent.log_vport", fmt.Sprintf("%d", vSockLogsPort)}, // tell the agent where to send the logs
-	{"rootflags", "data=ordered,errors=remount-ro ro"},    // mount the root filesystem as readonly
+	{"rootflags", "data=ordered,errors=remount-ro ro"}, // mount the root filesystem as readonly
 	{"rootfstype", "ext4"},
 }
 
