@@ -68,6 +68,11 @@ virtio_fs_cache_size = @DEFVIRTIOFSCACHESIZE@
 # cloud-hypervisor prefers virtiofs caching (dax) for performance reasons
 virtio_fs_cache = "always"
 
+# Block storage driver to be used for the hypervisor in case the container
+# rootfs is backed by a block device. This is virtio-scsi, virtio-blk
+# or nvdimm.
+block_device_driver = "virtio-blk"
+
 # This option changes the default hypervisor and kernel parameters
 # to enable debug output where available. This extra output is added
 # to the proxy logs, but only when proxy debug is also enabled.
