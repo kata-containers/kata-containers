@@ -8,6 +8,7 @@
 MACHINETYPE := virt
 KERNELPARAMS :=
 MACHINEACCELERATORS :=
+CPUFEATURES := pmu=off
 
 QEMUCMD := qemu-system-aarch64
 

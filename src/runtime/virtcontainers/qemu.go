@@ -537,8 +537,9 @@ func (q *qemu) createSandbox(ctx context.Context, id string, networkNS NetworkNa
 	}
 
 	rtc := govmmQemu.RTC{
-		Base:     "utc",
-		DriftFix: "slew",
+		Base:     govmmQemu.UTC,
+		Clock:    govmmQemu.Host,
+		DriftFix: govmmQemu.Slew,
 	}
 
 	if q.state.UUID == "" {
@@ -556,6 +557,7 @@ func (q *qemu) createSandbox(ctx context.Context, id string, networkNS NetworkNa
 	}
 
 	cpuModel := q.arch.cpuModel()
+	cpuModel += "," + q.config.CPUFeatures
 
 	firmwarePath, err := q.config.FirmwareAssetPath()
 	if err != nil {

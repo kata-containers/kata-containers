@@ -9,7 +9,6 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
-	runtim "runtime"
 	"strings"
 
 	"github.com/BurntSushi/toml"
@@ -223,9 +222,6 @@ func getHostInfo() (HostInfo, error) {
 	}
 
 	hostVMContainerCapable := true
-	if runtim.GOARCH == "ppc64le" {
-		hostVMContainerCapable = false
-	}
 
 	details := vmContainerCapableDetails{
 		cpuInfoFile:           procCPUInfo,

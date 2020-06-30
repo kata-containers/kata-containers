@@ -6,10 +6,11 @@
 package virtcontainers
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
+	"io/ioutil"
 	"net"
 	"net/http"
 	"os"
@@ -59,9 +60,7 @@ const (
 	clhStopSandboxTimeout = 3
 	clhSocket             = "clh.sock"
 	clhAPISocket          = "clh-api.sock"
-	clhLogFile            = "clh.log"
 	virtioFsSocket        = "virtiofsd.sock"
-	clhSerial             = "serial-tty.log"
 	supportedMajorVersion = 0
 	supportedMinorVersion = 5
 	defaultClhPath        = "/usr/local/bin/cloud-hypervisor"
@@ -88,6 +87,8 @@ type clhClient interface {
 	VmResizePut(ctx context.Context, vmResize chclient.VmResize) (*http.Response, error)
 	// Add VFIO PCI device to the VM
 	VmAddDevicePut(ctx context.Context, vmAddDevice chclient.VmAddDevice) (*http.Response, error)
+	// Add a new disk device to the VM
+	VmAddDiskPut(ctx context.Context, diskConfig chclient.DiskConfig) (*http.Response, error)
 }
 
 type CloudHypervisorVersion struct {
@@ -120,7 +121,6 @@ type cloudHypervisor struct {
 	APIClient clhClient
 	version   CloudHypervisorVersion
 	vmconfig  chclient.VmConfig
-	cmdOutput bytes.Buffer
 	virtiofsd Virtiofsd
 	store     persistapi.PersistDriver
 }
@@ -131,17 +131,14 @@ var clhKernelParams = []Param{
 	{"panic", "1"},         // upon kernel panic wait 1 second before reboot
 	{"no_timer_check", ""}, // do not check broken timer IRQ resources
 	{"noreplace-smp", ""},  // do not replace SMP instructions
-	{"agent.log_vport", fmt.Sprintf("%d", vSockLogsPort)}, // tell the agent where to send the logs
-	{"rootflags", "data=ordered,errors=remount-ro ro"},    // mount the root filesystem as readonly
+	{"rootflags", "data=ordered,errors=remount-ro ro"}, // mount the root filesystem as readonly
 	{"rootfstype", "ext4"},
 }
 
 var clhDebugKernelParams = []Param{
 
 	{"console", "ttyS0,115200n8"},     // enable serial console
-	{"systemd.log_level", "debug"},    // enable systemd debug output
 	{"systemd.log_target", "console"}, // send loggng to the console
-	{"initcall_debug", "1"},           // print init call timing information to the console
 }
 
 //###########################################################
@@ -286,13 +283,8 @@ func (clh *cloudHypervisor) createSandbox(ctx context.Context, id string, networ
 
 	// set the serial console to the cloud hypervisor
 	if clh.config.Debug {
-		serialPath, err := clh.serialPath(clh.id)
-		if err != nil {
-			return err
-		}
 		clh.vmconfig.Serial = chclient.ConsoleConfig{
-			Mode: cctFILE,
-			File: serialPath,
+			Mode: cctTTY,
 		}
 
 	} else {
@@ -368,17 +360,12 @@ func (clh *cloudHypervisor) startSandbox(timeout int) error {
 	var strErr string
 	strErr, pid, err := clh.LaunchClh()
 	if err != nil {
-		return fmt.Errorf("failed to launch cloud-hypervisor: %s, error messages from log: %s", err, strErr)
-	}
-	clh.state.PID = pid
-
-	if err := clh.waitVMM(clhTimeout); err != nil {
-		clh.Logger().WithField("error", err).WithField("output", clh.cmdOutput.String()).Warn("cloud-hypervisor init failed")
 		if shutdownErr := clh.virtiofsd.Stop(); shutdownErr != nil {
 			clh.Logger().WithField("error", shutdownErr).Warn("error shutting down Virtiofsd")
 		}
-		return err
+		return fmt.Errorf("failed to launch cloud-hypervisor: %q, hypervisor output:\n%s", err, strErr)
 	}
+	clh.state.PID = pid
 
 	if err := clh.bootVM(ctx); err != nil {
 		return err
@@ -410,6 +397,41 @@ func (clh *cloudHypervisor) getThreadIDs() (vcpuThreadIDs, error) {
 	return vcpuInfo, nil
 }
 
+func (clh *cloudHypervisor) hotplugBlockDevice(drive *config.BlockDrive) error {
+	if clh.config.BlockDeviceDriver != config.VirtioBlock {
+		return fmt.Errorf("incorrect hypervisor configuration on 'block_device_driver':"+
+			" using '%v' but only support '%v'", clh.config.BlockDeviceDriver, config.VirtioBlock)
+	}
+
+	cl := clh.client()
+	ctx, cancel := context.WithTimeout(context.Background(), clhHotPlugAPITimeout*time.Second)
+	defer cancel()
+
+	_, _, err := cl.VmmPingGet(ctx)
+	if err != nil {
+		return openAPIClientError(err)
+	}
+
+	//Explicitly set PCIAddr to NULL, so that VirtPath can be used
+	drive.PCIAddr = ""
+
+	if drive.Pmem {
+		err = fmt.Errorf("pmem device hotplug not supported")
+	} else {
+		blkDevice := chclient.DiskConfig{
+			Path:      drive.File,
+			Readonly:  drive.ReadOnly,
+			VhostUser: false,
+		}
+		_, err = cl.VmAddDiskPut(ctx, blkDevice)
+	}
+
+	if err != nil {
+		err = fmt.Errorf("failed to hotplug block device %+v %s", drive, openAPIClientError(err))
+	}
+	return err
+}
+
 func (clh *cloudHypervisor) hotPlugVFIODevice(device config.VFIODev) error {
 	cl := clh.client()
 	ctx, cancel := context.WithTimeout(context.Background(), clhHotPlugAPITimeout*time.Second)
@@ -432,6 +454,9 @@ func (clh *cloudHypervisor) hotplugAddDevice(devInfo interface{}, devType device
 	defer span.Finish()
 
 	switch devType {
+	case blockDev:
+		drive := devInfo.(*config.BlockDrive)
+		return nil, clh.hotplugBlockDevice(drive)
 	case vfioDev:
 		device := devInfo.(*config.VFIODev)
 		return nil, clh.hotPlugVFIODevice(*device)
@@ -663,6 +688,7 @@ func (clh *cloudHypervisor) capabilities() types.Capabilities {
 	clh.Logger().WithField("function", "capabilities").Info("get Capabilities")
 	var caps types.Capabilities
 	caps.SetFsSharingSupport()
+	caps.SetBlockDeviceHotplugSupport()
 	return caps
 }
 
@@ -771,16 +797,8 @@ func (clh *cloudHypervisor) vsockSocketPath(id string) (string, error) {
 	return utils.BuildSocketPath(clh.store.RunVMStoragePath(), id, clhSocket)
 }
 
-func (clh *cloudHypervisor) serialPath(id string) (string, error) {
-	return utils.BuildSocketPath(clh.store.RunVMStoragePath(), id, clhSerial)
-}
-
 func (clh *cloudHypervisor) apiSocketPath(id string) (string, error) {
 	return utils.BuildSocketPath(clh.store.RunVMStoragePath(), id, clhAPISocket)
-}
-
-func (clh *cloudHypervisor) logFilePath(id string) (string, error) {
-	return utils.BuildSocketPath(clh.store.RunVMStoragePath(), id, clhLogFile)
 }
 
 func (clh *cloudHypervisor) waitVMM(timeout uint) error {
@@ -873,8 +891,6 @@ func (clh *cloudHypervisor) getAvailableVersion() error {
 
 func (clh *cloudHypervisor) LaunchClh() (string, int, error) {
 
-	errStr := ""
-
 	clhPath, err := clh.clhPath()
 	if err != nil {
 		return "", -1, err
@@ -882,36 +898,71 @@ func (clh *cloudHypervisor) LaunchClh() (string, int, error) {
 
 	args := []string{cscAPIsocket, clh.state.apiSocket}
 	if clh.config.Debug {
-
-		logfile, err := clh.logFilePath(clh.id)
-		if err != nil {
-			return "", -1, err
-		}
-		args = append(args, cscLogFile)
-		args = append(args, logfile)
+		// Cloud hypervisor log levels
+		// 'v' occurrences increase the level
+		//0 =>  Error
+		//1 =>  Warn
+		//2 =>  Info
+		//3 =>  Debug
+		//4+ => Trace
+		// Use Info, the CI runs with debug enabled
+		// a high level of logging increases the boot time
+		// and in a nested environment this could increase
+		// the chances to fail because agent is not
+		// ready on time.
+		args = append(args, "-vv")
 	}
 
 	clh.Logger().WithField("path", clhPath).Info()
 	clh.Logger().WithField("args", strings.Join(args, " ")).Info()
 
-	cmd := exec.Command(clhPath, args...)
-	cmd.Stdout = &clh.cmdOutput
-	cmd.Stderr = &clh.cmdOutput
+	cmdHypervisor := exec.Command(clhPath, args...)
+	var hypervisorOutput io.ReadCloser
+	if clh.config.Debug {
+		cmdHypervisor.Env = os.Environ()
+		cmdHypervisor.Env = append(cmdHypervisor.Env, "RUST_BACKTRACE=full")
+		// Get  StdoutPipe only for debug, without debug golang will redirect to /dev/null
+		hypervisorOutput, err = cmdHypervisor.StdoutPipe()
+		if err != nil {
+			return "", -1, err
+		}
+	}
+
+	cmdHypervisor.Stderr = cmdHypervisor.Stdout
+
+	err = utils.StartCmd(cmdHypervisor)
+	if err != nil {
+		return "", -1, err
+	}
+
+	if err := clh.waitVMM(clhTimeout); err != nil {
+		clh.Logger().WithField("error", err).Warn("cloud-hypervisor init failed")
+		var output string
+
+		if hypervisorOutput != nil {
+			b, errRead := ioutil.ReadAll(hypervisorOutput)
+			if errRead != nil {
+				output = "failed to read hypervisor output to get error information"
+			} else {
+				output = string(b)
+			}
+		} else {
+			output = "Please enable hypervisor logging to get stdout information"
+		}
+
+		return output, -1, err
+	}
 
 	if clh.config.Debug {
-		cmd.Env = os.Environ()
-		cmd.Env = append(cmd.Env, "RUST_BACKTRACE=full")
-	}
-
-	if err := utils.StartCmd(cmd); err != nil {
-		fmt.Println("Error starting cloudHypervisor", err)
-		if cmd.Process != nil {
-			cmd.Process.Kill()
+		cmdLogger := utils.NewProgramLogger("kata-hypervisor")
+		clh.Logger().Debugf("Starting process logger(%s) for hypervisor", cmdLogger)
+		if err := cmdLogger.StartLogger(hypervisorOutput); err != nil {
+			// Not critical to run a container, but output wont be logged
+			clh.Logger().Warnf("Failed start process logger(%s) %s", cmdLogger, err)
 		}
-		return errStr, 0, err
 	}
 
-	return errStr, cmd.Process.Pid, nil
+	return "", cmdHypervisor.Process.Pid, nil
 }
 
 //###########################################################################
@@ -922,13 +973,12 @@ func (clh *cloudHypervisor) LaunchClh() (string, int, error) {
 
 const (
 	cctOFF  string = "Off"
-	cctFILE string = "File"
 	cctNULL string = "Null"
+	cctTTY  string = "Tty"
 )
 
 const (
 	cscAPIsocket string = "--api-socket"
-	cscLogFile   string = "--log-file"
 )
 
 //****************************************
@@ -1083,7 +1133,7 @@ func (clh *cloudHypervisor) addVSock(cid int64, path string) {
 		"cid":  cid,
 	}).Info("Adding HybridVSock")
 
-	clh.vmconfig.Vsock = chclient.VsockConfig{Cid: cid, Sock: path}
+	clh.vmconfig.Vsock = chclient.VsockConfig{Cid: cid, Socket: path}
 }
 
 func (clh *cloudHypervisor) addNet(e Endpoint) error {
@@ -1127,14 +1177,14 @@ func (clh *cloudHypervisor) addVolume(volume types.Volume) error {
 			{
 				Tag:       volume.MountTag,
 				CacheSize: int64(clh.config.VirtioFSCacheSize << 20),
-				Sock:      vfsdSockPath,
+				Socket:    vfsdSockPath,
 			},
 		}
 	} else {
 		clh.vmconfig.Fs = []chclient.FsConfig{
 			{
-				Tag:  volume.MountTag,
-				Sock: vfsdSockPath,
+				Tag:    volume.MountTag,
+				Socket: vfsdSockPath,
 			},
 		}
 
