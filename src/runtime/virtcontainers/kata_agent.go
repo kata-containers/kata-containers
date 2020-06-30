@@ -1221,6 +1221,7 @@ func (k *kataAgent) appendBlockDevice(dev ContainerDevice, c *Container) *grpc.D
 	case config.VirtioBlock:
 		kataDevice.Type = kataBlkDevType
 		kataDevice.Id = d.PCIAddr
+		kataDevice.VmPath = d.VirtPath
 	case config.VirtioSCSI:
 		kataDevice.Type = kataSCSIDevType
 		kataDevice.Id = d.SCSIAddr
