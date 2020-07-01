@@ -6,14 +6,12 @@
 package virtcontainers
 
 import (
-	"context"
 	"errors"
 
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/api"
 	exp "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/experimental"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist"
 	persistapi "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist/api"
-	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/store"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	"github.com/mitchellh/mapstructure"
 )
@@ -578,26 +576,4 @@ func loadSandboxConfig(id string) (*SandboxConfig, error) {
 		})
 	}
 	return sconfig, nil
-}
-
-var oldstoreKey = struct{}{}
-
-func loadSandboxConfigFromOldStore(ctx context.Context, sid string) (*SandboxConfig, context.Context, error) {
-	var config SandboxConfig
-	// We're bootstrapping
-	vcStore, err := store.NewVCSandboxStore(ctx, sid)
-	if err != nil {
-		return nil, ctx, err
-	}
-
-	if err := vcStore.Load(store.Configuration, &config); err != nil {
-		return nil, ctx, err
-	}
-
-	return &config, context.WithValue(ctx, oldstoreKey, true), nil
-}
-
-func useOldStore(ctx context.Context) bool {
-	v := ctx.Value(oldstoreKey)
-	return v != nil
 }
