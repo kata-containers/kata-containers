@@ -31,7 +31,15 @@ ifdef proto
 endif
 
 ARCH = $(shell uname -m)
-LIBC = musl
+LIBC ?= musl
+ifneq ($(LIBC),musl)
+    ifeq ($(LIBC),gnu)
+        override LIBC = gnu
+    else
+        $(error "ERROR: A non supported LIBC value was passed. Supported values are musl and gnu")
+    endif
+endif
+
 TRIPLE = $(ARCH)-unknown-linux-$(LIBC)
 
 TARGET_PATH = target/$(TRIPLE)/$(BUILD_TYPE)/$(TARGET)
