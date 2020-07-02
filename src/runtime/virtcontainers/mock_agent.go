@@ -17,230 +17,234 @@ import (
 	"golang.org/x/net/context"
 )
 
-// noopAgent a.k.a. NO-OP Agent is an empty Agent implementation, for testing and
+// mockAgent is an empty Agent implementation, for testing and
 // mocking purposes.
-type noopAgent struct {
+type mockAgent struct {
+}
+
+func NewMockAgent() agent {
+	return &mockAgent{}
 }
 
 //start the proxy to watch the vm console. It does nothing.
-func (n *noopAgent) startProxy(sandbox *Sandbox) error {
+func (n *mockAgent) startProxy(sandbox *Sandbox) error {
 	return nil
 }
 
 // init initializes the Noop agent, i.e. it does nothing.
-func (n *noopAgent) init(ctx context.Context, sandbox *Sandbox, config interface{}) (bool, error) {
+func (n *mockAgent) init(ctx context.Context, sandbox *Sandbox, config KataAgentConfig) (bool, error) {
 	return false, nil
 }
 
-func (n *noopAgent) longLiveConn() bool {
+func (n *mockAgent) longLiveConn() bool {
 	return false
 }
 
 // createSandbox is the Noop agent sandbox creation implementation. It does nothing.
-func (n *noopAgent) createSandbox(sandbox *Sandbox) error {
+func (n *mockAgent) createSandbox(sandbox *Sandbox) error {
 	return nil
 }
 
 // capabilities returns empty capabilities, i.e no capabilties are supported.
-func (n *noopAgent) capabilities() types.Capabilities {
+func (n *mockAgent) capabilities() types.Capabilities {
 	return types.Capabilities{}
 }
 
 // disconnect is the Noop agent connection closer. It does nothing.
-func (n *noopAgent) disconnect() error {
+func (n *mockAgent) disconnect() error {
 	return nil
 }
 
 // exec is the Noop agent command execution implementation. It does nothing.
-func (n *noopAgent) exec(sandbox *Sandbox, c Container, cmd types.Cmd) (*Process, error) {
+func (n *mockAgent) exec(sandbox *Sandbox, c Container, cmd types.Cmd) (*Process, error) {
 	return nil, nil
 }
 
 // startSandbox is the Noop agent Sandbox starting implementation. It does nothing.
-func (n *noopAgent) startSandbox(sandbox *Sandbox) error {
+func (n *mockAgent) startSandbox(sandbox *Sandbox) error {
 	return nil
 }
 
 // stopSandbox is the Noop agent Sandbox stopping implementation. It does nothing.
-func (n *noopAgent) stopSandbox(sandbox *Sandbox) error {
+func (n *mockAgent) stopSandbox(sandbox *Sandbox) error {
 	return nil
 }
 
 // createContainer is the Noop agent Container creation implementation. It does nothing.
-func (n *noopAgent) createContainer(sandbox *Sandbox, c *Container) (*Process, error) {
+func (n *mockAgent) createContainer(sandbox *Sandbox, c *Container) (*Process, error) {
 	return &Process{}, nil
 }
 
 // startContainer is the Noop agent Container starting implementation. It does nothing.
-func (n *noopAgent) startContainer(sandbox *Sandbox, c *Container) error {
+func (n *mockAgent) startContainer(sandbox *Sandbox, c *Container) error {
 	return nil
 }
 
 // stopContainer is the Noop agent Container stopping implementation. It does nothing.
-func (n *noopAgent) stopContainer(sandbox *Sandbox, c Container) error {
+func (n *mockAgent) stopContainer(sandbox *Sandbox, c Container) error {
 	return nil
 }
 
 // signalProcess is the Noop agent Container signaling implementation. It does nothing.
-func (n *noopAgent) signalProcess(c *Container, processID string, signal syscall.Signal, all bool) error {
+func (n *mockAgent) signalProcess(c *Container, processID string, signal syscall.Signal, all bool) error {
 	return nil
 }
 
 // processListContainer is the Noop agent Container ps implementation. It does nothing.
-func (n *noopAgent) processListContainer(sandbox *Sandbox, c Container, options ProcessListOptions) (ProcessList, error) {
+func (n *mockAgent) processListContainer(sandbox *Sandbox, c Container, options ProcessListOptions) (ProcessList, error) {
 	return nil, nil
 }
 
 // updateContainer is the Noop agent Container update implementation. It does nothing.
-func (n *noopAgent) updateContainer(sandbox *Sandbox, c Container, resources specs.LinuxResources) error {
+func (n *mockAgent) updateContainer(sandbox *Sandbox, c Container, resources specs.LinuxResources) error {
 	return nil
 }
 
 // memHotplugByProbe is the Noop agent notify meomory hotplug event via probe interface implementation. It does nothing.
-func (n *noopAgent) memHotplugByProbe(addr uint64, sizeMB uint32, memorySectionSizeMB uint32) error {
+func (n *mockAgent) memHotplugByProbe(addr uint64, sizeMB uint32, memorySectionSizeMB uint32) error {
 	return nil
 }
 
 // onlineCPUMem is the Noop agent Container online CPU and Memory implementation. It does nothing.
-func (n *noopAgent) onlineCPUMem(cpus uint32, cpuOnly bool) error {
+func (n *mockAgent) onlineCPUMem(cpus uint32, cpuOnly bool) error {
 	return nil
 }
 
 // updateInterface is the Noop agent Interface update implementation. It does nothing.
-func (n *noopAgent) updateInterface(inf *vcTypes.Interface) (*vcTypes.Interface, error) {
+func (n *mockAgent) updateInterface(inf *vcTypes.Interface) (*vcTypes.Interface, error) {
 	return nil, nil
 }
 
 // listInterfaces is the Noop agent Interfaces list implementation. It does nothing.
-func (n *noopAgent) listInterfaces() ([]*vcTypes.Interface, error) {
+func (n *mockAgent) listInterfaces() ([]*vcTypes.Interface, error) {
 	return nil, nil
 }
 
 // updateRoutes is the Noop agent Routes update implementation. It does nothing.
-func (n *noopAgent) updateRoutes(routes []*vcTypes.Route) ([]*vcTypes.Route, error) {
+func (n *mockAgent) updateRoutes(routes []*vcTypes.Route) ([]*vcTypes.Route, error) {
 	return nil, nil
 }
 
 // listRoutes is the Noop agent Routes list implementation. It does nothing.
-func (n *noopAgent) listRoutes() ([]*vcTypes.Route, error) {
+func (n *mockAgent) listRoutes() ([]*vcTypes.Route, error) {
 	return nil, nil
 }
 
 // check is the Noop agent health checker. It does nothing.
-func (n *noopAgent) check() error {
+func (n *mockAgent) check() error {
 	return nil
 }
 
 // statsContainer is the Noop agent Container stats implementation. It does nothing.
-func (n *noopAgent) statsContainer(sandbox *Sandbox, c Container) (*ContainerStats, error) {
+func (n *mockAgent) statsContainer(sandbox *Sandbox, c Container) (*ContainerStats, error) {
 	return &ContainerStats{}, nil
 }
 
 // waitProcess is the Noop agent process waiter. It does nothing.
-func (n *noopAgent) waitProcess(c *Container, processID string) (int32, error) {
+func (n *mockAgent) waitProcess(c *Container, processID string) (int32, error) {
 	return 0, nil
 }
 
 // winsizeProcess is the Noop agent process tty resizer. It does nothing.
-func (n *noopAgent) winsizeProcess(c *Container, processID string, height, width uint32) error {
+func (n *mockAgent) winsizeProcess(c *Container, processID string, height, width uint32) error {
 	return nil
 }
 
 // writeProcessStdin is the Noop agent process stdin writer. It does nothing.
-func (n *noopAgent) writeProcessStdin(c *Container, ProcessID string, data []byte) (int, error) {
+func (n *mockAgent) writeProcessStdin(c *Container, ProcessID string, data []byte) (int, error) {
 	return 0, nil
 }
 
 // closeProcessStdin is the Noop agent process stdin closer. It does nothing.
-func (n *noopAgent) closeProcessStdin(c *Container, ProcessID string) error {
+func (n *mockAgent) closeProcessStdin(c *Container, ProcessID string) error {
 	return nil
 }
 
 // readProcessStdout is the Noop agent process stdout reader. It does nothing.
-func (n *noopAgent) readProcessStdout(c *Container, processID string, data []byte) (int, error) {
+func (n *mockAgent) readProcessStdout(c *Container, processID string, data []byte) (int, error) {
 	return 0, nil
 }
 
 // readProcessStderr is the Noop agent process stderr reader. It does nothing.
-func (n *noopAgent) readProcessStderr(c *Container, processID string, data []byte) (int, error) {
+func (n *mockAgent) readProcessStderr(c *Container, processID string, data []byte) (int, error) {
 	return 0, nil
 }
 
 // pauseContainer is the Noop agent Container pause implementation. It does nothing.
-func (n *noopAgent) pauseContainer(sandbox *Sandbox, c Container) error {
+func (n *mockAgent) pauseContainer(sandbox *Sandbox, c Container) error {
 	return nil
 }
 
 // resumeContainer is the Noop agent Container resume implementation. It does nothing.
-func (n *noopAgent) resumeContainer(sandbox *Sandbox, c Container) error {
+func (n *mockAgent) resumeContainer(sandbox *Sandbox, c Container) error {
 	return nil
 }
 
 // configHypervisor is the Noop agent hypervisor configuration implementation. It does nothing.
-func (n *noopAgent) configure(h hypervisor, id, sharePath string, builtin bool, config interface{}) error {
+func (n *mockAgent) configure(h hypervisor, id, sharePath string, builtin bool, config interface{}) error {
 	return nil
 }
 
-func (n *noopAgent) configureFromGrpc(h hypervisor, id string, builtin bool, config interface{}) error {
+func (n *mockAgent) configureFromGrpc(h hypervisor, id string, builtin bool, config interface{}) error {
 	return nil
 }
 
 // reseedRNG is the Noop agent RND reseeder. It does nothing.
-func (n *noopAgent) reseedRNG(data []byte) error {
+func (n *mockAgent) reseedRNG(data []byte) error {
 	return nil
 }
 
 // reuseAgent is the Noop agent reuser. It does nothing.
-func (n *noopAgent) reuseAgent(agent agent) error {
+func (n *mockAgent) reuseAgent(agent agent) error {
 	return nil
 }
 
 // getAgentURL is the Noop agent url getter. It returns nothing.
-func (n *noopAgent) getAgentURL() (string, error) {
+func (n *mockAgent) getAgentURL() (string, error) {
 	return "", nil
 }
 
 // setProxy is the Noop agent proxy setter. It does nothing.
-func (n *noopAgent) setProxy(sandbox *Sandbox, proxy proxy, pid int, url string) error {
+func (n *mockAgent) setProxy(sandbox *Sandbox, proxy proxy, pid int, url string) error {
 	return nil
 }
 
-func (n *noopAgent) setProxyFromGrpc(proxy proxy, pid int, url string) {
+func (n *mockAgent) setProxyFromGrpc(proxy proxy, pid int, url string) {
 }
 
 // getGuestDetails is the Noop agent GuestDetails queryer. It does nothing.
-func (n *noopAgent) getGuestDetails(*grpc.GuestDetailsRequest) (*grpc.GuestDetailsResponse, error) {
+func (n *mockAgent) getGuestDetails(*grpc.GuestDetailsRequest) (*grpc.GuestDetailsResponse, error) {
 	return nil, nil
 }
 
 // setGuestDateTime is the Noop agent guest time setter. It does nothing.
-func (n *noopAgent) setGuestDateTime(time.Time) error {
+func (n *mockAgent) setGuestDateTime(time.Time) error {
 	return nil
 }
 
 // copyFile is the Noop agent copy file. It does nothing.
-func (n *noopAgent) copyFile(src, dst string) error {
+func (n *mockAgent) copyFile(src, dst string) error {
 	return nil
 }
 
-func (n *noopAgent) markDead() {
+func (n *mockAgent) markDead() {
 }
 
-func (n *noopAgent) cleanup(s *Sandbox) {
+func (n *mockAgent) cleanup(s *Sandbox) {
 }
 
 // save is the Noop agent state saver. It does nothing.
-func (n *noopAgent) save() (s persistapi.AgentState) {
+func (n *mockAgent) save() (s persistapi.AgentState) {
 	return
 }
 
 // load is the Noop agent state loader. It does nothing.
-func (n *noopAgent) load(s persistapi.AgentState) {}
+func (n *mockAgent) load(s persistapi.AgentState) {}
 
-func (n *noopAgent) getOOMEvent() (string, error) {
+func (n *mockAgent) getOOMEvent() (string, error) {
 	return "", nil
 }
 
-func (k *noopAgent) getAgentMetrics(req *grpc.GetMetricsRequest) (*grpc.Metrics, error) {
+func (k *mockAgent) getAgentMetrics(req *grpc.GetMetricsRequest) (*grpc.Metrics, error) {
 	return nil, nil
 }

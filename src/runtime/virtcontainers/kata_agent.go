@@ -131,6 +131,11 @@ const (
 	grpcGetMetricsRequest        = "grpc.GetMetricsRequest"
 )
 
+// newKataAgent returns an agent from an agent type.
+func newKataAgent() agent {
+	return &kataAgent{}
+}
+
 // The function is declared this way for mocking in unit tests
 var kataHostSharedDir = func() string {
 	if rootless.IsRootless() {
@@ -316,21 +321,16 @@ func (k *kataAgent) handleTraceSettings(config KataAgentConfig) bool {
 	return disableVMShutdown
 }
 
-func (k *kataAgent) init(ctx context.Context, sandbox *Sandbox, config interface{}) (disableVMShutdown bool, err error) {
+func (k *kataAgent) init(ctx context.Context, sandbox *Sandbox, config KataAgentConfig) (disableVMShutdown bool, err error) {
 	// save
 	k.ctx = sandbox.ctx
 
 	span, _ := k.trace("init")
 	defer span.Finish()
 
-	switch c := config.(type) {
-	case KataAgentConfig:
-		disableVMShutdown = k.handleTraceSettings(c)
-		k.keepConn = c.LongLiveConn
-		k.kmodules = c.KernelModules
-	default:
-		return false, vcTypes.ErrInvalidConfigType
-	}
+	disableVMShutdown = k.handleTraceSettings(config)
+	k.keepConn = config.LongLiveConn
+	k.kmodules = config.KernelModules
 
 	k.proxy, err = newProxy(sandbox.config.ProxyType)
 	if err != nil {

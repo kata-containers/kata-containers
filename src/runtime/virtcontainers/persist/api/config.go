@@ -234,7 +234,6 @@ type SandboxConfig struct {
 	HypervisorConfig HypervisorConfig
 
 	// only one agent config can be non-nil according to agent type
-	AgentType       string
 	KataAgentConfig *KataAgentConfig `json:",omitempty"`
 
 	ProxyType   string
