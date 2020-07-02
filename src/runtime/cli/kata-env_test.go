@@ -224,13 +224,8 @@ func getExpectedShimDetails(config oci.RuntimeConfig) (ShimInfo, error) {
 
 func getExpectedAgentDetails(config oci.RuntimeConfig) (AgentInfo, error) {
 
-	agentConfig, ok := config.AgentConfig.(vc.KataAgentConfig)
-	if !ok {
-		return AgentInfo{}, fmt.Errorf("expected KataAgentConfig, got %T", config.AgentConfig)
-	}
-
+	agentConfig := config.AgentConfig
 	return AgentInfo{
-		Type:  string(config.AgentType),
 		Debug: agentConfig.Debug,
 		Trace: agentConfig.Trace,
 
@@ -585,13 +580,8 @@ func TestEnvGetEnvInfoAgentError(t *testing.T) {
 	assert.NoError(err)
 	defer os.RemoveAll(tmpdir)
 
-	configFile, config, err := makeRuntimeConfig(tmpdir)
+	_, _, err = makeRuntimeConfig(tmpdir)
 	assert.NoError(err)
-
-	config.AgentConfig = "invalid agent config"
-
-	_, err = getEnvInfo(configFile, config)
-	assert.Error(err)
 }
 
 func TestEnvGetEnvInfoNoOSRelease(t *testing.T) {
@@ -842,8 +832,7 @@ func TestEnvGetAgentInfo(t *testing.T) {
 
 	assert.Equal(t, expectedAgent, agent)
 
-	agentConfig, ok := config.AgentConfig.(vc.KataAgentConfig)
-	assert.True(t, ok)
+	agentConfig := config.AgentConfig
 
 	agentConfig.Debug = true
 	config.AgentConfig = agentConfig
@@ -860,10 +849,6 @@ func TestEnvGetAgentInfo(t *testing.T) {
 	assert.True(t, agent.Trace)
 	assert.Equal(t, agent.TraceMode, "traceMode")
 	assert.Equal(t, agent.TraceType, "traceType")
-
-	config.AgentConfig = "I am the wrong type"
-	_, err = getAgentInfo(config)
-	assert.Error(t, err)
 }
 
 func testEnvShowTOMLSettings(t *testing.T, tmpdir string, tmpfile *os.File) error {
@@ -897,9 +882,7 @@ func testEnvShowTOMLSettings(t *testing.T, tmpdir string, tmpfile *os.File) erro
 		Path:    "/resolved/shim/path",
 	}
 
-	agent := AgentInfo{
-		Type: "agent-type",
-	}
+	agent := AgentInfo{}
 
 	expectedHostDetails, err := getExpectedHostDetails(tmpdir)
 	assert.NoError(t, err)
@@ -966,9 +949,7 @@ func testEnvShowJSONSettings(t *testing.T, tmpdir string, tmpfile *os.File) erro
 		Path:    "/resolved/shim/path",
 	}
 
-	agent := AgentInfo{
-		Type: "agent-type",
-	}
+	agent := AgentInfo{}
 
 	expectedHostDetails, err := getExpectedHostDetails(tmpdir)
 	assert.NoError(t, err)

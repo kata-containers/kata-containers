@@ -96,8 +96,7 @@ type RuntimeConfig struct {
 
 	NetmonConfig vc.NetmonConfig
 
-	AgentType   vc.AgentType
-	AgentConfig interface{}
+	AgentConfig vc.KataAgentConfig
 
 	ProxyType   vc.ProxyType
 	ProxyConfig vc.ProxyConfig
@@ -787,10 +786,7 @@ func addRuntimeConfigOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig) e
 }
 
 func addAgentConfigOverrides(ocispec specs.Spec, config *vc.SandboxConfig) error {
-	c, ok := config.AgentConfig.(vc.KataAgentConfig)
-	if !ok {
-		return nil
-	}
+	c := config.AgentConfig
 
 	if value, ok := ocispec.Annotations[vcAnnotations.KernelModules]; ok {
 		modules := strings.Split(value, KernelModulesSeparator)
@@ -853,7 +849,6 @@ func SandboxConfig(ocispec specs.Spec, runtime RuntimeConfig, bundlePath, cid, c
 		HypervisorType:   runtime.HypervisorType,
 		HypervisorConfig: runtime.HypervisorConfig,
 
-		AgentType:   runtime.AgentType,
 		AgentConfig: runtime.AgentConfig,
 
 		ProxyType:   runtime.ProxyType,

@@ -58,7 +58,6 @@ func Example_createAndStartSandbox() {
 		HypervisorType:   vc.QemuHypervisor,
 		HypervisorConfig: hypervisorConfig,
 
-		AgentType:   vc.KataContainersAgent,
 		AgentConfig: agConfig,
 
 		Containers: []vc.ContainerConfig{container},

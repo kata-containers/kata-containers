@@ -188,7 +188,7 @@ func TestDefaultProxyURLUnknown(t *testing.T) {
 	assert.Error(t, testDefaultProxyURL(socketPath, "foobar", sandboxID))
 }
 
-func testProxyStart(t *testing.T, agent agent, proxy proxy) {
+func testProxyStart(t *testing.T, agent kataAgent, proxy proxy) {
 	assert := assert.New(t)
 
 	assert.NotNil(proxy)

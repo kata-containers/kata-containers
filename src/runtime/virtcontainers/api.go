@@ -384,7 +384,6 @@ func StatusSandbox(ctx context.Context, sandboxID string) (SandboxStatus, error)
 		State:            s.state,
 		Hypervisor:       s.config.HypervisorType,
 		HypervisorConfig: s.config.HypervisorConfig,
-		Agent:            s.config.AgentType,
 		ContainersStatus: contStatusList,
 		Annotations:      s.config.Annotations,
 	}

@@ -131,6 +131,36 @@ const (
 	grpcGetOOMEventRequest       = "grpc.GetOOMEventRequest"
 )
 
+// ProcessListOptions contains the options used to list running
+// processes inside the container
+type ProcessListOptions struct {
+	// Format describes the output format to list the running processes.
+	// Formats are unrelated to ps(1) formats, only two formats can be specified:
+	// "json" and "table"
+	Format string
+
+	// Args contains the list of arguments to run ps(1) command.
+	// If Args is empty the agent will use "-ef" as options to ps(1).
+	Args []string
+}
+
+// ProcessList represents the list of running processes inside the container
+type ProcessList []byte
+
+const (
+	// SocketTypeVSOCK is a VSOCK socket type for talking to an agent.
+	SocketTypeVSOCK = "vsock"
+
+	// SocketTypeUNIX is a UNIX socket type for talking to an agent.
+	// It typically means the agent is living behind a host proxy.
+	SocketTypeUNIX = "unix"
+)
+
+// newAgent returns an agent from an agent type.
+func newAgent() *kataAgent {
+	return &kataAgent{}
+}
+
 // The function is declared this way for mocking in unit tests
 var kataHostSharedDir = func() string {
 	if rootless.IsRootless() {
@@ -776,14 +806,9 @@ func (k *kataAgent) getAgentURL() (string, error) {
 	return k.agentURL()
 }
 
-func (k *kataAgent) reuseAgent(agent agent) error {
-	a, ok := agent.(*kataAgent)
-	if !ok {
-		return fmt.Errorf("Bug: get a wrong type of agent")
-	}
-
-	k.installReqFunc(a.client)
-	k.client = a.client
+func (k *kataAgent) reuseAgent(agent *kataAgent) error {
+	k.installReqFunc(agent.client)
+	k.client = agent.client
 	return nil
 }
 

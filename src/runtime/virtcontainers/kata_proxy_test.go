@@ -8,7 +8,7 @@ package virtcontainers
 import "testing"
 
 func TestKataProxyStart(t *testing.T) {
-	agent := &kataAgent{}
+	agent := kataAgent{}
 	proxy := &kataProxy{}
 
 	testProxyStart(t, agent, proxy)

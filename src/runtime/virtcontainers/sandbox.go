@@ -25,7 +25,6 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 
-	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols/grpc"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/api"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/drivers"
@@ -33,6 +32,7 @@ import (
 	exp "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/experimental"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist"
 	persistapi "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist/api"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols/grpc"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/annotations"
 	vccgroups "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/cgroups"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/compatoci"
@@ -58,7 +58,6 @@ type SandboxStatus struct {
 	State            types.SandboxState
 	Hypervisor       HypervisorType
 	HypervisorConfig HypervisorConfig
-	Agent            AgentType
 	ContainersStatus []ContainerStatus
 
 	// Annotations allow clients to store arbitrary values,
@@ -82,8 +81,7 @@ type SandboxConfig struct {
 	HypervisorType   HypervisorType
 	HypervisorConfig HypervisorConfig
 
-	AgentType   AgentType
-	AgentConfig interface{}
+	AgentConfig KataAgentConfig
 
 	ProxyType   ProxyType
 	ProxyConfig ProxyConfig
@@ -182,7 +180,7 @@ type Sandbox struct {
 	sync.Mutex
 	factory    Factory
 	hypervisor hypervisor
-	agent      agent
+	agent      *kataAgent
 	store      *store.VCStore
 	// store is used to replace VCStore step by step
 	newStore persistapi.PersistDriver
@@ -332,7 +330,6 @@ func (s *Sandbox) Status() SandboxStatus {
 		State:            s.state,
 		Hypervisor:       s.config.HypervisorType,
 		HypervisorConfig: s.config.HypervisorConfig,
-		Agent:            s.config.AgentType,
 		ContainersStatus: contStatusList,
 		Annotations:      s.config.Annotations,
 	}
@@ -513,7 +510,7 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 		return nil, fmt.Errorf("Invalid sandbox configuration")
 	}
 
-	agent := newAgent(sandboxConfig.AgentType)
+	agent := newAgent()
 
 	hypervisor, err := newHypervisor(sandboxConfig.HypervisorType)
 	if err != nil {
@@ -610,12 +607,7 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 		return nil, err
 	}
 
-	agentConfig, err := newAgentConfig(sandboxConfig.AgentType, sandboxConfig.AgentConfig)
-	if err != nil {
-		return nil, err
-	}
-
-	if s.disableVMShutdown, err = s.agent.init(ctx, s, agentConfig); err != nil {
+	if s.disableVMShutdown, err = s.agent.init(ctx, s, sandboxConfig.AgentConfig); err != nil {
 		return nil, err
 	}
 
@@ -1018,7 +1010,6 @@ func (s *Sandbox) startVM() (err error) {
 			vm, err := s.factory.GetVM(ctx, VMConfig{
 				HypervisorType:   s.config.HypervisorType,
 				HypervisorConfig: s.config.HypervisorConfig,
-				AgentType:        s.config.AgentType,
 				AgentConfig:      s.config.AgentConfig,
 				ProxyType:        s.config.ProxyType,
 				ProxyConfig:      s.config.ProxyConfig,

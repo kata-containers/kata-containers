@@ -73,7 +73,6 @@ func TestFactoryCLIFunctionInit(t *testing.T) {
 	runtimeConfig.FactoryConfig.Template = true
 	runtimeConfig.FactoryConfig.TemplatePath = "/run/vc/vm/template"
 	runtimeConfig.HypervisorType = vc.MockHypervisor
-	runtimeConfig.AgentType = vc.NoopAgentType
 	runtimeConfig.ProxyType = vc.NoopProxyType
 	ctx.App.Metadata["runtimeConfig"] = runtimeConfig
 	fn, ok = initFactoryCommand.Action.(func(context *cli.Context) error)
@@ -109,7 +108,6 @@ func TestFactoryCLIFunctionDestroy(t *testing.T) {
 	// With template
 	runtimeConfig.FactoryConfig.Template = true
 	runtimeConfig.HypervisorType = vc.MockHypervisor
-	runtimeConfig.AgentType = vc.NoopAgentType
 	ctx.App.Metadata["runtimeConfig"] = runtimeConfig
 	fn, ok = destroyFactoryCommand.Action.(func(context *cli.Context) error)
 	assert.True(ok)
@@ -145,7 +143,6 @@ func TestFactoryCLIFunctionStatus(t *testing.T) {
 	// With template
 	runtimeConfig.FactoryConfig.Template = true
 	runtimeConfig.HypervisorType = vc.MockHypervisor
-	runtimeConfig.AgentType = vc.NoopAgentType
 	ctx.App.Metadata["runtimeConfig"] = runtimeConfig
 	err = fn(ctx)
 	assert.Nil(err)

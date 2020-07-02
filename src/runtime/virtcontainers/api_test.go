@@ -112,8 +112,6 @@ func newTestSandboxConfigNoop() SandboxConfig {
 		HypervisorType:   MockHypervisor,
 		HypervisorConfig: hypervisorConfig,
 
-		AgentType: NoopAgentType,
-
 		Containers: []ContainerConfig{container},
 
 		Annotations: sandboxAnnotations,
@@ -137,7 +135,6 @@ func newTestSandboxConfigNoop() SandboxConfig {
 
 func newTestSandboxConfigKataAgent() SandboxConfig {
 	sandboxConfig := newTestSandboxConfigNoop()
-	sandboxConfig.AgentType = KataContainersAgent
 	sandboxConfig.AgentConfig = KataAgentConfig{}
 	sandboxConfig.Containers = nil
 
@@ -540,7 +537,6 @@ func TestStatusSandboxSuccessfulStateReady(t *testing.T) {
 		},
 		Hypervisor:       MockHypervisor,
 		HypervisorConfig: hypervisorConfig,
-		Agent:            NoopAgentType,
 		ContainersStatus: []ContainerStatus{
 			{
 				ID: containerID,
@@ -600,7 +596,6 @@ func TestStatusSandboxSuccessfulStateRunning(t *testing.T) {
 		},
 		Hypervisor:       MockHypervisor,
 		HypervisorConfig: hypervisorConfig,
-		Agent:            NoopAgentType,
 		ContainersStatus: []ContainerStatus{
 			{
 				ID: containerID,
@@ -1412,7 +1407,7 @@ func TestProcessListContainer(t *testing.T) {
  * Benchmarks
  */
 
-func createNewSandboxConfig(hType HypervisorType, aType AgentType, aConfig interface{}) SandboxConfig {
+func createNewSandboxConfig(hType HypervisorType) SandboxConfig {
 	hypervisorConfig := HypervisorConfig{
 		KernelPath:     "/usr/share/kata-containers/vmlinux.container",
 		ImagePath:      "/usr/share/kata-containers/kata-containers.img",
@@ -1426,8 +1421,7 @@ func createNewSandboxConfig(hType HypervisorType, aType AgentType, aConfig inter
 		HypervisorType:   hType,
 		HypervisorConfig: hypervisorConfig,
 
-		AgentType:   aType,
-		AgentConfig: aConfig,
+		AgentConfig: KataAgentConfig{},
 
 		NetworkConfig: netConfig,
 
@@ -1488,14 +1482,14 @@ func createStartStopDeleteSandbox(b *testing.B, sandboxConfig SandboxConfig) {
 
 func BenchmarkCreateStartStopDeleteSandboxQemuHypervisorNoopAgentNetworkNoop(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		sandboxConfig := createNewSandboxConfig(QemuHypervisor, NoopAgentType, nil)
+		sandboxConfig := createNewSandboxConfig(QemuHypervisor)
 		createStartStopDeleteSandbox(b, sandboxConfig)
 	}
 }
 
 func BenchmarkCreateStartStopDeleteSandboxMockHypervisorNoopAgentNetworkNoop(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		sandboxConfig := createNewSandboxConfig(MockHypervisor, NoopAgentType, nil)
+		sandboxConfig := createNewSandboxConfig(MockHypervisor)
 		createStartStopDeleteSandbox(b, sandboxConfig)
 	}
 }

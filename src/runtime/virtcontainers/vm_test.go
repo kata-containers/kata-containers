@@ -24,7 +24,6 @@ func TestNewVM(t *testing.T) {
 
 	config := VMConfig{
 		HypervisorType: MockHypervisor,
-		AgentType:      NoopAgentType,
 		ProxyType:      NoopProxyType,
 	}
 	hyperConfig := HypervisorConfig{
@@ -103,11 +102,10 @@ func TestSetupProxy(t *testing.T) {
 
 	config := VMConfig{
 		HypervisorType: MockHypervisor,
-		AgentType:      NoopAgentType,
 	}
 
 	hypervisor := &mockHypervisor{}
-	agent := &noopAgent{}
+	agent := &kataAgent{}
 
 	// wrong proxy type
 	config.ProxyType = ProxyType("invalidProxyType")
@@ -124,7 +122,6 @@ func TestVMConfigGrpc(t *testing.T) {
 	config := VMConfig{
 		HypervisorType:   QemuHypervisor,
 		HypervisorConfig: newQemuConfig(),
-		AgentType:        KataContainersAgent,
 		AgentConfig:      KataAgentConfig{false, true, false, false, 0, "", "", []string{}},
 		ProxyType:        NoopProxyType,
 	}
