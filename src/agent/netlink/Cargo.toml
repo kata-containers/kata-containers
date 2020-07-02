@@ -9,7 +9,7 @@ edition = "2018"
 [dependencies]
 libc = "0.2.58"
 nix = "0.17.0"
-protobuf = "2.6.1"
+protobuf = "=2.6.1"
 rustjail = { path = "../rustjail" }
 protocols = { path = "../protocols" }
 slog = { version = "2.5.2", features = ["dynamic-keys", "max_level_trace", "release_max_level_info"] }

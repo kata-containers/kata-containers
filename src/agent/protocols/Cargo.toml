@@ -6,5 +6,5 @@ edition = "2018"
 
 [dependencies]
 grpcio = { git="https://github.com/alipay/grpc-rs", branch="rust_agent" }
-protobuf = "2.6.1"
+protobuf = "=2.6.1"
 futures = "0.1.27"
