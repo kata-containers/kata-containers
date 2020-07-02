@@ -161,7 +161,7 @@ func (clh *cloudHypervisor) checkVersion() error {
 
 // For cloudHypervisor this call only sets the internal structure up.
 // The VM will be created and started through startSandbox().
-func (clh *cloudHypervisor) createSandbox(ctx context.Context, id string, networkNS NetworkNamespace, hypervisorConfig *HypervisorConfig, stateful bool) error {
+func (clh *cloudHypervisor) createSandbox(ctx context.Context, id string, networkNS NetworkNamespace, hypervisorConfig *HypervisorConfig) error {
 	clh.ctx = ctx
 
 	span, _ := clh.trace("createSandbox")
