@@ -776,7 +776,7 @@ func generateVMSocket(id string, useVsock bool, vmStogarePath string) (interface
 // hypervisor is the virtcontainers hypervisor interface.
 // The default hypervisor implementation is Qemu.
 type hypervisor interface {
-	createSandbox(ctx context.Context, id string, networkNS NetworkNamespace, hypervisorConfig *HypervisorConfig, stateful bool) error
+	createSandbox(ctx context.Context, id string, networkNS NetworkNamespace, hypervisorConfig *HypervisorConfig) error
 	startSandbox(timeout int) error
 	stopSandbox() error
 	pauseSandbox() error

@@ -105,10 +105,6 @@ type SandboxConfig struct {
 	// SharePidNs sets all containers to share the same sandbox level pid namespace.
 	SharePidNs bool
 
-	// types.Stateful keeps sandbox resources in memory across APIs. Users will be responsible
-	// for calling Release() to release the memory resources.
-	Stateful bool
-
 	// SystemdCgroup enables systemd cgroup support
 	SystemdCgroup bool
 
@@ -200,7 +196,6 @@ type Sandbox struct {
 
 	shmSize           uint64
 	sharePidNs        bool
-	stateful          bool
 	seccompSupported  bool
 	disableVMShutdown bool
 
@@ -289,14 +284,6 @@ func (s *Sandbox) Release() error {
 	}
 	s.hypervisor.disconnect()
 	return s.agent.disconnect()
-}
-
-func (s *Sandbox) releaseStatelessSandbox() error {
-	if s.stateful {
-		return nil
-	}
-
-	return s.Release()
 }
 
 // Status gets the status of the sandbox
@@ -526,7 +513,6 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 		wg:              &sync.WaitGroup{},
 		shmSize:         sandboxConfig.ShmSize,
 		sharePidNs:      sandboxConfig.SharePidNs,
-		stateful:        sandboxConfig.Stateful,
 		networkNS:       NetworkNamespace{NetNsPath: sandboxConfig.NetworkConfig.NetNSPath},
 		ctx:             ctx,
 	}
@@ -562,7 +548,7 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 	}
 
 	// new store doesn't require hypervisor to be stored immediately
-	if err = s.hypervisor.createSandbox(ctx, s.id, s.networkNS, &sandboxConfig.HypervisorConfig, s.stateful); err != nil {
+	if err = s.hypervisor.createSandbox(ctx, s.id, s.networkNS, &sandboxConfig.HypervisorConfig); err != nil {
 		return nil, err
 	}
 
