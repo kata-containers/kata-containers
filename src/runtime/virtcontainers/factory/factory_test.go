@@ -33,7 +33,6 @@ func TestNewFactory(t *testing.T) {
 
 	config.VMConfig = vc.VMConfig{
 		HypervisorType: vc.MockHypervisor,
-		AgentType:      vc.NoopAgentType,
 		ProxyType:      vc.NoopProxyType,
 	}
 
@@ -122,7 +121,6 @@ func TestVMConfigValid(t *testing.T) {
 	err := f.validateNewVMConfig(config)
 	assert.NotNil(err)
 
-	config.AgentType = vc.NoopAgentType
 	err = f.validateNewVMConfig(config)
 	assert.NotNil(err)
 
@@ -148,11 +146,6 @@ func TestCheckVMConfig(t *testing.T) {
 	err = checkVMConfig(config1, config2)
 	assert.Nil(err)
 
-	config1.AgentType = vc.NoopAgentType
-	err = checkVMConfig(config1, config2)
-	assert.Error(err)
-
-	config2.AgentType = vc.NoopAgentType
 	err = checkVMConfig(config1, config2)
 	assert.Nil(err)
 
@@ -187,7 +180,6 @@ func TestFactoryGetVM(t *testing.T) {
 	vmConfig := vc.VMConfig{
 		HypervisorType:   vc.MockHypervisor,
 		HypervisorConfig: hyperConfig,
-		AgentType:        vc.NoopAgentType,
 		ProxyType:        vc.NoopProxyType,
 	}
 
@@ -335,7 +327,6 @@ func TestDeepCompare(t *testing.T) {
 	ctx := context.Background()
 	config.VMConfig = vc.VMConfig{
 		HypervisorType: vc.MockHypervisor,
-		AgentType:      vc.NoopAgentType,
 		ProxyType:      vc.NoopProxyType,
 	}
 	testDir := fs.MockStorageRootPath()

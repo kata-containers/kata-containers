@@ -166,7 +166,6 @@ var initFactoryCommand = cli.Command{
 			VMConfig: vc.VMConfig{
 				HypervisorType:   runtimeConfig.HypervisorType,
 				HypervisorConfig: runtimeConfig.HypervisorConfig,
-				AgentType:        runtimeConfig.AgentType,
 				AgentConfig:      runtimeConfig.AgentConfig,
 				ProxyType:        runtimeConfig.ProxyType,
 				ProxyConfig:      runtimeConfig.ProxyConfig,
@@ -256,7 +255,6 @@ var destroyFactoryCommand = cli.Command{
 				VMConfig: vc.VMConfig{
 					HypervisorType:   runtimeConfig.HypervisorType,
 					HypervisorConfig: runtimeConfig.HypervisorConfig,
-					AgentType:        runtimeConfig.AgentType,
 					AgentConfig:      runtimeConfig.AgentConfig,
 					ProxyType:        runtimeConfig.ProxyType,
 					ProxyConfig:      runtimeConfig.ProxyConfig,
@@ -314,7 +312,6 @@ var statusFactoryCommand = cli.Command{
 				VMConfig: vc.VMConfig{
 					HypervisorType:   runtimeConfig.HypervisorType,
 					HypervisorConfig: runtimeConfig.HypervisorConfig,
-					AgentType:        runtimeConfig.AgentType,
 					AgentConfig:      runtimeConfig.AgentConfig,
 					ProxyType:        runtimeConfig.ProxyType,
 					ProxyConfig:      runtimeConfig.ProxyConfig,

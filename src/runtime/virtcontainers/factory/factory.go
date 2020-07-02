@@ -121,10 +121,6 @@ func checkVMConfig(config1, config2 vc.VMConfig) error {
 		return fmt.Errorf("hypervisor type does not match: %s vs. %s", config1.HypervisorType, config2.HypervisorType)
 	}
 
-	if config1.AgentType != config2.AgentType {
-		return fmt.Errorf("agent type does not match: %s vs. %s", config1.AgentType, config2.AgentType)
-	}
-
 	// check hypervisor config details
 	resetHypervisorConfig(&config1)
 	resetHypervisorConfig(&config2)
@@ -143,10 +139,6 @@ func (f *factory) checkConfig(config vc.VMConfig) error {
 }
 
 func (f *factory) validateNewVMConfig(config vc.VMConfig) error {
-	if len(config.AgentType.String()) == 0 {
-		return fmt.Errorf("Missing agent type")
-	}
-
 	if len(config.ProxyType.String()) == 0 {
 		return fmt.Errorf("Missing proxy type")
 	}

@@ -57,7 +57,6 @@ type SandboxStatus struct {
 	State            types.SandboxState
 	Hypervisor       HypervisorType
 	HypervisorConfig HypervisorConfig
-	Agent            AgentType
 	ContainersStatus []ContainerStatus
 
 	// Annotations allow clients to store arbitrary values,
@@ -81,8 +80,7 @@ type SandboxConfig struct {
 	HypervisorType   HypervisorType
 	HypervisorConfig HypervisorConfig
 
-	AgentType   AgentType
-	AgentConfig interface{}
+	AgentConfig KataAgentConfig
 
 	ProxyType   ProxyType
 	ProxyConfig ProxyConfig
@@ -326,7 +324,6 @@ func (s *Sandbox) Status() SandboxStatus {
 		State:            s.state,
 		Hypervisor:       s.config.HypervisorType,
 		HypervisorConfig: s.config.HypervisorConfig,
-		Agent:            s.config.AgentType,
 		ContainersStatus: contStatusList,
 		Annotations:      s.config.Annotations,
 	}
@@ -507,7 +504,9 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 		return nil, fmt.Errorf("Invalid sandbox configuration")
 	}
 
-	agent := newAgent(sandboxConfig.AgentType)
+	// create agent instance
+	newAagentFunc := getNewAgentFunc(ctx)
+	agent := newAagentFunc()
 
 	hypervisor, err := newHypervisor(sandboxConfig.HypervisorType)
 	if err != nil {
@@ -571,12 +570,7 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 		return nil, err
 	}
 
-	agentConfig, err := newAgentConfig(sandboxConfig.AgentType, sandboxConfig.AgentConfig)
-	if err != nil {
-		return nil, err
-	}
-
-	if s.disableVMShutdown, err = s.agent.init(ctx, s, agentConfig); err != nil {
+	if s.disableVMShutdown, err = s.agent.init(ctx, s, sandboxConfig.AgentConfig); err != nil {
 		return nil, err
 	}
 
@@ -972,7 +966,6 @@ func (s *Sandbox) startVM() (err error) {
 			vm, err := s.factory.GetVM(ctx, VMConfig{
 				HypervisorType:   s.config.HypervisorType,
 				HypervisorConfig: s.config.HypervisorConfig,
-				AgentType:        s.config.AgentType,
 				AgentConfig:      s.config.AgentConfig,
 				ProxyType:        s.config.ProxyType,
 				ProxyConfig:      s.config.ProxyConfig,

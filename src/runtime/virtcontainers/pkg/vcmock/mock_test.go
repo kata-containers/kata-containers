@@ -663,7 +663,6 @@ func TestVCMockSetVMFactory(t *testing.T) {
 	}
 	vmConfig := vc.VMConfig{
 		HypervisorType:   vc.MockHypervisor,
-		AgentType:        vc.NoopAgentType,
 		HypervisorConfig: hyperConfig,
 	}
 

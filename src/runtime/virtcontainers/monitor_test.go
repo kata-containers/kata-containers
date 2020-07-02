@@ -19,7 +19,7 @@ func TestMonitorSuccess(t *testing.T) {
 	assert := assert.New(t)
 
 	// create a sandbox
-	s, err := testCreateSandbox(t, testSandboxID, MockHypervisor, hConfig, NoopAgentType, NetworkConfig{}, []ContainerConfig{contConfig}, nil)
+	s, err := testCreateSandbox(t, testSandboxID, MockHypervisor, hConfig, NetworkConfig{}, []ContainerConfig{contConfig}, nil)
 	assert.NoError(err)
 	defer cleanUp()
 
@@ -43,7 +43,7 @@ func TestMonitorClosedChannel(t *testing.T) {
 	assert := assert.New(t)
 
 	// create a sandbox
-	s, err := testCreateSandbox(t, testSandboxID, MockHypervisor, hConfig, NoopAgentType, NetworkConfig{}, []ContainerConfig{contConfig}, nil)
+	s, err := testCreateSandbox(t, testSandboxID, MockHypervisor, hConfig, NetworkConfig{}, []ContainerConfig{contConfig}, nil)
 	assert.NoError(err)
 	defer cleanUp()
 
