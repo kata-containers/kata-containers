@@ -298,7 +298,13 @@ fn virtio_blk_device_handler(
     sandbox: &Arc<Mutex<Sandbox>>,
 ) -> Result<()> {
     let mut dev = device.clone();
-    dev.vm_path = get_pci_device_name(sandbox, &device.id)?;
+
+    // When "Id (PCIAddr)" is not set, we allow to use the predicted "VmPath" passed from kata-runtime
+    // Note this is a special code path for cloud-hypervisor when BDF information is not available
+    if device.id != "" {
+        dev.vm_path = get_pci_device_name(sandbox, &device.id)?;
+    }
+
     update_spec_device_list(&dev, spec)
 }
 
