@@ -30,9 +30,9 @@ install_yq() {
 
 get_from_kata_deps() {
 	local dependency="$1"
-	BRANCH=${BRANCH:-master}
+	BRANCH=${branch:-master}
 	local branch="${2:-${BRANCH}}"
-	local runtime_repo="github.com/kata-containers/runtime"
+	local runtime_repo="github.com/kata-containers/kata-containers"
 	GOPATH=${GOPATH:-${HOME}/go}
 	local runtime_repo_dir="${GOPATH}/src/${runtime_repo}"
 	# For our CI, we will query the local versions.yaml file both for kernel and
