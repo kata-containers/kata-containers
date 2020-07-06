@@ -1,0 +1,55 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: kata-system
+
+---
+
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  labels:
+    app.kubernetes.io/name: kata-monitor
+  name: kata-monitor
+  namespace: kata-system
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: kata-monitor
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: kata-monitor
+      annotations:
+        prometheus.io/scrape: "true"
+    spec:
+      hostNetwork: true
+      containers:
+      - name: kata-monitor
+        image: docker.io/katadocker/kata-monitor:2.0.0
+        args: 
+          - -log-level=debug
+        ports:
+          - containerPort: 8090
+        resources:
+          limits:
+            cpu: 200m
+            memory: 300Mi
+          requests:
+            cpu: 200m
+            memory: 300Mi
+        volumeMounts:
+        - name: containerdtask
+          mountPath: /run/containerd/io.containerd.runtime.v2.task/
+          readOnly: true
+        - name: containerdsocket
+          mountPath: /run/containerd/containerd.sock
+          readOnly: true
+      terminationGracePeriodSeconds: 30
+      volumes:
+      - name: containerdtask
+        hostPath:
+          path: /run/containerd/io.containerd.runtime.v2.task/
+      - name: containerdsocket
+        hostPath:
+          path: /run/containerd/containerd.sock
