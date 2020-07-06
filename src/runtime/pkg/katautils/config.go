@@ -561,10 +561,6 @@ func newFirecrackerHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		return vc.HypervisorConfig{}, err
 	}
 
-	if !utils.SupportsVsocks() {
-		return vc.HypervisorConfig{}, errors.New("No vsock support, firecracker cannot be used")
-	}
-
 	rxRateLimiterMaxRate, err := h.getRxRateLimiterCfg()
 	if err != nil {
 		return vc.HypervisorConfig{}, err
