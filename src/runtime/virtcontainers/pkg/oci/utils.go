@@ -102,9 +102,6 @@ type RuntimeConfig struct {
 	ProxyType   vc.ProxyType
 	ProxyConfig vc.ProxyConfig
 
-	ShimType   vc.ShimType
-	ShimConfig interface{}
-
 	Console string
 
 	//Determines how the VM should be connected to the
@@ -858,9 +855,6 @@ func SandboxConfig(ocispec specs.Spec, runtime RuntimeConfig, bundlePath, cid, c
 
 		ProxyType:   runtime.ProxyType,
 		ProxyConfig: runtime.ProxyConfig,
-
-		ShimType:   runtime.ShimType,
-		ShimConfig: runtime.ShimConfig,
 
 		NetworkConfig: networkConfig,
 

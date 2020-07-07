@@ -183,7 +183,6 @@ func (s *Sandbox) dumpConfig(ss *persistapi.SandboxState) {
 			Path:  sconfig.ProxyConfig.Path,
 			Debug: sconfig.ProxyConfig.Debug,
 		},
-		ShimType: string(sconfig.ShimType),
 		NetworkConfig: persistapi.NetworkConfig{
 			NetNSPath:         sconfig.NetworkConfig.NetNSPath,
 			NetNsCreated:      sconfig.NetworkConfig.NetNsCreated,
@@ -268,19 +267,6 @@ func (s *Sandbox) dumpConfig(ss *persistapi.SandboxState) {
 			ss.Config.KataAgentConfig = &persistapi.KataAgentConfig{
 				LongLiveConn: sagent.LongLiveConn,
 				UseVSock:     sagent.UseVSock,
-			}
-		}
-	}
-
-	if sconfig.ShimType == "kataShim" {
-		var shim ShimConfig
-		err := mapstructure.Decode(sconfig.ShimConfig, &shim)
-		if err != nil {
-			s.Logger().WithError(err).Error("internal error: ShimConfig failed to decode")
-		} else {
-			ss.Config.KataShimConfig = &persistapi.ShimConfig{
-				Path:  shim.Path,
-				Debug: shim.Debug,
 			}
 		}
 	}
@@ -474,7 +460,6 @@ func loadSandboxConfig(id string) (*SandboxConfig, error) {
 			Path:  savedConf.ProxyConfig.Path,
 			Debug: savedConf.ProxyConfig.Debug,
 		},
-		ShimType: ShimType(savedConf.ShimType),
 		NetworkConfig: NetworkConfig{
 			NetNSPath:         savedConf.NetworkConfig.NetNSPath,
 			NetNsCreated:      savedConf.NetworkConfig.NetNsCreated,
@@ -555,13 +540,6 @@ func loadSandboxConfig(id string) (*SandboxConfig, error) {
 		sconfig.AgentConfig = KataAgentConfig{
 			LongLiveConn: savedConf.KataAgentConfig.LongLiveConn,
 			UseVSock:     savedConf.KataAgentConfig.UseVSock,
-		}
-	}
-
-	if savedConf.ShimType == "kataShim" {
-		sconfig.ShimConfig = ShimConfig{
-			Path:  savedConf.KataShimConfig.Path,
-			Debug: savedConf.KataShimConfig.Debug,
 		}
 	}
 
