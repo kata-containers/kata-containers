@@ -203,7 +203,7 @@ func (fc *firecracker) createSandbox(ctx context.Context, id string, networkNS N
 	defer span.Finish()
 
 	//TODO: check validity of the hypervisor config provided
-	//https://github.com/kata-containers/kata-containers/src/runtime/issues/1065
+	//https://github.com/kata-containers/runtime/issues/1065
 	fc.id = fc.truncateID(id)
 	fc.state.set(notReady)
 	fc.config = *hypervisorConfig
@@ -233,7 +233,7 @@ func (fc *firecracker) createSandbox(ctx context.Context, id string, networkNS N
 	fc.netNSPath = networkNS.NetNsPath
 
 	// Till we create lower privileged kata user run as root
-	// https://github.com/kata-containers/kata-containers/src/runtime/issues/1869
+	// https://github.com/kata-containers/runtime/issues/1869
 	fc.uid = "0"
 	fc.gid = "0"
 
@@ -381,7 +381,7 @@ func (fc *firecracker) fcInit(timeout int) error {
 			"--id", fc.id,
 			"--node", "0", //FIXME: Comprehend NUMA topology or explicit ignore
 			"--exec-file", fc.config.HypervisorPath,
-			"--uid", "0", //https://github.com/kata-containers/kata-containers/src/runtime/issues/1869
+			"--uid", "0", //https://github.com/kata-containers/runtime/issues/1869
 			"--gid", "0",
 			"--chroot-base-dir", fc.chrootBaseDir,
 		}
