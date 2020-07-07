@@ -30,7 +30,6 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/rootless"
 	vcTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/types"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/uuid"
-	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/store"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 
 	"github.com/gogo/protobuf/proto"
@@ -345,12 +344,6 @@ func (k *kataAgent) init(ctx context.Context, sandbox *Sandbox, config interface
 
 	k.proxyBuiltIn = isProxyBuiltIn(sandbox.config.ProxyType)
 
-	// Fetch agent runtime info.
-	if useOldStore(sandbox.ctx) {
-		if err := sandbox.store.Load(store.Agent, &k.state); err != nil {
-			k.Logger().Debug("Could not retrieve anything from storage")
-		}
-	}
 	return disableVMShutdown, nil
 }
 
