@@ -191,7 +191,7 @@ func (p *proxyBuiltin) watchConsole(proto, console string, logger *logrus.Entry)
 			return err
 		}
 		// TODO: please see
-		// https://github.com/kata-containers/kata-containers/src/runtime/issues/1940.
+		// https://github.com/kata-containers/runtime/issues/1940.
 	case consoleProtoPty:
 		fallthrough
 	default:
@@ -247,7 +247,7 @@ func (p *proxyBuiltin) start(params proxyParams) (int, string, error) {
 
 	// For firecracker, it hasn't support the console watching and it's consoleURL
 	// will be set empty.
-	// TODO: add support for hybrid vsocks, see https://github.com/kata-containers/kata-containers/src/runtime/issues/2098
+	// TODO: add support for hybrid vsocks, see https://github.com/kata-containers/runtime/issues/2098
 	if params.debug && params.consoleURL != "" && !strings.HasPrefix(params.consoleURL, kataclient.HybridVSockScheme) {
 		err := p.watchConsole(buildinProxyConsoleProto, params.consoleURL, params.logger)
 		if err != nil {

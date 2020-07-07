@@ -97,7 +97,7 @@ func (device *BlockDevice) Attach(devReceiver api.DeviceReceiver) (err error) {
 			//Longer term block based VM rootfs should be added
 			//as a regular block device which eliminates the
 			//offset.
-			//https://github.com/kata-containers/kata-containers/src/runtime/issues/1061
+			//https://github.com/kata-containers/runtime/issues/1061
 			globalIdx = index + 1
 		}
 
