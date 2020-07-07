@@ -19,7 +19,6 @@ import (
 
 	ktu "github.com/kata-containers/kata-containers/src/runtime/pkg/katatestutils"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils"
-	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/urfave/cli"
@@ -905,95 +904,4 @@ func TestArchRequiredKernelModules(t *testing.T) {
 	}
 
 	assert.EqualValues(count, expectedCount)
-}
-
-func TestCheckVersionConsistencyInComponents(t *testing.T) {
-	type testData struct {
-		proxyExist     bool
-		expectError    bool
-		shimVersion    string
-		proxyVersion   string
-		runtimeVersion string
-	}
-
-	data := []testData{
-		{
-			true,
-			true,
-			"kata-shim version 0.2.0-rc0-xxxxxxxxxxxxx",
-			"kata-proxy version 0.1.0-rc0-xxxxxxxxxxxxx",
-			"0.2.0-rc0",
-		},
-		{
-			true,
-			true,
-			"kata-shim version 0.1.0-rc0-xxxxxxxxxxxxx",
-			"kata-proxy version 0.2.0-rc0-xxxxxxxxxxxxx",
-			"0.2.0-rc0",
-		},
-		{
-			true,
-			true,
-			"kata-shim version 0.1.0-rc0-xxxxxxxxxxxxx",
-			"kata-proxy version 0.1.0-rc0-xxxxxxxxxxxxx",
-			"0.2.0-rc0",
-		},
-		{
-			true,
-			false,
-			"kata-shim version 0.2.0-rc0-xxxxxxxxxxxxx",
-			"kata-proxy version 0.2.0-rc0-xxxxxxxxxxxxx",
-			"0.2.0-rc0",
-		},
-		{
-			false,
-			true,
-			"kata-shim version 0.1.0-rc0-xxxxxxxxxxxxx",
-			"",
-			"0.2.0-rc0",
-		},
-		{
-			false,
-			false,
-			"kata-shim version 0.2.0-rc0-xxxxxxxxxxxxx",
-			"",
-			"0.2.0-rc0",
-		},
-		{
-			false,
-			false,
-			"kata-shim version 0.2.0-xxxxxxxxxxxxx",
-			"",
-			"0.2.0",
-		},
-	}
-
-	origVersion := version
-	for _, d := range data {
-		tmpdir, err := ioutil.TempDir("", "")
-		assert.NoError(t, err)
-		defer os.RemoveAll(tmpdir)
-
-		testShimVersion = d.shimVersion
-		if d.proxyExist {
-			testProxyVersion = d.proxyVersion
-		}
-		_, config, err := makeRuntimeConfig(tmpdir)
-		assert.NoError(t, err)
-		if !d.proxyExist {
-			config.ProxyType = vc.NoProxyType
-		}
-		version = d.runtimeVersion
-		defer func() {
-			version = origVersion
-		}()
-
-		err = checkVersionConsistencyInComponents(config)
-		if d.expectError {
-			assert.Error(t, err, fmt.Sprintf("%+v", d))
-			continue
-		} else {
-			assert.NoError(t, err, fmt.Sprintf("%+v", d))
-		}
-	}
 }

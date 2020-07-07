@@ -575,44 +575,8 @@ func StatusContainer(ctx context.Context, sandboxID, containerID string) (Contai
 	return statusContainer(s, containerID)
 }
 
-// This function might have to stop the container if it realizes the shim
-// process is not running anymore. This might be caused by two different
-// reasons, either the process inside the VM exited and the shim terminated
-// accordingly, or the shim has been killed directly and we need to make sure
-// that we properly stop the container process inside the VM.
-//
-// When a container needs to be stopped because of those reasons, we want this
-// to happen atomically from a sandbox perspective. That's why we cannot afford
-// to take a read or read/write lock based on the situation, as it would break
-// the initial locking from the caller. Instead, a read/write lock has to be
-// taken from the caller, even if we simply return the container status without
-// taking any action regarding the container.
 func statusContainer(sandbox *Sandbox, containerID string) (ContainerStatus, error) {
 	if container, ok := sandbox.containers[containerID]; ok {
-		// We have to check for the process state to make sure
-		// we update the status in case the process is supposed
-		// to be running but has been killed or terminated.
-		if (container.state.State == types.StateReady ||
-			container.state.State == types.StateRunning ||
-			container.state.State == types.StatePaused) &&
-			container.process.Pid > 0 {
-
-			running, err := isShimRunning(container.process.Pid)
-			if err != nil {
-				return ContainerStatus{}, err
-			}
-
-			if !running {
-				virtLog.WithFields(logrus.Fields{
-					"state": container.state.State,
-					"pid":   container.process.Pid}).
-					Info("container isn't running")
-				if err := container.stop(true); err != nil {
-					return ContainerStatus{}, err
-				}
-			}
-		}
-
 		return ContainerStatus{
 			ID:          container.id,
 			State:       container.state,

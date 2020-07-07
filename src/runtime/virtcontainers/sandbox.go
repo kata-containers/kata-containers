@@ -87,9 +87,6 @@ type SandboxConfig struct {
 	ProxyType   ProxyType
 	ProxyConfig ProxyConfig
 
-	ShimType   ShimType
-	ShimConfig interface{}
-
 	NetworkConfig NetworkConfig
 
 	// Volumes is a list of shared volumes between the host and the Sandbox.
