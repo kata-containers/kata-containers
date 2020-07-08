@@ -282,7 +282,7 @@ func beforeSubcommands(c *cli.Context) error {
 		rootless.SetRootless(*r)
 	}
 	// Support --systed-cgroup
-	// Issue: https://github.com/kata-containers/kata-containers/src/runtime/issues/2428
+	// Issue: https://github.com/kata-containers/runtime/issues/2428
 
 	ignoreConfigLogs := false
 	var traceRootSpan string
