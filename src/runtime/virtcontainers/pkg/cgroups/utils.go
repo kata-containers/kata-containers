@@ -9,7 +9,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
+	"strings"
 
 	"github.com/opencontainers/runc/libcontainer/configs"
 	"github.com/opencontainers/runtime-spec/specs-go"
@@ -60,13 +60,20 @@ func ValidCgroupPath(path string, systemdCgroup bool) (string, error) {
 }
 
 func IsSystemdCgroup(cgroupPath string) bool {
-	// systemd cgroup path: slice:prefix:name
-	re := regexp.MustCompile(`([[:alnum:]]|\.)+:([[:alnum:]]|\.)+:([[:alnum:]]|\.)+`)
-	found := re.FindStringIndex(cgroupPath)
 
-	// if found string is equal to cgroupPath then
-	// it's a correct systemd cgroup path.
-	return found != nil && cgroupPath[found[0]:found[1]] == cgroupPath
+	// If we are utilizing systemd to manage cgroups, we expect to receive a path
+	// in the format slice:scopeprefix:name. A typical example would be:
+	//
+	// system.slice:docker:6b4c4a4d0cc2a12c529dcb13a2b8e438dfb3b2a6af34d548d7d
+	//
+	// Based on this, let's split by the ':' delimiter and verify that the first
+	// section has .slice as a suffix.
+	parts := strings.Split(cgroupPath, ":")
+	if len(parts) == 3 && strings.HasSuffix(parts[0], ".slice") {
+		return true
+	}
+
+	return false
 }
 
 func DeviceToCgroupDevice(device string) (*configs.Device, error) {
