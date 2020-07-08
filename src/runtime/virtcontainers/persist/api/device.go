@@ -103,6 +103,10 @@ type DeviceState struct {
 	Major int64
 	Minor int64
 
+	// ColdPlug specifies whether the device must be cold plugged (true)
+	// or hot plugged (false).
+	ColdPlug bool
+
 	// DriverOptions is specific options for each device driver
 	// for example, for BlockDevice, we can set DriverOptions["blockDriver"]="virtio-blk"
 	DriverOptions map[string]string

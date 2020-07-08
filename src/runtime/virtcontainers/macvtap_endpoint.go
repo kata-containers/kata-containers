@@ -58,8 +58,9 @@ func (endpoint *MacvtapEndpoint) SetProperties(properties NetworkInfo) {
 }
 
 // Attach for macvtap endpoint passes macvtap device to the hypervisor.
-func (endpoint *MacvtapEndpoint) Attach(h hypervisor) error {
+func (endpoint *MacvtapEndpoint) Attach(s *Sandbox) error {
 	var err error
+	h := s.hypervisor
 
 	endpoint.VMFds, err = createMacvtapFds(endpoint.EndpointProperties.Iface.Index, int(h.hypervisorConfig().NumVCPUs))
 	if err != nil {

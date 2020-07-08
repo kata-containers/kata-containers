@@ -15,6 +15,7 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/drivers"
 	persistapi "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist/api"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/cgroups"
 	"github.com/safchain/ethtool"
 )
 
@@ -72,27 +73,29 @@ func (endpoint *PhysicalEndpoint) NetworkPair() *NetworkInterfacePair {
 
 // Attach for physical endpoint binds the physical network interface to
 // vfio-pci and adds device to the hypervisor with vfio-passthrough.
-func (endpoint *PhysicalEndpoint) Attach(h hypervisor) error {
+func (endpoint *PhysicalEndpoint) Attach(s *Sandbox) error {
 	// Unbind physical interface from host driver and bind to vfio
 	// so that it can be passed to qemu.
-	if err := bindNICToVFIO(endpoint); err != nil {
+	vfioPath, err := bindNICToVFIO(endpoint)
+	if err != nil {
 		return err
 	}
 
-	// TODO: use device manager as general device management entrance
-	var vendorID, deviceID string
-	if splits := strings.Split(endpoint.VendorDeviceID, " "); len(splits) == 2 {
-		vendorID = splits[0]
-		deviceID = splits[1]
+	c, err := cgroups.DeviceToCgroupDevice(vfioPath)
+	if err != nil {
+		return err
 	}
 
-	d := config.VFIODev{
-		BDF:      endpoint.BDF,
-		VendorID: vendorID,
-		DeviceID: deviceID,
+	d := config.DeviceInfo{
+		ContainerPath: c.Path,
+		DevType:       string(c.Type),
+		Major:         c.Major,
+		Minor:         c.Minor,
+		ColdPlug:      true,
 	}
 
-	return h.addDevice(d, vfioDev)
+	_, err = s.AddDevice(d)
+	return err
 }
 
 // Detach for physical endpoint unbinds the physical network interface from vfio-pci
@@ -202,7 +205,7 @@ func createPhysicalEndpoint(netInfo NetworkInfo) (*PhysicalEndpoint, error) {
 	return physicalEndpoint, nil
 }
 
-func bindNICToVFIO(endpoint *PhysicalEndpoint) error {
+func bindNICToVFIO(endpoint *PhysicalEndpoint) (string, error) {
 	return drivers.BindDevicetoVFIO(endpoint.BDF, endpoint.Driver, endpoint.VendorDeviceID)
 }
 

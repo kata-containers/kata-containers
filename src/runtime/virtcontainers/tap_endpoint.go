@@ -66,7 +66,7 @@ func (endpoint *TapEndpoint) SetProperties(properties NetworkInfo) {
 }
 
 // Attach for tap endpoint adds the tap interface to the hypervisor.
-func (endpoint *TapEndpoint) Attach(h hypervisor) error {
+func (endpoint *TapEndpoint) Attach(s *Sandbox) error {
 	return fmt.Errorf("TapEndpoint does not support Attach, if you're using docker please use --net none")
 }
 
