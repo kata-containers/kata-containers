@@ -1,0 +1,1916 @@
+version: 2.0.0
+components:
+    - prefix: kata_agent
+      title: Kata agent metrics
+      desc: Agent's metrics contains metrics about agent process.
+      metrics:
+        - name: kata_agent_io_stat
+          type: GAUGE
+          unit: ""
+          help: Agent process IO stat.
+          labels:
+            - name: item
+              desc: see `/proc/<pid>/io`
+              manually_edit: false
+              fixed: true
+              values:
+                - value: cancelled_write_byte
+                  desc: ""
+                - value: rchar
+                  desc: ""
+                - value: read_bytes
+                  desc: ""
+                - value: syscr
+                  desc: ""
+                - value: syscw
+                  desc: ""
+                - value: wchar
+                  desc: ""
+                - value: write_bytes
+                  desc: ""
+            - name: sandbox_id
+              desc: ""
+              manually_edit: false
+              fixed: false
+              values: []
+          since: 2.0.0
+        - name: kata_agent_proc_stat
+          type: GAUGE
+          unit: ""
+          help: Agent process stat.
+          labels:
+            - name: item
+              desc: see `/proc/<pid>/stat`
+              manually_edit: false
+              fixed: true
+              values:
+                - value: cstime
+                  desc: ""
+                - value: cutime
+                  desc: ""
+                - value: stime
+                  desc: ""
+                - value: utime
+                  desc: ""
+            - name: sandbox_id
+              desc: ""
+              manually_edit: false
+              fixed: false
+              values: []
+          since: 2.0.0
+        - name: kata_agent_proc_status
+          type: GAUGE
+          unit: ""
+          help: Agent process status.
+          labels:
+            - name: item
+              desc: see `/proc/<pid>/status`
+              manually_edit: false
+              fixed: true
+              values:
+                - value: hugetlbpages
+                  desc: ""
+                - value: nonvoluntary_ctxt_switches
+                  desc: ""
+                - value: rssanon
+                  desc: ""
+                - value: rssfile
+                  desc: ""
+                - value: rssshmem
+                  desc: ""
+                - value: vmdata
+                  desc: ""
+                - value: vmexe
+                  desc: ""
+                - value: vmhwm
+                  desc: ""
+                - value: vmlck
+                  desc: ""
+                - value: vmlib
+                  desc: ""
+                - value: vmpeak
+                  desc: ""
+                - value: vmpin
+                  desc: ""
+                - value: vmpte
+                  desc: ""
+                - value: vmrss
+                  desc: ""
+                - value: vmsize
+                  desc: ""
+                - value: vmstk
+                  desc: ""
+                - value: vmswap
+                  desc: ""
+                - value: voluntary_ctxt_switches
+                  desc: ""
+            - name: sandbox_id
+              desc: ""
+              manually_edit: false
+              fixed: false
+              values: []
+          since: 2.0.0
+        - name: kata_agent_process_cpu_seconds_total
+          type: COUNTER
+          unit: seconds
+          help: Total user and system CPU time spent in seconds.
+          labels:
+            - name: sandbox_id
+              desc: ""
+              manually_edit: false
+              fixed: false
+              values: []
+          since: 2.0.0
+        - name: kata_agent_process_max_fds
+          type: GAUGE
+          unit: ""
+          help: Maximum number of open file descriptors.
+          labels:
+            - name: sandbox_id
+              desc: ""
+              manually_edit: false
+              fixed: false
+              values: []
+          since: 2.0.0
+        - name: kata_agent_process_open_fds
+          type: GAUGE
+          unit: ""
+          help: Number of open file descriptors.
+          labels:
+            - name: sandbox_id
+              desc: ""
+              manually_edit: false
+              fixed: false
+              values: []
+          since: 2.0.0
+        - name: kata_agent_process_resident_memory_bytes
+          type: GAUGE
+          unit: bytes
+          help: Resident memory size in bytes.
+          labels:
+            - name: sandbox_id
+              desc: ""
+              manually_edit: false
+              fixed: false
+              values: []
+          since: 2.0.0
+        - name: kata_agent_process_start_time_seconds
+          type: GAUGE
+          unit: seconds
+          help: Start time of the process since unix epoch in seconds.
+          labels:
+            - name: sandbox_id
+              desc: ""
+              manually_edit: false
+              fixed: false
+              values: []
+          since: 2.0.0
+        - name: kata_agent_process_virtual_memory_bytes
+          type: GAUGE
+          unit: bytes
+          help: Virtual memory size in bytes.
+          labels:
+            - name: sandbox_id
+              desc: ""
+              manually_edit: false
+              fixed: false
+              values: []
+          since: 2.0.0
+        - name: kata_agent_scrape_count
+          type: COUNTER
+          unit: ""
+          help: Metrics scrape count
+          labels:
+            - name: sandbox_id
+              desc: ""
+              manually_edit: false
+              fixed: false
+              values: []
+          since: 2.0.0
+        - name: kata_agent_total_rss
+          type: GAUGE
+          unit: ""
+          help: Agent process total rss size
+          labels:
+            - name: sandbox_id
+              desc: ""
+              manually_edit: false
+              fixed: false
+              values: []
+          since: 2.0.0
+        - name: kata_agent_total_time
+          type: GAUGE
+          unit: ""
+          help: Agent process total time
+          labels:
+            - name: sandbox_id
+              desc: ""
+              manually_edit: false
+              fixed: false
+              values: []
+          since: 2.0.0
+        - name: kata_agent_total_vm
+          type: GAUGE
+          unit: ""
+          help: Agent process total vm size
+          labels:
+            - name: sandbox_id
+              desc: ""
+              manually_edit: false
+              fixed: false
+              values: []
+          since: 2.0.0
+    - prefix: kata_guest
+      title: Kata guest OS metrics
+      desc: Guest OS's metrics in hypervisor.
+      metrics:
+        - name: kata_guest_cpu_time
+          type: GAUGE
+          unit: ""
+          help: Guest CPU stat.
+          labels:
+            - name: cpu
+              desc: CPU no. and total for all CPUs
+              manually_edit: true
+              fixed: true
+              values:
+                - value: "0"
+                  desc: CPU 0
+                - value: "1"
+                  desc: CPU 1
+                - value: total
+                  desc: for all CPUs
+            - name: item
+              desc: Kernel/system statistics, from `/proc/stat`
+              manually_edit: false
+              fixed: true
+              values:
+                - value: guest
+                  desc: ""
+                - value: guest_nice
+                  desc: ""
+                - value: idle
+                  desc: ""
+                - value: iowait
+                  desc: ""
+                - value: irq
+                  desc: ""
+                - value: nice
+                  desc: ""
+                - value: softirq
+                  desc: ""
+                - value: steal
+                  desc: ""
+                - value: system
+                  desc: ""
+                - value: user
+                  desc: ""
+            - name: sandbox_id
+              desc: ""
+              manually_edit: false
+              fixed: false
+              values: []
+          since: 2.0.0
+        - name: kata_guest_diskstat
+          type: GAUGE
+          unit: ""
+          help: Disks stat in system.
+          labels:
+            - name: disk
+              desc: disk name
+              manually_edit: false
+              fixed: false
+              values: []
+            - name: item
+              desc: see `/proc/diskstats`
+              manually_edit: false
+              fixed: true
+              values:
+                - value: discards
+                  desc: ""
+                - value: discards_merged
+                  desc: ""
+                - value: flushes
+                  desc: ""
+                - value: in_progress
+                  desc: ""
+                - value: merged
+                  desc: ""
+                - value: reads
+                  desc: ""
+                - value: sectors_discarded
+                  desc: ""
+                - value: sectors_read
+                  desc: ""
+                - value: sectors_written
+                  desc: ""
+                - value: time_discarding
+                  desc: ""
+                - value: time_flushing
+                  desc: ""
+                - value: time_in_progress
+                  desc: ""
+                - value: time_reading
+                  desc: ""
+                - value: time_writing
+                  desc: ""
+                - value: weighted_time_in_progress
+                  desc: ""
+                - value: writes
+                  desc: ""
+                - value: writes_merged
+                  desc: ""
+            - name: sandbox_id
+              desc: ""
+              manually_edit: false
+              fixed: false
+              values: []
+          since: 2.0.0
+        - name: kata_guest_load
+          type: GAUGE
+          unit: ""
+          help: Guest system load.
+          labels:
+            - name: item
+              desc: ""
+              manually_edit: false
+              fixed: true
+              values:
+                - value: load1
+                  desc: ""
+                - value: load15
+                  desc: ""
+                - value: load5
+                  desc: ""
+            - name: sandbox_id
+              desc: ""
+              manually_edit: false
+              fixed: false
+              values: []
+          since: 2.0.0
+        - name: kata_guest_meminfo
+          type: GAUGE
+          unit: ""
+          help: Statistics about memory usage on the system.
+          labels:
+            - name: item
+              desc: see `/proc/meminfo`
+              manually_edit: false
+              fixed: true
+              values:
+                - value: active
+                  desc: ""
+                - value: active_anon
+                  desc: ""
+                - value: active_file
+                  desc: ""
+                - value: anon_hugepages
+                  desc: ""
+                - value: anon_pages
+                  desc: ""
+                - value: bounce
+                  desc: ""
+                - value: buffers
+                  desc: ""
+                - value: cached
+                  desc: ""
+                - value: cma_free
+                  desc: ""
+                - value: cma_total
+                  desc: ""
+                - value: commit_limit
+                  desc: ""
+                - value: committed_as
+                  desc: ""
+                - value: direct_map_1G
+                  desc: ""
+                - value: direct_map_2M
+                  desc: ""
+                - value: direct_map_4M
+                  desc: ""
+                - value: direct_map_4k
+                  desc: ""
+                - value: dirty
+                  desc: ""
+                - value: hardware_corrupted
+                  desc: ""
+                - value: high_free
+                  desc: ""
+                - value: high_total
+                  desc: ""
+                - value: hugepages_free
+                  desc: ""
+                - value: hugepages_rsvd
+                  desc: ""
+                - value: hugepages_surp
+                  desc: ""
+                - value: hugepages_total
+                  desc: ""
+                - value: hugepagesize
+                  desc: ""
+                - value: hugetlb
+                  desc: ""
+                - value: inactive
+                  desc: ""
+                - value: inactive_anon
+                  desc: ""
+                - value: inactive_file
+                  desc: ""
+                - value: k_reclaimable
+                  desc: ""
+                - value: kernel_stack
+                  desc: ""
+                - value: low_free
+                  desc: ""
+                - value: low_total
+                  desc: ""
+                - value: mapped
+                  desc: ""
+                - value: mem_available
+                  desc: ""
+                - value: mem_free
+                  desc: ""
+                - value: mem_total
+                  desc: ""
+                - value: mlocked
+                  desc: ""
+                - value: mmap_copy
+                  desc: ""
+                - value: nfs_unstable
+                  desc: ""
+                - value: page_tables
+                  desc: ""
+                - value: per_cpu
+                  desc: ""
+                - value: quicklists
+                  desc: ""
+                - value: s_reclaimable
+                  desc: ""
+                - value: s_unreclaim
+                  desc: ""
+                - value: shmem
+                  desc: ""
+                - value: shmem_hugepages
+                  desc: ""
+                - value: shmem_pmd_mapped
+                  desc: ""
+                - value: slab
+                  desc: ""
+                - value: swap_cached
+                  desc: ""
+                - value: swap_free
+                  desc: ""
+                - value: swap_total
+                  desc: ""
+                - value: unevictable
+                  desc: ""
+                - value: vmalloc_chunk
+                  desc: ""
+                - value: vmalloc_total
+                  desc: ""
+                - value: vmalloc_used
+                  desc: ""
+                - value: writeback
+                  desc: ""
+                - value: writeback_tmp
+                  desc: ""
+            - name: sandbox_id
+              desc: ""
+              manually_edit: false
+              fixed: false
+              values: []
+          since: 2.0.0
+        - name: kata_guest_netdev_stat
+          type: GAUGE
+          unit: ""
+          help: Guest net devices stats.
+          labels:
+            - name: interface
+              desc: network device name
+              manually_edit: false
+              fixed: false
+              values: []
+            - name: item
+              desc: see `/proc/net/dev`
+              manually_edit: false
+              fixed: true
+              values:
+                - value: recv_bytes
+                  desc: ""
+                - value: recv_compressed
+                  desc: ""
+                - value: recv_drop
+                  desc: ""
+                - value: recv_errs
+                  desc: ""
+                - value: recv_fifo
+                  desc: ""
+                - value: recv_frame
+                  desc: ""
+                - value: recv_multicast
+                  desc: ""
+                - value: recv_packets
+                  desc: ""
+                - value: sent_bytes
+                  desc: ""
+                - value: sent_carrier
+                  desc: ""
+                - value: sent_colls
+                  desc: ""
+                - value: sent_compressed
+                  desc: ""
+                - value: sent_drop
+                  desc: ""
+                - value: sent_errs
+                  desc: ""
+                - value: sent_fifo
+                  desc: ""
+                - value: sent_packets
+                  desc: ""
+            - name: sandbox_id
+              desc: ""
+              manually_edit: false
+              fixed: false
+              values: []
+          since: 2.0.0
+        - name: kata_guest_tasks
+          type: GAUGE
+          unit: ""
+          help: Guest system load.
+          labels:
+            - name: item
+              desc: ""
+              manually_edit: false
+              fixed: true
+              values:
+                - value: cur
+                  desc: ""
+                - value: max
+                  desc: ""
+            - name: sandbox_id
+              desc: ""
+              manually_edit: false
+              fixed: false
+              values: []
+          since: 2.0.0
+        - name: kata_guest_vm_stat
+          type: GAUGE
+          unit: ""
+          help: Guest virtual memory stat.
+          labels:
+            - name: item
+              desc: see `/proc/vmstat`
+              manually_edit: false
+              fixed: true
+              values:
+                - value: allocstall_dma
+                  desc: ""
+                - value: allocstall_dma32
+                  desc: ""
+                - value: allocstall_movable
+                  desc: ""
+                - value: allocstall_normal
+                  desc: ""
+                - value: balloon_deflate
+                  desc: ""
+                - value: balloon_inflate
+                  desc: ""
+                - value: compact_daemon_free_scanned
+                  desc: ""
+                - value: compact_daemon_migrate_scanned
+                  desc: ""
+                - value: compact_daemon_wake
+                  desc: ""
+                - value: compact_fail
+                  desc: ""
+                - value: compact_free_scanned
+                  desc: ""
+                - value: compact_isolated
+                  desc: ""
+                - value: compact_migrate_scanned
+                  desc: ""
+                - value: compact_stall
+                  desc: ""
+                - value: compact_success
+                  desc: ""
+                - value: drop_pagecache
+                  desc: ""
+                - value: drop_slab
+                  desc: ""
+                - value: htlb_buddy_alloc_fail
+                  desc: ""
+                - value: htlb_buddy_alloc_success
+                  desc: ""
+                - value: kswapd_high_wmark_hit_quickly
+                  desc: ""
+                - value: kswapd_inodesteal
+                  desc: ""
+                - value: kswapd_low_wmark_hit_quickly
+                  desc: ""
+                - value: nr_active_anon
+                  desc: ""
+                - value: nr_active_file
+                  desc: ""
+                - value: nr_anon_pages
+                  desc: ""
+                - value: nr_anon_transparent_hugepages
+                  desc: ""
+                - value: nr_bounce
+                  desc: ""
+                - value: nr_dirtied
+                  desc: ""
+                - value: nr_dirty
+                  desc: ""
+                - value: nr_dirty_background_threshold
+                  desc: ""
+                - value: nr_dirty_threshold
+                  desc: ""
+                - value: nr_file_pages
+                  desc: ""
+                - value: nr_free_cma
+                  desc: ""
+                - value: nr_free_pages
+                  desc: ""
+                - value: nr_inactive_anon
+                  desc: ""
+                - value: nr_inactive_file
+                  desc: ""
+                - value: nr_isolated_anon
+                  desc: ""
+                - value: nr_isolated_file
+                  desc: ""
+                - value: nr_kernel_stack
+                  desc: ""
+                - value: nr_mapped
+                  desc: ""
+                - value: nr_mlock
+                  desc: ""
+                - value: nr_page_table_pages
+                  desc: ""
+                - value: nr_shmem
+                  desc: ""
+                - value: nr_shmem_hugepages
+                  desc: ""
+                - value: nr_shmem_pmdmapped
+                  desc: ""
+                - value: nr_slab_reclaimable
+                  desc: ""
+                - value: nr_slab_unreclaimable
+                  desc: ""
+                - value: nr_unevictable
+                  desc: ""
+                - value: nr_unstable
+                  desc: ""
+                - value: nr_vmscan_immediate_reclaim
+                  desc: ""
+                - value: nr_vmscan_write
+                  desc: ""
+                - value: nr_writeback
+                  desc: ""
+                - value: nr_writeback_temp
+                  desc: ""
+                - value: nr_written
+                  desc: ""
+                - value: nr_zone_active_anon
+                  desc: ""
+                - value: nr_zone_active_file
+                  desc: ""
+                - value: nr_zone_inactive_anon
+                  desc: ""
+                - value: nr_zone_inactive_file
+                  desc: ""
+                - value: nr_zone_unevictable
+                  desc: ""
+                - value: nr_zone_write_pending
+                  desc: ""
+                - value: oom_kill
+                  desc: ""
+                - value: pageoutrun
+                  desc: ""
+                - value: pgactivate
+                  desc: ""
+                - value: pgalloc_dma
+                  desc: ""
+                - value: pgalloc_dma32
+                  desc: ""
+                - value: pgalloc_movable
+                  desc: ""
+                - value: pgalloc_normal
+                  desc: ""
+                - value: pgdeactivate
+                  desc: ""
+                - value: pgfault
+                  desc: ""
+                - value: pgfree
+                  desc: ""
+                - value: pginodesteal
+                  desc: ""
+                - value: pglazyfree
+                  desc: ""
+                - value: pglazyfreed
+                  desc: ""
+                - value: pgmajfault
+                  desc: ""
+                - value: pgmigrate_fail
+                  desc: ""
+                - value: pgmigrate_success
+                  desc: ""
+                - value: pgpgin
+                  desc: ""
+                - value: pgpgout
+                  desc: ""
+                - value: pgrefill
+                  desc: ""
+                - value: pgrotated
+                  desc: ""
+                - value: pgscan_direct
+                  desc: ""
+                - value: pgscan_direct_throttle
+                  desc: ""
+                - value: pgscan_kswapd
+                  desc: ""
+                - value: pgskip_dma
+                  desc: ""
+                - value: pgskip_dma32
+                  desc: ""
+                - value: pgskip_movable
+                  desc: ""
+                - value: pgskip_normal
+                  desc: ""
+                - value: pgsteal_direct
+                  desc: ""
+                - value: pgsteal_kswapd
+                  desc: ""
+                - value: pswpin
+                  desc: ""
+                - value: pswpout
+                  desc: ""
+                - value: slabs_scanned
+                  desc: ""
+                - value: swap_ra
+                  desc: ""
+                - value: swap_ra_hit
+                  desc: ""
+                - value: unevictable_pgs_cleared
+                  desc: ""
+                - value: unevictable_pgs_culled
+                  desc: ""
+                - value: unevictable_pgs_mlocked
+                  desc: ""
+                - value: unevictable_pgs_munlocked
+                  desc: ""
+                - value: unevictable_pgs_rescued
+                  desc: ""
+                - value: unevictable_pgs_scanned
+                  desc: ""
+                - value: unevictable_pgs_stranded
+                  desc: ""
+                - value: workingset_activate
+                  desc: ""
+                - value: workingset_nodereclaim
+                  desc: ""
+                - value: workingset_refault
+                  desc: ""
+            - name: sandbox_id
+              desc: ""
+              manually_edit: false
+              fixed: false
+              values: []
+          since: 2.0.0
+    - prefix: kata_hypervisor
+      title: Hypervisor metrics
+      desc: Hypervisors metrics, collected mainly from `proc` filesystem of hypervisor process.
+      metrics:
+        - name: kata_hypervisor_fds
+          type: GAUGE
+          unit: ""
+          help: Open FDs for hypervisor.
+          labels:
+            - name: sandbox_id
+              desc: ""
+              manually_edit: false
+              fixed: false
+              values: []
+          since: 2.0.0
+        - name: kata_hypervisor_io_stat
+          type: GAUGE
+          unit: ""
+          help: Process IO statistics.
+          labels:
+            - name: item
+              desc: see `/proc/<pid>/io`
+              manually_edit: false
+              fixed: true
+              values:
+                - value: cancelledwritebytes
+                  desc: ""
+                - value: rchar
+                  desc: ""
+                - value: readbytes
+                  desc: ""
+                - value: syscr
+                  desc: ""
+                - value: syscw
+                  desc: ""
+                - value: wchar
+                  desc: ""
+                - value: writebytes
+                  desc: ""
+            - name: sandbox_id
+              desc: ""
+              manually_edit: false
+              fixed: false
+              values: []
+          since: 2.0.0
+        - name: kata_hypervisor_netdev
+          type: GAUGE
+          unit: ""
+          help: Net devices statistics.
+          labels:
+            - name: interface
+              desc: network device name
+              manually_edit: false
+              fixed: false
+              values: []
+            - name: item
+              desc: see `/proc/net/dev`
+              manually_edit: false
+              fixed: true
+              values:
+                - value: recv_bytes
+                  desc: ""
+                - value: recv_compressed
+                  desc: ""
+                - value: recv_drop
+                  desc: ""
+                - value: recv_errs
+                  desc: ""
+                - value: recv_fifo
+                  desc: ""
+                - value: recv_frame
+                  desc: ""
+                - value: recv_multicast
+                  desc: ""
+                - value: recv_packets
+                  desc: ""
+                - value: sent_bytes
+                  desc: ""
+                - value: sent_carrier
+                  desc: ""
+                - value: sent_colls
+                  desc: ""
+                - value: sent_compressed
+                  desc: ""
+                - value: sent_drop
+                  desc: ""
+                - value: sent_errs
+                  desc: ""
+                - value: sent_fifo
+                  desc: ""
+                - value: sent_packets
+                  desc: ""
+            - name: sandbox_id
+              desc: ""
+              manually_edit: false
+              fixed: false
+              values: []
+          since: 2.0.0
+        - name: kata_hypervisor_proc_stat
+          type: GAUGE
+          unit: ""
+          help: Hypervisor process statistics.
+          labels:
+            - name: item
+              desc: see `/proc/<pid>/stat`
+              manually_edit: false
+              fixed: true
+              values:
+                - value: cstime
+                  desc: ""
+                - value: cutime
+                  desc: ""
+                - value: stime
+                  desc: ""
+                - value: utime
+                  desc: ""
+            - name: sandbox_id
+              desc: ""
+              manually_edit: false
+              fixed: false
+              values: []
+          since: 2.0.0
+        - name: kata_hypervisor_proc_status
+          type: GAUGE
+          unit: ""
+          help: Hypervisor process status.
+          labels:
+            - name: item
+              desc: see `/proc/<pid>/status`
+              manually_edit: false
+              fixed: true
+              values:
+                - value: hugetlbpages
+                  desc: ""
+                - value: nonvoluntary_ctxt_switches
+                  desc: ""
+                - value: rssanon
+                  desc: ""
+                - value: rssfile
+                  desc: ""
+                - value: rssshmem
+                  desc: ""
+                - value: vmdata
+                  desc: ""
+                - value: vmexe
+                  desc: ""
+                - value: vmhwm
+                  desc: ""
+                - value: vmlck
+                  desc: ""
+                - value: vmlib
+                  desc: ""
+                - value: vmpeak
+                  desc: ""
+                - value: vmpin
+                  desc: ""
+                - value: vmpmd
+                  desc: ""
+                - value: vmpte
+                  desc: ""
+                - value: vmrss
+                  desc: ""
+                - value: vmsize
+                  desc: ""
+                - value: vmstk
+                  desc: ""
+                - value: vmswap
+                  desc: ""
+                - value: voluntary_ctxt_switches
+                  desc: ""
+            - name: sandbox_id
+              desc: ""
+              manually_edit: false
+              fixed: false
+              values: []
+          since: 2.0.0
+        - name: kata_hypervisor_threads
+          type: GAUGE
+          unit: ""
+          help: Hypervisor process threads.
+          labels:
+            - name: sandbox_id
+              desc: ""
+              manually_edit: false
+              fixed: false
+              values: []
+          since: 2.0.0
+    - prefix: kata_monitor
+      title: Kata monitor metrics
+      desc: Metrics about `kata-monitor` itself.
+      metrics:
+        - name: kata_monitor_go_gc_duration_seconds
+          type: SUMMARY
+          unit: seconds
+          help: A summary of the pause duration of garbage collection cycles.
+          labels: []
+          since: 2.0.0
+        - name: kata_monitor_go_goroutines
+          type: GAUGE
+          unit: ""
+          help: Number of goroutines that currently exist.
+          labels: []
+          since: 2.0.0
+        - name: kata_monitor_go_info
+          type: GAUGE
+          unit: ""
+          help: Information about the Go environment.
+          labels:
+            - name: version
+              desc: golang version
+              manually_edit: true
+              fixed: true
+              values:
+                - value: go1.13.9
+                  desc: environment dependent variable
+          since: 2.0.0
+        - name: kata_monitor_go_memstats_alloc_bytes
+          type: GAUGE
+          unit: bytes
+          help: Number of bytes allocated and still in use.
+          labels: []
+          since: 2.0.0
+        - name: kata_monitor_go_memstats_alloc_bytes_total
+          type: COUNTER
+          unit: bytes
+          help: Total number of bytes allocated, even if freed.
+          labels: []
+          since: 2.0.0
+        - name: kata_monitor_go_memstats_buck_hash_sys_bytes
+          type: GAUGE
+          unit: bytes
+          help: Number of bytes used by the profiling bucket hash table.
+          labels: []
+          since: 2.0.0
+        - name: kata_monitor_go_memstats_frees_total
+          type: COUNTER
+          unit: ""
+          help: Total number of frees.
+          labels: []
+          since: 2.0.0
+        - name: kata_monitor_go_memstats_gc_cpu_fraction
+          type: GAUGE
+          unit: ""
+          help: The fraction of this program's available CPU time used by the GC since the program started.
+          labels: []
+          since: 2.0.0
+        - name: kata_monitor_go_memstats_gc_sys_bytes
+          type: GAUGE
+          unit: bytes
+          help: Number of bytes used for garbage collection system metadata.
+          labels: []
+          since: 2.0.0
+        - name: kata_monitor_go_memstats_heap_alloc_bytes
+          type: GAUGE
+          unit: bytes
+          help: Number of heap bytes allocated and still in use.
+          labels: []
+          since: 2.0.0
+        - name: kata_monitor_go_memstats_heap_idle_bytes
+          type: GAUGE
+          unit: bytes
+          help: Number of heap bytes waiting to be used.
+          labels: []
+          since: 2.0.0
+        - name: kata_monitor_go_memstats_heap_inuse_bytes
+          type: GAUGE
+          unit: bytes
+          help: Number of heap bytes that are in use.
+          labels: []
+          since: 2.0.0
+        - name: kata_monitor_go_memstats_heap_objects
+          type: GAUGE
+          unit: ""
+          help: Number of allocated objects.
+          labels: []
+          since: 2.0.0
+        - name: kata_monitor_go_memstats_heap_released_bytes
+          type: GAUGE
+          unit: bytes
+          help: Number of heap bytes released to OS.
+          labels: []
+          since: 2.0.0
+        - name: kata_monitor_go_memstats_heap_sys_bytes
+          type: GAUGE
+          unit: bytes
+          help: Number of heap bytes obtained from system.
+          labels: []
+          since: 2.0.0
+        - name: kata_monitor_go_memstats_last_gc_time_seconds
+          type: GAUGE
+          unit: seconds
+          help: Number of seconds since 1970 of last garbage collection.
+          labels: []
+          since: 2.0.0
+        - name: kata_monitor_go_memstats_lookups_total
+          type: COUNTER
+          unit: ""
+          help: Total number of pointer lookups.
+          labels: []
+          since: 2.0.0
+        - name: kata_monitor_go_memstats_mallocs_total
+          type: COUNTER
+          unit: ""
+          help: Total number of mallocs.
+          labels: []
+          since: 2.0.0
+        - name: kata_monitor_go_memstats_mcache_inuse_bytes
+          type: GAUGE
+          unit: bytes
+          help: Number of bytes in use by mcache structures.
+          labels: []
+          since: 2.0.0
+        - name: kata_monitor_go_memstats_mcache_sys_bytes
+          type: GAUGE
+          unit: bytes
+          help: Number of bytes used for mcache structures obtained from system.
+          labels: []
+          since: 2.0.0
+        - name: kata_monitor_go_memstats_mspan_inuse_bytes
+          type: GAUGE
+          unit: bytes
+          help: Number of bytes in use by mspan structures.
+          labels: []
+          since: 2.0.0
+        - name: kata_monitor_go_memstats_mspan_sys_bytes
+          type: GAUGE
+          unit: bytes
+          help: Number of bytes used for mspan structures obtained from system.
+          labels: []
+          since: 2.0.0
+        - name: kata_monitor_go_memstats_next_gc_bytes
+          type: GAUGE
+          unit: bytes
+          help: Number of heap bytes when next garbage collection will take place.
+          labels: []
+          since: 2.0.0
+        - name: kata_monitor_go_memstats_other_sys_bytes
+          type: GAUGE
+          unit: bytes
+          help: Number of bytes used for other system allocations.
+          labels: []
+          since: 2.0.0
+        - name: kata_monitor_go_memstats_stack_inuse_bytes
+          type: GAUGE
+          unit: bytes
+          help: Number of bytes in use by the stack allocator.
+          labels: []
+          since: 2.0.0
+        - name: kata_monitor_go_memstats_stack_sys_bytes
+          type: GAUGE
+          unit: bytes
+          help: Number of bytes obtained from system for stack allocator.
+          labels: []
+          since: 2.0.0
+        - name: kata_monitor_go_memstats_sys_bytes
+          type: GAUGE
+          unit: bytes
+          help: Number of bytes obtained from system.
+          labels: []
+          since: 2.0.0
+        - name: kata_monitor_go_threads
+          type: GAUGE
+          unit: ""
+          help: Number of OS threads created.
+          labels: []
+          since: 2.0.0
+        - name: kata_monitor_process_cpu_seconds_total
+          type: COUNTER
+          unit: seconds
+          help: Total user and system CPU time spent in seconds.
+          labels: []
+          since: 2.0.0
+        - name: kata_monitor_process_max_fds
+          type: GAUGE
+          unit: ""
+          help: Maximum number of open file descriptors.
+          labels: []
+          since: 2.0.0
+        - name: kata_monitor_process_open_fds
+          type: GAUGE
+          unit: ""
+          help: Number of open file descriptors.
+          labels: []
+          since: 2.0.0
+        - name: kata_monitor_process_resident_memory_bytes
+          type: GAUGE
+          unit: bytes
+          help: Resident memory size in bytes.
+          labels: []
+          since: 2.0.0
+        - name: kata_monitor_process_start_time_seconds
+          type: GAUGE
+          unit: seconds
+          help: Start time of the process since unix epoch in seconds.
+          labels: []
+          since: 2.0.0
+        - name: kata_monitor_process_virtual_memory_bytes
+          type: GAUGE
+          unit: bytes
+          help: Virtual memory size in bytes.
+          labels: []
+          since: 2.0.0
+        - name: kata_monitor_process_virtual_memory_max_bytes
+          type: GAUGE
+          unit: bytes
+          help: Maximum amount of virtual memory available in bytes.
+          labels: []
+          since: 2.0.0
+        - name: kata_monitor_running_shim_count
+          type: GAUGE
+          unit: ""
+          help: Running shim count(running sandboxes).
+          labels: []
+          since: 2.0.0
+        - name: kata_monitor_scrape_count
+          type: COUNTER
+          unit: ""
+          help: Scape count.
+          labels: []
+          since: 2.0.0
+        - name: kata_monitor_scrape_durations_histogram_milliseconds
+          type: HISTOGRAM
+          unit: milliseconds
+          help: Time used to scrape from shims
+          labels: []
+          since: 2.0.0
+        - name: kata_monitor_scrape_failed_count
+          type: COUNTER
+          unit: ""
+          help: Failed scape count.
+          labels: []
+          since: 2.0.0
+    - prefix: kata_shim
+      title: Kata containerd shim v2 metrics
+      desc: Metrics about Kata containerd shim v2 process.
+      metrics:
+        - name: kata_shim_agent_rpc_durations_histogram_milliseconds
+          type: HISTOGRAM
+          unit: milliseconds
+          help: RPC latency distributions.
+          labels:
+            - name: action
+              desc: RPC actions of Kata agent
+              manually_edit: true
+              fixed: true
+              values:
+                - value: grpc.CheckRequest
+                  desc: ""
+                - value: grpc.CloseStdinRequest
+                  desc: ""
+                - value: grpc.CopyFileRequest
+                  desc: ""
+                - value: grpc.CreateContainerRequest
+                  desc: ""
+                - value: grpc.CreateSandboxRequest
+                  desc: ""
+                - value: grpc.DestroySandboxRequest
+                  desc: ""
+                - value: grpc.ExecProcessRequest
+                  desc: ""
+                - value: grpc.GetMetricsRequest
+                  desc: ""
+                - value: grpc.GuestDetailsRequest
+                  desc: ""
+                - value: grpc.ListInterfacesRequest
+                  desc: ""
+                - value: grpc.ListProcessesRequest
+                  desc: ""
+                - value: grpc.ListRoutesRequest
+                  desc: ""
+                - value: grpc.MemHotplugByProbeRequest
+                  desc: ""
+                - value: grpc.OnlineCPUMemRequest
+                  desc: ""
+                - value: grpc.PauseContainerRequest
+                  desc: ""
+                - value: grpc.RemoveContainerRequest
+                  desc: ""
+                - value: grpc.ReseedRandomDevRequest
+                  desc: ""
+                - value: grpc.ResumeContainerRequest
+                  desc: ""
+                - value: grpc.SetGuestDateTimeRequest
+                  desc: ""
+                - value: grpc.SignalProcessRequest
+                  desc: ""
+                - value: grpc.StartContainerRequest
+                  desc: ""
+                - value: grpc.StartTracingRequest
+                  desc: ""
+                - value: grpc.StatsContainerRequest
+                  desc: ""
+                - value: grpc.StopTracingRequest
+                  desc: ""
+                - value: grpc.TtyWinResizeRequest
+                  desc: ""
+                - value: grpc.UpdateContainerRequest
+                  desc: ""
+                - value: grpc.UpdateInterfaceRequest
+                  desc: ""
+                - value: grpc.UpdateRoutesRequest
+                  desc: ""
+                - value: grpc.WaitProcessRequest
+                  desc: ""
+                - value: grpc.WriteStreamRequest
+                  desc: ""
+            - name: sandbox_id
+              desc: ""
+              manually_edit: false
+              fixed: false
+              values: []
+          since: 2.0.0
+        - name: kata_shim_fds
+          type: GAUGE
+          unit: ""
+          help: Kata containerd shim v2 open FDs.
+          labels:
+            - name: sandbox_id
+              desc: ""
+              manually_edit: false
+              fixed: false
+              values: []
+          since: 2.0.0
+        - name: kata_shim_go_gc_duration_seconds
+          type: SUMMARY
+          unit: seconds
+          help: A summary of the pause duration of garbage collection cycles.
+          labels:
+            - name: sandbox_id
+              desc: ""
+              manually_edit: false
+              fixed: false
+              values: []
+          since: 2.0.0
+        - name: kata_shim_go_goroutines
+          type: GAUGE
+          unit: ""
+          help: Number of goroutines that currently exist.
+          labels:
+            - name: sandbox_id
+              desc: ""
+              manually_edit: false
+              fixed: false
+              values: []
+          since: 2.0.0
+        - name: kata_shim_go_info
+          type: GAUGE
+          unit: ""
+          help: Information about the Go environment.
+          labels:
+            - name: sandbox_id
+              desc: ""
+              manually_edit: false
+              fixed: false
+              values: []
+            - name: version
+              desc: golang version
+              manually_edit: true
+              fixed: true
+              values:
+                - value: go1.13.9
+                  desc: environment dependent variable
+          since: 2.0.0
+        - name: kata_shim_go_memstats_alloc_bytes
+          type: GAUGE
+          unit: bytes
+          help: Number of bytes allocated and still in use.
+          labels:
+            - name: sandbox_id
+              desc: ""
+              manually_edit: false
+              fixed: false
+              values: []
+          since: 2.0.0
+        - name: kata_shim_go_memstats_alloc_bytes_total
+          type: COUNTER
+          unit: bytes
+          help: Total number of bytes allocated, even if freed.
+          labels:
+            - name: sandbox_id
+              desc: ""
+              manually_edit: false
+              fixed: false
+              values: []
+          since: 2.0.0
+        - name: kata_shim_go_memstats_buck_hash_sys_bytes
+          type: GAUGE
+          unit: bytes
+          help: Number of bytes used by the profiling bucket hash table.
+          labels:
+            - name: sandbox_id
+              desc: ""
+              manually_edit: false
+              fixed: false
+              values: []
+          since: 2.0.0
+        - name: kata_shim_go_memstats_frees_total
+          type: COUNTER
+          unit: ""
+          help: Total number of frees.
+          labels:
+            - name: sandbox_id
+              desc: ""
+              manually_edit: false
+              fixed: false
+              values: []
+          since: 2.0.0
+        - name: kata_shim_go_memstats_gc_cpu_fraction
+          type: GAUGE
+          unit: ""
+          help: The fraction of this program's available CPU time used by the GC since the program started.
+          labels:
+            - name: sandbox_id
+              desc: ""
+              manually_edit: false
+              fixed: false
+              values: []
+          since: 2.0.0
+        - name: kata_shim_go_memstats_gc_sys_bytes
+          type: GAUGE
+          unit: bytes
+          help: Number of bytes used for garbage collection system metadata.
+          labels:
+            - name: sandbox_id
+              desc: ""
+              manually_edit: false
+              fixed: false
+              values: []
+          since: 2.0.0
+        - name: kata_shim_go_memstats_heap_alloc_bytes
+          type: GAUGE
+          unit: bytes
+          help: Number of heap bytes allocated and still in use.
+          labels:
+            - name: sandbox_id
+              desc: ""
+              manually_edit: false
+              fixed: false
+              values: []
+          since: 2.0.0
+        - name: kata_shim_go_memstats_heap_idle_bytes
+          type: GAUGE
+          unit: bytes
+          help: Number of heap bytes waiting to be used.
+          labels:
+            - name: sandbox_id
+              desc: ""
+              manually_edit: false
+              fixed: false
+              values: []
+          since: 2.0.0
+        - name: kata_shim_go_memstats_heap_inuse_bytes
+          type: GAUGE
+          unit: bytes
+          help: Number of heap bytes that are in use.
+          labels:
+            - name: sandbox_id
+              desc: ""
+              manually_edit: false
+              fixed: false
+              values: []
+          since: 2.0.0
+        - name: kata_shim_go_memstats_heap_objects
+          type: GAUGE
+          unit: ""
+          help: Number of allocated objects.
+          labels:
+            - name: sandbox_id
+              desc: ""
+              manually_edit: false
+              fixed: false
+              values: []
+          since: 2.0.0
+        - name: kata_shim_go_memstats_heap_released_bytes
+          type: GAUGE
+          unit: bytes
+          help: Number of heap bytes released to OS.
+          labels:
+            - name: sandbox_id
+              desc: ""
+              manually_edit: false
+              fixed: false
+              values: []
+          since: 2.0.0
+        - name: kata_shim_go_memstats_heap_sys_bytes
+          type: GAUGE
+          unit: bytes
+          help: Number of heap bytes obtained from system.
+          labels:
+            - name: sandbox_id
+              desc: ""
+              manually_edit: false
+              fixed: false
+              values: []
+          since: 2.0.0
+        - name: kata_shim_go_memstats_last_gc_time_seconds
+          type: GAUGE
+          unit: seconds
+          help: Number of seconds since 1970 of last garbage collection.
+          labels:
+            - name: sandbox_id
+              desc: ""
+              manually_edit: false
+              fixed: false
+              values: []
+          since: 2.0.0
+        - name: kata_shim_go_memstats_lookups_total
+          type: COUNTER
+          unit: ""
+          help: Total number of pointer lookups.
+          labels:
+            - name: sandbox_id
+              desc: ""
+              manually_edit: false
+              fixed: false
+              values: []
+          since: 2.0.0
+        - name: kata_shim_go_memstats_mallocs_total
+          type: COUNTER
+          unit: ""
+          help: Total number of mallocs.
+          labels:
+            - name: sandbox_id
+              desc: ""
+              manually_edit: false
+              fixed: false
+              values: []
+          since: 2.0.0
+        - name: kata_shim_go_memstats_mcache_inuse_bytes
+          type: GAUGE
+          unit: bytes
+          help: Number of bytes in use by mcache structures.
+          labels:
+            - name: sandbox_id
+              desc: ""
+              manually_edit: false
+              fixed: false
+              values: []
+          since: 2.0.0
+        - name: kata_shim_go_memstats_mcache_sys_bytes
+          type: GAUGE
+          unit: bytes
+          help: Number of bytes used for mcache structures obtained from system.
+          labels:
+            - name: sandbox_id
+              desc: ""
+              manually_edit: false
+              fixed: false
+              values: []
+          since: 2.0.0
+        - name: kata_shim_go_memstats_mspan_inuse_bytes
+          type: GAUGE
+          unit: bytes
+          help: Number of bytes in use by mspan structures.
+          labels:
+            - name: sandbox_id
+              desc: ""
+              manually_edit: false
+              fixed: false
+              values: []
+          since: 2.0.0
+        - name: kata_shim_go_memstats_mspan_sys_bytes
+          type: GAUGE
+          unit: bytes
+          help: Number of bytes used for mspan structures obtained from system.
+          labels:
+            - name: sandbox_id
+              desc: ""
+              manually_edit: false
+              fixed: false
+              values: []
+          since: 2.0.0
+        - name: kata_shim_go_memstats_next_gc_bytes
+          type: GAUGE
+          unit: bytes
+          help: Number of heap bytes when next garbage collection will take place.
+          labels:
+            - name: sandbox_id
+              desc: ""
+              manually_edit: false
+              fixed: false
+              values: []
+          since: 2.0.0
+        - name: kata_shim_go_memstats_other_sys_bytes
+          type: GAUGE
+          unit: bytes
+          help: Number of bytes used for other system allocations.
+          labels:
+            - name: sandbox_id
+              desc: ""
+              manually_edit: false
+              fixed: false
+              values: []
+          since: 2.0.0
+        - name: kata_shim_go_memstats_stack_inuse_bytes
+          type: GAUGE
+          unit: bytes
+          help: Number of bytes in use by the stack allocator.
+          labels:
+            - name: sandbox_id
+              desc: ""
+              manually_edit: false
+              fixed: false
+              values: []
+          since: 2.0.0
+        - name: kata_shim_go_memstats_stack_sys_bytes
+          type: GAUGE
+          unit: bytes
+          help: Number of bytes obtained from system for stack allocator.
+          labels:
+            - name: sandbox_id
+              desc: ""
+              manually_edit: false
+              fixed: false
+              values: []
+          since: 2.0.0
+        - name: kata_shim_go_memstats_sys_bytes
+          type: GAUGE
+          unit: bytes
+          help: Number of bytes obtained from system.
+          labels:
+            - name: sandbox_id
+              desc: ""
+              manually_edit: false
+              fixed: false
+              values: []
+          since: 2.0.0
+        - name: kata_shim_go_threads
+          type: GAUGE
+          unit: ""
+          help: Number of OS threads created.
+          labels:
+            - name: sandbox_id
+              desc: ""
+              manually_edit: false
+              fixed: false
+              values: []
+          since: 2.0.0
+        - name: kata_shim_io_stat
+          type: GAUGE
+          unit: ""
+          help: Kata containerd shim v2 process IO statistics.
+          labels:
+            - name: item
+              desc: see `/proc/<pid>/io`
+              manually_edit: false
+              fixed: true
+              values:
+                - value: cancelledwritebytes
+                  desc: ""
+                - value: rchar
+                  desc: ""
+                - value: readbytes
+                  desc: ""
+                - value: syscr
+                  desc: ""
+                - value: syscw
+                  desc: ""
+                - value: wchar
+                  desc: ""
+                - value: writebytes
+                  desc: ""
+            - name: sandbox_id
+              desc: ""
+              manually_edit: false
+              fixed: false
+              values: []
+          since: 2.0.0
+        - name: kata_shim_netdev
+          type: GAUGE
+          unit: ""
+          help: Kata containerd shim v2 network devices statistics.
+          labels:
+            - name: interface
+              desc: network device name
+              manually_edit: false
+              fixed: false
+              values: []
+            - name: item
+              desc: see `/proc/net/dev`
+              manually_edit: false
+              fixed: true
+              values:
+                - value: recv_bytes
+                  desc: ""
+                - value: recv_compressed
+                  desc: ""
+                - value: recv_drop
+                  desc: ""
+                - value: recv_errs
+                  desc: ""
+                - value: recv_fifo
+                  desc: ""
+                - value: recv_frame
+                  desc: ""
+                - value: recv_multicast
+                  desc: ""
+                - value: recv_packets
+                  desc: ""
+                - value: sent_bytes
+                  desc: ""
+                - value: sent_carrier
+                  desc: ""
+                - value: sent_colls
+                  desc: ""
+                - value: sent_compressed
+                  desc: ""
+                - value: sent_drop
+                  desc: ""
+                - value: sent_errs
+                  desc: ""
+                - value: sent_fifo
+                  desc: ""
+                - value: sent_packets
+                  desc: ""
+            - name: sandbox_id
+              desc: ""
+              manually_edit: false
+              fixed: false
+              values: []
+          since: 2.0.0
+        - name: kata_shim_proc_stat
+          type: GAUGE
+          unit: ""
+          help: Kata containerd shim v2 process statistics.
+          labels:
+            - name: item
+              desc: see `/proc/<pid>/stat`
+              manually_edit: false
+              fixed: true
+              values:
+                - value: cstime
+                  desc: ""
+                - value: cutime
+                  desc: ""
+                - value: stime
+                  desc: ""
+                - value: utime
+                  desc: ""
+            - name: sandbox_id
+              desc: ""
+              manually_edit: false
+              fixed: false
+              values: []
+          since: 2.0.0
+        - name: kata_shim_proc_status
+          type: GAUGE
+          unit: ""
+          help: Kata containerd shim v2 process status.
+          labels:
+            - name: item
+              desc: see `/proc/<pid>/status`
+              manually_edit: false
+              fixed: true
+              values:
+                - value: hugetlbpages
+                  desc: ""
+                - value: nonvoluntary_ctxt_switches
+                  desc: ""
+                - value: rssanon
+                  desc: ""
+                - value: rssfile
+                  desc: ""
+                - value: rssshmem
+                  desc: ""
+                - value: vmdata
+                  desc: ""
+                - value: vmexe
+                  desc: ""
+                - value: vmhwm
+                  desc: ""
+                - value: vmlck
+                  desc: ""
+                - value: vmlib
+                  desc: ""
+                - value: vmpeak
+                  desc: ""
+                - value: vmpin
+                  desc: ""
+                - value: vmpmd
+                  desc: ""
+                - value: vmpte
+                  desc: ""
+                - value: vmrss
+                  desc: ""
+                - value: vmsize
+                  desc: ""
+                - value: vmstk
+                  desc: ""
+                - value: vmswap
+                  desc: ""
+                - value: voluntary_ctxt_switches
+                  desc: ""
+            - name: sandbox_id
+              desc: ""
+              manually_edit: false
+              fixed: false
+              values: []
+          since: 2.0.0
+        - name: kata_shim_process_cpu_seconds_total
+          type: COUNTER
+          unit: seconds
+          help: Total user and system CPU time spent in seconds.
+          labels:
+            - name: sandbox_id
+              desc: ""
+              manually_edit: false
+              fixed: false
+              values: []
+          since: 2.0.0
+        - name: kata_shim_process_max_fds
+          type: GAUGE
+          unit: ""
+          help: Maximum number of open file descriptors.
+          labels:
+            - name: sandbox_id
+              desc: ""
+              manually_edit: false
+              fixed: false
+              values: []
+          since: 2.0.0
+        - name: kata_shim_process_open_fds
+          type: GAUGE
+          unit: ""
+          help: Number of open file descriptors.
+          labels:
+            - name: sandbox_id
+              desc: ""
+              manually_edit: false
+              fixed: false
+              values: []
+          since: 2.0.0
+        - name: kata_shim_process_resident_memory_bytes
+          type: GAUGE
+          unit: bytes
+          help: Resident memory size in bytes.
+          labels:
+            - name: sandbox_id
+              desc: ""
+              manually_edit: false
+              fixed: false
+              values: []
+          since: 2.0.0
+        - name: kata_shim_process_start_time_seconds
+          type: GAUGE
+          unit: seconds
+          help: Start time of the process since unix epoch in seconds.
+          labels:
+            - name: sandbox_id
+              desc: ""
+              manually_edit: false
+              fixed: false
+              values: []
+          since: 2.0.0
+        - name: kata_shim_process_virtual_memory_bytes
+          type: GAUGE
+          unit: bytes
+          help: Virtual memory size in bytes.
+          labels:
+            - name: sandbox_id
+              desc: ""
+              manually_edit: false
+              fixed: false
+              values: []
+          since: 2.0.0
+        - name: kata_shim_process_virtual_memory_max_bytes
+          type: GAUGE
+          unit: bytes
+          help: Maximum amount of virtual memory available in bytes.
+          labels:
+            - name: sandbox_id
+              desc: ""
+              manually_edit: false
+              fixed: false
+              values: []
+          since: 2.0.0
+        - name: kata_shim_rpc_durations_histogram_milliseconds
+          type: HISTOGRAM
+          unit: milliseconds
+          help: RPC latency distributions.
+          labels:
+            - name: action
+              desc: Kata shim v2 actions
+              manually_edit: true
+              fixed: true
+              values:
+                - value: checkpoint
+                  desc: ""
+                - value: close_io
+                  desc: ""
+                - value: connect
+                  desc: ""
+                - value: create
+                  desc: ""
+                - value: delete
+                  desc: ""
+                - value: exec
+                  desc: ""
+                - value: kill
+                  desc: ""
+                - value: pause
+                  desc: ""
+                - value: pids
+                  desc: ""
+                - value: resize_pty
+                  desc: ""
+                - value: resume
+                  desc: ""
+                - value: shutdown
+                  desc: ""
+                - value: start
+                  desc: ""
+                - value: state
+                  desc: ""
+                - value: stats
+                  desc: ""
+                - value: update
+                  desc: ""
+                - value: wait
+                  desc: ""
+            - name: sandbox_id
+              desc: ""
+              manually_edit: false
+              fixed: false
+              values: []
+          since: 2.0.0
+        - name: kata_shim_threads
+          type: GAUGE
+          unit: ""
+          help: Kata containerd shim v2 process threads.
+          labels:
+            - name: sandbox_id
+              desc: ""
+              manually_edit: false
+              fixed: false
+              values: []
+          since: 2.0.0
