@@ -68,7 +68,8 @@ func (endpoint *TuntapEndpoint) SetProperties(properties NetworkInfo) {
 }
 
 // Attach for tap endpoint adds the tap interface to the hypervisor.
-func (endpoint *TuntapEndpoint) Attach(h hypervisor) error {
+func (endpoint *TuntapEndpoint) Attach(s *Sandbox) error {
+	h := s.hypervisor
 	if err := xConnectVMNetwork(endpoint, h); err != nil {
 		networkLogger().WithError(err).Error("Error bridging virtual endpoint")
 		return err

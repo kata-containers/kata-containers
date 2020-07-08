@@ -117,6 +117,10 @@ type DeviceInfo struct {
 	// for a nvdimm device in the guest.
 	Pmem bool
 
+	// ColdPlug specifies whether the device must be cold plugged (true)
+	// or hot plugged (false).
+	ColdPlug bool
+
 	// FileMode permission bits for the device.
 	FileMode os.FileMode
 

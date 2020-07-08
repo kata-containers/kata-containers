@@ -74,7 +74,7 @@ func (endpoint *VhostUserEndpoint) NetworkPair() *NetworkInterfacePair {
 }
 
 // Attach for vhostuser endpoint
-func (endpoint *VhostUserEndpoint) Attach(h hypervisor) error {
+func (endpoint *VhostUserEndpoint) Attach(s *Sandbox) error {
 	// Generate a unique ID to be used for hypervisor commandline fields
 	randBytes, err := utils.GenerateRandomBytes(8)
 	if err != nil {
@@ -89,7 +89,7 @@ func (endpoint *VhostUserEndpoint) Attach(h hypervisor) error {
 		Type:       config.VhostUserNet,
 	}
 
-	return h.addDevice(d, vhostuserDev)
+	return s.hypervisor.addDevice(d, vhostuserDev)
 }
 
 // Detach for vhostuser endpoint
