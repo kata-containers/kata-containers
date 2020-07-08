@@ -60,7 +60,7 @@ func (s *service) serveMetrics(w http.ResponseWriter, r *http.Request) {
 	agentMetrics, err := s.sandbox.GetAgentMetrics()
 	if err != nil {
 		logrus.WithError(err).Error("failed GetAgentMetrics")
-		if isGRPCErrorCode(codes.Unimplemented, err) {
+		if isGRPCErrorCode(codes.NotFound, err) {
 			logrus.Warn("metrics API not supportted by this agent.")
 			ifSupportAgentMetricsAPI = false
 			return
@@ -74,6 +74,11 @@ func (s *service) serveMetrics(w http.ResponseWriter, r *http.Request) {
 	for _, mf := range list {
 		encoder.Encode(mf)
 	}
+
+	// collect pod overhead metrics need sleep to get the changes of cpu/memory resources usage
+	// so here only trigger the collect operation, and the data will be gathered
+	// next time collection request from Prometheus server
+	go s.setPodOverheadMetrics()
 }
 
 func decodeAgentMetrics(body string) []*dto.MetricFamily {

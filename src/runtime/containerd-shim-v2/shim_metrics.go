@@ -6,7 +6,10 @@
 package containerdshim
 
 import (
+	"time"
+
 	mutils "github.com/kata-containers/kata-containers/src/runtime/pkg/utils"
+	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/procfs"
 )
@@ -66,6 +69,18 @@ var (
 		Name:      "fds",
 		Help:      "Kata containerd shim v2 open FDs.",
 	})
+
+	katashimPodOverheadCPU = prometheus.NewGauge(prometheus.GaugeOpts{
+		Namespace: namespaceKatashim,
+		Name:      "pod_overhead_cpu",
+		Help:      "Kata Pod overhead for CPU resources(percent).",
+	})
+
+	katashimPodOverheadMemory = prometheus.NewGauge(prometheus.GaugeOpts{
+		Namespace: namespaceKatashim,
+		Name:      "pod_overhead_memory_in_bytes",
+		Help:      "Kata Pod overhead for memory resources(bytes).",
+	})
 )
 
 func registerMetrics() {
@@ -76,6 +91,8 @@ func registerMetrics() {
 	prometheus.MustRegister(katashimNetdev)
 	prometheus.MustRegister(katashimIOStat)
 	prometheus.MustRegister(katashimOpenFDs)
+	prometheus.MustRegister(katashimPodOverheadCPU)
+	prometheus.MustRegister(katashimPodOverheadMemory)
 }
 
 // updateShimMetrics will update metrics for kata shim process itself
@@ -114,5 +131,80 @@ func updateShimMetrics() error {
 		mutils.SetGaugeVecProcIO(katashimIOStat, ioStat)
 	}
 
+	return nil
+}
+
+// statsSandbox returns a detailed sandbox stats.
+func (s *service) statsSandbox() (vc.SandboxStats, []vc.ContainerStats, error) {
+	sandboxStats, err := s.sandbox.Stats()
+	if err != nil {
+		return vc.SandboxStats{}, []vc.ContainerStats{}, err
+	}
+
+	containerStats := []vc.ContainerStats{}
+	for _, c := range s.sandbox.GetAllContainers() {
+		cstats, err := s.sandbox.StatsContainer(c.ID())
+		if err != nil {
+			return vc.SandboxStats{}, []vc.ContainerStats{}, err
+		}
+		containerStats = append(containerStats, cstats)
+	}
+
+	return sandboxStats, containerStats, nil
+}
+
+func calcOverhead(initialSandboxStats, finishSandboxStats vc.SandboxStats, initialContainerStats, finishContainersStats []vc.ContainerStats, deltaTime float64) (float64, float64) {
+	hostInitCPU := initialSandboxStats.CgroupStats.CPUStats.CPUUsage.TotalUsage
+	guestInitCPU := uint64(0)
+	for _, cs := range initialContainerStats {
+		guestInitCPU += cs.CgroupStats.CPUStats.CPUUsage.TotalUsage
+	}
+
+	hostFinalCPU := finishSandboxStats.CgroupStats.CPUStats.CPUUsage.TotalUsage
+	guestFinalCPU := uint64(0)
+	for _, cs := range finishContainersStats {
+		guestFinalCPU += cs.CgroupStats.CPUStats.CPUUsage.TotalUsage
+	}
+
+	var guestMemoryUsage uint64
+	for _, cs := range finishContainersStats {
+		guestMemoryUsage += cs.CgroupStats.MemoryStats.Usage.Usage
+	}
+
+	hostMemoryUsage := finishSandboxStats.CgroupStats.MemoryStats.Usage.Usage
+
+	cpuUsageGuest := float64(guestFinalCPU-guestInitCPU) / deltaTime * 100
+	cpuUsageHost := float64(hostFinalCPU-hostInitCPU) / deltaTime * 100
+
+	return float64(hostMemoryUsage - guestMemoryUsage), float64(cpuUsageHost - cpuUsageGuest)
+}
+
+func (s *service) getPodOverhead() (float64, float64, error) {
+	initTime := time.Now().UnixNano()
+	initialSandboxStats, initialContainerStats, err := s.statsSandbox()
+	if err != nil {
+		return 0, 0, err
+	}
+
+	// Wait for 1 second to calculate CPU usage
+	time.Sleep(time.Second * 1)
+	finishtTime := time.Now().UnixNano()
+	deltaTime := float64(finishtTime - initTime)
+
+	finishSandboxStats, finishContainersStats, err := s.statsSandbox()
+	if err != nil {
+		return 0, 0, err
+	}
+	mem, cpu := calcOverhead(initialSandboxStats, finishSandboxStats, initialContainerStats, finishContainersStats, deltaTime)
+	return mem, cpu, nil
+}
+
+func (s *service) setPodOverheadMetrics() error {
+	mem, cpu, err := s.getPodOverhead()
+	if err != nil {
+		return err
+	}
+	katashimPodOverheadMemory.Set(mem)
+	katashimPodOverheadCPU.Set(cpu)
 	return nil
 }
