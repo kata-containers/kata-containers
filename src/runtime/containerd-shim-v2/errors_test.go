@@ -35,5 +35,6 @@ func TestIsGRPCErrorCode(t *testing.T) {
 	assert := assert.New(t)
 
 	assert.True(isGRPCErrorCode(codes.Unimplemented, status.New(codes.Unimplemented, "foobar").Err()))
+	assert.True(isGRPCErrorCode(codes.NotFound, status.New(codes.NotFound, "foobar").Err()))
 	assert.False(isGRPCErrorCode(codes.Unimplemented, errors.New("foobar")))
 }
