@@ -8,3 +8,4 @@ Kata Containers design documents:
 - [VSocks](VSocks.md)
 - [VCPU handling](vcpu-handling.md)
 - [Host cgroups](host-cgroups.md)
+- [Metrics(Kata 2.0)](kata-2-0-metrics.md)
