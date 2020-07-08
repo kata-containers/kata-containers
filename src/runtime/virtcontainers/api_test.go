@@ -31,6 +31,8 @@ const (
 	containerID = "1"
 )
 
+var newMockAgent = NewMockAgent
+
 var sandboxAnnotations = map[string]string{
 	"sandbox.foo":   "sandbox.bar",
 	"sandbox.hello": "sandbox.world",
@@ -112,13 +114,12 @@ func newTestSandboxConfigNoop() SandboxConfig {
 		HypervisorType:   MockHypervisor,
 		HypervisorConfig: hypervisorConfig,
 
-		AgentType: NoopAgentType,
-
 		Containers: []ContainerConfig{container},
 
 		Annotations: sandboxAnnotations,
 
-		ProxyType: NoopProxyType,
+		ProxyType:   NoopProxyType,
+		AgentConfig: KataAgentConfig{},
 	}
 
 	configFile := filepath.Join(bundlePath, "config.json")
@@ -137,8 +138,6 @@ func newTestSandboxConfigNoop() SandboxConfig {
 
 func newTestSandboxConfigKataAgent() SandboxConfig {
 	sandboxConfig := newTestSandboxConfigNoop()
-	sandboxConfig.AgentType = KataContainersAgent
-	sandboxConfig.AgentConfig = KataAgentConfig{}
 	sandboxConfig.Containers = nil
 
 	return sandboxConfig
@@ -150,12 +149,15 @@ func TestCreateSandboxNoopAgentSuccessful(t *testing.T) {
 
 	config := newTestSandboxConfigNoop()
 
-	p, err := CreateSandbox(context.Background(), config, nil)
+	ctx := WithNewAgentFunc(context.Background(), newMockAgent)
+	p, err := CreateSandbox(ctx, config, nil)
 	assert.NoError(err)
 	assert.NotNil(p)
 
 	s, ok := p.(*Sandbox)
 	assert.True(ok)
+	assert.NotNil(s)
+
 	sandboxDir := filepath.Join(s.newStore.RunStoragePath(), p.ID())
 	_, err = os.Stat(sandboxDir)
 	assert.NoError(err)
@@ -189,7 +191,8 @@ func TestCreateSandboxKataAgentSuccessful(t *testing.T) {
 	assert.NoError(err)
 	defer kataProxyMock.Stop()
 
-	p, err := CreateSandbox(context.Background(), config, nil)
+	ctx := WithNewAgentFunc(context.Background(), newMockAgent)
+	p, err := CreateSandbox(ctx, config, nil)
 	assert.NoError(err)
 	assert.NotNil(p)
 
@@ -206,7 +209,8 @@ func TestCreateSandboxFailing(t *testing.T) {
 
 	config := SandboxConfig{}
 
-	p, err := CreateSandbox(context.Background(), config, nil)
+	ctx := WithNewAgentFunc(context.Background(), newMockAgent)
+	p, err := CreateSandbox(ctx, config, nil)
 	assert.Error(err)
 	assert.Nil(p.(*Sandbox))
 }
@@ -215,7 +219,7 @@ func TestDeleteSandboxNoopAgentSuccessful(t *testing.T) {
 	defer cleanUp()
 	assert := assert.New(t)
 
-	ctx := context.Background()
+	ctx := WithNewAgentFunc(context.Background(), newMockAgent)
 	config := newTestSandboxConfigNoop()
 
 	p, err := CreateSandbox(ctx, config, nil)
@@ -264,7 +268,7 @@ func TestDeleteSandboxKataAgentSuccessful(t *testing.T) {
 	assert.NoError(err)
 	defer kataProxyMock.Stop()
 
-	ctx := context.Background()
+	ctx := WithNewAgentFunc(context.Background(), newMockAgent)
 	p, err := CreateSandbox(ctx, config, nil)
 	assert.NoError(err)
 	assert.NotNil(p)
@@ -287,7 +291,8 @@ func TestDeleteSandboxFailing(t *testing.T) {
 	defer cleanUp()
 	assert := assert.New(t)
 
-	p, err := DeleteSandbox(context.Background(), testSandboxID)
+	ctx := WithNewAgentFunc(context.Background(), newMockAgent)
+	p, err := DeleteSandbox(ctx, testSandboxID)
 	assert.Error(err)
 	assert.Nil(p)
 }
@@ -298,7 +303,8 @@ func TestStartSandboxNoopAgentSuccessful(t *testing.T) {
 
 	config := newTestSandboxConfigNoop()
 
-	p, _, err := createAndStartSandbox(context.Background(), config)
+	ctx := WithNewAgentFunc(context.Background(), newMockAgent)
+	p, _, err := createAndStartSandbox(ctx, config)
 	assert.NoError(err)
 	assert.NotNil(p)
 }
@@ -330,7 +336,7 @@ func TestStartSandboxKataAgentSuccessful(t *testing.T) {
 	assert.NoError(err)
 	defer kataProxyMock.Stop()
 
-	ctx := context.Background()
+	ctx := WithNewAgentFunc(context.Background(), newMockAgent)
 	p, _, err := createAndStartSandbox(ctx, config)
 	assert.NoError(err)
 	assert.NotNil(p)
@@ -348,7 +354,8 @@ func TestStartSandboxFailing(t *testing.T) {
 	defer cleanUp()
 	assert := assert.New(t)
 
-	p, err := StartSandbox(context.Background(), testSandboxID)
+	ctx := WithNewAgentFunc(context.Background(), newMockAgent)
+	p, err := StartSandbox(ctx, testSandboxID)
 	assert.Error(err)
 	assert.Nil(p)
 }
@@ -362,7 +369,7 @@ func TestStopSandboxNoopAgentSuccessful(t *testing.T) {
 
 	config := newTestSandboxConfigNoop()
 
-	ctx := context.Background()
+	ctx := WithNewAgentFunc(context.Background(), newMockAgent)
 	p, _, err := createAndStartSandbox(ctx, config)
 	assert.NoError(err)
 	assert.NotNil(p)
@@ -399,7 +406,7 @@ func TestStopSandboxKataAgentSuccessful(t *testing.T) {
 	assert.NoError(err)
 	defer kataProxyMock.Stop()
 
-	ctx := context.Background()
+	ctx := WithNewAgentFunc(context.Background(), newMockAgent)
 	p, _, err := createAndStartSandbox(ctx, config)
 	assert.NoError(err)
 	assert.NotNil(p)
@@ -412,7 +419,8 @@ func TestStopSandboxKataAgentSuccessful(t *testing.T) {
 func TestStopSandboxFailing(t *testing.T) {
 	defer cleanUp()
 
-	p, err := StopSandbox(context.Background(), testSandboxID, false)
+	ctx := WithNewAgentFunc(context.Background(), newMockAgent)
+	p, err := StopSandbox(ctx, testSandboxID, false)
 	assert.Error(t, err)
 	assert.Nil(t, p)
 }
@@ -423,7 +431,8 @@ func TestRunSandboxNoopAgentSuccessful(t *testing.T) {
 
 	config := newTestSandboxConfigNoop()
 
-	p, err := RunSandbox(context.Background(), config, nil)
+	ctx := WithNewAgentFunc(context.Background(), newMockAgent)
+	p, err := RunSandbox(ctx, config, nil)
 	assert.NoError(err)
 	assert.NotNil(p)
 
@@ -462,7 +471,7 @@ func TestRunSandboxKataAgentSuccessful(t *testing.T) {
 	assert.NoError(err)
 	defer kataProxyMock.Stop()
 
-	ctx := context.Background()
+	ctx := WithNewAgentFunc(context.Background(), newMockAgent)
 	p, err := RunSandbox(ctx, config, nil)
 	assert.NoError(err)
 	assert.NotNil(p)
@@ -484,7 +493,8 @@ func TestRunSandboxFailing(t *testing.T) {
 
 	config := SandboxConfig{}
 
-	p, err := RunSandbox(context.Background(), config, nil)
+	ctx := WithNewAgentFunc(context.Background(), newMockAgent)
+	p, err := RunSandbox(ctx, config, nil)
 	assert.Error(err)
 	assert.Nil(p)
 }
@@ -495,7 +505,7 @@ func TestListSandboxSuccessful(t *testing.T) {
 
 	config := newTestSandboxConfigNoop()
 
-	ctx := context.Background()
+	ctx := WithNewAgentFunc(context.Background(), newMockAgent)
 	p, err := CreateSandbox(ctx, config, nil)
 	assert.NoError(err)
 	assert.NotNil(p)
@@ -507,7 +517,8 @@ func TestListSandboxSuccessful(t *testing.T) {
 func TestListSandboxNoSandboxDirectory(t *testing.T) {
 	defer cleanUp()
 
-	_, err := ListSandbox(context.Background())
+	ctx := WithNewAgentFunc(context.Background(), newMockAgent)
+	_, err := ListSandbox(ctx)
 	assert.NoError(t, err)
 }
 
@@ -540,7 +551,6 @@ func TestStatusSandboxSuccessfulStateReady(t *testing.T) {
 		},
 		Hypervisor:       MockHypervisor,
 		HypervisorConfig: hypervisorConfig,
-		Agent:            NoopAgentType,
 		ContainersStatus: []ContainerStatus{
 			{
 				ID: containerID,
@@ -556,7 +566,7 @@ func TestStatusSandboxSuccessfulStateReady(t *testing.T) {
 		},
 	}
 
-	ctx := context.Background()
+	ctx := WithNewAgentFunc(context.Background(), newMockAgent)
 	p, err := CreateSandbox(ctx, config, nil)
 	assert.NoError(err)
 	assert.NotNil(p)
@@ -568,7 +578,7 @@ func TestStatusSandboxSuccessfulStateReady(t *testing.T) {
 	// value will be.
 	expectedStatus.ContainersStatus[0].StartTime = status.ContainersStatus[0].StartTime
 
-	assert.Equal(status, expectedStatus)
+	assert.Equal(expectedStatus, status)
 }
 
 func TestStatusSandboxSuccessfulStateRunning(t *testing.T) {
@@ -600,7 +610,6 @@ func TestStatusSandboxSuccessfulStateRunning(t *testing.T) {
 		},
 		Hypervisor:       MockHypervisor,
 		HypervisorConfig: hypervisorConfig,
-		Agent:            NoopAgentType,
 		ContainersStatus: []ContainerStatus{
 			{
 				ID: containerID,
@@ -616,7 +625,7 @@ func TestStatusSandboxSuccessfulStateRunning(t *testing.T) {
 		},
 	}
 
-	ctx := context.Background()
+	ctx := WithNewAgentFunc(context.Background(), newMockAgent)
 	p, err := CreateSandbox(ctx, config, nil)
 	assert.NoError(err)
 	assert.NotNil(p)
@@ -632,7 +641,7 @@ func TestStatusSandboxSuccessfulStateRunning(t *testing.T) {
 	// value will be.
 	expectedStatus.ContainersStatus[0].StartTime = status.ContainersStatus[0].StartTime
 
-	assert.Exactly(status, expectedStatus)
+	assert.Exactly(expectedStatus, status)
 }
 
 func TestStatusSandboxFailingFetchSandboxConfig(t *testing.T) {
@@ -641,7 +650,7 @@ func TestStatusSandboxFailingFetchSandboxConfig(t *testing.T) {
 
 	config := newTestSandboxConfigNoop()
 
-	ctx := context.Background()
+	ctx := WithNewAgentFunc(context.Background(), newMockAgent)
 	p, err := CreateSandbox(ctx, config, nil)
 	assert.NoError(err)
 	assert.NotNil(p)
@@ -659,7 +668,7 @@ func TestStatusPodSandboxFailingFetchSandboxState(t *testing.T) {
 
 	config := newTestSandboxConfigNoop()
 
-	ctx := context.Background()
+	ctx := WithNewAgentFunc(context.Background(), newMockAgent)
 	p, err := CreateSandbox(ctx, config, nil)
 	assert.NoError(err)
 	assert.NotNil(p)
@@ -691,7 +700,7 @@ func TestCreateContainerSuccessful(t *testing.T) {
 	contID := "100"
 	config := newTestSandboxConfigNoop()
 
-	ctx := context.Background()
+	ctx := WithNewAgentFunc(context.Background(), newMockAgent)
 	p, err := CreateSandbox(ctx, config, nil)
 	assert.NoError(err)
 	assert.NotNil(p)
@@ -720,7 +729,7 @@ func TestCreateContainerFailingNoSandbox(t *testing.T) {
 	contID := "100"
 	config := newTestSandboxConfigNoop()
 
-	ctx := context.Background()
+	ctx := WithNewAgentFunc(context.Background(), newMockAgent)
 	p, err := CreateSandbox(ctx, config, nil)
 	assert.NoError(err)
 	assert.NotNil(p)
@@ -749,7 +758,7 @@ func TestDeleteContainerSuccessful(t *testing.T) {
 	contID := "100"
 	config := newTestSandboxConfigNoop()
 
-	ctx := context.Background()
+	ctx := WithNewAgentFunc(context.Background(), newMockAgent)
 	p, err := CreateSandbox(ctx, config, nil)
 	assert.NoError(err)
 	assert.NotNil(p)
@@ -783,7 +792,9 @@ func TestDeleteContainerFailingNoSandbox(t *testing.T) {
 	assert := assert.New(t)
 
 	contID := "100"
-	c, err := DeleteContainer(context.Background(), testSandboxID, contID)
+
+	ctx := WithNewAgentFunc(context.Background(), newMockAgent)
+	c, err := DeleteContainer(ctx, testSandboxID, contID)
 	assert.Error(err)
 	assert.Nil(c)
 }
@@ -795,7 +806,7 @@ func TestDeleteContainerFailingNoContainer(t *testing.T) {
 	contID := "100"
 	config := newTestSandboxConfigNoop()
 
-	ctx := context.Background()
+	ctx := WithNewAgentFunc(context.Background(), newMockAgent)
 	p, err := CreateSandbox(ctx, config, nil)
 	assert.NoError(err)
 	assert.NotNil(p)
@@ -818,7 +829,7 @@ func TestStartContainerNoopAgentSuccessful(t *testing.T) {
 	contID := "100"
 	config := newTestSandboxConfigNoop()
 
-	ctx := context.Background()
+	ctx := WithNewAgentFunc(context.Background(), newMockAgent)
 
 	p, sandboxDir, err := createAndStartSandbox(ctx, config)
 	assert.NoError(err)
@@ -842,7 +853,8 @@ func TestStartContainerFailingNoSandbox(t *testing.T) {
 	defer cleanUp()
 
 	contID := "100"
-	c, err := StartContainer(context.Background(), testSandboxID, contID)
+	ctx := WithNewAgentFunc(context.Background(), newMockAgent)
+	c, err := StartContainer(ctx, testSandboxID, contID)
 	assert.Error(t, err)
 	assert.Nil(t, c)
 }
@@ -854,7 +866,7 @@ func TestStartContainerFailingNoContainer(t *testing.T) {
 	contID := "100"
 	config := newTestSandboxConfigNoop()
 
-	ctx := context.Background()
+	ctx := WithNewAgentFunc(context.Background(), newMockAgent)
 	p, err := CreateSandbox(ctx, config, nil)
 	assert.NoError(err)
 	assert.NotNil(p)
@@ -877,7 +889,7 @@ func TestStartContainerFailingSandboxNotStarted(t *testing.T) {
 	contID := "100"
 	config := newTestSandboxConfigNoop()
 
-	ctx := context.Background()
+	ctx := WithNewAgentFunc(context.Background(), newMockAgent)
 	p, err := CreateSandbox(ctx, config, nil)
 	assert.NoError(err)
 	assert.NotNil(p)
@@ -912,7 +924,7 @@ func TestStopContainerNoopAgentSuccessful(t *testing.T) {
 	contID := "100"
 	config := newTestSandboxConfigNoop()
 
-	ctx := context.Background()
+	ctx := WithNewAgentFunc(context.Background(), newMockAgent)
 
 	p, sandboxDir, err := createAndStartSandbox(ctx, config)
 	assert.NoError(err)
@@ -944,7 +956,8 @@ func TestStopContainerFailingNoSandbox(t *testing.T) {
 	defer cleanUp()
 
 	contID := "100"
-	c, err := StopContainer(context.Background(), testSandboxID, contID)
+	ctx := WithNewAgentFunc(context.Background(), newMockAgent)
+	c, err := StopContainer(ctx, testSandboxID, contID)
 	assert.Error(t, err)
 	assert.Nil(t, c)
 }
@@ -959,7 +972,7 @@ func TestStopContainerFailingNoContainer(t *testing.T) {
 	contID := "100"
 	config := newTestSandboxConfigNoop()
 
-	ctx := context.Background()
+	ctx := WithNewAgentFunc(context.Background(), newMockAgent)
 	p, err := CreateSandbox(ctx, config, nil)
 	assert.NoError(err)
 	assert.NotNil(p)
@@ -982,7 +995,7 @@ func testKillContainerFromContReadySuccessful(t *testing.T, signal syscall.Signa
 	contID := "100"
 	config := newTestSandboxConfigNoop()
 
-	ctx := context.Background()
+	ctx := WithNewAgentFunc(context.Background(), newMockAgent)
 
 	p, sandboxDir, err := createAndStartSandbox(ctx, config)
 	assert.NoError(err)
@@ -1020,7 +1033,7 @@ func TestEnterContainerNoopAgentSuccessful(t *testing.T) {
 	contID := "100"
 	config := newTestSandboxConfigNoop()
 
-	ctx := context.Background()
+	ctx := WithNewAgentFunc(context.Background(), newMockAgent)
 
 	p, sandboxDir, err := createAndStartSandbox(ctx, config)
 	assert.NoError(err)
@@ -1053,7 +1066,8 @@ func TestEnterContainerFailingNoSandbox(t *testing.T) {
 	contID := "100"
 	cmd := newBasicTestCmd()
 
-	_, c, _, err := EnterContainer(context.Background(), testSandboxID, contID, cmd)
+	ctx := WithNewAgentFunc(context.Background(), newMockAgent)
+	_, c, _, err := EnterContainer(ctx, testSandboxID, contID, cmd)
 	assert.Error(err)
 	assert.Nil(c)
 }
@@ -1065,7 +1079,7 @@ func TestEnterContainerFailingNoContainer(t *testing.T) {
 	contID := "100"
 	config := newTestSandboxConfigNoop()
 
-	ctx := context.Background()
+	ctx := WithNewAgentFunc(context.Background(), newMockAgent)
 	p, err := CreateSandbox(ctx, config, nil)
 	assert.NoError(err)
 	assert.NotNil(p)
@@ -1090,7 +1104,7 @@ func TestEnterContainerFailingContNotStarted(t *testing.T) {
 	contID := "100"
 	config := newTestSandboxConfigNoop()
 
-	ctx := context.Background()
+	ctx := WithNewAgentFunc(context.Background(), newMockAgent)
 
 	p, sandboxDir, err := createAndStartSandbox(ctx, config)
 	assert.NoError(err)
@@ -1120,7 +1134,7 @@ func TestStatusContainerSuccessful(t *testing.T) {
 	contID := "100"
 	config := newTestSandboxConfigNoop()
 
-	ctx := context.Background()
+	ctx := WithNewAgentFunc(context.Background(), newMockAgent)
 	p, err := CreateSandbox(ctx, config, nil)
 	assert.NoError(err)
 	assert.NotNil(p)
@@ -1162,7 +1176,7 @@ func TestStatusContainerStateReady(t *testing.T) {
 	cgroupPath, err := vccgroups.RenameCgroupPath(vccgroups.DefaultCgroupPath)
 	assert.NoError(err)
 
-	ctx := context.Background()
+	ctx := WithNewAgentFunc(context.Background(), newMockAgent)
 	p, err := CreateSandbox(ctx, config, nil)
 	assert.NoError(err)
 	assert.NotNil(p)
@@ -1209,7 +1223,7 @@ func TestStatusContainerStateReady(t *testing.T) {
 	// value will be.
 	expectedStatus.StartTime = status.StartTime
 
-	assert.Exactly(status, expectedStatus)
+	assert.Exactly(expectedStatus, status)
 }
 
 func TestStatusContainerStateRunning(t *testing.T) {
@@ -1223,7 +1237,7 @@ func TestStatusContainerStateRunning(t *testing.T) {
 	cgroupPath, err := vccgroups.RenameCgroupPath(vccgroups.DefaultCgroupPath)
 	assert.NoError(err)
 
-	ctx := context.Background()
+	ctx := WithNewAgentFunc(context.Background(), newMockAgent)
 	p, err := CreateSandbox(ctx, config, nil)
 	assert.NoError(err)
 	assert.NotNil(p)
@@ -1278,7 +1292,7 @@ func TestStatusContainerStateRunning(t *testing.T) {
 	// value will be.
 	expectedStatus.StartTime = status.StartTime
 
-	assert.Exactly(status, expectedStatus)
+	assert.Exactly(expectedStatus, status)
 }
 
 func TestStatusContainerFailing(t *testing.T) {
@@ -1288,7 +1302,7 @@ func TestStatusContainerFailing(t *testing.T) {
 	contID := "100"
 	config := newTestSandboxConfigNoop()
 
-	ctx := context.Background()
+	ctx := WithNewAgentFunc(context.Background(), newMockAgent)
 	p, err := CreateSandbox(ctx, config, nil)
 	assert.NoError(err)
 	assert.NotNil(p)
@@ -1307,7 +1321,7 @@ func TestStatsContainerFailing(t *testing.T) {
 	contID := "100"
 	config := newTestSandboxConfigNoop()
 
-	ctx := context.Background()
+	ctx := WithNewAgentFunc(context.Background(), newMockAgent)
 	p, err := CreateSandbox(ctx, config, nil)
 	assert.NoError(err)
 	assert.NotNil(p)
@@ -1325,7 +1339,7 @@ func TestStatsContainer(t *testing.T) {
 	assert := assert.New(t)
 	contID := "100"
 
-	ctx := context.Background()
+	ctx := WithNewAgentFunc(context.Background(), newMockAgent)
 	_, err := StatsContainer(ctx, "", "")
 	assert.Error(err)
 
@@ -1360,7 +1374,7 @@ func TestStatsContainer(t *testing.T) {
 
 	stats, err := StatsContainer(ctx, pImpl.id, contID)
 	assert.NoError(err)
-	assert.Equal(stats, ContainerStats{})
+	assert.Equal(ContainerStats{}, stats)
 }
 
 func TestProcessListContainer(t *testing.T) {
@@ -1374,7 +1388,7 @@ func TestProcessListContainer(t *testing.T) {
 		Args:   []string{"-ef"},
 	}
 
-	ctx := context.Background()
+	ctx := WithNewAgentFunc(context.Background(), newMockAgent)
 	_, err := ProcessListContainer(ctx, "", "", options)
 	assert.Error(err)
 
@@ -1412,7 +1426,7 @@ func TestProcessListContainer(t *testing.T) {
  * Benchmarks
  */
 
-func createNewSandboxConfig(hType HypervisorType, aType AgentType, aConfig interface{}) SandboxConfig {
+func createNewSandboxConfig(hType HypervisorType) SandboxConfig {
 	hypervisorConfig := HypervisorConfig{
 		KernelPath:     "/usr/share/kata-containers/vmlinux.container",
 		ImagePath:      "/usr/share/kata-containers/kata-containers.img",
@@ -1426,8 +1440,7 @@ func createNewSandboxConfig(hType HypervisorType, aType AgentType, aConfig inter
 		HypervisorType:   hType,
 		HypervisorConfig: hypervisorConfig,
 
-		AgentType:   aType,
-		AgentConfig: aConfig,
+		AgentConfig: KataAgentConfig{},
 
 		NetworkConfig: netConfig,
 
@@ -1466,7 +1479,7 @@ func createAndStartSandbox(ctx context.Context, config SandboxConfig) (sandbox V
 }
 
 func createStartStopDeleteSandbox(b *testing.B, sandboxConfig SandboxConfig) {
-	ctx := context.Background()
+	ctx := WithNewAgentFunc(context.Background(), newMockAgent)
 
 	p, _, err := createAndStartSandbox(ctx, sandboxConfig)
 	if p == nil || err != nil {
@@ -1488,14 +1501,14 @@ func createStartStopDeleteSandbox(b *testing.B, sandboxConfig SandboxConfig) {
 
 func BenchmarkCreateStartStopDeleteSandboxQemuHypervisorNoopAgentNetworkNoop(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		sandboxConfig := createNewSandboxConfig(QemuHypervisor, NoopAgentType, nil)
+		sandboxConfig := createNewSandboxConfig(QemuHypervisor)
 		createStartStopDeleteSandbox(b, sandboxConfig)
 	}
 }
 
 func BenchmarkCreateStartStopDeleteSandboxMockHypervisorNoopAgentNetworkNoop(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		sandboxConfig := createNewSandboxConfig(MockHypervisor, NoopAgentType, nil)
+		sandboxConfig := createNewSandboxConfig(MockHypervisor)
 		createStartStopDeleteSandbox(b, sandboxConfig)
 	}
 }
@@ -1505,8 +1518,7 @@ func TestFetchSandbox(t *testing.T) {
 
 	config := newTestSandboxConfigNoop()
 
-	ctx := context.Background()
-
+	ctx := WithNewAgentFunc(context.Background(), newMockAgent)
 	s, err := CreateSandbox(ctx, config, nil)
 	assert.NoError(t, err)
 	assert.NotNil(t, s)
@@ -1523,8 +1535,7 @@ func TestFetchStatefulSandbox(t *testing.T) {
 
 	config.Stateful = true
 
-	ctx := context.Background()
-
+	ctx := WithNewAgentFunc(context.Background(), newMockAgent)
 	s, err := CreateSandbox(ctx, config, nil)
 	assert.NoError(t, err)
 	assert.NotNil(t, s)
@@ -1537,7 +1548,8 @@ func TestFetchStatefulSandbox(t *testing.T) {
 func TestFetchNonExistingSandbox(t *testing.T) {
 	defer cleanUp()
 
-	_, err := FetchSandbox(context.Background(), "some-non-existing-sandbox-name")
+	ctx := WithNewAgentFunc(context.Background(), newMockAgent)
+	_, err := FetchSandbox(ctx, "some-non-existing-sandbox-name")
 	assert.NotNil(t, err, "fetch non-existing sandbox should fail")
 }
 
@@ -1546,7 +1558,8 @@ func TestReleaseSandbox(t *testing.T) {
 
 	config := newTestSandboxConfigNoop()
 
-	s, err := CreateSandbox(context.Background(), config, nil)
+	ctx := WithNewAgentFunc(context.Background(), newMockAgent)
+	s, err := CreateSandbox(ctx, config, nil)
 	assert.NoError(t, err)
 	assert.NotNil(t, s)
 
@@ -1561,7 +1574,7 @@ func TestUpdateContainer(t *testing.T) {
 
 	defer cleanUp()
 
-	ctx := context.Background()
+	ctx := WithNewAgentFunc(context.Background(), newMockAgent)
 
 	period := uint64(1000)
 	quota := int64(2000)
@@ -1614,7 +1627,7 @@ func TestPauseResumeContainer(t *testing.T) {
 
 	defer cleanUp()
 
-	ctx := context.Background()
+	ctx := WithNewAgentFunc(context.Background(), newMockAgent)
 
 	assert := assert.New(t)
 	err := PauseContainer(ctx, "", "")
@@ -1669,7 +1682,7 @@ func TestNetworkOperation(t *testing.T) {
 	}
 	inf.IPAddresses = append(inf.IPAddresses, &ip)
 
-	ctx := context.Background()
+	ctx := WithNewAgentFunc(context.Background(), newMockAgent)
 
 	_, err := AddInterface(ctx, "", inf)
 	assert.Error(err)
@@ -1710,7 +1723,7 @@ func TestCleanupContainer(t *testing.T) {
 	config := newTestSandboxConfigNoop()
 	assert := assert.New(t)
 
-	ctx := context.Background()
+	ctx := WithNewAgentFunc(context.Background(), newMockAgent)
 
 	p, _, err := createAndStartSandbox(ctx, config)
 	if p == nil || err != nil {

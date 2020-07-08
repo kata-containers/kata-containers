@@ -114,7 +114,6 @@ type ProxyInfo struct {
 
 // AgentInfo stores agent details
 type AgentInfo struct {
-	Type      string
 	Debug     bool
 	Trace     bool
 	TraceMode string
@@ -296,23 +295,13 @@ func getCommandVersion(cmd string) (string, error) {
 }
 
 func getAgentInfo(config oci.RuntimeConfig) (AgentInfo, error) {
-	agent := AgentInfo{
-		Type: string(config.AgentType),
-	}
+	agent := AgentInfo{}
 
-	switch config.AgentType {
-	case vc.KataContainersAgent:
-		agentConfig, ok := config.AgentConfig.(vc.KataAgentConfig)
-		if !ok {
-			return AgentInfo{}, errors.New("cannot determine Kata agent config")
-		}
-		agent.Debug = agentConfig.Debug
-		agent.Trace = agentConfig.Trace
-		agent.TraceMode = agentConfig.TraceMode
-		agent.TraceType = agentConfig.TraceType
-	default:
-		// Nothing useful to report for the other agent types
-	}
+	agentConfig := config.AgentConfig
+	agent.Debug = agentConfig.Debug
+	agent.Trace = agentConfig.Trace
+	agent.TraceMode = agentConfig.TraceMode
+	agent.TraceType = agentConfig.TraceType
 
 	return agent, nil
 }

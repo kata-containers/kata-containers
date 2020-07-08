@@ -8,7 +8,6 @@ package virtcontainers
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"os"
 	"path/filepath"
 	"time"
@@ -44,8 +43,7 @@ type VMConfig struct {
 	HypervisorType   HypervisorType
 	HypervisorConfig HypervisorConfig
 
-	AgentType   AgentType
-	AgentConfig interface{}
+	AgentConfig KataAgentConfig
 
 	ProxyType   ProxyType
 	ProxyConfig ProxyConfig
@@ -63,12 +61,7 @@ func (c *VMConfig) ToGrpc() (*pb.GrpcVMConfig, error) {
 		return nil, err
 	}
 
-	aconf, ok := c.AgentConfig.(KataAgentConfig)
-	if !ok {
-		return nil, fmt.Errorf("agent type is not supported by VM cache")
-	}
-
-	agentConfig, err := json.Marshal(&aconf)
+	agentConfig, err := json.Marshal(&c.AgentConfig)
 	if err != nil {
 		return nil, err
 	}
@@ -85,10 +78,6 @@ func GrpcToVMConfig(j *pb.GrpcVMConfig) (*VMConfig, error) {
 	err := json.Unmarshal(j.Data, &config)
 	if err != nil {
 		return nil, err
-	}
-
-	if config.AgentType != KataContainersAgent {
-		return nil, fmt.Errorf("agent type %s is not supported by VM cache", config.AgentType)
 	}
 
 	var kataConfig KataAgentConfig
@@ -176,7 +165,9 @@ func NewVM(ctx context.Context, config VMConfig) (*VM, error) {
 	}
 
 	// 2. setup agent
-	agent := newAgent(config.AgentType)
+	newAagentFunc := getNewAgentFunc(ctx)
+	agent := newAagentFunc()
+
 	vmSharePath := buildVMSharePath(id, store.RunVMStoragePath())
 	err = agent.configure(hypervisor, id, vmSharePath, isProxyBuiltIn(config.ProxyType), config.AgentConfig)
 	if err != nil {
@@ -260,7 +251,9 @@ func NewVMFromGrpc(ctx context.Context, v *pb.GrpcVM, config VMConfig) (*VM, err
 		return nil, err
 	}
 
-	agent := newAgent(config.AgentType)
+	// create agent instance
+	newAagentFunc := getNewAgentFunc(ctx)
+	agent := newAagentFunc()
 	agent.configureFromGrpc(hypervisor, v.Id, isProxyBuiltIn(config.ProxyType), config.AgentConfig)
 
 	proxy, err := newProxy(config.ProxyType)

@@ -6,7 +6,6 @@
 package virtcontainers
 
 import (
-	"fmt"
 	"syscall"
 	"time"
 
@@ -14,13 +13,29 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols/grpc"
 	vcTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/types"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
-	"github.com/mitchellh/mapstructure"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"golang.org/x/net/context"
 )
 
-// AgentType describes the type of guest agent a Sandbox should run.
-type AgentType string
+type newAgentFuncKey struct{}
+
+type newAgentFuncType func() agent
+
+// getAgentFunc used to pass mock agent creation func to CreateSandbox passed in `ctx`
+func getNewAgentFunc(ctx context.Context) newAgentFuncType {
+	v := ctx.Value(newAgentFuncKey{})
+	if v != nil {
+		if vv, ok := v.(newAgentFuncType); ok {
+			return vv
+		}
+	}
+	return newKataAgent
+}
+
+// WithNewAgentFunc set newAgentFuncKey in `ctx`
+func WithNewAgentFunc(ctx context.Context, f newAgentFuncType) context.Context {
+	return context.WithValue(ctx, newAgentFuncKey{}, f)
+}
 
 // ProcessListOptions contains the options used to list running
 // processes inside the container
@@ -39,12 +54,6 @@ type ProcessListOptions struct {
 type ProcessList []byte
 
 const (
-	// NoopAgentType is the No-Op agent.
-	NoopAgentType AgentType = "noop"
-
-	// KataContainersAgent is the Kata Containers agent.
-	KataContainersAgent AgentType = "kata"
-
 	// SocketTypeVSOCK is a VSOCK socket type for talking to an agent.
 	SocketTypeVSOCK = "vsock"
 
@@ -52,61 +61,6 @@ const (
 	// It typically means the agent is living behind a host proxy.
 	SocketTypeUNIX = "unix"
 )
-
-// Set sets an agent type based on the input string.
-func (agentType *AgentType) Set(value string) error {
-	switch value {
-	case "noop":
-		*agentType = NoopAgentType
-		return nil
-	case "kata":
-		*agentType = KataContainersAgent
-		return nil
-	default:
-		return fmt.Errorf("Unknown agent type %s", value)
-	}
-}
-
-// String converts an agent type to a string.
-func (agentType *AgentType) String() string {
-	switch *agentType {
-	case NoopAgentType:
-		return string(NoopAgentType)
-	case KataContainersAgent:
-		return string(KataContainersAgent)
-	default:
-		return ""
-	}
-}
-
-// newAgent returns an agent from an agent type.
-func newAgent(agentType AgentType) agent {
-	switch agentType {
-	case NoopAgentType:
-		return &noopAgent{}
-	case KataContainersAgent:
-		return &kataAgent{}
-	default:
-		return &noopAgent{}
-	}
-}
-
-// newAgentConfig returns an agent config from a generic SandboxConfig interface.
-func newAgentConfig(agentType AgentType, agentConfig interface{}) (interface{}, error) {
-	switch agentType {
-	case NoopAgentType:
-		return nil, nil
-	case KataContainersAgent:
-		var kataAgentConfig KataAgentConfig
-		err := mapstructure.Decode(agentConfig, &kataAgentConfig)
-		if err != nil {
-			return nil, err
-		}
-		return kataAgentConfig, nil
-	default:
-		return nil, nil
-	}
-}
 
 // agent is the virtcontainers agent interface.
 // Agents are running in the guest VM and handling
@@ -117,7 +71,7 @@ type agent interface {
 	// init().
 	// After init() is called, agent implementations should be initialized and ready
 	// to handle all other Agent interface methods.
-	init(ctx context.Context, sandbox *Sandbox, config interface{}) (disableVMShutdown bool, err error)
+	init(ctx context.Context, sandbox *Sandbox, config KataAgentConfig) (disableVMShutdown bool, err error)
 
 	// capabilities should return a structure that specifies the capabilities
 	// supported by the agent.
