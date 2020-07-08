@@ -92,7 +92,6 @@ func hypervisorDevices() []specs.LinuxDeviceCgroup {
 // New creates a new CgroupManager
 func New(config *Config) (*Manager, error) {
 	var err error
-	useSystemdCgroup := UseSystemdCgroup()
 
 	devices := config.Resources.Devices
 	devices = append(devices, hypervisorDevices()...)
@@ -109,6 +108,9 @@ func New(config *Config) (*Manager, error) {
 
 	cgroups := config.Cgroups
 	cgroupPaths := config.CgroupPaths
+
+	// determine if we are utilizing systemd managed cgroups based on the path provided
+	useSystemdCgroup := IsSystemdCgroup(config.CgroupPath)
 
 	// Create a new cgroup if the current one is nil
 	// this cgroups must be saved later
@@ -205,7 +207,14 @@ func (m *Manager) moveToParent() error {
 	m.Lock()
 	defer m.Unlock()
 	for _, cgroupPath := range m.mgr.GetPaths() {
+
 		pids, err := readPids(cgroupPath)
+		// possible that the cgroupPath doesn't exist. If so, skip:
+		if os.IsNotExist(err) {
+			// The cgroup is not present on the filesystem: no pids to move. The systemd cgroup
+			// manager lists all of the subsystems, including those that are not actually being managed.
+			continue
+		}
 		if err != nil {
 			return err
 		}
@@ -271,7 +280,10 @@ func (m *Manager) GetPaths() map[string]string {
 func (m *Manager) Destroy() error {
 	// cgroup can't be destroyed if it contains running processes
 	if err := m.moveToParent(); err != nil {
-		return fmt.Errorf("Could not move processes into parent cgroup: %v", err)
+		// If the process migration to the parent cgroup fails, then
+		// we expect the Destroy to fail as well. Let's log an error here
+		// and attempt to execute the Destroy still to help cleanup the hosts' FS.
+		m.logger().WithError(err).Error("Could not move processes into parent cgroup")
 	}
 
 	m.Lock()
