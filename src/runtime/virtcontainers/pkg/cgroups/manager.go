@@ -53,9 +53,6 @@ const (
 )
 
 var (
-	// If set to true, expects cgroupsPath to be of form "slice:prefix:name", otherwise cgroups creation will fail
-	systemdCgroup *bool
-
 	cgroupsLogger = logrus.WithField("source", "virtcontainers/pkg/cgroups")
 )
 
@@ -64,18 +61,6 @@ func SetLogger(logger *logrus.Entry) {
 	fields := cgroupsLogger.Data
 
 	cgroupsLogger = logger.WithFields(fields)
-}
-
-func EnableSystemdCgroup() {
-	systemd := true
-	systemdCgroup = &systemd
-}
-
-func UseSystemdCgroup() bool {
-	if systemdCgroup != nil {
-		return *systemdCgroup
-	}
-	return false
 }
 
 // returns the list of devices that a hypervisor may need
