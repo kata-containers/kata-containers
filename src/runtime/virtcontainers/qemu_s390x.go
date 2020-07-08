@@ -152,7 +152,7 @@ func (q *qemuS390x) appendCCWBlockDevice(devices []govmmQemu.Device, drive confi
 }
 
 // appendVhostUserDevice throws an error if vhost devices are tried to be used.
-// See issue https://github.com/kata-containers/kata-containers/src/runtime/issues/659
+// See issue https://github.com/kata-containers/runtime/issues/659
 func (q *qemuS390x) appendVhostUserDevice(devices []govmmQemu.Device, attr config.VhostUserDeviceAttrs) ([]govmmQemu.Device, error) {
 	return nil, fmt.Errorf("No vhost-user devices supported on s390x")
 }

@@ -2066,7 +2066,7 @@ func calcHotplugMemMiBSize(mem uint32, memorySectionSizeMB uint32) (uint32, erro
 		return mem, nil
 	}
 
-	// TODO: hot add memory aligned to memory section should be more properly. See https://github.com/kata-containers/kata-containers/src/runtime/pull/624#issuecomment-419656853
+	// TODO: hot add memory aligned to memory section should be more properly. See https://github.com/kata-containers/runtime/pull/624#issuecomment-419656853
 	return uint32(math.Ceil(float64(mem)/float64(memorySectionSizeMB))) * memorySectionSizeMB, nil
 }
 
