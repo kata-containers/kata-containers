@@ -125,6 +125,9 @@ func (s *Sandbox) StatusContainer(contID string) (vc.ContainerStatus, error) {
 
 // StatsContainer implements the VCSandbox function of the same name.
 func (s *Sandbox) StatsContainer(contID string) (vc.ContainerStats, error) {
+	if s.StatsContainerFunc != nil {
+		return s.StatsContainerFunc(contID)
+	}
 	return vc.ContainerStats{}, nil
 }
 
@@ -231,4 +234,12 @@ func (s *Sandbox) GetAgentMetrics() (string, error) {
 		return s.GetAgentMetricsFunc()
 	}
 	return "", nil
+}
+
+// Stats implements the VCSandbox function of the same name.
+func (s *Sandbox) Stats() (vc.SandboxStats, error) {
+	if s.StatsFunc != nil {
+		return s.StatsFunc()
+	}
+	return vc.SandboxStats{}, nil
 }
