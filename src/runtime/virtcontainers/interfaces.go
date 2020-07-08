@@ -100,6 +100,9 @@ type VCSandbox interface {
 	ListRoutes() ([]*vcTypes.Route, error)
 
 	GetOOMEvent() (string, error)
+
+	UpdateRuntimeMetrics() error
+	GetAgentMetrics() (string, error)
 }
 
 // VCContainer is the Container interface
