@@ -190,7 +190,6 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (config testRuntimeConf
 		HypervisorType:   defaultHypervisor,
 		HypervisorConfig: hypervisorConfig,
 
-		AgentType:   defaultAgent,
 		AgentConfig: agentConfig,
 
 		ProxyType:   defaultProxy,
@@ -609,7 +608,6 @@ func TestMinimalRuntimeConfig(t *testing.T) {
 		HypervisorType:   defaultHypervisor,
 		HypervisorConfig: expectedHypervisorConfig,
 
-		AgentType:   defaultAgent,
 		AgentConfig: expectedAgentConfig,
 
 		ProxyType:   defaultProxy,
@@ -1516,30 +1514,6 @@ func TestDefaultCPUFeatures(t *testing.T) {
 	assert.Equal(cpuFeatures, h.cpuFeatures())
 }
 
-func TestUpdateRuntimeConfiguration(t *testing.T) {
-	assert := assert.New(t)
-
-	assert.Equal(defaultAgent, vc.KataContainersAgent)
-
-	config := oci.RuntimeConfig{}
-
-	tomlConf := tomlConfig{
-		Agent: map[string]agent{
-			// force a non-default value
-			kataAgentTableType: {},
-		},
-	}
-
-	assert.NotEqual(config.AgentType, vc.AgentType(kataAgentTableType))
-	assert.NotEqual(config.AgentConfig, vc.KataAgentConfig{})
-
-	err := updateRuntimeConfig("", tomlConf, &config, false)
-	assert.NoError(err)
-
-	assert.Equal(config.AgentType, vc.AgentType(kataAgentTableType))
-	assert.Equal(config.AgentConfig, vc.KataAgentConfig{})
-}
-
 func TestUpdateRuntimeConfigurationVMConfig(t *testing.T) {
 	assert := assert.New(t)
 
@@ -1588,8 +1562,6 @@ func TestUpdateRuntimeConfigurationFactoryConfig(t *testing.T) {
 
 func TestUpdateRuntimeConfigurationInvalidKernelParams(t *testing.T) {
 	assert := assert.New(t)
-
-	assert.Equal(defaultAgent, vc.KataContainersAgent)
 
 	config := oci.RuntimeConfig{}
 

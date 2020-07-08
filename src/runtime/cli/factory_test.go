@@ -6,6 +6,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"io/ioutil"
 	"os"
@@ -73,11 +74,19 @@ func TestFactoryCLIFunctionInit(t *testing.T) {
 	runtimeConfig.FactoryConfig.Template = true
 	runtimeConfig.FactoryConfig.TemplatePath = "/run/vc/vm/template"
 	runtimeConfig.HypervisorType = vc.MockHypervisor
-	runtimeConfig.AgentType = vc.NoopAgentType
 	runtimeConfig.ProxyType = vc.NoopProxyType
 	ctx.App.Metadata["runtimeConfig"] = runtimeConfig
 	fn, ok = initFactoryCommand.Action.(func(context *cli.Context) error)
 	assert.True(ok)
+
+	// config mock agent
+	stdCtx, err := cliContextToContext(ctx)
+	if err != nil {
+		stdCtx = context.Background()
+	}
+	stdCtx = vc.WithNewAgentFunc(stdCtx, vc.NewMockAgent)
+	ctx.App.Metadata["context"] = stdCtx
+
 	err = fn(ctx)
 	assert.Nil(err)
 }
@@ -109,7 +118,6 @@ func TestFactoryCLIFunctionDestroy(t *testing.T) {
 	// With template
 	runtimeConfig.FactoryConfig.Template = true
 	runtimeConfig.HypervisorType = vc.MockHypervisor
-	runtimeConfig.AgentType = vc.NoopAgentType
 	ctx.App.Metadata["runtimeConfig"] = runtimeConfig
 	fn, ok = destroyFactoryCommand.Action.(func(context *cli.Context) error)
 	assert.True(ok)
@@ -145,7 +153,6 @@ func TestFactoryCLIFunctionStatus(t *testing.T) {
 	// With template
 	runtimeConfig.FactoryConfig.Template = true
 	runtimeConfig.HypervisorType = vc.MockHypervisor
-	runtimeConfig.AgentType = vc.NoopAgentType
 	ctx.App.Metadata["runtimeConfig"] = runtimeConfig
 	err = fn(ctx)
 	assert.Nil(err)

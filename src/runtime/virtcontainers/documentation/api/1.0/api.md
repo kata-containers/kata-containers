@@ -36,7 +36,6 @@ sandbox lifecycle through the rest of the [sandbox API](#sandbox-functions).
   * [`Resources`](#resources)
   * [`HypervisorType`](#hypervisortype)
   * [`HypervisorConfig`](#hypervisorconfig)
-  * [`AgentType`](#agenttype)
   * [`ProxyType`](#proxytype)
   * [`ProxyConfig`](#proxyconfig)
   * [`ShimType`](#shimtype)
@@ -66,7 +65,6 @@ type SandboxConfig struct {
 	HypervisorType   HypervisorType
 	HypervisorConfig HypervisorConfig
 
-	AgentType   AgentType
 	AgentConfig interface{}
 
 	ProxyType   ProxyType
@@ -199,27 +197,6 @@ type HypervisorConfig struct {
 	// when running on top of another VMM.
 	DisableNestingChecks bool
 }
-```
-
-##### `AgentType`
-```Go
-// AgentType describes the type of guest agent a Sandbox should run.
-type AgentType string
-
-const (
-	// NoopAgentType is the No-Op agent.
-	NoopAgentType AgentType = "noop"
-
-	// KataContainersAgent is the Kata Containers agent.
-	KataContainersAgent AgentType = "kata"
-
-	// SocketTypeVSOCK is a VSOCK socket type for talking to an agent.
-	SocketTypeVSOCK = "vsock"
-
-	// SocketTypeUNIX is a UNIX socket type for talking to an agent.
-	// It typically means the agent is living behind a host proxy.
-	SocketTypeUNIX = "unix"
-)
 ```
 
 ##### `ProxyType`
@@ -891,7 +868,6 @@ func Example_createAndStartSandbox() {
 		HypervisorType:   vc.QemuHypervisor,
 		HypervisorConfig: hypervisorConfig,
 
-		AgentType:   vc.KataContainersAgent
 		AgentConfig: agConfig,
 
 		Containers: []vc.ContainerConfig{container},

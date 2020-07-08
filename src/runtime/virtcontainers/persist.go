@@ -13,7 +13,6 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist"
 	persistapi "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist/api"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
-	"github.com/mitchellh/mapstructure"
 )
 
 var (
@@ -177,7 +176,6 @@ func (s *Sandbox) dumpConfig(ss *persistapi.SandboxState) {
 	sconfig := s.config
 	ss.Config = persistapi.SandboxConfig{
 		HypervisorType: string(sconfig.HypervisorType),
-		AgentType:      string(sconfig.AgentType),
 		ProxyType:      string(sconfig.ProxyType),
 		ProxyConfig: persistapi.ProxyConfig{
 			Path:  sconfig.ProxyConfig.Path,
@@ -258,17 +256,9 @@ func (s *Sandbox) dumpConfig(ss *persistapi.SandboxState) {
 		TxRateLimiterMaxRate:    sconfig.HypervisorConfig.TxRateLimiterMaxRate,
 	}
 
-	if sconfig.AgentType == "kata" {
-		var sagent KataAgentConfig
-		err := mapstructure.Decode(sconfig.AgentConfig, &sagent)
-		if err != nil {
-			s.Logger().WithError(err).Error("internal error: KataAgentConfig failed to decode")
-		} else {
-			ss.Config.KataAgentConfig = &persistapi.KataAgentConfig{
-				LongLiveConn: sagent.LongLiveConn,
-				UseVSock:     sagent.UseVSock,
-			}
-		}
+	ss.Config.KataAgentConfig = &persistapi.KataAgentConfig{
+		LongLiveConn: sconfig.AgentConfig.LongLiveConn,
+		UseVSock:     sconfig.AgentConfig.UseVSock,
 	}
 
 	for _, contConf := range sconfig.Containers {
@@ -454,7 +444,6 @@ func loadSandboxConfig(id string) (*SandboxConfig, error) {
 	sconfig := &SandboxConfig{
 		ID:             id,
 		HypervisorType: HypervisorType(savedConf.HypervisorType),
-		AgentType:      AgentType(savedConf.AgentType),
 		ProxyType:      ProxyType(savedConf.ProxyType),
 		ProxyConfig: ProxyConfig{
 			Path:  savedConf.ProxyConfig.Path,
@@ -536,11 +525,9 @@ func loadSandboxConfig(id string) (*SandboxConfig, error) {
 		TxRateLimiterMaxRate:    hconf.TxRateLimiterMaxRate,
 	}
 
-	if savedConf.AgentType == "kata" {
-		sconfig.AgentConfig = KataAgentConfig{
-			LongLiveConn: savedConf.KataAgentConfig.LongLiveConn,
-			UseVSock:     savedConf.KataAgentConfig.UseVSock,
-		}
+	sconfig.AgentConfig = KataAgentConfig{
+		LongLiveConn: savedConf.KataAgentConfig.LongLiveConn,
+		UseVSock:     savedConf.KataAgentConfig.UseVSock,
 	}
 
 	for _, contConf := range savedConf.ContainerConfigs {

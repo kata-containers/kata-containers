@@ -308,7 +308,7 @@ func TestContainerAddDriveDir(t *testing.T) {
 		id:         testSandboxID,
 		devManager: manager.NewDeviceManager(manager.VirtioSCSI, false, "", nil),
 		hypervisor: &mockHypervisor{},
-		agent:      &noopAgent{},
+		agent:      &mockAgent{},
 		config: &SandboxConfig{
 			HypervisorConfig: HypervisorConfig{
 				DisableBlockDeviceUse: false,
@@ -364,7 +364,7 @@ func TestContainerRootfsPath(t *testing.T) {
 	sandbox := &Sandbox{
 		ctx:        context.Background(),
 		id:         "rootfstestsandbox",
-		agent:      &noopAgent{},
+		agent:      &mockAgent{},
 		hypervisor: &mockHypervisor{},
 		config: &SandboxConfig{
 			HypervisorConfig: HypervisorConfig{

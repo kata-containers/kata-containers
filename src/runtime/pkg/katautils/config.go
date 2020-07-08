@@ -25,7 +25,6 @@ import (
 
 const (
 	defaultHypervisor = vc.QemuHypervisor
-	defaultAgent      = vc.KataContainersAgent
 )
 
 var (
@@ -55,9 +54,6 @@ const (
 
 	// supported proxy component types
 	kataProxyTableType = "kata"
-
-	// supported agent component types
-	kataAgentTableType = "kata"
 
 	// the maximum amount of PCI bridges that can be cold plugged in a VM
 	maxPCIBridges uint32 = 5
@@ -932,37 +928,24 @@ func updateRuntimeConfigProxy(configPath string, tomlConf tomlConfig, config *oc
 
 func updateRuntimeConfigAgent(configPath string, tomlConf tomlConfig, config *oci.RuntimeConfig, builtIn bool) error {
 	if builtIn {
-		var agentConfig vc.KataAgentConfig
-
-		// If the agent config section isn't a Kata one, just default
-		// to everything being disabled.
-		agentConfig, _ = config.AgentConfig.(vc.KataAgentConfig)
-
-		config.AgentType = vc.KataContainersAgent
 		config.AgentConfig = vc.KataAgentConfig{
 			LongLiveConn:  true,
 			UseVSock:      config.HypervisorConfig.UseVSock,
-			Debug:         agentConfig.Debug,
-			KernelModules: agentConfig.KernelModules,
+			Debug:         config.AgentConfig.Debug,
+			KernelModules: config.AgentConfig.KernelModules,
 		}
 
 		return nil
 	}
 
-	for k, agent := range tomlConf.Agent {
-		switch k {
-		case kataAgentTableType:
-			config.AgentType = vc.KataContainersAgent
-			config.AgentConfig = vc.KataAgentConfig{
-				UseVSock:      config.HypervisorConfig.UseVSock,
-				Debug:         agent.debug(),
-				Trace:         agent.trace(),
-				TraceMode:     agent.traceMode(),
-				TraceType:     agent.traceType(),
-				KernelModules: agent.kernelModules(),
-			}
-		default:
-			return fmt.Errorf("%s agent type is not supported", k)
+	for _, agent := range tomlConf.Agent {
+		config.AgentConfig = vc.KataAgentConfig{
+			UseVSock:      config.HypervisorConfig.UseVSock,
+			Debug:         agent.debug(),
+			Trace:         agent.trace(),
+			TraceMode:     agent.traceMode(),
+			TraceType:     agent.traceType(),
+			KernelModules: agent.kernelModules(),
 		}
 	}
 
@@ -1005,18 +988,16 @@ func SetKernelParams(runtimeConfig *oci.RuntimeConfig) error {
 	}
 
 	// next, check for agent specific kernel params
-	if agentConfig, ok := runtimeConfig.AgentConfig.(vc.KataAgentConfig); ok {
-		err := vc.KataAgentSetDefaultTraceConfigOptions(&agentConfig)
-		if err != nil {
+	err := vc.KataAgentSetDefaultTraceConfigOptions(&runtimeConfig.AgentConfig)
+	if err != nil {
+		return err
+	}
+
+	params := vc.KataAgentKernelParams(runtimeConfig.AgentConfig)
+
+	for _, p := range params {
+		if err := runtimeConfig.AddKernelParam(p); err != nil {
 			return err
-		}
-
-		params := vc.KataAgentKernelParams(agentConfig)
-
-		for _, p := range params {
-			if err := runtimeConfig.AddKernelParam(p); err != nil {
-				return err
-			}
 		}
 	}
 
@@ -1106,19 +1087,16 @@ func GetDefaultHypervisorConfig() vc.HypervisorConfig {
 }
 
 func initConfig() (config oci.RuntimeConfig, err error) {
-	var defaultAgentConfig interface{}
-
 	err = config.InterNetworkModel.SetModel(defaultInterNetworkingModel)
 	if err != nil {
 		return oci.RuntimeConfig{}, err
 	}
 
-	defaultAgentConfig = vc.KataAgentConfig{}
+	defaultAgentConfig := vc.KataAgentConfig{}
 
 	config = oci.RuntimeConfig{
 		HypervisorType:   defaultHypervisor,
 		HypervisorConfig: GetDefaultHypervisorConfig(),
-		AgentType:        defaultAgent,
 		AgentConfig:      defaultAgentConfig,
 		ProxyType:        defaultProxy,
 	}
@@ -1279,9 +1257,6 @@ func checkFactoryConfig(config oci.RuntimeConfig) error {
 	if config.FactoryConfig.VMCacheNumber > 0 {
 		if config.HypervisorType != vc.QemuHypervisor {
 			return errors.New("VM cache just support qemu")
-		}
-		if config.AgentType != vc.KataContainersAgent {
-			return errors.New("VM cache just support kata agent")
 		}
 	}
 
