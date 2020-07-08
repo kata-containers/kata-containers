@@ -7,6 +7,7 @@ package vcmock
 
 import (
 	"context"
+	"io"
 	"syscall"
 
 	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
@@ -25,6 +26,46 @@ type Sandbox struct {
 	MockAnnotations map[string]string
 	MockContainers  []*Container
 	MockNetNs       string
+
+	// functions for mocks
+	AnnotationsFunc          func(key string) (string, error)
+	SetAnnotationsFunc       func(annotations map[string]string) error
+	GetAnnotationsFunc       func() map[string]string
+	GetNetNsFunc             func() string
+	GetAllContainersFunc     func() []vc.VCContainer
+	GetContainerFunc         func(containerID string) vc.VCContainer
+	ReleaseFunc              func() error
+	StartFunc                func() error
+	StopFunc                 func(force bool) error
+	PauseFunc                func() error
+	ResumeFunc               func() error
+	DeleteFunc               func() error
+	CreateContainerFunc      func(conf vc.ContainerConfig) (vc.VCContainer, error)
+	DeleteContainerFunc      func(contID string) (vc.VCContainer, error)
+	StartContainerFunc       func(contID string) (vc.VCContainer, error)
+	StopContainerFunc        func(contID string, force bool) (vc.VCContainer, error)
+	KillContainerFunc        func(contID string, signal syscall.Signal, all bool) error
+	StatusContainerFunc      func(contID string) (vc.ContainerStatus, error)
+	StatsContainerFunc       func(contID string) (vc.ContainerStats, error)
+	PauseContainerFunc       func(contID string) error
+	ResumeContainerFunc      func(contID string) error
+	StatusFunc               func() vc.SandboxStatus
+	EnterContainerFunc       func(containerID string, cmd types.Cmd) (vc.VCContainer, *vc.Process, error)
+	MonitorFunc              func() (chan error, error)
+	UpdateContainerFunc      func(containerID string, resources specs.LinuxResources) error
+	ProcessListContainerFunc func(containerID string, options vc.ProcessListOptions) (vc.ProcessList, error)
+	WaitProcessFunc          func(containerID, processID string) (int32, error)
+	SignalProcessFunc        func(containerID, processID string, signal syscall.Signal, all bool) error
+	WinsizeProcessFunc       func(containerID, processID string, height, width uint32) error
+	IOStreamFunc             func(containerID, processID string) (io.WriteCloser, io.Reader, io.Reader, error)
+	AddDeviceFunc            func(info config.DeviceInfo) (api.Device, error)
+	AddInterfaceFunc         func(inf *vcTypes.Interface) (*vcTypes.Interface, error)
+	RemoveInterfaceFunc      func(inf *vcTypes.Interface) (*vcTypes.Interface, error)
+	ListInterfacesFunc       func() ([]*vcTypes.Interface, error)
+	UpdateRoutesFunc         func(routes []*vcTypes.Route) ([]*vcTypes.Route, error)
+	ListRoutesFunc           func() ([]*vcTypes.Route, error)
+	UpdateRuntimeMetricsFunc func() error
+	GetAgentMetricsFunc      func() (string, error)
 }
 
 // Container is a fake Container type used for testing

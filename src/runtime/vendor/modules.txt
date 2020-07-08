@@ -25,9 +25,13 @@ github.com/PuerkitoBio/purell
 github.com/PuerkitoBio/urlesc
 # github.com/asaskevich/govalidator v0.0.0-20180720115003-f9ffefc3facf
 github.com/asaskevich/govalidator
+# github.com/beorn7/perks v1.0.1
+github.com/beorn7/perks/quantile
 # github.com/blang/semver v0.0.0-20190414102917-ba2c2ddd8906
 ## explicit
 github.com/blang/semver
+# github.com/cespare/xxhash/v2 v2.1.1
+github.com/cespare/xxhash/v2
 # github.com/cilium/ebpf v0.0.0-20200421083123-d05ecd062fb1
 ## explicit
 github.com/cilium/ebpf
@@ -45,21 +49,67 @@ github.com/containerd/cgroups
 github.com/containerd/console
 # github.com/containerd/containerd v1.2.1-0.20181210191522-f05672357f56
 ## explicit
+github.com/containerd/containerd
 github.com/containerd/containerd/api/events
+github.com/containerd/containerd/api/services/containers/v1
+github.com/containerd/containerd/api/services/content/v1
+github.com/containerd/containerd/api/services/diff/v1
+github.com/containerd/containerd/api/services/events/v1
+github.com/containerd/containerd/api/services/images/v1
+github.com/containerd/containerd/api/services/introspection/v1
+github.com/containerd/containerd/api/services/leases/v1
+github.com/containerd/containerd/api/services/namespaces/v1
+github.com/containerd/containerd/api/services/snapshots/v1
+github.com/containerd/containerd/api/services/tasks/v1
+github.com/containerd/containerd/api/services/version/v1
 github.com/containerd/containerd/api/types
 github.com/containerd/containerd/api/types/task
+github.com/containerd/containerd/archive
+github.com/containerd/containerd/archive/compression
+github.com/containerd/containerd/cio
+github.com/containerd/containerd/containers
+github.com/containerd/containerd/content
+github.com/containerd/containerd/content/proxy
+github.com/containerd/containerd/defaults
+github.com/containerd/containerd/diff
 github.com/containerd/containerd/errdefs
 github.com/containerd/containerd/events
+github.com/containerd/containerd/events/exchange
+github.com/containerd/containerd/filters
+github.com/containerd/containerd/identifiers
+github.com/containerd/containerd/images
+github.com/containerd/containerd/images/archive
+github.com/containerd/containerd/leases
+github.com/containerd/containerd/leases/proxy
 github.com/containerd/containerd/log
 github.com/containerd/containerd/mount
 github.com/containerd/containerd/namespaces
+github.com/containerd/containerd/oci
+github.com/containerd/containerd/pkg/dialer
+github.com/containerd/containerd/platforms
+github.com/containerd/containerd/plugin
+github.com/containerd/containerd/reference
+github.com/containerd/containerd/remotes
+github.com/containerd/containerd/remotes/docker
+github.com/containerd/containerd/remotes/docker/schema1
+github.com/containerd/containerd/rootfs
 github.com/containerd/containerd/runtime
 github.com/containerd/containerd/runtime/linux/runctypes
+github.com/containerd/containerd/runtime/v2/runc/options
 github.com/containerd/containerd/runtime/v2/shim
 github.com/containerd/containerd/runtime/v2/task
+github.com/containerd/containerd/services/server/config
+github.com/containerd/containerd/snapshots
+github.com/containerd/containerd/snapshots/proxy
 github.com/containerd/containerd/sys
+github.com/containerd/containerd/version
 # github.com/containerd/continuity v0.0.0-20200413184840-d3ef23f19fbb
 ## explicit
+github.com/containerd/continuity/fs
+github.com/containerd/continuity/sysx
+# github.com/containerd/cri v1.11.1
+## explicit
+github.com/containerd/cri/pkg/util
 # github.com/containerd/cri-containerd v1.11.1-0.20190125013620-4dd6735020f5
 ## explicit
 github.com/containerd/cri-containerd/pkg/annotations
@@ -96,6 +146,17 @@ github.com/davecgh/go-spew/spew
 # github.com/dlespiau/covertool v0.0.0-20180314162135-b0c4c6d0583a
 ## explicit
 github.com/dlespiau/covertool/pkg/cover
+# github.com/docker/distribution v2.7.1+incompatible
+## explicit
+github.com/docker/distribution/digestset
+github.com/docker/distribution/reference
+# github.com/docker/docker v1.13.1
+## explicit
+github.com/docker/docker/pkg/random
+github.com/docker/docker/pkg/stringid
+# github.com/docker/go-events v0.0.0-20190806004212-e31b211e4f1c
+## explicit
+github.com/docker/go-events
 # github.com/docker/go-units v0.3.3
 ## explicit
 github.com/docker/go-units
@@ -140,6 +201,9 @@ github.com/go-openapi/swag
 github.com/go-openapi/validate
 # github.com/godbus/dbus v0.0.0-20180201030542-885f9cc04c9c
 github.com/godbus/dbus
+# github.com/gogo/googleapis v1.4.0
+## explicit
+github.com/gogo/googleapis/google/rpc
 # github.com/gogo/protobuf v1.3.1
 ## explicit
 github.com/gogo/protobuf/gogoproto
@@ -148,7 +212,7 @@ github.com/gogo/protobuf/proto
 github.com/gogo/protobuf/protoc-gen-gogo/descriptor
 github.com/gogo/protobuf/sortkeys
 github.com/gogo/protobuf/types
-# github.com/golang/protobuf v1.3.1
+# github.com/golang/protobuf v1.4.2
 github.com/golang/protobuf/proto
 github.com/golang/protobuf/ptypes
 github.com/golang/protobuf/ptypes/any
@@ -171,6 +235,8 @@ github.com/konsorten/go-windows-terminal-sequences
 github.com/mailru/easyjson/buffer
 github.com/mailru/easyjson/jlexer
 github.com/mailru/easyjson/jwriter
+# github.com/matttproud/golang_protobuf_extensions v1.0.1
+github.com/matttproud/golang_protobuf_extensions/pbutil
 # github.com/mdlayher/vsock v0.0.0-20191108225356-d9c65923cb8f
 ## explicit
 github.com/mdlayher/vsock
@@ -179,6 +245,11 @@ github.com/mdlayher/vsock
 github.com/mitchellh/mapstructure
 # github.com/opencontainers/go-digest v1.0.0-rc1
 github.com/opencontainers/go-digest
+# github.com/opencontainers/image-spec v1.0.1
+## explicit
+github.com/opencontainers/image-spec/identity
+github.com/opencontainers/image-spec/specs-go
+github.com/opencontainers/image-spec/specs-go/v1
 # github.com/opencontainers/runc v1.0.0-rc9.0.20200102164712-2b52db75279c
 ## explicit
 github.com/opencontainers/runc/libcontainer/cgroups
@@ -210,9 +281,23 @@ github.com/opentracing/opentracing-go/log
 github.com/pkg/errors
 # github.com/pmezard/go-difflib v1.0.0
 github.com/pmezard/go-difflib/difflib
-# github.com/prometheus/procfs v0.0.0-20190328153300-af7bedc223fb
+# github.com/prometheus/client_golang v1.7.1
+## explicit
+github.com/prometheus/client_golang/prometheus
+github.com/prometheus/client_golang/prometheus/internal
+# github.com/prometheus/client_model v0.2.0
+## explicit
+github.com/prometheus/client_model/go
+# github.com/prometheus/common v0.10.0
+## explicit
+github.com/prometheus/common/expfmt
+github.com/prometheus/common/internal/bitbucket.org/ww/goautoneg
+github.com/prometheus/common/model
+# github.com/prometheus/procfs v0.1.3
 ## explicit
 github.com/prometheus/procfs
+github.com/prometheus/procfs/internal/fs
+github.com/prometheus/procfs/internal/util
 # github.com/safchain/ethtool v0.0.0-20190326074333-42ed695e3de8
 ## explicit
 github.com/safchain/ethtool
@@ -228,6 +313,9 @@ github.com/sirupsen/logrus/hooks/syslog
 # github.com/stretchr/testify v1.4.0
 ## explicit
 github.com/stretchr/testify/assert
+# github.com/syndtr/gocapability v0.0.0-20180916011248-d98352740cb2
+## explicit
+github.com/syndtr/gocapability/capability
 # github.com/uber/jaeger-client-go v0.0.0-20200422204034-e1cd868603cb
 ## explicit
 github.com/uber/jaeger-client-go
@@ -278,8 +366,11 @@ golang.org/x/net/trace
 ## explicit
 golang.org/x/oauth2
 golang.org/x/oauth2/internal
-# golang.org/x/sys v0.0.0-20200420163511-1957bb5e6d1f
+# golang.org/x/sync v0.0.0-20190911185100-cd5d95a43a6e
+golang.org/x/sync/errgroup
+# golang.org/x/sys v0.0.0-20200615200032-f1bc736245b1
 ## explicit
+golang.org/x/sys/internal/unsafeheader
 golang.org/x/sys/unix
 golang.org/x/sys/windows
 # golang.org/x/text v0.3.0
@@ -315,6 +406,7 @@ google.golang.org/grpc/credentials/internal
 google.golang.org/grpc/encoding
 google.golang.org/grpc/encoding/proto
 google.golang.org/grpc/grpclog
+google.golang.org/grpc/health/grpc_health_v1
 google.golang.org/grpc/internal
 google.golang.org/grpc/internal/backoff
 google.golang.org/grpc/internal/binarylog
@@ -334,7 +426,38 @@ google.golang.org/grpc/resolver/passthrough
 google.golang.org/grpc/stats
 google.golang.org/grpc/status
 google.golang.org/grpc/tap
-# gopkg.in/yaml.v2 v2.2.2
+# google.golang.org/protobuf v1.23.0
+google.golang.org/protobuf/encoding/prototext
+google.golang.org/protobuf/encoding/protowire
+google.golang.org/protobuf/internal/descfmt
+google.golang.org/protobuf/internal/descopts
+google.golang.org/protobuf/internal/detrand
+google.golang.org/protobuf/internal/encoding/defval
+google.golang.org/protobuf/internal/encoding/messageset
+google.golang.org/protobuf/internal/encoding/tag
+google.golang.org/protobuf/internal/encoding/text
+google.golang.org/protobuf/internal/errors
+google.golang.org/protobuf/internal/fieldnum
+google.golang.org/protobuf/internal/fieldsort
+google.golang.org/protobuf/internal/filedesc
+google.golang.org/protobuf/internal/filetype
+google.golang.org/protobuf/internal/flags
+google.golang.org/protobuf/internal/genname
+google.golang.org/protobuf/internal/impl
+google.golang.org/protobuf/internal/mapsort
+google.golang.org/protobuf/internal/pragma
+google.golang.org/protobuf/internal/set
+google.golang.org/protobuf/internal/strs
+google.golang.org/protobuf/internal/version
+google.golang.org/protobuf/proto
+google.golang.org/protobuf/reflect/protoreflect
+google.golang.org/protobuf/reflect/protoregistry
+google.golang.org/protobuf/runtime/protoiface
+google.golang.org/protobuf/runtime/protoimpl
+google.golang.org/protobuf/types/known/anypb
+google.golang.org/protobuf/types/known/durationpb
+google.golang.org/protobuf/types/known/timestamppb
+# gopkg.in/yaml.v2 v2.2.5
 gopkg.in/yaml.v2
 # gotest.tools v2.2.0+incompatible
 ## explicit

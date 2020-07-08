@@ -52,9 +52,10 @@ service AgentService {
 	rpc ListRoutes(ListRoutesRequest) returns (Routes);
 	rpc AddARPNeighbors(AddARPNeighborsRequest) returns (google.protobuf.Empty);
 
-	// tracing
+	// observability
 	rpc StartTracing(StartTracingRequest) returns (google.protobuf.Empty);
 	rpc StopTracing(StopTracingRequest) returns (google.protobuf.Empty);
+	rpc GetMetrics(GetMetricsRequest) returns (Metrics);
 
 	// misc (TODO: some rpcs can be replaced by hyperstart-exec)
 	rpc CreateSandbox(CreateSandboxRequest) returns (google.protobuf.Empty);
@@ -513,4 +514,10 @@ message GetOOMEventRequest {}
 
 message OOMEvent {
 	string container_id = 1;
+}
+
+message GetMetricsRequest {}
+
+message Metrics {
+	string metrics = 1;
 }
