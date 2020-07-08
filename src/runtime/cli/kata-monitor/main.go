@@ -15,7 +15,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-var metricListenAddr = flag.String("listen-address", ":8090", "The address to listen on for HTTP requests.")
+var monitorListenAddr = flag.String("listen-address", ":8090", "The address to listen on for HTTP requests.")
 var containerdAddr = flag.String("containerd-address", "/run/containerd/containerd.sock", "Containerd address to accept client requests.")
 var containerdConfig = flag.String("containerd-conf", "/etc/containerd/config.toml", "Containerd config file.")
 var logLevel = flag.String("log-level", "info", "Log level of logrus(trace/debug/info/warn/error/fatal/panic).")
@@ -26,17 +26,31 @@ func main() {
 	// init logrus
 	initLog()
 
-	// create new MAgent
-	ma, err := kataMonitor.NewKataMonitor(*containerdAddr, *containerdConfig)
+	// create new kataMonitor
+	km, err := kataMonitor.NewKataMonitor(*containerdAddr, *containerdConfig)
 	if err != nil {
 		panic(err)
 	}
 
 	// setup handlers, now only metrics is supported
-	http.HandleFunc("/metrics", ma.ProcessMetricsRequest)
+	m := http.NewServeMux()
+	m.Handle("/metrics", http.HandlerFunc(km.ProcessMetricsRequest))
+	m.Handle("/sandboxes", http.HandlerFunc(km.ListSandboxes))
+
+	// for debug shim process
+	m.Handle("/debug/vars", http.HandlerFunc(km.ExpvarHandler))
+	m.Handle("/debug/pprof/", http.HandlerFunc(km.PprofIndex))
+	m.Handle("/debug/pprof/cmdline", http.HandlerFunc(km.PprofCmdline))
+	m.Handle("/debug/pprof/profile", http.HandlerFunc(km.PprofProfile))
+	m.Handle("/debug/pprof/symbol", http.HandlerFunc(km.PprofSymbol))
+	m.Handle("/debug/pprof/trace", http.HandlerFunc(km.PprofTrace))
 
 	// listening on the server
-	logrus.Fatal(http.ListenAndServe(*metricListenAddr, nil))
+	svr := &http.Server{
+		Handler: m,
+		Addr:    *monitorListenAddr,
+	}
+	logrus.Fatal(svr.ListenAndServe())
 }
 
 // initLog setup logger

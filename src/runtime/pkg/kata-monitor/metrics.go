@@ -73,11 +73,10 @@ func registerMetrics() {
 	prometheus.MustRegister(scrapeDurationsHistogram)
 }
 
-// getMetricsAddress get metrics address for a sandbox, the abstract unix socket address is saved
+// getMonitorAddress get metrics address for a sandbox, the abstract unix socket address is saved
 // in `metrics_address` with the same place of `address`.
-func (km *KataMonitor) getMetricsAddress(sandboxID, namespace string) (string, error) {
+func (km *KataMonitor) getMonitorAddress(sandboxID, namespace string) (string, error) {
 	path := filepath.Join(km.containerdStatePath, types.ContainerdRuntimeTaskPath, namespace, sandboxID, "monitor_address")
-
 	data, err := ioutil.ReadFile(path)
 	if err != nil {
 		return "", err
@@ -237,7 +236,7 @@ func (km *KataMonitor) aggregateSandboxMetrics(encoder expfmt.Encoder) error {
 
 // getSandboxMetrics will get sandbox's metrics from shim
 func (km *KataMonitor) getSandboxMetrics(sandboxID, namespace string) ([]*dto.MetricFamily, error) {
-	socket, err := km.getMetricsAddress(sandboxID, namespace)
+	socket, err := km.getMonitorAddress(sandboxID, namespace)
 	if err != nil {
 		return nil, err
 	}

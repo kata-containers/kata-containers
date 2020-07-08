@@ -7,6 +7,7 @@ package katamonitor
 
 import (
 	"fmt"
+	"net/http"
 	"os"
 	"sync"
 
@@ -48,7 +49,7 @@ func NewKataMonitor(containerdAddr, containerdConfigFile string) (*KataMonitor, 
 		return nil, err
 	}
 
-	ka := &KataMonitor{
+	km := &KataMonitor{
 		containerdAddr:       containerdAddr,
 		containerdConfigFile: containerdConfigFile,
 		containerdStatePath:  containerdConf.State,
@@ -58,23 +59,47 @@ func NewKataMonitor(containerdAddr, containerdConfigFile string) (*KataMonitor, 
 		},
 	}
 
-	if err := ka.initSandboxCache(); err != nil {
+	if err := km.initSandboxCache(); err != nil {
 		return nil, err
 	}
 
 	// register metrics
 	registerMetrics()
 
-	go ka.sandboxCache.startEventsListener(ka.containerdAddr)
+	go km.sandboxCache.startEventsListener(km.containerdAddr)
 
-	return ka, nil
+	return km, nil
 }
 
-func (ka *KataMonitor) initSandboxCache() error {
-	sandboxes, err := ka.getSandboxes()
+func (km *KataMonitor) initSandboxCache() error {
+	sandboxes, err := km.getSandboxes()
 	if err != nil {
 		return err
 	}
-	ka.sandboxCache.init(sandboxes)
+	km.sandboxCache.init(sandboxes)
 	return nil
+}
+
+// ListSandboxes list all sandboxes running in Kata
+func (km *KataMonitor) ListSandboxes(w http.ResponseWriter, r *http.Request) {
+	sandboxes := km.getSandboxList()
+	for _, s := range sandboxes {
+		w.Write([]byte(fmt.Sprintf("%s\n", s)))
+	}
+}
+
+func (km *KataMonitor) getSandboxList() []string {
+	sn := km.sandboxCache.getAllSandboxes()
+	result := make([]string, len(sn))
+
+	i := 0
+	for k := range sn {
+		result[i] = k
+		i++
+	}
+	return result
+}
+
+func (km *KataMonitor) getSandboxNamespace(sandbox string) (string, error) {
+	return km.sandboxCache.getSandboxNamespace(sandbox)
 }

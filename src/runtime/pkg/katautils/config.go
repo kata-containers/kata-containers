@@ -139,6 +139,7 @@ type runtime struct {
 	SandboxCgroupOnly   bool     `toml:"sandbox_cgroup_only"`
 	Experimental        []string `toml:"experimental"`
 	InterNetworkModel   string   `toml:"internetworking_model"`
+	EnablePprof         bool     `toml:"enable_pprof"`
 }
 
 type agent struct {
@@ -1165,6 +1166,7 @@ func LoadConfiguration(configPath string, ignoreLogging, builtIn bool) (resolved
 
 	config.SandboxCgroupOnly = tomlConf.Runtime.SandboxCgroupOnly
 	config.DisableNewNetNs = tomlConf.Runtime.DisableNewNetNs
+	config.EnablePprof = tomlConf.Runtime.EnablePprof
 	for _, f := range tomlConf.Runtime.Experimental {
 		feature := exp.Get(f)
 		if feature == nil {
