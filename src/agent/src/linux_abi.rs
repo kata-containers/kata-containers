@@ -10,7 +10,7 @@ pub const SYSFS_DIR: &str = "/sys";
 pub const SYSFS_PCI_BUS_PREFIX: &str = "/sys/bus/pci/devices";
 pub const SYSFS_PCI_BUS_RESCAN_FILE: &str = "/sys/bus/pci/rescan";
 #[cfg(any(
-    target_arch = "powerpc64le",
+    target_arch = "powerpc64",
     target_arch = "s390x",
     target_arch = "x86_64",
     target_arch = "x86"
