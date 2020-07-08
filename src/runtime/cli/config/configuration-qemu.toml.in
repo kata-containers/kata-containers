@@ -480,3 +480,7 @@ sandbox_cgroup_only=@DEFSANDBOXCGROUPONLY@
 # Supported experimental features:
 # (default: [])
 experimental=@DEFAULTEXPFEATURES@
+
+# If enabled, user can run pprof tools with shim v2 process through kata-monitor.
+# (default: false)
+# EnablePprof = true

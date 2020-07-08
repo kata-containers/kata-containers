@@ -121,6 +121,9 @@ type RuntimeConfig struct {
 
 	//Experimental features enabled
 	Experimental []exp.Feature
+
+	// Determines if enable pprof
+	EnablePprof bool
 }
 
 // AddKernelParam allows the addition of new kernel parameters to an existing

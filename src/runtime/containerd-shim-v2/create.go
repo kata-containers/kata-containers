@@ -88,7 +88,7 @@ func create(ctx context.Context, s *service, r *taskAPI.CreateTaskRequest) (*con
 			return nil, err
 		}
 		s.sandbox = sandbox
-		go s.startManagementServer(ctx)
+		go s.startManagementServer(ctx, ociSpec)
 
 	case vc.PodContainer:
 		if s.sandbox == nil {
