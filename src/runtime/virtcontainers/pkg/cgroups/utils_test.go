@@ -22,8 +22,8 @@ func TestIsSystemdCgroup(t *testing.T) {
 		path     string
 		expected bool
 	}{
-		{"slice:kata:afhts2e5d4g5s", true},
-		{"slice.system:kata:afhts2e5d4g5s", true},
+		{"foo.slice:kata:afhts2e5d4g5s", true},
+		{"system.slice:kata:afhts2e5d4g5s", true},
 		{"/kata/afhts2e5d4g5s", false},
 		{"a:b:c:d", false},
 		{":::", false},
@@ -78,9 +78,9 @@ func TestValidCgroupPath(t *testing.T) {
 		{":a:b", true, true},
 		{"@:@:@", true, true},
 
-		// valid system paths
-		{"slice:kata:55555", true, false},
-		{"slice.system:kata:afhts2e5d4g5s", true, false},
+		// valid systemd paths
+		{"x.slice:kata:55555", true, false},
+		{"system.slice:kata:afhts2e5d4g5s", true, false},
 	} {
 		path, err := ValidCgroupPath(t.path, t.systemdCgroup)
 		if t.error {
