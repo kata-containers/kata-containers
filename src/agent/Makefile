@@ -40,6 +40,10 @@ ifneq ($(LIBC),musl)
     endif
 endif
 
+ifeq ($(ARCH), ppc64le)
+    override ARCH = powerpc64le
+endif
+
 TRIPLE = $(ARCH)-unknown-linux-$(LIBC)
 
 TARGET_PATH = target/$(TRIPLE)/$(BUILD_TYPE)/$(TARGET)
