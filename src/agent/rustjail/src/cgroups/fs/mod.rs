@@ -1321,7 +1321,7 @@ impl CgroupManager for Manager {
             match Blkio().get_stats(self.paths.get("blkio").unwrap()) {
                 Ok(stat) => SingularPtrField::some(stat),
                 Err(e) => {
-                    warn!(sl!(), "failed to get blkio stats");
+                    warn!(sl!(), "failed to get blkio stats {:?}", e);
                     SingularPtrField::none()
                 }
             }
