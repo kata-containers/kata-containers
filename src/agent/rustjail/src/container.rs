@@ -802,30 +802,24 @@ impl BaseContainer for LinuxContainer {
             unistd::close(pwfd);
         });
 
-        let mut child_stdin = std::process::Stdio::null();
-        let mut child_stdout = std::process::Stdio::null();
-        let mut child_stderr = std::process::Stdio::null();
-        let mut stdin = -1;
-        let mut stdout = -1;
-        let mut stderr = -1;
-
-        if tty {
+        let (child_stdin, child_stdout, child_stderr) = if tty {
             let pseduo = pty::openpty(None, None)?;
             p.term_master = Some(pseduo.master);
             fcntl::fcntl(pseduo.master, FcntlArg::F_SETFD(FdFlag::FD_CLOEXEC));
             fcntl::fcntl(pseduo.slave, FcntlArg::F_SETFD(FdFlag::FD_CLOEXEC));
 
-            child_stdin = unsafe { std::process::Stdio::from_raw_fd(pseduo.slave) };
-            child_stdout = unsafe { std::process::Stdio::from_raw_fd(pseduo.slave) };
-            child_stderr = unsafe { std::process::Stdio::from_raw_fd(pseduo.slave) };
+            (
+                unsafe { std::process::Stdio::from_raw_fd(pseduo.slave) },
+                unsafe { std::process::Stdio::from_raw_fd(pseduo.slave) },
+                unsafe { std::process::Stdio::from_raw_fd(pseduo.slave) },
+            )
         } else {
-            stdin = p.stdin.unwrap();
-            stdout = p.stdout.unwrap();
-            stderr = p.stderr.unwrap();
-            child_stdin = unsafe { std::process::Stdio::from_raw_fd(stdin) };
-            child_stdout = unsafe { std::process::Stdio::from_raw_fd(stdout) };
-            child_stderr = unsafe { std::process::Stdio::from_raw_fd(stderr) };
-        }
+            (
+                unsafe { std::process::Stdio::from_raw_fd(p.stdin.unwrap()) },
+                unsafe { std::process::Stdio::from_raw_fd(p.stdout.unwrap()) },
+                unsafe { std::process::Stdio::from_raw_fd(p.stderr.unwrap()) },
+            )
+        };
 
         let old_pid_ns = match fcntl::open(PID_NS_PATH, OFlag::O_CLOEXEC, Mode::empty()) {
             Ok(v) => v,
