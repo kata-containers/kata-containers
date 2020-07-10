@@ -53,7 +53,7 @@ use std::io::BufRead;
 use std::io::BufReader;
 use std::os::unix::io::FromRawFd;
 
-use slog::{debug, info, o, Logger};
+use slog::{info, o, Logger};
 
 const STATE_FILENAME: &'static str = "state.json";
 const EXEC_FIFO_FILENAME: &'static str = "exec.fifo";
@@ -1466,7 +1466,6 @@ fn set_sysctls(sysctls: &HashMap<String, String>) -> Result<()> {
     Ok(())
 }
 
-use std::error::Error as StdError;
 use std::io::Read;
 use std::os::unix::process::ExitStatusExt;
 use std::process::Stdio;
