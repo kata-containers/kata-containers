@@ -28,21 +28,7 @@ impl Display for Error {
     }
 }
 
-impl error::Error for Error {
-    fn description(&self) -> &str {
-        match *self {
-            Error::Io(ref e) => e.description(),
-            Error::Json(ref e) => e.description(),
-        }
-    }
-
-    fn cause(&self) -> Option<&dyn error::Error> {
-        match *self {
-            Error::Io(ref e) => Some(e),
-            Error::Json(ref e) => Some(e),
-        }
-    }
-}
+impl error::Error for Error {}
 
 impl From<io::Error> for Error {
     fn from(e: io::Error) -> Error {
