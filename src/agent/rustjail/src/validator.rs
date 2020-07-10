@@ -9,7 +9,6 @@ use lazy_static;
 use nix::errno::Errno;
 use nix::Error;
 use oci::{LinuxIDMapping, LinuxNamespace, Spec};
-use protobuf::RepeatedField;
 use std::collections::HashMap;
 use std::path::{Component, PathBuf};
 
