@@ -85,7 +85,7 @@ lazy_static! {
 
 use std::mem::MaybeUninit;
 
-fn announce(logger: &Logger) {
+fn announce(logger: &Logger, config: &agentConfig) {
     let commit = match env::var("VERSION_COMMIT") {
         Ok(s) => s,
         Err(_) => String::from(""),
@@ -99,6 +99,7 @@ fn announce(logger: &Logger) {
 
     "agent-version" =>  version::AGENT_VERSION,
     "api-version" => version::API_VERSION,
+    "config" => format!("{:?}", config),
     );
 }
 
@@ -186,7 +187,7 @@ fn main() -> Result<()> {
     // Recreate a logger with the log level get from "/proc/cmdline".
     let logger = logging::create_logger(NAME, "agent", config.log_level, writer);
 
-    announce(&logger);
+    announce(&logger, &config);
 
     // This "unused" variable is required as it enables the global (and crucially static) logger,
     // which is required to satisfy the the lifetime constraints of the auto-generated gRPC code.
