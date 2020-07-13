@@ -7,6 +7,7 @@ package katamonitor
 
 import (
 	"context"
+	"fmt"
 	"sync"
 
 	"github.com/containerd/containerd"
@@ -32,6 +33,17 @@ func (sc *sandboxCache) getAllSandboxes() map[string]string {
 	sc.Lock()
 	defer sc.Unlock()
 	return sc.sandboxes
+}
+
+func (sc *sandboxCache) getSandboxNamespace(sandbox string) (string, error) {
+	sc.Lock()
+	defer sc.Unlock()
+
+	if val, found := sc.sandboxes[sandbox]; found {
+		return val, nil
+	}
+
+	return "", fmt.Errorf("sandbox %s not in cache", sandbox)
 }
 
 func (sc *sandboxCache) deleteIfExists(id string) (string, bool) {
