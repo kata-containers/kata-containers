@@ -772,11 +772,7 @@ func (clh *cloudHypervisor) reset() {
 	clh.state.reset()
 }
 
-func (clh *cloudHypervisor) generateSocket(id string, useVsock bool) (interface{}, error) {
-	if !useVsock {
-		return nil, fmt.Errorf("Can't generate hybrid vsocket for cloud-hypervisor: vsocks is disabled")
-	}
-
+func (clh *cloudHypervisor) generateSocket(id string) (interface{}, error) {
 	udsPath, err := clh.vsockSocketPath(id)
 	if err != nil {
 		clh.Logger().Info("Can't generate socket path for cloud-hypervisor")

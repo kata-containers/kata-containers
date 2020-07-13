@@ -722,8 +722,8 @@ func (a *Acrn) check() error {
 	return nil
 }
 
-func (a *Acrn) generateSocket(id string, useVsock bool) (interface{}, error) {
-	return generateVMSocket(id, useVsock, a.store.RunVMStoragePath())
+func (a *Acrn) generateSocket(id string) (interface{}, error) {
+	return generateVMSocket(id, a.store.RunVMStoragePath())
 }
 
 // GetACRNUUIDBytes returns UUID bytes that is used for VM creation

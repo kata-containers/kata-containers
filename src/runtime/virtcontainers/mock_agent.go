@@ -26,11 +26,6 @@ func NewMockAgent() agent {
 	return &mockAgent{}
 }
 
-//start the proxy to watch the vm console. It does nothing.
-func (n *mockAgent) startProxy(sandbox *Sandbox) error {
-	return nil
-}
-
 // init initializes the Noop agent, i.e. it does nothing.
 func (n *mockAgent) init(ctx context.Context, sandbox *Sandbox, config KataAgentConfig) (bool, error) {
 	return false, nil
@@ -181,11 +176,11 @@ func (n *mockAgent) resumeContainer(sandbox *Sandbox, c Container) error {
 }
 
 // configHypervisor is the Noop agent hypervisor configuration implementation. It does nothing.
-func (n *mockAgent) configure(h hypervisor, id, sharePath string, builtin bool, config interface{}) error {
+func (n *mockAgent) configure(h hypervisor, id, sharePath string, config interface{}) error {
 	return nil
 }
 
-func (n *mockAgent) configureFromGrpc(h hypervisor, id string, builtin bool, config interface{}) error {
+func (n *mockAgent) configureFromGrpc(h hypervisor, id string, config interface{}) error {
 	return nil
 }
 
@@ -204,12 +199,9 @@ func (n *mockAgent) getAgentURL() (string, error) {
 	return "", nil
 }
 
-// setProxy is the Noop agent proxy setter. It does nothing.
-func (n *mockAgent) setProxy(sandbox *Sandbox, proxy proxy, pid int, url string) error {
+// setAgentURL is the Noop agent url setter. It does nothing.
+func (n *mockAgent) setAgentURL() error {
 	return nil
-}
-
-func (n *mockAgent) setProxyFromGrpc(proxy proxy, pid int, url string) {
 }
 
 // getGuestDetails is the Noop agent GuestDetails queryer. It does nothing.

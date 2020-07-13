@@ -142,9 +142,6 @@ ACRNCTLPATH := $(ACRNBINDIR)/$(ACRNCTLCMD)
 SHIMCMD := $(BIN_PREFIX)-shim
 SHIMPATH := $(PKGLIBEXECDIR)/$(SHIMCMD)
 
-PROXYCMD := $(BIN_PREFIX)-proxy
-PROXYPATH := $(PKGLIBEXECDIR)/$(PROXYCMD)
-
 NETMONCMD := $(BIN_PREFIX)-netmon
 NETMONPATH := $(PKGLIBEXECDIR)/$(NETMONCMD)
 
@@ -421,7 +418,6 @@ USER_VARS += PREFIX
 USER_VARS += PROJECT_NAME
 USER_VARS += PROJECT_PREFIX
 USER_VARS += PROJECT_TYPE
-USER_VARS += PROXYPATH
 USER_VARS += NETMONPATH
 USER_VARS += QEMUBINDIR
 USER_VARS += QEMUCMD
@@ -629,7 +625,6 @@ $(GENERATED_FILES): %: %.in $(MAKEFILE_LIST) VERSION .git-commit
 		-e "s|@LOCALSTATEDIR@|$(LOCALSTATEDIR)|g" \
 		-e "s|@PKGLIBEXECDIR@|$(PKGLIBEXECDIR)|g" \
 		-e "s|@PKGRUNDIR@|$(PKGRUNDIR)|g" \
-		-e "s|@PROXYPATH@|$(PROXYPATH)|g" \
 		-e "s|@NETMONPATH@|$(NETMONPATH)|g" \
 		-e "s|@PROJECT_BUG_URL@|$(PROJECT_BUG_URL)|g" \
 		-e "s|@PROJECT_URL@|$(PROJECT_URL)|g" \
@@ -853,5 +848,5 @@ ifneq (,$(findstring $(HYPERVISOR_ACRN),$(KNOWN_HYPERVISORS)))
 	@printf "\t$(HYPERVISOR_ACRN) hypervisor path (ACRNPATH) : %s\n" $(abspath $(ACRNPATH))
 endif
 	@printf "\tassets path (PKGDATADIR) : %s\n" $(abspath $(PKGDATADIR))
-	@printf "\tproxy+shim path (PKGLIBEXECDIR) : %s\n" $(abspath $(PKGLIBEXECDIR))
+	@printf "\tshim path (PKGLIBEXECDIR) : %s\n" $(abspath $(PKGLIBEXECDIR))
 	@printf "\n"

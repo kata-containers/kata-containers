@@ -28,8 +28,6 @@ const (
 )
 
 var (
-	defaultProxy = vc.KataProxyType
-
 	// if true, enable opentracing support.
 	tracing = false
 )
@@ -40,9 +38,9 @@ var (
 //
 //   [<component>.<type>]
 //
-// The components are hypervisor, proxy and agent. For example,
+// The components are hypervisor, and agent. For example,
 //
-//   [proxy.kata]
+//   [agent.kata]
 //
 // The currently supported types are listed below:
 const (
@@ -52,16 +50,12 @@ const (
 	qemuHypervisorTableType        = "qemu"
 	acrnHypervisorTableType        = "acrn"
 
-	// supported proxy component types
-	kataProxyTableType = "kata"
-
 	// the maximum amount of PCI bridges that can be cold plugged in a VM
 	maxPCIBridges uint32 = 5
 )
 
 type tomlConfig struct {
 	Hypervisor map[string]hypervisor
-	Proxy      map[string]proxy
 	Agent      map[string]agent
 	Runtime    runtime
 	Factory    factory
@@ -117,18 +111,12 @@ type hypervisor struct {
 	Debug                   bool     `toml:"enable_debug"`
 	DisableNestingChecks    bool     `toml:"disable_nesting_checks"`
 	EnableIOThreads         bool     `toml:"enable_iothreads"`
-	UseVSock                bool     `toml:"use_vsock"`
 	DisableImageNvdimm      bool     `toml:"disable_image_nvdimm"`
 	HotplugVFIOOnRootBus    bool     `toml:"hotplug_vfio_on_root_bus"`
 	DisableVhostNet         bool     `toml:"disable_vhost_net"`
 	GuestHookPath           string   `toml:"guest_hook_path"`
 	RxRateLimiterMaxRate    uint64   `toml:"rx_rate_limiter_max_rate"`
 	TxRateLimiterMaxRate    uint64   `toml:"tx_rate_limiter_max_rate"`
-}
-
-type proxy struct {
-	Path  string `toml:"path"`
-	Debug bool   `toml:"enable_debug"`
 }
 
 type runtime struct {
@@ -397,10 +385,6 @@ func (h hypervisor) msize9p() uint32 {
 	return h.Msize9p
 }
 
-func (h hypervisor) useVSock() bool {
-	return h.UseVSock
-}
-
 func (h hypervisor) guestHookPath() string {
 	if h.GuestHookPath == "" {
 		return defaultGuestHookPath
@@ -445,19 +429,6 @@ func (h hypervisor) getTxRateLimiterCfg() (uint64, error) {
 	}
 
 	return h.TxRateLimiterMaxRate, nil
-}
-
-func (p proxy) path() (string, error) {
-	path := p.Path
-	if path == "" {
-		path = defaultProxyPath
-	}
-
-	return ResolvePath(path)
-}
-
-func (p proxy) debug() bool {
-	return p.Debug
 }
 
 func (a agent) debug() bool {
@@ -561,7 +532,6 @@ func newFirecrackerHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		BlockDeviceDriver:     blockDriver,
 		EnableIOThreads:       h.EnableIOThreads,
 		DisableVhostNet:       true, // vhost-net backend is not supported in Firecracker
-		UseVSock:              true,
 		GuestHookPath:         h.guestHookPath(),
 		RxRateLimiterMaxRate:  rxRateLimiterMaxRate,
 		TxRateLimiterMaxRate:  txRateLimiterMaxRate,
@@ -627,14 +597,8 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 			errors.New("cannot enable virtio-fs without daemon path in configuration file")
 	}
 
-	useVSock := false
-	if h.useVSock() {
-		if utils.SupportsVsocks() {
-			kataUtilsLogger.Info("vsock supported")
-			useVSock = true
-		} else {
-			kataUtilsLogger.Warn("No vsock support, falling back to legacy serial port")
-		}
+	if vSock, err := utils.SupportsVsocks(); !vSock {
+		return vc.HypervisorConfig{}, err
 	}
 
 	rxRateLimiterMaxRate, err := h.getRxRateLimiterCfg()
@@ -684,7 +648,6 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		BlockDeviceCacheNoflush: h.BlockDeviceCacheNoflush,
 		EnableIOThreads:         h.EnableIOThreads,
 		Msize9p:                 h.msize9p(),
-		UseVSock:                useVSock,
 		DisableImageNvdimm:      h.DisableImageNvdimm,
 		HotplugVFIOOnRootBus:    h.HotplugVFIOOnRootBus,
 		PCIeRootPort:            h.PCIeRootPort,
@@ -842,7 +805,6 @@ func newClhHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		HotplugVFIOOnRootBus:    h.HotplugVFIOOnRootBus,
 		PCIeRootPort:            h.PCIeRootPort,
 		DisableVhostNet:         true,
-		UseVSock:                true,
 		VirtioFSExtraArgs:       h.VirtioFSExtraArgs,
 	}, nil
 }
@@ -892,42 +854,10 @@ func updateRuntimeConfigHypervisor(configPath string, tomlConf tomlConfig, confi
 	return nil
 }
 
-func updateRuntimeConfigProxy(configPath string, tomlConf tomlConfig, config *oci.RuntimeConfig, builtIn bool) error {
-	if builtIn {
-		config.ProxyType = vc.KataBuiltInProxyType
-		config.ProxyConfig = vc.ProxyConfig{
-			Debug: config.Debug,
-		}
-		return nil
-	}
-
-	for k, proxy := range tomlConf.Proxy {
-		switch k {
-		case kataProxyTableType:
-			config.ProxyType = vc.KataProxyType
-		default:
-			return fmt.Errorf("%s proxy type not supported", k)
-		}
-
-		path, err := proxy.path()
-		if err != nil {
-			return err
-		}
-
-		config.ProxyConfig = vc.ProxyConfig{
-			Path:  path,
-			Debug: proxy.debug(),
-		}
-	}
-
-	return nil
-}
-
 func updateRuntimeConfigAgent(configPath string, tomlConf tomlConfig, config *oci.RuntimeConfig, builtIn bool) error {
 	if builtIn {
 		config.AgentConfig = vc.KataAgentConfig{
 			LongLiveConn:  true,
-			UseVSock:      config.HypervisorConfig.UseVSock,
 			Debug:         config.AgentConfig.Debug,
 			KernelModules: config.AgentConfig.KernelModules,
 		}
@@ -937,7 +867,6 @@ func updateRuntimeConfigAgent(configPath string, tomlConf tomlConfig, config *oc
 
 	for _, agent := range tomlConf.Agent {
 		config.AgentConfig = vc.KataAgentConfig{
-			UseVSock:      config.HypervisorConfig.UseVSock,
 			Debug:         agent.debug(),
 			Trace:         agent.trace(),
 			TraceMode:     agent.traceMode(),
@@ -1010,10 +939,6 @@ func SetKernelParams(runtimeConfig *oci.RuntimeConfig) error {
 
 func updateRuntimeConfig(configPath string, tomlConf tomlConfig, config *oci.RuntimeConfig, builtIn bool) error {
 	if err := updateRuntimeConfigHypervisor(configPath, tomlConf, config); err != nil {
-		return err
-	}
-
-	if err := updateRuntimeConfigProxy(configPath, tomlConf, config, builtIn); err != nil {
 		return err
 	}
 
@@ -1095,7 +1020,6 @@ func initConfig() (config oci.RuntimeConfig, err error) {
 		HypervisorType:   defaultHypervisor,
 		HypervisorConfig: GetDefaultHypervisorConfig(),
 		AgentConfig:      defaultAgentConfig,
-		ProxyType:        defaultProxy,
 	}
 
 	return config, nil
@@ -1156,13 +1080,6 @@ func LoadConfiguration(configPath string, ignoreLogging, builtIn bool) (resolved
 	}
 
 	config.DisableGuestSeccomp = tomlConf.Runtime.DisableGuestSeccomp
-
-	// use no proxy if HypervisorConfig.UseVSock is true
-	if config.HypervisorConfig.UseVSock {
-		kataUtilsLogger.Info("VSOCK supported, configure to not use proxy")
-		config.ProxyType = vc.NoProxyType
-		config.ProxyConfig = vc.ProxyConfig{Debug: config.Debug}
-	}
 
 	config.SandboxCgroupOnly = tomlConf.Runtime.SandboxCgroupOnly
 	config.DisableNewNetNs = tomlConf.Runtime.DisableNewNetNs

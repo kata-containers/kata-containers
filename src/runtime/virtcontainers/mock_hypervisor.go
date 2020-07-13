@@ -14,6 +14,8 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 )
 
+var MockHybridVSockPath = "/tmp/kata-mock-hybrid-vsock.socket"
+
 type mockHypervisor struct {
 	mockPid int
 }
@@ -125,8 +127,10 @@ func (m *mockHypervisor) check() error {
 	return nil
 }
 
-func (m *mockHypervisor) generateSocket(id string, useVsock bool) (interface{}, error) {
-	return types.Socket{HostPath: "/tmp/socket", Name: "socket"}, nil
+func (m *mockHypervisor) generateSocket(id string) (interface{}, error) {
+	return types.MockHybridVSock{
+		UdsPath: MockHybridVSockPath,
+	}, nil
 }
 
 func (m *mockHypervisor) isRateLimiterBuiltin() bool {

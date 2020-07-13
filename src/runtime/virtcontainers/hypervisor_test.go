@@ -435,19 +435,10 @@ func genericTestRunningOnVMM(t *testing.T, data []testNestedVMMData) {
 func TestGenerateVMSocket(t *testing.T) {
 	assert := assert.New(t)
 
-	s, err := generateVMSocket("a", false, "")
-	assert.NoError(err)
-	socket, ok := s.(types.Socket)
-	assert.True(ok)
-	assert.NotEmpty(socket.DeviceID)
-	assert.NotEmpty(socket.ID)
-	assert.NotEmpty(socket.HostPath)
-	assert.NotEmpty(socket.Name)
-
 	if tc.NotValid(ktu.NeedRoot()) {
 		t.Skip(testDisabledAsNonRoot)
 	}
-	s, err = generateVMSocket("a", true, "")
+	s, err := generateVMSocket("a", "")
 	assert.NoError(err)
 	vsock, ok := s.(types.VSock)
 	assert.True(ok)

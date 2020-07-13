@@ -112,7 +112,6 @@ func resetHypervisorConfig(config *vc.VMConfig) {
 	config.HypervisorConfig.BootFromTemplate = false
 	config.HypervisorConfig.MemoryPath = ""
 	config.HypervisorConfig.DevicesStatePath = ""
-	config.ProxyConfig = vc.ProxyConfig{}
 }
 
 // It's important that baseConfig and newConfig are passed by value!
@@ -138,27 +137,18 @@ func (f *factory) checkConfig(config vc.VMConfig) error {
 	return checkVMConfig(baseConfig, config)
 }
 
-func (f *factory) validateNewVMConfig(config vc.VMConfig) error {
-	if len(config.ProxyType.String()) == 0 {
-		return fmt.Errorf("Missing proxy type")
-	}
-
-	return config.Valid()
-}
-
 // GetVM returns a working blank VM created by the factory.
 func (f *factory) GetVM(ctx context.Context, config vc.VMConfig) (*vc.VM, error) {
 	span, _ := trace(ctx, "GetVM")
 	defer span.Finish()
 
 	hypervisorConfig := config.HypervisorConfig
-	err := f.validateNewVMConfig(config)
-	if err != nil {
+	if err := config.Valid(); err != nil {
 		f.log().WithError(err).Error("invalid hypervisor config")
 		return nil, err
 	}
 
-	err = f.checkConfig(config)
+	err := f.checkConfig(config)
 	if err != nil {
 		f.log().WithError(err).Info("fallback to direct factory vm")
 		return direct.New(ctx, config).GetBaseVM(ctx, config)

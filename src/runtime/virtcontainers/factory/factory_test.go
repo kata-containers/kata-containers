@@ -7,12 +7,14 @@ package factory
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"testing"
 
 	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/factory/base"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist/fs"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/mock"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
@@ -33,7 +35,6 @@ func TestNewFactory(t *testing.T) {
 
 	config.VMConfig = vc.VMConfig{
 		HypervisorType: vc.MockHypervisor,
-		ProxyType:      vc.NoopProxyType,
 	}
 
 	_, err = NewFactory(ctx, config, false)
@@ -57,6 +58,11 @@ func TestNewFactory(t *testing.T) {
 	if os.Geteuid() != 0 {
 		t.Skip(testDisabledAsNonRoot)
 	}
+
+	hybridVSockTTRPCMock := mock.HybridVSockTTRPCMock{}
+	err = hybridVSockTTRPCMock.Start(fmt.Sprintf("mock://%s", vc.MockHybridVSockPath))
+	assert.NoError(err)
+	defer hybridVSockTTRPCMock.Stop()
 
 	config.Template = true
 	config.TemplatePath = fs.MockStorageRootPath()
@@ -102,31 +108,6 @@ func TestFactorySetLogger(t *testing.T) {
 	assert.True(ok)
 
 	assert.Equal(f.log().Logger.Level, testLog.Logger.Level)
-}
-
-func TestVMConfigValid(t *testing.T) {
-	assert := assert.New(t)
-
-	defer fs.MockStorageDestroy()
-	config := vc.VMConfig{
-		HypervisorType: vc.MockHypervisor,
-		HypervisorConfig: vc.HypervisorConfig{
-			KernelPath: fs.MockStorageRootPath(),
-			ImagePath:  fs.MockStorageRootPath(),
-		},
-	}
-
-	f := factory{}
-
-	err := f.validateNewVMConfig(config)
-	assert.NotNil(err)
-
-	err = f.validateNewVMConfig(config)
-	assert.NotNil(err)
-
-	config.ProxyType = vc.NoopProxyType
-	err = f.validateNewVMConfig(config)
-	assert.Nil(err)
 }
 
 func TestCheckVMConfig(t *testing.T) {
@@ -180,7 +161,6 @@ func TestFactoryGetVM(t *testing.T) {
 	vmConfig := vc.VMConfig{
 		HypervisorType:   vc.MockHypervisor,
 		HypervisorConfig: hyperConfig,
-		ProxyType:        vc.NoopProxyType,
 	}
 
 	err := vmConfig.Valid()
@@ -192,6 +172,11 @@ func TestFactoryGetVM(t *testing.T) {
 	if os.Geteuid() != 0 {
 		t.Skip(testDisabledAsNonRoot)
 	}
+
+	hybridVSockTTRPCMock := mock.HybridVSockTTRPCMock{}
+	err = hybridVSockTTRPCMock.Start(fmt.Sprintf("mock://%s", vc.MockHybridVSockPath))
+	assert.NoError(err)
+	defer hybridVSockTTRPCMock.Stop()
 
 	f, err := NewFactory(ctx, Config{VMConfig: vmConfig}, false)
 	assert.Nil(err)
@@ -327,7 +312,6 @@ func TestDeepCompare(t *testing.T) {
 	ctx := context.Background()
 	config.VMConfig = vc.VMConfig{
 		HypervisorType: vc.MockHypervisor,
-		ProxyType:      vc.NoopProxyType,
 	}
 	testDir := fs.MockStorageRootPath()
 	defer fs.MockStorageDestroy()

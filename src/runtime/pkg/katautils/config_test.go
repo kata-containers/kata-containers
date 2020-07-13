@@ -28,7 +28,6 @@ import (
 
 var (
 	hypervisorDebug = false
-	proxyDebug      = false
 	runtimeDebug    = false
 	runtimeTrace    = false
 	netmonDebug     = false
@@ -72,7 +71,6 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (config testRuntimeConf
 	kernelPath := path.Join(dir, "kernel")
 	kernelParams := "foo=bar xyz"
 	imagePath := path.Join(dir, "image")
-	proxyPath := path.Join(dir, "proxy")
 	netmonPath := path.Join(dir, "netmon")
 	logDir := path.Join(dir, "logs")
 	logPath := path.Join(logDir, "runtime.log")
@@ -93,7 +91,6 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (config testRuntimeConf
 		ImagePath:            imagePath,
 		KernelParams:         kernelParams,
 		MachineType:          machineType,
-		ProxyPath:            proxyPath,
 		NetmonPath:           netmonPath,
 		LogPath:              logPath,
 		DefaultGuestHookPath: defaultGuestHookPath,
@@ -110,7 +107,6 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (config testRuntimeConf
 		HypervisorDebug:      hypervisorDebug,
 		RuntimeDebug:         runtimeDebug,
 		RuntimeTrace:         runtimeTrace,
-		ProxyDebug:           proxyDebug,
 		NetmonDebug:          netmonDebug,
 		AgentDebug:           agentDebug,
 		AgentTrace:           agentTrace,
@@ -135,7 +131,7 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (config testRuntimeConf
 		return config, err
 	}
 
-	files := []string{hypervisorPath, kernelPath, imagePath, proxyPath}
+	files := []string{hypervisorPath, kernelPath, imagePath}
 
 	for _, file := range files {
 		// create the resource (which must be >0 bytes)
@@ -173,10 +169,6 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (config testRuntimeConf
 
 	agentConfig := vc.KataAgentConfig{}
 
-	proxyConfig := vc.ProxyConfig{
-		Path: proxyPath,
-	}
-
 	netmonConfig := vc.NetmonConfig{
 		Path:   netmonPath,
 		Debug:  false,
@@ -193,9 +185,6 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (config testRuntimeConf
 		HypervisorConfig: hypervisorConfig,
 
 		AgentConfig: agentConfig,
-
-		ProxyType:   defaultProxy,
-		ProxyConfig: proxyConfig,
 
 		NetmonConfig:    netmonConfig,
 		DisableNewNetNs: disableNewNetNs,
@@ -486,7 +475,6 @@ func TestMinimalRuntimeConfig(t *testing.T) {
 	}
 	defer os.RemoveAll(dir)
 
-	proxyPath := path.Join(dir, "proxy")
 	hypervisorPath := path.Join(dir, "hypervisor")
 	defaultHypervisorPath = hypervisorPath
 	jailerPath := path.Join(dir, "jailer")
@@ -530,24 +518,22 @@ func TestMinimalRuntimeConfig(t *testing.T) {
 	runtimeMinimalConfig := `
 	# Runtime configuration file
 
-	[proxy.kata]
-	path = "` + proxyPath + `"
-
 	[agent.kata]
 
 	[netmon]
 	path = "` + netmonPath + `"
 `
 
+	orgVHostVSockDevicePath := utils.VHostVSockDevicePath
+	defer func() {
+		utils.VHostVSockDevicePath = orgVHostVSockDevicePath
+	}()
+	utils.VHostVSockDevicePath = "/dev/null"
+
 	configPath := path.Join(dir, "runtime.toml")
 	err = createConfig(configPath, runtimeMinimalConfig)
 	if err != nil {
 		t.Fatal(err)
-	}
-
-	err = createEmptyFile(proxyPath)
-	if err != nil {
-		t.Error(err)
 	}
 
 	err = createEmptyFile(hypervisorPath)
@@ -592,10 +578,6 @@ func TestMinimalRuntimeConfig(t *testing.T) {
 
 	expectedAgentConfig := vc.KataAgentConfig{}
 
-	expectedProxyConfig := vc.ProxyConfig{
-		Path: proxyPath,
-	}
-
 	expectedNetmonConfig := vc.NetmonConfig{
 		Path:   netmonPath,
 		Debug:  false,
@@ -613,9 +595,6 @@ func TestMinimalRuntimeConfig(t *testing.T) {
 
 		AgentConfig: expectedAgentConfig,
 
-		ProxyType:   defaultProxy,
-		ProxyConfig: expectedProxyConfig,
-
 		NetmonConfig: expectedNetmonConfig,
 
 		FactoryConfig: expectedFactoryConfig,
@@ -627,87 +606,6 @@ func TestMinimalRuntimeConfig(t *testing.T) {
 
 	if reflect.DeepEqual(config, expectedConfig) == false {
 		t.Fatalf("Got %+v\n expecting %+v", config, expectedConfig)
-	}
-}
-
-func TestMinimalRuntimeConfigWithVsock(t *testing.T) {
-	dir, err := ioutil.TempDir(testDir, "minimal-runtime-config-")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(dir)
-
-	imagePath := path.Join(dir, "image.img")
-	initrdPath := path.Join(dir, "initrd.img")
-	proxyPath := path.Join(dir, "proxy")
-	hypervisorPath := path.Join(dir, "hypervisor")
-	kernelPath := path.Join(dir, "kernel")
-
-	savedDefaultImagePath := defaultImagePath
-	savedDefaultInitrdPath := defaultInitrdPath
-	savedDefaultHypervisorPath := defaultHypervisorPath
-	savedDefaultKernelPath := defaultKernelPath
-
-	defer func() {
-		defaultImagePath = savedDefaultImagePath
-		defaultInitrdPath = savedDefaultInitrdPath
-		defaultHypervisorPath = savedDefaultHypervisorPath
-		defaultKernelPath = savedDefaultKernelPath
-	}()
-
-	// Temporarily change the defaults to avoid this test using the real
-	// resource files that might be installed on the system!
-	defaultImagePath = imagePath
-	defaultInitrdPath = initrdPath
-	defaultHypervisorPath = hypervisorPath
-	defaultKernelPath = kernelPath
-
-	for _, file := range []string{proxyPath, hypervisorPath, kernelPath, imagePath} {
-		err = WriteFile(file, "foo", testFileMode)
-		if err != nil {
-			t.Fatal(err)
-		}
-	}
-
-	// minimal config with vsock enabled
-	runtimeMinimalConfig := `
-	# Runtime configuration file
-	[hypervisor.qemu]
-	use_vsock = true
-	image = "` + imagePath + `"
-
-	[proxy.kata]
-	path = "` + proxyPath + `"
-
-	[agent.kata]
-`
-	orgVHostVSockDevicePath := utils.VHostVSockDevicePath
-	defer func() {
-		utils.VHostVSockDevicePath = orgVHostVSockDevicePath
-	}()
-	utils.VHostVSockDevicePath = "/dev/null"
-
-	configPath := path.Join(dir, "runtime.toml")
-	err = createConfig(configPath, runtimeMinimalConfig)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	_, config, err := LoadConfiguration(configPath, false, false)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if config.ProxyType != vc.NoProxyType {
-		t.Fatalf("Proxy type must be NoProxy, got %+v", config.ProxyType)
-	}
-
-	if !reflect.DeepEqual(config.ProxyConfig, vc.ProxyConfig{}) {
-		t.Fatalf("Got %+v\n expecting %+v", config.ProxyConfig, vc.ProxyConfig{})
-	}
-
-	if config.HypervisorConfig.UseVSock != true {
-		t.Fatalf("use_vsock must be true, got %v", config.HypervisorConfig.UseVSock)
 	}
 }
 
@@ -730,7 +628,7 @@ func TestNewQemuHypervisorConfig(t *testing.T) {
 	defer func() {
 		utils.VHostVSockDevicePath = orgVHostVSockDevicePath
 	}()
-	utils.VHostVSockDevicePath = "/dev/abc/xyz"
+	utils.VHostVSockDevicePath = "/dev/null"
 	// 10Mbits/sec
 	rxRateLimiterMaxRate := uint64(10000000)
 	txRateLimiterMaxRate := uint64(10000000)
@@ -744,7 +642,6 @@ func TestNewQemuHypervisorConfig(t *testing.T) {
 		EnableIOThreads:       enableIOThreads,
 		HotplugVFIOOnRootBus:  hotplugVFIOOnRootBus,
 		PCIeRootPort:          pcieRootPort,
-		UseVSock:              true,
 		RxRateLimiterMaxRate:  rxRateLimiterMaxRate,
 		TxRateLimiterMaxRate:  txRateLimiterMaxRate,
 	}
@@ -766,16 +663,8 @@ func TestNewQemuHypervisorConfig(t *testing.T) {
 		}
 	}
 
-	// falling back to legacy serial port
-	config, err := newQemuHypervisorConfig(hypervisor)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	utils.VHostVSockDevicePath = "/dev/null"
-
 	// all paths exist now
-	config, err = newQemuHypervisorConfig(hypervisor)
+	config, err := newQemuHypervisorConfig(hypervisor)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -830,7 +719,6 @@ func TestNewFirecrackerHypervisorConfig(t *testing.T) {
 	jailerPath := path.Join(dir, "jailer")
 	disableBlockDeviceUse := false
 	disableVhostNet := true
-	useVSock := true
 	blockDeviceDriver := "virtio-mmio"
 	// !0Mbits/sec
 	rxRateLimiterMaxRate := uint64(10000000)
@@ -900,10 +788,6 @@ func TestNewFirecrackerHypervisorConfig(t *testing.T) {
 
 	if config.DisableVhostNet != disableVhostNet {
 		t.Errorf("Expected value for disable vhost net usage %v, got %v", disableVhostNet, config.DisableVhostNet)
-	}
-
-	if config.UseVSock != useVSock {
-		t.Errorf("Expected value for vsock usage %v, got %v", useVSock, config.UseVSock)
 	}
 
 	if config.RxRateLimiterMaxRate != rxRateLimiterMaxRate {
@@ -1000,10 +884,6 @@ func TestNewClhHypervisorConfig(t *testing.T) {
 
 	if config.ImagePath != hypervisor.Image {
 		t.Errorf("Expected image path %v, got %v", hypervisor.Image, config.ImagePath)
-	}
-
-	if config.UseVSock != true {
-		t.Errorf("Expected UseVSock %v, got %v", true, config.UseVSock)
 	}
 
 	if config.DisableVhostNet != true {
@@ -1236,46 +1116,6 @@ func TestHypervisorDefaultsVhostUserStorePath(t *testing.T) {
 	}
 	vhostUserStorePath = h.vhostUserStorePath()
 	assert.Equal(vhostUserStorePath, testVhostUserStorePath, "custom vhost-user store path wrong")
-}
-
-func TestProxyDefaults(t *testing.T) {
-	assert := assert.New(t)
-
-	tmpdir, err := ioutil.TempDir(testDir, "")
-	assert.NoError(err)
-	defer os.RemoveAll(tmpdir)
-
-	testProxyPath := filepath.Join(tmpdir, "proxy")
-	testProxyLinkPath := filepath.Join(tmpdir, "proxy-link")
-
-	err = createEmptyFile(testProxyPath)
-	assert.NoError(err)
-
-	err = syscall.Symlink(testProxyPath, testProxyLinkPath)
-	assert.NoError(err)
-
-	savedProxyPath := defaultProxyPath
-
-	defer func() {
-		defaultProxyPath = savedProxyPath
-	}()
-
-	defaultProxyPath = testProxyPath
-	p := proxy{}
-	path, err := p.path()
-	assert.NoError(err)
-	assert.Equal(path, defaultProxyPath, "default proxy path wrong")
-
-	// test path resolution
-	defaultProxyPath = testProxyLinkPath
-	p = proxy{}
-	path, err = p.path()
-	assert.NoError(err)
-	assert.Equal(path, testProxyPath)
-
-	assert.False(p.debug())
-	p.Debug = true
-	assert.True(p.debug())
 }
 
 func TestAgentDefaults(t *testing.T) {

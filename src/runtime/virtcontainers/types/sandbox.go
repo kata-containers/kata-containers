@@ -31,8 +31,9 @@ const (
 )
 
 const (
-	HybridVSockScheme = "hvsock"
-	VSockScheme       = "vsock"
+	HybridVSockScheme     = "hvsock"
+	MockHybridVSockScheme = "mock"
+	VSockScheme           = "vsock"
 )
 
 // SandboxState is a sandbox state structure
@@ -198,6 +199,15 @@ type HybridVSock struct {
 
 func (s *HybridVSock) String() string {
 	return fmt.Sprintf("%s://%s:%d", HybridVSockScheme, s.UdsPath, s.Port)
+}
+
+// MockHybridVSock defines a mock hybrid vsocket for tests only.
+type MockHybridVSock struct {
+	UdsPath string
+}
+
+func (s *MockHybridVSock) String() string {
+	return fmt.Sprintf("%s://%s", MockHybridVSockScheme, s.UdsPath)
 }
 
 // Socket defines a socket to communicate between

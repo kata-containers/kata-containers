@@ -66,5 +66,4 @@ var defaultRuntimeConfiguration = "@CONFIG_PATH@"
 var defaultSysConfRuntimeConfiguration = "@SYSCONFIG@"
 
 var name = "kata"
-var defaultProxyPath = "/usr/libexec/kata-containers/kata-proxy"
 var defaultNetmonPath = "/usr/libexec/kata-containers/kata-netmon"
