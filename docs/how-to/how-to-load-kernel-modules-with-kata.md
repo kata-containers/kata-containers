@@ -101,6 +101,8 @@ spec:
     tty: true
 ```
 
+> **Note**: To pass annotations to Kata containers, [cri must to be configurated correctly](how-to-set-sandbox-config-kata.md#cri-configuration)
+
 [1]: https://github.com/kata-containers/runtime
 [2]: https://github.com/kata-containers/agent
 [3]: https://kubernetes.io/docs/concepts/workloads/pods/pod/
