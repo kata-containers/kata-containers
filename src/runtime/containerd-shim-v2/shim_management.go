@@ -7,14 +7,19 @@ package containerdshim
 
 import (
 	"context"
+	"expvar"
 	"io"
 	"net/http"
+	"net/http/pprof"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/containerd/containerd/namespaces"
 	cdshim "github.com/containerd/containerd/runtime/v2/shim"
 	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
+	vcAnnotations "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/annotations"
+	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/prometheus/client_golang/prometheus"
 	dto "github.com/prometheus/client_model/go"
 	"github.com/prometheus/common/expfmt"
@@ -30,6 +35,7 @@ var (
 	ifSupportAgentMetricsAPI = true
 )
 
+// serveMetrics handle /metrics requests
 func (s *service) serveMetrics(w http.ResponseWriter, r *http.Request) {
 
 	// update metrics from sandbox
@@ -109,7 +115,7 @@ func decodeAgentMetrics(body string) []*dto.MetricFamily {
 	return list
 }
 
-func (s *service) startManagementServer(ctx context.Context) {
+func (s *service) startManagementServer(ctx context.Context, ociSpec *specs.Spec) {
 	// metrics socket will under sandbox's bundle path
 	metricsAddress, err := socketAddress(ctx, s.id)
 	if err != nil {
@@ -132,7 +138,9 @@ func (s *service) startManagementServer(ctx context.Context) {
 	logrus.Info("kata monitor inited")
 
 	// bind hanlder
-	http.HandleFunc("/metrics", s.serveMetrics)
+	m := http.NewServeMux()
+	m.Handle("/metrics", http.HandlerFunc(s.serveMetrics))
+	s.mountPprofHandle(m, ociSpec)
 
 	// register shim metrics
 	registerMetrics()
@@ -141,8 +149,30 @@ func (s *service) startManagementServer(ctx context.Context) {
 	vc.RegisterMetrics()
 
 	// start serve
-	svr := &http.Server{Handler: http.DefaultServeMux}
+	svr := &http.Server{Handler: m}
 	svr.Serve(listener)
+}
+
+// mountServeDebug provides a debug endpoint
+func (s *service) mountPprofHandle(m *http.ServeMux, ociSpec *specs.Spec) {
+
+	// return if not enabled
+	if !s.config.EnablePprof {
+		value, ok := ociSpec.Annotations[vcAnnotations.EnablePprof]
+		if !ok {
+			return
+		}
+		enabled, err := strconv.ParseBool(value)
+		if err != nil || !enabled {
+			return
+		}
+	}
+	m.Handle("/debug/vars", expvar.Handler())
+	m.Handle("/debug/pprof/", http.HandlerFunc(pprof.Index))
+	m.Handle("/debug/pprof/cmdline", http.HandlerFunc(pprof.Cmdline))
+	m.Handle("/debug/pprof/profile", http.HandlerFunc(pprof.Profile))
+	m.Handle("/debug/pprof/symbol", http.HandlerFunc(pprof.Symbol))
+	m.Handle("/debug/pprof/trace", http.HandlerFunc(pprof.Trace))
 }
 
 func socketAddress(ctx context.Context, id string) (string, error) {

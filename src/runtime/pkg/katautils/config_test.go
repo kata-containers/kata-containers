@@ -34,6 +34,7 @@ var (
 	netmonDebug     = false
 	agentDebug      = false
 	agentTrace      = false
+	enablePprof     = true
 )
 
 type testRuntimeConfig struct {
@@ -115,6 +116,7 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (config testRuntimeConf
 		AgentTrace:           agentTrace,
 		SharedFS:             sharedFS,
 		VirtioFSDaemon:       virtioFSdaemon,
+		EnablePprof:          enablePprof,
 	}
 
 	runtimeConfigFileData := ktu.MakeRuntimeConfigFileData(configFileOptions)
@@ -197,6 +199,7 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (config testRuntimeConf
 
 		NetmonConfig:    netmonConfig,
 		DisableNewNetNs: disableNewNetNs,
+		EnablePprof:     enablePprof,
 
 		FactoryConfig: factoryConfig,
 	}

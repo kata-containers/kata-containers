@@ -221,6 +221,9 @@ const (
 	// SandboxCgroupOnly is a sandbox annotation that determines if kata processes are managed only in sandbox cgroup.
 	SandboxCgroupOnly = kataAnnotRuntimePrefix + "sandbox_cgroup_only"
 
+	// EnablePprof is a sandbox annotation that determines if pprof enabled.
+	EnablePprof = kataAnnotRuntimePrefix + "enable_pprof"
+
 	// Experimental is a sandbox annotation that determines if experimental features enabled.
 	Experimental = kataAnnotRuntimePrefix + "experimental"
 

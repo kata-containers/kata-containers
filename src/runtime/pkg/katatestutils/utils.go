@@ -42,6 +42,7 @@ type RuntimeConfigOptions struct {
 	NetmonDebug          bool
 	AgentDebug           bool
 	AgentTrace           bool
+	EnablePprof          bool
 }
 
 func MakeRuntimeConfigFileData(config RuntimeConfigOptions) string {
@@ -89,5 +90,6 @@ func MakeRuntimeConfigFileData(config RuntimeConfigOptions) string {
 	[runtime]
 	enable_debug = ` + strconv.FormatBool(config.RuntimeDebug) + `
 	enable_tracing = ` + strconv.FormatBool(config.RuntimeTrace) + `
-	disable_new_netns= ` + strconv.FormatBool(config.DisableNewNetNs)
+	disable_new_netns= ` + strconv.FormatBool(config.DisableNewNetNs) + `
+	enable_pprof= ` + strconv.FormatBool(config.EnablePprof)
 }
