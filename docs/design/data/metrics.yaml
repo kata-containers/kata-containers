@@ -1698,6 +1698,28 @@ components:
               fixed: false
               values: []
           since: 2.0.0
+        - name: kata_shim_pod_overhead_cpu
+          type: GAUGE
+          unit: "percent"
+          help: Kata Pod overhead for CPU resources(percent).
+          labels:
+            - name: sandbox_id
+              desc: ""
+              manually_edit: false
+              fixed: false
+              values: []
+          since: 2.0.0
+        - name: kata_shim_pod_overhead_memory_in_bytes
+          type: GAUGE
+          unit: bytes
+          help: Kata Pod overhead for memory resources(bytes).
+          labels:
+            - name: sandbox_id
+              desc: ""
+              manually_edit: false
+              fixed: false
+              values: []
+          since: 2.0.0
         - name: kata_shim_proc_stat
           type: GAUGE
           unit: ""
