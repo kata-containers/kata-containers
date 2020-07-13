@@ -27,7 +27,6 @@ import (
 	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/compatoci"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/oci"
-	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/rootless"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/vcmock"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
@@ -47,6 +46,7 @@ const (
 	testSandboxID   = "99999999-9999-9999-99999999999999999"
 	testContainerID = "1"
 	testBundle      = "bundle"
+	testConsole     = "/dev/pts/999"
 )
 
 var (
@@ -1063,23 +1063,4 @@ func TestMainResetCLIGlobals(t *testing.T) {
 	assert.Equal(cli.AppHelpTemplate, savedCLIAppHelpTemplate)
 	assert.NotNil(cli.VersionPrinter)
 	assert.NotNil(savedCLIVersionPrinter)
-}
-
-func createTempContainerIDMapping(containerID, sandboxID string) (string, error) {
-	// Mocking rootless
-	rootless.IsRootless = func() bool { return false }
-
-	tmpDir, err := ioutil.TempDir("", "containers-mapping")
-	if err != nil {
-		return "", err
-	}
-	ctrsMapTreePath = tmpDir
-
-	path := filepath.Join(ctrsMapTreePath, containerID, sandboxID)
-	if err := os.MkdirAll(path, 0750); err != nil {
-		return "", err
-	}
-
-	katautils.SetCtrsMapTreePath(ctrsMapTreePath)
-	return tmpDir, nil
 }

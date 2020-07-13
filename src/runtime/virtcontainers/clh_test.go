@@ -241,7 +241,7 @@ func TestClhCreateSandbox(t *testing.T) {
 		},
 	}
 
-	err = clh.createSandbox(context.Background(), sandbox.id, NetworkNamespace{}, &sandbox.config.HypervisorConfig, false)
+	err = clh.createSandbox(context.Background(), sandbox.id, NetworkNamespace{}, &sandbox.config.HypervisorConfig)
 	assert.NoError(err)
 	assert.Exactly(clhConfig, clh.config)
 }
