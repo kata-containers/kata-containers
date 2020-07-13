@@ -16,6 +16,7 @@ coverage.html
 /cli/containerd-shim-kata-v2/config-generated.go
 /cli/coverage.html
 /containerd-shim-kata-v2
+/containerd-shim-v2/monitor_address
 /data/kata-collect-data.sh
 /kata-monitor
 /kata-netmon
