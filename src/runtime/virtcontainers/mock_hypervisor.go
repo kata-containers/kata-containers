@@ -26,7 +26,7 @@ func (m *mockHypervisor) hypervisorConfig() HypervisorConfig {
 	return HypervisorConfig{}
 }
 
-func (m *mockHypervisor) createSandbox(ctx context.Context, id string, networkNS NetworkNamespace, hypervisorConfig *HypervisorConfig, stateful bool) error {
+func (m *mockHypervisor) createSandbox(ctx context.Context, id string, networkNS NetworkNamespace, hypervisorConfig *HypervisorConfig) error {
 	err := hypervisorConfig.valid()
 	if err != nil {
 		return err

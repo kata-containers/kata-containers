@@ -149,9 +149,8 @@ type firecracker struct {
 	config         HypervisorConfig
 	pendingDevices []firecrackerDevice // Devices to be added before the FC VM ready
 
-	state    firecrackerState
-	jailed   bool //Set to true if jailer is enabled
-	stateful bool //Set to true if running with shimv2
+	state  firecrackerState
+	jailed bool //Set to true if jailer is enabled
 
 	fcConfigPath string
 	fcConfig     *types.FcConfig // Parameters configured before VM starts
@@ -196,7 +195,7 @@ func (fc *firecracker) truncateID(id string) string {
 
 // For firecracker this call only sets the internal structure up.
 // The sandbox will be created and started through startSandbox().
-func (fc *firecracker) createSandbox(ctx context.Context, id string, networkNS NetworkNamespace, hypervisorConfig *HypervisorConfig, stateful bool) error {
+func (fc *firecracker) createSandbox(ctx context.Context, id string, networkNS NetworkNamespace, hypervisorConfig *HypervisorConfig) error {
 	fc.ctx = ctx
 
 	span, _ := fc.trace("createSandbox")
@@ -207,7 +206,6 @@ func (fc *firecracker) createSandbox(ctx context.Context, id string, networkNS N
 	fc.id = fc.truncateID(id)
 	fc.state.set(notReady)
 	fc.config = *hypervisorConfig
-	fc.stateful = stateful
 
 	// When running with jailer all resources need to be under
 	// a specific location and that location needs to have
@@ -367,7 +365,7 @@ func (fc *firecracker) fcInit(timeout int) error {
 		return err
 	}
 
-	if !fc.config.Debug && fc.stateful {
+	if !fc.config.Debug {
 		args = append(args, "--daemonize")
 	}
 
@@ -399,7 +397,7 @@ func (fc *firecracker) fcInit(timeout int) error {
 		cmd = exec.Command(fc.config.HypervisorPath, args...)
 	}
 
-	if fc.config.Debug && fc.stateful {
+	if fc.config.Debug {
 		stdin, err := fc.watchConsole()
 		if err != nil {
 			return err
@@ -697,7 +695,7 @@ func (fc *firecracker) fcInitConfiguration() error {
 		return err
 	}
 
-	if fc.config.Debug && fc.stateful {
+	if fc.config.Debug {
 		fcKernelParams = append(fcKernelParams, Param{"console", "ttyS0"})
 	} else {
 		fcKernelParams = append(fcKernelParams, []Param{

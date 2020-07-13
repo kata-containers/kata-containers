@@ -62,9 +62,6 @@ func CreateSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Fac
 	defer span.Finish()
 
 	s, err := createSandboxFromConfig(ctx, sandboxConfig, factory)
-	if err == nil {
-		s.releaseStatelessSandbox()
-	}
 
 	return s, err
 }
@@ -161,7 +158,6 @@ func DeleteSandbox(ctx context.Context, sandboxID string) (VCSandbox, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer s.releaseStatelessSandbox()
 
 	// Delete it.
 	if err := s.Delete(); err != nil {
@@ -231,7 +227,6 @@ func StartSandbox(ctx context.Context, sandboxID string) (VCSandbox, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer s.releaseStatelessSandbox()
 
 	// Start it
 	err = s.Start()
@@ -267,7 +262,6 @@ func StopSandbox(ctx context.Context, sandboxID string, force bool) (VCSandbox, 
 	if err != nil {
 		return nil, err
 	}
-	defer s.releaseStatelessSandbox()
 
 	// Stop it.
 	err = s.Stop(force)
@@ -293,7 +287,6 @@ func RunSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 	if err != nil {
 		return nil, err
 	}
-	defer s.releaseStatelessSandbox()
 
 	unlock, err := rwLockSandbox(s.id)
 	if err != nil {
@@ -369,7 +362,6 @@ func StatusSandbox(ctx context.Context, sandboxID string) (SandboxStatus, error)
 	if err != nil {
 		return SandboxStatus{}, err
 	}
-	defer s.releaseStatelessSandbox()
 
 	var contStatusList []ContainerStatus
 	for _, container := range s.containers {
@@ -413,7 +405,6 @@ func CreateContainer(ctx context.Context, sandboxID string, containerConfig Cont
 	if err != nil {
 		return nil, nil, err
 	}
-	defer s.releaseStatelessSandbox()
 
 	c, err := s.CreateContainer(containerConfig)
 	if err != nil {
@@ -452,7 +443,6 @@ func DeleteContainer(ctx context.Context, sandboxID, containerID string) (VCCont
 	if err != nil {
 		return nil, err
 	}
-	defer s.releaseStatelessSandbox()
 
 	return s.DeleteContainer(containerID)
 }
@@ -481,7 +471,6 @@ func StartContainer(ctx context.Context, sandboxID, containerID string) (VCConta
 	if err != nil {
 		return nil, err
 	}
-	defer s.releaseStatelessSandbox()
 
 	return s.StartContainer(containerID)
 }
@@ -510,7 +499,6 @@ func StopContainer(ctx context.Context, sandboxID, containerID string) (VCContai
 	if err != nil {
 		return nil, err
 	}
-	defer s.releaseStatelessSandbox()
 
 	return s.StopContainer(containerID, false)
 }
@@ -539,7 +527,6 @@ func EnterContainer(ctx context.Context, sandboxID, containerID string, cmd type
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	defer s.releaseStatelessSandbox()
 
 	c, process, err := s.EnterContainer(containerID, cmd)
 	if err != nil {
@@ -573,7 +560,6 @@ func StatusContainer(ctx context.Context, sandboxID, containerID string) (Contai
 	if err != nil {
 		return ContainerStatus{}, err
 	}
-	defer s.releaseStatelessSandbox()
 
 	return statusContainer(s, containerID)
 }
@@ -620,7 +606,6 @@ func KillContainer(ctx context.Context, sandboxID, containerID string, signal sy
 	if err != nil {
 		return err
 	}
-	defer s.releaseStatelessSandbox()
 
 	return s.KillContainer(containerID, signal, all)
 }
@@ -649,7 +634,6 @@ func ProcessListContainer(ctx context.Context, sandboxID, containerID string, op
 	if err != nil {
 		return nil, err
 	}
-	defer s.releaseStatelessSandbox()
 
 	return s.ProcessListContainer(containerID, options)
 }
@@ -678,7 +662,6 @@ func UpdateContainer(ctx context.Context, sandboxID, containerID string, resourc
 	if err != nil {
 		return err
 	}
-	defer s.releaseStatelessSandbox()
 
 	return s.UpdateContainer(containerID, resources)
 }
@@ -707,7 +690,6 @@ func StatsContainer(ctx context.Context, sandboxID, containerID string) (Contain
 	if err != nil {
 		return ContainerStats{}, err
 	}
-	defer s.releaseStatelessSandbox()
 
 	return s.StatsContainer(containerID)
 }
@@ -732,7 +714,6 @@ func StatsSandbox(ctx context.Context, sandboxID string) (SandboxStats, []Contai
 	if err != nil {
 		return SandboxStats{}, []ContainerStats{}, err
 	}
-	defer s.releaseStatelessSandbox()
 
 	sandboxStats, err := s.Stats()
 	if err != nil {
@@ -770,7 +751,6 @@ func togglePauseContainer(ctx context.Context, sandboxID, containerID string, pa
 	if err != nil {
 		return err
 	}
-	defer s.releaseStatelessSandbox()
 
 	if pause {
 		return s.PauseContainer(containerID)
@@ -814,7 +794,6 @@ func AddDevice(ctx context.Context, sandboxID string, info deviceConfig.DeviceIn
 	if err != nil {
 		return nil, err
 	}
-	defer s.releaseStatelessSandbox()
 
 	return s.AddDevice(info)
 }
@@ -834,7 +813,6 @@ func toggleInterface(ctx context.Context, sandboxID string, inf *vcTypes.Interfa
 	if err != nil {
 		return nil, err
 	}
-	defer s.releaseStatelessSandbox()
 
 	if add {
 		return s.AddInterface(inf)
@@ -878,7 +856,6 @@ func ListInterfaces(ctx context.Context, sandboxID string) ([]*vcTypes.Interface
 	if err != nil {
 		return nil, err
 	}
-	defer s.releaseStatelessSandbox()
 
 	return s.ListInterfaces()
 }
@@ -902,7 +879,6 @@ func UpdateRoutes(ctx context.Context, sandboxID string, routes []*vcTypes.Route
 	if err != nil {
 		return nil, err
 	}
-	defer s.releaseStatelessSandbox()
 
 	return s.UpdateRoutes(routes)
 }
@@ -926,7 +902,6 @@ func ListRoutes(ctx context.Context, sandboxID string) ([]*vcTypes.Route, error)
 	if err != nil {
 		return nil, err
 	}
-	defer s.releaseStatelessSandbox()
 
 	return s.ListRoutes()
 }
