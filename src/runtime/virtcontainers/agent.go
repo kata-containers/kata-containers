@@ -56,10 +56,6 @@ type ProcessList []byte
 const (
 	// SocketTypeVSOCK is a VSOCK socket type for talking to an agent.
 	SocketTypeVSOCK = "vsock"
-
-	// SocketTypeUNIX is a UNIX socket type for talking to an agent.
-	// It typically means the agent is living behind a host proxy.
-	SocketTypeUNIX = "unix"
 )
 
 // agent is the virtcontainers agent interface.
@@ -86,17 +82,11 @@ type agent interface {
 	// disconnect will disconnect the connection to the agent
 	disconnect() error
 
-	// start the proxy
-	startProxy(sandbox *Sandbox) error
-
-	// set to use an existing proxy
-	setProxy(sandbox *Sandbox, proxy proxy, pid int, url string) error
-
-	// set to use an existing proxy from Grpc
-	setProxyFromGrpc(proxy proxy, pid int, url string)
-
 	// get agent url
 	getAgentURL() (string, error)
+
+	// set agent url
+	setAgentURL() error
 
 	// update the agent using some elements from another agent
 	reuseAgent(agent agent) error
@@ -173,10 +163,10 @@ type agent interface {
 	resumeContainer(sandbox *Sandbox, c Container) error
 
 	// configure will update agent settings based on provided arguments
-	configure(h hypervisor, id, sharePath string, builtin bool, config interface{}) error
+	configure(h hypervisor, id, sharePath string, config interface{}) error
 
 	// configureFromGrpc will update agent settings based on provided arguments which from Grpc
-	configureFromGrpc(h hypervisor, id string, builtin bool, config interface{}) error
+	configureFromGrpc(h hypervisor, id string, config interface{}) error
 
 	// reseedRNG will reseed the guest random number generator
 	reseedRNG(data []byte) error

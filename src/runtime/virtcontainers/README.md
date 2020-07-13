@@ -10,7 +10,6 @@ Table of Contents
     * [Hypervisors](#hypervisors)
     * [Agents](#agents)
     * [Shim](#shim)
-    * [Proxy](#proxy)
 * [API](#api)
     * [Sandbox API](#sandbox-api)
     * [Container API](#container-api)
@@ -100,12 +99,6 @@ for container stacks that make strong assumptions on the nature of the container
 monitoring. In cases where they assume containers are simply regular host processes, a shim
 layer is needed to translate host specific semantics into e.g. agent controlled virtual
 machine ones.
-
-## Proxy
-
-When hardware virtualized containers have limited I/O multiplexing capabilities,
-runtimes may decide to rely on an external host proxy to support cases where several
-runtime instances are talking to the same container.
 
 # API
 

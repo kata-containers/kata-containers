@@ -10,9 +10,6 @@ package persistapi
 
 // AgentState save agent state data
 type AgentState struct {
-	// Pid of proxy process
-	ProxyPid int
-
 	// URL to connect to agent
 	URL string
 }

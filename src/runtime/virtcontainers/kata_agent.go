@@ -57,7 +57,6 @@ const (
 var (
 	checkRequestTimeout         = 30 * time.Second
 	defaultRequestTimeout       = 60 * time.Second
-	errorMissingProxy           = errors.New("Missing proxy pointer")
 	errorMissingOCISpec         = errors.New("Missing OCI specification")
 	defaultKataHostSharedDir    = "/run/kata-containers/shared/sandboxes/"
 	defaultKataGuestSharedDir   = "/run/kata-containers/shared/containers/"
@@ -197,7 +196,6 @@ func ephemeralPath() string {
 // to reach the Kata Containers agent.
 type KataAgentConfig struct {
 	LongLiveConn      bool
-	UseVSock          bool
 	Debug             bool
 	Trace             bool
 	ContainerPipeSize uint32
@@ -209,13 +207,10 @@ type KataAgentConfig struct {
 // KataAgentState is the structure describing the data stored from this
 // agent implementation.
 type KataAgentState struct {
-	ProxyPid int
-	URL      string
+	URL string
 }
 
 type kataAgent struct {
-	proxy proxy
-
 	// lock protects the client pointer
 	sync.Mutex
 	client *kataclient.AgentClient
@@ -223,7 +218,6 @@ type kataAgent struct {
 	reqHandlers    map[string]reqFunc
 	state          KataAgentState
 	keepConn       bool
-	proxyBuiltIn   bool
 	dynamicTracing bool
 	dead           bool
 	kmodules       []string
@@ -331,23 +325,16 @@ func (k *kataAgent) init(ctx context.Context, sandbox *Sandbox, config KataAgent
 	k.keepConn = config.LongLiveConn
 	k.kmodules = config.KernelModules
 
-	k.proxy, err = newProxy(sandbox.config.ProxyType)
-	if err != nil {
-		return false, err
-	}
-
-	k.proxyBuiltIn = isProxyBuiltIn(sandbox.config.ProxyType)
-
 	return disableVMShutdown, nil
 }
 
 func (k *kataAgent) agentURL() (string, error) {
 	switch s := k.vmSocket.(type) {
-	case types.Socket:
-		return s.HostPath, nil
 	case types.VSock:
 		return s.String(), nil
 	case types.HybridVSock:
+		return s.String(), nil
+	case types.MockHybridVSock:
 		return s.String(), nil
 	default:
 		return "", fmt.Errorf("Invalid socket type")
@@ -363,12 +350,12 @@ func (k *kataAgent) capabilities() types.Capabilities {
 	return caps
 }
 
-func (k *kataAgent) internalConfigure(h hypervisor, id string, builtin bool, config interface{}) error {
+func (k *kataAgent) internalConfigure(h hypervisor, id string, config interface{}) error {
 	var err error
 	if config != nil {
 		switch c := config.(type) {
 		case KataAgentConfig:
-			if k.vmSocket, err = h.generateSocket(id, c.UseVSock); err != nil {
+			if k.vmSocket, err = h.generateSocket(id); err != nil {
 				return err
 			}
 			k.keepConn = c.LongLiveConn
@@ -377,25 +364,16 @@ func (k *kataAgent) internalConfigure(h hypervisor, id string, builtin bool, con
 		}
 	}
 
-	if builtin {
-		k.proxyBuiltIn = true
-	}
-
 	return nil
 }
 
-func (k *kataAgent) configure(h hypervisor, id, sharePath string, builtin bool, config interface{}) error {
-	err := k.internalConfigure(h, id, builtin, config)
+func (k *kataAgent) configure(h hypervisor, id, sharePath string, config interface{}) error {
+	err := k.internalConfigure(h, id, config)
 	if err != nil {
 		return err
 	}
 
 	switch s := k.vmSocket.(type) {
-	case types.Socket:
-		err = h.addDevice(s, serialPortDev)
-		if err != nil {
-			return err
-		}
 	case types.VSock:
 		if err = h.addDevice(s, vSockPCIDev); err != nil {
 			return err
@@ -405,6 +383,7 @@ func (k *kataAgent) configure(h hypervisor, id, sharePath string, builtin bool, 
 		if err != nil {
 			return err
 		}
+	case types.MockHybridVSock:
 	default:
 		return vcTypes.ErrInvalidConfigType
 	}
@@ -430,8 +409,8 @@ func (k *kataAgent) configure(h hypervisor, id, sharePath string, builtin bool, 
 	return h.addDevice(sharedVolume, fsDev)
 }
 
-func (k *kataAgent) configureFromGrpc(h hypervisor, id string, builtin bool, config interface{}) error {
-	return k.internalConfigure(h, id, builtin, config)
+func (k *kataAgent) configureFromGrpc(h hypervisor, id string, config interface{}) error {
+	return k.internalConfigure(h, id, config)
 }
 
 func (k *kataAgent) setupSharedPath(sandbox *Sandbox) error {
@@ -460,7 +439,7 @@ func (k *kataAgent) createSandbox(sandbox *Sandbox) error {
 	if err := k.setupSharedPath(sandbox); err != nil {
 		return err
 	}
-	return k.configure(sandbox.hypervisor, sandbox.id, getSharePath(sandbox.id), k.proxyBuiltIn, sandbox.config.AgentConfig)
+	return k.configure(sandbox.hypervisor, sandbox.id, getSharePath(sandbox.id), sandbox.config.AgentConfig)
 }
 
 func cmdToKataProcess(cmd types.Cmd) (process *grpc.Process, err error) {
@@ -664,91 +643,17 @@ func (k *kataAgent) listRoutes() ([]*pbTypes.Route, error) {
 	return nil, err
 }
 
-func (k *kataAgent) startProxy(sandbox *Sandbox) error {
-	span, _ := k.trace("startProxy")
-	defer span.Finish()
-
-	var err error
-	var agentURL string
-
-	if k.proxy == nil {
-		return errorMissingProxy
-	}
-
-	if k.proxy.consoleWatched() {
-		return nil
-	}
-
-	if k.state.URL != "" {
-		// For keepConn case, when k.state.URL isn't nil, it means shimv2 had disconnected from
-		// sandbox and try to relaunch sandbox again. Here it needs to start proxy again to watch
-		// the hypervisor console.
-		if k.keepConn {
-			agentURL = k.state.URL
-		} else {
-			k.Logger().WithFields(logrus.Fields{
-				"sandbox":   sandbox.id,
-				"proxy-pid": k.state.ProxyPid,
-				"proxy-url": k.state.URL,
-			}).Infof("proxy already started")
-			return nil
-		}
-	} else {
-		// Get agent socket path to provide it to the proxy.
-		agentURL, err = k.agentURL()
-		if err != nil {
-			return err
-		}
-	}
-
-	consoleURL, err := sandbox.hypervisor.getSandboxConsole(sandbox.id)
-	if err != nil {
-		return err
-	}
-
-	proxyParams := proxyParams{
-		id:         sandbox.id,
-		hid:        getHypervisorPid(sandbox.hypervisor),
-		path:       sandbox.config.ProxyConfig.Path,
-		agentURL:   agentURL,
-		consoleURL: consoleURL,
-		logger:     k.Logger().WithField("sandbox", sandbox.id),
-		// Disable debug so proxy doesn't read console if we want to
-		// debug the agent console ourselves.
-		debug: sandbox.config.ProxyConfig.Debug &&
-			!k.hasAgentDebugConsole(sandbox),
-	}
-
-	// Start the proxy here
-	pid, uri, err := k.proxy.start(proxyParams)
-	if err != nil {
-		return err
-	}
-
-	// If error occurs after kata-proxy process start,
-	// then rollback to kill kata-proxy process
-	defer func() {
-		if err != nil {
-			k.proxy.stop(pid)
-		}
-	}()
-
-	// Fill agent state with proxy information, and store them.
-	if err = k.setProxy(sandbox, k.proxy, pid, uri); err != nil {
-		return err
-	}
-
-	k.Logger().WithFields(logrus.Fields{
-		"sandbox":   sandbox.id,
-		"proxy-pid": pid,
-		"proxy-url": uri,
-	}).Info("proxy started")
-
-	return nil
-}
-
 func (k *kataAgent) getAgentURL() (string, error) {
 	return k.agentURL()
+}
+
+func (k *kataAgent) setAgentURL() error {
+	var err error
+	if k.state.URL, err = k.agentURL(); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (k *kataAgent) reuseAgent(agent agent) error {
@@ -760,31 +665,6 @@ func (k *kataAgent) reuseAgent(agent agent) error {
 	k.installReqFunc(a.client)
 	k.client = a.client
 	return nil
-}
-
-func (k *kataAgent) setProxy(sandbox *Sandbox, proxy proxy, pid int, url string) error {
-	if url == "" {
-		var err error
-		if url, err = k.agentURL(); err != nil {
-			return err
-		}
-	}
-
-	// Are we setting the same proxy again?
-	if k.proxy != nil && k.state.URL != "" && k.state.URL != url {
-		k.proxy.stop(k.state.ProxyPid)
-	}
-
-	k.proxy = proxy
-	k.state.ProxyPid = pid
-	k.state.URL = url
-	return nil
-}
-
-func (k *kataAgent) setProxyFromGrpc(proxy proxy, pid int, url string) {
-	k.proxy = proxy
-	k.state.ProxyPid = pid
-	k.state.URL = url
 }
 
 func (k *kataAgent) getDNS(sandbox *Sandbox) ([]string, error) {
@@ -815,16 +695,10 @@ func (k *kataAgent) startSandbox(sandbox *Sandbox) error {
 	span, _ := k.trace("startSandbox")
 	defer span.Finish()
 
-	err := k.startProxy(sandbox)
-	if err != nil {
+	if err := k.setAgentURL(); err != nil {
 		return err
 	}
 
-	defer func() {
-		if err != nil {
-			k.proxy.stop(k.state.ProxyPid)
-		}
-	}()
 	hostname := sandbox.config.Hostname
 	if len(hostname) > maxHostnameLen {
 		hostname = hostname[:maxHostnameLen]
@@ -976,10 +850,6 @@ func (k *kataAgent) stopSandbox(sandbox *Sandbox) error {
 	span, _ := k.trace("stopSandbox")
 	defer span.Finish()
 
-	if k.proxy == nil {
-		return errorMissingProxy
-	}
-
 	req := &grpc.DestroySandboxRequest{}
 
 	if _, err := k.sendReq(req); err != nil {
@@ -993,13 +863,6 @@ func (k *kataAgent) stopSandbox(sandbox *Sandbox) error {
 		}
 	}
 
-	if err := k.proxy.stop(k.state.ProxyPid); err != nil {
-		return err
-	}
-
-	// clean up agent state
-	k.state.ProxyPid = -1
-	k.state.URL = ""
 	return nil
 }
 
@@ -1861,15 +1724,8 @@ func (k *kataAgent) connect() error {
 		return nil
 	}
 
-	if k.state.ProxyPid > 0 {
-		// check that proxy is running before talk with it avoiding long timeouts
-		if err := syscall.Kill(k.state.ProxyPid, syscall.Signal(0)); err != nil {
-			return errors.New("Proxy is not running")
-		}
-	}
-
-	k.Logger().WithField("url", k.state.URL).WithField("proxy", k.state.ProxyPid).Info("New client")
-	client, err := kataclient.NewAgentClient(k.ctx, k.state.URL, k.proxyBuiltIn)
+	k.Logger().WithField("url", k.state.URL).Info("New client")
+	client, err := kataclient.NewAgentClient(k.ctx, k.state.URL)
 	if err != nil {
 		k.dead = true
 		return err
@@ -2249,13 +2105,11 @@ func (k *kataAgent) cleanup(s *Sandbox) {
 
 func (k *kataAgent) save() persistapi.AgentState {
 	return persistapi.AgentState{
-		ProxyPid: k.state.ProxyPid,
-		URL:      k.state.URL,
+		URL: k.state.URL,
 	}
 }
 
 func (k *kataAgent) load(s persistapi.AgentState) {
-	k.state.ProxyPid = s.ProxyPid
 	k.state.URL = s.URL
 }
 

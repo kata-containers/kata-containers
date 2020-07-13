@@ -83,9 +83,6 @@ type SandboxConfig struct {
 
 	AgentConfig KataAgentConfig
 
-	ProxyType   ProxyType
-	ProxyConfig ProxyConfig
-
 	NetworkConfig NetworkConfig
 
 	// Volumes is a list of shared volumes between the host and the Sandbox.
@@ -133,17 +130,6 @@ func (s *Sandbox) trace(name string) (opentracing.Span, context.Context) {
 	span.SetTag("subsystem", "sandbox")
 
 	return span, ctx
-}
-
-func (s *Sandbox) startProxy() error {
-
-	// If the proxy is KataBuiltInProxyType type, it needs to restart the proxy
-	// to watch the guest console if it hadn't been watched.
-	if s.agent == nil {
-		return fmt.Errorf("sandbox %s missed agent pointer", s.ID())
-	}
-
-	return s.agent.startProxy(s)
 }
 
 // valid checks that the sandbox configuration is valid.
@@ -956,8 +942,6 @@ func (s *Sandbox) startVM() (err error) {
 				HypervisorType:   s.config.HypervisorType,
 				HypervisorConfig: s.config.HypervisorConfig,
 				AgentConfig:      s.config.AgentConfig,
-				ProxyType:        s.config.ProxyType,
-				ProxyConfig:      s.config.ProxyConfig,
 			})
 			if err != nil {
 				return err
@@ -1397,7 +1381,7 @@ func (s *Sandbox) ResumeContainer(containerID string) error {
 	return nil
 }
 
-// createContainers registers all containers to the proxy, create the
+// createContainers registers all containers, create the
 // containers in the guest and starts one shim per container.
 func (s *Sandbox) createContainers() error {
 	span, _ := s.trace("createContainers")

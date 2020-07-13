@@ -164,11 +164,6 @@ func (q *qemu) kernelParameters() string {
 	// set the maximum number of vCPUs
 	params = append(params, Param{"nr_cpus", fmt.Sprintf("%d", q.config.DefaultMaxVCPUs)})
 
-	// Add a kernel param to indicate if vsock is being used.
-	// This will be consumed by the agent to determine if it needs to listen on
-	// a serial or vsock channel
-	params = append(params, Param{vsockKernelOption, strconv.FormatBool(q.config.UseVSock)})
-
 	// add the params specified by the provided config. As the kernel
 	// honours the last parameter value set and since the config-provided
 	// params are added here, they will take priority over the defaults.
@@ -2259,8 +2254,8 @@ func (q *qemu) check() error {
 	return nil
 }
 
-func (q *qemu) generateSocket(id string, useVsock bool) (interface{}, error) {
-	return generateVMSocket(id, useVsock, q.store.RunVMStoragePath())
+func (q *qemu) generateSocket(id string) (interface{}, error) {
+	return generateVMSocket(id, q.store.RunVMStoragePath())
 }
 
 func (q *qemu) isRateLimiterBuiltin() bool {

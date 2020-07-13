@@ -69,8 +69,7 @@ default_memory = @DEFMEMSZ@
 block_device_driver = "@DEFBLOCKSTORAGEDRIVER_ACRN@"
 
 # This option changes the default hypervisor and kernel parameters
-# to enable debug output where available. This extra output is added
-# to the proxy logs, but only when proxy debug is also enabled.
+# to enable debug output where available.
 #
 # Default false
 #enable_debug = true
@@ -101,13 +100,6 @@ block_device_driver = "@DEFBLOCKSTORAGEDRIVER_ACRN@"
 # Warnings will be logged if any error is encountered will scanning for hooks,
 # but it will not abort container execution.
 #guest_hook_path = "/usr/share/oci/hooks"
-
-[proxy.@PROJECT_TYPE@]
-path = "@PROXYPATH@"
-
-# If enabled, proxy messages will be sent to the system log
-# (default: disabled)
-#enable_debug = true
 
 [shim.@PROJECT_TYPE@]
 path = "@SHIMPATH@"

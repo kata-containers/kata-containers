@@ -235,12 +235,12 @@ func BuildSocketPath(elements ...string) (string, error) {
 }
 
 // SupportsVsocks returns true if vsocks are supported, otherwise false
-func SupportsVsocks() bool {
+func SupportsVsocks() (bool, error) {
 	if _, err := os.Stat(VHostVSockDevicePath); err != nil {
-		return false
+		return false, fmt.Errorf("host system doesn't support vsock: %v", err)
 	}
 
-	return true
+	return true, nil
 }
 
 // SupportsIfb returns true if ifb are supported, otherwise false

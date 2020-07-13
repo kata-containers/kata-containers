@@ -7,6 +7,7 @@ package template
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"testing"
 	"time"
@@ -15,6 +16,7 @@ import (
 
 	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist/fs"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/mock"
 )
 
 const testDisabledAsNonRoot = "Test disabled as requires root privileges"
@@ -38,13 +40,17 @@ func TestTemplateFactory(t *testing.T) {
 	vmConfig := vc.VMConfig{
 		HypervisorType:   vc.MockHypervisor,
 		HypervisorConfig: hyperConfig,
-		ProxyType:        vc.NoopProxyType,
 	}
 
 	err := vmConfig.Valid()
 	assert.Nil(err)
 
 	ctx := context.Background()
+
+	hybridVSockTTRPCMock := mock.HybridVSockTTRPCMock{}
+	err = hybridVSockTTRPCMock.Start(fmt.Sprintf("mock://%s", vc.MockHybridVSockPath))
+	assert.NoError(err)
+	defer hybridVSockTTRPCMock.Stop()
 
 	// New
 	f, err := New(ctx, vmConfig, testDir)

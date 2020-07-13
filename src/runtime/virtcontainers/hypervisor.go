@@ -10,7 +10,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
@@ -62,11 +61,6 @@ const (
 	defaultBridges = 1
 
 	defaultBlockDriver = config.VirtioSCSI
-
-	defaultSocketName        = "kata.sock"
-	defaultSocketDeviceID    = "channel0"
-	defaultSocketChannelName = "agent.channel.0"
-	defaultSocketID          = "charch0"
 
 	// port numbers below 1024 are called privileged ports. Only a process with
 	// CAP_NET_BIND_SERVICE capability may bind to these port numbers.
@@ -375,9 +369,6 @@ type HypervisorConfig struct {
 	// DisableNestingChecks is used to override customizations performed
 	// when running on top of another VMM.
 	DisableNestingChecks bool
-
-	// UseVSock use a vsock for agent communication
-	UseVSock bool
 
 	// DisableImageNvdimm is used to disable guest rootfs image nvdimm devices
 	DisableImageNvdimm bool
@@ -746,30 +737,16 @@ func getHypervisorPid(h hypervisor) int {
 	return pids[0]
 }
 
-func generateVMSocket(id string, useVsock bool, vmStogarePath string) (interface{}, error) {
-	if useVsock {
-		vhostFd, contextID, err := utils.FindContextID()
-		if err != nil {
-			return nil, err
-		}
-
-		return types.VSock{
-			VhostFd:   vhostFd,
-			ContextID: contextID,
-			Port:      uint32(vSockPort),
-		}, nil
-	}
-
-	path, err := utils.BuildSocketPath(filepath.Join(vmStogarePath, id), defaultSocketName)
+func generateVMSocket(id string, vmStogarePath string) (interface{}, error) {
+	vhostFd, contextID, err := utils.FindContextID()
 	if err != nil {
 		return nil, err
 	}
 
-	return types.Socket{
-		DeviceID: defaultSocketDeviceID,
-		ID:       defaultSocketID,
-		HostPath: path,
-		Name:     defaultSocketChannelName,
+	return types.VSock{
+		VhostFd:   vhostFd,
+		ContextID: contextID,
+		Port:      uint32(vSockPort),
 	}, nil
 }
 
@@ -804,7 +781,7 @@ type hypervisor interface {
 	load(persistapi.HypervisorState)
 
 	// generate the socket to communicate the host and guest
-	generateSocket(id string, useVsock bool) (interface{}, error)
+	generateSocket(id string) (interface{}, error)
 
 	// check if hypervisor supports built-in rate limiter.
 	isRateLimiterBuiltin() bool

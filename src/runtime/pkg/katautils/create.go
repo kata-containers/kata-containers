@@ -65,8 +65,6 @@ func HandleFactory(ctx context.Context, vci vc.VC, runtimeConfig *oci.RuntimeCon
 			HypervisorType:   runtimeConfig.HypervisorType,
 			HypervisorConfig: runtimeConfig.HypervisorConfig,
 			AgentConfig:      runtimeConfig.AgentConfig,
-			ProxyType:        runtimeConfig.ProxyType,
-			ProxyConfig:      runtimeConfig.ProxyConfig,
 		},
 	}
 
