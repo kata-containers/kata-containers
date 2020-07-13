@@ -28,6 +28,7 @@ extern crate slog;
 #[macro_use]
 extern crate netlink;
 
+use crossbeam_channel::bounded;
 use nix::fcntl::{self, OFlag};
 use nix::sys::socket::{self, AddressFamily, SockAddr, SockFlag, SockType};
 use nix::sys::wait::{self, WaitStatus};
@@ -58,6 +59,7 @@ mod namespace;
 mod network;
 pub mod random;
 mod sandbox;
+mod signal;
 #[cfg(test)]
 mod test_utils;
 mod uevent;
@@ -65,6 +67,7 @@ mod version;
 
 use mount::{cgroups_mount, general_mount};
 use sandbox::Sandbox;
+use signal::setup_signal_handler;
 use slog::Logger;
 use uevent::watch_uevents;
 
@@ -101,7 +104,7 @@ fn announce(logger: &Logger, config: &agentConfig) {
     );
 }
 
-fn main() -> Result<()> {
+fn real_main() -> Result<()> {
     let args: Vec<String> = env::args().collect();
 
     if args.len() == 2 && args[1] == "--version" {
@@ -187,15 +190,28 @@ fn main() -> Result<()> {
 
     announce(&logger, &config);
 
-    // This "unused" variable is required as it enables the global (and crucially static) logger,
+    // This variable is required as it enables the global (and crucially static) logger,
     // which is required to satisfy the the lifetime constraints of the auto-generated gRPC code.
-    let _guard = slog_scope::set_global_logger(logger.new(o!("subsystem" => "rpc")));
+    let guard = slog_scope::set_global_logger(logger.new(o!("subsystem" => "rpc")));
 
     start_sandbox(&logger, &config)?;
+
+    drop(guard);
+    drop(logger);
+
+    // Force uninterruptible logger thread to detect an error and end.
+    let _ = unistd::close(wfd);
+    let _ = unistd::close(rfd);
 
     let _ = log_handle.join();
 
     Ok(())
+}
+
+fn main() -> Result<()> {
+    let result = real_main();
+
+    result
 }
 
 fn start_sandbox(logger: &Logger, config: &agentConfig) -> Result<()> {
@@ -232,8 +248,13 @@ fn start_sandbox(logger: &Logger, config: &agentConfig) -> Result<()> {
 
     let sandbox = Arc::new(Mutex::new(s));
 
-    setup_signal_handler(&logger, sandbox.clone()).unwrap();
-    watch_uevents(sandbox.clone());
+    // Create a channel to inform threads to shut themselves down
+    let (shutdown_tx, shutdown_rx) = bounded::<bool>(1);
+
+    let signal_thread_handler =
+        setup_signal_handler(&logger, shutdown_rx.clone(), sandbox.clone()).map_err(|e| e)?;
+
+    let uevents_thread_handler = watch_uevents(shutdown_rx.clone(), sandbox.clone());
 
     let (tx, rx) = mpsc::channel::<i32>();
     sandbox.lock().unwrap().sender = Some(tx);
@@ -247,96 +268,21 @@ fn start_sandbox(logger: &Logger, config: &agentConfig) -> Result<()> {
 
     server.shutdown();
 
+    // Request helper threads stop
+    shutdown_tx.send(true).unwrap();
+
+    // Wait for the helper threads to end
+    uevents_thread_handler
+        .join()
+        .map_err(|e| format!("{:?}", e))?;
+    signal_thread_handler
+        .join()
+        .map_err(|e| format!("{:?}", e))?;
+
     if let Some(handle) = shell_handle {
         handle.join().map_err(|e| format!("{:?}", e))?;
     }
 
-    Ok(())
-}
-
-use nix::sys::wait::WaitPidFlag;
-
-fn setup_signal_handler(logger: &Logger, sandbox: Arc<Mutex<Sandbox>>) -> Result<()> {
-    let logger = logger.new(o!("subsystem" => "signals"));
-
-    set_child_subreaper(true).map_err(|err| {
-        format!(
-            "failed to setup agent as a child subreaper, failed with {}",
-            err
-        )
-    })?;
-
-    let signals = Signals::new(&[SIGCHLD])?;
-
-    let s = sandbox.clone();
-
-    thread::spawn(move || {
-        'outer: for sig in signals.forever() {
-            info!(logger, "received signal"; "signal" => sig);
-
-            // sevral signals can be combined together
-            // as one. So loop around to reap all
-            // exited children
-            'inner: loop {
-                let wait_status = match wait::waitpid(
-                    Some(Pid::from_raw(-1)),
-                    Some(WaitPidFlag::WNOHANG | WaitPidFlag::__WALL),
-                ) {
-                    Ok(s) => {
-                        if s == WaitStatus::StillAlive {
-                            continue 'outer;
-                        }
-                        s
-                    }
-                    Err(e) => {
-                        info!(
-                            logger,
-                            "waitpid reaper failed";
-                            "error" => e.as_errno().unwrap().desc()
-                        );
-                        continue 'outer;
-                    }
-                };
-
-                let pid = wait_status.pid();
-                if pid.is_some() {
-                    let raw_pid = pid.unwrap().as_raw();
-                    let child_pid = format!("{}", raw_pid);
-
-                    let logger = logger.new(o!("child-pid" => child_pid));
-
-                    let mut sandbox = s.lock().unwrap();
-                    let process = sandbox.find_process(raw_pid);
-                    if process.is_none() {
-                        info!(logger, "child exited unexpectedly");
-                        continue 'inner;
-                    }
-
-                    let mut p = process.unwrap();
-
-                    if p.exit_pipe_w.is_none() {
-                        error!(logger, "the process's exit_pipe_w isn't set");
-                        continue 'inner;
-                    }
-                    let pipe_write = p.exit_pipe_w.unwrap();
-                    let ret: i32;
-
-                    match wait_status {
-                        WaitStatus::Exited(_, c) => ret = c,
-                        WaitStatus::Signaled(_, sig, _) => ret = sig as i32,
-                        _ => {
-                            info!(logger, "got wrong status for process";
-                                  "child-status" => format!("{:?}", wait_status));
-                            continue 'inner;
-                        }
-                    }
-
-                    p.exit_code = ret;
-                    let _ = unistd::close(pipe_write);
-                }
-            }
-        }
-    });
     Ok(())
 }
 

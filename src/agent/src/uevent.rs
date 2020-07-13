@@ -7,10 +7,12 @@ use crate::device::online_device;
 use crate::linux_abi::*;
 use crate::sandbox::Sandbox;
 use crate::GLOBAL_DEVICE_WATCHER;
+use crossbeam_channel::{select, unbounded, Receiver, Sender};
 use netlink::{RtnlHandle, NETLINK_UEVENT};
 use slog::Logger;
 use std::sync::{Arc, Mutex};
 use std::thread;
+use std::thread::JoinHandle;
 
 #[derive(Debug, Default)]
 struct Uevent {
@@ -114,34 +116,68 @@ impl Uevent {
     }
 }
 
-pub fn watch_uevents(sandbox: Arc<Mutex<Sandbox>>) {
-    thread::spawn(move || {
-        let rtnl = RtnlHandle::new(NETLINK_UEVENT, 1).unwrap();
-        let logger = sandbox
-            .lock()
-            .unwrap()
-            .logger
-            .new(o!("subsystem" => "uevent"));
+fn get_uevents(logger: Logger, rtnl: RtnlHandle, ch: Sender<String>) {
+    let logger = logger.new(o!("subsystem" => "uevents"));
 
-        loop {
-            match rtnl.recv_message() {
-                Err(e) => {
-                    error!(logger, "receive uevent message failed"; "error" => format!("{}", e))
-                }
-                Ok(data) => {
-                    let text = String::from_utf8(data);
-                    match text {
-                        Err(e) => {
-                            error!(logger, "failed to convert bytes to text"; "error" => format!("{}", e))
-                        }
-                        Ok(text) => {
-                            let event = Uevent::new(&text);
-                            info!(logger, "got uevent message"; "event" => format!("{:?}", event));
-                            event.process(&logger, &sandbox);
+    loop {
+        match rtnl.recv_message() {
+            Err(e) => {
+                error!(logger, "receive uevent message failed"; "error" => format!("{}", e));
+            }
+            Ok(data) => {
+                let text = String::from_utf8(data);
+                match text {
+                    Err(e) => {
+                        error!(logger, "failed to convert bytes to text"; "error" => format!("{}", e))
+                    }
+                    Ok(text) => {
+                        let result = ch.send(text);
+                        if result.is_err() {
+                            error!(logger, "failed to send uevent to channel"; "error" => format!("{:?}", result.err()));
                         }
                     }
                 }
             }
         }
+    }
+}
+
+pub fn watch_uevents(shutdown: Receiver<bool>, sandbox: Arc<Mutex<Sandbox>>) -> JoinHandle<()> {
+    let logger = sandbox
+        .lock()
+        .unwrap()
+        .logger
+        .new(o!("subsystem" => "uevent"));
+
+    let handle = thread::spawn(move || {
+        let logger = logger.clone();
+
+        let (tx, rx) = unbounded::<String>();
+
+        let rtnl = RtnlHandle::new(NETLINK_UEVENT, 1).unwrap();
+
+        let uevents_logger = logger.clone();
+        let uevents_rtnl = rtnl.clone();
+
+        let _ = thread::spawn(move || get_uevents(uevents_logger, uevents_rtnl, tx));
+
+        let logger = logger.clone();
+
+        loop {
+            select! {
+                recv(rx) -> data => {
+                    let msg = data.unwrap();
+                    let event = Uevent::new(&msg);
+                    info!(logger, "got uevent message"; "event" => format!("{:?}", event));
+                    event.process(&logger, &sandbox);
+                },
+                recv(shutdown) -> _ => {
+                    drop(rtnl);
+                    break;
+                },
+            };
+        }
     });
+
+    handle
 }
