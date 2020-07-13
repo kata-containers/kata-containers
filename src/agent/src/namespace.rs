@@ -65,6 +65,11 @@ impl Namespace {
         self
     }
 
+    pub fn as_pid(mut self) -> Self {
+        self.ns_type = NamespaceType::PID;
+        self
+    }
+
     pub fn set_root_dir(mut self, dir: &str) -> Self {
         self.persistent_ns_dir = dir.to_string();
         self

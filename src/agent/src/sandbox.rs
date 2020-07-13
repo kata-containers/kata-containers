@@ -7,9 +7,11 @@
 use crate::linux_abi::*;
 use crate::mount::{get_mount_fs_type, remove_mounts, TYPEROOTFS};
 use crate::namespace::Namespace;
+use crate::namespace::NSTYPEPID;
 use crate::network::Network;
 use libc::pid_t;
 use netlink::{RtnlHandle, NETLINK_ROUTE};
+use oci::LinuxNamespace;
 use protocols::agent::OnlineCPUMemRequest;
 use regex::Regex;
 use rustjail::cgroups;
@@ -34,10 +36,10 @@ pub struct Sandbox {
     pub pci_device_map: HashMap<String, String>,
     pub shared_utsns: Namespace,
     pub shared_ipcns: Namespace,
+    pub sandbox_pidns: Option<Namespace>,
     pub storages: HashMap<String, u32>,
     pub running: bool,
     pub no_pivot_root: bool,
-    pub sandbox_pid_ns: bool,
     pub sender: Option<Sender<i32>>,
     pub rtnl: Option<RtnlHandle>,
 }
@@ -58,10 +60,10 @@ impl Sandbox {
             pci_device_map: HashMap::new(),
             shared_utsns: Namespace::new(&logger),
             shared_ipcns: Namespace::new(&logger),
+            sandbox_pidns: None,
             storages: HashMap::new(),
             running: false,
             no_pivot_root: fs_type.eq(TYPEROOTFS),
-            sandbox_pid_ns: false,
             sender: None,
             rtnl: Some(RtnlHandle::new(NETLINK_ROUTE, 0).unwrap()),
         })
@@ -189,6 +191,30 @@ impl Sandbox {
 
     pub fn add_container(&mut self, c: LinuxContainer) {
         self.containers.insert(c.id.clone(), c);
+    }
+
+    pub fn update_shared_pidns(&mut self, c: &LinuxContainer) -> Result<()> {
+        // Populate the shared pid path only if this is an infra container and
+        // sandbox_pidns has not been passed in the create_sandbox request.
+        // This means a separate pause process has not been created. We treat the
+        // first container created as the infra container in that case
+        // and use its pid namespace in case pid namespace needs to be shared.
+        if self.sandbox_pidns.is_none() && self.containers.len() == 0 {
+            let init_pid = c.init_process_pid;
+            if init_pid == -1 {
+                return Err(ErrorKind::ErrorCode(String::from(
+                    "Failed to setup pid namespace: init container pid is -1",
+                ))
+                .into());
+            }
+
+            let mut pid_ns = Namespace::new(&self.logger).as_pid();
+            pid_ns.path = format!("/proc/{}/ns/pid", init_pid);
+
+            self.sandbox_pidns = Some(pid_ns);
+        }
+
+        Ok(())
     }
 
     pub fn get_container(&mut self, id: &str) -> Option<&mut LinuxContainer> {
@@ -552,5 +578,22 @@ mod tests {
 
         s.add_container(linux_container);
         assert!(s.get_container("some_id").is_some());
+    }
+    #[test]
+    fn update_shared_pidns() {
+        skip_if_not_root!();
+        let logger = slog::Logger::root(slog::Discard, o!());
+        let mut s = Sandbox::new(&logger).unwrap();
+        let test_pid = 9999;
+
+        let mut linux_container = create_linuxcontainer();
+        linux_container.init_process_pid = test_pid;
+
+        s.update_shared_pidns(&linux_container).unwrap();
+
+        assert!(s.sandbox_pidns.is_some());
+
+        let ns_path = format!("/proc/{}/ns/pid", test_pid);
+        assert_eq!(s.sandbox_pidns.unwrap().path, ns_path);
     }
 }
