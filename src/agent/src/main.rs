@@ -46,7 +46,7 @@ use std::os::unix::io::AsRawFd;
 use std::path::Path;
 use std::sync::mpsc::{self, Sender};
 use std::sync::{Arc, Mutex, RwLock};
-use std::{io, thread};
+use std::{io, thread, thread::JoinHandle};
 use unistd::Pid;
 
 mod config;
@@ -82,8 +82,6 @@ lazy_static! {
     static ref AGENT_CONFIG: Arc<RwLock<agentConfig>> =
         Arc::new(RwLock::new(config::agentConfig::new()));
 }
-
-use std::mem::MaybeUninit;
 
 fn announce(logger: &Logger, config: &agentConfig) {
     let commit = match env::var("VERSION_COMMIT") {
@@ -204,21 +202,27 @@ fn start_sandbox(logger: &Logger, config: &agentConfig) -> Result<()> {
     let shells = SHELLS.clone();
     let debug_console_vport = config.debug_console_vport as u32;
 
-    let shell_handle = if config.debug_console {
+    let mut shell_handle: Option<JoinHandle<()>> = None;
+
+    if config.debug_console {
         let thread_logger = logger.clone();
 
-        thread::spawn(move || {
-            let shells = shells.lock().unwrap();
-            let result = setup_debug_console(shells.to_vec(), debug_console_vport);
-            if result.is_err() {
-                // Report error, but don't fail
-                warn!(thread_logger, "failed to setup debug console";
+        let builder = thread::Builder::new();
+
+        let handle = builder
+            .spawn(move || {
+                let shells = shells.lock().unwrap();
+                let result = setup_debug_console(shells.to_vec(), debug_console_vport);
+                if result.is_err() {
+                    // Report error, but don't fail
+                    warn!(thread_logger, "failed to setup debug console";
                     "error" => format!("{}", result.unwrap_err()));
-            }
-        })
-    } else {
-        unsafe { MaybeUninit::zeroed().assume_init() }
-    };
+                }
+            })
+            .map_err(|e| format!("{:?}", e))?;
+
+        shell_handle = Some(handle);
+    }
 
     // Initialize unique sandbox structure.
     let s = Sandbox::new(&logger).map_err(|e| {
@@ -261,8 +265,8 @@ fn start_sandbox(logger: &Logger, config: &agentConfig) -> Result<()> {
 
     server.shutdown();
 
-    if config.debug_console {
-        shell_handle.join().unwrap();
+    if let Some(handle) = shell_handle {
+        handle.join().map_err(|e| format!("{:?}", e))?;
     }
 
     let _ = fs::remove_file("/tmp/testagent");
