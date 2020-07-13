@@ -844,10 +844,7 @@ impl BaseContainer for LinuxContainer {
             unistd::close(old_pid_ns);
         });
 
-        let mut pidns = None;
-        if !p.init {
-            pidns = Some(get_pid_namespace(&self.logger, linux)?);
-        }
+        let pidns = get_pid_namespace(&self.logger, linux)?;
 
         if pidns.is_some() {
             sched::setns(pidns.unwrap(), CloneFlags::CLONE_NEWPID)
@@ -1071,12 +1068,11 @@ fn update_namespaces(logger: &Logger, spec: &mut Spec, init_pid: RawFd) -> Resul
     Ok(())
 }
 
-fn get_pid_namespace(logger: &Logger, linux: &Linux) -> Result<RawFd> {
+fn get_pid_namespace(logger: &Logger, linux: &Linux) -> Result<Option<RawFd>> {
     for ns in &linux.namespaces {
         if ns.r#type == "pid" {
             if ns.path == "" {
-                error!(logger, "pid ns path is empty");
-                return Err(ErrorKind::ErrorCode("pid ns path is empty".to_string()).into());
+                return Ok(None);
             }
 
             let fd = match fcntl::open(ns.path.as_str(), OFlag::O_CLOEXEC, Mode::empty()) {
@@ -1093,7 +1089,7 @@ fn get_pid_namespace(logger: &Logger, linux: &Linux) -> Result<RawFd> {
                 }
             };
 
-            return Ok(fd);
+            return Ok(Some(fd));
         }
     }
 
