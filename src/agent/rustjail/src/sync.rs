@@ -137,34 +137,38 @@ pub fn write_sync(fd: RawFd, msg_type: i32, data_str: &str) -> Result<()> {
 
     match msg_type {
         SYNC_FAILED => match write_count(fd, data_str.as_bytes(), data_str.len()) {
-            Ok(_count) => unistd::close(fd)?,
+            Ok(_) => unistd::close(fd)?,
             Err(e) => {
                 unistd::close(fd)?;
-                return Err(
-                    ErrorKind::ErrorCode("error in send message to process".to_string()).into(),
-                );
+                return Err(ErrorKind::ErrorCode(format!(
+                    "error in send message to process {}",
+                    e
+                ))
+                .into());
             }
         },
         SYNC_DATA => {
             let length: i32 = data_str.len() as i32;
             match write_count(fd, &length.to_be_bytes(), MSG_SIZE) {
-                Ok(_count) => (),
+                Ok(_) => (),
                 Err(e) => {
                     unistd::close(fd)?;
-                    return Err(ErrorKind::ErrorCode(
-                        "error in send message to process".to_string(),
-                    )
+                    return Err(ErrorKind::ErrorCode(format!(
+                        "error in send message to process {}",
+                        e
+                    ))
                     .into());
                 }
             }
 
             match write_count(fd, data_str.as_bytes(), data_str.len()) {
-                Ok(_count) => (),
+                Ok(_) => (),
                 Err(e) => {
                     unistd::close(fd)?;
-                    return Err(ErrorKind::ErrorCode(
-                        "error in send message to process".to_string(),
-                    )
+                    return Err(ErrorKind::ErrorCode(format!(
+                        "error in send message to process {}",
+                        e
+                    ))
                     .into());
                 }
             }
