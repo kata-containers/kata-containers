@@ -734,6 +734,7 @@ impl protocols::agent_ttrpc::AgentService for agentService {
 
         Ok(resp)
     }
+
     fn stats_container(
         &self,
         _ctx: &ttrpc::TtrpcContext,
@@ -764,7 +765,7 @@ impl protocols::agent_ttrpc::AgentService for agentService {
 
     fn pause_container(
         &self,
-        ctx: &ttrpc::TtrpcContext,
+        _ctx: &ttrpc::TtrpcContext,
         req: protocols::agent::PauseContainerRequest,
     ) -> ttrpc::Result<protocols::empty::Empty> {
         let cid = req.get_container_id();
@@ -790,7 +791,7 @@ impl protocols::agent_ttrpc::AgentService for agentService {
 
     fn resume_container(
         &self,
-        ctx: &ttrpc::TtrpcContext,
+        _ctx: &ttrpc::TtrpcContext,
         req: protocols::agent::ResumeContainerRequest,
     ) -> ttrpc::Result<protocols::empty::Empty> {
         let cid = req.get_container_id();
