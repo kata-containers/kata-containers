@@ -3,23 +3,25 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 use rustjail::errors::*;
+use std::env;
 use std::fs;
 use std::time;
 
 const DEBUG_CONSOLE_FLAG: &str = "agent.debug_console";
 const DEV_MODE_FLAG: &str = "agent.devmode";
 const LOG_LEVEL_OPTION: &str = "agent.log";
+const TRACE_MODE_OPTION: &str = "agent.trace";
 const HOTPLUG_TIMOUT_OPTION: &str = "agent.hotplug_timeout";
 const DEBUG_CONSOLE_VPORT_OPTION: &str = "agent.debug_console_vport";
 const LOG_VPORT_OPTION: &str = "agent.log_vport";
 const CONTAINER_PIPE_SIZE_OPTION: &str = "agent.container_pipe_size";
+const TRACING_ENV_VAR: &str = "KATA_AGENT_TRACING";
 
 const DEFAULT_LOG_LEVEL: slog::Level = slog::Level::Info;
 const DEFAULT_HOTPLUG_TIMEOUT: time::Duration = time::Duration::from_secs(3);
 const DEFAULT_CONTAINER_PIPE_SIZE: i32 = 0;
 
 // FIXME: unused
-const TRACE_MODE_FLAG: &str = "agent.trace";
 const USE_VSOCK_FLAG: &str = "agent.use_vsock";
 
 #[derive(Debug)]
@@ -31,6 +33,7 @@ pub struct agentConfig {
     pub debug_console_vport: i32,
     pub log_vport: i32,
     pub container_pipe_size: i32,
+    pub tracing: bool,
 }
 
 impl agentConfig {
@@ -43,6 +46,7 @@ impl agentConfig {
             debug_console_vport: 0,
             log_vport: 0,
             container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+            tracing: false,
         }
     }
 
@@ -56,6 +60,10 @@ impl agentConfig {
 
             if param.eq(&DEV_MODE_FLAG) {
                 self.dev_mode = true;
+            }
+
+            if param.starts_with(&TRACE_MODE_OPTION) {
+                self.tracing = true;
             }
 
             if param.starts_with(format!("{}=", LOG_LEVEL_OPTION).as_str()) {
@@ -89,6 +97,10 @@ impl agentConfig {
                 let container_pipe_size = get_container_pipe_size(param)?;
                 self.container_pipe_size = container_pipe_size
             }
+        }
+
+        if env::var(TRACING_ENV_VAR).is_ok() {
+            self.tracing = true;
         }
 
         Ok(())
@@ -267,6 +279,7 @@ mod tests {
             log_level: slog::Level,
             hotplug_timeout: time::Duration,
             container_pipe_size: i32,
+            tracing: bool,
         }
 
         let tests = &[
@@ -277,6 +290,7 @@ mod tests {
                 log_level: DEFAULT_LOG_LEVEL,
                 hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+                tracing: false,
             },
             TestData {
                 contents: "agent.debug_console agent.devmodex",
@@ -285,6 +299,7 @@ mod tests {
                 log_level: DEFAULT_LOG_LEVEL,
                 hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+                tracing: false,
             },
             TestData {
                 contents: "agent.logx=debug",
@@ -293,6 +308,7 @@ mod tests {
                 log_level: DEFAULT_LOG_LEVEL,
                 hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+                tracing: false,
             },
             TestData {
                 contents: "agent.log=debug",
@@ -301,6 +317,7 @@ mod tests {
                 log_level: slog::Level::Debug,
                 hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+                tracing: false,
             },
             TestData {
                 contents: "",
@@ -309,6 +326,7 @@ mod tests {
                 log_level: DEFAULT_LOG_LEVEL,
                 hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+                tracing: false,
             },
             TestData {
                 contents: "foo",
@@ -317,6 +335,7 @@ mod tests {
                 log_level: DEFAULT_LOG_LEVEL,
                 hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+                tracing: false,
             },
             TestData {
                 contents: "foo bar",
@@ -325,6 +344,7 @@ mod tests {
                 log_level: DEFAULT_LOG_LEVEL,
                 hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+                tracing: false,
             },
             TestData {
                 contents: "foo bar",
@@ -333,6 +353,7 @@ mod tests {
                 log_level: DEFAULT_LOG_LEVEL,
                 hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+                tracing: false,
             },
             TestData {
                 contents: "foo agent bar",
@@ -341,6 +362,7 @@ mod tests {
                 log_level: DEFAULT_LOG_LEVEL,
                 hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+                tracing: false,
             },
             TestData {
                 contents: "foo debug_console agent bar devmode",
@@ -349,6 +371,7 @@ mod tests {
                 log_level: DEFAULT_LOG_LEVEL,
                 hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+                tracing: false,
             },
             TestData {
                 contents: "agent.debug_console",
@@ -357,6 +380,7 @@ mod tests {
                 log_level: DEFAULT_LOG_LEVEL,
                 hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+                tracing: false,
             },
             TestData {
                 contents: "   agent.debug_console ",
@@ -365,6 +389,7 @@ mod tests {
                 log_level: DEFAULT_LOG_LEVEL,
                 hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+                tracing: false,
             },
             TestData {
                 contents: "agent.debug_console foo",
@@ -373,6 +398,7 @@ mod tests {
                 log_level: DEFAULT_LOG_LEVEL,
                 hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+                tracing: false,
             },
             TestData {
                 contents: " agent.debug_console foo",
@@ -381,6 +407,7 @@ mod tests {
                 log_level: DEFAULT_LOG_LEVEL,
                 hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+                tracing: false,
             },
             TestData {
                 contents: "foo agent.debug_console bar",
@@ -389,6 +416,7 @@ mod tests {
                 log_level: DEFAULT_LOG_LEVEL,
                 hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+                tracing: false,
             },
             TestData {
                 contents: "foo agent.debug_console",
@@ -397,6 +425,7 @@ mod tests {
                 log_level: DEFAULT_LOG_LEVEL,
                 hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+                tracing: false,
             },
             TestData {
                 contents: "foo agent.debug_console ",
@@ -405,6 +434,7 @@ mod tests {
                 log_level: DEFAULT_LOG_LEVEL,
                 hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+                tracing: false,
             },
             TestData {
                 contents: "agent.devmode",
@@ -413,6 +443,7 @@ mod tests {
                 log_level: DEFAULT_LOG_LEVEL,
                 hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+                tracing: false,
             },
             TestData {
                 contents: "   agent.devmode ",
@@ -421,6 +452,7 @@ mod tests {
                 log_level: DEFAULT_LOG_LEVEL,
                 hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+                tracing: false,
             },
             TestData {
                 contents: "agent.devmode foo",
@@ -429,6 +461,7 @@ mod tests {
                 log_level: DEFAULT_LOG_LEVEL,
                 hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+                tracing: false,
             },
             TestData {
                 contents: " agent.devmode foo",
@@ -437,6 +470,7 @@ mod tests {
                 log_level: DEFAULT_LOG_LEVEL,
                 hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+                tracing: false,
             },
             TestData {
                 contents: "foo agent.devmode bar",
@@ -445,6 +479,7 @@ mod tests {
                 log_level: DEFAULT_LOG_LEVEL,
                 hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+                tracing: false,
             },
             TestData {
                 contents: "foo agent.devmode",
@@ -453,6 +488,7 @@ mod tests {
                 log_level: DEFAULT_LOG_LEVEL,
                 hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+                tracing: false,
             },
             TestData {
                 contents: "foo agent.devmode ",
@@ -461,6 +497,7 @@ mod tests {
                 log_level: DEFAULT_LOG_LEVEL,
                 hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+                tracing: false,
             },
             TestData {
                 contents: "agent.devmode agent.debug_console",
@@ -469,6 +506,7 @@ mod tests {
                 log_level: DEFAULT_LOG_LEVEL,
                 hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+                tracing: false,
             },
             TestData {
                 contents: "agent.devmode agent.debug_console agent.hotplug_timeout=100",
@@ -477,6 +515,7 @@ mod tests {
                 log_level: DEFAULT_LOG_LEVEL,
                 hotplug_timeout: time::Duration::from_secs(100),
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+                tracing: false,
             },
             TestData {
                 contents: "agent.devmode agent.debug_console agent.hotplug_timeout=0",
@@ -485,6 +524,7 @@ mod tests {
                 log_level: DEFAULT_LOG_LEVEL,
                 hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+                tracing: false,
             },
             TestData {
                 contents: "agent.devmode agent.debug_console agent.container_pipe_size=2097152",
@@ -493,6 +533,7 @@ mod tests {
                 log_level: DEFAULT_LOG_LEVEL,
                 hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
                 container_pipe_size: 2097152,
+                tracing: false,
             },
             TestData {
                 contents: "agent.devmode agent.debug_console agent.container_pipe_size=100",
@@ -501,6 +542,7 @@ mod tests {
                 log_level: DEFAULT_LOG_LEVEL,
                 hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
                 container_pipe_size: 100,
+                tracing: false,
             },
             TestData {
                 contents: "agent.devmode agent.debug_console agent.container_pipe_size=0",
@@ -509,6 +551,7 @@ mod tests {
                 log_level: DEFAULT_LOG_LEVEL,
                 hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+                tracing: false,
             },
             TestData {
                 contents: "agent.devmode agent.debug_console agent.container_pip_siz=100",
@@ -517,6 +560,43 @@ mod tests {
                 log_level: DEFAULT_LOG_LEVEL,
                 hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+                tracing: false,
+            },
+            TestData {
+                contents: "trace",
+                debug_console: false,
+                dev_mode: false,
+                log_level: DEFAULT_LOG_LEVEL,
+                hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
+                container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+                tracing: false,
+            },
+            TestData {
+                contents: ".trace",
+                debug_console: false,
+                dev_mode: false,
+                log_level: DEFAULT_LOG_LEVEL,
+                hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
+                container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+                tracing: false,
+            },
+            TestData {
+                contents: "agent.trac",
+                debug_console: false,
+                dev_mode: false,
+                log_level: DEFAULT_LOG_LEVEL,
+                hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
+                container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+                tracing: false,
+            },
+            TestData {
+                contents: "agent.trace",
+                debug_console: false,
+                dev_mode: false,
+                log_level: DEFAULT_LOG_LEVEL,
+                hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
+                container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+                tracing: true,
             },
         ];
 
@@ -555,6 +635,7 @@ mod tests {
                 msg
             );
             assert_eq!(config.container_pipe_size, 0, "{}", msg);
+            assert_eq!(config.tracing, false, "{}", msg);
 
             let result = config.parse_cmdline(filename);
             assert!(result.is_ok(), "{}", msg);
@@ -564,6 +645,7 @@ mod tests {
             assert_eq!(d.log_level, config.log_level, "{}", msg);
             assert_eq!(d.hotplug_timeout, config.hotplug_timeout, "{}", msg);
             assert_eq!(d.container_pipe_size, config.container_pipe_size, "{}", msg);
+            assert_eq!(d.tracing, config.tracing, "{}", msg);
         }
     }
 

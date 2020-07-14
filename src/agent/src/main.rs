@@ -41,13 +41,16 @@ use std::collections::HashMap;
 use std::env;
 use std::ffi::OsStr;
 use std::fs::{self, File};
+use std::io;
 use std::os::unix::ffi::OsStrExt;
 use std::os::unix::fs as unixfs;
 use std::os::unix::io::AsRawFd;
 use std::path::Path;
 use std::sync::mpsc::{self, Sender};
 use std::sync::{Arc, Mutex, RwLock};
-use std::{io, thread, thread::JoinHandle};
+use std::thread;
+use std::thread::JoinHandle;
+use tracing::{info_span, Span};
 use unistd::Pid;
 
 mod config;
@@ -68,10 +71,11 @@ mod version;
 use mount::{cgroups_mount, general_mount};
 use sandbox::Sandbox;
 use signal::setup_signal_handler;
-use slog::Logger;
+use slog::{error, info, o, warn, Logger};
 use uevent::watch_uevents;
 
 mod rpc;
+mod tracer;
 
 const NAME: &str = "kata-agent";
 const VSOCK_ADDR: &str = "vsock://-1";
@@ -185,6 +189,7 @@ fn real_main() -> Result<()> {
     });
 
     let writer = unsafe { File::from_raw_fd(wfd) };
+
     // Recreate a logger with the log level get from "/proc/cmdline".
     let logger = logging::create_logger(NAME, "agent", config.log_level, writer);
 
@@ -192,11 +197,30 @@ fn real_main() -> Result<()> {
 
     // This variable is required as it enables the global (and crucially static) logger,
     // which is required to satisfy the the lifetime constraints of the auto-generated gRPC code.
-    let guard = slog_scope::set_global_logger(logger.new(o!("subsystem" => "rpc")));
+    let logger_guard = slog_scope::set_global_logger(logger.new(o!("subsystem" => "rpc")));
 
-    start_sandbox(&logger, &config)?;
+    if config.tracing {
+        // A NOP trace implementation will be used if this isn't called
+        tracer::setup_tracing(&logger);
+    }
 
-    drop(guard);
+    let trace_subscriber = tracer::get_subscriber(NAME);
+
+    tracing::subscriber::set_global_default(trace_subscriber).map_err(|e| e.to_string())?;
+
+    let root_span = info_span!("root-span");
+
+    let _enter = root_span.enter();
+
+    start_sandbox(&logger, root_span.clone(), &config)?;
+
+    drop(logger_guard);
+
+    // Install a NOP tracer for the remainder of the shutdown sequence
+    // to ensure any log calls made by local crates using the scope logger
+    // don't fail.
+    let _logger_guard = slog_scope::set_global_logger(slog::Logger::root(slog::Discard, o!()));
+
     drop(logger);
 
     // Force uninterruptible logger thread to detect an error and end.
@@ -209,12 +233,13 @@ fn real_main() -> Result<()> {
 }
 
 fn main() -> Result<()> {
-    let result = real_main();
-
-    result
+    real_main()
 }
 
-fn start_sandbox(logger: &Logger, config: &agentConfig) -> Result<()> {
+fn start_sandbox(logger: &Logger, parent_span: Span, config: &agentConfig) -> Result<()> {
+    let span = info_span!(parent: parent_span, "start_sandbox");
+    let _entered = span.enter();
+
     let shells = SHELLS.clone();
     let debug_console_vport = config.debug_console_vport as u32;
 
@@ -241,7 +266,7 @@ fn start_sandbox(logger: &Logger, config: &agentConfig) -> Result<()> {
     }
 
     // Initialize unique sandbox structure.
-    let s = Sandbox::new(&logger).map_err(|e| {
+    let s = Sandbox::new(&logger, span.clone()).map_err(|e| {
         error!(logger, "Failed to create sandbox with error: {:?}", e);
         e
     })?;
@@ -253,7 +278,6 @@ fn start_sandbox(logger: &Logger, config: &agentConfig) -> Result<()> {
 
     let signal_thread_handler =
         setup_signal_handler(&logger, shutdown_rx.clone(), sandbox.clone()).map_err(|e| e)?;
-
     let uevents_thread_handler = watch_uevents(shutdown_rx.clone(), sandbox.clone());
 
     let (tx, rx) = mpsc::channel::<i32>();
@@ -262,11 +286,17 @@ fn start_sandbox(logger: &Logger, config: &agentConfig) -> Result<()> {
     //vsock:///dev/vsock, port
     let mut server = rpc::start(sandbox.clone(), VSOCK_ADDR, VSOCK_PORT);
 
-    let _ = server.start().unwrap();
+    server
+        .start()
+        .map_err(|e| ErrorKind::ErrorCode(format!("failed to start RPC server: {:?}", e)))?;
 
     let _ = rx.recv().map_err(|e| format!("{:?}", e));
 
     server.shutdown();
+
+    if config.tracing {
+        tracer::shutdown_tracing();
+    }
 
     // Request helper threads stop
     shutdown_tx.send(true).unwrap();
@@ -275,6 +305,7 @@ fn start_sandbox(logger: &Logger, config: &agentConfig) -> Result<()> {
     uevents_thread_handler
         .join()
         .map_err(|e| format!("{:?}", e))?;
+
     signal_thread_handler
         .join()
         .map_err(|e| format!("{:?}", e))?;

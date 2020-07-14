@@ -44,6 +44,7 @@ use netlink::{RtnlHandle, NETLINK_ROUTE};
 use libc::{self, c_ushort, pid_t, winsize, TIOCSWINSZ};
 use serde_json;
 use std::convert::TryFrom;
+use std::fmt::Debug;
 use std::fs;
 use std::os::unix::io::RawFd;
 use std::os::unix::prelude::PermissionsExt;
@@ -57,6 +58,7 @@ use std::fs::{File, OpenOptions};
 use std::io::{BufRead, BufReader};
 use std::os::unix::fs::FileExt;
 use std::path::PathBuf;
+use tracing::{info_span, Span};
 
 const CONTAINER_BASE: &str = "/run/kata-containers";
 const MODPROBE_PATH: &str = "/sbin/modprobe";
@@ -68,7 +70,7 @@ macro_rules! sl {
     };
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct agentService {
     sandbox: Arc<Mutex<Sandbox>>,
     test: u32,
@@ -119,6 +121,7 @@ impl agentService {
         {
             sandbox = self.sandbox.clone();
             s = sandbox.lock().unwrap();
+
             s.container_mounts.insert(cid.clone(), m);
         }
 
@@ -518,6 +521,24 @@ impl agentService {
 
         Ok(resp)
     }
+
+    // Return the parent span.
+    //
+    // Note: Ideally, this function would construct and return the new span.
+    // However, that isn't possible since the tracing span macros require a
+    // constant str meaning adding a name parameter to this function for the
+    // span!()'s name wouldn't work.
+    fn get_span(&self) -> ttrpc::Result<Span> {
+        let sandbox = self.sandbox.clone();
+
+        let s = sandbox.lock().map_err(|e| {
+            ttrpc::error::Error::Others(format!("failed to unlock sandbox: {:?}", e))
+        })?;
+
+        let parent_span = s.span.clone();
+
+        Ok(parent_span)
+    }
 }
 
 impl protocols::agent_ttrpc::AgentService for agentService {
@@ -526,6 +547,10 @@ impl protocols::agent_ttrpc::AgentService for agentService {
         _ctx: &ttrpc::TtrpcContext,
         req: protocols::agent::CreateContainerRequest,
     ) -> ttrpc::Result<Empty> {
+        let parent_span = self.get_span()?;
+        let span = info_span!(parent: parent_span, "create_container");
+        let _entered = span.enter();
+
         match self.do_create_container(req) {
             Err(e) => Err(ttrpc::Error::RpcStatus(ttrpc::get_status(
                 ttrpc::Code::INTERNAL,
@@ -540,6 +565,10 @@ impl protocols::agent_ttrpc::AgentService for agentService {
         _ctx: &ttrpc::TtrpcContext,
         req: protocols::agent::StartContainerRequest,
     ) -> ttrpc::Result<Empty> {
+        let parent_span = self.get_span()?;
+        let span = info_span!(parent: parent_span, "start_container");
+        let _entered = span.enter();
+
         match self.do_start_container(req) {
             Err(e) => Err(ttrpc::Error::RpcStatus(ttrpc::get_status(
                 ttrpc::Code::INTERNAL,
@@ -557,6 +586,10 @@ impl protocols::agent_ttrpc::AgentService for agentService {
         _ctx: &ttrpc::TtrpcContext,
         req: protocols::agent::RemoveContainerRequest,
     ) -> ttrpc::Result<Empty> {
+        let parent_span = self.get_span()?;
+        let span = info_span!(parent: parent_span, "remove_container");
+        let _entered = span.enter();
+
         match self.do_remove_container(req) {
             Err(e) => Err(ttrpc::Error::RpcStatus(ttrpc::get_status(
                 ttrpc::Code::INTERNAL,
@@ -565,11 +598,16 @@ impl protocols::agent_ttrpc::AgentService for agentService {
             Ok(_) => Ok(Empty::new()),
         }
     }
+
     fn exec_process(
         &self,
         _ctx: &ttrpc::TtrpcContext,
         req: protocols::agent::ExecProcessRequest,
     ) -> ttrpc::Result<Empty> {
+        let parent_span = self.get_span()?;
+        let span = info_span!(parent: parent_span, "exec_process");
+        let _entered = span.enter();
+
         match self.do_exec_process(req) {
             Err(e) => Err(ttrpc::Error::RpcStatus(ttrpc::get_status(
                 ttrpc::Code::INTERNAL,
@@ -578,11 +616,16 @@ impl protocols::agent_ttrpc::AgentService for agentService {
             Ok(_) => Ok(Empty::new()),
         }
     }
+
     fn signal_process(
         &self,
         _ctx: &ttrpc::TtrpcContext,
         req: protocols::agent::SignalProcessRequest,
     ) -> ttrpc::Result<Empty> {
+        let parent_span = self.get_span()?;
+        let span = info_span!(parent: parent_span, "signal_process");
+        let _entered = span.enter();
+
         match self.do_signal_process(req) {
             Err(e) => Err(ttrpc::Error::RpcStatus(ttrpc::get_status(
                 ttrpc::Code::INTERNAL,
@@ -591,11 +634,16 @@ impl protocols::agent_ttrpc::AgentService for agentService {
             Ok(_) => Ok(Empty::new()),
         }
     }
+
     fn wait_process(
         &self,
         _ctx: &ttrpc::TtrpcContext,
         req: protocols::agent::WaitProcessRequest,
     ) -> ttrpc::Result<WaitProcessResponse> {
+        let parent_span = self.get_span()?;
+        let span = info_span!(parent: parent_span, "wait_process");
+        let _entered = span.enter();
+
         match self.do_wait_process(req) {
             Err(e) => Err(ttrpc::Error::RpcStatus(ttrpc::get_status(
                 ttrpc::Code::INTERNAL,
@@ -604,11 +652,16 @@ impl protocols::agent_ttrpc::AgentService for agentService {
             Ok(resp) => Ok(resp),
         }
     }
+
     fn list_processes(
         &self,
         _ctx: &ttrpc::TtrpcContext,
         req: protocols::agent::ListProcessesRequest,
     ) -> ttrpc::Result<ListProcessesResponse> {
+        let parent_span = self.get_span()?;
+        let span = info_span!(parent: parent_span, "list_processes");
+        let _entered = span.enter();
+
         let cid = req.container_id.clone();
         let format = req.format.clone();
         let mut args = req.args.clone().into_vec();
@@ -695,11 +748,16 @@ impl protocols::agent_ttrpc::AgentService for agentService {
         resp.process_list = Vec::from(result);
         Ok(resp)
     }
+
     fn update_container(
         &self,
         _ctx: &ttrpc::TtrpcContext,
         req: protocols::agent::UpdateContainerRequest,
     ) -> ttrpc::Result<Empty> {
+        let parent_span = self.get_span()?;
+        let span = info_span!(parent: parent_span, "update_container");
+        let _entered = span.enter();
+
         let cid = req.container_id.clone();
         let res = req.resources;
 
@@ -734,11 +792,16 @@ impl protocols::agent_ttrpc::AgentService for agentService {
 
         Ok(resp)
     }
+
     fn stats_container(
         &self,
         _ctx: &ttrpc::TtrpcContext,
         req: protocols::agent::StatsContainerRequest,
     ) -> ttrpc::Result<StatsContainerResponse> {
+        let parent_span = self.get_span()?;
+        let span = info_span!(parent: parent_span, "stats_container");
+        let _entered = span.enter();
+
         let cid = req.container_id.clone();
         let s = Arc::clone(&self.sandbox);
         let mut sandbox = s.lock().unwrap();
@@ -767,6 +830,10 @@ impl protocols::agent_ttrpc::AgentService for agentService {
         ctx: &ttrpc::TtrpcContext,
         req: protocols::agent::PauseContainerRequest,
     ) -> ttrpc::Result<protocols::empty::Empty> {
+        let parent_span = self.get_span()?;
+        let span = info_span!(parent: parent_span, "pause_container");
+        let _entered = span.enter();
+
         let cid = req.get_container_id();
         let s = Arc::clone(&self.sandbox);
         let mut sandbox = s.lock().unwrap();
@@ -793,6 +860,10 @@ impl protocols::agent_ttrpc::AgentService for agentService {
         ctx: &ttrpc::TtrpcContext,
         req: protocols::agent::ResumeContainerRequest,
     ) -> ttrpc::Result<protocols::empty::Empty> {
+        let parent_span = self.get_span()?;
+        let span = info_span!(parent: parent_span, "resume_container");
+        let _entered = span.enter();
+
         let cid = req.get_container_id();
         let s = Arc::clone(&self.sandbox);
         let mut sandbox = s.lock().unwrap();
@@ -819,6 +890,10 @@ impl protocols::agent_ttrpc::AgentService for agentService {
         _ctx: &ttrpc::TtrpcContext,
         req: protocols::agent::WriteStreamRequest,
     ) -> ttrpc::Result<WriteStreamResponse> {
+        let parent_span = self.get_span()?;
+        let span = info_span!(parent: parent_span, "write_stdin");
+        let _entered = span.enter();
+
         match self.do_write_stream(req) {
             Err(e) => Err(ttrpc::Error::RpcStatus(ttrpc::get_status(
                 ttrpc::Code::INTERNAL,
@@ -827,11 +902,16 @@ impl protocols::agent_ttrpc::AgentService for agentService {
             Ok(resp) => Ok(resp),
         }
     }
+
     fn read_stdout(
         &self,
         _ctx: &ttrpc::TtrpcContext,
         req: protocols::agent::ReadStreamRequest,
     ) -> ttrpc::Result<ReadStreamResponse> {
+        let parent_span = self.get_span()?;
+        let span = info_span!(parent: parent_span, "read_stdout");
+        let _entered = span.enter();
+
         match self.do_read_stream(req, true) {
             Err(e) => Err(ttrpc::Error::RpcStatus(ttrpc::get_status(
                 ttrpc::Code::INTERNAL,
@@ -840,11 +920,16 @@ impl protocols::agent_ttrpc::AgentService for agentService {
             Ok(resp) => Ok(resp),
         }
     }
+
     fn read_stderr(
         &self,
         _ctx: &ttrpc::TtrpcContext,
         req: protocols::agent::ReadStreamRequest,
     ) -> ttrpc::Result<ReadStreamResponse> {
+        let parent_span = self.get_span()?;
+        let span = info_span!(parent: parent_span, "read_stderr");
+        let _entered = span.enter();
+
         match self.do_read_stream(req, false) {
             Err(e) => Err(ttrpc::Error::RpcStatus(ttrpc::get_status(
                 ttrpc::Code::INTERNAL,
@@ -853,11 +938,16 @@ impl protocols::agent_ttrpc::AgentService for agentService {
             Ok(resp) => Ok(resp),
         }
     }
+
     fn close_stdin(
         &self,
         _ctx: &ttrpc::TtrpcContext,
         req: protocols::agent::CloseStdinRequest,
     ) -> ttrpc::Result<Empty> {
+        let parent_span = self.get_span()?;
+        let span = info_span!(parent: parent_span, "close_stdin");
+        let _entered = span.enter();
+
         let cid = req.container_id.clone();
         let eid = req.exec_id.clone();
         let s = Arc::clone(&self.sandbox);
@@ -891,6 +981,10 @@ impl protocols::agent_ttrpc::AgentService for agentService {
         _ctx: &ttrpc::TtrpcContext,
         req: protocols::agent::TtyWinResizeRequest,
     ) -> ttrpc::Result<Empty> {
+        let parent_span = self.get_span()?;
+        let span = info_span!(parent: parent_span, "tty_win_resize");
+        let _entered = span.enter();
+
         let cid = req.container_id.clone();
         let eid = req.exec_id.clone();
         let s = Arc::clone(&self.sandbox);
@@ -938,6 +1032,10 @@ impl protocols::agent_ttrpc::AgentService for agentService {
         _ctx: &ttrpc::TtrpcContext,
         req: protocols::agent::UpdateInterfaceRequest,
     ) -> ttrpc::Result<Interface> {
+        let parent_span = self.get_span()?;
+        let span = info_span!(parent: parent_span, "update_interface");
+        let _entered = span.enter();
+
         let interface = req.interface.clone();
         let s = Arc::clone(&self.sandbox);
         let mut sandbox = s.lock().unwrap();
@@ -960,11 +1058,16 @@ impl protocols::agent_ttrpc::AgentService for agentService {
 
         Ok(iface)
     }
+
     fn update_routes(
         &self,
         _ctx: &ttrpc::TtrpcContext,
         req: protocols::agent::UpdateRoutesRequest,
     ) -> ttrpc::Result<Routes> {
+        let parent_span = self.get_span()?;
+        let span = info_span!(parent: parent_span, "update_routes");
+        let _entered = span.enter();
+
         let mut routes = protocols::agent::Routes::new();
         let rs = req.routes.clone().unwrap().Routes.into_vec();
 
@@ -995,11 +1098,16 @@ impl protocols::agent_ttrpc::AgentService for agentService {
 
         Ok(routes)
     }
+
     fn list_interfaces(
         &self,
         _ctx: &ttrpc::TtrpcContext,
         _req: protocols::agent::ListInterfacesRequest,
     ) -> ttrpc::Result<Interfaces> {
+        let parent_span = self.get_span()?;
+        let span = info_span!(parent: parent_span, "list_interfaces");
+        let _entered = span.enter();
+
         let mut interface = protocols::agent::Interfaces::new();
         let s = Arc::clone(&self.sandbox);
         let mut sandbox = s.lock().unwrap();
@@ -1023,11 +1131,16 @@ impl protocols::agent_ttrpc::AgentService for agentService {
 
         Ok(interface)
     }
+
     fn list_routes(
         &self,
         _ctx: &ttrpc::TtrpcContext,
         _req: protocols::agent::ListRoutesRequest,
     ) -> ttrpc::Result<Routes> {
+        let parent_span = self.get_span()?;
+        let span = info_span!(parent: parent_span, "list_routes");
+        let _entered = span.enter();
+
         let mut routes = protocols::agent::Routes::new();
         let s = Arc::clone(&self.sandbox);
         let mut sandbox = s.lock().unwrap();
@@ -1052,26 +1165,41 @@ impl protocols::agent_ttrpc::AgentService for agentService {
 
         Ok(routes)
     }
+
     fn start_tracing(
         &self,
         _ctx: &ttrpc::TtrpcContext,
         req: protocols::agent::StartTracingRequest,
     ) -> ttrpc::Result<Empty> {
+        let parent_span = self.get_span()?;
+        let span = info_span!(parent: parent_span, "start_tracing");
+        let _entered = span.enter();
+
         info!(sl!(), "start_tracing {:?} self.test={}", req, self.test);
         Ok(Empty::new())
     }
+
     fn stop_tracing(
         &self,
         _ctx: &ttrpc::TtrpcContext,
         _req: protocols::agent::StopTracingRequest,
     ) -> ttrpc::Result<Empty> {
+        let parent_span = self.get_span()?;
+        let span = info_span!(parent: parent_span, "stop_tracing");
+        let _entered = span.enter();
+
         Ok(Empty::new())
     }
+
     fn create_sandbox(
         &self,
         _ctx: &ttrpc::TtrpcContext,
         req: protocols::agent::CreateSandboxRequest,
     ) -> ttrpc::Result<Empty> {
+        let parent_span = self.get_span()?;
+        let span = info_span!(parent: parent_span, "create_sandbox");
+        let _entered = span.enter();
+
         {
             let sandbox = self.sandbox.clone();
             let mut s = sandbox.lock().unwrap();
@@ -1130,22 +1258,36 @@ impl protocols::agent_ttrpc::AgentService for agentService {
         _ctx: &ttrpc::TtrpcContext,
         _req: protocols::agent::DestroySandboxRequest,
     ) -> ttrpc::Result<Empty> {
+        let parent_span = self.get_span()?;
+        let span = info_span!(parent: parent_span, "destroy_sandbox");
+        let entered = span.enter();
+
         let s = Arc::clone(&self.sandbox);
         let mut sandbox = s.lock().unwrap();
         // destroy all containers, clean up, notify agent to exit
         // etc.
         sandbox.destroy().unwrap();
 
+        // Force span to end *before* the ttRPC server ends to avoid
+        // this thread from racing with the main thread and potentially
+        // failing to complete this final API call trace span.
+        drop(entered);
+
         sandbox.sender.as_ref().unwrap().send(1).unwrap();
         sandbox.sender = None;
 
         Ok(Empty::new())
     }
+
     fn add_arp_neighbors(
         &self,
         _ctx: &ttrpc::TtrpcContext,
         req: protocols::agent::AddARPNeighborsRequest,
     ) -> ttrpc::Result<Empty> {
+        let parent_span = self.get_span()?;
+        let span = info_span!(parent: parent_span, "add_arp_neighbors");
+        let _entered = span.enter();
+
         let neighs = req.neighbors.clone().unwrap().ARPNeighbors.into_vec();
 
         let s = Arc::clone(&self.sandbox);
@@ -1166,11 +1308,16 @@ impl protocols::agent_ttrpc::AgentService for agentService {
 
         Ok(Empty::new())
     }
+
     fn online_cpu_mem(
         &self,
         _ctx: &ttrpc::TtrpcContext,
         req: protocols::agent::OnlineCPUMemRequest,
     ) -> ttrpc::Result<Empty> {
+        let parent_span = self.get_span()?;
+        let span = info_span!(parent: parent_span, "online_cpu_mem");
+        let _entered = span.enter();
+
         // sleep 5 seconds for debug
         // thread::sleep(Duration::new(5, 0));
         let s = Arc::clone(&self.sandbox);
@@ -1185,11 +1332,16 @@ impl protocols::agent_ttrpc::AgentService for agentService {
 
         Ok(Empty::new())
     }
+
     fn reseed_random_dev(
         &self,
         _ctx: &ttrpc::TtrpcContext,
         req: protocols::agent::ReseedRandomDevRequest,
     ) -> ttrpc::Result<Empty> {
+        let parent_span = self.get_span()?;
+        let span = info_span!(parent: parent_span, "reseed_random_dev");
+        let _entered = span.enter();
+
         if let Err(e) = random::reseed_rng(req.data.as_slice()) {
             return Err(ttrpc::Error::RpcStatus(ttrpc::get_status(
                 ttrpc::Code::INTERNAL,
@@ -1199,11 +1351,16 @@ impl protocols::agent_ttrpc::AgentService for agentService {
 
         Ok(Empty::new())
     }
+
     fn get_guest_details(
         &self,
         _ctx: &ttrpc::TtrpcContext,
         req: protocols::agent::GuestDetailsRequest,
     ) -> ttrpc::Result<GuestDetailsResponse> {
+        let parent_span = self.get_span()?;
+        let span = info_span!(parent: parent_span, "get_guest_details");
+        let _entered = span.enter();
+
         info!(sl!(), "get guest details!");
         let mut resp = GuestDetailsResponse::new();
         // to get memory block size
@@ -1227,11 +1384,16 @@ impl protocols::agent_ttrpc::AgentService for agentService {
 
         Ok(resp)
     }
+
     fn mem_hotplug_by_probe(
         &self,
         _ctx: &ttrpc::TtrpcContext,
         req: protocols::agent::MemHotplugByProbeRequest,
     ) -> ttrpc::Result<Empty> {
+        let parent_span = self.get_span()?;
+        let span = info_span!(parent: parent_span, "mem_hotplug_by_probe");
+        let _entered = span.enter();
+
         if let Err(e) = do_mem_hotplug_by_probe(&req.memHotplugProbeAddr) {
             return Err(ttrpc::Error::RpcStatus(ttrpc::get_status(
                 ttrpc::Code::INTERNAL,
@@ -1241,11 +1403,16 @@ impl protocols::agent_ttrpc::AgentService for agentService {
 
         Ok(Empty::new())
     }
+
     fn set_guest_date_time(
         &self,
         _ctx: &ttrpc::TtrpcContext,
         req: protocols::agent::SetGuestDateTimeRequest,
     ) -> ttrpc::Result<Empty> {
+        let parent_span = self.get_span()?;
+        let span = info_span!(parent: parent_span, "set_guest_date_time");
+        let _entered = span.enter();
+
         if let Err(e) = do_set_guest_date_time(req.Sec, req.Usec) {
             return Err(ttrpc::Error::RpcStatus(ttrpc::get_status(
                 ttrpc::Code::INTERNAL,
@@ -1255,11 +1422,16 @@ impl protocols::agent_ttrpc::AgentService for agentService {
 
         Ok(Empty::new())
     }
+
     fn copy_file(
         &self,
         _ctx: &ttrpc::TtrpcContext,
         req: protocols::agent::CopyFileRequest,
     ) -> ttrpc::Result<Empty> {
+        let parent_span = self.get_span()?;
+        let span = info_span!(parent: parent_span, "copy_file");
+        let _entered = span.enter();
+
         if let Err(e) = do_copy_file(&req) {
             return Err(ttrpc::Error::RpcStatus(ttrpc::get_status(
                 ttrpc::Code::INTERNAL,
@@ -1302,6 +1474,7 @@ impl protocols::health_ttrpc::Health for healthService {
 
         Ok(resp)
     }
+
     fn version(
         &self,
         _ctx: &ttrpc::TtrpcContext,
@@ -1438,7 +1611,7 @@ fn find_process<'a>(
     Ok(p)
 }
 
-pub fn start<S: Into<String>>(s: Arc<Mutex<Sandbox>>, host: S, port: u16) -> ttrpc::Server {
+pub fn start<S: Into<String> + Debug>(s: Arc<Mutex<Sandbox>>, host: S, port: u16) -> ttrpc::Server {
     let agent_service = Box::new(agentService {
         sandbox: s,
         test: 1,

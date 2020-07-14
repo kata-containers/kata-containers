@@ -23,10 +23,12 @@ use slog::Logger;
 use std::collections::HashMap;
 use std::fs;
 use std::sync::mpsc::Sender;
+use tracing::{info_span, instrument, Span};
 
 #[derive(Debug)]
 pub struct Sandbox {
     pub logger: Logger,
+    pub span: Span,
     pub id: String,
     pub hostname: String,
     pub containers: HashMap<String, LinuxContainer>,
@@ -45,12 +47,16 @@ pub struct Sandbox {
 }
 
 impl Sandbox {
-    pub fn new(logger: &Logger) -> Result<Self> {
+    pub fn new(logger: &Logger, parent_span: Span) -> Result<Self> {
+        let span = info_span!(parent: parent_span, "Sandbox::new");
+        let _entered = span.enter();
+
         let fs_type = get_mount_fs_type("/")?;
         let logger = logger.new(o!("subsystem" => "sandbox"));
 
         Ok(Sandbox {
             logger: logger.clone(),
+            span: span.clone(),
             id: String::new(),
             hostname: String::new(),
             network: Network::new(),
@@ -77,6 +83,7 @@ impl Sandbox {
     //
     // It's assumed that caller is calling this method after
     // acquiring a lock on sandbox.
+    #[instrument]
     pub fn set_sandbox_storage(&mut self, path: &str) -> bool {
         match self.storages.get_mut(path) {
             None => {
@@ -99,6 +106,7 @@ impl Sandbox {
     //
     // It's assumed that caller is calling this method after
     // acquiring a lock on sandbox.
+    #[instrument]
     pub fn unset_sandbox_storage(&mut self, path: &str) -> Result<bool> {
         match self.storages.get_mut(path) {
             None => {
@@ -124,6 +132,7 @@ impl Sandbox {
     //
     // It's assumed that caller is calling this method after
     // acquiring a lock on sandbox.
+    #[instrument]
     pub fn remove_sandbox_storage(&self, path: &str) -> Result<()> {
         let mounts = vec![path.to_string()];
         remove_mounts(&mounts)?;
@@ -137,6 +146,7 @@ impl Sandbox {
     //
     // It's assumed that caller is calling this method after
     // acquiring a lock on sandbox.
+    #[instrument]
     pub fn unset_and_remove_sandbox_storage(&mut self, path: &str) -> Result<()> {
         match self.unset_sandbox_storage(path) {
             Ok(res) => {
@@ -159,6 +169,7 @@ impl Sandbox {
         self.hostname = hostname;
     }
 
+    #[instrument]
     pub fn setup_shared_namespaces(&mut self) -> Result<bool> {
         // Set up shared IPC namespace
         self.shared_ipcns = match Namespace::new(&self.logger).as_ipc().setup() {
@@ -189,6 +200,7 @@ impl Sandbox {
         Ok(true)
     }
 
+    #[instrument]
     pub fn add_container(&mut self, c: LinuxContainer) {
         self.containers.insert(c.id.clone(), c);
     }
@@ -217,6 +229,7 @@ impl Sandbox {
         Ok(())
     }
 
+    #[instrument]
     pub fn get_container(&mut self, id: &str) -> Option<&mut LinuxContainer> {
         self.containers.get_mut(id)
     }
@@ -231,6 +244,7 @@ impl Sandbox {
         None
     }
 
+    #[instrument]
     pub fn destroy(&mut self) -> Result<()> {
         for (_, ctr) in &mut self.containers {
             ctr.destroy()?;
@@ -238,6 +252,7 @@ impl Sandbox {
         Ok(())
     }
 
+    #[instrument]
     pub fn online_cpu_memory(&self, req: &OnlineCPUMemRequest) -> Result<()> {
         if req.nb_cpus > 0 {
             // online cpus
@@ -263,6 +278,7 @@ impl Sandbox {
     }
 }
 
+#[instrument]
 fn online_resources(logger: &Logger, path: &str, pattern: &str, num: i32) -> Result<i32> {
     let mut count = 0;
     let re = Regex::new(pattern)?;
@@ -296,10 +312,12 @@ fn online_resources(logger: &Logger, path: &str, pattern: &str, num: i32) -> Res
     Ok(0)
 }
 
+#[instrument]
 fn online_cpus(logger: &Logger, num: i32) -> Result<i32> {
     online_resources(logger, SYSFS_CPU_ONLINE_PATH, r"cpu[0-9]+", num)
 }
 
+#[instrument]
 fn online_memory(logger: &Logger) -> Result<()> {
     online_resources(logger, SYSFS_MEMORY_ONLINE_PATH, r"memory[0-9]+", -1)?;
     Ok(())
@@ -316,6 +334,7 @@ mod tests {
     use rustjail::specconv::CreateOpts;
     use slog::Logger;
     use tempfile::Builder;
+    use tracing::Span;
 
     fn bind_mount(src: &str, dst: &str, logger: &Logger) -> Result<(), rustjail::errors::Error> {
         let baremount = BareMount::new(src, dst, "bind", MsFlags::MS_BIND, "", &logger);
@@ -325,7 +344,7 @@ mod tests {
     #[test]
     fn set_sandbox_storage() {
         let logger = slog::Logger::root(slog::Discard, o!());
-        let mut s = Sandbox::new(&logger).unwrap();
+        let mut s = Sandbox::new(&logger, Span::none()).unwrap();
 
         let tmpdir = Builder::new().tempdir().unwrap();
         let tmpdir_path = tmpdir.path().to_str().unwrap();
@@ -361,7 +380,7 @@ mod tests {
         skip_if_not_root!();
 
         let logger = slog::Logger::root(slog::Discard, o!());
-        let s = Sandbox::new(&logger).unwrap();
+        let s = Sandbox::new(&logger, Span::none()).unwrap();
 
         let tmpdir = Builder::new().tempdir().unwrap();
         let tmpdir_path = tmpdir.path().to_str().unwrap();
@@ -418,7 +437,7 @@ mod tests {
         skip_if_not_root!();
 
         let logger = slog::Logger::root(slog::Discard, o!());
-        let mut s = Sandbox::new(&logger).unwrap();
+        let mut s = Sandbox::new(&logger, Span::none()).unwrap();
 
         // FIX: This test fails, not sure why yet.
         assert!(
@@ -467,7 +486,7 @@ mod tests {
     #[test]
     fn unset_sandbox_storage() {
         let logger = slog::Logger::root(slog::Discard, o!());
-        let mut s = Sandbox::new(&logger).unwrap();
+        let mut s = Sandbox::new(&logger, Span::none()).unwrap();
 
         let storage_path = "/tmp/testEphe";
 
@@ -551,7 +570,7 @@ mod tests {
     fn get_container_entry_exist() {
         skip_if_not_root!();
         let logger = slog::Logger::root(slog::Discard, o!());
-        let mut s = Sandbox::new(&logger).unwrap();
+        let mut s = Sandbox::new(&logger, Span::none()).unwrap();
         let linux_container = create_linuxcontainer();
 
         s.containers
@@ -563,7 +582,7 @@ mod tests {
     #[test]
     fn get_container_no_entry() {
         let logger = slog::Logger::root(slog::Discard, o!());
-        let mut s = Sandbox::new(&logger).unwrap();
+        let mut s = Sandbox::new(&logger, Span::none()).unwrap();
 
         let cnt = s.get_container("testContainerID");
         assert!(cnt.is_none());
@@ -573,7 +592,7 @@ mod tests {
     fn add_and_get_container() {
         skip_if_not_root!();
         let logger = slog::Logger::root(slog::Discard, o!());
-        let mut s = Sandbox::new(&logger).unwrap();
+        let mut s = Sandbox::new(&logger, Span::none()).unwrap();
         let linux_container = create_linuxcontainer();
 
         s.add_container(linux_container);
@@ -583,7 +602,7 @@ mod tests {
     fn update_shared_pidns() {
         skip_if_not_root!();
         let logger = slog::Logger::root(slog::Discard, o!());
-        let mut s = Sandbox::new(&logger).unwrap();
+        let mut s = Sandbox::new(&logger, Span::none()).unwrap();
         let test_pid = 9999;
 
         let mut linux_container = create_linuxcontainer();
