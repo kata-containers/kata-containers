@@ -25,7 +25,6 @@ extern crate scopeguard;
 
 #[macro_use]
 extern crate slog;
-#[macro_use]
 extern crate netlink;
 
 use nix::fcntl::{self, OFlag};
@@ -83,8 +82,6 @@ lazy_static! {
         Arc::new(RwLock::new(config::agentConfig::new()));
 }
 
-use std::mem::MaybeUninit;
-
 fn announce(logger: &Logger) {
     let commit = match env::var("VERSION_COMMIT") {
         Ok(s) => s,
@@ -117,7 +114,7 @@ fn main() -> Result<()> {
 
     // support vsock log
     let (rfd, wfd) = unistd::pipe2(OFlag::O_CLOEXEC)?;
-    let writer = unsafe { File::from_raw_fd(wfd) };
+    unsafe { File::from_raw_fd(wfd) };
 
     let agentConfig = AGENT_CONFIG.clone();
 
@@ -192,7 +189,7 @@ fn main() -> Result<()> {
     let shell_handle = if config.debug_console {
         let thread_logger = logger.clone();
 
-        thread::spawn(move || {
+        Some(thread::spawn(move || {
             let shells = shells.lock().unwrap();
             let result = setup_debug_console(shells.to_vec(), debug_console_vport);
             if result.is_err() {
@@ -200,9 +197,9 @@ fn main() -> Result<()> {
                 warn!(thread_logger, "failed to setup debug console";
                     "error" => format!("{}", result.unwrap_err()));
             }
-        })
+        }))
     } else {
-        unsafe { MaybeUninit::zeroed().assume_init() }
+        None
     };
 
     // Initialize unique sandbox structure.
@@ -248,8 +245,8 @@ fn main() -> Result<()> {
 
     let _ = log_handle.join();
 
-    if config.debug_console {
-        shell_handle.join().unwrap();
+    if let Some(shell) = shell_handle {
+        shell.join().unwrap();
     }
 
     let _ = fs::remove_file("/tmp/testagent");
