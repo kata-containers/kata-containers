@@ -333,15 +333,15 @@ impl Container for LinuxContainer {
     }
 }
 
-pub fn init_child() {
+pub fn init_child() -> Result<()> {
     let cwfd = std::env::var(CWFD_FD).unwrap().parse::<i32>().unwrap();
     let cfd_log = std::env::var(CLOG_FD).unwrap().parse::<i32>().unwrap();
     match do_init_child(cwfd) {
         Ok(_) => (),
         Err(e) => {
             log_child!(cfd_log, "child exit: {:?}", e);
-            write_sync(cwfd, SYNC_FAILED, format!("{:?}", e).as_str());
-            return;
+            write_sync(cwfd, SYNC_FAILED, format!("{:?}", e).as_str())?;
+            return Err(ErrorKind::ErrorCode(format!("child exit {}", e)).into());
         }
     }
 
@@ -475,11 +475,11 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
         if let Err(e) = sched::setns(fd, s) {
             if s == CloneFlags::CLONE_NEWUSER {
                 if e.as_errno().unwrap() != Errno::EINVAL {
-                    write_sync(cwfd, SYNC_FAILED, format!("{:?}", e).as_str());
+                    write_sync(cwfd, SYNC_FAILED, format!("{:?}", e).as_str())?;
                     return Err(e.into());
                 }
             } else {
-                write_sync(cwfd, SYNC_FAILED, format!("{:?}", e).as_str());
+                write_sync(cwfd, SYNC_FAILED, format!("{:?}", e).as_str())?;
                 return Err(e.into());
             }
         }
@@ -554,7 +554,7 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
 
     if guser.additional_gids.len() > 0 {
         setgroups(guser.additional_gids.as_slice()).map_err(|e| {
-            write_sync(
+            let _ = write_sync(
                 cwfd,
                 SYNC_FAILED,
                 format!("setgroups failed: {:?}", e).as_str(),

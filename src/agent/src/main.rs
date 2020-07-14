@@ -105,7 +105,7 @@ fn announce(logger: &Logger) {
 fn main() -> Result<()> {
     let args: Vec<String> = env::args().collect();
     if args.len() == 2 && args[1] == "init" {
-        rustjail::container::init_child();
+        rustjail::container::init_child()?;
         exit(0);
     }
 
