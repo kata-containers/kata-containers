@@ -23,6 +23,9 @@ COMMIT_MSG = $(if $(COMMIT),$(COMMIT),unknown)
 # Exported to allow cargo to see it
 export VERSION_COMMIT := $(if $(COMMIT),$(VERSION)-$(COMMIT),$(VERSION))
 
+# Deny any warning
+export RUSTFLAGS = -D warnings
+
 BUILD_TYPE = release
 
 # set proto file to generate
