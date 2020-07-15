@@ -90,36 +90,17 @@ cli "$@"
 declare -a pkgVersions
 # Package depedencies
 info "Requires:"
-pkgVersions=($(pkg_required_ver "kata_proxy"))
-declare -A PROXY_REQUIRED_VERSION
-PROXY_REQUIRED_VERSION["deb"]=${pkgVersions[0]}
-PROXY_REQUIRED_VERSION["rpm"]=${pkgVersions[1]}
-info "proxy ${PROXY_REQUIRED_VERSION[@]}"
-
-declare -A SHIM_REQUIRED_VERSION
-pkgVersions=($(pkg_required_ver "kata_shim"))
-SHIM_REQUIRED_VERSION["deb"]=${pkgVersions[0]}
-SHIM_REQUIRED_VERSION["rpm"]=${pkgVersions[1]}
-info "shim ${SHIM_REQUIRED_VERSION[@]}"
-
 declare -A KERNEL_REQUIRED_VERSION
 pkgVersions=($(pkg_required_ver "kernel"))
 KERNEL_REQUIRED_VERSION["deb"]=${pkgVersions[0]}
 KERNEL_REQUIRED_VERSION["rpm"]=${pkgVersions[1]}
 info "kata-linux-container ${KERNEL_REQUIRED_VERSION[@]}"
 
-declare -A KSM_THROTTLER_REQUIRED_VERSION
-pkgVersions=($(pkg_required_ver "kata_ksm_throttler"))
-KSM_THROTTLER_REQUIRED_VERSION["deb"]=${pkgVersions[0]}
-KSM_THROTTLER_REQUIRED_VERSION["rpm"]=${pkgVersions[1]}
-info "ksm-throttler ${KSM_THROTTLER_REQUIRED_VERSION[@]}"
-
 declare -A KATA_IMAGE_REQUIRED_VERSION
 pkgVersions=($(pkg_required_ver "kata_osbuilder"))
 KATA_IMAGE_REQUIRED_VERSION["deb"]=${pkgVersions[0]}
 KATA_IMAGE_REQUIRED_VERSION["rpm"]=${pkgVersions[1]}
 info "image ${KATA_IMAGE_REQUIRED_VERSION[@]}"
-
 
 declare -A KATA_QEMU_VANILLA_REQUIRED_VERSION
 pkgVersions=($(pkg_required_ver "qemu_vanilla"))
@@ -140,14 +121,6 @@ replace_list+=(
 	"HASH=$short_hashtag"
 	"RELEASE=$RELEASE"
 	"VERSION=$VERSION"
-	"kata_osbuilder_version=${KATA_IMAGE_REQUIRED_VERSION["rpm"]}"
-	"kata_osbuilder_version_release=${KATA_IMAGE_REQUIRED_VERSION["deb"]}"
-	"kata_proxy_version=${PROXY_REQUIRED_VERSION["rpm"]}"
-	"kata_proxy_version_release=${PROXY_REQUIRED_VERSION["deb"]}"
-	"kata_shim_version=${SHIM_REQUIRED_VERSION["rpm"]}"
-	"kata_shim_version_release=${SHIM_REQUIRED_VERSION["deb"]}"
-	"ksm_throttler_version=${KSM_THROTTLER_REQUIRED_VERSION["rpm"]}"
-	"ksm_throttler_version_release=${KSM_THROTTLER_REQUIRED_VERSION["deb"]}"
 	"linux_container_version=${KERNEL_REQUIRED_VERSION["rpm"]}"
 	"linux_container_version_release=${KERNEL_REQUIRED_VERSION["deb"]}"
 	"qemu_vanilla_version=${KATA_QEMU_VANILLA_REQUIRED_VERSION["rpm"]}"
