@@ -457,8 +457,6 @@ fn setup_debug_console(shells: Vec<String>, port: u32) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::fs::File;
-    use std::io::Write;
     use tempfile::tempdir;
 
     #[test]
