@@ -18,7 +18,9 @@ import (
 	"testing"
 
 	ktu "github.com/kata-containers/kata-containers/src/runtime/pkg/katatestutils"
-	vcTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/types"
+	pbTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
+
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/vishvananda/netlink"
@@ -187,24 +189,24 @@ func TestConvertInterface(t *testing.T) {
 
 	linkType := "link_type_test"
 
-	expected := vcTypes.Interface{
+	expected := pbTypes.Interface{
 		Device: testIfaceName,
 		Name:   testIfaceName,
 		Mtu:    uint64(testMTU),
 		HwAddr: testHwAddr,
-		IPAddresses: []*vcTypes.IPAddress{
+		IPAddresses: []*pbTypes.IPAddress{
 			{
-				Family:  netlink.FAMILY_V4,
+				Family:  utils.ConvertNetlinkFamily(netlink.FAMILY_V4),
 				Address: testIPAddress,
 				Mask:    "0",
 			},
 			{
-				Family:  netlink.FAMILY_V6,
+				Family:  utils.ConvertNetlinkFamily(netlink.FAMILY_V6),
 				Address: testIP6Address,
 				Mask:    "0",
 			},
 		},
-		LinkType: linkType,
+		Type: linkType,
 	}
 
 	got := convertInterface(linkAttrs, linkType, addrs)
@@ -239,7 +241,7 @@ func TestConvertRoutes(t *testing.T) {
 		},
 	}
 
-	expected := []vcTypes.Route{
+	expected := []pbTypes.Route{
 		{
 			Dest:    testIPAddressWithMask,
 			Gateway: testIPAddress,
@@ -279,7 +281,7 @@ func testSetupNetwork(t *testing.T) testTeardownNetwork {
 	}
 }
 
-func testCreateDummyNetwork(t *testing.T, handler *netlink.Handle) (int, vcTypes.Interface) {
+func testCreateDummyNetwork(t *testing.T, handler *netlink.Handle) (int, pbTypes.Interface) {
 	hwAddr, err := net.ParseMAC(testHwAddr)
 	assert.Nil(t, err)
 
@@ -303,7 +305,7 @@ func testCreateDummyNetwork(t *testing.T, handler *netlink.Handle) (int, vcTypes
 	addrs, err := handler.AddrList(link, netlinkFamily)
 	assert.Nil(t, err)
 
-	var ipAddrs []*vcTypes.IPAddress
+	var ipAddrs []*pbTypes.IPAddress
 
 	// Scan addresses for ipv6 link local address which is automatically assigned
 	for _, addr := range addrs {
@@ -313,26 +315,26 @@ func testCreateDummyNetwork(t *testing.T, handler *netlink.Handle) (int, vcTypes
 
 		netMask, _ := addr.Mask.Size()
 
-		ipAddr := &vcTypes.IPAddress{
+		ipAddr := &pbTypes.IPAddress{
 			Address: addr.IP.String(),
 			Mask:    fmt.Sprintf("%d", netMask),
 		}
 
 		if addr.IP.To4() != nil {
-			ipAddr.Family = netlink.FAMILY_V4
+			ipAddr.Family = utils.ConvertNetlinkFamily(netlink.FAMILY_V4)
 		} else {
-			ipAddr.Family = netlink.FAMILY_V6
+			ipAddr.Family = utils.ConvertNetlinkFamily(netlink.FAMILY_V6)
 		}
 
 		ipAddrs = append(ipAddrs, ipAddr)
 	}
 
-	iface := vcTypes.Interface{
+	iface := pbTypes.Interface{
 		Device:      testIfaceName,
 		Name:        testIfaceName,
 		Mtu:         uint64(testMTU),
 		HwAddr:      testHwAddr,
-		LinkType:    link.Type(),
+		Type:        link.Type(),
 		IPAddresses: ipAddrs,
 	}
 
@@ -351,7 +353,7 @@ func TestScanNetwork(t *testing.T) {
 	idx, expected := testCreateDummyNetwork(t, handler)
 
 	n := &netmon{
-		netIfaces:  make(map[int]vcTypes.Interface),
+		netIfaces:  make(map[int]pbTypes.Interface),
 		netHandler: handler,
 	}
 
@@ -362,9 +364,9 @@ func TestScanNetwork(t *testing.T) {
 }
 
 func TestStoreDataToSend(t *testing.T) {
-	var got vcTypes.Interface
+	var got pbTypes.Interface
 
-	expected := vcTypes.Interface{
+	expected := pbTypes.Interface{
 		Device: testIfaceName,
 		Name:   testIfaceName,
 		Mtu:    uint64(testMTU),
@@ -461,15 +463,15 @@ func TestActionsCLI(t *testing.T) {
 	defer os.RemoveAll(testStorageParentPath)
 
 	// Test addInterfaceCLI
-	err = n.addInterfaceCLI(vcTypes.Interface{})
+	err = n.addInterfaceCLI(pbTypes.Interface{})
 	assert.Nil(t, err)
 
 	// Test delInterfaceCLI
-	err = n.delInterfaceCLI(vcTypes.Interface{})
+	err = n.delInterfaceCLI(pbTypes.Interface{})
 	assert.Nil(t, err)
 
 	// Test updateRoutesCLI
-	err = n.updateRoutesCLI([]vcTypes.Route{})
+	err = n.updateRoutesCLI([]pbTypes.Route{})
 	assert.Nil(t, err)
 
 	tearDownNetworkCb := testSetupNetwork(t)
@@ -527,8 +529,8 @@ func TestHandleRTMNewLink(t *testing.T) {
 	assert.Nil(t, err)
 
 	// Interface already exist in list
-	n.netIfaces = make(map[int]vcTypes.Interface)
-	n.netIfaces[testIfaceIndex] = vcTypes.Interface{}
+	n.netIfaces = make(map[int]pbTypes.Interface)
+	n.netIfaces[testIfaceIndex] = pbTypes.Interface{}
 	ev = netlink.LinkUpdate{
 		Link: &netlink.Dummy{
 			LinkAttrs: netlink.LinkAttrs{
@@ -541,7 +543,7 @@ func TestHandleRTMNewLink(t *testing.T) {
 	assert.Nil(t, err)
 
 	// Flags are not up and running
-	n.netIfaces = make(map[int]vcTypes.Interface)
+	n.netIfaces = make(map[int]pbTypes.Interface)
 	ev = netlink.LinkUpdate{
 		Link: &netlink.Dummy{
 			LinkAttrs: netlink.LinkAttrs{
@@ -554,7 +556,7 @@ func TestHandleRTMNewLink(t *testing.T) {
 	assert.Nil(t, err)
 
 	// Invalid link
-	n.netIfaces = make(map[int]vcTypes.Interface)
+	n.netIfaces = make(map[int]pbTypes.Interface)
 	ev = netlink.LinkUpdate{
 		Link: &netlink.Dummy{
 			LinkAttrs: netlink.LinkAttrs{
@@ -595,7 +597,7 @@ func TestHandleRTMDelLink(t *testing.T) {
 	assert.Nil(t, err)
 
 	// Interface does not exist in list
-	n.netIfaces = make(map[int]vcTypes.Interface)
+	n.netIfaces = make(map[int]pbTypes.Interface)
 	ev = netlink.LinkUpdate{
 		Link: &netlink.Dummy{
 			LinkAttrs: netlink.LinkAttrs{
@@ -610,7 +612,7 @@ func TestHandleRTMDelLink(t *testing.T) {
 
 func TestHandleRTMNewRouteIfaceNotFound(t *testing.T) {
 	n := &netmon{
-		netIfaces: make(map[int]vcTypes.Interface),
+		netIfaces: make(map[int]pbTypes.Interface),
 	}
 
 	err := n.handleRTMNewRoute(netlink.RouteUpdate{})

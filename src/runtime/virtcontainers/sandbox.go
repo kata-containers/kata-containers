@@ -32,6 +32,7 @@ import (
 	exp "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/experimental"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist"
 	persistapi "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist/api"
+	pbTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols/grpc"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/annotations"
 	vccgroups "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/cgroups"
@@ -846,7 +847,7 @@ func (s *Sandbox) removeNetwork() error {
 	return s.network.Remove(s.ctx, &s.networkNS, s.hypervisor)
 }
 
-func (s *Sandbox) generateNetInfo(inf *vcTypes.Interface) (NetworkInfo, error) {
+func (s *Sandbox) generateNetInfo(inf *pbTypes.Interface) (NetworkInfo, error) {
 	hw, err := net.ParseMAC(inf.HwAddr)
 	if err != nil {
 		return NetworkInfo{}, err
@@ -870,14 +871,14 @@ func (s *Sandbox) generateNetInfo(inf *vcTypes.Interface) (NetworkInfo, error) {
 				HardwareAddr: hw,
 				MTU:          int(inf.Mtu),
 			},
-			Type: inf.LinkType,
+			Type: inf.Type,
 		},
 		Addrs: addrs,
 	}, nil
 }
 
 // AddInterface adds new nic to the sandbox.
-func (s *Sandbox) AddInterface(inf *vcTypes.Interface) (*vcTypes.Interface, error) {
+func (s *Sandbox) AddInterface(inf *pbTypes.Interface) (*pbTypes.Interface, error) {
 	netInfo, err := s.generateNetInfo(inf)
 	if err != nil {
 		return nil, err
@@ -908,7 +909,7 @@ func (s *Sandbox) AddInterface(inf *vcTypes.Interface) (*vcTypes.Interface, erro
 }
 
 // RemoveInterface removes a nic of the sandbox.
-func (s *Sandbox) RemoveInterface(inf *vcTypes.Interface) (*vcTypes.Interface, error) {
+func (s *Sandbox) RemoveInterface(inf *pbTypes.Interface) (*pbTypes.Interface, error) {
 	for i, endpoint := range s.networkNS.Endpoints {
 		if endpoint.HardwareAddr() == inf.HwAddr {
 			s.Logger().WithField("endpoint-type", endpoint.Type()).Info("Hot detaching endpoint")
@@ -928,17 +929,17 @@ func (s *Sandbox) RemoveInterface(inf *vcTypes.Interface) (*vcTypes.Interface, e
 }
 
 // ListInterfaces lists all nics and their configurations in the sandbox.
-func (s *Sandbox) ListInterfaces() ([]*vcTypes.Interface, error) {
+func (s *Sandbox) ListInterfaces() ([]*pbTypes.Interface, error) {
 	return s.agent.listInterfaces()
 }
 
 // UpdateRoutes updates the sandbox route table (e.g. for portmapping support).
-func (s *Sandbox) UpdateRoutes(routes []*vcTypes.Route) ([]*vcTypes.Route, error) {
+func (s *Sandbox) UpdateRoutes(routes []*pbTypes.Route) ([]*pbTypes.Route, error) {
 	return s.agent.updateRoutes(routes)
 }
 
 // ListRoutes lists all routes and their configurations in the sandbox.
-func (s *Sandbox) ListRoutes() ([]*vcTypes.Route, error) {
+func (s *Sandbox) ListRoutes() ([]*pbTypes.Route, error) {
 	return s.agent.listRoutes()
 }
 

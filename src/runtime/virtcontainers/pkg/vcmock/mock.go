@@ -23,7 +23,7 @@ import (
 	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/api"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
-	vcTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/types"
+	pbTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/sirupsen/logrus"
@@ -246,7 +246,7 @@ func (m *VCMock) AddDevice(ctx context.Context, sandboxID string, info config.De
 }
 
 // AddInterface implements the VC function of the same name.
-func (m *VCMock) AddInterface(ctx context.Context, sandboxID string, inf *vcTypes.Interface) (*vcTypes.Interface, error) {
+func (m *VCMock) AddInterface(ctx context.Context, sandboxID string, inf *pbTypes.Interface) (*pbTypes.Interface, error) {
 	if m.AddInterfaceFunc != nil {
 		return m.AddInterfaceFunc(ctx, sandboxID, inf)
 	}
@@ -255,7 +255,7 @@ func (m *VCMock) AddInterface(ctx context.Context, sandboxID string, inf *vcType
 }
 
 // RemoveInterface implements the VC function of the same name.
-func (m *VCMock) RemoveInterface(ctx context.Context, sandboxID string, inf *vcTypes.Interface) (*vcTypes.Interface, error) {
+func (m *VCMock) RemoveInterface(ctx context.Context, sandboxID string, inf *pbTypes.Interface) (*pbTypes.Interface, error) {
 	if m.RemoveInterfaceFunc != nil {
 		return m.RemoveInterfaceFunc(ctx, sandboxID, inf)
 	}
@@ -264,7 +264,7 @@ func (m *VCMock) RemoveInterface(ctx context.Context, sandboxID string, inf *vcT
 }
 
 // ListInterfaces implements the VC function of the same name.
-func (m *VCMock) ListInterfaces(ctx context.Context, sandboxID string) ([]*vcTypes.Interface, error) {
+func (m *VCMock) ListInterfaces(ctx context.Context, sandboxID string) ([]*pbTypes.Interface, error) {
 	if m.ListInterfacesFunc != nil {
 		return m.ListInterfacesFunc(ctx, sandboxID)
 	}
@@ -273,7 +273,7 @@ func (m *VCMock) ListInterfaces(ctx context.Context, sandboxID string) ([]*vcTyp
 }
 
 // UpdateRoutes implements the VC function of the same name.
-func (m *VCMock) UpdateRoutes(ctx context.Context, sandboxID string, routes []*vcTypes.Route) ([]*vcTypes.Route, error) {
+func (m *VCMock) UpdateRoutes(ctx context.Context, sandboxID string, routes []*pbTypes.Route) ([]*pbTypes.Route, error) {
 	if m.UpdateRoutesFunc != nil {
 		return m.UpdateRoutesFunc(ctx, sandboxID, routes)
 	}
@@ -282,7 +282,7 @@ func (m *VCMock) UpdateRoutes(ctx context.Context, sandboxID string, routes []*v
 }
 
 // ListRoutes implements the VC function of the same name.
-func (m *VCMock) ListRoutes(ctx context.Context, sandboxID string) ([]*vcTypes.Route, error) {
+func (m *VCMock) ListRoutes(ctx context.Context, sandboxID string) ([]*pbTypes.Route, error) {
 	if m.ListRoutesFunc != nil {
 		return m.ListRoutesFunc(ctx, sandboxID)
 	}
