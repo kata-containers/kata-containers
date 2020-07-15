@@ -79,13 +79,14 @@ There are several kinds of Kata configurations and they are listed below.
 # CRI Configuration
 
 In case of CRI-O, all annotations specified in the pod spec are passed down to Kata.
+
 For containerd, annotations specified in the pod spec are passed down to Kata
-starting with version `1.3.0`. Additionally, extra configuration is needed for containerd,
-by providing a `pod_annotations` field in the containerd config file.  The `pod_annotations`
-field is a list of annotations that can be passed down to Kata as OCI annotations. 
-It supports golang match patterns. Since annotations supported by Kata follow the pattern
-`io.katacontainers.*`, the following configuration would work for passing annotations to 
-Kata from containerd:
+starting with version `1.3.0` of containerd. Additionally, extra configuration is
+needed for containerd, by providing a `pod_annotations` field in the containerd config
+file.  The `pod_annotations` field is a list of annotations that can be passed down to
+Kata as OCI annotations. It supports golang match patterns. Since annotations supported
+by Kata follow the pattern `io.katacontainers.*`, the following configuration would work
+for passing annotations to Kata from containerd:
 
 ```
 $ cat /etc/containerd/config
