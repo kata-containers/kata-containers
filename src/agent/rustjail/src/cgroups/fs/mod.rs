@@ -49,6 +49,11 @@ pub trait Subsystem {
     fn set(&self, _dir: &str, _r: &LinuxResources, _update: bool) -> Result<()> {
         Ok(())
     }
+
+    fn apply(&self, path: &str, pid: pid_t) -> Result<()> {
+        write_file(path, CGROUP_PROCS, pid)?;
+        Ok(())
+    }
 }
 
 pub const WILDCARD: i64 = -1;
@@ -307,7 +312,8 @@ where
     T: ToString,
 {
     let p = format!("{}/{}", dir, file);
-    fs::write(p.as_str(), v.to_string().as_bytes())?;
+    fs::write(p.as_str(), v.to_string().as_bytes())
+        .chain_err(|| format!("couldn't write to file: {:?}", p))?;
     Ok(())
 }
 
@@ -1122,22 +1128,25 @@ impl Subsystem for Named {
     }
 }
 
-fn get_subsystem(name: &str) -> Result<Box<dyn Subsystem>> {
+fn get_subsystem(name: &str) -> Option<Box<dyn Subsystem>> {
     match name {
-        "cpuset" => Ok(Box::new(CpuSet())),
-        "cpu" => Ok(Box::new(Cpu())),
-        "devices" => Ok(Box::new(Devices())),
-        "memory" => Ok(Box::new(Memory())),
-        "cpuacct" => Ok(Box::new(CpuAcct())),
-        "pids" => Ok(Box::new(Pids())),
-        "blkio" => Ok(Box::new(Blkio())),
-        "hugetlb" => Ok(Box::new(HugeTLB())),
-        "net_cls" => Ok(Box::new(NetCls())),
-        "net_prio" => Ok(Box::new(NetPrio())),
-        "perf_event" => Ok(Box::new(PerfEvent())),
-        "freezer" => Ok(Box::new(Freezer())),
-        "name=systemd" => Ok(Box::new(Named())),
-        _ => Err(nix::Error::Sys(Errno::EINVAL).into()),
+        "cpuset" => Some(Box::new(CpuSet())),
+        "cpu" => Some(Box::new(Cpu())),
+        "devices" => Some(Box::new(Devices())),
+        "memory" => Some(Box::new(Memory())),
+        "cpuacct" => Some(Box::new(CpuAcct())),
+        "pids" => Some(Box::new(Pids())),
+        "blkio" => Some(Box::new(Blkio())),
+        "hugetlb" => Some(Box::new(HugeTLB())),
+        "net_cls" => Some(Box::new(NetCls())),
+        "net_prio" => Some(Box::new(NetPrio())),
+        "perf_event" => Some(Box::new(PerfEvent())),
+        "freezer" => Some(Box::new(Freezer())),
+        "name=systemd" => Some(Box::new(Named())),
+        _ => {
+            info!(sl!(), "Found unexpected cgroup"; "cgroup" => name);
+            None
+        }
     }
 }
 
@@ -1242,7 +1251,9 @@ pub const FROZEN: &'static str = "FROZEN";
 impl CgroupManager for Manager {
     fn apply(&self, pid: pid_t) -> Result<()> {
         for (key, value) in &self.paths {
-            apply(value, pid)?;
+            if let Some(sub) = get_subsystem(key) {
+                sub.apply(value, pid)?;
+            }
         }
 
         Ok(())
@@ -1251,8 +1262,9 @@ impl CgroupManager for Manager {
     fn set(&self, spec: &LinuxResources, update: bool) -> Result<()> {
         for (key, value) in &self.paths {
             let _ = fs::create_dir_all(value);
-            let sub = get_subsystem(key)?;
-            sub.set(value, spec, update)?;
+            if let Some(sub) = get_subsystem(key) {
+                sub.set(value, spec, update)?;
+            }
         }
 
         Ok(())
