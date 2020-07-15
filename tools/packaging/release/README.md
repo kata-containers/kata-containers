@@ -31,37 +31,24 @@ $ ./update-repository-version.sh -h
 
 ### Update Kata projects to a new version
 
-Kata Containers is divided into multiple projects. With each release, all
-project versions are updated to keep the version consistent.
-
-To update all versions for all projects, use the following:
+To update project version for Kata Containers, use the following:
 
 ```bash
 $ make bump-kata-version NEW_VERSION=<new-version>
 ```
 
 The makefile target `bump-kata-version` creates a GitHub pull request in the
-Kata repositories. These pull requests are tested by the Kata CI to ensure the
+kata-containers repository. The pull request is tested by the Kata CI to ensure the
 entire project is working prior to the release. Next, the PR is approved and
 merged by Kata Containers members.
 
 ### `tag_repos.sh`
 
-After all the Kata repositories are updated with a new version, they need to be
+After Kata Containers repository is updated with a new version, it needs to be
 tagged.
 
-The `tag_repos.sh` script is used to create tags for the Kata Containers
-repositories. This script ensures that all the repositories are in the same
-version (by checking the `VERSION` file).
-
+The `tag_repos.sh` script is used to create tags for the Kata Containers repository.
 The script creates an **annotated tag** for the new release version for the
 following repositories:
 
-- agent
-- proxy
-- runtime
-- shim
-- throttler
-
-The script also tags the tests and osbuilder repositories to make it clear which
-versions of these supporting repositories are used for the release.
+- kata-containers

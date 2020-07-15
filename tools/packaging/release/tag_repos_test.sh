@@ -16,10 +16,10 @@ echo "Check tag_repos.sh -h option"
 ./release/tag_repos.sh -h | grep Usage
 
 echo "Check tag_repos.sh status"
-./release/tag_repos.sh status | grep runtime
+./release/tag_repos.sh status | grep kata-containers
 
 echo "Check tag_repos.sh pre-release"
-./release/tag_repos.sh pre-release $(curl -sL https://raw.githubusercontent.com/kata-containers/runtime/master/VERSION) | grep "Not checking runtime"
+./release/tag_repos.sh pre-release $(curl -sL https://raw.githubusercontent.com/kata-containers/kata-containers/2.0-dev/VERSION) | grep "Not checking runtime"
 
 echo "Check tag_repos.sh pre-release with invalid information"
 ./release/tag_repos.sh pre-release 1000000 | grep "ERROR" || true
