@@ -22,7 +22,9 @@ import (
 	"time"
 
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/signals"
-	vcTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/types"
+	pbTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
+
 	"github.com/sirupsen/logrus"
 	lSyslog "github.com/sirupsen/logrus/hooks/syslog"
 	"github.com/vishvananda/netlink"
@@ -70,7 +72,7 @@ type netmon struct {
 	storagePath string
 	sharedFile  string
 
-	netIfaces map[int]vcTypes.Interface
+	netIfaces map[int]pbTypes.Interface
 
 	linkUpdateCh chan netlink.LinkUpdate
 	linkDoneCh   chan struct{}
@@ -151,7 +153,7 @@ func newNetmon(params netmonParams) (*netmon, error) {
 		netmonParams: params,
 		storagePath:  filepath.Join(storageParentPath, params.sandboxID),
 		sharedFile:   filepath.Join(storageParentPath, params.sandboxID, sharedFile),
-		netIfaces:    make(map[int]vcTypes.Interface),
+		netIfaces:    make(map[int]pbTypes.Interface),
 		linkUpdateCh: make(chan netlink.LinkUpdate),
 		linkDoneCh:   make(chan struct{}),
 		rtUpdateCh:   make(chan netlink.RouteUpdate),
@@ -259,13 +261,13 @@ func (n *netmon) listenNetlinkEvents() error {
 // convertInterface converts a link and its IP addresses as defined by netlink
 // package, into the Interface structure format expected by kata-runtime to
 // describe an interface and its associated IP addresses.
-func convertInterface(linkAttrs *netlink.LinkAttrs, linkType string, addrs []netlink.Addr) vcTypes.Interface {
+func convertInterface(linkAttrs *netlink.LinkAttrs, linkType string, addrs []netlink.Addr) pbTypes.Interface {
 	if linkAttrs == nil {
 		netmonLog.Warn("Link attributes are nil")
-		return vcTypes.Interface{}
+		return pbTypes.Interface{}
 	}
 
-	var ipAddrs []*vcTypes.IPAddress
+	var ipAddrs []*pbTypes.IPAddress
 
 	for _, addr := range addrs {
 		if addr.IPNet == nil {
@@ -274,27 +276,27 @@ func convertInterface(linkAttrs *netlink.LinkAttrs, linkType string, addrs []net
 
 		netMask, _ := addr.Mask.Size()
 
-		ipAddr := &vcTypes.IPAddress{
+		ipAddr := &pbTypes.IPAddress{
 			Address: addr.IP.String(),
 			Mask:    fmt.Sprintf("%d", netMask),
 		}
 
 		if addr.IP.To4() != nil {
-			ipAddr.Family = netlink.FAMILY_V4
+			ipAddr.Family = utils.ConvertNetlinkFamily(netlink.FAMILY_V4)
 		} else {
-			ipAddr.Family = netlink.FAMILY_V6
+			ipAddr.Family = utils.ConvertNetlinkFamily(netlink.FAMILY_V6)
 		}
 
 		ipAddrs = append(ipAddrs, ipAddr)
 	}
 
-	iface := vcTypes.Interface{
+	iface := pbTypes.Interface{
 		Device:      linkAttrs.Name,
 		Name:        linkAttrs.Name,
 		IPAddresses: ipAddrs,
 		Mtu:         uint64(linkAttrs.MTU),
 		HwAddr:      linkAttrs.HardwareAddr.String(),
-		LinkType:    linkType,
+		Type:        linkType,
 	}
 
 	netmonLog.WithField("interface", iface).Debug("Interface converted")
@@ -305,8 +307,8 @@ func convertInterface(linkAttrs *netlink.LinkAttrs, linkType string, addrs []net
 // convertRoutes converts a list of routes as defined by netlink package,
 // into a list of Route structure format expected by kata-runtime to
 // describe a set of routes.
-func convertRoutes(netRoutes []netlink.Route) []vcTypes.Route {
-	var routes []vcTypes.Route
+func convertRoutes(netRoutes []netlink.Route) []pbTypes.Route {
+	var routes []pbTypes.Route
 
 	for _, netRoute := range netRoutes {
 		dst := ""
@@ -348,7 +350,7 @@ func convertRoutes(netRoutes []netlink.Route) []vcTypes.Route {
 			dev = iface.Name
 		}
 
-		route := vcTypes.Route{
+		route := pbTypes.Route{
 			Dest:    dst,
 			Gateway: gw,
 			Device:  dev,
@@ -420,7 +422,7 @@ func (n *netmon) execKataCmd(subCmd string) error {
 	return os.Remove(n.sharedFile)
 }
 
-func (n *netmon) addInterfaceCLI(iface vcTypes.Interface) error {
+func (n *netmon) addInterfaceCLI(iface pbTypes.Interface) error {
 	if err := n.storeDataToSend(iface); err != nil {
 		return err
 	}
@@ -428,7 +430,7 @@ func (n *netmon) addInterfaceCLI(iface vcTypes.Interface) error {
 	return n.execKataCmd(kataCLIAddIfaceCmd)
 }
 
-func (n *netmon) delInterfaceCLI(iface vcTypes.Interface) error {
+func (n *netmon) delInterfaceCLI(iface pbTypes.Interface) error {
 	if err := n.storeDataToSend(iface); err != nil {
 		return err
 	}
@@ -436,7 +438,7 @@ func (n *netmon) delInterfaceCLI(iface vcTypes.Interface) error {
 	return n.execKataCmd(kataCLIDelIfaceCmd)
 }
 
-func (n *netmon) updateRoutesCLI(routes []vcTypes.Route) error {
+func (n *netmon) updateRoutesCLI(routes []pbTypes.Route) error {
 	if err := n.storeDataToSend(routes); err != nil {
 		return err
 	}

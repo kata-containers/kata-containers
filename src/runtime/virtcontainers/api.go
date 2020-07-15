@@ -14,6 +14,7 @@ import (
 	deviceApi "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/api"
 	deviceConfig "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist"
+	pbTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/cgroups"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/compatoci"
 	vcTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/types"
@@ -798,7 +799,7 @@ func AddDevice(ctx context.Context, sandboxID string, info deviceConfig.DeviceIn
 	return s.AddDevice(info)
 }
 
-func toggleInterface(ctx context.Context, sandboxID string, inf *vcTypes.Interface, add bool) (*vcTypes.Interface, error) {
+func toggleInterface(ctx context.Context, sandboxID string, inf *pbTypes.Interface, add bool) (*pbTypes.Interface, error) {
 	if sandboxID == "" {
 		return nil, vcTypes.ErrNeedSandboxID
 	}
@@ -822,7 +823,7 @@ func toggleInterface(ctx context.Context, sandboxID string, inf *vcTypes.Interfa
 }
 
 // AddInterface is the virtcontainers add interface entry point.
-func AddInterface(ctx context.Context, sandboxID string, inf *vcTypes.Interface) (*vcTypes.Interface, error) {
+func AddInterface(ctx context.Context, sandboxID string, inf *pbTypes.Interface) (*pbTypes.Interface, error) {
 	span, ctx := trace(ctx, "AddInterface")
 	defer span.Finish()
 
@@ -830,7 +831,7 @@ func AddInterface(ctx context.Context, sandboxID string, inf *vcTypes.Interface)
 }
 
 // RemoveInterface is the virtcontainers remove interface entry point.
-func RemoveInterface(ctx context.Context, sandboxID string, inf *vcTypes.Interface) (*vcTypes.Interface, error) {
+func RemoveInterface(ctx context.Context, sandboxID string, inf *pbTypes.Interface) (*pbTypes.Interface, error) {
 	span, ctx := trace(ctx, "RemoveInterface")
 	defer span.Finish()
 
@@ -838,7 +839,7 @@ func RemoveInterface(ctx context.Context, sandboxID string, inf *vcTypes.Interfa
 }
 
 // ListInterfaces is the virtcontainers list interfaces entry point.
-func ListInterfaces(ctx context.Context, sandboxID string) ([]*vcTypes.Interface, error) {
+func ListInterfaces(ctx context.Context, sandboxID string) ([]*pbTypes.Interface, error) {
 	span, ctx := trace(ctx, "ListInterfaces")
 	defer span.Finish()
 
@@ -861,7 +862,7 @@ func ListInterfaces(ctx context.Context, sandboxID string) ([]*vcTypes.Interface
 }
 
 // UpdateRoutes is the virtcontainers update routes entry point.
-func UpdateRoutes(ctx context.Context, sandboxID string, routes []*vcTypes.Route) ([]*vcTypes.Route, error) {
+func UpdateRoutes(ctx context.Context, sandboxID string, routes []*pbTypes.Route) ([]*pbTypes.Route, error) {
 	span, ctx := trace(ctx, "UpdateRoutes")
 	defer span.Finish()
 
@@ -884,7 +885,7 @@ func UpdateRoutes(ctx context.Context, sandboxID string, routes []*vcTypes.Route
 }
 
 // ListRoutes is the virtcontainers list routes entry point.
-func ListRoutes(ctx context.Context, sandboxID string) ([]*vcTypes.Route, error) {
+func ListRoutes(ctx context.Context, sandboxID string) ([]*pbTypes.Route, error) {
 	span, ctx := trace(ctx, "ListRoutes")
 	defer span.Finish()
 

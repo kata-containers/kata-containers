@@ -14,7 +14,8 @@ import (
 
 	"github.com/containernetworking/plugins/pkg/ns"
 	ktu "github.com/kata-containers/kata-containers/src/runtime/pkg/katatestutils"
-	vcTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/types"
+	pbTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
 	"github.com/stretchr/testify/assert"
 	"github.com/vishvananda/netlink"
 )
@@ -96,29 +97,29 @@ func TestGenerateInterfacesAndRoutes(t *testing.T) {
 	//
 	// Build expected results:
 	//
-	expectedAddresses := []*vcTypes.IPAddress{
-		{Family: netlink.FAMILY_V4, Address: "172.17.0.2", Mask: "16"},
-		{Family: netlink.FAMILY_V4, Address: "182.17.0.2", Mask: "16"},
-		{Family: netlink.FAMILY_V6, Address: "2001:db8:1::242:ac11:2", Mask: "64"},
+	expectedAddresses := []*pbTypes.IPAddress{
+		{Family: utils.ConvertNetlinkFamily(netlink.FAMILY_V4), Address: "172.17.0.2", Mask: "16"},
+		{Family: utils.ConvertNetlinkFamily(netlink.FAMILY_V4), Address: "182.17.0.2", Mask: "16"},
+		{Family: utils.ConvertNetlinkFamily(netlink.FAMILY_V6), Address: "2001:db8:1::242:ac11:2", Mask: "64"},
 	}
 
-	expectedInterfaces := []*vcTypes.Interface{
+	expectedInterfaces := []*pbTypes.Interface{
 		{Device: "eth0", Name: "eth0", IPAddresses: expectedAddresses, Mtu: 1500, HwAddr: "02:00:ca:fe:00:04"},
 	}
 
-	expectedRoutes := []*vcTypes.Route{
+	expectedRoutes := []*pbTypes.Route{
 		{Dest: "", Gateway: "172.17.0.1", Device: "eth0", Source: "", Scope: uint32(254)},
 		{Dest: "172.17.0.0/16", Gateway: "172.17.0.1", Device: "eth0", Source: "172.17.0.2"},
 		{Dest: "2001:db8:1::/64", Gateway: "", Device: "eth0", Source: ""},
 		{Dest: "", Gateway: "2001:db8:1::1", Device: "eth0", Source: ""},
 	}
 
-	expectedNeighs := []*vcTypes.ARPNeighbor{
+	expectedNeighs := []*pbTypes.ARPNeighbor{
 		{
 			Device:      "eth0",
 			State:       netlink.NUD_PERMANENT,
-			LLAddr:      "6a:92:3a:59:70:aa",
-			ToIPAddress: &vcTypes.IPAddress{Address: "192.168.0.101", Family: netlink.FAMILY_V4},
+			Lladdr:      "6a:92:3a:59:70:aa",
+			ToIPAddress: &pbTypes.IPAddress{Address: "192.168.0.101", Family: utils.ConvertNetlinkFamily(netlink.FAMILY_V4)},
 		},
 	}
 

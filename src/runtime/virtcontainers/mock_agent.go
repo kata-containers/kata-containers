@@ -10,8 +10,8 @@ import (
 	"time"
 
 	persistapi "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist/api"
+	pbTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols/grpc"
-	vcTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/types"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"golang.org/x/net/context"
@@ -111,22 +111,22 @@ func (n *mockAgent) onlineCPUMem(cpus uint32, cpuOnly bool) error {
 }
 
 // updateInterface is the Noop agent Interface update implementation. It does nothing.
-func (n *mockAgent) updateInterface(inf *vcTypes.Interface) (*vcTypes.Interface, error) {
+func (n *mockAgent) updateInterface(inf *pbTypes.Interface) (*pbTypes.Interface, error) {
 	return nil, nil
 }
 
 // listInterfaces is the Noop agent Interfaces list implementation. It does nothing.
-func (n *mockAgent) listInterfaces() ([]*vcTypes.Interface, error) {
+func (n *mockAgent) listInterfaces() ([]*pbTypes.Interface, error) {
 	return nil, nil
 }
 
 // updateRoutes is the Noop agent Routes update implementation. It does nothing.
-func (n *mockAgent) updateRoutes(routes []*vcTypes.Route) ([]*vcTypes.Route, error) {
+func (n *mockAgent) updateRoutes(routes []*pbTypes.Route) ([]*pbTypes.Route, error) {
 	return nil, nil
 }
 
 // listRoutes is the Noop agent Routes list implementation. It does nothing.
-func (n *mockAgent) listRoutes() ([]*vcTypes.Route, error) {
+func (n *mockAgent) listRoutes() ([]*pbTypes.Route, error) {
 	return nil, nil
 }
 
