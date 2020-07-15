@@ -365,10 +365,6 @@ func (fc *firecracker) fcInit(timeout int) error {
 		return err
 	}
 
-	if !fc.config.Debug {
-		args = append(args, "--daemonize")
-	}
-
 	//https://github.com/firecracker-microvm/firecracker/blob/master/docs/jailer.md#jailer-usage
 	//--seccomp-level specifies whether seccomp filters should be installed and how restrictive they should be. Possible values are:
 	//0 : disabled.
@@ -382,6 +378,7 @@ func (fc *firecracker) fcInit(timeout int) error {
 			"--uid", "0", //https://github.com/kata-containers/runtime/issues/1869
 			"--gid", "0",
 			"--chroot-base-dir", fc.chrootBaseDir,
+			"--daemonize",
 		}
 		args = append(args, jailedArgs...)
 		if fc.netNSPath != "" {
