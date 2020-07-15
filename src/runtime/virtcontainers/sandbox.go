@@ -6,6 +6,7 @@
 package virtcontainers
 
 import (
+	"bufio"
 	"context"
 	"fmt"
 	"io"
@@ -189,6 +190,8 @@ type Sandbox struct {
 	cgroupMgr *vccgroups.Manager
 
 	ctx context.Context
+
+	cw *consoleWatcher
 }
 
 // ID returns the sandbox identifier string.
@@ -929,12 +932,118 @@ func (s *Sandbox) ListRoutes() ([]*pbTypes.Route, error) {
 	return s.agent.listRoutes()
 }
 
+const (
+	// unix socket type of console
+	consoleProtoUnix = "unix"
+
+	// pty type of console.
+	consoleProtoPty = "pty"
+)
+
+// console watcher is designed to monitor guest console output.
+type consoleWatcher struct {
+	proto      string
+	consoleURL string
+	conn       net.Conn
+	ptyConsole *os.File
+}
+
+func newConsoleWatcher(s *Sandbox) (*consoleWatcher, error) {
+	var (
+		err error
+		cw  consoleWatcher
+	)
+
+	cw.proto, cw.consoleURL, err = s.hypervisor.getSandboxConsole(s.id)
+	if err != nil {
+		return nil, err
+	}
+
+	return &cw, nil
+}
+
+// start the console watcher
+func (cw *consoleWatcher) start(s *Sandbox) (err error) {
+	if cw.consoleWatched() {
+		return fmt.Errorf("console watcher has already watched for sandbox %s", s.id)
+	}
+
+	var scanner *bufio.Scanner
+
+	switch cw.proto {
+	case consoleProtoUnix:
+		cw.conn, err = net.Dial("unix", cw.consoleURL)
+		if err != nil {
+			return err
+		}
+		scanner = bufio.NewScanner(cw.conn)
+	case consoleProtoPty:
+		// read-only
+		cw.ptyConsole, err = os.Open(cw.consoleURL)
+		scanner = bufio.NewScanner(cw.ptyConsole)
+	default:
+		return fmt.Errorf("unknown console proto %s", cw.proto)
+	}
+
+	go func() {
+		for scanner.Scan() {
+			s.Logger().WithFields(logrus.Fields{
+				"console-protocol": cw.proto,
+				"console-url":      cw.consoleURL,
+				"sandbox":          s.id,
+				"vmconsole":        scanner.Text(),
+			}).Debug("reading guest console")
+		}
+
+		if err := scanner.Err(); err != nil {
+			if err == io.EOF {
+				s.Logger().Info("console watcher quits")
+			} else {
+				s.Logger().WithError(err).WithFields(logrus.Fields{
+					"console-protocol": cw.proto,
+					"console-url":      cw.consoleURL,
+					"sandbox":          s.id,
+				}).Error("Failed to read guest console logs")
+			}
+		}
+	}()
+
+	return nil
+}
+
+// check if the console watcher has already watched the vm console.
+func (cw *consoleWatcher) consoleWatched() bool {
+	return cw.conn != nil || cw.ptyConsole != nil
+}
+
+// stop the console watcher.
+func (cw *consoleWatcher) stop() {
+	if cw.conn != nil {
+		cw.conn.Close()
+		cw.conn = nil
+	}
+
+	if cw.ptyConsole != nil {
+		cw.ptyConsole.Close()
+		cw.ptyConsole = nil
+	}
+}
+
 // startVM starts the VM.
 func (s *Sandbox) startVM() (err error) {
 	span, ctx := s.trace("startVM")
 	defer span.Finish()
 
 	s.Logger().Info("Starting VM")
+
+	if s.config.HypervisorConfig.Debug {
+		// create console watcher
+		consoleWatcher, err := newConsoleWatcher(s)
+		if err != nil {
+			return err
+		}
+		s.cw = consoleWatcher
+	}
 
 	if err := s.network.Run(s.networkNS.NetNsPath, func() error {
 		if s.factory != nil {
@@ -979,6 +1088,14 @@ func (s *Sandbox) startVM() (err error) {
 	}
 
 	s.Logger().Info("VM started")
+
+	if s.cw != nil {
+		s.Logger().Debug("console watcher starts")
+		if err := s.cw.start(s); err != nil {
+			s.cw.stop()
+			return err
+		}
+	}
 
 	// Once the hypervisor is done starting the sandbox,
 	// we want to guarantee that it is manageable.
@@ -1476,6 +1593,12 @@ func (s *Sandbox) Stop(force bool) error {
 
 	if err := s.stopVM(); err != nil && !force {
 		return err
+	}
+
+	// shutdown console watcher if exists
+	if s.cw != nil {
+		s.Logger().Debug("stop the sandbox")
+		s.cw.stop()
 	}
 
 	if err := s.setSandboxState(types.StateStopped); err != nil {

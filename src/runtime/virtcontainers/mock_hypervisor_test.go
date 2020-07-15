@@ -66,9 +66,11 @@ func TestMockHypervisorGetSandboxConsole(t *testing.T) {
 	var m *mockHypervisor
 
 	expected := ""
-	result, err := m.getSandboxConsole("testSandboxID")
+	expectedProto := ""
+	proto, result, err := m.getSandboxConsole("testSandboxID")
 	assert.NoError(t, err)
 	assert.Equal(t, result, expected)
+	assert.Equal(t, proto, expectedProto)
 }
 
 func TestMockHypervisorSaveSandbox(t *testing.T) {

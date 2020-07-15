@@ -254,7 +254,7 @@ func (a *Acrn) buildDevices(imagePath string) ([]Device, error) {
 		return nil, fmt.Errorf("Image Path should not be empty: %s", imagePath)
 	}
 
-	console, err := a.getSandboxConsole(a.id)
+	_, console, err := a.getSandboxConsole(a.id)
 	if err != nil {
 		return nil, err
 	}
@@ -643,11 +643,16 @@ func (a *Acrn) addDevice(devInfo interface{}, devType deviceType) error {
 
 // getSandboxConsole builds the path of the console where we can read
 // logs coming from the sandbox.
-func (a *Acrn) getSandboxConsole(id string) (string, error) {
+func (a *Acrn) getSandboxConsole(id string) (string, string, error) {
 	span, _ := a.trace("getSandboxConsole")
 	defer span.Finish()
 
-	return utils.BuildSocketPath(a.store.RunVMStoragePath(), id, acrnConsoleSocket)
+	consoleURL, err := utils.BuildSocketPath(a.store.RunVMStoragePath(), id, acrnConsoleSocket)
+	if err != nil {
+		return consoleProtoUnix, "", err
+	}
+
+	return consoleProtoUnix, consoleURL, nil
 }
 
 func (a *Acrn) saveSandbox() error {

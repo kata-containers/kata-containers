@@ -314,9 +314,10 @@ func TestQemuGetSandboxConsole(t *testing.T) {
 	sandboxID := "testSandboxID"
 	expected := filepath.Join(q.store.RunVMStoragePath(), sandboxID, consoleSocket)
 
-	result, err := q.getSandboxConsole(sandboxID)
+	proto, result, err := q.getSandboxConsole(sandboxID)
 	assert.NoError(err)
 	assert.Equal(result, expected)
+	assert.Equal(proto, consoleProtoUnix)
 }
 
 func TestQemuCapabilities(t *testing.T) {
