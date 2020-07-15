@@ -9,8 +9,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
-	"io/ioutil"
 	"net"
 	"net/http"
 	"os"
@@ -21,6 +19,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/containerd/console"
 	persistapi "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist/api"
 	chclient "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/cloud-hypervisor/client"
 	"github.com/opencontainers/selinux/go-selinux/label"
@@ -123,6 +122,7 @@ type cloudHypervisor struct {
 	vmconfig  chclient.VmConfig
 	virtiofsd Virtiofsd
 	store     persistapi.PersistDriver
+	console   console.Console
 }
 
 var clhKernelParams = []Param{
@@ -357,13 +357,12 @@ func (clh *cloudHypervisor) startSandbox(timeout int) error {
 		return errors.New("cloud-hypervisor only supports virtio based file sharing")
 	}
 
-	var strErr string
-	strErr, pid, err := clh.LaunchClh()
+	pid, err := clh.LaunchClh()
 	if err != nil {
 		if shutdownErr := clh.virtiofsd.Stop(); shutdownErr != nil {
 			clh.Logger().WithField("error", shutdownErr).Warn("error shutting down Virtiofsd")
 		}
-		return fmt.Errorf("failed to launch cloud-hypervisor: %q, hypervisor output:\n%s", err, strErr)
+		return fmt.Errorf("failed to launch cloud-hypervisor: %q", err)
 	}
 	clh.state.PID = pid
 
@@ -377,9 +376,16 @@ func (clh *cloudHypervisor) startSandbox(timeout int) error {
 
 // getSandboxConsole builds the path of the console where we can read
 // logs coming from the sandbox.
-func (clh *cloudHypervisor) getSandboxConsole(id string) (string, error) {
+func (clh *cloudHypervisor) getSandboxConsole(id string) (string, string, error) {
 	clh.Logger().WithField("function", "getSandboxConsole").WithField("id", id).Info("Get Sandbox Console")
-	return "", nil
+	master, slave, err := console.NewPty()
+	if err != nil {
+		clh.Logger().Debugf("Error create pseudo tty: %v", err)
+		return consoleProtoPty, "", err
+	}
+	clh.console = master
+
+	return consoleProtoPty, slave, nil
 }
 
 func (clh *cloudHypervisor) disconnect() {
@@ -885,11 +891,11 @@ func (clh *cloudHypervisor) getAvailableVersion() error {
 
 }
 
-func (clh *cloudHypervisor) LaunchClh() (string, int, error) {
+func (clh *cloudHypervisor) LaunchClh() (int, error) {
 
 	clhPath, err := clh.clhPath()
 	if err != nil {
-		return "", -1, err
+		return -1, err
 	}
 
 	args := []string{cscAPIsocket, clh.state.apiSocket}
@@ -913,14 +919,12 @@ func (clh *cloudHypervisor) LaunchClh() (string, int, error) {
 	clh.Logger().WithField("args", strings.Join(args, " ")).Info()
 
 	cmdHypervisor := exec.Command(clhPath, args...)
-	var hypervisorOutput io.ReadCloser
 	if clh.config.Debug {
 		cmdHypervisor.Env = os.Environ()
 		cmdHypervisor.Env = append(cmdHypervisor.Env, "RUST_BACKTRACE=full")
-		// Get  StdoutPipe only for debug, without debug golang will redirect to /dev/null
-		hypervisorOutput, err = cmdHypervisor.StdoutPipe()
-		if err != nil {
-			return "", -1, err
+		if clh.console != nil {
+			cmdHypervisor.Stderr = clh.console
+			cmdHypervisor.Stdout = clh.console
 		}
 	}
 
@@ -928,37 +932,15 @@ func (clh *cloudHypervisor) LaunchClh() (string, int, error) {
 
 	err = utils.StartCmd(cmdHypervisor)
 	if err != nil {
-		return "", -1, err
+		return -1, err
 	}
 
 	if err := clh.waitVMM(clhTimeout); err != nil {
 		clh.Logger().WithField("error", err).Warn("cloud-hypervisor init failed")
-		var output string
-
-		if hypervisorOutput != nil {
-			b, errRead := ioutil.ReadAll(hypervisorOutput)
-			if errRead != nil {
-				output = "failed to read hypervisor output to get error information"
-			} else {
-				output = string(b)
-			}
-		} else {
-			output = "Please enable hypervisor logging to get stdout information"
-		}
-
-		return output, -1, err
+		return -1, err
 	}
 
-	if clh.config.Debug {
-		cmdLogger := utils.NewProgramLogger("kata-hypervisor")
-		clh.Logger().Debugf("Starting process logger(%s) for hypervisor", cmdLogger)
-		if err := cmdLogger.StartLogger(hypervisorOutput); err != nil {
-			// Not critical to run a container, but output wont be logged
-			clh.Logger().Warnf("Failed start process logger(%s) %s", cmdLogger, err)
-		}
-	}
-
-	return "", cmdHypervisor.Process.Pid, nil
+	return cmdHypervisor.Process.Pid, nil
 }
 
 //###########################################################################

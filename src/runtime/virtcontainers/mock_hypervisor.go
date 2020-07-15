@@ -82,8 +82,8 @@ func (m *mockHypervisor) hotplugRemoveDevice(devInfo interface{}, devType device
 	return nil, nil
 }
 
-func (m *mockHypervisor) getSandboxConsole(sandboxID string) (string, error) {
-	return "", nil
+func (m *mockHypervisor) getSandboxConsole(sandboxID string) (string, string, error) {
+	return "", "", nil
 }
 
 func (m *mockHypervisor) resizeMemory(memMB uint32, memorySectionSizeMB uint32, probe bool) (uint32, memoryDevice, error) {

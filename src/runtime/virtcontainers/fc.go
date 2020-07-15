@@ -10,7 +10,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"io/ioutil"
 	"net"
 	"net/http"
@@ -25,7 +24,6 @@ import (
 
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
 	persistapi "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist/api"
-	kataclient "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols/client"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/firecracker/client"
 	models "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/firecracker/client/models"
 	ops "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/firecracker/client/operations"
@@ -154,6 +152,8 @@ type firecracker struct {
 
 	fcConfigPath string
 	fcConfig     *types.FcConfig // Parameters configured before VM starts
+
+	console console.Console
 }
 
 type firecrackerDevice struct {
@@ -398,13 +398,8 @@ func (fc *firecracker) fcInit(timeout int) error {
 	}
 
 	if fc.config.Debug {
-		stdin, err := fc.watchConsole()
-		if err != nil {
-			return err
-		}
-
-		cmd.Stderr = stdin
-		cmd.Stdout = stdin
+		cmd.Stderr = fc.console
+		cmd.Stdout = fc.console
 	}
 
 	fc.Logger().WithField("hypervisor args", args).Debug()
@@ -1101,8 +1096,15 @@ func (fc *firecracker) hotplugRemoveDevice(devInfo interface{}, devType deviceTy
 
 // getSandboxConsole builds the path of the console where we can read
 // logs coming from the sandbox.
-func (fc *firecracker) getSandboxConsole(id string) (string, error) {
-	return fmt.Sprintf("%s://%s:%d", kataclient.HybridVSockScheme, filepath.Join(fc.jailerRoot, defaultHybridVSocketName), vSockLogsPort), nil
+func (fc *firecracker) getSandboxConsole(id string) (string, string, error) {
+	master, slave, err := console.NewPty()
+	if err != nil {
+		fc.Logger().Debugf("Error create pseudo tty: %v", err)
+		return consoleProtoPty, "", err
+	}
+	fc.console = master
+
+	return consoleProtoPty, slave, nil
 }
 
 func (fc *firecracker) disconnect() {
@@ -1212,40 +1214,6 @@ func (fc *firecracker) generateSocket(id string) (interface{}, error) {
 		UdsPath: udsPath,
 		Port:    uint32(vSockPort),
 	}, nil
-}
-
-func (fc *firecracker) watchConsole() (*os.File, error) {
-	master, slave, err := console.NewPty()
-	if err != nil {
-		fc.Logger().WithField("Error create pseudo tty", err).Debug()
-		return nil, err
-	}
-
-	stdio, err := os.OpenFile(slave, syscall.O_RDWR, 0700)
-	if err != nil {
-		fc.Logger().WithError(err).Debugf("open pseudo tty %s", slave)
-		return nil, err
-	}
-
-	go func() {
-		scanner := bufio.NewScanner(master)
-		for scanner.Scan() {
-			fc.Logger().WithFields(logrus.Fields{
-				"sandbox":   fc.id,
-				"vmconsole": scanner.Text(),
-			}).Infof("reading guest console")
-		}
-
-		if err := scanner.Err(); err != nil {
-			if err == io.EOF {
-				fc.Logger().Info("console watcher quits")
-			} else {
-				fc.Logger().WithError(err).Error("Failed to read guest console")
-			}
-		}
-	}()
-
-	return stdio, nil
 }
 
 func (fc *firecracker) isRateLimiterBuiltin() bool {

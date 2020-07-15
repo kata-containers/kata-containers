@@ -380,7 +380,7 @@ func (q *qemu) createQmpSocket() ([]govmmQemu.QMPSocket, error) {
 func (q *qemu) buildDevices(initrdPath string) ([]govmmQemu.Device, *govmmQemu.IOThread, error) {
 	var devices []govmmQemu.Device
 
-	console, err := q.getSandboxConsole(q.id)
+	_, console, err := q.getSandboxConsole(q.id)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1764,11 +1764,16 @@ func (q *qemu) addDevice(devInfo interface{}, devType deviceType) error {
 
 // getSandboxConsole builds the path of the console where we can read
 // logs coming from the sandbox.
-func (q *qemu) getSandboxConsole(id string) (string, error) {
+func (q *qemu) getSandboxConsole(id string) (string, string, error) {
 	span, _ := q.trace("getSandboxConsole")
 	defer span.Finish()
 
-	return utils.BuildSocketPath(q.store.RunVMStoragePath(), id, consoleSocket)
+	consoleURL, err := utils.BuildSocketPath(q.store.RunVMStoragePath(), id, consoleSocket)
+	if err != nil {
+		return consoleProtoUnix, "", err
+	}
+
+	return consoleProtoUnix, consoleURL, nil
 }
 
 func (q *qemu) saveSandbox() error {
