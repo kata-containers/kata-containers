@@ -58,36 +58,50 @@ func TestIsBlock(t *testing.T) {
 
 func TestIsVhostUserBlk(t *testing.T) {
 	type testData struct {
+		devType  string
 		major    int64
 		expected bool
 	}
 
 	data := []testData{
-		{config.VhostUserBlkMajor, true},
-		{config.VhostUserSCSIMajor, false},
-		{240, false},
+		{"b", config.VhostUserBlkMajor, true},
+		{"c", config.VhostUserBlkMajor, false},
+		{"b", config.VhostUserSCSIMajor, false},
+		{"c", config.VhostUserSCSIMajor, false},
+		{"b", 240, false},
 	}
 
 	for _, d := range data {
-		isVhostUserBlk := isVhostUserBlk(config.DeviceInfo{Major: d.major})
+		isVhostUserBlk := isVhostUserBlk(
+			config.DeviceInfo{
+				DevType: d.devType,
+				Major: d.major,
+			})
 		assert.Equal(t, d.expected, isVhostUserBlk)
 	}
 }
 
 func TestIsVhostUserSCSI(t *testing.T) {
 	type testData struct {
+		devType  string
 		major    int64
 		expected bool
 	}
 
 	data := []testData{
-		{config.VhostUserBlkMajor, false},
-		{config.VhostUserSCSIMajor, true},
-		{240, false},
+		{"b", config.VhostUserBlkMajor, false},
+		{"c", config.VhostUserBlkMajor, false},
+		{"b", config.VhostUserSCSIMajor, true},
+		{"c", config.VhostUserSCSIMajor, false},
+		{"b", 240, false},
 	}
 
 	for _, d := range data {
-		isVhostUserSCSI := isVhostUserSCSI(config.DeviceInfo{Major: d.major})
+		isVhostUserSCSI := isVhostUserSCSI(
+			config.DeviceInfo{
+				DevType: d.devType,
+				Major: d.major,
+			})
 		assert.Equal(t, d.expected, isVhostUserSCSI)
 	}
 }
