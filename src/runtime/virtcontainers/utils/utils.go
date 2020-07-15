@@ -13,6 +13,10 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+
+	"github.com/vishvananda/netlink"
+
+	pbTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols"
 )
 
 const cpBinaryName = "cp"
@@ -317,4 +321,15 @@ func (p *ProgramLogger) StartLogger(output io.ReadCloser) error {
 
 func (p ProgramLogger) String() string {
 	return p.cmd.Path
+}
+
+func ConvertNetlinkFamily(netlinkFamily int32) pbTypes.IPFamily {
+	switch netlinkFamily {
+	case netlink.FAMILY_V6:
+		return pbTypes.IPFamily_v6
+	case netlink.FAMILY_V4:
+		fallthrough
+	default:
+		return pbTypes.IPFamily_v4
+	}
 }
