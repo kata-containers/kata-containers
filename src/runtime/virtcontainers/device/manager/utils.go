@@ -139,10 +139,10 @@ func isLargeBarSpace(resourcePath string) (bool, error) {
 
 // isVhostUserBlk checks if the device is a VhostUserBlk device.
 func isVhostUserBlk(devInfo config.DeviceInfo) bool {
-	return devInfo.Major == config.VhostUserBlkMajor
+	return devInfo.DevType == "b" && devInfo.Major == config.VhostUserBlkMajor
 }
 
 // isVhostUserSCSI checks if the device is a VhostUserSCSI device.
 func isVhostUserSCSI(devInfo config.DeviceInfo) bool {
-	return devInfo.Major == config.VhostUserSCSIMajor
+	return devInfo.DevType == "b" && devInfo.Major == config.VhostUserSCSIMajor
 }
