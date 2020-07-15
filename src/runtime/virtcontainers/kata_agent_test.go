@@ -29,11 +29,11 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/manager"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist"
 	aTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols"
+	pbTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols"
 	pb "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols/grpc"
 	vcAnnotations "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/annotations"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/mock"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/rootless"
-	vcTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/types"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 )
 
@@ -1062,7 +1062,7 @@ func TestAgentNetworkOperation(t *testing.T) {
 	_, err = k.listInterfaces()
 	assert.Nil(err)
 
-	_, err = k.updateRoutes([]*vcTypes.Route{})
+	_, err = k.updateRoutes([]*pbTypes.Route{})
 	assert.Nil(err)
 
 	_, err = k.listRoutes()

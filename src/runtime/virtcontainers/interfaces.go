@@ -12,7 +12,7 @@ import (
 
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/api"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
-	vcTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/types"
+	pbTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/sirupsen/logrus"
@@ -65,11 +65,11 @@ type VCSandbox interface {
 
 	AddDevice(info config.DeviceInfo) (api.Device, error)
 
-	AddInterface(inf *vcTypes.Interface) (*vcTypes.Interface, error)
-	RemoveInterface(inf *vcTypes.Interface) (*vcTypes.Interface, error)
-	ListInterfaces() ([]*vcTypes.Interface, error)
-	UpdateRoutes(routes []*vcTypes.Route) ([]*vcTypes.Route, error)
-	ListRoutes() ([]*vcTypes.Route, error)
+	AddInterface(inf *pbTypes.Interface) (*pbTypes.Interface, error)
+	RemoveInterface(inf *pbTypes.Interface) (*pbTypes.Interface, error)
+	ListInterfaces() ([]*pbTypes.Interface, error)
+	UpdateRoutes(routes []*pbTypes.Route) ([]*pbTypes.Route, error)
+	ListRoutes() ([]*pbTypes.Route, error)
 
 	GetOOMEvent() (string, error)
 
