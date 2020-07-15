@@ -13,9 +13,8 @@ set -o pipefail
 
 readonly script_name="$(basename "${BASH_SOURCE[0]}")"
 readonly script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-readonly project="kata-containers"
 readonly tmp_dir=$(mktemp -d -t build-image-tmp.XXXXXXXXXX)
-readonly osbuilder_url=https://github.com/${project}/osbuilder.git
+readonly osbuilder_url=https://github.com/kata-containers/kata-containers.git
 export   GOPATH="${tmp_dir}/go"
 
 export GOPATH=${GOPATH:-${HOME}/go}
@@ -126,8 +125,8 @@ main() {
 	initrd_os_version=$(get_from_kata_deps "assets.image.architecture.${arch_target}.version" "${kata_version}")
 
 	shift "$((OPTIND - 1))"
-	git clone "$osbuilder_url" "${tmp_dir}/osbuilder"
-	pushd "${tmp_dir}/osbuilder"
+	git clone "$osbuilder_url" "${tmp_dir}/kata-containers"
+	pushd "${tmp_dir}/kata-containers/tools/osbuilder"
 	git checkout "${osbuider_version}"
 	build_initrd
 	build_image

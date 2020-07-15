@@ -21,7 +21,7 @@ ARCH=${ARCH:-$(arch_to_golang "$(uname -m)")}
 
 get_kata_version() {
 	local branch="$1"
-	curl -SsL "https://raw.githubusercontent.com/${project}/runtime/${branch}/VERSION"
+	curl -SsL "https://raw.githubusercontent.com/${project}/kata-containers/${branch}/VERSION"
 }
 
 gen_version_file() {
@@ -35,12 +35,6 @@ gen_version_file() {
 	else
 		ref="refs/tags/${kata_version}^{}"
 	fi
-
-	kata_runtime_hash=$(get_kata_hash "runtime" "${ref}")
-	kata_proxy_hash=$(get_kata_hash "proxy" "${ref}")
-	kata_shim_hash=$(get_kata_hash "shim" "${ref}")
-	kata_agent_hash=$(get_kata_hash "agent" "${ref}")
-	kata_ksm_throttler_hash=$(get_kata_hash "ksm-throttler" "${ref}")
 
 	qemu_vanilla_branch=$(get_from_kata_deps "assets.hypervisor.qemu.version" "${kata_version}")
 	# Check if qemu.version can be used to get the version and hash, otherwise use qemu.tag
@@ -57,7 +51,6 @@ gen_version_file() {
 	kernel_version=${kernel_version#v}
 
 	golang_version=$(get_from_kata_deps "languages.golang.meta.newest-version" "${kata_version}")
-	golang_sha256=$(curl -s -L "https://storage.googleapis.com/golang/go${golang_version}.linux-${ARCH}.tar.gz.sha256")
 
 	# - is not a valid char for rpmbuild
 	# see https://github.com/semver/semver/issues/145
@@ -67,21 +60,6 @@ gen_version_file() {
 # This is a generated file from ${script_name}
 
 kata_version=${kata_version}
-
-kata_runtime_version=${kata_version}
-kata_runtime_hash=${kata_runtime_hash}
-
-kata_proxy_version=${kata_version}
-kata_proxy_hash=${kata_proxy_hash}
-
-kata_shim_version=${kata_version}
-kata_shim_hash=${kata_shim_hash}
-
-kata_agent_version=${kata_version}
-kata_agent_hash=${kata_agent_hash}
-
-kata_ksm_throttler_version=${kata_version}
-kata_ksm_throttler_hash=${kata_ksm_throttler_hash}
 
 # Dependencies
 kata_osbuilder_version=${kata_version}
@@ -93,7 +71,6 @@ kernel_version=${kernel_version}
 
 # Golang
 go_version=${golang_version}
-go_checksum=${golang_sha256}
 EOT
 }
 
@@ -164,11 +141,11 @@ main() {
 		[ -n "${tag}" ] || die "No tag specified" "1"
 
 		# use the runtime's repository to determine branch information
-		local repo="github.com/kata-containers/runtime"
-		local repo_dir="runtime"
+		local repo="github.com/kata-containers/kata-containers"
+		local repo_dir="kata-containers"
 		git clone --quiet "https://${repo}.git" "${repo_dir}"
 		pushd "${repo_dir}" >> /dev/null
-		local branch=$(git branch -r -q --contains "${tag}" | grep -E "master|stable" | grep -v HEAD)
+		local branch=$(git branch -r -q --contains "${tag}" | grep -E "master|stable|2.0-dev" | grep -v HEAD)
 
 		popd >> /dev/null
 		rm -rf ${repo_dir}
