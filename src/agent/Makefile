@@ -136,6 +136,7 @@ show-summary: show-header
 	@printf "  %s\n" "$(call get_command_version,rustc)"
 	@printf "  %s\n" "$(call get_command_version,rustup)"
 	@printf "  %s\n" "$(call get_toolchain_version)"
+	@printf "  target toolchain: %s\n" "$(TRIPLE)"
 	@printf "\n"
 
 help: show-summary
