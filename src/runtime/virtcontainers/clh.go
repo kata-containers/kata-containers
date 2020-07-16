@@ -408,7 +408,11 @@ func (clh *cloudHypervisor) getThreadIDs() (vcpuThreadIDs, error) {
 	return vcpuInfo, nil
 }
 
-func (clh *cloudHypervisor) hotplugBlockDevice(drive *config.BlockDrive) error {
+func clhDriveIndexToID(i int) string {
+	return "clh_drive_" + strconv.Itoa(i)
+}
+
+func (clh *cloudHypervisor) hotplugAddBlockDevice(drive *config.BlockDrive) error {
 	if clh.config.BlockDeviceDriver != config.VirtioBlock {
 		return fmt.Errorf("incorrect hypervisor configuration on 'block_device_driver':"+
 			" using '%v' but only support '%v'", clh.config.BlockDeviceDriver, config.VirtioBlock)
@@ -423,6 +427,8 @@ func (clh *cloudHypervisor) hotplugBlockDevice(drive *config.BlockDrive) error {
 		return openAPIClientError(err)
 	}
 
+	driveID := clhDriveIndexToID(drive.Index)
+
 	//Explicitly set PCIAddr to NULL, so that VirtPath can be used
 	drive.PCIAddr = ""
 
@@ -433,6 +439,7 @@ func (clh *cloudHypervisor) hotplugBlockDevice(drive *config.BlockDrive) error {
 			Path:      drive.File,
 			Readonly:  drive.ReadOnly,
 			VhostUser: false,
+			Id:        driveID,
 		}
 		_, _, err = cl.VmAddDiskPut(ctx, blkDevice)
 	}
@@ -467,7 +474,7 @@ func (clh *cloudHypervisor) hotplugAddDevice(devInfo interface{}, devType device
 	switch devType {
 	case blockDev:
 		drive := devInfo.(*config.BlockDrive)
-		return nil, clh.hotplugBlockDevice(drive)
+		return nil, clh.hotplugAddBlockDevice(drive)
 	case vfioDev:
 		device := devInfo.(*config.VFIODev)
 		return nil, clh.hotPlugVFIODevice(*device)
