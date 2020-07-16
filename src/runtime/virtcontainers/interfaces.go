@@ -75,6 +75,7 @@ type VCSandbox interface {
 
 	UpdateRuntimeMetrics() error
 	GetAgentMetrics() (string, error)
+	GetAgentURL() (string, error)
 }
 
 // VCContainer is the Container interface

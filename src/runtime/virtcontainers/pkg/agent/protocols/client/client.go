@@ -178,7 +178,7 @@ func parse(sock string) (string, *url.URL, error) {
 func agentDialer(addr *url.URL) dialer {
 	switch addr.Scheme {
 	case VSockSocketScheme:
-		return vsockDialer
+		return VsockDialer
 	case HybridVSockScheme:
 		return HybridVSockDialer
 	case MockHybridVSockScheme:
@@ -278,7 +278,7 @@ func commonDialer(timeout time.Duration, dialFunc func() (net.Conn, error), time
 	return conn, nil
 }
 
-func vsockDialer(sock string, timeout time.Duration) (net.Conn, error) {
+func VsockDialer(sock string, timeout time.Duration) (net.Conn, error) {
 	cid, port, err := parseGrpcVsockAddr(sock)
 	if err != nil {
 		return nil, err
