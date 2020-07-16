@@ -12,14 +12,6 @@ import (
 	"net/http"
 )
 
-func getSandboxIdFromReq(r *http.Request) (string, error) {
-	sandbox := r.URL.Query().Get("sandbox")
-	if sandbox != "" {
-		return sandbox, nil
-	}
-	return "", fmt.Errorf("sandbox not found in %+v", r.URL.Query())
-}
-
 func serveError(w http.ResponseWriter, status int, txt string) {
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.Header().Set("X-Go-Pprof", "1")
