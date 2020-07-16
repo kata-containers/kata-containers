@@ -209,7 +209,6 @@ func newTestRuntimeConfig(dir, consolePath string, create bool) (oci.RuntimeConf
 	return oci.RuntimeConfig{
 		HypervisorType:   vc.QemuHypervisor,
 		HypervisorConfig: hypervisorConfig,
-		ProxyType:        vc.KataBuiltInProxyType,
 		Console:          consolePath,
 	}, nil
 }

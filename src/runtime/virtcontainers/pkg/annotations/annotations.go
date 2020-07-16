@@ -97,9 +97,6 @@ const (
 	// GuestHookPath is a sandbox annotation to specify the path within the VM that will be used for 'drop-in' hooks.
 	GuestHookPath = kataAnnotHypervisorPrefix + "guest_hook_path"
 
-	// UseVSock is a sandbox annotation to specify use of vsock for agent communication.
-	UseVSock = kataAnnotHypervisorPrefix + "use_vsock"
-
 	// DisableImageNvdimm is a sandbox annotation to specify use of nvdimm device for guest rootfs image.
 	DisableImageNvdimm = kataAnnotHypervisorPrefix + "disable_image_nvdimm"
 

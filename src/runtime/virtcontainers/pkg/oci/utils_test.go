@@ -71,7 +71,6 @@ func TestMinimalSandboxConfig(t *testing.T) {
 
 	runtimeConfig := RuntimeConfig{
 		HypervisorType: vc.QemuHypervisor,
-		ProxyType:      vc.KataProxyType,
 		Console:        consolePath,
 	}
 
@@ -169,7 +168,6 @@ func TestMinimalSandboxConfig(t *testing.T) {
 		Hostname: "testHostname",
 
 		HypervisorType: vc.QemuHypervisor,
-		ProxyType:      vc.KataProxyType,
 
 		NetworkConfig: expectedNetworkConfig,
 
@@ -783,7 +781,6 @@ func TestAddHypervisorAnnotations(t *testing.T) {
 	ocispec.Annotations[vcAnnotations.CPUFeatures] = "pmu=off"
 	ocispec.Annotations[vcAnnotations.DisableVhostNet] = "true"
 	ocispec.Annotations[vcAnnotations.GuestHookPath] = "/usr/bin/"
-	ocispec.Annotations[vcAnnotations.UseVSock] = "true"
 	ocispec.Annotations[vcAnnotations.DisableImageNvdimm] = "true"
 	ocispec.Annotations[vcAnnotations.HotplugVFIOOnRootBus] = "true"
 	ocispec.Annotations[vcAnnotations.PCIeRootPort] = "2"
@@ -819,7 +816,6 @@ func TestAddHypervisorAnnotations(t *testing.T) {
 	assert.Equal(config.HypervisorConfig.CPUFeatures, "pmu=off")
 	assert.Equal(config.HypervisorConfig.DisableVhostNet, true)
 	assert.Equal(config.HypervisorConfig.GuestHookPath, "/usr/bin/")
-	assert.Equal(config.HypervisorConfig.UseVSock, true)
 	assert.Equal(config.HypervisorConfig.DisableImageNvdimm, true)
 	assert.Equal(config.HypervisorConfig.HotplugVFIOOnRootBus, true)
 	assert.Equal(config.HypervisorConfig.PCIeRootPort, uint32(2))

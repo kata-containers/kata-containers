@@ -98,9 +98,6 @@ type RuntimeConfig struct {
 
 	AgentConfig vc.KataAgentConfig
 
-	ProxyType   vc.ProxyType
-	ProxyConfig vc.ProxyConfig
-
 	Console string
 
 	//Determines how the VM should be connected to the
@@ -412,15 +409,6 @@ func addHypervisorConfigOverrides(ocispec specs.Spec, config *vc.SandboxConfig) 
 		if value != "" {
 			config.HypervisorConfig.GuestHookPath = value
 		}
-	}
-
-	if value, ok := ocispec.Annotations[vcAnnotations.UseVSock]; ok {
-		useVsock, err := strconv.ParseBool(value)
-		if err != nil {
-			return fmt.Errorf("Error parsing annotation for use_vsock: Please specify boolean value 'true|false'")
-		}
-
-		config.HypervisorConfig.UseVSock = useVsock
 	}
 
 	if value, ok := ocispec.Annotations[vcAnnotations.DisableImageNvdimm]; ok {
@@ -850,9 +838,6 @@ func SandboxConfig(ocispec specs.Spec, runtime RuntimeConfig, bundlePath, cid, c
 		HypervisorConfig: runtime.HypervisorConfig,
 
 		AgentConfig: runtime.AgentConfig,
-
-		ProxyType:   runtime.ProxyType,
-		ProxyConfig: runtime.ProxyConfig,
 
 		NetworkConfig: networkConfig,
 

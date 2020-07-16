@@ -116,7 +116,6 @@ func newTestSandboxConfigNoop() SandboxConfig {
 
 		Annotations: sandboxAnnotations,
 
-		ProxyType:   NoopProxyType,
 		AgentConfig: KataAgentConfig{},
 	}
 
@@ -171,23 +170,10 @@ func TestCreateSandboxKataAgentSuccessful(t *testing.T) {
 
 	config := newTestSandboxConfigKataAgent()
 
-	sockDir, err := testGenerateKataProxySockDir()
+	hybridVSockTTRPCMock := mock.HybridVSockTTRPCMock{}
+	err := hybridVSockTTRPCMock.Start(fmt.Sprintf("mock://%s", MockHybridVSockPath))
 	assert.NoError(err)
-
-	defer os.RemoveAll(sockDir)
-
-	testKataProxyURL := fmt.Sprintf(testKataProxyURLTempl, sockDir)
-	noopProxyURL = testKataProxyURL
-
-	impl := &gRPCProxy{}
-
-	kataProxyMock := mock.ProxyGRPCMock{
-		GRPCImplementer: impl,
-		GRPCRegister:    gRPCRegister,
-	}
-	err = kataProxyMock.Start(testKataProxyURL)
-	assert.NoError(err)
-	defer kataProxyMock.Stop()
+	defer hybridVSockTTRPCMock.Stop()
 
 	ctx := WithNewAgentFunc(context.Background(), newMockAgent)
 	p, err := CreateSandbox(ctx, config, nil)
@@ -234,8 +220,6 @@ func createNewSandboxConfig(hType HypervisorType) SandboxConfig {
 		AgentConfig: KataAgentConfig{},
 
 		NetworkConfig: netConfig,
-
-		ProxyType: NoopProxyType,
 	}
 }
 
