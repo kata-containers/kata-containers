@@ -10,7 +10,6 @@ import (
 	"compress/gzip"
 	"io"
 	"io/ioutil"
-	"net"
 	"net/http"
 	"path/filepath"
 	"sort"
@@ -236,33 +235,7 @@ func (km *KataMonitor) aggregateSandboxMetrics(encoder expfmt.Encoder) error {
 
 // getSandboxMetrics will get sandbox's metrics from shim
 func (km *KataMonitor) getSandboxMetrics(sandboxID, namespace string) ([]*dto.MetricFamily, error) {
-	socket, err := km.getMonitorAddress(sandboxID, namespace)
-	if err != nil {
-		return nil, err
-	}
-
-	transport := &http.Transport{
-		DisableKeepAlives: true,
-		Dial: func(proto, addr string) (conn net.Conn, err error) {
-			return net.Dial("unix", "\x00"+socket)
-		},
-	}
-
-	client := http.Client{
-		Timeout:   3 * time.Second,
-		Transport: transport,
-	}
-
-	resp, err := client.Get("http://shim/metrics")
-	if err != nil {
-		return nil, err
-	}
-
-	defer func() {
-		resp.Body.Close()
-	}()
-
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := km.doGet(sandboxID, namespace, defaultTimeout, "metrics")
 	if err != nil {
 		return nil, err
 	}

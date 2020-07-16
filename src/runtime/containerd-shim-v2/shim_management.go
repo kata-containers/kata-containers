@@ -8,6 +8,7 @@ package containerdshim
 import (
 	"context"
 	"expvar"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/pprof"
@@ -33,6 +34,18 @@ var (
 	ifSupportAgentMetricsAPI = true
 	shimMgtLog               = shimLog.WithField("subsystem", "shim-management")
 )
+
+// agentURL returns URL for agent
+func (s *service) agentURL(w http.ResponseWriter, r *http.Request) {
+	url, err := s.sandbox.GetAgentURL()
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(err.Error()))
+		return
+	}
+
+	fmt.Fprint(w, url)
+}
 
 // serveMetrics handle /metrics requests
 func (s *service) serveMetrics(w http.ResponseWriter, r *http.Request) {
@@ -139,6 +152,7 @@ func (s *service) startManagementServer(ctx context.Context, ociSpec *specs.Spec
 	// bind hanlder
 	m := http.NewServeMux()
 	m.Handle("/metrics", http.HandlerFunc(s.serveMetrics))
+	m.Handle("/agent-url", http.HandlerFunc(s.agentURL))
 	s.mountPprofHandle(m, ociSpec)
 
 	// register shim metrics
