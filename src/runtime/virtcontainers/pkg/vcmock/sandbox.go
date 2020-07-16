@@ -247,3 +247,10 @@ func (s *Sandbox) Stats() (vc.SandboxStats, error) {
 	}
 	return vc.SandboxStats{}, nil
 }
+
+func (s *Sandbox) GetAgentURL() (string, error) {
+	if s.GetAgentURLFunc != nil {
+		return s.GetAgentURLFunc()
+	}
+	return "", nil
+}

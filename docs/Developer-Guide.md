@@ -34,7 +34,11 @@
 * [Troubleshoot Kata Containers](#troubleshoot-kata-containers)
 * [Appendices](#appendices)
     * [Checking Docker default runtime](#checking-docker-default-runtime)
-    * [Set up a debug console](#set-up-a-debug-console)
+    * [Set up a debug console(the easy way)](#set-up-a-debug-consolethe-easy-way)
+        * [Enable agent debug console](#enable-agent-debug-console)
+        * [Start `kata-monitor`](#start-kata-monitor)
+        * [Connect to debug console](#connect-to-debug-console)
+    * [Set up a debug console(the traditional way)](#set-up-a-debug-consolethe-traditional-way)
         * [Create a custom image containing a shell](#create-a-custom-image-containing-a-shell)
         * [Create a debug systemd service](#create-a-debug-systemd-service)
         * [Build the debug image](#build-the-debug-image)
@@ -60,7 +64,7 @@ The recommended way to create a development environment is to first
 to create a working system.
 
 The installation guide instructions will install all required Kata Containers
-components, plus Docker*, the hypervisor, and the Kata Containers image and
+components, plus *Docker*, the hypervisor, and the Kata Containers image and
 guest kernel.
 
 # Requirements to build individual components
@@ -434,7 +438,48 @@ See [Set up a debug console](#set-up-a-debug-console).
 $ sudo docker info 2>/dev/null | grep -i "default runtime" | cut -d: -f2- | grep -q runc  && echo "SUCCESS" || echo "ERROR: Incorrect default Docker runtime"
 ```
 
-## Set up a debug console
+## Set up a debug console(The easy way)
+
+Kata containers 2.0 support a shell simulated *console* for quickly debug purpose. This approach use `vsock` to connect shell running inside guest started by agent. The good aspect is that we need not modify guest image or despite using what device that hypervisors support. Only `/bin/sh` or `/bin/bash` are necessary.
+
+### Enable agent debug console
+
+Change your `configuration.toml`, add agent debug parameters.
+
+```
+kernel_params = "agent.debug_console agent.debug_console_vport=1026"
+```
+
+Sandboxes created using this parameters will start a shell in guest if new connection is accept from `vsock`.
+
+### Start `kata-monitor`
+
+`kata-runitime exec` need `kata-monitor` to get the sandbox's `vsock` address to connect to, firt start `kata-monitor`.
+
+```
+$ sudo kata-monitor
+```
+
+`kata-monitor` will serve at `localhost:8090` by default.
+
+
+### Connect to debug console
+
+Command `kata-runitime exec` is used to connect to the debug console.
+
+```
+$ kata-runtime exec 1a9ab65be63b8b03dfd0c75036d27f0ed09eab38abb45337fea83acd3cd7bacd
+bash-4.2# id
+uid=0(root) gid=0(root) groups=0(root)
+bash-4.2# pwd
+/
+bash-4.2# exit
+exit
+```
+
+If you want to access guest OS through a traditional way, see [Set up a debug console(the traditional way)](#set-up-a-debug-console-the-traditional-way).
+
+## Set up a debug console(the traditional way)
 
 By default you cannot login to a virtual machine, since this can be sensitive
 from a security perspective. Also, allowing logins would require additional

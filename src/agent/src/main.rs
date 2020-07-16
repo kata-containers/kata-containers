@@ -31,16 +31,20 @@ extern crate netlink;
 use crate::netlink::{RtnlHandle, NETLINK_ROUTE};
 use anyhow::{anyhow, Context, Result};
 use nix::fcntl::{self, OFlag};
+use nix::fcntl::{FcntlArg, FdFlag};
+use nix::libc::{STDERR_FILENO, STDIN_FILENO, STDOUT_FILENO};
+use nix::pty;
+use nix::sys::select::{select, FdSet};
 use nix::sys::socket::{self, AddressFamily, SockAddr, SockFlag, SockType};
 use nix::sys::wait::{self, WaitStatus};
-use nix::unistd;
-use nix::unistd::dup;
+use nix::unistd::{self, close, dup, dup2, fork, setsid, ForkResult};
 use prctl::set_child_subreaper;
 use signal_hook::{iterator::Signals, SIGCHLD};
 use std::collections::HashMap;
 use std::env;
-use std::ffi::OsStr;
+use std::ffi::{CStr, CString, OsStr};
 use std::fs::{self, File};
+use std::io::{Read, Write};
 use std::os::unix::ffi::OsStrExt;
 use std::os::unix::fs as unixfs;
 use std::os::unix::io::AsRawFd;
@@ -74,6 +78,8 @@ mod rpc;
 const NAME: &str = "kata-agent";
 const KERNEL_CMDLINE_FILE: &str = "/proc/cmdline";
 const CONSOLE_PATH: &str = "/dev/console";
+
+const DEFAULT_BUF_SIZE: usize = 8 * 1024;
 
 lazy_static! {
     static ref GLOBAL_DEVICE_WATCHER: Arc<Mutex<HashMap<String, Sender<String>>>> =
@@ -213,7 +219,7 @@ fn start_sandbox(logger: &Logger, config: &agentConfig, init_mode: bool) -> Resu
 
         let handle = builder.spawn(move || {
             let shells = shells.lock().unwrap();
-            let result = setup_debug_console(shells.to_vec(), debug_console_vport);
+            let result = setup_debug_console(&thread_logger, shells.to_vec(), debug_console_vport);
             if result.is_err() {
                 // Report error, but don't fail
                 warn!(thread_logger, "failed to setup debug console";
@@ -406,9 +412,9 @@ use crate::config::agentConfig;
 use nix::sys::stat::Mode;
 use std::os::unix::io::{FromRawFd, RawFd};
 use std::path::PathBuf;
-use std::process::{exit, Command, Stdio};
+use std::process::exit;
 
-fn setup_debug_console(shells: Vec<String>, port: u32) -> Result<()> {
+fn setup_debug_console(logger: &Logger, shells: Vec<String>, port: u32) -> Result<()> {
     let mut shell: &str = "";
     for sh in shells.iter() {
         let binary = PathBuf::from(sh);
@@ -422,7 +428,7 @@ fn setup_debug_console(shells: Vec<String>, port: u32) -> Result<()> {
         return Err(anyhow!("no shell found to launch debug console"));
     }
 
-    let f: RawFd = if port > 0 {
+    if port > 0 {
         let listenfd = socket::socket(
             AddressFamily::Vsock,
             SockType::Stream,
@@ -432,29 +438,183 @@ fn setup_debug_console(shells: Vec<String>, port: u32) -> Result<()> {
         let addr = SockAddr::new_vsock(libc::VMADDR_CID_ANY, port);
         socket::bind(listenfd, &addr)?;
         socket::listen(listenfd, 1)?;
-        socket::accept4(listenfd, SockFlag::SOCK_CLOEXEC)?
+        loop {
+            let f: RawFd = socket::accept4(listenfd, SockFlag::SOCK_CLOEXEC)?;
+            match run_debug_console_shell(logger, shell, f) {
+                Ok(_) => {
+                    info!(logger, "run_debug_console_shell session finished");
+                }
+                Err(err) => {
+                    error!(logger, "run_debug_console_shell failed: {:?}", err);
+                }
+            }
+        }
     } else {
         let mut flags = OFlag::empty();
         flags.insert(OFlag::O_RDWR);
         flags.insert(OFlag::O_CLOEXEC);
-        fcntl::open(CONSOLE_PATH, flags, Mode::empty())?
+        loop {
+            let f: RawFd = fcntl::open(CONSOLE_PATH, flags, Mode::empty())?;
+            match run_debug_console_shell(logger, shell, f) {
+                Ok(_) => {
+                    info!(logger, "run_debug_console_shell session finished");
+                }
+                Err(err) => {
+                    error!(logger, "run_debug_console_shell failed: {:?}", err);
+                }
+            }
+        }
+    };
+}
+
+fn io_copy<R: ?Sized, W: ?Sized>(reader: &mut R, writer: &mut W) -> io::Result<u64>
+where
+    R: Read,
+    W: Write,
+{
+    let mut buf = [0; DEFAULT_BUF_SIZE];
+    let buf_len;
+
+    match reader.read(&mut buf) {
+        Ok(0) => return Ok(0),
+        Ok(len) => buf_len = len,
+        Err(err) => return Err(err),
     };
 
-    let cmd = Command::new(shell)
-        .arg("-i")
-        .stdin(unsafe { Stdio::from_raw_fd(f) })
-        .stdout(unsafe { Stdio::from_raw_fd(f) })
-        .stderr(unsafe { Stdio::from_raw_fd(f) })
-        .spawn();
+    // write and return
+    match writer.write_all(&buf[..buf_len]) {
+        Ok(_) => return Ok(buf_len as u64),
+        Err(err) => return Err(err),
+    }
+}
 
-    let mut cmd = match cmd {
-        Ok(c) => c,
-        Err(_) => return Err(anyhow!("failed to spawn shell")),
-    };
+fn run_debug_console_shell(logger: &Logger, shell: &str, socket_fd: RawFd) -> Result<()> {
+    let pseduo = pty::openpty(None, None)?;
+    let _ = fcntl::fcntl(pseduo.master, FcntlArg::F_SETFD(FdFlag::FD_CLOEXEC));
+    let _ = fcntl::fcntl(pseduo.slave, FcntlArg::F_SETFD(FdFlag::FD_CLOEXEC));
 
-    cmd.wait()?;
+    let slave_fd = pseduo.slave;
 
-    return Ok(());
+    match fork() {
+        Ok(ForkResult::Child) => {
+            // create new session with child as session leader
+            setsid()?;
+
+            // dup stdin, stdout, stderr to let child act as a terminal
+            dup2(slave_fd, STDIN_FILENO)?;
+            dup2(slave_fd, STDOUT_FILENO)?;
+            dup2(slave_fd, STDERR_FILENO)?;
+
+            // set tty
+            unsafe {
+                libc::ioctl(0, libc::TIOCSCTTY);
+            }
+
+            let cmd = CString::new(shell).unwrap();
+            let args: Vec<&CStr> = vec![];
+
+            // run shell
+            if let Err(e) = unistd::execvp(cmd.as_c_str(), args.as_slice()) {
+                match e {
+                    nix::Error::Sys(errno) => {
+                        std::process::exit(errno as i32);
+                    }
+                    _ => std::process::exit(-2),
+                }
+            }
+        }
+
+        Ok(ForkResult::Parent { child: child_pid }) => {
+            info!(logger, "get debug shell pid {:?}", child_pid);
+
+            let (rfd, wfd) = unistd::pipe2(OFlag::O_CLOEXEC)?;
+            let master_fd = pseduo.master;
+            let debug_shell_logger = logger.clone();
+
+            // start a thread to do IO copy between socket and pseduo.master
+            thread::spawn(move || {
+                let mut master_reader = unsafe { File::from_raw_fd(master_fd) };
+                let mut socket_writer = unsafe { File::from_raw_fd(socket_fd) };
+                let mut socket_reader = unsafe { File::from_raw_fd(socket_fd) };
+                let mut master_writer = unsafe { File::from_raw_fd(master_fd) };
+
+                loop {
+                    let mut fd_set = FdSet::new();
+                    fd_set.insert(master_fd);
+                    fd_set.insert(socket_fd);
+                    fd_set.insert(rfd);
+
+                    match select(
+                        Some(fd_set.highest().unwrap() + 1),
+                        &mut fd_set,
+                        None,
+                        None,
+                        None,
+                    ) {
+                        Ok(_) => (),
+                        Err(e) => {
+                            if e == nix::Error::from(nix::errno::Errno::EINTR) {
+                                continue;
+                            } else {
+                                error!(debug_shell_logger, "select error {:?}", e);
+                                break;
+                            }
+                        }
+                    }
+
+                    if fd_set.contains(master_fd) {
+                        match io_copy(&mut master_reader, &mut socket_writer) {
+                            Ok(0) => {
+                                debug!(debug_shell_logger, "master fd closed");
+                                break;
+                            }
+                            Ok(_) => {}
+                            Err(ref e) if e.kind() == std::io::ErrorKind::Interrupted => continue,
+                            Err(e) => {
+                                error!(debug_shell_logger, "read master fd error {:?}", e);
+                                break;
+                            }
+                        }
+                    }
+
+                    if fd_set.contains(socket_fd) {
+                        match io_copy(&mut socket_reader, &mut master_writer) {
+                            Ok(0) => {
+                                debug!(debug_shell_logger, "master fd closed");
+                                break;
+                            }
+                            Ok(_) => {}
+                            Err(ref e) if e.kind() == std::io::ErrorKind::Interrupted => continue,
+                            Err(e) => {
+                                error!(debug_shell_logger, "read master fd error {:?}", e);
+                                break;
+                            }
+                        }
+                    }
+
+                    if fd_set.contains(rfd) {
+                        info!(
+                            debug_shell_logger,
+                            "debug shelll process {} exited", child_pid
+                        );
+                        break;
+                    }
+                }
+            });
+
+            let wait_status = wait::waitpid(child_pid, None);
+            info!(logger, "debug console exit code: {:?}", wait_status);
+
+            // close pipe to exit select loop
+            let _ = close(wfd);
+        }
+        Err(err) => {
+            let msg = format!("fork error: {:?}", err);
+            return Err(ErrorKind::ErrorCode(msg).into());
+        }
+    }
+
+    Ok(())
 }
 
 #[cfg(test)]
@@ -472,8 +632,9 @@ mod tests {
         let shells_ref = SHELLS.clone();
         let mut shells = shells_ref.lock().unwrap();
         shells.clear();
+        let logger = slog_scope::logger();
 
-        let result = setup_debug_console(shells.to_vec(), 0);
+        let result = setup_debug_console(&logger, shells.to_vec(), 0);
 
         assert!(result.is_err());
         assert_eq!(
@@ -498,8 +659,9 @@ mod tests {
             .to_string();
 
         shells.push(shell);
+        let logger = slog_scope::logger();
 
-        let result = setup_debug_console(shells.to_vec(), 0);
+        let result = setup_debug_console(&logger, shells.to_vec(), 0);
 
         assert!(result.is_err());
         assert_eq!(
