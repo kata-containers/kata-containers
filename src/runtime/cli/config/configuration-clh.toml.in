@@ -94,17 +94,9 @@ virtio_fs_cache = "@DEFVIRTIOFSCACHE@"
 block_device_driver = "virtio-blk"
 
 # This option changes the default hypervisor and kernel parameters
-# to enable debug output where available. This extra output is added
-# to the proxy logs, but only when proxy debug is also enabled.
+# to enable debug output where available.
 #
 # Default false
-#enable_debug = true
-
-[proxy.@PROJECT_TYPE@]
-path = "@PROXYPATH@"
-
-# If enabled, proxy messages will be sent to the system log
-# (default: disabled)
 #enable_debug = true
 
 [shim.@PROJECT_TYPE@]

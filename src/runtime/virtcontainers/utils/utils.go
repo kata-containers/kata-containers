@@ -9,7 +9,6 @@ import (
 	"crypto/rand"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -235,12 +234,12 @@ func BuildSocketPath(elements ...string) (string, error) {
 }
 
 // SupportsVsocks returns true if vsocks are supported, otherwise false
-func SupportsVsocks() bool {
+func SupportsVsocks() (bool, error) {
 	if _, err := os.Stat(VHostVSockDevicePath); err != nil {
-		return false
+		return false, fmt.Errorf("host system doesn't support vsock: %v", err)
 	}
 
-	return true
+	return true, nil
 }
 
 // SupportsIfb returns true if ifb are supported, otherwise false
@@ -302,26 +301,6 @@ const (
 	MiB          = KiB << 10
 	GiB          = MiB << 10
 )
-
-// Binary to use to log program output
-const LoggerBinaryName = "systemd-cat"
-
-type ProgramLogger struct {
-	cmd *exec.Cmd
-}
-
-func NewProgramLogger(loggerLabel string) ProgramLogger {
-	return ProgramLogger{cmd: exec.Command(LoggerBinaryName, "-t", loggerLabel)}
-}
-
-func (p *ProgramLogger) StartLogger(output io.ReadCloser) error {
-	p.cmd.Stdin = output
-	return StartCmd(p.cmd)
-}
-
-func (p ProgramLogger) String() string {
-	return p.cmd.Path
-}
 
 func ConvertNetlinkFamily(netlinkFamily int32) pbTypes.IPFamily {
 	switch netlinkFamily {

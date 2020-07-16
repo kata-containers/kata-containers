@@ -18,8 +18,6 @@ import (
 	"syscall"
 	"testing"
 
-	"github.com/containerd/ttrpc"
-	gpb "github.com/gogo/protobuf/types"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/stretchr/testify/assert"
 
@@ -28,7 +26,6 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/drivers"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/manager"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist"
-	aTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols"
 	pbTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols"
 	pb "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols/grpc"
 	vcAnnotations "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/annotations"
@@ -38,7 +35,6 @@ import (
 )
 
 var (
-	testKataProxyURLTempl  = "unix://%s/kata-proxy-test.sock"
 	testBlkDriveFormat     = "testBlkDriveFormat"
 	testBlockDeviceCtrPath = "testBlockDeviceCtrPath"
 	testDevNo              = "testDevNo"
@@ -48,35 +44,21 @@ var (
 	testVirtPath           = "testVirtPath"
 )
 
-func testGenerateKataProxySockDir() (string, error) {
-	dir, err := ioutil.TempDir("", "kata-proxy-test")
-	if err != nil {
-		return "", err
-	}
-
-	return dir, nil
-}
-
 func TestKataAgentConnect(t *testing.T) {
 	assert := assert.New(t)
-	proxy := mock.ProxyGRPCMock{
-		GRPCImplementer: &gRPCProxy{},
-		GRPCRegister:    gRPCRegister,
-	}
 
-	sockDir, err := testGenerateKataProxySockDir()
+	url, err := mock.GenerateKataMockHybridVSock()
 	assert.NoError(err)
-	defer os.RemoveAll(sockDir)
 
-	testKataProxyURL := fmt.Sprintf(testKataProxyURLTempl, sockDir)
-	err = proxy.Start(testKataProxyURL)
+	hybridVSockTTRPCMock := mock.HybridVSockTTRPCMock{}
+	err = hybridVSockTTRPCMock.Start(url)
 	assert.NoError(err)
-	defer proxy.Stop()
+	defer hybridVSockTTRPCMock.Stop()
 
 	k := &kataAgent{
 		ctx: context.Background(),
 		state: KataAgentState{
-			URL: testKataProxyURL,
+			URL: url,
 		},
 	}
 
@@ -87,183 +69,25 @@ func TestKataAgentConnect(t *testing.T) {
 
 func TestKataAgentDisconnect(t *testing.T) {
 	assert := assert.New(t)
-	proxy := mock.ProxyGRPCMock{
-		GRPCImplementer: &gRPCProxy{},
-		GRPCRegister:    gRPCRegister,
-	}
 
-	sockDir, err := testGenerateKataProxySockDir()
+	url, err := mock.GenerateKataMockHybridVSock()
 	assert.NoError(err)
-	defer os.RemoveAll(sockDir)
 
-	testKataProxyURL := fmt.Sprintf(testKataProxyURLTempl, sockDir)
-	err = proxy.Start(testKataProxyURL)
+	hybridVSockTTRPCMock := mock.HybridVSockTTRPCMock{}
+	err = hybridVSockTTRPCMock.Start(url)
 	assert.NoError(err)
-	defer proxy.Stop()
+	defer hybridVSockTTRPCMock.Stop()
 
 	k := &kataAgent{
 		ctx: context.Background(),
 		state: KataAgentState{
-			URL: testKataProxyURL,
+			URL: url,
 		},
 	}
 
 	assert.NoError(k.connect())
 	assert.NoError(k.disconnect())
 	assert.Nil(k.client)
-}
-
-type gRPCProxy struct{}
-
-var emptyResp = &gpb.Empty{}
-
-func (p *gRPCProxy) CreateContainer(ctx context.Context, req *pb.CreateContainerRequest) (*gpb.Empty, error) {
-	return emptyResp, nil
-}
-
-func (p *gRPCProxy) StartContainer(ctx context.Context, req *pb.StartContainerRequest) (*gpb.Empty, error) {
-	return emptyResp, nil
-}
-
-func (p *gRPCProxy) ExecProcess(ctx context.Context, req *pb.ExecProcessRequest) (*gpb.Empty, error) {
-	return emptyResp, nil
-}
-
-func (p *gRPCProxy) SignalProcess(ctx context.Context, req *pb.SignalProcessRequest) (*gpb.Empty, error) {
-	return emptyResp, nil
-}
-
-func (p *gRPCProxy) WaitProcess(ctx context.Context, req *pb.WaitProcessRequest) (*pb.WaitProcessResponse, error) {
-	return &pb.WaitProcessResponse{}, nil
-}
-
-func (p *gRPCProxy) ListProcesses(ctx context.Context, req *pb.ListProcessesRequest) (*pb.ListProcessesResponse, error) {
-	return &pb.ListProcessesResponse{}, nil
-}
-
-func (p *gRPCProxy) UpdateContainer(ctx context.Context, req *pb.UpdateContainerRequest) (*gpb.Empty, error) {
-	return emptyResp, nil
-}
-
-func (p *gRPCProxy) RemoveContainer(ctx context.Context, req *pb.RemoveContainerRequest) (*gpb.Empty, error) {
-	return emptyResp, nil
-}
-
-func (p *gRPCProxy) WriteStdin(ctx context.Context, req *pb.WriteStreamRequest) (*pb.WriteStreamResponse, error) {
-	return &pb.WriteStreamResponse{}, nil
-}
-
-func (p *gRPCProxy) ReadStdout(ctx context.Context, req *pb.ReadStreamRequest) (*pb.ReadStreamResponse, error) {
-	return &pb.ReadStreamResponse{}, nil
-}
-
-func (p *gRPCProxy) ReadStderr(ctx context.Context, req *pb.ReadStreamRequest) (*pb.ReadStreamResponse, error) {
-	return &pb.ReadStreamResponse{}, nil
-}
-
-func (p *gRPCProxy) CloseStdin(ctx context.Context, req *pb.CloseStdinRequest) (*gpb.Empty, error) {
-	return emptyResp, nil
-}
-
-func (p *gRPCProxy) TtyWinResize(ctx context.Context, req *pb.TtyWinResizeRequest) (*gpb.Empty, error) {
-	return emptyResp, nil
-}
-
-func (p *gRPCProxy) CreateSandbox(ctx context.Context, req *pb.CreateSandboxRequest) (*gpb.Empty, error) {
-	return emptyResp, nil
-}
-
-func (p *gRPCProxy) DestroySandbox(ctx context.Context, req *pb.DestroySandboxRequest) (*gpb.Empty, error) {
-	return emptyResp, nil
-}
-
-func (p *gRPCProxy) UpdateInterface(ctx context.Context, req *pb.UpdateInterfaceRequest) (*aTypes.Interface, error) {
-	return &aTypes.Interface{}, nil
-}
-
-func (p *gRPCProxy) UpdateRoutes(ctx context.Context, req *pb.UpdateRoutesRequest) (*pb.Routes, error) {
-	return &pb.Routes{}, nil
-}
-
-func (p *gRPCProxy) ListInterfaces(ctx context.Context, req *pb.ListInterfacesRequest) (*pb.Interfaces, error) {
-	return &pb.Interfaces{}, nil
-}
-
-func (p *gRPCProxy) ListRoutes(ctx context.Context, req *pb.ListRoutesRequest) (*pb.Routes, error) {
-	return &pb.Routes{}, nil
-}
-
-func (p *gRPCProxy) AddARPNeighbors(ctx context.Context, req *pb.AddARPNeighborsRequest) (*gpb.Empty, error) {
-	return emptyResp, nil
-}
-
-func (p *gRPCProxy) OnlineCPUMem(ctx context.Context, req *pb.OnlineCPUMemRequest) (*gpb.Empty, error) {
-	return emptyResp, nil
-}
-
-func (p *gRPCProxy) StatsContainer(ctx context.Context, req *pb.StatsContainerRequest) (*pb.StatsContainerResponse, error) {
-	return &pb.StatsContainerResponse{}, nil
-}
-
-func (p *gRPCProxy) Check(ctx context.Context, req *pb.CheckRequest) (*pb.HealthCheckResponse, error) {
-	return &pb.HealthCheckResponse{}, nil
-}
-
-func (p *gRPCProxy) Version(ctx context.Context, req *pb.CheckRequest) (*pb.VersionCheckResponse, error) {
-	return &pb.VersionCheckResponse{}, nil
-
-}
-
-func (p *gRPCProxy) PauseContainer(ctx context.Context, req *pb.PauseContainerRequest) (*gpb.Empty, error) {
-	return emptyResp, nil
-}
-
-func (p *gRPCProxy) ResumeContainer(ctx context.Context, req *pb.ResumeContainerRequest) (*gpb.Empty, error) {
-	return emptyResp, nil
-}
-
-func (p *gRPCProxy) ReseedRandomDev(ctx context.Context, req *pb.ReseedRandomDevRequest) (*gpb.Empty, error) {
-	return emptyResp, nil
-}
-
-func (p *gRPCProxy) GetGuestDetails(ctx context.Context, req *pb.GuestDetailsRequest) (*pb.GuestDetailsResponse, error) {
-	return &pb.GuestDetailsResponse{}, nil
-}
-
-func (p *gRPCProxy) SetGuestDateTime(ctx context.Context, req *pb.SetGuestDateTimeRequest) (*gpb.Empty, error) {
-	return &gpb.Empty{}, nil
-}
-
-func (p *gRPCProxy) CopyFile(ctx context.Context, req *pb.CopyFileRequest) (*gpb.Empty, error) {
-	return &gpb.Empty{}, nil
-}
-
-func (p *gRPCProxy) StartTracing(ctx context.Context, req *pb.StartTracingRequest) (*gpb.Empty, error) {
-	return &gpb.Empty{}, nil
-}
-
-func (p *gRPCProxy) StopTracing(ctx context.Context, req *pb.StopTracingRequest) (*gpb.Empty, error) {
-	return &gpb.Empty{}, nil
-}
-
-func (p *gRPCProxy) MemHotplugByProbe(ctx context.Context, req *pb.MemHotplugByProbeRequest) (*gpb.Empty, error) {
-	return &gpb.Empty{}, nil
-}
-
-func (p *gRPCProxy) GetOOMEvent(ctx context.Context, req *pb.GetOOMEventRequest) (*pb.OOMEvent, error) {
-	return &pb.OOMEvent{}, nil
-}
-
-func (p *gRPCProxy) GetMetrics(ctx context.Context, req *pb.GetMetricsRequest) (*pb.Metrics, error) {
-	return &pb.Metrics{}, nil
-}
-
-func gRPCRegister(s *ttrpc.Server, srv interface{}) {
-	switch g := srv.(type) {
-	case *gRPCProxy:
-		pb.RegisterAgentServiceService(s, g)
-		pb.RegisterHealthService(s, g)
-	}
 }
 
 var reqList = []interface{}{
@@ -283,26 +107,18 @@ var reqList = []interface{}{
 func TestKataAgentSendReq(t *testing.T) {
 	assert := assert.New(t)
 
-	impl := &gRPCProxy{}
+	url, err := mock.GenerateKataMockHybridVSock()
+	assert.NoError(err)
 
-	proxy := mock.ProxyGRPCMock{
-		GRPCImplementer: impl,
-		GRPCRegister:    gRPCRegister,
-	}
-
-	sockDir, err := testGenerateKataProxySockDir()
-	assert.Nil(err)
-	defer os.RemoveAll(sockDir)
-
-	testKataProxyURL := fmt.Sprintf(testKataProxyURLTempl, sockDir)
-	err = proxy.Start(testKataProxyURL)
-	assert.Nil(err)
-	defer proxy.Stop()
+	hybridVSockTTRPCMock := mock.HybridVSockTTRPCMock{}
+	err = hybridVSockTTRPCMock.Start(url)
+	assert.NoError(err)
+	defer hybridVSockTTRPCMock.Stop()
 
 	k := &kataAgent{
 		ctx: context.Background(),
 		state: KataAgentState{
-			URL: testKataProxyURL,
+			URL: url,
 		},
 	}
 
@@ -905,14 +721,14 @@ func TestAgentConfigure(t *testing.T) {
 	c := KataAgentConfig{}
 	id := "foobar"
 
-	err = k.configure(h, id, dir, true, c)
+	err = k.configure(h, id, dir, c)
 	assert.Nil(err)
 
-	err = k.configure(h, id, dir, true, c)
+	err = k.configure(h, id, dir, c)
 	assert.Nil(err)
 	assert.Empty(k.state.URL)
 
-	err = k.configure(h, id, dir, false, c)
+	err = k.configure(h, id, dir, c)
 	assert.Nil(err)
 }
 
@@ -996,26 +812,18 @@ func TestAgentCreateContainer(t *testing.T) {
 		},
 	}
 
-	impl := &gRPCProxy{}
+	url, err := mock.GenerateKataMockHybridVSock()
+	assert.NoError(err)
 
-	proxy := mock.ProxyGRPCMock{
-		GRPCImplementer: impl,
-		GRPCRegister:    gRPCRegister,
-	}
-
-	sockDir, err := testGenerateKataProxySockDir()
-	assert.Nil(err)
-	defer os.RemoveAll(sockDir)
-
-	testKataProxyURL := fmt.Sprintf(testKataProxyURLTempl, sockDir)
-	err = proxy.Start(testKataProxyURL)
-	assert.Nil(err)
-	defer proxy.Stop()
+	hybridVSockTTRPCMock := mock.HybridVSockTTRPCMock{}
+	err = hybridVSockTTRPCMock.Start(url)
+	assert.NoError(err)
+	defer hybridVSockTTRPCMock.Stop()
 
 	k := &kataAgent{
 		ctx: context.Background(),
 		state: KataAgentState{
-			URL: testKataProxyURL,
+			URL: url,
 		},
 	}
 
@@ -1023,7 +831,7 @@ func TestAgentCreateContainer(t *testing.T) {
 	assert.Nil(err)
 	defer os.RemoveAll(dir)
 
-	err = k.configure(&mockHypervisor{}, sandbox.id, dir, true, KataAgentConfig{})
+	err = k.configure(&mockHypervisor{}, sandbox.id, dir, KataAgentConfig{})
 	assert.Nil(err)
 
 	// We'll fail on container metadata file creation, but it helps increasing coverage...
@@ -1034,25 +842,18 @@ func TestAgentCreateContainer(t *testing.T) {
 func TestAgentNetworkOperation(t *testing.T) {
 	assert := assert.New(t)
 
-	impl := &gRPCProxy{}
-
-	proxy := mock.ProxyGRPCMock{
-		GRPCImplementer: impl,
-		GRPCRegister:    gRPCRegister,
-	}
-
-	sockDir, err := testGenerateKataProxySockDir()
+	url, err := mock.GenerateKataMockHybridVSock()
 	assert.NoError(err)
-	defer os.RemoveAll(sockDir)
 
-	testKataProxyURL := fmt.Sprintf(testKataProxyURLTempl, sockDir)
-	assert.NoError(proxy.Start(testKataProxyURL))
-	defer proxy.Stop()
+	hybridVSockTTRPCMock := mock.HybridVSockTTRPCMock{}
+	err = hybridVSockTTRPCMock.Start(url)
+	assert.NoError(err)
+	defer hybridVSockTTRPCMock.Stop()
 
 	k := &kataAgent{
 		ctx: context.Background(),
 		state: KataAgentState{
-			URL: testKataProxyURL,
+			URL: url,
 		},
 	}
 
@@ -1069,31 +870,17 @@ func TestAgentNetworkOperation(t *testing.T) {
 	assert.Nil(err)
 }
 
-func TestKataAgentSetProxy(t *testing.T) {
-	assert := assert.New(t)
-
-	k := &kataAgent{ctx: context.Background()}
-	p := &kataBuiltInProxy{}
-	s := &Sandbox{
-		ctx: context.Background(),
-		id:  "foobar",
-	}
-
-	err := k.setProxy(s, p, 0, "")
-	assert.Error(err)
-}
-
 func TestKataGetAgentUrl(t *testing.T) {
 	assert := assert.New(t)
 	var err error
 
-	k := &kataAgent{vmSocket: types.Socket{HostPath: "/abc"}}
+	k := &kataAgent{vmSocket: types.VSock{}}
 	assert.NoError(err)
 	url, err := k.getAgentURL()
 	assert.Nil(err)
 	assert.NotEmpty(url)
 
-	k.vmSocket = types.VSock{}
+	k.vmSocket = types.HybridVSock{}
 	assert.NoError(err)
 	url, err = k.getAgentURL()
 	assert.Nil(err)
@@ -1103,26 +890,18 @@ func TestKataGetAgentUrl(t *testing.T) {
 func TestKataCopyFile(t *testing.T) {
 	assert := assert.New(t)
 
-	impl := &gRPCProxy{}
-
-	proxy := mock.ProxyGRPCMock{
-		GRPCImplementer: impl,
-		GRPCRegister:    gRPCRegister,
-	}
-
-	sockDir, err := testGenerateKataProxySockDir()
+	url, err := mock.GenerateKataMockHybridVSock()
 	assert.NoError(err)
-	defer os.RemoveAll(sockDir)
 
-	testKataProxyURL := fmt.Sprintf(testKataProxyURLTempl, sockDir)
-	err = proxy.Start(testKataProxyURL)
+	hybridVSockTTRPCMock := mock.HybridVSockTTRPCMock{}
+	err = hybridVSockTTRPCMock.Start(url)
 	assert.NoError(err)
-	defer proxy.Stop()
+	defer hybridVSockTTRPCMock.Stop()
 
 	k := &kataAgent{
 		ctx: context.Background(),
 		state: KataAgentState{
-			URL: testKataProxyURL,
+			URL: url,
 		},
 	}
 

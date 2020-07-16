@@ -206,8 +206,7 @@ vhost_user_store_path = "@DEFVHOSTUSERSTOREPATH@"
 #enable_swap = true
 
 # This option changes the default hypervisor and kernel parameters
-# to enable debug output where available. This extra output is added
-# to the proxy logs, but only when proxy debug is also enabled.
+# to enable debug output where available.
 #
 # Default false
 #enable_debug = true
@@ -221,12 +220,6 @@ vhost_user_store_path = "@DEFVHOSTUSERSTOREPATH@"
 # This is the msize used for 9p shares. It is the number of bytes
 # used for 9p packet payload.
 #msize_9p = @DEFMSIZE9P@
-
-# If true and vsocks are supported, use vsocks to communicate directly
-# with the agent and no proxy is started, otherwise use unix
-# sockets and start a proxy to communicate with the agent.
-# Default false
-#use_vsock = true
 
 # If false and nvdimm is supported, use nvdimm device to plug guest image.
 # Otherwise virtio-block device is used.
@@ -315,13 +308,6 @@ vhost_user_store_path = "@DEFVHOSTUSERSTOREPATH@"
 #
 # Default /var/run/kata-containers/cache.sock
 #vm_cache_endpoint = "/var/run/kata-containers/cache.sock"
-
-[proxy.@PROJECT_TYPE@]
-path = "@PROXYPATH@"
-
-# If enabled, proxy messages will be sent to the system log
-# (default: disabled)
-#enable_debug = true
 
 [shim.@PROJECT_TYPE@]
 path = "@SHIMPATH@"

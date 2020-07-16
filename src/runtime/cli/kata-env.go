@@ -101,15 +101,6 @@ type HypervisorInfo struct {
 	PCIeRootPort         uint32
 	HotplugVFIOOnRootBus bool
 	Debug                bool
-	UseVSock             bool
-}
-
-// ProxyInfo stores proxy details
-type ProxyInfo struct {
-	Type    string
-	Version VersionInfo
-	Path    string
-	Debug   bool
 }
 
 // AgentInfo stores agent details
@@ -155,7 +146,6 @@ type EnvInfo struct {
 	Image      ImageInfo
 	Kernel     KernelInfo
 	Initrd     InitrdInfo
-	Proxy      ProxyInfo
 	Agent      AgentInfo
 	Host       HostInfo
 	Netmon     NetmonInfo
@@ -234,40 +224,18 @@ func getHostInfo() (HostInfo, error) {
 		Model:  cpuModel,
 	}
 
+	supportVSocks, _ := vcUtils.SupportsVsocks()
+
 	host := HostInfo{
 		Kernel:             hostKernelVersion,
 		Architecture:       arch,
 		Distro:             hostDistro,
 		CPU:                hostCPU,
 		VMContainerCapable: hostVMContainerCapable,
-		SupportVSocks:      vcUtils.SupportsVsocks(),
+		SupportVSocks:      supportVSocks,
 	}
 
 	return host, nil
-}
-
-func getProxyInfo(config oci.RuntimeConfig) ProxyInfo {
-	if config.ProxyType == vc.NoProxyType {
-		return ProxyInfo{Type: string(config.ProxyType)}
-	}
-
-	proxyConfig := config.ProxyConfig
-
-	var proxyVersionInfo VersionInfo
-	if version, err := getCommandVersion(proxyConfig.Path); err != nil {
-		proxyVersionInfo = unknownVersionInfo
-	} else {
-		proxyVersionInfo = constructVersionInfo(version)
-	}
-
-	proxy := ProxyInfo{
-		Type:    string(config.ProxyType),
-		Version: proxyVersionInfo,
-		Path:    proxyConfig.Path,
-		Debug:   proxyConfig.Debug,
-	}
-
-	return proxy
 }
 
 func getNetmonInfo(config oci.RuntimeConfig) NetmonInfo {
@@ -321,7 +289,6 @@ func getHypervisorInfo(config oci.RuntimeConfig) HypervisorInfo {
 		Path:              hypervisorPath,
 		BlockDeviceDriver: config.HypervisorConfig.BlockDeviceDriver,
 		Msize9p:           config.HypervisorConfig.Msize9p,
-		UseVSock:          config.HypervisorConfig.UseVSock,
 		MemorySlots:       config.HypervisorConfig.MemSlots,
 		EntropySource:     config.HypervisorConfig.EntropySource,
 		SharedFS:          config.HypervisorConfig.SharedFS,
@@ -346,8 +313,6 @@ func getEnvInfo(configFile string, config oci.RuntimeConfig) (env EnvInfo, err e
 	if err != nil {
 		return EnvInfo{}, err
 	}
-
-	proxy := getProxyInfo(config)
 
 	netmon := getNetmonInfo(config)
 
@@ -378,7 +343,6 @@ func getEnvInfo(configFile string, config oci.RuntimeConfig) (env EnvInfo, err e
 		Image:      image,
 		Kernel:     kernel,
 		Initrd:     initrd,
-		Proxy:      proxy,
 		Agent:      agent,
 		Host:       host,
 		Netmon:     netmon,

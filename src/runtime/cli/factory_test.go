@@ -74,7 +74,6 @@ func TestFactoryCLIFunctionInit(t *testing.T) {
 	runtimeConfig.FactoryConfig.Template = true
 	runtimeConfig.FactoryConfig.TemplatePath = "/run/vc/vm/template"
 	runtimeConfig.HypervisorType = vc.MockHypervisor
-	runtimeConfig.ProxyType = vc.NoopProxyType
 	ctx.App.Metadata["runtimeConfig"] = runtimeConfig
 	fn, ok = initFactoryCommand.Action.(func(context *cli.Context) error)
 	assert.True(ok)

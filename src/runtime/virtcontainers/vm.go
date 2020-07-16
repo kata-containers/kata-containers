@@ -26,10 +26,6 @@ type VM struct {
 	hypervisor hypervisor
 	agent      agent
 
-	proxy    proxy
-	proxyPid int
-	proxyURL string
-
 	cpu    uint32
 	memory uint32
 
@@ -44,9 +40,6 @@ type VMConfig struct {
 	HypervisorConfig HypervisorConfig
 
 	AgentConfig KataAgentConfig
-
-	ProxyType   ProxyType
-	ProxyConfig ProxyConfig
 }
 
 // Valid check VMConfig validity.
@@ -89,50 +82,8 @@ func GrpcToVMConfig(j *pb.GrpcVMConfig) (*VMConfig, error) {
 	return &config, nil
 }
 
-func setupProxy(h hypervisor, agent agent, config VMConfig, id string) (int, string, proxy, error) {
-	consoleURL, err := h.getSandboxConsole(id)
-	if err != nil {
-		return -1, "", nil, err
-	}
-	agentURL, err := agent.getAgentURL()
-	if err != nil {
-		return -1, "", nil, err
-	}
-
-	proxy, err := newProxy(config.ProxyType)
-	if err != nil {
-		return -1, "", nil, err
-	}
-
-	proxyParams := proxyParams{
-		id:         id,
-		path:       config.ProxyConfig.Path,
-		agentURL:   agentURL,
-		consoleURL: consoleURL,
-		logger:     virtLog.WithField("vm", id),
-		debug:      config.ProxyConfig.Debug,
-	}
-	pid, url, err := proxy.start(proxyParams)
-	if err != nil {
-		virtLog.WithFields(logrus.Fields{
-			"vm":         id,
-			"proxy type": config.ProxyType,
-			"params":     proxyParams,
-		}).WithError(err).Error("failed to start proxy")
-		return -1, "", nil, err
-	}
-
-	return pid, url, proxy, nil
-}
-
 // NewVM creates a new VM based on provided VMConfig.
 func NewVM(ctx context.Context, config VMConfig) (*VM, error) {
-	var (
-		proxy proxy
-		pid   int
-		url   string
-	)
-
 	// 1. setup hypervisor
 	hypervisor, err := newHypervisor(config.HypervisorType)
 	if err != nil {
@@ -169,7 +120,11 @@ func NewVM(ctx context.Context, config VMConfig) (*VM, error) {
 	agent := newAagentFunc()
 
 	vmSharePath := buildVMSharePath(id, store.RunVMStoragePath())
-	err = agent.configure(hypervisor, id, vmSharePath, isProxyBuiltIn(config.ProxyType), config.AgentConfig)
+	err = agent.configure(hypervisor, id, vmSharePath, config.AgentConfig)
+	if err != nil {
+		return nil, err
+	}
+	err = agent.setAgentURL()
 	if err != nil {
 		return nil, err
 	}
@@ -186,22 +141,7 @@ func NewVM(ctx context.Context, config VMConfig) (*VM, error) {
 		}
 	}()
 
-	// 4. setup proxy
-	pid, url, proxy, err = setupProxy(hypervisor, agent, config, id)
-	if err != nil {
-		return nil, err
-	}
-	defer func() {
-		if err != nil {
-			virtLog.WithField("vm", id).WithError(err).Info("clean up proxy")
-			proxy.stop(pid)
-		}
-	}()
-	if err = agent.setProxy(nil, proxy, pid, url); err != nil {
-		return nil, err
-	}
-
-	// 5. check agent aliveness
+	// 4. check agent aliveness
 	// VMs booted from template are paused, do not check
 	if !config.HypervisorConfig.BootFromTemplate {
 		virtLog.WithField("vm", id).Info("check agent status")
@@ -215,9 +155,6 @@ func NewVM(ctx context.Context, config VMConfig) (*VM, error) {
 		id:         id,
 		hypervisor: hypervisor,
 		agent:      agent,
-		proxy:      proxy,
-		proxyPid:   pid,
-		proxyURL:   url,
 		cpu:        config.HypervisorConfig.NumVCPUs,
 		memory:     config.HypervisorConfig.MemorySize,
 		store:      store,
@@ -254,21 +191,12 @@ func NewVMFromGrpc(ctx context.Context, v *pb.GrpcVM, config VMConfig) (*VM, err
 	// create agent instance
 	newAagentFunc := getNewAgentFunc(ctx)
 	agent := newAagentFunc()
-	agent.configureFromGrpc(hypervisor, v.Id, isProxyBuiltIn(config.ProxyType), config.AgentConfig)
-
-	proxy, err := newProxy(config.ProxyType)
-	if err != nil {
-		return nil, err
-	}
-	agent.setProxyFromGrpc(proxy, int(v.ProxyPid), v.ProxyURL)
+	agent.configureFromGrpc(hypervisor, v.Id, config.AgentConfig)
 
 	return &VM{
 		id:         v.Id,
 		hypervisor: hypervisor,
 		agent:      agent,
-		proxy:      proxy,
-		proxyPid:   int(v.ProxyPid),
-		proxyURL:   v.ProxyURL,
 		cpu:        v.Cpu,
 		memory:     v.Memory,
 		cpuDelta:   v.CpuDelta,
@@ -308,15 +236,12 @@ func (v *VM) Start() error {
 	return v.hypervisor.startSandbox(vmStartTimeout)
 }
 
-// Disconnect agent and proxy connections to a VM
+// Disconnect agent connections to a VM
 func (v *VM) Disconnect() error {
 	v.logger().Info("kill vm")
 
 	if err := v.agent.disconnect(); err != nil {
 		v.logger().WithError(err).Error("failed to disconnect agent")
-	}
-	if err := v.proxy.stop(v.proxyPid); err != nil {
-		v.logger().WithError(err).Error("failed to stop proxy")
 	}
 
 	return nil
@@ -413,13 +338,7 @@ func (v *VM) assignSandbox(s *Sandbox) error {
 		"vmSockDir":   vmSockDir,
 		"sbSharePath": sbSharePath,
 		"sbSockDir":   sbSockDir,
-		"proxy-pid":   v.proxyPid,
-		"proxy-url":   v.proxyURL,
 	}).Infof("assign vm to sandbox %s", s.id)
-
-	if err := s.agent.setProxy(s, v.proxy, v.proxyPid, v.proxyURL); err != nil {
-		return err
-	}
 
 	if err := s.agent.reuseAgent(v.agent); err != nil {
 		return err
@@ -454,9 +373,6 @@ func (v *VM) ToGrpc(config VMConfig) (*pb.GrpcVM, error) {
 	return &pb.GrpcVM{
 		Id:         v.id,
 		Hypervisor: hJSON,
-
-		ProxyPid: int64(v.proxyPid),
-		ProxyURL: v.proxyURL,
 
 		Cpu:      v.cpu,
 		Memory:   v.memory,

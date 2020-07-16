@@ -27,7 +27,6 @@ func TestTemplateFactory(t *testing.T) {
 	}
 	vmConfig := vc.VMConfig{
 		HypervisorType:   vc.MockHypervisor,
-		ProxyType:        vc.NoopProxyType,
 		HypervisorConfig: hyperConfig,
 	}
 

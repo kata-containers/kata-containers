@@ -141,8 +141,7 @@ block_device_driver = "@DEFBLOCKSTORAGEDRIVER_FC@"
 #enable_swap = true
 
 # This option changes the default hypervisor and kernel parameters
-# to enable debug output where available. This extra output is added
-# to the proxy logs, but only when proxy debug is also enabled.
+# to enable debug output where available.
 # 
 # Default false
 #enable_debug = true
@@ -156,11 +155,6 @@ block_device_driver = "@DEFBLOCKSTORAGEDRIVER_FC@"
 # This is the msize used for 9p shares. It is the number of bytes 
 # used for 9p packet payload.
 #msize_9p = @DEFMSIZE9P@
-
-# If true and vsocks are supported, use vsocks to communicate directly
-# with the agent (no proxy is started).
-# Default true
-use_vsock = true
 
 # VFIO devices are hotplugged on a bridge by default. 
 # Enable hotplugging on root bus. This may be required for devices with

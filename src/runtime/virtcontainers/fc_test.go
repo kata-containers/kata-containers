@@ -16,11 +16,7 @@ func TestFCGenerateSocket(t *testing.T) {
 	assert := assert.New(t)
 
 	fc := firecracker{}
-	i, err := fc.generateSocket("a", false)
-	assert.Error(err)
-	assert.Nil(i)
-
-	i, err = fc.generateSocket("a", true)
+	i, err := fc.generateSocket("a")
 	assert.NoError(err)
 	assert.NotNil(i)
 

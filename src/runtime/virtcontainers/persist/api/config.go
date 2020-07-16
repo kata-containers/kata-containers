@@ -146,9 +146,6 @@ type HypervisorConfig struct {
 	// when running on top of another VMM.
 	DisableNestingChecks bool
 
-	// UseVSock use a vsock for agent communication
-	UseVSock bool
-
 	// DisableImageNvdimm disables nvdimm for guest rootfs image
 	DisableImageNvdimm bool
 
@@ -194,14 +191,6 @@ type HypervisorConfig struct {
 // to reach the Kata Containers agent.
 type KataAgentConfig struct {
 	LongLiveConn bool
-	UseVSock     bool
-}
-
-// ProxyConfig is a structure storing information needed from any
-// proxy in order to be properly initialized.
-type ProxyConfig struct {
-	Path  string
-	Debug bool
 }
 
 // ShimConfig is the structure providing specific configuration
@@ -235,9 +224,6 @@ type SandboxConfig struct {
 
 	// only one agent config can be non-nil according to agent type
 	KataAgentConfig *KataAgentConfig `json:",omitempty"`
-
-	ProxyType   string
-	ProxyConfig ProxyConfig
 
 	ShimType       string
 	KataShimConfig *ShimConfig

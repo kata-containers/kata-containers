@@ -23,7 +23,7 @@ typeset -r unknown="unknown"
 typeset -r osbuilder_file="/var/lib/osbuilder/osbuilder.yaml"
 
 # Maximum number of errors to show for a single system component
-# (such as runtime or proxy).
+# (such as runtime).
 PROBLEM_LIMIT=${PROBLEM_LIMIT:-50}
 
 # List of patterns used to detect problems in logfiles.
@@ -296,17 +296,6 @@ show_containerd_shimv2_log_details()
 	end_section
 }
 
-show_proxy_log_details()
-{
-	local title="Proxy logs"
-
-	subheading "$title"
-
-	start_section "$title"
-	find_system_journal_problems "proxy" "@PROJECT_TYPE@-proxy"
-	end_section
-}
-
 show_runtime_log_details()
 {
 	local title="Runtime logs"
@@ -347,7 +336,6 @@ show_log_details()
 	heading "$title"
 
 	show_runtime_log_details
-	show_proxy_log_details
 	show_shim_log_details
 	show_throttler_log_details
 	show_containerd_shimv2_log_details
@@ -377,7 +365,6 @@ show_package_versions()
 	# core components
 	for project in @PROJECT_TYPE@
 	do
-		pattern+="|${project}-proxy"
 		pattern+="|${project}-runtime"
 		pattern+="|${project}-shim"
 		pattern+="|${project}-ksm-throttler"

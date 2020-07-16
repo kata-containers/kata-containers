@@ -23,7 +23,7 @@ import (
 )
 
 const (
-	qemuArchBaseQemuPath    = "/usr/bin/qemu-system-x86_64"
+	qemuArchBaseQemuPath = "/usr/bin/qemu-system-x86_64"
 )
 
 var qemuArchBaseMachine = govmmQemu.Machine{
@@ -52,12 +52,12 @@ var qemuArchBaseKernelParams = []Param{
 
 func newQemuArchBase() *qemuArchBase {
 	return &qemuArchBase{
-		qemuMachine:           qemuArchBaseMachine,
-		qemuExePath:           qemuArchBaseQemuPaths[qemuArchBaseMachine.Type],
-		nestedRun:             false,
-		kernelParamsNonDebug:  qemuArchBaseKernelParamsNonDebug,
-		kernelParamsDebug:     qemuArchBaseKernelParamsDebug,
-		kernelParams:          qemuArchBaseKernelParams,
+		qemuMachine:          qemuArchBaseMachine,
+		qemuExePath:          qemuArchBaseQemuPaths[qemuArchBaseMachine.Type],
+		nestedRun:            false,
+		kernelParamsNonDebug: qemuArchBaseKernelParamsNonDebug,
+		kernelParamsDebug:    qemuArchBaseKernelParamsDebug,
+		kernelParams:         qemuArchBaseKernelParams,
 	}
 }
 
@@ -236,7 +236,7 @@ func TestQemuArchBaseAppendConsoles(t *testing.T) {
 	assert := assert.New(t)
 	qemuArchBase := newQemuArchBase()
 
-	path := filepath.Join(filepath.Join(fs.MockRunStoragePath(), sandboxID), consoleSocket)
+	path := filepath.Join(filepath.Join(fs.MockRunStoragePath(), "test"), consoleSocket)
 
 	expectedOut := []govmmQemu.Device{
 		govmmQemu.SerialDevice{
