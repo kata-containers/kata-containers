@@ -20,8 +20,7 @@ source "${script_dir}/../scripts/lib.sh"
 ARCH=${ARCH:-$(arch_to_golang "$(uname -m)")}
 
 get_kata_version() {
-	local branch="$1"
-	curl -SsL "https://raw.githubusercontent.com/${project}/kata-containers/${branch}/VERSION"
+	cat "${script_dir}/../../../VERSION"
 }
 
 gen_version_file() {
@@ -54,7 +53,7 @@ gen_version_file() {
 
 	# - is not a valid char for rpmbuild
 	# see https://github.com/semver/semver/issues/145
-	kata_version=$(get_kata_version "${branch}")
+	kata_version=$(get_kata_version)
 	kata_version=${kata_version/-/\~}
 	cat > "$versions_txt" <<EOT
 # This is a generated file from ${script_name}
@@ -168,7 +167,7 @@ main() {
 		if [ -n "${use_head}" ]; then
 			kata_version="HEAD"
 		else
-			kata_version=$(get_kata_version "${branch}")
+			kata_version=$(get_kata_version)
 		fi
 	fi
 
@@ -178,7 +177,7 @@ main() {
 		[ -n "${kata_version}" ] || die "${version_file} does not contain a valid kata_version variable"
 		# Replacing ~ with -, as - is not a valid char for rpmbuild
 		# see https://github.com/semver/semver/issues/145
-		[ "$(get_kata_version $branch)" = "${kata_version/\~/-}" ] && compare_result="matches" || compare_result="is different from"
+		[ "$(get_kata_version)" = "${kata_version/\~/-}" ] && compare_result="matches" || compare_result="is different from"
 		echo "${kata_version} in ${versions_txt} ${compare_result} the version at branch ${branch}"
 		return
 	fi

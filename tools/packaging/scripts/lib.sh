@@ -9,6 +9,8 @@ export GOPATH=${GOPATH:-${HOME}/go}
 export tests_repo="${tests_repo:-github.com/kata-containers/tests}"
 export tests_repo_dir="$GOPATH/src/$tests_repo"
 
+this_script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 hub_bin="hub-bin"
 
 clone_tests_repo() {
@@ -50,10 +52,7 @@ get_from_kata_deps() {
 	install_yq >&2
 
 	if [ ! -e "${versions_file}" ]; then
-		yaml_url="https://raw.githubusercontent.com/kata-containers/kata-containers/${branch}/versions.yaml"
-		echo "versions file (${versions_file}) does not exist" >&2
-		echo "Download from ${yaml_url}" >&2
-		curl --silent -o "${versions_file}" "$yaml_url"
+		cp "${this_script_dir}/../../../versions.yaml" ${versions_file}
 	fi
 	result=$("${GOPATH}/bin/yq" read -X "$versions_file" "$dependency")
 	[ "$result" = "null" ] && result=""
