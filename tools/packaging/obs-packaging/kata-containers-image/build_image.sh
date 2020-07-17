@@ -14,7 +14,6 @@ set -o pipefail
 readonly script_name="$(basename "${BASH_SOURCE[0]}")"
 readonly script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly tmp_dir=$(mktemp -d -t build-image-tmp.XXXXXXXXXX)
-readonly osbuilder_url=https://github.com/kata-containers/kata-containers.git
 export   GOPATH="${tmp_dir}/go"
 
 export GOPATH=${GOPATH:-${HOME}/go}
@@ -28,16 +27,11 @@ trap exit_handler EXIT
 
 arch_target="$(uname -m)"
 
-kata_version="master"
-
+source "${script_dir}/../versions.txt"
 # osbuilder info
-osbuider_version="${KATA_OSBUILDER_VERSION:-}"
+[ -n "${osbuider_version}" ] || osbuider_version="${kata_version}"
 # Agent version
-agent_version="${AGENT_VERSION:-}"
-if [ -z "${agent_version}" ]; then
-	source "${script_dir}/../versions.txt"
-	agent_version="${kata_agent_hash}"
-fi
+[ -n "${agent_version}" ] || agent_version="${kata_version}"
 
 readonly destdir="${PWD}"
 
@@ -45,7 +39,6 @@ build_initrd() {
 	sudo -E PATH="$PATH" make initrd \
 		DISTRO="$initrd_distro" \
 		DEBUG="${DEBUG:-}" \
-		AGENT_VERSION="${agent_version}" \
 		OS_VERSION="${initrd_os_version}" \
 		ROOTFS_BUILD_DEST="${tmp_dir}/initrd-image" \
 		USE_DOCKER=1 \
@@ -58,21 +51,20 @@ build_image() {
 		DISTRO="${img_distro}" \
 		DEBUG="${DEBUG:-}" \
 		USE_DOCKER="1" \
-		AGENT_VERSION="${agent_version}" \
 		IMG_OS_VERSION="${img_os_version}" \
 		ROOTFS_BUILD_DEST="${tmp_dir}/rootfs-image"
 }
 
 create_tarball() {
-	agent_sha=$(get_repo_hash "${GOPATH}/src/github.com/kata-containers/agent")
+	agent_sha=$(get_repo_hash "${script_dir}")
 	#reduce sha size for short names
 	agent_sha=${agent_sha:0:${short_commit_length}}
 	tarball_name="kata-containers-${osbuider_version}-${agent_sha}-${arch_target}.tar.gz"
 	image_name="kata-containers-image_${img_distro}_${osbuider_version}_agent_${agent_sha}.img"
 	initrd_name="kata-containers-initrd_${initrd_distro}_${osbuider_version}_agent_${agent_sha}.initrd"
 
-	mv "${tmp_dir}/osbuilder/kata-containers.img" "${image_name}"
-	mv "${tmp_dir}/osbuilder/kata-containers-initrd.img" "${initrd_name}"
+	mv "${script_dir}/../../../osbuilder/kata-containers.img" "${image_name}"
+	mv "${script_dir}/../../../osbuilder/kata-containers-initrd.img" "${initrd_name}"
 	sudo tar cfzv "${tarball_name}" "${initrd_name}" "${image_name}"
 }
 
@@ -105,10 +97,6 @@ main() {
 			;;
 		esac
 	done
-	# osbuilder info
-	[ -n "${osbuider_version}" ] || osbuider_version="${kata_version}"
-	# Agent version
-	[ -n "${agent_version}" ] || agent_version="${kata_version}"
 
 	install_yq
 
@@ -125,9 +113,7 @@ main() {
 	initrd_os_version=$(get_from_kata_deps "assets.image.architecture.${arch_target}.version" "${kata_version}")
 
 	shift "$((OPTIND - 1))"
-	git clone "$osbuilder_url" "${tmp_dir}/kata-containers"
-	pushd "${tmp_dir}/kata-containers/tools/osbuilder"
-	git checkout "${osbuider_version}"
+	pushd "${script_dir}/../../../osbuilder/"
 	build_initrd
 	build_image
 	create_tarball
