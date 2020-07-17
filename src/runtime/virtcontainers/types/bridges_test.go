@@ -43,6 +43,55 @@ func testAddRemoveDevice(t *testing.T, b *Bridge) {
 	}
 }
 
+func TestAddressFormat(t *testing.T) {
+	assert := assert.New(t)
+
+	// successful cases for AddressFormat functions
+	var ccwbridge = NewBridge(CCW, "", make(map[uint32]string), 0)
+	format, err := ccwbridge.AddressFormatCCW("0")
+	assert.NoError(err)
+	assert.Equal(format, "fe.0.0", "Format string should be fe.0.0")
+	format, err = ccwbridge.AddressFormatCCWForVirtServer("0")
+	assert.NoError(err)
+	assert.Equal(format, "0.0.0", "Format string should be 0.0.0")
+
+	// failure cases for AddressFormat functions
+	var pcibridge = NewBridge(PCI, "", make(map[uint32]string), 0)
+	_, err = pcibridge.AddressFormatCCW("0")
+	assert.Error(err)
+	_, err = pcibridge.AddressFormatCCWForVirtServer("0")
+	assert.Error(err)
+
+}
+
+func TestNewBridge(t *testing.T) {
+	assert := assert.New(t)
+
+	var pci Type = "pci"
+	var pcie Type = "pcie"
+	var ccw Type = "ccw"
+	var maxDefaultCapacity uint32
+
+	var pcibridge = NewBridge(PCI, "", make(map[uint32]string), 0)
+	assert.Equal(pcibridge.Type, pci, "Type should be PCI")
+	assert.Equal(pcibridge.Devices, make(map[uint32]string), "Devices should be equal to make(map[uint32]string)")
+	assert.Equal(pcibridge.Addr, 0, "Address should be 0")
+
+	var pciebridge = NewBridge(PCIE, "", make(map[uint32]string), 0)
+	assert.Equal(pciebridge.Type, pcie, "Type should be PCIE")
+	assert.Equal(pciebridge.Devices, make(map[uint32]string), "Devices should be equal to make(map[uint32]string)")
+	assert.Equal(pciebridge.Addr, 0, "Address should be 0")
+
+	var ccwbridge = NewBridge(CCW, "", make(map[uint32]string), 0)
+	assert.Equal(ccwbridge.Type, ccw, "Type should be CCW")
+	assert.Equal(ccwbridge.Devices, make(map[uint32]string), "Devices should be equal to make(map[uint32]string)")
+	assert.Equal(ccwbridge.Addr, 0, "Address should be 0")
+
+	var defaultbridge = NewBridge("", "", make(map[uint32]string), 0)
+	assert.Empty(defaultbridge.Type)
+	assert.Equal(defaultbridge.MaxCapacity, maxDefaultCapacity, "MaxCapacity should be 0")
+}
+
 func TestAddRemoveDevicePCI(t *testing.T) {
 
 	// create a pci bridge
