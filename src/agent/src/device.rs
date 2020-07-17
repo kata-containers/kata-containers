@@ -398,7 +398,7 @@ pub fn update_device_cgroup(spec: &mut Spec) -> Result<()> {
         major: Some(major),
         minor: Some(minor),
         r#type: String::from("b"),
-        access: String::from("rwm"),
+        access: String::from("rw"),
     });
 
     Ok(())
