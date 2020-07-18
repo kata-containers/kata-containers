@@ -34,3 +34,12 @@ func TestFsSharingCapability(t *testing.T) {
 	caps.SetFsSharingSupport()
 	assert.True(t, caps.IsFsSharingSupported())
 }
+
+func TestMultiQueueCapability(t *testing.T) {
+	assert := assert.New(t)
+	var caps Capabilities
+
+	assert.False(caps.IsMultiQueueSupported())
+	caps.SetMultiQueueSupport()
+	assert.True(caps.IsMultiQueueSupported())
+}
