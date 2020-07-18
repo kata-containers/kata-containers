@@ -27,18 +27,16 @@ kernel_version=""
 # Flag know if need to download the kernel source
 download_kernel=false
 # The repository where kernel configuration lives
-runtime_repository="github.com/${project_name}/runtime"
-# The repository where kernel configuration lives
 readonly kernel_config_repo="github.com/${project_name}/kata-containers/tools/packaging"
 readonly patches_repo="github.com/${project_name}/kata-containers/tools/packaging"
 readonly patches_repo_dir="${GOPATH}/src/${patches_repo}"
 # Default path to search patches to apply to kernel
-readonly default_patches_dir="${patches_repo_dir}/kernel/patches/"
+readonly default_patches_dir="${script_dir}/patches/"
 # Default path to search config for kata
-readonly default_kernel_config_dir="${GOPATH}/src/${kernel_config_repo}/kernel/configs"
+readonly default_kernel_config_dir="${script_dir}/configs"
 # Default path to search for kernel config fragments
-readonly default_config_frags_dir="${GOPATH}/src/${kernel_config_repo}/kernel/configs/fragments"
-readonly default_config_whitelist="${GOPATH}/src/${kernel_config_repo}/kernel/configs/fragments/whitelist.conf"
+readonly default_config_frags_dir="${script_dir}/configs/fragments"
+readonly default_config_whitelist="${script_dir}/configs/fragments/whitelist.conf"
 # GPU vendor
 readonly GV_INTEL="intel"
 readonly GV_NVIDIA="nvidia"
@@ -291,16 +289,6 @@ get_default_kernel_config() {
 get_config_and_patches() {
 	if [ -z "${patches_path}" ]; then
 		patches_path="${default_patches_dir}"
-		if [ ! -d "${patches_path}" ]; then
-			tag="${kata_version}"
-			git clone -q "https://${patches_repo}.git" "${patches_repo_dir}"
-			pushd "${patches_repo_dir}" >> /dev/null
-			if [ -n $tag ] ; then
-				info "checking out $tag"
-				git checkout -q $tag
-			fi
-			popd >> /dev/null
-		fi
 	fi
 }
 
