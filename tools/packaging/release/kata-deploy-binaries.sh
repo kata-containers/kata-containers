@@ -13,7 +13,7 @@ readonly script_name="$(basename "${BASH_SOURCE[0]}")"
 readonly script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly project="kata-containers"
 readonly prefix="/opt/kata"
-readonly project_to_attach="github.com/${project}/runtime"
+readonly project_to_attach="github.com/${project}/${project}"
 readonly tmp_dir=$(mktemp -d -t static-build-tmp.XXXXXXXXXX)
 readonly GOPATH="${tmp_dir}/go"
 # flag to decide if push tarball to github
@@ -31,12 +31,6 @@ exit_handler() {
 	[ -d "${tmp_dir}" ] || sudo rm -rf "${tmp_dir}"
 }
 trap exit_handler EXIT
-
-projects=(
-	proxy
-	runtime
-	shim
-)
 
 die() {
 	msg="$*"
@@ -201,22 +195,18 @@ install_docker_config_script() {
 #Install all components that are not assets
 install_kata_components() {
 	kata_version=${1:-$kata_version}
-	for p in "${projects[@]}"; do
-		echo "Download ${p}"
-		go get "github.com/${project}/$p" || true
-		pushd "${GOPATH}/src/github.com/${project}/$p" >>/dev/null
-		echo "Checkout to version ${kata_version}"
-		git checkout "${kata_version}"
-		echo "Build"
-		make \
-			PREFIX="${prefix}" \
-			QEMUCMD="qemu-system-x86_64"
-		echo "Install"
-		make PREFIX="${prefix}" \
-			DESTDIR="${destdir}" \
-			install
-		popd >>/dev/null
-	done
+	pushd "${script_dir}/../../../"
+	echo "Checkout to version ${kata_version}"
+	git checkout "${kata_version}"
+	echo "Build"
+	make \
+		PREFIX="${prefix}" \
+		QEMUCMD="qemu-system-x86_64"
+	echo "Install"
+	make PREFIX="${prefix}" \
+		DESTDIR="${destdir}" \
+		install
+	popd
 	sed -i -e '/^initrd =/d' "${destdir}/${prefix}/share/defaults/${project}/configuration-qemu.toml"
 	sed -i -e '/^initrd =/d' "${destdir}/${prefix}/share/defaults/${project}/configuration-fc.toml"
 	pushd "${destdir}/${prefix}/share/defaults/${project}"
@@ -300,7 +290,7 @@ main() {
 	tar cfJ "${tarball_name}" "./opt"
 	popd >>/dev/null
 	if [ "${push}" == "true" ]; then
-		hub -C "${GOPATH}/src/github.com/${project}/runtime" release edit -a "${tarball_name}" "${kata_version}"
+		hub -C "${GOPATH}/src/github.com/${project}/${project}" release edit -a "${tarball_name}" "${kata_version}"
 	else
 		echo "Wont push the tarball to github use -p option to do it."
 	fi
