@@ -660,7 +660,6 @@ main()
 {
 	parse_arguments $*
 	check_env_variables
-	init="${ROOTFS_DIR}/sbin/init"
 
 	if [ -n "$distro" ]; then
 		build_rootfs_distro
@@ -673,6 +672,7 @@ main()
 		prepare_overlay
 	fi
 
+	init="${ROOTFS_DIR}/sbin/init"
 	setup_rootfs
 }
 
