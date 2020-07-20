@@ -114,7 +114,7 @@ assets:
     description: |
       Root filesystem disk image used to boot the guest virtual
       machine.
-    url: "https://github.com/kata-containers/osbuilder"
+    url: "https://github.com/kata-containers/kata-containers/tools/osbuilder"
     architecture:
       aarch64:
         name: "ubuntu"
@@ -135,7 +135,7 @@ assets:
     description: |
       Root filesystem initrd used to boot the guest virtual
       machine.
-    url: "https://github.com/kata-containers/osbuilder"
+    url: "https://github.com/kata-containers/kata-containers/tools/osbuilder"
     architecture:
       aarch64:
         name: &default-initrd-name "alpine"
@@ -161,16 +161,6 @@ assets:
     description: "Linux kernel with virtio-fs support"
     url: "https://gitlab.com/virtio-fs/linux.git"
     tag: "kata-v5.6-april-09-2020"
-
-components:
-  description: "Core system functionality"
-
-  agent:
-    description: |
-      Container management service running in the guest virtual machines
-      root context.
-    url: "https://github.com/kata-containers/agent"
-    commit: "6f6e9ecd8aded0783c31968b304a9d6589114363"
 
 externals:
   description: "Third-party projects used by the system"

@@ -6,7 +6,7 @@
 
 all: | update-yaml generate-client-code
 MK_DIR := $(dir $(realpath $(firstword $(MAKEFILE_LIST))))
-YQ_INSTALLER := "$(MK_DIR)/../../../.ci/install-yq.sh"
+YQ_INSTALLER := "$(MK_DIR)/../../../../../ci/install_yq.sh"
 VERSIONS_FILE := "$(MK_DIR)/../../../../../versions.yaml"
 YQ := $(shell command -v yq 2> /dev/null)
 
@@ -22,7 +22,7 @@ generate-client-code: clean-generated-code
 
 update-yaml:
 ifndef YQ
-	$(MK_DIR)/../../../.ci/install-yq.sh
+	$(MK_DIR)/../../../../../ci//install_yq.sh
 endif
 	clh_version=$(shell yq r $(VERSIONS_FILE) assets.hypervisor.cloud_hypervisor.version); \
 	curl -OL https://raw.githubusercontent.com/cloud-hypervisor/cloud-hypervisor/$$clh_version/vmm/src/api/openapi/cloud-hypervisor.yaml

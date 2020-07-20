@@ -71,4 +71,3 @@ function install_yq() {
 }
 
 install_yq
-
