@@ -7,15 +7,11 @@
 set -e
 
 KATA_REPO=${KATA_REPO:-github.com/kata-containers/kata-containers}
-KATA_REPO_DIR="${GOPATH}/src/${KATA_REPO}"
 CMAKE_VERSION=${CMAKE_VERSION:-"null"}
 MUSL_VERSION=${MUSL_VERSION:-"null"}
-#https://github.com/kata-containers/tests/blob/master/.ci/jenkins_job_build.sh
 # Give preference to variable set by CI
-KATA_BRANCH=${branch:-}
-KATA_BRANCH=${KATA_BRANCH:-master}
-yq_file="${script_dir}/../scripts/install-yq.sh"
-kata_versions_file="${KATA_REPO_DIR}/versions.yaml"
+yq_file="${script_dir}/../../../ci/install_yq.sh"
+kata_versions_file="${script_dir}/../../../versions.yaml"
 
 error()
 {
@@ -199,7 +195,7 @@ create_summary_file()
 	if [ "${RUST_AGENT}" == "no" ]; then
 		agent_version=$("$agent" --version|awk '{print $NF}')
 	else
-		local -r agentdir="${GOPATH}/src/${KATA_REPO}/src/agent"
+		local -r agentdir="${script_dir}/../../../"
 		agent_version=$(cat ${agentdir}/VERSION)
 	fi
 

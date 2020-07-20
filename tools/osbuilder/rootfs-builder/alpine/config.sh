@@ -13,9 +13,7 @@ BASE_PACKAGES="alpine-base"
 # See a list of mirrors at http://nl.alpinelinux.org/alpine/MIRRORS.txt
 MIRROR=http://dl-5.alpinelinux.org/alpine
 
-# Mandatory Packages that must be installed
-#  - iptables: Need by Kata agent
-PACKAGES="iptables"
+PACKAGES=""
 
 # Init process must be one of {systemd,kata-agent}
 INIT_PROCESS=kata-agent

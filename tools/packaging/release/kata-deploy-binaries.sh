@@ -195,7 +195,7 @@ install_docker_config_script() {
 #Install all components that are not assets
 install_kata_components() {
 	kata_version=${1:-$kata_version}
-	pushd "${script_dir}/../../../"
+	pushd "${script_dir}/../../../src/runtime"
 	echo "Checkout to version ${kata_version}"
 	git checkout "${kata_version}"
 	echo "Build"
