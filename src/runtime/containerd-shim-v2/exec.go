@@ -7,6 +7,7 @@ package containerdshim
 
 import (
 	"fmt"
+	"io"
 	"strings"
 	"time"
 
@@ -31,6 +32,9 @@ type exec struct {
 
 	exitIOch chan struct{}
 	exitCh   chan uint32
+
+	stdinCloser chan struct{}
+	stdinPipe   io.WriteCloser
 
 	exitTime time.Time
 }
@@ -108,13 +112,14 @@ func newExec(c *container, stdin, stdout, stderr string, terminal bool, jspec *g
 	}
 
 	exec := &exec{
-		container: c,
-		cmds:      cmds,
-		tty:       tty,
-		exitCode:  exitCode255,
-		exitIOch:  make(chan struct{}),
-		exitCh:    make(chan uint32, 1),
-		status:    task.StatusCreated,
+		container:   c,
+		cmds:        cmds,
+		tty:         tty,
+		exitCode:    exitCode255,
+		exitIOch:    make(chan struct{}),
+		stdinCloser: make(chan struct{}),
+		exitCh:      make(chan uint32, 1),
+		status:      task.StatusCreated,
 	}
 
 	return exec, nil
