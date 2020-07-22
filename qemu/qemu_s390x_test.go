@@ -23,7 +23,7 @@ import "testing"
 // -pci devices don't play well with Z hence replace them with corresponding -ccw devices
 // See https://wiki.qemu.org/Documentation/Platforms/S390X
 var (
-	deviceFSString                 = "-device virtio-9p-ccw,fsdev=workload9p,mount_tag=rootfs,devno=" + DevNo + " -fsdev local,id=workload9p,path=/var/lib/docker/devicemapper/mnt/e31ebda2,security_model=none"
+	deviceFSString                 = "-device virtio-9p-ccw,fsdev=workload9p,mount_tag=rootfs,devno=" + DevNo + " -fsdev local,id=workload9p,path=/var/lib/docker/devicemapper/mnt/e31ebda2,security_model=none,multidevs=remap"
 	deviceNetworkString            = "-netdev tap,id=tap0,vhost=on,ifname=ceth0,downscript=no,script=no -device driver=virtio-net-ccw,netdev=tap0,mac=01:02:de:ad:be:ef,devno=" + DevNo
 	deviceNetworkStringMq          = "-netdev tap,id=tap0,vhost=on,fds=3:4 -device driver=virtio-net-ccw,netdev=tap0,mac=01:02:de:ad:be:ef,mq=on,devno=" + DevNo
 	deviceSerialString             = "-device virtio-serial-ccw,id=serial0,devno=" + DevNo
