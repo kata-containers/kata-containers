@@ -149,6 +149,7 @@ func TestAppendDeviceFS(t *testing.T) {
 		SecurityModel: None,
 		DisableModern: true,
 		ROMFile:       "efi-virtio.rom",
+		Multidev:      Remap,
 	}
 
 	if fsdev.Transport.isVirtioCCW(nil) {
