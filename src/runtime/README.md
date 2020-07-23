@@ -88,11 +88,11 @@ available for various operating systems.
 ## Quick start for developers
 
 See the
-[developer guide](https://github.com/kata-containers/documentation/blob/master/Developer-Guide.md).
+[developer guide](../../docs/Developer-Guide.md).
 
 ## Architecture overview
 
-See the [architecture overview](https://github.com/kata-containers/documentation/blob/master/design/architecture.md)
+See the [architecture overview](../../docs/design/architecture.md)
 for details on the Kata Containers design.
 
 ## Configuration
@@ -174,12 +174,12 @@ $ sudo journalctl -t kata
 ## Debugging
 
 See the
-[debugging section of the developer guide](https://github.com/kata-containers/documentation/blob/master/Developer-Guide.md#troubleshoot-kata-containers).
+[debugging section of the developer guide](../../docs/Developer-Guide.md#troubleshoot-kata-containers).
 
 ## Limitations
 
 See the
-[limitations file](https://github.com/kata-containers/documentation/blob/master/Limitations.md)
+[limitations file](../../docs/Limitations.md)
 for further details.
 
 ## Community
@@ -195,7 +195,7 @@ See [how to reach the community](https://github.com/kata-containers/community/bl
 See the
 [project table of contents](https://github.com/kata-containers/kata-containers)
 and the
-[documentation repository](https://github.com/kata-containers/documentation).
+[documentation repository](../../docs).
 
 ## Additional packages
 

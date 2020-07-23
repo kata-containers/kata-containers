@@ -8,9 +8,8 @@
         * [Kata Containers-developed components](#kata-containers-developed-components)
             * [Agent](#agent)
             * [KSM throttler](#ksm-throttler)
-            * [Proxy](#proxy)
             * [Runtime](#runtime)
-            * [Shim](#shim)
+            * [Trace forwarder](#trace-forwarder)
         * [Additional](#additional)
             * [Hypervisor](#hypervisor)
             * [Kernel](#kernel)
@@ -75,25 +74,11 @@ The [`kata-ksm-throttler`](https://github.com/kata-containers/ksm-throttler)
 is an optional utility that monitors containers and deduplicates memory to
 maximize container density on a host.
 
-##### Proxy
-
-The [`kata-proxy`](https://github.com/kata-containers/proxy) is a process that
-runs on the host and co-ordinates access to the agent running inside the
-virtual machine.
-
 ##### Runtime
 
 The [`kata-runtime`](src/runtime/README.md) is usually
 invoked by a container manager and provides high-level verbs to manage
 containers.
-
-##### Shim
-
-The [`kata-shim`](https://github.com/kata-containers/shim) is a process that
-runs on the host. It acts as though it is the workload (which actually runs
-inside the virtual machine). This shim is required to be compliant with the
-expectations of the [OCI runtime
-specification](https://github.com/opencontainers/runtime-spec).
 
 ##### Trace forwarder
 

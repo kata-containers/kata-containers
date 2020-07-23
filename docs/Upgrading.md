@@ -68,7 +68,7 @@ $ for container in $(sudo docker ps -q); do sudo docker stop $container; done
 
 The automatic migration of
 [Clear Containers configuration](https://github.com/clearcontainers/runtime#configuration) to
-[Kata Containers configuration](https://github.com/kata-containers/runtime#configuration) is
+[Kata Containers configuration](../src/runtime/README.md#configuration) is
 not supported.
 
 If you have made changes to your Clear Containers configuration, you should
@@ -111,7 +111,7 @@ $ sudo rm /etc/systemd/system/docker.service.d/clear-containers.conf
 
 ## Install Kata Containers
 
-Follow one of the [installation guides](https://github.com/kata-containers/documentation/tree/master/install).
+Follow one of the [installation guides](install).
 
 ## Create a Kata Container
 
@@ -126,12 +126,12 @@ not configured to use the same container root storage. Currently, runV defaults 
 defaults to `/var/run/kata-containers`.
 
 Now, to upgrade from runV you need to fresh install Kata Containers by following one of
-the [installation guides](https://github.com/kata-containers/documentation/tree/master/install).
+the [installation guides](install).
 
 # Upgrade Kata Containers
 
 As shown in the
-[installation instructions](https://github.com/kata-containers/documentation/blob/master/install),
+[installation instructions](install),
 Kata Containers provide binaries for popular distributions in their native
 packaging formats. This allows Kata Containers to be upgraded using the
 standard package management tools for your distribution.
@@ -150,7 +150,7 @@ Since the official assets are packaged, they are automatically upgraded when
 new package versions are published.
 
 > **Warning**: Note that if you use custom assets (by modifying the
-> [Kata Runtime configuration > file](https://github.com/kata-containers/runtime/#configuration)),
+> [Kata Runtime configuration > file](../src/runtime/README.md#configuration)),
 > it is your responsibility to ensure they are updated as necessary.
 
 ### Guest kernel
@@ -159,7 +159,7 @@ The `kata-linux-container` package contains a Linux\* kernel based on the
 latest vanilla version of the
 [long-term kernel](https://www.kernel.org/)
 plus a small number of
-[patches](https://github.com/kata-containers/packaging/tree/master/kernel).
+[patches](../tools/packaging/kernel).
 
 The `Longterm` branch is only updated with
 [important bug fixes](https://www.kernel.org/category/releases.html)
@@ -174,7 +174,7 @@ The `kata-containers-image` package is updated only when critical updates are
 available for the packages used to create it, such as:
 
 - systemd
-- [Kata Containers Agent](https://github.com/kata-containers/agent)
+- [Kata Containers Agent](../src/agent)
 
 ### Determining asset versions
 

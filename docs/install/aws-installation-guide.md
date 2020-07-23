@@ -137,4 +137,4 @@ Go onto the next step.
 
 The process for installing Kata itself on bare metal is identical to that of a virtualization-enabled VM.
 
-For detailed information to install Kata on your distribution of choice, see the [Kata Containers installation user guides](https://github.com/kata-containers/documentation/blob/master/install/README.md).
+For detailed information to install Kata on your distribution of choice, see the [Kata Containers installation user guides](../install/README.md).

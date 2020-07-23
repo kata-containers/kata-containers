@@ -307,17 +307,6 @@ show_runtime_log_details()
 	end_section
 }
 
-show_shim_log_details()
-{
-	local title="Shim logs"
-
-	subheading "$title"
-
-	start_section "$title"
-	find_system_journal_problems "shim" "@PROJECT_TYPE@-shim"
-	end_section
-}
-
 show_throttler_log_details()
 {
 	local title="Throttler logs"
@@ -336,7 +325,6 @@ show_log_details()
 	heading "$title"
 
 	show_runtime_log_details
-	show_shim_log_details
 	show_throttler_log_details
 	show_containerd_shimv2_log_details
 
@@ -366,7 +354,6 @@ show_package_versions()
 	for project in @PROJECT_TYPE@
 	do
 		pattern+="|${project}-runtime"
-		pattern+="|${project}-shim"
 		pattern+="|${project}-ksm-throttler"
 		pattern+="|${project}-containers-image"
 	done
