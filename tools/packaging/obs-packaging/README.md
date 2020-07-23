@@ -7,5 +7,5 @@ This directory contains tooling and packaging metadata to build all Kata
 components with OBS.
 
 See
-[the Kata installation documentation](https://github.com/kata-containers/documentation/blob/master/install/README.md)
+[the Kata installation documentation](../../../docs/install/README.md)
 for instructions on how to install the official packages.

@@ -170,6 +170,6 @@ docker run --cpus 4 -ti debian bash -c "nproc; cat /sys/fs/cgroup/cpu,cpuacct/cp
 [2]: https://kubernetes.io/docs/tasks/configure-pod-container/assign-cpu-resource
 [3]: https://kubernetes.io/docs/concepts/workloads/pods/pod/
 [4]: https://docs.docker.com/engine/reference/commandline/update/
-[5]: https://github.com/kata-containers/agent
-[6]: https://github.com/kata-containers/runtime
-[7]: https://github.com/kata-containers/runtime#configuration
+[5]: ../../src/agent
+[6]: ../../src/runtime
+[7]: ../../src/runtime/README.md#configuration

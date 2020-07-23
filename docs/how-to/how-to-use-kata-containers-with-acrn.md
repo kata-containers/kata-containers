@@ -49,7 +49,7 @@ This document requires the presence of the ACRN hypervisor and Kata Containers o
   $ sudo sed -i "s/$kernel_img/bzImage/g" /mnt/loader/entries/$conf_file
   $ sync && sudo umount /mnt && sudo reboot
   ```
-- Kata Containers installation: Automated installation does not seem to be supported for Clear Linux, so please use [manual installation](https://github.com/kata-containers/documentation/blob/master/Developer-Guide.md) steps.
+- Kata Containers installation: Automated installation does not seem to be supported for Clear Linux, so please use [manual installation](../Developer-Guide.md) steps.
 
 > **Note:** Create rootfs image and not initrd image.
 
@@ -82,7 +82,7 @@ $ sudo systemctl daemon-reload
 $ sudo systemctl restart docker
 ```
 
-4. Configure [Docker](https://github.com/kata-containers/documentation/blob/master/Developer-Guide.md#update-the-docker-systemd-unit-file) to use `kata-runtime`.
+4. Configure [Docker](../Developer-Guide.md#update-the-docker-systemd-unit-file) to use `kata-runtime`.
 
 ## Configure Kata Containers with ACRN
 

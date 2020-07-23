@@ -52,8 +52,8 @@ cargo build --target x86_64-unknown-linux-musl --release
 ```
 
 ## Run Kata CI with rust-agent
-   * Firstly, install kata as noted by ["how to install Kata"](https://github.com/kata-containers/documentation/blob/master/install/README.md)
-   * Secondly, build your own kata initrd/image following the steps in ["how to build your own initrd/image"](https://github.com/kata-containers/documentation/blob/master/Developer-Guide.md#create-and-install-rootfs-and-initrd-image).
+   * Firstly, install kata as noted by ["how to install Kata"](../../docs/install/README.md)
+   * Secondly, build your own kata initrd/image following the steps in ["how to build your own initrd/image"](../../docs/Developer-Guide.md#create-and-install-rootfs-and-initrd-image).
 notes: Please use your rust agent instead of the go agent when building your initrd/image.
    * Clone the kata ci test cases from: https://github.com/kata-containers/tests.git, and then run the cri test with: 
 

@@ -15,4 +15,4 @@ Create a new virtual machine with:
 
 ## Set up with distribution specific quick start
 
-Follow distribution specific [install guides](https://github.com/kata-containers/documentation/tree/master/install#supported-distributions).
+Follow distribution specific [install guides](../install/README.md#supported-distributions).

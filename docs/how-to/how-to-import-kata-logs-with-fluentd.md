@@ -33,7 +33,7 @@ also applies to the Kata `shimv2` runtime.  Differences pertaining to Kata `shim
 
 Kata generates logs. The logs can come from numerous parts of the Kata stack (the runtime, proxy, shim
 and even the agent). By default the logs
-[go to the system journal](https://github.com/kata-containers/runtime#logging),
+[go to the system journal](../../src/runtime/README.md#logging),
 but they can also be configured to be stored in files.
 
 The logs default format is in [`logfmt` structured logging](https://brandur.org/logfmt), but can be switched to
@@ -256,7 +256,7 @@ directly from Kata, that should make overall import and processing of the log en
 
 There are potentially two things we can do with Kata here:
 
-- Get Kata to [output its logs in `JSON` format](https://github.com/kata-containers/runtime#logging) rather
+- Get Kata to [output its logs in `JSON` format](../../src/runtime/README.md#logging) rather
   than `logfmt`.
 - Get Kata to log directly into a file, rather than via the system journal. This would allow us to not need
   to parse the systemd format files, and capture the Kata log lines directly. It would also avoid Fluentd

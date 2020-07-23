@@ -184,7 +184,7 @@ used for vhost-user devices.
 
 The base directory for vhost-user device is a configurable value,
 with the default being `/var/run/kata-containers/vhost-user`. It can be
-configured by parameter `vhost_user_store_path` in [Kata TOML configuration file](https://github.com/kata-containers/runtime/blob/master/README.md#configuration).
+configured by parameter `vhost_user_store_path` in [Kata TOML configuration file](../../src/runtime/README.md#configuration).
 
 Currently, the vhost-user storage device is not enabled by default, so
 the user should enable it explicitly inside the Kata TOML configuration

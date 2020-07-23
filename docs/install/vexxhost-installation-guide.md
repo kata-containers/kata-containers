@@ -13,4 +13,4 @@ with v2).  The recommended machine type for container workloads is `v2-highcpu` 
 
 ## Set up with distribution specific quick start
 
-Follow distribution specific [install guides](https://github.com/kata-containers/documentation/tree/master/install#supported-distributions).
+Follow distribution specific [install guides](../install/README.md#supported-distributions).
