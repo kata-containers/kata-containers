@@ -211,6 +211,7 @@ func TestQemuAddDeviceFsDev(t *testing.T) {
 			Path:          hostPath,
 			MountTag:      mountTag,
 			SecurityModel: govmmQemu.None,
+			Multidev:      govmmQemu.Remap,
 		},
 	}
 
