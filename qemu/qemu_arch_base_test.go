@@ -21,7 +21,7 @@ package qemu
 import "testing"
 
 var (
-	deviceFSString                 = "-device virtio-9p-pci,disable-modern=true,fsdev=workload9p,mount_tag=rootfs,romfile=efi-virtio.rom -fsdev local,id=workload9p,path=/var/lib/docker/devicemapper/mnt/e31ebda2,security_model=none"
+	deviceFSString                 = "-device virtio-9p-pci,disable-modern=true,fsdev=workload9p,mount_tag=rootfs,romfile=efi-virtio.rom -fsdev local,id=workload9p,path=/var/lib/docker/devicemapper/mnt/e31ebda2,security_model=none,multidevs=remap"
 	deviceNetworkString            = "-netdev tap,id=tap0,vhost=on,ifname=ceth0,downscript=no,script=no -device driver=virtio-net-pci,netdev=tap0,mac=01:02:de:ad:be:ef,disable-modern=true,romfile=efi-virtio.rom"
 	deviceNetworkStringMq          = "-netdev tap,id=tap0,vhost=on,fds=3:4 -device driver=virtio-net-pci,netdev=tap0,mac=01:02:de:ad:be:ef,disable-modern=true,mq=on,vectors=6,romfile=efi-virtio.rom"
 	deviceSerialString             = "-device virtio-serial-pci,disable-modern=true,id=serial0,romfile=efi-virtio.rom,max_ports=2"

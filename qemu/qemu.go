@@ -288,6 +288,23 @@ func (object Object) QemuParams(config *Config) []string {
 	return qemuParams
 }
 
+// Virtio9PMultidev filesystem behaviour to deal
+// with multiple devices being shared with a 9p export.
+type Virtio9PMultidev string
+
+const (
+	// Remap shares multiple devices with only one export.
+	Remap Virtio9PMultidev = "remap"
+
+	// Warn assumes that only one device is shared by the same export.
+	// Only a warning message is logged (once) by qemu on host side.
+	// This is the default behaviour.
+	Warn Virtio9PMultidev = "warn"
+
+	// Forbid like "warn" but also deny access to additional devices on guest.
+	Forbid Virtio9PMultidev = "forbid"
+)
+
 // FSDriver represents a qemu filesystem driver.
 type FSDriver string
 
@@ -350,6 +367,10 @@ type FSDevice struct {
 
 	// Transport is the virtio transport for this device.
 	Transport VirtioTransport
+
+	// Multidev is the filesystem behaviour to deal
+	// with multiple devices being shared with a 9p export
+	Multidev Virtio9PMultidev
 }
 
 // Virtio9PTransport is a map of the virtio-9p device name that corresponds
@@ -392,6 +413,10 @@ func (fsdev FSDevice) QemuParams(config *Config) []string {
 	fsParams = append(fsParams, fmt.Sprintf(",id=%s", fsdev.ID))
 	fsParams = append(fsParams, fmt.Sprintf(",path=%s", fsdev.Path))
 	fsParams = append(fsParams, fmt.Sprintf(",security_model=%s", fsdev.SecurityModel))
+
+	if fsdev.Multidev != "" {
+		fsParams = append(fsParams, fmt.Sprintf(",multidevs=%s", fsdev.Multidev))
+	}
 
 	qemuParams = append(qemuParams, "-device")
 	qemuParams = append(qemuParams, strings.Join(deviceParams, ""))
