@@ -44,12 +44,17 @@ func TestSandboxStateRunningStopped(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-func TestSandboxStateReadyPaused(t *testing.T) {
+func TestSandboxStateReadyStopped(t *testing.T) {
 	err := testSandboxStateTransition(t, StateReady, StateStopped)
 	assert.NoError(t, err)
 }
 
-func TestSandboxStatePausedReady(t *testing.T) {
+func TestSandboxStateStoppedRunning(t *testing.T) {
+	err := testSandboxStateTransition(t, StateStopped, StateRunning)
+	assert.NoError(t, err)
+}
+
+func TestSandboxStateStoppedReady(t *testing.T) {
 	err := testSandboxStateTransition(t, StateStopped, StateReady)
 	assert.Error(t, err)
 }
@@ -102,6 +107,15 @@ func TestVolumesSetSuccessful(t *testing.T) {
 	err := volumes.Set(volStr)
 	assert.NoError(t, err)
 	assert.Exactly(t, *volumes, expected)
+}
+
+func TestVolumesSetFailingEmptyString(t *testing.T) {
+	volumes := &Volumes{}
+
+	volStr := ""
+
+	err := volumes.Set(volStr)
+	assert.Error(t, err)
 }
 
 func TestVolumesSetFailingTooFewArguments(t *testing.T) {
@@ -172,6 +186,15 @@ func TestSocketsSetSuccessful(t *testing.T) {
 	err := sockets.Set(sockStr)
 	assert.NoError(t, err)
 	assert.Exactly(t, *sockets, expected)
+}
+
+func TestSocketsSetFailingEmptyString(t *testing.T) {
+	sockets := &Sockets{}
+
+	sockStr := ""
+
+	err := sockets.Set(sockStr)
+	assert.Error(t, err)
 }
 
 func TestSocketsSetFailingWrongArgsAmount(t *testing.T) {
