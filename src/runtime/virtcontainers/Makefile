@@ -10,8 +10,6 @@ VC_BIN_DIR := $(BIN_DIR)/virtcontainers/bin
 TEST_BIN_DIR := $(VC_BIN_DIR)/test
 HOOK_DIR := hook/mock
 HOOK_BIN := hook
-KATA_SHIM_DIR := shim/mock/kata-shim
-KATA_SHIM_BIN := kata-shim
 MK_DIR := $(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
 GOBUILD_FLAGS := -mod=vendor
 
@@ -35,10 +33,7 @@ build:
 hook:
 	$(QUIET_GOBUILD)go build $(GOBUILD_FLAGS) -o $(HOOK_DIR)/$@ $(HOOK_DIR)/*.go
 
-kata-shim:
-	$(QUIET_GOBUILD)go build $(GOBUILD_FLAGS) -o $(KATA_SHIM_DIR)/$@ $(KATA_SHIM_DIR)/*.go
-
-binaries: hook kata-shim
+binaries: hook
 
 #
 # Tests
@@ -51,7 +46,6 @@ check-go-static:
 
 check-go-test:
 	bash $(MK_DIR)/../.ci/go-test.sh \
-		$(TEST_BIN_DIR)/$(KATA_SHIM_BIN) \
 		$(TEST_BIN_DIR)/$(HOOK_BIN)
 
 #
@@ -70,7 +64,6 @@ install:
 	@mkdir -p $(VC_BIN_DIR)
 	@mkdir -p $(TEST_BIN_DIR)
 	$(call INSTALL_TEST_EXEC,$(HOOK_DIR)/$(HOOK_BIN))
-	$(call INSTALL_TEST_EXEC,$(KATA_SHIM_DIR)/$(KATA_SHIM_BIN))
 
 #
 # Uninstall
@@ -86,7 +79,6 @@ endef
 
 uninstall:
 	$(call UNINSTALL_TEST_EXEC,$(HOOK_BIN))
-	$(call UNINSTALL_TEST_EXEC,$(KATA_SHIM_BIN))
 
 #
 # Clean
@@ -99,7 +91,6 @@ $(shell test -e "$(1)" && test "$(1)" != "/" && echo "$(1)")
 endef
 
 CLEAN_FILES += $(HOOK_DIR)/$(HOOK_BIN)
-CLEAN_FILES += $(SHIM_DIR)/$(KATA_SHIM_BIN)
 
 clean:
 	rm -f $(foreach f,$(CLEAN_FILES),$(call FILE_SAFE_TO_REMOVE,$(f)))
@@ -108,7 +99,6 @@ clean:
 	all \
 	build \
 	hook \
-	shim \
 	binaries \
 	check \
 	check-go-static \
