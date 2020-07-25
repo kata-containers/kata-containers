@@ -90,6 +90,8 @@ type clhClient interface {
 	VmAddDiskPut(ctx context.Context, diskConfig chclient.DiskConfig) (chclient.PciDeviceInfo, *http.Response, error)
 	// Remove a device from the VM
 	VmRemoveDevicePut(ctx context.Context, vmRemoveDevice chclient.VmRemoveDevice) (*http.Response, error)
+	// Add a new net device to the VM
+	VmAddNetPut(ctx context.Context, netConfig chclient.NetConfig) (chclient.PciDeviceInfo, *http.Response, error)
 }
 
 type CloudHypervisorVersion struct {
@@ -469,6 +471,43 @@ func (clh *cloudHypervisor) hotPlugVFIODevice(device config.VFIODev) error {
 	return err
 }
 
+func (clh *cloudHypervisor) hotplugNetDevice(endpoint Endpoint) error {
+	clh.Logger().WithField("endpoint-type", endpoint).Debugf("Hotplug Endpoint of type %v", endpoint)
+
+	var tap, mac string
+
+	switch endpoint.Type() {
+	case VethEndpointType:
+		mac = endpoint.HardwareAddr()
+		if mac == "" {
+			return errors.New("Endpoint MAC address is empty")
+		}
+
+		netPair := endpoint.NetworkPair()
+		if netPair == nil {
+			return errors.New("net Pair to be added is nil, needed to get TAP path")
+		}
+
+		tap = netPair.TapInterface.TAPIface.Name
+		if tap == "" {
+			return errors.New("TAP path in network pair is empty")
+		}
+	default:
+		return fmt.Errorf("this endpoint(%v) is not supported", endpoint.Type())
+	}
+
+	cl := clh.client()
+	ctx, cancel := context.WithTimeout(context.Background(), clhHotPlugAPITimeout*time.Second)
+	defer cancel()
+
+	_, _, err := cl.VmAddNetPut(ctx, chclient.NetConfig{Tap: tap, Mac: mac})
+	if err != nil {
+		err = fmt.Errorf("Failed to hotplug device %+v %s", endpoint, openAPIClientError(err))
+	}
+
+	return err
+}
+
 func (clh *cloudHypervisor) hotplugAddDevice(devInfo interface{}, devType deviceType) (interface{}, error) {
 	span, _ := clh.trace("hotplugAddDevice")
 	defer span.Finish()
@@ -480,6 +519,9 @@ func (clh *cloudHypervisor) hotplugAddDevice(devInfo interface{}, devType device
 	case vfioDev:
 		device := devInfo.(*config.VFIODev)
 		return nil, clh.hotPlugVFIODevice(*device)
+	case netDev:
+		device := devInfo.(Endpoint)
+		return nil, clh.hotplugNetDevice(device)
 	default:
 		return nil, fmt.Errorf("cannot hotplug device: unsupported device type '%v'", devType)
 	}

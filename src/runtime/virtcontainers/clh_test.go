@@ -109,6 +109,11 @@ func (c *clhClientMock) VmRemoveDevicePut(ctx context.Context, vmRemoveDevice ch
 	return nil, nil
 }
 
+//nolint:golint
+func (c *clhClientMock) VmAddNetPut(ctx context.Context, netConfig chclient.NetConfig) (chclient.PciDeviceInfo, *http.Response, error) {
+	return chclient.PciDeviceInfo{}, nil, nil
+}
+
 func TestCloudHypervisorAddVSock(t *testing.T) {
 	assert := assert.New(t)
 	clh := cloudHypervisor{}
@@ -406,4 +411,48 @@ func TestCloudHypervisorHotplugRemoveBlockDevice(t *testing.T) {
 
 	err = clh.hotplugRemoveBlockDevice(&config.BlockDrive{Pmem: true})
 	assert.Error(err, "Hotplug remove pmem block device expected error")
+}
+
+func TestCloudHypervisorHotplugNetDevice(t *testing.T) {
+	assert := assert.New(t)
+
+	clhConfig, err := newClhConfig()
+	assert.NoError(err)
+
+	clh := &cloudHypervisor{}
+	clh.config = clhConfig
+	clh.APIClient = &clhClientMock{}
+
+	tapName := "test_tap"
+	noMacVeth := &VethEndpoint{EndpointType: VethEndpointType}
+	noMacVeth.NetPair.TapInterface.TAPIface.Name = tapName
+
+	noTapVeth := &VethEndpoint{EndpointType: VethEndpointType}
+	noTapVeth.NetPair.TAPIface.HardAddr = "11:22:33:44:55:66"
+
+	validVeth := &VethEndpoint{EndpointType: VethEndpointType}
+	validVeth.NetPair.TapInterface.TAPIface.Name = tapName
+	validVeth.NetPair.TAPIface.HardAddr = "11:22:33:44:55:66"
+
+	type args struct {
+		e Endpoint
+	}
+	tests := []struct {
+		name    string
+		args    args
+		wantErr bool
+	}{
+		{"TapEndpoint", args{e: &TapEndpoint{}}, true},
+		{"Empty VethEndpoint", args{e: &VethEndpoint{}}, true},
+		{"No MAC VethEndpoint", args{e: noMacVeth}, true},
+		{"No TAP VethEndpoint", args{e: noTapVeth}, true},
+		{"Valid VethEndpoint", args{e: validVeth}, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := clh.hotplugNetDevice(tt.args.e); (err != nil) != tt.wantErr {
+				t.Errorf("cloudHypervisor.hotplugNetDevice() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
 }
