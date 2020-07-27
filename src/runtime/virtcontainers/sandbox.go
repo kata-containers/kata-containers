@@ -1,4 +1,5 @@
 // Copyright (c) 2016 Intel Corporation
+// Copyright (c) 2020 Adobe Inc.
 //
 // SPDX-License-Identifier: Apache-2.0
 //
@@ -1201,6 +1202,14 @@ func (s *Sandbox) CreateContainer(contConfig ContainerConfig) (VCContainer, erro
 	defer func() {
 		// Rollback if error happens.
 		if err != nil {
+			logger := s.Logger().WithFields(logrus.Fields{"container-id": c.id, "sandox-id": s.id, "rollback": true})
+			logger.Warning("Cleaning up partially created container")
+
+			if err2 := c.stop(true); err2 != nil {
+				logger.WithError(err2).Warning("Could not delete container")
+			}
+
+			logger.Debug("Removing stopped container from sandbox store")
 			s.removeContainer(c.id)
 		}
 	}()
