@@ -29,8 +29,8 @@ download_kernel=false
 # The repository where kernel configuration lives
 runtime_repository="github.com/${project_name}/runtime"
 # The repository where kernel configuration lives
-readonly kernel_config_repo="github.com/${project_name}/packaging"
-readonly patches_repo="github.com/${project_name}/packaging"
+readonly kernel_config_repo="github.com/${project_name}/kata-containers/tools/packaging"
+readonly patches_repo="github.com/${project_name}/kata-containers/tools/packaging"
 readonly patches_repo_dir="${GOPATH}/src/${patches_repo}"
 # Default path to search patches to apply to kernel
 readonly default_patches_dir="${patches_repo_dir}/kernel/patches/"
@@ -391,7 +391,7 @@ build_kernel() {
 	make -j $(nproc) ARCH="${arch_target}"
 	[ "$arch_target" != "powerpc" ] && ([ -e "arch/${arch_target}/boot/bzImage" ] || [ -e "arch/${arch_target}/boot/Image.gz" ])
 	[ -e "vmlinux" ]
-	[ "${hypervisor_target}" == "firecracker" ] && [ "${arch_target}" == "arm64" ] && [ -e "arch/${arch_target}/boot/Image" ]
+	([ "${hypervisor_target}" == "firecracker" ] || [ "${hypervisor_target}" == "cloud-hypervisor" ]) && [ "${arch_target}" == "arm64" ] && [ -e "arch/${arch_target}/boot/Image" ]
 	popd >>/dev/null
 }
 
