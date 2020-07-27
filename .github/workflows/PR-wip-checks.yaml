@@ -1,0 +1,21 @@
+name: Pull request WIP checks
+on:
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - edited
+      - labeled
+      - unlabeled
+
+jobs:
+  pr_wip_check:
+    runs-on: ubuntu-latest
+    name: WIP Check
+    steps:
+    - name: WIP Check
+      uses: tim-actions/wip-check@1c2a1ca6c110026b3e2297bb2ef39e1747b5a755
+      with:
+        labels: '["do-not-merge", "wip", "rfc"]'
+        keywords: '["WIP", "wip", "RFC", "rfc", "dnm", "DNM", "do-not-merge"]'

@@ -1,0 +1,22 @@
+name: DCO check
+on: 
+  pull_request:
+    types:
+      - opened
+      - reopened
+      - synchronize
+
+jobs:
+  dco_check_job:
+    runs-on: ubuntu-latest
+    name: DCO Check
+    steps:
+    - name: Get PR Commits
+      id: 'get-pr-commits'
+      uses: tim-actions/get-pr-commits@ed97a21c3f83c3417e67a4733ea76887293a2c8f
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+    - name: DCO Check
+      uses: tim-actions/dco@2fd0504dc0d27b33f542867c300c60840c6dcb20
+      with:
+        commits: ${{ steps.get-pr-commits.outputs.commits }}
