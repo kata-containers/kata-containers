@@ -45,6 +45,9 @@ func testEnvGetEnvInfoSetsCPUTypeGeneric(t *testing.T) {
 	env, err := getEnvInfo(configFile, config)
 	assert.NoError(err)
 
+	// Free/Available are changing
+	expectedEnv.Host.Memory = env.Host.Memory
+
 	assert.Equal(expectedEnv, env)
 
 	assert.Equal(archRequiredCPUFlags, savedArchRequiredCPUFlags)
