@@ -16,6 +16,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -419,6 +420,10 @@ func (fc *firecracker) fcInit(timeout int) error {
 	return nil
 }
 
+type fcPowerOffFunc func(*firecracker) error
+
+var archFcPowerOffFunc fcPowerOffFunc
+
 func (fc *firecracker) fcEnd() (err error) {
 	span, _ := fc.trace("fcEnd")
 	defer span.Finish()
@@ -435,28 +440,29 @@ func (fc *firecracker) fcEnd() (err error) {
 
 	pid := fc.info.PID
 
-	// Send a SIGTERM to the VM process to try to stop it properly
-	if err = syscall.Kill(pid, syscall.SIGTERM); err != nil {
-		if err == syscall.ESRCH {
-			return nil
-		}
-		return err
-	}
-
-	// Wait for the VM process to terminate
-	tInit := time.Now()
-	for {
-		if err = syscall.Kill(pid, syscall.Signal(0)); err != nil {
-			return nil
+	// Trying to gracefully poweroff the VM
+	if archFcPowerOffFunc != nil {
+		if err := archFcPowerOffFunc(fc); err != nil {
+			return err
 		}
 
-		if time.Since(tInit).Seconds() >= fcStopSandboxTimeout {
-			fc.Logger().Warnf("VM still running after waiting %ds", fcStopSandboxTimeout)
-			break
-		}
+		// Wait for the VM process to terminate
+		tInit := time.Now()
+		for {
+			if err = syscall.Kill(pid, syscall.Signal(0)); err != nil {
+				return nil
+			}
 
-		// Let's avoid to run a too busy loop
-		time.Sleep(time.Duration(50) * time.Millisecond)
+			if time.Since(tInit).Seconds() >= fcStopSandboxTimeout {
+				fc.Logger().Warnf("VM still running after waiting %ds", fcStopSandboxTimeout)
+				break
+			}
+
+			// Let's avoid to run a too busy loop
+			time.Sleep(time.Duration(50) * time.Millisecond)
+		}
+	} else {
+		fc.Logger().Warnf("Firecracker doesn't support gracefully shutdown the VM from external on %s", runtime.GOARCH)
 	}
 
 	// Let's try with a hammer now, a SIGKILL should get rid of the
