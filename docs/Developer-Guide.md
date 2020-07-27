@@ -34,19 +34,20 @@
 * [Troubleshoot Kata Containers](#troubleshoot-kata-containers)
 * [Appendices](#appendices)
     * [Checking Docker default runtime](#checking-docker-default-runtime)
-    * [Set up a debug console(the easy way)](#set-up-a-debug-consolethe-easy-way)
-        * [Enable agent debug console](#enable-agent-debug-console)
-        * [Start `kata-monitor`](#start-kata-monitor)
-        * [Connect to debug console](#connect-to-debug-console)
-    * [Set up a debug console(the traditional way)](#set-up-a-debug-consolethe-traditional-way)
-        * [Create a custom image containing a shell](#create-a-custom-image-containing-a-shell)
-        * [Create a debug systemd service](#create-a-debug-systemd-service)
-        * [Build the debug image](#build-the-debug-image)
-        * [Configure runtime for custom debug image](#configure-runtime-for-custom-debug-image)
-        * [Ensure debug options are valid](#ensure-debug-options-are-valid)
-        * [Create a container](#create-a-container)
-        * [Connect to the virtual machine using the debug console](#connect-to-the-virtual-machine-using-the-debug-console)
-        * [Obtain details of the image](#obtain-details-of-the-image)
+    * [Set up a debug console](#set-up-a-debug-console)
+      * [Simple debug console setup](#simple-debug-console-setup)
+          * [Enable agent debug console](#enable-agent-debug-console)
+          * [Start `kata-monitor`](#start-kata-monitor)
+          * [Connect to debug console](#connect-to-debug-console)
+      * [Traditional debug console setup](#traditional-simple-debug-console-setup)
+          * [Create a custom image containing a shell](#create-a-custom-image-containing-a-shell)
+          * [Create a debug systemd service](#create-a-debug-systemd-service)
+          * [Build the debug image](#build-the-debug-image)
+          * [Configure runtime for custom debug image](#configure-runtime-for-custom-debug-image)
+          * [Ensure debug options are valid](#ensure-debug-options-are-valid)
+          * [Create a container](#create-a-container)
+          * [Connect to the virtual machine using the debug console](#connect-to-the-virtual-machine-using-the-debug-console)
+    * [Obtain details of the image](#obtain-details-of-the-image)
     * [Capturing kernel boot logs](#capturing-kernel-boot-logs)
 
 # Warning
@@ -437,24 +438,30 @@ See [Set up a debug console](#set-up-a-debug-console).
 ```
 $ sudo docker info 2>/dev/null | grep -i "default runtime" | cut -d: -f2- | grep -q runc  && echo "SUCCESS" || echo "ERROR: Incorrect default Docker runtime"
 ```
+## Set up a debug console
 
-## Set up a debug console(The easy way)
+Kata containers provides two ways to connect to the guest. One is using traditional login service, which needs additional works. In contrast the simple debug console is easy to setup.
 
-Kata containers 2.0 support a shell simulated *console* for quickly debug purpose. This approach use `vsock` to connect shell running inside guest started by agent. The good aspect is that we need not modify guest image or despite using what device that hypervisors support. Only `/bin/sh` or `/bin/bash` are necessary.
+### Simple debug console setup
 
-### Enable agent debug console
+Kata Containers 2.0 supports a shell simulated *console* for quick debug purpose. This approach uses VSOCK to
+connect to the shell running inside the guest which the agent starts. This method only requires the guest image to
+contain either `/bin/sh` or `/bin/bash`.
 
-Change your `configuration.toml`, add agent debug parameters.
+#### Enable agent debug console
+
+Enable debug_console_enabled in the configuration.toml configuration file:
 
 ```
-kernel_params = "agent.debug_console agent.debug_console_vport=1026"
+[agent.kata]
+debug_console_enabled = true
 ```
 
-Sandboxes created using this parameters will start a shell in guest if new connection is accept from `vsock`.
+This will pass `agent.debug_console agent.debug_console_vport=1026` to agent as kernel parameters, and sandboxes created using this parameters will start a shell in guest if new connection is accept from VSOCK.
 
-### Start `kata-monitor`
+#### Start `kata-monitor`
 
-`kata-runitime exec` need `kata-monitor` to get the sandbox's `vsock` address to connect to, firt start `kata-monitor`.
+The `kata-runtime exec` command needs `kata-monitor` to get the sandbox's `vsock` address to connect to, firt start `kata-monitor`.
 
 ```
 $ sudo kata-monitor
@@ -463,9 +470,9 @@ $ sudo kata-monitor
 `kata-monitor` will serve at `localhost:8090` by default.
 
 
-### Connect to debug console
+#### Connect to debug console
 
-Command `kata-runitime exec` is used to connect to the debug console.
+Command `kata-runtime exec` is used to connect to the debug console.
 
 ```
 $ kata-runtime exec 1a9ab65be63b8b03dfd0c75036d27f0ed09eab38abb45337fea83acd3cd7bacd
@@ -477,9 +484,9 @@ bash-4.2# exit
 exit
 ```
 
-If you want to access guest OS through a traditional way, see [Set up a debug console(the traditional way)](#set-up-a-debug-console-the-traditional-way).
+If you want to access guest OS through a traditional way, see [Traditional debug console setup)](#traditional-debug-console-setup).
 
-## Set up a debug console(the traditional way)
+### Traditional debug console setup
 
 By default you cannot login to a virtual machine, since this can be sensitive
 from a security perspective. Also, allowing logins would require additional
@@ -506,7 +513,7 @@ the following steps (using rootfs or initrd image).
 >
 > Once these steps are taken you can connect to the virtual machine using the [debug console](Developer-Guide.md#connect-to-the-virtual-machine-using-the-debug-console).
 
-### Create a custom image containing a shell
+#### Create a custom image containing a shell
 
 To login to a virtual machine, you must
 [create a custom rootfs](#create-a-rootfs-image) or [custom initrd](#create-an-initrd-image---optional)
@@ -521,7 +528,7 @@ $ export ROOTFS_DIR=${GOPATH}/src/github.com/kata-containers/kata-containers/too
 $ script -fec 'sudo -E GOPATH=$GOPATH USE_DOCKER=true EXTRA_PKGS="bash coreutils" ./rootfs.sh centos'
 ```
 
-### Create a debug systemd service
+#### Create a debug systemd service
 
 Create the service file that starts the shell in the rootfs directory:
 
@@ -550,12 +557,12 @@ Add a dependency to start the debug console:
 $ sudo sed -i '$a Requires=kata-debug.service' ${ROOTFS_DIR}/lib/systemd/system/kata-containers.target
 ```
 
-### Build the debug image
+#### Build the debug image
 
 Follow the instructions in the [Build a rootfs image](#build-a-rootfs-image)
 section when using rootfs, or when using initrd, complete the steps in the [Build an initrd image](#build-an-initrd-image) section.
 
-### Configure runtime for custom debug image
+#### Configure runtime for custom debug image
 
 Install the image:
 
@@ -580,7 +587,7 @@ $ (cd /usr/share/kata-containers && sudo ln -sf "$name" kata-containers.img)
 **Note**: You should take care to undo this change after you finish debugging
 to avoid all subsequently created containers from using the debug image.
 
-### Create a container
+#### Create a container
 
 Create a container as normal. For example using crictl:
 
@@ -588,7 +595,7 @@ Create a container as normal. For example using crictl:
 $ sudo crictl run -r kata container.yaml pod.yaml
 ```
 
-### Connect to the virtual machine using the debug console
+#### Connect to the virtual machine using the debug console
 
 ```
 $ id=$(sudo crictl pods --no-trunc -q)
@@ -601,7 +608,7 @@ $ sudo socat "stdin,raw,echo=0,escape=0x11" "unix-connect:${console}"
 To disconnect from the virtual machine, type `CONTROL+q` (hold down the
 `CONTROL` key and press `q`).
 
-### Obtain details of the image
+## Obtain details of the image
 
 If the image is created using
 [osbuilder](../tools/osbuilder), the following YAML

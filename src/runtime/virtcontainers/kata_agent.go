@@ -52,6 +52,11 @@ const (
 
 	// path to vfio devices
 	vfioPath = "/dev/vfio/"
+
+	// enable debug console
+	kernelParamDebugConsole           = "agent.debug_console"
+	kernelParamDebugConsoleVPort      = "agent.debug_console_vport"
+	kernelParamDebugConsoleVPortValue = "1026"
 )
 
 var (
@@ -195,13 +200,14 @@ func ephemeralPath() string {
 // KataAgentConfig is a structure storing information needed
 // to reach the Kata Containers agent.
 type KataAgentConfig struct {
-	LongLiveConn      bool
-	Debug             bool
-	Trace             bool
-	ContainerPipeSize uint32
-	TraceMode         string
-	TraceType         string
-	KernelModules     []string
+	LongLiveConn       bool
+	Debug              bool
+	Trace              bool
+	EnableDebugConsole bool
+	ContainerPipeSize  uint32
+	TraceMode          string
+	TraceType          string
+	KernelModules      []string
 }
 
 // KataAgentState is the structure describing the data stored from this
@@ -292,6 +298,11 @@ func KataAgentKernelParams(config KataAgentConfig) []Param {
 	if config.ContainerPipeSize > 0 {
 		containerPipeSize := strconv.FormatUint(uint64(config.ContainerPipeSize), 10)
 		params = append(params, Param{Key: vcAnnotations.ContainerPipeSizeKernelParam, Value: containerPipeSize})
+	}
+
+	if config.EnableDebugConsole {
+		params = append(params, Param{Key: kernelParamDebugConsole, Value: ""})
+		params = append(params, Param{Key: kernelParamDebugConsoleVPort, Value: kernelParamDebugConsoleVPortValue})
 	}
 
 	return params
@@ -1206,16 +1217,6 @@ func (k *kataAgent) buildContainerRootfs(sandbox *Sandbox, c *Container, rootPat
 	}
 
 	return nil, nil
-}
-
-func (k *kataAgent) hasAgentDebugConsole(sandbox *Sandbox) bool {
-	for _, p := range sandbox.config.HypervisorConfig.KernelParams {
-		if p.Key == "agent.debug_console" {
-			k.Logger().Info("agent has debug console")
-			return true
-		}
-	}
-	return false
 }
 
 func (k *kataAgent) createContainer(sandbox *Sandbox, c *Container) (p *Process, err error) {
