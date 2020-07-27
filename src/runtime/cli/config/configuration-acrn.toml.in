@@ -127,6 +127,13 @@ block_device_driver = "@DEFBLOCKSTORAGEDRIVER_ACRN@"
 #trace_mode = "dynamic"
 #trace_type = "isolated"
 
+# Enable debug console.
+
+# If enabled, user can connect guest OS running inside hypervisor
+# through "kata-runtime exec <sandbox-id>" command
+
+#debug_console_enabled = true
+
 [netmon]
 # If enabled, the network monitoring process gets started when the
 # sandbox is created. This allows for the detection of some additional
