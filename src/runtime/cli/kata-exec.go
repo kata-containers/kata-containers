@@ -28,9 +28,16 @@ import (
 const (
 
 	// The buffer size used to specify the buffer for IO streams copy
-	bufSize = 32 << 10
+	bufSize = 1024 * 2
 
 	defaultTimeout = 3 * time.Second
+
+	subCommandName = "exec"
+	// command-line parameters name
+	paramKataMonitorAddr                     = "kata-monitor-addr"
+	paramDebugConsolePort                    = "kata-debug-port"
+	defaultKernelParamDebugConsoleVPortValue = 1026
+	defaultParamKataMonitorAddr              = "http://localhost:8090"
 )
 
 var (
@@ -43,15 +50,15 @@ var (
 )
 
 var kataExecCLICommand = cli.Command{
-	Name:  execCmd,
+	Name:  subCommandName,
 	Usage: "Enter into guest by debug console",
 	Flags: []cli.Flag{
 		cli.StringFlag{
-			Name:  "monitor-addr",
+			Name:  paramKataMonitorAddr,
 			Usage: "Kata monitor listen address.",
 		},
 		cli.Uint64Flag{
-			Name:  "debug-port",
+			Name:  paramDebugConsolePort,
 			Usage: "Port that debug console is listening on.",
 		},
 	},
@@ -60,17 +67,17 @@ var kataExecCLICommand = cli.Command{
 		if err != nil {
 			return err
 		}
-		span, _ := katautils.Trace(ctx, "exec")
+		span, _ := katautils.Trace(ctx, subCommandName)
 		defer span.Finish()
 
-		endPoint := context.String("monitor-addr")
+		endPoint := context.String(paramKataMonitorAddr)
 		if endPoint == "" {
-			endPoint = "http://localhost:8090"
+			endPoint = defaultParamKataMonitorAddr
 		}
 
-		port := context.Uint64("debug-port")
+		port := context.Uint64(paramDebugConsolePort)
 		if port == 0 {
-			port = 1026
+			port = defaultKernelParamDebugConsoleVPortValue
 		}
 
 		sandboxID := context.Args().Get(0)
@@ -188,8 +195,11 @@ func getConn(endPoint, sandboxID string, port uint64) (net.Conn, error) {
 	switch addr.Scheme {
 	case clientUtils.VSockSocketScheme:
 		// vsock://31513974:1024
-		shimAddr := clientUtils.VSockSocketScheme + ":" + addr.Host
-		shimAddr = strings.Replace(shimAddr, ":1024", fmt.Sprintf(":%d", port), -1)
+		cidAndPort := strings.Split(addr.Host, ":")
+		if len(cidAndPort) != 2 {
+			return nil, fmt.Errorf("Invalid vsock scheme: %s", sock)
+		}
+		shimAddr := fmt.Sprintf("%s:%s:%d", clientUtils.VSockSocketScheme, cidAndPort[0], port)
 		return clientUtils.VsockDialer(shimAddr, defaultTimeout)
 
 	case clientUtils.HybridVSockScheme:

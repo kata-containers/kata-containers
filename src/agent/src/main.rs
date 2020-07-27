@@ -531,18 +531,21 @@ fn run_debug_console_shell(logger: &Logger, shell: &str, socket_fd: RawFd) -> Re
             let master_fd = pseduo.master;
             let debug_shell_logger = logger.clone();
 
+            // channel that used to sync between thread and main process
+            let (tx, rx) = mpsc::channel::<i32>();
+
             // start a thread to do IO copy between socket and pseduo.master
             thread::spawn(move || {
                 let mut master_reader = unsafe { File::from_raw_fd(master_fd) };
-                let mut socket_writer = unsafe { File::from_raw_fd(socket_fd) };
-                let mut socket_reader = unsafe { File::from_raw_fd(socket_fd) };
                 let mut master_writer = unsafe { File::from_raw_fd(master_fd) };
+                let mut socket_reader = unsafe { File::from_raw_fd(socket_fd) };
+                let mut socket_writer = unsafe { File::from_raw_fd(socket_fd) };
 
                 loop {
                     let mut fd_set = FdSet::new();
+                    fd_set.insert(rfd);
                     fd_set.insert(master_fd);
                     fd_set.insert(socket_fd);
-                    fd_set.insert(rfd);
 
                     match select(
                         Some(fd_set.highest().unwrap() + 1),
@@ -557,36 +560,7 @@ fn run_debug_console_shell(logger: &Logger, shell: &str, socket_fd: RawFd) -> Re
                                 continue;
                             } else {
                                 error!(debug_shell_logger, "select error {:?}", e);
-                                break;
-                            }
-                        }
-                    }
-
-                    if fd_set.contains(master_fd) {
-                        match io_copy(&mut master_reader, &mut socket_writer) {
-                            Ok(0) => {
-                                debug!(debug_shell_logger, "master fd closed");
-                                break;
-                            }
-                            Ok(_) => {}
-                            Err(ref e) if e.kind() == std::io::ErrorKind::Interrupted => continue,
-                            Err(e) => {
-                                error!(debug_shell_logger, "read master fd error {:?}", e);
-                                break;
-                            }
-                        }
-                    }
-
-                    if fd_set.contains(socket_fd) {
-                        match io_copy(&mut socket_reader, &mut master_writer) {
-                            Ok(0) => {
-                                debug!(debug_shell_logger, "master fd closed");
-                                break;
-                            }
-                            Ok(_) => {}
-                            Err(ref e) if e.kind() == std::io::ErrorKind::Interrupted => continue,
-                            Err(e) => {
-                                error!(debug_shell_logger, "read master fd error {:?}", e);
+                                tx.send(1).unwrap();
                                 break;
                             }
                         }
@@ -595,22 +569,66 @@ fn run_debug_console_shell(logger: &Logger, shell: &str, socket_fd: RawFd) -> Re
                     if fd_set.contains(rfd) {
                         info!(
                             debug_shell_logger,
-                            "debug shelll process {} exited", child_pid
+                            "debug shell process {} exited", child_pid
                         );
+                        tx.send(1).unwrap();
                         break;
+                    }
+
+                    if fd_set.contains(master_fd) {
+                        match io_copy(&mut master_reader, &mut socket_writer) {
+                            Ok(0) => {
+                                debug!(debug_shell_logger, "master fd closed");
+                                tx.send(1).unwrap();
+                                break;
+                            }
+                            Ok(_) => {}
+                            Err(ref e) if e.kind() == std::io::ErrorKind::Interrupted => continue,
+                            Err(e) => {
+                                error!(debug_shell_logger, "read master fd error {:?}", e);
+                                tx.send(1).unwrap();
+                                break;
+                            }
+                        }
+                    }
+
+                    if fd_set.contains(socket_fd) {
+                        match io_copy(&mut socket_reader, &mut master_writer) {
+                            Ok(0) => {
+                                debug!(debug_shell_logger, "socket fd closed");
+                                tx.send(1).unwrap();
+                                break;
+                            }
+                            Ok(_) => {}
+                            Err(ref e) if e.kind() == std::io::ErrorKind::Interrupted => continue,
+                            Err(e) => {
+                                error!(debug_shell_logger, "read socket fd error {:?}", e);
+                                tx.send(1).unwrap();
+                                break;
+                            }
+                        }
                     }
                 }
             });
 
             let wait_status = wait::waitpid(child_pid, None);
-            info!(logger, "debug console exit code: {:?}", wait_status);
+            info!(logger, "debug console process exit code: {:?}", wait_status);
 
+            info!(logger, "notify debug monitor thread to exit");
             // close pipe to exit select loop
             let _ = close(wfd);
+
+            // wait for thread exit.
+            let _ = rx.recv().unwrap();
+            info!(logger, "debug monitor thread has exited");
+
+            // close files
+            let _ = close(rfd);
+            let _ = close(master_fd);
+            let _ = close(slave_fd);
         }
         Err(err) => {
-            let msg = format!("fork error: {:?}", err);
-            return Err(ErrorKind::ErrorCode(msg).into());
+            return Err(anyhow!("fork error: {:?}", err));
         }
     }
 
