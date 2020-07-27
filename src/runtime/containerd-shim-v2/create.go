@@ -19,7 +19,6 @@ import (
 	"github.com/containerd/typeurl"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/pkg/errors"
-	"github.com/sirupsen/logrus"
 
 	// only register the proto type
 	_ "github.com/containerd/containerd/runtime/linux/runctypes"
@@ -72,7 +71,7 @@ func create(ctx context.Context, s *service, r *taskAPI.CreateTaskRequest) (*con
 		defer func() {
 			if err != nil && rootFs.Mounted {
 				if err2 := mount.UnmountAll(rootfs, 0); err2 != nil {
-					logrus.WithError(err2).Warn("failed to cleanup rootfs mount")
+					shimLog.WithField("container-type", containerType).WithError(err2).Warn("failed to cleanup rootfs mount")
 				}
 			}
 		}()
@@ -102,7 +101,7 @@ func create(ctx context.Context, s *service, r *taskAPI.CreateTaskRequest) (*con
 		defer func() {
 			if err != nil && rootFs.Mounted {
 				if err2 := mount.UnmountAll(rootfs, 0); err2 != nil {
-					logrus.WithError(err2).Warn("failed to cleanup rootfs mount")
+					shimLog.WithField("container-type", containerType).WithError(err2).Warn("failed to cleanup rootfs mount")
 				}
 			}
 		}()
