@@ -167,7 +167,9 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (config testRuntimeConf
 		VirtioFSCache:         defaultVirtioFSCacheMode,
 	}
 
-	agentConfig := vc.KataAgentConfig{}
+	agentConfig := vc.KataAgentConfig{
+		LongLiveConn: true,
+	}
 
 	netmonConfig := vc.NetmonConfig{
 		Path:   netmonPath,
@@ -519,7 +521,8 @@ func TestMinimalRuntimeConfig(t *testing.T) {
 	# Runtime configuration file
 
 	[agent.kata]
-
+	debug_console_enabled=true
+	kernel_modules=["a", "b", "c"]
 	[netmon]
 	path = "` + netmonPath + `"
 `
@@ -576,7 +579,11 @@ func TestMinimalRuntimeConfig(t *testing.T) {
 		VirtioFSCache:         defaultVirtioFSCacheMode,
 	}
 
-	expectedAgentConfig := vc.KataAgentConfig{}
+	expectedAgentConfig := vc.KataAgentConfig{
+		LongLiveConn:       true,
+		EnableDebugConsole: true,
+		KernelModules:      []string{"a", "b", "c"},
+	}
 
 	expectedNetmonConfig := vc.NetmonConfig{
 		Path:   netmonPath,
