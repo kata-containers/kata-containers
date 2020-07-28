@@ -501,11 +501,12 @@ func TestAppendEmptyDevice(t *testing.T) {
 }
 
 func TestAppendKnobsAllTrue(t *testing.T) {
-	var knobsString = "-no-user-config -nodefaults -nographic -daemonize -realtime mlock=on -S"
+	var knobsString = "-no-user-config -nodefaults -nographic --no-reboot -daemonize -realtime mlock=on -S"
 	knobs := Knobs{
 		NoUserConfig:  true,
 		NoDefaults:    true,
 		NoGraphic:     true,
+		NoReboot:      true,
 		Daemonize:     true,
 		MemPrealloc:   true,
 		FileBackedMem: true,
@@ -524,6 +525,7 @@ func TestAppendKnobsAllFalse(t *testing.T) {
 		NoUserConfig:  false,
 		NoDefaults:    false,
 		NoGraphic:     false,
+		NoReboot:      false,
 		MemPrealloc:   false,
 		FileBackedMem: false,
 		MemShared:     false,
@@ -666,6 +668,18 @@ func TestAppendMemoryFileBackedMemPrealloc(t *testing.T) {
 	mlockFalseString := "-realtime mlock=off"
 
 	testConfigAppend(conf, knobs, memString+" "+knobsString+" "+mlockFalseString, t)
+}
+
+func TestNoRebootKnob(t *testing.T) {
+	conf := &Config{}
+
+	knobs := Knobs{
+		NoReboot: true,
+	}
+	knobsString := "--no-reboot"
+	mlockFalseString := "-realtime mlock=off"
+
+	testConfigAppend(conf, knobs, knobsString+" "+mlockFalseString, t)
 }
 
 var kernelString = "-kernel /opt/vmlinux.container -initrd /opt/initrd.container -append root=/dev/pmem0p1 rootflags=dax,data=ordered,errors=remount-ro rw rootfstype=ext4 tsc=reliable"
