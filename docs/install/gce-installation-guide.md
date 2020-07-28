@@ -101,7 +101,7 @@ If this fails, ensure you created your instance from the correct image and that 
 
 The process for installing Kata itself on a virtualization-enabled VM is identical to that for bare metal.
 
-For detailed information to install Kata on your distribution of choice, see the [Kata Containers installation user guides](https://github.com/kata-containers/documentation/blob/master/install/README.md).
+For detailed information to install Kata on your distribution of choice, see the [Kata Containers installation user guides](../install/README.md).
 
 ## Create a Kata-enabled Image
 

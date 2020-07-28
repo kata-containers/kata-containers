@@ -72,7 +72,7 @@ Your host kernel needs to be booted with `intel_iommu=on` on the kernel command 
 
 ## Install and configure Kata Containers
 To use non-large BARs devices (for example, Nvidia Tesla T4), you need Kata version 1.3.0 or above.
-Follow the [Kata Containers setup instructions](https://github.com/kata-containers/documentation/blob/master/install/README.md)
+Follow the [Kata Containers setup instructions](../install/README.md)
 to install the latest version of Kata.
 
 The following configuration in the Kata `configuration.toml` file as shown below can work:
@@ -131,13 +131,13 @@ It is worth checking that it is not enabled in your kernel configuration to prev
 
 
 Build the Kata Containers kernel with the previous config options,
-using the instructions described in [Building Kata Containers kernel](https://github.com/kata-containers/packaging/tree/master/kernel).
+using the instructions described in [Building Kata Containers kernel](../../tools/packaging/kernel).
 For further details on building and installing guest kernels,
-see [the developer guide](https://github.com/kata-containers/documentation/blob/master/Developer-Guide.md#install-guest-kernel-images).
+see [the developer guide](../Developer-Guide.md#install-guest-kernel-images).
 
 There is an easy way to build a guest kernel that supports Nvidia GPU:
 ```
-## Build guest kernel with https://github.com/kata-containers/packaging/tree/master/kernel
+## Build guest kernel with ../../tools/packaging/kernel
 
 # Prepare (download guest kernel source, generate .config)
 $ ./build-kernel.sh -v 4.19.86 -g nvidia -f setup

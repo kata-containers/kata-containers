@@ -25,14 +25,14 @@ This document describes how to get Kata Containers to work with virtio-fs.
 
 ## Install Kata Containers with virtio-fs support
 
-The Kata Containers NEMU configuration, the NEMU VMM and the `virtiofs` daemon are available in the [Kata Container release](https://github.com/kata-containers/runtime/releases) artifacts starting with the 1.7 release. While the feature is experimental, distribution packages are not supported, but installation is available through [`kata-deploy`](https://github.com/kata-containers/packaging/tree/master/kata-deploy).
+The Kata Containers NEMU configuration, the NEMU VMM and the `virtiofs` daemon are available in the [Kata Container release](https://github.com/kata-containers/kata-containers/releases) artifacts starting with the 1.7 release. While the feature is experimental, distribution packages are not supported, but installation is available through [`kata-deploy`](../../tools/packaging/kata-deploy).
 
 Install the latest release of Kata as follows:
 ```
 docker run --runtime=runc -v /opt/kata:/opt/kata -v /var/run/dbus:/var/run/dbus -v /run/systemd:/run/systemd -v /etc/docker:/etc/docker -it katadocker/kata-deploy kata-deploy-docker install
 ```
 
-This will place the Kata release artifacts in `/opt/kata`, and update Docker's configuration to include a runtime target, `kata-nemu`. Learn more about `kata-deploy` and how to use `kata-deploy` in Kubernetes [here](https://github.com/kata-containers/packaging/tree/master/kata-deploy#kubernetes-quick-start).
+This will place the Kata release artifacts in `/opt/kata`, and update Docker's configuration to include a runtime target, `kata-nemu`. Learn more about `kata-deploy` and how to use `kata-deploy` in Kubernetes [here](../../tools/packaging/kata-deploy/README.md#kubernetes-quick-start).
 
 
 ## Run a Kata Container utilizing virtio-fs

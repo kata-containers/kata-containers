@@ -13,4 +13,4 @@
 2. Decide which container manager to use and select the corresponding link that follows:
 
    - [Docker](docker/rhel-docker-install.md)
-   - [Kubernetes](https://github.com/kata-containers/documentation/blob/master/Developer-Guide.md#run-kata-containers-with-kubernetes)
+   - [Kubernetes](../Developer-Guide.md#run-kata-containers-with-kubernetes)
