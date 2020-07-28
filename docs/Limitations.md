@@ -39,7 +39,7 @@ Some of these limitations have potential solutions, whereas others exist
 due to fundamental architectural differences generally related to the
 use of VMs.
 
-The [Kata Container runtime](https://github.com/kata-containers/runtime)
+The [Kata Container runtime](../src/runtime)
 launches each container within its own hardware isolated VM, and each VM has
 its own kernel. Due to this higher degree of isolation, certain container
 capabilities cannot be supported or are implicitly enabled through the VM.
@@ -270,11 +270,6 @@ The following examples outline some of the various areas constraints can be appl
 
     This can be achieved by specifying particular hypervisor configuration options.
 
-  - Constrain the [shim](https://github.com/kata-containers/shim) process.
-
-    This process represents the container workload running inside the VM.
-
-  - Constrain the [proxy](https://github.com/kata-containers/proxy) process.
 
 Note that in some circumstances it might be necessary to apply particular constraints
 to more than one of the previous areas to achieve the desired level of isolation and resource control.

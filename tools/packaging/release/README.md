@@ -14,7 +14,7 @@ tools used for creating Kata Containers releases.
 
 ## Create a Kata Containers release
 
-See [the release documentation](https://github.com/kata-containers/documentation/blob/master/Release-Process.md).
+See [the release documentation](../../../docs/Release-Process.md).
 
 ## Release tools
 

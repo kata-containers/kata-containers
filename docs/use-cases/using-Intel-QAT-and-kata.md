@@ -194,9 +194,9 @@ $ ls -la /sys/bus/pci/drivers/vfio-pci
 
 This example automatically uses the latest Kata kernel supported by Kata. It
 follows the instructions from the
-[packaging kernel repository](https://github.com/kata-containers/packaging/tree/master/kernel)
+[packaging kernel repository](../../tools/packaging/kernel)
 and uses the latest Kata kernel
-[config](https://github.com/kata-containers/packaging/tree/master/kernel/configs).
+[config](../../tools/packaging/kernel/configs).
 There are some patches that must be installed as well, which the 
 `build-kernel.sh` script should automatically apply. If you are using a
 different kernel version, then you might need to manually apply them. Since
