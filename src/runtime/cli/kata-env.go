@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
+	"runtime"
 	"strings"
 
 	"github.com/BurntSushi/toml"
@@ -18,6 +19,7 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/oci"
 	vcUtils "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
+	"github.com/prometheus/procfs"
 	"github.com/urfave/cli"
 )
 
@@ -25,7 +27,7 @@ import (
 //
 // XXX: Increment for every change to the output format
 // (meaning any change to the EnvInfo type).
-const formatVersion = "1.0.24"
+const formatVersion = "1.0.25"
 
 // MetaInfo stores information on the format of the output itself
 type MetaInfo struct {
@@ -53,6 +55,14 @@ type ImageInfo struct {
 type CPUInfo struct {
 	Vendor string
 	Model  string
+	CPUs   int
+}
+
+// MemoryInfo stores host memory details
+type MemoryInfo struct {
+	Total     uint64
+	Free      uint64
+	Available uint64
 }
 
 // RuntimeConfigInfo stores runtime config details.
@@ -123,6 +133,7 @@ type HostInfo struct {
 	Architecture       string
 	Distro             DistroInfo
 	CPU                CPUInfo
+	Memory             MemoryInfo
 	VMContainerCapable bool
 	SupportVSocks      bool
 }
@@ -222,20 +233,42 @@ func getHostInfo() (HostInfo, error) {
 	hostCPU := CPUInfo{
 		Vendor: cpuVendor,
 		Model:  cpuModel,
+		CPUs:   runtime.NumCPU(),
 	}
 
 	supportVSocks, _ := vcUtils.SupportsVsocks()
+
+	memoryInfo := getMemoryInfo()
 
 	host := HostInfo{
 		Kernel:             hostKernelVersion,
 		Architecture:       arch,
 		Distro:             hostDistro,
 		CPU:                hostCPU,
+		Memory:             memoryInfo,
 		VMContainerCapable: hostVMContainerCapable,
 		SupportVSocks:      supportVSocks,
 	}
 
 	return host, nil
+}
+
+func getMemoryInfo() MemoryInfo {
+	fs, err := procfs.NewDefaultFS()
+	if err != nil {
+		return MemoryInfo{}
+	}
+
+	mi, err := fs.Meminfo()
+	if err != nil {
+		return MemoryInfo{}
+	}
+
+	return MemoryInfo{
+		Total:     mi.MemTotal,
+		Free:      mi.MemFree,
+		Available: mi.MemAvailable,
+	}
 }
 
 func getNetmonInfo(config oci.RuntimeConfig) NetmonInfo {
