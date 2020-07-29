@@ -693,6 +693,7 @@ func (fc *firecracker) fcInitConfiguration() error {
 		return err
 	}
 
+	fcKernelParams = append(fcKernelParams, archRequiredFcKernelParams...)
 	if fc.config.Debug {
 		fcKernelParams = append(fcKernelParams, Param{"console", "ttyS0"})
 	} else {

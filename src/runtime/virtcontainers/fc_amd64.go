@@ -14,6 +14,16 @@ func init() {
 	archFcPowerOffFunc = fcSendCtrlAltDel
 }
 
+// At boot time, the Linux driver for i8042 spends a few tens of
+// milliseconds probing the device.
+// This can be disabled by using the following kernel parameters.
+var archRequiredFcKernelParams = []Param{
+	{"i8042.noaux", ""},
+	{"i8042.nomux", ""},
+	{"i8042.nopnp", ""},
+	{"i8042.dumbkbd", ""},
+}
+
 // Use SendCtrlAltDel API action to send CTRL+ALT+DEL to the VM.
 // This can be used to trigger a graceful shutdown of the microVM,
 // if the guest has support for i8042 and AT Keyboard.
