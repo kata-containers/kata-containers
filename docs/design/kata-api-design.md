@@ -10,9 +10,14 @@ To fulfill the [Kata design requirements](kata-design-requirements.md), and base
 
 |Name|Description|
 |---|---|
-|`CreateSandbox(SandboxConfig)`| Create and start a sandbox, and return the sandbox structure.|
+|`CreateSandbox(SandboxConfig)`| Create and start a sandbox, create its containers and do not start them, return the sandbox structure.|
 |`FetchSandbox(ID)`| Connect to an existing sandbox and return the sandbox structure.|
 |`ListSandboxes()`| List all existing sandboxes with status. |
+|`StatusSandbox(ID)`| Get the detailed status of a Sandbox. |
+|`StartSandbox(ID)`| Start an existing sandbox and all its containers, return the sandbox structure. |
+|`RunSandbox(SandboxConfig)`| Create and start a sandbox, and then create and start its containers, return the sandbox structure. |
+|`StopSandbox(ID)`| Stop an existing sandbox and destroy all containers within the sandbox, return the sandbox structure. |
+|`DeleteSandbox(ID)`| Stop an already created sandbox and then delete it, return the sandbox structure. |
 
 ### Sandbox Operation API
 
