@@ -24,8 +24,6 @@ import (
 	dto "github.com/prometheus/client_model/go"
 	"github.com/prometheus/common/expfmt"
 
-	"github.com/sirupsen/logrus"
-
 	"google.golang.org/grpc/codes"
 
 	mutils "github.com/kata-containers/kata-containers/src/runtime/pkg/utils"
@@ -33,6 +31,7 @@ import (
 
 var (
 	ifSupportAgentMetricsAPI = true
+	shimMgtLog               = shimLog.WithField("subsystem", "shim-management")
 )
 
 // serveMetrics handle /metrics requests
@@ -65,9 +64,9 @@ func (s *service) serveMetrics(w http.ResponseWriter, r *http.Request) {
 	// get metrics from agent
 	agentMetrics, err := s.sandbox.GetAgentMetrics()
 	if err != nil {
-		logrus.WithError(err).Error("failed GetAgentMetrics")
+		shimMgtLog.WithError(err).Error("failed GetAgentMetrics")
 		if isGRPCErrorCode(codes.NotFound, err) {
-			logrus.Warn("metrics API not supportted by this agent.")
+			shimMgtLog.Warn("metrics API not supportted by this agent.")
 			ifSupportAgentMetricsAPI = false
 			return
 		}
@@ -119,23 +118,23 @@ func (s *service) startManagementServer(ctx context.Context, ociSpec *specs.Spec
 	// metrics socket will under sandbox's bundle path
 	metricsAddress, err := socketAddress(ctx, s.id)
 	if err != nil {
-		logrus.Errorf("failed to create socket address: %s", err.Error())
+		shimMgtLog.WithError(err).Error("failed to create socket address")
 		return
 	}
 
 	listener, err := cdshim.NewSocket(metricsAddress)
 	if err != nil {
-		logrus.Errorf("failed to create listener: %s", err.Error())
+		shimMgtLog.WithError(err).Error("failed to create listener")
 		return
 	}
 
 	// write metrics address to filesystem
 	if err := cdshim.WriteAddress("monitor_address", metricsAddress); err != nil {
-		logrus.Errorf("failed to write metrics address: %s", err.Error())
+		shimMgtLog.WithError(err).Errorf("failed to write metrics address")
 		return
 	}
 
-	logrus.Info("kata monitor inited")
+	shimMgtLog.Info("kata management inited")
 
 	// bind hanlder
 	m := http.NewServeMux()
