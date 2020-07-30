@@ -2122,6 +2122,9 @@ type Knobs struct {
 
 	// Realtime will enable realtime QEMU
 	Realtime bool
+
+	// Exit instead of rebooting
+	NoReboot bool
 }
 
 // IOThread allows IO to be performed on a separate thread.
@@ -2455,6 +2458,10 @@ func (config *Config) appendKnobs() {
 
 	if config.Knobs.NoGraphic {
 		config.qemuParams = append(config.qemuParams, "-nographic")
+	}
+
+	if config.Knobs.NoReboot {
+		config.qemuParams = append(config.qemuParams, "--no-reboot")
 	}
 
 	if config.Knobs.Daemonize {
