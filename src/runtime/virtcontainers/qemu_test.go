@@ -187,6 +187,23 @@ func TestQemuMemoryTopology(t *testing.T) {
 	assert.Exactly(memory, expectedOut)
 }
 
+func TestQemuKnobs(t *testing.T) {
+	assert := assert.New(t)
+
+	sandbox, err := createQemuSandboxConfig()
+	assert.NoError(err)
+
+	q := &qemu{
+		store: sandbox.newStore,
+	}
+	err = q.createSandbox(context.Background(), sandbox.id, NetworkNamespace{}, &sandbox.config.HypervisorConfig)
+	assert.NoError(err)
+
+	assert.Equal(q.qemuConfig.Knobs.NoUserConfig, true)
+	assert.Equal(q.qemuConfig.Knobs.NoDefaults, true)
+	assert.Equal(q.qemuConfig.Knobs.NoGraphic, true)
+}
+
 func testQemuAddDevice(t *testing.T, devInfo interface{}, devType deviceType, expected []govmmQemu.Device) {
 	assert := assert.New(t)
 	q := &qemu{
