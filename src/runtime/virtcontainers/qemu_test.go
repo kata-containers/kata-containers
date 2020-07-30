@@ -202,6 +202,7 @@ func TestQemuKnobs(t *testing.T) {
 	assert.Equal(q.qemuConfig.Knobs.NoUserConfig, true)
 	assert.Equal(q.qemuConfig.Knobs.NoDefaults, true)
 	assert.Equal(q.qemuConfig.Knobs.NoGraphic, true)
+	assert.Equal(q.qemuConfig.Knobs.NoReboot, true)
 }
 
 func testQemuAddDevice(t *testing.T, devInfo interface{}, devType deviceType, expected []govmmQemu.Device) {
