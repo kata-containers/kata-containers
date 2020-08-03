@@ -1495,6 +1495,11 @@ fn execute_hook(logger: &Logger, h: &Hook, st: &OCIState) -> Result<()> {
     //	state.push_str("\n");
 
     let (rfd, wfd) = unistd::pipe2(OFlag::O_CLOEXEC)?;
+    defer!({
+        let _ = unistd::close(rfd);
+        let _ = unistd::close(wfd);
+    });
+
     match unistd::fork()? {
         ForkResult::Parent { child: _ch } => {
             let buf = read_sync(rfd)?;
