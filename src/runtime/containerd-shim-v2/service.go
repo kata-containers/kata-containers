@@ -57,6 +57,7 @@ var (
 
 // concrete virtcontainer implementation
 var vci vc.VC = &vc.VCImpl{}
+var logger = logrus.WithField("source", "shimv2")
 
 // shimLog is logger for shim package
 var shimLog = logrus.WithField("source", "containerd-kata-shim-v2")
@@ -229,10 +230,11 @@ func (s *service) StartShim(ctx context.Context, id, containerdBinary, container
 func (s *service) forward(publisher events.Publisher) {
 	for e := range s.events {
 		ctx, cancel := context.WithTimeout(s.ctx, timeOut)
-		err := publisher.Publish(ctx, getTopic(e), e)
+		topic := getTopic(e)
+		err := publisher.Publish(ctx, topic, e)
 		cancel()
 		if err != nil {
-			shimLog.WithError(err).Error("post event")
+			shimLog.WithError(err).WithField("topic", topic).WithField("event", e).Error("post event")
 		}
 	}
 }
@@ -383,6 +385,9 @@ func (s *service) Start(ctx context.Context, r *taskAPI.StartRequest) (_ *taskAP
 		rpcDurationsHistogram.WithLabelValues("start").Observe(float64(time.Since(start).Nanoseconds() / int64(time.Millisecond)))
 	}()
 
+	logger.Error("shimv2 rpc Start start")
+	defer logger.Error("shimv2 rpc Start end")
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -392,8 +397,10 @@ func (s *service) Start(ctx context.Context, r *taskAPI.StartRequest) (_ *taskAP
 	}
 
 	// hold the send lock so that the start events are sent before any exit events in the error case
+	logger.Error("shimv2 rpc Start eventSendMu lock")
 	s.eventSendMu.Lock()
 	defer s.eventSendMu.Unlock()
+	logger.Error("shimv2 rpc Start eventSendMu unlock")
 
 	//start a container
 	if r.ExecID == "" {
@@ -479,6 +486,9 @@ func (s *service) Exec(ctx context.Context, r *taskAPI.ExecProcessRequest) (_ *p
 		rpcDurationsHistogram.WithLabelValues("exec").Observe(float64(time.Since(start).Nanoseconds() / int64(time.Millisecond)))
 		err = toGRPC(err)
 	}()
+
+	logger.Error("shimv2 rpc Exec start")
+	defer logger.Error("shimv2 rpc Exec end")
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -744,6 +754,9 @@ func (s *service) CloseIO(ctx context.Context, r *taskAPI.CloseIORequest) (_ *pt
 		err = toGRPC(err)
 		rpcDurationsHistogram.WithLabelValues("close_io").Observe(float64(time.Since(start).Nanoseconds() / int64(time.Millisecond)))
 	}()
+
+	logger.Error("shimv2 rpc CloseIO start")
+	defer logger.Error("shimv2 rpc CloseIO end")
 
 	s.mu.Lock()
 	defer s.mu.Unlock()

@@ -116,6 +116,8 @@ func (c *Client) Call(ctx context.Context, service, method string, req, resp int
 		cresp = &Response{}
 	)
 
+	logrus.Errorf("CCCCC ttrpc call %s.%s %v", service, method, req)
+
 	if metadata, ok := GetMetadata(ctx); ok {
 		metadata.setRequest(creq)
 	}
@@ -127,9 +129,12 @@ func (c *Client) Call(ctx context.Context, service, method string, req, resp int
 	info := &UnaryClientInfo{
 		FullMethod: fullPath(service, method),
 	}
+
+	logrus.Error("CCCCC ttrpc before interceptor")
 	if err := c.interceptor(ctx, creq, cresp, info, c.dispatch); err != nil {
 		return err
 	}
+	logrus.Error("CCCCC ttrpc after interceptor")
 
 	if err := c.codec.Unmarshal(cresp.Payload, resp); err != nil {
 		return err
@@ -150,6 +155,8 @@ func (c *Client) dispatch(ctx context.Context, req *Request, resp *Response) err
 		errs: errs,
 	}
 
+	logrus.Errorf("CCCCC ttrpc dispatch push call %v", req)
+
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
@@ -158,14 +165,22 @@ func (c *Client) dispatch(ctx context.Context, req *Request, resp *Response) err
 		return c.error()
 	}
 
+	// logrus.Errorf("CCCCC ttrpc dispatch push call %v", req)
+
+	var err error
+
 	select {
 	case <-ctx.Done():
-		return ctx.Err()
+		err = ctx.Err()
 	case err := <-errs:
-		return filterCloseErr(err)
+		err = filterCloseErr(err)
 	case <-c.ctx.Done():
-		return c.error()
+		err = c.error()
 	}
+
+	logrus.Errorf("CCCCC ttrpc dispatch result received  %v", err)
+
+	return err
 }
 
 func (c *Client) Close() error {
@@ -194,9 +209,11 @@ func (r *receiver) run(ctx context.Context, c *channel) {
 		select {
 		case <-ctx.Done():
 			r.err = ctx.Err()
+			logrus.Errorf("CCCCCC receiver.run done %v", r.err)
 			return
 		default:
 			mh, p, err := c.recv()
+			logrus.Errorf("CCCCCC receiver.run received %v %s %v", mh, string(p), err)
 			if err != nil {
 				_, ok := status.FromError(err)
 				if !ok {
@@ -214,6 +231,7 @@ func (r *receiver) run(ctx context.Context, c *channel) {
 			}:
 			case <-ctx.Done():
 				r.err = ctx.Err()
+				logrus.Errorf("CCCCCC receiver.run done %v", r.err)
 				return
 			}
 		}
@@ -256,14 +274,23 @@ func (c *Client) run() {
 	for {
 		select {
 		case call := <-calls:
+			logrus.Errorf("CCCCC ttrpc run() sending %d %v", streamID, call)
+
 			if err := c.send(streamID, messageTypeRequest, call.req); err != nil {
 				call.errs <- err
+				logrus.Errorf("CCCCC ttrpc run() send error %d %v %v", streamID, call, err)
 				continue
 			}
+			logrus.Errorf("CCCCC ttrpc run() send ok %d", streamID)
 
 			waiters[streamID] = call
+			logrus.Errorf("CCCCC ttrpc run() waiters %v", waiters)
+
 			streamID += 2 // enforce odd client initiated request ids
 		case msg := <-incoming:
+			logrus.Errorf("CCCCC ttrpc run() new message %d", msg.StreamID)
+			logrus.Errorf("CCCCC ttrpc run() waiters %v", waiters)
+
 			call, ok := waiters[msg.StreamID]
 			if !ok {
 				logrus.Errorf("ttrpc: received message for unknown channel %v", msg.StreamID)
@@ -272,6 +299,7 @@ func (c *Client) run() {
 
 			call.errs <- c.recv(call.resp, msg)
 			delete(waiters, msg.StreamID)
+			logrus.Errorf("CCCCC ttrpc run() waiters %v", waiters)
 		case <-receiversDone:
 			// all the receivers have exited
 			if recv.err != nil {
@@ -302,6 +330,7 @@ func (c *Client) setError(err error) {
 }
 
 func (c *Client) send(streamID uint32, mtype messageType, msg interface{}) error {
+	logrus.Errorf("CCCCCC ttrpc client send %d %v %v", streamID, mtype, msg)
 	p, err := c.codec.Marshal(msg)
 	if err != nil {
 		return err
@@ -319,8 +348,9 @@ func (c *Client) recv(resp *Response, msg *message) error {
 		return errors.New("unknown message type received")
 	}
 
-	defer c.channel.putmbuf(msg.p)
-	return proto.Unmarshal(msg.p, resp)
+	err := proto.Unmarshal(msg.p, resp)
+	c.channel.putmbuf(msg.p)
+	return err
 }
 
 // filterCloseErr rewrites EOF and EPIPE errors to ErrClosed. Use when
@@ -338,9 +368,12 @@ func filterCloseErr(err error) error {
 	case strings.Contains(err.Error(), "use of closed network connection"):
 		return ErrClosed
 	default:
-		// if we have an epipe on a write, we cast to errclosed
-		if oerr, ok := err.(*net.OpError); ok && oerr.Op == "write" {
-			if serr, ok := oerr.Err.(*os.SyscallError); ok && serr.Err == syscall.EPIPE {
+		// if we have an epipe on a write or econnreset on a read , we cast to errclosed
+		if oerr, ok := err.(*net.OpError); ok && (oerr.Op == "write" || oerr.Op == "read") {
+			serr, sok := oerr.Err.(*os.SyscallError)
+			if sok && ((serr.Err == syscall.EPIPE && oerr.Op == "write") ||
+				(serr.Err == syscall.ECONNRESET && oerr.Op == "read")) {
+
 				return ErrClosed
 			}
 		}
