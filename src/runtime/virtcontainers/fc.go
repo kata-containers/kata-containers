@@ -625,6 +625,15 @@ func (fc *firecracker) fcSetLogger() error {
 	return err
 }
 
+func (fc *firecracker) updateMetrics(line string) {
+	var fm FirecrackerMetrics
+	if err := json.Unmarshal([]byte(line), &fm); err != nil {
+		fc.Logger().WithError(err).WithField("data", line).Error("failed to unmarshal fc metrics")
+		return
+	}
+	updateFirecrackerMetrics(&fm)
+}
+
 type fifoConsumer func(string)
 
 func (fc *firecracker) fcListenToFifo(fifoName string, consumer fifoConsumer) (string, error) {

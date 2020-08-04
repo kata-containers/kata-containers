@@ -2,33 +2,19 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 //
+// WARNING: This file is auto-generated - DO NOT EDIT!
 
 package virtcontainers
 
 import (
-	"encoding/json"
-
 	"github.com/prometheus/client_golang/prometheus"
 )
 
-const namespaceFirecracker = "kata_firecracker"
-
-func (fc *firecracker) updateMetrics(line string) {
-	var fm FirecrackerMetrics
-	if err := json.Unmarshal([]byte(line), &fm); err != nil {
-		fc.Logger().WithError(err).WithField("data", line).Error("failed to unmarshal fc metrics")
-		return
-	}
-	updateFirecrackerMetrics(&fm)
-}
-
-//
-// below is codes generated from
-// https://github.com/firecracker-microvm/firecracker/blob/b417a783e3e3dce60da9c2e745ffaf35595fc0be/src/logger/src/metrics.rs#L255-L687
+const fcMetricsNS = "kata_firecracker"
 
 var (
 	apiServerMetrics = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Namespace: namespaceFirecracker,
+		Namespace: fcMetricsNS,
 		Name:      "api_server",
 		Help:      "Metrics related to the internal API server.",
 	},
@@ -36,7 +22,7 @@ var (
 	)
 
 	getRequestsMetrics = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Namespace: namespaceFirecracker,
+		Namespace: fcMetricsNS,
 		Name:      "get_api_requests",
 		Help:      "Metrics specific to GET API Requests for counting user triggered actions and/or failures.",
 	},
@@ -44,7 +30,7 @@ var (
 	)
 
 	putRequestsMetrics = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Namespace: namespaceFirecracker,
+		Namespace: fcMetricsNS,
 		Name:      "put_api_requests",
 		Help:      "Metrics specific to PUT API Requests for counting user triggered actions and/or failures.",
 	},
@@ -52,7 +38,7 @@ var (
 	)
 
 	patchRequestsMetrics = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Namespace: namespaceFirecracker,
+		Namespace: fcMetricsNS,
 		Name:      "patch_api_requests",
 		Help:      "Metrics specific to PATCH API Requests for counting user triggered actions and/or failures.",
 	},
@@ -60,7 +46,7 @@ var (
 	)
 
 	blockDeviceMetrics = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Namespace: namespaceFirecracker,
+		Namespace: fcMetricsNS,
 		Name:      "block",
 		Help:      "Block Device associated metrics.",
 	},
@@ -68,7 +54,7 @@ var (
 	)
 
 	i8042DeviceMetrics = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Namespace: namespaceFirecracker,
+		Namespace: fcMetricsNS,
 		Name:      "i8042",
 		Help:      "Metrics specific to the i8042 device.",
 	},
@@ -76,7 +62,7 @@ var (
 	)
 
 	loggerSystemMetrics = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Namespace: namespaceFirecracker,
+		Namespace: fcMetricsNS,
 		Name:      "logger",
 		Help:      "Metrics for the logging subsystem.",
 	},
@@ -84,7 +70,7 @@ var (
 	)
 
 	mmdsMetrics = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Namespace: namespaceFirecracker,
+		Namespace: fcMetricsNS,
 		Name:      "mmds",
 		Help:      "Metrics for the MMDS functionality.",
 	},
@@ -92,7 +78,7 @@ var (
 	)
 
 	netDeviceMetrics = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Namespace: namespaceFirecracker,
+		Namespace: fcMetricsNS,
 		Name:      "net",
 		Help:      "Network-related metrics.",
 	},
@@ -100,7 +86,7 @@ var (
 	)
 
 	performanceMetrics = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Namespace: namespaceFirecracker,
+		Namespace: fcMetricsNS,
 		Name:      "latencies_us",
 		Help:      "Performance metrics related for the moment only to snapshots.",
 	},
@@ -108,7 +94,7 @@ var (
 	)
 
 	rtcDeviceMetrics = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Namespace: namespaceFirecracker,
+		Namespace: fcMetricsNS,
 		Name:      "rtc",
 		Help:      "Metrics specific to the RTC device.",
 	},
@@ -116,7 +102,7 @@ var (
 	)
 
 	seccompMetrics = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Namespace: namespaceFirecracker,
+		Namespace: fcMetricsNS,
 		Name:      "seccomp",
 		Help:      "Metrics for the seccomp filtering.",
 	},
@@ -124,7 +110,7 @@ var (
 	)
 
 	serialDeviceMetrics = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Namespace: namespaceFirecracker,
+		Namespace: fcMetricsNS,
 		Name:      "uart",
 		Help:      "Metrics specific to the UART device.",
 	},
@@ -132,7 +118,7 @@ var (
 	)
 
 	signalMetrics = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Namespace: namespaceFirecracker,
+		Namespace: fcMetricsNS,
 		Name:      "signals",
 		Help:      "Metrics related to signals.",
 	},
@@ -140,7 +126,7 @@ var (
 	)
 
 	vcpuMetrics = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Namespace: namespaceFirecracker,
+		Namespace: fcMetricsNS,
 		Name:      "vcpu",
 		Help:      "Metrics specific to VCPUs' mode of functioning.",
 	},
@@ -148,7 +134,7 @@ var (
 	)
 
 	vmmMetrics = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Namespace: namespaceFirecracker,
+		Namespace: fcMetricsNS,
 		Name:      "vmm",
 		Help:      "Metrics specific to the machine manager as a whole.",
 	},
@@ -156,7 +142,7 @@ var (
 	)
 
 	vsockDeviceMetrics = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Namespace: namespaceFirecracker,
+		Namespace: fcMetricsNS,
 		Name:      "vsock",
 		Help:      "Vsock-related metrics.",
 	},
@@ -363,43 +349,7 @@ func updateFirecrackerMetrics(fm *FirecrackerMetrics) {
 	vsockDeviceMetrics.WithLabelValues("rx_read_fails").Set(float64(fm.Vsock.RxReadFails))
 }
 
-/// Structure storing all metrics while enforcing serialization support on them.
-type FirecrackerMetrics struct {
-	/// API Server related metrics.
-	ApiServer ApiServerMetrics `json:"api_server"`
-	/// A block device's related metrics.
-	Block BlockDeviceMetrics `json:"block"`
-	/// Metrics related to API GET requests.
-	GetApiRequests GetRequestsMetrics `json:"get_api_requests"`
-	/// Metrics related to the i8042 device.
-	I8042 I8042DeviceMetrics `json:"i8042"`
-	/// Metrics related to performance measurements.
-	LatenciesUs PerformanceMetrics `json:"latencies_us"`
-	/// Logging related metrics.
-	Logger LoggerSystemMetrics `json:"logger"`
-	/// Metrics specific to MMDS functionality.
-	Mmds MmdsMetrics `json:"mmds"`
-	/// A network device's related metrics.
-	Net NetDeviceMetrics `json:"net"`
-	/// Metrics related to API PATCH requests.
-	PatchApiRequests PatchRequestsMetrics `json:"patch_api_requests"`
-	/// Metrics related to API PUT requests.
-	PutApiRequests PutRequestsMetrics `json:"put_api_requests"`
-	/// Metrics related to the RTC device.
-	Rtc RTCDeviceMetrics `json:"rtc"`
-	/// Metrics related to seccomp filtering.
-	Seccomp SeccompMetrics `json:"seccomp"`
-	/// Metrics related to a vcpu's functioning.
-	Vcpu VcpuMetrics `json:"vcpu"`
-	/// Metrics related to the virtual machine manager.
-	Vmm VmmMetrics `json:"vmm"`
-	/// Metrics related to the UART device.
-	Uart SerialDeviceMetrics `json:"uart"`
-	/// Metrics related to signals.
-	Signals SignalMetrics `json:"signals"`
-	/// Metrics related to virtio-vsockets.
-	Vsock VsockDeviceMetrics `json:"vsock"`
-}
+// golang types from rust version
 
 /// Metrics related to the internal API server.
 type ApiServerMetrics struct {
@@ -515,7 +465,7 @@ type I8042DeviceMetrics struct {
 	ErrorCount uint64 `json:"error_count"`
 	/// Number of superfluous read intents on this i8042 device.
 	MissedReadCount uint64 `json:"missed_read_count"`
-	/// Number of superfluous read intents on this i8042 device.
+	/// Number of superfluous write intents on this i8042 device.
 	MissedWriteCount uint64 `json:"missed_write_count"`
 	/// Bytes read by this device.
 	ReadCount uint64 `json:"read_count"`
@@ -758,4 +708,42 @@ type VsockDeviceMetrics struct {
 	TxWriteFails uint64 `json:"tx_write_fails"`
 	/// Number of times read() has failed.
 	RxReadFails uint64 `json:"rx_read_fails"`
+}
+
+/// Structure storing all metrics while enforcing serialization support on them.
+type FirecrackerMetrics struct {
+	/// API Server related metrics.
+	ApiServer ApiServerMetrics `json:"api_server"`
+	/// A block device's related metrics.
+	Block BlockDeviceMetrics `json:"block"`
+	/// Metrics related to API GET requests.
+	GetApiRequests GetRequestsMetrics `json:"get_api_requests"`
+	/// Metrics related to the i8042 device.
+	I8042 I8042DeviceMetrics `json:"i8042"`
+	/// Metrics related to performance measurements.
+	LatenciesUs PerformanceMetrics `json:"latencies_us"`
+	/// Logging related metrics.
+	Logger LoggerSystemMetrics `json:"logger"`
+	/// Metrics specific to MMDS functionality.
+	Mmds MmdsMetrics `json:"mmds"`
+	/// A network device's related metrics.
+	Net NetDeviceMetrics `json:"net"`
+	/// Metrics related to API PATCH requests.
+	PatchApiRequests PatchRequestsMetrics `json:"patch_api_requests"`
+	/// Metrics related to API PUT requests.
+	PutApiRequests PutRequestsMetrics `json:"put_api_requests"`
+	/// Metrics related to the RTC device.
+	Rtc RTCDeviceMetrics `json:"rtc"`
+	/// Metrics related to seccomp filtering.
+	Seccomp SeccompMetrics `json:"seccomp"`
+	/// Metrics related to a vcpu's functioning.
+	Vcpu VcpuMetrics `json:"vcpu"`
+	/// Metrics related to the virtual machine manager.
+	Vmm VmmMetrics `json:"vmm"`
+	/// Metrics related to the UART device.
+	Uart SerialDeviceMetrics `json:"uart"`
+	/// Metrics related to signals.
+	Signals SignalMetrics `json:"signals"`
+	/// Metrics related to virtio-vsockets.
+	Vsock VsockDeviceMetrics `json:"vsock"`
 }
