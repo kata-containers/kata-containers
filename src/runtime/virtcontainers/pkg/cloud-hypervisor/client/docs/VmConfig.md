@@ -17,7 +17,8 @@ Name | Type | Description | Notes
 **Serial** | [**ConsoleConfig**](ConsoleConfig.md) |  | [optional] 
 **Console** | [**ConsoleConfig**](ConsoleConfig.md) |  | [optional] 
 **Devices** | [**[]DeviceConfig**](DeviceConfig.md) |  | [optional] 
-**Vsock** | [**VsockConfig**](VsockConfig.md) |  | [optional]
+**Vsock** | [**VsockConfig**](VsockConfig.md) |  | [optional] 
+**SgxEpc** | [**[]SgxEpcConfig**](SgxEpcConfig.md) |  | [optional] 
 **Iommu** | **bool** |  | [optional] [default to false]
 
 [[Back to Model list]](../README.md#documentation-for-models) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to README]](../README.md)
