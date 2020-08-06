@@ -11,7 +11,13 @@ set -o pipefail
 script_dir=$(dirname $(readlink -f "$0"))
 docker_image="cloud-hypervisor-builder"
 
-sudo docker build -t "${docker_image}" "${script_dir}"
+DOCKER_CLI="docker"
+
+if ! command -v docker && command -v podman; then
+	DOCKER_CLI="podman"
+fi
+
+sudo "${DOCKER_CLI}" build -t "${docker_image}" "${script_dir}"
 
 if test -t 1; then
 	USE_TTY="-ti"
@@ -20,7 +26,7 @@ else
 	echo "INFO: not tty build"
 fi
 
-sudo docker run \
+sudo "${DOCKER_CLI}" run \
 	--rm \
 	-v "$(pwd):/$(pwd)" \
 	-w "$(pwd)" \
