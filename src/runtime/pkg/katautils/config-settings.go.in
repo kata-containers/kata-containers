@@ -40,6 +40,7 @@ const defaultEnableIOThreads bool = false
 const defaultEnableMemPrealloc bool = false
 const defaultEnableHugePages bool = false
 const defaultEnableIOMMU bool = false
+const defaultEnableIOMMUPlatform bool = false
 const defaultFileBackedMemRootDir string = ""
 const defaultEnableSwap bool = false
 const defaultEnableDebug bool = false

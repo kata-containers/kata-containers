@@ -358,6 +358,9 @@ type HypervisorConfig struct {
 	// IOMMU specifies if the VM should have a vIOMMU
 	IOMMU bool
 
+	// IOMMUPlatform is used to indicate if IOMMU_PLATFORM is enabled for supported devices
+	IOMMUPlatform bool
+
 	// Realtime Used to enable/disable realtime
 	Realtime bool
 
