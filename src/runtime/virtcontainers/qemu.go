@@ -478,15 +478,16 @@ func (q *qemu) createSandbox(ctx context.Context, id string, networkNS NetworkNa
 	}
 
 	knobs := govmmQemu.Knobs{
-		NoUserConfig: true,
-		NoDefaults:   true,
-		NoGraphic:    true,
-		NoReboot:     true,
-		Daemonize:    true,
-		MemPrealloc:  q.config.MemPrealloc,
-		HugePages:    q.config.HugePages,
-		Realtime:     q.config.Realtime,
-		Mlock:        q.config.Mlock,
+		NoUserConfig:  true,
+		NoDefaults:    true,
+		NoGraphic:     true,
+		NoReboot:      true,
+		Daemonize:     true,
+		MemPrealloc:   q.config.MemPrealloc,
+		HugePages:     q.config.HugePages,
+		Realtime:      q.config.Realtime,
+		Mlock:         q.config.Mlock,
+		IOMMUPlatform: q.config.IOMMUPlatform,
 	}
 
 	kernelPath, err := q.config.KernelAssetPath()
