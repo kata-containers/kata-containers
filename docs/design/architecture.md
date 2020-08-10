@@ -17,8 +17,6 @@
         * [exec](#exec)
         * [kill](#kill)
         * [delete](#delete)
-* [Proxy](#proxy)
-* [Shim](#shim)
 * [Networking](#networking)
 * [Storage](#storage)
 * [Kubernetes Support](#kubernetes-support)
@@ -37,7 +35,7 @@ This is an architectural overview of Kata Containers, based on the 1.5.0 release
 The two primary deliverables of the Kata Containers project are a container runtime
 and a CRI friendly shim. There is also a CRI friendly library API behind them.
 
-The [Kata Containers runtime (`kata-runtime`)](https://github.com/kata-containers/runtime)
+The [Kata Containers runtime (`kata-runtime`)](../../src/runtime)
 is compatible with the [OCI](https://github.com/opencontainers) [runtime specification](https://github.com/opencontainers/runtime-spec)
 and therefore works seamlessly with the
 [Docker\* Engine](https://www.docker.com/products/docker-engine) pluggable runtime
@@ -52,7 +50,7 @@ the Docker engine or `kubelet` (Kubernetes) creates respectively.
 
 ![Docker and Kata Containers](arch-images/docker-kata.png)
 
-The [`containerd-shim-kata-v2` (shown as `shimv2` from this point onwards)](https://github.com/kata-containers/runtime/tree/master/containerd-shim-v2) 
+The [`containerd-shim-kata-v2` (shown as `shimv2` from this point onwards)](../../src/runtime/containerd-shim-v2) 
 is another Kata Containers entrypoint, which 
 implements the [Containerd Runtime V2 (Shim API)](https://github.com/containerd/containerd/tree/master/runtime/v2) for Kata.
 With `shimv2`, Kubernetes can launch Pod and OCI compatible containers with one shim (the `shimv2`) per Pod instead
@@ -62,7 +60,7 @@ of `2N+1` shims (a `containerd-shim` and a `kata-shim` for each container and th
 ![Kubernetes integration with shimv2](arch-images/shimv2.svg)
 
 The container process is then spawned by
-[agent](https://github.com/kata-containers/agent), an agent process running
+[agent](../../src/agent), an agent process running
 as a daemon inside the virtual machine. `kata-agent` runs a gRPC server in
 the guest using a VIRTIO serial or VSOCK interface which QEMU exposes as a socket
 file on the host. `kata-runtime` uses a gRPC protocol to communicate with
@@ -72,30 +70,7 @@ stderr, stdin) between the containers and the manage engines (e.g. Docker Engine
 
 For any given container, both the init process and all potentially executed
 commands within that container, together with their related I/O streams, need
-to go through the VIRTIO serial or VSOCK interface exported by QEMU. 
-In the VIRTIO serial case, a [Kata Containers
-proxy (`kata-proxy`)](https://github.com/kata-containers/proxy) instance is
-launched for each virtual machine to handle multiplexing and demultiplexing
-those commands and streams.
-
-On the host, each container process's removal is handled by a reaper in the higher
-layers of the container stack. In the case of Docker or containerd it is handled by `containerd-shim`.
-In the case of CRI-O it is handled by `conmon`. For clarity, for the remainder
-of this document the term "container process reaper" will be used to refer to
-either reaper. As Kata Containers processes run inside their own  virtual machines,
-the container process reaper cannot monitor, control
-or reap them. `kata-runtime` fixes that issue by creating an [additional shim process
-(`kata-shim`)](https://github.com/kata-containers/shim) between the container process
-reaper and `kata-proxy`. A `kata-shim` instance will both forward signals and `stdin`
-streams to the container process on the guest and pass the container `stdout`
-and `stderr` streams back up the stack to the CRI shim or Docker via the container process
-reaper. `kata-runtime` creates a `kata-shim` daemon for each container and for each
-OCI command received to run within an already running container (example, `docker
-exec`).
-
-Since Kata Containers version 1.5, the new introduced `shimv2` has integrated the
-functionalities of the reaper, the `kata-runtime`, the `kata-shim`, and the `kata-proxy`.
-As a result, there will not be any of the additional processes previously listed.
+to go through the VSOCK interface exported by QEMU.
 
 The container workload, that is, the actual OCI bundle rootfs, is exported from the
 host to the virtual machine.  In the case where a block-based graph driver is
@@ -155,7 +130,7 @@ The only service running in the context of the initrd is the [Agent](#agent) as 
 
 ## Agent
 
-[`kata-agent`](https://github.com/kata-containers/agent) is a process running in the
+[`kata-agent`](../../src/agent) is a process running in the
 guest as a supervisor for managing containers and processes running within
 those containers.
 
@@ -164,12 +139,7 @@ run several containers per VM to support container engines that require multiple
 containers running inside a pod. In the case of docker, `kata-runtime` creates a
 single container per pod.
 
-`kata-agent` communicates with the other Kata components over gRPC.
-It also runs a [`yamux`](https://github.com/hashicorp/yamux) server on the same gRPC URL.
-
-The `kata-agent` makes use of [`libcontainer`](https://github.com/opencontainers/runc/tree/master/libcontainer)
-to manage the lifecycle of the container. This way the `kata-agent` reuses most
-of the code used by [`runc`](https://github.com/opencontainers/runc).
+`kata-agent` communicates with the other Kata components over ttRPC.
 
 ### Agent gRPC protocol
 
@@ -199,7 +169,7 @@ Most users will not need to modify the configuration file.
 The file is well commented and provides a few "knobs" that can be used to modify
 the behavior of the runtime.
 
-The configuration file is also used to enable runtime [debug output](https://github.com/kata-containers/documentation/blob/master/Developer-Guide.md#enable-full-debug).
+The configuration file is also used to enable runtime [debug output](../Developer-Guide.md#enable-full-debug).
 
 ### Significant OCI commands
 
@@ -323,57 +293,6 @@ process representing this container process.
 	3. Wait for `kata-shim` process to exit, and return an error if we reach the timeout again.
 	4. Communicate with `kata-agent` (connecting the proxy) to remove the container configuration from the VM.
 4. Return container status.
-
-## Proxy
-
-Communication with the VM can be achieved by either `virtio-serial` or, if the host
-kernel is newer than v4.8, a virtual socket, `vsock` can be used. The default is `virtio-serial`.
-
-The VM will likely be running multiple container processes.  In the event `virtio-serial`
-is used, the I/O streams associated with each process needs to be multiplexed and demultiplexed on the host. On systems with `vsock` support, this component becomes optional.
-
-`kata-proxy` is a process offering access to the VM [`kata-agent`](https://github.com/kata-containers/agent)
-to multiple `kata-shim` and `kata-runtime` clients associated with the VM. Its
-main role is to route the I/O streams and signals between each `kata-shim`
-instance and the `kata-agent`.
-`kata-proxy` connects to `kata-agent` on a Unix domain socket that `kata-runtime` provides
-while spawning `kata-proxy`.
-`kata-proxy` uses [`yamux`](https://github.com/hashicorp/yamux) to multiplex gRPC
-requests on its connection to the `kata-agent`.
-
-When proxy type is configured as `proxyBuiltIn`, we do not spawn a separate
-process to proxy gRPC connections. Instead a built-in Yamux gRPC dialer is used to connect
-directly to `kata-agent`. This is used by CRI container runtime server `frakti` which
-calls directly into `kata-runtime`.
-
-## Shim
-
-A container process reaper, such as Docker's `containerd-shim` or CRI-O's `conmon`,
-is designed around the assumption that it can monitor and reap the actual container
-process. As the container process reaper runs on the host, it cannot directly
-monitor a process running within a virtual machine. At most it can see the QEMU
-process, but that is not enough. With Kata Containers, `kata-shim` acts as the
-container process that the container process reaper can monitor. Therefore
-`kata-shim` needs to handle all container I/O streams (`stdout`, `stdin` and `stderr`)
-and forward all signals the container process reaper decides to send to the container
-process.
-
-`kata-shim` has an implicit knowledge about which VM agent will handle those streams
-and signals and thus acts as an encapsulation layer between the container process
-reaper and the `kata-agent`. `kata-shim`:
-
-- Connects to `kata-proxy` on a Unix domain socket. The socket URL is passed from
-  `kata-runtime` to `kata-shim` when the former spawns the latter along with a
-  `containerID` and `execID`. The `containerID` and `execID` are used to identify
-  the true container process that the shim process will be shadowing or representing.
-- Forwards the standard input stream from the container process reaper into
- `kata-proxy` using gRPC `WriteStdin` gRPC API.
-- Reads the standard output/error from the container process.
-- Forwards signals it receives from the container process reaper to `kata-proxy`
-  using `SignalProcessRequest` API.
-- Monitors terminal changes and forwards them to `kata-proxy` using gRPC `TtyWinResize`
-  API.
-
 
 ## Networking
 
@@ -534,13 +453,13 @@ pod creation request from a container one.
 ### Containerd
 
 As of Kata Containers 1.5, using `shimv2` with containerd 1.2.0 or above is the preferred
-way to run Kata Containers with Kubernetes ([see the howto](https://github.com/kata-containers/documentation/blob/master/how-to/how-to-use-k8s-with-cri-containerd-and-kata.md#configure-containerd-to-use-kata-containers)).
+way to run Kata Containers with Kubernetes ([see the howto](../how-to/how-to-use-k8s-with-cri-containerd-and-kata.md#configure-containerd-to-use-kata-containers)).
 The CRI-O will catch up soon ([`kubernetes-sigs/cri-o#2024`](https://github.com/kubernetes-sigs/cri-o/issues/2024)).
 
 Refer to the following how-to guides:
 
-- [How to use Kata Containers and Containerd](/how-to/containerd-kata.md)
-- [How to use Kata Containers and CRI (containerd plugin) with Kubernetes](/how-to/how-to-use-k8s-with-cri-containerd-and-kata.md)
+- [How to use Kata Containers and Containerd](../how-to/containerd-kata.md)
+- [How to use Kata Containers and CRI (containerd plugin) with Kubernetes](../how-to/how-to-use-k8s-with-cri-containerd-and-kata.md)
 
 ### CRI-O
 
@@ -587,7 +506,7 @@ with a Kubernetes pod:
 
 #### Mixing VM based and namespace based runtimes
 
-> **Note:** Since Kubernetes 1.12, the [`Kubernetes RuntimeClass`](/how-to/containerd-kata.md#kubernetes-runtimeclass)
+> **Note:** Since Kubernetes 1.12, the [`Kubernetes RuntimeClass`](../how-to/containerd-kata.md#kubernetes-runtimeclass)
 > has been supported and the user can specify runtime without the non-standardized annotations.
 
 One interesting evolution of the CRI-O support for `kata-runtime` is the ability

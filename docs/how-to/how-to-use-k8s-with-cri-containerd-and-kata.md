@@ -177,7 +177,7 @@ $ sudo -E kubectl taint nodes --all node-role.kubernetes.io/master-
 By default, all pods are created with the default runtime configured in CRI containerd plugin.
 
 If a pod has the `io.kubernetes.cri.untrusted-workload` annotation set to `"true"`, the CRI plugin runs the pod with the
-[Kata Containers runtime](https://github.com/kata-containers/runtime/blob/master/README.md).
+[Kata Containers runtime](../../src/runtime/README.md).
 
 - Create an untrusted pod configuration
 

@@ -23,7 +23,6 @@ require (
 	github.com/docker/distribution v2.7.1+incompatible // indirect
 	github.com/docker/docker v1.13.1 // indirect
 	github.com/docker/go-events v0.0.0-20190806004212-e31b211e4f1c // indirect
-	github.com/docker/go-units v0.3.3
 	github.com/go-ini/ini v1.28.2
 	github.com/go-openapi/errors v0.18.0
 	github.com/go-openapi/runtime v0.18.0
@@ -33,10 +32,8 @@ require (
 	github.com/gogo/googleapis v1.4.0 // indirect
 	github.com/gogo/protobuf v1.3.1
 	github.com/hashicorp/go-multierror v1.0.0
-	github.com/hashicorp/yamux v0.0.0-20190923154419-df201c70410d
-	github.com/intel/govmm v0.0.0-20200602145448-7cc469641b7b
+	github.com/intel/govmm v0.0.0-20200728135209-6c3315ba8a42
 	github.com/mdlayher/vsock v0.0.0-20191108225356-d9c65923cb8f
-	github.com/mitchellh/mapstructure v1.1.2
 	github.com/opencontainers/image-spec v1.0.1 // indirect
 	github.com/opencontainers/runc v1.0.0-rc9.0.20200102164712-2b52db75279c
 	github.com/opencontainers/runtime-spec v1.0.2-0.20190408193819-a1b50f621a48

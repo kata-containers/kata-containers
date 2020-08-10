@@ -158,7 +158,6 @@ github.com/docker/docker/pkg/stringid
 ## explicit
 github.com/docker/go-events
 # github.com/docker/go-units v0.3.3
-## explicit
 github.com/docker/go-units
 # github.com/globalsign/mgo v0.0.0-20181015135952-eeefdecb41b8
 github.com/globalsign/mgo/bson
@@ -223,10 +222,7 @@ github.com/hashicorp/errwrap
 # github.com/hashicorp/go-multierror v1.0.0
 ## explicit
 github.com/hashicorp/go-multierror
-# github.com/hashicorp/yamux v0.0.0-20190923154419-df201c70410d
-## explicit
-github.com/hashicorp/yamux
-# github.com/intel/govmm v0.0.0-20200602145448-7cc469641b7b
+# github.com/intel/govmm v0.0.0-20200728135209-6c3315ba8a42
 ## explicit
 github.com/intel/govmm/qemu
 # github.com/konsorten/go-windows-terminal-sequences v1.0.1
@@ -241,7 +237,6 @@ github.com/matttproud/golang_protobuf_extensions/pbutil
 ## explicit
 github.com/mdlayher/vsock
 # github.com/mitchellh/mapstructure v1.1.2
-## explicit
 github.com/mitchellh/mapstructure
 # github.com/opencontainers/go-digest v1.0.0-rc1
 github.com/opencontainers/go-digest

@@ -18,7 +18,7 @@ in a system configured to run Kata Containers.
 ## Prerequisites
 Kata Containers requires nested virtualization or bare metal.
 See the
-[hardware requirements](https://github.com/kata-containers/runtime/blob/master/README.md#hardware-requirements)
+[hardware requirements](../../src/runtime/README.md#hardware-requirements)
 to see if your system is capable of running Kata Containers.
 
 ## Packaged installation methods
@@ -78,7 +78,7 @@ Manual installation instructions are available for [these distributions](#suppor
 3. Install a supported container manager.
 4. Configure the container manager to use `kata-runtime` as the default OCI runtime. Or, for Kata Containers 1.5.0 or above, configure the
    `io.containerd.kata.v2` to be the runtime shim (see [containerd runtime v2 (shim API)](https://github.com/containerd/containerd/tree/master/runtime/v2)
-   and [How to use Kata Containers and CRI (containerd plugin) with Kubernetes](https://github.com/kata-containers/documentation/blob/master/how-to/how-to-use-k8s-with-cri-containerd-and-kata.md)).
+   and [How to use Kata Containers and CRI (containerd plugin) with Kubernetes](../how-to/how-to-use-k8s-with-cri-containerd-and-kata.md)).
 
 > **Notes on upgrading**:
 > - If you are installing Kata Containers on a system that already has Clear Containers or `runv` installed,
@@ -87,7 +87,7 @@ Manual installation instructions are available for [these distributions](#suppor
 > **Notes on releases**:
 > - [This download server](http://download.opensuse.org/repositories/home:/katacontainers:/releases:/)
 > hosts the Kata Containers packages built by OBS for all the supported architectures.
-> Packages are available for the latest and stable releases (more info [here](https://github.com/kata-containers/documentation/blob/master/Stable-Branch-Strategy.md)).
+> Packages are available for the latest and stable releases (more info [here](../Stable-Branch-Strategy.md)).
 >
 > - The following guides apply to the latest Kata Containers release
 > (a.k.a. `master` release).
@@ -124,4 +124,4 @@ versions. This is not recommended for normal users.
 ## Further information
 * The [upgrading document](../Upgrading.md).
 * The [developer guide](../Developer-Guide.md).
-* The [runtime documentation](https://github.com/kata-containers/runtime/blob/master/README.md).
+* The [runtime documentation](../../src/runtime/README.md).

@@ -16,7 +16,7 @@ automates the process to build a kernel for Kata Containers.
 ## Requirements
 
 The `build-kernel.sh` script requires an installed Golang version matching the
-[component build requirements](https://github.com/kata-containers/documentation/blob/master/Developer-Guide.md#requirements-to-build-individual-components).
+[component build requirements](../../../docs/Developer-Guide.md#requirements-to-build-individual-components).
 
 ## Usage
 

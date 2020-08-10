@@ -460,7 +460,13 @@ func generic9PVolume(volume types.Volume, nestedRun bool) govmmQemu.FSDevice {
 		MountTag:      volume.MountTag,
 		SecurityModel: govmmQemu.None,
 		DisableModern: nestedRun,
+		Multidev:      govmmQemu.Remap,
 	}
+}
+
+func genericAppend9PVolume(devices []govmmQemu.Device, volume types.Volume, nestedRun bool) (govmmQemu.FSDevice, error) {
+	d := generic9PVolume(volume, nestedRun)
+	return d, nil
 }
 
 func (q *qemuArchBase) append9PVolume(devices []govmmQemu.Device, volume types.Volume) ([]govmmQemu.Device, error) {
@@ -468,7 +474,11 @@ func (q *qemuArchBase) append9PVolume(devices []govmmQemu.Device, volume types.V
 		return devices, nil
 	}
 
-	d := generic9PVolume(volume, q.nestedRun)
+	d, err := genericAppend9PVolume(devices, volume, q.nestedRun)
+	if err != nil {
+		return nil, err
+	}
+
 	devices = append(devices, d)
 	return devices, nil
 }

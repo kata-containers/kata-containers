@@ -14,6 +14,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"runtime"
 	goruntime "runtime"
 	"strings"
 	"testing"
@@ -272,6 +273,10 @@ VERSION_ID="%s"
 		expectedHostDetails.CPU.Model = "v8"
 	}
 
+	// set CPU num.
+	// will not set memory info, because memory may be changed.
+	expectedHostDetails.CPU.CPUs = runtime.NumCPU()
+
 	return expectedHostDetails, nil
 }
 
@@ -391,7 +396,16 @@ func TestEnvGetHostInfo(t *testing.T) {
 	host, err := getHostInfo()
 	assert.NoError(t, err)
 
+	// Free/Available are changing
+	expectedHostDetails.Memory = host.Memory
+
 	assert.Equal(t, expectedHostDetails, host)
+
+	// check CPU cores and memory info
+	assert.Equal(t, true, host.CPU.CPUs > 0)
+	assert.Equal(t, true, host.Memory.Total > 0)
+	assert.Equal(t, true, host.Memory.Free > 0)
+	assert.Equal(t, true, host.Memory.Available > 0)
 }
 
 func TestEnvGetHostInfoNoProcCPUInfo(t *testing.T) {
@@ -470,6 +484,9 @@ func TestEnvGetEnvInfo(t *testing.T) {
 		env, err := getEnvInfo(configFile, config)
 		assert.NoError(t, err)
 
+		// Free/Available are changing
+		expectedEnv.Host.Memory = env.Host.Memory
+
 		assert.Equal(t, expectedEnv, env)
 	}
 }
@@ -494,6 +511,9 @@ func TestEnvGetEnvInfoNoHypervisorVersion(t *testing.T) {
 
 	env, err := getEnvInfo(configFile, config)
 	assert.NoError(err)
+
+	// Free/Available are changing
+	expectedEnv.Host.Memory = env.Host.Memory
 
 	assert.Equal(expectedEnv, env)
 }

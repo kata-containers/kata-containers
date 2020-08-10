@@ -309,24 +309,6 @@ vhost_user_store_path = "@DEFVHOSTUSERSTOREPATH@"
 # Default /var/run/kata-containers/cache.sock
 #vm_cache_endpoint = "/var/run/kata-containers/cache.sock"
 
-[shim.@PROJECT_TYPE@]
-path = "@SHIMPATH@"
-
-# If enabled, shim messages will be sent to the system log
-# (default: disabled)
-#enable_debug = true
-
-# If enabled, the shim will create opentracing.io traces and spans.
-# (See https://www.jaegertracing.io/docs/getting-started).
-#
-# Note: By default, the shim runs in a separate network namespace. Therefore,
-# to allow it to send trace details to the Jaeger agent running on the host,
-# it is necessary to set 'disable_new_netns=true' so that it runs in the host
-# network namespace.
-#
-# (default: disabled)
-#enable_tracing = true
-
 [agent.@PROJECT_TYPE@]
 # If enabled, make the agent display debug-level messages.
 # (default: disabled)

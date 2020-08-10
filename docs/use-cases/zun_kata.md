@@ -10,7 +10,7 @@ Currently, the instructions are based on the following links:
 
 - https://docs.openstack.org/zun/latest/admin/clear-containers.html
 
-- https://github.com/kata-containers/documentation/blob/master/install/ubuntu-installation-guide.md
+- ../install/ubuntu-installation-guide.md
 
 
 ## Install Git to use with DevStack
@@ -54,7 +54,7 @@ $ zun delete test
 
 ## Install Kata Containers
 
-Follow [these instructions](https://github.com/kata-containers/documentation/blob/master/install/ubuntu-installation-guide.md)
+Follow [these instructions](../install/ubuntu-installation-guide.md)
 to install the Kata Containers components.
 
 ## Update Docker with new Kata Containers runtime

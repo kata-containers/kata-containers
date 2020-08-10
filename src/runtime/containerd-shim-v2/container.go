@@ -6,6 +6,7 @@
 package containerdshim
 
 import (
+	"io"
 	"time"
 
 	"github.com/containerd/containerd/api/types/task"
@@ -17,23 +18,25 @@ import (
 )
 
 type container struct {
-	s        *service
-	ttyio    *ttyIO
-	spec     *specs.Spec
-	exitTime time.Time
-	execs    map[string]*exec
-	exitIOch chan struct{}
-	exitCh   chan uint32
-	id       string
-	stdin    string
-	stdout   string
-	stderr   string
-	bundle   string
-	cType    vc.ContainerType
-	exit     uint32
-	status   task.Status
-	terminal bool
-	mounted  bool
+	s           *service
+	ttyio       *ttyIO
+	spec        *specs.Spec
+	exitTime    time.Time
+	execs       map[string]*exec
+	exitIOch    chan struct{}
+	stdinPipe   io.WriteCloser
+	stdinCloser chan struct{}
+	exitCh      chan uint32
+	id          string
+	stdin       string
+	stdout      string
+	stderr      string
+	bundle      string
+	cType       vc.ContainerType
+	exit        uint32
+	status      task.Status
+	terminal    bool
+	mounted     bool
 }
 
 func newContainer(s *service, r *taskAPI.CreateTaskRequest, containerType vc.ContainerType, spec *specs.Spec, mounted bool) (*container, error) {
@@ -47,20 +50,21 @@ func newContainer(s *service, r *taskAPI.CreateTaskRequest, containerType vc.Con
 	}
 
 	c := &container{
-		s:        s,
-		spec:     spec,
-		id:       r.ID,
-		bundle:   r.Bundle,
-		stdin:    r.Stdin,
-		stdout:   r.Stdout,
-		stderr:   r.Stderr,
-		terminal: r.Terminal,
-		cType:    containerType,
-		execs:    make(map[string]*exec),
-		status:   task.StatusCreated,
-		exitIOch: make(chan struct{}),
-		exitCh:   make(chan uint32, 1),
-		mounted:  mounted,
+		s:           s,
+		spec:        spec,
+		id:          r.ID,
+		bundle:      r.Bundle,
+		stdin:       r.Stdin,
+		stdout:      r.Stdout,
+		stderr:      r.Stderr,
+		terminal:    r.Terminal,
+		cType:       containerType,
+		execs:       make(map[string]*exec),
+		status:      task.StatusCreated,
+		exitIOch:    make(chan struct{}),
+		exitCh:      make(chan uint32, 1),
+		stdinCloser: make(chan struct{}),
+		mounted:     mounted,
 	}
 	return c, nil
 }

@@ -19,7 +19,6 @@ import (
 	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/compatoci"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/oci"
-	"github.com/sirupsen/logrus"
 )
 
 func cReap(s *service, status int, id, execid string, exitat time.Time) {
@@ -33,18 +32,18 @@ func cReap(s *service, status int, id, execid string, exitat time.Time) {
 }
 
 func cleanupContainer(ctx context.Context, sid, cid, bundlePath string) error {
-	logrus.WithField("Service", "Cleanup").WithField("container", cid).Info("Cleanup container")
+	shimLog.WithField("service", "cleanup").WithField("container", cid).Info("Cleanup container")
 
 	err := vci.CleanupContainer(ctx, sid, cid, true)
 	if err != nil {
-		logrus.WithError(err).WithField("container", cid).Warn("failed to cleanup container")
+		shimLog.WithError(err).WithField("container", cid).Warn("failed to cleanup container")
 		return err
 	}
 
 	rootfs := filepath.Join(bundlePath, "rootfs")
 
 	if err := mount.UnmountAll(rootfs, 0); err != nil {
-		logrus.WithError(err).WithField("container", cid).Warn("failed to cleanup container rootfs")
+		shimLog.WithError(err).WithField("container", cid).Warn("failed to cleanup container rootfs")
 		return err
 	}
 
