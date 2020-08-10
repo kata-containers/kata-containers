@@ -95,13 +95,13 @@ func (c *clhClientMock) VmResizePut(ctx context.Context, vmResize chclient.VmRes
 }
 
 //nolint:golint
-func (c *clhClientMock) VmAddDevicePut(ctx context.Context, vmAddDevice chclient.VmAddDevice) (*http.Response, error) {
-	return nil, nil
+func (c *clhClientMock) VmAddDevicePut(ctx context.Context, vmAddDevice chclient.VmAddDevice) (chclient.PciDeviceInfo, *http.Response, error) {
+	return chclient.PciDeviceInfo{}, nil, nil
 }
 
 //nolint:golint
-func (c *clhClientMock) VmAddDiskPut(ctx context.Context, diskConfig chclient.DiskConfig) (*http.Response, error) {
-	return nil, nil
+func (c *clhClientMock) VmAddDiskPut(ctx context.Context, diskConfig chclient.DiskConfig) (chclient.PciDeviceInfo, *http.Response, error) {
+	return chclient.PciDeviceInfo{}, nil, nil
 }
 
 func TestCloudHypervisorAddVSock(t *testing.T) {
