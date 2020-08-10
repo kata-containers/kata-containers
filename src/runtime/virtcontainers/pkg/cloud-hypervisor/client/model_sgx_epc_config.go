@@ -8,9 +8,8 @@
  */
 
 package openapi
-// CpusConfig struct for CpusConfig
-type CpusConfig struct {
-	BootVcpus int32 `json:"boot_vcpus"`
-	MaxVcpus int32 `json:"max_vcpus"`
-	Topology CpuTopology `json:"topology,omitempty"`
+// SgxEpcConfig struct for SgxEpcConfig
+type SgxEpcConfig struct {
+	Size int32 `json:"size"`
+	Prefault bool `json:"prefault,omitempty"`
 }
