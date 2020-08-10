@@ -1217,6 +1217,15 @@ func (q *QMP) ExecutePCIVFIOMediatedDeviceAdd(ctx context.Context, devID, sysfsd
 	return q.executeCommand(ctx, "device_add", args, nil)
 }
 
+// ExecuteAPVFIOMediatedDeviceAdd adds a VFIO mediated AP device to a QEMU instance using the device_add command.
+func (q *QMP) ExecuteAPVFIOMediatedDeviceAdd(ctx context.Context, sysfsdev string) error {
+	args := map[string]interface{}{
+		"driver":   VfioAP,
+		"sysfsdev": sysfsdev,
+	}
+	return q.executeCommand(ctx, "device_add", args, nil)
+}
+
 // isSocketIDSupported returns if the cpu driver supports the socket id option
 func isSocketIDSupported(driver string) bool {
 	if driver == "host-s390x-cpu" || driver == "host-powerpc64-cpu" {

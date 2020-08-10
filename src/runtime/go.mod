@@ -64,6 +64,7 @@ require (
 )
 
 replace (
+	github.com/intel/govmm => github.com/Jakob-Naucke/govmm v0.0.0-20200806123926-d6752d6216de
 	github.com/uber-go/atomic => go.uber.org/atomic v1.5.1
 	gotest.tools/v3 => gotest.tools v2.2.0+incompatible
 )
