@@ -296,6 +296,12 @@ func (clh *cloudHypervisor) createSandbox(ctx context.Context, id string, networ
 		Mode: cctOFF,
 	}
 
+	clh.vmconfig.Cpus.Topology = chclient.CpuTopology{
+		ThreadsPerCore: 1,
+		CoresPerDie:    int32(clh.config.DefaultMaxVCPUs),
+		DiesPerPackage: 1,
+		Packages:       1,
+	}
 	// Overwrite the default value of HTTP API socket path for cloud hypervisor
 	apiSocketPath, err := clh.apiSocketPath(id)
 	if err != nil {
