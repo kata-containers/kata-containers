@@ -13,7 +13,6 @@
         * [journald rate limiting](#journald-rate-limiting)
             * [`systemd-journald` suppressing messages](#systemd-journald-suppressing-messages)
             * [Disabling `systemd-journald` rate limiting](#disabling-systemd-journald-rate-limiting)
-* [Build and install Kata proxy](#build-and-install-kata-proxy)
 * [Build and install Kata shim](#build-and-install-kata-shim)
 * [Create and install rootfs and initrd image](#create-and-install-rootfs-and-initrd-image)
     * [Build a custom Kata agent - OPTIONAL](#build-a-custom-kata-agent---optional)
@@ -241,13 +240,6 @@ Restart `systemd-journald` for the changes to take effect:
 
 ```sh
 $ sudo systemctl restart systemd-journald
-```
-
-# Build and install Kata proxy
-
-```
-$ go get -d -u github.com/kata-containers/proxy
-$ cd $GOPATH/src/github.com/kata-containers/proxy && make && sudo make install
 ```
 
 # Build and install Kata shim
