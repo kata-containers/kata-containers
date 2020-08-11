@@ -764,7 +764,7 @@ impl protocols::agent_ttrpc::AgentService for agentService {
 
     fn pause_container(
         &self,
-        ctx: &ttrpc::TtrpcContext,
+        _: &ttrpc::TtrpcContext,
         req: protocols::agent::PauseContainerRequest,
     ) -> ttrpc::Result<protocols::empty::Empty> {
         let cid = req.get_container_id();
@@ -790,7 +790,7 @@ impl protocols::agent_ttrpc::AgentService for agentService {
 
     fn resume_container(
         &self,
-        ctx: &ttrpc::TtrpcContext,
+        _: &ttrpc::TtrpcContext,
         req: protocols::agent::ResumeContainerRequest,
     ) -> ttrpc::Result<protocols::empty::Empty> {
         let cid = req.get_container_id();
@@ -1366,7 +1366,7 @@ fn get_agent_details() -> AgentDetails {
 
     detail.set_version(AGENT_VERSION.to_string());
     detail.set_supports_seccomp(false);
-    detail.init_daemon = { unistd::getpid() == Pid::from_raw(1) };
+    detail.init_daemon = unistd::getpid() == Pid::from_raw(1);
 
     detail.device_handlers = RepeatedField::new();
     detail.storage_handlers = RepeatedField::from_vec(

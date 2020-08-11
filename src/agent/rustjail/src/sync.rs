@@ -23,7 +23,9 @@ macro_rules! log_child {
         let lfd = $fd;
         let mut log_str = format_args!($($arg)+).to_string();
         log_str.push('\n');
-        write_count(lfd, log_str.as_bytes(), log_str.len());
+        if let Err(e) = write_count(lfd, log_str.as_bytes(), log_str.len()) {
+            eprintln!("log_child failed: {:?}", e);
+        }
     })
 }
 
@@ -140,9 +142,11 @@ pub fn write_sync(fd: RawFd, msg_type: i32, data_str: &str) -> Result<()> {
             Ok(_count) => unistd::close(fd)?,
             Err(e) => {
                 unistd::close(fd)?;
-                return Err(
-                    ErrorKind::ErrorCode("error in send message to process".to_string()).into(),
-                );
+                return Err(ErrorKind::ErrorCode(format!(
+                    "error in send message to process: {:?}",
+                    e
+                ))
+                .into());
             }
         },
         SYNC_DATA => {
@@ -151,9 +155,10 @@ pub fn write_sync(fd: RawFd, msg_type: i32, data_str: &str) -> Result<()> {
                 Ok(_count) => (),
                 Err(e) => {
                     unistd::close(fd)?;
-                    return Err(ErrorKind::ErrorCode(
-                        "error in send message to process".to_string(),
-                    )
+                    return Err(ErrorKind::ErrorCode(format!(
+                        "error in send message to process: {:?}",
+                        e
+                    ))
                     .into());
                 }
             }
@@ -162,9 +167,10 @@ pub fn write_sync(fd: RawFd, msg_type: i32, data_str: &str) -> Result<()> {
                 Ok(_count) => (),
                 Err(e) => {
                     unistd::close(fd)?;
-                    return Err(ErrorKind::ErrorCode(
-                        "error in send message to process".to_string(),
-                    )
+                    return Err(ErrorKind::ErrorCode(format!(
+                        "error in send message to process: {:?}",
+                        e
+                    ))
                     .into());
                 }
             }

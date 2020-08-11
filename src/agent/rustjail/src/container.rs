@@ -53,7 +53,7 @@ use std::io::BufRead;
 use std::io::BufReader;
 use std::os::unix::io::FromRawFd;
 
-use slog::{debug, info, o, Logger};
+use slog::{info, o, Logger};
 
 const STATE_FILENAME: &'static str = "state.json";
 const EXEC_FIFO_FILENAME: &'static str = "exec.fifo";
@@ -340,7 +340,9 @@ pub fn init_child() {
         Ok(_) => (),
         Err(e) => {
             log_child!(cfd_log, "child exit: {:?}", e);
-            write_sync(cwfd, SYNC_FAILED, format!("{:?}", e).as_str());
+            if let Err(we) = write_sync(cwfd, SYNC_FAILED, format!("{:?}", e).as_str()) {
+                log_child!(cfd_log, "write_sync failed: {:?}", we);
+            }
             return;
         }
     }
@@ -369,7 +371,7 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
 
     let buf = read_sync(crfd)?;
     let process_str = std::str::from_utf8(&buf)?;
-    let mut oci_process: oci::Process = serde_json::from_str(process_str)?;
+    let oci_process: oci::Process = serde_json::from_str(process_str)?;
     log_child!(cfd_log, "notify parent to send cgroup manager");
     write_sync(cwfd, SYNC_SUCCESS, "")?;
 
@@ -475,11 +477,15 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
         if let Err(e) = sched::setns(fd, s) {
             if s == CloneFlags::CLONE_NEWUSER {
                 if e.as_errno().unwrap() != Errno::EINVAL {
-                    write_sync(cwfd, SYNC_FAILED, format!("{:?}", e).as_str());
+                    if let Err(we) = write_sync(cwfd, SYNC_FAILED, format!("{:?}", e).as_str()) {
+                        log_child!(cfd_log, "write_sync failed: {:?}", we);
+                    }
                     return Err(e.into());
                 }
             } else {
-                write_sync(cwfd, SYNC_FAILED, format!("{:?}", e).as_str());
+                if let Err(we) = write_sync(cwfd, SYNC_FAILED, format!("{:?}", e).as_str()) {
+                    log_child!(cfd_log, "write_sync failed: {:?}", we);
+                }
                 return Err(e.into());
             }
         }
@@ -554,11 +560,13 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
 
     if guser.additional_gids.len() > 0 {
         setgroups(guser.additional_gids.as_slice()).map_err(|e| {
-            write_sync(
+            if let Err(we) = write_sync(
                 cwfd,
                 SYNC_FAILED,
                 format!("setgroups failed: {:?}", e).as_str(),
-            );
+            ) {
+                log_child!(cfd_log, "write_sync failed: {:?}", we);
+            }
             e
         })?;
     }
@@ -621,9 +629,9 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
     // notify parent that the child's ready to start
     write_sync(cwfd, SYNC_SUCCESS, "")?;
     log_child!(cfd_log, "ready to run exec");
-    unistd::close(cfd_log);
-    unistd::close(crfd);
-    unistd::close(cwfd);
+    let _ = unistd::close(cfd_log);
+    let _ = unistd::close(crfd);
+    let _ = unistd::close(cwfd);
 
     if oci_process.terminal {
         unistd::setsid()?;
@@ -643,7 +651,7 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
         unistd::read(fd, &mut buf)?;
     }
 
-    do_exec(&args);
+    do_exec(&args)?;
 
     Err(ErrorKind::ErrorCode("fail to create container".to_string()).into())
 }
@@ -765,7 +773,7 @@ impl BaseContainer for LinuxContainer {
         let st = self.oci_state()?;
 
         let (pfd_log, cfd_log) = unistd::pipe().chain_err(|| "failed to create pipe")?;
-        fcntl::fcntl(pfd_log, FcntlArg::F_SETFD(FdFlag::FD_CLOEXEC));
+        fcntl::fcntl(pfd_log, FcntlArg::F_SETFD(FdFlag::FD_CLOEXEC))?;
 
         let child_logger = logger.new(o!("action" => "child process log"));
         let log_handler = thread::spawn(move || {
@@ -794,26 +802,26 @@ impl BaseContainer for LinuxContainer {
         info!(logger, "exec fifo opened!");
         let (prfd, cwfd) = unistd::pipe().chain_err(|| "failed to create pipe")?;
         let (crfd, pwfd) = unistd::pipe().chain_err(|| "failed to create pipe")?;
-        fcntl::fcntl(prfd, FcntlArg::F_SETFD(FdFlag::FD_CLOEXEC));
-        fcntl::fcntl(pwfd, FcntlArg::F_SETFD(FdFlag::FD_CLOEXEC));
+        fcntl::fcntl(prfd, FcntlArg::F_SETFD(FdFlag::FD_CLOEXEC))?;
+        fcntl::fcntl(pwfd, FcntlArg::F_SETFD(FdFlag::FD_CLOEXEC))?;
 
         defer!({
-            unistd::close(prfd);
-            unistd::close(pwfd);
+            let _ = unistd::close(prfd);
+            let _ = unistd::close(pwfd);
         });
 
-        let mut child_stdin = std::process::Stdio::null();
-        let mut child_stdout = std::process::Stdio::null();
-        let mut child_stderr = std::process::Stdio::null();
-        let mut stdin = -1;
-        let mut stdout = -1;
-        let mut stderr = -1;
+        let child_stdin: std::process::Stdio;
+        let child_stdout: std::process::Stdio;
+        let child_stderr: std::process::Stdio;
+        let stdin: i32;
+        let stdout: i32;
+        let stderr: i32;
 
         if tty {
             let pseduo = pty::openpty(None, None)?;
             p.term_master = Some(pseduo.master);
-            fcntl::fcntl(pseduo.master, FcntlArg::F_SETFD(FdFlag::FD_CLOEXEC));
-            fcntl::fcntl(pseduo.slave, FcntlArg::F_SETFD(FdFlag::FD_CLOEXEC));
+            fcntl::fcntl(pseduo.master, FcntlArg::F_SETFD(FdFlag::FD_CLOEXEC))?;
+            fcntl::fcntl(pseduo.slave, FcntlArg::F_SETFD(FdFlag::FD_CLOEXEC))?;
 
             child_stdin = unsafe { std::process::Stdio::from_raw_fd(pseduo.slave) };
             child_stdout = unsafe { std::process::Stdio::from_raw_fd(pseduo.slave) };
@@ -840,8 +848,13 @@ impl BaseContainer for LinuxContainer {
 
         //restore the parent's process's pid namespace.
         defer!({
-            sched::setns(old_pid_ns, CloneFlags::CLONE_NEWPID);
-            unistd::close(old_pid_ns);
+            if let Err(e) = sched::setns(old_pid_ns, CloneFlags::CLONE_NEWPID) {
+                error!(
+                    logger,
+                    "cannot restore the parent's process's pid namespace {:?}", e
+                )
+            }
+            let _ = unistd::close(old_pid_ns);
         });
 
         let pidns = get_pid_namespace(&self.logger, linux)?;
@@ -883,7 +896,7 @@ impl BaseContainer for LinuxContainer {
         }
 
         if p.init {
-            unistd::close(fifofd);
+            let _ = unistd::close(fifofd);
         }
 
         info!(logger, "child pid: {}", p.pid);
@@ -902,7 +915,9 @@ impl BaseContainer for LinuxContainer {
             Err(e) => {
                 error!(logger, "create container process error {:?}", e);
                 // kill the child process.
-                signal::kill(Pid::from_raw(p.pid), Some(Signal::SIGKILL));
+                if let Err(ke) = signal::kill(Pid::from_raw(p.pid), Some(Signal::SIGKILL)) {
+                    error!(logger, "cannot kill child process {:?}", ke);
+                }
                 return Err(e);
             }
         };
@@ -915,7 +930,11 @@ impl BaseContainer for LinuxContainer {
         let (exit_pipe_r, exit_pipe_w) = unistd::pipe2(OFlag::O_CLOEXEC)
             .chain_err(|| "failed to create pipe")
             .map_err(|e| {
-                signal::kill(Pid::from_raw(child.id() as i32), Some(Signal::SIGKILL));
+                if let Err(ke) =
+                    signal::kill(Pid::from_raw(child.id() as i32), Some(Signal::SIGKILL))
+                {
+                    error!(logger, "cannot kill child process {:?}", ke);
+                }
                 e
             })?;
 
@@ -929,7 +948,7 @@ impl BaseContainer for LinuxContainer {
         self.processes.insert(p.pid, p);
 
         info!(logger, "wait on child log handler");
-        log_handler.join();
+        log_handler.join().unwrap();
         info!(logger, "create process completed");
         return Ok(());
     }
@@ -1040,7 +1059,7 @@ fn do_exec(args: &[String]) -> Result<()> {
     Ok(())
 }
 
-fn update_namespaces(logger: &Logger, spec: &mut Spec, init_pid: RawFd) -> Result<()> {
+fn update_namespaces(_: &Logger, spec: &mut Spec, init_pid: RawFd) -> Result<()> {
     let linux = match spec.linux.as_mut() {
         None => {
             return Err(
@@ -1123,7 +1142,7 @@ fn join_namespaces(
     p: &Process,
     cm: &FsManager,
     st: &OCIState,
-    child: &mut Child,
+    _: &mut Child,
     pwfd: RawFd,
     prfd: RawFd,
 ) -> Result<()> {
@@ -1472,7 +1491,6 @@ fn set_sysctls(sysctls: &HashMap<String, String>) -> Result<()> {
     Ok(())
 }
 
-use std::error::Error as StdError;
 use std::io::Read;
 use std::os::unix::process::ExitStatusExt;
 use std::process::Stdio;
@@ -1589,7 +1607,7 @@ fn execute_hook(logger: &Logger, h: &Hook, st: &OCIState) -> Result<()> {
                         info!(
                             logger,
                             "wait child error: {} {}",
-                            e.description(),
+                            e.to_string(),
                             e.raw_os_error().unwrap()
                         );
 
