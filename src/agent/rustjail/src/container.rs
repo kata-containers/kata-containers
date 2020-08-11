@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
+use dirs;
 use lazy_static;
 use oci::{Hook, Linux, LinuxNamespace, LinuxResources, POSIXRlimit, Spec};
 use serde_json;
@@ -66,6 +67,7 @@ const CRFD_FD: &str = "CRFD_FD";
 const CWFD_FD: &str = "CWFD_FD";
 const CLOG_FD: &str = "CLOG_FD";
 const FIFO_FD: &str = "FIFO_FD";
+const HOME_ENV_KEY: &str = "HOME";
 
 #[derive(PartialEq, Clone, Copy)]
 pub enum Status {
@@ -603,6 +605,13 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
             continue;
         }
         env::set_var(v[0], v[1]);
+    }
+
+    // set the "HOME" env getting from "/etc/passwd"
+    if env::var_os(HOME_ENV_KEY).is_none() {
+        if let Some(home_dir) = dirs::home_dir() {
+            env::set_var(HOME_ENV_KEY, home_dir);
+        }
     }
 
     let exec_file = Path::new(&args[0]);
