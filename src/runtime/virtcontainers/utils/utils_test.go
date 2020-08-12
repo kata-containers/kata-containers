@@ -6,6 +6,7 @@
 package utils
 
 import (
+	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -199,10 +200,11 @@ func TestGetVirtDriveName(t *testing.T) {
 		{18277, "vdzzz"},
 	}
 
-	for _, test := range tests {
+	for i, test := range tests {
+		msg := fmt.Sprintf("test[%d]: %+v", i, test)
 		driveName, err := GetVirtDriveName(test.index)
-		assert.NoError(err)
-		assert.Equal(driveName, test.expectedDrive)
+		assert.NoError(err, msg)
+		assert.Equal(driveName, test.expectedDrive, msg)
 	}
 }
 
@@ -225,11 +227,12 @@ func TestGetSCSIIdLun(t *testing.T) {
 		{513, 2, 1},
 	}
 
-	for _, test := range tests {
+	for i, test := range tests {
+		msg := fmt.Sprintf("test[%d]: %+v", i, test)
 		scsiID, lun, err := GetSCSIIdLun(test.index)
-		assert.NoError(err)
-		assert.Equal(scsiID, test.expectedScsiID)
-		assert.Equal(lun, test.expectedLun)
+		assert.NoError(err, msg)
+		assert.Equal(scsiID, test.expectedScsiID, msg)
+		assert.Equal(lun, test.expectedLun, msg)
 	}
 
 	_, _, err := GetSCSIIdLun(-1)
@@ -251,10 +254,11 @@ func TestGetSCSIAddress(t *testing.T) {
 		{512, "2:0"},
 	}
 
-	for _, test := range tests {
+	for i, test := range tests {
+		msg := fmt.Sprintf("test[%d]: %+v", i, test)
 		scsiAddr, err := GetSCSIAddress(test.index)
-		assert.NoError(err)
-		assert.Equal(scsiAddr, test.expectedSCSIAddress)
+		assert.NoError(err, msg)
+		assert.Equal(scsiAddr, test.expectedSCSIAddress, msg)
 	}
 
 	_, err := GetSCSIAddress(-1)
@@ -299,15 +303,16 @@ func TestBuildSocketPath(t *testing.T) {
 
 	for i, d := range data {
 		result, err := BuildSocketPath(d.elems...)
+		msg := fmt.Sprintf("test[%d]: %+v", i, d)
 
 		if d.valid {
-			assert.NoErrorf(err, "test %d, data %+v", i, d)
+			assert.NoErrorf(err, "test %d, data %+v", i, d, msg)
 		} else {
-			assert.Errorf(err, "test %d, data %+v", i, d)
+			assert.Errorf(err, "test %d, data %+v", i, d, msg)
 		}
 
-		assert.NotNil(result)
-		assert.Equal(d.expected, result)
+		assert.NotNil(result, msg)
+		assert.Equal(d.expected, result, msg)
 	}
 }
 
