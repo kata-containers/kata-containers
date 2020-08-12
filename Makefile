@@ -30,3 +30,6 @@ generate-protocols:
 	make -C src/agent generate-protocols
 
 .PHONY: all default
+
+test:
+	cd src/runtime && make test
