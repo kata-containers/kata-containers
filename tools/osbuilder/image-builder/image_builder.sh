@@ -186,14 +186,20 @@ check_rootfs() {
 	OK "init is installed"
 
 
-	systemd_path="/lib/systemd/systemd"
-	systemd="${rootfs}${systemd_path}"
+	candidate_systemd_paths="/usr/lib/systemd/systemd /lib/systemd/systemd"
 
 	# check agent or systemd
 	case "${AGENT_INIT}" in
 		"no")
-			if [ ! -x "${systemd}" ] && [ ! -L "${systemd}" ]; then
-				error "${systemd_path} is not installed in ${rootfs}"
+			for systemd_path in $candidate_systemd_paths; do
+				systemd="${rootfs}${systemd_path}"
+				if [ -x "${systemd}" ] || [ -L "${systemd}" ]; then
+					found="yes"
+					break
+				fi
+			done
+			if [ ! $found ]; then
+				error "None of ${candidate_systemd_paths} is installed in ${rootfs}"
 				return 1
 			fi
 			OK "init is systemd"
@@ -207,10 +213,13 @@ check_rootfs() {
 				return 1
 			fi
 			# checksum must be different to system
-			if [ -f "${systemd}" ] && cmp -s "${systemd}" "${agent}"; then
-			   error "The agent is not the init process. ${agent_path} is systemd"
-			   return 1
-			fi
+			for systemd_path in $candidate_systemd_paths; do
+				systemd="${rootfs}${systemd_path}"
+				if [ -f "${systemd}" ] && cmp -s "${systemd}" "${agent}"; then
+					error "The agent is not the init process. ${agent_path} is systemd"
+					return 1
+				fi
+			done
 
 			OK "Agent installed"
 			;;
