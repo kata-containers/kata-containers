@@ -28,6 +28,12 @@ jobs:
       with:
         commits: ${{ steps.get-pr-commits.outputs.commits }}
 
+    - name: Commit Body Missing Check
+      if: ${{ success() || failure() }}
+      uses: tim-actions/commit-body-check@v1.0.2
+      with:
+        commits: ${{ steps.get-pr-commits.outputs.commits }}
+
     - name: Check Subject Line Length
       uses: tim-actions/commit-message-checker-with-regex@v0.3.1
       with:
