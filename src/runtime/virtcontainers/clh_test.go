@@ -104,6 +104,11 @@ func (c *clhClientMock) VmAddDiskPut(ctx context.Context, diskConfig chclient.Di
 	return chclient.PciDeviceInfo{}, nil, nil
 }
 
+//nolint:golint
+func (c *clhClientMock) VmRemoveDevicePut(ctx context.Context, vmRemoveDevice chclient.VmRemoveDevice) (*http.Response, error) {
+	return nil, nil
+}
+
 func TestCloudHypervisorAddVSock(t *testing.T) {
 	assert := assert.New(t)
 	clh := cloudHypervisor{}
@@ -363,7 +368,7 @@ func TestCheckVersion(t *testing.T) {
 	}
 }
 
-func TestCloudHypervisorHotplugBlockDevice(t *testing.T) {
+func TestCloudHypervisorHotplugAddBlockDevice(t *testing.T) {
 	assert := assert.New(t)
 
 	clhConfig, err := newClhConfig()
@@ -374,13 +379,31 @@ func TestCloudHypervisorHotplugBlockDevice(t *testing.T) {
 	clh.APIClient = &clhClientMock{}
 
 	clh.config.BlockDeviceDriver = config.VirtioBlock
-	err = clh.hotplugBlockDevice(&config.BlockDrive{Pmem: false})
+	err = clh.hotplugAddBlockDevice(&config.BlockDrive{Pmem: false})
 	assert.NoError(err, "Hotplug disk block device expected no error")
 
-	err = clh.hotplugBlockDevice(&config.BlockDrive{Pmem: true})
+	err = clh.hotplugAddBlockDevice(&config.BlockDrive{Pmem: true})
 	assert.Error(err, "Hotplug pmem block device expected error")
 
 	clh.config.BlockDeviceDriver = config.VirtioSCSI
-	err = clh.hotplugBlockDevice(&config.BlockDrive{Pmem: false})
+	err = clh.hotplugAddBlockDevice(&config.BlockDrive{Pmem: false})
 	assert.Error(err, "Hotplug block device not using 'virtio-blk' expected error")
+}
+
+func TestCloudHypervisorHotplugRemoveBlockDevice(t *testing.T) {
+	assert := assert.New(t)
+
+	clhConfig, err := newClhConfig()
+	assert.NoError(err)
+
+	clh := &cloudHypervisor{}
+	clh.config = clhConfig
+	clh.APIClient = &clhClientMock{}
+
+	clh.config.BlockDeviceDriver = config.VirtioBlock
+	err = clh.hotplugRemoveBlockDevice(&config.BlockDrive{Pmem: false})
+	assert.NoError(err, "Hotplug remove disk block device expected no error")
+
+	err = clh.hotplugRemoveBlockDevice(&config.BlockDrive{Pmem: true})
+	assert.Error(err, "Hotplug remove pmem block device expected error")
 }
