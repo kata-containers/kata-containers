@@ -61,6 +61,6 @@ jobs:
       uses: tim-actions/commit-message-checker-with-regex@v0.3.1
       with:
         commits: ${{ steps.get-pr-commits.outputs.commits }}
-        pattern: '^[\h]*([^:\h]+)[\h]*:'
+        pattern: '^[\h]*([^:\h\n]+)[\h]*:'
         error: 'Failed to find subsystem in subject'
         post_error: ${{ env.error_msg }}
