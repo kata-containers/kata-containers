@@ -88,6 +88,8 @@ type clhClient interface {
 	VmAddDevicePut(ctx context.Context, vmAddDevice chclient.VmAddDevice) (chclient.PciDeviceInfo, *http.Response, error)
 	// Add a new disk device to the VM
 	VmAddDiskPut(ctx context.Context, diskConfig chclient.DiskConfig) (chclient.PciDeviceInfo, *http.Response, error)
+	// Remove a device from the VM
+	VmRemoveDevicePut(ctx context.Context, vmRemoveDevice chclient.VmRemoveDevice) (*http.Response, error)
 }
 
 type CloudHypervisorVersion struct {
@@ -484,9 +486,39 @@ func (clh *cloudHypervisor) hotplugAddDevice(devInfo interface{}, devType device
 
 }
 
+func (clh *cloudHypervisor) hotplugRemoveBlockDevice(drive *config.BlockDrive) error {
+	cl := clh.client()
+	ctx, cancel := context.WithTimeout(context.Background(), clhHotPlugAPITimeout*time.Second)
+	defer cancel()
+
+	driveID := clhDriveIndexToID(drive.Index)
+
+	if drive.Pmem {
+		return fmt.Errorf("pmem device hotplug remove not supported")
+	}
+
+	_, err := cl.VmRemoveDevicePut(ctx, chclient.VmRemoveDevice{Id: driveID})
+
+	if err != nil {
+		err = fmt.Errorf("failed to hotplug remove block device %+v %s", drive, openAPIClientError(err))
+	}
+
+	return err
+}
+
 func (clh *cloudHypervisor) hotplugRemoveDevice(devInfo interface{}, devType deviceType) (interface{}, error) {
-	clh.Logger().WithField("function", "hotplugRemoveDevice").Warn("hotplug remove device not supported")
-	return nil, nil
+	span, _ := clh.trace("hotplugRemoveDevice")
+	defer span.Finish()
+
+	switch devType {
+	case blockDev:
+		return nil, clh.hotplugRemoveBlockDevice(devInfo.(*config.BlockDrive))
+	default:
+		clh.Logger().WithFields(log.Fields{"devInfo": devInfo,
+			"deviceType": devType}).Error("hotplugRemoveDevice: unsupported device")
+		return nil, fmt.Errorf("Could not hot remove device: unsupported device: %v, type: %v",
+			devInfo, devType)
+	}
 }
 
 func (clh *cloudHypervisor) hypervisorConfig() HypervisorConfig {
