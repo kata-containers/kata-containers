@@ -1,0 +1,63 @@
+name: Move issues to in progress when referenced by a PR
+
+on:
+  pull_request:
+    types:
+      - opened
+
+jobs:
+  move-linked-issues-to-in-progress:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install hub
+        run: |
+          HUB_ARCH="amd64"
+          HUB_VER=$(curl -sL "https://api.github.com/repos/github/hub/releases/latest" |\
+            jq -r .tag_name | sed 's/^v//')
+          curl -sL \
+            "https://github.com/github/hub/releases/download/v${HUB_VER}/hub-linux-${HUB_ARCH}-${HUB_VER}.tgz" |\
+          tar xz --strip-components=2 --wildcards '*/bin/hub' && \
+          sudo install hub /usr/local/bin
+
+      - name: Install hub extension script
+        run: |
+          # Clone into a temporary directory to avoid overwriting
+          # any existing github directory.
+          pushd $(mktemp -d)
+          git clone --single-branch --depth 1 "https://github.com/kata-containers/.github" && cd .github/scripts
+          sudo install kata-hub.sh /usr/local/bin
+          popd
+
+      - name: Move issue to 'In progress'
+        env:
+          GITHUB_TOKEN: ${{ secrets.KATA_GITHUB_ACTIONS_TOKEN }}
+          DEBUG: true
+        run: |
+          pr=${{ github.event.number }}
+          linked_issue_url=$(kata-hub.sh list-issue-linked-prs |\
+            grep -v "^\#" |\
+            grep "/pull/${pr};" |\
+            cut -d';' -f2 || true)
+
+          # PR doesn't have a linked issue
+          # (it should, but maybe a new user forgot to add a "Fixes #" commit).
+          [ -z "$linked_issue_url" ] && \
+            echo "::error::No linked issue for PR $pr" && \
+            exit 1
+
+          issue_number=$(echo "$linked_issue_url"| awk -F\/ '{print $NF}' || true)
+          [ -z "$issue_number" ] && \
+            echo "::error::Cannot determine issue number from $linked_issue_url for PR $pr" && \
+            exit 1
+
+          project_name="Issue backlog"
+          project_type="org"
+          project_column="In progress"
+
+          # Move the issue to the correct column on the project board
+          kata-hub.sh \
+            move-issue \
+            "$issue" \
+            "$project_name" \
+            "$project_type" \
+            "$project_column"
