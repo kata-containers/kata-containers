@@ -32,6 +32,7 @@ use crate::log_child;
 
 // Info reveals information about a particular mounted filesystem. This
 // struct is populated from the content in the /proc/<pid>/mountinfo file.
+#[derive(std::fmt::Debug)]
 pub struct Info {
     id: i32,
     parent: i32,
@@ -51,9 +52,12 @@ const MOUNTINFOFORMAT: &'static str = "{d} {d} {d}:{d} {} {} {} {}";
 lazy_static! {
     static ref PROPAGATION: HashMap<&'static str, MsFlags> = {
         let mut m = HashMap::new();
-        m.insert("shared", MsFlags::MS_SHARED | MsFlags::MS_REC);
-        m.insert("private", MsFlags::MS_PRIVATE | MsFlags::MS_REC);
-        m.insert("slave", MsFlags::MS_SLAVE | MsFlags::MS_REC);
+        m.insert("shared", MsFlags::MS_SHARED);
+        m.insert("rshared", MsFlags::MS_SHARED | MsFlags::MS_REC);
+        m.insert("private", MsFlags::MS_PRIVATE);
+        m.insert("rprivate", MsFlags::MS_PRIVATE | MsFlags::MS_REC);
+        m.insert("slave", MsFlags::MS_SLAVE);
+        m.insert("rslave", MsFlags::MS_SLAVE | MsFlags::MS_REC);
         m
     };
     static ref OPTIONS: HashMap<&'static str, (bool, MsFlags)> = {
@@ -121,6 +125,9 @@ pub fn init_rootfs(
     let rootfs = root.to_str().unwrap();
 
     mount::mount(None::<&str>, "/", None::<&str>, flags, None::<&str>)?;
+
+    rootfs_parent_mount_private(rootfs)?;
+
     mount::mount(
         Some(rootfs),
         rootfs,
@@ -142,6 +149,18 @@ pub fn init_rootfs(
             }
 
             mount_from(cfd_log, &m, &rootfs, flags, &data, "")?;
+            // bind mount won't change mount options, we need remount to make mount options
+            // effective.
+            // first check that we have non-default options required before attempting a
+            // remount
+            if m.r#type == "bind" {
+                for o in &m.options {
+                    if let Some(fl) = PROPAGATION.get(o.as_str()) {
+                        let dest = format!("{}{}", &rootfs, &m.destination);
+                        mount::mount(None::<&str>, dest.as_str(), None::<&str>, *fl, None::<&str>)?;
+                    }
+                }
+            }
         }
     }
 
@@ -262,15 +281,68 @@ fn mount_cgroups(
     Ok(())
 }
 
-pub fn pivot_rootfs<P: ?Sized + NixPath>(path: &P) -> Result<()> {
+pub fn pivot_rootfs<P: ?Sized + NixPath + std::fmt::Debug>(path: &P) -> Result<()> {
     let oldroot = fcntl::open("/", OFlag::O_DIRECTORY | OFlag::O_RDONLY, Mode::empty())?;
     defer!(unistd::close(oldroot).unwrap());
     let newroot = fcntl::open(path, OFlag::O_DIRECTORY | OFlag::O_RDONLY, Mode::empty())?;
     defer!(unistd::close(newroot).unwrap());
-    unistd::pivot_root(path, path)?;
-    mount::umount2("/", MntFlags::MNT_DETACH)?;
+
+    // Change to the new root so that the pivot_root actually acts on it.
     unistd::fchdir(newroot)?;
+    unistd::pivot_root(".", ".").chain_err(|| format!("failed to pivot_root on {:?}", path))?;
+
+    // Currently our "." is oldroot (according to the current kernel code).
+    // However, purely for safety, we will fchdir(oldroot) since there isn't
+    // really any guarantee from the kernel what /proc/self/cwd will be after a
+    // pivot_root(2).
+    unistd::fchdir(oldroot)?;
+
+    // Make oldroot rslave to make sure our unmounts don't propagate to the
+    // host. We don't use rprivate because this is known to cause issues due
+    // to races where we still have a reference to a mount while a process in
+    // the host namespace are trying to operate on something they think has no
+    // mounts (devicemapper in particular).
+    mount::mount(
+        Some("none"),
+        ".",
+        Some(""),
+        MsFlags::MS_SLAVE | MsFlags::MS_REC,
+        Some(""),
+    )?;
+
+    // Preform the unmount. MNT_DETACH allows us to unmount /proc/self/cwd.
+    mount::umount2(".", MntFlags::MNT_DETACH).chain_err(|| "failed to do umount2")?;
+
+    // Switch back to our shiny new root.
+    unistd::chdir("/")?;
     stat::umask(Mode::from_bits_truncate(0o022));
+    Ok(())
+}
+
+fn rootfs_parent_mount_private(path: &str) -> Result<()> {
+    let mount_infos = parse_mount_table()?;
+
+    let mut max_len = 0;
+    let mut mount_point = String::from("");
+    let mut options = String::from("");
+    for i in mount_infos {
+        if path.starts_with(&i.mount_point) && i.mount_point.len() > max_len {
+            max_len = i.mount_point.len();
+            mount_point = i.mount_point;
+            options = i.optional;
+        }
+    }
+
+    if options.contains("shared:") {
+        mount::mount(
+            None::<&str>,
+            mount_point.as_str(),
+            None::<&str>,
+            MsFlags::MS_PRIVATE,
+            None::<&str>,
+        )?;
+    }
+
     Ok(())
 }
 
