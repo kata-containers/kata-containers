@@ -158,9 +158,9 @@ assets:
     version: "v5.4.32"
 
   kernel-experimental:
-    description: "Linux kernel with virtio-fs-dev branch"
+    description: "Linux kernel with virtio-fs support"
     url: "https://gitlab.com/virtio-fs/linux.git"
-    tag: "virtio-fs-dev"
+    tag: "kata-v5.6-april-09-2020"
 
 components:
   description: "Core system functionality"
