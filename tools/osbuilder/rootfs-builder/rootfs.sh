@@ -15,7 +15,7 @@ script_dir="$(dirname $(readlink -f $0))"
 AGENT_VERSION=${AGENT_VERSION:-}
 GO_AGENT_PKG=${GO_AGENT_PKG:-github.com/kata-containers/agent}
 RUST_AGENT_PKG=${RUST_AGENT_PKG:-github.com/kata-containers/kata-containers}
-RUST_AGENT=${RUST_AGENT:-no}
+RUST_AGENT=${RUST_AGENT:-yes}
 RUST_VERSION="null"
 CMAKE_VERSION=${CMAKE_VERSION:-"null"}
 MUSL_VERSION=${MUSL_VERSION:-"null"}
@@ -100,8 +100,8 @@ AGENT_INIT          When set to "yes", use ${AGENT_BIN} as init process in place
                     of systemd.
                     Default value: no
 
-RUST_AGENT          When set to "yes", build kata-agent from kata-rust-agent instead of go agent
-                    Default value: "no"
+RUST_AGENT          When set to "no", build kata-agent from go agent instead of kata-rust-agent
+                    Default value: "yes"
 
 RUST_AGENT_PKG      URL of the Git repository hosting the agent package.
                     Default value: ${RUST_AGENT_PKG}
