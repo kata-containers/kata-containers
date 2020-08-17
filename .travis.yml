@@ -5,7 +5,6 @@ go:
     - "1.11"
     - tip
 arch:
-    - amd64
     - s390x
 
 go_import_path: github.com/intel/govmm
