@@ -21,5 +21,7 @@ before_install:
 
 script:
    - go env
-   - $GOPATH/bin/goveralls -v -service=travis-ci
    - gometalinter --tests --vendor --disable-all --enable=misspell --enable=vet --enable=ineffassign --enable=gofmt --enable=gocyclo --cyclo-over=15 --enable=golint --enable=errcheck --enable=deadcode --enable=staticcheck -enable=gas ./...
+
+after_success:
+   - $GOPATH/bin/goveralls -repotoken $COVERALLS_TOKEN -v -service=travis-ci
