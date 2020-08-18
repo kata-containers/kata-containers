@@ -26,6 +26,7 @@ OSBUILDER_VERSION="unknown"
 DOCKER_RUNTIME=${DOCKER_RUNTIME:-runc}
 GO_VERSION="null"
 export GOPATH=${GOPATH:-${HOME}/go}
+LIBC=${LIBC:-musl}
 
 lib_file="${script_dir}/../scripts/lib.sh"
 source "$lib_file"
@@ -574,8 +575,8 @@ EOT
 		pushd "${agent_dir}"
 		[ -n "${AGENT_VERSION}" ] && git checkout "${AGENT_VERSION}" && OK "git checkout successful" || info "checkout failed!"
 		make clean
-		make INIT=${AGENT_INIT}
-		make install DESTDIR="${ROOTFS_DIR}" INIT=${AGENT_INIT} SECCOMP=${SECCOMP}
+		make LIBC=${LIBC} INIT=${AGENT_INIT}
+		make install DESTDIR="${ROOTFS_DIR}" LIBC=${LIBC} INIT=${AGENT_INIT} SECCOMP=${SECCOMP}
 		popd
 	else
 		cp ${AGENT_SOURCE_BIN} ${AGENT_DEST}
@@ -631,7 +632,7 @@ See issue: https://github.com/kata-containers/osbuilder/issues/386"
 		fi
 	fi
 
-	if [ "${RUST_AGENT}" == "yes" ] && [ "${arch}" == "s390x" -o "${arch}" == "ppc64le" ]; then
+	if [ "${RUST_AGENT}" == "yes" ] && [ "${arch}" == "s390x" ]; then
 		die "Cannot build rust agent on ppc64le.
 musl cannot be built on ppc64le because of long double
 reprentation is broken. And rust has no musl target on ppc64le.
