@@ -28,6 +28,7 @@ extern crate slog;
 #[macro_use]
 extern crate netlink;
 
+use crate::netlink::{RtnlHandle, NETLINK_ROUTE};
 use nix::fcntl::{self, OFlag};
 use nix::sys::socket::{self, AddressFamily, SockAddr, SockFlag, SockType};
 use nix::sys::wait::{self, WaitStatus};
@@ -121,7 +122,8 @@ fn main() -> Result<()> {
 
     let agentConfig = AGENT_CONFIG.clone();
 
-    if unistd::getpid() == Pid::from_raw(1) {
+    let init_mode = unistd::getpid() == Pid::from_raw(1);
+    if init_mode {
         // dup a new file descriptor for this temporary logger writer,
         // since this logger would be dropped and it's writer would
         // be closed out of this code block.
@@ -206,10 +208,17 @@ fn main() -> Result<()> {
     };
 
     // Initialize unique sandbox structure.
-    let s = Sandbox::new(&logger).map_err(|e| {
+    let mut s = Sandbox::new(&logger).map_err(|e| {
         error!(logger, "Failed to create sandbox with error: {:?}", e);
         e
     })?;
+
+    if init_mode {
+        let mut rtnl = RtnlHandle::new(NETLINK_ROUTE, 0).unwrap();
+        rtnl.handle_localhost()?;
+
+        s.rtnl = Some(rtnl);
+    }
 
     let sandbox = Arc::new(Mutex::new(s));
 
