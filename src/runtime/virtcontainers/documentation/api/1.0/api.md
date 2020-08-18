@@ -819,17 +819,28 @@ func ProcessListContainer(sandboxID, containerID string, options ProcessListOpti
 
 ```Go
 
+import (
+    "context"
+    "fmt"
+    "strings"
+
+    vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
+    "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
+)
+
+var containerRootfs = vc.RootFs{Target: "/var/lib/container/bundle/", Mounted: true}
+
 // This example creates and starts a single container sandbox,
 // using qemu as the hypervisor and kata as the VM agent.
 func Example_createAndStartSandbox() {
-	envs := []vc.EnvVar{
+	envs := []types.EnvVar{
 		{
 			Var:   "PATH",
 			Value: "/bin:/usr/bin:/sbin:/usr/sbin",
 		},
 	}
 
-	cmd := vc.Cmd{
+	cmd := types.Cmd{
 		Args:    strings.Split("/bin/sh", " "),
 		Envs:    envs,
 		WorkDir: "/",
@@ -844,27 +855,20 @@ func Example_createAndStartSandbox() {
 
 	// Sets the hypervisor configuration.
 	hypervisorConfig := vc.HypervisorConfig{
-		KernelPath:     "/usr/share/clear-containers/vmlinux.container",
-		ImagePath:      "/usr/share/clear-containers/clear-containers.img",
+		KernelPath:     "/usr/share/kata-containers/vmlinux.container",
+		ImagePath:      "/usr/share/kata-containers/clear-containers.img",
 		HypervisorPath: "/usr/bin/qemu-system-x86_64",
+		MemorySize:     1024,
 	}
 
 	// Use kata default values for the agent.
 	agConfig := vc.KataAgentConfig{}
-
-	// VM resources
-	vmConfig := vc.Resources{
-		VCPUs:  4,
-		Memory: 1024,
-	}
 
 	// The sandbox configuration:
 	// - One container
 	// - Hypervisor is QEMU
 	// - Agent is kata
 	sandboxConfig := vc.SandboxConfig{
-		VMConfig: vmConfig,
-
 		HypervisorType:   vc.QemuHypervisor,
 		HypervisorConfig: hypervisorConfig,
 
