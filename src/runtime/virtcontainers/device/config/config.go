@@ -89,9 +89,6 @@ var SysIOMMUPath = "/sys/kernel/iommu_groups"
 // SysBusPciDevicesPath is static string of /sys/bus/pci/devices
 var SysBusPciDevicesPath = "/sys/bus/pci/devices"
 
-// SysBusPciSlotsPath is static string of /sys/bus/pci/slots
-var SysBusPciSlotsPath = "/sys/bus/pci/slots"
-
 var getSysDevPath = getSysDevPathImpl
 
 // DeviceInfo is an embedded type that contains device data common to all types of devices.
