@@ -1100,6 +1100,23 @@ func TestQMPPCIVFIOPCIeDeviceAdd(t *testing.T) {
 	<-disconnectedCh
 }
 
+func TestQMPAPVFIOMediatedDeviceAdd(t *testing.T) {
+	connectedCh := make(chan *QMPVersion)
+	disconnectedCh := make(chan struct{})
+	buf := newQMPTestCommandBuffer(t)
+	buf.AddCommand("device_add", nil, "return", nil)
+	cfg := QMPConfig{Logger: qmpTestLogger{}}
+	q := startQMPLoop(buf, cfg, connectedCh, disconnectedCh)
+	checkVersion(t, connectedCh)
+	sysfsDev := "/sys/devices/vfio_ap/matrix/a297db4a-f4c2-11e6-90f6-d3b88d6c9525"
+	err := q.ExecuteAPVFIOMediatedDeviceAdd(context.Background(), sysfsDev)
+	if err != nil {
+		t.Fatalf("Unexpected error %v", err)
+	}
+	q.Shutdown()
+	<-disconnectedCh
+}
+
 // Checks that CPU are correctly added using device_add
 func TestQMPCPUDeviceAdd(t *testing.T) {
 	drivers := []string{"host-x86_64-cpu", "host-s390x-cpu", "host-powerpc64-cpu"}
