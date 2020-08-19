@@ -9,6 +9,7 @@ package drivers
 import (
 	"fmt"
 	"io/ioutil"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -22,6 +23,8 @@ const (
 
 	PCIDomain   = "0000"
 	PCIeKeyword = "PCIe"
+
+	PCIConfigSpaceSize = 256
 )
 
 type PCISysFsType string
@@ -52,23 +55,17 @@ func isPCIeDevice(bdf string) bool {
 	if len(strings.Split(bdf, ":")) == 2 {
 		bdf = PCIDomain + ":" + bdf
 	}
-	slots, err := ioutil.ReadDir(config.SysBusPciSlotsPath)
+
+	configPath := filepath.Join(config.SysBusPciDevicesPath, bdf, "config")
+	fi, err := os.Stat(configPath)
 	if err != nil {
-		deviceLogger().WithError(err).WithField("path", config.SysBusPciSlotsPath).Warn("failed to list pci slots")
-		return false
+		deviceLogger().WithField("dev-bdf", bdf).WithField("error", err).Warning("Couldn't stat() configuration space file")
+		return false //Who knows?
 	}
-	b := strings.Split(bdf, ".")[0]
-	for _, slot := range slots {
-		address := getPCISlotProperty(slot.Name(), PCISysFsSlotsAddress)
-		if b == address {
-			maxBusSpeed := getPCISlotProperty(slot.Name(), PCISysFsSlotsMaxBusSpeed)
-			if strings.Contains(maxBusSpeed, PCIeKeyword) {
-				return true
-			}
-		}
-	}
-	deviceLogger().WithField("dev-bdf", bdf).Debug("can not find slot for bdf of pci device")
-	return false
+
+	// Plain PCI devices hav 256 bytes of configuration space,
+	// PCI-Express devices have 4096 bytes
+	return fi.Size() > PCIConfigSpaceSize
 }
 
 // read from /sys/bus/pci/devices/xxx/property
@@ -80,17 +77,6 @@ func getPCIDeviceProperty(bdf string, property PCISysFsProperty) string {
 	rlt, err := readPCIProperty(propertyPath)
 	if err != nil {
 		deviceLogger().WithError(err).WithField("path", propertyPath).Warn("failed to read pci device property")
-		return ""
-	}
-	return rlt
-}
-
-// read from /sys/bus/pci/slots/xxx/property
-func getPCISlotProperty(slot string, property PCISysFsProperty) string {
-	propertyPath := filepath.Join(config.SysBusPciSlotsPath, slot, string(property))
-	rlt, err := readPCIProperty(propertyPath)
-	if err != nil {
-		deviceLogger().WithError(err).WithField("path", propertyPath).Warn("failed to read pci slot property")
 		return ""
 	}
 	return rlt
