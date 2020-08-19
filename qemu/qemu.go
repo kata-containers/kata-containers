@@ -123,6 +123,9 @@ const (
 	// VfioCCW is the vfio driver with CCW transport.
 	VfioCCW DeviceDriver = "vfio-ccw"
 
+	// VfioAP is the vfio driver with AP transport.
+	VfioAP DeviceDriver = "vfio-ap"
+
 	// VHostVSockPCI is a generic Vsock vhost device with PCI transport.
 	VHostVSockPCI DeviceDriver = "vhost-vsock-pci"
 
