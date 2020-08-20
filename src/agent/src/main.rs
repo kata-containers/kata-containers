@@ -195,6 +195,14 @@ fn main() -> Result<()> {
     // which is required to satisfy the the lifetime constraints of the auto-generated gRPC code.
     let _guard = slog_scope::set_global_logger(logger.new(o!("subsystem" => "rpc")));
 
+    start_sandbox(&logger, &config)?;
+
+    let _ = log_handle.join();
+
+    Ok(())
+}
+
+fn start_sandbox(logger: &Logger, config: &agentConfig) -> Result<()> {
     let shells = SHELLS.clone();
     let debug_console_vport = config.debug_console_vport as u32;
 
@@ -261,8 +269,6 @@ fn main() -> Result<()> {
     handle.join().unwrap();
 
     server.shutdown();
-
-    let _ = log_handle.join();
 
     if config.debug_console {
         shell_handle.join().unwrap();
