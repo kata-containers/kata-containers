@@ -105,6 +105,19 @@ fn announce(logger: &Logger) {
 
 fn main() -> Result<()> {
     let args: Vec<String> = env::args().collect();
+
+    if args.len() == 2 && args[1] == "--version" {
+        println!(
+            "{} version {} (api version: {}, commit version: {}, type: rust)",
+            NAME,
+            version::AGENT_VERSION,
+            version::API_VERSION,
+            env::var("VERSION_COMMIT").unwrap_or("unknown".to_string())
+        );
+
+        exit(0);
+    }
+
     if args.len() == 2 && args[1] == "init" {
         rustjail::container::init_child();
         exit(0);
@@ -176,13 +189,6 @@ fn main() -> Result<()> {
     let logger = logging::create_logger(NAME, "agent", config.log_level, writer);
 
     announce(&logger);
-
-    if args.len() == 2 && args[1] == "--version" {
-        // force logger to flush
-        drop(logger);
-
-        exit(0);
-    }
 
     // This "unused" variable is required as it enables the global (and crucially static) logger,
     // which is required to satisfy the the lifetime constraints of the auto-generated gRPC code.
