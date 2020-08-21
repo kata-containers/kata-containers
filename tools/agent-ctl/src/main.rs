@@ -40,27 +40,36 @@ const WARNING_TEXT: &str = r#"WARNING:
     sandbox."#;
 
 fn make_examples_text(program_name: &str) -> String {
+    let abstract_server_address = "unix://@/foo/bar/abstract.socket";
     let bundle = "$bundle_dir";
-    let cid = 3;
-    let container_id = "$container_id";
     let config_file_uri = "file:///tmp/config.json";
-    let port = 1024;
+    let container_id = "$container_id";
+    let local_server_address = "unix:///tmp/local.socket";
     let sandbox_id = "$sandbox_id";
+    let vsock_server_address = "vsock://3:1024";
 
     format!(
         r#"EXAMPLES:
 
 - Check if the agent is running:
 
-  $ {program} connect --vsock-cid {cid} --vsock-port {port} --cmd Check
+  $ {program} connect --server-address "{vsock_server_address}" --cmd Check
+
+- Connect to the agent using local sockets (when running in same environment as the agent):
+
+  # Local socket
+  $ {program} connect --server-address "{local_server_address}" --cmd Check
+
+  # Abstract socket
+  $ {program} connect --server-address "{abstract_server_address}" --cmd Check
 
 - Query the agent environment:
 
-  $ {program} connect --vsock-cid {cid} --vsock-port {port} --cmd GuestDetails
+  $ {program} connect --server-address "{vsock_server_address}" --cmd GuestDetails
 
 - List all available (built-in and Kata Agent API) commands:
 
-  $ {program} connect --vsock-cid {cid} --vsock-port {port} --cmd list
+  $ {program} connect --server-address "{vsock_server_address}" --cmd list
 
 - Generate a random container ID:
 
@@ -72,33 +81,34 @@ fn make_examples_text(program_name: &str) -> String {
 
 - Attempt to create 7 sandboxes, ignoring any errors:
 
-  $ {program} connect --vsock-cid {cid} --vsock-port {port} --repeat 7 --cmd CreateSandbox
+  $ {program} connect --server-address "{vsock_server_address}" --repeat 7 --cmd CreateSandbox
 
 - Query guest details forever:
 
-  $ {program} connect --vsock-cid {cid} --vsock-port {port} --repeat -1 --cmd GuestDetails
+  $ {program} connect --server-address "{vsock_server_address}" --repeat -1 --cmd GuestDetails
 
 - Send a 'SIGUSR1' signal to a container process:
 
-  $ {program} connect --vsock-cid {cid} --vsock-port {port} --cmd 'SignalProcess signal=usr1 sid={sandbox_id} cid={container_id}'
+  $ {program} connect --server-address "{vsock_server_address}" --cmd 'SignalProcess signal=usr1 sid={sandbox_id} cid={container_id}'
 
 - Create a sandbox with a single container, and then destroy everything:
 
-  $ {program} connect --vsock-cid {cid} --vsock-port {port} --cmd CreateSandbox
-  $ {program} connect --vsock-cid {cid} --vsock-port {port} --bundle-dir {bundle:?} --cmd CreateContainer
-  $ {program} connect --vsock-cid {cid} --vsock-port {port} --cmd DestroySandbox
+  $ {program} connect --server-address "{vsock_server_address}" --cmd CreateSandbox
+  $ {program} connect --server-address "{vsock_server_address}" --bundle-dir {bundle:?} --cmd CreateContainer
+  $ {program} connect --server-address "{vsock_server_address}" --cmd DestroySandbox
 
 - Create a Container using a custom configuration file:
 
-  $ {program} connect --vsock-cid {cid} --vsock-port {port} --bundle-dir {bundle:?} --cmd 'CreateContainer spec={config_file_uri}'
+  $ {program} connect --server-address "{vsock_server_address}" --bundle-dir {bundle:?} --cmd 'CreateContainer spec={config_file_uri}'
 	"#,
+        abstract_server_address = abstract_server_address,
         bundle = bundle,
-        cid = cid,
         config_file_uri = config_file_uri,
         container_id = container_id,
-        port = port,
+        local_server_address = local_server_address,
         program = program_name,
         sandbox_id = sandbox_id,
+        vsock_server_address = vsock_server_address,
     )
 }
 
@@ -111,23 +121,10 @@ fn connect(name: &str, global_args: clap::ArgMatches) -> Result<()> {
     let interactive = args.is_present("interactive");
     let ignore_errors = args.is_present("ignore-errors");
 
-    let cid_str = args
-        .value_of("vsock-cid")
-        .ok_or("need VSOCK cid".to_string())
+    let server_address = args
+        .value_of("server-address")
+        .ok_or("need server adddress".to_string())
         .map_err(|e| anyhow!(e))?;
-
-    let port_str = args
-        .value_of("vsock-port")
-        .ok_or("need VSOCK port number".to_string())
-        .map_err(|e| anyhow!(e))?;
-
-    let cid: u32 = cid_str
-        .parse::<u32>()
-        .map_err(|e| anyhow!(format!("invalid VSOCK CID number: {}", e.to_string())))?;
-
-    let port: u32 = port_str
-        .parse::<u32>()
-        .map_err(|e| anyhow!(format!("invalid VSOCK port number: {}", e)))?;
 
     let mut commands: Vec<&str> = Vec::new();
 
@@ -156,8 +153,7 @@ fn connect(name: &str, global_args: clap::ArgMatches) -> Result<()> {
 
     let result = rpc::run(
         &logger,
-        cid,
-        port,
+        server_address,
         bundle_dir,
         interactive,
         ignore_errors,
@@ -201,13 +197,6 @@ fn real_main() -> Result<()> {
                     .value_name("directory"),
                     )
                 .arg(
-                    Arg::with_name("vsock-cid")
-                    .long("vsock-cid")
-                    .help("VSOCK Context ID")
-                    .takes_value(true)
-                    .value_name("CID"),
-                    )
-                .arg(
                     Arg::with_name("cmd")
                     .long("cmd")
                     .short("c")
@@ -227,11 +216,11 @@ fn real_main() -> Result<()> {
                     .help("Allow interactive client"),
                     )
                 .arg(
-                    Arg::with_name("vsock-port")
-                    .long("vsock-port")
-                    .help("VSOCK Port number")
+                    Arg::with_name("server-address")
+                    .long("server-address")
+                    .help("server URI (vsock:// or unix://)")
                     .takes_value(true)
-                    .value_name("port-number"),
+                    .value_name("URI"),
                     )
                 .arg(
                     Arg::with_name("timeout")
