@@ -57,7 +57,7 @@ function waitForLabelRemoval() {
 }
 
 function run_test() {
-    YAMLPATH="./kata-deploy"
+    YAMLPATH="./tools/packaging/kata-deploy/"
     echo "verify connectivity with a pod using Kata"
 
     deployment=""
@@ -97,19 +97,19 @@ function test_kata() {
 
     [[ -z "$PKG_SHA" ]] && die "no PKG_SHA provided"
 
+    YAMLPATH="./tools/packaging/kata-deploy/"
+
     # This action could be called in two contexts:
     #  1. Packaging workflows: testing in packaging repository, where we assume yaml/packaging
     #   bits under test are already part of teh action workspace.
     #  2. From kata-containers: when creating a release, the appropriate packaging repository is
     #   not yet part of the workspace, and we will need to clone
-    if [[ ! -d ./kata-deploy ]]; then
-        [[ -d  packaging ]] || git clone https://github.com/kata-containers/packaging packaging
-        cd packaging
+    if [[ ! -d $YAMLPATH ]]; then
+        [[ -d  $YAMLPATH ]] || git clone https://github.com/kata-containers/kata-containers
+        cd kata-containers
         git fetch
         git checkout $PKG_SHA
     fi
-
-    YAMLPATH="./kata-deploy"
 
     kubectl apply -f "$YAMLPATH/kata-rbac/base/kata-rbac.yaml"
 
