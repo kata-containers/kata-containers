@@ -246,12 +246,6 @@ fn start_sandbox(logger: &Logger, config: &agentConfig) -> Result<()> {
     //vsock:///dev/vsock, port
     let mut server = rpc::start(sandbox.clone(), VSOCK_ADDR, VSOCK_PORT);
 
-    /*
-        let _ = fs::remove_file("/tmp/testagent");
-        let _ = fs::remove_dir_all("/run/agent");
-        let mut server = grpc::start(sandbox.clone(), "unix:///tmp/testagent", 1);
-    */
-
     let handle = thread::spawn(move || {
         // info!("Press ENTER to exit...");
         // let _ = io::stdin().read(&mut [0]).unwrap();
@@ -259,10 +253,6 @@ fn start_sandbox(logger: &Logger, config: &agentConfig) -> Result<()> {
 
         let _ = rx.recv().unwrap();
     });
-    // receive something from destroy_sandbox here?
-    // or in the thread above? It depneds whether grpc request
-    // are run in another thread or in the main thead?
-    // let _ = rx.wait();
 
     let _ = server.start().unwrap();
 
@@ -273,8 +263,6 @@ fn start_sandbox(logger: &Logger, config: &agentConfig) -> Result<()> {
     if config.debug_console {
         shell_handle.join().unwrap();
     }
-
-    let _ = fs::remove_file("/tmp/testagent");
 
     Ok(())
 }
