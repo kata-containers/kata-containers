@@ -26,7 +26,8 @@ build_rootfs() {
 	check_root
 	mkdir -p "${ROOTFS_DIR}"
 
-	cp -a -r /bin /etc /lib /sbin /usr /var ${ROOTFS_DIR}
+	rm -rf ${ROOTFS_DIR}/var/tmp
+	cp -a -r -f /bin /etc /lib /sbin /usr /var ${ROOTFS_DIR}
 	mkdir -p ${ROOTFS_DIR}{/root,/proc,/dev,/home,/media,/mnt,/opt,/run,/srv,/sys,/tmp}
 
 	echo "${MIRROR}/${OS_VERSION}/main" >  ${ROOTFS_DIR}/etc/apk/repositories
