@@ -41,11 +41,14 @@
           * [Connect to debug console](#connect-to-debug-console)
       * [Traditional debug console setup](#traditional-debug-console-setup)
           * [Create a custom image containing a shell](#create-a-custom-image-containing-a-shell)
-          * [Create a debug systemd service](#create-a-debug-systemd-service)
           * [Build the debug image](#build-the-debug-image)
           * [Configure runtime for custom debug image](#configure-runtime-for-custom-debug-image)
+          * [Connect to the virtual machine using the debug console](#connect-to-the-virtual-machine-using-the-debug-console)
+              * [Enabling debug console for QEMU](#enabling-debug-console-for-qemu)
+              * [Enabling debug console for cloud-hypervisor / firecracker](#enabling-debug-console-for-cloud-hypervisor--firecracker)
           * [Create a container](#create-a-container)
           * [Connect to the virtual machine using the debug console](#connect-to-the-virtual-machine-using-the-debug-console)
+    * [Obtain details of the image](#obtain-details-of-the-image)
     * [Capturing kernel boot logs](#capturing-kernel-boot-logs)
 
 # Warning
@@ -540,35 +543,6 @@ $ export ROOTFS_DIR=${GOPATH}/src/github.com/kata-containers/kata-containers/too
 $ script -fec 'sudo -E GOPATH=$GOPATH USE_DOCKER=true EXTRA_PKGS="bash coreutils" ./rootfs.sh centos'
 ```
 
-#### Create a debug systemd service
-
-Create the service file that starts the shell in the rootfs directory:
-
-```
-$ cat <<EOT | sudo tee ${ROOTFS_DIR}/lib/systemd/system/kata-debug.service
-[Unit]
-Description=Kata Containers debug console
-
-[Service]
-Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-StandardInput=tty
-StandardOutput=tty
-# Must be disabled to allow the job to access the real console
-PrivateDevices=no
-Type=simple
-ExecStart=/bin/bash
-Restart=always
-EOT
-```
-
-**Note**: You might need to adjust the `ExecStart=` path.
-
-Add a dependency to start the debug console:
-
-```
-$ sudo sed -i '$a Requires=kata-debug.service' ${ROOTFS_DIR}/lib/systemd/system/kata-containers.target
-```
-
 #### Build the debug image
 
 Follow the instructions in the [Build a rootfs image](#build-a-rootfs-image)
@@ -609,10 +583,55 @@ $ sudo crictl run -r kata container.yaml pod.yaml
 
 #### Connect to the virtual machine using the debug console
 
+The steps required to enable debug console for QEMU slightly differ with
+those for firecracker / cloud-hypervisor.
+ 
+##### Enabling debug console for QEMU
+
+Add `agent.debug_console` to the guest kernel command line to allow the agent process to start a debug console. 
+
 ```
-$ id=$(sudo crictl pods --no-trunc -q)
-$ console="/var/run/vc/vm/${id}/console.sock"
-$ sudo socat "stdin,raw,echo=0,escape=0x11" "unix-connect:${console}"
+$ sudo sed -i -e 's/^kernel_params = "\(.*\)"/kernel_params = "\1 agent.debug_console"/g' "${kata_configuration_file}"
+```
+
+Here `kata_configuration_file` could point to `/etc/kata-containers/configuration.toml` 
+or `/usr/share/defaults/kata-containers/configuration.toml`
+or `/opt/kata/share/defaults/kata-containers/configuration-{hypervisor}.toml`, if
+you installed Kata Containers using `kata-deploy`.
+
+##### Enabling debug console for cloud-hypervisor / firecracker
+
+Slightly different configuration is required in case of firecracker and cloud hypervisor. 
+Firecracker and cloud-hypervisor don't have a UNIX socket connected to `/dev/console`. 
+Hence, the kernel command line option `agent.debug_console` will not work for them. 
+These hypervisors support `hybrid vsocks`,  which can be used for communication
+between the host and the guest. The kernel command line option `agent.debug_console_vport`
+ was added to allow developers specify on which `vsock` port the debugging console should be connected.
+
+
+Add the parameter `agent.debug_console_vport=1026` to the kernel command line
+as shown below:
+```
+sudo sed -i -e 's/^kernel_params = "\(.*\)"/kernel_params = "\1 agent.debug_console_vport=1026"/g' "${kata_configuration_file}"
+```
+
+> **Note** Ports 1024 and 1025 are reserved for communication with the agent
+> and gathering of agent logs respectively. 
+
+Next, connect to the debug console. The VSOCKS paths vary slightly between
+cloud-hypervisor and firecracker.
+In case of cloud-hypervisor, connect to the `vsock` as shown:
+```
+$ sudo su -c 'cd /var/run/vc/vm/{sandbox_id}/root/ && socat stdin unix-connect:clh.sock'
+CONNECT 1026
+```
+
+**Note**: You need to type `CONNECT 1026` and press `RETURN` key after entering the `socat` command.
+
+For firecracker, connect to the `hvsock` as shown:
+```
+$ sudo su -c 'cd /var/run/vc/firecracker/{sandbox_id}/root/ && socat stdin unix-connect:kata.hvsock'
+CONNECT 1026
 ```
 
 **Note**: You need to press the `RETURN` key to see the shell prompt.
