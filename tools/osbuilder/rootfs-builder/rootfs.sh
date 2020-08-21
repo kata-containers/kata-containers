@@ -347,7 +347,7 @@ build_rootfs_distro()
 
 	if [ -z "${USE_DOCKER}" ] && [ -z "${USE_PODMAN}" ]; then
 		#Generate an error if the local Go version is too old
-		echo "build directly"
+		info "build directly"
 		build_rootfs ${ROOTFS_DIR}
 	else
 		if [ -n "${USE_DOCKER}" ]; then
@@ -382,6 +382,7 @@ build_rootfs_distro()
 		else
 			docker_run_args+=" --env AGENT_SOURCE_BIN=${AGENT_SOURCE_BIN}"
 			docker_run_args+=" -v ${AGENT_SOURCE_BIN}:${AGENT_SOURCE_BIN}"
+			docker_run_args+=" -v ${GOPATH_LOCAL}:${GOPATH_LOCAL} --env GOPATH=${GOPATH_LOCAL}"
 		fi
 
 		docker_run_args+=" $(docker_extra_args $distro)"
@@ -538,21 +539,14 @@ EOT
 	AGENT_DEST="${AGENT_DIR}/${AGENT_BIN}"
 
 	if [ -z "${AGENT_SOURCE_BIN}" ] ; then
-		if [ "$RUST_AGENT" != "yes" ]; then
-			agent_pkg="${GO_AGENT_PKG}"
-			agent_dir="${GOPATH_LOCAL}/src/${GO_AGENT_PKG}"
-		else
-			# The PATH /.cargo/bin is apparently wrong
-			# looks like $HOME is resolved to empty when
-			# container is started
-			test -r "${HOME}/.cargo/env" && source "${HOME}/.cargo/env" || true
-			# rust agent needs x86_64-unknown-linux-musl
-			bash ${script_dir}/../../../ci/install_rust.sh
-			agent_pkg="${RUST_AGENT_PKG}"
-			agent_dir="${script_dir}/../../../src/agent/"
-			# For now, rust-agent doesn't support seccomp yet.
-			SECCOMP="no"
-		fi
+		# rust agent needs x86_64-unknown-linux-musl
+		rustup show | grep x86_64-unknown-linux-musl > /dev/null || bash ${script_dir}/../../../ci/install_rust.sh
+		test -r "${HOME}/.cargo/env" && source "${HOME}/.cargo/env"
+
+		agent_pkg="${RUST_AGENT_PKG}"
+		agent_dir="${script_dir}/../../../src/agent/"
+		# For now, rust-agent doesn't support seccomp yet.
+		SECCOMP="no"
 
 		info "Build agent"
 		pushd "${agent_dir}"
