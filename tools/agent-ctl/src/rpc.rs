@@ -13,8 +13,7 @@ use crate::types::Config;
 
 pub fn run(
     logger: &Logger,
-    cid: u32,
-    port: u32,
+    server_address: &str,
     bundle_dir: &str,
     interactive: bool,
     ignore_errors: bool,
@@ -22,8 +21,7 @@ pub fn run(
     commands: Vec<&str>,
 ) -> Result<()> {
     let cfg = Config {
-        cid: cid,
-        port: port,
+        server_address: server_address.to_string(),
         bundle_dir: bundle_dir.to_string(),
         timeout_nano: timeout_nano,
         interactive: interactive,

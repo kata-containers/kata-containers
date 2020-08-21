@@ -250,7 +250,7 @@ fn config_file_from_bundle_dir(bundle_dir: &str) -> Result<String> {
     config_path
         .into_os_string()
         .into_string()
-        .map_err(|e| anyhow!(format!("failed to construct config file path: {:?}", e)))
+        .map_err(|e| anyhow!("{:?}", e).context("failed to construct config file path"))
 }
 
 fn root_oci_to_grpc(bundle_dir: &str, root: &ociRoot) -> Result<grpcRoot> {
@@ -265,7 +265,7 @@ fn root_oci_to_grpc(bundle_dir: &str, root: &ociRoot) -> Result<grpcRoot> {
         abs_root_dir
             .into_os_string()
             .into_string()
-            .map_err(|e| anyhow!(format!("failed to construct bundle path: {:?}", e)))?
+            .map_err(|e| anyhow!("{:?}", e).context("failed to construct bundle path"))?
     };
 
     let grpc_root = grpcRoot {
