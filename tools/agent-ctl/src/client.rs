@@ -247,7 +247,7 @@ fn get_agent_cmd_func(name: &str) -> Result<AgentCmdFp> {
         }
     }
 
-    Err(anyhow!(format!("Invalid command: {:?}", name)))
+    Err(anyhow!("Invalid command: {:?}", name))
 }
 
 fn get_builtin_cmd_details() -> Vec<String> {
@@ -275,7 +275,7 @@ fn get_builtin_cmd_func(name: &str) -> Result<BuiltinCmdFp> {
         }
     }
 
-    Err(anyhow!(format!("Invalid command: {:?}", name)))
+    Err(anyhow!("Invalid command: {:?}", name))
 }
 
 fn client_create_vsock_fd(cid: libc::c_uint, port: u32) -> Result<RawFd> {
