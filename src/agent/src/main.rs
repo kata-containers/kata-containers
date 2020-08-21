@@ -246,17 +246,9 @@ fn start_sandbox(logger: &Logger, config: &agentConfig) -> Result<()> {
     //vsock:///dev/vsock, port
     let mut server = rpc::start(sandbox.clone(), VSOCK_ADDR, VSOCK_PORT);
 
-    let handle = thread::spawn(move || {
-        // info!("Press ENTER to exit...");
-        // let _ = io::stdin().read(&mut [0]).unwrap();
-        // thread::sleep(Duration::from_secs(3000));
-
-        let _ = rx.recv().unwrap();
-    });
-
     let _ = server.start().unwrap();
 
-    handle.join().unwrap();
+    let _ = rx.recv().map_err(|e| format!("{:?}", e));
 
     server.shutdown();
 
