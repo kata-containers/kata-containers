@@ -98,6 +98,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4785bdd1c96b2a846b2bd7cc02e86b6b3dbf14e7e53446c4f54c92a361040822"
 
 [[package]]
+name = "cgroups"
+version = "0.1.1-alpha.0"
+source = "git+https://github.com/kata-containers/cgroups-rs?tag=0.1.1#3852d7c1805499cd6a0e37ec400d81a7085d91a7"
+dependencies = [
+ "libc",
+ "log",
+ "nix 0.18.0",
+ "regex",
+]
+
+[[package]]
 name = "chrono"
 version = "0.4.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -240,6 +251,7 @@ name = "kata-agent"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "cgroups",
  "lazy_static",
  "libc",
  "logging",
@@ -271,9 +283,9 @@ checksum = "e2abad23fbc42b3700f2f279844dc832adb2b2eb069b2df918f455c4e18cc646"
 
 [[package]]
 name = "libc"
-version = "0.2.70"
+version = "0.2.77"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3baa92041a6fec78c687fa0cc2b3fae8884f743d672cf551bed1d6dac6988d0f"
+checksum = "f2f96b10ec2560088a8e76961b00d47107b3a625fecb76dedb29ee7ccbf98235"
 
 [[package]]
 name = "libflate"
@@ -361,6 +373,18 @@ dependencies = [
  "cfg-if",
  "libc",
  "void",
+]
+
+[[package]]
+name = "nix"
+version = "0.18.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "83450fe6a6142ddd95fb064b746083fc4ef1705fe81f64a64e1d4b39f54a1055"
+dependencies = [
+ "bitflags",
+ "cc",
+ "cfg-if",
+ "libc",
 ]
 
 [[package]]
@@ -619,6 +643,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "caps",
+ "cgroups",
  "dirs",
  "lazy_static",
  "libc",

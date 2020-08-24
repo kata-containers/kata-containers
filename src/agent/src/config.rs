@@ -14,6 +14,7 @@ const HOTPLUG_TIMOUT_OPTION: &str = "agent.hotplug_timeout";
 const DEBUG_CONSOLE_VPORT_OPTION: &str = "agent.debug_console_vport";
 const LOG_VPORT_OPTION: &str = "agent.log_vport";
 const CONTAINER_PIPE_SIZE_OPTION: &str = "agent.container_pipe_size";
+const UNIFIED_CGROUP_HIERARCHY_OPTION: &str = "agent.unified_cgroup_hierarchy";
 
 const DEFAULT_LOG_LEVEL: slog::Level = slog::Level::Info;
 const DEFAULT_HOTPLUG_TIMEOUT: time::Duration = time::Duration::from_secs(3);
@@ -36,6 +37,7 @@ pub struct agentConfig {
     pub log_vport: i32,
     pub container_pipe_size: i32,
     pub server_addr: String,
+    pub unified_cgroup_hierarchy: bool,
 }
 
 impl agentConfig {
@@ -49,6 +51,7 @@ impl agentConfig {
             log_vport: 0,
             container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
             server_addr: format!("{}:{}", VSOCK_ADDR, VSOCK_PORT),
+            unified_cgroup_hierarchy: false,
         }
     }
 
@@ -56,6 +59,7 @@ impl agentConfig {
         let cmdline = fs::read_to_string(file)?;
         let params: Vec<&str> = cmdline.split_ascii_whitespace().collect();
         for param in params.iter() {
+            // parse cmdline flags
             if param.eq(&DEBUG_CONSOLE_FLAG) {
                 self.debug_console = true;
             }
@@ -64,6 +68,7 @@ impl agentConfig {
                 self.dev_mode = true;
             }
 
+            // parse cmdline options
             if param.starts_with(format!("{}=", LOG_LEVEL_OPTION).as_str()) {
                 let level = get_log_level(param)?;
                 self.log_level = level;
@@ -94,6 +99,11 @@ impl agentConfig {
             if param.starts_with(format!("{}=", CONTAINER_PIPE_SIZE_OPTION).as_str()) {
                 let container_pipe_size = get_container_pipe_size(param)?;
                 self.container_pipe_size = container_pipe_size
+            }
+
+            if param.starts_with(format!("{}=", UNIFIED_CGROUP_HIERARCHY_OPTION).as_str()) {
+                let b = get_bool_value(param, false);
+                self.unified_cgroup_hierarchy = b;
             }
         }
 
@@ -173,6 +183,34 @@ fn get_hotplug_timeout(param: &str) -> Result<time::Duration> {
     }
 
     Ok(time::Duration::from_secs(value.unwrap()))
+}
+
+fn get_bool_value(param: &str, default: bool) -> bool {
+    let fields: Vec<&str> = param.split("=").collect();
+
+    if fields.len() != 2 {
+        return default;
+    }
+
+    let v = fields[1];
+
+    // bool
+    let t: std::result::Result<bool, std::str::ParseBoolError> = v.parse();
+    if t.is_ok() {
+        return t.unwrap();
+    }
+
+    // integer
+    let i: std::result::Result<u64, std::num::ParseIntError> = v.parse();
+    if i.is_err() {
+        return default;
+    }
+
+    // only `0` returns false, otherwise returns true
+    match i.unwrap() {
+        0 => false,
+        _ => true,
+    }
 }
 
 fn get_container_pipe_size(param: &str) -> Result<i32> {
@@ -269,6 +307,7 @@ mod tests {
             log_level: slog::Level,
             hotplug_timeout: time::Duration,
             container_pipe_size: i32,
+            unified_cgroup_hierarchy: bool,
         }
 
         let tests = &[
@@ -279,6 +318,7 @@ mod tests {
                 log_level: DEFAULT_LOG_LEVEL,
                 hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+                unified_cgroup_hierarchy: false,
             },
             TestData {
                 contents: "agent.debug_console agent.devmodex",
@@ -287,6 +327,7 @@ mod tests {
                 log_level: DEFAULT_LOG_LEVEL,
                 hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+                unified_cgroup_hierarchy: false,
             },
             TestData {
                 contents: "agent.logx=debug",
@@ -295,6 +336,7 @@ mod tests {
                 log_level: DEFAULT_LOG_LEVEL,
                 hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+                unified_cgroup_hierarchy: false,
             },
             TestData {
                 contents: "agent.log=debug",
@@ -303,6 +345,7 @@ mod tests {
                 log_level: slog::Level::Debug,
                 hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+                unified_cgroup_hierarchy: false,
             },
             TestData {
                 contents: "",
@@ -311,6 +354,7 @@ mod tests {
                 log_level: DEFAULT_LOG_LEVEL,
                 hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+                unified_cgroup_hierarchy: false,
             },
             TestData {
                 contents: "foo",
@@ -319,6 +363,7 @@ mod tests {
                 log_level: DEFAULT_LOG_LEVEL,
                 hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+                unified_cgroup_hierarchy: false,
             },
             TestData {
                 contents: "foo bar",
@@ -327,6 +372,7 @@ mod tests {
                 log_level: DEFAULT_LOG_LEVEL,
                 hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+                unified_cgroup_hierarchy: false,
             },
             TestData {
                 contents: "foo bar",
@@ -335,6 +381,7 @@ mod tests {
                 log_level: DEFAULT_LOG_LEVEL,
                 hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+                unified_cgroup_hierarchy: false,
             },
             TestData {
                 contents: "foo agent bar",
@@ -343,6 +390,7 @@ mod tests {
                 log_level: DEFAULT_LOG_LEVEL,
                 hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+                unified_cgroup_hierarchy: false,
             },
             TestData {
                 contents: "foo debug_console agent bar devmode",
@@ -351,6 +399,7 @@ mod tests {
                 log_level: DEFAULT_LOG_LEVEL,
                 hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+                unified_cgroup_hierarchy: false,
             },
             TestData {
                 contents: "agent.debug_console",
@@ -359,6 +408,7 @@ mod tests {
                 log_level: DEFAULT_LOG_LEVEL,
                 hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+                unified_cgroup_hierarchy: false,
             },
             TestData {
                 contents: "   agent.debug_console ",
@@ -367,6 +417,7 @@ mod tests {
                 log_level: DEFAULT_LOG_LEVEL,
                 hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+                unified_cgroup_hierarchy: false,
             },
             TestData {
                 contents: "agent.debug_console foo",
@@ -375,6 +426,7 @@ mod tests {
                 log_level: DEFAULT_LOG_LEVEL,
                 hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+                unified_cgroup_hierarchy: false,
             },
             TestData {
                 contents: " agent.debug_console foo",
@@ -383,6 +435,7 @@ mod tests {
                 log_level: DEFAULT_LOG_LEVEL,
                 hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+                unified_cgroup_hierarchy: false,
             },
             TestData {
                 contents: "foo agent.debug_console bar",
@@ -391,6 +444,7 @@ mod tests {
                 log_level: DEFAULT_LOG_LEVEL,
                 hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+                unified_cgroup_hierarchy: false,
             },
             TestData {
                 contents: "foo agent.debug_console",
@@ -399,6 +453,7 @@ mod tests {
                 log_level: DEFAULT_LOG_LEVEL,
                 hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+                unified_cgroup_hierarchy: false,
             },
             TestData {
                 contents: "foo agent.debug_console ",
@@ -407,6 +462,7 @@ mod tests {
                 log_level: DEFAULT_LOG_LEVEL,
                 hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+                unified_cgroup_hierarchy: false,
             },
             TestData {
                 contents: "agent.devmode",
@@ -415,6 +471,7 @@ mod tests {
                 log_level: DEFAULT_LOG_LEVEL,
                 hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+                unified_cgroup_hierarchy: false,
             },
             TestData {
                 contents: "   agent.devmode ",
@@ -423,6 +480,7 @@ mod tests {
                 log_level: DEFAULT_LOG_LEVEL,
                 hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+                unified_cgroup_hierarchy: false,
             },
             TestData {
                 contents: "agent.devmode foo",
@@ -431,6 +489,7 @@ mod tests {
                 log_level: DEFAULT_LOG_LEVEL,
                 hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+                unified_cgroup_hierarchy: false,
             },
             TestData {
                 contents: " agent.devmode foo",
@@ -439,6 +498,7 @@ mod tests {
                 log_level: DEFAULT_LOG_LEVEL,
                 hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+                unified_cgroup_hierarchy: false,
             },
             TestData {
                 contents: "foo agent.devmode bar",
@@ -447,6 +507,7 @@ mod tests {
                 log_level: DEFAULT_LOG_LEVEL,
                 hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+                unified_cgroup_hierarchy: false,
             },
             TestData {
                 contents: "foo agent.devmode",
@@ -455,6 +516,7 @@ mod tests {
                 log_level: DEFAULT_LOG_LEVEL,
                 hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+                unified_cgroup_hierarchy: false,
             },
             TestData {
                 contents: "foo agent.devmode ",
@@ -463,6 +525,7 @@ mod tests {
                 log_level: DEFAULT_LOG_LEVEL,
                 hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+                unified_cgroup_hierarchy: false,
             },
             TestData {
                 contents: "agent.devmode agent.debug_console",
@@ -471,54 +534,61 @@ mod tests {
                 log_level: DEFAULT_LOG_LEVEL,
                 hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+                unified_cgroup_hierarchy: false,
             },
             TestData {
-                contents: "agent.devmode agent.debug_console agent.hotplug_timeout=100",
+                contents: "agent.devmode agent.debug_console agent.hotplug_timeout=100 agent.unified_cgroup_hierarchy=a",
                 debug_console: true,
                 dev_mode: true,
                 log_level: DEFAULT_LOG_LEVEL,
                 hotplug_timeout: time::Duration::from_secs(100),
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+                unified_cgroup_hierarchy: false,
             },
             TestData {
-                contents: "agent.devmode agent.debug_console agent.hotplug_timeout=0",
+                contents: "agent.devmode agent.debug_console agent.hotplug_timeout=0 agent.unified_cgroup_hierarchy=11",
                 debug_console: true,
                 dev_mode: true,
                 log_level: DEFAULT_LOG_LEVEL,
                 hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+                unified_cgroup_hierarchy: true,
             },
             TestData {
-                contents: "agent.devmode agent.debug_console agent.container_pipe_size=2097152",
+                contents: "agent.devmode agent.debug_console agent.container_pipe_size=2097152 agent.unified_cgroup_hierarchy=false",
                 debug_console: true,
                 dev_mode: true,
                 log_level: DEFAULT_LOG_LEVEL,
                 hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
                 container_pipe_size: 2097152,
+                unified_cgroup_hierarchy: false,
             },
             TestData {
-                contents: "agent.devmode agent.debug_console agent.container_pipe_size=100",
+                contents: "agent.devmode agent.debug_console agent.container_pipe_size=100 agent.unified_cgroup_hierarchy=true",
                 debug_console: true,
                 dev_mode: true,
                 log_level: DEFAULT_LOG_LEVEL,
                 hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
                 container_pipe_size: 100,
+                unified_cgroup_hierarchy: true,
             },
             TestData {
-                contents: "agent.devmode agent.debug_console agent.container_pipe_size=0",
+                contents: "agent.devmode agent.debug_console agent.container_pipe_size=0 agent.unified_cgroup_hierarchy=0",
                 debug_console: true,
                 dev_mode: true,
                 log_level: DEFAULT_LOG_LEVEL,
                 hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+                unified_cgroup_hierarchy: false,
             },
             TestData {
-                contents: "agent.devmode agent.debug_console agent.container_pip_siz=100",
+                contents: "agent.devmode agent.debug_console agent.container_pip_siz=100 agent.unified_cgroup_hierarchy=1",
                 debug_console: true,
                 dev_mode: true,
                 log_level: DEFAULT_LOG_LEVEL,
                 hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+                unified_cgroup_hierarchy: true,
             },
         ];
 
@@ -550,6 +620,7 @@ mod tests {
             let mut config = agentConfig::new();
             assert_eq!(config.debug_console, false, "{}", msg);
             assert_eq!(config.dev_mode, false, "{}", msg);
+            assert_eq!(config.unified_cgroup_hierarchy, false, "{}", msg);
             assert_eq!(
                 config.hotplug_timeout,
                 time::Duration::from_secs(3),
@@ -563,6 +634,11 @@ mod tests {
 
             assert_eq!(d.debug_console, config.debug_console, "{}", msg);
             assert_eq!(d.dev_mode, config.dev_mode, "{}", msg);
+            assert_eq!(
+                d.unified_cgroup_hierarchy, config.unified_cgroup_hierarchy,
+                "{}",
+                msg
+            );
             assert_eq!(d.log_level, config.log_level, "{}", msg);
             assert_eq!(d.hotplug_timeout, config.hotplug_timeout, "{}", msg);
             assert_eq!(d.container_pipe_size, config.container_pipe_size, "{}", msg);

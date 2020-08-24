@@ -1203,10 +1203,10 @@ func (s *Sandbox) CreateContainer(contConfig ContainerConfig) (VCContainer, erro
 		// Rollback if error happens.
 		if err != nil {
 			logger := s.Logger().WithFields(logrus.Fields{"container-id": c.id, "sandox-id": s.id, "rollback": true})
-			logger.Warning("Cleaning up partially created container")
+			logger.WithError(err).Error("Cleaning up partially created container")
 
 			if err2 := c.stop(true); err2 != nil {
-				logger.WithError(err2).Warning("Could not delete container")
+				logger.WithError(err2).Error("Could not delete container")
 			}
 
 			logger.Debug("Removing stopped container from sandbox store")
@@ -1894,9 +1894,11 @@ func (s *Sandbox) updateResources() error {
 		return err
 	}
 
+	s.Logger().Debugf("Request to hypervisor to update oldCPUs/newCPUs: %d/%d", oldCPUs, newCPUs)
 	// If the CPUs were increased, ask agent to online them
 	if oldCPUs < newCPUs {
 		vcpusAdded := newCPUs - oldCPUs
+		s.Logger().Debugf("Request to onlineCPUMem with %d CPUs", vcpusAdded)
 		if err := s.agent.onlineCPUMem(vcpusAdded, true); err != nil {
 			return err
 		}
