@@ -38,6 +38,7 @@ use protocols::agent::StatsContainerResponse;
 use nix::errno::Errno;
 use nix::fcntl::{self, OFlag};
 use nix::fcntl::{FcntlArg, FdFlag};
+use nix::mount::MntFlags;
 use nix::pty;
 use nix::sched::{self, CloneFlags};
 use nix::sys::signal::{self, Signal};
@@ -972,6 +973,10 @@ impl BaseContainer for LinuxContainer {
         }
 
         self.status.transition(Status::STOPPED);
+        nix::mount::umount2(
+            spec.root.as_ref().unwrap().path.as_str(),
+            MntFlags::MNT_DETACH,
+        )?;
         fs::remove_dir_all(&self.root)?;
         Ok(())
     }
