@@ -3,10 +3,11 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
+use std::path::Path;
 use std::sync::{Arc, Mutex};
 use ttrpc;
 
-use oci::{LinuxNamespace, Spec};
+use oci::{LinuxNamespace, Root, Spec};
 use protobuf::{RepeatedField, SingularPtrField};
 use protocols::agent::{
     AgentDetails, CopyFileRequest, GuestDetailsResponse, Interfaces, ListProcessesResponse,
@@ -25,6 +26,7 @@ use rustjail::process::Process;
 use rustjail::specconv::CreateOpts;
 
 use nix::errno::Errno;
+use nix::mount::MsFlags;
 use nix::sys::signal::Signal;
 use nix::sys::stat;
 use nix::unistd::{self, Pid};
@@ -33,7 +35,7 @@ use rustjail::process::ProcessOperations;
 use crate::device::{add_devices, rescan_pci_bus, update_device_cgroup};
 use crate::linux_abi::*;
 use crate::metrics::get_metrics;
-use crate::mount::{add_storages, remove_mounts, STORAGEHANDLERLIST};
+use crate::mount::{add_storages, remove_mounts, BareMount, STORAGEHANDLERLIST};
 use crate::namespace::{NSTYPEIPC, NSTYPEPID, NSTYPEUTS};
 use crate::random;
 use crate::sandbox::Sandbox;
@@ -129,7 +131,7 @@ impl agentService {
 
         // write spec to bundle path, hooks might
         // read ocispec
-        let olddir = setup_bundle(&oci)?;
+        let olddir = setup_bundle(&cid, &mut oci)?;
         // restore the cwd for kata-agent process.
         defer!(unistd::chdir(&olddir).unwrap());
 
@@ -1644,26 +1646,46 @@ fn do_copy_file(req: &CopyFileRequest) -> Result<()> {
     Ok(())
 }
 
-fn setup_bundle(spec: &Spec) -> Result<PathBuf> {
+// Setup container bundle under CONTAINER_BASE, which is cleaned up
+// before removing a container.
+// - bundle path is /<CONTAINER_BASE>/<cid>/
+// - config.json at /<CONTAINER_BASE>/<cid>/config.json
+// - container rootfs bind mounted at /<CONTAINER_BASE>/<cid>/rootfs
+// - modify container spec root to point to /<CONTAINER_BASE>/<cid>/rootfs
+fn setup_bundle(cid: &str, spec: &mut Spec) -> Result<PathBuf> {
     if spec.root.is_none() {
         return Err(nix::Error::Sys(Errno::EINVAL).into());
     }
-    let root = spec.root.as_ref().unwrap().path.as_str();
+    let spec_root = spec.root.as_ref().unwrap();
 
-    let rootfs = fs::canonicalize(root)?;
-    let bundle_path = rootfs.parent().unwrap().to_str().unwrap();
+    let bundle_path = Path::new(CONTAINER_BASE).join(cid);
+    let config_path = bundle_path.clone().join("config.json");
+    let rootfs_path = bundle_path.clone().join("rootfs");
 
-    let config = format!("{}/{}", bundle_path, "config.json");
+    fs::create_dir_all(&rootfs_path)?;
+    BareMount::new(
+        &spec_root.path,
+        rootfs_path.to_str().unwrap(),
+        "bind",
+        MsFlags::MS_BIND,
+        "",
+        &sl!(),
+    )
+    .mount()?;
+    spec.root = Some(Root {
+        path: rootfs_path.to_str().unwrap().to_owned(),
+        readonly: spec_root.readonly,
+    });
 
     info!(
         sl!(),
         "{:?}",
         spec.process.as_ref().unwrap().console_size.as_ref()
     );
-    let _ = spec.save(config.as_str());
+    let _ = spec.save(config_path.to_str().unwrap());
 
     let olddir = unistd::getcwd().chain_err(|| "cannot getcwd")?;
-    unistd::chdir(bundle_path)?;
+    unistd::chdir(bundle_path.to_str().unwrap())?;
 
     Ok(olddir)
 }
