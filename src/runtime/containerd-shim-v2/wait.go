@@ -146,7 +146,7 @@ func watchOOMEvents(ctx context.Context, s *service) {
 				// If the GetOOMEvent call is not implemented, then the agent is most likely an older version,
 				// stop attempting to get OOM events.
 				// for rust agent, the response code is not found
-				if isGRPCErrorCode(codes.NotFound, err) {
+				if isGRPCErrorCode(codes.NotFound, err) || err.Error() == "Dead agent" {
 					return
 				}
 				continue
