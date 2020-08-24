@@ -235,6 +235,16 @@ func BuildSocketPath(elements ...string) (string, error) {
 
 // SupportsVsocks returns true if vsocks are supported, otherwise false
 func SupportsVsocks() (bool, error) {
+	vsockModule := "vhost_vsock"
+	// First, check to see if the vhost_vsock module is already loaded
+	path := filepath.Join(sysModuleDir, vsockModule)
+	if _, err := os.Stat(path); err != nil && os.IsNotExist(err) {
+		// Try to load the vhost_vsock module.
+		cmd := exec.Command("modprobe", vsockModule)
+		// modprobe maybe failed if vhost_vsock built-in, so ignore cmd.Run() returned value.
+		cmd.Run()
+	}
+
 	if _, err := os.Stat(VHostVSockDevicePath); err != nil {
 		return false, fmt.Errorf("host system doesn't support vsock: %v", err)
 	}
