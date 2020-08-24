@@ -129,6 +129,9 @@ impl agentService {
         // Add the root partition to the device cgroup to prevent access
         update_device_cgroup(&mut oci)?;
 
+        // Append guest hooks
+        append_guest_hooks(&s, &mut oci);
+
         // write spec to bundle path, hooks might
         // read ocispec
         let olddir = setup_bundle(&cid, &mut oci)?;
@@ -1084,6 +1087,15 @@ impl protocols::agent_ttrpc::AgentService for agentService {
             s.hostname = req.hostname.clone();
             s.running = true;
 
+            if !req.guest_hook_path.is_empty() {
+                if let Err(e) = s.add_hooks(&req.guest_hook_path) {
+                    error!(
+                        sl!(),
+                        "add guest hook {} failed: {:?}", req.guest_hook_path, e
+                    );
+                }
+            }
+
             if req.sandbox_id.len() > 0 {
                 s.id = req.sandbox_id.clone();
             }
@@ -1521,6 +1533,18 @@ fn update_container_namespaces(
 
     linux.namespaces.push(pid_ns);
     Ok(())
+}
+
+fn append_guest_hooks(s: &Sandbox, oci: &mut Spec) {
+    if s.hooks.is_none() {
+        return;
+    }
+    let guest_hooks = s.hooks.as_ref().unwrap();
+    let mut hooks = oci.hooks.take().unwrap_or_default();
+    hooks.prestart.append(&mut guest_hooks.prestart.clone());
+    hooks.poststart.append(&mut guest_hooks.poststart.clone());
+    hooks.poststop.append(&mut guest_hooks.poststop.clone());
+    oci.hooks = Some(hooks);
 }
 
 // Check is the container process installed the

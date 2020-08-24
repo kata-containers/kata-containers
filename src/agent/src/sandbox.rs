@@ -11,7 +11,7 @@ use crate::namespace::NSTYPEPID;
 use crate::network::Network;
 use libc::pid_t;
 use netlink::{RtnlHandle, NETLINK_ROUTE};
-use oci::LinuxNamespace;
+use oci::{Hook, Hooks};
 use protocols::agent::OnlineCPUMemRequest;
 use regex::Regex;
 use rustjail::cgroups;
@@ -22,6 +22,8 @@ use rustjail::process::Process;
 use slog::Logger;
 use std::collections::HashMap;
 use std::fs;
+use std::os::unix::fs::PermissionsExt;
+use std::path::Path;
 use std::sync::mpsc::Sender;
 
 #[derive(Debug)]
@@ -42,6 +44,7 @@ pub struct Sandbox {
     pub no_pivot_root: bool,
     pub sender: Option<Sender<i32>>,
     pub rtnl: Option<RtnlHandle>,
+    pub hooks: Option<Hooks>,
 }
 
 impl Sandbox {
@@ -66,6 +69,7 @@ impl Sandbox {
             no_pivot_root: fs_type.eq(TYPEROOTFS),
             sender: None,
             rtnl: Some(RtnlHandle::new(NETLINK_ROUTE, 0).unwrap()),
+            hooks: None,
         })
     }
 
@@ -260,6 +264,57 @@ impl Sandbox {
         }
 
         Ok(())
+    }
+
+    pub fn add_hooks(&mut self, dir: &str) -> Result<()> {
+        let mut hooks = Hooks::default();
+        if let Ok(hook) = self.find_hooks(dir, "prestart") {
+            hooks.prestart = hook;
+        }
+        if let Ok(hook) = self.find_hooks(dir, "poststart") {
+            hooks.poststart = hook;
+        }
+        if let Ok(hook) = self.find_hooks(dir, "poststop") {
+            hooks.poststop = hook;
+        }
+        self.hooks = Some(hooks);
+        Ok(())
+    }
+
+    fn find_hooks(&self, hook_path: &str, hook_type: &str) -> Result<Vec<Hook>> {
+        let mut hooks = Vec::new();
+        for entry in fs::read_dir(Path::new(hook_path).join(hook_type))? {
+            let entry = entry?;
+            // Reject non-file, symlinks and non-executable files
+            if !entry.file_type()?.is_file()
+                || entry.file_type()?.is_symlink()
+                || entry.metadata()?.permissions().mode() & 0o777 & 0o111 == 0
+            {
+                continue;
+            }
+
+            let name = entry.file_name();
+            let hook = Hook {
+                path: Path::new(hook_path)
+                    .join(hook_type)
+                    .join(&name)
+                    .to_str()
+                    .unwrap()
+                    .to_owned(),
+                args: vec![name.to_str().unwrap().to_owned(), hook_type.to_owned()],
+                ..Default::default()
+            };
+            info!(
+                self.logger,
+                "found {} hook {:?} mode {:o}",
+                hook_type,
+                hook,
+                entry.metadata()?.permissions().mode()
+            );
+            hooks.push(hook);
+        }
+
+        Ok(hooks)
     }
 }
 
