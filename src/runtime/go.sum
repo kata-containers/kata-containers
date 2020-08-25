@@ -168,6 +168,8 @@ github.com/intel/govmm v0.0.0-20200724170648-af9e34b91ae9 h1:GSRnVLRNweZV3f8Vo3v
 github.com/intel/govmm v0.0.0-20200724170648-af9e34b91ae9/go.mod h1:QKGWoQtjvkvFtzP6ybiM3lxUHqf83Sv3oLqyELUKH4g=
 github.com/intel/govmm v0.0.0-20200728135209-6c3315ba8a42 h1:Yu3/MlZl/kKE0Ipgio/KVorMIrjeHTVOG4+9WAddgOQ=
 github.com/intel/govmm v0.0.0-20200728135209-6c3315ba8a42/go.mod h1:QKGWoQtjvkvFtzP6ybiM3lxUHqf83Sv3oLqyELUKH4g=
+github.com/intel/govmm v0.0.0-20200825065022-6042f6033126 h1:yltaUdR0Vitnn/FEfy+JWbJ+oGhMAPP/3S7ja9S5yso=
+github.com/intel/govmm v0.0.0-20200825065022-6042f6033126/go.mod h1:QKGWoQtjvkvFtzP6ybiM3lxUHqf83Sv3oLqyELUKH4g=
 github.com/j-keck/arping v0.0.0-20160618110441-2cf9dc699c56/go.mod h1:ymszkNOg6tORTn+6F6j+Jc8TOr5osrynvN6ivFWZ2GA=
 github.com/json-iterator/go v1.1.6/go.mod h1:+SdeFBvtyEkXs7REEP0seUULqWtbJapLOCVDaaPEHmU=
 github.com/json-iterator/go v1.1.10/go.mod h1:KdQUCv79m/52Kvf8AW2vK1V8akMuk1QjK/uOdHXbAo4=
