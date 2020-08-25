@@ -959,6 +959,12 @@ func (clh *cloudHypervisor) LaunchClh() (int, error) {
 		args = append(args, "-vv")
 	}
 
+	// Disable the 'seccomp' option in clh for now.
+	// In this way, we can separate the periodic failures caused
+	// by incomplete `seccomp` filters from other failures.
+	// We will bring it back after completing the `seccomp` filter.
+	args = append(args, "--seccomp", "false")
+
 	clh.Logger().WithField("path", clhPath).Info()
 	clh.Logger().WithField("args", strings.Join(args, " ")).Info()
 
