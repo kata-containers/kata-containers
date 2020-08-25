@@ -102,6 +102,31 @@ lazy_static! {
     };
 }
 
+#[inline(always)]
+fn mount<P1: ?Sized + NixPath, P2: ?Sized + NixPath, P3: ?Sized + NixPath, P4: ?Sized + NixPath>(
+    source: Option<&P1>,
+    target: &P2,
+    fstype: Option<&P3>,
+    flags: MsFlags,
+    data: Option<&P4>,
+) -> std::result::Result<(), nix::Error> {
+    #[cfg(not(test))]
+    return mount::mount(source, target, fstype, flags, data);
+    #[cfg(test)]
+    return Ok(());
+}
+
+#[inline(always)]
+fn umount2<P: ?Sized + NixPath>(
+    target: &P,
+    flags: MntFlags,
+) -> std::result::Result<(), nix::Error> {
+    #[cfg(not(test))]
+    return mount::umount2(target, flags);
+    #[cfg(test)]
+    return Ok(());
+}
+
 pub fn init_rootfs(
     cfd_log: RawFd,
     spec: &Spec,
@@ -124,11 +149,11 @@ pub fn init_rootfs(
     let root = fs::canonicalize(rootfs)?;
     let rootfs = root.to_str().unwrap();
 
-    mount::mount(None::<&str>, "/", None::<&str>, flags, None::<&str>)?;
+    mount(None::<&str>, "/", None::<&str>, flags, None::<&str>)?;
 
     rootfs_parent_mount_private(rootfs)?;
 
-    mount::mount(
+    mount(
         Some(rootfs),
         rootfs,
         None::<&str>,
@@ -157,7 +182,7 @@ pub fn init_rootfs(
                 for o in &m.options {
                     if let Some(fl) = PROPAGATION.get(o.as_str()) {
                         let dest = format!("{}{}", &rootfs, &m.destination);
-                        mount::mount(None::<&str>, dest.as_str(), None::<&str>, *fl, None::<&str>)?;
+                        mount(None::<&str>, dest.as_str(), None::<&str>, *fl, None::<&str>)?;
                     }
                 }
             }
@@ -196,7 +221,7 @@ fn mount_cgroups_v2(cfd_log: RawFd, m: &Mount, rootfs: &str, flags: MsFlags) -> 
 
     if flags.contains(MsFlags::MS_RDONLY) {
         let dest = format!("{}{}", rootfs, m.destination.as_str());
-        mount::mount(
+        mount(
             Some(dest.as_str()),
             dest.as_str(),
             None::<&str>,
@@ -303,7 +328,7 @@ fn mount_cgroups(
 
     if flags.contains(MsFlags::MS_RDONLY) {
         let dest = format!("{}{}", rootfs, m.destination.as_str());
-        mount::mount(
+        mount(
             Some(dest.as_str()),
             dest.as_str(),
             None::<&str>,
@@ -336,7 +361,7 @@ pub fn pivot_rootfs<P: ?Sized + NixPath + std::fmt::Debug>(path: &P) -> Result<(
     // to races where we still have a reference to a mount while a process in
     // the host namespace are trying to operate on something they think has no
     // mounts (devicemapper in particular).
-    mount::mount(
+    mount(
         Some("none"),
         ".",
         Some(""),
@@ -345,7 +370,7 @@ pub fn pivot_rootfs<P: ?Sized + NixPath + std::fmt::Debug>(path: &P) -> Result<(
     )?;
 
     // Preform the unmount. MNT_DETACH allows us to unmount /proc/self/cwd.
-    mount::umount2(".", MntFlags::MNT_DETACH).context("failed to do umount2")?;
+    umount2(".", MntFlags::MNT_DETACH).context("failed to do umount2")?;
 
     // Switch back to our shiny new root.
     unistd::chdir("/")?;
@@ -368,7 +393,7 @@ fn rootfs_parent_mount_private(path: &str) -> Result<()> {
     }
 
     if options.contains("shared:") {
-        mount::mount(
+        mount(
             None::<&str>,
             mount_point.as_str(),
             None::<&str>,
@@ -463,14 +488,14 @@ pub fn ms_move_root(rootfs: &str) -> Result<bool> {
         }
 
         // Be sure umount events are not propagated to the host.
-        mount::mount(
+        mount(
             None::<&str>,
             abs_mount_point,
             None::<&str>,
             MsFlags::MS_SLAVE | MsFlags::MS_REC,
             None::<&str>,
         )?;
-        match mount::umount2(abs_mount_point, MntFlags::MNT_DETACH) {
+        match umount2(abs_mount_point, MntFlags::MNT_DETACH) {
             Ok(_) => (),
             Err(e) => {
                 if e.ne(&nix::Error::from(Errno::EINVAL)) && e.ne(&nix::Error::from(Errno::EPERM)) {
@@ -479,7 +504,7 @@ pub fn ms_move_root(rootfs: &str) -> Result<bool> {
 
                 // If we have not privileges for umounting (e.g. rootless), then
                 // cover the path.
-                mount::mount(
+                mount(
                     Some("tmpfs"),
                     abs_mount_point,
                     Some("tmpfs"),
@@ -490,7 +515,7 @@ pub fn ms_move_root(rootfs: &str) -> Result<bool> {
         }
     }
 
-    mount::mount(
+    mount(
         Some(abs_root),
         "/",
         None::<&str>,
@@ -584,7 +609,7 @@ fn mount_from(
         }
     }
 
-    match mount::mount(
+    match mount(
         Some(src.as_str()),
         dest.as_str(),
         Some(m.r#type.as_str()),
@@ -608,7 +633,7 @@ fn mount_from(
                 | MsFlags::MS_SLAVE),
         )
     {
-        match mount::mount(
+        match mount(
             Some(dest.as_str()),
             dest.as_str(),
             None::<&str>,
@@ -714,7 +739,7 @@ fn bind_dev(dev: &LinuxDevice) -> Result<()> {
 
     unistd::close(fd)?;
 
-    mount::mount(
+    mount(
         Some(&*dev.path),
         &dev.path[1..],
         None::<&str>,
@@ -744,7 +769,7 @@ pub fn finish_rootfs(cfd_log: RawFd, spec: &Spec) -> Result<()> {
         if m.destination == "/dev" {
             let (flags, _) = parse_mount(m);
             if flags.contains(MsFlags::MS_RDONLY) {
-                mount::mount(
+                mount(
                     Some("/dev"),
                     "/dev",
                     None::<&str>,
@@ -758,7 +783,7 @@ pub fn finish_rootfs(cfd_log: RawFd, spec: &Spec) -> Result<()> {
     if spec.root.as_ref().unwrap().readonly {
         let flags = MsFlags::MS_BIND | MsFlags::MS_RDONLY | MsFlags::MS_NODEV | MsFlags::MS_REMOUNT;
 
-        mount::mount(Some("/"), "/", None::<&str>, flags, None::<&str>)?;
+        mount(Some("/"), "/", None::<&str>, flags, None::<&str>)?;
     }
     stat::umask(Mode::from_bits_truncate(0o022));
     unistd::chdir(&olddir)?;
@@ -773,7 +798,7 @@ fn mask_path(path: &str) -> Result<()> {
 
     //info!("{}", path);
 
-    match mount::mount(
+    match mount(
         Some("/dev/null"),
         path,
         None::<&str>,
@@ -805,7 +830,7 @@ fn readonly_path(path: &str) -> Result<()> {
 
     //info!("{}", path);
 
-    match mount::mount(
+    match mount(
         Some(&path[1..]),
         path,
         None::<&str>,
@@ -829,7 +854,7 @@ fn readonly_path(path: &str) -> Result<()> {
         Ok(_) => {}
     }
 
-    mount::mount(
+    mount(
         Some(&path[1..]),
         &path[1..],
         None::<&str>,
