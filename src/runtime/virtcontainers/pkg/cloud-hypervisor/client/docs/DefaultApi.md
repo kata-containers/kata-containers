@@ -18,6 +18,7 @@ Method | HTTP request | Description
 [**VmAddNetPut**](DefaultApi.md#VmAddNetPut) | **Put** /vm.add-net | Add a new network device to the VM
 [**VmAddPmemPut**](DefaultApi.md#VmAddPmemPut) | **Put** /vm.add-pmem | Add a new pmem device to the VM
 [**VmAddVsockPut**](DefaultApi.md#VmAddVsockPut) | **Put** /vm.add-vsock | Add a new vsock device to the VM
+[**VmCountersGet**](DefaultApi.md#VmCountersGet) | **Get** /vm.counters | Get counters from the VM
 [**VmInfoGet**](DefaultApi.md#VmInfoGet) | **Get** /vm.info | Returns general information about the cloud-hypervisor Virtual Machine (VM) instance.
 [**VmRemoveDevicePut**](DefaultApi.md#VmRemoveDevicePut) | **Put** /vm.remove-device | Remove a device from the VM
 [**VmResizePut**](DefaultApi.md#VmResizePut) | **Put** /vm.resize | Resize the VM
@@ -257,7 +258,7 @@ No authorization required
 
 ## VmAddDevicePut
 
-> VmAddDevicePut(ctx, vmAddDevice)
+> PciDeviceInfo VmAddDevicePut(ctx, vmAddDevice)
 
 Add a new device to the VM
 
@@ -271,7 +272,7 @@ Name | Type | Description  | Notes
 
 ### Return type
 
- (empty response body)
+[**PciDeviceInfo**](PciDeviceInfo.md)
 
 ### Authorization
 
@@ -280,7 +281,7 @@ No authorization required
 ### HTTP request headers
 
 - **Content-Type**: application/json
-- **Accept**: Not defined
+- **Accept**: application/json
 
 [[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints)
 [[Back to Model list]](../README.md#documentation-for-models)
@@ -289,7 +290,7 @@ No authorization required
 
 ## VmAddDiskPut
 
-> VmAddDiskPut(ctx, diskConfig)
+> PciDeviceInfo VmAddDiskPut(ctx, diskConfig)
 
 Add a new disk to the VM
 
@@ -303,7 +304,7 @@ Name | Type | Description  | Notes
 
 ### Return type
 
- (empty response body)
+[**PciDeviceInfo**](PciDeviceInfo.md)
 
 ### Authorization
 
@@ -312,7 +313,7 @@ No authorization required
 ### HTTP request headers
 
 - **Content-Type**: application/json
-- **Accept**: Not defined
+- **Accept**: application/json
 
 [[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints)
 [[Back to Model list]](../README.md#documentation-for-models)
@@ -321,7 +322,7 @@ No authorization required
 
 ## VmAddFsPut
 
-> VmAddFsPut(ctx, fsConfig)
+> PciDeviceInfo VmAddFsPut(ctx, fsConfig)
 
 Add a new virtio-fs device to the VM
 
@@ -331,11 +332,11 @@ Add a new virtio-fs device to the VM
 Name | Type | Description  | Notes
 ------------- | ------------- | ------------- | -------------
 **ctx** | **context.Context** | context for authentication, logging, cancellation, deadlines, tracing, etc.
-**fsConfig** | [**FsConfig**](FsConfig.md)| The details of the new virtio-fs |
+**fsConfig** | [**FsConfig**](FsConfig.md)| The details of the new virtio-fs | 
 
 ### Return type
 
- (empty response body)
+[**PciDeviceInfo**](PciDeviceInfo.md)
 
 ### Authorization
 
@@ -344,7 +345,7 @@ No authorization required
 ### HTTP request headers
 
 - **Content-Type**: application/json
-- **Accept**: Not defined
+- **Accept**: application/json
 
 [[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints)
 [[Back to Model list]](../README.md#documentation-for-models)
@@ -353,7 +354,7 @@ No authorization required
 
 ## VmAddNetPut
 
-> VmAddNetPut(ctx, netConfig)
+> PciDeviceInfo VmAddNetPut(ctx, netConfig)
 
 Add a new network device to the VM
 
@@ -367,7 +368,7 @@ Name | Type | Description  | Notes
 
 ### Return type
 
- (empty response body)
+[**PciDeviceInfo**](PciDeviceInfo.md)
 
 ### Authorization
 
@@ -376,7 +377,7 @@ No authorization required
 ### HTTP request headers
 
 - **Content-Type**: application/json
-- **Accept**: Not defined
+- **Accept**: application/json
 
 [[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints)
 [[Back to Model list]](../README.md#documentation-for-models)
@@ -385,7 +386,7 @@ No authorization required
 
 ## VmAddPmemPut
 
-> VmAddPmemPut(ctx, pmemConfig)
+> PciDeviceInfo VmAddPmemPut(ctx, pmemConfig)
 
 Add a new pmem device to the VM
 
@@ -399,7 +400,7 @@ Name | Type | Description  | Notes
 
 ### Return type
 
- (empty response body)
+[**PciDeviceInfo**](PciDeviceInfo.md)
 
 ### Authorization
 
@@ -408,7 +409,7 @@ No authorization required
 ### HTTP request headers
 
 - **Content-Type**: application/json
-- **Accept**: Not defined
+- **Accept**: application/json
 
 [[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints)
 [[Back to Model list]](../README.md#documentation-for-models)
@@ -417,7 +418,7 @@ No authorization required
 
 ## VmAddVsockPut
 
-> VmAddVsockPut(ctx, vsockConfig)
+> PciDeviceInfo VmAddVsockPut(ctx, vsockConfig)
 
 Add a new vsock device to the VM
 
@@ -427,11 +428,11 @@ Add a new vsock device to the VM
 Name | Type | Description  | Notes
 ------------- | ------------- | ------------- | -------------
 **ctx** | **context.Context** | context for authentication, logging, cancellation, deadlines, tracing, etc.
-**vsockConfig** | [**VsockConfig**](VsockConfig.md)| The details of the new vsock device |
+**vsockConfig** | [**VsockConfig**](VsockConfig.md)| The details of the new vsock device | 
 
 ### Return type
 
- (empty response body)
+[**PciDeviceInfo**](PciDeviceInfo.md)
 
 ### Authorization
 
@@ -440,7 +441,35 @@ No authorization required
 ### HTTP request headers
 
 - **Content-Type**: application/json
-- **Accept**: Not defined
+- **Accept**: application/json
+
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints)
+[[Back to Model list]](../README.md#documentation-for-models)
+[[Back to README]](../README.md)
+
+
+## VmCountersGet
+
+> map[string]map[string]int32 VmCountersGet(ctx, )
+
+Get counters from the VM
+
+### Required Parameters
+
+This endpoint does not need any parameter.
+
+### Return type
+
+[**map[string]map[string]int32**](map.md)
+
+### Authorization
+
+No authorization required
+
+### HTTP request headers
+
+- **Content-Type**: Not defined
+- **Accept**: application/json
 
 [[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints)
 [[Back to Model list]](../README.md#documentation-for-models)

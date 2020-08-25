@@ -75,7 +75,7 @@ assets:
       url: "https://github.com/cloud-hypervisor/cloud-hypervisor"
       uscan-url: >-
         https://github.com/cloud-hypervisor/cloud-hypervisor/tags.*/v?(\d\S+)\.tar\.gz
-      version: "v0.8.0"
+      version: "v0.9.0"
 
     firecracker:
       description: "Firecracker micro-VMM"
@@ -106,9 +106,9 @@ assets:
           commit: "47c1cc30e440860aa695358f7c2dd0b9d7b53d16"
 
     qemu-experimental:
-      description: "QEMU with virtiofs 3.0"
+      description: "QEMU with virtiofs support"
       url: "https://gitlab.com/virtio-fs/qemu.git"
-      tag: "virtio-fs-v0.3"
+      tag: "qemu5.0-virtiofs-with51bits-dax"
 
   image:
     description: |
