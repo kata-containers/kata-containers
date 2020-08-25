@@ -123,6 +123,9 @@ const (
 	// VfioCCW is the vfio driver with CCW transport.
 	VfioCCW DeviceDriver = "vfio-ccw"
 
+	// VfioAP is the vfio driver with AP transport.
+	VfioAP DeviceDriver = "vfio-ap"
+
 	// VHostVSockPCI is a generic Vsock vhost device with PCI transport.
 	VHostVSockPCI DeviceDriver = "vhost-vsock-pci"
 
@@ -406,6 +409,9 @@ func (fsdev FSDevice) QemuParams(config *Config) []string {
 		deviceParams = append(deviceParams, fmt.Sprintf(",romfile=%s", fsdev.ROMFile))
 	}
 	if fsdev.Transport.isVirtioCCW(config) {
+		if config.Knobs.IOMMUPlatform {
+			deviceParams = append(deviceParams, ",iommu_platform=on")
+		}
 		deviceParams = append(deviceParams, fmt.Sprintf(",devno=%s", fsdev.DevNo))
 	}
 
@@ -537,6 +543,9 @@ func (cdev CharDevice) QemuParams(config *Config) []string {
 	}
 
 	if cdev.Driver == VirtioSerial && cdev.Transport.isVirtioCCW(config) {
+		if config.Knobs.IOMMUPlatform {
+			deviceParams = append(deviceParams, ",iommu_platform=on")
+		}
 		deviceParams = append(deviceParams, fmt.Sprintf(",devno=%s", cdev.DevNo))
 	}
 
@@ -804,6 +813,9 @@ func (netdev NetDevice) QemuDeviceParams(config *Config) []string {
 	}
 
 	if netdev.Transport.isVirtioCCW(config) {
+		if config.Knobs.IOMMUPlatform {
+			deviceParams = append(deviceParams, ",iommu_platform=on")
+		}
 		deviceParams = append(deviceParams, fmt.Sprintf(",devno=%s", netdev.DevNo))
 	}
 
@@ -937,6 +949,9 @@ func (dev SerialDevice) QemuParams(config *Config) []string {
 	}
 
 	if dev.Transport.isVirtioCCW(config) {
+		if config.Knobs.IOMMUPlatform {
+			deviceParams = append(deviceParams, ",iommu_platform=on")
+		}
 		deviceParams = append(deviceParams, fmt.Sprintf(",devno=%s", dev.DevNo))
 	}
 
@@ -1528,6 +1543,9 @@ func (scsiCon SCSIController) QemuParams(config *Config) []string {
 	}
 
 	if scsiCon.Transport.isVirtioCCW(config) {
+		if config.Knobs.IOMMUPlatform {
+			devParams = append(devParams, ",iommu_platform=on")
+		}
 		devParams = append(devParams, fmt.Sprintf("devno=%s", scsiCon.DevNo))
 	}
 
@@ -1710,6 +1728,9 @@ func (vsock VSOCKDevice) QemuParams(config *Config) []string {
 	}
 
 	if vsock.Transport.isVirtioCCW(config) {
+		if config.Knobs.IOMMUPlatform {
+			deviceParams = append(deviceParams, ",iommu_platform=on")
+		}
 		deviceParams = append(deviceParams, fmt.Sprintf(",devno=%s", vsock.DevNo))
 	}
 
@@ -1780,6 +1801,9 @@ func (v RngDevice) QemuParams(config *Config) []string {
 	}
 
 	if v.Transport.isVirtioCCW(config) {
+		if config.Knobs.IOMMUPlatform {
+			deviceParams = append(deviceParams, ",iommu_platform=on")
+		}
 		deviceParams = append(deviceParams, fmt.Sprintf("devno=%s", v.DevNo))
 	}
 
@@ -2125,6 +2149,9 @@ type Knobs struct {
 
 	// Exit instead of rebooting
 	NoReboot bool
+
+	// IOMMUPlatform will enable IOMMU for supported devices
+	IOMMUPlatform bool
 }
 
 // IOThread allows IO to be performed on a separate thread.
