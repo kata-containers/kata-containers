@@ -269,3 +269,12 @@ func (q *qemuS390x) appendVSock(devices []govmmQemu.Device, vsock types.VSock) (
 func (q *qemuS390x) appendIOMMU(devices []govmmQemu.Device) ([]govmmQemu.Device, error) {
 	return devices, fmt.Errorf("S390x does not support appending a vIOMMU")
 }
+
+func (q *qemuS390x) addDeviceToBridge(ID string, t types.Type) (string, types.Bridge, error) {
+	addr, b, err := genericAddDeviceToBridge(q.Bridges, ID, types.CCW)
+	if err != nil {
+		return "", b, err
+	}
+
+	return fmt.Sprintf("%04x", addr), b, nil
+}
