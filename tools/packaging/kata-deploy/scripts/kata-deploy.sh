@@ -96,6 +96,7 @@ function configure_crio() {
 # Path to the Kata Containers runtime binary that uses the QEMU hypervisor.
 [$kata_qemu_conf]
   runtime_path = "${kata_qemu_path}"
+  privileged_without_host_devices = true
 EOT
 	fi
 
@@ -109,6 +110,7 @@ EOT
 # Path to the Kata Containers runtime binary that uses the QEMU hypervisor with virtiofs support.
 [$kata_qemu_virtiofs_conf]
   runtime_path = "${kata_qemu_virtiofs_path}"
+  privileged_without_host_devices = true
 EOT
         fi
 
@@ -122,6 +124,7 @@ EOT
 # Path to the Kata Containers runtime binary that uses the firecracker hypervisor.
 [$kata_fc_conf]
   runtime_path = "${kata_fc_path}"
+  privileged_without_host_devices = true
 EOT
 	fi
 
@@ -135,6 +138,7 @@ EOT
 # Path to the Kata Containers runtime binary that uses the Cloud Hypervisor.
 [$kata_clh_conf]
   runtime_path = "${kata_clh_path}"
+  privileged_without_host_devices = true
 EOT
 	fi
 
@@ -166,6 +170,7 @@ function configure_containerd_runtime() {
 		cat <<EOT | tee -a "$containerd_conf_file"
 [$runtime_table]
   runtime_type = "${runtime_type}"
+  privileged_without_host_devices = true
 EOT
 	fi
 
