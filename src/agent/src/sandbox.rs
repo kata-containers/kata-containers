@@ -370,6 +370,8 @@ mod tests {
     use rustjail::container::LinuxContainer;
     use rustjail::specconv::CreateOpts;
     use slog::Logger;
+    use std::fs::{self, File};
+    use std::os::unix::fs::PermissionsExt;
     use tempfile::Builder;
 
     fn bind_mount(src: &str, dst: &str, logger: &Logger) -> Result<(), rustjail::errors::Error> {
@@ -650,5 +652,27 @@ mod tests {
 
         let ns_path = format!("/proc/{}/ns/pid", test_pid);
         assert_eq!(s.sandbox_pidns.unwrap().path, ns_path);
+    }
+    #[test]
+    fn add_guest_hooks() {
+        let logger = slog::Logger::root(slog::Discard, o!());
+        let mut s = Sandbox::new(&logger).unwrap();
+        let tmpdir = Builder::new().tempdir().unwrap();
+        let tmpdir_path = tmpdir.path().to_str().unwrap();
+
+        assert!(fs::create_dir_all(tmpdir.path().join("prestart")).is_ok());
+        assert!(fs::create_dir_all(tmpdir.path().join("poststop")).is_ok());
+
+        let file = File::create(tmpdir.path().join("prestart").join("prestart.sh")).unwrap();
+        let mut perm = file.metadata().unwrap().permissions();
+        perm.set_mode(0o777);
+        assert!(file.set_permissions(perm).is_ok());
+        assert!(File::create(tmpdir.path().join("poststop").join("poststop.sh")).is_ok());
+
+        assert!(s.add_hooks(tmpdir_path).is_ok());
+        assert!(s.hooks.is_some());
+        assert!(s.hooks.as_ref().unwrap().prestart.len() == 1);
+        assert!(s.hooks.as_ref().unwrap().poststart.is_empty());
+        assert!(s.hooks.as_ref().unwrap().poststop.is_empty());
     }
 }

@@ -1759,6 +1759,7 @@ fn load_kernel_module(module: &protocols::agent::KernelModule) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use oci::{Hook, Hooks};
 
     #[test]
     fn test_load_kernel_module() {
@@ -1779,5 +1780,23 @@ mod tests {
         m.name = "bridge".to_string();
         let result = load_kernel_module(&m);
         assert!(result.is_ok(), "load module should success");
+    }
+
+    #[test]
+    fn test_append_guest_hooks() {
+        let logger = slog::Logger::root(slog::Discard, o!());
+        let mut s = Sandbox::new(&logger).unwrap();
+        s.hooks = Some(Hooks {
+            prestart: vec![Hook {
+                path: "foo".to_string(),
+                ..Default::default()
+            }],
+            ..Default::default()
+        });
+        let mut oci = Spec {
+            ..Default::default()
+        };
+        append_guest_hooks(&s, &mut oci);
+        assert_eq!(s.hooks, oci.hooks);
     }
 }
