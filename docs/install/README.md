@@ -43,7 +43,6 @@ Kata is packaged by the Kata community for:
 |-----------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------|
 |[Debian](debian-installation-guide.md)                           | 9, 10                                                                                                             |
 |[openSUSE](opensuse-installation-guide.md)                       | [Leap](opensuse-leap-installation-guide.md) (15, 15.1)<br>[Tumbleweed](opensuse-tumbleweed-installation-guide.md) |
-|[Red Hat Enterprise Linux (RHEL)](rhel-installation-guide.md)    | 7                                                                                                                 |
 |[SUSE Linux Enterprise Server (SLES)](sles-installation-guide.md)| SLES 12 SP3                                                                                                       |
 |[Ubuntu](ubuntu-installation-guide.md)                           | 16.04, 18.04                                                                                                      |
 
