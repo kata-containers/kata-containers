@@ -42,7 +42,6 @@ Kata is packaged by the Kata community for:
 |Distribution (link to installation guide)                        | Versions                                                                                                          |
 |-----------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------|
 |[Debian](debian-installation-guide.md)                           | 9, 10                                                                                                             |
-|[Fedora](fedora-installation-guide.md)                           | 28, 29, 30                                                                                                        |
 |[openSUSE](opensuse-installation-guide.md)                       | [Leap](opensuse-leap-installation-guide.md) (15, 15.1)<br>[Tumbleweed](opensuse-tumbleweed-installation-guide.md) |
 |[Red Hat Enterprise Linux (RHEL)](rhel-installation-guide.md)    | 7                                                                                                                 |
 |[SUSE Linux Enterprise Server (SLES)](sles-installation-guide.md)| SLES 12 SP3                                                                                                       |
@@ -52,10 +51,11 @@ Kata is packaged by the Kata community for:
 
 Kata packages are provided by official distribution repositories for:
 
-|Distribution (link to packages)                                  | Versions   |
-|-----------------------------------------------------------------|------------|
-|[CentOS](centos-installation-guide.md)                           | 8          |
-|[openSUSE](https://software.opensuse.org/package/katacontainers) | Tumbleweed |
+|Distribution (link to packages)                                  | Versions    |
+|-----------------------------------------------------------------|-------------|
+|[CentOS](centos-installation-guide.md)                           | 8           |
+|[Fedora](fedora-installation-guide.md)                           | 32, Rawhide | 
+|[openSUSE](https://software.opensuse.org/package/katacontainers) | Tumbleweed  |
 
 
 ### Automatic Installation
