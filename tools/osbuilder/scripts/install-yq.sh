@@ -56,12 +56,14 @@ function install_yq() {
 		die "Please install curl"
 	fi
 
-	local yq_version=2.3.0
+	local yq_version=3.1.0
 
-	local yq_url="https://${yq_pkg}/releases/download/${yq_version}/yq_${goos}_${goarch}"
-	curl -o "${yq_path}" -LSsf ${yq_url}
+	## NOTE: ${var,,} => gives lowercase value of var
+	local yq_url="https://${yq_pkg}/releases/download/${yq_version}/yq_${goos,,}_${goarch}"
+	curl -o "${yq_path}" -LSsf "${yq_url}"
 	[ $? -ne 0 ] && die "Download ${yq_url} failed"
-	chmod +x ${yq_path}
+	chmod +x "${yq_path}"
+	echo "Installed $(${yq_path} --version)"
 
 	if ! command -v "${yq_path}" >/dev/null; then
 		die "Cannot not get ${yq_path} executable"
