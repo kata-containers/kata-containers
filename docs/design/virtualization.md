@@ -62,7 +62,7 @@ be changed by editing the runtime [`configuration`](./architecture.md/#configura
 Devices and features used:
 - virtio VSOCK or virtio serial
 - virtio block or virtio SCSI
-- virtio net
+- [virtio net](https://www.redhat.com/en/virtio-networking-series)
 - virtio fs or virtio 9p (recommend: virtio fs)
 - VFIO
 - hotplug
