@@ -171,6 +171,7 @@ function configure_containerd_runtime() {
 [$runtime_table]
   runtime_type = "${runtime_type}"
   privileged_without_host_devices = true
+  pod_annotations = ["io.katacontainers.*"]
 EOT
 	fi
 
