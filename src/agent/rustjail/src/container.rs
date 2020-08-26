@@ -1515,12 +1515,16 @@ fn execute_hook(logger: &Logger, h: &Hook, st: &OCIState) -> Result<()> {
     });
 
     match unistd::fork()? {
-        ForkResult::Parent { child: _ch } => {
+        ForkResult::Parent { child } => {
             let buf = read_sync(rfd)?;
-            let buf_array: [u8; 4] = [buf[0], buf[1], buf[2], buf[3]];
-            let status: i32 = i32::from_be_bytes(buf_array);
+            let status = if buf.len() == 4 {
+                let buf_array: [u8; 4] = [buf[0], buf[1], buf[2], buf[3]];
+                i32::from_be_bytes(buf_array)
+            } else {
+                -libc::EPIPE
+            };
 
-            info!(logger, "hook child: {}", _ch);
+            info!(logger, "hook child: {} status: {}", child, status);
 
             // let _ = wait::waitpid(_ch,
             //	Some(WaitPidFlag::WEXITED | WaitPidFlag::__WALL));
@@ -1649,7 +1653,11 @@ fn execute_hook(logger: &Logger, h: &Hook, st: &OCIState) -> Result<()> {
             };
 
             handle.join().unwrap();
-            let _ = write_sync(wfd, status, "");
+            let _ = write_sync(
+                wfd,
+                SYNC_DATA,
+                std::str::from_utf8(&status.to_be_bytes()).unwrap_or_default(),
+            );
             // let _ = wait::waitpid(Pid::from_raw(pid),
             //	Some(WaitPidFlag::WEXITED | WaitPidFlag::__WALL));
             std::process::exit(0);
