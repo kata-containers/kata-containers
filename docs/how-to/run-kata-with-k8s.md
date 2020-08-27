@@ -14,7 +14,7 @@
   * [Run a Kubernetes pod with Kata Containers](#run-a-kubernetes-pod-with-kata-containers)
 
 ## Prerequisites
-This guide requires Kata Containers available on your system, install-able by following [this guide](https://github.com/kata-containers/documentation/blob/master/install/README.md).
+This guide requires Kata Containers available on your system, install-able by following [this guide](../install/README.md).
 
 ## Install a CRI implementation
 
@@ -28,7 +28,7 @@ After choosing one CRI implementation, you must make the appropriate configurati
 to ensure it integrates with Kata Containers.
 
 Kata Containers 1.5 introduced the `shimv2` for containerd 1.2.0, reducing the components
-required to spawn pods and containers, and this is the preferred way to run Kata Containers with Kubernetes ([as documented here](https://github.com/kata-containers/documentation/blob/master/how-to/how-to-use-k8s-with-cri-containerd-and-kata.md#configure-containerd-to-use-kata-containers)).
+required to spawn pods and containers, and this is the preferred way to run Kata Containers with Kubernetes ([as documented here](../how-to/how-to-use-k8s-with-cri-containerd-and-kata.md#configure-containerd-to-use-kata-containers)).
 
 An equivalent shim implementation for CRI-O is planned.
 
@@ -78,7 +78,7 @@ a runtime to be used when the workload cannot be trusted and a higher level of s
 is required. An additional flag can be used to let CRI-O know if a workload
 should be considered _trusted_ or _untrusted_ by default.
 For further details, see the documentation
-[here](https://github.com/kata-containers/documentation/blob/master/design/architecture.md#mixing-vm-based-and-namespace-based-runtimes).
+[here](../design/architecture.md#mixing-vm-based-and-namespace-based-runtimes).
 
 ```toml
 # runtime is the OCI compatible runtime used for trusted container workloads.
@@ -132,7 +132,7 @@ to properly install it.
 
 To customize containerd to select Kata Containers runtime, follow our
 "Configure containerd to use Kata Containers" internal documentation
-[here](https://github.com/kata-containers/documentation/blob/master/how-to/how-to-use-k8s-with-cri-containerd-and-kata.md#configure-containerd-to-use-kata-containers).
+[here](../how-to/how-to-use-k8s-with-cri-containerd-and-kata.md#configure-containerd-to-use-kata-containers).
 
 ## Install Kubernetes
 
@@ -160,7 +160,7 @@ Environment="KUBELET_EXTRA_ARGS=--container-runtime=remote --runtime-request-tim
 Environment="KUBELET_EXTRA_ARGS=--container-runtime=remote --runtime-request-timeout=15m --container-runtime-endpoint=unix:///run/containerd/containerd.sock"
 ```
 For more information about containerd see the "Configure Kubelet to use containerd"
-documentation [here](https://github.com/kata-containers/documentation/blob/master/how-to/how-to-use-k8s-with-cri-containerd-and-kata.md#configure-kubelet-to-use-containerd).
+documentation [here](../how-to/how-to-use-k8s-with-cri-containerd-and-kata.md#configure-kubelet-to-use-containerd).
 
 ## Run a Kubernetes pod with Kata Containers
 

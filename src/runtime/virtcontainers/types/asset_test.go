@@ -6,6 +6,7 @@
 package types
 
 import (
+	"fmt"
 	"io/ioutil"
 	"os"
 	"testing"
@@ -65,6 +66,27 @@ func TestAssetHash(t *testing.T) {
 	assert.Equal(assetContentHash, a.computedHash)
 }
 
+func testPath(t *testing.T, a *Asset, correctPath string, msg string) {
+	assert := assert.New(t)
+
+	returnedPath := a.Path()
+	assert.Equal(returnedPath, correctPath, msg)
+}
+
+func testType(t *testing.T, a *Asset, correctType AssetType, msg string) {
+	assert := assert.New(t)
+
+	returnedType := a.Type()
+	assert.Equal(returnedType, correctType, msg)
+}
+
+func testValid(t *testing.T, a *Asset, msg string) {
+	assert := assert.New(t)
+
+	v := a.Valid()
+	assert.True(v, msg)
+}
+
 func TestAssetNew(t *testing.T) {
 	assert := assert.New(t)
 
@@ -79,23 +101,59 @@ func TestAssetNew(t *testing.T) {
 	_, err = tmpfile.Write(assetContent)
 	assert.Nil(err)
 
-	anno := map[string]string{
-		annotations.KernelPath: tmpfile.Name(),
-		annotations.KernelHash: assetContentHash,
-	}
-	a, err := NewAsset(anno, ImageAsset)
-	assert.Nil(err)
-	assert.Nil(a)
-
-	a, err = NewAsset(anno, KernelAsset)
-	assert.Nil(err)
-	assert.Equal(assetContentHash, a.computedHash)
-
-	anno = map[string]string{
-		annotations.KernelPath: tmpfile.Name(),
-		annotations.KernelHash: assetContentWrongHash,
+	type testData struct {
+		inputPathVar   string
+		inputHashVar   string
+		inputAssetType AssetType
+		inputHash      string
+		expectError    bool
+		expectNilAsset bool
 	}
 
-	_, err = NewAsset(anno, KernelAsset)
-	assert.NotNil(err)
+	data := []testData{
+		// Successful with correct hash
+		{annotations.KernelPath, annotations.KernelHash, KernelAsset, assetContentHash, false, false},
+		{annotations.ImagePath, annotations.ImageHash, ImageAsset, assetContentHash, false, false},
+		{annotations.InitrdPath, annotations.InitrdHash, InitrdAsset, assetContentHash, false, false},
+		{annotations.HypervisorPath, annotations.HypervisorHash, HypervisorAsset, assetContentHash, false, false},
+		{annotations.JailerPath, annotations.JailerHash, JailerAsset, assetContentHash, false, false},
+		{annotations.FirmwarePath, annotations.FirmwareHash, FirmwareAsset, assetContentHash, false, false},
+
+		// Failure with incorrect hash
+		{annotations.KernelPath, annotations.KernelHash, KernelAsset, assetContentWrongHash, true, false},
+		{annotations.ImagePath, annotations.ImageHash, ImageAsset, assetContentWrongHash, true, false},
+		{annotations.InitrdPath, annotations.InitrdHash, InitrdAsset, assetContentWrongHash, true, false},
+		{annotations.HypervisorPath, annotations.HypervisorHash, HypervisorAsset, assetContentWrongHash, true, false},
+		{annotations.JailerPath, annotations.JailerHash, JailerAsset, assetContentWrongHash, true, false},
+		{annotations.FirmwarePath, annotations.FirmwareHash, FirmwareAsset, assetContentWrongHash, true, false},
+
+		// Other failures
+		{annotations.KernelPath, annotations.KernelHash, ImageAsset, assetContentHash, false, true},
+	}
+
+	for i, d := range data {
+		msg := fmt.Sprintf("test[%d]: %+v", i, d)
+
+		anno := map[string]string{
+			d.inputPathVar: tmpfile.Name(),
+			d.inputHashVar: d.inputHash,
+		}
+
+		if d.expectNilAsset {
+			a, err := NewAsset(anno, d.inputAssetType)
+			assert.NoError(err, msg)
+			assert.Nil(a, msg)
+		} else if d.expectError {
+			_, err := NewAsset(anno, d.inputAssetType)
+			assert.NotNil(err, msg)
+		} else {
+			a, err := NewAsset(anno, d.inputAssetType)
+			assert.Nil(err, msg)
+			assert.Equal(assetContentHash, a.computedHash, msg)
+
+			testPath(t, a, tmpfile.Name(), msg)
+			testType(t, a, d.inputAssetType, msg)
+			testValid(t, a, msg)
+		}
+	}
 }

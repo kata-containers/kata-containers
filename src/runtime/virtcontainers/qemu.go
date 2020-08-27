@@ -481,6 +481,7 @@ func (q *qemu) createSandbox(ctx context.Context, id string, networkNS NetworkNa
 		NoUserConfig: true,
 		NoDefaults:   true,
 		NoGraphic:    true,
+		NoReboot:     true,
 		Daemonize:    true,
 		MemPrealloc:  q.config.MemPrealloc,
 		HugePages:    q.config.HugePages,

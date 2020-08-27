@@ -75,7 +75,7 @@ assets:
       url: "https://github.com/cloud-hypervisor/cloud-hypervisor"
       uscan-url: >-
         https://github.com/cloud-hypervisor/cloud-hypervisor/tags.*/v?(\d\S+)\.tar\.gz
-      version: "v0.8.0"
+      version: "v0.9.0"
 
     firecracker:
       description: "Firecracker micro-VMM"
@@ -88,8 +88,8 @@ assets:
     qemu:
       description: "VMM that uses KVM"
       url: "https://github.com/qemu/qemu"
-      version: "4.1.1"
-      tag: "v4.1.1"
+      version: "5.0.0"
+      tag: "v5.0.0"
       # Do not include any non-full release versions
       # Break the line *without CR or space being appended*, to appease
       # yamllint, and note the deliberate ' ' at the end of the expression.
@@ -106,9 +106,9 @@ assets:
           commit: "47c1cc30e440860aa695358f7c2dd0b9d7b53d16"
 
     qemu-experimental:
-      description: "QEMU with virtiofs 3.0"
+      description: "QEMU with virtiofs support"
       url: "https://gitlab.com/virtio-fs/qemu.git"
-      tag: "virtio-fs-v0.3"
+      tag: "qemu5.0-virtiofs-with51bits-dax"
 
   image:
     description: |
@@ -158,9 +158,9 @@ assets:
     version: "v5.4.32"
 
   kernel-experimental:
-    description: "Linux kernel with virtio-fs-dev branch"
+    description: "Linux kernel with virtio-fs support"
     url: "https://gitlab.com/virtio-fs/linux.git"
-    tag: "virtio-fs-dev"
+    tag: "kata-v5.6-april-09-2020"
 
 components:
   description: "Core system functionality"

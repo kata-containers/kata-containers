@@ -17,4 +17,5 @@ type MemoryConfig struct {
 	HotplugMethod string `json:"hotplug_method,omitempty"`
 	Shared bool `json:"shared,omitempty"`
 	Hugepages bool `json:"hugepages,omitempty"`
+	Balloon bool `json:"balloon,omitempty"`
 }

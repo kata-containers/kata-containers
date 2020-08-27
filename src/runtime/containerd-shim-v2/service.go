@@ -58,9 +58,15 @@ var (
 // concrete virtcontainer implementation
 var vci vc.VC = &vc.VCImpl{}
 
+// shimLog is logger for shim package
+var shimLog = logrus.WithField("source", "containerd-kata-shim-v2")
+
 // New returns a new shim service that can be used via GRPC
 func New(ctx context.Context, id string, publisher events.Publisher) (cdshim.Shim, error) {
-	logger := logrus.WithField("ID", id)
+	shimLog = shimLog.WithFields(logrus.Fields{
+		"sandbox": id,
+		"pid":     os.Getpid(),
+	})
 	// Discard the log before shim init its log output. Otherwise
 	// it will output into stdio, from which containerd would like
 	// to get the shim's socket address.
@@ -69,8 +75,8 @@ func New(ctx context.Context, id string, publisher events.Publisher) (cdshim.Shi
 	if !opts.Debug {
 		logrus.SetLevel(logrus.WarnLevel)
 	}
-	vci.SetLogger(ctx, logger)
-	katautils.SetLogger(ctx, logger, logger.Logger.Level)
+	vci.SetLogger(ctx, shimLog)
+	katautils.SetLogger(ctx, shimLog, shimLog.Logger.Level)
 
 	ctx, cancel := context.WithCancel(ctx)
 
@@ -226,7 +232,7 @@ func (s *service) forward(publisher events.Publisher) {
 		err := publisher.Publish(ctx, getTopic(e), e)
 		cancel()
 		if err != nil {
-			logrus.WithError(err).Error("post event")
+			shimLog.WithError(err).Error("post event")
 		}
 	}
 }
@@ -269,7 +275,7 @@ func getTopic(e interface{}) string {
 	case *eventstypes.TaskCheckpointed:
 		return cdruntime.TaskCheckpointedEventTopic
 	default:
-		logrus.Warnf("no topic for type %#v", e)
+		shimLog.WithField("event-type", e).Warn("no topic for event type")
 	}
 	return cdruntime.TaskUnknownTopic
 }
@@ -684,7 +690,7 @@ func (s *service) Kill(ctx context.Context, r *taskAPI.KillRequest) (_ *ptypes.E
 	// and return directly.
 	if signum == syscall.SIGKILL || signum == syscall.SIGTERM {
 		if c.status == task.StatusStopped {
-			logrus.WithField("sandbox", s.sandbox.ID()).WithField("Container", c.id).Debug("Container has already been stopped")
+			shimLog.WithField("sandbox", s.sandbox.ID()).WithField("container", c.id).Debug("Container has already been stopped")
 			return empty, nil
 		}
 	}
@@ -697,10 +703,10 @@ func (s *service) Kill(ctx context.Context, r *taskAPI.KillRequest) (_ *ptypes.E
 		}
 		processID = execs.id
 		if processID == "" {
-			logrus.WithFields(logrus.Fields{
+			shimLog.WithFields(logrus.Fields{
 				"sandbox":   s.sandbox.ID(),
-				"Container": c.id,
-				"ExecID":    r.ExecID,
+				"container": c.id,
+				"exec-id":   r.ExecID,
 			}).Debug("Id of exec process to be signalled is empty")
 			return empty, errors.New("The exec process does not exist")
 		}
@@ -747,19 +753,23 @@ func (s *service) CloseIO(ctx context.Context, r *taskAPI.CloseIORequest) (_ *pt
 		return nil, err
 	}
 
-	tty := c.ttyio
+	stdin := c.stdinPipe
+	stdinCloser := c.stdinCloser
+
 	if r.ExecID != "" {
 		execs, err := c.getExec(r.ExecID)
 		if err != nil {
 			return nil, err
 		}
-		tty = execs.ttyio
+		stdin = execs.stdinPipe
+		stdinCloser = execs.stdinCloser
 	}
 
-	if tty != nil && tty.Stdin != nil {
-		if err := tty.Stdin.Close(); err != nil {
-			return nil, errors.Wrap(err, "close stdin")
-		}
+	// wait until the stdin io copy terminated, otherwise
+	// some contents would not be forwarded to the process.
+	<-stdinCloser
+	if err := stdin.Close(); err != nil {
+		return nil, errors.Wrap(err, "close stdin")
 	}
 
 	return empty, nil

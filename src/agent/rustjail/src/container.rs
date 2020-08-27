@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
+use dirs;
 use lazy_static;
 use oci::{Hook, Linux, LinuxNamespace, LinuxResources, POSIXRlimit, Spec};
 use serde_json;
@@ -37,6 +38,7 @@ use protocols::agent::StatsContainerResponse;
 use nix::errno::Errno;
 use nix::fcntl::{self, OFlag};
 use nix::fcntl::{FcntlArg, FdFlag};
+use nix::mount::MntFlags;
 use nix::pty;
 use nix::sched::{self, CloneFlags};
 use nix::sys::signal::{self, Signal};
@@ -66,6 +68,7 @@ const CRFD_FD: &str = "CRFD_FD";
 const CWFD_FD: &str = "CWFD_FD";
 const CLOG_FD: &str = "CLOG_FD";
 const FIFO_FD: &str = "FIFO_FD";
+const HOME_ENV_KEY: &str = "HOME";
 
 #[derive(PartialEq, Clone, Copy)]
 pub enum Status {
@@ -150,7 +153,7 @@ lazy_static! {
             r#type: "c".to_string(),
             major: 1,
             minor: 3,
-            file_mode: Some(0o066),
+            file_mode: Some(0o666),
             uid: Some(0xffffffff),
             gid: Some(0xffffffff),
         });
@@ -159,7 +162,7 @@ lazy_static! {
             r#type: "c".to_string(),
             major: 1,
             minor: 5,
-            file_mode: Some(0o066),
+            file_mode: Some(0o666),
             uid: Some(0xffffffff),
             gid: Some(0xffffffff),
         });
@@ -168,7 +171,7 @@ lazy_static! {
             r#type: String::from("c"),
             major: 1,
             minor: 7,
-            file_mode: Some(0o066),
+            file_mode: Some(0o666),
             uid: Some(0xffffffff),
             gid: Some(0xffffffff),
         });
@@ -177,7 +180,7 @@ lazy_static! {
             r#type: "c".to_string(),
             major: 5,
             minor: 0,
-            file_mode: Some(0o066),
+            file_mode: Some(0o666),
             uid: Some(0xffffffff),
             gid: Some(0xffffffff),
         });
@@ -186,7 +189,7 @@ lazy_static! {
             r#type: "c".to_string(),
             major: 1,
             minor: 9,
-            file_mode: Some(0o066),
+            file_mode: Some(0o666),
             uid: Some(0xffffffff),
             gid: Some(0xffffffff),
         });
@@ -195,7 +198,7 @@ lazy_static! {
             r#type: "c".to_string(),
             major: 1,
             minor: 8,
-            file_mode: Some(0o066),
+            file_mode: Some(0o666),
             uid: Some(0xffffffff),
             gid: Some(0xffffffff),
         });
@@ -605,6 +608,13 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
         env::set_var(v[0], v[1]);
     }
 
+    // set the "HOME" env getting from "/etc/passwd"
+    if env::var_os(HOME_ENV_KEY).is_none() {
+        if let Some(home_dir) = dirs::home_dir() {
+            env::set_var(HOME_ENV_KEY, home_dir);
+        }
+    }
+
     let exec_file = Path::new(&args[0]);
     log_child!(cfd_log, "process command: {:?}", &args);
     if !exec_file.exists() {
@@ -963,6 +973,10 @@ impl BaseContainer for LinuxContainer {
         }
 
         self.status.transition(Status::STOPPED);
+        nix::mount::umount2(
+            spec.root.as_ref().unwrap().path.as_str(),
+            MntFlags::MNT_DETACH,
+        )?;
         fs::remove_dir_all(&self.root)?;
         Ok(())
     }
@@ -1495,13 +1509,22 @@ fn execute_hook(logger: &Logger, h: &Hook, st: &OCIState) -> Result<()> {
     //	state.push_str("\n");
 
     let (rfd, wfd) = unistd::pipe2(OFlag::O_CLOEXEC)?;
-    match unistd::fork()? {
-        ForkResult::Parent { child: _ch } => {
-            let buf = read_sync(rfd)?;
-            let buf_array: [u8; 4] = [buf[0], buf[1], buf[2], buf[3]];
-            let status: i32 = i32::from_be_bytes(buf_array);
+    defer!({
+        let _ = unistd::close(rfd);
+        let _ = unistd::close(wfd);
+    });
 
-            info!(logger, "hook child: {}", _ch);
+    match unistd::fork()? {
+        ForkResult::Parent { child } => {
+            let buf = read_sync(rfd)?;
+            let status = if buf.len() == 4 {
+                let buf_array: [u8; 4] = [buf[0], buf[1], buf[2], buf[3]];
+                i32::from_be_bytes(buf_array)
+            } else {
+                -libc::EPIPE
+            };
+
+            info!(logger, "hook child: {} status: {}", child, status);
 
             // let _ = wait::waitpid(_ch,
             //	Some(WaitPidFlag::WEXITED | WaitPidFlag::__WALL));
@@ -1630,7 +1653,11 @@ fn execute_hook(logger: &Logger, h: &Hook, st: &OCIState) -> Result<()> {
             };
 
             handle.join().unwrap();
-            let _ = write_sync(wfd, status, "");
+            let _ = write_sync(
+                wfd,
+                SYNC_DATA,
+                std::str::from_utf8(&status.to_be_bytes()).unwrap_or_default(),
+            );
             // let _ = wait::waitpid(Pid::from_raw(pid),
             //	Some(WaitPidFlag::WEXITED | WaitPidFlag::__WALL));
             std::process::exit(0);

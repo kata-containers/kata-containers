@@ -51,7 +51,7 @@ Kata Containers introduces a non-negligible overhead for running a sandbox (pod)
  2) Kata Containers do not fully constrain the VMM and associated processes, instead placing a subset of them outside of the pod-cgroup.
 
 Kata Containers provides two options for how cgroups are handled on the host. Selection of these options is done through
-the `SandboxCgroupOnly` flag within the Kata Containers [configuration](https://github.com/kata-containers/runtime#configuration)
+the `SandboxCgroupOnly` flag within the Kata Containers [configuration](../../src/runtime/README.md#configuration)
 file.
 
 ## `SandboxCgroupOnly` enabled

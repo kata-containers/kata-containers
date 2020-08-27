@@ -24,5 +24,6 @@ type VmConfig struct {
 	Console ConsoleConfig `json:"console,omitempty"`
 	Devices []DeviceConfig `json:"devices,omitempty"`
 	Vsock VsockConfig `json:"vsock,omitempty"`
+	SgxEpc []SgxEpcConfig `json:"sgx_epc,omitempty"`
 	Iommu bool `json:"iommu,omitempty"`
 }

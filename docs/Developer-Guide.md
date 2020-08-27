@@ -13,7 +13,6 @@
         * [journald rate limiting](#journald-rate-limiting)
             * [`systemd-journald` suppressing messages](#systemd-journald-suppressing-messages)
             * [Disabling `systemd-journald` rate limiting](#disabling-systemd-journald-rate-limiting)
-* [Build and install Kata proxy](#build-and-install-kata-proxy)
 * [Build and install Kata shim](#build-and-install-kata-shim)
 * [Create and install rootfs and initrd image](#create-and-install-rootfs-and-initrd-image)
     * [Build a custom Kata agent - OPTIONAL](#build-a-custom-kata-agent---optional)
@@ -243,13 +242,6 @@ Restart `systemd-journald` for the changes to take effect:
 $ sudo systemctl restart systemd-journald
 ```
 
-# Build and install Kata proxy
-
-```
-$ go get -d -u github.com/kata-containers/proxy
-$ cd $GOPATH/src/github.com/kata-containers/proxy && make && sudo make install
-```
-
 # Build and install Kata shim
 
 ```
@@ -378,11 +370,11 @@ $ (cd /usr/share/kata-containers && sudo ln -sf "$image" kata-containers-initrd.
 
 # Install guest kernel images
 
-You can build and install the guest kernel image as shown [here](https://github.com/kata-containers/packaging/tree/master/kernel#build-kata-containers-kernel).
+You can build and install the guest kernel image as shown [here](../tools/packaging/kernel/README.md#build-kata-containers-kernel).
 
 # Install a hypervisor
 
-When setting up Kata using a [packaged installation method](https://github.com/kata-containers/documentation/tree/master/install#installing-on-a-linux-system), the `qemu-lite` hypervisor is installed automatically. For other installation methods, you will need to manually install a suitable hypervisor.
+When setting up Kata using a [packaged installation method](install/README.md#installing-on-a-linux-system), the `qemu-lite` hypervisor is installed automatically. For other installation methods, you will need to manually install a suitable hypervisor.
 
 ## Build a custom QEMU
 
@@ -447,14 +439,14 @@ Refer to to the [Run Kata Containers with Kubernetes](how-to/run-kata-with-k8s.m
 If you are unable to create a Kata Container first ensure you have
 [enabled full debug](#enable-full-debug)
 before attempting to create a container. Then run the
-[`kata-collect-data.sh`](https://github.com/kata-containers/runtime/blob/master/data/kata-collect-data.sh.in)
+[`kata-collect-data.sh`](../src/runtime/data/kata-collect-data.sh.in)
 script and paste its output directly into a
 [GitHub issue](https://github.com/kata-containers/kata-containers/issues/new).
 
 > **Note:**
 >
 > The `kata-collect-data.sh` script is built from the
-> [runtime](https://github.com/kata-containers/runtime) repository.
+> [runtime](../src/runtime) repository.
 
 To perform analysis on Kata logs, use the
 [`kata-log-parser`](https://github.com/kata-containers/tests/tree/master/cmd/log-parser)
@@ -507,7 +499,7 @@ the following steps (using rootfs or initrd image).
 > additional packages in the rootfs and add “agent.debug_console” to kernel parameters in the runtime
 > config file. This tells the Kata agent to launch the console directly.
 >
-> Once these steps are taken you can connect to the virtual machine using the [debug console](https://github.com/kata-containers/documentation/blob/master/Developer-Guide.md#connect-to-the-virtual-machine-using-the-debug-console).
+> Once these steps are taken you can connect to the virtual machine using the [debug console](Developer-Guide.md#connect-to-the-virtual-machine-using-the-debug-console).
 
 ### Create a custom image containing a shell
 
@@ -571,7 +563,7 @@ $ sudo install -o root -g root -m 0640 kata-containers.img "/usr/share/kata-cont
 ```
 
 Next, modify the `image=` values in the `[hypervisor.qemu]` section of the
-[configuration file](https://github.com/kata-containers/runtime#configuration)
+[configuration file](../src/runtime/README.md#configuration)
 to specify the full path to the image name specified in the previous code
 section. Alternatively, recreate the symbolic link so it points to
 the new debug image:

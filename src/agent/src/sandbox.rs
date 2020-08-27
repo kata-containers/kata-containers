@@ -11,7 +11,7 @@ use crate::namespace::NSTYPEPID;
 use crate::network::Network;
 use libc::pid_t;
 use netlink::{RtnlHandle, NETLINK_ROUTE};
-use oci::LinuxNamespace;
+use oci::{Hook, Hooks};
 use protocols::agent::OnlineCPUMemRequest;
 use regex::Regex;
 use rustjail::cgroups;
@@ -22,6 +22,8 @@ use rustjail::process::Process;
 use slog::Logger;
 use std::collections::HashMap;
 use std::fs;
+use std::os::unix::fs::PermissionsExt;
+use std::path::Path;
 use std::sync::mpsc::Sender;
 
 #[derive(Debug)]
@@ -42,6 +44,7 @@ pub struct Sandbox {
     pub no_pivot_root: bool,
     pub sender: Option<Sender<i32>>,
     pub rtnl: Option<RtnlHandle>,
+    pub hooks: Option<Hooks>,
 }
 
 impl Sandbox {
@@ -66,6 +69,7 @@ impl Sandbox {
             no_pivot_root: fs_type.eq(TYPEROOTFS),
             sender: None,
             rtnl: Some(RtnlHandle::new(NETLINK_ROUTE, 0).unwrap()),
+            hooks: None,
         })
     }
 
@@ -261,6 +265,57 @@ impl Sandbox {
 
         Ok(())
     }
+
+    pub fn add_hooks(&mut self, dir: &str) -> Result<()> {
+        let mut hooks = Hooks::default();
+        if let Ok(hook) = self.find_hooks(dir, "prestart") {
+            hooks.prestart = hook;
+        }
+        if let Ok(hook) = self.find_hooks(dir, "poststart") {
+            hooks.poststart = hook;
+        }
+        if let Ok(hook) = self.find_hooks(dir, "poststop") {
+            hooks.poststop = hook;
+        }
+        self.hooks = Some(hooks);
+        Ok(())
+    }
+
+    fn find_hooks(&self, hook_path: &str, hook_type: &str) -> Result<Vec<Hook>> {
+        let mut hooks = Vec::new();
+        for entry in fs::read_dir(Path::new(hook_path).join(hook_type))? {
+            let entry = entry?;
+            // Reject non-file, symlinks and non-executable files
+            if !entry.file_type()?.is_file()
+                || entry.file_type()?.is_symlink()
+                || entry.metadata()?.permissions().mode() & 0o777 & 0o111 == 0
+            {
+                continue;
+            }
+
+            let name = entry.file_name();
+            let hook = Hook {
+                path: Path::new(hook_path)
+                    .join(hook_type)
+                    .join(&name)
+                    .to_str()
+                    .unwrap()
+                    .to_owned(),
+                args: vec![name.to_str().unwrap().to_owned(), hook_type.to_owned()],
+                ..Default::default()
+            };
+            info!(
+                self.logger,
+                "found {} hook {:?} mode {:o}",
+                hook_type,
+                hook,
+                entry.metadata()?.permissions().mode()
+            );
+            hooks.push(hook);
+        }
+
+        Ok(hooks)
+    }
 }
 
 fn online_resources(logger: &Logger, path: &str, pattern: &str, num: i32) -> Result<i32> {
@@ -315,6 +370,8 @@ mod tests {
     use rustjail::container::LinuxContainer;
     use rustjail::specconv::CreateOpts;
     use slog::Logger;
+    use std::fs::{self, File};
+    use std::os::unix::fs::PermissionsExt;
     use tempfile::Builder;
 
     fn bind_mount(src: &str, dst: &str, logger: &Logger) -> Result<(), rustjail::errors::Error> {
@@ -595,5 +652,27 @@ mod tests {
 
         let ns_path = format!("/proc/{}/ns/pid", test_pid);
         assert_eq!(s.sandbox_pidns.unwrap().path, ns_path);
+    }
+    #[test]
+    fn add_guest_hooks() {
+        let logger = slog::Logger::root(slog::Discard, o!());
+        let mut s = Sandbox::new(&logger).unwrap();
+        let tmpdir = Builder::new().tempdir().unwrap();
+        let tmpdir_path = tmpdir.path().to_str().unwrap();
+
+        assert!(fs::create_dir_all(tmpdir.path().join("prestart")).is_ok());
+        assert!(fs::create_dir_all(tmpdir.path().join("poststop")).is_ok());
+
+        let file = File::create(tmpdir.path().join("prestart").join("prestart.sh")).unwrap();
+        let mut perm = file.metadata().unwrap().permissions();
+        perm.set_mode(0o777);
+        assert!(file.set_permissions(perm).is_ok());
+        assert!(File::create(tmpdir.path().join("poststop").join("poststop.sh")).is_ok());
+
+        assert!(s.add_hooks(tmpdir_path).is_ok());
+        assert!(s.hooks.is_some());
+        assert!(s.hooks.as_ref().unwrap().prestart.len() == 1);
+        assert!(s.hooks.as_ref().unwrap().poststart.is_empty());
+        assert!(s.hooks.as_ref().unwrap().poststop.is_empty());
     }
 }

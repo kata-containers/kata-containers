@@ -38,10 +38,6 @@ After that, we drafted the initial code here, and any contributions are welcome.
 
 ## Getting Started
 
-### Dependencies
-The `rust-agent` depends on [`grpc-rs`](https://github.com/pingcap/grpc-rs) by PingCAP. However, the upstream `grpc-rs` and [gRPC](https://github.com/grpc/grpc) need some changes to be used here, which may take some time to be landed. Therefore, we created a temporary fork or `grpc-rs` here:
-- https://github.com/alipay/grpc-rs/tree/rust_agent
-
 ### Build from Source
 The rust-agent need to be built with rust nightly, and static linked with musl.
 ```bash
@@ -52,8 +48,8 @@ cargo build --target x86_64-unknown-linux-musl --release
 ```
 
 ## Run Kata CI with rust-agent
-   * Firstly, install kata as noted by ["how to install Kata"](https://github.com/kata-containers/documentation/blob/master/install/README.md)
-   * Secondly, build your own kata initrd/image following the steps in ["how to build your own initrd/image"](https://github.com/kata-containers/documentation/blob/master/Developer-Guide.md#create-and-install-rootfs-and-initrd-image).
+   * Firstly, install kata as noted by ["how to install Kata"](../../docs/install/README.md)
+   * Secondly, build your own kata initrd/image following the steps in ["how to build your own initrd/image"](../../docs/Developer-Guide.md#create-and-install-rootfs-and-initrd-image).
 notes: Please use your rust agent instead of the go agent when building your initrd/image.
    * Clone the kata ci test cases from: https://github.com/kata-containers/tests.git, and then run the cri test with: 
 

@@ -16,3 +16,6 @@ QEMUCMD := qemu-system-aarch64
 FCCMD := firecracker
 # Firecracker's jailer binary name
 FCJAILERCMD := jailer
+
+# cloud-hypervisor binary name
+CLHCMD := cloud-hypervisor

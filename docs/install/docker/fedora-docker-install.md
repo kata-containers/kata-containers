@@ -26,7 +26,7 @@
 2. Configure Docker to use Kata Containers by default with **ONE** of the following methods:
 
    1. systemd (this is the default and is applied automatically if you select the
-      [automatic installation](https://github.com/kata-containers/documentation/tree/master/install#automatic-installation) option)
+      [automatic installation](../../install/README.md#automatic-installation) option)
 
        ```bash
        $ sudo mkdir -p /etc/systemd/system/docker.service.d/

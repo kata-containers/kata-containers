@@ -10,7 +10,7 @@
 VMCache is a new function that creates VMs as caches before using it.
 It helps speed up new container creation.  
 The function consists of a server and some clients communicating
-through Unix socket.  The protocol is gRPC in [`protocols/cache/cache.proto`](https://github.com/kata-containers/runtime/blob/master/protocols/cache/cache.proto).  
+through Unix socket.  The protocol is gRPC in [`protocols/cache/cache.proto`](../../src/runtime/protocols/cache/cache.proto).  
 The VMCache server will create some VMs and cache them by factory cache.
 It will convert the VM to gRPC format and transport it when gets
 requested from clients.  
@@ -21,9 +21,9 @@ a new sandbox.
 
 ### How is this different to VM templating
 
-Both [VM templating](https://github.com/kata-containers/documentation/blob/master/how-to/what-is-vm-templating-and-how-do-I-use-it.md) and VMCache help speed up new container creation.  
+Both [VM templating](../how-to/what-is-vm-templating-and-how-do-I-use-it.md) and VMCache help speed up new container creation.  
 When VM templating enabled, new VMs are created by cloning from a pre-created template VM, and they will share the same initramfs, kernel and agent memory in readonly mode.  So it saves a lot of memory if there are many Kata Containers running on the same host.  
-VMCache is not vulnerable to [share memory CVE](https://github.com/kata-containers/documentation/blob/master/how-to/what-is-vm-templating-and-how-do-I-use-it.md#what-are-the-cons) because each VM doesn't share the memory.
+VMCache is not vulnerable to [share memory CVE](../how-to/what-is-vm-templating-and-how-do-I-use-it.md#what-are-the-cons) because each VM doesn't share the memory.
 
 ### How to enable VMCache
 
