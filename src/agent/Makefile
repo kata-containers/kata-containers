@@ -91,6 +91,9 @@ $(TARGET): $(TARGET_PATH)
 $(TARGET_PATH): $(SOURCES) | show-summary
 	@cargo build --target $(TRIPLE) --$(BUILD_TYPE)
 
+optimize: $(SOURCES) | show-summary show-header
+	@RUSTFLAGS='-C link-arg=-s' cargo build --target $(TRIPLE) --$(BUILD_TYPE)
+
 show-header:
 	@printf "%s - version %s (commit %s)\n\n" "$(TARGET)" "$(VERSION)" "$(COMMIT_MSG)"
 
@@ -140,7 +143,8 @@ help: show-summary
 .PHONY: \
 	help \
 	show-header \
-	show-summary
+	show-summary \
+	optimize
 
 generate-protocols:
 	protocols/hack/update-generated-proto.sh "${PROTO_FILE}"
