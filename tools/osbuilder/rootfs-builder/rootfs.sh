@@ -539,9 +539,11 @@ EOT
 	AGENT_DEST="${AGENT_DIR}/${AGENT_BIN}"
 
 	if [ -z "${AGENT_SOURCE_BIN}" ] ; then
-		# rust agent needs x86_64-unknown-linux-musl
-		rustup show | grep x86_64-unknown-linux-musl > /dev/null || bash ${script_dir}/../../../ci/install_rust.sh
+		bash ${script_dir}/../../../ci/install_musl.sh
+		# rust agent needs ${arch}-unknown-linux-musl
+		rustup show | grep linux-musl > /dev/null || bash ${script_dir}/../../../ci/install_rust.sh
 		test -r "${HOME}/.cargo/env" && source "${HOME}/.cargo/env"
+		[ "$ARCH" == "aarch64" ] && OLD_PATH=$PATH && export PATH=$PATH:/usr/local/musl/bin
 
 		agent_pkg="${RUST_AGENT_PKG}"
 		agent_dir="${script_dir}/../../../src/agent/"
@@ -554,6 +556,7 @@ EOT
 		make clean
 		make LIBC=${LIBC} INIT=${AGENT_INIT}
 		make install DESTDIR="${ROOTFS_DIR}" LIBC=${LIBC} INIT=${AGENT_INIT} SECCOMP=${SECCOMP}
+		[ "$ARCH" == "aarch64" ] && export PATH=$OLD_PATH && rm -rf /usr/local/musl
 		popd
 	else
 		cp ${AGENT_SOURCE_BIN} ${AGENT_DEST}
