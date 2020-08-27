@@ -72,8 +72,6 @@ use uevent::watch_uevents;
 mod rpc;
 
 const NAME: &str = "kata-agent";
-const VSOCK_ADDR: &str = "vsock://-1";
-const VSOCK_PORT: u16 = 1024;
 const KERNEL_CMDLINE_FILE: &str = "/proc/cmdline";
 const CONSOLE_PATH: &str = "/dev/console";
 
@@ -247,7 +245,7 @@ fn start_sandbox(logger: &Logger, config: &agentConfig, init_mode: bool) -> Resu
     sandbox.lock().unwrap().sender = Some(tx);
 
     //vsock:///dev/vsock, port
-    let mut server = rpc::start(sandbox.clone(), VSOCK_ADDR, VSOCK_PORT);
+    let mut server = rpc::start(sandbox.clone(), config.server_addr.as_str());
 
     let _ = server.start().unwrap();
 

@@ -1452,7 +1452,7 @@ fn find_process<'a>(
     Ok(p)
 }
 
-pub fn start<S: Into<String>>(s: Arc<Mutex<Sandbox>>, host: S, port: u16) -> ttrpc::Server {
+pub fn start(s: Arc<Mutex<Sandbox>>, server_address: &str) -> ttrpc::Server {
     let agent_service = Box::new(agentService {
         sandbox: s,
         test: 1,
@@ -1468,17 +1468,13 @@ pub fn start<S: Into<String>>(s: Arc<Mutex<Sandbox>>, host: S, port: u16) -> ttr
 
     let hservice = protocols::health_ttrpc::create_health(health_worker);
 
-    let mut addr: String = host.into();
-    addr.push_str(":");
-    addr.push_str(&port.to_string());
-
     let server = ttrpc::Server::new()
-        .bind(addr.as_str())
+        .bind(server_address)
         .unwrap()
         .register_service(aservice)
         .register_service(hservice);
 
-    info!(sl!(), "ttRPC server started");
+    info!(sl!(), "ttRPC server started"; "address" => server_address);
 
     server
 }
