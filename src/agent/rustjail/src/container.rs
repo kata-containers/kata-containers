@@ -153,7 +153,7 @@ lazy_static! {
             r#type: "c".to_string(),
             major: 1,
             minor: 3,
-            file_mode: Some(0o066),
+            file_mode: Some(0o666),
             uid: Some(0xffffffff),
             gid: Some(0xffffffff),
         });
@@ -162,7 +162,7 @@ lazy_static! {
             r#type: "c".to_string(),
             major: 1,
             minor: 5,
-            file_mode: Some(0o066),
+            file_mode: Some(0o666),
             uid: Some(0xffffffff),
             gid: Some(0xffffffff),
         });
@@ -171,7 +171,7 @@ lazy_static! {
             r#type: String::from("c"),
             major: 1,
             minor: 7,
-            file_mode: Some(0o066),
+            file_mode: Some(0o666),
             uid: Some(0xffffffff),
             gid: Some(0xffffffff),
         });
@@ -180,7 +180,7 @@ lazy_static! {
             r#type: "c".to_string(),
             major: 5,
             minor: 0,
-            file_mode: Some(0o066),
+            file_mode: Some(0o666),
             uid: Some(0xffffffff),
             gid: Some(0xffffffff),
         });
@@ -189,7 +189,7 @@ lazy_static! {
             r#type: "c".to_string(),
             major: 1,
             minor: 9,
-            file_mode: Some(0o066),
+            file_mode: Some(0o666),
             uid: Some(0xffffffff),
             gid: Some(0xffffffff),
         });
@@ -198,7 +198,7 @@ lazy_static! {
             r#type: "c".to_string(),
             major: 1,
             minor: 8,
-            file_mode: Some(0o066),
+            file_mode: Some(0o666),
             uid: Some(0xffffffff),
             gid: Some(0xffffffff),
         });
