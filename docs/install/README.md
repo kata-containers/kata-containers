@@ -42,18 +42,18 @@ Kata is packaged by the Kata community for:
 |Distribution (link to installation guide)                        | Versions                                                                                                          |
 |-----------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------|
 |[Debian](debian-installation-guide.md)                           | 9, 10                                                                                                             |
-|[SUSE Linux Enterprise Server (SLES)](sles-installation-guide.md)| SLES 12 SP3                                                                                                       |
 |[Ubuntu](ubuntu-installation-guide.md)                           | 16.04, 18.04                                                                                                      |
 
 #### Official packages
 
 Kata packages are provided by official distribution repositories for:
 
-|Distribution (link to packages)            | Versions                                                                       |
-|-------------------------------------------|--------------------------------------------------------------------------------|
-|[CentOS](centos-installation-guide.md)     | 8                                                                              |
-|[Fedora](fedora-installation-guide.md)     | 32, Rawhide                                                                    | 
-|[openSUSE](opensuse-installation-guide.md) | [Leap 15.1](opensuse-leap-15.1-installation-guide.md)<br>Leap 15.2, Tumbleweed |
+|Distribution (link to packages)                          | Versions                                                                       |
+|---------------------------------------------------------|--------------------------------------------------------------------------------|
+|[CentOS](centos-installation-guide.md)                   | 8                                                                              |
+|[Fedora](fedora-installation-guide.md)                   | 32, Rawhide                                                                    | 
+|[SUSE Linux Enterprise (SLE)](sle-installation-guide.md) | SLE 15 SP1, 15 SP2                                                             |
+|[openSUSE](opensuse-installation-guide.md)               | [Leap 15.1](opensuse-leap-15.1-installation-guide.md)<br>Leap 15.2, Tumbleweed |
 
 
 ### Automatic Installation
