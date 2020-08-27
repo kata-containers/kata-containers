@@ -1,7 +1,6 @@
 # Kata Containers packaging
 
 * [Introduction](#introduction)
-* [Build using OBS](#build-using-obs)
 * [Build in a container](#build-in-a-container)
 * [Build a snap package](#build-a-snap-package)
 * [Build static binaries](#build-static-binaries)
@@ -17,10 +16,6 @@
 
 Kata Containers currently supports packages for many distributions. Tooling to
 aid in creating these packages are contained within this repository.
-
-## Build using OBS
-
-See the [OBS documentation](obs-packaging).
 
 ## Build in a container
 
