@@ -28,6 +28,7 @@ extern crate slog;
 #[macro_use]
 extern crate netlink;
 
+use crate::netlink::{RtnlHandle, NETLINK_ROUTE};
 use nix::fcntl::{self, OFlag};
 use nix::sys::socket::{self, AddressFamily, SockAddr, SockFlag, SockType};
 use nix::sys::wait::{self, WaitStatus};
@@ -46,7 +47,7 @@ use std::os::unix::io::AsRawFd;
 use std::path::Path;
 use std::sync::mpsc::{self, Sender};
 use std::sync::{Arc, Mutex, RwLock};
-use std::{io, thread};
+use std::{io, thread, thread::JoinHandle};
 use unistd::Pid;
 
 mod config;
@@ -83,9 +84,7 @@ lazy_static! {
         Arc::new(RwLock::new(config::agentConfig::new()));
 }
 
-use std::mem::MaybeUninit;
-
-fn announce(logger: &Logger) {
+fn announce(logger: &Logger, config: &agentConfig) {
     let commit = match env::var("VERSION_COMMIT") {
         Ok(s) => s,
         Err(_) => String::from(""),
@@ -99,11 +98,25 @@ fn announce(logger: &Logger) {
 
     "agent-version" =>  version::AGENT_VERSION,
     "api-version" => version::API_VERSION,
+    "config" => format!("{:?}", config),
     );
 }
 
 fn main() -> Result<()> {
     let args: Vec<String> = env::args().collect();
+
+    if args.len() == 2 && args[1] == "--version" {
+        println!(
+            "{} version {} (api version: {}, commit version: {}, type: rust)",
+            NAME,
+            version::AGENT_VERSION,
+            version::API_VERSION,
+            env::var("VERSION_COMMIT").unwrap_or("unknown".to_string())
+        );
+
+        exit(0);
+    }
+
     if args.len() == 2 && args[1] == "init" {
         rustjail::container::init_child();
         exit(0);
@@ -121,7 +134,8 @@ fn main() -> Result<()> {
 
     let agentConfig = AGENT_CONFIG.clone();
 
-    if unistd::getpid() == Pid::from_raw(1) {
+    let init_mode = unistd::getpid() == Pid::from_raw(1);
+    if init_mode {
         // dup a new file descriptor for this temporary logger writer,
         // since this logger would be dropped and it's writer would
         // be closed out of this code block.
@@ -173,43 +187,56 @@ fn main() -> Result<()> {
     // Recreate a logger with the log level get from "/proc/cmdline".
     let logger = logging::create_logger(NAME, "agent", config.log_level, writer);
 
-    announce(&logger);
-
-    if args.len() == 2 && args[1] == "--version" {
-        // force logger to flush
-        drop(logger);
-
-        exit(0);
-    }
+    announce(&logger, &config);
 
     // This "unused" variable is required as it enables the global (and crucially static) logger,
     // which is required to satisfy the the lifetime constraints of the auto-generated gRPC code.
     let _guard = slog_scope::set_global_logger(logger.new(o!("subsystem" => "rpc")));
 
+    start_sandbox(&logger, &config, init_mode)?;
+
+    let _ = log_handle.join();
+
+    Ok(())
+}
+
+fn start_sandbox(logger: &Logger, config: &agentConfig, init_mode: bool) -> Result<()> {
     let shells = SHELLS.clone();
     let debug_console_vport = config.debug_console_vport as u32;
 
-    let shell_handle = if config.debug_console {
+    let mut shell_handle: Option<JoinHandle<()>> = None;
+    if config.debug_console {
         let thread_logger = logger.clone();
 
-        thread::spawn(move || {
-            let shells = shells.lock().unwrap();
-            let result = setup_debug_console(shells.to_vec(), debug_console_vport);
-            if result.is_err() {
-                // Report error, but don't fail
-                warn!(thread_logger, "failed to setup debug console";
+        let builder = thread::Builder::new();
+
+        let handle = builder
+            .spawn(move || {
+                let shells = shells.lock().unwrap();
+                let result = setup_debug_console(shells.to_vec(), debug_console_vport);
+                if result.is_err() {
+                    // Report error, but don't fail
+                    warn!(thread_logger, "failed to setup debug console";
                     "error" => format!("{}", result.unwrap_err()));
-            }
-        })
-    } else {
-        unsafe { MaybeUninit::zeroed().assume_init() }
-    };
+                }
+            })
+            .map_err(|e| format!("{:?}", e))?;
+
+        shell_handle = Some(handle);
+    }
 
     // Initialize unique sandbox structure.
-    let s = Sandbox::new(&logger).map_err(|e| {
+    let mut s = Sandbox::new(&logger).map_err(|e| {
         error!(logger, "Failed to create sandbox with error: {:?}", e);
         e
     })?;
+
+    if init_mode {
+        let mut rtnl = RtnlHandle::new(NETLINK_ROUTE, 0).unwrap();
+        rtnl.handle_localhost()?;
+
+        s.rtnl = Some(rtnl);
+    }
 
     let sandbox = Arc::new(Mutex::new(s));
 
@@ -222,37 +249,15 @@ fn main() -> Result<()> {
     //vsock:///dev/vsock, port
     let mut server = rpc::start(sandbox.clone(), VSOCK_ADDR, VSOCK_PORT);
 
-    /*
-        let _ = fs::remove_file("/tmp/testagent");
-        let _ = fs::remove_dir_all("/run/agent");
-        let mut server = grpc::start(sandbox.clone(), "unix:///tmp/testagent", 1);
-    */
-
-    let handle = thread::spawn(move || {
-        // info!("Press ENTER to exit...");
-        // let _ = io::stdin().read(&mut [0]).unwrap();
-        // thread::sleep(Duration::from_secs(3000));
-
-        let _ = rx.recv().unwrap();
-    });
-    // receive something from destroy_sandbox here?
-    // or in the thread above? It depneds whether grpc request
-    // are run in another thread or in the main thead?
-    // let _ = rx.wait();
-
     let _ = server.start().unwrap();
 
-    handle.join().unwrap();
+    let _ = rx.recv().map_err(|e| format!("{:?}", e));
 
     server.shutdown();
 
-    let _ = log_handle.join();
-
-    if config.debug_console {
-        shell_handle.join().unwrap();
+    if let Some(handle) = shell_handle {
+        handle.join().map_err(|e| format!("{:?}", e))?;
     }
-
-    let _ = fs::remove_file("/tmp/testagent");
 
     Ok(())
 }

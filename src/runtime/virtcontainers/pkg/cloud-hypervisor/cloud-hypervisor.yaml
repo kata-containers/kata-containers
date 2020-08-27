@@ -42,6 +42,17 @@ paths:
               schema:
                 $ref: '#/components/schemas/VmInfo'
 
+  /vm.counters:
+    get:
+      summary: Get counters from the VM
+      responses:
+        200:
+          description: The VM counters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VmCounters'
+
   /vm.create:
     put:
       summary: Create the cloud-hypervisor Virtual Machine (VM) instance. The instance is not booted, only created.
@@ -150,8 +161,12 @@ paths:
               $ref: '#/components/schemas/VmAddDevice'
         required: true
       responses:
-        204:
+        200:
           description: The new device was successfully added to the VM instance.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PciDeviceInfo'
         404:
           description: The new device could not be added to the VM instance.
 
@@ -182,8 +197,12 @@ paths:
               $ref: '#/components/schemas/DiskConfig'
         required: true
       responses:
-        204:
+        200:
           description: The new disk was successfully added to the VM instance.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PciDeviceInfo'
         500:
           description: The new disk could not be added to the VM instance.
 
@@ -198,8 +217,12 @@ paths:
               $ref: '#/components/schemas/FsConfig'
         required: true
       responses:
-        204:
+        200:
           description: The new device was successfully added to the VM instance.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PciDeviceInfo'
         500:
           description: The new device could not be added to the VM instance.
 
@@ -214,8 +237,12 @@ paths:
               $ref: '#/components/schemas/PmemConfig'
         required: true
       responses:
-        204:
+        200:
           description: The new device was successfully added to the VM instance.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PciDeviceInfo'
         500:
           description: The new device could not be added to the VM instance.
 
@@ -230,8 +257,12 @@ paths:
               $ref: '#/components/schemas/NetConfig'
         required: true
       responses:
-        204:
+        200:
           description: The new device was successfully added to the VM instance.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PciDeviceInfo'
         500:
           description: The new device could not be added to the VM instance.
 
@@ -246,8 +277,12 @@ paths:
               $ref: '#/components/schemas/VsockConfig'
         required: true
       responses:
-        204:
+        200:
           description: The new device was successfully added to the VM instance.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PciDeviceInfo'
         500:
           description: The new device could not be added to the VM instance.
 
@@ -311,6 +346,26 @@ components:
           enum: [Created, Running, Shutdown, Paused]
       description: Virtual Machine information
 
+    VmCounters:
+      type: object
+      additionalProperties:
+        type: object
+        additionalProperties:
+          type: integer
+          format: uint64
+
+    PciDeviceInfo:
+      required:
+      - id
+      - bdf
+      type: object
+      properties:
+        id:
+          type: string
+        bdf:
+          type: string
+      description: Information about a PCI device
+
     VmConfig:
       required:
       - kernel
@@ -355,10 +410,26 @@ components:
             $ref: '#/components/schemas/DeviceConfig'
         vsock:
             $ref: '#/components/schemas/VsockConfig'
+        sgx_epc:
+          type: array
+          items:
+            $ref: '#/components/schemas/SgxEpcConfig'
         iommu:
           type: boolean
           default: false
       description: Virtual machine configuration
+
+    CpuTopology:
+      type: object
+      properties:
+        threads_per_core:
+          type: integer
+        cores_per_die:
+          type: integer
+        dies_per_package:
+          type: integer
+        packages:
+          type: integer
 
     CpusConfig:
       required:
@@ -374,6 +445,8 @@ components:
           minimum: 1
           default: 1
           type: integer
+        topology:
+            $ref: '#/components/schemas/CpuTopology'
 
     MemoryConfig:
       required:
@@ -399,6 +472,9 @@ components:
           type: boolean
           default: false
         hugepages:
+          type: boolean
+          default: false
+        balloon:
           type: boolean
           default: false
 
@@ -598,6 +674,18 @@ components:
         id:
           type: string
 
+    SgxEpcConfig:
+      required:
+      - size
+      type: object
+      properties:
+        size:
+          type: integer
+          format: uint64
+        prefault:
+          type: boolean
+          default: false
+
     VmResize:
       type: object
       properties:
@@ -606,6 +694,10 @@ components:
           type: integer
         desired_ram:
           description: desired memory ram in bytes
+          type: integer
+          format: int64
+        desired_ram_w_balloon:
+          description: desired ballon size in bytes
           type: integer
           format: int64
 

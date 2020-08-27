@@ -28,8 +28,15 @@ jobs:
       with:
         commits: ${{ steps.get-pr-commits.outputs.commits }}
 
+    - name: Commit Body Missing Check
+      if: ${{ success() || failure() }}
+      uses: tim-actions/commit-body-check@v1.0.2
+      with:
+        commits: ${{ steps.get-pr-commits.outputs.commits }}
+
     - name: Check Subject Line Length
-      uses: tim-actions/commit-message-checker-with-regex@v0.3.0
+      if: ${{ success() || failure() }}
+      uses: tim-actions/commit-message-checker-with-regex@v0.3.1
       with:
         commits: ${{ steps.get-pr-commits.outputs.commits }}
         pattern: '^.{0,75}(\n.*)*$'
@@ -38,28 +45,29 @@ jobs:
 
     - name: Check Body Line Length
       if: ${{ success() || failure() }}
-      uses: tim-actions/commit-message-checker-with-regex@v0.3.0
+      uses: tim-actions/commit-message-checker-with-regex@v0.3.1
       with:
         commits: ${{ steps.get-pr-commits.outputs.commits }}
-        pattern: '^.+(\n.{0,72})*$|^.+\n\s*[^a-zA-Z\s\n]'
+        pattern: '^.+(\n.{0,72})*$|^.+\n\s*[^a-zA-Z\s\n]|^.+\n\S+$'
         error: 'Body line too long (max 72)'
         post_error: ${{ env.error_msg }}
 
     - name: Check Fixes
       if: ${{ success() || failure() }}
-      uses: tim-actions/commit-message-checker-with-regex@v0.3.0
+      uses: tim-actions/commit-message-checker-with-regex@v0.3.1
       with:
         commits: ${{ steps.get-pr-commits.outputs.commits }}
         pattern: '\s*Fixes\s*:?\s*(#\d+|github\.com\/kata-containers\/[a-z-.]*#\d+)'
         flags: 'i'
         error: 'No "Fixes" found'
         post_error: ${{ env.error_msg }}
+        one_pass_all_pass: 'true'
 
     - name: Check Subsystem
       if: ${{ success() || failure() }}
-      uses: tim-actions/commit-message-checker-with-regex@v0.3.0
+      uses: tim-actions/commit-message-checker-with-regex@v0.3.1
       with:
         commits: ${{ steps.get-pr-commits.outputs.commits }}
-        pattern: '^[\h]*([^:\h]+)[\h]*:'
+        pattern: '^[\s\t]*[^:\s\t]+[\s\t]*:'
         error: 'Failed to find subsystem in subject'
         post_error: ${{ env.error_msg }}

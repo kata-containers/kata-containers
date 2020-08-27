@@ -6,6 +6,7 @@
 package utils
 
 import (
+	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -94,6 +95,28 @@ func TestRevereString(t *testing.T) {
 	assert.Equal(reversed, "rtstseT")
 }
 
+func TestCleanupFds(t *testing.T) {
+	assert := assert.New(t)
+
+	tmpFile, err := ioutil.TempFile("", "testFds1")
+	assert.NoError(err)
+	filename := tmpFile.Name()
+	defer os.Remove(filename)
+
+	numFds := 1
+	fds := make([]*os.File, numFds)
+	assert.NotNil(fds)
+	assert.Equal(len(fds), 1)
+
+	fds[0] = tmpFile
+
+	CleanupFds(fds, 0)
+	CleanupFds(fds, 1)
+
+	err = tmpFile.Close()
+	assert.Error(err)
+}
+
 func TestWriteToFile(t *testing.T) {
 	assert := assert.New(t)
 
@@ -116,6 +139,29 @@ func TestWriteToFile(t *testing.T) {
 	assert.NoError(err)
 
 	assert.True(reflect.DeepEqual(testData, data))
+}
+
+func TestCalculateMilliCPUs(t *testing.T) {
+	assert := assert.New(t)
+
+	n := CalculateMilliCPUs(1, 1)
+	expected := uint32(1000)
+	assert.Equal(n, expected)
+
+	n = CalculateMilliCPUs(1, 0)
+	expected = uint32(0)
+	assert.Equal(n, expected)
+
+	n = CalculateMilliCPUs(-1, 1)
+	assert.Equal(n, expected)
+}
+
+func TestCaluclateVCpusFromMilliCpus(t *testing.T) {
+	assert := assert.New(t)
+
+	n := CalculateVCpusFromMilliCpus(1)
+	expected := uint32(1)
+	assert.Equal(n, expected)
 }
 
 func TestConstraintsToVCPUs(t *testing.T) {
@@ -154,10 +200,11 @@ func TestGetVirtDriveName(t *testing.T) {
 		{18277, "vdzzz"},
 	}
 
-	for _, test := range tests {
+	for i, test := range tests {
+		msg := fmt.Sprintf("test[%d]: %+v", i, test)
 		driveName, err := GetVirtDriveName(test.index)
-		assert.NoError(err)
-		assert.Equal(driveName, test.expectedDrive)
+		assert.NoError(err, msg)
+		assert.Equal(driveName, test.expectedDrive, msg)
 	}
 }
 
@@ -180,15 +227,18 @@ func TestGetSCSIIdLun(t *testing.T) {
 		{513, 2, 1},
 	}
 
-	for _, test := range tests {
+	for i, test := range tests {
+		msg := fmt.Sprintf("test[%d]: %+v", i, test)
 		scsiID, lun, err := GetSCSIIdLun(test.index)
-		assert.NoError(err)
-		assert.Equal(scsiID, test.expectedScsiID)
-		assert.Equal(lun, test.expectedLun)
+		assert.NoError(err, msg)
+		assert.Equal(scsiID, test.expectedScsiID, msg)
+		assert.Equal(lun, test.expectedLun, msg)
 	}
 
-	_, _, err := GetSCSIIdLun(maxSCSIDevices + 1)
-	assert.NotNil(err)
+	_, _, err := GetSCSIIdLun(-1)
+	assert.Error(err)
+	_, _, err = GetSCSIIdLun(maxSCSIDevices + 1)
+	assert.Error(err)
 }
 
 func TestGetSCSIAddress(t *testing.T) {
@@ -204,11 +254,23 @@ func TestGetSCSIAddress(t *testing.T) {
 		{512, "2:0"},
 	}
 
-	for _, test := range tests {
+	for i, test := range tests {
+		msg := fmt.Sprintf("test[%d]: %+v", i, test)
 		scsiAddr, err := GetSCSIAddress(test.index)
-		assert.NoError(err)
-		assert.Equal(scsiAddr, test.expectedSCSIAddress)
+		assert.NoError(err, msg)
+		assert.Equal(scsiAddr, test.expectedSCSIAddress, msg)
 	}
+
+	_, err := GetSCSIAddress(-1)
+	assert.Error(err)
+}
+
+func TestMakeNameID(t *testing.T) {
+	assert := assert.New(t)
+
+	nameID := MakeNameID("testType", "testID", 14)
+	expected := "testType-testI"
+	assert.Equal(expected, nameID)
 }
 
 func TestBuildSocketPath(t *testing.T) {
@@ -241,15 +303,16 @@ func TestBuildSocketPath(t *testing.T) {
 
 	for i, d := range data {
 		result, err := BuildSocketPath(d.elems...)
+		msg := fmt.Sprintf("test[%d]: %+v", i, d)
 
 		if d.valid {
-			assert.NoErrorf(err, "test %d, data %+v", i, d)
+			assert.NoErrorf(err, "test %d, data %+v", i, d, msg)
 		} else {
-			assert.Errorf(err, "test %d, data %+v", i, d)
+			assert.Errorf(err, "test %d, data %+v", i, d, msg)
 		}
 
-		assert.NotNil(result)
-		assert.Equal(d.expected, result)
+		assert.NotNil(result, msg)
+		assert.Equal(d.expected, result, msg)
 	}
 }
 
@@ -271,4 +334,44 @@ func TestSupportsVsocks(t *testing.T) {
 	VHostVSockDevicePath = vHostVSockFile.Name()
 
 	assert.True(SupportsVsocks())
+}
+
+func TestAlignMem(t *testing.T) {
+	assert := assert.New(t)
+
+	memSize := MemUnit(1024) * MiB
+	blockSize := MemUnit(512) * MiB
+	resultMem := memSize.AlignMem(blockSize)
+	expected := memSize
+	assert.Equal(expected, resultMem)
+
+	memSize = MemUnit(512) * MiB
+	blockSize = MemUnit(1024) * MiB
+	resultMem = memSize.AlignMem(blockSize)
+	expected = blockSize
+	assert.Equal(expected, resultMem)
+
+	memSize = MemUnit(1024) * MiB
+	blockSize = MemUnit(50) * MiB
+	resultMem = memSize.AlignMem(blockSize)
+	expected = memSize + (blockSize - (memSize % blockSize))
+	assert.Equal(expected, resultMem)
+}
+
+func TestToMiB(t *testing.T) {
+	assert := assert.New(t)
+
+	memSize := MemUnit(1) * GiB
+	result := memSize.ToMiB()
+	expected := uint64(1024)
+	assert.Equal(expected, result)
+}
+
+func TestToBytes(t *testing.T) {
+	assert := assert.New(t)
+
+	memSize := MemUnit(1) * GiB
+	result := memSize.ToBytes()
+	expected := uint64(1073741824)
+	assert.Equal(expected, result)
 }

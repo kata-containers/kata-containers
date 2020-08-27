@@ -130,10 +130,8 @@ fn create_extended_pipe(flags: OFlag, pipe_size: i32) -> Result<(RawFd, RawFd)> 
 
 #[cfg(test)]
 mod tests {
-    use crate::process::create_extended_pipe;
-    use nix::fcntl::{fcntl, FcntlArg, OFlag};
+    use super::*;
     use std::fs;
-    use std::os::unix::io::RawFd;
 
     fn get_pipe_max_size() -> i32 {
         fs::read_to_string("/proc/sys/fs/pipe-max-size")
@@ -157,5 +155,30 @@ mod tests {
         let (r, w) = create_extended_pipe(OFlag::O_CLOEXEC, max_size).unwrap();
         let actual_size = get_pipe_size(w);
         assert_eq!(max_size, actual_size);
+    }
+
+    #[test]
+    fn test_process() {
+        let id = "abc123rgb";
+        let init = true;
+        let process = Process::new(
+            &Logger::root(slog::Discard, o!("source" => "unit-test")),
+            &OCIProcess::default(),
+            id,
+            init,
+            32,
+        );
+
+        let mut process = process.unwrap();
+        assert_eq!(process.exec_id, id);
+        assert_eq!(process.init, init);
+
+        // -1 by default
+        assert_eq!(process.pid, -1);
+        assert!(process.wait().is_err());
+        // signal to every process in the process
+        // group of the calling process.
+        process.pid = 0;
+        assert!(process.signal(Signal::SIGCONT).is_ok());
     }
 }
