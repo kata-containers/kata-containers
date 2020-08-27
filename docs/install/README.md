@@ -35,15 +35,6 @@ to see if your system is capable of running Kata Containers.
 | [Scripted](#scripted-installation)                   |Generates an installation script which will result in a working system when executed     |[see table](#supported-distributions) |
 | [Manual](#manual-installation)                       |Allows the user to read a brief document and execute the specified commands step-by-step |[see table](#supported-distributions) |
 
-### Supported Distributions
-
-Kata is packaged by the Kata community for:
-
-|Distribution (link to installation guide)                        | Versions                                                                                                          |
-|-----------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------|
-|[Debian](debian-installation-guide.md)                           | 9, 10                                                                                                             |
-|[Ubuntu](ubuntu-installation-guide.md)                           | 16.04, 18.04                                                                                                      |
-
 #### Official packages
 
 Kata packages are provided by official distribution repositories for:
