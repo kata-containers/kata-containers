@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 use rustjail::errors::*;
+use std::env;
 use std::fs;
 use std::time;
 
@@ -17,6 +18,9 @@ const CONTAINER_PIPE_SIZE_OPTION: &str = "agent.container_pipe_size";
 const DEFAULT_LOG_LEVEL: slog::Level = slog::Level::Info;
 const DEFAULT_HOTPLUG_TIMEOUT: time::Duration = time::Duration::from_secs(3);
 const DEFAULT_CONTAINER_PIPE_SIZE: i32 = 0;
+const VSOCK_ADDR: &str = "vsock://-1";
+const VSOCK_PORT: u16 = 1024;
+const SERVER_ADDR_ENV_VAR: &str = "KATA_AGENT_SERVER_ADDR";
 
 // FIXME: unused
 const TRACE_MODE_FLAG: &str = "agent.trace";
@@ -31,6 +35,7 @@ pub struct agentConfig {
     pub debug_console_vport: i32,
     pub log_vport: i32,
     pub container_pipe_size: i32,
+    pub server_addr: String,
 }
 
 impl agentConfig {
@@ -43,6 +48,7 @@ impl agentConfig {
             debug_console_vport: 0,
             log_vport: 0,
             container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+            server_addr: format!("{}:{}", VSOCK_ADDR, VSOCK_PORT),
         }
     }
 
@@ -89,6 +95,10 @@ impl agentConfig {
                 let container_pipe_size = get_container_pipe_size(param)?;
                 self.container_pipe_size = container_pipe_size
             }
+        }
+
+        if let Ok(addr) = env::var(SERVER_ADDR_ENV_VAR) {
+            self.server_addr = addr;
         }
 
         Ok(())
