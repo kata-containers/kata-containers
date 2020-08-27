@@ -55,7 +55,7 @@ line.
 ## Install and configure Kata Containers
 
 To use this feature, you need Kata version 1.3.0 or above.
-Follow the [Kata Containers setup instructions](https://github.com/kata-containers/documentation/blob/master/install/README.md)
+Follow the [Kata Containers setup instructions](../install/README.md)
 to install the latest version of Kata.
 
 In order to pass a GPU to a Kata Container, you need to enable the `hotplug_vfio_on_root_bus`
@@ -82,12 +82,12 @@ CONFIG_DRM_I915_USERPTR=y
 ```
 
 Build the Kata Containers kernel with the previous config options, using the instructions
-described in [Building Kata Containers kernel](https://github.com/kata-containers/packaging/tree/master/kernel).
-For further details on building and installing guest kernels, see [the developer guide](https://github.com/kata-containers/documentation/blob/master/Developer-Guide.md#install-guest-kernel-images).
+described in [Building Kata Containers kernel](../../tools/packaging/kernel).
+For further details on building and installing guest kernels, see [the developer guide](../Developer-Guide.md#install-guest-kernel-images).
 
 There is an easy way to build a guest kernel that supports Intel GPU:
 ```
-## Build guest kernel with https://github.com/kata-containers/packaging/tree/master/kernel
+## Build guest kernel with ../../tools/packaging/kernel
 
 # Prepare (download guest kernel source, generate .config)
 $ ./build-kernel.sh -g intel -f setup

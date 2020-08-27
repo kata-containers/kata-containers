@@ -11,6 +11,7 @@ import (
 	"time"
 
 	govmmQemu "github.com/intel/govmm/qemu"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 )
 
 type qemuArm64 struct {
@@ -106,4 +107,15 @@ func (q *qemuArm64) setIgnoreSharedMemoryMigrationCaps(_ context.Context, _ *gov
 
 func (q *qemuArm64) appendIOMMU(devices []govmmQemu.Device) ([]govmmQemu.Device, error) {
 	return devices, fmt.Errorf("Arm64 architecture does not support vIOMMU")
+}
+
+func (q *qemuArm64) append9PVolume(devices []govmmQemu.Device, volume types.Volume) ([]govmmQemu.Device, error) {
+	d, err := genericAppend9PVolume(devices, volume, q.nestedRun)
+	if err != nil {
+		return nil, err
+	}
+
+	d.Multidev = ""
+	devices = append(devices, d)
+	return devices, nil
 }

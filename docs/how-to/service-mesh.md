@@ -48,7 +48,7 @@ as the proxy starts.
 
 ### Kata and Kubernetes
 
-Follow the [instructions](https://github.com/kata-containers/documentation/blob/master/install/README.md)
+Follow the [instructions](../install/README.md)
 to get Kata Containers properly installed and configured with Kubernetes.
 You can choose between CRI-O and CRI-containerd, both are supported
 through this document.

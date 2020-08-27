@@ -30,6 +30,10 @@ var rootfsDir = "rootfs"
 
 var systemMountPrefixes = []string{"/proc", "/sys"}
 
+func mountLogger() *logrus.Entry {
+	return virtLog.WithField("subsystem", "mount")
+}
+
 var propagationTypes = map[string]uintptr{
 	"shared":  syscall.MS_SHARED,
 	"private": syscall.MS_PRIVATE,
@@ -321,17 +325,17 @@ func bindUnmountContainerRootfs(ctx context.Context, sharedDir, cID string) erro
 
 	rootfsDest := filepath.Join(sharedDir, cID, rootfsDir)
 	if isSymlink(filepath.Join(sharedDir, cID)) || isSymlink(rootfsDest) {
-		logrus.Warnf("container dir %s is a symlink, malicious guest?", cID)
+		mountLogger().WithField("container", cID).Warnf("container dir is a symlink, malicious guest?")
 		return nil
 	}
 
 	err := syscall.Unmount(rootfsDest, syscall.MNT_DETACH|UmountNoFollow)
 	if err == syscall.ENOENT {
-		logrus.Warnf("%s: %s", err, rootfsDest)
+		mountLogger().WithError(err).WithField("rootfs-dir", rootfsDest).Warn()
 		return nil
 	}
 	if err := syscall.Rmdir(rootfsDest); err != nil {
-		logrus.WithError(err).WithField("rootfs-dir", rootfsDest).Warn("Could not remove container rootfs dir")
+		mountLogger().WithError(err).WithField("rootfs-dir", rootfsDest).Warn("Could not remove container rootfs dir")
 	}
 
 	return err
@@ -344,7 +348,7 @@ func bindUnmountAllRootfs(ctx context.Context, sharedDir string, sandbox *Sandbo
 	var errors *merr.Error
 	for _, c := range sandbox.containers {
 		if isSymlink(filepath.Join(sharedDir, c.id)) {
-			logrus.Warnf("container dir %s is a symlink, malicious guest?", c.id)
+			mountLogger().WithField("container", c.id).Warnf("container dir is a symlink, malicious guest?")
 			continue
 		}
 		c.unmountHostMounts()

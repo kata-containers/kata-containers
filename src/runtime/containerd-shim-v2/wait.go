@@ -40,7 +40,7 @@ func wait(s *service, c *container, execID string) (int32, error) {
 
 	ret, err := s.sandbox.WaitProcess(c.id, processID)
 	if err != nil {
-		logrus.WithError(err).WithFields(logrus.Fields{
+		shimLog.WithError(err).WithFields(logrus.Fields{
 			"container": c.id,
 			"pid":       processID,
 		}).Error("Wait for process failed")
@@ -61,15 +61,15 @@ func wait(s *service, c *container, execID string) (int32, error) {
 				s.monitor <- nil
 			}
 			if err = s.sandbox.Stop(true); err != nil {
-				logrus.WithField("sandbox", s.sandbox.ID()).Error("failed to stop sandbox")
+				shimLog.WithField("sandbox", s.sandbox.ID()).Error("failed to stop sandbox")
 			}
 
 			if err = s.sandbox.Delete(); err != nil {
-				logrus.WithField("sandbox", s.sandbox.ID()).Error("failed to delete sandbox")
+				shimLog.WithField("sandbox", s.sandbox.ID()).Error("failed to delete sandbox")
 			}
 		} else {
 			if _, err = s.sandbox.StopContainer(c.id, false); err != nil {
-				logrus.WithError(err).WithField("container", c.id).Warn("stop container failed")
+				shimLog.WithError(err).WithField("container", c.id).Warn("stop container failed")
 			}
 		}
 		c.status = task.StatusStopped
@@ -105,14 +105,14 @@ func watchSandbox(s *service) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	// sandbox malfunctioning, cleanup as much as we can
-	logrus.WithError(err).Warn("sandbox stopped unexpectedly")
+	shimLog.WithError(err).Warn("sandbox stopped unexpectedly")
 	err = s.sandbox.Stop(true)
 	if err != nil {
-		logrus.WithError(err).Warn("stop sandbox failed")
+		shimLog.WithError(err).Warn("stop sandbox failed")
 	}
 	err = s.sandbox.Delete()
 	if err != nil {
-		logrus.WithError(err).Warn("delete sandbox failed")
+		shimLog.WithError(err).Warn("delete sandbox failed")
 	}
 
 	for _, c := range s.containers {
@@ -120,9 +120,9 @@ func watchSandbox(s *service) {
 			continue
 		}
 		rootfs := path.Join(c.bundle, "rootfs")
-		logrus.WithField("rootfs", rootfs).WithField("id", c.id).Debug("container umount rootfs")
+		shimLog.WithField("rootfs", rootfs).WithField("container", c.id).Debug("container umount rootfs")
 		if err := mount.UnmountAll(rootfs, 0); err != nil {
-			logrus.WithError(err).Warn("failed to cleanup rootfs mount")
+			shimLog.WithError(err).Warn("failed to cleanup rootfs mount")
 		}
 	}
 
@@ -142,7 +142,7 @@ func watchOOMEvents(ctx context.Context, s *service) {
 		default:
 			containerID, err := s.sandbox.GetOOMEvent()
 			if err != nil {
-				logrus.WithField("sandbox", s.sandbox.ID()).WithError(err).Warn("failed to get OOM event from sandbox")
+				shimLog.WithError(err).Warn("failed to get OOM event from sandbox")
 				// If the GetOOMEvent call is not implemented, then the agent is most likely an older version,
 				// stop attempting to get OOM events.
 				// for rust agent, the response code is not found

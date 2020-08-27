@@ -85,9 +85,11 @@ type clhClient interface {
 	// Add/remove CPUs to/from the VM
 	VmResizePut(ctx context.Context, vmResize chclient.VmResize) (*http.Response, error)
 	// Add VFIO PCI device to the VM
-	VmAddDevicePut(ctx context.Context, vmAddDevice chclient.VmAddDevice) (*http.Response, error)
+	VmAddDevicePut(ctx context.Context, vmAddDevice chclient.VmAddDevice) (chclient.PciDeviceInfo, *http.Response, error)
 	// Add a new disk device to the VM
-	VmAddDiskPut(ctx context.Context, diskConfig chclient.DiskConfig) (*http.Response, error)
+	VmAddDiskPut(ctx context.Context, diskConfig chclient.DiskConfig) (chclient.PciDeviceInfo, *http.Response, error)
+	// Remove a device from the VM
+	VmRemoveDevicePut(ctx context.Context, vmRemoveDevice chclient.VmRemoveDevice) (*http.Response, error)
 }
 
 type CloudHypervisorVersion struct {
@@ -221,7 +223,6 @@ func (clh *cloudHypervisor) createSandbox(ctx context.Context, id string, networ
 	// Set initial memomory size of the virtual machine
 	// Convert to int64 openApiClient only support int64
 	clh.vmconfig.Memory.Size = int64((utils.MemUnit(clh.config.MemorySize) * utils.MiB).ToBytes())
-	clh.vmconfig.Memory.File = "/dev/shm"
 	// shared memory should be enabled if using vhost-user(kata uses virtiofsd)
 	clh.vmconfig.Memory.Shared = true
 	hostMemKb, err := getHostMemorySizeKb(procMemInfo)
@@ -297,6 +298,12 @@ func (clh *cloudHypervisor) createSandbox(ctx context.Context, id string, networ
 		Mode: cctOFF,
 	}
 
+	clh.vmconfig.Cpus.Topology = chclient.CpuTopology{
+		ThreadsPerCore: 1,
+		CoresPerDie:    int32(clh.config.DefaultMaxVCPUs),
+		DiesPerPackage: 1,
+		Packages:       1,
+	}
 	// Overwrite the default value of HTTP API socket path for cloud hypervisor
 	apiSocketPath, err := clh.apiSocketPath(id)
 	if err != nil {
@@ -403,7 +410,11 @@ func (clh *cloudHypervisor) getThreadIDs() (vcpuThreadIDs, error) {
 	return vcpuInfo, nil
 }
 
-func (clh *cloudHypervisor) hotplugBlockDevice(drive *config.BlockDrive) error {
+func clhDriveIndexToID(i int) string {
+	return "clh_drive_" + strconv.Itoa(i)
+}
+
+func (clh *cloudHypervisor) hotplugAddBlockDevice(drive *config.BlockDrive) error {
 	if clh.config.BlockDeviceDriver != config.VirtioBlock {
 		return fmt.Errorf("incorrect hypervisor configuration on 'block_device_driver':"+
 			" using '%v' but only support '%v'", clh.config.BlockDeviceDriver, config.VirtioBlock)
@@ -418,6 +429,8 @@ func (clh *cloudHypervisor) hotplugBlockDevice(drive *config.BlockDrive) error {
 		return openAPIClientError(err)
 	}
 
+	driveID := clhDriveIndexToID(drive.Index)
+
 	//Explicitly set PCIAddr to NULL, so that VirtPath can be used
 	drive.PCIAddr = ""
 
@@ -428,8 +441,9 @@ func (clh *cloudHypervisor) hotplugBlockDevice(drive *config.BlockDrive) error {
 			Path:      drive.File,
 			Readonly:  drive.ReadOnly,
 			VhostUser: false,
+			Id:        driveID,
 		}
-		_, err = cl.VmAddDiskPut(ctx, blkDevice)
+		_, _, err = cl.VmAddDiskPut(ctx, blkDevice)
 	}
 
 	if err != nil {
@@ -448,7 +462,7 @@ func (clh *cloudHypervisor) hotPlugVFIODevice(device config.VFIODev) error {
 		return openAPIClientError(err)
 	}
 
-	_, err = cl.VmAddDevicePut(ctx, chclient.VmAddDevice{Path: device.SysfsDev})
+	_, _, err = cl.VmAddDevicePut(ctx, chclient.VmAddDevice{Path: device.SysfsDev})
 	if err != nil {
 		err = fmt.Errorf("Failed to hotplug device %+v %s", device, openAPIClientError(err))
 	}
@@ -462,7 +476,7 @@ func (clh *cloudHypervisor) hotplugAddDevice(devInfo interface{}, devType device
 	switch devType {
 	case blockDev:
 		drive := devInfo.(*config.BlockDrive)
-		return nil, clh.hotplugBlockDevice(drive)
+		return nil, clh.hotplugAddBlockDevice(drive)
 	case vfioDev:
 		device := devInfo.(*config.VFIODev)
 		return nil, clh.hotPlugVFIODevice(*device)
@@ -472,9 +486,39 @@ func (clh *cloudHypervisor) hotplugAddDevice(devInfo interface{}, devType device
 
 }
 
+func (clh *cloudHypervisor) hotplugRemoveBlockDevice(drive *config.BlockDrive) error {
+	cl := clh.client()
+	ctx, cancel := context.WithTimeout(context.Background(), clhHotPlugAPITimeout*time.Second)
+	defer cancel()
+
+	driveID := clhDriveIndexToID(drive.Index)
+
+	if drive.Pmem {
+		return fmt.Errorf("pmem device hotplug remove not supported")
+	}
+
+	_, err := cl.VmRemoveDevicePut(ctx, chclient.VmRemoveDevice{Id: driveID})
+
+	if err != nil {
+		err = fmt.Errorf("failed to hotplug remove block device %+v %s", drive, openAPIClientError(err))
+	}
+
+	return err
+}
+
 func (clh *cloudHypervisor) hotplugRemoveDevice(devInfo interface{}, devType deviceType) (interface{}, error) {
-	clh.Logger().WithField("function", "hotplugRemoveDevice").Warn("hotplug remove device not supported")
-	return nil, nil
+	span, _ := clh.trace("hotplugRemoveDevice")
+	defer span.Finish()
+
+	switch devType {
+	case blockDev:
+		return nil, clh.hotplugRemoveBlockDevice(devInfo.(*config.BlockDrive))
+	default:
+		clh.Logger().WithFields(log.Fields{"devInfo": devInfo,
+			"deviceType": devType}).Error("hotplugRemoveDevice: unsupported device")
+		return nil, fmt.Errorf("Could not hot remove device: unsupported device: %v, type: %v",
+			devInfo, devType)
+	}
 }
 
 func (clh *cloudHypervisor) hypervisorConfig() HypervisorConfig {

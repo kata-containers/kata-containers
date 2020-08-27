@@ -38,6 +38,16 @@ paths:
           description: The VM information
       summary: Returns general information about the cloud-hypervisor Virtual Machine
         (VM) instance.
+  /vm.counters:
+    get:
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VmCounters'
+          description: The VM counters
+      summary: Get counters from the VM
   /vm.create:
     put:
       operationId: createVM
@@ -138,7 +148,11 @@ paths:
         description: The path of the new device
         required: true
       responses:
-        "204":
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PciDeviceInfo'
           description: The new device was successfully added to the VM instance.
         "404":
           description: The new device could not be added to the VM instance.
@@ -168,7 +182,11 @@ paths:
         description: The details of the new disk
         required: true
       responses:
-        "204":
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PciDeviceInfo'
           description: The new disk was successfully added to the VM instance.
         "500":
           description: The new disk could not be added to the VM instance.
@@ -183,7 +201,11 @@ paths:
         description: The details of the new virtio-fs
         required: true
       responses:
-        "204":
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PciDeviceInfo'
           description: The new device was successfully added to the VM instance.
         "500":
           description: The new device could not be added to the VM instance.
@@ -198,7 +220,11 @@ paths:
         description: The details of the new pmem device
         required: true
       responses:
-        "204":
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PciDeviceInfo'
           description: The new device was successfully added to the VM instance.
         "500":
           description: The new device could not be added to the VM instance.
@@ -213,7 +239,11 @@ paths:
         description: The details of the new network device
         required: true
       responses:
-        "204":
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PciDeviceInfo'
           description: The new device was successfully added to the VM instance.
         "500":
           description: The new device could not be added to the VM instance.
@@ -228,7 +258,11 @@ paths:
         description: The details of the new vsock device
         required: true
       responses:
-        "204":
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PciDeviceInfo'
           description: The new device was successfully added to the VM instance.
         "500":
           description: The new device could not be added to the VM instance.
@@ -293,13 +327,14 @@ components:
             hugepages: false
             shared: false
             mergeable: false
+            balloon: false
             file: file
-            size: 1
-            hotplug_size: 5
+            size: 7
+            hotplug_size: 9
             hotplug_method: acpi
           disks:
           - path: path
-            num_queues: 5
+            num_queues: 3
             readonly: false
             iommu: false
             queue_size: 2
@@ -309,7 +344,7 @@ components:
             poll_queue: true
             id: id
           - path: path
-            num_queues: 5
+            num_queues: 3
             readonly: false
             iommu: false
             queue_size: 2
@@ -319,6 +354,11 @@ components:
             poll_queue: true
             id: id
           cpus:
+            topology:
+              dies_per_package: 5
+              threads_per_core: 1
+              cores_per_die: 5
+              packages: 2
             boot_vcpus: 1
             max_vcpus: 1
           devices:
@@ -333,17 +373,22 @@ components:
           rng:
             iommu: false
             src: /dev/urandom
+          sgx_epc:
+          - prefault: false
+            size: 1
+          - prefault: false
+            size: 1
           fs:
-          - num_queues: 3
-            queue_size: 2
-            cache_size: 4
+          - num_queues: 1
+            queue_size: 1
+            cache_size: 1
             dax: true
             tag: tag
             socket: socket
             id: id
-          - num_queues: 3
-            queue_size: 2
-            cache_size: 4
+          - num_queues: 1
+            queue_size: 1
+            cache_size: 1
             dax: true
             tag: tag
             socket: socket
@@ -356,13 +401,13 @@ components:
           pmem:
           - mergeable: false
             file: file
-            size: 7
+            size: 6
             iommu: false
             id: id
             discard_writes: false
           - mergeable: false
             file: file
-            size: 7
+            size: 6
             iommu: false
             id: id
             discard_writes: false
@@ -377,9 +422,9 @@ components:
             path: path
           net:
           - tap: tap
-            num_queues: 7
+            num_queues: 4
             iommu: false
-            queue_size: 9
+            queue_size: 7
             vhost_socket: vhost_socket
             vhost_user: false
             ip: 192.168.249.1
@@ -387,9 +432,9 @@ components:
             mac: mac
             mask: 255.255.255.0
           - tap: tap
-            num_queues: 7
+            num_queues: 4
             iommu: false
-            queue_size: 9
+            queue_size: 7
             vhost_socket: vhost_socket
             vhost_user: false
             ip: 192.168.249.1
@@ -410,6 +455,27 @@ components:
       - config
       - state
       type: object
+    VmCounters:
+      additionalProperties:
+        additionalProperties:
+          format: uint64
+          type: integer
+        type: object
+      type: object
+    PciDeviceInfo:
+      description: Information about a PCI device
+      example:
+        bdf: bdf
+        id: id
+      properties:
+        id:
+          type: string
+        bdf:
+          type: string
+      required:
+      - bdf
+      - id
+      type: object
     VmConfig:
       description: Virtual machine configuration
       example:
@@ -421,13 +487,14 @@ components:
           hugepages: false
           shared: false
           mergeable: false
+          balloon: false
           file: file
-          size: 1
-          hotplug_size: 5
+          size: 7
+          hotplug_size: 9
           hotplug_method: acpi
         disks:
         - path: path
-          num_queues: 5
+          num_queues: 3
           readonly: false
           iommu: false
           queue_size: 2
@@ -437,7 +504,7 @@ components:
           poll_queue: true
           id: id
         - path: path
-          num_queues: 5
+          num_queues: 3
           readonly: false
           iommu: false
           queue_size: 2
@@ -447,6 +514,11 @@ components:
           poll_queue: true
           id: id
         cpus:
+          topology:
+            dies_per_package: 5
+            threads_per_core: 1
+            cores_per_die: 5
+            packages: 2
           boot_vcpus: 1
           max_vcpus: 1
         devices:
@@ -461,17 +533,22 @@ components:
         rng:
           iommu: false
           src: /dev/urandom
+        sgx_epc:
+        - prefault: false
+          size: 1
+        - prefault: false
+          size: 1
         fs:
-        - num_queues: 3
-          queue_size: 2
-          cache_size: 4
+        - num_queues: 1
+          queue_size: 1
+          cache_size: 1
           dax: true
           tag: tag
           socket: socket
           id: id
-        - num_queues: 3
-          queue_size: 2
-          cache_size: 4
+        - num_queues: 1
+          queue_size: 1
+          cache_size: 1
           dax: true
           tag: tag
           socket: socket
@@ -484,13 +561,13 @@ components:
         pmem:
         - mergeable: false
           file: file
-          size: 7
+          size: 6
           iommu: false
           id: id
           discard_writes: false
         - mergeable: false
           file: file
-          size: 7
+          size: 6
           iommu: false
           id: id
           discard_writes: false
@@ -505,9 +582,9 @@ components:
           path: path
         net:
         - tap: tap
-          num_queues: 7
+          num_queues: 4
           iommu: false
-          queue_size: 9
+          queue_size: 7
           vhost_socket: vhost_socket
           vhost_user: false
           ip: 192.168.249.1
@@ -515,9 +592,9 @@ components:
           mac: mac
           mask: 255.255.255.0
         - tap: tap
-          num_queues: 7
+          num_queues: 4
           iommu: false
-          queue_size: 9
+          queue_size: 7
           vhost_socket: vhost_socket
           vhost_user: false
           ip: 192.168.249.1
@@ -563,6 +640,10 @@ components:
           type: array
         vsock:
           $ref: '#/components/schemas/VsockConfig'
+        sgx_epc:
+          items:
+            $ref: '#/components/schemas/SgxEpcConfig'
+          type: array
         iommu:
           default: false
           type: boolean
@@ -570,8 +651,29 @@ components:
       - cmdline
       - kernel
       type: object
+    CpuTopology:
+      example:
+        dies_per_package: 5
+        threads_per_core: 1
+        cores_per_die: 5
+        packages: 2
+      properties:
+        threads_per_core:
+          type: integer
+        cores_per_die:
+          type: integer
+        dies_per_package:
+          type: integer
+        packages:
+          type: integer
+      type: object
     CpusConfig:
       example:
+        topology:
+          dies_per_package: 5
+          threads_per_core: 1
+          cores_per_die: 5
+          packages: 2
         boot_vcpus: 1
         max_vcpus: 1
       properties:
@@ -583,6 +685,8 @@ components:
           default: 1
           minimum: 1
           type: integer
+        topology:
+          $ref: '#/components/schemas/CpuTopology'
       required:
       - boot_vcpus
       - max_vcpus
@@ -592,9 +696,10 @@ components:
         hugepages: false
         shared: false
         mergeable: false
+        balloon: false
         file: file
-        size: 1
-        hotplug_size: 5
+        size: 7
+        hotplug_size: 9
         hotplug_method: acpi
       properties:
         size:
@@ -615,6 +720,9 @@ components:
           default: false
           type: boolean
         hugepages:
+          default: false
+          type: boolean
+        balloon:
           default: false
           type: boolean
       required:
@@ -651,7 +759,7 @@ components:
     DiskConfig:
       example:
         path: path
-        num_queues: 5
+        num_queues: 3
         readonly: false
         iommu: false
         queue_size: 2
@@ -694,9 +802,9 @@ components:
     NetConfig:
       example:
         tap: tap
-        num_queues: 7
+        num_queues: 4
         iommu: false
-        queue_size: 9
+        queue_size: 7
         vhost_socket: vhost_socket
         vhost_user: false
         ip: 192.168.249.1
@@ -748,9 +856,9 @@ components:
       type: object
     FsConfig:
       example:
-        num_queues: 3
-        queue_size: 2
-        cache_size: 4
+        num_queues: 1
+        queue_size: 1
+        cache_size: 1
         dax: true
         tag: tag
         socket: socket
@@ -782,7 +890,7 @@ components:
       example:
         mergeable: false
         file: file
-        size: 7
+        size: 6
         iommu: false
         id: id
         discard_writes: false
@@ -867,9 +975,24 @@ components:
       - cid
       - socket
       type: object
+    SgxEpcConfig:
+      example:
+        prefault: false
+        size: 1
+      properties:
+        size:
+          format: uint64
+          type: integer
+        prefault:
+          default: false
+          type: boolean
+      required:
+      - size
+      type: object
     VmResize:
       example:
         desired_vcpus: 1
+        desired_ram_w_balloon: 1
         desired_ram: 6
       properties:
         desired_vcpus:
@@ -877,6 +1000,10 @@ components:
           type: integer
         desired_ram:
           description: desired memory ram in bytes
+          format: int64
+          type: integer
+        desired_ram_w_balloon:
+          description: desired ballon size in bytes
           format: int64
           type: integer
       type: object

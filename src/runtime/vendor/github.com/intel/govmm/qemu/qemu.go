@@ -123,6 +123,9 @@ const (
 	// VfioCCW is the vfio driver with CCW transport.
 	VfioCCW DeviceDriver = "vfio-ccw"
 
+	// VfioAP is the vfio driver with AP transport.
+	VfioAP DeviceDriver = "vfio-ap"
+
 	// VHostVSockPCI is a generic Vsock vhost device with PCI transport.
 	VHostVSockPCI DeviceDriver = "vhost-vsock-pci"
 
@@ -288,6 +291,23 @@ func (object Object) QemuParams(config *Config) []string {
 	return qemuParams
 }
 
+// Virtio9PMultidev filesystem behaviour to deal
+// with multiple devices being shared with a 9p export.
+type Virtio9PMultidev string
+
+const (
+	// Remap shares multiple devices with only one export.
+	Remap Virtio9PMultidev = "remap"
+
+	// Warn assumes that only one device is shared by the same export.
+	// Only a warning message is logged (once) by qemu on host side.
+	// This is the default behaviour.
+	Warn Virtio9PMultidev = "warn"
+
+	// Forbid like "warn" but also deny access to additional devices on guest.
+	Forbid Virtio9PMultidev = "forbid"
+)
+
 // FSDriver represents a qemu filesystem driver.
 type FSDriver string
 
@@ -350,6 +370,10 @@ type FSDevice struct {
 
 	// Transport is the virtio transport for this device.
 	Transport VirtioTransport
+
+	// Multidev is the filesystem behaviour to deal
+	// with multiple devices being shared with a 9p export
+	Multidev Virtio9PMultidev
 }
 
 // Virtio9PTransport is a map of the virtio-9p device name that corresponds
@@ -385,6 +409,9 @@ func (fsdev FSDevice) QemuParams(config *Config) []string {
 		deviceParams = append(deviceParams, fmt.Sprintf(",romfile=%s", fsdev.ROMFile))
 	}
 	if fsdev.Transport.isVirtioCCW(config) {
+		if config.Knobs.IOMMUPlatform {
+			deviceParams = append(deviceParams, ",iommu_platform=on")
+		}
 		deviceParams = append(deviceParams, fmt.Sprintf(",devno=%s", fsdev.DevNo))
 	}
 
@@ -392,6 +419,10 @@ func (fsdev FSDevice) QemuParams(config *Config) []string {
 	fsParams = append(fsParams, fmt.Sprintf(",id=%s", fsdev.ID))
 	fsParams = append(fsParams, fmt.Sprintf(",path=%s", fsdev.Path))
 	fsParams = append(fsParams, fmt.Sprintf(",security_model=%s", fsdev.SecurityModel))
+
+	if fsdev.Multidev != "" {
+		fsParams = append(fsParams, fmt.Sprintf(",multidevs=%s", fsdev.Multidev))
+	}
 
 	qemuParams = append(qemuParams, "-device")
 	qemuParams = append(qemuParams, strings.Join(deviceParams, ""))
@@ -512,6 +543,9 @@ func (cdev CharDevice) QemuParams(config *Config) []string {
 	}
 
 	if cdev.Driver == VirtioSerial && cdev.Transport.isVirtioCCW(config) {
+		if config.Knobs.IOMMUPlatform {
+			deviceParams = append(deviceParams, ",iommu_platform=on")
+		}
 		deviceParams = append(deviceParams, fmt.Sprintf(",devno=%s", cdev.DevNo))
 	}
 
@@ -779,6 +813,9 @@ func (netdev NetDevice) QemuDeviceParams(config *Config) []string {
 	}
 
 	if netdev.Transport.isVirtioCCW(config) {
+		if config.Knobs.IOMMUPlatform {
+			deviceParams = append(deviceParams, ",iommu_platform=on")
+		}
 		deviceParams = append(deviceParams, fmt.Sprintf(",devno=%s", netdev.DevNo))
 	}
 
@@ -912,6 +949,9 @@ func (dev SerialDevice) QemuParams(config *Config) []string {
 	}
 
 	if dev.Transport.isVirtioCCW(config) {
+		if config.Knobs.IOMMUPlatform {
+			deviceParams = append(deviceParams, ",iommu_platform=on")
+		}
 		deviceParams = append(deviceParams, fmt.Sprintf(",devno=%s", dev.DevNo))
 	}
 
@@ -1503,6 +1543,9 @@ func (scsiCon SCSIController) QemuParams(config *Config) []string {
 	}
 
 	if scsiCon.Transport.isVirtioCCW(config) {
+		if config.Knobs.IOMMUPlatform {
+			devParams = append(devParams, ",iommu_platform=on")
+		}
 		devParams = append(devParams, fmt.Sprintf("devno=%s", scsiCon.DevNo))
 	}
 
@@ -1685,6 +1728,9 @@ func (vsock VSOCKDevice) QemuParams(config *Config) []string {
 	}
 
 	if vsock.Transport.isVirtioCCW(config) {
+		if config.Knobs.IOMMUPlatform {
+			deviceParams = append(deviceParams, ",iommu_platform=on")
+		}
 		deviceParams = append(deviceParams, fmt.Sprintf(",devno=%s", vsock.DevNo))
 	}
 
@@ -1755,6 +1801,9 @@ func (v RngDevice) QemuParams(config *Config) []string {
 	}
 
 	if v.Transport.isVirtioCCW(config) {
+		if config.Knobs.IOMMUPlatform {
+			deviceParams = append(deviceParams, ",iommu_platform=on")
+		}
 		deviceParams = append(deviceParams, fmt.Sprintf("devno=%s", v.DevNo))
 	}
 
@@ -2097,6 +2146,12 @@ type Knobs struct {
 
 	// Realtime will enable realtime QEMU
 	Realtime bool
+
+	// Exit instead of rebooting
+	NoReboot bool
+
+	// IOMMUPlatform will enable IOMMU for supported devices
+	IOMMUPlatform bool
 }
 
 // IOThread allows IO to be performed on a separate thread.
@@ -2430,6 +2485,10 @@ func (config *Config) appendKnobs() {
 
 	if config.Knobs.NoGraphic {
 		config.qemuParams = append(config.qemuParams, "-nographic")
+	}
+
+	if config.Knobs.NoReboot {
+		config.qemuParams = append(config.qemuParams, "--no-reboot")
 	}
 
 	if config.Knobs.Daemonize {

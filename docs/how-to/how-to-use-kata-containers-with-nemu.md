@@ -19,7 +19,7 @@ Kata Containers relies by default on the QEMU hypervisor in order to spawn the v
 This document describes how to run Kata Containers with NEMU, first by explaining how to download, build and install it. Then it walks through the steps needed to update your Kata Containers configuration in order to run with NEMU. 
 
 ## Pre-requisites
-This document requires Kata Containers to be [installed](https://github.com/kata-containers/documentation/blob/master/install/README.md) on your system.
+This document requires Kata Containers to be [installed](../install/README.md) on your system.
 
 Also, it's worth noting that NEMU only supports `x86_64` and `aarch64` architecture.
 

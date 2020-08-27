@@ -16,7 +16,7 @@ automates the process to build a kernel for Kata Containers.
 ## Requirements
 
 The `build-kernel.sh` script requires an installed Golang version matching the
-[component build requirements](https://github.com/kata-containers/documentation/blob/master/Developer-Guide.md#requirements-to-build-individual-components).
+[component build requirements](../../../docs/Developer-Guide.md#requirements-to-build-individual-components).
 
 ## Usage
 
@@ -43,16 +43,17 @@ Commands:
 
 Options:
 
-	-c <path>   : Path to config file to build a the kernel.
-	-d          : Enable bash debug.
-	-e          : Enable experimental kernel.
-	-f          : Enable force generate config when setup.
-	-g <vendor> : GPU vendor, intel or nvidia.
-	-h          : Display this help.
-	-k <path>   : Path to kernel to build.
-	-p <path>   : Path to a directory with patches to apply to kernel.
-	-t          : Hypervisor_target.
-	-v          : Kernel version to use if kernel path not provided.
+	-a <arch>       : Arch target to build the kernel, such as aarch64/ppc64le/s390x/x86_64.
+	-c <path>   	: Path to config file to build the kernel.
+	-d          	: Enable bash debug.
+	-e          	: Enable experimental kernel.
+	-f          	: Enable force generate config when setup.
+	-g <vendor> 	: GPU vendor, intel or nvidia.
+	-h          	: Display this help.
+	-k <path>   	: Path to kernel to build.
+	-p <path>   	: Path to a directory with patches to apply to kernel.
+	-t <hypervisor>	: Hypervisor_target.
+	-v <version>	: Kernel version to use if kernel path not provided.
 ```
 
 Example:

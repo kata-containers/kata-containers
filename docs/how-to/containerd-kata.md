@@ -57,7 +57,7 @@ use `RuntimeClass` instead of the deprecated annotations.
 
 ### Containerd Runtime V2 API: Shim V2 API
 
-The [`containerd-shim-kata-v2` (short as `shimv2` in this documentation)](https://github.com/kata-containers/runtime/tree/master/containerd-shim-v2) 
+The [`containerd-shim-kata-v2` (short as `shimv2` in this documentation)](../../src/runtime/containerd-shim-v2) 
 implements the [Containerd Runtime V2 (Shim API)](https://github.com/containerd/containerd/tree/master/runtime/v2) for Kata.
 With `shimv2`, Kubernetes can launch Pod and OCI-compatible containers with one shim per Pod. Prior to `shimv2`, `2N+1` 
 shims (i.e. a `containerd-shim` and a `kata-shim` for each container and the Pod sandbox itself) and no standalone `kata-proxy` 
@@ -72,7 +72,7 @@ is implemented in Kata Containers v1.5.0.
 
 ### Install Kata Containers
 
-Follow the instructions to [install Kata Containers](https://github.com/kata-containers/documentation/blob/master/install/README.md).
+Follow the instructions to [install Kata Containers](../install/README.md).
 
 ### Install containerd with CRI plugin
 

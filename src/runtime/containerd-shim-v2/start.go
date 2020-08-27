@@ -62,17 +62,22 @@ func startContainer(ctx context.Context, s *service, c *container) error {
 		return err
 	}
 
+	c.stdinPipe = stdin
+
 	if c.stdin != "" || c.stdout != "" || c.stderr != "" {
 		tty, err := newTtyIO(ctx, c.stdin, c.stdout, c.stderr, c.terminal)
 		if err != nil {
 			return err
 		}
 		c.ttyio = tty
-		go ioCopy(c.exitIOch, tty, stdin, stdout, stderr)
+		go ioCopy(c.exitIOch, c.stdinCloser, tty, stdin, stdout, stderr)
 	} else {
 		//close the io exit channel, since there is no io for this container,
 		//otherwise the following wait goroutine will hang on this channel.
 		close(c.exitIOch)
+		//close the stdin closer channel to notify that it's safe to close process's
+		// io.
+		close(c.stdinCloser)
 	}
 
 	go wait(s, c, "")
@@ -111,13 +116,16 @@ func startExec(ctx context.Context, s *service, containerID, execID string) (*ex
 	if err != nil {
 		return nil, err
 	}
+
+	execs.stdinPipe = stdin
+
 	tty, err := newTtyIO(ctx, execs.tty.stdin, execs.tty.stdout, execs.tty.stderr, execs.tty.terminal)
 	if err != nil {
 		return nil, err
 	}
 	execs.ttyio = tty
 
-	go ioCopy(execs.exitIOch, tty, stdin, stdout, stderr)
+	go ioCopy(execs.exitIOch, execs.stdinCloser, tty, stdin, stdout, stderr)
 
 	go wait(s, c, execID)
 

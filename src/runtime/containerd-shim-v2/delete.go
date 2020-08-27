@@ -12,8 +12,6 @@ import (
 	"github.com/containerd/containerd/mount"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
-
-	"github.com/sirupsen/logrus"
 )
 
 func deleteContainer(ctx context.Context, s *service, c *container) error {
@@ -42,7 +40,7 @@ func deleteContainer(ctx context.Context, s *service, c *container) error {
 	if c.mounted {
 		rootfs := path.Join(c.bundle, "rootfs")
 		if err := mount.UnmountAll(rootfs, 0); err != nil {
-			logrus.WithError(err).Warn("failed to cleanup rootfs mount")
+			shimLog.WithError(err).Warn("failed to cleanup rootfs mount")
 		}
 	}
 

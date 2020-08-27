@@ -281,7 +281,7 @@ func (q *QMP) readLoop(fromVMCh chan<- []byte) {
 
 		fromVMCh <- sendLine
 	}
-	q.cfg.Logger.Infof("sanner return error: %v", scanner.Err())
+	q.cfg.Logger.Infof("scanner return error: %v", scanner.Err())
 	close(fromVMCh)
 }
 
@@ -1213,6 +1213,15 @@ func (q *QMP) ExecutePCIVFIOMediatedDeviceAdd(ctx context.Context, devID, sysfsd
 	}
 	if addr != "" {
 		args["addr"] = addr
+	}
+	return q.executeCommand(ctx, "device_add", args, nil)
+}
+
+// ExecuteAPVFIOMediatedDeviceAdd adds a VFIO mediated AP device to a QEMU instance using the device_add command.
+func (q *QMP) ExecuteAPVFIOMediatedDeviceAdd(ctx context.Context, sysfsdev string) error {
+	args := map[string]interface{}{
+		"driver":   VfioAP,
+		"sysfsdev": sysfsdev,
 	}
 	return q.executeCommand(ctx, "device_add", args, nil)
 }
