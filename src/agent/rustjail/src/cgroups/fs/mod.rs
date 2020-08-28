@@ -5,7 +5,7 @@
 use crate::cgroups::FreezerState;
 use crate::cgroups::Manager as CgroupManager;
 use crate::container::DEFAULT_DEVICES;
-use crate::errors::*;
+use anyhow::{anyhow, Context, Error, Result};
 use lazy_static;
 use libc::{self, pid_t};
 use nix::errno::Errno;
@@ -167,6 +167,14 @@ lazy_static! {
     };
 }
 
+pub fn io_error_kind_eq(e: &Error, k: std::io::ErrorKind) -> bool {
+    if let Some(ref re) = e.downcast_ref::<std::io::Error>() {
+        return re.kind() == k;
+    }
+
+    return false;
+}
+
 pub const KB: u128 = 1000;
 pub const MB: u128 = 1000 * KB;
 pub const GB: u128 = 1000 * MB;
@@ -313,7 +321,8 @@ where
 {
     let p = format!("{}/{}", dir, file);
     fs::write(p.as_str(), v.to_string().as_bytes())
-        .chain_err(|| format!("couldn't write to file: {:?}", p))?;
+        .context(format!("couldn't write to file: {:?}", p))?;
+
     Ok(())
 }
 
@@ -327,7 +336,7 @@ fn copy_parent(dir: &str, file: &str) -> Result<()> {
     let parent = if let Some(index) = dir.rfind('/') {
         &dir[..index]
     } else {
-        return Err(ErrorKind::ErrorCode("cannot copy file from parent".to_string()).into());
+        return Err(anyhow!("cannot copy file from parent"));
     };
 
     match read_file(parent, file) {
@@ -340,12 +349,9 @@ fn copy_parent(dir: &str, file: &str) -> Result<()> {
                 return copy_parent(dir, file);
             }
         }
-        Err(Error(ErrorKind::Io(e), _)) => {
-            if e.kind() == std::io::ErrorKind::NotFound {
-                copy_parent(parent, file)?;
-                return copy_parent(dir, file);
-            }
-            return Err(ErrorKind::Io(e).into());
+        Err(ref e) if io_error_kind_eq(e, std::io::ErrorKind::NotFound) => {
+            copy_parent(parent, file)?;
+            return copy_parent(dir, file);
         }
         Err(e) => return Err(e.into()),
     }
@@ -362,14 +368,8 @@ fn write_nonzero(dir: &str, file: &str, v: i128) -> Result<()> {
 fn try_write_nonzero(dir: &str, file: &str, v: i128) -> Result<()> {
     match write_nonzero(dir, file, v) {
         Ok(_) => Ok(()),
-        Err(Error(ErrorKind::Io(e), _)) => {
-            if e.kind() == std::io::ErrorKind::PermissionDenied {
-                return Ok(());
-            } else {
-                return Err(ErrorKind::Io(e).into());
-            }
-        }
-        e => e,
+        Err(ref e) if io_error_kind_eq(e, std::io::ErrorKind::PermissionDenied) => Ok(()),
+        Err(e) => Err(anyhow!(e)),
     }
 }
 
@@ -394,7 +394,7 @@ fn try_write_file<T: ToString>(dir: &str, file: &str, v: T) -> Result<()> {
 
             info!(sl!(), "{}", err.desc());
 
-            return Err(e);
+            return Err(anyhow!(e));
         }
 
         Ok(_) => {}
@@ -668,17 +668,14 @@ where
     T: ToString,
 {
     match write_file(dir, file, v) {
-        Err(Error(ErrorKind::Io(e), _)) => {
-            if e.kind() != std::io::ErrorKind::PermissionDenied
-                && e.kind() != std::io::ErrorKind::Other
-            {
-                return Err(ErrorKind::Io(e).into());
-            }
-
+        Err(ref e)
+            if io_error_kind_eq(e, std::io::ErrorKind::PermissionDenied)
+                || io_error_kind_eq(e, std::io::ErrorKind::Other) =>
+        {
             return Ok(());
         }
 
-        Err(e) => return Err(e.into()),
+        Err(e) => return Err(anyhow!(e)),
 
         Ok(_) => return Ok(()),
     }
@@ -727,17 +724,11 @@ impl Subsystem for Memory {
 
 fn get_exist_memory_data(dir: &str, sub: &str) -> Result<Option<MemoryData>> {
     let res = match get_memory_data(dir, sub) {
-        Err(Error(ErrorKind::Io(e), _)) => {
-            if e.kind() == std::io::ErrorKind::NotFound {
-                None
-            } else {
-                return Err(ErrorKind::Io(e).into());
-            }
-        }
+        Err(ref e) if io_error_kind_eq(e, std::io::ErrorKind::NotFound) => None,
 
         Ok(r) => Some(r),
 
-        Err(e) => return Err(e.into()),
+        Err(e) => return Err(anyhow!(e)),
     };
 
     Ok(res)
@@ -872,19 +863,15 @@ fn rate(d: &LinuxThrottleDevice) -> String {
 
 fn write_blkio_device<T: ToString>(dir: &str, file: &str, v: T) -> Result<()> {
     match write_file(dir, file, v) {
-        Err(Error(ErrorKind::Io(e), _)) => {
+        Err(ref e) if io_error_kind_eq(e, std::io::ErrorKind::Other) => {
             // only ignore ENODEV
-            if e.kind() == std::io::ErrorKind::Other {
-                let raw = std::io::Error::last_os_error().raw_os_error().unwrap();
-                if Errno::from_i32(raw) == Errno::ENODEV {
-                    return Ok(());
-                }
+            let raw = std::io::Error::last_os_error().raw_os_error().unwrap();
+            if Errno::from_i32(raw) == Errno::ENODEV {
+                return Ok(());
             }
-
-            return Err(ErrorKind::Io(e).into());
         }
 
-        Err(e) => return Err(e.into()),
+        Err(e) => return Err(anyhow!(e)),
 
         Ok(_) => {}
     }
@@ -1381,7 +1368,7 @@ impl CgroupManager for Manager {
         let m = if self.paths.get("devices").is_some() {
             get_procs(self.paths.get("devices").unwrap())?
         } else {
-            return Err(ErrorKind::ErrorCode("no devices cgroup".to_string()).into());
+            return Err(anyhow!("no devices cgroup".to_string()));
         };
 
         Ok(m)
@@ -1391,7 +1378,7 @@ impl CgroupManager for Manager {
         let m = if self.paths.get("devices").is_some() {
             get_all_procs(self.paths.get("devices").unwrap())?
         } else {
-            return Err(ErrorKind::ErrorCode("no devices cgroup".to_string()).into());
+            return Err(anyhow!("no devices cgroup"));
         };
 
         Ok(m)
