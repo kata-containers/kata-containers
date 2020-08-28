@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use anyhow::{anyhow, Context, Error, Result};
+use anyhow::{anyhow, bail, Context, Error, Result};
 use libc::uid_t;
 use nix::errno::Errno;
 use nix::fcntl::{self, OFlag};
