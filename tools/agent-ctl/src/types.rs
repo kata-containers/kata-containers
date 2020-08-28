@@ -11,8 +11,7 @@ pub type Options = HashMap<String, String>;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
-    pub cid: u32,
-    pub port: u32,
+    pub server_address: String,
     pub bundle_dir: String,
     pub timeout_nano: i64,
     pub interactive: bool,
