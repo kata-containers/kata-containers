@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use rustjail::errors::*;
 use std::collections::HashMap;
 use std::ffi::CString;
 use std::fs;
@@ -26,6 +25,7 @@ use crate::device::{get_pci_device_name, get_scsi_device_name, online_device};
 use crate::linux_abi::*;
 use crate::protocols::agent::Storage;
 use crate::Sandbox;
+use anyhow::{anyhow, Context, Result};
 use slog::Logger;
 
 pub const DRIVER9PTYPE: &str = "9p";
@@ -191,11 +191,11 @@ impl<'a> BareMount<'a> {
         let cstr_fs_type: CString;
 
         if self.source.len() == 0 {
-            return Err(ErrorKind::ErrorCode("need mount source".to_string()).into());
+            return Err(anyhow!("need mount source"));
         }
 
         if self.destination.len() == 0 {
-            return Err(ErrorKind::ErrorCode("need mount destination".to_string()).into());
+            return Err(anyhow!("need mount destination"));
         }
 
         cstr_source = CString::new(self.source)?;
@@ -205,7 +205,7 @@ impl<'a> BareMount<'a> {
         dest = cstr_dest.as_ptr();
 
         if self.fs_type.len() == 0 {
-            return Err(ErrorKind::ErrorCode("need mount FS type".to_string()).into());
+            return Err(anyhow!("need mount FS type"));
         }
 
         cstr_fs_type = CString::new(self.fs_type)?;
@@ -227,13 +227,12 @@ impl<'a> BareMount<'a> {
         let rc = unsafe { mount(source, dest, fs_type, self.flags.bits(), options) };
 
         if rc < 0 {
-            return Err(ErrorKind::ErrorCode(format!(
+            return Err(anyhow!(
                 "failed to mount {:?} to {:?}, with error: {}",
                 self.source,
                 self.destination,
                 io::Error::last_os_error()
-            ))
-            .into());
+            ));
         }
         Ok(())
     }
@@ -274,8 +273,10 @@ fn local_storage_handler(
         return Ok("".to_string());
     }
 
-    fs::create_dir_all(&storage.mount_point)
-        .chain_err(|| format!("failed to create dir all {:?}", &storage.mount_point))?;
+    fs::create_dir_all(&storage.mount_point).context(format!(
+        "failed to create dir all {:?}",
+        &storage.mount_point
+    ))?;
 
     let opts_vec: Vec<String> = storage.options.to_vec();
 
@@ -332,11 +333,11 @@ fn virtio_blk_storage_handler(
     // use the virt path provided in Storage Source
     if storage.source.starts_with("/dev") {
         let metadata = fs::metadata(&storage.source)
-            .chain_err(|| format!("get metadata on file {:?}", &storage.source))?;
+            .context(format!("get metadata on file {:?}", &storage.source))?;
 
         let mode = metadata.permissions().mode();
         if mode & libc::S_IFBLK == 0 {
-            return Err(ErrorKind::ErrorCode(format!("Invalid device {}", &storage.source)).into());
+            return Err(anyhow!("Invalid device {}", &storage.source));
         }
     } else {
         let dev_path = get_pci_device_name(&sandbox, &storage.source)?;
@@ -376,7 +377,7 @@ fn mount_storage(logger: &Logger, storage: &Storage) -> Result<()> {
         DRIVER9PTYPE | DRIVERVIRTIOFSTYPE => {
             let dest_path = Path::new(storage.mount_point.as_str());
             if !dest_path.exists() {
-                fs::create_dir_all(dest_path).chain_err(|| "Create mount destination failed")?;
+                fs::create_dir_all(dest_path).context("Create mount destination failed")?;
             }
         }
         _ => {
@@ -450,11 +451,10 @@ pub fn add_storages(
 
         let handler = match STORAGEHANDLERLIST.get(&handler_name.as_str()) {
             None => {
-                return Err(ErrorKind::ErrorCode(format!(
+                return Err(anyhow!(
                     "Failed to find the storage handler {}",
                     storage.driver.to_owned()
-                ))
-                .into());
+                ));
             }
             Some(f) => f,
         };
@@ -480,7 +480,7 @@ fn mount_to_rootfs(logger: &Logger, m: &INIT_MOUNT) -> Result<()> {
 
     let bare_mount = BareMount::new(m.src, m.dest, m.fstype, flags, options.as_str(), logger);
 
-    fs::create_dir_all(Path::new(m.dest)).chain_err(|| "could not create directory")?;
+    fs::create_dir_all(Path::new(m.dest)).context("could not create directory")?;
 
     if let Err(err) = bare_mount.mount() {
         if m.src != "dev" {
@@ -514,7 +514,7 @@ pub fn get_mount_fs_type(mount_point: &str) -> Result<String> {
 // any error ecountered.
 pub fn get_mount_fs_type_from_file(mount_file: &str, mount_point: &str) -> Result<String> {
     if mount_point == "" {
-        return Err(ErrorKind::ErrorCode(format!("Invalid mount point {}", mount_point)).into());
+        return Err(anyhow!("Invalid mount point {}", mount_point));
     }
 
     let file = File::open(mount_file)?;
@@ -536,11 +536,10 @@ pub fn get_mount_fs_type_from_file(mount_file: &str, mount_point: &str) -> Resul
         }
     }
 
-    Err(ErrorKind::ErrorCode(format!(
+    Err(anyhow!(
         "failed to find FS type for mount point {}",
         mount_point
     ))
-    .into())
 }
 
 pub fn get_cgroup_mounts(logger: &Logger, cg_path: &str) -> Result<Vec<INIT_MOUNT>> {
@@ -635,7 +634,7 @@ pub fn cgroups_mount(logger: &Logger) -> Result<()> {
 
 pub fn remove_mounts(mounts: &Vec<String>) -> Result<()> {
     for m in mounts.iter() {
-        mount::umount(m.as_str()).chain_err(|| format!("failed to umount {:?}", m))?;
+        mount::umount(m.as_str()).context(format!("failed to umount {:?}", m))?;
     }
     Ok(())
 }
@@ -647,21 +646,15 @@ fn ensure_destination_exists(destination: &str, fs_type: &str) -> Result<()> {
     if !d.exists() {
         let dir = match d.parent() {
             Some(d) => d,
-            None => {
-                return Err(ErrorKind::ErrorCode(format!(
-                    "mount destination {} doesn't exist",
-                    destination
-                ))
-                .into())
-            }
+            None => return Err(anyhow!("mount destination {} doesn't exist", destination)),
         };
         if !dir.exists() {
-            fs::create_dir_all(dir).chain_err(|| format!("create dir all failed on {:?}", dir))?;
+            fs::create_dir_all(dir).context(format!("create dir all failed on {:?}", dir))?;
         }
     }
 
     if fs_type != "bind" || d.is_dir() {
-        fs::create_dir_all(d).chain_err(|| format!("create dir all failed on {:?}", d))?;
+        fs::create_dir_all(d).context(format!("create dir all failed on {:?}", d))?;
     } else {
         fs::OpenOptions::new().create(true).open(d)?;
     }

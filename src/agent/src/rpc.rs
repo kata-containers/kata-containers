@@ -7,6 +7,7 @@ use std::path::Path;
 use std::sync::{Arc, Mutex};
 use ttrpc;
 
+use anyhow::{anyhow, Context, Result};
 use oci::{LinuxNamespace, Root, Spec};
 use protobuf::{RepeatedField, SingularPtrField};
 use protocols::agent::{
@@ -21,7 +22,6 @@ use protocols::health::{
 use protocols::types::Interface;
 use rustjail;
 use rustjail::container::{BaseContainer, Container, LinuxContainer};
-use rustjail::errors::*;
 use rustjail::process::Process;
 use rustjail::specconv::CreateOpts;
 
@@ -90,9 +90,7 @@ impl agentService {
             Some(spec) => rustjail::grpc_to_oci(spec),
             None => {
                 error!(sl!(), "no oci spec in the create container request!");
-                return Err(
-                    ErrorKind::Nix(nix::Error::from_errno(nix::errno::Errno::EINVAL)).into(),
-                );
+                return Err(anyhow!(nix::Error::from_errno(nix::errno::Errno::EINVAL)));
             }
         };
 
@@ -101,7 +99,7 @@ impl agentService {
         // re-scan PCI bus
         // looking for hidden devices
 
-        rescan_pci_bus().chain_err(|| "Could not rescan PCI bus")?;
+        rescan_pci_bus().context("Could not rescan PCI bus")?;
 
         // Some devices need some extra processing (the ones invoked with
         // --device for instance), and that's what this call is doing. It
@@ -163,7 +161,7 @@ impl agentService {
             tp
         } else {
             info!(sl!(), "no process configurations!");
-            return Err(ErrorKind::Nix(nix::Error::from_errno(nix::errno::Errno::EINVAL)).into());
+            return Err(anyhow!(nix::Error::from_errno(nix::errno::Errno::EINVAL)));
         };
 
         ctr.start(p)?;
@@ -184,7 +182,7 @@ impl agentService {
         let ctr: &mut LinuxContainer = match s.get_container(cid.as_str()) {
             Some(cr) => cr,
             None => {
-                return Err(ErrorKind::Nix(nix::Error::from_errno(Errno::EINVAL)).into());
+                return Err(anyhow!(nix::Error::from_errno(Errno::EINVAL)));
             }
         };
 
@@ -203,7 +201,7 @@ impl agentService {
             let ctr: &mut LinuxContainer = match sandbox.get_container(cid.as_str()) {
                 Some(cr) => cr,
                 None => {
-                    return Err(ErrorKind::Nix(nix::Error::from_errno(Errno::EINVAL)).into());
+                    return Err(anyhow!(nix::Error::from_errno(Errno::EINVAL)));
                 }
             };
 
@@ -252,13 +250,13 @@ impl agentService {
         });
 
         if let Err(_) = rx.recv_timeout(Duration::from_secs(req.timeout as u64)) {
-            return Err(ErrorKind::Nix(nix::Error::from_errno(nix::errno::Errno::ETIME)).into());
+            return Err(anyhow!(nix::Error::from_errno(nix::errno::Errno::ETIME)));
         }
 
         if let Err(_) = handle.join() {
-            return Err(
-                ErrorKind::Nix(nix::Error::from_errno(nix::errno::Errno::UnknownErrno)).into(),
-            );
+            return Err(anyhow!(nix::Error::from_errno(
+                nix::errno::Errno::UnknownErrno
+            )));
         }
 
         let s = self.sandbox.clone();
@@ -301,7 +299,7 @@ impl agentService {
         let process = if req.process.is_some() {
             req.process.as_ref().unwrap()
         } else {
-            return Err(ErrorKind::Nix(nix::Error::from_errno(nix::errno::Errno::EINVAL)).into());
+            return Err(anyhow!(nix::Error::from_errno(nix::errno::Errno::EINVAL)));
         };
 
         let pipe_size = AGENT_CONFIG.read().unwrap().container_pipe_size;
@@ -311,9 +309,7 @@ impl agentService {
         let ctr = match sandbox.get_container(cid.as_str()) {
             Some(v) => v,
             None => {
-                return Err(
-                    ErrorKind::Nix(nix::Error::from_errno(nix::errno::Errno::EINVAL)).into(),
-                );
+                return Err(anyhow!(nix::Error::from_errno(nix::errno::Errno::EINVAL)));
             }
         };
 
@@ -396,7 +392,7 @@ impl agentService {
         let ctr: &mut LinuxContainer = match sandbox.get_container(cid.as_str()) {
             Some(cr) => cr,
             None => {
-                return Err(ErrorKind::Nix(nix::Error::from_errno(Errno::EINVAL)).into());
+                return Err(anyhow!(nix::Error::from_errno(Errno::EINVAL)));
             }
         };
 
@@ -472,9 +468,7 @@ impl agentService {
             Err(e) => match e {
                 nix::Error::Sys(nix::errno::Errno::EAGAIN) => l = 0,
                 _ => {
-                    return Err(
-                        ErrorKind::Nix(nix::Error::from_errno(nix::errno::Errno::EIO)).into(),
-                    );
+                    return Err(anyhow!(nix::Error::from_errno(nix::errno::Errno::EIO)));
                 }
             },
         }
@@ -513,7 +507,7 @@ impl agentService {
         }
 
         if fd == -1 {
-            return Err(ErrorKind::Nix(nix::Error::from_errno(nix::errno::Errno::EINVAL)).into());
+            return Err(anyhow!(nix::Error::from_errno(nix::errno::Errno::EINVAL)));
         }
 
         let vector = read_stream(fd, req.len as usize)?;
@@ -1338,7 +1332,7 @@ fn get_memory_info(block_size: bool, hotplug: bool) -> Result<(u64, bool)> {
             Ok(v) => {
                 if v.len() == 0 {
                     info!(sl!(), "string in empty???");
-                    return Err(ErrorKind::ErrorCode("Invalid block size".to_string()).into());
+                    return Err(anyhow!("Invalid block size"));
                 }
 
                 size = v.trim().parse::<u64>()?;
@@ -1346,7 +1340,7 @@ fn get_memory_info(block_size: bool, hotplug: bool) -> Result<(u64, bool)> {
             Err(e) => {
                 info!(sl!(), "memory block size error: {:?}", e.kind());
                 if e.kind() != std::io::ErrorKind::NotFound {
-                    return Err(ErrorKind::Io(e).into());
+                    return Err(anyhow!(e));
                 }
             }
         }
@@ -1364,9 +1358,9 @@ fn get_memory_info(block_size: bool, hotplug: bool) -> Result<(u64, bool)> {
                 match e {
                     nix::Error::Sys(errno) => match errno {
                         Errno::ENOENT => plug = false,
-                        _ => return Err(ErrorKind::Nix(e).into()),
+                        _ => return Err(anyhow!(e)),
                     },
-                    _ => return Err(ErrorKind::Nix(e).into()),
+                    _ => return Err(anyhow!(e)),
                 }
             }
         }
@@ -1407,15 +1401,15 @@ fn read_stream(fd: RawFd, l: usize) -> Result<Vec<u8>> {
             // was closed, instead it would return a 0 reading length, please
             // see https://github.com/rust-lang/rfcs/blob/master/text/0517-io-os-reform.md#errors
             if len == 0 {
-                return Err(ErrorKind::ErrorCode("read  meet eof".to_string()).into());
+                return Err(anyhow!("read  meet eof"));
             }
         }
         Err(e) => match e {
             nix::Error::Sys(errno) => match errno {
                 Errno::EAGAIN => v.resize(0, 0),
-                _ => return Err(ErrorKind::Nix(nix::Error::Sys(errno)).into()),
+                _ => return Err(anyhow!(nix::Error::Sys(errno))),
             },
-            _ => return Err(ErrorKind::ErrorCode("read error".to_string()).into()),
+            _ => return Err(anyhow!("read error")),
         },
     }
 
@@ -1430,15 +1424,13 @@ fn find_process<'a>(
 ) -> Result<&'a mut Process> {
     let ctr = match sandbox.get_container(cid) {
         Some(v) => v,
-        None => return Err(ErrorKind::ErrorCode(String::from("Invalid container id")).into()),
+        None => return Err(anyhow!("Invalid container id")),
     };
 
     if init || eid == "" {
         let p = match ctr.processes.get_mut(&ctr.init_process_pid) {
             Some(v) => v,
-            None => {
-                return Err(ErrorKind::ErrorCode(String::from("cannot find init process!")).into())
-            }
+            None => return Err(anyhow!("cannot find init process!")),
         };
 
         return Ok(p);
@@ -1446,7 +1438,7 @@ fn find_process<'a>(
 
     let p = match ctr.get_process(eid) {
         Ok(v) => v,
-        Err(_) => return Err(ErrorKind::ErrorCode("Invalid exec id".to_string()).into()),
+        Err(_) => return Err(anyhow!("Invalid exec id")),
     };
 
     Ok(p)
@@ -1496,11 +1488,7 @@ fn update_container_namespaces(
     sandbox_pidns: bool,
 ) -> Result<()> {
     let linux = match spec.linux.as_mut() {
-        None => {
-            return Err(
-                ErrorKind::ErrorCode("Spec didn't container linux field".to_string()).into(),
-            )
-        }
+        None => return Err(anyhow!("Spec didn't container linux field")),
         Some(l) => l,
     };
 
@@ -1704,7 +1692,7 @@ fn setup_bundle(cid: &str, spec: &mut Spec) -> Result<PathBuf> {
     );
     let _ = spec.save(config_path.to_str().unwrap());
 
-    let olddir = unistd::getcwd().chain_err(|| "cannot getcwd")?;
+    let olddir = unistd::getcwd().context("cannot getcwd")?;
     unistd::chdir(bundle_path.to_str().unwrap())?;
 
     Ok(olddir)
@@ -1712,7 +1700,7 @@ fn setup_bundle(cid: &str, spec: &mut Spec) -> Result<PathBuf> {
 
 fn load_kernel_module(module: &protocols::agent::KernelModule) -> Result<()> {
     if module.name == "" {
-        return Err(ErrorKind::ErrorCode("Kernel module name is empty".to_string()).into());
+        return Err(anyhow!("Kernel module name is empty"));
     }
 
     info!(
@@ -1744,11 +1732,9 @@ fn load_kernel_module(module: &protocols::agent::KernelModule) -> Result<()> {
                 "load_kernel_module return code: {} stdout:{} stderr:{}",
                 code, std_out, std_err
             );
-            return Err(ErrorKind::ErrorCode(msg).into());
+            return Err(anyhow!(msg));
         }
-        None => {
-            return Err(ErrorKind::ErrorCode("Process terminated by signal".to_string()).into())
-        }
+        None => return Err(anyhow!("Process terminated by signal")),
     }
 }
 
