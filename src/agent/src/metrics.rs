@@ -7,8 +7,8 @@ extern crate procfs;
 
 use prometheus::{Encoder, Gauge, GaugeVec, IntCounter, TextEncoder};
 
+use anyhow::Result;
 use protocols;
-use rustjail::errors::*;
 
 const NAMESPACE_KATA_AGENT: &str = "kata_agent";
 const NAMESPACE_KATA_GUEST: &str = "kata_guest";
