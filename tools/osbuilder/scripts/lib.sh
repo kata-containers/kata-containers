@@ -375,13 +375,13 @@ RUN ln -sf /usr/bin/g++ /bin/musl-g++
 detect_go_version()
 {
 	info "Detecting go version"
-	typeset -r yq=$(command -v yq || command -v "${GOPATH}/bin/yq" || echo "${GOPATH}/bin/yq")
+	typeset yq=$(command -v yq || command -v ${GOPATH}/bin/yq || echo "${GOPATH}/bin/yq")
 	if [ ! -f "$yq" ]; then
 		source "$yq_file"
 	fi
 
 	info "Get Go version from ${kata_versions_file}"
-	GO_VERSION="$(cat "${kata_versions_file}"  | $yq r - "languages.golang.meta.newest-version")"
+	GO_VERSION="$(cat "${kata_versions_file}"  | $yq r -X - "languages.golang.meta.newest-version")"
 
 	[ "$?" == "0" ] && [ "$GO_VERSION" != "null" ]
 }
@@ -395,7 +395,7 @@ detect_rust_version()
 	fi
 
 	info "Get rust version from ${kata_versions_file}"
-	RUST_VERSION="$(cat "${kata_versions_file}"  | $yq r - "languages.rust.meta.newest-version")"
+	RUST_VERSION="$(cat "${kata_versions_file}"  | $yq r -X - "languages.rust.meta.newest-version")"
 
 	[ "$?" == "0" ] && [ "$RUST_VERSION" != "null" ]
 }
@@ -409,7 +409,7 @@ detect_cmake_version()
 	fi
 
 	info "Get cmake version from ${kata_versions_file}"
-	CMAKE_VERSION="$(cat "${kata_versions_file}"  | $yq r - "externals.cmake.version")"
+	CMAKE_VERSION="$(cat "${kata_versions_file}"  | $yq r -X - "externals.cmake.version")"
 
 	[ "$?" == "0" ] && [ "$CMAKE_VERSION" != "null" ]
 }
@@ -423,7 +423,7 @@ detect_musl_version()
 	fi
 
 	info "Get musl version from ${kata_versions_file}"
-	MUSL_VERSION="$(cat "${kata_versions_file}"  | $yq r - "externals.musl.version")"
+	MUSL_VERSION="$(cat "${kata_versions_file}"  | $yq r -X - "externals.musl.version")"
 
 	[ "$?" == "0" ] && [ "$MUSL_VERSION" != "null" ]
 }
