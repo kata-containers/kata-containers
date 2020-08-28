@@ -8,9 +8,9 @@
 
 use lazy_static;
 
-use crate::errors::*;
 use crate::log_child;
 use crate::sync::write_count;
+use anyhow::{anyhow, Result};
 use caps::{self, CapSet, Capability, CapsHashSet};
 use oci::LinuxCapabilities;
 use std::collections::HashMap;
@@ -96,7 +96,7 @@ fn to_capshashset(cfd_log: RawFd, caps: &[String]) -> CapsHashSet {
 }
 
 pub fn reset_effective() -> Result<()> {
-    caps::set(None, CapSet::Effective, caps::all())?;
+    caps::set(None, CapSet::Effective, caps::all()).map_err(|e| anyhow!(e.to_string()))?;
     Ok(())
 }
 
@@ -104,24 +104,27 @@ pub fn drop_priviledges(cfd_log: RawFd, caps: &LinuxCapabilities) -> Result<()> 
     let all = caps::all();
 
     for c in all.difference(&to_capshashset(cfd_log, caps.bounding.as_ref())) {
-        caps::drop(None, CapSet::Bounding, *c)?;
+        caps::drop(None, CapSet::Bounding, *c).map_err(|e| anyhow!(e.to_string()))?;
     }
 
     caps::set(
         None,
         CapSet::Effective,
         to_capshashset(cfd_log, caps.effective.as_ref()),
-    )?;
+    )
+    .map_err(|e| anyhow!(e.to_string()))?;
     caps::set(
         None,
         CapSet::Permitted,
         to_capshashset(cfd_log, caps.permitted.as_ref()),
-    )?;
+    )
+    .map_err(|e| anyhow!(e.to_string()))?;
     caps::set(
         None,
         CapSet::Inheritable,
         to_capshashset(cfd_log, caps.inheritable.as_ref()),
-    )?;
+    )
+    .map_err(|e| anyhow!(e.to_string()))?;
 
     if let Err(_) = caps::set(
         None,
