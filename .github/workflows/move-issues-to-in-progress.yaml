@@ -1,0 +1,78 @@
+# Copyright (c) 2020 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+
+name: Move issues to "In progress" in backlog project when referenced by a PR
+
+on:
+  pull_request_target:
+    types:
+      - opened
+      - reopened
+
+jobs:
+  move-linked-issues-to-in-progress:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install hub
+        run: |
+          HUB_ARCH="amd64"
+          HUB_VER=$(curl -sL "https://api.github.com/repos/github/hub/releases/latest" |\
+            jq -r .tag_name | sed 's/^v//')
+          curl -sL \
+            "https://github.com/github/hub/releases/download/v${HUB_VER}/hub-linux-${HUB_ARCH}-${HUB_VER}.tgz" |\
+          tar xz --strip-components=2 --wildcards '*/bin/hub' && \
+          sudo install hub /usr/local/bin
+
+      - name: Install hub extension script
+        run: |
+          # Clone into a temporary directory to avoid overwriting
+          # any existing github directory.
+          pushd $(mktemp -d) &>/dev/null
+          git clone --single-branch --depth 1 "https://github.com/kata-containers/.github" && cd .github/scripts
+          sudo install hub-util.sh /usr/local/bin
+          popd &>/dev/null
+
+      - name: Checkout code to allow hub to communicate with the project
+        uses: actions/checkout@v2
+
+      - name: Move issue to "In progress"
+        env:
+          GITHUB_TOKEN: ${{ secrets.KATA_GITHUB_ACTIONS_TOKEN }}
+        run: |
+          pr=${{ github.event.pull_request.number }}
+
+          linked_issue_urls=$(hub-util.sh \
+            list-issues-for-pr "$pr" |\
+            grep -v "^\#"  |\
+            cut -d';' -f3 || true)
+
+          # PR doesn't have any linked issues
+          # (it should, but maybe a new user forgot to add a "Fixes: #XXX" commit).
+          [ -z "$linked_issue_urls" ] && {
+            echo "::error::No linked issues for PR $pr"
+            exit 1
+          }
+
+          project_name="Issue backlog"
+          project_type="org"
+          project_column="In progress"
+
+          for issue_url in $(echo "$linked_issue_urls")
+          do
+            issue=$(echo "$issue_url"| awk -F\/ '{print $NF}' || true)
+
+            [ -z "$issue" ] && {
+              echo "::error::Cannot determine issue number from $issue_url for PR $pr"
+              exit 1
+            }
+
+            # Move the issue to the correct column on the project board
+            hub-util.sh \
+              move-issue \
+              "$issue" \
+              "$project_name" \
+              "$project_type" \
+              "$project_column"
+          done
