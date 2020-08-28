@@ -10,7 +10,6 @@ use serde_json;
 
 use protocols::oci::State as OCIState;
 
-use crate::errors::*;
 use std::collections::HashMap;
 use std::fmt;
 use std::path::PathBuf;

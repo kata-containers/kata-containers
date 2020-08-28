@@ -3,12 +3,12 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use crate::errors::*;
 use nix::errno::Errno;
 use nix::unistd;
-use nix::Error;
 use std::mem;
 use std::os::unix::io::RawFd;
+
+use anyhow::{anyhow, Result};
 
 pub const SYNC_SUCCESS: i32 = 1;
 pub const SYNC_FAILED: i32 = 2;
@@ -40,7 +40,7 @@ pub fn write_count(fd: RawFd, buf: &[u8], count: usize) -> Result<usize> {
             }
 
             Err(e) => {
-                if e != Error::from_errno(Errno::EINTR) {
+                if e != nix::Error::from_errno(Errno::EINTR) {
                     return Err(e.into());
                 }
             }
@@ -64,7 +64,7 @@ fn read_count(fd: RawFd, count: usize) -> Result<Vec<u8>> {
             }
 
             Err(e) => {
-                if e != Error::from_errno(Errno::EINTR) {
+                if e != nix::Error::from_errno(Errno::EINTR) {
                     return Err(e.into());
                 }
             }
@@ -77,13 +77,12 @@ fn read_count(fd: RawFd, count: usize) -> Result<Vec<u8>> {
 pub fn read_sync(fd: RawFd) -> Result<Vec<u8>> {
     let buf = read_count(fd, MSG_SIZE)?;
     if buf.len() != MSG_SIZE {
-        return Err(ErrorKind::ErrorCode(format!(
+        return Err(anyhow!(
             "process: {} failed to receive sync message from peer: got msg length: {}, expected: {}",
             std::process::id(),
             buf.len(),
             MSG_SIZE
-        ))
-        .into());
+        ));
     }
     let buf_array: [u8; MSG_SIZE] = [buf[0], buf[1], buf[2], buf[3]];
     let msg: i32 = i32::from_be_bytes(buf_array);
@@ -111,19 +110,17 @@ pub fn read_sync(fd: RawFd) -> Result<Vec<u8>> {
             }
 
             let error_str = match std::str::from_utf8(&error_buf) {
-                Ok(v) => v,
+                Ok(v) => String::from(v),
                 Err(e) => {
-                    return Err(ErrorKind::ErrorCode(format!(
-                        "receive error message from child process failed: {:?}",
-                        e
-                    ))
-                    .into())
+                    return Err(
+                        anyhow!(e).context("receive error message from child process failed")
+                    );
                 }
             };
 
-            return Err(ErrorKind::ErrorCode(String::from(error_str)).into());
+            return Err(anyhow!(error_str));
         }
-        _ => return Err(ErrorKind::ErrorCode("error in receive sync message".to_string()).into()),
+        _ => return Err(anyhow!("error in receive sync message")),
     }
 }
 
@@ -132,7 +129,7 @@ pub fn write_sync(fd: RawFd, msg_type: i32, data_str: &str) -> Result<()> {
 
     let count = write_count(fd, &buf, MSG_SIZE)?;
     if count != MSG_SIZE {
-        return Err(ErrorKind::ErrorCode("error in send sync message".to_string()).into());
+        return Err(anyhow!("error in send sync message"));
     }
 
     match msg_type {
@@ -140,9 +137,7 @@ pub fn write_sync(fd: RawFd, msg_type: i32, data_str: &str) -> Result<()> {
             Ok(_count) => unistd::close(fd)?,
             Err(e) => {
                 unistd::close(fd)?;
-                return Err(
-                    ErrorKind::ErrorCode("error in send message to process".to_string()).into(),
-                );
+                return Err(anyhow!(e).context("error in send message to process"));
             }
         },
         SYNC_DATA => {
@@ -151,10 +146,7 @@ pub fn write_sync(fd: RawFd, msg_type: i32, data_str: &str) -> Result<()> {
                 Ok(_count) => (),
                 Err(e) => {
                     unistd::close(fd)?;
-                    return Err(ErrorKind::ErrorCode(
-                        "error in send message to process".to_string(),
-                    )
-                    .into());
+                    return Err(anyhow!(e).context("error in send message to process"));
                 }
             }
 
@@ -162,10 +154,7 @@ pub fn write_sync(fd: RawFd, msg_type: i32, data_str: &str) -> Result<()> {
                 Ok(_count) => (),
                 Err(e) => {
                     unistd::close(fd)?;
-                    return Err(ErrorKind::ErrorCode(
-                        "error in send message to process".to_string(),
-                    )
-                    .into());
+                    return Err(anyhow!(e).context("error in send message to process"));
                 }
             }
         }

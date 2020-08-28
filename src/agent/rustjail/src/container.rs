@@ -14,6 +14,7 @@ use std::os::unix::io::RawFd;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 // use crate::sync::Cond;
+use anyhow::{anyhow, Context, Result};
 use libc::pid_t;
 use oci::{LinuxDevice, LinuxIDMapping};
 use std::clone::Clone;
@@ -24,7 +25,6 @@ use std::process::{Child, Command};
 use crate::cgroups::Manager as CgroupManager;
 use crate::process::Process;
 // use crate::intelrdt::Manager as RdtManager;
-use crate::errors::*;
 use crate::log_child;
 use crate::specconv::CreateOpts;
 use crate::sync::*;
@@ -44,7 +44,6 @@ use nix::sched::{self, CloneFlags};
 use nix::sys::signal::{self, Signal};
 use nix::sys::stat::{self, Mode};
 use nix::unistd::{self, ForkResult, Gid, Pid, Uid};
-use nix::Error;
 
 use libc;
 use protobuf::SingularPtrField;
@@ -294,11 +293,10 @@ impl Container for LinuxContainer {
     fn pause(&mut self) -> Result<()> {
         let status = self.status();
         if status != Status::RUNNING && status != Status::CREATED {
-            return Err(ErrorKind::ErrorCode(format!(
+            return Err(anyhow!(
                 "failed to pause container: current status is: {:?}",
                 status
-            ))
-            .into());
+            ));
         }
 
         if self.cgroup_manager.is_some() {
@@ -310,17 +308,13 @@ impl Container for LinuxContainer {
             self.status.transition(Status::PAUSED);
             return Ok(());
         }
-        Err(ErrorKind::ErrorCode(String::from("failed to get container's cgroup manager")).into())
+        Err(anyhow!("failed to get container's cgroup manager"))
     }
 
     fn resume(&mut self) -> Result<()> {
         let status = self.status();
         if status != Status::PAUSED {
-            return Err(ErrorKind::ErrorCode(format!(
-                "container status is: {:?}, not paused",
-                status
-            ))
-            .into());
+            return Err(anyhow!("container status is: {:?}, not paused", status));
         }
 
         if self.cgroup_manager.is_some() {
@@ -332,7 +326,7 @@ impl Container for LinuxContainer {
             self.status.transition(Status::RUNNING);
             return Ok(());
         }
-        Err(ErrorKind::ErrorCode(String::from("failed to get container's cgroup manager")).into())
+        Err(anyhow!("failed to get container's cgroup manager"))
     }
 }
 
@@ -383,11 +377,11 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
     let p = if spec.process.is_some() {
         spec.process.as_ref().unwrap()
     } else {
-        return Err(ErrorKind::ErrorCode("didn't find process in Spec".to_string()).into());
+        return Err(anyhow!("didn't find process in Spec"));
     };
 
     if spec.linux.is_none() {
-        return Err(ErrorKind::ErrorCode("no linux config".to_string()).into());
+        return Err(anyhow!("no linux config"));
     }
     let linux = spec.linux.as_ref().unwrap();
 
@@ -401,7 +395,7 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
     for ns in &nses {
         let s = NAMESPACES.get(&ns.r#type.as_str());
         if s.is_none() {
-            return Err(ErrorKind::ErrorCode("invalid ns type".to_string()).into());
+            return Err(anyhow!("invalid ns type"));
         }
         let s = s.unwrap();
 
@@ -569,7 +563,7 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
     // NoNewPeiviledges, Drop capabilities
     if oci_process.no_new_privileges {
         if let Err(_) = prctl::set_no_new_privileges(true) {
-            return Err(ErrorKind::ErrorCode("cannot set no new privileges".to_string()).into());
+            return Err(anyhow!("cannot set no new privileges"));
         }
     }
 
@@ -621,9 +615,7 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
         match find_file(exec_file) {
             Some(_) => (),
             None => {
-                return Err(
-                    ErrorKind::ErrorCode(format!("the file {} is not exist", &args[0])).into(),
-                );
+                return Err(anyhow!("the file {} is not exist", &args[0]));
             }
         }
     }
@@ -655,7 +647,7 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
 
     do_exec(&args);
 
-    Err(ErrorKind::ErrorCode("fail to create container".to_string()).into())
+    Err(anyhow!("fail to create container"))
 }
 
 impl BaseContainer for LinuxContainer {
@@ -668,7 +660,7 @@ impl BaseContainer for LinuxContainer {
     }
 
     fn state(&self) -> Result<State> {
-        Err(ErrorKind::ErrorCode(String::from("not suppoerted")).into())
+        Err(anyhow!("not suppoerted"))
     }
 
     fn oci_state(&self) -> Result<OCIState> {
@@ -708,7 +700,7 @@ impl BaseContainer for LinuxContainer {
             }
         }
 
-        Err(ErrorKind::ErrorCode(format!("invalid eid {}", eid)).into())
+        Err(anyhow!("invalid eid {}", eid))
     }
 
     fn stats(&self) -> Result<StatsContainerResponse> {
@@ -747,7 +739,7 @@ impl BaseContainer for LinuxContainer {
         let mut fifofd: RawFd = -1;
         if p.init {
             if let Ok(_) = stat::stat(fifo_file.as_str()) {
-                return Err(ErrorKind::ErrorCode("exec fifo exists".to_string()).into());
+                return Err(anyhow!("exec fifo exists"));
             }
             unistd::mkfifo(fifo_file.as_str(), Mode::from_bits(0o622).unwrap())?;
             // defer!(fs::remove_file(&fifo_file)?);
@@ -763,18 +755,18 @@ impl BaseContainer for LinuxContainer {
         fscgroup::init_static();
 
         if self.config.spec.is_none() {
-            return Err(ErrorKind::ErrorCode("no spec".to_string()).into());
+            return Err(anyhow!("no spec"));
         }
 
         let spec = self.config.spec.as_ref().unwrap();
         if spec.linux.is_none() {
-            return Err(ErrorKind::ErrorCode("no linux config".to_string()).into());
+            return Err(anyhow!("no linux config"));
         }
         let linux = spec.linux.as_ref().unwrap();
 
         let st = self.oci_state()?;
 
-        let (pfd_log, cfd_log) = unistd::pipe().chain_err(|| "failed to create pipe")?;
+        let (pfd_log, cfd_log) = unistd::pipe().context("failed to create pipe")?;
         fcntl::fcntl(pfd_log, FcntlArg::F_SETFD(FdFlag::FD_CLOEXEC));
 
         let child_logger = logger.new(o!("action" => "child process log"));
@@ -802,8 +794,8 @@ impl BaseContainer for LinuxContainer {
         });
 
         info!(logger, "exec fifo opened!");
-        let (prfd, cwfd) = unistd::pipe().chain_err(|| "failed to create pipe")?;
-        let (crfd, pwfd) = unistd::pipe().chain_err(|| "failed to create pipe")?;
+        let (prfd, cwfd) = unistd::pipe().context("failed to create pipe")?;
+        let (crfd, pwfd) = unistd::pipe().context("failed to create pipe")?;
         fcntl::fcntl(prfd, FcntlArg::F_SETFD(FdFlag::FD_CLOEXEC));
         fcntl::fcntl(pwfd, FcntlArg::F_SETFD(FdFlag::FD_CLOEXEC));
 
@@ -858,7 +850,7 @@ impl BaseContainer for LinuxContainer {
 
         if pidns.is_some() {
             sched::setns(pidns.unwrap(), CloneFlags::CLONE_NEWPID)
-                .chain_err(|| "failed to join pidns")?;
+                .context("failed to join pidns")?;
             unistd::close(pidns.unwrap())?;
         } else {
             sched::unshare(CloneFlags::CLONE_NEWPID)?;
@@ -923,7 +915,7 @@ impl BaseContainer for LinuxContainer {
 
         // create the pipes for notify process exited
         let (exit_pipe_r, exit_pipe_w) = unistd::pipe2(OFlag::O_CLOEXEC)
-            .chain_err(|| "failed to create pipe")
+            .context("failed to create pipe")
             .map_err(|e| {
                 signal::kill(Pid::from_raw(child.id() as i32), Some(Signal::SIGKILL));
                 e
@@ -1056,11 +1048,7 @@ fn do_exec(args: &[String]) -> Result<()> {
 
 fn update_namespaces(logger: &Logger, spec: &mut Spec, init_pid: RawFd) -> Result<()> {
     let linux = match spec.linux.as_mut() {
-        None => {
-            return Err(
-                ErrorKind::ErrorCode("Spec didn't container linux field".to_string()).into(),
-            )
-        }
+        None => return Err(anyhow!("Spec didn't container linux field")),
         Some(l) => l,
     };
 
@@ -1107,7 +1095,7 @@ fn get_pid_namespace(logger: &Logger, linux: &Linux) -> Result<Option<RawFd>> {
         }
     }
 
-    Err(ErrorKind::ErrorCode("cannot find the pid ns".to_string()).into())
+    Err(anyhow!("cannot find the pid ns"))
 }
 
 fn is_userns_enabled(linux: &Linux) -> bool {
@@ -1271,7 +1259,7 @@ fn write_mappings(logger: &Logger, path: &str, maps: &[LinuxIDMapping]) -> Resul
 fn setid(uid: Uid, gid: Gid) -> Result<()> {
     // set uid/gid
     if let Err(e) = prctl::set_keep_capabilities(true) {
-        bail!(format!("set keep capabilities returned {}", e));
+        bail!(anyhow!(e).context("set keep capabilities returned"));
     };
     {
         unistd::setresgid(gid, gid, gid)?;
@@ -1285,7 +1273,7 @@ fn setid(uid: Uid, gid: Gid) -> Result<()> {
     }
 
     if let Err(e) = prctl::set_keep_capabilities(false) {
-        bail!(format!("set keep capabilities returned {}", e));
+        bail!(anyhow!(e).context("set keep capabilities returned"));
     };
     Ok(())
 }
@@ -1306,10 +1294,10 @@ impl LinuxContainer {
 
         if let Err(e) = fs::create_dir_all(root.as_str()) {
             if e.kind() == std::io::ErrorKind::AlreadyExists {
-                return Err(e).chain_err(|| format!("container {} already exists", id.as_str()));
+                return Err(e).context(format!("container {} already exists", id.as_str()));
             }
 
-            return Err(e).chain_err(|| format!("fail to create container directory {}", root));
+            return Err(e).context(format!("fail to create container directory {}", root));
         }
 
         unistd::chown(
@@ -1317,7 +1305,7 @@ impl LinuxContainer {
             Some(unistd::getuid()),
             Some(unistd::getgid()),
         )
-        .chain_err(|| format!("cannot change onwer of container {} root", id))?;
+        .context(format!("cannot change onwer of container {} root", id))?;
 
         if config.spec.is_none() {
             return Err(nix::Error::Sys(Errno::EINVAL).into());
@@ -1359,7 +1347,7 @@ impl LinuxContainer {
     }
 
     fn load<T: Into<String>>(_id: T, _base: T) -> Result<Self> {
-        Err(ErrorKind::ErrorCode("not supported".to_string()).into())
+        Err(anyhow!("not supported"))
     }
     /*
         fn new_parent_process(&self, p: &Process) -> Result<Box<ParentProcess>> {
@@ -1500,7 +1488,7 @@ fn execute_hook(logger: &Logger, h: &Hook, st: &OCIState) -> Result<()> {
     let binary = PathBuf::from(h.path.as_str());
     let path = binary.canonicalize()?;
     if !path.exists() {
-        return Err(ErrorKind::Nix(Error::from_errno(Errno::EINVAL)).into());
+        return Err(anyhow!(nix::Error::from_errno(Errno::EINVAL)));
     }
 
     let args = h.args.clone();
@@ -1531,11 +1519,11 @@ fn execute_hook(logger: &Logger, h: &Hook, st: &OCIState) -> Result<()> {
 
             if status != 0 {
                 if status == -libc::ETIMEDOUT {
-                    return Err(ErrorKind::Nix(Error::from_errno(Errno::ETIMEDOUT)).into());
+                    return Err(anyhow!(nix::Error::from_errno(Errno::ETIMEDOUT)));
                 } else if status == -libc::EPIPE {
-                    return Err(ErrorKind::Nix(Error::from_errno(Errno::EPIPE)).into());
+                    return Err(anyhow!(nix::Error::from_errno(Errno::EPIPE)));
                 } else {
-                    return Err(ErrorKind::Nix(Error::from_errno(Errno::UnknownErrno)).into());
+                    return Err(anyhow!(nix::Error::from_errno(Errno::UnknownErrno)));
                 }
             }
 
