@@ -350,6 +350,7 @@ mod tests {
     //use rustjail::Error;
     use super::Sandbox;
     use crate::{mount::BareMount, skip_if_not_root};
+    use anyhow::Error;
     use nix::mount::MsFlags;
     use oci::{Linux, Root, Spec};
     use rustjail::container::LinuxContainer;
@@ -359,7 +360,7 @@ mod tests {
     use std::os::unix::fs::PermissionsExt;
     use tempfile::Builder;
 
-    fn bind_mount(src: &str, dst: &str, logger: &Logger) -> Result<(), rustjail::errors::Error> {
+    fn bind_mount(src: &str, dst: &str, logger: &Logger) -> Result<(), Error> {
         let baremount = BareMount::new(src, dst, "bind", MsFlags::MS_BIND, "", &logger);
         baremount.mount()
     }

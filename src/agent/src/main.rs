@@ -470,7 +470,7 @@ mod tests {
         assert!(result.is_err());
         assert_eq!(
             result.unwrap_err().to_string(),
-            "Error Code: 'no shell found to launch debug console'"
+            "no shell found to launch debug console"
         );
     }
 
@@ -496,7 +496,7 @@ mod tests {
         assert!(result.is_err());
         assert_eq!(
             result.unwrap_err().to_string(),
-            "Error Code: 'no shell found to launch debug console'"
+            "no shell found to launch debug console"
         );
     }
 }

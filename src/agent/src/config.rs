@@ -203,6 +203,7 @@ fn get_container_pipe_size(param: &str) -> Result<i32> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use anyhow::Error;
     use std::fs::File;
     use std::io::Write;
     use std::time;
@@ -223,7 +224,7 @@ mod tests {
 
     // helper function to make errors less crazy-long
     fn make_err(desc: &str) -> Error {
-        anyhow!(desc)
+        anyhow!(desc.to_string())
     }
 
     // Parameters:
