@@ -14,7 +14,7 @@ use std::os::unix::io::RawFd;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 // use crate::sync::Cond;
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use libc::pid_t;
 use oci::{LinuxDevice, LinuxIDMapping};
 use std::clone::Clone;
