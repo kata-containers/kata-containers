@@ -256,7 +256,9 @@ fn ephemeral_storage_handler(
         return Err(err.into());
     }
 
-    common_storage_handler(logger, storage)
+    common_storage_handler(logger, storage)?;
+
+    Ok("".to_string())
 }
 
 fn local_storage_handler(
