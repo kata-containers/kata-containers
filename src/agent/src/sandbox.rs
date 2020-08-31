@@ -131,7 +131,7 @@ impl Sandbox {
     pub fn remove_sandbox_storage(&self, path: &str) -> Result<()> {
         let mounts = vec![path.to_string()];
         remove_mounts(&mounts)?;
-        fs::remove_dir_all(path)?;
+        fs::remove_dir_all(path).chain_err(|| format!("failed to remove dir {:?}", path))?;
         Ok(())
     }
 

@@ -256,7 +256,9 @@ fn ephemeral_storage_handler(
         return Err(err.into());
     }
 
-    common_storage_handler(logger, storage)
+    common_storage_handler(logger, storage)?;
+
+    Ok("".to_string())
 }
 
 fn local_storage_handler(
@@ -272,7 +274,8 @@ fn local_storage_handler(
         return Ok("".to_string());
     }
 
-    fs::create_dir_all(&storage.mount_point)?;
+    fs::create_dir_all(&storage.mount_point)
+        .chain_err(|| format!("failed to create dir all {:?}", &storage.mount_point))?;
 
     let opts_vec: Vec<String> = storage.options.to_vec();
 
@@ -328,7 +331,8 @@ fn virtio_blk_storage_handler(
     // If hot-plugged, get the device node path based on the PCI address else
     // use the virt path provided in Storage Source
     if storage.source.starts_with("/dev") {
-        let metadata = fs::metadata(&storage.source)?;
+        let metadata = fs::metadata(&storage.source)
+            .chain_err(|| format!("get metadata on file {:?}", &storage.source))?;
 
         let mode = metadata.permissions().mode();
         if mode & libc::S_IFBLK == 0 {
@@ -631,7 +635,7 @@ pub fn cgroups_mount(logger: &Logger) -> Result<()> {
 
 pub fn remove_mounts(mounts: &Vec<String>) -> Result<()> {
     for m in mounts.iter() {
-        mount::umount(m.as_str())?;
+        mount::umount(m.as_str()).chain_err(|| format!("failed to umount {:?}", m))?;
     }
     Ok(())
 }
@@ -652,12 +656,12 @@ fn ensure_destination_exists(destination: &str, fs_type: &str) -> Result<()> {
             }
         };
         if !dir.exists() {
-            fs::create_dir_all(dir)?;
+            fs::create_dir_all(dir).chain_err(|| format!("create dir all failed on {:?}", dir))?;
         }
     }
 
     if fs_type != "bind" || d.is_dir() {
-        fs::create_dir_all(d)?;
+        fs::create_dir_all(d).chain_err(|| format!("create dir all failed on {:?}", d))?;
     } else {
         fs::OpenOptions::new().create(true).open(d)?;
     }
