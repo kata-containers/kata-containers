@@ -530,6 +530,15 @@ func addHypervisorMemoryOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig
 
 		sbConfig.HypervisorConfig.IOMMU = iommu
 	}
+
+	if value, ok := ocispec.Annotations[vcAnnotations.IOMMUPlatform]; ok {
+		deviceIOMMU, err := strconv.ParseBool(value)
+		if err != nil {
+			return fmt.Errorf("Error parsing annotation for enable_iommu_platform: Please specify boolean value 'true|false'")
+		}
+
+		sbConfig.HypervisorConfig.IOMMUPlatform = deviceIOMMU
+	}
 	return nil
 }
 
