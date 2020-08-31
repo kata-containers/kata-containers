@@ -63,7 +63,6 @@ function install_yq() {
 	curl -o "${yq_path}" -LSsf "${yq_url}"
 	[ $? -ne 0 ] && die "Download ${yq_url} failed"
 	chmod +x "${yq_path}"
-	echo "Installed $(${yq_path} --version)"
 
 	if ! command -v "${yq_path}" >/dev/null; then
 		die "Cannot not get ${yq_path} executable"
