@@ -101,8 +101,8 @@ AGENT_INIT          When set to "yes", use ${AGENT_BIN} as init process in place
                     of systemd.
                     Default value: no
 
-RUST_AGENT          When set to "yes", build kata-agent from kata-rust-agent instead of go agent
-                    Default value: "no"
+RUST_AGENT          When set to "no", build kata-agent from go agent instead of kata-rust-agent
+                    Default value: "yes"
 
 RUST_AGENT_PKG      URL of the Git repository hosting the agent package.
                     Default value: ${RUST_AGENT_PKG}
