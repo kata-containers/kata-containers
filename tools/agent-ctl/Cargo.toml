@@ -6,7 +6,7 @@
 [package]
 name = "kata-agent-ctl"
 version = "0.0.1"
-authors = ["James O. D. Hunt <james.o.hunt@intel.com>"]
+authors = ["The Kata Containers community <kata-dev@lists.katacontainers.io>"]
 edition = "2018"
 
 [dependencies]

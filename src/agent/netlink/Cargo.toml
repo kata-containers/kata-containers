@@ -1,7 +1,7 @@
 [package]
 name = "netlink"
 version = "0.1.0"
-authors = ["Yang Bo <yb203166@antfin.com>"]
+authors = ["The Kata Containers community <kata-dev@lists.katacontainers.io>"]
 edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
