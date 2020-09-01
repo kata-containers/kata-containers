@@ -9,6 +9,8 @@ export GOPATH=${GOPATH:-${HOME}/go}
 export tests_repo="${tests_repo:-github.com/kata-containers/tests}"
 export tests_repo_dir="$GOPATH/src/$tests_repo"
 
+this_script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 hub_bin="hub-bin"
 
 clone_tests_repo() {
@@ -32,16 +34,14 @@ get_from_kata_deps() {
 	local dependency="$1"
 	BRANCH=${branch:-master}
 	local branch="${2:-${BRANCH}}"
-	local runtime_repo="github.com/kata-containers/kata-containers"
 	GOPATH=${GOPATH:-${HOME}/go}
-	local runtime_repo_dir="${GOPATH}/src/${runtime_repo}"
 	# For our CI, we will query the local versions.yaml file both for kernel and
 	# all other subsystems. eg: a new version of NEMU would be good to test
 	# through CI. For the kernel, .ci/install_kata_kernel.sh file in tests
 	# repository will pass the kernel version as an override to this function to
 	# allow testing of kernels before they land in tree.
-	if [ "${CI:-}" = "true" ] && [ -d "${runtime_repo_dir}" ]; then
-		versions_file="${runtime_repo_dir}/versions.yaml"
+	if [ "${CI:-}" = "true" ]; then
+		versions_file="${this_script_dir}/../../../versions.yaml"
 	else
 		versions_file="versions-${branch}.yaml"
 	fi
@@ -50,10 +50,7 @@ get_from_kata_deps() {
 	install_yq >&2
 
 	if [ ! -e "${versions_file}" ]; then
-		yaml_url="https://raw.githubusercontent.com/kata-containers/runtime/${branch}/versions.yaml"
-		echo "versions file (${versions_file}) does not exist" >&2
-		echo "Download from ${yaml_url}" >&2
-		curl --silent -o "${versions_file}" "$yaml_url"
+		cp "${this_script_dir}/../../../versions.yaml" ${versions_file}
 	fi
 	result=$("${GOPATH}/bin/yq" read -X "$versions_file" "$dependency")
 	[ "$result" = "null" ] && result=""

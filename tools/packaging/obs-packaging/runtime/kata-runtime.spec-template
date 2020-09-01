@@ -26,9 +26,6 @@ BuildRequires: git
 
 Requires: kata-containers-image = @kata_osbuilder_version@
 Requires: kata-linux-container = @linux_container_version@
-Requires: kata-proxy = @kata_proxy_version@
-Requires: kata-shim = @kata_shim_version@
-Requires: kata-ksm-throttler = @ksm_throttler_version@
 Requires: qemu-vanilla = @qemu_vanilla_version@
 
 # Patches

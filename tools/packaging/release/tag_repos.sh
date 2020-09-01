@@ -68,15 +68,6 @@ info() {
 }
 
 repos=(
-	"agent"
-	"documentation"
-	"ksm-throttler"
-	"osbuilder"
-	"packaging"
-	"proxy"
-	"runtime"
-	"shim"
-	"tests"
 	"kata-containers"
 )
 
@@ -208,7 +199,7 @@ main () {
 
 	subcmd=${1:-""}
 	shift || true
-	kata_version=$(curl -Ls "${URL_RAW_FILE}/runtime/${branch}/VERSION" | grep -v -P "^#")
+	kata_version=$(curl -Ls "${URL_RAW_FILE}/kata-containers/${branch}/VERSION" | grep -v -P "^#")
 
 	[ -z "${subcmd}" ] && usage && exit 0
 

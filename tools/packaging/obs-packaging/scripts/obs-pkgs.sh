@@ -15,8 +15,5 @@ OBS_PKGS_PROJECTS+=(
 	qemu-vanilla
 	linux-container
 	kata-containers-image
-	proxy
-	shim
-	ksm-throttler
 	runtime
 )

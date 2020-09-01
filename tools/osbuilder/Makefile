@@ -13,6 +13,7 @@ DISTRO                := centos
 BUILD_METHOD          := distro
 BUILD_METHOD_LIST     := distro dracut
 AGENT_INIT            ?= no
+USE_DOCKER            ?= true
 ROOTFS_BUILD_DEST     := $(shell pwd)
 IMAGES_BUILD_DEST     := $(shell pwd)
 ROOTFS_MARKER_SUFFIX   := _rootfs.done
