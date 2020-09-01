@@ -80,6 +80,9 @@ offer the ability to run from within a container (for ease of setup) by setting 
 `USE_DOCKER=true` or `USE_PODMAN=true` variable. If both are set, `USE_DOCKER=true`
 takes precedence over `USE_PODMAN=true`.
 
+By default a go agent is used in kata rootfs image or initrd, to use rust agent by setting 
+the `RUST_AGENT=yes` variable.
+
 For more detailed information, consult the documentation for a particular component.
 
 When invoking the appropriate make target as showed below, a single command is used
@@ -107,10 +110,16 @@ For further details, see
 $ sudo -E PATH=$PATH make USE_DOCKER=true rootfs
 ```
 
-#### Rootfs with the agent as init
+#### Rootfs with the go agent as init
 
 ```
 $ sudo -E PATH=$PATH make USE_DOCKER=true AGENT_INIT=yes rootfs
+```
+
+#### Rootfs with the rust agent as init
+
+```
+$ sudo -E PATH=$PATH make USE_DOCKER=true AGENT_INIT=yes RUST_AGENT=yes rootfs
 ```
 
 #### dracut based rootfs

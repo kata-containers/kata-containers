@@ -54,6 +54,9 @@ The rootfs must provide at least the following components:
 
   Path: `/bin/kata-agent` - Kata Containers guest.
 
+By default a go agent is used in kata rootfs image or initrd, to use rust agent by setting
+the `RUST_AGENT` environment variable to `yes`.
+
 - An `init` system (e.g. `systemd`) to start the Kata agent
   when the guest OS boots.
 
