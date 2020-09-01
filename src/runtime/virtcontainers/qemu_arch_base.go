@@ -712,30 +712,34 @@ func (q *qemuArchBase) setIgnoreSharedMemoryMigrationCaps(ctx context.Context, q
 }
 
 func (q *qemuArchBase) addDeviceToBridge(ID string, t types.Type) (string, types.Bridge, error) {
+	addr, b, err := genericAddDeviceToBridge(q.Bridges, ID, t)
+	if err != nil {
+		return "", b, err
+	}
+
+	return fmt.Sprintf("%02x", addr), b, nil
+}
+
+func genericAddDeviceToBridge(bridges []types.Bridge, ID string, t types.Type) (uint32, types.Bridge, error) {
 	var err error
 	var addr uint32
 
-	if len(q.Bridges) == 0 {
-		return "", types.Bridge{}, errors.New("failed to get available address from bridges")
+	if len(bridges) == 0 {
+		return 0, types.Bridge{}, errors.New("failed to get available address from bridges")
 	}
 
 	// looking for an empty address in the bridges
-	for _, b := range q.Bridges {
+	for _, b := range bridges {
 		if t != b.Type {
 			continue
 		}
 		addr, err = b.AddDevice(ID)
 		if err == nil {
-			switch t {
-			case types.CCW:
-				return fmt.Sprintf("%04x", addr), b, nil
-			case types.PCI, types.PCIE:
-				return fmt.Sprintf("%02x", addr), b, nil
-			}
+			return addr, b, nil
 		}
 	}
 
-	return "", types.Bridge{}, fmt.Errorf("no more bridge slots available")
+	return 0, types.Bridge{}, fmt.Errorf("no more bridge slots available")
 }
 
 func (q *qemuArchBase) removeDeviceFromBridge(ID string) error {

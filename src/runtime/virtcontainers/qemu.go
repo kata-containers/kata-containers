@@ -1305,6 +1305,9 @@ func (q *qemu) hotplugVFIODevice(device *config.VFIODev, op operation) (err erro
 			case config.VFIODeviceNormalType:
 				return q.qmpMonitorCh.qmp.ExecuteVFIODeviceAdd(q.qmpMonitorCh.ctx, devID, device.BDF, device.Bus, romFile)
 			case config.VFIODeviceMediatedType:
+				if utils.IsAPVFIOMediatedDevice(device.SysfsDev) {
+					return q.qmpMonitorCh.qmp.ExecuteAPVFIOMediatedDeviceAdd(q.qmpMonitorCh.ctx, device.SysfsDev)
+				}
 				return q.qmpMonitorCh.qmp.ExecutePCIVFIOMediatedDeviceAdd(q.qmpMonitorCh.ctx, devID, device.SysfsDev, "", device.Bus, romFile)
 			default:
 				return fmt.Errorf("Incorrect VFIO device type found")
@@ -1326,6 +1329,9 @@ func (q *qemu) hotplugVFIODevice(device *config.VFIODev, op operation) (err erro
 		case config.VFIODeviceNormalType:
 			return q.qmpMonitorCh.qmp.ExecutePCIVFIODeviceAdd(q.qmpMonitorCh.ctx, devID, device.BDF, addr, bridge.ID, romFile)
 		case config.VFIODeviceMediatedType:
+			if utils.IsAPVFIOMediatedDevice(device.SysfsDev) {
+				return q.qmpMonitorCh.qmp.ExecuteAPVFIOMediatedDeviceAdd(q.qmpMonitorCh.ctx, device.SysfsDev)
+			}
 			return q.qmpMonitorCh.qmp.ExecutePCIVFIOMediatedDeviceAdd(q.qmpMonitorCh.ctx, devID, device.SysfsDev, addr, bridge.ID, romFile)
 		default:
 			return fmt.Errorf("Incorrect VFIO device type found")
