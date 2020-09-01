@@ -15,7 +15,7 @@ script_dir="$(dirname $(readlink -f $0))"
 AGENT_VERSION=${AGENT_VERSION:-}
 GO_AGENT_PKG=${GO_AGENT_PKG:-github.com/kata-containers/agent}
 RUST_AGENT_PKG=${RUST_AGENT_PKG:-github.com/kata-containers/kata-containers}
-RUST_AGENT=${RUST_AGENT:-no}
+RUST_AGENT=${RUST_AGENT:-yes}
 RUST_VERSION="null"
 CMAKE_VERSION=${CMAKE_VERSION:-"null"}
 MUSL_VERSION=${MUSL_VERSION:-"null"}
@@ -288,6 +288,7 @@ check_env_variables()
 # Builds a rootfs based on the distro name provided as argument
 build_rootfs_distro()
 {
+	repo_dir="${script_dir}/../../../"
 	[ -n "${distro}" ] || usage 1
 	distro_config_dir="${script_dir}/${distro}"
 
@@ -346,21 +347,8 @@ build_rootfs_distro()
 
 	if [ -z "${USE_DOCKER}" ] && [ -z "${USE_PODMAN}" ]; then
 		#Generate an error if the local Go version is too old
-		foundVersion=$(go version | sed -E "s/^.+([0-9]+\.[0-9]+\.[0-9]+).*$/\1/g")
-
-		compare_versions "${GO_VERSION}" "${foundVersion}" || \
-			die "Your Go version ${foundVersion} is older than the minimum expected Go version ${GO_VERSION}"
-
-		if [ "${RUST_AGENT}" == "yes" ]; then
-			source "${HOME}/.cargo/env"
-			foundVersion=$(rustc --version | sed -E "s/^.+([0-9]+\.[0-9]+\.[0-9]+).*$/\1/g")
-
-			compare_versions "${RUST_VERSION}" "${foundVersion}" || \
-				die "Your rust version ${foundVersion} is older than the minimum expected rust version ${RUST_VERSION}"
-
-			foundVersion=$(cmake --version | grep "[0-9]\+.[0-9]\+.[0-9]\+" | sed -E "s/^.+([0-9]+\.[0-9]+\.[0-9]+).*$/\1/g")
-
-		fi
+		info "build directly"
+		build_rootfs ${ROOTFS_DIR}
 	else
 		if [ -n "${USE_DOCKER}" ]; then
 			container_engine="docker"
@@ -394,6 +382,7 @@ build_rootfs_distro()
 		else
 			docker_run_args+=" --env AGENT_SOURCE_BIN=${AGENT_SOURCE_BIN}"
 			docker_run_args+=" -v ${AGENT_SOURCE_BIN}:${AGENT_SOURCE_BIN}"
+			docker_run_args+=" -v ${GOPATH_LOCAL}:${GOPATH_LOCAL} --env GOPATH=${GOPATH_LOCAL}"
 		fi
 
 		docker_run_args+=" $(docker_extra_args $distro)"
@@ -427,19 +416,16 @@ build_rootfs_distro()
 			--env INSIDE_CONTAINER=1 \
 			--env SECCOMP="${SECCOMP}" \
 			--env DEBUG="${DEBUG}" \
+			--env STAGE_PREPARE_ROOTFS=1 \
 			--env HOME="/root" \
-			-v "${script_dir}":"/osbuilder" \
+			-v "${repo_dir}":"/kata-containers" \
 			-v "${ROOTFS_DIR}":"/rootfs" \
 			-v "${script_dir}/../scripts":"/scripts" \
 			-v "${kernel_mod_dir}":"${kernel_mod_dir}" \
 			$docker_run_args \
 			${image_name} \
-			bash /osbuilder/rootfs.sh "${distro}"
-
-		exit $?
+			bash /kata-containers/tools/osbuilder/rootfs-builder/rootfs.sh "${distro}"
 	fi
-
-	build_rootfs ${ROOTFS_DIR}
 }
 
 # Used to create a minimal directory tree where the agent can be instaleld.
@@ -553,23 +539,16 @@ EOT
 	AGENT_DEST="${AGENT_DIR}/${AGENT_BIN}"
 
 	if [ -z "${AGENT_SOURCE_BIN}" ] ; then
-		if [ "$RUST_AGENT" != "yes" ]; then
-			agent_pkg="${GO_AGENT_PKG}"
-			agent_dir="${GOPATH_LOCAL}/src/${GO_AGENT_PKG}"
-		else
-			# The PATH /.cargo/bin is apparently wrong
-			# looks like $HOME is resolved to empty when
-			# container is started
-			source "${HOME}/.cargo/env"
-			agent_pkg="${RUST_AGENT_PKG}"
-			agent_dir="${GOPATH_LOCAL}/src/${RUST_AGENT_PKG}/src/agent"
-			# For now, rust-agent doesn't support seccomp yet.
-			SECCOMP="no"
-		fi
+		bash ${script_dir}/../../../ci/install_musl.sh
+		# rust agent needs ${arch}-unknown-linux-musl
+		rustup show | grep linux-musl > /dev/null || bash ${script_dir}/../../../ci/install_rust.sh
+		test -r "${HOME}/.cargo/env" && source "${HOME}/.cargo/env"
+		[ "$ARCH" == "aarch64" ] && OLD_PATH=$PATH && export PATH=$PATH:/usr/local/musl/bin
 
-		info "Pull Agent source code"
-		go get -d "${agent_pkg}" || true
-		OK "Pull Agent source code"
+		agent_pkg="${RUST_AGENT_PKG}"
+		agent_dir="${script_dir}/../../../src/agent/"
+		# For now, rust-agent doesn't support seccomp yet.
+		SECCOMP="no"
 
 		info "Build agent"
 		pushd "${agent_dir}"
@@ -577,6 +556,7 @@ EOT
 		make clean
 		make LIBC=${LIBC} INIT=${AGENT_INIT}
 		make install DESTDIR="${ROOTFS_DIR}" LIBC=${LIBC} INIT=${AGENT_INIT} SECCOMP=${SECCOMP}
+		[ "$ARCH" == "aarch64" ] && export PATH=$OLD_PATH && rm -rf /usr/local/musl
 		popd
 	else
 		cp ${AGENT_SOURCE_BIN} ${AGENT_DEST}
@@ -624,18 +604,10 @@ parse_arguments()
 	distro="$1"
 	arch=$(uname -m)
 
-	if [ "${distro}" == "alpine" ]; then
-		if [ "${RUST_AGENT}" == "yes" ]; then
-			die "rust agent cannot be built on ${distro}.
-alpine: only has stable/nightly-x86_64-unknown-linux-musl toolchain. It does not support proc-macro compilation.
-See issue: https://github.com/kata-containers/osbuilder/issues/386"
-		fi
-	fi
-
 	if [ "${RUST_AGENT}" == "yes" ] && [ "${arch}" == "s390x" ]; then
-		die "Cannot build rust agent on ppc64le.
-musl cannot be built on ppc64le because of long double
-reprentation is broken. And rust has no musl target on ppc64le.
+		die "Cannot build rust agent on s390x
+musl cannot be built on s390x because of long double
+reprentation is broken. And rust has no musl target on s390x.
 See issue: https://github.com/kata-containers/osbuilder/issues/388"
 	fi
 }
@@ -673,8 +645,10 @@ main()
 		prepare_overlay
 	fi
 
-	init="${ROOTFS_DIR}/sbin/init"
-	setup_rootfs
+	if [ "$STAGE_PREPARE_ROOTFS" == "" ]; then
+		init="${ROOTFS_DIR}/sbin/init"
+		setup_rootfs
+	fi
 }
 
 main $*

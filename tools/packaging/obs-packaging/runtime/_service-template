@@ -3,7 +3,7 @@
 <!--- OBS plugin tar_scm (Source control manager) -->
 <service name="tar_scm">
     <param name="scm">git</param>
-    <param name="url">https://github.com/kata-containers/runtime.git</param>
+    <param name="url">https://github.com/kata-containers/kata-containers.git</param>
     <param name="filename">kata-runtime</param>
     <!--- versionformat defines the name of the  tarball. -->
     <param name="versionformat">@VERSION@</param>
