@@ -118,12 +118,12 @@ All other configurations are supported and are working properly.
 
 The newest version of Docker supported is specified by the
 `externals.docker.version` variable in the
-[versions database](https://github.com/kata-containers/runtime/blob/master/versions.yaml).
+[versions database](https://github.com/kata-containers/kata-containers/blob/2.0-dev/versions.yaml).
 
 Basic Docker swarm support works. However, if you want to use custom networks
 with Docker's swarm, an older version of Docker is required. This is specified
 by the `externals.docker.meta.swarm-version` variable in the
-[versions database](https://github.com/kata-containers/runtime/blob/master/versions.yaml).
+[versions database](https://github.com/kata-containers/kata-containers/blob/2.0-dev/versions.yaml).
 
 See issue https://github.com/kata-containers/runtime/issues/175 for more information.
 

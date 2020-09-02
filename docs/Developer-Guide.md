@@ -76,7 +76,7 @@ You need to install the following to build Kata Containers components:
 - [golang](https://golang.org/dl)
 
   To view the versions of go known to work, see the `golang` entry in the
-  [versions database](https://github.com/kata-containers/runtime/blob/master/versions.yaml).
+  [versions database](https://github.com/kata-containers/kata-containers/blob/2.0-dev/versions.yaml).
 
 - `make`.
 - `gcc` (required for building the shim and runtime).

@@ -174,7 +174,7 @@ In this case, the PR you submit needs to be tested together with a patch from
 another Kata Containers repository. To do this you have to specify which
 repository and which pull request [it depends on][depends-on-docs].
 
-[runtime-versions-file]: https://github.com/kata-containers/runtime/blob/master/versions.yaml
-[patches-dir]: https://github.com/kata-containers/packaging/tree/master/kernel/patches
+[runtime-versions-file]: https://github.com/kata-containers/kata-containers/blob/2.0-dev/versions.yaml
+[patches-dir]: https://github.com/kata-containers/kata-containers/tree/2.0-dev/tools/packaging/kernel/patches
 [depends-on-docs]: https://github.com/kata-containers/tests/blob/master/README.md#breaking-compatibility
 [cache-job]: http://jenkins.katacontainers.io/job/image-nightly-x86_64/

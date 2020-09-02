@@ -29,7 +29,7 @@ to launch Kata Containers. For the previous version of Kata Containers, the Pods
 
 > **Note:** For information about the supported versions of these components,
 > see the  Kata Containers
-> [`versions.yaml`](https://github.com/kata-containers/runtime/blob/master/versions.yaml)
+> [`versions.yaml`](https://github.com/kata-containers/kata-containers/blob/2.0-dev/versions.yaml)
 > file.
 
 ## Install and configure containerd
