@@ -7,6 +7,7 @@ description: |
   advantages of VMs
 confinement: classic
 adopt-info: metadata
+base: core20
 
 parts:
   metadata:
@@ -17,20 +18,34 @@ parts:
       - git
       - git-extras
     override-pull: |
-      branch="master"
+      version="9999"
+      kata_url="https://github.com/kata-containers/kata-containers"
 
-      # kata CI or launchpad snap-master, then build latest stable
-      if [ "${CI}" != "true" ] && ! echo "${SNAPCRAFT_IMAGE_INFO}" | egrep -o "build_url.*" | grep  -q "${branch}"; then
-        # Get the latest stable version
-        runtime_url="https://github.com/kata-containers/runtime"
-        branch=$(git ls-remote --tags ${runtime_url}  | egrep -o "refs.*" | egrep -v "\-alpha|\-rc|{}" | egrep -o "[[:digit:]]+\.[[:digit:]]+\.[[:digit:]]+" | sort -V -r | head -1)
-      fi
+      image_info="${SNAPCRAFT_IMAGE_INFO:-}"
+      snap_env="$(echo "${image_info}" | egrep -o "build_url.*" | egrep -o "snap.*build" | cut -d/ -f2)"
+
+      case "${snap_env}" in
+        stable)
+          # Get the latest stable version
+          version=$(git ls-remote --tags ${kata_url}  | egrep -o "refs.*" | egrep -v "\-alpha|\-rc|{}" | egrep -o "[[:digit:]]+\.[[:digit:]]+\.[[:digit:]]+" | sort -V -r | head -1)
+          git checkout ${version}
+        ;;
+
+        *-dev)
+          version="${snap_env}"
+        ;;
+      esac
 
       snapcraftctl set-grade "stable"
-      snapcraftctl set-version "${branch}"
-      echo "${branch}" | tee ${SNAPCRAFT_STAGE}/kata_version
+      snapcraftctl set-version "${version}"
 
-  yq:
+      # setup GOPATH - this repo dir should be there
+      export GOPATH=${SNAPCRAFT_STAGE}/gopath
+      kata_dir=${GOPATH}/src/github.com/${SNAPCRAFT_PROJECT_NAME}/${SNAPCRAFT_PROJECT_NAME}
+      mkdir -p $(dirname ${kata_dir})
+      ln -sf $(realpath "${SNAPCRAFT_STAGE}/..") ${kata_dir}
+
+  godeps:
     after: [metadata]
     plugin: nil
     prime:
@@ -38,7 +53,10 @@ parts:
     build-packages:
       - curl
     override-build: |
-      yq_path="yq"
+      # put everything in stage
+      cd ${SNAPCRAFT_STAGE}
+
+      yq_path="./yq"
       yq_pkg="github.com/mikefarah/yq"
       goos="linux"
       case "$(uname -m)" in
@@ -59,170 +77,57 @@ parts:
       curl -o "${yq_path}" -LSsf ${yq_url}
       chmod +x ${yq_path}
 
-  go:
-    after: [yq]
-    override-build: |
-      kata_version=$(cat ${SNAPCRAFT_STAGE}/kata_version)
-      yq=$(realpath ../../yq/build/yq)
-      versions_url=https://raw.githubusercontent.com/kata-containers/runtime/${kata_version}/versions.yaml
-      version="$(curl -sSL ${versions_url} | ${yq} r - languages.golang.version)"
-      curl -LO https://dl.google.com/go/go${version}.src.tar.gz
-      tar -xf go${version}.src.tar.gz --strip-components=1
-      cd src && env GOROOT_BOOTSTRAP=$(go env GOROOT | tr -d '\n') ./make.bash
-    build-packages:
-      - golang-go
-      - g++
-      - curl
-    plugin: nil
-    prime:
-      - -*
-
-  runtime:
-    after: [go, image]
-    plugin: nil
-    build-attributes: [no-patchelf]
-    override-build: |
-      kata_version=$(cat ${SNAPCRAFT_STAGE}/kata_version)
-      pkg_name=runtime
-
-      # set GOPATH
-      export GOPATH=$(realpath go)
-      # go was built in parts/go/build
-      export GOROOT=$(realpath ../../go/build)
-      export PATH="${GOROOT}/bin:${PATH}"
-      pkg_gopath=${GOPATH}/src/github.com/${SNAPCRAFT_PROJECT_NAME}/${pkg_name}
-      mkdir -p ${pkg_gopath}
-
-      # download source
-      git clone -b ${kata_version} https://github.com/kata-containers/${pkg_name} ${pkg_gopath}
-      cd ${pkg_gopath}
-
-      # build and install
-      arch=$(uname -m)
-      if [ ${arch} = "ppc64le" ]; then
-        arch="ppc64"
-      fi
-
-      make \
-        PREFIX=/snap/${SNAPCRAFT_PROJECT_NAME}/current/usr \
-        SKIP_GO_VERSION_CHECK=1 \
-        QEMUCMD=qemu-system-$arch
-      make install \
-        PREFIX=/usr \
-        DESTDIR=${SNAPCRAFT_PART_INSTALL} \
-        SKIP_GO_VERSION_CHECK=1 \
-        QEMUCMD=qemu-system-$arch
-
-      if [ -e ${SNAPCRAFT_STAGE}/kata-containers.img ]; then
-        # Use rootfs image by default
-        sed -i -e '/^initrd =/d' ${SNAPCRAFT_PART_INSTALL}/usr/share/defaults/${SNAPCRAFT_PROJECT_NAME}/configuration.toml
-      else
-        # Use initrd by default
-        sed -i -e '/^image =/d' ${SNAPCRAFT_PART_INSTALL}/usr/share/defaults/${SNAPCRAFT_PROJECT_NAME}/configuration.toml
-      fi
-
-  proxy:
-    after: [go]
-    plugin: nil
-    build-attributes: [no-patchelf]
-    override-build: |
-      kata_version=$(cat ${SNAPCRAFT_STAGE}/kata_version)
-      pkg_name=proxy
-
-      # set GOPATH
-      export GOPATH=$(realpath go)
-      # go was built in parts/go/build
-      export GOROOT=$(realpath ../../go/build)
-      export PATH="${GOROOT}/bin:${PATH}"
-      pkg_gopath=${GOPATH}/src/github.com/${SNAPCRAFT_PROJECT_NAME}/${pkg_name}
-      mkdir -p ${pkg_gopath}
-
-      # download source
-      git clone -b ${kata_version} https://github.com/kata-containers/${pkg_name} ${pkg_gopath}
-      cd ${pkg_gopath}
-
-      # build and install
-      make
-      make install DESTDIR=${SNAPCRAFT_PART_INSTALL}
-
-  shim:
-    after: [go]
-    plugin: nil
-    build-attributes: [no-patchelf]
-    override-build: |
-      kata_version=$(cat ${SNAPCRAFT_STAGE}/kata_version)
-      pkg_name=shim
-
-      # set GOPATH
-      export GOPATH=$(realpath go)
-      # go was built in parts/go/build
-      export GOROOT=$(realpath ../../go/build)
-      export PATH="${GOROOT}/bin:${PATH}"
-      pkg_gopath=${GOPATH}/src/github.com/${SNAPCRAFT_PROJECT_NAME}/${pkg_name}
-      mkdir -p ${pkg_gopath}
-
-      # download source
-      git clone -b ${kata_version} https://github.com/kata-containers/${pkg_name} ${pkg_gopath}
-      cd ${pkg_gopath}
-
-      # build and install
-      make
-      make install LIBEXECDIR=${SNAPCRAFT_PART_INSTALL}/usr/libexec
+      kata_dir=gopath/src/github.com/${SNAPCRAFT_PROJECT_NAME}/${SNAPCRAFT_PROJECT_NAME}
+      version="$(${yq_path} r ${kata_dir}/versions.yaml languages.golang.meta.newest-version)"
+      tarfile="go${version}.${goos}-${goarch}.tar.gz"
+      curl -LO https://golang.org/dl/${tarfile}
+      tar -xf ${tarfile} --strip-components=1
 
   image:
-    after: [go]
+    after: [godeps]
     plugin: nil
     build-packages:
+      - docker.io
       - cpio
       - git
       - iptables
       - software-properties-common
       - uidmap
+      - gnupg2
     override-build: |
-      kata_version=$(cat ${SNAPCRAFT_STAGE}/kata_version)
-      yq=$(realpath ../../yq/build/yq)
-      pkg_name=osbuilder
-      cni_plugings_repo="github.com/containernetworking/plugins"
+      yq=${SNAPCRAFT_STAGE}/yq
 
       # set GOPATH
-      export GOPATH=$(realpath go)
-      pkg_gopath=${GOPATH}/src/github.com/${SNAPCRAFT_PROJECT_NAME}/${pkg_name}
-      mkdir -p ${pkg_gopath}
+      export GOPATH=${SNAPCRAFT_STAGE}/gopath
+      kata_dir=${GOPATH}/src/github.com/${SNAPCRAFT_PROJECT_NAME}/${SNAPCRAFT_PROJECT_NAME}
 
-      # go was built in parts/go/build
-      export GOROOT=$(realpath ../../go/build)
+      export GOROOT=${SNAPCRAFT_STAGE}
       export PATH="${GOROOT}/bin:${PATH}"
 
-      # install podman
-      sudo add-apt-repository -y ppa:projectatomic/ppa
-      sudo apt-get update
-      sudo apt-get --no-install-recommends install -y apt-utils ca-certificates podman
-
-      # Build and install cni plugings
-      echo "Retrieve CNI plugins repository"
-      go get -d ${cni_plugings_repo} || true
-      cd $GOPATH/src/${cni_plugings_repo}
-
-      echo "Build CNI plugins"
-      ./build_linux.sh
-
-      echo "Install CNI binaries"
-      cni_bin_path="/opt/cni"
-      sudo mkdir -p ${cni_bin_path}
-      sudo cp -a bin ${cni_bin_path}
+      if [ -n "$http_proxy" ]; then
+        echo "Setting proxy $http_proxy"
+        sudo -E systemctl set-environment http_proxy=$http_proxy || true
+        sudo -E systemctl set-environment https_proxy=$https_proxy || true
+      fi
 
       # Copy yq binary. It's used in the container
       mkdir -p "${GOPATH}/bin/"
       cp -a "${yq}" "${GOPATH}/bin/"
 
-      # download source
-      git clone -b ${kata_version} https://github.com/kata-containers/${pkg_name} ${pkg_gopath}
-      cd ${pkg_gopath}
+      echo "Unmasking docker service"
+      sudo -E systemctl unmask docker.service || true
+      sudo -E systemctl unmask docker.socket || true
+      echo "Adding $USER into docker group"
+      sudo -E gpasswd -a $USER docker
+      echo "Starting docker"
+      sudo -E systemctl start docker || true
+
+      cd ${kata_dir}/tools/osbuilder
 
       # build image
-      export AGENT_VERSION=${kata_version}
+      export AGENT_VERSION=$(cat ${kata_dir}/VERSION)
       export AGENT_INIT=yes
-      export USE_PODMAN=1
+      export USE_DOCKER=1
       export DEBUG=1
       case "$(uname -m)" in
         aarch64|ppc64le|s390x)
@@ -239,40 +144,47 @@ parts:
       kata_image_dir=${SNAPCRAFT_PART_INSTALL}/usr/share/kata-containers
       mkdir -p ${kata_image_dir}
       cp kata-containers*.img ${kata_image_dir}
-      if [ -e kata-containers.img ]; then
-        touch ${SNAPCRAFT_STAGE}/kata-containers.img
-      else
-        touch ${SNAPCRAFT_STAGE}/kata-containers-initrd.img
-      fi
 
-  ksm-throttler:
-    after: [go]
+  runtime:
+    after: [godeps, image]
     plugin: nil
     build-attributes: [no-patchelf]
     override-build: |
-      kata_version=$(cat ${SNAPCRAFT_STAGE}/kata_version)
-      pkg_name=ksm-throttler
-
       # set GOPATH
-      export GOPATH=$(realpath go)
-      # go was built in parts/go/build
-      export GOROOT=$(realpath ../../go/build)
+      export GOPATH=${SNAPCRAFT_STAGE}/gopath
+      export GOROOT=${SNAPCRAFT_STAGE}
       export PATH="${GOROOT}/bin:${PATH}"
-      pkg_gopath=${GOPATH}/src/github.com/${SNAPCRAFT_PROJECT_NAME}/${pkg_name}
-      mkdir -p ${pkg_gopath}
+      kata_dir=${GOPATH}/src/github.com/${SNAPCRAFT_PROJECT_NAME}/${SNAPCRAFT_PROJECT_NAME}
 
-      # download source
-      git clone -b ${kata_version} https://github.com/kata-containers/${pkg_name} ${pkg_gopath}
-      cd ${pkg_gopath}
+      cd ${kata_dir}/src/runtime
 
-      # build and install
-      make TARGET=kata-ksm-throttler
+      # setup arch
+      arch=$(uname -m)
+      if [ ${arch} = "ppc64le" ]; then
+        arch="ppc64"
+      fi
+
+      # build and install runtime
+      make \
+        PREFIX=/snap/${SNAPCRAFT_PROJECT_NAME}/current/usr \
+        SKIP_GO_VERSION_CHECK=1 \
+        QEMUCMD=qemu-system-$arch
       make install \
+        PREFIX=/usr \
         DESTDIR=${SNAPCRAFT_PART_INSTALL} \
-        TARGET=kata-ksm-throttler
+        SKIP_GO_VERSION_CHECK=1 \
+        QEMUCMD=qemu-system-$arch
+
+      if [ -e ${SNAPCRAFT_PART_INSTALL}/../../image/install/usr/share/kata-containers/kata-containers.img ]; then
+        # Use rootfs image by default
+        sed -i -e '/^initrd =/d' ${SNAPCRAFT_PART_INSTALL}/usr/share/defaults/${SNAPCRAFT_PROJECT_NAME}/configuration.toml
+      else
+        # Use initrd by default
+        sed -i -e '/^image =/d' ${SNAPCRAFT_PART_INSTALL}/usr/share/defaults/${SNAPCRAFT_PROJECT_NAME}/configuration.toml
+      fi
 
   kernel:
-    after: [kernel-dump, scripts-dump, yq]
+    after: [godeps, image]
     plugin: nil
     build-packages:
       - libelf-dev
@@ -281,10 +193,13 @@ parts:
       - bison
       - flex
     override-build: |
-      yq=$(realpath ../../yq/build/yq)
+      export GOPATH=${SNAPCRAFT_STAGE}/gopath
+      kata_dir=${GOPATH}/src/github.com/${SNAPCRAFT_PROJECT_NAME}/${SNAPCRAFT_PROJECT_NAME}
+
+      cd ${kata_dir}/tools/packaging/kernel
 
       # Say 'no' to everithing, fix issues with incomplete .config files
-      yes "n" | ${SNAPCRAFT_STAGE}/kernel/build-kernel.sh setup
+      yes "n" | ./build-kernel.sh setup
       kernel_dir_prefix="kata-linux-"
       cd ${kernel_dir_prefix}*
       version=$(basename ${PWD} | sed 's|'"${kernel_dir_prefix}"'||' | cut -d- -f1)
@@ -304,25 +219,9 @@ parts:
       cp vmlinux ${kata_kernel_dir}/${vmlinux_name}
       ln -sf ${vmlinux_name} ${kata_kernel_dir}/vmlinux.container
 
-  kernel-dump:
-    source: kernel
-    plugin: dump
-    organize:
-      '*' : kernel/
-    prime:
-      - -*
-
-  scripts-dump:
-    source: scripts
-    plugin: dump
-    organize:
-      '*' : scripts/
-    prime:
-      - -*
-
   qemu:
     plugin: make
-    after: [scripts-dump, qemu-patches-dump, qemu-aarch64-patches-dump, yq, qemu-configs-dump]
+    after: [godeps, runtime]
     build-packages:
       - gcc
       - python
@@ -343,40 +242,39 @@ parts:
       - libmount-dev
       - libselinux1-dev
     override-build: |
-      kata_version=$(cat ${SNAPCRAFT_STAGE}/kata_version)
-      yq=$(realpath ../../yq/build/yq)
-      pkg_name="qemu"
-      configs_dir="${SNAPCRAFT_STAGE}/qemu/default-configs"
+      yq=${SNAPCRAFT_STAGE}/yq
+      export GOPATH=${SNAPCRAFT_STAGE}/gopath
+      kata_dir=${GOPATH}/src/github.com/${SNAPCRAFT_PROJECT_NAME}/${SNAPCRAFT_PROJECT_NAME}
 
-      versions_url=https://raw.githubusercontent.com/kata-containers/runtime/${kata_version}/versions.yaml
+      versions_file="${kata_dir}/versions.yaml"
       # arch-specific definition
       case "$(uname -m)" in
         "aarch64")
-          branch="$(curl -sSL ${versions_url} | ${yq} r - assets.hypervisor.qemu.architecture.aarch64.branch)"
-          url="$(curl -sSL ${versions_url} | ${yq} r - assets.hypervisor.qemu.url)"
-          commit="$(curl -sSL ${versions_url} | ${yq} r - assets.hypervisor.qemu.architecture.aarch64.commit)"
-          patch_dir="${SNAPCRAFT_STAGE}/qemu-aarch64/patches/"
+          branch="$(${yq} r ${versions_file} assets.hypervisor.qemu.architecture.aarch64.branch)"
+          url="$(${yq} r ${versions_file} assets.hypervisor.qemu.url)"
+          commit="$(${yq} r ${versions_file} assets.hypervisor.qemu.architecture.aarch64.commit)"
+          patches_dir="${kata_dir}/tools/packaging/obs-packaging/qemu-aarch64/patches/"
         ;;
 
         *)
-          branch="$(curl -sSL ${versions_url} | ${yq} r - assets.hypervisor.qemu.tag)"
-          url="$(curl -sSL ${versions_url} | ${yq} r - assets.hypervisor.qemu.url)"
-          patch_dir="${SNAPCRAFT_STAGE}/qemu/patches/$(echo ${branch} | cut -d. -f1-2 | tr -d v).x"
+          branch="$(${yq} r ${versions_file} assets.hypervisor.qemu.tag)"
+          url="$(${yq} r ${versions_file} assets.hypervisor.qemu.url)"
           commit=""
+          patches_dir="${kata_dir}/tools/packaging/qemu/patches/$(echo ${branch} | sed -e 's/.[[:digit:]]*$//' -e 's/^v//').x"
         ;;
       esac
 
       # download source
-      pkg_repo_dir="${pkg_name}-repo"
-      git clone --branch ${branch} --single-branch ${url} "${pkg_repo_dir}"
-      cd ${pkg_repo_dir}
+      qemu_dir=${SNAPCRAFT_STAGE}/qemu
+      git clone --branch ${branch} --single-branch ${url} "${qemu_dir}"
+      cd ${qemu_dir}
       [ -z "${commit}" ] || git checkout ${commit}
 
       [ -n "$(ls -A ui/keycodemapdb)" ] || git clone https://github.com/qemu/keycodemapdb ui/keycodemapdb/
       [ -n "$(ls -A capstone)" ] || git clone https://github.com/qemu/capstone capstone
 
       # Apply patches
-      for patch in ${patch_dir}/*.patch; do
+      for patch in ${patches_dir}/*.patch; do
         echo "Applying $(basename "$patch") ..."
         patch \
           --batch \
@@ -388,9 +286,10 @@ parts:
       # Only x86_64 supports libpmem
       [ "$(uname -m)" = "x86_64" ] && sudo apt-get --no-install-recommends install -y apt-utils ca-certificates libpmem-dev
 
-      chmod +x ${SNAPCRAFT_STAGE}/scripts/configure-hypervisor.sh
+      configure_hypervisor=${kata_dir}/tools/packaging/scripts/configure-hypervisor.sh
+      chmod +x ${configure_hypervisor}
       # static build
-      echo "$(${SNAPCRAFT_STAGE}/scripts/configure-hypervisor.sh -s qemu) \
+      echo "$(${configure_hypervisor} -s qemu) \
         --disable-rbd
         --prefix=/snap/${SNAPCRAFT_PROJECT_NAME}/current/usr \
         --datadir=/snap/${SNAPCRAFT_PROJECT_NAME}/current/usr/share \
@@ -398,46 +297,27 @@ parts:
         | xargs ./configure
 
       # Copy QEMU configurations (Kconfigs)
-      cp -a ${configs_dir} .
+      cp -a ${kata_dir}/tools/packaging/qemu/default-configs/* default-configs/
 
       # build and install
       make -j $(($(nproc)-1))
       make install DESTDIR=${SNAPCRAFT_PART_INSTALL}
     prime:
       - -snap/
-      - -usr/var/
-      - -usr/libexec/
       - -usr/bin/qemu-ga
       - -usr/bin/qemu-pr-helper
       - -usr/bin/virtfs-proxy-helper
+      - -usr/include/
+      - -usr/libexec/
+      - -usr/share/applications/
+      - -usr/share/icons/
+      - -usr/var/
       - usr/*
       - lib/*
     organize:
       # Hack: move qemu to /
       "snap/kata-containers/current/": "./"
 
-  qemu-patches-dump:
-    source: qemu/patches/
-    plugin: dump
-    organize:
-      '*' : qemu/patches/
-    prime:
-      - -*
-  qemu-aarch64-patches-dump:
-    source: obs-packaging/qemu-aarch64/patches/
-    plugin: dump
-    organize:
-      '*' : qemu-aarch64/patches/
-    prime:
-      - -*
-  qemu-configs-dump:
-    source: qemu/default-configs/
-    plugin: dump
-    organize:
-      '*' : qemu/default-configs/
-    prime:
-      - -*
-
 apps:
   runtime:
-    command: usr/bin/kata-runtime
+    command: usr/bin/containerd-shim-kata-v2
