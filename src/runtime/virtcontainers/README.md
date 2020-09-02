@@ -18,7 +18,8 @@ Table of Contents
 * [Storage](#storage)
     * [How to check if container uses devicemapper block device as its rootfs](#how-to-check-if-container-uses-devicemapper-block-device-as-its-rootfs)
 * [Devices](#devices)
-    * [How to pass a device using VFIO-passthrough](#how-to-pass-a-device-using-vfio-passthrough)
+    * [How to pass a device using VFIO-PCI passthrough](#how-to-pass-a-device-using-vfio-pci-passthrough)
+    * [How to pass a device using VFIO-AP passthrough](#how-to-pass-a-device-using-vfio-ap-passthrough)
 * [Developers](#developers)
 * [Persistent storage plugin support](#persistent-storage-plugin-support)
 * [Experimental features](#experimental-features)
@@ -240,9 +241,11 @@ Start a container. Call `mount(8)` within the container. You should see `/` moun
 Support has been added to pass [VFIO](https://www.kernel.org/doc/Documentation/vfio.txt) 
 assigned devices on the docker command line with --device.
 Support for passing other devices including block devices with --device has
-not been added added yet.
+not been added yet. [PCI](#how-to-pass-a-device-using-vfio-pci-passthrough) and
+[AP](#how-to-pass-a-device-using-vfio-ap-passthrough) (IBM Z Crypto Express
+cards) devices can be passed.
 
-## How to pass a device using VFIO-passthrough
+## How to pass a device using VFIO-PCI passthrough
 
 1. Requirements
 
@@ -319,6 +322,83 @@ PCI devices. The driver for the device needs to be present within the
 Clear Containers kernel. If the driver is missing,  you can add it to your
 custom container kernel using the [osbuilder](https://github.com/clearcontainers/osbuilder)
 tooling.
+
+## How to pass a device using VFIO-AP passthrough
+
+IBM Z mainframes (s390x) use the AP (Adjunct Processor) bus for their Crypto
+Express hardware security modules. Such devices can be passed over VFIO, which
+is also supported in Kata. Pass-through happens separated by adapter and
+domain, i.e. a passable VFIO device has one or multiple adapter-domain
+combinations.
+
+1. You must follow the [kernel documentation for preparing VFIO-AP passthrough](https://www.kernel.org/doc/html/latest/s390/vfio-ap.html).
+In short, your host kernel should have the following enabled or available as
+module (in case of modules, load the modules accordingly, e.g. through
+`modprobe`). If one is missing, you will have to update your kernel
+accordingly, e.g. through recompiling.
+
+```
+CONFIG_VFIO_AP
+CONFIG_VFIO_IOMMU_TYPE1
+CONFIG_VFIO
+CONFIG_VFIO_MDEV
+CONFIG_VFIO_MDEV_DEVICE
+CONFIG_S390_AP_IOMMU
+```
+
+2. Set the AP adapter(s) and domain(s) you want to pass in `/sys/bus/ap/apmask`
+and `/sys/bus/ap/aqmask` by writing their negative numbers. Assuming you
+want to pass 06.0032, you'd run
+
+```sh
+$ echo -0x6 | sudo tee /sys/bus/ap/apmask > /dev/null
+$ echo -0x32 | sudo tee /sys/bus/ap/aqmask > /dev/null
+```
+
+3. Create one or multiple mediated devices -- one per container you want to
+pass to. You must write a UUID for the device to
+`/sys/devices/vfio_ap/matrix/mdev_supported_types/vfio_ap-passthrough/create`.
+You can use `uuidgen` for generating the UUID, e.g.
+
+```sh
+$ uuidgen | sudo tee /sys/devices/vfio_ap/matrix/mdev_supported_types/vfio_ap-passthrough/create
+a297db4a-f4c2-11e6-90f6-d3b88d6c9525
+```
+
+4. Set the AP adapter(s) and domain(s) you want to pass per device by writing
+their numbers to `/sys/devices/vfio_ap/matrix/${UUID}/assign_adapter` and
+`assign_domain` in the same directory. For the UUID from step 3, that would be
+
+```sh
+$ echo 0x6 | sudo tee /sys/devices/vfio_ap/matrix/a297db4a-f4c2-11e6-90f6-d3b88d6c9525/assign_adapter > /dev/null
+$ echo 0x32 | sudo tee /sys/devices/vfio_ap/matrix/a297db4a-f4c2-11e6-90f6-d3b88d6c9525/assign_domain > /dev/null
+```
+
+5. Find the IOMMU group of the mediated device by following the link from
+`/sys/devices/vfio_ap/matrix/${UUID}/iommu_group`. There should be a
+correspondent VFIO device in `/dev/vfio`.
+
+```sh
+$ readlink /sys/devices/vfio_ap/matrix/a297db4a-f4c2-11e6-90f6-d3b88d6c9525/iommu_group
+../../../../kernel/iommu_groups/0
+$ ls /dev/vfio
+0 vfio
+```
+
+6. This device can now be passed. To verify the cards are there, you can use
+`lszcrypt` from `s390-tools` (`s390-tools` in Alpine, Debian, and Ubuntu,
+`s390utils` in Fedora). With `lszcrypt`, you can see the cards after the
+[configuration time](https://www.ibm.com/support/knowledgecenter/en/linuxonibm/com.ibm.linux.z.ubdd/ludd_t_crypt_add.html)
+has passed.
+
+```sh
+$ sudo docker run -it --device /dev/vfio/0 ubuntu
+$ lszcrypt
+CARD.DOMAIN TYPE  MODE        STATUS  REQUESTS
+----------------------------------------------
+06          CEX7C CCA-Coproc  online         1
+06.0032     CEX7C CCA-Coproc  online         1
+```
 
 # Developers
 
