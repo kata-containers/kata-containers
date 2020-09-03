@@ -1639,3 +1639,18 @@ func (q *QMP) ExecQomSet(ctx context.Context, path, property string, value uint6
 
 	return q.executeCommand(ctx, "qom-set", args, nil)
 }
+
+// ExecQomGet qom-get path property
+func (q *QMP) ExecQomGet(ctx context.Context, path, property string) (interface{}, error) {
+	args := map[string]interface{}{
+		"path":     path,
+		"property": property,
+	}
+
+	response, err := q.executeCommandWithResponse(ctx, "qom-get", args, nil, nil)
+	if err != nil {
+		return "", err
+	}
+
+	return response, nil
+}
