@@ -20,8 +20,10 @@ image = "@IMAGEPATH@"
 # of the annotation, e.g. "path" for io.katacontainers.config.hypervisor.path"
 enable_annotations = @DEFENABLEANNOTATIONS@
 
-# List of valid annotations values for the hypervisor (default: empty)
+# List of valid annotations values for the hypervisor
 # Each member of the list is a path pattern as described by glob(3).
+# The default if not set is empty (all annotations rejected.)
+# Your distribution recommends: @CLHPATHLIST@
 path_list = @CLHPATHLIST@
 
 # Optional space-separated list of options to pass to the guest kernel.
@@ -71,7 +73,9 @@ default_memory = @DEFMEMSZ@
 # Path to vhost-user-fs daemon.
 virtio_fs_daemon = "@DEFVIRTIOFSDAEMON@"
 
-# List of valid annotations values for the virtiofs daemon (default: empty)
+# List of valid annotations values for the virtiofs daemon
+# The default if not set is empty (all annotations rejected.)
+# Your distribution recommends: @DEFVIRTIOFSDAEMONLIST@
 virtio_fs_daemon_list = @DEFVIRTIOFSDAEMONLIST@
 
 # Default size of DAX cache in MiB

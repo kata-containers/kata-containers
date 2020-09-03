@@ -19,10 +19,14 @@ machine_type = "@MACHINETYPE@"
 # List of valid annotation names for the hypervisor
 # Each member of the list is a regular expression, which is the base name
 # of the annotation, e.g. "path" for io.katacontainers.config.hypervisor.path"
+# The default if not set is empty (all annotations rejected.)
+# Your distribution recommends: @DEFENABLEANNOTATIONS@
 enable_annotations = @DEFENABLEANNOTATIONS@
 
-# List of valid annotations values for the hypervisor (default: empty)
+# List of valid annotations values for the hypervisor
 # Each member of the list is a path pattern as described by glob(3).
+# The default if not set is empty (all annotations rejected.)
+# Your distribution recommends: @QEMUVIRTIOFSPATHLIST@
 path_list = @QEMUVIRTIOFSPATHLIST@
 
 # Optional space-separated list of options to pass to the guest kernel.
@@ -119,7 +123,9 @@ shared_fs = "@DEFSHAREDFS_QEMU_VIRTIOFS@"
 # Path to vhost-user-fs daemon.
 virtio_fs_daemon = "@DEFVIRTIOFSDAEMON@"
 
-# List of valid annotations values for the virtiofs daemon (default: empty)
+# List of valid annotations values for the virtiofs daemon
+# The default if not set is empty (all annotations rejected.)
+# Your distribution recommends: @DEFVIRTIOFSDAEMONLIST@
 virtio_fs_daemon_list = @DEFVIRTIOFSDAEMONLIST@
 
 # Default size of DAX cache in MiB
@@ -211,7 +217,9 @@ vhost_user_store_path = "@DEFVHOSTUSERSTOREPATH@"
 # Enabling this will result in the VM device having iommu_platform=on set
 #enable_iommu_platform = true
 
-# List of valid annotations values for the virtiofs daemon (default: empty)
+# List of valid annotations values for the virtiofs daemon
+# The default if not set is empty (all annotations rejected.)
+# Your distribution recommends: @DEFVHOSTUSERSTOREPATHLIST@
 vhost_user_store_path_list = @DEFVHOSTUSERSTOREPATHLIST@
 
 # Enable file based guest memory support. The default is an empty string which
@@ -220,8 +228,10 @@ vhost_user_store_path_list = @DEFVHOSTUSERSTOREPATHLIST@
 # This option will be ignored if VM templating is enabled.
 #file_mem_backend = "@DEFFILEMEMBACKEND@"
 
-# List of valid annotations values for the file_mem_backend annotation (default: empty)
-#file_mem_backend_list = @DEFFILEMEMBACKENDLIST@
+# List of valid annotations values for the file_mem_backend annotation
+# The default if not set is empty (all annotations rejected.)
+# Your distribution recommends: @DEFFILEMEMBACKENDLIST@
+file_mem_backend_list = @DEFFILEMEMBACKENDLIST@
 
 # Enable swap of vm memory. Default false.
 # The behaviour is undefined if mem_prealloc is also set to true
