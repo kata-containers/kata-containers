@@ -30,11 +30,17 @@ BuildRequires : findutils
 
 %if 0%{?centos_version}
 BuildRequires : librbd1-devel
+BuildRequires : libmount
 %else
 
 %if ! 0%{?rhel_version}
 BuildRequires : librbd-devel
 %endif
+
+BuildRequires : libselinux-devel
+BuildRequires : libffi-devel
+BuildRequires : libmount-devel
+BuildRequires : libblkid-devel
 
 %endif
 
@@ -44,13 +50,8 @@ BuildRequires : libnuma-devel
 BuildRequires : numactl-devel
 %endif
 
-%if 0%{?centos} < 8
-BuildRequires : python
-BuildRequires : python-devel
-%else
 BuildRequires : python3
 BuildRequires : python3-devel
-%endif
 BuildRequires : zlib-devel
 BuildRequires : pkgconfig(pixman-1)
 BuildRequires : libpmem-devel
