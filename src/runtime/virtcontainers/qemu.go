@@ -1273,13 +1273,13 @@ func (q *qemu) hotplugVFIODevice(device *config.VFIODev, op operation) (err erro
 	}
 
 	devID := device.ID
-	machinneType := q.hypervisorConfig().HypervisorMachineType
+	machineType := q.hypervisorConfig().HypervisorMachineType
 
 	if op == addDevice {
 
 		buf, _ := json.Marshal(device)
 		q.Logger().WithFields(logrus.Fields{
-			"machine-type":             machinneType,
+			"machine-type":             machineType,
 			"hotplug-vfio-on-root-bus": q.state.HotplugVFIOOnRootBus,
 			"pcie-root-port":           q.state.PCIeRootPort,
 			"device-info":              string(buf),
@@ -1291,7 +1291,7 @@ func (q *qemu) hotplugVFIODevice(device *config.VFIODev, op operation) (err erro
 		if q.state.HotplugVFIOOnRootBus {
 
 			// In case MachineType is q35, a PCIe device is hotplugged on a PCIe Root Port.
-			switch machinneType {
+			switch machineType {
 			case QemuQ35:
 				if device.IsPCIe && q.state.PCIeRootPort <= 0 {
 					q.Logger().WithField("dev-id", device.ID).Warn("VFIO device is a PCIe device. It's recommended to add the PCIe Root Port by setting the pcie_root_port parameter in the configuration for q35")
