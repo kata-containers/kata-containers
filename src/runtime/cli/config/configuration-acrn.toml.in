@@ -21,11 +21,15 @@ image = "@IMAGEPATH@"
 # of the annotation, e.g. "path" for io.katacontainers.config.hypervisor.path"
 enable_annotations = @DEFENABLEANNOTATIONS@
 
-# List of valid annotations values for the hypervisor (default: empty)
+# List of valid annotations values for the hypervisor
 # Each member of the list is a path pattern as described by glob(3).
+# The default if not set is empty (all annotations rejected.)
+# Your distribution recommends: @ACRNPATHLIST@
 path_list = @ACRNPATHLIST@
 
-# List of valid annotations values for ctlpath (default: empty)
+# List of valid annotations values for ctlpath
+# The default if not set is empty (all annotations rejected.)
+# Your distribution recommends: @ACRNCTLPATHLIST@
 ctlpath_list = @ACRNCTLPATHLIST@
 
 # Optional space-separated list of options to pass to the guest kernel.
