@@ -1770,3 +1770,27 @@ func TestExecQomSet(t *testing.T) {
 	q.Shutdown()
 	<-disconnectedCh
 }
+
+// Checks qom-get
+func TestExecQomGet(t *testing.T) {
+	connectedCh := make(chan *QMPVersion)
+	disconnectedCh := make(chan struct{})
+	buf := newQMPTestCommandBuffer(t)
+	buf.AddCommand("qom-get", nil, "return", "container")
+	cfg := QMPConfig{Logger: qmpTestLogger{}}
+	q := startQMPLoop(buf, cfg, connectedCh, disconnectedCh)
+	checkVersion(t, connectedCh)
+	val, err := q.ExecQomGet(context.Background(), "/", "type")
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+	vals, ok := val.(string)
+	if !ok {
+		t.Fatalf("Unexpected type in qom-get")
+	}
+	if vals != "container" {
+		t.Fatalf("Unpexected value in qom-get")
+	}
+	q.Shutdown()
+	<-disconnectedCh
+}
