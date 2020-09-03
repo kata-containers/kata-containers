@@ -575,7 +575,7 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
 
     if oci_process.capabilities.is_some() {
         let c = oci_process.capabilities.as_ref().unwrap();
-        capabilities::drop_priviledges(cfd_log, c)?;
+        capabilities::drop_privileges(cfd_log, c)?;
     }
 
     if init {
