@@ -1453,7 +1453,7 @@ func addHTBQdisc(linkIndex int, maxRate uint64) error {
 		Parent:    netlink.HANDLE_ROOT,
 	}
 	qdisc := netlink.NewHtb(qdiscAttrs)
-	// all non-priviledged traffic go to classid 1:2.
+	// all non-privileged traffic go to classid 1:2.
 	qdisc.Defcls = 2
 
 	err := netlink.QdiscAdd(qdisc)
@@ -1476,7 +1476,7 @@ func addHTBQdisc(linkIndex int, maxRate uint64) error {
 		return fmt.Errorf("Failed to add htb classid 1:1 : %v", err)
 	}
 
-	// above class has at least one default child class(1:2) for all non-priviledged traffic.
+	// above class has at least one default child class(1:2) for all non-privileged traffic.
 	classAttrs = netlink.ClassAttrs{
 		LinkIndex: linkIndex,
 		Parent:    netlink.MakeHandle(1, 1),

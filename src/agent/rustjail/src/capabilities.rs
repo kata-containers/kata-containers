@@ -100,7 +100,7 @@ pub fn reset_effective() -> Result<()> {
     Ok(())
 }
 
-pub fn drop_priviledges(cfd_log: RawFd, caps: &LinuxCapabilities) -> Result<()> {
+pub fn drop_privileges(cfd_log: RawFd, caps: &LinuxCapabilities) -> Result<()> {
     let all = caps::all();
 
     for c in all.difference(&to_capshashset(cfd_log, caps.bounding.as_ref())) {
