@@ -239,6 +239,7 @@ ifneq (,$(QEMUCMD))
     # qemu-specific options (all should be suffixed by "_QEMU")
     DEFBLOCKSTORAGEDRIVER_QEMU := virtio-scsi
     DEFNETWORKMODEL_QEMU := tcfilter
+    KERNELTYPE = uncompressed
     KERNELNAME = $(call MAKE_KERNEL_NAME,$(KERNELTYPE))
     KERNELPATH = $(KERNELDIR)/$(KERNELNAME)
 endif
