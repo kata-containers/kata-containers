@@ -126,10 +126,10 @@ Containers components to help with this, and then use `kubectl` on the host (tha
 configured for you) to deploy them:
 
 ```sh
-$ git clone https://github.com/kata-containers/packaging.git
-$ cd packaging/kata-deploy
-$ kubectl apply -f kata-rbac.yaml
-$ kubectl apply -f kata-deploy.yaml
+$ git clone https://github.com/kata-containers/kata-containers.git
+$ cd kata-containers/tools/packaging/kata-deploy
+$ kubectl apply -f kata-rbac/base/kata-rbac.yaml
+$ kubectl apply -f kata-deploy/base/kata-deploy.yaml
 ```
 
 This installs the Kata Containers components into `/opt/kata` inside the Minikube node. It can take
@@ -166,7 +166,7 @@ $ kubectl apply -f https://raw.githubusercontent.com/kubernetes/node-api/master/
 Now register the `kata qemu` runtime with that class. This should result in no errors:
 
 ```sh
-$ cd packaging/kata-deploy/k8s-1.14
+$ cd kata-containers/tools/packaging/kata-deploy/k8s-1.14
 $ kubectl apply -f kata-qemu-runtimeClass.yaml
 ```
 
@@ -187,7 +187,7 @@ for more details.
 Perform the following action to launch a Kata Containers based Apache PHP pod:
 
 ```sh
-$ cd packaging/kata-deploy/examples
+$ cd kata-containers/tools/packaging/kata-deploy/examples
 $ kubectl apply -f test-deploy-kata-qemu.yaml
 ```
 
