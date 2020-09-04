@@ -324,7 +324,12 @@ format_loop() {
 			;;
 
 		"${xfs_format}")
-			mkfs.xfs -q -f -b size="${block_size}" "${device}p1"
+			# DAX and reflink cannot be used together!
+			# Explicitly disable reflink, if it fails then reflink
+			# is not supported and '-m reflink=0' is not needed.
+			if mkfs.xfs -m reflink=0 -q -f -b size="${block_size}" "${device}p1" 2>&1 | grep -q "unknown option"; then
+				mkfs.xfs -q -f -b size="${block_size}" "${device}p1"
+			fi
 			;;
 
 		*)
