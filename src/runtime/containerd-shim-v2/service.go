@@ -154,8 +154,14 @@ func newCommand(ctx context.Context, containerdBinary, id, containerdAddress str
 	cmd := sysexec.Command(self, args...)
 	cmd.Dir = cwd
 
-	// Set the go max process to 2 in case the shim forks too much process
-	cmd.Env = append(os.Environ(), "GOMAXPROCS=2")
+	maxProcs := os.Getenv("GOMAXPROCS")
+	if maxProcs == "" {
+		// If GOMAXPROCS hasn't been set, we set the go max process to 2 in case the shim forks too much process.
+		cmd.Env = append(os.Environ(), "GOMAXPROCS=2")
+	} else {
+		// If GOMAXPROCS has been set, we use the copy of the OS environment.
+		cmd.Env = os.Environ()
+	}
 
 	cmd.SysProcAttr = &syscall.SysProcAttr{
 		Setpgid: true,
