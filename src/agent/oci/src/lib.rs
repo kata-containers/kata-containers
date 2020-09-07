@@ -653,7 +653,7 @@ pub struct WindowsNetwork {
     #[serde(
         default,
         skip_serializing_if = "String::is_empty",
-        rename = "nwtworkSharedContainerName"
+        rename = "networkSharedContainerName"
     )]
     pub network_shared_container_name: String,
 }
