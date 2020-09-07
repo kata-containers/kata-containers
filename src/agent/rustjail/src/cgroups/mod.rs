@@ -3,8 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use crate::errors::*;
 // use crate::configs::{FreezerState, Config};
+use anyhow::{anyhow, Result};
 use oci::LinuxResources;
 use protocols::agent::CgroupStats;
 use std::collections::HashMap;
@@ -16,34 +16,34 @@ pub type FreezerState = &'static str;
 
 pub trait Manager {
     fn apply(&self, _pid: i32) -> Result<()> {
-        Err(ErrorKind::ErrorCode("not supported!".to_string()).into())
+        Err(anyhow!("not supported!".to_string()))
     }
 
     fn get_pids(&self) -> Result<Vec<i32>> {
-        Err(ErrorKind::ErrorCode("not supported!".to_string()).into())
+        Err(anyhow!("not supported!"))
     }
 
     fn get_all_pids(&self) -> Result<Vec<i32>> {
-        Err(ErrorKind::ErrorCode("not supported!".to_string()).into())
+        Err(anyhow!("not supported!"))
     }
 
     fn get_stats(&self) -> Result<CgroupStats> {
-        Err(ErrorKind::ErrorCode("not supported!".to_string()).into())
+        Err(anyhow!("not supported!"))
     }
 
     fn freeze(&self, _state: FreezerState) -> Result<()> {
-        Err(ErrorKind::ErrorCode("not supported!".to_string()).into())
+        Err(anyhow!("not supported!"))
     }
 
     fn destroy(&mut self) -> Result<()> {
-        Err(ErrorKind::ErrorCode("not supported!".to_string()).into())
+        Err(anyhow!("not supported!"))
     }
 
     fn get_paths(&self) -> Result<HashMap<String, String>> {
-        Err(ErrorKind::ErrorCode("not supported!".to_string()).into())
+        Err(anyhow!("not supported!"))
     }
 
     fn set(&self, _container: &LinuxResources, _update: bool) -> Result<()> {
-        Err(ErrorKind::ErrorCode("not supported!".to_string()).into())
+        Err(anyhow!("not supported!"))
     }
 }

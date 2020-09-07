@@ -13,7 +13,6 @@
 #![allow(non_upper_case_globals)]
 // #![allow(unused_comparisons)]
 #[macro_use]
-extern crate error_chain;
 extern crate serde;
 extern crate serde_json;
 #[macro_use]
@@ -45,7 +44,6 @@ macro_rules! sl {
 pub mod capabilities;
 pub mod cgroups;
 pub mod container;
-pub mod errors;
 pub mod mount;
 pub mod process;
 pub mod specconv;

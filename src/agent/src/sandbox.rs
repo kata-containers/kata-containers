@@ -9,6 +9,7 @@ use crate::mount::{get_mount_fs_type, remove_mounts, TYPEROOTFS};
 use crate::namespace::Namespace;
 use crate::namespace::NSTYPEPID;
 use crate::network::Network;
+use anyhow::{anyhow, Context, Result};
 use libc::pid_t;
 use netlink::{RtnlHandle, NETLINK_ROUTE};
 use oci::{Hook, Hooks};
@@ -17,7 +18,6 @@ use regex::Regex;
 use rustjail::cgroups;
 use rustjail::container::BaseContainer;
 use rustjail::container::LinuxContainer;
-use rustjail::errors::*;
 use rustjail::process::Process;
 use slog::Logger;
 use std::collections::HashMap;
@@ -105,13 +105,7 @@ impl Sandbox {
     // acquiring a lock on sandbox.
     pub fn unset_sandbox_storage(&mut self, path: &str) -> Result<bool> {
         match self.storages.get_mut(path) {
-            None => {
-                return Err(ErrorKind::ErrorCode(format!(
-                    "Sandbox storage with path {} not found",
-                    path
-                ))
-                .into())
-            }
+            None => return Err(anyhow!("Sandbox storage with path {} not found", path)),
             Some(count) => {
                 *count -= 1;
                 if *count < 1 {
@@ -131,7 +125,7 @@ impl Sandbox {
     pub fn remove_sandbox_storage(&self, path: &str) -> Result<()> {
         let mounts = vec![path.to_string()];
         remove_mounts(&mounts)?;
-        fs::remove_dir_all(path).chain_err(|| format!("failed to remove dir {:?}", path))?;
+        fs::remove_dir_all(path).context(format!("failed to remove dir {:?}", path))?;
         Ok(())
     }
 
@@ -168,11 +162,7 @@ impl Sandbox {
         self.shared_ipcns = match Namespace::new(&self.logger).as_ipc().setup() {
             Ok(ns) => ns,
             Err(err) => {
-                return Err(ErrorKind::ErrorCode(format!(
-                    "Failed to setup persistent IPC namespace with error: {}",
-                    err
-                ))
-                .into())
+                return Err(anyhow!(err).context("Failed to setup persistent IPC namespace"));
             }
         };
 
@@ -183,11 +173,7 @@ impl Sandbox {
         {
             Ok(ns) => ns,
             Err(err) => {
-                return Err(ErrorKind::ErrorCode(format!(
-                    "Failed to setup persistent UTS namespace with error: {}",
-                    err
-                ))
-                .into())
+                return Err(anyhow!(err).context("Failed to setup persistent UTS namespace"));
             }
         };
         Ok(true)
@@ -206,10 +192,9 @@ impl Sandbox {
         if self.sandbox_pidns.is_none() && self.containers.len() == 0 {
             let init_pid = c.init_process_pid;
             if init_pid == -1 {
-                return Err(ErrorKind::ErrorCode(String::from(
-                    "Failed to setup pid namespace: init container pid is -1",
-                ))
-                .into());
+                return Err(anyhow!(
+                    "Failed to setup pid namespace: init container pid is -1"
+                ));
             }
 
             let mut pid_ns = Namespace::new(&self.logger).as_pid();
@@ -365,6 +350,7 @@ mod tests {
     //use rustjail::Error;
     use super::Sandbox;
     use crate::{mount::BareMount, skip_if_not_root};
+    use anyhow::Error;
     use nix::mount::MsFlags;
     use oci::{Linux, Root, Spec};
     use rustjail::container::LinuxContainer;
@@ -374,7 +360,7 @@ mod tests {
     use std::os::unix::fs::PermissionsExt;
     use tempfile::Builder;
 
-    fn bind_mount(src: &str, dst: &str, logger: &Logger) -> Result<(), rustjail::errors::Error> {
+    fn bind_mount(src: &str, dst: &str, logger: &Logger) -> Result<(), Error> {
         let baremount = BareMount::new(src, dst, "bind", MsFlags::MS_BIND, "", &logger);
         baremount.mount()
     }

@@ -3,11 +3,11 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
+use anyhow::Result;
 use libc;
 use nix::errno::Errno;
 use nix::fcntl::{self, OFlag};
 use nix::sys::stat::Mode;
-use rustjail::errors::*;
 use std::fs;
 
 pub const RNGDEV: &str = "/dev/random";

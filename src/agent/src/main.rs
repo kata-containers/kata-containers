@@ -29,13 +29,13 @@ extern crate slog;
 extern crate netlink;
 
 use crate::netlink::{RtnlHandle, NETLINK_ROUTE};
+use anyhow::{anyhow, Context, Result};
 use nix::fcntl::{self, OFlag};
 use nix::sys::socket::{self, AddressFamily, SockAddr, SockFlag, SockType};
 use nix::sys::wait::{self, WaitStatus};
 use nix::unistd;
 use nix::unistd::dup;
 use prctl::set_child_subreaper;
-use rustjail::errors::*;
 use signal_hook::{iterator::Signals, SIGCHLD};
 use std::collections::HashMap;
 use std::env;
@@ -208,26 +208,21 @@ fn start_sandbox(logger: &Logger, config: &agentConfig, init_mode: bool) -> Resu
 
         let builder = thread::Builder::new();
 
-        let handle = builder
-            .spawn(move || {
-                let shells = shells.lock().unwrap();
-                let result = setup_debug_console(shells.to_vec(), debug_console_vport);
-                if result.is_err() {
-                    // Report error, but don't fail
-                    warn!(thread_logger, "failed to setup debug console";
+        let handle = builder.spawn(move || {
+            let shells = shells.lock().unwrap();
+            let result = setup_debug_console(shells.to_vec(), debug_console_vport);
+            if result.is_err() {
+                // Report error, but don't fail
+                warn!(thread_logger, "failed to setup debug console";
                     "error" => format!("{}", result.unwrap_err()));
-                }
-            })
-            .map_err(|e| format!("{:?}", e))?;
+            }
+        })?;
 
         shell_handle = Some(handle);
     }
 
     // Initialize unique sandbox structure.
-    let mut s = Sandbox::new(&logger).map_err(|e| {
-        error!(logger, "Failed to create sandbox with error: {:?}", e);
-        e
-    })?;
+    let mut s = Sandbox::new(&logger).context("Failed to create sandbox")?;
 
     if init_mode {
         let mut rtnl = RtnlHandle::new(NETLINK_ROUTE, 0).unwrap();
@@ -249,12 +244,12 @@ fn start_sandbox(logger: &Logger, config: &agentConfig, init_mode: bool) -> Resu
 
     let _ = server.start().unwrap();
 
-    let _ = rx.recv().map_err(|e| format!("{:?}", e));
+    let _ = rx.recv()?;
 
     server.shutdown();
 
     if let Some(handle) = shell_handle {
-        handle.join().map_err(|e| format!("{:?}", e))?;
+        handle.join().map_err(|e| anyhow!("{:?}", e))?;
     }
 
     Ok(())
@@ -265,12 +260,8 @@ use nix::sys::wait::WaitPidFlag;
 fn setup_signal_handler(logger: &Logger, sandbox: Arc<Mutex<Sandbox>>) -> Result<()> {
     let logger = logger.new(o!("subsystem" => "signals"));
 
-    set_child_subreaper(true).map_err(|err| {
-        format!(
-            "failed to setup agent as a child subreaper, failed with {}",
-            err
-        )
-    })?;
+    set_child_subreaper(true)
+        .map_err(|err| anyhow!(err).context("failed to setup agent as a child subreaper"))?;
 
     let signals = Signals::new(&[SIGCHLD])?;
 
@@ -381,7 +372,7 @@ fn sethostname(hostname: &OsStr) -> Result<()> {
         unsafe { libc::sethostname(hostname.as_bytes().as_ptr() as *const libc::c_char, size) };
 
     if result != 0 {
-        Err(ErrorKind::ErrorCode("failed to set hostname".to_string()).into())
+        Err(anyhow!("failed to set hostname"))
     } else {
         Ok(())
     }
@@ -420,9 +411,7 @@ fn setup_debug_console(shells: Vec<String>, port: u32) -> Result<()> {
     }
 
     if shell == "" {
-        return Err(
-            ErrorKind::ErrorCode("no shell found to launch debug console".to_string()).into(),
-        );
+        return Err(anyhow!("no shell found to launch debug console"));
     }
 
     let f: RawFd = if port > 0 {
@@ -452,7 +441,7 @@ fn setup_debug_console(shells: Vec<String>, port: u32) -> Result<()> {
 
     let mut cmd = match cmd {
         Ok(c) => c,
-        Err(_) => return Err(ErrorKind::ErrorCode("failed to spawn shell".to_string()).into()),
+        Err(_) => return Err(anyhow!("failed to spawn shell")),
     };
 
     cmd.wait()?;
@@ -481,7 +470,7 @@ mod tests {
         assert!(result.is_err());
         assert_eq!(
             result.unwrap_err().to_string(),
-            "Error Code: 'no shell found to launch debug console'"
+            "no shell found to launch debug console"
         );
     }
 
@@ -507,7 +496,7 @@ mod tests {
         assert!(result.is_err());
         assert_eq!(
             result.unwrap_err().to_string(),
-            "Error Code: 'no shell found to launch debug console'"
+            "no shell found to launch debug console"
         );
     }
 }

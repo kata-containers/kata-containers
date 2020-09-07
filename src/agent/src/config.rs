@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 //
-use rustjail::errors::*;
+use anyhow::{anyhow, Result};
 use std::env;
 use std::fs;
 use std::time;
@@ -108,7 +108,7 @@ impl agentConfig {
 fn get_vsock_port(p: &str) -> Result<i32> {
     let fields: Vec<&str> = p.split("=").collect();
     if fields.len() != 2 {
-        return Err(ErrorKind::ErrorCode("invalid port parameter".to_string()).into());
+        return Err(anyhow!("invalid port parameter"));
     }
 
     Ok(fields[1].parse::<i32>()?)
@@ -134,7 +134,7 @@ fn logrus_to_slog_level(logrus_level: &str) -> Result<slog::Level> {
         "trace" => slog::Level::Trace,
 
         _ => {
-            return Err(ErrorKind::ErrorCode(String::from("invalid log level")).into());
+            return Err(anyhow!("invalid log level"));
         }
     };
 
@@ -145,11 +145,11 @@ fn get_log_level(param: &str) -> Result<slog::Level> {
     let fields: Vec<&str> = param.split("=").collect();
 
     if fields.len() != 2 {
-        return Err(ErrorKind::ErrorCode(String::from("invalid log level parameter")).into());
+        return Err(anyhow!("invalid log level parameter"));
     }
 
     if fields[0] != LOG_LEVEL_OPTION {
-        Err(ErrorKind::ErrorCode(String::from("invalid log level key name")).into())
+        Err(anyhow!("invalid log level key name"))
     } else {
         Ok(logrus_to_slog_level(fields[1])?)
     }
@@ -159,17 +159,17 @@ fn get_hotplug_timeout(param: &str) -> Result<time::Duration> {
     let fields: Vec<&str> = param.split("=").collect();
 
     if fields.len() != 2 {
-        return Err(ErrorKind::ErrorCode(String::from("invalid hotplug timeout parameter")).into());
+        return Err(anyhow!("invalid hotplug timeout parameter"));
     }
 
     let key = fields[0];
     if key != HOTPLUG_TIMOUT_OPTION {
-        return Err(ErrorKind::ErrorCode(String::from("invalid hotplug timeout key name")).into());
+        return Err(anyhow!("invalid hotplug timeout key name"));
     }
 
     let value = fields[1].parse::<u64>();
     if value.is_err() {
-        return Err(ErrorKind::ErrorCode(String::from("unable to parse hotplug timeout")).into());
+        return Err(anyhow!("unable to parse hotplug timeout"));
     }
 
     Ok(time::Duration::from_secs(value.unwrap()))
@@ -179,31 +179,22 @@ fn get_container_pipe_size(param: &str) -> Result<i32> {
     let fields: Vec<&str> = param.split("=").collect();
 
     if fields.len() != 2 {
-        return Err(
-            ErrorKind::ErrorCode(String::from("invalid container pipe size parameter")).into(),
-        );
+        return Err(anyhow!("invalid container pipe size parameter"));
     }
 
     let key = fields[0];
     if key != CONTAINER_PIPE_SIZE_OPTION {
-        return Err(
-            ErrorKind::ErrorCode(String::from("invalid container pipe size key name")).into(),
-        );
+        return Err(anyhow!("invalid container pipe size key name"));
     }
 
     let res = fields[1].parse::<i32>();
     if res.is_err() {
-        return Err(
-            ErrorKind::ErrorCode(String::from("unable to parse container pipe size")).into(),
-        );
+        return Err(anyhow!("unable to parse container pipe size"));
     }
 
     let value = res.unwrap();
     if value < 0 {
-        return Err(ErrorKind::ErrorCode(String::from(
-            "container pipe size should not be negative",
-        ))
-        .into());
+        return Err(anyhow!("container pipe size should not be negative"));
     }
 
     Ok(value)
@@ -212,6 +203,7 @@ fn get_container_pipe_size(param: &str) -> Result<i32> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use anyhow::Error;
     use std::fs::File;
     use std::io::Write;
     use std::time;
@@ -232,7 +224,7 @@ mod tests {
 
     // helper function to make errors less crazy-long
     fn make_err(desc: &str) -> Error {
-        ErrorKind::ErrorCode(desc.to_string()).into()
+        anyhow!(desc.to_string())
     }
 
     // Parameters:
