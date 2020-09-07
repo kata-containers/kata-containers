@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
+use anyhow::{anyhow, bail, Context, Error, Result};
 use libc::uid_t;
 use nix::errno::Errno;
 use nix::fcntl::{self, OFlag};
@@ -23,7 +24,6 @@ use std::fs::File;
 use std::io::{BufRead, BufReader};
 
 use crate::container::DEFAULT_DEVICES;
-use crate::errors::*;
 use crate::sync::write_count;
 use lazy_static;
 use std::string::ToString;
@@ -139,7 +139,7 @@ pub fn init_rootfs(
     for m in &spec.mounts {
         let (mut flags, data) = parse_mount(&m);
         if !m.destination.starts_with("/") || m.destination.contains("..") {
-            return Err(ErrorKind::Nix(nix::Error::Sys(Errno::EINVAL)).into());
+            return Err(anyhow!(nix::Error::Sys(Errno::EINVAL)));
         }
         if m.r#type == "cgroup" {
             mount_cgroups(cfd_log, &m, rootfs, flags, &data, cpath, mounts)?;
@@ -289,7 +289,7 @@ pub fn pivot_rootfs<P: ?Sized + NixPath + std::fmt::Debug>(path: &P) -> Result<(
 
     // Change to the new root so that the pivot_root actually acts on it.
     unistd::fchdir(newroot)?;
-    unistd::pivot_root(".", ".").chain_err(|| format!("failed to pivot_root on {:?}", path))?;
+    unistd::pivot_root(".", ".").context(format!("failed to pivot_root on {:?}", path))?;
 
     // Currently our "." is oldroot (according to the current kernel code).
     // However, purely for safety, we will fchdir(oldroot) since there isn't
@@ -311,7 +311,7 @@ pub fn pivot_rootfs<P: ?Sized + NixPath + std::fmt::Debug>(path: &P) -> Result<(
     )?;
 
     // Preform the unmount. MNT_DETACH allows us to unmount /proc/self/cwd.
-    mount::umount2(".", MntFlags::MNT_DETACH).chain_err(|| "failed to do umount2")?;
+    mount::umount2(".", MntFlags::MNT_DETACH).context("failed to do umount2")?;
 
     // Switch back to our shiny new root.
     unistd::chdir("/")?;
@@ -395,7 +395,7 @@ fn parse_mount_table() -> Result<Vec<Info>> {
 
             infos.push(info);
         } else {
-            return Err(ErrorKind::ErrorCode("failed to parse mount info file".to_string()).into());
+            return Err(anyhow!("failed to parse mount info file".to_string()));
         }
     }
 
@@ -408,20 +408,17 @@ pub fn ms_move_root(rootfs: &str) -> Result<bool> {
 
     let root_path = Path::new(rootfs);
     let abs_root_buf = root_path.absolutize()?;
-    let abs_root = abs_root_buf.to_str().ok_or::<Error>(
-        ErrorKind::ErrorCode(format!("failed to parse {} to absolute path", rootfs)).into(),
-    )?;
+    let abs_root = abs_root_buf
+        .to_str()
+        .ok_or::<Error>(anyhow!("failed to parse {} to absolute path", rootfs))?;
 
     for info in mount_infos.iter() {
         let mount_point = Path::new(&info.mount_point);
         let abs_mount_buf = mount_point.absolutize()?;
-        let abs_mount_point = abs_mount_buf.to_str().ok_or::<Error>(
-            ErrorKind::ErrorCode(format!(
-                "failed to parse {} to absolute path",
-                info.mount_point
-            ))
-            .into(),
-        )?;
+        let abs_mount_point = abs_mount_buf.to_str().ok_or::<Error>(anyhow!(
+            "failed to parse {} to absolute path",
+            info.mount_point
+        ))?;
         let abs_mount_point_string = String::from(abs_mount_point);
 
         // Umount every syfs and proc file systems, except those under the container rootfs
@@ -443,7 +440,7 @@ pub fn ms_move_root(rootfs: &str) -> Result<bool> {
             Ok(_) => (),
             Err(e) => {
                 if e.ne(&nix::Error::from(Errno::EINVAL)) && e.ne(&nix::Error::from(Errno::EPERM)) {
-                    return Err(ErrorKind::ErrorCode(e.to_string()).into());
+                    return Err(anyhow!(e));
                 }
 
                 // If we have not privileges for umounting (e.g. rootless), then
@@ -630,7 +627,7 @@ fn create_devices(devices: &[LinuxDevice], bind: bool) -> Result<()> {
     for dev in devices {
         if !dev.path.starts_with("/dev") || dev.path.contains("..") {
             let msg = format!("{} is not a valid device path", dev.path);
-            bail!(ErrorKind::ErrorCode(msg));
+            bail!(anyhow!(msg));
         }
         op(dev)?;
     }
@@ -661,7 +658,7 @@ lazy_static! {
 fn mknod_dev(dev: &LinuxDevice) -> Result<()> {
     let f = match LINUXDEVICETYPE.get(dev.r#type.as_str()) {
         Some(v) => v,
-        None => return Err(ErrorKind::ErrorCode("invalid spec".to_string()).into()),
+        None => return Err(anyhow!("invalid spec".to_string())),
     };
 
     stat::mknod(
