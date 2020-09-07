@@ -32,7 +32,7 @@ use nix::sys::stat;
 use nix::unistd::{self, Pid};
 use rustjail::process::ProcessOperations;
 
-use crate::device::{add_devices, rescan_pci_bus, update_device_cgroup};
+use crate::device::{add_devices, update_device_cgroup};
 use crate::linux_abi::*;
 use crate::metrics::get_metrics;
 use crate::mount::{add_storages, remove_mounts, BareMount, STORAGEHANDLERLIST};
@@ -97,11 +97,6 @@ impl agentService {
         };
 
         info!(sl!(), "receive createcontainer {}", &cid);
-
-        // re-scan PCI bus
-        // looking for hidden devices
-
-        rescan_pci_bus().chain_err(|| "Could not rescan PCI bus")?;
 
         // Some devices need some extra processing (the ones invoked with
         // --device for instance), and that's what this call is doing. It

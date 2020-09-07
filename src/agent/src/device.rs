@@ -44,10 +44,6 @@ lazy_static! {
     };
 }
 
-pub fn rescan_pci_bus() -> Result<()> {
-    online_device(SYSFS_PCI_BUS_RESCAN_FILE)
-}
-
 pub fn online_device(path: &str) -> Result<()> {
     fs::write(path, "1")?;
     Ok(())
@@ -156,7 +152,6 @@ pub fn get_scsi_device_name(sandbox: &Arc<Mutex<Sandbox>>, scsi_addr: &str) -> R
 pub fn get_pci_device_name(sandbox: &Arc<Mutex<Sandbox>>, pci_id: &str) -> Result<String> {
     let pci_addr = get_pci_device_address(pci_id)?;
 
-    rescan_pci_bus()?;
     get_device_name(sandbox, &pci_addr)
 }
 
