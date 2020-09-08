@@ -441,8 +441,7 @@ prepare_overlay()
 	# we were passed a pre-populated rootfs directory
 	if [ ! -e ./sbin/init ]; then
 		ln -sf  ./usr/lib/systemd/systemd ./init
-		ln -sf  ../../init ./lib/systemd/systemd
-		ln -sf  ../init ./sbin/init
+		ln -sf  /init ./sbin/init
 	fi
 
 	# Kata systemd unit file
