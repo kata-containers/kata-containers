@@ -173,7 +173,7 @@ DEFSHAREDFS_QEMU_VIRTIOFS := virtio-fs
 DEFVIRTIOFSDAEMON := $(VIRTIOFSDBINDIR)/virtiofsd
 # Default DAX mapping cache size in MiB
 DEFVIRTIOFSCACHESIZE := 1024
-DEFVIRTIOFSCACHE ?= auto
+DEFVIRTIOFSCACHE ?= none
 # Format example:
 #   [\"-o\", \"arg1=xxx,arg2\", \"-o\", \"hello world\", \"--arg3=yyy\"]
 #
