@@ -876,3 +876,94 @@ fn readonly_path(path: &str) -> Result<()> {
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::os::unix::io::AsRawFd;
+    use tempfile::tempdir;
+
+    #[test]
+    fn test_init_rootfs() {
+        let stdout_fd = std::io::stdout().as_raw_fd();
+        let mut spec = oci::Spec::default();
+        let cpath = HashMap::new();
+        let mounts = HashMap::new();
+
+        // there is no spec.linux, should fail
+        let ret = init_rootfs(stdout_fd, &spec, &cpath, &mounts, true);
+        assert!(
+            ret.is_err(),
+            "Should fail: there is no spec.linux. Got: {:?}",
+            ret
+        );
+
+        // there is no spec.Root, should fail
+        spec.linux = Some(oci::Linux::default());
+        let ret = init_rootfs(stdout_fd, &spec, &cpath, &mounts, true);
+        assert!(
+            ret.is_err(),
+            "should fail: there is no spec.Root. Got: {:?}",
+            ret
+        );
+
+        let rootfs = tempdir().unwrap();
+        let ret = fs::create_dir(rootfs.path().join("dev"));
+        assert!(ret.is_ok(), "Got: {:?}", ret);
+
+        spec.root = Some(oci::Root {
+            path: rootfs.path().to_str().unwrap().to_string(),
+            readonly: false,
+        });
+
+        // there is no spec.mounts, but should pass
+        let ret = init_rootfs(stdout_fd, &spec, &cpath, &mounts, true);
+        assert!(ret.is_ok(), "Should pass. Got: {:?}", ret);
+        let ret = fs::remove_dir_all(rootfs.path().join("dev"));
+        let ret = fs::create_dir(rootfs.path().join("dev"));
+
+        // Adding bad mount point to spec.mounts
+        spec.mounts.push(oci::Mount {
+            destination: "error".into(),
+            r#type: "bind".into(),
+            source: "error".into(),
+            options: vec!["shared".into(), "rw".into(), "dev".into()],
+        });
+
+        // destination doesn't start with /, should fail
+        let ret = init_rootfs(stdout_fd, &spec, &cpath, &mounts, true);
+        assert!(
+            ret.is_err(),
+            "Should fail: destination doesn't start with '/'. Got: {:?}",
+            ret
+        );
+        spec.mounts.pop();
+        let ret = fs::remove_dir_all(rootfs.path().join("dev"));
+        let ret = fs::create_dir(rootfs.path().join("dev"));
+
+        // mounting a cgroup
+        spec.mounts.push(oci::Mount {
+            destination: "/cgroup".into(),
+            r#type: "cgroup".into(),
+            source: "/cgroup".into(),
+            options: vec!["shared".into()],
+        });
+
+        let ret = init_rootfs(stdout_fd, &spec, &cpath, &mounts, true);
+        assert!(ret.is_ok(), "Should pass. Got: {:?}", ret);
+        spec.mounts.pop();
+        let ret = fs::remove_dir_all(rootfs.path().join("dev"));
+        let ret = fs::create_dir(rootfs.path().join("dev"));
+
+        // mounting /dev
+        spec.mounts.push(oci::Mount {
+            destination: "/dev".into(),
+            r#type: "bind".into(),
+            source: "/dev".into(),
+            options: vec!["shared".into()],
+        });
+
+        let ret = init_rootfs(stdout_fd, &spec, &cpath, &mounts, true);
+        assert!(ret.is_ok(), "Should pass. Got: {:?}", ret);
+    }
+}
