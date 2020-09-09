@@ -661,6 +661,7 @@ dependencies = [
  "serde_json",
  "slog",
  "slog-scope",
+ "tempfile",
 ]
 
 [[package]]
