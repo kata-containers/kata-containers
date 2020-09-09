@@ -539,9 +539,10 @@ EOT
 	AGENT_DEST="${AGENT_DIR}/${AGENT_BIN}"
 
 	if [ -z "${AGENT_SOURCE_BIN}" ] ; then
+		[ "$ARCH" == "ppc64le" ] && ([ "$LIBC" == "gnu" ] || die "LIBC type for ppc64le should be gnu")
 		bash ${script_dir}/../../../ci/install_musl.sh
-		# rust agent needs ${arch}-unknown-linux-musl
-		rustup show | grep linux-musl > /dev/null || bash ${script_dir}/../../../ci/install_rust.sh
+		# rust agent needs ${arch}-unknown-linux-${LIBC}
+		rustup show | grep linux-${LIBC} > /dev/null || bash ${script_dir}/../../../ci/install_rust.sh
 		test -r "${HOME}/.cargo/env" && source "${HOME}/.cargo/env"
 		[ "$ARCH" == "aarch64" ] && OLD_PATH=$PATH && export PATH=$PATH:/usr/local/musl/bin
 
