@@ -138,16 +138,28 @@ pub fn init_rootfs(
     lazy_static::initialize(&PROPAGATION);
     lazy_static::initialize(&LINUXDEVICETYPE);
 
-    let linux = spec.linux.as_ref().unwrap();
+    let linux = &spec
+        .linux
+        .as_ref()
+        .ok_or::<Error>(anyhow!("Could not get linux configuration from spec"))?;
+
     let mut flags = MsFlags::MS_REC;
     match PROPAGATION.get(&linux.rootfs_propagation.as_str()) {
         Some(fl) => flags |= *fl,
         None => flags |= MsFlags::MS_SLAVE,
     }
 
-    let rootfs = spec.root.as_ref().unwrap().path.as_str();
-    let root = fs::canonicalize(rootfs)?;
-    let rootfs = root.to_str().unwrap();
+    let root = spec
+        .root
+        .as_ref()
+        .ok_or(anyhow!("Could not get rootfs path from spec"))
+        .and_then(|r| {
+            fs::canonicalize(r.path.as_str()).context("Could not canonicalize rootfs path")
+        })?;
+
+    let rootfs = (*root)
+        .to_str()
+        .ok_or(anyhow!("Could not convert rootfs path to string"))?;
 
     mount(None::<&str>, "/", None::<&str>, flags, None::<&str>)?;
 
