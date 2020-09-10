@@ -26,8 +26,8 @@ enable_annotations = @DEFENABLEANNOTATIONS@
 # List of valid annotations values for the hypervisor
 # Each member of the list is a path pattern as described by glob(3).
 # The default if not set is empty (all annotations rejected.)
-# Your distribution recommends: @QEMUVIRTIOFSPATHLIST@
-path_list = @QEMUVIRTIOFSPATHLIST@
+# Your distribution recommends: @QEMUVALIDHYPERVISORPATHS@
+valid_hypervisor_paths = @QEMUVALIDHYPERVISORPATHS@
 
 # Optional space-separated list of options to pass to the guest kernel.
 # For example, use `kernel_params = "vsyscall=emulate"` if you are having
@@ -125,8 +125,8 @@ virtio_fs_daemon = "@DEFVIRTIOFSDAEMON@"
 
 # List of valid annotations values for the virtiofs daemon
 # The default if not set is empty (all annotations rejected.)
-# Your distribution recommends: @DEFVIRTIOFSDAEMONLIST@
-virtio_fs_daemon_list = @DEFVIRTIOFSDAEMONLIST@
+# Your distribution recommends: @DEFVALIDVIRTIOFSDAEMONPATHS@
+valid_virtio_fs_daemon_paths = @DEFVALIDVIRTIOFSDAEMONPATHS@
 
 # Default size of DAX cache in MiB
 virtio_fs_cache_size = @DEFVIRTIOFSCACHESIZE@
@@ -219,8 +219,8 @@ vhost_user_store_path = "@DEFVHOSTUSERSTOREPATH@"
 
 # List of valid annotations values for the virtiofs daemon
 # The default if not set is empty (all annotations rejected.)
-# Your distribution recommends: @DEFVHOSTUSERSTOREPATHLIST@
-vhost_user_store_path_list = @DEFVHOSTUSERSTOREPATHLIST@
+# Your distribution recommends: @DEFVALIDVHOSTUSERSTOREPATHS@
+valid_vhost_user_store_paths = @DEFVALIDVHOSTUSERSTOREPATHS@
 
 # Enable file based guest memory support. The default is an empty string which
 # will disable this feature. In the case of virtio-fs, this is enabled
@@ -230,8 +230,8 @@ vhost_user_store_path_list = @DEFVHOSTUSERSTOREPATHLIST@
 
 # List of valid annotations values for the file_mem_backend annotation
 # The default if not set is empty (all annotations rejected.)
-# Your distribution recommends: @DEFFILEMEMBACKENDLIST@
-file_mem_backend_list = @DEFFILEMEMBACKENDLIST@
+# Your distribution recommends: @DEFVALIDVHOSTUSERSTOREPATHS@
+valid_file_mem_backends = @DEFVALIDFILEMEMBACKENDS@
 
 # Enable swap of vm memory. Default false.
 # The behaviour is undefined if mem_prealloc is also set to true

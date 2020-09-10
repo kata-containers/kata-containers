@@ -23,8 +23,8 @@ enable_annotations = @DEFENABLEANNOTATIONS@
 # List of valid annotations values for the hypervisor
 # Each member of the list is a path pattern as described by glob(3).
 # The default if not set is empty (all annotations rejected.)
-# Your distribution recommends: @CLHPATHLIST@
-path_list = @CLHPATHLIST@
+# Your distribution recommends: @CLHVALIDHYPERVISORPATHS@
+valid_hypervisor_paths = @CLHVALIDHYPERVISORPATHS@
 
 # Optional space-separated list of options to pass to the guest kernel.
 # For example, use `kernel_params = "vsyscall=emulate"` if you are having
@@ -75,8 +75,8 @@ virtio_fs_daemon = "@DEFVIRTIOFSDAEMON@"
 
 # List of valid annotations values for the virtiofs daemon
 # The default if not set is empty (all annotations rejected.)
-# Your distribution recommends: @DEFVIRTIOFSDAEMONLIST@
-virtio_fs_daemon_list = @DEFVIRTIOFSDAEMONLIST@
+# Your distribution recommends: @DEFVALIDVIRTIOFSDAEMONPATHS@
+valid_virtio_fs_daemon_paths = @DEFVALIDVIRTIOFSDAEMONPATHS@
 
 # Default size of DAX cache in MiB
 virtio_fs_cache_size = @DEFVIRTIOFSCACHESIZE@
