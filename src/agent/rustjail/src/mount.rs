@@ -352,6 +352,16 @@ fn mount_cgroups(
     Ok(())
 }
 
+fn pivot_root<P1: ?Sized + NixPath, P2: ?Sized + NixPath>(
+    new_root: &P1,
+    put_old: &P2,
+) -> anyhow::Result<(), nix::Error> {
+    #[cfg(not(test))]
+    return unistd::pivot_root(new_root, put_old);
+    #[cfg(test)]
+    return Ok(());
+}
+
 pub fn pivot_rootfs<P: ?Sized + NixPath + std::fmt::Debug>(path: &P) -> Result<()> {
     let oldroot = fcntl::open("/", OFlag::O_DIRECTORY | OFlag::O_RDONLY, Mode::empty())?;
     defer!(unistd::close(oldroot).unwrap());
@@ -360,7 +370,7 @@ pub fn pivot_rootfs<P: ?Sized + NixPath + std::fmt::Debug>(path: &P) -> Result<(
 
     // Change to the new root so that the pivot_root actually acts on it.
     unistd::fchdir(newroot)?;
-    unistd::pivot_root(".", ".").context(format!("failed to pivot_root on {:?}", path))?;
+    pivot_root(".", ".").context(format!("failed to pivot_root on {:?}", path))?;
 
     // Currently our "." is oldroot (according to the current kernel code).
     // However, purely for safety, we will fchdir(oldroot) since there isn't
