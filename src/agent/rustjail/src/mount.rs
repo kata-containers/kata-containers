@@ -483,6 +483,14 @@ fn parse_mount_table() -> Result<Vec<Info>> {
     Ok(infos)
 }
 
+#[inline(always)]
+fn chroot<P: ?Sized + NixPath>(path: &P) -> Result<(), nix::Error> {
+    #[cfg(not(test))]
+    return unistd::chroot(path);
+    #[cfg(test)]
+    return Ok(());
+}
+
 pub fn ms_move_root(rootfs: &str) -> Result<bool> {
     unistd::chdir(rootfs)?;
     let mount_infos = parse_mount_table()?;
@@ -544,7 +552,7 @@ pub fn ms_move_root(rootfs: &str) -> Result<bool> {
         MsFlags::MS_MOVE,
         None::<&str>,
     )?;
-    unistd::chroot(".")?;
+    chroot(".")?;
     unistd::chdir("/")?;
 
     Ok(true)
