@@ -1179,8 +1179,6 @@ impl protocols::agent_ttrpc::AgentService for agentService {
         _ctx: &ttrpc::TtrpcContext,
         req: protocols::agent::OnlineCPUMemRequest,
     ) -> ttrpc::Result<Empty> {
-        // sleep 5 seconds for debug
-        // thread::sleep(Duration::new(5, 0));
         let s = Arc::clone(&self.sandbox);
         let sandbox = s.lock().unwrap();
 

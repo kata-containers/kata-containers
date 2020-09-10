@@ -25,6 +25,7 @@ use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use std::sync::mpsc::Sender;
+use std::{thread, time};
 
 #[derive(Debug)]
 pub struct Sandbox {
@@ -316,10 +317,18 @@ fn online_resources(logger: &Logger, path: &str, pattern: &str, num: i32) -> Res
         if re.is_match(name) {
             let file = format!("{}/{}", p.to_str().unwrap(), SYSFS_ONLINE_FILE);
             info!(logger, "{}", file.as_str());
-            let c = fs::read_to_string(file.as_str())?;
+
+            let c = fs::read_to_string(file.as_str());
+            if c.is_err() {
+                continue;
+            }
+            let c = c.unwrap();
 
             if c.trim().contains("0") {
-                fs::write(file.as_str(), "1")?;
+                let r = fs::write(file.as_str(), "1");
+                if r.is_err() {
+                    continue;
+                }
                 count += 1;
 
                 if num > 0 && count == num {
@@ -336,8 +345,37 @@ fn online_resources(logger: &Logger, path: &str, pattern: &str, num: i32) -> Res
     Ok(0)
 }
 
+// max wait for all CPUs to online will use 50 * 100 = 5 seconds.
+const ONLINE_CPUMEM_WATI_MILLIS: u64 = 50;
+const ONLINE_CPUMEM_MAX_RETRIES: u32 = 100;
+
 fn online_cpus(logger: &Logger, num: i32) -> Result<i32> {
-    online_resources(logger, SYSFS_CPU_ONLINE_PATH, r"cpu[0-9]+", num)
+    let mut onlined_count: i32 = 0;
+
+    for i in 0..ONLINE_CPUMEM_MAX_RETRIES {
+        let r = online_resources(
+            logger,
+            SYSFS_CPU_ONLINE_PATH,
+            r"cpu[0-9]+",
+            (num - onlined_count),
+        );
+        if r.is_err() {
+            return r;
+        }
+
+        onlined_count += r.unwrap();
+        if onlined_count == num {
+            info!(logger, "online {} CPU(s) after {} retries", num, i);
+            return Ok(num);
+        }
+        thread::sleep(time::Duration::from_millis(ONLINE_CPUMEM_WATI_MILLIS));
+    }
+
+    Err(anyhow!(
+        "failed to online {} CPU(s) after {} retries",
+        num,
+        ONLINE_CPUMEM_MAX_RETRIES
+    ))
 }
 
 fn online_memory(logger: &Logger) -> Result<()> {
