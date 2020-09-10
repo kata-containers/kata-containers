@@ -894,6 +894,7 @@ fn readonly_path(path: &str) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::skip_if_not_root;
     use std::os::unix::io::AsRawFd;
     use tempfile::tempdir;
 
@@ -1058,6 +1059,68 @@ mod tests {
         );
 
         let ret = mask_path("/tmp");
+        assert!(ret.is_ok(), "Should pass. Got: {:?}", ret);
+    }
+
+    #[test]
+    fn test_finish_rootfs() {
+        let stdout_fd = std::io::stdout().as_raw_fd();
+        let mut spec = oci::Spec::default();
+
+        spec.linux = Some(oci::Linux::default());
+        spec.linux.as_mut().unwrap().masked_paths = vec!["/tmp".to_string()];
+        spec.linux.as_mut().unwrap().readonly_paths = vec!["/tmp".to_string()];
+        spec.root = Some(oci::Root {
+            path: "/tmp".to_string(),
+            readonly: true,
+        });
+        spec.mounts = vec![oci::Mount {
+            destination: "/dev".to_string(),
+            r#type: "bind".to_string(),
+            source: "/dev".to_string(),
+            options: vec!["ro".to_string(), "shared".to_string()],
+        }];
+
+        let ret = finish_rootfs(stdout_fd, &spec);
+        assert!(ret.is_ok(), "Should pass. Got: {:?}", ret);
+    }
+
+    #[test]
+    fn test_readonly_path() {
+        let ret = readonly_path("abc");
+        assert!(ret.is_err(), "Should fail. Got: {:?}", ret);
+
+        let ret = readonly_path("../../");
+        assert!(ret.is_err(), "Should fail. Got: {:?}", ret);
+
+        let ret = readonly_path("/tmp");
+        assert!(ret.is_ok(), "Should pass. Got: {:?}", ret);
+    }
+
+    #[test]
+    fn test_mknod_dev() {
+        skip_if_not_root!();
+
+        let tempdir = tempdir().unwrap();
+
+        let olddir = unistd::getcwd().unwrap();
+        defer!(unistd::chdir(&olddir););
+        unistd::chdir(tempdir.path());
+
+        let dev = oci::LinuxDevice {
+            path: "/fifo".to_string(),
+            r#type: "c".to_string(),
+            major: 0,
+            minor: 0,
+            file_mode: Some(0660),
+            uid: Some(unistd::getuid().as_raw()),
+            gid: Some(unistd::getgid().as_raw()),
+        };
+
+        let ret = mknod_dev(&dev);
+        assert!(ret.is_ok(), "Should pass. Got: {:?}", ret);
+
+        let ret = stat::stat("fifo");
         assert!(ret.is_ok(), "Should pass. Got: {:?}", ret);
     }
 }

@@ -580,4 +580,15 @@ mod tests {
     fn it_works() {
         assert_eq!(2 + 2, 4);
     }
+
+    #[allow(unused_macros)]
+    #[macro_export]
+    macro_rules! skip_if_not_root {
+        () => {
+            if !nix::unistd::Uid::effective().is_root() {
+                println!("INFO: skipping {} which needs root", module_path!());
+                return;
+            }
+        };
+    }
 }
