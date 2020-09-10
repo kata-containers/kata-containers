@@ -724,10 +724,6 @@ fn ensure_ptmx() -> Result<()> {
     Ok(())
 }
 
-fn makedev(major: u64, minor: u64) -> u64 {
-    (minor & 0xff) | ((major & 0xfff) << 8) | ((minor & !0xff) << 12) | ((major & !0xfff) << 32)
-}
-
 lazy_static! {
     static ref LINUXDEVICETYPE: HashMap<&'static str, SFlag> = {
         let mut m = HashMap::new();
@@ -748,7 +744,7 @@ fn mknod_dev(dev: &LinuxDevice) -> Result<()> {
         &dev.path[1..],
         *f,
         Mode::from_bits_truncate(dev.file_mode.unwrap_or(0)),
-        makedev(dev.major as u64, dev.minor as u64),
+        nix::sys::stat::makedev(dev.major as u64, dev.minor as u64),
     )?;
 
     unistd::chown(
