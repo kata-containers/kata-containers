@@ -183,18 +183,18 @@ func containerMounts(spec specs.Spec) []vc.Mount {
 	return mnts
 }
 
-func contains(s []string, e string) bool {
-	for _, a := range s {
-		if a == e {
+func contains(strings []string, toFind string) bool {
+	for _, candidate := range strings {
+		if candidate == toFind {
 			return true
 		}
 	}
 	return false
 }
 
-func regexpContains(s []string, e string) bool {
-	for _, a := range s {
-		if matched, _ := regexp.MatchString(a, e); matched {
+func regexpContains(regexps []string, toMatch string) bool {
+	for _, candidate := range regexps {
+		if matched, _ := regexp.MatchString(candidate, toMatch); matched {
 			return true
 		}
 	}
