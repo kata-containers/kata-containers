@@ -1031,4 +1031,37 @@ mod tests {
         let ret = pivot_rootfs("/tmp");
         assert!(ret.is_ok(), "Should pass. Got: {:?}", ret);
     }
+
+    #[test]
+    fn test_ms_move_rootfs() {
+        let ret = ms_move_root("/abc");
+        assert!(
+            ret.is_err(),
+            "Should fail. path doesn't exist. Got: {:?}",
+            ret
+        );
+
+        let ret = ms_move_root("/tmp");
+        assert!(ret.is_ok(), "Should pass. Got: {:?}", ret);
+    }
+
+    #[test]
+    fn test_mask_path() {
+        let ret = mask_path("abc");
+        assert!(
+            ret.is_err(),
+            "Should fail: path doesn't start with '/'. Got: {:?}",
+            ret
+        );
+
+        let ret = mask_path("abc/../");
+        assert!(
+            ret.is_err(),
+            "Should fail: path contains '..'. Got: {:?}",
+            ret
+        );
+
+        let ret = mask_path("/tmp");
+        assert!(ret.is_ok(), "Should pass. Got: {:?}", ret);
+    }
 }
