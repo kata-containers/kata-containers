@@ -966,4 +966,45 @@ mod tests {
         let ret = init_rootfs(stdout_fd, &spec, &cpath, &mounts, true);
         assert!(ret.is_ok(), "Should pass. Got: {:?}", ret);
     }
+
+    #[test]
+    fn test_mount_cgroups() {
+        let stdout_fd = std::io::stdout().as_raw_fd();
+        let mount = oci::Mount {
+            destination: "/cgroups".to_string(),
+            r#type: "cgroup".to_string(),
+            source: "/cgroups".to_string(),
+            options: vec!["shared".to_string()],
+        };
+        let tempdir = tempdir().unwrap();
+        let rootfs = tempdir.path().to_str().unwrap().to_string();
+        let flags = MsFlags::MS_RDONLY;
+        let mut cpath = HashMap::new();
+        let mut cgroup_mounts = HashMap::new();
+
+        cpath.insert("cpu".to_string(), "cpu".to_string());
+        cpath.insert("memory".to_string(), "memory".to_string());
+
+        cgroup_mounts.insert("default".to_string(), "default".to_string());
+        cgroup_mounts.insert("cpu".to_string(), "cpu".to_string());
+        cgroup_mounts.insert("memory".to_string(), "memory".to_string());
+
+        let ret = fs::create_dir_all(tempdir.path().join("cgroups"));
+        assert!(ret.is_ok(), "Should pass. Got {:?}", ret);
+        let ret = fs::create_dir_all(tempdir.path().join("cpu"));
+        assert!(ret.is_ok(), "Should pass. Got {:?}", ret);
+        let ret = fs::create_dir_all(tempdir.path().join("memory"));
+        assert!(ret.is_ok(), "Should pass. Got {:?}", ret);
+
+        let ret = mount_cgroups(
+            stdout_fd,
+            &mount,
+            &rootfs,
+            flags,
+            "",
+            &cpath,
+            &cgroup_mounts,
+        );
+        assert!(ret.is_ok(), "Should pass. Got: {:?}", ret);
+    }
 }
