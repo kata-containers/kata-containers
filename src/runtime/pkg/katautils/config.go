@@ -71,12 +71,12 @@ type factory struct {
 
 type hypervisor struct {
 	Path                    string   `toml:"path"`
-	HypervisorPathList      []string `toml:"path_list"`
+	HypervisorPathList      []string `toml:"valid_hypervisor_paths"`
 	JailerPath              string   `toml:"jailer_path"`
-	JailerPathList          []string `toml:"jailer_path_list"`
+	JailerPathList          []string `toml:"valid_jailer_paths"`
 	Kernel                  string   `toml:"kernel"`
 	CtlPath                 string   `toml:"ctlpath"`
-	CtlPathList             []string `toml:"ctlpath_list"`
+	CtlPathList             []string `toml:"valid_ctlpaths"`
 	Initrd                  string   `toml:"initrd"`
 	Image                   string   `toml:"image"`
 	Firmware                string   `toml:"firmware"`
@@ -88,7 +88,7 @@ type hypervisor struct {
 	EntropySource           string   `toml:"entropy_source"`
 	SharedFS                string   `toml:"shared_fs"`
 	VirtioFSDaemon          string   `toml:"virtio_fs_daemon"`
-	VirtioFSDaemonList      []string `toml:"virtio_fs_daemon_list"`
+	VirtioFSDaemonList      []string `toml:"valid_virtio_fs_daemon_paths"`
 	VirtioFSCache           string   `toml:"virtio_fs_cache"`
 	VirtioFSExtraArgs       []string `toml:"virtio_fs_extra_args"`
 	VirtioFSCacheSize       uint32   `toml:"virtio_fs_cache_size"`
@@ -97,7 +97,7 @@ type hypervisor struct {
 	BlockDeviceCacheNoflush bool     `toml:"block_device_cache_noflush"`
 	EnableVhostUserStore    bool     `toml:"enable_vhost_user_store"`
 	VhostUserStorePath      string   `toml:"vhost_user_store_path"`
-	VhostUserStorePathList  []string `toml:"vhost_user_store_path_list"`
+	VhostUserStorePathList  []string `toml:"valid_vhost_user_store_paths"`
 	NumVCPUs                int32    `toml:"default_vcpus"`
 	DefaultMaxVCPUs         uint32   `toml:"default_maxvcpus"`
 	MemorySize              uint32   `toml:"default_memory"`
@@ -113,7 +113,7 @@ type hypervisor struct {
 	IOMMU                   bool     `toml:"enable_iommu"`
 	IOMMUPlatform           bool     `toml:"enable_iommu_platform"`
 	FileBackedMemRootDir    string   `toml:"file_mem_backend"`
-	FileBackedMemRootList   []string `toml:"file_mem_backend_list"`
+	FileBackedMemRootList   []string `toml:"valid_file_mem_backends"`
 	Swap                    bool     `toml:"enable_swap"`
 	Debug                   bool     `toml:"enable_debug"`
 	DisableNestingChecks    bool     `toml:"disable_nesting_checks"`

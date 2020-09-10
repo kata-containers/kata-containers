@@ -23,8 +23,8 @@ enable_annotations = @DEFENABLEANNOTATIONS@
 # List of valid annotations values for the hypervisor
 # Each member of the list is a path pattern as described by glob(3).
 # The default if not set is empty (all annotations rejected.)
-# Your distribution recommends: @FCPATHLIST@
-path_list = @FCPATHLIST@
+# Your distribution recommends: @FCVALIDHYPERVISORPATHS@
+valid_hypervisor_paths = @FCVALIDHYPERVISORPATHS@
 
 # Path for the jailer specific to firecracker
 # If the jailer path is not set kata will launch firecracker
@@ -37,8 +37,8 @@ path_list = @FCPATHLIST@
 # List of valid jailer path values for the hypervisor
 # Each member of the list can be a regular expression
 # The default if not set is empty (all annotations rejected.)
-# Your distribution recommends: @FCJAILERPATHLIST@
-jailer_path_list = @FCJAILERPATHLIST@
+# Your distribution recommends: @FCVALIDJAILERPATHS@
+valid_jailer_paths = @FCVALIDJAILERPATHS@
 
 
 # Optional space-separated list of options to pass to the guest kernel.
