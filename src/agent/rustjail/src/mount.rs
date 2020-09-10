@@ -1017,4 +1017,10 @@ mod tests {
         );
         assert!(ret.is_ok(), "Should pass. Got: {:?}", ret);
     }
+
+    #[test]
+    fn test_pivot_root() {
+        let ret = pivot_rootfs("/tmp");
+        assert!(ret.is_ok(), "Should pass. Got: {:?}", ret);
+    }
 }
