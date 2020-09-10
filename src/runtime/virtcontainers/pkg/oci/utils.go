@@ -201,8 +201,8 @@ func regexpContains(s []string, e string) bool {
 	return false
 }
 
-func checkPathIsInGlobList(list []string, path string) bool {
-	for _, glob := range list {
+func checkPathIsInGlobs(globs []string, path string) bool {
+	for _, glob := range globs {
 		filenames, _ := filepath.Glob(glob)
 		for _, a := range filenames {
 			if path == a {
@@ -417,21 +417,21 @@ func addHypervisorConfigOverrides(ocispec specs.Spec, config *vc.SandboxConfig, 
 	}
 
 	if value, ok := ocispec.Annotations[vcAnnotations.HypervisorPath]; ok {
-		if !checkPathIsInGlobList(runtime.HypervisorConfig.HypervisorPathList, value) {
+		if !checkPathIsInGlobs(runtime.HypervisorConfig.HypervisorPathList, value) {
 			return fmt.Errorf("hypervisor %v required from annotation is not valid", value)
 		}
 		config.HypervisorConfig.HypervisorPath = value
 	}
 
 	if value, ok := ocispec.Annotations[vcAnnotations.JailerPath]; ok {
-		if !checkPathIsInGlobList(runtime.HypervisorConfig.JailerPathList, value) {
+		if !checkPathIsInGlobs(runtime.HypervisorConfig.JailerPathList, value) {
 			return fmt.Errorf("jailer %v required from annotation is not valid", value)
 		}
 		config.HypervisorConfig.JailerPath = value
 	}
 
 	if value, ok := ocispec.Annotations[vcAnnotations.CtlPath]; ok {
-		if !checkPathIsInGlobList(runtime.HypervisorConfig.HypervisorCtlPathList, value) {
+		if !checkPathIsInGlobs(runtime.HypervisorConfig.HypervisorCtlPathList, value) {
 			return fmt.Errorf("hypervisor control %v required from annotation is not valid", value)
 		}
 		config.HypervisorConfig.HypervisorCtlPath = value
@@ -461,7 +461,7 @@ func addHypervisorConfigOverrides(ocispec specs.Spec, config *vc.SandboxConfig, 
 	}
 
 	if value, ok := ocispec.Annotations[vcAnnotations.VhostUserStorePath]; ok {
-		if !checkPathIsInGlobList(runtime.HypervisorConfig.VhostUserStorePathList, value) {
+		if !checkPathIsInGlobs(runtime.HypervisorConfig.VhostUserStorePathList, value) {
 			return fmt.Errorf("vhost store path %v required from annotation is not valid", value)
 		}
 		config.HypervisorConfig.VhostUserStorePath = value
@@ -586,7 +586,7 @@ func addHypervisorMemoryOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig
 	}
 
 	if value, ok := ocispec.Annotations[vcAnnotations.FileBackedMemRootDir]; ok {
-		if !checkPathIsInGlobList(runtime.HypervisorConfig.FileBackedMemRootList, value) {
+		if !checkPathIsInGlobs(runtime.HypervisorConfig.FileBackedMemRootList, value) {
 			return fmt.Errorf("file_mem_backend value %v required from annotation is not valid", value)
 		}
 		sbConfig.HypervisorConfig.FileBackedMemRootDir = value
@@ -742,7 +742,7 @@ func addHypervisorVirtioFsOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConf
 	}
 
 	if value, ok := ocispec.Annotations[vcAnnotations.VirtioFSDaemon]; ok {
-		if !checkPathIsInGlobList(runtime.HypervisorConfig.VirtioFSDaemonList, value) {
+		if !checkPathIsInGlobs(runtime.HypervisorConfig.VirtioFSDaemonList, value) {
 			return fmt.Errorf("virtiofs daemon %v required from annotation is not valid", value)
 		}
 		sbConfig.HypervisorConfig.VirtioFSDaemon = value
