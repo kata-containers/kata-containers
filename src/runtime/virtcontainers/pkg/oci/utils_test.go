@@ -681,7 +681,20 @@ func TestAddAssetAnnotations(t *testing.T) {
 		Console:        consolePath,
 	}
 
-	addAnnotations(ocispec, &config, runtimeConfig)
+	// Try annotations without enabling them first
+	err := addAnnotations(ocispec, &config, runtimeConfig)
+	assert.Error(err)
+	assert.Exactly(map[string]string{}, config.Annotations)
+
+	// Check if annotation not enabled correctly
+	runtimeConfig.HypervisorConfig.EnableAnnotations = []string{"nonexistent"}
+	err = addAnnotations(ocispec, &config, runtimeConfig)
+	assert.Error(err)
+
+	// Check that it works if all annotation are enabled
+	runtimeConfig.HypervisorConfig.EnableAnnotations = []string{".*"}
+	err = addAnnotations(ocispec, &config, runtimeConfig)
+	assert.NoError(err)
 	assert.Exactly(expectedAnnotations, config.Annotations)
 }
 
@@ -771,6 +784,9 @@ func TestAddHypervisorAnnotations(t *testing.T) {
 		HypervisorType: vc.QemuHypervisor,
 		Console:        consolePath,
 	}
+	runtimeConfig.HypervisorConfig.EnableAnnotations = []string{".*"}
+	runtimeConfig.HypervisorConfig.FileBackedMemRootList = []string{"/dev/shm*"}
+	runtimeConfig.HypervisorConfig.VirtioFSDaemonList = []string{"/bin/*ls*"}
 
 	ocispec.Annotations[vcAnnotations.KernelParams] = "vsyscall=emulate iommu=on"
 	addHypervisorConfigOverrides(ocispec, &config, runtimeConfig)
@@ -794,7 +810,7 @@ func TestAddHypervisorAnnotations(t *testing.T) {
 	ocispec.Annotations[vcAnnotations.BlockDeviceCacheDirect] = "true"
 	ocispec.Annotations[vcAnnotations.BlockDeviceCacheNoflush] = "true"
 	ocispec.Annotations[vcAnnotations.SharedFS] = "virtio-fs"
-	ocispec.Annotations[vcAnnotations.VirtioFSDaemon] = "/home/virtiofsd"
+	ocispec.Annotations[vcAnnotations.VirtioFSDaemon] = "/bin/false"
 	ocispec.Annotations[vcAnnotations.VirtioFSCache] = "/home/cache"
 	ocispec.Annotations[vcAnnotations.Msize9p] = "512"
 	ocispec.Annotations[vcAnnotations.MachineType] = "q35"
@@ -831,7 +847,7 @@ func TestAddHypervisorAnnotations(t *testing.T) {
 	assert.Equal(config.HypervisorConfig.BlockDeviceCacheDirect, true)
 	assert.Equal(config.HypervisorConfig.BlockDeviceCacheNoflush, true)
 	assert.Equal(config.HypervisorConfig.SharedFS, "virtio-fs")
-	assert.Equal(config.HypervisorConfig.VirtioFSDaemon, "/home/virtiofsd")
+	assert.Equal(config.HypervisorConfig.VirtioFSDaemon, "/bin/false")
 	assert.Equal(config.HypervisorConfig.VirtioFSCache, "/home/cache")
 	assert.Equal(config.HypervisorConfig.Msize9p, uint32(512))
 	assert.Equal(config.HypervisorConfig.HypervisorMachineType, "q35")
@@ -851,6 +867,67 @@ func TestAddHypervisorAnnotations(t *testing.T) {
 	// In case an absurd large value is provided, the config value if not over-ridden
 	ocispec.Annotations[vcAnnotations.DefaultVCPUs] = "655536"
 	err := addAnnotations(ocispec, &config, runtimeConfig)
+	assert.Error(err)
+
+	ocispec.Annotations[vcAnnotations.DefaultVCPUs] = "-1"
+	err = addAnnotations(ocispec, &config, runtimeConfig)
+	assert.Error(err)
+
+	ocispec.Annotations[vcAnnotations.DefaultVCPUs] = "1"
+	ocispec.Annotations[vcAnnotations.DefaultMaxVCPUs] = "-1"
+	err = addAnnotations(ocispec, &config, runtimeConfig)
+	assert.Error(err)
+
+	ocispec.Annotations[vcAnnotations.DefaultMaxVCPUs] = "1"
+	ocispec.Annotations[vcAnnotations.DefaultMemory] = fmt.Sprintf("%d", vc.MinHypervisorMemory+1)
+	assert.Error(err)
+}
+
+func TestAddProtectedHypervisorAnnotations(t *testing.T) {
+	assert := assert.New(t)
+
+	config := vc.SandboxConfig{
+		Annotations: make(map[string]string),
+	}
+
+	ocispec := specs.Spec{
+		Annotations: make(map[string]string),
+	}
+
+	runtimeConfig := RuntimeConfig{
+		HypervisorType: vc.QemuHypervisor,
+		Console:        consolePath,
+	}
+	ocispec.Annotations[vcAnnotations.KernelParams] = "vsyscall=emulate iommu=on"
+	err := addAnnotations(ocispec, &config, runtimeConfig)
+	assert.Error(err)
+	assert.Exactly(vc.HypervisorConfig{}, config.HypervisorConfig)
+
+	// Enable annotations
+	runtimeConfig.HypervisorConfig.EnableAnnotations = []string{".*"}
+
+	ocispec.Annotations[vcAnnotations.FileBackedMemRootDir] = "/dev/shm"
+	ocispec.Annotations[vcAnnotations.VirtioFSDaemon] = "/bin/false"
+
+	config.HypervisorConfig.FileBackedMemRootDir = "do-not-touch"
+	config.HypervisorConfig.VirtioFSDaemon = "dangerous-daemon"
+
+	err = addAnnotations(ocispec, &config, runtimeConfig)
+	assert.Error(err)
+	assert.Equal(config.HypervisorConfig.FileBackedMemRootDir, "do-not-touch")
+	assert.Equal(config.HypervisorConfig.VirtioFSDaemon, "dangerous-daemon")
+
+	// Now enable them and check again
+	runtimeConfig.HypervisorConfig.FileBackedMemRootList = []string{"/dev/*m"}
+	runtimeConfig.HypervisorConfig.VirtioFSDaemonList = []string{"/bin/*ls*"}
+	err = addAnnotations(ocispec, &config, runtimeConfig)
+	assert.NoError(err)
+	assert.Equal(config.HypervisorConfig.FileBackedMemRootDir, "/dev/shm")
+	assert.Equal(config.HypervisorConfig.VirtioFSDaemon, "/bin/false")
+
+	// In case an absurd large value is provided, the config value if not over-ridden
+	ocispec.Annotations[vcAnnotations.DefaultVCPUs] = "655536"
+	err = addAnnotations(ocispec, &config, runtimeConfig)
 	assert.Error(err)
 
 	ocispec.Annotations[vcAnnotations.DefaultVCPUs] = "-1"
