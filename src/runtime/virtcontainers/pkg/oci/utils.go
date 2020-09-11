@@ -416,36 +416,8 @@ func addHypervisorConfigOverrides(ocispec specs.Spec, config *vc.SandboxConfig, 
 		return err
 	}
 
-	if value, ok := ocispec.Annotations[vcAnnotations.HypervisorPath]; ok {
-		if !checkPathIsInGlobs(runtime.HypervisorConfig.HypervisorPathList, value) {
-			return fmt.Errorf("hypervisor %v required from annotation is not valid", value)
-		}
-		config.HypervisorConfig.HypervisorPath = value
-	}
-
-	if value, ok := ocispec.Annotations[vcAnnotations.JailerPath]; ok {
-		if !checkPathIsInGlobs(runtime.HypervisorConfig.JailerPathList, value) {
-			return fmt.Errorf("jailer %v required from annotation is not valid", value)
-		}
-		config.HypervisorConfig.JailerPath = value
-	}
-
-	if value, ok := ocispec.Annotations[vcAnnotations.CtlPath]; ok {
-		if !checkPathIsInGlobs(runtime.HypervisorConfig.HypervisorCtlPathList, value) {
-			return fmt.Errorf("hypervisor control %v required from annotation is not valid", value)
-		}
-		config.HypervisorConfig.HypervisorCtlPath = value
-	}
-
-	if value, ok := ocispec.Annotations[vcAnnotations.KernelParams]; ok {
-		if value != "" {
-			params := vc.DeserializeParams(strings.Fields(value))
-			for _, param := range params {
-				if err := config.HypervisorConfig.AddKernelParam(param); err != nil {
-					return fmt.Errorf("Error adding kernel parameters in annotation kernel_params : %v", err)
-				}
-			}
-		}
+	if err := addHypervisorPathOverrides(ocispec, config, runtime); err != nil {
+		return err
 	}
 
 	if value, ok := ocispec.Annotations[vcAnnotations.MachineType]; ok {
@@ -519,6 +491,41 @@ func addHypervisorConfigOverrides(ocispec specs.Spec, config *vc.SandboxConfig, 
 		config.HypervisorConfig.SGXEPCSize = size
 	}
 
+	return nil
+}
+
+func addHypervisorPathOverrides(ocispec specs.Spec, config *vc.SandboxConfig, runtime RuntimeConfig) error {
+	if value, ok := ocispec.Annotations[vcAnnotations.HypervisorPath]; ok {
+		if !checkPathIsInGlobs(runtime.HypervisorConfig.HypervisorPathList, value) {
+			return fmt.Errorf("hypervisor %v required from annotation is not valid", value)
+		}
+		config.HypervisorConfig.HypervisorPath = value
+	}
+
+	if value, ok := ocispec.Annotations[vcAnnotations.JailerPath]; ok {
+		if !checkPathIsInGlobs(runtime.HypervisorConfig.JailerPathList, value) {
+			return fmt.Errorf("jailer %v required from annotation is not valid", value)
+		}
+		config.HypervisorConfig.JailerPath = value
+	}
+
+	if value, ok := ocispec.Annotations[vcAnnotations.CtlPath]; ok {
+		if !checkPathIsInGlobs(runtime.HypervisorConfig.HypervisorCtlPathList, value) {
+			return fmt.Errorf("hypervisor control %v required from annotation is not valid", value)
+		}
+		config.HypervisorConfig.HypervisorCtlPath = value
+	}
+
+	if value, ok := ocispec.Annotations[vcAnnotations.KernelParams]; ok {
+		if value != "" {
+			params := vc.DeserializeParams(strings.Fields(value))
+			for _, param := range params {
+				if err := config.HypervisorConfig.AddKernelParam(param); err != nil {
+					return fmt.Errorf("Error adding kernel parameters in annotation kernel_params : %v", err)
+				}
+			}
+		}
+	}
 	return nil
 }
 
