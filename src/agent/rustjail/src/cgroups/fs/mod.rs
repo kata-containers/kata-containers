@@ -1389,10 +1389,6 @@ impl Manager {
     pub fn new(cpath: &str) -> Result<Self> {
         let mut m = HashMap::new();
 
-        if !cpath.starts_with('/') {
-            return Err(nix::Error::Sys(Errno::EINVAL).into());
-        }
-
         let paths = get_paths()?;
         let mounts = get_mounts()?;
 
@@ -1404,9 +1400,9 @@ impl Manager {
             }
 
             let p = if value == "/" {
-                format!("{}{}", mnt.unwrap(), cpath)
+                format!("{}/{}", mnt.unwrap(), cpath)
             } else {
-                format!("{}{}{}", mnt.unwrap(), value, cpath)
+                format!("{}{}/{}", mnt.unwrap(), value, cpath)
             };
 
             m.insert(key.to_string(), p);
