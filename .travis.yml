@@ -22,6 +22,7 @@ install:
   - export RUST_AGENT=yes
   - make -C ${TRAVIS_BUILD_DIR}/src/agent
   - make -C ${TRAVIS_BUILD_DIR}/src/agent check
+  - sudo -E PATH=$PATH make -C ${TRAVIS_BUILD_DIR}/src/agent check
 
 before_script:
   - "ci/install_go.sh"
