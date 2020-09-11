@@ -923,6 +923,37 @@ func TestRegexpContains(t *testing.T) {
 	}
 }
 
+func TestCheckPathIsInGlobs(t *testing.T) {
+	assert := assert.New(t)
+
+	type testData struct {
+		globs    []string
+		toMatch  string
+		expected bool
+	}
+
+	data := []testData{
+		{[]string{}, "", false},
+		{[]string{}, "nonempty", false},
+		{[]string{"simple"}, "simple", false},
+		{[]string{"simple"}, "some_simple_text", false},
+		{[]string{"/bin/ls"}, "/bin/ls", true},
+		{[]string{"/bin/ls", "/bin/false"}, "/bin/ls", true},
+		{[]string{"/bin/ls", "/bin/false"}, "/bin/false", true},
+		{[]string{"/bin/ls", "/bin/false"}, "/bin/bar", false},
+		{[]string{"/bin/*ls*"}, "/bin/ls", true},
+		{[]string{"/bin/*ls*"}, "/bin/false", true},
+		{[]string{"bin/ls"}, "/bin/ls", false},
+		{[]string{"./bin/ls"}, "/bin/ls", false},
+		{[]string{"*/bin/ls"}, "/bin/ls", false},
+	}
+
+	for _, d := range data {
+		matched := checkPathIsInGlobs(d.globs, d.toMatch)
+		assert.Equal(d.expected, matched, "%+v", d)
+	}
+}
+
 func TestIsCRIOContainerManager(t *testing.T) {
 	assert := assert.New(t)
 
