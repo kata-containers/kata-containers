@@ -955,7 +955,7 @@ mod tests {
                 continue;
             }
 
-            let error_msg = format!("{}", result.unwrap_err());
+            let error_msg = format!("{:#}", result.unwrap_err());
 
             assert!(error_msg.contains(d.error_contains), msg);
         }
