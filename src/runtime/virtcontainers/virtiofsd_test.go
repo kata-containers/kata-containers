@@ -35,7 +35,7 @@ func TestVirtiofsdStart(t *testing.T) {
 
 	socketDir, err := ioutil.TempDir("", "")
 	assert.NoError(err)
-	defer os.RemoveAll(sourcePath)
+	defer os.RemoveAll(socketDir)
 
 	socketPath := socketDir + "socket.s"
 
