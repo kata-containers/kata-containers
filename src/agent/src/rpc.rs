@@ -37,6 +37,8 @@ use crate::linux_abi::*;
 use crate::metrics::get_metrics;
 use crate::mount::{add_storages, remove_mounts, BareMount, STORAGEHANDLERLIST};
 use crate::namespace::{NSTYPEIPC, NSTYPEPID, NSTYPEUTS};
+use crate::network::setup_guest_dns;
+use crate::network::Network;
 use crate::random;
 use crate::sandbox::Sandbox;
 use crate::version::{AGENT_VERSION, API_VERSION};
@@ -1066,6 +1068,7 @@ impl protocols::agent_ttrpc::AgentService for agentService {
     ) -> ttrpc::Result<Empty> {
         Ok(Empty::new())
     }
+
     fn create_sandbox(
         &self,
         _ctx: &ttrpc::TtrpcContext,
@@ -1131,8 +1134,27 @@ impl protocols::agent_ttrpc::AgentService for agentService {
             }
         };
 
+        match setup_guest_dns(sl!(), req.dns.to_vec()) {
+            Ok(dns_list) => {
+                let sandbox = self.sandbox.clone();
+                let mut s = sandbox.lock().unwrap();
+                let _ = req
+                    .dns
+                    .to_vec()
+                    .iter()
+                    .map(|dns| s.network.set_dns(dns.to_string()));
+            }
+            Err(e) => {
+                return Err(ttrpc::Error::RpcStatus(ttrpc::get_status(
+                    ttrpc::Code::INTERNAL,
+                    e.to_string(),
+                )))
+            }
+        };
+
         Ok(Empty::new())
     }
+
     fn destroy_sandbox(
         &self,
         _ctx: &ttrpc::TtrpcContext,
