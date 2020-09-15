@@ -1,98 +1,82 @@
 # Kata Containers installation user guides
 
-- [Kata Containers installation user guides](#kata-containers-installation-user-guides)
-  - [Prerequisites](#prerequisites)
-  - [Packaged installation methods](#packaged-installation-methods)
-    - [Official packages](#official-packages)
-    - [Automatic Installation](#automatic-installation)
-    - [Snap Installation](#snap-installation)
-    - [Scripted Installation](#scripted-installation)
-    - [Manual Installation](#manual-installation)
-  - [Build from source installation](#build-from-source-installation)
-  - [Installing on a Cloud Service Platform](#installing-on-a-cloud-service-platform)
-  - [Further information](#further-information)
+* [Kata Containers installation user guides](#kata-containers-installation-user-guides)
+    * [Prerequisites](#prerequisites)
+    * [Legacy installation](#legacy-installation)
+    * [Packaged installation methods](#packaged-installation-methods)
+        * [Official packages](#official-packages)
+        * [Snap Installation](#snap-installation)
+        * [Automatic Installation](#automatic-installation)
+        * [Manual Installation](#manual-installation)
+    * [Build from source installation](#build-from-source-installation)
+    * [Installing on a Cloud Service Platform](#installing-on-a-cloud-service-platform)
+    * [Further information](#further-information)
 
 The following is an overview of the different installation methods available. All of these methods equally result
 in a system configured to run Kata Containers.
 
 ## Prerequisites
+
 Kata Containers requires nested virtualization or bare metal.
 See the
-[hardware requirements](../../src/runtime/README.md#hardware-requirements)
+[hardware requirements](/src/runtime/README.md#hardware-requirements)
 to see if your system is capable of running Kata Containers.
+
+## Legacy installation
+
+If you wish to install a legacy 1.x version of Kata Containers, see
+[the Kata Containers 1.x installation documentation](https://github.com/kata-containers/documentation/tree/master/install/).
 
 ## Packaged installation methods
 
 > **Notes:**
 >
 > - Packaged installation methods uses your distribution's native package format (such as RPM or DEB).
+> - You are strongly encouraged to choose an installation method that provides
+>   automatic updates, to ensure you benefit from security updates and bug fixes.
 
-| Installation method                                  | Description                                                                             | Distributions supported              |
-|------------------------------------------------------|-----------------------------------------------------------------------------------------|--------------------------------------|
-| [Automatic](#automatic-installation)                 |Run a single command to install a full system                                            | |
-| [Using snap](#snap-installation)                     |Easy to install and automatic updates                                                    |any distro that supports snapd        |
-| [Using official distro packages](#official-packages) |Kata packages provided by Linux distributions official repositories                      | |
-| [Scripted](#scripted-installation)                   |Generates an installation script which will result in a working system when executed     | |
-| [Manual](#manual-installation)                       |Allows the user to read a brief document and execute the specified commands step-by-step | |
+| Installation method                                  | Description                                                         | Automatic updates | Use case                                                 |
+|------------------------------------------------------|---------------------------------------------------------------------|-------------------|----------------------------------------------------------|
+| [Using official distro packages](#official-packages) | Kata packages provided by Linux distributions official repositories | yes               | Recommended for most users.                              |
+| [Using snap](#snap-installation)                     | Easy to install                                                     | yes               | Good alternative to official distro packages.            |
+| [Automatic](#automatic-installation)                 | Run a single command to install a full system                       | **No!**           | For those wanting the latest release quickly.            |
+| [Manual](#manual-installation)                       | Follow a guide step-by-step to install a working system             | **No!**           | For those who want the latest release with more control. |
+| [Build from source](#build-from-source-installation) | Build the software components manually                              | **No!**           | Power users and developers only.                         |
 
 ### Official packages
 
 Kata packages are provided by official distribution repositories for:
 
-| Distribution (link to packages)                          | Versions                                                                       | Contacts |
-| -------------------------------------------------------- | ------------------------------------------------------------------------------ | -------- |
-| [CentOS](centos-installation-guide.md)                   | 8                                                                              |          |
-| [Fedora](fedora-installation-guide.md)                   | 32, Rawhide                                                                    |          |
-| [SUSE Linux Enterprise (SLE)](sle-installation-guide.md) | SLE 15 SP1, 15 SP2                                                             |          |
-| [openSUSE](opensuse-installation-guide.md)               | [Leap 15.1](opensuse-leap-15.1-installation-guide.md)<br>Leap 15.2, Tumbleweed |          |
+| Distribution (link to installation guide)                | Minimum versions                                                               |
+|----------------------------------------------------------|--------------------------------------------------------------------------------|
+| [CentOS](centos-installation-guide.md)                   | 8                                                                              |
+| [Fedora](fedora-installation-guide.md)                   | 32, Rawhide                                                                    |
+| [openSUSE](opensuse-installation-guide.md)               | [Leap 15.1](opensuse-leap-15.1-installation-guide.md)<br>Leap 15.2, Tumbleweed |
+| [SUSE Linux Enterprise (SLE)](sle-installation-guide.md) | SLE 15 SP1, 15 SP2                                                             |
 
-
-### Automatic Installation
-
-[Use `kata-manager`](installing-with-kata-manager.md) to automatically install Kata packages.
+> **Note::**
+>
+> All users are encouraged to uses the official distribution versions of Kata
+> Containers unless they understand the implications of alternative methods.
 
 ### Snap Installation
+
+> **Note:** The snap installation is available for all distributions which support `snapd`.
 
 [![Get it from the Snap Store](https://snapcraft.io/static/images/badges/en/snap-store-black.svg)](https://snapcraft.io/kata-containers)
 
 [Use snap](snap-installation-guide.md) to install Kata Containers from https://snapcraft.io.
 
-### Scripted Installation
-[Use `kata-doc-to-script`](installing-with-kata-doc-to-script.md) to generate installation scripts that can be reviewed before they are executed.
+### Automatic Installation
+
+[Use `kata-manager`](/utils/README.md) to automatically install a working Kata Containers system.
 
 ### Manual Installation
-Manual installation instructions are available for [these distributions](#packaged-installation-methods) and document how to:
-1. Add the Kata Containers repository to your distro package manager, and import the packages signing key.
-2. Install the Kata Containers packages.
-3. Install a supported container manager.
-4. Configure the container manager to use Kata Containers as the default OCI runtime. Or, for Kata Containers 1.5.0 or above, configure the
-   `io.containerd.kata.v2` to be the runtime shim (see [containerd runtime v2 (shim API)](https://github.com/containerd/containerd/tree/master/runtime/v2)
-   and [How to use Kata Containers and CRI (containerd plugin) with Kubernetes](../how-to/how-to-use-k8s-with-cri-containerd-and-kata.md)).
 
-> **Notes on upgrading**:
-> - If you are installing Kata Containers on a system that already has Clear Containers or `runv` installed,
->  first read [the upgrading document](../Upgrading.md).
-
-> **Notes on releases**:
-> - [This download server](http://download.opensuse.org/repositories/home:/katacontainers:/releases:/)
-> hosts the Kata Containers packages built by OBS for all the supported architectures.
-> Packages are available for the latest and stable releases (more info [here](../Stable-Branch-Strategy.md)).
->
-> - The following guides apply to the latest Kata Containers release
-> (a.k.a. `master` release).
->
-> - When choosing a stable release, replace all `master` occurrences in the URLs
-> with a `stable-x.y` version available on the [download server](http://download.opensuse.org/repositories/home:/katacontainers:/releases:/).
-
-> **Notes on packages source verification**:
-> - The Kata packages hosted on the download server are signed with GPG to ensure integrity and authenticity.
->
-> - The public key used to sign packages is available [at this link](https://raw.githubusercontent.com/kata-containers/tests/master/data/rpm-signkey.pub); the fingerprint is `9FDC0CB6 3708CF80 3696E2DC D0B37B82 6063F3ED`.
->
-> - Only trust the signing key and fingerprint listed in the previous bullet point. Do not disable GPG checks,
-> otherwise packages source and authenticity is not guaranteed.
+Follow the [containerd installation guide](container-manager/containerd/containerd-install.md).
 
 ## Build from source installation
+
 > **Notes:**
 >
 > - Power users who decide to build from sources should be aware of the
@@ -104,6 +88,7 @@ who are comfortable building software from source to use the latest component
 versions. This is not recommended for normal users.
 
 ## Installing on a Cloud Service Platform
+
 * [Amazon Web Services (AWS)](aws-installation-guide.md)
 * [Google Compute Engine (GCE)](gce-installation-guide.md)
 * [Microsoft Azure](azure-installation-guide.md)
@@ -111,6 +96,7 @@ versions. This is not recommended for normal users.
 * [VEXXHOST OpenStack Cloud](vexxhost-installation-guide.md)
 
 ## Further information
+
 * The [upgrading document](../Upgrading.md).
 * The [developer guide](../Developer-Guide.md).
 * The [runtime documentation](../../src/runtime/README.md).
