@@ -179,6 +179,7 @@ func checkAndMount(s *service, r *taskAPI.CreateTaskRequest) (bool, error) {
 	if len(r.Rootfs) == 1 {
 		m := r.Rootfs[0]
 
+		// Plug the block backed rootfs directly instead of mounting it.
 		if katautils.IsBlockDevice(m.Source) && !s.config.HypervisorConfig.DisableBlockDeviceUse {
 			return false, nil
 		}
