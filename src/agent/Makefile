@@ -57,12 +57,16 @@ INIT := no
 # Path to systemd unit directory if installed as not init.
 UNIT_DIR := /usr/lib/systemd/system
 
+GENERATED_CODE = src/generated.rs
+
 GENERATED_FILES :=
+
+GENERATED_FILES += $(GENERATED_CODE)
 
 ifeq ($(INIT),no)
     # Unit file to start kata agent in systemd systems
     UNIT_FILES = kata-agent.service
-    GENERATED_FILES := $(UNIT_FILES)
+    GENERATED_FILES += $(UNIT_FILES)
     # Target to be reached in systemd services
     UNIT_FILES += kata-containers.target
 endif
@@ -86,7 +90,7 @@ endef
 
 default: $(TARGET) show-header
 
-$(TARGET): $(TARGET_PATH)
+$(TARGET): $(GENERATED_CODE) $(TARGET_PATH)
 
 $(TARGET_PATH): $(SOURCES) | show-summary
 	@cargo build --target $(TRIPLE) --$(BUILD_TYPE)
@@ -101,6 +105,7 @@ $(GENERATED_FILES): %: %.in
 	@sed \
 		-e 's|[@]bindir[@]|$(BINDIR)|g' \
 		-e 's|[@]kata-agent[@]|$(TARGET)|g' \
+		-e 's|[@]VERSION_COMMIT[@]|$(VERSION_COMMIT)|g' \
 		"$<" > "$@"
 
 install: build-service
