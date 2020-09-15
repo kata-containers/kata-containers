@@ -44,7 +44,5 @@ func deleteContainer(ctx context.Context, s *service, c *container) error {
 		}
 	}
 
-	delete(s.containers, c.id)
-
-	return nil
+	return delete(s.containers, c.id)
 }
