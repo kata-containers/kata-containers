@@ -108,6 +108,7 @@ install: build-service
 
 clean:
 	@cargo clean
+	@rm -f $(GENERATED_FILES)
 
 test:
 	@cargo test --all --target $(TRIPLE)
