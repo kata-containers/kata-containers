@@ -202,7 +202,7 @@ func doMount(mounts []*containerd_types.Mount, rootfs string) error {
 	}
 
 	for _, rm := range mounts {
-		m := &mount.Mount{
+		m := &mount.Mount {
 			Type:    rm.Type,
 			Source:  rm.Source,
 			Options: rm.Options,
