@@ -466,6 +466,17 @@ show_container_mgr_details()
 		subheading "$title"
 		run_cmd_and_show_quoted_output "" "podman --version"
 
+		run_cmd_and_show_quoted_output "" "podman system info"
+
+		local cmd file
+
+		for file in {/etc,/usr/share}/containers/*.{conf,json}; do
+			if [ -e "$file" ]; then
+				cmd="cat $file"
+				run_cmd_and_show_quoted_output "" "$cmd"
+			fi
+		done
+
 		end_section
 	fi
 
