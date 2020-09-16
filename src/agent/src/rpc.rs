@@ -4,6 +4,7 @@
 //
 
 use std::path::Path;
+use std::sync::mpsc::{channel, Sender};
 use std::sync::{Arc, Mutex};
 use ttrpc;
 
@@ -365,6 +366,7 @@ impl agentService {
         let pid: pid_t;
         let mut exit_pipe_r: RawFd = -1;
         let mut buf: Vec<u8> = vec![0, 1];
+        let (exit_send, exit_recv) = channel();
 
         info!(
             sl!(),
@@ -382,6 +384,7 @@ impl agentService {
                 exit_pipe_r = p.exit_pipe_r.unwrap();
             }
 
+            p.exit_watchers.push(exit_send);
             pid = p.pid;
         }
 
@@ -398,9 +401,16 @@ impl agentService {
             }
         };
 
-        // need to close all fds
-        let mut p = ctr.processes.get_mut(&pid).unwrap();
+        let mut p = match ctr.processes.get_mut(&pid) {
+            Some(p) => p,
+            None => {
+                // Lost race, pick up exit code from channel
+                resp.status = exit_recv.recv().unwrap();
+                return Ok(resp);
+            }
+        };
 
+        // need to close all fds
         if p.parent_stdin.is_some() {
             let _ = unistd::close(p.parent_stdin.unwrap());
         }
@@ -427,6 +437,11 @@ impl agentService {
         p.term_master = None;
 
         resp.status = p.exit_code;
+        // broadcast exit code to all parallel watchers
+        for s in p.exit_watchers.iter() {
+            // Just ignore errors in case any watcher quits unexpectedly
+            let _ = s.send(p.exit_code);
+        }
 
         ctr.processes.remove(&pid);
 
