@@ -25,6 +25,9 @@ const projectPrefix = "@PROJECT_TYPE@"
 // original URL for this project
 const projectURL = "@PROJECT_URL@"
 
+// Project URL's organisation name
+const projectORG = "@PROJECT_ORG@"
+
 const defaultRootDirectory = "@PKGRUNDIR@"
 
 // commit is the git commit the runtime is compiled from.
