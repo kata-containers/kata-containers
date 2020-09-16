@@ -52,7 +52,6 @@ use unistd::Pid;
 
 mod config;
 mod device;
-mod generated;
 mod linux_abi;
 mod metrics;
 mod mount;
@@ -85,7 +84,7 @@ lazy_static! {
 
 fn announce(logger: &Logger, config: &agentConfig) {
     info!(logger, "announce";
-    "agent-commit" => generated::VERSION_COMMIT,
+    "agent-commit" => version::VERSION_COMMIT,
 
     // Avoid any possibility of confusion with the old agent
     "agent-type" => "rust",
@@ -105,7 +104,7 @@ fn main() -> Result<()> {
             NAME,
             version::AGENT_VERSION,
             version::API_VERSION,
-            generated::VERSION_COMMIT,
+            version::VERSION_COMMIT,
         );
 
         exit(0);
