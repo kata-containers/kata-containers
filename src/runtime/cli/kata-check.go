@@ -71,6 +71,9 @@ const (
 	genericCPUFlagsTag    = "flags"      // nolint: varcheck, unused, deadcode
 	genericCPUVendorField = "vendor_id"  // nolint: varcheck, unused, deadcode
 	genericCPUModelField  = "model name" // nolint: varcheck, unused, deadcode
+
+	// If set, do not perform any network checks
+	noNetworkEnvVar = "KATA_CHECK_NO_NETWORK"
 )
 
 // variables rather than consts to allow tests to modify them
@@ -307,14 +310,71 @@ var kataCheckCLICommand = cli.Command{
 	Usage: "tests if system can run " + project,
 	Flags: []cli.Flag{
 		cli.BoolFlag{
-			Name:  "verbose, v",
-			Usage: "display the list of checks performed",
+			Name:  "check-version-only",
+			Usage: "Only compare the current and latest available versions (requires network, non-root only)",
+		},
+		cli.BoolFlag{
+			Name:  "include-all-releases",
+			Usage: "Don't filter out pre-release release versions",
+		},
+		cli.BoolFlag{
+			Name:  "no-network-checks, n",
+			Usage: "Do not run any checks using the network",
+		},
+		cli.BoolFlag{
+			Name:  "only-list-releases",
+			Usage: "Only list newer available releases (non-root only)",
 		},
 		cli.BoolFlag{
 			Name:  "strict, s",
 			Usage: "perform strict checking",
 		},
+		cli.BoolFlag{
+			Name:  "verbose, v",
+			Usage: "display the list of checks performed",
+		},
 	},
+	Description: fmt.Sprintf(`tests if system can run %s and version is current.
+
+ENVIRONMENT VARIABLES:
+
+- %s: If set to any value, act as if "--no-network-checks" was specified.
+
+EXAMPLES:
+
+- Perform basic checks:
+
+  $ %s %s
+
+- Local basic checks only:
+
+  $ %s %s --no-network-checks
+
+- Perform further checks:
+
+  $ sudo %s %s
+
+- Just check if a newer version is available:
+
+  $ %s %s --check-version-only
+
+- List available releases (shows output in format "version;release-date;url"):
+
+  $ %s %s --only-list-releases
+
+- List all available releases (includes pre-release versions):
+
+  $ %s %s --only-list-releases --include-all-releases
+`,
+		project,
+		noNetworkEnvVar,
+		name, checkCmd,
+		name, checkCmd,
+		name, checkCmd,
+		name, checkCmd,
+		name, checkCmd,
+		name, checkCmd,
+	),
 
 	Action: func(context *cli.Context) error {
 		verbose := context.Bool("verbose")
@@ -328,6 +388,28 @@ var kataCheckCLICommand = cli.Command{
 
 		span, _ := katautils.Trace(ctx, "kata-check")
 		defer span.Finish()
+
+		if context.Bool("no-network-checks") == false && os.Getenv(noNetworkEnvVar) == "" {
+			cmd := RelCmdCheck
+
+			if context.Bool("only-list-releases") {
+				cmd = RelCmdList
+			}
+
+			if os.Geteuid() == 0 {
+				kataLog.Warn("Not running network checks as super user")
+			} else {
+
+				err = HandleReleaseVersions(cmd, version, context.Bool("include-all-releases"))
+				if err != nil {
+					return err
+				}
+			}
+		}
+
+		if context.Bool("check-version-only") || context.Bool("only-list-releases") {
+			return nil
+		}
 
 		runtimeConfig, ok := context.App.Metadata["runtimeConfig"].(oci.RuntimeConfig)
 		if !ok {
