@@ -1036,3 +1036,13 @@ func GetOCIConfig(status vc.ContainerStatus) (specs.Spec, error) {
 
 	return *status.Spec, nil
 }
+
+// IsCRIOContainerManager check if a Pod is created from CRI-O
+func IsCRIOContainerManager(spec *specs.Spec) bool {
+	if val, ok := spec.Annotations[crioAnnotations.ContainerType]; ok {
+		if val == crioAnnotations.ContainerTypeSandbox || val == crioAnnotations.ContainerTypeContainer {
+			return true
+		}
+	}
+	return false
+}
