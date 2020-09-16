@@ -57,8 +57,19 @@ INIT := no
 # Path to systemd unit directory if installed as not init.
 UNIT_DIR := /usr/lib/systemd/system
 
-GENERATED_CODE = src/generated.rs
+GENERATED_CODE = src/version.rs
 
+AGENT_NAME=$(TARGET)
+API_VERSION=0.0.1
+AGENT_VERSION=$(VERSION)
+
+GENERATED_REPLACEMENTS= \
+    AGENT_NAME \
+    AGENT_VERSION \
+    API_VERSION \
+    BINDIR \
+    COMMIT \
+    VERSION_COMMIT
 GENERATED_FILES :=
 
 GENERATED_FILES += $(GENERATED_CODE)
@@ -102,11 +113,7 @@ show-header:
 	@printf "%s - version %s (commit %s)\n\n" "$(TARGET)" "$(VERSION)" "$(COMMIT_MSG)"
 
 $(GENERATED_FILES): %: %.in
-	@sed \
-		-e 's|[@]bindir[@]|$(BINDIR)|g' \
-		-e 's|[@]kata-agent[@]|$(TARGET)|g' \
-		-e 's|[@]VERSION_COMMIT[@]|$(VERSION_COMMIT)|g' \
-		"$<" > "$@"
+	@sed $(foreach r,$(GENERATED_REPLACEMENTS),-e 's|@$r@|$($r)|g') "$<" > "$@"
 
 install: build-service
 	@install -D $(TARGET_PATH) $(DESTDIR)/$(BINDIR)/$(TARGET)
