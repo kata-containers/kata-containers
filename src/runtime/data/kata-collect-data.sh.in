@@ -433,8 +433,7 @@ show_container_mgr_details()
 		local cmd="systemctl show crio"
 		run_cmd_and_show_quoted_output "" "$cmd"
 
-		local file="/etc/crio/crio.conf"
-		cmd="cat $file"
+		cmd="crio config"
 		run_cmd_and_show_quoted_output "" "$cmd"
 
 		end_section
