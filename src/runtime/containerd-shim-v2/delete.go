@@ -9,25 +9,21 @@ import (
 	"context"
 	"path"
 
+	"github.com/containerd/containerd/api/types/task"
 	"github.com/containerd/containerd/mount"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils"
-	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 )
 
 func deleteContainer(ctx context.Context, s *service, c *container) error {
-	status, err := s.sandbox.StatusContainer(c.id)
-	if err != nil && !isNotFound(err) {
-		return err
-	}
-	if !c.cType.IsSandbox() && err == nil {
-		if status.State.State != types.StateStopped {
-			_, err = s.sandbox.StopContainer(c.id, false)
+	if !c.cType.IsSandbox() {
+		if c.status != task.StatusStopped {
+			_, err := s.sandbox.StopContainer(c.id, false)
 			if err != nil {
 				return err
 			}
 		}
 
-		if _, err = s.sandbox.DeleteContainer(c.id); err != nil {
+		if _, err := s.sandbox.DeleteContainer(c.id); err != nil {
 			return err
 		}
 	}

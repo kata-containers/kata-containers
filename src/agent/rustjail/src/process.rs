@@ -7,6 +7,7 @@
 use libc::pid_t;
 use std::fs::File;
 use std::os::unix::io::RawFd;
+use std::sync::mpsc::Sender;
 
 // use crate::configs::{Capabilities, Rlimit};
 // use crate::cgroups::Manager as CgroupManager;
@@ -45,6 +46,7 @@ pub struct Process {
     pub pid: pid_t,
 
     pub exit_code: i32,
+    pub exit_watchers: Vec<Sender<i32>>,
     pub oci: OCIProcess,
     pub logger: Logger,
 }
@@ -95,6 +97,7 @@ impl Process {
             init,
             pid: -1,
             exit_code: 0,
+            exit_watchers: Vec::new(),
             oci: ocip.clone(),
             logger: logger.clone(),
         };

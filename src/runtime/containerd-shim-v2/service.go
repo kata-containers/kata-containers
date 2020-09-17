@@ -681,20 +681,7 @@ func (s *service) Kill(ctx context.Context, r *taskAPI.KillRequest) (_ *ptypes.E
 		return nil, err
 	}
 
-	// According to CRI specs, kubelet will call StopPodSandbox()
-	// at least once before calling RemovePodSandbox, and this call
-	// is idempotent, and must not return an error if all relevant
-	// resources have already been reclaimed. And in that call it will
-	// send a SIGKILL signal first to try to stop the container, thus
-	// once the container has terminated, here should ignore this signal
-	// and return directly.
-	if signum == syscall.SIGKILL || signum == syscall.SIGTERM {
-		if c.status == task.StatusStopped {
-			shimLog.WithField("sandbox", s.sandbox.ID()).WithField("container", c.id).Debug("Container has already been stopped")
-			return empty, nil
-		}
-	}
-
+	processStatus := c.status
 	processID := c.id
 	if r.ExecID != "" {
 		execs, err := c.getExec(r.ExecID)
@@ -710,6 +697,23 @@ func (s *service) Kill(ctx context.Context, r *taskAPI.KillRequest) (_ *ptypes.E
 			}).Debug("Id of exec process to be signalled is empty")
 			return empty, errors.New("The exec process does not exist")
 		}
+		processStatus = execs.status
+	}
+
+	// According to CRI specs, kubelet will call StopPodSandbox()
+	// at least once before calling RemovePodSandbox, and this call
+	// is idempotent, and must not return an error if all relevant
+	// resources have already been reclaimed. And in that call it will
+	// send a SIGKILL signal first to try to stop the container, thus
+	// once the container has terminated, here should ignore this signal
+	// and return directly.
+	if (signum == syscall.SIGKILL || signum == syscall.SIGTERM) && processStatus == task.StatusStopped {
+		shimLog.WithFields(logrus.Fields{
+			"sandbox":   s.sandbox.ID(),
+			"container": c.id,
+			"exec-id":   r.ExecID,
+		}).Debug("process has already stopped")
+		return empty, nil
 	}
 
 	return empty, s.sandbox.SignalProcess(c.id, processID, signum, r.All)
