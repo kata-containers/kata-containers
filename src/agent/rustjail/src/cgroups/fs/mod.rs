@@ -230,7 +230,7 @@ impl CgroupManager for Manager {
 }
 
 fn set_network_resources(
-    cg: &cgroups::Cgroup,
+    _cg: &cgroups::Cgroup,
     network: &LinuxNetwork,
     res: &mut cgroups::Resources,
 ) -> Result<()> {
@@ -259,7 +259,7 @@ fn set_network_resources(
 }
 
 fn set_devices_resources(
-    cg: &cgroups::Cgroup,
+    _cg: &cgroups::Cgroup,
     device_resources: &Vec<LinuxDeviceCgroup>,
     res: &mut cgroups::Resources,
 ) -> Result<()> {
@@ -288,7 +288,7 @@ fn set_devices_resources(
 }
 
 fn set_hugepages_resources(
-    cg: &cgroups::Cgroup,
+    _cg: &cgroups::Cgroup,
     hugepage_limits: &Vec<LinuxHugepageLimit>,
     res: &mut cgroups::Resources,
 ) -> Result<()> {
