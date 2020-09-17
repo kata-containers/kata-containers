@@ -888,7 +888,6 @@ impl BaseContainer for LinuxContainer {
             &p,
             self.cgroup_manager.as_ref().unwrap(),
             &st,
-            &mut child,
             pwfd,
             prfd,
         ) {
@@ -1039,8 +1038,9 @@ fn do_exec(args: &[String]) -> ! {
 }
 
 fn update_namespaces(logger: &Logger, spec: &mut Spec, init_pid: RawFd) -> Result<()> {
+    info!(logger, "updating namespaces");
     let linux = match spec.linux.as_mut() {
-        None => return Err(anyhow!("Spec didn't container linux field")),
+        None => return Err(anyhow!("Spec didn't contain linux field")),
         Some(l) => l,
     };
 
@@ -1117,7 +1117,6 @@ fn join_namespaces(
     p: &Process,
     cm: &FsManager,
     st: &OCIState,
-    _child: &mut Child,
     pwfd: RawFd,
     prfd: RawFd,
 ) -> Result<()> {
