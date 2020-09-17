@@ -69,7 +69,6 @@ use protocols::oci::{
     Root as grpcRoot, Spec as grpcSpec,
 };
 use std::collections::HashMap;
-use std::mem::MaybeUninit;
 
 pub fn process_grpc_to_oci(p: &grpcProcess) -> ociProcess {
     let console_size = if p.ConsoleSize.is_some() {
@@ -91,7 +90,12 @@ pub fn process_grpc_to_oci(p: &grpcProcess) -> ociProcess {
             username: u.Username.clone(),
         }
     } else {
-        unsafe { MaybeUninit::zeroed().assume_init() }
+        ociUser {
+            uid: 0,
+            gid: 0,
+            additional_gids: vec![],
+            username: String::from(""),
+        }
     };
 
     let capabilities = if p.Capabilities.is_some() {
@@ -136,20 +140,11 @@ pub fn process_grpc_to_oci(p: &grpcProcess) -> ociProcess {
     }
 }
 
-fn process_oci_to_grpc(_p: ociProcess) -> grpcProcess {
-    // dont implement it for now
-    unsafe { MaybeUninit::zeroed().assume_init() }
-}
-
 fn root_grpc_to_oci(root: &grpcRoot) -> ociRoot {
     ociRoot {
         path: root.Path.clone(),
         readonly: root.Readonly,
     }
-}
-
-fn root_oci_to_grpc(_root: &ociRoot) -> grpcRoot {
-    unsafe { MaybeUninit::zeroed().assume_init() }
 }
 
 fn mount_grpc_to_oci(m: &grpcMount) -> ociMount {
@@ -159,10 +154,6 @@ fn mount_grpc_to_oci(m: &grpcMount) -> ociMount {
         source: m.source.clone(),
         options: m.options.clone().into_vec(),
     }
-}
-
-fn mount_oci_to_grpc(_m: &ociMount) -> grpcMount {
-    unsafe { MaybeUninit::zeroed().assume_init() }
 }
 
 use oci::Hook as ociHook;
@@ -193,10 +184,6 @@ fn hooks_grpc_to_oci(h: &grpcHooks) -> ociHooks {
         poststart,
         poststop,
     }
-}
-
-fn hooks_oci_to_grpc(_h: &ociHooks) -> grpcHooks {
-    unsafe { MaybeUninit::zeroed().assume_init() }
 }
 
 use oci::{
@@ -563,10 +550,6 @@ pub fn grpc_to_oci(grpc: &grpcSpec) -> ociSpec {
         windows: None,
         vm: None,
     }
-}
-
-pub fn oci_to_grpc(_oci: &ociSpec) -> grpcSpec {
-    unsafe { MaybeUninit::zeroed().assume_init() }
 }
 
 #[cfg(test)]
