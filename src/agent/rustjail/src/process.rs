@@ -15,12 +15,10 @@ use std::sync::mpsc::Sender;
 
 use nix::fcntl::{fcntl, FcntlArg, OFlag};
 use nix::sys::signal::{self, Signal};
-use nix::sys::socket::{self, AddressFamily, SockFlag, SockType};
 use nix::sys::wait::{self, WaitStatus};
 use nix::unistd::{self, Pid};
 use nix::Result;
 
-use nix::Error;
 use oci::Process as OCIProcess;
 use slog::Logger;
 
