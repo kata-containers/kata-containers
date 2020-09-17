@@ -364,7 +364,7 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
 
     let buf = read_sync(crfd)?;
     let process_str = std::str::from_utf8(&buf)?;
-    let mut oci_process: oci::Process = serde_json::from_str(process_str)?;
+    let oci_process: oci::Process = serde_json::from_str(process_str)?;
     log_child!(cfd_log, "notify parent to send cgroup manager");
     write_sync(cwfd, SYNC_SUCCESS, "")?;
 
@@ -799,9 +799,9 @@ impl BaseContainer for LinuxContainer {
             unistd::close(pwfd);
         });
 
-        let mut child_stdin: std::process::Stdio;
-        let mut child_stdout: std::process::Stdio;
-        let mut child_stderr: std::process::Stdio;
+        let child_stdin: std::process::Stdio;
+        let child_stdout: std::process::Stdio;
+        let child_stderr: std::process::Stdio;
 
         if tty {
             let pseudo = pty::openpty(None, None)?;
@@ -865,7 +865,7 @@ impl BaseContainer for LinuxContainer {
             child = child.env(FIFO_FD, format!("{}", fifofd));
         }
 
-        let mut child = child.spawn()?;
+        let child = child.spawn()?;
 
         unistd::close(crfd)?;
         unistd::close(cwfd)?;
