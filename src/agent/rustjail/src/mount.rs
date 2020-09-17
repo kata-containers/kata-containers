@@ -7,7 +7,9 @@ use anyhow::{anyhow, bail, Context, Error, Result};
 use libc::uid_t;
 use nix::errno::Errno;
 use nix::fcntl::{self, OFlag};
-use nix::mount::{self, MntFlags, MsFlags};
+#[cfg(not(test))]
+use nix::mount;
+use nix::mount::{MntFlags, MsFlags};
 use nix::sys::stat::{self, Mode, SFlag};
 use nix::unistd::{self, Gid, Uid};
 use nix::NixPath;

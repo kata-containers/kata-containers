@@ -7,10 +7,8 @@
 use crate::linux_abi::*;
 use crate::mount::{get_mount_fs_type, remove_mounts, TYPEROOTFS};
 use crate::namespace::Namespace;
-use crate::namespace::NSTYPEPID;
 use crate::network::Network;
 use anyhow::{anyhow, Context, Result};
-use cgroups;
 use libc::pid_t;
 use netlink::{RtnlHandle, NETLINK_ROUTE};
 use oci::{Hook, Hooks};

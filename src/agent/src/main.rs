@@ -25,7 +25,6 @@ extern crate scopeguard;
 
 #[macro_use]
 extern crate slog;
-#[macro_use]
 extern crate netlink;
 
 use crate::netlink::{RtnlHandle, NETLINK_ROUTE};
@@ -637,8 +636,6 @@ fn run_debug_console_shell(logger: &Logger, shell: &str, socket_fd: RawFd) -> Re
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::fs::File;
-    use std::io::Write;
     use tempfile::tempdir;
 
     #[test]
