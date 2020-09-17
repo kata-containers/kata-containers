@@ -5,9 +5,20 @@
 
 dist: bionic
 os: linux
-language: go
-go: 1.14.4
 env: target_branch=$TRAVIS_BRANCH
+
+# set cache directories manually, because
+# we are using a non-standard directory struct
+# cargo root is in srs/agent
+#
+# If needed, caches can be cleared
+# by ways documented in
+# https://docs.travis-ci.com/user/caching#clearing-caches
+language: rust
+cache:
+  cargo: true
+  directories:
+    - src/agent/target
 
 before_install:
   - git remote set-branches --add origin "${TRAVIS_BRANCH}"
@@ -26,7 +37,6 @@ install:
 
 before_script:
   - "ci/install_go.sh"
-  - "ci/install_vc.sh"
   - make -C ${TRAVIS_BUILD_DIR}/src/runtime
   - make -C ${TRAVIS_BUILD_DIR}/src/runtime test
   - sudo -E PATH=$PATH GOPATH=$GOPATH make -C ${TRAVIS_BUILD_DIR}/src/runtime test
