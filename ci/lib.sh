@@ -17,9 +17,9 @@ clone_tests_repo()
 
 	go get -d -u "$tests_repo" || true
 
-       if [ -n "${TRAVIS_BRANCH:-}" ]; then
-               ( cd "${tests_repo_dir}" && git checkout "${TRAVIS_BRANCH}" )
-       fi
+	if [ -n "${TRAVIS_BRANCH:-}" ]; then
+		( cd "${tests_repo_dir}" && git checkout "${TRAVIS_BRANCH}" )
+	fi
 }
 
 run_static_checks()
