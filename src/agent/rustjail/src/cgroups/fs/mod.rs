@@ -468,7 +468,7 @@ fn build_blk_io_device_throttle_resource(
 fn linux_device_to_cgroup_device(d: &LinuxDevice) -> DeviceResource {
     let dev_type = DeviceType::from_char(d.r#type.chars().next()).unwrap();
 
-    let mut permissions = vec![
+    let permissions = vec![
         DevicePermissions::Read,
         DevicePermissions::Write,
         DevicePermissions::MkNod,
@@ -518,7 +518,7 @@ fn lines_to_map(content: &str) -> HashMap<String, u64> {
         .lines()
         .map(|x| x.split_whitespace().collect::<Vec<&str>>())
         .filter(|x| x.len() == 2 && x[1].parse::<u64>().is_ok())
-        .fold(HashMap::new(), |mut hm, mut x| {
+        .fold(HashMap::new(), |mut hm, x| {
             hm.insert(x[0].to_string(), x[1].parse::<u64>().unwrap());
             hm
         })
