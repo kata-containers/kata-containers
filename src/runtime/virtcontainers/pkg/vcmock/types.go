@@ -88,34 +88,5 @@ type VCMock struct {
 	SetFactoryFunc func(ctx context.Context, factory vc.Factory)
 
 	CreateSandboxFunc  func(ctx context.Context, sandboxConfig vc.SandboxConfig) (vc.VCSandbox, error)
-	DeleteSandboxFunc  func(ctx context.Context, sandboxID string) (vc.VCSandbox, error)
-	ListSandboxFunc    func(ctx context.Context) ([]vc.SandboxStatus, error)
-	FetchSandboxFunc   func(ctx context.Context, sandboxID string) (vc.VCSandbox, error)
-	RunSandboxFunc     func(ctx context.Context, sandboxConfig vc.SandboxConfig) (vc.VCSandbox, error)
-	StartSandboxFunc   func(ctx context.Context, sandboxID string) (vc.VCSandbox, error)
-	StatusSandboxFunc  func(ctx context.Context, sandboxID string) (vc.SandboxStatus, error)
-	StatsContainerFunc func(ctx context.Context, sandboxID, containerID string) (vc.ContainerStats, error)
-	StatsSandboxFunc   func(ctx context.Context, sandboxID string) (vc.SandboxStats, []vc.ContainerStats, error)
-	StopSandboxFunc    func(ctx context.Context, sandboxID string, force bool) (vc.VCSandbox, error)
-
-	CreateContainerFunc      func(ctx context.Context, sandboxID string, containerConfig vc.ContainerConfig) (vc.VCSandbox, vc.VCContainer, error)
-	DeleteContainerFunc      func(ctx context.Context, sandboxID, containerID string) (vc.VCContainer, error)
-	EnterContainerFunc       func(ctx context.Context, sandboxID, containerID string, cmd types.Cmd) (vc.VCSandbox, vc.VCContainer, *vc.Process, error)
-	KillContainerFunc        func(ctx context.Context, sandboxID, containerID string, signal syscall.Signal, all bool) error
-	StartContainerFunc       func(ctx context.Context, sandboxID, containerID string) (vc.VCContainer, error)
-	StatusContainerFunc      func(ctx context.Context, sandboxID, containerID string) (vc.ContainerStatus, error)
-	StopContainerFunc        func(ctx context.Context, sandboxID, containerID string) (vc.VCContainer, error)
-	ProcessListContainerFunc func(ctx context.Context, sandboxID, containerID string, options vc.ProcessListOptions) (vc.ProcessList, error)
-	UpdateContainerFunc      func(ctx context.Context, sandboxID, containerID string, resources specs.LinuxResources) error
-	PauseContainerFunc       func(ctx context.Context, sandboxID, containerID string) error
-	ResumeContainerFunc      func(ctx context.Context, sandboxID, containerID string) error
-
-	AddDeviceFunc func(ctx context.Context, sandboxID string, info config.DeviceInfo) (api.Device, error)
-
-	AddInterfaceFunc     func(ctx context.Context, sandboxID string, inf *pbTypes.Interface) (*pbTypes.Interface, error)
-	RemoveInterfaceFunc  func(ctx context.Context, sandboxID string, inf *pbTypes.Interface) (*pbTypes.Interface, error)
-	ListInterfacesFunc   func(ctx context.Context, sandboxID string) ([]*pbTypes.Interface, error)
-	UpdateRoutesFunc     func(ctx context.Context, sandboxID string, routes []*pbTypes.Route) ([]*pbTypes.Route, error)
-	ListRoutesFunc       func(ctx context.Context, sandboxID string) ([]*pbTypes.Route, error)
 	CleanupContainerFunc func(ctx context.Context, sandboxID, containerID string, force bool) error
 }

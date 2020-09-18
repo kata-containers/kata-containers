@@ -317,12 +317,12 @@ func TestCreateContainerConfigFail(t *testing.T) {
 		MockID: testSandboxID,
 	}
 
-	testingImpl.CreateContainerFunc = func(ctx context.Context, sandboxID string, containerConfig vc.ContainerConfig) (vc.VCSandbox, vc.VCContainer, error) {
-		return sandbox, &vcmock.Container{}, nil
+	sandbox.CreateContainerFunc = func(conf vc.ContainerConfig) (vc.VCContainer, error) {
+		return &vcmock.Container{}, nil
 	}
 
 	defer func() {
-		testingImpl.CreateContainerFunc = nil
+		sandbox.CreateContainerFunc = nil
 	}()
 
 	tmpdir, err := ioutil.TempDir("", "")

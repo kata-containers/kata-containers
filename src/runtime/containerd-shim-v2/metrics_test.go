@@ -7,12 +7,11 @@
 package containerdshim
 
 import (
-	"context"
 	"testing"
 
 	"github.com/containerd/cgroups"
-	"github.com/containerd/containerd/namespaces"
 	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/vcmock"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -37,18 +36,21 @@ func TestStatNetworkMetric(t *testing.T) {
 		},
 	}
 
-	testingImpl.StatsContainerFunc = func(ctx context.Context, sandboxID, containerID string) (vc.ContainerStats, error) {
+	sandbox := &vcmock.Sandbox{
+		MockID: testSandboxID,
+	}
+
+	sandbox.StatsContainerFunc = func(contID string) (vc.ContainerStats, error) {
 		return vc.ContainerStats{
 			NetworkStats: mockNetwork,
 		}, nil
 	}
 
 	defer func() {
-		testingImpl.StatsContainerFunc = nil
+		sandbox.StatsContainerFunc = nil
 	}()
 
-	ctx := namespaces.WithNamespace(context.Background(), "UnitTest")
-	resp, err := testingImpl.StatsContainer(ctx, testSandboxID, testContainerID)
+	resp, err := sandbox.StatsContainer(testContainerID)
 	assert.NoError(err)
 
 	metrics := statsToMetrics(&resp)

@@ -28,7 +28,7 @@ func TestStartStartSandboxSuccess(t *testing.T) {
 		MockID: testSandboxID,
 	}
 
-	testingImpl.StatusContainerFunc = func(ctx context.Context, sandboxID, containerID string) (vc.ContainerStatus, error) {
+	sandbox.StatusContainerFunc = func(contID string) (vc.ContainerStatus, error) {
 		return vc.ContainerStatus{
 			ID: sandbox.ID(),
 			Annotations: map[string]string{
@@ -38,7 +38,7 @@ func TestStartStartSandboxSuccess(t *testing.T) {
 	}
 
 	defer func() {
-		testingImpl.StatusContainerFunc = nil
+		sandbox.StatusContainerFunc = nil
 	}()
 
 	s := &service{
@@ -58,12 +58,12 @@ func TestStartStartSandboxSuccess(t *testing.T) {
 		ID: testSandboxID,
 	}
 
-	testingImpl.StartSandboxFunc = func(ctx context.Context, sandboxID string) (vc.VCSandbox, error) {
-		return sandbox, nil
+	sandbox.StartFunc = func() error {
+		return nil
 	}
 
 	defer func() {
-		testingImpl.StartSandboxFunc = nil
+		sandbox.StartFunc = nil
 	}()
 
 	ctx := namespaces.WithNamespace(context.Background(), "UnitTest")
@@ -79,7 +79,7 @@ func TestStartMissingAnnotation(t *testing.T) {
 		MockID: testSandboxID,
 	}
 
-	testingImpl.StatusContainerFunc = func(ctx context.Context, sandboxID, containerID string) (vc.ContainerStatus, error) {
+	sandbox.StatusContainerFunc = func(contID string) (vc.ContainerStatus, error) {
 		return vc.ContainerStatus{
 			ID:          sandbox.ID(),
 			Annotations: map[string]string{},
@@ -87,7 +87,7 @@ func TestStartMissingAnnotation(t *testing.T) {
 	}
 
 	defer func() {
-		testingImpl.StatusContainerFunc = nil
+		sandbox.StatusContainerFunc = nil
 	}()
 
 	s := &service{
@@ -107,12 +107,12 @@ func TestStartMissingAnnotation(t *testing.T) {
 		ID: testSandboxID,
 	}
 
-	testingImpl.StartSandboxFunc = func(ctx context.Context, sandboxID string) (vc.VCSandbox, error) {
-		return sandbox, nil
+	sandbox.StartFunc = func() error {
+		return nil
 	}
 
 	defer func() {
-		testingImpl.StartSandboxFunc = nil
+		sandbox.StartFunc = nil
 	}()
 
 	_, err = s.Start(s.ctx, reqStart)
@@ -135,7 +135,7 @@ func TestStartStartContainerSucess(t *testing.T) {
 		},
 	}
 
-	testingImpl.StatusContainerFunc = func(ctx context.Context, sandboxID, containerID string) (vc.ContainerStatus, error) {
+	sandbox.StatusContainerFunc = func(contID string) (vc.ContainerStatus, error) {
 		return vc.ContainerStatus{
 			ID: testContainerID,
 			Annotations: map[string]string{
@@ -145,15 +145,15 @@ func TestStartStartContainerSucess(t *testing.T) {
 	}
 
 	defer func() {
-		testingImpl.StatusContainerFunc = nil
+		sandbox.StatusContainerFunc = nil
 	}()
 
-	testingImpl.StartContainerFunc = func(ctx context.Context, sandboxID, containerID string) (vc.VCContainer, error) {
+	sandbox.StartContainerFunc = func(contID string) (vc.VCContainer, error) {
 		return sandbox.MockContainers[0], nil
 	}
 
 	defer func() {
-		testingImpl.StartContainerFunc = nil
+		sandbox.StartContainerFunc = nil
 	}()
 
 	s := &service{
