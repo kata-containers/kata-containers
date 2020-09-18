@@ -126,6 +126,15 @@ fn main() -> Result<()> {
     let writer = unsafe { File::from_raw_fd(wfd) };
 
     let agentConfig = AGENT_CONFIG.clone();
+    // once parsed cmdline and set the config, release the write lock
+    // as soon as possible in case other thread would get read lock on
+    // it.
+    {
+        let mut config = agentConfig.write().unwrap();
+        config.parse_cmdline(KERNEL_CMDLINE_FILE)?;
+    }
+
+    let config = agentConfig.read().unwrap();
 
     let init_mode = unistd::getpid() == Pid::from_raw(1);
     if init_mode {
@@ -139,18 +148,9 @@ fn main() -> Result<()> {
         // since before do the base mount, it wouldn't access "/proc/cmdline"
         // to get the customzied debug level.
         let logger = logging::create_logger(NAME, "agent", slog::Level::Debug, writer);
-        init_agent_as_init(&logger)?;
+        init_agent_as_init(&logger, config.unified_cgroup_hierarchy)?;
     }
 
-    // once parsed cmdline and set the config, release the write lock
-    // as soon as possible in case other thread would get read lock on
-    // it.
-    {
-        let mut config = agentConfig.write().unwrap();
-        config.parse_cmdline(KERNEL_CMDLINE_FILE)?;
-    }
-
-    let config = agentConfig.read().unwrap();
     let log_vport = config.log_vport as u32;
     let log_handle = thread::spawn(move || -> Result<()> {
         let mut reader = unsafe { File::from_raw_fd(rfd) };
@@ -334,9 +334,9 @@ fn setup_signal_handler(logger: &Logger, sandbox: Arc<Mutex<Sandbox>>) -> Result
 
 // init_agent_as_init will do the initializations such as setting up the rootfs
 // when this agent has been run as the init process.
-fn init_agent_as_init(logger: &Logger) -> Result<()> {
+fn init_agent_as_init(logger: &Logger, unified_cgroup_hierarchy: bool) -> Result<()> {
     general_mount(logger)?;
-    cgroups_mount(logger)?;
+    cgroups_mount(logger, unified_cgroup_hierarchy)?;
 
     fs::remove_file(Path::new("/dev/ptmx"))?;
     unixfs::symlink(Path::new("/dev/pts/ptmx"), Path::new("/dev/ptmx"))?;
