@@ -42,10 +42,7 @@ EOT
 }
 
 repos=(
-	"agent"
-	"proxy"
-	"runtime"
-	"shim"
+	"kata-containers"
 )
 
 get_release_info() {
