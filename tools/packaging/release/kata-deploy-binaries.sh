@@ -173,7 +173,7 @@ install_clh() {
 	kata_version="${kata_version}" "${script_dir}/../static-build/cloud-hypervisor/build-static-clh.sh"
 	info "Install static cloud-hypervisor"
 	mkdir -p "${destdir}/opt/kata/bin/"
-	sudo install -D --owner root --group root --mode 0744 cloud-hypervisor/cloud-hypervisor "${destdir}/opt/kata/bin/cloud-hypervisor"
+	sudo install -D --owner root --group root --mode 0744 cloud-hypervisor "${destdir}/opt/kata/bin/cloud-hypervisor"
 	pushd "${destdir}"
 	# create tarball for github release action
 	tar -czvf ../kata-static-clh.tar.gz *
