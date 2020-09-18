@@ -14,7 +14,7 @@ Wants=kata-containers.target
 # from a VM vsock port
 StandardOutput=tty
 Type=simple
-ExecStart=@bindir@/@kata-agent@
+ExecStart=@BINDIR@/@AGENT_NAME@
 LimitNOFILE=infinity
 # ExecStop is required for static agent tracing; in all other scenarios
 # the runtime handles shutting down the VM.

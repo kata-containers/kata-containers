@@ -83,13 +83,8 @@ lazy_static! {
 }
 
 fn announce(logger: &Logger, config: &agentConfig) {
-    let commit = match env::var("VERSION_COMMIT") {
-        Ok(s) => s,
-        Err(_) => String::from(""),
-    };
-
     info!(logger, "announce";
-    "agent-commit" => commit.as_str(),
+    "agent-commit" => version::VERSION_COMMIT,
 
     // Avoid any possibility of confusion with the old agent
     "agent-type" => "rust",
@@ -109,7 +104,7 @@ fn main() -> Result<()> {
             NAME,
             version::AGENT_VERSION,
             version::API_VERSION,
-            env::var("VERSION_COMMIT").unwrap_or("unknown".to_string())
+            version::VERSION_COMMIT,
         );
 
         exit(0);
