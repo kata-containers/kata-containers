@@ -542,7 +542,22 @@ pub fn get_mount_fs_type_from_file(mount_file: &str, mount_point: &str) -> Resul
     ))
 }
 
-pub fn get_cgroup_mounts(logger: &Logger, cg_path: &str) -> Result<Vec<INIT_MOUNT>> {
+pub fn get_cgroup_mounts(
+    logger: &Logger,
+    cg_path: &str,
+    unified_cgroup_hierarchy: bool,
+) -> Result<Vec<INIT_MOUNT>> {
+    // cgroup v2
+    // https://github.com/kata-containers/agent/blob/8c9bbadcd448c9a67690fbe11a860aaacc69813c/agent.go#L1249
+    if unified_cgroup_hierarchy {
+        return Ok(vec![INIT_MOUNT {
+            fstype: "cgroup2",
+            src: "cgroup2",
+            dest: "/sys/fs/cgroup",
+            options: vec!["nosuid", "nodev", "noexec", "relatime", "nsdelegate"],
+        }]);
+    }
+
     let file = File::open(&cg_path)?;
     let reader = BufReader::new(file);
 
@@ -617,10 +632,10 @@ pub fn get_cgroup_mounts(logger: &Logger, cg_path: &str) -> Result<Vec<INIT_MOUN
     Ok(cg_mounts)
 }
 
-pub fn cgroups_mount(logger: &Logger) -> Result<()> {
+pub fn cgroups_mount(logger: &Logger, unified_cgroup_hierarchy: bool) -> Result<()> {
     let logger = logger.new(o!("subsystem" => "mount"));
 
-    let cgroups = get_cgroup_mounts(&logger, PROC_CGROUPS)?;
+    let cgroups = get_cgroup_mounts(&logger, PROC_CGROUPS, unified_cgroup_hierarchy)?;
 
     for cg in cgroups.iter() {
         mount_to_rootfs(&logger, cg)?;
@@ -1072,6 +1087,20 @@ mod tests {
     }
 
     #[test]
+    fn test_get_cgroup_v2_mounts() {
+        let dir = tempdir().expect("failed to create tmpdir");
+        let drain = slog::Discard;
+        let logger = slog::Logger::root(drain, o!());
+        let result = get_cgroup_mounts(&logger, "", true);
+
+        assert_eq!(true, result.is_ok());
+        let result = result.unwrap();
+        assert_eq!(1, result.len());
+        assert_eq!(result[0].fstype, "cgroup2");
+        assert_eq!(result[0].src, "cgroup2");
+    }
+
+    #[test]
     fn test_get_cgroup_mounts() {
         #[derive(Debug)]
         struct TestData<'a> {
@@ -1175,7 +1204,7 @@ mod tests {
         ];
 
         // First, test a missing file
-        let result = get_cgroup_mounts(&logger, enoent_filename);
+        let result = get_cgroup_mounts(&logger, enoent_filename, false);
 
         assert!(result.is_err());
         let error_msg = format!("{}", result.unwrap_err());
@@ -1198,7 +1227,7 @@ mod tests {
             file.write_all(d.contents.as_bytes())
                 .expect(&format!("{}: failed to write file contents", msg));
 
-            let result = get_cgroup_mounts(&logger, filename);
+            let result = get_cgroup_mounts(&logger, filename, false);
             let msg = format!("{}: result: {:?}", msg, result);
 
             if d.error_contains != "" {

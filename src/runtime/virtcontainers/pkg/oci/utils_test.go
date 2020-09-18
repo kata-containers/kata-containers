@@ -17,6 +17,7 @@ import (
 	"testing"
 
 	"github.com/cri-o/cri-o/pkg/annotations"
+	crioAnnotations "github.com/cri-o/cri-o/pkg/annotations"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/sys/unix"
@@ -865,4 +866,35 @@ func TestAddRuntimeAnnotations(t *testing.T) {
 	assert.Equal(config.SandboxCgroupOnly, true)
 	assert.Equal(config.NetworkConfig.DisableNewNetNs, true)
 	assert.Equal(config.NetworkConfig.InterworkingModel, vc.NetXConnectMacVtapModel)
+}
+
+func TestIsCRIOContainerManager(t *testing.T) {
+	assert := assert.New(t)
+
+	testCases := []struct {
+		annotations map[string]string
+		result      bool
+	}{
+		{
+			annotations: map[string]string{crioAnnotations.ContainerType: "abc"},
+			result:      false,
+		},
+		{
+			annotations: map[string]string{crioAnnotations.ContainerType: crioAnnotations.ContainerTypeSandbox},
+			result:      true,
+		},
+		{
+			annotations: map[string]string{crioAnnotations.ContainerType: crioAnnotations.ContainerTypeContainer},
+			result:      true,
+		},
+	}
+
+	for i := range testCases {
+		tc := testCases[i]
+		ocispec := specs.Spec{
+			Annotations: tc.annotations,
+		}
+		result := IsCRIOContainerManager(&ocispec)
+		assert.Equal(tc.result, result, "test case %d", (i + 1))
+	}
 }

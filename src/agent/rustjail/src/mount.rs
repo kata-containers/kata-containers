@@ -176,6 +176,38 @@ pub fn init_rootfs(
     Ok(())
 }
 
+fn mount_cgroups_v2(cfd_log: RawFd, m: &Mount, rootfs: &str, flags: MsFlags) -> Result<()> {
+    let olddir = unistd::getcwd()?;
+    unistd::chdir(rootfs)?;
+
+    // https://github.com/opencontainers/runc/blob/09ddc63afdde16d5fb859a1d3ab010bd45f08497/libcontainer/rootfs_linux.go#L287
+    let bm = Mount {
+        source: "cgroup".to_string(),
+        r#type: "cgroup2".to_string(),
+        destination: m.destination.clone(),
+        options: Vec::new(),
+    };
+
+    let mount_flags: MsFlags = flags;
+
+    mount_from(cfd_log, &bm, rootfs, mount_flags, "", "")?;
+
+    unistd::chdir(&olddir)?;
+
+    if flags.contains(MsFlags::MS_RDONLY) {
+        let dest = format!("{}{}", rootfs, m.destination.as_str());
+        mount::mount(
+            Some(dest.as_str()),
+            dest.as_str(),
+            None::<&str>,
+            flags | MsFlags::MS_BIND | MsFlags::MS_REMOUNT,
+            None::<&str>,
+        )?;
+    }
+
+    Ok(())
+}
+
 fn mount_cgroups(
     cfd_log: RawFd,
     m: &Mount,
@@ -185,6 +217,9 @@ fn mount_cgroups(
     cpath: &HashMap<String, String>,
     mounts: &HashMap<String, String>,
 ) -> Result<()> {
+    if cgroups::hierarchies::is_cgroup2_unified_mode() {
+        return mount_cgroups_v2(cfd_log, &m, rootfs, flags);
+    }
     // mount tmpfs
     let ctm = Mount {
         source: "tmpfs".to_string(),
@@ -194,7 +229,6 @@ fn mount_cgroups(
     };
 
     let cflags = MsFlags::MS_NOEXEC | MsFlags::MS_NOSUID | MsFlags::MS_NODEV;
-    //  info!(logger, "tmpfs");
     mount_from(cfd_log, &ctm, rootfs, cflags, "", "")?;
     let olddir = unistd::getcwd()?;
 
@@ -527,29 +561,23 @@ fn mount_from(
         if src.is_file() {
             let _ = OpenOptions::new().create(true).write(true).open(&dest);
         }
-        src
+        src.to_str().unwrap().to_string()
     } else {
         let _ = fs::create_dir_all(&dest);
-        PathBuf::from(&m.source)
-    };
-
-    // ignore this check since some mount's src didn't been a directory
-    // such as tmpfs.
-    /*
-        match stat::stat(src.to_str().unwrap()) {
-            Ok(_) => {}
-            Err(e) => {
-                info!("{}: {}", src.to_str().unwrap(), e.as_errno().unwrap().desc());
-            }
+        if m.r#type.as_str() == "cgroup2" {
+            "cgroup2".to_string()
+        } else {
+            let tmp = PathBuf::from(&m.source);
+            tmp.to_str().unwrap().to_string()
         }
-    */
+    };
 
     match stat::stat(dest.as_str()) {
         Ok(_) => {}
         Err(e) => {
             log_child!(
                 cfd_log,
-                "{}: {}",
+                "dest stat error. {}: {}",
                 dest.as_str(),
                 e.as_errno().unwrap().desc()
             );
@@ -557,7 +585,7 @@ fn mount_from(
     }
 
     match mount::mount(
-        Some(src.to_str().unwrap()),
+        Some(src.as_str()),
         dest.as_str(),
         Some(m.r#type.as_str()),
         flags,

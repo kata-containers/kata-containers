@@ -7,6 +7,7 @@ package containerdshim
 
 import (
 	"context"
+	"os"
 	"path"
 	"time"
 
@@ -15,6 +16,8 @@ import (
 	"github.com/containerd/containerd/mount"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc/codes"
+
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/oci"
 )
 
 func wait(s *service, c *container, execID string) (int32, error) {
@@ -146,12 +149,26 @@ func watchOOMEvents(ctx context.Context, s *service) {
 				// If the GetOOMEvent call is not implemented, then the agent is most likely an older version,
 				// stop attempting to get OOM events.
 				// for rust agent, the response code is not found
-				if isGRPCErrorCode(codes.NotFound, err) {
+				if isGRPCErrorCode(codes.NotFound, err) || err.Error() == "Dead agent" {
 					return
 				}
 				continue
 			}
 
+			// write oom file for CRI-O
+			if c, ok := s.containers[containerID]; ok && oci.IsCRIOContainerManager(c.spec) {
+				oomPath := path.Join(c.bundle, "oom")
+				shimLog.Infof("write oom file to notify CRI-O: %s", oomPath)
+
+				f, err := os.OpenFile(oomPath, os.O_CREATE, 0666)
+				if err != nil {
+					shimLog.WithError(err).Warnf("failed to write oom file %s", oomPath)
+				} else {
+					f.Close()
+				}
+			}
+
+			// publish event for containerd
 			s.send(&events.TaskOOM{
 				ContainerID: containerID,
 			})
