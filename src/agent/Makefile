@@ -57,12 +57,27 @@ INIT := no
 # Path to systemd unit directory if installed as not init.
 UNIT_DIR := /usr/lib/systemd/system
 
+GENERATED_CODE = src/version.rs
+
+AGENT_NAME=$(TARGET)
+API_VERSION=0.0.1
+AGENT_VERSION=$(VERSION)
+
+GENERATED_REPLACEMENTS= \
+    AGENT_NAME \
+    AGENT_VERSION \
+    API_VERSION \
+    BINDIR \
+    COMMIT \
+    VERSION_COMMIT
 GENERATED_FILES :=
+
+GENERATED_FILES += $(GENERATED_CODE)
 
 ifeq ($(INIT),no)
     # Unit file to start kata agent in systemd systems
     UNIT_FILES = kata-agent.service
-    GENERATED_FILES := $(UNIT_FILES)
+    GENERATED_FILES += $(UNIT_FILES)
     # Target to be reached in systemd services
     UNIT_FILES += kata-containers.target
 endif
@@ -86,7 +101,7 @@ endef
 
 default: $(TARGET) show-header
 
-$(TARGET): $(TARGET_PATH)
+$(TARGET): $(GENERATED_CODE) $(TARGET_PATH)
 
 $(TARGET_PATH): $(SOURCES) | show-summary
 	@cargo build --target $(TRIPLE) --$(BUILD_TYPE)
@@ -98,16 +113,14 @@ show-header:
 	@printf "%s - version %s (commit %s)\n\n" "$(TARGET)" "$(VERSION)" "$(COMMIT_MSG)"
 
 $(GENERATED_FILES): %: %.in
-	@sed \
-		-e 's|[@]bindir[@]|$(BINDIR)|g' \
-		-e 's|[@]kata-agent[@]|$(TARGET)|g' \
-		"$<" > "$@"
+	@sed $(foreach r,$(GENERATED_REPLACEMENTS),-e 's|@$r@|$($r)|g') "$<" > "$@"
 
 install: build-service
 	@install -D $(TARGET_PATH) $(DESTDIR)/$(BINDIR)/$(TARGET)
 
 clean:
 	@cargo clean
+	@rm -f $(GENERATED_FILES)
 
 test:
 	@cargo test --all --target $(TRIPLE)
