@@ -138,11 +138,9 @@ More information [Limitations][limitations]
 [kernel]: ${kernel_url}/linux-${kernel_version#v}.tar.xz
 [kernel-patches]: https://github.com/kata-containers/packaging/tree/${kata_kernel_config_version}/kernel/patches
 [kernel-config]: https://github.com/kata-containers/packaging/tree/${kata_kernel_config_version}/kernel/configs
-[agent]: https://github.com/kata-containers/agent/releases/tag/${runtime_version}
-[image]: https://github.com/kata-containers/osbuilder/releases/tag/${runtime_version}
 [ocispec]: https://github.com/opencontainers/runtime-spec/releases/tag/${oci_spec_version}
-[limitations]: https://github.com/kata-containers/documentation/blob/master/Limitations.md
-[installation]: https://github.com/kata-containers/documentation/tree/master/install
+[limitations]: https://github.com/kata-containers/kata-containers/blob/${new_release}/docs/Limitations.md
+[installation]: https://github.com/kata-containers/kata-containers/blob/${new_release}/docs/install
 EOT
 }
 
