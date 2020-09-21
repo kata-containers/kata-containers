@@ -7,7 +7,9 @@ dist: bionic
 os: linux
 language: go
 go: 1.14.4
-env: target_branch=$TRAVIS_BRANCH
+env:
+  - target_branch=$TRAVIS_BRANCH
+  - RUST_BACKTRACE=1
 
 before_install:
   - git remote set-branches --add origin "${TRAVIS_BRANCH}"
