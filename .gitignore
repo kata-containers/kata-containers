@@ -3,3 +3,4 @@
 **/*.rej
 **/target
 **/.vscode
+src/agent/src/version.rs
