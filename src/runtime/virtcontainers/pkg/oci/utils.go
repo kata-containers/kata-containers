@@ -19,6 +19,7 @@ import (
 	crioAnnotations "github.com/cri-o/cri-o/pkg/annotations"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/sirupsen/logrus"
+	"k8s.io/apimachinery/pkg/api/resource"
 
 	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
@@ -441,6 +442,20 @@ func addHypervisorConfigOverrides(ocispec specs.Spec, config *vc.SandboxConfig) 
 		if value != "" {
 			config.HypervisorConfig.EntropySource = value
 		}
+	}
+	if epcSize, ok := ocispec.Annotations[vcAnnotations.SGXEPC]; ok {
+		quantity, err := resource.ParseQuantity(epcSize)
+		if err != nil {
+			return fmt.Errorf("Couldn't parse EPC '%v': %v", err, epcSize)
+		}
+
+		if quantity.Format != resource.BinarySI {
+			return fmt.Errorf("Unsupported EPC format '%v': use Ki | Mi | Gi | Ti | Pi | Ei as suffix", epcSize)
+		}
+
+		size, _ := quantity.AsInt64()
+
+		config.HypervisorConfig.SGXEPCSize = size
 	}
 
 	return nil

@@ -56,6 +56,8 @@ const defaultVhostUserStorePath string = "/var/run/kata-containers/vhost-user/"
 const defaultRxRateLimiterMaxRate = uint64(0)
 const defaultTxRateLimiterMaxRate = uint64(0)
 
+var defaultSGXEPCSize = int64(0)
+
 const defaultTemplatePath string = "/run/vc/vm/template"
 const defaultVMCacheEndpoint string = "/var/run/kata-containers/cache.sock"
 
