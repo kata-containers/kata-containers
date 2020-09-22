@@ -43,7 +43,8 @@ include $(ARCH_FILE)
 PROJECT_TYPE = kata
 PROJECT_NAME = Kata Containers
 PROJECT_TAG = kata-containers
-PROJECT_URL = https://github.com/kata-containers
+PROJECT_ORG = $(PROJECT_TAG)
+PROJECT_URL = https://github.com/$(PROJECT_ORG)
 PROJECT_BUG_URL = $(PROJECT_URL)/kata-containers/issues/new
 
 # list of scripts to install
@@ -628,6 +629,7 @@ $(GENERATED_FILES): %: %.in $(MAKEFILE_LIST) VERSION .git-commit
 		-e "s|@PKGRUNDIR@|$(PKGRUNDIR)|g" \
 		-e "s|@NETMONPATH@|$(NETMONPATH)|g" \
 		-e "s|@PROJECT_BUG_URL@|$(PROJECT_BUG_URL)|g" \
+		-e "s|@PROJECT_ORG@|$(PROJECT_ORG)|g" \
 		-e "s|@PROJECT_URL@|$(PROJECT_URL)|g" \
 		-e "s|@PROJECT_NAME@|$(PROJECT_NAME)|g" \
 		-e "s|@PROJECT_TAG@|$(PROJECT_TAG)|g" \
