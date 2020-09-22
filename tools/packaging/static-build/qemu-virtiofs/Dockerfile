@@ -60,7 +60,7 @@ RUN cat patches_virtiofs
 RUN [ ! -s patches_virtiofs ] || git apply $(cat patches_virtiofs)
 
 RUN cat VERSION | awk 'BEGIN{FS=OFS="."}{print $1 "." $2 ".x"}' > stable_branch
-RUN echo "root/kata_qemu_patches/$(cat stable_branch)/" > patches_qemu_dir
+RUN echo "/root/kata_qemu_patches/$(cat stable_branch)/" > patches_qemu_dir
 RUN echo "patches dir $(cat patches_qemu_dir)"
 RUN find "$(cat patches_qemu_dir)" -name '*.patch' -type f |sort -t- -k1,1n > patches_qemu
 RUN echo "Patches to apply for qemu:"
