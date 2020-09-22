@@ -71,14 +71,16 @@ After completing, the original `daemon.json`, if it existed, is restored and all
 ### Install Kata on a running Kubernetes cluster
 
 ```sh
-$ kubectl apply -f https://raw.githubusercontent.com/kata-containers/packaging/master/kata-deploy/kata-rbac/base/kata-rbac.yaml
-$ kubectl apply -f https://raw.githubusercontent.com/kata-containers/packaging/master/kata-deploy/kata-deploy/base/kata-deploy.yaml
+$ cd $GOPATH/src/github.com/kata-containers/kata-containers/tools/packaging/kata-deploy
+$ kubectl apply -f kata-rbac/base/kata-rbac.yaml
+$ kubectl apply -f kata-deploy/base/kata-deploy.yaml
 ```
 
 or on a [k3s](https://k3s.io/) cluster:
 
 ```sh
-$ kubectl apply -k github.com/kata-containers/packaging/kata-deploy/kata-deploy/overlays/k3s
+$ cd $GOPATH/src/github.com/kata-containers/kata-containers/tools/packaging/kata-deploy
+$ kubectl apply -k kata-deploy/overlays/k3s
 ```
 
 ### Run a sample workload
@@ -90,30 +92,35 @@ run through an applicable runtime if they are marked with the appropriate `runti
 `runtimeClass` is a built-in type in Kubernetes versions 1.14 and greater. In Kubernetes 1.13, `runtimeClass`
 is defined through a custom resource definition. For Kubernetes 1.13:
 ```sh
-  $ kubectl apply -f https://raw.githubusercontent.com/kata-containers/packaging/master/kata-deploy/k8s-1.13/runtimeclass-crd.yaml
+  $ cd $GOPATH/src/github.com/kata-containers/kata-containers/tools/packaging/kata-deploy/k8s-1.13
+  $ kubectl apply -f runtimeclass-crd.yaml
 ```
 
 In order to use a workload Kata with QEMU, first add a `RuntimeClass` as:
 - For Kubernetes 1.14:
   ```sh
-  $ kubectl apply -f https://raw.githubusercontent.com/kata-containers/packaging/master/kata-deploy/k8s-1.14/kata-qemu-runtimeClass.yaml
+  $ cd $GOPATH/src/github.com/kata-containers/kata-containers/tools/packaging/kata-deploy/k8s-1.14
+  $ kubectl apply -f kata-qemu-runtimeClass.yaml
   ```
 
 - For Kubernetes 1.13:
   ```sh
-  $ kubectl apply -f https://raw.githubusercontent.com/kata-containers/packaging/master/kata-deploy/k8s-1.13/kata-qemu-runtimeClass.yaml
+  $ cd $GOPATH/src/github.com/kata-containers/kata-containers/tools/packaging/kata-deploy/k8s-1.13
+  $ kubectl apply -f kata-qemu-runtimeClass.yaml
   ```
 
 
 In order to use a workload Kata with Firecracker, first add a `RuntimeClass` as:
 - For Kubernetes 1.14:
   ```sh
-  $ kubectl apply -f https://raw.githubusercontent.com/kata-containers/packaging/master/kata-deploy/k8s-1.14/kata-fc-runtimeClass.yaml
+  $ cd $GOPATH/src/github.com/kata-containers/kata-containers/tools/packaging/kata-deploy/k8s-1.14
+  $ kubectl apply -f kata-fc-runtimeClass.yaml
   ```
 
 - For Kubernetes  1.13:
   ```sh
-  $ kubectl apply -f https://raw.githubusercontent.com/kata-containers/packaging/master/kata-deploy/k8s-1.13/kata-fc-runtimeClass.yaml
+  $ cd $GOPATH/src/github.com/kata-containers/kata-containers/tools/packaging/kata-deploy/k8s-1.13
+  $ kubectl apply -f kata-fc-runtimeClass.yaml
   ```
 
 The following YAML snippet shows how to specify a workload should use Kata with QEMU:
@@ -137,29 +144,33 @@ spec:
 To run an example with `kata-qemu`:
 
 ```sh
-$ kubectl apply -f https://raw.githubusercontent.com/kata-containers/packaging/master/kata-deploy/examples/test-deploy-kata-qemu.yaml
+$ cd $GOPATH/src/github.com/kata-containers/kata-containers/tools/packaging/kata-deploy/examples
+$ kubectl apply -f test-deploy-kata-qemu.yaml
 ```
 
 To run an example with `kata-fc`:
 
 ```sh
-$ kubectl apply -f https://raw.githubusercontent.com/kata-containers/packaging/master/kata-deploy/examples/test-deploy-kata-fc.yaml
+$ cd $GOPATH/src/github.com/kata-containers/kata-containers/tools/packaging/kata-deploy/examples
+$ kubectl apply -f test-deploy-kata-fc.yaml
 ```
 
 The following removes the test pods:
 
 ```sh
-$ kubectl delete -f https://raw.githubusercontent.com/kata-containers/packaging/master/kata-deploy/examples/test-deploy-kata-qemu.yaml
-$ kubectl delete -f https://raw.githubusercontent.com/kata-containers/packaging/master/kata-deploy/examples/test-deploy-kata-fc.yaml
+$ cd $GOPATH/src/github.com/kata-containers/kata-containers/tools/packaging/kata-deploy/examples
+$ kubectl delete -f test-deploy-kata-qemu.yaml
+$ kubectl delete -f test-deploy-kata-fc.yaml
 ```
 
 ### Remove Kata from the Kubernetes cluster
 
 ```sh
-$ kubectl delete -f kata-deploy.yaml
-$ kubectl apply -f kata-cleanup.yaml
-$ kubectl delete -f kata-cleanup.yaml
-$ kubectl delete -f kata-rbac.yaml
+$ cd $GOPATH/src/github.com/kata-containers/kata-containers/tools/packaging/kata-deploy
+$ kubectl delete -f kata-deploy/base/kata-deploy.yaml
+$ kubectl apply -f kata-cleanup/base/kata-cleanup.yaml
+$ kubectl delete -f kata-cleanup/base/kata-cleanup.yaml
+$ kubectl delete -f kata-rbac/base/kata-rbac.yaml
 ```
 
 ## `kata-deploy` details
