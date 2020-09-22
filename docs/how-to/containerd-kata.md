@@ -193,13 +193,16 @@ From Containerd v1.2.4 and Kata v1.6.0, there is a new runtime option supported,
 ```toml
       [plugins.cri.containerd.runtimes.kata]
          runtime_type = "io.containerd.kata.v2"
+	 privileged_without_host_devices = true
 	 [plugins.cri.containerd.runtimes.kata.options]
 	   ConfigPath = "/etc/kata-containers/config.toml"
 ```
 
+`privileged_without_host_devices` tells containerd that a privileged Kata container should not have direct access to all host devices. If unset, containerd will pass all host devices to Kata container, which may cause security issues.
+
 This `ConfigPath` option is optional. If you do not specify it, shimv2 first tries to get the configuration file from the environment variable `KATA_CONF_FILE`. If neither are set, shimv2 will use the default Kata configuration file paths (`/etc/kata-containers/configuration.toml` and `/usr/share/defaults/kata-containers/configuration.toml`).
 
-If you use Containerd older than v1.2.4 or a version of Kata older than v1.6.0  and also want to specify a configuration file, you can use the following workaround, since the shimv2 accepts an environment variable, `KATA_CONF_FILE` for the configuration file path. Then, you can create a 
+If you use Containerd older than v1.2.4 or a version of Kata older than v1.6.0  and also want to specify a configuration file, you can use the following workaround, since the shimv2 accepts an environment variable, `KATA_CONF_FILE` for the configuration file path. Then, you can create a
 shell script with the following:
 
 ```bash
