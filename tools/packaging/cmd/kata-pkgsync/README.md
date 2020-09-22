@@ -42,12 +42,12 @@ of packages, to avoid re-downloading files if already done.
 
 Install with:
 ```
-$ go get github.com/kata-containers/packaging/cmd/kata-pkgsync`
+$ go get github.com/kata-containers/kata-containers`
 ```
 
 Create your configuration:
 ```
-$ cd $GOPATH/src/github.com/kata-containers/packaging/cmd/kata-pkgsync
+$ cd $GOPATH/src/github.com/kata-containers/kata-containers/tools/packaging/cmd/kata-pkgsync
 $ cp config-example.yaml config.yaml
 ```
 
