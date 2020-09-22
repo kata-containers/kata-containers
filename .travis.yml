@@ -5,8 +5,6 @@
 
 dist: bionic
 os: linux
-env: target_branch=$TRAVIS_BRANCH
-
 # set cache directories manually, because
 # we are using a non-standard directory struct
 # cargo root is in srs/agent
@@ -15,10 +13,17 @@ env: target_branch=$TRAVIS_BRANCH
 # by ways documented in
 # https://docs.travis-ci.com/user/caching#clearing-caches
 language: rust
+rust:
+  - 1.44.1
+  - stable
 cache:
   cargo: true
   directories:
     - src/agent/target
+
+env:
+  - target_branch=$TRAVIS_BRANCH
+  - RUST_BACKTRACE=1
 
 before_install:
   - git remote set-branches --add origin "${TRAVIS_BRANCH}"
@@ -28,9 +33,11 @@ before_install:
 # we use install to run check agent
 # so that it is easy to skip for non-amd64 platform
 install:
-  - "ci/install_rust.sh"
   - export PATH=$PATH:"$HOME/.cargo/bin"
   - export RUST_AGENT=yes
+  - rustup target add x86_64-unknown-linux-musl
+  - sudo ln -sf /usr/bin/g++ /bin/musl-g++
+  - rustup component add rustfmt
   - make -C ${TRAVIS_BUILD_DIR}/src/agent
   - make -C ${TRAVIS_BUILD_DIR}/src/agent check
   - sudo -E PATH=$PATH make -C ${TRAVIS_BUILD_DIR}/src/agent check
