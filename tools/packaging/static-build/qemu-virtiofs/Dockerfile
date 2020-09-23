@@ -54,10 +54,11 @@ ADD qemu /root/kata_qemu
 # Apply experimental specific patches
 # Patches to quick fix virtiofs fork
 ENV VIRTIOFS_PATCHES_DIR=/root/kata_qemu/patches/${QEMU_VIRTIOFS_TAG}/
-RUN find "${VIRTIOFS_PATCHES_DIR}" -name '*.patch' -type f |sort -t- -k1,1n > patches_virtiofs
-RUN echo "Patches to apply for virtiofs fixes:"
-RUN cat patches_virtiofs
-RUN [ ! -s patches_virtiofs ] || git apply $(cat patches_virtiofs)
+RUN if [ -d ${VIRTIOFS_PATCHES_DIR} ]; then \
+	echo "Patches to apply for virtiofs fixes:"; \
+	for patch in $(find "${VIRTIOFS_PATCHES_DIR}" -name '*.patch' -type f |sort -t- -k1,1n); do \
+		git apply $patch; \
+	done;fi
 RUN /root/kata_qemu/apply_patches.sh
 
 RUN PREFIX="${PREFIX}" /root/configure-hypervisor.sh -s kata-qemu | sed -e 's|--disable-seccomp||g' | xargs ./configure \
