@@ -25,7 +25,6 @@ before_install:
   - git remote set-branches --add origin "${TRAVIS_BRANCH}"
   - git fetch
   - export RUST_BACKTRACE=1
-  - export target_branch=$TRAVIS_BRANCH
   - "ci/setup.sh"
 
 # we use install to run check agent
