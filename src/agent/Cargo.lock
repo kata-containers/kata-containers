@@ -100,7 +100,7 @@ checksum = "4785bdd1c96b2a846b2bd7cc02e86b6b3dbf14e7e53446c4f54c92a361040822"
 [[package]]
 name = "cgroups"
 version = "0.1.1-alpha.0"
-source = "git+https://github.com/kata-containers/cgroups-rs?tag=0.1.1#3852d7c1805499cd6a0e37ec400d81a7085d91a7"
+source = "git+https://github.com/kata-containers/cgroups-rs?branch=stable-0.1.1#8717524f2c95aacd30768b6f0f7d7f2fddef5cac"
 dependencies = [
  "libc",
  "log",
