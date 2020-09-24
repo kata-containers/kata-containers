@@ -1447,7 +1447,7 @@ fn get_agent_details() -> AgentDetails {
 
     detail.set_version(AGENT_VERSION.to_string());
     detail.set_supports_seccomp(false);
-    detail.init_daemon = { unistd::getpid() == Pid::from_raw(1) };
+    detail.init_daemon = unistd::getpid() == Pid::from_raw(1);
 
     detail.device_handlers = RepeatedField::new();
     detail.storage_handlers = RepeatedField::from_vec(
