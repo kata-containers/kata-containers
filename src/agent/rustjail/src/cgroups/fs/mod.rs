@@ -91,7 +91,7 @@ impl CgroupManager for Manager {
         let h = cgroups::hierarchies::auto();
         let h = Box::new(&*h);
         let cg = load_or_create(h, &self.cpath);
-        cg.add_task(CgroupPid::from(pid as u64));
+        cg.add_task(CgroupPid::from(pid as u64))?;
         Ok(())
     }
 
@@ -194,10 +194,10 @@ impl CgroupManager for Manager {
         let freezer_controller: &FreezerController = cg.controller_of().unwrap();
         match state {
             FreezerState::Thawed => {
-                freezer_controller.thaw();
+                freezer_controller.thaw()?;
             }
             FreezerState::Frozen => {
-                freezer_controller.freeze();
+                freezer_controller.freeze()?;
             }
             _ => {
                 return Err(nix::Error::Sys(Errno::EINVAL).into());
@@ -363,11 +363,11 @@ fn set_cpu_resources(cg: &cgroups::Cgroup, cpu: &LinuxCPU) -> Result<()> {
     let cpuset_controller: &CpuSetController = cg.controller_of().unwrap();
 
     if !cpu.cpus.is_empty() {
-        cpuset_controller.set_cpus(&cpu.cpus);
+        cpuset_controller.set_cpus(&cpu.cpus)?;
     }
 
     if !cpu.mems.is_empty() {
-        cpuset_controller.set_mems(&cpu.mems);
+        cpuset_controller.set_mems(&cpu.mems)?;
     }
 
     let cpu_controller: &CpuController = cg.controller_of().unwrap();
@@ -379,11 +379,12 @@ fn set_cpu_resources(cg: &cgroups::Cgroup, cpu: &LinuxCPU) -> Result<()> {
             shares
         };
         if shares != 0 {
-            cpu_controller.set_shares(shares);
+            cpu_controller.set_shares(shares)?;
         }
     }
 
-    cpu_controller.set_cfs_quota_and_period(cpu.quota, cpu.period);
+    set_resource!(cpu_controller, set_cfs_quota, cpu, quota);
+    set_resource!(cpu_controller, set_cfs_period, cpu, period);
 
     set_resource!(cpu_controller, set_rt_runtime, cpu, realtime_runtime);
     set_resource!(cpu_controller, set_rt_period_us, cpu, realtime_period);
@@ -1059,7 +1060,7 @@ impl Manager {
             info!(sl!(), "updating cpuset for path {:?}", &r_path);
             let cg = load_or_create(h, &r_path);
             let cpuset_controller: &CpuSetController = cg.controller_of().unwrap();
-            cpuset_controller.set_cpus(cpuset_cpus);
+            cpuset_controller.set_cpus(cpuset_cpus)?;
         }
 
         Ok(())
