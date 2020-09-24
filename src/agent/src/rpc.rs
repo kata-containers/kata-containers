@@ -4,7 +4,7 @@
 //
 
 use std::path::Path;
-use std::sync::mpsc::{channel, Sender};
+use std::sync::mpsc::channel;
 use std::sync::{Arc, Mutex};
 use ttrpc;
 
@@ -40,7 +40,6 @@ use crate::metrics::get_metrics;
 use crate::mount::{add_storages, remove_mounts, BareMount, STORAGEHANDLERLIST};
 use crate::namespace::{NSTYPEIPC, NSTYPEPID, NSTYPEUTS};
 use crate::network::setup_guest_dns;
-use crate::network::Network;
 use crate::random;
 use crate::sandbox::Sandbox;
 use crate::version::{AGENT_VERSION, API_VERSION};
