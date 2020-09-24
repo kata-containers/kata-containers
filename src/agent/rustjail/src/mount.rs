@@ -176,7 +176,10 @@ pub fn init_rootfs(
     for m in &spec.mounts {
         let (mut flags, data) = parse_mount(&m);
         if !m.destination.starts_with("/") || m.destination.contains("..") {
-            return Err(anyhow!(nix::Error::Sys(Errno::EINVAL)));
+            return Err(anyhow!(
+                "the mount destination {} is invalid",
+                m.destination
+            ));
         }
         if m.r#type == "cgroup" {
             mount_cgroups(cfd_log, &m, rootfs, flags, &data, cpath, mounts)?;
