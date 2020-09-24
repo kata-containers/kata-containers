@@ -106,10 +106,10 @@ default: $(TARGET) show-header
 $(TARGET): $(GENERATED_CODE) $(TARGET_PATH)
 
 $(TARGET_PATH): $(SOURCES) | show-summary
-	@cargo build --target $(TRIPLE) --$(BUILD_TYPE)
+	@RUSTFLAGS="--deny warnings" cargo build --target $(TRIPLE) --$(BUILD_TYPE)
 
 optimize: $(SOURCES) | show-summary show-header
-	@RUSTFLAGS='-C link-arg=-s' cargo build --target $(TRIPLE) --$(BUILD_TYPE)
+	@RUSTFLAGS='-C link-arg=-s --deny-warnings' cargo build --target $(TRIPLE) --$(BUILD_TYPE)
 
 show-header:
 	@printf "%s - version %s (commit %s)\n\n" "$(TARGET)" "$(VERSION)" "$(COMMIT_MSG)"
