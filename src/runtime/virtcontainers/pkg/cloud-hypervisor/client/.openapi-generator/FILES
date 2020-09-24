@@ -17,7 +17,10 @@ docs/FsConfig.md
 docs/InitramfsConfig.md
 docs/KernelConfig.md
 docs/MemoryConfig.md
+docs/MemoryZoneConfig.md
 docs/NetConfig.md
+docs/NumaConfig.md
+docs/NumaDistance.md
 docs/PciDeviceInfo.md
 docs/PmemConfig.md
 docs/RestoreConfig.md
@@ -28,6 +31,7 @@ docs/VmConfig.md
 docs/VmInfo.md
 docs/VmRemoveDevice.md
 docs/VmResize.md
+docs/VmResizeZone.md
 docs/VmSnapshotConfig.md
 docs/VmmPingResponse.md
 docs/VsockConfig.md
@@ -44,7 +48,10 @@ model_fs_config.go
 model_initramfs_config.go
 model_kernel_config.go
 model_memory_config.go
+model_memory_zone_config.go
 model_net_config.go
+model_numa_config.go
+model_numa_distance.go
 model_pci_device_info.go
 model_pmem_config.go
 model_restore_config.go
@@ -55,6 +62,7 @@ model_vm_config.go
 model_vm_info.go
 model_vm_remove_device.go
 model_vm_resize.go
+model_vm_resize_zone.go
 model_vm_snapshot_config.go
 model_vmm_ping_response.go
 model_vsock_config.go
