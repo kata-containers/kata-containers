@@ -129,7 +129,6 @@ fn main() -> Result<()> {
 
     // support vsock log
     let (rfd, wfd) = unistd::pipe2(OFlag::O_CLOEXEC)?;
-    let writer = unsafe { File::from_raw_fd(wfd) };
 
     let agentConfig = AGENT_CONFIG.clone();
 
