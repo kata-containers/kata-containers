@@ -103,19 +103,16 @@ fn register_memory_event_v2(
                 }
                 info!(sl!(), "event.wd: {:?}", event.wd);
 
-                match event.wd {
-                    ev_fd => {
-                        let oom = get_value_from_cgroup(&event_control_path, "oom_kill");
-                        if oom.unwrap_or(0) > 0 {
-                            sender.send(containere_id.clone()).unwrap();
-                            return;
-                        }
+                if event.wd == ev_fd {
+                    let oom = get_value_from_cgroup(&event_control_path, "oom_kill");
+                    if oom.unwrap_or(0) > 0 {
+                        sender.send(containere_id.clone()).unwrap();
+                        return;
                     }
-                    cg_fd => {
-                        let pids = get_value_from_cgroup(&cgroup_event_control_path, "populated");
-                        if pids.unwrap_or(-1) == 0 {
-                            return;
-                        }
+                } else if event.wd == cg_fd {
+                    let pids = get_value_from_cgroup(&cgroup_event_control_path, "populated");
+                    if pids.unwrap_or(-1) == 0 {
+                        return;
                     }
                 }
             }
