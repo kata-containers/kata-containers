@@ -14,7 +14,7 @@ type VmConfig struct {
 	Memory MemoryConfig `json:"memory,omitempty"`
 	Kernel KernelConfig `json:"kernel"`
 	Initramfs *InitramfsConfig `json:"initramfs,omitempty"`
-	Cmdline CmdLineConfig `json:"cmdline"`
+	Cmdline CmdLineConfig `json:"cmdline,omitempty"`
 	Disks []DiskConfig `json:"disks,omitempty"`
 	Net []NetConfig `json:"net,omitempty"`
 	Rng RngConfig `json:"rng,omitempty"`
@@ -25,5 +25,6 @@ type VmConfig struct {
 	Devices []DeviceConfig `json:"devices,omitempty"`
 	Vsock VsockConfig `json:"vsock,omitempty"`
 	SgxEpc []SgxEpcConfig `json:"sgx_epc,omitempty"`
+	Numa []NumaConfig `json:"numa,omitempty"`
 	Iommu bool `json:"iommu,omitempty"`
 }

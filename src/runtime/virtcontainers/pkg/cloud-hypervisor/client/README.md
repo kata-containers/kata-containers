@@ -50,6 +50,7 @@ Class | Method | HTTP request | Description
 *DefaultApi* | [**VmInfoGet**](docs/DefaultApi.md#vminfoget) | **Get** /vm.info | Returns general information about the cloud-hypervisor Virtual Machine (VM) instance.
 *DefaultApi* | [**VmRemoveDevicePut**](docs/DefaultApi.md#vmremovedeviceput) | **Put** /vm.remove-device | Remove a device from the VM
 *DefaultApi* | [**VmResizePut**](docs/DefaultApi.md#vmresizeput) | **Put** /vm.resize | Resize the VM
+*DefaultApi* | [**VmResizeZonePut**](docs/DefaultApi.md#vmresizezoneput) | **Put** /vm.resize-zone | Resize a memory zone
 *DefaultApi* | [**VmRestorePut**](docs/DefaultApi.md#vmrestoreput) | **Put** /vm.restore | Restore a VM from a snapshot.
 *DefaultApi* | [**VmSnapshotPut**](docs/DefaultApi.md#vmsnapshotput) | **Put** /vm.snapshot | Returns a VM snapshot.
 *DefaultApi* | [**VmmPingGet**](docs/DefaultApi.md#vmmpingget) | **Get** /vmm.ping | Ping the VMM to check for API server availability
@@ -67,7 +68,10 @@ Class | Method | HTTP request | Description
  - [InitramfsConfig](docs/InitramfsConfig.md)
  - [KernelConfig](docs/KernelConfig.md)
  - [MemoryConfig](docs/MemoryConfig.md)
+ - [MemoryZoneConfig](docs/MemoryZoneConfig.md)
  - [NetConfig](docs/NetConfig.md)
+ - [NumaConfig](docs/NumaConfig.md)
+ - [NumaDistance](docs/NumaDistance.md)
  - [PciDeviceInfo](docs/PciDeviceInfo.md)
  - [PmemConfig](docs/PmemConfig.md)
  - [RestoreConfig](docs/RestoreConfig.md)
@@ -78,6 +82,7 @@ Class | Method | HTTP request | Description
  - [VmInfo](docs/VmInfo.md)
  - [VmRemoveDevice](docs/VmRemoveDevice.md)
  - [VmResize](docs/VmResize.md)
+ - [VmResizeZone](docs/VmResizeZone.md)
  - [VmSnapshotConfig](docs/VmSnapshotConfig.md)
  - [VmmPingResponse](docs/VmmPingResponse.md)
  - [VsockConfig](docs/VsockConfig.md)
