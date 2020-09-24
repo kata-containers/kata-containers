@@ -799,26 +799,23 @@ impl BaseContainer for LinuxContainer {
             unistd::close(pwfd);
         });
 
-        let mut child_stdin = std::process::Stdio::null();
-        let mut child_stdout = std::process::Stdio::null();
-        let mut child_stderr = std::process::Stdio::null();
-        let mut stdin = -1;
-        let mut stdout = -1;
-        let mut stderr = -1;
+        let mut child_stdin: std::process::Stdio;
+        let mut child_stdout: std::process::Stdio;
+        let mut child_stderr: std::process::Stdio;
 
         if tty {
-            let pseduo = pty::openpty(None, None)?;
-            p.term_master = Some(pseduo.master);
-            fcntl::fcntl(pseduo.master, FcntlArg::F_SETFD(FdFlag::FD_CLOEXEC));
-            fcntl::fcntl(pseduo.slave, FcntlArg::F_SETFD(FdFlag::FD_CLOEXEC));
+            let pseudo = pty::openpty(None, None)?;
+            p.term_master = Some(pseudo.master);
+            fcntl::fcntl(pseudo.master, FcntlArg::F_SETFD(FdFlag::FD_CLOEXEC));
+            fcntl::fcntl(pseudo.slave, FcntlArg::F_SETFD(FdFlag::FD_CLOEXEC));
 
-            child_stdin = unsafe { std::process::Stdio::from_raw_fd(pseduo.slave) };
-            child_stdout = unsafe { std::process::Stdio::from_raw_fd(pseduo.slave) };
-            child_stderr = unsafe { std::process::Stdio::from_raw_fd(pseduo.slave) };
+            child_stdin = unsafe { std::process::Stdio::from_raw_fd(pseudo.slave) };
+            child_stdout = unsafe { std::process::Stdio::from_raw_fd(pseudo.slave) };
+            child_stderr = unsafe { std::process::Stdio::from_raw_fd(pseudo.slave) };
         } else {
-            stdin = p.stdin.unwrap();
-            stdout = p.stdout.unwrap();
-            stderr = p.stderr.unwrap();
+            let stdin = p.stdin.unwrap();
+            let stdout = p.stdout.unwrap();
+            let stderr = p.stderr.unwrap();
             child_stdin = unsafe { std::process::Stdio::from_raw_fd(stdin) };
             child_stdout = unsafe { std::process::Stdio::from_raw_fd(stdout) };
             child_stderr = unsafe { std::process::Stdio::from_raw_fd(stderr) };

@@ -151,11 +151,11 @@ mod tests {
     #[test]
     fn test_create_extended_pipe() {
         // Test the default
-        let (r, w) = create_extended_pipe(OFlag::O_CLOEXEC, 0).unwrap();
+        let (_r, _w) = create_extended_pipe(OFlag::O_CLOEXEC, 0).unwrap();
 
         // Test setting to the max size
         let max_size = get_pipe_max_size();
-        let (r, w) = create_extended_pipe(OFlag::O_CLOEXEC, max_size).unwrap();
+        let (_, w) = create_extended_pipe(OFlag::O_CLOEXEC, max_size).unwrap();
         let actual_size = get_pipe_size(w);
         assert_eq!(max_size, actual_size);
     }
