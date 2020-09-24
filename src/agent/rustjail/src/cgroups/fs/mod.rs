@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use cgroups::blkio::{BlkIo, BlkIoController, BlkIoData, IoService};
+use cgroups::blkio::{BlkIoController, BlkIoData, IoService};
 use cgroups::cpu::CpuController;
 use cgroups::cpuacct::CpuAcctController;
 use cgroups::cpuset::CpuSetController;
@@ -15,18 +15,18 @@ use cgroups::memory::MemController;
 use cgroups::pid::PidController;
 use cgroups::{
     BlkIoDeviceResource, BlkIoDeviceThrottleResource, Cgroup, CgroupPid, Controller,
-    DeviceResource, DeviceResources, HugePageResource, MaxValue, NetworkPriority,
+    DeviceResource, HugePageResource, MaxValue, NetworkPriority,
 };
 
 use crate::cgroups::Manager as CgroupManager;
 use crate::container::DEFAULT_DEVICES;
-use anyhow::{anyhow, Context, Error, Result};
+use anyhow::{anyhow, Context, Result};
 use lazy_static;
 use libc::{self, pid_t};
 use nix::errno::Errno;
 use oci::{
     LinuxBlockIO, LinuxCPU, LinuxDevice, LinuxDeviceCgroup, LinuxHugepageLimit, LinuxMemory,
-    LinuxNetwork, LinuxPids, LinuxResources, LinuxThrottleDevice, LinuxWeightDevice,
+    LinuxNetwork, LinuxPids, LinuxResources,
 };
 
 use protobuf::{CachedSize, RepeatedField, SingularPtrField, UnknownFields};
@@ -34,7 +34,6 @@ use protocols::agent::{
     BlkioStats, BlkioStatsEntry, CgroupStats, CpuStats, CpuUsage, HugetlbStats, MemoryData,
     MemoryStats, PidsStats, ThrottlingData,
 };
-use regex::Regex;
 use std::collections::HashMap;
 use std::fs;
 use std::path::Path;

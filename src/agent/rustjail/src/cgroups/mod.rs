@@ -7,7 +7,6 @@
 use anyhow::{anyhow, Result};
 use oci::LinuxResources;
 use protocols::agent::CgroupStats;
-use std::collections::HashMap;
 
 use cgroups::freezer::FreezerState;
 

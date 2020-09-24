@@ -12,7 +12,6 @@
 // #![allow(unused_must_use)]
 #![allow(non_upper_case_globals)]
 // #![allow(unused_comparisons)]
-#[macro_use]
 extern crate serde;
 extern crate serde_json;
 #[macro_use]

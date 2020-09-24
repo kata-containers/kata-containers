@@ -30,7 +30,7 @@ use crate::specconv::CreateOpts;
 use crate::sync::*;
 // use crate::stats::Stats;
 use crate::capabilities::{self, CAPSMAP};
-use crate::cgroups::fs::{self as fscgroup, Manager as FsManager};
+use crate::cgroups::fs::{Manager as FsManager};
 use crate::cgroups::Manager;
 use crate::{mount, validator};
 
@@ -55,7 +55,7 @@ use std::io::BufRead;
 use std::io::BufReader;
 use std::os::unix::io::FromRawFd;
 
-use slog::{debug, info, o, Logger};
+use slog::{info, o, Logger};
 
 const STATE_FILENAME: &'static str = "state.json";
 const EXEC_FIFO_FILENAME: &'static str = "exec.fifo";
