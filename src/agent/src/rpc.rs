@@ -790,7 +790,7 @@ impl protocols::agent_ttrpc::AgentService for agentService {
 
     fn pause_container(
         &self,
-        ctx: &ttrpc::TtrpcContext,
+        _ctx: &ttrpc::TtrpcContext,
         req: protocols::agent::PauseContainerRequest,
     ) -> ttrpc::Result<protocols::empty::Empty> {
         let cid = req.get_container_id();
@@ -816,7 +816,7 @@ impl protocols::agent_ttrpc::AgentService for agentService {
 
     fn resume_container(
         &self,
-        ctx: &ttrpc::TtrpcContext,
+        _ctx: &ttrpc::TtrpcContext,
         req: protocols::agent::ResumeContainerRequest,
     ) -> ttrpc::Result<protocols::empty::Empty> {
         let cid = req.get_container_id();
@@ -1160,7 +1160,7 @@ impl protocols::agent_ttrpc::AgentService for agentService {
         };
 
         match setup_guest_dns(sl!(), req.dns.to_vec()) {
-            Ok(dns_list) => {
+            Ok(_) => {
                 let sandbox = self.sandbox.clone();
                 let mut s = sandbox.lock().unwrap();
                 let _ = req

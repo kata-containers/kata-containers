@@ -1088,7 +1088,7 @@ mod tests {
 
     #[test]
     fn test_get_cgroup_v2_mounts() {
-        let dir = tempdir().expect("failed to create tmpdir");
+        let _ = tempdir().expect("failed to create tmpdir");
         let drain = slog::Discard;
         let logger = slog::Logger::root(drain, o!());
         let result = get_cgroup_mounts(&logger, "", true);

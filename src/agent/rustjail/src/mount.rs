@@ -111,6 +111,7 @@ lazy_static! {
 }
 
 #[inline(always)]
+#[allow(unused_variables)]
 fn mount<P1: ?Sized + NixPath, P2: ?Sized + NixPath, P3: ?Sized + NixPath, P4: ?Sized + NixPath>(
     source: Option<&P1>,
     target: &P2,
@@ -125,6 +126,7 @@ fn mount<P1: ?Sized + NixPath, P2: ?Sized + NixPath, P3: ?Sized + NixPath, P4: ?
 }
 
 #[inline(always)]
+#[allow(unused_variables)]
 fn umount2<P: ?Sized + NixPath>(
     target: &P,
     flags: MntFlags,
@@ -421,6 +423,7 @@ fn mount_cgroups(
     Ok(())
 }
 
+#[allow(unused_variables)]
 fn pivot_root<P1: ?Sized + NixPath, P2: ?Sized + NixPath>(
     new_root: &P1,
     put_old: &P2,
@@ -553,6 +556,7 @@ fn parse_mount_table() -> Result<Vec<Info>> {
 }
 
 #[inline(always)]
+#[allow(unused_variables)]
 fn chroot<P: ?Sized + NixPath>(path: &P) -> Result<(), nix::Error> {
     #[cfg(not(test))]
     return unistd::chroot(path);
@@ -1004,8 +1008,8 @@ mod tests {
         // there is no spec.mounts, but should pass
         let ret = init_rootfs(stdout_fd, &spec, &cpath, &mounts, true);
         assert!(ret.is_ok(), "Should pass. Got: {:?}", ret);
-        let ret = fs::remove_dir_all(rootfs.path().join("dev"));
-        let ret = fs::create_dir(rootfs.path().join("dev"));
+        let _ = fs::remove_dir_all(rootfs.path().join("dev"));
+        let _ = fs::create_dir(rootfs.path().join("dev"));
 
         // Adding bad mount point to spec.mounts
         spec.mounts.push(oci::Mount {
@@ -1023,8 +1027,8 @@ mod tests {
             ret
         );
         spec.mounts.pop();
-        let ret = fs::remove_dir_all(rootfs.path().join("dev"));
-        let ret = fs::create_dir(rootfs.path().join("dev"));
+        let _ = fs::remove_dir_all(rootfs.path().join("dev"));
+        let _ = fs::create_dir(rootfs.path().join("dev"));
 
         // mounting a cgroup
         spec.mounts.push(oci::Mount {
@@ -1037,8 +1041,8 @@ mod tests {
         let ret = init_rootfs(stdout_fd, &spec, &cpath, &mounts, true);
         assert!(ret.is_ok(), "Should pass. Got: {:?}", ret);
         spec.mounts.pop();
-        let ret = fs::remove_dir_all(rootfs.path().join("dev"));
-        let ret = fs::create_dir(rootfs.path().join("dev"));
+        let _ = fs::remove_dir_all(rootfs.path().join("dev"));
+        let _ = fs::create_dir(rootfs.path().join("dev"));
 
         // mounting /dev
         spec.mounts.push(oci::Mount {
