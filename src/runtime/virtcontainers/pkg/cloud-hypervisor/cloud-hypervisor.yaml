@@ -150,6 +150,22 @@ paths:
         404:
           description: The VM instance could not be resized because it is not created.
 
+  /vm.resize-zone:
+    put:
+      summary: Resize a memory zone
+      requestBody:
+        description: The target size for the memory zone
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VmResizeZone'
+        required: true
+      responses:
+        204:
+          description: The memory zone was successfully resized.
+        500:
+          description: The memory zone could not be resized.
+
   /vm.add-device:
     put:
       summary: Add a new device to the VM
@@ -369,7 +385,6 @@ components:
     VmConfig:
       required:
       - kernel
-      - cmdline
       type: object
       properties:
         cpus:
@@ -414,6 +429,10 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/SgxEpcConfig'
+        numa:
+          type: array
+          items:
+            $ref: '#/components/schemas/NumaConfig'
         iommu:
           type: boolean
           default: false
@@ -448,6 +467,39 @@ components:
         topology:
             $ref: '#/components/schemas/CpuTopology'
 
+    MemoryZoneConfig:
+      required:
+      - id
+      - size
+      type: object
+      properties:
+        id:
+          type: string
+        size:
+          type: integer
+          format: int64
+          default: 512 MB
+        file:
+          type: string
+        mergeable:
+          type: boolean
+          default: false
+        shared:
+          type: boolean
+          default: false
+        hugepages:
+          type: boolean
+          default: false
+        host_numa_node:
+          type: integer
+          format: uint32
+        hotplug_size:
+          type: integer
+          format: int64
+        hotplugged_size:
+          type: integer
+          format: int64
+
     MemoryConfig:
       required:
       - size
@@ -460,8 +512,9 @@ components:
         hotplug_size:
           type: integer
           format: int64
-        file:
-          type: string
+        hotplugged_size:
+          type: integer
+          format: int64
         mergeable:
           type: boolean
           default: false
@@ -477,6 +530,13 @@ components:
         balloon:
           type: boolean
           default: false
+        balloon_size:
+          type: integer
+          format: uint64
+        zones:
+          type: array
+          items:
+            $ref: '#/components/schemas/MemoryZoneConfig'
 
     KernelConfig:
       required:
@@ -686,6 +746,41 @@ components:
           type: boolean
           default: false
 
+    NumaDistance:
+      required:
+      - destination
+      - distance
+      type: object
+      properties:
+        destination:
+          type: integer
+          format: uint32
+        distance:
+          type: integer
+          format: uint8
+
+    NumaConfig:
+      required:
+      - guest_numa_id
+      type: object
+      properties:
+        guest_numa_id:
+          type: integer
+          format: uint32
+        cpus:
+          type: array
+          items:
+            type: integer
+            format: uint8
+        distances:
+          type: array
+          items:
+            $ref: '#/components/schemas/NumaDistance'
+        memory_zones:
+          type: array
+          items:
+            type: string
+
     VmResize:
       type: object
       properties:
@@ -698,6 +793,16 @@ components:
           format: int64
         desired_ram_w_balloon:
           description: desired ballon size in bytes
+          type: integer
+          format: int64
+
+    VmResizeZone:
+      type: object
+      properties:
+        id:
+          type: string
+        desired_ram:
+          description: desired memory zone size in bytes
           type: integer
           format: int64
 
