@@ -397,11 +397,11 @@ func TestFindNewestRelease(t *testing.T) {
 	assert := assert.New(t)
 
 	type testData struct {
-		currentVer      semver.Version
 		versions        []semver.Version
-		expectAvailable bool
+		currentVer      semver.Version
 		expectVersion   semver.Version
 		expectError     bool
+		expectAvailable bool
 	}
 
 	ver1, err := semver.Make("1.11.1")
@@ -414,15 +414,15 @@ func TestFindNewestRelease(t *testing.T) {
 	assert.NoError(err)
 
 	data := []testData{
-		{semver.Version{}, []semver.Version{}, false, semver.Version{}, true},
-		{ver1, []semver.Version{}, false, semver.Version{}, true},
-		{ver1, []semver.Version{ver1}, false, semver.Version{}, false},
-		{ver2, []semver.Version{ver1}, false, semver.Version{}, false},
-		{ver1, []semver.Version{ver2}, true, ver2, false},
-		{ver1, []semver.Version{ver3}, true, ver3, false},
-		{ver1, []semver.Version{ver2, ver3}, true, ver3, false},
-		{ver2, []semver.Version{ver1, ver3}, true, ver3, false},
-		{ver2, []semver.Version{ver1}, false, semver.Version{}, false},
+		{[]semver.Version{}, semver.Version{}, semver.Version{}, true, false},
+		{[]semver.Version{}, ver1, semver.Version{}, true, false},
+		{[]semver.Version{ver1}, ver1, semver.Version{}, false, false},
+		{[]semver.Version{ver1}, ver2, semver.Version{}, false, false},
+		{[]semver.Version{ver2}, ver1, ver2, false, true},
+		{[]semver.Version{ver3}, ver1, ver3, false, true},
+		{[]semver.Version{ver2, ver3}, ver1, ver3, false, true},
+		{[]semver.Version{ver1, ver3}, ver2, ver3, false, true},
+		{[]semver.Version{ver1}, ver2, semver.Version{}, false, false},
 	}
 
 	for i, d := range data {

@@ -128,7 +128,7 @@ func makeRelease(release map[string]interface{}) (version string, details releas
 	key := "tag_name"
 
 	version, ok := release[key].(string)
-	if ok != true {
+	if !ok {
 		return "", details, fmt.Errorf("failed to find key %s in release data", key)
 	}
 
@@ -144,7 +144,7 @@ func makeRelease(release map[string]interface{}) (version string, details releas
 	key = "assets"
 
 	assetsArray, ok := release[key].([]interface{})
-	if ok != true {
+	if !ok {
 		return "", details, fmt.Errorf("failed to find key %s in release version %q data", key, version)
 	}
 
@@ -163,7 +163,7 @@ func makeRelease(release map[string]interface{}) (version string, details releas
 	key = "browser_download_url"
 
 	downloadURL, ok = assets.(map[string]interface{})[key].(string)
-	if ok != true {
+	if !ok {
 		return "", details, fmt.Errorf("failed to find key %s in release version %q asset data", key, version)
 	}
 
@@ -174,7 +174,7 @@ func makeRelease(release map[string]interface{}) (version string, details releas
 	key = "name"
 
 	filename, ok = assets.(map[string]interface{})[key].(string)
-	if ok != true {
+	if !ok {
 		return "", details, fmt.Errorf("failed to find key %s in release version %q asset data", key, version)
 	}
 
@@ -185,7 +185,7 @@ func makeRelease(release map[string]interface{}) (version string, details releas
 	key = "created_at"
 
 	createDate, ok = assets.(map[string]interface{})[key].(string)
-	if ok != true {
+	if !ok {
 		return "", details, fmt.Errorf("failed to find key %s in release version %q asset data", key, version)
 	}
 
@@ -400,10 +400,6 @@ func HandleReleaseVersions(cmd ReleaseCmd, currentVersion string, includeAll boo
 	details, ok := releases[newest.String()]
 	if !ok {
 		return fmt.Errorf("Release %v has no details", newest)
-	}
-
-	if err != nil {
-		return err
 	}
 
 	return showLatestRelease(output, currentSemver, details)
