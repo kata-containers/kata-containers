@@ -39,7 +39,7 @@ require (
 	github.com/opencontainers/runtime-spec v1.0.2-0.20190408193819-a1b50f621a48
 	github.com/opencontainers/selinux v1.4.0
 	github.com/opentracing/opentracing-go v1.1.0
-	github.com/pkg/errors v0.8.1
+	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.7.1
 	github.com/prometheus/client_model v0.2.0
 	github.com/prometheus/common v0.10.0
@@ -56,11 +56,12 @@ require (
 	github.com/vishvananda/netlink v1.0.1-0.20190604022042-c8c507c80ea2
 	github.com/vishvananda/netns v0.0.0-20180720170159-13995c7128cc
 	go.uber.org/atomic v1.6.0 // indirect
-	golang.org/x/net v0.0.0-20191108221443-4ba9e2ef068c
+	golang.org/x/net v0.0.0-20200707034311-ab3426394381
 	golang.org/x/oauth2 v0.0.0-20191122200657-5d9234df094c
-	golang.org/x/sys v0.0.0-20200615200032-f1bc736245b1
+	golang.org/x/sys v0.0.0-20200622214017-ed371f2e16b4
 	google.golang.org/grpc v1.19.0
 	gotest.tools v2.2.0+incompatible // indirect
+	k8s.io/apimachinery v0.18.2
 )
 
 replace (
