@@ -8,16 +8,15 @@
  */
 
 package openapi
-// MemoryConfig struct for MemoryConfig
-type MemoryConfig struct {
+// MemoryZoneConfig struct for MemoryZoneConfig
+type MemoryZoneConfig struct {
+	Id string `json:"id"`
 	Size int64 `json:"size"`
-	HotplugSize int64 `json:"hotplug_size,omitempty"`
-	HotpluggedSize int64 `json:"hotplugged_size,omitempty"`
+	File string `json:"file,omitempty"`
 	Mergeable bool `json:"mergeable,omitempty"`
-	HotplugMethod string `json:"hotplug_method,omitempty"`
 	Shared bool `json:"shared,omitempty"`
 	Hugepages bool `json:"hugepages,omitempty"`
-	Balloon bool `json:"balloon,omitempty"`
-	BalloonSize int32 `json:"balloon_size,omitempty"`
-	Zones []MemoryZoneConfig `json:"zones,omitempty"`
+	HostNumaNode int32 `json:"host_numa_node,omitempty"`
+	HotplugSize int64 `json:"hotplug_size,omitempty"`
+	HotpluggedSize int64 `json:"hotplugged_size,omitempty"`
 }

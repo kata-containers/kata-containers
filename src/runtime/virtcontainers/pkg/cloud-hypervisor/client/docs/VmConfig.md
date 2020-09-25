@@ -8,7 +8,7 @@ Name | Type | Description | Notes
 **Memory** | [**MemoryConfig**](MemoryConfig.md) |  | [optional] 
 **Kernel** | [**KernelConfig**](KernelConfig.md) |  | 
 **Initramfs** | Pointer to [**InitramfsConfig**](InitramfsConfig.md) |  | [optional] 
-**Cmdline** | [**CmdLineConfig**](CmdLineConfig.md) |  | 
+**Cmdline** | [**CmdLineConfig**](CmdLineConfig.md) |  | [optional] 
 **Disks** | [**[]DiskConfig**](DiskConfig.md) |  | [optional] 
 **Net** | [**[]NetConfig**](NetConfig.md) |  | [optional] 
 **Rng** | [**RngConfig**](RngConfig.md) |  | [optional] 
@@ -19,6 +19,7 @@ Name | Type | Description | Notes
 **Devices** | [**[]DeviceConfig**](DeviceConfig.md) |  | [optional] 
 **Vsock** | [**VsockConfig**](VsockConfig.md) |  | [optional] 
 **SgxEpc** | [**[]SgxEpcConfig**](SgxEpcConfig.md) |  | [optional] 
+**Numa** | [**[]NumaConfig**](NumaConfig.md) |  | [optional] 
 **Iommu** | **bool** |  | [optional] [default to false]
 
 [[Back to Model list]](../README.md#documentation-for-models) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to README]](../README.md)
