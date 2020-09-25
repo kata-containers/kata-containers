@@ -803,9 +803,9 @@ impl BaseContainer for LinuxContainer {
             unistd::close(pwfd);
         });
 
-        let mut child_stdin = std::process::Stdio::null();
-        let mut child_stdout = std::process::Stdio::null();
-        let mut child_stderr = std::process::Stdio::null();
+        let child_stdin;
+        let child_stdout;
+        let child_stderr;
         let mut stdin = -1;
         let mut stdout = -1;
         let mut stderr = -1;
