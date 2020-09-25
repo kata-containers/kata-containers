@@ -806,9 +806,6 @@ impl BaseContainer for LinuxContainer {
         let child_stdin;
         let child_stdout;
         let child_stderr;
-        let mut stdin = -1;
-        let mut stdout = -1;
-        let mut stderr = -1;
 
         if tty {
             let pseduo = pty::openpty(None, None)?;
@@ -820,9 +817,9 @@ impl BaseContainer for LinuxContainer {
             child_stdout = unsafe { std::process::Stdio::from_raw_fd(pseduo.slave) };
             child_stderr = unsafe { std::process::Stdio::from_raw_fd(pseduo.slave) };
         } else {
-            stdin = p.stdin.unwrap();
-            stdout = p.stdout.unwrap();
-            stderr = p.stderr.unwrap();
+            let stdin = p.stdin.unwrap();
+            let stdout = p.stdout.unwrap();
+            let stderr = p.stderr.unwrap();
             child_stdin = unsafe { std::process::Stdio::from_raw_fd(stdin) };
             child_stdout = unsafe { std::process::Stdio::from_raw_fd(stdout) };
             child_stderr = unsafe { std::process::Stdio::from_raw_fd(stderr) };
