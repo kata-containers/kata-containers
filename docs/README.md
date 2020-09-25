@@ -40,6 +40,7 @@ See the [howto documentation](how-to).
 * [Intel QAT with Kata](./use-cases/using-Intel-QAT-and-kata.md)
 * [VPP with Kata](./use-cases/using-vpp-and-kata.md)
 * [SPDK vhost-user with Kata](./use-cases/using-SPDK-vhostuser-and-kata.md)
+* [Intel SGX with Kata](./use-cases/using-Intel-SGX-and-kata.md)
 
 ## Developer Guide
 
