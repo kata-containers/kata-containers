@@ -319,13 +319,11 @@ RUN curl --proto '=https' --tlsv1.2 https://sh.rustup.rs -sSLf --output /tmp/rus
     chmod a+x /tmp/rust-init; \
 	export http_proxy=${http_proxy:-}; \
 	export https_proxy=${http_proxy:-}; \
-	/tmp/rust-init -y
+	/tmp/rust-init -y --default-toolchain ${RUST_VERSION}
 RUN . /root/.cargo/env; \
     export http_proxy=${http_proxy:-}; \
 	export https_proxy=${http_proxy:-}; \
 	cargo install cargo-when; \
-	rustup toolchain install ${RUST_VERSION}; \
-	rustup default ${RUST_VERSION}; \
 	rustup target install ${rustarch}-unknown-linux-musl
 RUN ln -sf /usr/bin/g++ /bin/musl-g++
 "
