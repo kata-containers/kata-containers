@@ -808,14 +808,14 @@ impl BaseContainer for LinuxContainer {
         let child_stderr;
 
         if tty {
-            let pseduo = pty::openpty(None, None)?;
-            p.term_master = Some(pseduo.master);
-            fcntl::fcntl(pseduo.master, FcntlArg::F_SETFD(FdFlag::FD_CLOEXEC));
-            fcntl::fcntl(pseduo.slave, FcntlArg::F_SETFD(FdFlag::FD_CLOEXEC));
+            let pseudo = pty::openpty(None, None)?;
+            p.term_master = Some(pseudo.master);
+            fcntl::fcntl(pseudo.master, FcntlArg::F_SETFD(FdFlag::FD_CLOEXEC));
+            fcntl::fcntl(pseudo.slave, FcntlArg::F_SETFD(FdFlag::FD_CLOEXEC));
 
-            child_stdin = unsafe { std::process::Stdio::from_raw_fd(pseduo.slave) };
-            child_stdout = unsafe { std::process::Stdio::from_raw_fd(pseduo.slave) };
-            child_stderr = unsafe { std::process::Stdio::from_raw_fd(pseduo.slave) };
+            child_stdin = unsafe { std::process::Stdio::from_raw_fd(pseudo.slave) };
+            child_stdout = unsafe { std::process::Stdio::from_raw_fd(pseudo.slave) };
+            child_stderr = unsafe { std::process::Stdio::from_raw_fd(pseudo.slave) };
         } else {
             let stdin = p.stdin.unwrap();
             let stdout = p.stdout.unwrap();
