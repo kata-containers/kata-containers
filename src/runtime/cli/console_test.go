@@ -10,6 +10,7 @@ import (
 	"os"
 	"testing"
 
+	ktu "github.com/kata-containers/kata-containers/src/runtime/pkg/katatestutils"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -22,6 +23,9 @@ func TestConsoleFromFile(t *testing.T) {
 }
 
 func TestNewConsole(t *testing.T) {
+	if tc.NotValid(ktu.NeedRoot()) {
+		t.Skip(testDisabledAsNonRoot)
+	}
 	assert := assert.New(t)
 
 	console, err := newConsole()
@@ -34,6 +38,9 @@ func TestNewConsole(t *testing.T) {
 }
 
 func TestIsTerminal(t *testing.T) {
+	if tc.NotValid(ktu.NeedRoot()) {
+		t.Skip(testDisabledAsNonRoot)
+	}
 	assert := assert.New(t)
 
 	var fd uintptr = 4
