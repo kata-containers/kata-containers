@@ -36,7 +36,7 @@ var kernelParams = []Param{
 	{"net.ifnames", "0"},
 }
 
-var supportedQemuMachine = govmmQemu.Machine {
+var supportedQemuMachine = govmmQemu.Machine{
 	Type:    QemuPseries,
 	Options: defaultQemuMachineOptions,
 }
@@ -63,12 +63,12 @@ func newQemuArch(config HypervisorConfig) (qemuArch, error) {
 
 	q := &qemuPPC64le{
 		qemuArchBase{
-			qemuMachine:           supportedQemuMachine,
-			qemuExePath:           defaultQemuPath,
-			memoryOffset:          config.MemOffset,
-			kernelParamsNonDebug:  kernelParamsNonDebug,
-			kernelParamsDebug:     kernelParamsDebug,
-			kernelParams:          kernelParams,
+			qemuMachine:          supportedQemuMachine,
+			qemuExePath:          defaultQemuPath,
+			memoryOffset:         config.MemOffset,
+			kernelParamsNonDebug: kernelParamsNonDebug,
+			kernelParamsDebug:    kernelParamsDebug,
+			kernelParams:         kernelParams,
 		},
 	}
 

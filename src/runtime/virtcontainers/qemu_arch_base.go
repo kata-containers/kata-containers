@@ -136,18 +136,18 @@ type qemuArch interface {
 }
 
 type qemuArchBase struct {
-	qemuMachine           govmmQemu.Machine
-	qemuExePath           string
-	memoryOffset          uint32
-	nestedRun             bool
-	vhost                 bool
-	disableNvdimm         bool
-	dax                   bool
-	networkIndex          int
-	kernelParamsNonDebug  []Param
-	kernelParamsDebug     []Param
-	kernelParams          []Param
-	Bridges               []types.Bridge
+	qemuMachine          govmmQemu.Machine
+	qemuExePath          string
+	memoryOffset         uint32
+	nestedRun            bool
+	vhost                bool
+	disableNvdimm        bool
+	dax                  bool
+	networkIndex         int
+	kernelParamsNonDebug []Param
+	kernelParamsDebug    []Param
+	kernelParams         []Param
+	Bridges              []types.Bridge
 }
 
 const (
