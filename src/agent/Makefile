@@ -42,6 +42,8 @@ endif
 
 ifeq ($(ARCH), ppc64le)
     override ARCH = powerpc64le
+    override LIBC = gnu
+    $(warning "WARNING: powerpc64le-unknown-linux-musl target is unavailable")
 endif
 
 TRIPLE = $(ARCH)-unknown-linux-$(LIBC)
