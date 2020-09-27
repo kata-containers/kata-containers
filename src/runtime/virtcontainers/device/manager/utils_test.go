@@ -75,7 +75,7 @@ func TestIsVhostUserBlk(t *testing.T) {
 		isVhostUserBlk := isVhostUserBlk(
 			config.DeviceInfo{
 				DevType: d.devType,
-				Major: d.major,
+				Major:   d.major,
 			})
 		assert.Equal(t, d.expected, isVhostUserBlk)
 	}
@@ -100,7 +100,7 @@ func TestIsVhostUserSCSI(t *testing.T) {
 		isVhostUserSCSI := isVhostUserSCSI(
 			config.DeviceInfo{
 				DevType: d.devType,
-				Major: d.major,
+				Major:   d.major,
 			})
 		assert.Equal(t, d.expected, isVhostUserSCSI)
 	}
