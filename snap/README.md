@@ -84,12 +84,12 @@ then a new configuration file can be [created](#configure-kata-containers)
 and [configured][7].
 
 [1]: https://docs.snapcraft.io/snaps/intro
-[2]: ../../../docs/design/architecture.md#root-filesystem-image
+[2]: ../docs/design/architecture.md#root-filesystem-image
 [3]: https://docs.snapcraft.io/reference/confinement#classic
 [4]: https://github.com/kata-containers/runtime#configuration
 [5]: https://docs.docker.com/engine/reference/commandline/dockerd
-[6]: ../../../docs/install/docker/ubuntu-docker-install.md
-[7]: ../../../docs/Developer-Guide.md#configure-to-use-initrd-or-rootfs-image
+[6]: ../docs/install/docker/ubuntu-docker-install.md
+[7]: ../docs/Developer-Guide.md#configure-to-use-initrd-or-rootfs-image
 [8]: https://snapcraft.io/kata-containers
-[9]: ../../../docs/Developer-Guide.md#run-kata-containers-with-docker
-[10]: ../../../docs/Developer-Guide.md#run-kata-containers-with-kubernetes
+[9]: ../docs/Developer-Guide.md#run-kata-containers-with-docker
+[10]: ../docs/Developer-Guide.md#run-kata-containers-with-kubernetes

@@ -1,4 +1,4 @@
-// Copyright 2017 HyperHQ Inc.
+// Copyright (c) 2017 HyperHQ Inc.
 //
 // SPDX-License-Identifier: Apache-2.0
 //
