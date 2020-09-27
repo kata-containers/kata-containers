@@ -56,6 +56,7 @@ jobs:
   - name: ppc64le test
     os: linux-ppc64le
     install: skip
+    script: skip
   allow_failures:
     - name: ppc64le test
   fast_finish: true
