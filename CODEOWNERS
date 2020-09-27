@@ -1,4 +1,4 @@
-# Copyright 2019 Intel Corporation.
+# Copyright (c) 2019 Intel Corporation
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -10,4 +10,3 @@
 # used. See https://help.github.com/articles/about-code-owners/
 
 *.md    @kata-containers/documentation
-
