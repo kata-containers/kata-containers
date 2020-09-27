@@ -5,6 +5,7 @@
 
 export tests_repo="${tests_repo:-github.com/kata-containers/tests}"
 export tests_repo_dir="$GOPATH/src/$tests_repo"
+export branch="2.0-dev"
 
 clone_tests_repo()
 {
@@ -17,14 +18,15 @@ clone_tests_repo()
 
 	go get -d -u "$tests_repo" || true
 
-	if [ -n "${TRAVIS_BRANCH:-}" ]; then
-		( cd "${tests_repo_dir}" && git checkout "${TRAVIS_BRANCH}" )
-	fi
+	pushd "${tests_repo_dir}" && git checkout "${branch}" && popd
 }
 
 run_static_checks()
 {
 	clone_tests_repo
+	# Make sure we have the targeting branch
+	git remote set-branches --add origin "${branch}"
+	git fetch -a
 	bash "$tests_repo_dir/.ci/static-checks.sh" "github.com/kata-containers/kata-containers"
 }
 
