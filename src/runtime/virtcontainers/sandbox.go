@@ -513,6 +513,7 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 	}
 
 	if err = globalSandboxList.addSandbox(s); err != nil {
+		s.newStore.Destroy(s.id)
 		return nil, err
 	}
 
