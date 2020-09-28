@@ -996,16 +996,16 @@ func (a *DefaultApiService) VmAddVsockPut(ctx _context.Context, vsockConfig Vsoc
 /*
 VmCountersGet Get counters from the VM
  * @param ctx _context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
-@return map[string]map[string]int32
+@return map[string]map[string]int64
 */
-func (a *DefaultApiService) VmCountersGet(ctx _context.Context) (map[string]map[string]int32, *_nethttp.Response, error) {
+func (a *DefaultApiService) VmCountersGet(ctx _context.Context) (map[string]map[string]int64, *_nethttp.Response, error) {
 	var (
 		localVarHTTPMethod   = _nethttp.MethodGet
 		localVarPostBody     interface{}
 		localVarFormFileName string
 		localVarFileName     string
 		localVarFileBytes    []byte
-		localVarReturnValue  map[string]map[string]int32
+		localVarReturnValue  map[string]map[string]int64
 	)
 
 	// create path and map variables
