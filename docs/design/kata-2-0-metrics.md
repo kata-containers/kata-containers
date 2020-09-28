@@ -9,6 +9,7 @@
 * [Metrics list](#metrics-list)
   * [Metric types](#metric-types)
   * [Kata agent metrics](#kata-agent-metrics)
+  * [Firecracker metrics](#firecracker-metrics)
   * [Kata guest OS metrics](#kata-guest-os-metrics)
   * [Hypervisor metrics](#hypervisor-metrics)
   * [Kata monitor metrics](#kata-monitor-metrics)
@@ -152,6 +153,7 @@ Metrics is categorized by component where metrics are collected from and for.
 
 * [Metric types](#metric-types)
 * [Kata agent metrics](#kata-agent-metrics)
+* [Firecracker metrics](#firecracker-metrics)
 * [Kata guest OS metrics](#kata-guest-os-metrics)
 * [Hypervisor metrics](#hypervisor-metrics)
 * [Kata monitor metrics](#kata-monitor-metrics)
@@ -197,6 +199,30 @@ Agent's metrics contains metrics about agent process.
 | `kata_agent_total_rss`: <br> Agent process total `rss` size | `GAUGE` |  | <ul><li>`sandbox_id`</li></ul> | 2.0.0 |
 | `kata_agent_total_time`: <br> Agent process total time | `GAUGE` |  | <ul><li>`sandbox_id`</li></ul> | 2.0.0 |
 | `kata_agent_total_vm`: <br> Agent process total `vm` size | `GAUGE` |  | <ul><li>`sandbox_id`</li></ul> | 2.0.0 |
+
+### Firecracker metrics
+
+Metrics for Firecracker vmm.
+
+| Metric name | Type | Units | Labels | Introduced in Kata version |
+|---|---|---|---|---|
+| `kata_firecracker_api_server`: <br> Metrics related to the internal API server. | `GAUGE` |  | <ul><li>`item`<ul><li>`process_startup_time_cpu_us`</li><li>`process_startup_time_us`</li><li>`sync_response_fails`</li><li>`sync_vmm_send_timeout_count`</li></ul></li><li>`sandbox_id`</li></ul> | 2.0.0 |
+| `kata_firecracker_block`: <br> Block Device associated metrics. | `GAUGE` |  | <ul><li>`item`<ul><li>`activate_fails`</li><li>`cfg_fails`</li><li>`event_fails`</li><li>`execute_fails`</li><li>`flush_count`</li><li>`invalid_reqs_count`</li><li>`no_avail_buffer`</li><li>`queue_event_count`</li><li>`rate_limiter_event_count`</li><li>`rate_limiter_throttled_events`</li><li>`read_bytes`</li><li>`read_count`</li><li>`update_count`</li><li>`update_fails`</li><li>`write_bytes`</li><li>`write_count`</li></ul></li><li>`sandbox_id`</li></ul> | 2.0.0 |
+| `kata_firecracker_get_api_requests`: <br> Metrics specific to GET API Requests for counting user triggered actions and/or failures. | `GAUGE` |  | <ul><li>`item`<ul><li>`instance_info_count`</li><li>`instance_info_fails`</li><li>`machine_cfg_count`</li><li>`machine_cfg_fails`</li></ul></li><li>`sandbox_id`</li></ul> | 2.0.0 |
+| `kata_firecracker_i8042`: <br> Metrics specific to the i8042 device. | `GAUGE` |  | <ul><li>`item`<ul><li>`error_count`</li><li>`missed_read_count`</li><li>`missed_write_count`</li><li>`read_count`</li><li>`reset_count`</li><li>`write_count`</li></ul></li><li>`sandbox_id`</li></ul> | 2.0.0 |
+| `kata_firecracker_latencies_us`: <br> Performance metrics related for the moment only to snapshots. | `GAUGE` |  | <ul><li>`item`<ul><li>`diff_create_snapshot`</li><li>`full_create_snapshot`</li><li>`load_snapshot`</li><li>`pause_vm`</li><li>`resume_vm`</li><li>`vmm_diff_create_snapshot`</li><li>`vmm_full_create_snapshot`</li><li>`vmm_load_snapshot`</li><li>`vmm_pause_vm`</li><li>`vmm_resume_vm`</li></ul></li><li>`sandbox_id`</li></ul> | 2.0.0 |
+| `kata_firecracker_logger`: <br> Metrics for the logging subsystem. | `GAUGE` |  | <ul><li>`item`<ul><li>`log_fails`</li><li>`metrics_fails`</li><li>`missed_log_count`</li><li>`missed_metrics_count`</li></ul></li><li>`sandbox_id`</li></ul> | 2.0.0 |
+| `kata_firecracker_mmds`: <br> Metrics for the MMDS functionality. | `GAUGE` |  | <ul><li>`item`<ul><li>`connections_created`</li><li>`connections_destroyed`</li><li>`rx_accepted`</li><li>`rx_accepted_err`</li><li>`rx_accepted_unusual`</li><li>`rx_bad_eth`</li><li>`rx_count`</li><li>`tx_bytes`</li><li>`tx_count`</li><li>`tx_errors`</li><li>`tx_frames`</li></ul></li><li>`sandbox_id`</li></ul> | 2.0.0 |
+| `kata_firecracker_net`: <br> Network-related metrics. | `GAUGE` |  | <ul><li>`item`<ul><li>`activate_fails`</li><li>`cfg_fails`</li><li>`event_fails`</li><li>`mac_address_updates`</li><li>`no_rx_avail_buffer`</li><li>`no_tx_avail_buffer`</li><li>`rx_bytes_count`</li><li>`rx_count`</li><li>`rx_event_rate_limiter_count`</li><li>`rx_fails`</li><li>`rx_packets_count`</li><li>`rx_partial_writes`</li><li>`rx_queue_event_count`</li><li>`rx_rate_limiter_throttled`</li><li>`rx_tap_event_count`</li><li>`tap_read_fails`</li><li>`tap_write_fails`</li><li>`tx_bytes_count`</li><li>`tx_count`</li><li>`tx_fails`</li><li>`tx_malformed_frames`</li><li>`tx_packets_count`</li><li>`tx_partial_reads`</li><li>`tx_queue_event_count`</li><li>`tx_rate_limiter_event_count`</li><li>`tx_rate_limiter_throttled`</li><li>`tx_spoofed_mac_count`</li></ul></li><li>`sandbox_id`</li></ul> | 2.0.0 |
+| `kata_firecracker_patch_api_requests`: <br> Metrics specific to PATCH API Requests for counting user triggered actions and/or failures. | `GAUGE` |  | <ul><li>`item`<ul><li>`drive_count`</li><li>`drive_fails`</li><li>`machine_cfg_count`</li><li>`machine_cfg_fails`</li><li>`network_count`</li><li>`network_fails`</li></ul></li><li>`sandbox_id`</li></ul> | 2.0.0 |
+| `kata_firecracker_put_api_requests`: <br> Metrics specific to PUT API Requests for counting user triggered actions and/or failures. | `GAUGE` |  | <ul><li>`item`<ul><li>`actions_count`</li><li>`actions_fails`</li><li>`boot_source_count`</li><li>`boot_source_fails`</li><li>`drive_count`</li><li>`drive_fails`</li><li>`logger_count`</li><li>`logger_fails`</li><li>`machine_cfg_count`</li><li>`machine_cfg_fails`</li><li>`metrics_count`</li><li>`metrics_fails`</li><li>`network_count`</li><li>`network_fails`</li></ul></li><li>`sandbox_id`</li></ul> | 2.0.0 |
+| `kata_firecracker_rtc`: <br> Metrics specific to the RTC device. | `GAUGE` |  | <ul><li>`item`<ul><li>`error_count`</li><li>`missed_read_count`</li><li>`missed_write_count`</li></ul></li><li>`sandbox_id`</li></ul> | 2.0.0 |
+| `kata_firecracker_seccomp`: <br> Metrics for the seccomp filtering. | `GAUGE` |  | <ul><li>`item`<ul><li>`num_faults`</li></ul></li><li>`sandbox_id`</li></ul> | 2.0.0 |
+| `kata_firecracker_signals`: <br> Metrics related to signals. | `GAUGE` |  | <ul><li>`item`<ul><li>`sigbus`</li><li>`sigsegv`</li></ul></li><li>`sandbox_id`</li></ul> | 2.0.0 |
+| `kata_firecracker_uart`: <br> Metrics specific to the UART device. | `GAUGE` |  | <ul><li>`item`<ul><li>`error_count`</li><li>`flush_count`</li><li>`missed_read_count`</li><li>`missed_write_count`</li><li>`read_count`</li><li>`write_count`</li></ul></li><li>`sandbox_id`</li></ul> | 2.0.0 |
+| `kata_firecracker_vcpu`: <br> Metrics specific to VCPUs' mode of functioning. | `GAUGE` |  | <ul><li>`item`<ul><li>`exit_io_in`</li><li>`exit_io_out`</li><li>`exit_mmio_read`</li><li>`exit_mmio_write`</li><li>`failures`</li><li>`filter_cpuid`</li></ul></li><li>`sandbox_id`</li></ul> | 2.0.0 |
+| `kata_firecracker_vmm`: <br> Metrics specific to the machine manager as a whole. | `GAUGE` |  | <ul><li>`item`<ul><li>`device_events`</li><li>`panic_count`</li></ul></li><li>`sandbox_id`</li></ul> | 2.0.0 |
+| `kata_firecracker_vsock`: <br> Vsock-related metrics. | `GAUGE` |  | <ul><li>`item`<ul><li>`activate_fails`</li><li>`cfg_fails`</li><li>`conn_event_fails`</li><li>`conns_added`</li><li>`conns_killed`</li><li>`conns_removed`</li><li>`ev_queue_event_fails`</li><li>`killq_resync`</li><li>`muxer_event_fails`</li><li>`rx_bytes_count`</li><li>`rx_packets_count`</li><li>`rx_queue_event_count`</li><li>`rx_queue_event_fails`</li><li>`rx_read_fails`</li><li>`tx_bytes_count`</li><li>`tx_flush_fails`</li><li>`tx_packets_count`</li><li>`tx_queue_event_count`</li><li>`tx_queue_event_fails`</li><li>`tx_write_fails`</li></ul></li><li>`sandbox_id`</li></ul> | 2.0.0 |
 
 ### Kata guest OS metrics
 

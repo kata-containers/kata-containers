@@ -605,13 +605,13 @@ func (fc *firecracker) fcSetLogger() error {
 	}
 
 	// listen to log fifo file and transfer error info
-	jailedLogFifo, err := fc.fcListenToFifo(fcLogFifo)
+	jailedLogFifo, err := fc.fcListenToFifo(fcLogFifo, nil)
 	if err != nil {
 		return fmt.Errorf("Failed setting log: %s", err)
 	}
 
 	// listen to metrics file and transfer error info
-	jailedMetricsFifo, err := fc.fcListenToFifo(fcMetricsFifo)
+	jailedMetricsFifo, err := fc.fcListenToFifo(fcMetricsFifo, fc.updateMetrics)
 	if err != nil {
 		return fmt.Errorf("Failed setting log: %s", err)
 	}
@@ -625,7 +625,18 @@ func (fc *firecracker) fcSetLogger() error {
 	return err
 }
 
-func (fc *firecracker) fcListenToFifo(fifoName string) (string, error) {
+func (fc *firecracker) updateMetrics(line string) {
+	var fm FirecrackerMetrics
+	if err := json.Unmarshal([]byte(line), &fm); err != nil {
+		fc.Logger().WithError(err).WithField("data", line).Error("failed to unmarshal fc metrics")
+		return
+	}
+	updateFirecrackerMetrics(&fm)
+}
+
+type fifoConsumer func(string)
+
+func (fc *firecracker) fcListenToFifo(fifoName string, consumer fifoConsumer) (string, error) {
 	fcFifoPath := filepath.Join(fc.vmPath, fifoName)
 	fcFifo, err := fifo.OpenFifo(context.Background(), fcFifoPath, syscall.O_CREAT|syscall.O_RDONLY|syscall.O_NONBLOCK, 0)
 	if err != nil {
@@ -640,9 +651,13 @@ func (fc *firecracker) fcListenToFifo(fifoName string) (string, error) {
 	go func() {
 		scanner := bufio.NewScanner(fcFifo)
 		for scanner.Scan() {
-			fc.Logger().WithFields(logrus.Fields{
-				"fifoName": fifoName,
-				"contents": scanner.Text()}).Error("firecracker failed")
+			if consumer != nil {
+				consumer(scanner.Text())
+			} else {
+				fc.Logger().WithFields(logrus.Fields{
+					"fifoName": fifoName,
+					"contents": scanner.Text()}).Debug("read firecracker fifo")
+			}
 		}
 
 		if err := scanner.Err(); err != nil {
@@ -734,6 +749,9 @@ func (fc *firecracker) fcInitConfiguration() error {
 			return err
 		}
 	}
+
+	// register firecracker specificed metrics
+	registerFirecrackerMetrics()
 
 	return nil
 }
