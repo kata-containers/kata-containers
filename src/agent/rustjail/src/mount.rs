@@ -14,6 +14,7 @@ use nix::NixPath;
 use oci::{LinuxDevice, Mount, Spec};
 use std::collections::{HashMap, HashSet};
 use std::fs::{self, OpenOptions};
+use std::mem::MaybeUninit;
 use std::os::unix;
 use std::os::unix::io::RawFd;
 use std::path::{Path, PathBuf};
@@ -48,6 +49,13 @@ pub struct Info {
 }
 
 const MOUNTINFOFORMAT: &'static str = "{d} {d} {d}:{d} {} {} {} {}";
+const PROC_PATH: &str = "/proc";
+
+// since libc didn't defined this const for musl, thus redefined it here.
+#[cfg(all(target_os = "linux", target_env = "gnu"))]
+const PROC_SUPER_MAGIC: libc::c_long = 0x00009fa0;
+#[cfg(all(target_os = "linux", target_env = "musl"))]
+const PROC_SUPER_MAGIC: libc::c_ulong = 0x00009fa0;
 
 lazy_static! {
     static ref PROPAGATION: HashMap<&'static str, MsFlags> = {
@@ -176,13 +184,21 @@ pub fn init_rootfs(
     for m in &spec.mounts {
         let (mut flags, data) = parse_mount(&m);
         if !m.destination.starts_with("/") || m.destination.contains("..") {
-            return Err(anyhow!(nix::Error::Sys(Errno::EINVAL)));
+            return Err(anyhow!(
+                "the mount destination {} is invalid",
+                m.destination
+            ));
         }
+
         if m.r#type == "cgroup" {
             mount_cgroups(cfd_log, &m, rootfs, flags, &data, cpath, mounts)?;
         } else {
             if m.destination == "/dev" {
                 flags &= !MsFlags::MS_RDONLY;
+            }
+
+            if m.r#type == "bind" {
+                check_proc_mount(m)?;
             }
 
             mount_from(cfd_log, &m, &rootfs, flags, &data, "")?;
@@ -211,6 +227,59 @@ pub fn init_rootfs(
     unistd::chdir(&olddir)?;
 
     Ok(())
+}
+
+fn check_proc_mount(m: &Mount) -> Result<()> {
+    // White list, it should be sub directories of invalid destinations
+    // These entries can be bind mounted by files emulated by fuse,
+    // so commands like top, free displays stats in container.
+    let valid_destinations = [
+        "/proc/cpuinfo",
+        "/proc/diskstats",
+        "/proc/meminfo",
+        "/proc/stat",
+        "/proc/swaps",
+        "/proc/uptime",
+        "/proc/loadavg",
+        "/proc/net/dev",
+    ];
+
+    for i in valid_destinations.iter() {
+        if m.destination.as_str() == *i {
+            return Ok(());
+        }
+    }
+
+    if m.destination == PROC_PATH {
+        // only allow a mount on-top of proc if it's source is "proc"
+        unsafe {
+            let mut stats = MaybeUninit::<libc::statfs>::uninit();
+            if let Ok(_) = m
+                .source
+                .with_nix_path(|path| libc::statfs(path.as_ptr(), stats.as_mut_ptr()))
+            {
+                if stats.assume_init().f_type == PROC_SUPER_MAGIC {
+                    return Ok(());
+                }
+            } else {
+                return Ok(());
+            }
+
+            return Err(anyhow!(format!(
+                "{} cannot be mounted to {} because it is not of type proc",
+                m.source, m.destination
+            )));
+        }
+    }
+
+    if m.destination.starts_with(PROC_PATH) {
+        return Err(anyhow!(format!(
+            "{} cannot be mounted because it is inside /proc",
+            m.destination
+        )));
+    }
+
+    return Ok(());
 }
 
 fn mount_cgroups_v2(cfd_log: RawFd, m: &Mount, rootfs: &str, flags: MsFlags) -> Result<()> {
@@ -1122,5 +1191,34 @@ mod tests {
 
         let ret = stat::stat("fifo");
         assert!(ret.is_ok(), "Should pass. Got: {:?}", ret);
+    }
+    #[test]
+    fn test_check_proc_mount() {
+        let mount = oci::Mount {
+            destination: "/proc".to_string(),
+            r#type: "bind".to_string(),
+            source: "/test".to_string(),
+            options: vec!["shared".to_string()],
+        };
+
+        assert!(check_proc_mount(&mount).is_err());
+
+        let mount = oci::Mount {
+            destination: "/proc/cpuinfo".to_string(),
+            r#type: "bind".to_string(),
+            source: "/test".to_string(),
+            options: vec!["shared".to_string()],
+        };
+
+        assert!(check_proc_mount(&mount).is_ok());
+
+        let mount = oci::Mount {
+            destination: "/proc/test".to_string(),
+            r#type: "bind".to_string(),
+            source: "/test".to_string(),
+            options: vec!["shared".to_string()],
+        };
+
+        assert!(check_proc_mount(&mount).is_err());
     }
 }
