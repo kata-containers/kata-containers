@@ -132,11 +132,12 @@ type runtime struct {
 }
 
 type agent struct {
-	Debug         bool     `toml:"enable_debug"`
-	Tracing       bool     `toml:"enable_tracing"`
-	TraceMode     string   `toml:"trace_mode"`
-	TraceType     string   `toml:"trace_type"`
-	KernelModules []string `toml:"kernel_modules"`
+	Debug               bool     `toml:"enable_debug"`
+	Tracing             bool     `toml:"enable_tracing"`
+	TraceMode           string   `toml:"trace_mode"`
+	TraceType           string   `toml:"trace_type"`
+	KernelModules       []string `toml:"kernel_modules"`
+	DebugConsoleEnabled bool     `toml:"debug_console_enabled"`
 }
 
 type netmon struct {
@@ -439,6 +440,10 @@ func (h hypervisor) getIOMMUPlatform() bool {
 		kataUtilsLogger.Info("IOMMUPlatform is disabled by default.")
 	}
 	return h.IOMMUPlatform
+}
+
+func (a agent) debugConsoleEnabled() bool {
+	return a.DebugConsoleEnabled
 }
 
 func (a agent) debug() bool {
@@ -866,23 +871,15 @@ func updateRuntimeConfigHypervisor(configPath string, tomlConf tomlConfig, confi
 }
 
 func updateRuntimeConfigAgent(configPath string, tomlConf tomlConfig, config *oci.RuntimeConfig, builtIn bool) error {
-	if builtIn {
-		config.AgentConfig = vc.KataAgentConfig{
-			LongLiveConn:  true,
-			Debug:         config.AgentConfig.Debug,
-			KernelModules: config.AgentConfig.KernelModules,
-		}
-
-		return nil
-	}
-
 	for _, agent := range tomlConf.Agent {
 		config.AgentConfig = vc.KataAgentConfig{
-			Debug:         agent.debug(),
-			Trace:         agent.trace(),
-			TraceMode:     agent.traceMode(),
-			TraceType:     agent.traceType(),
-			KernelModules: agent.kernelModules(),
+			LongLiveConn:       true,
+			Debug:              agent.debug(),
+			Trace:              agent.trace(),
+			TraceMode:          agent.traceMode(),
+			TraceType:          agent.traceType(),
+			KernelModules:      agent.kernelModules(),
+			EnableDebugConsole: agent.debugConsoleEnabled(),
 		}
 	}
 
@@ -1026,12 +1023,10 @@ func initConfig() (config oci.RuntimeConfig, err error) {
 		return oci.RuntimeConfig{}, err
 	}
 
-	defaultAgentConfig := vc.KataAgentConfig{}
-
 	config = oci.RuntimeConfig{
 		HypervisorType:   defaultHypervisor,
 		HypervisorConfig: GetDefaultHypervisorConfig(),
-		AgentConfig:      defaultAgentConfig,
+		AgentConfig:      vc.KataAgentConfig{},
 	}
 
 	return config, nil

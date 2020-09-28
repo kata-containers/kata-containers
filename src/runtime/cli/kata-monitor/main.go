@@ -36,6 +36,7 @@ func main() {
 	m := http.NewServeMux()
 	m.Handle("/metrics", http.HandlerFunc(km.ProcessMetricsRequest))
 	m.Handle("/sandboxes", http.HandlerFunc(km.ListSandboxes))
+	m.Handle("/agent-url", http.HandlerFunc(km.GetAgentURL))
 
 	// for debug shim process
 	m.Handle("/debug/vars", http.HandlerFunc(km.ExpvarHandler))

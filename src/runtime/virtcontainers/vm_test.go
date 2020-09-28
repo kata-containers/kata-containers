@@ -101,7 +101,15 @@ func TestVMConfigGrpc(t *testing.T) {
 	config := VMConfig{
 		HypervisorType:   QemuHypervisor,
 		HypervisorConfig: newQemuConfig(),
-		AgentConfig:      KataAgentConfig{true, false, false, 0, "", "", []string{}},
+		AgentConfig: KataAgentConfig{
+			LongLiveConn:       true,
+			Debug:              false,
+			Trace:              false,
+			EnableDebugConsole: false,
+			ContainerPipeSize:  0,
+			TraceMode:          "",
+			TraceType:          "",
+			KernelModules:      []string{}},
 	}
 
 	p, err := config.ToGrpc()

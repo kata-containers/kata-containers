@@ -245,7 +245,7 @@ const (
 	// The following example can be used to load two kernel modules with parameters
 	///
 	//   annotations:
-	//     io.kata-containers.config.agent.kernel_modules: "e1000e InterruptThrottleRate=3000,3000,3000 EEE=1; i915 enable_ppgtt=0"
+	//     io.katacontainers.config.agent.kernel_modules: "e1000e InterruptThrottleRate=3000,3000,3000 EEE=1; i915 enable_ppgtt=0"
 	//
 	// The first word is considered as the module name and the rest as its parameters.
 	//
