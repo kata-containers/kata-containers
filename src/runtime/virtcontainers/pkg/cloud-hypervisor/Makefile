@@ -13,7 +13,7 @@ YQ := $(shell command -v yq 2> /dev/null)
 generate-client-code: clean-generated-code
 	docker run --rm \
 		--user $$(id -u):$$(id -g) \
-		-v $${PWD}:/local openapitools/openapi-generator-cli generate \
+		-v $${PWD}:/local openapitools/openapi-generator-cli:v4.3.1 generate \
 		-i /local/cloud-hypervisor.yaml \
 		-g go \
 		-o /local/client
