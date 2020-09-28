@@ -368,7 +368,7 @@ components:
         type: object
         additionalProperties:
           type: integer
-          format: uint64
+          format: int64
 
     PciDeviceInfo:
       required:
@@ -741,7 +741,7 @@ components:
       properties:
         size:
           type: integer
-          format: uint64
+          format: int64
         prefault:
           type: boolean
           default: false

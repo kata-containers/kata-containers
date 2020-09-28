@@ -451,7 +451,7 @@ No authorization required
 
 ## VmCountersGet
 
-> map[string]map[string]int32 VmCountersGet(ctx, )
+> map[string]map[string]int64 VmCountersGet(ctx, )
 
 Get counters from the VM
 
@@ -461,7 +461,7 @@ This endpoint does not need any parameter.
 
 ### Return type
 
-[**map[string]map[string]int32**](map.md)
+[**map[string]map[string]int64**](map.md)
 
 ### Authorization
 
