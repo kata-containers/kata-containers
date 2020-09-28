@@ -518,7 +518,7 @@ components:
     VmCounters:
       additionalProperties:
         additionalProperties:
-          format: uint64
+          format: int64
           type: integer
         type: object
       type: object
@@ -1158,7 +1158,7 @@ components:
         size: 8
       properties:
         size:
-          format: uint64
+          format: int64
           type: integer
         prefault:
           default: false
