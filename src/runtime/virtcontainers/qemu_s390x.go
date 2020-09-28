@@ -36,7 +36,7 @@ var kernelParams = []Param{
 
 var ccwbridge = types.NewBridge(types.CCW, "", make(map[uint32]string, types.CCWBridgeMaxCapacity), 0)
 
-var supportedQemuMachine = govmmQemu.Machine {
+var supportedQemuMachine = govmmQemu.Machine{
 	Type:    QemuCCWVirtio,
 	Options: defaultQemuMachineOptions,
 }
@@ -61,12 +61,12 @@ func newQemuArch(config HypervisorConfig) (qemuArch, error) {
 
 	q := &qemuS390x{
 		qemuArchBase{
-			qemuMachine:           supportedQemuMachine,
-			qemuExePath:           defaultQemuPath,
-			memoryOffset:          config.MemOffset,
-			kernelParamsNonDebug:  kernelParamsNonDebug,
-			kernelParamsDebug:     kernelParamsDebug,
-			kernelParams:          kernelParams,
+			qemuMachine:          supportedQemuMachine,
+			qemuExePath:          defaultQemuPath,
+			memoryOffset:         config.MemOffset,
+			kernelParamsNonDebug: kernelParamsNonDebug,
+			kernelParamsDebug:    kernelParamsDebug,
+			kernelParams:         kernelParams,
 		},
 	}
 	// Set first bridge type to CCW
