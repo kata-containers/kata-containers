@@ -68,10 +68,10 @@ func TestStatsSandbox(t *testing.T) {
 		StatsFunc:          getSandboxCPUFunc(1000, 100000),
 		StatsContainerFunc: getStatsContainerCPUFunc(100, 200, 10000, 20000),
 		MockContainers: []*vcmock.Container{
-			&vcmock.Container{
+			{
 				MockID: "foo",
 			},
-			&vcmock.Container{
+			{
 				MockID: "bar",
 			},
 		},

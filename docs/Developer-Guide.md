@@ -39,15 +39,13 @@
           * [Enable agent debug console](#enable-agent-debug-console)
           * [Start `kata-monitor`](#start-kata-monitor)
           * [Connect to debug console](#connect-to-debug-console)
-      * [Traditional debug console setup](#traditional-simple-debug-console-setup)
+      * [Traditional debug console setup](#traditional-debug-console-setup)
           * [Create a custom image containing a shell](#create-a-custom-image-containing-a-shell)
           * [Create a debug systemd service](#create-a-debug-systemd-service)
           * [Build the debug image](#build-the-debug-image)
           * [Configure runtime for custom debug image](#configure-runtime-for-custom-debug-image)
-          * [Ensure debug options are valid](#ensure-debug-options-are-valid)
           * [Create a container](#create-a-container)
           * [Connect to the virtual machine using the debug console](#connect-to-the-virtual-machine-using-the-debug-console)
-    * [Obtain details of the image](#obtain-details-of-the-image)
     * [Capturing kernel boot logs](#capturing-kernel-boot-logs)
 
 # Warning
@@ -450,7 +448,7 @@ contain either `/bin/sh` or `/bin/bash`.
 
 #### Enable agent debug console
 
-Enable debug_console_enabled in the configuration.toml configuration file:
+Enable debug_console_enabled in the `configuration.toml` configuration file:
 
 ```
 [agent.kata]
@@ -461,7 +459,7 @@ This will pass `agent.debug_console agent.debug_console_vport=1026` to agent as 
 
 #### Start `kata-monitor`
 
-The `kata-runtime exec` command needs `kata-monitor` to get the sandbox's `vsock` address to connect to, firt start `kata-monitor`.
+The `kata-runtime exec` command needs `kata-monitor` to get the sandbox's `vsock` address to connect to, first start `kata-monitor`.
 
 ```
 $ sudo kata-monitor
@@ -503,7 +501,7 @@ the following steps (using rootfs or initrd image).
 >
 > Look for `INIT_PROCESS=systemd` in the `config.sh` osbuilder rootfs config file
 > to verify an osbuilder distro supports systemd for the distro you want to build rootfs for.
-> For an example, see the [Clear Linux config.sh file](../tools/osbuilder/blob/master/rootfs-builder/clearlinux/config.sh).
+> For an example, see the [Clear Linux config.sh file](../tools/osbuilder/rootfs-builder/clearlinux/config.sh).
 >
 > For a non-systemd-based distro, create an equivalent system
 > service using that distro’s init system syntax. Alternatively, you can build a distro
@@ -589,7 +587,7 @@ to avoid all subsequently created containers from using the debug image.
 
 #### Create a container
 
-Create a container as normal. For example using crictl:
+Create a container as normal. For example using `crictl`:
 
 ```
 $ sudo crictl run -r kata container.yaml pod.yaml

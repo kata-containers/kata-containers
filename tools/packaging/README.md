@@ -31,7 +31,7 @@ running Kubernetes Cluster very straightforward.
 
 ## Build a snap package
 
-See [the snap documentation](snap).
+See [the snap documentation](../../snap).
 
 ## Build static binaries
 
@@ -60,6 +60,10 @@ See [the Jenkins documentation](Jenkinsfiles).
 ## Packaging scripts
 
 See the [scripts documentation](scripts).
+
+## Sync packages
+
+See [the `kata-pkgsync` documentation](cmd/kata-pkgsync).
 
 ## Credits
 
