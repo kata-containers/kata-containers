@@ -80,6 +80,28 @@ func (km *KataMonitor) initSandboxCache() error {
 	return nil
 }
 
+// GetAgentURL returns agent URL
+func (km *KataMonitor) GetAgentURL(w http.ResponseWriter, r *http.Request) {
+	sandboxID, err := getSandboxIdFromReq(r)
+	if err != nil {
+		commonServeError(w, http.StatusBadRequest, err)
+		return
+	}
+	namespace, err := km.getSandboxNamespace(sandboxID)
+	if err != nil {
+		commonServeError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	data, err := km.doGet(sandboxID, namespace, defaultTimeout, "agent-url")
+	if err != nil {
+		commonServeError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	fmt.Fprintln(w, string(data))
+}
+
 // ListSandboxes list all sandboxes running in Kata
 func (km *KataMonitor) ListSandboxes(w http.ResponseWriter, r *http.Request) {
 	sandboxes := km.getSandboxList()

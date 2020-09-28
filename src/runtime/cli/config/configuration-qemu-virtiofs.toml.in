@@ -352,6 +352,12 @@ vhost_user_store_path = "@DEFVHOSTUSERSTOREPATH@"
 #
 kernel_modules=[]
 
+# Enable debug console.
+
+# If enabled, user can connect guest OS running inside hypervisor
+# through "kata-runtime exec <sandbox-id>" command
+
+#debug_console_enabled = true
 
 [netmon]
 # If enabled, the network monitoring process gets started when the
