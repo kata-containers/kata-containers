@@ -340,8 +340,6 @@ pub fn init_child() {
             return;
         }
     }
-
-    std::process::exit(-1);
 }
 
 fn do_init_child(cwfd: RawFd) -> Result<()> {
@@ -647,8 +645,6 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
     }
 
     do_exec(&args);
-
-    Err(anyhow!("fail to create container"))
 }
 
 impl BaseContainer for LinuxContainer {
