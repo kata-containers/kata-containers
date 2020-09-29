@@ -5,13 +5,11 @@
 
 export tests_repo="${tests_repo:-github.com/kata-containers/tests}"
 export tests_repo_dir="$GOPATH/src/$tests_repo"
-export branch="2.0-dev"
+export branch="${branch:-2.0-dev}"
 
 clone_tests_repo()
 {
-	# KATA_CI_NO_NETWORK is (has to be) ignored if there is
-	# no existing clone.
-	if [ -d "$tests_repo_dir" -a -n "$KATA_CI_NO_NETWORK" ]
+	if [ -d "$tests_repo_dir" -a -n "$CI" ]
 	then
 		return
 	fi
