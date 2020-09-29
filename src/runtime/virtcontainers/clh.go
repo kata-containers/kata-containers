@@ -429,14 +429,11 @@ func (clh *cloudHypervisor) hotplugAddBlockDevice(drive *config.BlockDrive) erro
 			" using '%v' but only support '%v'", clh.config.BlockDeviceDriver, config.VirtioBlock)
 	}
 
+	var err error
+
 	cl := clh.client()
 	ctx, cancel := context.WithTimeout(context.Background(), clhHotPlugAPITimeout*time.Second)
 	defer cancel()
-
-	_, _, err := cl.VmmPingGet(ctx)
-	if err != nil {
-		return openAPIClientError(err)
-	}
 
 	driveID := clhDriveIndexToID(drive.Index)
 
@@ -466,12 +463,7 @@ func (clh *cloudHypervisor) hotPlugVFIODevice(device config.VFIODev) error {
 	ctx, cancel := context.WithTimeout(context.Background(), clhHotPlugAPITimeout*time.Second)
 	defer cancel()
 
-	_, _, err := cl.VmmPingGet(ctx)
-	if err != nil {
-		return openAPIClientError(err)
-	}
-
-	_, _, err = cl.VmAddDevicePut(ctx, chclient.VmAddDevice{Path: device.SysfsDev})
+	_, _, err := cl.VmAddDevicePut(ctx, chclient.VmAddDevice{Path: device.SysfsDev})
 	if err != nil {
 		err = fmt.Errorf("Failed to hotplug device %+v %s", device, openAPIClientError(err))
 	}
