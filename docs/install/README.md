@@ -2,8 +2,7 @@
 
 * [Prerequisites](#prerequisites)
 * [Packaged installation methods](#packaged-installation-methods)
-   * [Supported Distributions](#supported-distributions)
-      * [Official packages](#official-packages)
+   * [Official packages](#official-packages)
    * [Automatic Installation](#automatic-installation)
    * [Snap Installation](#snap-installation)
    * [Scripted Installation](#scripted-installation)
@@ -29,13 +28,13 @@ to see if your system is capable of running Kata Containers.
 
 | Installation method                                  | Description                                                                             | Distributions supported              |
 |------------------------------------------------------|-----------------------------------------------------------------------------------------|--------------------------------------|
-| [Automatic](#automatic-installation)                 |Run a single command to install a full system                                            |[see table](#supported-distributions) |
+| [Automatic](#automatic-installation)                 |Run a single command to install a full system                                            | |
 | [Using snap](#snap-installation)                     |Easy to install and automatic updates                                                    |any distro that supports snapd        |
-| [Using official distro packages](#official-packages) |Kata packages provided by Linux distributions official repositories                      |[see table](#supported-distributions) |
-| [Scripted](#scripted-installation)                   |Generates an installation script which will result in a working system when executed     |[see table](#supported-distributions) |
-| [Manual](#manual-installation)                       |Allows the user to read a brief document and execute the specified commands step-by-step |[see table](#supported-distributions) |
+| [Using official distro packages](#official-packages) |Kata packages provided by Linux distributions official repositories                      | |
+| [Scripted](#scripted-installation)                   |Generates an installation script which will result in a working system when executed     | |
+| [Manual](#manual-installation)                       |Allows the user to read a brief document and execute the specified commands step-by-step | |
 
-#### Official packages
+### Official packages
 
 Kata packages are provided by official distribution repositories for:
 
@@ -61,7 +60,7 @@ Kata packages are provided by official distribution repositories for:
 [Use `kata-doc-to-script`](installing-with-kata-doc-to-script.md) to generate installation scripts that can be reviewed before they are executed.
 
 ### Manual Installation
-Manual installation instructions are available for [these distributions](#supported-distributions) and document how to:
+Manual installation instructions are available for [these distributions](#packaged-installation-methods) and document how to:
 1. Add the Kata Containers repository to your distro package manager, and import the packages signing key.
 2. Install the Kata Containers packages.
 3. Install a supported container manager.
