@@ -48,15 +48,9 @@ RUN git clone https://github.com/qemu/capstone.git capstone
 RUN git clone https://github.com/qemu/keycodemapdb.git ui/keycodemapdb
 
 ADD scripts/configure-hypervisor.sh /root/configure-hypervisor.sh
-ADD qemu/patches/ /root/kata_qemu_patches
+ADD qemu /root/kata_qemu
 
-RUN  \
-	cat VERSION; \
-	stable_branch=$(cat VERSION | awk 'BEGIN{FS=OFS="."}{print $1 "." $2 ".x"}');\
-	for patch in $(find /root/kata_qemu_patches/${stable_branch}/ -name '*.patch'); do\
-		echo "apply $patch";\
-		git apply "$patch"; \
-	done
+RUN  /root/kata_qemu/apply_patches.sh
 
 RUN PREFIX="${PREFIX}" /root/configure-hypervisor.sh -s kata-qemu | xargs ./configure \
 	--with-pkgversion=kata-static
