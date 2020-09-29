@@ -3,7 +3,7 @@
 > **Note:**
 >
 > - This guide assumes you have
->   [already installed the Kata Containers packages](../sles-installation-guide.md).
+>   [already installed the Kata Containers packages](../sle-installation-guide.md).
 
 1. Install the latest version of Docker with the following commands:
 
