@@ -4,11 +4,24 @@
 
    ```bash
    $ source /etc/os-release
-   $ sudo yum -y install yum-utils
-   $ ARCH=$(arch)
-   $ BRANCH="${BRANCH:-master}"
-   $ sudo -E yum-config-manager --add-repo "http://download.opensuse.org/repositories/home:/katacontainers:/releases:/${ARCH}:/${BRANCH}/CentOS_${VERSION_ID}/home:katacontainers:releases:${ARCH}:${BRANCH}.repo"
-   $ sudo -E yum -y install kata-runtime kata-proxy kata-shim
+   $ cat <<EOF | sudo -E tee /etc/yum.repos.d/advanced-virt.repo
+     [advanced-virt]
+     name=Advanced Virtualization
+     baseurl=http://mirror.centos.org/\$contentdir/\$releasever/virt/\$basearch/advanced-virtualization
+     enabled=1
+     gpgcheck=1
+     skip_if_unavailable=1
+     EOF
+   $ cat <<EOF | sudo -E tee /etc/yum.repos.d/kata-containers.repo
+     [kata-containers]
+     name=Kata Containers
+     baseurl=http://mirror.centos.org/\$contentdir/\$releasever/virt/\$basearch/kata-containers
+     enabled=1
+     gpgcheck=1
+     skip_if_unavailable=1
+     EOF
+   $ sudo -E dnf module disable -y virt:rhel
+   $ sudo -E dnf install -y kata-runtime
    ```
 
 2. Decide which container manager to use and select the corresponding link that follows:
