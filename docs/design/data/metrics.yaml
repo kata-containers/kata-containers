@@ -220,6 +220,566 @@ components:
               fixed: false
               values: []
           since: 2.0.0
+    - prefix: kata_firecracker
+      title: Firecracker vmm metrics
+      desc: Metrics for Firecracker vmm
+      metrics:
+        - name: kata_firecracker_api_server
+          type: GAUGE
+          unit: ""
+          help: Metrics related to the internal API server.
+          labels:
+            - name: item
+              desc: ""
+              manually_edit: false
+              fixed: true
+              values:
+                - value: process_startup_time_cpu_us
+                  desc: ""
+                - value: process_startup_time_us
+                  desc: ""
+                - value: sync_response_fails
+                  desc: ""
+                - value: sync_vmm_send_timeout_count
+                  desc: ""
+            - name: sandbox_id
+              desc: ""
+              manually_edit: false
+              fixed: false
+              values: []
+          since: 2.0.0
+        - name: kata_firecracker_block
+          type: GAUGE
+          unit: ""
+          help: Block Device associated metrics.
+          labels:
+            - name: item
+              desc: ""
+              manually_edit: false
+              fixed: true
+              values:
+                - value: activate_fails
+                  desc: ""
+                - value: cfg_fails
+                  desc: ""
+                - value: event_fails
+                  desc: ""
+                - value: execute_fails
+                  desc: ""
+                - value: flush_count
+                  desc: ""
+                - value: invalid_reqs_count
+                  desc: ""
+                - value: no_avail_buffer
+                  desc: ""
+                - value: queue_event_count
+                  desc: ""
+                - value: rate_limiter_event_count
+                  desc: ""
+                - value: rate_limiter_throttled_events
+                  desc: ""
+                - value: read_bytes
+                  desc: ""
+                - value: read_count
+                  desc: ""
+                - value: update_count
+                  desc: ""
+                - value: update_fails
+                  desc: ""
+                - value: write_bytes
+                  desc: ""
+                - value: write_count
+                  desc: ""
+            - name: sandbox_id
+              desc: ""
+              manually_edit: false
+              fixed: false
+              values: []
+          since: 2.0.0
+        - name: kata_firecracker_get_api_requests
+          type: GAUGE
+          unit: ""
+          help: Metrics specific to GET API Requests for counting user triggered actions and/or failures.
+          labels:
+            - name: item
+              desc: ""
+              manually_edit: false
+              fixed: true
+              values:
+                - value: instance_info_count
+                  desc: ""
+                - value: instance_info_fails
+                  desc: ""
+                - value: machine_cfg_count
+                  desc: ""
+                - value: machine_cfg_fails
+                  desc: ""
+            - name: sandbox_id
+              desc: ""
+              manually_edit: false
+              fixed: false
+              values: []
+          since: 2.0.0
+        - name: kata_firecracker_i8042
+          type: GAUGE
+          unit: ""
+          help: Metrics specific to the i8042 device.
+          labels:
+            - name: item
+              desc: ""
+              manually_edit: false
+              fixed: true
+              values:
+                - value: error_count
+                  desc: ""
+                - value: missed_read_count
+                  desc: ""
+                - value: missed_write_count
+                  desc: ""
+                - value: read_count
+                  desc: ""
+                - value: reset_count
+                  desc: ""
+                - value: write_count
+                  desc: ""
+            - name: sandbox_id
+              desc: ""
+              manually_edit: false
+              fixed: false
+              values: []
+          since: 2.0.0
+        - name: kata_firecracker_latencies_us
+          type: GAUGE
+          unit: ""
+          help: Performance metrics related for the moment only to snapshots.
+          labels:
+            - name: item
+              desc: ""
+              manually_edit: false
+              fixed: true
+              values:
+                - value: diff_create_snapshot
+                  desc: ""
+                - value: full_create_snapshot
+                  desc: ""
+                - value: load_snapshot
+                  desc: ""
+                - value: pause_vm
+                  desc: ""
+                - value: resume_vm
+                  desc: ""
+                - value: vmm_diff_create_snapshot
+                  desc: ""
+                - value: vmm_full_create_snapshot
+                  desc: ""
+                - value: vmm_load_snapshot
+                  desc: ""
+                - value: vmm_pause_vm
+                  desc: ""
+                - value: vmm_resume_vm
+                  desc: ""
+            - name: sandbox_id
+              desc: ""
+              manually_edit: false
+              fixed: false
+              values: []
+          since: 2.0.0
+        - name: kata_firecracker_logger
+          type: GAUGE
+          unit: ""
+          help: Metrics for the logging subsystem.
+          labels:
+            - name: item
+              desc: ""
+              manually_edit: false
+              fixed: true
+              values:
+                - value: log_fails
+                  desc: ""
+                - value: metrics_fails
+                  desc: ""
+                - value: missed_log_count
+                  desc: ""
+                - value: missed_metrics_count
+                  desc: ""
+            - name: sandbox_id
+              desc: ""
+              manually_edit: false
+              fixed: false
+              values: []
+          since: 2.0.0
+        - name: kata_firecracker_mmds
+          type: GAUGE
+          unit: ""
+          help: Metrics for the MMDS functionality.
+          labels:
+            - name: item
+              desc: ""
+              manually_edit: false
+              fixed: true
+              values:
+                - value: connections_created
+                  desc: ""
+                - value: connections_destroyed
+                  desc: ""
+                - value: rx_accepted
+                  desc: ""
+                - value: rx_accepted_err
+                  desc: ""
+                - value: rx_accepted_unusual
+                  desc: ""
+                - value: rx_bad_eth
+                  desc: ""
+                - value: rx_count
+                  desc: ""
+                - value: tx_bytes
+                  desc: ""
+                - value: tx_count
+                  desc: ""
+                - value: tx_errors
+                  desc: ""
+                - value: tx_frames
+                  desc: ""
+            - name: sandbox_id
+              desc: ""
+              manually_edit: false
+              fixed: false
+              values: []
+          since: 2.0.0
+        - name: kata_firecracker_net
+          type: GAUGE
+          unit: ""
+          help: Network-related metrics.
+          labels:
+            - name: item
+              desc: ""
+              manually_edit: false
+              fixed: true
+              values:
+                - value: activate_fails
+                  desc: ""
+                - value: cfg_fails
+                  desc: ""
+                - value: event_fails
+                  desc: ""
+                - value: mac_address_updates
+                  desc: ""
+                - value: no_rx_avail_buffer
+                  desc: ""
+                - value: no_tx_avail_buffer
+                  desc: ""
+                - value: rx_bytes_count
+                  desc: ""
+                - value: rx_count
+                  desc: ""
+                - value: rx_event_rate_limiter_count
+                  desc: ""
+                - value: rx_fails
+                  desc: ""
+                - value: rx_packets_count
+                  desc: ""
+                - value: rx_partial_writes
+                  desc: ""
+                - value: rx_queue_event_count
+                  desc: ""
+                - value: rx_rate_limiter_throttled
+                  desc: ""
+                - value: rx_tap_event_count
+                  desc: ""
+                - value: tap_read_fails
+                  desc: ""
+                - value: tap_write_fails
+                  desc: ""
+                - value: tx_bytes_count
+                  desc: ""
+                - value: tx_count
+                  desc: ""
+                - value: tx_fails
+                  desc: ""
+                - value: tx_malformed_frames
+                  desc: ""
+                - value: tx_packets_count
+                  desc: ""
+                - value: tx_partial_reads
+                  desc: ""
+                - value: tx_queue_event_count
+                  desc: ""
+                - value: tx_rate_limiter_event_count
+                  desc: ""
+                - value: tx_rate_limiter_throttled
+                  desc: ""
+                - value: tx_spoofed_mac_count
+                  desc: ""
+            - name: sandbox_id
+              desc: ""
+              manually_edit: false
+              fixed: false
+              values: []
+          since: 2.0.0
+        - name: kata_firecracker_patch_api_requests
+          type: GAUGE
+          unit: ""
+          help: Metrics specific to PATCH API Requests for counting user triggered actions and/or failures.
+          labels:
+            - name: item
+              desc: ""
+              manually_edit: false
+              fixed: true
+              values:
+                - value: drive_count
+                  desc: ""
+                - value: drive_fails
+                  desc: ""
+                - value: machine_cfg_count
+                  desc: ""
+                - value: machine_cfg_fails
+                  desc: ""
+                - value: network_count
+                  desc: ""
+                - value: network_fails
+                  desc: ""
+            - name: sandbox_id
+              desc: ""
+              manually_edit: false
+              fixed: false
+              values: []
+          since: 2.0.0
+        - name: kata_firecracker_put_api_requests
+          type: GAUGE
+          unit: ""
+          help: Metrics specific to PUT API Requests for counting user triggered actions and/or failures.
+          labels:
+            - name: item
+              desc: ""
+              manually_edit: false
+              fixed: true
+              values:
+                - value: actions_count
+                  desc: ""
+                - value: actions_fails
+                  desc: ""
+                - value: boot_source_count
+                  desc: ""
+                - value: boot_source_fails
+                  desc: ""
+                - value: drive_count
+                  desc: ""
+                - value: drive_fails
+                  desc: ""
+                - value: logger_count
+                  desc: ""
+                - value: logger_fails
+                  desc: ""
+                - value: machine_cfg_count
+                  desc: ""
+                - value: machine_cfg_fails
+                  desc: ""
+                - value: metrics_count
+                  desc: ""
+                - value: metrics_fails
+                  desc: ""
+                - value: network_count
+                  desc: ""
+                - value: network_fails
+                  desc: ""
+            - name: sandbox_id
+              desc: ""
+              manually_edit: false
+              fixed: false
+              values: []
+          since: 2.0.0
+        - name: kata_firecracker_rtc
+          type: GAUGE
+          unit: ""
+          help: Metrics specific to the RTC device.
+          labels:
+            - name: item
+              desc: ""
+              manually_edit: false
+              fixed: true
+              values:
+                - value: error_count
+                  desc: ""
+                - value: missed_read_count
+                  desc: ""
+                - value: missed_write_count
+                  desc: ""
+            - name: sandbox_id
+              desc: ""
+              manually_edit: false
+              fixed: false
+              values: []
+          since: 2.0.0
+        - name: kata_firecracker_seccomp
+          type: GAUGE
+          unit: ""
+          help: Metrics for the seccomp filtering.
+          labels:
+            - name: item
+              desc: ""
+              manually_edit: false
+              fixed: true
+              values:
+                - value: num_faults
+                  desc: ""
+            - name: sandbox_id
+              desc: ""
+              manually_edit: false
+              fixed: false
+              values: []
+          since: 2.0.0
+        - name: kata_firecracker_signals
+          type: GAUGE
+          unit: ""
+          help: Metrics related to signals.
+          labels:
+            - name: item
+              desc: ""
+              manually_edit: false
+              fixed: true
+              values:
+                - value: sigbus
+                  desc: ""
+                - value: sigsegv
+                  desc: ""
+            - name: sandbox_id
+              desc: ""
+              manually_edit: false
+              fixed: false
+              values: []
+          since: 2.0.0
+        - name: kata_firecracker_uart
+          type: GAUGE
+          unit: ""
+          help: Metrics specific to the UART device.
+          labels:
+            - name: item
+              desc: ""
+              manually_edit: false
+              fixed: true
+              values:
+                - value: error_count
+                  desc: ""
+                - value: flush_count
+                  desc: ""
+                - value: missed_read_count
+                  desc: ""
+                - value: missed_write_count
+                  desc: ""
+                - value: read_count
+                  desc: ""
+                - value: write_count
+                  desc: ""
+            - name: sandbox_id
+              desc: ""
+              manually_edit: false
+              fixed: false
+              values: []
+          since: 2.0.0
+        - name: kata_firecracker_vcpu
+          type: GAUGE
+          unit: ""
+          help: Metrics specific to VCPUs' mode of functioning.
+          labels:
+            - name: item
+              desc: ""
+              manually_edit: false
+              fixed: true
+              values:
+                - value: exit_io_in
+                  desc: ""
+                - value: exit_io_out
+                  desc: ""
+                - value: exit_mmio_read
+                  desc: ""
+                - value: exit_mmio_write
+                  desc: ""
+                - value: failures
+                  desc: ""
+                - value: filter_cpuid
+                  desc: ""
+            - name: sandbox_id
+              desc: ""
+              manually_edit: false
+              fixed: false
+              values: []
+          since: 2.0.0
+        - name: kata_firecracker_vmm
+          type: GAUGE
+          unit: ""
+          help: Metrics specific to the machine manager as a whole.
+          labels:
+            - name: item
+              desc: ""
+              manually_edit: false
+              fixed: true
+              values:
+                - value: device_events
+                  desc: ""
+                - value: panic_count
+                  desc: ""
+            - name: sandbox_id
+              desc: ""
+              manually_edit: false
+              fixed: false
+              values: []
+          since: 2.0.0
+        - name: kata_firecracker_vsock
+          type: GAUGE
+          unit: ""
+          help: Vsock-related metrics.
+          labels:
+            - name: item
+              desc: ""
+              manually_edit: false
+              fixed: true
+              values:
+                - value: activate_fails
+                  desc: ""
+                - value: cfg_fails
+                  desc: ""
+                - value: conn_event_fails
+                  desc: ""
+                - value: conns_added
+                  desc: ""
+                - value: conns_killed
+                  desc: ""
+                - value: conns_removed
+                  desc: ""
+                - value: ev_queue_event_fails
+                  desc: ""
+                - value: killq_resync
+                  desc: ""
+                - value: muxer_event_fails
+                  desc: ""
+                - value: rx_bytes_count
+                  desc: ""
+                - value: rx_packets_count
+                  desc: ""
+                - value: rx_queue_event_count
+                  desc: ""
+                - value: rx_queue_event_fails
+                  desc: ""
+                - value: rx_read_fails
+                  desc: ""
+                - value: tx_bytes_count
+                  desc: ""
+                - value: tx_flush_fails
+                  desc: ""
+                - value: tx_packets_count
+                  desc: ""
+                - value: tx_queue_event_count
+                  desc: ""
+                - value: tx_queue_event_fails
+                  desc: ""
+                - value: tx_write_fails
+                  desc: ""
+            - name: sandbox_id
+              desc: ""
+              manually_edit: false
+              fixed: false
+              values: []
+          since: 2.0.0
     - prefix: kata_guest
       title: Kata guest OS metrics
       desc: Guest OS's metrics in hypervisor.
