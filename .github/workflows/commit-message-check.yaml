@@ -48,7 +48,25 @@ jobs:
       uses: tim-actions/commit-message-checker-with-regex@v0.3.1
       with:
         commits: ${{ steps.get-pr-commits.outputs.commits }}
-        pattern: '^.+(\n.{0,72})*$|^.+\n\s*[^a-zA-Z\s\n]|^.+\n\S+$'
+        # Notes:
+        #
+        # - The subject line is not enforced here (see other check), but has
+        #   to be specified at the start of the regex as the action is passed
+        #   the entire commit message.
+        #
+        # - Body lines *can* be longer than the maximum if they start
+        #   with a non-alphabetic character.
+        #
+        #   This allows stack traces, log files snippets, emails, long URLs,
+        #   etc to be specified. Some of these naturally "work" as they start
+        #   with numeric timestamps or addresses. Emails can but quoted using
+        #   the normal ">" character, markdown bullets ("-", "*") are also
+        #   useful for lists of URLs, but it is always possible to override
+        #   the check by simply space indenting the content you need to add.
+        #
+        # - A SoB comment can be any length (as it is unreasonable to penalise
+        #   people with long names/email addresses :)
+        pattern: '^.+(\n([a-zA-Z].{0,149}|[^a-zA-Z\n].*|Signed-off-by:.*|))+$'
         error: 'Body line too long (max 72)'
         post_error: ${{ env.error_msg }}
 
