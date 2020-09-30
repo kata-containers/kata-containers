@@ -1,15 +1,16 @@
 # Kata Containers installation user guides
 
-* [Prerequisites](#prerequisites)
-* [Packaged installation methods](#packaged-installation-methods)
-   * [Official packages](#official-packages)
-   * [Automatic Installation](#automatic-installation)
-   * [Snap Installation](#snap-installation)
-   * [Scripted Installation](#scripted-installation)
-   * [Manual Installation](#manual-installation)
-* [Build from source installation](#build-from-source-installation)
-* [Installing on a Cloud Service Platform](#installing-on-a-cloud-service-platform)
-* [Further information](#further-information)
+- [Kata Containers installation user guides](#kata-containers-installation-user-guides)
+  - [Prerequisites](#prerequisites)
+  - [Packaged installation methods](#packaged-installation-methods)
+    - [Official packages](#official-packages)
+    - [Automatic Installation](#automatic-installation)
+    - [Snap Installation](#snap-installation)
+    - [Scripted Installation](#scripted-installation)
+    - [Manual Installation](#manual-installation)
+  - [Build from source installation](#build-from-source-installation)
+  - [Installing on a Cloud Service Platform](#installing-on-a-cloud-service-platform)
+  - [Further information](#further-information)
 
 The following is an overview of the different installation methods available. All of these methods equally result
 in a system configured to run Kata Containers.
@@ -38,12 +39,12 @@ to see if your system is capable of running Kata Containers.
 
 Kata packages are provided by official distribution repositories for:
 
-|Distribution (link to packages)                          | Versions                                                                       | Contacts                                              |
-|---------------------------------------------------------|--------------------------------------------------------------------------------|-------------------------------------------------------|
-|[CentOS](centos-installation-guide.md)                   | 8                                                                              |                                                       |
-|[Fedora](fedora-installation-guide.md)                   | 32, Rawhide                                                                    |                                                       |
-|[SUSE Linux Enterprise (SLE)](sle-installation-guide.md) | SLE 15 SP1, 15 SP2                                                             |                                                       |
-|[openSUSE](opensuse-installation-guide.md)               | [Leap 15.1](opensuse-leap-15.1-installation-guide.md)<br>Leap 15.2, Tumbleweed |                                                       |
+| Distribution (link to packages)                          | Versions                                                                       | Contacts |
+| -------------------------------------------------------- | ------------------------------------------------------------------------------ | -------- |
+| [CentOS](centos-installation-guide.md)                   | 8                                                                              |          |
+| [Fedora](fedora-installation-guide.md)                   | 32, Rawhide                                                                    |          |
+| [SUSE Linux Enterprise (SLE)](sle-installation-guide.md) | SLE 15 SP1, 15 SP2                                                             |          |
+| [openSUSE](opensuse-installation-guide.md)               | [Leap 15.1](opensuse-leap-15.1-installation-guide.md)<br>Leap 15.2, Tumbleweed |          |
 
 
 ### Automatic Installation
