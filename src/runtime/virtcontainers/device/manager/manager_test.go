@@ -105,7 +105,7 @@ func TestAttachVFIODevice(t *testing.T) {
 	}
 	tmpDir, err := ioutil.TempDir("", "")
 	assert.Nil(t, err)
-	os.RemoveAll(tmpDir)
+	defer os.RemoveAll(tmpDir)
 
 	testFDIOGroup := "2"
 	testDeviceBDFPath := "0000:00:1c.0"
@@ -114,15 +114,27 @@ func TestAttachVFIODevice(t *testing.T) {
 	err = os.MkdirAll(devicesDir, dirMode)
 	assert.Nil(t, err)
 
-	deviceFile := filepath.Join(devicesDir, testDeviceBDFPath)
-	_, err = os.Create(deviceFile)
+	deviceBDFDir := filepath.Join(devicesDir, testDeviceBDFPath)
+	err = os.MkdirAll(deviceBDFDir, dirMode)
+	assert.Nil(t, err)
+
+	deviceClassFile := filepath.Join(deviceBDFDir, "class")
+	_, err = os.Create(deviceClassFile)
+	assert.Nil(t, err)
+
+	deviceConfigFile := filepath.Join(deviceBDFDir, "config")
+	_, err = os.Create(deviceConfigFile)
 	assert.Nil(t, err)
 
 	savedIOMMUPath := config.SysIOMMUPath
 	config.SysIOMMUPath = tmpDir
 
+	savedSysBusPciDevicesPath := config.SysBusPciDevicesPath
+	config.SysBusPciDevicesPath = devicesDir
+
 	defer func() {
 		config.SysIOMMUPath = savedIOMMUPath
+		config.SysBusPciDevicesPath = savedSysBusPciDevicesPath
 	}()
 
 	path := filepath.Join(vfioPath, testFDIOGroup)
@@ -220,7 +232,7 @@ func TestAttachVhostUserBlkDevice(t *testing.T) {
 		vhostUserStorePath:    tmpDir,
 	}
 	assert.Nil(t, err)
-	os.RemoveAll(tmpDir)
+	defer os.RemoveAll(tmpDir)
 
 	vhostUserDevNodePath := filepath.Join(tmpDir, "/block/devices/")
 	vhostUserSockPath := filepath.Join(tmpDir, "/block/sockets/")
