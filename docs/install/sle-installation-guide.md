@@ -10,6 +10,4 @@
    ```
 
 2. Decide which container manager to use and select the corresponding link that follows:
-
-   - [Docker](docker/sles-docker-install.md)
    - [Kubernetes](../Developer-Guide.md#run-kata-containers-with-kubernetes)
