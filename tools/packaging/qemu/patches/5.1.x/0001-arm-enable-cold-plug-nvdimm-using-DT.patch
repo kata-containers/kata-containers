@@ -1,0 +1,124 @@
+From a72acadd08b9135784ef8699bcb65f9edb64735a Mon Sep 17 00:00:00 2001
+From: Shameer Kolothum <shameerali.kolothum.thodi@huawei.com>
+Date: Sun, 27 Sep 2020 17:43:31 +0800
+Subject: [PATCH] hw/arm/boot: Expose the pmem nodes in the DT.
+
+In case of NV-DIMM slots, let's add /pmem DT nodes.
+original patch see [1].
+
+rebased by Edmond.
+
+Signed-off-by: Eric Auger <eric.auger@redhat.com>
+Signed-off-by: Shameer Kolothum <shameerali.kolothum.thodi@huawei.com>
+Signed-off-by: Edmond AK Dantes <edmond.dantes.ak47@outlook.com>
+
+[1] https://patchwork.kernel.org/patch/11174981/
+---
+ hw/arm/boot.c | 44 ++++++++++++++++++++++++++++++++++++++++++++
+ hw/arm/virt.c | 13 +++++++++----
+ 2 files changed, 53 insertions(+), 4 deletions(-)
+
+diff --git a/hw/arm/boot.c b/hw/arm/boot.c
+index 3e9816af80..3214933c64 100644
+--- a/hw/arm/boot.c
++++ b/hw/arm/boot.c
+@@ -20,6 +20,7 @@
+ #include "hw/boards.h"
+ #include "sysemu/reset.h"
+ #include "hw/loader.h"
++#include "hw/mem/memory-device.h"
+ #include "elf.h"
+ #include "sysemu/device_tree.h"
+ #include "qemu/config-file.h"
+@@ -524,6 +525,44 @@ static void fdt_add_psci_node(void *fdt)
+     qemu_fdt_setprop_cell(fdt, "/psci", "migrate", migrate_fn);
+ }
+ 
++static int fdt_add_pmem_node(void *fdt, uint32_t acells, uint32_t scells)
++{
++    MemoryDeviceInfoList *info, *info_list = qmp_memory_device_list();
++    MemoryDeviceInfo *mi;
++    int ret;
++
++    for (info = info_list; info != NULL; info = info->next) {
++        mi = info->value;
++
++        if (mi->type == MEMORY_DEVICE_INFO_KIND_NVDIMM) {
++            PCDIMMDeviceInfo *di = mi->u.nvdimm.data;
++            char *nodename;
++
++            nodename = g_strdup_printf("/pmem@%" PRIx64, di->addr);
++            qemu_fdt_add_subnode(fdt, nodename);
++            qemu_fdt_setprop_string(fdt, nodename, "compatible", "pmem-region");
++            ret = qemu_fdt_setprop_sized_cells(fdt, nodename, "reg", acells,
++                                               di->addr, scells, di->size);
++            /* only set the NUMA ID if it is specified */
++            if (!ret && di->node >= 0) {
++                ret = qemu_fdt_setprop_cell(fdt, nodename, "numa-node-id",
++                                            di->node);
++            }
++
++            g_free(nodename);
++
++            if (ret < 0) {
++                fprintf(stderr, "couldn't add NVDIMM /memory@%"PRIx64" node\n",
++                        di->addr);
++                goto out;
++            }
++        }
++    }
++out:
++    qapi_free_MemoryDeviceInfoList(info_list);
++    return ret;
++}
++
+ int arm_load_dtb(hwaddr addr, const struct arm_boot_info *binfo,
+                  hwaddr addr_limit, AddressSpace *as, MachineState *ms)
+ {
+@@ -623,6 +662,11 @@ int arm_load_dtb(hwaddr addr, const struct arm_boot_info *binfo,
+         }
+     }
+ 
++    rc = fdt_add_pmem_node(fdt, acells, scells);
++    if (rc < 0) {
++        fprintf(stderr, "couldn't add pmem memory nodes\n");
++        goto fail;
++    }
+     rc = fdt_path_offset(fdt, "/chosen");
+     if (rc < 0) {
+         qemu_fdt_add_subnode(fdt, "/chosen");
+diff --git a/hw/arm/virt.c b/hw/arm/virt.c
+index ecfee362a1..09eb6c06e4 100644
+--- a/hw/arm/virt.c
++++ b/hw/arm/virt.c
+@@ -2189,9 +2189,12 @@ static void virt_memory_pre_plug(HotplugHandler *hotplug_dev, DeviceState *dev,
+     const bool is_nvdimm = object_dynamic_cast(OBJECT(dev), TYPE_NVDIMM);
+ 
+     if (!vms->acpi_dev) {
+-        error_setg(errp,
+-                   "memory hotplug is not enabled: missing acpi-ged device");
+-        return;
++          /* Allow nvdimm DT or cold plug */
++          if (!(is_nvdimm && !dev->hotplugged)) {
++              error_setg(errp,
++                         "memory hotplug is not enabled: missing acpi-ged device");
++              return;
++         }
+     }
+ 
+     if (vms->mte) {
+@@ -2224,8 +2227,10 @@ static void virt_memory_plug(HotplugHandler *hotplug_dev,
+         nvdimm_plug(ms->nvdimms_state);
+     }
+ 
+-    hotplug_handler_plug(HOTPLUG_HANDLER(vms->acpi_dev),
++    if (vms->acpi_dev) {
++        hotplug_handler_plug(HOTPLUG_HANDLER(vms->acpi_dev),
+                          dev, &error_abort);
++    }
+ 
+ out:
+     error_propagate(errp, local_err);
+-- 
+2.17.1
+
