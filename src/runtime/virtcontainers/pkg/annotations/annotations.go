@@ -270,3 +270,13 @@ const (
 	// SHA512 is the SHA-512 (64) hash algorithm
 	SHA512 string = "sha512"
 )
+
+// Third-party annotations - annotations defined by other projects or k8s plugins
+// but that can change Kata Containers behaviour.
+
+const (
+	// This annotation enables SGX. Hardware-based isolation and memory encryption.
+	// Supported suffixes are: Ki | Mi | Gi | Ti | Pi | Ei . For example: 4Mi
+	// For more information about supported suffixes see https://physics.nist.gov/cuu/Units/binary.html
+	SGXEPC = "sgx.intel.com/epc"
+)

@@ -321,6 +321,15 @@ func (clh *cloudHypervisor) createSandbox(ctx context.Context, id string, networ
 		cache:      clh.config.VirtioFSCache,
 	}
 
+	if clh.config.SGXEPCSize > 0 {
+		epcSection := chclient.SgxEpcConfig{
+			Size:     clh.config.SGXEPCSize,
+			Prefault: true,
+		}
+
+		clh.vmconfig.SgxEpc = append(clh.vmconfig.SgxEpc, epcSection)
+	}
+
 	return nil
 }
 
