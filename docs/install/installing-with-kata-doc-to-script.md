@@ -5,7 +5,7 @@
 * [Docker Installation and Setup](#docker-installation-and-setup)
 
 ## Introduction
-Use [these installation instructions](README.md#supported-distributions) together with
+Use [these installation instructions](README.md#packaged-installation-methods) together with
 [`kata-doc-to-script`](https://github.com/kata-containers/tests/blob/master/.ci/kata-doc-to-script.sh)
 to generate installation bash scripts.
 
