@@ -374,7 +374,9 @@ generate_qemu_options() {
 		qemu_options+=(size:--disable-cloop)
 		qemu_options+=(size:--disable-dmg)
 		qemu_options+=(size:--disable-parallels)
-		qemu_options+=(size:--disable-vxhs)
+		if [ "${qemu_version_major}" -le 5 ] && [ "${qemu_version_minor}" -lt 1 ]; then
+			qemu_options+=(size:--disable-vxhs)
+		fi
 	fi
 
 	#---------------------------------------------------------------------
