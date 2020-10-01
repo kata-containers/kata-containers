@@ -83,6 +83,7 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (config testRuntimeConf
 	disableNewNetNs := false
 	sharedFS := "virtio-9p"
 	virtioFSdaemon := path.Join(dir, "virtiofsd")
+	epcSize := int64(0)
 
 	configFileOptions := ktu.RuntimeConfigOptions{
 		Hypervisor:           "qemu",
@@ -165,6 +166,7 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (config testRuntimeConf
 		SharedFS:              sharedFS,
 		VirtioFSDaemon:        virtioFSdaemon,
 		VirtioFSCache:         defaultVirtioFSCacheMode,
+		SGXEPCSize:            epcSize,
 	}
 
 	agentConfig := vc.KataAgentConfig{
