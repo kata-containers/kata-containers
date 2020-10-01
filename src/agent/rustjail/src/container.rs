@@ -1018,7 +1018,7 @@ where
     })
 }
 
-fn do_exec(args: &[String]) -> ! {
+fn do_exec(args: &[String]) -> Result<()> {
     let path = &args[0];
     let p = CString::new(path.to_string()).unwrap();
     let sa: Vec<CString> = args
@@ -1037,8 +1037,8 @@ fn do_exec(args: &[String]) -> ! {
             _ => std::process::exit(-2),
         }
     }
-
-    unreachable!()
+    // should never reach here
+    Ok(())
 }
 
 fn update_namespaces(logger: &Logger, spec: &mut Spec, init_pid: RawFd) -> Result<()> {
