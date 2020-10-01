@@ -6,7 +6,7 @@
 * [Further Information](#further-information)
 
 ## Introduction
-`kata-manager` automates the Kata Containers installation procedure documented for [these Linux distributions](README.md#supported-distributions).
+`kata-manager` automates the Kata Containers installation procedure documented for [these Linux distributions](README.md#packaged-installation-methods).
 
 > **Note**:
 > - `kata-manager` requires `curl` and `sudo` installed on your system.
