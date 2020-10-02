@@ -75,6 +75,11 @@ You need to install the following to build Kata Containers components:
   To view the versions of go known to work, see the `golang` entry in the
   [versions database](../versions.yaml).
 
+- [rust](https://www.rust-lang.org/tools/install)
+
+  To view the versions of rust known to work, see the `rust` entry in the
+  [versions database](../versions.yaml).
+
 - `make`.
 - `gcc` (required for building the shim and runtime).
 
@@ -246,6 +251,15 @@ $ sudo systemctl restart systemd-journald
 > **Note:**
 >
 > - You should only do this step if you are testing with the latest version of the agent.
+
+The rust-agent is built with a static linked `musl.` To configure this:
+
+```
+rustup target add x86_64-unknown-linux-musl
+sudo ln -s /usr/bin/g++ /bin/musl-g++
+```
+
+To build the agent:
 
 ```
 $ go get -d -u github.com/kata-containers/kata-containers
