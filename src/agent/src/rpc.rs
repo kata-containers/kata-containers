@@ -891,10 +891,10 @@ impl protocols::agent_ttrpc::AgentService for agentService {
 
         let p = match find_process(&mut sandbox, cid.as_str(), eid.as_str(), false) {
             Ok(v) => v,
-            Err(e) => {
+            Err(_) => {
                 return Err(ttrpc::Error::RpcStatus(ttrpc::get_status(
                     ttrpc::Code::INVALID_ARGUMENT,
-                    format!("invalid argument: {:?}", e),
+                    "invalid argument".to_string(),
                 )));
             }
         };
@@ -923,10 +923,10 @@ impl protocols::agent_ttrpc::AgentService for agentService {
         let mut sandbox = s.lock().unwrap();
         let p = match find_process(&mut sandbox, cid.as_str(), eid.as_str(), false) {
             Ok(v) => v,
-            Err(e) => {
+            Err(_e) => {
                 return Err(ttrpc::Error::RpcStatus(ttrpc::get_status(
                     ttrpc::Code::UNAVAILABLE,
-                    format!("invalid argument: {:?}", e),
+                    "cannot find the process".to_string(),
                 )));
             }
         };
@@ -948,10 +948,10 @@ impl protocols::agent_ttrpc::AgentService for agentService {
             };
 
             let err = libc::ioctl(fd, TIOCSWINSZ, &win);
-            if let Err(e) = Errno::result(err).map(drop) {
+            if let Err(_) = Errno::result(err).map(drop) {
                 return Err(ttrpc::Error::RpcStatus(ttrpc::get_status(
                     ttrpc::Code::INTERNAL,
-                    format!("ioctl error: {:?}", e),
+                    "ioctl error".to_string(),
                 )));
             }
         }
@@ -976,10 +976,10 @@ impl protocols::agent_ttrpc::AgentService for agentService {
 
         let iface = match rtnl.update_interface(interface.as_ref().unwrap()) {
             Ok(v) => v,
-            Err(e) => {
+            Err(_) => {
                 return Err(ttrpc::Error::RpcStatus(ttrpc::get_status(
                     ttrpc::Code::INTERNAL,
-                    format!("update interface: {:?}", e),
+                    "update interface".to_string(),
                 )));
             }
         };
@@ -1005,10 +1005,10 @@ impl protocols::agent_ttrpc::AgentService for agentService {
         // get current routes to return when error out
         let crs = match rtnl.list_routes() {
             Ok(routes) => routes,
-            Err(e) => {
+            Err(_) => {
                 return Err(ttrpc::Error::RpcStatus(ttrpc::get_status(
                     ttrpc::Code::INTERNAL,
-                    format!("update routes: {:?}", e),
+                    "update routes".to_string(),
                 )));
             }
         };
@@ -1037,10 +1037,10 @@ impl protocols::agent_ttrpc::AgentService for agentService {
         let rtnl = sandbox.rtnl.as_mut().unwrap();
         let v = match rtnl.list_interfaces() {
             Ok(value) => value,
-            Err(e) => {
+            Err(_) => {
                 return Err(ttrpc::Error::RpcStatus(ttrpc::get_status(
                     ttrpc::Code::INTERNAL,
-                    format!("list interface: {:?}", e),
+                    "list interface".to_string(),
                 )));
             }
         };
@@ -1066,10 +1066,10 @@ impl protocols::agent_ttrpc::AgentService for agentService {
 
         let v = match rtnl.list_routes() {
             Ok(value) => value,
-            Err(e) => {
+            Err(_) => {
                 return Err(ttrpc::Error::RpcStatus(ttrpc::get_status(
                     ttrpc::Code::INTERNAL,
-                    format!("list routes: {:?}", e),
+                    "list routes".to_string(),
                 )));
             }
         };
