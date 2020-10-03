@@ -75,6 +75,11 @@ You need to install the following to build Kata Containers components:
   To view the versions of go known to work, see the `golang` entry in the
   [versions database](../versions.yaml).
 
+- [rust](https://www.rust-lang.org/tools/install)
+
+  To view the versions of rust known to work, see the `rust` entry in the
+  [versions database](../versions.yaml).
+
 - `make`.
 - `gcc` (required for building the shim and runtime).
 
@@ -247,6 +252,15 @@ $ sudo systemctl restart systemd-journald
 >
 > - You should only do this step if you are testing with the latest version of the agent.
 
+The rust-agent is built with a static linked `musl.` To configure this:
+
+```
+rustup target add x86_64-unknown-linux-musl
+sudo ln -s /usr/bin/g++ /bin/musl-g++
+```
+
+To build the agent:
+
 ```
 $ go get -d -u github.com/kata-containers/kata-containers
 $ cd $GOPATH/src/github.com/kata-containers/kata-containers/src/agent && make
@@ -288,9 +302,9 @@ You MUST choose one of `alpine`, `centos`, `clearlinux`, `debian`, `euleros`, `f
 > - You should only do this step if you are testing with the latest version of the agent.
 
 ```
-$ sudo install -o root -g root -m 0550 -t ${ROOTFS_DIR}/bin ../../agent/kata-agent
-$ sudo install -o root -g root -m 0440 ../../agent/kata-agent.service ${ROOTFS_DIR}/usr/lib/systemd/system/
-$ sudo install -o root -g root -m 0440 ../../agent/kata-containers.target ${ROOTFS_DIR}/usr/lib/systemd/system/
+$ sudo install -o root -g root -m 0550 -t ${ROOTFS_DIR}/bin ../../../src/agent/target/x86_64-unknown-linux-musl/release/kata-agent
+$ sudo install -o root -g root -m 0440 ../../../src/agent/kata-agent.service ${ROOTFS_DIR}/usr/lib/systemd/system/
+$ sudo install -o root -g root -m 0440 ../../../src/agent/kata-containers.target ${ROOTFS_DIR}/usr/lib/systemd/system/
 ```
 
 ### Build a rootfs image
