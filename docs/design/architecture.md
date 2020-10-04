@@ -167,9 +167,9 @@ interfaces with `TAP` ones using Traffic Control:
 
 With a TC filter in place, a redirection is created between the container network and the
 virtual machine. As an example, the CNI may create a device, `eth0`, in the container's network
-namespace, which is a VETH device. Kata Containers will create a tap device for the VM, `kata_tap0`,
-and setup a TC redirection filter to mirror traffic from `eth0`'s ingress to `kata_tap0`'s egress,
-and a second to mirror traffic from `kata_tap0`'s ingress to `eth0`'s egress.
+namespace, which is a VETH device. Kata Containers will create a tap device for the VM, `tap0_kata`,
+and setup a TC redirection filter to mirror traffic from `eth0`'s ingress to `tap0_kata`'s egress,
+and a second to mirror traffic from `tap0_kata`'s ingress to `eth0`'s egress.
 
 Kata Containers maintains support for MACVTAP, which was an earlier implementation used in Kata. TC-filter
 is the default because it allows for simpler configuration, better CNI plugin compatibility, and performance
