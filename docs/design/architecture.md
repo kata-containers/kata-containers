@@ -13,7 +13,6 @@
   - [Runtime](#runtime)
     - [Configuration](#configuration)
   - [Networking](#networking)
-    - [CNM](#cnm)
     - [Network Hotplug](#network-hotplug)
   - [Storage](#storage)
   - [Kubernetes support](#kubernetes-support)
@@ -157,65 +156,30 @@ In order to do so, container engines will usually add one end of a virtual
 ethernet (`veth`) pair into the container networking namespace. The other end of
 the `veth` pair is added to the host networking namespace.
 
-This is a very namespace-centric approach as many hypervisors (in particular QEMU)
-cannot handle `veth` interfaces. Typically, `TAP` interfaces are created for VM
-connectivity.
+This is a very namespace-centric approach as many hypervisors/VMMs cannot handle `veth` 
+interfaces. Typically, `TAP` interfaces are created for VM connectivity.
 
 To overcome incompatibility between typical container engines expectations
 and virtual machines, Kata Containers networking transparently connects `veth`
-interfaces with `TAP` ones using MACVTAP:
+interfaces with `TAP` ones using Traffic Control:
 
 ![Kata Containers networking](arch-images/network.png)
+
+With a TC filter in place, a redirection is created between the container network and the
+virtual machine. As an example, the CNI may create a device, `eth0`, in the container's network
+namespace, which is a VETH device. Kata Containers will create a tap device for the VM, `kata_tap0`,
+and setup a TC redirection filter to mirror traffic from `eth0`'s ingress to `kata_tap0`'s egress,
+and a second to mirror traffic from `kata_tap0`'s ingress to `eth0`'s egress.
+
+Kata Containers maintains support for MACVTAP, which was an earlier implementation used in Kata. TC-filter
+is the default because it allows for simpler configuration, better CNI plugin compatibility, and performance
+on par with MACVTAP.
+
+Kata Containers has deprecated support for bridge due to lacking performance relative to TC-filter and MACVTAP.
 
  Kata Containers supports both
 [CNM](https://github.com/docker/libnetwork/blob/master/docs/design.md#the-container-network-model)
 and [CNI](https://github.com/containernetworking/cni) for networking management.
-
-### CNM
-
-![High-level CNM Diagram](arch-images/CNM_overall_diagram.png)
-
-__CNM lifecycle__
-
-1.  `RequestPool`
-
-2.  `CreateNetwork`
-
-3.  `RequestAddress`
-
-4.  `CreateEndPoint`
-
-5.  `CreateContainer`
-
-6.  Create `config.json`
-
-7.  Create PID and network namespace
-
-8.  `ProcessExternalKey`
-
-9.  `JoinEndPoint`
-
-10. `LaunchContainer`
-
-11. Launch
-
-12. Run container
-
-![Detailed CNM Diagram](arch-images/CNM_detailed_diagram.png)
-
-__Runtime network setup with CNM__
-
-1. Read `config.json`
-
-2. Create the network namespace
-
-3. Call the `prestart` hook (from inside the netns)
-
-4. Scan network interfaces inside netns and get the name of the interface
-  created by prestart hook
-
-5. Create bridge, TAP, and link all together with network interface previously
-  created
 
 ### Network Hotplug
 
