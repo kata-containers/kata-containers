@@ -18,6 +18,6 @@ type MemoryConfig struct {
 	Shared bool `json:"shared,omitempty"`
 	Hugepages bool `json:"hugepages,omitempty"`
 	Balloon bool `json:"balloon,omitempty"`
-	BalloonSize int32 `json:"balloon_size,omitempty"`
+	BalloonSize int64 `json:"balloon_size,omitempty"`
 	Zones []MemoryZoneConfig `json:"zones,omitempty"`
 }

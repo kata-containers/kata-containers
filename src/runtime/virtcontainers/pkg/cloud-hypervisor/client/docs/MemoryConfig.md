@@ -12,7 +12,7 @@ Name | Type | Description | Notes
 **Shared** | **bool** |  | [optional] [default to false]
 **Hugepages** | **bool** |  | [optional] [default to false]
 **Balloon** | **bool** |  | [optional] [default to false]
-**BalloonSize** | **int32** |  | [optional] 
+**BalloonSize** | **int64** |  | [optional] 
 **Zones** | [**[]MemoryZoneConfig**](MemoryZoneConfig.md) |  | [optional] 
 
 [[Back to Model list]](../README.md#documentation-for-models) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to README]](../README.md)

@@ -828,7 +828,7 @@ components:
           default: false
           type: boolean
         host_numa_node:
-          format: uint32
+          format: int32
           type: integer
         hotplug_size:
           format: int64
@@ -896,7 +896,7 @@ components:
           default: false
           type: boolean
         balloon_size:
-          format: uint64
+          format: int64
           type: integer
         zones:
           items:
@@ -1172,10 +1172,10 @@ components:
         destination: 3
       properties:
         destination:
-          format: uint32
+          format: int32
           type: integer
         distance:
-          format: uint8
+          format: int32
           type: integer
       required:
       - destination
@@ -1197,11 +1197,11 @@ components:
         guest_numa_id: 9
       properties:
         guest_numa_id:
-          format: uint32
+          format: int32
           type: integer
         cpus:
           items:
-            format: uint8
+            format: int32
             type: integer
           type: array
         distances:
@@ -1248,8 +1248,15 @@ components:
     VmAddDevice:
       example:
         path: path
+        iommu: false
+        id: id
       properties:
         path:
+          type: string
+        iommu:
+          default: false
+          type: boolean
+        id:
           type: string
       type: object
     VmRemoveDevice:
