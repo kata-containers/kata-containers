@@ -13,9 +13,6 @@
 #![allow(non_upper_case_globals)]
 // #![allow(unused_comparisons)]
 #[macro_use]
-#[cfg(test)]
-extern crate serial_test;
-#[macro_use]
 extern crate serde;
 extern crate serde_json;
 #[macro_use]

@@ -968,7 +968,6 @@ mod tests {
     use tempfile::tempdir;
 
     #[test]
-    #[serial(chdir)]
     fn test_init_rootfs() {
         let stdout_fd = std::io::stdout().as_raw_fd();
         let mut spec = oci::Spec::default();
@@ -1053,7 +1052,6 @@ mod tests {
     }
 
     #[test]
-    #[serial(chdir)]
     fn test_mount_cgroups() {
         let stdout_fd = std::io::stdout().as_raw_fd();
         let mount = oci::Mount {
@@ -1095,14 +1093,12 @@ mod tests {
     }
 
     #[test]
-    #[serial(chdir)]
     fn test_pivot_root() {
         let ret = pivot_rootfs("/tmp");
         assert!(ret.is_ok(), "Should pass. Got: {:?}", ret);
     }
 
     #[test]
-    #[serial(chdir)]
     fn test_ms_move_rootfs() {
         let ret = ms_move_root("/abc");
         assert!(
@@ -1136,7 +1132,6 @@ mod tests {
     }
 
     #[test]
-    #[serial(chdir)]
     fn test_finish_rootfs() {
         let stdout_fd = std::io::stdout().as_raw_fd();
         let mut spec = oci::Spec::default();
@@ -1172,7 +1167,6 @@ mod tests {
     }
 
     #[test]
-    #[serial(chdir)]
     fn test_mknod_dev() {
         skip_if_not_root!();
 
