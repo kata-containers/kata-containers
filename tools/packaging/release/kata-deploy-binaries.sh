@@ -11,6 +11,8 @@ set -o pipefail
 
 readonly script_name="$(basename "${BASH_SOURCE[0]}")"
 readonly script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+readonly pkg_root_dir="$(cd "${script_dir}/.." && pwd)"
+readonly repo_root_dir="$(cd "${script_dir}/../../../" && pwd)"
 readonly project="kata-containers"
 readonly prefix="/opt/kata"
 readonly project_to_attach="github.com/${project}/${project}"
@@ -90,7 +92,7 @@ install_image() {
 	image_destdir="${destdir}/${prefix}/share/kata-containers/"
 	info "Create image"
 	image_tarball=$(find . -name 'kata-containers-'"${kata_version}"'-*.tar.gz')
-	[ -f "${image_tarball}" ] || "${script_dir}/../obs-packaging/kata-containers-image/build_image.sh" -v "${kata_version}"
+	[ -f "${image_tarball}" ] || "${pkg_root_dir}/guest-image/build_image.sh" -v "${kata_version}"
 	image_tarball=$(find . -name 'kata-containers-'"${kata_version}"'-*.tar.gz')
 	[ -f "${image_tarball}" ] || die "image not found"
 	info "Install image in destdir ${image_tarball}"
@@ -111,7 +113,7 @@ install_image() {
 #Install kernel asset
 install_kernel() {
 	kata_version=${1:-$kata_version}
-	pushd "${script_dir}/../"
+	pushd "${pkg_root_dir}"
 	info "build kernel"
 	kata_version="${kata_version}" ./kernel/build-kernel.sh setup
 	kata_version="${kata_version}" ./kernel/build-kernel.sh build
@@ -126,7 +128,7 @@ install_kernel() {
 #Install experimental kernel asset
 install_experimental_kernel() {
 	kata_version=${1:-$kata_version}
-	pushd "${script_dir}/../"
+	pushd "${pkg_root_dir}"
 	info "build experimental kernel"
 	kata_version="${kata_version}" ./kernel/build-kernel.sh -e setup
 	kata_version="${kata_version}" ./kernel/build-kernel.sh -e build
@@ -142,21 +144,21 @@ install_experimental_kernel() {
 install_qemu() {
 	kata_version=${1:-$kata_version}
 	info "build static qemu"
-	kata_version="${kata_version}" "${script_dir}/../static-build/qemu/build-static-qemu.sh"
+	kata_version="${kata_version}" "${pkg_root_dir}/static-build/qemu/build-static-qemu.sh"
 }
 
 # Install static qemu-virtiofsd asset
 install_qemu_virtiofsd() {
 	kata_version=${1:-$kata_version}
 	info "build static qemu-virtiofs"
-	kata_version="${kata_version}" "${script_dir}/../static-build/qemu-virtiofs/build-static-qemu-virtiofs.sh"
+	kata_version="${kata_version}" "${pkg_root_dir}/static-build/qemu-virtiofs/build-static-qemu-virtiofs.sh"
 }
 
 # Install static firecracker asset
 install_firecracker() {
 	kata_version=${1:-$kata_version}
 	info "build static firecracker"
-	[ -f "firecracker/firecracker-static" ] || kata_version="${kata_version}" "${script_dir}/../static-build/firecracker/build-static-firecracker.sh"
+	[ -f "firecracker/firecracker-static" ] || kata_version="${kata_version}" "${pkg_root_dir}/static-build/firecracker/build-static-firecracker.sh"
 	info "Install static firecracker"
 	mkdir -p "${destdir}/opt/kata/bin/"
 	sudo install -D --owner root --group root --mode 0744  firecracker/firecracker-static "${destdir}/opt/kata/bin/firecracker"
@@ -170,7 +172,7 @@ install_firecracker() {
 install_clh() {
 	kata_version=${1:-$kata_version}
 	info "build static cloud-hypervisor"
-	kata_version="${kata_version}" "${script_dir}/../static-build/cloud-hypervisor/build-static-clh.sh"
+	kata_version="${kata_version}" "${pkg_root_dir}/static-build/cloud-hypervisor/build-static-clh.sh"
 	info "Install static cloud-hypervisor"
 	mkdir -p "${destdir}/opt/kata/bin/"
 	sudo install -D --owner root --group root --mode 0744 cloud-hypervisor "${destdir}/opt/kata/bin/cloud-hypervisor"
@@ -182,7 +184,7 @@ install_clh() {
 
 install_docker_config_script() {
 	local docker_config_script_name="kata-configure-docker.sh"
-	local docker_config_script="${script_dir}/../static-build/scripts/${docker_config_script_name}"
+	local docker_config_script="${pkg_root_dir}/static-build/scripts/${docker_config_script_name}"
 
 	local script_dest_dir="${destdir}/opt/kata/share/scripts"
 
@@ -195,7 +197,7 @@ install_docker_config_script() {
 #Install all components that are not assets
 install_kata_components() {
 	kata_version=${1:-$kata_version}
-	pushd "${script_dir}/../../../src/runtime"
+	pushd "${repo_root_dir}/src/runtime"
 	echo "Checkout to version ${kata_version}"
 	git checkout "${kata_version}"
 	echo "Build"
@@ -273,7 +275,6 @@ main() {
 	destdir="${workdir}/kata-static-${kata_version}-$(uname -m)"
 	info "DESTDIR ${destdir}"
 	mkdir -p "${destdir}"
-	install_image
 	install_kata_components
 	install_experimental_kernel
 	install_kernel
@@ -281,6 +282,7 @@ main() {
 	install_qemu
 	install_qemu_virtiofsd
 	install_firecracker
+	install_image
 	install_docker_config_script
 
 	untar_qemu_binaries
