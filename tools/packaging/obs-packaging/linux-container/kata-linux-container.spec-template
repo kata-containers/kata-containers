@@ -1,0 +1,165 @@
+#
+# This is a special configuration of the Linux kernel, aimed exclusively
+# for running inside a container
+# This specialization allows us to optimize memory footprint and boot time.
+#
+
+Name:           kata-linux-container
+Version:        @VERSION@.@CONFIG_VERSION@
+Release:        @RELEASE@
+License:        GPL-2.0
+Summary:        The Linux kernel optimized for running inside a container
+Group:          System/Kernel
+Url:            http://www.kernel.org/
+Source0:        https://cdn.kernel.org/pub/linux/kernel/v5.x/linux-@VERSION@.tar.xz
+Source1:        kata-kernel-configs.tar.gz
+Source2:        kata-multiarch.sh
+
+%define kversion %{version}-%{release}.container
+
+BuildRequires:  bash >= 2.03
+BuildRequires:  bc
+BuildRequires:  binutils-devel
+
+%if 0%{?rhel_version}
+BuildRequires:  elfutils-devel
+%endif
+
+%if 0%{?suse_version}
+BuildRequires:  libelf-devel
+BuildRequires: fdupes
+%endif
+
+%if 0%{?fedora} || 0%{?centos} <= 7
+BuildRequires:  pkgconfig(libelf)
+%endif
+
+%if 0%{?centos} >= 8
+BuildRequires: elfutils-libelf-devel
+%endif
+
+BuildRequires:  make >= 3.78
+BuildRequires:  openssl-devel
+BuildRequires:  flex
+BuildRequires:  bison
+
+# don't strip .ko files!
+%global __os_install_post %{nil}
+%define debug_package %{nil}
+%define __strip /bin/true
+
+# Patches
+@RPM_PATCH_LIST@
+
+%description
+The Linux kernel.
+
+%package debug
+Summary: Debug components for the %{name} package
+Group:   System/Kernel
+
+%description debug
+Debug components for the kata-linux-container package.
+This package includes the kernel config and the kernel map.
+
+%prep
+%setup -q -n linux-@VERSION@
+%setup -q -T -D -n linux-@VERSION@ -a 1
+cp %{SOURCE2} .
+chmod +x $(basename %{SOURCE2})
+
+# Patches
+@RPM_APPLY_PATCHES@
+
+%build
+
+BuildKernel() {
+    local kernelArch=$(./kata-multiarch.sh -a %{_arch})
+    ExtraVer="-%{release}.container"
+
+    perl -p -i -e "s/^EXTRAVERSION.*/EXTRAVERSION = ${ExtraVer}/" Makefile
+
+    make -s mrproper
+
+    # Runtime .config selection based on kernelArch
+    rm -f .config
+    find kata-kernel-configs -name "${kernelArch}_kata_kvm_*" -exec cp {} .config \;
+    if [ ! -f .config ]; then
+        # Use fragments to generate the .config
+        frag_dir="kata-kernel-configs/fragments"
+        KCONFIG_CONFIG=.config ARCH=${kernelArch} scripts/kconfig/merge_config.sh -r -n ${frag_dir}/common/*.conf ${frag_dir}/${kernelArch}/*
+    fi
+    [ -f .config ] || (echo "ERROR: cannot find the kernel config file for the ${kernelArch} architecture"; exit 1)
+
+    %if 0%{?rhel_version} || 0%{?suse_version}
+    # RHEL in OBS has updated gcc.
+    # https://github.com/kata-containers/packaging/pull/370#issuecomment-469620154
+    sed -i -e 's/CONFIG_RETPOLINE=y/CONFIG_RETPOLINE=n/g' .config
+    %endif
+
+    %if 0%{?fedora}
+    #Fedora uses gcc 8, build is failing due to warnings.
+    export CFLAGS="-Wno-error=restrict"
+    export EXTRA_CFLAGS="-Wno-format-truncation -Wno-cast-function-type -Wno-error=restrict -Wno-error"
+    %endif
+    # https://github.com/kata-containers/packaging/issues/394 enable reproducible builds:
+    export KBUILD_BUILD_USER=katabuilduser
+    export KBUILD_BUILD_HOST=katabuildhost
+    # Default to zero seconds after midnight 1970-01-01 (the epoch)
+    export KBUILD_BUILD_TIMESTAMP="$(LANG=C date -u -d "@${SOURCE_DATE_EPOCH:-0}")"
+
+    make -s ARCH=$kernelArch oldconfig > /dev/null
+    make -s CONFIG_DEBUG_SECTION_MISMATCH=y %{?_smp_mflags} ARCH=$kernelArch %{?sparse_mflags} || exit 1
+}
+
+BuildKernel
+
+%install
+
+InstallKernel() {
+    compressedImage=$(./kata-multiarch.sh -i %{_arch})
+    rawImage="vmlinux"
+    KernelVer=%{kversion}
+    KernelDir=%{buildroot}/usr/share/kata-containers
+
+    mkdir   -p ${KernelDir}
+
+    if [ -n "$compressedImage" ]; then
+        cp "$compressedImage" ${KernelDir}/vmlinuz-$KernelVer
+        chmod 755 ${KernelDir}/vmlinuz-$KernelVer
+        ln -sf vmlinuz-$KernelVer ${KernelDir}/vmlinuz.container
+    fi
+
+    cp $rawImage ${KernelDir}/vmlinux-$KernelVer
+    chmod 755 ${KernelDir}/vmlinux-$KernelVer
+    ln -sf vmlinux-$KernelVer ${KernelDir}/vmlinux.container
+
+    cp .config "${KernelDir}/config-${KernelVer}"
+    cp System.map "${KernelDir}/System.map-${KernelVer}"
+
+    rm -f %{buildroot}/usr/lib/modules/$KernelVer/build
+    rm -f %{buildroot}/usr/lib/modules/$KernelVer/source
+}
+
+InstallKernel
+
+rm -rf %{buildroot}/usr/lib/firmware
+
+%if 0%{?suse_version}
+%fdupes -s %{buildroot}
+%endif
+
+%files
+%dir /usr/share/kata-containers
+/usr/share/kata-containers/vmlinux-%{kversion}
+/usr/share/kata-containers/vmlinux.container
+
+%ifnarch ppc64le
+/usr/share/kata-containers/vmlinuz-%{kversion}
+/usr/share/kata-containers/vmlinuz.container
+%endif
+
+%files debug
+%defattr(-,root,root,-)
+/usr/share/kata-containers/config-%{kversion}
+/usr/share/kata-containers/System.map-%{kversion}
