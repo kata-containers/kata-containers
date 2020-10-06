@@ -1,0 +1,13 @@
+Source: qemu-vanilla
+Section: devel
+Priority: optional
+Maintainer: Kata containers team <https://github.com/kata-containers/>
+Build-Depends: debhelper (>= 9), cpio, libelf-dev, rsync, libdw-dev, pkg-config, flex, bison, libaudit-dev, bc, python3-dev, gawk, autoconf, automake, libtool, libltdl-dev, libglib2.0-dev, libglib2.0-0, libcap-dev, libcap-ng-dev, libattr1-dev, m4, libnuma-dev, zlib1g-dev, libpixman-1-0, libpixman-1-dev, libselinux1-dev, libffi-dev, libmount-dev, libblkid-dev
+Standards-Version: 3.9.6
+Homepage: https://katacontainers.io
+
+Package: qemu-vanilla
+Architecture: @deb_arch@
+Depends: ${shlibs:Depends}, ${misc:Depends}, ${perl:Depends},
+Description: linux kernel optimised for container-like workloads.
+ Linux kernel optimised for container-like workloads

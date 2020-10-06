@@ -1,0 +1,46 @@
+#!/usr/bin/make -f
+export DH_VERBOSE = 1
+export PKG_NAME=kata-runtime
+export DOMAIN=github.com
+export ORG=kata-containers
+export PROJECT=runtime
+export IMPORTNAME=$(DOMAIN)/$(ORG)/$(PROJECT)
+export DH_GOPKG:=$(IMPORTNAME)
+export DEB_BUILD_OPTIONS=nocheck
+export PATH:=/usr/src/packages/BUILD/local/go/bin:$(PATH)
+export GOPATH=/usr/src/packages/BUILD/go
+export GOROOT=/usr/src/packages/BUILD/local/go
+export DH_OPTIONS
+
+export DEFAULT_QEMU=qemu-vanilla-system-x86_64
+
+GO_VERSION=@GO_VERSION@
+
+%:
+	dh $@
+
+override_dh_auto_clean:
+
+override_dh_auto_build:
+	mkdir -p /usr/src/packages/BUILD/local/
+	mkdir -p /usr/src/packages/BUILD/go/src/$(DOMAIN)/$(ORG)/
+	tar xzf /usr/src/packages/SOURCES/go$(GO_VERSION).linux-@GO_ARCH@.tar.gz -C /usr/src/packages/BUILD/local
+	ln -s /usr/src/packages/BUILD /usr/src/packages/BUILD/go/src/$(IMPORTNAME)
+	cd $(GOPATH)/src/$(IMPORTNAME)/; \
+	make \
+		QEMUCMD=$(DEFAULT_QEMU) \
+		COMMIT=@HASH@ \
+		SKIP_GO_VERSION_CHECK=1
+
+override_dh_auto_install:
+	mkdir -p debian/$(PKG_NAME)
+
+	cd $(GOPATH)/src/$(IMPORTNAME)/; \
+	make install \
+		DESTDIR=$(shell pwd)/debian/$(PKG_NAME)/ \
+		PREFIX=/usr \
+		COMMIT=@HASH@ \
+		QEMUCMD=$(DEFAULT_QEMU) \
+		SKIP_GO_VERSION_CHECK=1
+
+	sed -i -e '/^initrd =/d' $(shell pwd)/debian/$(PKG_NAME)/usr/share/defaults/kata-containers/configuration.toml
