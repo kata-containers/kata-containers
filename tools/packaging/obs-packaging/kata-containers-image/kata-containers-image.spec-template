@@ -1,0 +1,43 @@
+Name:           kata-containers-image
+Version:        @VERSION@
+Release:        @RELEASE@
+License:        Artistic-1.0 and BSD-3-Clause and BSD-4-Clause-UC and GFDL-1.3 and GPL-2.0 and GPL-2.0+ and GPL-3.0 and GPL-3.0+ and LGPL-2.0 and LGPL-2.0+ and LGPL-2.1 and LGPL-3.0+ and MIT and MPL-2.0
+Summary:        Kata Containers Image
+Url:            https://github.com/kata-containers/osbuilder
+Group:          image
+Source0:        kata-containers.tar.gz
+Source1:        LICENSE
+
+%global debug_package %{nil}
+
+@RPM_PATCH_LIST@
+
+%description
+Kata Containers rootfs image
+
+%prep
+# Patches
+@RPM_APPLY_PATCHES@
+
+%install
+ImageDir=%{buildroot}/usr/share/kata-containers
+mkdir -p ${ImageDir}
+
+pushd %{_sourcedir}
+tar xfz kata-containers.tar.gz
+image=$(find ${PWD} -type f -name '*.img')
+initrd=$(find ${PWD} -type f -name '*.initrd')
+popd
+install -m 0400 -p "${image}" ${ImageDir}/
+install -m 0400 -p "${initrd}"  ${ImageDir}/
+ln -s /usr/share/kata-containers/$(basename "${image}") ${ImageDir}/kata-containers.img
+ln -s /usr/share/kata-containers/$(basename "${initrd}")  ${ImageDir}/kata-containers-initrd.img
+
+%files
+%if 0%{?suse_version}
+%dir /usr/share/kata-containers
+%endif
+/usr/share/kata-containers/kata-containers-image*.img
+/usr/share/kata-containers/kata-containers.img
+/usr/share/kata-containers/kata-containers-initrd*.initrd
+/usr/share/kata-containers/kata-containers-initrd.img

@@ -1,0 +1,25 @@
+#
+# Copyright (c) 2018 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+
+# Installation variables
+DESTDIR :=
+DEFAULTSDIR := /usr/share/
+PROJECT_DIR := Kata-containers
+VMLINUX := @VMLINUX@
+VMLINUZ := @VMLINUZ@
+
+DESTSYSCONFDIR := $(abspath $(DESTDIR)/$(DEFAULTSDIR)/$(PROJECT_DIR))
+
+
+VMLINUX_DEST := $(abspath $(DESTSYSCONFDIR)/$(VMLINUX))
+VMLINUZ_DEST := $(abspath $(DESTSYSCONFDIR)/$(VMLINUZ))
+
+
+install:
+	install -D --owner root --group root --mode 0644 $(VMLINUX) $(VMLINUX_DEST)
+	install -D --owner root --group root --mode 0644 $(VMLINUZ) $(VMLINUZ_DEST)
+	ln -sf $(VMLINUX_DEST) $(DESTSYSCONFDIR)/vmlinuz.container
+	ln -sf $(VMLINUZ_DEST) $(DESTSYSCONFDIR)/vmlinux.container

@@ -1,0 +1,26 @@
+#!/usr/bin/make -f
+include /usr/share/dpkg/default.mk
+export LANG=C
+%:
+	dh $@
+
+override_dh_auto_configure:
+	chmod a+x "../SOURCES/configure-hypervisor.sh"
+	eval "../SOURCES/configure-hypervisor.sh" "qemu-vanilla" | sed -e 's/--enable-libpmem//g' | xargs ./configure --prefix=/usr
+override_dh_auto_build:
+	make
+
+override_dh_auto_install:
+	dh_auto_install
+	for file in $(CURDIR)/debian/qemu-vanilla/usr/bin/* ; do \
+		dir=$$(dirname $$file) ;\
+		bin=$$(basename $$file) ;\
+		new=$$(echo $$bin | sed -e 's/qemu-/qemu-vanilla-/g' -e 's/ivshmem-/ivshmem-vanilla-/g' -e 's/virtfs-/virtfs-vanilla-/g') ;\
+		mv $$file "$$dir"/"$$new" ; \
+	done
+
+override_dh_auto_test:
+	echo "Skip auto test"
+
+override_dh_auto_clean:
+	echo "Skip auto clean"

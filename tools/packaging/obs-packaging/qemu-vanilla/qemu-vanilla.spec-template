@@ -1,0 +1,135 @@
+%global qemu_vanilla_hash @QEMU_VANILLA_HASH@
+Name: qemu-vanilla
+Version: @VERSION@+git.%{qemu_vanilla_hash}
+Release: @RELEASE@
+Source0: %{name}-%{version}.tar.gz
+Source1: qemu-vanilla-rpmlintrc
+Source2: configure-hypervisor.sh
+BuildRoot: %{_tmppath}/%{name}-%{version}-%{release}
+
+Summary  : OpenBIOS development utilities
+Group    : Development/Tools
+License  : BSD-2-Clause and BSD-3-Clause and GPL-2.0 and GPL-2.0+ and LGPL-2.0+ and LGPL-2.1
+
+Requires: qemu-vanilla-bin
+Requires: qemu-vanilla-data
+BuildRequires : automake
+BuildRequires : bc
+BuildRequires : bison
+BuildRequires : flex
+BuildRequires : gcc-c++
+BuildRequires : glib2-devel
+BuildRequires : libattr-devel
+BuildRequires : libcap-devel
+BuildRequires : libcap-ng-devel
+BuildRequires : libtool
+BuildRequires : libtool-ltdl-devel
+BuildRequires : libtool
+BuildRequires : m4
+BuildRequires : findutils
+
+%if 0%{?centos_version}
+BuildRequires : librbd1-devel
+BuildRequires : libmount
+%else
+
+%if ! 0%{?rhel_version}
+BuildRequires : librbd-devel
+%endif
+
+BuildRequires : libselinux-devel
+BuildRequires : libffi-devel
+BuildRequires : libmount-devel
+BuildRequires : libblkid-devel
+
+%endif
+
+%if 0%{?suse_version}
+BuildRequires : libnuma-devel
+%else
+BuildRequires : numactl-devel
+%endif
+
+BuildRequires : python3
+BuildRequires : python3-devel
+BuildRequires : zlib-devel
+BuildRequires : pkgconfig(pixman-1)
+BuildRequires : libpmem-devel
+
+# Patches
+@RPM_PATCH_LIST@
+
+%description
+===========
+QEMU is a generic and open source machine & userspace emulator and
+virtualizer.
+
+%package bin
+Summary: Bin components for the qemu-vanilla package
+Group: Binaries
+Requires: qemu-vanilla-data
+
+%description bin
+bin components for the qemu-vanilla package.
+
+
+%package data
+Summary: Data components for the qemu-vanilla package
+Group: Data
+
+%description data
+data components for the qemu-vanilla package.
+
+%global debug_package %{nil}
+
+%prep
+chmod +x %{_sourcedir}/configure-hypervisor.sh
+
+%setup -q
+# Patches
+@RPM_APPLY_PATCHES@
+
+%build
+export LANG=C
+
+# RHEL in OBS does not provide librados.
+# Remove it: See https://github.com/kata-containers/packaging/issues/36
+"%{_sourcedir}/configure-hypervisor.sh" "qemu-vanilla" \
+%if 0%{?rhel_version}
+	| sed -e 's/--enable-rbd//g' \
+%endif
+	| xargs ./configure --prefix=/usr
+
+make V=1  %{?_smp_mflags}
+
+%install
+rm -rf %{buildroot}
+#%make_install
+make install DESTDIR=%{buildroot}
+## make_install_append content
+for file in %{buildroot}/usr/bin/*
+do
+  dir=$(dirname "$file")
+  bin=$(basename "$file")
+  new=$(echo "$bin"|sed -e 's/qemu-/qemu-vanilla-/g' -e 's/ivshmem-/ivshmem-vanilla-/g' -e 's/virtfs-/virtfs-vanilla-/g')
+  mv "$file" "$dir/$new"
+done
+## make_install_append end
+
+%files
+%defattr(-,root,root,-)
+
+%files bin
+%defattr(-,root,root,-)
+%exclude /usr/bin/qemu-vanilla-ga
+%exclude /usr/bin/qemu-vanilla-pr-helper
+/usr/bin/qemu-vanilla-system-*
+%exclude /usr/bin/virtfs-vanilla-proxy-helper
+%exclude %dir /usr/libexec
+%exclude %dir /usr/libexec/qemu-vanilla
+%exclude /usr/libexec/qemu-vanilla/qemu-bridge-helper
+
+%files data
+%defattr(-,root,root,-)
+%dir /usr/share/qemu-vanilla
+/usr/share/qemu-vanilla/*

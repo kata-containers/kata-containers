@@ -1,0 +1,17 @@
+#!/usr/bin/make -f
+
+%:
+	dh $@
+override_dh_auto_build:
+
+override_dh_auto_install:
+	mkdir -p debian/kata-containers-image ; \
+	tar xzf /usr/src/packages/SOURCES/kata-containers.tar.gz -C /usr/src/packages/SOURCES/ ; \
+	image=$$(find /usr/src/packages/SOURCES/ -type f -name '*.img') ; \
+	initrd=$$(find /usr/src/packages/SOURCES/ -type f -name '*.initrd') ; \
+	install -m 0400 -D $${image} ./debian/kata-containers-image/usr/share/kata-containers/ ; \
+	install -m 0400 -D $${initrd} ./debian/kata-containers-image/usr/share/kata-containers/ ; \
+	ln -s /usr/share/kata-containers/$$(basename $${image}) \
+	./debian/kata-containers-image/usr/share/kata-containers/kata-containers.img ; \
+	ln -s /usr/share/kata-containers/$$(basename $${initrd}) \
+	./debian/kata-containers-image/usr/share/kata-containers/kata-containers-initrd.img ;
