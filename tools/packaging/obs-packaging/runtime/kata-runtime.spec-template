@@ -1,0 +1,97 @@
+%global DOMAIN github.com
+%global ORG kata-containers
+%global PROJECT runtime
+%global IMPORTNAME %{DOMAIN}/%{ORG}/%{PROJECT}
+%global GO_VERSION @GO_VERSION@
+
+%global DEFAULT_QEMU qemu-vanilla-system-x86_64
+
+%define LIBEXECDIR /usr/libexec
+
+%undefine _missing_build_ids_terminate_build
+%define  debug_package %{nil}
+
+Name:      kata-runtime
+# Version is expected to be started with a digit following by an alphanumeric string
+# e.g. 1.0.0+git.1234567
+Version:   @VERSION@
+Release:   @RELEASE@
+Source0:   %{name}-%{version}.tar.gz
+BuildRoot: %{_tmppath}/%{name}-%{version}-%{release}-root-%(%{__id_u} -n)
+Summary  : No detailed summary available
+Group    : Development/Tools
+License  : Apache-2.0
+
+BuildRequires: git
+
+Requires: kata-containers-image = @kata_osbuilder_version@
+Requires: kata-linux-container = @linux_container_version@
+Requires: qemu-vanilla = @qemu_vanilla_version@
+
+# Patches
+@RPM_PATCH_LIST@
+
+%description
+.. contents::
+.. sectnum::
+``kata-runtime``
+===================
+Overview
+--------
+
+%prep
+mkdir local
+tar -C local -xzf ../SOURCES/go%{GO_VERSION}.linux-@GO_ARCH@.tar.gz
+%autosetup -N -S git
+# Patches
+@RPM_APPLY_PATCHES@
+
+
+%build
+export GOROOT=$HOME/rpmbuild/BUILD/local/go
+export PATH=$PATH:$HOME/rpmbuild/BUILD/local/go/bin
+export GOPATH=$HOME/rpmbuild/BUILD/go/
+
+mkdir -p $HOME/rpmbuild/BUILD/go/src/%{DOMAIN}/%{ORG}
+ln -s $HOME/rpmbuild/BUILD/kata-runtime-%{version} $HOME/rpmbuild/BUILD/go/src/%{IMPORTNAME}
+cd $HOME/rpmbuild/BUILD/go/src/%{IMPORTNAME}
+make \
+    QEMUCMD=%{DEFAULT_QEMU} \
+    COMMIT=@HASH@  \
+    SKIP_GO_VERSION_CHECK=1
+
+%check
+export http_proxy=http://127.0.0.1:9/
+export https_proxy=http://127.0.0.1:9/
+export no_proxy=localhost
+
+%install
+
+export GOROOT=$HOME/rpmbuild/BUILD/local/go
+export PATH=$PATH:$HOME/rpmbuild/BUILD/local/go/bin
+export GOPATH=$HOME/rpmbuild/BUILD/go/
+
+cd $HOME/rpmbuild/BUILD/go/src/%{IMPORTNAME}
+make \
+    DESTDIR=%{buildroot} \
+    PREFIX=/usr \
+    QEMUCMD=%{DEFAULT_QEMU} \
+    COMMIT=@HASH@ \
+    SKIP_GO_VERSION_CHECK=1 \
+    install
+sed -i -e '/^initrd =/d' %{buildroot}/usr/share/defaults/kata-containers/configuration.toml
+
+%files
+%defattr(-,root,root,-)
+/usr/bin/kata-runtime
+/usr/bin/containerd-shim-kata-v2
+%{LIBEXECDIR}
+%{LIBEXECDIR}/kata-containers
+%{LIBEXECDIR}/kata-containers/kata-netmon
+/usr/bin/kata-collect-data.sh
+/usr/share/defaults/
+/usr/share/defaults/kata-containers/
+/usr/share/defaults/kata-containers/configuration*.toml
+/usr/share/bash-completion
+/usr/share/bash-completion/completions
+/usr/share/bash-completion/completions/kata-runtime
