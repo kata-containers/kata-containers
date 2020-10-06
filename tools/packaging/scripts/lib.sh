@@ -11,6 +11,8 @@ export tests_repo_dir="$GOPATH/src/$tests_repo"
 
 this_script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+short_commit_length=10
+
 hub_bin="hub-bin"
 
 clone_tests_repo() {
