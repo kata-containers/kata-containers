@@ -13,12 +13,13 @@ set -o pipefail
 
 readonly script_name="$(basename "${BASH_SOURCE[0]}")"
 readonly script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+readonly repo_root_dir="$(cd "${script_dir}/../../../" && pwd)"
+readonly osbuilder_dir="$(cd "${repo_root_dir}/tools/osbuilder" && pwd)"
 readonly tmp_dir=$(mktemp -d -t build-image-tmp.XXXXXXXXXX)
 export   GOPATH="${tmp_dir}/go"
 
 export GOPATH=${GOPATH:-${HOME}/go}
-source "${script_dir}/../../scripts/lib.sh"
-source "${script_dir}/../scripts/pkglib.sh"
+source "${repo_root_dir}/scripts/lib.sh"
 
 exit_handler() {
 	[ -d "${tmp_dir}" ] && sudo rm -rf "$tmp_dir"
@@ -27,7 +28,7 @@ trap exit_handler EXIT
 
 arch_target="$(uname -m)"
 
-source "${script_dir}/../versions.txt"
+source "${repo_root_dir}/versions.txt"
 
 readonly destdir="${PWD}"
 
@@ -39,7 +40,6 @@ build_initrd() {
 		ROOTFS_BUILD_DEST="${tmp_dir}/initrd-image" \
 		USE_DOCKER=1 \
 		AGENT_INIT="yes"
-
 }
 
 build_image() {
@@ -59,8 +59,8 @@ create_tarball() {
 	image_name="kata-containers-image_${img_distro}_${kata_version}_agent_${agent_sha}.img"
 	initrd_name="kata-containers-initrd_${initrd_distro}_${kata_version}_agent_${agent_sha}.initrd"
 
-	mv "${script_dir}/../../../osbuilder/kata-containers.img" "${image_name}"
-	mv "${script_dir}/../../../osbuilder/kata-containers-initrd.img" "${initrd_name}"
+	mv "${osbuilder_dir}/kata-containers.img" "${image_name}"
+	mv "${osbuilder_dir}/kata-containers-initrd.img" "${initrd_name}"
 	sudo tar cfzv "${tarball_name}" "${initrd_name}" "${image_name}"
 }
 
@@ -109,7 +109,7 @@ main() {
 	initrd_os_version=$(get_from_kata_deps "assets.image.architecture.${arch_target}.version" "${kata_version}")
 
 	shift "$((OPTIND - 1))"
-	pushd "${script_dir}/../../../osbuilder/"
+	pushd "${osbuilder_dir}"
 	build_initrd
 	build_image
 	create_tarball
