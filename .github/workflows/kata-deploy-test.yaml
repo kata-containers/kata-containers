@@ -1,0 +1,53 @@
+on: issue_comment
+name: test-kata-deploy
+jobs:
+  check_comments:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check for Command
+        id: command
+        uses: kata-containers/slash-command-action@v1
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          command: "test-kata-deploy"
+          reaction: "true"
+          reaction-type: "eyes"
+          allow-edits: "false"
+          permission-level: admin
+      - name: verify command arg is kata-deploy
+        run: |
+           echo "The command was '${{ steps.command.outputs.command-name }}' with arguments '${{ steps.command.outputs.command-arguments }}'"
+  create-and-test-container:
+    needs: check_comments
+    runs-on: ubuntu-latest
+    steps:
+      - name: get-PR-ref
+        id: get-PR-ref
+        run: |
+            ref=$(cat $GITHUB_EVENT_PATH | jq -r '.issue.pull_request.url' | sed  's#^.*\/pulls#refs\/pull#' | sed 's#$#\/merge#')
+            echo "reference for PR: " ${ref}
+            echo "##[set-output name=pr-ref;]${ref}"
+      - uses: actions/checkout@v2-beta
+        with:
+          ref: ${{ steps.get-PR-ref.outputs.pr-ref }}
+      - name: build-container-image
+        id: build-container-image
+        run: |
+            PR_SHA=$(git log --format=format:%H -n1)
+            VERSION=$(curl https://raw.githubusercontent.com/kata-containers/kata-containers/2.0-dev/VERSION)
+            ARTIFACT_URL="https://github.com/kata-containers/kata-containers/releases/download/${VERSION}/kata-static-${VERSION}-x86_64.tar.xz"
+            wget "${ARTIFACT_URL}" -O ./kata-deploy/kata-static.tar.xz
+            docker build --build-arg KATA_ARTIFACTS=kata-static.tar.xz -t katadocker/kata-deploy-ci:${PR_SHA} ./kata-deploy
+            docker login -u ${{ secrets.DOCKER_USERNAME }} -p ${{ secrets.DOCKER_PASSWORD }}
+            docker push katadocker/kata-deploy-ci:$PR_SHA
+            echo "##[set-output name=pr-sha;]${PR_SHA}"
+      - name: test-kata-deploy-ci-in-aks
+        uses: ./kata-deploy/action
+        with:
+          packaging-sha: ${{ steps.build-container-image.outputs.pr-sha }}
+        env:
+          PKG_SHA: ${{ steps.build-container-image.outputs.pr-sha }}
+          AZ_APPID: ${{ secrets.AZ_APPID }}
+          AZ_PASSWORD: ${{ secrets.AZ_PASSWORD }}
+          AZ_SUBSCRIPTION_ID: ${{ secrets.AZ_SUBSCRIPTION_ID }}
+          AZ_TENANT_ID: ${{ secrets.AZ_TENANT_ID }}
