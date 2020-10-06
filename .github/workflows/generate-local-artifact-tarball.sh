@@ -18,9 +18,9 @@ main() {
     fi
 
     tag=$(echo $GITHUB_REF | cut -d/ -f3-)
-    pushd $GITHUB_WORKSPACE/tools/packaging/obs-packaging
+    pushd $GITHUB_WORKSPACE/tools/packaging
     git checkout $tag
-    ./gen_versions_txt.sh $tag
+    ./scripts/gen_versions_txt.sh $tag
     popd
 
     pushd $GITHUB_WORKSPACE/tools/packaging/release

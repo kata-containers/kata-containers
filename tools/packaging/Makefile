@@ -8,7 +8,7 @@
 MK_DIR :=$(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
 SED := sed
 YQ := $(MK_DIR)/yq
-SNAPCRAFT_FILE := snap/snapcraft.yaml
+SNAPCRAFT_FILE := ../../snap/snapcraft.yaml
 VERSIONS_YAML_FILE := ../../versions.yaml
 VERSION_FILE := ../../VERSION
 
@@ -18,19 +18,9 @@ export SNAPCRAFT_FILE
 export VERSION_FILE
 export VERSIONS_YAML_FILE
 
-test:
-	@$(MK_DIR)/.ci/test.sh
-
-test-release-tools:
-	@$(MK_DIR)/release/tag_repos_test.sh
-	@$(MK_DIR)/release/update-repository-version_test.sh
-
 test-static-build:
 	@make -f $(MK_DIR)/static-build/qemu/Makefile
 	@make -f $(MK_DIR)/static-build/firecracker/Makefile
-
-test-packaging-tools:
-	@$(MK_DIR)/obs-packaging/build_from_docker.sh
 
 $(YQ):
 	@bash -c "source scripts/lib.sh; install_yq $${MK_DIR}"
@@ -41,10 +31,7 @@ snap: $(YQ)
 	fi
 	snapcraft -d
 
-obs-test:
-	@$(MK_DIR)/tests/run_obs_testing.sh
-
 cmd-kata-pkgsync:
 	@make -C $(MK_DIR)/cmd/kata-pkgsync
 
-.PHONY: test test-release-tools test-static-build test-packaging-tools snap cmd-kata-pkgsync
+.PHONY: test-static-build snap cmd-kata-pkgsync
