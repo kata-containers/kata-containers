@@ -1185,8 +1185,8 @@ mod tests {
         let tempdir = tempdir().unwrap();
 
         let olddir = unistd::getcwd().unwrap();
-        defer!(unistd::chdir(&olddir););
-        unistd::chdir(tempdir.path());
+        defer!(let _ = unistd::chdir(&olddir););
+        let _ = unistd::chdir(tempdir.path());
 
         let dev = oci::LinuxDevice {
             path: "/fifo".to_string(),
