@@ -13,13 +13,14 @@ set -o pipefail
 
 readonly script_name="$(basename "${BASH_SOURCE[0]}")"
 readonly script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+readonly packaging_root_dir="$(cd "${script_dir}/../" && pwd)"
 readonly repo_root_dir="$(cd "${script_dir}/../../../" && pwd)"
 readonly osbuilder_dir="$(cd "${repo_root_dir}/tools/osbuilder" && pwd)"
 readonly tmp_dir=$(mktemp -d -t build-image-tmp.XXXXXXXXXX)
 export   GOPATH="${tmp_dir}/go"
 
 export GOPATH=${GOPATH:-${HOME}/go}
-source "${repo_root_dir}/scripts/lib.sh"
+source "${packaging_root_dir}/scripts/lib.sh"
 
 exit_handler() {
 	[ -d "${tmp_dir}" ] && sudo rm -rf "$tmp_dir"
@@ -28,7 +29,7 @@ trap exit_handler EXIT
 
 arch_target="$(uname -m)"
 
-source "${repo_root_dir}/versions.txt"
+source "${packaging_root_dir}/versions.txt"
 
 readonly destdir="${PWD}"
 
