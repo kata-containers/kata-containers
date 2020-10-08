@@ -262,10 +262,14 @@ fn update_spec_device_list(device: &Device, spec: &mut Spec) -> Result<()> {
                     }
                 }
             }
+            return Ok(());
         }
     }
 
-    Ok(())
+    Err(anyhow!(
+        "Should have found a matching device {} in the spec",
+        device.vm_path
+    ))
 }
 
 // device.Id should be the predicted device name (vda, vdb, ...)
