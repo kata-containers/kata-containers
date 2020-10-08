@@ -301,3 +301,15 @@ specs:
       https://github.com/opencontainers/runtime-spec/tags
       .*/v?(\d\S+)\.tar\.gz
     version: "v1.0.0-rc5"
+
+plugins:
+  description: |
+    Details of plugins required for the components or testing.
+
+  sriov-network-device:
+    description: |
+      The SR-IOV network device plugin is Kubernetes device plugin for
+      discovering and advertising SR-IOV virtual functions (VFs)
+      available on a Kubernetes host.
+    url: "https://github.com/k8snetworkplumbingwg/sriov-network-device-plugin"
+    version: "b7f6d3e0679796e907ecca88cfab0e32e326850d"
