@@ -28,8 +28,15 @@ macro_rules! sl {
 
 const VM_ROOTFS: &str = "/";
 
+struct DevIndexEntry {
+    idx: usize,
+    residx: Vec<usize>,
+}
+
+struct DevIndex(HashMap<String, DevIndexEntry>);
+
 // DeviceHandler is the type of callback to be defined to handle every type of device driver.
-type DeviceHandler = fn(&Device, &mut Spec, &Arc<Mutex<Sandbox>>) -> Result<()>;
+type DeviceHandler = fn(&Device, &mut Spec, &Arc<Mutex<Sandbox>>, &DevIndex) -> Result<()>;
 
 // DeviceHandlerList lists the supported drivers.
 #[cfg_attr(rustfmt, rustfmt_skip)]
@@ -194,7 +201,7 @@ fn scan_scsi_bus(scsi_addr: &str) -> Result<()> {
 // the same device in the list of devices provided through the OCI spec.
 // This is needed to update information about minor/major numbers that cannot
 // be predicted from the caller.
-fn update_spec_device_list(device: &Device, spec: &mut Spec) -> Result<()> {
+fn update_spec_device_list(device: &Device, spec: &mut Spec, devidx: &DevIndex) -> Result<()> {
     let major_id: c_uint;
     let minor_id: c_uint;
 
@@ -228,48 +235,44 @@ fn update_spec_device_list(device: &Device, spec: &mut Spec) -> Result<()> {
         "got the device: dev_path: {}, major: {}, minor: {}\n", &device.vm_path, major_id, minor_id
     );
 
-    let devices = linux.devices.as_mut_slice();
-    for dev in devices.iter_mut() {
-        if dev.path == device.container_path {
-            let host_major = dev.major;
-            let host_minor = dev.minor;
+    if let Some(idxdata) = devidx.0.get(device.container_path.as_str()) {
+        let dev = &mut linux.devices[idxdata.idx];
+        let host_major = dev.major;
+        let host_minor = dev.minor;
 
-            dev.major = major_id as i64;
-            dev.minor = minor_id as i64;
+        dev.major = major_id as i64;
+        dev.minor = minor_id as i64;
+
+        info!(
+            sl!(),
+            "change the device from major: {} minor: {} to vm device major: {} minor: {}",
+            host_major,
+            host_minor,
+            major_id,
+            minor_id
+        );
+
+        // Resources must be updated since they are used to identify
+        // the device in the devices cgroup.
+        for ridx in &idxdata.residx {
+            // unwrap is safe, because residx would be empty if there
+            // were no resources
+            let res = &mut linux.resources.as_mut().unwrap().devices[*ridx];
+            res.major = Some(major_id as i64);
+            res.minor = Some(minor_id as i64);
 
             info!(
                 sl!(),
-                "change the device from major: {} minor: {} to vm device major: {} minor: {}",
-                host_major,
-                host_minor,
-                major_id,
-                minor_id
+                "set resources for device major: {} minor: {}\n", major_id, minor_id
             );
-
-            // Resources must be updated since they are used to identify the
-            // device in the devices cgroup.
-            if let Some(res) = linux.resources.as_mut() {
-                let ds = res.devices.as_mut_slice();
-                for d in ds.iter_mut() {
-                    if d.major == Some(host_major) && d.minor == Some(host_minor) {
-                        d.major = Some(major_id as i64);
-                        d.minor = Some(minor_id as i64);
-
-                        info!(
-                            sl!(),
-                            "set resources for device major: {} minor: {}\n", major_id, minor_id
-                        );
-                    }
-                }
-            }
-            return Ok(());
         }
+        Ok(())
+    } else {
+        Err(anyhow!(
+            "Should have found a matching device {} in the spec",
+            device.vm_path
+        ))
     }
-
-    Err(anyhow!(
-        "Should have found a matching device {} in the spec",
-        device.vm_path
-    ))
 }
 
 // device.Id should be the predicted device name (vda, vdb, ...)
@@ -278,12 +281,13 @@ fn virtiommio_blk_device_handler(
     device: &Device,
     spec: &mut Spec,
     _sandbox: &Arc<Mutex<Sandbox>>,
+    devidx: &DevIndex,
 ) -> Result<()> {
     if device.vm_path == "" {
         return Err(anyhow!("Invalid path for virtio mmio blk device"));
     }
 
-    update_spec_device_list(device, spec)
+    update_spec_device_list(device, spec, devidx)
 }
 
 // device.Id should be the PCI address in the format  "bridgeAddr/deviceAddr".
@@ -293,6 +297,7 @@ fn virtio_blk_device_handler(
     device: &Device,
     spec: &mut Spec,
     sandbox: &Arc<Mutex<Sandbox>>,
+    devidx: &DevIndex,
 ) -> Result<()> {
     let mut dev = device.clone();
 
@@ -302,7 +307,7 @@ fn virtio_blk_device_handler(
         dev.vm_path = get_pci_device_name(sandbox, &device.id)?;
     }
 
-    update_spec_device_list(&dev, spec)
+    update_spec_device_list(&dev, spec, devidx)
 }
 
 // device.Id should be the SCSI address of the disk in the format "scsiID:lunID"
@@ -310,22 +315,46 @@ fn virtio_scsi_device_handler(
     device: &Device,
     spec: &mut Spec,
     sandbox: &Arc<Mutex<Sandbox>>,
+    devidx: &DevIndex,
 ) -> Result<()> {
     let mut dev = device.clone();
     dev.vm_path = get_scsi_device_name(sandbox, &device.id)?;
-    update_spec_device_list(&dev, spec)
+    update_spec_device_list(&dev, spec, devidx)
 }
 
 fn virtio_nvdimm_device_handler(
     device: &Device,
     spec: &mut Spec,
     _sandbox: &Arc<Mutex<Sandbox>>,
+    devidx: &DevIndex,
 ) -> Result<()> {
     if device.vm_path == "" {
         return Err(anyhow!("Invalid path for nvdimm device"));
     }
 
-    update_spec_device_list(device, spec)
+    update_spec_device_list(device, spec, devidx)
+}
+
+impl DevIndex {
+    fn new(spec: &Spec) -> DevIndex {
+        let mut map = HashMap::new();
+
+        for linux in spec.linux.as_ref() {
+            for (i, d) in linux.devices.iter().enumerate() {
+                let mut residx = Vec::new();
+
+                for linuxres in linux.resources.as_ref() {
+                    for (j, r) in linuxres.devices.iter().enumerate() {
+                        if r.major == Some(d.major) && r.minor == Some(d.minor) {
+                            residx.push(j);
+                        }
+                    }
+                }
+                map.insert(d.path.clone(), DevIndexEntry { idx: i, residx });
+            }
+        }
+        DevIndex(map)
+    }
 }
 
 pub fn add_devices(
@@ -333,14 +362,21 @@ pub fn add_devices(
     spec: &mut Spec,
     sandbox: &Arc<Mutex<Sandbox>>,
 ) -> Result<()> {
+    let devidx = DevIndex::new(spec);
+
     for device in devices.iter() {
-        add_device(device, spec, sandbox)?;
+        add_device(device, spec, sandbox, &devidx)?;
     }
 
     Ok(())
 }
 
-fn add_device(device: &Device, spec: &mut Spec, sandbox: &Arc<Mutex<Sandbox>>) -> Result<()> {
+fn add_device(
+    device: &Device,
+    spec: &mut Spec,
+    sandbox: &Arc<Mutex<Sandbox>>,
+    devidx: &DevIndex,
+) -> Result<()> {
     // log before validation to help with debugging gRPC protocol version differences.
     info!(sl!(), "device-id: {}, device-type: {}, device-vm-path: {}, device-container-path: {}, device-options: {:?}",
           device.id, device.field_type, device.vm_path, device.container_path, device.options);
@@ -359,7 +395,7 @@ fn add_device(device: &Device, spec: &mut Spec, sandbox: &Arc<Mutex<Sandbox>>) -
 
     match DEVICEHANDLERLIST.get(device.field_type.as_str()) {
         None => Err(anyhow!("Unknown device type {}", device.field_type)),
-        Some(dev_handler) => dev_handler(device, spec, sandbox),
+        Some(dev_handler) => dev_handler(device, spec, sandbox, devidx),
     }
 }
 
@@ -425,19 +461,22 @@ mod tests {
         let mut spec = Spec::default();
 
         // container_path empty
-        let res = update_spec_device_list(&device, &mut spec);
+        let devidx = DevIndex::new(&spec);
+        let res = update_spec_device_list(&device, &mut spec, &devidx);
         assert!(res.is_err());
 
         device.container_path = "/dev/null".to_string();
 
         // linux is empty
-        let res = update_spec_device_list(&device, &mut spec);
+        let devidx = DevIndex::new(&spec);
+        let res = update_spec_device_list(&device, &mut spec, &devidx);
         assert!(res.is_err());
 
         spec.linux = Some(Linux::default());
 
         // linux.devices is empty
-        let res = update_spec_device_list(&device, &mut spec);
+        let devidx = DevIndex::new(&spec);
+        let res = update_spec_device_list(&device, &mut spec, &devidx);
         assert!(res.is_err());
 
         spec.linux.as_mut().unwrap().devices = vec![oci::LinuxDevice {
@@ -448,19 +487,22 @@ mod tests {
         }];
 
         // vm_path empty
-        let res = update_spec_device_list(&device, &mut spec);
+        let devidx = DevIndex::new(&spec);
+        let res = update_spec_device_list(&device, &mut spec, &devidx);
         assert!(res.is_err());
 
         device.vm_path = "/dev/null".to_string();
 
         // guest and host path are not the same
-        let res = update_spec_device_list(&device, &mut spec);
+        let devidx = DevIndex::new(&spec);
+        let res = update_spec_device_list(&device, &mut spec, &devidx);
         assert!(res.is_err(), "device={:?} spec={:?}", device, spec);
 
         spec.linux.as_mut().unwrap().devices[0].path = device.container_path.clone();
 
         // spec.linux.resources is empty
-        let res = update_spec_device_list(&device, &mut spec);
+        let devidx = DevIndex::new(&spec);
+        let res = update_spec_device_list(&device, &mut spec, &devidx);
         assert!(res.is_ok());
 
         // update both devices and cgroup lists
@@ -480,7 +522,121 @@ mod tests {
             ..oci::LinuxResources::default()
         });
 
-        let res = update_spec_device_list(&device, &mut spec);
+        let devidx = DevIndex::new(&spec);
+        let res = update_spec_device_list(&device, &mut spec, &devidx);
         assert!(res.is_ok());
+    }
+
+    #[test]
+    fn test_update_spec_device_list_guest_host_conflict() {
+        let null_rdev = fs::metadata("/dev/null").unwrap().rdev();
+        let zero_rdev = fs::metadata("/dev/zero").unwrap().rdev();
+        let full_rdev = fs::metadata("/dev/full").unwrap().rdev();
+
+        let host_major_a = stat::major(null_rdev) as i64;
+        let host_minor_a = stat::minor(null_rdev) as i64;
+        let host_major_b = stat::major(zero_rdev) as i64;
+        let host_minor_b = stat::minor(zero_rdev) as i64;
+
+        let mut spec = Spec {
+            linux: Some(Linux {
+                devices: vec![
+                    oci::LinuxDevice {
+                        path: "/dev/a".to_string(),
+                        r#type: "c".to_string(),
+                        major: host_major_a,
+                        minor: host_minor_a,
+                        ..oci::LinuxDevice::default()
+                    },
+                    oci::LinuxDevice {
+                        path: "/dev/b".to_string(),
+                        r#type: "c".to_string(),
+                        major: host_major_b,
+                        minor: host_minor_b,
+                        ..oci::LinuxDevice::default()
+                    },
+                ],
+                resources: Some(LinuxResources {
+                    devices: vec![
+                        oci::LinuxDeviceCgroup {
+                            r#type: "c".to_string(),
+                            major: Some(host_major_a),
+                            minor: Some(host_minor_a),
+                            ..oci::LinuxDeviceCgroup::default()
+                        },
+                        oci::LinuxDeviceCgroup {
+                            r#type: "c".to_string(),
+                            major: Some(host_major_b),
+                            minor: Some(host_minor_b),
+                            ..oci::LinuxDeviceCgroup::default()
+                        },
+                    ],
+                    ..LinuxResources::default()
+                }),
+                ..Linux::default()
+            }),
+            ..Spec::default()
+        };
+        let devidx = DevIndex::new(&spec);
+
+        let dev_a = Device {
+            container_path: "/dev/a".to_string(),
+            vm_path: "/dev/zero".to_string(),
+            ..Device::default()
+        };
+
+        let guest_major_a = stat::major(zero_rdev) as i64;
+        let guest_minor_a = stat::minor(zero_rdev) as i64;
+
+        let dev_b = Device {
+            container_path: "/dev/b".to_string(),
+            vm_path: "/dev/full".to_string(),
+            ..Device::default()
+        };
+
+        let guest_major_b = stat::major(full_rdev) as i64;
+        let guest_minor_b = stat::minor(full_rdev) as i64;
+
+        let specdevices = &spec.linux.as_ref().unwrap().devices;
+        assert_eq!(host_major_a, specdevices[0].major);
+        assert_eq!(host_minor_a, specdevices[0].minor);
+        assert_eq!(host_major_b, specdevices[1].major);
+        assert_eq!(host_minor_b, specdevices[1].minor);
+
+        let specresources = spec.linux.as_ref().unwrap().resources.as_ref().unwrap();
+        assert_eq!(Some(host_major_a), specresources.devices[0].major);
+        assert_eq!(Some(host_minor_a), specresources.devices[0].minor);
+        assert_eq!(Some(host_major_b), specresources.devices[1].major);
+        assert_eq!(Some(host_minor_b), specresources.devices[1].minor);
+
+        let res = update_spec_device_list(&dev_a, &mut spec, &devidx);
+        assert!(res.is_ok());
+
+        let specdevices = &spec.linux.as_ref().unwrap().devices;
+        assert_eq!(guest_major_a, specdevices[0].major);
+        assert_eq!(guest_minor_a, specdevices[0].minor);
+        assert_eq!(host_major_b, specdevices[1].major);
+        assert_eq!(host_minor_b, specdevices[1].minor);
+
+        let specresources = spec.linux.as_ref().unwrap().resources.as_ref().unwrap();
+        assert_eq!(Some(guest_major_a), specresources.devices[0].major);
+        assert_eq!(Some(guest_minor_a), specresources.devices[0].minor);
+        assert_eq!(Some(host_major_b), specresources.devices[1].major);
+        assert_eq!(Some(host_minor_b), specresources.devices[1].minor);
+
+        let res = update_spec_device_list(&dev_b, &mut spec, &devidx);
+        assert!(res.is_ok());
+
+        let specdevices = &spec.linux.as_ref().unwrap().devices;
+        assert_eq!(guest_major_a, specdevices[0].major);
+        assert_eq!(guest_minor_a, specdevices[0].minor);
+        assert_eq!(guest_major_b, specdevices[1].major);
+        assert_eq!(guest_minor_b, specdevices[1].minor);
+
+        let specresources = spec.linux.as_ref().unwrap().resources.as_ref().unwrap();
+        assert_eq!(Some(guest_major_a), specresources.devices[0].major);
+        assert_eq!(Some(guest_minor_a), specresources.devices[0].minor);
+        assert_eq!(Some(guest_major_b), specresources.devices[1].major);
+        assert_eq!(Some(guest_minor_b), specresources.devices[1].minor);
     }
 }
