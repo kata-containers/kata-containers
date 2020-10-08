@@ -224,7 +224,7 @@ parts:
     after: [godeps, runtime]
     build-packages:
       - gcc
-      - python
+      - python3
       - zlib1g-dev
       - libcap-ng-dev
       - libglib2.0-dev
