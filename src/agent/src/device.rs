@@ -345,7 +345,10 @@ impl DevIndex {
 
                 for linuxres in linux.resources.as_ref() {
                     for (j, r) in linuxres.devices.iter().enumerate() {
-                        if r.major == Some(d.major) && r.minor == Some(d.minor) {
+                        if r.r#type == d.r#type
+                            && r.major == Some(d.major)
+                            && r.minor == Some(d.minor)
+                        {
                             residx.push(j);
                         }
                     }
@@ -638,5 +641,78 @@ mod tests {
         assert_eq!(Some(guest_minor_a), specresources.devices[0].minor);
         assert_eq!(Some(guest_major_b), specresources.devices[1].major);
         assert_eq!(Some(guest_minor_b), specresources.devices[1].minor);
+    }
+
+    #[test]
+    fn test_update_spec_device_list_char_block_conflict() {
+        let null_rdev = fs::metadata("/dev/null").unwrap().rdev();
+
+        let guest_major = stat::major(null_rdev) as i64;
+        let guest_minor = stat::minor(null_rdev) as i64;
+        let host_major: i64 = 99;
+        let host_minor: i64 = 99;
+
+        let mut spec = Spec {
+            linux: Some(Linux {
+                devices: vec![
+                    oci::LinuxDevice {
+                        path: "/dev/char".to_string(),
+                        r#type: "c".to_string(),
+                        major: host_major,
+                        minor: host_minor,
+                        ..oci::LinuxDevice::default()
+                    },
+                    oci::LinuxDevice {
+                        path: "/dev/block".to_string(),
+                        r#type: "b".to_string(),
+                        major: host_major,
+                        minor: host_minor,
+                        ..oci::LinuxDevice::default()
+                    },
+                ],
+                resources: Some(LinuxResources {
+                    devices: vec![
+                        LinuxDeviceCgroup {
+                            r#type: "c".to_string(),
+                            major: Some(host_major),
+                            minor: Some(host_minor),
+                            ..LinuxDeviceCgroup::default()
+                        },
+                        LinuxDeviceCgroup {
+                            r#type: "b".to_string(),
+                            major: Some(host_major),
+                            minor: Some(host_minor),
+                            ..LinuxDeviceCgroup::default()
+                        },
+                    ],
+                    ..LinuxResources::default()
+                }),
+                ..Linux::default()
+            }),
+            ..Spec::default()
+        };
+        let devidx = DevIndex::new(&spec);
+
+        let dev = Device {
+            container_path: "/dev/char".to_string(),
+            vm_path: "/dev/null".to_string(),
+            ..Device::default()
+        };
+
+        let specresources = spec.linux.as_ref().unwrap().resources.as_ref().unwrap();
+        assert_eq!(Some(host_major), specresources.devices[0].major);
+        assert_eq!(Some(host_minor), specresources.devices[0].minor);
+        assert_eq!(Some(host_major), specresources.devices[1].major);
+        assert_eq!(Some(host_minor), specresources.devices[1].minor);
+
+        let res = update_spec_device_list(&dev, &mut spec, &devidx);
+        assert!(res.is_ok());
+
+        // Only the char device, not the block device should be updated
+        let specresources = spec.linux.as_ref().unwrap().resources.as_ref().unwrap();
+        assert_eq!(Some(guest_major), specresources.devices[0].major);
+        assert_eq!(Some(guest_minor), specresources.devices[0].minor);
+        assert_eq!(Some(host_major), specresources.devices[1].major);
+        assert_eq!(Some(host_minor), specresources.devices[1].minor);
     }
 }
