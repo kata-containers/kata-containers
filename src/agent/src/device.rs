@@ -417,4 +417,70 @@ mod tests {
         assert_eq!(devices[0].major, Some(major));
         assert_eq!(devices[0].minor, Some(minor));
     }
+
+    #[test]
+    fn test_update_spec_device_list() {
+        let (major, minor) = (7, 2);
+        let mut device = Device::default();
+        let mut spec = Spec::default();
+
+        // container_path empty
+        let res = update_spec_device_list(&device, &mut spec);
+        assert!(res.is_err());
+
+        device.container_path = "/dev/null".to_string();
+
+        // linux is empty
+        let res = update_spec_device_list(&device, &mut spec);
+        assert!(res.is_err());
+
+        spec.linux = Some(Linux::default());
+
+        // linux.devices is empty
+        let res = update_spec_device_list(&device, &mut spec);
+        assert!(res.is_err());
+
+        spec.linux.as_mut().unwrap().devices = vec![oci::LinuxDevice {
+            path: "/dev/null2".to_string(),
+            major,
+            minor,
+            ..oci::LinuxDevice::default()
+        }];
+
+        // vm_path empty
+        let res = update_spec_device_list(&device, &mut spec);
+        assert!(res.is_err());
+
+        device.vm_path = "/dev/null".to_string();
+
+        // guest and host path are not the same
+        let res = update_spec_device_list(&device, &mut spec);
+        assert!(res.is_err(), "device={:?} spec={:?}", device, spec);
+
+        spec.linux.as_mut().unwrap().devices[0].path = device.container_path.clone();
+
+        // spec.linux.resources is empty
+        let res = update_spec_device_list(&device, &mut spec);
+        assert!(res.is_ok());
+
+        // update both devices and cgroup lists
+        spec.linux.as_mut().unwrap().devices = vec![oci::LinuxDevice {
+            path: device.container_path.clone(),
+            major,
+            minor,
+            ..oci::LinuxDevice::default()
+        }];
+
+        spec.linux.as_mut().unwrap().resources = Some(oci::LinuxResources {
+            devices: vec![oci::LinuxDeviceCgroup {
+                major: Some(major),
+                minor: Some(minor),
+                ..oci::LinuxDeviceCgroup::default()
+            }],
+            ..oci::LinuxResources::default()
+        });
+
+        let res = update_spec_device_list(&device, &mut spec);
+        assert!(res.is_ok());
+    }
 }
