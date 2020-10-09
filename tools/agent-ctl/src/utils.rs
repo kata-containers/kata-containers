@@ -8,8 +8,7 @@ use anyhow::{anyhow, Result};
 use oci::{Process as ociProcess, Root as ociRoot, Spec as ociSpec};
 use protocols::oci::{
     Box as grpcBox, Linux as grpcLinux, LinuxCapabilities as grpcLinuxCapabilities,
-    POSIXRlimit as grpcPOSIXRlimit, Process as grpcProcess, Root as grpcRoot, Spec as grpcSpec,
-    User as grpcUser,
+    Process as grpcProcess, Root as grpcRoot, Spec as grpcSpec, User as grpcUser,
 };
 use rand::Rng;
 use slog::{debug, warn};

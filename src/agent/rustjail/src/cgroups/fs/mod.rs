@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use cgroups::blkio::{BlkIo, BlkIoController, BlkIoData, IoService};
+use cgroups::blkio::{BlkIoController, BlkIoData, IoService};
 use cgroups::cpu::CpuController;
 use cgroups::cpuacct::CpuAcctController;
 use cgroups::cpuset::CpuSetController;
@@ -15,18 +15,18 @@ use cgroups::memory::MemController;
 use cgroups::pid::PidController;
 use cgroups::{
     BlkIoDeviceResource, BlkIoDeviceThrottleResource, Cgroup, CgroupPid, Controller,
-    DeviceResource, DeviceResources, HugePageResource, MaxValue, NetworkPriority,
+    DeviceResource, HugePageResource, MaxValue, NetworkPriority,
 };
 
 use crate::cgroups::Manager as CgroupManager;
 use crate::container::DEFAULT_DEVICES;
-use anyhow::{anyhow, Context, Error, Result};
+use anyhow::{anyhow, Context, Result};
 use lazy_static;
 use libc::{self, pid_t};
 use nix::errno::Errno;
 use oci::{
     LinuxBlockIO, LinuxCPU, LinuxDevice, LinuxDeviceCgroup, LinuxHugepageLimit, LinuxMemory,
-    LinuxNetwork, LinuxPids, LinuxResources, LinuxThrottleDevice, LinuxWeightDevice,
+    LinuxNetwork, LinuxPids, LinuxResources,
 };
 
 use protobuf::{CachedSize, RepeatedField, SingularPtrField, UnknownFields};
@@ -34,7 +34,6 @@ use protocols::agent::{
     BlkioStats, BlkioStatsEntry, CgroupStats, CpuStats, CpuUsage, HugetlbStats, MemoryData,
     MemoryStats, PidsStats, ThrottlingData,
 };
-use regex::Regex;
 use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
@@ -91,7 +90,7 @@ impl CgroupManager for Manager {
         let h = cgroups::hierarchies::auto();
         let h = Box::new(&*h);
         let cg = load_or_create(h, &self.cpath);
-        cg.add_task(CgroupPid::from(pid as u64));
+        cg.add_task(CgroupPid::from(pid as u64))?;
         Ok(())
     }
 
@@ -194,10 +193,10 @@ impl CgroupManager for Manager {
         let freezer_controller: &FreezerController = cg.controller_of().unwrap();
         match state {
             FreezerState::Thawed => {
-                freezer_controller.thaw();
+                freezer_controller.thaw()?;
             }
             FreezerState::Frozen => {
-                freezer_controller.freeze();
+                freezer_controller.freeze()?;
             }
             _ => {
                 return Err(nix::Error::Sys(Errno::EINVAL).into());
@@ -230,7 +229,7 @@ impl CgroupManager for Manager {
 }
 
 fn set_network_resources(
-    cg: &cgroups::Cgroup,
+    _cg: &cgroups::Cgroup,
     network: &LinuxNetwork,
     res: &mut cgroups::Resources,
 ) -> Result<()> {
@@ -259,7 +258,7 @@ fn set_network_resources(
 }
 
 fn set_devices_resources(
-    cg: &cgroups::Cgroup,
+    _cg: &cgroups::Cgroup,
     device_resources: &Vec<LinuxDeviceCgroup>,
     res: &mut cgroups::Resources,
 ) -> Result<()> {
@@ -288,7 +287,7 @@ fn set_devices_resources(
 }
 
 fn set_hugepages_resources(
-    cg: &cgroups::Cgroup,
+    _cg: &cgroups::Cgroup,
     hugepage_limits: &Vec<LinuxHugepageLimit>,
     res: &mut cgroups::Resources,
 ) -> Result<()> {
@@ -363,11 +362,11 @@ fn set_cpu_resources(cg: &cgroups::Cgroup, cpu: &LinuxCPU) -> Result<()> {
     let cpuset_controller: &CpuSetController = cg.controller_of().unwrap();
 
     if !cpu.cpus.is_empty() {
-        cpuset_controller.set_cpus(&cpu.cpus);
+        cpuset_controller.set_cpus(&cpu.cpus)?;
     }
 
     if !cpu.mems.is_empty() {
-        cpuset_controller.set_mems(&cpu.mems);
+        cpuset_controller.set_mems(&cpu.mems)?;
     }
 
     let cpu_controller: &CpuController = cg.controller_of().unwrap();
@@ -379,11 +378,12 @@ fn set_cpu_resources(cg: &cgroups::Cgroup, cpu: &LinuxCPU) -> Result<()> {
             shares
         };
         if shares != 0 {
-            cpu_controller.set_shares(shares);
+            cpu_controller.set_shares(shares)?;
         }
     }
 
-    cpu_controller.set_cfs_quota_and_period(cpu.quota, cpu.period);
+    set_resource!(cpu_controller, set_cfs_quota, cpu, quota);
+    set_resource!(cpu_controller, set_cfs_period, cpu, period);
 
     set_resource!(cpu_controller, set_rt_runtime, cpu, realtime_runtime);
     set_resource!(cpu_controller, set_rt_period_us, cpu, realtime_period);
@@ -468,7 +468,7 @@ fn build_blk_io_device_throttle_resource(
 fn linux_device_to_cgroup_device(d: &LinuxDevice) -> DeviceResource {
     let dev_type = DeviceType::from_char(d.r#type.chars().next()).unwrap();
 
-    let mut permissions = vec![
+    let permissions = vec![
         DevicePermissions::Read,
         DevicePermissions::Write,
         DevicePermissions::MkNod,
@@ -518,7 +518,7 @@ fn lines_to_map(content: &str) -> HashMap<String, u64> {
         .lines()
         .map(|x| x.split_whitespace().collect::<Vec<&str>>())
         .filter(|x| x.len() == 2 && x[1].parse::<u64>().is_ok())
-        .fold(HashMap::new(), |mut hm, mut x| {
+        .fold(HashMap::new(), |mut hm, x| {
             hm.insert(x[0].to_string(), x[1].parse::<u64>().unwrap());
             hm
         })
@@ -1059,7 +1059,7 @@ impl Manager {
             info!(sl!(), "updating cpuset for path {:?}", &r_path);
             let cg = load_or_create(h, &r_path);
             let cpuset_controller: &CpuSetController = cg.controller_of().unwrap();
-            cpuset_controller.set_cpus(cpuset_cpus);
+            cpuset_controller.set_cpus(cpuset_cpus)?;
         }
 
         Ok(())

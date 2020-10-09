@@ -182,12 +182,6 @@ impl<D> RuntimeLevelFilter<D> {
             level: Mutex::new(level),
         }
     }
-
-    fn set_level(&self, level: slog::Level) {
-        let mut log_level = self.level.lock().unwrap();
-
-        *log_level = level;
-    }
 }
 
 impl<D> Drain for RuntimeLevelFilter<D>
