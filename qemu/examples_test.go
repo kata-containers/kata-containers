@@ -21,7 +21,7 @@ import (
 
 	"context"
 
-	"github.com/intel/govmm/qemu"
+	"github.com/kata-containers/govmm/qemu"
 )
 
 func Example() {
