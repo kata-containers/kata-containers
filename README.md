@@ -1,14 +1,14 @@
 # Virtual Machine Manager for Go
 
-[![Go Report Card](https://goreportcard.com/badge/github.com/intel/govmm)](https://goreportcard.com/report/github.com/intel/govmm)
-[![Build Status](https://travis-ci.org/intel/govmm.svg?branch=master)](https://travis-ci.org/intel/govmm)
-[![GoDoc](https://godoc.org/github.com/intel/govmm/qemu?status.svg)](https://godoc.org/github.com/intel/govmm/qemu)
-[![Coverage Status](https://coveralls.io/repos/github/intel/govmm/badge.svg?branch=master)](https://coveralls.io/github/intel/govmm?branch=master)
+[![Go Report Card](https://goreportcard.com/badge/github.com/kata-containers/govmm)](https://goreportcard.com/report/github.com/kata-containers/govmm)
+[![Build Status](https://travis-ci.org/kata-containers/govmm.svg?branch=master)](https://travis-ci.org/kata-containers/govmm)
+[![GoDoc](https://godoc.org/github.com/kata-containers/govmm/qemu?status.svg)](https://godoc.org/github.com/kata-containers/govmm/qemu)
+[![Coverage Status](https://coveralls.io/repos/github/kata-containers/govmm/badge.svg?branch=master)](https://coveralls.io/github/kata-containers/govmm?branch=master)
 
 Virtual Machine Manager for Go (govmm) is a suite of packages that
 provide Go APIs for creating and managing virtual machines.  There's
 currently support for only one hypervisor, qemu/kvm, support for which
-is provided by the github.com/intel/govmm/qemu package.
+is provided by the github.com/kata-containers/govmm/qemu package.
 
 The qemu package provides APIs for launching qemu instances and for
 managing those instances via QMP, once launched.  VM instances can

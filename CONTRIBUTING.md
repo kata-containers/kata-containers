@@ -85,12 +85,12 @@ We accept github pull requests.
 We request you give quality assurance some consideration by:
 
 * Adding go unit tests for changes where it makes sense.
-* Enabling [Travis CI](https://travis-ci.org/intel/govmm) on your github fork of Virtual Machine Manager for Go to get continuous integration feedback on your dev/test branches.
+* Enabling [Travis CI](https://travis-ci.org/kata-containers/govmm) on your github fork of Virtual Machine Manager for Go to get continuous integration feedback on your dev/test branches.
 
 ## Issue tracking
 
 If you have a problem, please let us know.  If it's a bug not already documented, by all means please [open an
-issue in github](https://github.com/intel/govmm/issues/new) so we all get visibility
+issue in github](https://github.com/kata-containers/govmm/issues/new) so we all get visibility
 the problem and work toward resolution.
 
 Any security issues discovered with govmm should be reported by following the instructions on https://01.org/security.

@@ -7,7 +7,7 @@ go:
 arch:
     - s390x
 
-go_import_path: github.com/intel/govmm
+go_import_path: github.com/kata-containers/govmm
 
 matrix:
   allow_failures:
