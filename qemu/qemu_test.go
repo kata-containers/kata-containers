@@ -44,6 +44,9 @@ func testConfigAppend(config *Config, structure interface{}, expected string, t 
 	case Machine:
 		config.Machine = s
 		config.appendMachine()
+	case FwCfg:
+		config.FwCfg = s
+		config.appendFwCfg(nil)
 
 	case Device:
 		config.Devices = []Device{s}
@@ -1141,6 +1144,26 @@ func TestBadCPUs(t *testing.T) {
 	}
 }
 
+func TestBadFwcfg(t *testing.T) {
+	c := &Config{}
+	c.appendFwCfg(nil)
+	if len(c.qemuParams) != 0 {
+		t.Errorf("Expected empty qemuParams, found %s", c.qemuParams)
+	}
+
+	c = &Config{
+		FwCfg: FwCfg{
+			Name: "name=opt/com.mycompany/blob",
+			File: "./my_blob.bin",
+			Str:  "foo",
+		},
+	}
+	c.appendFwCfg(nil)
+	if len(c.qemuParams) != 0 {
+		t.Errorf("Expected empty qemuParams, found %s", c.qemuParams)
+	}
+}
+
 var (
 	vIommuString        = "-device intel-iommu,intremap=on,device-iotlb=on,caching-mode=on"
 	vIommuNoCacheString = "-device intel-iommu,intremap=on,device-iotlb=on,caching-mode=off"
@@ -1163,4 +1186,20 @@ func TestIommu(t *testing.T) {
 
 	testAppend(iommu, vIommuNoCacheString, t)
 
+}
+
+func TestAppendFwcfg(t *testing.T) {
+	fwcfgString := "-fw_cfg name=\"opt/com.mycompany/blob\",file=\"./my_blob.bin\""
+	fwcfg := FwCfg{
+		Name: "opt/com.mycompany/blob",
+		File: "./my_blob.bin",
+	}
+	testAppend(fwcfg, fwcfgString, t)
+
+	fwcfgString = "-fw_cfg name=\"opt/com.mycompany/blob\",string=\"foo\""
+	fwcfg = FwCfg{
+		Name: "opt/com.mycompany/blob",
+		Str:  "foo",
+	}
+	testAppend(fwcfg, fwcfgString, t)
 }
