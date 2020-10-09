@@ -45,7 +45,9 @@ The `rust-agent` depends on [`grpc-rs`](https://github.com/pingcap/grpc-rs) by P
 ### Build from Source
 The rust-agent need to be built with static linked with musl:
 ```bash
-$ rustup target add x86_64-unknown-linux-musl
+$ arch=$(uname -m)
+$ [ "$arch" == "ppc64le" ] && arch=powerpc64le
+$ rustup target add "${arch}-unknown-linux-musl"
 $ sudo ln -s /usr/bin/g++ /bin/musl-g++  
 ```
 Download the kata-containers source and build the agent:
