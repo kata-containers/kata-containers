@@ -4,7 +4,7 @@
 //
 
 use std::path::Path;
-use std::sync::mpsc::{channel, Sender};
+use std::sync::mpsc::channel;
 use std::sync::{Arc, Mutex};
 use ttrpc;
 
@@ -40,7 +40,6 @@ use crate::metrics::get_metrics;
 use crate::mount::{add_storages, remove_mounts, BareMount, STORAGEHANDLERLIST};
 use crate::namespace::{NSTYPEIPC, NSTYPEPID, NSTYPEUTS};
 use crate::network::setup_guest_dns;
-use crate::network::Network;
 use crate::random;
 use crate::sandbox::Sandbox;
 use crate::version::{AGENT_VERSION, API_VERSION};
@@ -790,7 +789,7 @@ impl protocols::agent_ttrpc::AgentService for agentService {
 
     fn pause_container(
         &self,
-        ctx: &ttrpc::TtrpcContext,
+        _ctx: &ttrpc::TtrpcContext,
         req: protocols::agent::PauseContainerRequest,
     ) -> ttrpc::Result<protocols::empty::Empty> {
         let cid = req.get_container_id();
@@ -816,7 +815,7 @@ impl protocols::agent_ttrpc::AgentService for agentService {
 
     fn resume_container(
         &self,
-        ctx: &ttrpc::TtrpcContext,
+        _ctx: &ttrpc::TtrpcContext,
         req: protocols::agent::ResumeContainerRequest,
     ) -> ttrpc::Result<protocols::empty::Empty> {
         let cid = req.get_container_id();
@@ -1160,7 +1159,7 @@ impl protocols::agent_ttrpc::AgentService for agentService {
         };
 
         match setup_guest_dns(sl!(), req.dns.to_vec()) {
-            Ok(dns_list) => {
+            Ok(_) => {
                 let sandbox = self.sandbox.clone();
                 let mut s = sandbox.lock().unwrap();
                 let _ = req
@@ -1447,7 +1446,7 @@ fn get_agent_details() -> AgentDetails {
 
     detail.set_version(AGENT_VERSION.to_string());
     detail.set_supports_seccomp(false);
-    detail.init_daemon = { unistd::getpid() == Pid::from_raw(1) };
+    detail.init_daemon = unistd::getpid() == Pid::from_raw(1);
 
     detail.device_handlers = RepeatedField::new();
     detail.storage_handlers = RepeatedField::from_vec(

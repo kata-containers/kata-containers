@@ -23,7 +23,8 @@ macro_rules! log_child {
         let lfd = $fd;
         let mut log_str = format_args!($($arg)+).to_string();
         log_str.push('\n');
-        write_count(lfd, log_str.as_bytes(), log_str.len());
+        // Ignore error writing to the logger, not much we can do
+        let _ = write_count(lfd, log_str.as_bytes(), log_str.len());
     })
 }
 
