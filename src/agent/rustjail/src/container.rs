@@ -456,6 +456,24 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
         setrlimit(rl)?;
     }
 
+    //
+    // Make the process non-dumpable, to avoid various race conditions that
+    // could cause processes in namespaces we're joining to access host
+    // resources (or potentially execute code).
+    //
+    // However, if the number of namespaces we are joining is 0, we are not
+    // going to be switching to a different security context. Thus setting
+    // ourselves to be non-dumpable only breaks things (like rootless
+    // containers), which is the recommendation from the kernel folks.
+    //
+    // Ref: https://github.com/opencontainers/runc/commit/50a19c6ff828c58e5dab13830bd3dacde268afe5
+    //
+    if !nses.is_empty() {
+        if let Err(e) = prctl::set_dumpable(false) {
+            return Err(anyhow!(e).context("set process non-dumpable failed"));
+        };
+    }
+
     if userns {
         log_child!(cfd_log, "enter new user namespace");
         sched::unshare(CloneFlags::CLONE_NEWUSER)?;
