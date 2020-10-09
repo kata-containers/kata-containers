@@ -43,12 +43,16 @@ The `rust-agent` depends on [`grpc-rs`](https://github.com/pingcap/grpc-rs) by P
 - https://github.com/alipay/grpc-rs/tree/rust_agent
 
 ### Build from Source
-The rust-agent need to be built with rust nightly, and static linked with musl.
+The rust-agent need to be built with static linked with musl:
 ```bash
-rustup target add x86_64-unknown-linux-musl
-git submodule update --init --recursive  
-sudo ln -s /usr/bin/g++ /bin/musl-g++  
-cargo build --target x86_64-unknown-linux-musl --release
+$ rustup target add x86_64-unknown-linux-musl
+$ sudo ln -s /usr/bin/g++ /bin/musl-g++  
+```
+Download the kata-containers source and build the agent:
+```bash
+$ go get -d -u github.com/kata-containers/kata-containers
+$ cd $GOPATH/src/github.com/kata-containers/kata-containers/src/agent
+$ make
 ```
 
 ## Run Kata CI with rust-agent
