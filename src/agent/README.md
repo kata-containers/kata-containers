@@ -52,7 +52,10 @@ $ sudo ln -s /usr/bin/g++ /bin/musl-g++
 ```
 Download the kata-containers source and build the agent:
 ```bash
-$ go get -d -u github.com/kata-containers/kata-containers
+$ GOPATH="${GOPATH:-$HOME/go}"
+$ dir="$GOPATH/src/github.com/kata-containers"
+$ mkdir -p "$dir" && cd "$dir"
+$ git clone --depth 1 https://github.com/kata-containers/kata-containers && cd kata-containers
 $ cd $GOPATH/src/github.com/kata-containers/kata-containers/src/agent
 $ make
 ```
