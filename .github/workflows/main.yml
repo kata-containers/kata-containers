@@ -16,7 +16,7 @@ jobs:
         go-version: ${{ matrix.go-version }}
     - name: Setup GOPATH
       run: |
-        gopath_org=$(go env GOPATH)/src/github.com/intel/
+        gopath_org=$(go env GOPATH)/src/github.com/kata-containers/
         mkdir -p ${gopath_org}
         ln -s ${PWD} ${gopath_org}
     - name: Checkout code
@@ -27,14 +27,14 @@ jobs:
         $(go env GOPATH)/bin/gometalinter --install
     - name: Running gometalinter
       run: |
-        gopath_repo=$(go env GOPATH)/src/github.com/intel/govmm
+        gopath_repo=$(go env GOPATH)/src/github.com/kata-containers/govmm
         pushd ${gopath_repo}
         $(go env GOPATH)/bin/gometalinter --tests --vendor --disable-all --enable=misspell --enable=vet --enable=ineffassign --enable=gofmt --enable=gocyclo --cyclo-over=15 --enable=golint --enable=errcheck --enable=deadcode --enable=staticcheck -enable=gas ./...
     - name: Send coverage
       env:
         COVERALLS_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
-        gopath_repo=$(go env GOPATH)/src/github.com/intel/govmm
+        gopath_repo=$(go env GOPATH)/src/github.com/kata-containers/govmm
         pushd ${gopath_repo}
         go get github.com/mattn/goveralls
         $(go env GOPATH)/bin/goveralls -v -service=github
