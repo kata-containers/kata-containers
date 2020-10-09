@@ -1,6 +1,6 @@
 <img src="https://www.openstack.org/assets/kata/kata-vertical-on-white.png" width="150">
 
-# Kata Containers
+# Kata  Containers
 
 * [Raising issues](#raising-issues)
 * [Kata Containers repositories](#kata-containers-repositories)
@@ -24,7 +24,7 @@
 
 ---
 
-Welcome to Kata Containers!
+Welcome to Kata  Containers!
 
 The purpose of this repository is to act as a "top level" site for the project. Specifically it is used:
 
@@ -43,7 +43,7 @@ issues](https://github.com/kata-containers/kata-containers/issues/new):
 - Where the raiser is unsure which repositories are affected.
 
 > **Note:**
-> 
+>
 > - If an issue affects only a single component, it should be raised in that
 >   components repository.
 
