@@ -205,6 +205,21 @@ pub fn init_rootfs(
                 check_proc_mount(m)?;
             }
 
+            // If the destination already exists and is not a directory, we bail
+            // out This is to avoid mounting through a symlink or similar -- which
+            // has been a "fun" attack scenario in the past.
+            if m.r#type == "proc" || m.r#type == "sysfs" {
+                if let Ok(meta) = fs::symlink_metadata(&m.destination) {
+                    if !meta.is_dir() {
+                        return Err(anyhow!(
+                            "Mount point {} must be ordinary directory: got {:?}",
+                            m.destination,
+                            meta.file_type()
+                        ));
+                    }
+                }
+            }
+
             mount_from(cfd_log, &m, &rootfs, flags, &data, "")?;
             // bind mount won't change mount options, we need remount to make mount options
             // effective.
