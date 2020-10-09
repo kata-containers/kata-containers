@@ -559,6 +559,7 @@ EOT
 		[ "$ARCH" == "aarch64" ] && export PATH=$OLD_PATH && rm -rf /usr/local/musl
 		popd
 	else
+		mkdir -p ${AGENT_DIR}
 		cp ${AGENT_SOURCE_BIN} ${AGENT_DEST}
 		OK "cp ${AGENT_SOURCE_BIN} ${AGENT_DEST}"
 	fi
