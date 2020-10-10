@@ -76,7 +76,6 @@ macro_rules! sl {
 #[derive(Clone)]
 pub struct agentService {
     sandbox: Arc<Mutex<Sandbox>>,
-    test: u32,
 }
 
 impl agentService {
@@ -1063,7 +1062,7 @@ impl protocols::agent_ttrpc::AgentService for agentService {
         _ctx: &ttrpc::TtrpcContext,
         req: protocols::agent::StartTracingRequest,
     ) -> ttrpc::Result<Empty> {
-        info!(sl!(), "start_tracing {:?} self.test={}", req, self.test);
+        info!(sl!(), "start_tracing {:?}", req);
         Ok(Empty::new())
     }
     fn stop_tracing(
@@ -1498,10 +1497,8 @@ fn find_process<'a>(
 }
 
 pub fn start(s: Arc<Mutex<Sandbox>>, server_address: &str) -> ttrpc::Server {
-    let agent_service = Box::new(agentService {
-        sandbox: s,
-        test: 1,
-    }) as Box<dyn protocols::agent_ttrpc::AgentService + Send + Sync>;
+    let agent_service = Box::new(agentService { sandbox: s })
+        as Box<dyn protocols::agent_ttrpc::AgentService + Send + Sync>;
 
     let agent_worker = Arc::new(agent_service);
 
