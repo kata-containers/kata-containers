@@ -1,0 +1,143 @@
+From d55f518248f263bb8d0852f98e47102ea09d4f89 Mon Sep 17 00:00:00 2001
+From: Stefano Garzarella <sgarzare@redhat.com>
+Date: Mon, 21 Sep 2020 14:25:03 +0200
+Subject: [PATCH 1/4] virtio: skip legacy support check on machine types less
+ than 5.1
+
+Commit 9b3a35ec82 ("virtio: verify that legacy support is not accidentally
+on") added a check that returns an error if legacy support is on, but the
+device does not support legacy.
+
+Unfortunately some devices were wrongly declared legacy capable even if
+they were not (e.g vhost-vsock).
+
+To avoid migration issues, we add a virtio-device property
+(x-disable-legacy-check) to skip the legacy error, printing a warning
+instead, for machine types < 5.1.
+
+Cc: qemu-stable@nongnu.org
+Fixes: 9b3a35ec82 ("virtio: verify that legacy support is not accidentally on")
+Suggested-by: Dr. David Alan Gilbert <dgilbert@redhat.com>
+Suggested-by: Cornelia Huck <cohuck@redhat.com>
+Reviewed-by: Cornelia Huck <cohuck@redhat.com>
+Signed-off-by: Stefano Garzarella <sgarzare@redhat.com>
+Message-Id: <20200921122506.82515-2-sgarzare@redhat.com>
+Reviewed-by: Michael S. Tsirkin <mst@redhat.com>
+Signed-off-by: Michael S. Tsirkin <mst@redhat.com>
+---
+ hw/core/machine.c          |  1 +
+ hw/s390x/virtio-ccw.c      | 15 ++++++++++++---
+ hw/virtio/virtio-pci.c     | 14 ++++++++++++--
+ hw/virtio/virtio.c         |  7 +++++++
+ include/hw/virtio/virtio.h |  2 ++
+ 5 files changed, 34 insertions(+), 5 deletions(-)
+
+diff --git a/hw/core/machine.c b/hw/core/machine.c
+index 9b02fb2..d7f4a0d 100644
+--- a/hw/core/machine.c
++++ b/hw/core/machine.c
+@@ -44,6 +44,7 @@ GlobalProperty hw_compat_5_0[] = {
+     { "vmport", "x-signal-unsupported-cmd", "off" },
+     { "vmport", "x-report-vmx-type", "off" },
+     { "vmport", "x-cmds-v2", "off" },
++    { "virtio-device", "x-disable-legacy-check", "true" },
+ };
+ const size_t hw_compat_5_0_len = G_N_ELEMENTS(hw_compat_5_0);
+
+diff --git a/hw/s390x/virtio-ccw.c b/hw/s390x/virtio-ccw.c
+index 8d140dc..4582e94 100644
+--- a/hw/s390x/virtio-ccw.c
++++ b/hw/s390x/virtio-ccw.c
+@@ -1122,9 +1122,18 @@ static void virtio_ccw_device_plugged(DeviceState *d, Error **errp)
+     }
+
+     if (!virtio_ccw_rev_max(dev) && !virtio_legacy_allowed(vdev)) {
+-        error_setg(errp, "Invalid value of property max_rev "
+-                   "(is %d expected >= 1)", virtio_ccw_rev_max(dev));
+-        return;
++        /*
++         * To avoid migration issues, we allow legacy mode when legacy
++         * check is disabled in the old machine types (< 5.1).
++         */
++        if (virtio_legacy_check_disabled(vdev)) {
++            warn_report("device requires revision >= 1, but for backward "
++                        "compatibility max_revision=0 is allowed");
++        } else {
++            error_setg(errp, "Invalid value of property max_rev "
++                       "(is %d expected >= 1)", virtio_ccw_rev_max(dev));
++            return;
++        }
+     }
+
+     if (virtio_get_num_queues(vdev) > VIRTIO_QUEUE_MAX) {
+diff --git a/hw/virtio/virtio-pci.c b/hw/virtio/virtio-pci.c
+index 02790e3..36524a5 100644
+--- a/hw/virtio/virtio-pci.c
++++ b/hw/virtio/virtio-pci.c
+@@ -1597,8 +1597,18 @@ static void virtio_pci_device_plugged(DeviceState *d, Error **errp)
+
+     if (legacy) {
+         if (!virtio_legacy_allowed(vdev)) {
+-            error_setg(errp, "device is modern-only, use disable-legacy=on");
+-            return;
++            /*
++             * To avoid migration issues, we allow legacy mode when legacy
++             * check is disabled in the old machine types (< 5.1).
++             */
++            if (virtio_legacy_check_disabled(vdev)) {
++                warn_report("device is modern-only, but for backward "
++                            "compatibility legacy is allowed");
++            } else {
++                error_setg(errp,
++                           "device is modern-only, use disable-legacy=on");
++                return;
++            }
+         }
+         if (virtio_host_has_feature(vdev, VIRTIO_F_IOMMU_PLATFORM)) {
+             error_setg(errp, "VIRTIO_F_IOMMU_PLATFORM was supported by"
+diff --git a/hw/virtio/virtio.c b/hw/virtio/virtio.c
+index 3a3d012..a2edb4f 100644
+--- a/hw/virtio/virtio.c
++++ b/hw/virtio/virtio.c
+@@ -3304,6 +3304,11 @@ bool virtio_legacy_allowed(VirtIODevice *vdev)
+     }
+ }
+
++bool virtio_legacy_check_disabled(VirtIODevice *vdev)
++{
++    return vdev->disable_legacy_check;
++}
++
+ hwaddr virtio_queue_get_desc_addr(VirtIODevice *vdev, int n)
+ {
+     return vdev->vq[n].vring.desc;
+@@ -3713,6 +3718,8 @@ static Property virtio_properties[] = {
+     DEFINE_VIRTIO_COMMON_FEATURES(VirtIODevice, host_features),
+     DEFINE_PROP_BOOL("use-started", VirtIODevice, use_started, true),
+     DEFINE_PROP_BOOL("use-disabled-flag", VirtIODevice, use_disabled_flag, true),
++    DEFINE_PROP_BOOL("x-disable-legacy-check", VirtIODevice,
++                     disable_legacy_check, false),
+     DEFINE_PROP_END_OF_LIST(),
+ };
+
+diff --git a/include/hw/virtio/virtio.h b/include/hw/virtio/virtio.h
+index 28cf3b9..b7ece7a 100644
+--- a/include/hw/virtio/virtio.h
++++ b/include/hw/virtio/virtio.h
+@@ -101,6 +101,7 @@ struct VirtIODevice
+     bool use_started;
+     bool started;
+     bool start_on_kick; /* when virtio 1.0 feature has not been negotiated */
++    bool disable_legacy_check;
+     VMChangeStateEntry *vmstate;
+     char *bus_name;
+     uint8_t device_endian;
+@@ -394,5 +395,6 @@ static inline bool virtio_device_disabled(VirtIODevice *vdev)
+ }
+
+ bool virtio_legacy_allowed(VirtIODevice *vdev);
++bool virtio_legacy_check_disabled(VirtIODevice *vdev);
+
+ #endif
+--
+1.8.3.1
