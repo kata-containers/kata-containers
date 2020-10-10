@@ -1353,7 +1353,13 @@ fn get_memory_info(block_size: bool, hotplug: bool) -> Result<(u64, bool)> {
                     return Err(anyhow!("Invalid block size"));
                 }
 
-                size = v.trim().parse::<u64>()?;
+                size = match u64::from_str_radix(v.trim(), 16) {
+                    Ok(h) => h,
+                    Err(_) => {
+                        warn!(sl!(), "failed to parse the str {} to hex", size);
+                        return Err(anyhow!("Invalid block size"));
+                    }
+                };
             }
             Err(e) => {
                 info!(sl!(), "memory block size error: {:?}", e.kind());
