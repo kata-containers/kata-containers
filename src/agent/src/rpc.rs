@@ -669,15 +669,10 @@ impl protocols::agent_ttrpc::AgentService for agentService {
         let out: String = String::from_utf8(output.stdout).unwrap();
         let mut lines: Vec<String> = out.split('\n').map(|v| v.to_string()).collect();
 
-        let predicate = |v| {
-            if v == "PID" {
-                return true;
-            } else {
-                return false;
-            }
-        };
-
-        let pid_index = lines[0].split_whitespace().position(predicate).unwrap();
+        let pid_index = lines[0]
+            .split_whitespace()
+            .position(|v| v == "PID")
+            .unwrap();
 
         let mut result = String::new();
         result.push_str(lines[0].as_str());
