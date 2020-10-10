@@ -31,7 +31,9 @@ pull_clh_released_binary() {
     info "Download cloud-hypervisor version: ${cloud_hypervisor_version}"
     cloud_hypervisor_binary="https://github.com/cloud-hypervisor/cloud-hypervisor/releases/download/${cloud_hypervisor_version}/cloud-hypervisor-static"
 
-    curl --fail -L ${cloud_hypervisor_binary} -o cloud-hypervisor || return 1
+    curl --fail -L ${cloud_hypervisor_binary} -o cloud-hypervisor-static || return 1
+    mkdir -p cloud-hypervisor
+    mv -f cloud-hypervisor-static cloud-hypervisor/cloud-hypervisor
 }
 
 build_clh_from_source() {
