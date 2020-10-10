@@ -125,7 +125,7 @@ lazy_static! {
 // type of storage driver.
 type StorageHandler = fn(&Logger, &Storage, Arc<Mutex<Sandbox>>) -> Result<String>;
 
-// StorageHandlerList lists the supported drivers.
+// STORAGEHANDLERLIST lists the supported drivers.
 #[cfg_attr(rustfmt, rustfmt_skip)]
 lazy_static! {
     pub static ref STORAGEHANDLERLIST: HashMap<&'static str, StorageHandler> = {
@@ -510,7 +510,7 @@ pub fn get_mount_fs_type(mount_point: &str) -> Result<String> {
     get_mount_fs_type_from_file(PROC_MOUNTSTATS, mount_point)
 }
 
-// get_mount_fs_type returns the FS type corresponding to the passed mount point and
+// get_mount_fs_type_from_file returns the FS type corresponding to the passed mount point and
 // any error ecountered.
 pub fn get_mount_fs_type_from_file(mount_file: &str, mount_point: &str) -> Result<String> {
     if mount_point == "" {
@@ -643,7 +643,7 @@ pub fn cgroups_mount(logger: &Logger, unified_cgroup_hierarchy: bool) -> Result<
 
     // Enable memory hierarchical account.
     // For more information see https://www.kernel.org/doc/Documentation/cgroup-v1/memory.txt
-    online_device("/sys/fs/cgroup/memory//memory.use_hierarchy")?;
+    online_device("/sys/fs/cgroup/memory/memory.use_hierarchy")?;
     Ok(())
 }
 
@@ -654,8 +654,8 @@ pub fn remove_mounts(mounts: &Vec<String>) -> Result<()> {
     Ok(())
 }
 
-// ensureDestinationExists will recursively create a given mountpoint. If directories
-// are created, their permissions are initialized to mountPerm
+// ensure_destination_exists will recursively create a given mountpoint. If directories
+// are created, their permissions are initialized to mountPerm(0755)
 fn ensure_destination_exists(destination: &str, fs_type: &str) -> Result<()> {
     let d = Path::new(destination);
     if !d.exists() {
