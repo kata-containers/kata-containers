@@ -354,9 +354,12 @@ You MUST choose one of `alpine`, `centos`, `clearlinux`, `euleros`, and `fedora`
 >
 > - Check the [compatibility matrix](../tools/osbuilder/README.md#platform-distro-compatibility-matrix) before creating rootfs.
 
-Optionally, add your custom agent binary to the rootfs with the following:
+Optionally, add your custom agent binary to the rootfs with the following, `LIBC` default is `musl`, if `ARCH` is `ppc64le`, should set the `LIBC=gnu` and `ARCH=powerpc64le`:
 ```
-$ sudo install -o root -g root -m 0550 -T ../../agent/kata-agent ${ROOTFS_DIR}/sbin/init
+$ export ARCH=$(shell uname -m)
+$ [ ${ARCH} == "ppc64le" ] && export LIBC=gnu || export LIBC=musl
+$ [ ${ARCH} == "ppc64le" ] && export ARCH=powerpc64le
+$ sudo install -o root -g root -m 0550 -T ../../../src/agent/target/$(ARCH)-unknown-linux-$(LIBC)/release/kata-agent ${ROOTFS_DIR}/sbin/init
 ```
 
 ### Build an initrd image
