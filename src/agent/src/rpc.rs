@@ -208,18 +208,7 @@ impl agentService {
         let cid = req.container_id.clone();
         let mut cmounts: Vec<String> = vec![];
 
-        if req.timeout == 0 {
-            let s = Arc::clone(&self.sandbox);
-            let mut sandbox = s.lock().unwrap();
-            let ctr: &mut LinuxContainer = match sandbox.get_container(cid.as_str()) {
-                Some(cr) => cr,
-                None => {
-                    return Err(anyhow!(nix::Error::from_errno(Errno::EINVAL)));
-                }
-            };
-
-            ctr.destroy()?;
-
+        let mut remove_container_resources = |sandbox: &mut Sandbox| -> Result<()> {
             // Find the sandbox storage used by this container
             let mounts = sandbox.container_mounts.get(&cid);
             if mounts.is_some() {
@@ -240,6 +229,22 @@ impl agentService {
 
             sandbox.container_mounts.remove(cid.as_str());
             sandbox.containers.remove(cid.as_str());
+            Ok(())
+        };
+
+        if req.timeout == 0 {
+            let s = Arc::clone(&self.sandbox);
+            let mut sandbox = s.lock().unwrap();
+            let ctr: &mut LinuxContainer = match sandbox.get_container(cid.as_str()) {
+                Some(cr) => cr,
+                None => {
+                    return Err(anyhow!(nix::Error::from_errno(Errno::EINVAL)));
+                }
+            };
+
+            ctr.destroy()?;
+
+            remove_container_resources(&mut sandbox)?;
 
             return Ok(());
         }
@@ -275,26 +280,7 @@ impl agentService {
         let s = self.sandbox.clone();
         let mut sandbox = s.lock().unwrap();
 
-        // Find the sandbox storage used by this container
-        let mounts = sandbox.container_mounts.get(&cid);
-        if mounts.is_some() {
-            let mounts = mounts.unwrap();
-
-            remove_mounts(&mounts)?;
-
-            for m in mounts.iter() {
-                if sandbox.storages.get(m).is_some() {
-                    cmounts.push(m.to_string());
-                }
-            }
-        }
-
-        for m in cmounts.iter() {
-            sandbox.unset_and_remove_sandbox_storage(m)?;
-        }
-
-        sandbox.container_mounts.remove(&cid);
-        sandbox.containers.remove(cid.as_str());
+        remove_container_resources(&mut sandbox)?;
 
         Ok(())
     }
