@@ -75,7 +75,7 @@ impl Namespace {
         self
     }
 
-    // setup_persistent_ns creates persistent namespace without switching to it.
+    // setup creates persistent namespace without switching to it.
     // Note, pid namespaces cannot be persisted.
     pub fn setup(mut self) -> Result<Self, String> {
         if let Err(err) = fs::create_dir_all(&self.persistent_ns_dir) {
