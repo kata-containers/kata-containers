@@ -1,7 +1,8 @@
 {
 	"metadata": {
 		"name": "redis-client-pod",
-		"uid": "test-redis-client-pod"
+		"uid": "test-redis-client-pod",
+		"namespace": "test.kata"
 	},
 	"hostname": "redis-client",
 	"log_directory": "",
