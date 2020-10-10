@@ -105,8 +105,10 @@ default: $(TARGET) show-header
 
 $(TARGET): $(GENERATED_CODE) $(TARGET_PATH)
 
+#remember to add '-C link-arg=-lgcc' to RUSTFLAGS when you assign it.
 $(TARGET_PATH): $(SOURCES) | show-summary
-	@RUSTFLAGS="--deny warnings" cargo build --target $(TRIPLE) --$(BUILD_TYPE)
+	@RUSTFLAGS='-C link-arg=-lgcc --deny warnings' cargo build --target $(TRIPLE) --$(BUILD_TYPE)
+
 
 optimize: $(SOURCES) | show-summary show-header
 	@RUSTFLAGS='-C link-arg=-s --deny-warnings' cargo build --target $(TRIPLE) --$(BUILD_TYPE)
