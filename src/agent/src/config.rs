@@ -222,22 +222,16 @@ fn get_bool_value(param: &str) -> Result<bool> {
 
     let v = fields[1];
 
-    // bool
-    let t: std::result::Result<bool, std::str::ParseBoolError> = v.parse();
-    if t.is_ok() {
-        return Ok(t.unwrap());
-    }
-
-    // integer
-    let i: std::result::Result<u64, std::num::ParseIntError> = v.parse();
-    if i.is_err() {
-        return Ok(false);
-    }
-
-    // only `0` returns false, otherwise returns true
-    Ok(match i.unwrap() {
-        0 => false,
-        _ => true,
+    // first try to parse as bool value
+    v.parse::<bool>().or_else(|_err1| {
+        // then try to parse as integer value
+        v.parse::<u64>().or_else(|_err2| Ok(0)).and_then(|v| {
+            // only `0` returns false, otherwise returns true
+            Ok(match v {
+                0 => false,
+                _ => true,
+            })
+        })
     })
 }
 
