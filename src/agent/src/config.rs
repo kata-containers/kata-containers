@@ -40,6 +40,36 @@ pub struct agentConfig {
     pub unified_cgroup_hierarchy: bool,
 }
 
+// parse_cmdline_param parse commandline parameters.
+macro_rules! parse_cmdline_param {
+    // commandline flags, without func to parse the option values
+    ($param:ident, $key:ident, $field:expr) => {
+        if $param.eq(&$key) {
+            $field = true;
+            continue;
+        }
+    };
+    // commandline options, with func to parse the option values
+    ($param:ident, $key:ident, $field:expr, $func:ident) => {
+        if $param.starts_with(format!("{}=", $key).as_str()) {
+            let val = $func($param)?;
+            $field = val;
+            continue;
+        }
+    };
+    // commandline options, with func to parse the option values, and match func
+    // to valid the values
+    ($param:ident, $key:ident, $field:expr, $func:ident, $guard:expr) => {
+        if $param.starts_with(format!("{}=", $key).as_str()) {
+            let val = $func($param)?;
+            if $guard(val) {
+                $field = val;
+            }
+            continue;
+        }
+    };
+}
+
 impl agentConfig {
     pub fn new() -> agentConfig {
         agentConfig {
@@ -60,51 +90,49 @@ impl agentConfig {
         let params: Vec<&str> = cmdline.split_ascii_whitespace().collect();
         for param in params.iter() {
             // parse cmdline flags
-            if param.eq(&DEBUG_CONSOLE_FLAG) {
-                self.debug_console = true;
-            }
-
-            if param.eq(&DEV_MODE_FLAG) {
-                self.dev_mode = true;
-            }
+            parse_cmdline_param!(param, DEBUG_CONSOLE_FLAG, self.debug_console);
+            parse_cmdline_param!(param, DEV_MODE_FLAG, self.dev_mode);
 
             // parse cmdline options
-            if param.starts_with(format!("{}=", LOG_LEVEL_OPTION).as_str()) {
-                let level = get_log_level(param)?;
-                self.log_level = level;
-            }
+            parse_cmdline_param!(param, LOG_LEVEL_OPTION, self.log_level, get_log_level);
 
-            if param.starts_with(format!("{}=", HOTPLUG_TIMOUT_OPTION).as_str()) {
-                let hotplugTimeout = get_hotplug_timeout(param)?;
-                // ensure the timeout is a positive value
-                if hotplugTimeout.as_secs() > 0 {
-                    self.hotplug_timeout = hotplugTimeout;
-                }
-            }
+            // ensure the timeout is a positive value
+            parse_cmdline_param!(
+                param,
+                HOTPLUG_TIMOUT_OPTION,
+                self.hotplug_timeout,
+                get_hotplug_timeout,
+                |hotplugTimeout: time::Duration| hotplugTimeout.as_secs() > 0
+            );
 
-            if param.starts_with(format!("{}=", DEBUG_CONSOLE_VPORT_OPTION).as_str()) {
-                let port = get_vsock_port(param)?;
-                if port > 0 {
-                    self.debug_console_vport = port;
-                }
-            }
+            // vsock port should be positive values
+            parse_cmdline_param!(
+                param,
+                DEBUG_CONSOLE_VPORT_OPTION,
+                self.debug_console_vport,
+                get_vsock_port,
+                |port| port > 0
+            );
+            parse_cmdline_param!(
+                param,
+                LOG_VPORT_OPTION,
+                self.log_vport,
+                get_vsock_port,
+                |port| port > 0
+            );
 
-            if param.starts_with(format!("{}=", LOG_VPORT_OPTION).as_str()) {
-                let port = get_vsock_port(param)?;
-                if port > 0 {
-                    self.log_vport = port;
-                }
-            }
-
-            if param.starts_with(format!("{}=", CONTAINER_PIPE_SIZE_OPTION).as_str()) {
-                let container_pipe_size = get_container_pipe_size(param)?;
-                self.container_pipe_size = container_pipe_size
-            }
-
-            if param.starts_with(format!("{}=", UNIFIED_CGROUP_HIERARCHY_OPTION).as_str()) {
-                let b = get_bool_value(param, false);
-                self.unified_cgroup_hierarchy = b;
-            }
+            parse_cmdline_param!(
+                param,
+                CONTAINER_PIPE_SIZE_OPTION,
+                self.container_pipe_size,
+                get_container_pipe_size
+            );
+            parse_cmdline_param!(
+                param,
+                UNIFIED_CGROUP_HIERARCHY_OPTION,
+                self.unified_cgroup_hierarchy,
+                get_bool_value
+            );
         }
 
         if let Ok(addr) = env::var(SERVER_ADDR_ENV_VAR) {
@@ -185,11 +213,11 @@ fn get_hotplug_timeout(param: &str) -> Result<time::Duration> {
     Ok(time::Duration::from_secs(value.unwrap()))
 }
 
-fn get_bool_value(param: &str, default: bool) -> bool {
+fn get_bool_value(param: &str) -> Result<bool> {
     let fields: Vec<&str> = param.split("=").collect();
 
     if fields.len() != 2 {
-        return default;
+        return Ok(false);
     }
 
     let v = fields[1];
@@ -197,20 +225,20 @@ fn get_bool_value(param: &str, default: bool) -> bool {
     // bool
     let t: std::result::Result<bool, std::str::ParseBoolError> = v.parse();
     if t.is_ok() {
-        return t.unwrap();
+        return Ok(t.unwrap());
     }
 
     // integer
     let i: std::result::Result<u64, std::num::ParseIntError> = v.parse();
     if i.is_err() {
-        return default;
+        return Ok(false);
     }
 
     // only `0` returns false, otherwise returns true
-    match i.unwrap() {
+    Ok(match i.unwrap() {
         0 => false,
         _ => true,
-    }
+    })
 }
 
 fn get_container_pipe_size(param: &str) -> Result<i32> {
