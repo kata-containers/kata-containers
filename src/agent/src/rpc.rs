@@ -100,7 +100,6 @@ impl agentService {
 
         // re-scan PCI bus
         // looking for hidden devices
-
         rescan_pci_bus().context("Could not rescan PCI bus")?;
 
         // Some devices need some extra processing (the ones invoked with
@@ -293,7 +292,6 @@ impl agentService {
         let s = self.sandbox.clone();
         let mut sandbox = s.lock().unwrap();
 
-        // ignore string_user, not sure what it is
         let process = if req.process.is_some() {
             req.process.as_ref().unwrap()
         } else {
@@ -555,10 +553,7 @@ impl protocols::agent_ttrpc::AgentService for agentService {
                 ttrpc::Code::INTERNAL,
                 e.to_string(),
             ))),
-            Ok(_) => {
-                info!(sl!(), "exec process!\n");
-                Ok(Empty::new())
-            }
+            Ok(_) => Ok(Empty::new()),
         }
     }
 
@@ -575,6 +570,7 @@ impl protocols::agent_ttrpc::AgentService for agentService {
             Ok(_) => Ok(Empty::new()),
         }
     }
+
     fn exec_process(
         &self,
         _ctx: &ttrpc::TtrpcContext,
@@ -588,6 +584,7 @@ impl protocols::agent_ttrpc::AgentService for agentService {
             Ok(_) => Ok(Empty::new()),
         }
     }
+
     fn signal_process(
         &self,
         _ctx: &ttrpc::TtrpcContext,
@@ -601,6 +598,7 @@ impl protocols::agent_ttrpc::AgentService for agentService {
             Ok(_) => Ok(Empty::new()),
         }
     }
+
     fn wait_process(
         &self,
         _ctx: &ttrpc::TtrpcContext,
@@ -614,6 +612,7 @@ impl protocols::agent_ttrpc::AgentService for agentService {
             Ok(resp) => Ok(resp),
         }
     }
+
     fn list_processes(
         &self,
         _ctx: &ttrpc::TtrpcContext,
@@ -700,6 +699,7 @@ impl protocols::agent_ttrpc::AgentService for agentService {
         resp.process_list = Vec::from(result);
         Ok(resp)
     }
+
     fn update_container(
         &self,
         _ctx: &ttrpc::TtrpcContext,
@@ -739,6 +739,7 @@ impl protocols::agent_ttrpc::AgentService for agentService {
 
         Ok(resp)
     }
+
     fn stats_container(
         &self,
         _ctx: &ttrpc::TtrpcContext,
@@ -832,6 +833,7 @@ impl protocols::agent_ttrpc::AgentService for agentService {
             Ok(resp) => Ok(resp),
         }
     }
+
     fn read_stdout(
         &self,
         _ctx: &ttrpc::TtrpcContext,
@@ -845,6 +847,7 @@ impl protocols::agent_ttrpc::AgentService for agentService {
             Ok(resp) => Ok(resp),
         }
     }
+
     fn read_stderr(
         &self,
         _ctx: &ttrpc::TtrpcContext,
@@ -858,6 +861,7 @@ impl protocols::agent_ttrpc::AgentService for agentService {
             Ok(resp) => Ok(resp),
         }
     }
+
     fn close_stdin(
         &self,
         _ctx: &ttrpc::TtrpcContext,
@@ -965,6 +969,7 @@ impl protocols::agent_ttrpc::AgentService for agentService {
 
         Ok(iface)
     }
+
     fn update_routes(
         &self,
         _ctx: &ttrpc::TtrpcContext,
@@ -1000,6 +1005,7 @@ impl protocols::agent_ttrpc::AgentService for agentService {
 
         Ok(routes)
     }
+
     fn list_interfaces(
         &self,
         _ctx: &ttrpc::TtrpcContext,
@@ -1028,6 +1034,7 @@ impl protocols::agent_ttrpc::AgentService for agentService {
 
         Ok(interface)
     }
+
     fn list_routes(
         &self,
         _ctx: &ttrpc::TtrpcContext,
@@ -1057,6 +1064,7 @@ impl protocols::agent_ttrpc::AgentService for agentService {
 
         Ok(routes)
     }
+
     fn start_tracing(
         &self,
         _ctx: &ttrpc::TtrpcContext,
@@ -1065,6 +1073,7 @@ impl protocols::agent_ttrpc::AgentService for agentService {
         info!(sl!(), "start_tracing {:?}", req);
         Ok(Empty::new())
     }
+
     fn stop_tracing(
         &self,
         _ctx: &ttrpc::TtrpcContext,
@@ -1175,6 +1184,7 @@ impl protocols::agent_ttrpc::AgentService for agentService {
 
         Ok(Empty::new())
     }
+
     fn add_arp_neighbors(
         &self,
         _ctx: &ttrpc::TtrpcContext,
@@ -1200,6 +1210,7 @@ impl protocols::agent_ttrpc::AgentService for agentService {
 
         Ok(Empty::new())
     }
+
     fn online_cpu_mem(
         &self,
         _ctx: &ttrpc::TtrpcContext,
@@ -1217,6 +1228,7 @@ impl protocols::agent_ttrpc::AgentService for agentService {
 
         Ok(Empty::new())
     }
+
     fn reseed_random_dev(
         &self,
         _ctx: &ttrpc::TtrpcContext,
@@ -1231,6 +1243,7 @@ impl protocols::agent_ttrpc::AgentService for agentService {
 
         Ok(Empty::new())
     }
+
     fn get_guest_details(
         &self,
         _ctx: &ttrpc::TtrpcContext,
@@ -1259,6 +1272,7 @@ impl protocols::agent_ttrpc::AgentService for agentService {
 
         Ok(resp)
     }
+
     fn mem_hotplug_by_probe(
         &self,
         _ctx: &ttrpc::TtrpcContext,
@@ -1273,6 +1287,7 @@ impl protocols::agent_ttrpc::AgentService for agentService {
 
         Ok(Empty::new())
     }
+
     fn set_guest_date_time(
         &self,
         _ctx: &ttrpc::TtrpcContext,
@@ -1287,6 +1302,7 @@ impl protocols::agent_ttrpc::AgentService for agentService {
 
         Ok(Empty::new())
     }
+
     fn copy_file(
         &self,
         _ctx: &ttrpc::TtrpcContext,
@@ -1362,6 +1378,7 @@ impl protocols::health_ttrpc::Health for healthService {
 
         Ok(resp)
     }
+
     fn version(
         &self,
         _ctx: &ttrpc::TtrpcContext,
