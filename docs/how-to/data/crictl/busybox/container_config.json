@@ -1,6 +1,7 @@
 {
 	"metadata": {
-		"name": "busybox-container"
+		"name": "busybox-container",
+		"namespace": "test.kata"
 	},
 	"image": {
 		"image": "docker.io/library/busybox:latest"

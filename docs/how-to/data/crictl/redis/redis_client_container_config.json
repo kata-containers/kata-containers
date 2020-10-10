@@ -1,6 +1,7 @@
 {
 	"metadata": {
-		"name": "redis-client"
+		"name": "redis-client",
+		"namespace": "test.kata"
 	},
 	"image": {
 		"image": "docker.io/library/redis:6.0.8-alpine"
