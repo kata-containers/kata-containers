@@ -1,0 +1,19 @@
+{
+	"metadata": {
+		"name": "busybox-container",
+		"namespace": "test.kata"
+	},
+	"image": {
+		"image": "docker.io/library/busybox:latest"
+	},
+	"command": [
+		"sleep",
+		"9999"
+	],
+	"args": [],
+	"working_dir": "/",
+	"log_path": "",
+	"stdin": false,
+	"stdin_once": false,
+	"tty": false
+}

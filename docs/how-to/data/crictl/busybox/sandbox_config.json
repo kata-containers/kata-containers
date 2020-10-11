@@ -1,0 +1,20 @@
+{
+	"metadata": {
+		"name": "busybox-pod",
+		"uid": "busybox-pod",
+		"namespace": "test.kata"
+	},
+	"hostname": "busybox_host",
+	"log_directory": "",
+	"dns_config": {
+	},
+	"port_mappings": [],
+	"resources": {
+	},
+	"labels": {
+	},
+	"annotations": {
+	},
+	"linux": {
+	}
+}
