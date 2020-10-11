@@ -1,0 +1,28 @@
+{
+	"metadata": {
+		"name": "redis-client-pod",
+		"uid": "test-redis-client-pod",
+		"namespace": "test.kata"
+	},
+	"hostname": "redis-client",
+	"log_directory": "",
+	"dns_config": {
+		"searches": [
+			"8.8.8.8"
+		]
+	},
+	"port_mappings": [],
+	"resources": {
+		"cpu": {
+			"limits": 1,
+			"requests": 1
+		}
+	},
+	"labels": {
+		"tier": "backend"
+	},
+	"annotations": {
+	},
+	"linux": {
+	}
+}

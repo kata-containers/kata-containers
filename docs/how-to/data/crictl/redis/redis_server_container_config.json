@@ -1,0 +1,36 @@
+{
+	"metadata": {
+		"name": "redis-server",
+		"namespace": "test.kata"
+	},
+	"image": {
+		"image": "docker.io/library/redis:6.0.8-alpine"
+	},
+	"envs": [
+		{
+			"key": "PATH",
+			"value": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+		},
+		{
+			"key": "TERM",
+			"value": "xterm"
+		}
+	],
+	"labels": {
+		"tier": "backend"
+	},
+	"annotations": {
+		"pod": "redis-server-pod"
+	},
+	"log_path": "",
+	"stdin": false,
+	"stdin_once": false,
+	"tty": false,
+	"linux": {
+		"resources": {
+			"memory_limit_in_bytes": 524288000
+		},
+		"security_context": {
+		}
+	}
+}
