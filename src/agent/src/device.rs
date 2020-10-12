@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use libc::{c_uint, major, minor};
+use libc::{major, minor};
 use nix::sys::stat;
 use std::collections::HashMap;
 use std::fs;
@@ -16,7 +16,7 @@ use crate::mount::{DRIVERBLKTYPE, DRIVERMMIOBLKTYPE, DRIVERNVDIMMTYPE, DRIVERSCS
 use crate::sandbox::Sandbox;
 use crate::{AGENT_CONFIG, GLOBAL_DEVICE_WATCHER};
 use anyhow::{anyhow, Result};
-use oci::{LinuxDeviceCgroup, LinuxResources, Spec};
+use oci::{Linux, LinuxDeviceCgroup, LinuxResources, Spec};
 use protocols::agent::Device;
 
 // Convenience macro to obtain the scope logger
@@ -195,8 +195,8 @@ fn scan_scsi_bus(scsi_addr: &str) -> Result<()> {
 // This is needed to update information about minor/major numbers that cannot
 // be predicted from the caller.
 fn update_spec_device_list(device: &Device, spec: &mut Spec) -> Result<()> {
-    let major_id: c_uint;
-    let minor_id: c_uint;
+    let major_id;
+    let minor_id;
 
     // If no container_path is provided, we won't be able to match and
     // update the device in the OCI spec device list. This is an error.
@@ -207,7 +207,7 @@ fn update_spec_device_list(device: &Device, spec: &mut Spec) -> Result<()> {
         ));
     }
 
-    let linux = match spec.linux.as_mut() {
+    let mut linux = match spec.linux.as_mut() {
         None => return Err(anyhow!("Spec didn't container linux field")),
         Some(l) => l,
     };
@@ -218,9 +218,10 @@ fn update_spec_device_list(device: &Device, spec: &mut Spec) -> Result<()> {
 
     let meta = fs::metadata(&device.vm_path)?;
     let dev_id = meta.rdev();
+    let dev_type = get_dev_type(meta.mode());
     unsafe {
-        major_id = major(dev_id);
-        minor_id = minor(dev_id);
+        major_id = major(dev_id) as i64;
+        minor_id = minor(dev_id) as i64;
     }
 
     info!(
@@ -228,22 +229,42 @@ fn update_spec_device_list(device: &Device, spec: &mut Spec) -> Result<()> {
         "got the device: dev_path: {}, major: {}, minor: {}\n", &device.vm_path, major_id, minor_id
     );
 
+    update_one_spec_device(
+        &mut linux,
+        &device.container_path,
+        dev_type,
+        major_id,
+        minor_id,
+    )
+}
+
+// 1. find out linux device matching dev_container_path and update its (major, minor) to
+//    match given (guest_major, guest_minor)
+// 2. look for matching device cgroups constraints in linux.resources and update their (major,
+//    minor) to match giving (guest_major, guest_minor)
+fn update_one_spec_device(
+    linux: &mut Linux,
+    dev_container_path: &str,
+    dev_type: &str,
+    guest_major: i64,
+    guest_minor: i64,
+) -> Result<()> {
     let devices = linux.devices.as_mut_slice();
     for dev in devices.iter_mut() {
-        if dev.path == device.container_path {
+        if dev.path.as_str() == dev_container_path && dev_type == &dev.r#type {
             let host_major = dev.major;
             let host_minor = dev.minor;
 
-            dev.major = major_id as i64;
-            dev.minor = minor_id as i64;
+            dev.major = guest_major;
+            dev.minor = guest_minor;
 
             info!(
                 sl!(),
                 "change the device from major: {} minor: {} to vm device major: {} minor: {}",
                 host_major,
                 host_minor,
-                major_id,
-                minor_id
+                guest_major,
+                guest_minor,
             );
 
             // Resources must be updated since they are used to identify the
@@ -251,13 +272,18 @@ fn update_spec_device_list(device: &Device, spec: &mut Spec) -> Result<()> {
             if let Some(res) = linux.resources.as_mut() {
                 let ds = res.devices.as_mut_slice();
                 for d in ds.iter_mut() {
-                    if d.major == Some(host_major) && d.minor == Some(host_minor) {
-                        d.major = Some(major_id as i64);
-                        d.minor = Some(minor_id as i64);
+                    if d.r#type.as_str() == dev_type
+                        && d.major == Some(host_major)
+                        && d.minor == Some(host_minor)
+                    {
+                        d.major = Some(guest_major);
+                        d.minor = Some(guest_minor);
 
                         info!(
                             sl!(),
-                            "set resources for device major: {} minor: {}\n", major_id, minor_id
+                            "set resources for device major: {} minor: {}\n",
+                            guest_major,
+                            guest_minor
                         );
                     }
                 }
@@ -266,6 +292,20 @@ fn update_spec_device_list(device: &Device, spec: &mut Spec) -> Result<()> {
     }
 
     Ok(())
+}
+
+fn get_dev_type(mode: u32) -> &'static str {
+    match (mode >> 12) & 0o17 {
+        0o001 => "p", // pipe/fifo
+        0o002 => "c", // character dev
+        0o004 => "d", // directory
+        0o006 => "b", // block dev
+        0o010 => "-", // regular file
+        0o012 => "l", // link
+        0o014 => "s", // socket
+        0o016 => "w", // whiteout
+        _ => "?",     // unknown
+    }
 }
 
 // device.Id should be the predicted device name (vda, vdb, ...)
@@ -392,7 +432,7 @@ pub fn update_device_cgroup(spec: &mut Spec) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use oci::Linux;
+    use oci::LinuxDevice;
 
     #[test]
     fn test_update_device_cgroup() {
@@ -412,5 +452,99 @@ mod tests {
 
         assert_eq!(devices[0].major, Some(major));
         assert_eq!(devices[0].minor, Some(minor));
+    }
+
+    #[test]
+    fn test_do_update_spec_device_list() {
+        let mut linux = Linux::default();
+
+        let init_one_dev =
+            |linux: &mut Linux, path: &str, dev_type: &str, major: i64, minor: i64| {
+                linux.devices.push(LinuxDevice {
+                    path: path.to_owned(),
+                    r#type: dev_type.to_owned(),
+                    major,
+                    minor,
+                    ..Default::default()
+                });
+
+                if linux.resources.is_none() {
+                    linux.resources = Some(LinuxResources::default());
+                }
+
+                let resources = linux.resources.as_mut().unwrap();
+                resources.devices.push(LinuxDeviceCgroup {
+                    allow: false,
+                    major: Some(major),
+                    minor: Some(minor),
+                    r#type: dev_type.to_owned(),
+                    ..Default::default()
+                });
+            };
+
+        let major = 100;
+        let minor = 200;
+        let path = "/dev/aaa";
+        let dev_type = "b";
+        init_one_dev(&mut linux, path, dev_type, major, minor);
+
+        // mismatching path or device type has no effect
+        update_one_spec_device(
+            &mut linux,
+            path,
+            (dev_type.to_string() + "c").as_str(),
+            major + 1,
+            minor + 1,
+        )
+        .unwrap();
+        assert_eq!(linux.devices[0].major, major);
+        assert_eq!(
+            linux.resources.as_ref().unwrap().devices[0].major,
+            Some(major)
+        );
+
+        update_one_spec_device(
+            &mut linux,
+            (path.to_string() + "c").as_str(),
+            dev_type,
+            major + 1,
+            minor + 1,
+        )
+        .unwrap();
+        assert_eq!(linux.devices[0].major, major);
+        assert_eq!(
+            linux.resources.as_ref().unwrap().devices[0].major,
+            Some(major)
+        );
+
+        // regular update
+        update_one_spec_device(&mut linux, path, dev_type, major + 1, minor + 1).unwrap();
+        assert_eq!(linux.devices[0].major, major + 1);
+        assert_eq!(
+            linux.resources.as_ref().unwrap().devices[0].major,
+            Some(major + 1)
+        );
+
+        // mismatched dev type does not update mistakenly
+        let mut linux = Linux::default();
+        init_one_dev(&mut linux, path, dev_type, major, minor);
+        init_one_dev(
+            &mut linux,
+            path,
+            (dev_type.to_string() + "a").as_str(),
+            major,
+            minor,
+        );
+        update_one_spec_device(&mut linux, path, dev_type, major + 1, minor + 1).unwrap();
+        assert_eq!(linux.devices[0].major, major + 1);
+        assert_eq!(
+            linux.resources.as_ref().unwrap().devices[0].major,
+            Some(major + 1)
+        );
+        assert_eq!(linux.devices[1].major, major);
+        assert_eq!(
+            linux.resources.as_ref().unwrap().devices[1].major,
+            Some(major)
+        );
     }
 }
