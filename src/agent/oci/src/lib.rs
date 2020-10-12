@@ -494,6 +494,9 @@ pub struct LinuxDeviceCgroup {
     pub minor: Option<i64>,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub access: String,
+    /// A back reference to the index of device in Linux.devices in the spec
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub index: Option<usize>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq)]
@@ -1415,6 +1418,7 @@ mod tests {
                             major: None,
                             minor: None,
                             access: "rwm".to_string(),
+                            index: None,
                         },
                         crate::LinuxDeviceCgroup {
                             allow: true,
@@ -1422,6 +1426,7 @@ mod tests {
                             major: Some(10),
                             minor: Some(229),
                             access: "rw".to_string(),
+                            index: None,
                         },
                         crate::LinuxDeviceCgroup {
                             allow: true,
@@ -1429,6 +1434,7 @@ mod tests {
                             major: Some(8),
                             minor: Some(0),
                             access: "r".to_string(),
+                            index: None,
                         },
                     ],
                     memory: Some(crate::LinuxMemory {

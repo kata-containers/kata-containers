@@ -296,6 +296,7 @@ pub fn resources_grpc_to_oci(res: &grpcLinuxResources) -> ociLinuxResources {
                 major,
                 minor,
                 access: dev.Access.clone(),
+                index: None,
             });
         }
         d
@@ -427,7 +428,7 @@ fn linux_grpc_to_oci(l: &grpcLinux) -> ociLinux {
     let uid_mappings = idmaps_grpc_to_oci(l.UIDMappings.as_ref());
     let gid_mappings = idmaps_grpc_to_oci(l.GIDMappings.as_ref());
 
-    let resources = if l.Resources.is_some() {
+    let mut resources = if l.Resources.is_some() {
         Some(resources_grpc_to_oci(l.Resources.as_ref().unwrap()))
     } else {
         None
@@ -454,7 +455,7 @@ fn linux_grpc_to_oci(l: &grpcLinux) -> ociLinux {
     let devices = {
         let mut r = Vec::new();
 
-        for d in l.Devices.iter() {
+        for (i, d) in l.Devices.iter().enumerate() {
             r.push(ociLinuxDevice {
                 path: d.Path.clone(),
                 r#type: d.Type.clone(),
@@ -464,6 +465,17 @@ fn linux_grpc_to_oci(l: &grpcLinux) -> ociLinux {
                 uid: Some(d.UID),
                 gid: Some(d.GID),
             });
+            if let Some(res) = resources.as_mut() {
+                let ds = res.devices.as_mut_slice();
+                ds.iter_mut().for_each(|x| {
+                    if x.r#type.as_str() == &d.Type
+                        && x.major == Some(d.Major)
+                        && x.minor == Some(d.Minor)
+                    {
+                        x.index = Some(i);
+                    }
+                });
+            }
         }
         r
     };

@@ -544,6 +544,7 @@ lazy_static! {
             major: Some(WILDCARD),
             minor: Some(WILDCARD),
             access: "m".to_string(),
+            index: None,
         });
 
         // all mknod to all block devices
@@ -553,6 +554,7 @@ lazy_static! {
             major: Some(WILDCARD),
             minor: Some(WILDCARD),
             access: "m".to_string(),
+            index: None,
         });
 
         // all read/write/mknod to char device /dev/console
@@ -562,6 +564,7 @@ lazy_static! {
             major: Some(5),
             minor: Some(1),
             access: "rwm".to_string(),
+            index: None,
         });
 
         // all read/write/mknod to char device /dev/pts/<N>
@@ -571,6 +574,7 @@ lazy_static! {
             major: Some(136),
             minor: Some(WILDCARD),
             access: "rwm".to_string(),
+            index: None,
         });
 
         // all read/write/mknod to char device /dev/ptmx
@@ -580,6 +584,7 @@ lazy_static! {
             major: Some(5),
             minor: Some(2),
             access: "rwm".to_string(),
+            index: None,
         });
 
         // all read/write/mknod to char device /dev/net/tun
@@ -589,6 +594,7 @@ lazy_static! {
             major: Some(10),
             minor: Some(200),
             access: "rwm".to_string(),
+            index: None,
         });
 
         v

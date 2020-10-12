@@ -250,7 +250,7 @@ fn update_one_spec_device(
     guest_minor: i64,
 ) -> Result<()> {
     let devices = linux.devices.as_mut_slice();
-    for dev in devices.iter_mut() {
+    for (index, dev) in devices.iter_mut().enumerate() {
         if dev.path.as_str() == dev_container_path && dev_type == &dev.r#type {
             let host_major = dev.major;
             let host_minor = dev.minor;
@@ -275,6 +275,7 @@ fn update_one_spec_device(
                     if d.r#type.as_str() == dev_type
                         && d.major == Some(host_major)
                         && d.minor == Some(host_minor)
+                        && d.index == Some(index)
                     {
                         d.major = Some(guest_major);
                         d.minor = Some(guest_minor);
@@ -424,6 +425,7 @@ pub fn update_device_cgroup(spec: &mut Spec) -> Result<()> {
         minor: Some(minor),
         r#type: String::from("b"),
         access: String::from("rw"),
+        index: None,
     });
 
     Ok(())
@@ -478,7 +480,8 @@ mod tests {
                     major: Some(major),
                     minor: Some(minor),
                     r#type: dev_type.to_owned(),
-                    ..Default::default()
+                    access: "r".to_string(),
+                    index: Some(linux.devices.len() - 1),
                 });
             };
 
@@ -545,6 +548,37 @@ mod tests {
         assert_eq!(
             linux.resources.as_ref().unwrap().devices[1].major,
             Some(major)
+        );
+
+        // conflicting host/guest major/minor should not result in resource caos
+        let mut linux = Linux::default();
+        let path_b = "/dev/bbb";
+        let major_b = major + 100;
+        let minor_b = minor + 100;
+        init_one_dev(&mut linux, path, dev_type, major, minor);
+        init_one_dev(&mut linux, path_b, dev_type, major_b, minor_b);
+        update_one_spec_device(&mut linux, path, dev_type, major_b, minor_b).unwrap();
+        assert_eq!(linux.devices[0].major, major_b);
+        assert_eq!(
+            linux.resources.as_ref().unwrap().devices[0].major,
+            Some(major_b)
+        );
+        assert_eq!(linux.devices[1].major, major_b);
+        assert_eq!(
+            linux.resources.as_ref().unwrap().devices[1].major,
+            Some(major_b)
+        );
+
+        update_one_spec_device(&mut linux, path_b, dev_type, major_b + 100, minor_b + 100).unwrap();
+        assert_eq!(linux.devices[0].major, major_b);
+        assert_eq!(
+            linux.resources.as_ref().unwrap().devices[0].major,
+            Some(major_b)
+        );
+        assert_eq!(linux.devices[1].major, major_b + 100);
+        assert_eq!(
+            linux.resources.as_ref().unwrap().devices[1].major,
+            Some(major_b + 100)
         );
     }
 }
