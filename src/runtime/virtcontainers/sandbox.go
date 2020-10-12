@@ -44,6 +44,7 @@ import (
 	vcTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/types"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
+	"k8s.io/kubernetes/pkg/kubelet/cm/cpuset"
 )
 
 const (
@@ -2302,4 +2303,25 @@ func (s *Sandbox) GetOOMEvent() (string, error) {
 
 func (s *Sandbox) GetAgentURL() (string, error) {
 	return s.agent.getAgentURL()
+}
+
+// getSandboxCPUSet returns the union of each of the sandbox's containers' CPU sets
+// as a string in canonical linux CPU list format
+func (s *Sandbox) getSandboxCPUSet() (string, error) {
+	if s.config == nil {
+		return "", nil
+	}
+
+	result := cpuset.NewCPUSet()
+	for _, ctr := range s.config.Containers {
+		if ctr.Resources.CPU != nil {
+			currSet, err := cpuset.Parse(ctr.Resources.CPU.Cpus)
+			if err != nil {
+				return "", fmt.Errorf("unable to parse CPUset for container %s", ctr.ID)
+			}
+			result = result.Union(currSet)
+		}
+	}
+
+	return result.String(), nil
 }
