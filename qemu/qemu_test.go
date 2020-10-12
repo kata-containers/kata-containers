@@ -45,7 +45,7 @@ func testConfigAppend(config *Config, structure interface{}, expected string, t 
 		config.Machine = s
 		config.appendMachine()
 	case FwCfg:
-		config.FwCfg = s
+		config.FwCfg = []FwCfg{s}
 		config.appendFwCfg(nil)
 
 	case Device:
@@ -1152,10 +1152,12 @@ func TestBadFwcfg(t *testing.T) {
 	}
 
 	c = &Config{
-		FwCfg: FwCfg{
-			Name: "name=opt/com.mycompany/blob",
-			File: "./my_blob.bin",
-			Str:  "foo",
+		FwCfg: []FwCfg{
+			{
+				Name: "name=opt/com.mycompany/blob",
+				File: "./my_blob.bin",
+				Str:  "foo",
+			},
 		},
 	}
 	c.appendFwCfg(nil)
@@ -1189,14 +1191,14 @@ func TestIommu(t *testing.T) {
 }
 
 func TestAppendFwcfg(t *testing.T) {
-	fwcfgString := "-fw_cfg name=\"opt/com.mycompany/blob\",file=\"./my_blob.bin\""
+	fwcfgString := "-fw_cfg name=opt/com.mycompany/blob,file=./my_blob.bin"
 	fwcfg := FwCfg{
 		Name: "opt/com.mycompany/blob",
 		File: "./my_blob.bin",
 	}
 	testAppend(fwcfg, fwcfgString, t)
 
-	fwcfgString = "-fw_cfg name=\"opt/com.mycompany/blob\",string=\"foo\""
+	fwcfgString = "-fw_cfg name=opt/com.mycompany/blob,string=foo"
 	fwcfg = FwCfg{
 		Name: "opt/com.mycompany/blob",
 		Str:  "foo",
