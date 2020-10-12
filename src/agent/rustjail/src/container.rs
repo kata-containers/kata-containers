@@ -387,7 +387,7 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
     let linux = spec.linux.as_ref().unwrap();
 
     // get namespace vector to join/new
-    let nses = get_namespaces(&linux)?;
+    let nses = get_namespaces(&linux);
 
     let mut userns = false;
     let mut to_new = CloneFlags::empty();
@@ -1140,24 +1140,21 @@ fn get_pid_namespace(logger: &Logger, linux: &Linux) -> Result<Option<RawFd>> {
 }
 
 fn is_userns_enabled(linux: &Linux) -> bool {
-    for ns in &linux.namespaces {
-        if ns.r#type == "user" && ns.path == "" {
-            return true;
-        }
-    }
-
-    false
+    linux
+        .namespaces
+        .iter()
+        .any(|ns| ns.r#type == "user" && ns.path == "")
 }
 
-fn get_namespaces(linux: &Linux) -> Result<Vec<LinuxNamespace>> {
-    let mut ns: Vec<LinuxNamespace> = Vec::new();
-    for i in &linux.namespaces {
-        ns.push(LinuxNamespace {
-            r#type: i.r#type.clone(),
-            path: i.path.clone(),
-        });
-    }
-    Ok(ns)
+fn get_namespaces(linux: &Linux) -> Vec<LinuxNamespace> {
+    linux
+        .namespaces
+        .iter()
+        .map(|ns| LinuxNamespace {
+            r#type: ns.r#type.clone(),
+            path: ns.path.clone(),
+        })
+        .collect()
 }
 
 fn join_namespaces(
@@ -1270,15 +1267,12 @@ fn join_namespaces(
 }
 
 fn write_mappings(logger: &Logger, path: &str, maps: &[LinuxIDMapping]) -> Result<()> {
-    let mut data = String::new();
-    for m in maps {
-        if m.size == 0 {
-            continue;
-        }
-
-        let val = format!("{} {} {}\n", m.container_id, m.host_id, m.size);
-        data = data + &val;
-    }
+    let data = maps
+        .iter()
+        .filter(|m| m.size != 0)
+        .map(|m| format!("{} {} {}\n", m.container_id, m.host_id, m.size))
+        .collect::<Vec<_>>()
+        .join("");
 
     info!(logger, "mapping: {}", data);
     if !data.is_empty() {
