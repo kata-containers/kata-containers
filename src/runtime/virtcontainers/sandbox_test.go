@@ -1419,3 +1419,109 @@ func TestSandbox_SetupSandboxCgroup(t *testing.T) {
 		})
 	}
 }
+
+func getContainerConfigWithCPUSet(cpuset string) ContainerConfig {
+	return ContainerConfig{
+		Resources: specs.LinuxResources{
+			CPU: &specs.LinuxCPU{
+				Cpus: cpuset,
+			},
+		},
+	}
+}
+
+func getSimpleSandbox(cpuset0, cpuset1, cpuset2 string) *Sandbox {
+	sandbox := Sandbox{}
+
+	sandbox.config = &SandboxConfig{
+		Containers: []ContainerConfig{
+			getContainerConfigWithCPUSet(cpuset0),
+			getContainerConfigWithCPUSet(cpuset1),
+			getContainerConfigWithCPUSet(cpuset2),
+		},
+	}
+
+	return &sandbox
+}
+
+func TestGetSandboxCpuSet(t *testing.T) {
+
+	tests := []struct {
+		name    string
+		cpuset0 string
+		cpuset1 string
+		cpuset2 string
+		result  string
+		wantErr bool
+	}{
+		{
+			"single, no cpuset",
+			"",
+			"",
+			"",
+			"",
+			false,
+		},
+		{
+			"single cpuset",
+			"0",
+			"",
+			"",
+			"0",
+			false,
+		},
+		{
+			"two duplicate cpuset",
+			"0",
+			"0",
+			"",
+			"0",
+			false,
+		},
+		{
+			"3 cpusets",
+			"0-3",
+			"5-7",
+			"1",
+			"0-3,5-7",
+			false,
+		},
+		{
+			"weird, but should be okay",
+			"0-3",
+			"99999",
+			"",
+			"0-3,99999",
+			false,
+		},
+		{
+			"two, overlapping cpuset",
+			"0-3",
+			"1-2",
+			"",
+			"0-3",
+			false,
+		},
+		{
+			"garbage, should fail",
+			"7 beard-seconds",
+			"Audrey + 7",
+			"Elliott - 17",
+			"",
+			true,
+		},
+	}
+	for _, tt := range tests {
+
+		t.Run(tt.name, func(t *testing.T) {
+			s := getSimpleSandbox(tt.cpuset0, tt.cpuset1, tt.cpuset2)
+			res, err := s.getSandboxCPUSet()
+			if (err != nil) != tt.wantErr {
+				t.Errorf("getSandboxCPUSet() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if res != tt.result {
+				t.Errorf("getSandboxCPUSet() result = %s, wanted result %s", res, tt.result)
+			}
+		})
+	}
+}
