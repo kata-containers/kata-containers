@@ -46,6 +46,13 @@ ifeq ($(ARCH), ppc64le)
     $(warning "WARNING: powerpc64le-unknown-linux-musl target is unavailable")
 endif
 
+
+EXTRA_RUSTFLAGS :=
+ifeq ($(ARCH), aarch64)
+    override EXTRA_RUSTFLAGS = -C link-arg=-lgcc
+    $(warning "WARNING: aarch64-musl needs extra symbols from libgcc")
+endif
+
 TRIPLE = $(ARCH)-unknown-linux-$(LIBC)
 
 TARGET_PATH = target/$(TRIPLE)/$(BUILD_TYPE)/$(TARGET)
@@ -106,10 +113,10 @@ default: $(TARGET) show-header
 $(TARGET): $(GENERATED_CODE) $(TARGET_PATH)
 
 $(TARGET_PATH): $(SOURCES) | show-summary
-	@RUSTFLAGS="--deny warnings" cargo build --target $(TRIPLE) --$(BUILD_TYPE)
+	@RUSTFLAGS="$(EXTRA_RUSTFLAGS) --deny warnings" cargo build --target $(TRIPLE) --$(BUILD_TYPE)
 
 optimize: $(SOURCES) | show-summary show-header
-	@RUSTFLAGS='-C link-arg=-s --deny-warnings' cargo build --target $(TRIPLE) --$(BUILD_TYPE)
+	@RUSTFLAGS="-C link-arg=-s $(EXTRA_RUSTFLAGS) --deny-warnings" cargo build --target $(TRIPLE) --$(BUILD_TYPE)
 
 show-header:
 	@printf "%s - version %s (commit %s)\n\n" "$(TARGET)" "$(VERSION)" "$(COMMIT_MSG)"

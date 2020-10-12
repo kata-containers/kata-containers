@@ -1,0 +1,57 @@
+From 27eda699f59d430c33fc054a36a17251992e70dc Mon Sep 17 00:00:00 2001
+From: Stefano Garzarella <sgarzare@redhat.com>
+Date: Mon, 21 Sep 2020 14:25:05 +0200
+Subject: [PATCH 3/4] vhost-user-vsock-pci: force virtio version 1
+
+Commit 9b3a35ec82 ("virtio: verify that legacy support is not
+accidentally on") added a safety check that requires to set
+'disable-legacy=on' on vhost-user-vsock-pci device:
+
+    $ ./qemu-system-x86_64 ... \
+    -chardev socket,id=char0,reconnect=0,path=/tmp/vhost4.socket \
+    -device vhost-user-vsock-pci,chardev=char0
+        qemu-system-x86_64: -device vhost-user-vsock-pci,chardev=char0:
+        device is modern-only, use disable-legacy=on
+
+virtio-vsock was introduced after the release of VIRTIO 1.0
+specifications, so it should be 'modern-only'.
+
+This patch forces virtio version 1 and removes the 'transitional_name'
+property, as done for vhost-vsock-pci, removing the need to specify
+'disable-legacy=on' on vhost-user-vsock-pci device.
+
+Cc: qemu-stable@nongnu.org
+Suggested-by: Cornelia Huck <cohuck@redhat.com>
+Reviewed-by: Cornelia Huck <cohuck@redhat.com>
+Signed-off-by: Stefano Garzarella <sgarzare@redhat.com>
+Message-Id: <20200921122506.82515-4-sgarzare@redhat.com>
+Reviewed-by: Michael S. Tsirkin <mst@redhat.com>
+Signed-off-by: Michael S. Tsirkin <mst@redhat.com>
+---
+ hw/virtio/vhost-user-vsock-pci.c | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/hw/virtio/vhost-user-vsock-pci.c b/hw/virtio/vhost-user-vsock-pci.c
+index 763f899..72a9619 100644
+--- a/hw/virtio/vhost-user-vsock-pci.c
++++ b/hw/virtio/vhost-user-vsock-pci.c
+@@ -41,6 +41,9 @@ static void vhost_user_vsock_pci_realize(VirtIOPCIProxy *vpci_dev, Error **errp)
+     VHostUserVSockPCI *dev = VHOST_USER_VSOCK_PCI(vpci_dev);
+     DeviceState *vdev = DEVICE(&dev->vdev);
+
++    /* unlike vhost-vsock, we do not need to care about pre-5.1 compat */
++    virtio_pci_force_virtio_1(vpci_dev);
++
+     qdev_realize(vdev, BUS(&vpci_dev->bus), errp);
+ }
+
+@@ -69,7 +72,6 @@ static void vhost_user_vsock_pci_instance_init(Object *obj)
+ static const VirtioPCIDeviceTypeInfo vhost_user_vsock_pci_info = {
+     .base_name             = TYPE_VHOST_USER_VSOCK_PCI,
+     .generic_name          = "vhost-user-vsock-pci",
+-    .transitional_name     = "vhost-user-vsock-pci-transitional",
+     .non_transitional_name = "vhost-user-vsock-pci-non-transitional",
+     .instance_size = sizeof(VHostUserVSockPCI),
+     .instance_init = vhost_user_vsock_pci_instance_init,
+--
+1.8.3.1
