@@ -3,35 +3,32 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
+use anyhow::{anyhow, bail, Context, Result};
 use dirs;
 use lazy_static;
+use libc::pid_t;
 use oci::{Hook, Linux, LinuxNamespace, LinuxResources, POSIXRlimit, Spec};
+use oci::{LinuxDevice, LinuxIDMapping};
 use serde_json;
+use std::clone::Clone;
 use std::ffi::{CStr, CString};
 use std::fmt;
+use std::fmt::Display;
 use std::fs;
 use std::os::unix::io::RawFd;
 use std::path::{Path, PathBuf};
-use std::time::SystemTime;
-// use crate::sync::Cond;
-use anyhow::{anyhow, bail, Context, Result};
-use libc::pid_t;
-use oci::{LinuxDevice, LinuxIDMapping};
-use std::clone::Clone;
-use std::fmt::Display;
 use std::process::Command;
+use std::time::SystemTime;
 
 use cgroups::freezer::FreezerState;
 
-use crate::process::Process;
-// use crate::intelrdt::Manager as RdtManager;
-use crate::log_child;
-use crate::specconv::CreateOpts;
-use crate::sync::*;
-// use crate::stats::Stats;
 use crate::capabilities::{self, CAPSMAP};
 use crate::cgroups::fs::Manager as FsManager;
 use crate::cgroups::Manager;
+use crate::log_child;
+use crate::process::Process;
+use crate::specconv::CreateOpts;
+use crate::sync::*;
 use crate::{mount, validator};
 
 use protocols::agent::StatsContainerResponse;
@@ -225,11 +222,6 @@ pub struct BaseState {
     init_process_pid: i32,
     #[serde(default)]
     init_process_start: u64,
-    /*
-    #[serde(default)]
-        created: SystemTime,
-        config: Config,
-    */
 }
 
 pub trait BaseContainer {
@@ -291,12 +283,8 @@ pub struct SyncPC {
 }
 
 pub trait Container: BaseContainer {
-    //	fn checkpoint(&self, opts: &CriuOpts) -> Result<()>;
-    //	fn restore(&self, p: &Process, opts: &CriuOpts) -> Result<()>;
     fn pause(&mut self) -> Result<()>;
     fn resume(&mut self) -> Result<()>;
-    //	fn notify_oom(&self) -> Result<(Sender, Receiver)>;
-    //	fn notify_memory_pressure(&self, lvl: PressureLevel) -> Result<(Sender, Receiver)>;
 }
 
 impl Container for LinuxContainer {
@@ -627,7 +615,7 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
         fifofd = std::env::var(FIFO_FD)?.parse::<i32>().unwrap();
     }
 
-    //cleanup the env inherited from parent
+    // cleanup the env inherited from parent
     for (key, _) in env::vars() {
         env::remove_var(key);
     }
@@ -636,7 +624,6 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
     for e in env.iter() {
         let v: Vec<&str> = e.splitn(2, "=").collect();
         if v.len() != 2 {
-            //info!(logger, "incorrect env config!");
             continue;
         }
         env::set_var(v[0], v[1]);
@@ -780,7 +767,6 @@ impl BaseContainer for LinuxContainer {
                 return Err(anyhow!("exec fifo exists"));
             }
             unistd::mkfifo(fifo_file.as_str(), Mode::from_bits(0o622).unwrap())?;
-            // defer!(fs::remove_file(&fifo_file)?);
 
             fifofd = fcntl::open(
                 fifo_file.as_str(),
@@ -1089,8 +1075,6 @@ fn do_exec(args: &[String]) -> ! {
     let a: Vec<&CStr> = sa.iter().map(|s| s.as_c_str()).collect();
 
     if let Err(e) = unistd::execvp(p.as_c_str(), a.as_slice()) {
-        //     info!(logger, "execve failed!!!");
-        //     info!(logger, "binary: {:?}, args: {:?}, envs: {:?}", p, a, env);
         match e {
             nix::Error::Sys(errno) => {
                 std::process::exit(errno as i32);
@@ -1198,7 +1182,6 @@ fn join_namespaces(
 
     info!(logger, "wait child received oci spec");
 
-    //    child.try_wait()?;
     read_sync(prfd)?;
 
     info!(logger, "send oci process from parent to child");
@@ -1211,7 +1194,7 @@ fn join_namespaces(
     let cm_str = serde_json::to_string(cm)?;
     write_sync(pwfd, SYNC_DATA, cm_str.as_str())?;
 
-    //wait child setup user namespace
+    // wait child setup user namespace
     info!(logger, "wait child setup user namespace");
     read_sync(prfd)?;
 
@@ -1270,7 +1253,7 @@ fn join_namespaces(
         read_sync(prfd)?;
         info!(logger, "get ready to run poststart hook!");
 
-        //run poststart hook
+        // run poststart hook
         if spec.hooks.is_some() {
             info!(logger, "poststart hook");
             let hooks = spec.hooks.as_ref().unwrap();
@@ -1508,7 +1491,6 @@ fn execute_hook(logger: &Logger, h: &Hook, st: &OCIState) -> Result<()> {
     let args = h.args.clone();
     let envs = h.env.clone();
     let state = serde_json::to_string(st)?;
-    //	state.push_str("\n");
 
     let (rfd, wfd) = unistd::pipe2(OFlag::O_CLOEXEC)?;
     defer!({
@@ -1527,9 +1509,6 @@ fn execute_hook(logger: &Logger, h: &Hook, st: &OCIState) -> Result<()> {
             };
 
             info!(logger, "hook child: {} status: {}", child, status);
-
-            // let _ = wait::waitpid(_ch,
-            //	Some(WaitPidFlag::WEXITED | WaitPidFlag::__WALL));
 
             if status != 0 {
                 if status == -libc::ETIMEDOUT {
@@ -1571,7 +1550,7 @@ fn execute_hook(logger: &Logger, h: &Hook, st: &OCIState) -> Result<()> {
                     .spawn()
                     .unwrap();
 
-                //send out our pid
+                // send out our pid
                 tx.send(child.id() as libc::pid_t).unwrap();
                 info!(logger, "hook grand: {}", child.id());
 
@@ -1590,7 +1569,7 @@ fn execute_hook(logger: &Logger, h: &Hook, st: &OCIState) -> Result<()> {
                     .unwrap()
                     .read_to_string(&mut out)
                     .unwrap();
-                info!(logger, "{}", out.as_str());
+                info!(logger, "child stdout: {}", out.as_str());
                 match child.wait() {
                     Ok(exit) => {
                         let code: i32 = if exit.success() {
@@ -1660,8 +1639,6 @@ fn execute_hook(logger: &Logger, h: &Hook, st: &OCIState) -> Result<()> {
                 SYNC_DATA,
                 std::str::from_utf8(&status.to_be_bytes()).unwrap_or_default(),
             );
-            // let _ = wait::waitpid(Pid::from_raw(pid),
-            //	Some(WaitPidFlag::WEXITED | WaitPidFlag::__WALL));
             std::process::exit(0);
         }
     }
