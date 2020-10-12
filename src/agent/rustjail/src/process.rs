@@ -3,15 +3,10 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-// use std::process::{Stdio, Command, ExitStatus};
 use libc::pid_t;
 use std::fs::File;
 use std::os::unix::io::RawFd;
 use std::sync::mpsc::Sender;
-
-// use crate::configs::{Capabilities, Rlimit};
-// use crate::cgroups::Manager as CgroupManager;
-// use crate::intelrdt::Manager as RdtManager;
 
 use nix::fcntl::{fcntl, FcntlArg, OFlag};
 use nix::sys::signal::{self, Signal};
@@ -31,8 +26,6 @@ pub struct Process {
     pub exit_pipe_r: Option<RawFd>,
     pub exit_pipe_w: Option<RawFd>,
     pub extra_files: Vec<File>,
-    //	pub caps: Capabilities,
-    //	pub rlimits: Vec<Rlimit>,
     pub term_master: Option<RawFd>,
     pub tty: bool,
     pub parent_stdin: Option<RawFd>,
