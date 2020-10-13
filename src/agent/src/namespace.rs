@@ -131,12 +131,12 @@ impl Namespace {
             };
 
             let bare_mount = BareMount::new(source, destination, "none", flags, "", &logger);
-            if let Err(err) = bare_mount.mount() {
-                return Err(format!(
+            bare_mount.mount().map_err(|e| {
+                format!(
                     "Failed to mount {} to {} with err:{:?}",
-                    source, destination, err
-                ));
-            }
+                    source, destination, e
+                )
+            })?;
 
             Ok(())
         });

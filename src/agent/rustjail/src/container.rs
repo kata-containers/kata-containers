@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::{anyhow, Context, Result};
 use dirs;
 use lazy_static;
 use libc::pid_t;
@@ -457,9 +457,8 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
     // Ref: https://github.com/opencontainers/runc/commit/50a19c6ff828c58e5dab13830bd3dacde268afe5
     //
     if !nses.is_empty() {
-        if let Err(e) = prctl::set_dumpable(false) {
-            return Err(anyhow!(e).context("set process non-dumpable failed"));
-        };
+        prctl::set_dumpable(false)
+            .map_err(|e| anyhow!(e).context("set process non-dumpable failed"))?;
     }
 
     if userns {
@@ -590,9 +589,7 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
 
     // NoNewPeiviledges, Drop capabilities
     if oci_process.no_new_privileges {
-        if let Err(_) = prctl::set_no_new_privileges(true) {
-            return Err(anyhow!("cannot set no new privileges"));
-        }
+        prctl::set_no_new_privileges(true).map_err(|_| anyhow!("cannot set no new privileges"))?;
     }
 
     if oci_process.capabilities.is_some() {
@@ -1074,14 +1071,12 @@ fn do_exec(args: &[String]) -> ! {
         .collect();
     let a: Vec<&CStr> = sa.iter().map(|s| s.as_c_str()).collect();
 
-    if let Err(e) = unistd::execvp(p.as_c_str(), a.as_slice()) {
-        match e {
-            nix::Error::Sys(errno) => {
-                std::process::exit(errno as i32);
-            }
-            _ => std::process::exit(-2),
+    let _ = unistd::execvp(p.as_c_str(), a.as_slice()).map_err(|e| match e {
+        nix::Error::Sys(errno) => {
+            std::process::exit(errno as i32);
         }
-    }
+        _ => std::process::exit(-2),
+    });
 
     unreachable!()
 }
@@ -1291,9 +1286,9 @@ fn write_mappings(logger: &Logger, path: &str, maps: &[LinuxIDMapping]) -> Resul
 
 fn setid(uid: Uid, gid: Gid) -> Result<()> {
     // set uid/gid
-    if let Err(e) = prctl::set_keep_capabilities(true) {
-        bail!(anyhow!(e).context("set keep capabilities returned"));
-    };
+    prctl::set_keep_capabilities(true)
+        .map_err(|e| anyhow!(e).context("set keep capabilities returned"))?;
+
     {
         unistd::setresgid(gid, gid, gid)?;
     }
@@ -1305,9 +1300,9 @@ fn setid(uid: Uid, gid: Gid) -> Result<()> {
         capabilities::reset_effective()?;
     }
 
-    if let Err(e) = prctl::set_keep_capabilities(false) {
-        bail!(anyhow!(e).context("set keep capabilities returned"));
-    };
+    prctl::set_keep_capabilities(false)
+        .map_err(|e| anyhow!(e).context("set keep capabilities returned"))?;
+
     Ok(())
 }
 
@@ -1325,13 +1320,13 @@ impl LinuxContainer {
         // validate oci spec
         validator::validate(&config)?;
 
-        if let Err(e) = fs::create_dir_all(root.as_str()) {
+        fs::create_dir_all(root.as_str()).map_err(|e| {
             if e.kind() == std::io::ErrorKind::AlreadyExists {
-                return Err(e).context(format!("container {} already exists", id.as_str()));
+                return anyhow!(e).context(format!("container {} already exists", id.as_str()));
             }
 
-            return Err(e).context(format!("fail to create container directory {}", root));
-        }
+            anyhow!(e).context(format!("fail to create container directory {}", root))
+        })?;
 
         unistd::chown(
             root.as_str(),

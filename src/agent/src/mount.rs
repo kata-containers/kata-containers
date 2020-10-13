@@ -251,10 +251,7 @@ fn ephemeral_storage_handler(
         return Ok("".to_string());
     }
 
-    if let Err(err) = fs::create_dir_all(Path::new(&storage.mount_point)) {
-        return Err(err.into());
-    }
-
+    fs::create_dir_all(Path::new(&storage.mount_point))?;
     common_storage_handler(logger, storage)?;
 
     Ok("".to_string())
