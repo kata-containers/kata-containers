@@ -455,11 +455,8 @@ pub fn add_storages(
                 )
             })?;
 
-        let mount_point = match handler(&logger, &storage, sandbox.clone()) {
-            // Todo need to rollback the mounted storage if err met.
-            Err(e) => return Err(e),
-            Ok(m) => m,
-        };
+        // Todo need to rollback the mounted storage if err met.
+        let mount_point = handler(&logger, &storage, sandbox.clone())?;
 
         if mount_point.len() > 0 {
             mount_list.push(mount_point);
