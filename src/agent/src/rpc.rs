@@ -258,15 +258,12 @@ impl agentService {
                 });
         });
 
-        if let Err(_) = rx.recv_timeout(Duration::from_secs(req.timeout as u64)) {
-            return Err(anyhow!(nix::Error::from_errno(nix::errno::Errno::ETIME)));
-        }
+        rx.recv_timeout(Duration::from_secs(req.timeout as u64))
+            .map_err(|_| anyhow!(nix::Error::from_errno(nix::errno::Errno::ETIME)))?;
 
-        if let Err(_) = handle.join() {
-            return Err(anyhow!(nix::Error::from_errno(
-                nix::errno::Errno::UnknownErrno
-            )));
-        }
+        handle
+            .join()
+            .map_err(|_| anyhow!(nix::Error::from_errno(nix::errno::Errno::UnknownErrno)))?;
 
         let s = self.sandbox.clone();
         let mut sandbox = s.lock().unwrap();
@@ -903,12 +900,12 @@ impl protocols::agent_ttrpc::AgentService for agentService {
             };
 
             let err = libc::ioctl(fd, TIOCSWINSZ, &win);
-            if let Err(e) = Errno::result(err).map(drop) {
-                return Err(ttrpc::Error::RpcStatus(ttrpc::get_status(
+            Errno::result(err).map(drop).map_err(|e| {
+                ttrpc::Error::RpcStatus(ttrpc::get_status(
                     ttrpc::Code::INTERNAL,
                     format!("ioctl error: {:?}", e),
-                )));
-            }
+                ))
+            })?;
         }
 
         Ok(Empty::new())
@@ -1062,12 +1059,12 @@ impl protocols::agent_ttrpc::AgentService for agentService {
             s.running = true;
 
             if !req.guest_hook_path.is_empty() {
-                if let Err(e) = s.add_hooks(&req.guest_hook_path) {
+                let _ = s.add_hooks(&req.guest_hook_path).map_err(|e| {
                     error!(
                         sl!(),
                         "add guest hook {} failed: {:?}", req.guest_hook_path, e
                     );
-                }
+                });
             }
 
             if req.sandbox_id.len() > 0 {
@@ -1168,12 +1165,9 @@ impl protocols::agent_ttrpc::AgentService for agentService {
         let s = Arc::clone(&self.sandbox);
         let sandbox = s.lock().unwrap();
 
-        if let Err(e) = sandbox.online_cpu_memory(&req) {
-            return Err(ttrpc::Error::RpcStatus(ttrpc::get_status(
-                ttrpc::Code::INTERNAL,
-                e.to_string(),
-            )));
-        }
+        sandbox.online_cpu_memory(&req).map_err(|e| {
+            ttrpc::Error::RpcStatus(ttrpc::get_status(ttrpc::Code::INTERNAL, e.to_string()))
+        })?;
 
         Ok(Empty::new())
     }
@@ -1183,12 +1177,9 @@ impl protocols::agent_ttrpc::AgentService for agentService {
         _ctx: &ttrpc::TtrpcContext,
         req: protocols::agent::ReseedRandomDevRequest,
     ) -> ttrpc::Result<Empty> {
-        if let Err(e) = random::reseed_rng(req.data.as_slice()) {
-            return Err(ttrpc::Error::RpcStatus(ttrpc::get_status(
-                ttrpc::Code::INTERNAL,
-                e.to_string(),
-            )));
-        }
+        random::reseed_rng(req.data.as_slice()).map_err(|e| {
+            ttrpc::Error::RpcStatus(ttrpc::get_status(ttrpc::Code::INTERNAL, e.to_string()))
+        })?;
 
         Ok(Empty::new())
     }
@@ -1227,12 +1218,9 @@ impl protocols::agent_ttrpc::AgentService for agentService {
         _ctx: &ttrpc::TtrpcContext,
         req: protocols::agent::MemHotplugByProbeRequest,
     ) -> ttrpc::Result<Empty> {
-        if let Err(e) = do_mem_hotplug_by_probe(&req.memHotplugProbeAddr) {
-            return Err(ttrpc::Error::RpcStatus(ttrpc::get_status(
-                ttrpc::Code::INTERNAL,
-                e.to_string(),
-            )));
-        }
+        do_mem_hotplug_by_probe(&req.memHotplugProbeAddr).map_err(|e| {
+            ttrpc::Error::RpcStatus(ttrpc::get_status(ttrpc::Code::INTERNAL, e.to_string()))
+        })?;
 
         Ok(Empty::new())
     }
@@ -1242,12 +1230,9 @@ impl protocols::agent_ttrpc::AgentService for agentService {
         _ctx: &ttrpc::TtrpcContext,
         req: protocols::agent::SetGuestDateTimeRequest,
     ) -> ttrpc::Result<Empty> {
-        if let Err(e) = do_set_guest_date_time(req.Sec, req.Usec) {
-            return Err(ttrpc::Error::RpcStatus(ttrpc::get_status(
-                ttrpc::Code::INTERNAL,
-                e.to_string(),
-            )));
-        }
+        do_set_guest_date_time(req.Sec, req.Usec).map_err(|e| {
+            ttrpc::Error::RpcStatus(ttrpc::get_status(ttrpc::Code::INTERNAL, e.to_string()))
+        })?;
 
         Ok(Empty::new())
     }
@@ -1257,12 +1242,9 @@ impl protocols::agent_ttrpc::AgentService for agentService {
         _ctx: &ttrpc::TtrpcContext,
         req: protocols::agent::CopyFileRequest,
     ) -> ttrpc::Result<Empty> {
-        if let Err(e) = do_copy_file(&req) {
-            return Err(ttrpc::Error::RpcStatus(ttrpc::get_status(
-                ttrpc::Code::INTERNAL,
-                e.to_string(),
-            )));
-        }
+        do_copy_file(&req).map_err(|e| {
+            ttrpc::Error::RpcStatus(ttrpc::get_status(ttrpc::Code::INTERNAL, e.to_string()))
+        })?;
 
         Ok(Empty::new())
     }
