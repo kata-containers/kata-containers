@@ -564,15 +564,25 @@ func (s *Sandbox) createCgroupManager() error {
 	}
 
 	spec := s.GetPatchedOCISpec()
-	if spec != nil {
+	if spec != nil && spec.Linux != nil {
 		cgroupPath = spec.Linux.CgroupsPath
 
 		// Kata relies on the cgroup parent created and configured by the container
-		// engine, but sometimes the sandbox cgroup is not configured and the container
-		// may have access to all the resources, hence the runtime must constrain the
-		// sandbox and update the list of devices with the devices hotplugged in the
-		// hypervisor.
-		resources = *spec.Linux.Resources
+		// engine by default. The exception is for devices whitelist as well as sandbox-level
+		// CPUSet.
+		if spec.Linux.Resources != nil {
+			resources.Devices = spec.Linux.Resources.Devices
+
+			if spec.Linux.Resources.CPU != nil {
+				resources.CPU = &specs.LinuxCPU{
+					Cpus: spec.Linux.Resources.CPU.Cpus,
+				}
+			}
+		}
+
+		//TODO: in Docker or Podman use case, it is reasonable to set a constraint. Need to add a flag
+		// to allow users to configure Kata to constrain CPUs and Memory in this alternative
+		// scenario. See https://github.com/kata-containers/runtime/issues/2811
 	}
 
 	if s.devManager != nil {
@@ -1215,7 +1225,7 @@ func (s *Sandbox) CreateContainer(contConfig ContainerConfig) (VCContainer, erro
 		}
 	}()
 
-	// Sandbox is reponsable to update VM resources needed by Containers
+	// Sandbox is responsible to update VM resources needed by Containers
 	// Update resources after having added containers to the sandbox, since
 	// container status is requiered to know if more resources should be added.
 	err = s.updateResources()
@@ -1327,6 +1337,11 @@ func (s *Sandbox) DeleteContainer(containerID string) (VCContainer, error) {
 			s.config.Containers = append(s.config.Containers[:idx], s.config.Containers[idx+1:]...)
 			break
 		}
+	}
+
+	// update the sandbox cgroup
+	if err = s.cgroupsUpdate(); err != nil {
+		return nil, err
 	}
 
 	if err = s.storeSandbox(); err != nil {
@@ -1866,11 +1881,12 @@ func (s *Sandbox) AddDevice(info config.DeviceInfo) (api.Device, error) {
 	return b, nil
 }
 
-// updateResources will calculate the resources required for the virtual machine, and
-// adjust the virtual machine sizing accordingly. For a given sandbox, it will calculate the
-// number of vCPUs required based on the sum of container requests, plus default CPUs for the VM.
-// Similar is done for memory. If changes in memory or CPU are made, the VM will be updated and
-// the agent will online the applicable CPU and memory.
+// updateResources will:
+// - calculate the resources required for the virtual machine, and adjust the virtual machine
+// sizing accordingly. For a given sandbox, it will calculate the number of vCPUs required based
+// on the sum of container requests, plus default CPUs for the VM. Similar is done for memory.
+// If changes in memory or CPU are made, the VM will be updated and the agent will online the
+// applicable CPU and memory.
 func (s *Sandbox) updateResources() error {
 	if s == nil {
 		return errors.New("sandbox is nil")
@@ -1975,9 +1991,20 @@ func (s *Sandbox) GetHypervisorType() string {
 func (s *Sandbox) cgroupsUpdate() error {
 
 	// If Kata is configured for SandboxCgroupOnly, the VMM and its processes are already
-	// in the Kata sandbox cgroup (inherited). No need to move threads/processes, and we should
-	// rely on parent's cgroup CPU/memory values
+	// in the Kata sandbox cgroup (inherited). Check to see if sandbox cpuset needs to be
+	// updated.
 	if s.config.SandboxCgroupOnly {
+		cpuset, err := s.getSandboxCPUSet()
+		if err != nil {
+			return err
+		}
+
+		if cpuset != "" {
+			if err := s.cgroupMgr.SetCPUSet(cpuset); err != nil {
+				return err
+			}
+		}
+
 		return nil
 	}
 
