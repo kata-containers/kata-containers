@@ -5,7 +5,7 @@
 qemu_black_list=(
 */bin/qemu-pr-helper
 */bin/virtfs-proxy-helper
-*/libexec/
+*/libexec/kata-qemu/qemu*
 */share/*/applications/
 */share/*/*.dtb
 */share/*/efi-e1000e.rom
