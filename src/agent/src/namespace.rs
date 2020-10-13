@@ -3,15 +3,15 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
+use anyhow::{anyhow, Result};
 use nix::mount::MsFlags;
 use nix::sched::{unshare, CloneFlags};
 use nix::unistd::{getpid, gettid};
 use std::fmt;
 use std::fs;
 use std::fs::File;
-use std::os::unix::io::AsRawFd;
 use std::path::{Path, PathBuf};
-use std::thread;
+use std::thread::{self};
 
 use crate::mount::{BareMount, FLAGS};
 use slog::Logger;
@@ -77,10 +77,8 @@ impl Namespace {
 
     // setup creates persistent namespace without switching to it.
     // Note, pid namespaces cannot be persisted.
-    pub fn setup(mut self) -> Result<Self, String> {
-        if let Err(err) = fs::create_dir_all(&self.persistent_ns_dir) {
-            return Err(err.to_string());
-        }
+    pub fn setup(mut self) -> Result<Self> {
+        fs::create_dir_all(&self.persistent_ns_dir)?;
 
         let ns_path = PathBuf::from(&self.persistent_ns_dir);
         let ns_type = self.ns_type.clone();
@@ -88,33 +86,23 @@ impl Namespace {
 
         let new_ns_path = ns_path.join(&ns_type.get());
 
-        if let Err(err) = File::create(new_ns_path.as_path()) {
-            return Err(err.to_string());
-        }
+        File::create(new_ns_path.as_path())?;
 
         self.path = new_ns_path.clone().into_os_string().into_string().unwrap();
         let hostname = self.hostname.clone();
 
-        let new_thread = thread::spawn(move || {
+        let new_thread = thread::spawn(move || -> Result<()> {
             let origin_ns_path = get_current_thread_ns_path(&ns_type.get());
 
-            let _origin_ns_fd = match File::open(Path::new(&origin_ns_path)) {
-                Err(err) => return Err(err.to_string()),
-                Ok(file) => file.as_raw_fd(),
-            };
+            File::open(Path::new(&origin_ns_path))?;
 
             // Create a new netns on the current thread.
             let cf = ns_type.get_flags().clone();
 
-            if let Err(err) = unshare(cf) {
-                return Err(err.to_string());
-            }
+            unshare(cf)?;
 
             if ns_type == NamespaceType::UTS && hostname.is_some() {
-                match nix::unistd::sethostname(hostname.unwrap()) {
-                    Err(err) => return Err(err.to_string()),
-                    Ok(_) => (),
-                }
+                nix::unistd::sethostname(hostname.unwrap())?;
             }
             // Bind mount the new namespace from the current thread onto the mount point to persist it.
             let source: &str = origin_ns_path.as_str();
@@ -132,22 +120,20 @@ impl Namespace {
 
             let bare_mount = BareMount::new(source, destination, "none", flags, "", &logger);
             bare_mount.mount().map_err(|e| {
-                format!(
+                anyhow!(
                     "Failed to mount {} to {} with err:{:?}",
-                    source, destination, e
+                    source,
+                    destination,
+                    e
                 )
             })?;
 
             Ok(())
         });
 
-        match new_thread.join() {
-            Ok(t) => match t {
-                Err(err) => return Err(err),
-                Ok(()) => (),
-            },
-            Err(err) => return Err(format!("Failed to join thread {:?}!", err)),
-        }
+        new_thread
+            .join()
+            .map_err(|e| anyhow!("Failed to join thread {:?}!", e))??;
 
         Ok(self)
     }
