@@ -143,16 +143,10 @@ impl Sandbox {
     // It's assumed that caller is calling this method after
     // acquiring a lock on sandbox.
     pub fn unset_and_remove_sandbox_storage(&mut self, path: &str) -> Result<()> {
-        match self.unset_sandbox_storage(path) {
-            Ok(res) => {
-                if res {
-                    return self.remove_sandbox_storage(path);
-                }
-            }
-            Err(err) => {
-                return Err(err);
-            }
+        if self.unset_sandbox_storage(path)? {
+            return self.remove_sandbox_storage(path);
         }
+
         Ok(())
     }
 
