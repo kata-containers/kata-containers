@@ -1139,6 +1139,12 @@ func (c *Container) update(resources specs.LinuxResources) error {
 		if q := cpu.Quota; q != nil && *q != 0 {
 			c.config.Resources.CPU.Quota = q
 		}
+		if cpu.Cpus != "" {
+			c.config.Resources.CPU.Cpus = cpu.Cpus
+		}
+		if cpu.Mems != "" {
+			c.config.Resources.CPU.Mems = cpu.Mems
+		}
 	}
 
 	if c.config.Resources.Memory == nil {
