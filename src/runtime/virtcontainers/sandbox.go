@@ -1898,7 +1898,10 @@ func (s *Sandbox) updateResources() error {
 		return fmt.Errorf("sandbox config is nil")
 	}
 
-	sandboxVCPUs := s.calculateSandboxCPUs()
+	sandboxVCPUs, err := s.calculateSandboxCPUs()
+	if err != nil {
+		return err
+	}
 	// Add default vcpus for sandbox
 	sandboxVCPUs += s.hypervisor.hypervisorConfig().NumVCPUs
 
@@ -1960,8 +1963,9 @@ func (s *Sandbox) calculateSandboxMemory() int64 {
 	return memorySandbox
 }
 
-func (s *Sandbox) calculateSandboxCPUs() uint32 {
+func (s *Sandbox) calculateSandboxCPUs() (uint32, error) {
 	mCPU := uint32(0)
+	cpusetCount := int(0)
 
 	for _, c := range s.config.Containers {
 		// Do not hot add again non-running containers resources
@@ -1975,9 +1979,22 @@ func (s *Sandbox) calculateSandboxCPUs() uint32 {
 				mCPU += utils.CalculateMilliCPUs(*cpu.Quota, *cpu.Period)
 			}
 
+			set, err := cpuset.Parse(cpu.Cpus)
+			if err != nil {
+				return 0, nil
+			}
+			cpusetCount += set.Size()
 		}
 	}
-	return utils.CalculateVCpusFromMilliCpus(mCPU)
+
+	// If we aren't being constrained, then we could have two scenarios:
+	//  1. BestEffort QoS: no proper support today in Kata.
+	//  2. We could be constrained only by CPUSets. Check for this:
+	if mCPU == 0 && cpusetCount > 0 {
+		return uint32(cpusetCount), nil
+	}
+
+	return utils.CalculateVCpusFromMilliCpus(mCPU), nil
 }
 
 // GetHypervisorType is used for getting Hypervisor name currently used.
@@ -2314,11 +2331,11 @@ func (s *Sandbox) getSandboxCPUSet() (string, string, error) {
 	memResult := cpuset.NewCPUSet()
 	for _, ctr := range s.config.Containers {
 		if ctr.Resources.CPU != nil {
-			currCpuSet, err := cpuset.Parse(ctr.Resources.CPU.Cpus)
+			currCPUSet, err := cpuset.Parse(ctr.Resources.CPU.Cpus)
 			if err != nil {
 				return "", "", fmt.Errorf("unable to parse CPUset.cpus for container %s: %v", ctr.ID, err)
 			}
-			cpuResult = cpuResult.Union(currCpuSet)
+			cpuResult = cpuResult.Union(currCPUSet)
 
 			currMemSet, err := cpuset.Parse(ctr.Resources.CPU.Mems)
 			if err != nil {
