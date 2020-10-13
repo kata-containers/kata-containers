@@ -1165,6 +1165,14 @@ func (c *Container) update(resources specs.LinuxResources) error {
 		}
 	}
 
+	// There currently isn't a notion of cpusets.cpus or mems being tracked
+	// inside of the guest. Make sure we clear these before asking agent to update
+	// the container's cgroups.
+	if resources.CPU != nil {
+		resources.CPU.Mems = ""
+		resources.CPU.Cpus = ""
+	}
+
 	return c.sandbox.agent.updateContainer(c.sandbox, *c, resources)
 }
 
