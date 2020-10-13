@@ -1996,15 +1996,13 @@ func (s *Sandbox) cgroupsUpdate() error {
 	// in the Kata sandbox cgroup (inherited). Check to see if sandbox cpuset needs to be
 	// updated.
 	if s.config.SandboxCgroupOnly {
-		cpuset, err := s.getSandboxCPUSet()
+		cpuset, memset, err := s.getSandboxCPUSet()
 		if err != nil {
 			return err
 		}
 
-		if cpuset != "" {
-			if err := s.cgroupMgr.SetCPUSet(cpuset); err != nil {
-				return err
-			}
+		if err := s.cgroupMgr.SetCPUSet(cpuset, memset); err != nil {
+			return err
 		}
 
 		return nil
@@ -2305,23 +2303,30 @@ func (s *Sandbox) GetAgentURL() (string, error) {
 	return s.agent.getAgentURL()
 }
 
-// getSandboxCPUSet returns the union of each of the sandbox's containers' CPU sets
-// as a string in canonical linux CPU list format
-func (s *Sandbox) getSandboxCPUSet() (string, error) {
+// getSandboxCPUSet returns the union of each of the sandbox's containers' CPU sets'
+// cpus and mems as a string in canonical linux CPU/mems list format
+func (s *Sandbox) getSandboxCPUSet() (string, string, error) {
 	if s.config == nil {
-		return "", nil
+		return "", "", nil
 	}
 
-	result := cpuset.NewCPUSet()
+	cpuResult := cpuset.NewCPUSet()
+	memResult := cpuset.NewCPUSet()
 	for _, ctr := range s.config.Containers {
 		if ctr.Resources.CPU != nil {
-			currSet, err := cpuset.Parse(ctr.Resources.CPU.Cpus)
+			currCpuSet, err := cpuset.Parse(ctr.Resources.CPU.Cpus)
 			if err != nil {
-				return "", fmt.Errorf("unable to parse CPUset for container %s", ctr.ID)
+				return "", "", fmt.Errorf("unable to parse CPUset.cpus for container %s: %v", ctr.ID, err)
 			}
-			result = result.Union(currSet)
+			cpuResult = cpuResult.Union(currCpuSet)
+
+			currMemSet, err := cpuset.Parse(ctr.Resources.CPU.Mems)
+			if err != nil {
+				return "", "", fmt.Errorf("unable to parse CPUset.mems for container %s: %v", ctr.ID, err)
+			}
+			memResult = memResult.Union(currMemSet)
 		}
 	}
 
-	return result.String(), nil
+	return cpuResult.String(), memResult.String(), nil
 }
