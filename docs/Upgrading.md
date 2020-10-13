@@ -1,134 +1,77 @@
 * [Introduction](#introduction)
-* [Unsupported scenarios](#unsupported-scenarios)
-* [Maintenance Warning](#maintenance-warning)
-* [Upgrade from Clear Containers](#upgrade-from-clear-containers)
-    * [Stop all running Clear Container instances](#stop-all-running-clear-container-instances)
-    * [Configuration migration](#configuration-migration)
-    * [Remove Clear Containers packages](#remove-clear-containers-packages)
-        * [Fedora](#fedora)
-        * [Ubuntu](#ubuntu)
-    * [Disable old container manager configuration](#disable-old-container-manager-configuration)
-    * [Install Kata Containers](#install-kata-containers)
-    * [Create a Kata Container](#create-a-kata-container)
-* [Upgrade from runV](#upgrade-from-runv)
+* [Maintenance warning](#maintenance-warning)
+* [Determine current version](#determine-current-version)
+* [Determine latest version](#determine-latest-version)
+* [Configuration changes](#configuration-changes)
 * [Upgrade Kata Containers](#upgrade-kata-containers)
-* [Appendices](#appendices)
-    * [Assets](#assets)
-        * [Guest kernel](#guest-kernel)
-        * [Image](#image)
-        * [Determining asset versions](#determining-asset-versions)
+    * [Upgrade native distribution packaged version](#upgrade-native-distribution-packaged-version)
+    * [Static installation](#static-installation)
+        * [Determine if you are using a static installation](#determine-if-you-are-using-a-static-installation)
+        * [Remove a static installation](#remove-a-static-installation)
+        * [Upgrade a static installation](#upgrade-a-static-installation)
+* [Custom assets](#custom-assets)
 
 # Introduction
 
-This document explains how to upgrade from
-[Clear Containers](https://github.com/clearcontainers) and [runV](https://github.com/hyperhq/runv) to
-[Kata Containers](https://github.com/kata-containers) and how to upgrade an existing
-Kata Containers system to the latest version.
+This document outlines the options for upgrading from a
+[Kata Containers 1.x release](https://github.com/kata-containers/runtime/releases) to a
+[Kata Containers 2.x release](https://github.com/kata-containers/kata-containers/releases).
 
-# Unsupported scenarios
+# Maintenance warning
 
-Upgrading a Clear Containers system on the following distributions is **not**
-supported since the installation process for these distributions makes use of
-unpackaged components:
+Kata Containers 2.x is the new focus for the Kata Containers development
+community.
 
-- [CentOS](https://github.com/clearcontainers/runtime/blob/master/docs/centos-installation-guide.md)
-- [BCLinux](https://github.com/clearcontainers/runtime/blob/master/docs/bclinux-installation-guide.md)
-- [RHEL](https://github.com/clearcontainers/runtime/blob/master/docs/rhel-installation-guide.md)
-- [SLES](https://github.com/clearcontainers/runtime/blob/master/docs/sles-installation-guide.md)
+Although Kata Containers 1.x releases will continue to be published for a
+period of time, once a stable release for Kata Containers 2.x is published,
+Kata Containers 1.x stable users should consider switching to the Kata 2.x
+release.
 
-Additionally, upgrading
-[Clear Linux](https://github.com/clearcontainers/runtime/blob/master/docs/clearlinux-installation-guide.md)
-is not supported as Kata Containers packages do not yet exist.
+See the [stable branch strategy documentation](Stable-Branch-Strategy.md) for
+further details.
 
-# Maintenance Warning
+# Determine current version
 
-The Clear Containers codebase is no longer being developed. Only new releases
-will be considered for significant bug fixes.
+To display the current Kata Containers version, run one of the following:
 
-The main development focus is now on Kata Containers. All Clear Containers
-users are encouraged to switch to Kata Containers.
-
-# Upgrade from Clear Containers
-
-Since Kata Containers can co-exist on the same system as Clear Containers, if
-you already have Clear Containers installed, the upgrade process is simply to
-install Kata Containers. However, since Clear Containers is
-[no longer being actively developed](#maintenance-warning),
-you are encouraged to remove Clear Containers from your systems.
-
-## Stop all running Clear Container instances
-
-Assuming a Docker\* system, to stop all currently running Clear Containers:
-
-```
-$ for container in $(sudo docker ps -q); do sudo docker stop $container; done
+```bash
+$ kata-runtime --version
+$ containerd-shim-kata-v2 --version
 ```
 
-## Configuration migration
+# Determine latest version
 
-The automatic migration of
-[Clear Containers configuration](https://github.com/clearcontainers/runtime#configuration) to
-[Kata Containers configuration](../src/runtime/README.md#configuration) is
-not supported.
+Kata Containers 2.x releases are published on the
+[Kata Containers GitHub releases page](https://github.com/kata-containers/kata-containers/releases).
 
-If you have made changes to your Clear Containers configuration, you should
-review those changes and decide whether to manually apply those changes to the
-Kata Containers configuration.
+Alternatively, if you are using Kata Containers version 1.12.0 or newer, you
+can check for newer releases using the command line:
 
-> **Note**: This step must be completed before continuing to
-> [remove the Clear Containers packages](#remove-clear-containers-packages) since doing so will
-> *delete the default Clear Containers configuration file from your system*.
-
-## Remove Clear Containers packages
-
-> **Warning**: If you have modified your
-> [Clear Containers configuration](https://github.com/clearcontainers/runtime#configuration),
-> you might want to make a safe copy of the configuration file before removing the
-> packages since doing so will *delete the default configuration file*
-
-### Fedora
-
-```
-$ sudo -E dnf remove cc-runtime\* cc-proxy\* cc-shim\* linux-container clear-containers-image qemu-lite cc-ksm-throttler
-$ sudo rm /etc/yum.repos.d/home:clearcontainers:clear-containers-3.repo
+```bash
+$ kata-runtime kata-check --check-version-only
 ```
 
-### Ubuntu
+There are various other related options. Run `kata-runtime kata-check --help`
+for further details.
 
-```
-$ sudo apt-get purge cc-runtime\* cc-proxy\* cc-shim\* linux-container clear-containers-image qemu-lite cc-ksm-throttler
-$ sudo rm /etc/apt/sources.list.d/clear-containers.list
-```
+# Configuration changes
 
-## Disable old container manager configuration
+The [Kata Containers 2.x configuration file](/src/runtime/README.md#configuration)
+is compatible with the
+[Kata Containers 1.x configuration file](https://github.com/kata-containers/runtime/blob/master/README.md#configuration).
 
-Assuming a Docker installation, remove the docker configuration for Clear
-Containers:
+However, if you have created a local configuration file
+(`/etc/kata-containers/configuration.toml`), this will mask the newer Kata
+Containers 2.x configuration file.
 
-```
-$ sudo rm /etc/systemd/system/docker.service.d/clear-containers.conf
-```
-
-## Install Kata Containers
-
-Follow one of the [installation guides](install).
-
-## Create a Kata Container
-
-```
-$ sudo docker run -ti busybox sh
-```
-
-# Upgrade from runV
-
-runV and Kata Containers can run together on the same system without affecting each other, as long as they are
-not configured to use the same container root storage. Currently, runV defaults to `/run/runv` and Kata Containers
-defaults to `/var/run/kata-containers`.
-
-Now, to upgrade from runV you need to fresh install Kata Containers by following one of
-the [installation guides](install).
+Since Kata Containers 2.x introduces a number of new options and changes
+some default values, we recommend that you disable the local configuration
+file (by moving or renaming it) until you have reviewed the changes to the
+official configuration file and applied them to your local file if required.
 
 # Upgrade Kata Containers
+
+## Upgrade native distribution packaged version
 
 As shown in the
 [installation instructions](install),
@@ -136,50 +79,62 @@ Kata Containers provide binaries for popular distributions in their native
 packaging formats. This allows Kata Containers to be upgraded using the
 standard package management tools for your distribution.
 
-# Appendices
+> **Note:**
+>
+> Users should prefer the distribution packaged version of Kata Containers
+> unless they understand the implications of a manual installation.
 
-## Assets
+## Static installation
 
-Kata Containers requires additional resources to create a virtual machine
-container. These resources are called
-[Kata Containers assets](./design/architecture.md#assets),
-which comprise a guest kernel and a root filesystem or initrd image. This
-section describes when these components are updated.
+> **Note:**
+>
+> Unless you are an advanced user, if you are using a static installation of
+> Kata Containers, we recommend you remove it and install a
+> [native distribution packaged version](#upgrade-native-distribution-packaged-version)
+> instead.
 
-Since the official assets are packaged, they are automatically upgraded when
-new package versions are published.
+### Determine if you are using a static installation
 
-> **Warning**: Note that if you use custom assets (by modifying the
-> [Kata Runtime configuration > file](../src/runtime/README.md#configuration)),
-> it is your responsibility to ensure they are updated as necessary.
+If the following command displays the output "static", you are using a static
+version of Kata Containers:
 
-### Guest kernel
-
-The `kata-linux-container` package contains a Linux\* kernel based on the
-latest vanilla version of the
-[long-term kernel](https://www.kernel.org/)
-plus a small number of
-[patches](../tools/packaging/kernel).
-
-The `Longterm` branch is only updated with
-[important bug fixes](https://www.kernel.org/category/releases.html)
-meaning this package is only updated when necessary.
-
-The guest kernel package is updated when a new long-term kernel is released
-and when any patch updates are required.
-
-### Image
-
-The `kata-containers-image` package is updated only when critical updates are
-available for the packages used to create it, such as:
-
-- systemd
-- [Kata Containers Agent](../src/agent)
-
-### Determining asset versions
-
-To see which versions of the assets being used:
-
+```bash
+$ ls /opt/kata/bin/kata-runtime &>/dev/null && echo static
 ```
-$ kata-runtime kata-env
-```
+
+### Remove a static installation
+
+Static installations are installed in `/opt/kata/`, so to uninstall simply
+remove this directory.
+
+### Upgrade a static installation
+
+If you understand the implications of using a static installation, to upgrade
+first
+[remove the existing static installation](#remove-a-static-installation), then
+[install the latest release](#determine-latest-version).
+
+See the
+[manual installation installation documentation](install/README.md#manual-installation)
+for details on how to automatically install and configuration a static release
+with containerd.
+
+# Custom assets
+
+> **Note:**
+>
+> This section only applies to advanced users who have built their own guest
+> kernel or image.
+
+If you are using custom
+[guest assets](design/architecture.md#guest-assets),
+you must upgrade them to work with Kata Containers 2.x since Kata
+Containers 1.x assets will **not** work.
+
+See the following for further details:
+
+- [Guest kernel documentation](/tools/packaging/kernel)
+- [Guest image and initrd documentation](/tools/osbuilder)
+
+The official assets are packaged meaning they are automatically included in
+new releases.
