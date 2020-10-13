@@ -331,3 +331,16 @@ func (m *Manager) RemoveDevice(device string) error {
 	m.Unlock()
 	return fmt.Errorf("device %v not found in the cgroup", device)
 }
+
+func (m *Manager) SetCPUSet(cpuset string) error {
+	cgroups, err := m.GetCgroups()
+	if err != nil {
+		return err
+	}
+
+	m.Lock()
+	cgroups.CpusetCpus = cpuset
+	m.Unlock()
+
+	return m.Apply()
+}
