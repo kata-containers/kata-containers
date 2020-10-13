@@ -487,23 +487,26 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
         }
 
         log_child!(cfd_log, "join namespace {:?}", s);
-        if let Err(e) = sched::setns(fd, s) {
+        sched::setns(fd, s).or_else(|e| {
             if s == CloneFlags::CLONE_NEWUSER {
                 if e.as_errno().unwrap() != Errno::EINVAL {
                     check!(
                         write_sync(cwfd, SYNC_FAILED, format!("{:?}", e).as_str()),
                         "write_sync for CLONE_NEWUSER"
                     );
-                    return Err(e.into());
+                    return Err(e);
                 }
+
+                Ok(())
             } else {
                 check!(
                     write_sync(cwfd, SYNC_FAILED, format!("{:?}", e).as_str()),
                     "write_sync for sched::setns"
                 );
-                return Err(e.into());
+                Err(e)
             }
-        }
+        })?;
+
         unistd::close(fd)?;
 
         if s == CloneFlags::CLONE_NEWUSER {
