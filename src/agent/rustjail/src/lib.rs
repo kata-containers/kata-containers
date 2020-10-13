@@ -554,11 +554,6 @@ pub fn grpc_to_oci(grpc: &grpcSpec) -> ociSpec {
 
 #[cfg(test)]
 mod tests {
-    #[test]
-    fn it_works() {
-        assert_eq!(2 + 2, 4);
-    }
-
     #[allow(unused_macros)]
     #[macro_export]
     macro_rules! skip_if_not_root {
