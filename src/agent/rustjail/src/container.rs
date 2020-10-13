@@ -67,17 +67,6 @@ const CLOG_FD: &str = "CLOG_FD";
 const FIFO_FD: &str = "FIFO_FD";
 const HOME_ENV_KEY: &str = "HOME";
 
-#[macro_export]
-macro_rules! check {
-    ($what:expr, $where:expr) => ({
-        if let Err(e) = $what {
-            let subsystem = $where;
-            let logger = slog_scope::logger().new(o!("subsystem" => subsystem));
-            warn!(logger, "{:?}", e);
-        }
-    })
-}
-
 #[derive(PartialEq, Clone, Copy)]
 pub enum Status {
     CREATED,
@@ -778,10 +767,9 @@ impl BaseContainer for LinuxContainer {
         let st = self.oci_state()?;
 
         let (pfd_log, cfd_log) = unistd::pipe().context("failed to create pipe")?;
-        check!(
-            fcntl::fcntl(pfd_log, FcntlArg::F_SETFD(FdFlag::FD_CLOEXEC)),
-            "fcntl pfd log FD_CLOEXEC"
-        );
+
+        let _ = fcntl::fcntl(pfd_log, FcntlArg::F_SETFD(FdFlag::FD_CLOEXEC))
+            .map_err(|e| warn!(logger, "fcntl pfd log FD_CLOEXEC {:?}", e));
 
         let child_logger = logger.new(o!("action" => "child process log"));
         let log_handler = thread::spawn(move || {
@@ -810,18 +798,16 @@ impl BaseContainer for LinuxContainer {
         info!(logger, "exec fifo opened!");
         let (prfd, cwfd) = unistd::pipe().context("failed to create pipe")?;
         let (crfd, pwfd) = unistd::pipe().context("failed to create pipe")?;
-        check!(
-            fcntl::fcntl(prfd, FcntlArg::F_SETFD(FdFlag::FD_CLOEXEC)),
-            "fcntl prfd FD_CLOEXEC"
-        );
-        check!(
-            fcntl::fcntl(pwfd, FcntlArg::F_SETFD(FdFlag::FD_CLOEXEC)),
-            "fcntl pwfd FD_COLEXEC"
-        );
+
+        let _ = fcntl::fcntl(prfd, FcntlArg::F_SETFD(FdFlag::FD_CLOEXEC))
+            .map_err(|e| warn!(logger, "fcntl prfd FD_CLOEXEC {:?}", e));
+
+        let _ = fcntl::fcntl(pwfd, FcntlArg::F_SETFD(FdFlag::FD_CLOEXEC))
+            .map_err(|e| warn!(logger, "fcntl pwfd FD_COLEXEC {:?}", e));
 
         defer!({
-            check!(unistd::close(prfd), "close prfd");
-            check!(unistd::close(pwfd), "close pwfd");
+            let _ = unistd::close(prfd).map_err(|e| warn!(logger, "close prfd {:?}", e));
+            let _ = unistd::close(pwfd).map_err(|e| warn!(logger, "close pwfd {:?}", e));
         });
 
         let child_stdin: std::process::Stdio;
@@ -831,14 +817,10 @@ impl BaseContainer for LinuxContainer {
         if tty {
             let pseudo = pty::openpty(None, None)?;
             p.term_master = Some(pseudo.master);
-            check!(
-                fcntl::fcntl(pseudo.master, FcntlArg::F_SETFD(FdFlag::FD_CLOEXEC)),
-                "fnctl pseudo.master"
-            );
-            check!(
-                fcntl::fcntl(pseudo.slave, FcntlArg::F_SETFD(FdFlag::FD_CLOEXEC)),
-                "fcntl pseudo.slave"
-            );
+            let _ = fcntl::fcntl(pseudo.master, FcntlArg::F_SETFD(FdFlag::FD_CLOEXEC))
+                .map_err(|e| warn!(logger, "fnctl pseudo.master {:?}", e));
+            let _ = fcntl::fcntl(pseudo.slave, FcntlArg::F_SETFD(FdFlag::FD_CLOEXEC))
+                .map_err(|e| warn!(logger, "fcntl pseudo.slave {:?}", e));
 
             child_stdin = unsafe { std::process::Stdio::from_raw_fd(pseudo.slave) };
             child_stdout = unsafe { std::process::Stdio::from_raw_fd(pseudo.slave) };
@@ -865,11 +847,10 @@ impl BaseContainer for LinuxContainer {
 
         //restore the parent's process's pid namespace.
         defer!({
-            check!(
-                sched::setns(old_pid_ns, CloneFlags::CLONE_NEWPID),
-                "settns CLONE_NEWPID"
-            );
-            check!(unistd::close(old_pid_ns), "close old pid namespace");
+            let _ = sched::setns(old_pid_ns, CloneFlags::CLONE_NEWPID)
+                .map_err(|e| warn!(logger, "settns CLONE_NEWPID {:?}", e));
+            let _ = unistd::close(old_pid_ns)
+                .map_err(|e| warn!(logger, "close old pid namespace {:?}", e));
         });
 
         let pidns = get_pid_namespace(&self.logger, linux)?;
@@ -911,7 +892,7 @@ impl BaseContainer for LinuxContainer {
         }
 
         if p.init {
-            check!(unistd::close(fifofd), "close fifofd");
+            let _ = unistd::close(fifofd).map_err(|e| warn!(logger, "close fifofd {:?}", e));
         }
 
         info!(logger, "child pid: {}", p.pid);
@@ -929,10 +910,8 @@ impl BaseContainer for LinuxContainer {
             Err(e) => {
                 error!(logger, "create container process error {:?}", e);
                 // kill the child process.
-                check!(
-                    signal::kill(Pid::from_raw(p.pid), Some(Signal::SIGKILL)),
-                    "signal::kill joining namespaces"
-                );
+                let _ = signal::kill(Pid::from_raw(p.pid), Some(Signal::SIGKILL))
+                    .map_err(|e| warn!(logger, "signal::kill joining namespaces {:?}", e));
                 return Err(e);
             }
         };
@@ -945,10 +924,9 @@ impl BaseContainer for LinuxContainer {
         let (exit_pipe_r, exit_pipe_w) = unistd::pipe2(OFlag::O_CLOEXEC)
             .context("failed to create pipe")
             .map_err(|e| {
-                check!(
-                    signal::kill(Pid::from_raw(child.id() as i32), Some(Signal::SIGKILL)),
-                    "signal::kill creating pipe"
-                );
+                let _ = signal::kill(Pid::from_raw(child.id() as i32), Some(Signal::SIGKILL))
+                    .map_err(|e| warn!(logger, "signal::kill creating pipe {:?}", e));
+
                 e
             })?;
 
@@ -962,7 +940,9 @@ impl BaseContainer for LinuxContainer {
         self.processes.insert(p.pid, p);
 
         info!(logger, "wait on child log handler");
-        check!(log_handler.join(), "joining log handler");
+        let _ = log_handler
+            .join()
+            .map_err(|e| warn!(logger, "joining log handler {:?}", e));
         info!(logger, "create process completed");
         return Ok(());
     }
