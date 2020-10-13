@@ -612,12 +612,7 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
     let exec_file = Path::new(&args[0]);
     log_child!(cfd_log, "process command: {:?}", &args);
     if !exec_file.exists() {
-        match find_file(exec_file) {
-            Some(_) => (),
-            None => {
-                return Err(anyhow!("the file {} is not exist", &args[0]));
-            }
-        }
+        find_file(exec_file).ok_or_else(|| anyhow!("the file {} is not exist", &args[0]))?;
     }
 
     // notify parent that the child's ready to start
@@ -1047,10 +1042,10 @@ fn do_exec(args: &[String]) -> ! {
 
 fn update_namespaces(logger: &Logger, spec: &mut Spec, init_pid: RawFd) -> Result<()> {
     info!(logger, "updating namespaces");
-    let linux = match spec.linux.as_mut() {
-        None => return Err(anyhow!("Spec didn't contain linux field")),
-        Some(l) => l,
-    };
+    let linux = spec
+        .linux
+        .as_mut()
+        .ok_or_else(|| anyhow!("Spec didn't contain linux field"))?;
 
     let namespaces = linux.namespaces.as_mut_slice();
     for namespace in namespaces.iter_mut() {
