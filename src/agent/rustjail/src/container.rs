@@ -335,10 +335,7 @@ pub fn init_child() {
         Ok(_) => (),
         Err(e) => {
             log_child!(cfd_log, "child exit: {:?}", e);
-            check!(
-                write_sync(cwfd, SYNC_FAILED, format!("{:?}", e).as_str()),
-                "write_sync in init_child()"
-            );
+            let _ = write_sync(cwfd, SYNC_FAILED, format!("{:?}", e).as_str());
             return;
         }
     }
@@ -490,19 +487,13 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
         sched::setns(fd, s).or_else(|e| {
             if s == CloneFlags::CLONE_NEWUSER {
                 if e.as_errno().unwrap() != Errno::EINVAL {
-                    check!(
-                        write_sync(cwfd, SYNC_FAILED, format!("{:?}", e).as_str()),
-                        "write_sync for CLONE_NEWUSER"
-                    );
+                    let _ = write_sync(cwfd, SYNC_FAILED, format!("{:?}", e).as_str());
                     return Err(e);
                 }
 
                 Ok(())
             } else {
-                check!(
-                    write_sync(cwfd, SYNC_FAILED, format!("{:?}", e).as_str()),
-                    "write_sync for sched::setns"
-                );
+                let _ = write_sync(cwfd, SYNC_FAILED, format!("{:?}", e).as_str());
                 Err(e)
             }
         })?;
@@ -578,14 +569,12 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
 
     if guser.additional_gids.len() > 0 {
         setgroups(guser.additional_gids.as_slice()).map_err(|e| {
-            check!(
-                write_sync(
-                    cwfd,
-                    SYNC_FAILED,
-                    format!("setgroups failed: {:?}", e).as_str()
-                ),
-                "write_sync for setgroups"
+            let _ = write_sync(
+                cwfd,
+                SYNC_FAILED,
+                format!("setgroups failed: {:?}", e).as_str(),
             );
+
             e
         })?;
     }
@@ -650,9 +639,9 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
     // notify parent that the child's ready to start
     write_sync(cwfd, SYNC_SUCCESS, "")?;
     log_child!(cfd_log, "ready to run exec");
-    check!(unistd::close(cfd_log), "closing cfd log");
-    check!(unistd::close(crfd), "closing crfd");
-    check!(unistd::close(cwfd), "closing cwfd");
+    let _ = unistd::close(cfd_log);
+    let _ = unistd::close(crfd);
+    let _ = unistd::close(cwfd);
 
     if oci_process.terminal {
         unistd::setsid()?;
