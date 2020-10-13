@@ -612,24 +612,23 @@ pub fn ms_move_root(rootfs: &str) -> Result<bool> {
             MsFlags::MS_SLAVE | MsFlags::MS_REC,
             None::<&str>,
         )?;
-        match umount2(abs_mount_point, MntFlags::MNT_DETACH) {
-            Ok(_) => (),
-            Err(e) => {
-                if e.ne(&nix::Error::from(Errno::EINVAL)) && e.ne(&nix::Error::from(Errno::EPERM)) {
-                    return Err(anyhow!(e));
-                }
-
-                // If we have not privileges for umounting (e.g. rootless), then
-                // cover the path.
-                mount(
-                    Some("tmpfs"),
-                    abs_mount_point,
-                    Some("tmpfs"),
-                    MsFlags::empty(),
-                    None::<&str>,
-                )?;
+        umount2(abs_mount_point, MntFlags::MNT_DETACH).or_else(|e| {
+            if e.ne(&nix::Error::from(Errno::EINVAL)) && e.ne(&nix::Error::from(Errno::EPERM)) {
+                return Err(anyhow!(e));
             }
-        }
+
+            // If we have not privileges for umounting (e.g. rootless), then
+            // cover the path.
+            mount(
+                Some("tmpfs"),
+                abs_mount_point,
+                Some("tmpfs"),
+                MsFlags::empty(),
+                None::<&str>,
+            )?;
+
+            Ok(())
+        })?;
     }
 
     mount(
