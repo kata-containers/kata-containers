@@ -204,10 +204,10 @@ fn update_spec_device_list(device: &Device, spec: &mut Spec) -> Result<()> {
         ));
     }
 
-    let linux = match spec.linux.as_mut() {
-        None => return Err(anyhow!("Spec didn't container linux field")),
-        Some(l) => l,
-    };
+    let linux = spec
+        .linux
+        .as_mut()
+        .ok_or_else(|| anyhow!("Spec didn't container linux field"))?;
 
     if !Path::new(&device.vm_path).exists() {
         return Err(anyhow!("vm_path:{} doesn't exist", device.vm_path));
@@ -365,10 +365,10 @@ pub fn update_device_cgroup(spec: &mut Spec) -> Result<()> {
     let major = stat::major(rdev) as i64;
     let minor = stat::minor(rdev) as i64;
 
-    let linux = match spec.linux.as_mut() {
-        None => return Err(anyhow!("Spec didn't container linux field")),
-        Some(l) => l,
-    };
+    let linux = spec
+        .linux
+        .as_mut()
+        .ok_or_else(|| anyhow!("Spec didn't container linux field"))?;
 
     if linux.resources.is_none() {
         linux.resources = Some(LinuxResources::default());

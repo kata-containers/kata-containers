@@ -446,15 +446,14 @@ pub fn add_storages(
             "subsystem" => "storage",
             "storage-type" => handler_name.to_owned()));
 
-        let handler = match STORAGEHANDLERLIST.get(&handler_name.as_str()) {
-            None => {
-                return Err(anyhow!(
+        let handler = STORAGEHANDLERLIST
+            .get(&handler_name.as_str())
+            .ok_or_else(|| {
+                anyhow!(
                     "Failed to find the storage handler {}",
                     storage.driver.to_owned()
-                ));
-            }
-            Some(f) => f,
-        };
+                )
+            })?;
 
         let mount_point = match handler(&logger, &storage, sandbox.clone()) {
             // Todo need to rollback the mounted storage if err met.
@@ -659,10 +658,9 @@ pub fn remove_mounts(mounts: &Vec<String>) -> Result<()> {
 fn ensure_destination_exists(destination: &str, fs_type: &str) -> Result<()> {
     let d = Path::new(destination);
     if !d.exists() {
-        let dir = match d.parent() {
-            Some(d) => d,
-            None => return Err(anyhow!("mount destination {} doesn't exist", destination)),
-        };
+        let dir = d
+            .parent()
+            .ok_or_else(|| anyhow!("mount destination {} doesn't exist", destination))?;
         if !dir.exists() {
             fs::create_dir_all(dir).context(format!("create dir all failed on {:?}", dir))?;
         }
