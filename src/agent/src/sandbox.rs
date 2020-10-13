@@ -166,23 +166,17 @@ impl Sandbox {
 
     pub fn setup_shared_namespaces(&mut self) -> Result<bool> {
         // Set up shared IPC namespace
-        self.shared_ipcns = match Namespace::new(&self.logger).as_ipc().setup() {
-            Ok(ns) => ns,
-            Err(err) => {
-                return Err(anyhow!(err).context("Failed to setup persistent IPC namespace"));
-            }
-        };
+        self.shared_ipcns = Namespace::new(&self.logger)
+            .as_ipc()
+            .setup()
+            .context("Failed to setup persistent IPC namespace")?;
 
         // // Set up shared UTS namespace
-        self.shared_utsns = match Namespace::new(&self.logger)
+        self.shared_utsns = Namespace::new(&self.logger)
             .as_uts(self.hostname.as_str())
             .setup()
-        {
-            Ok(ns) => ns,
-            Err(err) => {
-                return Err(anyhow!(err).context("Failed to setup persistent UTS namespace"));
-            }
-        };
+            .context("Failed to setup persistent UTS namespace")?;
+
         Ok(true)
     }
 
