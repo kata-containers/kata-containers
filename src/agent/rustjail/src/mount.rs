@@ -912,8 +912,6 @@ fn mask_path(path: &str) -> Result<()> {
         return Err(nix::Error::Sys(Errno::EINVAL).into());
     }
 
-    //info!("{}", path);
-
     match mount(
         Some("/dev/null"),
         path,
@@ -929,7 +927,6 @@ fn mask_path(path: &str) -> Result<()> {
         }
 
         Err(e) => {
-            //info!("{}: {}", path, e.as_errno().unwrap().desc());
             return Err(e.into());
         }
 
@@ -943,8 +940,6 @@ fn readonly_path(path: &str) -> Result<()> {
     if !path.starts_with("/") || path.contains("..") {
         return Err(nix::Error::Sys(Errno::EINVAL).into());
     }
-
-    //info!("{}", path);
 
     match mount(
         Some(&path[1..]),
@@ -963,7 +958,6 @@ fn readonly_path(path: &str) -> Result<()> {
         }
 
         Err(e) => {
-            //info!("{}: {}", path, e.as_errno().unwrap().desc());
             return Err(e.into());
         }
 

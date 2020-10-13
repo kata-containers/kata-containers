@@ -76,7 +76,6 @@ macro_rules! sl {
 #[derive(Clone)]
 pub struct agentService {
     sandbox: Arc<Mutex<Sandbox>>,
-    test: u32,
 }
 
 impl agentService {
@@ -101,7 +100,6 @@ impl agentService {
 
         // re-scan PCI bus
         // looking for hidden devices
-
         rescan_pci_bus().context("Could not rescan PCI bus")?;
 
         // Some devices need some extra processing (the ones invoked with
@@ -183,12 +181,9 @@ impl agentService {
         let mut s = sandbox.lock().unwrap();
         let sid = s.id.clone();
 
-        let ctr: &mut LinuxContainer = match s.get_container(cid.as_str()) {
-            Some(cr) => cr,
-            None => {
-                return Err(anyhow!(nix::Error::from_errno(Errno::EINVAL)));
-            }
-        };
+        let ctr = s
+            .get_container(&cid)
+            .ok_or(anyhow!("Invalid container id"))?;
 
         ctr.exec()?;
 
@@ -208,18 +203,7 @@ impl agentService {
         let cid = req.container_id.clone();
         let mut cmounts: Vec<String> = vec![];
 
-        if req.timeout == 0 {
-            let s = Arc::clone(&self.sandbox);
-            let mut sandbox = s.lock().unwrap();
-            let ctr: &mut LinuxContainer = match sandbox.get_container(cid.as_str()) {
-                Some(cr) => cr,
-                None => {
-                    return Err(anyhow!(nix::Error::from_errno(Errno::EINVAL)));
-                }
-            };
-
-            ctr.destroy()?;
-
+        let mut remove_container_resources = |sandbox: &mut Sandbox| -> Result<()> {
             // Find the sandbox storage used by this container
             let mounts = sandbox.container_mounts.get(&cid);
             if mounts.is_some() {
@@ -240,6 +224,19 @@ impl agentService {
 
             sandbox.container_mounts.remove(cid.as_str());
             sandbox.containers.remove(cid.as_str());
+            Ok(())
+        };
+
+        if req.timeout == 0 {
+            let s = Arc::clone(&self.sandbox);
+            let mut sandbox = s.lock().unwrap();
+            let ctr = sandbox
+                .get_container(&cid)
+                .ok_or(anyhow!("Invalid container id"))?;
+
+            ctr.destroy()?;
+
+            remove_container_resources(&mut sandbox)?;
 
             return Ok(());
         }
@@ -251,15 +248,14 @@ impl agentService {
 
         let handle = thread::spawn(move || {
             let mut sandbox = s.lock().unwrap();
-            let ctr: &mut LinuxContainer = match sandbox.get_container(cid2.as_str()) {
-                Some(cr) => cr,
-                None => {
-                    return;
-                }
-            };
-
-            ctr.destroy().unwrap();
-            tx.send(1).unwrap();
+            let _ctr = sandbox
+                .get_container(&cid2)
+                .ok_or(anyhow!("Invalid container id"))
+                .and_then(|ctr| {
+                    ctr.destroy().unwrap();
+                    tx.send(1).unwrap();
+                    Ok(ctr)
+                });
         });
 
         if let Err(_) = rx.recv_timeout(Duration::from_secs(req.timeout as u64)) {
@@ -275,26 +271,7 @@ impl agentService {
         let s = self.sandbox.clone();
         let mut sandbox = s.lock().unwrap();
 
-        // Find the sandbox storage used by this container
-        let mounts = sandbox.container_mounts.get(&cid);
-        if mounts.is_some() {
-            let mounts = mounts.unwrap();
-
-            remove_mounts(&mounts)?;
-
-            for m in mounts.iter() {
-                if sandbox.storages.get(m).is_some() {
-                    cmounts.push(m.to_string());
-                }
-            }
-        }
-
-        for m in cmounts.iter() {
-            sandbox.unset_and_remove_sandbox_storage(m)?;
-        }
-
-        sandbox.container_mounts.remove(&cid);
-        sandbox.containers.remove(cid.as_str());
+        remove_container_resources(&mut sandbox)?;
 
         Ok(())
     }
@@ -308,7 +285,6 @@ impl agentService {
         let s = self.sandbox.clone();
         let mut sandbox = s.lock().unwrap();
 
-        // ignore string_user, not sure what it is
         let process = if req.process.is_some() {
             req.process.as_ref().unwrap()
         } else {
@@ -319,12 +295,9 @@ impl agentService {
         let ocip = rustjail::process_grpc_to_oci(process);
         let p = Process::new(&sl!(), &ocip, exec_id.as_str(), false, pipe_size)?;
 
-        let ctr = match sandbox.get_container(cid.as_str()) {
-            Some(v) => v,
-            None => {
-                return Err(anyhow!(nix::Error::from_errno(nix::errno::Errno::EINVAL)));
-            }
-        };
+        let ctr = sandbox
+            .get_container(&cid)
+            .ok_or(anyhow!("Invalid container id"))?;
 
         ctr.run(p)?;
 
@@ -404,12 +377,9 @@ impl agentService {
         }
 
         let mut sandbox = s.lock().unwrap();
-        let ctr: &mut LinuxContainer = match sandbox.get_container(cid.as_str()) {
-            Some(cr) => cr,
-            None => {
-                return Err(anyhow!(nix::Error::from_errno(Errno::EINVAL)));
-            }
-        };
+        let ctr = sandbox
+            .get_container(&cid)
+            .ok_or(anyhow!("Invalid container id"))?;
 
         let mut p = match ctr.processes.get_mut(&pid) {
             Some(p) => p,
@@ -570,10 +540,7 @@ impl protocols::agent_ttrpc::AgentService for agentService {
                 ttrpc::Code::INTERNAL,
                 e.to_string(),
             ))),
-            Ok(_) => {
-                info!(sl!(), "exec process!\n");
-                Ok(Empty::new())
-            }
+            Ok(_) => Ok(Empty::new()),
         }
     }
 
@@ -590,6 +557,7 @@ impl protocols::agent_ttrpc::AgentService for agentService {
             Ok(_) => Ok(Empty::new()),
         }
     }
+
     fn exec_process(
         &self,
         _ctx: &ttrpc::TtrpcContext,
@@ -603,6 +571,7 @@ impl protocols::agent_ttrpc::AgentService for agentService {
             Ok(_) => Ok(Empty::new()),
         }
     }
+
     fn signal_process(
         &self,
         _ctx: &ttrpc::TtrpcContext,
@@ -616,6 +585,7 @@ impl protocols::agent_ttrpc::AgentService for agentService {
             Ok(_) => Ok(Empty::new()),
         }
     }
+
     fn wait_process(
         &self,
         _ctx: &ttrpc::TtrpcContext,
@@ -629,6 +599,7 @@ impl protocols::agent_ttrpc::AgentService for agentService {
             Ok(resp) => Ok(resp),
         }
     }
+
     fn list_processes(
         &self,
         _ctx: &ttrpc::TtrpcContext,
@@ -642,15 +613,12 @@ impl protocols::agent_ttrpc::AgentService for agentService {
         let s = Arc::clone(&self.sandbox);
         let mut sandbox = s.lock().unwrap();
 
-        let ctr: &mut LinuxContainer = match sandbox.get_container(cid.as_str()) {
-            Some(cr) => cr,
-            None => {
-                return Err(ttrpc::Error::RpcStatus(ttrpc::get_status(
-                    ttrpc::Code::INVALID_ARGUMENT,
-                    "invalid container id".to_string(),
-                )));
-            }
-        };
+        let ctr = sandbox
+            .get_container(&cid)
+            .ok_or(ttrpc::Error::RpcStatus(ttrpc::get_status(
+                ttrpc::Code::INVALID_ARGUMENT,
+                "invalid container id".to_string(),
+            )))?;
 
         let pids = ctr.processes().unwrap();
 
@@ -683,15 +651,10 @@ impl protocols::agent_ttrpc::AgentService for agentService {
         let out: String = String::from_utf8(output.stdout).unwrap();
         let mut lines: Vec<String> = out.split('\n').map(|v| v.to_string()).collect();
 
-        let predicate = |v| {
-            if v == "PID" {
-                return true;
-            } else {
-                return false;
-            }
-        };
-
-        let pid_index = lines[0].split_whitespace().position(predicate).unwrap();
+        let pid_index = lines[0]
+            .split_whitespace()
+            .position(|v| v == "PID")
+            .unwrap();
 
         let mut result = String::new();
         result.push_str(lines[0].as_str());
@@ -720,6 +683,7 @@ impl protocols::agent_ttrpc::AgentService for agentService {
         resp.process_list = Vec::from(result);
         Ok(resp)
     }
+
     fn update_container(
         &self,
         _ctx: &ttrpc::TtrpcContext,
@@ -731,15 +695,12 @@ impl protocols::agent_ttrpc::AgentService for agentService {
         let s = Arc::clone(&self.sandbox);
         let mut sandbox = s.lock().unwrap();
 
-        let ctr: &mut LinuxContainer = match sandbox.get_container(cid.as_str()) {
-            Some(cr) => cr,
-            None => {
-                return Err(ttrpc::Error::RpcStatus(ttrpc::get_status(
-                    ttrpc::Code::INTERNAL,
-                    "invalid container id".to_string(),
-                )));
-            }
-        };
+        let ctr = sandbox
+            .get_container(&cid)
+            .ok_or(ttrpc::Error::RpcStatus(ttrpc::get_status(
+                ttrpc::Code::INVALID_ARGUMENT,
+                "invalid container id".to_string(),
+            )))?;
 
         let resp = Empty::new();
 
@@ -759,6 +720,7 @@ impl protocols::agent_ttrpc::AgentService for agentService {
 
         Ok(resp)
     }
+
     fn stats_container(
         &self,
         _ctx: &ttrpc::TtrpcContext,
@@ -768,15 +730,12 @@ impl protocols::agent_ttrpc::AgentService for agentService {
         let s = Arc::clone(&self.sandbox);
         let mut sandbox = s.lock().unwrap();
 
-        let ctr: &mut LinuxContainer = match sandbox.get_container(cid.as_str()) {
-            Some(cr) => cr,
-            None => {
-                return Err(ttrpc::Error::RpcStatus(ttrpc::get_status(
-                    ttrpc::Code::INTERNAL,
-                    "invalid container id".to_string(),
-                )));
-            }
-        };
+        let ctr = sandbox
+            .get_container(&cid)
+            .ok_or(ttrpc::Error::RpcStatus(ttrpc::get_status(
+                ttrpc::Code::INVALID_ARGUMENT,
+                "invalid container id".to_string(),
+            )))?;
 
         match ctr.stats() {
             Err(e) => Err(ttrpc::Error::RpcStatus(ttrpc::get_status(
@@ -795,22 +754,19 @@ impl protocols::agent_ttrpc::AgentService for agentService {
         let cid = req.get_container_id();
         let s = Arc::clone(&self.sandbox);
         let mut sandbox = s.lock().unwrap();
-        if let Some(ctr) = sandbox.get_container(cid) {
-            match ctr.pause() {
-                Err(e) => {
-                    return Err(ttrpc::Error::RpcStatus(ttrpc::get_status(
-                        ttrpc::Code::INTERNAL,
-                        e.to_string(),
-                    )))
-                }
-                Ok(_) => return Ok(Empty::new()),
-            }
-        };
 
-        Err(ttrpc::Error::RpcStatus(ttrpc::get_status(
-            ttrpc::Code::INVALID_ARGUMENT,
-            "invalid argument".to_string(),
-        )))
+        let ctr = sandbox
+            .get_container(&cid)
+            .ok_or(ttrpc::Error::RpcStatus(ttrpc::get_status(
+                ttrpc::Code::INVALID_ARGUMENT,
+                "invalid container id".to_string(),
+            )))?;
+
+        ctr.pause().map_err(|e| {
+            ttrpc::Error::RpcStatus(ttrpc::get_status(ttrpc::Code::INTERNAL, e.to_string()))
+        })?;
+
+        Ok(Empty::new())
     }
 
     fn resume_container(
@@ -821,22 +777,19 @@ impl protocols::agent_ttrpc::AgentService for agentService {
         let cid = req.get_container_id();
         let s = Arc::clone(&self.sandbox);
         let mut sandbox = s.lock().unwrap();
-        if let Some(ctr) = sandbox.get_container(cid) {
-            match ctr.resume() {
-                Err(e) => {
-                    return Err(ttrpc::Error::RpcStatus(ttrpc::get_status(
-                        ttrpc::Code::INTERNAL,
-                        e.to_string(),
-                    )))
-                }
-                Ok(_) => return Ok(Empty::new()),
-            }
-        };
 
-        Err(ttrpc::Error::RpcStatus(ttrpc::get_status(
-            ttrpc::Code::INVALID_ARGUMENT,
-            "invalid argument: ".to_string(),
-        )))
+        let ctr = sandbox
+            .get_container(&cid)
+            .ok_or(ttrpc::Error::RpcStatus(ttrpc::get_status(
+                ttrpc::Code::INVALID_ARGUMENT,
+                "invalid container id".to_string(),
+            )))?;
+
+        ctr.resume().map_err(|e| {
+            ttrpc::Error::RpcStatus(ttrpc::get_status(ttrpc::Code::INTERNAL, e.to_string()))
+        })?;
+
+        Ok(Empty::new())
     }
 
     fn write_stdin(
@@ -852,6 +805,7 @@ impl protocols::agent_ttrpc::AgentService for agentService {
             Ok(resp) => Ok(resp),
         }
     }
+
     fn read_stdout(
         &self,
         _ctx: &ttrpc::TtrpcContext,
@@ -865,6 +819,7 @@ impl protocols::agent_ttrpc::AgentService for agentService {
             Ok(resp) => Ok(resp),
         }
     }
+
     fn read_stderr(
         &self,
         _ctx: &ttrpc::TtrpcContext,
@@ -878,6 +833,7 @@ impl protocols::agent_ttrpc::AgentService for agentService {
             Ok(resp) => Ok(resp),
         }
     }
+
     fn close_stdin(
         &self,
         _ctx: &ttrpc::TtrpcContext,
@@ -973,18 +929,18 @@ impl protocols::agent_ttrpc::AgentService for agentService {
 
         let rtnl = sandbox.rtnl.as_mut().unwrap();
 
-        let iface = match rtnl.update_interface(interface.as_ref().unwrap()) {
-            Ok(v) => v,
-            Err(e) => {
-                return Err(ttrpc::Error::RpcStatus(ttrpc::get_status(
+        let iface = rtnl
+            .update_interface(interface.as_ref().unwrap())
+            .map_err(|e| {
+                ttrpc::Error::RpcStatus(ttrpc::get_status(
                     ttrpc::Code::INTERNAL,
                     format!("update interface: {:?}", e),
-                )));
-            }
-        };
+                ))
+            })?;
 
         Ok(iface)
     }
+
     fn update_routes(
         &self,
         _ctx: &ttrpc::TtrpcContext,
@@ -1001,16 +957,15 @@ impl protocols::agent_ttrpc::AgentService for agentService {
         }
 
         let rtnl = sandbox.rtnl.as_mut().unwrap();
+
         // get current routes to return when error out
-        let crs = match rtnl.list_routes() {
-            Ok(routes) => routes,
-            Err(e) => {
-                return Err(ttrpc::Error::RpcStatus(ttrpc::get_status(
-                    ttrpc::Code::INTERNAL,
-                    format!("update routes: {:?}", e),
-                )));
-            }
-        };
+        let crs = rtnl.list_routes().map_err(|e| {
+            ttrpc::Error::RpcStatus(ttrpc::get_status(
+                ttrpc::Code::INTERNAL,
+                format!("update routes: {:?}", e),
+            ))
+        })?;
+
         let v = match rtnl.update_routes(rs.as_ref()) {
             Ok(value) => value,
             Err(_) => crs,
@@ -1020,6 +975,7 @@ impl protocols::agent_ttrpc::AgentService for agentService {
 
         Ok(routes)
     }
+
     fn list_interfaces(
         &self,
         _ctx: &ttrpc::TtrpcContext,
@@ -1034,20 +990,18 @@ impl protocols::agent_ttrpc::AgentService for agentService {
         }
 
         let rtnl = sandbox.rtnl.as_mut().unwrap();
-        let v = match rtnl.list_interfaces() {
-            Ok(value) => value,
-            Err(e) => {
-                return Err(ttrpc::Error::RpcStatus(ttrpc::get_status(
-                    ttrpc::Code::INTERNAL,
-                    format!("list interface: {:?}", e),
-                )));
-            }
-        };
+        let v = rtnl.list_interfaces().map_err(|e| {
+            ttrpc::Error::RpcStatus(ttrpc::get_status(
+                ttrpc::Code::INTERNAL,
+                format!("list interface: {:?}", e),
+            ))
+        })?;
 
         interface.set_Interfaces(RepeatedField::from_vec(v));
 
         Ok(interface)
     }
+
     fn list_routes(
         &self,
         _ctx: &ttrpc::TtrpcContext,
@@ -1063,28 +1017,27 @@ impl protocols::agent_ttrpc::AgentService for agentService {
 
         let rtnl = sandbox.rtnl.as_mut().unwrap();
 
-        let v = match rtnl.list_routes() {
-            Ok(value) => value,
-            Err(e) => {
-                return Err(ttrpc::Error::RpcStatus(ttrpc::get_status(
-                    ttrpc::Code::INTERNAL,
-                    format!("list routes: {:?}", e),
-                )));
-            }
-        };
+        let v = rtnl.list_routes().map_err(|e| {
+            ttrpc::Error::RpcStatus(ttrpc::get_status(
+                ttrpc::Code::INTERNAL,
+                format!("list routes: {:?}", e),
+            ))
+        })?;
 
         routes.set_Routes(RepeatedField::from_vec(v));
 
         Ok(routes)
     }
+
     fn start_tracing(
         &self,
         _ctx: &ttrpc::TtrpcContext,
         req: protocols::agent::StartTracingRequest,
     ) -> ttrpc::Result<Empty> {
-        info!(sl!(), "start_tracing {:?} self.test={}", req, self.test);
+        info!(sl!(), "start_tracing {:?}", req);
         Ok(Empty::new())
     }
+
     fn stop_tracing(
         &self,
         _ctx: &ttrpc::TtrpcContext,
@@ -1122,26 +1075,14 @@ impl protocols::agent_ttrpc::AgentService for agentService {
             }
 
             for m in req.kernel_modules.iter() {
-                match load_kernel_module(m) {
-                    Ok(_) => (),
-                    Err(e) => {
-                        return Err(ttrpc::Error::RpcStatus(ttrpc::get_status(
-                            ttrpc::Code::INTERNAL,
-                            e.to_string(),
-                        )))
-                    }
-                }
+                let _ = load_kernel_module(m).map_err(|e| {
+                    ttrpc::Error::RpcStatus(ttrpc::get_status(ttrpc::Code::INTERNAL, e.to_string()))
+                })?;
             }
 
-            match s.setup_shared_namespaces() {
-                Ok(_) => (),
-                Err(e) => {
-                    return Err(ttrpc::Error::RpcStatus(ttrpc::get_status(
-                        ttrpc::Code::INTERNAL,
-                        e.to_string(),
-                    )))
-                }
-            }
+            s.setup_shared_namespaces().map_err(|e| {
+                ttrpc::Error::RpcStatus(ttrpc::get_status(ttrpc::Code::INTERNAL, e.to_string()))
+            })?;
         }
 
         match add_storages(sl!(), req.storages.to_vec(), self.sandbox.clone()) {
@@ -1195,6 +1136,7 @@ impl protocols::agent_ttrpc::AgentService for agentService {
 
         Ok(Empty::new())
     }
+
     fn add_arp_neighbors(
         &self,
         _ctx: &ttrpc::TtrpcContext,
@@ -1211,15 +1153,13 @@ impl protocols::agent_ttrpc::AgentService for agentService {
 
         let rtnl = sandbox.rtnl.as_mut().unwrap();
 
-        if let Err(e) = rtnl.add_arp_neighbors(neighs.as_ref()) {
-            return Err(ttrpc::Error::RpcStatus(ttrpc::get_status(
-                ttrpc::Code::INTERNAL,
-                e.to_string(),
-            )));
-        }
+        rtnl.add_arp_neighbors(neighs.as_ref()).map_err(|e| {
+            ttrpc::Error::RpcStatus(ttrpc::get_status(ttrpc::Code::INTERNAL, e.to_string()))
+        })?;
 
         Ok(Empty::new())
     }
+
     fn online_cpu_mem(
         &self,
         _ctx: &ttrpc::TtrpcContext,
@@ -1237,6 +1177,7 @@ impl protocols::agent_ttrpc::AgentService for agentService {
 
         Ok(Empty::new())
     }
+
     fn reseed_random_dev(
         &self,
         _ctx: &ttrpc::TtrpcContext,
@@ -1251,6 +1192,7 @@ impl protocols::agent_ttrpc::AgentService for agentService {
 
         Ok(Empty::new())
     }
+
     fn get_guest_details(
         &self,
         _ctx: &ttrpc::TtrpcContext,
@@ -1279,6 +1221,7 @@ impl protocols::agent_ttrpc::AgentService for agentService {
 
         Ok(resp)
     }
+
     fn mem_hotplug_by_probe(
         &self,
         _ctx: &ttrpc::TtrpcContext,
@@ -1293,6 +1236,7 @@ impl protocols::agent_ttrpc::AgentService for agentService {
 
         Ok(Empty::new())
     }
+
     fn set_guest_date_time(
         &self,
         _ctx: &ttrpc::TtrpcContext,
@@ -1307,6 +1251,7 @@ impl protocols::agent_ttrpc::AgentService for agentService {
 
         Ok(Empty::new())
     }
+
     fn copy_file(
         &self,
         _ctx: &ttrpc::TtrpcContext,
@@ -1382,6 +1327,7 @@ impl protocols::health_ttrpc::Health for healthService {
 
         Ok(resp)
     }
+
     fn version(
         &self,
         _ctx: &ttrpc::TtrpcContext,
@@ -1500,33 +1446,23 @@ fn find_process<'a>(
     eid: &'a str,
     init: bool,
 ) -> Result<&'a mut Process> {
-    let ctr = match sandbox.get_container(cid) {
-        Some(v) => v,
-        None => return Err(anyhow!("Invalid container id")),
-    };
+    let ctr = sandbox
+        .get_container(cid)
+        .ok_or(anyhow!("Invalid container id"))?;
 
     if init || eid == "" {
-        let p = match ctr.processes.get_mut(&ctr.init_process_pid) {
-            Some(v) => v,
-            None => return Err(anyhow!("cannot find init process!")),
-        };
-
-        return Ok(p);
+        return ctr
+            .processes
+            .get_mut(&ctr.init_process_pid)
+            .ok_or(anyhow!("cannot find init process!"));
     }
 
-    let p = match ctr.get_process(eid) {
-        Ok(v) => v,
-        Err(_) => return Err(anyhow!("Invalid exec id")),
-    };
-
-    Ok(p)
+    ctr.get_process(eid).map_err(|_| anyhow!("Invalid exec id"))
 }
 
 pub fn start(s: Arc<Mutex<Sandbox>>, server_address: &str) -> ttrpc::Server {
-    let agent_service = Box::new(agentService {
-        sandbox: s,
-        test: 1,
-    }) as Box<dyn protocols::agent_ttrpc::AgentService + Send + Sync>;
+    let agent_service = Box::new(agentService { sandbox: s })
+        as Box<dyn protocols::agent_ttrpc::AgentService + Send + Sync>;
 
     let agent_worker = Arc::new(agent_service);
 
@@ -1565,10 +1501,10 @@ fn update_container_namespaces(
     spec: &mut Spec,
     sandbox_pidns: bool,
 ) -> Result<()> {
-    let linux = match spec.linux.as_mut() {
-        None => return Err(anyhow!("Spec didn't container linux field")),
-        Some(l) => l,
-    };
+    let linux = spec
+        .linux
+        .as_mut()
+        .ok_or(anyhow!("Spec didn't container linux field"))?;
 
     let namespaces = linux.namespaces.as_mut_slice();
     for namespace in namespaces.iter_mut() {

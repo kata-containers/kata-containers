@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-// use crate::configs::{FreezerState, Config};
 use anyhow::{anyhow, Result};
 use oci::LinuxResources;
 use protocols::agent::CgroupStats;
