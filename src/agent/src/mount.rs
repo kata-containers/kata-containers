@@ -479,15 +479,18 @@ fn mount_to_rootfs(logger: &Logger, m: &INIT_MOUNT) -> Result<()> {
 
     fs::create_dir_all(Path::new(m.dest)).context("could not create directory")?;
 
-    if let Err(err) = bare_mount.mount() {
+    bare_mount.mount().or_else(|e| {
         if m.src != "dev" {
-            return Err(err.into());
+            return Err(e);
         }
+
         error!(
             logger,
             "Could not mount filesystem from {} to {}", m.src, m.dest
         );
-    }
+
+        Ok(())
+    })?;
 
     Ok(())
 }

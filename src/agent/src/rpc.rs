@@ -1610,11 +1610,13 @@ fn do_copy_file(req: &CopyFileRequest) -> Result<()> {
         PathBuf::from("/")
     };
 
-    if let Err(e) = fs::create_dir_all(dir.to_str().unwrap()) {
+    fs::create_dir_all(dir.to_str().unwrap()).or_else(|e| {
         if e.kind() != std::io::ErrorKind::AlreadyExists {
-            return Err(e.into());
+            return Err(e);
         }
-    }
+
+        Ok(())
+    })?;
 
     std::fs::set_permissions(
         dir.to_str().unwrap(),
