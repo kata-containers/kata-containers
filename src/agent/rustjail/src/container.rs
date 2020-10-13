@@ -320,14 +320,11 @@ impl Container for LinuxContainer {
 pub fn init_child() {
     let cwfd = std::env::var(CWFD_FD).unwrap().parse::<i32>().unwrap();
     let cfd_log = std::env::var(CLOG_FD).unwrap().parse::<i32>().unwrap();
-    match do_init_child(cwfd) {
-        Ok(_) => (),
-        Err(e) => {
-            log_child!(cfd_log, "child exit: {:?}", e);
-            let _ = write_sync(cwfd, SYNC_FAILED, format!("{:?}", e).as_str());
-            return;
-        }
-    }
+
+    let _ = do_init_child(cwfd).map_err(|e| {
+        log_child!(cfd_log, "child exit: {:?}", e);
+        let _ = write_sync(cwfd, SYNC_FAILED, format!("{:?}", e).as_str());
+    });
 }
 
 fn do_init_child(cwfd: RawFd) -> Result<()> {
@@ -392,9 +389,8 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
                 to_new.set(*s, true);
             }
         } else {
-            let fd = match fcntl::open(ns.path.as_str(), OFlag::O_CLOEXEC, Mode::empty()) {
-                Ok(v) => v,
-                Err(e) => {
+            let fd =
+                fcntl::open(ns.path.as_str(), OFlag::O_CLOEXEC, Mode::empty()).map_err(|e| {
                     log_child!(
                         cfd_log,
                         "cannot open type: {} path: {}",
@@ -402,9 +398,8 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
                         ns.path.clone()
                     );
                     log_child!(cfd_log, "error is : {}", e.as_errno().unwrap().desc());
-                    return Err(e.into());
-                }
-            };
+                    e
+                })?;
 
             if *s != CloneFlags::CLONE_NEWPID {
                 to_join.push((*s, fd));
@@ -834,16 +829,14 @@ impl BaseContainer for LinuxContainer {
             child_stderr = unsafe { std::process::Stdio::from_raw_fd(stderr) };
         }
 
-        let old_pid_ns = match fcntl::open(PID_NS_PATH, OFlag::O_CLOEXEC, Mode::empty()) {
-            Ok(v) => v,
-            Err(e) => {
+        let old_pid_ns =
+            fcntl::open(PID_NS_PATH, OFlag::O_CLOEXEC, Mode::empty()).map_err(|e| {
                 error!(
                     logger,
                     "cannot open pid ns path: {} with error: {:?}", PID_NS_PATH, e
                 );
-                return Err(e.into());
-            }
-        };
+                e
+            })?;
 
         //restore the parent's process's pid namespace.
         defer!({
@@ -897,7 +890,7 @@ impl BaseContainer for LinuxContainer {
 
         info!(logger, "child pid: {}", p.pid);
 
-        match join_namespaces(
+        join_namespaces(
             &logger,
             &spec,
             &p,
@@ -905,16 +898,15 @@ impl BaseContainer for LinuxContainer {
             &st,
             pwfd,
             prfd,
-        ) {
-            Ok(_) => (),
-            Err(e) => {
-                error!(logger, "create container process error {:?}", e);
-                // kill the child process.
-                let _ = signal::kill(Pid::from_raw(p.pid), Some(Signal::SIGKILL))
-                    .map_err(|e| warn!(logger, "signal::kill joining namespaces {:?}", e));
-                return Err(e);
-            }
-        };
+        )
+        .map_err(|e| {
+            error!(logger, "create container process error {:?}", e);
+            // kill the child process.
+            let _ = signal::kill(Pid::from_raw(p.pid), Some(Signal::SIGKILL))
+                .map_err(|e| warn!(logger, "signal::kill joining namespaces {:?}", e));
+
+            e
+        })?;
 
         info!(logger, "entered namespaces!");
 
@@ -1085,9 +1077,8 @@ fn get_pid_namespace(logger: &Logger, linux: &Linux) -> Result<Option<RawFd>> {
                 return Ok(None);
             }
 
-            let fd = match fcntl::open(ns.path.as_str(), OFlag::O_CLOEXEC, Mode::empty()) {
-                Ok(v) => v,
-                Err(e) => {
+            let fd =
+                fcntl::open(ns.path.as_str(), OFlag::O_CLOEXEC, Mode::empty()).map_err(|e| {
                     error!(
                         logger,
                         "cannot open type: {} path: {}",
@@ -1095,9 +1086,9 @@ fn get_pid_namespace(logger: &Logger, linux: &Linux) -> Result<Option<RawFd>> {
                         ns.path.clone()
                     );
                     error!(logger, "error is : {}", e.as_errno().unwrap().desc());
-                    return Err(e.into());
-                }
-            };
+
+                    e
+                })?;
 
             return Ok(Some(fd));
         }
@@ -1245,13 +1236,10 @@ fn write_mappings(logger: &Logger, path: &str, maps: &[LinuxIDMapping]) -> Resul
     if !data.is_empty() {
         let fd = fcntl::open(path, OFlag::O_WRONLY, Mode::empty())?;
         defer!(unistd::close(fd).unwrap());
-        match unistd::write(fd, data.as_bytes()) {
-            Ok(_) => {}
-            Err(e) => {
-                info!(logger, "cannot write mapping");
-                return Err(e.into());
-            }
-        }
+        unistd::write(fd, data.as_bytes()).map_err(|e| {
+            info!(logger, "cannot write mapping");
+            e
+        })?;
     }
     Ok(())
 }

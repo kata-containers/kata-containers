@@ -407,20 +407,17 @@ fn mount_cgroups(
 
         if key != base {
             let src = format!("{}/{}", m.destination.as_str(), key);
-            match unix::fs::symlink(destination.as_str(), &src[1..]) {
-                Err(e) => {
-                    log_child!(
-                        cfd_log,
-                        "symlink: {} {} err: {}",
-                        key,
-                        destination.as_str(),
-                        e.to_string()
-                    );
+            unix::fs::symlink(destination.as_str(), &src[1..]).map_err(|e| {
+                log_child!(
+                    cfd_log,
+                    "symlink: {} {} err: {}",
+                    key,
+                    destination.as_str(),
+                    e.to_string()
+                );
 
-                    return Err(e.into());
-                }
-                Ok(_) => {}
-            }
+                e
+            })?;
         }
     }
 
@@ -689,18 +686,14 @@ fn mount_from(
             Path::new(&dest)
         };
 
-        // let _ = fs::create_dir_all(&dir);
-        match fs::create_dir_all(&dir) {
-            Ok(_) => {}
-            Err(e) => {
-                log_child!(
-                    cfd_log,
-                    "creat dir {}: {}",
-                    dir.to_str().unwrap(),
-                    e.to_string()
-                );
-            }
-        }
+        let _ = fs::create_dir_all(&dir).map_err(|e| {
+            log_child!(
+                cfd_log,
+                "creat dir {}: {}",
+                dir.to_str().unwrap(),
+                e.to_string()
+            )
+        });
 
         // make sure file exists so we can bind over it
         if src.is_file() {
@@ -717,31 +710,26 @@ fn mount_from(
         }
     };
 
-    match stat::stat(dest.as_str()) {
-        Ok(_) => {}
-        Err(e) => {
-            log_child!(
-                cfd_log,
-                "dest stat error. {}: {}",
-                dest.as_str(),
-                e.as_errno().unwrap().desc()
-            );
-        }
-    }
+    let _ = stat::stat(dest.as_str()).map_err(|e| {
+        log_child!(
+            cfd_log,
+            "dest stat error. {}: {}",
+            dest.as_str(),
+            e.as_errno().unwrap().desc()
+        )
+    });
 
-    match mount(
+    mount(
         Some(src.as_str()),
         dest.as_str(),
         Some(m.r#type.as_str()),
         flags,
         Some(d.as_str()),
-    ) {
-        Ok(_) => {}
-        Err(e) => {
-            log_child!(cfd_log, "mount error: {}", e.as_errno().unwrap().desc());
-            return Err(e.into());
-        }
-    }
+    )
+    .map_err(|e| {
+        log_child!(cfd_log, "mount error: {}", e.as_errno().unwrap().desc());
+        e
+    })?;
 
     if flags.contains(MsFlags::MS_BIND)
         && flags.intersects(
@@ -753,24 +741,22 @@ fn mount_from(
                 | MsFlags::MS_SLAVE),
         )
     {
-        match mount(
+        mount(
             Some(dest.as_str()),
             dest.as_str(),
             None::<&str>,
             flags | MsFlags::MS_REMOUNT,
             None::<&str>,
-        ) {
-            Err(e) => {
-                log_child!(
-                    cfd_log,
-                    "remout {}: {}",
-                    dest.as_str(),
-                    e.as_errno().unwrap().desc()
-                );
-                return Err(e.into());
-            }
-            Ok(_) => {}
-        }
+        )
+        .map_err(|e| {
+            log_child!(
+                cfd_log,
+                "remout {}: {}",
+                dest.as_str(),
+                e.as_errno().unwrap().desc()
+            );
+            e
+        })?;
     }
     Ok(())
 }
