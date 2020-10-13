@@ -197,7 +197,7 @@ DEFVIRTIOFSCACHE ?= auto
 #
 # see `virtiofsd -h` for possible options.
 # Make sure you quote args.
-DEFVIRTIOFSEXTRAARGS ?= []
+DEFVIRTIOFSEXTRAARGS ?= [\"--thread-pool-size=1\"]
 DEFENABLEIOTHREADS := false
 DEFENABLEMEMPREALLOC := false
 DEFENABLEHUGEPAGES := false
