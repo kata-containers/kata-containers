@@ -316,10 +316,9 @@ impl Sandbox {
         thread::spawn(move || {
             for event in rx {
                 info!(logger, "got an OOM event {:?}", event);
-                match tx.send(container_id.clone()) {
-                    Err(err) => error!(logger, "failed to send message: {:?}", err),
-                    Ok(_) => {}
-                }
+                let _ = tx
+                    .send(container_id.clone())
+                    .map_err(|e| error!(logger, "failed to send message: {:?}", e));
             }
         });
     }

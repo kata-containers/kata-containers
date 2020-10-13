@@ -137,17 +137,14 @@ fn get_device_name(sandbox: &Arc<Mutex<Sandbox>>, dev_addr: &str) -> Result<Stri
 
     info!(sl!(), "Waiting on channel for device notification\n");
     let hotplug_timeout = AGENT_CONFIG.read().unwrap().hotplug_timeout;
-    let dev_name = match rx.recv_timeout(hotplug_timeout) {
-        Ok(name) => name,
-        Err(_) => {
-            GLOBAL_DEVICE_WATCHER.lock().unwrap().remove_entry(dev_addr);
-            return Err(anyhow!(
-                "Timeout reached after {:?} waiting for device {}",
-                hotplug_timeout,
-                dev_addr
-            ));
-        }
-    };
+    let dev_name = rx.recv_timeout(hotplug_timeout).map_err(|_| {
+        GLOBAL_DEVICE_WATCHER.lock().unwrap().remove_entry(dev_addr);
+        anyhow!(
+            "Timeout reached after {:?} waiting for device {}",
+            hotplug_timeout,
+            dev_addr
+        )
+    })?;
 
     Ok(format!("{}/{}", SYSTEM_DEV_PATH, &dev_name))
 }
