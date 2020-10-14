@@ -266,18 +266,21 @@ fn set_devices_resources(
     let mut devices = vec![];
 
     for d in device_resources.iter() {
-        let dev = linux_device_group_to_cgroup_device(&d);
-        devices.push(dev);
+        if let Some(dev) = linux_device_group_to_cgroup_device(&d) {
+            devices.push(dev);
+        }
     }
 
     for d in DEFAULT_DEVICES.iter() {
-        let dev = linux_device_to_cgroup_device(&d);
-        devices.push(dev);
+        if let Some(dev) = linux_device_to_cgroup_device(&d) {
+            devices.push(dev);
+        }
     }
 
     for d in DEFAULT_ALLOWED_DEVICES.iter() {
-        let dev = linux_device_group_to_cgroup_device(&d);
-        devices.push(dev);
+        if let Some(dev) = linux_device_group_to_cgroup_device(&d) {
+            devices.push(dev);
+        }
     }
 
     res.devices.update_values = true;
@@ -465,8 +468,11 @@ fn build_blk_io_device_throttle_resource(
     blk_io_device_throttle_resources
 }
 
-fn linux_device_to_cgroup_device(d: &LinuxDevice) -> DeviceResource {
-    let dev_type = DeviceType::from_char(d.r#type.chars().next()).unwrap();
+fn linux_device_to_cgroup_device(d: &LinuxDevice) -> Option<DeviceResource> {
+    let dev_type = match DeviceType::from_char(d.r#type.chars().next()) {
+        Some(t) => t,
+        None => return None,
+    };
 
     let permissions = vec![
         DevicePermissions::Read,
@@ -474,17 +480,20 @@ fn linux_device_to_cgroup_device(d: &LinuxDevice) -> DeviceResource {
         DevicePermissions::MkNod,
     ];
 
-    DeviceResource {
+    Some(DeviceResource {
         allow: true,
         devtype: dev_type,
         major: d.major,
         minor: d.minor,
         access: permissions,
-    }
+    })
 }
 
-fn linux_device_group_to_cgroup_device(d: &LinuxDeviceCgroup) -> DeviceResource {
-    let dev_type = DeviceType::from_char(d.r#type.chars().next()).unwrap();
+fn linux_device_group_to_cgroup_device(d: &LinuxDeviceCgroup) -> Option<DeviceResource> {
+    let dev_type = match DeviceType::from_char(d.r#type.chars().next()) {
+        Some(t) => t,
+        None => return None,
+    };
 
     let mut permissions: Vec<DevicePermissions> = vec![];
     for p in d.access.chars().collect::<Vec<char>>() {
@@ -496,13 +505,13 @@ fn linux_device_group_to_cgroup_device(d: &LinuxDeviceCgroup) -> DeviceResource 
         }
     }
 
-    DeviceResource {
+    Some(DeviceResource {
         allow: d.allow,
         devtype: dev_type,
         major: d.major.unwrap_or(0),
         minor: d.minor.unwrap_or(0),
         access: permissions,
-    }
+    })
 }
 
 // split space separated values into an vector of u64
