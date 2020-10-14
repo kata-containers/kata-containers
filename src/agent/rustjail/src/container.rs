@@ -397,7 +397,7 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
                         ns.r#type.clone(),
                         ns.path.clone()
                     );
-                    log_child!(cfd_log, "error is : {}", e.as_errno().unwrap().desc());
+                    log_child!(cfd_log, "error is : {:?}", e.as_errno());
                     e
                 })?;
 
@@ -1080,7 +1080,7 @@ fn get_pid_namespace(logger: &Logger, linux: &Linux) -> Result<Option<RawFd>> {
                         ns.r#type.clone(),
                         ns.path.clone()
                     );
-                    error!(logger, "error is : {}", e.as_errno().unwrap().desc());
+                    error!(logger, "error is : {:?}", e.as_errno());
 
                     e
                 })?;

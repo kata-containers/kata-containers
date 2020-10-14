@@ -712,9 +712,9 @@ fn mount_from(
     let _ = stat::stat(dest.as_str()).map_err(|e| {
         log_child!(
             cfd_log,
-            "dest stat error. {}: {}",
+            "dest stat error. {}: {:?}",
             dest.as_str(),
-            e.as_errno().unwrap().desc()
+            e.as_errno()
         )
     });
 
@@ -726,7 +726,7 @@ fn mount_from(
         Some(d.as_str()),
     )
     .map_err(|e| {
-        log_child!(cfd_log, "mount error: {}", e.as_errno().unwrap().desc());
+        log_child!(cfd_log, "mount error: {:?}", e.as_errno());
         e
     })?;
 
@@ -748,12 +748,7 @@ fn mount_from(
             None::<&str>,
         )
         .map_err(|e| {
-            log_child!(
-                cfd_log,
-                "remout {}: {}",
-                dest.as_str(),
-                e.as_errno().unwrap().desc()
-            );
+            log_child!(cfd_log, "remout {}: {:?}", dest.as_str(), e.as_errno());
             e
         })?;
     }
