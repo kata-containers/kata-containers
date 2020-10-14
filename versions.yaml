@@ -179,7 +179,7 @@ externals:
     description: |
       OCI-based Kubernetes Container Runtime Interface implementation
     url: "https://github.com/cri-o/cri-o"
-    version: "0eec454168e381e460b3d6de07bf50bfd9b0d082"
+    version: "v1.18.3"
     meta:
       openshift: "6273bea4c9ed788aeb3d051ebf2d030060c05b6c"
       crictl: 1.0.0-beta.2
@@ -191,12 +191,12 @@ externals:
     tarball_url: "https://storage.googleapis.com/cri-containerd-release"
     # Next commit from 1.3 branch contains fix to be able to run
     # tests using go 1.13
-    version: "3a4acfbc99aa976849f51a8edd4af20ead51d8d7"
+    version: "v1.3.7"
 
   critools:
     description: "CLI tool for Container Runtime Interface (CRI)"
     url: "https://github.com/kubernetes-sigs/cri-tools"
-    version: "1.17.0"
+    version: "1.18.0"
 
   docker:
     description: "Moby project container manager"
@@ -214,7 +214,7 @@ externals:
     uscan-url: >-
       https://github.com/kubernetes/kubernetes/tags
       .*/v?([\d\.]+)\.tar\.gz
-    version: "1.17.3-00"
+    version: "1.18.9-00"
 
   openshift:
     description: |
