@@ -2133,20 +2133,22 @@ func (fwcfg FwCfg) QemuParams(config *Config) []string {
 	var fwcfgParams []string
 	var qemuParams []string
 
-	if config.FwCfg.Name != "" {
-		fwcfgParams = append(fwcfgParams, fmt.Sprintf("name=%q", config.FwCfg.Name))
+	for _, f := range config.FwCfg {
+		if f.Name != "" {
+			fwcfgParams = append(fwcfgParams, fmt.Sprintf("name=%s", f.Name))
 
-		if config.FwCfg.File != "" {
-			fwcfgParams = append(fwcfgParams, fmt.Sprintf(",file=%q", config.FwCfg.File))
+			if f.File != "" {
+				fwcfgParams = append(fwcfgParams, fmt.Sprintf(",file=%s", f.File))
+			}
+
+			if f.Str != "" {
+				fwcfgParams = append(fwcfgParams, fmt.Sprintf(",string=%s", f.Str))
+			}
 		}
 
-		if config.FwCfg.Str != "" {
-			fwcfgParams = append(fwcfgParams, fmt.Sprintf(",string=%q", config.FwCfg.Str))
-		}
+		qemuParams = append(qemuParams, "-fw_cfg")
+		qemuParams = append(qemuParams, strings.Join(fwcfgParams, ""))
 	}
-
-	qemuParams = append(qemuParams, "-fw_cfg")
-	qemuParams = append(qemuParams, strings.Join(fwcfgParams, ""))
 
 	return qemuParams
 }
@@ -2285,7 +2287,7 @@ type Config struct {
 	fds []*os.File
 
 	// FwCfg is the -fw_cfg parameter
-	FwCfg FwCfg
+	FwCfg []FwCfg
 
 	IOThreads []IOThread
 
@@ -2624,12 +2626,14 @@ func (config *Config) appendFwCfg(logger QMPLog) {
 		logger = qmpNullLogger{}
 	}
 
-	if !config.FwCfg.Valid() {
-		logger.Errorf("fw_cfg is not valid: %+v", config.FwCfg)
-		return
-	}
+	for _, f := range config.FwCfg {
+		if !f.Valid() {
+			logger.Errorf("fw_cfg is not valid: %+v", config.FwCfg)
+			continue
+		}
 
-	config.qemuParams = append(config.qemuParams, config.FwCfg.QemuParams(config)...)
+		config.qemuParams = append(config.qemuParams, f.QemuParams(config)...)
+	}
 }
 
 // LaunchQemu can be used to launch a new qemu instance.
