@@ -8,6 +8,7 @@ package katamonitor
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"sync"
 
 	"github.com/containerd/containerd"
@@ -97,6 +98,11 @@ func (sc *sandboxCache) startEventsListener(addr string) error {
 		`topic=="/containers/delete"`,
 	}
 
+	runtimeNameRegexp, err := regexp.Compile(types.KataRuntimeNameRegexp)
+	if err != nil {
+		return err
+	}
+
 	eventsCh, errCh := eventsClient.Subscribe(ctx, eventFilters...)
 	for {
 		var e *events.Envelope
@@ -138,7 +144,7 @@ func (sc *sandboxCache) startEventsListener(addr string) error {
 				}
 
 				// skip non-kata contaienrs
-				if cc.Runtime.Name != types.KataRuntimeName {
+				if !runtimeNameRegexp.MatchString(cc.Runtime.Name) {
 					continue
 				}
 
