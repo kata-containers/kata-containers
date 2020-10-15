@@ -1140,9 +1140,6 @@ fn agent_cmd_sandbox_update_interface(
     // FIXME: Implement 'UpdateInterface' fully.
     eprintln!("FIXME: 'UpdateInterface' not fully implemented");
 
-    // let if = ...;
-    // req.set_interface(if);
-
     info!(sl!(), "response received";
         "response" => format!("{:?}", reply));
 
@@ -1166,9 +1163,6 @@ fn agent_cmd_sandbox_update_routes(
 
     // FIXME: Implement 'UpdateRoutes' fully.
     eprintln!("FIXME: 'UpdateRoutes' not fully implemented");
-
-    // let routes = ...;
-    // req.set_routes(routes);
 
     info!(sl!(), "response received";
         "response" => format!("{:?}", reply));
