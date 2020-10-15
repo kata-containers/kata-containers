@@ -106,9 +106,9 @@ static AGENT_CMDS: &'static [AgentCmd] = &[
         fp: agent_cmd_container_exec,
     },
     AgentCmd {
-        name: "GuestDetails",
+        name: "GetGuestDetails",
         st: ServiceType::Agent,
-        fp: agent_cmd_sandbox_guest_details,
+        fp: agent_cmd_sandbox_get_guest_details,
     },
     AgentCmd {
         name: "ListInterfaces",
@@ -940,7 +940,7 @@ fn agent_cmd_container_start(
     Ok(())
 }
 
-fn agent_cmd_sandbox_guest_details(
+fn agent_cmd_sandbox_get_guest_details(
     cfg: &Config,
     client: &AgentServiceClient,
     _health: &HealthClient,
