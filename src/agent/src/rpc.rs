@@ -890,6 +890,13 @@ impl protocols::agent_ttrpc::AgentService for agentService {
         _ctx: &ttrpc::TtrpcContext,
         req: protocols::agent::UpdateInterfaceRequest,
     ) -> ttrpc::Result<Interface> {
+        if req.interface.is_none() {
+            return Err(ttrpc::Error::RpcStatus(ttrpc::get_status(
+                ttrpc::Code::INVALID_ARGUMENT,
+                format!("empty update interface request"),
+            )));
+        }
+
         let interface = req.interface.clone();
         let s = Arc::clone(&self.sandbox);
         let mut sandbox = s.lock().unwrap();
@@ -1710,7 +1717,27 @@ fn load_kernel_module(module: &protocols::agent::KernelModule) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::protocols::agent_ttrpc::AgentService;
     use oci::{Hook, Hooks};
+    use std::sync::mpsc::{Receiver, Sender};
+    use ttrpc::{MessageHeader, TtrpcContext};
+
+    fn mk_ttrpc_context() -> (TtrpcContext, Receiver<(MessageHeader, Vec<u8>)>) {
+        let mh = MessageHeader::default();
+
+        let (tx, rx): (
+            Sender<(MessageHeader, Vec<u8>)>,
+            Receiver<(MessageHeader, Vec<u8>)>,
+        ) = channel();
+
+        let ctx = TtrpcContext {
+            fd: -1,
+            mh: mh,
+            res_tx: tx,
+        };
+
+        (ctx, rx)
+    }
 
     #[test]
     fn test_load_kernel_module() {
@@ -1749,5 +1776,22 @@ mod tests {
         };
         append_guest_hooks(&s, &mut oci);
         assert_eq!(s.hooks, oci.hooks);
+    }
+
+    #[test]
+    fn test_update_interface() {
+        let logger = slog::Logger::root(slog::Discard, o!());
+        let sandbox = Sandbox::new(&logger).unwrap();
+
+        let agent_service = Box::new(agentService {
+            sandbox: Arc::new(Mutex::new(sandbox)),
+        });
+
+        let req = protocols::agent::UpdateInterfaceRequest::default();
+        let (ctx, _) = mk_ttrpc_context();
+
+        let result = agent_service.update_interface(&ctx, req);
+
+        assert!(result.is_err(), "expected update interface to fail");
     }
 }
