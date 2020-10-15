@@ -408,3 +408,17 @@ pub fn get_grpc_spec(options: &mut Options, cid: &str) -> Result<grpcSpec> {
 
     Ok(oci_to_grpc(&bundle_dir, cid, &oci_spec)?)
 }
+
+pub fn str_to_bytes(s: &str) -> Result<Vec<u8>> {
+    let prefix = "hex:";
+
+    if s.starts_with(prefix) {
+        let hex_str = s.trim_start_matches(prefix);
+
+        let decoded = hex::decode(hex_str).map_err(|e| anyhow!(e))?;
+
+        Ok(decoded)
+    } else {
+        Ok(s.as_bytes().to_vec())
+    }
+}
