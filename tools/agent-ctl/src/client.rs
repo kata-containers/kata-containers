@@ -1179,7 +1179,7 @@ fn agent_cmd_sandbox_list_routes(
 
 #[inline]
 fn builtin_cmd_repeat(_cfg: &Config, _options: &mut Options, _args: &str) -> (Result<()>, bool) {
-    // XXX: NOP implementation. Due to the way repeat has to work, providing
+    // XXX: NOP implementation. Due to the way repeat has to work, providing a
     // handler like this is "too late" to be useful. However, a handler
     // is required as "repeat" is a valid command.
     //
