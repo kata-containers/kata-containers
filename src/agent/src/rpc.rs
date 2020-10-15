@@ -919,6 +919,13 @@ impl protocols::agent_ttrpc::AgentService for agentService {
         _ctx: &ttrpc::TtrpcContext,
         req: protocols::agent::UpdateInterfaceRequest,
     ) -> ttrpc::Result<Interface> {
+        if req.interface.is_none() {
+            return Err(ttrpc::Error::RpcStatus(ttrpc::get_status(
+                ttrpc::Code::INVALID_ARGUMENT,
+                format!("empty update interface request"),
+            )));
+        }
+
         let interface = req.interface.clone();
         let s = Arc::clone(&self.sandbox);
         let mut sandbox = s.lock().unwrap();
@@ -947,6 +954,13 @@ impl protocols::agent_ttrpc::AgentService for agentService {
         req: protocols::agent::UpdateRoutesRequest,
     ) -> ttrpc::Result<Routes> {
         let mut routes = protocols::agent::Routes::new();
+        if req.routes.is_none() {
+            return Err(ttrpc::Error::RpcStatus(ttrpc::get_status(
+                ttrpc::Code::INVALID_ARGUMENT,
+                format!("empty update routes request"),
+            )));
+        }
+
         let rs = req.routes.clone().unwrap().Routes.into_vec();
 
         let s = Arc::clone(&self.sandbox);
@@ -1142,6 +1156,13 @@ impl protocols::agent_ttrpc::AgentService for agentService {
         _ctx: &ttrpc::TtrpcContext,
         req: protocols::agent::AddARPNeighborsRequest,
     ) -> ttrpc::Result<Empty> {
+        if req.neighbors.is_none() {
+            return Err(ttrpc::Error::RpcStatus(ttrpc::get_status(
+                ttrpc::Code::INVALID_ARGUMENT,
+                format!("empty add arp neighbours request"),
+            )));
+        }
+
         let neighs = req.neighbors.clone().unwrap().ARPNeighbors.into_vec();
 
         let s = Arc::clone(&self.sandbox);
@@ -1755,7 +1776,27 @@ fn load_kernel_module(module: &protocols::agent::KernelModule) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::protocols::agent_ttrpc::AgentService;
     use oci::{Hook, Hooks};
+    use std::sync::mpsc::{Receiver, Sender};
+    use ttrpc::{MessageHeader, TtrpcContext};
+
+    fn mk_ttrpc_context() -> (TtrpcContext, Receiver<(MessageHeader, Vec<u8>)>) {
+        let mh = MessageHeader::default();
+
+        let (tx, rx): (
+            Sender<(MessageHeader, Vec<u8>)>,
+            Receiver<(MessageHeader, Vec<u8>)>,
+        ) = channel();
+
+        let ctx = TtrpcContext {
+            fd: -1,
+            mh: mh,
+            res_tx: tx,
+        };
+
+        (ctx, rx)
+    }
 
     #[test]
     fn test_load_kernel_module() {
@@ -1794,5 +1835,56 @@ mod tests {
         };
         append_guest_hooks(&s, &mut oci);
         assert_eq!(s.hooks, oci.hooks);
+    }
+
+    #[test]
+    fn test_update_interface() {
+        let logger = slog::Logger::root(slog::Discard, o!());
+        let sandbox = Sandbox::new(&logger).unwrap();
+
+        let agent_service = Box::new(agentService {
+            sandbox: Arc::new(Mutex::new(sandbox)),
+        });
+
+        let req = protocols::agent::UpdateInterfaceRequest::default();
+        let (ctx, _) = mk_ttrpc_context();
+
+        let result = agent_service.update_interface(&ctx, req);
+
+        assert!(result.is_err(), "expected update interface to fail");
+    }
+
+    #[test]
+    fn test_update_routes() {
+        let logger = slog::Logger::root(slog::Discard, o!());
+        let sandbox = Sandbox::new(&logger).unwrap();
+
+        let agent_service = Box::new(agentService {
+            sandbox: Arc::new(Mutex::new(sandbox)),
+        });
+
+        let req = protocols::agent::UpdateRoutesRequest::default();
+        let (ctx, _) = mk_ttrpc_context();
+
+        let result = agent_service.update_routes(&ctx, req);
+
+        assert!(result.is_err(), "expected update routes to fail");
+    }
+
+    #[test]
+    fn test_add_arp_neighbors() {
+        let logger = slog::Logger::root(slog::Discard, o!());
+        let sandbox = Sandbox::new(&logger).unwrap();
+
+        let agent_service = Box::new(agentService {
+            sandbox: Arc::new(Mutex::new(sandbox)),
+        });
+
+        let req = protocols::agent::AddARPNeighborsRequest::default();
+        let (ctx, _) = mk_ttrpc_context();
+
+        let result = agent_service.add_arp_neighbors(&ctx, req);
+
+        assert!(result.is_err(), "expected add arp neighbors to fail");
     }
 }
