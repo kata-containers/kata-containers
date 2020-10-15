@@ -1127,6 +1127,13 @@ impl protocols::agent_ttrpc::AgentService for agentService {
         _ctx: &ttrpc::TtrpcContext,
         req: protocols::agent::AddARPNeighborsRequest,
     ) -> ttrpc::Result<Empty> {
+        if req.neighbors.is_none() {
+            return Err(ttrpc::Error::RpcStatus(ttrpc::get_status(
+                ttrpc::Code::INVALID_ARGUMENT,
+                format!("empty add arp neighbours request"),
+            )));
+        }
+
         let neighs = req.neighbors.clone().unwrap().ARPNeighbors.into_vec();
 
         let s = Arc::clone(&self.sandbox);
@@ -1817,5 +1824,22 @@ mod tests {
         let result = agent_service.update_routes(&ctx, req);
 
         assert!(result.is_err(), "expected update routes to fail");
+    }
+
+    #[test]
+    fn test_add_arp_neighbors() {
+        let logger = slog::Logger::root(slog::Discard, o!());
+        let sandbox = Sandbox::new(&logger).unwrap();
+
+        let agent_service = Box::new(agentService {
+            sandbox: Arc::new(Mutex::new(sandbox)),
+        });
+
+        let req = protocols::agent::AddARPNeighborsRequest::default();
+        let (ctx, _) = mk_ttrpc_context();
+
+        let result = agent_service.add_arp_neighbors(&ctx, req);
+
+        assert!(result.is_err(), "expected add arp neighbors to fail");
     }
 }
