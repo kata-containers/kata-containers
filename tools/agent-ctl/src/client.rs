@@ -684,6 +684,8 @@ fn agent_cmd_health_check(
     // value unused
     req.set_service("".to_string());
 
+    debug!(sl!(), "sending request"; "request" => format!("{:?}", req));
+
     let reply = health
         .check(&req, cfg.timeout_nano)
         .map_err(|e| anyhow!("{:?}", e).context(ERR_API_FAILED))?;
@@ -707,6 +709,8 @@ fn agent_cmd_health_version(
     // value unused
     req.set_service("".to_string());
 
+    debug!(sl!(), "sending request"; "request" => format!("{:?}", req));
+
     let reply = health
         .version(&req, cfg.timeout_nano)
         .map_err(|e| anyhow!("{:?}", e).context(ERR_API_FAILED))?;
@@ -729,6 +733,8 @@ fn agent_cmd_sandbox_create(
     let sid = utils::get_option("sid", options, args);
     req.set_sandbox_id(sid);
 
+    debug!(sl!(), "sending request"; "request" => format!("{:?}", req));
+
     let reply = client
         .create_sandbox(&req, cfg.timeout_nano)
         .map_err(|e| anyhow!("{:?}", e).context(ERR_API_FAILED))?;
@@ -747,6 +753,8 @@ fn agent_cmd_sandbox_destroy(
     _args: &str,
 ) -> Result<()> {
     let req = DestroySandboxRequest::default();
+
+    debug!(sl!(), "sending request"; "request" => format!("{:?}", req));
 
     let reply = client
         .destroy_sandbox(&req, cfg.timeout_nano)
@@ -778,6 +786,8 @@ fn agent_cmd_container_create(
     req.set_exec_id(exec_id);
     req.set_OCI(grpc_spec);
 
+    debug!(sl!(), "sending request"; "request" => format!("{:?}", req));
+
     let reply = client
         .create_container(&req, cfg.timeout_nano)
         .map_err(|e| anyhow!("{:?}", e).context(ERR_API_FAILED))?;
@@ -800,6 +810,8 @@ fn agent_cmd_container_remove(
     let cid = utils::get_option("cid", options, args);
 
     req.set_container_id(cid);
+
+    debug!(sl!(), "sending request"; "request" => format!("{:?}", req));
 
     let reply = client
         .remove_container(&req, cfg.timeout_nano)
@@ -838,6 +850,8 @@ fn agent_cmd_container_exec(
     req.set_exec_id(exec_id);
     req.set_process(process);
 
+    debug!(sl!(), "sending request"; "request" => format!("{:?}", req));
+
     let reply = client
         .exec_process(&req, cfg.timeout_nano)
         .map_err(|e| anyhow!("{:?}", e).context(ERR_API_FAILED))?;
@@ -860,6 +874,8 @@ fn agent_cmd_container_stats(
     let cid = utils::get_option("cid", options, args);
 
     req.set_container_id(cid);
+
+    debug!(sl!(), "sending request"; "request" => format!("{:?}", req));
 
     let reply = client
         .stats_container(&req, cfg.timeout_nano)
@@ -884,6 +900,8 @@ fn agent_cmd_container_pause(
 
     req.set_container_id(cid);
 
+    debug!(sl!(), "sending request"; "request" => format!("{:?}", req));
+
     let reply = client
         .pause_container(&req, cfg.timeout_nano)
         .map_err(|e| anyhow!("{:?}", e).context(ERR_API_FAILED))?;
@@ -906,6 +924,8 @@ fn agent_cmd_container_resume(
     let cid = utils::get_option("cid", options, args);
 
     req.set_container_id(cid);
+
+    debug!(sl!(), "sending request"; "request" => format!("{:?}", req));
 
     let reply = client
         .resume_container(&req, cfg.timeout_nano)
@@ -930,6 +950,8 @@ fn agent_cmd_container_start(
 
     req.set_container_id(cid);
 
+    debug!(sl!(), "sending request"; "request" => format!("{:?}", req));
+
     let reply = client
         .start_container(&req, cfg.timeout_nano)
         .map_err(|e| anyhow!("{:?}", e).context(ERR_API_FAILED))?;
@@ -950,6 +972,8 @@ fn agent_cmd_sandbox_get_guest_details(
     let mut req = GuestDetailsRequest::default();
 
     req.set_mem_block_size(true);
+
+    debug!(sl!(), "sending request"; "request" => format!("{:?}", req));
 
     let reply = client
         .get_guest_details(&req, cfg.timeout_nano)
@@ -981,6 +1005,8 @@ fn agent_cmd_container_list_processes(
     req.set_container_id(cid);
     req.set_format(list_format);
 
+    debug!(sl!(), "sending request"; "request" => format!("{:?}", req));
+
     let reply = client
         .list_processes(&req, cfg.timeout_nano)
         .map_err(|e| anyhow!("{:?}", e).context(ERR_API_FAILED))?;
@@ -1005,6 +1031,8 @@ fn agent_cmd_container_wait_process(
 
     req.set_container_id(cid);
     req.set_exec_id(exec_id);
+
+    debug!(sl!(), "sending request"; "request" => format!("{:?}", req));
 
     let reply = client
         .wait_process(&req, cfg.timeout_nano)
@@ -1041,6 +1069,8 @@ fn agent_cmd_container_signal_process(
     req.set_exec_id(exec_id);
     req.set_signal(signum as u32);
 
+    debug!(sl!(), "sending request"; "request" => format!("{:?}", req));
+
     let reply = client
         .signal_process(&req, cfg.timeout_nano)
         .map_err(|e| anyhow!("{:?}", e).context(ERR_API_FAILED))?;
@@ -1059,6 +1089,8 @@ fn agent_cmd_sandbox_tracing_start(
     _args: &str,
 ) -> Result<()> {
     let req = StartTracingRequest::default();
+
+    debug!(sl!(), "sending request"; "request" => format!("{:?}", req));
 
     let reply = client
         .start_tracing(&req, cfg.timeout_nano)
@@ -1079,6 +1111,8 @@ fn agent_cmd_sandbox_tracing_stop(
 ) -> Result<()> {
     let req = StopTracingRequest::default();
 
+    debug!(sl!(), "sending request"; "request" => format!("{:?}", req));
+
     let reply = client
         .stop_tracing(&req, cfg.timeout_nano)
         .map_err(|e| anyhow!("{:?}", e).context(ERR_API_FAILED))?;
@@ -1098,6 +1132,7 @@ fn agent_cmd_sandbox_update_interface(
 ) -> Result<()> {
     let req = UpdateInterfaceRequest::default();
 
+    debug!(sl!(), "sending request"; "request" => format!("{:?}", req));
     let reply = client
         .update_interface(&req, cfg.timeout_nano)
         .map_err(|e| anyhow!("{:?}", e).context(ERR_API_FAILED))?;
@@ -1122,6 +1157,8 @@ fn agent_cmd_sandbox_update_routes(
     _args: &str,
 ) -> Result<()> {
     let req = UpdateRoutesRequest::default();
+
+    debug!(sl!(), "sending request"; "request" => format!("{:?}", req));
 
     let reply = client
         .update_routes(&req, cfg.timeout_nano)
@@ -1148,6 +1185,8 @@ fn agent_cmd_sandbox_list_interfaces(
 ) -> Result<()> {
     let req = ListInterfacesRequest::default();
 
+    debug!(sl!(), "sending request"; "request" => format!("{:?}", req));
+
     let reply = client
         .list_interfaces(&req, cfg.timeout_nano)
         .map_err(|e| anyhow!("{:?}", e).context(ERR_API_FAILED))?;
@@ -1166,6 +1205,8 @@ fn agent_cmd_sandbox_list_routes(
     _args: &str,
 ) -> Result<()> {
     let req = ListRoutesRequest::default();
+
+    debug!(sl!(), "sending request"; "request" => format!("{:?}", req));
 
     let reply = client
         .list_routes(&req, cfg.timeout_nano)
