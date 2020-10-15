@@ -925,6 +925,13 @@ impl protocols::agent_ttrpc::AgentService for agentService {
         req: protocols::agent::UpdateRoutesRequest,
     ) -> ttrpc::Result<Routes> {
         let mut routes = protocols::agent::Routes::new();
+        if req.routes.is_none() {
+            return Err(ttrpc::Error::RpcStatus(ttrpc::get_status(
+                ttrpc::Code::INVALID_ARGUMENT,
+                format!("empty update routes request"),
+            )));
+        }
+
         let rs = req.routes.clone().unwrap().Routes.into_vec();
 
         let s = Arc::clone(&self.sandbox);
@@ -1793,5 +1800,22 @@ mod tests {
         let result = agent_service.update_interface(&ctx, req);
 
         assert!(result.is_err(), "expected update interface to fail");
+    }
+
+    #[test]
+    fn test_update_routes() {
+        let logger = slog::Logger::root(slog::Discard, o!());
+        let sandbox = Sandbox::new(&logger).unwrap();
+
+        let agent_service = Box::new(agentService {
+            sandbox: Arc::new(Mutex::new(sandbox)),
+        });
+
+        let req = protocols::agent::UpdateRoutesRequest::default();
+        let (ctx, _) = mk_ttrpc_context();
+
+        let result = agent_service.update_routes(&ctx, req);
+
+        assert!(result.is_err(), "expected update routes to fail");
     }
 }
