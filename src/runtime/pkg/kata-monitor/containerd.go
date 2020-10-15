@@ -82,7 +82,7 @@ func (ka *KataMonitor) getSandboxes() (map[string]string, error) {
 			namespacedCtx := namespaces.WithNamespace(ctx, namespace)
 			// only list Kata Containers pods/containers
 			containers, err := client.ContainerService().List(namespacedCtx,
-				"runtime.name=="+types.KataRuntimeName+`,labels."io.cri-containerd.kind"==sandbox`)
+				"runtime.name~="+types.KataRuntimeNameRegexp+`,labels."io.cri-containerd.kind"==sandbox`)
 			if err != nil {
 				return err
 			}
