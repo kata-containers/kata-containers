@@ -41,7 +41,7 @@ fn get_value_from_cgroup(path: &PathBuf, key: &str) -> Result<i64> {
     );
 
     for line in content.lines() {
-        let arr: Vec<&str> = line.split(" ").collect();
+        let arr: Vec<&str> = line.split(' ').collect();
         if arr.len() == 2 && arr[0] == key {
             let r = arr[1].parse::<i64>()?;
             return Ok(r);

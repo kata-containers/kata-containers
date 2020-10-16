@@ -21,7 +21,6 @@ use cgroups::{
 use crate::cgroups::Manager as CgroupManager;
 use crate::container::DEFAULT_DEVICES;
 use anyhow::{anyhow, Context, Result};
-use lazy_static;
 use libc::{self, pid_t};
 use nix::errno::Errno;
 use oci::{
@@ -46,18 +45,19 @@ macro_rules! sl {
 }
 
 pub fn load_or_create<'a>(h: Box<&'a dyn cgroups::Hierarchy>, path: &str) -> Cgroup<'a> {
-    let valid_path = path.trim_start_matches("/").to_string();
+    let valid_path = path.trim_start_matches('/').to_string();
     let cg = load(h.clone(), &valid_path);
-    if cg.is_none() {
-        info!(sl!(), "create new cgroup: {}", &valid_path);
-        cgroups::Cgroup::new(h, valid_path.as_str())
-    } else {
-        cg.unwrap()
+    match cg {
+        Some(cg) => cg,
+        None => {
+            info!(sl!(), "create new cgroup: {}", &valid_path);
+            cgroups::Cgroup::new(h, valid_path.as_str())
+        }
     }
 }
 
 pub fn load<'a>(h: Box<&'a dyn cgroups::Hierarchy>, path: &str) -> Option<Cgroup<'a>> {
-    let valid_path = path.trim_start_matches("/").to_string();
+    let valid_path = path.trim_start_matches('/').to_string();
     let cg = cgroups::Cgroup::load(h, valid_path.as_str());
     let cpu_controller: &CpuController = cg.controller_of().unwrap();
     if cpu_controller.exists() {
@@ -210,8 +210,8 @@ impl CgroupManager for Manager {
         let h = cgroups::hierarchies::auto();
         let h = Box::new(&*h);
         let cg = load(h, &self.cpath);
-        if cg.is_some() {
-            cg.unwrap().delete();
+        if let Some(cg) = cg {
+            cg.delete();
         }
         Ok(())
     }
@@ -259,7 +259,7 @@ fn set_network_resources(
 
 fn set_devices_resources(
     _cg: &cgroups::Cgroup,
-    device_resources: &Vec<LinuxDeviceCgroup>,
+    device_resources: &[LinuxDeviceCgroup],
     res: &mut cgroups::Resources,
 ) -> Result<()> {
     info!(sl!(), "cgroup manager set devices");
@@ -291,7 +291,7 @@ fn set_devices_resources(
 
 fn set_hugepages_resources(
     _cg: &cgroups::Cgroup,
-    hugepage_limits: &Vec<LinuxHugepageLimit>,
+    hugepage_limits: &[LinuxHugepageLimit],
     res: &mut cgroups::Resources,
 ) -> Result<()> {
     info!(sl!(), "cgroup manager set hugepage");
@@ -453,7 +453,7 @@ fn set_pids_resources(cg: &cgroups::Cgroup, pids: &LinuxPids) -> Result<()> {
 }
 
 fn build_blk_io_device_throttle_resource(
-    input: &Vec<oci::LinuxThrottleDevice>,
+    input: &[oci::LinuxThrottleDevice],
 ) -> Vec<BlkIoDeviceThrottleResource> {
     let mut blk_io_device_throttle_resources = vec![];
     for d in input.iter() {
@@ -685,7 +685,7 @@ fn get_memory_stats(cg: &cgroups::Cgroup) -> SingularPtrField<MemoryStats> {
 
     // use_hierarchy
     let value = memory.use_hierarchy;
-    let use_hierarchy = if value == 1 { true } else { false };
+    let use_hierarchy = value == 1;
 
     // gte memory datas
     let usage = SingularPtrField::some(MemoryData {
@@ -739,13 +739,12 @@ fn get_pids_stats(cg: &cgroups::Cgroup) -> SingularPtrField<PidsStats> {
     let current = pid_controller.get_pid_current().unwrap_or(0);
     let max = pid_controller.get_pid_max();
 
-    let limit = if max.is_err() {
-        0
-    } else {
-        match max.unwrap() {
+    let limit = match max {
+        Err(_) => 0,
+        Ok(max) => match max {
             MaxValue::Value(v) => v,
             MaxValue::Max => 0,
-        }
+        },
     } as u64;
 
     SingularPtrField::some(PidsStats {
@@ -788,7 +787,7 @@ https://github.com/opencontainers/runc/blob/a5847db387ae28c0ca4ebe4beee1a76900c8
     Total 0
 */
 
-fn get_blkio_stat_blkiodata(blkiodata: &Vec<BlkIoData>) -> RepeatedField<BlkioStatsEntry> {
+fn get_blkio_stat_blkiodata(blkiodata: &[BlkIoData]) -> RepeatedField<BlkioStatsEntry> {
     let mut m = RepeatedField::new();
     if blkiodata.len() == 0 {
         return m;
@@ -810,7 +809,7 @@ fn get_blkio_stat_blkiodata(blkiodata: &Vec<BlkIoData>) -> RepeatedField<BlkioSt
     m
 }
 
-fn get_blkio_stat_ioservice(services: &Vec<IoService>) -> RepeatedField<BlkioStatsEntry> {
+fn get_blkio_stat_ioservice(services: &[IoService]) -> RepeatedField<BlkioStatsEntry> {
     let mut m = RepeatedField::new();
 
     if services.len() == 0 {
@@ -930,8 +929,8 @@ fn get_hugetlb_stats(cg: &cgroups::Cgroup) -> HashMap<String, HugetlbStats> {
     h
 }
 
-pub const PATHS: &'static str = "/proc/self/cgroup";
-pub const MOUNTS: &'static str = "/proc/self/mountinfo";
+pub const PATHS: &str = "/proc/self/cgroup";
+pub const MOUNTS: &str = "/proc/self/mountinfo";
 
 pub fn get_paths() -> Result<HashMap<String, String>> {
     let mut m = HashMap::new();
@@ -1056,7 +1055,7 @@ impl Manager {
             if i == 0 {
                 break;
             }
-            i = i - 1;
+            i -= 1;
             let h = cgroups::hierarchies::auto();
             let h = Box::new(&*h);
 

@@ -4,12 +4,9 @@
 //
 
 use anyhow::{anyhow, Context, Result};
-use dirs;
-use lazy_static;
 use libc::pid_t;
 use oci::{Hook, Linux, LinuxNamespace, LinuxResources, POSIXRlimit, Spec};
 use oci::{LinuxDevice, LinuxIDMapping};
-use serde_json;
 use std::clone::Clone;
 use std::ffi::{CStr, CString};
 use std::fmt;
@@ -43,7 +40,6 @@ use nix::sys::signal::{self, Signal};
 use nix::sys::stat::{self, Mode};
 use nix::unistd::{self, ForkResult, Gid, Pid, Uid};
 
-use libc;
 use protobuf::SingularPtrField;
 
 use oci::State as OCIState;
@@ -54,9 +50,9 @@ use std::os::unix::io::FromRawFd;
 
 use slog::{info, o, Logger};
 
-const STATE_FILENAME: &'static str = "state.json";
-const EXEC_FIFO_FILENAME: &'static str = "exec.fifo";
-const VER_MARKER: &'static str = "1.2.5";
+const STATE_FILENAME: &str = "state.json";
+const EXEC_FIFO_FILENAME: &str = "exec.fifo";
+const VER_MARKER: &str = "1.2.5";
 const PID_NS_PATH: &str = "/proc/self/ns/pid";
 
 const INIT: &str = "INIT";
@@ -595,7 +591,7 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
 
     // setup the envs
     for e in env.iter() {
-        let v: Vec<&str> = e.splitn(2, "=").collect();
+        let v: Vec<&str> = e.splitn(2, '=').collect();
         if v.len() != 2 {
             continue;
         }
@@ -731,7 +727,7 @@ impl BaseContainer for LinuxContainer {
         info!(logger, "enter container.start!");
         let mut fifofd: RawFd = -1;
         if p.init {
-            if let Ok(_) = stat::stat(fifo_file.as_str()) {
+            if stat::stat(fifo_file.as_str()).is_ok() {
                 return Err(anyhow!("exec fifo exists"));
             }
             unistd::mkfifo(fifo_file.as_str(), Mode::from_bits(0o622).unwrap())?;
@@ -931,7 +927,7 @@ impl BaseContainer for LinuxContainer {
             .join()
             .map_err(|e| warn!(logger, "joining log handler {:?}", e));
         info!(logger, "create process completed");
-        return Ok(());
+        Ok(())
     }
 
     fn run(&mut self, p: Process) -> Result<()> {
@@ -1164,11 +1160,9 @@ fn join_namespaces(
     }
 
     // apply cgroups
-    if p.init {
-        if res.is_some() {
-            info!(logger, "apply cgroups!");
-            cm.set(res.unwrap(), false)?;
-        }
+    if p.init && res.is_some() {
+        info!(logger, "apply cgroups!");
+        cm.set(res.unwrap(), false)?;
     }
 
     if res.is_some() {
@@ -1464,7 +1458,7 @@ fn execute_hook(logger: &Logger, h: &Hook, st: &OCIState) -> Result<()> {
                 }
             }
 
-            return Ok(());
+            Ok(())
         }
 
         ForkResult::Child => {
@@ -1567,13 +1561,11 @@ fn execute_hook(logger: &Logger, h: &Hook, st: &OCIState) -> Result<()> {
                             error
                         }
                     }
+                } else if let Ok(s) = rx.recv() {
+                    s
                 } else {
-                    if let Ok(s) = rx.recv() {
-                        s
-                    } else {
-                        let _ = signal::kill(Pid::from_raw(pid), Some(Signal::SIGKILL));
-                        -libc::EPIPE
-                    }
+                    let _ = signal::kill(Pid::from_raw(pid), Some(Signal::SIGKILL));
+                    -libc::EPIPE
                 }
             };
 
