@@ -1084,6 +1084,8 @@ func (blkdev BlockDevice) QemuParams(config *Config) []string {
 		deviceParams = append(deviceParams, fmt.Sprintf(",share-rw=on"))
 	}
 
+	deviceParams = append(deviceParams, fmt.Sprintf(",serial=%s", blkdev.ID))
+
 	blkParams = append(blkParams, fmt.Sprintf("id=%s", blkdev.ID))
 	blkParams = append(blkParams, fmt.Sprintf(",file=%s", blkdev.File))
 	blkParams = append(blkParams, fmt.Sprintf(",aio=%s", blkdev.AIO))
