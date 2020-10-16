@@ -77,7 +77,7 @@ func TestQemuArm64AppendBridges(t *testing.T) {
 
 	expectedOut := []govmmQemu.Device{
 		govmmQemu.BridgeDevice{
-			Type:    govmmQemu.PCIEBridge,
+			Type:    govmmQemu.PCIBridge,
 			Bus:     defaultBridgeBus,
 			ID:      bridges[0].ID,
 			Chassis: 1,
