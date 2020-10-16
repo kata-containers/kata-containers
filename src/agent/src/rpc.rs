@@ -6,7 +6,7 @@
 use std::path::Path;
 use std::sync::mpsc::channel;
 use std::sync::{Arc, Mutex};
-use ttrpc;
+use ttrpc::{self, error::get_rpc_status as ttrpc_error};
 
 use anyhow::{anyhow, Context, Result};
 use oci::{LinuxNamespace, Root, Spec};
@@ -514,10 +514,7 @@ impl protocols::agent_ttrpc::AgentService for agentService {
         req: protocols::agent::CreateContainerRequest,
     ) -> ttrpc::Result<Empty> {
         match self.do_create_container(req) {
-            Err(e) => Err(ttrpc::Error::RpcStatus(ttrpc::get_status(
-                ttrpc::Code::INTERNAL,
-                e.to_string(),
-            ))),
+            Err(e) => Err(ttrpc_error(ttrpc::Code::INTERNAL, e.to_string())),
             Ok(_) => Ok(Empty::new()),
         }
     }
@@ -528,10 +525,7 @@ impl protocols::agent_ttrpc::AgentService for agentService {
         req: protocols::agent::StartContainerRequest,
     ) -> ttrpc::Result<Empty> {
         match self.do_start_container(req) {
-            Err(e) => Err(ttrpc::Error::RpcStatus(ttrpc::get_status(
-                ttrpc::Code::INTERNAL,
-                e.to_string(),
-            ))),
+            Err(e) => Err(ttrpc_error(ttrpc::Code::INTERNAL, e.to_string())),
             Ok(_) => Ok(Empty::new()),
         }
     }
@@ -542,10 +536,7 @@ impl protocols::agent_ttrpc::AgentService for agentService {
         req: protocols::agent::RemoveContainerRequest,
     ) -> ttrpc::Result<Empty> {
         match self.do_remove_container(req) {
-            Err(e) => Err(ttrpc::Error::RpcStatus(ttrpc::get_status(
-                ttrpc::Code::INTERNAL,
-                e.to_string(),
-            ))),
+            Err(e) => Err(ttrpc_error(ttrpc::Code::INTERNAL, e.to_string())),
             Ok(_) => Ok(Empty::new()),
         }
     }
@@ -556,10 +547,7 @@ impl protocols::agent_ttrpc::AgentService for agentService {
         req: protocols::agent::ExecProcessRequest,
     ) -> ttrpc::Result<Empty> {
         match self.do_exec_process(req) {
-            Err(e) => Err(ttrpc::Error::RpcStatus(ttrpc::get_status(
-                ttrpc::Code::INTERNAL,
-                e.to_string(),
-            ))),
+            Err(e) => Err(ttrpc_error(ttrpc::Code::INTERNAL, e.to_string())),
             Ok(_) => Ok(Empty::new()),
         }
     }
@@ -570,10 +558,7 @@ impl protocols::agent_ttrpc::AgentService for agentService {
         req: protocols::agent::SignalProcessRequest,
     ) -> ttrpc::Result<Empty> {
         match self.do_signal_process(req) {
-            Err(e) => Err(ttrpc::Error::RpcStatus(ttrpc::get_status(
-                ttrpc::Code::INTERNAL,
-                e.to_string(),
-            ))),
+            Err(e) => Err(ttrpc_error(ttrpc::Code::INTERNAL, e.to_string())),
             Ok(_) => Ok(Empty::new()),
         }
     }
@@ -583,9 +568,8 @@ impl protocols::agent_ttrpc::AgentService for agentService {
         _ctx: &ttrpc::TtrpcContext,
         req: protocols::agent::WaitProcessRequest,
     ) -> ttrpc::Result<WaitProcessResponse> {
-        self.do_wait_process(req).map_err(|e| {
-            ttrpc::Error::RpcStatus(ttrpc::get_status(ttrpc::Code::INTERNAL, e.to_string()))
-        })
+        self.do_wait_process(req)
+            .map_err(|e| ttrpc_error(ttrpc::Code::INTERNAL, e.to_string()))
     }
 
     fn list_processes(
@@ -617,10 +601,10 @@ impl protocols::agent_ttrpc::AgentService for agentService {
                 return Ok(resp);
             }
             _ => {
-                return Err(ttrpc::Error::RpcStatus(ttrpc::get_status(
+                return Err(ttrpc_error(
                     ttrpc::Code::INVALID_ARGUMENT,
                     "invalid format!".to_string(),
-                )));
+                ));
             }
         }
 
@@ -696,10 +680,7 @@ impl protocols::agent_ttrpc::AgentService for agentService {
             let ociRes = rustjail::resources_grpc_to_oci(&res.unwrap());
             match ctr.set(ociRes) {
                 Err(e) => {
-                    return Err(ttrpc::Error::RpcStatus(ttrpc::get_status(
-                        ttrpc::Code::INTERNAL,
-                        e.to_string(),
-                    )));
+                    return Err(ttrpc_error(ttrpc::Code::INTERNAL, e.to_string()));
                 }
 
                 Ok(_) => return Ok(resp),
@@ -725,9 +706,8 @@ impl protocols::agent_ttrpc::AgentService for agentService {
             )
         })?;
 
-        ctr.stats().map_err(|e| {
-            ttrpc::Error::RpcStatus(ttrpc::get_status(ttrpc::Code::INTERNAL, e.to_string()))
-        })
+        ctr.stats()
+            .map_err(|e| ttrpc_error(ttrpc::Code::INTERNAL, e.to_string()))
     }
 
     fn pause_container(
@@ -746,9 +726,8 @@ impl protocols::agent_ttrpc::AgentService for agentService {
             )
         })?;
 
-        ctr.pause().map_err(|e| {
-            ttrpc::Error::RpcStatus(ttrpc::get_status(ttrpc::Code::INTERNAL, e.to_string()))
-        })?;
+        ctr.pause()
+            .map_err(|e| ttrpc_error(ttrpc::Code::INTERNAL, e.to_string()))?;
 
         Ok(Empty::new())
     }
@@ -769,9 +748,8 @@ impl protocols::agent_ttrpc::AgentService for agentService {
             )
         })?;
 
-        ctr.resume().map_err(|e| {
-            ttrpc::Error::RpcStatus(ttrpc::get_status(ttrpc::Code::INTERNAL, e.to_string()))
-        })?;
+        ctr.resume()
+            .map_err(|e| ttrpc_error(ttrpc::Code::INTERNAL, e.to_string()))?;
 
         Ok(Empty::new())
     }
@@ -781,9 +759,8 @@ impl protocols::agent_ttrpc::AgentService for agentService {
         _ctx: &ttrpc::TtrpcContext,
         req: protocols::agent::WriteStreamRequest,
     ) -> ttrpc::Result<WriteStreamResponse> {
-        self.do_write_stream(req).map_err(|e| {
-            ttrpc::Error::RpcStatus(ttrpc::get_status(ttrpc::Code::INTERNAL, e.to_string()))
-        })
+        self.do_write_stream(req)
+            .map_err(|e| ttrpc_error(ttrpc::Code::INTERNAL, e.to_string()))
     }
 
     fn read_stdout(
@@ -791,9 +768,8 @@ impl protocols::agent_ttrpc::AgentService for agentService {
         _ctx: &ttrpc::TtrpcContext,
         req: protocols::agent::ReadStreamRequest,
     ) -> ttrpc::Result<ReadStreamResponse> {
-        self.do_read_stream(req, true).map_err(|e| {
-            ttrpc::Error::RpcStatus(ttrpc::get_status(ttrpc::Code::INTERNAL, e.to_string()))
-        })
+        self.do_read_stream(req, true)
+            .map_err(|e| ttrpc_error(ttrpc::Code::INTERNAL, e.to_string()))
     }
 
     fn read_stderr(
@@ -801,9 +777,8 @@ impl protocols::agent_ttrpc::AgentService for agentService {
         _ctx: &ttrpc::TtrpcContext,
         req: protocols::agent::ReadStreamRequest,
     ) -> ttrpc::Result<ReadStreamResponse> {
-        self.do_read_stream(req, false).map_err(|e| {
-            ttrpc::Error::RpcStatus(ttrpc::get_status(ttrpc::Code::INTERNAL, e.to_string()))
-        })
+        self.do_read_stream(req, false)
+            .map_err(|e| ttrpc_error(ttrpc::Code::INTERNAL, e.to_string()))
     }
 
     fn close_stdin(
@@ -817,10 +792,10 @@ impl protocols::agent_ttrpc::AgentService for agentService {
         let mut sandbox = s.lock().unwrap();
 
         let p = find_process(&mut sandbox, cid.as_str(), eid.as_str(), false).map_err(|e| {
-            ttrpc::Error::RpcStatus(ttrpc::get_status(
+            ttrpc_error(
                 ttrpc::Code::INVALID_ARGUMENT,
                 format!("invalid argument: {:?}", e),
-            ))
+            )
         })?;
 
         if p.term_master.is_some() {
@@ -846,17 +821,14 @@ impl protocols::agent_ttrpc::AgentService for agentService {
         let s = Arc::clone(&self.sandbox);
         let mut sandbox = s.lock().unwrap();
         let p = find_process(&mut sandbox, cid.as_str(), eid.as_str(), false).map_err(|e| {
-            ttrpc::Error::RpcStatus(ttrpc::get_status(
+            ttrpc_error(
                 ttrpc::Code::UNAVAILABLE,
                 format!("invalid argument: {:?}", e),
-            ))
+            )
         })?;
 
         if p.term_master.is_none() {
-            return Err(ttrpc::Error::RpcStatus(ttrpc::get_status(
-                ttrpc::Code::UNAVAILABLE,
-                "no tty".to_string(),
-            )));
+            return Err(ttrpc_error(ttrpc::Code::UNAVAILABLE, "no tty".to_string()));
         }
 
         let fd = p.term_master.unwrap();
@@ -869,12 +841,9 @@ impl protocols::agent_ttrpc::AgentService for agentService {
             };
 
             let err = libc::ioctl(fd, TIOCSWINSZ, &win);
-            Errno::result(err).map(drop).map_err(|e| {
-                ttrpc::Error::RpcStatus(ttrpc::get_status(
-                    ttrpc::Code::INTERNAL,
-                    format!("ioctl error: {:?}", e),
-                ))
-            })?;
+            Errno::result(err)
+                .map(drop)
+                .map_err(|e| ttrpc_error(ttrpc::Code::INTERNAL, format!("ioctl error: {:?}", e)))?;
         }
 
         Ok(Empty::new())
@@ -886,10 +855,10 @@ impl protocols::agent_ttrpc::AgentService for agentService {
         req: protocols::agent::UpdateInterfaceRequest,
     ) -> ttrpc::Result<Interface> {
         if req.interface.is_none() {
-            return Err(ttrpc::Error::RpcStatus(ttrpc::get_status(
+            return Err(ttrpc_error(
                 ttrpc::Code::INVALID_ARGUMENT,
                 "empty update interface request".to_string(),
-            )));
+            ));
         }
 
         let interface = req.interface;
@@ -905,10 +874,7 @@ impl protocols::agent_ttrpc::AgentService for agentService {
         let iface = rtnl
             .update_interface(interface.as_ref().unwrap())
             .map_err(|e| {
-                ttrpc::Error::RpcStatus(ttrpc::get_status(
-                    ttrpc::Code::INTERNAL,
-                    format!("update interface: {:?}", e),
-                ))
+                ttrpc_error(ttrpc::Code::INTERNAL, format!("update interface: {:?}", e))
             })?;
 
         Ok(iface)
@@ -921,10 +887,10 @@ impl protocols::agent_ttrpc::AgentService for agentService {
     ) -> ttrpc::Result<Routes> {
         let mut routes = protocols::agent::Routes::new();
         if req.routes.is_none() {
-            return Err(ttrpc::Error::RpcStatus(ttrpc::get_status(
+            return Err(ttrpc_error(
                 ttrpc::Code::INVALID_ARGUMENT,
                 "empty update routes request".to_string(),
-            )));
+            ));
         }
 
         let rs = req.routes.unwrap().Routes.into_vec();
@@ -939,12 +905,9 @@ impl protocols::agent_ttrpc::AgentService for agentService {
         let rtnl = sandbox.rtnl.as_mut().unwrap();
 
         // get current routes to return when error out
-        let crs = rtnl.list_routes().map_err(|e| {
-            ttrpc::Error::RpcStatus(ttrpc::get_status(
-                ttrpc::Code::INTERNAL,
-                format!("update routes: {:?}", e),
-            ))
-        })?;
+        let crs = rtnl
+            .list_routes()
+            .map_err(|e| ttrpc_error(ttrpc::Code::INTERNAL, format!("update routes: {:?}", e)))?;
 
         let v = match rtnl.update_routes(rs.as_ref()) {
             Ok(value) => value,
@@ -970,12 +933,9 @@ impl protocols::agent_ttrpc::AgentService for agentService {
         }
 
         let rtnl = sandbox.rtnl.as_mut().unwrap();
-        let v = rtnl.list_interfaces().map_err(|e| {
-            ttrpc::Error::RpcStatus(ttrpc::get_status(
-                ttrpc::Code::INTERNAL,
-                format!("list interface: {:?}", e),
-            ))
-        })?;
+        let v = rtnl
+            .list_interfaces()
+            .map_err(|e| ttrpc_error(ttrpc::Code::INTERNAL, format!("list interface: {:?}", e)))?;
 
         interface.set_Interfaces(RepeatedField::from_vec(v));
 
@@ -997,12 +957,9 @@ impl protocols::agent_ttrpc::AgentService for agentService {
 
         let rtnl = sandbox.rtnl.as_mut().unwrap();
 
-        let v = rtnl.list_routes().map_err(|e| {
-            ttrpc::Error::RpcStatus(ttrpc::get_status(
-                ttrpc::Code::INTERNAL,
-                format!("list routes: {:?}", e),
-            ))
-        })?;
+        let v = rtnl
+            .list_routes()
+            .map_err(|e| ttrpc_error(ttrpc::Code::INTERNAL, format!("list routes: {:?}", e)))?;
 
         routes.set_Routes(RepeatedField::from_vec(v));
 
@@ -1055,14 +1012,12 @@ impl protocols::agent_ttrpc::AgentService for agentService {
             }
 
             for m in req.kernel_modules.iter() {
-                let _ = load_kernel_module(m).map_err(|e| {
-                    ttrpc::Error::RpcStatus(ttrpc::get_status(ttrpc::Code::INTERNAL, e.to_string()))
-                })?;
+                let _ = load_kernel_module(m)
+                    .map_err(|e| ttrpc_error(ttrpc::Code::INTERNAL, e.to_string()))?;
             }
 
-            s.setup_shared_namespaces().map_err(|e| {
-                ttrpc::Error::RpcStatus(ttrpc::get_status(ttrpc::Code::INTERNAL, e.to_string()))
-            })?;
+            s.setup_shared_namespaces()
+                .map_err(|e| ttrpc_error(ttrpc::Code::INTERNAL, e.to_string()))?;
         }
 
         match add_storages(sl!(), req.storages.to_vec(), self.sandbox.clone()) {
@@ -1071,12 +1026,7 @@ impl protocols::agent_ttrpc::AgentService for agentService {
                 let mut s = sandbox.lock().unwrap();
                 s.mounts = m
             }
-            Err(e) => {
-                return Err(ttrpc::Error::RpcStatus(ttrpc::get_status(
-                    ttrpc::Code::INTERNAL,
-                    e.to_string(),
-                )))
-            }
+            Err(e) => return Err(ttrpc_error(ttrpc::Code::INTERNAL, e.to_string())),
         };
 
         match setup_guest_dns(sl!(), req.dns.to_vec()) {
@@ -1089,12 +1039,7 @@ impl protocols::agent_ttrpc::AgentService for agentService {
                     .iter()
                     .map(|dns| s.network.set_dns(dns.to_string()));
             }
-            Err(e) => {
-                return Err(ttrpc::Error::RpcStatus(ttrpc::get_status(
-                    ttrpc::Code::INTERNAL,
-                    e.to_string(),
-                )))
-            }
+            Err(e) => return Err(ttrpc_error(ttrpc::Code::INTERNAL, e.to_string())),
         };
 
         Ok(Empty::new())
@@ -1123,10 +1068,10 @@ impl protocols::agent_ttrpc::AgentService for agentService {
         req: protocols::agent::AddARPNeighborsRequest,
     ) -> ttrpc::Result<Empty> {
         if req.neighbors.is_none() {
-            return Err(ttrpc::Error::RpcStatus(ttrpc::get_status(
+            return Err(ttrpc_error(
                 ttrpc::Code::INVALID_ARGUMENT,
                 "empty add arp neighbours request".to_string(),
-            )));
+            ));
         }
 
         let neighs = req.neighbors.unwrap().ARPNeighbors.into_vec();
@@ -1140,9 +1085,8 @@ impl protocols::agent_ttrpc::AgentService for agentService {
 
         let rtnl = sandbox.rtnl.as_mut().unwrap();
 
-        rtnl.add_arp_neighbors(neighs.as_ref()).map_err(|e| {
-            ttrpc::Error::RpcStatus(ttrpc::get_status(ttrpc::Code::INTERNAL, e.to_string()))
-        })?;
+        rtnl.add_arp_neighbors(neighs.as_ref())
+            .map_err(|e| ttrpc_error(ttrpc::Code::INTERNAL, e.to_string()))?;
 
         Ok(Empty::new())
     }
@@ -1155,9 +1099,9 @@ impl protocols::agent_ttrpc::AgentService for agentService {
         let s = Arc::clone(&self.sandbox);
         let sandbox = s.lock().unwrap();
 
-        sandbox.online_cpu_memory(&req).map_err(|e| {
-            ttrpc::Error::RpcStatus(ttrpc::get_status(ttrpc::Code::INTERNAL, e.to_string()))
-        })?;
+        sandbox
+            .online_cpu_memory(&req)
+            .map_err(|e| ttrpc_error(ttrpc::Code::INTERNAL, e.to_string()))?;
 
         Ok(Empty::new())
     }
@@ -1167,9 +1111,8 @@ impl protocols::agent_ttrpc::AgentService for agentService {
         _ctx: &ttrpc::TtrpcContext,
         req: protocols::agent::ReseedRandomDevRequest,
     ) -> ttrpc::Result<Empty> {
-        random::reseed_rng(req.data.as_slice()).map_err(|e| {
-            ttrpc::Error::RpcStatus(ttrpc::get_status(ttrpc::Code::INTERNAL, e.to_string()))
-        })?;
+        random::reseed_rng(req.data.as_slice())
+            .map_err(|e| ttrpc_error(ttrpc::Code::INTERNAL, e.to_string()))?;
 
         Ok(Empty::new())
     }
@@ -1189,10 +1132,7 @@ impl protocols::agent_ttrpc::AgentService for agentService {
             }
             Err(e) => {
                 info!(sl!(), "fail to get memory info!");
-                return Err(ttrpc::Error::RpcStatus(ttrpc::get_status(
-                    ttrpc::Code::INTERNAL,
-                    e.to_string(),
-                )));
+                return Err(ttrpc_error(ttrpc::Code::INTERNAL, e.to_string()));
             }
         }
 
@@ -1208,9 +1148,8 @@ impl protocols::agent_ttrpc::AgentService for agentService {
         _ctx: &ttrpc::TtrpcContext,
         req: protocols::agent::MemHotplugByProbeRequest,
     ) -> ttrpc::Result<Empty> {
-        do_mem_hotplug_by_probe(&req.memHotplugProbeAddr).map_err(|e| {
-            ttrpc::Error::RpcStatus(ttrpc::get_status(ttrpc::Code::INTERNAL, e.to_string()))
-        })?;
+        do_mem_hotplug_by_probe(&req.memHotplugProbeAddr)
+            .map_err(|e| ttrpc_error(ttrpc::Code::INTERNAL, e.to_string()))?;
 
         Ok(Empty::new())
     }
@@ -1220,9 +1159,8 @@ impl protocols::agent_ttrpc::AgentService for agentService {
         _ctx: &ttrpc::TtrpcContext,
         req: protocols::agent::SetGuestDateTimeRequest,
     ) -> ttrpc::Result<Empty> {
-        do_set_guest_date_time(req.Sec, req.Usec).map_err(|e| {
-            ttrpc::Error::RpcStatus(ttrpc::get_status(ttrpc::Code::INTERNAL, e.to_string()))
-        })?;
+        do_set_guest_date_time(req.Sec, req.Usec)
+            .map_err(|e| ttrpc_error(ttrpc::Code::INTERNAL, e.to_string()))?;
 
         Ok(Empty::new())
     }
@@ -1232,9 +1170,7 @@ impl protocols::agent_ttrpc::AgentService for agentService {
         _ctx: &ttrpc::TtrpcContext,
         req: protocols::agent::CopyFileRequest,
     ) -> ttrpc::Result<Empty> {
-        do_copy_file(&req).map_err(|e| {
-            ttrpc::Error::RpcStatus(ttrpc::get_status(ttrpc::Code::INTERNAL, e.to_string()))
-        })?;
+        do_copy_file(&req).map_err(|e| ttrpc_error(ttrpc::Code::INTERNAL, e.to_string()))?;
 
         Ok(Empty::new())
     }
@@ -1245,10 +1181,7 @@ impl protocols::agent_ttrpc::AgentService for agentService {
         req: protocols::agent::GetMetricsRequest,
     ) -> ttrpc::Result<Metrics> {
         match get_metrics(&req) {
-            Err(e) => Err(ttrpc::Error::RpcStatus(ttrpc::get_status(
-                ttrpc::Code::INTERNAL,
-                e.to_string(),
-            ))),
+            Err(e) => Err(ttrpc_error(ttrpc::Code::INTERNAL, e.to_string())),
             Ok(s) => {
                 let mut metrics = Metrics::new();
                 metrics.set_metrics(s);
@@ -1270,12 +1203,7 @@ impl protocols::agent_ttrpc::AgentService for agentService {
         drop(sandbox);
 
         match event_rx.recv() {
-            Err(err) => {
-                return Err(ttrpc::Error::RpcStatus(ttrpc::get_status(
-                    ttrpc::Code::INTERNAL,
-                    err.to_string(),
-                )))
-            }
+            Err(err) => return Err(ttrpc_error(ttrpc::Code::INTERNAL, err.to_string())),
             Ok(container_id) => {
                 info!(sl!(), "get_oom_event return {}", &container_id);
                 let mut resp = OOMEvent::new();
