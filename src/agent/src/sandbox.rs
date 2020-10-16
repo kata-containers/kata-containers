@@ -143,16 +143,10 @@ impl Sandbox {
     // It's assumed that caller is calling this method after
     // acquiring a lock on sandbox.
     pub fn unset_and_remove_sandbox_storage(&mut self, path: &str) -> Result<()> {
-        match self.unset_sandbox_storage(path) {
-            Ok(res) => {
-                if res {
-                    return self.remove_sandbox_storage(path);
-                }
-            }
-            Err(err) => {
-                return Err(err);
-            }
+        if self.unset_sandbox_storage(path)? {
+            return self.remove_sandbox_storage(path);
         }
+
         Ok(())
     }
 
@@ -166,23 +160,17 @@ impl Sandbox {
 
     pub fn setup_shared_namespaces(&mut self) -> Result<bool> {
         // Set up shared IPC namespace
-        self.shared_ipcns = match Namespace::new(&self.logger).as_ipc().setup() {
-            Ok(ns) => ns,
-            Err(err) => {
-                return Err(anyhow!(err).context("Failed to setup persistent IPC namespace"));
-            }
-        };
+        self.shared_ipcns = Namespace::new(&self.logger)
+            .as_ipc()
+            .setup()
+            .context("Failed to setup persistent IPC namespace")?;
 
         // // Set up shared UTS namespace
-        self.shared_utsns = match Namespace::new(&self.logger)
+        self.shared_utsns = Namespace::new(&self.logger)
             .as_uts(self.hostname.as_str())
             .setup()
-        {
-            Ok(ns) => ns,
-            Err(err) => {
-                return Err(anyhow!(err).context("Failed to setup persistent UTS namespace"));
-            }
-        };
+            .context("Failed to setup persistent UTS namespace")?;
+
         Ok(true)
     }
 
@@ -316,10 +304,9 @@ impl Sandbox {
         thread::spawn(move || {
             for event in rx {
                 info!(logger, "got an OOM event {:?}", event);
-                match tx.send(container_id.clone()) {
-                    Err(err) => error!(logger, "failed to send message: {:?}", err),
-                    Ok(_) => {}
-                }
+                let _ = tx
+                    .send(container_id.clone())
+                    .map_err(|e| error!(logger, "failed to send message: {:?}", e));
             }
         });
     }
