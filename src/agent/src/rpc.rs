@@ -1746,7 +1746,7 @@ mod tests {
 
         let ctx = TtrpcContext {
             fd: -1,
-            mh: mh,
+            mh,
             res_tx: tx,
         };
 

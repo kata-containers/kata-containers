@@ -825,7 +825,7 @@ fn build_blkio_stats_entry(major: i16, minor: i16, op: &str, value: u64) -> Blki
         major: major as u64,
         minor: minor as u64,
         op: op.to_string(),
-        value: value,
+        value,
         unknown_fields: UnknownFields::default(),
         cached_size: CachedSize::default(),
     }

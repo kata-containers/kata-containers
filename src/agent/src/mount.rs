@@ -173,9 +173,9 @@ impl<'a> BareMount<'a> {
         BareMount {
             source: s,
             destination: d,
-            fs_type: fs_type,
-            flags: flags,
-            options: options,
+            fs_type,
+            flags,
+            options,
             logger: logger.new(o!("subsystem" => "baremount")),
         }
     }

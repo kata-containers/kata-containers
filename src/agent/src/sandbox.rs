@@ -74,7 +74,7 @@ impl Sandbox {
             sender: None,
             rtnl: Some(RtnlHandle::new(NETLINK_ROUTE, 0).unwrap()),
             hooks: None,
-            event_rx: event_rx,
+            event_rx,
             event_tx: tx,
         })
     }
