@@ -88,7 +88,7 @@ fn hostname(oci: &Spec) -> Result<()> {
 
 fn security(oci: &Spec) -> Result<()> {
     let linux = oci.linux.as_ref().unwrap();
-    if linux.masked_paths.len() == 0 && linux.readonly_paths.len() == 0 {
+    if linux.masked_paths.is_empty() && linux.readonly_paths.is_empty() {
         return Ok(());
     }
 
@@ -124,7 +124,7 @@ fn usernamespace(oci: &Spec) -> Result<()> {
         idmapping(&linux.gid_mappings)?;
     } else {
         // no user namespace but idmap
-        if linux.uid_mappings.len() != 0 || linux.gid_mappings.len() != 0 {
+        if !linux.uid_mappings.is_empty() || !linux.gid_mappings.is_empty() {
             return Err(anyhow!(nix::Error::from_errno(Errno::EINVAL)));
         }
     }
@@ -222,7 +222,7 @@ fn rootless_euid_mapping(oci: &Spec) -> Result<()> {
         return Err(anyhow!(nix::Error::from_errno(Errno::EINVAL)));
     }
 
-    if linux.uid_mappings.len() == 0 || linux.gid_mappings.len() == 0 {
+    if linux.uid_mappings.is_empty() || linux.gid_mappings.is_empty() {
         // rootless containers requires at least one UID/GID mapping
         return Err(anyhow!(nix::Error::from_errno(Errno::EINVAL)));
     }
