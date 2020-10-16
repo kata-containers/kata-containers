@@ -6,8 +6,6 @@
 // looks like we can use caps to manipulate capabilities
 // conveniently, use caps to do it directly.. maybe
 
-use lazy_static;
-
 use crate::log_child;
 use crate::sync::write_count;
 use anyhow::{anyhow, Result};
