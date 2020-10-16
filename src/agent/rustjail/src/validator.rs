@@ -134,7 +134,7 @@ fn usernamespace(oci: &Spec) -> Result<()> {
         idmapping(&linux.gid_mappings).context("idmapping gid")?;
     } else {
         // no user namespace but idmap
-        if linux.uid_mappings.len() != 0 || linux.gid_mappings.len() != 0 {
+        if !linux.uid_mappings.is_empty() || !linux.gid_mappings.is_empty() {
             return Err(anyhow!(nix::Error::from_errno(Errno::EINVAL)));
         }
     }
@@ -239,7 +239,7 @@ fn rootless_euid_mapping(oci: &Spec) -> Result<()> {
         return Err(anyhow!(nix::Error::from_errno(Errno::EINVAL)));
     }
 
-    if linux.uid_mappings.len() == 0 || linux.gid_mappings.len() == 0 {
+    if linux.uid_mappings.is_empty() || linux.gid_mappings.is_empty() {
         // rootless containers requires at least one UID/GID mapping
         return Err(anyhow!(nix::Error::from_errno(Errno::EINVAL)));
     }

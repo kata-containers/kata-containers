@@ -135,7 +135,7 @@ impl CgroupManager for Manager {
         }
 
         // set hugepages resources
-        if r.hugepage_limits.len() > 0 {
+        if !r.hugepage_limits.is_empty() {
             set_hugepages_resources(&cg, &r.hugepage_limits, res)?;
         }
 
@@ -780,7 +780,7 @@ https://github.com/opencontainers/runc/blob/a5847db387ae28c0ca4ebe4beee1a76900c8
 
 fn get_blkio_stat_blkiodata(blkiodata: &[BlkIoData]) -> RepeatedField<BlkioStatsEntry> {
     let mut m = RepeatedField::new();
-    if blkiodata.len() == 0 {
+    if blkiodata.is_empty() {
         return m;
     }
 
@@ -803,7 +803,7 @@ fn get_blkio_stat_blkiodata(blkiodata: &[BlkIoData]) -> RepeatedField<BlkioStats
 fn get_blkio_stat_ioservice(services: &[IoService]) -> RepeatedField<BlkioStatsEntry> {
     let mut m = RepeatedField::new();
 
-    if services.len() == 0 {
+    if services.is_empty() {
         return m;
     }
 
@@ -865,7 +865,7 @@ fn get_blkio_stats(cg: &cgroups::Cgroup) -> SingularPtrField<BlkioStats> {
     let mut m = BlkioStats::new();
     let io_serviced_recursive = blkio.io_serviced_recursive;
 
-    if io_serviced_recursive.len() == 0 {
+    if io_serviced_recursive.is_empty() {
         // fall back to generic stats
         // blkio.throttle.io_service_bytes,
         // maybe io_service_bytes_recursive?

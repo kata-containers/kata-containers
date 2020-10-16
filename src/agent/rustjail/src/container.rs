@@ -527,7 +527,7 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
 
     setid(uid, gid)?;
 
-    if guser.additional_gids.len() > 0 {
+    if !guser.additional_gids.is_empty() {
         setgroups(guser.additional_gids.as_slice()).map_err(|e| {
             let _ = write_sync(
                 cwfd,

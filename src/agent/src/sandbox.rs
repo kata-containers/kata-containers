@@ -183,7 +183,7 @@ impl Sandbox {
         // This means a separate pause process has not been created. We treat the
         // first container created as the infra container in that case
         // and use its pid namespace in case pid namespace needs to be shared.
-        if self.sandbox_pidns.is_none() && self.containers.len() == 0 {
+        if self.sandbox_pidns.is_none() && self.containers.is_empty() {
             let init_pid = c.init_process_pid;
             if init_pid == -1 {
                 return Err(anyhow!(

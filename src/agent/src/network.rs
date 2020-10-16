@@ -48,7 +48,7 @@ pub fn setup_guest_dns(logger: Logger, dns_list: Vec<String>) -> Result<()> {
 fn do_setup_guest_dns(logger: Logger, dns_list: Vec<String>, src: &str, dst: &str) -> Result<()> {
     let logger = logger.new(o!( "subsystem" => "network"));
 
-    if dns_list.len() == 0 {
+    if dns_list.is_empty() {
         info!(
             logger,
             "Did not set sandbox DNS as DNS not received as part of request."

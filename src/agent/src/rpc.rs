@@ -630,7 +630,7 @@ impl protocols::agent_ttrpc::AgentService for agentService {
         }
 
         // format "table"
-        if args.len() == 0 {
+        if args.is_empty() {
             // default argument
             args = vec!["-ef".to_string()];
         }
@@ -1055,7 +1055,7 @@ impl protocols::agent_ttrpc::AgentService for agentService {
                 });
             }
 
-            if req.sandbox_id.len() > 0 {
+            if !req.sandbox_id.is_empty() {
                 s.id = req.sandbox_id.clone();
             }
 
@@ -1325,7 +1325,7 @@ fn get_memory_info(block_size: bool, hotplug: bool) -> Result<(u64, bool)> {
     if block_size {
         match fs::read_to_string(SYSFS_MEMORY_BLOCK_SIZE_PATH) {
             Ok(v) => {
-                if v.len() == 0 {
+                if v.is_empty() {
                     info!(sl!(), "string in empty???");
                     return Err(anyhow!("Invalid block size"));
                 }

@@ -190,11 +190,11 @@ impl<'a> BareMount<'a> {
         let cstr_dest: CString;
         let cstr_fs_type: CString;
 
-        if self.source.len() == 0 {
+        if self.source.is_empty() {
             return Err(anyhow!("need mount source"));
         }
 
-        if self.destination.len() == 0 {
+        if self.destination.is_empty() {
             return Err(anyhow!("need mount destination"));
         }
 
@@ -204,14 +204,14 @@ impl<'a> BareMount<'a> {
         cstr_dest = CString::new(self.destination)?;
         dest = cstr_dest.as_ptr();
 
-        if self.fs_type.len() == 0 {
+        if self.fs_type.is_empty() {
             return Err(anyhow!("need mount FS type"));
         }
 
         cstr_fs_type = CString::new(self.fs_type)?;
         fs_type = cstr_fs_type.as_ptr();
 
-        if self.options.len() > 0 {
+        if !self.options.is_empty() {
             cstr_options = CString::new(self.options)?;
             options = cstr_options.as_ptr() as *const c_void;
         }
@@ -410,14 +410,14 @@ fn parse_mount_flags_and_options(options_vec: Vec<&str>) -> (MsFlags, String) {
     let mut options: String = "".to_string();
 
     for opt in options_vec {
-        if opt.len() != 0 {
+        if !opt.is_empty() {
             match FLAGS.get(opt) {
                 Some(x) => {
                     let (_, f) = *x;
                     flags = flags | f;
                 }
                 None => {
-                    if options.len() > 0 {
+                    if !options.is_empty() {
                         options.push_str(format!(",{}", opt).as_str());
                     } else {
                         options.push_str(format!("{}", opt).as_str());
@@ -458,7 +458,7 @@ pub fn add_storages(
         // Todo need to rollback the mounted storage if err met.
         let mount_point = handler(&logger, &storage, sandbox.clone())?;
 
-        if mount_point.len() > 0 {
+        if !mount_point.is_empty() {
             mount_list.push(mount_point);
         }
     }
