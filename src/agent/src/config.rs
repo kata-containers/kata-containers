@@ -22,8 +22,9 @@ const DEFAULT_CONTAINER_PIPE_SIZE: i32 = 0;
 const VSOCK_ADDR: &str = "vsock://-1";
 const VSOCK_PORT: u16 = 1024;
 
-// Environment variable used for development and testing
+// Environment variables used for development and testing
 const SERVER_ADDR_ENV_VAR: &str = "KATA_AGENT_SERVER_ADDR";
+const LOG_LEVEL_ENV_VAR: &str = "KATA_AGENT_LOG_LEVEL";
 
 // FIXME: unused
 const TRACE_MODE_FLAG: &str = "agent.trace";
@@ -139,6 +140,12 @@ impl agentConfig {
 
         if let Ok(addr) = env::var(SERVER_ADDR_ENV_VAR) {
             self.server_addr = addr;
+        }
+
+        if let Ok(addr) = env::var(LOG_LEVEL_ENV_VAR) {
+            if let Ok(level) = logrus_to_slog_level(&addr) {
+                self.log_level = level;
+            }
         }
 
         Ok(())
@@ -374,6 +381,17 @@ mod tests {
                 debug_console: false,
                 dev_mode: false,
                 log_level: slog::Level::Debug,
+                hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
+                container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+                server_addr: TEST_SERVER_ADDR,
+                unified_cgroup_hierarchy: false,
+            },
+            TestData {
+                contents: "agent.log=debug",
+                env_vars: vec!["KATA_AGENT_LOG_LEVEL=trace"],
+                debug_console: false,
+                dev_mode: false,
+                log_level: slog::Level::Trace,
                 hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
                 server_addr: TEST_SERVER_ADDR,
@@ -751,6 +769,50 @@ mod tests {
                 hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
                 server_addr: "unix://@/tmp/foo.socket",
+                unified_cgroup_hierarchy: false,
+            },
+            TestData {
+                contents: "",
+                env_vars: vec!["KATA_AGENT_LOG_LEVEL="],
+                debug_console: false,
+                dev_mode: false,
+                log_level: DEFAULT_LOG_LEVEL,
+                hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
+                container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+                server_addr: TEST_SERVER_ADDR,
+                unified_cgroup_hierarchy: false,
+            },
+            TestData {
+                contents: "",
+                env_vars: vec!["KATA_AGENT_LOG_LEVEL=invalid"],
+                debug_console: false,
+                dev_mode: false,
+                log_level: DEFAULT_LOG_LEVEL,
+                hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
+                container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+                server_addr: TEST_SERVER_ADDR,
+                unified_cgroup_hierarchy: false,
+            },
+            TestData {
+                contents: "",
+                env_vars: vec!["KATA_AGENT_LOG_LEVEL=debug"],
+                debug_console: false,
+                dev_mode: false,
+                log_level: slog::Level::Debug,
+                hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
+                container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+                server_addr: TEST_SERVER_ADDR,
+                unified_cgroup_hierarchy: false,
+            },
+            TestData {
+                contents: "",
+                env_vars: vec!["KATA_AGENT_LOG_LEVEL=debugger"],
+                debug_console: false,
+                dev_mode: false,
+                log_level: DEFAULT_LOG_LEVEL,
+                hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
+                container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+                server_addr: TEST_SERVER_ADDR,
                 unified_cgroup_hierarchy: false,
             },
         ];
