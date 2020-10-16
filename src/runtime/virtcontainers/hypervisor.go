@@ -275,11 +275,20 @@ type HypervisorConfig struct {
 	// HypervisorPath is the hypervisor executable host path.
 	HypervisorPath string
 
+	// HypervisorPathList is the list of hypervisor paths names allowed in annotations
+	HypervisorPathList []string
+
+	// HypervisorCtlPathList is the list of hypervisor control paths names allowed in annotations
+	HypervisorCtlPathList []string
+
 	// HypervisorCtlPath is the hypervisor ctl executable host path.
 	HypervisorCtlPath string
 
 	// JailerPath is the jailer executable host path.
 	JailerPath string
+
+	// JailerPathList is the list of jailer paths names allowed in annotations
+	JailerPathList []string
 
 	// BlockDeviceDriver specifies the driver to be used for block device
 	// either VirtioSCSI or VirtioBlock with the default driver being defaultBlockDriver
@@ -309,6 +318,9 @@ type HypervisorConfig struct {
 	// VirtioFSDaemon is the virtio-fs vhost-user daemon path
 	VirtioFSDaemon string
 
+	// VirtioFSDaemonList is the list of valid virtiofs names for annotations
+	VirtioFSDaemonList []string
+
 	// VirtioFSCache cache mode for fs version cache or "none"
 	VirtioFSCache string
 
@@ -317,6 +329,9 @@ type HypervisorConfig struct {
 
 	// File based memory backend root directory
 	FileBackedMemRootDir string
+
+	// FileBackedMemRootList is the list of valid root directories values for annotations
+	FileBackedMemRootList []string
 
 	// customAssets is a map of assets.
 	// Each value in that map takes precedence over the configured assets.
@@ -400,6 +415,9 @@ type HypervisorConfig struct {
 	// related folders, sockets and device nodes should be.
 	VhostUserStorePath string
 
+	// VhostUserStorePathList is the list of valid values for vhost-user paths
+	VhostUserStorePathList []string
+
 	// GuestHookPath is the path within the VM that will be used for 'drop-in' hooks
 	GuestHookPath string
 
@@ -419,6 +437,9 @@ type HypervisorConfig struct {
 	// SGXEPCSize specifies the size in bytes for the EPC Section.
 	// Enable SGX. Hardware-based isolation and memory encryption.
 	SGXEPCSize int64
+
+	// Enable annotations by name
+	EnableAnnotations []string
 }
 
 // vcpu mapping from vcpu number to thread number
