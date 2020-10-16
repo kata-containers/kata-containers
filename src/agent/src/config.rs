@@ -144,7 +144,7 @@ impl agentConfig {
 }
 
 fn get_vsock_port(p: &str) -> Result<i32> {
-    let fields: Vec<&str> = p.split("=").collect();
+    let fields: Vec<&str> = p.split('=').collect();
     if fields.len() != 2 {
         return Err(anyhow!("invalid port parameter"));
     }
@@ -180,7 +180,7 @@ fn logrus_to_slog_level(logrus_level: &str) -> Result<slog::Level> {
 }
 
 fn get_log_level(param: &str) -> Result<slog::Level> {
-    let fields: Vec<&str> = param.split("=").collect();
+    let fields: Vec<&str> = param.split('=').collect();
 
     if fields.len() != 2 {
         return Err(anyhow!("invalid log level parameter"));
@@ -194,7 +194,7 @@ fn get_log_level(param: &str) -> Result<slog::Level> {
 }
 
 fn get_hotplug_timeout(param: &str) -> Result<time::Duration> {
-    let fields: Vec<&str> = param.split("=").collect();
+    let fields: Vec<&str> = param.split('=').collect();
 
     if fields.len() != 2 {
         return Err(anyhow!("invalid hotplug timeout parameter"));
@@ -214,7 +214,7 @@ fn get_hotplug_timeout(param: &str) -> Result<time::Duration> {
 }
 
 fn get_bool_value(param: &str) -> Result<bool> {
-    let fields: Vec<&str> = param.split("=").collect();
+    let fields: Vec<&str> = param.split('=').collect();
 
     if fields.len() != 2 {
         return Ok(false);
@@ -225,18 +225,15 @@ fn get_bool_value(param: &str) -> Result<bool> {
     // first try to parse as bool value
     v.parse::<bool>().or_else(|_err1| {
         // then try to parse as integer value
-        v.parse::<u64>().or_else(|_err2| Ok(0)).and_then(|v| {
-            // only `0` returns false, otherwise returns true
-            Ok(match v {
-                0 => false,
-                _ => true,
-            })
+        v.parse::<u64>().or_else(|_err2| Ok(0)).map(|v| match v {
+            0 => false,
+            _ => true,
         })
     })
 }
 
 fn get_container_pipe_size(param: &str) -> Result<i32> {
-    let fields: Vec<&str> = param.split("=").collect();
+    let fields: Vec<&str> = param.split('=').collect();
 
     if fields.len() != 2 {
         return Err(anyhow!("invalid container pipe size parameter"));
@@ -634,10 +631,10 @@ mod tests {
             let filename = file_path.to_str().expect("failed to create filename");
 
             let mut file =
-                File::create(filename).expect(&format!("{}: failed to create file", msg));
+                File::create(filename).unwrap_or_else(|_| panic!("{}: failed to create file", msg));
 
             file.write_all(d.contents.as_bytes())
-                .expect(&format!("{}: failed to write file contents", msg));
+                .unwrap_or_else(|_| panic!("{}: failed to write file contents", msg));
 
             let mut config = agentConfig::new();
             assert_eq!(config.debug_console, false, "{}", msg);
@@ -737,7 +734,7 @@ mod tests {
 
             let msg = format!("{}: result: {:?}", msg, result);
 
-            assert_result!(d.result, result, format!("{}", msg));
+            assert_result!(d.result, result, msg);
         }
     }
 
@@ -831,7 +828,7 @@ mod tests {
 
             let msg = format!("{}: result: {:?}", msg, result);
 
-            assert_result!(d.result, result, format!("{}", msg));
+            assert_result!(d.result, result, msg);
         }
     }
 
@@ -901,7 +898,7 @@ mod tests {
 
             let msg = format!("{}: result: {:?}", msg, result);
 
-            assert_result!(d.result, result, format!("{}", msg));
+            assert_result!(d.result, result, msg);
         }
     }
 
@@ -975,7 +972,7 @@ mod tests {
 
             let msg = format!("{}: result: {:?}", msg, result);
 
-            assert_result!(d.result, result, format!("{}", msg));
+            assert_result!(d.result, result, msg);
         }
     }
 }

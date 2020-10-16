@@ -4,7 +4,6 @@
 //
 
 use anyhow::Result;
-use libc;
 use nix::errno::Errno;
 use nix::fcntl::{self, OFlag};
 use nix::sys::stat::Mode;
