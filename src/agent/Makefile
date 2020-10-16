@@ -121,6 +121,12 @@ optimize: $(SOURCES) | show-summary show-header
 show-header:
 	@printf "%s - version %s (commit %s)\n\n" "$(TARGET)" "$(VERSION)" "$(COMMIT_MSG)"
 
+clippy: $(GENERATED_CODE)
+	cargo clippy --all-targets --all-features --release \
+		-- \
+		-Aclippy::redundant_allocation \
+		-D warnings
+
 $(GENERATED_FILES): %: %.in
 	@sed $(foreach r,$(GENERATED_REPLACEMENTS),-e 's|@$r@|$($r)|g') "$<" > "$@"
 

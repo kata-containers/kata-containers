@@ -15,7 +15,7 @@ os: linux
 # https://docs.travis-ci.com/user/caching#clearing-caches
 language: rust
 rust:
-  - 1.44.1
+  - 1.47.0
 cache:
   cargo: true
   directories:
@@ -36,9 +36,9 @@ install:
   - rustup target add x86_64-unknown-linux-musl
   - sudo ln -sf /usr/bin/g++ /bin/musl-g++
   - rustup component add rustfmt
-  - make -C ${TRAVIS_BUILD_DIR}/src/agent
-  - make -C ${TRAVIS_BUILD_DIR}/src/agent check
-  - sudo -E PATH=$PATH make -C ${TRAVIS_BUILD_DIR}/src/agent check
+  - rustup component add clippy
+  - make -C ${TRAVIS_BUILD_DIR}/src/agent clippy
+  - "ci/static-checks.sh"
 
 before_script:
   - "ci/install_go.sh"
@@ -47,7 +47,9 @@ before_script:
   - sudo -E PATH=$PATH GOPATH=$GOPATH make -C ${TRAVIS_BUILD_DIR}/src/runtime test
 
 script:
-  - "ci/static-checks.sh"
+  - make -C ${TRAVIS_BUILD_DIR}/src/agent
+  - make -C ${TRAVIS_BUILD_DIR}/src/agent check
+  - sudo -E PATH=$PATH make -C ${TRAVIS_BUILD_DIR}/src/agent check
 
 jobs:
   include:
