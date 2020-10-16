@@ -3,5 +3,6 @@
 **/*.rej
 **/target
 **/.vscode
+pkg/logging/Cargo.lock
 src/agent/src/version.rs
 src/agent/kata-agent.service
