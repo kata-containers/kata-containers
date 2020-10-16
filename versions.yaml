@@ -155,7 +155,7 @@ assets:
     url: "https://cdn.kernel.org/pub/linux/kernel/v4.x/"
     uscan-url: >-
       https://mirrors.edge.kernel.org/pub/linux/kernel/v5.x/linux-(5\.4\..+)\.tar\.gz
-    version: "v5.4.60"
+    version: "v5.4.71"
 
   kernel-experimental:
     description: "Linux kernel with virtio-fs support"
