@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 //
+#![allow(clippy::module_inception)]
 
 #[cfg(test)]
 mod test_utils {

@@ -1735,13 +1735,12 @@ mod tests {
     use std::sync::mpsc::{Receiver, Sender};
     use ttrpc::{MessageHeader, TtrpcContext};
 
-    fn mk_ttrpc_context() -> (TtrpcContext, Receiver<(MessageHeader, Vec<u8>)>) {
+    type Message = (MessageHeader, Vec<u8>);
+
+    fn mk_ttrpc_context() -> (TtrpcContext, Receiver<Message>) {
         let mh = MessageHeader::default();
 
-        let (tx, rx): (
-            Sender<(MessageHeader, Vec<u8>)>,
-            Receiver<(MessageHeader, Vec<u8>)>,
-        ) = channel();
+        let (tx, rx): (Sender<Message>, Receiver<Message>) = channel();
 
         let ctx = TtrpcContext {
             fd: -1,
