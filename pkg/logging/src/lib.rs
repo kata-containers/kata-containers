@@ -93,9 +93,7 @@ impl HashSerializer {
         // Take care to only add the first instance of a key. This matters for loggers (but not
         // Records) since a child loggers have parents and the loggers are serialised child first
         // meaning the *newest* fields are serialised first.
-        if !self.fields.contains_key(&key) {
-            self.fields.insert(key, value);
-        }
+        self.fields.entry(key).or_insert(value);
     }
 
     fn remove_field(&mut self, key: &str) {
