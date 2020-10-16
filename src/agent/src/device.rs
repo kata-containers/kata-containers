@@ -137,17 +137,14 @@ fn get_device_name(sandbox: &Arc<Mutex<Sandbox>>, dev_addr: &str) -> Result<Stri
 
     info!(sl!(), "Waiting on channel for device notification\n");
     let hotplug_timeout = AGENT_CONFIG.read().unwrap().hotplug_timeout;
-    let dev_name = match rx.recv_timeout(hotplug_timeout) {
-        Ok(name) => name,
-        Err(_) => {
-            GLOBAL_DEVICE_WATCHER.lock().unwrap().remove_entry(dev_addr);
-            return Err(anyhow!(
-                "Timeout reached after {:?} waiting for device {}",
-                hotplug_timeout,
-                dev_addr
-            ));
-        }
-    };
+    let dev_name = rx.recv_timeout(hotplug_timeout).map_err(|_| {
+        GLOBAL_DEVICE_WATCHER.lock().unwrap().remove_entry(dev_addr);
+        anyhow!(
+            "Timeout reached after {:?} waiting for device {}",
+            hotplug_timeout,
+            dev_addr
+        )
+    })?;
 
     Ok(format!("{}/{}", SYSTEM_DEV_PATH, &dev_name))
 }
@@ -214,10 +211,10 @@ fn update_spec_device_list(device: &Device, spec: &mut Spec, devidx: &DevIndex) 
         ));
     }
 
-    let linux = match spec.linux.as_mut() {
-        None => return Err(anyhow!("Spec didn't container linux field")),
-        Some(l) => l,
-    };
+    let linux = spec
+        .linux
+        .as_mut()
+        .ok_or_else(|| anyhow!("Spec didn't container linux field"))?;
 
     if !Path::new(&device.vm_path).exists() {
         return Err(anyhow!("vm_path:{} doesn't exist", device.vm_path));
@@ -411,10 +408,10 @@ pub fn update_device_cgroup(spec: &mut Spec) -> Result<()> {
     let major = stat::major(rdev) as i64;
     let minor = stat::minor(rdev) as i64;
 
-    let linux = match spec.linux.as_mut() {
-        None => return Err(anyhow!("Spec didn't container linux field")),
-        Some(l) => l,
-    };
+    let linux = spec
+        .linux
+        .as_mut()
+        .ok_or_else(|| anyhow!("Spec didn't container linux field"))?;
 
     if linux.resources.is_none() {
         linux.resources = Some(LinuxResources::default());

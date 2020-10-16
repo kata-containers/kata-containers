@@ -126,13 +126,12 @@ pub fn drop_privileges(cfd_log: RawFd, caps: &LinuxCapabilities) -> Result<()> {
     )
     .map_err(|e| anyhow!(e.to_string()))?;
 
-    if let Err(_) = caps::set(
+    let _ = caps::set(
         None,
         CapSet::Ambient,
         to_capshashset(cfd_log, caps.ambient.as_ref()),
-    ) {
-        log_child!(cfd_log, "failed to set ambient capability");
-    }
+    )
+    .map_err(|_| log_child!(cfd_log, "failed to set ambient capability"));
 
     Ok(())
 }
