@@ -21,7 +21,6 @@ use protocols::health::{
     HealthCheckResponse, HealthCheckResponse_ServingStatus, VersionCheckResponse,
 };
 use protocols::types::Interface;
-use rustjail;
 use rustjail::cgroups::notifier;
 use rustjail::container::{BaseContainer, Container, LinuxContainer};
 use rustjail::process::Process;
@@ -47,7 +46,6 @@ use crate::AGENT_CONFIG;
 use netlink::{RtnlHandle, NETLINK_ROUTE};
 
 use libc::{self, c_ushort, pid_t, winsize, TIOCSWINSZ};
-use serde_json;
 use std::convert::TryFrom;
 use std::fs;
 use std::os::unix::io::RawFd;
@@ -152,14 +150,13 @@ impl agentService {
 
         let pipe_size = AGENT_CONFIG.read().unwrap().container_pipe_size;
         let p = if oci.process.is_some() {
-            let tp = Process::new(
+            Process::new(
                 &sl!(),
                 &oci.process.as_ref().unwrap(),
                 cid.as_str(),
                 true,
                 pipe_size,
-            )?;
-            tp
+            )?
         } else {
             info!(sl!(), "no process configurations!");
             return Err(anyhow!(nix::Error::from_errno(nix::errno::Errno::EINVAL)));
@@ -175,7 +172,7 @@ impl agentService {
     }
 
     fn do_start_container(&self, req: protocols::agent::StartContainerRequest) -> Result<()> {
-        let cid = req.container_id.clone();
+        let cid = req.container_id;
 
         let sandbox = self.sandbox.clone();
         let mut s = sandbox.lock().unwrap();
@@ -183,7 +180,7 @@ impl agentService {
 
         let ctr = s
             .get_container(&cid)
-            .ok_or(anyhow!("Invalid container id"))?;
+            .ok_or_else(|| anyhow!("Invalid container id"))?;
 
         ctr.exec()?;
 
@@ -206,9 +203,7 @@ impl agentService {
         let mut remove_container_resources = |sandbox: &mut Sandbox| -> Result<()> {
             // Find the sandbox storage used by this container
             let mounts = sandbox.container_mounts.get(&cid);
-            if mounts.is_some() {
-                let mounts = mounts.unwrap();
-
+            if let Some(mounts) = mounts {
                 remove_mounts(&mounts)?;
 
                 for m in mounts.iter() {
@@ -232,7 +227,7 @@ impl agentService {
             let mut sandbox = s.lock().unwrap();
             let ctr = sandbox
                 .get_container(&cid)
-                .ok_or(anyhow!("Invalid container id"))?;
+                .ok_or_else(|| anyhow!("Invalid container id"))?;
 
             ctr.destroy()?;
 
@@ -250,11 +245,11 @@ impl agentService {
             let mut sandbox = s.lock().unwrap();
             let _ctr = sandbox
                 .get_container(&cid2)
-                .ok_or(anyhow!("Invalid container id"))
-                .and_then(|ctr| {
+                .ok_or_else(|| anyhow!("Invalid container id"))
+                .map(|ctr| {
                     ctr.destroy().unwrap();
                     tx.send(1).unwrap();
-                    Ok(ctr)
+                    ctr
                 });
         });
 
@@ -277,7 +272,7 @@ impl agentService {
         let cid = req.container_id.clone();
         let exec_id = req.exec_id.clone();
 
-        info!(sl!(), "cid: {} eid: {}", cid.clone(), exec_id.clone());
+        info!(sl!(), "cid: {} eid: {}", cid, exec_id);
 
         let s = self.sandbox.clone();
         let mut sandbox = s.lock().unwrap();
@@ -294,7 +289,7 @@ impl agentService {
 
         let ctr = sandbox
             .get_container(&cid)
-            .ok_or(anyhow!("Invalid container id"))?;
+            .ok_or_else(|| anyhow!("Invalid container id"))?;
 
         ctr.run(p)?;
 
@@ -340,7 +335,7 @@ impl agentService {
         req: protocols::agent::WaitProcessRequest,
     ) -> Result<protocols::agent::WaitProcessResponse> {
         let cid = req.container_id.clone();
-        let eid = req.exec_id.clone();
+        let eid = req.exec_id;
         let s = self.sandbox.clone();
         let mut resp = WaitProcessResponse::new();
         let pid: pid_t;
@@ -376,7 +371,7 @@ impl agentService {
         let mut sandbox = s.lock().unwrap();
         let ctr = sandbox
             .get_container(&cid)
-            .ok_or(anyhow!("Invalid container id"))?;
+            .ok_or_else(|| anyhow!("Invalid container id"))?;
 
         let mut p = match ctr.processes.get_mut(&pid) {
             Some(p) => p,
@@ -600,18 +595,18 @@ impl protocols::agent_ttrpc::AgentService for agentService {
     ) -> ttrpc::Result<ListProcessesResponse> {
         let cid = req.container_id.clone();
         let format = req.format.clone();
-        let mut args = req.args.clone().into_vec();
+        let mut args = req.args.into_vec();
         let mut resp = ListProcessesResponse::new();
 
         let s = Arc::clone(&self.sandbox);
         let mut sandbox = s.lock().unwrap();
 
-        let ctr = sandbox
-            .get_container(&cid)
-            .ok_or(ttrpc::Error::RpcStatus(ttrpc::get_status(
+        let ctr = sandbox.get_container(&cid).ok_or_else(|| {
+            ttrpc_error(
                 ttrpc::Code::INVALID_ARGUMENT,
                 "invalid container id".to_string(),
-            )))?;
+            )
+        })?;
 
         let pids = ctr.processes().unwrap();
 
@@ -688,12 +683,12 @@ impl protocols::agent_ttrpc::AgentService for agentService {
         let s = Arc::clone(&self.sandbox);
         let mut sandbox = s.lock().unwrap();
 
-        let ctr = sandbox
-            .get_container(&cid)
-            .ok_or(ttrpc::Error::RpcStatus(ttrpc::get_status(
+        let ctr = sandbox.get_container(&cid).ok_or_else(|| {
+            ttrpc_error(
                 ttrpc::Code::INVALID_ARGUMENT,
                 "invalid container id".to_string(),
-            )))?;
+            )
+        })?;
 
         let resp = Empty::new();
 
@@ -719,16 +714,16 @@ impl protocols::agent_ttrpc::AgentService for agentService {
         _ctx: &ttrpc::TtrpcContext,
         req: protocols::agent::StatsContainerRequest,
     ) -> ttrpc::Result<StatsContainerResponse> {
-        let cid = req.container_id.clone();
+        let cid = req.container_id;
         let s = Arc::clone(&self.sandbox);
         let mut sandbox = s.lock().unwrap();
 
-        let ctr = sandbox
-            .get_container(&cid)
-            .ok_or(ttrpc::Error::RpcStatus(ttrpc::get_status(
+        let ctr = sandbox.get_container(&cid).ok_or_else(|| {
+            ttrpc_error(
                 ttrpc::Code::INVALID_ARGUMENT,
                 "invalid container id".to_string(),
-            )))?;
+            )
+        })?;
 
         ctr.stats().map_err(|e| {
             ttrpc::Error::RpcStatus(ttrpc::get_status(ttrpc::Code::INTERNAL, e.to_string()))
@@ -744,12 +739,12 @@ impl protocols::agent_ttrpc::AgentService for agentService {
         let s = Arc::clone(&self.sandbox);
         let mut sandbox = s.lock().unwrap();
 
-        let ctr = sandbox
-            .get_container(&cid)
-            .ok_or(ttrpc::Error::RpcStatus(ttrpc::get_status(
+        let ctr = sandbox.get_container(&cid).ok_or_else(|| {
+            ttrpc_error(
                 ttrpc::Code::INVALID_ARGUMENT,
                 "invalid container id".to_string(),
-            )))?;
+            )
+        })?;
 
         ctr.pause().map_err(|e| {
             ttrpc::Error::RpcStatus(ttrpc::get_status(ttrpc::Code::INTERNAL, e.to_string()))
@@ -767,12 +762,12 @@ impl protocols::agent_ttrpc::AgentService for agentService {
         let s = Arc::clone(&self.sandbox);
         let mut sandbox = s.lock().unwrap();
 
-        let ctr = sandbox
-            .get_container(&cid)
-            .ok_or(ttrpc::Error::RpcStatus(ttrpc::get_status(
+        let ctr = sandbox.get_container(&cid).ok_or_else(|| {
+            ttrpc_error(
                 ttrpc::Code::INVALID_ARGUMENT,
                 "invalid container id".to_string(),
-            )))?;
+            )
+        })?;
 
         ctr.resume().map_err(|e| {
             ttrpc::Error::RpcStatus(ttrpc::get_status(ttrpc::Code::INTERNAL, e.to_string()))
@@ -817,7 +812,7 @@ impl protocols::agent_ttrpc::AgentService for agentService {
         req: protocols::agent::CloseStdinRequest,
     ) -> ttrpc::Result<Empty> {
         let cid = req.container_id.clone();
-        let eid = req.exec_id.clone();
+        let eid = req.exec_id;
         let s = Arc::clone(&self.sandbox);
         let mut sandbox = s.lock().unwrap();
 
@@ -893,11 +888,11 @@ impl protocols::agent_ttrpc::AgentService for agentService {
         if req.interface.is_none() {
             return Err(ttrpc::Error::RpcStatus(ttrpc::get_status(
                 ttrpc::Code::INVALID_ARGUMENT,
-                format!("empty update interface request"),
+                "empty update interface request".to_string(),
             )));
         }
 
-        let interface = req.interface.clone();
+        let interface = req.interface;
         let s = Arc::clone(&self.sandbox);
         let mut sandbox = s.lock().unwrap();
 
@@ -928,11 +923,11 @@ impl protocols::agent_ttrpc::AgentService for agentService {
         if req.routes.is_none() {
             return Err(ttrpc::Error::RpcStatus(ttrpc::get_status(
                 ttrpc::Code::INVALID_ARGUMENT,
-                format!("empty update routes request"),
+                "empty update routes request".to_string(),
             )));
         }
 
-        let rs = req.routes.clone().unwrap().Routes.into_vec();
+        let rs = req.routes.unwrap().Routes.into_vec();
 
         let s = Arc::clone(&self.sandbox);
         let mut sandbox = s.lock().unwrap();
@@ -1088,7 +1083,7 @@ impl protocols::agent_ttrpc::AgentService for agentService {
             Ok(_) => {
                 let sandbox = self.sandbox.clone();
                 let mut s = sandbox.lock().unwrap();
-                let _ = req
+                let _dns = req
                     .dns
                     .to_vec()
                     .iter()
@@ -1130,11 +1125,11 @@ impl protocols::agent_ttrpc::AgentService for agentService {
         if req.neighbors.is_none() {
             return Err(ttrpc::Error::RpcStatus(ttrpc::get_status(
                 ttrpc::Code::INVALID_ARGUMENT,
-                format!("empty add arp neighbours request"),
+                "empty add arp neighbours request".to_string(),
             )));
         }
 
-        let neighs = req.neighbors.clone().unwrap().ARPNeighbors.into_vec();
+        let neighs = req.neighbors.unwrap().ARPNeighbors.into_vec();
 
         let s = Arc::clone(&self.sandbox);
         let mut sandbox = s.lock().unwrap();
@@ -1285,7 +1280,7 @@ impl protocols::agent_ttrpc::AgentService for agentService {
                 info!(sl!(), "get_oom_event return {}", &container_id);
                 let mut resp = OOMEvent::new();
                 resp.container_id = container_id;
-                return Ok(resp);
+                Ok(resp)
             }
         }
     }
@@ -1422,13 +1417,13 @@ fn find_process<'a>(
 ) -> Result<&'a mut Process> {
     let ctr = sandbox
         .get_container(cid)
-        .ok_or(anyhow!("Invalid container id"))?;
+        .ok_or_else(|| anyhow!("Invalid container id"))?;
 
     if init || eid == "" {
         return ctr
             .processes
             .get_mut(&ctr.init_process_pid)
-            .ok_or(anyhow!("cannot find init process!"));
+            .ok_or_else(|| anyhow!("cannot find init process!"));
     }
 
     ctr.get_process(eid).map_err(|_| anyhow!("Invalid exec id"))
@@ -1478,7 +1473,7 @@ fn update_container_namespaces(
     let linux = spec
         .linux
         .as_mut()
-        .ok_or(anyhow!("Spec didn't container linux field"))?;
+        .ok_or_else(|| anyhow!("Spec didn't container linux field"))?;
 
     let namespaces = linux.namespaces.as_mut_slice();
     for namespace in namespaces.iter_mut() {
@@ -1546,7 +1541,7 @@ fn is_signal_handled(pid: pid_t, signum: u32) -> bool {
             }
         };
         if line.starts_with("SigCgt:") {
-            let mask_vec: Vec<&str> = line.split(":").collect();
+            let mask_vec: Vec<&str> = line.split(':').collect();
             if mask_vec.len() != 2 {
                 warn!(sl!(), "parse the SigCgt field failed\n");
                 return false;
@@ -1566,7 +1561,7 @@ fn is_signal_handled(pid: pid_t, signum: u32) -> bool {
     false
 }
 
-fn do_mem_hotplug_by_probe(addrs: &Vec<u64>) -> Result<()> {
+fn do_mem_hotplug_by_probe(addrs: &[u64]) -> Result<()> {
     for addr in addrs.iter() {
         fs::write(SYSFS_MEMORY_HOTPLUG_PROBE_PATH, format!("{:#X}", *addr))?;
     }
@@ -1579,8 +1574,12 @@ fn do_set_guest_date_time(sec: i64, usec: i64) -> Result<()> {
         tv_usec: usec,
     };
 
-    let ret =
-        unsafe { libc::settimeofday(&tv as *const libc::timeval, 0 as *const libc::timezone) };
+    let ret = unsafe {
+        libc::settimeofday(
+            &tv as *const libc::timeval,
+            std::ptr::null::<libc::timezone>(),
+        )
+    };
 
     Errno::result(ret).map(drop)?;
 
@@ -1596,8 +1595,8 @@ fn do_copy_file(req: &CopyFileRequest) -> Result<()> {
 
     let parent = path.parent();
 
-    let dir = if parent.is_some() {
-        parent.unwrap().to_path_buf()
+    let dir = if let Some(parent) = parent {
+        parent.to_path_buf()
     } else {
         PathBuf::from("/")
     };
@@ -1657,8 +1656,8 @@ fn setup_bundle(cid: &str, spec: &mut Spec) -> Result<PathBuf> {
     let spec_root = spec.root.as_ref().unwrap();
 
     let bundle_path = Path::new(CONTAINER_BASE).join(cid);
-    let config_path = bundle_path.clone().join("config.json");
-    let rootfs_path = bundle_path.clone().join("rootfs");
+    let config_path = bundle_path.join("config.json");
+    let rootfs_path = bundle_path.join("rootfs");
 
     fs::create_dir_all(&rootfs_path)?;
     BareMount::new(
@@ -1722,9 +1721,9 @@ fn load_kernel_module(module: &protocols::agent::KernelModule) -> Result<()> {
                 "load_kernel_module return code: {} stdout:{} stderr:{}",
                 code, std_out, std_err
             );
-            return Err(anyhow!(msg));
+            Err(anyhow!(msg))
         }
-        None => return Err(anyhow!("Process terminated by signal")),
+        None => Err(anyhow!("Process terminated by signal")),
     }
 }
 

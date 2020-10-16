@@ -51,12 +51,12 @@ impl Namespace {
         }
     }
 
-    pub fn as_ipc(mut self) -> Self {
+    pub fn get_ipc(mut self) -> Self {
         self.ns_type = NamespaceType::IPC;
         self
     }
 
-    pub fn as_uts(mut self, hostname: &str) -> Self {
+    pub fn get_uts(mut self, hostname: &str) -> Self {
         self.ns_type = NamespaceType::UTS;
         if hostname != "" {
             self.hostname = Some(String::from(hostname));
@@ -64,7 +64,7 @@ impl Namespace {
         self
     }
 
-    pub fn as_pid(mut self) -> Self {
+    pub fn get_pid(mut self) -> Self {
         self.ns_type = NamespaceType::PID;
         self
     }
@@ -99,7 +99,7 @@ impl Namespace {
             File::open(Path::new(&origin_ns_path))?;
 
             // Create a new netns on the current thread.
-            let cf = ns_type.get_flags().clone();
+            let cf = ns_type.get_flags();
 
             unshare(cf)?;
 
@@ -112,12 +112,9 @@ impl Namespace {
 
             let mut flags = MsFlags::empty();
 
-            match FLAGS.get("rbind") {
-                Some(x) => {
-                    let (_, f) = *x;
-                    flags = flags | f;
-                }
-                None => (),
+            if let Some(x) = FLAGS.get("rbind") {
+                let (_, f) = *x;
+                flags |= f;
             };
 
             let bare_mount = BareMount::new(source, destination, "none", flags, "", &logger);
@@ -196,23 +193,23 @@ mod tests {
         let tmpdir = Builder::new().prefix("ipc").tempdir().unwrap();
 
         let ns_ipc = Namespace::new(&logger)
-            .as_ipc()
+            .get_ipc()
             .set_root_dir(tmpdir.path().to_str().unwrap())
             .setup();
 
         assert!(ns_ipc.is_ok());
-        assert!(remove_mounts(&vec![ns_ipc.unwrap().path]).is_ok());
+        assert!(remove_mounts(&[ns_ipc.unwrap().path]).is_ok());
 
         let logger = slog::Logger::root(slog::Discard, o!());
         let tmpdir = Builder::new().prefix("uts").tempdir().unwrap();
 
         let ns_uts = Namespace::new(&logger)
-            .as_uts("test_hostname")
+            .get_uts("test_hostname")
             .set_root_dir(tmpdir.path().to_str().unwrap())
             .setup();
 
         assert!(ns_uts.is_ok());
-        assert!(remove_mounts(&vec![ns_uts.unwrap().path]).is_ok());
+        assert!(remove_mounts(&[ns_uts.unwrap().path]).is_ok());
 
         // Check it cannot persist pid namespaces.
         let logger = slog::Logger::root(slog::Discard, o!());

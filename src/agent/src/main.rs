@@ -246,8 +246,8 @@ fn start_sandbox(logger: &Logger, config: &agentConfig, init_mode: bool) -> Resu
     let (tx, rx) = mpsc::channel::<i32>();
     sandbox.lock().unwrap().sender = Some(tx);
 
-    //vsock:///dev/vsock, port
-    let mut server = rpc::start(sandbox.clone(), config.server_addr.as_str());
+    // vsock:///dev/vsock, port
+    let mut server = rpc::start(sandbox, config.server_addr.as_str());
 
     let _ = server.start().unwrap();
 
@@ -271,8 +271,6 @@ fn setup_signal_handler(logger: &Logger, sandbox: Arc<Mutex<Sandbox>>) -> Result
         .map_err(|err| anyhow!(err).context("failed to setup agent as a child subreaper"))?;
 
     let signals = Signals::new(&[SIGCHLD])?;
-
-    let s = sandbox.clone();
 
     thread::spawn(move || {
         'outer: for sig in signals.forever() {
@@ -303,13 +301,13 @@ fn setup_signal_handler(logger: &Logger, sandbox: Arc<Mutex<Sandbox>>) -> Result
                 };
 
                 let pid = wait_status.pid();
-                if pid.is_some() {
-                    let raw_pid = pid.unwrap().as_raw();
+                if let Some(pid) = pid {
+                    let raw_pid = pid.as_raw();
                     let child_pid = format!("{}", raw_pid);
 
                     let logger = logger.new(o!("child-pid" => child_pid));
 
-                    let mut sandbox = s.lock().unwrap();
+                    let mut sandbox = sandbox.lock().unwrap();
                     let process = sandbox.find_process(raw_pid);
                     if process.is_none() {
                         info!(logger, "child exited unexpectedly");
@@ -366,7 +364,8 @@ fn init_agent_as_init(logger: &Logger, unified_cgroup_hierarchy: bool) -> Result
 
     env::set_var("PATH", "/bin:/sbin/:/usr/bin/:/usr/sbin/");
 
-    let contents = std::fs::read_to_string("/etc/hostname").unwrap_or(String::from("localhost"));
+    let contents =
+        std::fs::read_to_string("/etc/hostname").unwrap_or_else(|_| String::from("localhost"));
     let contents_array: Vec<&str> = contents.split(' ').collect();
     let hostname = contents_array[0].trim();
 
@@ -481,8 +480,8 @@ where
 
     // write and return
     match writer.write_all(&buf[..buf_len]) {
-        Ok(_) => return Ok(buf_len as u64),
-        Err(err) => return Err(err),
+        Ok(_) => Ok(buf_len as u64),
+        Err(err) => Err(err),
     }
 }
 

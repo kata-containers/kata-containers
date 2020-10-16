@@ -39,7 +39,7 @@ pub const DRIVERLOCALTYPE: &str = "local";
 
 pub const TYPEROOTFS: &str = "rootfs";
 
-#[cfg_attr(rustfmt, rustfmt_skip)]
+#[rustfmt::skip]
 lazy_static! {
     pub static ref FLAGS: HashMap<&'static str, (bool, MsFlags)> = {
         let mut m = HashMap::new();
@@ -88,7 +88,7 @@ pub struct INIT_MOUNT {
     options: Vec<&'static str>,
 }
 
-#[cfg_attr(rustfmt, rustfmt_skip)]
+#[rustfmt::skip]
 lazy_static!{
     static ref CGROUPS: HashMap<&'static str, &'static str> = {
         let mut m = HashMap::new();
@@ -109,7 +109,7 @@ lazy_static!{
     };
 }
 
-#[cfg_attr(rustfmt, rustfmt_skip)]
+#[rustfmt::skip]
 lazy_static! {
     pub static ref INIT_ROOTFS_MOUNTS: Vec<INIT_MOUNT> = vec![
         INIT_MOUNT{fstype: "proc", src: "proc", dest: "/proc", options: vec!["nosuid", "nodev", "noexec"]},
@@ -126,7 +126,7 @@ lazy_static! {
 type StorageHandler = fn(&Logger, &Storage, Arc<Mutex<Sandbox>>) -> Result<String>;
 
 // STORAGEHANDLERLIST lists the supported drivers.
-#[cfg_attr(rustfmt, rustfmt_skip)]
+#[rustfmt::skip]
 lazy_static! {
     pub static ref STORAGEHANDLERLIST: HashMap<&'static str, StorageHandler> = {
     	let mut m = HashMap::new();
@@ -243,8 +243,7 @@ fn ephemeral_storage_handler(
     storage: &Storage,
     sandbox: Arc<Mutex<Sandbox>>,
 ) -> Result<String> {
-    let s = sandbox.clone();
-    let mut sb = s.lock().unwrap();
+    let mut sb = sandbox.lock().unwrap();
     let new_storage = sb.set_sandbox_storage(&storage.mount_point);
 
     if !new_storage {
@@ -262,8 +261,7 @@ fn local_storage_handler(
     storage: &Storage,
     sandbox: Arc<Mutex<Sandbox>>,
 ) -> Result<String> {
-    let s = sandbox.clone();
-    let mut sb = s.lock().unwrap();
+    let mut sb = sandbox.lock().unwrap();
     let new_storage = sb.set_sandbox_storage(&storage.mount_point);
 
     if !new_storage {
@@ -279,8 +277,7 @@ fn local_storage_handler(
 
     let opts = parse_options(opts_vec);
     let mode = opts.get("mode");
-    if mode.is_some() {
-        let mode = mode.unwrap();
+    if let Some(mode) = mode {
         let mut permission = fs::metadata(&storage.mount_point)?.permissions();
 
         let o_mode = u32::from_str_radix(mode, 8)?;
@@ -414,13 +411,13 @@ fn parse_mount_flags_and_options(options_vec: Vec<&str>) -> (MsFlags, String) {
             match FLAGS.get(opt) {
                 Some(x) => {
                     let (_, f) = *x;
-                    flags = flags | f;
+                    flags |= f;
                 }
                 None => {
                     if !options.is_empty() {
                         options.push_str(format!(",{}", opt).as_str());
                     } else {
-                        options.push_str(format!("{}", opt).as_str());
+                        options.push_str(opt.to_string().as_str());
                     }
                 }
             };
@@ -570,10 +567,10 @@ pub fn get_cgroup_mounts(
     'outer: for (_, line) in reader.lines().enumerate() {
         let line = line?;
 
-        let fields: Vec<&str> = line.split("\t").collect();
+        let fields: Vec<&str> = line.split('\t').collect();
 
         // Ignore comment header
-        if fields[0].starts_with("#") {
+        if fields[0].starts_with('#') {
             continue;
         }
 
@@ -643,7 +640,7 @@ pub fn cgroups_mount(logger: &Logger, unified_cgroup_hierarchy: bool) -> Result<
     Ok(())
 }
 
-pub fn remove_mounts(mounts: &Vec<String>) -> Result<()> {
+pub fn remove_mounts(mounts: &[String]) -> Result<()> {
     for m in mounts.iter() {
         mount::umount(m.as_str()).context(format!("failed to umount {:?}", m))?;
     }
@@ -675,7 +672,7 @@ fn ensure_destination_exists(destination: &str, fs_type: &str) -> Result<()> {
 fn parse_options(option_list: Vec<String>) -> HashMap<String, String> {
     let mut options = HashMap::new();
     for opt in option_list.iter() {
-        let fields: Vec<&str> = opt.split("=").collect();
+        let fields: Vec<&str> = opt.split('=').collect();
         if fields.len() != 2 {
             continue;
         }
@@ -856,7 +853,7 @@ mod tests {
 
                     let msg = format!("{}: umount result: {:?}", msg, result);
 
-                    assert!(ret == 0, format!("{}", msg));
+                    assert!(ret == 0, msg);
                 };
 
                 continue;
@@ -914,7 +911,8 @@ mod tests {
             .expect("failed to create mount destination filename");
 
         for d in [test_dir_filename, mnt_src_filename, mnt_dest_filename].iter() {
-            std::fs::create_dir_all(d).expect(&format!("failed to create directory {}", d));
+            std::fs::create_dir_all(d)
+                .unwrap_or_else(|_| panic!("failed to create directory {}", d));
         }
 
         // Create an actual mount
@@ -1055,13 +1053,13 @@ mod tests {
 
             let filename = file_path
                 .to_str()
-                .expect(&format!("{}: failed to create filename", msg));
+                .unwrap_or_else(|| panic!("{}: failed to create filename", msg));
 
             let mut file =
-                File::create(filename).expect(&format!("{}: failed to create file", msg));
+                File::create(filename).unwrap_or_else(|_| panic!("{}: failed to create file", msg));
 
             file.write_all(d.contents.as_bytes())
-                .expect(&format!("{}: failed to write file contents", msg));
+                .unwrap_or_else(|_| panic!("{}: failed to write file contents", msg));
 
             let result = get_mount_fs_type_from_file(filename, d.mount_point);
 
@@ -1217,10 +1215,10 @@ mod tests {
                 .expect("failed to create cgroup file filename");
 
             let mut file =
-                File::create(filename).expect(&format!("{}: failed to create file", msg));
+                File::create(filename).unwrap_or_else(|_| panic!("{}: failed to create file", msg));
 
             file.write_all(d.contents.as_bytes())
-                .expect(&format!("{}: failed to write file contents", msg));
+                .unwrap_or_else(|_| panic!("{}: failed to write file contents", msg));
 
             let result = get_cgroup_mounts(&logger, filename, false);
             let msg = format!("{}: result: {:?}", msg, result);
