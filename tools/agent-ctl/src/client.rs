@@ -8,6 +8,7 @@
 use crate::types::{Config, Options};
 use crate::utils;
 use anyhow::{anyhow, Result};
+use byteorder::ByteOrder;
 use nix::sys::socket::{connect, socket, AddressFamily, SockAddr, SockFlag, SockType, UnixAddr};
 use protocols::agent::*;
 use protocols::agent_ttrpc::*;
@@ -76,6 +77,11 @@ const ERR_API_FAILED: &str = "API failed";
 
 static AGENT_CMDS: &'static [AgentCmd] = &[
     AgentCmd {
+        name: "AddARPNeighbors",
+        st: ServiceType::Agent,
+        fp: agent_cmd_sandbox_add_arp_neighbors,
+    },
+    AgentCmd {
         name: "Check",
         st: ServiceType::Health,
         fp: agent_cmd_health_check,
@@ -84,6 +90,16 @@ static AGENT_CMDS: &'static [AgentCmd] = &[
         name: "Version",
         st: ServiceType::Health,
         fp: agent_cmd_health_version,
+    },
+    AgentCmd {
+        name: "CloseStdin",
+        st: ServiceType::Agent,
+        fp: agent_cmd_container_close_stdin,
+    },
+    AgentCmd {
+        name: "CopyFile",
+        st: ServiceType::Agent,
+        fp: agent_cmd_sandbox_copy_file,
     },
     AgentCmd {
         name: "CreateContainer",
@@ -106,9 +122,19 @@ static AGENT_CMDS: &'static [AgentCmd] = &[
         fp: agent_cmd_container_exec,
     },
     AgentCmd {
-        name: "GuestDetails",
+        name: "GetGuestDetails",
         st: ServiceType::Agent,
-        fp: agent_cmd_sandbox_guest_details,
+        fp: agent_cmd_sandbox_get_guest_details,
+    },
+    AgentCmd {
+        name: "GetMetrics",
+        st: ServiceType::Agent,
+        fp: agent_cmd_sandbox_get_metrics,
+    },
+    AgentCmd {
+        name: "GetOOMEvent",
+        st: ServiceType::Agent,
+        fp: agent_cmd_sandbox_get_oom_event,
     },
     AgentCmd {
         name: "ListInterfaces",
@@ -126,9 +152,34 @@ static AGENT_CMDS: &'static [AgentCmd] = &[
         fp: agent_cmd_container_list_processes,
     },
     AgentCmd {
+        name: "MemHotplugByProbe",
+        st: ServiceType::Agent,
+        fp: agent_cmd_sandbox_mem_hotplug_by_probe,
+    },
+    AgentCmd {
+        name: "OnlineCPUMem",
+        st: ServiceType::Agent,
+        fp: agent_cmd_sandbox_online_cpu_mem,
+    },
+    AgentCmd {
         name: "PauseContainer",
         st: ServiceType::Agent,
         fp: agent_cmd_container_pause,
+    },
+    AgentCmd {
+        name: "ReadStderr",
+        st: ServiceType::Agent,
+        fp: agent_cmd_container_read_stderr,
+    },
+    AgentCmd {
+        name: "ReadStdout",
+        st: ServiceType::Agent,
+        fp: agent_cmd_container_read_stdout,
+    },
+    AgentCmd {
+        name: "ReseedRandomDev",
+        st: ServiceType::Agent,
+        fp: agent_cmd_sandbox_reseed_random_dev,
     },
     AgentCmd {
         name: "RemoveContainer",
@@ -139,6 +190,11 @@ static AGENT_CMDS: &'static [AgentCmd] = &[
         name: "ResumeContainer",
         st: ServiceType::Agent,
         fp: agent_cmd_container_resume,
+    },
+    AgentCmd {
+        name: "SetGuestDateTime",
+        st: ServiceType::Agent,
+        fp: agent_cmd_sandbox_set_guest_date_time,
     },
     AgentCmd {
         name: "SignalProcess",
@@ -166,6 +222,16 @@ static AGENT_CMDS: &'static [AgentCmd] = &[
         fp: agent_cmd_sandbox_tracing_stop,
     },
     AgentCmd {
+        name: "TtyWinResize",
+        st: ServiceType::Agent,
+        fp: agent_cmd_container_tty_win_resize,
+    },
+    AgentCmd {
+        name: "UpdateContainer",
+        st: ServiceType::Agent,
+        fp: agent_cmd_sandbox_update_container,
+    },
+    AgentCmd {
         name: "UpdateInterface",
         st: ServiceType::Agent,
         fp: agent_cmd_sandbox_update_interface,
@@ -179,6 +245,11 @@ static AGENT_CMDS: &'static [AgentCmd] = &[
         name: "WaitProcess",
         st: ServiceType::Agent,
         fp: agent_cmd_container_wait_process,
+    },
+    AgentCmd {
+        name: "WriteStdin",
+        st: ServiceType::Agent,
+        fp: agent_cmd_container_write_stdin,
     },
 ];
 
@@ -684,6 +755,8 @@ fn agent_cmd_health_check(
     // value unused
     req.set_service("".to_string());
 
+    debug!(sl!(), "sending request"; "request" => format!("{:?}", req));
+
     let reply = health
         .check(&req, cfg.timeout_nano)
         .map_err(|e| anyhow!("{:?}", e).context(ERR_API_FAILED))?;
@@ -707,6 +780,8 @@ fn agent_cmd_health_version(
     // value unused
     req.set_service("".to_string());
 
+    debug!(sl!(), "sending request"; "request" => format!("{:?}", req));
+
     let reply = health
         .version(&req, cfg.timeout_nano)
         .map_err(|e| anyhow!("{:?}", e).context(ERR_API_FAILED))?;
@@ -729,6 +804,8 @@ fn agent_cmd_sandbox_create(
     let sid = utils::get_option("sid", options, args);
     req.set_sandbox_id(sid);
 
+    debug!(sl!(), "sending request"; "request" => format!("{:?}", req));
+
     let reply = client
         .create_sandbox(&req, cfg.timeout_nano)
         .map_err(|e| anyhow!("{:?}", e).context(ERR_API_FAILED))?;
@@ -747,6 +824,8 @@ fn agent_cmd_sandbox_destroy(
     _args: &str,
 ) -> Result<()> {
     let req = DestroySandboxRequest::default();
+
+    debug!(sl!(), "sending request"; "request" => format!("{:?}", req));
 
     let reply = client
         .destroy_sandbox(&req, cfg.timeout_nano)
@@ -778,6 +857,8 @@ fn agent_cmd_container_create(
     req.set_exec_id(exec_id);
     req.set_OCI(grpc_spec);
 
+    debug!(sl!(), "sending request"; "request" => format!("{:?}", req));
+
     let reply = client
         .create_container(&req, cfg.timeout_nano)
         .map_err(|e| anyhow!("{:?}", e).context(ERR_API_FAILED))?;
@@ -800,6 +881,8 @@ fn agent_cmd_container_remove(
     let cid = utils::get_option("cid", options, args);
 
     req.set_container_id(cid);
+
+    debug!(sl!(), "sending request"; "request" => format!("{:?}", req));
 
     let reply = client
         .remove_container(&req, cfg.timeout_nano)
@@ -838,6 +921,8 @@ fn agent_cmd_container_exec(
     req.set_exec_id(exec_id);
     req.set_process(process);
 
+    debug!(sl!(), "sending request"; "request" => format!("{:?}", req));
+
     let reply = client
         .exec_process(&req, cfg.timeout_nano)
         .map_err(|e| anyhow!("{:?}", e).context(ERR_API_FAILED))?;
@@ -860,6 +945,8 @@ fn agent_cmd_container_stats(
     let cid = utils::get_option("cid", options, args);
 
     req.set_container_id(cid);
+
+    debug!(sl!(), "sending request"; "request" => format!("{:?}", req));
 
     let reply = client
         .stats_container(&req, cfg.timeout_nano)
@@ -884,6 +971,8 @@ fn agent_cmd_container_pause(
 
     req.set_container_id(cid);
 
+    debug!(sl!(), "sending request"; "request" => format!("{:?}", req));
+
     let reply = client
         .pause_container(&req, cfg.timeout_nano)
         .map_err(|e| anyhow!("{:?}", e).context(ERR_API_FAILED))?;
@@ -906,6 +995,8 @@ fn agent_cmd_container_resume(
     let cid = utils::get_option("cid", options, args);
 
     req.set_container_id(cid);
+
+    debug!(sl!(), "sending request"; "request" => format!("{:?}", req));
 
     let reply = client
         .resume_container(&req, cfg.timeout_nano)
@@ -930,6 +1021,8 @@ fn agent_cmd_container_start(
 
     req.set_container_id(cid);
 
+    debug!(sl!(), "sending request"; "request" => format!("{:?}", req));
+
     let reply = client
         .start_container(&req, cfg.timeout_nano)
         .map_err(|e| anyhow!("{:?}", e).context(ERR_API_FAILED))?;
@@ -940,7 +1033,7 @@ fn agent_cmd_container_start(
     Ok(())
 }
 
-fn agent_cmd_sandbox_guest_details(
+fn agent_cmd_sandbox_get_guest_details(
     cfg: &Config,
     client: &AgentServiceClient,
     _health: &HealthClient,
@@ -950,6 +1043,8 @@ fn agent_cmd_sandbox_guest_details(
     let mut req = GuestDetailsRequest::default();
 
     req.set_mem_block_size(true);
+
+    debug!(sl!(), "sending request"; "request" => format!("{:?}", req));
 
     let reply = client
         .get_guest_details(&req, cfg.timeout_nano)
@@ -981,6 +1076,8 @@ fn agent_cmd_container_list_processes(
     req.set_container_id(cid);
     req.set_format(list_format);
 
+    debug!(sl!(), "sending request"; "request" => format!("{:?}", req));
+
     let reply = client
         .list_processes(&req, cfg.timeout_nano)
         .map_err(|e| anyhow!("{:?}", e).context(ERR_API_FAILED))?;
@@ -1005,6 +1102,8 @@ fn agent_cmd_container_wait_process(
 
     req.set_container_id(cid);
     req.set_exec_id(exec_id);
+
+    debug!(sl!(), "sending request"; "request" => format!("{:?}", req));
 
     let reply = client
         .wait_process(&req, cfg.timeout_nano)
@@ -1041,6 +1140,8 @@ fn agent_cmd_container_signal_process(
     req.set_exec_id(exec_id);
     req.set_signal(signum as u32);
 
+    debug!(sl!(), "sending request"; "request" => format!("{:?}", req));
+
     let reply = client
         .signal_process(&req, cfg.timeout_nano)
         .map_err(|e| anyhow!("{:?}", e).context(ERR_API_FAILED))?;
@@ -1059,6 +1160,8 @@ fn agent_cmd_sandbox_tracing_start(
     _args: &str,
 ) -> Result<()> {
     let req = StartTracingRequest::default();
+
+    debug!(sl!(), "sending request"; "request" => format!("{:?}", req));
 
     let reply = client
         .start_tracing(&req, cfg.timeout_nano)
@@ -1079,6 +1182,8 @@ fn agent_cmd_sandbox_tracing_stop(
 ) -> Result<()> {
     let req = StopTracingRequest::default();
 
+    debug!(sl!(), "sending request"; "request" => format!("{:?}", req));
+
     let reply = client
         .stop_tracing(&req, cfg.timeout_nano)
         .map_err(|e| anyhow!("{:?}", e).context(ERR_API_FAILED))?;
@@ -1098,15 +1203,13 @@ fn agent_cmd_sandbox_update_interface(
 ) -> Result<()> {
     let req = UpdateInterfaceRequest::default();
 
+    debug!(sl!(), "sending request"; "request" => format!("{:?}", req));
     let reply = client
         .update_interface(&req, cfg.timeout_nano)
         .map_err(|e| anyhow!("{:?}", e).context(ERR_API_FAILED))?;
 
     // FIXME: Implement 'UpdateInterface' fully.
     eprintln!("FIXME: 'UpdateInterface' not fully implemented");
-
-    // let if = ...;
-    // req.set_interface(if);
 
     info!(sl!(), "response received";
         "response" => format!("{:?}", reply));
@@ -1123,15 +1226,14 @@ fn agent_cmd_sandbox_update_routes(
 ) -> Result<()> {
     let req = UpdateRoutesRequest::default();
 
+    debug!(sl!(), "sending request"; "request" => format!("{:?}", req));
+
     let reply = client
         .update_routes(&req, cfg.timeout_nano)
         .map_err(|e| anyhow!("{:?}", e).context(ERR_API_FAILED))?;
 
     // FIXME: Implement 'UpdateRoutes' fully.
     eprintln!("FIXME: 'UpdateRoutes' not fully implemented");
-
-    // let routes = ...;
-    // req.set_routes(routes);
 
     info!(sl!(), "response received";
         "response" => format!("{:?}", reply));
@@ -1147,6 +1249,8 @@ fn agent_cmd_sandbox_list_interfaces(
     _args: &str,
 ) -> Result<()> {
     let req = ListInterfacesRequest::default();
+
+    debug!(sl!(), "sending request"; "request" => format!("{:?}", req));
 
     let reply = client
         .list_interfaces(&req, cfg.timeout_nano)
@@ -1167,6 +1271,8 @@ fn agent_cmd_sandbox_list_routes(
 ) -> Result<()> {
     let req = ListRoutesRequest::default();
 
+    debug!(sl!(), "sending request"; "request" => format!("{:?}", req));
+
     let reply = client
         .list_routes(&req, cfg.timeout_nano)
         .map_err(|e| anyhow!("{:?}", e).context(ERR_API_FAILED))?;
@@ -1177,9 +1283,531 @@ fn agent_cmd_sandbox_list_routes(
     Ok(())
 }
 
+fn agent_cmd_container_tty_win_resize(
+    cfg: &Config,
+    client: &AgentServiceClient,
+    _health: &HealthClient,
+    options: &mut Options,
+    args: &str,
+) -> Result<()> {
+    let mut req = TtyWinResizeRequest::default();
+
+    let cid = utils::get_option("cid", options, args);
+    let exec_id = utils::get_option("exec_id", options, args);
+
+    req.set_container_id(cid);
+    req.set_exec_id(exec_id);
+
+    let rows_str = utils::get_option("row", options, args);
+
+    if rows_str != "" {
+        let rows = rows_str
+            .parse::<u32>()
+            .map_err(|e| anyhow!(e).context("invalid row size"))?;
+        req.set_row(rows);
+    }
+
+    let cols_str = utils::get_option("column", options, args);
+
+    if cols_str != "" {
+        let cols = cols_str
+            .parse::<u32>()
+            .map_err(|e| anyhow!(e).context("invalid column size"))?;
+
+        req.set_column(cols);
+    }
+
+    debug!(sl!(), "sending request"; "request" => format!("{:?}", req));
+
+    let reply = client
+        .tty_win_resize(&req, cfg.timeout_nano)
+        .map_err(|e| anyhow!("{:?}", e).context(ERR_API_FAILED))?;
+
+    info!(sl!(), "response received";
+        "response" => format!("{:?}", reply));
+
+    Ok(())
+}
+
+fn agent_cmd_container_close_stdin(
+    cfg: &Config,
+    client: &AgentServiceClient,
+    _health: &HealthClient,
+    options: &mut Options,
+    args: &str,
+) -> Result<()> {
+    let mut req = CloseStdinRequest::default();
+
+    let cid = utils::get_option("cid", options, args);
+    let exec_id = utils::get_option("exec_id", options, args);
+
+    req.set_container_id(cid);
+    req.set_exec_id(exec_id);
+
+    debug!(sl!(), "sending request"; "request" => format!("{:?}", req));
+
+    let reply = client
+        .close_stdin(&req, cfg.timeout_nano)
+        .map_err(|e| anyhow!("{:?}", e).context(ERR_API_FAILED))?;
+
+    info!(sl!(), "response received";
+        "response" => format!("{:?}", reply));
+
+    Ok(())
+}
+
+fn agent_cmd_container_read_stdout(
+    cfg: &Config,
+    client: &AgentServiceClient,
+    _health: &HealthClient,
+    options: &mut Options,
+    args: &str,
+) -> Result<()> {
+    let mut req = ReadStreamRequest::default();
+
+    let cid = utils::get_option("cid", options, args);
+    let exec_id = utils::get_option("exec_id", options, args);
+
+    req.set_container_id(cid);
+    req.set_exec_id(exec_id);
+
+    let length_str = utils::get_option("len", options, args);
+
+    if length_str != "" {
+        let length = length_str
+            .parse::<u32>()
+            .map_err(|e| anyhow!(e).context("invalid length"))?;
+        req.set_len(length);
+    }
+
+    debug!(sl!(), "sending request"; "request" => format!("{:?}", req));
+
+    let reply = client
+        .read_stdout(&req, cfg.timeout_nano)
+        .map_err(|e| anyhow!("{:?}", e).context(ERR_API_FAILED))?;
+
+    info!(sl!(), "response received";
+        "response" => format!("{:?}", reply));
+
+    Ok(())
+}
+
+fn agent_cmd_container_read_stderr(
+    cfg: &Config,
+    client: &AgentServiceClient,
+    _health: &HealthClient,
+    options: &mut Options,
+    args: &str,
+) -> Result<()> {
+    let mut req = ReadStreamRequest::default();
+
+    let cid = utils::get_option("cid", options, args);
+    let exec_id = utils::get_option("exec_id", options, args);
+
+    req.set_container_id(cid);
+    req.set_exec_id(exec_id);
+
+    let length_str = utils::get_option("len", options, args);
+
+    if length_str != "" {
+        let length = length_str
+            .parse::<u32>()
+            .map_err(|e| anyhow!(e).context("invalid length"))?;
+        req.set_len(length);
+    }
+
+    debug!(sl!(), "sending request"; "request" => format!("{:?}", req));
+
+    let reply = client
+        .read_stderr(&req, cfg.timeout_nano)
+        .map_err(|e| anyhow!("{:?}", e).context(ERR_API_FAILED))?;
+
+    info!(sl!(), "response received";
+        "response" => format!("{:?}", reply));
+
+    Ok(())
+}
+
+fn agent_cmd_container_write_stdin(
+    cfg: &Config,
+    client: &AgentServiceClient,
+    _health: &HealthClient,
+    options: &mut Options,
+    args: &str,
+) -> Result<()> {
+    let mut req = WriteStreamRequest::default();
+
+    let cid = utils::get_option("cid", options, args);
+    let exec_id = utils::get_option("exec_id", options, args);
+
+    let str_data = utils::get_option("data", options, args);
+    let data = utils::str_to_bytes(&str_data)?;
+
+    req.set_container_id(cid);
+    req.set_exec_id(exec_id);
+    req.set_data(data.to_vec());
+
+    debug!(sl!(), "sending request"; "request" => format!("{:?}", req));
+
+    let reply = client
+        .write_stdin(&req, cfg.timeout_nano)
+        .map_err(|e| anyhow!("{:?}", e).context(ERR_API_FAILED))?;
+
+    info!(sl!(), "response received";
+        "response" => format!("{:?}", reply));
+
+    Ok(())
+}
+
+fn agent_cmd_sandbox_get_metrics(
+    cfg: &Config,
+    client: &AgentServiceClient,
+    _health: &HealthClient,
+    _options: &mut Options,
+    _args: &str,
+) -> Result<()> {
+    let req = GetMetricsRequest::default();
+
+    debug!(sl!(), "sending request"; "request" => format!("{:?}", req));
+
+    let reply = client
+        .get_metrics(&req, cfg.timeout_nano)
+        .map_err(|e| anyhow!("{:?}", e).context(ERR_API_FAILED))?;
+
+    info!(sl!(), "response received";
+        "response" => format!("{:?}", reply));
+
+    Ok(())
+}
+
+fn agent_cmd_sandbox_get_oom_event(
+    cfg: &Config,
+    client: &AgentServiceClient,
+    _health: &HealthClient,
+    _options: &mut Options,
+    _args: &str,
+) -> Result<()> {
+    let req = GetOOMEventRequest::default();
+
+    debug!(sl!(), "sending request"; "request" => format!("{:?}", req));
+
+    let reply = client
+        .get_oom_event(&req, cfg.timeout_nano)
+        .map_err(|e| anyhow!("{:?}", e).context(ERR_API_FAILED))?;
+
+    info!(sl!(), "response received";
+        "response" => format!("{:?}", reply));
+
+    Ok(())
+}
+
+fn agent_cmd_sandbox_copy_file(
+    cfg: &Config,
+    client: &AgentServiceClient,
+    _health: &HealthClient,
+    options: &mut Options,
+    args: &str,
+) -> Result<()> {
+    let mut req = CopyFileRequest::default();
+
+    let path = utils::get_option("path", options, args);
+    if path != "" {
+        req.set_path(path);
+    }
+
+    let file_size_str = utils::get_option("file_size", options, args);
+
+    if file_size_str != "" {
+        let file_size = file_size_str
+            .parse::<i64>()
+            .map_err(|e| anyhow!(e).context("invalid file_size"))?;
+
+        req.set_file_size(file_size);
+    }
+
+    let file_mode_str = utils::get_option("file_mode", options, args);
+
+    if file_mode_str != "" {
+        let file_mode = file_mode_str
+            .parse::<u32>()
+            .map_err(|e| anyhow!(e).context("invalid file_mode"))?;
+
+        req.set_file_mode(file_mode);
+    }
+
+    let dir_mode_str = utils::get_option("dir_mode", options, args);
+
+    if dir_mode_str != "" {
+        let dir_mode = dir_mode_str
+            .parse::<u32>()
+            .map_err(|e| anyhow!(e).context("invalid dir_mode"))?;
+
+        req.set_dir_mode(dir_mode);
+    }
+
+    let uid_str = utils::get_option("uid", options, args);
+
+    if uid_str != "" {
+        let uid = uid_str
+            .parse::<i32>()
+            .map_err(|e| anyhow!(e).context("invalid uid"))?;
+
+        req.set_uid(uid);
+    }
+
+    let gid_str = utils::get_option("gid", options, args);
+
+    if gid_str != "" {
+        let gid = gid_str
+            .parse::<i32>()
+            .map_err(|e| anyhow!(e).context("invalid gid"))?;
+        req.set_gid(gid);
+    }
+
+    let offset_str = utils::get_option("offset", options, args);
+
+    if offset_str != "" {
+        let offset = offset_str
+            .parse::<i64>()
+            .map_err(|e| anyhow!(e).context("invalid offset"))?;
+        req.set_offset(offset);
+    }
+
+    let data_str = utils::get_option("data", options, args);
+    if data_str != "" {
+        let data = utils::str_to_bytes(&data_str)?;
+        req.set_data(data.to_vec());
+    }
+
+    debug!(sl!(), "sending request"; "request" => format!("{:?}", req));
+
+    let reply = client
+        .copy_file(&req, cfg.timeout_nano)
+        .map_err(|e| anyhow!("{:?}", e).context(ERR_API_FAILED))?;
+
+    info!(sl!(), "response received";
+        "response" => format!("{:?}", reply));
+
+    Ok(())
+}
+
+fn agent_cmd_sandbox_reseed_random_dev(
+    cfg: &Config,
+    client: &AgentServiceClient,
+    _health: &HealthClient,
+    options: &mut Options,
+    args: &str,
+) -> Result<()> {
+    let mut req = ReseedRandomDevRequest::default();
+
+    let str_data = utils::get_option("data", options, args);
+    let data = utils::str_to_bytes(&str_data)?;
+
+    req.set_data(data.to_vec());
+
+    debug!(sl!(), "sending request"; "request" => format!("{:?}", req));
+
+    let reply = client
+        .reseed_random_dev(&req, cfg.timeout_nano)
+        .map_err(|e| anyhow!("{:?}", e).context(ERR_API_FAILED))?;
+
+    info!(sl!(), "response received";
+        "response" => format!("{:?}", reply));
+
+    Ok(())
+}
+
+fn agent_cmd_sandbox_online_cpu_mem(
+    cfg: &Config,
+    client: &AgentServiceClient,
+    _health: &HealthClient,
+    options: &mut Options,
+    args: &str,
+) -> Result<()> {
+    let mut req = OnlineCPUMemRequest::default();
+
+    let wait_str = utils::get_option("wait", options, args);
+
+    if wait_str != "" {
+        let wait = wait_str
+            .parse::<bool>()
+            .map_err(|e| anyhow!(e).context("invalid wait bool"))?;
+
+        req.set_wait(wait);
+    }
+
+    let nb_cpus_str = utils::get_option("nb_cpus", options, args);
+
+    if nb_cpus_str != "" {
+        let nb_cpus = nb_cpus_str
+            .parse::<u32>()
+            .map_err(|e| anyhow!(e).context("invalid nb_cpus value"))?;
+
+        req.set_nb_cpus(nb_cpus);
+    }
+
+    let cpu_only_str = utils::get_option("cpu_only", options, args);
+
+    if cpu_only_str != "" {
+        let cpu_only = cpu_only_str
+            .parse::<bool>()
+            .map_err(|e| anyhow!(e).context("invalid cpu_only bool"))?;
+
+        req.set_cpu_only(cpu_only);
+    }
+
+    debug!(sl!(), "sending request"; "request" => format!("{:?}", req));
+
+    let reply = client
+        .online_cpu_mem(&req, cfg.timeout_nano)
+        .map_err(|e| anyhow!("{:?}", e).context(ERR_API_FAILED))?;
+
+    info!(sl!(), "response received";
+        "response" => format!("{:?}", reply));
+
+    Ok(())
+}
+
+fn agent_cmd_sandbox_set_guest_date_time(
+    cfg: &Config,
+    client: &AgentServiceClient,
+    _health: &HealthClient,
+    options: &mut Options,
+    args: &str,
+) -> Result<()> {
+    let mut req = SetGuestDateTimeRequest::default();
+
+    let secs_str = utils::get_option("sec", options, args);
+
+    if secs_str != "" {
+        let secs = secs_str
+            .parse::<i64>()
+            .map_err(|e| anyhow!(e).context("invalid seconds"))?;
+
+        req.set_Sec(secs);
+    }
+
+    let usecs_str = utils::get_option("usec", options, args);
+
+    if usecs_str != "" {
+        let usecs = usecs_str
+            .parse::<i64>()
+            .map_err(|e| anyhow!(e).context("invalid useconds"))?;
+
+        req.set_Usec(usecs);
+    }
+
+    debug!(sl!(), "sending request"; "request" => format!("{:?}", req));
+
+    let reply = client
+        .set_guest_date_time(&req, cfg.timeout_nano)
+        .map_err(|e| anyhow!("{:?}", e).context(ERR_API_FAILED))?;
+
+    info!(sl!(), "response received";
+        "response" => format!("{:?}", reply));
+
+    Ok(())
+}
+
+fn agent_cmd_sandbox_add_arp_neighbors(
+    cfg: &Config,
+    client: &AgentServiceClient,
+    _health: &HealthClient,
+    _options: &mut Options,
+    _args: &str,
+) -> Result<()> {
+    let req = AddARPNeighborsRequest::default();
+
+    // FIXME: Implement fully.
+    eprintln!("FIXME: 'AddARPNeighbors' not fully implemented");
+
+    debug!(sl!(), "sending request"; "request" => format!("{:?}", req));
+
+    let reply = client
+        .add_arp_neighbors(&req, cfg.timeout_nano)
+        .map_err(|e| anyhow!("{:?}", e).context(ERR_API_FAILED))?;
+
+    info!(sl!(), "response received";
+        "response" => format!("{:?}", reply));
+
+    Ok(())
+}
+
+fn agent_cmd_sandbox_update_container(
+    cfg: &Config,
+    client: &AgentServiceClient,
+    _health: &HealthClient,
+    options: &mut Options,
+    args: &str,
+) -> Result<()> {
+    let mut req = UpdateContainerRequest::default();
+
+    let cid = utils::get_option("cid", options, args);
+
+    req.set_container_id(cid);
+
+    // FIXME: Implement fully
+    eprintln!("FIXME: 'UpdateContainer' not fully implemented");
+
+    debug!(sl!(), "sending request"; "request" => format!("{:?}", req));
+
+    let reply = client
+        .update_container(&req, cfg.timeout_nano)
+        .map_err(|e| anyhow!("{:?}", e).context(ERR_API_FAILED))?;
+
+    info!(sl!(), "response received";
+        "response" => format!("{:?}", reply));
+
+    Ok(())
+}
+
+fn agent_cmd_sandbox_mem_hotplug_by_probe(
+    cfg: &Config,
+    client: &AgentServiceClient,
+    _health: &HealthClient,
+    options: &mut Options,
+    args: &str,
+) -> Result<()> {
+    let mut req = MemHotplugByProbeRequest::default();
+
+    // Expected to be a comma separated list of hex addresses
+    let addr_list = utils::get_option("memHotplugProbeAddr", options, args);
+
+    if addr_list != "" {
+        let addrs: Vec<u64> = addr_list
+            // Convert into a list of string values.
+            .split(",")
+            // Convert each string element into a u8 array of bytes, ignoring
+            // those elements that fail the conversion.
+            .filter_map(|s| hex::decode(s.trim_start_matches("0x")).ok())
+            // "Stretch" the u8 byte slice into one of length 8
+            // (to allow each 8 byte chunk to be converted into a u64).
+            .map(|mut v| -> Vec<u8> {
+                v.resize(8, 0x0);
+                v
+            })
+            // Convert the slice of u8 bytes into a u64
+            .map(|b| byteorder::LittleEndian::read_u64(&b))
+            .collect();
+
+        req.set_memHotplugProbeAddr(addrs);
+    }
+
+    debug!(sl!(), "sending request"; "request" => format!("{:?}", req));
+
+    let reply = client
+        .mem_hotplug_by_probe(&req, cfg.timeout_nano)
+        .map_err(|e| anyhow!("{:?}", e).context(ERR_API_FAILED))?;
+
+    info!(sl!(), "response received";
+        "response" => format!("{:?}", reply));
+
+    Ok(())
+}
+
 #[inline]
 fn builtin_cmd_repeat(_cfg: &Config, _options: &mut Options, _args: &str) -> (Result<()>, bool) {
-    // XXX: NOP implementation. Due to the way repeat has to work, providing
+    // XXX: NOP implementation. Due to the way repeat has to work, providing a
     // handler like this is "too late" to be useful. However, a handler
     // is required as "repeat" is a valid command.
     //
