@@ -1,0 +1,60 @@
+From 04d325e86f79bd61f8fd50d45ff795aca0dd3404 Mon Sep 17 00:00:00 2001
+From: Vivek Goyal <vgoyal@redhat.com>
+Date: Mon, 21 Sep 2020 17:32:16 -0400
+Subject: [PATCH] virtiofsd: Used glib "shared" thread pool
+
+glib offers thread pools and it seems to support "exclusive" and "shared"
+thread pools.
+
+https://developer.gnome.org/glib/stable/glib-Thread-Pools.html#g-thread-pool-new
+
+Currently we use "exlusive" thread pools but its performance seems to be
+poor. I tried using "shared" thread pools and performance seems much
+better. I posted performance results here.
+
+https://www.redhat.com/archives/virtio-fs/2020-September/msg00080.html
+
+So lets switch to shared thread pools. We can think of making it optional
+once somebody can show in what cases exclusive thread pools offer better
+results. For now, my simple performance tests across the board see
+better results with shared thread pools.
+
+Signed-off-by: Vivek Goyal <vgoyal@redhat.com>
+Message-Id: <20200921213216.GE13362@redhat.com>
+Reviewed-by: Stefan Hajnoczi <stefanha@redhat.com>
+Signed-off-by: Dr. David Alan Gilbert <dgilbert@redhat.com>
+  With seccomp fix from Miklos
+---
+ tools/virtiofsd/fuse_virtio.c         | 2 +-
+ tools/virtiofsd/seccomp.c             | 2 ++
+ 2 files changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/tools/virtiofsd/fuse_virtio.c b/tools/virtiofsd/fuse_virtio.c
+index 9e5537506c..d5c8e98253 100644
+--- a/tools/virtiofsd/fuse_virtio.c
++++ b/tools/virtiofsd/fuse_virtio.c
+@@ -588,7 +588,7 @@ static void *fv_queue_thread(void *opaque)
+     struct fuse_session *se = qi->virtio_dev->se;
+     GThreadPool *pool;
+ 
+-    pool = g_thread_pool_new(fv_queue_worker, qi, se->thread_pool_size, TRUE,
++    pool = g_thread_pool_new(fv_queue_worker, qi, se->thread_pool_size, FALSE,
+                              NULL);
+     if (!pool) {
+         fuse_log(FUSE_LOG_ERR, "%s: g_thread_pool_new failed\n", __func__);
+diff --git a/tools/virtiofsd/seccomp.c b/tools/virtiofsd/seccomp.c
+index 19fee60011..eb9af8265f 100644
+--- a/tools/virtiofsd/seccomp.c
++++ b/tools/virtiofsd/seccomp.c
+@@ -93,6 +93,8 @@ static const int syscall_whitelist[] = {
+     SCMP_SYS(rt_sigaction),
+     SCMP_SYS(rt_sigprocmask),
+     SCMP_SYS(rt_sigreturn),
++    SCMP_SYS(sched_getattr),
++    SCMP_SYS(sched_setattr),
+     SCMP_SYS(sendmsg),
+     SCMP_SYS(setresgid),
+     SCMP_SYS(setresuid),
+-- 
+2.28.0
+
