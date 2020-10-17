@@ -284,7 +284,7 @@ parts:
       done
 
       # Only x86_64 supports libpmem
-      [ "$(uname -m)" = "x86_64" ] && sudo apt-get --no-install-recommends install -y apt-utils ca-certificates libpmem-dev
+      [ "$(uname -m)" = "x86_64" ] && sudo apt-get --no-install-recommends install -y apt-utils ca-certificates libpmem-dev libseccomp-dev
 
       configure_hypervisor=${kata_dir}/tools/packaging/scripts/configure-hypervisor.sh
       chmod +x ${configure_hypervisor}
