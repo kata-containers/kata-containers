@@ -1,3 +1,7 @@
+# Copyright (c) 2019 Intel Corporation
+# Copyright (c) 2020 Ant Group
+#
+# SPDX-License-Identifier: Apache-2.0
 from ubuntu:20.04
 
 ARG QEMU_VIRTIOFS_REPO
@@ -68,5 +72,5 @@ RUN make -j$(nproc)
 RUN make -j$(nproc) virtiofsd
 RUN make install DESTDIR=/tmp/qemu-virtiofs-static
 RUN mv /tmp/qemu-virtiofs-static/"${PREFIX}"/bin/qemu-system-x86_64 /tmp/qemu-virtiofs-static/"${PREFIX}"/bin/qemu-virtiofs-system-x86_64
-RUN chmod +x virtiofsd && mv virtiofsd /tmp/qemu-virtiofs-static/opt/kata/bin/
+RUN mv /tmp/qemu-virtiofs-static/"${PREFIX}"/libexec/kata-qemu/virtiofsd /tmp/qemu-virtiofs-static/opt/kata/bin/virtiofsd-dax
 RUN cd /tmp/qemu-virtiofs-static && tar -czvf "${QEMU_TARBALL}"  *
