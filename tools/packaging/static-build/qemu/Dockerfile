@@ -1,3 +1,7 @@
+# Copyright (c) 2019 Intel Corporation
+# Copyright (c) 2020 Ant Group
+#
+# SPDX-License-Identifier: Apache-2.0
 from ubuntu:20.04
 
 ARG QEMU_REPO
@@ -36,7 +40,8 @@ RUN apt-get --no-install-recommends install -y \
 	    libtool \
 	    make \
 	    pkg-config \
-	    pkg-config \
+	    libseccomp-dev \
+	    libseccomp2 \
 	    python \
 	    python-dev \
 	    rsync \
@@ -56,5 +61,6 @@ RUN PREFIX="${PREFIX}" /root/configure-hypervisor.sh -s kata-qemu | xargs ./conf
 	--with-pkgversion=kata-static
 
 RUN make -j$(nproc)
+RUN make -j$(nproc) virtiofsd
 RUN make install DESTDIR=/tmp/qemu-static
 RUN cd /tmp/qemu-static && tar -czvf "${QEMU_TARBALL}" *
