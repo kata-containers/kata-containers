@@ -1139,6 +1139,12 @@ func (c *Container) update(resources specs.LinuxResources) error {
 		if q := cpu.Quota; q != nil && *q != 0 {
 			c.config.Resources.CPU.Quota = q
 		}
+		if cpu.Cpus != "" {
+			c.config.Resources.CPU.Cpus = cpu.Cpus
+		}
+		if cpu.Mems != "" {
+			c.config.Resources.CPU.Mems = cpu.Mems
+		}
 	}
 
 	if c.config.Resources.Memory == nil {
@@ -1157,6 +1163,14 @@ func (c *Container) update(resources specs.LinuxResources) error {
 		if err := c.cgroupsUpdate(resources); err != nil {
 			return err
 		}
+	}
+
+	// There currently isn't a notion of cpusets.cpus or mems being tracked
+	// inside of the guest. Make sure we clear these before asking agent to update
+	// the container's cgroups.
+	if resources.CPU != nil {
+		resources.CPU.Mems = ""
+		resources.CPU.Cpus = ""
 	}
 
 	return c.sandbox.agent.updateContainer(c.sandbox, *c, resources)

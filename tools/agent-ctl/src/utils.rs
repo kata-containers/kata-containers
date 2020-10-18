@@ -8,8 +8,7 @@ use anyhow::{anyhow, Result};
 use oci::{Process as ociProcess, Root as ociRoot, Spec as ociSpec};
 use protocols::oci::{
     Box as grpcBox, Linux as grpcLinux, LinuxCapabilities as grpcLinuxCapabilities,
-    POSIXRlimit as grpcPOSIXRlimit, Process as grpcProcess, Root as grpcRoot, Spec as grpcSpec,
-    User as grpcUser,
+    Process as grpcProcess, Root as grpcRoot, Spec as grpcSpec, User as grpcUser,
 };
 use rand::Rng;
 use slog::{debug, warn};
@@ -408,4 +407,18 @@ pub fn get_grpc_spec(options: &mut Options, cid: &str) -> Result<grpcSpec> {
     let oci_spec: ociSpec = serde_json::from_str(&json_spec).map_err(|e| anyhow!(e))?;
 
     Ok(oci_to_grpc(&bundle_dir, cid, &oci_spec)?)
+}
+
+pub fn str_to_bytes(s: &str) -> Result<Vec<u8>> {
+    let prefix = "hex:";
+
+    if s.starts_with(prefix) {
+        let hex_str = s.trim_start_matches(prefix);
+
+        let decoded = hex::decode(hex_str).map_err(|e| anyhow!(e))?;
+
+        Ok(decoded)
+    } else {
+        Ok(s.as_bytes().to_vec())
+    }
 }

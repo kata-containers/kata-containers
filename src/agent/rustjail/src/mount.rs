@@ -7,7 +7,9 @@ use anyhow::{anyhow, bail, Context, Error, Result};
 use libc::uid_t;
 use nix::errno::Errno;
 use nix::fcntl::{self, OFlag};
-use nix::mount::{self, MntFlags, MsFlags};
+#[cfg(not(test))]
+use nix::mount;
+use nix::mount::{MntFlags, MsFlags};
 use nix::sys::stat::{self, Mode, SFlag};
 use nix::unistd::{self, Gid, Uid};
 use nix::NixPath;
@@ -111,6 +113,7 @@ lazy_static! {
 }
 
 #[inline(always)]
+#[allow(unused_variables)]
 fn mount<P1: ?Sized + NixPath, P2: ?Sized + NixPath, P3: ?Sized + NixPath, P4: ?Sized + NixPath>(
     source: Option<&P1>,
     target: &P2,
@@ -125,6 +128,7 @@ fn mount<P1: ?Sized + NixPath, P2: ?Sized + NixPath, P3: ?Sized + NixPath, P4: ?
 }
 
 #[inline(always)]
+#[allow(unused_variables)]
 fn umount2<P: ?Sized + NixPath>(
     target: &P,
     flags: MntFlags,
@@ -199,6 +203,21 @@ pub fn init_rootfs(
 
             if m.r#type == "bind" {
                 check_proc_mount(m)?;
+            }
+
+            // If the destination already exists and is not a directory, we bail
+            // out This is to avoid mounting through a symlink or similar -- which
+            // has been a "fun" attack scenario in the past.
+            if m.r#type == "proc" || m.r#type == "sysfs" {
+                if let Ok(meta) = fs::symlink_metadata(&m.destination) {
+                    if !meta.is_dir() {
+                        return Err(anyhow!(
+                            "Mount point {} must be ordinary directory: got {:?}",
+                            m.destination,
+                            meta.file_type()
+                        ));
+                    }
+                }
             }
 
             mount_from(cfd_log, &m, &rootfs, flags, &data, "")?;
@@ -388,20 +407,17 @@ fn mount_cgroups(
 
         if key != base {
             let src = format!("{}/{}", m.destination.as_str(), key);
-            match unix::fs::symlink(destination.as_str(), &src[1..]) {
-                Err(e) => {
-                    log_child!(
-                        cfd_log,
-                        "symlink: {} {} err: {}",
-                        key,
-                        destination.as_str(),
-                        e.to_string()
-                    );
+            unix::fs::symlink(destination.as_str(), &src[1..]).map_err(|e| {
+                log_child!(
+                    cfd_log,
+                    "symlink: {} {} err: {}",
+                    key,
+                    destination.as_str(),
+                    e.to_string()
+                );
 
-                    return Err(e.into());
-                }
-                Ok(_) => {}
-            }
+                e
+            })?;
         }
     }
 
@@ -421,6 +437,7 @@ fn mount_cgroups(
     Ok(())
 }
 
+#[allow(unused_variables)]
 fn pivot_root<P1: ?Sized + NixPath, P2: ?Sized + NixPath>(
     new_root: &P1,
     put_old: &P2,
@@ -553,6 +570,7 @@ fn parse_mount_table() -> Result<Vec<Info>> {
 }
 
 #[inline(always)]
+#[allow(unused_variables)]
 fn chroot<P: ?Sized + NixPath>(path: &P) -> Result<(), nix::Error> {
     #[cfg(not(test))]
     return unistd::chroot(path);
@@ -594,24 +612,23 @@ pub fn ms_move_root(rootfs: &str) -> Result<bool> {
             MsFlags::MS_SLAVE | MsFlags::MS_REC,
             None::<&str>,
         )?;
-        match umount2(abs_mount_point, MntFlags::MNT_DETACH) {
-            Ok(_) => (),
-            Err(e) => {
-                if e.ne(&nix::Error::from(Errno::EINVAL)) && e.ne(&nix::Error::from(Errno::EPERM)) {
-                    return Err(anyhow!(e));
-                }
-
-                // If we have not privileges for umounting (e.g. rootless), then
-                // cover the path.
-                mount(
-                    Some("tmpfs"),
-                    abs_mount_point,
-                    Some("tmpfs"),
-                    MsFlags::empty(),
-                    None::<&str>,
-                )?;
+        umount2(abs_mount_point, MntFlags::MNT_DETACH).or_else(|e| {
+            if e.ne(&nix::Error::from(Errno::EINVAL)) && e.ne(&nix::Error::from(Errno::EPERM)) {
+                return Err(anyhow!(e));
             }
-        }
+
+            // If we have not privileges for umounting (e.g. rootless), then
+            // cover the path.
+            mount(
+                Some("tmpfs"),
+                abs_mount_point,
+                Some("tmpfs"),
+                MsFlags::empty(),
+                None::<&str>,
+            )?;
+
+            Ok(())
+        })?;
     }
 
     mount(
@@ -668,18 +685,14 @@ fn mount_from(
             Path::new(&dest)
         };
 
-        // let _ = fs::create_dir_all(&dir);
-        match fs::create_dir_all(&dir) {
-            Ok(_) => {}
-            Err(e) => {
-                log_child!(
-                    cfd_log,
-                    "creat dir {}: {}",
-                    dir.to_str().unwrap(),
-                    e.to_string()
-                );
-            }
-        }
+        let _ = fs::create_dir_all(&dir).map_err(|e| {
+            log_child!(
+                cfd_log,
+                "creat dir {}: {}",
+                dir.to_str().unwrap(),
+                e.to_string()
+            )
+        });
 
         // make sure file exists so we can bind over it
         if src.is_file() {
@@ -696,31 +709,26 @@ fn mount_from(
         }
     };
 
-    match stat::stat(dest.as_str()) {
-        Ok(_) => {}
-        Err(e) => {
-            log_child!(
-                cfd_log,
-                "dest stat error. {}: {}",
-                dest.as_str(),
-                e.as_errno().unwrap().desc()
-            );
-        }
-    }
+    let _ = stat::stat(dest.as_str()).map_err(|e| {
+        log_child!(
+            cfd_log,
+            "dest stat error. {}: {:?}",
+            dest.as_str(),
+            e.as_errno()
+        )
+    });
 
-    match mount(
+    mount(
         Some(src.as_str()),
         dest.as_str(),
         Some(m.r#type.as_str()),
         flags,
         Some(d.as_str()),
-    ) {
-        Ok(_) => {}
-        Err(e) => {
-            log_child!(cfd_log, "mount error: {}", e.as_errno().unwrap().desc());
-            return Err(e.into());
-        }
-    }
+    )
+    .map_err(|e| {
+        log_child!(cfd_log, "mount error: {:?}", e.as_errno());
+        e
+    })?;
 
     if flags.contains(MsFlags::MS_BIND)
         && flags.intersects(
@@ -732,24 +740,17 @@ fn mount_from(
                 | MsFlags::MS_SLAVE),
         )
     {
-        match mount(
+        mount(
             Some(dest.as_str()),
             dest.as_str(),
             None::<&str>,
             flags | MsFlags::MS_REMOUNT,
             None::<&str>,
-        ) {
-            Err(e) => {
-                log_child!(
-                    cfd_log,
-                    "remout {}: {}",
-                    dest.as_str(),
-                    e.as_errno().unwrap().desc()
-                );
-                return Err(e.into());
-            }
-            Ok(_) => {}
-        }
+        )
+        .map_err(|e| {
+            log_child!(cfd_log, "remout {}: {:?}", dest.as_str(), e.as_errno());
+            e
+        })?;
     }
     Ok(())
 }
@@ -891,8 +892,6 @@ fn mask_path(path: &str) -> Result<()> {
         return Err(nix::Error::Sys(Errno::EINVAL).into());
     }
 
-    //info!("{}", path);
-
     match mount(
         Some("/dev/null"),
         path,
@@ -908,7 +907,6 @@ fn mask_path(path: &str) -> Result<()> {
         }
 
         Err(e) => {
-            //info!("{}: {}", path, e.as_errno().unwrap().desc());
             return Err(e.into());
         }
 
@@ -922,8 +920,6 @@ fn readonly_path(path: &str) -> Result<()> {
     if !path.starts_with("/") || path.contains("..") {
         return Err(nix::Error::Sys(Errno::EINVAL).into());
     }
-
-    //info!("{}", path);
 
     match mount(
         Some(&path[1..]),
@@ -942,7 +938,6 @@ fn readonly_path(path: &str) -> Result<()> {
         }
 
         Err(e) => {
-            //info!("{}: {}", path, e.as_errno().unwrap().desc());
             return Err(e.into());
         }
 
@@ -1004,8 +999,8 @@ mod tests {
         // there is no spec.mounts, but should pass
         let ret = init_rootfs(stdout_fd, &spec, &cpath, &mounts, true);
         assert!(ret.is_ok(), "Should pass. Got: {:?}", ret);
-        let ret = fs::remove_dir_all(rootfs.path().join("dev"));
-        let ret = fs::create_dir(rootfs.path().join("dev"));
+        let _ = fs::remove_dir_all(rootfs.path().join("dev"));
+        let _ = fs::create_dir(rootfs.path().join("dev"));
 
         // Adding bad mount point to spec.mounts
         spec.mounts.push(oci::Mount {
@@ -1023,8 +1018,8 @@ mod tests {
             ret
         );
         spec.mounts.pop();
-        let ret = fs::remove_dir_all(rootfs.path().join("dev"));
-        let ret = fs::create_dir(rootfs.path().join("dev"));
+        let _ = fs::remove_dir_all(rootfs.path().join("dev"));
+        let _ = fs::create_dir(rootfs.path().join("dev"));
 
         // mounting a cgroup
         spec.mounts.push(oci::Mount {
@@ -1037,8 +1032,8 @@ mod tests {
         let ret = init_rootfs(stdout_fd, &spec, &cpath, &mounts, true);
         assert!(ret.is_ok(), "Should pass. Got: {:?}", ret);
         spec.mounts.pop();
-        let ret = fs::remove_dir_all(rootfs.path().join("dev"));
-        let ret = fs::create_dir(rootfs.path().join("dev"));
+        let _ = fs::remove_dir_all(rootfs.path().join("dev"));
+        let _ = fs::create_dir(rootfs.path().join("dev"));
 
         // mounting /dev
         spec.mounts.push(oci::Mount {
@@ -1179,8 +1174,8 @@ mod tests {
         let tempdir = tempdir().unwrap();
 
         let olddir = unistd::getcwd().unwrap();
-        defer!(unistd::chdir(&olddir););
-        unistd::chdir(tempdir.path());
+        defer!(let _ = unistd::chdir(&olddir););
+        let _ = unistd::chdir(tempdir.path());
 
         let dev = oci::LinuxDevice {
             path: "/fifo".to_string(),

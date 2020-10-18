@@ -28,6 +28,7 @@ const (
 	//
 	// Assets
 	//
+	KataAnnotationHypervisorPrefix = kataAnnotHypervisorPrefix
 
 	// KernelPath is a sandbox annotation for passing a per container path pointing at the kernel needed to boot the container VM.
 	KernelPath = kataAnnotHypervisorPrefix + "kernel"
@@ -43,6 +44,9 @@ const (
 
 	// JailerPath is a sandbox annotation for passing a per container path pointing at the jailer that will constrain the container VM.
 	JailerPath = kataAnnotHypervisorPrefix + "jailer_path"
+
+	// CtlPath is a sandbox annotation for passing a per container path pointing at the acrn ctl binary
+	CtlPath = kataAnnotHypervisorPrefix + "ctlpath"
 
 	// FirmwarePath is a sandbox annotation for passing a per container path pointing at the guest firmware that will run the container VM.
 	FirmwarePath = kataAnnotHypervisorPrefix + "firmware"
@@ -211,7 +215,7 @@ const (
 	TxRateLimiterMaxRate = kataAnnotHypervisorPrefix + "tx_rate_limiter_max_rate"
 )
 
-// Agent related annotations
+// Runtime related annotations
 const (
 	kataAnnotRuntimePrefix = kataConfAnnotationsPrefix + "runtime."
 
@@ -235,6 +239,7 @@ const (
 	DisableNewNetNs = kataAnnotRuntimePrefix + "disable_new_netns"
 )
 
+// Agent related annotations
 const (
 	kataAnnotAgentPrefix = kataConfAnnotationsPrefix + "agent."
 

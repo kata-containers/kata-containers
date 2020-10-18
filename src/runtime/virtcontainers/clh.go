@@ -420,14 +420,11 @@ func (clh *cloudHypervisor) hotplugAddBlockDevice(drive *config.BlockDrive) erro
 			" using '%v' but only support '%v'", clh.config.BlockDeviceDriver, config.VirtioBlock)
 	}
 
+	var err error
+
 	cl := clh.client()
 	ctx, cancel := context.WithTimeout(context.Background(), clhHotPlugAPITimeout*time.Second)
 	defer cancel()
-
-	_, _, err := cl.VmmPingGet(ctx)
-	if err != nil {
-		return openAPIClientError(err)
-	}
 
 	driveID := clhDriveIndexToID(drive.Index)
 
@@ -457,12 +454,7 @@ func (clh *cloudHypervisor) hotPlugVFIODevice(device config.VFIODev) error {
 	ctx, cancel := context.WithTimeout(context.Background(), clhHotPlugAPITimeout*time.Second)
 	defer cancel()
 
-	_, _, err := cl.VmmPingGet(ctx)
-	if err != nil {
-		return openAPIClientError(err)
-	}
-
-	_, _, err = cl.VmAddDevicePut(ctx, chclient.VmAddDevice{Path: device.SysfsDev})
+	_, _, err := cl.VmAddDevicePut(ctx, chclient.VmAddDevice{Path: device.SysfsDev, Id: device.ID})
 	if err != nil {
 		err = fmt.Errorf("Failed to hotplug device %+v %s", device, openAPIClientError(err))
 	}
@@ -506,6 +498,20 @@ func (clh *cloudHypervisor) hotplugRemoveBlockDevice(drive *config.BlockDrive) e
 	return err
 }
 
+func (clh *cloudHypervisor) hotplugRemoveVfioDevice(device *config.VFIODev) error {
+	cl := clh.client()
+	ctx, cancel := context.WithTimeout(context.Background(), clhHotPlugAPITimeout*time.Second)
+	defer cancel()
+
+	_, err := cl.VmRemoveDevicePut(ctx, chclient.VmRemoveDevice{Id: device.ID})
+
+	if err != nil {
+		err = fmt.Errorf("failed to hotplug remove vfio device %+v %s", device, openAPIClientError(err))
+	}
+
+	return err
+}
+
 func (clh *cloudHypervisor) hotplugRemoveDevice(devInfo interface{}, devType deviceType) (interface{}, error) {
 	span, _ := clh.trace("hotplugRemoveDevice")
 	defer span.Finish()
@@ -513,6 +519,8 @@ func (clh *cloudHypervisor) hotplugRemoveDevice(devInfo interface{}, devType dev
 	switch devType {
 	case blockDev:
 		return nil, clh.hotplugRemoveBlockDevice(devInfo.(*config.BlockDrive))
+	case vfioDev:
+		return nil, clh.hotplugRemoveVfioDevice(devInfo.(*config.VFIODev))
 	default:
 		clh.Logger().WithFields(log.Fields{"devInfo": devInfo,
 			"deviceType": devType}).Error("hotplugRemoveDevice: unsupported device")

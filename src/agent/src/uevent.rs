@@ -99,14 +99,14 @@ impl Uevent {
             let online_path = format!("{}/{}/online", SYSFS_DIR, &self.devpath);
             // It's a memory hot-add event.
             if online_path.starts_with(SYSFS_MEMORY_ONLINE_PATH) {
-                if let Err(e) = online_device(online_path.as_ref()) {
+                let _ = online_device(online_path.as_ref()).map_err(|e| {
                     error!(
                         *logger,
                         "failed to online device";
                         "device" => &self.devpath,
                         "error" => format!("{}", e),
-                    );
-                }
+                    )
+                });
                 return;
             }
         }

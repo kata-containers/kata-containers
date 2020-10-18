@@ -1,0 +1,73 @@
+From 6209070503989cf4f28549f228989419d4f0b236 Mon Sep 17 00:00:00 2001
+From: Stefano Garzarella <sgarzare@redhat.com>
+Date: Mon, 21 Sep 2020 14:25:04 +0200
+Subject: [PATCH 2/4] vhost-vsock-pci: force virtio version 1
+
+Commit 9b3a35ec82 ("virtio: verify that legacy support is not
+accidentally on") added a safety check that requires to set
+'disable-legacy=on' on vhost-vsock-pci device:
+
+    $ ./qemu-system-x86_64 ... -device vhost-vsock-pci,guest-cid=5
+        qemu-system-x86_64: -device vhost-vsock-pci,guest-cid=5:
+        device is modern-only, use disable-legacy=on
+
+virtio-vsock was introduced after the release of VIRTIO 1.0
+specifications, so it should be 'modern-only'.
+In addition Cornelia verified that forcing a legacy mode on
+vhost-vsock-pci device using x86-64 host and s390x guest, so with
+different endianness, produces strange behaviours.
+
+This patch forces virtio version 1 and removes the 'transitional_name'
+property removing the need to specify 'disable-legacy=on' on
+vhost-vsock-pci device.
+
+To avoid migration issues, we force virtio version 1 only when
+legacy check is enabled in the new machine types (>= 5.1).
+
+As the transitional device name is not commonly used, we do not
+provide compatibility handling for it.
+
+Cc: qemu-stable@nongnu.org
+Reported-by: Qian Cai <caiqian@redhat.com>
+Reported-by: Qinghua Cheng <qcheng@redhat.com>
+Buglink: https://bugzilla.redhat.com/show_bug.cgi?id=1868449
+Suggested-by: Cornelia Huck <cohuck@redhat.com>
+Reviewed-by: Cornelia Huck <cohuck@redhat.com>
+Signed-off-by: Stefano Garzarella <sgarzare@redhat.com>
+Message-Id: <20200921122506.82515-3-sgarzare@redhat.com>
+Reviewed-by: Michael S. Tsirkin <mst@redhat.com>
+Signed-off-by: Michael S. Tsirkin <mst@redhat.com>
+---
+ hw/virtio/vhost-vsock-pci.c | 10 +++++++++-
+ 1 file changed, 9 insertions(+), 1 deletion(-)
+
+diff --git a/hw/virtio/vhost-vsock-pci.c b/hw/virtio/vhost-vsock-pci.c
+index e56067b..205da8d 100644
+--- a/hw/virtio/vhost-vsock-pci.c
++++ b/hw/virtio/vhost-vsock-pci.c
+@@ -44,6 +44,15 @@ static void vhost_vsock_pci_realize(VirtIOPCIProxy *vpci_dev, Error **errp)
+ {
+     VHostVSockPCI *dev = VHOST_VSOCK_PCI(vpci_dev);
+     DeviceState *vdev = DEVICE(&dev->vdev);
++    VirtIODevice *virtio_dev = VIRTIO_DEVICE(vdev);
++
++    /*
++     * To avoid migration issues, we force virtio version 1 only when
++     * legacy check is enabled in the new machine types (>= 5.1).
++     */
++    if (!virtio_legacy_check_disabled(virtio_dev)) {
++        virtio_pci_force_virtio_1(vpci_dev);
++    }
+
+     qdev_realize(vdev, BUS(&vpci_dev->bus), errp);
+ }
+@@ -73,7 +82,6 @@ static void vhost_vsock_pci_instance_init(Object *obj)
+ static const VirtioPCIDeviceTypeInfo vhost_vsock_pci_info = {
+     .base_name             = TYPE_VHOST_VSOCK_PCI,
+     .generic_name          = "vhost-vsock-pci",
+-    .transitional_name     = "vhost-vsock-pci-transitional",
+     .non_transitional_name = "vhost-vsock-pci-non-transitional",
+     .instance_size = sizeof(VHostVSockPCI),
+     .instance_init = vhost_vsock_pci_instance_init,
+--
+1.8.3.1

@@ -25,7 +25,6 @@ extern crate scopeguard;
 
 #[macro_use]
 extern crate slog;
-#[macro_use]
 extern crate netlink;
 
 use crate::netlink::{RtnlHandle, NETLINK_ROUTE};
@@ -129,7 +128,6 @@ fn main() -> Result<()> {
 
     // support vsock log
     let (rfd, wfd) = unistd::pipe2(OFlag::O_CLOEXEC)?;
-    let writer = unsafe { File::from_raw_fd(wfd) };
 
     let agentConfig = AGENT_CONFIG.clone();
 
@@ -514,14 +512,12 @@ fn run_debug_console_shell(logger: &Logger, shell: &str, socket_fd: RawFd) -> Re
             let args: Vec<&CStr> = vec![];
 
             // run shell
-            if let Err(e) = unistd::execvp(cmd.as_c_str(), args.as_slice()) {
-                match e {
-                    nix::Error::Sys(errno) => {
-                        std::process::exit(errno as i32);
-                    }
-                    _ => std::process::exit(-2),
+            let _ = unistd::execvp(cmd.as_c_str(), args.as_slice()).map_err(|e| match e {
+                nix::Error::Sys(errno) => {
+                    std::process::exit(errno as i32);
                 }
-            }
+                _ => std::process::exit(-2),
+            });
         }
 
         Ok(ForkResult::Parent { child: child_pid }) => {
@@ -638,8 +634,6 @@ fn run_debug_console_shell(logger: &Logger, shell: &str, socket_fd: RawFd) -> Re
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::fs::File;
-    use std::io::Write;
     use tempfile::tempdir;
 
     #[test]

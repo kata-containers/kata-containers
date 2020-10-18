@@ -3,24 +3,17 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-// use std::process::{Stdio, Command, ExitStatus};
 use libc::pid_t;
 use std::fs::File;
 use std::os::unix::io::RawFd;
 use std::sync::mpsc::Sender;
 
-// use crate::configs::{Capabilities, Rlimit};
-// use crate::cgroups::Manager as CgroupManager;
-// use crate::intelrdt::Manager as RdtManager;
-
 use nix::fcntl::{fcntl, FcntlArg, OFlag};
 use nix::sys::signal::{self, Signal};
-use nix::sys::socket::{self, AddressFamily, SockFlag, SockType};
 use nix::sys::wait::{self, WaitStatus};
 use nix::unistd::{self, Pid};
 use nix::Result;
 
-use nix::Error;
 use oci::Process as OCIProcess;
 use slog::Logger;
 
@@ -33,8 +26,6 @@ pub struct Process {
     pub exit_pipe_r: Option<RawFd>,
     pub exit_pipe_w: Option<RawFd>,
     pub extra_files: Vec<File>,
-    //	pub caps: Capabilities,
-    //	pub rlimits: Vec<Rlimit>,
     pub term_master: Option<RawFd>,
     pub tty: bool,
     pub parent_stdin: Option<RawFd>,
@@ -151,11 +142,11 @@ mod tests {
     #[test]
     fn test_create_extended_pipe() {
         // Test the default
-        let (r, w) = create_extended_pipe(OFlag::O_CLOEXEC, 0).unwrap();
+        let (_r, _w) = create_extended_pipe(OFlag::O_CLOEXEC, 0).unwrap();
 
         // Test setting to the max size
         let max_size = get_pipe_max_size();
-        let (r, w) = create_extended_pipe(OFlag::O_CLOEXEC, max_size).unwrap();
+        let (_, w) = create_extended_pipe(OFlag::O_CLOEXEC, max_size).unwrap();
         let actual_size = get_pipe_size(w);
         assert_eq!(max_size, actual_size);
     }

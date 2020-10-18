@@ -3,35 +3,32 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
+use anyhow::{anyhow, Context, Result};
 use dirs;
 use lazy_static;
+use libc::pid_t;
 use oci::{Hook, Linux, LinuxNamespace, LinuxResources, POSIXRlimit, Spec};
+use oci::{LinuxDevice, LinuxIDMapping};
 use serde_json;
+use std::clone::Clone;
 use std::ffi::{CStr, CString};
 use std::fmt;
+use std::fmt::Display;
 use std::fs;
 use std::os::unix::io::RawFd;
 use std::path::{Path, PathBuf};
+use std::process::Command;
 use std::time::SystemTime;
-// use crate::sync::Cond;
-use anyhow::{anyhow, bail, Context, Result};
-use libc::pid_t;
-use oci::{LinuxDevice, LinuxIDMapping};
-use std::clone::Clone;
-use std::fmt::Display;
-use std::process::{Child, Command};
 
 use cgroups::freezer::FreezerState;
 
-use crate::process::Process;
-// use crate::intelrdt::Manager as RdtManager;
+use crate::capabilities::{self, CAPSMAP};
+use crate::cgroups::fs::Manager as FsManager;
+use crate::cgroups::Manager;
 use crate::log_child;
+use crate::process::Process;
 use crate::specconv::CreateOpts;
 use crate::sync::*;
-// use crate::stats::Stats;
-use crate::capabilities::{self, CAPSMAP};
-use crate::cgroups::fs::{self as fscgroup, Manager as FsManager};
-use crate::cgroups::Manager;
 use crate::{mount, validator};
 
 use protocols::agent::StatsContainerResponse;
@@ -55,7 +52,7 @@ use std::io::BufRead;
 use std::io::BufReader;
 use std::os::unix::io::FromRawFd;
 
-use slog::{debug, info, o, Logger};
+use slog::{info, o, Logger};
 
 const STATE_FILENAME: &'static str = "state.json";
 const EXEC_FIFO_FILENAME: &'static str = "exec.fifo";
@@ -214,11 +211,6 @@ pub struct BaseState {
     init_process_pid: i32,
     #[serde(default)]
     init_process_start: u64,
-    /*
-    #[serde(default)]
-        created: SystemTime,
-        config: Config,
-    */
 }
 
 pub trait BaseContainer {
@@ -280,12 +272,8 @@ pub struct SyncPC {
 }
 
 pub trait Container: BaseContainer {
-    //	fn checkpoint(&self, opts: &CriuOpts) -> Result<()>;
-    //	fn restore(&self, p: &Process, opts: &CriuOpts) -> Result<()>;
     fn pause(&mut self) -> Result<()>;
     fn resume(&mut self) -> Result<()>;
-    //	fn notify_oom(&self) -> Result<(Sender, Receiver)>;
-    //	fn notify_memory_pressure(&self, lvl: PressureLevel) -> Result<(Sender, Receiver)>;
 }
 
 impl Container for LinuxContainer {
@@ -332,14 +320,11 @@ impl Container for LinuxContainer {
 pub fn init_child() {
     let cwfd = std::env::var(CWFD_FD).unwrap().parse::<i32>().unwrap();
     let cfd_log = std::env::var(CLOG_FD).unwrap().parse::<i32>().unwrap();
-    match do_init_child(cwfd) {
-        Ok(_) => (),
-        Err(e) => {
-            log_child!(cfd_log, "child exit: {:?}", e);
-            write_sync(cwfd, SYNC_FAILED, format!("{:?}", e).as_str());
-            return;
-        }
-    }
+
+    let _ = do_init_child(cwfd).map_err(|e| {
+        log_child!(cfd_log, "child exit: {:?}", e);
+        let _ = write_sync(cwfd, SYNC_FAILED, format!("{:?}", e).as_str());
+    });
 }
 
 fn do_init_child(cwfd: RawFd) -> Result<()> {
@@ -364,7 +349,7 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
 
     let buf = read_sync(crfd)?;
     let process_str = std::str::from_utf8(&buf)?;
-    let mut oci_process: oci::Process = serde_json::from_str(process_str)?;
+    let oci_process: oci::Process = serde_json::from_str(process_str)?;
     log_child!(cfd_log, "notify parent to send cgroup manager");
     write_sync(cwfd, SYNC_SUCCESS, "")?;
 
@@ -385,7 +370,7 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
     let linux = spec.linux.as_ref().unwrap();
 
     // get namespace vector to join/new
-    let nses = get_namespaces(&linux)?;
+    let nses = get_namespaces(&linux);
 
     let mut userns = false;
     let mut to_new = CloneFlags::empty();
@@ -404,19 +389,17 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
                 to_new.set(*s, true);
             }
         } else {
-            let fd = match fcntl::open(ns.path.as_str(), OFlag::O_CLOEXEC, Mode::empty()) {
-                Ok(v) => v,
-                Err(e) => {
+            let fd =
+                fcntl::open(ns.path.as_str(), OFlag::O_CLOEXEC, Mode::empty()).map_err(|e| {
                     log_child!(
                         cfd_log,
                         "cannot open type: {} path: {}",
                         ns.r#type.clone(),
                         ns.path.clone()
                     );
-                    log_child!(cfd_log, "error is : {}", e.as_errno().unwrap().desc());
-                    return Err(e.into());
-                }
-            };
+                    log_child!(cfd_log, "error is : {:?}", e.as_errno());
+                    e
+                })?;
 
             if *s != CloneFlags::CLONE_NEWPID {
                 to_join.push((*s, fd));
@@ -440,6 +423,23 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
     for rl in p.rlimits.iter() {
         log_child!(cfd_log, "set resource limit: {:?}", rl);
         setrlimit(rl)?;
+    }
+
+    //
+    // Make the process non-dumpable, to avoid various race conditions that
+    // could cause processes in namespaces we're joining to access host
+    // resources (or potentially execute code).
+    //
+    // However, if the number of namespaces we are joining is 0, we are not
+    // going to be switching to a different security context. Thus setting
+    // ourselves to be non-dumpable only breaks things (like rootless
+    // containers), which is the recommendation from the kernel folks.
+    //
+    // Ref: https://github.com/opencontainers/runc/commit/50a19c6ff828c58e5dab13830bd3dacde268afe5
+    //
+    if !nses.is_empty() {
+        prctl::set_dumpable(false)
+            .map_err(|e| anyhow!(e).context("set process non-dumpable failed"))?;
     }
 
     if userns {
@@ -468,17 +468,20 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
         }
 
         log_child!(cfd_log, "join namespace {:?}", s);
-        if let Err(e) = sched::setns(fd, s) {
+        sched::setns(fd, s).or_else(|e| {
             if s == CloneFlags::CLONE_NEWUSER {
                 if e.as_errno().unwrap() != Errno::EINVAL {
-                    write_sync(cwfd, SYNC_FAILED, format!("{:?}", e).as_str());
-                    return Err(e.into());
+                    let _ = write_sync(cwfd, SYNC_FAILED, format!("{:?}", e).as_str());
+                    return Err(e);
                 }
+
+                Ok(())
             } else {
-                write_sync(cwfd, SYNC_FAILED, format!("{:?}", e).as_str());
-                return Err(e.into());
+                let _ = write_sync(cwfd, SYNC_FAILED, format!("{:?}", e).as_str());
+                Err(e)
             }
-        }
+        })?;
+
         unistd::close(fd)?;
 
         if s == CloneFlags::CLONE_NEWUSER {
@@ -550,20 +553,19 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
 
     if guser.additional_gids.len() > 0 {
         setgroups(guser.additional_gids.as_slice()).map_err(|e| {
-            write_sync(
+            let _ = write_sync(
                 cwfd,
                 SYNC_FAILED,
                 format!("setgroups failed: {:?}", e).as_str(),
             );
+
             e
         })?;
     }
 
     // NoNewPeiviledges, Drop capabilities
     if oci_process.no_new_privileges {
-        if let Err(_) = prctl::set_no_new_privileges(true) {
-            return Err(anyhow!("cannot set no new privileges"));
-        }
+        prctl::set_no_new_privileges(true).map_err(|_| anyhow!("cannot set no new privileges"))?;
     }
 
     if oci_process.capabilities.is_some() {
@@ -586,7 +588,7 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
         fifofd = std::env::var(FIFO_FD)?.parse::<i32>().unwrap();
     }
 
-    //cleanup the env inherited from parent
+    // cleanup the env inherited from parent
     for (key, _) in env::vars() {
         env::remove_var(key);
     }
@@ -595,7 +597,6 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
     for e in env.iter() {
         let v: Vec<&str> = e.splitn(2, "=").collect();
         if v.len() != 2 {
-            //info!(logger, "incorrect env config!");
             continue;
         }
         env::set_var(v[0], v[1]);
@@ -611,20 +612,15 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
     let exec_file = Path::new(&args[0]);
     log_child!(cfd_log, "process command: {:?}", &args);
     if !exec_file.exists() {
-        match find_file(exec_file) {
-            Some(_) => (),
-            None => {
-                return Err(anyhow!("the file {} is not exist", &args[0]));
-            }
-        }
+        find_file(exec_file).ok_or_else(|| anyhow!("the file {} is not exist", &args[0]))?;
     }
 
     // notify parent that the child's ready to start
     write_sync(cwfd, SYNC_SUCCESS, "")?;
     log_child!(cfd_log, "ready to run exec");
-    unistd::close(cfd_log);
-    unistd::close(crfd);
-    unistd::close(cwfd);
+    let _ = unistd::close(cfd_log);
+    let _ = unistd::close(crfd);
+    let _ = unistd::close(cwfd);
 
     if oci_process.terminal {
         unistd::setsid()?;
@@ -739,7 +735,6 @@ impl BaseContainer for LinuxContainer {
                 return Err(anyhow!("exec fifo exists"));
             }
             unistd::mkfifo(fifo_file.as_str(), Mode::from_bits(0o622).unwrap())?;
-            // defer!(fs::remove_file(&fifo_file)?);
 
             fifofd = fcntl::open(
                 fifo_file.as_str(),
@@ -762,7 +757,9 @@ impl BaseContainer for LinuxContainer {
         let st = self.oci_state()?;
 
         let (pfd_log, cfd_log) = unistd::pipe().context("failed to create pipe")?;
-        fcntl::fcntl(pfd_log, FcntlArg::F_SETFD(FdFlag::FD_CLOEXEC));
+
+        let _ = fcntl::fcntl(pfd_log, FcntlArg::F_SETFD(FdFlag::FD_CLOEXEC))
+            .map_err(|e| warn!(logger, "fcntl pfd log FD_CLOEXEC {:?}", e));
 
         let child_logger = logger.new(o!("action" => "child process log"));
         let log_handler = thread::spawn(move || {
@@ -791,54 +788,57 @@ impl BaseContainer for LinuxContainer {
         info!(logger, "exec fifo opened!");
         let (prfd, cwfd) = unistd::pipe().context("failed to create pipe")?;
         let (crfd, pwfd) = unistd::pipe().context("failed to create pipe")?;
-        fcntl::fcntl(prfd, FcntlArg::F_SETFD(FdFlag::FD_CLOEXEC));
-        fcntl::fcntl(pwfd, FcntlArg::F_SETFD(FdFlag::FD_CLOEXEC));
+
+        let _ = fcntl::fcntl(prfd, FcntlArg::F_SETFD(FdFlag::FD_CLOEXEC))
+            .map_err(|e| warn!(logger, "fcntl prfd FD_CLOEXEC {:?}", e));
+
+        let _ = fcntl::fcntl(pwfd, FcntlArg::F_SETFD(FdFlag::FD_CLOEXEC))
+            .map_err(|e| warn!(logger, "fcntl pwfd FD_COLEXEC {:?}", e));
 
         defer!({
-            unistd::close(prfd);
-            unistd::close(pwfd);
+            let _ = unistd::close(prfd).map_err(|e| warn!(logger, "close prfd {:?}", e));
+            let _ = unistd::close(pwfd).map_err(|e| warn!(logger, "close pwfd {:?}", e));
         });
 
-        let mut child_stdin = std::process::Stdio::null();
-        let mut child_stdout = std::process::Stdio::null();
-        let mut child_stderr = std::process::Stdio::null();
-        let mut stdin = -1;
-        let mut stdout = -1;
-        let mut stderr = -1;
+        let child_stdin: std::process::Stdio;
+        let child_stdout: std::process::Stdio;
+        let child_stderr: std::process::Stdio;
 
         if tty {
-            let pseduo = pty::openpty(None, None)?;
-            p.term_master = Some(pseduo.master);
-            fcntl::fcntl(pseduo.master, FcntlArg::F_SETFD(FdFlag::FD_CLOEXEC));
-            fcntl::fcntl(pseduo.slave, FcntlArg::F_SETFD(FdFlag::FD_CLOEXEC));
+            let pseudo = pty::openpty(None, None)?;
+            p.term_master = Some(pseudo.master);
+            let _ = fcntl::fcntl(pseudo.master, FcntlArg::F_SETFD(FdFlag::FD_CLOEXEC))
+                .map_err(|e| warn!(logger, "fnctl pseudo.master {:?}", e));
+            let _ = fcntl::fcntl(pseudo.slave, FcntlArg::F_SETFD(FdFlag::FD_CLOEXEC))
+                .map_err(|e| warn!(logger, "fcntl pseudo.slave {:?}", e));
 
-            child_stdin = unsafe { std::process::Stdio::from_raw_fd(pseduo.slave) };
-            child_stdout = unsafe { std::process::Stdio::from_raw_fd(pseduo.slave) };
-            child_stderr = unsafe { std::process::Stdio::from_raw_fd(pseduo.slave) };
+            child_stdin = unsafe { std::process::Stdio::from_raw_fd(pseudo.slave) };
+            child_stdout = unsafe { std::process::Stdio::from_raw_fd(pseudo.slave) };
+            child_stderr = unsafe { std::process::Stdio::from_raw_fd(pseudo.slave) };
         } else {
-            stdin = p.stdin.unwrap();
-            stdout = p.stdout.unwrap();
-            stderr = p.stderr.unwrap();
+            let stdin = p.stdin.unwrap();
+            let stdout = p.stdout.unwrap();
+            let stderr = p.stderr.unwrap();
             child_stdin = unsafe { std::process::Stdio::from_raw_fd(stdin) };
             child_stdout = unsafe { std::process::Stdio::from_raw_fd(stdout) };
             child_stderr = unsafe { std::process::Stdio::from_raw_fd(stderr) };
         }
 
-        let old_pid_ns = match fcntl::open(PID_NS_PATH, OFlag::O_CLOEXEC, Mode::empty()) {
-            Ok(v) => v,
-            Err(e) => {
+        let old_pid_ns =
+            fcntl::open(PID_NS_PATH, OFlag::O_CLOEXEC, Mode::empty()).map_err(|e| {
                 error!(
                     logger,
                     "cannot open pid ns path: {} with error: {:?}", PID_NS_PATH, e
                 );
-                return Err(e.into());
-            }
-        };
+                e
+            })?;
 
         //restore the parent's process's pid namespace.
         defer!({
-            sched::setns(old_pid_ns, CloneFlags::CLONE_NEWPID);
-            unistd::close(old_pid_ns);
+            let _ = sched::setns(old_pid_ns, CloneFlags::CLONE_NEWPID)
+                .map_err(|e| warn!(logger, "settns CLONE_NEWPID {:?}", e));
+            let _ = unistd::close(old_pid_ns)
+                .map_err(|e| warn!(logger, "close old pid namespace {:?}", e));
         });
 
         let pidns = get_pid_namespace(&self.logger, linux)?;
@@ -868,7 +868,7 @@ impl BaseContainer for LinuxContainer {
             child = child.env(FIFO_FD, format!("{}", fifofd));
         }
 
-        let mut child = child.spawn()?;
+        let child = child.spawn()?;
 
         unistd::close(crfd)?;
         unistd::close(cwfd)?;
@@ -880,29 +880,28 @@ impl BaseContainer for LinuxContainer {
         }
 
         if p.init {
-            unistd::close(fifofd);
+            let _ = unistd::close(fifofd).map_err(|e| warn!(logger, "close fifofd {:?}", e));
         }
 
         info!(logger, "child pid: {}", p.pid);
 
-        match join_namespaces(
+        join_namespaces(
             &logger,
             &spec,
             &p,
             self.cgroup_manager.as_ref().unwrap(),
             &st,
-            &mut child,
             pwfd,
             prfd,
-        ) {
-            Ok(_) => (),
-            Err(e) => {
-                error!(logger, "create container process error {:?}", e);
-                // kill the child process.
-                signal::kill(Pid::from_raw(p.pid), Some(Signal::SIGKILL));
-                return Err(e);
-            }
-        };
+        )
+        .map_err(|e| {
+            error!(logger, "create container process error {:?}", e);
+            // kill the child process.
+            let _ = signal::kill(Pid::from_raw(p.pid), Some(Signal::SIGKILL))
+                .map_err(|e| warn!(logger, "signal::kill joining namespaces {:?}", e));
+
+            e
+        })?;
 
         info!(logger, "entered namespaces!");
 
@@ -912,7 +911,9 @@ impl BaseContainer for LinuxContainer {
         let (exit_pipe_r, exit_pipe_w) = unistd::pipe2(OFlag::O_CLOEXEC)
             .context("failed to create pipe")
             .map_err(|e| {
-                signal::kill(Pid::from_raw(child.id() as i32), Some(Signal::SIGKILL));
+                let _ = signal::kill(Pid::from_raw(child.id() as i32), Some(Signal::SIGKILL))
+                    .map_err(|e| warn!(logger, "signal::kill creating pipe {:?}", e));
+
                 e
             })?;
 
@@ -926,7 +927,9 @@ impl BaseContainer for LinuxContainer {
         self.processes.insert(p.pid, p);
 
         info!(logger, "wait on child log handler");
-        log_handler.join();
+        let _ = log_handler
+            .join()
+            .map_err(|e| warn!(logger, "joining log handler {:?}", e));
         info!(logger, "create process completed");
         return Ok(());
     }
@@ -1027,25 +1030,22 @@ fn do_exec(args: &[String]) -> ! {
         .collect();
     let a: Vec<&CStr> = sa.iter().map(|s| s.as_c_str()).collect();
 
-    if let Err(e) = unistd::execvp(p.as_c_str(), a.as_slice()) {
-        //     info!(logger, "execve failed!!!");
-        //     info!(logger, "binary: {:?}, args: {:?}, envs: {:?}", p, a, env);
-        match e {
-            nix::Error::Sys(errno) => {
-                std::process::exit(errno as i32);
-            }
-            _ => std::process::exit(-2),
+    let _ = unistd::execvp(p.as_c_str(), a.as_slice()).map_err(|e| match e {
+        nix::Error::Sys(errno) => {
+            std::process::exit(errno as i32);
         }
-    }
+        _ => std::process::exit(-2),
+    });
 
     unreachable!()
 }
 
 fn update_namespaces(logger: &Logger, spec: &mut Spec, init_pid: RawFd) -> Result<()> {
-    let linux = match spec.linux.as_mut() {
-        None => return Err(anyhow!("Spec didn't container linux field")),
-        Some(l) => l,
-    };
+    info!(logger, "updating namespaces");
+    let linux = spec
+        .linux
+        .as_mut()
+        .ok_or_else(|| anyhow!("Spec didn't contain linux field"))?;
 
     let namespaces = linux.namespaces.as_mut_slice();
     for namespace in namespaces.iter_mut() {
@@ -1072,19 +1072,18 @@ fn get_pid_namespace(logger: &Logger, linux: &Linux) -> Result<Option<RawFd>> {
                 return Ok(None);
             }
 
-            let fd = match fcntl::open(ns.path.as_str(), OFlag::O_CLOEXEC, Mode::empty()) {
-                Ok(v) => v,
-                Err(e) => {
+            let fd =
+                fcntl::open(ns.path.as_str(), OFlag::O_CLOEXEC, Mode::empty()).map_err(|e| {
                     error!(
                         logger,
                         "cannot open type: {} path: {}",
                         ns.r#type.clone(),
                         ns.path.clone()
                     );
-                    error!(logger, "error is : {}", e.as_errno().unwrap().desc());
-                    return Err(e.into());
-                }
-            };
+                    error!(logger, "error is : {:?}", e.as_errno());
+
+                    e
+                })?;
 
             return Ok(Some(fd));
         }
@@ -1094,24 +1093,21 @@ fn get_pid_namespace(logger: &Logger, linux: &Linux) -> Result<Option<RawFd>> {
 }
 
 fn is_userns_enabled(linux: &Linux) -> bool {
-    for ns in &linux.namespaces {
-        if ns.r#type == "user" && ns.path == "" {
-            return true;
-        }
-    }
-
-    false
+    linux
+        .namespaces
+        .iter()
+        .any(|ns| ns.r#type == "user" && ns.path == "")
 }
 
-fn get_namespaces(linux: &Linux) -> Result<Vec<LinuxNamespace>> {
-    let mut ns: Vec<LinuxNamespace> = Vec::new();
-    for i in &linux.namespaces {
-        ns.push(LinuxNamespace {
-            r#type: i.r#type.clone(),
-            path: i.path.clone(),
-        });
-    }
-    Ok(ns)
+fn get_namespaces(linux: &Linux) -> Vec<LinuxNamespace> {
+    linux
+        .namespaces
+        .iter()
+        .map(|ns| LinuxNamespace {
+            r#type: ns.r#type.clone(),
+            path: ns.path.clone(),
+        })
+        .collect()
 }
 
 fn join_namespaces(
@@ -1120,7 +1116,6 @@ fn join_namespaces(
     p: &Process,
     cm: &FsManager,
     st: &OCIState,
-    _child: &mut Child,
     pwfd: RawFd,
     prfd: RawFd,
 ) -> Result<()> {
@@ -1137,7 +1132,6 @@ fn join_namespaces(
 
     info!(logger, "wait child received oci spec");
 
-    //    child.try_wait()?;
     read_sync(prfd)?;
 
     info!(logger, "send oci process from parent to child");
@@ -1150,7 +1144,7 @@ fn join_namespaces(
     let cm_str = serde_json::to_string(cm)?;
     write_sync(pwfd, SYNC_DATA, cm_str.as_str())?;
 
-    //wait child setup user namespace
+    // wait child setup user namespace
     info!(logger, "wait child setup user namespace");
     read_sync(prfd)?;
 
@@ -1209,7 +1203,7 @@ fn join_namespaces(
         read_sync(prfd)?;
         info!(logger, "get ready to run poststart hook!");
 
-        //run poststart hook
+        // run poststart hook
         if spec.hooks.is_some() {
             info!(logger, "poststart hook");
             let hooks = spec.hooks.as_ref().unwrap();
@@ -1226,36 +1220,30 @@ fn join_namespaces(
 }
 
 fn write_mappings(logger: &Logger, path: &str, maps: &[LinuxIDMapping]) -> Result<()> {
-    let mut data = String::new();
-    for m in maps {
-        if m.size == 0 {
-            continue;
-        }
-
-        let val = format!("{} {} {}\n", m.container_id, m.host_id, m.size);
-        data = data + &val;
-    }
+    let data = maps
+        .iter()
+        .filter(|m| m.size != 0)
+        .map(|m| format!("{} {} {}\n", m.container_id, m.host_id, m.size))
+        .collect::<Vec<_>>()
+        .join("");
 
     info!(logger, "mapping: {}", data);
     if !data.is_empty() {
         let fd = fcntl::open(path, OFlag::O_WRONLY, Mode::empty())?;
         defer!(unistd::close(fd).unwrap());
-        match unistd::write(fd, data.as_bytes()) {
-            Ok(_) => {}
-            Err(e) => {
-                info!(logger, "cannot write mapping");
-                return Err(e.into());
-            }
-        }
+        unistd::write(fd, data.as_bytes()).map_err(|e| {
+            info!(logger, "cannot write mapping");
+            e
+        })?;
     }
     Ok(())
 }
 
 fn setid(uid: Uid, gid: Gid) -> Result<()> {
     // set uid/gid
-    if let Err(e) = prctl::set_keep_capabilities(true) {
-        bail!(anyhow!(e).context("set keep capabilities returned"));
-    };
+    prctl::set_keep_capabilities(true)
+        .map_err(|e| anyhow!(e).context("set keep capabilities returned"))?;
+
     {
         unistd::setresgid(gid, gid, gid)?;
     }
@@ -1267,9 +1255,9 @@ fn setid(uid: Uid, gid: Gid) -> Result<()> {
         capabilities::reset_effective()?;
     }
 
-    if let Err(e) = prctl::set_keep_capabilities(false) {
-        bail!(anyhow!(e).context("set keep capabilities returned"));
-    };
+    prctl::set_keep_capabilities(false)
+        .map_err(|e| anyhow!(e).context("set keep capabilities returned"))?;
+
     Ok(())
 }
 
@@ -1287,13 +1275,13 @@ impl LinuxContainer {
         // validate oci spec
         validator::validate(&config)?;
 
-        if let Err(e) = fs::create_dir_all(root.as_str()) {
+        fs::create_dir_all(root.as_str()).map_err(|e| {
             if e.kind() == std::io::ErrorKind::AlreadyExists {
-                return Err(e).context(format!("container {} already exists", id.as_str()));
+                return anyhow!(e).context(format!("container {} already exists", id.as_str()));
             }
 
-            return Err(e).context(format!("fail to create container directory {}", root));
-        }
+            anyhow!(e).context(format!("fail to create container directory {}", root))
+        })?;
 
         unistd::chown(
             root.as_str(),
@@ -1428,7 +1416,6 @@ fn set_sysctls(sysctls: &HashMap<String, String>) -> Result<()> {
     Ok(())
 }
 
-use std::error::Error as StdError;
 use std::io::Read;
 use std::os::unix::process::ExitStatusExt;
 use std::process::Stdio;
@@ -1448,7 +1435,6 @@ fn execute_hook(logger: &Logger, h: &Hook, st: &OCIState) -> Result<()> {
     let args = h.args.clone();
     let envs = h.env.clone();
     let state = serde_json::to_string(st)?;
-    //	state.push_str("\n");
 
     let (rfd, wfd) = unistd::pipe2(OFlag::O_CLOEXEC)?;
     defer!({
@@ -1467,9 +1453,6 @@ fn execute_hook(logger: &Logger, h: &Hook, st: &OCIState) -> Result<()> {
             };
 
             info!(logger, "hook child: {} status: {}", child, status);
-
-            // let _ = wait::waitpid(_ch,
-            //	Some(WaitPidFlag::WEXITED | WaitPidFlag::__WALL));
 
             if status != 0 {
                 if status == -libc::ETIMEDOUT {
@@ -1511,7 +1494,7 @@ fn execute_hook(logger: &Logger, h: &Hook, st: &OCIState) -> Result<()> {
                     .spawn()
                     .unwrap();
 
-                //send out our pid
+                // send out our pid
                 tx.send(child.id() as libc::pid_t).unwrap();
                 info!(logger, "hook grand: {}", child.id());
 
@@ -1530,7 +1513,7 @@ fn execute_hook(logger: &Logger, h: &Hook, st: &OCIState) -> Result<()> {
                     .unwrap()
                     .read_to_string(&mut out)
                     .unwrap();
-                info!(logger, "{}", out.as_str());
+                info!(logger, "child stdout: {}", out.as_str());
                 match child.wait() {
                     Ok(exit) => {
                         let code: i32 = if exit.success() {
@@ -1549,7 +1532,7 @@ fn execute_hook(logger: &Logger, h: &Hook, st: &OCIState) -> Result<()> {
                         info!(
                             logger,
                             "wait child error: {} {}",
-                            e.description(),
+                            e,
                             e.raw_os_error().unwrap()
                         );
 
@@ -1600,8 +1583,6 @@ fn execute_hook(logger: &Logger, h: &Hook, st: &OCIState) -> Result<()> {
                 SYNC_DATA,
                 std::str::from_utf8(&status.to_be_bytes()).unwrap_or_default(),
             );
-            // let _ = wait::waitpid(Pid::from_raw(pid),
-            //	Some(WaitPidFlag::WEXITED | WaitPidFlag::__WALL));
             std::process::exit(0);
         }
     }

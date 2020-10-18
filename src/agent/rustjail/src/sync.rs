@@ -23,7 +23,8 @@ macro_rules! log_child {
         let lfd = $fd;
         let mut log_str = format_args!($($arg)+).to_string();
         log_str.push('\n');
-        write_count(lfd, log_str.as_bytes(), log_str.len());
+        // Ignore error writing to the logger, not much we can do
+        let _ = write_count(lfd, log_str.as_bytes(), log_str.len());
     })
 }
 
@@ -142,21 +143,15 @@ pub fn write_sync(fd: RawFd, msg_type: i32, data_str: &str) -> Result<()> {
         },
         SYNC_DATA => {
             let length: i32 = data_str.len() as i32;
-            match write_count(fd, &length.to_be_bytes(), MSG_SIZE) {
-                Ok(_count) => (),
-                Err(e) => {
-                    unistd::close(fd)?;
-                    return Err(anyhow!(e).context("error in send message to process"));
-                }
-            }
+            write_count(fd, &length.to_be_bytes(), MSG_SIZE).or_else(|e| {
+                unistd::close(fd)?;
+                Err(anyhow!(e).context("error in send message to process"))
+            })?;
 
-            match write_count(fd, data_str.as_bytes(), data_str.len()) {
-                Ok(_count) => (),
-                Err(e) => {
-                    unistd::close(fd)?;
-                    return Err(anyhow!(e).context("error in send message to process"));
-                }
-            }
+            write_count(fd, data_str.as_bytes(), data_str.len()).or_else(|e| {
+                unistd::close(fd)?;
+                Err(anyhow!(e).context("error in send message to process"))
+            })?;
         }
 
         _ => (),

@@ -16,6 +16,22 @@ ctlpath = "@ACRNCTLPATH@"
 kernel = "@KERNELPATH_ACRN@"
 image = "@IMAGEPATH@"
 
+# List of valid annotation names for the hypervisor
+# Each member of the list is a regular expression, which is the base name
+# of the annotation, e.g. "path" for io.katacontainers.config.hypervisor.path"
+enable_annotations = @DEFENABLEANNOTATIONS@
+
+# List of valid annotations values for the hypervisor
+# Each member of the list is a path pattern as described by glob(3).
+# The default if not set is empty (all annotations rejected.)
+# Your distribution recommends: @ACRNVALIDHYPERVISORPATHS@
+valid_hypervisor_paths = @ACRNVALIDHYPERVISORPATHS@
+
+# List of valid annotations values for ctlpath
+# The default if not set is empty (all annotations rejected.)
+# Your distribution recommends: @ACRNVALIDCTLPATHS@
+valid_ctlpaths = @ACRNVALIDCTLPATHS@
+
 # Optional space-separated list of options to pass to the guest kernel.
 # For example, use `kernel_params = "vsyscall=emulate"` if you are having
 # trouble running pre-2.15 glibc.

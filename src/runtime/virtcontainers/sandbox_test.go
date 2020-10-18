@@ -106,12 +106,18 @@ func TestCreateMockSandbox(t *testing.T) {
 func TestCalculateSandboxCPUs(t *testing.T) {
 	sandbox := &Sandbox{}
 	sandbox.config = &SandboxConfig{}
+
 	unconstrained := newTestContainerConfigNoop("cont-00001")
-	constrained := newTestContainerConfigNoop("cont-00001")
+	constrained := newTestContainerConfigNoop("cont-00002")
+	unconstrainedCpusets0_1 := newTestContainerConfigNoop("cont-00003")
+	unconstrainedCpusets2 := newTestContainerConfigNoop("cont-00004")
+	constrainedCpusets0_7 := newTestContainerConfigNoop("cont-00005")
 	quota := int64(4000)
 	period := uint64(1000)
 	constrained.Resources.CPU = &specs.LinuxCPU{Period: &period, Quota: &quota}
-
+	unconstrainedCpusets0_1.Resources.CPU = &specs.LinuxCPU{Cpus: "0-1"}
+	unconstrainedCpusets2.Resources.CPU = &specs.LinuxCPU{Cpus: "2"}
+	constrainedCpusets0_7.Resources.CPU = &specs.LinuxCPU{Period: &period, Quota: &quota, Cpus: "0-7"}
 	tests := []struct {
 		name       string
 		containers []ContainerConfig
@@ -123,11 +129,14 @@ func TestCalculateSandboxCPUs(t *testing.T) {
 		{"2-constrained", []ContainerConfig{constrained, constrained}, 8},
 		{"3-mix-constraints", []ContainerConfig{unconstrained, constrained, constrained}, 8},
 		{"3-constrained", []ContainerConfig{constrained, constrained, constrained}, 12},
+		{"unconstrained-1-cpuset", []ContainerConfig{unconstrained, unconstrained, unconstrainedCpusets0_1}, 2},
+		{"unconstrained-2-cpuset", []ContainerConfig{unconstrainedCpusets0_1, unconstrainedCpusets2}, 3},
+		{"constrained-cpuset", []ContainerConfig{constrainedCpusets0_7}, 4},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			sandbox.config.Containers = tt.containers
-			got := sandbox.calculateSandboxCPUs()
+			got, _ := sandbox.calculateSandboxCPUs()
 			assert.Equal(t, got, tt.want)
 		})
 	}
@@ -1415,6 +1424,130 @@ func TestSandbox_SetupSandboxCgroup(t *testing.T) {
 			tt.s.createCgroupManager()
 			if err := tt.s.setupSandboxCgroup(); (err != nil) != tt.wantErr {
 				t.Errorf("Sandbox.SetupSandboxCgroupOnly() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func getContainerConfigWithCPUSet(cpuset, memset string) ContainerConfig {
+	return ContainerConfig{
+		Resources: specs.LinuxResources{
+			CPU: &specs.LinuxCPU{
+				Cpus: cpuset,
+				Mems: memset,
+			},
+		},
+	}
+}
+
+func getSimpleSandbox(cpusets, memsets [3]string) *Sandbox {
+	sandbox := Sandbox{}
+
+	sandbox.config = &SandboxConfig{
+		Containers: []ContainerConfig{
+			getContainerConfigWithCPUSet(cpusets[0], memsets[0]),
+			getContainerConfigWithCPUSet(cpusets[1], memsets[1]),
+			getContainerConfigWithCPUSet(cpusets[2], memsets[2]),
+		},
+	}
+
+	return &sandbox
+}
+
+func TestGetSandboxCpuSet(t *testing.T) {
+
+	tests := []struct {
+		name      string
+		cpusets   [3]string
+		memsets   [3]string
+		cpuResult string
+		memResult string
+		wantErr   bool
+	}{
+		{
+			"single, no cpuset",
+			[3]string{"", "", ""},
+			[3]string{"", "", ""},
+			"",
+			"",
+			false,
+		},
+		{
+			"single cpuset",
+			[3]string{"0", "", ""},
+			[3]string{"", "", ""},
+			"0",
+			"",
+			false,
+		},
+		{
+			"two duplicate cpuset",
+			[3]string{"0", "0", ""},
+			[3]string{"", "", ""},
+			"0",
+			"",
+			false,
+		},
+		{
+			"3 cpusets",
+			[3]string{"0-3", "5-7", "1"},
+			[3]string{"", "", ""},
+			"0-3,5-7",
+			"",
+			false,
+		},
+
+		{
+			"weird, but should be okay",
+			[3]string{"0-3", "99999", ""},
+			[3]string{"", "", ""},
+			"0-3,99999",
+			"",
+			false,
+		},
+		{
+			"two, overlapping cpuset",
+			[3]string{"0-3", "1-2", ""},
+			[3]string{"", "", ""},
+			"0-3",
+			"",
+			false,
+		},
+		{
+			"garbage, should fail",
+			[3]string{"7 beard-seconds", "Audrey + 7", "Elliott - 17"},
+			[3]string{"", "", ""},
+			"",
+			"",
+			true,
+		},
+		{
+			"cpuset and memset",
+			[3]string{"0-3", "1-2", ""},
+			[3]string{"0", "1", "0-1"},
+			"0-3",
+			"0-1",
+			false,
+		},
+		{
+			"memset",
+			[3]string{"0-3", "1-2", ""},
+			[3]string{"0", "3", ""},
+			"0-3",
+			"0,3",
+			false,
+		},
+	}
+	for _, tt := range tests {
+
+		t.Run(tt.name, func(t *testing.T) {
+			s := getSimpleSandbox(tt.cpusets, tt.memsets)
+			res, _, err := s.getSandboxCPUSet()
+			if (err != nil) != tt.wantErr {
+				t.Errorf("getSandboxCPUSet() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if res != tt.cpuResult {
+				t.Errorf("getSandboxCPUSet() result = %s, wanted result %s", res, tt.cpuResult)
 			}
 		})
 	}

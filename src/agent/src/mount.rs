@@ -125,7 +125,7 @@ lazy_static! {
 // type of storage driver.
 type StorageHandler = fn(&Logger, &Storage, Arc<Mutex<Sandbox>>) -> Result<String>;
 
-// StorageHandlerList lists the supported drivers.
+// STORAGEHANDLERLIST lists the supported drivers.
 #[cfg_attr(rustfmt, rustfmt_skip)]
 lazy_static! {
     pub static ref STORAGEHANDLERLIST: HashMap<&'static str, StorageHandler> = {
@@ -251,10 +251,7 @@ fn ephemeral_storage_handler(
         return Ok("".to_string());
     }
 
-    if let Err(err) = fs::create_dir_all(Path::new(&storage.mount_point)) {
-        return Err(err.into());
-    }
-
+    fs::create_dir_all(Path::new(&storage.mount_point))?;
     common_storage_handler(logger, storage)?;
 
     Ok("".to_string())
@@ -449,21 +446,17 @@ pub fn add_storages(
             "subsystem" => "storage",
             "storage-type" => handler_name.to_owned()));
 
-        let handler = match STORAGEHANDLERLIST.get(&handler_name.as_str()) {
-            None => {
-                return Err(anyhow!(
+        let handler = STORAGEHANDLERLIST
+            .get(&handler_name.as_str())
+            .ok_or_else(|| {
+                anyhow!(
                     "Failed to find the storage handler {}",
                     storage.driver.to_owned()
-                ));
-            }
-            Some(f) => f,
-        };
+                )
+            })?;
 
-        let mount_point = match handler(&logger, &storage, sandbox.clone()) {
-            // Todo need to rollback the mounted storage if err met.
-            Err(e) => return Err(e),
-            Ok(m) => m,
-        };
+        // Todo need to rollback the mounted storage if err met.
+        let mount_point = handler(&logger, &storage, sandbox.clone())?;
 
         if mount_point.len() > 0 {
             mount_list.push(mount_point);
@@ -482,15 +475,18 @@ fn mount_to_rootfs(logger: &Logger, m: &INIT_MOUNT) -> Result<()> {
 
     fs::create_dir_all(Path::new(m.dest)).context("could not create directory")?;
 
-    if let Err(err) = bare_mount.mount() {
+    bare_mount.mount().or_else(|e| {
         if m.src != "dev" {
-            return Err(err.into());
+            return Err(e);
         }
+
         error!(
             logger,
             "Could not mount filesystem from {} to {}", m.src, m.dest
         );
-    }
+
+        Ok(())
+    })?;
 
     Ok(())
 }
@@ -510,7 +506,7 @@ pub fn get_mount_fs_type(mount_point: &str) -> Result<String> {
     get_mount_fs_type_from_file(PROC_MOUNTSTATS, mount_point)
 }
 
-// get_mount_fs_type returns the FS type corresponding to the passed mount point and
+// get_mount_fs_type_from_file returns the FS type corresponding to the passed mount point and
 // any error ecountered.
 pub fn get_mount_fs_type_from_file(mount_file: &str, mount_point: &str) -> Result<String> {
     if mount_point == "" {
@@ -643,7 +639,7 @@ pub fn cgroups_mount(logger: &Logger, unified_cgroup_hierarchy: bool) -> Result<
 
     // Enable memory hierarchical account.
     // For more information see https://www.kernel.org/doc/Documentation/cgroup-v1/memory.txt
-    online_device("/sys/fs/cgroup/memory//memory.use_hierarchy")?;
+    online_device("/sys/fs/cgroup/memory/memory.use_hierarchy")?;
     Ok(())
 }
 
@@ -654,15 +650,14 @@ pub fn remove_mounts(mounts: &Vec<String>) -> Result<()> {
     Ok(())
 }
 
-// ensureDestinationExists will recursively create a given mountpoint. If directories
-// are created, their permissions are initialized to mountPerm
+// ensure_destination_exists will recursively create a given mountpoint. If directories
+// are created, their permissions are initialized to mountPerm(0755)
 fn ensure_destination_exists(destination: &str, fs_type: &str) -> Result<()> {
     let d = Path::new(destination);
     if !d.exists() {
-        let dir = match d.parent() {
-            Some(d) => d,
-            None => return Err(anyhow!("mount destination {} doesn't exist", destination)),
-        };
+        let dir = d
+            .parent()
+            .ok_or_else(|| anyhow!("mount destination {} doesn't exist", destination))?;
         if !dir.exists() {
             fs::create_dir_all(dir).context(format!("create dir all failed on {:?}", dir))?;
         }
@@ -1088,7 +1083,7 @@ mod tests {
 
     #[test]
     fn test_get_cgroup_v2_mounts() {
-        let dir = tempdir().expect("failed to create tmpdir");
+        let _ = tempdir().expect("failed to create tmpdir");
         let drain = slog::Discard;
         let logger = slog::Logger::root(drain, o!());
         let result = get_cgroup_mounts(&logger, "", true);

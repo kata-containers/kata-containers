@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"regexp"
 	goruntime "runtime"
 	"strconv"
 	"strings"
@@ -181,13 +182,42 @@ func containerMounts(spec specs.Spec) []vc.Mount {
 	return mnts
 }
 
-func contains(s []string, e string) bool {
-	for _, a := range s {
-		if a == e {
+func contains(strings []string, toFind string) bool {
+	for _, candidate := range strings {
+		if candidate == toFind {
 			return true
 		}
 	}
 	return false
+}
+
+func regexpContains(regexps []string, toMatch string) bool {
+	for _, candidate := range regexps {
+		if matched, _ := regexp.MatchString(candidate, toMatch); matched {
+			return true
+		}
+	}
+	return false
+}
+
+func checkPathIsInGlobs(globs []string, path string) bool {
+	for _, glob := range globs {
+		filenames, _ := filepath.Glob(glob)
+		for _, a := range filenames {
+			if path == a {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// Check if an annotation name either belongs to another prefix, matches regexp list
+func checkAnnotationNameIsValid(list []string, name string, prefix string) bool {
+	if strings.HasPrefix(name, prefix) {
+		return regexpContains(list, strings.TrimPrefix(name, prefix))
+	}
+	return true
 }
 
 func newLinuxDeviceInfo(d specs.LinuxDevice) (*config.DeviceInfo, error) {
@@ -322,13 +352,18 @@ func SandboxID(spec specs.Spec) (string, error) {
 	return "", fmt.Errorf("Could not find sandbox ID")
 }
 
-func addAnnotations(ocispec specs.Spec, config *vc.SandboxConfig) error {
+func addAnnotations(ocispec specs.Spec, config *vc.SandboxConfig, runtime RuntimeConfig) error {
+	for key := range ocispec.Annotations {
+		if !checkAnnotationNameIsValid(runtime.HypervisorConfig.EnableAnnotations, key, vcAnnotations.KataAnnotationHypervisorPrefix) {
+			return fmt.Errorf("annotation %v is not enabled", key)
+		}
+	}
 	addAssetAnnotations(ocispec, config)
-	if err := addHypervisorConfigOverrides(ocispec, config); err != nil {
+	if err := addHypervisorConfigOverrides(ocispec, config, runtime); err != nil {
 		return err
 	}
 
-	if err := addRuntimeConfigOverrides(ocispec, config); err != nil {
+	if err := addRuntimeConfigOverrides(ocispec, config, runtime); err != nil {
 		return err
 	}
 
@@ -353,20 +388,18 @@ func addAssetAnnotations(ocispec specs.Spec, config *vc.SandboxConfig) {
 
 	for _, a := range assetAnnotations {
 		value, ok := ocispec.Annotations[a]
-		if !ok {
-			continue
+		if ok {
+			config.Annotations[a] = value
 		}
-
-		config.Annotations[a] = value
 	}
 }
 
-func addHypervisorConfigOverrides(ocispec specs.Spec, config *vc.SandboxConfig) error {
+func addHypervisorConfigOverrides(ocispec specs.Spec, config *vc.SandboxConfig, runtime RuntimeConfig) error {
 	if err := addHypervisorCPUOverrides(ocispec, config); err != nil {
 		return err
 	}
 
-	if err := addHypervisorMemoryOverrides(ocispec, config); err != nil {
+	if err := addHypervisorMemoryOverrides(ocispec, config, runtime); err != nil {
 		return err
 	}
 
@@ -374,7 +407,7 @@ func addHypervisorConfigOverrides(ocispec specs.Spec, config *vc.SandboxConfig) 
 		return err
 	}
 
-	if err := addHypervisporVirtioFsOverrides(ocispec, config); err != nil {
+	if err := addHypervisorVirtioFsOverrides(ocispec, config, runtime); err != nil {
 		return err
 	}
 
@@ -382,15 +415,8 @@ func addHypervisorConfigOverrides(ocispec specs.Spec, config *vc.SandboxConfig) 
 		return err
 	}
 
-	if value, ok := ocispec.Annotations[vcAnnotations.KernelParams]; ok {
-		if value != "" {
-			params := vc.DeserializeParams(strings.Fields(value))
-			for _, param := range params {
-				if err := config.HypervisorConfig.AddKernelParam(param); err != nil {
-					return fmt.Errorf("Error adding kernel parameters in annotation kernel_params : %v", err)
-				}
-			}
-		}
+	if err := addHypervisorPathOverrides(ocispec, config, runtime); err != nil {
+		return err
 	}
 
 	if value, ok := ocispec.Annotations[vcAnnotations.MachineType]; ok {
@@ -403,6 +429,13 @@ func addHypervisorConfigOverrides(ocispec specs.Spec, config *vc.SandboxConfig) 
 		if value != "" {
 			config.HypervisorConfig.MachineAccelerators = value
 		}
+	}
+
+	if value, ok := ocispec.Annotations[vcAnnotations.VhostUserStorePath]; ok {
+		if !checkPathIsInGlobs(runtime.HypervisorConfig.VhostUserStorePathList, value) {
+			return fmt.Errorf("vhost store path %v required from annotation is not valid", value)
+		}
+		config.HypervisorConfig.VhostUserStorePath = value
 	}
 
 	if value, ok := ocispec.Annotations[vcAnnotations.GuestHookPath]; ok {
@@ -446,7 +479,42 @@ func addHypervisorConfigOverrides(ocispec specs.Spec, config *vc.SandboxConfig) 
 	return nil
 }
 
-func addHypervisorMemoryOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig) error {
+func addHypervisorPathOverrides(ocispec specs.Spec, config *vc.SandboxConfig, runtime RuntimeConfig) error {
+	if value, ok := ocispec.Annotations[vcAnnotations.HypervisorPath]; ok {
+		if !checkPathIsInGlobs(runtime.HypervisorConfig.HypervisorPathList, value) {
+			return fmt.Errorf("hypervisor %v required from annotation is not valid", value)
+		}
+		config.HypervisorConfig.HypervisorPath = value
+	}
+
+	if value, ok := ocispec.Annotations[vcAnnotations.JailerPath]; ok {
+		if !checkPathIsInGlobs(runtime.HypervisorConfig.JailerPathList, value) {
+			return fmt.Errorf("jailer %v required from annotation is not valid", value)
+		}
+		config.HypervisorConfig.JailerPath = value
+	}
+
+	if value, ok := ocispec.Annotations[vcAnnotations.CtlPath]; ok {
+		if !checkPathIsInGlobs(runtime.HypervisorConfig.HypervisorCtlPathList, value) {
+			return fmt.Errorf("hypervisor control %v required from annotation is not valid", value)
+		}
+		config.HypervisorConfig.HypervisorCtlPath = value
+	}
+
+	if value, ok := ocispec.Annotations[vcAnnotations.KernelParams]; ok {
+		if value != "" {
+			params := vc.DeserializeParams(strings.Fields(value))
+			for _, param := range params {
+				if err := config.HypervisorConfig.AddKernelParam(param); err != nil {
+					return fmt.Errorf("Error adding kernel parameters in annotation kernel_params : %v", err)
+				}
+			}
+		}
+	}
+	return nil
+}
+
+func addHypervisorMemoryOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig, runtime RuntimeConfig) error {
 	if value, ok := ocispec.Annotations[vcAnnotations.DefaultMemory]; ok {
 		memorySz, err := strconv.ParseUint(value, 10, 32)
 		if err != nil {
@@ -510,6 +578,9 @@ func addHypervisorMemoryOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig
 	}
 
 	if value, ok := ocispec.Annotations[vcAnnotations.FileBackedMemRootDir]; ok {
+		if !checkPathIsInGlobs(runtime.HypervisorConfig.FileBackedMemRootList, value) {
+			return fmt.Errorf("file_mem_backend value %v required from annotation is not valid", value)
+		}
 		sbConfig.HypervisorConfig.FileBackedMemRootDir = value
 	}
 
@@ -646,7 +717,7 @@ func addHypervisorBlockOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig)
 	return nil
 }
 
-func addHypervisporVirtioFsOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig) error {
+func addHypervisorVirtioFsOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig, runtime RuntimeConfig) error {
 	if value, ok := ocispec.Annotations[vcAnnotations.SharedFS]; ok {
 		supportedSharedFS := []string{config.Virtio9P, config.VirtioFS}
 		valid := false
@@ -663,6 +734,9 @@ func addHypervisporVirtioFsOverrides(ocispec specs.Spec, sbConfig *vc.SandboxCon
 	}
 
 	if value, ok := ocispec.Annotations[vcAnnotations.VirtioFSDaemon]; ok {
+		if !checkPathIsInGlobs(runtime.HypervisorConfig.VirtioFSDaemonList, value) {
+			return fmt.Errorf("virtiofs daemon %v required from annotation is not valid", value)
+		}
 		sbConfig.HypervisorConfig.VirtioFSDaemon = value
 	}
 
@@ -730,7 +804,7 @@ func addHypervisporNetworkOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConf
 	return nil
 }
 
-func addRuntimeConfigOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig) error {
+func addRuntimeConfigOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig, runtime RuntimeConfig) error {
 	if value, ok := ocispec.Annotations[vcAnnotations.DisableGuestSeccomp]; ok {
 		disableGuestSeccomp, err := strconv.ParseBool(value)
 		if err != nil {
@@ -870,7 +944,7 @@ func SandboxConfig(ocispec specs.Spec, runtime RuntimeConfig, bundlePath, cid, c
 		Experimental: runtime.Experimental,
 	}
 
-	if err := addAnnotations(ocispec, &sandboxConfig); err != nil {
+	if err := addAnnotations(ocispec, &sandboxConfig, runtime); err != nil {
 		return vc.SandboxConfig{}, err
 	}
 

@@ -8,7 +8,6 @@ use anyhow::{anyhow, Result};
 use lazy_static;
 use nix::errno::Errno;
 use oci::{LinuxIDMapping, LinuxNamespace, Spec};
-use protobuf::RepeatedField;
 use std::collections::HashMap;
 use std::path::{Component, PathBuf};
 
@@ -226,7 +225,8 @@ fn rootless_euid_mapping(oci: &Spec) -> Result<()> {
         return Err(anyhow!(nix::Error::from_errno(Errno::EINVAL)));
     }
 
-    if linux.gid_mappings.len() == 0 || linux.gid_mappings.len() == 0 {
+    if linux.uid_mappings.len() == 0 || linux.gid_mappings.len() == 0 {
+        // rootless containers requires at least one UID/GID mapping
         return Err(anyhow!(nix::Error::from_errno(Errno::EINVAL)));
     }
 

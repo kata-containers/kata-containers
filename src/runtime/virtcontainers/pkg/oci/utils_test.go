@@ -676,7 +676,25 @@ func TestAddAssetAnnotations(t *testing.T) {
 		Annotations: expectedAnnotations,
 	}
 
-	addAnnotations(ocispec, &config)
+	runtimeConfig := RuntimeConfig{
+		HypervisorType: vc.QemuHypervisor,
+		Console:        consolePath,
+	}
+
+	// Try annotations without enabling them first
+	err := addAnnotations(ocispec, &config, runtimeConfig)
+	assert.Error(err)
+	assert.Exactly(map[string]string{}, config.Annotations)
+
+	// Check if annotation not enabled correctly
+	runtimeConfig.HypervisorConfig.EnableAnnotations = []string{"nonexistent"}
+	err = addAnnotations(ocispec, &config, runtimeConfig)
+	assert.Error(err)
+
+	// Check that it works if all annotation are enabled
+	runtimeConfig.HypervisorConfig.EnableAnnotations = []string{".*"}
+	err = addAnnotations(ocispec, &config, runtimeConfig)
+	assert.NoError(err)
 	assert.Exactly(expectedAnnotations, config.Annotations)
 }
 
@@ -700,9 +718,14 @@ func TestAddAgentAnnotations(t *testing.T) {
 		ContainerPipeSize: 1024,
 	}
 
+	runtimeConfig := RuntimeConfig{
+		HypervisorType: vc.QemuHypervisor,
+		Console:        consolePath,
+	}
+
 	ocispec.Annotations[vcAnnotations.KernelModules] = strings.Join(expectedAgentConfig.KernelModules, KernelModulesSeparator)
 	ocispec.Annotations[vcAnnotations.AgentContainerPipeSize] = "1024"
-	addAnnotations(ocispec, &config)
+	addAnnotations(ocispec, &config, runtimeConfig)
 	assert.Exactly(expectedAgentConfig, config.AgentConfig)
 }
 
@@ -722,8 +745,13 @@ func TestContainerPipeSizeAnnotation(t *testing.T) {
 		ContainerPipeSize: 0,
 	}
 
+	runtimeConfig := RuntimeConfig{
+		HypervisorType: vc.QemuHypervisor,
+		Console:        consolePath,
+	}
+
 	ocispec.Annotations[vcAnnotations.AgentContainerPipeSize] = "foo"
-	err := addAnnotations(ocispec, &config)
+	err := addAnnotations(ocispec, &config, runtimeConfig)
 	assert.Error(err)
 	assert.Exactly(expectedAgentConfig, config.AgentConfig)
 }
@@ -752,8 +780,16 @@ func TestAddHypervisorAnnotations(t *testing.T) {
 		},
 	}
 
+	runtimeConfig := RuntimeConfig{
+		HypervisorType: vc.QemuHypervisor,
+		Console:        consolePath,
+	}
+	runtimeConfig.HypervisorConfig.EnableAnnotations = []string{".*"}
+	runtimeConfig.HypervisorConfig.FileBackedMemRootList = []string{"/dev/shm*"}
+	runtimeConfig.HypervisorConfig.VirtioFSDaemonList = []string{"/bin/*ls*"}
+
 	ocispec.Annotations[vcAnnotations.KernelParams] = "vsyscall=emulate iommu=on"
-	addHypervisorConfigOverrides(ocispec, &config)
+	addHypervisorConfigOverrides(ocispec, &config, runtimeConfig)
 	assert.Exactly(expectedHyperConfig, config.HypervisorConfig)
 
 	ocispec.Annotations[vcAnnotations.DefaultVCPUs] = "1"
@@ -774,7 +810,7 @@ func TestAddHypervisorAnnotations(t *testing.T) {
 	ocispec.Annotations[vcAnnotations.BlockDeviceCacheDirect] = "true"
 	ocispec.Annotations[vcAnnotations.BlockDeviceCacheNoflush] = "true"
 	ocispec.Annotations[vcAnnotations.SharedFS] = "virtio-fs"
-	ocispec.Annotations[vcAnnotations.VirtioFSDaemon] = "/home/virtiofsd"
+	ocispec.Annotations[vcAnnotations.VirtioFSDaemon] = "/bin/false"
 	ocispec.Annotations[vcAnnotations.VirtioFSCache] = "/home/cache"
 	ocispec.Annotations[vcAnnotations.Msize9p] = "512"
 	ocispec.Annotations[vcAnnotations.MachineType] = "q35"
@@ -791,7 +827,7 @@ func TestAddHypervisorAnnotations(t *testing.T) {
 	ocispec.Annotations[vcAnnotations.RxRateLimiterMaxRate] = "10000000"
 	ocispec.Annotations[vcAnnotations.TxRateLimiterMaxRate] = "10000000"
 
-	addAnnotations(ocispec, &config)
+	addAnnotations(ocispec, &config, runtimeConfig)
 	assert.Equal(config.HypervisorConfig.NumVCPUs, uint32(1))
 	assert.Equal(config.HypervisorConfig.DefaultMaxVCPUs, uint32(1))
 	assert.Equal(config.HypervisorConfig.MemorySize, uint32(1024))
@@ -810,7 +846,7 @@ func TestAddHypervisorAnnotations(t *testing.T) {
 	assert.Equal(config.HypervisorConfig.BlockDeviceCacheDirect, true)
 	assert.Equal(config.HypervisorConfig.BlockDeviceCacheNoflush, true)
 	assert.Equal(config.HypervisorConfig.SharedFS, "virtio-fs")
-	assert.Equal(config.HypervisorConfig.VirtioFSDaemon, "/home/virtiofsd")
+	assert.Equal(config.HypervisorConfig.VirtioFSDaemon, "/bin/false")
 	assert.Equal(config.HypervisorConfig.VirtioFSCache, "/home/cache")
 	assert.Equal(config.HypervisorConfig.Msize9p, uint32(512))
 	assert.Equal(config.HypervisorConfig.HypervisorMachineType, "q35")
@@ -828,16 +864,77 @@ func TestAddHypervisorAnnotations(t *testing.T) {
 
 	// In case an absurd large value is provided, the config value if not over-ridden
 	ocispec.Annotations[vcAnnotations.DefaultVCPUs] = "655536"
-	err := addAnnotations(ocispec, &config)
+	err := addAnnotations(ocispec, &config, runtimeConfig)
 	assert.Error(err)
 
 	ocispec.Annotations[vcAnnotations.DefaultVCPUs] = "-1"
-	err = addAnnotations(ocispec, &config)
+	err = addAnnotations(ocispec, &config, runtimeConfig)
 	assert.Error(err)
 
 	ocispec.Annotations[vcAnnotations.DefaultVCPUs] = "1"
 	ocispec.Annotations[vcAnnotations.DefaultMaxVCPUs] = "-1"
-	err = addAnnotations(ocispec, &config)
+	err = addAnnotations(ocispec, &config, runtimeConfig)
+	assert.Error(err)
+
+	ocispec.Annotations[vcAnnotations.DefaultMaxVCPUs] = "1"
+	ocispec.Annotations[vcAnnotations.DefaultMemory] = fmt.Sprintf("%d", vc.MinHypervisorMemory+1)
+	assert.Error(err)
+}
+
+func TestAddProtectedHypervisorAnnotations(t *testing.T) {
+	assert := assert.New(t)
+
+	config := vc.SandboxConfig{
+		Annotations: make(map[string]string),
+	}
+
+	ocispec := specs.Spec{
+		Annotations: make(map[string]string),
+	}
+
+	runtimeConfig := RuntimeConfig{
+		HypervisorType: vc.QemuHypervisor,
+		Console:        consolePath,
+	}
+	ocispec.Annotations[vcAnnotations.KernelParams] = "vsyscall=emulate iommu=on"
+	err := addAnnotations(ocispec, &config, runtimeConfig)
+	assert.Error(err)
+	assert.Exactly(vc.HypervisorConfig{}, config.HypervisorConfig)
+
+	// Enable annotations
+	runtimeConfig.HypervisorConfig.EnableAnnotations = []string{".*"}
+
+	ocispec.Annotations[vcAnnotations.FileBackedMemRootDir] = "/dev/shm"
+	ocispec.Annotations[vcAnnotations.VirtioFSDaemon] = "/bin/false"
+
+	config.HypervisorConfig.FileBackedMemRootDir = "do-not-touch"
+	config.HypervisorConfig.VirtioFSDaemon = "dangerous-daemon"
+
+	err = addAnnotations(ocispec, &config, runtimeConfig)
+	assert.Error(err)
+	assert.Equal(config.HypervisorConfig.FileBackedMemRootDir, "do-not-touch")
+	assert.Equal(config.HypervisorConfig.VirtioFSDaemon, "dangerous-daemon")
+
+	// Now enable them and check again
+	runtimeConfig.HypervisorConfig.FileBackedMemRootList = []string{"/dev/*m"}
+	runtimeConfig.HypervisorConfig.VirtioFSDaemonList = []string{"/bin/*ls*"}
+	err = addAnnotations(ocispec, &config, runtimeConfig)
+	assert.NoError(err)
+	assert.Equal(config.HypervisorConfig.FileBackedMemRootDir, "/dev/shm")
+	assert.Equal(config.HypervisorConfig.VirtioFSDaemon, "/bin/false")
+
+	// In case an absurd large value is provided, the config value if not over-ridden
+	ocispec.Annotations[vcAnnotations.DefaultVCPUs] = "655536"
+	err = addAnnotations(ocispec, &config, runtimeConfig)
+	assert.Error(err)
+
+	ocispec.Annotations[vcAnnotations.DefaultVCPUs] = "-1"
+	err = addAnnotations(ocispec, &config, runtimeConfig)
+	assert.Error(err)
+
+	ocispec.Annotations[vcAnnotations.DefaultVCPUs] = "1"
+	ocispec.Annotations[vcAnnotations.DefaultMaxVCPUs] = "-1"
+	err = addAnnotations(ocispec, &config, runtimeConfig)
 	assert.Error(err)
 
 	ocispec.Annotations[vcAnnotations.DefaultMaxVCPUs] = "1"
@@ -856,16 +953,80 @@ func TestAddRuntimeAnnotations(t *testing.T) {
 		Annotations: make(map[string]string),
 	}
 
+	runtimeConfig := RuntimeConfig{
+		HypervisorType: vc.QemuHypervisor,
+		Console:        consolePath,
+	}
+
 	ocispec.Annotations[vcAnnotations.DisableGuestSeccomp] = "true"
 	ocispec.Annotations[vcAnnotations.SandboxCgroupOnly] = "true"
 	ocispec.Annotations[vcAnnotations.DisableNewNetNs] = "true"
 	ocispec.Annotations[vcAnnotations.InterNetworkModel] = "macvtap"
 
-	addAnnotations(ocispec, &config)
+	addAnnotations(ocispec, &config, runtimeConfig)
 	assert.Equal(config.DisableGuestSeccomp, true)
 	assert.Equal(config.SandboxCgroupOnly, true)
 	assert.Equal(config.NetworkConfig.DisableNewNetNs, true)
 	assert.Equal(config.NetworkConfig.InterworkingModel, vc.NetXConnectMacVtapModel)
+}
+
+func TestRegexpContains(t *testing.T) {
+	assert := assert.New(t)
+
+	type testData struct {
+		regexps  []string
+		toMatch  string
+		expected bool
+	}
+
+	data := []testData{
+		{[]string{}, "", false},
+		{[]string{}, "nonempty", false},
+		{[]string{"simple"}, "simple", true},
+		{[]string{"simple"}, "some_simple_text", true},
+		{[]string{"simple"}, "simp", false},
+		{[]string{"one", "two"}, "one", true},
+		{[]string{"one", "two"}, "two", true},
+		{[]string{"o*"}, "oooo", true},
+		{[]string{"o*"}, "oooa", true},
+		{[]string{"^o*$"}, "oooa", false},
+	}
+
+	for _, d := range data {
+		matched := regexpContains(d.regexps, d.toMatch)
+		assert.Equal(d.expected, matched, "%+v", d)
+	}
+}
+
+func TestCheckPathIsInGlobs(t *testing.T) {
+	assert := assert.New(t)
+
+	type testData struct {
+		globs    []string
+		toMatch  string
+		expected bool
+	}
+
+	data := []testData{
+		{[]string{}, "", false},
+		{[]string{}, "nonempty", false},
+		{[]string{"simple"}, "simple", false},
+		{[]string{"simple"}, "some_simple_text", false},
+		{[]string{"/bin/ls"}, "/bin/ls", true},
+		{[]string{"/bin/ls", "/bin/false"}, "/bin/ls", true},
+		{[]string{"/bin/ls", "/bin/false"}, "/bin/false", true},
+		{[]string{"/bin/ls", "/bin/false"}, "/bin/bar", false},
+		{[]string{"/bin/*ls*"}, "/bin/ls", true},
+		{[]string{"/bin/*ls*"}, "/bin/false", true},
+		{[]string{"bin/ls"}, "/bin/ls", false},
+		{[]string{"./bin/ls"}, "/bin/ls", false},
+		{[]string{"*/bin/ls"}, "/bin/ls", false},
+	}
+
+	for _, d := range data {
+		matched := checkPathIsInGlobs(d.globs, d.toMatch)
+		assert.Equal(d.expected, matched, "%+v", d)
+	}
 }
 
 func TestIsCRIOContainerManager(t *testing.T) {

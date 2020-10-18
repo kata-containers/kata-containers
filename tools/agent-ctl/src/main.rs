@@ -65,7 +65,7 @@ fn make_examples_text(program_name: &str) -> String {
 
 - Query the agent environment:
 
-  $ {program} connect --server-address "{vsock_server_address}" --cmd GuestDetails
+  $ {program} connect --server-address "{vsock_server_address}" --cmd GetGuestDetails
 
 - List all available (built-in and Kata Agent API) commands:
 
@@ -85,7 +85,7 @@ fn make_examples_text(program_name: &str) -> String {
 
 - Query guest details forever:
 
-  $ {program} connect --server-address "{vsock_server_address}" --repeat -1 --cmd GuestDetails
+  $ {program} connect --server-address "{vsock_server_address}" --repeat -1 --cmd GetGuestDetails
 
 - Send a 'SIGUSR1' signal to a container process:
 

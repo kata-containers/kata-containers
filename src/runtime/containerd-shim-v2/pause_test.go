@@ -28,14 +28,14 @@ func TestPauseContainerSuccess(t *testing.T) {
 		MockID: testSandboxID,
 	}
 
-	testingImpl.PauseContainerFunc = func(ctx context.Context, sandboxID, containerID string) error {
+	sandbox.PauseContainerFunc = func(contID string) error {
 		return nil
 	}
 	defer func() {
-		testingImpl.PauseContainerFunc = nil
+		sandbox.PauseContainerFunc = nil
 	}()
 
-	testingImpl.StatusContainerFunc = func(ctx context.Context, sandboxID, containerID string) (vc.ContainerStatus, error) {
+	sandbox.StatusContainerFunc = func(contID string) (vc.ContainerStatus, error) {
 		return vc.ContainerStatus{
 			ID:          testContainerID,
 			Annotations: make(map[string]string),
@@ -45,7 +45,7 @@ func TestPauseContainerSuccess(t *testing.T) {
 		}, nil
 	}
 	defer func() {
-		testingImpl.StatusContainerFunc = nil
+		sandbox.StatusContainerFunc = nil
 	}()
 
 	s := &service{
@@ -76,14 +76,14 @@ func TestPauseContainerFail(t *testing.T) {
 		MockID: testSandboxID,
 	}
 
-	testingImpl.PauseContainerFunc = func(ctx context.Context, sandboxID, containerID string) error {
+	sandbox.PauseContainerFunc = func(contID string) error {
 		return nil
 	}
 	defer func() {
-		testingImpl.PauseContainerFunc = nil
+		sandbox.PauseContainerFunc = nil
 	}()
 
-	testingImpl.StatusContainerFunc = func(ctx context.Context, sandboxID, containerID string) (vc.ContainerStatus, error) {
+	sandbox.StatusContainerFunc = func(contID string) (vc.ContainerStatus, error) {
 		return vc.ContainerStatus{
 			ID:          testContainerID,
 			Annotations: make(map[string]string),
@@ -93,7 +93,7 @@ func TestPauseContainerFail(t *testing.T) {
 		}, nil
 	}
 	defer func() {
-		testingImpl.StatusContainerFunc = nil
+		sandbox.StatusContainerFunc = nil
 	}()
 
 	s := &service{
@@ -119,14 +119,14 @@ func TestResumeContainerSuccess(t *testing.T) {
 		MockID: testSandboxID,
 	}
 
-	testingImpl.ResumeContainerFunc = func(ctx context.Context, sandboxID, containerID string) error {
+	sandbox.ResumeContainerFunc = func(contID string) error {
 		return nil
 	}
 	defer func() {
-		testingImpl.ResumeContainerFunc = nil
+		sandbox.ResumeContainerFunc = nil
 	}()
 
-	testingImpl.StatusContainerFunc = func(ctx context.Context, sandboxID, containerID string) (vc.ContainerStatus, error) {
+	sandbox.StatusContainerFunc = func(contID string) (vc.ContainerStatus, error) {
 		return vc.ContainerStatus{
 			ID:          testContainerID,
 			Annotations: make(map[string]string),
@@ -137,7 +137,7 @@ func TestResumeContainerSuccess(t *testing.T) {
 	}
 
 	defer func() {
-		testingImpl.StatusContainerFunc = nil
+		sandbox.StatusContainerFunc = nil
 	}()
 
 	s := &service{
@@ -168,13 +168,13 @@ func TestResumeContainerFail(t *testing.T) {
 		MockID: testSandboxID,
 	}
 
-	testingImpl.ResumeContainerFunc = func(ctx context.Context, sandboxID, containerID string) error {
+	sandbox.ResumeContainerFunc = func(contID string) error {
 		return nil
 	}
 	defer func() {
-		testingImpl.ResumeContainerFunc = nil
+		sandbox.ResumeContainerFunc = nil
 	}()
-	testingImpl.StatusContainerFunc = func(ctx context.Context, sandboxID, containerID string) (vc.ContainerStatus, error) {
+	sandbox.StatusContainerFunc = func(contID string) (vc.ContainerStatus, error) {
 		return vc.ContainerStatus{
 			ID:          testContainerID,
 			Annotations: make(map[string]string),
@@ -184,7 +184,7 @@ func TestResumeContainerFail(t *testing.T) {
 		}, nil
 	}
 	defer func() {
-		testingImpl.StatusContainerFunc = nil
+		sandbox.StatusContainerFunc = nil
 	}()
 
 	s := &service{
