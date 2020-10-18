@@ -215,6 +215,9 @@ externals:
       https://github.com/kubernetes/kubernetes/tags
       .*/v?([\d\.]+)\.tar\.gz
     version: "1.18.9-00"
+    architecture:
+      aarch64:
+        version: "1.17.3-00"
 
   openshift:
     description: |
