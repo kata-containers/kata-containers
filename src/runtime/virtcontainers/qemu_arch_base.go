@@ -308,6 +308,7 @@ func (q *qemuArchBase) appendConsole(devices []govmmQemu.Device, path string) ([
 		Driver:        govmmQemu.VirtioSerial,
 		ID:            "serial0",
 		DisableModern: q.nestedRun,
+		MaxPorts:      uint(2),
 	}
 
 	devices = append(devices, serial)
