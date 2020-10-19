@@ -240,8 +240,9 @@ func TestQemuArchBaseAppendConsoles(t *testing.T) {
 
 	expectedOut := []govmmQemu.Device{
 		govmmQemu.SerialDevice{
-			Driver: govmmQemu.VirtioSerial,
-			ID:     "serial0",
+			Driver:   govmmQemu.VirtioSerial,
+			ID:       "serial0",
+			MaxPorts: uint(2),
 		},
 		govmmQemu.CharDevice{
 			Driver:   govmmQemu.Console,
