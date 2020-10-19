@@ -1794,3 +1794,22 @@ func TestExecQomGet(t *testing.T) {
 	q.Shutdown()
 	<-disconnectedCh
 }
+
+// Checks dump-guest-memory
+func TestExecuteDumpGuestMemory(t *testing.T) {
+	connectedCh := make(chan *QMPVersion)
+	disconnectedCh := make(chan struct{})
+	buf := newQMPTestCommandBuffer(t)
+	buf.AddCommand("dump-guest-memory", nil, "return", nil)
+	cfg := QMPConfig{Logger: qmpTestLogger{}}
+	q := startQMPLoop(buf, cfg, connectedCh, disconnectedCh)
+	checkVersion(t, connectedCh)
+
+	err := q.ExecuteDumpGuestMemory(context.Background(), "file:/tmp/dump.xxx.yyy", false, "elf")
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+
+	q.Shutdown()
+	<-disconnectedCh
+}
