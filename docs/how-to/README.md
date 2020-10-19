@@ -15,7 +15,6 @@
 
 ## Hypervisors Integration
 - [Kata Containers with Firecracker](https://github.com/kata-containers/documentation/wiki/Initial-release-of-Kata-Containers-with-Firecracker-support)
-- [Kata Containers with NEMU](how-to-use-kata-containers-with-nemu.md)
 - [Kata Containers with ACRN Hypervisor](how-to-use-kata-containers-with-acrn.md)
 
 ## Advanced Topics
