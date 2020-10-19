@@ -21,20 +21,10 @@ parts:
       version="9999"
       kata_url="https://github.com/kata-containers/kata-containers"
 
-      image_info="${SNAPCRAFT_IMAGE_INFO:-}"
-      snap_env="$(echo "${image_info}" | egrep -o "build_url.*" | egrep -o "snap.*build" | cut -d/ -f2)"
-
-      case "${snap_env}" in
-        stable)
-          # Get the latest stable version
-          version=$(git ls-remote --tags ${kata_url}  | egrep -o "refs.*" | egrep -v "\-alpha|\-rc|{}" | egrep -o "[[:digit:]]+\.[[:digit:]]+\.[[:digit:]]+" | sort -V -r | head -1)
-          git checkout ${version}
-        ;;
-
-        *-dev)
-          version="${snap_env}"
-        ;;
-      esac
+      if echo "${GITHUB_REF}" | grep -q -E "^refs/tags"; then
+        version=$(echo ${GITHUB_REF} | cut -d/ -f3)
+        git checkout ${version}
+      fi
 
       snapcraftctl set-grade "stable"
       snapcraftctl set-version "${version}"
