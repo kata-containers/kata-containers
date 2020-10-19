@@ -14,8 +14,17 @@
 - [How to import Kata Containers logs into Fluentd](how-to-import-kata-logs-with-fluentd.md)
 
 ## Hypervisors Integration
+
+  Currently supported hypervisors with Kata Containers include:
+- `qemu`
+- `cloud-hypervisor`
+- `firecracker`
+- `ACRN`
+
+  While `qemu` and `cloud-hypervisor` work out of the box with installation of Kata,
+  some additional configuration is needed in case of `firecracker` and `ACRN`.
+  Refer to the following guides for additional configuration steps:
 - [Kata Containers with Firecracker](https://github.com/kata-containers/documentation/wiki/Initial-release-of-Kata-Containers-with-Firecracker-support)
-- [Kata Containers with NEMU](how-to-use-kata-containers-with-nemu.md)
 - [Kata Containers with ACRN Hypervisor](how-to-use-kata-containers-with-acrn.md)
 
 ## Advanced Topics

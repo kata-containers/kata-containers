@@ -11,7 +11,6 @@
             * [Runtime](#runtime)
             * [Trace forwarder](#trace-forwarder)
         * [Additional](#additional)
-            * [Hypervisor](#hypervisor)
             * [Kernel](#kernel)
     * [CI](#ci)
     * [Community](#community)
@@ -86,11 +85,6 @@ The [`kata-trace-forwarder`](src/trace-forwarder) is a component only used
 when tracing the [agent](#agent) process.
 
 #### Additional
-
-##### Hypervisor
-
-The [`qemu`](https://github.com/kata-containers/qemu) hypervisor is used to
-create virtual machines for hosting the containers.
 
 ##### Kernel
 
