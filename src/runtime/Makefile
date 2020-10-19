@@ -93,6 +93,9 @@ DEFAULTSDIR := $(SHAREDIR)/defaults
 COLLECT_SCRIPT = data/kata-collect-data.sh
 COLLECT_SCRIPT_SRC = $(COLLECT_SCRIPT).in
 
+# @RUNTIME_NAME@ should be replaced with the target in generated files
+RUNTIME_NAME = $(TARGET)
+
 GENERATED_FILES += $(COLLECT_SCRIPT)
 GENERATED_VARS = \
 		VERSION \
