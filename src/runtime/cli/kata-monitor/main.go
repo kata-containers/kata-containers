@@ -9,6 +9,8 @@ import (
 	"flag"
 	"net/http"
 	"os"
+	"runtime"
+	"text/template"
 	"time"
 
 	kataMonitor "github.com/kata-containers/kata-containers/src/runtime/pkg/kata-monitor"
@@ -20,11 +22,76 @@ var containerdAddr = flag.String("containerd-address", "/run/containerd/containe
 var containerdConfig = flag.String("containerd-conf", "/etc/containerd/config.toml", "Containerd config file.")
 var logLevel = flag.String("log-level", "info", "Log level of logrus(trace/debug/info/warn/error/fatal/panic).")
 
+// These values are overridden via ldflags
+var (
+	appName = "kata-monitor"
+	// version is the kata monitor version.
+	version = "0.1.0"
+
+	GitCommit = "unknown-commit"
+)
+
+type versionInfo struct {
+	AppName   string
+	Version   string
+	GitCommit string
+	GoVersion string
+	Os        string
+	Arch      string
+}
+
+var versionTemplate = `{{.AppName}}
+ Version:	{{.Version}}
+ Go version:	{{.GoVersion}}
+ Git commit:	{{.GitCommit}}
+ OS/Arch:	{{.Os}}/{{.Arch}}
+`
+
+func printVersion(ver versionInfo) {
+	t, err := template.New("version").Parse(versionTemplate)
+
+	if err = t.Execute(os.Stdout, ver); err != nil {
+		panic(err)
+	}
+}
+
 func main() {
+	ver := versionInfo{
+		AppName:   appName,
+		Version:   version,
+		GoVersion: runtime.Version(),
+		Os:        runtime.GOOS,
+		Arch:      runtime.GOARCH,
+		GitCommit: GitCommit,
+	}
+
+	if len(os.Args) == 2 && (os.Args[1] == "--version" || os.Args[1] == "version") {
+		printVersion(ver)
+		return
+	}
+
 	flag.Parse()
 
 	// init logrus
 	initLog()
+
+	announceFields := logrus.Fields{
+		// properties from version info
+		"app":        ver.AppName,
+		"version":    ver.Version,
+		"go-version": ver.GoVersion,
+		"os":         ver.Os,
+		"arch":       ver.Arch,
+		"git-commit": ver.GitCommit,
+
+		// properties from command-line options
+		"listen-address":     *monitorListenAddr,
+		"containerd-address": *containerdAddr,
+		"containerd-conf":    *containerdConfig,
+		"log-level":          *logLevel,
+	}
+
+	logrus.WithFields(announceFields).Info("announce")
 
 	// create new kataMonitor
 	km, err := kataMonitor.NewKataMonitor(*containerdAddr, *containerdConfig)
