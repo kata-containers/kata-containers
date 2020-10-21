@@ -1203,7 +1203,7 @@ impl protocols::agent_ttrpc::AgentService for agentService {
         drop(sandbox);
 
         match event_rx.recv() {
-            Err(err) => return Err(ttrpc_error(ttrpc::Code::INTERNAL, err.to_string())),
+            Err(err) => Err(ttrpc_error(ttrpc::Code::INTERNAL, err.to_string())),
             Ok(container_id) => {
                 info!(sl!(), "get_oom_event return {}", &container_id);
                 let mut resp = OOMEvent::new();
@@ -1327,7 +1327,7 @@ fn read_stream(fd: RawFd, l: usize) -> Result<Vec<u8>> {
         }
         Err(e) => match e {
             nix::Error::Sys(errno) => match errno {
-                Errno::EAGAIN => v.resize(0, 0),
+                Errno::EAGAIN => v.clear(),
                 _ => return Err(anyhow!(nix::Error::Sys(errno))),
             },
             _ => return Err(anyhow!("read error")),
