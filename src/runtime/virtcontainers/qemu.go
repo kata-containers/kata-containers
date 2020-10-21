@@ -31,6 +31,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
 
+	pkgUtils "github.com/kata-containers/kata-containers/src/runtime/pkg/utils"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
 	persistapi "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist/api"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/uuid"
@@ -99,12 +100,18 @@ type qemu struct {
 	stopped bool
 
 	store persistapi.PersistDriver
+
+	// if in memory dump progress
+	memoryDumpFlag sync.Mutex
 }
 
 const (
 	consoleSocket = "console.sock"
 	qmpSocket     = "qmp.sock"
 	vhostFSSocket = "vhost-fs.sock"
+
+	// memory dump format will be set to elf
+	memoryDumpFormat = "elf"
 
 	qmpCapErrMsg  = "Failed to negoatiate QMP capabilities"
 	qmpExecCatCmd = "exec:cat"
@@ -408,13 +415,17 @@ func (q *qemu) buildDevices(initrdPath string) ([]govmmQemu.Device, *govmmQemu.I
 		}
 	}
 
+	if q.config.IfPVPanicEnabled() {
+		// there should have no errors for pvpanic device
+		devices, _ = q.arch.appendPVPanicDevice(devices)
+	}
+
 	var ioThread *govmmQemu.IOThread
 	if q.config.BlockDeviceDriver == config.VirtioSCSI {
 		return q.arch.appendSCSIController(devices, q.config.EnableIOThreads)
 	}
 
 	return devices, ioThread, nil
-
 }
 
 func (q *qemu) setupTemplate(knobs *govmmQemu.Knobs, memory *govmmQemu.Memory) govmmQemu.Incoming {
@@ -1027,7 +1038,13 @@ func (q *qemu) qmpSetup() error {
 		return nil
 	}
 
-	cfg := govmmQemu.QMPConfig{Logger: newQMPLogger()}
+	events := make(chan govmmQemu.QMPEvent)
+	go q.loopQMPEvent(events)
+
+	cfg := govmmQemu.QMPConfig{
+		Logger:  newQMPLogger(),
+		EventCh: events,
+	}
 
 	// Auto-closed by QMPStart().
 	disconnectCh := make(chan struct{})
@@ -1047,6 +1064,136 @@ func (q *qemu) qmpSetup() error {
 	q.qmpMonitorCh.qmp = qmp
 	q.qmpMonitorCh.disconn = disconnectCh
 
+	return nil
+}
+
+func (q *qemu) loopQMPEvent(event chan govmmQemu.QMPEvent) {
+	for {
+		select {
+		case e, open := <-event:
+			if !open {
+				q.Logger().Infof("QMP event channel closed")
+				return
+			}
+			q.Logger().WithField("event", e).Debug("got QMP event")
+			if e.Name == "GUEST_PANICKED" {
+				go q.handleGuestPanic()
+			}
+		}
+	}
+}
+
+func (q *qemu) handleGuestPanic() {
+	if err := q.dumpGuestMemory(q.config.GuestMemoryDumpPath); err != nil {
+		q.Logger().WithError(err).Error("failed to dump guest memory")
+	}
+
+	// TODO: how to notify the upper level sandbox to handle the error
+	// to do a fast fail(shutdown or others).
+	// tracked by https://github.com/kata-containers/kata-containers/issues/1026
+}
+
+// canDumpGuestMemory check if can do a guest memory dump operation.
+// for now it only ensure there must be double of VM size for free disk spaces
+func (q *qemu) canDumpGuestMemory(dumpSavePath string) error {
+	fs := unix.Statfs_t{}
+	if err := unix.Statfs(dumpSavePath, &fs); err != nil {
+		q.Logger().WithError(err).WithField("dumpSavePath", dumpSavePath).Error("failed to call Statfs")
+		return nil
+	}
+	availSpaceInBytes := fs.Bavail * uint64(fs.Bsize)
+	q.Logger().WithFields(
+		logrus.Fields{
+			"dumpSavePath":      dumpSavePath,
+			"availSpaceInBytes": availSpaceInBytes,
+		}).Info("get avail space")
+
+	// get guest memory size
+	guestMemorySizeInBytes := (uint64(q.config.MemorySize) + uint64(q.state.HotpluggedMemory)) << utils.MibToBytesShift
+	q.Logger().WithField("guestMemorySizeInBytes", guestMemorySizeInBytes).Info("get guest memory size")
+
+	// default we want ensure there are at least double of VM memory size free spaces available,
+	// this may complete one dump operation for one sandbox
+	exceptMemorySize := guestMemorySizeInBytes * 2
+	if availSpaceInBytes >= exceptMemorySize {
+		return nil
+	} else {
+		return fmt.Errorf("there are not enough free space to store memory dump file. Except %d bytes, but only %d bytes available", exceptMemorySize, availSpaceInBytes)
+	}
+}
+
+// dumpSandboxMetaInfo save meta information for debug purpose, includes:
+// hypervisor verison, sandbox/container state, hypervisor config
+func (q *qemu) dumpSandboxMetaInfo(dumpSavePath string) {
+	dumpStatePath := filepath.Join(dumpSavePath, "state")
+
+	// copy state from /run/vc/sbs to memory dump directory
+	statePath := filepath.Join(q.store.RunStoragePath(), q.id)
+	command := []string{"/bin/cp", "-ar", statePath, dumpStatePath}
+	q.Logger().WithField("command", command).Info("try to save sandbox state")
+	if output, err := pkgUtils.RunCommandFull(command, true); err != nil {
+		q.Logger().WithError(err).WithField("output", output).Error("failed to save state")
+	}
+	// save hypervisor meta information
+	fileName := filepath.Join(dumpSavePath, "hypervisor.conf")
+	data, _ := json.MarshalIndent(q.config, "", " ")
+	if err := ioutil.WriteFile(fileName, data, defaultFilePerms); err != nil {
+		q.Logger().WithError(err).WithField("hypervisor.conf", data).Error("write to hypervisor.conf file failed")
+	}
+
+	// save hypervisor version
+	hyperVisorVersion, err := pkgUtils.RunCommand([]string{q.config.HypervisorPath, "--version"})
+	if err != nil {
+		q.Logger().WithError(err).WithField("HypervisorPath", data).Error("failed to get hypervisor version")
+	}
+
+	fileName = filepath.Join(dumpSavePath, "hypervisor.version")
+	if err := ioutil.WriteFile(fileName, []byte(hyperVisorVersion), defaultFilePerms); err != nil {
+		q.Logger().WithError(err).WithField("hypervisor.version", data).Error("write to hypervisor.version file failed")
+	}
+}
+
+func (q *qemu) dumpGuestMemory(dumpSavePath string) error {
+	if dumpSavePath == "" {
+		return nil
+	}
+
+	q.memoryDumpFlag.Lock()
+	defer q.memoryDumpFlag.Unlock()
+
+	q.Logger().WithField("dumpSavePath", dumpSavePath).Info("try to dump guest memory")
+
+	dumpSavePath = filepath.Join(dumpSavePath, q.id)
+	dumpStatePath := filepath.Join(dumpSavePath, "state")
+	if err := pkgUtils.EnsureDir(dumpStatePath, DirMode); err != nil {
+		return err
+	}
+
+	// save meta information for sandbox
+	q.dumpSandboxMetaInfo(dumpSavePath)
+	q.Logger().Info("dump sandbox meta information completed")
+
+	// check device free space and estimated dump size
+	if err := q.canDumpGuestMemory(dumpSavePath); err != nil {
+		q.Logger().Warnf("can't dump guest memory: %s", err.Error())
+		return err
+	}
+
+	// dump guest memory
+	protocol := fmt.Sprintf("file:%s/vmcore-%s.%s", dumpSavePath, time.Now().Format("20060102150405.999"), memoryDumpFormat)
+	q.Logger().Infof("try to dump guest memory to %s", protocol)
+
+	if err := q.qmpSetup(); err != nil {
+		q.Logger().WithError(err).Error("setup manage QMP failed")
+		return err
+	}
+
+	if err := q.qmpMonitorCh.qmp.ExecuteDumpGuestMemory(q.qmpMonitorCh.ctx, protocol, q.config.GuestMemoryDumpPaging, memoryDumpFormat); err != nil {
+		q.Logger().WithError(err).Error("dump guest memory failed")
+		return err
+	}
+
+	q.Logger().Info("dump guest memory completed")
 	return nil
 }
 
@@ -2250,6 +2397,9 @@ func (q *qemu) load(s persistapi.HypervisorState) {
 }
 
 func (q *qemu) check() error {
+	q.memoryDumpFlag.Lock()
+	defer q.memoryDumpFlag.Unlock()
+
 	err := q.qmpSetup()
 	if err != nil {
 		return err
