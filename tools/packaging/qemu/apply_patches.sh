@@ -18,7 +18,7 @@ patches_dir="${script_dir}/patches/${stable_branch}"
 
 echo "Handle patches for QEMU $qemu_version (stable ${stable_branch})"
 if [ -d $patches_dir ]; then
-	for patch in $(find $patches_dir -name '*.patch'); do
+	for patch in $(find $patches_dir -name '*.patch'|sort -t- -k1,1n); do
 		echo "Apply $patch"
 		git apply "$patch"
 	done
