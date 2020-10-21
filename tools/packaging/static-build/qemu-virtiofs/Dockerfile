@@ -61,12 +61,10 @@ ADD static-build /root/static-build
 # Apply experimental specific patches
 # Patches to quick fix virtiofs fork
 ENV VIRTIOFS_PATCHES_DIR=/root/kata_qemu/patches/${QEMU_VIRTIOFS_TAG}/
-RUN if [ -d ${VIRTIOFS_PATCHES_DIR} ]; then \
-	echo "Patches to apply for virtiofs fixes:"; \
-	for patch in $(find "${VIRTIOFS_PATCHES_DIR}" -name '*.patch' -type f |sort -t- -k1,1n); do \
-		git apply $patch; \
-	done;fi
-RUN /root/kata_qemu/apply_patches.sh
+RUN /root/apply_patches.sh ${VIRTIOFS_PATCHES_DIR}
+# Apply the stable branch patches
+RUN stable_branch=$(cat VERSION | awk 'BEGIN{FS=OFS="."}{print $1 "." $2 ".x"}') && \
+        /root/apply_patches.sh "/root/kata_qemu/patches/${stable_branch}"
 
 RUN PREFIX="${PREFIX}" /root/configure-hypervisor.sh -s kata-qemu | sed -e 's|--disable-seccomp||g' | xargs ./configure \
 	--with-pkgversion=kata-static
