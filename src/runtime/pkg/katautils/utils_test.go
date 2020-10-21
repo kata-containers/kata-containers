@@ -18,6 +18,7 @@ import (
 	"syscall"
 	"testing"
 
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/utils"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/compatoci"
 	"github.com/stretchr/testify/assert"
 )
@@ -90,7 +91,7 @@ func createOCIConfig(bundleDir string) error {
 		return errors.New("Cannot find command to generate OCI config file")
 	}
 
-	_, err := RunCommand([]string{configCmd, "spec", "--bundle", bundleDir})
+	_, err := utils.RunCommand([]string{configCmd, "spec", "--bundle", bundleDir})
 	if err != nil {
 		return err
 	}

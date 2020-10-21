@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils"
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/utils"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -176,13 +177,13 @@ VERSION_ID="%s"
 }
 
 func TestUtilsRunCommand(t *testing.T) {
-	output, err := katautils.RunCommand([]string{"true"})
+	output, err := utils.RunCommand([]string{"true"})
 	assert.NoError(t, err)
 	assert.Equal(t, "", output)
 }
 
 func TestUtilsRunCommandCaptureStdout(t *testing.T) {
-	output, err := katautils.RunCommand([]string{"echo", "hello"})
+	output, err := utils.RunCommand([]string{"echo", "hello"})
 	assert.NoError(t, err)
 	assert.Equal(t, "hello", output)
 }
@@ -190,7 +191,7 @@ func TestUtilsRunCommandCaptureStdout(t *testing.T) {
 func TestUtilsRunCommandIgnoreStderr(t *testing.T) {
 	args := []string{"/bin/sh", "-c", "echo foo >&2;exit 0"}
 
-	output, err := katautils.RunCommand(args)
+	output, err := utils.RunCommand(args)
 	assert.NoError(t, err)
 	assert.Equal(t, "", output)
 }
@@ -213,7 +214,7 @@ func TestUtilsRunCommandInvalidCmds(t *testing.T) {
 	}
 
 	for _, args := range invalidCommands {
-		output, err := katautils.RunCommand(args)
+		output, err := utils.RunCommand(args)
 		assert.Error(t, err)
 		assert.Equal(t, "", output)
 	}

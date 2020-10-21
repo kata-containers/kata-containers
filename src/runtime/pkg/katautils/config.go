@@ -125,6 +125,8 @@ type hypervisor struct {
 	RxRateLimiterMaxRate    uint64   `toml:"rx_rate_limiter_max_rate"`
 	TxRateLimiterMaxRate    uint64   `toml:"tx_rate_limiter_max_rate"`
 	EnableAnnotations       []string `toml:"enable_annotations"`
+	GuestMemoryDumpPath     string   `toml:"guest_memory_dump_path"`
+	GuestMemoryDumpPaging   bool     `toml:"guest_memory_dump_paging"`
 }
 
 type runtime struct {
@@ -688,6 +690,8 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		RxRateLimiterMaxRate:    rxRateLimiterMaxRate,
 		TxRateLimiterMaxRate:    txRateLimiterMaxRate,
 		EnableAnnotations:       h.EnableAnnotations,
+		GuestMemoryDumpPath:     h.GuestMemoryDumpPath,
+		GuestMemoryDumpPaging:   h.GuestMemoryDumpPaging,
 	}, nil
 }
 
