@@ -11,7 +11,7 @@ import (
 
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 
-	govmmQemu "github.com/intel/govmm/qemu"
+	govmmQemu "github.com/kata-containers/govmm/qemu"
 )
 
 type qemuAmd64 struct {
