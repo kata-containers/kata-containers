@@ -1,142 +1,184 @@
 #!/bin/bash
 
-# //
-# // Copyright 2020 Ant Financial
-# //
-# // SPDX-License-Identifier: Apache-2.0
-# //
+# Copyright 2020 Ant Financial
+# Copyright (c) 2020 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
 
-die() {
-    cat <<EOT >&2
-====================================================================
-====                compile protocols failed                    ====
+set -o errexit
+set -o nounset
+set -o pipefail
+set -o errtrace
 
-$1
+[ -n "${DEBUG:-}" ] && set -o xtrace
 
-====================================================================
+readonly script_name=${0##*/}
+
+# Protocol buffer files required to generate rust bindings.
+#
+# These files define the Kata Containers agent API.
+proto_files_list=(
+	"agent.proto"
+	"health.proto"
+	"oci.proto"
+	"github.com/kata-containers/agent/pkg/types/types.proto"
+)
+
+# List of required command and their canonical sites.
+deps=(
+	"protoc:https://github.com/protocolbuffers/protobuf"
+	"protoc-gen-rust:https://github.com/pingcap/grpc-rs"
+	"ttrpc_rust_plugin:https://github.com/containerd/ttrpc-rust"
+)
+
+project_slug="kata-containers/kata-containers"
+project_site="github.com/${project_slug}"
+
+die()
+{
+	echo >&2 "ERROR: $*"
+	exit 1
+}
+
+info()
+{
+	echo "INFO: $*"
+}
+
+setup()
+{
+	[ -z "${GOPATH}" ] && die "GOPATH not set"
+
+	local dep
+
+	for dep in "${deps[@]}"
+	do
+		local cmd=$(echo "$dep"|cut -d: -f1)
+		local url=$(echo "$dep"|cut -d: -f2-)
+
+		command -v "$cmd" &>/dev/null || die "Install $cmd from $url"
+	done
+}
+
+usage()
+{
+	local file_list=$(echo ${proto_files_list[@]} | sed 's/ /, /g')
+
+	cat <<-EOT
+	Usage: $script_name [options] <proto-file>
+
+	Description: Generate Kata Containers agent rust API bindings
+	  from protocol buffer definition (.proto) files.
+
+	Options:
+
+	 -h : Show this help statement.
+
+	Notes:
+
+	- <proto-file> can be either:
+	  - A file (one of ${file_list}).
+	  - The word 'all', meaning process all files.
+
 EOT
-    exit 1
 }
 
-show_succeed_msg() {
-    echo "===================================================================="
-    echo "====                                                            ===="
-    echo "====                compile protocols succeed                   ===="
-    echo "====                                                            ===="
-    echo "===================================================================="
+generate_rust_sources()
+{
+	local file="${1:-}"
+
+	[ -z "$file" ] && die "need file"
+
+	local filepath="${GOPATH}/src/${project_site}/src/agent/protocols/protos/${file}"
+
+	[ -e "$filepath" ] || die "file $file ($filepath) does not exist"
+
+	local out_dir="./protocols/src"
+	local out_file=$(basename "${file/.proto/.rs}")
+	local outfile_path="${out_dir}/${out_file}"
+
+	local ttrpc_cmd=$(command -v ttrpc_rust_plugin)
+
+	local includes=()
+
+	# Yes, this *is* required!
+	includes+=("${GOPATH}/src")
+
+	includes+=("${GOPATH}/src/${project_site}/src/agent/protocols/protos")
+
+	local include
+
+	for include in "${includes[@]}"
+	do
+		[ -d "$include" ] || die "include directory '$include' does not exist"
+	done
+
+	local include_path=$(echo "${includes[@]}"|tr ' ' ':')
+
+	local cmd="protoc \
+		--rust_out=${out_dir} \
+		--ttrpc_out=${out_dir},plugins=ttrpc:${out_dir} \
+		--plugin=protoc-gen-ttrpc=${ttrpc_cmd} \
+		-I${include_path} \
+		${filepath}"
+
+	local ret
+
+	info "Converting '$file' into '$out_file'"
+
+	{ $cmd; ret=$?; } || true
+
+	[ $ret -eq 0 ] || die "Failed to generate rust file from ${file}"
+
+	if [ "$file" = "oci.proto" ]
+	then
+		# Need change Box<Self> to ::std::boxed::Box<Self> because there is another struct Box
+		sed -i 's/fn into_any(self: Box<Self>) -> ::std::boxed::Box<dyn (::std::any::Any)> {/fn into_any(self: ::std::boxed::Box<Self>) -> ::std::boxed::Box<dyn (::std::any::Any)> {/g' "$outfile_path"
+	fi
 }
 
-show_usage() {
-    echo "===================================================================="
-    echo ""
-    echo "       USAGE: make PROTO_FILE=<xyz.proto> generate-protocols"
-    echo ""
-    echo "       Where PROTO_FILE may be:"
-    echo "         all: will compile all protocol buffer files"
-    echo ""
-    echo "       Or compile individually by using the exact proto file:"
+handle_targets()
+{
+	local targets=("${@}")
 
-    # iterate over proto files
-    for file in "$@"
-    do
-        echo "         $file"
-    done
+	[ -z "$targets" ] && die "need targets"
 
-    echo ""
-    echo "===================================================================="
+	local target
+
+	for target in ${targets[@]}
+	do
+		generate_rust_sources "$target"
+	done
 }
 
-generate_go_sources() {
-    local cmd="protoc -I$GOPATH/src/github.com/kata-containers/agent/vendor/github.com/gogo/protobuf:$GOPATH/src/github.com/kata-containers/agent/vendor:$GOPATH/src/github.com/gogo/protobuf:$GOPATH/src/github.com/gogo/googleapis:$GOPATH/src:$GOPATH/src/github.com/kata-containers/kata-containers/src/agent/protocols/protos \
---gogottrpc_out=plugins=ttrpc+fieldpath,\
-import_path=github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols/grpc,\
-\
-Mgithub.com/kata-containers/kata-containers/src/agent/protocols/protos/github.com/kata-containers/agent/pkg/types/types.proto=github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols,\
-\
-Mgithub.com/kata-containers/kata-containers/src/agent/protocols/protos/oci.proto=github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols/grpc,\
-\
-Mgogoproto/gogo.proto=github.com/gogo/protobuf/gogoproto,Mgoogle/protobuf/any.proto=github.com/gogo/protobuf/types,Mgoogle/protobuf/descriptor.proto=github.com/gogo/protobuf/protoc-gen-gogo/descriptor,Mgoogle/protobuf/duration.proto=github.com/gogo/protobuf/types,Mgoogle/protobuf/empty.proto=github.com/gogo/protobuf/types,Mgoogle/protobuf/field_mask.proto=github.com/gogo/protobuf/types,Mgoogle/protobuf/timestamp.proto=github.com/gogo/protobuf/types,Mgoogle/protobuf/wrappers.proto=github.com/gogo/protobuf/types,Mgoogle/rpc/status.proto=github.com/gogo/googleapis/google/rpc\
-:$GOPATH/src \
-$GOPATH/src/github.com/kata-containers/kata-containers/src/agent/protocols/protos/$1"
+main()
+{
+	local target="${1:-}"
 
-    echo $cmd
-    $cmd
-    [ $? -eq 0 ] || die "Failed to generate golang file from $1"
+	case "$target" in
+		-h|--help|help) usage; exit 0 ;;
+		"") usage; exit 1 ;;
+	esac
+
+	local expected_dir="agent"
+
+	[ "$(basename $(pwd))" != "$expected_dir" ] && \
+		die "Run from $expected_dir directory"
+
+	setup
+
+	local targets=()
+
+	if [ "$target" = "all" ]
+	then
+		targets=("${proto_files_list[@]}")
+	else
+		targets=("$target")
+	fi
+
+	handle_targets "${targets[@]}"
+
+	info "Done"
 }
 
-generate_rust_sources() {
-    local cmd="protoc --rust_out=./protocols/src/ \
---ttrpc_out=./protocols/src/,plugins=ttrpc:./protocols/src/ \
---plugin=protoc-gen-ttrpc=`which ttrpc_rust_plugin` \
--I $GOPATH/src/github.com/kata-containers/agent/vendor/github.com/gogo/protobuf:$GOPATH/src/github.com/kata-containers/agent/vendor:$GOPATH/src/github.com/gogo/protobuf:$GOPATH/src/github.com/gogo/googleapis:$GOPATH/src:$GOPATH/src/github.com/kata-containers/kata-containers/src/agent/protocols/protos \
-$GOPATH/src/github.com/kata-containers/kata-containers/src/agent/protocols/protos/$1"
-
-    echo $cmd
-    $cmd
-    [ $? -eq 0 ] || die "Failed to generate rust file from $1"
-
-    if [ "$1" = "oci.proto" ]; then
-        # Need change Box<Self> to ::std::boxed::Box<Self> because there is another struct Box
-        sed 's/fn into_any(self: Box<Self>) -> ::std::boxed::Box<::std::any::Any> {/fn into_any(self: ::std::boxed::Box<Self>) -> ::std::boxed::Box<::std::any::Any> {/g' ./protocols/src/oci.rs > ./protocols/src/new_oci.rs
-        sed 's/fn into_any(self: Box<Self>) -> ::std::boxed::Box<dyn (::std::any::Any)> {/fn into_any(self: ::std::boxed::Box<Self>) -> ::std::boxed::Box<dyn (::std::any::Any)> {/g' ./protocols/src/oci.rs > ./protocols/src/new_oci.rs
-        mv ./protocols/src/new_oci.rs ./protocols/src/oci.rs
-    fi;
-}
-
-if [ "$(basename $(pwd))" != "agent" ]; then
-	die "Please go to directory of protocols before execute this shell"
-fi
-
-# Protocol buffer files required to generate golang/rust bindings.
-proto_files_list=(agent.proto health.proto oci.proto github.com/kata-containers/agent/pkg/types/types.proto)
-
-if [ "$1" = "" ]; then
-    show_usage "${proto_files_list[@]}"
-    exit 1
-fi;
-
-# pre-requirement check
-which protoc
-[ $? -eq 0 ] || die "Please install protoc from github.com/protocolbuffers/protobuf"
-
-which protoc-gen-rust
-[ $? -eq 0 ] || die "Please install protobuf-codegen from github.com/pingcap/grpc-rs"
-
-which ttrpc_rust_plugin
-[ $? -eq 0 ] || die "Please install ttrpc_rust_plugin from https://github.com/containerd/ttrpc-rust"
-
-which protoc-gen-gogottrpc
-[ $? -eq 0 ] || die "Please install protoc-gen-gogottrpc from https://github.com/containerd/ttrpc"
-
-# do generate work
-target=$1
-
-# compile all proto files
-if [ "$target" = "all" ]; then
-    # compile all proto files
-    for f in ${proto_files_list[@]}; do
-        echo -e "\n   [golang] compiling ${f} ..."
-        generate_go_sources $f
-        echo -e "   [golang] ${f} compiled\n"
-
-        echo -e "\n   [rust] compiling ${f} ..."
-        generate_rust_sources $f
-        echo -e "   [rust] ${f} compiled\n"
-    done
-else
-    # compile individual proto file
-    for f in ${proto_files_list[@]}; do
-        if [ "$target" = "$f" ]; then
-            echo -e "\n   [golang] compiling ${target} ..."
-            generate_go_sources $target
-            echo -e "   [golang] ${target} compiled\n"
-
-            echo -e "\n   [rust] compiling ${target} ..."
-            generate_rust_sources $target
-            echo -e "   [rust] ${target} compiled\n"
-        fi
-    done
-fi;
-
-# if have no errors, compilation will succeed
-show_succeed_msg
+main "$*"
