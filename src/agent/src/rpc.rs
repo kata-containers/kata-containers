@@ -1399,7 +1399,7 @@ fn read_stream(fd: RawFd, l: usize) -> Result<Vec<u8>> {
         }
         Err(e) => match e {
             nix::Error::Sys(errno) => match errno {
-                Errno::EAGAIN => v.resize(0, 0),
+                Errno::EAGAIN => v.clear(),
                 _ => return Err(anyhow!(nix::Error::Sys(errno))),
             },
             _ => return Err(anyhow!("read error")),
