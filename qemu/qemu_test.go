@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -1023,6 +1024,25 @@ func TestBadGlobalParam(t *testing.T) {
 	c.appendGlobalParam()
 	if len(c.qemuParams) != 0 {
 		t.Errorf("Expected empty qemuParams, found %s", c.qemuParams)
+	}
+}
+
+func TestBadPFlash(t *testing.T) {
+	c := &Config{}
+	c.appendPFlashParam()
+	if len(c.qemuParams) != 0 {
+		t.Errorf("Expected empty qemuParams, found %s", c.qemuParams)
+	}
+}
+
+func TestValidPFlash(t *testing.T) {
+	c := &Config{}
+	c.PFlash = []string{"flash0", "flash1"}
+	c.appendPFlashParam()
+	expected := []string{"-pflash", "flash0", "-pflash", "flash1"}
+	ok := reflect.DeepEqual(expected, c.qemuParams)
+	if !ok {
+		t.Errorf("Expected %v, found %v", expected, c.qemuParams)
 	}
 }
 
