@@ -38,8 +38,8 @@ struct DevIndex(HashMap<String, DevIndexEntry>);
 // DeviceHandler is the type of callback to be defined to handle every type of device driver.
 type DeviceHandler = fn(&Device, &mut Spec, &Arc<Mutex<Sandbox>>, &DevIndex) -> Result<()>;
 
-// DeviceHandlerList lists the supported drivers.
-#[cfg_attr(rustfmt, rustfmt_skip)]
+// DEVICEHANDLERLIST lists the supported drivers.
+#[rustfmt::skip]
 lazy_static! {
     static ref DEVICEHANDLERLIST: HashMap<&'static str, DeviceHandler> = {
         let mut m: HashMap<&'static str, DeviceHandler> = HashMap::new();
@@ -65,7 +65,7 @@ pub fn online_device(path: &str) -> Result<()> {
 // Here, bridgeAddr is the address at which the bridge is attached on the root bus,
 // while deviceAddr is the address at which the device is attached on the bridge.
 fn get_pci_device_address(pci_id: &str) -> Result<String> {
-    let tokens: Vec<&str> = pci_id.split("/").collect();
+    let tokens: Vec<&str> = pci_id.split('/').collect();
 
     if tokens.len() != 2 {
         return Err(anyhow!(
@@ -165,7 +165,7 @@ pub fn get_pci_device_name(sandbox: &Arc<Mutex<Sandbox>>, pci_id: &str) -> Resul
 
 /// Scan SCSI bus for the given SCSI address(SCSI-Id and LUN)
 fn scan_scsi_bus(scsi_addr: &str) -> Result<()> {
-    let tokens: Vec<&str> = scsi_addr.split(":").collect();
+    let tokens: Vec<&str> = scsi_addr.split(':').collect();
     if tokens.len() != 2 {
         return Err(anyhow!(
             "Unexpected format for SCSI Address: {}, expect SCSIID:LUA",
@@ -336,11 +336,11 @@ impl DevIndex {
     fn new(spec: &Spec) -> DevIndex {
         let mut map = HashMap::new();
 
-        for linux in spec.linux.as_ref() {
+        if let Some(linux) = spec.linux.as_ref() {
             for (i, d) in linux.devices.iter().enumerate() {
                 let mut residx = Vec::new();
 
-                for linuxres in linux.resources.as_ref() {
+                if let Some(linuxres) = linux.resources.as_ref() {
                     for (j, r) in linuxres.devices.iter().enumerate() {
                         if r.r#type == d.r#type
                             && r.major == Some(d.major)
