@@ -8,3 +8,6 @@ edition = "2018"
 ttrpc = { git = "https://github.com/containerd/ttrpc-rust.git", branch="0.3.0" }
 protobuf = "=2.14.0"
 futures = "0.1.27"
+
+[build-dependencies]
+ttrpc-codegen = "0.1.2"
