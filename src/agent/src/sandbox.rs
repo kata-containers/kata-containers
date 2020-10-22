@@ -75,7 +75,7 @@ impl Sandbox {
             sender: None,
             rtnl: Some(RtnlHandle::new(NETLINK_ROUTE, 0).unwrap()),
             hooks: None,
-            event_rx: event_rx,
+            event_rx,
             event_tx: tx,
         })
     }
@@ -112,14 +112,14 @@ impl Sandbox {
     // acquiring a lock on sandbox.
     pub fn unset_sandbox_storage(&mut self, path: &str) -> Result<bool> {
         match self.storages.get_mut(path) {
-            None => return Err(anyhow!("Sandbox storage with path {} not found", path)),
+            None => Err(anyhow!("Sandbox storage with path {} not found", path)),
             Some(count) => {
                 *count -= 1;
                 if *count < 1 {
                     self.storages.remove(path);
                     return Ok(true);
                 }
-                return Ok(false);
+                Ok(false)
             }
         }
     }
@@ -161,13 +161,13 @@ impl Sandbox {
     pub fn setup_shared_namespaces(&mut self) -> Result<bool> {
         // Set up shared IPC namespace
         self.shared_ipcns = Namespace::new(&self.logger)
-            .as_ipc()
+            .get_ipc()
             .setup()
             .context("Failed to setup persistent IPC namespace")?;
 
         // // Set up shared UTS namespace
         self.shared_utsns = Namespace::new(&self.logger)
-            .as_uts(self.hostname.as_str())
+            .get_uts(self.hostname.as_str())
             .setup()
             .context("Failed to setup persistent UTS namespace")?;
 
@@ -184,7 +184,7 @@ impl Sandbox {
         // This means a separate pause process has not been created. We treat the
         // first container created as the infra container in that case
         // and use its pid namespace in case pid namespace needs to be shared.
-        if self.sandbox_pidns.is_none() && self.containers.len() == 0 {
+        if self.sandbox_pidns.is_none() && self.containers.is_empty() {
             let init_pid = c.init_process_pid;
             if init_pid == -1 {
                 return Err(anyhow!(
@@ -192,7 +192,7 @@ impl Sandbox {
                 ));
             }
 
-            let mut pid_ns = Namespace::new(&self.logger).as_pid();
+            let mut pid_ns = Namespace::new(&self.logger).get_pid();
             pid_ns.path = format!("/proc/{}/ns/pid", init_pid);
 
             self.sandbox_pidns = Some(pid_ns);
@@ -216,7 +216,7 @@ impl Sandbox {
     }
 
     pub fn destroy(&mut self) -> Result<()> {
-        for (_, ctr) in &mut self.containers {
+        for ctr in self.containers.values_mut() {
             ctr.destroy()?;
         }
         Ok(())
@@ -332,7 +332,7 @@ fn online_resources(logger: &Logger, path: &str, pattern: &str, num: i32) -> Res
             }
             let c = c.unwrap();
 
-            if c.trim().contains("0") {
+            if c.trim().contains('0') {
                 let r = fs::write(file.as_str(), "1");
                 if r.is_err() {
                     continue;
@@ -612,8 +612,8 @@ mod tests {
 
         let linux = Linux::default();
         let mut spec = Spec::default();
-        spec.root = Some(root).into();
-        spec.linux = Some(linux).into();
+        spec.root = Some(root);
+        spec.linux = Some(linux);
 
         CreateOpts {
             cgroup_name: "".to_string(),

@@ -88,14 +88,14 @@ pub fn read_sync(fd: RawFd) -> Result<Vec<u8>> {
     let buf_array: [u8; MSG_SIZE] = [buf[0], buf[1], buf[2], buf[3]];
     let msg: i32 = i32::from_be_bytes(buf_array);
     match msg {
-        SYNC_SUCCESS => return Ok(Vec::new()),
+        SYNC_SUCCESS => Ok(Vec::new()),
         SYNC_DATA => {
             let buf = read_count(fd, MSG_SIZE)?;
             let buf_array: [u8; MSG_SIZE] = [buf[0], buf[1], buf[2], buf[3]];
             let msg_length: i32 = i32::from_be_bytes(buf_array);
             let data_buf = read_count(fd, msg_length as usize)?;
 
-            return Ok(data_buf);
+            Ok(data_buf)
         }
         SYNC_FAILED => {
             let mut error_buf = vec![];
@@ -119,9 +119,9 @@ pub fn read_sync(fd: RawFd) -> Result<Vec<u8>> {
                 }
             };
 
-            return Err(anyhow!(error_str));
+            Err(anyhow!(error_str))
         }
-        _ => return Err(anyhow!("error in receive sync message")),
+        _ => Err(anyhow!("error in receive sync message")),
     }
 }
 
