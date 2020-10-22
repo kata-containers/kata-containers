@@ -11,8 +11,8 @@ option go_package = "github.com/kata-containers/kata-containers/src/runtime/virt
 
 package grpc;
 
-import "github.com/kata-containers/kata-containers/src/agent/protocols/protos/oci.proto";
-import "github.com/kata-containers/kata-containers/src/agent/protocols/protos/github.com/kata-containers/agent/pkg/types/types.proto";
+import "oci.proto";
+import "github.com/kata-containers/agent/pkg/types/types.proto";
 
 import "google/protobuf/empty.proto";
 
