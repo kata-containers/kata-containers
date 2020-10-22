@@ -62,7 +62,8 @@ DESTDIR="${DESTDIR:-/}"
 #PREFIX=
 PREFIX="${PREFIX:-/usr}"
 
-source "${script_dir}/../scripts/lib.sh"
+packaging_scripts_dir="${script_dir}/../scripts"
+source "${packaging_scripts_dir}/lib.sh"
 
 usage() {
 	exit_code="$1"
@@ -332,34 +333,14 @@ setup_kernel() {
 	local major_kernel
 	major_kernel=$(get_major_kernel_version "${kernel_version}")
 	local patches_dir_for_version="${patches_path}/${major_kernel}.x"
-	local kernel_patches=""
-	if [ -d "${patches_dir_for_version}" ]; then
-		# Patches are expected to be named in the standard
-		# git-format-patch(1) format where the first part of the
-		# filename represents the patch ordering
-		# (lowest numbers apply first):
-		#
-		#   "${number}-${dashed_description}"
-		#
-		# For example,
-		#
-		#   0001-fix-the-bad-thing.patch
-		#   0002-improve-the-fix-the-bad-thing-fix.patch
-		#   0003-correct-compiler-warnings.patch
-		kernel_patches=$(find "${patches_dir_for_version}" -name '*.patch' -type f |\
-			sort -t- -k1,1n)
-	else
-		info "kernel patches directory does not exit"
-	fi
 
 	[ -n "${arch_target}" ] || arch_target="$(uname -m)"
 	arch_target=$(arch_to_kernel "${arch_target}")
 	(
 	cd "${kernel_path}" || exit 1
-	for p in ${kernel_patches}; do
-		info "Applying patch $p"
-		patch -p1 --fuzz 0 <"$p"
-	done
+
+	# Apply version specific patches
+	${packaging_scripts_dir}/apply_patches.sh "${patches_dir_for_version}"
 
 	[ -n "${hypervisor_target}" ] || hypervisor_target="kvm"
 	[ -n "${kernel_config_path}" ] || kernel_config_path=$(get_default_kernel_config "${kernel_version}" "${hypervisor_target}" "${arch_target}" "${kernel_path}")
