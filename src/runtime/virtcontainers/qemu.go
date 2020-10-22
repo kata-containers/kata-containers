@@ -1976,7 +1976,7 @@ func genericBridges(number uint32, machineType string) []types.Bridge {
 	case QemuPC:
 		bt = types.PCI
 	case QemuVirt:
-		bt = types.PCIE
+		bt = types.PCI
 	case QemuPseries:
 		bt = types.PCI
 	case QemuCCWVirtio:
