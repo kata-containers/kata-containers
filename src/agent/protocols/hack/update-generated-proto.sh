@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # //
-# // Copyright 2020 Ant Financial
+# // Copyright (c) 2020 Ant Financial
 # //
 # // SPDX-License-Identifier: Apache-2.0
 # //
