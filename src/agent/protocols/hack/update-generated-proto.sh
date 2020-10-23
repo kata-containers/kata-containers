@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # //
-# // Copyright (c) 2020 Ant Financial
+# // Copyright (c) 2020 Ant Group
 # //
 # // SPDX-License-Identifier: Apache-2.0
 # //
@@ -51,7 +51,7 @@ generate_go_sources() {
 --gogottrpc_out=plugins=ttrpc+fieldpath,\
 import_path=github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols/grpc,\
 \
-Mgithub.com/kata-containers/kata-containers/src/agent/protocols/protos/github.com/kata-containers/agent/pkg/types/types.proto=github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols,\
+Mgithub.com/kata-containers/kata-containers/src/agent/protocols/protos/types.proto=github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols,\
 \
 Mgithub.com/kata-containers/kata-containers/src/agent/protocols/protos/oci.proto=github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols/grpc,\
 \
@@ -69,7 +69,7 @@ if [ "$(basename $(pwd))" != "agent" ]; then
 fi
 
 # Protocol buffer files required to generate golang/rust bindings.
-proto_files_list=(agent.proto health.proto oci.proto github.com/kata-containers/agent/pkg/types/types.proto)
+proto_files_list=(agent.proto health.proto oci.proto types.proto)
 
 if [ "$1" = "" ]; then
     show_usage "${proto_files_list[@]}"

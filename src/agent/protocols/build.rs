@@ -8,7 +8,7 @@ use std::io::{Read, Write};
 
 fn main() {
     let protos = vec![
-        "protos/github.com/kata-containers/agent/pkg/types/types.proto",
+        "protos/types.proto",
         "protos/agent.proto",
         "protos/health.proto",
         "protos/google/protobuf/empty.proto",
