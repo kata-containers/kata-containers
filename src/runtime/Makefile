@@ -603,8 +603,9 @@ $(SHIMV2_OUTPUT): $(SOURCES) $(GENERATED_FILES) $(MAKEFILE_LIST)
 	$(QUIET_BUILD)(cd $(SHIMV2_DIR)/ && ln -fs $(GENERATED_CONFIG))
 	$(QUIET_BUILD)(cd $(SHIMV2_DIR)/ && go build $(KATA_LDFLAGS) $(BUILDFLAGS) -o $@ .)
 
-$(MONITOR_OUTPUT): $(SOURCES) $(GENERATED_FILES) $(MAKEFILE_LIST)
-	$(QUIET_BUILD)(cd $(MONITOR_DIR)/ && go build $(KATA_LDFLAGS) $(BUILDFLAGS) -o $@ .)
+$(MONITOR_OUTPUT): $(SOURCES) $(GENERATED_FILES) $(MAKEFILE_LIST) .git-commit
+	$(QUIET_BUILD)(cd $(MONITOR_DIR)/ && go build \
+		--ldflags "-X main.GitCommit=$(shell cat .git-commit)" -o $@ .)
 
 .PHONY: \
 	check \
