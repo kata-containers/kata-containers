@@ -222,7 +222,7 @@ test to check the parsing works. The resulting output from Fluentd is:
   "_COMM":"kata-runtime",
   "_EXE":"/opt/kata/bin/kata-runtime",
   "SYSLOG_TIMESTAMP":"Feb 21 10:31:27 ",
-  "_CMDLINE":"/opt/kata/bin/kata-runtime --kata-config /opt/kata/share/defaults/kata-containers/configuration-qemu.toml --root /run/runc state 7cdd31660d8705facdadeb8598d2c0bd008e8142c54e3b3069abd392c8d58997",
+  "_CMDLINE":"/opt/kata/bin/kata-runtime --config /opt/kata/share/defaults/kata-containers/configuration-qemu.toml --root /run/runc state 7cdd31660d8705facdadeb8598d2c0bd008e8142c54e3b3069abd392c8d58997",
   "SYSLOG_PID":"14314",
   "_PID":"14314",
   "MESSAGE":"time=\"2020-02-21T10:31:27.810781647Z\" level=info msg=\"release sandbox\" arch=amd64 command=state container=7cdd31660d8705facdadeb8598d2c0bd008e8142c54e3b3069abd392c8d58997 name=kata-runtime pid=14314 sandbox=1c3e77cad66aa2b6d8cc846f818370f79cb0104c0b840f67d0f502fd6562b68c source=virtcontainers subsystem=sandbox",
@@ -281,7 +281,7 @@ own file (rather than into the system journal).
 
 ```bash
 #!/bin/bash
-/opt/kata/bin/kata-runtime --kata-config "/opt/kata/share/defaults/kata-containers/configuration-qemu.toml" --log-format=json --log=/var/log/kata-runtime.log $@
+/opt/kata/bin/kata-runtime --config "/opt/kata/share/defaults/kata-containers/configuration-qemu.toml" --log-format=json --log=/var/log/kata-runtime.log $@
 ```
 
 And then we'll add the Fluentd config section to parse that file. Note, we inform the parser that Kata is

@@ -129,14 +129,14 @@ The below command lists the full paths to the configuration files that the
 runtime attempts to load. The first path that exists will be used:
 
 ```bash
-$ kata-runtime --kata-show-default-config-paths
+$ kata-runtime --show-default-config-paths
 ```
 
 Aside from the built-in locations, it is possible to specify the path to a
-custom configuration file using the `--kata-config` option:
+custom configuration file using the `--config` option:
 
 ```bash
-$ kata-runtime --kata-config=/some/where/configuration.toml ...
+$ kata-runtime --config=/some/where/configuration.toml ...
 ```
 
 The runtime will log the full path to the configuration file it is using. See

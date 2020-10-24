@@ -91,7 +91,7 @@ To configure Kata Containers with ACRN, copy the generated `configuration-acrn.t
 The following command shows full paths to the `configuration.toml` files that the runtime loads. It will use the first path that exists. (Please make sure the kernel and image paths are set correctly in the `configuration.toml` file)
 
 ```bash
-$ sudo kata-runtime --kata-show-default-config-paths
+$ sudo kata-runtime --show-default-config-paths
 ```
 
 >**Warning:** Please offline CPUs using [this](offline_cpu.sh) script, else VM launches will fail.
