@@ -15,6 +15,9 @@ typeset -r runtime=${runtime_path:-"$runtime_snap_path"}
 typeset -r containerd_shim_v2_name="containerd-shim-kata-v2"
 typeset -r containerd_shim_v2=$(command -v "$containerd_shim_v2_name" 2>/dev/null)
 
+typeset -r kata_monitor_name="kata-monitor"
+typeset -r kata_monitor=$(command -v "$kata_monitor_name" 2>/dev/null)
+
 typeset -r issue_url="@PROJECT_BUG_URL@"
 typeset -r script_version="@VERSION@ (commit @COMMIT@)"
 
@@ -770,6 +773,21 @@ show_throttler_details()
 	end_section
 }
 
+show_kata_monitor_version()
+{
+	start_section "Kata Monitor"
+
+	local cmd="${kata_monitor_name} --version"
+
+	msg "Kata Monitor \`$kata_monitor_name\`."
+
+	run_cmd_and_show_quoted_output "" "$cmd"
+
+	separator
+
+	end_section
+}
+
 # Retrieve details of the image containing
 # the rootfs used to boot the virtual machine.
 show_image_details()
@@ -850,6 +868,7 @@ show_details()
 	show_log_details
 	show_container_mgr_details
 	show_package_versions
+	show_kata_monitor_version
 
 	show_footer
 }
