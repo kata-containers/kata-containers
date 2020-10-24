@@ -671,7 +671,7 @@ func TestMainBeforeSubCommandsShowCCConfigPaths(t *testing.T) {
 	defer os.RemoveAll(tmpdir)
 
 	set := flag.NewFlagSet("", 0)
-	set.Bool("kata-show-default-config-paths", true, "")
+	set.Bool("show-default-config-paths", true, "")
 
 	ctx := createCLIContext(set)
 

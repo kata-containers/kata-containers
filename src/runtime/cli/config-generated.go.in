@@ -9,10 +9,6 @@
 // by the tests.
 package main
 
-import (
-	"fmt"
-)
-
 // name is the name of the runtime
 const name = "@RUNTIME_NAME@"
 
@@ -35,10 +31,6 @@ var commit = "@COMMIT@"
 
 // version is the runtime version.
 var version = "@VERSION@"
-
-// project-specific option names
-var configFilePathOption = fmt.Sprintf("%s-config", projectPrefix)
-var showConfigPathsOption = fmt.Sprintf("%s-show-default-config-paths", projectPrefix)
 
 // Default config file used by stateless systems.
 var defaultRuntimeConfiguration = "@CONFIG_PATH@"
