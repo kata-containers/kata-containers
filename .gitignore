@@ -6,3 +6,6 @@
 pkg/logging/Cargo.lock
 src/agent/src/version.rs
 src/agent/kata-agent.service
+src/agent/protocols/src/*.rs
+!src/agent/protocols/src/lib.rs
+
