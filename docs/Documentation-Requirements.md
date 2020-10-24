@@ -25,7 +25,7 @@ All documents must:
 - Have a `.md` file extension.
 - Include a TOC (table of contents) at the top of the document with links to
   all heading sections. We recommend using the
-  [`check-markdown`](https://github.com/kata-containers/tests/tree/master/cmd/check-markdown)
+  [`kata-check-markdown`](https://github.com/kata-containers/tests/tree/master/cmd/check-markdown)
   tool to generate the TOC.
 - Be linked to from another document in the same repository.
 

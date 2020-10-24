@@ -137,7 +137,7 @@ The runtime uses a TOML format configuration file called `configuration.toml`. B
 
 The actual configuration file paths can be determined by running:
 ```
-$ kata-runtime --kata-show-default-config-paths
+$ kata-runtime --show-default-config-paths
 ```
 Most users will not need to modify the configuration file.
 
