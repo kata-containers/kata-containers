@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # //
-# // Copyright 2020 Ant Financial
+# // Copyright (c) 2020 Ant Group
 # //
 # // SPDX-License-Identifier: Apache-2.0
 # //
@@ -51,7 +51,7 @@ generate_go_sources() {
 --gogottrpc_out=plugins=ttrpc+fieldpath,\
 import_path=github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols/grpc,\
 \
-Mgithub.com/kata-containers/kata-containers/src/agent/protocols/protos/github.com/kata-containers/agent/pkg/types/types.proto=github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols,\
+Mgithub.com/kata-containers/kata-containers/src/agent/protocols/protos/types.proto=github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols,\
 \
 Mgithub.com/kata-containers/kata-containers/src/agent/protocols/protos/oci.proto=github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols/grpc,\
 \
@@ -64,31 +64,12 @@ $GOPATH/src/github.com/kata-containers/kata-containers/src/agent/protocols/proto
     [ $? -eq 0 ] || die "Failed to generate golang file from $1"
 }
 
-generate_rust_sources() {
-    local cmd="protoc --rust_out=./protocols/src/ \
---ttrpc_out=./protocols/src/,plugins=ttrpc:./protocols/src/ \
---plugin=protoc-gen-ttrpc=`which ttrpc_rust_plugin` \
--I $GOPATH/src/github.com/kata-containers/agent/vendor/github.com/gogo/protobuf:$GOPATH/src/github.com/kata-containers/agent/vendor:$GOPATH/src/github.com/gogo/protobuf:$GOPATH/src/github.com/gogo/googleapis:$GOPATH/src:$GOPATH/src/github.com/kata-containers/kata-containers/src/agent/protocols/protos \
-$GOPATH/src/github.com/kata-containers/kata-containers/src/agent/protocols/protos/$1"
-
-    echo $cmd
-    $cmd
-    [ $? -eq 0 ] || die "Failed to generate rust file from $1"
-
-    if [ "$1" = "oci.proto" ]; then
-        # Need change Box<Self> to ::std::boxed::Box<Self> because there is another struct Box
-        sed 's/fn into_any(self: Box<Self>) -> ::std::boxed::Box<::std::any::Any> {/fn into_any(self: ::std::boxed::Box<Self>) -> ::std::boxed::Box<::std::any::Any> {/g' ./protocols/src/oci.rs > ./protocols/src/new_oci.rs
-        sed 's/fn into_any(self: Box<Self>) -> ::std::boxed::Box<dyn (::std::any::Any)> {/fn into_any(self: ::std::boxed::Box<Self>) -> ::std::boxed::Box<dyn (::std::any::Any)> {/g' ./protocols/src/oci.rs > ./protocols/src/new_oci.rs
-        mv ./protocols/src/new_oci.rs ./protocols/src/oci.rs
-    fi;
-}
-
 if [ "$(basename $(pwd))" != "agent" ]; then
 	die "Please go to directory of protocols before execute this shell"
 fi
 
 # Protocol buffer files required to generate golang/rust bindings.
-proto_files_list=(agent.proto health.proto oci.proto github.com/kata-containers/agent/pkg/types/types.proto)
+proto_files_list=(agent.proto health.proto oci.proto types.proto)
 
 if [ "$1" = "" ]; then
     show_usage "${proto_files_list[@]}"
@@ -118,10 +99,6 @@ if [ "$target" = "all" ]; then
         echo -e "\n   [golang] compiling ${f} ..."
         generate_go_sources $f
         echo -e "   [golang] ${f} compiled\n"
-
-        echo -e "\n   [rust] compiling ${f} ..."
-        generate_rust_sources $f
-        echo -e "   [rust] ${f} compiled\n"
     done
 else
     # compile individual proto file
@@ -130,10 +107,6 @@ else
             echo -e "\n   [golang] compiling ${target} ..."
             generate_go_sources $target
             echo -e "   [golang] ${target} compiled\n"
-
-            echo -e "\n   [rust] compiling ${target} ..."
-            generate_rust_sources $target
-            echo -e "   [rust] ${target} compiled\n"
         fi
     done
 fi;
