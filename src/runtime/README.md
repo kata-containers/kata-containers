@@ -65,7 +65,7 @@ The runtime has a built-in command to determine if your host system is capable
 of running and creating a Kata Container:
 
 ```bash
-$ kata-runtime kata-check
+$ kata-runtime check
 ```
 
 > **Note:**
@@ -135,7 +135,7 @@ To see details of your systems runtime environment (including the location of
 the configuration file being used), run:
 
 ```bash
-$ kata-runtime kata-env
+$ kata-runtime env
 ```
 
 ## Logging

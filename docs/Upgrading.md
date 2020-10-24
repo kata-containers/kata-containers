@@ -48,10 +48,10 @@ Alternatively, if you are using Kata Containers version 1.12.0 or newer, you
 can check for newer releases using the command line:
 
 ```bash
-$ kata-runtime kata-check --check-version-only
+$ kata-runtime check --check-version-only
 ```
 
-There are various other related options. Run `kata-runtime kata-check --help`
+There are various other related options. Run `kata-runtime check --help`
 for further details.
 
 # Configuration changes

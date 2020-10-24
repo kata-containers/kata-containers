@@ -104,7 +104,7 @@ The build will create the following:
 You can check if your system is capable of creating a Kata Container by running the following:
 
 ```
-$ sudo kata-runtime kata-check
+$ sudo kata-runtime check
 ```
 
 If your system is *not* able to run Kata Containers, the previous command will error out and explain why.
