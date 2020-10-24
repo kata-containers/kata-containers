@@ -63,6 +63,8 @@ _kata_subcmd_needs_existing_container()
     for cmd in \
 	    'kata-check' \
 	    'kata-env' \
+	    'check' \
+	    'env' \
 	    'create' \
 	    'help' \
 	    'list' \
