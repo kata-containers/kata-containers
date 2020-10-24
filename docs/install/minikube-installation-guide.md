@@ -54,7 +54,7 @@ to enable nested virtualization can be found on the
 [KVM Nested Guests page](https://www.linux-kvm.org/page/Nested_Guests)
 
 Alternatively, and for other architectures, the Kata Containers built in
-[`kata-check`](../../src/runtime/README.md#hardware-requirements)
+[`check`](../../src/runtime/README.md#hardware-requirements)
 command can be used *inside Minikube* once Kata has been installed, to check for compatibility.
 
 ## Setting up Minikube
