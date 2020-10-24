@@ -437,8 +437,9 @@ func writeJSONSettings(env EnvInfo, file *os.File) error {
 }
 
 var kataEnvCLICommand = cli.Command{
-	Name:  envCmd,
-	Usage: "display settings. Default to TOML",
+	Name:    "env",
+	Aliases: []string{"kata-env"},
+	Usage:   "display settings. Default to TOML",
 	Flags: []cli.Flag{
 		cli.BoolFlag{
 			Name:  "json",

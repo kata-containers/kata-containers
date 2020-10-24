@@ -272,7 +272,7 @@ func beforeSubcommands(c *cli.Context) error {
 	ignoreConfigLogs := false
 	var traceRootSpan string
 
-	subCmdIsCheckCmd := (c.NArg() >= 1 && (c.Args()[0] == checkCmd))
+	subCmdIsCheckCmd := (c.NArg() >= 1 && ((c.Args()[0] == "kata-check") || (c.Args()[0] == "check")))
 	if subCmdIsCheckCmd {
 		// checkCmd will use the default logrus logger to stderr
 		// raise the logger default level to warn
@@ -313,7 +313,7 @@ func beforeSubcommands(c *cli.Context) error {
 		// (meaning any spans created at this point will be silently ignored).
 		setExternalLoggers(context.Background(), kataLog)
 
-		if c.NArg() == 1 && c.Args()[0] == envCmd {
+		if c.NArg() == 1 && (c.Args()[0] == "kata-env" || c.Args()[0] == "env") {
 			// simply report the logging setup
 			ignoreConfigLogs = true
 		}
