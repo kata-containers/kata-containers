@@ -39,6 +39,8 @@ use nix::sched::{self, CloneFlags};
 use nix::sys::signal::{self, Signal};
 use nix::sys::stat::{self, Mode};
 use nix::unistd::{self, ForkResult, Gid, Pid, Uid};
+use std::os::unix::fs::MetadataExt;
+use std::os::unix::io::AsRawFd;
 
 use protobuf::SingularPtrField;
 
@@ -545,6 +547,12 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
     let uid = Uid::from_raw(guser.uid);
     let gid = Gid::from_raw(guser.gid);
 
+    // only change stdio devices owner when user
+    // isn't root.
+    if guser.uid != 0 {
+        set_stdio_permissions(guser.uid)?;
+    }
+
     setid(uid, gid)?;
 
     if !guser.additional_gids.is_empty() {
@@ -637,6 +645,43 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
     }
 
     do_exec(&args);
+}
+
+// set_stdio_permissions fixes the permissions of PID 1's STDIO
+// within the container to the specified user.
+// The ownership needs to match because it is created outside of
+// the container and needs to be localized.
+fn set_stdio_permissions(uid: libc::uid_t) -> Result<()> {
+    let meta = fs::metadata("/dev/null")?;
+    let fds = [
+        std::io::stdin().as_raw_fd(),
+        std::io::stdout().as_raw_fd(),
+        std::io::stderr().as_raw_fd(),
+    ];
+
+    for fd in &fds {
+        let stat = stat::fstat(*fd)?;
+        // Skip chown of /dev/null if it was used as one of the STDIO fds.
+        if stat.st_rdev == meta.rdev() {
+            continue;
+        }
+
+        // According to the POSIX specification, -1 is used to indicate that owner and group
+        // are not to be changed.  Since uid_t and gid_t are unsigned types, we have to wrap
+        // around to get -1.
+        let gid = (0 as libc::gid_t).wrapping_sub(1);
+
+        // We only change the uid owner (as it is possible for the mount to
+        // prefer a different gid, and there's no reason for us to change it).
+        // The reason why we don't just leave the default uid=X mount setup is
+        // that users expect to be able to actually use their console. Without
+        // this code, you couldn't effectively run as a non-root user inside a
+        // container and also have a console set up.
+        let res = unsafe { libc::fchown(*fd, uid, gid) };
+        Errno::result(res).map_err(|e| anyhow!(e).context("set stdio permissions failed"))?;
+    }
+
+    Ok(())
 }
 
 impl BaseContainer for LinuxContainer {
@@ -1583,6 +1628,9 @@ fn execute_hook(logger: &Logger, h: &Hook, st: &OCIState) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::skip_if_not_root;
+    use std::fs;
+    use std::os::unix::fs::MetadataExt;
 
     #[test]
     fn test_status_transtition() {
@@ -1600,5 +1648,28 @@ mod tests {
 
             assert_eq!(pre_status, status.pre_status());
         }
+    }
+
+    #[test]
+    fn test_set_stdio_permissions() {
+        skip_if_not_root!();
+
+        let meta = fs::metadata("/dev/stdin").unwrap();
+        let old_uid = meta.uid();
+
+        let uid = 1000;
+        set_stdio_permissions(uid).unwrap();
+
+        let meta = fs::metadata("/dev/stdin").unwrap();
+        assert_eq!(meta.uid(), uid);
+
+        let meta = fs::metadata("/dev/stdout").unwrap();
+        assert_eq!(meta.uid(), uid);
+
+        let meta = fs::metadata("/dev/stderr").unwrap();
+        assert_eq!(meta.uid(), uid);
+
+        // restore the uid
+        set_stdio_permissions(old_uid).unwrap();
     }
 }
