@@ -11,7 +11,7 @@ option go_package = "github.com/kata-containers/kata-containers/src/runtime/virt
 
 package grpc;
 
-import "github.com/gogo/protobuf/gogoproto/gogo.proto";
+import "gogo/protobuf/gogoproto/gogo.proto";
 import "google/protobuf/wrappers.proto";
 
 option (gogoproto.equal_all) = true;
