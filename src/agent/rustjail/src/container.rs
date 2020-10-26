@@ -694,7 +694,7 @@ impl BaseContainer for LinuxContainer {
     }
 
     fn state(&self) -> Result<State> {
-        Err(anyhow!("not suppoerted"))
+        Err(anyhow!("not supported"))
     }
 
     fn oci_state(&self) -> Result<OCIState> {
