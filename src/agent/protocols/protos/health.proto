@@ -1,6 +1,6 @@
 //
-// Copyright 2017 HyperHQ Inc.
-// Copyright (c) 2019 Ant Financial
+// Copyright (c) 2017 HyperHQ Inc.
+// Copyright (c) 2019-2020 Ant Group
 //
 // SPDX-License-Identifier: Apache-2.0
 //
@@ -11,7 +11,7 @@ option go_package = "github.com/kata-containers/kata-containers/src/runtime/virt
 
 package grpc;
 
-import "github.com/gogo/protobuf/gogoproto/gogo.proto";
+import "gogo/protobuf/gogoproto/gogo.proto";
 
 option (gogoproto.equal_all) = true;
 option (gogoproto.populate_all) = true;
