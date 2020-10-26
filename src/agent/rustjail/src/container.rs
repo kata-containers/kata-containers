@@ -698,7 +698,11 @@ impl BaseContainer for LinuxContainer {
     }
 
     fn oci_state(&self) -> Result<OCIState> {
-        let oci = self.config.spec.as_ref().unwrap();
+        let oci = match self.config.spec.as_ref() {
+            Some(s) => s,
+            None => return Err(anyhow!("Unable to get OCI state: spec not found")),
+        };
+
         let status = self.status();
         let pid = if status != Status::STOPPED {
             self.init_process_pid
@@ -706,9 +710,17 @@ impl BaseContainer for LinuxContainer {
             0
         };
 
-        let root = oci.root.as_ref().unwrap().path.as_str();
+        let root = match oci.root.as_ref() {
+            Some(s) => s.path.as_str(),
+            None => return Err(anyhow!("Unable to get root path: oci.root is none")),
+        };
+
         let path = fs::canonicalize(root)?;
-        let bundle = path.parent().unwrap().to_str().unwrap().to_string();
+        let bundle = match path.parent() {
+            Some(s) => s.to_str().unwrap().to_string(),
+            None => return Err(anyhow!("could not get root parent: root path {:?}", path)),
+        };
+
         Ok(OCIState {
             version: oci.version.clone(),
             id: self.id(),
