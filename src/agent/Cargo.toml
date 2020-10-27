@@ -30,6 +30,7 @@ slog-scope = "4.1.2"
 
 # Redirect ttrpc log calls
 slog-stdlog = "4.0.0"
+log = "0.4.11"
 
 # for testing
 tempfile = "3.1.0"

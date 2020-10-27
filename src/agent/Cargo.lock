@@ -375,6 +375,7 @@ dependencies = [
  "cgroups",
  "lazy_static",
  "libc",
+ "log",
  "logging",
  "netlink",
  "nix 0.17.0",
