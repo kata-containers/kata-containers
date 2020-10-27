@@ -27,6 +27,10 @@ regex = "1"
 #   (by stopping the compiler from removing log calls).
 slog = { version = "2.5.2", features = ["dynamic-keys", "max_level_trace", "release_max_level_info"] }
 slog-scope = "4.1.2"
+
+# Redirect ttrpc log calls
+slog-stdlog = "4.0.0"
+
 # for testing
 tempfile = "3.1.0"
 prometheus = { version = "0.9.0", features = ["process"] }
