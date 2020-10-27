@@ -210,7 +210,7 @@ Advice:
 
 - You can check the latest version of Kata Containers by running:
 
-  $ kata-runtime kata-check --only-list-releases
+  $ kata-runtime check --only-list-releases
 
 EOT
 }

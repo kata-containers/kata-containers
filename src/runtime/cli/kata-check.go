@@ -306,8 +306,9 @@ func genericHostIsVMContainerCapable(details vmContainerCapableDetails) error {
 }
 
 var kataCheckCLICommand = cli.Command{
-	Name:  checkCmd,
-	Usage: "tests if system can run " + project,
+	Name:    "check",
+	Aliases: []string{"kata-check"},
+	Usage:   "tests if system can run " + project,
 	Flags: []cli.Flag{
 		cli.BoolFlag{
 			Name:  "check-version-only",
@@ -344,36 +345,36 @@ EXAMPLES:
 
 - Perform basic checks:
 
-  $ %s %s
+  $ %s check
 
 - Local basic checks only:
 
-  $ %s %s --no-network-checks
+  $ %s check --no-network-checks
 
 - Perform further checks:
 
-  $ sudo %s %s
+  $ sudo %s check
 
 - Just check if a newer version is available:
 
-  $ %s %s --check-version-only
+  $ %s check --check-version-only
 
 - List available releases (shows output in format "version;release-date;url"):
 
-  $ %s %s --only-list-releases
+  $ %s check --only-list-releases
 
 - List all available releases (includes pre-release versions):
 
-  $ %s %s --only-list-releases --include-all-releases
+  $ %s check --only-list-releases --include-all-releases
 `,
 		project,
 		noNetworkEnvVar,
-		name, checkCmd,
-		name, checkCmd,
-		name, checkCmd,
-		name, checkCmd,
-		name, checkCmd,
-		name, checkCmd,
+		name,
+		name,
+		name,
+		name,
+		name,
+		name,
 	),
 
 	Action: func(context *cli.Context) error {
@@ -386,7 +387,7 @@ EXAMPLES:
 			return err
 		}
 
-		span, _ := katautils.Trace(ctx, "kata-check")
+		span, _ := katautils.Trace(ctx, "check")
 		defer span.Finish()
 
 		if context.Bool("no-network-checks") == false && os.Getenv(noNetworkEnvVar) == "" {
@@ -413,7 +414,7 @@ EXAMPLES:
 
 		runtimeConfig, ok := context.App.Metadata["runtimeConfig"].(oci.RuntimeConfig)
 		if !ok {
-			return errors.New("kata-check: cannot determine runtime config")
+			return errors.New("check: cannot determine runtime config")
 		}
 
 		err = setCPUtype(runtimeConfig.HypervisorType)

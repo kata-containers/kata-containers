@@ -6,7 +6,7 @@
 * [Install Kata](#install-kata)
 * [Create a Kata-enabled Image](#create-a-kata-enabled-image)
 
-Kata Containers on Google Compute Engine (GCE) makes use of [nested virtualization](https://cloud.google.com/compute/docs/instances/enable-nested-virtualization-vm-instances). Most of the installation procedure is identical to that for Kata on your preferred distribution, but enabling nested virtualization currently requires extra steps on GCE. This guide walks you through creating an image and instance with nested virtualization enabled. Note that `kata-runtime kata-check` checks for nested virtualization, but does not fail if support is not found.
+Kata Containers on Google Compute Engine (GCE) makes use of [nested virtualization](https://cloud.google.com/compute/docs/instances/enable-nested-virtualization-vm-instances). Most of the installation procedure is identical to that for Kata on your preferred distribution, but enabling nested virtualization currently requires extra steps on GCE. This guide walks you through creating an image and instance with nested virtualization enabled. Note that `kata-runtime check` checks for nested virtualization, but does not fail if support is not found.
 
 As a pre-requisite this guide assumes an installed and configured instance of the [Google Cloud SDK](https://cloud.google.com/sdk/downloads). For a zero-configuration option, all of the commands below were been tested under [Google Cloud Shell](https://cloud.google.com/shell/) (as of Jun 2018). Verify your `gcloud` installation and configuration:
 
