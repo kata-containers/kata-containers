@@ -56,8 +56,9 @@ There are some limitations with this approach:
 
 As was mentioned above, not all containers need the same modules, therefore using
 the configuration file for specifying the list of kernel modules per [POD][3] can
-be a pain. Unlike the configuration file, annotations provide a way to specify
-custom configurations per POD.
+be a pain.
+Unlike the configuration file, [annotations](how-to-set-sandbox-config-kata.md)
+provide a way to specify custom configurations per POD.
 
 The list of kernel modules and parameters can be set using the annotation
 `io.katacontainers.config.agent.kernel_modules` as a semicolon separated
