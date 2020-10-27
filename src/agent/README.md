@@ -39,11 +39,20 @@ After that, we drafted the initial code here, and any contributions are welcome.
 ## Getting Started
 
 ### Build from Source
-The rust-agent need to be built with rust newer than 1.37, and static linked with `musl`.
+The rust-agent needs to be built statically and linked with `musl`
 ```bash
-rustup target add x86_64-unknown-linux-musl
-sudo ln -s /usr/bin/g++ /bin/musl-g++  
-cargo build --target x86_64-unknown-linux-musl --release
+$ arch=$(uname -m)
+$ [ "$arch" == "ppc64le" ] && arch=powerpc64le
+$ rustup target add "${arch}-unknown-linux-musl"
+$ sudo ln -s /usr/bin/g++ /bin/musl-g++
+```
+
+Download the source files in the Kata containers repository and build the agent:
+```bash
+$ GOPATH="${GOPATH:-$HOME/go}"
+$ dir="$GOPATH/src/github.com/kata-containers"
+$ git -C ${dir} clone --depth 1 https://github.com/kata-containers/kata-containers
+$ make -C ${dir}/kata-containers/src/agent
 ```
 
 ## Run Kata CI with rust-agent
