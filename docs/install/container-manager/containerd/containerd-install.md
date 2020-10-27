@@ -18,7 +18,7 @@
 >
 > - If you decide to proceed and install a Kata Containers release, you can
 >   still check for the latest version of Kata Containers by running
->   `kata-runtime kata-check --only-list-releases`.
+>   `kata-runtime check --only-list-releases`.
 >
 > - These instructions will not work for Fedora 31 and higher since those
 >   distribution versions only support cgroups version 2 by default. However,

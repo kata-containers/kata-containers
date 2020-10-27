@@ -36,10 +36,6 @@ var commit = "@COMMIT@"
 // version is the runtime version.
 var version = "@VERSION@"
 
-// project-specific command names
-var envCmd = fmt.Sprintf("%s-env", projectPrefix)
-var checkCmd = fmt.Sprintf("%s-check", projectPrefix)
-
 // project-specific option names
 var configFilePathOption = fmt.Sprintf("%s-config", projectPrefix)
 var showConfigPathsOption = fmt.Sprintf("%s-show-default-config-paths", projectPrefix)
