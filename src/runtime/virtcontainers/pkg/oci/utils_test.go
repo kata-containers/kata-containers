@@ -858,7 +858,6 @@ func TestAddHypervisorAnnotations(t *testing.T) {
 	ocispec.Annotations[vcAnnotations.DisableImageNvdimm] = "true"
 	ocispec.Annotations[vcAnnotations.HotplugVFIOOnRootBus] = "true"
 	ocispec.Annotations[vcAnnotations.PCIeRootPort] = "2"
-	ocispec.Annotations[vcAnnotations.EntropySource] = "/dev/urandom"
 	ocispec.Annotations[vcAnnotations.IOMMUPlatform] = "true"
 	ocispec.Annotations[vcAnnotations.SGXEPC] = "64Mi"
 	// 10Mbit
@@ -895,7 +894,6 @@ func TestAddHypervisorAnnotations(t *testing.T) {
 	assert.Equal(config.HypervisorConfig.DisableImageNvdimm, true)
 	assert.Equal(config.HypervisorConfig.HotplugVFIOOnRootBus, true)
 	assert.Equal(config.HypervisorConfig.PCIeRootPort, uint32(2))
-	assert.Equal(config.HypervisorConfig.EntropySource, "/dev/urandom")
 	assert.Equal(config.HypervisorConfig.IOMMUPlatform, true)
 	assert.Equal(config.HypervisorConfig.SGXEPCSize, int64(67108864))
 	assert.Equal(config.HypervisorConfig.RxRateLimiterMaxRate, uint64(10000000))
@@ -945,22 +943,27 @@ func TestAddProtectedHypervisorAnnotations(t *testing.T) {
 
 	ocispec.Annotations[vcAnnotations.FileBackedMemRootDir] = "/dev/shm"
 	ocispec.Annotations[vcAnnotations.VirtioFSDaemon] = "/bin/false"
+	ocispec.Annotations[vcAnnotations.EntropySource] = "/dev/urandom"
 
 	config.HypervisorConfig.FileBackedMemRootDir = "do-not-touch"
 	config.HypervisorConfig.VirtioFSDaemon = "dangerous-daemon"
+	config.HypervisorConfig.EntropySource = "truly-random"
 
 	err = addAnnotations(ocispec, &config, runtimeConfig)
 	assert.Error(err)
 	assert.Equal(config.HypervisorConfig.FileBackedMemRootDir, "do-not-touch")
 	assert.Equal(config.HypervisorConfig.VirtioFSDaemon, "dangerous-daemon")
+	assert.Equal(config.HypervisorConfig.EntropySource, "truly-random")
 
 	// Now enable them and check again
 	runtimeConfig.HypervisorConfig.FileBackedMemRootList = []string{"/dev/*m"}
 	runtimeConfig.HypervisorConfig.VirtioFSDaemonList = []string{"/bin/*ls*"}
+	runtimeConfig.HypervisorConfig.EntropySourceList = []string{"/dev/*random*"}
 	err = addAnnotations(ocispec, &config, runtimeConfig)
 	assert.NoError(err)
 	assert.Equal(config.HypervisorConfig.FileBackedMemRootDir, "/dev/shm")
 	assert.Equal(config.HypervisorConfig.VirtioFSDaemon, "/bin/false")
+	assert.Equal(config.HypervisorConfig.EntropySource, "/dev/urandom")
 
 	// In case an absurd large value is provided, the config value if not over-ridden
 	ocispec.Annotations[vcAnnotations.DefaultVCPUs] = "655536"
