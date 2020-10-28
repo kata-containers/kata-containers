@@ -45,15 +45,16 @@ const (
 	// ImageAsset is an image asset.
 	ImageAsset AssetType = "image"
 
-	// InitrdAsset is an intird asset.
+	// InitrdAsset is an initrd asset.
 	InitrdAsset AssetType = "initrd"
 
 	// HypervisorAsset is an hypervisor asset.
 	HypervisorAsset AssetType = "hypervisor"
 
-	// HypervisorCtlAsset is an hypervisor control asset.
+	// HypervisorCtlAsset is a hypervisor control asset.
 	HypervisorCtlAsset AssetType = "hypervisorctl"
-	// JailerAsset is an jailer asset.
+
+	// JailerAsset is a jailer asset.
 	JailerAsset AssetType = "jailer"
 
 	// FirmwareAsset is a firmware asset.
