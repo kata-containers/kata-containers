@@ -112,7 +112,12 @@ lazy_static! {
 
 #[inline(always)]
 #[allow(unused_variables)]
-fn mount<P1: ?Sized + NixPath, P2: ?Sized + NixPath, P3: ?Sized + NixPath, P4: ?Sized + NixPath>(
+pub fn mount<
+    P1: ?Sized + NixPath,
+    P2: ?Sized + NixPath,
+    P3: ?Sized + NixPath,
+    P4: ?Sized + NixPath,
+>(
     source: Option<&P1>,
     target: &P2,
     fstype: Option<&P3>,
@@ -127,7 +132,7 @@ fn mount<P1: ?Sized + NixPath, P2: ?Sized + NixPath, P3: ?Sized + NixPath, P4: ?
 
 #[inline(always)]
 #[allow(unused_variables)]
-fn umount2<P: ?Sized + NixPath>(
+pub fn umount2<P: ?Sized + NixPath>(
     target: &P,
     flags: MntFlags,
 ) -> std::result::Result<(), nix::Error> {

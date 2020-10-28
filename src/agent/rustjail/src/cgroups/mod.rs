@@ -10,6 +10,7 @@ use protocols::agent::CgroupStats;
 use cgroups::freezer::FreezerState;
 
 pub mod fs;
+pub mod mock;
 pub mod notifier;
 pub mod systemd;
 
