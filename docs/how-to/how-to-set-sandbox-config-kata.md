@@ -26,6 +26,7 @@ There are several kinds of Kata configurations and they are listed below.
 | Key | Value Type | Comments |
 |-------| ----- | ----- |
 | `io.katacontainers.config.agent.enable_tracing` | `boolean` | enable tracing for the agent |
+| `io.katacontainers.config.agent.container_pipe_size` | uint32 | specify the size of the std(in/out) pipes created for containers |
 | `io.katacontainers.config.agent.kernel_modules` | string | the list of kernel modules and their parameters that will be loaded in the guest kernel. Semicolon separated list of kernel modules and their parameters. These modules will be loaded in the guest kernel using `modprobe`(8). E.g., `e1000e InterruptThrottleRate=3000,3000,3000 EEE=1; i915 enable_ppgtt=0` |
 | `io.katacontainers.config.agent.trace_mode` | string | the trace mode for the agent |
 | `io.katacontainers.config.agent.trace_type` | string | the trace type for the agent |
@@ -38,15 +39,21 @@ There are several kinds of Kata configurations and they are listed below.
 | `io.katacontainers.config.hypervisor.block_device_cache_noflush` | `boolean` | Denotes whether flush requests for the device are ignored |
 | `io.katacontainers.config.hypervisor.block_device_cache_set` | `boolean` | cache-related options will be set to block devices or not |
 | `io.katacontainers.config.hypervisor.block_device_driver` | string | the driver to be used for block device, valid values are `virtio-blk`, `virtio-scsi`, `nvdimm`|
+| `io.katacontainers.config.hypervisor.cpu_features` | `string` | Comma-separated list of CPU features to pass to the CPU (QEMU) |
 | `io.katacontainers.config.hypervisor.default_max_vcpus` | uint32| the maximum number of vCPUs allocated for the VM by the hypervisor |
 | `io.katacontainers.config.hypervisor.default_memory` | uint32| the memory assigned for a VM by the hypervisor in `MiB` |
 | `io.katacontainers.config.hypervisor.default_vcpus` | uint32| the default vCPUs assigned for a VM by the hypervisor |
 | `io.katacontainers.config.hypervisor.disable_block_device_use` | `boolean` | disallow a block device from being used |
+| `io.katacontainers.config.hypervisor.disable_image_nvdimm` | `boolean` | specify if a `nvdimm` device should be used as rootfs for the guest (QEMU) |
 | `io.katacontainers.config.hypervisor.disable_vhost_net` | `boolean` | specify if `vhost-net` is not available on the host |
 | `io.katacontainers.config.hypervisor.enable_hugepages` | `boolean` | if the memory should be `pre-allocated` from huge pages |
+| `io.katacontainers.config.hypervisor.enable_iommu_platform` | `boolean` | enable `iommu` on CCW devices (QEMU s390x) |
+| `io.katacontainers.config.hypervisor.enable_iommu` | `boolean` | enable `iommu` on Q35 (QEMU x86_64) |
 | `io.katacontainers.config.hypervisor.enable_iothreads` | `boolean`| enable IO to be processed in a separate thread. Supported currently for virtio-`scsi` driver |
 | `io.katacontainers.config.hypervisor.enable_mem_prealloc` | `boolean` | the memory space used for `nvdimm` device by the hypervisor |
 | `io.katacontainers.config.hypervisor.enable_swap` | `boolean` | enable swap of VM memory |
+| `io.katacontainers.config.hypervisor.enable_vhost_user_store` | `boolean` | enable vhost-user storage device (QEMU) |
+| `io.katacontainers.config.hypervisor.enable_virtio_mem` | `boolean` | enable virtio-mem (QEMU) |
 | `io.katacontainers.config.hypervisor.entropy_source` | string| the path to a host source of entropy (`/dev/random`, `/dev/urandom` or real hardware RNG device) |
 | `io.katacontainers.config.hypervisor.file_mem_backend` | string | file based memory backend root directory |
 | `io.katacontainers.config.hypervisor.firmware_hash` | string | container firmware SHA-512 hash value |
@@ -69,8 +76,10 @@ There are several kinds of Kata configurations and they are listed below.
 | `io.katacontainers.config.hypervisor.memory_slots` | uint32| the memory slots assigned to the VM by the hypervisor |
 | `io.katacontainers.config.hypervisor.msize_9p` | uint32 | the `msize` for 9p shares |
 | `io.katacontainers.config.hypervisor.path` | string | the hypervisor that will run the container VM |
+| `io.katacontainers.config.hypervisor.pcie_root_port` | specify the number of PCIe Root Port devices. The PCIe Root Port device is used to hot-plug a PCIe device (QEMU) |
 | `io.katacontainers.config.hypervisor.shared_fs` | string | the shared file system type, either `virtio-9p` or `virtio-fs` |
 | `io.katacontainers.config.hypervisor.use_vsock` | `boolean` | specify use of `vsock` for agent communication |
+| `io.katacontainers.config.hypervisor.vhost_user_store_path` | `string` | specify the directory path where vhost-user devices related folders, sockets and device nodes should be (QEMU) |
 | `io.katacontainers.config.hypervisor.virtio_fs_cache_size` | uint32 | virtio-fs DAX cache size in `MiB` |
 | `io.katacontainers.config.hypervisor.virtio_fs_cache` | string | the cache mode for virtio-fs, valid values are `always`, `auto` and `none` |
 | `io.katacontainers.config.hypervisor.virtio_fs_daemon` | string | virtio-fs `vhost-user` daemon path |
@@ -101,7 +110,7 @@ $ cat /etc/containerd/config
 
 ```
 
-Additional documentation on the above configuration can be found in the 
+Additional documentation on the above configuration can be found in the
 [containerd docs](https://github.com/containerd/cri/blob/8d5a8355d07783ba2f8f451209f6bdcc7c412346/docs/config.md).
 
 # Example - Using annotations
