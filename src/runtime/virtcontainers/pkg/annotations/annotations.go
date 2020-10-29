@@ -42,6 +42,9 @@ const (
 	// HypervisorPath is a sandbox annotation for passing a per container path pointing at the hypervisor that will run the container VM.
 	HypervisorPath = kataAnnotHypervisorPrefix + "path"
 
+	// HypervisorCtlPath is a sandbox annotation for passing a per container path pointing at the hypervisor control binary that will run the container VM.
+	HypervisorCtlPath = kataAnnotHypervisorPrefix + "ctlpath"
+
 	// JailerPath is a sandbox annotation for passing a per container path pointing at the jailer that will constrain the container VM.
 	JailerPath = kataAnnotHypervisorPrefix + "jailer_path"
 
@@ -62,6 +65,9 @@ const (
 
 	// HypervisorHash is an sandbox annotation for passing a container hypervisor binary SHA-512 hash value.
 	HypervisorHash = kataAnnotHypervisorPrefix + "hypervisor_hash"
+
+	// HypervisorCtlHash is a sandbox annotation for passing a container hypervisor control binary SHA-512 hash value.
+	HypervisorCtlHash = kataAnnotHypervisorPrefix + "hypervisorctl_hash"
 
 	// JailerHash is an sandbox annotation for passing a jailer binary SHA-512 hash value.
 	JailerHash = kataAnnotHypervisorPrefix + "jailer_hash"
