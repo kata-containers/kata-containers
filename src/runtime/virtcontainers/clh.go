@@ -133,7 +133,7 @@ var clhKernelParams = []Param{
 	{"panic", "1"},         // upon kernel panic wait 1 second before reboot
 	{"no_timer_check", ""}, // do not check broken timer IRQ resources
 	{"noreplace-smp", ""},  // do not replace SMP instructions
-	{"rootflags", "data=ordered,errors=remount-ro ro"}, // mount the root filesystem as readonly
+	{"rootflags", "dax,data=ordered,errors=remount-ro ro"}, // mount the root filesystem as readonly
 	{"rootfstype", "ext4"},
 }
 
