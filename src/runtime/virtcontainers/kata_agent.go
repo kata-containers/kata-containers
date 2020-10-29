@@ -635,10 +635,10 @@ func (k *kataAgent) listInterfaces() ([]*pbTypes.Interface, error) {
 		return nil, err
 	}
 	resultInterfaces, ok := resultingInterfaces.(*grpc.Interfaces)
-	if ok {
-		return resultInterfaces.Interfaces, err
+	if !ok {
+		return nil, fmt.Errorf("Unexpected type %T for interfaces", resultingInterfaces)
 	}
-	return nil, err
+	return resultInterfaces.Interfaces, nil
 }
 
 func (k *kataAgent) listRoutes() ([]*pbTypes.Route, error) {
