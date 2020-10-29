@@ -29,6 +29,8 @@ func (t AssetType) Annotations() (string, string, error) {
 		return annotations.InitrdPath, annotations.InitrdHash, nil
 	case HypervisorAsset:
 		return annotations.HypervisorPath, annotations.HypervisorHash, nil
+	case HypervisorCtlAsset:
+		return annotations.HypervisorCtlPath, annotations.HypervisorCtlHash, nil
 	case JailerAsset:
 		return annotations.JailerPath, annotations.JailerHash, nil
 	case FirmwareAsset:
@@ -92,6 +94,8 @@ func (a *Asset) Valid() bool {
 	case InitrdAsset:
 		return true
 	case HypervisorAsset:
+		return true
+	case HypervisorCtlAsset:
 		return true
 	case JailerAsset:
 		return true
