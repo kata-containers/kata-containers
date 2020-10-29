@@ -21,6 +21,7 @@ signal-hook = "0.1.9"
 scan_fmt = "0.2.3"
 scopeguard = "1.0.0"
 regex = "1"
+
 # slog:
 # - Dynamic keys required to allow HashMap keys to be slog::Serialized.
 # - The 'max_*' features allow changing the log level at runtime
