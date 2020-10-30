@@ -707,4 +707,31 @@ mod tests {
         assert!(s.hooks.as_ref().unwrap().poststart.is_empty());
         assert!(s.hooks.as_ref().unwrap().poststop.is_empty());
     }
+
+    #[test]
+    pub fn test_sandbox_is_running() {
+        let logger = slog::Logger::root(slog::Discard, o!());
+        let mut s = Sandbox::new(&logger).unwrap();
+        s.running = true;
+        assert!(s.is_running());
+        s.running = false;
+        assert!(!s.is_running());
+    }
+
+    #[test]
+    fn test_sandbox_set_hostname() {
+        let logger = slog::Logger::root(slog::Discard, o!());
+        let mut s = Sandbox::new(&logger).unwrap();
+        let hostname = "abc123";
+        s.set_hostname(hostname.to_string());
+        assert_eq!(s.hostname, hostname);
+    }
+
+    #[test]
+    fn test_sandbox_set_destroy() {
+        let logger = slog::Logger::root(slog::Discard, o!());
+        let mut s = Sandbox::new(&logger).unwrap();
+        let ret = s.destroy();
+        assert!(ret.is_ok());
+    }
 }
