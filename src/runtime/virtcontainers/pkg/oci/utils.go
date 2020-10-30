@@ -160,11 +160,19 @@ func cmdEnvs(spec specs.Spec, envs []types.EnvVar) []types.EnvVar {
 }
 
 func newMount(m specs.Mount) vc.Mount {
+	readonly := false
+	for _, flag := range m.Options {
+		if flag == "ro" {
+			readonly = true
+			break
+		}
+	}
 	return vc.Mount{
 		Source:      m.Source,
 		Destination: m.Destination,
 		Type:        m.Type,
 		Options:     m.Options,
+		ReadOnly:    readonly,
 	}
 }
 

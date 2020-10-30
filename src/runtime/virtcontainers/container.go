@@ -470,7 +470,7 @@ func (c *Container) shareFiles(m Mount, idx int, hostSharedDir, guestSharedDir s
 	} else {
 		// These mounts are created in the shared dir
 		mountDest := filepath.Join(hostSharedDir, filename)
-		if err := bindMount(c.ctx, m.Source, mountDest, false, "private"); err != nil {
+		if err := bindMount(c.ctx, m.Source, mountDest, m.ReadOnly, "private"); err != nil {
 			return "", false, err
 		}
 		// Save HostPath mount value into the mount list of the container.
@@ -546,22 +546,12 @@ func (c *Container) mountSharedDirMounts(hostSharedDir, guestSharedDir string) (
 			continue
 		}
 
-		// Check if mount is readonly, let the agent handle the readonly mount
-		// within the VM.
-		readonly := false
-		for _, flag := range m.Options {
-			if flag == "ro" {
-				readonly = true
-				break
-			}
-		}
-
 		sharedDirMount := Mount{
 			Source:      guestDest,
 			Destination: m.Destination,
 			Type:        m.Type,
 			Options:     m.Options,
-			ReadOnly:    readonly,
+			ReadOnly:    m.ReadOnly,
 		}
 
 		sharedDirMounts[sharedDirMount.Destination] = sharedDirMount
