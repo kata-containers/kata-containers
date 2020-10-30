@@ -45,17 +45,19 @@ pub fn online_device(path: &str) -> Result<()> {
     Ok(())
 }
 
-// get_pci_device_address fetches the complete PCI address in sysfs, based on the PCI
-// identifier provided. This should be in the format: "bridgeAddr/deviceAddr".
-// Here, bridgeAddr is the address at which the bridge is attached on the root bus,
-// while deviceAddr is the address at which the device is attached on the bridge.
-fn get_pci_device_address(pci_id: &str) -> Result<String> {
-    let tokens: Vec<&str> = pci_id.split('/').collect();
+// pcipath_to_sysfs fetches the sysfs path for a PCI device, relative
+// to the syfs path for the PCI host bridge, based on the PCI path
+// provided. The path should be in the format "bridgeAddr/deviceAddr",
+// where bridgeAddr is the address at which the brige is attached on
+// the root bus, while deviceAddr is the address at which the device
+// is attached on the bridge.
+fn pcipath_to_sysfs(pcipath: &str) -> Result<String> {
+    let tokens: Vec<&str> = pcipath.split('/').collect();
 
     if tokens.len() != 2 {
         return Err(anyhow!(
-            "PCI Identifier for device should be of format [bridgeAddr/deviceAddr], got {}",
-            pci_id
+            "PCI path for device should be of format [bridgeAddr/deviceAddr], got {:?}",
+            pcipath
         ));
     }
 
@@ -89,14 +91,14 @@ fn get_pci_device_address(pci_id: &str) -> Result<String> {
     // We do not pass devices as multifunction, hence the trailing 0 in the address.
     let pci_device_addr = format!("{}:{}.0", bus, device_id);
 
-    let bridge_device_pci_addr = format!("{}/{}", pci_bridge_addr, pci_device_addr);
+    let sysfs_rel_path = format!("{}/{}", pci_bridge_addr, pci_device_addr);
 
     info!(
         sl!(),
-        "Fetched PCI address for device PCIAddr:{}\n", bridge_device_pci_addr
+        "Fetched sysfs relative path for PCI device {}\n", sysfs_rel_path
     );
 
-    Ok(bridge_device_pci_addr)
+    Ok(sysfs_rel_path)
 }
 
 async fn get_device_name(sandbox: &Arc<Mutex<Sandbox>>, dev_addr: &str) -> Result<String> {
@@ -155,11 +157,11 @@ pub async fn get_scsi_device_name(
     get_device_name(sandbox, &dev_sub_path).await
 }
 
-pub async fn get_pci_device_name(sandbox: &Arc<Mutex<Sandbox>>, pci_id: &str) -> Result<String> {
-    let pci_addr = get_pci_device_address(pci_id)?;
+pub async fn get_pci_device_name(sandbox: &Arc<Mutex<Sandbox>>, pcipath: &str) -> Result<String> {
+    let sysfs_rel_path = pcipath_to_sysfs(pcipath)?;
 
     rescan_pci_bus()?;
-    get_device_name(sandbox, &pci_addr).await
+    get_device_name(sandbox, &sysfs_rel_path).await
 }
 
 pub async fn get_pmem_device_name(
