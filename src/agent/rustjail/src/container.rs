@@ -818,30 +818,8 @@ impl BaseContainer for LinuxContainer {
             .map_err(|e| warn!(logger, "fcntl pfd log FD_CLOEXEC {:?}", e));
 
         let child_logger = logger.new(o!("action" => "child process log"));
-        let log_handler = thread::spawn(move || {
-            let log_file = unsafe { std::fs::File::from_raw_fd(pfd_log) };
-            let mut reader = BufReader::new(log_file);
+        let log_handler = setup_child_logger(pfd_log, child_logger)?;
 
-            loop {
-                let mut line = String::new();
-                match reader.read_line(&mut line) {
-                    Err(e) => {
-                        info!(child_logger, "read child process log error: {:?}", e);
-                        break;
-                    }
-                    Ok(count) => {
-                        if count == 0 {
-                            info!(child_logger, "read child process log end",);
-                            break;
-                        }
-
-                        info!(child_logger, "{}", line);
-                    }
-                }
-            }
-        });
-
-        info!(logger, "exec fifo opened!");
         let (prfd, cwfd) = unistd::pipe().context("failed to create pipe")?;
         let (crfd, pwfd) = unistd::pipe().context("failed to create pipe")?;
 
@@ -1164,6 +1142,34 @@ fn get_namespaces(linux: &Linux) -> Vec<LinuxNamespace> {
             path: ns.path.clone(),
         })
         .collect()
+}
+
+pub fn setup_child_logger(fd: RawFd, child_logger: Logger) -> Result<std::thread::JoinHandle<()>> {
+    let builder = thread::Builder::new();
+    builder
+        .spawn(move || {
+            let log_file = unsafe { std::fs::File::from_raw_fd(fd) };
+            let mut reader = BufReader::new(log_file);
+
+            loop {
+                let mut line = String::new();
+                match reader.read_line(&mut line) {
+                    Err(e) => {
+                        info!(child_logger, "read child process log error: {:?}", e);
+                        break;
+                    }
+                    Ok(count) => {
+                        if count == 0 {
+                            info!(child_logger, "read child process log end",);
+                            break;
+                        }
+
+                        info!(child_logger, "{}", line);
+                    }
+                }
+            }
+        })
+        .map_err(|e| anyhow!(e).context("failed to create thread"))
 }
 
 fn join_namespaces(
