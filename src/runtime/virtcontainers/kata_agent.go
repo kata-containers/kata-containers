@@ -1256,7 +1256,7 @@ func (k *kataAgent) createContainer(sandbox *Sandbox, c *Container) (p *Process,
 	}
 
 	// Handle container mounts
-	newMounts, ignoredMounts, err := c.mountSharedDirMounts(getMountPath(sandbox.id), kataGuestSharedDir())
+	newMounts, ignoredMounts, err := c.mountSharedDirMounts(getSharePath(sandbox.id), getMountPath(sandbox.id), kataGuestSharedDir())
 	if err != nil {
 		return nil, err
 	}

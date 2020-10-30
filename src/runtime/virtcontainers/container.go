@@ -435,7 +435,7 @@ func (c *Container) setContainerState(state types.StateString) error {
 	return nil
 }
 
-func (c *Container) shareFiles(m Mount, idx int, hostSharedDir, guestSharedDir string) (string, bool, error) {
+func (c *Container) shareFiles(m Mount, idx int, hostSharedDir, hostMountDir, guestSharedDir string) (string, bool, error) {
 	randBytes, err := utils.GenerateRandomBytes(8)
 	if err != nil {
 		return "", false, err
@@ -469,12 +469,19 @@ func (c *Container) shareFiles(m Mount, idx int, hostSharedDir, guestSharedDir s
 		}
 	} else {
 		// These mounts are created in the shared dir
-		mountDest := filepath.Join(hostSharedDir, filename)
+		mountDest := filepath.Join(hostMountDir, filename)
 		if err := bindMount(c.ctx, m.Source, mountDest, m.ReadOnly, "private"); err != nil {
 			return "", false, err
 		}
 		// Save HostPath mount value into the mount list of the container.
 		c.mounts[idx].HostPath = mountDest
+		// bindmount remount event is not propagated to mount subtrees, so we have to remount the shared dir mountpoint directly.
+		if m.ReadOnly {
+			mountDest = filepath.Join(hostSharedDir, filename)
+			if err := remountRo(c.ctx, mountDest); err != nil {
+				return "", false, err
+			}
+		}
 	}
 
 	return guestDest, false, nil
@@ -485,7 +492,7 @@ func (c *Container) shareFiles(m Mount, idx int, hostSharedDir, guestSharedDir s
 // It also updates the container mount list with the HostPath info, and store
 // container mounts to the storage. This way, we will have the HostPath info
 // available when we will need to unmount those mounts.
-func (c *Container) mountSharedDirMounts(hostSharedDir, guestSharedDir string) (sharedDirMounts map[string]Mount, ignoredMounts map[string]Mount, err error) {
+func (c *Container) mountSharedDirMounts(hostSharedDir, hostMountDir, guestSharedDir string) (sharedDirMounts map[string]Mount, ignoredMounts map[string]Mount, err error) {
 	sharedDirMounts = make(map[string]Mount)
 	ignoredMounts = make(map[string]Mount)
 	var devicesToDetach []string
@@ -535,7 +542,7 @@ func (c *Container) mountSharedDirMounts(hostSharedDir, guestSharedDir string) (
 
 		var ignore bool
 		var guestDest string
-		guestDest, ignore, err = c.shareFiles(m, idx, hostSharedDir, guestSharedDir)
+		guestDest, ignore, err = c.shareFiles(m, idx, hostSharedDir, hostMountDir, guestSharedDir)
 		if err != nil {
 			return nil, nil, err
 		}
