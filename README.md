@@ -15,7 +15,6 @@
             * [Kata Containers 1.x components](#kata-containers-1x-components)
         * [Common repositories](#common-repositories)
         * [Packaging and releases](#packaging-and-releases)
-    * [Credits](#credits)
 
 ---
 
@@ -135,11 +134,6 @@ Kata Containers is now
 [available natively for most distributions](docs/install/README.md#packaged-installation-methods).
 However, packaging scripts and metadata are still used to generate snap and GitHub releases. See
 the [components](#components) section for further details.
-
-## Credits
-
-Kata Containers uses [packagecloud](https://packagecloud.io) for package
-hosting.
 
 ---
 
