@@ -390,7 +390,7 @@ func TestCloudHypervisorHotplugAddBlockDevice(t *testing.T) {
 	assert.Error(err, "Hotplug block device not using 'virtio-blk' expected error")
 }
 
-func TestCloudHypervisorHotplugRemoveBlockDevice(t *testing.T) {
+func TestCloudHypervisorHotplugRemoveDevice(t *testing.T) {
 	assert := assert.New(t)
 
 	clhConfig, err := newClhConfig()
@@ -400,10 +400,12 @@ func TestCloudHypervisorHotplugRemoveBlockDevice(t *testing.T) {
 	clh.config = clhConfig
 	clh.APIClient = &clhClientMock{}
 
-	clh.config.BlockDeviceDriver = config.VirtioBlock
-	err = clh.hotplugRemoveBlockDevice(&config.BlockDrive{Pmem: false})
-	assert.NoError(err, "Hotplug remove disk block device expected no error")
+	_, err = clh.hotplugRemoveDevice(&config.BlockDrive{}, blockDev)
+	assert.NoError(err, "Hotplug remove block device expected no error")
 
-	err = clh.hotplugRemoveBlockDevice(&config.BlockDrive{Pmem: true})
+	_, err = clh.hotplugRemoveDevice(&config.VFIODev{}, vfioDev)
+	assert.NoError(err, "Hotplug remove vfio block device expected no error")
+
+	_, err = clh.hotplugRemoveDevice(nil, netDev)
 	assert.Error(err, "Hotplug remove pmem block device expected error")
 }
