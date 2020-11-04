@@ -307,7 +307,7 @@ func TestCleanupContainer(t *testing.T) {
 	}
 
 	for _, c := range p.GetAllContainers() {
-		CleanupContainer(ctx, p.ID(), c.ID(), true)
+		CleanupContainer(ctx, p, c.ID(), true)
 	}
 
 	s, ok := p.(*Sandbox)

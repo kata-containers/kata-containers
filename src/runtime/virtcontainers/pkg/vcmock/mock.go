@@ -18,6 +18,7 @@ package vcmock
 import (
 	"context"
 	"fmt"
+
 	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
 	"github.com/sirupsen/logrus"
 )
@@ -49,9 +50,9 @@ func (m *VCMock) CreateSandbox(ctx context.Context, sandboxConfig vc.SandboxConf
 	return nil, fmt.Errorf("%s: %s (%+v): sandboxConfig: %v", mockErrorPrefix, getSelf(), m, sandboxConfig)
 }
 
-func (m *VCMock) CleanupContainer(ctx context.Context, sandboxID, containerID string, force bool) error {
+func (m *VCMock) CleanupContainer(ctx context.Context, sandbox vc.VCSandbox, containerID string, force bool) error {
 	if m.CleanupContainerFunc != nil {
-		return m.CleanupContainerFunc(ctx, sandboxID, containerID, true)
+		return m.CleanupContainerFunc(ctx, sandbox, containerID, true)
 	}
-	return fmt.Errorf("%s: %s (%+v): sandboxID: %v", mockErrorPrefix, getSelf(), m, sandboxID)
+	return fmt.Errorf("%s: %s (%+v): sandbox: %v", mockErrorPrefix, getSelf(), m, sandbox)
 }

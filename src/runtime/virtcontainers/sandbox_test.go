@@ -301,13 +301,11 @@ func TestSandboxSetSandboxAndContainerState(t *testing.T) {
 	}
 
 	// force state to be read from disk
-	p2 := globalSandbox
-
-	if err := testCheckSandboxOnDiskState(p2, newSandboxState); err != nil {
+	if err := testCheckSandboxOnDiskState(p, newSandboxState); err != nil {
 		t.Error(err)
 	}
 
-	c2, err := p2.findContainer(contID)
+	c2, err := p.findContainer(contID)
 	assert.NoError(err)
 
 	if err := testCheckContainerOnDiskState(c2, newContainerState); err != nil {
