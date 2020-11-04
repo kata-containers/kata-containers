@@ -24,7 +24,7 @@ type VC interface {
 	SetFactory(ctx context.Context, factory Factory)
 
 	CreateSandbox(ctx context.Context, sandboxConfig SandboxConfig) (VCSandbox, error)
-	CleanupContainer(ctx context.Context, sandboxID, containerID string, force bool) error
+	CleanupContainer(ctx context.Context, sandbox VCSandbox, containerID string, force bool) error
 }
 
 // VCSandbox is the Sandbox interface

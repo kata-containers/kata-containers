@@ -1247,3 +1247,6 @@ func revertBytes(num uint64) uint64 {
 		return 1024*revertBytes(a) + b
 	}
 }
+
+func (fc *firecracker) setSandbox(sandbox *Sandbox) {
+}

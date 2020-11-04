@@ -54,9 +54,6 @@ const (
 	DirMode = os.FileMode(0750) | os.ModeDir
 )
 
-// globalSandbox tracks sandbox globally
-var globalSandbox *Sandbox
-
 // SandboxStatus describes a sandbox status.
 type SandboxStatus struct {
 	ID               string
@@ -503,11 +500,11 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 		ctx:             ctx,
 	}
 
+	hypervisor.setSandbox(s)
+
 	if s.newStore, err = persist.GetDriver(); err != nil || s.newStore == nil {
 		return nil, fmt.Errorf("failed to get fs persist driver: %v", err)
 	}
-
-	globalSandbox = s
 
 	defer func() {
 		if retErr != nil {
