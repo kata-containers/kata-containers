@@ -316,6 +316,6 @@ func TestCleanupContainer(t *testing.T) {
 
 	_, err = os.Stat(sandboxDir)
 	if err == nil {
-		t.Fatal(err)
+		t.Fatal("sandbox dir should be deleted")
 	}
 }

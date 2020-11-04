@@ -230,10 +230,10 @@ func TestAcrnCreateSandbox(t *testing.T) {
 		state: types.SandboxState{BlockIndexMap: make(map[int]struct{})},
 	}
 
-	err = globalSandboxList.addSandbox(sandbox)
-	assert.NoError(err)
-
-	defer globalSandboxList.removeSandbox(sandbox.id)
+	globalSandbox = sandbox
+	defer func() {
+		globalSandbox = nil
+	}()
 
 	//set PID to 1 to ignore hypercall to get UUID and set a random UUID
 	a.state.PID = 1

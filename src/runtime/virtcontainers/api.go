@@ -153,10 +153,7 @@ func CleanupContainer(ctx context.Context, sandboxID, containerID string, force 
 	}
 	defer unlock()
 
-	s, err := fetchSandbox(ctx, sandboxID)
-	if err != nil {
-		return err
-	}
+	s := globalSandbox
 
 	defer s.Release()
 
