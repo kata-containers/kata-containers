@@ -10,7 +10,7 @@ env:
   error_msg: |+
     See the document below for help on formatting commits for the project.
 
-    https://github.com/kata-containers/community/blob/master/CONTRIBUTING.md#patch-forma
+    https://github.com/kata-containers/community/blob/master/CONTRIBUTING.md#patch-format
 
 jobs:
   commit-message-check:
