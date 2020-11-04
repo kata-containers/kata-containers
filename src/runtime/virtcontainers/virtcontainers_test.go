@@ -58,7 +58,7 @@ var testHyperstartTtySocket = ""
 // cleanUp Removes any stale sandbox/container state that can affect
 // the next test to run.
 func cleanUp() {
-	globalSandboxList.removeSandbox(testSandboxID)
+	globalSandbox = nil
 	os.RemoveAll(fs.MockRunStoragePath())
 	os.RemoveAll(fs.MockRunVMStoragePath())
 	syscall.Unmount(getSharePath(testSandboxID), syscall.MNT_DETACH|UmountNoFollow)

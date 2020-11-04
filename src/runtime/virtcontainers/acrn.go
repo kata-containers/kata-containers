@@ -231,10 +231,9 @@ func (a *Acrn) appendImage(devices []Device, imagePath string) ([]Device, error)
 	// Get sandbox and increment the globalIndex.
 	// This is to make sure the VM rootfs occupies
 	// the first Index which is /dev/vda.
-	sandbox, err := globalSandboxList.lookupSandbox(a.id)
-	if sandbox == nil && err != nil {
-		return nil, err
-	}
+	sandbox := globalSandbox
+	var err error
+
 	if _, err = sandbox.GetAndSetSandboxBlockIndex(); err != nil {
 		return nil, err
 	}
