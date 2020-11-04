@@ -612,11 +612,6 @@ func (conf *HypervisorConfig) HypervisorCtlAssetPath() (string, error) {
 	return conf.assetPath(types.HypervisorCtlAsset)
 }
 
-// JailerAssetPath returns the VM Jailer path
-func (conf *HypervisorConfig) JailerAssetPath() (string, error) {
-	return conf.assetPath(types.JailerAsset)
-}
-
 // CustomHypervisorAsset returns true if the hypervisor asset is a custom one, false otherwise.
 func (conf *HypervisorConfig) CustomHypervisorAsset() bool {
 	return conf.isCustomAsset(types.HypervisorAsset)
@@ -625,11 +620,6 @@ func (conf *HypervisorConfig) CustomHypervisorAsset() bool {
 // FirmwareAssetPath returns the guest firmware path
 func (conf *HypervisorConfig) FirmwareAssetPath() (string, error) {
 	return conf.assetPath(types.FirmwareAsset)
-}
-
-// CustomFirmwareAsset returns true if the firmware asset is a custom one, false otherwise.
-func (conf *HypervisorConfig) CustomFirmwareAsset() bool {
-	return conf.isCustomAsset(types.FirmwareAsset)
 }
 
 func appendParam(params []Param, parameter string, value string) []Param {
