@@ -210,6 +210,7 @@ func checkPathIsInGlobs(globs []string, path string) bool {
 			}
 		}
 	}
+
 	return false
 }
 
@@ -218,6 +219,7 @@ func checkAnnotationNameIsValid(list []string, name string, prefix string) bool 
 	if strings.HasPrefix(name, prefix) {
 		return regexpContains(list, strings.TrimPrefix(name, prefix))
 	}
+
 	return true
 }
 
@@ -359,7 +361,12 @@ func addAnnotations(ocispec specs.Spec, config *vc.SandboxConfig, runtime Runtim
 			return fmt.Errorf("annotation %v is not enabled", key)
 		}
 	}
-	addAssetAnnotations(ocispec, config)
+
+	err := addAssetAnnotations(ocispec, config)
+	if err != nil {
+		return err
+	}
+
 	if err := addHypervisorConfigOverrides(ocispec, config, runtime); err != nil {
 		return err
 	}
@@ -374,17 +381,10 @@ func addAnnotations(ocispec specs.Spec, config *vc.SandboxConfig, runtime Runtim
 	return nil
 }
 
-func addAssetAnnotations(ocispec specs.Spec, config *vc.SandboxConfig) {
-	assetAnnotations := []string{
-		vcAnnotations.KernelPath,
-		vcAnnotations.ImagePath,
-		vcAnnotations.InitrdPath,
-		vcAnnotations.FirmwarePath,
-		vcAnnotations.KernelHash,
-		vcAnnotations.ImageHash,
-		vcAnnotations.InitrdHash,
-		vcAnnotations.FirmwareHash,
-		vcAnnotations.AssetHashType,
+func addAssetAnnotations(ocispec specs.Spec, config *vc.SandboxConfig) error {
+	assetAnnotations, err := types.AssetAnnotations()
+	if err != nil {
+		return err
 	}
 
 	for _, a := range assetAnnotations {
@@ -393,6 +393,8 @@ func addAssetAnnotations(ocispec specs.Spec, config *vc.SandboxConfig) {
 			config.Annotations[a] = value
 		}
 	}
+
+	return nil
 }
 
 func addHypervisorConfigOverrides(ocispec specs.Spec, config *vc.SandboxConfig, runtime RuntimeConfig) error {
