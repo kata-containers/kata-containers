@@ -13,6 +13,7 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
+	"strings"
 	"sync"
 	"syscall"
 	"testing"
@@ -641,51 +642,127 @@ var assetContentWrongHash = "92549f8d2018a95a294d28a65e795ed7d1a9d150009a28cea10
 func TestSandboxCreateAssets(t *testing.T) {
 	assert := assert.New(t)
 
+	type testData struct {
+		assetType   types.AssetType
+		annotations map[string]string
+	}
+
 	tmpfile, err := ioutil.TempFile("", "virtcontainers-test-")
 	assert.Nil(err)
 
+	filename := tmpfile.Name()
+
 	defer func() {
 		tmpfile.Close()
-		os.Remove(tmpfile.Name()) // clean up
+		os.Remove(filename) // clean up
 	}()
 
 	_, err = tmpfile.Write(assetContent)
 	assert.Nil(err)
 
 	originalKernelPath := filepath.Join(testDir, testKernel)
+	originalImagePath := filepath.Join(testDir, testImage)
+	originalInitrdPath := filepath.Join(testDir, testInitrd)
+	originalFirmwarePath := filepath.Join(testDir, testFirmware)
+	originalHypervisorPath := filepath.Join(testDir, testHypervisor)
+	originalHypervisorCtlPath := filepath.Join(testDir, testHypervisorCtl)
+	originalJailerPath := filepath.Join(testDir, testJailer)
 
 	hc := HypervisorConfig{
-		KernelPath: originalKernelPath,
-		ImagePath:  filepath.Join(testDir, testImage),
+		KernelPath:        originalKernelPath,
+		ImagePath:         originalImagePath,
+		InitrdPath:        originalInitrdPath,
+		FirmwarePath:      originalFirmwarePath,
+		HypervisorPath:    originalHypervisorPath,
+		HypervisorCtlPath: originalHypervisorCtlPath,
+		JailerPath:        originalJailerPath,
 	}
 
-	p := &SandboxConfig{
-		Annotations: map[string]string{
-			annotations.KernelPath: tmpfile.Name(),
-			annotations.KernelHash: assetContentHash,
+	data := []testData{
+		{
+			types.FirmwareAsset,
+			map[string]string{
+				annotations.FirmwarePath: filename,
+				annotations.FirmwareHash: assetContentHash,
+			},
 		},
-
-		HypervisorConfig: hc,
-	}
-
-	err = createAssets(context.Background(), p)
-	assert.Nil(err)
-
-	a, ok := p.HypervisorConfig.customAssets[types.KernelAsset]
-	assert.True(ok)
-	assert.Equal(a.Path(), tmpfile.Name())
-
-	p = &SandboxConfig{
-		Annotations: map[string]string{
-			annotations.KernelPath: tmpfile.Name(),
-			annotations.KernelHash: assetContentWrongHash,
+		{
+			types.HypervisorAsset,
+			map[string]string{
+				annotations.HypervisorPath: filename,
+				annotations.HypervisorHash: assetContentHash,
+			},
 		},
-
-		HypervisorConfig: hc,
+		{
+			types.HypervisorCtlAsset,
+			map[string]string{
+				annotations.HypervisorCtlPath: filename,
+				annotations.HypervisorCtlHash: assetContentHash,
+			},
+		},
+		{
+			types.ImageAsset,
+			map[string]string{
+				annotations.ImagePath: filename,
+				annotations.ImageHash: assetContentHash,
+			},
+		},
+		{
+			types.InitrdAsset,
+			map[string]string{
+				annotations.InitrdPath: filename,
+				annotations.InitrdHash: assetContentHash,
+			},
+		},
+		{
+			types.JailerAsset,
+			map[string]string{
+				annotations.JailerPath: filename,
+				annotations.JailerHash: assetContentHash,
+			},
+		},
+		{
+			types.KernelAsset,
+			map[string]string{
+				annotations.KernelPath: filename,
+				annotations.KernelHash: assetContentHash,
+			},
+		},
 	}
 
-	err = createAssets(context.Background(), p)
-	assert.NotNil(err)
+	for i, d := range data {
+		msg := fmt.Sprintf("test[%d]: %+v", i, d)
+
+		config := &SandboxConfig{
+			Annotations:      d.annotations,
+			HypervisorConfig: hc,
+		}
+
+		err = createAssets(context.Background(), config)
+		assert.NoError(err, msg)
+
+		a, ok := config.HypervisorConfig.customAssets[d.assetType]
+		assert.True(ok, msg)
+		assert.Equal(a.Path(), filename, msg)
+
+		// Now test with invalid hashes
+		badHashAnnotations := make(map[string]string)
+		for k, v := range d.annotations {
+			if strings.HasSuffix(k, "_hash") {
+				badHashAnnotations[k] = assetContentWrongHash
+			} else {
+				badHashAnnotations[k] = v
+			}
+		}
+
+		config = &SandboxConfig{
+			Annotations:      badHashAnnotations,
+			HypervisorConfig: hc,
+		}
+
+		err = createAssets(context.Background(), config)
+		assert.Error(err, msg)
+	}
 }
 
 func testFindContainerFailure(t *testing.T, sandbox *Sandbox, cid string) {
