@@ -447,3 +447,41 @@ func TestGenerateVMSocket(t *testing.T) {
 	assert.NotZero(vsock.ContextID)
 	assert.NotZero(vsock.Port)
 }
+
+func TestAssetPath(t *testing.T) {
+	assert := assert.New(t)
+
+	// Minimal config containing values for all asset annotation options.
+	// The values are "paths" (start with a slash), but end with the
+	// annotation name.
+	cfg := HypervisorConfig{
+		HypervisorPath:    "/" + "io.katacontainers.config.hypervisor.path",
+		HypervisorCtlPath: "/" + "io.katacontainers.config.hypervisor.ctlpath",
+
+		KernelPath: "/" + "io.katacontainers.config.hypervisor.kernel",
+
+		ImagePath:  "/" + "io.katacontainers.config.hypervisor.image",
+		InitrdPath: "/" + "io.katacontainers.config.hypervisor.initrd",
+
+		FirmwarePath: "/" + "io.katacontainers.config.hypervisor.firmware",
+		JailerPath:   "/" + "io.katacontainers.config.hypervisor.jailer_path",
+	}
+
+	for _, asset := range types.AssetTypes() {
+		msg := fmt.Sprintf("asset: %v", asset)
+
+		annoPath, annoHash, err := asset.Annotations()
+		assert.NoError(err, msg)
+
+		msg += fmt.Sprintf(", annotation path: %v, annotation hash: %v", annoPath, annoHash)
+
+		p, err := cfg.assetPath(asset)
+		assert.NoError(err, msg)
+
+		assert.NotEqual(p, annoPath, msg)
+		assert.NotEqual(p, annoHash, msg)
+
+		expected := fmt.Sprintf("/%s", annoPath)
+		assert.Equal(expected, p, msg)
+	}
+}

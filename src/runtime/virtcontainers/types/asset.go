@@ -18,6 +18,60 @@ import (
 // AssetType describe a type of assets.
 type AssetType string
 
+const (
+	// KernelAsset is a kernel asset.
+	KernelAsset AssetType = "kernel"
+
+	// ImageAsset is an image asset.
+	ImageAsset AssetType = "image"
+
+	// InitrdAsset is an initrd asset.
+	InitrdAsset AssetType = "initrd"
+
+	// HypervisorAsset is an hypervisor asset.
+	HypervisorAsset AssetType = "hypervisor"
+
+	// HypervisorCtlAsset is a hypervisor control asset.
+	HypervisorCtlAsset AssetType = "hypervisorctl"
+
+	// JailerAsset is a jailer asset.
+	JailerAsset AssetType = "jailer"
+
+	// FirmwareAsset is a firmware asset.
+	FirmwareAsset AssetType = "firmware"
+)
+
+// AssetTypes returns a list of all known asset types.
+//
+// XXX: New asset types *MUST* be added here.
+func AssetTypes() []AssetType {
+	return []AssetType{
+		FirmwareAsset,
+		HypervisorAsset,
+		HypervisorCtlAsset,
+		ImageAsset,
+		InitrdAsset,
+		JailerAsset,
+		KernelAsset,
+	}
+}
+
+// AssetAnnotations returns all annotations for all asset types.
+func AssetAnnotations() ([]string, error) {
+	var result []string
+
+	for _, at := range AssetTypes() {
+		aPath, aHash, err := at.Annotations()
+		if err != nil {
+			return []string{}, err
+		}
+
+		result = append(result, []string{aPath, aHash}...)
+	}
+
+	return result, nil
+}
+
 // Annotations returns the path and hash annotations for a given Asset type.
 func (t AssetType) Annotations() (string, string, error) {
 	switch t {
@@ -29,6 +83,8 @@ func (t AssetType) Annotations() (string, string, error) {
 		return annotations.InitrdPath, annotations.InitrdHash, nil
 	case HypervisorAsset:
 		return annotations.HypervisorPath, annotations.HypervisorHash, nil
+	case HypervisorCtlAsset:
+		return annotations.HypervisorCtlPath, annotations.HypervisorCtlHash, nil
 	case JailerAsset:
 		return annotations.JailerPath, annotations.JailerHash, nil
 	case FirmwareAsset:
@@ -37,28 +93,6 @@ func (t AssetType) Annotations() (string, string, error) {
 
 	return "", "", fmt.Errorf("Wrong asset type %s", t)
 }
-
-const (
-	// KernelAsset is a kernel asset.
-	KernelAsset AssetType = "kernel"
-
-	// ImageAsset is an image asset.
-	ImageAsset AssetType = "image"
-
-	// InitrdAsset is an intird asset.
-	InitrdAsset AssetType = "initrd"
-
-	// HypervisorAsset is an hypervisor asset.
-	HypervisorAsset AssetType = "hypervisor"
-
-	// HypervisorCtlAsset is an hypervisor control asset.
-	HypervisorCtlAsset AssetType = "hypervisorctl"
-	// JailerAsset is an jailer asset.
-	JailerAsset AssetType = "jailer"
-
-	// FirmwareAsset is a firmware asset.
-	FirmwareAsset AssetType = "firmware"
-)
 
 // Asset represents a virtcontainers asset.
 type Asset struct {
@@ -83,19 +117,10 @@ func (a *Asset) Valid() bool {
 		return false
 	}
 
-	switch a.kind {
-	case KernelAsset:
-		return true
-	case ImageAsset:
-		return true
-	case InitrdAsset:
-		return true
-	case HypervisorAsset:
-		return true
-	case JailerAsset:
-		return true
-	case FirmwareAsset:
-		return true
+	for _, at := range AssetTypes() {
+		if at == a.kind {
+			return true
+		}
 	}
 
 	return false
