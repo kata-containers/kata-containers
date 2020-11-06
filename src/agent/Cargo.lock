@@ -375,6 +375,7 @@ dependencies = [
  "cgroups",
  "lazy_static",
  "libc",
+ "log",
  "logging",
  "netlink",
  "nix 0.17.0",
@@ -392,6 +393,7 @@ dependencies = [
  "signal-hook",
  "slog",
  "slog-scope",
+ "slog-stdlog",
  "tempfile",
  "ttrpc",
 ]
@@ -1075,6 +1077,17 @@ dependencies = [
  "arc-swap",
  "lazy_static",
  "slog",
+]
+
+[[package]]
+name = "slog-stdlog"
+version = "4.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8228ab7302adbf4fcb37e66f3cda78003feb521e7fd9e3847ec117a7784d0f5a"
+dependencies = [
+ "log",
+ "slog",
+ "slog-scope",
 ]
 
 [[package]]

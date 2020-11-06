@@ -198,6 +198,13 @@ fn main() -> Result<()> {
     // which is required to satisfy the the lifetime constraints of the auto-generated gRPC code.
     let _guard = slog_scope::set_global_logger(logger.new(o!("subsystem" => "rpc")));
 
+    let mut _log_guard: Result<(), log::SetLoggerError> = Ok(());
+
+    if config.log_level == slog::Level::Trace {
+        // Redirect ttrpc log calls to slog iff full debug requested
+        _log_guard = Ok(slog_stdlog::init().map_err(|e| e)?);
+    }
+
     start_sandbox(&logger, &config, init_mode)?;
 
     let _ = log_handle.join();
