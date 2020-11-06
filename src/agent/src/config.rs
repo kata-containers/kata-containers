@@ -21,7 +21,10 @@ const DEFAULT_HOTPLUG_TIMEOUT: time::Duration = time::Duration::from_secs(3);
 const DEFAULT_CONTAINER_PIPE_SIZE: i32 = 0;
 const VSOCK_ADDR: &str = "vsock://-1";
 const VSOCK_PORT: u16 = 1024;
+
+// Environment variables used for development and testing
 const SERVER_ADDR_ENV_VAR: &str = "KATA_AGENT_SERVER_ADDR";
+const LOG_LEVEL_ENV_VAR: &str = "KATA_AGENT_LOG_LEVEL";
 
 // FIXME: unused
 const TRACE_MODE_FLAG: &str = "agent.trace";
@@ -137,6 +140,12 @@ impl agentConfig {
 
         if let Ok(addr) = env::var(SERVER_ADDR_ENV_VAR) {
             self.server_addr = addr;
+        }
+
+        if let Ok(addr) = env::var(LOG_LEVEL_ENV_VAR) {
+            if let Ok(level) = logrus_to_slog_level(&addr) {
+                self.log_level = level;
+            }
         }
 
         Ok(())
@@ -317,296 +326,494 @@ mod tests {
 
     #[test]
     fn test_parse_cmdline() {
+        const TEST_SERVER_ADDR: &str = "vsock://-1:1024";
+
         #[derive(Debug)]
         struct TestData<'a> {
             contents: &'a str,
+            env_vars: Vec<&'a str>,
             debug_console: bool,
             dev_mode: bool,
             log_level: slog::Level,
             hotplug_timeout: time::Duration,
             container_pipe_size: i32,
+            server_addr: &'a str,
             unified_cgroup_hierarchy: bool,
         }
 
         let tests = &[
             TestData {
                 contents: "agent.debug_consolex agent.devmode",
+                env_vars: Vec::new(),
                 debug_console: false,
                 dev_mode: true,
                 log_level: DEFAULT_LOG_LEVEL,
                 hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+                server_addr: TEST_SERVER_ADDR,
                 unified_cgroup_hierarchy: false,
             },
             TestData {
                 contents: "agent.debug_console agent.devmodex",
+                env_vars: Vec::new(),
                 debug_console: true,
                 dev_mode: false,
                 log_level: DEFAULT_LOG_LEVEL,
                 hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+                server_addr: TEST_SERVER_ADDR,
                 unified_cgroup_hierarchy: false,
             },
             TestData {
                 contents: "agent.logx=debug",
+                env_vars: Vec::new(),
                 debug_console: false,
                 dev_mode: false,
                 log_level: DEFAULT_LOG_LEVEL,
                 hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+                server_addr: TEST_SERVER_ADDR,
                 unified_cgroup_hierarchy: false,
             },
             TestData {
                 contents: "agent.log=debug",
+                env_vars: Vec::new(),
                 debug_console: false,
                 dev_mode: false,
                 log_level: slog::Level::Debug,
                 hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+                server_addr: TEST_SERVER_ADDR,
+                unified_cgroup_hierarchy: false,
+            },
+            TestData {
+                contents: "agent.log=debug",
+                env_vars: vec!["KATA_AGENT_LOG_LEVEL=trace"],
+                debug_console: false,
+                dev_mode: false,
+                log_level: slog::Level::Trace,
+                hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
+                container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+                server_addr: TEST_SERVER_ADDR,
                 unified_cgroup_hierarchy: false,
             },
             TestData {
                 contents: "",
+                env_vars: Vec::new(),
                 debug_console: false,
                 dev_mode: false,
                 log_level: DEFAULT_LOG_LEVEL,
                 hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+                server_addr: TEST_SERVER_ADDR,
                 unified_cgroup_hierarchy: false,
             },
             TestData {
                 contents: "foo",
+                env_vars: Vec::new(),
                 debug_console: false,
                 dev_mode: false,
                 log_level: DEFAULT_LOG_LEVEL,
                 hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+                server_addr: TEST_SERVER_ADDR,
                 unified_cgroup_hierarchy: false,
             },
             TestData {
                 contents: "foo bar",
+                env_vars: Vec::new(),
                 debug_console: false,
                 dev_mode: false,
                 log_level: DEFAULT_LOG_LEVEL,
                 hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+                server_addr: TEST_SERVER_ADDR,
                 unified_cgroup_hierarchy: false,
             },
             TestData {
                 contents: "foo bar",
+                env_vars: Vec::new(),
                 debug_console: false,
                 dev_mode: false,
                 log_level: DEFAULT_LOG_LEVEL,
                 hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+                server_addr: TEST_SERVER_ADDR,
                 unified_cgroup_hierarchy: false,
             },
             TestData {
                 contents: "foo agent bar",
+                env_vars: Vec::new(),
                 debug_console: false,
                 dev_mode: false,
                 log_level: DEFAULT_LOG_LEVEL,
                 hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+                server_addr: TEST_SERVER_ADDR,
                 unified_cgroup_hierarchy: false,
             },
             TestData {
                 contents: "foo debug_console agent bar devmode",
+                env_vars: Vec::new(),
                 debug_console: false,
                 dev_mode: false,
                 log_level: DEFAULT_LOG_LEVEL,
                 hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+                server_addr: TEST_SERVER_ADDR,
                 unified_cgroup_hierarchy: false,
             },
             TestData {
                 contents: "agent.debug_console",
+                env_vars: Vec::new(),
                 debug_console: true,
                 dev_mode: false,
                 log_level: DEFAULT_LOG_LEVEL,
                 hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+                server_addr: TEST_SERVER_ADDR,
                 unified_cgroup_hierarchy: false,
             },
             TestData {
                 contents: "   agent.debug_console ",
+                env_vars: Vec::new(),
                 debug_console: true,
                 dev_mode: false,
                 log_level: DEFAULT_LOG_LEVEL,
                 hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+                server_addr: TEST_SERVER_ADDR,
                 unified_cgroup_hierarchy: false,
             },
             TestData {
                 contents: "agent.debug_console foo",
+                env_vars: Vec::new(),
                 debug_console: true,
                 dev_mode: false,
                 log_level: DEFAULT_LOG_LEVEL,
                 hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+                server_addr: TEST_SERVER_ADDR,
                 unified_cgroup_hierarchy: false,
             },
             TestData {
                 contents: " agent.debug_console foo",
+                env_vars: Vec::new(),
                 debug_console: true,
                 dev_mode: false,
                 log_level: DEFAULT_LOG_LEVEL,
                 hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+                server_addr: TEST_SERVER_ADDR,
                 unified_cgroup_hierarchy: false,
             },
             TestData {
                 contents: "foo agent.debug_console bar",
+                env_vars: Vec::new(),
                 debug_console: true,
                 dev_mode: false,
                 log_level: DEFAULT_LOG_LEVEL,
                 hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+                server_addr: TEST_SERVER_ADDR,
                 unified_cgroup_hierarchy: false,
             },
             TestData {
                 contents: "foo agent.debug_console",
+                env_vars: Vec::new(),
                 debug_console: true,
                 dev_mode: false,
                 log_level: DEFAULT_LOG_LEVEL,
                 hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+                server_addr: TEST_SERVER_ADDR,
                 unified_cgroup_hierarchy: false,
             },
             TestData {
                 contents: "foo agent.debug_console ",
+                env_vars: Vec::new(),
                 debug_console: true,
                 dev_mode: false,
                 log_level: DEFAULT_LOG_LEVEL,
                 hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+                server_addr: TEST_SERVER_ADDR,
                 unified_cgroup_hierarchy: false,
             },
             TestData {
                 contents: "agent.devmode",
+                env_vars: Vec::new(),
                 debug_console: false,
                 dev_mode: true,
                 log_level: DEFAULT_LOG_LEVEL,
                 hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+                server_addr: TEST_SERVER_ADDR,
                 unified_cgroup_hierarchy: false,
             },
             TestData {
                 contents: "   agent.devmode ",
+                env_vars: Vec::new(),
                 debug_console: false,
                 dev_mode: true,
                 log_level: DEFAULT_LOG_LEVEL,
                 hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+                server_addr: TEST_SERVER_ADDR,
                 unified_cgroup_hierarchy: false,
             },
             TestData {
                 contents: "agent.devmode foo",
+                env_vars: Vec::new(),
                 debug_console: false,
                 dev_mode: true,
                 log_level: DEFAULT_LOG_LEVEL,
                 hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+                server_addr: TEST_SERVER_ADDR,
                 unified_cgroup_hierarchy: false,
             },
             TestData {
                 contents: " agent.devmode foo",
+                env_vars: Vec::new(),
                 debug_console: false,
                 dev_mode: true,
                 log_level: DEFAULT_LOG_LEVEL,
                 hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+                server_addr: TEST_SERVER_ADDR,
                 unified_cgroup_hierarchy: false,
             },
             TestData {
                 contents: "foo agent.devmode bar",
+                env_vars: Vec::new(),
                 debug_console: false,
                 dev_mode: true,
                 log_level: DEFAULT_LOG_LEVEL,
                 hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+                server_addr: TEST_SERVER_ADDR,
                 unified_cgroup_hierarchy: false,
             },
             TestData {
                 contents: "foo agent.devmode",
+                env_vars: Vec::new(),
                 debug_console: false,
                 dev_mode: true,
                 log_level: DEFAULT_LOG_LEVEL,
                 hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+                server_addr: TEST_SERVER_ADDR,
                 unified_cgroup_hierarchy: false,
             },
             TestData {
                 contents: "foo agent.devmode ",
+                env_vars: Vec::new(),
                 debug_console: false,
                 dev_mode: true,
                 log_level: DEFAULT_LOG_LEVEL,
                 hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+                server_addr: TEST_SERVER_ADDR,
                 unified_cgroup_hierarchy: false,
             },
             TestData {
                 contents: "agent.devmode agent.debug_console",
+                env_vars: Vec::new(),
                 debug_console: true,
                 dev_mode: true,
                 log_level: DEFAULT_LOG_LEVEL,
                 hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+                server_addr: TEST_SERVER_ADDR,
                 unified_cgroup_hierarchy: false,
             },
             TestData {
                 contents: "agent.devmode agent.debug_console agent.hotplug_timeout=100 agent.unified_cgroup_hierarchy=a",
+                env_vars: Vec::new(),
                 debug_console: true,
                 dev_mode: true,
                 log_level: DEFAULT_LOG_LEVEL,
                 hotplug_timeout: time::Duration::from_secs(100),
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+                server_addr: TEST_SERVER_ADDR,
                 unified_cgroup_hierarchy: false,
             },
             TestData {
                 contents: "agent.devmode agent.debug_console agent.hotplug_timeout=0 agent.unified_cgroup_hierarchy=11",
+                env_vars: Vec::new(),
                 debug_console: true,
                 dev_mode: true,
                 log_level: DEFAULT_LOG_LEVEL,
                 hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+                server_addr: TEST_SERVER_ADDR,
                 unified_cgroup_hierarchy: true,
             },
             TestData {
                 contents: "agent.devmode agent.debug_console agent.container_pipe_size=2097152 agent.unified_cgroup_hierarchy=false",
+                env_vars: Vec::new(),
                 debug_console: true,
                 dev_mode: true,
                 log_level: DEFAULT_LOG_LEVEL,
                 hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
                 container_pipe_size: 2097152,
+                server_addr: TEST_SERVER_ADDR,
                 unified_cgroup_hierarchy: false,
             },
             TestData {
                 contents: "agent.devmode agent.debug_console agent.container_pipe_size=100 agent.unified_cgroup_hierarchy=true",
+                env_vars: Vec::new(),
                 debug_console: true,
                 dev_mode: true,
                 log_level: DEFAULT_LOG_LEVEL,
                 hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
                 container_pipe_size: 100,
+                server_addr: TEST_SERVER_ADDR,
                 unified_cgroup_hierarchy: true,
             },
             TestData {
                 contents: "agent.devmode agent.debug_console agent.container_pipe_size=0 agent.unified_cgroup_hierarchy=0",
+                env_vars: Vec::new(),
                 debug_console: true,
                 dev_mode: true,
                 log_level: DEFAULT_LOG_LEVEL,
                 hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+                server_addr: TEST_SERVER_ADDR,
                 unified_cgroup_hierarchy: false,
             },
             TestData {
                 contents: "agent.devmode agent.debug_console agent.container_pip_siz=100 agent.unified_cgroup_hierarchy=1",
+                env_vars: Vec::new(),
                 debug_console: true,
                 dev_mode: true,
                 log_level: DEFAULT_LOG_LEVEL,
                 hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+                server_addr: TEST_SERVER_ADDR,
                 unified_cgroup_hierarchy: true,
+            },
+            TestData {
+                contents: "",
+                env_vars: Vec::new(),
+                debug_console: false,
+                dev_mode: false,
+                log_level: DEFAULT_LOG_LEVEL,
+                hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
+                container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+                server_addr: TEST_SERVER_ADDR,
+                unified_cgroup_hierarchy: false,
+            },
+            TestData {
+                contents: "",
+                env_vars: vec!["KATA_AGENT_SERVER_ADDR=foo"],
+                debug_console: false,
+                dev_mode: false,
+                log_level: DEFAULT_LOG_LEVEL,
+                hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
+                container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+                server_addr: "foo",
+                unified_cgroup_hierarchy: false,
+            },
+            TestData {
+                contents: "",
+                env_vars: vec!["KATA_AGENT_SERVER_ADDR=="],
+                debug_console: false,
+                dev_mode: false,
+                log_level: DEFAULT_LOG_LEVEL,
+                hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
+                container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+                server_addr: "=",
+                unified_cgroup_hierarchy: false,
+            },
+            TestData {
+                contents: "",
+                env_vars: vec!["KATA_AGENT_SERVER_ADDR==foo"],
+                debug_console: false,
+                dev_mode: false,
+                log_level: DEFAULT_LOG_LEVEL,
+                hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
+                container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+                server_addr: "=foo",
+                unified_cgroup_hierarchy: false,
+            },
+            TestData {
+                contents: "",
+                env_vars: vec!["KATA_AGENT_SERVER_ADDR=foo=bar=baz="],
+                debug_console: false,
+                dev_mode: false,
+                log_level: DEFAULT_LOG_LEVEL,
+                hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
+                container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+                server_addr: "foo=bar=baz=",
+                unified_cgroup_hierarchy: false,
+            },
+            TestData {
+                contents: "",
+                env_vars: vec!["KATA_AGENT_SERVER_ADDR=unix:///tmp/foo.socket"],
+                debug_console: false,
+                dev_mode: false,
+                log_level: DEFAULT_LOG_LEVEL,
+                hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
+                container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+                server_addr: "unix:///tmp/foo.socket",
+                unified_cgroup_hierarchy: false,
+            },
+            TestData {
+                contents: "",
+                env_vars: vec!["KATA_AGENT_SERVER_ADDR=unix://@/tmp/foo.socket"],
+                debug_console: false,
+                dev_mode: false,
+                log_level: DEFAULT_LOG_LEVEL,
+                hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
+                container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+                server_addr: "unix://@/tmp/foo.socket",
+                unified_cgroup_hierarchy: false,
+            },
+            TestData {
+                contents: "",
+                env_vars: vec!["KATA_AGENT_LOG_LEVEL="],
+                debug_console: false,
+                dev_mode: false,
+                log_level: DEFAULT_LOG_LEVEL,
+                hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
+                container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+                server_addr: TEST_SERVER_ADDR,
+                unified_cgroup_hierarchy: false,
+            },
+            TestData {
+                contents: "",
+                env_vars: vec!["KATA_AGENT_LOG_LEVEL=invalid"],
+                debug_console: false,
+                dev_mode: false,
+                log_level: DEFAULT_LOG_LEVEL,
+                hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
+                container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+                server_addr: TEST_SERVER_ADDR,
+                unified_cgroup_hierarchy: false,
+            },
+            TestData {
+                contents: "",
+                env_vars: vec!["KATA_AGENT_LOG_LEVEL=debug"],
+                debug_console: false,
+                dev_mode: false,
+                log_level: slog::Level::Debug,
+                hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
+                container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+                server_addr: TEST_SERVER_ADDR,
+                unified_cgroup_hierarchy: false,
+            },
+            TestData {
+                contents: "",
+                env_vars: vec!["KATA_AGENT_LOG_LEVEL=debugger"],
+                debug_console: false,
+                dev_mode: false,
+                log_level: DEFAULT_LOG_LEVEL,
+                hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
+                container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+                server_addr: TEST_SERVER_ADDR,
+                unified_cgroup_hierarchy: false,
             },
         ];
 
@@ -621,7 +828,8 @@ mod tests {
         let result = config.parse_cmdline(&filename.to_owned());
         assert!(result.is_err());
 
-        // Now, test various combinations of file contents
+        // Now, test various combinations of file contents and environment
+        // variables.
         for (i, d) in tests.iter().enumerate() {
             let msg = format!("test[{}]: {:?}", i, d);
 
@@ -635,6 +843,19 @@ mod tests {
             file.write_all(d.contents.as_bytes())
                 .unwrap_or_else(|_| panic!("{}: failed to write file contents", msg));
 
+            let mut vars_to_unset = Vec::new();
+
+            for v in &d.env_vars {
+                let fields: Vec<&str> = v.split('=').collect();
+
+                let name = fields[0];
+                let value = fields[1..].join("=");
+
+                env::set_var(name, value);
+
+                vars_to_unset.push(name);
+            }
+
             let mut config = agentConfig::new();
             assert_eq!(config.debug_console, false, "{}", msg);
             assert_eq!(config.dev_mode, false, "{}", msg);
@@ -646,6 +867,7 @@ mod tests {
                 msg
             );
             assert_eq!(config.container_pipe_size, 0, "{}", msg);
+            assert_eq!(config.server_addr, TEST_SERVER_ADDR, "{}", msg);
 
             let result = config.parse_cmdline(filename);
             assert!(result.is_ok(), "{}", msg);
@@ -660,6 +882,11 @@ mod tests {
             assert_eq!(d.log_level, config.log_level, "{}", msg);
             assert_eq!(d.hotplug_timeout, config.hotplug_timeout, "{}", msg);
             assert_eq!(d.container_pipe_size, config.container_pipe_size, "{}", msg);
+            assert_eq!(d.server_addr, config.server_addr, "{}", msg);
+
+            for v in vars_to_unset {
+                env::remove_var(v);
+            }
         }
     }
 
