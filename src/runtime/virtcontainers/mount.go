@@ -277,6 +277,11 @@ func remount(ctx context.Context, mountflags uintptr, src string) error {
 	return nil
 }
 
+// remount a mount point as readonly
+func remountRo(ctx context.Context, src string) error {
+	return remount(ctx, syscall.MS_BIND|syscall.MS_RDONLY, src)
+}
+
 // bindMountContainerRootfs bind mounts a container rootfs into a 9pfs shared
 // directory between the guest and the host.
 func bindMountContainerRootfs(ctx context.Context, shareDir, cid, cRootFs string, readonly bool) error {

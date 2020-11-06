@@ -1175,7 +1175,7 @@ func TestPreAddDevice(t *testing.T) {
 		},
 	}
 
-	mounts, ignoreMounts, err := container.mountSharedDirMounts("", "")
+	mounts, ignoreMounts, err := container.mountSharedDirMounts("", "", "")
 	assert.Nil(t, err)
 	assert.Equal(t, len(mounts), 0,
 		"mounts should contain nothing because it only contains a block device")
