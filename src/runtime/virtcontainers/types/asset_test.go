@@ -116,6 +116,7 @@ func TestAssetNew(t *testing.T) {
 		{annotations.ImagePath, annotations.ImageHash, ImageAsset, assetContentHash, false, false},
 		{annotations.InitrdPath, annotations.InitrdHash, InitrdAsset, assetContentHash, false, false},
 		{annotations.HypervisorPath, annotations.HypervisorHash, HypervisorAsset, assetContentHash, false, false},
+		{annotations.HypervisorCtlPath, annotations.HypervisorCtlHash, HypervisorCtlAsset, assetContentHash, false, false},
 		{annotations.JailerPath, annotations.JailerHash, JailerAsset, assetContentHash, false, false},
 		{annotations.FirmwarePath, annotations.FirmwareHash, FirmwareAsset, assetContentHash, false, false},
 
@@ -124,6 +125,7 @@ func TestAssetNew(t *testing.T) {
 		{annotations.ImagePath, annotations.ImageHash, ImageAsset, assetContentWrongHash, true, false},
 		{annotations.InitrdPath, annotations.InitrdHash, InitrdAsset, assetContentWrongHash, true, false},
 		{annotations.HypervisorPath, annotations.HypervisorHash, HypervisorAsset, assetContentWrongHash, true, false},
+		{annotations.HypervisorCtlPath, annotations.HypervisorCtlHash, HypervisorCtlAsset, assetContentWrongHash, true, false},
 		{annotations.JailerPath, annotations.JailerHash, JailerAsset, assetContentWrongHash, true, false},
 		{annotations.FirmwarePath, annotations.FirmwareHash, FirmwareAsset, assetContentWrongHash, true, false},
 
