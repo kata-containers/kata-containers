@@ -58,6 +58,7 @@ Class | Method | HTTP request | Description
 
 ## Documentation For Models
 
+ - [BalloonConfig](docs/BalloonConfig.md)
  - [CmdLineConfig](docs/CmdLineConfig.md)
  - [ConsoleConfig](docs/ConsoleConfig.md)
  - [CpuTopology](docs/CpuTopology.md)

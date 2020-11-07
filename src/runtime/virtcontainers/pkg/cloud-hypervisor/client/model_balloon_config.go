@@ -8,9 +8,7 @@
  */
 
 package openapi
-// VmInfo Virtual Machine information
-type VmInfo struct {
-	Config VmConfig `json:"config"`
-	State string `json:"state"`
-	MemoryActualSize int64 `json:"memory_actual_size,omitempty"`
+// BalloonConfig struct for BalloonConfig
+type BalloonConfig struct {
+	Size int64 `json:"size"`
 }
