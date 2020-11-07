@@ -487,55 +487,35 @@ func (clh *cloudHypervisor) hotplugAddDevice(devInfo interface{}, devType device
 
 }
 
-func (clh *cloudHypervisor) hotplugRemoveBlockDevice(drive *config.BlockDrive) error {
-	cl := clh.client()
-	ctx, cancel := context.WithTimeout(context.Background(), clhHotPlugAPITimeout*time.Second)
-	defer cancel()
-
-	driveID := clhDriveIndexToID(drive.Index)
-
-	if drive.Pmem {
-		return fmt.Errorf("pmem device hotplug remove not supported")
-	}
-
-	_, err := cl.VmRemoveDevicePut(ctx, chclient.VmRemoveDevice{Id: driveID})
-
-	if err != nil {
-		err = fmt.Errorf("failed to hotplug remove block device %+v %s", drive, openAPIClientError(err))
-	}
-
-	return err
-}
-
-func (clh *cloudHypervisor) hotplugRemoveVfioDevice(device *config.VFIODev) error {
-	cl := clh.client()
-	ctx, cancel := context.WithTimeout(context.Background(), clhHotPlugAPITimeout*time.Second)
-	defer cancel()
-
-	_, err := cl.VmRemoveDevicePut(ctx, chclient.VmRemoveDevice{Id: device.ID})
-
-	if err != nil {
-		err = fmt.Errorf("failed to hotplug remove vfio device %+v %s", device, openAPIClientError(err))
-	}
-
-	return err
-}
-
 func (clh *cloudHypervisor) hotplugRemoveDevice(devInfo interface{}, devType deviceType) (interface{}, error) {
 	span, _ := clh.trace("hotplugRemoveDevice")
 	defer span.Finish()
 
+	var deviceID string
+
 	switch devType {
 	case blockDev:
-		return nil, clh.hotplugRemoveBlockDevice(devInfo.(*config.BlockDrive))
+		deviceID = clhDriveIndexToID(devInfo.(*config.BlockDrive).Index)
 	case vfioDev:
-		return nil, clh.hotplugRemoveVfioDevice(devInfo.(*config.VFIODev))
+		deviceID = devInfo.(*config.VFIODev).ID
 	default:
 		clh.Logger().WithFields(log.Fields{"devInfo": devInfo,
 			"deviceType": devType}).Error("hotplugRemoveDevice: unsupported device")
 		return nil, fmt.Errorf("Could not hot remove device: unsupported device: %v, type: %v",
 			devInfo, devType)
 	}
+
+	cl := clh.client()
+	ctx, cancel := context.WithTimeout(context.Background(), clhHotPlugAPITimeout*time.Second)
+	defer cancel()
+
+	_, err := cl.VmRemoveDevicePut(ctx, chclient.VmRemoveDevice{Id: deviceID})
+
+	if err != nil {
+		err = fmt.Errorf("failed to hotplug remove (unplug) device %+v: %s", devInfo, openAPIClientError(err))
+	}
+
+	return nil, err
 }
 
 func (clh *cloudHypervisor) hypervisorConfig() HypervisorConfig {
