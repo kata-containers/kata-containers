@@ -46,6 +46,7 @@ overridden by `/etc/kata-containers/configuration.toml` if provided) such that:
   - `enable_template = true`
   - `initrd =` is set
   - `image =` option is commented out or removed
+  - `shared_fs` should not be `virtio-fs`
 
 Then you can create a VM templating for later usage by calling
 ```
