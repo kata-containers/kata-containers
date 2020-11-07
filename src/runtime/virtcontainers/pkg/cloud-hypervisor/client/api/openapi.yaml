@@ -332,19 +332,21 @@ components:
     VmInfo:
       description: Virtual Machine information
       example:
+        memory_actual_size: 2
         state: Created
         config:
           console:
             mode: "false"
             file: file
             iommu: false
+          balloon:
+            size: 4
           memory:
             hugepages: false
             shared: false
             mergeable: false
-            balloon: false
-            size: 7
-            hotplugged_size: 3
+            size: 9
+            hotplugged_size: 2
             zones:
             - hugepages: false
               shared: false
@@ -364,9 +366,8 @@ components:
               host_numa_node: 7
               id: id
               hotplug_size: 1
-            hotplug_size: 9
+            hotplug_size: 3
             hotplug_method: acpi
-            balloon_size: 2
           disks:
           - path: path
             num_queues: 1
@@ -394,6 +395,7 @@ components:
               threads_per_core: 1
               cores_per_die: 5
               packages: 2
+            max_phys_bits: 7
             boot_vcpus: 1
             max_vcpus: 1
           devices:
@@ -407,47 +409,47 @@ components:
             path: path
           numa:
           - distances:
-            - distance: 6
-              destination: 3
-            - distance: 6
-              destination: 3
+            - distance: 1
+              destination: 6
+            - distance: 1
+              destination: 6
             cpus:
-            - 6
-            - 6
+            - 3
+            - 3
             memory_zones:
             - memory_zones
             - memory_zones
-            guest_numa_id: 9
+            guest_numa_id: 6
           - distances:
-            - distance: 6
-              destination: 3
-            - distance: 6
-              destination: 3
+            - distance: 1
+              destination: 6
+            - distance: 1
+              destination: 6
             cpus:
-            - 6
-            - 6
+            - 3
+            - 3
             memory_zones:
             - memory_zones
             - memory_zones
-            guest_numa_id: 9
+            guest_numa_id: 6
           rng:
             iommu: false
             src: /dev/urandom
           sgx_epc:
           - prefault: false
-            size: 8
+            size: 9
           - prefault: false
-            size: 8
+            size: 9
           fs:
-          - num_queues: 4
-            queue_size: 5
+          - num_queues: 5
+            queue_size: 9
             cache_size: 9
             dax: true
             tag: tag
             socket: socket
             id: id
-          - num_queues: 4
-            queue_size: 5
+          - num_queues: 5
+            queue_size: 9
             cache_size: 9
             dax: true
             tag: tag
@@ -461,18 +463,19 @@ components:
           pmem:
           - mergeable: false
             file: file
-            size: 9
+            size: 6
             iommu: false
             id: id
             discard_writes: false
           - mergeable: false
             file: file
-            size: 9
+            size: 6
             iommu: false
             id: id
             discard_writes: false
           cmdline:
             args: args
+          watchdog: false
           iommu: false
           serial:
             mode: "false"
@@ -511,6 +514,9 @@ components:
           - Shutdown
           - Paused
           type: string
+        memory_actual_size:
+          format: int64
+          type: integer
       required:
       - config
       - state
@@ -543,13 +549,14 @@ components:
           mode: "false"
           file: file
           iommu: false
+        balloon:
+          size: 4
         memory:
           hugepages: false
           shared: false
           mergeable: false
-          balloon: false
-          size: 7
-          hotplugged_size: 3
+          size: 9
+          hotplugged_size: 2
           zones:
           - hugepages: false
             shared: false
@@ -569,9 +576,8 @@ components:
             host_numa_node: 7
             id: id
             hotplug_size: 1
-          hotplug_size: 9
+          hotplug_size: 3
           hotplug_method: acpi
-          balloon_size: 2
         disks:
         - path: path
           num_queues: 1
@@ -599,6 +605,7 @@ components:
             threads_per_core: 1
             cores_per_die: 5
             packages: 2
+          max_phys_bits: 7
           boot_vcpus: 1
           max_vcpus: 1
         devices:
@@ -612,47 +619,47 @@ components:
           path: path
         numa:
         - distances:
-          - distance: 6
-            destination: 3
-          - distance: 6
-            destination: 3
+          - distance: 1
+            destination: 6
+          - distance: 1
+            destination: 6
           cpus:
-          - 6
-          - 6
+          - 3
+          - 3
           memory_zones:
           - memory_zones
           - memory_zones
-          guest_numa_id: 9
+          guest_numa_id: 6
         - distances:
-          - distance: 6
-            destination: 3
-          - distance: 6
-            destination: 3
+          - distance: 1
+            destination: 6
+          - distance: 1
+            destination: 6
           cpus:
-          - 6
-          - 6
+          - 3
+          - 3
           memory_zones:
           - memory_zones
           - memory_zones
-          guest_numa_id: 9
+          guest_numa_id: 6
         rng:
           iommu: false
           src: /dev/urandom
         sgx_epc:
         - prefault: false
-          size: 8
+          size: 9
         - prefault: false
-          size: 8
+          size: 9
         fs:
-        - num_queues: 4
-          queue_size: 5
+        - num_queues: 5
+          queue_size: 9
           cache_size: 9
           dax: true
           tag: tag
           socket: socket
           id: id
-        - num_queues: 4
-          queue_size: 5
+        - num_queues: 5
+          queue_size: 9
           cache_size: 9
           dax: true
           tag: tag
@@ -666,18 +673,19 @@ components:
         pmem:
         - mergeable: false
           file: file
-          size: 9
+          size: 6
           iommu: false
           id: id
           discard_writes: false
         - mergeable: false
           file: file
-          size: 9
+          size: 6
           iommu: false
           id: id
           discard_writes: false
         cmdline:
           args: args
+        watchdog: false
         iommu: false
         serial:
           mode: "false"
@@ -727,6 +735,8 @@ components:
           type: array
         rng:
           $ref: '#/components/schemas/RngConfig'
+        balloon:
+          $ref: '#/components/schemas/BalloonConfig'
         fs:
           items:
             $ref: '#/components/schemas/FsConfig'
@@ -756,6 +766,9 @@ components:
         iommu:
           default: false
           type: boolean
+        watchdog:
+          default: false
+          type: boolean
       required:
       - kernel
       type: object
@@ -782,6 +795,7 @@ components:
           threads_per_core: 1
           cores_per_die: 5
           packages: 2
+        max_phys_bits: 7
         boot_vcpus: 1
         max_vcpus: 1
       properties:
@@ -795,6 +809,8 @@ components:
           type: integer
         topology:
           $ref: '#/components/schemas/CpuTopology'
+        max_phys_bits:
+          type: integer
       required:
       - boot_vcpus
       - max_vcpus
@@ -845,9 +861,8 @@ components:
         hugepages: false
         shared: false
         mergeable: false
-        balloon: false
-        size: 7
-        hotplugged_size: 3
+        size: 9
+        hotplugged_size: 2
         zones:
         - hugepages: false
           shared: false
@@ -867,9 +882,8 @@ components:
           host_numa_node: 7
           id: id
           hotplug_size: 1
-        hotplug_size: 9
+        hotplug_size: 3
         hotplug_method: acpi
-        balloon_size: 2
       properties:
         size:
           format: int64
@@ -892,12 +906,6 @@ components:
         hugepages:
           default: false
           type: boolean
-        balloon:
-          default: false
-          type: boolean
-        balloon_size:
-          format: int64
-          type: integer
         zones:
           items:
             $ref: '#/components/schemas/MemoryZoneConfig'
@@ -1031,10 +1039,20 @@ components:
       required:
       - src
       type: object
+    BalloonConfig:
+      example:
+        size: 4
+      properties:
+        size:
+          format: int64
+          type: integer
+      required:
+      - size
+      type: object
     FsConfig:
       example:
-        num_queues: 4
-        queue_size: 5
+        num_queues: 5
+        queue_size: 9
         cache_size: 9
         dax: true
         tag: tag
@@ -1067,7 +1085,7 @@ components:
       example:
         mergeable: false
         file: file
-        size: 9
+        size: 6
         iommu: false
         id: id
         discard_writes: false
@@ -1155,7 +1173,7 @@ components:
     SgxEpcConfig:
       example:
         prefault: false
-        size: 8
+        size: 9
       properties:
         size:
           format: int64
@@ -1168,8 +1186,8 @@ components:
       type: object
     NumaDistance:
       example:
-        distance: 6
-        destination: 3
+        distance: 1
+        destination: 6
       properties:
         destination:
           format: int32
@@ -1184,17 +1202,17 @@ components:
     NumaConfig:
       example:
         distances:
-        - distance: 6
-          destination: 3
-        - distance: 6
-          destination: 3
+        - distance: 1
+          destination: 6
+        - distance: 1
+          destination: 6
         cpus:
-        - 6
-        - 6
+        - 3
+        - 3
         memory_zones:
         - memory_zones
         - memory_zones
-        guest_numa_id: 9
+        guest_numa_id: 6
       properties:
         guest_numa_id:
           format: int32
@@ -1217,8 +1235,8 @@ components:
       type: object
     VmResize:
       example:
+        desired_balloon: 1
         desired_vcpus: 1
-        desired_ram_w_balloon: 1
         desired_ram: 6
       properties:
         desired_vcpus:
@@ -1228,8 +1246,8 @@ components:
           description: desired memory ram in bytes
           format: int64
           type: integer
-        desired_ram_w_balloon:
-          description: desired ballon size in bytes
+        desired_balloon:
+          description: desired balloon size in bytes
           format: int64
           type: integer
       type: object
