@@ -18,6 +18,7 @@ type VmConfig struct {
 	Disks []DiskConfig `json:"disks,omitempty"`
 	Net []NetConfig `json:"net,omitempty"`
 	Rng RngConfig `json:"rng,omitempty"`
+	Balloon BalloonConfig `json:"balloon,omitempty"`
 	Fs []FsConfig `json:"fs,omitempty"`
 	Pmem []PmemConfig `json:"pmem,omitempty"`
 	Serial ConsoleConfig `json:"serial,omitempty"`
@@ -27,4 +28,5 @@ type VmConfig struct {
 	SgxEpc []SgxEpcConfig `json:"sgx_epc,omitempty"`
 	Numa []NumaConfig `json:"numa,omitempty"`
 	Iommu bool `json:"iommu,omitempty"`
+	Watchdog bool `json:"watchdog,omitempty"`
 }
