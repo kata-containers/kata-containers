@@ -13,6 +13,6 @@ type VmResize struct {
 	DesiredVcpus int32 `json:"desired_vcpus,omitempty"`
 	// desired memory ram in bytes
 	DesiredRam int64 `json:"desired_ram,omitempty"`
-	// desired ballon size in bytes
-	DesiredRamWBalloon int64 `json:"desired_ram_w_balloon,omitempty"`
+	// desired balloon size in bytes
+	DesiredBalloon int64 `json:"desired_balloon,omitempty"`
 }
