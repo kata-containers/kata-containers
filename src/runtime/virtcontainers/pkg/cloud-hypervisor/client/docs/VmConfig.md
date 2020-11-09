@@ -12,6 +12,7 @@ Name | Type | Description | Notes
 **Disks** | [**[]DiskConfig**](DiskConfig.md) |  | [optional] 
 **Net** | [**[]NetConfig**](NetConfig.md) |  | [optional] 
 **Rng** | [**RngConfig**](RngConfig.md) |  | [optional] 
+**Balloon** | [**BalloonConfig**](BalloonConfig.md) |  | [optional] 
 **Fs** | [**[]FsConfig**](FsConfig.md) |  | [optional] 
 **Pmem** | [**[]PmemConfig**](PmemConfig.md) |  | [optional] 
 **Serial** | [**ConsoleConfig**](ConsoleConfig.md) |  | [optional] 
@@ -21,6 +22,7 @@ Name | Type | Description | Notes
 **SgxEpc** | [**[]SgxEpcConfig**](SgxEpcConfig.md) |  | [optional] 
 **Numa** | [**[]NumaConfig**](NumaConfig.md) |  | [optional] 
 **Iommu** | **bool** |  | [optional] [default to false]
+**Watchdog** | **bool** |  | [optional] [default to false]
 
 [[Back to Model list]](../README.md#documentation-for-models) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to README]](../README.md)
 
