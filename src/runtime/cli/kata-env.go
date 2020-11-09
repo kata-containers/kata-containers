@@ -14,6 +14,7 @@ import (
 
 	"github.com/BurntSushi/toml"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils"
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/utils"
 	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
 	exp "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/experimental"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/oci"
@@ -292,7 +293,7 @@ func getNetmonInfo(config oci.RuntimeConfig) NetmonInfo {
 }
 
 func getCommandVersion(cmd string) (string, error) {
-	return katautils.RunCommand([]string{cmd, "--version"})
+	return utils.RunCommand([]string{cmd, "--version"})
 }
 
 func getAgentInfo(config oci.RuntimeConfig) (AgentInfo, error) {

@@ -319,6 +319,26 @@ valid_file_mem_backends = @DEFVALIDFILEMEMBACKENDS@
 # Default 0-sized value means unlimited rate.
 #tx_rate_limiter_max_rate = 0
 
+# Set where to save the guest memory dump file.
+# If set, when GUEST_PANICKED event occurred,
+# guest memeory will be dumped to host filesystem under guest_memory_dump_path,
+# This directory will be created automatically if it does not exist.
+#
+# The dumped file(also called vmcore) can be processed with crash or gdb.
+#
+# WARNING:
+#   Dump guest’s memory can take very long depending on the amount of guest memory
+#   and use much disk space.
+#guest_memory_dump_path="/var/crash/kata"
+
+# If enable paging.
+# Basically, if you want to use "gdb" rather than "crash",
+# or need the guest-virtual addresses in the ELF vmcore,
+# then you should enable paging.
+#
+# See: https://www.qemu.org/docs/master/qemu-qmp-ref.html#Dump-guest-memory for details
+#guest_memory_dump_paging=false
+
 [factory]
 # VM templating support. Once enabled, new VMs are created from template
 # using vm cloning. They will share the same initial kernel, initramfs and

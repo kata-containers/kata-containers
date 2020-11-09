@@ -440,6 +440,13 @@ type HypervisorConfig struct {
 
 	// Enable annotations by name
 	EnableAnnotations []string
+
+	// GuestCoredumpPath is the path in host for saving guest memory dump
+	GuestMemoryDumpPath string
+
+	// GuestMemoryDumpPaging is used to indicate if enable paging
+	// for QEMU dump-guest-memory command
+	GuestMemoryDumpPaging bool
 }
 
 // vcpu mapping from vcpu number to thread number
@@ -605,6 +612,10 @@ func (conf *HypervisorConfig) CustomInitrdAsset() bool {
 // HypervisorAssetPath returns the VM hypervisor path
 func (conf *HypervisorConfig) HypervisorAssetPath() (string, error) {
 	return conf.assetPath(types.HypervisorAsset)
+}
+
+func (conf *HypervisorConfig) IfPVPanicEnabled() bool {
+	return conf.GuestMemoryDumpPath != ""
 }
 
 // HypervisorCtlAssetPath returns the VM hypervisor ctl path

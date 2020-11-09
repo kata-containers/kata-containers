@@ -21,6 +21,7 @@ import (
 
 	ktu "github.com/kata-containers/kata-containers/src/runtime/pkg/katatestutils"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils"
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/utils"
 	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/compatoci"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/oci"
@@ -150,7 +151,7 @@ func createOCIConfig(bundleDir string) error {
 		return errors.New("Cannot find command to generate OCI config file")
 	}
 
-	_, err := katautils.RunCommand([]string{configCmd, "spec", "--bundle", bundleDir})
+	_, err := utils.RunCommand([]string{configCmd, "spec", "--bundle", bundleDir})
 	if err != nil {
 		return err
 	}
@@ -278,7 +279,7 @@ func makeOCIBundle(bundleDir string) error {
 		}
 	}
 
-	output, err := katautils.RunCommandFull([]string{"cp", "-a", from, to}, true)
+	output, err := utils.RunCommandFull([]string{"cp", "-a", from, to}, true)
 	if err != nil {
 		return fmt.Errorf("failed to copy test OCI bundle from %v to %v: %v (output: %v)", from, to, err, output)
 	}
