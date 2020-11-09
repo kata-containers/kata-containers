@@ -8,13 +8,12 @@ package katautils
 
 import (
 	"fmt"
-	"golang.org/x/sys/unix"
 	"io/ioutil"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"strings"
 	"syscall"
+
+	"golang.org/x/sys/unix"
 )
 
 // FileExists test is a file exiting or not
@@ -109,28 +108,4 @@ func GetFileContents(file string) (string, error) {
 	}
 
 	return string(bytes), nil
-}
-
-// RunCommandFull returns the commands space-trimmed standard output and
-// error on success. Note that if the command fails, the requested output will
-// still be returned, along with an error.
-func RunCommandFull(args []string, includeStderr bool) (string, error) {
-	cmd := exec.Command(args[0], args[1:]...)
-	var err error
-	var bytes []byte
-
-	if includeStderr {
-		bytes, err = cmd.CombinedOutput()
-	} else {
-		bytes, err = cmd.Output()
-	}
-
-	trimmed := strings.TrimSpace(string(bytes))
-
-	return trimmed, err
-}
-
-// RunCommand returns the commands space-trimmed standard output on success
-func RunCommand(args []string) (string, error) {
-	return RunCommandFull(args, false)
 }

@@ -14,7 +14,7 @@ import (
 	"strings"
 
 	"github.com/BurntSushi/toml"
-	govmmQemu "github.com/intel/govmm/qemu"
+	govmmQemu "github.com/kata-containers/govmm/qemu"
 	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
 	exp "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/experimental"
@@ -125,6 +125,8 @@ type hypervisor struct {
 	RxRateLimiterMaxRate    uint64   `toml:"rx_rate_limiter_max_rate"`
 	TxRateLimiterMaxRate    uint64   `toml:"tx_rate_limiter_max_rate"`
 	EnableAnnotations       []string `toml:"enable_annotations"`
+	GuestMemoryDumpPath     string   `toml:"guest_memory_dump_path"`
+	GuestMemoryDumpPaging   bool     `toml:"guest_memory_dump_paging"`
 }
 
 type runtime struct {
@@ -688,6 +690,8 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		RxRateLimiterMaxRate:    rxRateLimiterMaxRate,
 		TxRateLimiterMaxRate:    txRateLimiterMaxRate,
 		EnableAnnotations:       h.EnableAnnotations,
+		GuestMemoryDumpPath:     h.GuestMemoryDumpPath,
+		GuestMemoryDumpPaging:   h.GuestMemoryDumpPaging,
 	}, nil
 }
 
@@ -844,7 +848,7 @@ func newClhHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		DisableVhostNet:         true,
 		VirtioFSExtraArgs:       h.VirtioFSExtraArgs,
 		SGXEPCSize:              defaultSGXEPCSize,
-		EnableAnnotations:     h.EnableAnnotations,
+		EnableAnnotations:       h.EnableAnnotations,
 	}, nil
 }
 

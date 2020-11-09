@@ -7,6 +7,8 @@ package katautils
 
 import (
 	"os/exec"
+
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/utils"
 )
 
 type CtrEngine struct {
@@ -19,7 +21,7 @@ var (
 
 func (e *CtrEngine) Init(name string) (string, error) {
 	var out string
-	out, err := RunCommandFull([]string{name, "version"}, true)
+	out, err := utils.RunCommandFull([]string{name, "version"}, true)
 	if err != nil {
 		return out, err
 	}
@@ -30,19 +32,19 @@ func (e *CtrEngine) Init(name string) (string, error) {
 
 func (e *CtrEngine) Inspect(image string) (string, error) {
 	// Only hit the network if the image doesn't exist locally
-	return RunCommand([]string{e.Name, "inspect", "--type=image", image})
+	return utils.RunCommand([]string{e.Name, "inspect", "--type=image", image})
 }
 
 func (e *CtrEngine) Pull(image string) (string, error) {
-	return RunCommand([]string{e.Name, "pull", image})
+	return utils.RunCommand([]string{e.Name, "pull", image})
 }
 
 func (e *CtrEngine) Create(image string) (string, error) {
-	return RunCommand([]string{e.Name, "create", image})
+	return utils.RunCommand([]string{e.Name, "create", image})
 }
 
 func (e *CtrEngine) Rm(ctrID string) (string, error) {
-	return RunCommand([]string{e.Name, "rm", ctrID})
+	return utils.RunCommand([]string{e.Name, "rm", ctrID})
 }
 
 func (e *CtrEngine) GetRootfs(ctrID string, dir string) error {
