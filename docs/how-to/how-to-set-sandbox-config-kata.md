@@ -91,7 +91,7 @@ There are several kinds of Kata configurations and they are listed below.
 | `io.katacontainers.config.hypervisor.virtio_fs_daemon` | string | virtio-fs `vhost-user` daemon path |
 | `io.katacontainers.config.hypervisor.virtio_fs_extra_args` | string | extra options passed to `virtiofs` daemon |
 
-# CRI Configuration
+# CRI-O Configuration
 
 In case of CRI-O, all annotations specified in the pod spec are passed down to Kata.
 
