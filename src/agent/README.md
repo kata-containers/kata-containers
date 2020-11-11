@@ -40,9 +40,11 @@ After that, we drafted the initial code here, and any contributions are welcome.
 
 ### Build from Source
 The rust-agent needs to be built statically and linked with `musl`
+
+> **Note:** skip this step for ppc64le, the build scripts explicitly use gnu for ppc64le.
+
 ```bash
 $ arch=$(uname -m)
-$ [ "$arch" == "ppc64le" ] && arch=powerpc64le
 $ rustup target add "${arch}-unknown-linux-musl"
 $ sudo ln -s /usr/bin/g++ /bin/musl-g++
 ```
