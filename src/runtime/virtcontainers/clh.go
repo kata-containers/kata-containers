@@ -765,13 +765,14 @@ func (clh *cloudHypervisor) terminate() (err error) {
 	}
 
 	clh.Logger().WithField("PID", pid).Info("Stopping Cloud Hypervisor")
-
 	if pidRunning {
 		clhRunning, _ := clh.isClhRunning(clhStopSandboxTimeout)
+		clh.Logger().WithField("clhRunning", clhRunning).Info("")
 		if clhRunning {
 			ctx, cancel := context.WithTimeout(context.Background(), clhStopSandboxTimeout*time.Second)
 			defer cancel()
 			if _, err = clh.client().ShutdownVMM(ctx); err != nil {
+				clh.Logger().WithError(err).Error("failed to ShutdownVMM")
 				return err
 			}
 		}
@@ -780,6 +781,7 @@ func (clh *cloudHypervisor) terminate() (err error) {
 	// At this point the VMM was stop nicely, but need to check if PID is still running
 	// Wait for the VM process to terminate
 	tInit := time.Now()
+	clh.Logger().WithField("pidRunning", pidRunning).Info("before check pidRunning")
 	for {
 		if err = syscall.Kill(pid, syscall.Signal(0)); err != nil {
 			pidRunning = false
@@ -795,23 +797,29 @@ func (clh *cloudHypervisor) terminate() (err error) {
 		// Let's avoid to run a too busy loop
 		time.Sleep(time.Duration(50) * time.Millisecond)
 	}
+	clh.Logger().WithField("pidRunning", pidRunning).Info("after check pidRunning")
 
 	// Let's try with a hammer now, a SIGKILL should get rid of the
 	// VM process.
 	if pidRunning {
 		if err = syscall.Kill(pid, syscall.SIGKILL); err != nil {
+			clh.Logger().WithError(err).Error("failed to kill hypervisor pid")
 			return fmt.Errorf("Fatal, failed to kill hypervisor process, error: %s", err)
 		}
 	}
 
 	if clh.virtiofsd == nil {
+		clh.Logger().Error("virtiofsd config is nil, failed to stop it")
 		return errors.New("virtiofsd config is nil, failed to stop it")
 	}
 
+	clh.Logger().WithField("PID", pid).Info("cleanup VM")
 	if err := clh.cleanupVM(true); err != nil {
+		clh.Logger().WithError(err).Error("failed to cleanupVM")
 		return err
 	}
 
+	clh.Logger().WithField("PID", pid).Info("stop virtiofsd")
 	return clh.virtiofsd.Stop()
 }
 
