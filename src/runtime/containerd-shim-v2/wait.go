@@ -20,6 +20,8 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/oci"
 )
 
+const defaultCheckInterval = 1 * time.Second
+
 func wait(s *service, c *container, execID string) (int32, error) {
 	var execs *exec
 	var err error
@@ -152,6 +154,7 @@ func watchOOMEvents(ctx context.Context, s *service) {
 				if isGRPCErrorCode(codes.NotFound, err) || err.Error() == "Dead agent" {
 					return
 				}
+				time.Sleep(defaultCheckInterval)
 				continue
 			}
 
