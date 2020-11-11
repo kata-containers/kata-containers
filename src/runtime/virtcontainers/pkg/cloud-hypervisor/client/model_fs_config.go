@@ -12,9 +12,9 @@ package openapi
 type FsConfig struct {
 	Tag string `json:"tag"`
 	Socket string `json:"socket"`
-	NumQueues int32 `json:"num_queues,omitempty"`
-	QueueSize int32 `json:"queue_size,omitempty"`
-	Dax bool `json:"dax,omitempty"`
-	CacheSize int64 `json:"cache_size,omitempty"`
+	NumQueues int32 `json:"num_queues"`
+	QueueSize int32 `json:"queue_size"`
+	Dax bool `json:"dax"`
+	CacheSize int64 `json:"cache_size"`
 	Id string `json:"id,omitempty"`
 }

@@ -1078,6 +1078,10 @@ components:
         id:
           type: string
       required:
+      - cache_size
+      - dax
+      - num_queues
+      - queue_size
       - socket
       - tag
       type: object
