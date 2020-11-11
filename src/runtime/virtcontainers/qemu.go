@@ -747,8 +747,7 @@ func (q *qemu) setupVirtioMem() error {
 		return err
 	}
 
-	err = q.qmpSetup()
-	if err != nil {
+	if err = q.qmpSetup(); err != nil {
 		return err
 	}
 	err = q.qmpMonitorCh.qmp.ExecMemdevAdd(q.qmpMonitorCh.ctx, memoryBack, "virtiomem", target, sizeMB, share, "virtio-mem-pci", "virtiomem0")
@@ -859,13 +858,12 @@ func (q *qemu) startSandbox(timeout int) error {
 }
 
 func (q *qemu) bootFromTemplate() error {
-	err := q.qmpSetup()
-	if err != nil {
+	if err := q.qmpSetup(); err != nil {
 		return err
 	}
 	defer q.qmpShutdown()
 
-	err = q.arch.setIgnoreSharedMemoryMigrationCaps(q.qmpMonitorCh.ctx, q.qmpMonitorCh.qmp)
+	err := q.arch.setIgnoreSharedMemoryMigrationCaps(q.qmpMonitorCh.ctx, q.qmpMonitorCh.qmp)
 	if err != nil {
 		q.Logger().WithError(err).Error("set migration ignore shared memory")
 		return err
@@ -961,12 +959,11 @@ func (q *qemu) stopSandbox() error {
 		}
 	}
 
-	err := q.qmpSetup()
-	if err != nil {
+	if err := q.qmpSetup(); err != nil {
 		return err
 	}
 
-	err = q.qmpMonitorCh.qmp.ExecuteQuit(q.qmpMonitorCh.ctx)
+	err := q.qmpMonitorCh.qmp.ExecuteQuit(q.qmpMonitorCh.ctx)
 	if err != nil {
 		q.Logger().WithError(err).Error("Fail to execute qmp QUIT")
 		return err
@@ -1012,22 +1009,15 @@ func (q *qemu) togglePauseSandbox(pause bool) error {
 	span, _ := q.trace("togglePauseSandbox")
 	defer span.Finish()
 
-	err := q.qmpSetup()
-	if err != nil {
+	if err := q.qmpSetup(); err != nil {
 		return err
 	}
 
 	if pause {
-		err = q.qmpMonitorCh.qmp.ExecuteStop(q.qmpMonitorCh.ctx)
+		return q.qmpMonitorCh.qmp.ExecuteStop(q.qmpMonitorCh.ctx)
 	} else {
-		err = q.qmpMonitorCh.qmp.ExecuteCont(q.qmpMonitorCh.ctx)
+		return q.qmpMonitorCh.qmp.ExecuteCont(q.qmpMonitorCh.ctx)
 	}
-
-	if err != nil {
-		return err
-	}
-
-	return nil
 }
 
 func (q *qemu) qmpSetup() error {
@@ -1353,15 +1343,14 @@ func (q *qemu) hotplugAddVhostUserBlkDevice(vAttr *config.VhostUserDeviceAttrs, 
 }
 
 func (q *qemu) hotplugBlockDevice(drive *config.BlockDrive, op operation) error {
-	err := q.qmpSetup()
-	if err != nil {
+	if err := q.qmpSetup(); err != nil {
 		return err
 	}
 
 	devID := "virtio-" + drive.ID
 
 	if op == addDevice {
-		err = q.hotplugAddBlockDevice(drive, op, devID)
+		return q.hotplugAddBlockDevice(drive, op, devID)
 	} else {
 		if q.config.BlockDeviceDriver == config.VirtioBlock {
 			if err := q.arch.removeDeviceFromBridge(drive.ID); err != nil {
@@ -1373,17 +1362,12 @@ func (q *qemu) hotplugBlockDevice(drive *config.BlockDrive, op operation) error 
 			return err
 		}
 
-		if err := q.qmpMonitorCh.qmp.ExecuteBlockdevDel(q.qmpMonitorCh.ctx, drive.ID); err != nil {
-			return err
-		}
+		return q.qmpMonitorCh.qmp.ExecuteBlockdevDel(q.qmpMonitorCh.ctx, drive.ID)
 	}
-
-	return err
 }
 
 func (q *qemu) hotplugVhostUserDevice(vAttr *config.VhostUserDeviceAttrs, op operation) error {
-	err := q.qmpSetup()
-	if err != nil {
+	if err := q.qmpSetup(); err != nil {
 		return err
 	}
 
@@ -1405,17 +1389,12 @@ func (q *qemu) hotplugVhostUserDevice(vAttr *config.VhostUserDeviceAttrs, op ope
 			return err
 		}
 
-		if err := q.qmpMonitorCh.qmp.ExecuteChardevDel(q.qmpMonitorCh.ctx, vAttr.DevID); err != nil {
-			return err
-		}
+		return q.qmpMonitorCh.qmp.ExecuteChardevDel(q.qmpMonitorCh.ctx, vAttr.DevID)
 	}
-
-	return nil
 }
 
 func (q *qemu) hotplugVFIODevice(device *config.VFIODev, op operation) (err error) {
-	err = q.qmpSetup()
-	if err != nil {
+	if err = q.qmpSetup(); err != nil {
 		return err
 	}
 
@@ -1492,12 +1471,8 @@ func (q *qemu) hotplugVFIODevice(device *config.VFIODev, op operation) (err erro
 			}
 		}
 
-		if err := q.qmpMonitorCh.qmp.ExecuteDeviceDel(q.qmpMonitorCh.ctx, devID); err != nil {
-			return err
-		}
+		return q.qmpMonitorCh.qmp.ExecuteDeviceDel(q.qmpMonitorCh.ctx, devID)
 	}
-
-	return nil
 }
 
 func (q *qemu) hotAddNetDevice(name, hardAddr string, VMFds, VhostFds []*os.File) error {
@@ -1524,8 +1499,7 @@ func (q *qemu) hotAddNetDevice(name, hardAddr string, VMFds, VhostFds []*os.File
 }
 
 func (q *qemu) hotplugNetDevice(endpoint Endpoint, op operation) (err error) {
-	err = q.qmpSetup()
-	if err != nil {
+	if err = q.qmpSetup(); err != nil {
 		return err
 	}
 	var tap TapInterface
@@ -1587,11 +1561,8 @@ func (q *qemu) hotplugNetDevice(endpoint Endpoint, op operation) (err error) {
 	if err := q.qmpMonitorCh.qmp.ExecuteDeviceDel(q.qmpMonitorCh.ctx, devID); err != nil {
 		return err
 	}
-	if err := q.qmpMonitorCh.qmp.ExecuteNetdevDel(q.qmpMonitorCh.ctx, tap.Name); err != nil {
-		return err
-	}
 
-	return nil
+	return q.qmpMonitorCh.qmp.ExecuteNetdevDel(q.qmpMonitorCh.ctx, tap.Name)
 }
 
 func (q *qemu) hotplugDevice(devInfo interface{}, devType deviceType, op operation) (interface{}, error) {
@@ -1649,8 +1620,7 @@ func (q *qemu) hotplugCPUs(vcpus uint32, op operation) (uint32, error) {
 		return 0, nil
 	}
 
-	err := q.qmpSetup()
-	if err != nil {
+	if err := q.qmpSetup(); err != nil {
 		return 0, err
 	}
 
@@ -1760,8 +1730,7 @@ func (q *qemu) hotplugMemory(memDev *memoryDevice, op operation) (int, error) {
 	memLog := q.Logger().WithField("hotplug", "memory")
 
 	memLog.WithField("hotplug-memory-mb", memDev.sizeMB).Debug("requested memory hotplug")
-	err := q.qmpSetup()
-	if err != nil {
+	if err := q.qmpSetup(); err != nil {
 		return 0, err
 	}
 
@@ -1934,8 +1903,7 @@ func (q *qemu) getSandboxConsole(id string) (string, string, error) {
 func (q *qemu) saveSandbox() error {
 	q.Logger().Info("save sandbox")
 
-	err := q.qmpSetup()
-	if err != nil {
+	if err := q.qmpSetup(); err != nil {
 		return err
 	}
 
@@ -1949,7 +1917,7 @@ func (q *qemu) saveSandbox() error {
 		}
 	}
 
-	err = q.qmpMonitorCh.qmp.ExecSetMigrateArguments(q.qmpMonitorCh.ctx, fmt.Sprintf("%s>%s", qmpExecCatCmd, q.config.DevicesStatePath))
+	err := q.qmpMonitorCh.qmp.ExecSetMigrateArguments(q.qmpMonitorCh.ctx, fmt.Sprintf("%s>%s", qmpExecCatCmd, q.config.DevicesStatePath))
 	if err != nil {
 		q.Logger().WithError(err).Error("exec migration")
 		return err
@@ -2006,15 +1974,14 @@ func (q *qemu) disconnect() {
 func (q *qemu) resizeMemory(reqMemMB uint32, memoryBlockSizeMB uint32, probe bool) (uint32, memoryDevice, error) {
 
 	currentMemory := q.config.MemorySize + uint32(q.state.HotpluggedMemory)
-	err := q.qmpSetup()
-	if err != nil {
+	if err := q.qmpSetup(); err != nil {
 		return 0, memoryDevice{}, err
 	}
 	var addMemDevice memoryDevice
 	if q.config.VirtioMem && currentMemory != reqMemMB {
 		q.Logger().WithField("hotplug", "memory").Debugf("resize memory from %dMB to %dMB", currentMemory, reqMemMB)
 		sizeByte := (reqMemMB - q.config.MemorySize) * 1024 * 1024
-		err = q.qmpMonitorCh.qmp.ExecQomSet(q.qmpMonitorCh.ctx, "virtiomem0", "requested-size", uint64(sizeByte))
+		err := q.qmpMonitorCh.qmp.ExecQomSet(q.qmpMonitorCh.ctx, "virtiomem0", "requested-size", uint64(sizeByte))
 		if err != nil {
 			return 0, memoryDevice{}, err
 		}
@@ -2196,8 +2163,7 @@ func (q *qemu) getThreadIDs() (vcpuThreadIDs, error) {
 	defer span.Finish()
 
 	tid := vcpuThreadIDs{}
-	err := q.qmpSetup()
-	if err != nil {
+	if err := q.qmpSetup(); err != nil {
 		return tid, err
 	}
 
@@ -2400,8 +2366,7 @@ func (q *qemu) check() error {
 	q.memoryDumpFlag.Lock()
 	defer q.memoryDumpFlag.Unlock()
 
-	err := q.qmpSetup()
-	if err != nil {
+	if err := q.qmpSetup(); err != nil {
 		return err
 	}
 
