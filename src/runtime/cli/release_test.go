@@ -458,6 +458,21 @@ func TestGetNewReleaseType(t *testing.T) {
 	}
 
 	data := []testData{
+		// Check build metadata (ignored for version comparisions)
+		{"2.0.0+build", "2.0.0", true, ""},
+		{"2.0.0+build-1", "2.0.0+build-2", true, ""},
+		{"1.12.0+build", "1.12.0", true, ""},
+
+		{"2.0.0-rc3+foo", "2.0.0", false, "major"},
+		{"2.0.0-rc3+foo", "2.0.0-rc4", false, "pre-release"},
+		{"1.12.0+foo", "1.13.0", false, "minor"},
+
+		{"1.12.0+build", "2.0.0", false, "major"},
+		{"1.12.0+build", "1.13.0", false, "minor"},
+		{"1.12.0-rc2+build", "1.12.1", false, "patch"},
+		{"1.12.0-rc2+build", "1.12.1-foo", false, "patch pre-release"},
+		{"1.12.0-rc4+wibble", "1.12.0", false, "major"},
+
 		{"2.0.0-alpha3", "1.0.0", true, ""},
 		{"1.0.0", "1.0.0", true, ""},
 		{"2.0.0", "1.0.0", true, ""},
