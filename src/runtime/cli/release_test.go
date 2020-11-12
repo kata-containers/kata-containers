@@ -488,6 +488,12 @@ func TestGetNewReleaseType(t *testing.T) {
 		{"1.0.0", "1.0.3", false, "patch"},
 		{"1.0.0-beta29", "1.0.0-beta30", false, "pre-release"},
 		{"1.0.0", "1.0.3-alpha99.1b", false, "patch pre-release"},
+
+		{"2.0.0-rc0", "2.0.0", false, "major"},
+		{"2.0.0-rc1", "2.0.0", false, "major"},
+
+		{"1.12.0-rc0", "1.12.0", false, "major"},
+		{"1.12.0-rc5", "1.12.0", false, "major"},
 	}
 
 	for i, d := range data {
