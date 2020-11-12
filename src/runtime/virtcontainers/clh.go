@@ -1197,22 +1197,23 @@ func (clh *cloudHypervisor) addVolume(volume types.Volume) error {
 		return err
 	}
 
-	if clh.config.VirtioFSCache == virtioFsCacheAlways {
-		clh.vmconfig.Fs = []chclient.FsConfig{
-			{
-				Tag:       volume.MountTag,
-				CacheSize: int64(clh.config.VirtioFSCacheSize << 20),
-				Socket:    vfsdSockPath,
-			},
-		}
-	} else {
-		clh.vmconfig.Fs = []chclient.FsConfig{
-			{
-				Tag:    volume.MountTag,
-				Socket: vfsdSockPath,
-			},
-		}
+	// disable DAX if VirtioFSCacheSize is 0
+	dax := clh.config.VirtioFSCacheSize != 0
 
+	// numQueues and queueSize are required, let's use the
+	// default values defined by cloud-hypervisor
+	numQueues := int32(1)
+	queueSize := int32(1024)
+
+	clh.vmconfig.Fs = []chclient.FsConfig{
+		{
+			Tag:       volume.MountTag,
+			Socket:    vfsdSockPath,
+			Dax:       dax,
+			CacheSize: int64(clh.config.VirtioFSCacheSize << 20),
+			NumQueues: numQueues,
+			QueueSize: queueSize,
+		},
 	}
 
 	clh.Logger().Debug("Adding share volume to hypervisor: ", volume.MountTag)
