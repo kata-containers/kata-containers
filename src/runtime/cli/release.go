@@ -321,8 +321,14 @@ func getNewReleaseType(current semver.Version, latest semver.Version) (string, e
 		}
 	} else if latest.Patch == current.Patch && len(latest.Pre) > 0 {
 		desc = "pre-release"
+	} else if latest.Major == current.Major &&
+		latest.Minor == current.Minor &&
+		latest.Patch == current.Patch {
+		if len(current.Pre) > 0 && len(latest.Pre) == 0 {
+			desc = "major"
+		}
 	} else {
-		return "", fmt.Errorf("BUG: unhandled scenario: current version: %s, latest version: %v", current, latest)
+		return "", fmt.Errorf("BUG: unhandled scenario: current version: %s, latest version: %s", current, latest)
 	}
 
 	return desc, nil
