@@ -654,8 +654,12 @@ components:
 
     FsConfig:
       required:
-      - tag
+      - cache_size
+      - dax
+      - num_queues
+      - queue_size
       - socket
+      - tag
       type: object
       properties:
         tag:
