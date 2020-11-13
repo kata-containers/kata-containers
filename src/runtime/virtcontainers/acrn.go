@@ -88,6 +88,7 @@ type Acrn struct {
 	arch       acrnArch
 	ctx        context.Context
 	store      persistapi.PersistDriver
+	sandbox    *Sandbox
 }
 
 type acrnPlatformInfo struct {
@@ -231,11 +232,9 @@ func (a *Acrn) appendImage(devices []Device, imagePath string) ([]Device, error)
 	// Get sandbox and increment the globalIndex.
 	// This is to make sure the VM rootfs occupies
 	// the first Index which is /dev/vda.
-	sandbox, err := globalSandboxList.lookupSandbox(a.id)
-	if sandbox == nil && err != nil {
-		return nil, err
-	}
-	if _, err = sandbox.GetAndSetSandboxBlockIndex(); err != nil {
+	var err error
+
+	if _, err = a.sandbox.GetAndSetSandboxBlockIndex(); err != nil {
 		return nil, err
 	}
 
@@ -821,4 +820,8 @@ func (a *Acrn) loadInfo() error {
 
 func (a *Acrn) isRateLimiterBuiltin() bool {
 	return false
+}
+
+func (a *Acrn) setSandbox(sandbox *Sandbox) {
+	a.sandbox = sandbox
 }

@@ -31,10 +31,10 @@ func cReap(s *service, status int, id, execid string, exitat time.Time) {
 	}
 }
 
-func cleanupContainer(ctx context.Context, sid, cid, bundlePath string) error {
+func cleanupContainer(ctx context.Context, sandbox vc.VCSandbox, cid, bundlePath string) error {
 	shimLog.WithField("service", "cleanup").WithField("container", cid).Info("Cleanup container")
 
-	err := vci.CleanupContainer(ctx, sid, cid, true)
+	err := vci.CleanupContainer(ctx, sandbox, cid, true)
 	if err != nil {
 		shimLog.WithError(err).WithField("container", cid).Warn("failed to cleanup container")
 		return err

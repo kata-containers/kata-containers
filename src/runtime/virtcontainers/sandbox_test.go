@@ -301,14 +301,11 @@ func TestSandboxSetSandboxAndContainerState(t *testing.T) {
 	}
 
 	// force state to be read from disk
-	p2, err := fetchSandbox(context.Background(), p.ID())
-	assert.NoError(err)
-
-	if err := testCheckSandboxOnDiskState(p2, newSandboxState); err != nil {
+	if err := testCheckSandboxOnDiskState(p, newSandboxState); err != nil {
 		t.Error(err)
 	}
 
-	c2, err := p2.findContainer(contID)
+	c2, err := p.findContainer(contID)
 	assert.NoError(err)
 
 	if err := testCheckContainerOnDiskState(c2, newContainerState); err != nil {
@@ -1327,9 +1324,6 @@ func checkSandboxRemains() error {
 	}
 	if err = checkDirNotExist(path.Join(kataHostSharedDir(), testSandboxID)); err != nil {
 		return fmt.Errorf("%s still exists", path.Join(kataHostSharedDir(), testSandboxID))
-	}
-	if _, err = globalSandboxList.lookupSandbox(testSandboxID); err == nil {
-		return fmt.Errorf("globalSandboxList for %s stil exists", testSandboxID)
 	}
 
 	return nil
