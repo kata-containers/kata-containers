@@ -17,13 +17,13 @@ import (
 )
 
 const (
-	testSandboxID   = "testSandboxID"
 	testContainerID = "testContainerID"
 )
 
 var (
-	loggerTriggered  = 0
-	factoryTriggered = 0
+	loggerTriggered               = 0
+	factoryTriggered              = 0
+	testSandbox      vc.VCSandbox = &Sandbox{}
 )
 
 func TestVCImplementations(t *testing.T) {
@@ -178,21 +178,21 @@ func TestVCMockCleanupContainer(t *testing.T) {
 	assert.Nil(m.CleanupContainerFunc)
 
 	ctx := context.Background()
-	err := m.CleanupContainer(ctx, testSandboxID, testContainerID, false)
+	err := m.CleanupContainer(ctx, testSandbox, testContainerID, false)
 	assert.Error(err)
 	assert.True(IsMockError(err))
 
-	m.CleanupContainerFunc = func(ctx context.Context, sandboxID, containerID string, force bool) error {
+	m.CleanupContainerFunc = func(ctx context.Context, sandbox vc.VCSandbox, containerID string, force bool) error {
 		return nil
 	}
 
-	err = m.CleanupContainer(ctx, testSandboxID, testContainerID, false)
+	err = m.CleanupContainer(ctx, testSandbox, testContainerID, false)
 	assert.NoError(err)
 
 	// reset
 	m.CleanupContainerFunc = nil
 
-	err = m.CleanupContainer(ctx, testSandboxID, testContainerID, false)
+	err = m.CleanupContainer(ctx, testSandbox, testContainerID, false)
 	assert.Error(err)
 	assert.True(IsMockError(err))
 }
@@ -204,21 +204,21 @@ func TestVCMockForceCleanupContainer(t *testing.T) {
 	assert.Nil(m.CleanupContainerFunc)
 
 	ctx := context.Background()
-	err := m.CleanupContainer(ctx, testSandboxID, testContainerID, true)
+	err := m.CleanupContainer(ctx, testSandbox, testContainerID, true)
 	assert.Error(err)
 	assert.True(IsMockError(err))
 
-	m.CleanupContainerFunc = func(ctx context.Context, sandboxID, containerID string, force bool) error {
+	m.CleanupContainerFunc = func(ctx context.Context, sandbox vc.VCSandbox, containerID string, force bool) error {
 		return nil
 	}
 
-	err = m.CleanupContainer(ctx, testSandboxID, testContainerID, true)
+	err = m.CleanupContainer(ctx, testSandbox, testContainerID, true)
 	assert.NoError(err)
 
 	// reset
 	m.CleanupContainerFunc = nil
 
-	err = m.CleanupContainer(ctx, testSandboxID, testContainerID, true)
+	err = m.CleanupContainer(ctx, testSandbox, testContainerID, true)
 	assert.Error(err)
 	assert.True(IsMockError(err))
 }

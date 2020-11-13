@@ -307,7 +307,7 @@ func TestCleanupContainer(t *testing.T) {
 	}
 
 	for _, c := range p.GetAllContainers() {
-		CleanupContainer(ctx, p.ID(), c.ID(), true)
+		CleanupContainer(ctx, p, c.ID(), true)
 	}
 
 	s, ok := p.(*Sandbox)
@@ -316,6 +316,6 @@ func TestCleanupContainer(t *testing.T) {
 
 	_, err = os.Stat(sandboxDir)
 	if err == nil {
-		t.Fatal(err)
+		t.Fatal("sandbox dir should be deleted")
 	}
 }

@@ -38,7 +38,6 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols/grpc"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/annotations"
 	vccgroups "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/cgroups"
-	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/compatoci"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/cpuset"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/rootless"
 	vcTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/types"
@@ -270,7 +269,6 @@ func (s *Sandbox) GetContainer(containerID string) VCContainer {
 // Release closes the agent connection and removes sandbox from internal list.
 func (s *Sandbox) Release() error {
 	s.Logger().Info("release sandbox")
-	globalSandboxList.removeSandbox(s.id)
 	if s.monitor != nil {
 		s.monitor.stop()
 	}
@@ -502,19 +500,15 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 		ctx:             ctx,
 	}
 
+	hypervisor.setSandbox(s)
+
 	if s.newStore, err = persist.GetDriver(); err != nil || s.newStore == nil {
 		return nil, fmt.Errorf("failed to get fs persist driver: %v", err)
-	}
-
-	if err = globalSandboxList.addSandbox(s); err != nil {
-		s.newStore.Destroy(s.id)
-		return nil, err
 	}
 
 	defer func() {
 		if retErr != nil {
 			s.Logger().WithError(retErr).WithField("sandboxid", s.id).Error("Create new sandbox failed")
-			globalSandboxList.removeSandbox(s.id)
 			s.newStore.Destroy(s.id)
 		}
 	}()
@@ -636,50 +630,6 @@ func rwLockSandbox(sandboxID string) (func() error, error) {
 	return store.Lock(sandboxID, true)
 }
 
-// fetchSandbox fetches a sandbox config from a sandbox ID and returns a sandbox.
-func fetchSandbox(ctx context.Context, sandboxID string) (sandbox *Sandbox, err error) {
-	virtLog.Info("fetch sandbox")
-	if sandboxID == "" {
-		return nil, vcTypes.ErrNeedSandboxID
-	}
-
-	sandbox, err = globalSandboxList.lookupSandbox(sandboxID)
-	if sandbox != nil && err == nil {
-		return sandbox, err
-	}
-
-	var config SandboxConfig
-
-	// load sandbox config fromld store.
-	c, err := loadSandboxConfig(sandboxID)
-	if err != nil {
-		virtLog.Warningf("failed to get sandbox config from new store: %v", err)
-		return nil, err
-	}
-
-	config = *c
-
-	// fetchSandbox is not suppose to create new sandbox VM.
-	sandbox, err = createSandbox(ctx, config, nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create sandbox with config %+v: %v", config, err)
-	}
-
-	if sandbox.config.SandboxCgroupOnly {
-		if err := sandbox.createCgroupManager(); err != nil {
-			return nil, err
-		}
-	}
-
-	// This sandbox already exists, we don't need to recreate the containers in the guest.
-	// We only need to fetch the containers from storage and create the container structs.
-	if err := sandbox.fetchContainers(); err != nil {
-		return nil, err
-	}
-
-	return sandbox, nil
-}
-
 // findContainer returns a container from the containers list held by the
 // sandbox structure, based on a container ID.
 func (s *Sandbox) findContainer(containerID string) (*Container, error) {
@@ -740,8 +690,6 @@ func (s *Sandbox) Delete() error {
 			return err
 		}
 	}
-
-	globalSandboxList.removeSandbox(s.id)
 
 	if s.monitor != nil {
 		s.monitor.stop()
@@ -1141,33 +1089,6 @@ func (s *Sandbox) addContainer(c *Container) error {
 		return fmt.Errorf("Duplicated container: %s", c.id)
 	}
 	s.containers[c.id] = c
-
-	return nil
-}
-
-// newContainers creates new containers structure and
-// adds them to the sandbox. It does not create the containers
-// in the guest. This should only be used when fetching a
-// sandbox that already exists.
-func (s *Sandbox) fetchContainers() error {
-	for i, contConfig := range s.config.Containers {
-		// Add spec from bundle path
-		spec, err := compatoci.GetContainerSpec(contConfig.Annotations)
-		if err != nil {
-			return err
-		}
-		contConfig.CustomSpec = &spec
-		s.config.Containers[i] = contConfig
-
-		c, err := newContainer(s, &s.config.Containers[i])
-		if err != nil {
-			return err
-		}
-
-		if err := s.addContainer(c); err != nil {
-			return err
-		}
-	}
 
 	return nil
 }

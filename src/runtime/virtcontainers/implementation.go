@@ -38,6 +38,6 @@ func (impl *VCImpl) CreateSandbox(ctx context.Context, sandboxConfig SandboxConf
 // CleanupContainer is used by shimv2 to stop and delete a container exclusively, once there is no container
 // in the sandbox left, do stop the sandbox and delete it. Those serial operations will be done exclusively by
 // locking the sandbox.
-func (impl *VCImpl) CleanupContainer(ctx context.Context, sandboxID, containerID string, force bool) error {
-	return CleanupContainer(ctx, sandboxID, containerID, force)
+func (impl *VCImpl) CleanupContainer(ctx context.Context, sandbox VCSandbox, containerID string, force bool) error {
+	return CleanupContainer(ctx, sandbox, containerID, force)
 }
