@@ -14,6 +14,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"syscall"
@@ -755,6 +756,12 @@ func (clh *cloudHypervisor) trace(name string) (opentracing.Span, context.Contex
 }
 
 func (clh *cloudHypervisor) terminate() (err error) {
+	defer func() {
+		if x := recover(); x != nil {
+			clh.Logger().WithField("stack", debug.Stack()).Errorf("recover: %+v", x)
+		}
+	}()
+
 	span, _ := clh.trace("terminate")
 	defer span.Finish()
 
@@ -783,19 +790,23 @@ func (clh *cloudHypervisor) terminate() (err error) {
 	tInit := time.Now()
 	clh.Logger().WithField("pidRunning", pidRunning).Info("before check pidRunning")
 	for {
+		clh.Logger().WithField("pidRunning", pidRunning).Info("11111111111")
 		if err = syscall.Kill(pid, syscall.Signal(0)); err != nil {
 			pidRunning = false
 			break
 		}
+		clh.Logger().WithField("pidRunning", pidRunning).Info("2222222222222")
 
 		if time.Since(tInit).Seconds() >= clhStopSandboxTimeout {
 			pidRunning = true
 			clh.Logger().Warnf("VM still running after waiting %ds", clhStopSandboxTimeout)
 			break
 		}
+		clh.Logger().WithField("pidRunning", pidRunning).Info("3333333333")
 
 		// Let's avoid to run a too busy loop
 		time.Sleep(time.Duration(50) * time.Millisecond)
+		clh.Logger().WithField("pidRunning", pidRunning).Info("4444444444")
 	}
 	clh.Logger().WithField("pidRunning", pidRunning).Info("after check pidRunning")
 
@@ -807,6 +818,7 @@ func (clh *cloudHypervisor) terminate() (err error) {
 			return fmt.Errorf("Fatal, failed to kill hypervisor process, error: %s", err)
 		}
 	}
+	clh.Logger().WithField("pidRunning", pidRunning).Info("555555555")
 
 	if clh.virtiofsd == nil {
 		clh.Logger().Error("virtiofsd config is nil, failed to stop it")
@@ -1230,6 +1242,7 @@ func (clh *cloudHypervisor) addVolume(volume types.Volume) error {
 
 // cleanupVM will remove generated files and directories related with the virtual machine
 func (clh *cloudHypervisor) cleanupVM(force bool) error {
+	clh.Logger().Info("cleanupVM()")
 
 	if clh.id == "" {
 		return errors.New("Hypervisor ID is empty")

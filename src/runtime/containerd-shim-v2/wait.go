@@ -9,6 +9,7 @@ import (
 	"context"
 	"os"
 	"path"
+	"runtime/debug"
 	"time"
 
 	"github.com/containerd/containerd/api/events"
@@ -25,6 +26,12 @@ const defaultCheckInterval = 1 * time.Second
 func wait(s *service, c *container, execID string) (int32, error) {
 	var execs *exec
 	var err error
+
+	defer func() {
+		if x := recover(); x != nil {
+			shimLog.WithField("stack", debug.Stack()).Errorf("newWatcher recover: %+v", x)
+		}
+	}()
 
 	processID := c.id
 
@@ -65,10 +72,13 @@ func wait(s *service, c *container, execID string) (int32, error) {
 			if s.monitor != nil {
 				s.monitor <- nil
 			}
+
+			logrus.WithField("sandbox", s.sandbox.ID()).Error("before s.sandbox.Stop(true)")
 			if err = s.sandbox.Stop(true); err != nil {
 				shimLog.WithField("sandbox", s.sandbox.ID()).Error("failed to stop sandbox")
 			}
 
+			logrus.WithField("sandbox", s.sandbox.ID()).Error("before s.sandbox.Delete(true)")
 			if err = s.sandbox.Delete(); err != nil {
 				shimLog.WithField("sandbox", s.sandbox.ID()).Error("failed to delete sandbox")
 			}
@@ -98,14 +108,23 @@ func wait(s *service, c *container, execID string) (int32, error) {
 }
 
 func watchSandbox(s *service) {
+	defer func() {
+		if x := recover(); x != nil {
+			shimLog.WithField("stack", debug.Stack()).Errorf("watchSandbox recover: %+v", x)
+		}
+	}()
+
 	if s.monitor == nil {
 		return
 	}
+	shimLog.WithField("id", s.id).Warn("watchSandbox started")
 	err := <-s.monitor
 	if err == nil {
+		shimLog.WithField("id", s.id).Warn("watchSandbox get nil err, return")
 		return
 	}
 	s.monitor = nil
+	shimLog.WithField("id", s.id).WithError(err).Warn("watchSandbox get err")
 
 	s.mu.Lock()
 	defer s.mu.Unlock()

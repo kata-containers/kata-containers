@@ -22,6 +22,7 @@ import (
 )
 
 func cReap(s *service, status int, id, execid string, exitat time.Time) {
+	shimLog.WithField("status", status).WithField(id, id).Info("cReap")
 	s.ec <- exit{
 		timestamp: exitat,
 		pid:       s.pid,

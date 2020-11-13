@@ -6,6 +6,7 @@
 package virtcontainers
 
 import (
+	"runtime/debug"
 	"sync"
 	"time"
 
@@ -49,6 +50,12 @@ func (m *monitor) newWatcher() (chan error, error) {
 
 		// create and start agent watcher
 		go func() {
+			defer func() {
+				if x := recover(); x != nil {
+					virtLog.WithField("stack", debug.Stack()).Errorf("monitor.go#newWatcher recover: %+v", x)
+				}
+			}()
+
 			tick := time.NewTicker(m.checkInterval)
 			for {
 				select {
@@ -69,6 +76,7 @@ func (m *monitor) newWatcher() (chan error, error) {
 
 func (m *monitor) notify(err error) {
 	m.sandbox.agent.markDead()
+	virtLog.WithError(err).Error("monitor notify")
 
 	m.Lock()
 	defer m.Unlock()
