@@ -234,4 +234,4 @@ experimental=@DEFAULTEXPFEATURES@
 
 # If enabled, user can run pprof tools with shim v2 process through kata-monitor.
 # (default: false)
-# EnablePprof = true
+# enable_pprof = true
