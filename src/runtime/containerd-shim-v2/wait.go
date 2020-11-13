@@ -78,7 +78,7 @@ func wait(s *service, c *container, execID string) (int32, error) {
 				shimLog.WithField("sandbox", s.sandbox.ID()).Error("failed to stop sandbox")
 			}
 
-			logrus.WithField("sandbox", s.sandbox.ID()).Error("before s.sandbox.Delete(true)")
+			logrus.WithField("sandbox", s.sandbox.ID()).Error("before s.sandbox.Delete()")
 			if err = s.sandbox.Delete(); err != nil {
 				shimLog.WithField("sandbox", s.sandbox.ID()).Error("failed to delete sandbox")
 			}
@@ -158,6 +158,11 @@ func watchOOMEvents(ctx context.Context, s *service) {
 	if s.sandbox == nil {
 		return
 	}
+	defer func() {
+		if x := recover(); x != nil {
+			shimLog.WithField("stack", debug.Stack()).Errorf("watchOOMEvents recover: %+v", x)
+		}
+	}()
 
 	for {
 		select {
