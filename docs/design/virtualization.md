@@ -122,8 +122,6 @@ Devices used:
 
 | Solution | release introduced | brief summary |
 |-|-|-|
-| QEMU | 1.0 | upstream QEMU, with support for hotplug and filesystem sharing |
-| NEMU | 1.4 | Deprecated, removed as of 1.10 release. Slimmed down fork of QEMU, with experimental support of virtio-fs |
-| Firecracker | 1.5 | upstream Firecracker, rust-VMM based, no VFIO, no FS sharing, no memory/CPU hotplug |
-| QEMU-virtio-fs | 1.7 | upstream QEMU with support for virtio-fs. Will be removed once virtio-fs lands in upstream QEMU |
 | Cloud Hypervisor | 1.10 |  rust-VMM based, includes VFIO and FS sharing through virtio-fs, no hotplug |
+| Firecracker | 1.5 | upstream Firecracker, rust-VMM based, no VFIO, no FS sharing, no memory/CPU hotplug |
+| QEMU | 1.0 | upstream QEMU, with support for hotplug and filesystem sharing |
