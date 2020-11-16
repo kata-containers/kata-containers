@@ -19,6 +19,8 @@ For details of the other Kata Containers repositories, see the
 * [Quick start for developers](#quick-start-for-developers)
 * [Architecture overview](#architecture-overview)
 * [Configuration](#configuration)
+    * [Hypervisor specific configuration](#hypervisor-specific-configuration)
+    * [Stateless systems](#stateless-systems)
 * [Logging](#logging)
     * [Kata OCI](#kata-oci)
     * [Kata containerd shimv2](#kata-containerd-shimv2)
@@ -105,6 +107,15 @@ The file contains comments explaining all options.
 > The initial values in the configuration file provide a good default configuration.
 > You may need to modify this file to optimise or tailor your system, or if you have
 > specific requirements.
+
+### Hypervisor specific configuration
+
+Kata Containers supports multiple hypervisors so your `configuration.toml`
+configuration file may be a symbolic link to a hypervisor-specific
+configuration file. See
+[the hypervisors document](../../docs/hypervisors.md) for further details.
+
+### Stateless systems
 
 Since the runtime supports a
 [stateless system](https://clearlinux.org/about),

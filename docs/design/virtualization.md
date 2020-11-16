@@ -41,14 +41,9 @@ Each hypervisor or VMM varies on how or if it handles each of these.
 
 ## Kata Containers Hypervisor and VMM support
 
-Kata Containers is designed to support multiple virtual machine monitors (VMMs) and hypervisors.
-Kata Containers supports:
- - [ACRN hypervisor](https://projectacrn.org/)
- - [Cloud Hypervisor](https://github.com/cloud-hypervisor/cloud-hypervisor)/[KVM](https://www.linux-kvm.org/page/Main_Page)
- - [Firecracker](https://github.com/firecracker-microvm/firecracker)/KVM
- - [QEMU](http://www.qemu-project.org/)/KVM
+Kata Containers [supports multiple hypervisors](../hypervisors.md).
 
-Which configuration to use will depend on the end user's requirements. Details of each solution and a summary are provided below.
+Details of each solution and a summary are provided below.
 
 ### QEMU/KVM
 
