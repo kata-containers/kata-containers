@@ -7,7 +7,6 @@ package virtcontainers
 
 import (
 	"context"
-	"fmt"
 	"runtime"
 
 	deviceApi "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/api"
@@ -136,24 +135,28 @@ func createSandboxFromConfig(ctx context.Context, sandboxConfig SandboxConfig, f
 // CleanupContainer is used by shimv2 to stop and delete a container exclusively, once there is no container
 // in the sandbox left, do stop the sandbox and delete it. Those serial operations will be done exclusively by
 // locking the sandbox.
-func CleanupContainer(ctx context.Context, sandbox VCSandbox, containerID string, force bool) error {
+func CleanupContainer(ctx context.Context, sandboxID, containerID string, force bool) error {
 	span, ctx := trace(ctx, "CleanupContainer")
 	defer span.Finish()
+
+	if sandboxID == "" {
+		return vcTypes.ErrNeedSandboxID
+	}
+
 	if containerID == "" {
 		return vcTypes.ErrNeedContainerID
 	}
 
-	s, ok := sandbox.(*Sandbox)
-	if !ok {
-		return fmt.Errorf("not a Sandbox reference")
-	}
-
-	unlock, err := rwLockSandbox(s.id)
+	unlock, err := rwLockSandbox(sandboxID)
 	if err != nil {
 		return err
 	}
 	defer unlock()
 
+	s, err := fetchSandbox(ctx, sandboxID)
+	if err != nil {
+		return err
+	}
 	defer s.Release()
 
 	_, err = s.StopContainer(containerID, force)

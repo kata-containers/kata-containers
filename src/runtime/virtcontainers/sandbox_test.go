@@ -24,7 +24,9 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/manager"
 	exp "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/experimental"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist/fs"
+
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/annotations"
+	vcAnnotations "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/annotations"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/stretchr/testify/assert"
@@ -249,11 +251,54 @@ func testCheckContainerOnDiskState(c *Container, containerState types.ContainerS
 	return nil
 }
 
+// writeContainerConfig write config.json to bundle path
+// and return bundle path.
+// NOTE: don't forget to delete the bundle path
+func writeContainerConfig() (string, error) {
+
+	basicSpec := `
+{
+	"ociVersion": "1.0.0-rc2-dev",
+	"process": {
+		"capabilities": [
+		]
+	}
+}`
+
+	configDir, err := ioutil.TempDir("", "vc-tmp-")
+	if err != nil {
+		return "", err
+	}
+
+	err = os.MkdirAll(configDir, DirMode)
+	if err != nil {
+		return "", err
+	}
+
+	configFilePath := filepath.Join(configDir, "config.json")
+	err = ioutil.WriteFile(configFilePath, []byte(basicSpec), 0644)
+	if err != nil {
+		return "", err
+	}
+
+	return configDir, nil
+}
+
 func TestSandboxSetSandboxAndContainerState(t *testing.T) {
 	contID := "505"
 	contConfig := newTestContainerConfigNoop(contID)
-	hConfig := newHypervisorConfig(nil, nil)
 	assert := assert.New(t)
+
+	configDir, err := writeContainerConfig()
+	if err != nil {
+		os.RemoveAll(configDir)
+	}
+	assert.NoError(err)
+
+	// set bundle path annotation, fetchSandbox need this annotation to get containers
+	contConfig.Annotations[vcAnnotations.BundlePathKey] = configDir
+
+	hConfig := newHypervisorConfig(nil, nil)
 
 	// create a sandbox
 	p, err := testCreateSandbox(t, testSandboxID, MockHypervisor, hConfig, NetworkConfig{}, []ContainerConfig{contConfig}, nil)
@@ -301,11 +346,14 @@ func TestSandboxSetSandboxAndContainerState(t *testing.T) {
 	}
 
 	// force state to be read from disk
-	if err := testCheckSandboxOnDiskState(p, newSandboxState); err != nil {
+	p2, err := fetchSandbox(context.Background(), p.ID())
+	assert.NoError(err)
+
+	if err := testCheckSandboxOnDiskState(p2, newSandboxState); err != nil {
 		t.Error(err)
 	}
 
-	c2, err := p.findContainer(contID)
+	c2, err := p2.findContainer(contID)
 	assert.NoError(err)
 
 	if err := testCheckContainerOnDiskState(c2, newContainerState); err != nil {

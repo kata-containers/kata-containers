@@ -9,6 +9,8 @@ import (
 	"errors"
 
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/api"
+	exp "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/experimental"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist"
 	persistapi "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist/api"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 )
@@ -425,4 +427,118 @@ func (c *Container) Restore() error {
 	c.loadContProcess(cs)
 	c.loadContMounts(cs)
 	return nil
+}
+
+func loadSandboxConfig(id string) (*SandboxConfig, error) {
+	store, err := persist.GetDriver()
+	if err != nil || store == nil {
+		return nil, errors.New("failed to get fs persist driver")
+	}
+
+	ss, _, err := store.FromDisk(id)
+	if err != nil {
+		return nil, err
+	}
+
+	savedConf := ss.Config
+	sconfig := &SandboxConfig{
+		ID:             id,
+		HypervisorType: HypervisorType(savedConf.HypervisorType),
+		NetworkConfig: NetworkConfig{
+			NetNSPath:         savedConf.NetworkConfig.NetNSPath,
+			NetNsCreated:      savedConf.NetworkConfig.NetNsCreated,
+			DisableNewNetNs:   savedConf.NetworkConfig.DisableNewNetNs,
+			InterworkingModel: NetInterworkingModel(savedConf.NetworkConfig.InterworkingModel),
+		},
+
+		ShmSize:             savedConf.ShmSize,
+		SharePidNs:          savedConf.SharePidNs,
+		SystemdCgroup:       savedConf.SystemdCgroup,
+		SandboxCgroupOnly:   savedConf.SandboxCgroupOnly,
+		DisableGuestSeccomp: savedConf.DisableGuestSeccomp,
+		Cgroups:             savedConf.Cgroups,
+	}
+
+	for _, name := range savedConf.Experimental {
+		sconfig.Experimental = append(sconfig.Experimental, *exp.Get(name))
+	}
+
+	hconf := savedConf.HypervisorConfig
+	sconfig.HypervisorConfig = HypervisorConfig{
+		NumVCPUs:                hconf.NumVCPUs,
+		DefaultMaxVCPUs:         hconf.DefaultMaxVCPUs,
+		MemorySize:              hconf.MemorySize,
+		DefaultBridges:          hconf.DefaultBridges,
+		Msize9p:                 hconf.Msize9p,
+		MemSlots:                hconf.MemSlots,
+		MemOffset:               hconf.MemOffset,
+		VirtioMem:               hconf.VirtioMem,
+		VirtioFSCacheSize:       hconf.VirtioFSCacheSize,
+		KernelPath:              hconf.KernelPath,
+		ImagePath:               hconf.ImagePath,
+		InitrdPath:              hconf.InitrdPath,
+		FirmwarePath:            hconf.FirmwarePath,
+		MachineAccelerators:     hconf.MachineAccelerators,
+		CPUFeatures:             hconf.CPUFeatures,
+		HypervisorPath:          hconf.HypervisorPath,
+		HypervisorPathList:      hconf.HypervisorPathList,
+		HypervisorCtlPath:       hconf.HypervisorCtlPath,
+		HypervisorCtlPathList:   hconf.HypervisorCtlPathList,
+		JailerPath:              hconf.JailerPath,
+		JailerPathList:          hconf.JailerPathList,
+		BlockDeviceDriver:       hconf.BlockDeviceDriver,
+		HypervisorMachineType:   hconf.HypervisorMachineType,
+		MemoryPath:              hconf.MemoryPath,
+		DevicesStatePath:        hconf.DevicesStatePath,
+		EntropySource:           hconf.EntropySource,
+		SharedFS:                hconf.SharedFS,
+		VirtioFSDaemon:          hconf.VirtioFSDaemon,
+		VirtioFSDaemonList:      hconf.VirtioFSDaemonList,
+		VirtioFSCache:           hconf.VirtioFSCache,
+		VirtioFSExtraArgs:       hconf.VirtioFSExtraArgs[:],
+		BlockDeviceCacheSet:     hconf.BlockDeviceCacheSet,
+		BlockDeviceCacheDirect:  hconf.BlockDeviceCacheDirect,
+		BlockDeviceCacheNoflush: hconf.BlockDeviceCacheNoflush,
+		DisableBlockDeviceUse:   hconf.DisableBlockDeviceUse,
+		EnableIOThreads:         hconf.EnableIOThreads,
+		Debug:                   hconf.Debug,
+		MemPrealloc:             hconf.MemPrealloc,
+		HugePages:               hconf.HugePages,
+		FileBackedMemRootDir:    hconf.FileBackedMemRootDir,
+		FileBackedMemRootList:   hconf.FileBackedMemRootList,
+		Realtime:                hconf.Realtime,
+		Mlock:                   hconf.Mlock,
+		DisableNestingChecks:    hconf.DisableNestingChecks,
+		DisableImageNvdimm:      hconf.DisableImageNvdimm,
+		HotplugVFIOOnRootBus:    hconf.HotplugVFIOOnRootBus,
+		PCIeRootPort:            hconf.PCIeRootPort,
+		BootToBeTemplate:        hconf.BootToBeTemplate,
+		BootFromTemplate:        hconf.BootFromTemplate,
+		DisableVhostNet:         hconf.DisableVhostNet,
+		EnableVhostUserStore:    hconf.EnableVhostUserStore,
+		VhostUserStorePath:      hconf.VhostUserStorePath,
+		VhostUserStorePathList:  hconf.VhostUserStorePathList,
+		GuestHookPath:           hconf.GuestHookPath,
+		VMid:                    hconf.VMid,
+		RxRateLimiterMaxRate:    hconf.RxRateLimiterMaxRate,
+		TxRateLimiterMaxRate:    hconf.TxRateLimiterMaxRate,
+		SGXEPCSize:              hconf.SGXEPCSize,
+		EnableAnnotations:       hconf.EnableAnnotations,
+	}
+
+	sconfig.AgentConfig = KataAgentConfig{
+		LongLiveConn: savedConf.KataAgentConfig.LongLiveConn,
+	}
+
+	for _, contConf := range savedConf.ContainerConfigs {
+		sconfig.Containers = append(sconfig.Containers, ContainerConfig{
+			ID:          contConf.ID,
+			Annotations: contConf.Annotations,
+			Resources:   contConf.Resources,
+			RootFs: RootFs{
+				Target: contConf.RootFs,
+			},
+		})
+	}
+	return sconfig, nil
 }
