@@ -310,4 +310,8 @@ parts:
 
 apps:
   runtime:
+    command: usr/bin/kata-runtime
+  shim:
     command: usr/bin/containerd-shim-kata-v2
+  collect-data:
+    command: usr/bin/kata-collect-data.sh
