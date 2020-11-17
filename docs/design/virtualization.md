@@ -41,14 +41,9 @@ Each hypervisor or VMM varies on how or if it handles each of these.
 
 ## Kata Containers Hypervisor and VMM support
 
-Kata Containers is designed to support multiple virtual machine monitors (VMMs) and hypervisors.
-Kata Containers supports:
- - [ACRN hypervisor](https://projectacrn.org/)
- - [Cloud Hypervisor](https://github.com/cloud-hypervisor/cloud-hypervisor)/[KVM](https://www.linux-kvm.org/page/Main_Page)
- - [Firecracker](https://github.com/firecracker-microvm/firecracker)/KVM
- - [QEMU](http://www.qemu-project.org/)/KVM
+Kata Containers [supports multiple hypervisors](../hypervisors.md).
 
-Which configuration to use will depend on the end user's requirements. Details of each solution and a summary are provided below.
+Details of each solution and a summary are provided below.
 
 ### QEMU/KVM
 
@@ -122,8 +117,6 @@ Devices used:
 
 | Solution | release introduced | brief summary |
 |-|-|-|
-| QEMU | 1.0 | upstream QEMU, with support for hotplug and filesystem sharing |
-| NEMU | 1.4 | Deprecated, removed as of 1.10 release. Slimmed down fork of QEMU, with experimental support of virtio-fs |
-| Firecracker | 1.5 | upstream Firecracker, rust-VMM based, no VFIO, no FS sharing, no memory/CPU hotplug |
-| QEMU-virtio-fs | 1.7 | upstream QEMU with support for virtio-fs. Will be removed once virtio-fs lands in upstream QEMU |
 | Cloud Hypervisor | 1.10 |  rust-VMM based, includes VFIO and FS sharing through virtio-fs, no hotplug |
+| Firecracker | 1.5 | upstream Firecracker, rust-VMM based, no VFIO, no FS sharing, no memory/CPU hotplug |
+| QEMU | 1.0 | upstream QEMU, with support for hotplug and filesystem sharing |
