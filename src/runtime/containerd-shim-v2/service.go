@@ -312,17 +312,17 @@ func (s *service) Cleanup(ctx context.Context) (_ *taskAPI.DeleteResponse, err e
 
 	switch containerType {
 	case vc.PodSandbox:
-		err = cleanupContainer(ctx, s.sandbox, s.id, path)
+		err = cleanupContainer(ctx, s.id, s.id, path)
 		if err != nil {
 			return nil, err
 		}
 	case vc.PodContainer:
-		_, err := oci.SandboxID(ociSpec)
+		sandboxID, err := oci.SandboxID(ociSpec)
 		if err != nil {
 			return nil, err
 		}
 
-		err = cleanupContainer(ctx, s.sandbox, s.id, path)
+		err = cleanupContainer(ctx, sandboxID, s.id, path)
 		if err != nil {
 			return nil, err
 		}
