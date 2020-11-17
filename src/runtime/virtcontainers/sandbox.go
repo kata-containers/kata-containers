@@ -701,9 +701,9 @@ func (s *Sandbox) Delete() error {
 		}
 	}
 
-	if s.monitor != nil {
-		s.monitor.stop()
-	}
+	// if s.monitor != nil {
+	// 	s.monitor.stop()
+	// }
 
 	if err := s.hypervisor.cleanup(); err != nil {
 		s.Logger().WithError(err).Error("failed to cleanup hypervisor")
@@ -1542,9 +1542,9 @@ func (s *Sandbox) Stop(force bool) error {
 	}
 
 	// FIXME debug
-	// if s.monitor != nil {
-	// 	s.monitor.stop()
-	// }
+	if s.monitor != nil {
+		s.monitor.stop()
+	}
 
 	if err := s.stopVM(); err != nil && !force {
 		return err
