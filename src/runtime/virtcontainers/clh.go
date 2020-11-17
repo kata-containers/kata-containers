@@ -1253,7 +1253,7 @@ func (clh *cloudHypervisor) cleanupVM(force bool) error {
 	path, err := clh.vsockSocketPath(clh.id)
 	if err == nil {
 		if err := os.Remove(path); err != nil {
-			clh.Logger().WithError(err).WithField("path", path).Warn("removing vm socket failed")
+			clh.Logger().WithField("path", path).Warn("removing vm socket failed")
 		}
 	}
 

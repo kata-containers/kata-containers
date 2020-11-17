@@ -14,7 +14,6 @@ import (
 	"math"
 	"net"
 	"os"
-	"runtime/debug"
 	"strings"
 	"sync"
 	"syscall"
@@ -675,13 +674,6 @@ func (s *Sandbox) removeContainer(containerID string) error {
 // Delete deletes an already created sandbox.
 // The VM in which the sandbox is running will be shut down.
 func (s *Sandbox) Delete() error {
-	s.Logger().Error("sandbox.Delete()")
-	defer func() {
-		if x := recover(); x != nil {
-			s.Logger().WithField("stack", debug.Stack()).Errorf("Delete recover: %+v", x)
-		}
-	}()
-
 	if s.state.State != types.StateReady &&
 		s.state.State != types.StatePaused &&
 		s.state.State != types.StateStopped {
@@ -690,7 +682,6 @@ func (s *Sandbox) Delete() error {
 
 	for _, c := range s.containers {
 		if err := c.delete(); err != nil {
-			s.Logger().WithError(err).Error("sandbox.Delete()")
 			return err
 		}
 	}
@@ -701,9 +692,9 @@ func (s *Sandbox) Delete() error {
 		}
 	}
 
-	// if s.monitor != nil {
-	// 	s.monitor.stop()
-	// }
+	if s.monitor != nil {
+		s.monitor.stop()
+	}
 
 	if err := s.hypervisor.cleanup(); err != nil {
 		s.Logger().WithError(err).Error("failed to cleanup hypervisor")
@@ -1539,11 +1530,6 @@ func (s *Sandbox) Stop(force bool) error {
 		if err := c.stop(force); err != nil {
 			return err
 		}
-	}
-
-	// FIXME debug
-	if s.monitor != nil {
-		s.monitor.stop()
 	}
 
 	if err := s.stopVM(); err != nil && !force {

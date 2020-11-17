@@ -294,7 +294,6 @@ func (s *service) Cleanup(ctx context.Context) (_ *taskAPI.DeleteResponse, err e
 	if s.id == "" {
 		return nil, errdefs.ToGRPCf(errdefs.ErrInvalidArgument, "the container id is empty, please specify the container id")
 	}
-	shimLog.WithField("sid", s.id).Error("Enter Cleanup")
 
 	path, err := os.Getwd()
 	if err != nil {
@@ -307,7 +306,6 @@ func (s *service) Cleanup(ctx context.Context) (_ *taskAPI.DeleteResponse, err e
 	}
 
 	containerType, err := oci.ContainerType(ociSpec)
-	shimLog.WithError(err).Errorf("containerType %s", containerType)
 	if err != nil {
 		return nil, err
 	}
@@ -819,18 +817,15 @@ func (s *service) Shutdown(ctx context.Context, r *taskAPI.ShutdownRequest) (_ *
 		err = toGRPC(err)
 		rpcDurationsHistogram.WithLabelValues("shutdown").Observe(float64(time.Since(start).Nanoseconds() / int64(time.Millisecond)))
 	}()
-	shimLog.WithField("sandbox", s.sandbox.ID()).Error("enter Shutdown")
 
 	s.mu.Lock()
 	if len(s.containers) != 0 {
 		s.mu.Unlock()
-		shimLog.WithField("sandbox", s.sandbox.ID()).Error("Shutdown not empty")
 		return empty, nil
 	}
 	s.mu.Unlock()
-	shimLog.WithField("sandbox", s.sandbox.ID()).Error("Shutdown cancel")
+
 	s.cancel()
-	shimLog.WithField("sandbox", s.sandbox.ID()).Error("Shutdown exit")
 
 	os.Exit(0)
 
