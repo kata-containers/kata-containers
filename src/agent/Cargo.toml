@@ -46,3 +46,6 @@ members = [
     "protocols",
     "rustjail",
 ]
+
+[profile.release]
+lto = true
