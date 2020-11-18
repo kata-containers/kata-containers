@@ -48,13 +48,16 @@ impl Uevent {
 
     // Check whether this is a block device hot-add event.
     fn is_block_add_event(&self) -> bool {
+        let pci_root_bus_path = create_pci_root_bus_path();
         self.action == U_EVENT_ACTION_ADD
             && self.subsystem == "block"
-            && self.devpath.starts_with(PCI_ROOT_BUS_PATH)
+            && self.devpath.starts_with(&pci_root_bus_path)
             && self.devname != ""
     }
 
     fn handle_block_add_event(&self, sandbox: &Arc<Mutex<Sandbox>>) {
+        let pci_root_bus_path = create_pci_root_bus_path();
+
         // Keep the same lock order as device::get_device_name(), otherwise it may cause deadlock.
         let mut w = GLOBAL_DEVICE_WATCHER.lock().unwrap();
         let mut sb = sandbox.lock().unwrap();
@@ -69,7 +72,7 @@ impl Uevent {
         let empties: Vec<_> = w
             .iter()
             .filter(|(dev_addr, _)| {
-                let pci_p = format!("{}/{}", PCI_ROOT_BUS_PATH, *dev_addr);
+                let pci_p = format!("{}/{}", pci_root_bus_path, *dev_addr);
 
                 // blk block device
                 devpath.starts_with(pci_p.as_str()) ||
