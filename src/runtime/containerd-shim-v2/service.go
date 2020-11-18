@@ -10,6 +10,7 @@ import (
 	"io/ioutil"
 	"os"
 	sysexec "os/exec"
+	"runtime/debug"
 	"sync"
 	"syscall"
 	"time"
@@ -286,6 +287,11 @@ func (s *service) Cleanup(ctx context.Context) (_ *taskAPI.DeleteResponse, err e
 	//the returned response, thus here redirect the log to stderr in case there's
 	//any log output to stdout.
 	logrus.SetOutput(os.Stderr)
+	defer func() {
+		if x := recover(); x != nil {
+			shimLog.WithField("stack", debug.Stack()).Errorf("recover: %+v", x)
+		}
+	}()
 
 	defer func() {
 		err = toGRPC(err)

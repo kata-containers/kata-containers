@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime/debug"
 	"time"
 
 	"github.com/containerd/containerd/mount"
@@ -34,6 +35,11 @@ func cReap(s *service, status int, id, execid string, exitat time.Time) {
 
 func cleanupContainer(ctx context.Context, sandboxID, cid, bundlePath string) error {
 	shimLog.WithField("service", "cleanup").WithField("container", cid).Info("Cleanup container")
+	defer func() {
+		if x := recover(); x != nil {
+			shimLog.WithField("stack", debug.Stack()).Errorf("recover: %+v", x)
+		}
+	}()
 
 	err := vci.CleanupContainer(ctx, sandboxID, cid, true)
 	if err != nil {

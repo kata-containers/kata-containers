@@ -8,6 +8,7 @@ package virtcontainers
 import (
 	"context"
 	"runtime"
+	"runtime/debug"
 
 	deviceApi "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/api"
 	deviceConfig "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
@@ -138,6 +139,11 @@ func createSandboxFromConfig(ctx context.Context, sandboxConfig SandboxConfig, f
 func CleanupContainer(ctx context.Context, sandboxID, containerID string, force bool) error {
 	span, ctx := trace(ctx, "CleanupContainer")
 	defer span.Finish()
+	defer func() {
+		if x := recover(); x != nil {
+			virtLog.WithField("stack", debug.Stack()).Errorf("recover: %+v", x)
+		}
+	}()
 
 	if sandboxID == "" {
 		return vcTypes.ErrNeedSandboxID
