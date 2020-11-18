@@ -5,8 +5,10 @@
 
 /// Linux ABI related constants.
 
-pub const SYSFS_DIR: &str = "/sys";
+#[cfg(target_arch = "aarch64")]
+use std::fs;
 
+pub const SYSFS_DIR: &str = "/sys";
 pub const SYSFS_PCI_BUS_PREFIX: &str = "/sys/bus/pci/devices";
 pub const SYSFS_PCI_BUS_RESCAN_FILE: &str = "/sys/bus/pci/rescan";
 #[cfg(any(
@@ -15,9 +17,46 @@ pub const SYSFS_PCI_BUS_RESCAN_FILE: &str = "/sys/bus/pci/rescan";
     target_arch = "x86_64",
     target_arch = "x86"
 ))]
-pub const PCI_ROOT_BUS_PATH: &str = "/devices/pci0000:00";
+pub fn create_pci_root_bus_path() -> String {
+    String::from("/devices/pci0000:00")
+}
+
 #[cfg(target_arch = "aarch64")]
-pub const PCI_ROOT_BUS_PATH: &str = "/devices/platform/4010000000.pcie/pci0000:00";
+pub fn create_pci_root_bus_path() -> String {
+    let ret = String::from("/devices/platform/4010000000.pcie/pci0000:00");
+
+    let mut sysfs_dir = String::from(SYSFS_DIR);
+    let mut start_root_bus_path = String::from("/devices/platform/");
+    let end_root_bus_path = String::from("/pci0000:00");
+
+    sysfs_dir.push_str(&start_root_bus_path);
+    let entries = match fs::read_dir(sysfs_dir) {
+        Ok(e) => e,
+        Err(_) => return ret,
+    };
+    for entry in entries {
+        let pathname = match entry {
+            Ok(p) => p.path(),
+            Err(_) => return ret,
+        };
+        let dir_name = match pathname.file_name() {
+            Some(p) => p.to_str(),
+            None => return ret,
+        };
+        let dir_name = match dir_name {
+            Some(p) => p,
+            None => return ret,
+        };
+        let dir_name = String::from(dir_name);
+        if dir_name.ends_with(".pcie") {
+            start_root_bus_path.push_str(&dir_name);
+            start_root_bus_path.push_str(&end_root_bus_path);
+            return start_root_bus_path;
+        }
+    }
+
+    ret
+}
 
 pub const SYSFS_CPU_ONLINE_PATH: &str = "/sys/devices/system/cpu";
 
