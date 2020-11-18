@@ -215,8 +215,6 @@ func (s *service) StartShim(ctx context.Context, id, containerdBinary, container
 		}
 	}()
 
-	// make sure to wait after start
-	go cmd.Wait()
 	if err = cdshim.WritePidFile("shim.pid", cmd.Process.Pid); err != nil {
 		return "", err
 	}
