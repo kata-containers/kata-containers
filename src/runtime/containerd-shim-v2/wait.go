@@ -173,8 +173,7 @@ func watchOOMEvents(ctx context.Context, s *service) {
 				if isGRPCErrorCode(codes.NotFound, err) || err.Error() == "Dead agent" {
 					return
 				}
-				// FIXME FOR debug
-				// time.Sleep(defaultCheckInterval)
+				time.Sleep(defaultCheckInterval)
 				continue
 			}
 
