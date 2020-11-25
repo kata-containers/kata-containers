@@ -41,7 +41,7 @@ use nix::pty;
 use nix::sched::{self, CloneFlags};
 use nix::sys::signal::{self, Signal};
 use nix::sys::stat::{self, Mode};
-use nix::unistd::{self, ForkResult, Gid, Pid, Uid};
+use nix::unistd::{self, fork, ForkResult, Gid, Pid, Uid};
 use std::os::unix::fs::MetadataExt;
 use std::os::unix::io::AsRawFd;
 
@@ -67,6 +67,7 @@ const CWFD_FD: &str = "CWFD_FD";
 const CLOG_FD: &str = "CLOG_FD";
 const FIFO_FD: &str = "FIFO_FD";
 const HOME_ENV_KEY: &str = "HOME";
+const PIDNS_FD: &str = "PIDNS_FD";
 
 #[derive(PartialEq, Clone, Copy)]
 pub enum Status {
@@ -322,10 +323,13 @@ pub fn init_child() {
     let cwfd = std::env::var(CWFD_FD).unwrap().parse::<i32>().unwrap();
     let cfd_log = std::env::var(CLOG_FD).unwrap().parse::<i32>().unwrap();
 
-    let _ = do_init_child(cwfd).map_err(|e| {
-        log_child!(cfd_log, "child exit: {:?}", e);
-        let _ = write_sync(cwfd, SYNC_FAILED, format!("{:?}", e).as_str());
-    });
+    match do_init_child(cwfd) {
+        Ok(_) => log_child!(cfd_log, "temporary parent process exit successfully"),
+        Err(e) => {
+            log_child!(cfd_log, "temporary parent process exit:child exit: {:?}", e);
+            let _ = write_sync(cwfd, SYNC_FAILED, format!("{:?}", e).as_str());
+        }
+    }
 }
 
 fn do_init_child(cwfd: RawFd) -> Result<()> {
@@ -339,6 +343,38 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
     let no_pivot = std::env::var(NO_PIVOT)?.eq(format!("{}", true).as_str());
     let crfd = std::env::var(CRFD_FD)?.parse::<i32>().unwrap();
     let cfd_log = std::env::var(CLOG_FD)?.parse::<i32>().unwrap();
+
+    // get the pidns fd from parent, if parent had passed the pidns fd,
+    // then get it and join in this pidns; otherwise, create a new pidns
+    // by unshare from the parent pidns.
+    match std::env::var(PIDNS_FD) {
+        Ok(fd) => {
+            let pidns_fd = fd.parse::<i32>().context("get parent pidns fd")?;
+            sched::setns(pidns_fd, CloneFlags::CLONE_NEWPID).context("failed to join pidns")?;
+            let _ = unistd::close(pidns_fd);
+        }
+        Err(_e) => sched::unshare(CloneFlags::CLONE_NEWPID)?,
+    }
+
+    match fork() {
+        Ok(ForkResult::Parent { child, .. }) => {
+            log_child!(
+                cfd_log,
+                "Continuing execution in temporary process, new child has pid: {:?}",
+                child
+            );
+            let _ = write_sync(cwfd, SYNC_DATA, format!("{}", pid_t::from(child)).as_str());
+            // parent return
+            return Ok(());
+        }
+        Ok(ForkResult::Child) => (),
+        Err(e) => {
+            return Err(anyhow!(format!(
+                "failed to fork temporary process: {:?}",
+                e
+            )));
+        }
+    }
 
     log_child!(cfd_log, "child process start run");
     let buf = read_sync(crfd)?;
@@ -858,32 +894,11 @@ impl BaseContainer for LinuxContainer {
             child_stderr = unsafe { std::process::Stdio::from_raw_fd(stderr) };
         }
 
-        let old_pid_ns =
-            fcntl::open(PID_NS_PATH, OFlag::O_CLOEXEC, Mode::empty()).map_err(|e| {
-                error!(
-                    logger,
-                    "cannot open pid ns path: {} with error: {:?}", PID_NS_PATH, e
-                );
-                e
-            })?;
-
-        //restore the parent's process's pid namespace.
-        defer!({
-            let _ = sched::setns(old_pid_ns, CloneFlags::CLONE_NEWPID)
-                .map_err(|e| warn!(logger, "settns CLONE_NEWPID {:?}", e));
-            let _ = unistd::close(old_pid_ns)
-                .map_err(|e| warn!(logger, "close old pid namespace {:?}", e));
-        });
-
         let pidns = get_pid_namespace(&self.logger, linux)?;
 
-        if pidns.is_some() {
-            sched::setns(pidns.unwrap(), CloneFlags::CLONE_NEWPID)
-                .context("failed to join pidns")?;
-            unistd::close(pidns.unwrap())?;
-        } else {
-            sched::unshare(CloneFlags::CLONE_NEWPID)?;
-        }
+        defer!(if let Some(pid) = pidns {
+            let _ = unistd::close(pid);
+        });
 
         let exec_path = std::env::current_exe()?;
         let mut child = std::process::Command::new(exec_path);
@@ -902,13 +917,31 @@ impl BaseContainer for LinuxContainer {
             child = child.env(FIFO_FD, format!("{}", fifofd));
         }
 
+        if pidns.is_some() {
+            child = child.env(PIDNS_FD, format!("{}", pidns.unwrap()));
+        }
+
         let child = child.spawn()?;
 
         unistd::close(crfd)?;
         unistd::close(cwfd)?;
         unistd::close(cfd_log)?;
 
-        p.pid = child.id() as i32;
+        // get container process's pid
+        let pid_buf = read_sync(prfd)?;
+        let pid_str = std::str::from_utf8(&pid_buf).context("get pid string")?;
+        let pid = match pid_str.parse::<i32>() {
+            Ok(i) => i,
+            Err(e) => {
+                return Err(anyhow!(format!(
+                    "failed to get container process's pid: {:?}",
+                    e
+                )));
+            }
+        };
+
+        p.pid = pid;
+
         if p.init {
             self.init_process_pid = p.pid;
         }
@@ -1107,7 +1140,7 @@ fn get_pid_namespace(logger: &Logger, linux: &Linux) -> Result<Option<RawFd>> {
             }
 
             let fd =
-                fcntl::open(ns.path.as_str(), OFlag::O_CLOEXEC, Mode::empty()).map_err(|e| {
+                fcntl::open(ns.path.as_str(), OFlag::O_RDONLY, Mode::empty()).map_err(|e| {
                     error!(
                         logger,
                         "cannot open type: {} path: {}",
