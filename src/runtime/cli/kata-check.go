@@ -134,17 +134,25 @@ func getCPUFlags(cpuinfo string) string {
 // haveKernelModule returns true if the specified module exists
 // (either loaded or available to be loaded)
 func haveKernelModule(module string) bool {
+	kmodLog := kataLog.WithField("module", module)
+
 	// First, check to see if the module is already loaded
 	path := filepath.Join(sysModuleDir, module)
 	if katautils.FileExists(path) {
 		return true
 	}
 
+	// Only root can load modules
+	if os.Getuid() != 0 {
+		kmodLog.Error("Module is not loaded and it can not be inserted. Please consider running with sudo or as root")
+		return false
+	}
+
 	// Now, check if the module is unloaded, but available.
 	// And modprobe it if so.
 	cmd := exec.Command(modProbeCmd, module)
 	if output, err := cmd.CombinedOutput(); err != nil {
-		kataLog.WithField("module", module).WithError(err).Warnf("modprobe insert module failed: %s", string(output))
+		kmodLog.WithError(err).WithField("output", string(output)).Warnf("modprobe insert module failed")
 		return false
 	}
 	return true
