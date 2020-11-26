@@ -23,17 +23,17 @@ To fulfill the [Kata design requirements](kata-design-requirements.md), and base
 |`sandbox.Stats()`| Get the stats of a running sandbox, return a `SandboxStats` structure.|
 |`sandbox.Status()`| Get the status of the sandbox and containers, return a `SandboxStatus` structure.|
 |`sandbox.Stop(force)`| Stop a sandbox and Destroy the containers in the sandbox. When force is true, ignore guest related stop failures.|
-|`sandbox.CreateContainer(contConfig)`| Create new container in the sandbox with the `ContainerConfig` param. It will add new container config to `sandbox.config.Containers`.|
-|`sandbox.DeleteContainer(containerID)`| Delete a container from the sandbox by containerID, return a `Container` structure.|
+|`sandbox.CreateContainer(contConfig)`| Create new container in the sandbox with the `ContainerConfig` parameter. It will add new container config to `sandbox.config.Containers`.|
+|`sandbox.DeleteContainer(containerID)`| Delete a container from the sandbox by `containerID`, return a `Container` structure.|
 |`sandbox.EnterContainer(containerID, cmd)`| Run a new process in a container, executing customer's `types.Cmd` command.|
-|`sandbox.KillContainer(containerID, signal, all)`| Signal a container in the sandbox by the containerID.|
-|`sandbox.PauseContainer(containerID)`| Pause a running container in the sandbox by the containerID.|
+|`sandbox.KillContainer(containerID, signal, all)`| Signal a container in the sandbox by the `containerID`.|
+|`sandbox.PauseContainer(containerID)`| Pause a running container in the sandbox by the `containerID`.|
 |`sandbox.ProcessListContainer(containerID, options)`| List every process running inside a specific container in the sandbox, return a `ProcessList` structure.|
-|`sandbox.ResumeContainer(containerID)`| Resume a paused container in the sandbox by the containerID.|
-|`sandbox.StartContainer(containerID)`| Start a container in the sandbox by the containerID.|
+|`sandbox.ResumeContainer(containerID)`| Resume a paused container in the sandbox by the `containerID`.|
+|`sandbox.StartContainer(containerID)`| Start a container in the sandbox by the `containerID`.|
 |`sandbox.StatsContainer(containerID)`| Get the stats of a running container, return a `ContainerStats` structure.|
 |`sandbox.StatusContainer(containerID)`| Get the status of a container in the sandbox, return a `ContainerStatus` structure.|
-|`sandbox.StopContainer(containerID, force)`| Stop a container in the sandbox by the containerID.|
+|`sandbox.StopContainer(containerID, force)`| Stop a container in the sandbox by the `containerID`.|
 |`sandbox.UpdateContainer(containerID, resources)`| Update a running container in the sandbox.|
 |`sandbox.WaitProcess(containerID, processID)`| Wait on a process to terminate.|
 ### Sandbox Hotplug API
@@ -57,7 +57,7 @@ To fulfill the [Kata design requirements](kata-design-requirements.md), and base
 |Name|Description|
 |---|---|
 |`sandbox.GetOOMEvent()`| Monitor the OOM events that occur in the sandbox..|
-|`sandbox.UpdateRuntimeMetrics()`| Update the shim/hypervisor's metrics of the running sandbox.|
+|`sandbox.UpdateRuntimeMetrics()`| Update the shim/`hypervisor`'s metrics of the running sandbox.|
 |`sandbox.GetAgentMetrics()`| Get metrics of the agent and the guest in the running sandbox.|
 
 ## Plugin framework for external proprietary Kata runtime extensions
