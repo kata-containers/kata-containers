@@ -513,6 +513,10 @@ func TestCheckCheckCPUAttribs(t *testing.T) {
 }
 
 func TestCheckHaveKernelModule(t *testing.T) {
+	if tc.NotValid(ktu.NeedRoot()) {
+		t.Skip(testDisabledAsNonRoot)
+	}
+
 	assert := assert.New(t)
 
 	dir, err := ioutil.TempDir("", "")
