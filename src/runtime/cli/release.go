@@ -6,6 +6,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -276,12 +277,17 @@ func getReleases(releaseURL string, includeAll bool) ([]semver.Version, map[stri
 
 	releasesArray := []map[string]interface{}{}
 
-	bytes, err := ioutil.ReadAll(resp.Body)
+	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to read release details: %v", err)
+	} else if resp.StatusCode == http.StatusForbidden && bytes.Contains(body, []byte("limit exceeded")) {
+		// Do not fail if rate limit is exceeded
+		kataLog.WithField("url", releaseURL).
+			Warn("API rate limit exceeded. Try again later. Read https://docs.github.com/apps/building-github-apps/understanding-rate-limits-for-github-apps for more information")
+		return []semver.Version{}, map[string]releaseDetails{}, nil
 	}
 
-	if err := json.Unmarshal(bytes, &releasesArray); err != nil {
+	if err := json.Unmarshal(body, &releasesArray); err != nil {
 		return nil, nil, fmt.Errorf("failed to unpack release details: %v", err)
 	}
 
