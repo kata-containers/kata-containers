@@ -13,10 +13,13 @@ clean:
 
 test:
 
+install:
+
 check:
 
 .PHONY: \
 	build \
 	test \
 	check \
+	install \
 	clean
