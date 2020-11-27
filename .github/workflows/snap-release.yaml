@@ -1,0 +1,37 @@
+name: Release Kata 2.x in snapcraft store
+on:
+  push:
+    tags:
+      - '2.*'
+jobs:
+  release-snap:
+    runs-on: ubuntu-20.04
+    steps:
+      - name: Check out Git repository
+        uses: actions/checkout@v2
+
+      - name: Install Snapcraft
+        uses: samuelmeuli/action-snapcraft@v1
+        with:
+          snapcraft_token: ${{ secrets.snapcraft_token }}
+
+      - name: Build snap
+        run: |
+          sudo apt-get install -y git git-extras
+          kata_url="https://github.com/kata-containers/kata-containers"
+          latest_version=$(git ls-remote --tags ${kata_url} | egrep -o "refs.*" | egrep -o "[[:digit:]]+\.[[:digit:]]+\.[[:digit:]]+" | sort -V -r -u | head -1)
+          current_version="$(echo ${GITHUB_REF} | cut -d/ -f3)"
+          # Check if the current tag is the latest tag
+          if echo -e "$latest_version\n$current_version" | sort -C -V; then
+            # Current version is the latest version, build it
+            snapcraft -d snap --destructive-mode
+          fi
+
+      - name: Upload snap
+        run: |
+          snap_version="$(echo ${GITHUB_REF} | cut -d/ -f3)"
+          snap_file="kata-containers_${snap_version}_amd64.snap"
+          # Upload the snap if it exists
+          if [ -f ${snap_file} ]; then
+            snapcraft upload --release=stable ${snap_file}
+          fi
