@@ -277,8 +277,15 @@ pflashes = []
 # Use this parameter when using some large PCI bar devices, such as Nvidia GPU
 # The value means the number of pcie_root_port
 # This value is valid when hotplug_vfio_on_root_bus is true and machine_type is "q35"
-# Default 0
-#pcie_root_port = 2
+# Default 0, Max 2
+#pcie_root_port = 1
+
+# This is a workaround for QEMU with guest kernel 5.x behavior
+# Use this parameter when hot plugging large PCI Bar devices fails
+# This value represents the delay (in seconds) for attaching a large PCI bar device after the container is created
+# This value is valid when machine_type is q35, hotplug_vfio_on_root_bus is true and pcie_root_port is greater than 0
+# Default 0, Max 5
+#pcie_lazy_attach_delay = 2
 
 # If vhost-net backend for virtio-net is not desired, set to true. Default is false, which trades off
 # security (vhost-net runs ring0) for network I/O performance.

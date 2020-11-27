@@ -89,6 +89,7 @@ func makeRuntimeConfig(prefixDir string) (configFile string, config oci.RuntimeC
 	enableIOThreads := true
 	hotplugVFIOOnRootBus := true
 	pcieRootPort := uint32(2)
+	pcieLazyAttachDelay := uint32(3)
 	disableNewNetNs := false
 	sharedFS := "virtio-9p"
 	virtioFSdaemon := filepath.Join(prefixDir, "virtiofsd")
@@ -138,6 +139,7 @@ func makeRuntimeConfig(prefixDir string) (configFile string, config oci.RuntimeC
 		EnableIOThreads:      enableIOThreads,
 		HotplugVFIOOnRootBus: hotplugVFIOOnRootBus,
 		PCIeRootPort:         pcieRootPort,
+		PCIeLazyAttachDelay:  pcieLazyAttachDelay,
 		DisableNewNetNs:      disableNewNetNs,
 		DefaultVCPUCount:     hypConfig.NumVCPUs,
 		DefaultMaxVCPUCount:  hypConfig.DefaultMaxVCPUs,
@@ -295,6 +297,7 @@ func getExpectedHypervisor(config oci.RuntimeConfig) HypervisorInfo {
 
 		HotplugVFIOOnRootBus: config.HypervisorConfig.HotplugVFIOOnRootBus,
 		PCIeRootPort:         config.HypervisorConfig.PCIeRootPort,
+		PCIeLazyAttachDelay:  config.HypervisorConfig.PCIeLazyAttachDelay,
 	}
 }
 

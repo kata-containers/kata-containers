@@ -118,6 +118,10 @@ const (
 	// The PCIe Root Port device is used to hot-plug the PCIe device
 	PCIeRootPort = kataAnnotHypervisorPrefix + "pcie_root_port"
 
+	// PCIeLazyAttachDelay is a sandbox annotation used to indicate if devices whether to hot-plug
+	// the device after a few seconds delay
+	PCIeLazyAttachDelay = kataAnnotHypervisorPrefix + "pcie_lazy_attach_delay"
+
 	// EntropySource is a sandbox annotation to specify the path to a host source of
 	// entropy (/dev/random, /dev/urandom or real hardware RNG device)
 	EntropySource = kataAnnotHypervisorPrefix + "entropy_source"

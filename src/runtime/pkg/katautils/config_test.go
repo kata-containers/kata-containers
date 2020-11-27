@@ -83,6 +83,8 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (config testRuntimeConf
 	enableIOThreads := true
 	hotplugVFIOOnRootBus := true
 	pcieRootPort := uint32(2)
+	pcieLazyAttachDelay := uint32(3)
+
 	disableNewNetNs := false
 	sharedFS := "virtio-9p"
 	virtioFSdaemon := path.Join(dir, "virtiofsd")
@@ -103,6 +105,7 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (config testRuntimeConf
 		EnableIOThreads:      enableIOThreads,
 		HotplugVFIOOnRootBus: hotplugVFIOOnRootBus,
 		PCIeRootPort:         pcieRootPort,
+		PCIeLazyAttachDelay:  pcieLazyAttachDelay,
 		DisableNewNetNs:      disableNewNetNs,
 		DefaultVCPUCount:     defaultVCPUCount,
 		DefaultMaxVCPUCount:  defaultMaxVCPUCount,
@@ -164,6 +167,7 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (config testRuntimeConf
 		EnableIOThreads:       enableIOThreads,
 		HotplugVFIOOnRootBus:  hotplugVFIOOnRootBus,
 		PCIeRootPort:          pcieRootPort,
+		PCIeLazyAttachDelay:   pcieLazyAttachDelay,
 		Msize9p:               defaultMsize9p,
 		MemSlots:              defaultMemSlots,
 		EntropySource:         defaultEntropySource,
@@ -643,6 +647,7 @@ func TestNewQemuHypervisorConfig(t *testing.T) {
 	enableIOThreads := true
 	hotplugVFIOOnRootBus := true
 	pcieRootPort := uint32(2)
+	pcieLazyAttachDelay := uint32(3)
 	orgVHostVSockDevicePath := utils.VHostVSockDevicePath
 	defer func() {
 		utils.VHostVSockDevicePath = orgVHostVSockDevicePath
@@ -661,6 +666,7 @@ func TestNewQemuHypervisorConfig(t *testing.T) {
 		EnableIOThreads:       enableIOThreads,
 		HotplugVFIOOnRootBus:  hotplugVFIOOnRootBus,
 		PCIeRootPort:          pcieRootPort,
+		PCIeLazyAttachDelay:   pcieLazyAttachDelay,
 		RxRateLimiterMaxRate:  rxRateLimiterMaxRate,
 		TxRateLimiterMaxRate:  txRateLimiterMaxRate,
 	}
@@ -714,6 +720,10 @@ func TestNewQemuHypervisorConfig(t *testing.T) {
 
 	if config.PCIeRootPort != pcieRootPort {
 		t.Errorf("Expected value for PCIeRootPort %v, got %v", pcieRootPort, config.PCIeRootPort)
+	}
+
+	if config.PCIeLazyAttachDelay != pcieLazyAttachDelay {
+		t.Errorf("Expected value for PCIeLazyAttachDelay %v, got %v", pcieLazyAttachDelay, config.PCIeLazyAttachDelay)
 	}
 
 	if config.RxRateLimiterMaxRate != rxRateLimiterMaxRate {
@@ -840,6 +850,7 @@ func TestNewQemuHypervisorConfigImageAndInitrd(t *testing.T) {
 	enableIOThreads := true
 	hotplugVFIOOnRootBus := true
 	pcieRootPort := uint32(2)
+	pcieLazyAttachDelay := uint32(3)
 
 	hypervisor := hypervisor{
 		Path:                  hypervisorPath,
@@ -851,6 +862,7 @@ func TestNewQemuHypervisorConfigImageAndInitrd(t *testing.T) {
 		EnableIOThreads:       enableIOThreads,
 		HotplugVFIOOnRootBus:  hotplugVFIOOnRootBus,
 		PCIeRootPort:          pcieRootPort,
+		PCIeLazyAttachDelay:   pcieLazyAttachDelay,
 	}
 
 	_, err = newQemuHypervisorConfig(hypervisor)

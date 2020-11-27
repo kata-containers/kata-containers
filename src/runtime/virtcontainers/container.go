@@ -844,6 +844,7 @@ func (c *Container) create(ctx context.Context) (err error) {
 
 	var (
 		machineType        = c.sandbox.config.HypervisorConfig.HypervisorMachineType
+		delayAttachSeconds = c.sandbox.config.HypervisorConfig.PCIeLazyAttachDelay
 		normalAttachedDevs []ContainerDevice //for q35: normally attached devices
 		delayAttachedDevs  []ContainerDevice //for q35: delay attached devices, for example, large bar space device
 	)
@@ -889,9 +890,12 @@ func (c *Container) create(ctx context.Context) (err error) {
 	// lazy attach device after createContainer for q35
 	if machineType == QemuQ35 && len(delayAttachedDevs) > 0 {
 		c.Logger().WithFields(logrus.Fields{
-			"machine_type": machineType,
-			"devices":      delayAttachedDevs,
+			"machine_type":           machineType,
+			"devices":                delayAttachedDevs,
+			"pcie_lazy_attach_delay": delayAttachSeconds,
 		}).Info("lazy attach devices")
+		// fix: https://github.com/kata-containers/kata-containers/issues/835
+		time.Sleep(time.Duration(delayAttachSeconds) * time.Second)
 		if err = c.attachDevices(ctx, delayAttachedDevs); err != nil {
 			return
 		}
