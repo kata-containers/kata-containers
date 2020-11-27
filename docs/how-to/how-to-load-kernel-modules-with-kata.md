@@ -101,7 +101,7 @@ spec:
     tty: true
 ```
 
-> **Note**: To pass annotations to Kata containers, [cri must to be configurated correctly](how-to-set-sandbox-config-kata.md#cri-configuration)
+> **Note**: To pass annotations to Kata containers, [`CRI` must to be configured correctly](how-to-set-sandbox-config-kata.md#cri-configuration)
 
 [1]: ../../src/runtime
 [2]: ../../src/agent
