@@ -4,6 +4,7 @@
 # SPDX-License-Identifier: Apache-2.0
 from ubuntu:20.04
 
+ARG QEMU_DESTDIR
 ARG QEMU_REPO
 # commit/tag/branch
 ARG QEMU_VERSION
@@ -64,5 +65,5 @@ RUN PREFIX="${PREFIX}" /root/configure-hypervisor.sh -s kata-qemu | xargs ./conf
 
 RUN make -j$(nproc)
 RUN make -j$(nproc) virtiofsd
-RUN make install DESTDIR=/tmp/qemu-static
-RUN cd /tmp/qemu-static && tar -czvf "${QEMU_TARBALL}" *
+RUN make install DESTDIR="${QEMU_DESTDIR}"
+RUN cd "${QEMU_DESTDIR}" && tar -czvf "${QEMU_TARBALL}" *

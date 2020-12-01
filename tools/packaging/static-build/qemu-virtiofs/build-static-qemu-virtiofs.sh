@@ -26,6 +26,7 @@ qemu_virtiofs_repo=$(get_from_kata_deps "assets.hypervisor.qemu-experimental.url
 qemu_virtiofs_tag=$(get_from_kata_deps "assets.hypervisor.qemu-experimental.tag" "${kata_version}")
 qemu_virtiofs_tar="kata-static-qemu-virtiofsd.tar.gz"
 qemu_tmp_tar="kata-static-qemu-virtiofsd-tmp.tar.gz"
+qemu_destdir="/tmp/qemu-virtiofs-static"
 
 info "Build ${qemu_virtiofs_repo} tag: ${qemu_virtiofs_tag}"
 
@@ -37,6 +38,7 @@ sudo "${DOCKER_CLI}" build \
 	--no-cache \
 	--build-arg http_proxy="${http_proxy}" \
 	--build-arg https_proxy="${https_proxy}" \
+	--build-arg QEMU_DESTDIR="${qemu_destdir}" \
 	--build-arg QEMU_VIRTIOFS_REPO="${qemu_virtiofs_repo}" \
 	--build-arg QEMU_VIRTIOFS_TAG="${qemu_virtiofs_tag}" \
 	--build-arg QEMU_TARBALL="${qemu_virtiofs_tar}" \
@@ -48,7 +50,7 @@ sudo "${DOCKER_CLI}" build \
 sudo "${DOCKER_CLI}" run \
 	-i \
 	-v "${PWD}":/share qemu-virtiofs-static \
-	mv "/tmp/qemu-virtiofs-static/${qemu_virtiofs_tar}" /share/
+	mv "${qemu_destdir}/${qemu_virtiofs_tar}" /share/
 
 sudo chown ${USER}:${USER} "${PWD}/${qemu_virtiofs_tar}"
 
