@@ -53,7 +53,3 @@ sudo "${DOCKER_CLI}" run \
 	mv "${qemu_destdir}/${qemu_virtiofs_tar}" /share/
 
 sudo chown ${USER}:${USER} "${PWD}/${qemu_virtiofs_tar}"
-
-# Remove blacklisted binaries
-gzip -d < "${qemu_virtiofs_tar}" | tar --delete --wildcards -f - ${qemu_black_list[*]} | gzip > "${qemu_tmp_tar}"
-mv -f "${qemu_tmp_tar}" "${qemu_virtiofs_tar}"
