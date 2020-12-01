@@ -16,6 +16,7 @@ source "${script_dir}/../qemu.blacklist"
 packaging_dir="${script_dir}/../.."
 qemu_tar="kata-static-qemu.tar.gz"
 qemu_tmp_tar="kata-static-qemu-tmp.tar.gz"
+qemu_destdir="/tmp/qemu-static/"
 
 qemu_repo="${qemu_repo:-}"
 qemu_version="${qemu_version:-}"
@@ -45,6 +46,7 @@ sudo docker build \
 	--no-cache \
 	--build-arg http_proxy="${http_proxy}" \
 	--build-arg https_proxy="${https_proxy}" \
+	--build-arg QEMU_DESTDIR="${qemu_destdir}" \
 	--build-arg QEMU_REPO="${qemu_repo}" \
 	--build-arg QEMU_VERSION="${qemu_version}" \
 	--build-arg QEMU_TARBALL="${qemu_tar}" \
@@ -56,7 +58,7 @@ sudo docker build \
 sudo docker run \
 	-i \
 	-v "${PWD}":/share qemu-static \
-	mv "/tmp/qemu-static/${qemu_tar}" /share/
+	mv "${qemu_destdir}/${qemu_tar}" /share/
 
 sudo chown ${USER}:${USER} "${PWD}/${qemu_tar}"
 
