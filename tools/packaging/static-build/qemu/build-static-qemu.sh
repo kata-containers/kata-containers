@@ -61,7 +61,3 @@ sudo docker run \
 	mv "${qemu_destdir}/${qemu_tar}" /share/
 
 sudo chown ${USER}:${USER} "${PWD}/${qemu_tar}"
-
-# Remove blacklisted binaries
-gzip -d < "${qemu_tar}" | tar --delete --wildcards -f - ${qemu_black_list[*]} | gzip > "${qemu_tmp_tar}"
-mv -f "${qemu_tmp_tar}" "${qemu_tar}"
