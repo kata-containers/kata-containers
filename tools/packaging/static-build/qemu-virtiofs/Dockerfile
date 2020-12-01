@@ -56,6 +56,7 @@ RUN git checkout "${QEMU_VIRTIOFS_TAG}"
 ADD scripts/configure-hypervisor.sh /root/configure-hypervisor.sh
 ADD qemu /root/kata_qemu
 ADD scripts/apply_patches.sh /root/apply_patches.sh
+ADD static-build /root/static-build
 
 # Apply experimental specific patches
 # Patches to quick fix virtiofs fork
@@ -74,4 +75,4 @@ RUN make install DESTDIR="${QEMU_DESTDIR}"
 RUN cd "${QEMU_DESTDIR}/${PREFIX}" && \
 	mv bin/qemu-system-x86_64 bin/qemu-virtiofs-system-x86_64 && \
 	mv libexec/kata-qemu/virtiofsd bin/virtiofsd-dax
-RUN cd "${QEMU_DESTDIR}" && tar -czvf "${QEMU_TARBALL}"  *
+RUN /root/static-build/scripts/qemu-build-post.sh

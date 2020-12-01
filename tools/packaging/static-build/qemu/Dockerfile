@@ -56,6 +56,7 @@ RUN git clone https://github.com/qemu/keycodemapdb.git ui/keycodemapdb
 ADD scripts/configure-hypervisor.sh /root/configure-hypervisor.sh
 ADD qemu /root/kata_qemu
 ADD scripts/apply_patches.sh /root/apply_patches.sh
+ADD static-build /root/static-build
 
 RUN stable_branch=$(cat VERSION | awk 'BEGIN{FS=OFS="."}{print $1 "." $2 ".x"}') && \
 	/root/apply_patches.sh "/root/kata_qemu/patches/${stable_branch}"
@@ -66,4 +67,4 @@ RUN PREFIX="${PREFIX}" /root/configure-hypervisor.sh -s kata-qemu | xargs ./conf
 RUN make -j$(nproc)
 RUN make -j$(nproc) virtiofsd
 RUN make install DESTDIR="${QEMU_DESTDIR}"
-RUN cd "${QEMU_DESTDIR}" && tar -czvf "${QEMU_TARBALL}" *
+RUN /root/static-build/scripts/qemu-build-post.sh
