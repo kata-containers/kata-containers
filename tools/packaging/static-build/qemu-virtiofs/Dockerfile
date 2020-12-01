@@ -4,6 +4,7 @@
 # SPDX-License-Identifier: Apache-2.0
 from ubuntu:20.04
 
+ARG QEMU_DESTDIR
 ARG QEMU_VIRTIOFS_REPO
 # commit/tag/branch
 ARG QEMU_VIRTIOFS_TAG
@@ -70,7 +71,8 @@ RUN PREFIX="${PREFIX}" /root/configure-hypervisor.sh -s kata-qemu | sed -e 's|--
 
 RUN make -j$(nproc)
 RUN make -j$(nproc) virtiofsd
-RUN make install DESTDIR=/tmp/qemu-virtiofs-static
-RUN mv /tmp/qemu-virtiofs-static/"${PREFIX}"/bin/qemu-system-x86_64 /tmp/qemu-virtiofs-static/"${PREFIX}"/bin/qemu-virtiofs-system-x86_64
-RUN mv /tmp/qemu-virtiofs-static/"${PREFIX}"/libexec/kata-qemu/virtiofsd /tmp/qemu-virtiofs-static/opt/kata/bin/virtiofsd-dax
-RUN cd /tmp/qemu-virtiofs-static && tar -czvf "${QEMU_TARBALL}"  *
+RUN make install DESTDIR="${QEMU_DESTDIR}"
+RUN cd "${QEMU_DESTDIR}/${PREFIX}" && \
+	mv bin/qemu-system-x86_64 bin/qemu-virtiofs-system-x86_64 && \
+	mv libexec/kata-qemu/virtiofsd bin/virtiofsd-dax
+RUN cd "${QEMU_DESTDIR}" && tar -czvf "${QEMU_TARBALL}"  *
