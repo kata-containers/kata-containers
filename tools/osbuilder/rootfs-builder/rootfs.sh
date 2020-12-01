@@ -505,6 +505,7 @@ EOT
 	case "${distro}" in
 		"ubuntu" | "debian")
 			echo "I am ubuntu or debian"
+			mkdir -p ${ROOTFS_DIR}/etc/chrony
 			chrony_conf_file="${ROOTFS_DIR}/etc/chrony/chrony.conf"
 			chrony_systemd_service="${ROOTFS_DIR}/lib/systemd/system/chrony.service"
 			;;
