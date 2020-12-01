@@ -1022,11 +1022,11 @@ impl Manager {
         })
     }
 
-    pub fn update_cpuset_path(&self, cpuset_cpus: &str) -> Result<()> {
-        if cpuset_cpus == "" {
+    pub fn update_cpuset_path(&self, guest_cpuset: &str, container_cpuset: &str) -> Result<()> {
+        if guest_cpuset == "" {
             return Ok(());
         }
-        info!(sl!(), "update_cpuset_path to: {}", cpuset_cpus);
+        info!(sl!(), "update_cpuset_path to: {}", guest_cpuset);
 
         let h = cgroups::hierarchies::auto();
         let h = Box::new(&*h);
@@ -1040,8 +1040,8 @@ impl Manager {
         let h = cgroups::hierarchies::auto();
         let h = Box::new(&*h);
         let cg = load_or_create(h, &self.cpath);
-        let cpuset_controller: &CpuSetController = cg.controller_of().unwrap();
-        let path = cpuset_controller.path();
+        let container_cpuset_controller: &CpuSetController = cg.controller_of().unwrap();
+        let path = container_cpuset_controller.path();
         let container_path = Path::new(path);
         info!(sl!(), "container cpuset path: {:?}", &path);
 
@@ -1050,11 +1050,9 @@ impl Manager {
             if ancestor == root_path {
                 break;
             }
-            if ancestor != container_path {
-                paths.push(ancestor);
-            }
+            paths.push(ancestor);
         }
-        info!(sl!(), "paths to update cpuset: {:?}", &paths);
+        info!(sl!(), "parent paths to update cpuset: {:?}", &paths);
 
         let mut i = paths.len();
         loop {
@@ -1070,10 +1068,20 @@ impl Manager {
                 .to_str()
                 .unwrap()
                 .trim_start_matches(root_path.to_str().unwrap());
-            info!(sl!(), "updating cpuset for path {:?}", &r_path);
+            info!(sl!(), "updating cpuset for parent path {:?}", &r_path);
             let cg = load_or_create(h, &r_path);
             let cpuset_controller: &CpuSetController = cg.controller_of().unwrap();
-            cpuset_controller.set_cpus(cpuset_cpus)?;
+            cpuset_controller.set_cpus(guest_cpuset)?;
+        }
+
+        if !container_cpuset.is_empty() {
+            info!(
+                sl!(),
+                "updating cpuset for container path: {:?} cpuset: {}",
+                &container_path,
+                container_cpuset
+            );
+            container_cpuset_controller.set_cpus(container_cpuset)?;
         }
 
         Ok(())
