@@ -365,7 +365,9 @@ fn set_cpu_resources(cg: &cgroups::Cgroup, cpu: &LinuxCPU) -> Result<()> {
     let cpuset_controller: &CpuSetController = cg.controller_of().unwrap();
 
     if !cpu.cpus.is_empty() {
-        cpuset_controller.set_cpus(&cpu.cpus)?;
+        if let Err(e) = cpuset_controller.set_cpus(&cpu.cpus) {
+            warn!(sl!(), "write cpuset failed: {:?}", e);
+        }
     }
 
     if !cpu.mems.is_empty() {
