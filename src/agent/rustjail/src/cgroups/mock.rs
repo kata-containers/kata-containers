@@ -64,7 +64,7 @@ impl Manager {
         })
     }
 
-    pub fn update_cpuset_path(&self, _: &str) -> Result<()> {
+    pub fn update_cpuset_path(&self, _: &str, _: &str) -> Result<()> {
         Ok(())
     }
 
