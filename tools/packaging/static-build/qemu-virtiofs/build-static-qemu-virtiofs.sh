@@ -48,6 +48,7 @@ sudo "${DOCKER_CLI}" build \
 	-t qemu-virtiofs-static
 
 sudo "${DOCKER_CLI}" run \
+	--rm \
 	-i \
 	-v "${PWD}":/share qemu-virtiofs-static \
 	mv "${qemu_destdir}/${qemu_virtiofs_tar}" /share/
