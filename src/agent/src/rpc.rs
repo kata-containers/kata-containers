@@ -24,6 +24,7 @@ use protocols::types::Interface;
 use rustjail::cgroups::notifier;
 use rustjail::container::{BaseContainer, Container, LinuxContainer};
 use rustjail::process::Process;
+use rustjail::reaper;
 use rustjail::specconv::CreateOpts;
 
 use nix::errno::Errno;
@@ -189,9 +190,13 @@ impl agentService {
             let cg_path = ctr.cgroup_manager.as_ref().unwrap().get_cg_path("memory");
             if cg_path.is_some() {
                 let rx = notifier::notify_oom(cid.as_str(), cg_path.unwrap())?;
-                s.run_oom_event_monitor(rx, cid);
+                s.run_oom_event_monitor(rx, cid.clone());
             }
         }
+
+        // set epoller
+        let p = find_process(&mut s, cid.as_str(), "", true)?;
+        p.create_epoller()?;
 
         Ok(())
     }
@@ -272,7 +277,7 @@ impl agentService {
         let cid = req.container_id.clone();
         let exec_id = req.exec_id.clone();
 
-        info!(sl!(), "cid: {} eid: {}", cid, exec_id);
+        info!(sl!(), "do_exec_process cid: {} eid: {}", cid, exec_id);
 
         let s = self.sandbox.clone();
         let mut sandbox = s.lock().unwrap();
@@ -292,6 +297,10 @@ impl agentService {
             .ok_or_else(|| anyhow!("Invalid container id"))?;
 
         ctr.run(p)?;
+
+        // set epoller
+        let p = find_process(&mut sandbox, cid.as_str(), exec_id.as_str(), false)?;
+        p.create_epoller()?;
 
         Ok(())
     }
@@ -403,6 +412,8 @@ impl agentService {
             let _ = unistd::close(p.exit_pipe_r.unwrap());
         }
 
+        p.close_epoller();
+
         p.parent_stdin = None;
         p.parent_stdout = None;
         p.parent_stderr = None;
@@ -426,13 +437,6 @@ impl agentService {
     ) -> Result<protocols::agent::WriteStreamResponse> {
         let cid = req.container_id.clone();
         let eid = req.exec_id.clone();
-
-        info!(
-            sl!(),
-            "write stdin";
-            "container-id" => cid.clone(),
-            "exec-id" => eid.clone()
-        );
 
         let s = self.sandbox.clone();
         let mut sandbox = s.lock().unwrap();
@@ -477,6 +481,7 @@ impl agentService {
         let eid = req.exec_id;
 
         let mut fd: RawFd = -1;
+        let mut epoller: Option<reaper::Epoller> = None;
         {
             let s = self.sandbox.clone();
             let mut sandbox = s.lock().unwrap();
@@ -485,6 +490,7 @@ impl agentService {
 
             if p.term_master.is_some() {
                 fd = p.term_master.unwrap();
+                epoller = p.epoller.clone();
             } else if stdout {
                 if p.parent_stdout.is_some() {
                     fd = p.parent_stdout.unwrap();
@@ -492,6 +498,17 @@ impl agentService {
             } else {
                 fd = p.parent_stderr.unwrap();
             }
+        }
+
+        if let Some(epoller) = epoller {
+            // The process's epoller's poll() will return a file descriptor of the process's
+            // terminal or one end of its exited pipe. If it returns its terminal, it means
+            // there is data needed to be read out or it has been closed; if it returns the
+            // process's exited pipe, it means the process has exited and there is no data
+            // needed to be read out in its terminal, thus following read on it will read out
+            // "EOF" to terminate this process's io since the other end of this pipe has been
+            // closed in reap().
+            fd = epoller.poll()?;
         }
 
         if fd == -1 {
@@ -807,6 +824,8 @@ impl protocols::agent_ttrpc::AgentService for agentService {
             let _ = unistd::close(p.parent_stdin.unwrap());
             p.parent_stdin = None;
         }
+
+        p.close_epoller();
 
         Ok(Empty::new())
     }

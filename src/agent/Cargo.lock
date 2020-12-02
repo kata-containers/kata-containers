@@ -249,6 +249,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e78d4f1cc4ae33bbfc157ed5d5a5ef3bc29227303d595861deb238fcec4e9457"
 
 [[package]]
+name = "epoll"
+version = "4.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "20df693c700404f7e19d4d6fae6b15215d2913c27955d2b9d6f2c0f537511cd0"
+dependencies = [
+ "bitflags",
+ "libc",
+]
+
+[[package]]
 name = "errno"
 version = "0.2.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -921,6 +931,7 @@ dependencies = [
  "caps",
  "cgroups",
  "dirs",
+ "epoll",
  "lazy_static",
  "libc",
  "nix 0.17.0",

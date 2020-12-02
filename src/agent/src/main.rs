@@ -306,6 +306,7 @@ fn setup_signal_handler(logger: &Logger, sandbox: Arc<Mutex<Sandbox>>) -> Result
                         continue 'outer;
                     }
                 };
+                info!(logger, "wait_status"; "wait_status result" => format!("{:?}", wait_status));
 
                 let pid = wait_status.pid();
                 if let Some(pid) = pid {
@@ -342,6 +343,13 @@ fn setup_signal_handler(logger: &Logger, sandbox: Arc<Mutex<Sandbox>>) -> Result
 
                     p.exit_code = ret;
                     let _ = unistd::close(pipe_write);
+
+                    if let Some(ref poller) = p.epoller {
+                        info!(logger, "close epoller");
+                        // close the socket file to notify readStdio to close terminal specifically
+                        // in case this process's terminal has been inherited by its children.
+                        poller.close_wfd()
+                    }
                 }
             }
         }
