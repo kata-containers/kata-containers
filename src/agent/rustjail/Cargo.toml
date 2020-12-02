@@ -26,6 +26,7 @@ dirs = "3.0.1"
 anyhow = "1.0.32"
 cgroups = { git = "https://github.com/kata-containers/cgroups-rs", branch = "stable-0.1.1"}
 tempfile = "3.1.0"
+epoll = "4.3.1"
 
 [dev-dependencies]
 serial_test = "0.5.0"
