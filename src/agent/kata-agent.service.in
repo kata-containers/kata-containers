@@ -20,3 +20,5 @@ LimitNOFILE=infinity
 # the runtime handles shutting down the VM.
 ExecStop=/bin/sync ; /usr/bin/systemctl --force poweroff
 FailureAction=poweroff
+# Discourage OOM-killer from touching the agent
+OOMScoreAdjust=-997
