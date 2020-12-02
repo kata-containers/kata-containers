@@ -65,6 +65,13 @@ This section describes the terms used for all documentation in this repository.
   A guest OS build method where the building host is used as the Base OS.
   For more information refer to the [dracut homepage](https://dracut.wiki.kernel.org/index.php/Main_Page).
 
+- Agent init
+
+  The Guest OS should have the Kata Containers agent started on boot time.
+
+  That is achieved by using a system manager (for example, systemd) which
+  will evoke the agent binary; or having the agent itself as the init process.
+
 ## Building
 
 The top-level `Makefile` contains an example of how to use the available components.
