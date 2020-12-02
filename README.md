@@ -64,6 +64,9 @@ See the [community](#community) section for ways to contact us.
 Please raise an issue
 [in this repository](https://github.com/kata-containers/kata-containers/issues).
 
+> **Note:**
+> If you are reporting a security issue, please follow the [vulnerability reporting process](https://github.com/kata-containers/community#vulnerability-handling)
+
 #### Kata Containers 1.x versions
 
 For older Kata Containers 1.x releases, please raise an issue in the
