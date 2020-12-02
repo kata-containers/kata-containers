@@ -56,6 +56,7 @@ sudo docker build \
 	-t qemu-static
 
 sudo docker run \
+	--rm \
 	-i \
 	-v "${PWD}":/share qemu-static \
 	mv "${qemu_destdir}/${qemu_tar}" /share/
