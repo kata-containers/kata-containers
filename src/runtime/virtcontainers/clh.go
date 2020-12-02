@@ -764,7 +764,14 @@ func (clh *cloudHypervisor) terminate() (err error) {
 		pidRunning = false
 	}
 
-	clh.Logger().WithField("PID", pid).Info("Stopping Cloud Hypervisor")
+	defer func() {
+		clh.Logger().Debug("cleanup VM")
+		if err1 := clh.cleanupVM(true); err1 != nil {
+			clh.Logger().WithError(err1).Error("failed to cleanupVM")
+		}
+	}()
+
+	clh.Logger().Debug("Stopping Cloud Hypervisor")
 
 	if pidRunning {
 		clhRunning, _ := clh.isClhRunning(clhStopSandboxTimeout)
@@ -808,11 +815,12 @@ func (clh *cloudHypervisor) terminate() (err error) {
 		return errors.New("virtiofsd config is nil, failed to stop it")
 	}
 
-	if err := clh.cleanupVM(true); err != nil {
-		return err
+	clh.Logger().Debug("stop virtiofsd")
+	if err = clh.virtiofsd.Stop(); err != nil {
+		clh.Logger().Error("failed to stop virtiofsd")
 	}
 
-	return clh.virtiofsd.Stop()
+	return
 }
 
 func (clh *cloudHypervisor) reset() {
