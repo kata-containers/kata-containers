@@ -343,34 +343,46 @@ func (s *service) Create(ctx context.Context, r *taskAPI.CreateTaskRequest) (_ *
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	var c *container
-
-	c, err = create(ctx, s, r)
-	if err != nil {
-		return nil, err
+	type Result struct {
+		container *container
+		err       error
 	}
+	ch := make(chan Result, 1)
+	go func() {
+		container, err := create(ctx, s, r)
+		ch <- Result{container, err}
+	}()
 
-	c.status = task.StatusCreated
+	select {
+	case <-ctx.Done():
+		return nil, errors.Errorf("create container timeout: %v", r.ID)
+	case res := <-ch:
+		if res.err != nil {
+			return nil, res.err
+		}
+		container := res.container
+		container.status = task.StatusCreated
 
-	s.containers[r.ID] = c
+		s.containers[r.ID] = container
 
-	s.send(&eventstypes.TaskCreate{
-		ContainerID: r.ID,
-		Bundle:      r.Bundle,
-		Rootfs:      r.Rootfs,
-		IO: &eventstypes.TaskIO{
-			Stdin:    r.Stdin,
-			Stdout:   r.Stdout,
-			Stderr:   r.Stderr,
-			Terminal: r.Terminal,
-		},
-		Checkpoint: r.Checkpoint,
-		Pid:        s.pid,
-	})
+		s.send(&eventstypes.TaskCreate{
+			ContainerID: r.ID,
+			Bundle:      r.Bundle,
+			Rootfs:      r.Rootfs,
+			IO: &eventstypes.TaskIO{
+				Stdin:    r.Stdin,
+				Stdout:   r.Stdout,
+				Stderr:   r.Stderr,
+				Terminal: r.Terminal,
+			},
+			Checkpoint: r.Checkpoint,
+			Pid:        s.pid,
+		})
 
-	return &taskAPI.CreateTaskResponse{
-		Pid: s.pid,
-	}, nil
+		return &taskAPI.CreateTaskResponse{
+			Pid: s.pid,
+		}, nil
+	}
 }
 
 // Start a process
