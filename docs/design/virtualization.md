@@ -100,23 +100,34 @@ Devices used:
 
 ### Cloud Hypervisor/KVM
 
-Cloud Hypervisor, based on [rust-VMM](https://github.com/rust-vmm), is designed to have a lighter footprint and attack surface. For Kata Containers,
-relative to Firecracker, the Cloud Hypervisor configuration provides better compatibility at the expense of exposing additional devices: file system
-sharing and direct device assignment.  As of the 1.10 release of Kata Containers, Cloud Hypervisor does not support device hotplug, and as a result
-does not support updating container resources after boot, or utilizing block based volumes. While Cloud Hypervisor does support VFIO, Kata is still adding
-this support. As of 1.10, Kata does not support block based volumes or direct device assignment. See [Cloud Hypervisor device support documentation](https://github.com/cloud-hypervisor/cloud-hypervisor/blob/master/docs/device_model.md)
-for more details on Cloud Hypervisor.
+[Cloud Hypervisor](https://github.com/cloud-hypervisor/cloud-hypervisor), based
+on [rust-vmm](https://github.com/rust-vmm), is designed to have a
+lighter footprint and smaller attack surface for running modern cloud
+workloads. Kata Containers with Cloud
+Hypervisor provides mostly complete compatibility with Kubernetes
+comparable to the QEMU configuration. As of the 1.12 and 2.0.0 release
+of Kata Containers, the Cloud Hypervisor configuration supports both CPU
+and memory resize, device hotplug (disk and VFIO), file-system sharing through virtio-fs,
+block-based volumes, booting from VM images backed by pmem device, and
+fine-grained seccomp filters for each VMM threads (e.g. all virtio
+device worker threads). Please check [this GitHub Project](https://github.com/orgs/kata-containers/projects/21)
+for details of ongoing integration efforts.
 
-Devices used:
-- virtio VSOCK
+Devices and features used:
+- virtio VSOCK or virtio serial
 - virtio block
 - virtio net
 - virtio fs
+- virtio pmem
+- VFIO
+- hotplug
+- seccomp filters
+- [HTTP OpenAPI](https://github.com/cloud-hypervisor/cloud-hypervisor/blob/master/vmm/src/api/openapi/cloud-hypervisor.yaml)
 
 ### Summary
 
 | Solution | release introduced | brief summary |
 |-|-|-|
-| Cloud Hypervisor | 1.10 |  rust-VMM based, includes VFIO and FS sharing through virtio-fs, no hotplug |
+| Cloud Hypervisor | 1.10 | upstream Cloud Hypervisor with rich feature support, e.g. hotplug, VFIO and FS sharing|
 | Firecracker | 1.5 | upstream Firecracker, rust-VMM based, no VFIO, no FS sharing, no memory/CPU hotplug |
 | QEMU | 1.0 | upstream QEMU, with support for hotplug and filesystem sharing |
