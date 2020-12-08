@@ -14,6 +14,7 @@ use nix::sys::wait::{self, WaitStatus};
 use nix::unistd::{self, Pid};
 use nix::Result;
 
+use crate::reaper::Epoller;
 use oci::Process as OCIProcess;
 use slog::Logger;
 
@@ -40,6 +41,7 @@ pub struct Process {
     pub exit_watchers: Vec<Sender<i32>>,
     pub oci: OCIProcess,
     pub logger: Logger,
+    pub epoller: Option<Epoller>,
 }
 
 pub trait ProcessOperations {
@@ -91,6 +93,7 @@ impl Process {
             exit_watchers: Vec::new(),
             oci: ocip.clone(),
             logger: logger.clone(),
+            epoller: None,
         };
 
         info!(logger, "before create console socket!");
@@ -111,6 +114,29 @@ impl Process {
             p.stderr = Some(stderr);
         }
         Ok(p)
+    }
+
+    pub fn close_epoller(&mut self) {
+        if let Some(epoller) = self.epoller.take() {
+            epoller.close();
+        }
+    }
+
+    pub fn create_epoller(&mut self) -> anyhow::Result<()> {
+        match self.term_master {
+            Some(term_master) => {
+                // add epoller to process
+                let epoller = Epoller::new(&self.logger, term_master)?;
+                self.epoller = Some(epoller)
+            }
+            None => {
+                info!(
+                    self.logger,
+                    "try to add epoller to a process without a term master fd"
+                );
+            }
+        }
+        Ok(())
     }
 }
 
