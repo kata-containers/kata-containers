@@ -400,6 +400,9 @@ build_rootfs_distro()
 			done
 		fi
 
+		before_starting_container
+		trap after_stopping_container EXIT
+
 		#Make sure we use a compatible runtime to build rootfs
 		# In case Clear Containers Runtime is installed we dont want to hit issue:
 		#https://github.com/clearcontainers/runtime/issues/828
