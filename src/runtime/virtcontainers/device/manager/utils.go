@@ -42,6 +42,37 @@ func isBlock(devInfo config.DeviceInfo) bool {
 	return devInfo.DevType == "b"
 }
 
+func CheckVendorDelay(hostPath string, delayVendos []string) (bool, error) {
+	if !isVFIO(hostPath) {
+		return false, nil
+	}
+
+	iommuDevicesPath := filepath.Join(config.SysIOMMUPath, filepath.Base(hostPath), "devices")
+	deviceFiles, err := ioutil.ReadDir(iommuDevicesPath)
+	if err != nil {
+		return false, err
+	}
+
+	for _, deviceFile := range deviceFiles {
+		vendorPath := filepath.Join(iommuDevicesPath, deviceFile.Name(), "vendor")
+		buf, err := ioutil.ReadFile(vendorPath)
+		if err != nil {
+			return false, fmt.Errorf("failed to read sysfs resource %v, error:%v", vendorPath, err)
+		}
+		vendor := strings.Split(string(buf), "\n")[0]
+		deviceLogger().WithFields(logrus.Fields{
+			"vendor":        vendor,
+			"delay-vendors": delayVendos,
+		}).Debug("check VFIO device vendor")
+		for _, v := range delayVendos {
+			if vendor == v {
+				return true, nil
+			}
+		}
+	}
+	return false, nil
+}
+
 // IsVFIOLargeBarSpaceDevice checks if the device is a large bar space device.
 func IsVFIOLargeBarSpaceDevice(hostPath string) (bool, error) {
 	if !isVFIO(hostPath) {

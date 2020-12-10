@@ -438,6 +438,10 @@ func addHypervisorConfigOverrides(ocispec specs.Spec, config *vc.SandboxConfig, 
 		return err
 	}
 
+	if err := addHypervisorPCIeOverrides(ocispec, config); err != nil {
+		return err
+	}
+
 	if value, ok := ocispec.Annotations[vcAnnotations.MachineType]; ok {
 		if value != "" {
 			config.HypervisorConfig.HypervisorMachineType = value
@@ -470,41 +474,6 @@ func addHypervisorConfigOverrides(ocispec specs.Spec, config *vc.SandboxConfig, 
 		}
 
 		config.HypervisorConfig.DisableImageNvdimm = disableNvdimm
-	}
-
-	if value, ok := ocispec.Annotations[vcAnnotations.HotplugVFIOOnRootBus]; ok {
-		hotplugVFIOOnRootBus, err := strconv.ParseBool(value)
-		if err != nil {
-			return fmt.Errorf("Error parsing annotation for hotplug_vfio_on_root_bus: Please specify boolean value 'true|false'")
-		}
-
-		config.HypervisorConfig.HotplugVFIOOnRootBus = hotplugVFIOOnRootBus
-	}
-
-	if value, ok := ocispec.Annotations[vcAnnotations.PCIeRootPort]; ok {
-		pcieRootPort, err := strconv.ParseUint(value, 10, 32)
-		if err != nil {
-			return fmt.Errorf("Error parsing annotation for pcie_root_port: %v, Please specify an integer in [0, %v]",
-				err, vc.MaxPCIeRootPort)
-		}
-		config.HypervisorConfig.PCIeRootPort = uint32(pcieRootPort)
-		if config.HypervisorConfig.PCIeRootPort > vc.MaxPCIeRootPort {
-			return fmt.Errorf("Error parsing annotation for pcie_root_port: %v, Please specify an integer in [0, %v]",
-				config.HypervisorConfig.PCIeRootPort, vc.MaxPCIeRootPort)
-		}
-	}
-
-	if value, ok := ocispec.Annotations[vcAnnotations.PCIeLazyAttachDelay]; ok {
-		pcieLazyAttachDelay, err := strconv.ParseUint(value, 10, 32)
-		if err != nil {
-			return fmt.Errorf("Error parsing annotation for pcie_lazy_attach_delay: %v, Please specify an integer in [0, %v]",
-				err, vc.MaxPCIeLazyAttachDelay)
-		}
-		config.HypervisorConfig.PCIeLazyAttachDelay = uint32(pcieLazyAttachDelay)
-		if config.HypervisorConfig.PCIeLazyAttachDelay > vc.MaxPCIeLazyAttachDelay {
-			return fmt.Errorf("Error parsing annotation for pcie_lazy_attach_delay: %v, Please specify an integer in [0, %v]",
-				config.HypervisorConfig.PCIeLazyAttachDelay, vc.MaxPCIeLazyAttachDelay)
-		}
 	}
 
 	if value, ok := ocispec.Annotations[vcAnnotations.EntropySource]; ok {
@@ -954,6 +923,54 @@ func addAgentConfigOverrides(ocispec specs.Spec, config *vc.SandboxConfig) error
 
 	config.AgentConfig = c
 
+	return nil
+}
+
+func addHypervisorPCIeOverrides(ocispec specs.Spec, config *vc.SandboxConfig) error {
+	var err error
+
+	if value, ok := ocispec.Annotations[vcAnnotations.HotplugVFIOOnRootBus]; ok {
+		config.HypervisorConfig.HotplugVFIOOnRootBus, err = strconv.ParseBool(value)
+		if err != nil {
+			return fmt.Errorf("Error parsing annotation for hotplug_vfio_on_root_bus: Please specify boolean value 'true|false'")
+		}
+	}
+
+	if value, ok := ocispec.Annotations[vcAnnotations.PCIeRootPort]; ok {
+		pcieRootPort, err := strconv.ParseUint(value, 10, 32)
+		if err != nil {
+			return fmt.Errorf("Error parsing annotation for pcie_root_port: %v, Please specify an integer in [0, %v]",
+				err, vc.MaxPCIeRootPort)
+		}
+		config.HypervisorConfig.PCIeRootPort = uint32(pcieRootPort)
+		if config.HypervisorConfig.PCIeRootPort > vc.MaxPCIeRootPort {
+			return fmt.Errorf("Error parsing annotation for pcie_root_port: %v, Please specify an integer in [0, %v]",
+				config.HypervisorConfig.PCIeRootPort, vc.MaxPCIeRootPort)
+		}
+	}
+
+	if value, ok := ocispec.Annotations[vcAnnotations.PCIeLazyAttachVendor]; ok {
+		config.HypervisorConfig.PCIeLazyAttachVendor = strings.Split(value, ",")
+		reg := regexp.MustCompile(vc.VendorIdRE)
+		for _, v := range config.HypervisorConfig.PCIeLazyAttachVendor {
+			if !reg.MatchString(v) {
+				return fmt.Errorf("Error parsing annotation for pcie_lazy_attach_vendor: %v, Please specify the valid vendor id, format 0x????", v)
+			}
+		}
+	}
+
+	if value, ok := ocispec.Annotations[vcAnnotations.PCIeLazyAttachDelay]; ok {
+		pcieLazyAttachDelay, err := strconv.ParseUint(value, 10, 32)
+		if err != nil {
+			return fmt.Errorf("Error parsing annotation for pcie_lazy_attach_delay: %v, Please specify an integer in [0, %v]",
+				err, vc.MaxPCIeLazyAttachDelay)
+		}
+		config.HypervisorConfig.PCIeLazyAttachDelay = uint32(pcieLazyAttachDelay)
+		if config.HypervisorConfig.PCIeLazyAttachDelay > vc.MaxPCIeLazyAttachDelay {
+			return fmt.Errorf("Error parsing annotation for pcie_lazy_attach_delay: %v, Please specify an integer in [0, %v]",
+				config.HypervisorConfig.PCIeLazyAttachDelay, vc.MaxPCIeLazyAttachDelay)
+		}
+	}
 	return nil
 }
 

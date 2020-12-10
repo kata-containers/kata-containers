@@ -6,7 +6,10 @@
 
 package katatestutils
 
-import "strconv"
+import (
+	"encoding/json"
+	"strconv"
+)
 
 type RuntimeConfigOptions struct {
 	Hypervisor           string
@@ -30,6 +33,7 @@ type RuntimeConfigOptions struct {
 	VirtioFSDaemon       string
 	PFlash               []string
 	PCIeRootPort         uint32
+	PCIeLazyAttachVendor []string
 	PCIeLazyAttachDelay  uint32
 	DisableBlock         bool
 	EnableIOThreads      bool
@@ -105,6 +109,7 @@ var ContainerIDTestData = []ContainerIDTestDataType{
 }
 
 func MakeRuntimeConfigFileData(config RuntimeConfigOptions) string {
+	pcieLazyAttachVendor, _ := json.Marshal(config.PCIeLazyAttachVendor)
 	return `
 	# Runtime configuration file
 
@@ -122,6 +127,7 @@ func MakeRuntimeConfigFileData(config RuntimeConfigOptions) string {
 	enable_iothreads =  ` + strconv.FormatBool(config.EnableIOThreads) + `
 	hotplug_vfio_on_root_bus =  ` + strconv.FormatBool(config.HotplugVFIOOnRootBus) + `
 	pcie_root_port = ` + strconv.FormatUint(uint64(config.PCIeRootPort), 10) + `
+	pcie_lazy_attach_vendor = ` + string(pcieLazyAttachVendor) + `
 	pcie_lazy_attach_delay = ` + strconv.FormatUint(uint64(config.PCIeLazyAttachDelay), 10) + `
 	msize_9p = ` + strconv.FormatUint(uint64(config.DefaultMsize9p), 10) + `
 	enable_debug = ` + strconv.FormatBool(config.HypervisorDebug) + `

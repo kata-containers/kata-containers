@@ -83,6 +83,7 @@ There are several kinds of Kata configurations and they are listed below.
 | `io.katacontainers.config.hypervisor.msize_9p` | uint32 | the `msize` for 9p shares |
 | `io.katacontainers.config.hypervisor.path` | string | the hypervisor that will run the container VM |
 | `io.katacontainers.config.hypervisor.pcie_root_port` | uint32 | specify the number of PCIe Root Port devices. The PCIe Root Port device is used to hot-plug a PCIe device (QEMU) |
+| `io.katacontainers.config.hypervisor.pcie_lazy_attach_vendor` | string | specify the vendor id list of the PCIe device that needs to be lazily attached, separated by comma (QEMU) |
 | `io.katacontainers.config.hypervisor.pcie_lazy_attach_delay` | uint32 | specify the delay in seconds for hot-plug the PCIe devices (QEMU) |
 | `io.katacontainers.config.hypervisor.shared_fs` | string | the shared file system type, either `virtio-9p` or `virtio-fs` |
 | `io.katacontainers.config.hypervisor.use_vsock` | `boolean` | specify use of `vsock` for agent communication |

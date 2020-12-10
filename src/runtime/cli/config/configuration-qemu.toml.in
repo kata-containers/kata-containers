@@ -269,21 +269,27 @@ pflashes = []
 # VFIO devices are hotplugged on a bridge by default.
 # Enable hotplugging on root bus. This may be required for devices with
 # a large PCI bar, as this is a current limitation with hotplugging on
-# a bridge. This value is valid for "pc" machine type.
+# a bridge.
 # Default false
 #hotplug_vfio_on_root_bus = true
 
 # Before hot plugging a PCIe device, you need to add a pcie_root_port device.
 # Use this parameter when using some large PCI bar devices, such as Nvidia GPU
 # The value means the number of pcie_root_port
-# This value is valid when hotplug_vfio_on_root_bus is true and machine_type is "q35"
+# This value is valid when machine_type is "q35" and hotplug_vfio_on_root_bus is true
 # Default 0, Max 2
 #pcie_root_port = 1
+
+# Specify the vendor id of the vfio device that needs to be lazily attached
+# Use this parameter when hot plugging large PCI Bar devices fails
+# This value is valid when machine_type is q35
+# Default is [], "0x10de" is Nvidia
+#pcie_lazy_attach_vendor = ["0x10de"]
 
 # This is a workaround for QEMU with guest kernel 5.x behavior
 # Use this parameter when hot plugging large PCI Bar devices fails
 # This value represents the delay (in seconds) for attaching a large PCI bar device after the container is created
-# This value is valid when machine_type is q35, hotplug_vfio_on_root_bus is true and pcie_root_port is greater than 0
+# This value is valid when machine_type is q35
 # Default 0, Max 5
 #pcie_lazy_attach_delay = 2
 

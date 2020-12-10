@@ -824,7 +824,7 @@ func TestAddHypervisorAnnotations(t *testing.T) {
 	runtimeConfig.HypervisorConfig.EnableAnnotations = []string{".*"}
 	runtimeConfig.HypervisorConfig.FileBackedMemRootList = []string{"/dev/shm*"}
 	runtimeConfig.HypervisorConfig.VirtioFSDaemonList = []string{"/bin/*ls*"}
-
+	runtimeConfig.HypervisorConfig.EntropySourceList = []string{"/dev/*random*"}
 	ocispec.Annotations[vcAnnotations.KernelParams] = "vsyscall=emulate iommu=on"
 	addHypervisorConfigOverrides(ocispec, &config, runtimeConfig)
 	assert.Exactly(expectedHyperConfig, config.HypervisorConfig)
@@ -860,6 +860,7 @@ func TestAddHypervisorAnnotations(t *testing.T) {
 	ocispec.Annotations[vcAnnotations.HotplugVFIOOnRootBus] = "true"
 	ocispec.Annotations[vcAnnotations.PCIeRootPort] = "2"
 	ocispec.Annotations[vcAnnotations.PCIeLazyAttachDelay] = "3"
+	ocispec.Annotations[vcAnnotations.PCIeLazyAttachVendor] = "0x10de,0x10df"
 	ocispec.Annotations[vcAnnotations.EntropySource] = "/dev/urandom"
 	ocispec.Annotations[vcAnnotations.IOMMUPlatform] = "true"
 	ocispec.Annotations[vcAnnotations.SGXEPC] = "64Mi"
@@ -899,6 +900,7 @@ func TestAddHypervisorAnnotations(t *testing.T) {
 	assert.Equal(config.HypervisorConfig.HotplugVFIOOnRootBus, true)
 	assert.Equal(config.HypervisorConfig.PCIeRootPort, uint32(2))
 	assert.Equal(config.HypervisorConfig.PCIeLazyAttachDelay, uint32(3))
+	assert.Equal(config.HypervisorConfig.PCIeLazyAttachVendor, []string{"0x10de", "0x10df"})
 	assert.Equal(config.HypervisorConfig.EntropySource, "/dev/urandom")
 	assert.Equal(config.HypervisorConfig.IOMMUPlatform, true)
 	assert.Equal(config.HypervisorConfig.SGXEPCSize, int64(67108864))

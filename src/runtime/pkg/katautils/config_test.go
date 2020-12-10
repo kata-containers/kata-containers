@@ -83,6 +83,7 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (config testRuntimeConf
 	enableIOThreads := true
 	hotplugVFIOOnRootBus := true
 	pcieRootPort := uint32(2)
+	pcieLazyAttachVendor := []string{"0x10de"}
 	pcieLazyAttachDelay := uint32(3)
 
 	disableNewNetNs := false
@@ -105,6 +106,7 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (config testRuntimeConf
 		EnableIOThreads:      enableIOThreads,
 		HotplugVFIOOnRootBus: hotplugVFIOOnRootBus,
 		PCIeRootPort:         pcieRootPort,
+		PCIeLazyAttachVendor: pcieLazyAttachVendor,
 		PCIeLazyAttachDelay:  pcieLazyAttachDelay,
 		DisableNewNetNs:      disableNewNetNs,
 		DefaultVCPUCount:     defaultVCPUCount,
@@ -167,6 +169,7 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (config testRuntimeConf
 		EnableIOThreads:       enableIOThreads,
 		HotplugVFIOOnRootBus:  hotplugVFIOOnRootBus,
 		PCIeRootPort:          pcieRootPort,
+		PCIeLazyAttachVendor:  pcieLazyAttachVendor,
 		PCIeLazyAttachDelay:   pcieLazyAttachDelay,
 		Msize9p:               defaultMsize9p,
 		MemSlots:              defaultMemSlots,
@@ -647,6 +650,7 @@ func TestNewQemuHypervisorConfig(t *testing.T) {
 	enableIOThreads := true
 	hotplugVFIOOnRootBus := true
 	pcieRootPort := uint32(2)
+	pcieLazyAttachVendor := []string{"0x10de"}
 	pcieLazyAttachDelay := uint32(3)
 	orgVHostVSockDevicePath := utils.VHostVSockDevicePath
 	defer func() {
@@ -666,6 +670,7 @@ func TestNewQemuHypervisorConfig(t *testing.T) {
 		EnableIOThreads:       enableIOThreads,
 		HotplugVFIOOnRootBus:  hotplugVFIOOnRootBus,
 		PCIeRootPort:          pcieRootPort,
+		PCIeLazyAttachVendor:  pcieLazyAttachVendor,
 		PCIeLazyAttachDelay:   pcieLazyAttachDelay,
 		RxRateLimiterMaxRate:  rxRateLimiterMaxRate,
 		TxRateLimiterMaxRate:  txRateLimiterMaxRate,
@@ -720,6 +725,10 @@ func TestNewQemuHypervisorConfig(t *testing.T) {
 
 	if config.PCIeRootPort != pcieRootPort {
 		t.Errorf("Expected value for PCIeRootPort %v, got %v", pcieRootPort, config.PCIeRootPort)
+	}
+
+	if strings.Join(config.PCIeLazyAttachVendor, ",") != strings.Join(pcieLazyAttachVendor, ",") {
+		t.Errorf("Expected value for PCIeLazyAttachVendor %v, got %v", pcieLazyAttachVendor, config.PCIeLazyAttachVendor)
 	}
 
 	if config.PCIeLazyAttachDelay != pcieLazyAttachDelay {
@@ -850,6 +859,7 @@ func TestNewQemuHypervisorConfigImageAndInitrd(t *testing.T) {
 	enableIOThreads := true
 	hotplugVFIOOnRootBus := true
 	pcieRootPort := uint32(2)
+	pcieLazyAttachVendor := []string{"0x10de"}
 	pcieLazyAttachDelay := uint32(3)
 
 	hypervisor := hypervisor{
@@ -862,6 +872,7 @@ func TestNewQemuHypervisorConfigImageAndInitrd(t *testing.T) {
 		EnableIOThreads:       enableIOThreads,
 		HotplugVFIOOnRootBus:  hotplugVFIOOnRootBus,
 		PCIeRootPort:          pcieRootPort,
+		PCIeLazyAttachVendor:  pcieLazyAttachVendor,
 		PCIeLazyAttachDelay:   pcieLazyAttachDelay,
 	}
 

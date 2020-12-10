@@ -118,6 +118,9 @@ const (
 	// The PCIe Root Port device is used to hot-plug the PCIe device
 	PCIeRootPort = kataAnnotHypervisorPrefix + "pcie_root_port"
 
+	// PCIeLazyAttachVendor specify the vendor id of the PCIe device that needs to be lazily attached
+	PCIeLazyAttachVendor = kataAnnotHypervisorPrefix + "pcie_lazy_attach_vendor"
+
 	// PCIeLazyAttachDelay is a sandbox annotation used to indicate if devices whether to hot-plug
 	// the device after a few seconds delay
 	PCIeLazyAttachDelay = kataAnnotHypervisorPrefix + "pcie_lazy_attach_delay"

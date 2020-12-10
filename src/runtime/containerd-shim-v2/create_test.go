@@ -393,6 +393,7 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (config string, err err
 	enableIOThreads := true
 	hotplugVFIOOnRootBus := true
 	pcieRootPort := uint32(2)
+	pcieLazyAttachVendor := []string{"0x10de"}
 	pcieLazyAttachDelay := uint32(3)
 	disableNewNetNs := false
 	sharedFS := "virtio-9p"
@@ -413,6 +414,7 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (config string, err err
 		EnableIOThreads:      enableIOThreads,
 		HotplugVFIOOnRootBus: hotplugVFIOOnRootBus,
 		PCIeRootPort:         pcieRootPort,
+		PCIeLazyAttachVendor: pcieLazyAttachVendor,
 		PCIeLazyAttachDelay:  pcieLazyAttachDelay,
 		DisableNewNetNs:      disableNewNetNs,
 		SharedFS:             sharedFS,

@@ -176,6 +176,9 @@ type HypervisorConfig struct {
 	// The PCIe Root Port device is used to hot-plug the PCIe device
 	PCIeRootPort uint32
 
+	// PCIeLazyAttachVendor specify the vendor id of the PCIe device that needs to be lazily attached
+	PCIeLazyAttachVendor []string
+
 	// PCIeLazyAttachDelay is a sandbox annotation used to indicate if devices whether to hot-plug
 	// the device after a few seconds delay
 	PCIeLazyAttachDelay uint32
