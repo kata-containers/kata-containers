@@ -9,11 +9,13 @@ use std::collections::HashMap;
 use std::fs;
 use std::os::unix::fs::MetadataExt;
 use std::path::Path;
+use std::str::FromStr;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
 use crate::linux_abi::*;
 use crate::mount::{DRIVER_BLK_TYPE, DRIVER_MMIO_BLK_TYPE, DRIVER_NVDIMM_TYPE, DRIVER_SCSI_TYPE};
+use crate::pci;
 use crate::sandbox::Sandbox;
 use crate::{AGENT_CONFIG, GLOBAL_DEVICE_WATCHER};
 use anyhow::{anyhow, Result};
@@ -45,60 +47,46 @@ pub fn online_device(path: &str) -> Result<()> {
     Ok(())
 }
 
-// pcipath_to_sysfs fetches the sysfs path for a PCI device, relative
-// to the syfs path for the PCI host bridge, based on the PCI path
-// provided. The path should be in the format "bridgeAddr/deviceAddr",
-// where bridgeAddr is the address at which the brige is attached on
-// the root bus, while deviceAddr is the address at which the device
-// is attached on the bridge.
+// pciPathToSysfs fetches the sysfs path for a PCI path, relative to
+// the syfs path for the PCI host bridge, based on the PCI path
+// provided.
 fn pcipath_to_sysfs(pcipath: &str) -> Result<String> {
-    let tokens: Vec<&str> = pcipath.split('/').collect();
+    let pcipath = pci::Path::from_str(pcipath)?;
+    let mut bus = "0000:00".to_string();
+    let mut relpath = String::new();
+    let root_bus_sysfs = format!("{}{}", SYSFS_DIR, create_pci_root_bus_path());
 
-    if tokens.len() != 2 {
-        return Err(anyhow!(
-            "PCI path for device should be of format [bridgeAddr/deviceAddr], got {:?}",
-            pcipath
-        ));
+    for i in 0..pcipath.len() {
+        let bdf = format!("{}:{}.0", bus, pcipath[i]);
+
+        relpath = format!("{}/{}", relpath, bdf);
+
+        if i == pcipath.len() - 1 {
+            // Final device need not be a bridge
+            break;
+        }
+
+        // Find out the bus exposed by bridge
+        let bridgebuspath = format!("{}{}/pci_bus", root_bus_sysfs, relpath);
+        let mut files: Vec<_> = fs::read_dir(&bridgebuspath)?.collect();
+
+        if files.len() != 1 {
+            return Err(anyhow!(
+                "Expected exactly one PCI bus in {}, got {} instead",
+                bridgebuspath,
+                files.len()
+            ));
+        }
+
+        // unwrap is safe, because of the length test above
+        let busfile = files.pop().unwrap()?;
+        bus = busfile
+            .file_name()
+            .into_string()
+            .map_err(|e| anyhow!("Bad filename under {}: {:?}", &bridgebuspath, e))?;
     }
 
-    let bridge_id = tokens[0];
-    let device_id = tokens[1];
-
-    // Deduce the complete bridge address based on the bridge address identifier passed
-    // and the fact that bridges are attached on the main bus with function 0.
-    let pci_bridge_addr = format!("0000:00:{}.0", bridge_id);
-
-    // Find out the bus exposed by bridge
-    let bridge_bus_path = format!("{}/{}/pci_bus/", SYSFS_PCI_BUS_PREFIX, pci_bridge_addr);
-
-    let files_slice: Vec<_> = fs::read_dir(&bridge_bus_path)
-        .unwrap()
-        .map(|res| res.unwrap().path())
-        .collect();
-    let bus_num = files_slice.len();
-
-    if bus_num != 1 {
-        return Err(anyhow!(
-            "Expected an entry for bus in {}, got {} entries instead",
-            bridge_bus_path,
-            bus_num
-        ));
-    }
-
-    let bus = files_slice[0].file_name().unwrap().to_str().unwrap();
-
-    // Device address is based on the bus of the bridge to which it is attached.
-    // We do not pass devices as multifunction, hence the trailing 0 in the address.
-    let pci_device_addr = format!("{}:{}.0", bus, device_id);
-
-    let sysfs_rel_path = format!("{}/{}", pci_bridge_addr, pci_device_addr);
-
-    info!(
-        sl!(),
-        "Fetched sysfs relative path for PCI device {}\n", sysfs_rel_path
-    );
-
-    Ok(sysfs_rel_path)
+    Ok(relpath)
 }
 
 async fn get_device_name(sandbox: &Arc<Mutex<Sandbox>>, dev_addr: &str) -> Result<String> {
