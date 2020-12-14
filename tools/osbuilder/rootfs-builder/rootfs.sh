@@ -200,7 +200,7 @@ docker_extra_args()
 		args+=" --cap-add SYS_CHROOT"
 		# debootstrap needs to create device nodes to properly function
 		args+=" --cap-add MKNOD"
-		;&
+		;;
 	suse)
 		# Required to mount inside a container
 		args+=" --cap-add SYS_ADMIN"
