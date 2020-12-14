@@ -58,7 +58,7 @@ to go through the VSOCK interface exported by QEMU.
 
 The container workload, that is, the actual OCI bundle rootfs, is exported from the
 host to the virtual machine.  In the case where a block-based graph driver is
-configured, `virtio-scsi` will be used. In all other cases a 9pfs VIRTIO mount point
+configured, `virtio-scsi` will be used. In all other cases a `virtio-fs` VIRTIO mount point
 will be used. `kata-agent` uses this mount point as the root filesystem for the
 container processes.
 
