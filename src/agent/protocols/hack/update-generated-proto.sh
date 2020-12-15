@@ -47,7 +47,7 @@ show_usage() {
 }
 
 generate_go_sources() {
-    local cmd="protoc -I$GOPATH/src/github.com/kata-containers/agent/vendor/github.com/gogo/protobuf:$GOPATH/src/github.com/kata-containers/agent/vendor:$GOPATH/src/github.com/gogo/protobuf:$GOPATH/src/github.com/gogo/googleapis:$GOPATH/src:$GOPATH/src/github.com/kata-containers/kata-containers/src/agent/protocols/protos \
+    local cmd="protoc -I$GOPATH/src:$GOPATH/src/github.com/kata-containers/kata-containers/src/agent/protocols/protos \
 --gogottrpc_out=plugins=ttrpc+fieldpath,\
 import_path=github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols/grpc,\
 \
