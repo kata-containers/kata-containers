@@ -984,7 +984,7 @@ func generateVCNetworkStructures(networkNS NetworkNamespace) ([]*pbTypes.Interfa
 			Mtu:         uint64(endpoint.Properties().Iface.MTU),
 			RawFlags:    noarp,
 			HwAddr:      endpoint.HardwareAddr(),
-			PciAddr:     endpoint.PciAddr(),
+			PciPath:     endpoint.PciAddr(),
 		}
 
 		ifaces = append(ifaces, &ifc)
