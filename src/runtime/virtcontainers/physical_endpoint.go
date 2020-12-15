@@ -17,6 +17,7 @@ import (
 	persistapi "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist/api"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/cgroups"
 	"github.com/safchain/ethtool"
+	vcTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/types"
 )
 
 // PhysicalEndpoint gathers a physical network interface and its properties
@@ -28,7 +29,7 @@ type PhysicalEndpoint struct {
 	BDF                string
 	Driver             string
 	VendorDeviceID     string
-	PCIAddr            string
+	PCIPath            vcTypes.PciPath
 }
 
 // Properties returns the properties of the physical interface.
@@ -51,14 +52,14 @@ func (endpoint *PhysicalEndpoint) Type() EndpointType {
 	return endpoint.EndpointType
 }
 
-// PciAddr returns the PCI address of the endpoint.
-func (endpoint *PhysicalEndpoint) PciAddr() string {
-	return endpoint.PCIAddr
+// PciPath returns the PCI path of the endpoint.
+func (endpoint *PhysicalEndpoint) PciPath() vcTypes.PciPath {
+	return endpoint.PCIPath
 }
 
-// SetPciAddr sets the PCI address of the endpoint.
-func (endpoint *PhysicalEndpoint) SetPciAddr(pciAddr string) {
-	endpoint.PCIAddr = pciAddr
+// SetPciPath sets the PCI path of the endpoint.
+func (endpoint *PhysicalEndpoint) SetPciPath(pciPath vcTypes.PciPath) {
+	endpoint.PCIPath = pciPath
 }
 
 // SetProperties sets the properties of the physical endpoint.
