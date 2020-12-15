@@ -50,8 +50,7 @@ pub fn online_device(path: &str) -> Result<()> {
 // pciPathToSysfs fetches the sysfs path for a PCI path, relative to
 // the syfs path for the PCI host bridge, based on the PCI path
 // provided.
-fn pcipath_to_sysfs(pcipath: &str) -> Result<String> {
-    let pcipath = pci::Path::from_str(pcipath)?;
+fn pcipath_to_sysfs(pcipath: &pci::Path) -> Result<String> {
     let mut bus = "0000:00".to_string();
     let mut relpath = String::new();
     let root_bus_sysfs = format!("{}{}", SYSFS_DIR, create_pci_root_bus_path());
@@ -145,7 +144,10 @@ pub async fn get_scsi_device_name(
     get_device_name(sandbox, &dev_sub_path).await
 }
 
-pub async fn get_pci_device_name(sandbox: &Arc<Mutex<Sandbox>>, pcipath: &str) -> Result<String> {
+pub async fn get_pci_device_name(
+    sandbox: &Arc<Mutex<Sandbox>>,
+    pcipath: &pci::Path,
+) -> Result<String> {
     let sysfs_rel_path = pcipath_to_sysfs(pcipath)?;
 
     rescan_pci_bus()?;
@@ -284,9 +286,7 @@ async fn virtiommio_blk_device_handler(
     update_spec_device_list(device, spec, devidx)
 }
 
-// device.Id should be the PCI address in the format  "bridgeAddr/deviceAddr".
-// Here, bridgeAddr is the address at which the brige is attached on the root bus,
-// while deviceAddr is the address at which the device is attached on the bridge.
+// device.Id should be a PCI path string
 async fn virtio_blk_device_handler(
     device: &Device,
     spec: &mut Spec,
@@ -295,10 +295,12 @@ async fn virtio_blk_device_handler(
 ) -> Result<()> {
     let mut dev = device.clone();
 
-    // When "Id (PCIAddr)" is not set, we allow to use the predicted "VmPath" passed from kata-runtime
-    // Note this is a special code path for cloud-hypervisor when BDF information is not available
+    // When "Id (PCI path)" is not set, we allow to use the predicted
+    // "VmPath" passed from kata-runtime Note this is a special code
+    // path for cloud-hypervisor when BDF information is not available
     if device.id != "" {
-        dev.vm_path = get_pci_device_name(sandbox, &device.id).await?;
+        let pcipath = pci::Path::from_str(&device.id)?;
+        dev.vm_path = get_pci_device_name(sandbox, &pcipath).await?;
     }
 
     update_spec_device_list(&dev, spec, devidx)
