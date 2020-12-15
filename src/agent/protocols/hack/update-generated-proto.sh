@@ -80,12 +80,6 @@ fi;
 which protoc
 [ $? -eq 0 ] || die "Please install protoc from github.com/protocolbuffers/protobuf"
 
-which protoc-gen-rust
-[ $? -eq 0 ] || die "Please install protobuf-codegen from github.com/pingcap/grpc-rs"
-
-which ttrpc_rust_plugin
-[ $? -eq 0 ] || die "Please install ttrpc_rust_plugin from https://github.com/containerd/ttrpc-rust"
-
 which protoc-gen-gogottrpc
 [ $? -eq 0 ] || die "Please install protoc-gen-gogottrpc from https://github.com/containerd/ttrpc"
 
