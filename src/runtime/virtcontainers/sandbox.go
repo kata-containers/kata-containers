@@ -850,7 +850,7 @@ func (s *Sandbox) AddInterface(inf *pbTypes.Interface) (*pbTypes.Interface, erro
 	}
 
 	// Add network for vm
-	inf.PciPath = endpoint.PciAddr()
+	inf.PciPath = endpoint.PciPath().String()
 	return s.agent.updateInterface(inf)
 }
 
