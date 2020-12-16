@@ -1289,8 +1289,18 @@ func (q *qemu) hotplugAddBlockDevice(drive *config.BlockDrive, op operation, dev
 			}
 		}()
 
-		// PCI address is in the format bridge-addr/device-addr eg. "03/02"
-		drive.PCIAddr = fmt.Sprintf("%02x", bridge.Addr) + "/" + addr
+		bridgeSlot, err := vcTypes.PciSlotFromInt(bridge.Addr)
+		if err != nil {
+			return err
+		}
+		devSlot, err := vcTypes.PciSlotFromString(addr)
+		if err != nil {
+			return err
+		}
+		drive.PCIPath, err = vcTypes.PciPathFromSlots(bridgeSlot, devSlot)
+		if err != nil {
+			return err
+		}
 
 		if err = q.qmpMonitorCh.qmp.ExecutePCIDeviceAdd(q.qmpMonitorCh.ctx, drive.ID, devID, driver, addr, bridge.ID, romFile, 0, true, defaultDisableModern); err != nil {
 			return err

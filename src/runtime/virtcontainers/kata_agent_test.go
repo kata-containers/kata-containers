@@ -32,6 +32,7 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/mock"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/rootless"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
+	vcTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/types"
 )
 
 var (
@@ -39,7 +40,7 @@ var (
 	testBlockDeviceCtrPath = "testBlockDeviceCtrPath"
 	testDevNo              = "testDevNo"
 	testNvdimmID           = "testNvdimmID"
-	testPCIAddr            = "04/02"
+	testPCIPath, _         = vcTypes.PciPathFromString("04/02")
 	testSCSIAddr           = "testSCSIAddr"
 	testVirtPath           = "testVirtPath"
 )
@@ -271,13 +272,13 @@ func TestHandleDeviceBlockVolume(t *testing.T) {
 			inputMount:        Mount{},
 			inputDev: &drivers.BlockDevice{
 				BlockDrive: &config.BlockDrive{
-					PCIAddr:  testPCIAddr,
+					PCIPath:  testPCIPath,
 					VirtPath: testVirtPath,
 				},
 			},
 			resultVol: &pb.Storage{
 				Driver: kataBlkDevType,
-				Source: testPCIAddr,
+				Source: testPCIPath.String(),
 			},
 		},
 		{
@@ -353,16 +354,17 @@ func TestHandleBlockVolume(t *testing.T) {
 	bDestination := "/DeviceBlock/destination"
 	dDestination := "/DeviceDirectBlock/destination"
 	vPCIAddr := "0001:01"
-	bPCIAddr := "0002:01"
-	dPCIAddr := "0003:01"
+	bPCIPath, err := vcTypes.PciPathFromString("03/04")
+	assert.NoError(t, err)
+	dPCIPath, err := vcTypes.PciPathFromString("04/05")
 
 	vDev := drivers.NewVhostUserBlkDevice(&config.DeviceInfo{ID: vDevID})
 	bDev := drivers.NewBlockDevice(&config.DeviceInfo{ID: bDevID})
 	dDev := drivers.NewBlockDevice(&config.DeviceInfo{ID: dDevID})
 
 	vDev.VhostUserDeviceAttrs = &config.VhostUserDeviceAttrs{PCIAddr: vPCIAddr}
-	bDev.BlockDrive = &config.BlockDrive{PCIAddr: bPCIAddr}
-	dDev.BlockDrive = &config.BlockDrive{PCIAddr: dPCIAddr}
+	bDev.BlockDrive = &config.BlockDrive{PCIPath: bPCIPath}
+	dDev.BlockDrive = &config.BlockDrive{PCIPath: dPCIPath}
 
 	var devices []api.Device
 	devices = append(devices, vDev, bDev, dDev)
@@ -418,14 +420,14 @@ func TestHandleBlockVolume(t *testing.T) {
 		Fstype:     "bind",
 		Options:    []string{"bind"},
 		Driver:     kataBlkDevType,
-		Source:     bPCIAddr,
+		Source:     bPCIPath.String(),
 	}
 	dStorage := &pb.Storage{
 		MountPoint: dDestination,
 		Fstype:     "ext4",
 		Options:    []string{"ro"},
 		Driver:     kataBlkDevType,
-		Source:     dPCIAddr,
+		Source:     dPCIPath.String(),
 	}
 
 	assert.Equal(t, vStorage, volumeStorages[0], "Error while handle VhostUserBlk type block volume")
@@ -462,7 +464,7 @@ func TestAppendDevices(t *testing.T) {
 				ID: id,
 			},
 			BlockDrive: &config.BlockDrive{
-				PCIAddr: testPCIAddr,
+				PCIPath: testPCIPath,
 			},
 		},
 	}
@@ -489,7 +491,7 @@ func TestAppendDevices(t *testing.T) {
 		{
 			Type:          kataBlkDevType,
 			ContainerPath: testBlockDeviceCtrPath,
-			Id:            testPCIAddr,
+			Id:            testPCIPath.String(),
 		},
 	}
 	updatedDevList := k.appendDevices(devList, c)
@@ -509,7 +511,7 @@ func TestAppendVhostUserBlkDevices(t *testing.T) {
 			},
 			VhostUserDeviceAttrs: &config.VhostUserDeviceAttrs{
 				Type:    config.VhostUserBlk,
-				PCIAddr: testPCIAddr,
+				PCIAddr: testPCIPath.String(),
 			},
 		},
 	}
@@ -537,7 +539,7 @@ func TestAppendVhostUserBlkDevices(t *testing.T) {
 		{
 			Type:          kataBlkDevType,
 			ContainerPath: testBlockDeviceCtrPath,
-			Id:            testPCIAddr,
+			Id:            testPCIPath.String(),
 		},
 	}
 	updatedDevList := k.appendDevices(devList, c)
