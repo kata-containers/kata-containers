@@ -250,9 +250,10 @@ type VhostUserDeviceAttrs struct {
 	CacheSize uint32
 	Cache     string
 
-	// PCIAddr is the PCI address used to identify the slot at which the drive is attached.
-	// It is only meaningful for vhost user block devices
-	PCIAddr string
+	// PCIPath is the PCI path used to identify the slot at which
+	// the drive is attached.  It is only meaningful for vhost
+	// user block devices
+	PCIPath vcTypes.PciPath
 
 	// Block index of the device if assigned
 	Index int

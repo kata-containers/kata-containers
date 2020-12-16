@@ -73,9 +73,9 @@ type VhostUserDeviceAttrs struct {
 	// MacAddress is only meaningful for vhost user net device
 	MacAddress string
 
-	// PCIAddr is the PCI address used to identify the slot at which the drive is attached.
+	// PCIPath is the PCI path used to identify the slot at which the drive is attached.
 	// It is only meaningful for vhost user block devices
-	PCIAddr string
+	PCIPath vcTypes.PciPath
 
 	// Block index of the device if assigned
 	Index int

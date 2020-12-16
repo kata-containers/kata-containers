@@ -164,7 +164,7 @@ func (device *VhostUserBlkDevice) Save() persistapi.DeviceState {
 			DevID:      vAttr.DevID,
 			SocketPath: vAttr.SocketPath,
 			Type:       string(vAttr.Type),
-			PCIAddr:    vAttr.PCIAddr,
+			PCIPath:    vAttr.PCIPath,
 			Index:      vAttr.Index,
 		}
 	}
@@ -185,7 +185,7 @@ func (device *VhostUserBlkDevice) Load(ds persistapi.DeviceState) {
 		DevID:      dev.DevID,
 		SocketPath: dev.SocketPath,
 		Type:       config.DeviceType(dev.Type),
-		PCIAddr:    dev.PCIAddr,
+		PCIPath:    dev.PCIPath,
 		Index:      dev.Index,
 	}
 }
