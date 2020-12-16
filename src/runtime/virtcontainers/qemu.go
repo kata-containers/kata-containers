@@ -1351,8 +1351,15 @@ func (q *qemu) hotplugAddVhostUserBlkDevice(vAttr *config.VhostUserDeviceAttrs, 
 		}
 	}()
 
-	// PCI address is in the format bridge-addr/device-addr eg. "03/02"
-	vAttr.PCIAddr = fmt.Sprintf("%02x", bridge.Addr) + "/" + addr
+	bridgeSlot, err := vcTypes.PciSlotFromInt(bridge.Addr)
+	if err != nil {
+		return err
+	}
+	devSlot, err := vcTypes.PciSlotFromString(addr)
+	if err != nil {
+		return err
+	}
+	vAttr.PCIPath, err = vcTypes.PciPathFromSlots(bridgeSlot, devSlot)
 
 	if err = q.qmpMonitorCh.qmp.ExecutePCIVhostUserDevAdd(q.qmpMonitorCh.ctx, driver, devID, vAttr.DevID, addr, bridge.ID); err != nil {
 		return err
