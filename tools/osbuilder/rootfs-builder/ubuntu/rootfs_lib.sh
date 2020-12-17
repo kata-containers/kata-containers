@@ -80,5 +80,8 @@ build_rootfs() {
 		${ROOTFS_DIR}
 
 	chroot $ROOTFS_DIR ln -s /lib/systemd/systemd /usr/lib/systemd/systemd
-}
 
+    # Reduce image size and memory footprint
+    # removing not needed files and directories.
+    chroot $ROOTFS_DIR rm -rf /usr/share/{bash-completion,bug,doc,info,lintian,locale,man,menu,misc,pixmaps,terminfo,zoneinfo,zsh}
+}
