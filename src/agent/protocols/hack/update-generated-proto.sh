@@ -47,7 +47,7 @@ show_usage() {
 }
 
 generate_go_sources() {
-    local cmd="protoc -I$GOPATH/src/github.com/kata-containers/agent/vendor/github.com/gogo/protobuf:$GOPATH/src/github.com/kata-containers/agent/vendor:$GOPATH/src/github.com/gogo/protobuf:$GOPATH/src/github.com/gogo/googleapis:$GOPATH/src:$GOPATH/src/github.com/kata-containers/kata-containers/src/agent/protocols/protos \
+    local cmd="protoc -I$GOPATH/src:$GOPATH/src/github.com/kata-containers/kata-containers/src/agent/protocols/protos \
 --gogottrpc_out=plugins=ttrpc+fieldpath,\
 import_path=github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols/grpc,\
 \
@@ -79,12 +79,6 @@ fi;
 # pre-requirement check
 which protoc
 [ $? -eq 0 ] || die "Please install protoc from github.com/protocolbuffers/protobuf"
-
-which protoc-gen-rust
-[ $? -eq 0 ] || die "Please install protobuf-codegen from github.com/pingcap/grpc-rs"
-
-which ttrpc_rust_plugin
-[ $? -eq 0 ] || die "Please install ttrpc_rust_plugin from https://github.com/containerd/ttrpc-rust"
 
 which protoc-gen-gogottrpc
 [ $? -eq 0 ] || die "Please install protoc-gen-gogottrpc from https://github.com/containerd/ttrpc"
