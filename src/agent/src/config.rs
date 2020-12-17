@@ -234,9 +234,7 @@ fn get_bool_value(param: &str) -> Result<bool> {
     // first try to parse as bool value
     v.parse::<bool>().or_else(|_err1| {
         // then try to parse as integer value
-        v.parse::<u64>()
-            .or_else(|_err2| Ok(0))
-            .map(|v| !matches!(v, 0))
+        v.parse::<u64>().or(Ok(0)).map(|v| !matches!(v, 0))
     })
 }
 
