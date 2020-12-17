@@ -8,6 +8,7 @@ use nix::errno::Errno;
 use nix::fcntl::{self, OFlag};
 use nix::sys::stat::Mode;
 use std::fs;
+use std::os::unix::io::{AsRawFd, FromRawFd};
 
 pub const RNGDEV: &str = "/dev/random";
 pub const RNDADDTOENTCNT: libc::c_int = 0x40045201;
@@ -23,18 +24,22 @@ pub fn reseed_rng(data: &[u8]) -> Result<()> {
     let len = data.len() as libc::c_long;
     fs::write(RNGDEV, data)?;
 
-    let fd = fcntl::open(RNGDEV, OFlag::O_RDWR, Mode::from_bits_truncate(0o022))?;
+    let f = {
+        let fd = fcntl::open(RNGDEV, OFlag::O_RDWR, Mode::from_bits_truncate(0o022))?;
+        // Wrap fd with `File` to properly close descriptor on exit
+        unsafe { fs::File::from_raw_fd(fd) }
+    };
 
     let ret = unsafe {
         libc::ioctl(
-            fd,
+            f.as_raw_fd(),
             RNDADDTOENTCNT as IoctlRequestType,
             &len as *const libc::c_long,
         )
     };
     let _ = Errno::result(ret).map(drop)?;
 
-    let ret = unsafe { libc::ioctl(fd, RNDRESEEDRNG as IoctlRequestType, 0) };
+    let ret = unsafe { libc::ioctl(f.as_raw_fd(), RNDRESEEDRNG as IoctlRequestType, 0) };
     let _ = Errno::result(ret).map(drop)?;
 
     Ok(())
