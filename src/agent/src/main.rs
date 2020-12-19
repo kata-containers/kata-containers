@@ -100,7 +100,8 @@ fn announce(logger: &Logger, config: &agentConfig) {
     );
 }
 
-fn main() -> Result<()> {
+#[tokio::main]
+async fn main() -> Result<()> {
     let args: Vec<String> = env::args().collect();
 
     if args.len() == 2 && args[1] == "--version" {
@@ -205,14 +206,14 @@ fn main() -> Result<()> {
         _log_guard = Ok(slog_stdlog::init().map_err(|e| e)?);
     }
 
-    start_sandbox(&logger, &config, init_mode)?;
+    start_sandbox(&logger, &config, init_mode).await?;
 
     let _ = log_handle.join();
 
     Ok(())
 }
 
-fn start_sandbox(logger: &Logger, config: &agentConfig, init_mode: bool) -> Result<()> {
+async fn start_sandbox(logger: &Logger, config: &agentConfig, init_mode: bool) -> Result<()> {
     let shells = SHELLS.clone();
     let debug_console_vport = config.debug_console_vport as u32;
 
@@ -254,13 +255,13 @@ fn start_sandbox(logger: &Logger, config: &agentConfig, init_mode: bool) -> Resu
     sandbox.lock().unwrap().sender = Some(tx);
 
     // vsock:///dev/vsock, port
-    let mut server = rpc::start(sandbox, config.server_addr.as_str());
+    let mut server = rpc::start(sandbox, config.server_addr.as_str()).await?;
 
-    let _ = server.start().unwrap();
+    server.start().await?;
 
     let _ = rx.recv()?;
 
-    server.shutdown();
+    server.shutdown().await?;
 
     if let Some(handle) = shell_handle {
         handle.join().map_err(|e| anyhow!("{:?}", e))?;
