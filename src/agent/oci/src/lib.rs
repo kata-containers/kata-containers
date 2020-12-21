@@ -142,7 +142,7 @@ pub struct User {
     pub gid: u32,
     #[serde(
         default,
-        rename = "addtionalGids",
+        rename = "additionalGids",
         skip_serializing_if = "Vec::is_empty"
     )]
     pub additional_gids: Vec<u32>,
@@ -1223,8 +1223,7 @@ mod tests {
                     uid: 1,
                     gid: 1,
                     // incompatible with oci
-                    // additional_gids: vec![5, 6],
-                    additional_gids: vec![],
+                    additional_gids: vec![5, 6],
                     username: "".to_string(),
                 },
                 args: vec!["sh".to_string()],
