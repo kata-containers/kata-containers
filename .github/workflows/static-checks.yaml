@@ -15,11 +15,14 @@ jobs:
       TRAVIS_PULL_REQUEST_SHA : ${{ github.event.pull_request.head.sha }}
       RUST_BACKTRACE: "1"
       RUST_AGENT: "yes"
+      target_branch: ${TRAVIS_BRANCH}
     steps:
     - name: Install Go
       uses: actions/setup-go@v2
       with:
         go-version: ${{ matrix.go-version }}
+      env:
+        GOPATH: ${{ runner.workspace }}/kata-containers
     - name: Setup GOPATH
       run: |
         gopath_org=$(go env GOPATH)/src/github.com/kata-containers/
@@ -29,43 +32,37 @@ jobs:
         echo "TRAVIS_PULL_REQUEST_BRANCH: ${TRAVIS_PULL_REQUEST_BRANCH}"
         echo "TRAVIS_PULL_REQUEST_SHA: ${TRAVIS_PULL_REQUEST_SHA}"
         echo "TRAVIS: ${TRAVIS}"
+    - name: Set env
+      run: |
+        echo "GOPATH=${{ github.workspace }}" >> $GITHUB_ENV
+        echo "${{ github.workspace }}/bin" >> $GITHUB_PATH
     - name: Checkout code
       uses: actions/checkout@v2
       with:
         fetch-depth: 0
+        path: ./src/github.com/${{ github.repository }}
     - name: Setup travis references
       run: |
         echo "TRAVIS_BRANCH=${TRAVIS_BRANCH:-$(echo $GITHUB_REF | awk 'BEGIN { FS = \"/\" } ; { print $3 }')}" 
+        target_branch=${TRAVIS_BRANCH}
     - name: Setup
       run: |
-        kata_repo=$(go env GOPATH)/src/github.com/kata-containers/kata-containers
-        pushd ${kata_repo}/ci/
-        GOPATH=$(go env GOPATH) ./setup.sh
-    - name: Install rust
+        cd ${GOPATH}/src/github.com/kata-containers/kata-containers && ./ci/setup.sh
+      env:
+        GOPATH: ${{ runner.workspace }}/kata-containers
+    - name: Building rust
       run: |
-        kata_repo=$(go env GOPATH)/src/github.com/kata-containers/kata-containers
-        pushd ${kata_repo}/ci/
-        GOPATH=$(go env GOPATH) ./install_rust.sh
-    - name: Agent
-      run: |
-        kata_repo=$(go env GOPATH)/src/github.com/kata-containers/kata-containers
-        pushd ${kata_repo}/src/agent
-        GOPATH=$(go env GOPATH) make    
-    - name: Install agent
-      run: |
-        kata_repo=$(go env GOPATH)/src/github.com/kata-containers/kata-containers
-        pushd ${kata_repo}/src/agent
-        GOPATH=$(go env GOPATH) make check 
+        cd ${GOPATH}/src/github.com/kata-containers/kata-containers && ./ci/install_rust.sh
+        PATH=$PATH:"$HOME/.cargo/bin"
     - name: Make clippy
       run: |
-        kata_repo=$(go env GOPATH)/src/github.com/kata-containers/kata-containers
-        pushd ${kata_repo}/src/agent
-        rustup target add x86_64-unknown-linux-musl
-        rustup component add rustfmt
-        rustup component add clippy
-        GOPATH=$(go env GOPATH) make clippy
+        cd ${GOPATH}/src/github.com/kata-containers/kata-containers/src/agent && rustup target add x86_64-unknown-linux-musl && rustup component add rustfmt && rustup component add clippy && make clippy
     - name: Static checks
       run: |
-        kata_repo=$(go env GOPATH)/src/github.com/kata-containers/kata-containers
-        pushd ${kata_repo}/ci/
-        GOPATH=$(go env GOPATH) ./static-checks.sh
+        cd ${GOPATH}/src/github.com/kata-containers/kata-containers && ./ci/static-checks.sh
+    - name: Build agent
+      run: |
+        cd ${GOPATH}/src/github.com/kata-containers/kata-containers/src/agent && make
+    - name: Run agent unit tests
+      run: |
+        cd ${GOPATH}/src/github.com/kata-containers/kata-containers/src/agent && make check
