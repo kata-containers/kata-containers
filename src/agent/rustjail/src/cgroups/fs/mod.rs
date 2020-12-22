@@ -421,13 +421,13 @@ fn set_memory_resources(cg: &cgroups::Cgroup, memory: &LinuxMemory, update: bool
         }
     }
 
-    if let Some(swapiness) = memory.swapiness {
-        if swapiness >= 0 && swapiness <= 100 {
-            mem_controller.set_swappiness(swapiness as u64)?;
+    if let Some(swappiness) = memory.swappiness {
+        if swappiness >= 0 && swappiness <= 100 {
+            mem_controller.set_swappiness(swappiness as u64)?;
         } else {
             return Err(anyhow!(
                 "invalid value:{}. valid memory swappiness range is 0-100",
-                swapiness
+                swappiness
             ));
         }
     }
