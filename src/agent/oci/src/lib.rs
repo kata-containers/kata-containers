@@ -142,7 +142,7 @@ pub struct User {
     pub gid: u32,
     #[serde(
         default,
-        rename = "addtionalGids",
+        rename = "additionalGids",
         skip_serializing_if = "Vec::is_empty"
     )]
     pub additional_gids: Vec<u32>,
@@ -302,6 +302,7 @@ pub struct LinuxBlockIODevice {
 
 #[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq)]
 pub struct LinuxWeightDevice {
+    #[serde(flatten)]
     pub blk: LinuxBlockIODevice,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub weight: Option<u16>,
@@ -315,6 +316,7 @@ pub struct LinuxWeightDevice {
 
 #[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq)]
 pub struct LinuxThrottleDevice {
+    #[serde(flatten)]
     pub blk: LinuxBlockIODevice,
     #[serde(default)]
     pub rate: u64,
@@ -375,7 +377,7 @@ pub struct LinuxMemory {
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "kernelTCP")]
     pub kernel_tcp: Option<i64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub swapiness: Option<i64>,
+    pub swappiness: Option<i64>,
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
@@ -833,7 +835,7 @@ mod tests {
     }
 
     #[test]
-    fn test_deserialize_sepc() {
+    fn test_deserialize_spec() {
         let data = r#"{
             "ociVersion": "1.0.1",
             "process": {
@@ -1118,36 +1120,28 @@ mod tests {
                         "leafWeight": 10,
                         "weightDevice": [
                             {
-                                "blk": {
-                                    "major": 8,
-                                    "minor": 0
-                                },
+                                "major": 8,
+                                "minor": 0,
                                 "weight": 500,
                                 "leafWeight": 300
                             },
                             {
-                                "blk":{
-                                    "major": 8,
-                                    "minor": 16
-                                },
+                                "major": 8,
+                                "minor": 16,
                                 "weight": 500
                             }
                         ],
                         "throttleReadBpsDevice": [
                             {
-                                "blk":{
-                                    "major": 8,
-                                    "minor": 0
-                                },
+                                "major": 8,
+                                "minor": 0,
                                 "rate": 600
                             }
                         ],
                         "throttleWriteIOPSDevice": [
                             {
-                                "blk":{
-                                    "major": 8,
-                                    "minor": 16
-                                },
+                                "major": 8,
+                                "minor": 16,
                                 "rate": 300
                             }
                         ]
@@ -1223,8 +1217,7 @@ mod tests {
                     uid: 1,
                     gid: 1,
                     // incompatible with oci
-                    // additional_gids: vec![5, 6],
-                    additional_gids: vec![],
+                    additional_gids: vec![5, 6],
                     username: "".to_string(),
                 },
                 args: vec!["sh".to_string()],
@@ -1437,8 +1430,7 @@ mod tests {
                         swap: Some(536870912),
                         kernel: Some(-1),
                         kernel_tcp: Some(-1),
-                        // incompatible with oci
-                        swapiness: None,
+                        swappiness: Some(0),
                         disable_oom_killer: Some(false),
                     }),
                     cpu: Some(crate::LinuxCPU {
@@ -1591,25 +1583,6 @@ mod tests {
             vm: None,
         };
 
-        // warning : incompatible with oci : https://github.com/opencontainers/runtime-spec/blob/master/config.md
-        // 1. User use addtionalGids while oci use additionalGids
-        // 2. LinuxMemory use swapiness while oci use swappiness
-        // 3. LinuxWeightDevice with blk
-        //    {
-        //        "blk": {
-        //            "major": 8,
-        //            "minor": 0
-        //        },
-        //        "weight": 500,
-        //        "leafWeight": 300
-        //    }
-        //    oci without blk
-        //    {
-        //        "major": 8,
-        //        "minor": 0,
-        //        "weight": 500,
-        //        "leafWeight": 300
-        //    }
         let current: crate::Spec = serde_json::from_str(data).unwrap();
         assert_eq!(expected, current);
     }
