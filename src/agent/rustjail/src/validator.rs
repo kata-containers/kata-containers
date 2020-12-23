@@ -4,7 +4,7 @@
 //
 
 use crate::container::Config;
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use lazy_static;
 use nix::errno::Errno;
 use oci::{LinuxIDMapping, LinuxNamespace, Spec};
@@ -60,7 +60,7 @@ fn rootfs(root: &str) -> Result<()> {
         cleaned.push(e);
     }
 
-    let canon = path.canonicalize()?;
+    let canon = path.canonicalize().context("canonicalize")?;
     if cleaned != canon {
         // There is symbolic in path
         return Err(anyhow!(nix::Error::from_errno(Errno::EINVAL)));
@@ -123,8 +123,8 @@ fn usernamespace(oci: &Spec) -> Result<()> {
         }
         // check if idmappings is correct, at least I saw idmaps
         // with zero size was passed to agent
-        idmapping(&linux.uid_mappings)?;
-        idmapping(&linux.gid_mappings)?;
+        idmapping(&linux.uid_mappings).context("idmapping uid")?;
+        idmapping(&linux.gid_mappings).context("idmapping gid")?;
     } else {
         // no user namespace but idmap
         if linux.uid_mappings.len() != 0 || linux.gid_mappings.len() != 0 {
@@ -165,14 +165,20 @@ fn check_host_ns(path: &str) -> Result<()> {
     let cpath = PathBuf::from(path);
     let hpath = PathBuf::from("/proc/self/ns/net");
 
-    let real_hpath = hpath.read_link()?;
-    let meta = cpath.symlink_metadata()?;
+    let real_hpath = hpath
+        .read_link()
+        .context(format!("read link {:?}", hpath))?;
+    let meta = cpath
+        .symlink_metadata()
+        .context(format!("symlink metadata {:?}", cpath))?;
     let file_type = meta.file_type();
 
     if !file_type.is_symlink() {
         return Ok(());
     }
-    let real_cpath = cpath.read_link()?;
+    let real_cpath = cpath
+        .read_link()
+        .context(format!("read link {:?}", cpath))?;
     if real_cpath == real_hpath {
         return Err(anyhow!(nix::Error::from_errno(Errno::EINVAL)));
     }
@@ -254,7 +260,10 @@ fn rootless_euid_mount(oci: &Spec) -> Result<()> {
                     return Err(anyhow!(nix::Error::from_errno(Errno::EINVAL)));
                 }
 
-                let id = fields[1].trim().parse::<u32>()?;
+                let id = fields[1]
+                    .trim()
+                    .parse::<u32>()
+                    .context(format!("parse field {}", &fields[1]))?;
 
                 if opt.starts_with("uid=") {
                     if !has_idmapping(&linux.uid_mappings, id) {
@@ -274,8 +283,8 @@ fn rootless_euid_mount(oci: &Spec) -> Result<()> {
 }
 
 fn rootless_euid(oci: &Spec) -> Result<()> {
-    rootless_euid_mapping(oci)?;
-    rootless_euid_mount(oci)?;
+    rootless_euid_mapping(oci).context("rootless euid mapping")?;
+    rootless_euid_mount(oci).context("rotless euid mount")?;
     Ok(())
 }
 
@@ -292,16 +301,16 @@ pub fn validate(conf: &Config) -> Result<()> {
     }
     let root = oci.root.as_ref().unwrap().path.as_str();
 
-    rootfs(root)?;
-    network(oci)?;
-    hostname(oci)?;
-    security(oci)?;
-    usernamespace(oci)?;
-    cgroupnamespace(oci)?;
-    sysctl(&oci)?;
+    rootfs(root).context("rootfs")?;
+    network(oci).context("network")?;
+    hostname(oci).context("hostname")?;
+    security(oci).context("security")?;
+    usernamespace(oci).context("usernamespace")?;
+    cgroupnamespace(oci).context("cgroupnamespace")?;
+    sysctl(&oci).context("sysctl")?;
 
     if conf.rootless_euid {
-        rootless_euid(oci)?;
+        rootless_euid(oci).context("rootless euid")?;
     }
 
     Ok(())
