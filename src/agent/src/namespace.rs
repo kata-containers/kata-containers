@@ -11,7 +11,6 @@ use std::fmt;
 use std::fs;
 use std::fs::File;
 use std::path::{Path, PathBuf};
-use std::thread::{self};
 
 use crate::mount::{BareMount, FLAGS};
 use slog::Logger;
@@ -76,7 +75,7 @@ impl Namespace {
 
     // setup creates persistent namespace without switching to it.
     // Note, pid namespaces cannot be persisted.
-    pub fn setup(mut self) -> Result<Self> {
+    pub async fn setup(mut self) -> Result<Self> {
         fs::create_dir_all(&self.persistent_ns_dir)?;
 
         let ns_path = PathBuf::from(&self.persistent_ns_dir);
@@ -93,45 +92,51 @@ impl Namespace {
         self.path = new_ns_path.clone().into_os_string().into_string().unwrap();
         let hostname = self.hostname.clone();
 
-        let new_thread = thread::spawn(move || -> Result<()> {
-            let origin_ns_path = get_current_thread_ns_path(&ns_type.get());
+        let new_thread = tokio::spawn(async move {
+            if let Err(err) = || -> Result<()> {
+                let origin_ns_path = get_current_thread_ns_path(&ns_type.get());
 
-            File::open(Path::new(&origin_ns_path))?;
+                File::open(Path::new(&origin_ns_path))?;
 
-            // Create a new netns on the current thread.
-            let cf = ns_type.get_flags();
+                // Create a new netns on the current thread.
+                let cf = ns_type.get_flags();
 
-            unshare(cf)?;
+                unshare(cf)?;
 
-            if ns_type == NamespaceType::UTS && hostname.is_some() {
-                nix::unistd::sethostname(hostname.unwrap())?;
+                if ns_type == NamespaceType::UTS && hostname.is_some() {
+                    nix::unistd::sethostname(hostname.unwrap())?;
+                }
+                // Bind mount the new namespace from the current thread onto the mount point to persist it.
+                let source: &str = origin_ns_path.as_str();
+                let destination: &str = new_ns_path.as_path().to_str().unwrap_or("none");
+
+                let mut flags = MsFlags::empty();
+
+                if let Some(x) = FLAGS.get("rbind") {
+                    let (_, f) = *x;
+                    flags |= f;
+                };
+
+                let bare_mount = BareMount::new(source, destination, "none", flags, "", &logger);
+                bare_mount.mount().map_err(|e| {
+                    anyhow!(
+                        "Failed to mount {} to {} with err:{:?}",
+                        source,
+                        destination,
+                        e
+                    )
+                })?;
+
+                Ok(())
+            }() {
+                return Err(err);
             }
-            // Bind mount the new namespace from the current thread onto the mount point to persist it.
-            let source: &str = origin_ns_path.as_str();
-            let destination: &str = new_ns_path.as_path().to_str().unwrap_or("none");
-
-            let mut flags = MsFlags::empty();
-
-            if let Some(x) = FLAGS.get("rbind") {
-                let (_, f) = *x;
-                flags |= f;
-            };
-
-            let bare_mount = BareMount::new(source, destination, "none", flags, "", &logger);
-            bare_mount.mount().map_err(|e| {
-                anyhow!(
-                    "Failed to mount {} to {} with err:{:?}",
-                    source,
-                    destination,
-                    e
-                )
-            })?;
 
             Ok(())
         });
 
         new_thread
-            .join()
+            .await
             .map_err(|e| anyhow!("Failed to join thread {:?}!", e))??;
 
         Ok(self)

@@ -9,7 +9,8 @@ use std::collections::HashMap;
 use std::fs;
 use std::os::unix::fs::MetadataExt;
 use std::path::Path;
-use std::sync::{mpsc, Arc, Mutex};
+use std::sync::Arc;
+use tokio::sync::Mutex;
 
 use crate::linux_abi::*;
 use crate::mount::{DRIVERBLKTYPE, DRIVERMMIOBLKTYPE, DRIVERNVDIMMTYPE, DRIVERSCSITYPE};
@@ -34,22 +35,6 @@ struct DevIndexEntry {
 }
 
 struct DevIndex(HashMap<String, DevIndexEntry>);
-
-// DeviceHandler is the type of callback to be defined to handle every type of device driver.
-type DeviceHandler = fn(&Device, &mut Spec, &Arc<Mutex<Sandbox>>, &DevIndex) -> Result<()>;
-
-// DEVICEHANDLERLIST lists the supported drivers.
-#[rustfmt::skip]
-lazy_static! {
-    static ref DEVICEHANDLERLIST: HashMap<&'static str, DeviceHandler> = {
-        let mut m: HashMap<&'static str, DeviceHandler> = HashMap::new();
-        m.insert(DRIVERBLKTYPE, virtio_blk_device_handler);
-        m.insert(DRIVERMMIOBLKTYPE, virtiommio_blk_device_handler);
-        m.insert(DRIVERNVDIMMTYPE, virtio_nvdimm_device_handler);
-        m.insert(DRIVERSCSITYPE, virtio_scsi_device_handler);
-        m
-    };
-}
 
 pub fn rescan_pci_bus() -> Result<()> {
     online_device(SYSFS_PCI_BUS_RESCAN_FILE)
@@ -114,10 +99,10 @@ fn get_pci_device_address(pci_id: &str) -> Result<String> {
     Ok(bridge_device_pci_addr)
 }
 
-fn get_device_name(sandbox: &Arc<Mutex<Sandbox>>, dev_addr: &str) -> Result<String> {
+async fn get_device_name(sandbox: &Arc<Mutex<Sandbox>>, dev_addr: &str) -> Result<String> {
     // Keep the same lock order as uevent::handle_block_add_event(), otherwise it may cause deadlock.
-    let mut w = GLOBAL_DEVICE_WATCHER.lock().unwrap();
-    let sb = sandbox.lock().unwrap();
+    let mut w = GLOBAL_DEVICE_WATCHER.lock().await;
+    let sb = sandbox.lock().await;
     for (key, value) in sb.pci_device_map.iter() {
         if key.contains(dev_addr) {
             info!(sl!(), "Device {} found in pci device map", dev_addr);
@@ -131,36 +116,50 @@ fn get_device_name(sandbox: &Arc<Mutex<Sandbox>>, dev_addr: &str) -> Result<Stri
     // The key of the watchers map is the device we are interested in.
     // Note this is done inside the lock, not to miss any events from the
     // global udev listener.
-    let (tx, rx) = mpsc::channel::<String>();
-    w.insert(dev_addr.to_string(), tx);
+    let (tx, rx) = tokio::sync::oneshot::channel::<String>();
+    w.insert(dev_addr.to_string(), Some(tx));
     drop(w);
 
     info!(sl!(), "Waiting on channel for device notification\n");
-    let hotplug_timeout = AGENT_CONFIG.read().unwrap().hotplug_timeout;
-    let dev_name = rx.recv_timeout(hotplug_timeout).map_err(|_| {
-        GLOBAL_DEVICE_WATCHER.lock().unwrap().remove_entry(dev_addr);
-        anyhow!(
-            "Timeout reached after {:?} waiting for device {}",
-            hotplug_timeout,
-            dev_addr
-        )
-    })?;
+    let hotplug_timeout = AGENT_CONFIG.read().await.hotplug_timeout;
+    let timeout = tokio::time::delay_for(hotplug_timeout);
+
+    let dev_name;
+    tokio::select! {
+        v = rx => {
+            dev_name = v?;
+        }
+        _ = timeout => {
+            let watcher = GLOBAL_DEVICE_WATCHER.clone();
+            let mut w = watcher.lock().await;
+            w.remove_entry(dev_addr);
+
+            return Err(anyhow!(
+                "Timeout reached after {:?} waiting for device {}",
+                hotplug_timeout,
+                dev_addr
+            ));
+        }
+    };
 
     Ok(format!("{}/{}", SYSTEM_DEV_PATH, &dev_name))
 }
 
-pub fn get_scsi_device_name(sandbox: &Arc<Mutex<Sandbox>>, scsi_addr: &str) -> Result<String> {
+pub async fn get_scsi_device_name(
+    sandbox: &Arc<Mutex<Sandbox>>,
+    scsi_addr: &str,
+) -> Result<String> {
     let dev_sub_path = format!("{}{}/{}", SCSI_HOST_CHANNEL, scsi_addr, SCSI_BLOCK_SUFFIX);
 
     scan_scsi_bus(scsi_addr)?;
-    get_device_name(sandbox, &dev_sub_path)
+    get_device_name(sandbox, &dev_sub_path).await
 }
 
-pub fn get_pci_device_name(sandbox: &Arc<Mutex<Sandbox>>, pci_id: &str) -> Result<String> {
+pub async fn get_pci_device_name(sandbox: &Arc<Mutex<Sandbox>>, pci_id: &str) -> Result<String> {
     let pci_addr = get_pci_device_address(pci_id)?;
 
     rescan_pci_bus()?;
-    get_device_name(sandbox, &pci_addr)
+    get_device_name(sandbox, &pci_addr).await
 }
 
 /// Scan SCSI bus for the given SCSI address(SCSI-Id and LUN)
@@ -274,7 +273,7 @@ fn update_spec_device_list(device: &Device, spec: &mut Spec, devidx: &DevIndex) 
 
 // device.Id should be the predicted device name (vda, vdb, ...)
 // device.VmPath already provides a way to send it in
-fn virtiommio_blk_device_handler(
+async fn virtiommio_blk_device_handler(
     device: &Device,
     spec: &mut Spec,
     _sandbox: &Arc<Mutex<Sandbox>>,
@@ -290,7 +289,7 @@ fn virtiommio_blk_device_handler(
 // device.Id should be the PCI address in the format  "bridgeAddr/deviceAddr".
 // Here, bridgeAddr is the address at which the brige is attached on the root bus,
 // while deviceAddr is the address at which the device is attached on the bridge.
-fn virtio_blk_device_handler(
+async fn virtio_blk_device_handler(
     device: &Device,
     spec: &mut Spec,
     sandbox: &Arc<Mutex<Sandbox>>,
@@ -301,25 +300,25 @@ fn virtio_blk_device_handler(
     // When "Id (PCIAddr)" is not set, we allow to use the predicted "VmPath" passed from kata-runtime
     // Note this is a special code path for cloud-hypervisor when BDF information is not available
     if device.id != "" {
-        dev.vm_path = get_pci_device_name(sandbox, &device.id)?;
+        dev.vm_path = get_pci_device_name(sandbox, &device.id).await?;
     }
 
     update_spec_device_list(&dev, spec, devidx)
 }
 
 // device.Id should be the SCSI address of the disk in the format "scsiID:lunID"
-fn virtio_scsi_device_handler(
+async fn virtio_scsi_device_handler(
     device: &Device,
     spec: &mut Spec,
     sandbox: &Arc<Mutex<Sandbox>>,
     devidx: &DevIndex,
 ) -> Result<()> {
     let mut dev = device.clone();
-    dev.vm_path = get_scsi_device_name(sandbox, &device.id)?;
+    dev.vm_path = get_scsi_device_name(sandbox, &device.id).await?;
     update_spec_device_list(&dev, spec, devidx)
 }
 
-fn virtio_nvdimm_device_handler(
+async fn virtio_nvdimm_device_handler(
     device: &Device,
     spec: &mut Spec,
     _sandbox: &Arc<Mutex<Sandbox>>,
@@ -357,7 +356,7 @@ impl DevIndex {
     }
 }
 
-pub fn add_devices(
+pub async fn add_devices(
     devices: &[Device],
     spec: &mut Spec,
     sandbox: &Arc<Mutex<Sandbox>>,
@@ -365,13 +364,13 @@ pub fn add_devices(
     let devidx = DevIndex::new(spec);
 
     for device in devices.iter() {
-        add_device(device, spec, sandbox, &devidx)?;
+        add_device(device, spec, sandbox, &devidx).await?;
     }
 
     Ok(())
 }
 
-fn add_device(
+async fn add_device(
     device: &Device,
     spec: &mut Spec,
     sandbox: &Arc<Mutex<Sandbox>>,
@@ -393,9 +392,12 @@ fn add_device(
         return Err(anyhow!("invalid container path for device {:?}", device));
     }
 
-    match DEVICEHANDLERLIST.get(device.field_type.as_str()) {
-        None => Err(anyhow!("Unknown device type {}", device.field_type)),
-        Some(dev_handler) => dev_handler(device, spec, sandbox, devidx),
+    match device.field_type.as_str() {
+        DRIVERBLKTYPE => virtio_blk_device_handler(device, spec, sandbox, devidx).await,
+        DRIVERMMIOBLKTYPE => virtiommio_blk_device_handler(device, spec, sandbox, devidx).await,
+        DRIVERNVDIMMTYPE => virtio_nvdimm_device_handler(device, spec, sandbox, devidx).await,
+        DRIVERSCSITYPE => virtio_scsi_device_handler(device, spec, sandbox, devidx).await,
+        _ => Err(anyhow!("Unknown device type {}", device.field_type)),
     }
 }
 

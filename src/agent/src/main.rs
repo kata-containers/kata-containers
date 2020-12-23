@@ -15,7 +15,6 @@ extern crate prctl;
 extern crate prometheus;
 extern crate protocols;
 extern crate regex;
-extern crate rustjail;
 extern crate scan_fmt;
 extern crate serde_json;
 extern crate signal_hook;
@@ -38,7 +37,6 @@ use nix::sys::socket::{self, AddressFamily, SockAddr, SockFlag, SockType};
 use nix::sys::wait::{self, WaitStatus};
 use nix::unistd::{self, close, dup, dup2, fork, setsid, ForkResult};
 use prctl::set_child_subreaper;
-use signal_hook::{iterator::Signals, SIGCHLD};
 use std::collections::HashMap;
 use std::env;
 use std::ffi::{CStr, CString, OsStr};
@@ -48,9 +46,7 @@ use std::os::unix::ffi::OsStrExt;
 use std::os::unix::fs as unixfs;
 use std::os::unix::io::AsRawFd;
 use std::path::Path;
-use std::sync::mpsc::{self, Sender};
-use std::sync::{Arc, Mutex, RwLock};
-use std::{io, thread, thread::JoinHandle};
+use std::sync::Arc;
 use unistd::Pid;
 
 mod config;
@@ -72,6 +68,16 @@ use sandbox::Sandbox;
 use slog::Logger;
 use uevent::watch_uevents;
 
+use std::sync::Mutex as SyncMutex;
+
+use futures::StreamExt as _;
+use rustjail::pipestream::PipeStream;
+use tokio::{
+    signal::unix::{signal, SignalKind},
+    sync::{oneshot::Sender, Mutex, RwLock},
+};
+use tokio_vsock::{Incoming, VsockListener, VsockStream};
+
 mod rpc;
 
 const NAME: &str = "kata-agent";
@@ -81,7 +87,7 @@ const CONSOLE_PATH: &str = "/dev/console";
 const DEFAULT_BUF_SIZE: usize = 8 * 1024;
 
 lazy_static! {
-    static ref GLOBAL_DEVICE_WATCHER: Arc<Mutex<HashMap<String, Sender<String>>>> =
+    static ref GLOBAL_DEVICE_WATCHER: Arc<Mutex<HashMap<String, Option<Sender<String>>>>> =
         Arc::new(Mutex::new(HashMap::new()));
     static ref AGENT_CONFIG: Arc<RwLock<agentConfig>> =
         Arc::new(RwLock::new(config::agentConfig::new()));
@@ -100,8 +106,28 @@ fn announce(logger: &Logger, config: &agentConfig) {
     );
 }
 
-#[tokio::main]
-async fn main() -> Result<()> {
+fn set_fd_close_exec(fd: RawFd) -> Result<RawFd> {
+    if let Err(e) = fcntl::fcntl(fd, FcntlArg::F_SETFD(FdFlag::FD_CLOEXEC)) {
+        return Err(anyhow!("failed to set fd: {} as close-on-exec: {}", fd, e));
+    }
+    Ok(fd)
+}
+
+fn get_vsock_incoming(fd: RawFd) -> Incoming {
+    let incoming;
+    unsafe {
+        incoming = VsockListener::from_raw_fd(fd).incoming();
+    }
+    incoming
+}
+
+async fn get_vsock_stream(fd: RawFd) -> Result<VsockStream> {
+    let stream = get_vsock_incoming(fd).next().await.unwrap().unwrap();
+    set_fd_close_exec(stream.as_raw_fd())?;
+    Ok(stream)
+}
+
+fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     let args: Vec<String> = env::args().collect();
 
     if args.len() == 2 && args[1] == "--version" {
@@ -121,107 +147,122 @@ async fn main() -> Result<()> {
         exit(0);
     }
 
-    env::set_var("RUST_BACKTRACE", "full");
+    let mut rt = tokio::runtime::Builder::new()
+        .basic_scheduler()
+        .max_threads(1)
+        .enable_all()
+        .build()?;
 
-    lazy_static::initialize(&SHELLS);
+    rt.block_on(async {
+        env::set_var("RUST_BACKTRACE", "full");
 
-    lazy_static::initialize(&AGENT_CONFIG);
+        lazy_static::initialize(&SHELLS);
 
-    // support vsock log
-    let (rfd, wfd) = unistd::pipe2(OFlag::O_CLOEXEC)?;
+        lazy_static::initialize(&AGENT_CONFIG);
 
-    let agentConfig = AGENT_CONFIG.clone();
+        // support vsock log
+        let (rfd, wfd) = unistd::pipe2(OFlag::O_CLOEXEC)?;
 
-    let init_mode = unistd::getpid() == Pid::from_raw(1);
-    if init_mode {
-        // dup a new file descriptor for this temporary logger writer,
-        // since this logger would be dropped and it's writer would
-        // be closed out of this code block.
-        let newwfd = dup(wfd)?;
-        let writer = unsafe { File::from_raw_fd(newwfd) };
+        let agentConfig = AGENT_CONFIG.clone();
 
-        // Init a temporary logger used by init agent as init process
-        // since before do the base mount, it wouldn't access "/proc/cmdline"
-        // to get the customzied debug level.
-        let logger = logging::create_logger(NAME, "agent", slog::Level::Debug, writer);
+        let init_mode = unistd::getpid() == Pid::from_raw(1);
+        if init_mode {
+            // dup a new file descriptor for this temporary logger writer,
+            // since this logger would be dropped and it's writer would
+            // be closed out of this code block.
+            let newwfd = dup(wfd)?;
+            let writer = unsafe { File::from_raw_fd(newwfd) };
 
-        // Must mount proc fs before parsing kernel command line
-        general_mount(&logger).map_err(|e| {
-            error!(logger, "fail general mount: {}", e);
-            e
-        })?;
+            // Init a temporary logger used by init agent as init process
+            // since before do the base mount, it wouldn't access "/proc/cmdline"
+            // to get the customzied debug level.
+            let logger = logging::create_logger(NAME, "agent", slog::Level::Debug, writer);
 
-        let mut config = agentConfig.write().unwrap();
-        config.parse_cmdline(KERNEL_CMDLINE_FILE)?;
+            // Must mount proc fs before parsing kernel command line
+            general_mount(&logger).map_err(|e| {
+                error!(logger, "fail general mount: {}", e);
+                e
+            })?;
 
-        init_agent_as_init(&logger, config.unified_cgroup_hierarchy)?;
-    } else {
-        // once parsed cmdline and set the config, release the write lock
-        // as soon as possible in case other thread would get read lock on
-        // it.
-        let mut config = agentConfig.write().unwrap();
-        config.parse_cmdline(KERNEL_CMDLINE_FILE)?;
-    }
-    let config = agentConfig.read().unwrap();
+            let mut config = agentConfig.write().await;
+            config.parse_cmdline(KERNEL_CMDLINE_FILE)?;
 
-    let log_vport = config.log_vport as u32;
-    let log_handle = thread::spawn(move || -> Result<()> {
-        let mut reader = unsafe { File::from_raw_fd(rfd) };
-        if log_vport > 0 {
-            let listenfd = socket::socket(
-                AddressFamily::Vsock,
-                SockType::Stream,
-                SockFlag::SOCK_CLOEXEC,
-                None,
-            )?;
-            let addr = SockAddr::new_vsock(libc::VMADDR_CID_ANY, log_vport);
-            socket::bind(listenfd, &addr)?;
-            socket::listen(listenfd, 1)?;
-            let datafd = socket::accept4(listenfd, SockFlag::SOCK_CLOEXEC)?;
-            let mut log_writer = unsafe { File::from_raw_fd(datafd) };
-            let _ = io::copy(&mut reader, &mut log_writer)?;
-            let _ = unistd::close(listenfd);
-            let _ = unistd::close(datafd);
+            init_agent_as_init(&logger, config.unified_cgroup_hierarchy)?;
+        } else {
+            // once parsed cmdline and set the config, release the write lock
+            // as soon as possible in case other thread would get read lock on
+            // it.
+            let mut config = agentConfig.write().await;
+            config.parse_cmdline(KERNEL_CMDLINE_FILE)?;
         }
-        // copy log to stdout
-        let mut stdout_writer = io::stdout();
-        let _ = io::copy(&mut reader, &mut stdout_writer)?;
+        let config = agentConfig.read().await;
+
+        let log_vport = config.log_vport as u32;
+        let log_handle = tokio::spawn(async move {
+            let mut reader = PipeStream::from_fd(rfd);
+
+            if log_vport > 0 {
+                let listenfd = socket::socket(
+                    AddressFamily::Vsock,
+                    SockType::Stream,
+                    SockFlag::SOCK_CLOEXEC,
+                    None,
+                )
+                .unwrap();
+
+                let addr = SockAddr::new_vsock(libc::VMADDR_CID_ANY, log_vport);
+                socket::bind(listenfd, &addr).unwrap();
+                socket::listen(listenfd, 1).unwrap();
+
+                let mut vsock_stream = get_vsock_stream(listenfd).await.unwrap();
+
+                // copy log to stdout
+                tokio::io::copy(&mut reader, &mut vsock_stream)
+                    .await
+                    .unwrap();
+            }
+
+            // copy log to stdout
+            let mut stdout_writer = tokio::io::stdout();
+            let _ = tokio::io::copy(&mut reader, &mut stdout_writer).await;
+        });
+
+        let writer = unsafe { File::from_raw_fd(wfd) };
+
+        // Recreate a logger with the log level get from "/proc/cmdline".
+        let logger = logging::create_logger(NAME, "agent", config.log_level, writer);
+
+        announce(&logger, &config);
+
+        // This "unused" variable is required as it enables the global (and crucially static) logger,
+        // which is required to satisfy the the lifetime constraints of the auto-generated gRPC code.
+        let _guard = slog_scope::set_global_logger(logger.new(o!("subsystem" => "rpc")));
+
+        let mut _log_guard: Result<(), log::SetLoggerError> = Ok(());
+
+        if config.log_level == slog::Level::Trace {
+            // Redirect ttrpc log calls to slog iff full debug requested
+            _log_guard = Ok(slog_stdlog::init().map_err(|e| e)?);
+        }
+
+        start_sandbox(&logger, &config, init_mode).await?;
+
+        let _ = log_handle.await.unwrap();
+
         Ok(())
-    });
-
-    let writer = unsafe { File::from_raw_fd(wfd) };
-    // Recreate a logger with the log level get from "/proc/cmdline".
-    let logger = logging::create_logger(NAME, "agent", config.log_level, writer);
-
-    announce(&logger, &config);
-
-    // This "unused" variable is required as it enables the global (and crucially static) logger,
-    // which is required to satisfy the the lifetime constraints of the auto-generated gRPC code.
-    let _guard = slog_scope::set_global_logger(logger.new(o!("subsystem" => "rpc")));
-
-    let mut _log_guard: Result<(), log::SetLoggerError> = Ok(());
-
-    if config.log_level == slog::Level::Trace {
-        // Redirect ttrpc log calls to slog iff full debug requested
-        _log_guard = Ok(slog_stdlog::init().map_err(|e| e)?);
-    }
-
-    start_sandbox(&logger, &config, init_mode).await?;
-
-    let _ = log_handle.join();
-
-    Ok(())
+    })
 }
 
 async fn start_sandbox(logger: &Logger, config: &agentConfig, init_mode: bool) -> Result<()> {
     let shells = SHELLS.clone();
     let debug_console_vport = config.debug_console_vport as u32;
 
-    let mut shell_handle: Option<JoinHandle<()>> = None;
+    // TODO: async the debug console
+    let mut _shell_handle: Option<std::thread::JoinHandle<()>> = None;
     if config.debug_console {
         let thread_logger = logger.clone();
 
-        let builder = thread::Builder::new();
+        let builder = std::thread::Builder::new();
 
         let handle = builder.spawn(move || {
             let shells = shells.lock().unwrap();
@@ -233,7 +274,7 @@ async fn start_sandbox(logger: &Logger, config: &agentConfig, init_mode: bool) -
             }
         })?;
 
-        shell_handle = Some(handle);
+        _shell_handle = Some(handle);
     }
 
     // Initialize unique sandbox structure.
@@ -248,41 +289,38 @@ async fn start_sandbox(logger: &Logger, config: &agentConfig, init_mode: bool) -
 
     let sandbox = Arc::new(Mutex::new(s));
 
-    setup_signal_handler(&logger, sandbox.clone()).unwrap();
-    watch_uevents(sandbox.clone());
+    setup_signal_handler(&logger, sandbox.clone())
+        .await
+        .unwrap();
+    watch_uevents(sandbox.clone()).await;
 
-    let (tx, rx) = mpsc::channel::<i32>();
-    sandbox.lock().unwrap().sender = Some(tx);
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    sandbox.lock().await.sender = Some(tx);
 
     // vsock:///dev/vsock, port
-    let mut server = rpc::start(sandbox, config.server_addr.as_str()).await?;
-
+    let mut server = rpc::start(sandbox.clone(), config.server_addr.as_str());
     server.start().await?;
 
-    let _ = rx.recv()?;
-
+    let _ = rx.await?;
     server.shutdown().await?;
-
-    if let Some(handle) = shell_handle {
-        handle.join().map_err(|e| anyhow!("{:?}", e))?;
-    }
 
     Ok(())
 }
 
 use nix::sys::wait::WaitPidFlag;
 
-fn setup_signal_handler(logger: &Logger, sandbox: Arc<Mutex<Sandbox>>) -> Result<()> {
+async fn setup_signal_handler(logger: &Logger, sandbox: Arc<Mutex<Sandbox>>) -> Result<()> {
     let logger = logger.new(o!("subsystem" => "signals"));
 
     set_child_subreaper(true)
         .map_err(|err| anyhow!(err).context("failed to setup agent as a child subreaper"))?;
 
-    let signals = Signals::new(&[SIGCHLD])?;
+    let mut signal_stream = signal(SignalKind::child())?;
 
-    thread::spawn(move || {
-        'outer: for sig in signals.forever() {
-            info!(logger, "received signal"; "signal" => sig);
+    tokio::spawn(async move {
+        'outer: loop {
+            signal_stream.recv().await;
+            info!(logger, "received signal"; "signal" => "SIGCHLD");
 
             // sevral signals can be combined together
             // as one. So loop around to reap all
@@ -316,7 +354,7 @@ fn setup_signal_handler(logger: &Logger, sandbox: Arc<Mutex<Sandbox>>) -> Result
 
                     let logger = logger.new(o!("child-pid" => child_pid));
 
-                    let mut sandbox = sandbox.lock().unwrap();
+                    let mut sandbox = sandbox.lock().await;
                     let process = sandbox.find_process(raw_pid);
                     if process.is_none() {
                         info!(logger, "child exited unexpectedly");
@@ -375,7 +413,7 @@ fn init_agent_as_init(logger: &Logger, unified_cgroup_hierarchy: bool) -> Result
     unistd::setsid()?;
 
     unsafe {
-        libc::ioctl(io::stdin().as_raw_fd(), libc::TIOCSCTTY, 1);
+        libc::ioctl(std::io::stdin().as_raw_fd(), libc::TIOCSCTTY, 1);
     }
 
     env::set_var("PATH", "/bin:/sbin/:/usr/bin/:/usr/sbin/");
@@ -406,7 +444,7 @@ fn sethostname(hostname: &OsStr) -> Result<()> {
 }
 
 lazy_static! {
-    static ref SHELLS: Arc<Mutex<Vec<String>>> = {
+    static ref SHELLS: Arc<SyncMutex<Vec<String>>> = {
         let mut v = Vec::new();
 
         if !cfg!(test) {
@@ -414,7 +452,7 @@ lazy_static! {
             v.push("/bin/sh".to_string());
         }
 
-        Arc::new(Mutex::new(v))
+        Arc::new(SyncMutex::new(v))
     };
 }
 
@@ -480,7 +518,7 @@ fn setup_debug_console(logger: &Logger, shells: Vec<String>, port: u32) -> Resul
     };
 }
 
-fn io_copy<R: ?Sized, W: ?Sized>(reader: &mut R, writer: &mut W) -> io::Result<u64>
+fn io_copy<R: ?Sized, W: ?Sized>(reader: &mut R, writer: &mut W) -> std::io::Result<u64>
 where
     R: Read,
     W: Write,
@@ -543,10 +581,10 @@ fn run_debug_console_shell(logger: &Logger, shell: &str, socket_fd: RawFd) -> Re
             let debug_shell_logger = logger.clone();
 
             // channel that used to sync between thread and main process
-            let (tx, rx) = mpsc::channel::<i32>();
+            let (tx, rx) = std::sync::mpsc::channel::<i32>();
 
             // start a thread to do IO copy between socket and pseduo.master
-            thread::spawn(move || {
+            std::thread::spawn(move || {
                 let mut master_reader = unsafe { File::from_raw_fd(master_fd) };
                 let mut master_writer = unsafe { File::from_raw_fd(master_fd) };
                 let mut socket_reader = unsafe { File::from_raw_fd(socket_fd) };

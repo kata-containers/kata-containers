@@ -6,7 +6,7 @@
 use libc::pid_t;
 use std::fs::File;
 use std::os::unix::io::RawFd;
-use std::sync::mpsc::Sender;
+use tokio::sync::mpsc::Sender;
 
 use nix::fcntl::{fcntl, FcntlArg, OFlag};
 use nix::sys::signal::{self, Signal};
@@ -17,6 +17,27 @@ use nix::Result;
 use crate::reaper::Epoller;
 use oci::Process as OCIProcess;
 use slog::Logger;
+
+use crate::pipestream::PipeStream;
+use std::collections::HashMap;
+use std::sync::Arc;
+use tokio::io::{split, ReadHalf, WriteHalf};
+use tokio::sync::Mutex;
+
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+pub enum StreamType {
+    Stdin,
+    Stdout,
+    Stderr,
+    ExitPipeR,
+    TermMaster,
+    ParentStdin,
+    ParentStdout,
+    ParentStderr,
+}
+
+type Reader = Arc<Mutex<ReadHalf<PipeStream>>>;
+type Writer = Arc<Mutex<WriteHalf<PipeStream>>>;
 
 #[derive(Debug)]
 pub struct Process {
@@ -42,6 +63,9 @@ pub struct Process {
     pub oci: OCIProcess,
     pub logger: Logger,
     pub epoller: Option<Epoller>,
+
+    readers: HashMap<StreamType, Reader>,
+    writers: HashMap<StreamType, Writer>,
 }
 
 pub trait ProcessOperations {
@@ -94,6 +118,8 @@ impl Process {
             oci: ocip.clone(),
             logger: logger.clone(),
             epoller: None,
+            readers: HashMap::new(),
+            writers: HashMap::new(),
         };
 
         info!(logger, "before create console socket!");
@@ -138,7 +164,58 @@ impl Process {
         }
         Ok(())
     }
+
+    fn get_fd(&self, stream_type: &StreamType) -> Option<RawFd> {
+        match stream_type {
+            StreamType::Stdin => self.stdin,
+            StreamType::Stdout => self.stdout,
+            StreamType::Stderr => self.stderr,
+            StreamType::ExitPipeR => self.exit_pipe_r,
+            StreamType::TermMaster => self.term_master,
+            StreamType::ParentStdin => self.parent_stdin,
+            StreamType::ParentStdout => self.parent_stdout,
+            StreamType::ParentStderr => self.parent_stderr,
+        }
+    }
+
+    fn get_stream_and_store(&mut self, stream_type: StreamType) -> Option<(Reader, Writer)> {
+        let fd = self.get_fd(&stream_type)?;
+        let stream = PipeStream::from_fd(fd);
+
+        let (reader, writer) = split(stream);
+        let reader = Arc::new(Mutex::new(reader));
+        let writer = Arc::new(Mutex::new(writer));
+
+        self.readers.insert(stream_type.clone(), reader.clone());
+        self.writers.insert(stream_type, writer.clone());
+
+        Some((reader, writer))
+    }
+
+    pub fn get_reader(&mut self, stream_type: StreamType) -> Option<Reader> {
+        if let Some(reader) = self.readers.get(&stream_type) {
+            return Some(reader.clone());
+        }
+
+        let (reader, _) = self.get_stream_and_store(stream_type)?;
+        Some(reader)
+    }
+
+    pub fn get_writer(&mut self, stream_type: StreamType) -> Option<Writer> {
+        if let Some(writer) = self.writers.get(&stream_type) {
+            return Some(writer.clone());
+        }
+
+        let (_, writer) = self.get_stream_and_store(stream_type)?;
+        Some(writer)
+    }
+
+    pub fn close_stream(&mut self, stream_type: StreamType) {
+        let _ = self.readers.remove(&stream_type);
+        let _ = self.writers.remove(&stream_type);
+    }
 }
+
 
 fn create_extended_pipe(flags: OFlag, pipe_size: i32) -> Result<(RawFd, RawFd)> {
     let (r, w) = unistd::pipe2(flags)?;
