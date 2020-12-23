@@ -182,6 +182,19 @@ docker_extra_args()
 	local args=""
 
 	case "$1" in
+	 gentoo)
+		# Requred to chroot
+		args+=" --cap-add SYS_CHROOT"
+		# debootstrap needs to create device nodes to properly function
+		args+=" --cap-add MKNOD"
+		# Required to mount inside a container
+		args+=" --cap-add SYS_ADMIN"
+		# Required to build glibc
+		args+=" --cap-add SYS_PTRACE"
+		# mount portage volume
+		args+=" -v ${gentoo_local_portage_dir}:/usr/portage/packages"
+		args+=" --volumes-from ${gentoo_portage_container}"
+		;;
 	 ubuntu | debian)
 		# Requred to chroot
 		args+=" --cap-add SYS_CHROOT"
@@ -400,6 +413,9 @@ build_rootfs_distro()
 			done
 		fi
 
+		before_starting_container
+		trap after_stopping_container EXIT
+
 		#Make sure we use a compatible runtime to build rootfs
 		# In case Clear Containers Runtime is installed we dont want to hit issue:
 		#https://github.com/clearcontainers/runtime/issues/828
@@ -503,6 +519,10 @@ EOT
 	mkdir -p "${ROOTFS_DIR}/etc"
 
 	case "${distro}" in
+		"gentoo")
+			chrony_conf_file="${ROOTFS_DIR}/etc/chrony/chrony.conf"
+			chrony_systemd_service="${ROOTFS_DIR}/lib/systemd/system/chronyd.service"
+			;;
 		"ubuntu" | "debian")
 			echo "I am ubuntu or debian"
 			chrony_conf_file="${ROOTFS_DIR}/etc/chrony/chrony.conf"
@@ -527,7 +547,9 @@ EOT
 	sed -i 's/^\(server \|pool \|peer \)/# &/g'  ${chrony_conf_file}
 
 	if [ -f "$chrony_systemd_service" ]; then
-		sed -i '/^\[Unit\]/a ConditionPathExists=\/dev\/ptp0' ${chrony_systemd_service}
+		# Remove user option, user could not exist in the rootfs
+		sed -i -e 's/^\(ExecStart=.*\)-u [[:alnum:]]*/\1/g' \
+		       -e '/^\[Unit\]/a ConditionPathExists=\/dev\/ptp0' ${chrony_systemd_service}
 	fi
 
 	# The CC on s390x for fedora needs to be manually set to gcc when the golang is downloaded from the main page.
