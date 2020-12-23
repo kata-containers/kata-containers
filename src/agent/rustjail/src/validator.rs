@@ -4,13 +4,13 @@
 //
 
 use crate::container::Config;
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, Context, Error, Result};
 use nix::errno::Errno;
-use oci::{LinuxIDMapping, LinuxNamespace, Spec};
+use oci::{Linux, LinuxIDMapping, LinuxNamespace, Spec};
 use std::collections::HashMap;
 use std::path::{Component, PathBuf};
 
-fn einval() {
+fn einval() -> Error {
     anyhow!(nix::Error::from_errno(Errno::EINVAL))
 }
 
@@ -308,4 +308,275 @@ pub fn validate(conf: &Config) -> Result<()> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use oci::Mount;
+
+    #[test]
+    fn test_namespace() {
+        let namespaces = [
+            LinuxNamespace {
+                r#type: "net".to_owned(),
+                path: "/sys/cgroups/net".to_owned(),
+            },
+            LinuxNamespace {
+                r#type: "uts".to_owned(),
+                path: "/sys/cgroups/uts".to_owned(),
+            },
+        ];
+
+        assert_eq!(contain_namespace(&namespaces, "net"), true);
+        assert_eq!(contain_namespace(&namespaces, "uts"), true);
+
+        assert_eq!(contain_namespace(&namespaces, ""), false);
+        assert_eq!(contain_namespace(&namespaces, "Net"), false);
+        assert_eq!(contain_namespace(&namespaces, "ipc"), false);
+
+        assert_eq!(
+            get_namespace_path(&namespaces, "net").unwrap(),
+            "/sys/cgroups/net"
+        );
+        assert_eq!(
+            get_namespace_path(&namespaces, "uts").unwrap(),
+            "/sys/cgroups/uts"
+        );
+
+        get_namespace_path(&namespaces, "").unwrap_err();
+        get_namespace_path(&namespaces, "Uts").unwrap_err();
+        get_namespace_path(&namespaces, "ipc").unwrap_err();
+    }
+
+    #[test]
+    fn test_rootfs() {
+        rootfs("/_no_exit_fs_xxxxxxxxxxx").unwrap_err();
+        rootfs("sys").unwrap_err();
+        rootfs("/proc/self/root").unwrap_err();
+        rootfs("/proc/self/root/sys").unwrap_err();
+
+        rootfs("/proc/self").unwrap_err();
+        rootfs("/./proc/self").unwrap_err();
+        rootfs("/proc/././self").unwrap_err();
+        rootfs("/proc/.././self").unwrap_err();
+
+        rootfs("/proc/uptime").unwrap();
+        rootfs("/../proc/uptime").unwrap();
+        rootfs("/../../proc/uptime").unwrap();
+        rootfs("/proc/../proc/uptime").unwrap();
+        rootfs("/proc/../../proc/uptime").unwrap();
+    }
+
+    #[test]
+    fn test_hostname() {
+        let mut spec = Spec::default();
+
+        hostname(&spec).unwrap();
+
+        spec.hostname = "a.test.com".to_owned();
+        hostname(&spec).unwrap_err();
+
+        let mut linux = Linux::default();
+        linux.namespaces = vec![
+            LinuxNamespace {
+                r#type: "net".to_owned(),
+                path: "/sys/cgroups/net".to_owned(),
+            },
+            LinuxNamespace {
+                r#type: "uts".to_owned(),
+                path: "/sys/cgroups/uts".to_owned(),
+            },
+        ];
+        spec.linux = Some(linux);
+        hostname(&spec).unwrap();
+    }
+
+    #[test]
+    fn test_security() {
+        let mut spec = Spec::default();
+
+        let linux = Linux::default();
+        spec.linux = Some(linux);
+        security(&spec).unwrap();
+
+        let mut linux = Linux::default();
+        linux.masked_paths.push("/test".to_owned());
+        linux.namespaces = vec![
+            LinuxNamespace {
+                r#type: "net".to_owned(),
+                path: "/sys/cgroups/net".to_owned(),
+            },
+            LinuxNamespace {
+                r#type: "uts".to_owned(),
+                path: "/sys/cgroups/uts".to_owned(),
+            },
+        ];
+        spec.linux = Some(linux);
+        security(&spec).unwrap_err();
+
+        let mut linux = Linux::default();
+        linux.masked_paths.push("/test".to_owned());
+        linux.namespaces = vec![
+            LinuxNamespace {
+                r#type: "net".to_owned(),
+                path: "/sys/cgroups/net".to_owned(),
+            },
+            LinuxNamespace {
+                r#type: "mount".to_owned(),
+                path: "/sys/cgroups/mount".to_owned(),
+            },
+        ];
+        spec.linux = Some(linux);
+        security(&spec).unwrap();
+    }
+
+    #[test]
+    fn test_usernamespace() {
+        let mut spec = Spec::default();
+        usernamespace(&spec).unwrap_err();
+
+        let linux = Linux::default();
+        spec.linux = Some(linux);
+        usernamespace(&spec).unwrap();
+
+        let mut linux = Linux::default();
+        linux.uid_mappings = vec![LinuxIDMapping {
+            container_id: 0,
+            host_id: 1000,
+            size: 0,
+        }];
+        spec.linux = Some(linux);
+        usernamespace(&spec).unwrap_err();
+
+        let mut linux = Linux::default();
+        linux.uid_mappings = vec![LinuxIDMapping {
+            container_id: 0,
+            host_id: 1000,
+            size: 100,
+        }];
+        spec.linux = Some(linux);
+        usernamespace(&spec).unwrap_err();
+    }
+
+    #[test]
+    fn test_rootless_euid() {
+        let mut spec = Spec::default();
+
+        // Test case: without linux
+        rootless_euid_mapping(&spec).unwrap_err();
+        rootless_euid_mount(&spec).unwrap_err();
+
+        // Test case: without user namespace
+        let linux = Linux::default();
+        spec.linux = Some(linux);
+        rootless_euid_mapping(&spec).unwrap_err();
+
+        // Test case: without user namespace
+        let linux = spec.linux.as_mut().unwrap();
+        linux.namespaces = vec![
+            LinuxNamespace {
+                r#type: "net".to_owned(),
+                path: "/sys/cgroups/net".to_owned(),
+            },
+            LinuxNamespace {
+                r#type: "uts".to_owned(),
+                path: "/sys/cgroups/uts".to_owned(),
+            },
+        ];
+        rootless_euid_mapping(&spec).unwrap_err();
+
+        let linux = spec.linux.as_mut().unwrap();
+        linux.namespaces = vec![
+            LinuxNamespace {
+                r#type: "net".to_owned(),
+                path: "/sys/cgroups/net".to_owned(),
+            },
+            LinuxNamespace {
+                r#type: "user".to_owned(),
+                path: "/sys/cgroups/user".to_owned(),
+            },
+        ];
+        linux.uid_mappings = vec![LinuxIDMapping {
+            container_id: 0,
+            host_id: 1000,
+            size: 1000,
+        }];
+        linux.gid_mappings = vec![LinuxIDMapping {
+            container_id: 0,
+            host_id: 1000,
+            size: 1000,
+        }];
+        rootless_euid_mapping(&spec).unwrap();
+
+        spec.mounts.push(Mount {
+            destination: "/app".to_owned(),
+            r#type: "tmpfs".to_owned(),
+            source: "".to_owned(),
+            options: vec!["uid=10000".to_owned()],
+        });
+        rootless_euid_mount(&spec).unwrap_err();
+
+        spec.mounts = vec![
+            (Mount {
+                destination: "/app".to_owned(),
+                r#type: "tmpfs".to_owned(),
+                source: "".to_owned(),
+                options: vec!["uid=500".to_owned(), "gid=500".to_owned()],
+            }),
+        ];
+        rootless_euid(&spec).unwrap();
+    }
+
+    #[test]
+    fn test_check_host_ns() {
+        check_host_ns("/proc/self/ns/net").unwrap_err();
+        check_host_ns("/proc/sys/net/ipv4/tcp_sack").unwrap();
+    }
+
+    #[test]
+    fn test_sysctl() {
+        let mut spec = Spec::default();
+
+        let mut linux = Linux::default();
+        linux.namespaces = vec![LinuxNamespace {
+            r#type: "net".to_owned(),
+            path: "/sys/cgroups/net".to_owned(),
+        }];
+        linux
+            .sysctl
+            .insert("kernel.domainname".to_owned(), "test.com".to_owned());
+        spec.linux = Some(linux);
+        sysctl(&spec).unwrap_err();
+
+        spec.linux
+            .as_mut()
+            .unwrap()
+            .namespaces
+            .push(LinuxNamespace {
+                r#type: "uts".to_owned(),
+                path: "/sys/cgroups/uts".to_owned(),
+            });
+        sysctl(&spec).unwrap();
+    }
+
+    #[test]
+    fn test_validate() {
+        let spec = Spec::default();
+        let mut config = Config {
+            cgroup_name: "container1".to_owned(),
+            use_systemd_cgroup: false,
+            no_pivot_root: true,
+            no_new_keyring: true,
+            rootless_euid: false,
+            rootless_cgroup: false,
+            spec: Some(spec),
+        };
+
+        validate(&config).unwrap_err();
+
+        let linux = Linux::default();
+        config.spec.as_mut().unwrap().linux = Some(linux);
+        validate(&config).unwrap_err();
+    }
 }
