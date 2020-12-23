@@ -26,7 +26,6 @@ dirs = "3.0.1"
 anyhow = "1.0.32"
 cgroups = { package = "cgroups-rs", version = "0.2.1" }
 tempfile = "3.1.0"
-epoll = "4.3.1"
 
 tokio = { version = "0.2", features = ["sync", "io-util", "process", "time", "macros"] }
 futures = "0.3"

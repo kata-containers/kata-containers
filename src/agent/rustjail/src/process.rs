@@ -14,7 +14,6 @@ use nix::sys::wait::{self, WaitStatus};
 use nix::unistd::{self, Pid};
 use nix::Result;
 
-use crate::reaper::Epoller;
 use oci::Process as OCIProcess;
 use slog::Logger;
 
@@ -23,6 +22,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::io::{split, ReadHalf, WriteHalf};
 use tokio::sync::Mutex;
+use tokio::sync::Notify;
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub enum StreamType {
@@ -62,7 +62,7 @@ pub struct Process {
     pub exit_watchers: Vec<Sender<i32>>,
     pub oci: OCIProcess,
     pub logger: Logger,
-    pub epoller: Option<Epoller>,
+    pub term_exit_notifier: Arc<Notify>,
 
     readers: HashMap<StreamType, Reader>,
     writers: HashMap<StreamType, Writer>,
@@ -117,7 +117,7 @@ impl Process {
             exit_watchers: Vec::new(),
             oci: ocip.clone(),
             logger: logger.clone(),
-            epoller: None,
+            term_exit_notifier: Arc::new(Notify::new()),
             readers: HashMap::new(),
             writers: HashMap::new(),
         };
@@ -142,27 +142,9 @@ impl Process {
         Ok(p)
     }
 
-    pub fn close_epoller(&mut self) {
-        if let Some(epoller) = self.epoller.take() {
-            epoller.close();
-        }
-    }
-
-    pub fn create_epoller(&mut self) -> anyhow::Result<()> {
-        match self.term_master {
-            Some(term_master) => {
-                // add epoller to process
-                let epoller = Epoller::new(&self.logger, term_master)?;
-                self.epoller = Some(epoller)
-            }
-            None => {
-                info!(
-                    self.logger,
-                    "try to add epoller to a process without a term master fd"
-                );
-            }
-        }
-        Ok(())
+    pub fn notify_term_close(&mut self) {
+        let notify = self.term_exit_notifier.clone();
+        notify.notify();
     }
 
     fn get_fd(&self, stream_type: &StreamType) -> Option<RawFd> {
@@ -215,7 +197,6 @@ impl Process {
         let _ = self.writers.remove(&stream_type);
     }
 }
-
 
 fn create_extended_pipe(flags: OFlag, pipe_size: i32) -> Result<(RawFd, RawFd)> {
     let (r, w) = unistd::pipe2(flags)?;

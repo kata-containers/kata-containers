@@ -383,12 +383,10 @@ async fn setup_signal_handler(logger: &Logger, sandbox: Arc<Mutex<Sandbox>>) -> 
                     p.exit_code = ret;
                     let _ = unistd::close(pipe_write);
 
-                    if let Some(ref poller) = p.epoller {
-                        info!(logger, "close epoller");
-                        // close the socket file to notify readStdio to close terminal specifically
-                        // in case this process's terminal has been inherited by its children.
-                        poller.close_wfd()
-                    }
+                    info!(logger, "notify term to close");
+                    // close the socket file to notify readStdio to close terminal specifically
+                    // in case this process's terminal has been inherited by its children.
+                    p.notify_term_close();
                 }
             }
         }
