@@ -233,6 +233,10 @@ impl Sandbox {
             online_memory(&self.logger)?;
         }
 
+        if req.nb_cpus == 0 {
+            return Ok(());
+        }
+
         let guest_cpuset = rustjail_cgroups::fs::get_guest_cpuset()?;
 
         for (_, ctr) in self.containers.iter() {
