@@ -201,10 +201,6 @@ impl agentService {
             }
         }
 
-        // set epoller
-        let p = find_process(&mut s, cid.as_str(), "", true)?;
-        p.create_epoller()?;
-
         Ok(())
     }
 
@@ -311,10 +307,6 @@ impl agentService {
             .ok_or_else(|| anyhow!("Invalid container id"))?;
 
         ctr.run(p).await?;
-
-        // set epoller
-        let p = find_process(&mut sandbox, cid.as_str(), exec_id.as_str(), false)?;
-        p.create_epoller()?;
 
         Ok(())
     }
@@ -459,9 +451,7 @@ impl agentService {
         let cid = req.container_id;
         let eid = req.exec_id;
 
-        // let mut fd: RawFd = -1;
-        // let mut epoller: Option<reaper::Epoller> = None;
-
+        let mut term_exit_notifier = Arc::new(tokio::sync::Notify::new());
         let reader = {
             let s = self.sandbox.clone();
             let mut sandbox = s.lock().await;
@@ -469,7 +459,7 @@ impl agentService {
             let p = find_process(&mut sandbox, cid.as_str(), eid.as_str(), false)?;
 
             if p.term_master.is_some() {
-                // epoller = p.epoller.clone();
+                term_exit_notifier = p.term_exit_notifier.clone();
                 p.get_reader(StreamType::TermMaster)
             } else if stdout {
                 if p.parent_stdout.is_some() {
@@ -487,12 +477,19 @@ impl agentService {
         }
 
         let reader = reader.unwrap();
-        let vector = read_stream(reader, req.len as usize).await?;
 
-        let mut resp = ReadStreamResponse::new();
-        resp.set_data(vector);
+        tokio::select! {
+            _ = term_exit_notifier.notified() => {
+                Err(anyhow!("eof"))
+            }
+            v = read_stream(reader, req.len as usize)  => {
+                let vector = v?;
+                let mut resp = ReadStreamResponse::new();
+                resp.set_data(vector);
 
-        Ok(resp)
+                Ok(resp)
+            }
+        }
     }
 }
 
@@ -805,7 +802,7 @@ impl protocols::agent_ttrpc::AgentService for agentService {
             p.parent_stdin = None;
         }
 
-        p.close_epoller();
+        p.notify_term_close();
 
         Ok(Empty::new())
     }
@@ -1317,7 +1314,7 @@ async fn read_stream(reader: Arc<Mutex<ReadHalf<PipeStream>>>, l: usize) -> Resu
     content.resize(len, 0);
 
     if len == 0 {
-        return Err(anyhow!("read  meet eof"));
+        return Err(anyhow!("read meet eof"));
     }
 
     Ok(content)
@@ -1627,7 +1624,7 @@ fn cleanup_process(p: &mut Process) -> Result<()> {
         let _ = unistd::close(p.exit_pipe_r.unwrap())?;
     }
 
-    p.close_epoller();
+    p.notify_term_close();
 
     p.parent_stdin = None;
     p.parent_stdout = None;
