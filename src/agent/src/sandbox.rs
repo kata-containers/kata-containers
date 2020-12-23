@@ -749,11 +749,11 @@ mod tests {
         assert_eq!(s.hostname, hostname);
     }
 
-    #[test]
-    fn test_sandbox_set_destroy() {
+    #[tokio::test]
+    async fn test_sandbox_set_destroy() {
         let logger = slog::Logger::root(slog::Discard, o!());
         let mut s = Sandbox::new(&logger).unwrap();
-        let ret = s.destroy();
+        let ret = s.destroy().await;
         assert!(ret.is_ok());
     }
 }

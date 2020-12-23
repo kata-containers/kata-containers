@@ -190,8 +190,8 @@ mod tests {
     use nix::sched::CloneFlags;
     use tempfile::Builder;
 
-    #[test]
-    fn test_setup_persistent_ns() {
+    #[tokio::test]
+    async fn test_setup_persistent_ns() {
         skip_if_not_root!();
         // Create dummy logger and temp folder.
         let logger = slog::Logger::root(slog::Discard, o!());
@@ -200,7 +200,8 @@ mod tests {
         let ns_ipc = Namespace::new(&logger)
             .get_ipc()
             .set_root_dir(tmpdir.path().to_str().unwrap())
-            .setup();
+            .setup()
+            .await;
 
         assert!(ns_ipc.is_ok());
         assert!(remove_mounts(&[ns_ipc.unwrap().path]).is_ok());
@@ -211,7 +212,8 @@ mod tests {
         let ns_uts = Namespace::new(&logger)
             .get_uts("test_hostname")
             .set_root_dir(tmpdir.path().to_str().unwrap())
-            .setup();
+            .setup()
+            .await;
 
         assert!(ns_uts.is_ok());
         assert!(remove_mounts(&[ns_uts.unwrap().path]).is_ok());
@@ -223,7 +225,8 @@ mod tests {
         let ns_pid = Namespace::new(&logger)
             .get_pid()
             .set_root_dir(tmpdir.path().to_str().unwrap())
-            .setup();
+            .setup()
+            .await;
 
         assert!(ns_pid.is_err());
     }
