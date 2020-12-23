@@ -1825,27 +1825,34 @@ mod tests {
         }
     }
 
-    fn new_linux_container<U, F: FnOnce(LinuxContainer) -> Result<U, anyhow::Error>>(
+    fn new_linux_container() -> (Result<LinuxContainer>, tempfile::TempDir) {
+        // Create a temporal directory
+        let dir = tempdir()
+            .map_err(|e| anyhow!(e).context("tempdir failed"))
+            .unwrap();
+
+        // Create a new container
+        (
+            LinuxContainer::new(
+                "some_id",
+                &dir.path().join("rootfs").to_str().unwrap(),
+                create_dummy_opts(),
+                &slog_scope::logger(),
+            ),
+            dir,
+        )
+    }
+
+    fn new_linux_container_and_then<U, F: FnOnce(LinuxContainer) -> Result<U, anyhow::Error>>(
         op: F,
     ) -> Result<U, anyhow::Error> {
-        // Create a temporal directory
-        tempdir()
-            .map_err(|e| anyhow!(e).context("tempdir failed"))
-            .and_then(|p: tempfile::TempDir| {
-                // Create a new container
-                LinuxContainer::new(
-                    "some_id",
-                    &p.path().join("rootfs").to_str().unwrap(),
-                    create_dummy_opts(),
-                    &slog_scope::logger(),
-                )
-                .and_then(op)
-            })
+        let (container, _dir) = new_linux_container();
+        container.and_then(op)
     }
 
     #[test]
     fn test_linuxcontainer_pause_bad_status() {
-        let ret = new_linux_container(|mut c: LinuxContainer| {
+        let ret = new_linux_container_and_then(|mut c: LinuxContainer| {
             // Change state to pause, c.pause() should fail
             c.status.transition(Status::PAUSED);
             c.pause().map_err(|e| anyhow!(e))
@@ -1857,7 +1864,7 @@ mod tests {
 
     #[test]
     fn test_linuxcontainer_pause_cgroupmgr_is_none() {
-        let ret = new_linux_container(|mut c: LinuxContainer| {
+        let ret = new_linux_container_and_then(|mut c: LinuxContainer| {
             c.cgroup_manager = None;
             c.pause().map_err(|e| anyhow!(e))
         });
@@ -1867,7 +1874,7 @@ mod tests {
 
     #[test]
     fn test_linuxcontainer_pause() {
-        let ret = new_linux_container(|mut c: LinuxContainer| {
+        let ret = new_linux_container_and_then(|mut c: LinuxContainer| {
             c.cgroup_manager = FsManager::new("").ok();
             c.pause().map_err(|e| anyhow!(e))
         });
@@ -1877,7 +1884,7 @@ mod tests {
 
     #[test]
     fn test_linuxcontainer_resume_bad_status() {
-        let ret = new_linux_container(|mut c: LinuxContainer| {
+        let ret = new_linux_container_and_then(|mut c: LinuxContainer| {
             // Change state to created, c.resume() should fail
             c.status.transition(Status::CREATED);
             c.resume().map_err(|e| anyhow!(e))
@@ -1889,7 +1896,7 @@ mod tests {
 
     #[test]
     fn test_linuxcontainer_resume_cgroupmgr_is_none() {
-        let ret = new_linux_container(|mut c: LinuxContainer| {
+        let ret = new_linux_container_and_then(|mut c: LinuxContainer| {
             c.status.transition(Status::PAUSED);
             c.cgroup_manager = None;
             c.resume().map_err(|e| anyhow!(e))
@@ -1900,7 +1907,7 @@ mod tests {
 
     #[test]
     fn test_linuxcontainer_resume() {
-        let ret = new_linux_container(|mut c: LinuxContainer| {
+        let ret = new_linux_container_and_then(|mut c: LinuxContainer| {
             c.cgroup_manager = FsManager::new("").ok();
             // Change status to paused, this way we can resume it
             c.status.transition(Status::PAUSED);
@@ -1912,7 +1919,7 @@ mod tests {
 
     #[test]
     fn test_linuxcontainer_state() {
-        let ret = new_linux_container(|c: LinuxContainer| c.state());
+        let ret = new_linux_container_and_then(|c: LinuxContainer| c.state());
         assert!(ret.is_err(), "Expecting Err, Got {:?}", ret);
         assert!(
             format!("{:?}", ret).contains("not supported"),
@@ -1923,7 +1930,7 @@ mod tests {
 
     #[test]
     fn test_linuxcontainer_oci_state_no_root_parent() {
-        let ret = new_linux_container(|mut c: LinuxContainer| {
+        let ret = new_linux_container_and_then(|mut c: LinuxContainer| {
             c.config.spec.as_mut().unwrap().root.as_mut().unwrap().path = "/".to_string();
             c.oci_state()
         });
@@ -1937,13 +1944,13 @@ mod tests {
 
     #[test]
     fn test_linuxcontainer_oci_state() {
-        let ret = new_linux_container(|c: LinuxContainer| c.oci_state());
+        let ret = new_linux_container_and_then(|c: LinuxContainer| c.oci_state());
         assert!(ret.is_ok(), "Expecting Ok, Got {:?}", ret);
     }
 
     #[test]
     fn test_linuxcontainer_config() {
-        let ret = new_linux_container(|c: LinuxContainer| Ok(c));
+        let ret = new_linux_container_and_then(|c: LinuxContainer| Ok(c));
         assert!(ret.is_ok(), "Expecting ok, Got {:?}", ret);
         assert!(
             ret.as_ref().unwrap().config().is_ok(),
@@ -1954,13 +1961,13 @@ mod tests {
 
     #[test]
     fn test_linuxcontainer_processes() {
-        let ret = new_linux_container(|c: LinuxContainer| c.processes());
+        let ret = new_linux_container_and_then(|c: LinuxContainer| c.processes());
         assert!(ret.is_ok(), "Expecting Ok, Got {:?}", ret);
     }
 
     #[test]
     fn test_linuxcontainer_get_process_not_found() {
-        let _ = new_linux_container(|mut c: LinuxContainer| {
+        let _ = new_linux_container_and_then(|mut c: LinuxContainer| {
             let p = c.get_process("123");
             assert!(p.is_err(), "Expecting Err, Got {:?}", p);
             Ok(())
@@ -1969,7 +1976,7 @@ mod tests {
 
     #[test]
     fn test_linuxcontainer_get_process() {
-        let _ = new_linux_container(|mut c: LinuxContainer| {
+        let _ = new_linux_container_and_then(|mut c: LinuxContainer| {
             c.processes.insert(
                 1,
                 Process::new(&sl!(), &oci::Process::default(), "123", true, 1).unwrap(),
@@ -1982,49 +1989,57 @@ mod tests {
 
     #[test]
     fn test_linuxcontainer_stats() {
-        let ret = new_linux_container(|c: LinuxContainer| c.stats());
+        let ret = new_linux_container_and_then(|c: LinuxContainer| c.stats());
         assert!(ret.is_ok(), "Expecting Ok, Got {:?}", ret);
     }
 
     #[test]
     fn test_linuxcontainer_set() {
-        let ret =
-            new_linux_container(|mut c: LinuxContainer| c.set(oci::LinuxResources::default()));
+        let ret = new_linux_container_and_then(|mut c: LinuxContainer| {
+            c.set(oci::LinuxResources::default())
+        });
         assert!(ret.is_ok(), "Expecting Ok, Got {:?}", ret);
     }
 
-    #[test]
-    fn test_linuxcontainer_start() {
-        let ret = new_linux_container(|mut c: LinuxContainer| {
-            c.start(Process::new(&sl!(), &oci::Process::default(), "123", true, 1).unwrap())
-        });
+    #[tokio::test]
+    async fn test_linuxcontainer_start() {
+        let (c, _dir) = new_linux_container();
+        let ret = c
+            .unwrap()
+            .start(Process::new(&sl!(), &oci::Process::default(), "123", true, 1).unwrap())
+            .await;
         assert!(ret.is_err(), "Expecting Err, Got {:?}", ret);
     }
 
-    #[test]
-    fn test_linuxcontainer_run() {
-        let ret = new_linux_container(|mut c: LinuxContainer| {
-            c.run(Process::new(&sl!(), &oci::Process::default(), "123", true, 1).unwrap())
-        });
+    #[tokio::test]
+    async fn test_linuxcontainer_run() {
+        let (c, _dir) = new_linux_container();
+        let ret = c
+            .unwrap()
+            .run(Process::new(&sl!(), &oci::Process::default(), "123", true, 1).unwrap())
+            .await;
         assert!(ret.is_err(), "Expecting Err, Got {:?}", ret);
     }
 
-    #[test]
-    fn test_linuxcontainer_destroy() {
-        let ret = new_linux_container(|mut c: LinuxContainer| c.destroy());
+    #[tokio::test]
+    async fn test_linuxcontainer_destroy() {
+        let (c, _dir) = new_linux_container();
+
+        let ret = c.unwrap().destroy().await;
         assert!(ret.is_ok(), "Expecting Ok, Got {:?}", ret);
     }
 
     #[test]
     fn test_linuxcontainer_signal() {
-        let ret =
-            new_linux_container(|c: LinuxContainer| c.signal(nix::sys::signal::SIGCONT, true));
+        let ret = new_linux_container_and_then(|c: LinuxContainer| {
+            c.signal(nix::sys::signal::SIGCONT, true)
+        });
         assert!(ret.is_ok(), "Expecting Ok, Got {:?}", ret);
     }
 
     #[test]
     fn test_linuxcontainer_exec() {
-        let ret = new_linux_container(|mut c: LinuxContainer| c.exec());
+        let ret = new_linux_container_and_then(|mut c: LinuxContainer| c.exec());
         assert!(ret.is_err(), "Expecting Err, Got {:?}", ret);
     }
 
