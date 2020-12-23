@@ -257,25 +257,23 @@ async fn start_sandbox(logger: &Logger, config: &agentConfig, init_mode: bool) -
     let shells = SHELLS.clone();
     let debug_console_vport = config.debug_console_vport as u32;
 
-    // TODO: async the debug console
-    let mut _shell_handle: Option<std::thread::JoinHandle<()>> = None;
-    if config.debug_console {
+    let shell_handle = if config.debug_console {
         let thread_logger = logger.clone();
+        let shells = shells.lock().unwrap().to_vec();
 
-        let builder = std::thread::Builder::new();
-
-        let handle = builder.spawn(move || {
-            let shells = shells.lock().unwrap();
-            let result = setup_debug_console(&thread_logger, shells.to_vec(), debug_console_vport);
+        let handle = tokio::task::spawn_blocking(move || {
+            let result = setup_debug_console(&thread_logger, shells, debug_console_vport);
             if result.is_err() {
                 // Report error, but don't fail
                 warn!(thread_logger, "failed to setup debug console";
                     "error" => format!("{}", result.unwrap_err()));
             }
-        })?;
+        });
 
-        _shell_handle = Some(handle);
-    }
+        Some(handle)
+    } else {
+        None
+    };
 
     // Initialize unique sandbox structure.
     let mut s = Sandbox::new(&logger).context("Failed to create sandbox")?;
@@ -303,6 +301,10 @@ async fn start_sandbox(logger: &Logger, config: &agentConfig, init_mode: bool) -
 
     let _ = rx.await?;
     server.shutdown().await?;
+
+    if let Some(handle) = shell_handle {
+        handle.await.map_err(|e| anyhow!("{:?}", e))?;
+    }
 
     Ok(())
 }
@@ -454,9 +456,6 @@ lazy_static! {
     };
 }
 
-// pub static mut LOG_LEVEL: ;
-// pub static mut TRACE_MODE: ;
-
 use crate::config::agentConfig;
 use nix::sys::stat::Mode;
 use std::os::unix::io::{FromRawFd, RawFd};
@@ -464,18 +463,10 @@ use std::path::PathBuf;
 use std::process::exit;
 
 fn setup_debug_console(logger: &Logger, shells: Vec<String>, port: u32) -> Result<()> {
-    let mut shell: &str = "";
-    for sh in shells.iter() {
-        let binary = PathBuf::from(sh);
-        if binary.exists() {
-            shell = sh;
-            break;
-        }
-    }
-
-    if shell == "" {
-        return Err(anyhow!("no shell found to launch debug console"));
-    }
+    let shell = shells
+        .iter()
+        .find(|sh| PathBuf::from(sh).exists())
+        .ok_or_else(|| anyhow!("no shell found to launch debug console"))?;
 
     if port > 0 {
         let listenfd = socket::socket(
