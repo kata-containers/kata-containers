@@ -40,10 +40,12 @@ pub mod capabilities;
 pub mod cgroups;
 pub mod container;
 pub mod mount;
+pub mod pipestream;
 pub mod process;
 pub mod reaper;
 pub mod specconv;
 pub mod sync;
+pub mod sync_with_async;
 pub mod validator;
 
 // pub mod factory;

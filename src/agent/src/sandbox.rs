@@ -22,9 +22,10 @@ use std::collections::HashMap;
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
-use std::sync::mpsc::{self, Receiver, Sender};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::{thread, time};
+use tokio::sync::mpsc::{channel, Receiver, Sender};
+use tokio::sync::Mutex;
 
 #[derive(Debug)]
 pub struct Sandbox {
@@ -42,7 +43,7 @@ pub struct Sandbox {
     pub storages: HashMap<String, u32>,
     pub running: bool,
     pub no_pivot_root: bool,
-    pub sender: Option<Sender<i32>>,
+    pub sender: Option<tokio::sync::oneshot::Sender<i32>>,
     pub rtnl: Option<RtnlHandle>,
     pub hooks: Option<Hooks>,
     pub event_rx: Arc<Mutex<Receiver<String>>>,
@@ -53,7 +54,7 @@ impl Sandbox {
     pub fn new(logger: &Logger) -> Result<Self> {
         let fs_type = get_mount_fs_type("/")?;
         let logger = logger.new(o!("subsystem" => "sandbox"));
-        let (tx, rx) = mpsc::channel::<String>();
+        let (tx, rx) = channel::<String>(100);
         let event_rx = Arc::new(Mutex::new(rx));
 
         Ok(Sandbox {
@@ -157,17 +158,19 @@ impl Sandbox {
         self.hostname = hostname;
     }
 
-    pub fn setup_shared_namespaces(&mut self) -> Result<bool> {
+    pub async fn setup_shared_namespaces(&mut self) -> Result<bool> {
         // Set up shared IPC namespace
         self.shared_ipcns = Namespace::new(&self.logger)
             .get_ipc()
             .setup()
+            .await
             .context("Failed to setup persistent IPC namespace")?;
 
         // // Set up shared UTS namespace
         self.shared_utsns = Namespace::new(&self.logger)
             .get_uts(self.hostname.as_str())
             .setup()
+            .await
             .context("Failed to setup persistent UTS namespace")?;
 
         Ok(true)
@@ -214,9 +217,9 @@ impl Sandbox {
         None
     }
 
-    pub fn destroy(&mut self) -> Result<()> {
+    pub async fn destroy(&mut self) -> Result<()> {
         for ctr in self.containers.values_mut() {
-            ctr.destroy()?;
+            ctr.destroy().await?;
         }
         Ok(())
     }
@@ -315,15 +318,17 @@ impl Sandbox {
         Ok(hooks)
     }
 
-    pub fn run_oom_event_monitor(&self, rx: Receiver<String>, container_id: String) {
-        let tx = self.event_tx.clone();
+    pub async fn run_oom_event_monitor(&self, mut rx: Receiver<String>, container_id: String) {
+        let mut tx = self.event_tx.clone();
         let logger = self.logger.clone();
 
-        thread::spawn(move || {
-            for event in rx {
+        tokio::spawn(async move {
+            loop {
+                let event = rx.recv().await;
                 info!(logger, "got an OOM event {:?}", event);
                 let _ = tx
                     .send(container_id.clone())
+                    .await
                     .map_err(|e| error!(logger, "failed to send message: {:?}", e));
             }
         });

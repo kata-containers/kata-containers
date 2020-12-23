@@ -161,9 +161,9 @@ checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
 
 [[package]]
 name = "cgroups-rs"
-version = "0.2.0"
+version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "02274214de2526e48355facdd16c9d774bba2cf74d135ffb9876a60b4d613464"
+checksum = "348eb6d8e20a9f5247209686b7d0ffc2f4df40ddcb95f9940de55a94a655b3f5"
 dependencies = [
  "libc",
  "log",
@@ -487,6 +487,28 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "644f9158b2f133fd50f5fb3242878846d9eb792e445c893805ff0e3824006e35"
 
 [[package]]
+name = "inotify"
+version = "0.9.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "04c6848dfb1580647ab039713282cdd1ab2bfb47b60ecfb598e22e60e3baf3f8"
+dependencies = [
+ "bitflags",
+ "futures-core",
+ "inotify-sys",
+ "libc",
+ "tokio 0.3.6",
+]
+
+[[package]]
+name = "inotify-sys"
+version = "0.1.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c4563555856585ab3180a5bf0b2f9f8d301a728462afffc8195b3f5394229c55"
+dependencies = [
+ "libc",
+]
+
+[[package]]
 name = "iovec"
 version = "0.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -517,11 +539,13 @@ dependencies = [
  "anyhow",
  "async-trait",
  "cgroups-rs",
+ "futures",
  "lazy_static",
  "libc",
  "log",
  "logging",
  "netlink",
+ "netlink-sys",
  "nix 0.17.0",
  "oci",
  "prctl",
@@ -539,7 +563,8 @@ dependencies = [
  "slog-scope",
  "slog-stdlog",
  "tempfile",
- "tokio",
+ "tokio 0.2.24",
+ "tokio-vsock",
  "ttrpc",
 ]
 
@@ -647,10 +672,35 @@ dependencies = [
  "kernel32-sys",
  "libc",
  "log",
- "miow",
+ "miow 0.2.2",
  "net2",
  "slab",
  "winapi 0.2.8",
+]
+
+[[package]]
+name = "mio"
+version = "0.7.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f33bc887064ef1fd66020c9adfc45bb9f33d75a42096c81e7c56c65b75dd1a8b"
+dependencies = [
+ "libc",
+ "log",
+ "miow 0.3.6",
+ "ntapi",
+ "winapi 0.3.9",
+]
+
+[[package]]
+name = "mio-named-pipes"
+version = "0.1.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0840c1c50fd55e521b247f949c241c9997709f23bd7f023b9762cd561e935656"
+dependencies = [
+ "log",
+ "mio 0.6.23",
+ "miow 0.3.6",
+ "winapi 0.3.9",
 ]
 
 [[package]]
@@ -661,7 +711,7 @@ checksum = "afcb699eb26d4332647cc848492bbc15eafb26f08d0304550d5aa1f612e066f0"
 dependencies = [
  "iovec",
  "libc",
- "mio",
+ "mio 0.6.23",
 ]
 
 [[package]]
@@ -674,6 +724,16 @@ dependencies = [
  "net2",
  "winapi 0.2.8",
  "ws2_32-sys",
+]
+
+[[package]]
+name = "miow"
+version = "0.3.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5a33c1b55807fbed163481b5ba66db4b2fa6cde694a5027be10fb724206c5897"
+dependencies = [
+ "socket2",
+ "winapi 0.3.9",
 ]
 
 [[package]]
@@ -703,6 +763,19 @@ dependencies = [
  "protocols",
  "slog",
  "slog-scope",
+]
+
+[[package]]
+name = "netlink-sys"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cc9e9df13fd91bdd4b92bea93d5d2848c8035677c60fc3fee5dabddc02c3012e"
+dependencies = [
+ "futures",
+ "libc",
+ "log",
+ "mio 0.6.23",
+ "tokio 0.2.24",
 ]
 
 [[package]]
@@ -760,6 +833,15 @@ name = "nom"
 version = "2.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf51a729ecf40266a2368ad335a5fdde43471f545a967109cd62146ecf8b66ff"
+
+[[package]]
+name = "ntapi"
+version = "0.3.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3f6bb902e437b6d86e03cce10a7e2af662292c5dfef23b65899ea3ac9354ad44"
+dependencies = [
+ "winapi 0.3.9",
+]
 
 [[package]]
 name = "num-integer"
@@ -889,6 +971,12 @@ name = "pin-project-lite"
 version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c917123afa01924fc84bb20c4c03f004d9c38e5127e3c039bbf7f4b9c76a2f6b"
+
+[[package]]
+name = "pin-project-lite"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6b063f57ec186e6140e2b8b6921e5f1bd89c7356dda5b33acc5401203ca6131c"
 
 [[package]]
 name = "pin-utils"
@@ -1213,12 +1301,16 @@ name = "rustjail"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "caps",
  "cgroups-rs",
  "dirs",
  "epoll",
+ "futures",
+ "inotify",
  "lazy_static",
  "libc",
+ "mio 0.6.23",
  "nix 0.17.0",
  "oci",
  "path-absolutize",
@@ -1235,6 +1327,7 @@ dependencies = [
  "slog",
  "slog-scope",
  "tempfile",
+ "tokio 0.2.24",
 ]
 
 [[package]]
@@ -1414,6 +1507,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fbee7696b84bbf3d89a1c2eccff0850e3047ed46bfcd2e92c29a2d074d57e252"
 
 [[package]]
+name = "socket2"
+version = "0.3.19"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "122e570113d28d773067fab24266b66753f6ea915758651696b6e35e49f88d6e"
+dependencies = [
+ "cfg-if 1.0.0",
+ "libc",
+ "winapi 0.3.9",
+]
+
+[[package]]
 name = "spin"
 version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1513,12 +1617,27 @@ dependencies = [
  "lazy_static",
  "libc",
  "memchr",
- "mio",
+ "mio 0.6.23",
+ "mio-named-pipes",
  "mio-uds",
  "num_cpus",
- "pin-project-lite",
+ "pin-project-lite 0.1.11",
+ "signal-hook-registry",
  "slab",
  "tokio-macros",
+ "winapi 0.3.9",
+]
+
+[[package]]
+name = "tokio"
+version = "0.3.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "720ba21c25078711bf456d607987d95bce90f7c3bea5abe1db587862e7a1e87c"
+dependencies = [
+ "autocfg",
+ "libc",
+ "mio 0.7.6",
+ "pin-project-lite 0.2.0",
 ]
 
 [[package]]
@@ -1542,17 +1661,17 @@ dependencies = [
  "futures",
  "iovec",
  "libc",
- "mio",
+ "mio 0.6.23",
  "nix 0.17.0",
- "tokio",
+ "tokio 0.2.24",
  "vsock",
 ]
 
 [[package]]
 name = "ttrpc"
-version = "0.4.13"
+version = "0.4.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d6e99ffa09e7fbe514b58b01bd17d71e3ed4dd27c588afa43d41ec0b7fc90b0a"
+checksum = "fc512242eee1f113eadd48087dd97cbf807ccae4820006e7a890044044399c51"
 dependencies = [
  "async-trait",
  "byteorder",
@@ -1563,7 +1682,7 @@ dependencies = [
  "protobuf",
  "protobuf-codegen-pure",
  "thiserror",
- "tokio",
+ "tokio 0.2.24",
  "tokio-vsock",
 ]
 

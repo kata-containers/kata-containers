@@ -5,7 +5,7 @@ authors = ["The Kata Containers community <kata-dev@lists.katacontainers.io>"]
 edition = "2018"
 
 [dependencies]
-ttrpc = { version="0.4.13", features=["async"] }
+ttrpc = { version = "0.4.14", features = ["async"] }
 async-trait = "0.1.42"
 protobuf = "=2.14.0"
 
