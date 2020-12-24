@@ -52,7 +52,11 @@ fn rootfs(root: &str) -> Result<()> {
             continue;
         }
 
-        stack.push(c.as_os_str().to_str().unwrap().to_string());
+        if let Some(v) = c.as_os_str().to_str() {
+            stack.push(v.to_string());
+        } else {
+            return Err(anyhow!(nix::Error::from_errno(Errno::EINVAL)));
+        }
     }
 
     let mut cleaned = PathBuf::from("/");
@@ -78,10 +82,10 @@ fn hostname(oci: &Spec) -> Result<()> {
         return Ok(());
     }
 
-    if oci.linux.is_none() {
-        return Err(anyhow!(nix::Error::from_errno(Errno::EINVAL)));
-    }
-    let linux = oci.linux.as_ref().unwrap();
+    let linux = oci
+        .linux
+        .as_ref()
+        .ok_or(anyhow!(nix::Error::from_errno(Errno::EINVAL)))?;
     if !contain_namespace(&linux.namespaces, "uts") {
         return Err(anyhow!(nix::Error::from_errno(Errno::EINVAL)));
     }
@@ -90,8 +94,11 @@ fn hostname(oci: &Spec) -> Result<()> {
 }
 
 fn security(oci: &Spec) -> Result<()> {
-    let linux = oci.linux.as_ref().unwrap();
-    if linux.masked_paths.len() == 0 && linux.readonly_paths.len() == 0 {
+    let linux = oci
+        .linux
+        .as_ref()
+        .ok_or(anyhow!(nix::Error::from_errno(Errno::EINVAL)))?;
+    if linux.masked_paths.is_empty() && linux.readonly_paths.is_empty() {
         return Ok(());
     }
 
@@ -115,7 +122,10 @@ fn idmapping(maps: &Vec<LinuxIDMapping>) -> Result<()> {
 }
 
 fn usernamespace(oci: &Spec) -> Result<()> {
-    let linux = oci.linux.as_ref().unwrap();
+    let linux = oci
+        .linux
+        .as_ref()
+        .ok_or(anyhow!(nix::Error::from_errno(Errno::EINVAL)))?;
     if contain_namespace(&linux.namespaces, "user") {
         let user_ns = PathBuf::from("/proc/self/ns/user");
         if !user_ns.exists() {
@@ -136,7 +146,10 @@ fn usernamespace(oci: &Spec) -> Result<()> {
 }
 
 fn cgroupnamespace(oci: &Spec) -> Result<()> {
-    let linux = oci.linux.as_ref().unwrap();
+    let linux = oci
+        .linux
+        .as_ref()
+        .ok_or(anyhow!(nix::Error::from_errno(Errno::EINVAL)))?;
     if contain_namespace(&linux.namespaces, "cgroup") {
         let path = PathBuf::from("/proc/self/ns/cgroup");
         if !path.exists() {
@@ -187,7 +200,10 @@ fn check_host_ns(path: &str) -> Result<()> {
 }
 
 fn sysctl(oci: &Spec) -> Result<()> {
-    let linux = oci.linux.as_ref().unwrap();
+    let linux = oci
+        .linux
+        .as_ref()
+        .ok_or(anyhow!(nix::Error::from_errno(Errno::EINVAL)))?;
     for (key, _) in linux.sysctl.iter() {
         if SYSCTLS.contains_key(key.as_str()) || key.starts_with("fs.mqueue.") {
             if contain_namespace(&linux.namespaces, "ipc") {
@@ -226,7 +242,10 @@ fn sysctl(oci: &Spec) -> Result<()> {
 }
 
 fn rootless_euid_mapping(oci: &Spec) -> Result<()> {
-    let linux = oci.linux.as_ref().unwrap();
+    let linux = oci
+        .linux
+        .as_ref()
+        .ok_or(anyhow!(nix::Error::from_errno(Errno::EINVAL)))?;
     if !contain_namespace(&linux.namespaces, "user") {
         return Err(anyhow!(nix::Error::from_errno(Errno::EINVAL)));
     }
@@ -249,7 +268,10 @@ fn has_idmapping(maps: &Vec<LinuxIDMapping>, id: u32) -> bool {
 }
 
 fn rootless_euid_mount(oci: &Spec) -> Result<()> {
-    let linux = oci.linux.as_ref().unwrap();
+    let linux = oci
+        .linux
+        .as_ref()
+        .ok_or(anyhow!(nix::Error::from_errno(Errno::EINVAL)))?;
 
     for mnt in oci.mounts.iter() {
         for opt in mnt.options.iter() {
@@ -290,16 +312,19 @@ fn rootless_euid(oci: &Spec) -> Result<()> {
 
 pub fn validate(conf: &Config) -> Result<()> {
     lazy_static::initialize(&SYSCTLS);
-    let oci = conf.spec.as_ref().unwrap();
+    let oci = conf
+        .spec
+        .as_ref()
+        .ok_or(anyhow!(nix::Error::from_errno(Errno::EINVAL)))?;
 
     if oci.linux.is_none() {
         return Err(anyhow!(nix::Error::from_errno(Errno::EINVAL)));
     }
 
-    if oci.root.is_none() {
-        return Err(anyhow!(nix::Error::from_errno(Errno::EINVAL)));
-    }
-    let root = oci.root.as_ref().unwrap().path.as_str();
+    let root = match oci.root.as_ref() {
+        Some(v) => v.path.as_str(),
+        None => return Err(anyhow!(nix::Error::from_errno(Errno::EINVAL))),
+    };
 
     rootfs(root).context("rootfs")?;
     network(oci).context("network")?;
