@@ -10,6 +10,14 @@ use oci::{LinuxIDMapping, LinuxNamespace, Spec};
 use std::collections::HashMap;
 use std::path::{Component, PathBuf};
 
+fn einval() {
+    anyhow!(nix::Error::from_errno(Errno::EINVAL))
+}
+
+fn get_linux(oci: &Spec) -> Result<&Linux> {
+    oci.linux.as_ref().ok_or_else(einval)
+}
+
 fn contain_namespace(nses: &[LinuxNamespace], key: &str) -> bool {
     for ns in nses {
         if ns.r#type.as_str() == key {
@@ -27,14 +35,14 @@ fn get_namespace_path(nses: &[LinuxNamespace], key: &str) -> Result<String> {
         }
     }
 
-    Err(anyhow!(nix::Error::from_errno(Errno::EINVAL)))
+    Err(einval())
 }
 
 fn rootfs(root: &str) -> Result<()> {
     let path = PathBuf::from(root);
     // not absolute path or not exists
     if !path.exists() || !path.is_absolute() {
-        return Err(anyhow!(nix::Error::from_errno(Errno::EINVAL)));
+        return Err(einval());
     }
 
     // symbolic link? ..?
@@ -52,7 +60,7 @@ fn rootfs(root: &str) -> Result<()> {
         if let Some(v) = c.as_os_str().to_str() {
             stack.push(v.to_string());
         } else {
-            return Err(anyhow!(nix::Error::from_errno(Errno::EINVAL)));
+            return Err(einval());
         }
     }
 
@@ -64,7 +72,7 @@ fn rootfs(root: &str) -> Result<()> {
     let canon = path.canonicalize().context("canonicalize")?;
     if cleaned != canon {
         // There is symbolic in path
-        return Err(anyhow!(nix::Error::from_errno(Errno::EINVAL)));
+        return Err(einval());
     }
 
     Ok(())
@@ -79,28 +87,23 @@ fn hostname(oci: &Spec) -> Result<()> {
         return Ok(());
     }
 
-    let linux = oci
-        .linux
-        .as_ref()
-        .ok_or(anyhow!(nix::Error::from_errno(Errno::EINVAL)))?;
+    let linux = get_linux(oci)?;
     if !contain_namespace(&linux.namespaces, "uts") {
-        return Err(anyhow!(nix::Error::from_errno(Errno::EINVAL)));
+        return Err(einval());
     }
 
     Ok(())
 }
 
 fn security(oci: &Spec) -> Result<()> {
-    let linux = oci
-        .linux
-        .as_ref()
-        .ok_or(anyhow!(nix::Error::from_errno(Errno::EINVAL)))?;
+    let linux = get_linux(oci)?;
+
     if linux.masked_paths.is_empty() && linux.readonly_paths.is_empty() {
         return Ok(());
     }
 
     if !contain_namespace(&linux.namespaces, "mount") {
-        return Err(anyhow!(nix::Error::from_errno(Errno::EINVAL)));
+        return Err(einval());
     }
 
     // don't care about selinux at present
@@ -115,14 +118,12 @@ fn idmapping(maps: &[LinuxIDMapping]) -> Result<()> {
         }
     }
 
-    Err(anyhow!(nix::Error::from_errno(Errno::EINVAL)))
+    Err(einval())
 }
 
 fn usernamespace(oci: &Spec) -> Result<()> {
-    let linux = oci
-        .linux
-        .as_ref()
-        .ok_or(anyhow!(nix::Error::from_errno(Errno::EINVAL)))?;
+    let linux = get_linux(oci)?;
+
     if contain_namespace(&linux.namespaces, "user") {
         let user_ns = PathBuf::from("/proc/self/ns/user");
         if !user_ns.exists() {
@@ -135,7 +136,7 @@ fn usernamespace(oci: &Spec) -> Result<()> {
     } else {
         // no user namespace but idmap
         if !linux.uid_mappings.is_empty() || !linux.gid_mappings.is_empty() {
-            return Err(anyhow!(nix::Error::from_errno(Errno::EINVAL)));
+            return Err(einval());
         }
     }
 
@@ -143,10 +144,8 @@ fn usernamespace(oci: &Spec) -> Result<()> {
 }
 
 fn cgroupnamespace(oci: &Spec) -> Result<()> {
-    let linux = oci
-        .linux
-        .as_ref()
-        .ok_or(anyhow!(nix::Error::from_errno(Errno::EINVAL)))?;
+    let linux = get_linux(oci)?;
+
     if contain_namespace(&linux.namespaces, "cgroup") {
         let path = PathBuf::from("/proc/self/ns/cgroup");
         if !path.exists() {
@@ -190,23 +189,21 @@ fn check_host_ns(path: &str) -> Result<()> {
         .read_link()
         .context(format!("read link {:?}", cpath))?;
     if real_cpath == real_hpath {
-        return Err(anyhow!(nix::Error::from_errno(Errno::EINVAL)));
+        return Err(einval());
     }
 
     Ok(())
 }
 
 fn sysctl(oci: &Spec) -> Result<()> {
-    let linux = oci
-        .linux
-        .as_ref()
-        .ok_or(anyhow!(nix::Error::from_errno(Errno::EINVAL)))?;
+    let linux = get_linux(oci)?;
+
     for (key, _) in linux.sysctl.iter() {
         if SYSCTLS.contains_key(key.as_str()) || key.starts_with("fs.mqueue.") {
             if contain_namespace(&linux.namespaces, "ipc") {
                 continue;
             } else {
-                return Err(anyhow!(nix::Error::from_errno(Errno::EINVAL)));
+                return Err(einval());
             }
         }
 
@@ -216,27 +213,25 @@ fn sysctl(oci: &Spec) -> Result<()> {
             }
 
             if key == "kernel.hostname" {
-                return Err(anyhow!(nix::Error::from_errno(Errno::EINVAL)));
+                return Err(einval());
             }
         }
 
-        return Err(anyhow!(nix::Error::from_errno(Errno::EINVAL)));
+        return Err(einval());
     }
     Ok(())
 }
 
 fn rootless_euid_mapping(oci: &Spec) -> Result<()> {
-    let linux = oci
-        .linux
-        .as_ref()
-        .ok_or(anyhow!(nix::Error::from_errno(Errno::EINVAL)))?;
+    let linux = get_linux(oci)?;
+
     if !contain_namespace(&linux.namespaces, "user") {
-        return Err(anyhow!(nix::Error::from_errno(Errno::EINVAL)));
+        return Err(einval());
     }
 
     if linux.uid_mappings.is_empty() || linux.gid_mappings.is_empty() {
         // rootless containers requires at least one UID/GID mapping
-        return Err(anyhow!(nix::Error::from_errno(Errno::EINVAL)));
+        return Err(einval());
     }
 
     Ok(())
@@ -252,10 +247,7 @@ fn has_idmapping(maps: &[LinuxIDMapping], id: u32) -> bool {
 }
 
 fn rootless_euid_mount(oci: &Spec) -> Result<()> {
-    let linux = oci
-        .linux
-        .as_ref()
-        .ok_or(anyhow!(nix::Error::from_errno(Errno::EINVAL)))?;
+    let linux = get_linux(oci)?;
 
     for mnt in oci.mounts.iter() {
         for opt in mnt.options.iter() {
@@ -263,7 +255,7 @@ fn rootless_euid_mount(oci: &Spec) -> Result<()> {
                 let fields: Vec<&str> = opt.split('=').collect();
 
                 if fields.len() != 2 {
-                    return Err(anyhow!(nix::Error::from_errno(Errno::EINVAL)));
+                    return Err(einval());
                 }
 
                 let id = fields[1]
@@ -272,11 +264,11 @@ fn rootless_euid_mount(oci: &Spec) -> Result<()> {
                     .context(format!("parse field {}", &fields[1]))?;
 
                 if opt.starts_with("uid=") && !has_idmapping(&linux.uid_mappings, id) {
-                    return Err(anyhow!(nix::Error::from_errno(Errno::EINVAL)));
+                    return Err(einval());
                 }
 
                 if opt.starts_with("gid=") && !has_idmapping(&linux.gid_mappings, id) {
-                    return Err(anyhow!(nix::Error::from_errno(Errno::EINVAL)));
+                    return Err(einval());
                 }
             }
         }
@@ -292,18 +284,15 @@ fn rootless_euid(oci: &Spec) -> Result<()> {
 
 pub fn validate(conf: &Config) -> Result<()> {
     lazy_static::initialize(&SYSCTLS);
-    let oci = conf
-        .spec
-        .as_ref()
-        .ok_or(anyhow!(nix::Error::from_errno(Errno::EINVAL)))?;
+    let oci = conf.spec.as_ref().ok_or_else(einval)?;
 
     if oci.linux.is_none() {
-        return Err(anyhow!(nix::Error::from_errno(Errno::EINVAL)));
+        return Err(einval());
     }
 
     let root = match oci.root.as_ref() {
         Some(v) => v.path.as_str(),
-        None => return Err(anyhow!(nix::Error::from_errno(Errno::EINVAL))),
+        None => return Err(einval()),
     };
 
     rootfs(root).context("rootfs")?;
