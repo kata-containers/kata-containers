@@ -52,4 +52,3 @@ fn replace_text_in_file(file_name: &str, from: &str, to: &str) -> Result<(), std
 
     Ok(())
 }
-
