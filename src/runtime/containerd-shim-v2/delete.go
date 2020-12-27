@@ -17,13 +17,12 @@ import (
 func deleteContainer(ctx context.Context, s *service, c *container) error {
 	if !c.cType.IsSandbox() {
 		if c.status != task.StatusStopped {
-			_, err := s.sandbox.StopContainer(c.id, false)
-			if err != nil {
+			if _, err := s.sandbox.StopContainer(c.id, false); err != nil && !isNotFound(err) {
 				return err
 			}
 		}
 
-		if _, err := s.sandbox.DeleteContainer(c.id); err != nil {
+		if _, err := s.sandbox.DeleteContainer(c.id); err != nil && !isNotFound(err) {
 			return err
 		}
 	}
