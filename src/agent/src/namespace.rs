@@ -205,7 +205,7 @@ mod tests {
         assert!(remove_mounts(&vec![ns_ipc.unwrap().path]).is_ok());
 
         let logger = slog::Logger::root(slog::Discard, o!());
-        let tmpdir = Builder::new().prefix("ipc").tempdir().unwrap();
+        let tmpdir = Builder::new().prefix("uts").tempdir().unwrap();
 
         let ns_uts = Namespace::new(&logger)
             .as_uts("test_hostname")
