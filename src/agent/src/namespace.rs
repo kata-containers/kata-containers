@@ -82,6 +82,9 @@ impl Namespace {
 
         let ns_path = PathBuf::from(&self.persistent_ns_dir);
         let ns_type = self.ns_type;
+        if ns_type == NamespaceType::PID {
+            return Err(anyhow!("Cannot persist namespace of PID type"));
+        }
         let logger = self.logger.clone();
 
         let new_ns_path = ns_path.join(&ns_type.get());
@@ -208,6 +211,17 @@ mod tests {
 
         assert!(ns_uts.is_ok());
         assert!(remove_mounts(&[ns_uts.unwrap().path]).is_ok());
+
+        // Check it cannot persist pid namespaces.
+        let logger = slog::Logger::root(slog::Discard, o!());
+        let tmpdir = Builder::new().prefix("pid").tempdir().unwrap();
+
+        let ns_pid = Namespace::new(&logger)
+            .get_pid()
+            .set_root_dir(tmpdir.path().to_str().unwrap())
+            .setup();
+
+        assert!(ns_pid.is_err());
     }
 
     #[test]
