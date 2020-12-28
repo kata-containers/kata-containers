@@ -16,7 +16,6 @@ use std::thread::{self};
 use crate::mount::{BareMount, FLAGS};
 use slog::Logger;
 
-//use container::Process;
 const PERSISTENT_NS_DIR: &str = "/var/run/sandbox-ns";
 pub const NSTYPEIPC: &str = "ipc";
 pub const NSTYPEUTS: &str = "uts";
