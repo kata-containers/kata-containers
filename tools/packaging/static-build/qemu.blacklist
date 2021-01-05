@@ -6,7 +6,7 @@ qemu_black_list=(
 */bin/qemu-pr-helper
 */bin/virtfs-proxy-helper
 */libexec/kata-qemu/qemu*
-*/share/*/applications/
+*/share/*/applications
 */share/*/*.dtb
 */share/*/efi-e1000e.rom
 */share/*/efi-e1000.rom
@@ -15,9 +15,9 @@ qemu_black_list=(
 */share/*/efi-pcnet.rom
 */share/*/efi-rtl8139.rom
 */share/*/efi-vmxnet3.rom
-*/share/*/icons/
+*/share/*/icons
 */share/*/*.img
-*/share/*/keymaps/
+*/share/*/keymaps
 */share/*/multiboot.bin
 */share/*/openbios-ppc
 */share/*/openbios-sparc32
