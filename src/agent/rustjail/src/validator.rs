@@ -214,16 +214,8 @@ fn sysctl(oci: &Spec) -> Result<()> {
         }
 
         if key.starts_with("net.") {
-            if !contain_namespace(&linux.namespaces, "network") {
-                return Err(anyhow!(nix::Error::from_errno(Errno::EINVAL)));
-            }
-
-            let net = get_namespace_path(&linux.namespaces, "network")?;
-            if net.is_empty() || net == "".to_string() {
-                continue;
-            }
-
-            check_host_ns(net.as_str())?;
+            // the network ns is shared with the guest, don't expect to find it in spec
+            continue;
         }
 
         if contain_namespace(&linux.namespaces, "uts") {
