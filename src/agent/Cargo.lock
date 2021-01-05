@@ -143,13 +143,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
 
 [[package]]
-name = "cgroups"
-version = "0.1.1-alpha.0"
-source = "git+https://github.com/kata-containers/cgroups-rs?branch=stable-0.1.1#8717524f2c95aacd30768b6f0f7d7f2fddef5cac"
+name = "cgroups-rs"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "02274214de2526e48355facdd16c9d774bba2cf74d135ffb9876a60b4d613464"
 dependencies = [
  "libc",
  "log",
  "nix 0.18.0",
+ "procinfo",
  "regex",
 ]
 
@@ -382,7 +384,7 @@ name = "kata-agent"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "cgroups",
+ "cgroups-rs",
  "lazy_static",
  "libc",
  "log",
@@ -558,6 +560,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "nom"
+version = "2.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cf51a729ecf40266a2368ad335a5fdde43471f545a967109cd62146ecf8b66ff"
+
+[[package]]
 name = "num-integer"
 version = "0.1.43"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -691,6 +699,18 @@ dependencies = [
  "lazy_static",
  "libc",
  "libflate",
+]
+
+[[package]]
+name = "procinfo"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6ab1427f3d2635891f842892dda177883dca0639e05fe66796a62c9d2f23b49c"
+dependencies = [
+ "byteorder",
+ "libc",
+ "nom",
+ "rustc_version",
 ]
 
 [[package]]
@@ -924,12 +944,21 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6e3bad0ee36814ca07d7968269dd4b7ec89ec2da10c4bb613928d3077083c232"
 
 [[package]]
+name = "rustc_version"
+version = "0.2.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "138e3e0acb6c9fb258b19b67cb8abd63c00679d2851805ea151465464fe9030a"
+dependencies = [
+ "semver",
+]
+
+[[package]]
 name = "rustjail"
 version = "0.1.0"
 dependencies = [
  "anyhow",
  "caps",
- "cgroups",
+ "cgroups-rs",
  "dirs",
  "epoll",
  "lazy_static",
@@ -972,6 +1001,21 @@ name = "scopeguard"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d29ab0c6d3fc0ee92fe66e2d99f700eab17a8d57d1c1d3b748380fb20baa78cd"
+
+[[package]]
+name = "semver"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1d7eb9ef2c18661902cc47e535f9bc51b78acd254da71d375c2f6720d9a40403"
+dependencies = [
+ "semver-parser",
+]
+
+[[package]]
+name = "semver-parser"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "388a1df253eca08550bef6c72392cfe7c30914bf41df5269b68cbd6ff8f570a3"
 
 [[package]]
 name = "serde"
