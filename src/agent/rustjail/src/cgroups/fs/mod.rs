@@ -44,35 +44,23 @@ macro_rules! sl {
     };
 }
 
-pub fn load_or_create<'a>(h: Box<&'a dyn cgroups::Hierarchy>, path: &str) -> Cgroup<'a> {
-    let valid_path = path.trim_start_matches('/').to_string();
-    let cg = load(h.clone(), &valid_path);
-    match cg {
-        Some(cg) => cg,
-        None => {
-            info!(sl!(), "create new cgroup: {}", &valid_path);
-            cgroups::Cgroup::new(h, valid_path.as_str())
+macro_rules! get_controller_or_return_singular_none {
+    ($cg:ident) => {
+        match $cg.controller_of() {
+            Some(c) => c,
+            None => return SingularPtrField::none(),
         }
-    }
-}
-
-pub fn load<'a>(h: Box<&'a dyn cgroups::Hierarchy>, path: &str) -> Option<Cgroup<'a>> {
-    let valid_path = path.trim_start_matches('/').to_string();
-    let cg = cgroups::Cgroup::load(h, valid_path.as_str());
-    let cpu_controller: &CpuController = cg.controller_of().unwrap();
-    if cpu_controller.exists() {
-        Some(cg)
-    } else {
-        None
-    }
+    };
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Manager {
     pub paths: HashMap<String, String>,
     pub mounts: HashMap<String, String>,
-    // pub rels: HashMap<String, String>,
     pub cpath: String,
+    #[serde(skip)]
+    cgroup: cgroups::Cgroup,
+    relative_paths: HashMap<String, String>,
 }
 
 // set_resource is used to set reources by cgroup controller.
@@ -87,17 +75,11 @@ macro_rules! set_resource {
 
 impl CgroupManager for Manager {
     fn apply(&self, pid: pid_t) -> Result<()> {
-        let h = cgroups::hierarchies::auto();
-        let h = Box::new(&*h);
-        let cg = load_or_create(h, &self.cpath);
-        cg.add_task(CgroupPid::from(pid as u64))?;
+        self.cgroup.add_task(CgroupPid::from(pid as u64))?;
         Ok(())
     }
 
     fn set(&self, r: &LinuxResources, update: bool) -> Result<()> {
-        let h = cgroups::hierarchies::auto();
-        let h = Box::new(&*h);
-        let cg = load_or_create(h, &self.cpath);
         info!(
             sl!(),
             "cgroup manager set resources for container. Resources input {:?}", r
@@ -107,53 +89,49 @@ impl CgroupManager for Manager {
 
         // set cpuset and cpu reources
         if let Some(cpu) = &r.cpu {
-            set_cpu_resources(&cg, cpu)?;
+            set_cpu_resources(&self.cgroup, cpu)?;
         }
 
         // set memory resources
         if let Some(memory) = &r.memory {
-            set_memory_resources(&cg, memory, update)?;
+            set_memory_resources(&self.cgroup, memory, update)?;
         }
 
         // set pids resources
         if let Some(pids_resources) = &r.pids {
-            set_pids_resources(&cg, pids_resources)?;
+            set_pids_resources(&self.cgroup, pids_resources)?;
         }
 
         // set block_io resources
         if let Some(blkio) = &r.block_io {
-            set_block_io_resources(&cg, blkio, res)?;
+            set_block_io_resources(&self.cgroup, blkio, res)?;
         }
 
         // set hugepages resources
         if !r.hugepage_limits.is_empty() {
-            set_hugepages_resources(&cg, &r.hugepage_limits, res)?;
+            set_hugepages_resources(&self.cgroup, &r.hugepage_limits, res)?;
         }
 
         // set network resources
         if let Some(network) = &r.network {
-            set_network_resources(&cg, network, res)?;
+            set_network_resources(&self.cgroup, network, res)?;
         }
 
         // set devices resources
-        set_devices_resources(&cg, &r.devices, res)?;
+        set_devices_resources(&self.cgroup, &r.devices, res)?;
         info!(sl!(), "resources after processed {:?}", res);
 
         // apply resources
-        cg.apply(res)?;
+        self.cgroup.apply(res)?;
 
         Ok(())
     }
 
     fn get_stats(&self) -> Result<CgroupStats> {
-        let h = cgroups::hierarchies::auto();
-        let h = Box::new(&*h);
-        let cg = load_or_create(h, &self.cpath);
-
         // CpuStats
-        let cpu_usage = get_cpuacct_stats(&cg);
+        let cpu_usage = get_cpuacct_stats(&self.cgroup);
 
-        let throttling_data = get_cpu_stats(&cg);
+        let throttling_data = get_cpu_stats(&self.cgroup);
 
         let cpu_stats = SingularPtrField::some(CpuStats {
             cpu_usage,
@@ -163,17 +141,17 @@ impl CgroupManager for Manager {
         });
 
         // Memorystats
-        let memory_stats = get_memory_stats(&cg);
+        let memory_stats = get_memory_stats(&self.cgroup);
 
         // PidsStats
-        let pids_stats = get_pids_stats(&cg);
+        let pids_stats = get_pids_stats(&self.cgroup);
 
         // BlkioStats
         // note that virtiofs has no blkio stats
-        let blkio_stats = get_blkio_stats(&cg);
+        let blkio_stats = get_blkio_stats(&self.cgroup);
 
         // HugetlbStats
-        let hugetlb_stats = get_hugetlb_stats(&cg);
+        let hugetlb_stats = get_hugetlb_stats(&self.cgroup);
 
         Ok(CgroupStats {
             cpu_stats,
@@ -187,10 +165,7 @@ impl CgroupManager for Manager {
     }
 
     fn freeze(&self, state: FreezerState) -> Result<()> {
-        let h = cgroups::hierarchies::auto();
-        let h = Box::new(&*h);
-        let cg = load_or_create(h, &self.cpath);
-        let freezer_controller: &FreezerController = cg.controller_of().unwrap();
+        let freezer_controller: &FreezerController = self.cgroup.controller_of().unwrap();
         match state {
             FreezerState::Thawed => {
                 freezer_controller.thaw()?;
@@ -207,20 +182,12 @@ impl CgroupManager for Manager {
     }
 
     fn destroy(&mut self) -> Result<()> {
-        let h = cgroups::hierarchies::auto();
-        let h = Box::new(&*h);
-        let cg = load(h, &self.cpath);
-        if let Some(cg) = cg {
-            cg.delete();
-        }
+        let _ = self.cgroup.delete();
         Ok(())
     }
 
     fn get_pids(&self) -> Result<Vec<pid_t>> {
-        let h = cgroups::hierarchies::auto();
-        let h = Box::new(&*h);
-        let cg = load_or_create(h, &self.cpath);
-        let mem_controller: &MemController = cg.controller_of().unwrap();
+        let mem_controller: &MemController = self.cgroup.controller_of().unwrap();
         let pids = mem_controller.tasks();
         let result = pids.iter().map(|x| x.pid as i32).collect::<Vec<i32>>();
 
@@ -239,7 +206,7 @@ fn set_network_resources(
     // description can be found at https://www.kernel.org/doc/html/latest/admin-guide/cgroup-v1/net_cls.html
     let class_id = network.class_id.unwrap_or(0) as u64;
     if class_id != 0 {
-        res.network.class_id = class_id;
+        res.network.class_id = Some(class_id);
     }
 
     // set network priorities
@@ -252,7 +219,6 @@ fn set_network_resources(
         });
     }
 
-    res.network.update_values = true;
     res.network.priorities = priorities;
     Ok(())
 }
@@ -283,7 +249,6 @@ fn set_devices_resources(
         }
     }
 
-    res.devices.update_values = true;
     res.devices.devices = devices;
 
     Ok(())
@@ -295,7 +260,6 @@ fn set_hugepages_resources(
     res: &mut cgroups::Resources,
 ) -> Result<()> {
     info!(sl!(), "cgroup manager set hugepage");
-    res.hugepages.update_values = true;
     let mut limits = vec![];
 
     for l in hugepage_limits.iter() {
@@ -316,7 +280,6 @@ fn set_block_io_resources(
     res: &mut cgroups::Resources,
 ) -> Result<()> {
     info!(sl!(), "cgroup manager set block io");
-    res.blkio.update_values = true;
 
     if cg.v2() {
         res.blkio.weight = convert_blk_io_to_v2_value(blkio.weight);
@@ -607,10 +570,8 @@ lazy_static! {
 }
 
 fn get_cpu_stats(cg: &cgroups::Cgroup) -> SingularPtrField<ThrottlingData> {
-    let cpu_controller: &CpuController = cg.controller_of().unwrap();
-
+    let cpu_controller: &CpuController = get_controller_or_return_singular_none!(cg);
     let stat = cpu_controller.cpu().stat;
-
     let h = lines_to_map(&stat);
 
     SingularPtrField::some(ThrottlingData {
@@ -623,27 +584,18 @@ fn get_cpu_stats(cg: &cgroups::Cgroup) -> SingularPtrField<ThrottlingData> {
 }
 
 fn get_cpuacct_stats(cg: &cgroups::Cgroup) -> SingularPtrField<CpuUsage> {
-    let cpuacct_controller: Option<&CpuAcctController> = cg.controller_of();
-    if cpuacct_controller.is_none() {
-        if cg.v2() {
-            return SingularPtrField::some(CpuUsage {
-                total_usage: 0,
-                percpu_usage: vec![],
-                usage_in_kernelmode: 0,
-                usage_in_usermode: 0,
-                unknown_fields: UnknownFields::default(),
-                cached_size: CachedSize::default(),
-            });
-        }
+    if let Some(cpuacct_controller) = cg.controller_of::<CpuAcctController>() {
+        let cpuacct = cpuacct_controller.cpuacct();
 
-        // try to get from cpu controller
-        let cpu_controller: &CpuController = cg.controller_of().unwrap();
-        let stat = cpu_controller.cpu().stat;
-        let h = lines_to_map(&stat);
-        let usage_in_usermode = *h.get("user_usec").unwrap();
-        let usage_in_kernelmode = *h.get("system_usec").unwrap();
-        let total_usage = *h.get("usage_usec").unwrap();
-        let percpu_usage = vec![];
+        let h = lines_to_map(&cpuacct.stat);
+        let usage_in_usermode =
+            (((*h.get("user").unwrap() * NANO_PER_SECOND) as f64) / *CLOCK_TICKS) as u64;
+        let usage_in_kernelmode =
+            (((*h.get("system").unwrap() * NANO_PER_SECOND) as f64) / *CLOCK_TICKS) as u64;
+
+        let total_usage = cpuacct.usage;
+
+        let percpu_usage = line_to_vec(&cpuacct.usage_percpu);
 
         return SingularPtrField::some(CpuUsage {
             total_usage,
@@ -655,18 +607,25 @@ fn get_cpuacct_stats(cg: &cgroups::Cgroup) -> SingularPtrField<CpuUsage> {
         });
     }
 
-    let cpuacct_controller = cpuacct_controller.unwrap();
-    let cpuacct = cpuacct_controller.cpuacct();
+    if cg.v2() {
+        return SingularPtrField::some(CpuUsage {
+            total_usage: 0,
+            percpu_usage: vec![],
+            usage_in_kernelmode: 0,
+            usage_in_usermode: 0,
+            unknown_fields: UnknownFields::default(),
+            cached_size: CachedSize::default(),
+        });
+    }
 
-    let h = lines_to_map(&cpuacct.stat);
-    let usage_in_usermode =
-        (((*h.get("user").unwrap() * NANO_PER_SECOND) as f64) / *CLOCK_TICKS) as u64;
-    let usage_in_kernelmode =
-        (((*h.get("system").unwrap() * NANO_PER_SECOND) as f64) / *CLOCK_TICKS) as u64;
-
-    let total_usage = cpuacct.usage;
-
-    let percpu_usage = line_to_vec(&cpuacct.usage_percpu);
+    // try to get from cpu controller
+    let cpu_controller: &CpuController = get_controller_or_return_singular_none!(cg);
+    let stat = cpu_controller.cpu().stat;
+    let h = lines_to_map(&stat);
+    let usage_in_usermode = *h.get("user_usec").unwrap();
+    let usage_in_kernelmode = *h.get("system_usec").unwrap();
+    let total_usage = *h.get("usage_usec").unwrap();
+    let percpu_usage = vec![];
 
     SingularPtrField::some(CpuUsage {
         total_usage,
@@ -679,7 +638,7 @@ fn get_cpuacct_stats(cg: &cgroups::Cgroup) -> SingularPtrField<CpuUsage> {
 }
 
 fn get_memory_stats(cg: &cgroups::Cgroup) -> SingularPtrField<MemoryStats> {
-    let memory_controller: &MemController = cg.controller_of().unwrap();
+    let memory_controller: &MemController = get_controller_or_return_singular_none!(cg);
 
     // cache from memory stat
     let memory = memory_controller.memory_stat();
@@ -736,7 +695,7 @@ fn get_memory_stats(cg: &cgroups::Cgroup) -> SingularPtrField<MemoryStats> {
 }
 
 fn get_pids_stats(cg: &cgroups::Cgroup) -> SingularPtrField<PidsStats> {
-    let pid_controller: &PidController = cg.controller_of().unwrap();
+    let pid_controller: &PidController = get_controller_or_return_singular_none!(cg);
 
     let current = pid_controller.get_pid_current().unwrap_or(0);
     let max = pid_controller.get_pid_max();
@@ -842,7 +801,7 @@ fn build_blkio_stats_entry(major: i16, minor: i16, op: &str, value: u64) -> Blki
 }
 
 fn get_blkio_stats_v2(cg: &cgroups::Cgroup) -> SingularPtrField<BlkioStats> {
-    let blkio_controller: &BlkIoController = cg.controller_of().unwrap();
+    let blkio_controller: &BlkIoController = get_controller_or_return_singular_none!(cg);
     let blkio = blkio_controller.blkio();
 
     let mut resp = BlkioStats::new();
@@ -870,7 +829,7 @@ fn get_blkio_stats(cg: &cgroups::Cgroup) -> SingularPtrField<BlkioStats> {
         return get_blkio_stats_v2(&cg);
     }
 
-    let blkio_controller: &BlkIoController = cg.controller_of().unwrap();
+    let blkio_controller: &BlkIoController = get_controller_or_return_singular_none!(cg);
     let blkio = blkio_controller.blkio();
 
     let mut m = BlkioStats::new();
@@ -987,9 +946,19 @@ pub fn get_mounts() -> Result<HashMap<String, String>> {
     Ok(m)
 }
 
+fn new_cgroup(
+    h: Box<dyn cgroups::Hierarchy>,
+    path: &str,
+    relative_paths: HashMap<String, String>,
+) -> Cgroup {
+    let valid_path = path.trim_start_matches('/').to_string();
+    cgroups::Cgroup::new_with_relative_paths(h, valid_path.as_str(), relative_paths)
+}
+
 impl Manager {
     pub fn new(cpath: &str) -> Result<Self> {
         let mut m = HashMap::new();
+        let mut relative_paths = HashMap::new();
 
         let paths = get_paths()?;
         let mounts = get_mounts()?;
@@ -1008,6 +977,7 @@ impl Manager {
             };
 
             m.insert(key.to_string(), p);
+            relative_paths.insert(key.to_string(), value.to_string());
         }
 
         Ok(Self {
@@ -1015,6 +985,8 @@ impl Manager {
             mounts,
             // rels: paths,
             cpath: cpath.to_string(),
+            cgroup: new_cgroup(cgroups::hierarchies::auto(), cpath, relative_paths.clone()),
+            relative_paths,
         })
     }
 
@@ -1025,18 +997,14 @@ impl Manager {
         info!(sl!(), "update_cpuset_path to: {}", guest_cpuset);
 
         let h = cgroups::hierarchies::auto();
-        let h = Box::new(&*h);
-        let root_cg = load_or_create(h, "");
+        let root_cg = h.root_control_group();
 
         let root_cpuset_controller: &CpuSetController = root_cg.controller_of().unwrap();
         let path = root_cpuset_controller.path();
         let root_path = Path::new(path);
         info!(sl!(), "root cpuset path: {:?}", &path);
 
-        let h = cgroups::hierarchies::auto();
-        let h = Box::new(&*h);
-        let cg = load_or_create(h, &self.cpath);
-        let container_cpuset_controller: &CpuSetController = cg.controller_of().unwrap();
+        let container_cpuset_controller: &CpuSetController = self.cgroup.controller_of().unwrap();
         let path = container_cpuset_controller.path();
         let container_path = Path::new(path);
         info!(sl!(), "container cpuset path: {:?}", &path);
@@ -1056,8 +1024,6 @@ impl Manager {
                 break;
             }
             i -= 1;
-            let h = cgroups::hierarchies::auto();
-            let h = Box::new(&*h);
 
             // remove cgroup root from path
             let r_path = &paths[i]
@@ -1065,7 +1031,11 @@ impl Manager {
                 .unwrap()
                 .trim_start_matches(root_path.to_str().unwrap());
             info!(sl!(), "updating cpuset for parent path {:?}", &r_path);
-            let cg = load_or_create(h, &r_path);
+            let cg = new_cgroup(
+                cgroups::hierarchies::auto(),
+                &r_path,
+                self.relative_paths.clone(),
+            );
             let cpuset_controller: &CpuSetController = cg.controller_of().unwrap();
             cpuset_controller.set_cpus(guest_cpuset)?;
         }
