@@ -334,6 +334,16 @@ generate_qemu_options() {
 	# Don't build the qemu-io, qemu-nbd and qemu-image tools
 	qemu_options+=(size:--disable-tools)
 
+	# Kata Containers may be configured to use the virtiofs daemon.
+	#
+	# But since QEMU 5.2 the daemon is built as part of the tools set
+	# (disabled with --disable-tools) thus it needs to be explicitely
+	# enabled.
+	if gt_eq "${qemu_version}" "5.2.0" ; then
+		qemu_options+=(functionality:--enable-virtiofsd)
+		qemu_options+=(functionality:--enable-virtfs)
+	fi
+
 	# Don't build linux-user bsd-user
 	qemu_options+=(size:--disable-bsd-user)
 	qemu_options+=(size:--disable-linux-user)
@@ -461,7 +471,10 @@ generate_qemu_options() {
 	_qemu_cflags=""
 
 	# compile with high level of optimisation
-	_qemu_cflags+=" -O3"
+	# On version 5.2.0 onward the Meson build system warns to not use -O3
+	if ! gt_eq "${qemu_version}" "5.2.0" ; then
+		_qemu_cflags+=" -O3"
+	fi
 
 	# Improve code quality by assuming identical semantics for interposed
 	# synmbols.

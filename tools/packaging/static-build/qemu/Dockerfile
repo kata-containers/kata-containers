@@ -40,6 +40,7 @@ RUN apt-get --no-install-recommends install -y \
 	    libselinux1-dev \
 	    libtool \
 	    make \
+	    ninja-build \
 	    pkg-config \
 	    libseccomp-dev \
 	    libseccomp2 \
@@ -65,6 +66,5 @@ RUN PREFIX="${PREFIX}" /root/configure-hypervisor.sh -s kata-qemu | xargs ./conf
 	--with-pkgversion=kata-static
 
 RUN make -j$(nproc)
-RUN make -j$(nproc) virtiofsd
 RUN make install DESTDIR="${QEMU_DESTDIR}"
 RUN /root/static-build/scripts/qemu-build-post.sh
