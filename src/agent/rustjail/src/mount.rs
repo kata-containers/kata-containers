@@ -188,6 +188,7 @@ pub fn init_rootfs(
         None::<&str>,
     )?;
 
+    let mut bind_mount_dev = false;
     for m in &spec.mounts {
         let (mut flags, data) = parse_mount(&m);
         if !m.destination.starts_with('/') || m.destination.contains("..") {
@@ -201,6 +202,9 @@ pub fn init_rootfs(
             mount_cgroups(cfd_log, &m, rootfs, flags, &data, cpath, mounts)?;
         } else {
             if m.destination == "/dev" {
+                if m.r#type == "bind" {
+                    bind_mount_dev = true;
+                }
                 flags &= !MsFlags::MS_RDONLY;
             }
 
@@ -242,9 +246,14 @@ pub fn init_rootfs(
     let olddir = unistd::getcwd()?;
     unistd::chdir(rootfs)?;
 
-    default_symlinks()?;
-    create_devices(&linux.devices, bind_device)?;
-    ensure_ptmx()?;
+    // in case the /dev directory was binded mount from guest,
+    // then there's no need to create devices nodes and symlinks
+    // in /dev.
+    if !bind_mount_dev {
+        default_symlinks()?;
+        create_devices(&linux.devices, bind_device)?;
+        ensure_ptmx()?;
+    }
 
     unistd::chdir(&olddir)?;
 
