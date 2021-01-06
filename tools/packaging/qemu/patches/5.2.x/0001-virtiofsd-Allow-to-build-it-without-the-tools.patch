@@ -1,0 +1,36 @@
+From a369195f7fb111a55617ff14aac4c8d87f3b996f Mon Sep 17 00:00:00 2001
+From: Wainer dos Santos Moschetta <wainersm@redhat.com>
+Date: Tue, 2 Feb 2021 13:46:24 -0500
+Subject: [PATCH] virtiofsd: Allow to build it without the tools
+
+This changed the Meson build script to allow virtiofsd be built even
+though the tools build is disabled, thus honoring the --enable-virtiofsd
+option.
+
+(Backport of commit xxxxxx)
+Signed-off-by: Wainer dos Santos Moschetta <wainersm@redhat.com>
+---
+ tools/meson.build | 7 +++++--
+ 1 file changed, 5 insertions(+), 2 deletions(-)
+
+diff --git a/tools/meson.build b/tools/meson.build
+index 76bf84df52..2a1d520127 100644
+--- a/tools/meson.build
++++ b/tools/meson.build
+@@ -10,8 +10,11 @@ if get_option('virtiofsd').enabled()
+       error('virtiofsd requires Linux')
+     elif 'CONFIG_SECCOMP' not in config_host or 'CONFIG_LIBCAP_NG' not in config_host
+       error('virtiofsd requires libcap-ng-devel and seccomp-devel')
+-    elif not have_tools or 'CONFIG_VHOST_USER' not in config_host
+-      error('virtiofsd needs tools and vhost-user support')
++    elif 'CONFIG_VHOST_USER' not in config_host
++      error('virtiofsd needs vhost-user support')
++    else
++      # Disabled all the tools but virtiofsd.
++      have_virtiofsd = true
+     endif
+   endif
+ elif get_option('virtiofsd').disabled() or not have_system
+-- 
+2.26.2
+

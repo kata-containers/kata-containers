@@ -1,0 +1,31 @@
+From 62124e5080e6f49f294caad60fbee26cc2d39d8f Mon Sep 17 00:00:00 2001
+From: Greg Kurz <groug@kaod.org>
+Date: Thu, 21 Jan 2021 18:15:40 +0100
+Subject: [PATCH 5/6] virtiofsd: Add _llseek to the seccomp whitelist
+
+This is how glibc implements lseek(2) on POWER.
+
+BugLink: https://bugzilla.redhat.com/show_bug.cgi?id=1917692
+Signed-off-by: Greg Kurz <groug@kaod.org>
+Message-Id: <20210121171540.1449777-1-groug@kaod.org>
+Reviewed-by: Dr. David Alan Gilbert <dgilbert@redhat.com>
+Signed-off-by: Dr. David Alan Gilbert <dgilbert@redhat.com>
+---
+ tools/virtiofsd/passthrough_seccomp.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/tools/virtiofsd/passthrough_seccomp.c b/tools/virtiofsd/passthrough_seccomp.c
+index a60d7da4b4..1ecf5bf318 100644
+--- a/tools/virtiofsd/passthrough_seccomp.c
++++ b/tools/virtiofsd/passthrough_seccomp.c
+@@ -65,6 +65,7 @@ static const int syscall_whitelist[] = {
+     SCMP_SYS(linkat),
+     SCMP_SYS(listxattr),
+     SCMP_SYS(lseek),
++    SCMP_SYS(_llseek), /* For POWER */
+     SCMP_SYS(madvise),
+     SCMP_SYS(mkdirat),
+     SCMP_SYS(mknodat),
+-- 
+2.26.2
+

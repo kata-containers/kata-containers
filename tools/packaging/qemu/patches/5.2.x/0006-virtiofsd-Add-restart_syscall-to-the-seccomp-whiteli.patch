@@ -1,0 +1,33 @@
+From cf269ff8032392bbdd700e7bfd21823ad9eee3a9 Mon Sep 17 00:00:00 2001
+From: Greg Kurz <groug@kaod.org>
+Date: Mon, 1 Feb 2021 20:33:05 +0100
+Subject: [PATCH 6/6] virtiofsd: Add restart_syscall to the seccomp whitelist
+
+This is how linux restarts some system calls after SIGSTOP/SIGCONT.
+This is needed to avoid virtiofsd termination when resuming execution
+under GDB for example.
+
+Signed-off-by: Greg Kurz <groug@kaod.org>
+Message-Id: <20210201193305.136390-1-groug@kaod.org>
+Reviewed-by: Dr. David Alan Gilbert <dgilbert@redhat.com>
+Reviewed-by: Stefan Hajnoczi <stefanha@redhat.com>
+Signed-off-by: Dr. David Alan Gilbert <dgilbert@redhat.com>
+---
+ tools/virtiofsd/passthrough_seccomp.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/tools/virtiofsd/passthrough_seccomp.c b/tools/virtiofsd/passthrough_seccomp.c
+index 1ecf5bf318..ea852e2e33 100644
+--- a/tools/virtiofsd/passthrough_seccomp.c
++++ b/tools/virtiofsd/passthrough_seccomp.c
+@@ -89,6 +89,7 @@ static const int syscall_whitelist[] = {
+     SCMP_SYS(renameat),
+     SCMP_SYS(renameat2),
+     SCMP_SYS(removexattr),
++    SCMP_SYS(restart_syscall),
+     SCMP_SYS(rt_sigaction),
+     SCMP_SYS(rt_sigprocmask),
+     SCMP_SYS(rt_sigreturn),
+-- 
+2.26.2
+
