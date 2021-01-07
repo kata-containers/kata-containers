@@ -566,7 +566,8 @@ EOT
 	AGENT_DEST="${AGENT_DIR}/${AGENT_BIN}"
 
 	if [ -z "${AGENT_SOURCE_BIN}" ] ; then
-		[ "$ARCH" == "ppc64le" ] && ([ "$LIBC" == "gnu" ] || die "LIBC type for ppc64le should be gnu")
+                # LIBC type for ppc64le should be gnu
+		[ "$ARCH" == "ppc64le" ] && LIBC=gnu
 		bash ${script_dir}/../../../ci/install_musl.sh
 		# rust agent needs ${arch}-unknown-linux-${LIBC}
 		rustup show | grep linux-${LIBC} > /dev/null || bash ${script_dir}/../../../ci/install_rust.sh
