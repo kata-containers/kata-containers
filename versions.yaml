@@ -271,12 +271,12 @@ languages:
   rust:
     description: "Rust language"
     notes: "'version' is the default minimum version used by this project."
-    version: "1.38.0"
+    version: "1.49.0"
     meta:
       description: |
         'newest-version' is the latest version known to work when
         building Kata
-      newest-version: "1.47.0"
+      newest-version: "1.49.0"
 
 specs:
   description: "Details of important specifications"

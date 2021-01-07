@@ -27,6 +27,8 @@ BUILD_TYPE = release
 
 ARCH = $(shell uname -m)
 LIBC ?= musl
+GNU_STATIC ?= no
+
 ifneq ($(LIBC),musl)
     ifeq ($(LIBC),gnu)
         override LIBC = gnu
@@ -51,6 +53,12 @@ EXTRA_RUSTFLAGS :=
 ifeq ($(ARCH), aarch64)
     override EXTRA_RUSTFLAGS = -C link-arg=-lgcc
     $(warning "WARNING: aarch64-musl needs extra symbols from libgcc")
+endif
+
+ifeq ($(LIBC), gnu)
+    ifeq ($(GNU_STATIC), yes)
+        EXTRA_RUSTFLAGS += -C target-feature=+crt-static
+    endif
 endif
 
 TRIPLE = $(ARCH)-unknown-linux-$(LIBC)
