@@ -1,0 +1,20 @@
+[package]
+name = "netlink"
+version = "0.1.0"
+authors = ["The Kata Containers community <kata-dev@lists.katacontainers.io>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+libc = "0.2.79"
+nix = "0.17.0"
+
+protobuf = { version = "=2.14.0", optional = true }
+protocols = { path = "../protocols", optional = true }
+slog = { version = "2.5.2", features = ["dynamic-keys", "max_level_trace", "release_max_level_info"], optional = true }
+slog-scope = { version = "4.1.2", optional = true }
+
+[features]
+with-log = ["slog", "slog-scope"]
+with-agent-handler = ["protobuf", "protocols"]
