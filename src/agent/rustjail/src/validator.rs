@@ -207,6 +207,11 @@ fn sysctl(oci: &Spec) -> Result<()> {
             }
         }
 
+        if key.starts_with("net.") {
+            // the network ns is shared with the guest, don't expect to find it in spec
+            continue;
+        }
+
         if contain_namespace(&linux.namespaces, "uts") {
             if key == "kernel.domainname" {
                 continue;
