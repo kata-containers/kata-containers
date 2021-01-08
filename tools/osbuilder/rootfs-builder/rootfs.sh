@@ -181,29 +181,22 @@ docker_extra_args()
 {
 	local args=""
 
+	# Required to mount inside a container
+	args+=" --cap-add SYS_ADMIN"
+	# Requred to chroot
+	args+=" --cap-add SYS_CHROOT"
+	# debootstrap needs to create device nodes to properly function
+	args+=" --cap-add MKNOD"
+
 	case "$1" in
 	 gentoo)
-		# Requred to chroot
-		args+=" --cap-add SYS_CHROOT"
-		# debootstrap needs to create device nodes to properly function
-		args+=" --cap-add MKNOD"
-		# Required to mount inside a container
-		args+=" --cap-add SYS_ADMIN"
 		# Required to build glibc
 		args+=" --cap-add SYS_PTRACE"
 		# mount portage volume
 		args+=" -v ${gentoo_local_portage_dir}:/usr/portage/packages"
 		args+=" --volumes-from ${gentoo_portage_container}"
 		;;
-	 ubuntu | debian)
-		# Requred to chroot
-		args+=" --cap-add SYS_CHROOT"
-		# debootstrap needs to create device nodes to properly function
-		args+=" --cap-add MKNOD"
-		;;
 	suse)
-		# Required to mount inside a container
-		args+=" --cap-add SYS_ADMIN"
 		# When AppArmor is enabled, mounting inside a container is blocked with docker-default profile.
 		# See https://github.com/moby/moby/issues/16429
 		args+=" --security-opt apparmor=unconfined"
