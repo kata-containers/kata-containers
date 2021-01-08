@@ -189,7 +189,7 @@ docker_extra_args()
 	args+=" --cap-add MKNOD"
 
 	case "$1" in
-	 gentoo)
+	gentoo)
 		# Required to build glibc
 		args+=" --cap-add SYS_PTRACE"
 		# mount portage volume
