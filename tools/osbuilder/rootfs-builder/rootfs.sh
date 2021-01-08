@@ -196,10 +196,23 @@ docker_extra_args()
 		args+=" -v ${gentoo_local_portage_dir}:/usr/portage/packages"
 		args+=" --volumes-from ${gentoo_portage_container}"
 		;;
-	suse)
-		# When AppArmor is enabled, mounting inside a container is blocked with docker-default profile.
-		# See https://github.com/moby/moby/issues/16429
-		args+=" --security-opt apparmor=unconfined"
+        debian | ubuntu | suse)
+		source /etc/os-release
+
+		case "$ID" in
+                fedora | centos | rhel)
+			# Depending on the podman version, we'll face issues when passing
+		        # `--security-opt apparmor=unconfined` on a system where not apparmor is not installed.
+			# Because of this, let's just avoid adding this option when the host OS comes from Red Hat.
+
+			# A explict check for podman, at least for now, can be avoided.
+			;;
+		*)
+			# When AppArmor is enabled, mounting inside a container is blocked with docker-default profile.
+			# See https://github.com/moby/moby/issues/16429
+			args+=" --security-opt apparmor=unconfined"
+			;;
+		esac
 		;;
 	*)
 		;;
