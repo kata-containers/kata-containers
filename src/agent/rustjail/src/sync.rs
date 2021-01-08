@@ -72,7 +72,15 @@ fn read_count(fd: RawFd, count: usize) -> Result<Vec<u8>> {
         }
     }
 
-    Ok(v[0..len].to_vec())
+    if len != count {
+        Err(anyhow::anyhow!(
+            "invalid read count expect {} get {}",
+            count,
+            len
+        ))
+    } else {
+        Ok(v[0..len].to_vec())
+    }
 }
 
 pub fn read_sync(fd: RawFd) -> Result<Vec<u8>> {
