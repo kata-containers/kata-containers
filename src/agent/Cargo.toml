@@ -4,6 +4,9 @@ version = "0.1.0"
 authors = ["The Kata Containers community <kata-dev@lists.katacontainers.io>"]
 edition = "2018"
 
+[build-dependencies]
+rustc_version = "0.3.0"
+
 [dependencies]
 oci = { path = "oci" }
 logging = { path = "../../pkg/logging" }
