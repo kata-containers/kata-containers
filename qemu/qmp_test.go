@@ -408,7 +408,7 @@ func TestQMPBlockdevAdd(t *testing.T) {
 	q := startQMPLoop(buf, cfg, connectedCh, disconnectedCh)
 	q.version = checkVersion(t, connectedCh)
 	err := q.ExecuteBlockdevAdd(context.Background(), "/dev/rbd0",
-		fmt.Sprintf("drive_%s", volumeUUID))
+		fmt.Sprintf("drive_%s", volumeUUID), false)
 	if err != nil {
 		t.Fatalf("Unexpected error %v", err)
 	}
@@ -432,7 +432,7 @@ func TestQMPBlockdevAddWithCache(t *testing.T) {
 	q := startQMPLoop(buf, cfg, connectedCh, disconnectedCh)
 	q.version = checkVersion(t, connectedCh)
 	err := q.ExecuteBlockdevAddWithCache(context.Background(), "/dev/rbd0",
-		fmt.Sprintf("drive_%s", volumeUUID), true, true)
+		fmt.Sprintf("drive_%s", volumeUUID), true, true, false)
 	if err != nil {
 		t.Fatalf("Unexpected error %v", err)
 	}
