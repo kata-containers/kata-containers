@@ -68,7 +68,7 @@ parts:
       chmod +x ${yq_path}
 
       kata_dir=gopath/src/github.com/${SNAPCRAFT_PROJECT_NAME}/${SNAPCRAFT_PROJECT_NAME}
-      version="$(${yq_path} r ${kata_dir}/versions.yaml languages.golang.meta.newest-version)"
+      version="$(${yq_path} e .languages.golang.meta.newest-version ${kata_dir}/versions.yaml)"
       tarfile="go${version}.${goos}-${goarch}.tar.gz"
       curl -LO https://golang.org/dl/${tarfile}
       tar -xf ${tarfile} --strip-components=1
@@ -240,15 +240,15 @@ parts:
       # arch-specific definition
       case "$(uname -m)" in
         "aarch64")
-          branch="$(${yq} r ${versions_file} assets.hypervisor.qemu.architecture.aarch64.branch)"
-          url="$(${yq} r ${versions_file} assets.hypervisor.qemu.url)"
-          commit="$(${yq} r ${versions_file} assets.hypervisor.qemu.architecture.aarch64.commit)"
+          branch="$(${yq} e .assets.hypervisor.qemu.architecture.aarch64.branch ${versions_file})"
+          url="$(${yq} e .assets.hypervisor.qemu.url ${versions_file})"
+          commit="$(${yq} e .assets.hypervisor.qemu.architecture.aarch64.commit ${versions_file})"
           patches_dir="${kata_dir}/tools/packaging/obs-packaging/qemu-aarch64/patches/"
         ;;
 
         *)
-          branch="$(${yq} r ${versions_file} assets.hypervisor.qemu.tag)"
-          url="$(${yq} r ${versions_file} assets.hypervisor.qemu.url)"
+          branch="$(${yq} e .assets.hypervisor.qemu.tag ${versions_file})"
+          url="$(${yq} e .assets.hypervisor.qemu.url ${versions_file})"
           commit=""
           patches_dir="${kata_dir}/tools/packaging/qemu/patches/$(echo ${branch} | sed -e 's/.[[:digit:]]*$//' -e 's/^v//').x"
         ;;
