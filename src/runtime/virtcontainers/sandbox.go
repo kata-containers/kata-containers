@@ -1098,13 +1098,13 @@ func (s *Sandbox) addContainer(c *Container) error {
 // This should be called only when the sandbox is already created.
 // It will add new container config to sandbox.config.Containers
 func (s *Sandbox) CreateContainer(contConfig ContainerConfig) (VCContainer, error) {
-	// Create the container.
+	// Create the container object, add devices to the sandbox's device-manager:
 	c, err := newContainer(s, &contConfig)
 	if err != nil {
 		return nil, err
 	}
 
-	// Update sandbox config.
+	// Update sandbox config to include the new container's config
 	s.config.Containers = append(s.config.Containers, contConfig)
 
 	defer func() {
@@ -1116,6 +1116,7 @@ func (s *Sandbox) CreateContainer(contConfig ContainerConfig) (VCContainer, erro
 		}
 	}()
 
+	// create and start the container
 	err = c.create()
 	if err != nil {
 		return nil, err
