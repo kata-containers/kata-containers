@@ -61,11 +61,12 @@ func (device *BlockDevice) Attach(devReceiver api.DeviceReceiver) (err error) {
 	}
 
 	drive := &config.BlockDrive{
-		File:   device.DeviceInfo.HostPath,
-		Format: "raw",
-		ID:     utils.MakeNameID("drive", device.DeviceInfo.ID, maxDevIDSize),
-		Index:  index,
-		Pmem:   device.DeviceInfo.Pmem,
+		File:     device.DeviceInfo.HostPath,
+		Format:   "raw",
+		ID:       utils.MakeNameID("drive", device.DeviceInfo.ID, maxDevIDSize),
+		Index:    index,
+		Pmem:     device.DeviceInfo.Pmem,
+		ReadOnly: device.DeviceInfo.ReadOnly,
 	}
 
 	if fs, ok := device.DeviceInfo.DriverOptions["fstype"]; ok {

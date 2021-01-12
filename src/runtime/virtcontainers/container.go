@@ -672,6 +672,7 @@ func (c *Container) createBlockDevices() error {
 				DevType:       "b",
 				Major:         int64(unix.Major(stat.Rdev)),
 				Minor:         int64(unix.Minor(stat.Rdev)),
+				ReadOnly:      m.ReadOnly,
 			}
 			// check whether source can be used as a pmem device
 		} else if di, err = config.PmemDeviceInfo(m.Source, m.Destination); err != nil {
