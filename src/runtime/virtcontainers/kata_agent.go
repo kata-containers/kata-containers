@@ -1400,7 +1400,7 @@ func (k *kataAgent) handleLocalStorage(mounts []specs.Mount, sandboxID string, r
 
 // handleDeviceBlockVolume handles volume that is block device file
 // and DeviceBlock type.
-func (k *kataAgent) handleDeviceBlockVolume(c *Container, device api.Device) (*grpc.Storage, error) {
+func (k *kataAgent) handleDeviceBlockVolume(c *Container, m Mount, device api.Device) (*grpc.Storage, error) {
 	vol := &grpc.Storage{}
 
 	blockDrive, ok := device.GetDeviceInfo().(*config.BlockDrive)
@@ -1420,6 +1420,7 @@ func (k *kataAgent) handleDeviceBlockVolume(c *Container, device api.Device) (*g
 		vol.Source = blockDrive.DevNo
 	case c.sandbox.config.HypervisorConfig.BlockDeviceDriver == config.VirtioBlock:
 		vol.Driver = kataBlkDevType
+
 		if blockDrive.PCIAddr == "" {
 			vol.Source = blockDrive.VirtPath
 		} else {
@@ -1435,12 +1436,22 @@ func (k *kataAgent) handleDeviceBlockVolume(c *Container, device api.Device) (*g
 		return nil, fmt.Errorf("Unknown block device driver: %s", c.sandbox.config.HypervisorConfig.BlockDeviceDriver)
 	}
 
+	vol.MountPoint = m.Destination
+
+	// If no explicit FS Type or Options are being set, then let's use what is provided for the particular mount:
+	if vol.Fstype == "" {
+		vol.Fstype = m.Type
+	}
+	if len(vol.Options) == 0 {
+		vol.Options = m.Options
+	}
+
 	return vol, nil
 }
 
 // handleVhostUserBlkVolume handles volume that is block device file
 // and VhostUserBlk type.
-func (k *kataAgent) handleVhostUserBlkVolume(c *Container, device api.Device) (*grpc.Storage, error) {
+func (k *kataAgent) handleVhostUserBlkVolume(c *Container, m Mount, device api.Device) (*grpc.Storage, error) {
 	vol := &grpc.Storage{}
 
 	d, ok := device.GetDeviceInfo().(*config.VhostUserDeviceAttrs)
@@ -1451,6 +1462,9 @@ func (k *kataAgent) handleVhostUserBlkVolume(c *Container, device api.Device) (*
 
 	vol.Driver = kataBlkDevType
 	vol.Source = d.PCIAddr
+	vol.Fstype = "bind"
+	vol.Options = []string{"bind"}
+	vol.MountPoint = m.Destination
 
 	return vol, nil
 }
@@ -1483,9 +1497,9 @@ func (k *kataAgent) handleBlockVolumes(c *Container) ([]*grpc.Storage, error) {
 		var err error
 		switch device.DeviceType() {
 		case config.DeviceBlock:
-			vol, err = k.handleDeviceBlockVolume(c, device)
+			vol, err = k.handleDeviceBlockVolume(c, m, device)
 		case config.VhostUserBlk:
-			vol, err = k.handleVhostUserBlkVolume(c, device)
+			vol, err = k.handleVhostUserBlkVolume(c, m, device)
 		default:
 			k.Logger().Error("Unknown device type")
 			continue
@@ -1493,14 +1507,6 @@ func (k *kataAgent) handleBlockVolumes(c *Container) ([]*grpc.Storage, error) {
 
 		if vol == nil || err != nil {
 			return nil, err
-		}
-
-		vol.MountPoint = m.Destination
-		if vol.Fstype == "" {
-			vol.Fstype = "bind"
-		}
-		if len(vol.Options) == 0 {
-			vol.Options = []string{"bind"}
 		}
 
 		volumeStorages = append(volumeStorages, vol)
