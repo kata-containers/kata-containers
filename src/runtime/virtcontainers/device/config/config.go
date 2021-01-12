@@ -114,6 +114,9 @@ type DeviceInfo struct {
 	// for a nvdimm device in the guest.
 	Pmem bool
 
+	// If applicable, should this device be considered RO
+	ReadOnly bool
+
 	// ColdPlug specifies whether the device must be cold plugged (true)
 	// or hot plugged (false).
 	ColdPlug bool
