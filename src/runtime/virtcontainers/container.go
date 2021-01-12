@@ -488,7 +488,7 @@ func (c *Container) shareFiles(m Mount, idx int, hostSharedDir, hostMountDir, gu
 }
 
 // mountSharedDirMounts handles bind-mounts by bindmounting to the host shared
-// directory which is mounted through 9pfs in the VM.
+// directory which is mounted through virtiofs/9pfs in the VM.
 // It also updates the container mount list with the HostPath info, and store
 // container mounts to the storage. This way, we will have the HostPath info
 // available when we will need to unmount those mounts.
@@ -511,6 +511,18 @@ func (c *Container) mountSharedDirMounts(hostSharedDir, hostMountDir, guestShare
 			continue
 		}
 
+		// Check if mount is a block device file. If it is, the block device will be attached to the host
+		// instead of passing this as a shared mount:
+		if len(m.BlockDeviceID) > 0 {
+			// Attach this block device, all other devices passed in the config have been attached at this point
+			if err = c.sandbox.devManager.AttachDevice(m.BlockDeviceID, c.sandbox); err != nil {
+				return nil, nil, err
+			}
+			devicesToDetach = append(devicesToDetach, m.BlockDeviceID)
+			continue
+		}
+
+		// For non-block based mounts, we are only interested in bind mounts
 		if m.Type != "bind" {
 			continue
 		}
@@ -519,17 +531,6 @@ func (c *Container) mountSharedDirMounts(hostSharedDir, hostMountDir, guestShare
 		// but it does not make sense to pass this as a 9p mount from the host side.
 		// This needs to be handled purely in the guest, by allocating memory for this inside the VM.
 		if m.Destination == "/dev/shm" {
-			continue
-		}
-
-		// Check if mount is a block device file. If it is, the block device will be attached to the host
-		// instead of passing this as a shared mount.
-		if len(m.BlockDeviceID) > 0 {
-			// Attach this block device, all other devices passed in the config have been attached at this point
-			if err = c.sandbox.devManager.AttachDevice(m.BlockDeviceID, c.sandbox); err != nil {
-				return nil, nil, err
-			}
-			devicesToDetach = append(devicesToDetach, m.BlockDeviceID)
 			continue
 		}
 
@@ -628,6 +629,9 @@ func filterDevices(c *Container, devices []ContainerDevice) (ret []ContainerDevi
 	return
 }
 
+// Add any mount based block devices to the device manager and save the
+// device ID for the particular mount. This'll occur when the mountpoint source
+// is a block device.
 func (c *Container) createBlockDevices() error {
 	if !c.checkBlockDeviceSupport() {
 		c.Logger().Warn("Block device not supported")
@@ -636,10 +640,15 @@ func (c *Container) createBlockDevices() error {
 
 	// iterate all mounts and create block device if it's block based.
 	for i, m := range c.mounts {
-		if len(m.BlockDeviceID) > 0 || m.Type != "bind" {
+		if len(m.BlockDeviceID) > 0 {
 			// Non-empty m.BlockDeviceID indicates there's already one device
 			// associated with the mount,so no need to create a new device for it
 			// and we only create block device for bind mount
+			continue
+		}
+
+		if m.Type != "bind" {
+			// We only handle for bind-mounts
 			continue
 		}
 
@@ -670,7 +679,6 @@ func (c *Container) createBlockDevices() error {
 
 		if err == nil && di != nil {
 			b, err := c.sandbox.devManager.NewDevice(*di)
-
 			if err != nil {
 				// Do not return an error, try to create
 				// devices for other mounts
@@ -722,11 +730,12 @@ func newContainer(sandbox *Sandbox, contConfig *ContainerConfig) (*Container, er
 		return nil, err
 	}
 
-	// Go to next step for first created container
+	// If mounts are block devices, add to devmanager
 	if err := c.createMounts(); err != nil {
 		return nil, err
 	}
 
+	// Add container's devices to sandbox's device-manager
 	if err := c.createDevices(contConfig); err != nil {
 		return nil, err
 	}
@@ -736,11 +745,7 @@ func newContainer(sandbox *Sandbox, contConfig *ContainerConfig) (*Container, er
 
 func (c *Container) createMounts() error {
 	// Create block devices for newly created container
-	if err := c.createBlockDevices(); err != nil {
-		return err
-	}
-
-	return nil
+	return c.createBlockDevices()
 }
 
 func (c *Container) createDevices(contConfig *ContainerConfig) error {
@@ -810,6 +815,7 @@ func (c *Container) create() (err error) {
 	}()
 
 	if c.checkBlockDeviceSupport() {
+		// If the rootfs is backed by a block device, go ahead and hotplug it to the guest
 		if err = c.hotplugDrive(); err != nil {
 			return
 		}
@@ -1205,11 +1211,14 @@ func (c *Container) resume() error {
 	return c.setContainerState(types.StateRunning)
 }
 
+// hotplugDrive will attempt to hotplug the container rootfs if it is backed by a
+// block device
 func (c *Container) hotplugDrive() error {
 	var dev device
 	var err error
 
-	// container rootfs is blockdevice backed and isn't mounted
+	// Check to see if the rootfs is an umounted block device (source) or if the
+	// mount (target) is backed by a block device:
 	if !c.rootFs.Mounted {
 		dev, err = getDeviceForPath(c.rootFs.Source)
 		// there is no "rootfs" dir on block device backed rootfs
@@ -1271,6 +1280,7 @@ func (c *Container) hotplugDrive() error {
 	return c.setStateFstype(fsType)
 }
 
+// plugDevice will attach the rootfs if blockdevice is supported (this is rootfs specific)
 func (c *Container) plugDevice(devicePath string) error {
 	var stat unix.Stat_t
 	if err := unix.Stat(devicePath, &stat); err != nil {

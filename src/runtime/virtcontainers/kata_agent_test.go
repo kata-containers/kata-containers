@@ -228,6 +228,7 @@ func TestHandleDeviceBlockVolume(t *testing.T) {
 
 	tests := []struct {
 		BlockDeviceDriver string
+		inputMount        Mount
 		inputDev          *drivers.BlockDevice
 		resultVol         *pb.Storage
 	}{
@@ -239,6 +240,7 @@ func TestHandleDeviceBlockVolume(t *testing.T) {
 					Format:   testBlkDriveFormat,
 				},
 			},
+			inputMount: Mount{},
 			resultVol: &pb.Storage{
 				Driver:  kataNvdimmDevType,
 				Source:  fmt.Sprintf("/dev/pmem%s", testNvdimmID),
@@ -248,18 +250,25 @@ func TestHandleDeviceBlockVolume(t *testing.T) {
 		},
 		{
 			BlockDeviceDriver: config.VirtioBlockCCW,
+			inputMount: Mount{
+				Type:    "bind",
+				Options: []string{"ro"},
+			},
 			inputDev: &drivers.BlockDevice{
 				BlockDrive: &config.BlockDrive{
 					DevNo: testDevNo,
 				},
 			},
 			resultVol: &pb.Storage{
-				Driver: kataBlkCCWDevType,
-				Source: testDevNo,
+				Driver:  kataBlkCCWDevType,
+				Source:  testDevNo,
+				Fstype:  "bind",
+				Options: []string{"ro"},
 			},
 		},
 		{
 			BlockDeviceDriver: config.VirtioBlock,
+			inputMount:        Mount{},
 			inputDev: &drivers.BlockDevice{
 				BlockDrive: &config.BlockDrive{
 					PCIAddr:  testPCIAddr,
@@ -320,7 +329,7 @@ func TestHandleDeviceBlockVolume(t *testing.T) {
 			},
 		}
 
-		vol, _ := k.handleDeviceBlockVolume(c, test.inputDev)
+		vol, _ := k.handleDeviceBlockVolume(c, test.inputMount, test.inputDev)
 		assert.True(t, reflect.DeepEqual(vol, test.resultVol),
 			"Volume didn't match: got %+v, expecting %+v",
 			vol, test.resultVol)
@@ -336,22 +345,27 @@ func TestHandleBlockVolume(t *testing.T) {
 	containers := map[string]*Container{}
 	containers[c.id] = c
 
-	// Create a VhostUserBlk device and a DeviceBlock device
+	// Create a devices for VhostUserBlk, standard DeviceBlock and direct assigned Block device
 	vDevID := "MockVhostUserBlk"
 	bDevID := "MockDeviceBlock"
+	dDevID := "MockDeviceBlockDirect"
 	vDestination := "/VhostUserBlk/destination"
 	bDestination := "/DeviceBlock/destination"
+	dDestination := "/DeviceDirectBlock/destination"
 	vPCIAddr := "0001:01"
 	bPCIAddr := "0002:01"
+	dPCIAddr := "0003:01"
 
 	vDev := drivers.NewVhostUserBlkDevice(&config.DeviceInfo{ID: vDevID})
 	bDev := drivers.NewBlockDevice(&config.DeviceInfo{ID: bDevID})
+	dDev := drivers.NewBlockDevice(&config.DeviceInfo{ID: dDevID})
 
 	vDev.VhostUserDeviceAttrs = &config.VhostUserDeviceAttrs{PCIAddr: vPCIAddr}
 	bDev.BlockDrive = &config.BlockDrive{PCIAddr: bPCIAddr}
+	dDev.BlockDrive = &config.BlockDrive{PCIAddr: dPCIAddr}
 
 	var devices []api.Device
-	devices = append(devices, vDev, bDev)
+	devices = append(devices, vDev, bDev, dDev)
 
 	// Create a VhostUserBlk mount and a DeviceBlock mount
 	var mounts []Mount
@@ -362,8 +376,16 @@ func TestHandleBlockVolume(t *testing.T) {
 	bMount := Mount{
 		BlockDeviceID: bDevID,
 		Destination:   bDestination,
+		Type:          "bind",
+		Options:       []string{"bind"},
 	}
-	mounts = append(mounts, vMount, bMount)
+	dMount := Mount{
+		BlockDeviceID: dDevID,
+		Destination:   dDestination,
+		Type:          "ext4",
+		Options:       []string{"ro"},
+	}
+	mounts = append(mounts, vMount, bMount, dMount)
 
 	tmpDir := "/vhost/user/dir"
 	dm := manager.NewDeviceManager(manager.VirtioBlock, true, tmpDir, devices)
@@ -398,9 +420,17 @@ func TestHandleBlockVolume(t *testing.T) {
 		Driver:     kataBlkDevType,
 		Source:     bPCIAddr,
 	}
+	dStorage := &pb.Storage{
+		MountPoint: dDestination,
+		Fstype:     "ext4",
+		Options:    []string{"ro"},
+		Driver:     kataBlkDevType,
+		Source:     dPCIAddr,
+	}
 
 	assert.Equal(t, vStorage, volumeStorages[0], "Error while handle VhostUserBlk type block volume")
 	assert.Equal(t, bStorage, volumeStorages[1], "Error while handle BlockDevice type block volume")
+	assert.Equal(t, dStorage, volumeStorages[2], "Error while handle direct BlockDevice type block volume")
 }
 
 func TestAppendDevicesEmptyContainerDeviceList(t *testing.T) {
