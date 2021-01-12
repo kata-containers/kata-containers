@@ -135,7 +135,7 @@ const (
 
 func isDimmSupported(config *Config) bool {
 	switch runtime.GOARCH {
-	case "amd64", "386", "ppc64le":
+	case "amd64", "386", "ppc64le", "arm64":
 		if config != nil && config.Machine.Type == MachineTypeMicrovm {
 			// microvm does not support NUMA
 			return false
@@ -2300,6 +2300,9 @@ type Config struct {
 	// Bios is the -bios parameter
 	Bios string
 
+	// PFlash specifies the parallel flash images (-pflash parameter)
+	PFlash []string
+
 	// Incoming controls migration source preparation
 	Incoming Incoming
 
@@ -2490,6 +2493,13 @@ func (config *Config) appendGlobalParam() {
 	}
 }
 
+func (config *Config) appendPFlashParam() {
+	for _, p := range config.PFlash {
+		config.qemuParams = append(config.qemuParams, "-pflash")
+		config.qemuParams = append(config.qemuParams, p)
+	}
+}
+
 func (config *Config) appendVGA() {
 	if config.VGA != "" {
 		config.qemuParams = append(config.qemuParams, "-vga")
@@ -2675,6 +2685,7 @@ func LaunchQemu(config Config, logger QMPLog) (string, error) {
 	config.appendDevices()
 	config.appendRTC()
 	config.appendGlobalParam()
+	config.appendPFlashParam()
 	config.appendVGA()
 	config.appendKnobs()
 	config.appendKernel()
