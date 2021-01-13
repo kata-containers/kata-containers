@@ -198,6 +198,8 @@ github.com/juju/testing v0.0.0-20190613124551-e81189438503/go.mod h1:63prj8cnj0t
 github.com/julienschmidt/httprouter v1.2.0/go.mod h1:SYymIcj16QtmaHHD7aYtjjsJG7VTCxuUUipMqKk8s4w=
 github.com/kata-containers/govmm v0.0.0-20201020052039-99f43ec18864 h1:ETwjbdr9aU/J90P5D/HAxRW8M4r0HQSPmuBDIaNr9EM=
 github.com/kata-containers/govmm v0.0.0-20201020052039-99f43ec18864/go.mod h1:VmAHbsL5lLfzHW/MNL96NVLF840DNEV5i683kISgFKk=
+github.com/kata-containers/govmm v0.0.0-20210112013750-7d320e8f5dca h1:UdXFthwasAPnmv37gLJUEFsW9FaabYA+mM6FoSi8kzU=
+github.com/kata-containers/govmm v0.0.0-20210112013750-7d320e8f5dca/go.mod h1:VmAHbsL5lLfzHW/MNL96NVLF840DNEV5i683kISgFKk=
 github.com/kisielk/errcheck v1.2.0/go.mod h1:/BMXB+zMLi60iA8Vv6Ksmxu/1UDYcXs4uQLJ+jE2L00=
 github.com/kisielk/gotool v1.0.0/go.mod h1:XhKaO+MFFWcvkIS/tQcRk01m1F5IRFswLeQ+oQHNcck=
 github.com/konsorten/go-windows-terminal-sequences v1.0.1 h1:mweAR1A6xJ3oS2pRaGiHgQ4OO8tzTaLawm8vnODuwDk=
