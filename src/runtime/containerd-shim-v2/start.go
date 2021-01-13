@@ -52,7 +52,9 @@ func startContainer(ctx context.Context, s *service, c *container) error {
 		return katautils.PostStartHooks(ctx, *c.spec, s.sandbox.ID(), c.bundle)
 	})
 	if err != nil {
-		return err
+		// log warning and continue, as defined in oci runtime spec
+		// https://github.com/opencontainers/runtime-spec/blob/master/runtime.md#lifecycle
+		shimLog.WithError(err).Warn("Failed to run post-start hooks")
 	}
 
 	c.status = task.StatusRunning
