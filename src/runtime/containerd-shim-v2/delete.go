@@ -29,7 +29,9 @@ func deleteContainer(ctx context.Context, s *service, c *container) error {
 
 	// Run post-stop OCI hooks.
 	if err := katautils.PostStopHooks(ctx, *c.spec, s.sandbox.ID(), c.bundle); err != nil {
-		return err
+		// log warning and continue, as defined in oci runtime spec
+		// https://github.com/opencontainers/runtime-spec/blob/master/runtime.md#lifecycle
+		shimLog.WithError(err).Warn("Failed to run post-stop hooks")
 	}
 
 	if c.mounted {
