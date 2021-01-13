@@ -12,18 +12,19 @@
 #
 # BIN_AGENT: Name of the Kata-Agent binary
 #
-# REPO_URL: URL to distribution repository ( should be configured in 
+# REPO_URL: URL to distribution repository ( should be configured in
 #           config.sh file)
 #
-# Any other configuration variable for a specific distro must be added 
+# Any other configuration variable for a specific distro must be added
 # and documented on its own config.sh
-# 
+#
 # - Expected result
 #
 # rootfs_dir populated with rootfs pkgs
 # It must provide a binary in /sbin/init
 #
-# Note: For some distros, the build_rootfs() function provided in scripts/lib.sh
+# Note: For some distros, the build_rootfs(), before_starting_container()
+#       and after_starting_container() functions provided in scripts/lib.sh
 #       will suffice. If a new distro is introduced with a special requirement,
 #       then, a rootfs_builder/<distro>/rootfs_lib.sh file should be created
 #       using this template.
@@ -51,4 +52,20 @@ build_rootfs() {
 
 	# Populate ROOTFS_DIR
 	# Must provide /sbin/init and /bin/${BIN_AGENT}
+}
+
+before_starting_container() {
+	# Run the following tasks before starting the container that builds the rootfs.
+	# For example:
+	# * Create a container
+	# * Create a volume
+	return 0
+}
+
+after_stopping_container() {
+	# Run the following tasks after stoping the container that builds the rootfs.
+	# For example:
+	# * Delete a container
+	# * Delete a volume
+	return 0
 }

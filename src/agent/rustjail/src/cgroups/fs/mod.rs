@@ -67,6 +67,15 @@ pub fn load<'a>(h: Box<&'a dyn cgroups::Hierarchy>, path: &str) -> Option<Cgroup
     }
 }
 
+macro_rules! get_controller_or_return_singular_none {
+    ($cg:ident) => {
+        match $cg.controller_of() {
+            Some(c) => c,
+            None => return SingularPtrField::none(),
+        }
+    };
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Manager {
     pub paths: HashMap<String, String>,
@@ -421,13 +430,13 @@ fn set_memory_resources(cg: &cgroups::Cgroup, memory: &LinuxMemory, update: bool
         }
     }
 
-    if let Some(swapiness) = memory.swapiness {
-        if swapiness >= 0 && swapiness <= 100 {
-            mem_controller.set_swappiness(swapiness as u64)?;
+    if let Some(swappiness) = memory.swappiness {
+        if swappiness >= 0 && swappiness <= 100 {
+            mem_controller.set_swappiness(swappiness as u64)?;
         } else {
             return Err(anyhow!(
                 "invalid value:{}. valid memory swappiness range is 0-100",
-                swapiness
+                swappiness
             ));
         }
     }
@@ -605,10 +614,8 @@ lazy_static! {
 }
 
 fn get_cpu_stats(cg: &cgroups::Cgroup) -> SingularPtrField<ThrottlingData> {
-    let cpu_controller: &CpuController = cg.controller_of().unwrap();
-
+    let cpu_controller: &CpuController = get_controller_or_return_singular_none!(cg);
     let stat = cpu_controller.cpu().stat;
-
     let h = lines_to_map(&stat);
 
     SingularPtrField::some(ThrottlingData {
@@ -621,27 +628,18 @@ fn get_cpu_stats(cg: &cgroups::Cgroup) -> SingularPtrField<ThrottlingData> {
 }
 
 fn get_cpuacct_stats(cg: &cgroups::Cgroup) -> SingularPtrField<CpuUsage> {
-    let cpuacct_controller: Option<&CpuAcctController> = cg.controller_of();
-    if cpuacct_controller.is_none() {
-        if cg.v2() {
-            return SingularPtrField::some(CpuUsage {
-                total_usage: 0,
-                percpu_usage: vec![],
-                usage_in_kernelmode: 0,
-                usage_in_usermode: 0,
-                unknown_fields: UnknownFields::default(),
-                cached_size: CachedSize::default(),
-            });
-        }
+    if let Some(cpuacct_controller) = cg.controller_of::<CpuAcctController>() {
+        let cpuacct = cpuacct_controller.cpuacct();
 
-        // try to get from cpu controller
-        let cpu_controller: &CpuController = cg.controller_of().unwrap();
-        let stat = cpu_controller.cpu().stat;
-        let h = lines_to_map(&stat);
-        let usage_in_usermode = *h.get("user_usec").unwrap();
-        let usage_in_kernelmode = *h.get("system_usec").unwrap();
-        let total_usage = *h.get("usage_usec").unwrap();
-        let percpu_usage = vec![];
+        let h = lines_to_map(&cpuacct.stat);
+        let usage_in_usermode =
+            (((*h.get("user").unwrap() * NANO_PER_SECOND) as f64) / *CLOCK_TICKS) as u64;
+        let usage_in_kernelmode =
+            (((*h.get("system").unwrap() * NANO_PER_SECOND) as f64) / *CLOCK_TICKS) as u64;
+
+        let total_usage = cpuacct.usage;
+
+        let percpu_usage = line_to_vec(&cpuacct.usage_percpu);
 
         return SingularPtrField::some(CpuUsage {
             total_usage,
@@ -653,18 +651,25 @@ fn get_cpuacct_stats(cg: &cgroups::Cgroup) -> SingularPtrField<CpuUsage> {
         });
     }
 
-    let cpuacct_controller = cpuacct_controller.unwrap();
-    let cpuacct = cpuacct_controller.cpuacct();
+    if cg.v2() {
+        return SingularPtrField::some(CpuUsage {
+            total_usage: 0,
+            percpu_usage: vec![],
+            usage_in_kernelmode: 0,
+            usage_in_usermode: 0,
+            unknown_fields: UnknownFields::default(),
+            cached_size: CachedSize::default(),
+        });
+    }
 
-    let h = lines_to_map(&cpuacct.stat);
-    let usage_in_usermode =
-        (((*h.get("user").unwrap() * NANO_PER_SECOND) as f64) / *CLOCK_TICKS) as u64;
-    let usage_in_kernelmode =
-        (((*h.get("system").unwrap() * NANO_PER_SECOND) as f64) / *CLOCK_TICKS) as u64;
-
-    let total_usage = cpuacct.usage;
-
-    let percpu_usage = line_to_vec(&cpuacct.usage_percpu);
+    // try to get from cpu controller
+    let cpu_controller: &CpuController = get_controller_or_return_singular_none!(cg);
+    let stat = cpu_controller.cpu().stat;
+    let h = lines_to_map(&stat);
+    let usage_in_usermode = *h.get("user_usec").unwrap();
+    let usage_in_kernelmode = *h.get("system_usec").unwrap();
+    let total_usage = *h.get("usage_usec").unwrap();
+    let percpu_usage = vec![];
 
     SingularPtrField::some(CpuUsage {
         total_usage,
@@ -677,7 +682,7 @@ fn get_cpuacct_stats(cg: &cgroups::Cgroup) -> SingularPtrField<CpuUsage> {
 }
 
 fn get_memory_stats(cg: &cgroups::Cgroup) -> SingularPtrField<MemoryStats> {
-    let memory_controller: &MemController = cg.controller_of().unwrap();
+    let memory_controller: &MemController = get_controller_or_return_singular_none!(cg);
 
     // cache from memory stat
     let memory = memory_controller.memory_stat();
@@ -734,7 +739,7 @@ fn get_memory_stats(cg: &cgroups::Cgroup) -> SingularPtrField<MemoryStats> {
 }
 
 fn get_pids_stats(cg: &cgroups::Cgroup) -> SingularPtrField<PidsStats> {
-    let pid_controller: &PidController = cg.controller_of().unwrap();
+    let pid_controller: &PidController = get_controller_or_return_singular_none!(cg);
 
     let current = pid_controller.get_pid_current().unwrap_or(0);
     let max = pid_controller.get_pid_max();
@@ -841,7 +846,7 @@ fn build_blkio_stats_entry(major: i16, minor: i16, op: &str, value: u64) -> Blki
 }
 
 fn get_blkio_stats_v2(cg: &cgroups::Cgroup) -> SingularPtrField<BlkioStats> {
-    let blkio_controller: &BlkIoController = cg.controller_of().unwrap();
+    let blkio_controller: &BlkIoController = get_controller_or_return_singular_none!(cg);
     let blkio = blkio_controller.blkio();
 
     let mut resp = BlkioStats::new();
@@ -869,7 +874,7 @@ fn get_blkio_stats(cg: &cgroups::Cgroup) -> SingularPtrField<BlkioStats> {
         return get_blkio_stats_v2(&cg);
     }
 
-    let blkio_controller: &BlkIoController = cg.controller_of().unwrap();
+    let blkio_controller: &BlkIoController = get_controller_or_return_singular_none!(cg);
     let blkio = blkio_controller.blkio();
 
     let mut m = BlkioStats::new();

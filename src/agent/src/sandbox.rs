@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-//use crate::container::Container;
 use crate::linux_abi::*;
 use crate::mount::{get_mount_fs_type, remove_mounts, TYPEROOTFS};
 use crate::namespace::Namespace;
@@ -233,6 +232,10 @@ impl Sandbox {
             online_memory(&self.logger)?;
         }
 
+        if req.nb_cpus == 0 {
+            return Ok(());
+        }
+
         let cpuset = rustjail_cgroups::fs::get_guest_cpuset()?;
 
         for (_, ctr) in self.containers.iter() {
@@ -393,7 +396,6 @@ fn online_memory(logger: &Logger) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
-    //use rustjail::Error;
     use super::Sandbox;
     use crate::{mount::BareMount, skip_if_not_root};
     use anyhow::Error;

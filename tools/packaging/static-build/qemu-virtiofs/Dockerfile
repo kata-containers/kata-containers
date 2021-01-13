@@ -4,6 +4,7 @@
 # SPDX-License-Identifier: Apache-2.0
 from ubuntu:20.04
 
+ARG QEMU_DESTDIR
 ARG QEMU_VIRTIOFS_REPO
 # commit/tag/branch
 ARG QEMU_VIRTIOFS_TAG
@@ -54,23 +55,24 @@ RUN git checkout "${QEMU_VIRTIOFS_TAG}"
 
 ADD scripts/configure-hypervisor.sh /root/configure-hypervisor.sh
 ADD qemu /root/kata_qemu
+ADD scripts/apply_patches.sh /root/apply_patches.sh
+ADD static-build /root/static-build
 
 # Apply experimental specific patches
 # Patches to quick fix virtiofs fork
 ENV VIRTIOFS_PATCHES_DIR=/root/kata_qemu/patches/${QEMU_VIRTIOFS_TAG}/
-RUN if [ -d ${VIRTIOFS_PATCHES_DIR} ]; then \
-	echo "Patches to apply for virtiofs fixes:"; \
-	for patch in $(find "${VIRTIOFS_PATCHES_DIR}" -name '*.patch' -type f |sort -t- -k1,1n); do \
-		git apply $patch; \
-	done;fi
-RUN /root/kata_qemu/apply_patches.sh
+RUN /root/apply_patches.sh ${VIRTIOFS_PATCHES_DIR}
+# Apply the stable branch patches
+RUN stable_branch=$(cat VERSION | awk 'BEGIN{FS=OFS="."}{print $1 "." $2 ".x"}') && \
+        /root/apply_patches.sh "/root/kata_qemu/patches/${stable_branch}"
 
 RUN PREFIX="${PREFIX}" /root/configure-hypervisor.sh -s kata-qemu | sed -e 's|--disable-seccomp||g' | xargs ./configure \
 	--with-pkgversion=kata-static
 
 RUN make -j$(nproc)
 RUN make -j$(nproc) virtiofsd
-RUN make install DESTDIR=/tmp/qemu-virtiofs-static
-RUN mv /tmp/qemu-virtiofs-static/"${PREFIX}"/bin/qemu-system-x86_64 /tmp/qemu-virtiofs-static/"${PREFIX}"/bin/qemu-virtiofs-system-x86_64
-RUN mv /tmp/qemu-virtiofs-static/"${PREFIX}"/libexec/kata-qemu/virtiofsd /tmp/qemu-virtiofs-static/opt/kata/bin/virtiofsd-dax
-RUN cd /tmp/qemu-virtiofs-static && tar -czvf "${QEMU_TARBALL}"  *
+RUN make install DESTDIR="${QEMU_DESTDIR}"
+RUN cd "${QEMU_DESTDIR}/${PREFIX}" && \
+	mv bin/qemu-system-x86_64 bin/qemu-virtiofs-system-x86_64 && \
+	mv libexec/kata-qemu/virtiofsd bin/virtiofsd-dax
+RUN /root/static-build/scripts/qemu-build-post.sh
