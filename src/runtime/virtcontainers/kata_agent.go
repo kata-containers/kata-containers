@@ -1180,7 +1180,6 @@ func (k *kataAgent) buildContainerRootfs(sandbox *Sandbox, c *Container, rootPat
 			}
 
 		case sandbox.config.HypervisorConfig.BlockDeviceDriver == config.VirtioSCSI:
-
 			rootfs.Driver = kataSCSIDevType
 			rootfs.Source = blockDrive.SCSIAddr
 		default:
@@ -1195,8 +1194,8 @@ func (k *kataAgent) buildContainerRootfs(sandbox *Sandbox, c *Container, rootPat
 		}
 
 		// Ensure container mount destination exists
-		// TODO: remove dependency on shared fs path. shared fs is just one kind of storage sources.
-		// we should not always use shared fs path for all kinds of storage. Stead, all storage
+		// TODO: remove dependency on shared fs path. shared fs is just one kind of storage source.
+		// we should not always use shared fs path for all kinds of storage. Instead, all storage
 		// should be bind mounted to a tmpfs path for containers to use.
 		if err := os.MkdirAll(filepath.Join(getMountPath(c.sandbox.id), c.id, c.rootfsSuffix), DirMode); err != nil {
 			return nil, err
@@ -1204,13 +1203,10 @@ func (k *kataAgent) buildContainerRootfs(sandbox *Sandbox, c *Container, rootPat
 		return rootfs, nil
 	}
 
-	// This is not a block based device rootfs.
-	// We are going to bind mount it into the 9pfs
-	// shared drive between the host and the guest.
-	// With 9pfs we don't need to ask the agent to
-	// mount the rootfs as the shared directory
-	// (kataGuestSharedDir) is already mounted in the
-	// guest. We only need to mount the rootfs from
+	// This is not a block based device rootfs. We are going to bind mount it into the shared drive
+	// between the host and the guest.
+	// With virtiofs/9pfs we don't need to ask the agent to mount the rootfs as the shared directory
+	// (kataGuestSharedDir) is already mounted in the guest. We only need to mount the rootfs from
 	// the host and it will show up in the guest.
 	if err := bindMountContainerRootfs(k.ctx, getMountPath(sandbox.id), c.id, c.rootFs.Target, false); err != nil {
 		return nil, err
@@ -1240,9 +1236,14 @@ func (k *kataAgent) createContainer(sandbox *Sandbox, c *Container) (p *Process,
 		}
 	}()
 
+	// setup rootfs -- if its block based, we'll receive a non-nil storage object representing
+	// the block device for the rootfs, which us utilized for mounting in the guest. This'll be handled
+	// already for non-block based rootfs
 	if rootfs, err = k.buildContainerRootfs(sandbox, c, rootPathParent); err != nil {
 		return nil, err
-	} else if rootfs != nil {
+	}
+
+	if rootfs != nil {
 		// Add rootfs to the list of container storage.
 		// We only need to do this for block based rootfs, as we
 		// want the agent to mount it into the right location
@@ -1291,6 +1292,7 @@ func (k *kataAgent) createContainer(sandbox *Sandbox, c *Container) (p *Process,
 	if err != nil {
 		return nil, err
 	}
+
 	if err := k.replaceOCIMountsForStorages(ociSpec, volumeStorages); err != nil {
 		return nil, err
 	}
@@ -1400,7 +1402,7 @@ func (k *kataAgent) handleLocalStorage(mounts []specs.Mount, sandboxID string, r
 
 // handleDeviceBlockVolume handles volume that is block device file
 // and DeviceBlock type.
-func (k *kataAgent) handleDeviceBlockVolume(c *Container, device api.Device) (*grpc.Storage, error) {
+func (k *kataAgent) handleDeviceBlockVolume(c *Container, m Mount, device api.Device) (*grpc.Storage, error) {
 	vol := &grpc.Storage{}
 
 	blockDrive, ok := device.GetDeviceInfo().(*config.BlockDrive)
@@ -1435,12 +1437,22 @@ func (k *kataAgent) handleDeviceBlockVolume(c *Container, device api.Device) (*g
 		return nil, fmt.Errorf("Unknown block device driver: %s", c.sandbox.config.HypervisorConfig.BlockDeviceDriver)
 	}
 
+	vol.MountPoint = m.Destination
+
+	// If no explicit FS Type or Options are being set, then let's use what is provided for the particular mount:
+	if vol.Fstype == "" {
+		vol.Fstype = m.Type
+	}
+	if len(vol.Options) == 0 {
+		vol.Options = m.Options
+	}
+
 	return vol, nil
 }
 
 // handleVhostUserBlkVolume handles volume that is block device file
 // and VhostUserBlk type.
-func (k *kataAgent) handleVhostUserBlkVolume(c *Container, device api.Device) (*grpc.Storage, error) {
+func (k *kataAgent) handleVhostUserBlkVolume(c *Container, m Mount, device api.Device) (*grpc.Storage, error) {
 	vol := &grpc.Storage{}
 
 	d, ok := device.GetDeviceInfo().(*config.VhostUserDeviceAttrs)
@@ -1451,6 +1463,9 @@ func (k *kataAgent) handleVhostUserBlkVolume(c *Container, device api.Device) (*
 
 	vol.Driver = kataBlkDevType
 	vol.Source = d.PCIAddr
+	vol.Fstype = "bind"
+	vol.Options = []string{"bind"}
+	vol.MountPoint = m.Destination
 
 	return vol, nil
 }
@@ -1483,9 +1498,9 @@ func (k *kataAgent) handleBlockVolumes(c *Container) ([]*grpc.Storage, error) {
 		var err error
 		switch device.DeviceType() {
 		case config.DeviceBlock:
-			vol, err = k.handleDeviceBlockVolume(c, device)
+			vol, err = k.handleDeviceBlockVolume(c, m, device)
 		case config.VhostUserBlk:
-			vol, err = k.handleVhostUserBlkVolume(c, device)
+			vol, err = k.handleVhostUserBlkVolume(c, m, device)
 		default:
 			k.Logger().Error("Unknown device type")
 			continue
@@ -1493,14 +1508,6 @@ func (k *kataAgent) handleBlockVolumes(c *Container) ([]*grpc.Storage, error) {
 
 		if vol == nil || err != nil {
 			return nil, err
-		}
-
-		vol.MountPoint = m.Destination
-		if vol.Fstype == "" {
-			vol.Fstype = "bind"
-		}
-		if len(vol.Options) == 0 {
-			vol.Options = []string{"bind"}
 		}
 
 		volumeStorages = append(volumeStorages, vol)
