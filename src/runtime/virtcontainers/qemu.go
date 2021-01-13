@@ -24,7 +24,7 @@ import (
 	"time"
 	"unsafe"
 
-	govmmQemu "github.com/intel/govmm/qemu"
+	govmmQemu "github.com/kata-containers/govmm/qemu"
 	"github.com/opencontainers/selinux/go-selinux/label"
 	"github.com/opentracing/opentracing-go"
 	"github.com/pkg/errors"

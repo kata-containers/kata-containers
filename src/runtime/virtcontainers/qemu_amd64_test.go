@@ -11,7 +11,7 @@ import (
 	"os"
 	"testing"
 
-	govmmQemu "github.com/intel/govmm/qemu"
+	govmmQemu "github.com/kata-containers/govmm/qemu"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	"github.com/stretchr/testify/assert"
 )
@@ -255,7 +255,7 @@ func TestQemuAmd64Iommu(t *testing.T) {
 	assert.NoError(err)
 
 	p := qemu.kernelParameters(false)
-	assert.Contains(p, Param{"intel_iommu", "on"})
+	assert.Contains(p, Param{"kata-containers_iommu", "on"})
 
 	m := qemu.machine()
 	assert.Contains(m.Options, "kernel_irqchip=split")

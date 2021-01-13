@@ -164,12 +164,6 @@ github.com/hashicorp/go-multierror v1.0.0/go.mod h1:dHtQlpGsu+cZNNAkkCN/P3hoUDHh
 github.com/hpcloud/tail v1.0.0 h1:nfCOvKYfkgYP8hkirhJocXT2+zOD8yUNjXaWfTlyFKI=
 github.com/hpcloud/tail v1.0.0/go.mod h1:ab1qPbhIpdTxEkNHXyeSf5vhxWSCs/tWer42PpOxQnU=
 github.com/inconshreveable/mousetrap v1.0.0/go.mod h1:PxqpIevigyE2G7u3NXJIT2ANytuPF1OarO4DADm73n8=
-github.com/intel/govmm v0.0.0-20200724170648-af9e34b91ae9 h1:GSRnVLRNweZV3f8Vo3vtMlPsuzvpj57Gj7Y7TkGVO6U=
-github.com/intel/govmm v0.0.0-20200724170648-af9e34b91ae9/go.mod h1:QKGWoQtjvkvFtzP6ybiM3lxUHqf83Sv3oLqyELUKH4g=
-github.com/intel/govmm v0.0.0-20200728135209-6c3315ba8a42 h1:Yu3/MlZl/kKE0Ipgio/KVorMIrjeHTVOG4+9WAddgOQ=
-github.com/intel/govmm v0.0.0-20200728135209-6c3315ba8a42/go.mod h1:QKGWoQtjvkvFtzP6ybiM3lxUHqf83Sv3oLqyELUKH4g=
-github.com/intel/govmm v0.0.0-20200825065022-6042f6033126 h1:yltaUdR0Vitnn/FEfy+JWbJ+oGhMAPP/3S7ja9S5yso=
-github.com/intel/govmm v0.0.0-20200825065022-6042f6033126/go.mod h1:QKGWoQtjvkvFtzP6ybiM3lxUHqf83Sv3oLqyELUKH4g=
 github.com/j-keck/arping v0.0.0-20160618110441-2cf9dc699c56/go.mod h1:ymszkNOg6tORTn+6F6j+Jc8TOr5osrynvN6ivFWZ2GA=
 github.com/json-iterator/go v1.1.6/go.mod h1:+SdeFBvtyEkXs7REEP0seUULqWtbJapLOCVDaaPEHmU=
 github.com/json-iterator/go v1.1.10/go.mod h1:KdQUCv79m/52Kvf8AW2vK1V8akMuk1QjK/uOdHXbAo4=
@@ -179,7 +173,8 @@ github.com/juju/errors v0.0.0-20180806074554-22422dad46e1/go.mod h1:W54LbzXuIE0b
 github.com/juju/loggo v0.0.0-20190526231331-6e530bcce5d8/go.mod h1:vgyd7OREkbtVEN/8IXZe5Ooef3LQePvuBm9UWj6ZL8U=
 github.com/juju/testing v0.0.0-20190613124551-e81189438503/go.mod h1:63prj8cnj0tU0S9OHjGJn+b1h0ZghCndfnbQolrYTwA=
 github.com/julienschmidt/httprouter v1.2.0/go.mod h1:SYymIcj16QtmaHHD7aYtjjsJG7VTCxuUUipMqKk8s4w=
-github.com/kata-containers/kata-containers v0.0.0-20201013034856-c88820454d08 h1:yk9fzLKb9RmV9xuT5mkJw4owk/K0rX5cusm2ukEEDro=
+github.com/kata-containers/govmm v0.0.0-20210112013750-7d320e8f5dca h1:UdXFthwasAPnmv37gLJUEFsW9FaabYA+mM6FoSi8kzU=
+github.com/kata-containers/govmm v0.0.0-20210112013750-7d320e8f5dca/go.mod h1:VmAHbsL5lLfzHW/MNL96NVLF840DNEV5i683kISgFKk=
 github.com/kisielk/errcheck v1.2.0/go.mod h1:/BMXB+zMLi60iA8Vv6Ksmxu/1UDYcXs4uQLJ+jE2L00=
 github.com/kisielk/gotool v1.0.0/go.mod h1:XhKaO+MFFWcvkIS/tQcRk01m1F5IRFswLeQ+oQHNcck=
 github.com/konsorten/go-windows-terminal-sequences v1.0.1 h1:mweAR1A6xJ3oS2pRaGiHgQ4OO8tzTaLawm8vnODuwDk=

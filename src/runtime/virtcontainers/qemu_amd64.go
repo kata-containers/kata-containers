@@ -11,7 +11,7 @@ import (
 
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 
-	govmmQemu "github.com/intel/govmm/qemu"
+	govmmQemu "github.com/kata-containers/govmm/qemu"
 )
 
 type qemuAmd64 struct {
@@ -109,7 +109,7 @@ func newQemuArch(config HypervisorConfig) (qemuArch, error) {
 		var q35QemuIOMMUOptions = "accel=kvm,kernel_irqchip=split"
 
 		kernelParams = append(kernelParams,
-			Param{"intel_iommu", "on"})
+			Param{"kata-containers_iommu", "on"})
 		kernelParams = append(kernelParams,
 			Param{"iommu", "pt"})
 

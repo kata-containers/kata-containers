@@ -135,7 +135,7 @@ const (
 
 func isDimmSupported(config *Config) bool {
 	switch runtime.GOARCH {
-	case "amd64", "386", "ppc64le":
+	case "amd64", "386", "ppc64le", "arm64":
 		if config != nil && config.Machine.Type == MachineTypeMicrovm {
 			// microvm does not support NUMA
 			return false
@@ -1084,6 +1084,8 @@ func (blkdev BlockDevice) QemuParams(config *Config) []string {
 		deviceParams = append(deviceParams, fmt.Sprintf(",share-rw=on"))
 	}
 
+	deviceParams = append(deviceParams, fmt.Sprintf(",serial=%s", blkdev.ID))
+
 	blkParams = append(blkParams, fmt.Sprintf("id=%s", blkdev.ID))
 	blkParams = append(blkParams, fmt.Sprintf(",file=%s", blkdev.File))
 	blkParams = append(blkParams, fmt.Sprintf(",aio=%s", blkdev.AIO))
@@ -1116,6 +1118,24 @@ func (blkdev BlockDevice) deviceName(config *Config) string {
 	}
 
 	return string(blkdev.Driver)
+}
+
+// PVPanicDevice represents a qemu pvpanic device.
+type PVPanicDevice struct {
+	NoShutdown bool
+}
+
+// Valid always returns true for pvpanic device
+func (dev PVPanicDevice) Valid() bool {
+	return true
+}
+
+// QemuParams returns the qemu parameters built out of this serial device.
+func (dev PVPanicDevice) QemuParams(config *Config) []string {
+	if dev.NoShutdown {
+		return []string{"-device", "pvpanic", "-no-shutdown"}
+	}
+	return []string{"-device", "pvpanic"}
 }
 
 // VhostUserDevice represents a qemu vhost-user device meant to be passed
@@ -2103,6 +2123,56 @@ type Kernel struct {
 	Params string
 }
 
+// FwCfg allows QEMU to pass entries to the guest
+// File and Str are mutually exclusive
+type FwCfg struct {
+	Name string
+	File string
+	Str  string
+}
+
+// Valid returns true if the FwCfg structure is valid and complete.
+func (fwcfg FwCfg) Valid() bool {
+	if fwcfg.Name == "" {
+		return false
+	}
+
+	if fwcfg.File != "" && fwcfg.Str != "" {
+		return false
+	}
+
+	if fwcfg.File == "" && fwcfg.Str == "" {
+		return false
+	}
+
+	return true
+}
+
+// QemuParams returns the qemu parameters built out of the FwCfg object
+func (fwcfg FwCfg) QemuParams(config *Config) []string {
+	var fwcfgParams []string
+	var qemuParams []string
+
+	for _, f := range config.FwCfg {
+		if f.Name != "" {
+			fwcfgParams = append(fwcfgParams, fmt.Sprintf("name=%s", f.Name))
+
+			if f.File != "" {
+				fwcfgParams = append(fwcfgParams, fmt.Sprintf(",file=%s", f.File))
+			}
+
+			if f.Str != "" {
+				fwcfgParams = append(fwcfgParams, fmt.Sprintf(",string=%s", f.Str))
+			}
+		}
+
+		qemuParams = append(qemuParams, "-fw_cfg")
+		qemuParams = append(qemuParams, strings.Join(fwcfgParams, ""))
+	}
+
+	return qemuParams
+}
+
 // Knobs regroups a set of qemu boolean settings
 type Knobs struct {
 	// NoUserConfig prevents qemu from loading user config files.
@@ -2230,11 +2300,17 @@ type Config struct {
 	// Bios is the -bios parameter
 	Bios string
 
+	// PFlash specifies the parallel flash images (-pflash parameter)
+	PFlash []string
+
 	// Incoming controls migration source preparation
 	Incoming Incoming
 
 	// fds is a list of open file descriptors to be passed to the spawned qemu process
 	fds []*os.File
+
+	// FwCfg is the -fw_cfg parameter
+	FwCfg []FwCfg
 
 	IOThreads []IOThread
 
@@ -2417,6 +2493,13 @@ func (config *Config) appendGlobalParam() {
 	}
 }
 
+func (config *Config) appendPFlashParam() {
+	for _, p := range config.PFlash {
+		config.qemuParams = append(config.qemuParams, "-pflash")
+		config.qemuParams = append(config.qemuParams, p)
+	}
+}
+
 func (config *Config) appendVGA() {
 	if config.VGA != "" {
 		config.qemuParams = append(config.qemuParams, "-vga")
@@ -2568,6 +2651,21 @@ func (config *Config) appendLogFile() {
 	}
 }
 
+func (config *Config) appendFwCfg(logger QMPLog) {
+	if logger == nil {
+		logger = qmpNullLogger{}
+	}
+
+	for _, f := range config.FwCfg {
+		if !f.Valid() {
+			logger.Errorf("fw_cfg is not valid: %+v", config.FwCfg)
+			continue
+		}
+
+		config.qemuParams = append(config.qemuParams, f.QemuParams(config)...)
+	}
+}
+
 // LaunchQemu can be used to launch a new qemu instance.
 //
 // The Config parameter contains a set of qemu parameters and settings.
@@ -2587,6 +2685,7 @@ func LaunchQemu(config Config, logger QMPLog) (string, error) {
 	config.appendDevices()
 	config.appendRTC()
 	config.appendGlobalParam()
+	config.appendPFlashParam()
 	config.appendVGA()
 	config.appendKnobs()
 	config.appendKernel()
@@ -2595,6 +2694,7 @@ func LaunchQemu(config Config, logger QMPLog) (string, error) {
 	config.appendIncoming()
 	config.appendPidFile()
 	config.appendLogFile()
+	config.appendFwCfg(logger)
 
 	if err := config.appendCPUs(); err != nil {
 		return "", err
