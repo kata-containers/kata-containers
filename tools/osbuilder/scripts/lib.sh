@@ -239,6 +239,7 @@ generate_dockerfile()
 	local architecture=$(uname -m)
 	local rustarch=${architecture}
 	local muslarch=${architecture}
+	local libc=musl
 	case "$(uname -m)" in
 		"ppc64le")
 			goarch=ppc64le
@@ -251,6 +252,7 @@ generate_dockerfile()
 			;;
 		"s390x")
 			goarch=s390x
+			libc=gnu
 			;;
 
 		*)
@@ -324,7 +326,7 @@ RUN . /root/.cargo/env; \
     export http_proxy=${http_proxy:-}; \
 	export https_proxy=${http_proxy:-}; \
 	cargo install cargo-when; \
-	rustup target install ${rustarch}-unknown-linux-musl
+	rustup target install ${rustarch}-unknown-linux-${libc}
 RUN ln -sf /usr/bin/g++ /bin/musl-g++
 "
 	# rust agent still need go to build
@@ -342,7 +344,7 @@ RUN ln -sf /usr/bin/g++ /bin/musl-g++
 	# powerpc have no musl target, don't setup rust enviroment
 	# since we cannot static link agent. Besides, there is
 	# also long double representation problem when building musl-libc
-	if [ "${architecture}" == "ppc64le" ] || [ "${architecture}" == "s390x" ]; then
+	if [ "${architecture}" == "ppc64le" ]; then
 		sed \
 			-e "s|@GO_VERSION@|${GO_VERSION}|g" \
 			-e "s|@OS_VERSION@|${OS_VERSION:-}|g" \
@@ -350,6 +352,17 @@ RUN ln -sf /usr/bin/g++ /bin/musl-g++
 			-e "s|@INSTALL_MUSL@||g" \
 			-e "s|@INSTALL_GO@|${install_go//$'\n'/\\n}|g" \
 			-e "s|@INSTALL_RUST@||g" \
+			-e "s|@SET_PROXY@|${set_proxy:-}|g" \
+			"${dockerfile_template}" > Dockerfile
+	# no musl target on s390x, will use GNU
+	elif [ "${architecture}" == "s390x" ]; then
+		sed \
+			-e "s|@GO_VERSION@|${GO_VERSION}|g" \
+			-e "s|@OS_VERSION@|${OS_VERSION:-}|g" \
+			-e "s|@INSTALL_CMAKE@|${install_cmake//$'\n'/\\n}|g" \
+			-e "s|@INSTALL_MUSL@||g" \
+			-e "s|@INSTALL_GO@|${install_go//$'\n'/\\n}|g" \
+			-e "s|@INSTALL_RUST@|${install_rust//$'\n'/\\n}|g" \
 			-e "s|@SET_PROXY@|${set_proxy:-}|g" \
 			"${dockerfile_template}" > Dockerfile
 	else
