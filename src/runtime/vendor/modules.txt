@@ -222,9 +222,9 @@ github.com/hashicorp/errwrap
 # github.com/hashicorp/go-multierror v1.0.0
 ## explicit
 github.com/hashicorp/go-multierror
-# github.com/intel/govmm v0.0.0-20200825065022-6042f6033126
+# github.com/kata-containers/govmm v0.0.0-20210112013750-7d320e8f5dca
 ## explicit
-github.com/intel/govmm/qemu
+github.com/kata-containers/govmm/qemu
 # github.com/konsorten/go-windows-terminal-sequences v1.0.1
 github.com/konsorten/go-windows-terminal-sequences
 # github.com/mailru/easyjson v0.0.0-20180823135443-60711f1a8329

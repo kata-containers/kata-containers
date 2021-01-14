@@ -268,7 +268,7 @@ func (q *QMP) readLoop(fromVMCh chan<- []byte) {
 	for scanner.Scan() {
 		line := scanner.Bytes()
 		if q.cfg.Logger.V(1) {
-			q.cfg.Logger.Infof("%s", string(line))
+			q.cfg.Logger.Infof("read from QMP: %s", string(line))
 		}
 
 		// Since []byte channel type transfer slice info(include slice underlying array pointer, len, cap)
@@ -773,11 +773,12 @@ func (q *QMP) ExecuteQuit(ctx context.Context) error {
 	return q.executeCommand(ctx, "quit", nil, nil)
 }
 
-func (q *QMP) blockdevAddBaseArgs(device, blockdevID string) (map[string]interface{}, map[string]interface{}) {
+func (q *QMP) blockdevAddBaseArgs(device, blockdevID string, ro bool) (map[string]interface{}, map[string]interface{}) {
 	var args map[string]interface{}
 
 	blockdevArgs := map[string]interface{}{
-		"driver": "raw",
+		"driver":    "raw",
+		"read-only": ro,
 		"file": map[string]interface{}{
 			"driver":   "file",
 			"filename": device,
@@ -801,8 +802,8 @@ func (q *QMP) blockdevAddBaseArgs(device, blockdevID string) (map[string]interfa
 // path of the device to add, e.g., /dev/rdb0, and blockdevID is an identifier
 // used to name the device.  As this identifier will be passed directly to QMP,
 // it must obey QMP's naming rules, e,g., it must start with a letter.
-func (q *QMP) ExecuteBlockdevAdd(ctx context.Context, device, blockdevID string) error {
-	args, _ := q.blockdevAddBaseArgs(device, blockdevID)
+func (q *QMP) ExecuteBlockdevAdd(ctx context.Context, device, blockdevID string, ro bool) error {
+	args, _ := q.blockdevAddBaseArgs(device, blockdevID, ro)
 
 	return q.executeCommand(ctx, "blockdev-add", args, nil)
 }
@@ -814,8 +815,8 @@ func (q *QMP) ExecuteBlockdevAdd(ctx context.Context, device, blockdevID string)
 // direct denotes whether use of O_DIRECT (bypass the host page cache)
 // is enabled.  noFlush denotes whether flush requests for the device are
 // ignored.
-func (q *QMP) ExecuteBlockdevAddWithCache(ctx context.Context, device, blockdevID string, direct, noFlush bool) error {
-	args, blockdevArgs := q.blockdevAddBaseArgs(device, blockdevID)
+func (q *QMP) ExecuteBlockdevAddWithCache(ctx context.Context, device, blockdevID string, direct, noFlush, ro bool) error {
+	args, blockdevArgs := q.blockdevAddBaseArgs(device, blockdevID, ro)
 
 	if q.version.Major < 2 || (q.version.Major == 2 && q.version.Minor < 9) {
 		return fmt.Errorf("versions of qemu (%d.%d) older than 2.9 do not support set cache-related options for block devices",
@@ -1638,4 +1639,30 @@ func (q *QMP) ExecQomSet(ctx context.Context, path, property string, value uint6
 	}
 
 	return q.executeCommand(ctx, "qom-set", args, nil)
+}
+
+// ExecQomGet qom-get path property
+func (q *QMP) ExecQomGet(ctx context.Context, path, property string) (interface{}, error) {
+	args := map[string]interface{}{
+		"path":     path,
+		"property": property,
+	}
+
+	response, err := q.executeCommandWithResponse(ctx, "qom-get", args, nil, nil)
+	if err != nil {
+		return "", err
+	}
+
+	return response, nil
+}
+
+// ExecuteDumpGuestMemory dump guest memory to host
+func (q *QMP) ExecuteDumpGuestMemory(ctx context.Context, protocol string, paging bool, format string) error {
+	args := map[string]interface{}{
+		"protocol": protocol,
+		"paging":   paging,
+		"format":   format,
+	}
+
+	return q.executeCommand(ctx, "dump-guest-memory", args, nil)
 }
