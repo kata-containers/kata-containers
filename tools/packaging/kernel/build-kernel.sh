@@ -403,6 +403,8 @@ install_kata() {
 	# Install uncompressed kernel
 	if [ "${arch_target}" = "arm64" ]; then
 		install --mode 0644 -D "arch/${arch_target}/boot/Image" "${install_path}/${vmlinux}"
+	elif [ "${arch_target}" = "s390" ]; then
+		install --mode 0644 -D "arch/${arch_target}/boot/compressed/vmlinux" "${install_path}/${vmlinux}"
 	else
 		install --mode 0644 -D "vmlinux" "${install_path}/${vmlinux}"
 	fi
