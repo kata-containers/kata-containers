@@ -561,7 +561,7 @@ EOT
 
 	if [ -z "${AGENT_SOURCE_BIN}" ] ; then
 		[ "$ARCH" == "ppc64le" ] && { LIBC=gnu; echo "WARNING: Forcing LIBC=gnu for ppc64le because musl toolchain is not supported on ppc64le"; }
-		bash ${script_dir}/../../../ci/install_musl.sh
+		[ "$LIBC" == "musl" ] && bash ${script_dir}/../../../ci/install_musl.sh
 		# rust agent needs ${arch}-unknown-linux-${LIBC}
 		rustup show | grep linux-${LIBC} > /dev/null || bash ${script_dir}/../../../ci/install_rust.sh
 		test -r "${HOME}/.cargo/env" && source "${HOME}/.cargo/env"
@@ -626,13 +626,6 @@ parse_arguments()
 	shift $(($OPTIND - 1))
 	distro="$1"
 	arch=$(uname -m)
-
-	if [ "${RUST_AGENT}" == "yes" ] && [ "${arch}" == "s390x" ]; then
-		die "Cannot build rust agent on s390x
-musl cannot be built on s390x because of long double
-reprentation is broken. And rust has no musl target on s390x.
-See issue: https://github.com/kata-containers/osbuilder/issues/388"
-	fi
 }
 
 detect_host_distro()
