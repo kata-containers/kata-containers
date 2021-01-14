@@ -57,15 +57,10 @@ parts:
         *) echo "unsupported architecture: $(uname -m)"; exit 1;;
       esac
 
-      # Workaround to get latest release from github (to not use github token).
-      # Get the redirection to latest release on github.
-      yq_latest_url=$(curl -Ls -o /dev/null -w %{url_effective} "https://${yq_pkg}/releases/latest")
-      # The redirected url should include the latest release version
-      # https://github.com/mikefarah/yq/releases/tag/<VERSION-HERE>
-      yq_version=$(basename "${yq_latest_url}")
+      yq_version=3.4.1
       yq_url="https://${yq_pkg}/releases/download/${yq_version}/yq_${goos}_${goarch}"
-      curl -o "${yq_path}" -LSsf ${yq_url}
-      chmod +x ${yq_path}
+      curl -o "${yq_path}" -LSsf "${yq_url}"
+      chmod +x "${yq_path}"
 
       kata_dir=gopath/src/github.com/${SNAPCRAFT_PROJECT_NAME}/${SNAPCRAFT_PROJECT_NAME}
       version="$(${yq_path} r ${kata_dir}/versions.yaml languages.golang.meta.newest-version)"
