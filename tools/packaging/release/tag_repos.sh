@@ -69,6 +69,7 @@ info() {
 
 repos=(
 	"kata-containers"
+	"tests"
 )
 
 
