@@ -50,7 +50,7 @@ jobs:
         cd ${GOPATH}/src/github.com/kata-containers/kata-containers && ./ci/setup.sh
       env:
         GOPATH: ${{ runner.workspace }}/kata-containers
-    - name: Building rust
+    - name: Installing rust
       run: |
         cd ${GOPATH}/src/github.com/kata-containers/kata-containers && ./ci/install_rust.sh
         PATH=$PATH:"$HOME/.cargo/bin"
