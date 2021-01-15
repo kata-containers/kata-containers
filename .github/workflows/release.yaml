@@ -277,6 +277,7 @@ jobs:
           docker push katadocker/kata-deploy-ci:$pkg_sha
           mkdir -p packaging/kata-deploy
           ln -s $GITHUB_WORKSPACE/tools/packaging/kata-deploy/action packaging/kata-deploy/action
+          echo "::set-output name=PKG_SHA::${pkg_sha}"
       - name: test-kata-deploy-ci-in-aks
         uses: ./packaging/kata-deploy/action
         with:
