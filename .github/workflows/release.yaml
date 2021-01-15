@@ -44,7 +44,7 @@ jobs:
            echo "artifact-built=false" >> $GITHUB_ENV
          fi
       - name: store-artifacts
-        if: $artifact-built == 'true'
+        if: ${{ env.artifact-built }} == 'true'
         uses: actions/upload-artifact@v2
         with:
           name: kata-artifacts
@@ -72,7 +72,7 @@ jobs:
            echo "artifact-built=false" >> $GITHUB_ENV
          fi
       - name: store-artifacts
-        if: $artifact-built == 'true'
+        if: ${{ env.artifact-built }} == 'true'
         uses: actions/upload-artifact@v2
         with:
           name: kata-artifacts
@@ -98,7 +98,7 @@ jobs:
            echo "artifact-built=false" >> $GITHUB_ENV
          fi
       - name: store-artifacts
-        if: $artifact-built == 'true'
+        if: ${{ env.artifact-built }} == 'true'
         uses: actions/upload-artifact@v2
         with:
           name: kata-artifacts
@@ -124,7 +124,7 @@ jobs:
            echo "artifact-built=false" >> $GITHUB_ENV
          fi
       - name: store-artifacts
-        if: $artifact-built == 'true'
+        if: ${{ env.artifact-built }} == 'true'
         uses: actions/upload-artifact@v2
         with:
           name: kata-artifacts
@@ -150,7 +150,7 @@ jobs:
            echo "artifact-built=false" >> $GITHUB_ENV
          fi
       - name: store-artifacts
-        if: artifact-built == 'true'
+        if: ${{ env.artifact-built }} == 'true'
         uses: actions/upload-artifact@v2
         with:
           name: kata-artifacts
@@ -176,7 +176,7 @@ jobs:
            echo "artifact-built=false" >> $GITHUB_ENV
          fi
       - name: store-artifacts
-        if: $artifact-built == 'true'
+        if: ${{ env.artifact-built }} == 'true'
         uses: actions/upload-artifact@v2
         with:
           name: kata-artifacts
@@ -203,7 +203,7 @@ jobs:
            echo "artifact-built=false" >> $GITHUB_ENV
          fi
       - name: store-artifacts
-        if: $artifact-built == 'true'
+        if: ${{ env.artifact-built }} == 'true'
         uses: actions/upload-artifact@v2
         with:
           name: kata-artifacts
@@ -229,7 +229,7 @@ jobs:
            echo "artifact-built=false" >> $GITHUB_ENV
          fi
       - name: store-artifacts
-        if: $artifact-built == 'true'
+        if: ${{ env.artifact-built }} == 'true'
         uses: actions/upload-artifact@v2
         with:
           name: kata-artifacts
