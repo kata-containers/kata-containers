@@ -165,6 +165,7 @@ EOT
 
 repos=(
 	"kata-containers"
+	"tests"
 )
 
 main(){
