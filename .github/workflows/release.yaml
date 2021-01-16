@@ -39,9 +39,9 @@ jobs:
         run: |
          if grep -q $buildstr artifact-list.txt; then
            $GITHUB_WORKSPACE/.github/workflows/generate-local-artifact-tarball.sh $buildstr
-           echo ::set-env name=artifact-built::true
+           echo "artifact-built=true" >> $GITHUB_ENV
          else
-           echo ::set-env name=artifact-built::false
+           echo "artifact-built=false" >> $GITHUB_ENV
          fi
       - name: store-artifacts
         if: env.artifact-built == 'true'
@@ -67,9 +67,9 @@ jobs:
         run: |
          if grep -q $buildstr artifact-list.txt; then
            $GITHUB_WORKSPACE/.github/workflows/generate-local-artifact-tarball.sh $buildstr
-           echo ::set-env name=artifact-built::true
+           echo "artifact-built=true" >> $GITHUB_ENV
          else
-           echo ::set-env name=artifact-built::false
+           echo "artifact-built=false" >> $GITHUB_ENV
          fi
       - name: store-artifacts
         if: env.artifact-built == 'true'
@@ -93,9 +93,9 @@ jobs:
         run: |
          if grep -q $buildstr artifact-list.txt; then
            $GITHUB_WORKSPACE/.github/workflows/generate-local-artifact-tarball.sh $buildstr
-           echo ::set-env name=artifact-built::true
+           echo "artifact-built=true" >> $GITHUB_ENV
          else
-           echo ::set-env name=artifact-built::false
+           echo "artifact-built=false" >> $GITHUB_ENV
          fi
       - name: store-artifacts
         if: env.artifact-built == 'true'
@@ -119,9 +119,9 @@ jobs:
         run: |
          if grep -q $buildstr artifact-list.txt; then
            $GITHUB_WORKSPACE/.github/workflows/generate-local-artifact-tarball.sh $buildstr
-           echo ::set-env name=artifact-built::true
+           echo "artifact-built=true" >> $GITHUB_ENV
          else
-           echo ::set-env name=artifact-built::false
+           echo "artifact-built=false" >> $GITHUB_ENV
          fi
       - name: store-artifacts
         if: env.artifact-built == 'true'
@@ -145,9 +145,9 @@ jobs:
         run: |
          if grep -q $buildstr artifact-list.txt; then
            $GITHUB_WORKSPACE/.github/workflows/generate-local-artifact-tarball.sh $buildstr
-           echo ::set-env name=artifact-built::true
+           echo "artifact-built=true" >> $GITHUB_ENV
          else
-           echo ::set-env name=artifact-built::false
+           echo "artifact-built=false" >> $GITHUB_ENV
          fi
       - name: store-artifacts
         if: env.artifact-built == 'true'
@@ -171,9 +171,9 @@ jobs:
         run: |
          if grep -q $buildstr artifact-list.txt; then
            $GITHUB_WORKSPACE/.github/workflows/generate-local-artifact-tarball.sh $buildstr
-           echo ::set-env name=artifact-built::true
+           echo "artifact-built=true" >> $GITHUB_ENV
          else
-           echo ::set-env name=artifact-built::false
+           echo "artifact-built=false" >> $GITHUB_ENV
          fi
       - name: store-artifacts
         if: env.artifact-built == 'true'
@@ -198,9 +198,9 @@ jobs:
         run: |
          if grep -q $buildstr artifact-list.txt; then
            $GITHUB_WORKSPACE/.github/workflows/generate-local-artifact-tarball.sh $buildstr
-           echo ::set-env name=artifact-built::true
+           echo "artifact-built=true" >> $GITHUB_ENV
          else
-           echo ::set-env name=artifact-built::false
+           echo "artifact-built=false" >> $GITHUB_ENV
          fi
       - name: store-artifacts
         if: env.artifact-built == 'true'
@@ -224,9 +224,9 @@ jobs:
         run: |
          if grep -q $buildstr artifact-list.txt; then
            $GITHUB_WORKSPACE/.github/workflows/generate-local-artifact-tarball.sh $buildstr
-           echo ::set-env name=artifact-built::true
+           echo "artifact-built=true" >> $GITHUB_ENV
          else
-           echo ::set-env name=artifact-built::false
+           echo "artifact-built=false" >> $GITHUB_ENV
          fi
       - name: store-artifacts
         if: env.artifact-built == 'true'
@@ -275,11 +275,9 @@ jobs:
           docker build --build-arg KATA_ARTIFACTS=kata-static.tar.xz -t katadocker/kata-deploy-ci:$pkg_sha $GITHUB_WORKSPACE/tools/packaging/kata-deploy
           docker login -u ${{ secrets.DOCKER_USERNAME }} -p ${{ secrets.DOCKER_PASSWORD }}
           docker push katadocker/kata-deploy-ci:$pkg_sha
-
-          echo "##[set-output name=PKG_SHA;]${pkg_sha}"
-          echo ::set-env name=TAG::$tag
           mkdir -p packaging/kata-deploy
           ln -s $GITHUB_WORKSPACE/tools/packaging/kata-deploy/action packaging/kata-deploy/action
+          echo "::set-output name=PKG_SHA::${pkg_sha}"
       - name: test-kata-deploy-ci-in-aks
         uses: ./packaging/kata-deploy/action
         with:
