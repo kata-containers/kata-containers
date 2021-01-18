@@ -22,7 +22,9 @@ use regex::Regex;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 
-use crate::device::{get_pci_device_name, get_scsi_device_name, online_device};
+use crate::device::{
+    get_pci_device_name, get_pmem_device_name, get_scsi_device_name, online_device,
+};
 use crate::linux_abi::*;
 use crate::protocols::agent::Storage;
 use crate::Sandbox;
@@ -122,7 +124,7 @@ lazy_static! {
     ];
 }
 
-pub const STORAGE_HANDLER_LIST: [&str; 7] = [
+pub const STORAGE_HANDLER_LIST: [&str; 8] = [
     DRIVERBLKTYPE,
     DRIVER9PTYPE,
     DRIVERVIRTIOFSTYPE,
@@ -130,6 +132,7 @@ pub const STORAGE_HANDLER_LIST: [&str; 7] = [
     DRIVERMMIOBLKTYPE,
     DRIVERLOCALTYPE,
     DRIVERSCSITYPE,
+    DRIVERNVDIMMTYPE,
 ];
 
 #[derive(Debug, Clone)]
@@ -347,6 +350,32 @@ fn common_storage_handler(logger: &Logger, storage: &Storage) -> Result<String> 
     mount_storage(logger, storage).and(Ok(mount_point))
 }
 
+// nvdimm_storage_handler handles the storage for NVDIMM driver.
+async fn nvdimm_storage_handler(
+    logger: &Logger,
+    storage: &Storage,
+    sandbox: Arc<Mutex<Sandbox>>,
+) -> Result<String> {
+    let mut storage = storage.clone();
+    // If hot-plugged, get the device node path based on the PCI address else
+    // use the virt path provided in Storage Source
+    let pmem_devname = match storage.source.strip_prefix("/dev/") {
+        Some(dev) => dev,
+        None => {
+            return Err(anyhow!(
+                "Storage source '{}' must start with /dev/",
+                storage.source
+            ))
+        }
+    };
+
+    // Retrieve the device path from NVDIMM address.
+    let dev_path = get_pmem_device_name(&sandbox, pmem_devname).await?;
+    storage.source = dev_path;
+
+    common_storage_handler(logger, &storage)
+}
+
 // mount_storage performs the mount described by the storage structure.
 fn mount_storage(logger: &Logger, storage: &Storage) -> Result<()> {
     let logger = logger.new(o!("subsystem" => "mount"));
@@ -441,6 +470,7 @@ pub async fn add_storages(
             }
             DRIVERLOCALTYPE => local_storage_handler(&logger, &storage, sandbox.clone()).await,
             DRIVERSCSITYPE => virtio_scsi_storage_handler(&logger, &storage, sandbox.clone()).await,
+            DRIVERNVDIMMTYPE => nvdimm_storage_handler(&logger, &storage, sandbox.clone()).await,
             _ => {
                 return Err(anyhow!(
                     "Failed to find the storage handler {}",
