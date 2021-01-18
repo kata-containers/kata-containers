@@ -54,7 +54,10 @@ impl Uevent {
         let pci_root_bus_path = create_pci_root_bus_path();
         self.action == U_EVENT_ACTION_ADD
             && self.subsystem == "block"
-            && self.devpath.starts_with(&pci_root_bus_path)
+            && {
+                self.devpath.starts_with(pci_root_bus_path.as_str())
+                    || self.devpath.starts_with(ACPI_DEV_PATH) // NVDIMM/PMEM devices
+            }
             && self.devname != ""
     }
 
@@ -80,11 +83,18 @@ impl Uevent {
 
                 // blk block device
                 devpath.starts_with(pci_p.as_str()) ||
-                    // scsi block device
-                    {
-                        (*dev_addr).ends_with(SCSI_BLOCK_SUFFIX) &&
-                            devpath.contains(*dev_addr)
-                    }
+                // scsi block device
+                {
+                    (*dev_addr).ends_with(SCSI_BLOCK_SUFFIX) &&
+                        devpath.contains(*dev_addr)
+                } ||
+                // nvdimm/pmem device
+                {
+                    let pmem_suffix = format!("/{}/{}", SCSI_BLOCK_SUFFIX, self.devname);
+                    devpath.starts_with(ACPI_DEV_PATH) &&
+                        devpath.ends_with(pmem_suffix.as_str()) &&
+                        dev_addr.ends_with(pmem_suffix.as_str())
+                }
             })
             .map(|(k, sender)| {
                 let devname = self.devname.clone();
