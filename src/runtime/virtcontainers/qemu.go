@@ -262,6 +262,7 @@ func (q *qemu) setup(id string, hypervisorConfig *HypervisorConfig) error {
 	}
 
 	q.arch.setBridges(q.state.Bridges)
+	q.arch.setPFlash(q.config.PFlash)
 
 	if create {
 		q.Logger().Debug("Creating bridges")
@@ -572,6 +573,11 @@ func (q *qemu) createSandbox(ctx context.Context, id string, networkNS NetworkNa
 		return err
 	}
 
+	pflash, err := q.arch.getPFlash()
+	if err != nil {
+		return err
+	}
+
 	qemuPath, err := q.qemuPath()
 	if err != nil {
 		return err
@@ -595,6 +601,7 @@ func (q *qemu) createSandbox(ctx context.Context, id string, networkNS NetworkNa
 		VGA:         "none",
 		GlobalParam: "kvm-pit.lost_tick_policy=discard",
 		Bios:        firmwarePath,
+		PFlash:      pflash,
 		PidFile:     filepath.Join(q.store.RunVMStoragePath(), q.id, "pid"),
 	}
 

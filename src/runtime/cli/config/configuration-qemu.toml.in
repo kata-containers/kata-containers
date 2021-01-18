@@ -241,6 +241,10 @@ valid_file_mem_backends = @DEFVALIDFILEMEMBACKENDS@
 # The behaviour is undefined if mem_prealloc is also set to true
 #enable_swap = true
 
+# -pflash can add image file to VM. The arguments of it should be in format
+# of ["/path/to/flash0.img", "/path/to/flash1.img"]
+pflashes = []
+
 # This option changes the default hypervisor and kernel parameters
 # to enable debug output where available.
 #
