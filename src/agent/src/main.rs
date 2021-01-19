@@ -24,7 +24,6 @@ extern crate scopeguard;
 
 #[macro_use]
 extern crate slog;
-extern crate netlink;
 
 use anyhow::{anyhow, Context, Result};
 use nix::fcntl::{self, OFlag};
@@ -54,7 +53,7 @@ mod linux_abi;
 mod metrics;
 mod mount;
 mod namespace;
-mod netlink2;
+mod netlink;
 mod network;
 pub mod random;
 mod sandbox;

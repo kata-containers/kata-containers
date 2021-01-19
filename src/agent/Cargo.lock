@@ -564,7 +564,6 @@ dependencies = [
  "libc",
  "log",
  "logging",
- "netlink",
  "netlink-packet-utils",
  "netlink-sys 0.4.0",
  "nix 0.17.0",
@@ -773,18 +772,6 @@ dependencies = [
  "cfg-if 0.1.10",
  "libc",
  "winapi 0.3.9",
-]
-
-[[package]]
-name = "netlink"
-version = "0.1.0"
-dependencies = [
- "libc",
- "nix 0.17.0",
- "protobuf",
- "protocols",
- "slog",
- "slog-scope",
 ]
 
 [[package]]

@@ -9,7 +9,6 @@ oci = { path = "oci" }
 logging = { path = "../../pkg/logging" }
 rustjail = { path = "rustjail" }
 protocols = { path = "protocols" }
-netlink = { path = "netlink", features = ["with-log", "with-agent-handler"] }
 lazy_static = "1.3.0"
 ttrpc = { version = "0.4.14", features = ["async", "protobuf-codec"], default-features = false }
 protobuf = "=2.14.0"
@@ -51,7 +50,6 @@ cgroups = { package = "cgroups-rs", version = "0.2.1" }
 
 [workspace]
 members = [
-    "netlink",
     "oci",
     "protocols",
     "rustjail",

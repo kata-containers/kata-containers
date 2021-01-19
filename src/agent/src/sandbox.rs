@@ -6,7 +6,7 @@
 use crate::linux_abi::*;
 use crate::mount::{get_mount_fs_type, remove_mounts, TYPEROOTFS};
 use crate::namespace::Namespace;
-use crate::netlink2::Handle;
+use crate::netlink::Handle;
 use crate::network::Network;
 use anyhow::{anyhow, Context, Result};
 use libc::pid_t;
