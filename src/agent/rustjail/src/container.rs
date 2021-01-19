@@ -1039,6 +1039,10 @@ impl BaseContainer for LinuxContainer {
             MntFlags::MNT_DETACH,
         )?;
         fs::remove_dir_all(&self.root)?;
+
+        if let Some(cgm) = self.cgroup_manager.as_mut() {
+            cgm.destroy().context("destroy cgroups")?;
+        }
         Ok(())
     }
 
