@@ -51,7 +51,6 @@ use crate::random;
 use crate::sandbox::Sandbox;
 use crate::version::{AGENT_VERSION, API_VERSION};
 use crate::AGENT_CONFIG;
-use netlink::{RtnlHandle, NETLINK_ROUTE};
 
 use libc::{self, c_ushort, pid_t, winsize, TIOCSWINSZ};
 use std::convert::TryFrom;
@@ -850,30 +849,24 @@ impl protocols::agent_ttrpc::AgentService for agentService {
         _ctx: &TtrpcContext,
         req: protocols::agent::UpdateInterfaceRequest,
     ) -> ttrpc::Result<Interface> {
-        if req.interface.is_none() {
-            return Err(ttrpc_error(
+        let interface = req.interface.into_option().ok_or_else(|| {
+            ttrpc_error(
                 ttrpc::Code::INVALID_ARGUMENT,
                 "empty update interface request".to_string(),
-            ));
-        }
+            )
+        })?;
 
-        let interface = req.interface;
-        let s = Arc::clone(&self.sandbox);
-        let mut sandbox = s.lock().await;
-
-        if sandbox.rtnl.is_none() {
-            sandbox.rtnl = Some(RtnlHandle::new(NETLINK_ROUTE, 0).unwrap());
-        }
-
-        let rtnl = sandbox.rtnl.as_mut().unwrap();
-
-        let iface = rtnl
-            .update_interface(interface.as_ref().unwrap())
+        self.sandbox
+            .lock()
+            .await
+            .rtnl
+            .update_interface(&interface)
+            .await
             .map_err(|e| {
                 ttrpc_error(ttrpc::Code::INTERNAL, format!("update interface: {:?}", e))
             })?;
 
-        Ok(iface)
+        Ok(interface)
     }
 
     async fn update_routes(
@@ -881,38 +874,37 @@ impl protocols::agent_ttrpc::AgentService for agentService {
         _ctx: &TtrpcContext,
         req: protocols::agent::UpdateRoutesRequest,
     ) -> ttrpc::Result<Routes> {
-        let mut routes = protocols::agent::Routes::new();
-        if req.routes.is_none() {
-            return Err(ttrpc_error(
-                ttrpc::Code::INVALID_ARGUMENT,
-                "empty update routes request".to_string(),
-            ));
-        }
+        let new_routes = req
+            .routes
+            .into_option()
+            .map(|r| r.Routes.into_vec())
+            .ok_or_else(|| {
+                ttrpc_error(
+                    ttrpc::Code::INVALID_ARGUMENT,
+                    "empty update routes request".to_string(),
+                )
+            })?;
 
-        let rs = req.routes.unwrap().Routes.into_vec();
+        let mut sandbox = self.sandbox.lock().await;
 
-        let s = Arc::clone(&self.sandbox);
-        let mut sandbox = s.lock().await;
+        sandbox.rtnl.update_routes(new_routes).await.map_err(|e| {
+            ttrpc_error(
+                ttrpc::Code::INTERNAL,
+                format!("Failed to update routes: {:?}", e),
+            )
+        })?;
 
-        if sandbox.rtnl.is_none() {
-            sandbox.rtnl = Some(RtnlHandle::new(NETLINK_ROUTE, 0).unwrap());
-        }
+        let list = sandbox.rtnl.list_routes().await.map_err(|e| {
+            ttrpc_error(
+                ttrpc::Code::INTERNAL,
+                format!("Failed to list routes after update: {:?}", e),
+            )
+        })?;
 
-        let rtnl = sandbox.rtnl.as_mut().unwrap();
-
-        // get current routes to return when error out
-        let crs = rtnl
-            .list_routes()
-            .map_err(|e| ttrpc_error(ttrpc::Code::INTERNAL, format!("update routes: {:?}", e)))?;
-
-        let v = match rtnl.update_routes(rs.as_ref()) {
-            Ok(value) => value,
-            Err(_) => crs,
-        };
-
-        routes.set_Routes(RepeatedField::from_vec(v));
-
-        Ok(routes)
+        Ok(protocols::agent::Routes {
+            Routes: RepeatedField::from_vec(list),
+            ..Default::default()
+        })
     }
 
     async fn list_interfaces(
@@ -920,22 +912,24 @@ impl protocols::agent_ttrpc::AgentService for agentService {
         _ctx: &TtrpcContext,
         _req: protocols::agent::ListInterfacesRequest,
     ) -> ttrpc::Result<Interfaces> {
-        let mut interface = protocols::agent::Interfaces::new();
-        let s = Arc::clone(&self.sandbox);
-        let mut sandbox = s.lock().await;
-
-        if sandbox.rtnl.is_none() {
-            sandbox.rtnl = Some(RtnlHandle::new(NETLINK_ROUTE, 0).unwrap());
-        }
-
-        let rtnl = sandbox.rtnl.as_mut().unwrap();
-        let v = rtnl
+        let list = self
+            .sandbox
+            .lock()
+            .await
+            .rtnl
             .list_interfaces()
-            .map_err(|e| ttrpc_error(ttrpc::Code::INTERNAL, format!("list interface: {:?}", e)))?;
+            .await
+            .map_err(|e| {
+                ttrpc_error(
+                    ttrpc::Code::INTERNAL,
+                    format!("Failed to list interfaces: {:?}", e),
+                )
+            })?;
 
-        interface.set_Interfaces(RepeatedField::from_vec(v));
-
-        Ok(interface)
+        Ok(protocols::agent::Interfaces {
+            Interfaces: RepeatedField::from_vec(list),
+            ..Default::default()
+        })
     }
 
     async fn list_routes(
@@ -943,23 +937,19 @@ impl protocols::agent_ttrpc::AgentService for agentService {
         _ctx: &TtrpcContext,
         _req: protocols::agent::ListRoutesRequest,
     ) -> ttrpc::Result<Routes> {
-        let mut routes = protocols::agent::Routes::new();
-        let s = Arc::clone(&self.sandbox);
-        let mut sandbox = s.lock().await;
-
-        if sandbox.rtnl.is_none() {
-            sandbox.rtnl = Some(RtnlHandle::new(NETLINK_ROUTE, 0).unwrap());
-        }
-
-        let rtnl = sandbox.rtnl.as_mut().unwrap();
-
-        let v = rtnl
+        let list = self
+            .sandbox
+            .lock()
+            .await
+            .rtnl
             .list_routes()
+            .await
             .map_err(|e| ttrpc_error(ttrpc::Code::INTERNAL, format!("list routes: {:?}", e)))?;
 
-        routes.set_Routes(RepeatedField::from_vec(v));
-
-        Ok(routes)
+        Ok(protocols::agent::Routes {
+            Routes: RepeatedField::from_vec(list),
+            ..Default::default()
+        })
     }
 
     async fn start_tracing(
@@ -1062,26 +1052,29 @@ impl protocols::agent_ttrpc::AgentService for agentService {
         _ctx: &TtrpcContext,
         req: protocols::agent::AddARPNeighborsRequest,
     ) -> ttrpc::Result<Empty> {
-        if req.neighbors.is_none() {
-            return Err(ttrpc_error(
-                ttrpc::Code::INVALID_ARGUMENT,
-                "empty add arp neighbours request".to_string(),
-            ));
-        }
+        let neighs = req
+            .neighbors
+            .into_option()
+            .map(|n| n.ARPNeighbors.into_vec())
+            .ok_or_else(|| {
+                ttrpc_error(
+                    ttrpc::Code::INVALID_ARGUMENT,
+                    "empty add arp neighbours request".to_string(),
+                )
+            })?;
 
-        let neighs = req.neighbors.unwrap().ARPNeighbors.into_vec();
-
-        let s = Arc::clone(&self.sandbox);
-        let mut sandbox = s.lock().await;
-
-        if sandbox.rtnl.is_none() {
-            sandbox.rtnl = Some(RtnlHandle::new(NETLINK_ROUTE, 0).unwrap());
-        }
-
-        let rtnl = sandbox.rtnl.as_mut().unwrap();
-
-        rtnl.add_arp_neighbors(neighs.as_ref())
-            .map_err(|e| ttrpc_error(ttrpc::Code::INTERNAL, e.to_string()))?;
+        self.sandbox
+            .lock()
+            .await
+            .rtnl
+            .add_arp_neighbors(neighs)
+            .await
+            .map_err(|e| {
+                ttrpc_error(
+                    ttrpc::Code::INTERNAL,
+                    format!("Failed to add ARP neighbours: {:?}", e),
+                )
+            })?;
 
         Ok(Empty::new())
     }
