@@ -27,6 +27,9 @@ tokio = { version = "0.2", features = ["rt-core", "sync", "uds", "stream", "macr
 futures = "0.3"
 netlink-sys = { version = "0.4.0", features = ["tokio_socket",]}
 tokio-vsock = "0.2.2"
+rtnetlink = "0.6.0"
+netlink-packet-utils = "0.4.0"
+ipnetwork = "0.17.0"
 
 # slog:
 # - Dynamic keys required to allow HashMap keys to be slog::Serialized.
