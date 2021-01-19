@@ -5,7 +5,7 @@ jobs:
     strategy:
       matrix:
         go-version: [1.13.x, 1.14.x, 1.15.x]
-        os: [ubuntu-18.04]
+        os: [ubuntu-20.04]
     runs-on: ${{ matrix.os }}
     env:
       GO111MODULE: off
