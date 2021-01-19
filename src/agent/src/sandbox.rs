@@ -6,10 +6,10 @@
 use crate::linux_abi::*;
 use crate::mount::{get_mount_fs_type, remove_mounts, TYPEROOTFS};
 use crate::namespace::Namespace;
+use crate::netlink2::Handle;
 use crate::network::Network;
 use anyhow::{anyhow, Context, Result};
 use libc::pid_t;
-use netlink::{RtnlHandle, NETLINK_ROUTE};
 use oci::{Hook, Hooks};
 use protocols::agent::OnlineCPUMemRequest;
 use regex::Regex;
@@ -44,7 +44,7 @@ pub struct Sandbox {
     pub running: bool,
     pub no_pivot_root: bool,
     pub sender: Option<tokio::sync::oneshot::Sender<i32>>,
-    pub rtnl: Option<RtnlHandle>,
+    pub rtnl: Handle,
     pub hooks: Option<Hooks>,
     pub event_rx: Arc<Mutex<Receiver<String>>>,
     pub event_tx: Sender<String>,
@@ -73,7 +73,7 @@ impl Sandbox {
             running: false,
             no_pivot_root: fs_type.eq(TYPEROOTFS),
             sender: None,
-            rtnl: Some(RtnlHandle::new(NETLINK_ROUTE, 0).unwrap()),
+            rtnl: Handle::new()?,
             hooks: None,
             event_rx,
             event_tx: tx,
@@ -680,8 +680,8 @@ mod tests {
         assert!(cnt.is_none());
     }
 
-    #[test]
-    fn add_and_get_container() {
+    #[tokio::test]
+    async fn add_and_get_container() {
         skip_if_not_root!();
         let logger = slog::Logger::root(slog::Discard, o!());
         let mut s = Sandbox::new(&logger).unwrap();
@@ -707,8 +707,9 @@ mod tests {
         let ns_path = format!("/proc/{}/ns/pid", test_pid);
         assert_eq!(s.sandbox_pidns.unwrap().path, ns_path);
     }
-    #[test]
-    fn add_guest_hooks() {
+
+    #[tokio::test]
+    async fn add_guest_hooks() {
         let logger = slog::Logger::root(slog::Discard, o!());
         let mut s = Sandbox::new(&logger).unwrap();
         let tmpdir = Builder::new().tempdir().unwrap();
