@@ -6,7 +6,7 @@
 use libc::pid_t;
 use std::fs::File;
 use std::os::unix::io::RawFd;
-use std::sync::mpsc::Sender;
+use tokio::sync::mpsc::Sender;
 
 use nix::fcntl::{fcntl, FcntlArg, OFlag};
 use nix::sys::signal::{self, Signal};
@@ -14,9 +14,30 @@ use nix::sys::wait::{self, WaitStatus};
 use nix::unistd::{self, Pid};
 use nix::Result;
 
-use crate::reaper::Epoller;
 use oci::Process as OCIProcess;
 use slog::Logger;
+
+use crate::pipestream::PipeStream;
+use std::collections::HashMap;
+use std::sync::Arc;
+use tokio::io::{split, ReadHalf, WriteHalf};
+use tokio::sync::Mutex;
+use tokio::sync::Notify;
+
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+pub enum StreamType {
+    Stdin,
+    Stdout,
+    Stderr,
+    ExitPipeR,
+    TermMaster,
+    ParentStdin,
+    ParentStdout,
+    ParentStderr,
+}
+
+type Reader = Arc<Mutex<ReadHalf<PipeStream>>>;
+type Writer = Arc<Mutex<WriteHalf<PipeStream>>>;
 
 #[derive(Debug)]
 pub struct Process {
@@ -41,7 +62,10 @@ pub struct Process {
     pub exit_watchers: Vec<Sender<i32>>,
     pub oci: OCIProcess,
     pub logger: Logger,
-    pub epoller: Option<Epoller>,
+    pub term_exit_notifier: Arc<Notify>,
+
+    readers: HashMap<StreamType, Reader>,
+    writers: HashMap<StreamType, Writer>,
 }
 
 pub trait ProcessOperations {
@@ -93,7 +117,9 @@ impl Process {
             exit_watchers: Vec::new(),
             oci: ocip.clone(),
             logger: logger.clone(),
-            epoller: None,
+            term_exit_notifier: Arc::new(Notify::new()),
+            readers: HashMap::new(),
+            writers: HashMap::new(),
         };
 
         info!(logger, "before create console socket!");
@@ -116,27 +142,59 @@ impl Process {
         Ok(p)
     }
 
-    pub fn close_epoller(&mut self) {
-        if let Some(epoller) = self.epoller.take() {
-            epoller.close();
+    pub fn notify_term_close(&mut self) {
+        let notify = self.term_exit_notifier.clone();
+        notify.notify();
+    }
+
+    fn get_fd(&self, stream_type: &StreamType) -> Option<RawFd> {
+        match stream_type {
+            StreamType::Stdin => self.stdin,
+            StreamType::Stdout => self.stdout,
+            StreamType::Stderr => self.stderr,
+            StreamType::ExitPipeR => self.exit_pipe_r,
+            StreamType::TermMaster => self.term_master,
+            StreamType::ParentStdin => self.parent_stdin,
+            StreamType::ParentStdout => self.parent_stdout,
+            StreamType::ParentStderr => self.parent_stderr,
         }
     }
 
-    pub fn create_epoller(&mut self) -> anyhow::Result<()> {
-        match self.term_master {
-            Some(term_master) => {
-                // add epoller to process
-                let epoller = Epoller::new(&self.logger, term_master)?;
-                self.epoller = Some(epoller)
-            }
-            None => {
-                info!(
-                    self.logger,
-                    "try to add epoller to a process without a term master fd"
-                );
-            }
+    fn get_stream_and_store(&mut self, stream_type: StreamType) -> Option<(Reader, Writer)> {
+        let fd = self.get_fd(&stream_type)?;
+        let stream = PipeStream::from_fd(fd);
+
+        let (reader, writer) = split(stream);
+        let reader = Arc::new(Mutex::new(reader));
+        let writer = Arc::new(Mutex::new(writer));
+
+        self.readers.insert(stream_type.clone(), reader.clone());
+        self.writers.insert(stream_type, writer.clone());
+
+        Some((reader, writer))
+    }
+
+    pub fn get_reader(&mut self, stream_type: StreamType) -> Option<Reader> {
+        if let Some(reader) = self.readers.get(&stream_type) {
+            return Some(reader.clone());
         }
-        Ok(())
+
+        let (reader, _) = self.get_stream_and_store(stream_type)?;
+        Some(reader)
+    }
+
+    pub fn get_writer(&mut self, stream_type: StreamType) -> Option<Writer> {
+        if let Some(writer) = self.writers.get(&stream_type) {
+            return Some(writer.clone());
+        }
+
+        let (_, writer) = self.get_stream_and_store(stream_type)?;
+        Some(writer)
+    }
+
+    pub fn close_stream(&mut self, stream_type: StreamType) {
+        let _ = self.readers.remove(&stream_type);
+        let _ = self.writers.remove(&stream_type);
     }
 }
 

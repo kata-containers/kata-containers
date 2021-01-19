@@ -12,7 +12,8 @@ use std::os::unix::fs::PermissionsExt;
 
 use std::path::Path;
 use std::ptr::null;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
+use tokio::sync::Mutex;
 
 use libc::{c_void, mount};
 use nix::mount::{self, MsFlags};
@@ -121,32 +122,15 @@ lazy_static! {
     ];
 }
 
-// StorageHandler is the type of callback to be defined to handle every
-// type of storage driver.
-type StorageHandler = fn(&Logger, &Storage, Arc<Mutex<Sandbox>>) -> Result<String>;
-
-// STORAGEHANDLERLIST lists the supported drivers.
-#[rustfmt::skip]
-lazy_static! {
-    pub static ref STORAGEHANDLERLIST: HashMap<&'static str, StorageHandler> = {
-    	let mut m = HashMap::new();
-    let blk: StorageHandler = virtio_blk_storage_handler;
-        m.insert(DRIVERBLKTYPE, blk);
-	let p9: StorageHandler= virtio9p_storage_handler;
-        m.insert(DRIVER9PTYPE, p9);
-	let virtiofs: StorageHandler = virtiofs_storage_handler;
-        m.insert(DRIVERVIRTIOFSTYPE, virtiofs);
-    let ephemeral: StorageHandler = ephemeral_storage_handler;
-        m.insert(DRIVEREPHEMERALTYPE, ephemeral);
-    let virtiommio: StorageHandler = virtiommio_blk_storage_handler;
-        m.insert(DRIVERMMIOBLKTYPE, virtiommio);
-    let local: StorageHandler = local_storage_handler;
-        m.insert(DRIVERLOCALTYPE, local);
-    let scsi: StorageHandler = virtio_scsi_storage_handler;
-        m.insert(DRIVERSCSITYPE, scsi);
-        m
-    };
-}
+pub const STORAGE_HANDLER_LIST: [&str; 7] = [
+    DRIVERBLKTYPE,
+    DRIVER9PTYPE,
+    DRIVERVIRTIOFSTYPE,
+    DRIVEREPHEMERALTYPE,
+    DRIVERMMIOBLKTYPE,
+    DRIVERLOCALTYPE,
+    DRIVERSCSITYPE,
+];
 
 #[derive(Debug, Clone)]
 pub struct BareMount<'a> {
@@ -238,12 +222,12 @@ impl<'a> BareMount<'a> {
     }
 }
 
-fn ephemeral_storage_handler(
+async fn ephemeral_storage_handler(
     logger: &Logger,
     storage: &Storage,
     sandbox: Arc<Mutex<Sandbox>>,
 ) -> Result<String> {
-    let mut sb = sandbox.lock().unwrap();
+    let mut sb = sandbox.lock().await;
     let new_storage = sb.set_sandbox_storage(&storage.mount_point);
 
     if !new_storage {
@@ -256,12 +240,12 @@ fn ephemeral_storage_handler(
     Ok("".to_string())
 }
 
-fn local_storage_handler(
+async fn local_storage_handler(
     _logger: &Logger,
     storage: &Storage,
     sandbox: Arc<Mutex<Sandbox>>,
 ) -> Result<String> {
-    let mut sb = sandbox.lock().unwrap();
+    let mut sb = sandbox.lock().await;
     let new_storage = sb.set_sandbox_storage(&storage.mount_point);
 
     if !new_storage {
@@ -289,7 +273,7 @@ fn local_storage_handler(
     Ok("".to_string())
 }
 
-fn virtio9p_storage_handler(
+async fn virtio9p_storage_handler(
     logger: &Logger,
     storage: &Storage,
     _sandbox: Arc<Mutex<Sandbox>>,
@@ -298,7 +282,7 @@ fn virtio9p_storage_handler(
 }
 
 // virtiommio_blk_storage_handler handles the storage for mmio blk driver.
-fn virtiommio_blk_storage_handler(
+async fn virtiommio_blk_storage_handler(
     logger: &Logger,
     storage: &Storage,
     _sandbox: Arc<Mutex<Sandbox>>,
@@ -308,7 +292,7 @@ fn virtiommio_blk_storage_handler(
 }
 
 // virtiofs_storage_handler handles the storage for virtio-fs.
-fn virtiofs_storage_handler(
+async fn virtiofs_storage_handler(
     logger: &Logger,
     storage: &Storage,
     _sandbox: Arc<Mutex<Sandbox>>,
@@ -317,7 +301,7 @@ fn virtiofs_storage_handler(
 }
 
 // virtio_blk_storage_handler handles the storage for blk driver.
-fn virtio_blk_storage_handler(
+async fn virtio_blk_storage_handler(
     logger: &Logger,
     storage: &Storage,
     sandbox: Arc<Mutex<Sandbox>>,
@@ -334,7 +318,7 @@ fn virtio_blk_storage_handler(
             return Err(anyhow!("Invalid device {}", &storage.source));
         }
     } else {
-        let dev_path = get_pci_device_name(&sandbox, &storage.source)?;
+        let dev_path = get_pci_device_name(&sandbox, &storage.source).await?;
         storage.source = dev_path;
     }
 
@@ -342,7 +326,7 @@ fn virtio_blk_storage_handler(
 }
 
 // virtio_scsi_storage_handler handles the storage for scsi driver.
-fn virtio_scsi_storage_handler(
+async fn virtio_scsi_storage_handler(
     logger: &Logger,
     storage: &Storage,
     sandbox: Arc<Mutex<Sandbox>>,
@@ -350,7 +334,7 @@ fn virtio_scsi_storage_handler(
     let mut storage = storage.clone();
 
     // Retrieve the device path from SCSI address.
-    let dev_path = get_scsi_device_name(&sandbox, &storage.source)?;
+    let dev_path = get_scsi_device_name(&sandbox, &storage.source).await?;
     storage.source = dev_path;
 
     common_storage_handler(logger, &storage)
@@ -430,7 +414,7 @@ fn parse_mount_flags_and_options(options_vec: Vec<&str>) -> (MsFlags, String) {
 // associated operations such as waiting for the device to show up, and mount
 // it to a specific location, according to the type of handler chosen, and for
 // each storage.
-pub fn add_storages(
+pub async fn add_storages(
     logger: Logger,
     storages: Vec<Storage>,
     sandbox: Arc<Mutex<Sandbox>>,
@@ -443,17 +427,30 @@ pub fn add_storages(
             "subsystem" => "storage",
             "storage-type" => handler_name.to_owned()));
 
-        let handler = STORAGEHANDLERLIST
-            .get(&handler_name.as_str())
-            .ok_or_else(|| {
-                anyhow!(
+        let res = match handler_name.as_str() {
+            DRIVERBLKTYPE => virtio_blk_storage_handler(&logger, &storage, sandbox.clone()).await,
+            DRIVER9PTYPE => virtio9p_storage_handler(&logger, &storage, sandbox.clone()).await,
+            DRIVERVIRTIOFSTYPE => {
+                virtiofs_storage_handler(&logger, &storage, sandbox.clone()).await
+            }
+            DRIVEREPHEMERALTYPE => {
+                ephemeral_storage_handler(&logger, &storage, sandbox.clone()).await
+            }
+            DRIVERMMIOBLKTYPE => {
+                virtiommio_blk_storage_handler(&logger, &storage, sandbox.clone()).await
+            }
+            DRIVERLOCALTYPE => local_storage_handler(&logger, &storage, sandbox.clone()).await,
+            DRIVERSCSITYPE => virtio_scsi_storage_handler(&logger, &storage, sandbox.clone()).await,
+            _ => {
+                return Err(anyhow!(
                     "Failed to find the storage handler {}",
                     storage.driver.to_owned()
-                )
-            })?;
+                ));
+            }
+        };
 
         // Todo need to rollback the mounted storage if err met.
-        let mount_point = handler(&logger, &storage, sandbox.clone())?;
+        let mount_point = res?;
 
         if !mount_point.is_empty() {
             mount_list.push(mount_point);

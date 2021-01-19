@@ -7,10 +7,13 @@ use crate::device::online_device;
 use crate::linux_abi::*;
 use crate::sandbox::Sandbox;
 use crate::GLOBAL_DEVICE_WATCHER;
-use netlink::{RtnlHandle, NETLINK_UEVENT};
 use slog::Logger;
-use std::sync::{Arc, Mutex};
-use std::thread;
+
+use netlink_sys::{Protocol, Socket, SocketAddr};
+use nix::errno::Errno;
+use std::os::unix::io::FromRawFd;
+use std::sync::Arc;
+use tokio::sync::Mutex;
 
 #[derive(Debug, Default)]
 struct Uevent {
@@ -55,12 +58,13 @@ impl Uevent {
             && self.devname != ""
     }
 
-    fn handle_block_add_event(&self, sandbox: &Arc<Mutex<Sandbox>>) {
+    async fn handle_block_add_event(&self, sandbox: &Arc<Mutex<Sandbox>>) {
         let pci_root_bus_path = create_pci_root_bus_path();
 
         // Keep the same lock order as device::get_device_name(), otherwise it may cause deadlock.
-        let mut w = GLOBAL_DEVICE_WATCHER.lock().unwrap();
-        let mut sb = sandbox.lock().unwrap();
+        let watcher = GLOBAL_DEVICE_WATCHER.clone();
+        let mut w = watcher.lock().await;
+        let mut sb = sandbox.lock().await;
 
         // Add the device node name to the pci device map.
         sb.pci_device_map
@@ -70,7 +74,7 @@ impl Uevent {
         // Close the channel after watcher has been notified.
         let devpath = self.devpath.clone();
         let empties: Vec<_> = w
-            .iter()
+            .iter_mut()
             .filter(|(dev_addr, _)| {
                 let pci_p = format!("{}/{}", pci_root_bus_path, *dev_addr);
 
@@ -84,6 +88,7 @@ impl Uevent {
             })
             .map(|(k, sender)| {
                 let devname = self.devname.clone();
+                let sender = sender.take().unwrap();
                 let _ = sender.send(devname);
                 k.clone()
             })
@@ -95,9 +100,9 @@ impl Uevent {
         }
     }
 
-    fn process(&self, logger: &Logger, sandbox: &Arc<Mutex<Sandbox>>) {
+    async fn process(&self, logger: &Logger, sandbox: &Arc<Mutex<Sandbox>>) {
         if self.is_block_add_event() {
-            return self.handle_block_add_event(sandbox);
+            return self.handle_block_add_event(sandbox).await;
         } else if self.action == U_EVENT_ACTION_ADD {
             let online_path = format!("{}/{}/online", SYSFS_DIR, &self.devpath);
             // It's a memory hot-add event.
@@ -117,22 +122,37 @@ impl Uevent {
     }
 }
 
-pub fn watch_uevents(sandbox: Arc<Mutex<Sandbox>>) {
-    thread::spawn(move || {
-        let rtnl = RtnlHandle::new(NETLINK_UEVENT, 1).unwrap();
-        let logger = sandbox
-            .lock()
-            .unwrap()
-            .logger
-            .new(o!("subsystem" => "uevent"));
+pub async fn watch_uevents(sandbox: Arc<Mutex<Sandbox>>) {
+    let sref = sandbox.clone();
+    let s = sref.lock().await;
+    let logger = s.logger.new(o!("subsystem" => "uevent"));
+
+    tokio::spawn(async move {
+        let mut socket;
+        unsafe {
+            let fd = libc::socket(
+                libc::AF_NETLINK,
+                libc::SOCK_DGRAM | libc::SOCK_CLOEXEC,
+                Protocol::KObjectUevent as libc::c_int,
+            );
+            socket = Socket::from_raw_fd(fd);
+        }
+        socket.bind(&SocketAddr::new(0, 1)).unwrap();
 
         loop {
-            match rtnl.recv_message() {
+            match socket.recv_from_full().await {
                 Err(e) => {
                     error!(logger, "receive uevent message failed"; "error" => format!("{}", e))
                 }
-                Ok(data) => {
-                    let text = String::from_utf8(data);
+                Ok((buf, addr)) => {
+                    if addr.port_number() != 0 {
+                        // not our netlink message
+                        let err_msg = format!("{:?}", nix::Error::Sys(Errno::EBADMSG));
+                        error!(logger, "receive uevent message failed"; "error" => err_msg);
+                        return;
+                    }
+
+                    let text = String::from_utf8(buf);
                     match text {
                         Err(e) => {
                             error!(logger, "failed to convert bytes to text"; "error" => format!("{}", e))
@@ -140,7 +160,7 @@ pub fn watch_uevents(sandbox: Arc<Mutex<Sandbox>>) {
                         Ok(text) => {
                             let event = Uevent::new(&text);
                             info!(logger, "got uevent message"; "event" => format!("{:?}", event));
-                            event.process(&logger, &sandbox);
+                            event.process(&logger, &sandbox).await;
                         }
                     }
                 }
