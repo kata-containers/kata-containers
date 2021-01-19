@@ -55,6 +55,7 @@ mod linux_abi;
 mod metrics;
 mod mount;
 mod namespace;
+mod netlink2;
 mod network;
 pub mod random;
 mod sandbox;
