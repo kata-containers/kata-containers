@@ -58,6 +58,13 @@ pub fn create_pci_root_bus_path() -> String {
     ret
 }
 
+// From https://www.kernel.org/doc/Documentation/acpi/namespace.txt
+// The Linux kernel's core ACPI subsystem creates struct acpi_device
+// objects for ACPI namespace objects representing devices, power resources
+// processors, thermal zones. Those objects are exported to user space via
+// sysfs as directories in the subtree under /sys/devices/LNXSYSTM:00
+pub const ACPI_DEV_PATH: &str = "/devices/LNXSYSTM";
+
 pub const SYSFS_CPU_ONLINE_PATH: &str = "/sys/devices/system/cpu";
 
 pub const SYSFS_MEMORY_BLOCK_SIZE_PATH: &str = "/sys/devices/system/memory/block_size_bytes";

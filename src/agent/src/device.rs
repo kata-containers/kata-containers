@@ -162,6 +162,14 @@ pub async fn get_pci_device_name(sandbox: &Arc<Mutex<Sandbox>>, pci_id: &str) ->
     get_device_name(sandbox, &pci_addr).await
 }
 
+pub async fn get_pmem_device_name(
+    sandbox: &Arc<Mutex<Sandbox>>,
+    pmem_devname: &str,
+) -> Result<String> {
+    let dev_sub_path = format!("/{}/{}", SCSI_BLOCK_SUFFIX, pmem_devname);
+    get_device_name(sandbox, &dev_sub_path).await
+}
+
 /// Scan SCSI bus for the given SCSI address(SCSI-Id and LUN)
 fn scan_scsi_bus(scsi_addr: &str) -> Result<()> {
     let tokens: Vec<&str> = scsi_addr.split(':').collect();
