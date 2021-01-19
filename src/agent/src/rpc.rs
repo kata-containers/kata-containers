@@ -3,10 +3,18 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
+use async_trait::async_trait;
+use rustjail::{pipestream::PipeStream, process::StreamType};
+use tokio::io::{AsyncReadExt, AsyncWriteExt, ReadHalf};
+use tokio::sync::Mutex;
+
 use std::path::Path;
-use std::sync::mpsc::channel;
-use std::sync::{Arc, Mutex};
-use ttrpc::{self, error::get_rpc_status as ttrpc_error};
+use std::sync::Arc;
+use ttrpc::{
+    self,
+    error::get_rpc_status as ttrpc_error,
+    r#async::{Server as TtrpcServer, TtrpcContext},
+};
 
 use anyhow::{anyhow, Context, Result};
 use oci::{LinuxNamespace, Root, Spec};
@@ -24,7 +32,6 @@ use protocols::types::Interface;
 use rustjail::cgroups::notifier;
 use rustjail::container::{BaseContainer, Container, LinuxContainer};
 use rustjail::process::Process;
-use rustjail::reaper;
 use rustjail::specconv::CreateOpts;
 
 use nix::errno::Errno;
@@ -37,7 +44,7 @@ use rustjail::process::ProcessOperations;
 use crate::device::{add_devices, rescan_pci_bus, update_device_cgroup};
 use crate::linux_abi::*;
 use crate::metrics::get_metrics;
-use crate::mount::{add_storages, remove_mounts, BareMount, STORAGEHANDLERLIST};
+use crate::mount::{add_storages, remove_mounts, BareMount, STORAGE_HANDLER_LIST};
 use crate::namespace::{NSTYPEIPC, NSTYPEPID, NSTYPEUTS};
 use crate::network::setup_guest_dns;
 use crate::random;
@@ -49,11 +56,8 @@ use netlink::{RtnlHandle, NETLINK_ROUTE};
 use libc::{self, c_ushort, pid_t, winsize, TIOCSWINSZ};
 use std::convert::TryFrom;
 use std::fs;
-use std::os::unix::io::RawFd;
 use std::os::unix::prelude::PermissionsExt;
 use std::process::{Command, Stdio};
-use std::sync::mpsc;
-use std::thread;
 use std::time::Duration;
 
 use nix::unistd::{Gid, Uid};
@@ -78,7 +82,10 @@ pub struct agentService {
 }
 
 impl agentService {
-    fn do_create_container(&self, req: protocols::agent::CreateContainerRequest) -> Result<()> {
+    async fn do_create_container(
+        &self,
+        req: protocols::agent::CreateContainerRequest,
+    ) -> Result<()> {
         let cid = req.container_id.clone();
 
         let mut oci_spec = req.OCI.clone();
@@ -106,7 +113,7 @@ impl agentService {
         // updates the devices listed in the OCI spec, so that they actually
         // match real devices inside the VM. This step is necessary since we
         // cannot predict everything from the caller.
-        add_devices(&req.devices.to_vec(), &mut oci, &self.sandbox)?;
+        add_devices(&req.devices.to_vec(), &mut oci, &self.sandbox).await?;
 
         // Both rootfs and volumes (invoked with --volume for instance) will
         // be processed the same way. The idea is to always mount any provided
@@ -115,10 +122,10 @@ impl agentService {
         // After all those storages have been processed, no matter the order
         // here, the agent will rely on rustjail (using the oci.Mounts
         // list) to bind mount all of them inside the container.
-        let m = add_storages(sl!(), req.storages.to_vec(), self.sandbox.clone())?;
+        let m = add_storages(sl!(), req.storages.to_vec(), self.sandbox.clone()).await?;
         {
             sandbox = self.sandbox.clone();
-            s = sandbox.lock().unwrap();
+            s = sandbox.lock().await;
             s.container_mounts.insert(cid.clone(), m);
         }
 
@@ -149,7 +156,7 @@ impl agentService {
         let mut ctr: LinuxContainer =
             LinuxContainer::new(cid.as_str(), CONTAINER_BASE, opts, &sl!())?;
 
-        let pipe_size = AGENT_CONFIG.read().unwrap().container_pipe_size;
+        let pipe_size = AGENT_CONFIG.read().await.container_pipe_size;
         let p = if oci.process.is_some() {
             Process::new(
                 &sl!(),
@@ -163,7 +170,7 @@ impl agentService {
             return Err(anyhow!(nix::Error::from_errno(nix::errno::Errno::EINVAL)));
         };
 
-        ctr.start(p)?;
+        ctr.start(p).await?;
 
         s.update_shared_pidns(&ctr)?;
         s.add_container(ctr);
@@ -172,11 +179,11 @@ impl agentService {
         Ok(())
     }
 
-    fn do_start_container(&self, req: protocols::agent::StartContainerRequest) -> Result<()> {
+    async fn do_start_container(&self, req: protocols::agent::StartContainerRequest) -> Result<()> {
         let cid = req.container_id;
 
         let sandbox = self.sandbox.clone();
-        let mut s = sandbox.lock().unwrap();
+        let mut s = sandbox.lock().await;
         let sid = s.id.clone();
 
         let ctr = s
@@ -189,19 +196,18 @@ impl agentService {
         if sid != cid && ctr.cgroup_manager.is_some() {
             let cg_path = ctr.cgroup_manager.as_ref().unwrap().get_cg_path("memory");
             if cg_path.is_some() {
-                let rx = notifier::notify_oom(cid.as_str(), cg_path.unwrap())?;
-                s.run_oom_event_monitor(rx, cid.clone());
+                let rx = notifier::notify_oom(cid.as_str(), cg_path.unwrap()).await?;
+                s.run_oom_event_monitor(rx, cid.clone()).await;
             }
         }
-
-        // set epoller
-        let p = find_process(&mut s, cid.as_str(), "", true)?;
-        p.create_epoller()?;
 
         Ok(())
     }
 
-    fn do_remove_container(&self, req: protocols::agent::RemoveContainerRequest) -> Result<()> {
+    async fn do_remove_container(
+        &self,
+        req: protocols::agent::RemoveContainerRequest,
+    ) -> Result<()> {
         let cid = req.container_id.clone();
         let mut cmounts: Vec<String> = vec![];
 
@@ -229,12 +235,12 @@ impl agentService {
 
         if req.timeout == 0 {
             let s = Arc::clone(&self.sandbox);
-            let mut sandbox = s.lock().unwrap();
+            let mut sandbox = s.lock().await;
             let ctr = sandbox
                 .get_container(&cid)
                 .ok_or_else(|| anyhow!("Invalid container id"))?;
 
-            ctr.destroy()?;
+            ctr.destroy().await?;
 
             remove_container_resources(&mut sandbox)?;
 
@@ -244,43 +250,47 @@ impl agentService {
         // timeout != 0
         let s = self.sandbox.clone();
         let cid2 = cid.clone();
-        let (tx, rx) = mpsc::channel();
+        let (tx, rx) = tokio::sync::oneshot::channel::<i32>();
 
-        let handle = thread::spawn(move || {
-            let mut sandbox = s.lock().unwrap();
-            let _ctr = sandbox
-                .get_container(&cid2)
-                .ok_or_else(|| anyhow!("Invalid container id"))
-                .map(|ctr| {
-                    ctr.destroy().unwrap();
-                    tx.send(1).unwrap();
-                    ctr
-                });
+        let handle = tokio::spawn(async move {
+            let mut sandbox = s.lock().await;
+            if let Some(ctr) = sandbox.get_container(&cid2) {
+                ctr.destroy().await.unwrap();
+                tx.send(1).unwrap();
+            };
         });
 
-        rx.recv_timeout(Duration::from_secs(req.timeout as u64))
-            .map_err(|_| anyhow!(nix::Error::from_errno(nix::errno::Errno::ETIME)))?;
+        let timeout = tokio::time::delay_for(Duration::from_secs(req.timeout.into()));
 
-        handle
-            .join()
-            .map_err(|_| anyhow!(nix::Error::from_errno(nix::errno::Errno::UnknownErrno)))?;
+        tokio::select! {
+            _ = rx => {}
+            _ = timeout => {
+                return Err(anyhow!(nix::Error::from_errno(nix::errno::Errno::ETIME)));
+            }
+        };
+
+        if handle.await.is_err() {
+            return Err(anyhow!(nix::Error::from_errno(
+                nix::errno::Errno::UnknownErrno
+            )));
+        }
 
         let s = self.sandbox.clone();
-        let mut sandbox = s.lock().unwrap();
+        let mut sandbox = s.lock().await;
 
         remove_container_resources(&mut sandbox)?;
 
         Ok(())
     }
 
-    fn do_exec_process(&self, req: protocols::agent::ExecProcessRequest) -> Result<()> {
+    async fn do_exec_process(&self, req: protocols::agent::ExecProcessRequest) -> Result<()> {
         let cid = req.container_id.clone();
         let exec_id = req.exec_id.clone();
 
         info!(sl!(), "do_exec_process cid: {} eid: {}", cid, exec_id);
 
         let s = self.sandbox.clone();
-        let mut sandbox = s.lock().unwrap();
+        let mut sandbox = s.lock().await;
 
         let process = if req.process.is_some() {
             req.process.as_ref().unwrap()
@@ -288,7 +298,7 @@ impl agentService {
             return Err(anyhow!(nix::Error::from_errno(nix::errno::Errno::EINVAL)));
         };
 
-        let pipe_size = AGENT_CONFIG.read().unwrap().container_pipe_size;
+        let pipe_size = AGENT_CONFIG.read().await.container_pipe_size;
         let ocip = rustjail::process_grpc_to_oci(process);
         let p = Process::new(&sl!(), &ocip, exec_id.as_str(), false, pipe_size)?;
 
@@ -296,20 +306,16 @@ impl agentService {
             .get_container(&cid)
             .ok_or_else(|| anyhow!("Invalid container id"))?;
 
-        ctr.run(p)?;
-
-        // set epoller
-        let p = find_process(&mut sandbox, cid.as_str(), exec_id.as_str(), false)?;
-        p.create_epoller()?;
+        ctr.run(p).await?;
 
         Ok(())
     }
 
-    fn do_signal_process(&self, req: protocols::agent::SignalProcessRequest) -> Result<()> {
+    async fn do_signal_process(&self, req: protocols::agent::SignalProcessRequest) -> Result<()> {
         let cid = req.container_id.clone();
         let eid = req.exec_id.clone();
         let s = self.sandbox.clone();
-        let mut sandbox = s.lock().unwrap();
+        let mut sandbox = s.lock().await;
         let mut init = false;
 
         info!(
@@ -339,7 +345,7 @@ impl agentService {
         Ok(())
     }
 
-    fn do_wait_process(
+    async fn do_wait_process(
         &self,
         req: protocols::agent::WaitProcessRequest,
     ) -> Result<protocols::agent::WaitProcessResponse> {
@@ -348,9 +354,9 @@ impl agentService {
         let s = self.sandbox.clone();
         let mut resp = WaitProcessResponse::new();
         let pid: pid_t;
-        let mut exit_pipe_r: RawFd = -1;
-        let mut buf: Vec<u8> = vec![0, 1];
-        let (exit_send, exit_recv) = channel();
+        let stream;
+
+        let (exit_send, mut exit_recv) = tokio::sync::mpsc::channel(100);
 
         info!(
             sl!(),
@@ -360,24 +366,24 @@ impl agentService {
         );
 
         {
-            let mut sandbox = s.lock().unwrap();
-
+            let mut sandbox = s.lock().await;
             let p = find_process(&mut sandbox, cid.as_str(), eid.as_str(), false)?;
 
-            if p.exit_pipe_r.is_some() {
-                exit_pipe_r = p.exit_pipe_r.unwrap();
-            }
+            stream = p.get_reader(StreamType::ExitPipeR);
 
             p.exit_watchers.push(exit_send);
             pid = p.pid;
         }
 
-        if exit_pipe_r != -1 {
+        if stream.is_some() {
             info!(sl!(), "reading exit pipe");
-            let _ = unistd::read(exit_pipe_r, buf.as_mut_slice());
+
+            let reader = stream.unwrap();
+            let mut content: Vec<u8> = vec![0, 1];
+            let _ = reader.lock().await.read(&mut content).await;
         }
 
-        let mut sandbox = s.lock().unwrap();
+        let mut sandbox = s.lock().await;
         let ctr = sandbox
             .get_container(&cid)
             .ok_or_else(|| anyhow!("Invalid container id"))?;
@@ -386,44 +392,20 @@ impl agentService {
             Some(p) => p,
             None => {
                 // Lost race, pick up exit code from channel
-                resp.status = exit_recv.recv().unwrap();
+                resp.status = exit_recv.recv().await.unwrap();
                 return Ok(resp);
             }
         };
 
-        // need to close all fds
-        if p.parent_stdin.is_some() {
-            let _ = unistd::close(p.parent_stdin.unwrap());
-        }
-
-        if p.parent_stdout.is_some() {
-            let _ = unistd::close(p.parent_stdout.unwrap());
-        }
-
-        if p.parent_stderr.is_some() {
-            let _ = unistd::close(p.parent_stderr.unwrap());
-        }
-
-        if p.term_master.is_some() {
-            let _ = unistd::close(p.term_master.unwrap());
-        }
-
-        if p.exit_pipe_r.is_some() {
-            let _ = unistd::close(p.exit_pipe_r.unwrap());
-        }
-
-        p.close_epoller();
-
-        p.parent_stdin = None;
-        p.parent_stdout = None;
-        p.parent_stderr = None;
-        p.term_master = None;
+        // need to close all fd
+        // ignore errors for some fd might be closed by stream
+        let _ = cleanup_process(&mut p);
 
         resp.status = p.exit_code;
         // broadcast exit code to all parallel watchers
-        for s in p.exit_watchers.iter() {
+        for s in p.exit_watchers.iter_mut() {
             // Just ignore errors in case any watcher quits unexpectedly
-            let _ = s.send(p.exit_code);
+            let _ = s.send(p.exit_code).await;
         }
 
         ctr.processes.remove(&pid);
@@ -431,48 +413,37 @@ impl agentService {
         Ok(resp)
     }
 
-    fn do_write_stream(
+    async fn do_write_stream(
         &self,
         req: protocols::agent::WriteStreamRequest,
     ) -> Result<protocols::agent::WriteStreamResponse> {
         let cid = req.container_id.clone();
         let eid = req.exec_id.clone();
 
-        let s = self.sandbox.clone();
-        let mut sandbox = s.lock().unwrap();
-        let p = find_process(&mut sandbox, cid.as_str(), eid.as_str(), false)?;
+        let writer = {
+            let s = self.sandbox.clone();
+            let mut sandbox = s.lock().await;
+            let p = find_process(&mut sandbox, cid.as_str(), eid.as_str(), false)?;
 
-        // use ptmx io
-        let fd = if p.term_master.is_some() {
-            p.term_master.unwrap()
-        } else {
-            // use piped io
-            p.parent_stdin.unwrap()
+            // use ptmx io
+            if p.term_master.is_some() {
+                p.get_writer(StreamType::TermMaster)
+            } else {
+                // use piped io
+                p.get_writer(StreamType::ParentStdin)
+            }
         };
 
-        let mut l = req.data.len();
-        match unistd::write(fd, req.data.as_slice()) {
-            Ok(v) => {
-                if v < l {
-                    info!(sl!(), "write {} bytes", v);
-                    l = v;
-                }
-            }
-            Err(e) => match e {
-                nix::Error::Sys(nix::errno::Errno::EAGAIN) => l = 0,
-                _ => {
-                    return Err(anyhow!(nix::Error::from_errno(nix::errno::Errno::EIO)));
-                }
-            },
-        }
+        let writer = writer.unwrap();
+        writer.lock().await.write_all(req.data.as_slice()).await?;
 
         let mut resp = WriteStreamResponse::new();
-        resp.set_len(l as u32);
+        resp.set_len(req.data.len() as u32);
 
         Ok(resp)
     }
 
-    fn do_read_stream(
+    async fn do_read_stream(
         &self,
         req: protocols::agent::ReadStreamRequest,
         stdout: bool,
@@ -480,118 +451,118 @@ impl agentService {
         let cid = req.container_id;
         let eid = req.exec_id;
 
-        let mut fd: RawFd = -1;
-        let mut epoller: Option<reaper::Epoller> = None;
-        {
+        let mut term_exit_notifier = Arc::new(tokio::sync::Notify::new());
+        let reader = {
             let s = self.sandbox.clone();
-            let mut sandbox = s.lock().unwrap();
+            let mut sandbox = s.lock().await;
 
             let p = find_process(&mut sandbox, cid.as_str(), eid.as_str(), false)?;
 
             if p.term_master.is_some() {
-                fd = p.term_master.unwrap();
-                epoller = p.epoller.clone();
+                term_exit_notifier = p.term_exit_notifier.clone();
+                p.get_reader(StreamType::TermMaster)
             } else if stdout {
                 if p.parent_stdout.is_some() {
-                    fd = p.parent_stdout.unwrap();
+                    p.get_reader(StreamType::ParentStdout)
+                } else {
+                    None
                 }
             } else {
-                fd = p.parent_stderr.unwrap();
+                p.get_reader(StreamType::ParentStderr)
             }
-        }
+        };
 
-        if let Some(epoller) = epoller {
-            // The process's epoller's poll() will return a file descriptor of the process's
-            // terminal or one end of its exited pipe. If it returns its terminal, it means
-            // there is data needed to be read out or it has been closed; if it returns the
-            // process's exited pipe, it means the process has exited and there is no data
-            // needed to be read out in its terminal, thus following read on it will read out
-            // "EOF" to terminate this process's io since the other end of this pipe has been
-            // closed in reap().
-            fd = epoller.poll()?;
-        }
-
-        if fd == -1 {
+        if reader.is_none() {
             return Err(anyhow!(nix::Error::from_errno(nix::errno::Errno::EINVAL)));
         }
 
-        let vector = read_stream(fd, req.len as usize)?;
+        let reader = reader.unwrap();
 
-        let mut resp = ReadStreamResponse::new();
-        resp.set_data(vector);
+        tokio::select! {
+            _ = term_exit_notifier.notified() => {
+                Err(anyhow!("eof"))
+            }
+            v = read_stream(reader, req.len as usize)  => {
+                let vector = v?;
+                let mut resp = ReadStreamResponse::new();
+                resp.set_data(vector);
 
-        Ok(resp)
+                Ok(resp)
+            }
+        }
     }
 }
 
+#[async_trait]
 impl protocols::agent_ttrpc::AgentService for agentService {
-    fn create_container(
+    async fn create_container(
         &self,
-        _ctx: &ttrpc::TtrpcContext,
+        _ctx: &TtrpcContext,
         req: protocols::agent::CreateContainerRequest,
     ) -> ttrpc::Result<Empty> {
-        match self.do_create_container(req) {
+        match self.do_create_container(req).await {
             Err(e) => Err(ttrpc_error(ttrpc::Code::INTERNAL, e.to_string())),
             Ok(_) => Ok(Empty::new()),
         }
     }
 
-    fn start_container(
+    async fn start_container(
         &self,
-        _ctx: &ttrpc::TtrpcContext,
+        _ctx: &TtrpcContext,
         req: protocols::agent::StartContainerRequest,
     ) -> ttrpc::Result<Empty> {
-        match self.do_start_container(req) {
+        match self.do_start_container(req).await {
             Err(e) => Err(ttrpc_error(ttrpc::Code::INTERNAL, e.to_string())),
             Ok(_) => Ok(Empty::new()),
         }
     }
 
-    fn remove_container(
+    async fn remove_container(
         &self,
-        _ctx: &ttrpc::TtrpcContext,
+        _ctx: &TtrpcContext,
         req: protocols::agent::RemoveContainerRequest,
     ) -> ttrpc::Result<Empty> {
-        match self.do_remove_container(req) {
+        match self.do_remove_container(req).await {
             Err(e) => Err(ttrpc_error(ttrpc::Code::INTERNAL, e.to_string())),
             Ok(_) => Ok(Empty::new()),
         }
     }
 
-    fn exec_process(
+    async fn exec_process(
         &self,
-        _ctx: &ttrpc::TtrpcContext,
+        _ctx: &TtrpcContext,
         req: protocols::agent::ExecProcessRequest,
     ) -> ttrpc::Result<Empty> {
-        match self.do_exec_process(req) {
+        match self.do_exec_process(req).await {
             Err(e) => Err(ttrpc_error(ttrpc::Code::INTERNAL, e.to_string())),
             Ok(_) => Ok(Empty::new()),
         }
     }
 
-    fn signal_process(
+    async fn signal_process(
         &self,
-        _ctx: &ttrpc::TtrpcContext,
+        _ctx: &TtrpcContext,
         req: protocols::agent::SignalProcessRequest,
     ) -> ttrpc::Result<Empty> {
-        match self.do_signal_process(req) {
+        match self.do_signal_process(req).await {
             Err(e) => Err(ttrpc_error(ttrpc::Code::INTERNAL, e.to_string())),
             Ok(_) => Ok(Empty::new()),
         }
     }
 
-    fn wait_process(
+    async fn wait_process(
         &self,
-        _ctx: &ttrpc::TtrpcContext,
+        _ctx: &TtrpcContext,
         req: protocols::agent::WaitProcessRequest,
     ) -> ttrpc::Result<WaitProcessResponse> {
         self.do_wait_process(req)
+            .await
             .map_err(|e| ttrpc_error(ttrpc::Code::INTERNAL, e.to_string()))
     }
 
-    fn list_processes(
+    async fn list_processes(
         &self,
-        _ctx: &ttrpc::TtrpcContext,
+        _ctx: &TtrpcContext,
         req: protocols::agent::ListProcessesRequest,
     ) -> ttrpc::Result<ListProcessesResponse> {
         let cid = req.container_id.clone();
@@ -600,7 +571,7 @@ impl protocols::agent_ttrpc::AgentService for agentService {
         let mut resp = ListProcessesResponse::new();
 
         let s = Arc::clone(&self.sandbox);
-        let mut sandbox = s.lock().unwrap();
+        let mut sandbox = s.lock().await;
 
         let ctr = sandbox.get_container(&cid).ok_or_else(|| {
             ttrpc_error(
@@ -631,10 +602,11 @@ impl protocols::agent_ttrpc::AgentService for agentService {
             args = vec!["-ef".to_string()];
         }
 
-        let output = Command::new("ps")
+        let output = tokio::process::Command::new("ps")
             .args(args.as_slice())
             .stdout(Stdio::piped())
             .output()
+            .await
             .expect("ps failed");
 
         let out: String = String::from_utf8(output.stdout).unwrap();
@@ -673,16 +645,16 @@ impl protocols::agent_ttrpc::AgentService for agentService {
         Ok(resp)
     }
 
-    fn update_container(
+    async fn update_container(
         &self,
-        _ctx: &ttrpc::TtrpcContext,
+        _ctx: &TtrpcContext,
         req: protocols::agent::UpdateContainerRequest,
     ) -> ttrpc::Result<Empty> {
         let cid = req.container_id.clone();
         let res = req.resources;
 
         let s = Arc::clone(&self.sandbox);
-        let mut sandbox = s.lock().unwrap();
+        let mut sandbox = s.lock().await;
 
         let ctr = sandbox.get_container(&cid).ok_or_else(|| {
             ttrpc_error(
@@ -707,14 +679,14 @@ impl protocols::agent_ttrpc::AgentService for agentService {
         Ok(resp)
     }
 
-    fn stats_container(
+    async fn stats_container(
         &self,
-        _ctx: &ttrpc::TtrpcContext,
+        _ctx: &TtrpcContext,
         req: protocols::agent::StatsContainerRequest,
     ) -> ttrpc::Result<StatsContainerResponse> {
         let cid = req.container_id;
         let s = Arc::clone(&self.sandbox);
-        let mut sandbox = s.lock().unwrap();
+        let mut sandbox = s.lock().await;
 
         let ctr = sandbox.get_container(&cid).ok_or_else(|| {
             ttrpc_error(
@@ -727,14 +699,14 @@ impl protocols::agent_ttrpc::AgentService for agentService {
             .map_err(|e| ttrpc_error(ttrpc::Code::INTERNAL, e.to_string()))
     }
 
-    fn pause_container(
+    async fn pause_container(
         &self,
-        _ctx: &ttrpc::TtrpcContext,
+        _ctx: &TtrpcContext,
         req: protocols::agent::PauseContainerRequest,
     ) -> ttrpc::Result<protocols::empty::Empty> {
         let cid = req.get_container_id();
         let s = Arc::clone(&self.sandbox);
-        let mut sandbox = s.lock().unwrap();
+        let mut sandbox = s.lock().await;
 
         let ctr = sandbox.get_container(&cid).ok_or_else(|| {
             ttrpc_error(
@@ -749,14 +721,14 @@ impl protocols::agent_ttrpc::AgentService for agentService {
         Ok(Empty::new())
     }
 
-    fn resume_container(
+    async fn resume_container(
         &self,
-        _ctx: &ttrpc::TtrpcContext,
+        _ctx: &TtrpcContext,
         req: protocols::agent::ResumeContainerRequest,
     ) -> ttrpc::Result<protocols::empty::Empty> {
         let cid = req.get_container_id();
         let s = Arc::clone(&self.sandbox);
-        let mut sandbox = s.lock().unwrap();
+        let mut sandbox = s.lock().await;
 
         let ctr = sandbox.get_container(&cid).ok_or_else(|| {
             ttrpc_error(
@@ -771,42 +743,45 @@ impl protocols::agent_ttrpc::AgentService for agentService {
         Ok(Empty::new())
     }
 
-    fn write_stdin(
+    async fn write_stdin(
         &self,
-        _ctx: &ttrpc::TtrpcContext,
+        _ctx: &TtrpcContext,
         req: protocols::agent::WriteStreamRequest,
     ) -> ttrpc::Result<WriteStreamResponse> {
         self.do_write_stream(req)
+            .await
             .map_err(|e| ttrpc_error(ttrpc::Code::INTERNAL, e.to_string()))
     }
 
-    fn read_stdout(
+    async fn read_stdout(
         &self,
-        _ctx: &ttrpc::TtrpcContext,
+        _ctx: &TtrpcContext,
         req: protocols::agent::ReadStreamRequest,
     ) -> ttrpc::Result<ReadStreamResponse> {
         self.do_read_stream(req, true)
+            .await
             .map_err(|e| ttrpc_error(ttrpc::Code::INTERNAL, e.to_string()))
     }
 
-    fn read_stderr(
+    async fn read_stderr(
         &self,
-        _ctx: &ttrpc::TtrpcContext,
+        _ctx: &TtrpcContext,
         req: protocols::agent::ReadStreamRequest,
     ) -> ttrpc::Result<ReadStreamResponse> {
         self.do_read_stream(req, false)
+            .await
             .map_err(|e| ttrpc_error(ttrpc::Code::INTERNAL, e.to_string()))
     }
 
-    fn close_stdin(
+    async fn close_stdin(
         &self,
-        _ctx: &ttrpc::TtrpcContext,
+        _ctx: &TtrpcContext,
         req: protocols::agent::CloseStdinRequest,
     ) -> ttrpc::Result<Empty> {
         let cid = req.container_id.clone();
         let eid = req.exec_id;
         let s = Arc::clone(&self.sandbox);
-        let mut sandbox = s.lock().unwrap();
+        let mut sandbox = s.lock().await;
 
         let p = find_process(&mut sandbox, cid.as_str(), eid.as_str(), false).map_err(|e| {
             ttrpc_error(
@@ -816,29 +791,31 @@ impl protocols::agent_ttrpc::AgentService for agentService {
         })?;
 
         if p.term_master.is_some() {
+            p.close_stream(StreamType::TermMaster);
             let _ = unistd::close(p.term_master.unwrap());
             p.term_master = None;
         }
 
         if p.parent_stdin.is_some() {
+            p.close_stream(StreamType::ParentStdin);
             let _ = unistd::close(p.parent_stdin.unwrap());
             p.parent_stdin = None;
         }
 
-        p.close_epoller();
+        p.notify_term_close();
 
         Ok(Empty::new())
     }
 
-    fn tty_win_resize(
+    async fn tty_win_resize(
         &self,
-        _ctx: &ttrpc::TtrpcContext,
+        _ctx: &TtrpcContext,
         req: protocols::agent::TtyWinResizeRequest,
     ) -> ttrpc::Result<Empty> {
         let cid = req.container_id.clone();
         let eid = req.exec_id.clone();
         let s = Arc::clone(&self.sandbox);
-        let mut sandbox = s.lock().unwrap();
+        let mut sandbox = s.lock().await;
         let p = find_process(&mut sandbox, cid.as_str(), eid.as_str(), false).map_err(|e| {
             ttrpc_error(
                 ttrpc::Code::UNAVAILABLE,
@@ -868,9 +845,9 @@ impl protocols::agent_ttrpc::AgentService for agentService {
         Ok(Empty::new())
     }
 
-    fn update_interface(
+    async fn update_interface(
         &self,
-        _ctx: &ttrpc::TtrpcContext,
+        _ctx: &TtrpcContext,
         req: protocols::agent::UpdateInterfaceRequest,
     ) -> ttrpc::Result<Interface> {
         if req.interface.is_none() {
@@ -882,7 +859,7 @@ impl protocols::agent_ttrpc::AgentService for agentService {
 
         let interface = req.interface;
         let s = Arc::clone(&self.sandbox);
-        let mut sandbox = s.lock().unwrap();
+        let mut sandbox = s.lock().await;
 
         if sandbox.rtnl.is_none() {
             sandbox.rtnl = Some(RtnlHandle::new(NETLINK_ROUTE, 0).unwrap());
@@ -899,9 +876,9 @@ impl protocols::agent_ttrpc::AgentService for agentService {
         Ok(iface)
     }
 
-    fn update_routes(
+    async fn update_routes(
         &self,
-        _ctx: &ttrpc::TtrpcContext,
+        _ctx: &TtrpcContext,
         req: protocols::agent::UpdateRoutesRequest,
     ) -> ttrpc::Result<Routes> {
         let mut routes = protocols::agent::Routes::new();
@@ -915,7 +892,7 @@ impl protocols::agent_ttrpc::AgentService for agentService {
         let rs = req.routes.unwrap().Routes.into_vec();
 
         let s = Arc::clone(&self.sandbox);
-        let mut sandbox = s.lock().unwrap();
+        let mut sandbox = s.lock().await;
 
         if sandbox.rtnl.is_none() {
             sandbox.rtnl = Some(RtnlHandle::new(NETLINK_ROUTE, 0).unwrap());
@@ -938,14 +915,14 @@ impl protocols::agent_ttrpc::AgentService for agentService {
         Ok(routes)
     }
 
-    fn list_interfaces(
+    async fn list_interfaces(
         &self,
-        _ctx: &ttrpc::TtrpcContext,
+        _ctx: &TtrpcContext,
         _req: protocols::agent::ListInterfacesRequest,
     ) -> ttrpc::Result<Interfaces> {
         let mut interface = protocols::agent::Interfaces::new();
         let s = Arc::clone(&self.sandbox);
-        let mut sandbox = s.lock().unwrap();
+        let mut sandbox = s.lock().await;
 
         if sandbox.rtnl.is_none() {
             sandbox.rtnl = Some(RtnlHandle::new(NETLINK_ROUTE, 0).unwrap());
@@ -961,14 +938,14 @@ impl protocols::agent_ttrpc::AgentService for agentService {
         Ok(interface)
     }
 
-    fn list_routes(
+    async fn list_routes(
         &self,
-        _ctx: &ttrpc::TtrpcContext,
+        _ctx: &TtrpcContext,
         _req: protocols::agent::ListRoutesRequest,
     ) -> ttrpc::Result<Routes> {
         let mut routes = protocols::agent::Routes::new();
         let s = Arc::clone(&self.sandbox);
-        let mut sandbox = s.lock().unwrap();
+        let mut sandbox = s.lock().await;
 
         if sandbox.rtnl.is_none() {
             sandbox.rtnl = Some(RtnlHandle::new(NETLINK_ROUTE, 0).unwrap());
@@ -985,31 +962,31 @@ impl protocols::agent_ttrpc::AgentService for agentService {
         Ok(routes)
     }
 
-    fn start_tracing(
+    async fn start_tracing(
         &self,
-        _ctx: &ttrpc::TtrpcContext,
+        _ctx: &TtrpcContext,
         req: protocols::agent::StartTracingRequest,
     ) -> ttrpc::Result<Empty> {
         info!(sl!(), "start_tracing {:?}", req);
         Ok(Empty::new())
     }
 
-    fn stop_tracing(
+    async fn stop_tracing(
         &self,
-        _ctx: &ttrpc::TtrpcContext,
+        _ctx: &TtrpcContext,
         _req: protocols::agent::StopTracingRequest,
     ) -> ttrpc::Result<Empty> {
         Ok(Empty::new())
     }
 
-    fn create_sandbox(
+    async fn create_sandbox(
         &self,
-        _ctx: &ttrpc::TtrpcContext,
+        _ctx: &TtrpcContext,
         req: protocols::agent::CreateSandboxRequest,
     ) -> ttrpc::Result<Empty> {
         {
             let sandbox = self.sandbox.clone();
-            let mut s = sandbox.lock().unwrap();
+            let mut s = sandbox.lock().await;
 
             let _ = fs::remove_dir_all(CONTAINER_BASE);
             let _ = fs::create_dir_all(CONTAINER_BASE);
@@ -1036,13 +1013,14 @@ impl protocols::agent_ttrpc::AgentService for agentService {
             }
 
             s.setup_shared_namespaces()
+                .await
                 .map_err(|e| ttrpc_error(ttrpc::Code::INTERNAL, e.to_string()))?;
         }
 
-        match add_storages(sl!(), req.storages.to_vec(), self.sandbox.clone()) {
+        match add_storages(sl!(), req.storages.to_vec(), self.sandbox.clone()).await {
             Ok(m) => {
                 let sandbox = self.sandbox.clone();
-                let mut s = sandbox.lock().unwrap();
+                let mut s = sandbox.lock().await;
                 s.mounts = m
             }
             Err(e) => return Err(ttrpc_error(ttrpc::Code::INTERNAL, e.to_string())),
@@ -1051,7 +1029,7 @@ impl protocols::agent_ttrpc::AgentService for agentService {
         match setup_guest_dns(sl!(), req.dns.to_vec()) {
             Ok(_) => {
                 let sandbox = self.sandbox.clone();
-                let mut s = sandbox.lock().unwrap();
+                let mut s = sandbox.lock().await;
                 let _dns = req
                     .dns
                     .to_vec()
@@ -1064,26 +1042,24 @@ impl protocols::agent_ttrpc::AgentService for agentService {
         Ok(Empty::new())
     }
 
-    fn destroy_sandbox(
+    async fn destroy_sandbox(
         &self,
-        _ctx: &ttrpc::TtrpcContext,
+        _ctx: &TtrpcContext,
         _req: protocols::agent::DestroySandboxRequest,
     ) -> ttrpc::Result<Empty> {
         let s = Arc::clone(&self.sandbox);
-        let mut sandbox = s.lock().unwrap();
+        let mut sandbox = s.lock().await;
         // destroy all containers, clean up, notify agent to exit
         // etc.
-        sandbox.destroy().unwrap();
-
-        sandbox.sender.as_ref().unwrap().send(1).unwrap();
-        sandbox.sender = None;
+        sandbox.destroy().await.unwrap();
+        sandbox.sender.take().unwrap().send(1).unwrap();
 
         Ok(Empty::new())
     }
 
-    fn add_arp_neighbors(
+    async fn add_arp_neighbors(
         &self,
-        _ctx: &ttrpc::TtrpcContext,
+        _ctx: &TtrpcContext,
         req: protocols::agent::AddARPNeighborsRequest,
     ) -> ttrpc::Result<Empty> {
         if req.neighbors.is_none() {
@@ -1096,7 +1072,7 @@ impl protocols::agent_ttrpc::AgentService for agentService {
         let neighs = req.neighbors.unwrap().ARPNeighbors.into_vec();
 
         let s = Arc::clone(&self.sandbox);
-        let mut sandbox = s.lock().unwrap();
+        let mut sandbox = s.lock().await;
 
         if sandbox.rtnl.is_none() {
             sandbox.rtnl = Some(RtnlHandle::new(NETLINK_ROUTE, 0).unwrap());
@@ -1110,13 +1086,13 @@ impl protocols::agent_ttrpc::AgentService for agentService {
         Ok(Empty::new())
     }
 
-    fn online_cpu_mem(
+    async fn online_cpu_mem(
         &self,
-        _ctx: &ttrpc::TtrpcContext,
+        _ctx: &TtrpcContext,
         req: protocols::agent::OnlineCPUMemRequest,
     ) -> ttrpc::Result<Empty> {
         let s = Arc::clone(&self.sandbox);
-        let sandbox = s.lock().unwrap();
+        let sandbox = s.lock().await;
 
         sandbox
             .online_cpu_memory(&req)
@@ -1125,9 +1101,9 @@ impl protocols::agent_ttrpc::AgentService for agentService {
         Ok(Empty::new())
     }
 
-    fn reseed_random_dev(
+    async fn reseed_random_dev(
         &self,
-        _ctx: &ttrpc::TtrpcContext,
+        _ctx: &TtrpcContext,
         req: protocols::agent::ReseedRandomDevRequest,
     ) -> ttrpc::Result<Empty> {
         random::reseed_rng(req.data.as_slice())
@@ -1136,9 +1112,9 @@ impl protocols::agent_ttrpc::AgentService for agentService {
         Ok(Empty::new())
     }
 
-    fn get_guest_details(
+    async fn get_guest_details(
         &self,
-        _ctx: &ttrpc::TtrpcContext,
+        _ctx: &TtrpcContext,
         req: protocols::agent::GuestDetailsRequest,
     ) -> ttrpc::Result<GuestDetailsResponse> {
         info!(sl!(), "get guest details!");
@@ -1162,9 +1138,9 @@ impl protocols::agent_ttrpc::AgentService for agentService {
         Ok(resp)
     }
 
-    fn mem_hotplug_by_probe(
+    async fn mem_hotplug_by_probe(
         &self,
-        _ctx: &ttrpc::TtrpcContext,
+        _ctx: &TtrpcContext,
         req: protocols::agent::MemHotplugByProbeRequest,
     ) -> ttrpc::Result<Empty> {
         do_mem_hotplug_by_probe(&req.memHotplugProbeAddr)
@@ -1173,9 +1149,9 @@ impl protocols::agent_ttrpc::AgentService for agentService {
         Ok(Empty::new())
     }
 
-    fn set_guest_date_time(
+    async fn set_guest_date_time(
         &self,
-        _ctx: &ttrpc::TtrpcContext,
+        _ctx: &TtrpcContext,
         req: protocols::agent::SetGuestDateTimeRequest,
     ) -> ttrpc::Result<Empty> {
         do_set_guest_date_time(req.Sec, req.Usec)
@@ -1184,9 +1160,9 @@ impl protocols::agent_ttrpc::AgentService for agentService {
         Ok(Empty::new())
     }
 
-    fn copy_file(
+    async fn copy_file(
         &self,
-        _ctx: &ttrpc::TtrpcContext,
+        _ctx: &TtrpcContext,
         req: protocols::agent::CopyFileRequest,
     ) -> ttrpc::Result<Empty> {
         do_copy_file(&req).map_err(|e| ttrpc_error(ttrpc::Code::INTERNAL, e.to_string()))?;
@@ -1194,9 +1170,9 @@ impl protocols::agent_ttrpc::AgentService for agentService {
         Ok(Empty::new())
     }
 
-    fn get_metrics(
+    async fn get_metrics(
         &self,
-        _ctx: &ttrpc::TtrpcContext,
+        _ctx: &TtrpcContext,
         req: protocols::agent::GetMetricsRequest,
     ) -> ttrpc::Result<Metrics> {
         match get_metrics(&req) {
@@ -1209,21 +1185,21 @@ impl protocols::agent_ttrpc::AgentService for agentService {
         }
     }
 
-    fn get_oom_event(
+    async fn get_oom_event(
         &self,
-        _ctx: &ttrpc::TtrpcContext,
+        _ctx: &TtrpcContext,
         _req: protocols::agent::GetOOMEventRequest,
     ) -> ttrpc::Result<OOMEvent> {
         let sandbox = self.sandbox.clone();
-        let s = sandbox.lock().unwrap();
+        let s = sandbox.lock().await;
         let event_rx = &s.event_rx.clone();
-        let event_rx = event_rx.lock().unwrap();
+        let mut event_rx = event_rx.lock().await;
         drop(s);
         drop(sandbox);
 
-        match event_rx.recv() {
-            Err(err) => Err(ttrpc_error(ttrpc::Code::INTERNAL, err.to_string())),
-            Ok(container_id) => {
+        match event_rx.recv().await {
+            None => Err(ttrpc_error(ttrpc::Code::INTERNAL, "")),
+            Some(container_id) => {
                 info!(sl!(), "get_oom_event return {}", &container_id);
                 let mut resp = OOMEvent::new();
                 resp.container_id = container_id;
@@ -1235,10 +1211,12 @@ impl protocols::agent_ttrpc::AgentService for agentService {
 
 #[derive(Clone)]
 struct healthService;
+
+#[async_trait]
 impl protocols::health_ttrpc::Health for healthService {
-    fn check(
+    async fn check(
         &self,
-        _ctx: &ttrpc::TtrpcContext,
+        _ctx: &TtrpcContext,
         _req: protocols::health::CheckRequest,
     ) -> ttrpc::Result<HealthCheckResponse> {
         let mut resp = HealthCheckResponse::new();
@@ -1247,9 +1225,9 @@ impl protocols::health_ttrpc::Health for healthService {
         Ok(resp)
     }
 
-    fn version(
+    async fn version(
         &self,
-        _ctx: &ttrpc::TtrpcContext,
+        _ctx: &TtrpcContext,
         req: protocols::health::CheckRequest,
     ) -> ttrpc::Result<VersionCheckResponse> {
         info!(sl!(), "version {:?}", req);
@@ -1318,42 +1296,28 @@ fn get_agent_details() -> AgentDetails {
 
     detail.device_handlers = RepeatedField::new();
     detail.storage_handlers = RepeatedField::from_vec(
-        STORAGEHANDLERLIST
-            .keys()
-            .cloned()
-            .map(|x| x.into())
+        STORAGE_HANDLER_LIST
+            .to_vec()
+            .iter()
+            .map(|x| x.to_string())
             .collect(),
     );
 
     detail
 }
 
-fn read_stream(fd: RawFd, l: usize) -> Result<Vec<u8>> {
-    let mut v: Vec<u8> = Vec::with_capacity(l);
-    unsafe {
-        v.set_len(l);
+async fn read_stream(reader: Arc<Mutex<ReadHalf<PipeStream>>>, l: usize) -> Result<Vec<u8>> {
+    let mut content = vec![0u8; l];
+
+    let mut reader = reader.lock().await;
+    let len = reader.read(&mut content).await?;
+    content.resize(len, 0);
+
+    if len == 0 {
+        return Err(anyhow!("read meet eof"));
     }
 
-    match unistd::read(fd, v.as_mut_slice()) {
-        Ok(len) => {
-            v.resize(len, 0);
-            // Rust didn't return an EOF error when the reading peer point
-            // was closed, instead it would return a 0 reading length, please
-            // see https://github.com/rust-lang/rfcs/blob/master/text/0517-io-os-reform.md#errors
-            if len == 0 {
-                return Err(anyhow!("read  meet eof"));
-            }
-        }
-        Err(e) => match e {
-            nix::Error::Sys(errno) => match errno {
-                Errno::EAGAIN => v.clear(),
-                _ => return Err(anyhow!(nix::Error::Sys(errno))),
-            },
-            _ => return Err(anyhow!("read error")),
-        },
-    }
-
-    Ok(v)
+    Ok(content)
 }
 
 fn find_process<'a>(
@@ -1376,7 +1340,7 @@ fn find_process<'a>(
     ctr.get_process(eid).map_err(|_| anyhow!("Invalid exec id"))
 }
 
-pub fn start(s: Arc<Mutex<Sandbox>>, server_address: &str) -> ttrpc::Server {
+pub fn start(s: Arc<Mutex<Sandbox>>, server_address: &str) -> TtrpcServer {
     let agent_service = Box::new(agentService { sandbox: s })
         as Box<dyn protocols::agent_ttrpc::AgentService + Send + Sync>;
 
@@ -1390,7 +1354,7 @@ pub fn start(s: Arc<Mutex<Sandbox>>, server_address: &str) -> ttrpc::Server {
 
     let hservice = protocols::health_ttrpc::create_health(health_worker);
 
-    let server = ttrpc::Server::new()
+    let server = TtrpcServer::new()
         .bind(server_address)
         .unwrap()
         .register_service(aservice)
@@ -1634,6 +1598,42 @@ fn setup_bundle(cid: &str, spec: &mut Spec) -> Result<PathBuf> {
     Ok(olddir)
 }
 
+fn cleanup_process(p: &mut Process) -> Result<()> {
+    if p.parent_stdin.is_some() {
+        p.close_stream(StreamType::ParentStdin);
+        let _ = unistd::close(p.parent_stdin.unwrap())?;
+    }
+
+    if p.parent_stdout.is_some() {
+        p.close_stream(StreamType::ParentStdout);
+        let _ = unistd::close(p.parent_stdout.unwrap())?;
+    }
+
+    if p.parent_stderr.is_some() {
+        p.close_stream(StreamType::ParentStderr);
+        let _ = unistd::close(p.parent_stderr.unwrap())?;
+    }
+
+    if p.term_master.is_some() {
+        p.close_stream(StreamType::TermMaster);
+        let _ = unistd::close(p.term_master.unwrap())?;
+    }
+
+    if p.exit_pipe_r.is_some() {
+        p.close_stream(StreamType::ExitPipeR);
+        let _ = unistd::close(p.exit_pipe_r.unwrap())?;
+    }
+
+    p.notify_term_close();
+
+    p.parent_stdin = None;
+    p.parent_stdout = None;
+    p.parent_stderr = None;
+    p.term_master = None;
+
+    Ok(())
+}
+
 fn load_kernel_module(module: &protocols::agent::KernelModule) -> Result<()> {
     if module.name == "" {
         return Err(anyhow!("Kernel module name is empty"));
@@ -1679,23 +1679,13 @@ mod tests {
     use super::*;
     use crate::protocols::agent_ttrpc::AgentService;
     use oci::{Hook, Hooks};
-    use std::sync::mpsc::{Receiver, Sender};
-    use ttrpc::{MessageHeader, TtrpcContext};
+    use ttrpc::{r#async::TtrpcContext, MessageHeader};
 
-    type Message = (MessageHeader, Vec<u8>);
-
-    fn mk_ttrpc_context() -> (TtrpcContext, Receiver<Message>) {
-        let mh = MessageHeader::default();
-
-        let (tx, rx): (Sender<Message>, Receiver<Message>) = channel();
-
-        let ctx = TtrpcContext {
+    fn mk_ttrpc_context() -> TtrpcContext {
+        TtrpcContext {
             fd: -1,
-            mh,
-            res_tx: tx,
-        };
-
-        (ctx, rx)
+            mh: MessageHeader::default(),
+        }
     }
 
     #[test]
@@ -1737,8 +1727,8 @@ mod tests {
         assert_eq!(s.hooks, oci.hooks);
     }
 
-    #[test]
-    fn test_update_interface() {
+    #[tokio::test]
+    async fn test_update_interface() {
         let logger = slog::Logger::root(slog::Discard, o!());
         let sandbox = Sandbox::new(&logger).unwrap();
 
@@ -1747,15 +1737,15 @@ mod tests {
         });
 
         let req = protocols::agent::UpdateInterfaceRequest::default();
-        let (ctx, _) = mk_ttrpc_context();
+        let ctx = mk_ttrpc_context();
 
-        let result = agent_service.update_interface(&ctx, req);
+        let result = agent_service.update_interface(&ctx, req).await;
 
         assert!(result.is_err(), "expected update interface to fail");
     }
 
-    #[test]
-    fn test_update_routes() {
+    #[tokio::test]
+    async fn test_update_routes() {
         let logger = slog::Logger::root(slog::Discard, o!());
         let sandbox = Sandbox::new(&logger).unwrap();
 
@@ -1764,15 +1754,15 @@ mod tests {
         });
 
         let req = protocols::agent::UpdateRoutesRequest::default();
-        let (ctx, _) = mk_ttrpc_context();
+        let ctx = mk_ttrpc_context();
 
-        let result = agent_service.update_routes(&ctx, req);
+        let result = agent_service.update_routes(&ctx, req).await;
 
         assert!(result.is_err(), "expected update routes to fail");
     }
 
-    #[test]
-    fn test_add_arp_neighbors() {
+    #[tokio::test]
+    async fn test_add_arp_neighbors() {
         let logger = slog::Logger::root(slog::Discard, o!());
         let sandbox = Sandbox::new(&logger).unwrap();
 
@@ -1781,9 +1771,9 @@ mod tests {
         });
 
         let req = protocols::agent::AddARPNeighborsRequest::default();
-        let (ctx, _) = mk_ttrpc_context();
+        let ctx = mk_ttrpc_context();
 
-        let result = agent_service.add_arp_neighbors(&ctx, req);
+        let result = agent_service.add_arp_neighbors(&ctx, req).await;
 
         assert!(result.is_err(), "expected add arp neighbors to fail");
     }

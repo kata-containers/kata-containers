@@ -5,9 +5,9 @@ authors = ["The Kata Containers community <kata-dev@lists.katacontainers.io>"]
 edition = "2018"
 
 [dependencies]
-ttrpc = "0.3.0"
+ttrpc = { version = "0.4.14", features = ["async"] }
+async-trait = "0.1.42"
 protobuf = "=2.14.0"
-futures = "0.1.27"
 
 [build-dependencies]
 ttrpc-codegen = "0.1.2"

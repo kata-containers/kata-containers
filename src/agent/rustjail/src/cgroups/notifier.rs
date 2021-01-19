@@ -3,16 +3,18 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use eventfd::{eventfd, EfdFlags};
 use nix::sys::eventfd;
-use nix::sys::inotify::{AddWatchFlags, InitFlags, Inotify};
 use std::fs::{self, File};
-use std::io::Read;
 use std::os::unix::io::{AsRawFd, FromRawFd};
 use std::path::{Path, PathBuf};
-use std::sync::mpsc::{self, Receiver};
-use std::thread;
+
+use crate::pipestream::PipeStream;
+use futures::StreamExt as _;
+use inotify::{Inotify, WatchMask};
+use tokio::io::AsyncReadExt;
+use tokio::sync::mpsc::{channel, Receiver};
 
 // Convenience macro to obtain the scope logger
 macro_rules! sl {
@@ -21,11 +23,11 @@ macro_rules! sl {
     };
 }
 
-pub fn notify_oom(cid: &str, cg_dir: String) -> Result<Receiver<String>> {
+pub async fn notify_oom(cid: &str, cg_dir: String) -> Result<Receiver<String>> {
     if cgroups::hierarchies::is_cgroup2_unified_mode() {
-        return notify_on_oom_v2(cid, cg_dir);
+        return notify_on_oom_v2(cid, cg_dir).await;
     }
-    notify_on_oom(cid, cg_dir)
+    notify_on_oom(cid, cg_dir).await
 }
 
 // get_value_from_cgroup parse cgroup file with `Flat keyed`
@@ -52,11 +54,11 @@ fn get_value_from_cgroup(path: &PathBuf, key: &str) -> Result<i64> {
 
 // notify_on_oom returns channel on which you can expect event about OOM,
 // if process died without OOM this channel will be closed.
-pub fn notify_on_oom_v2(containere_id: &str, cg_dir: String) -> Result<Receiver<String>> {
-    register_memory_event_v2(containere_id, cg_dir, "memory.events", "cgroup.events")
+pub async fn notify_on_oom_v2(containere_id: &str, cg_dir: String) -> Result<Receiver<String>> {
+    register_memory_event_v2(containere_id, cg_dir, "memory.events", "cgroup.events").await
 }
 
-fn register_memory_event_v2(
+async fn register_memory_event_v2(
     containere_id: &str,
     cg_dir: String,
     memory_event_name: &str,
@@ -73,54 +75,54 @@ fn register_memory_event_v2(
         "register_memory_event_v2 cgroup_event_control_path: {:?}", &cgroup_event_control_path
     );
 
-    let fd = Inotify::init(InitFlags::empty()).unwrap();
+    let mut inotify = Inotify::init().context("Failed to initialize inotify")?;
 
     // watching oom kill
-    let ev_fd = fd
-        .add_watch(&event_control_path, AddWatchFlags::IN_MODIFY)
-        .unwrap();
+    let ev_wd = inotify.add_watch(&event_control_path, WatchMask::MODIFY)?;
     // Because no `unix.IN_DELETE|unix.IN_DELETE_SELF` event for cgroup file system, so watching all process exited
-    let cg_fd = fd
-        .add_watch(&cgroup_event_control_path, AddWatchFlags::IN_MODIFY)
-        .unwrap();
-    info!(sl!(), "ev_fd: {:?}", ev_fd);
-    info!(sl!(), "cg_fd: {:?}", cg_fd);
+    let cg_wd = inotify.add_watch(&cgroup_event_control_path, WatchMask::MODIFY)?;
 
-    let (sender, receiver) = mpsc::channel();
+    info!(sl!(), "ev_wd: {:?}", ev_wd);
+    info!(sl!(), "cg_wd: {:?}", cg_wd);
+
+    let (mut sender, receiver) = channel(100);
     let containere_id = containere_id.to_string();
 
-    thread::spawn(move || {
-        loop {
-            let events = fd.read_events().unwrap();
+    tokio::spawn(async move {
+        let mut buffer = [0; 32];
+        let mut stream = inotify
+            .event_stream(&mut buffer)
+            .expect("create inotify event stream failed");
+
+        while let Some(event_or_error) = stream.next().await {
+            let event = event_or_error.unwrap();
             info!(
                 sl!(),
-                "container[{}] get events for container: {:?}", &containere_id, &events
+                "container[{}] get event for container: {:?}", &containere_id, &event
             );
+            // info!("is1: {}", event.wd == wd1);
+            info!(sl!(), "event.wd: {:?}", event.wd);
 
-            for event in events {
-                if event.mask & AddWatchFlags::IN_MODIFY != AddWatchFlags::IN_MODIFY {
-                    continue;
+            if event.wd == ev_wd {
+                let oom = get_value_from_cgroup(&event_control_path, "oom_kill");
+                if oom.unwrap_or(0) > 0 {
+                    let _ = sender.send(containere_id.clone()).await.map_err(|e| {
+                        error!(sl!(), "send containere_id failed, error: {:?}", e);
+                    });
+                    return;
                 }
-                info!(sl!(), "event.wd: {:?}", event.wd);
-
-                if event.wd == ev_fd {
-                    let oom = get_value_from_cgroup(&event_control_path, "oom_kill");
-                    if oom.unwrap_or(0) > 0 {
-                        sender.send(containere_id.clone()).unwrap();
-                        return;
-                    }
-                } else if event.wd == cg_fd {
-                    let pids = get_value_from_cgroup(&cgroup_event_control_path, "populated");
-                    if pids.unwrap_or(-1) == 0 {
-                        return;
-                    }
+            } else if event.wd == cg_wd {
+                let pids = get_value_from_cgroup(&cgroup_event_control_path, "populated");
+                if pids.unwrap_or(-1) == 0 {
+                    return;
                 }
             }
-            // When a cgroup is destroyed, an event is sent to eventfd.
-            // So if the control path is gone, return instead of notifying.
-            if !Path::new(&event_control_path).exists() {
-                return;
-            }
+        }
+
+        // When a cgroup is destroyed, an event is sent to eventfd.
+        // So if the control path is gone, return instead of notifying.
+        if !Path::new(&event_control_path).exists() {
+            return;
         }
     });
 
@@ -129,16 +131,16 @@ fn register_memory_event_v2(
 
 // notify_on_oom returns channel on which you can expect event about OOM,
 // if process died without OOM this channel will be closed.
-fn notify_on_oom(cid: &str, dir: String) -> Result<Receiver<String>> {
+async fn notify_on_oom(cid: &str, dir: String) -> Result<Receiver<String>> {
     if dir == "" {
         return Err(anyhow!("memory controller missing"));
     }
 
-    register_memory_event(cid, dir, "memory.oom_control", "")
+    register_memory_event(cid, dir, "memory.oom_control", "").await
 }
 
 // level is one of "low", "medium", or "critical"
-fn notify_memory_pressure(cid: &str, dir: String, level: &str) -> Result<Receiver<String>> {
+async fn notify_memory_pressure(cid: &str, dir: String, level: &str) -> Result<Receiver<String>> {
     if dir == "" {
         return Err(anyhow!("memory controller missing"));
     }
@@ -147,10 +149,10 @@ fn notify_memory_pressure(cid: &str, dir: String, level: &str) -> Result<Receive
         return Err(anyhow!("invalid pressure level {}", level));
     }
 
-    register_memory_event(cid, dir, "memory.pressure_level", level)
+    register_memory_event(cid, dir, "memory.pressure_level", level).await
 }
 
-fn register_memory_event(
+async fn register_memory_event(
     cid: &str,
     cg_dir: String,
     event_name: &str,
@@ -171,15 +173,16 @@ fn register_memory_event(
 
     fs::write(&event_control_path, data)?;
 
-    let mut eventfd_file = unsafe { File::from_raw_fd(eventfd) };
+    let mut eventfd_stream = unsafe { PipeStream::from_raw_fd(eventfd) };
 
-    let (sender, receiver) = mpsc::channel();
+    let (sender, receiver) = tokio::sync::mpsc::channel(100);
     let containere_id = cid.to_string();
 
-    thread::spawn(move || {
+    tokio::spawn(async move {
         loop {
-            let mut buf = [0; 8];
-            match eventfd_file.read(&mut buf) {
+            let mut sender = sender.clone();
+            let mut buf = [0u8; 8];
+            match eventfd_stream.read(&mut buf).await {
                 Err(err) => {
                     warn!(sl!(), "failed to read from eventfd: {:?}", err);
                     return;
@@ -198,7 +201,10 @@ fn register_memory_event(
             if !Path::new(&event_control_path).exists() {
                 return;
             }
-            sender.send(containere_id.clone()).unwrap();
+
+            let _ = sender.send(containere_id.clone()).await.map_err(|e| {
+                error!(sl!(), "send containere_id failed, error: {:?}", e);
+            });
         }
     });
 
