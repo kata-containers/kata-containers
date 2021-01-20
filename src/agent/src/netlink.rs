@@ -1,5 +1,9 @@
-use anyhow::Context;
-use anyhow::{anyhow, Result};
+// Copyright (c) 2021 Kata Maintainers
+//
+// SPDX-License-Identifier: Apache-2.0
+//
+
+use anyhow::{anyhow, Context, Result};
 use futures::{future, StreamExt, TryStreamExt};
 use ipnetwork::{IpNetwork, Ipv4Network, Ipv6Network};
 use protobuf::RepeatedField;
@@ -189,7 +193,7 @@ impl Handle {
         };
 
         next.map(|msg| msg.into())
-            .ok_or(anyhow!("Link not found ({})", filter))
+            .ok_or_else(|| anyhow!("Link not found ({})", filter))
     }
 
     async fn list_links(&self) -> Result<Vec<Link>> {
@@ -313,12 +317,12 @@ impl Handle {
         // Split the list so we add routes with no gateway first.
         // Note: `partition_in_place` is a better fit here, since it reorders things inplace (instead of
         // allocating two separate collections), however it's not yet in stable Rust.
-        let (a, b): (Vec<Route>, Vec<Route>) = list.into_iter().partition(|p| p.gateway.len() == 0);
+        let (a, b): (Vec<Route>, Vec<Route>) = list.into_iter().partition(|p| p.gateway.is_empty());
         let list = a.iter().chain(&b);
 
         for route in list {
             let link = self.find_link(LinkFilter::Name(&route.device)).await?;
-            let is_v6 = route.gateway.contains("::") || route.dest.contains("::");
+            let is_v6 = is_ipv6(route.get_gateway()) || is_ipv6(route.get_dest());
 
             const MAIN_TABLE: u8 = packet::constants::RT_TABLE_MAIN;
             const UNICAST: u8 = packet::constants::RTN_UNICAST;
@@ -332,7 +336,7 @@ impl Handle {
             // This if branch is a bit clumsy because it does almost the same.
             // TODO: Simplify this once https://github.com/little-dude/netlink/pull/140 is merged and released
             if is_v6 {
-                let dest_addr = if route.dest.len() > 0 {
+                let dest_addr = if !route.dest.is_empty() {
                     Ipv6Network::from_str(&route.dest)?
                 } else {
                     Ipv6Network::new(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 0), 0)?
@@ -350,7 +354,7 @@ impl Handle {
                     .destination_prefix(dest_addr.ip(), dest_addr.prefix())
                     .output_interface(link.index());
 
-                if route.source.len() > 0 {
+                if !route.source.is_empty() {
                     let network = Ipv6Network::from_str(&route.source)?;
                     if network.prefix() > 0 {
                         request = request.source_prefix(network.ip(), network.prefix());
@@ -362,7 +366,7 @@ impl Handle {
                     }
                 }
 
-                if route.gateway.len() > 0 {
+                if !route.gateway.is_empty() {
                     let ip = Ipv6Addr::from_str(&route.gateway)?;
                     request = request.gateway(ip);
                 }
@@ -376,7 +380,7 @@ impl Handle {
                     )
                 })?;
             } else {
-                let dest_addr = if route.dest.len() > 0 {
+                let dest_addr = if !route.dest.is_empty() {
                     Ipv4Network::from_str(&route.dest)?
                 } else {
                     Ipv4Network::new(Ipv4Addr::new(0, 0, 0, 0), 0)?
@@ -394,7 +398,7 @@ impl Handle {
                     .destination_prefix(dest_addr.ip(), dest_addr.prefix())
                     .output_interface(link.index());
 
-                if route.source.len() > 0 {
+                if !route.source.is_empty() {
                     let network = Ipv4Network::from_str(&route.source)?;
                     if network.prefix() > 0 {
                         request = request.source_prefix(network.ip(), network.prefix());
@@ -406,7 +410,7 @@ impl Handle {
                     }
                 }
 
-                if route.gateway.len() > 0 {
+                if !route.gateway.is_empty() {
                     let ip = Ipv4Addr::from_str(&route.gateway)?;
                     request = request.gateway(ip);
                 }
@@ -605,8 +609,12 @@ fn format_address(data: &[u8]) -> Result<String> {
     }
 }
 
+fn is_ipv6(str: &str) -> bool {
+    Ipv6Addr::from_str(str).is_ok()
+}
+
 fn parse_mac_address(addr: &str) -> Result<[u8; 6]> {
-    let mut split = addr.splitn(6, ":");
+    let mut split = addr.splitn(6, ':');
 
     // Parse single Mac address block
     let mut parse_next = || -> Result<u8> {
@@ -648,7 +656,7 @@ impl Link {
                     None
                 }
             })
-            .unwrap_or(String::new())
+            .unwrap_or_default()
     }
 
     /// Extract Mac address.
@@ -663,7 +671,7 @@ impl Link {
                     None
                 }
             })
-            .unwrap_or(String::new())
+            .unwrap_or_default()
     }
 
     /// Returns whether the link is UP
@@ -750,7 +758,7 @@ impl Address {
                     None
                 }
             })
-            .unwrap_or(String::new())
+            .unwrap_or_default()
     }
 
     fn local(&self) -> String {
@@ -765,7 +773,7 @@ impl Address {
                     None
                 }
             })
-            .unwrap_or(String::new())
+            .unwrap_or_default()
     }
 }
 
@@ -937,6 +945,16 @@ mod tests {
     fn parse_mac() {
         let bytes = parse_mac_address("AB:0C:DE:12:34:56").expect("Failed to parse mac address");
         assert_eq!(bytes, [0xAB, 0x0C, 0xDE, 0x12, 0x34, 0x56]);
+    }
+
+    #[test]
+    fn check_ipv6() {
+        assert!(is_ipv6("::1"));
+        assert!(is_ipv6("2001:0:3238:DFE1:63::FEFB"));
+
+        assert!(!is_ipv6(""));
+        assert!(!is_ipv6("127.0.0.1"));
+        assert!(!is_ipv6("10.10.10.10"));
     }
 
     fn clean_env_for_test_add_one_arp_neighbor(dummy_name: &str, ip: &str) {
