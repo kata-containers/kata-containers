@@ -31,16 +31,16 @@ use crate::Sandbox;
 use anyhow::{anyhow, Context, Result};
 use slog::Logger;
 
-pub const DRIVER9PTYPE: &str = "9p";
-pub const DRIVERVIRTIOFSTYPE: &str = "virtio-fs";
-pub const DRIVERBLKTYPE: &str = "blk";
-pub const DRIVERMMIOBLKTYPE: &str = "mmioblk";
-pub const DRIVERSCSITYPE: &str = "scsi";
-pub const DRIVERNVDIMMTYPE: &str = "nvdimm";
-pub const DRIVEREPHEMERALTYPE: &str = "ephemeral";
-pub const DRIVERLOCALTYPE: &str = "local";
+pub const DRIVER_9P_TYPE: &str = "9p";
+pub const DRIVER_VIRTIOFS_TYPE: &str = "virtio-fs";
+pub const DRIVER_BLK_TYPE: &str = "blk";
+pub const DRIVER_MMIO_BLK_TYPE: &str = "mmioblk";
+pub const DRIVER_SCSI_TYPE: &str = "scsi";
+pub const DRIVER_NVDIMM_TYPE: &str = "nvdimm";
+pub const DRIVER_EPHEMERAL_TYPE: &str = "ephemeral";
+pub const DRIVER_LOCAL_TYPE: &str = "local";
 
-pub const TYPEROOTFS: &str = "rootfs";
+pub const TYPE_ROOTFS: &str = "rootfs";
 
 #[rustfmt::skip]
 lazy_static! {
@@ -125,14 +125,14 @@ lazy_static! {
 }
 
 pub const STORAGE_HANDLER_LIST: [&str; 8] = [
-    DRIVERBLKTYPE,
-    DRIVER9PTYPE,
-    DRIVERVIRTIOFSTYPE,
-    DRIVEREPHEMERALTYPE,
-    DRIVERMMIOBLKTYPE,
-    DRIVERLOCALTYPE,
-    DRIVERSCSITYPE,
-    DRIVERNVDIMMTYPE,
+    DRIVER_BLK_TYPE,
+    DRIVER_9P_TYPE,
+    DRIVER_VIRTIOFS_TYPE,
+    DRIVER_EPHEMERAL_TYPE,
+    DRIVER_MMIO_BLK_TYPE,
+    DRIVER_LOCAL_TYPE,
+    DRIVER_SCSI_TYPE,
+    DRIVER_NVDIMM_TYPE,
 ];
 
 #[derive(Debug, Clone)]
@@ -381,7 +381,7 @@ fn mount_storage(logger: &Logger, storage: &Storage) -> Result<()> {
     let logger = logger.new(o!("subsystem" => "mount"));
 
     match storage.fstype.as_str() {
-        DRIVER9PTYPE | DRIVERVIRTIOFSTYPE => {
+        DRIVER_9P_TYPE | DRIVER_VIRTIOFS_TYPE => {
             let dest_path = Path::new(storage.mount_point.as_str());
             if !dest_path.exists() {
                 fs::create_dir_all(dest_path).context("Create mount destination failed")?;
@@ -457,20 +457,22 @@ pub async fn add_storages(
             "storage-type" => handler_name.to_owned()));
 
         let res = match handler_name.as_str() {
-            DRIVERBLKTYPE => virtio_blk_storage_handler(&logger, &storage, sandbox.clone()).await,
-            DRIVER9PTYPE => virtio9p_storage_handler(&logger, &storage, sandbox.clone()).await,
-            DRIVERVIRTIOFSTYPE => {
+            DRIVER_BLK_TYPE => virtio_blk_storage_handler(&logger, &storage, sandbox.clone()).await,
+            DRIVER_9P_TYPE => virtio9p_storage_handler(&logger, &storage, sandbox.clone()).await,
+            DRIVER_VIRTIOFS_TYPE => {
                 virtiofs_storage_handler(&logger, &storage, sandbox.clone()).await
             }
-            DRIVEREPHEMERALTYPE => {
+            DRIVER_EPHEMERAL_TYPE => {
                 ephemeral_storage_handler(&logger, &storage, sandbox.clone()).await
             }
-            DRIVERMMIOBLKTYPE => {
+            DRIVER_MMIO_BLK_TYPE => {
                 virtiommio_blk_storage_handler(&logger, &storage, sandbox.clone()).await
             }
-            DRIVERLOCALTYPE => local_storage_handler(&logger, &storage, sandbox.clone()).await,
-            DRIVERSCSITYPE => virtio_scsi_storage_handler(&logger, &storage, sandbox.clone()).await,
-            DRIVERNVDIMMTYPE => nvdimm_storage_handler(&logger, &storage, sandbox.clone()).await,
+            DRIVER_LOCAL_TYPE => local_storage_handler(&logger, &storage, sandbox.clone()).await,
+            DRIVER_SCSI_TYPE => {
+                virtio_scsi_storage_handler(&logger, &storage, sandbox.clone()).await
+            }
+            DRIVER_NVDIMM_TYPE => nvdimm_storage_handler(&logger, &storage, sandbox.clone()).await,
             _ => {
                 return Err(anyhow!(
                     "Failed to find the storage handler {}",
