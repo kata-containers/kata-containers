@@ -433,8 +433,8 @@ mod tests {
         baremount.mount()
     }
 
-    #[test]
-    fn set_sandbox_storage() {
+    #[tokio::test]
+    async fn set_sandbox_storage() {
         let logger = slog::Logger::root(slog::Discard, o!());
         let mut s = Sandbox::new(&logger).unwrap();
 
@@ -467,8 +467,8 @@ mod tests {
         );
     }
 
-    #[test]
-    fn remove_sandbox_storage() {
+    #[tokio::test]
+    async fn remove_sandbox_storage() {
         skip_if_not_root!();
 
         let logger = slog::Logger::root(slog::Discard, o!());
@@ -523,9 +523,9 @@ mod tests {
         assert!(s.remove_sandbox_storage(destdir_path).is_ok());
     }
 
-    #[test]
+    #[tokio::test]
     #[allow(unused_assignments)]
-    fn unset_and_remove_sandbox_storage() {
+    async fn unset_and_remove_sandbox_storage() {
         skip_if_not_root!();
 
         let logger = slog::Logger::root(slog::Discard, o!());
@@ -575,8 +575,8 @@ mod tests {
         assert!(s.unset_and_remove_sandbox_storage(&other_dir_str).is_err());
     }
 
-    #[test]
-    fn unset_sandbox_storage() {
+    #[tokio::test]
+    async fn unset_sandbox_storage() {
         let logger = slog::Logger::root(slog::Discard, o!());
         let mut s = Sandbox::new(&logger).unwrap();
 
@@ -658,8 +658,8 @@ mod tests {
         .unwrap()
     }
 
-    #[test]
-    fn get_container_entry_exist() {
+    #[tokio::test]
+    async fn get_container_entry_exist() {
         skip_if_not_root!();
         let logger = slog::Logger::root(slog::Discard, o!());
         let mut s = Sandbox::new(&logger).unwrap();
@@ -671,8 +671,8 @@ mod tests {
         assert!(cnt.is_some());
     }
 
-    #[test]
-    fn get_container_no_entry() {
+    #[tokio::test]
+    async fn get_container_no_entry() {
         let logger = slog::Logger::root(slog::Discard, o!());
         let mut s = Sandbox::new(&logger).unwrap();
 
@@ -690,8 +690,9 @@ mod tests {
         s.add_container(linux_container);
         assert!(s.get_container("some_id").is_some());
     }
-    #[test]
-    fn update_shared_pidns() {
+
+    #[tokio::test]
+    async fn update_shared_pidns() {
         skip_if_not_root!();
         let logger = slog::Logger::root(slog::Discard, o!());
         let mut s = Sandbox::new(&logger).unwrap();
@@ -731,8 +732,8 @@ mod tests {
         assert!(s.hooks.as_ref().unwrap().poststop.is_empty());
     }
 
-    #[test]
-    pub fn test_sandbox_is_running() {
+    #[tokio::test]
+    async fn test_sandbox_is_running() {
         let logger = slog::Logger::root(slog::Discard, o!());
         let mut s = Sandbox::new(&logger).unwrap();
         s.running = true;
@@ -741,8 +742,8 @@ mod tests {
         assert!(!s.is_running());
     }
 
-    #[test]
-    fn test_sandbox_set_hostname() {
+    #[tokio::test]
+    async fn test_sandbox_set_hostname() {
         let logger = slog::Logger::root(slog::Discard, o!());
         let mut s = Sandbox::new(&logger).unwrap();
         let hostname = "abc123";

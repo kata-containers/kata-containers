@@ -1702,8 +1702,8 @@ mod tests {
         assert!(result.is_ok(), "load module should success");
     }
 
-    #[test]
-    fn test_append_guest_hooks() {
+    #[tokio::test]
+    async fn test_append_guest_hooks() {
         let logger = slog::Logger::root(slog::Discard, o!());
         let mut s = Sandbox::new(&logger).unwrap();
         s.hooks = Some(Hooks {
