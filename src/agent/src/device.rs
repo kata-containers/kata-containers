@@ -13,7 +13,7 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 
 use crate::linux_abi::*;
-use crate::mount::{DRIVERBLKTYPE, DRIVERMMIOBLKTYPE, DRIVERNVDIMMTYPE, DRIVERSCSITYPE};
+use crate::mount::{DRIVER_BLK_TYPE, DRIVER_MMIO_BLK_TYPE, DRIVER_NVDIMM_TYPE, DRIVER_SCSI_TYPE};
 use crate::sandbox::Sandbox;
 use crate::{AGENT_CONFIG, GLOBAL_DEVICE_WATCHER};
 use anyhow::{anyhow, Result};
@@ -401,10 +401,10 @@ async fn add_device(
     }
 
     match device.field_type.as_str() {
-        DRIVERBLKTYPE => virtio_blk_device_handler(device, spec, sandbox, devidx).await,
-        DRIVERMMIOBLKTYPE => virtiommio_blk_device_handler(device, spec, sandbox, devidx).await,
-        DRIVERNVDIMMTYPE => virtio_nvdimm_device_handler(device, spec, sandbox, devidx).await,
-        DRIVERSCSITYPE => virtio_scsi_device_handler(device, spec, sandbox, devidx).await,
+        DRIVER_BLK_TYPE => virtio_blk_device_handler(device, spec, sandbox, devidx).await,
+        DRIVER_MMIO_BLK_TYPE => virtiommio_blk_device_handler(device, spec, sandbox, devidx).await,
+        DRIVER_NVDIMM_TYPE => virtio_nvdimm_device_handler(device, spec, sandbox, devidx).await,
+        DRIVER_SCSI_TYPE => virtio_scsi_device_handler(device, spec, sandbox, devidx).await,
         _ => Err(anyhow!("Unknown device type {}", device.field_type)),
     }
 }

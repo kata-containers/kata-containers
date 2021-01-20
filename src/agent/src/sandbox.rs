@@ -4,7 +4,7 @@
 //
 
 use crate::linux_abi::*;
-use crate::mount::{get_mount_fs_type, remove_mounts, TYPEROOTFS};
+use crate::mount::{get_mount_fs_type, remove_mounts, TYPE_ROOTFS};
 use crate::namespace::Namespace;
 use crate::network::Network;
 use anyhow::{anyhow, Context, Result};
@@ -71,7 +71,7 @@ impl Sandbox {
             sandbox_pidns: None,
             storages: HashMap::new(),
             running: false,
-            no_pivot_root: fs_type.eq(TYPEROOTFS),
+            no_pivot_root: fs_type.eq(TYPE_ROOTFS),
             sender: None,
             rtnl: Some(RtnlHandle::new(NETLINK_ROUTE, 0).unwrap()),
             hooks: None,
