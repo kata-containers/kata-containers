@@ -144,7 +144,7 @@ main() {
 		local repo_dir="kata-containers"
 		git clone --quiet "https://${repo}.git" "${repo_dir}"
 		pushd "${repo_dir}" >> /dev/null
-		local branch=$(git branch -r -q --contains "${tag}" | grep -E "master|stable|2.0-dev" | grep -v HEAD)
+		local branch=$(git branch -r -q --contains "${tag}" | grep -E "master|stable|main" | grep -v HEAD)
 
 		popd >> /dev/null
 		rm -rf ${repo_dir}

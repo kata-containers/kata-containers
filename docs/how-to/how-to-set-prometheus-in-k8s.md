@@ -34,7 +34,7 @@ Also you should ensure that `kubectl` working correctly.
 Start Prometheus by utilizing our sample manifest:
 
 ```
-$ kubectl apply -f https://raw.githubusercontent.com/kata-containers/kata-containers/2.0-dev/docs/how-to/data/prometheus.yml
+$ kubectl apply -f https://raw.githubusercontent.com/kata-containers/kata-containers/main/docs/how-to/data/prometheus.yml
 ```
 
 This will create a new namespace, `prometheus`, and create the following resources:
@@ -60,7 +60,7 @@ go_gc_duration_seconds{quantile="0.75"} 0.000229911
 `kata-monitor` can be started on the cluster as follows:
 
 ```
-$ kubectl apply -f https://raw.githubusercontent.com/kata-containers/kata-containers/2.0-dev/docs/how-to/data/kata-monitor-daemonset.yml
+$ kubectl apply -f https://raw.githubusercontent.com/kata-containers/kata-containers/main/docs/how-to/data/kata-monitor-daemonset.yml
 ```
 
 This will create a new namespace `kata-system` and a `daemonset` in it.
@@ -73,7 +73,7 @@ Once the `daemonset` is running, Prometheus should discover `kata-monitor` as a 
 Run this command to run Grafana in Kubernetes:
 
 ```
-$ kubectl apply -f https://raw.githubusercontent.com/kata-containers/kata-containers/2.0-dev/docs/how-to/data/grafana.yml
+$ kubectl apply -f https://raw.githubusercontent.com/kata-containers/kata-containers/main/docs/how-to/data/grafana.yml
 ```
 
 This will create deployment and service for Grafana under namespace `prometheus`.
@@ -99,7 +99,7 @@ You can import this dashboard using Grafana UI, or using `curl` command in conso
 $ curl -XPOST -i localhost:3000/api/dashboards/import \
     -u admin:admin \
     -H "Content-Type: application/json" \
-	-d "{\"dashboard\":$(curl -sL https://raw.githubusercontent.com/kata-containers/kata-containers/2.0-dev/docs/how-to/data/dashboard.json )}"
+	-d "{\"dashboard\":$(curl -sL https://raw.githubusercontent.com/kata-containers/kata-containers/main/docs/how-to/data/dashboard.json )}"
 ```
 
 ## References
