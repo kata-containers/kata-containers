@@ -41,7 +41,7 @@ If you still wish to continue, but prefer a manual installation, see
 To install and configure a system with Kata Containers and containerd, run:
 
 ```bash
-$ bash -c "$(curl -fsSL https://raw.githubusercontent.com/kata-containers/kata-containers/2.0-dev/utils/kata-manager.sh)"
+$ bash -c "$(curl -fsSL https://raw.githubusercontent.com/kata-containers/kata-containers/main/utils/kata-manager.sh)"
 ```
 
 > **Notes:**
