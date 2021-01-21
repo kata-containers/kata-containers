@@ -17,7 +17,6 @@ GO_AGENT_PKG=${GO_AGENT_PKG:-github.com/kata-containers/agent}
 RUST_AGENT_PKG=${RUST_AGENT_PKG:-github.com/kata-containers/kata-containers}
 RUST_AGENT=${RUST_AGENT:-yes}
 RUST_VERSION="null"
-CMAKE_VERSION=${CMAKE_VERSION:-"null"}
 MUSL_VERSION=${MUSL_VERSION:-"null"}
 AGENT_BIN=${AGENT_BIN:-kata-agent}
 AGENT_INIT=${AGENT_INIT:-no}
@@ -353,11 +352,6 @@ build_rootfs_distro()
 		die "Could not detect the required rust version for AGENT_VERSION='${AGENT_VERSION:-master}'."
 
 	echo "Required rust version: $RUST_VERSION"
-
-	detect_cmake_version ||
-		die "Could not detect the required cmake version for AGENT_VERSION='${AGENT_VERSION:-master}'."
-
-	echo "Required cmake version: $CMAKE_VERSION"
 
 	detect_musl_version ||
 		die "Could not detect the required musl version for AGENT_VERSION='${AGENT_VERSION:-master}'."

@@ -33,8 +33,6 @@ RUN yum -y update && yum install -y \
     vim \
     which
 
-# install cmake because centos7's cmake is too old
-@INSTALL_CMAKE@
 @INSTALL_MUSL@
 # This will install the proper golang to build Kata components
 @INSTALL_GO@

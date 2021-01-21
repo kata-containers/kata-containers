@@ -28,7 +28,6 @@ zypper --non-interactive install --no-recommends --force-resolution \
     autoconf \
     automake \
     binutils \
-    cmake \
     coreutils \
     curl \
     gcc \

@@ -237,19 +237,6 @@ externals:
       .*/v?(\d\S+)\.tar\.gz
     version: "v1.0.0-rc5"
 
-  cmake:
-    description: |
-      Build system, to build grpc-rs.
-    url: "https://github.com/Kitware/CMake"
-    uscan-url: >-
-      https://github.com/Kitware/CMake/releases/download/
-      v?([\d\.]+)/cmake-([\d\.]+)\.tar\.gz
-    version: "3.15.3"
-    meta:
-      description: |
-        'newest-version' is the latest version known to work.
-      newest-version: "3.15.3"
-
   musl:
     description: |
       The musl library is used to build the rust agent.
