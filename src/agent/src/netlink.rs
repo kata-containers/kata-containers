@@ -322,9 +322,18 @@ impl Handle {
 
             use packet::nlas::route::Nla;
 
+            // Build a common indeterminate ip request
+            let request = self
+                .handle
+                .route()
+                .add()
+                .table(MAIN_TABLE)
+                .kind(UNICAST)
+                .protocol(BOOT_PROT)
+                .scope(scope);
+
             // `rtnetlink` offers a separate request builders for different IP versions (IP v4 and v6).
             // This if branch is a bit clumsy because it does almost the same.
-            // TODO: Simplify this once https://github.com/little-dude/netlink/pull/140 is merged and released
             if is_v6 {
                 let dest_addr = if !route.dest.is_empty() {
                     Ipv6Network::from_str(&route.dest)?
@@ -333,14 +342,8 @@ impl Handle {
                 };
 
                 // Build IP v6 request
-                let mut request = self
-                    .handle
-                    .route()
-                    .add_v6()
-                    .table(MAIN_TABLE)
-                    .kind(UNICAST)
-                    .protocol(BOOT_PROT)
-                    .scope(scope)
+                let mut request = request
+                    .v6()
                     .destination_prefix(dest_addr.ip(), dest_addr.prefix())
                     .output_interface(link.index());
 
@@ -377,14 +380,8 @@ impl Handle {
                 };
 
                 // Build IP v4 request
-                let mut request = self
-                    .handle
-                    .route()
-                    .add_v4()
-                    .table(MAIN_TABLE)
-                    .kind(UNICAST)
-                    .protocol(BOOT_PROT)
-                    .scope(scope)
+                let mut request = request
+                    .v4()
                     .destination_prefix(dest_addr.ip(), dest_addr.prefix())
                     .output_interface(link.index());
 

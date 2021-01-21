@@ -141,9 +141,7 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
         exit(0);
     }
 
-    let mut rt = tokio::runtime::Builder::new()
-        .basic_scheduler()
-        .max_threads(1)
+    let rt = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()?;
 

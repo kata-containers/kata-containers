@@ -259,14 +259,12 @@ impl AgentService {
             };
         });
 
-        let timeout = tokio::time::delay_for(Duration::from_secs(req.timeout.into()));
-
-        tokio::select! {
-            _ = rx => {}
-            _ = timeout => {
-                return Err(anyhow!(nix::Error::from_errno(nix::errno::Errno::ETIME)));
-            }
-        };
+        if tokio::time::timeout(Duration::from_secs(req.timeout.into()), rx)
+            .await
+            .is_err()
+        {
+            return Err(anyhow!(nix::Error::from_errno(nix::errno::Errno::ETIME)));
+        }
 
         if handle.await.is_err() {
             return Err(anyhow!(nix::Error::from_errno(

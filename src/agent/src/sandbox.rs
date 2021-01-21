@@ -311,7 +311,7 @@ impl Sandbox {
     }
 
     pub async fn run_oom_event_monitor(&self, mut rx: Receiver<String>, container_id: String) {
-        let mut tx = self.event_tx.clone();
+        let tx = self.event_tx.clone();
         let logger = self.logger.clone();
 
         tokio::spawn(async move {

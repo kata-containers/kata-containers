@@ -85,7 +85,7 @@ async fn register_memory_event_v2(
     info!(sl!(), "ev_wd: {:?}", ev_wd);
     info!(sl!(), "cg_wd: {:?}", cg_wd);
 
-    let (mut sender, receiver) = channel(100);
+    let (sender, receiver) = channel(100);
     let containere_id = containere_id.to_string();
 
     tokio::spawn(async move {
@@ -180,7 +180,7 @@ async fn register_memory_event(
 
     tokio::spawn(async move {
         loop {
-            let mut sender = sender.clone();
+            let sender = sender.clone();
             let mut buf = [0u8; 8];
             match eventfd_stream.read(&mut buf).await {
                 Err(err) => {
