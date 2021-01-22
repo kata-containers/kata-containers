@@ -126,9 +126,9 @@ The following repositories are used by both the current and first generation Kat
 
 | Component | Description | Current | First generation | Notes |
 |-|-|-|-|-|
-| CI | Continuous Integration configuration files and scripts. | [Kata 2.x](https://github.com/kata-containers/ci/tree/2.0-dev) | [Kata 1.x](https://github.com/kata-containers/ci/tree/master) | |
+| CI | Continuous Integration configuration files and scripts. | [Kata 2.x](https://github.com/kata-containers/ci/tree/main) | [Kata 1.x](https://github.com/kata-containers/ci/tree/master) | |
 | kernel | The Linux kernel used by the hypervisor to boot the guest image. | [Kata 2.x][kernel] | [Kata 1.x][kernel] | Patches are stored in the packaging component. |
-| tests | Test code. | [Kata 2.x](https://github.com/kata-containers/tests/tree/2.0-dev) | [Kata 1.x](https://github.com/kata-containers/tests/tree/master) | Excludes unit tests which live with the main code. |
+| tests | Test code. | [Kata 2.x](https://github.com/kata-containers/tests/tree/main) | [Kata 1.x](https://github.com/kata-containers/tests/tree/master) | Excludes unit tests which live with the main code. |
 | www.katacontainers.io | Contains the source for the [main web site](https://www.katacontainers.io). | [Kata 2.x][github-katacontainers.io] | [Kata 1.x][github-katacontainers.io] | | |
 
 ### Packaging and releases
