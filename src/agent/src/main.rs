@@ -24,9 +24,7 @@ extern crate scopeguard;
 
 #[macro_use]
 extern crate slog;
-extern crate netlink;
 
-use crate::netlink::{RtnlHandle, NETLINK_ROUTE};
 use anyhow::{anyhow, Context, Result};
 use nix::fcntl::{self, OFlag};
 use nix::fcntl::{FcntlArg, FdFlag};
@@ -55,6 +53,7 @@ mod linux_abi;
 mod metrics;
 mod mount;
 mod namespace;
+mod netlink;
 mod network;
 pub mod random;
 mod sandbox;
@@ -276,13 +275,9 @@ async fn start_sandbox(logger: &Logger, config: &agentConfig, init_mode: bool) -
     };
 
     // Initialize unique sandbox structure.
-    let mut s = Sandbox::new(&logger).context("Failed to create sandbox")?;
-
+    let s = Sandbox::new(&logger).context("Failed to create sandbox")?;
     if init_mode {
-        let mut rtnl = RtnlHandle::new(NETLINK_ROUTE, 0).unwrap();
-        rtnl.handle_localhost()?;
-
-        s.rtnl = Some(rtnl);
+        s.rtnl.handle_localhost().await?;
     }
 
     let sandbox = Arc::new(Mutex::new(s));
