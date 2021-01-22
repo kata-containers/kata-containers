@@ -127,9 +127,9 @@ configuration.
 Example:
 
 ```bash
-# From https://github.com/kata-containers/kata-containers/blob/2.0-dev/versions.yaml
+# From https://github.com/kata-containers/kata-containers/blob/main/versions.yaml
 $ kernel_version_in_versions_file=5.4.60
-# From https://github.com/kata-containers/kata-containers/blob/2.0-dev/tools/packaging/kernel/kata_config_version
+# From https://github.com/kata-containers/kata-containers/blob/main/tools/packaging/kernel/kata_config_version
 $ kata_config_version=83
 $ latest_kernel_version=${kernel_version_in_versions_file}-${kata_config_version}
 ```
