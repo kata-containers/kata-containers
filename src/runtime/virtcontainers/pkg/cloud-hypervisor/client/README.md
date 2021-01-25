@@ -64,6 +64,7 @@ Class | Method | HTTP request | Description
  - [CpuTopology](docs/CpuTopology.md)
  - [CpusConfig](docs/CpusConfig.md)
  - [DeviceConfig](docs/DeviceConfig.md)
+ - [DeviceNode](docs/DeviceNode.md)
  - [DiskConfig](docs/DiskConfig.md)
  - [FsConfig](docs/FsConfig.md)
  - [InitramfsConfig](docs/InitramfsConfig.md)
