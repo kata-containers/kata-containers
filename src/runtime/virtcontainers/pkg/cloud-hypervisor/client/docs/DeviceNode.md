@@ -1,13 +1,13 @@
-# VmInfo
+# DeviceNode
 
 ## Properties
 
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
-**Config** | [**VmConfig**](VmConfig.md) |  | 
-**State** | **string** |  | 
-**MemoryActualSize** | **int64** |  | [optional] 
-**DeviceTree** | [**map[string]DeviceNode**](DeviceNode.md) |  | [optional] 
+**Id** | **string** |  | [optional] 
+**Resources** | **[]map[string]interface{}** |  | [optional] 
+**Children** | **[]string** |  | [optional] 
+**PciBdf** | **int32** |  | [optional] 
 
 [[Back to Model list]](../README.md#documentation-for-models) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to README]](../README.md)
 
