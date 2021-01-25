@@ -3,7 +3,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-From docker.io/centos:@OS_VERSION@
+From registry.centos.org/centos:@OS_VERSION@
 
 @SET_PROXY@
 
