@@ -60,7 +60,6 @@ pub struct Manager {
     pub cpath: String,
     #[serde(skip)]
     cgroup: cgroups::Cgroup,
-    relative_paths: HashMap<String, String>,
 }
 
 // set_resource is used to set reources by cgroup controller.
@@ -946,38 +945,28 @@ pub fn get_mounts() -> Result<HashMap<String, String>> {
     Ok(m)
 }
 
-fn new_cgroup(
-    h: Box<dyn cgroups::Hierarchy>,
-    path: &str,
-    relative_paths: HashMap<String, String>,
-) -> Cgroup {
+fn new_cgroup(h: Box<dyn cgroups::Hierarchy>, path: &str) -> Cgroup {
     let valid_path = path.trim_start_matches('/').to_string();
-    cgroups::Cgroup::new_with_relative_paths(h, valid_path.as_str(), relative_paths)
+    cgroups::Cgroup::new(h, valid_path.as_str())
 }
 
 impl Manager {
     pub fn new(cpath: &str) -> Result<Self> {
         let mut m = HashMap::new();
-        let mut relative_paths = HashMap::new();
 
         let paths = get_paths()?;
         let mounts = get_mounts()?;
 
-        for (key, value) in &paths {
+        for key in paths.keys() {
             let mnt = mounts.get(key);
 
             if mnt.is_none() {
                 continue;
             }
 
-            let p = if value == "/" {
-                format!("{}/{}", mnt.unwrap(), cpath)
-            } else {
-                format!("{}{}/{}", mnt.unwrap(), value, cpath)
-            };
+            let p = format!("{}/{}", mnt.unwrap(), cpath);
 
             m.insert(key.to_string(), p);
-            relative_paths.insert(key.to_string(), value.to_string());
         }
 
         Ok(Self {
@@ -985,8 +974,7 @@ impl Manager {
             mounts,
             // rels: paths,
             cpath: cpath.to_string(),
-            cgroup: new_cgroup(cgroups::hierarchies::auto(), cpath, relative_paths.clone()),
-            relative_paths,
+            cgroup: new_cgroup(cgroups::hierarchies::auto(), cpath),
         })
     }
 
@@ -1031,11 +1019,7 @@ impl Manager {
                 .unwrap()
                 .trim_start_matches(root_path.to_str().unwrap());
             info!(sl!(), "updating cpuset for parent path {:?}", &r_path);
-            let cg = new_cgroup(
-                cgroups::hierarchies::auto(),
-                &r_path,
-                self.relative_paths.clone(),
-            );
+            let cg = new_cgroup(cgroups::hierarchies::auto(), &r_path);
             let cpuset_controller: &CpuSetController = cg.controller_of().unwrap();
             cpuset_controller.set_cpus(guest_cpuset)?;
         }
