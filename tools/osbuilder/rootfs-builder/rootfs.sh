@@ -147,7 +147,7 @@ DOCKER_RUNTIME      Docker runtime to use when USE_DOCKER is set.
 
 Refer to the Platform-OS Compatibility Matrix for more details on the supported
 architectures:
-https://github.com/kata-containers/osbuilder#platform-distro-compatibility-matrix
+https://github.com/kata-containers/kata-containers/tree/main/tools/osbuilder#platform-distro-compatibility-matrix
 
 EOT
 exit "${error}"
