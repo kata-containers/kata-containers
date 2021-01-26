@@ -1,0 +1,39 @@
+From ac36d37e943635fc072e9d4f47e40a48fbcdb3f0 Mon Sep 17 00:00:00 2001
+From: Arjan van de Ven <arjan@linux.intel.com>
+Date: Wed, 9 Oct 2019 15:04:33 +0200
+Subject: ACPI: Always build evged in
+
+Although the Generic Event Device is a Hardware-reduced
+platfom device in principle, it should not be restricted to
+ACPI_REDUCED_HARDWARE_ONLY.
+
+Kernels supporting both fixed and hardware-reduced ACPI platforms
+should be able to probe the GED when dynamically detecting that a
+platform is hardware-reduced. For that, the driver must be
+unconditionally built in.
+
+Signed-off-by: Arjan van de Ven <arjan@linux.intel.com>
+Signed-off-by: Samuel Ortiz <sameo@linux.intel.com>
+Signed-off-by: Rafael J. Wysocki <rafael.j.wysocki@intel.com>
+---
+ drivers/acpi/Makefile | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+(limited to 'drivers/acpi/Makefile')
+
+diff --git a/drivers/acpi/Makefile b/drivers/acpi/Makefile
+index 5d361e4e3405..ef1ac4d127da 100644
+--- a/drivers/acpi/Makefile
++++ b/drivers/acpi/Makefile
+@@ -48,7 +48,7 @@ acpi-y				+= acpi_pnp.o
+ acpi-$(CONFIG_ARM_AMBA)	+= acpi_amba.o
+ acpi-y				+= power.o
+ acpi-y				+= event.o
+-acpi-$(CONFIG_ACPI_REDUCED_HARDWARE_ONLY) += evged.o
++acpi-y				+= evged.o
+ acpi-y				+= sysfs.o
+ acpi-y				+= property.o
+ acpi-$(CONFIG_X86)		+= acpi_cmos_rtc.o
+-- 
+cgit 1.2-0.3.lf.el7
+
