@@ -195,6 +195,9 @@ github.com/hashicorp/go-multierror
 # github.com/intel-go/cpuid v0.0.0-20210602155658-5747e5cec0d9
 ## explicit
 github.com/intel-go/cpuid
+# github.com/kata-containers/directvolume v0.0.0-20210621215611-28839bf22226
+## explicit
+github.com/kata-containers/directvolume
 # github.com/kata-containers/govmm v0.0.0-20210804035756-3c64244cbb48
 ## explicit
 github.com/kata-containers/govmm/qemu

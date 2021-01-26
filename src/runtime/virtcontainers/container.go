@@ -14,10 +14,12 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils/katatrace"
+	directvolume "github.com/kata-containers/directvolume"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/manager"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols/grpc"
@@ -681,6 +683,9 @@ func filterDevices(c *Container, devices []ContainerDevice) (ret []ContainerDevi
 // Add any mount based block devices to the device manager and save the
 // device ID for the particular mount. This'll occur when the mountpoint source
 // is a block device.
+//
+// A standard bind mount volume with 'magic' json file in its root will indicate
+// a FS system is desired for sandbox, but is being provided as a block device only on host.
 func (c *Container) createBlockDevices(ctx context.Context) error {
 	if !c.checkBlockDeviceSupport(ctx) {
 		c.Logger().Warn("Block device not supported")
@@ -701,6 +706,28 @@ func (c *Container) createBlockDevices(ctx context.Context) error {
 			continue
 		}
 
+		// Check for scenario where CSI is providing a FS based volume which is not mounted on the host. In this
+		// scenario, a special file will be present within the mount's source which provides details on where the
+		// backing block device comes from. We then ignore the mount on the host, and instead pass
+		// the block device to the VM, and mount it in the guest to provide to the container workload.
+		if _, err := os.Stat(filepath.Join(m.Source, directvolume.DirectAssignedVolumeJson)); err == nil {
+			c.Logger().Debugf("found direct assigned volume: %s", m.Source)
+
+			directInfo, err := getDirectAssignedDiskMountInfo(filepath.Join(m.Source, directvolume.DirectAssignedVolumeJson))
+			if err != nil {
+				c.Logger().WithError(err).Error("direct assigned volume found, but error reading file")
+				return err
+			}
+
+			// Update the volume information based on what we received from CSI:
+			c.mounts[i].Source = directInfo.Device
+			c.mounts[i].Type = directInfo.FsType
+			m.Source = directInfo.Device
+			m.Type = directInfo.FsType
+
+			c.mounts[i].Options = strings.Split(directInfo.Options, ",")
+			m.Options = c.mounts[i].Options
+		}
 		var stat unix.Stat_t
 		if err := unix.Stat(m.Source, &stat); err != nil {
 			return fmt.Errorf("stat %q failed: %v", m.Source, err)
