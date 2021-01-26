@@ -504,6 +504,16 @@ components:
             id: id
             mac: mac
             mask: 255.255.255.0
+        device_tree:
+          key:
+            children:
+            - children
+            - children
+            pci_bdf: 6
+            resources:
+            - '{}'
+            - '{}'
+            id: id
       properties:
         config:
           $ref: '#/components/schemas/VmConfig'
@@ -517,9 +527,38 @@ components:
         memory_actual_size:
           format: int64
           type: integer
+        device_tree:
+          additionalProperties:
+            $ref: '#/components/schemas/DeviceNode'
+          type: object
       required:
       - config
       - state
+      type: object
+    DeviceNode:
+      example:
+        children:
+        - children
+        - children
+        pci_bdf: 6
+        resources:
+        - '{}'
+        - '{}'
+        id: id
+      properties:
+        id:
+          type: string
+        resources:
+          items:
+            type: object
+          type: array
+        children:
+          items:
+            type: string
+          type: array
+        pci_bdf:
+          format: int32
+          type: integer
       type: object
     VmCounters:
       additionalProperties:
