@@ -41,13 +41,13 @@ machine_type = "@MACHINETYPE@"
 # List of valid annotation names for the hypervisor
 # Each member of the list is a regular expression, which is the base name
 # of the annotation, e.g. "path" for io.katacontainers.config.hypervisor.path"
-enable_annotations = @DEFENABLEANNOTATIONS@
+#enable_annotations = @DEFENABLEANNOTATIONS@
 
 # List of valid annotations values for the hypervisor
 # Each member of the list is a path pattern as described by glob(3).
 # The default if not set is empty (all annotations rejected.)
 # Your distribution recommends: @QEMUVALIDHYPERVISORPATHS@
-valid_hypervisor_paths = @QEMUVALIDHYPERVISORPATHS@
+#valid_hypervisor_paths = @QEMUVALIDHYPERVISORPATHS@
 
 # Optional space-separated list of options to pass to the guest kernel.
 # For example, use `kernel_params = "vsyscall=emulate"` if you are having
@@ -124,7 +124,7 @@ default_memory = @DEFMEMSZ@
 # Default memory slots per SB/VM.
 # If unspecified then it will be set @DEFMEMSLOTS@.
 # This is will determine the times that memory will be hotadded to sandbox/VM.
-#memory_slots = @DEFMEMSLOTS@
+memory_slots = @DEFMEMSLOTS@
 
 # The size in MiB will be plused to max memory of hypervisor.
 # It is the memory address space for the NVDIMM devie.
@@ -159,7 +159,7 @@ virtio_fs_daemon = "@DEFVIRTIOFSDAEMON@"
 # List of valid annotations values for the virtiofs daemon
 # The default if not set is empty (all annotations rejected.)
 # Your distribution recommends: @DEFVALIDVIRTIOFSDAEMONPATHS@
-valid_virtio_fs_daemon_paths = @DEFVALIDVIRTIOFSDAEMONPATHS@
+#valid_virtio_fs_daemon_paths = @DEFVALIDVIRTIOFSDAEMONPATHS@
 
 # Default size of DAX cache in MiB
 virtio_fs_cache_size = @DEFVIRTIOFSCACHESIZE@
@@ -253,7 +253,7 @@ vhost_user_store_path = "@DEFVHOSTUSERSTOREPATH@"
 # List of valid annotations values for the vhost user store path
 # The default if not set is empty (all annotations rejected.)
 # Your distribution recommends: @DEFVALIDVHOSTUSERSTOREPATHS@
-valid_vhost_user_store_paths = @DEFVALIDVHOSTUSERSTOREPATHS@
+#valid_vhost_user_store_paths = @DEFVALIDVHOSTUSERSTOREPATHS@
 
 # Enable file based guest memory support. The default is an empty string which
 # will disable this feature. In the case of virtio-fs, this is enabled
@@ -264,7 +264,7 @@ valid_vhost_user_store_paths = @DEFVALIDVHOSTUSERSTOREPATHS@
 # List of valid annotations values for the file_mem_backend annotation
 # The default if not set is empty (all annotations rejected.)
 # Your distribution recommends: @DEFVALIDFILEMEMBACKENDS@
-valid_file_mem_backends = @DEFVALIDFILEMEMBACKENDS@
+#valid_file_mem_backends = @DEFVALIDFILEMEMBACKENDS@
 
 # -pflash can add image file to VM. The arguments of it should be in format
 # of ["/path/to/flash0.img", "/path/to/flash1.img"]
@@ -344,7 +344,7 @@ valid_entropy_sources = @DEFVALIDENTROPYSOURCES@
 # https://github.com/opencontainers/runtime-spec/blob/v1.0.1/config.md#posix-platform-hooks
 # Warnings will be logged if any error is encountered while scanning for hooks,
 # but it will not abort container execution.
-#guest_hook_path = "/usr/share/oci/hooks"
+guest_hook_path = "/usr/share/oci/hooks"
 #
 # Use rx Rate Limiter to control network I/O inbound bandwidth(size in bits/sec for SB/VM).
 # In Qemu, we use classful qdiscs HTB(Hierarchy Token Bucket) to discipline traffic.
@@ -471,7 +471,7 @@ kernel_modules=[]
 
 # Agent connection dialing timeout value in seconds
 # (default: 30)
-#dial_timeout = 30
+dial_timeout = 90
 
 [runtime]
 # If enabled, the runtime will log additional debug messages to the

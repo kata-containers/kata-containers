@@ -145,6 +145,7 @@ ACRNVALIDHYPERVISORPATHS := [\"$(ACRNPATH)\"]
 ACRNCTLPATH := $(ACRNBINDIR)/$(ACRNCTLCMD)
 ACRNVALIDCTLPATHS := [\"$(ACRNCTLPATH)\"]
 
+
 # Default number of vCPUs
 DEFVCPUS := 1
 # Default maximum number of vCPUs
@@ -157,12 +158,12 @@ DEFMEMSZ := 2048
 # - preallocated memory
 # - vm template memory
 # - hugepage memory
-DEFMEMSLOTS := 10
+DEFMEMSLOTS := 32
 #Default number of bridges
 DEFBRIDGES := 1
 DEFENABLEANNOTATIONS := []
 DEFDISABLEGUESTSECCOMP := true
-DEFDISABLEGUESTEMPTYDIR := false
+DEFDISABLEGUESTEMPTYDIR := true
 #Default experimental features enabled
 DEFAULTEXPFEATURES := []
 
@@ -175,7 +176,7 @@ DEFVALIDENTROPYSOURCES := [\"/dev/urandom\",\"/dev/random\",\"\"]
 DEFDISABLEBLOCK := false
 DEFSHAREDFS_CLH_VIRTIOFS := virtio-fs
 DEFSHAREDFS_QEMU_VIRTIOFS := virtio-fs
-DEFVIRTIOFSDAEMON := $(LIBEXECDIR)/kata-qemu/virtiofsd
+DEFVIRTIOFSDAEMON := $(PKGLIBEXECDIR)/virtiofsd
 DEFVALIDVIRTIOFSDAEMONPATHS := [\"$(DEFVIRTIOFSDAEMON)\"]
 # Default DAX mapping cache size in MiB
 #if value is 0, DAX is not enabled
@@ -197,11 +198,12 @@ DEFMSIZE9P := 8192
 DEFVFIOMODE := guest-kernel
 
 # Default cgroup model
-DEFSANDBOXCGROUPONLY ?= false
+DEFSANDBOXCGROUPONLY ?= true
+
 
 DEFSTATICRESOURCEMGMT ?= false
 
-DEFBINDMOUNTS := []
+DEFBINDMOUNTS := [\"/usr/share/kata-containers/certs.pem\"]
 
 SED = sed
 
@@ -242,10 +244,10 @@ ifneq (,$(QEMUCMD))
     CONFIGS += $(CONFIG_QEMU)
 
     # qemu-specific options (all should be suffixed by "_QEMU")
-    DEFBLOCKSTORAGEDRIVER_QEMU := virtio-scsi
+    DEFBLOCKSTORAGEDRIVER_QEMU := virtio-blk
     DEFNETWORKMODEL_QEMU := tcfilter
     KERNELTYPE = uncompressed
-    KERNELNAME = $(call MAKE_KERNEL_NAME,$(KERNELTYPE))
+    KERNELNAME = vmlinuz
     KERNELPATH = $(KERNELDIR)/$(KERNELNAME)
 endif
 
@@ -545,7 +547,7 @@ endef
 # Returns the name of the kernel file to use based on the provided KERNELTYPE.
 # $1 : KERNELTYPE (compressed or uncompressed)
 define MAKE_KERNEL_NAME
-$(if $(findstring uncompressed,$1),vmlinux.container,vmlinuz.container)
+$(if $(findstring uncompressed,$1),vmlinux,vmlinuz.container)
 endef
 
 define MAKE_KERNEL_VIRTIOFS_NAME

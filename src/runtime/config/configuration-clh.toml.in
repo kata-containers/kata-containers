@@ -53,13 +53,13 @@ image = "@IMAGEPATH@"
 # List of valid annotation names for the hypervisor
 # Each member of the list is a regular expression, which is the base name
 # of the annotation, e.g. "path" for io.katacontainers.config.hypervisor.path"
-enable_annotations = @DEFENABLEANNOTATIONS@
+#enable_annotations = @DEFENABLEANNOTATIONS@
 
 # List of valid annotations values for the hypervisor
 # Each member of the list is a path pattern as described by glob(3).
 # The default if not set is empty (all annotations rejected.)
 # Your distribution recommends: @CLHVALIDHYPERVISORPATHS@
-valid_hypervisor_paths = @CLHVALIDHYPERVISORPATHS@
+#valid_hypervisor_paths = @CLHVALIDHYPERVISORPATHS@
 
 # Optional space-separated list of options to pass to the guest kernel.
 # For example, use `kernel_params = "vsyscall=emulate"` if you are having
@@ -103,7 +103,7 @@ default_memory = @DEFMEMSZ@
 # Default memory slots per SB/VM.
 # If unspecified then it will be set @DEFMEMSLOTS@.
 # This is will determine the times that memory will be hotadded to sandbox/VM.
-#memory_slots = @DEFMEMSLOTS@
+memory_slots = @DEFMEMSLOTS@
 
 # Shared file system type:
 #   - virtio-fs (default)
@@ -116,7 +116,7 @@ virtio_fs_daemon = "@DEFVIRTIOFSDAEMON@"
 # List of valid annotations values for the virtiofs daemon
 # The default if not set is empty (all annotations rejected.)
 # Your distribution recommends: @DEFVALIDVIRTIOFSDAEMONPATHS@
-valid_virtio_fs_daemon_paths = @DEFVALIDVIRTIOFSDAEMONPATHS@
+#valid_virtio_fs_daemon_paths = @DEFVALIDVIRTIOFSDAEMONPATHS@
 
 # Default size of DAX cache in MiB
 virtio_fs_cache_size = @DEFVIRTIOFSCACHESIZE@
@@ -177,7 +177,7 @@ block_device_driver = "virtio-blk"
 # https://github.com/opencontainers/runtime-spec/blob/v1.0.1/config.md#posix-platform-hooks
 # Warnings will be logged if any error is encountered while scanning for hooks,
 # but it will not abort container execution.
-#guest_hook_path = "/usr/share/oci/hooks"
+guest_hook_path = "/usr/share/oci/hooks"
 #
 [agent.@PROJECT_TYPE@]
 # If enabled, make the agent display debug-level messages.
@@ -207,7 +207,7 @@ block_device_driver = "virtio-blk"
 
 # Agent connection dialing timeout value in seconds
 # (default: 30)
-#dial_timeout = 30
+dial_timeout = 90
 
 [runtime]
 # If enabled, the runtime will log additional debug messages to the
