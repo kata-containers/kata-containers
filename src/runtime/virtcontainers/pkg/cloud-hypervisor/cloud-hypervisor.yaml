@@ -363,8 +363,30 @@ components:
         memory_actual_size:
           type: integer
           format: int64
+        device_tree:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/DeviceNode'
       description: Virtual Machine information
 
+    DeviceNode:
+      type: object
+      properties:
+        id:
+          type: string
+        resources:
+          type: array
+          items:
+            # Rust enum type (with data) which can't be better represented here
+            type: object
+        children:
+          type: array
+          items:
+            type: string
+        pci_bdf:
+          type: integer
+          format: int32
+        
     VmCounters:
       type: object
       additionalProperties:
