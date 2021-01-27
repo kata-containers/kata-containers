@@ -170,9 +170,9 @@ checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
 
 [[package]]
 name = "cgroups-rs"
-version = "0.2.1"
+version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "348eb6d8e20a9f5247209686b7d0ffc2f4df40ddcb95f9940de55a94a655b3f5"
+checksum = "52d1133681d746cc4807ad3b8005019af9299a086f61d5ed1de0e3a2000184f2"
 dependencies = [
  "libc",
  "log",
