@@ -12,7 +12,6 @@ RUN dnf -y update && dnf install -y \
     automake \
     binutils \
     chrony \
-    cmake \
     coreutils \
     curl \
     gcc \

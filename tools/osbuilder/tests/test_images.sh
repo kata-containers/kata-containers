@@ -644,8 +644,6 @@ test_dracut()
 		die "Could not detect the required Go version for AGENT_VERSION='${AGENT_VERSION:-master}'."
 	detect_rust_version ||
 		die "Could not detect the required rust version for AGENT_VERSION='${AGENT_VERSION:-master}'."
-	detect_cmake_version ||
-		die "Could not detect the required cmake version for AGENT_VERSION='${AGENT_VERSION:-master}'."
 	detect_musl_version ||
 		die "Could not detect the required musl version for AGENT_VERSION='${AGENT_VERSION:-master}'."
 
