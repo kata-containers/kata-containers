@@ -7,7 +7,6 @@
 set -e
 
 KATA_REPO=${KATA_REPO:-github.com/kata-containers/kata-containers}
-CMAKE_VERSION=${CMAKE_VERSION:-"null"}
 MUSL_VERSION=${MUSL_VERSION:-"null"}
 # Give preference to variable set by CI
 yq_file="${script_dir}/../../../ci/install_yq.sh"
@@ -272,18 +271,6 @@ ENV PATH=\$PATH:\$GOROOT/bin:\$GOPATH/bin
 
 	# Rust agent
 	# rust installer should set path apropiately, just in case
-	local cmake_file="cmake-${CMAKE_VERSION}.tar.gz"
-	local cmake_dir="cmake-${CMAKE_VERSION}"
-	readonly install_cmake="
-RUN pushd /root; \
-    curl -sLO https://github.com/Kitware/CMake/releases/download/v${CMAKE_VERSION}/${cmake_file}; \
-	tar -zxf ${cmake_file}; \
-	cd ${cmake_dir}; \
-	./bootstrap > /dev/null 2>\&1; \
-	make > /dev/null 2>\&1; \
-	make install > /dev/null 2>\&1; \
-	popd
-"
 	# install musl for compiling rust-agent
 	install_musl=
 	if [ "${muslarch}" == "aarch64" ]; then
@@ -346,7 +333,6 @@ RUN ln -sf /usr/bin/g++ /bin/musl-g++
 		sed \
 			-e "s|@GO_VERSION@|${GO_VERSION}|g" \
 			-e "s|@OS_VERSION@|${OS_VERSION:-}|g" \
-			-e "s|@INSTALL_CMAKE@||g" \
 			-e "s|@INSTALL_MUSL@||g" \
 			-e "s|@INSTALL_GO@|${install_go//$'\n'/\\n}|g" \
 			-e "s|@INSTALL_RUST@||g" \
@@ -356,7 +342,6 @@ RUN ln -sf /usr/bin/g++ /bin/musl-g++
 		sed \
 			-e "s|@GO_VERSION@|${GO_VERSION}|g" \
 			-e "s|@OS_VERSION@|${OS_VERSION:-}|g" \
-			-e "s|@INSTALL_CMAKE@|${install_cmake//$'\n'/\\n}|g" \
 			-e "s|@INSTALL_MUSL@|${install_musl//$'\n'/\\n}|g" \
 			-e "s|@INSTALL_GO@|${install_go//$'\n'/\\n}|g" \
 			-e "s|@INSTALL_RUST@|${install_rust//$'\n'/\\n}|g" \
@@ -392,20 +377,6 @@ detect_rust_version()
 	RUST_VERSION="$(cat "${kata_versions_file}"  | $yq r -X - "languages.rust.meta.newest-version")"
 
 	[ "$?" == "0" ] && [ "$RUST_VERSION" != "null" ]
-}
-
-detect_cmake_version()
-{
-	info "Detecting cmake version"
-	typeset -r yq=$(command -v yq || command -v "${GOPATH}/bin/yq" || echo "${GOPATH}/bin/yq")
-	if [ ! -f "$yq" ]; then
-		source "$yq_file"
-	fi
-
-	info "Get cmake version from ${kata_versions_file}"
-	CMAKE_VERSION="$(cat "${kata_versions_file}"  | $yq r -X - "externals.cmake.version")"
-
-	[ "$?" == "0" ] && [ "$CMAKE_VERSION" != "null" ]
 }
 
 detect_musl_version()
