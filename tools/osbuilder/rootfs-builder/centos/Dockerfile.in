@@ -34,6 +34,6 @@ RUN yum -y update && yum install -y \
     which
 
 @INSTALL_MUSL@
-# This will install the proper golang to build Kata components
+# This will install the proper golang, rustc to build Kata components
 @INSTALL_GO@
 @INSTALL_RUST@

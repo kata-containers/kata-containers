@@ -13,7 +13,6 @@ set -o errtrace
 script_name="${0##*/}"
 script_dir="$(dirname $(readlink -f $0))"
 AGENT_VERSION=${AGENT_VERSION:-}
-GO_AGENT_PKG=${GO_AGENT_PKG:-github.com/kata-containers/agent}
 RUST_AGENT_PKG=${RUST_AGENT_PKG:-github.com/kata-containers/kata-containers}
 RUST_AGENT=${RUST_AGENT:-yes}
 RUST_VERSION="null"
@@ -116,9 +115,6 @@ AGENT_SOURCE_BIN    Path to the directory of agent binary.
 DISTRO_REPO         Use host repositories to install guest packages.
                     Default value: <not set>
 
-GO_AGENT_PKG        URL of the Git repository hosting the agent package.
-                    Default value: ${GO_AGENT_PKG}
-
 GRACEFUL_EXIT       If set, and if the DISTRO configuration specifies a
                     non-empty BUILD_CAN_FAIL variable, do not return with an
                     error code in case any of the build step fails.
@@ -201,7 +197,7 @@ docker_extra_args()
 		case "$ID" in
                 fedora | centos | rhel)
 			# Depending on the podman version, we'll face issues when passing
-		        # `--security-opt apparmor=unconfined` on a system where not apparmor is not installed.
+		        # `--security-opt apparmor=unconfined` on a system where apparmor is not installed.
 			# Because of this, let's just avoid adding this option when the host OS comes from Red Hat.
 
 			# A explict check for podman, at least for now, can be avoided.
@@ -288,7 +284,8 @@ compare_versions()
 check_env_variables()
 {
 	# Fetch the first element from GOPATH as working directory
-	# as go get only works against the first item in the GOPATH
+	# as go get only works against the first item in the GOPATH.
+	# We need this just to grab yq. We should revisit removing this
 	[ -z "$GOPATH" ] && die "GOPATH not set"
 	GOPATH_LOCAL="${GOPATH%%:*}"
 
@@ -344,7 +341,6 @@ build_rootfs_distro()
 
 	detect_go_version ||
 		die "Could not detect the required Go version for AGENT_VERSION='${AGENT_VERSION:-master}'."
-
 	echo "Required Go version: $GO_VERSION"
 
 	# need to detect rustc's version too?
@@ -358,94 +354,13 @@ build_rootfs_distro()
 
 	echo "Required musl version: $MUSL_VERSION"
 
-	if [ -z "${USE_DOCKER}" ] && [ -z "${USE_PODMAN}" ]; then
-		#Generate an error if the local Go version is too old
-		info "build directly"
-		build_rootfs ${ROOTFS_DIR}
-	else
-		if [ -n "${USE_DOCKER}" ]; then
-			container_engine="docker"
-		elif [ -n "${USE_PODMAN}" ]; then
-			container_engine="podman"
-		fi
-
-		image_name="${distro}-rootfs-osbuilder"
-
-		# setup to install go or rust here
-		generate_dockerfile "${distro_config_dir}"
-		"$container_engine" build  \
-			--build-arg http_proxy="${http_proxy}" \
-			--build-arg https_proxy="${https_proxy}" \
-			-t "${image_name}" "${distro_config_dir}"
-
-		# fake mapping if KERNEL_MODULES_DIR is unset
-		kernel_mod_dir=${KERNEL_MODULES_DIR:-${ROOTFS_DIR}}
-
-		docker_run_args=""
-		docker_run_args+=" --rm"
-		docker_run_args+=" --runtime ${DOCKER_RUNTIME}"
-
-		if [ -z "${AGENT_SOURCE_BIN}" ] ; then
-			if [ "$RUST_AGENT" == "no" ]; then
-				docker_run_args+=" --env GO_AGENT_PKG=${GO_AGENT_PKG}"
-			else
-				docker_run_args+=" --env RUST_AGENT_PKG=${RUST_AGENT_PKG}"
-			fi
-			docker_run_args+=" --env RUST_AGENT=${RUST_AGENT} -v ${GOPATH_LOCAL}:${GOPATH_LOCAL} --env GOPATH=${GOPATH_LOCAL}"
-		else
-			docker_run_args+=" --env AGENT_SOURCE_BIN=${AGENT_SOURCE_BIN}"
-			docker_run_args+=" -v ${AGENT_SOURCE_BIN}:${AGENT_SOURCE_BIN}"
-			docker_run_args+=" -v ${GOPATH_LOCAL}:${GOPATH_LOCAL} --env GOPATH=${GOPATH_LOCAL}"
-		fi
-
-		docker_run_args+=" $(docker_extra_args $distro)"
-
-		# Relabel volumes so SELinux allows access (see docker-run(1))
-		if command -v selinuxenabled > /dev/null && selinuxenabled ; then
-			SRC_VOL=("${GOPATH_LOCAL}")
-
-			for volume_dir in "${script_dir}" \
-					  "${ROOTFS_DIR}" \
-					  "${script_dir}/../scripts" \
-					  "${kernel_mod_dir}" \
-					  "${SRC_VOL[@]}"; do
-				chcon -Rt svirt_sandbox_file_t "$volume_dir"
-			done
-		fi
-
-		before_starting_container
-		trap after_stopping_container EXIT
-
-		#Make sure we use a compatible runtime to build rootfs
-		# In case Clear Containers Runtime is installed we dont want to hit issue:
-		#https://github.com/clearcontainers/runtime/issues/828
-		"$container_engine" run  \
-			--env https_proxy="${https_proxy}" \
-			--env http_proxy="${http_proxy}" \
-			--env AGENT_VERSION="${AGENT_VERSION}" \
-			--env ROOTFS_DIR="/rootfs" \
-			--env AGENT_BIN="${AGENT_BIN}" \
-			--env AGENT_INIT="${AGENT_INIT}" \
-			--env KERNEL_MODULES_DIR="${KERNEL_MODULES_DIR}" \
-			--env EXTRA_PKGS="${EXTRA_PKGS}" \
-			--env OSBUILDER_VERSION="${OSBUILDER_VERSION}" \
-			--env INSIDE_CONTAINER=1 \
-			--env SECCOMP="${SECCOMP}" \
-			--env DEBUG="${DEBUG}" \
-			--env STAGE_PREPARE_ROOTFS=1 \
-			--env HOME="/root" \
-			-v "${repo_dir}":"/kata-containers" \
-			-v "${ROOTFS_DIR}":"/rootfs" \
-			-v "${script_dir}/../scripts":"/scripts" \
-			-v "${kernel_mod_dir}":"${kernel_mod_dir}" \
-			$docker_run_args \
-			${image_name} \
-			bash /kata-containers/tools/osbuilder/rootfs-builder/rootfs.sh "${distro}"
-	fi
+	info "build directly"
+	build_rootfs ${ROOTFS_DIR}
 }
 
 # Used to create a minimal directory tree where the agent can be instaleld.
 # This is used when a distro is not specified.
+
 prepare_overlay()
 {
 	pushd "${ROOTFS_DIR}" > /dev/null
@@ -560,16 +475,26 @@ EOT
 	AGENT_DEST="${AGENT_DIR}/${AGENT_BIN}"
 
 	if [ -z "${AGENT_SOURCE_BIN}" ] ; then
-		[ "$ARCH" == "ppc64le" ] && ([ "$LIBC" == "gnu" ] || die "LIBC type for ppc64le should be gnu")
-		bash ${script_dir}/../../../ci/install_musl.sh
-		# rust agent needs ${arch}-unknown-linux-${LIBC}
-		rustup show | grep linux-${LIBC} > /dev/null || bash ${script_dir}/../../../ci/install_rust.sh
-		test -r "${HOME}/.cargo/env" && source "${HOME}/.cargo/env"
-		[ "$ARCH" == "aarch64" ] && OLD_PATH=$PATH && export PATH=$PATH:/usr/local/musl/bin
 
+		[ "$ARCH" == "ppc64le" ] && ([ "$LIBC" == "gnu" ] || die "LIBC type for ppc64le should be gnu")
+
+		bash ${script_dir}/../../../ci/install_musl.sh
+
+		# rust agent needs ${arch}-unknown-linux-${LIBC}
+		test -r "${HOME}/.cargo/env" && source "${HOME}/.cargo/env"
+
+		if [ "$ARCH" == "ppc64le" ]; then
+			rustup target add powerpc64le-unknown-linux-${LIBC}
+		else
+			rustup target add "$ARCH"-unknown-linux-${LIBC}
+			ln -sf /usr/bin/g++ /bin/musl=g
+		fi
+
+		[ "$ARCH" == "aarch64" ] && OLD_PATH=$PATH && export PATH=$PATH:/usr/local/musl/bin
 		agent_pkg="${RUST_AGENT_PKG}"
 		agent_dir="${script_dir}/../../../src/agent/"
-		# For now, rust-agent doesn't support seccomp yet.
+
+		# For now, rust-agent doesn't support seccomp:
 		SECCOMP="no"
 
 		info "Build agent"
@@ -652,15 +577,140 @@ detect_host_distro()
 	esac
 }
 
+build_with_container()
+{
+	local container_engine=$1
+	local distro=$2
+
+	local repo_dir="${script_dir}/../../../"
+	local image_name="${distro}-rootfs-osbuilder"
+	local distro_config_dir="${script_dir}/${distro}"
+
+	#
+	# Setup distro specific 'stuff' in preparation for making the dockerfile:
+	#
+	rootfs_config="${distro_config_dir}/${CONFIG_SH}"
+	source "${rootfs_config}"
+
+	# Source arch-specific config file
+	rootfs_arch_config="${distro_config_dir}/${CONFIG_ARCH_SH}"
+	if [ -f "${rootfs_arch_config}" ]; then
+		source "${rootfs_arch_config}"
+	fi
+
+	if [ -z "$ROOTFS_DIR" ]; then
+		 ROOTFS_DIR="${script_dir}/rootfs-${OS_NAME}"
+	fi
+
+	# Determine rust version required:
+	detect_rust_version ||
+		die "Could not detect the required rust version for AGENT_VERSION='${AGENT_VERSION:-master}'."
+
+	echo "Required rust version: $RUST_VERSION"
+
+	# Go is required to facilitate getting yq....
+	detect_go_version ||
+		die "Could not detect the required Go version for AGENT_VERSION='${AGENT_VERSION:-master}'."
+	echo "Required Go version: $GO_VERSION"
+
+
+	# Setup Dockerfile
+	generate_dockerfile "${distro_config_dir}"
+
+	# Build container image for building the rootfs/agent:
+	"$container_engine" build  \
+		--build-arg http_proxy="${http_proxy}" \
+		--build-arg https_proxy="${https_proxy}" \
+		-t "${image_name}" "${distro_config_dir}"
+
+
+	# fake mapping if KERNEL_MODULES_DIR is unset
+	kernel_mod_dir=${KERNEL_MODULES_DIR:-${ROOTFS_DIR}}
+
+	docker_run_args=""
+	docker_run_args+=" --rm"
+	docker_run_args+=" --runtime ${DOCKER_RUNTIME}"
+
+	if [ -z "${AGENT_SOURCE_BIN}" ] ; then
+		docker_run_args+=" --env RUST_AGENT_PKG=${RUST_AGENT_PKG}"
+		docker_run_args+=" --env RUST_AGENT=${RUST_AGENT}"
+	else
+		docker_run_args+=" --env AGENT_SOURCE_BIN=${AGENT_SOURCE_BIN}"
+		docker_run_args+=" -v ${AGENT_SOURCE_BIN}:${AGENT_SOURCE_BIN}"
+		docker_run_args+=" -v ${GOPATH_LOCAL}:${GOPATH_LOCAL} --env GOPATH=${GOPATH_LOCAL}"
+	fi
+
+	docker_run_args+=" $(docker_extra_args $distro)"
+
+	# Relabel volumes so SELinux allows access (see docker-run(1))
+	if command -v selinuxenabled > /dev/null && selinuxenabled ; then
+		SRC_VOL=("${GOPATH_LOCAL}")
+		for volume_dir in "${script_dir}" "${ROOTFS_DIR}" "${kernel_mod_dir}" "${SRC_VOL[@]}"; do
+			chcon -Rt svirt_sandbox_file_t "$volume_dir"
+		done
+	fi
+
+	before_starting_container
+	trap after_stopping_container EXIT
+
+	#Make sure we use a compatible runtime to build rootfs
+	# In case Clear Containers Runtime is installed we dont want to hit issue:
+	#https://github.com/clearcontainers/runtime/issues/828
+	"$container_engine" run  \
+		--env https_proxy="${https_proxy}" \
+		--env http_proxy="${http_proxy}" \
+		--env AGENT_VERSION="${AGENT_VERSION}" \
+		--env ROOTFS_DIR="/rootfs" \
+		--env AGENT_BIN="${AGENT_BIN}" \
+		--env AGENT_INIT="${AGENT_INIT}" \
+		--env KERNEL_MODULES_DIR="${KERNEL_MODULES_DIR}" \
+		--env EXTRA_PKGS="${EXTRA_PKGS}" \
+		--env OSBUILDER_VERSION="${OSBUILDER_VERSION}" \
+		--env INSIDE_CONTAINER=1 \
+		--env SECCOMP="${SECCOMP}" \
+		--env DEBUG="${DEBUG}" \
+		--env HOME="/root" \
+		-v "${repo_dir}":"/kata-containers" \
+		-v "${ROOTFS_DIR}":"/rootfs" \
+		-v "${kernel_mod_dir}":"${kernel_mod_dir}" \
+		$docker_run_args \
+		${image_name} \
+		bash /kata-containers/tools/osbuilder/rootfs-builder/rootfs.sh "${distro}"
+}
+
 main()
 {
-	parse_arguments $*
+	parse_arguments "$@"
 	check_env_variables
 
+	local container_engine
+	if [ -n "${USE_DOCKER}" ]; then
+		container_engine="docker"
+	elif [ -n "${USE_PODMAN}" ]; then
+		container_engine="podman"
+	fi
+
+	if [ -n "$container_engine" ]; then
+		build_with_container "${container_engine}" "${distro}"
+
+		# Alpine can't build the rust agent. To work around this,
+		# we "skip" this part when building in the container. Let's 
+		# build in that situation, otherwise our work here is done!
+		if [ "$distro" == "alpine" ]; then
+			info "Doing direct build of the rust agent for Alpine"
+			init="${ROOTFS_DIR}/sbin/init"
+			setup_rootfs
+		fi
+		exit $?
+	fi
+
+	#
+	# Build the rootfs, and then add the Kata Agent artifacts
+	#
 	if [ -n "$distro" ]; then
 		build_rootfs_distro
 	else
-		#Make sure ROOTFS_DIR is set correctly
+		# Make sure ROOTFS_DIR is set correctly
 		[ -d "${ROOTFS_DIR}" ] || die "Invalid rootfs directory: '$ROOTFS_DIR'"
 
 		# Set the distro for dracut build method
@@ -668,10 +718,15 @@ main()
 		prepare_overlay
 	fi
 
-	if [ "$STAGE_PREPARE_ROOTFS" == "" ]; then
+	# If we are running within the container and are building Alpine, let's
+	# skip building the agent:
+	if [ "$distro" == "alpine" ] && [ $INSIDE_CONTAINER ]; then
+		info "Skipping Agent build inside container for Alpine"
+	else
+		# Add the agent artifacts
 		init="${ROOTFS_DIR}/sbin/init"
 		setup_rootfs
 	fi
 }
 
-main $*
+main "$@"
