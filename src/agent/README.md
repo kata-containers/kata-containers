@@ -49,6 +49,11 @@ $ rustup target add "${arch}-unknown-linux-musl"
 $ sudo ln -s /usr/bin/g++ /bin/musl-g++
 ```
 
+ppc64le-only: Manually install `protoc`, e.g.
+```bash
+$ sudo dnf install protobuf-compiler
+```
+
 Download the source files in the Kata containers repository and build the agent:
 ```bash
 $ GOPATH="${GOPATH:-$HOME/go}"
