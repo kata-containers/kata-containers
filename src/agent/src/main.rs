@@ -6,7 +6,7 @@
 #[macro_use]
 extern crate lazy_static;
 extern crate oci;
-extern crate prctl;
+extern crate capctl;
 extern crate prometheus;
 extern crate protocols;
 extern crate regex;
@@ -28,7 +28,7 @@ use nix::sys::select::{select, FdSet};
 use nix::sys::socket::{self, AddressFamily, SockAddr, SockFlag, SockType};
 use nix::sys::wait::{self, WaitStatus};
 use nix::unistd::{self, close, dup, dup2, fork, setsid, ForkResult};
-use prctl::set_child_subreaper;
+use capctl::prctl::set_subreaper;
 use std::collections::HashMap;
 use std::env;
 use std::ffi::{CStr, CString, OsStr};
@@ -303,7 +303,7 @@ use nix::sys::wait::WaitPidFlag;
 async fn setup_signal_handler(logger: &Logger, sandbox: Arc<Mutex<Sandbox>>) -> Result<()> {
     let logger = logger.new(o!("subsystem" => "signals"));
 
-    set_child_subreaper(true)
+    set_subreaper(true)
         .map_err(|err| anyhow!(err).context("failed to setup agent as a child subreaper"))?;
 
     let mut signal_stream = signal(SignalKind::child())?;

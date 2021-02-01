@@ -23,7 +23,7 @@ extern crate caps;
 extern crate protocols;
 #[macro_use]
 extern crate scopeguard;
-extern crate prctl;
+extern crate capctl;
 #[macro_use]
 extern crate lazy_static;
 extern crate libc;
