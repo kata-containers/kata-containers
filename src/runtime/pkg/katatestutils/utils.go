@@ -41,6 +41,9 @@ type RuntimeConfigOptions struct {
 	AgentDebug           bool
 	AgentTrace           bool
 	EnablePprof          bool
+	JaegerEndpoint       string
+	JaegerUser           string
+	JaegerPassword       string
 }
 
 func MakeRuntimeConfigFileData(config RuntimeConfigOptions) string {
@@ -85,5 +88,8 @@ func MakeRuntimeConfigFileData(config RuntimeConfigOptions) string {
 	enable_debug = ` + strconv.FormatBool(config.RuntimeDebug) + `
 	enable_tracing = ` + strconv.FormatBool(config.RuntimeTrace) + `
 	disable_new_netns= ` + strconv.FormatBool(config.DisableNewNetNs) + `
-	enable_pprof= ` + strconv.FormatBool(config.EnablePprof)
+	enable_pprof= ` + strconv.FormatBool(config.EnablePprof) + `
+	jaeger_endpoint= "` + config.JaegerEndpoint + `"
+	jaeger_user= "` + config.JaegerUser + `"
+	jaeger_password= "` + config.JaegerPassword + `"`
 }

@@ -109,6 +109,10 @@ type RuntimeConfig struct {
 	Debug             bool
 	Trace             bool
 
+	JaegerEndpoint string
+	JaegerUser     string
+	JaegerPassword string
+
 	//Determines if seccomp should be applied inside guest
 	DisableGuestSeccomp bool
 

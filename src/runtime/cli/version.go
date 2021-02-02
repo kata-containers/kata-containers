@@ -20,7 +20,7 @@ var versionCLICommand = cli.Command{
 		}
 
 		span, _ := katautils.Trace(ctx, "version")
-		defer span.Finish()
+		defer span.End()
 
 		cli.VersionPrinter(context)
 		return nil

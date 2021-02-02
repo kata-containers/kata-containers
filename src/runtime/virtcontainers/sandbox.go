@@ -22,7 +22,6 @@ import (
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/opencontainers/runc/libcontainer/configs"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
-	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
@@ -44,6 +43,9 @@ import (
 	vcTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/types"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
+	"go.opentelemetry.io/otel"
+	otelLabel "go.opentelemetry.io/otel/label"
+	otelTrace "go.opentelemetry.io/otel/trace"
 )
 
 const (
@@ -122,15 +124,15 @@ type SandboxConfig struct {
 	Cgroups *configs.Cgroup
 }
 
-func (s *Sandbox) trace(name string) (opentracing.Span, context.Context) {
+func (s *Sandbox) trace(name string) (otelTrace.Span, context.Context) {
 	if s.ctx == nil {
 		s.Logger().WithField("type", "bug").Error("trace called before context set")
 		s.ctx = context.Background()
 	}
 
-	span, ctx := opentracing.StartSpanFromContext(s.ctx, name)
-
-	span.SetTag("subsystem", "sandbox")
+	tracer := otel.Tracer("kata")
+	ctx, span := tracer.Start(s.ctx, name)
+	span.SetAttributes(otelLabel.Key("subsystem").String("sandbox"))
 
 	return span, ctx
 }
@@ -381,7 +383,7 @@ func (s *Sandbox) IOStream(containerID, processID string) (io.WriteCloser, io.Re
 
 func createAssets(ctx context.Context, sandboxConfig *SandboxConfig) error {
 	span, _ := trace(ctx, "createAssets")
-	defer span.Finish()
+	defer span.End()
 
 	for _, name := range types.AssetTypes() {
 		a, err := types.NewAsset(sandboxConfig.Annotations, name)
@@ -431,7 +433,7 @@ func (s *Sandbox) getAndStoreGuestDetails() error {
 // be started.
 func createSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factory) (*Sandbox, error) {
 	span, ctx := trace(ctx, "createSandbox")
-	defer span.Finish()
+	defer span.End()
 
 	if err := createAssets(ctx, &sandboxConfig); err != nil {
 		return nil, err
@@ -469,7 +471,7 @@ func createSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Fac
 
 func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factory) (sb *Sandbox, retErr error) {
 	span, ctx := trace(ctx, "newSandbox")
-	defer span.Finish()
+	defer span.End()
 
 	if !sandboxConfig.valid() {
 		return nil, fmt.Errorf("Invalid sandbox configuration")
@@ -604,7 +606,7 @@ func (s *Sandbox) createCgroupManager() error {
 // storeSandbox stores a sandbox config.
 func (s *Sandbox) storeSandbox() error {
 	span, _ := s.trace("storeSandbox")
-	defer span.Finish()
+	defer span.End()
 
 	// flush data to storage
 	if err := s.Save(); err != nil {
@@ -707,7 +709,7 @@ func (s *Sandbox) Delete() error {
 
 func (s *Sandbox) startNetworkMonitor() error {
 	span, _ := s.trace("startNetworkMonitor")
-	defer span.Finish()
+	defer span.End()
 
 	binPath, err := os.Executable()
 	if err != nil {
@@ -746,7 +748,7 @@ func (s *Sandbox) createNetwork() error {
 	}
 
 	span, _ := s.trace("createNetwork")
-	defer span.Finish()
+	defer span.End()
 
 	s.networkNS = NetworkNamespace{
 		NetNsPath:    s.config.NetworkConfig.NetNSPath,
@@ -780,7 +782,7 @@ func (s *Sandbox) postCreatedNetwork() error {
 
 func (s *Sandbox) removeNetwork() error {
 	span, _ := s.trace("removeNetwork")
-	defer span.Finish()
+	defer span.End()
 
 	if s.config.NetworkConfig.NetmonConfig.Enable {
 		if err := stopNetmon(s.networkNS.NetmonPID); err != nil {
@@ -987,7 +989,7 @@ func (cw *consoleWatcher) stop() {
 // startVM starts the VM.
 func (s *Sandbox) startVM() (err error) {
 	span, ctx := s.trace("startVM")
-	defer span.Finish()
+	defer span.End()
 
 	s.Logger().Info("Starting VM")
 
@@ -1068,7 +1070,7 @@ func (s *Sandbox) startVM() (err error) {
 // stopVM: stop the sandbox's VM
 func (s *Sandbox) stopVM() error {
 	span, _ := s.trace("stopVM")
-	defer span.Finish()
+	defer span.End()
 
 	s.Logger().Info("Stopping sandbox in the VM")
 	if err := s.agent.stopSandbox(s); err != nil {
@@ -1444,7 +1446,7 @@ func (s *Sandbox) ResumeContainer(containerID string) error {
 // containers in the guest and starts one shim per container.
 func (s *Sandbox) createContainers() error {
 	span, _ := s.trace("createContainers")
-	defer span.Finish()
+	defer span.End()
 
 	for _, contConfig := range s.config.Containers {
 
@@ -1516,7 +1518,7 @@ func (s *Sandbox) Start() error {
 // When force is true, ignore guest related stop failures.
 func (s *Sandbox) Stop(force bool) error {
 	span, _ := s.trace("stop")
-	defer span.Finish()
+	defer span.End()
 
 	if s.state.State == types.StateStopped {
 		s.Logger().Info("sandbox already stopped")
@@ -1627,7 +1629,7 @@ func (s *Sandbox) unsetSandboxBlockIndex(index int) error {
 // Sandbox implement DeviceReceiver interface from device/api/interface.go
 func (s *Sandbox) HotplugAddDevice(device api.Device, devType config.DeviceType) error {
 	span, _ := s.trace("HotplugAddDevice")
-	defer span.Finish()
+	defer span.End()
 
 	if s.config.SandboxCgroupOnly {
 		// We are about to add a device to the hypervisor,

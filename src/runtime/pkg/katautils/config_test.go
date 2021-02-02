@@ -34,6 +34,9 @@ var (
 	agentDebug      = false
 	agentTrace      = false
 	enablePprof     = true
+	jaegerEndpoint  = "localhost"
+	jaegerUser      = "jaeger_user1"
+	jaegerPassword  = "jaeger_password1"
 )
 
 type testRuntimeConfig struct {
@@ -114,6 +117,9 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (config testRuntimeConf
 		SharedFS:             sharedFS,
 		VirtioFSDaemon:       virtioFSdaemon,
 		EnablePprof:          enablePprof,
+		JaegerEndpoint:       jaegerEndpoint,
+		JaegerUser:           jaegerUser,
+		JaegerPassword:       jaegerPassword,
 	}
 
 	runtimeConfigFileData := ktu.MakeRuntimeConfigFileData(configFileOptions)
@@ -193,6 +199,9 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (config testRuntimeConf
 		NetmonConfig:    netmonConfig,
 		DisableNewNetNs: disableNewNetNs,
 		EnablePprof:     enablePprof,
+		JaegerEndpoint:  jaegerEndpoint,
+		JaegerUser:      jaegerUser,
+		JaegerPassword:  jaegerPassword,
 
 		FactoryConfig: factoryConfig,
 	}
