@@ -1,4 +1,5 @@
 // Copyright (c) 2017-2019 Intel Corporation
+// Copyright (c) 2020 Ant Group
 //
 // SPDX-License-Identifier: Apache-2.0
 //
@@ -19,6 +20,7 @@ import (
 	"time"
 
 	"github.com/containerd/console"
+	kataMonitor "github.com/kata-containers/kata-containers/src/runtime/pkg/kata-monitor"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils"
 	clientUtils "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols/client"
 	"github.com/pkg/errors"
@@ -35,10 +37,10 @@ const (
 
 	subCommandName = "exec"
 	// command-line parameters name
-	paramKataMonitorAddr                     = "kata-monitor-addr"
+	paramRuntimeNamespace                    = "runtime-namespace"
 	paramDebugConsolePort                    = "kata-debug-port"
 	defaultKernelParamDebugConsoleVPortValue = 1026
-	defaultParamKataMonitorAddr              = "http://localhost:8090"
+	defaultRuntimeNamespace                  = "k8s.io"
 )
 
 var (
@@ -55,12 +57,12 @@ var kataExecCLICommand = cli.Command{
 	Usage: "Enter into guest by debug console",
 	Flags: []cli.Flag{
 		cli.StringFlag{
-			Name:  paramKataMonitorAddr,
-			Usage: "Kata monitor listen address.",
+			Name:  paramRuntimeNamespace,
+			Usage: "Namespace that containerd or CRI-O are using for containers. (Default: k8s.io, only works for containerd)",
 		},
 		cli.Uint64Flag{
 			Name:  paramDebugConsolePort,
-			Usage: "Port that debug console is listening on.",
+			Usage: "Port that debug console is listening on. (Default: 1026)",
 		},
 	},
 	Action: func(context *cli.Context) error {
@@ -71,11 +73,11 @@ var kataExecCLICommand = cli.Command{
 		span, _ := katautils.Trace(ctx, subCommandName)
 		defer span.End()
 
-		endPoint := context.String(paramKataMonitorAddr)
-		if endPoint == "" {
-			endPoint = defaultParamKataMonitorAddr
+		namespace := context.String(paramRuntimeNamespace)
+		if namespace == "" {
+			namespace = defaultRuntimeNamespace
 		}
-		span.SetAttributes(label.Key("endPoint").String(endPoint))
+		span.SetAttributes(label.Key("namespace").String(namespace))
 
 		port := context.Uint64(paramDebugConsolePort)
 		if port == 0 {
@@ -89,7 +91,7 @@ var kataExecCLICommand = cli.Command{
 		}
 		span.SetAttributes(label.Key("sandbox").String(sandboxID))
 
-		conn, err := getConn(endPoint, sandboxID, port)
+		conn, err := getConn(namespace, sandboxID, port)
 		if err != nil {
 			return err
 		}
@@ -172,15 +174,20 @@ func (s *iostream) Read(data []byte) (n int, err error) {
 	return s.conn.Read(data)
 }
 
-func getConn(endPoint, sandboxID string, port uint64) (net.Conn, error) {
-	shimURL := fmt.Sprintf("%s/agent-url?sandbox=%s", endPoint, sandboxID)
-	resp, err := http.Get(shimURL)
+func getConn(namespace, sandboxID string, port uint64) (net.Conn, error) {
+	socketAddr := fmt.Sprintf("/containerd-shim/%s/%s/shim-monitor.sock", namespace, sandboxID)
+	client, err := kataMonitor.BuildUnixSocketClient(socketAddr, defaultTimeout)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := client.Get("http://shim/agent-url")
 	if err != nil {
 		return nil, err
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("Failed to get %s: %d", shimURL, resp.StatusCode)
+		return nil, fmt.Errorf("Failed to get %s: %d", socketAddr, resp.StatusCode)
 	}
 
 	defer resp.Body.Close()
