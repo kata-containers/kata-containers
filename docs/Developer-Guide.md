@@ -37,7 +37,6 @@
     * [Set up a debug console](#set-up-a-debug-console)
       * [Simple debug console setup](#simple-debug-console-setup)
           * [Enable agent debug console](#enable-agent-debug-console)
-          * [Start `kata-monitor`](#start-kata-monitor)
           * [Connect to debug console](#connect-to-debug-console)
       * [Traditional debug console setup](#traditional-debug-console-setup)
           * [Create a custom image containing a shell](#create-a-custom-image-containing-a-shell)
@@ -477,17 +476,6 @@ debug_console_enabled = true
 
 This will pass `agent.debug_console agent.debug_console_vport=1026` to agent as kernel parameters, and sandboxes created using this parameters will start a shell in guest if new connection is accept from VSOCK.
 
-#### Start `kata-monitor`
-
-The `kata-runtime exec` command needs `kata-monitor` to get the sandbox's `vsock` address to connect to, first start `kata-monitor`.
-
-```
-$ sudo kata-monitor
-```
-
-`kata-monitor` will serve at `localhost:8090` by default.
-
-
 #### Connect to debug console
 
 Command `kata-runtime exec` is used to connect to the debug console.
@@ -501,6 +489,8 @@ bash-4.2# pwd
 bash-4.2# exit
 exit
 ```
+
+`kata-runtime exec` has a command-line option `runtime-namespace`, which is used to specify under which namespace the containers(Pods) are created. By default, it is set to `k8s.io` and works for containerd, for other upper runtimes, you may need to set the namespace by `runtime-namespace` option.
 
 If you want to access guest OS through a traditional way, see [Traditional debug console setup)](#traditional-debug-console-setup).
 
