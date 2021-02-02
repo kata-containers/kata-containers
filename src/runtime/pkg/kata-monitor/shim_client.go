@@ -1,4 +1,4 @@
-// Copyright (c) 2020 Ant Financial
+// Copyright (c) 2020-2021 Ant Group
 //
 // SPDX-License-Identifier: Apache-2.0
 //
@@ -34,15 +34,19 @@ func getSandboxIdFromReq(r *http.Request) (string, error) {
 }
 
 func (km *KataMonitor) buildShimClient(sandboxID, namespace string, timeout time.Duration) (*http.Client, error) {
-	socket, err := km.getMonitorAddress(sandboxID, namespace)
+	socketAddr, err := km.getMonitorAddress(sandboxID, namespace)
 	if err != nil {
 		return nil, err
 	}
+	return BuildUnixSocketClient(socketAddr, timeout)
+}
 
+// BuildUnixSocketClient build http client for Unix socket
+func BuildUnixSocketClient(socketAddr string, timeout time.Duration) (*http.Client, error) {
 	transport := &http.Transport{
 		DisableKeepAlives: true,
 		Dial: func(proto, addr string) (conn net.Conn, err error) {
-			return net.Dial("unix", "\x00"+socket)
+			return net.Dial("unix", "\x00"+socketAddr)
 		},
 	}
 
