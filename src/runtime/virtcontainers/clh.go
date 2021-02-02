@@ -23,9 +23,11 @@ import (
 	persistapi "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist/api"
 	chclient "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/cloud-hypervisor/client"
 	"github.com/opencontainers/selinux/go-selinux/label"
-	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
+	"go.opentelemetry.io/otel"
+	otelLabel "go.opentelemetry.io/otel/label"
+	otelTrace "go.opentelemetry.io/otel/trace"
 
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
@@ -167,7 +169,7 @@ func (clh *cloudHypervisor) createSandbox(ctx context.Context, id string, networ
 	clh.ctx = ctx
 
 	span, _ := clh.trace("createSandbox")
-	defer span.Finish()
+	defer span.End()
 
 	err := hypervisorConfig.valid()
 	if err != nil {
@@ -336,7 +338,7 @@ func (clh *cloudHypervisor) createSandbox(ctx context.Context, id string, networ
 // startSandbox will start the VMM and boot the virtual machine for the given sandbox.
 func (clh *cloudHypervisor) startSandbox(timeout int) error {
 	span, _ := clh.trace("startSandbox")
-	defer span.Finish()
+	defer span.End()
 
 	ctx, cancel := context.WithTimeout(context.Background(), clhAPITimeout*time.Second)
 	defer cancel()
@@ -472,7 +474,7 @@ func (clh *cloudHypervisor) hotPlugVFIODevice(device config.VFIODev) error {
 
 func (clh *cloudHypervisor) hotplugAddDevice(devInfo interface{}, devType deviceType) (interface{}, error) {
 	span, _ := clh.trace("hotplugAddDevice")
-	defer span.Finish()
+	defer span.End()
 
 	switch devType {
 	case blockDev:
@@ -489,7 +491,7 @@ func (clh *cloudHypervisor) hotplugAddDevice(devInfo interface{}, devType device
 
 func (clh *cloudHypervisor) hotplugRemoveDevice(devInfo interface{}, devType deviceType) (interface{}, error) {
 	span, _ := clh.trace("hotplugRemoveDevice")
-	defer span.Finish()
+	defer span.End()
 
 	var deviceID string
 
@@ -650,7 +652,7 @@ func (clh *cloudHypervisor) resumeSandbox() error {
 // stopSandbox will stop the Sandbox's VM.
 func (clh *cloudHypervisor) stopSandbox() (err error) {
 	span, _ := clh.trace("stopSandbox")
-	defer span.Finish()
+	defer span.End()
 	clh.Logger().WithField("function", "stopSandbox").Info("Stop Sandbox")
 	return clh.terminate()
 }
@@ -696,7 +698,7 @@ func (clh *cloudHypervisor) getPids() []int {
 
 func (clh *cloudHypervisor) addDevice(devInfo interface{}, devType deviceType) error {
 	span, _ := clh.trace("addDevice")
-	defer span.Finish()
+	defer span.End()
 
 	var err error
 
@@ -730,7 +732,7 @@ func (clh *cloudHypervisor) Logger() *log.Entry {
 // Adds all capabilities supported by cloudHypervisor implementation of hypervisor interface
 func (clh *cloudHypervisor) capabilities() types.Capabilities {
 	span, _ := clh.trace("capabilities")
-	defer span.Finish()
+	defer span.End()
 
 	clh.Logger().WithField("function", "capabilities").Info("get Capabilities")
 	var caps types.Capabilities
@@ -739,24 +741,22 @@ func (clh *cloudHypervisor) capabilities() types.Capabilities {
 	return caps
 }
 
-func (clh *cloudHypervisor) trace(name string) (opentracing.Span, context.Context) {
-
+func (clh *cloudHypervisor) trace(name string) (otelTrace.Span, context.Context) {
 	if clh.ctx == nil {
 		clh.Logger().WithField("type", "bug").Error("trace called before context set")
 		clh.ctx = context.Background()
 	}
 
-	span, ctx := opentracing.StartSpanFromContext(clh.ctx, name)
-
-	span.SetTag("subsystem", "cloudHypervisor")
-	span.SetTag("type", "clh")
+	tracer := otel.Tracer("kata")
+	ctx, span := tracer.Start(clh.ctx, name)
+	span.SetAttributes([]otelLabel.KeyValue{otelLabel.Key("subsystem").String("hypervisor"), otelLabel.Key("type").String("clh")}...)
 
 	return span, ctx
 }
 
 func (clh *cloudHypervisor) terminate() (err error) {
 	span, _ := clh.trace("terminate")
-	defer span.Finish()
+	defer span.End()
 
 	pid := clh.state.PID
 	pidRunning := true

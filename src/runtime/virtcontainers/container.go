@@ -23,10 +23,12 @@ import (
 	vcTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/types"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
+	"go.opentelemetry.io/otel"
+	otelLabel "go.opentelemetry.io/otel/label"
+	otelTrace "go.opentelemetry.io/otel/trace"
 
 	"github.com/containerd/cgroups"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
-	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
@@ -351,15 +353,15 @@ func (c *Container) Logger() *logrus.Entry {
 	})
 }
 
-func (c *Container) trace(name string) (opentracing.Span, context.Context) {
+func (c *Container) trace(name string) (otelTrace.Span, context.Context) {
 	if c.ctx == nil {
 		c.Logger().WithField("type", "bug").Error("trace called before context set")
 		c.ctx = context.Background()
 	}
 
-	span, ctx := opentracing.StartSpanFromContext(c.ctx, name)
-
-	span.SetTag("subsystem", "container")
+	tracer := otel.Tracer("kata")
+	ctx, span := tracer.Start(c.ctx, name)
+	span.SetAttributes(otelLabel.Key("subsystem").String("container"))
 
 	return span, ctx
 }
@@ -569,14 +571,14 @@ func (c *Container) mountSharedDirMounts(hostSharedDir, hostMountDir, guestShare
 }
 
 func (c *Container) unmountHostMounts() error {
-	var span opentracing.Span
+	var span otelTrace.Span
 	span, c.ctx = c.trace("unmountHostMounts")
-	defer span.Finish()
+	defer span.End()
 
 	for _, m := range c.mounts {
 		if m.HostPath != "" {
 			span, _ := c.trace("unmount")
-			span.SetTag("host-path", m.HostPath)
+			span.SetAttributes(otelLabel.Key("host-path").String(m.HostPath))
 
 			if err := syscall.Unmount(m.HostPath, syscall.MNT_DETACH|UmountNoFollow); err != nil {
 				c.Logger().WithFields(logrus.Fields{
@@ -600,7 +602,7 @@ func (c *Container) unmountHostMounts() error {
 				}
 			}
 
-			span.Finish()
+			span.End()
 		}
 	}
 
@@ -699,7 +701,7 @@ func (c *Container) createBlockDevices() error {
 // newContainer creates a Container structure from a sandbox and a container configuration.
 func newContainer(sandbox *Sandbox, contConfig *ContainerConfig) (*Container, error) {
 	span, _ := sandbox.trace("newContainer")
-	defer span.Finish()
+	defer span.End()
 
 	if !contConfig.valid() {
 		return &Container{}, fmt.Errorf("Invalid container configuration")
@@ -969,7 +971,7 @@ func (c *Container) start() error {
 
 func (c *Container) stop(force bool) error {
 	span, _ := c.trace("stop")
-	defer span.Finish()
+	defer span.End()
 
 	// In case the container status has been updated implicitly because
 	// the container process has terminated, it might be possible that

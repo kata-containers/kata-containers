@@ -36,9 +36,11 @@ import (
 	httptransport "github.com/go-openapi/runtime/client"
 	"github.com/go-openapi/strfmt"
 	"github.com/opencontainers/selinux/go-selinux/label"
-	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
+	"go.opentelemetry.io/otel"
+	otelLabel "go.opentelemetry.io/otel/label"
+	otelTrace "go.opentelemetry.io/otel/trace"
 )
 
 type vmmState uint8
@@ -166,16 +168,15 @@ func (fc *firecracker) Logger() *logrus.Entry {
 	return virtLog.WithField("subsystem", "firecracker")
 }
 
-func (fc *firecracker) trace(name string) (opentracing.Span, context.Context) {
+func (fc *firecracker) trace(name string) (otelTrace.Span, context.Context) {
 	if fc.ctx == nil {
 		fc.Logger().WithField("type", "bug").Error("trace called before context set")
 		fc.ctx = context.Background()
 	}
 
-	span, ctx := opentracing.StartSpanFromContext(fc.ctx, name)
-
-	span.SetTag("subsystem", "hypervisor")
-	span.SetTag("type", "firecracker")
+	tracer := otel.Tracer("kata")
+	ctx, span := tracer.Start(fc.ctx, name)
+	span.SetAttributes([]otelLabel.KeyValue{otelLabel.Key("subsystem").String("hypervisor"), otelLabel.Key("type").String("firecracker")}...)
 
 	return span, ctx
 }
@@ -199,7 +200,7 @@ func (fc *firecracker) createSandbox(ctx context.Context, id string, networkNS N
 	fc.ctx = ctx
 
 	span, _ := fc.trace("createSandbox")
-	defer span.Finish()
+	defer span.End()
 
 	//TODO: check validity of the hypervisor config provided
 	//https://github.com/kata-containers/runtime/issues/1065
@@ -242,7 +243,7 @@ func (fc *firecracker) createSandbox(ctx context.Context, id string, networkNS N
 
 func (fc *firecracker) newFireClient() *client.Firecracker {
 	span, _ := fc.trace("newFireClient")
-	defer span.Finish()
+	defer span.End()
 	httpClient := client.NewHTTPClient(strfmt.NewFormats())
 
 	socketTransport := &http.Transport{
@@ -324,7 +325,7 @@ func (fc *firecracker) checkVersion(version string) error {
 // waitVMMRunning will wait for timeout seconds for the VMM to be up and running.
 func (fc *firecracker) waitVMMRunning(timeout int) error {
 	span, _ := fc.trace("wait VMM to be running")
-	defer span.Finish()
+	defer span.End()
 
 	if timeout < 0 {
 		return fmt.Errorf("Invalid timeout %ds", timeout)
@@ -346,7 +347,7 @@ func (fc *firecracker) waitVMMRunning(timeout int) error {
 
 func (fc *firecracker) fcInit(timeout int) error {
 	span, _ := fc.trace("fcInit")
-	defer span.Finish()
+	defer span.End()
 
 	var err error
 	//FC version set and check
@@ -421,7 +422,7 @@ func (fc *firecracker) fcInit(timeout int) error {
 
 func (fc *firecracker) fcEnd() (err error) {
 	span, _ := fc.trace("fcEnd")
-	defer span.Finish()
+	defer span.End()
 
 	fc.Logger().Info("Stopping firecracker VM")
 
@@ -466,7 +467,7 @@ func (fc *firecracker) fcEnd() (err error) {
 
 func (fc *firecracker) client() *client.Firecracker {
 	span, _ := fc.trace("client")
-	defer span.Finish()
+	defer span.End()
 
 	if fc.connection == nil {
 		fc.connection = fc.newFireClient()
@@ -533,7 +534,7 @@ func (fc *firecracker) fcJailResource(src, dst string) (string, error) {
 
 func (fc *firecracker) fcSetBootSource(path, params string) error {
 	span, _ := fc.trace("fcSetBootSource")
-	defer span.Finish()
+	defer span.End()
 	fc.Logger().WithFields(logrus.Fields{"kernel-path": path,
 		"kernel-params": params}).Debug("fcSetBootSource")
 
@@ -554,7 +555,7 @@ func (fc *firecracker) fcSetBootSource(path, params string) error {
 
 func (fc *firecracker) fcSetVMRootfs(path string) error {
 	span, _ := fc.trace("fcSetVMRootfs")
-	defer span.Finish()
+	defer span.End()
 
 	jailedRootfs, err := fc.fcJailResource(path, fcRootfs)
 	if err != nil {
@@ -581,7 +582,7 @@ func (fc *firecracker) fcSetVMRootfs(path string) error {
 
 func (fc *firecracker) fcSetVMBaseConfig(mem int64, vcpus int64, htEnabled bool) {
 	span, _ := fc.trace("fcSetVMBaseConfig")
-	defer span.Finish()
+	defer span.End()
 	fc.Logger().WithFields(logrus.Fields{"mem": mem,
 		"vcpus":     vcpus,
 		"htEnabled": htEnabled}).Debug("fcSetVMBaseConfig")
@@ -597,7 +598,7 @@ func (fc *firecracker) fcSetVMBaseConfig(mem int64, vcpus int64, htEnabled bool)
 
 func (fc *firecracker) fcSetLogger() error {
 	span, _ := fc.trace("fcSetLogger")
-	defer span.Finish()
+	defer span.End()
 
 	fcLogLevel := "Error"
 	if fc.config.Debug {
@@ -761,7 +762,7 @@ func (fc *firecracker) fcInitConfiguration() error {
 // for configuration, but not yet start the actual virtual machine
 func (fc *firecracker) startSandbox(timeout int) error {
 	span, _ := fc.trace("startSandbox")
-	defer span.Finish()
+	defer span.End()
 
 	if err := fc.fcInitConfiguration(); err != nil {
 		return err
@@ -813,7 +814,7 @@ func fcDriveIndexToID(i int) string {
 
 func (fc *firecracker) createDiskPool() error {
 	span, _ := fc.trace("createDiskPool")
-	defer span.Finish()
+	defer span.End()
 
 	for i := 0; i < fcDiskPoolSize; i++ {
 		driveID := fcDriveIndexToID(i)
@@ -851,7 +852,7 @@ func (fc *firecracker) umountResource(jailedPath string) {
 // cleanup all jail artifacts
 func (fc *firecracker) cleanupJail() {
 	span, _ := fc.trace("cleanupJail")
-	defer span.Finish()
+	defer span.End()
 
 	fc.umountResource(fcKernel)
 	fc.umountResource(fcRootfs)
@@ -874,7 +875,7 @@ func (fc *firecracker) cleanupJail() {
 // stopSandbox will stop the Sandbox's VM.
 func (fc *firecracker) stopSandbox() (err error) {
 	span, _ := fc.trace("stopSandbox")
-	defer span.Finish()
+	defer span.End()
 
 	return fc.fcEnd()
 }
@@ -893,7 +894,7 @@ func (fc *firecracker) resumeSandbox() error {
 
 func (fc *firecracker) fcAddVsock(hvs types.HybridVSock) {
 	span, _ := fc.trace("fcAddVsock")
-	defer span.Finish()
+	defer span.End()
 
 	udsPath := hvs.UdsPath
 	if fc.jailed {
@@ -913,7 +914,7 @@ func (fc *firecracker) fcAddVsock(hvs types.HybridVSock) {
 
 func (fc *firecracker) fcAddNetDevice(endpoint Endpoint) {
 	span, _ := fc.trace("fcAddNetDevice")
-	defer span.Finish()
+	defer span.End()
 
 	ifaceID := endpoint.Name()
 
@@ -969,7 +970,7 @@ func (fc *firecracker) fcAddNetDevice(endpoint Endpoint) {
 
 func (fc *firecracker) fcAddBlockDrive(drive config.BlockDrive) error {
 	span, _ := fc.trace("fcAddBlockDrive")
-	defer span.Finish()
+	defer span.End()
 
 	driveID := drive.ID
 	isReadOnly := false
@@ -995,7 +996,7 @@ func (fc *firecracker) fcAddBlockDrive(drive config.BlockDrive) error {
 // Firecracker supports replacing the host drive used once the VM has booted up
 func (fc *firecracker) fcUpdateBlockDrive(path, id string) error {
 	span, _ := fc.trace("fcUpdateBlockDrive")
-	defer span.Finish()
+	defer span.End()
 
 	// Use the global block index as an index into the pool of the devices
 	// created for firecracker.
@@ -1019,7 +1020,7 @@ func (fc *firecracker) fcUpdateBlockDrive(path, id string) error {
 // virtual machine starts.  Devices include drivers and network interfaces only.
 func (fc *firecracker) addDevice(devInfo interface{}, devType deviceType) error {
 	span, _ := fc.trace("addDevice")
-	defer span.Finish()
+	defer span.End()
 
 	fc.state.RLock()
 	defer fc.state.RUnlock()
@@ -1080,7 +1081,7 @@ func (fc *firecracker) hotplugBlockDevice(drive config.BlockDrive, op operation)
 // hotplugAddDevice supported in Firecracker VMM
 func (fc *firecracker) hotplugAddDevice(devInfo interface{}, devType deviceType) (interface{}, error) {
 	span, _ := fc.trace("hotplugAddDevice")
-	defer span.Finish()
+	defer span.End()
 
 	switch devType {
 	case blockDev:
@@ -1096,7 +1097,7 @@ func (fc *firecracker) hotplugAddDevice(devInfo interface{}, devType deviceType)
 // hotplugRemoveDevice supported in Firecracker VMM
 func (fc *firecracker) hotplugRemoveDevice(devInfo interface{}, devType deviceType) (interface{}, error) {
 	span, _ := fc.trace("hotplugRemoveDevice")
-	defer span.Finish()
+	defer span.End()
 
 	switch devType {
 	case blockDev:
@@ -1129,7 +1130,7 @@ func (fc *firecracker) disconnect() {
 // Adds all capabilities supported by firecracker implementation of hypervisor interface
 func (fc *firecracker) capabilities() types.Capabilities {
 	span, _ := fc.trace("capabilities")
-	defer span.Finish()
+	defer span.End()
 	var caps types.Capabilities
 	caps.SetBlockDeviceHotplugSupport()
 

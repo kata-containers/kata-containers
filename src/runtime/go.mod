@@ -6,7 +6,6 @@ require (
 	github.com/BurntSushi/toml v0.3.1
 	github.com/blang/semver v0.0.0-20190414102917-ba2c2ddd8906
 	github.com/cilium/ebpf v0.0.0-20200421083123-d05ecd062fb1 // indirect
-	github.com/codahale/hdrhistogram v0.0.0-20161010025455-3a0bb77429bd // indirect
 	github.com/containerd/cgroups v0.0.0-20190717030353-c4b9ac5c7601
 	github.com/containerd/console v0.0.0-20191206165004-02ecf6a7291e
 	github.com/containerd/containerd v1.2.1-0.20181210191522-f05672357f56
@@ -38,7 +37,6 @@ require (
 	github.com/opencontainers/runc v1.0.0-rc9.0.20200102164712-2b52db75279c
 	github.com/opencontainers/runtime-spec v1.0.2-0.20190408193819-a1b50f621a48
 	github.com/opencontainers/selinux v1.4.0
-	github.com/opentracing/opentracing-go v1.1.0
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.7.1
 	github.com/prometheus/client_model v0.2.0
@@ -48,23 +46,25 @@ require (
 	github.com/seccomp/libseccomp-golang v0.9.1 // indirect
 	github.com/sirupsen/logrus v1.4.2
 	github.com/smartystreets/goconvey v1.6.4 // indirect
-	github.com/stretchr/testify v1.4.0
+	github.com/stretchr/testify v1.6.1
 	github.com/syndtr/gocapability v0.0.0-20180916011248-d98352740cb2 // indirect
-	github.com/uber/jaeger-client-go v0.0.0-20200422204034-e1cd868603cb
-	github.com/uber/jaeger-lib v2.2.0+incompatible // indirect
 	github.com/urfave/cli v1.20.1-0.20170926034118-ac249472b7de
 	github.com/vishvananda/netlink v1.0.1-0.20190604022042-c8c507c80ea2
 	github.com/vishvananda/netns v0.0.0-20180720170159-13995c7128cc
-	go.uber.org/atomic v1.6.0 // indirect
-	golang.org/x/net v0.0.0-20200707034311-ab3426394381
-	golang.org/x/oauth2 v0.0.0-20191122200657-5d9234df094c
-	golang.org/x/sys v0.0.0-20200622214017-ed371f2e16b4
-	google.golang.org/grpc v1.19.0
+	go.opentelemetry.io/otel v0.15.0
+	go.opentelemetry.io/otel/exporters/trace/jaeger v0.15.0
+	go.opentelemetry.io/otel/sdk v0.15.0
+	golang.org/x/net v0.0.0-20200822124328-c89045814202
+	golang.org/x/oauth2 v0.0.0-20200902213428-5d25da1a8d43
+	golang.org/x/sys v0.0.0-20200905004654-be1d3432aa8f
+	google.golang.org/grpc v1.31.1
 	gotest.tools v2.2.0+incompatible // indirect
 	k8s.io/apimachinery v0.18.2
 )
 
 replace (
 	github.com/uber-go/atomic => go.uber.org/atomic v1.5.1
+	google.golang.org/genproto => google.golang.org/genproto v0.0.0-20180817151627-c66870c02cf8
+	google.golang.org/grpc => google.golang.org/grpc v1.19.0
 	gotest.tools/v3 => gotest.tools v2.2.0+incompatible
 )

@@ -31,10 +31,12 @@ import (
 	vcTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/types"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/uuid"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/label"
+	otelTrace "go.opentelemetry.io/otel/trace"
 
 	"github.com/gogo/protobuf/proto"
 	"github.com/opencontainers/runtime-spec/specs-go"
-	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/net/context"
 	"golang.org/x/sys/unix"
@@ -232,16 +234,15 @@ type kataAgent struct {
 	ctx      context.Context
 }
 
-func (k *kataAgent) trace(name string) (opentracing.Span, context.Context) {
+func (k *kataAgent) trace(name string) (otelTrace.Span, context.Context) {
 	if k.ctx == nil {
 		k.Logger().WithField("type", "bug").Error("trace called before context set")
 		k.ctx = context.Background()
 	}
 
-	span, ctx := opentracing.StartSpanFromContext(k.ctx, name)
-
-	span.SetTag("subsystem", "agent")
-	span.SetTag("type", "kata")
+	tracer := otel.Tracer("kata")
+	ctx, span := tracer.Start(k.ctx, name)
+	span.SetAttributes([]label.KeyValue{label.Key("subsystem").String("agent"), label.Key("type").String("kata")}...)
 
 	return span, ctx
 }
@@ -330,7 +331,7 @@ func (k *kataAgent) init(ctx context.Context, sandbox *Sandbox, config KataAgent
 	k.ctx = sandbox.ctx
 
 	span, _ := k.trace("init")
-	defer span.Finish()
+	defer span.End()
 
 	disableVMShutdown = k.handleTraceSettings(config)
 	k.keepConn = config.LongLiveConn
@@ -445,7 +446,7 @@ func (k *kataAgent) setupSharedPath(sandbox *Sandbox) error {
 
 func (k *kataAgent) createSandbox(sandbox *Sandbox) error {
 	span, _ := k.trace("createSandbox")
-	defer span.Finish()
+	defer span.End()
 
 	if err := k.setupSharedPath(sandbox); err != nil {
 		return err
@@ -532,7 +533,7 @@ func cmdEnvsToStringSlice(ev []types.EnvVar) []string {
 
 func (k *kataAgent) exec(sandbox *Sandbox, c Container, cmd types.Cmd) (*Process, error) {
 	span, _ := k.trace("exec")
-	defer span.Finish()
+	defer span.End()
 
 	var kataProcess *grpc.Process
 
@@ -704,7 +705,7 @@ func (k *kataAgent) getDNS(sandbox *Sandbox) ([]string, error) {
 
 func (k *kataAgent) startSandbox(sandbox *Sandbox) error {
 	span, _ := k.trace("startSandbox")
-	defer span.Finish()
+	defer span.End()
 
 	if err := k.setAgentURL(); err != nil {
 		return err
@@ -859,7 +860,7 @@ func setupStorages(sandbox *Sandbox) []*grpc.Storage {
 
 func (k *kataAgent) stopSandbox(sandbox *Sandbox) error {
 	span, _ := k.trace("stopSandbox")
-	defer span.Finish()
+	defer span.End()
 
 	req := &grpc.DestroySandboxRequest{}
 
@@ -1217,7 +1218,7 @@ func (k *kataAgent) buildContainerRootfs(sandbox *Sandbox, c *Container, rootPat
 
 func (k *kataAgent) createContainer(sandbox *Sandbox, c *Container) (p *Process, err error) {
 	span, _ := k.trace("createContainer")
-	defer span.Finish()
+	defer span.End()
 
 	var ctrStorages []*grpc.Storage
 	var ctrDevices []*grpc.Device
@@ -1547,7 +1548,7 @@ func (k *kataAgent) handlePidNamespace(grpcSpec *grpc.Spec, sandbox *Sandbox) bo
 
 func (k *kataAgent) startContainer(sandbox *Sandbox, c *Container) error {
 	span, _ := k.trace("startContainer")
-	defer span.Finish()
+	defer span.End()
 
 	req := &grpc.StartContainerRequest{
 		ContainerId: c.id,
@@ -1559,7 +1560,7 @@ func (k *kataAgent) startContainer(sandbox *Sandbox, c *Container) error {
 
 func (k *kataAgent) stopContainer(sandbox *Sandbox, c Container) error {
 	span, _ := k.trace("stopContainer")
-	defer span.Finish()
+	defer span.End()
 
 	_, err := k.sendReq(&grpc.RemoveContainerRequest{ContainerId: c.id})
 	return err
@@ -1723,7 +1724,7 @@ func (k *kataAgent) connect() error {
 	}
 
 	span, _ := k.trace("connect")
-	defer span.Finish()
+	defer span.End()
 
 	// This is for the first connection only, to prevent race
 	k.Lock()
@@ -1747,7 +1748,7 @@ func (k *kataAgent) connect() error {
 
 func (k *kataAgent) disconnect() error {
 	span, _ := k.trace("disconnect")
-	defer span.Finish()
+	defer span.End()
 
 	k.Lock()
 	defer k.Unlock()
@@ -1769,7 +1770,7 @@ func (k *kataAgent) disconnect() error {
 // check grpc server is serving
 func (k *kataAgent) check() error {
 	span, _ := k.trace("check")
-	defer span.Finish()
+	defer span.End()
 
 	_, err := k.sendReq(&grpc.CheckRequest{})
 	if err != nil {
@@ -1780,7 +1781,7 @@ func (k *kataAgent) check() error {
 
 func (k *kataAgent) waitProcess(c *Container, processID string) (int32, error) {
 	span, _ := k.trace("waitProcess")
-	defer span.Finish()
+	defer span.End()
 
 	resp, err := k.sendReq(&grpc.WaitProcessRequest{
 		ContainerId: c.id,
@@ -1943,8 +1944,8 @@ func (k *kataAgent) getReqContext(reqName string) (ctx context.Context, cancel c
 func (k *kataAgent) sendReq(request interface{}) (interface{}, error) {
 	start := time.Now()
 	span, _ := k.trace("sendReq")
-	span.SetTag("request", request)
-	defer span.Finish()
+	span.SetAttributes(label.Key("request").String(fmt.Sprintf("%+v", request)))
+	defer span.End()
 
 	if err := k.connect(); err != nil {
 		return nil, err

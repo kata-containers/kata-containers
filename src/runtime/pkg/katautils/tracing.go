@@ -7,67 +7,89 @@ package katautils
 
 import (
 	"context"
-	"io"
 
-	opentracing "github.com/opentracing/opentracing-go"
-	"github.com/uber/jaeger-client-go/config"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/oci"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/exporters/trace/jaeger"
+	"go.opentelemetry.io/otel/label"
+	"go.opentelemetry.io/otel/propagation"
+	export "go.opentelemetry.io/otel/sdk/export/trace"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/trace"
+	otelTrace "go.opentelemetry.io/otel/trace"
 )
 
-// Implements jaeger-client-go.Logger interface
-type traceLogger struct {
+// kataSpanExporter is used to ensure that Jaeger logs each span.
+// This is essential as it is used by:
+//
+// https: //github.com/kata-containers/tests/blob/master/tracing/tracing-test.sh
+type kataSpanExporter struct{}
+
+var _ export.SpanExporter = (*kataSpanExporter)(nil)
+
+// ExportSpans exports SpanData to Jaeger.
+func (e *kataSpanExporter) ExportSpans(ctx context.Context, spans []*export.SpanData) error {
+	for _, span := range spans {
+		kataUtilsLogger.Infof("Reporting span %+v", span)
+	}
+	return nil
+}
+
+func (e *kataSpanExporter) Shutdown(ctx context.Context) error {
+	return nil
 }
 
 // tracerCloser contains a copy of the closer returned by createTracer() which
 // is used by stopTracing().
-var tracerCloser io.Closer
-
-func (t traceLogger) Error(msg string) {
-	kataUtilsLogger.Error(msg)
-}
-
-func (t traceLogger) Infof(msg string, args ...interface{}) {
-	kataUtilsLogger.Infof(msg, args...)
-}
+var tracerCloser func()
 
 // CreateTracer create a tracer
-func CreateTracer(name string) (opentracing.Tracer, error) {
-	cfg := &config.Configuration{
-		ServiceName: name,
-
-		// If tracing is disabled, use a NOP trace implementation
-		Disabled: !tracing,
-
-		// Note that span logging reporter option cannot be enabled as
-		// it pollutes the output stream which causes (atleast) the
-		// "state" command to fail under Docker.
-		Sampler: &config.SamplerConfig{
-			Type:  "const",
-			Param: 1,
-		},
-
-		// Ensure that Jaeger logs each span.
-		// This is essential as it is used by:
-		//
-		// https: //github.com/kata-containers/tests/blob/master/tracing/tracing-test.sh
-		Reporter: &config.ReporterConfig{
-			LogSpans: tracing,
-		},
+func CreateTracer(name string, config *oci.RuntimeConfig) (func(), error) {
+	if !tracing {
+		otel.SetTracerProvider(trace.NewNoopTracerProvider())
+		return func() {}, nil
 	}
 
-	logger := traceLogger{}
+	// build kata exporter to log reporting span records
+	kataExporter := &kataSpanExporter{}
 
-	tracer, closer, err := cfg.NewTracer(config.Logger(logger))
+	// build jaeger exporter
+	collectorEndpoint := config.JaegerEndpoint
+	if collectorEndpoint == "" {
+		collectorEndpoint = "http://localhost:14268/api/traces"
+	}
+
+	jaegerExporter, err := jaeger.NewRawExporter(
+		jaeger.WithCollectorEndpoint(collectorEndpoint,
+			jaeger.WithUsername(config.JaegerUser),
+			jaeger.WithPassword(config.JaegerPassword),
+		), jaeger.WithProcess(jaeger.Process{
+			ServiceName: name,
+			Tags: []label.KeyValue{
+				label.String("exporter", "jaeger"),
+				label.String("lib", "opentelemetry"),
+			},
+		}))
 	if err != nil {
 		return nil, err
 	}
 
-	// save for stopTracing()'s exclusive use
-	tracerCloser = closer
+	// build tracer provider, that combining both jaeger exporter and kata exporter.
+	tp := sdktrace.NewTracerProvider(
+		sdktrace.WithConfig(
+			sdktrace.Config{
+				DefaultSampler: sdktrace.AlwaysSample(),
+			},
+		),
+		sdktrace.WithSyncer(kataExporter),
+		sdktrace.WithSyncer(jaegerExporter),
+	)
 
-	// Seems to be essential to ensure non-root spans are logged
-	opentracing.SetGlobalTracer(tracer)
+	tracerCloser = jaegerExporter.Flush
 
-	return tracer, nil
+	otel.SetTracerProvider(tp)
+	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}))
+	return tracerCloser, nil
 }
 
 // StopTracing ends all tracing, reporting the spans to the collector.
@@ -76,25 +98,24 @@ func StopTracing(ctx context.Context) {
 		return
 	}
 
-	span := opentracing.SpanFromContext(ctx)
-
+	span := otelTrace.SpanFromContext(ctx)
 	if span != nil {
-		span.Finish()
+		span.End()
 	}
 
 	// report all possible spans to the collector
 	if tracerCloser != nil {
-		tracerCloser.Close()
+		tracerCloser()
 	}
 }
 
 // Trace creates a new tracing span based on the specified name and parent
 // context.
-func Trace(parent context.Context, name string) (opentracing.Span, context.Context) {
-	span, ctx := opentracing.StartSpanFromContext(parent, name)
+func Trace(parent context.Context, name string) (otelTrace.Span, context.Context) {
 
-	span.SetTag("source", "runtime")
-	span.SetTag("component", "cli")
+	tracer := otel.Tracer("kata")
+	ctx, span := tracer.Start(parent, name)
+	span.SetAttributes(label.Key("source").String("runtime"))
 
 	// This is slightly confusing: when tracing is disabled, trace spans
 	// are still created - but the tracer used is a NOP. Therefore, only

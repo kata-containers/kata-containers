@@ -23,6 +23,7 @@ import (
 	clientUtils "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols/client"
 	"github.com/pkg/errors"
 	"github.com/urfave/cli"
+	"go.opentelemetry.io/otel/label"
 )
 
 const (
@@ -68,22 +69,25 @@ var kataExecCLICommand = cli.Command{
 			return err
 		}
 		span, _ := katautils.Trace(ctx, subCommandName)
-		defer span.Finish()
+		defer span.End()
 
 		endPoint := context.String(paramKataMonitorAddr)
 		if endPoint == "" {
 			endPoint = defaultParamKataMonitorAddr
 		}
+		span.SetAttributes(label.Key("endPoint").String(endPoint))
 
 		port := context.Uint64(paramDebugConsolePort)
 		if port == 0 {
 			port = defaultKernelParamDebugConsoleVPortValue
 		}
+		span.SetAttributes(label.Key("port").Uint64(port))
 
 		sandboxID := context.Args().Get(0)
 		if sandboxID == "" {
 			return fmt.Errorf("SandboxID not found")
 		}
+		span.SetAttributes(label.Key("sandbox").String(sandboxID))
 
 		conn, err := getConn(endPoint, sandboxID, port)
 		if err != nil {

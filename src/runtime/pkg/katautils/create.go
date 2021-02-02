@@ -17,6 +17,7 @@ import (
 	vf "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/factory"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/oci"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
+	"go.opentelemetry.io/otel/label"
 )
 
 // GetKernelParamsFunc use a variable to allow tests to modify its value
@@ -104,7 +105,7 @@ func SetEphemeralStorageType(ociSpec specs.Spec) specs.Spec {
 func CreateSandbox(ctx context.Context, vci vc.VC, ociSpec specs.Spec, runtimeConfig oci.RuntimeConfig, rootFs vc.RootFs,
 	containerID, bundlePath, console string, disableOutput, systemdCgroup bool) (_ vc.VCSandbox, _ vc.Process, err error) {
 	span, ctx := Trace(ctx, "createSandbox")
-	defer span.Finish()
+	defer span.End()
 
 	sandboxConfig, err := oci.SandboxConfig(ociSpec, runtimeConfig, bundlePath, containerID, console, disableOutput, systemdCgroup)
 	if err != nil {
@@ -158,7 +159,7 @@ func CreateSandbox(ctx context.Context, vci vc.VC, ociSpec specs.Spec, runtimeCo
 
 	sid := sandbox.ID()
 	kataUtilsLogger = kataUtilsLogger.WithField("sandbox", sid)
-	span.SetTag("sandbox", sid)
+	span.SetAttributes(label.Key("sandbox").String(sid))
 
 	containers := sandbox.GetAllContainers()
 	if len(containers) != 1 {
@@ -202,7 +203,7 @@ func CreateContainer(ctx context.Context, sandbox vc.VCSandbox, ociSpec specs.Sp
 	var c vc.VCContainer
 
 	span, ctx := Trace(ctx, "createContainer")
-	defer span.Finish()
+	defer span.End()
 
 	ociSpec = SetEphemeralStorageType(ociSpec)
 
@@ -227,7 +228,7 @@ func CreateContainer(ctx context.Context, sandbox vc.VCSandbox, ociSpec specs.Sp
 		return vc.Process{}, err
 	}
 
-	span.SetTag("sandbox", sandboxID)
+	span.SetAttributes(label.Key("sandbox").String(sandboxID))
 
 	c, err = sandbox.CreateContainer(contConfig)
 	if err != nil {
