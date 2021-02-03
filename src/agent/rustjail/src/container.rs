@@ -1602,6 +1602,9 @@ async fn execute_hook(logger: &Logger, h: &Hook, st: &OCIState) -> Result<()> {
                     .write_all(state.as_bytes())
                     .unwrap();
 
+                // Close stdin so that hook program could receive EOF.
+                child.stdin.take();
+
                 // read something from stdout for debug
                 let mut out = String::new();
                 child
