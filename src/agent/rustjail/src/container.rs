@@ -276,7 +276,6 @@ pub struct SyncPC {
     pid: pid_t,
 }
 
-#[async_trait]
 pub trait Container: BaseContainer {
     fn pause(&mut self) -> Result<()>;
     fn resume(&mut self) -> Result<()>;
