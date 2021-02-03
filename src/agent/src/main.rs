@@ -17,7 +17,6 @@ extern crate protocols;
 extern crate regex;
 extern crate scan_fmt;
 extern crate serde_json;
-extern crate signal_hook;
 
 #[macro_use]
 extern crate scopeguard;

@@ -253,7 +253,6 @@ mod tests {
 
         // -1 by default
         assert_eq!(process.pid, -1);
-        assert!(process.wait().is_err());
         // signal to every process in the process
         // group of the calling process.
         process.pid = 0;

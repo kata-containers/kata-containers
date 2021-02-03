@@ -579,7 +579,6 @@ dependencies = [
  "scan_fmt",
  "scopeguard",
  "serde_json",
- "signal-hook",
  "slog",
  "slog-scope",
  "slog-stdlog",
@@ -1509,16 +1508,6 @@ dependencies = [
  "proc-macro2 1.0.24",
  "quote 1.0.8",
  "syn 1.0.55",
-]
-
-[[package]]
-name = "signal-hook"
-version = "0.1.16"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "604508c1418b99dfe1925ca9224829bb2a8a9a04dda655cc01fcad46f4ab05ed"
-dependencies = [
- "libc",
- "signal-hook-registry",
 ]
 
 [[package]]
