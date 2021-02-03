@@ -1702,6 +1702,29 @@ mod tests {
         };
     }
 
+    #[tokio::test]
+    async fn test_execute_hook() {
+        execute_hook(
+            &slog_scope::logger(),
+            &Hook {
+                path: "/usr/bin/xargs".to_string(),
+                args: vec![],
+                env: vec![],
+                timeout: None,
+            },
+            &OCIState {
+                version: "1.2.3".to_string(),
+                id: "321".to_string(),
+                status: "".to_string(),
+                pid: 2,
+                bundle: "".to_string(),
+                annotations: Default::default(),
+            },
+        )
+        .await
+        .unwrap()
+    }
+
     #[test]
     fn test_status_transtition() {
         let mut status = ContainerStatus::new();
