@@ -380,7 +380,7 @@ fn online_cpus(logger: &Logger, num: i32) -> Result<i32> {
             logger,
             SYSFS_CPU_ONLINE_PATH,
             r"cpu[0-9]+",
-            (num - onlined_count),
+            num - onlined_count,
         );
         if r.is_err() {
             return r;
