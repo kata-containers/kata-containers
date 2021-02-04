@@ -7,7 +7,6 @@
 #![allow(unused_parens)]
 #![allow(unused_unsafe)]
 #![allow(dead_code)]
-#![allow(non_snake_case)]
 #[macro_use]
 extern crate lazy_static;
 extern crate oci;
@@ -161,7 +160,7 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
         // support vsock log
         let (rfd, wfd) = unistd::pipe2(OFlag::O_CLOEXEC)?;
 
-        let agentConfig = AGENT_CONFIG.clone();
+        let agent_config = AGENT_CONFIG.clone();
 
         let init_mode = unistd::getpid() == Pid::from_raw(1);
         if init_mode {
@@ -182,7 +181,7 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
                 e
             })?;
 
-            let mut config = agentConfig.write().await;
+            let mut config = agent_config.write().await;
             config.parse_cmdline(KERNEL_CMDLINE_FILE)?;
 
             init_agent_as_init(&logger, config.unified_cgroup_hierarchy)?;
@@ -190,10 +189,10 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
             // once parsed cmdline and set the config, release the write lock
             // as soon as possible in case other thread would get read lock on
             // it.
-            let mut config = agentConfig.write().await;
+            let mut config = agent_config.write().await;
             config.parse_cmdline(KERNEL_CMDLINE_FILE)?;
         }
-        let config = agentConfig.read().await;
+        let config = agent_config.read().await;
 
         let log_vport = config.log_vport as u32;
         let log_handle = tokio::spawn(async move {

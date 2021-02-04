@@ -139,10 +139,10 @@ mod tests {
         assert_eq!(true, content.is_ok());
         let content = content.unwrap();
 
-        let expected_DNS: Vec<&str> = content.split('\n').collect();
+        let expected_dns: Vec<&str> = content.split('\n').collect();
 
         // assert the data are the same as /run/kata-containers/sandbox/resolv.conf
-        assert_eq!(dns, expected_DNS);
+        assert_eq!(dns, expected_dns);
 
         // umount /etc/resolv.conf
         let _ = mount::umount(dst_filename);

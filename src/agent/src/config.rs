@@ -105,7 +105,7 @@ impl agentConfig {
                 HOTPLUG_TIMOUT_OPTION,
                 self.hotplug_timeout,
                 get_hotplug_timeout,
-                |hotplugTimeout: time::Duration| hotplugTimeout.as_secs() > 0
+                |hotplug_timeout: time::Duration| hotplug_timeout.as_secs() > 0
             );
 
             // vsock port should be positive values

@@ -665,8 +665,8 @@ impl protocols::agent_ttrpc::AgentService for agentService {
         let resp = Empty::new();
 
         if res.is_some() {
-            let ociRes = rustjail::resources_grpc_to_oci(&res.unwrap());
-            match ctr.set(ociRes) {
+            let oci_res = rustjail::resources_grpc_to_oci(&res.unwrap());
+            match ctr.set(oci_res) {
                 Err(e) => {
                     return Err(ttrpc_error(ttrpc::Code::INTERNAL, e.to_string()));
                 }
