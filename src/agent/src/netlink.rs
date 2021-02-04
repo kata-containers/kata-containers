@@ -45,7 +45,7 @@ pub enum AddressFilter {
 }
 
 /// A high level wrapper for netlink (and `rtnetlink` crate) for use by the Agent's RPC.
-/// It is expected to be consumed by the `agentService`, so it operates with protobuf
+/// It is expected to be consumed by the `AgentService`, so it operates with protobuf
 /// structures directly for convenience.
 #[derive(Debug)]
 pub struct Handle {

@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-#![allow(non_camel_case_types)]
 #[macro_use]
 extern crate lazy_static;
 extern crate oci;
@@ -83,11 +82,11 @@ const DEFAULT_BUF_SIZE: usize = 8 * 1024;
 lazy_static! {
     static ref GLOBAL_DEVICE_WATCHER: Arc<Mutex<HashMap<String, Option<Sender<String>>>>> =
         Arc::new(Mutex::new(HashMap::new()));
-    static ref AGENT_CONFIG: Arc<RwLock<agentConfig>> =
-        Arc::new(RwLock::new(config::agentConfig::new()));
+    static ref AGENT_CONFIG: Arc<RwLock<AgentConfig>> =
+        Arc::new(RwLock::new(config::AgentConfig::new()));
 }
 
-fn announce(logger: &Logger, config: &agentConfig) {
+fn announce(logger: &Logger, config: &AgentConfig) {
     info!(logger, "announce";
     "agent-commit" => version::VERSION_COMMIT,
 
@@ -247,7 +246,7 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     })
 }
 
-async fn start_sandbox(logger: &Logger, config: &agentConfig, init_mode: bool) -> Result<()> {
+async fn start_sandbox(logger: &Logger, config: &AgentConfig, init_mode: bool) -> Result<()> {
     let shells = SHELLS.clone();
     let debug_console_vport = config.debug_console_vport as u32;
 
@@ -446,7 +445,7 @@ lazy_static! {
     };
 }
 
-use crate::config::agentConfig;
+use crate::config::AgentConfig;
 use nix::sys::stat::Mode;
 use std::os::unix::io::{FromRawFd, RawFd};
 use std::path::PathBuf;
