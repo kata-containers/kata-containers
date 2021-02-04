@@ -1,0 +1,104 @@
+From f876aae825d77aec1a735ecf5b2bc821eba11913 Mon Sep 17 00:00:00 2001
+From: Jiachen Zhang <zhangjiachen.jaycee@bytedance.com>
+Date: Thu, 4 Feb 2021 22:22:03 +0100
+Subject: [PATCH] virtiofsd: Add -o allow_direct_io|no_allow_direct_io options
+
+Due to the commit 65da4539803373ec4eec97ffc49ee90083e56efd, the O_DIRECT
+open flag of guest applications will be discarded by virtiofsd. While
+this behavior makes it consistent with the virtio-9p scheme when guest
+applications use direct I/O, we no longer have any chance to bypass the
+host page cache.
+
+Therefore, we add a flag 'allow_direct_io' to lo_data. If '-o
+ no_allow_direct_io' option is added, or none of '-o allow_direct_io' or
+ '-o no_allow_direct_io' is added, the 'allow_direct_io' will be set to
+ 0, and virtiofsd discards O_DIRECT as before. If '-o allow_direct_io'
+is added to the starting command-line, 'allow_direct_io' will be set to
+1, so that the O_DIRECT flags will be retained and host page cache can
+be bypassed.
+
+Signed-off-by: Jiachen Zhang <zhangjiachen.jaycee@bytedance.com>
+Reviewed-by: Stefan Hajnoczi <stefanha@redhat.com>
+Message-Id: <20200824105957.61265-1-zhangjiachen.jaycee@bytedance.com>
+Signed-off-by: Dr. David Alan Gilbert <dgilbert@redhat.com>
+---
+ tools/virtiofsd/passthrough_ll.c | 20 ++++++++++++++------
+ 1 file changed, 14 insertions(+), 6 deletions(-)
+
+diff --git a/tools/virtiofsd/passthrough_ll.c b/tools/virtiofsd/passthrough_ll.c
+index f7b9c1d2..bec60352 100644
+--- a/tools/virtiofsd/passthrough_ll.c
++++ b/tools/virtiofsd/passthrough_ll.c
+@@ -151,6 +151,7 @@ struct lo_data {
+     int timeout_set;
+     int readdirplus_set;
+     int readdirplus_clear;
++    int allow_direct_io;
+     struct lo_inode root;
+     GHashTable *inodes; /* protected by lo->mutex */
+     struct lo_map ino_map; /* protected by lo->mutex */
+@@ -179,6 +180,8 @@ static const struct fuse_opt lo_opts[] = {
+     { "norace", offsetof(struct lo_data, norace), 1 },
+     { "readdirplus", offsetof(struct lo_data, readdirplus_set), 1 },
+     { "no_readdirplus", offsetof(struct lo_data, readdirplus_clear), 1 },
++    { "allow_direct_io", offsetof(struct lo_data, allow_direct_io), 1 },
++    { "no_allow_direct_io", offsetof(struct lo_data, allow_direct_io), 0 },
+     FUSE_OPT_END
+ };
+ static bool use_syslog = false;
+@@ -1677,7 +1680,8 @@ static void lo_releasedir(fuse_req_t req, fuse_ino_t ino,
+     fuse_reply_err(req, 0);
+ }
+ 
+-static void update_open_flags(int writeback, struct fuse_file_info *fi)
++static void update_open_flags(int writeback, int allow_direct_io,
++                              struct fuse_file_info *fi)
+ {
+     /*
+      * With writeback cache, kernel may send read requests even
+@@ -1702,10 +1706,13 @@ static void update_open_flags(int writeback, struct fuse_file_info *fi)
+ 
+     /*
+      * O_DIRECT in guest should not necessarily mean bypassing page
+-     * cache on host as well. If somebody needs that behavior, it
+-     * probably should be a configuration knob in daemon.
++     * cache on host as well. Therefore, we discard it by default
++     * ('-o no_allow_direct_io'). If somebody needs that behavior,
++     * the '-o allow_direct_io' option should be set.
+      */
+-    fi->flags &= ~O_DIRECT;
++    if (!allow_direct_io) {
++        fi->flags &= ~O_DIRECT;
++    }
+ }
+ 
+ static void lo_create(fuse_req_t req, fuse_ino_t parent, const char *name,
+@@ -1737,7 +1744,7 @@ static void lo_create(fuse_req_t req, fuse_ino_t parent, const char *name,
+         goto out;
+     }
+ 
+-    update_open_flags(lo->writeback, fi);
++    update_open_flags(lo->writeback, lo->allow_direct_io, fi);
+ 
+     fd = openat(parent_inode->fd, name, (fi->flags | O_CREAT) & ~O_NOFOLLOW,
+                 mode);
+@@ -1947,7 +1954,7 @@ static void lo_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
+     fuse_log(FUSE_LOG_DEBUG, "lo_open(ino=%" PRIu64 ", flags=%d)\n", ino,
+              fi->flags);
+ 
+-    update_open_flags(lo->writeback, fi);
++    update_open_flags(lo->writeback, lo->allow_direct_io, fi);
+ 
+     sprintf(buf, "%i", lo_fd(req, ino));
+     fd = openat(lo->proc_self_fd, buf, fi->flags & ~O_NOFOLLOW);
+@@ -2852,6 +2859,7 @@ int main(int argc, char *argv[])
+         .debug = 0,
+         .writeback = 0,
+         .posix_lock = 1,
++	.allow_direct_io = 0,
+         .proc_self_fd = -1,
+     };
+     struct lo_map_elem *root_elem;
+-- 
+2.29.2
+
