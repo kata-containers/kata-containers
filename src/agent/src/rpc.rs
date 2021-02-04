@@ -76,11 +76,11 @@ macro_rules! sl {
 }
 
 #[derive(Clone)]
-pub struct agentService {
+pub struct AgentService {
     sandbox: Arc<Mutex<Sandbox>>,
 }
 
-impl agentService {
+impl AgentService {
     async fn do_create_container(
         &self,
         req: protocols::agent::CreateContainerRequest,
@@ -493,7 +493,7 @@ impl agentService {
 }
 
 #[async_trait]
-impl protocols::agent_ttrpc::AgentService for agentService {
+impl protocols::agent_ttrpc::AgentService for AgentService {
     async fn create_container(
         &self,
         _ctx: &TtrpcContext,
@@ -1203,10 +1203,10 @@ impl protocols::agent_ttrpc::AgentService for agentService {
 }
 
 #[derive(Clone)]
-struct healthService;
+struct HealthService;
 
 #[async_trait]
-impl protocols::health_ttrpc::Health for healthService {
+impl protocols::health_ttrpc::Health for HealthService {
     async fn check(
         &self,
         _ctx: &TtrpcContext,
@@ -1334,13 +1334,13 @@ fn find_process<'a>(
 }
 
 pub fn start(s: Arc<Mutex<Sandbox>>, server_address: &str) -> TtrpcServer {
-    let agent_service = Box::new(agentService { sandbox: s })
+    let agent_service = Box::new(AgentService { sandbox: s })
         as Box<dyn protocols::agent_ttrpc::AgentService + Send + Sync>;
 
     let agent_worker = Arc::new(agent_service);
 
     let health_service =
-        Box::new(healthService {}) as Box<dyn protocols::health_ttrpc::Health + Send + Sync>;
+        Box::new(HealthService {}) as Box<dyn protocols::health_ttrpc::Health + Send + Sync>;
     let health_worker = Arc::new(health_service);
 
     let aservice = protocols::agent_ttrpc::create_agent_service(agent_worker);
@@ -1670,7 +1670,7 @@ fn load_kernel_module(module: &protocols::agent::KernelModule) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::protocols::agent_ttrpc::AgentService;
+    use crate::protocols::agent_ttrpc::AgentService as _;
     use oci::{Hook, Hooks};
     use ttrpc::{r#async::TtrpcContext, MessageHeader};
 
@@ -1725,7 +1725,7 @@ mod tests {
         let logger = slog::Logger::root(slog::Discard, o!());
         let sandbox = Sandbox::new(&logger).unwrap();
 
-        let agent_service = Box::new(agentService {
+        let agent_service = Box::new(AgentService {
             sandbox: Arc::new(Mutex::new(sandbox)),
         });
 
@@ -1742,7 +1742,7 @@ mod tests {
         let logger = slog::Logger::root(slog::Discard, o!());
         let sandbox = Sandbox::new(&logger).unwrap();
 
-        let agent_service = Box::new(agentService {
+        let agent_service = Box::new(AgentService {
             sandbox: Arc::new(Mutex::new(sandbox)),
         });
 
@@ -1759,7 +1759,7 @@ mod tests {
         let logger = slog::Logger::root(slog::Discard, o!());
         let sandbox = Sandbox::new(&logger).unwrap();
 
-        let agent_service = Box::new(agentService {
+        let agent_service = Box::new(AgentService {
             sandbox: Arc::new(Mutex::new(sandbox)),
         });
 
