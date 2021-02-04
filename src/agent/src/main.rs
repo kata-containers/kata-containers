@@ -6,7 +6,6 @@
 #![allow(non_camel_case_types)]
 #![allow(unused_parens)]
 #![allow(unused_unsafe)]
-#![allow(dead_code)]
 #[macro_use]
 extern crate lazy_static;
 extern crate oci;
