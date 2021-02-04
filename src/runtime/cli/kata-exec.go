@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"sync"
@@ -175,7 +176,7 @@ func (s *iostream) Read(data []byte) (n int, err error) {
 }
 
 func getConn(namespace, sandboxID string, port uint64) (net.Conn, error) {
-	socketAddr := fmt.Sprintf("/containerd-shim/%s/%s/shim-monitor.sock", namespace, sandboxID)
+	socketAddr := filepath.Join(string(filepath.Separator), "containerd-shim", namespace, sandboxID, "shim-monitor.sock")
 	client, err := kataMonitor.BuildUnixSocketClient(socketAddr, defaultTimeout)
 	if err != nil {
 		return nil, err
