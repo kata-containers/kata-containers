@@ -119,3 +119,16 @@ func (q *qemuArm64) append9PVolume(devices []govmmQemu.Device, volume types.Volu
 	devices = append(devices, d)
 	return devices, nil
 }
+
+func (q *qemuArm64) getPFlash() ([]string, error) {
+	length := len(q.PFlash)
+	if length == 0 {
+		return nil, nil
+	} else if length == 1 {
+		return nil, fmt.Errorf("two pflash images needed for arm64")
+	} else if length == 2 {
+		return q.PFlash, nil
+	} else {
+		return nil, fmt.Errorf("too many pflash images for arm64")
+	}
+}

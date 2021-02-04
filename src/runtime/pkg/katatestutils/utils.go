@@ -28,6 +28,7 @@ type RuntimeConfigOptions struct {
 	AgentTraceType       string
 	SharedFS             string
 	VirtioFSDaemon       string
+	PFlash               []string
 	PCIeRootPort         uint32
 	DisableBlock         bool
 	EnableIOThreads      bool

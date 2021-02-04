@@ -333,6 +333,9 @@ type HypervisorConfig struct {
 	// FileBackedMemRootList is the list of valid root directories values for annotations
 	FileBackedMemRootList []string
 
+	// PFlash image paths
+	PFlash []string
+
 	// customAssets is a map of assets.
 	// Each value in that map takes precedence over the configured assets.
 	// For example, if there is a value for the "kernel" key in this map,
