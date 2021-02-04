@@ -25,9 +25,17 @@ pub fn create_pci_root_bus_path() -> String {
 pub fn create_pci_root_bus_path() -> String {
     let ret = String::from("/devices/platform/4010000000.pcie/pci0000:00");
 
+    let acpi_root_bus_path = String::from("/devices/pci0000:00");
+    let mut acpi_sysfs_dir = String::from(SYSFS_DIR);
     let mut sysfs_dir = String::from(SYSFS_DIR);
     let mut start_root_bus_path = String::from("/devices/platform/");
     let end_root_bus_path = String::from("/pci0000:00");
+
+    // check if there is pci bus path for acpi
+    acpi_sysfs_dir.push_str(&acpi_root_bus_path);
+    if let Ok(_) = fs::metadata(&acpi_sysfs_dir) {
+        return acpi_root_bus_path;
+    }
 
     sysfs_dir.push_str(&start_root_bus_path);
     let entries = match fs::read_dir(sysfs_dir) {
