@@ -26,10 +26,6 @@ const VSOCK_PORT: u16 = 1024;
 const SERVER_ADDR_ENV_VAR: &str = "KATA_AGENT_SERVER_ADDR";
 const LOG_LEVEL_ENV_VAR: &str = "KATA_AGENT_LOG_LEVEL";
 
-// FIXME: unused
-const TRACE_MODE_FLAG: &str = "agent.trace";
-const USE_VSOCK_FLAG: &str = "agent.use_vsock";
-
 #[derive(Debug)]
 pub struct agentConfig {
     pub debug_console: bool,
