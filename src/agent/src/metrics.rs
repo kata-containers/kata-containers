@@ -187,9 +187,9 @@ fn update_guest_metrics() {
             info!(sl!(), "failed to get guest KernelStats: {:?}", err);
         }
         Ok(kernel_stats) => {
-            set_gauge_vec_CPU_time(&GUEST_CPU_TIME, "total", &kernel_stats.total);
+            set_gauge_vec_cpu_time(&GUEST_CPU_TIME, "total", &kernel_stats.total);
             for (i, cpu_time) in kernel_stats.cpu_time.iter().enumerate() {
-                set_gauge_vec_CPU_time(&GUEST_CPU_TIME, format!("{}", i).as_str(), &cpu_time);
+                set_gauge_vec_cpu_time(&GUEST_CPU_TIME, format!("{}", i).as_str(), &cpu_time);
             }
         }
     }
@@ -332,7 +332,7 @@ fn set_gauge_vec_meminfo(gv: &prometheus::GaugeVec, meminfo: &procfs::Meminfo) {
         .set(meminfo.k_reclaimable.unwrap_or(0) as f64);
 }
 
-fn set_gauge_vec_CPU_time(gv: &prometheus::GaugeVec, cpu: &str, cpu_time: &procfs::CpuTime) {
+fn set_gauge_vec_cpu_time(gv: &prometheus::GaugeVec, cpu: &str, cpu_time: &procfs::CpuTime) {
     gv.with_label_values(&[cpu, "user"])
         .set(cpu_time.user as f64);
     gv.with_label_values(&[cpu, "nice"])

@@ -84,7 +84,7 @@ lazy_static! {
 }
 
 #[derive(Debug, PartialEq)]
-pub struct INIT_MOUNT {
+pub struct InitMount {
     fstype: &'static str,
     src: &'static str,
     dest: &'static str,
@@ -114,13 +114,13 @@ lazy_static!{
 
 #[rustfmt::skip]
 lazy_static! {
-    pub static ref INIT_ROOTFS_MOUNTS: Vec<INIT_MOUNT> = vec![
-        INIT_MOUNT{fstype: "proc", src: "proc", dest: "/proc", options: vec!["nosuid", "nodev", "noexec"]},
-        INIT_MOUNT{fstype: "sysfs", src: "sysfs", dest: "/sys", options: vec!["nosuid", "nodev", "noexec"]},
-        INIT_MOUNT{fstype: "devtmpfs", src: "dev", dest: "/dev", options: vec!["nosuid"]},
-        INIT_MOUNT{fstype: "tmpfs", src: "tmpfs", dest: "/dev/shm", options: vec!["nosuid", "nodev"]},
-        INIT_MOUNT{fstype: "devpts", src: "devpts", dest: "/dev/pts", options: vec!["nosuid", "noexec"]},
-        INIT_MOUNT{fstype: "tmpfs", src: "tmpfs", dest: "/run", options: vec!["nosuid", "nodev"]},
+    pub static ref INIT_ROOTFS_MOUNTS: Vec<InitMount> = vec![
+        InitMount{fstype: "proc", src: "proc", dest: "/proc", options: vec!["nosuid", "nodev", "noexec"]},
+        InitMount{fstype: "sysfs", src: "sysfs", dest: "/sys", options: vec!["nosuid", "nodev", "noexec"]},
+        InitMount{fstype: "devtmpfs", src: "dev", dest: "/dev", options: vec!["nosuid"]},
+        InitMount{fstype: "tmpfs", src: "tmpfs", dest: "/dev/shm", options: vec!["nosuid", "nodev"]},
+        InitMount{fstype: "devpts", src: "devpts", dest: "/dev/pts", options: vec!["nosuid", "noexec"]},
+        InitMount{fstype: "tmpfs", src: "tmpfs", dest: "/run", options: vec!["nosuid", "nodev"]},
     ];
 }
 
@@ -492,7 +492,7 @@ pub async fn add_storages(
     Ok(mount_list)
 }
 
-fn mount_to_rootfs(logger: &Logger, m: &INIT_MOUNT) -> Result<()> {
+fn mount_to_rootfs(logger: &Logger, m: &InitMount) -> Result<()> {
     let options_vec: Vec<&str> = m.options.clone();
 
     let (flags, options) = parse_mount_flags_and_options(options_vec);
@@ -568,11 +568,11 @@ pub fn get_cgroup_mounts(
     logger: &Logger,
     cg_path: &str,
     unified_cgroup_hierarchy: bool,
-) -> Result<Vec<INIT_MOUNT>> {
+) -> Result<Vec<InitMount>> {
     // cgroup v2
     // https://github.com/kata-containers/agent/blob/8c9bbadcd448c9a67690fbe11a860aaacc69813c/agent.go#L1249
     if unified_cgroup_hierarchy {
-        return Ok(vec![INIT_MOUNT {
+        return Ok(vec![InitMount {
             fstype: "cgroup2",
             src: "cgroup2",
             dest: "/sys/fs/cgroup",
@@ -584,7 +584,7 @@ pub fn get_cgroup_mounts(
     let reader = BufReader::new(file);
 
     let mut has_device_cgroup = false;
-    let mut cg_mounts: Vec<INIT_MOUNT> = vec![INIT_MOUNT {
+    let mut cg_mounts: Vec<InitMount> = vec![InitMount {
         fstype: "tmpfs",
         src: "tmpfs",
         dest: SYSFS_CGROUPPATH,
@@ -630,7 +630,7 @@ pub fn get_cgroup_mounts(
 
         if let Some(value) = CGROUPS.get(&fields[0]) {
             let key = CGROUPS.keys().find(|&&f| f == fields[0]).unwrap();
-            cg_mounts.push(INIT_MOUNT {
+            cg_mounts.push(InitMount {
                 fstype: "cgroup",
                 src: "cgroup",
                 dest: *value,
@@ -644,7 +644,7 @@ pub fn get_cgroup_mounts(
         return Ok(Vec::new());
     }
 
-    cg_mounts.push(INIT_MOUNT {
+    cg_mounts.push(InitMount {
         fstype: "tmpfs",
         src: "tmpfs",
         dest: SYSFS_CGROUPPATH,
@@ -1142,21 +1142,21 @@ mod tests {
         let drain = slog::Discard;
         let logger = slog::Logger::root(drain, o!());
 
-        let first_mount = INIT_MOUNT {
+        let first_mount = InitMount {
             fstype: "tmpfs",
             src: "tmpfs",
             dest: SYSFS_CGROUPPATH,
             options: vec!["nosuid", "nodev", "noexec", "mode=755"],
         };
 
-        let last_mount = INIT_MOUNT {
+        let last_mount = InitMount {
             fstype: "tmpfs",
             src: "tmpfs",
             dest: SYSFS_CGROUPPATH,
             options: vec!["remount", "ro", "nosuid", "nodev", "noexec", "mode=755"],
         };
 
-        let cg_devices_mount = INIT_MOUNT {
+        let cg_devices_mount = InitMount {
             fstype: "cgroup",
             src: "cgroup",
             dest: "/sys/fs/cgroup/devices",

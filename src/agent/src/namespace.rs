@@ -68,6 +68,7 @@ impl Namespace {
         self
     }
 
+    #[allow(dead_code)]
     pub fn set_root_dir(mut self, dir: &str) -> Self {
         self.persistent_ns_dir = dir.to_string();
         self

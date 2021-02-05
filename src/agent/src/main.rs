@@ -3,11 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-#![allow(non_camel_case_types)]
-#![allow(unused_parens)]
-#![allow(unused_unsafe)]
-#![allow(dead_code)]
-#![allow(non_snake_case)]
 #[macro_use]
 extern crate lazy_static;
 extern crate oci;
@@ -87,11 +82,11 @@ const DEFAULT_BUF_SIZE: usize = 8 * 1024;
 lazy_static! {
     static ref GLOBAL_DEVICE_WATCHER: Arc<Mutex<HashMap<String, Option<Sender<String>>>>> =
         Arc::new(Mutex::new(HashMap::new()));
-    static ref AGENT_CONFIG: Arc<RwLock<agentConfig>> =
-        Arc::new(RwLock::new(config::agentConfig::new()));
+    static ref AGENT_CONFIG: Arc<RwLock<AgentConfig>> =
+        Arc::new(RwLock::new(config::AgentConfig::new()));
 }
 
-fn announce(logger: &Logger, config: &agentConfig) {
+fn announce(logger: &Logger, config: &AgentConfig) {
     info!(logger, "announce";
     "agent-commit" => version::VERSION_COMMIT,
 
@@ -161,7 +156,7 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
         // support vsock log
         let (rfd, wfd) = unistd::pipe2(OFlag::O_CLOEXEC)?;
 
-        let agentConfig = AGENT_CONFIG.clone();
+        let agent_config = AGENT_CONFIG.clone();
 
         let init_mode = unistd::getpid() == Pid::from_raw(1);
         if init_mode {
@@ -182,7 +177,7 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
                 e
             })?;
 
-            let mut config = agentConfig.write().await;
+            let mut config = agent_config.write().await;
             config.parse_cmdline(KERNEL_CMDLINE_FILE)?;
 
             init_agent_as_init(&logger, config.unified_cgroup_hierarchy)?;
@@ -190,10 +185,10 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
             // once parsed cmdline and set the config, release the write lock
             // as soon as possible in case other thread would get read lock on
             // it.
-            let mut config = agentConfig.write().await;
+            let mut config = agent_config.write().await;
             config.parse_cmdline(KERNEL_CMDLINE_FILE)?;
         }
-        let config = agentConfig.read().await;
+        let config = agent_config.read().await;
 
         let log_vport = config.log_vport as u32;
         let log_handle = tokio::spawn(async move {
@@ -251,7 +246,7 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     })
 }
 
-async fn start_sandbox(logger: &Logger, config: &agentConfig, init_mode: bool) -> Result<()> {
+async fn start_sandbox(logger: &Logger, config: &AgentConfig, init_mode: bool) -> Result<()> {
     let shells = SHELLS.clone();
     let debug_console_vport = config.debug_console_vport as u32;
 
@@ -450,7 +445,7 @@ lazy_static! {
     };
 }
 
-use crate::config::agentConfig;
+use crate::config::AgentConfig;
 use nix::sys::stat::Mode;
 use std::os::unix::io::{FromRawFd, RawFd};
 use std::path::PathBuf;

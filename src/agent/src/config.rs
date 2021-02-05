@@ -26,12 +26,8 @@ const VSOCK_PORT: u16 = 1024;
 const SERVER_ADDR_ENV_VAR: &str = "KATA_AGENT_SERVER_ADDR";
 const LOG_LEVEL_ENV_VAR: &str = "KATA_AGENT_LOG_LEVEL";
 
-// FIXME: unused
-const TRACE_MODE_FLAG: &str = "agent.trace";
-const USE_VSOCK_FLAG: &str = "agent.use_vsock";
-
 #[derive(Debug)]
-pub struct agentConfig {
+pub struct AgentConfig {
     pub debug_console: bool,
     pub dev_mode: bool,
     pub log_level: slog::Level,
@@ -73,9 +69,9 @@ macro_rules! parse_cmdline_param {
     };
 }
 
-impl agentConfig {
-    pub fn new() -> agentConfig {
-        agentConfig {
+impl AgentConfig {
+    pub fn new() -> AgentConfig {
+        AgentConfig {
             debug_console: false,
             dev_mode: false,
             log_level: DEFAULT_LOG_LEVEL,
@@ -105,7 +101,7 @@ impl agentConfig {
                 HOTPLUG_TIMOUT_OPTION,
                 self.hotplug_timeout,
                 get_hotplug_timeout,
-                |hotplugTimeout: time::Duration| hotplugTimeout.as_secs() > 0
+                |hotplug_timeout: time::Duration| hotplug_timeout.as_secs() > 0
             );
 
             // vsock port should be positive values
@@ -315,7 +311,7 @@ mod tests {
 
     #[test]
     fn test_new() {
-        let config = agentConfig::new();
+        let config = AgentConfig::new();
         assert_eq!(config.debug_console, false);
         assert_eq!(config.dev_mode, false);
         assert_eq!(config.log_level, DEFAULT_LOG_LEVEL);
@@ -822,7 +818,7 @@ mod tests {
 
         let filename = file_path.to_str().expect("failed to create filename");
 
-        let mut config = agentConfig::new();
+        let mut config = AgentConfig::new();
         let result = config.parse_cmdline(&filename.to_owned());
         assert!(result.is_err());
 
@@ -854,7 +850,7 @@ mod tests {
                 vars_to_unset.push(name);
             }
 
-            let mut config = agentConfig::new();
+            let mut config = AgentConfig::new();
             assert_eq!(config.debug_console, false, "{}", msg);
             assert_eq!(config.dev_mode, false, "{}", msg);
             assert_eq!(config.unified_cgroup_hierarchy, false, "{}", msg);
