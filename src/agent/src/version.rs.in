@@ -7,6 +7,8 @@
 // WARNING: This file is auto-generated - DO NOT EDIT!
 //
 
+#![allow(dead_code)]
+
 pub const AGENT_VERSION: &str = "@AGENT_VERSION@";
 pub const API_VERSION: &str = "@API_VERSION@";
 pub const VERSION_COMMIT: &str = "@VERSION_COMMIT@";

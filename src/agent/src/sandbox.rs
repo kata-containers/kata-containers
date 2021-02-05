@@ -150,14 +150,6 @@ impl Sandbox {
         Ok(())
     }
 
-    pub fn is_running(&self) -> bool {
-        self.running
-    }
-
-    pub fn set_hostname(&mut self, hostname: String) {
-        self.hostname = hostname;
-    }
-
     pub async fn setup_shared_namespaces(&mut self) -> Result<bool> {
         // Set up shared IPC namespace
         self.shared_ipcns = Namespace::new(&self.logger)
@@ -388,7 +380,7 @@ fn online_cpus(logger: &Logger, num: i32) -> Result<i32> {
             logger,
             SYSFS_CPU_ONLINE_PATH,
             r"cpu[0-9]+",
-            (num - onlined_count),
+            num - onlined_count,
         );
         if r.is_err() {
             return r;
@@ -730,25 +722,6 @@ mod tests {
         assert!(s.hooks.as_ref().unwrap().prestart.len() == 1);
         assert!(s.hooks.as_ref().unwrap().poststart.is_empty());
         assert!(s.hooks.as_ref().unwrap().poststop.is_empty());
-    }
-
-    #[tokio::test]
-    async fn test_sandbox_is_running() {
-        let logger = slog::Logger::root(slog::Discard, o!());
-        let mut s = Sandbox::new(&logger).unwrap();
-        s.running = true;
-        assert!(s.is_running());
-        s.running = false;
-        assert!(!s.is_running());
-    }
-
-    #[tokio::test]
-    async fn test_sandbox_set_hostname() {
-        let logger = slog::Logger::root(slog::Discard, o!());
-        let mut s = Sandbox::new(&logger).unwrap();
-        let hostname = "abc123";
-        s.set_hostname(hostname.to_string());
-        assert_eq!(s.hostname, hostname);
     }
 
     #[tokio::test]

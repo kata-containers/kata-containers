@@ -40,11 +40,12 @@ pub enum AddressFilter {
     /// Return addresses that belong to the given interface.
     LinkIndex(u32),
     /// Get addresses with the given prefix.
+    #[allow(dead_code)]
     IpAddress(IpAddr),
 }
 
 /// A high level wrapper for netlink (and `rtnetlink` crate) for use by the Agent's RPC.
-/// It is expected to be consumed by the `agentService`, so it operates with protobuf
+/// It is expected to be consumed by the `AgentService`, so it operates with protobuf
 /// structures directly for convenience.
 #[derive(Debug)]
 pub struct Handle {
@@ -212,17 +213,6 @@ impl Handle {
         let link_req = self.handle.link().set(link_index);
         let set_req = if up { link_req.up() } else { link_req.down() };
         set_req.execute().await?;
-        Ok(())
-    }
-
-    pub async fn delete_links<I>(&mut self, list: I) -> Result<()>
-    where
-        I: IntoIterator<Item = u32>,
-    {
-        for index in list.into_iter() {
-            self.handle.link().del(index).execute().await?;
-        }
-
         Ok(())
     }
 
@@ -742,6 +732,7 @@ impl Address {
         self.0.header.family == packet::constants::AF_INET6 as u8
     }
 
+    #[allow(dead_code)]
     fn prefix(&self) -> u8 {
         self.0.header.prefix_len
     }
