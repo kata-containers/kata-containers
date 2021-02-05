@@ -2,6 +2,8 @@ on: issue_comment
 name: test-kata-deploy
 jobs:
   check_comments:
+    if: ${{ github.event.issue.pull_request }}
+    types: [created, edited]
     runs-on: ubuntu-latest
     steps:
       - name: Check for Command
