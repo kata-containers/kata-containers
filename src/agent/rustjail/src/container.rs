@@ -18,7 +18,7 @@ use std::time::SystemTime;
 
 use cgroups::freezer::FreezerState;
 
-use crate::capabilities::{self, CAPSMAP};
+use crate::capabilities;
 #[cfg(not(test))]
 use crate::cgroups::fs::Manager as FsManager;
 #[cfg(test)]
@@ -339,7 +339,6 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
     lazy_static::initialize(&NAMESPACES);
     lazy_static::initialize(&DEFAULT_DEVICES);
     lazy_static::initialize(&RLIMITMAPS);
-    lazy_static::initialize(&CAPSMAP);
 
     let init = std::env::var(INIT)?.eq(format!("{}", true).as_str());
 
