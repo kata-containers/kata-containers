@@ -5,7 +5,7 @@
 
 use anyhow::{anyhow, Context, Result};
 use libc::pid_t;
-use oci::{Hook, Linux, LinuxNamespace, LinuxResources, POSIXRlimit, Spec};
+use oci::{Hook, Linux, LinuxNamespace, LinuxResources, Spec};
 use oci::{LinuxDevice, LinuxIDMapping};
 use std::clone::Clone;
 use std::ffi::{CStr, CString};
@@ -48,6 +48,7 @@ use protobuf::SingularPtrField;
 use oci::State as OCIState;
 use std::collections::HashMap;
 use std::os::unix::io::FromRawFd;
+use std::str::FromStr;
 
 use slog::{info, o, Logger};
 
@@ -55,6 +56,7 @@ use crate::pipestream::PipeStream;
 use crate::sync::{read_sync, write_count, write_sync, SYNC_DATA, SYNC_FAILED, SYNC_SUCCESS};
 use crate::sync_with_async::{read_async, write_async};
 use async_trait::async_trait;
+use rlimit::{setrlimit, Resource, Rlim};
 use tokio::io::AsyncBufReadExt;
 
 const STATE_FILENAME: &str = "state.json";
@@ -338,7 +340,6 @@ pub fn init_child() {
 fn do_init_child(cwfd: RawFd) -> Result<()> {
     lazy_static::initialize(&NAMESPACES);
     lazy_static::initialize(&DEFAULT_DEVICES);
-    lazy_static::initialize(&RLIMITMAPS);
 
     let init = std::env::var(INIT)?.eq(format!("{}", true).as_str());
 
@@ -461,7 +462,11 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
     // set rlimit
     for rl in p.rlimits.iter() {
         log_child!(cfd_log, "set resource limit: {:?}", rl);
-        setrlimit(rl)?;
+        setrlimit(
+            Resource::from_str(&rl.r#type)?,
+            Rlim::from_raw(rl.soft),
+            Rlim::from_raw(rl.hard),
+        )?;
     }
 
     //
@@ -1435,48 +1440,6 @@ impl LinuxContainer {
 type RlimitsType = libc::c_int;
 #[cfg(target_env = "gnu")]
 type RlimitsType = libc::__rlimit_resource_t;
-
-lazy_static! {
-    pub static ref RLIMITMAPS: HashMap<String, RlimitsType> = {
-        let mut m = HashMap::new();
-        m.insert("RLIMIT_CPU".to_string(), libc::RLIMIT_CPU);
-        m.insert("RLIMIT_FSIZE".to_string(), libc::RLIMIT_FSIZE);
-        m.insert("RLIMIT_DATA".to_string(), libc::RLIMIT_DATA);
-        m.insert("RLIMIT_STACK".to_string(), libc::RLIMIT_STACK);
-        m.insert("RLIMIT_CORE".to_string(), libc::RLIMIT_CORE);
-        m.insert("RLIMIT_RSS".to_string(), libc::RLIMIT_RSS);
-        m.insert("RLIMIT_NPROC".to_string(), libc::RLIMIT_NPROC);
-        m.insert("RLIMIT_NOFILE".to_string(), libc::RLIMIT_NOFILE);
-        m.insert("RLIMIT_MEMLOCK".to_string(), libc::RLIMIT_MEMLOCK);
-        m.insert("RLIMIT_AS".to_string(), libc::RLIMIT_AS);
-        m.insert("RLIMIT_LOCKS".to_string(), libc::RLIMIT_LOCKS);
-        m.insert("RLIMIT_SIGPENDING".to_string(), libc::RLIMIT_SIGPENDING);
-        m.insert("RLIMIT_MSGQUEUE".to_string(), libc::RLIMIT_MSGQUEUE);
-        m.insert("RLIMIT_NICE".to_string(), libc::RLIMIT_NICE);
-        m.insert("RLIMIT_RTPRIO".to_string(), libc::RLIMIT_RTPRIO);
-        m.insert("RLIMIT_RTTIME".to_string(), libc::RLIMIT_RTTIME);
-        m
-    };
-}
-
-fn setrlimit(limit: &POSIXRlimit) -> Result<()> {
-    let rl = libc::rlimit {
-        rlim_cur: limit.soft,
-        rlim_max: limit.hard,
-    };
-
-    let res = if RLIMITMAPS.get(limit.r#type.as_str()).is_some() {
-        *RLIMITMAPS.get(limit.r#type.as_str()).unwrap()
-    } else {
-        return Err(nix::Error::Sys(Errno::EINVAL).into());
-    };
-
-    let ret = unsafe { libc::setrlimit(res as RlimitsType, &rl as *const libc::rlimit) };
-
-    Errno::result(ret).map(drop)?;
-
-    Ok(())
-}
 
 fn setgroups(grps: &[libc::gid_t]) -> Result<()> {
     let ret = unsafe { libc::setgroups(grps.len(), grps.as_ptr() as *const libc::gid_t) };
