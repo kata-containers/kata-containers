@@ -13,7 +13,7 @@ var exitFunc = os.Exit
 
 // atexit registers a function f that will be run when exit is called. The
 // handlers so registered will be called the in reverse order of their
-// registration.
+// registration.  '^_^'
 func atexit(f func()) {
 	atexitFuncs = append(atexitFuncs, f)
 }

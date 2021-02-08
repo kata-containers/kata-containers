@@ -18,7 +18,7 @@
 
 ---
 
-Welcome to Kata Containers!
+Welcome to Kata Containers :)!
 
 This repository is the home of the Kata Containers code for the 2.0 and newer
 releases.
