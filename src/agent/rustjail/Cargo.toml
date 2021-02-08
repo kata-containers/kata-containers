@@ -10,7 +10,7 @@ serde_json = "1.0.39"
 serde_derive = "1.0.91"
 oci = { path = "../oci" }
 protocols = { path ="../protocols" }
-caps = "0.3.0"
+caps = "0.5.0"
 nix = "0.17.0"
 scopeguard = "1.0.0"
 prctl = "1.0.0"
