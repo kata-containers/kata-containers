@@ -50,10 +50,9 @@ pub fn online_device(path: &str) -> Result<()> {
 // pciPathToSysfs fetches the sysfs path for a PCI path, relative to
 // the syfs path for the PCI host bridge, based on the PCI path
 // provided.
-fn pcipath_to_sysfs(pcipath: &pci::Path) -> Result<String> {
+fn pcipath_to_sysfs(root_bus_sysfs: &str, pcipath: &pci::Path) -> Result<String> {
     let mut bus = "0000:00".to_string();
     let mut relpath = String::new();
-    let root_bus_sysfs = format!("{}{}", SYSFS_DIR, create_pci_root_bus_path());
 
     for i in 0..pcipath.len() {
         let bdf = format!("{}:{}.0", bus, pcipath[i]);
@@ -148,7 +147,8 @@ pub async fn get_pci_device_name(
     sandbox: &Arc<Mutex<Sandbox>>,
     pcipath: &pci::Path,
 ) -> Result<String> {
-    let sysfs_rel_path = pcipath_to_sysfs(pcipath)?;
+    let root_bus_sysfs = format!("{}{}", SYSFS_DIR, create_pci_root_bus_path());
+    let sysfs_rel_path = pcipath_to_sysfs(&root_bus_sysfs, pcipath)?;
 
     rescan_pci_bus()?;
     get_device_name(sandbox, &sysfs_rel_path).await
