@@ -1,0 +1,17 @@
+[package]
+name = "kernel32-sys"
+version = "0.2.2"
+authors = ["Peter Atashian <retep998@gmail.com>"]
+description = "Contains function definitions for the Windows API library kernel32. See winapi for types and constants."
+documentation = "https://retep998.github.io/doc/kernel32/"
+repository = "https://github.com/retep998/winapi-rs"
+readme = "README.md"
+keywords = ["windows", "ffi", "win32"]
+license = "MIT"
+build = "build.rs"
+[lib]
+name = "kernel32"
+[dependencies]
+winapi = { version = "0.2.5", path = "../.." }
+[build-dependencies]
+winapi-build = { version = "0.1.1", path = "../../build" }

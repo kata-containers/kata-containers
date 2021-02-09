@@ -1,0 +1,5 @@
+error: unexpected token
+ --> $DIR/unexpected-group.rs:4:12
+  |
+4 |     fn [<a {} b>]() {}
+  |            ^^

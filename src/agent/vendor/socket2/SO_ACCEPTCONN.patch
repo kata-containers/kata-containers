@@ -1,0 +1,96 @@
+diff --git a/src/socket.rs b/src/socket.rs
+index 725ad2a..3f7b499 100644
+--- a/src/socket.rs
++++ b/src/socket.rs
+@@ -963,6 +963,26 @@ fn inner(&self) -> &sys::Socket {
+     }
+ }
+ 
++/// Socket options get/set using `SOL_SOCKET`.
++///
++/// Additional documentation can be found in documentation of the OS.
++/// * Linux: <https://man7.org/linux/man-pages/man7/socket.7.html>
++/// * Windows: <https://docs.microsoft.com/en-us/windows/win32/winsock/sol-socket-socket-options>
++impl Socket {
++    /// Gets the value of the `SO_ACCEPTCONN` option on this socket.
++    ///
++    /// Returns `true` if this socket has been marked to accept connections with
++    /// [`listen`].
++    ///
++    /// [`listen`]: Socket::listen
++    pub fn is_listener(&self) -> io::Result<bool> {
++        unsafe {
++            getsockopt::<c_int>(self.inner, sys::SOL_SOCKET, sys::SO_ACCEPTCONN)
++                .map(|is_listener| is_listener != 0)
++        }
++    }
++}
++
+ /// Socket options for TCP socket, get/set using `IPPROTO_TCP`.
+ ///
+ /// Additional documentation can be found in documentation of the OS.
+diff --git a/src/sys/unix.rs b/src/sys/unix.rs
+index 60593a1..51b916a 100644
+--- a/src/sys/unix.rs
++++ b/src/sys/unix.rs
+@@ -54,8 +54,8 @@
+ pub(crate) use libc::MSG_OOB;
+ pub(crate) use libc::{
+     IPPROTO_IP, IPPROTO_IPV6, IPV6_MULTICAST_HOPS, IPV6_MULTICAST_LOOP, IPV6_UNICAST_HOPS,
+-    IPV6_V6ONLY, IP_MULTICAST_LOOP, IP_MULTICAST_TTL, IP_TTL, MSG_PEEK, SOL_SOCKET, SO_BROADCAST,
+-    SO_ERROR, TCP_NODELAY,
++    IPV6_V6ONLY, IP_MULTICAST_LOOP, IP_MULTICAST_TTL, IP_TTL, MSG_PEEK, SOL_SOCKET, SO_ACCEPTCONN,
++    SO_BROADCAST, SO_ERROR, TCP_NODELAY,
+ };
+ 
+ // See this type in the Windows file.
+diff --git a/src/sys/windows.rs b/src/sys/windows.rs
+index 663b63f..a212525 100644
+--- a/src/sys/windows.rs
++++ b/src/sys/windows.rs
+@@ -60,7 +60,7 @@
+ pub(crate) use winapi::um::ws2tcpip::socklen_t;
+ // Used in `Socket`.
+ pub(crate) use winapi::shared::ws2def::{
+-    IPPROTO_IP, SOL_SOCKET, SO_BROADCAST, SO_ERROR, TCP_NODELAY,
++    IPPROTO_IP, SOL_SOCKET, SO_ACCEPTCONN, SO_BROADCAST, SO_ERROR, TCP_NODELAY,
+ };
+ pub(crate) use winapi::shared::ws2ipdef::{
+     IPV6_MULTICAST_HOPS, IPV6_MULTICAST_LOOP, IPV6_UNICAST_HOPS, IPV6_V6ONLY, IP_MULTICAST_LOOP,
+diff --git a/tests/options.rs b/tests/options.rs
+index 9c3d1c2..2d256a7 100644
+--- a/tests/options.rs
++++ b/tests/options.rs
+@@ -1,6 +1,8 @@
+ //! Tests for getting and setting socket options.
+ 
+-use socket2::{Domain, Socket, Type};
++use std::net::SocketAddr;
++
++use socket2::{Domain, Protocol, Socket, Type};
+ 
+ /// Macro to create a simple test to set and get a socket option.
+ macro_rules! test {
+@@ -86,6 +88,22 @@ fn $get_fn() {
+     set_mark(123)
+ );
+ 
++#[test]
++fn is_listener() {
++    // TODO: IPv6.
++
++    let socket = Socket::new(Domain::IPV4, Type::STREAM, Some(Protocol::TCP))
++        .expect("failed to create `Socket`");
++    //assert_eq!(socket.is_listener().unwrap(), false);
++
++    let addr: SocketAddr = "127.0.0.1:0".parse().unwrap();
++    let addr = addr.into();
++    socket.bind(&addr).unwrap();
++    socket.listen(1).unwrap();
++    dbg!(socket.is_listener());
++    assert_eq!(socket.is_listener().unwrap(), true);
++}
++
+ test!(IPv4 ttl, set_ttl(40));
+ #[cfg(not(windows))] // TODO: returns `WSAENOPROTOOPT` (10042) on Windows.
+ test!(IPv4 broadcast, set_broadcast(true));

@@ -1,0 +1,11 @@
+[package]
+name = "winapi-build"
+version = "0.1.1"
+authors = ["Peter Atashian <retep998@gmail.com>"]
+description = "Common code for build.rs in WinAPI -sys crates."
+repository = "https://github.com/retep998/winapi-rs"
+keywords = ["Windows", "FFI", "WinSDK"]
+license = "MIT"
+
+[lib]
+name = "build"

@@ -1,0 +1,26 @@
+[package]
+
+name = "prctl"
+version = "1.0.0"
+authors = ["Stanisław Pitucha <viraptor@gmail.com>"]
+license = "MIT"
+description = """
+This package provides safe abstraction to the linux prctl() interface. Some
+functions may be architecture-specific.
+"""
+keywords = ["linux", "prctl"]
+readme = "README.md"
+homepage = "https://github.com/viraptor/prctl-rs"
+repository = "https://github.com/viraptor/prctl-rs.git"
+
+[features]
+root_test = []
+not_travis = []
+
+[lib]
+name = "prctl"
+doctest = false
+
+[dependencies]
+nix = "*"
+libc = "*"

@@ -1,0 +1,20 @@
+# Refactor
+
+* [ ] CONTRIBUTING.md
+* [ ] Move tests from src/*.rs to tests dir.
+* [ ] Tracking issue for tests. Check all functions/coverage (with `rustcov`).
+* [ ] Look at `SockAddr`.
+  * [ ] Add docs about its size.
+
+## Maybe add socket options
+
+# SOL_SOCKET
+SO_ACCEPTCONN
+SO_DOMAIN
+SO_TYPE
+SO_INCOMING_CPU // Linux only?
+SO_INCOMING_NAPI_ID // Linux only?
+
+# No-op/error returned on Windows:
+SO_RCVLOWAT
+SO_SNDLOWAT

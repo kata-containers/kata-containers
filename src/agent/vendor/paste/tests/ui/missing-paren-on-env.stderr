@@ -1,0 +1,5 @@
+error: expected `(`
+ --> $DIR/missing-paren-on-env.rs:4:15
+  |
+4 |     fn [<env! huh>]() {}
+  |               ^^^

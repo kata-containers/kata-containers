@@ -1,0 +1,7 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: caps
+Source: https://www.github.com/lucab/caps-rs
+
+Files: *
+Copyright: 2017-2019, Project contributors
+License: MIT or Apache-2.0

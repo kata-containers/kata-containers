@@ -1,0 +1,148 @@
+
+Available lint options:
+    -W <foo>           Warn about <foo>
+    -A <foo>           Allow <foo>
+    -D <foo>           Deny <foo>
+    -F <foo>           Forbid <foo> (deny <foo> and all attempts to override)
+
+
+Lint checks provided by rustc:
+
+                                                       name  default  meaning
+                                                       ----  -------  -------
+                     absolute-paths-not-starting-with-crate  allow    fully qualified paths that start with a module name instead of `crate`, `self`, or an extern crate name
+                                       anonymous-parameters  allow    detects anonymous parameters
+                                               box-pointers  allow    use of owned (Box type) heap memory
+                                       deprecated-in-future  allow    detects use of items that will be deprecated in a future version
+                                  elided-lifetimes-in-paths  allow    hidden lifetime parameters in types are deprecated
+                             explicit-outlives-requirements  allow    outlives requirements can be inferred
+                                          invalid-html-tags  allow    detects invalid HTML tags in doc comments
+                                             keyword-idents  allow    detects edition keywords being used as an identifier
+                                     macro-use-extern-crate  allow    the `#[macro_use]` attribute is now deprecated in favor of using macros via the module system
+                                       meta-variable-misuse  allow    possible meta-variable misuse at macro definition
+                               missing-copy-implementations  allow    detects potentially-forgotten implementations of `Copy`
+                                   missing-crate-level-docs  allow    detects crates with no crate-level documentation
+                              missing-debug-implementations  allow    detects missing implementations of Debug
+                                               missing-docs  allow    detects missing documentation for public members
+                                  missing-doc-code-examples  allow    detects publicly-exported items without code samples in their documentation
+                                           non-ascii-idents  allow    detects non-ASCII identifiers
+                                   pointer-structural-match  allow    pointers are not structural-match
+                                          private-doc-tests  allow    detects code samples in docs of private items not documented by rustdoc
+                                       single-use-lifetimes  allow    detects lifetime parameters that are only used once
+                                              trivial-casts  allow    detects trivial casts which could be removed
+                                      trivial-numeric-casts  allow    detects trivial casts of numeric types which could be removed
+                                       unaligned-references  allow    detects unaligned references to fields of packed structs
+                                            unreachable-pub  allow    `pub` items not reachable from crate root
+                                                unsafe-code  allow    usage of `unsafe` code
+                                     unsafe-op-in-unsafe-fn  allow    unsafe operations in unsafe functions without an explicit unsafe block are deprecated
+                                          unstable-features  allow    enabling unstable features (deprecated. do not use)
+                                  unused-crate-dependencies  allow    crate dependencies that are never used
+                                       unused-extern-crates  allow    extern crates that are never used
+                                       unused-import-braces  allow    unnecessary braces around an imported item
+                                           unused-lifetimes  allow    detects lifetime parameters that are never used
+                                      unused-qualifications  allow    detects unnecessarily qualified names
+                                             unused-results  allow    unused result of an expression in a statement
+                                   variant-size-differences  allow    detects enums with widely varying variant sizes
+                                            array-into-iter  warn     detects calling `into_iter` on arrays
+                                           asm-sub-register  warn     using only a subset of a register for inline asm inputs
+                                         bare-trait-objects  warn     suggest using `dyn Trait` for trait objects
+                                 bindings-with-variant-name  warn     detects pattern bindings with the same name as one of the matched variants
+                                     broken-intra-doc-links  warn     failures in resolving intra-doc link targets
+                                       cenum-impl-drop-cast  warn     a C-like enum implementing Drop is cast
+                               clashing-extern-declarations  warn     detects when an extern fn has been declared with the same name but different types
+                                       coherence-leak-check  warn     distinct impls distinguished only by the leak-check code
+                                          confusable-idents  warn     detects visually confusable pairs between identifiers
+                                const-evaluatable-unchecked  warn     detects a generic constant is used in a type without a emitting a warning
+                                        const-item-mutation  warn     detects attempts to mutate a `const` item
+                                                  dead-code  warn     detect unused, unexported items
+                                                 deprecated  warn     detects use of deprecated items
+                                                drop-bounds  warn     bounds of the form `T: Drop` are useless
+                          ellipsis-inclusive-range-patterns  warn     `...` range patterns are deprecated
+                              exported-private-dependencies  warn     public interface leaks type from a private dependency
+                     illegal-floating-point-literal-pattern  warn     floating-point literals cannot be used in patterns
+                                            improper-ctypes  warn     proper use of libc types in foreign modules
+                                improper-ctypes-definitions  warn     proper use of libc types in foreign item definitions
+                                        incomplete-features  warn     incomplete features that may function improperly in some or all cases
+                                  indirect-structural-match  warn     constant used in pattern contains value of non-structural-match type in a field or a variant
+                                         inline-no-sanitize  warn     detects incompatible use of `#[inline(always)]` and `#[no_sanitize(...)]`
+                               invalid-codeblock-attributes  warn     codeblock attribute looks a lot like a known one
+                                              invalid-value  warn     an invalid value is being created (such as a NULL reference)
+                                   irrefutable-let-patterns  warn     detects irrefutable patterns in if-let and while-let statements
+                              late-bound-lifetime-arguments  warn     detects generic lifetime arguments in path segments with late bound lifetime parameters
+                                   mixed-script-confusables  warn     detects Unicode scripts whose mixed script confusables codepoints are solely used
+                        mutable-borrow-reservation-conflict  warn     reservation of a two-phased borrow conflicts with other shared borrows
+                                nontrivial-structural-match  warn     constant used in pattern of non-structural-match type and the constant's initializer expression contains values of non-structural-match types
+                                       non-camel-case-types  warn     types, variants, traits and type parameters should have camel case names
+                               non-shorthand-field-patterns  warn     using `Struct { x: x }` instead of `Struct { x }` in a pattern
+                                             non-snake-case  warn     variables, methods, functions, lifetime parameters and modules should have snake case names
+                                     non-upper-case-globals  warn     static constants should have uppercase identifiers
+                                    no-mangle-generic-items  warn     generic items must be mangled
+                                       overlapping-patterns  warn     detects overlapping patterns
+                                            path-statements  warn     path statements with no effect
+                                          private-in-public  warn     detect private items in public interfaces not caught by the old implementation
+                      proc-macro-derive-resolution-fallback  warn     detects proc macro derives using inaccessible names from parent modules
+                                       redundant-semicolons  warn     detects unnecessary trailing semicolons
+                                  renamed-and-removed-lints  warn     lints that have been renamed or removed
+                                        safe-packed-borrows  warn     safe borrows of fields of packed structs were erroneously allowed
+                                            stable-features  warn     stable features found in `#[feature]` directive
+                                             trivial-bounds  warn     these bounds don't depend on an type parameters
+                                          type-alias-bounds  warn     bounds in type aliases are not enforced
+                                   tyvar-behind-raw-pointer  warn     raw pointer to an inference variable
+                                        uncommon-codepoints  warn     detects uncommon Unicode codepoints in identifiers
+                                    unconditional-recursion  warn     functions that cannot return without calling themselves
+                                              unknown-lints  warn     unrecognized lint attribute
+                                      unnameable-test-items  warn     detects an item that cannot be named being marked as `#[test_case]`
+                                           unreachable-code  warn     detects unreachable code paths
+                                       unreachable-patterns  warn     detects unreachable patterns
+                                   unstable-name-collisions  warn     detects name collision with an existing but unstable method
+                                          unused-allocation  warn     detects unnecessary allocations that can be eliminated
+                                         unused-assignments  warn     detect assignments that will never be read
+                                          unused-attributes  warn     detects attributes that were not used by the compiler
+                                              unused-braces  warn     unnecessary braces around an expression
+                                         unused-comparisons  warn     comparisons made useless by limits of the types involved
+                                        unused-doc-comments  warn     detects doc comments that aren't used by rustdoc
+                                            unused-features  warn     unused features found in crate-level `#[feature]` directives
+                                             unused-imports  warn     imports that are never used
+                                              unused-labels  warn     detects labels that are never used
+                                              unused-macros  warn     detects macros that were not used
+                                            unused-must-use  warn     unused result of a type flagged as `#[must_use]`
+                                                 unused-mut  warn     detect mut variables which don't need to be mutable
+                                              unused-parens  warn     `if`, `match`, `while` and `return` do not need parentheses
+                                              unused-unsafe  warn     unnecessary use of an `unsafe` block
+                                           unused-variables  warn     detect variables which are not used in any way
+                                                   warnings  warn     mass-change the level for lints which produce warnings
+                                where-clauses-object-safety  warn     checks the object safety of where clauses
+                                                 while-true  warn     suggest using `loop { }` instead of `while true { }`
+                                 ambiguous-associated-items  deny     ambiguous associated items
+                                        arithmetic-overflow  deny     arithmetic operation overflows
+                                     conflicting-repr-hints  deny     conflicts between `#[repr(..)]` hints that were previously accepted and used in practice
+                                                  const-err  deny     constant evaluation detected erroneous expression
+                                 ill-formed-attribute-input  deny     ill-formed attribute inputs that were previously accepted and used in practice
+                                         incomplete-include  deny     trailing content in included file
+                                 invalid-type-param-default  deny     type parameter default erroneously allowed in invalid location
+    macro-expanded-macro-exports-accessed-by-absolute-paths  deny     macro-expanded `macro_export` macros from the current crate cannot be referred to by absolute paths
+                                         mutable-transmutes  deny     mutating transmuted &mut T from &T may cause undefined behavior
+                                      no-mangle-const-items  deny     const items will not have their symbols exported
+                              order-dependent-trait-objects  deny     trait-object types were treated as different depending on marker-trait order
+                                       overflowing-literals  deny     literal out of range for its type
+                               patterns-in-fns-without-body  deny     patterns in functions without body were erroneously allowed
+                            pub-use-of-private-extern-crate  deny     detect public re-exports of private extern crates
+                                              soft-unstable  deny     a feature gate that doesn't break dependent crates
+                                        unconditional-panic  deny     operation will cause a panic at runtime
+                                        unknown-crate-types  deny     unknown crate type found in `#[crate_type]` directive
+
+
+Lint groups provided by rustc:
+
+                       name  sub-lints
+                       ----  ---------
+                   warnings  all lints that are set to issue warnings
+        future-incompatible  keyword-idents, anonymous-parameters, illegal-floating-point-literal-pattern, private-in-public, pub-use-of-private-extern-crate, invalid-type-param-default, safe-packed-borrows, patterns-in-fns-without-body, late-bound-lifetime-arguments, order-dependent-trait-objects, coherence-leak-check, tyvar-behind-raw-pointer, absolute-paths-not-starting-with-crate, unstable-name-collisions, where-clauses-object-safety, proc-macro-derive-resolution-fallback, macro-expanded-macro-exports-accessed-by-absolute-paths, ill-formed-attribute-input, conflicting-repr-hints, ambiguous-associated-items, mutable-borrow-reservation-conflict, indirect-structural-match, pointer-structural-match, nontrivial-structural-match, soft-unstable, cenum-impl-drop-cast, const-evaluatable-unchecked, array-into-iter
+          nonstandard-style  non-camel-case-types, non-snake-case, non-upper-case-globals
+    rust-2018-compatibility  keyword-idents, anonymous-parameters, tyvar-behind-raw-pointer, absolute-paths-not-starting-with-crate
+           rust-2018-idioms  bare-trait-objects, unused-extern-crates, ellipsis-inclusive-range-patterns, elided-lifetimes-in-paths, explicit-outlives-requirements
+                    rustdoc  broken-intra-doc-links, private-intra-doc-links, invalid-codeblock-attributes, missing-doc-code-examples, private-doc-tests, invalid-html-tags
+                     unused  unused-imports, unused-variables, unused-assignments, dead-code, unused-mut, unreachable-code, unreachable-patterns, overlapping-patterns, unused-must-use, unused-unsafe, path-statements, unused-attributes, unused-macros, unused-allocation, unused-doc-comments, unused-extern-crates, unused-features, unused-labels, unused-parens, unused-braces, redundant-semicolons
+
+
+Compiler plugins can provide additional lints and lint groups. To see a listing of these, re-run `rustc -W help` with a crate filename.

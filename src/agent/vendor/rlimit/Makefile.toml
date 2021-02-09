@@ -1,0 +1,27 @@
+[config]
+skip_core_tasks = true
+
+[tasks.default]
+alias = "dev"
+
+[tasks.dev]
+dependencies = [
+    "format",
+    "check",
+    "test"
+]
+
+[tasks.format]
+script = ["cargo fmt --all"]
+
+[tasks.check]
+script = [
+    "cargo check",
+    "cargo clippy -- -D warnings",
+]
+dependencies = [
+    "format"
+]
+
+[tasks.test]
+script = ["cargo test --all-features -- --test-threads=1"]

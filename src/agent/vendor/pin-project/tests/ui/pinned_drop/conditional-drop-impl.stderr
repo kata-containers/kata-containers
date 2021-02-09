@@ -1,0 +1,26 @@
+error[E0367]: `Drop` impl requires `T: Unpin` but the struct it is implemented for does not
+  --> $DIR/conditional-drop-impl.rs:10:9
+   |
+10 | impl<T: Unpin> Drop for DropImpl<T> {
+   |         ^^^^^
+   |
+note: the implementor must specify the same requirement
+  --> $DIR/conditional-drop-impl.rs:6:1
+   |
+6  | / struct DropImpl<T> {
+7  | |     f: T,
+8  | | }
+   | |_^
+
+error[E0277]: `T` cannot be unpinned
+  --> $DIR/conditional-drop-impl.rs:15:15
+   |
+15 | #[pin_project(PinnedDrop)] //~ ERROR E0277
+   |               ^^^^^^^^^^ the trait `Unpin` is not implemented for `T`
+   |
+   = note: required because of the requirements on the impl of `PinnedDrop` for `PinnedDropImpl<T>`
+   = note: required by `pin_project::__private::PinnedDrop::drop`
+help: consider restricting type parameter `T`
+   |
+16 | struct PinnedDropImpl<T: Unpin> {
+   |                        ^^^^^^^

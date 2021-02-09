@@ -1,0 +1,17 @@
+error[E0552]: unrecognized representation hint
+ --> $DIR/packed-name-value.rs:3:8
+  |
+3 | #[repr(packed = "")] //~ ERROR E0552
+  |        ^^^^^^^^^^^
+
+error[E0552]: unrecognized representation hint
+ --> $DIR/packed-name-value.rs:9:8
+  |
+9 | #[repr(packed = "")] //~ ERROR E0552
+  |        ^^^^^^^^^^^
+
+error[E0552]: unrecognized representation hint
+  --> $DIR/packed-name-value.rs:14:8
+   |
+14 | #[repr(packed = "")] //~ ERROR E0552
+   |        ^^^^^^^^^^^

@@ -1,0 +1,61 @@
+[package]
+name = "winapi"
+version = "0.2.8"
+authors = ["Peter Atashian <retep998@gmail.com>"]
+description = "Types and constants for WinAPI bindings. See README for list of crates providing function bindings."
+documentation = "https://retep998.github.io/doc/winapi/"
+repository = "https://github.com/retep998/winapi-rs"
+readme = "README.md"
+keywords = ["windows", "ffi", "win32", "com", "directx"]
+license = "MIT"
+include = ["src/**/*", "Cargo.toml", "LICENSE.md"]
+
+[dev-dependencies]
+advapi32-sys = { version = "0", path = "lib/advapi32" }
+bcrypt-sys = { version = "0", path = "lib/bcrypt" }
+comctl32-sys = { version = "0", path = "lib/comctl32" }
+comdlg32-sys = { version = "0", path = "lib/comdlg32" }
+credui-sys = { version = "0", path = "lib/credui" }
+crypt32-sys = { version = "0", path = "lib/crypt32" }
+d2d1-sys = { version = "0", path = "lib/d2d1" }
+d3d11-sys = { version = "0", path = "lib/d3d11" }
+d3d12-sys = { version = "0", path = "lib/d3d12" }
+d3d9-sys = { version = "0", path = "lib/d3d9" }
+d3dcompiler-sys = { version = "0", path = "lib/d3dcompiler" }
+dbghelp-sys = { version = "0", path = "lib/dbghelp" }
+dsound-sys = { version = "0", path = "lib/dsound" }
+dwmapi-sys = { version = "0", path = "lib/dwmapi" }
+dwrite-sys = { version = "0", path = "lib/dwrite" }
+dxgi-sys = { version = "0", path = "lib/dxgi" }
+dxguid-sys = { version = "0", path = "lib/dxguid" }
+gdi32-sys = { version = "0", path = "lib/gdi32" }
+hid-sys = { version = "0", path = "lib/hid" }
+httpapi-sys = { version = "0", path = "lib/httpapi" }
+kernel32-sys = { version = "0", path = "lib/kernel32" }
+ktmw32-sys = { version = "0", path = "lib/ktmw32" }
+mpr-sys = { version = "0", path = "lib/mpr" }
+netapi32-sys = { version = "0", path = "lib/netapi32" }
+odbc32-sys = { version = "0", path = "lib/odbc32" }
+ole32-sys = { version = "0", path = "lib/ole32" }
+oleaut32-sys = { version = "0", path = "lib/oleaut32" }
+opengl32-sys = { version = "0", path = "lib/opengl32" }
+pdh-sys = { version = "0", path = "lib/pdh" }
+psapi-sys = { version = "0", path = "lib/psapi" }
+runtimeobject-sys = { version = "0", path = "lib/runtimeobject" }
+secur32-sys = { version = "0", path = "lib/secur32" }
+setupapi-sys = { version = "0", path = "lib/setupapi" }
+shell32-sys = { version = "0", path = "lib/shell32" }
+shlwapi-sys = { version = "0", path = "lib/shlwapi" }
+user32-sys = { version = "0", path = "lib/user32" }
+userenv-sys = { version = "0", path = "lib/userenv" }
+usp10-sys = { version = "0", path = "lib/usp10" }
+uuid-sys = { version = "0", path = "lib/uuid" }
+vssapi-sys = { version = "0", path = "lib/vssapi" }
+wevtapi-sys = { version = "0", path = "lib/wevtapi" }
+winhttp-sys = { version = "0", path = "lib/winhttp" }
+winmm-sys = { version = "0", path = "lib/winmm" }
+winscard-sys = { version = "0", path = "lib/winscard" }
+winspool-sys = { version = "0", path = "lib/winspool" }
+winusb-sys = { version = "0", path = "lib/winusb" }
+ws2_32-sys = { version = "0", path = "lib/ws2_32" }
+xinput-sys = { version = "0", path = "lib/xinput" }

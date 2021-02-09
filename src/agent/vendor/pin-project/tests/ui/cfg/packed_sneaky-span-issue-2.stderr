@@ -1,0 +1,1 @@
+error: #[pin_project] attribute may not be used on #[repr(packed)] types

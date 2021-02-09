@@ -1,0 +1,30 @@
+error[E0517]: attribute should be applied to a struct or union
+ --> $DIR/packed-enum.rs:3:8
+  |
+3 |   #[repr(packed)] //~ ERROR E0517
+  |          ^^^^^^
+4 | / enum E1 {
+5 | |     V(()),
+6 | | }
+  | |_- not a struct or union
+
+error[E0517]: attribute should be applied to a struct or union
+  --> $DIR/packed-enum.rs:9:8
+   |
+9  |   #[repr(packed)] //~ ERROR E0517
+   |          ^^^^^^
+10 | / enum E2 {
+11 | |     V(()),
+12 | | }
+   | |_- not a struct or union
+
+error[E0517]: attribute should be applied to a struct or union
+  --> $DIR/packed-enum.rs:14:8
+   |
+14 |   #[repr(packed)] //~ ERROR E0517
+   |          ^^^^^^
+15 |   #[pin_project]
+16 | / enum E3 {
+17 | |     V(()),
+18 | | }
+   | |_- not a struct or union

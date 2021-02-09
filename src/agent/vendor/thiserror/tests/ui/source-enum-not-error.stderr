@@ -1,0 +1,17 @@
+error[E0599]: no method named `as_dyn_error` found for reference `&NotError` in the current scope
+  --> $DIR/source-enum-not-error.rs:10:9
+   |
+4  | pub struct NotError;
+   | --------------------
+   | |
+   | doesn't satisfy `NotError: AsDynError`
+   | doesn't satisfy `NotError: std::error::Error`
+...
+10 |         source: NotError,
+   |         ^^^^^^ method not found in `&NotError`
+   |
+   = note: the method `as_dyn_error` exists but the following trait bounds were not satisfied:
+           `NotError: std::error::Error`
+           which is required by `NotError: AsDynError`
+           `&NotError: std::error::Error`
+           which is required by `&NotError: AsDynError`

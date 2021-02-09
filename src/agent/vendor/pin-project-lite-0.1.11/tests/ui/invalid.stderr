@@ -1,0 +1,17 @@
+error: no rules expected the token `(`
+ --> $DIR/invalid.rs:5:14
+  |
+5 |         #[pin()] //~ ERROR no rules expected the token `(`
+  |              ^ no rules expected this token in macro call
+
+error: no rules expected the token `#`
+  --> $DIR/invalid.rs:20:9
+   |
+20 |         #[pin] //~ ERROR no rules expected the token `#`
+   |         ^ no rules expected this token in macro call
+
+error: cannot find attribute `pin` in this scope
+  --> $DIR/invalid.rs:11:7
+   |
+11 |     #[pin] //~ ERROR cannot find attribute `pin` in this scope
+   |       ^^^

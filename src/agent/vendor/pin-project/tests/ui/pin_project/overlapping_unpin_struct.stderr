@@ -1,0 +1,11 @@
+error[E0277]: `PhantomPinned` cannot be unpinned
+  --> $DIR/overlapping_unpin_struct.rs:17:5
+   |
+14 | fn is_unpin<T: Unpin>() {}
+   |                ----- required by this bound in `is_unpin`
+...
+17 |     is_unpin::<S<PhantomPinned>>(); //~ ERROR E0277
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ within `_::__S<'_, PhantomPinned>`, the trait `Unpin` is not implemented for `PhantomPinned`
+   |
+   = note: required because it appears within the type `_::__S<'_, PhantomPinned>`
+   = note: required because of the requirements on the impl of `Unpin` for `S<PhantomPinned>`

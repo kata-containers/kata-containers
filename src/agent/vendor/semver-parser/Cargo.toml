@@ -1,0 +1,11 @@
+[package]
+name = "semver-parser"
+version = "0.7.0"
+authors = ["Steve Klabnik <steve@steveklabnik.com>"]
+license = "MIT/Apache-2.0"
+repository = "https://github.com/steveklabnik/semver-parser"
+homepage = "https://github.com/steveklabnik/semver-parser"
+documentation = "https://docs.rs/semver-parser"
+description = """
+Parsing of the semver spec.
+"""
