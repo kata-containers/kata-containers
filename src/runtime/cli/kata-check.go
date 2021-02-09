@@ -396,7 +396,7 @@ EXAMPLES:
 		}
 
 		span, _ := katautils.Trace(ctx, "check")
-		defer span.Finish()
+		defer span.End()
 
 		if context.Bool("no-network-checks") == false && os.Getenv(noNetworkEnvVar) == "" {
 			cmd := RelCmdCheck

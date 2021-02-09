@@ -19,9 +19,11 @@ import (
 	"time"
 
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
-	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/label"
+	otelTrace "go.opentelemetry.io/otel/trace"
 )
 
 const (
@@ -83,7 +85,7 @@ func (v *virtiofsd) getSocketFD() (*os.File, error) {
 // Start the virtiofsd daemon
 func (v *virtiofsd) Start(ctx context.Context) (int, error) {
 	span, _ := v.trace("Start")
-	defer span.Finish()
+	defer span.End()
 	pid := 0
 
 	if err := v.valid(); err != nil {
@@ -202,14 +204,14 @@ func (v *virtiofsd) Logger() *log.Entry {
 	return virtLog.WithField("subsystem", "virtiofsd")
 }
 
-func (v *virtiofsd) trace(name string) (opentracing.Span, context.Context) {
+func (v *virtiofsd) trace(name string) (otelTrace.Span, context.Context) {
 	if v.ctx == nil {
 		v.ctx = context.Background()
 	}
 
-	span, ctx := opentracing.StartSpanFromContext(v.ctx, name)
-
-	span.SetTag("subsystem", "virtiofds")
+	tracer := otel.Tracer("kata")
+	ctx, span := tracer.Start(v.ctx, name)
+	span.SetAttributes(label.Key("subsystem").String("virtiofds"))
 
 	return span, ctx
 }
@@ -259,7 +261,7 @@ func waitVirtiofsReady(cmd *exec.Cmd, stderr io.ReadCloser, debug bool) error {
 
 func (v *virtiofsd) kill() (err error) {
 	span, _ := v.trace("kill")
-	defer span.Finish()
+	defer span.End()
 
 	if v.PID == 0 {
 		return errors.New("invalid virtiofsd PID(0)")

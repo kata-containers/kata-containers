@@ -220,7 +220,7 @@ const mountPerm = os.FileMode(0755)
 // pgtypes stands for propagation types, which are shared, private, slave, and ubind.
 func bindMount(ctx context.Context, source, destination string, readonly bool, pgtypes string) error {
 	span, _ := trace(ctx, "bindMount")
-	defer span.Finish()
+	defer span.End()
 
 	if source == "" {
 		return fmt.Errorf("source must be specified")
@@ -286,7 +286,7 @@ func remountRo(ctx context.Context, src string) error {
 // directory between the guest and the host.
 func bindMountContainerRootfs(ctx context.Context, shareDir, cid, cRootFs string, readonly bool) error {
 	span, _ := trace(ctx, "bindMountContainerRootfs")
-	defer span.Finish()
+	defer span.End()
 
 	rootfsDest := filepath.Join(shareDir, cid, rootfsDir)
 
@@ -326,7 +326,7 @@ func isSymlink(path string) bool {
 
 func bindUnmountContainerRootfs(ctx context.Context, sharedDir, cID string) error {
 	span, _ := trace(ctx, "bindUnmountContainerRootfs")
-	defer span.Finish()
+	defer span.End()
 
 	rootfsDest := filepath.Join(sharedDir, cID, rootfsDir)
 	if isSymlink(filepath.Join(sharedDir, cID)) || isSymlink(rootfsDest) {
@@ -348,7 +348,7 @@ func bindUnmountContainerRootfs(ctx context.Context, sharedDir, cID string) erro
 
 func bindUnmountAllRootfs(ctx context.Context, sharedDir string, sandbox *Sandbox) error {
 	span, _ := trace(ctx, "bindUnmountAllRootfs")
-	defer span.Finish()
+	defer span.End()
 
 	var errors *merr.Error
 	for _, c := range sandbox.containers {

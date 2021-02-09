@@ -12,13 +12,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"os/exec"
-	"strings"
 	"syscall"
 	"time"
 
 	"github.com/opencontainers/runtime-spec/specs-go"
-	"github.com/opentracing/opentracing-go/log"
 	"github.com/sirupsen/logrus"
+	"go.opentelemetry.io/otel/label"
 )
 
 // Logger returns a logrus logger appropriate for logging hook messages
@@ -28,13 +27,14 @@ func hookLogger() *logrus.Entry {
 
 func runHook(ctx context.Context, hook specs.Hook, cid, bundlePath string) error {
 	span, _ := Trace(ctx, "hook")
-	defer span.Finish()
+	defer span.End()
 
-	span.SetTag("subsystem", "runHook")
+	span.SetAttributes(label.Key("subsystem").String("runHook"))
 
-	span.LogFields(
-		log.String("hook-name", hook.Path),
-		log.String("hook-args", strings.Join(hook.Args, " ")))
+	// FIXME
+	// span.LogFields(
+	// 	log.String("hook-name", hook.Path),
+	// 	log.String("hook-args", strings.Join(hook.Args, " ")))
 
 	state := specs.State{
 		Pid:    syscall.Gettid(),
@@ -91,9 +91,9 @@ func runHook(ctx context.Context, hook specs.Hook, cid, bundlePath string) error
 
 func runHooks(ctx context.Context, hooks []specs.Hook, cid, bundlePath, hookType string) error {
 	span, _ := Trace(ctx, "hooks")
-	defer span.Finish()
+	defer span.End()
 
-	span.SetTag("subsystem", hookType)
+	span.SetAttributes(label.Key("subsystem").String(hookType))
 
 	for _, hook := range hooks {
 		if err := runHook(ctx, hook, cid, bundlePath); err != nil {

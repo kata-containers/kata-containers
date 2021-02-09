@@ -483,6 +483,16 @@ disable_guest_seccomp=@DEFDISABLEGUESTSECCOMP@
 # (default: disabled)
 #enable_tracing = true
 
+# Set the full url to the Jaeger HTTP Thrift collector.
+# The default if not set will be "http://localhost:14268/api/traces"
+#jaeger_endpoint = ""
+
+# Sets the username to be used if basic auth is required for Jaeger.
+#jaeger_user = ""
+
+# Sets the password to be used if basic auth is required for Jaeger.
+#jaeger_password = ""
+
 # If enabled, the runtime will not create a network namespace for shim and hypervisor processes.
 # This option may have some potential impacts to your host. It should only be used when you know what you're doing.
 # `disable_new_netns` conflicts with `enable_netmon`

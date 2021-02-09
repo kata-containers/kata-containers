@@ -25,9 +25,11 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/oci"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/rootless"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
-	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/label"
+	otelTrace "go.opentelemetry.io/otel/trace"
 )
 
 // specConfig is the name of the file holding the containers configuration
@@ -211,16 +213,16 @@ func setupSignalHandler(ctx context.Context) {
 // setExternalLoggers registers the specified logger with the external
 // packages which accept a logger to handle their own logging.
 func setExternalLoggers(ctx context.Context, logger *logrus.Entry) {
-	var span opentracing.Span
+	var span otelTrace.Span
 
 	// Only create a new span if a root span already exists. This is
 	// required to ensure that this function will not disrupt the root
 	// span logic by creating a span before the proper root span has been
 	// created.
 
-	if opentracing.SpanFromContext(ctx) != nil {
+	if otelTrace.SpanFromContext(ctx) != nil {
 		span, ctx = katautils.Trace(ctx, "setExternalLoggers")
-		defer span.Finish()
+		defer span.End()
 	}
 
 	// Set virtcontainers logger.
@@ -245,6 +247,7 @@ func beforeSubcommands(c *cli.Context) error {
 	var configFile string
 	var runtimeConfig oci.RuntimeConfig
 	var err error
+	var traceFlushFunc func()
 
 	katautils.SetConfigOptions(name, defaultRuntimeConfiguration, defaultSysConfRuntimeConfiguration)
 
@@ -334,10 +337,11 @@ func beforeSubcommands(c *cli.Context) error {
 			// This delays collection of trace data slightly but benefits the user by
 			// ensuring the first span is the name of the sub-command being
 			// invoked from the command-line.
-			err = setupTracing(c, traceRootSpan)
+			traceFlushFunc, err = setupTracing(c, traceRootSpan, &runtimeConfig)
 			if err != nil {
 				return err
 			}
+			defer traceFlushFunc()
 		}
 	}
 
@@ -377,10 +381,15 @@ func handleShowConfig(context *cli.Context) {
 	}
 }
 
-func setupTracing(context *cli.Context, rootSpanName string) error {
-	tracer, err := katautils.CreateTracer(name)
+func setupTracing(context *cli.Context, rootSpanName string, config *oci.RuntimeConfig) (func(), error) {
+	flush, err := katautils.CreateTracer(name, config)
 	if err != nil {
-		fatal(err)
+		return nil, err
+	}
+
+	ctx, err := cliContextToContext(context)
+	if err != nil {
+		return nil, err
 	}
 
 	// Create the root span now that the sub-command name is
@@ -390,23 +399,16 @@ func setupTracing(context *cli.Context, rootSpanName string) error {
 	// before the subcommand handler is called. As such, we cannot
 	// "Finish()" the span here - that is handled in the .After
 	// function.
-	span := tracer.StartSpan(rootSpanName)
+	tracer := otel.Tracer("kata")
+	newCtx, span := tracer.Start(ctx, rootSpanName)
 
-	ctx, err := cliContextToContext(context)
-	if err != nil {
-		return err
-	}
-
-	span.SetTag("subsystem", "runtime")
-
-	// Associate the root span with the context
-	ctx = opentracing.ContextWithSpan(ctx, span)
+	span.SetAttributes(label.Key("subsystem").String("runtime"))
 
 	// Add tracer to metadata and update the context
 	context.App.Metadata["tracer"] = tracer
-	context.App.Metadata["context"] = ctx
+	context.App.Metadata["context"] = newCtx
 
-	return nil
+	return flush, nil
 }
 
 // add supported experimental features in context

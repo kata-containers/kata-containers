@@ -14,8 +14,10 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/cgroups"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/compatoci"
 	vcTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/types"
-	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/sirupsen/logrus"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/label"
+	otelTrace "go.opentelemetry.io/otel/trace"
 )
 
 func init() {
@@ -26,15 +28,13 @@ var virtLog = logrus.WithField("source", "virtcontainers")
 
 // trace creates a new tracing span based on the specified name and parent
 // context.
-func trace(parent context.Context, name string) (opentracing.Span, context.Context) {
-	span, ctx := opentracing.StartSpanFromContext(parent, name)
-
-	// Should not need to be changed (again).
-	span.SetTag("source", "virtcontainers")
-	span.SetTag("component", "virtcontainers")
-
-	// Should be reset as new subsystems are entered.
-	span.SetTag("subsystem", "api")
+func trace(parent context.Context, name string) (otelTrace.Span, context.Context) {
+	tracer := otel.Tracer("kata")
+	ctx, span := tracer.Start(parent, name)
+	span.SetAttributes([]label.KeyValue{
+		label.Key("source").String("virtcontainers"),
+		label.Key("component").String("virtcontainers"),
+		label.Key("subsystem").String("api")}...)
 
 	return span, ctx
 }
@@ -54,7 +54,7 @@ func SetLogger(ctx context.Context, logger *logrus.Entry) {
 // CreateSandbox creates a sandbox and its containers. It does not start them.
 func CreateSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factory) (VCSandbox, error) {
 	span, ctx := trace(ctx, "CreateSandbox")
-	defer span.Finish()
+	defer span.End()
 
 	s, err := createSandboxFromConfig(ctx, sandboxConfig, factory)
 
@@ -63,7 +63,7 @@ func CreateSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Fac
 
 func createSandboxFromConfig(ctx context.Context, sandboxConfig SandboxConfig, factory Factory) (_ *Sandbox, err error) {
 	span, ctx := trace(ctx, "createSandboxFromConfig")
-	defer span.Finish()
+	defer span.End()
 
 	// Create the sandbox.
 	s, err := createSandbox(ctx, sandboxConfig, factory)
@@ -137,7 +137,7 @@ func createSandboxFromConfig(ctx context.Context, sandboxConfig SandboxConfig, f
 // locking the sandbox.
 func CleanupContainer(ctx context.Context, sandboxID, containerID string, force bool) error {
 	span, ctx := trace(ctx, "CleanupContainer")
-	defer span.Finish()
+	defer span.End()
 
 	if sandboxID == "" {
 		return vcTypes.ErrNeedSandboxID

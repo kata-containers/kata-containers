@@ -454,7 +454,7 @@ var kataEnvCLICommand = cli.Command{
 		}
 
 		span, _ := katautils.Trace(ctx, "kata-env")
-		defer span.Finish()
+		defer span.End()
 
 		return handleSettings(defaultOutputFile, context)
 	},

@@ -26,9 +26,11 @@ import (
 
 	govmmQemu "github.com/kata-containers/govmm/qemu"
 	"github.com/opencontainers/selinux/go-selinux/label"
-	"github.com/opentracing/opentracing-go"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
+	"go.opentelemetry.io/otel"
+	otelLabel "go.opentelemetry.io/otel/label"
+	otelTrace "go.opentelemetry.io/otel/trace"
 	"golang.org/x/sys/unix"
 
 	pkgUtils "github.com/kata-containers/kata-containers/src/runtime/pkg/utils"
@@ -184,7 +186,7 @@ func (q *qemu) kernelParameters() string {
 // Adds all capabilities supported by qemu implementation of hypervisor interface
 func (q *qemu) capabilities() types.Capabilities {
 	span, _ := q.trace("capabilities")
-	defer span.Finish()
+	defer span.End()
 
 	return q.arch.capabilities()
 }
@@ -211,16 +213,15 @@ func (q *qemu) qemuPath() (string, error) {
 	return p, nil
 }
 
-func (q *qemu) trace(name string) (opentracing.Span, context.Context) {
+func (q *qemu) trace(name string) (otelTrace.Span, context.Context) {
 	if q.ctx == nil {
 		q.Logger().WithField("type", "bug").Error("trace called before context set")
 		q.ctx = context.Background()
 	}
 
-	span, ctx := opentracing.StartSpanFromContext(q.ctx, name)
-
-	span.SetTag("subsystem", "hypervisor")
-	span.SetTag("type", "qemu")
+	tracer := otel.Tracer("kata")
+	ctx, span := tracer.Start(q.ctx, name)
+	span.SetAttributes([]otelLabel.KeyValue{otelLabel.Key("subsystem").String("hypervisor"), otelLabel.Key("type").String("qemu")}...)
 
 	return span, ctx
 }
@@ -228,7 +229,7 @@ func (q *qemu) trace(name string) (opentracing.Span, context.Context) {
 // setup sets the Qemu structure up.
 func (q *qemu) setup(id string, hypervisorConfig *HypervisorConfig) error {
 	span, _ := q.trace("setup")
-	defer span.Finish()
+	defer span.End()
 
 	err := hypervisorConfig.valid()
 	if err != nil {
@@ -471,7 +472,7 @@ func (q *qemu) createSandbox(ctx context.Context, id string, networkNS NetworkNa
 	q.ctx = ctx
 
 	span, _ := q.trace("createSandbox")
-	defer span.Finish()
+	defer span.End()
 
 	if err := q.setup(id, hypervisorConfig); err != nil {
 		return err
@@ -775,7 +776,7 @@ func (q *qemu) setupVirtioMem() error {
 // startSandbox will start the Sandbox's VM.
 func (q *qemu) startSandbox(timeout int) error {
 	span, _ := q.trace("startSandbox")
-	defer span.Finish()
+	defer span.End()
 
 	if q.config.Debug {
 		params := q.arch.kernelParameters(q.config.Debug)
@@ -886,7 +887,7 @@ func (q *qemu) bootFromTemplate() error {
 // waitSandbox will wait for the Sandbox's VM to be up and running.
 func (q *qemu) waitSandbox(timeout int) error {
 	span, _ := q.trace("waitSandbox")
-	defer span.Finish()
+	defer span.End()
 
 	if timeout < 0 {
 		return fmt.Errorf("Invalid timeout %ds", timeout)
@@ -940,7 +941,7 @@ func (q *qemu) waitSandbox(timeout int) error {
 // stopSandbox will stop the Sandbox's VM.
 func (q *qemu) stopSandbox() error {
 	span, _ := q.trace("stopSandbox")
-	defer span.Finish()
+	defer span.End()
 
 	q.Logger().Info("Stopping Sandbox")
 	if q.stopped {
@@ -1014,7 +1015,7 @@ func (q *qemu) cleanupVM() error {
 
 func (q *qemu) togglePauseSandbox(pause bool) error {
 	span, _ := q.trace("togglePauseSandbox")
-	defer span.Finish()
+	defer span.End()
 
 	if err := q.qmpSetup(); err != nil {
 		return err
@@ -1599,7 +1600,7 @@ func (q *qemu) hotplugDevice(devInfo interface{}, devType deviceType, op operati
 
 func (q *qemu) hotplugAddDevice(devInfo interface{}, devType deviceType) (interface{}, error) {
 	span, _ := q.trace("hotplugAddDevice")
-	defer span.Finish()
+	defer span.End()
 
 	data, err := q.hotplugDevice(devInfo, devType, addDevice)
 	if err != nil {
@@ -1611,7 +1612,7 @@ func (q *qemu) hotplugAddDevice(devInfo interface{}, devType deviceType) (interf
 
 func (q *qemu) hotplugRemoveDevice(devInfo interface{}, devType deviceType) (interface{}, error) {
 	span, _ := q.trace("hotplugRemoveDevice")
-	defer span.Finish()
+	defer span.End()
 
 	data, err := q.hotplugDevice(devInfo, devType, removeDevice)
 	if err != nil {
@@ -1823,14 +1824,14 @@ func (q *qemu) hotplugAddMemory(memDev *memoryDevice) (int, error) {
 
 func (q *qemu) pauseSandbox() error {
 	span, _ := q.trace("pauseSandbox")
-	defer span.Finish()
+	defer span.End()
 
 	return q.togglePauseSandbox(true)
 }
 
 func (q *qemu) resumeSandbox() error {
 	span, _ := q.trace("resumeSandbox")
-	defer span.Finish()
+	defer span.End()
 
 	return q.togglePauseSandbox(false)
 }
@@ -1839,7 +1840,7 @@ func (q *qemu) resumeSandbox() error {
 func (q *qemu) addDevice(devInfo interface{}, devType deviceType) error {
 	var err error
 	span, _ := q.trace("addDevice")
-	defer span.Finish()
+	defer span.End()
 
 	switch v := devInfo.(type) {
 	case types.Volume:
@@ -1897,7 +1898,7 @@ func (q *qemu) addDevice(devInfo interface{}, devType deviceType) error {
 // logs coming from the sandbox.
 func (q *qemu) getSandboxConsole(id string) (string, string, error) {
 	span, _ := q.trace("getSandboxConsole")
-	defer span.Finish()
+	defer span.End()
 
 	consoleURL, err := utils.BuildSocketPath(q.store.RunVMStoragePath(), id, consoleSocket)
 	if err != nil {
@@ -1962,7 +1963,7 @@ func (q *qemu) waitMigration() error {
 
 func (q *qemu) disconnect() {
 	span, _ := q.trace("disconnect")
-	defer span.Finish()
+	defer span.End()
 
 	q.qmpShutdown()
 }
@@ -2167,7 +2168,7 @@ func genericAppendPCIeRootPort(devices []govmmQemu.Device, number uint32, machin
 
 func (q *qemu) getThreadIDs() (vcpuThreadIDs, error) {
 	span, _ := q.trace("getThreadIDs")
-	defer span.Finish()
+	defer span.End()
 
 	tid := vcpuThreadIDs{}
 	if err := q.qmpSetup(); err != nil {
@@ -2233,7 +2234,7 @@ func (q *qemu) resizeVCPUs(reqVCPUs uint32) (currentVCPUs uint32, newVCPUs uint3
 
 func (q *qemu) cleanup() error {
 	span, _ := q.trace("cleanup")
-	defer span.Finish()
+	defer span.End()
 
 	for _, fd := range q.fds {
 		if err := fd.Close(); err != nil {
