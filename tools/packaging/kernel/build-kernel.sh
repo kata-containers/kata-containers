@@ -188,7 +188,12 @@ get_kernel_frag_path() {
 	local arch_configs="$(ls ${arch_path}/*.conf)"
 	# Exclude configs if they have !$arch tag in the header
 	local common_configs="$(grep "\!${arch}" ${common_path}/*.conf -L)"
-	local experimental_configs="$(ls ${common_path}/experimental/*.conf)"
+
+	local experimental_configs=""
+	local experimental_dir="${common_path}/experimental"
+	if [ -d "$experimental_dir" ]; then
+		experimental_configs=$(find "$experimental_dir" -name '*.conf')
+	fi
 
 	# These are the strings that the kernel merge_config.sh script kicks out
 	# when it reports an error or warning condition. We search for them in the
