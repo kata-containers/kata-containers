@@ -69,7 +69,7 @@ parts:
       tar -xf ${tarfile} --strip-components=1
 
   image:
-    after: [godeps]
+    after: [godeps, qemu, kernel]
     plugin: nil
     build-packages:
       - docker.io
@@ -171,7 +171,7 @@ parts:
       fi
 
   kernel:
-    after: [godeps, image]
+    after: [godeps]
     plugin: nil
     build-packages:
       - libelf-dev
@@ -208,7 +208,7 @@ parts:
 
   qemu:
     plugin: make
-    after: [godeps, runtime]
+    after: [godeps]
     build-packages:
       - gcc
       - python3
