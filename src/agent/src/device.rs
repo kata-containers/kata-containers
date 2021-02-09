@@ -435,6 +435,7 @@ pub fn update_device_cgroup(spec: &mut Spec) -> Result<()> {
 mod tests {
     use super::*;
     use oci::Linux;
+    use tempfile::tempdir;
 
     #[test]
     fn test_update_device_cgroup() {
@@ -713,5 +714,69 @@ mod tests {
         assert_eq!(Some(guest_minor), specresources.devices[0].minor);
         assert_eq!(Some(host_major), specresources.devices[1].major);
         assert_eq!(Some(host_minor), specresources.devices[1].minor);
+    }
+
+    #[test]
+    fn test_pcipath_to_sysfs() {
+        let testdir = tempdir().expect("failed to create tmpdir");
+        let rootbuspath = testdir.path().to_str().unwrap();
+
+        let path2 = pci::Path::from_str("02").unwrap();
+        let path23 = pci::Path::from_str("02/03").unwrap();
+        let path234 = pci::Path::from_str("02/03/04").unwrap();
+
+        let relpath = pcipath_to_sysfs(rootbuspath, &path2);
+        assert_eq!(relpath.unwrap(), "/0000:00:02.0");
+
+        let relpath = pcipath_to_sysfs(rootbuspath, &path23);
+        assert!(relpath.is_err());
+
+        let relpath = pcipath_to_sysfs(rootbuspath, &path234);
+        assert!(relpath.is_err());
+
+        // Create mock sysfs files for the device at 0000:00:02.0
+        let bridge2path = format!("{}{}", rootbuspath, "/0000:00:02.0");
+
+        fs::create_dir_all(&bridge2path).unwrap();
+
+        let relpath = pcipath_to_sysfs(rootbuspath, &path2);
+        assert_eq!(relpath.unwrap(), "/0000:00:02.0");
+
+        let relpath = pcipath_to_sysfs(rootbuspath, &path23);
+        assert!(relpath.is_err());
+
+        let relpath = pcipath_to_sysfs(rootbuspath, &path234);
+        assert!(relpath.is_err());
+
+        // Create mock sysfs files to indicate that 0000:00:02.0 is a bridge to bus 01
+        let bridge2bus = "0000:01";
+        let bus2path = format!("{}/pci_bus/{}", bridge2path, bridge2bus);
+
+        fs::create_dir_all(bus2path).unwrap();
+
+        let relpath = pcipath_to_sysfs(rootbuspath, &path2);
+        assert_eq!(relpath.unwrap(), "/0000:00:02.0");
+
+        let relpath = pcipath_to_sysfs(rootbuspath, &path23);
+        assert_eq!(relpath.unwrap(), "/0000:00:02.0/0000:01:03.0");
+
+        let relpath = pcipath_to_sysfs(rootbuspath, &path234);
+        assert!(relpath.is_err());
+
+        // Create mock sysfs files for a bridge at 0000:01:03.0 to bus 02
+        let bridge3path = format!("{}/0000:01:03.0", bridge2path);
+        let bridge3bus = "0000:02";
+        let bus3path = format!("{}/pci_bus/{}", bridge3path, bridge3bus);
+
+        fs::create_dir_all(bus3path).unwrap();
+
+        let relpath = pcipath_to_sysfs(rootbuspath, &path2);
+        assert_eq!(relpath.unwrap(), "/0000:00:02.0");
+
+        let relpath = pcipath_to_sysfs(rootbuspath, &path23);
+        assert_eq!(relpath.unwrap(), "/0000:00:02.0/0000:01:03.0");
+
+        let relpath = pcipath_to_sysfs(rootbuspath, &path234);
+        assert_eq!(relpath.unwrap(), "/0000:00:02.0/0000:01:03.0/0000:02:04.0");
     }
 }
