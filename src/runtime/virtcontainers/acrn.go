@@ -17,9 +17,11 @@ import (
 	"time"
 	"unsafe"
 
-	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/label"
+	otelTrace "go.opentelemetry.io/otel/trace"
 
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
 	persistapi "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist/api"
@@ -148,7 +150,7 @@ func (a *Acrn) kernelParameters() string {
 // Adds all capabilities supported by Acrn implementation of hypervisor interface
 func (a *Acrn) capabilities() types.Capabilities {
 	span, _ := a.trace("capabilities")
-	defer span.Finish()
+	defer span.End()
 
 	return a.arch.capabilities()
 }
@@ -204,16 +206,15 @@ func (a *Acrn) Logger() *logrus.Entry {
 	return virtLog.WithField("subsystem", "acrn")
 }
 
-func (a *Acrn) trace(name string) (opentracing.Span, context.Context) {
+func (a *Acrn) trace(name string) (otelTrace.Span, context.Context) {
 	if a.ctx == nil {
 		a.Logger().WithField("type", "bug").Error("trace called before context set")
 		a.ctx = context.Background()
 	}
 
-	span, ctx := opentracing.StartSpanFromContext(a.ctx, name)
-
-	span.SetTag("subsystem", "hypervisor")
-	span.SetTag("type", "acrn")
+	tracer := otel.Tracer("kata")
+	ctx, span := tracer.Start(a.ctx, name)
+	span.SetAttributes([]label.KeyValue{label.Key("subsystem").String("hypervisor"), label.Key("type").String("acrn")}...)
 
 	return span, ctx
 }
@@ -287,7 +288,7 @@ func (a *Acrn) buildDevices(imagePath string) ([]Device, error) {
 // setup sets the Acrn structure up.
 func (a *Acrn) setup(id string, hypervisorConfig *HypervisorConfig) error {
 	span, _ := a.trace("setup")
-	defer span.Finish()
+	defer span.End()
 
 	err := hypervisorConfig.valid()
 	if err != nil {
@@ -330,7 +331,7 @@ func (a *Acrn) setup(id string, hypervisorConfig *HypervisorConfig) error {
 
 func (a *Acrn) createDummyVirtioBlkDev(devices []Device) ([]Device, error) {
 	span, _ := a.trace("createDummyVirtioBlkDev")
-	defer span.Finish()
+	defer span.End()
 
 	// Since acrn doesn't support hot-plug, dummy virtio-blk
 	// devices are added and later replaced with container-rootfs.
@@ -353,7 +354,7 @@ func (a *Acrn) createSandbox(ctx context.Context, id string, networkNS NetworkNa
 	a.ctx = ctx
 
 	span, _ := a.trace("createSandbox")
-	defer span.Finish()
+	defer span.End()
 
 	if err := a.setup(id, hypervisorConfig); err != nil {
 		return err
@@ -418,7 +419,7 @@ func (a *Acrn) createSandbox(ctx context.Context, id string, networkNS NetworkNa
 // startSandbox will start the Sandbox's VM.
 func (a *Acrn) startSandbox(timeoutSecs int) error {
 	span, _ := a.trace("startSandbox")
-	defer span.Finish()
+	defer span.End()
 
 	if a.config.Debug {
 		params := a.arch.kernelParameters(a.config.Debug)
@@ -464,7 +465,7 @@ func (a *Acrn) startSandbox(timeoutSecs int) error {
 // waitSandbox will wait for the Sandbox's VM to be up and running.
 func (a *Acrn) waitSandbox(timeoutSecs int) error {
 	span, _ := a.trace("waitSandbox")
-	defer span.Finish()
+	defer span.End()
 
 	if timeoutSecs < 0 {
 		return fmt.Errorf("Invalid timeout %ds", timeoutSecs)
@@ -478,7 +479,7 @@ func (a *Acrn) waitSandbox(timeoutSecs int) error {
 // stopSandbox will stop the Sandbox's VM.
 func (a *Acrn) stopSandbox() (err error) {
 	span, _ := a.trace("stopSandbox")
-	defer span.Finish()
+	defer span.End()
 
 	a.Logger().Info("Stopping acrn VM")
 
@@ -568,7 +569,7 @@ func (a *Acrn) updateBlockDevice(drive *config.BlockDrive) error {
 
 func (a *Acrn) hotplugAddDevice(devInfo interface{}, devType deviceType) (interface{}, error) {
 	span, _ := a.trace("hotplugAddDevice")
-	defer span.Finish()
+	defer span.End()
 
 	switch devType {
 	case blockDev:
@@ -582,7 +583,7 @@ func (a *Acrn) hotplugAddDevice(devInfo interface{}, devType deviceType) (interf
 
 func (a *Acrn) hotplugRemoveDevice(devInfo interface{}, devType deviceType) (interface{}, error) {
 	span, _ := a.trace("hotplugRemoveDevice")
-	defer span.Finish()
+	defer span.End()
 
 	// Not supported. return success
 
@@ -591,7 +592,7 @@ func (a *Acrn) hotplugRemoveDevice(devInfo interface{}, devType deviceType) (int
 
 func (a *Acrn) pauseSandbox() error {
 	span, _ := a.trace("pauseSandbox")
-	defer span.Finish()
+	defer span.End()
 
 	// Not supported. return success
 
@@ -600,7 +601,7 @@ func (a *Acrn) pauseSandbox() error {
 
 func (a *Acrn) resumeSandbox() error {
 	span, _ := a.trace("resumeSandbox")
-	defer span.Finish()
+	defer span.End()
 
 	// Not supported. return success
 
@@ -611,7 +612,7 @@ func (a *Acrn) resumeSandbox() error {
 func (a *Acrn) addDevice(devInfo interface{}, devType deviceType) error {
 	var err error
 	span, _ := a.trace("addDevice")
-	defer span.Finish()
+	defer span.End()
 
 	switch v := devInfo.(type) {
 	case types.Volume:
@@ -644,7 +645,7 @@ func (a *Acrn) addDevice(devInfo interface{}, devType deviceType) error {
 // logs coming from the sandbox.
 func (a *Acrn) getSandboxConsole(id string) (string, string, error) {
 	span, _ := a.trace("getSandboxConsole")
-	defer span.Finish()
+	defer span.End()
 
 	consoleURL, err := utils.BuildSocketPath(a.store.RunVMStoragePath(), id, acrnConsoleSocket)
 	if err != nil {
@@ -664,14 +665,14 @@ func (a *Acrn) saveSandbox() error {
 
 func (a *Acrn) disconnect() {
 	span, _ := a.trace("disconnect")
-	defer span.Finish()
+	defer span.End()
 
 	// Not supported.
 }
 
 func (a *Acrn) getThreadIDs() (vcpuThreadIDs, error) {
 	span, _ := a.trace("getThreadIDs")
-	defer span.Finish()
+	defer span.End()
 
 	// Not supported. return success
 	//Just allocating an empty map
@@ -689,7 +690,7 @@ func (a *Acrn) resizeVCPUs(reqVCPUs uint32) (currentVCPUs uint32, newVCPUs uint3
 
 func (a *Acrn) cleanup() error {
 	span, _ := a.trace("cleanup")
-	defer span.Finish()
+	defer span.End()
 
 	return nil
 }

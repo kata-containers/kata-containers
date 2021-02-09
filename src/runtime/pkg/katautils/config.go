@@ -139,6 +139,9 @@ type runtime struct {
 	Experimental        []string `toml:"experimental"`
 	InterNetworkModel   string   `toml:"internetworking_model"`
 	EnablePprof         bool     `toml:"enable_pprof"`
+	JaegerEndpoint      string   `toml:"jaeger_endpoint"`
+	JaegerUser          string   `toml:"jaeger_user"`
+	JaegerPassword      string   `toml:"jaeger_password"`
 }
 
 type agent struct {
@@ -1143,6 +1146,9 @@ func LoadConfiguration(configPath string, ignoreLogging, builtIn bool) (resolved
 	config.SandboxCgroupOnly = tomlConf.Runtime.SandboxCgroupOnly
 	config.DisableNewNetNs = tomlConf.Runtime.DisableNewNetNs
 	config.EnablePprof = tomlConf.Runtime.EnablePprof
+	config.JaegerEndpoint = tomlConf.Runtime.JaegerEndpoint
+	config.JaegerUser = tomlConf.Runtime.JaegerUser
+	config.JaegerPassword = tomlConf.Runtime.JaegerPassword
 	for _, f := range tomlConf.Runtime.Experimental {
 		feature := exp.Get(f)
 		if feature == nil {

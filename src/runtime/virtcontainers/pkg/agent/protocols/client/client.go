@@ -19,9 +19,7 @@ import (
 	"time"
 
 	"github.com/mdlayher/vsock"
-	//	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/sirupsen/logrus"
-	//	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	grpcStatus "google.golang.org/grpc/status"
 

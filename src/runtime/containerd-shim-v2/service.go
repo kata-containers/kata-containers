@@ -25,9 +25,11 @@ import (
 	"github.com/containerd/typeurl"
 	ptypes "github.com/gogo/protobuf/types"
 	"github.com/opencontainers/runtime-spec/specs-go"
-	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/label"
+	otelTrace "go.opentelemetry.io/otel/trace"
 	"golang.org/x/sys/unix"
 
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils"
@@ -86,13 +88,13 @@ func New(ctx context.Context, id string, publisher events.Publisher) (cdshim.Shi
 	}
 
 	// create tracer
-	_, err = katautils.CreateTracer("kata")
+	_, err = katautils.CreateTracer("kata", &runtimeConfig)
 	if err != nil {
 		return nil, err
 	}
 	// create span
 	span, ctx := trace(ctx, "New")
-	defer span.Finish()
+	defer span.End()
 
 	ctx, cancel := context.WithCancel(ctx)
 
@@ -189,7 +191,7 @@ func (s *service) StartShim(ctx context.Context, id, containerdBinary, container
 	defer katautils.StopTracing(s.ctx)
 
 	span, _ := trace(s.ctx, "StartShim")
-	defer span.Finish()
+	defer span.End()
 
 	bundlePath, err := os.Getwd()
 	if err != nil {
@@ -302,21 +304,21 @@ func getTopic(e interface{}) string {
 	return cdruntime.TaskUnknownTopic
 }
 
-func trace(ctx context.Context, name string) (opentracing.Span, context.Context) {
+func trace(ctx context.Context, name string) (otelTrace.Span, context.Context) {
 	if ctx == nil {
 		logrus.WithField("type", "bug").Error("trace called before context set")
 		ctx = context.Background()
 	}
-
-	span, ctx := opentracing.StartSpanFromContext(ctx, name)
-	span.SetTag("source", "runtime")
+	tracer := otel.Tracer("kata")
+	ctx, span := tracer.Start(ctx, name)
+	span.SetAttributes([]label.KeyValue{label.Key("source").String("runtime"), label.Key("package").String("containerdshim")}...)
 
 	return span, ctx
 }
 
 func (s *service) Cleanup(ctx context.Context) (_ *taskAPI.DeleteResponse, err error) {
 	span, _ := trace(s.ctx, "Cleanup")
-	defer span.Finish()
+	defer span.End()
 
 	//Since the binary cleanup will return the DeleteResponse from stdout to
 	//containerd, thus we must make sure there is no any outputs in stdout except
@@ -374,7 +376,7 @@ func (s *service) Cleanup(ctx context.Context) (_ *taskAPI.DeleteResponse, err e
 // Create a new sandbox or container with the underlying OCI runtime
 func (s *service) Create(ctx context.Context, r *taskAPI.CreateTaskRequest) (_ *taskAPI.CreateTaskResponse, err error) {
 	span, _ := trace(s.ctx, "Create")
-	defer span.Finish()
+	defer span.End()
 
 	start := time.Now()
 	defer func() {
@@ -430,7 +432,7 @@ func (s *service) Create(ctx context.Context, r *taskAPI.CreateTaskRequest) (_ *
 // Start a process
 func (s *service) Start(ctx context.Context, r *taskAPI.StartRequest) (_ *taskAPI.StartResponse, err error) {
 	span, _ := trace(s.ctx, "Start")
-	defer span.Finish()
+	defer span.End()
 
 	start := time.Now()
 	defer func() {
@@ -481,7 +483,7 @@ func (s *service) Start(ctx context.Context, r *taskAPI.StartRequest) (_ *taskAP
 // Delete the initial process and container
 func (s *service) Delete(ctx context.Context, r *taskAPI.DeleteRequest) (_ *taskAPI.DeleteResponse, err error) {
 	span, _ := trace(s.ctx, "Delete")
-	defer span.Finish()
+	defer span.End()
 
 	start := time.Now()
 	defer func() {
@@ -533,7 +535,7 @@ func (s *service) Delete(ctx context.Context, r *taskAPI.DeleteRequest) (_ *task
 // Exec an additional process inside the container
 func (s *service) Exec(ctx context.Context, r *taskAPI.ExecProcessRequest) (_ *ptypes.Empty, err error) {
 	span, _ := trace(s.ctx, "Exec")
-	defer span.Finish()
+	defer span.End()
 
 	start := time.Now()
 	defer func() {
@@ -571,7 +573,7 @@ func (s *service) Exec(ctx context.Context, r *taskAPI.ExecProcessRequest) (_ *p
 // ResizePty of a process
 func (s *service) ResizePty(ctx context.Context, r *taskAPI.ResizePtyRequest) (_ *ptypes.Empty, err error) {
 	span, _ := trace(s.ctx, "ResizePty")
-	defer span.Finish()
+	defer span.End()
 
 	start := time.Now()
 	defer func() {
@@ -610,7 +612,7 @@ func (s *service) ResizePty(ctx context.Context, r *taskAPI.ResizePtyRequest) (_
 // State returns runtime state information for a process
 func (s *service) State(ctx context.Context, r *taskAPI.StateRequest) (_ *taskAPI.StateResponse, err error) {
 	span, _ := trace(s.ctx, "State")
-	defer span.Finish()
+	defer span.End()
 
 	start := time.Now()
 	defer func() {
@@ -662,7 +664,7 @@ func (s *service) State(ctx context.Context, r *taskAPI.StateRequest) (_ *taskAP
 // Pause the container
 func (s *service) Pause(ctx context.Context, r *taskAPI.PauseRequest) (_ *ptypes.Empty, err error) {
 	span, _ := trace(s.ctx, "Pause")
-	defer span.Finish()
+	defer span.End()
 
 	start := time.Now()
 	defer func() {
@@ -701,7 +703,7 @@ func (s *service) Pause(ctx context.Context, r *taskAPI.PauseRequest) (_ *ptypes
 // Resume the container
 func (s *service) Resume(ctx context.Context, r *taskAPI.ResumeRequest) (_ *ptypes.Empty, err error) {
 	span, _ := trace(s.ctx, "Resume")
-	defer span.Finish()
+	defer span.End()
 
 	start := time.Now()
 	defer func() {
@@ -738,7 +740,7 @@ func (s *service) Resume(ctx context.Context, r *taskAPI.ResumeRequest) (_ *ptyp
 // Kill a process with the provided signal
 func (s *service) Kill(ctx context.Context, r *taskAPI.KillRequest) (_ *ptypes.Empty, err error) {
 	span, _ := trace(s.ctx, "Kill")
-	defer span.Finish()
+	defer span.End()
 
 	start := time.Now()
 	defer func() {
@@ -799,7 +801,7 @@ func (s *service) Kill(ctx context.Context, r *taskAPI.KillRequest) (_ *ptypes.E
 // thus only return the Shim's pid directly.
 func (s *service) Pids(ctx context.Context, r *taskAPI.PidsRequest) (_ *taskAPI.PidsResponse, err error) {
 	span, _ := trace(s.ctx, "Pids")
-	defer span.Finish()
+	defer span.End()
 
 	var processes []*task.ProcessInfo
 
@@ -822,7 +824,7 @@ func (s *service) Pids(ctx context.Context, r *taskAPI.PidsRequest) (_ *taskAPI.
 // CloseIO of a process
 func (s *service) CloseIO(ctx context.Context, r *taskAPI.CloseIORequest) (_ *ptypes.Empty, err error) {
 	span, _ := trace(s.ctx, "CloseIO")
-	defer span.Finish()
+	defer span.End()
 
 	start := time.Now()
 	defer func() {
@@ -863,7 +865,7 @@ func (s *service) CloseIO(ctx context.Context, r *taskAPI.CloseIORequest) (_ *pt
 // Checkpoint the container
 func (s *service) Checkpoint(ctx context.Context, r *taskAPI.CheckpointTaskRequest) (_ *ptypes.Empty, err error) {
 	span, _ := trace(s.ctx, "Checkpoint")
-	defer span.Finish()
+	defer span.End()
 
 	start := time.Now()
 	defer func() {
@@ -877,7 +879,7 @@ func (s *service) Checkpoint(ctx context.Context, r *taskAPI.CheckpointTaskReque
 // Connect returns shim information such as the shim's pid
 func (s *service) Connect(ctx context.Context, r *taskAPI.ConnectRequest) (_ *taskAPI.ConnectResponse, err error) {
 	span, _ := trace(s.ctx, "Connect")
-	defer span.Finish()
+	defer span.End()
 
 	start := time.Now()
 	defer func() {
@@ -911,7 +913,7 @@ func (s *service) Shutdown(ctx context.Context, r *taskAPI.ShutdownRequest) (_ *
 	}
 	s.mu.Unlock()
 
-	span.Finish()
+	span.End()
 	katautils.StopTracing(s.ctx)
 
 	s.cancel()
@@ -925,7 +927,7 @@ func (s *service) Shutdown(ctx context.Context, r *taskAPI.ShutdownRequest) (_ *
 
 func (s *service) Stats(ctx context.Context, r *taskAPI.StatsRequest) (_ *taskAPI.StatsResponse, err error) {
 	span, _ := trace(s.ctx, "Stats")
-	defer span.Finish()
+	defer span.End()
 
 	start := time.Now()
 	defer func() {
@@ -954,7 +956,7 @@ func (s *service) Stats(ctx context.Context, r *taskAPI.StatsRequest) (_ *taskAP
 // Update a running container
 func (s *service) Update(ctx context.Context, r *taskAPI.UpdateTaskRequest) (_ *ptypes.Empty, err error) {
 	span, _ := trace(s.ctx, "Update")
-	defer span.Finish()
+	defer span.End()
 
 	start := time.Now()
 	defer func() {
@@ -986,7 +988,7 @@ func (s *service) Update(ctx context.Context, r *taskAPI.UpdateTaskRequest) (_ *
 // Wait for a process to exit
 func (s *service) Wait(ctx context.Context, r *taskAPI.WaitRequest) (_ *taskAPI.WaitResponse, err error) {
 	span, _ := trace(s.ctx, "Wait")
-	defer span.Finish()
+	defer span.End()
 
 	var ret uint32
 

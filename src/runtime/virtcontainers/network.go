@@ -20,10 +20,12 @@ import (
 
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/containernetworking/plugins/pkg/testutils"
-	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 	"github.com/vishvananda/netns"
+	"go.opentelemetry.io/otel"
+	otelLabel "go.opentelemetry.io/otel/label"
+	otelTrace "go.opentelemetry.io/otel/trace"
 	"golang.org/x/sys/unix"
 
 	pbTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols"
@@ -1251,19 +1253,18 @@ func createEndpoint(netInfo NetworkInfo, idx int, model NetInterworkingModel, li
 type Network struct {
 }
 
-func (n *Network) trace(ctx context.Context, name string) (opentracing.Span, context.Context) {
-	span, ct := opentracing.StartSpanFromContext(ctx, name)
+func (n *Network) trace(ctx context.Context, name string) (otelTrace.Span, context.Context) {
+	tracer := otel.Tracer("kata")
+	ctx, span := tracer.Start(ctx, name)
+	span.SetAttributes([]otelLabel.KeyValue{otelLabel.Key("subsystem").String("network"), otelLabel.Key("type").String("default")}...)
 
-	span.SetTag("subsystem", "network")
-	span.SetTag("type", "default")
-
-	return span, ct
+	return span, ctx
 }
 
 // Run runs a callback in the specified network namespace.
 func (n *Network) Run(networkNSPath string, cb func() error) error {
 	span, _ := n.trace(context.Background(), "run")
-	defer span.Finish()
+	defer span.End()
 
 	return doNetNS(networkNSPath, func(_ ns.NetNS) error {
 		return cb()
@@ -1273,7 +1274,7 @@ func (n *Network) Run(networkNSPath string, cb func() error) error {
 // Add adds all needed interfaces inside the network namespace.
 func (n *Network) Add(ctx context.Context, config *NetworkConfig, s *Sandbox, hotplug bool) ([]Endpoint, error) {
 	span, _ := n.trace(ctx, "add")
-	defer span.Finish()
+	defer span.End()
 
 	endpoints, err := createEndpointsFromScan(config.NetNSPath, config)
 	if err != nil {
@@ -1354,7 +1355,7 @@ func (n *Network) PostAdd(ctx context.Context, ns *NetworkNamespace, hotplug boo
 // namespace in case the namespace has been created by us.
 func (n *Network) Remove(ctx context.Context, ns *NetworkNamespace, hypervisor hypervisor) error {
 	span, _ := n.trace(ctx, "remove")
-	defer span.Finish()
+	defer span.End()
 
 	for _, endpoint := range ns.Endpoints {
 		if endpoint.GetRxRateLimiter() {

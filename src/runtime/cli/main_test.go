@@ -32,7 +32,7 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/stretchr/testify/assert"
-	jaeger "github.com/uber/jaeger-client-go"
+
 	"github.com/urfave/cli"
 )
 
@@ -435,7 +435,6 @@ func createCLIContextWithApp(flagSet *flag.FlagSet, app *cli.App) *cli.Context {
 
 	// add standard entries
 	ctx.App.Metadata["context"] = context.Background()
-	ctx.App.Metadata["tracer"] = &jaeger.Tracer{}
 
 	return ctx
 }

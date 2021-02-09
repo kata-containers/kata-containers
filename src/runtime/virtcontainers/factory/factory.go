@@ -17,8 +17,10 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/factory/grpccache"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/factory/template"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
-	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/sirupsen/logrus"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/label"
+	otelTrace "go.opentelemetry.io/otel/trace"
 )
 
 var factoryLogger = logrus.FieldLogger(logrus.New())
@@ -38,10 +40,10 @@ type factory struct {
 	base base.FactoryBase
 }
 
-func trace(parent context.Context, name string) (opentracing.Span, context.Context) {
-	span, ctx := opentracing.StartSpanFromContext(parent, name)
-
-	span.SetTag("subsystem", "factory")
+func trace(parent context.Context, name string) (otelTrace.Span, context.Context) {
+	tracer := otel.Tracer("kata")
+	ctx, span := tracer.Start(parent, name)
+	span.SetAttributes(label.Key("subsystem").String("factory"))
 
 	return span, ctx
 }
@@ -49,7 +51,7 @@ func trace(parent context.Context, name string) (opentracing.Span, context.Conte
 // NewFactory returns a working factory.
 func NewFactory(ctx context.Context, config Config, fetchOnly bool) (vc.Factory, error) {
 	span, _ := trace(ctx, "NewFactory")
-	defer span.Finish()
+	defer span.End()
 
 	err := config.VMConfig.Valid()
 	if err != nil {
@@ -140,7 +142,7 @@ func (f *factory) checkConfig(config vc.VMConfig) error {
 // GetVM returns a working blank VM created by the factory.
 func (f *factory) GetVM(ctx context.Context, config vc.VMConfig) (*vc.VM, error) {
 	span, _ := trace(ctx, "GetVM")
-	defer span.Finish()
+	defer span.End()
 
 	hypervisorConfig := config.HypervisorConfig
 	if err := config.Valid(); err != nil {
