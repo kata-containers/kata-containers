@@ -1,0 +1,5 @@
+error: non-static lifetimes are not allowed in the source of an error
+ --> $DIR/lifetime.rs:5:18
+  |
+5 | struct Error<'a>(#[from] Inner<'a>);
+  |                  ^^^^^^^^^^^^^^^^^

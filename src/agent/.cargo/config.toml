@@ -1,0 +1,10 @@
+[source.crates-io]
+replace-with = "vendored-sources"
+
+[source."https://github.com/kata-containers/cgroups-rs"]
+git = "https://github.com/kata-containers/cgroups-rs"
+branch = "stable-0.1.1"
+replace-with = "vendored-sources"
+
+[source.vendored-sources]
+directory = "vendor"

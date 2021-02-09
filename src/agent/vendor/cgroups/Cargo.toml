@@ -1,0 +1,19 @@
+[package]
+name = "cgroups"
+description = "Native Rust crate for managing control groups on Linux"
+repository = "https://github.com/levex/cgroups-rs"
+keywords = ["linux", "cgroup", "containers", "isolation"]
+categories = ["os", "api-bindings", "os::unix-apis"]
+license = "MIT OR Apache-2.0"
+version = "0.1.1-alpha.0"
+authors = ["Levente Kurusa <lkurusa@acm.org>", "Sam Wilson <tecywiz121@hotmail.com>"]
+edition = "2018"
+
+[dependencies]
+log = "0.4"
+regex = "1.1"
+nix = "0.18.0"
+libc = "0.2"
+
+[dev-dependencies]
+libc = "0.2.76"

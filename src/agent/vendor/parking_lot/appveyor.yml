@@ -1,0 +1,59 @@
+environment:
+  TRAVIS_CARGO_NIGHTLY_FEATURE: nightly
+  RUST_TEST_THREADS: 1
+  matrix:
+  - TARGET: x86_64-pc-windows-msvc
+    MSYSTEM: MINGW64
+    CPU: x86_64
+    TOOLCHAIN: nightly
+    FEATURES: nightly
+  - TARGET: i686-pc-windows-msvc
+    MSYSTEM: MINGW32
+    CPU: i686
+    TOOLCHAIN: nightly
+    FEATURES: nightly
+  - TARGET: x86_64-pc-windows-gnu
+    MSYSTEM: MINGW64
+    CPU: x86_64
+    TOOLCHAIN: nightly
+    FEATURES: nightly
+  - TARGET: i686-pc-windows-gnu
+    MSYSTEM: MINGW32
+    CPU: i686
+    TOOLCHAIN: nightly
+    FEATURES: nightly
+  - TARGET: x86_64-pc-windows-msvc
+    MSYSTEM: MINGW64
+    CPU: x86_64
+    TOOLCHAIN: 1.36.0
+  - TARGET: i686-pc-windows-msvc
+    MSYSTEM: MINGW32
+    CPU: i686
+    TOOLCHAIN: 1.36.0
+  - TARGET: x86_64-pc-windows-gnu
+    MSYSTEM: MINGW64
+    CPU: x86_64
+    TOOLCHAIN: 1.36.0
+  - TARGET: i686-pc-windows-gnu
+    MSYSTEM: MINGW32
+    CPU: i686
+    TOOLCHAIN: 1.36.0
+
+install:
+  - set PATH=C:\msys64\%MSYSTEM%\bin;c:\msys64\usr\bin;%PATH%
+  - pacman --noconfirm -Syu mingw-w64-%CPU%-make
+  - appveyor-retry appveyor DownloadFile https://win.rustup.rs/ -FileName rustup-init.exe
+  - rustup-init.exe -y --default-host %TARGET% --default-toolchain %TOOLCHAIN%
+  - set PATH=%PATH%;C:\Users\appveyor\.cargo\bin
+  - rustc -vV
+  - cargo -vV
+
+build_script:
+  - cargo build --features "%FEATURES%"
+
+test_script:
+  - cargo test --all --features "%FEATURES%"
+  - cargo doc --all
+  - cd benchmark
+  - cargo run --release --bin mutex -- 2 1 0 1 2
+  - cargo run --release --bin rwlock -- 1 1 1 0 1 2

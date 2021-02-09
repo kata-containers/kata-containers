@@ -1,0 +1,26 @@
+[package]
+
+name = "unicode-xid"
+version = "0.1.0"
+authors = ["erick.tryzelaar <erick.tryzelaar@gmail.com>",
+           "kwantam <kwantam@gmail.com>",
+           ]
+
+homepage = "https://github.com/unicode-rs/unicode-xid"
+repository = "https://github.com/unicode-rs/unicode-xid"
+documentation = "https://unicode-rs.github.io/unicode-xid"
+license = "MIT/Apache-2.0"
+keywords = ["text", "unicode", "xid"]
+readme = "README.md"
+description = """
+Determine whether characters have the XID_Start
+or XID_Continue properties according to
+Unicode Standard Annex #31.
+"""
+
+exclude = [ "target/*", "Cargo.lock" ]
+
+[features]
+default = []
+no_std = []
+bench = []

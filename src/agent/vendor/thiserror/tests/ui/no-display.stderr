@@ -1,0 +1,12 @@
+error[E0599]: no method named `as_display` found for reference `&NoDisplay` in the current scope
+ --> $DIR/no-display.rs:7:9
+  |
+4 | struct NoDisplay;
+  | ----------------- doesn't satisfy `NoDisplay: std::fmt::Display`
+...
+7 | #[error("thread: {thread}")]
+  |         ^^^^^^^^^^^^^^^^^^ method not found in `&NoDisplay`
+  |
+  = note: the method `as_display` exists but the following trait bounds were not satisfied:
+          `NoDisplay: std::fmt::Display`
+          which is required by `&NoDisplay: DisplayAsDisplay`

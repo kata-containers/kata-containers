@@ -1,0 +1,15 @@
+[package]
+
+name = "void"
+version = "1.0.2"
+authors = ["Jonathan Reem <jonathan.reem@gmail.com>"]
+repository = "https://github.com/reem/rust-void.git"
+description = "The uninhabited void type for use in statically impossible cases."
+readme = "README.md"
+license = "MIT"
+
+[features]
+
+default = ["std"]
+std = []
+
