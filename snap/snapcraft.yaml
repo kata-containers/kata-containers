@@ -89,6 +89,8 @@ parts:
       export GOROOT=${SNAPCRAFT_STAGE}
       export PATH="${GOROOT}/bin:${PATH}"
 
+      http_proxy=${http_proxy:-""}
+      https_proxy=${https_proxy:-""}
       if [ -n "$http_proxy" ]; then
         echo "Setting proxy $http_proxy"
         sudo -E systemctl set-environment http_proxy=$http_proxy || true
