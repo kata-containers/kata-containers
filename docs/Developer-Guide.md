@@ -404,7 +404,7 @@ To build a version of QEMU using the same options as the default `qemu-lite` ver
 ```
 $ go get -d github.com/kata-containers/kata-containers/tools/packaging
 $ cd $your_qemu_directory
-$ ${GOPATH}/src/github.com/kata-containers/kata-containers/tools/packaging/scripts/configure-hypervisor.sh qemu > kata.cfg
+$ ${GOPATH}/src/github.com/kata-containers/kata-containers/tools/packaging/scripts/configure-hypervisor.sh kata-qemu > kata.cfg
 $ eval ./configure "$(cat kata.cfg)"
 $ make -j $(nproc)
 $ sudo -E make install
