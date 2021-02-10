@@ -441,7 +441,8 @@ message LinuxInterfacePriority {
 message LinuxSeccomp {
 	string DefaultAction = 1;
 	repeated string Architectures = 2;
-	repeated LinuxSyscall Syscalls = 3  [(gogoproto.nullable) = false];
+	repeated string Flags = 3;
+	repeated LinuxSyscall Syscalls = 4  [(gogoproto.nullable) = false];
 }
 
 message LinuxSeccompArg {
@@ -454,7 +455,8 @@ message LinuxSeccompArg {
 message LinuxSyscall {
 	repeated string Names = 1;
 	string Action = 2;
-	repeated LinuxSeccompArg Args = 3  [(gogoproto.nullable) = false];
+	uint32 ErrnoRet = 3;
+	repeated LinuxSeccompArg Args = 4  [(gogoproto.nullable) = false];
 }
 
 message LinuxIntelRdt {
