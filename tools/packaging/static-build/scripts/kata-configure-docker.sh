@@ -81,7 +81,7 @@ configure_docker()
 			--arg config "$config" \
 			--arg runtime "$runtime" \
 			--arg runtime_path "$runtime_path" \
-			'.runtimes[$runtime] = {path: $runtime_path, "runtimeArgs": ["--kata-config", $config]}')
+			'.runtimes[$runtime] = {path: $runtime_path, "runtimeArgs": ["--config", $config]}')
 
 		echo "$result" > "$docker_config_file"
 	done

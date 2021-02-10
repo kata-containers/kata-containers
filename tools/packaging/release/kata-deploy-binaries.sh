@@ -218,25 +218,25 @@ install_kata_components() {
 	pushd "${destdir}/${prefix}/bin"
 	cat <<EOT | sudo tee kata-fc
 #!/bin/bash
-${prefix}/bin/kata-runtime --kata-config "${prefix}/share/defaults/${project}/configuration-fc.toml" \$@
+${prefix}/bin/kata-runtime --config "${prefix}/share/defaults/${project}/configuration-fc.toml" \$@
 EOT
 	sudo chmod +x kata-fc
 
 	cat <<EOT | sudo tee kata-qemu
 #!/bin/bash
-${prefix}/bin/kata-runtime --kata-config "${prefix}/share/defaults/${project}/configuration-qemu.toml" \$@
+${prefix}/bin/kata-runtime --config "${prefix}/share/defaults/${project}/configuration-qemu.toml" \$@
 EOT
 	sudo chmod +x kata-qemu
 
 	cat <<EOT | sudo tee kata-clh
 #!/bin/bash
-${prefix}/bin/kata-runtime --kata-config "${prefix}/share/defaults/${project}/configuration-clh.toml" \$@
+${prefix}/bin/kata-runtime --config "${prefix}/share/defaults/${project}/configuration-clh.toml" \$@
 EOT
 	sudo chmod +x kata-clh
 
 	cat <<EOT | sudo tee kata-qemu-virtiofs
 #!/bin/bash
-${prefix}/bin/kata-runtime --kata-config "${prefix}/share/defaults/${project}/configuration-qemu-virtiofs.toml" \$@
+${prefix}/bin/kata-runtime --config "${prefix}/share/defaults/${project}/configuration-qemu-virtiofs.toml" \$@
 EOT
 	sudo chmod +x kata-qemu-virtiofs
 

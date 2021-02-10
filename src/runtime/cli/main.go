@@ -86,8 +86,8 @@ var defaultErrorFile = os.Stderr
 // runtimeFlags is the list of supported global command-line flags
 var runtimeFlags = []cli.Flag{
 	cli.StringFlag{
-		Name:  configFilePathOption,
-		Usage: project + " config file path",
+		Name:    "config, kata-config",
+		Usage:   project + " config file path",
 	},
 	cli.StringFlag{
 		Name:  "log",
@@ -110,8 +110,8 @@ var runtimeFlags = []cli.Flag{
 		Usage: "ignore cgroup permission errors ('true', 'false', or 'auto')",
 	},
 	cli.BoolFlag{
-		Name:  showConfigPathsOption,
-		Usage: "show config file paths that will be checked for (in order)",
+		Name:    "show-default-config-paths, kata-show-default-config-paths",
+		Usage:   "show config file paths that will be checked for (in order)",
 	},
 	cli.BoolFlag{
 		Name:  "systemd-cgroup",
@@ -322,7 +322,7 @@ func beforeSubcommands(c *cli.Context) error {
 		}
 	}
 
-	configFile, runtimeConfig, err = katautils.LoadConfiguration(c.GlobalString(configFilePathOption), ignoreConfigLogs, false)
+	configFile, runtimeConfig, err = katautils.LoadConfiguration(c.GlobalString("config"), ignoreConfigLogs, false)
 	if err != nil {
 		fatal(err)
 	}
@@ -370,7 +370,7 @@ func beforeSubcommands(c *cli.Context) error {
 // handleShowConfig determines if the user wishes to see the configuration
 // paths. If so, it will display them and then exit.
 func handleShowConfig(context *cli.Context) {
-	if context.GlobalBool(showConfigPathsOption) {
+	if context.GlobalBool("show-default-config-paths") {
 		files := katautils.GetDefaultConfigFilePaths()
 
 		for _, file := range files {
