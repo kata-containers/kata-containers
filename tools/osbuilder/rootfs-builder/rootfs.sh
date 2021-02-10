@@ -100,12 +100,6 @@ AGENT_INIT          When set to "yes", use ${AGENT_BIN} as init process in place
                     of systemd.
                     Default value: no
 
-RUST_AGENT          When set to "no", build kata-agent from go agent instead of kata-rust-agent
-                    Default value: "yes"
-
-RUST_AGENT_PKG      URL of the Git repository hosting the agent package.
-                    Default value: ${RUST_AGENT_PKG}
-
 AGENT_VERSION       Version of the agent to include in the rootfs.
                     Default value: ${AGENT_VERSION:-<not set>}
 
@@ -115,6 +109,9 @@ AGENT_SOURCE_BIN    Path to the directory of agent binary.
 
 DISTRO_REPO         Use host repositories to install guest packages.
                     Default value: <not set>
+
+DOCKER_RUNTIME      Docker runtime to use when USE_DOCKER is set.
+                    Default value: runc
 
 GO_AGENT_PKG        URL of the Git repository hosting the agent package.
                     Default value: ${GO_AGENT_PKG}
@@ -133,6 +130,12 @@ KERNEL_MODULES_DIR  Path to a directory containing kernel modules to include in
 ROOTFS_DIR          Path to the directory that is populated with the rootfs.
                     Default value: <${script_name} path>/rootfs-<DISTRO-name>
 
+RUST_AGENT          When set to "no", build kata-agent from go agent instead of kata-rust-agent
+                    Default value: "yes"
+
+RUST_AGENT_PKG      URL of the Git repository hosting the agent package.
+                    Default value: ${RUST_AGENT_PKG}
+
 USE_DOCKER          If set, build the rootfs inside a container (requires
                     Docker).
                     Default value: <not set>
@@ -140,9 +143,6 @@ USE_DOCKER          If set, build the rootfs inside a container (requires
 USE_PODMAN          If set and USE_DOCKER not set, then build the rootfs inside
                     a podman container (requires podman).
                     Default value: <not set>
-
-DOCKER_RUNTIME      Docker runtime to use when USE_DOCKER is set.
-                    Default value: runc
 
 Refer to the Platform-OS Compatibility Matrix for more details on the supported
 architectures:
