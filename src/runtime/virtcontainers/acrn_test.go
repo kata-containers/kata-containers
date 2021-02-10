@@ -89,7 +89,7 @@ func testAcrnAddDevice(t *testing.T, devInfo interface{}, devType deviceType, ex
 		arch: &acrnArchBase{},
 	}
 
-	err := a.addDevice(devInfo, devType)
+	err := a.addDevice(context.Background(), devInfo, devType)
 	assert.NoError(err)
 	assert.Exactly(a.acrnConfig.Devices, expected)
 }

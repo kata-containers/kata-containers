@@ -74,19 +74,19 @@ func createSandboxFromConfig(ctx context.Context, sandboxConfig SandboxConfig, f
 	// cleanup sandbox resources in case of any failure
 	defer func() {
 		if err != nil {
-			s.Delete()
+			s.Delete(ctx)
 		}
 	}()
 
 	// Create the sandbox network
-	if err = s.createNetwork(); err != nil {
+	if err = s.createNetwork(ctx); err != nil {
 		return nil, err
 	}
 
 	// network rollback
 	defer func() {
 		if err != nil {
-			s.removeNetwork()
+			s.removeNetwork(ctx)
 		}
 	}()
 
@@ -102,30 +102,30 @@ func createSandboxFromConfig(ctx context.Context, sandboxConfig SandboxConfig, f
 	}
 
 	// Start the VM
-	if err = s.startVM(); err != nil {
+	if err = s.startVM(ctx); err != nil {
 		return nil, err
 	}
 
 	// rollback to stop VM if error occurs
 	defer func() {
 		if err != nil {
-			s.stopVM()
+			s.stopVM(ctx)
 		}
 	}()
 
-	s.postCreatedNetwork()
+	s.postCreatedNetwork(ctx)
 
-	if err = s.getAndStoreGuestDetails(); err != nil {
+	if err = s.getAndStoreGuestDetails(ctx); err != nil {
 		return nil, err
 	}
 
 	// Create Containers
-	if err = s.createContainers(); err != nil {
+	if err = s.createContainers(ctx); err != nil {
 		return nil, err
 	}
 
 	// The sandbox is completely created now, we can store it.
-	if err = s.storeSandbox(); err != nil {
+	if err = s.storeSandbox(ctx); err != nil {
 		return nil, err
 	}
 
@@ -157,14 +157,14 @@ func CleanupContainer(ctx context.Context, sandboxID, containerID string, force 
 	if err != nil {
 		return err
 	}
-	defer s.Release()
+	defer s.Release(ctx)
 
-	_, err = s.StopContainer(containerID, force)
+	_, err = s.StopContainer(ctx, containerID, force)
 	if err != nil && !force {
 		return err
 	}
 
-	_, err = s.DeleteContainer(containerID)
+	_, err = s.DeleteContainer(ctx, containerID)
 	if err != nil && !force {
 		return err
 	}
@@ -173,11 +173,11 @@ func CleanupContainer(ctx context.Context, sandboxID, containerID string, force 
 		return nil
 	}
 
-	if err = s.Stop(force); err != nil && !force {
+	if err = s.Stop(ctx, force); err != nil && !force {
 		return err
 	}
 
-	if err = s.Delete(); err != nil {
+	if err = s.Delete(ctx); err != nil {
 		return err
 	}
 

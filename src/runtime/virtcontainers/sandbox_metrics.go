@@ -6,6 +6,8 @@
 package virtcontainers
 
 import (
+	"context"
+
 	mutils "github.com/kata-containers/kata-containers/src/runtime/pkg/utils"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols/grpc"
 	"github.com/prometheus/client_golang/prometheus"
@@ -126,8 +128,8 @@ func (s *Sandbox) UpdateRuntimeMetrics() error {
 	return nil
 }
 
-func (s *Sandbox) GetAgentMetrics() (string, error) {
-	r, err := s.agent.getAgentMetrics(&grpc.GetMetricsRequest{})
+func (s *Sandbox) GetAgentMetrics(ctx context.Context) (string, error) {
+	r, err := s.agent.getAgentMetrics(ctx, &grpc.GetMetricsRequest{})
 	if err != nil {
 		return "", err
 	}

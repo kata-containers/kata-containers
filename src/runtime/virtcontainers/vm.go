@@ -120,7 +120,7 @@ func NewVM(ctx context.Context, config VMConfig) (*VM, error) {
 	agent := newAagentFunc()
 
 	vmSharePath := buildVMSharePath(id, store.RunVMStoragePath())
-	err = agent.configure(hypervisor, id, vmSharePath, config.AgentConfig)
+	err = agent.configure(ctx, hypervisor, id, vmSharePath, config.AgentConfig)
 	if err != nil {
 		return nil, err
 	}
@@ -130,14 +130,14 @@ func NewVM(ctx context.Context, config VMConfig) (*VM, error) {
 	}
 
 	// 3. boot up guest vm
-	if err = hypervisor.startSandbox(vmStartTimeout); err != nil {
+	if err = hypervisor.startSandbox(ctx, vmStartTimeout); err != nil {
 		return nil, err
 	}
 
 	defer func() {
 		if err != nil {
 			virtLog.WithField("vm", id).WithError(err).Info("clean up vm")
-			hypervisor.stopSandbox()
+			hypervisor.stopSandbox(ctx)
 		}
 	}()
 
@@ -145,7 +145,7 @@ func NewVM(ctx context.Context, config VMConfig) (*VM, error) {
 	// VMs booted from template are paused, do not check
 	if !config.HypervisorConfig.BootFromTemplate {
 		virtLog.WithField("vm", id).Info("check agent status")
-		err = agent.check()
+		err = agent.check(ctx)
 		if err != nil {
 			return nil, err
 		}
@@ -213,9 +213,9 @@ func (v *VM) logger() logrus.FieldLogger {
 }
 
 // Pause pauses a VM.
-func (v *VM) Pause() error {
+func (v *VM) Pause(ctx context.Context) error {
 	v.logger().Info("pause vm")
-	return v.hypervisor.pauseSandbox()
+	return v.hypervisor.pauseSandbox(ctx)
 }
 
 // Save saves a VM to persistent disk.
@@ -225,22 +225,22 @@ func (v *VM) Save() error {
 }
 
 // Resume resumes a paused VM.
-func (v *VM) Resume() error {
+func (v *VM) Resume(ctx context.Context) error {
 	v.logger().Info("resume vm")
-	return v.hypervisor.resumeSandbox()
+	return v.hypervisor.resumeSandbox(ctx)
 }
 
 // Start kicks off a configured VM.
-func (v *VM) Start() error {
+func (v *VM) Start(ctx context.Context) error {
 	v.logger().Info("start vm")
-	return v.hypervisor.startSandbox(vmStartTimeout)
+	return v.hypervisor.startSandbox(ctx, vmStartTimeout)
 }
 
 // Disconnect agent connections to a VM
-func (v *VM) Disconnect() error {
+func (v *VM) Disconnect(ctx context.Context) error {
 	v.logger().Info("kill vm")
 
-	if err := v.agent.disconnect(); err != nil {
+	if err := v.agent.disconnect(ctx); err != nil {
 		v.logger().WithError(err).Error("failed to disconnect agent")
 	}
 
@@ -248,10 +248,10 @@ func (v *VM) Disconnect() error {
 }
 
 // Stop stops a VM process.
-func (v *VM) Stop() error {
+func (v *VM) Stop(ctx context.Context) error {
 	v.logger().Info("stop vm")
 
-	if err := v.hypervisor.stopSandbox(); err != nil {
+	if err := v.hypervisor.stopSandbox(ctx); err != nil {
 		return err
 	}
 
@@ -259,10 +259,10 @@ func (v *VM) Stop() error {
 }
 
 // AddCPUs adds num of CPUs to the VM.
-func (v *VM) AddCPUs(num uint32) error {
+func (v *VM) AddCPUs(ctx context.Context, num uint32) error {
 	if num > 0 {
 		v.logger().Infof("hot adding %d vCPUs", num)
-		if _, err := v.hypervisor.hotplugAddDevice(num, cpuDev); err != nil {
+		if _, err := v.hypervisor.hotplugAddDevice(ctx, num, cpuDev); err != nil {
 			return err
 		}
 		v.cpuDelta += num
@@ -273,11 +273,11 @@ func (v *VM) AddCPUs(num uint32) error {
 }
 
 // AddMemory adds numMB of memory to the VM.
-func (v *VM) AddMemory(numMB uint32) error {
+func (v *VM) AddMemory(ctx context.Context, numMB uint32) error {
 	if numMB > 0 {
 		v.logger().Infof("hot adding %d MB memory", numMB)
 		dev := &memoryDevice{1, int(numMB), 0, false}
-		if _, err := v.hypervisor.hotplugAddDevice(dev, memoryDev); err != nil {
+		if _, err := v.hypervisor.hotplugAddDevice(ctx, dev, memoryDev); err != nil {
 			return err
 		}
 	}
@@ -286,9 +286,9 @@ func (v *VM) AddMemory(numMB uint32) error {
 }
 
 // OnlineCPUMemory puts the hotplugged CPU and memory online.
-func (v *VM) OnlineCPUMemory() error {
+func (v *VM) OnlineCPUMemory(ctx context.Context) error {
 	v.logger().Infof("online CPU %d and memory", v.cpuDelta)
-	err := v.agent.onlineCPUMem(v.cpuDelta, false)
+	err := v.agent.onlineCPUMem(ctx, v.cpuDelta, false)
 	if err == nil {
 		v.cpuDelta = 0
 	}
@@ -298,7 +298,7 @@ func (v *VM) OnlineCPUMemory() error {
 
 // ReseedRNG adds random entropy to guest random number generator
 // and reseeds it.
-func (v *VM) ReseedRNG() error {
+func (v *VM) ReseedRNG(ctx context.Context) error {
 	v.logger().Infof("reseed guest random number generator")
 	urandomDev := "/dev/urandom"
 	data := make([]byte, 512)
@@ -313,14 +313,14 @@ func (v *VM) ReseedRNG() error {
 		return err
 	}
 
-	return v.agent.reseedRNG(data)
+	return v.agent.reseedRNG(ctx, data)
 }
 
 // SyncTime syncs guest time with host time.
-func (v *VM) SyncTime() error {
+func (v *VM) SyncTime(ctx context.Context) error {
 	now := time.Now()
 	v.logger().WithField("time", now).Infof("sync guest time")
-	return v.agent.setGuestDateTime(now)
+	return v.agent.setGuestDateTime(ctx, now)
 }
 
 func (v *VM) assignSandbox(s *Sandbox) error {
@@ -364,8 +364,8 @@ func (v *VM) assignSandbox(s *Sandbox) error {
 }
 
 // ToGrpc convert VM struct to Grpc format pb.GrpcVM.
-func (v *VM) ToGrpc(config VMConfig) (*pb.GrpcVM, error) {
-	hJSON, err := v.hypervisor.toGrpc()
+func (v *VM) ToGrpc(ctx context.Context, config VMConfig) (*pb.GrpcVM, error) {
+	hJSON, err := v.hypervisor.toGrpc(ctx)
 	if err != nil {
 		return nil, err
 	}

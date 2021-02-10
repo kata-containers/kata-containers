@@ -65,7 +65,7 @@ func (s *Sandbox) GetContainer(containerID string) vc.VCContainer {
 }
 
 // Release implements the VCSandbox function of the same name.
-func (s *Sandbox) Release() error {
+func (s *Sandbox) Release(ctx context.Context) error {
 	return nil
 }
 
@@ -90,12 +90,12 @@ func (s *Sandbox) Resume() error {
 }
 
 // Delete implements the VCSandbox function of the same name.
-func (s *Sandbox) Delete() error {
+func (s *Sandbox) Delete(ctx context.Context) error {
 	return nil
 }
 
 // CreateContainer implements the VCSandbox function of the same name.
-func (s *Sandbox) CreateContainer(conf vc.ContainerConfig) (vc.VCContainer, error) {
+func (s *Sandbox) CreateContainer(ctx context.Context, conf vc.ContainerConfig) (vc.VCContainer, error) {
 	if s.CreateContainerFunc != nil {
 		return s.CreateContainerFunc(conf)
 	}
@@ -103,12 +103,12 @@ func (s *Sandbox) CreateContainer(conf vc.ContainerConfig) (vc.VCContainer, erro
 }
 
 // DeleteContainer implements the VCSandbox function of the same name.
-func (s *Sandbox) DeleteContainer(contID string) (vc.VCContainer, error) {
+func (s *Sandbox) DeleteContainer(ctx context.Context, contID string) (vc.VCContainer, error) {
 	return &Container{}, nil
 }
 
 // StartContainer implements the VCSandbox function of the same name.
-func (s *Sandbox) StartContainer(contID string) (vc.VCContainer, error) {
+func (s *Sandbox) StartContainer(ctx context.Context, contID string) (vc.VCContainer, error) {
 	return &Container{}, nil
 }
 
@@ -118,7 +118,7 @@ func (s *Sandbox) StopContainer(contID string, force bool) (vc.VCContainer, erro
 }
 
 // KillContainer implements the VCSandbox function of the same name.
-func (s *Sandbox) KillContainer(contID string, signal syscall.Signal, all bool) error {
+func (s *Sandbox) KillContainer(ctx context.Context, contID string, signal syscall.Signal, all bool) error {
 	return nil
 }
 
@@ -128,7 +128,7 @@ func (s *Sandbox) StatusContainer(contID string) (vc.ContainerStatus, error) {
 }
 
 // StatsContainer implements the VCSandbox function of the same name.
-func (s *Sandbox) StatsContainer(contID string) (vc.ContainerStats, error) {
+func (s *Sandbox) StatsContainer(ctx context.Context, contID string) (vc.ContainerStats, error) {
 	if s.StatsContainerFunc != nil {
 		return s.StatsContainerFunc(contID)
 	}
@@ -136,12 +136,12 @@ func (s *Sandbox) StatsContainer(contID string) (vc.ContainerStats, error) {
 }
 
 // PauseContainer implements the VCSandbox function of the same name.
-func (s *Sandbox) PauseContainer(contID string) error {
+func (s *Sandbox) PauseContainer(ctx context.Context, contID string) error {
 	return nil
 }
 
 // ResumeContainer implements the VCSandbox function of the same name.
-func (s *Sandbox) ResumeContainer(contID string) error {
+func (s *Sandbox) ResumeContainer(ctx context.Context, contID string) error {
 	return nil
 }
 
@@ -151,37 +151,37 @@ func (s *Sandbox) Status() vc.SandboxStatus {
 }
 
 // EnterContainer implements the VCSandbox function of the same name.
-func (s *Sandbox) EnterContainer(containerID string, cmd types.Cmd) (vc.VCContainer, *vc.Process, error) {
+func (s *Sandbox) EnterContainer(ctx context.Context, containerID string, cmd types.Cmd) (vc.VCContainer, *vc.Process, error) {
 	return &Container{}, &vc.Process{}, nil
 }
 
 // Monitor implements the VCSandbox function of the same name.
-func (s *Sandbox) Monitor() (chan error, error) {
+func (s *Sandbox) Monitor(ctx context.Context) (chan error, error) {
 	return nil, nil
 }
 
 // UpdateContainer implements the VCSandbox function of the same name.
-func (s *Sandbox) UpdateContainer(containerID string, resources specs.LinuxResources) error {
+func (s *Sandbox) UpdateContainer(ctx context.Context, containerID string, resources specs.LinuxResources) error {
 	return nil
 }
 
 // ProcessListContainer implements the VCSandbox function of the same name.
-func (s *Sandbox) ProcessListContainer(containerID string, options vc.ProcessListOptions) (vc.ProcessList, error) {
+func (s *Sandbox) ProcessListContainer(ctx context.Context, containerID string, options vc.ProcessListOptions) (vc.ProcessList, error) {
 	return nil, nil
 }
 
 // WaitProcess implements the VCSandbox function of the same name.
-func (s *Sandbox) WaitProcess(containerID, processID string) (int32, error) {
+func (s *Sandbox) WaitProcess(ctx context.Context, containerID, processID string) (int32, error) {
 	return 0, nil
 }
 
 // SignalProcess implements the VCSandbox function of the same name.
-func (s *Sandbox) SignalProcess(containerID, processID string, signal syscall.Signal, all bool) error {
+func (s *Sandbox) SignalProcess(ctx context.Context, containerID, processID string, signal syscall.Signal, all bool) error {
 	return nil
 }
 
 // WinsizeProcess implements the VCSandbox function of the same name.
-func (s *Sandbox) WinsizeProcess(containerID, processID string, height, width uint32) error {
+func (s *Sandbox) WinsizeProcess(ctx context.Context, containerID, processID string, height, width uint32) error {
 	return nil
 }
 
@@ -191,36 +191,36 @@ func (s *Sandbox) IOStream(containerID, processID string) (io.WriteCloser, io.Re
 }
 
 // AddDevice adds a device to sandbox
-func (s *Sandbox) AddDevice(info config.DeviceInfo) (api.Device, error) {
+func (s *Sandbox) AddDevice(ctx context.Context, info config.DeviceInfo) (api.Device, error) {
 	return nil, nil
 }
 
 // AddInterface implements the VCSandbox function of the same name.
-func (s *Sandbox) AddInterface(inf *pbTypes.Interface) (*pbTypes.Interface, error) {
+func (s *Sandbox) AddInterface(ctx context.Context, inf *pbTypes.Interface) (*pbTypes.Interface, error) {
 	return nil, nil
 }
 
 // RemoveInterface implements the VCSandbox function of the same name.
-func (s *Sandbox) RemoveInterface(inf *pbTypes.Interface) (*pbTypes.Interface, error) {
+func (s *Sandbox) RemoveInterface(ctx context.Context, inf *pbTypes.Interface) (*pbTypes.Interface, error) {
 	return nil, nil
 }
 
 // ListInterfaces implements the VCSandbox function of the same name.
-func (s *Sandbox) ListInterfaces() ([]*pbTypes.Interface, error) {
+func (s *Sandbox) ListInterfaces(ctx context.Context) ([]*pbTypes.Interface, error) {
 	return nil, nil
 }
 
 // UpdateRoutes implements the VCSandbox function of the same name.
-func (s *Sandbox) UpdateRoutes(routes []*pbTypes.Route) ([]*pbTypes.Route, error) {
+func (s *Sandbox) UpdateRoutes(ctx context.Context, routes []*pbTypes.Route) ([]*pbTypes.Route, error) {
 	return nil, nil
 }
 
 // ListRoutes implements the VCSandbox function of the same name.
-func (s *Sandbox) ListRoutes() ([]*pbTypes.Route, error) {
+func (s *Sandbox) ListRoutes(ctx context.Context) ([]*pbTypes.Route, error) {
 	return nil, nil
 }
 
-func (s *Sandbox) GetOOMEvent() (string, error) {
+func (s *Sandbox) GetOOMEvent(ctx context.Context) (string, error) {
 	return "", nil
 }
 
@@ -233,7 +233,7 @@ func (s *Sandbox) UpdateRuntimeMetrics() error {
 }
 
 // GetAgentMetrics implements the VCSandbox function of the same name.
-func (s *Sandbox) GetAgentMetrics() (string, error) {
+func (s *Sandbox) GetAgentMetrics(ctx context.Context) (string, error) {
 	if s.GetAgentMetricsFunc != nil {
 		return s.GetAgentMetricsFunc()
 	}
@@ -241,7 +241,7 @@ func (s *Sandbox) GetAgentMetrics() (string, error) {
 }
 
 // Stats implements the VCSandbox function of the same name.
-func (s *Sandbox) Stats() (vc.SandboxStats, error) {
+func (s *Sandbox) Stats(ctx context.Context) (vc.SandboxStats, error) {
 	if s.StatsFunc != nil {
 		return s.StatsFunc()
 	}

@@ -786,27 +786,27 @@ func generateVMSocket(id string, vmStogarePath string) (interface{}, error) {
 // The default hypervisor implementation is Qemu.
 type hypervisor interface {
 	createSandbox(ctx context.Context, id string, networkNS NetworkNamespace, hypervisorConfig *HypervisorConfig) error
-	startSandbox(timeout int) error
-	stopSandbox() error
-	pauseSandbox() error
+	startSandbox(ctx context.Context, timeout int) error
+	stopSandbox(ctx context.Context) error
+	pauseSandbox(ctx context.Context) error
 	saveSandbox() error
-	resumeSandbox() error
-	addDevice(devInfo interface{}, devType deviceType) error
-	hotplugAddDevice(devInfo interface{}, devType deviceType) (interface{}, error)
-	hotplugRemoveDevice(devInfo interface{}, devType deviceType) (interface{}, error)
-	resizeMemory(memMB uint32, memoryBlockSizeMB uint32, probe bool) (uint32, memoryDevice, error)
-	resizeVCPUs(vcpus uint32) (uint32, uint32, error)
-	getSandboxConsole(sandboxID string) (string, string, error)
-	disconnect()
-	capabilities() types.Capabilities
+	resumeSandbox(ctx context.Context) error
+	addDevice(ctx context.Context, devInfo interface{}, devType deviceType) error
+	hotplugAddDevice(ctx context.Context, devInfo interface{}, devType deviceType) (interface{}, error)
+	hotplugRemoveDevice(ctx context.Context, devInfo interface{}, devType deviceType) (interface{}, error)
+	resizeMemory(ctx context.Context, memMB uint32, memoryBlockSizeMB uint32, probe bool) (uint32, memoryDevice, error)
+	resizeVCPUs(ctx context.Context, vcpus uint32) (uint32, uint32, error)
+	getSandboxConsole(ctx context.Context, sandboxID string) (string, string, error)
+	disconnect(ctx context.Context)
+	capabilities(ctx context.Context) types.Capabilities
 	hypervisorConfig() HypervisorConfig
-	getThreadIDs() (vcpuThreadIDs, error)
-	cleanup() error
+	getThreadIDs(ctx context.Context) (vcpuThreadIDs, error)
+	cleanup(ctx context.Context) error
 	// getPids returns a slice of hypervisor related process ids.
 	// The hypervisor pid must be put at index 0.
 	getPids() []int
 	fromGrpc(ctx context.Context, hypervisorConfig *HypervisorConfig, j []byte) error
-	toGrpc() ([]byte, error)
+	toGrpc(ctx context.Context) ([]byte, error)
 	check() error
 
 	save() persistapi.HypervisorState

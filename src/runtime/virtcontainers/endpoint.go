@@ -6,6 +6,7 @@
 package virtcontainers
 
 import (
+	"context"
 	"fmt"
 
 	persistapi "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist/api"
@@ -23,10 +24,10 @@ type Endpoint interface {
 
 	SetProperties(NetworkInfo)
 	SetPciPath(vcTypes.PciPath)
-	Attach(*Sandbox) error
-	Detach(netNsCreated bool, netNsPath string) error
-	HotAttach(h hypervisor) error
-	HotDetach(h hypervisor, netNsCreated bool, netNsPath string) error
+	Attach(context.Context, *Sandbox) error
+	Detach(ctx context.Context, netNsCreated bool, netNsPath string) error
+	HotAttach(ctx context.Context, h hypervisor) error
+	HotDetach(ctx context.Context, h hypervisor, netNsCreated bool, netNsPath string) error
 
 	save() persistapi.NetworkEndpoint
 	load(persistapi.NetworkEndpoint)

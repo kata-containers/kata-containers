@@ -7,6 +7,7 @@ package cgroups
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -295,7 +296,7 @@ func (m *Manager) Destroy() error {
 }
 
 // AddDevice adds a device to the device cgroup
-func (m *Manager) AddDevice(device string) error {
+func (m *Manager) AddDevice(ctx context.Context, device string) error {
 	cgroups, err := m.GetCgroups()
 	if err != nil {
 		return err

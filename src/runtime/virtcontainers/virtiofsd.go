@@ -35,7 +35,7 @@ type Virtiofsd interface {
 	// Start virtiofsd, return pid of virtiofsd process
 	Start(context.Context) (pid int, err error)
 	// Stop virtiofsd process
-	Stop() error
+	Stop(context.Context) error
 }
 
 // Helper function to check virtiofsd is serving
@@ -84,7 +84,7 @@ func (v *virtiofsd) getSocketFD() (*os.File, error) {
 
 // Start the virtiofsd daemon
 func (v *virtiofsd) Start(ctx context.Context) (int, error) {
-	span, _ := v.trace("Start")
+	span, _ := v.trace(ctx, "Start")
 	defer span.End()
 	pid := 0
 
@@ -131,8 +131,8 @@ func (v *virtiofsd) Start(ctx context.Context) (int, error) {
 	return pid, socketFD.Close()
 }
 
-func (v *virtiofsd) Stop() error {
-	if err := v.kill(); err != nil {
+func (v *virtiofsd) Stop(ctx context.Context) error {
+	if err := v.kill(ctx); err != nil {
 		return nil
 	}
 
@@ -204,13 +204,13 @@ func (v *virtiofsd) Logger() *log.Entry {
 	return virtLog.WithField("subsystem", "virtiofsd")
 }
 
-func (v *virtiofsd) trace(name string) (otelTrace.Span, context.Context) {
-	if v.ctx == nil {
-		v.ctx = context.Background()
+func (v *virtiofsd) trace(parent context.Context, name string) (otelTrace.Span, context.Context) {
+	if parent == nil {
+		parent = context.Background()
 	}
 
 	tracer := otel.Tracer("kata")
-	ctx, span := tracer.Start(v.ctx, name)
+	ctx, span := tracer.Start(parent, name)
 	span.SetAttributes(label.Key("subsystem").String("virtiofds"))
 
 	return span, ctx
@@ -259,8 +259,8 @@ func waitVirtiofsReady(cmd *exec.Cmd, stderr io.ReadCloser, debug bool) error {
 	return err
 }
 
-func (v *virtiofsd) kill() (err error) {
-	span, _ := v.trace("kill")
+func (v *virtiofsd) kill(ctx context.Context) (err error) {
+	span, _ := v.trace(ctx, "kill")
 	defer span.End()
 
 	if v.PID == 0 {

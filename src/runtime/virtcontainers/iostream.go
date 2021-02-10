@@ -6,6 +6,7 @@
 package virtcontainers
 
 import (
+	"context"
 	"errors"
 	"io"
 )
@@ -58,7 +59,8 @@ func (s *stdinStream) Write(data []byte) (n int, err error) {
 		return 0, errors.New("stream closed")
 	}
 
-	return s.sandbox.agent.writeProcessStdin(s.container, s.process, data)
+	// can not pass context to Write(), so use background context
+	return s.sandbox.agent.writeProcessStdin(context.Background(), s.container, s.process, data)
 }
 
 func (s *stdinStream) Close() error {
@@ -66,7 +68,8 @@ func (s *stdinStream) Close() error {
 		return errors.New("stream closed")
 	}
 
-	err := s.sandbox.agent.closeProcessStdin(s.container, s.process)
+	// can not pass context to Close(), so use background context
+	err := s.sandbox.agent.closeProcessStdin(context.Background(), s.container, s.process)
 	if err == nil {
 		s.closed = true
 	}
@@ -79,7 +82,8 @@ func (s *stdoutStream) Read(data []byte) (n int, err error) {
 		return 0, errors.New("stream closed")
 	}
 
-	return s.sandbox.agent.readProcessStdout(s.container, s.process, data)
+	// can not pass context to Read(), so use background context
+	return s.sandbox.agent.readProcessStdout(context.Background(), s.container, s.process, data)
 }
 
 func (s *stderrStream) Read(data []byte) (n int, err error) {
@@ -87,5 +91,6 @@ func (s *stderrStream) Read(data []byte) (n int, err error) {
 		return 0, errors.New("stream closed")
 	}
 
-	return s.sandbox.agent.readProcessStderr(s.container, s.process, data)
+	// can not pass context to Read(), so use background context
+	return s.sandbox.agent.readProcessStderr(context.Background(), s.container, s.process, data)
 }

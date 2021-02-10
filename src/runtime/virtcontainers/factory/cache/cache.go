@@ -62,8 +62,8 @@ func New(ctx context.Context, count uint, b base.FactoryBase) base.FactoryBase {
 					c.removeFromVmm(vm)
 				case <-closed:
 					c.removeFromVmm(vm)
-					vm.Stop()
-					vm.Disconnect()
+					vm.Stop(ctx)
+					vm.Disconnect(ctx)
 					c.wg.Done()
 					return
 				}
