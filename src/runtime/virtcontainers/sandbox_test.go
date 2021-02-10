@@ -326,7 +326,7 @@ func TestSandboxSetSandboxAndContainerState(t *testing.T) {
 	}
 
 	// persist to disk
-	err = p.storeSandbox()
+	err = p.storeSandbox(p.ctx)
 	assert.NoError(err)
 
 	newSandboxState := types.SandboxState{
@@ -876,12 +876,12 @@ func TestCreateContainer(t *testing.T) {
 
 	contID := "999"
 	contConfig := newTestContainerConfigNoop(contID)
-	_, err = s.CreateContainer(contConfig)
+	_, err = s.CreateContainer(context.Background(), contConfig)
 	assert.Nil(t, err, "Failed to create container %+v in sandbox %+v: %v", contConfig, s, err)
 
 	assert.Equal(t, len(s.config.Containers), 1, "Container config list length from sandbox structure should be 1")
 
-	_, err = s.CreateContainer(contConfig)
+	_, err = s.CreateContainer(context.Background(), contConfig)
 	assert.NotNil(t, err, "Should failed to create a duplicated container")
 	assert.Equal(t, len(s.config.Containers), 1, "Container config list length from sandbox structure should be 1")
 }
@@ -896,7 +896,7 @@ func TestDeleteContainer(t *testing.T) {
 	assert.NotNil(t, err, "Deletng non-existing container should fail")
 
 	contConfig := newTestContainerConfigNoop(contID)
-	_, err = s.CreateContainer(contConfig)
+	_, err = s.CreateContainer(context.Background(), contConfig)
 	assert.Nil(t, err, "Failed to create container %+v in sandbox %+v: %v", contConfig, s, err)
 
 	_, err = s.DeleteContainer(contID)
@@ -909,17 +909,17 @@ func TestStartContainer(t *testing.T) {
 	defer cleanUp()
 
 	contID := "999"
-	_, err = s.StartContainer(contID)
+	_, err = s.StartContainer(context.Background(), contID)
 	assert.NotNil(t, err, "Starting non-existing container should fail")
 
 	err = s.Start()
 	assert.Nil(t, err, "Failed to start sandbox: %v", err)
 
 	contConfig := newTestContainerConfigNoop(contID)
-	_, err = s.CreateContainer(contConfig)
+	_, err = s.CreateContainer(context.Background(), contConfig)
 	assert.Nil(t, err, "Failed to create container %+v in sandbox %+v: %v", contConfig, s, err)
 
-	_, err = s.StartContainer(contID)
+	_, err = s.StartContainer(context.Background(), contID)
 	assert.Nil(t, err, "Start container failed: %v", err)
 }
 
@@ -933,7 +933,7 @@ func TestStatusContainer(t *testing.T) {
 	assert.NotNil(t, err, "Status non-existing container should fail")
 
 	contConfig := newTestContainerConfigNoop(contID)
-	_, err = s.CreateContainer(contConfig)
+	_, err = s.CreateContainer(context.Background(), contConfig)
 	assert.Nil(t, err, "Failed to create container %+v in sandbox %+v: %v", contConfig, s, err)
 
 	_, err = s.StatusContainer(contID)
@@ -962,7 +962,7 @@ func TestEnterContainer(t *testing.T) {
 	assert.NotNil(t, err, "Entering non-existing container should fail")
 
 	contConfig := newTestContainerConfigNoop(contID)
-	_, err = s.CreateContainer(contConfig)
+	_, err = s.CreateContainer(context.Background(), contConfig)
 	assert.Nil(t, err, "Failed to create container %+v in sandbox %+v: %v", contConfig, s, err)
 
 	_, _, err = s.EnterContainer(contID, cmd)
@@ -987,7 +987,7 @@ func TestDeleteStoreWhenCreateContainerFail(t *testing.T) {
 	contConfig := newTestContainerConfigNoop(contID)
 	contConfig.RootFs = RootFs{Target: "", Mounted: true}
 	s.state.CgroupPath = filepath.Join(testDir, "bad-cgroup")
-	_, err = s.CreateContainer(contConfig)
+	_, err = s.CreateContainer(context.Background(), contConfig)
 	assert.NotNil(t, err, "Should fail to create container due to wrong cgroup")
 }
 
@@ -1051,13 +1051,13 @@ func TestWaitProcess(t *testing.T) {
 	assert.NotNil(t, err, "Wait process in non-existing container should fail")
 
 	contConfig := newTestContainerConfigNoop(contID)
-	_, err = s.CreateContainer(contConfig)
+	_, err = s.CreateContainer(context.Background(), contConfig)
 	assert.Nil(t, err, "Failed to create container %+v in sandbox %+v: %v", contConfig, s, err)
 
 	_, err = s.WaitProcess(contID, execID)
 	assert.Nil(t, err, "Wait process in ready container failed: %v", err)
 
-	_, err = s.StartContainer(contID)
+	_, err = s.StartContainer(context.Background(), contID)
 	assert.Nil(t, err, "Start container failed: %v", err)
 
 	_, err = s.WaitProcess(contID, execID)
@@ -1081,13 +1081,13 @@ func TestSignalProcess(t *testing.T) {
 	assert.NotNil(t, err, "Wait process in non-existing container should fail")
 
 	contConfig := newTestContainerConfigNoop(contID)
-	_, err = s.CreateContainer(contConfig)
+	_, err = s.CreateContainer(context.Background(), contConfig)
 	assert.Nil(t, err, "Failed to create container %+v in sandbox %+v: %v", contConfig, s, err)
 
 	err = s.SignalProcess(contID, execID, syscall.SIGKILL, true)
 	assert.Nil(t, err, "Wait process in ready container failed: %v", err)
 
-	_, err = s.StartContainer(contID)
+	_, err = s.StartContainer(context.Background(), contID)
 	assert.Nil(t, err, "Start container failed: %v", err)
 
 	err = s.SignalProcess(contID, execID, syscall.SIGKILL, false)
@@ -1111,13 +1111,13 @@ func TestWinsizeProcess(t *testing.T) {
 	assert.NotNil(t, err, "Winsize process in non-existing container should fail")
 
 	contConfig := newTestContainerConfigNoop(contID)
-	_, err = s.CreateContainer(contConfig)
+	_, err = s.CreateContainer(context.Background(), contConfig)
 	assert.Nil(t, err, "Failed to create container %+v in sandbox %+v: %v", contConfig, s, err)
 
 	err = s.WinsizeProcess(contID, execID, 100, 200)
 	assert.Nil(t, err, "Winsize process in ready container failed: %v", err)
 
-	_, err = s.StartContainer(contID)
+	_, err = s.StartContainer(context.Background(), contID)
 	assert.Nil(t, err, "Start container failed: %v", err)
 
 	err = s.WinsizeProcess(contID, execID, 100, 200)
@@ -1141,13 +1141,13 @@ func TestContainerProcessIOStream(t *testing.T) {
 	assert.NotNil(t, err, "Winsize process in non-existing container should fail")
 
 	contConfig := newTestContainerConfigNoop(contID)
-	_, err = s.CreateContainer(contConfig)
+	_, err = s.CreateContainer(context.Background(), contConfig)
 	assert.Nil(t, err, "Failed to create container %+v in sandbox %+v: %v", contConfig, s, err)
 
 	_, _, _, err = s.IOStream(contID, execID)
 	assert.Nil(t, err, "Winsize process in ready container failed: %v", err)
 
-	_, err = s.StartContainer(contID)
+	_, err = s.StartContainer(context.Background(), contID)
 	assert.Nil(t, err, "Start container failed: %v", err)
 
 	_, _, _, err = s.IOStream(contID, execID)
@@ -1204,37 +1204,37 @@ func TestAttachBlockDevice(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, index, 0)
 
-	err = device.Attach(sandbox)
+	err = device.Attach(context.Background(), sandbox)
 	assert.Nil(t, err)
 	index, err = sandbox.getAndSetSandboxBlockIndex()
 	assert.Nil(t, err)
 	assert.Equal(t, index, 2)
 
-	err = device.Detach(sandbox)
+	err = device.Detach(context.Background(), sandbox)
 	assert.Nil(t, err)
 	index, err = sandbox.getAndSetSandboxBlockIndex()
 	assert.Nil(t, err)
 	assert.Equal(t, index, 1)
 
 	container.state.State = types.StateReady
-	err = device.Attach(sandbox)
+	err = device.Attach(context.Background(), sandbox)
 	assert.Nil(t, err)
 
-	err = device.Detach(sandbox)
+	err = device.Detach(context.Background(), sandbox)
 	assert.Nil(t, err)
 
 	container.sandbox.config.HypervisorConfig.BlockDeviceDriver = config.VirtioSCSI
-	err = device.Attach(sandbox)
+	err = device.Attach(context.Background(), sandbox)
 	assert.Nil(t, err)
 
-	err = device.Detach(sandbox)
+	err = device.Detach(context.Background(), sandbox)
 	assert.Nil(t, err)
 
 	container.state.State = types.StateReady
-	err = device.Attach(sandbox)
+	err = device.Attach(context.Background(), sandbox)
 	assert.Nil(t, err)
 
-	err = device.Detach(sandbox)
+	err = device.Detach(context.Background(), sandbox)
 	assert.Nil(t, err)
 }
 
@@ -1283,7 +1283,7 @@ func TestPreAddDevice(t *testing.T) {
 	}
 
 	// Add a mount device for a mountpoint before container's creation
-	dev, err := sandbox.AddDevice(deviceInfo)
+	dev, err := sandbox.AddDevice(context.Background(), deviceInfo)
 	assert.Nil(t, err)
 
 	// in Frakti use case, here we will create and start the container
@@ -1419,7 +1419,7 @@ func TestSandboxUpdateResources(t *testing.T) {
 		nil)
 
 	assert.NoError(t, err)
-	err = s.updateResources()
+	err = s.updateResources(context.Background())
 	assert.NoError(t, err)
 
 	containerMemLimit := int64(1000)
@@ -1437,7 +1437,7 @@ func TestSandboxUpdateResources(t *testing.T) {
 		c.Resources.CPU.Period = &containerCPUPeriod
 		c.Resources.CPU.Quota = &containerCPUQouta
 	}
-	err = s.updateResources()
+	err = s.updateResources(context.Background())
 	assert.NoError(t, err)
 }
 

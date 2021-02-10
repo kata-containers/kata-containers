@@ -295,12 +295,12 @@ func TestCleanupContainer(t *testing.T) {
 	for _, contID := range contIDs {
 		contConfig := newTestContainerConfigNoop(contID)
 
-		c, err := p.CreateContainer(contConfig)
+		c, err := s.CreateContainer(context.Background(), contConfig)
 		if c == nil || err != nil {
 			t.Fatal(err)
 		}
 
-		c, err = p.StartContainer(c.ID())
+		c, err = p.StartContainer(context.Background(), c.ID())
 		if c == nil || err != nil {
 			t.Fatal(err)
 		}

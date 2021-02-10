@@ -73,7 +73,7 @@ func (s *cacheServer) GetBaseVM(ctx context.Context, empty *types.Empty) (*pb.Gr
 		return nil, errors.Wrapf(err, "failed to GetBaseVM")
 	}
 
-	return vm.ToGrpc(config)
+	return vm.ToGrpc(ctx, config)
 }
 
 func (s *cacheServer) quit() {

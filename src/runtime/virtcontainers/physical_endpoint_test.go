@@ -26,7 +26,7 @@ func TestPhysicalEndpoint_HotAttach(t *testing.T) {
 
 	h := &mockHypervisor{}
 
-	err := v.HotAttach(h)
+	err := v.HotAttach(context.Background(), h)
 	assert.Error(err)
 }
 
@@ -39,7 +39,7 @@ func TestPhysicalEndpoint_HotDetach(t *testing.T) {
 
 	h := &mockHypervisor{}
 
-	err := v.HotDetach(h, true, "")
+	err := v.HotDetach(context.Background(), h, true, "")
 	assert.Error(err)
 }
 

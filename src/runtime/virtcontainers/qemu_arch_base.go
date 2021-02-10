@@ -105,7 +105,7 @@ type qemuArch interface {
 	appendRNGDevice(devices []govmmQemu.Device, rngDevice config.RNGDev) ([]govmmQemu.Device, error)
 
 	// addDeviceToBridge adds devices to the bus
-	addDeviceToBridge(ID string, t types.Type) (string, types.Bridge, error)
+	addDeviceToBridge(ctx context.Context, ID string, t types.Type) (string, types.Bridge, error)
 
 	// removeDeviceFromBridge removes devices to the bus
 	removeDeviceFromBridge(ID string) error
@@ -722,8 +722,8 @@ func (q *qemuArchBase) setIgnoreSharedMemoryMigrationCaps(ctx context.Context, q
 	return err
 }
 
-func (q *qemuArchBase) addDeviceToBridge(ID string, t types.Type) (string, types.Bridge, error) {
-	addr, b, err := genericAddDeviceToBridge(q.Bridges, ID, t)
+func (q *qemuArchBase) addDeviceToBridge(ctx context.Context, ID string, t types.Type) (string, types.Bridge, error) {
+	addr, b, err := genericAddDeviceToBridge(ctx, q.Bridges, ID, t)
 	if err != nil {
 		return "", b, err
 	}
@@ -731,7 +731,7 @@ func (q *qemuArchBase) addDeviceToBridge(ID string, t types.Type) (string, types
 	return fmt.Sprintf("%02x", addr), b, nil
 }
 
-func genericAddDeviceToBridge(bridges []types.Bridge, ID string, t types.Type) (uint32, types.Bridge, error) {
+func genericAddDeviceToBridge(ctx context.Context, bridges []types.Bridge, ID string, t types.Type) (uint32, types.Bridge, error) {
 	var err error
 	var addr uint32
 
@@ -744,7 +744,7 @@ func genericAddDeviceToBridge(bridges []types.Bridge, ID string, t types.Type) (
 		if t != b.Type {
 			continue
 		}
-		addr, err = b.AddDevice(ID)
+		addr, err = b.AddDevice(ctx, ID)
 		if err == nil {
 			return addr, b, nil
 		}

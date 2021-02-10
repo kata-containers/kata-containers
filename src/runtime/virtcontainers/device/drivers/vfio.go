@@ -7,6 +7,7 @@
 package drivers
 
 import (
+	"context"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -56,7 +57,7 @@ func NewVFIODevice(devInfo *config.DeviceInfo) *VFIODevice {
 
 // Attach is standard interface of api.Device, it's used to add device to some
 // DeviceReceiver
-func (device *VFIODevice) Attach(devReceiver api.DeviceReceiver) (retErr error) {
+func (device *VFIODevice) Attach(ctx context.Context, devReceiver api.DeviceReceiver) (retErr error) {
 	skip, err := device.bumpAttachCount(true)
 	if err != nil {
 		return err
@@ -105,13 +106,13 @@ func (device *VFIODevice) Attach(devReceiver api.DeviceReceiver) (retErr error) 
 	deviceLogger().WithField("cold-plug", coldPlug).Info("Attaching VFIO device")
 
 	if coldPlug {
-		if err := devReceiver.AppendDevice(device); err != nil {
+		if err := devReceiver.AppendDevice(ctx, device); err != nil {
 			deviceLogger().WithError(err).Error("Failed to append device")
 			return err
 		}
 	} else {
 		// hotplug a VFIO device is actually hotplugging a group of iommu devices
-		if err := devReceiver.HotplugAddDevice(device, config.DeviceVFIO); err != nil {
+		if err := devReceiver.HotplugAddDevice(ctx, device, config.DeviceVFIO); err != nil {
 			deviceLogger().WithError(err).Error("Failed to add device")
 			return err
 		}
@@ -126,7 +127,7 @@ func (device *VFIODevice) Attach(devReceiver api.DeviceReceiver) (retErr error) 
 
 // Detach is standard interface of api.Device, it's used to remove device from some
 // DeviceReceiver
-func (device *VFIODevice) Detach(devReceiver api.DeviceReceiver) (retErr error) {
+func (device *VFIODevice) Detach(ctx context.Context, devReceiver api.DeviceReceiver) (retErr error) {
 	skip, err := device.bumpAttachCount(false)
 	if err != nil {
 		return err
@@ -151,7 +152,7 @@ func (device *VFIODevice) Detach(devReceiver api.DeviceReceiver) (retErr error) 
 	}
 
 	// hotplug a VFIO device is actually hotplugging a group of iommu devices
-	if err := devReceiver.HotplugRemoveDevice(device, config.DeviceVFIO); err != nil {
+	if err := devReceiver.HotplugRemoveDevice(ctx, device, config.DeviceVFIO); err != nil {
 		deviceLogger().WithError(err).Error("Failed to remove device")
 		return err
 	}

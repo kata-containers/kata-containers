@@ -26,22 +26,22 @@ func startContainer(ctx context.Context, s *service, c *container) error {
 	}
 
 	if c.cType.IsSandbox() {
-		err := s.sandbox.Start()
+		err := s.sandbox.Start(ctx)
 		if err != nil {
 			return err
 		}
 		// Start monitor after starting sandbox
-		s.monitor, err = s.sandbox.Monitor()
+		s.monitor, err = s.sandbox.Monitor(ctx)
 		if err != nil {
 			return err
 		}
-		go watchSandbox(s)
+		go watchSandbox(ctx, s)
 
 		// We don't rely on the context passed to startContainer as it can be cancelled after
 		// this rpc call.
-		go watchOOMEvents(s.ctx, s)
+		go watchOOMEvents(ctx, s)
 	} else {
-		_, err := s.sandbox.StartContainer(c.id)
+		_, err := s.sandbox.StartContainer(ctx, c.id)
 		if err != nil {
 			return err
 		}
@@ -82,7 +82,7 @@ func startContainer(ctx context.Context, s *service, c *container) error {
 		close(c.stdinCloser)
 	}
 
-	go wait(s, c, "")
+	go wait(ctx, s, c, "")
 
 	return nil
 }
@@ -99,7 +99,7 @@ func startExec(ctx context.Context, s *service, containerID, execID string) (*ex
 		return nil, err
 	}
 
-	_, proc, err := s.sandbox.EnterContainer(containerID, *execs.cmds)
+	_, proc, err := s.sandbox.EnterContainer(ctx, containerID, *execs.cmds)
 	if err != nil {
 		err := fmt.Errorf("cannot enter container %s, with err %s", containerID, err)
 		return nil, err
@@ -108,7 +108,7 @@ func startExec(ctx context.Context, s *service, containerID, execID string) (*ex
 
 	execs.status = task.StatusRunning
 	if execs.tty.height != 0 && execs.tty.width != 0 {
-		err = s.sandbox.WinsizeProcess(c.id, execs.id, execs.tty.height, execs.tty.width)
+		err = s.sandbox.WinsizeProcess(ctx, c.id, execs.id, execs.tty.height, execs.tty.width)
 		if err != nil {
 			return nil, err
 		}
@@ -129,7 +129,7 @@ func startExec(ctx context.Context, s *service, containerID, execID string) (*ex
 
 	go ioCopy(execs.exitIOch, execs.stdinCloser, tty, stdin, stdout, stderr)
 
-	go wait(s, c, execID)
+	go wait(ctx, s, c, execID)
 
 	return execs, nil
 }

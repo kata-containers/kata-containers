@@ -230,7 +230,7 @@ func CreateContainer(ctx context.Context, sandbox vc.VCSandbox, ociSpec specs.Sp
 
 	span.SetAttributes(label.Key("sandbox").String(sandboxID))
 
-	c, err = sandbox.CreateContainer(contConfig)
+	c, err = sandbox.CreateContainer(ctx, contConfig)
 	if err != nil {
 		return vc.Process{}, err
 	}

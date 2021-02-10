@@ -141,7 +141,7 @@ func (f *factory) checkConfig(config vc.VMConfig) error {
 
 // GetVM returns a working blank VM created by the factory.
 func (f *factory) GetVM(ctx context.Context, config vc.VMConfig) (*vc.VM, error) {
-	span, _ := trace(ctx, "GetVM")
+	span, ctx := trace(ctx, "GetVM")
 	defer span.End()
 
 	hypervisorConfig := config.HypervisorConfig
@@ -167,23 +167,23 @@ func (f *factory) GetVM(ctx context.Context, config vc.VMConfig) (*vc.VM, error)
 	defer func() {
 		if err != nil {
 			f.log().WithError(err).Error("clean up vm")
-			vm.Stop()
+			vm.Stop(ctx)
 		}
 	}()
 
-	err = vm.Resume()
+	err = vm.Resume(ctx)
 	if err != nil {
 		return nil, err
 	}
 
 	// reseed RNG so that shared memory VMs do not generate same random numbers.
-	err = vm.ReseedRNG()
+	err = vm.ReseedRNG(ctx)
 	if err != nil {
 		return nil, err
 	}
 
 	// sync guest time since we might have paused it for a long time.
-	err = vm.SyncTime()
+	err = vm.SyncTime(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -191,7 +191,7 @@ func (f *factory) GetVM(ctx context.Context, config vc.VMConfig) (*vc.VM, error)
 	online := false
 	baseConfig := f.base.Config().HypervisorConfig
 	if baseConfig.NumVCPUs < hypervisorConfig.NumVCPUs {
-		err = vm.AddCPUs(hypervisorConfig.NumVCPUs - baseConfig.NumVCPUs)
+		err = vm.AddCPUs(ctx, hypervisorConfig.NumVCPUs - baseConfig.NumVCPUs)
 		if err != nil {
 			return nil, err
 		}
@@ -199,7 +199,7 @@ func (f *factory) GetVM(ctx context.Context, config vc.VMConfig) (*vc.VM, error)
 	}
 
 	if baseConfig.MemorySize < hypervisorConfig.MemorySize {
-		err = vm.AddMemory(hypervisorConfig.MemorySize - baseConfig.MemorySize)
+		err = vm.AddMemory(ctx, hypervisorConfig.MemorySize - baseConfig.MemorySize)
 		if err != nil {
 			return nil, err
 		}
@@ -207,7 +207,7 @@ func (f *factory) GetVM(ctx context.Context, config vc.VMConfig) (*vc.VM, error)
 	}
 
 	if online {
-		err = vm.OnlineCPUMemory()
+		err = vm.OnlineCPUMemory(ctx)
 		if err != nil {
 			return nil, err
 		}

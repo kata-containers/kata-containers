@@ -38,44 +38,44 @@ type VCSandbox interface {
 	ID() string
 	SetAnnotations(annotations map[string]string) error
 
-	Stats() (SandboxStats, error)
+	Stats(ctx context.Context) (SandboxStats, error)
 
-	Start() error
-	Stop(force bool) error
-	Release() error
-	Monitor() (chan error, error)
-	Delete() error
+	Start(ctx context.Context) error
+	Stop(ctx context.Context, force bool) error
+	Release(ctx context.Context) error
+	Monitor(ctx context.Context) (chan error, error)
+	Delete(ctx context.Context) error
 	Status() SandboxStatus
-	CreateContainer(contConfig ContainerConfig) (VCContainer, error)
-	DeleteContainer(contID string) (VCContainer, error)
-	StartContainer(containerID string) (VCContainer, error)
-	StopContainer(containerID string, force bool) (VCContainer, error)
-	KillContainer(containerID string, signal syscall.Signal, all bool) error
+	CreateContainer(ctx context.Context, contConfig ContainerConfig) (VCContainer, error)
+	DeleteContainer(ctx context.Context, contID string) (VCContainer, error)
+	StartContainer(ctx context.Context, containerID string) (VCContainer, error)
+	StopContainer(ctx context.Context, containerID string, force bool) (VCContainer, error)
+	KillContainer(ctx context.Context, containerID string, signal syscall.Signal, all bool) error
 	StatusContainer(containerID string) (ContainerStatus, error)
-	StatsContainer(containerID string) (ContainerStats, error)
-	PauseContainer(containerID string) error
-	ResumeContainer(containerID string) error
-	EnterContainer(containerID string, cmd types.Cmd) (VCContainer, *Process, error)
-	UpdateContainer(containerID string, resources specs.LinuxResources) error
-	ProcessListContainer(containerID string, options ProcessListOptions) (ProcessList, error)
-	WaitProcess(containerID, processID string) (int32, error)
-	SignalProcess(containerID, processID string, signal syscall.Signal, all bool) error
-	WinsizeProcess(containerID, processID string, height, width uint32) error
+	StatsContainer(ctx context.Context, containerID string) (ContainerStats, error)
+	PauseContainer(ctx context.Context, containerID string) error
+	ResumeContainer(ctx context.Context, containerID string) error
+	EnterContainer(ctx context.Context, containerID string, cmd types.Cmd) (VCContainer, *Process, error)
+	UpdateContainer(ctx context.Context, containerID string, resources specs.LinuxResources) error
+	ProcessListContainer(ctx context.Context, containerID string, options ProcessListOptions) (ProcessList, error)
+	WaitProcess(ctx context.Context, containerID, processID string) (int32, error)
+	SignalProcess(ctx context.Context, containerID, processID string, signal syscall.Signal, all bool) error
+	WinsizeProcess(ctx context.Context, containerID, processID string, height, width uint32) error
 	IOStream(containerID, processID string) (io.WriteCloser, io.Reader, io.Reader, error)
 
-	AddDevice(info config.DeviceInfo) (api.Device, error)
+	AddDevice(ctx context.Context, info config.DeviceInfo) (api.Device, error)
 
-	AddInterface(inf *pbTypes.Interface) (*pbTypes.Interface, error)
-	RemoveInterface(inf *pbTypes.Interface) (*pbTypes.Interface, error)
-	ListInterfaces() ([]*pbTypes.Interface, error)
-	UpdateRoutes(routes []*pbTypes.Route) ([]*pbTypes.Route, error)
-	ListRoutes() ([]*pbTypes.Route, error)
+	AddInterface(ctx context.Context, inf *pbTypes.Interface) (*pbTypes.Interface, error)
+	RemoveInterface(ctx context.Context, inf *pbTypes.Interface) (*pbTypes.Interface, error)
+	ListInterfaces(ctx context.Context) ([]*pbTypes.Interface, error)
+	UpdateRoutes(ctx context.Context, routes []*pbTypes.Route) ([]*pbTypes.Route, error)
+	ListRoutes(ctx context.Context) ([]*pbTypes.Route, error)
 
-	GetOOMEvent() (string, error)
+	GetOOMEvent(ctx context.Context) (string, error)
 	GetHypervisorPid() (int, error)
 
 	UpdateRuntimeMetrics() error
-	GetAgentMetrics() (string, error)
+	GetAgentMetrics(ctx context.Context) (string, error)
 	GetAgentURL() (string, error)
 }
 

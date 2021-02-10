@@ -6,6 +6,7 @@
 package virtcontainers
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/containernetworking/plugins/pkg/ns"
@@ -87,19 +88,19 @@ func (endpoint *BridgedMacvlanEndpoint) NetworkPair() *NetworkInterfacePair {
 
 // Attach for virtual endpoint bridges the network pair and adds the
 // tap interface of the network pair to the hypervisor.
-func (endpoint *BridgedMacvlanEndpoint) Attach(s *Sandbox) error {
+func (endpoint *BridgedMacvlanEndpoint) Attach(ctx context.Context, s *Sandbox) error {
 	h := s.hypervisor
-	if err := xConnectVMNetwork(endpoint, h); err != nil {
+	if err := xConnectVMNetwork(ctx, endpoint, h); err != nil {
 		networkLogger().WithError(err).Error("Error bridging virtual ep")
 		return err
 	}
 
-	return h.addDevice(endpoint, netDev)
+	return h.addDevice(ctx, endpoint, netDev)
 }
 
 // Detach for the virtual endpoint tears down the tap and bridge
 // created for the veth interface.
-func (endpoint *BridgedMacvlanEndpoint) Detach(netNsCreated bool, netNsPath string) error {
+func (endpoint *BridgedMacvlanEndpoint) Detach(ctx context.Context, netNsCreated bool, netNsPath string) error {
 	// The network namespace would have been deleted at this point
 	// if it has not been created by virtcontainers.
 	if !netNsCreated {
@@ -112,12 +113,12 @@ func (endpoint *BridgedMacvlanEndpoint) Detach(netNsCreated bool, netNsPath stri
 }
 
 // HotAttach for physical endpoint not supported yet
-func (endpoint *BridgedMacvlanEndpoint) HotAttach(h hypervisor) error {
+func (endpoint *BridgedMacvlanEndpoint) HotAttach(ctx context.Context, h hypervisor) error {
 	return fmt.Errorf("BridgedMacvlanEndpoint does not support Hot attach")
 }
 
 // HotDetach for physical endpoint not supported yet
-func (endpoint *BridgedMacvlanEndpoint) HotDetach(h hypervisor, netNsCreated bool, netNsPath string) error {
+func (endpoint *BridgedMacvlanEndpoint) HotDetach(ctx context.Context, h hypervisor, netNsCreated bool, netNsPath string) error {
 	return fmt.Errorf("BridgedMacvlanEndpoint does not support Hot detach")
 }
 

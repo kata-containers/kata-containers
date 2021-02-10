@@ -236,14 +236,14 @@ type kataAgent struct {
 	ctx      context.Context
 }
 
-func (k *kataAgent) trace(name string) (otelTrace.Span, context.Context) {
-	if k.ctx == nil {
+func (k *kataAgent) trace(parent context.Context, name string) (otelTrace.Span, context.Context) {
+	if parent == nil {
 		k.Logger().WithField("type", "bug").Error("trace called before context set")
-		k.ctx = context.Background()
+		parent = context.Background()
 	}
 
 	tracer := otel.Tracer("kata")
-	ctx, span := tracer.Start(k.ctx, name)
+	ctx, span := tracer.Start(parent, name)
 	span.SetAttributes([]label.KeyValue{label.Key("subsystem").String("agent"), label.Key("type").String("kata")}...)
 
 	return span, ctx
@@ -332,7 +332,7 @@ func (k *kataAgent) init(ctx context.Context, sandbox *Sandbox, config KataAgent
 	// save
 	k.ctx = sandbox.ctx
 
-	span, _ := k.trace("init")
+	span, _ := k.trace(ctx, "init")
 	defer span.End()
 
 	disableVMShutdown = k.handleTraceSettings(config)
@@ -425,7 +425,7 @@ func cleanupSandboxBindMounts(sandbox *Sandbox) error {
 	return nil
 }
 
-func (k *kataAgent) configure(h hypervisor, id, sharePath string, config interface{}) error {
+func (k *kataAgent) configure(ctx context.Context, h hypervisor, id, sharePath string, config interface{}) error {
 	err := k.internalConfigure(h, id, config)
 	if err != nil {
 		return err
@@ -433,11 +433,11 @@ func (k *kataAgent) configure(h hypervisor, id, sharePath string, config interfa
 
 	switch s := k.vmSocket.(type) {
 	case types.VSock:
-		if err = h.addDevice(s, vSockPCIDev); err != nil {
+		if err = h.addDevice(ctx, s, vSockPCIDev); err != nil {
 			return err
 		}
 	case types.HybridVSock:
-		err = h.addDevice(s, hybridVirtioVsockDev)
+		err = h.addDevice(ctx, s, hybridVirtioVsockDev)
 		if err != nil {
 			return err
 		}
@@ -448,7 +448,7 @@ func (k *kataAgent) configure(h hypervisor, id, sharePath string, config interfa
 
 	// Neither create shared directory nor add 9p device if hypervisor
 	// doesn't support filesystem sharing.
-	caps := h.capabilities()
+	caps := h.capabilities(ctx)
 	if !caps.IsFsSharingSupported() {
 		return nil
 	}
@@ -464,14 +464,14 @@ func (k *kataAgent) configure(h hypervisor, id, sharePath string, config interfa
 		return err
 	}
 
-	return h.addDevice(sharedVolume, fsDev)
+	return h.addDevice(ctx, sharedVolume, fsDev)
 }
 
 func (k *kataAgent) configureFromGrpc(h hypervisor, id string, config interface{}) error {
 	return k.internalConfigure(h, id, config)
 }
 
-func (k *kataAgent) setupSharedPath(sandbox *Sandbox) error {
+func (k *kataAgent) setupSharedPath(ctx context.Context, sandbox *Sandbox) error {
 	// create shared path structure
 	sharePath := getSharePath(sandbox.id)
 	mountPath := getMountPath(sandbox.id)
@@ -483,7 +483,7 @@ func (k *kataAgent) setupSharedPath(sandbox *Sandbox) error {
 	}
 
 	// slave mount so that future mountpoints under mountPath are shown in sharePath as well
-	if err := bindMount(context.Background(), mountPath, sharePath, true, "slave"); err != nil {
+	if err := bindMount(ctx, mountPath, sharePath, true, "slave"); err != nil {
 		return err
 	}
 
@@ -495,14 +495,14 @@ func (k *kataAgent) setupSharedPath(sandbox *Sandbox) error {
 	return nil
 }
 
-func (k *kataAgent) createSandbox(sandbox *Sandbox) error {
-	span, _ := k.trace("createSandbox")
+func (k *kataAgent) createSandbox(ctx context.Context, sandbox *Sandbox) error {
+	span, ctx := k.trace(ctx, "createSandbox")
 	defer span.End()
 
-	if err := k.setupSharedPath(sandbox); err != nil {
+	if err := k.setupSharedPath(ctx, sandbox); err != nil {
 		return err
 	}
-	return k.configure(sandbox.hypervisor, sandbox.id, getSharePath(sandbox.id), sandbox.config.AgentConfig)
+	return k.configure(ctx, sandbox.hypervisor, sandbox.id, getSharePath(sandbox.id), sandbox.config.AgentConfig)
 }
 
 func cmdToKataProcess(cmd types.Cmd) (process *grpc.Process, err error) {
@@ -582,8 +582,8 @@ func cmdEnvsToStringSlice(ev []types.EnvVar) []string {
 	return env
 }
 
-func (k *kataAgent) exec(sandbox *Sandbox, c Container, cmd types.Cmd) (*Process, error) {
-	span, _ := k.trace("exec")
+func (k *kataAgent) exec(ctx context.Context, sandbox *Sandbox, c Container, cmd types.Cmd) (*Process, error) {
+	span, ctx := k.trace(ctx, "exec")
 	defer span.End()
 
 	var kataProcess *grpc.Process
@@ -599,19 +599,19 @@ func (k *kataAgent) exec(sandbox *Sandbox, c Container, cmd types.Cmd) (*Process
 		Process:     kataProcess,
 	}
 
-	if _, err := k.sendReq(req); err != nil {
+	if _, err := k.sendReq(ctx, req); err != nil {
 		return nil, err
 	}
 
 	return buildProcessFromExecID(req.ExecId)
 }
 
-func (k *kataAgent) updateInterface(ifc *pbTypes.Interface) (*pbTypes.Interface, error) {
+func (k *kataAgent) updateInterface(ctx context.Context, ifc *pbTypes.Interface) (*pbTypes.Interface, error) {
 	// send update interface request
 	ifcReq := &grpc.UpdateInterfaceRequest{
 		Interface: ifc,
 	}
-	resultingInterface, err := k.sendReq(ifcReq)
+	resultingInterface, err := k.sendReq(ctx, ifcReq)
 	if err != nil {
 		k.Logger().WithFields(logrus.Fields{
 			"interface-requested": fmt.Sprintf("%+v", ifc),
@@ -624,23 +624,23 @@ func (k *kataAgent) updateInterface(ifc *pbTypes.Interface) (*pbTypes.Interface,
 	return nil, err
 }
 
-func (k *kataAgent) updateInterfaces(interfaces []*pbTypes.Interface) error {
+func (k *kataAgent) updateInterfaces(ctx context.Context, interfaces []*pbTypes.Interface) error {
 	for _, ifc := range interfaces {
-		if _, err := k.updateInterface(ifc); err != nil {
+		if _, err := k.updateInterface(ctx, ifc); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (k *kataAgent) updateRoutes(routes []*pbTypes.Route) ([]*pbTypes.Route, error) {
+func (k *kataAgent) updateRoutes(ctx context.Context, routes []*pbTypes.Route) ([]*pbTypes.Route, error) {
 	if routes != nil {
 		routesReq := &grpc.UpdateRoutesRequest{
 			Routes: &grpc.Routes{
 				Routes: routes,
 			},
 		}
-		resultingRoutes, err := k.sendReq(routesReq)
+		resultingRoutes, err := k.sendReq(ctx, routesReq)
 		if err != nil {
 			k.Logger().WithFields(logrus.Fields{
 				"routes-requested": fmt.Sprintf("%+v", routes),
@@ -656,14 +656,14 @@ func (k *kataAgent) updateRoutes(routes []*pbTypes.Route) ([]*pbTypes.Route, err
 	return nil, nil
 }
 
-func (k *kataAgent) addARPNeighbors(neighs []*pbTypes.ARPNeighbor) error {
+func (k *kataAgent) addARPNeighbors(ctx context.Context, neighs []*pbTypes.ARPNeighbor) error {
 	if neighs != nil {
 		neighsReq := &grpc.AddARPNeighborsRequest{
 			Neighbors: &grpc.ARPNeighbors{
 				ARPNeighbors: neighs,
 			},
 		}
-		_, err := k.sendReq(neighsReq)
+		_, err := k.sendReq(ctx, neighsReq)
 		if err != nil {
 			if grpcStatus.Convert(err).Code() == codes.Unimplemented {
 				k.Logger().WithFields(logrus.Fields{
@@ -680,9 +680,9 @@ func (k *kataAgent) addARPNeighbors(neighs []*pbTypes.ARPNeighbor) error {
 	return nil
 }
 
-func (k *kataAgent) listInterfaces() ([]*pbTypes.Interface, error) {
+func (k *kataAgent) listInterfaces(ctx context.Context) ([]*pbTypes.Interface, error) {
 	req := &grpc.ListInterfacesRequest{}
-	resultingInterfaces, err := k.sendReq(req)
+	resultingInterfaces, err := k.sendReq(ctx, req)
 	if err != nil {
 		return nil, err
 	}
@@ -693,9 +693,9 @@ func (k *kataAgent) listInterfaces() ([]*pbTypes.Interface, error) {
 	return resultInterfaces.Interfaces, nil
 }
 
-func (k *kataAgent) listRoutes() ([]*pbTypes.Route, error) {
+func (k *kataAgent) listRoutes(ctx context.Context) ([]*pbTypes.Route, error) {
 	req := &grpc.ListRoutesRequest{}
-	resultingRoutes, err := k.sendReq(req)
+	resultingRoutes, err := k.sendReq(ctx, req)
 	if err != nil {
 		return nil, err
 	}
@@ -754,8 +754,8 @@ func (k *kataAgent) getDNS(sandbox *Sandbox) ([]string, error) {
 	return nil, nil
 }
 
-func (k *kataAgent) startSandbox(sandbox *Sandbox) error {
-	span, _ := k.trace("startSandbox")
+func (k *kataAgent) startSandbox(ctx context.Context, sandbox *Sandbox) error {
+	span, ctx := k.trace(ctx, "startSandbox")
 	defer span.End()
 
 	if err := k.setAgentURL(); err != nil {
@@ -773,7 +773,7 @@ func (k *kataAgent) startSandbox(sandbox *Sandbox) error {
 	}
 
 	// check grpc server is serving
-	if err = k.check(); err != nil {
+	if err = k.check(ctx); err != nil {
 		return err
 	}
 
@@ -784,17 +784,17 @@ func (k *kataAgent) startSandbox(sandbox *Sandbox) error {
 	if err != nil {
 		return err
 	}
-	if err = k.updateInterfaces(interfaces); err != nil {
+	if err = k.updateInterfaces(ctx, interfaces); err != nil {
 		return err
 	}
-	if _, err = k.updateRoutes(routes); err != nil {
+	if _, err = k.updateRoutes(ctx, routes); err != nil {
 		return err
 	}
-	if err = k.addARPNeighbors(neighs); err != nil {
+	if err = k.addARPNeighbors(ctx, neighs); err != nil {
 		return err
 	}
 
-	storages := setupStorages(sandbox)
+	storages := setupStorages(ctx, sandbox)
 
 	kmodules := setupKernelModules(k.kmodules)
 
@@ -808,13 +808,13 @@ func (k *kataAgent) startSandbox(sandbox *Sandbox) error {
 		KernelModules: kmodules,
 	}
 
-	_, err = k.sendReq(req)
+	_, err = k.sendReq(ctx, req)
 	if err != nil {
 		return err
 	}
 
 	if k.dynamicTracing {
-		_, err = k.sendReq(&grpc.StartTracingRequest{})
+		_, err = k.sendReq(ctx, &grpc.StartTracingRequest{})
 		if err != nil {
 			return err
 		}
@@ -844,9 +844,9 @@ func setupKernelModules(kmodules []string) []*grpc.KernelModule {
 	return modules
 }
 
-func setupStorages(sandbox *Sandbox) []*grpc.Storage {
+func setupStorages(ctx context.Context, sandbox *Sandbox) []*grpc.Storage {
 	storages := []*grpc.Storage{}
-	caps := sandbox.hypervisor.capabilities()
+	caps := sandbox.hypervisor.capabilities(ctx)
 
 	// append 9p shared volume to storages only if filesystem sharing is supported
 	if caps.IsFsSharingSupported() {
@@ -909,18 +909,18 @@ func setupStorages(sandbox *Sandbox) []*grpc.Storage {
 	return storages
 }
 
-func (k *kataAgent) stopSandbox(sandbox *Sandbox) error {
-	span, _ := k.trace("stopSandbox")
+func (k *kataAgent) stopSandbox(ctx context.Context, sandbox *Sandbox) error {
+	span, ctx := k.trace(ctx, "stopSandbox")
 	defer span.End()
 
 	req := &grpc.DestroySandboxRequest{}
 
-	if _, err := k.sendReq(req); err != nil {
+	if _, err := k.sendReq(ctx, req); err != nil {
 		return err
 	}
 
 	if k.dynamicTracing {
-		_, err := k.sendReq(&grpc.StopTracingRequest{})
+		_, err := k.sendReq(ctx, &grpc.StopTracingRequest{})
 		if err != nil {
 			return err
 		}
@@ -1187,19 +1187,19 @@ func (k *kataAgent) appendDevices(deviceList []*grpc.Device, c *Container) []*gr
 // been performed before the container creation failed.
 // - Unmount container volumes.
 // - Unmount container rootfs.
-func (k *kataAgent) rollbackFailingContainerCreation(c *Container) {
+func (k *kataAgent) rollbackFailingContainerCreation(ctx context.Context, c *Container) {
 	if c != nil {
-		if err2 := c.unmountHostMounts(); err2 != nil {
+		if err2 := c.unmountHostMounts(ctx); err2 != nil {
 			k.Logger().WithError(err2).Error("rollback failed unmountHostMounts()")
 		}
 
-		if err2 := bindUnmountContainerRootfs(k.ctx, getMountPath(c.sandbox.id), c.id); err2 != nil {
+		if err2 := bindUnmountContainerRootfs(ctx, getMountPath(c.sandbox.id), c.id); err2 != nil {
 			k.Logger().WithError(err2).Error("rollback failed bindUnmountContainerRootfs()")
 		}
 	}
 }
 
-func (k *kataAgent) buildContainerRootfs(sandbox *Sandbox, c *Container, rootPathParent string) (*grpc.Storage, error) {
+func (k *kataAgent) buildContainerRootfs(ctx context.Context, sandbox *Sandbox, c *Container, rootPathParent string) (*grpc.Storage, error) {
 	if c.state.Fstype != "" && c.state.BlockDeviceID != "" {
 		// The rootfs storage volume represents the container rootfs
 		// mount point inside the guest.
@@ -1264,15 +1264,15 @@ func (k *kataAgent) buildContainerRootfs(sandbox *Sandbox, c *Container, rootPat
 	// With virtiofs/9pfs we don't need to ask the agent to mount the rootfs as the shared directory
 	// (kataGuestSharedDir) is already mounted in the guest. We only need to mount the rootfs from
 	// the host and it will show up in the guest.
-	if err := bindMountContainerRootfs(k.ctx, getMountPath(sandbox.id), c.id, c.rootFs.Target, false); err != nil {
+	if err := bindMountContainerRootfs(ctx, getMountPath(sandbox.id), c.id, c.rootFs.Target, false); err != nil {
 		return nil, err
 	}
 
 	return nil, nil
 }
 
-func (k *kataAgent) createContainer(sandbox *Sandbox, c *Container) (p *Process, err error) {
-	span, _ := k.trace("createContainer")
+func (k *kataAgent) createContainer(ctx context.Context, sandbox *Sandbox, c *Container) (p *Process, err error) {
+	span, ctx := k.trace(ctx, "createContainer")
 	defer span.End()
 
 	var ctrStorages []*grpc.Storage
@@ -1288,14 +1288,14 @@ func (k *kataAgent) createContainer(sandbox *Sandbox, c *Container) (p *Process,
 	defer func() {
 		if err != nil {
 			k.Logger().WithError(err).Error("createContainer failed")
-			k.rollbackFailingContainerCreation(c)
+			k.rollbackFailingContainerCreation(ctx, c)
 		}
 	}()
 
 	// setup rootfs -- if its block based, we'll receive a non-nil storage object representing
 	// the block device for the rootfs, which us utilized for mounting in the guest. This'll be handled
 	// already for non-block based rootfs
-	if rootfs, err = k.buildContainerRootfs(sandbox, c, rootPathParent); err != nil {
+	if rootfs, err = k.buildContainerRootfs(ctx, sandbox, c, rootPathParent); err != nil {
 		return nil, err
 	}
 
@@ -1313,7 +1313,7 @@ func (k *kataAgent) createContainer(sandbox *Sandbox, c *Container) (p *Process,
 	}
 
 	// Handle container mounts
-	newMounts, ignoredMounts, err := c.mountSharedDirMounts(getSharePath(sandbox.id), getMountPath(sandbox.id), kataGuestSharedDir())
+	newMounts, ignoredMounts, err := c.mountSharedDirMounts(ctx, getSharePath(sandbox.id), getMountPath(sandbox.id), kataGuestSharedDir())
 	if err != nil {
 		return nil, err
 	}
@@ -1380,7 +1380,7 @@ func (k *kataAgent) createContainer(sandbox *Sandbox, c *Container) (p *Process,
 		SandboxPidns: sharedPidNs,
 	}
 
-	if _, err = k.sendReq(req); err != nil {
+	if _, err = k.sendReq(ctx, req); err != nil {
 		return nil, err
 	}
 
@@ -1601,27 +1601,27 @@ func (k *kataAgent) handlePidNamespace(grpcSpec *grpc.Spec, sandbox *Sandbox) bo
 	return sharedPidNs
 }
 
-func (k *kataAgent) startContainer(sandbox *Sandbox, c *Container) error {
-	span, _ := k.trace("startContainer")
+func (k *kataAgent) startContainer(ctx context.Context, sandbox *Sandbox, c *Container) error {
+	span, ctx := k.trace(ctx, "startContainer")
 	defer span.End()
 
 	req := &grpc.StartContainerRequest{
 		ContainerId: c.id,
 	}
 
-	_, err := k.sendReq(req)
+	_, err := k.sendReq(ctx, req)
 	return err
 }
 
-func (k *kataAgent) stopContainer(sandbox *Sandbox, c Container) error {
-	span, _ := k.trace("stopContainer")
+func (k *kataAgent) stopContainer(ctx context.Context, sandbox *Sandbox, c Container) error {
+	span, ctx := k.trace(ctx, "stopContainer")
 	defer span.End()
 
-	_, err := k.sendReq(&grpc.RemoveContainerRequest{ContainerId: c.id})
+	_, err := k.sendReq(ctx, &grpc.RemoveContainerRequest{ContainerId: c.id})
 	return err
 }
 
-func (k *kataAgent) signalProcess(c *Container, processID string, signal syscall.Signal, all bool) error {
+func (k *kataAgent) signalProcess(ctx context.Context, c *Container, processID string, signal syscall.Signal, all bool) error {
 	execID := processID
 	if all {
 		// kata agent uses empty execId to signal all processes in a container
@@ -1633,11 +1633,11 @@ func (k *kataAgent) signalProcess(c *Container, processID string, signal syscall
 		Signal:      uint32(signal),
 	}
 
-	_, err := k.sendReq(req)
+	_, err := k.sendReq(ctx, req)
 	return err
 }
 
-func (k *kataAgent) winsizeProcess(c *Container, processID string, height, width uint32) error {
+func (k *kataAgent) winsizeProcess(ctx context.Context, c *Container, processID string, height, width uint32) error {
 	req := &grpc.TtyWinResizeRequest{
 		ContainerId: c.id,
 		ExecId:      processID,
@@ -1645,18 +1645,18 @@ func (k *kataAgent) winsizeProcess(c *Container, processID string, height, width
 		Column:      width,
 	}
 
-	_, err := k.sendReq(req)
+	_, err := k.sendReq(ctx, req)
 	return err
 }
 
-func (k *kataAgent) processListContainer(sandbox *Sandbox, c Container, options ProcessListOptions) (ProcessList, error) {
+func (k *kataAgent) processListContainer(ctx context.Context, sandbox *Sandbox, c Container, options ProcessListOptions) (ProcessList, error) {
 	req := &grpc.ListProcessesRequest{
 		ContainerId: c.id,
 		Format:      options.Format,
 		Args:        options.Args,
 	}
 
-	resp, err := k.sendReq(req)
+	resp, err := k.sendReq(ctx, req)
 	if err != nil {
 		return nil, err
 	}
@@ -1669,7 +1669,7 @@ func (k *kataAgent) processListContainer(sandbox *Sandbox, c Container, options 
 	return processList.ProcessList, nil
 }
 
-func (k *kataAgent) updateContainer(sandbox *Sandbox, c Container, resources specs.LinuxResources) error {
+func (k *kataAgent) updateContainer(ctx context.Context, sandbox *Sandbox, c Container, resources specs.LinuxResources) error {
 	grpcResources, err := grpc.ResourcesOCItoGRPC(&resources)
 	if err != nil {
 		return err
@@ -1680,29 +1680,29 @@ func (k *kataAgent) updateContainer(sandbox *Sandbox, c Container, resources spe
 		Resources:   grpcResources,
 	}
 
-	_, err = k.sendReq(req)
+	_, err = k.sendReq(ctx, req)
 	return err
 }
 
-func (k *kataAgent) pauseContainer(sandbox *Sandbox, c Container) error {
+func (k *kataAgent) pauseContainer(ctx context.Context, sandbox *Sandbox, c Container) error {
 	req := &grpc.PauseContainerRequest{
 		ContainerId: c.id,
 	}
 
-	_, err := k.sendReq(req)
+	_, err := k.sendReq(ctx, req)
 	return err
 }
 
-func (k *kataAgent) resumeContainer(sandbox *Sandbox, c Container) error {
+func (k *kataAgent) resumeContainer(ctx context.Context, sandbox *Sandbox, c Container) error {
 	req := &grpc.ResumeContainerRequest{
 		ContainerId: c.id,
 	}
 
-	_, err := k.sendReq(req)
+	_, err := k.sendReq(ctx, req)
 	return err
 }
 
-func (k *kataAgent) memHotplugByProbe(addr uint64, sizeMB uint32, memorySectionSizeMB uint32) error {
+func (k *kataAgent) memHotplugByProbe(ctx context.Context, addr uint64, sizeMB uint32, memorySectionSizeMB uint32) error {
 	if memorySectionSizeMB == uint32(0) {
 		return fmt.Errorf("memorySectionSizeMB couldn't be zero")
 	}
@@ -1722,27 +1722,27 @@ func (k *kataAgent) memHotplugByProbe(addr uint64, sizeMB uint32, memorySectionS
 		MemHotplugProbeAddr: addrList,
 	}
 
-	_, err := k.sendReq(req)
+	_, err := k.sendReq(ctx, req)
 	return err
 }
 
-func (k *kataAgent) onlineCPUMem(cpus uint32, cpuOnly bool) error {
+func (k *kataAgent) onlineCPUMem(ctx context.Context, cpus uint32, cpuOnly bool) error {
 	req := &grpc.OnlineCPUMemRequest{
 		Wait:    false,
 		NbCpus:  cpus,
 		CpuOnly: cpuOnly,
 	}
 
-	_, err := k.sendReq(req)
+	_, err := k.sendReq(ctx, req)
 	return err
 }
 
-func (k *kataAgent) statsContainer(sandbox *Sandbox, c Container) (*ContainerStats, error) {
+func (k *kataAgent) statsContainer(ctx context.Context, sandbox *Sandbox, c Container) (*ContainerStats, error) {
 	req := &grpc.StatsContainerRequest{
 		ContainerId: c.id,
 	}
 
-	returnStats, err := k.sendReq(req)
+	returnStats, err := k.sendReq(ctx, req)
 
 	if err != nil {
 		return nil, err
@@ -1769,7 +1769,7 @@ func (k *kataAgent) statsContainer(sandbox *Sandbox, c Container) (*ContainerSta
 	return containerStats, nil
 }
 
-func (k *kataAgent) connect() error {
+func (k *kataAgent) connect(ctx context.Context) error {
 	if k.dead {
 		return errors.New("Dead agent")
 	}
@@ -1778,7 +1778,7 @@ func (k *kataAgent) connect() error {
 		return nil
 	}
 
-	span, _ := k.trace("connect")
+	span, ctx := k.trace(ctx, "connect")
 	defer span.End()
 
 	// This is for the first connection only, to prevent race
@@ -1801,8 +1801,8 @@ func (k *kataAgent) connect() error {
 	return nil
 }
 
-func (k *kataAgent) disconnect() error {
-	span, _ := k.trace("disconnect")
+func (k *kataAgent) disconnect(ctx context.Context) error {
+	span, _ := k.trace(ctx, "disconnect")
 	defer span.End()
 
 	k.Lock()
@@ -1823,22 +1823,22 @@ func (k *kataAgent) disconnect() error {
 }
 
 // check grpc server is serving
-func (k *kataAgent) check() error {
-	span, _ := k.trace("check")
+func (k *kataAgent) check(ctx context.Context) error {
+	span, ctx := k.trace(ctx, "check")
 	defer span.End()
 
-	_, err := k.sendReq(&grpc.CheckRequest{})
+	_, err := k.sendReq(ctx, &grpc.CheckRequest{})
 	if err != nil {
 		err = fmt.Errorf("Failed to check if grpc server is working: %s", err)
 	}
 	return err
 }
 
-func (k *kataAgent) waitProcess(c *Container, processID string) (int32, error) {
-	span, _ := k.trace("waitProcess")
+func (k *kataAgent) waitProcess(ctx context.Context, c *Container, processID string) (int32, error) {
+	span, ctx := k.trace(ctx, "waitProcess")
 	defer span.End()
 
-	resp, err := k.sendReq(&grpc.WaitProcessRequest{
+	resp, err := k.sendReq(ctx, &grpc.WaitProcessRequest{
 		ContainerId: c.id,
 		ExecId:      processID,
 	})
@@ -1849,8 +1849,8 @@ func (k *kataAgent) waitProcess(c *Container, processID string) (int32, error) {
 	return resp.(*grpc.WaitProcessResponse).Status, nil
 }
 
-func (k *kataAgent) writeProcessStdin(c *Container, ProcessID string, data []byte) (int, error) {
-	resp, err := k.sendReq(&grpc.WriteStreamRequest{
+func (k *kataAgent) writeProcessStdin(ctx context.Context, c *Container, ProcessID string, data []byte) (int, error) {
+	resp, err := k.sendReq(ctx, &grpc.WriteStreamRequest{
 		ContainerId: c.id,
 		ExecId:      ProcessID,
 		Data:        data,
@@ -1863,8 +1863,8 @@ func (k *kataAgent) writeProcessStdin(c *Container, ProcessID string, data []byt
 	return int(resp.(*grpc.WriteStreamResponse).Len), nil
 }
 
-func (k *kataAgent) closeProcessStdin(c *Container, ProcessID string) error {
-	_, err := k.sendReq(&grpc.CloseStdinRequest{
+func (k *kataAgent) closeProcessStdin(ctx context.Context, c *Container, ProcessID string) error {
+	_, err := k.sendReq(ctx, &grpc.CloseStdinRequest{
 		ContainerId: c.id,
 		ExecId:      ProcessID,
 	})
@@ -1872,8 +1872,8 @@ func (k *kataAgent) closeProcessStdin(c *Container, ProcessID string) error {
 	return err
 }
 
-func (k *kataAgent) reseedRNG(data []byte) error {
-	_, err := k.sendReq(&grpc.ReseedRandomDevRequest{
+func (k *kataAgent) reseedRNG(ctx context.Context, data []byte) error {
+	_, err := k.sendReq(ctx, &grpc.ReseedRandomDevRequest{
 		Data: data,
 	})
 
@@ -1996,17 +1996,17 @@ func (k *kataAgent) getReqContext(reqName string) (ctx context.Context, cancel c
 	return ctx, cancel
 }
 
-func (k *kataAgent) sendReq(request interface{}) (interface{}, error) {
+func (k *kataAgent) sendReq(spanCtx context.Context, request interface{}) (interface{}, error) {
 	start := time.Now()
-	span, _ := k.trace("sendReq")
+	span, spanCtx := k.trace(spanCtx, "sendReq")
 	span.SetAttributes(label.Key("request").String(fmt.Sprintf("%+v", request)))
 	defer span.End()
 
-	if err := k.connect(); err != nil {
+	if err := k.connect(spanCtx); err != nil {
 		return nil, err
 	}
 	if !k.keepConn {
-		defer k.disconnect()
+		defer k.disconnect(spanCtx)
 	}
 
 	msgName := proto.MessageName(request.(proto.Message))
@@ -2028,24 +2028,24 @@ func (k *kataAgent) sendReq(request interface{}) (interface{}, error) {
 }
 
 // readStdout and readStderr are special that we cannot differentiate them with the request types...
-func (k *kataAgent) readProcessStdout(c *Container, processID string, data []byte) (int, error) {
-	if err := k.connect(); err != nil {
+func (k *kataAgent) readProcessStdout(ctx context.Context, c *Container, processID string, data []byte) (int, error) {
+	if err := k.connect(ctx); err != nil {
 		return 0, err
 	}
 	if !k.keepConn {
-		defer k.disconnect()
+		defer k.disconnect(ctx)
 	}
 
 	return k.readProcessStream(c.id, processID, data, k.client.AgentServiceClient.ReadStdout)
 }
 
 // readStdout and readStderr are special that we cannot differentiate them with the request types...
-func (k *kataAgent) readProcessStderr(c *Container, processID string, data []byte) (int, error) {
-	if err := k.connect(); err != nil {
+func (k *kataAgent) readProcessStderr(ctx context.Context, c *Container, processID string, data []byte) (int, error) {
+	if err := k.connect(ctx); err != nil {
 		return 0, err
 	}
 	if !k.keepConn {
-		defer k.disconnect()
+		defer k.disconnect(ctx)
 	}
 
 	return k.readProcessStream(c.id, processID, data, k.client.AgentServiceClient.ReadStderr)
@@ -2066,8 +2066,8 @@ func (k *kataAgent) readProcessStream(containerID, processID string, data []byte
 	return 0, err
 }
 
-func (k *kataAgent) getGuestDetails(req *grpc.GuestDetailsRequest) (*grpc.GuestDetailsResponse, error) {
-	resp, err := k.sendReq(req)
+func (k *kataAgent) getGuestDetails(ctx context.Context, req *grpc.GuestDetailsRequest) (*grpc.GuestDetailsResponse, error) {
+	resp, err := k.sendReq(ctx, req)
 	if err != nil {
 		return nil, err
 	}
@@ -2075,8 +2075,8 @@ func (k *kataAgent) getGuestDetails(req *grpc.GuestDetailsRequest) (*grpc.GuestD
 	return resp.(*grpc.GuestDetailsResponse), nil
 }
 
-func (k *kataAgent) setGuestDateTime(tv time.Time) error {
-	_, err := k.sendReq(&grpc.SetGuestDateTimeRequest{
+func (k *kataAgent) setGuestDateTime(ctx context.Context, tv time.Time) error {
+	_, err := k.sendReq(ctx, &grpc.SetGuestDateTimeRequest{
 		Sec:  tv.Unix(),
 		Usec: int64(tv.Nanosecond() / 1e3),
 	})
@@ -2084,7 +2084,7 @@ func (k *kataAgent) setGuestDateTime(tv time.Time) error {
 	return err
 }
 
-func (k *kataAgent) copyFile(src, dst string) error {
+func (k *kataAgent) copyFile(ctx context.Context, src, dst string) error {
 	var st unix.Stat_t
 
 	err := unix.Stat(src, &st)
@@ -2115,7 +2115,7 @@ func (k *kataAgent) copyFile(src, dst string) error {
 
 	// Handle the special case where the file is empty
 	if fileSize == 0 {
-		_, err = k.sendReq(cpReq)
+		_, err = k.sendReq(ctx, cpReq)
 		return err
 	}
 
@@ -2131,7 +2131,7 @@ func (k *kataAgent) copyFile(src, dst string) error {
 		cpReq.Data = b[:bytesToCopy]
 		cpReq.Offset = offset
 
-		if _, err = k.sendReq(cpReq); err != nil {
+		if _, err = k.sendReq(ctx, cpReq); err != nil {
 			return fmt.Errorf("Could not send CopyFile request: %v", err)
 		}
 
@@ -2143,13 +2143,13 @@ func (k *kataAgent) copyFile(src, dst string) error {
 	return nil
 }
 
-func (k *kataAgent) markDead() {
+func (k *kataAgent) markDead(ctx context.Context) {
 	k.Logger().Infof("mark agent dead")
 	k.dead = true
-	k.disconnect()
+	k.disconnect(ctx)
 }
 
-func (k *kataAgent) cleanup(s *Sandbox) {
+func (k *kataAgent) cleanup(ctx context.Context, s *Sandbox) {
 	if err := cleanupSandboxBindMounts(s); err != nil {
 		k.Logger().WithError(err).Errorf("failed to cleanup observability logs bindmount")
 	}
@@ -2163,7 +2163,7 @@ func (k *kataAgent) cleanup(s *Sandbox) {
 
 	// Unmount mount path
 	path = getMountPath(s.id)
-	if err := bindUnmountAllRootfs(k.ctx, path, s); err != nil {
+	if err := bindUnmountAllRootfs(ctx, path, s); err != nil {
 		k.Logger().WithError(err).Errorf("failed to unmount vm mount path %s", path)
 	}
 	if err := os.RemoveAll(getSandboxPath(s.id)); err != nil {
@@ -2181,9 +2181,9 @@ func (k *kataAgent) load(s persistapi.AgentState) {
 	k.state.URL = s.URL
 }
 
-func (k *kataAgent) getOOMEvent() (string, error) {
+func (k *kataAgent) getOOMEvent(ctx context.Context) (string, error) {
 	req := &grpc.GetOOMEventRequest{}
-	result, err := k.sendReq(req)
+	result, err := k.sendReq(ctx, req)
 	if err != nil {
 		return "", err
 	}
@@ -2193,8 +2193,8 @@ func (k *kataAgent) getOOMEvent() (string, error) {
 	return "", err
 }
 
-func (k *kataAgent) getAgentMetrics(req *grpc.GetMetricsRequest) (*grpc.Metrics, error) {
-	resp, err := k.sendReq(req)
+func (k *kataAgent) getAgentMetrics(ctx context.Context, req *grpc.GetMetricsRequest) (*grpc.Metrics, error) {
+	resp, err := k.sendReq(ctx, req)
 	if err != nil {
 		return nil, err
 	}

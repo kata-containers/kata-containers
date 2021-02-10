@@ -124,9 +124,9 @@ func (t *template) createTemplateVM(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	defer vm.Stop()
+	defer vm.Stop(ctx)
 
-	if err = vm.Disconnect(); err != nil {
+	if err = vm.Disconnect(ctx); err != nil {
 		return err
 	}
 
@@ -139,7 +139,7 @@ func (t *template) createTemplateVM(ctx context.Context) error {
 	// created from template, so it worth the invest.
 	time.Sleep(templateWaitForAgent)
 
-	if err = vm.Pause(); err != nil {
+	if err = vm.Pause(ctx); err != nil {
 		return err
 	}
 
