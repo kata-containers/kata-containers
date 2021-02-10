@@ -122,6 +122,9 @@ type RuntimeConfig struct {
 	//Determines kata processes are managed only in sandbox cgroup
 	SandboxCgroupOnly bool
 
+	//Paths to be bindmounted RO into the guest.
+	SandboxBindMounts []string
+
 	//Experimental features enabled
 	Experimental []exp.Feature
 
@@ -964,6 +967,7 @@ func SandboxConfig(ocispec specs.Spec, runtime RuntimeConfig, bundlePath, cid, c
 		SystemdCgroup: systemdCgroup,
 
 		SandboxCgroupOnly: runtime.SandboxCgroupOnly,
+		SandboxBindMounts: runtime.SandboxBindMounts,
 
 		DisableGuestSeccomp: runtime.DisableGuestSeccomp,
 

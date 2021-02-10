@@ -1610,3 +1610,52 @@ func TestCheckFactoryConfig(t *testing.T) {
 		}
 	}
 }
+
+func TestValidateBindMounts(t *testing.T) {
+	assert := assert.New(t)
+
+	tmpdir1, err := ioutil.TempDir(testDir, "tmp1-")
+	assert.NoError(err)
+	defer os.RemoveAll(tmpdir1)
+
+	tmpdir2, err := ioutil.TempDir(testDir, "tmp2-")
+	assert.NoError(err)
+	defer os.RemoveAll(tmpdir2)
+
+	duplicate1 := filepath.Join(tmpdir1, "cat.txt")
+	duplicate2 := filepath.Join(tmpdir2, "cat.txt")
+	unique := filepath.Join(tmpdir1, "foobar.txt")
+
+	err = ioutil.WriteFile(duplicate1, []byte("kibble-monster"), 0644)
+	assert.NoError(err)
+
+	err = ioutil.WriteFile(duplicate2, []byte("furbag"), 0644)
+	assert.NoError(err)
+
+	err = ioutil.WriteFile(unique, []byte("fuzzball"), 0644)
+	assert.NoError(err)
+
+	type testData struct {
+		name        string
+		mounts      []string
+		expectError bool
+	}
+
+	data := []testData{
+		{"two unique directories", []string{tmpdir1, tmpdir2}, false},
+		{"unique directory and two unique files", []string{tmpdir1, duplicate1, unique}, false},
+		{"two files with same base name", []string{duplicate1, duplicate2}, true},
+		{"non existent path", []string{"/this/does/not/exist"}, true},
+		{"non existent path with existing path", []string{unique, "/this/does/not/exist"}, true},
+		{"non existent path with duplicates", []string{duplicate1, duplicate2, "/this/does/not/exist"}, true},
+		{"no paths", []string{}, false},
+	}
+	for i, d := range data {
+		err := validateBindMounts(d.mounts)
+		if d.expectError {
+			assert.Error(err, "test %d (%+v)", i, d.name)
+		} else {
+			assert.NoError(err, "test %d (%+v)", i, d.name)
+		}
+	}
+}
