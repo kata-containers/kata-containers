@@ -100,12 +100,12 @@ AGENT_INIT          When set to "yes", use ${AGENT_BIN} as init process in place
                     of systemd.
                     Default value: no
 
-AGENT_VERSION       Version of the agent to include in the rootfs.
-                    Default value: ${AGENT_VERSION:-<not set>}
-
 AGENT_SOURCE_BIN    Path to the directory of agent binary.
                     If set, use the binary as agent but not build agent package.
                     Default value: <not set>
+
+AGENT_VERSION       Version of the agent to include in the rootfs.
+                    Default value: ${AGENT_VERSION:-<not set>}
 
 DISTRO_REPO         Use host repositories to install guest packages.
                     Default value: <not set>
@@ -122,6 +122,10 @@ GRACEFUL_EXIT       If set, and if the DISTRO configuration specifies a
                     This is used when running CI jobs, to tolerate failures for
                     specific distributions.
                     Default value: <not set>
+
+IMAGE_REGISTRY      Hostname for the image registry used to pull down the rootfs
+                    build image.
+                    Default value: docker.io
 
 KERNEL_MODULES_DIR  Path to a directory containing kernel modules to include in
                     the rootfs.
@@ -371,9 +375,15 @@ build_rootfs_distro()
 
 		image_name="${distro}-rootfs-osbuilder"
 
+		REGISTRY_ARG=""
+		if [ -n "${IMAGE_REGISTRY}" ]; then
+			REGISTRY_ARG="--build-arg IMAGE_REGISTRY=${IMAGE_REGISTRY}"
+		fi
+
 		# setup to install go or rust here
 		generate_dockerfile "${distro_config_dir}"
 		"$container_engine" build  \
+			${REGISTRY_ARG} \
 			--build-arg http_proxy="${http_proxy}" \
 			--build-arg https_proxy="${https_proxy}" \
 			-t "${image_name}" "${distro_config_dir}"
