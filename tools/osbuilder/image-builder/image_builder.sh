@@ -86,8 +86,8 @@ Options:
 Extra environment variables:
 	AGENT_BIN:  Use it to change the expected agent binary name
 	AGENT_INIT: Use kata agent as init process
-	NSDAX_BIN:  Use to specify path to pre-compiled 'nsdax' tool.
 	FS_TYPE:    Filesystem type to use. Only xfs and ext4 are supported.
+	NSDAX_BIN:  Use to specify path to pre-compiled 'nsdax' tool.
 	USE_DOCKER: If set will build image in a Docker Container (requries docker)
 		    DEFAULT: not set
 	USE_PODMAN: If set and USE_DOCKER not set, will build image in a Podman Container (requries podman)
