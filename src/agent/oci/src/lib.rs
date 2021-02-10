@@ -8,7 +8,7 @@ extern crate serde;
 extern crate serde_derive;
 extern crate serde_json;
 
-use libc::mode_t;
+use libc::{self, mode_t};
 use std::collections::HashMap;
 
 mod serialize;
@@ -25,6 +25,10 @@ where
     T: Default + PartialEq,
 {
     *d == T::default()
+}
+
+fn default_seccomp_errno() -> u32 {
+    libc::EPERM as u32
 }
 
 #[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq)]
@@ -710,6 +714,8 @@ pub struct LinuxSeccomp {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub architectures: Vec<Arch>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub flags: Vec<LinuxSeccompFlag>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub syscalls: Vec<LinuxSyscall>,
 }
 
@@ -733,14 +739,20 @@ pub const ARCHS390: &str = "SCMP_ARCH_S390";
 pub const ARCHS390X: &str = "SCMP_ARCH_S390X";
 pub const ARCHPARISC: &str = "SCMP_ARCH_PARISC";
 pub const ARCHPARISC64: &str = "SCMP_ARCH_PARISC64";
+pub const ARCHRISCV64: &str = "SCMP_ARCH_RISCV64";
+
+pub type LinuxSeccompFlag = String;
 
 pub type LinuxSeccompAction = String;
 
 pub const ACTKILL: &str = "SCMP_ACT_KILL";
+pub const ACTKILLPROCESS: &str = "SCMP_ACT_KILL_PROCESS";
+pub const ACTKILLTHREAD: &str = "SCMP_ACT_KILL_THREAD";
 pub const ACTTRAP: &str = "SCMP_ACT_TRAP";
 pub const ACTERRNO: &str = "SCMP_ACT_ERRNO";
 pub const ACTTRACE: &str = "SCMP_ACT_TRACE";
 pub const ACTALLOW: &str = "SCMP_ACT_ALLOW";
+pub const ACTLOG: &str = "SCMP_ACT_LOG";
 
 pub type LinuxSeccompOperator = String;
 
@@ -770,6 +782,8 @@ pub struct LinuxSyscall {
     pub names: Vec<String>,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub action: LinuxSeccompAction,
+    #[serde(default = "default_seccomp_errno", rename = "errnoRet")]
+    pub errno_ret: u32,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub args: Vec<LinuxSeccompArg>,
 }
@@ -1554,9 +1568,11 @@ mod tests {
                 seccomp: Some(crate::LinuxSeccomp {
                     default_action: "SCMP_ACT_ALLOW".to_string(),
                     architectures: vec!["SCMP_ARCH_X86".to_string(), "SCMP_ARCH_X32".to_string()],
+                    flags: vec![],
                     syscalls: vec![crate::LinuxSyscall {
                         names: vec!["getcwd".to_string(), "chmod".to_string()],
                         action: "SCMP_ACT_ERRNO".to_string(),
+                        errno_ret: crate::default_seccomp_errno(),
                         args: vec![],
                     }],
                 }),

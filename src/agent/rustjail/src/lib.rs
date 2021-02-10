@@ -412,6 +412,7 @@ fn seccomp_grpc_to_oci(sec: &grpcLinuxSeccomp) -> ociLinuxSeccomp {
             r.push(ociLinuxSyscall {
                 names: sys.Names.clone().into_vec(),
                 action: sys.Action.clone(),
+                errno_ret: sys.ErrnoRet,
                 args,
             });
         }
@@ -421,6 +422,7 @@ fn seccomp_grpc_to_oci(sec: &grpcLinuxSeccomp) -> ociLinuxSeccomp {
     ociLinuxSeccomp {
         default_action: sec.DefaultAction.clone(),
         architectures: sec.Architectures.clone().into_vec(),
+        flags: sec.Flags.clone().into_vec(),
         syscalls,
     }
 }
