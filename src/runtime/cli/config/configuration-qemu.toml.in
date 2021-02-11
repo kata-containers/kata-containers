@@ -309,7 +309,7 @@ pflashes = []
 # lexicographical order, to the lifecycle of the guest container.
 # Hooks are executed in the runtime namespace of the guest. See the official documentation:
 # https://github.com/opencontainers/runtime-spec/blob/v1.0.1/config.md#posix-platform-hooks
-# Warnings will be logged if any error is encountered will scanning for hooks,
+# Warnings will be logged if any error is encountered while scanning for hooks,
 # but it will not abort container execution.
 #guest_hook_path = "/usr/share/oci/hooks"
 #
