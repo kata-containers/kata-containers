@@ -842,6 +842,7 @@ func newClhHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		HotplugVFIOOnRootBus:    h.HotplugVFIOOnRootBus,
 		PCIeRootPort:            h.PCIeRootPort,
 		DisableVhostNet:         true,
+		GuestHookPath:           h.guestHookPath(),
 		VirtioFSExtraArgs:       h.VirtioFSExtraArgs,
 		EnableAnnotations:       h.EnableAnnotations,
 	}, nil
