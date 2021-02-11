@@ -69,8 +69,8 @@ impl Uevent {
         let mut w = watcher.lock().await;
         let mut sb = sandbox.lock().await;
 
-        // Add the device node name to the pci device map.
-        sb.pci_device_map
+        // Add the device node name to the device map.
+        sb.sys_to_dev_map
             .insert(self.devpath.clone(), self.devname.clone());
 
         // Notify watchers that are interested in the udev event.

@@ -91,9 +91,9 @@ async fn get_device_name(sandbox: &Arc<Mutex<Sandbox>>, dev_addr: &str) -> Resul
     // Keep the same lock order as uevent::handle_block_add_event(), otherwise it may cause deadlock.
     let mut w = GLOBAL_DEVICE_WATCHER.lock().await;
     let sb = sandbox.lock().await;
-    for (key, value) in sb.pci_device_map.iter() {
+    for (key, value) in sb.sys_to_dev_map.iter() {
         if key.contains(dev_addr) {
-            info!(sl!(), "Device {} found in pci device map", dev_addr);
+            info!(sl!(), "Device {} found in device map", dev_addr);
             return Ok(format!("{}/{}", SYSTEM_DEV_PATH, value));
         }
     }
