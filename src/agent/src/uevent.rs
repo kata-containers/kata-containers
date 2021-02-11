@@ -61,7 +61,6 @@ impl Uevent {
     }
 
     async fn handle_block_add_event(&self, sandbox: &Arc<Mutex<Sandbox>>) {
-        let pci_root_bus_path = create_pci_root_bus_path();
         let mut sb = sandbox.lock().await;
 
         // Add the device node name to the device map.
@@ -74,24 +73,7 @@ impl Uevent {
         let keys: Vec<_> = sb
             .dev_watcher
             .keys()
-            .filter(|dev_addr| {
-                let pci_p = format!("{}/{}", pci_root_bus_path, *dev_addr);
-
-                // blk block device
-                devpath.starts_with(pci_p.as_str()) ||
-                // scsi block device
-                {
-                    (*dev_addr).ends_with(SCSI_BLOCK_SUFFIX) &&
-                        devpath.contains(*dev_addr)
-                } ||
-                // nvdimm/pmem device
-                {
-                    let pmem_suffix = format!("/{}/{}", SCSI_BLOCK_SUFFIX, self.devname);
-                    devpath.starts_with(ACPI_DEV_PATH) &&
-                        devpath.ends_with(pmem_suffix.as_str()) &&
-                        dev_addr.ends_with(pmem_suffix.as_str())
-                }
-            })
+            .filter(|dev_addr| devpath.contains(*dev_addr))
             .cloned()
             .collect();
 
