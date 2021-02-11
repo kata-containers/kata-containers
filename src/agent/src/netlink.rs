@@ -873,7 +873,6 @@ mod tests {
 
         for iface in &list {
             assert_ne!(iface.name.len(), 0);
-            assert_ne!(iface.hwAddr.len(), 0);
             assert_ne!(iface.mtu, 0);
 
             for ip in &iface.IPAddresses {
