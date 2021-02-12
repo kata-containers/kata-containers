@@ -779,4 +779,49 @@ mod tests {
         let relpath = pcipath_to_sysfs(rootbuspath, &path234);
         assert_eq!(relpath.unwrap(), "/0000:00:02.0/0000:01:03.0/0000:02:04.0");
     }
+
+    #[tokio::test]
+    async fn test_get_device_name() {
+        let devname = "vda";
+        let busid = "0.0.0005";
+        let devpath = format!("/dev/ces/css0/0.0.0004/{}/virtio4/block/{}", busid, devname);
+
+        let logger = slog::Logger::root(slog::Discard, o!());
+        let sandbox = Arc::new(Mutex::new(Sandbox::new(&logger).unwrap()));
+
+        let mut sb = sandbox.lock().await;
+        sb.sys_to_dev_map
+            .insert(devpath.clone(), devname.to_string());
+        drop(sb); // unlock
+
+        let name = get_device_name(&sandbox, busid).await;
+        assert!(name.is_ok(), "{}", name.unwrap_err());
+        assert_eq!(name.unwrap(), format!("{}/{}", SYSTEM_DEV_PATH, devname));
+
+        let mut sb = sandbox.lock().await;
+        sb.sys_to_dev_map.remove(&devpath);
+        drop(sb); // unlock
+
+        tokio::spawn(async move {
+            loop {
+                let mut w = GLOBAL_DEVICE_WATCHER.lock().await;
+                let matched_key = w
+                    .keys()
+                    .filter(|dev_addr| devpath.contains(*dev_addr))
+                    .cloned()
+                    .next();
+
+                if let Some(k) = matched_key {
+                    let sender = w.remove(&k).unwrap().unwrap();
+                    let _ = sender.send(devname.to_string());
+                    return;
+                }
+                drop(w); // unlock
+            }
+        });
+
+        let name = get_device_name(&sandbox, busid).await;
+        assert!(name.is_ok(), "{}", name.unwrap_err());
+        assert_eq!(name.unwrap(), format!("{}/{}", SYSTEM_DEV_PATH, devname));
+    }
 }
