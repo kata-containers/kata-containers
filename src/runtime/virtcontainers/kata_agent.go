@@ -964,6 +964,10 @@ func (k *kataAgent) constraintGRPCSpec(grpcSpec *grpc.Spec, passSeccomp bool) {
 	grpcSpec.Linux.Resources.BlockIO = nil
 	grpcSpec.Linux.Resources.HugepageLimits = nil
 	grpcSpec.Linux.Resources.Network = nil
+	if grpcSpec.Linux.Resources.CPU != nil {
+		grpcSpec.Linux.Resources.CPU.Cpus = ""
+		grpcSpec.Linux.Resources.CPU.Mems = ""
+	}
 
 	// There are three main reasons to do not apply systemd cgroups in the VM
 	// - Initrd image doesn't have systemd.
