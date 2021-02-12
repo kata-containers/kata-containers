@@ -5,9 +5,11 @@
 
 extern crate procfs;
 
+use anyhow::{ensure, Result};
+use nix::sys::statfs;
 use prometheus::{Encoder, Gauge, GaugeVec, IntCounter, TextEncoder};
-
-use anyhow::Result;
+use std::path::Path;
+use tokio::time::{timeout, Duration};
 
 const NAMESPACE_KATA_AGENT: &str = "kata_agent";
 const NAMESPACE_KATA_GUEST: &str = "kata_guest";
@@ -488,4 +490,74 @@ fn set_gauge_vec_proc_stat(gv: &prometheus::GaugeVec, stat: &procfs::process::St
     gv.with_label_values(&["stime"]).set(stat.stime as f64);
     gv.with_label_values(&["cutime"]).set(stat.cutime as f64);
     gv.with_label_values(&["cstime"]).set(stat.cstime as f64);
+}
+
+pub struct FsStat {
+    free: u64,
+    size: u64,
+    used: u64,
+    status: String,
+}
+
+const OPEN_TIMEOUT_SECS: u64 = 10;
+
+async fn open_mount(path: &str) -> Result<()> {
+    let future = tokio::fs::File::open(path);
+    let duration = Duration::from_secs(OPEN_TIMEOUT_SECS);
+
+    match timeout(duration, future).await {
+        Ok(Ok(_file)) => Ok(()),
+        Ok(Err(err)) => {
+            // No timeout, but failed to open volume
+            Err(err.into())
+        }
+        Err(err) => {
+            // Timeout
+            Err(err.into())
+        }
+    }
+}
+
+pub async fn get_volume_stats(mount: &str) -> Result<FsStat> {
+    let path = Path::new(mount);
+    ensure!(path.exists(), "Mount path not exists");
+
+    let status = open_mount(mount);
+
+    let stat = statfs::statfs(mount)?;
+
+    let (size, free) = {
+        let block_size = stat.block_size() as u64;
+
+        let size = stat.blocks() * block_size;
+        let free = stat.blocks_available() * block_size;
+
+        (size, free)
+    };
+
+    let result = FsStat {
+        free,
+        size,
+        used: size - free,
+        status: match status.await {
+            Ok(_) => String::from("ok"),
+            Err(err) => err.to_string(),
+        },
+    };
+
+    Ok(result)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_get_volume_stats() {
+        let stats = get_volume_stats("/").await.unwrap();
+        assert_ne!(stats.size, 0);
+        assert_ne!(stats.used, 0);
+        assert_ne!(stats.free, 0);
+        assert_eq!(stats.status, "ok");
+    }
 }
