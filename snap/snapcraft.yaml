@@ -183,8 +183,8 @@ parts:
 
       cd ${kata_dir}/tools/packaging/kernel
 
-      # Say 'no' to everithing, fix issues with incomplete .config files
-      yes "n" | ./build-kernel.sh setup
+      # Setup and build kernel
+      ./build-kernel.sh -d setup
       kernel_dir_prefix="kata-linux-"
       cd ${kernel_dir_prefix}*
       version=$(basename ${PWD} | sed 's|'"${kernel_dir_prefix}"'||' | cut -d- -f1)
