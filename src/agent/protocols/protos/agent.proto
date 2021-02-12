@@ -55,6 +55,7 @@ service AgentService {
 	rpc StartTracing(StartTracingRequest) returns (google.protobuf.Empty);
 	rpc StopTracing(StopTracingRequest) returns (google.protobuf.Empty);
 	rpc GetMetrics(GetMetricsRequest) returns (Metrics);
+	rpc GetFsMountMetrics(GetFsMountMetricsRequest) returns (FsMountMetrics);
 
 	// misc (TODO: some rpcs can be replaced by hyperstart-exec)
 	rpc CreateSandbox(CreateSandboxRequest) returns (google.protobuf.Empty);
@@ -513,3 +514,13 @@ message GetMetricsRequest {}
 message Metrics {
 	string metrics = 1;
 }
+
+message GetFsMountMetricsRequest {
+    string mount = 1;
+}
+
+message FsMountMetrics {
+    map<string, int64> metrics = 1;
+    string status = 2;
+}
+

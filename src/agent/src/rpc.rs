@@ -23,9 +23,9 @@ use anyhow::{anyhow, Context, Result};
 use oci::{LinuxNamespace, Root, Spec};
 use protobuf::{RepeatedField, SingularPtrField};
 use protocols::agent::{
-    AddSwapRequest, AgentDetails, CopyFileRequest, GuestDetailsResponse, Interfaces, Metrics,
-    OOMEvent, ReadStreamResponse, Routes, StatsContainerResponse, WaitProcessResponse,
-    WriteStreamResponse,
+    AddSwapRequest, AgentDetails, CopyFileRequest, FsMountMetrics, GuestDetailsResponse,
+    Interfaces, Metrics, OOMEvent, ReadStreamResponse, Routes, StatsContainerResponse,
+    WaitProcessResponse, WriteStreamResponse,
 };
 use protocols::empty::Empty;
 use protocols::health::{
@@ -46,7 +46,7 @@ use rustjail::process::ProcessOperations;
 
 use crate::device::{add_devices, pcipath_to_sysfs, rescan_pci_bus, update_device_cgroup};
 use crate::linux_abi::*;
-use crate::metrics::get_metrics;
+use crate::metrics::{get_metrics, get_volume_stats};
 use crate::mount::{add_storages, remove_mounts, BareMount, STORAGE_HANDLER_LIST};
 use crate::namespace::{NSTYPEIPC, NSTYPEPID, NSTYPEUTS};
 use crate::network::setup_guest_dns;
@@ -71,6 +71,7 @@ use std::process::{Command, Stdio};
 use std::time::Duration;
 
 use nix::unistd::{Gid, Uid};
+use std::collections::HashMap;
 use std::fs::{File, OpenOptions};
 use std::io::{BufRead, BufReader};
 use std::os::unix::fs::FileExt;
@@ -1170,6 +1171,33 @@ impl protocols::agent_ttrpc::AgentService for AgentService {
                 metrics.set_metrics(s);
                 Ok(metrics)
             }
+        }
+    }
+
+    async fn get_fs_mount_metrics(
+        &self,
+        _ctx: &TtrpcContext,
+        req: protocols::agent::GetFsMountMetricsRequest,
+    ) -> ttrpc::Result<FsMountMetrics> {
+        match get_volume_stats(req.get_mount()).await {
+            Ok(stats) => {
+                let metrics = [
+                    ("bytesFree", stats.bytes_free),
+                    ("bytesUsed", stats.bytes_used),
+                    ("filesFree", stats.files_free),
+                    ("filesUsed", stats.files_used),
+                ]
+                .iter()
+                .cloned()
+                .map(|(k, v)| (k.to_string(), v as i64))
+                .collect::<HashMap<_, _>>();
+
+                let mut response = FsMountMetrics::new();
+                response.set_status(stats.status);
+                response.set_metrics(metrics);
+                Ok(response)
+            }
+            Err(err) => Err(ttrpc_error(ttrpc::Code::INTERNAL, err.to_string())),
         }
     }
 

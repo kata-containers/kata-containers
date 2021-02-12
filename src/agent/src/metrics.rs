@@ -5,9 +5,11 @@
 
 extern crate procfs;
 
+use anyhow::{ensure, Result};
+use nix::sys::statfs;
 use prometheus::{Encoder, Gauge, GaugeVec, IntCounter, TextEncoder};
-
-use anyhow::Result;
+use std::path::Path;
+use tokio::time::{timeout, Duration};
 use tracing::instrument;
 
 const NAMESPACE_KATA_AGENT: &str = "kata_agent";
@@ -499,4 +501,117 @@ fn set_gauge_vec_proc_stat(gv: &prometheus::GaugeVec, stat: &procfs::process::St
     gv.with_label_values(&["stime"]).set(stat.stime as f64);
     gv.with_label_values(&["cutime"]).set(stat.cutime as f64);
     gv.with_label_values(&["cstime"]).set(stat.cstime as f64);
+}
+
+pub struct FsStat {
+    pub bytes_free: u64,
+    pub bytes_used: u64,
+    /// Total file nodes
+    pub files_free: u64,
+    pub files_used: u64,
+    pub status: String,
+}
+
+const OPEN_TIMEOUT_SECS: u64 = 10;
+
+async fn open_mount(path: &str) -> Result<()> {
+    let future = tokio::fs::File::open(path);
+    let duration = Duration::from_secs(OPEN_TIMEOUT_SECS);
+
+    match timeout(duration, future).await {
+        Ok(Ok(_file)) => Ok(()),
+        Ok(Err(err)) => {
+            // No timeout, but failed to open volume
+            Err(err.into())
+        }
+        Err(err) => {
+            // Timeout
+            Err(err.into())
+        }
+    }
+}
+
+pub async fn get_volume_stats(mount: &str) -> Result<FsStat> {
+    let path = Path::new(mount);
+    ensure!(path.exists(), "Mount path does not exist");
+
+    let status = open_mount(mount);
+
+    let stat = statfs::statfs(mount)?;
+
+    let fs_stat = {
+        let block_size = stat.block_size() as u64;
+        let size = stat.blocks() * block_size;
+        let free = stat.blocks_available() * block_size;
+        let used = size - free;
+
+        let f_size = stat.files();
+        let f_free = stat.files_free();
+        let f_used = f_size - f_free;
+
+        FsStat {
+            bytes_free: free,
+            bytes_used: used,
+            files_free: f_free,
+            files_used: f_used,
+            status: match status.await {
+                Ok(_) => String::from("ok"),
+                Err(err) => err.to_string(),
+            },
+        }
+    };
+    Ok(fs_stat)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::skip_if_not_root;
+    use nix::mount;
+
+    #[tokio::test]
+    async fn test_get_volume_stats() {
+        skip_if_not_root!();
+
+        let mut stats = get_volume_stats("/").await.unwrap();
+        assert_ne!(stats.bytes_free, 0);
+        assert_ne!(stats.bytes_used, 0);
+        assert_ne!(stats.files_free, 0);
+        assert_ne!(stats.files_used, 0);
+        assert_eq!(stats.status, "ok");
+
+        // Verify error if path does not exist
+        assert!(get_volume_stats("/does-not-exist").await.is_err());
+
+        // Create a new tmpfs mount, and verify the initial values
+        let mount_dir = tempfile::tempdir().unwrap();
+        mount::mount(
+            Some("tmpfs"),
+            mount_dir.path().to_str().unwrap(),
+            Some("tmpfs"),
+            mount::MsFlags::empty(),
+            None::<&str>,
+        )
+        .unwrap();
+        stats = get_volume_stats(mount_dir.path().to_str().unwrap())
+            .await
+            .unwrap();
+        assert_eq!(stats.bytes_used, 0);
+        assert_eq!(stats.files_used, 1);
+        assert_ne!(stats.bytes_free, 0);
+        let free = stats.bytes_free;
+        let files_free = stats.files_free;
+
+        // a write will result in a block increase in utilization
+        std::fs::write(mount_dir.path().join("file.dat"), "foobar").unwrap();
+
+        stats = get_volume_stats(mount_dir.path().to_str().unwrap())
+            .await
+            .unwrap();
+
+        assert_eq!(stats.files_used, 2);
+        assert_eq!(stats.bytes_used, 4 * 1024);
+        assert_eq!(stats.bytes_free, free - 4 * 1024);
+        assert_eq!(stats.files_free, files_free - 1);
+    }
 }
