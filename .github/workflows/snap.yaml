@@ -1,15 +1,5 @@
 name: snap CI
-on:
-  pull_request:
-    paths:
-      - "**/Makefile"
-      - "**/*.go"
-      - "**/*.mk"
-      - "**/*.rs"
-      - "**/*.sh"
-      - "**/*.toml"
-      - "**/*.yaml"
-      - "**/*.yml"
+on: ["pull_request"]
 jobs:
   test:
     runs-on: ubuntu-20.04
