@@ -784,7 +784,17 @@ pub struct LinuxIntelRdt {
     pub l3_cache_schema: String,
 }
 
-#[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, Copy, Clone, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum ContainerState {
+    CREATING,
+    CREATED,
+    RUNNING,
+    STOPPED,
+    PAUSED,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct State {
     #[serde(
         default,
@@ -794,8 +804,7 @@ pub struct State {
     pub version: String,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub id: String,
-    #[serde(default, skip_serializing_if = "String::is_empty")]
-    pub status: String,
+    pub status: ContainerState,
     #[serde(default)]
     pub pid: i32,
     #[serde(default, skip_serializing_if = "String::is_empty")]
@@ -806,6 +815,8 @@ pub struct State {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+
     #[test]
     fn test_deserialize_state() {
         let data = r#"{
@@ -818,10 +829,10 @@ mod tests {
                 "myKey": "myValue"
             }
         }"#;
-        let expected = crate::State {
+        let expected = State {
             version: "0.2.0".to_string(),
             id: "oci-container1".to_string(),
-            status: "running".to_string(),
+            status: ContainerState::RUNNING,
             pid: 4422,
             bundle: "/containers/redis".to_string(),
             annotations: [("myKey".to_string(), "myValue".to_string())]

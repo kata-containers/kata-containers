@@ -7,12 +7,11 @@ use anyhow::{anyhow, Context, Result};
 use dirs;
 use lazy_static;
 use libc::pid_t;
+use oci::{ContainerState, LinuxDevice, LinuxIDMapping};
 use oci::{Hook, Linux, LinuxNamespace, LinuxResources, POSIXRlimit, Spec};
-use oci::{LinuxDevice, LinuxIDMapping};
 use serde_json;
 use std::clone::Clone;
 use std::ffi::{CStr, CString};
-use std::fmt;
 use std::fmt::Display;
 use std::fs;
 use std::os::unix::io::RawFd;
@@ -67,37 +66,29 @@ const CLOG_FD: &str = "CLOG_FD";
 const FIFO_FD: &str = "FIFO_FD";
 const HOME_ENV_KEY: &str = "HOME";
 
-#[derive(PartialEq, Clone, Copy)]
-pub enum Status {
-    CREATED,
-    RUNNING,
-    STOPPED,
-    PAUSED,
-}
-
 #[derive(Debug)]
 pub struct ContainerStatus {
-    pre_status: Status,
-    cur_status: Status,
+    pre_status: ContainerState,
+    cur_status: ContainerState,
 }
 
 impl ContainerStatus {
     fn new() -> Self {
         ContainerStatus {
-            pre_status: Status::CREATED,
-            cur_status: Status::CREATED,
+            pre_status: ContainerState::CREATED,
+            cur_status: ContainerState::CREATED,
         }
     }
 
-    fn status(&self) -> Status {
+    fn status(&self) -> ContainerState {
         self.cur_status
     }
 
-    fn pre_status(&self) -> Status {
+    fn pre_status(&self) -> ContainerState {
         self.pre_status
     }
 
-    fn transition(&mut self, to: Status) {
+    fn transition(&mut self, to: ContainerState) {
         self.pre_status = self.status();
         self.cur_status = to;
     }
@@ -105,17 +96,6 @@ impl ContainerStatus {
 
 pub type Config = CreateOpts;
 type NamespaceType = String;
-
-impl fmt::Debug for Status {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            Status::CREATED => write!(f, "{:?}", "created"),
-            Status::RUNNING => write!(f, "{:?}", "running"),
-            Status::STOPPED => write!(f, "{:?}", "stopped"),
-            Status::PAUSED => write!(f, "{:?}", "paused"),
-        }
-    }
-}
 
 lazy_static! {
     static ref NAMESPACES: HashMap<&'static str, CloneFlags> = {
@@ -215,7 +195,7 @@ pub struct BaseState {
 
 pub trait BaseContainer {
     fn id(&self) -> String;
-    fn status(&self) -> Status;
+    fn status(&self) -> ContainerState;
     fn state(&self) -> Result<State>;
     fn oci_state(&self) -> Result<OCIState>;
     fn config(&self) -> Result<&Config>;
@@ -279,7 +259,7 @@ pub trait Container: BaseContainer {
 impl Container for LinuxContainer {
     fn pause(&mut self) -> Result<()> {
         let status = self.status();
-        if status != Status::RUNNING && status != Status::CREATED {
+        if status != ContainerState::RUNNING && status != ContainerState::CREATED {
             return Err(anyhow!(
                 "failed to pause container: current status is: {:?}",
                 status
@@ -292,7 +272,7 @@ impl Container for LinuxContainer {
                 .unwrap()
                 .freeze(FreezerState::Frozen)?;
 
-            self.status.transition(Status::PAUSED);
+            self.status.transition(ContainerState::PAUSED);
             return Ok(());
         }
         Err(anyhow!("failed to get container's cgroup manager"))
@@ -300,7 +280,7 @@ impl Container for LinuxContainer {
 
     fn resume(&mut self) -> Result<()> {
         let status = self.status();
-        if status != Status::PAUSED {
+        if status != ContainerState::PAUSED {
             return Err(anyhow!("container status is: {:?}, not paused", status));
         }
 
@@ -310,7 +290,7 @@ impl Container for LinuxContainer {
                 .unwrap()
                 .freeze(FreezerState::Thawed)?;
 
-            self.status.transition(Status::RUNNING);
+            self.status.transition(ContainerState::RUNNING);
             return Ok(());
         }
         Err(anyhow!("failed to get container's cgroup manager"))
@@ -648,7 +628,7 @@ impl BaseContainer for LinuxContainer {
         self.id.clone()
     }
 
-    fn status(&self) -> Status {
+    fn status(&self) -> ContainerState {
         self.status.status()
     }
 
@@ -659,7 +639,7 @@ impl BaseContainer for LinuxContainer {
     fn oci_state(&self) -> Result<OCIState> {
         let oci = self.config.spec.as_ref().unwrap();
         let status = self.status();
-        let pid = if status != Status::STOPPED {
+        let pid = if status != ContainerState::STOPPED {
             self.init_process_pid
         } else {
             0
@@ -671,7 +651,7 @@ impl BaseContainer for LinuxContainer {
         Ok(OCIState {
             version: oci.version.clone(),
             id: self.id(),
-            status: format!("{:?}", status),
+            status,
             pid,
             bundle,
             annotations: oci.annotations.clone(),
@@ -940,7 +920,7 @@ impl BaseContainer for LinuxContainer {
 
         if init {
             self.exec()?;
-            self.status.transition(Status::RUNNING);
+            self.status.transition(ContainerState::RUNNING);
         }
 
         Ok(())
@@ -962,7 +942,7 @@ impl BaseContainer for LinuxContainer {
             }
         }
 
-        self.status.transition(Status::STOPPED);
+        self.status.transition(ContainerState::STOPPED);
         nix::mount::umount2(
             spec.root.as_ref().unwrap().path.as_str(),
             MntFlags::MNT_DETACH,
@@ -998,7 +978,7 @@ impl BaseContainer for LinuxContainer {
             .unwrap()
             .as_secs();
 
-        self.status.transition(Status::RUNNING);
+        self.status.transition(ContainerState::RUNNING);
         unistd::close(fd)?;
 
         Ok(())
@@ -1595,15 +1575,22 @@ fn execute_hook(logger: &Logger, h: &Hook, st: &OCIState) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tempfile::tempdir;
+
+    macro_rules! sl {
+        () => {
+            slog_scope::logger()
+        };
+    }
 
     #[test]
     fn test_status_transtition() {
         let mut status = ContainerStatus::new();
-        let status_table: [Status; 4] = [
-            Status::CREATED,
-            Status::RUNNING,
-            Status::PAUSED,
-            Status::STOPPED,
+        let status_table: [ContainerState; 4] = [
+            ContainerState::CREATED,
+            ContainerState::RUNNING,
+            ContainerState::PAUSED,
+            ContainerState::STOPPED,
         ];
 
         for s in status_table.iter() {
@@ -1612,5 +1599,97 @@ mod tests {
 
             assert_eq!(pre_status, status.pre_status());
         }
+    }
+
+    #[test]
+    fn test_namespaces() {
+        lazy_static::initialize(&NAMESPACES);
+        assert_eq!(NAMESPACES.len(), 7);
+
+        let ns = NAMESPACES.get("user");
+        assert!(ns.is_some());
+
+        let ns = NAMESPACES.get("ipc");
+        assert!(ns.is_some());
+
+        let ns = NAMESPACES.get("pid");
+        assert!(ns.is_some());
+
+        let ns = NAMESPACES.get("network");
+        assert!(ns.is_some());
+
+        let ns = NAMESPACES.get("mount");
+        assert!(ns.is_some());
+
+        let ns = NAMESPACES.get("uts");
+        assert!(ns.is_some());
+
+        let ns = NAMESPACES.get("cgroup");
+        assert!(ns.is_some());
+    }
+
+    #[test]
+    fn test_typetoname() {
+        lazy_static::initialize(&TYPETONAME);
+        assert_eq!(TYPETONAME.len(), 7);
+
+        let ns = TYPETONAME.get("user");
+        assert!(ns.is_some());
+
+        let ns = TYPETONAME.get("ipc");
+        assert!(ns.is_some());
+
+        let ns = TYPETONAME.get("pid");
+        assert!(ns.is_some());
+
+        let ns = TYPETONAME.get("network");
+        assert!(ns.is_some());
+
+        let ns = TYPETONAME.get("mount");
+        assert!(ns.is_some());
+
+        let ns = TYPETONAME.get("uts");
+        assert!(ns.is_some());
+
+        let ns = TYPETONAME.get("cgroup");
+        assert!(ns.is_some());
+    }
+
+    fn create_dummy_opts() -> CreateOpts {
+        let mut root = oci::Root::default();
+        root.path = "/tmp".to_string();
+
+        let linux = Linux::default();
+        let mut spec = Spec::default();
+        spec.root = Some(root).into();
+        spec.linux = Some(linux).into();
+
+        CreateOpts {
+            cgroup_name: "".to_string(),
+            use_systemd_cgroup: false,
+            no_pivot_root: false,
+            no_new_keyring: false,
+            spec: Some(spec),
+            rootless_euid: false,
+            rootless_cgroup: false,
+        }
+    }
+
+    fn new_linux_container() -> (Result<LinuxContainer>, tempfile::TempDir) {
+        // Create a temporal directory
+        let dir = tempdir()
+            .map_err(|e| anyhow!(e).context("tempdir failed"))
+            .unwrap();
+
+        // Create a new container
+        (
+            LinuxContainer::new(
+                "some_id",
+                &dir.path().join("rootfs").to_str().unwrap(),
+                create_dummy_opts(),
+                &slog_scope::logger(),
+            ),
+            dir,
+        )
     }
 }
