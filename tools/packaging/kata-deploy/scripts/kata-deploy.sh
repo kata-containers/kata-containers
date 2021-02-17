@@ -54,6 +54,8 @@ function install_artifacts() {
 }
 
 function configure_cri_runtime() {
+	configure_different_shims_base
+
 	case $1 in
 	crio)
 		configure_crio
@@ -92,7 +94,7 @@ function configure_different_shims_base() {
 
 		cat << EOT | tee "$shim_file"
 #!/bin/bash
-KATA_CONF_FILE=/opt/kata/share/defaults/kata-containers/configuration-${shim}.toml /opt/kata/bin/containerd-shim-kata-v2 \$@
+KATA_CONF_FILE=/opt/kata/share/defaults/kata-containers/configuration-${shim}.toml /opt/kata/bin/containerd-shim-kata-v2 "\$@"
 EOT
 		chmod +x "$shim_file"
 	done
@@ -112,6 +114,31 @@ function cleanup_different_shims_base() {
 	done
 }
 
+function configure_crio_runtime() {
+	local runtime="kata"
+	if [ -n "${1-}" ]; then
+		runtime+="-$1"
+	fi
+
+	local kata_path="/usr/local/bin/containerd-shim-${runtime}-v2"
+	local kata_conf="crio.runtime.runtimes.${runtime}"
+
+	if grep -qEe "^\[$kata_conf\]" $crio_conf_file; then
+		echo "Configuration exists $kata_conf, overwriting"
+		sed -i "/\[$kata_conf\]/\[$kata_conf-original\]/" $crio_conf_file
+	fi
+
+	cat <<EOT | tee -a "$crio_conf_file"
+
+# Path to the Kata Containers runtime binary that uses the $1
+[$kata_conf]
+	runtime_path = "${kata_path}"
+	runtime_type = "vm"
+	runtime_root = "/run/vc"
+	privileged_without_host_devices = true
+EOT
+}
+
 function configure_crio() {
 	# Configure crio to use Kata:
 	echo "Add Kata Containers as a supported runtime for CRIO:"
@@ -119,73 +146,9 @@ function configure_crio() {
 	# backup the CRIO.conf only if a backup doesn't already exist (don't override original)
 	cp -n "$crio_conf_file" "$crio_conf_file_backup"
 
-	local kata_clh_path="/opt/kata/bin/kata-clh"
-	local kata_clh_conf="crio.runtime.runtimes.kata-clh"
-
-	local kata_fc_path="/opt/kata/bin/kata-fc"
-	local kata_fc_conf="crio.runtime.runtimes.kata-fc"
-
-	local kata_qemu_path="/opt/kata/bin/kata-qemu"
-	local kata_qemu_conf="crio.runtime.runtimes.kata-qemu"
-
-	local kata_qemu_virtiofs_path="/opt/kata/bin/kata-qemu-virtiofs"
-	local kata_qemu_virtiofs_conf="crio.runtime.runtimes.kata-qemu-virtiofs"
-
-	# add kata-qemu config
-	if grep -qEe "^\[$kata_qemu_conf\]" $crio_conf_file; then
-		echo "Configuration exists $kata_qemu_conf, overwriting"
-		sed -i "/\[$kata_qemu_conf\]/,+1s#runtime_path.*#runtime_path = \"${kata_qemu_path}\"#" $crio_conf_file
-	else
-		cat <<EOT | tee -a "$crio_conf_file"
-
-# Path to the Kata Containers runtime binary that uses the QEMU hypervisor.
-[$kata_qemu_conf]
-  runtime_path = "${kata_qemu_path}"
-  privileged_without_host_devices = true
-EOT
-	fi
-
-        # add kata-qemu-virtiofs config
-	if grep -qEe "^\[$kata_qemu_virtiofs_conf\]" $crio_conf_file; then
-		echo "Configuration exists $kata_qemu_virtiofs_conf, overwriting"
-		sed -i "/\[$kata_qemu_virtiofs_conf\]/,+1s#runtime_path.*#runtime_path = \"${kata_qemu_virtiofs_path}\"#" $crio_conf_file
-	else
-		cat <<EOT | tee -a "$crio_conf_file"
-
-# Path to the Kata Containers runtime binary that uses the QEMU hypervisor with virtiofs support.
-[$kata_qemu_virtiofs_conf]
-  runtime_path = "${kata_qemu_virtiofs_path}"
-  privileged_without_host_devices = true
-EOT
-        fi
-
-	# add kata-fc config
-	if grep -qEe "^\[$kata_fc_conf\]" $crio_conf_file; then
-		echo "Configuration exists for $kata_fc_conf, overwriting"
-		sed -i "/\[$kata_fc_conf\]/,+1s#runtime_path.*#runtime_path = \"${kata_fc_path}\"#" $crio_conf_file
-	else
-		cat <<EOT | tee -a "$crio_conf_file"
-
-# Path to the Kata Containers runtime binary that uses the firecracker hypervisor.
-[$kata_fc_conf]
-  runtime_path = "${kata_fc_path}"
-  privileged_without_host_devices = true
-EOT
-	fi
-
-	# add kata-clh config
-	if grep -qEe "^\[$kata_clh_conf\]" $crio_conf_file; then
-		echo "Configuration exists $kata_clh_conf, overwriting"
-		sed -i "/\[$kata_clh_conf\]/,+1s#runtime_path.*#runtime_path = \"${kata_clh_path}\"#" $crio_conf_file
-	else
-		cat <<EOT | tee -a "$crio_conf_file"
-
-# Path to the Kata Containers runtime binary that uses the Cloud Hypervisor.
-[$kata_clh_conf]
-  runtime_path = "${kata_clh_path}"
-  privileged_without_host_devices = true
-EOT
-	fi
+	for shim in "${shims[@]}"; do
+		configure_crio_runtime $shim
+	done
 
 	# Replace if exists, insert otherwise
 	grep -Fq 'manage_network_ns_lifecycle =' $crio_conf_file \
@@ -245,8 +208,6 @@ function configure_containerd() {
 	# Add default Kata runtime configuration
 	configure_containerd_runtime
 
-	configure_different_shims_base
-
 	for shim in "${shims[@]}"; do
 		configure_containerd_runtime $shim
 	done
@@ -258,6 +219,8 @@ function remove_artifacts() {
 }
 
 function cleanup_cri_runtime() {
+	cleanup_different_shims_base
+
 	case $1 in
 	crio)
 		cleanup_crio
@@ -280,9 +243,6 @@ function cleanup_containerd() {
 	if [ -f "$containerd_conf_file_backup" ]; then
 		mv "$containerd_conf_file_backup" "$containerd_conf_file"
 	fi
-
-
-	cleanup_different_shims_base
 }
 
 function reset_runtime() {
