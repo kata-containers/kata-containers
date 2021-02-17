@@ -66,6 +66,52 @@ function configure_cri_runtime() {
 	systemctl restart "$1"
 }
 
+function configure_different_shims_base() {
+	# Currently containerd has an assumption on the location of the shimv2 implementation
+	# This forces kata-deploy to create files in a well-defined location that's part of
+	# the PATH, pointing to the containerd-shim-kata-v2 binary in /opt/kata/bin
+	# Issues:
+	#   https://github.com/containerd/containerd/issues/3073
+	#   https://github.com/containerd/containerd/issues/5006
+
+	mkdir -p /usr/local/bin
+
+	for shim in "${shims[@]}"; do
+		local shim_binary="containerd-shim-kata-${shim}-v2"
+		local shim_file="/usr/local/bin/${shim_binary}"
+		local shim_backup="/usr/local/bin/${shim_binary}.bak"
+
+		if [ -f "${shim_file}" ]; then
+			echo "warning: ${shim_binary} already exists" >&2
+			if [ ! -f "${shim_backup}" ]; then
+				mv "${shim_file}" "${shim_backup}"
+			else
+				rm "${shim_file}"
+			fi
+		fi
+
+		cat << EOT | tee "$shim_file"
+#!/bin/bash
+KATA_CONF_FILE=/opt/kata/share/defaults/kata-containers/configuration-${shim}.toml /opt/kata/bin/containerd-shim-kata-v2 \$@
+EOT
+		chmod +x "$shim_file"
+	done
+}
+
+function cleanup_different_shims_base() {
+	for shim in "${shims[@]}"; do
+		local shim_binary="containerd-shim-kata-${shim}-v2"
+		local shim_file="/usr/local/bin/${shim_binary}"
+		local shim_backup="/usr/local/bin/${shim_binary}.bak"
+
+		rm "${shim_file}" || true
+
+		if [ -f "${shim_backup}" ]; then
+			mv "$shim_backup" "$shim_file"
+		fi
+	done
+}
+
 function configure_crio() {
 	# Configure crio to use Kata:
 	echo "Add Kata Containers as a supported runtime for CRIO:"
@@ -199,32 +245,10 @@ function configure_containerd() {
 	# Add default Kata runtime configuration
 	configure_containerd_runtime
 
-	#Currently containerd has an assumption on the location of the shimv2 implementation
-	#Until support is added (see https://github.com/containerd/containerd/issues/3073),
-	#create a link in /usr/local/bin/ to the v2-shim implementation in /opt/kata/bin.
-
-	mkdir -p /usr/local/bin
+	configure_different_shims_base
 
 	for shim in "${shims[@]}"; do
 		configure_containerd_runtime $shim
-
-		local shim_binary="containerd-shim-kata-${shim}-v2"
-		local shim_file="/usr/local/bin/${shim_binary}"
-		local shim_backup="/usr/local/bin/${shim_binary}.bak"
-
-		if [ -f "${shim_file}" ]; then
-			echo "warning: ${shim_binary} already exists" >&2
-			if [ ! -f "${shim_backup}" ]; then
-				mv "${shim_file}" "${shim_backup}"
-			else
-				rm "${shim_file}"
-			fi
-		fi
-       cat << EOT | tee "$shim_file"
-#!/bin/bash
-KATA_CONF_FILE=/opt/kata/share/defaults/kata-containers/configuration-${shim}.toml /opt/kata/bin/containerd-shim-kata-v2 \$@
-EOT
-	chmod +x "$shim_file"
 	done
 }
 
@@ -244,6 +268,7 @@ function cleanup_cri_runtime() {
 	esac
 
 }
+
 function cleanup_crio() {
 	if [ -f "$crio_conf_file_backup" ]; then
 		cp "$crio_conf_file_backup" "$crio_conf_file"
@@ -256,22 +281,8 @@ function cleanup_containerd() {
 		mv "$containerd_conf_file_backup" "$containerd_conf_file"
 	fi
 
-	#Currently containerd has an assumption on the location of the shimv2 implementation
-	#Until support is added (see https://github.com/containerd/containerd/issues/3073), we manage
-	# a reference to the v2-shim implementation
 
-	for shim in "${shims[@]}"; do
-		local shim_binary="containerd-shim-kata-${shim}-v2"
-		local shim_file="/usr/local/bin/${shim_binary}"
-		local shim_backup="/usr/local/bin/${shim_binary}.bak"
-
-		rm "${shim_file}" || true
-
-		if [ -f "${shim_backup}" ]; then
-			mv "$shim_backup" "$shim_file"
-		fi
-	done
-
+	cleanup_different_shims_base
 }
 
 function reset_runtime() {
