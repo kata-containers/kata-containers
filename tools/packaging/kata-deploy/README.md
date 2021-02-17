@@ -182,17 +182,18 @@ This image contains all the necessary artifacts for running Kata Containers, all
 from the [Kata Containers release page](https://github.com/kata-containers/runtime/releases).
 
 Host artifacts:
-* `kata-runtime`
+* `cloud-hypervisor`, `firecracker`, `qemu-system-x86_64`, `qemu-virtiofs-system-x86_64` and supporting binaries
+* `containerd-shim-kata-v2`
+* `kata-clh`
+* `kata-collect-data.sh`
 * `kata-fc`
 * `kata-qemu`
-* `kata-proxy`
-* `kata-shim`
-* `firecracker`
-* `qemu-system-x86_64` and supporting binaries
+* `kata-qemu-virtiofs`
+* `kata-runtime`
 
 Virtual Machine artifacts:
-* `kata-containers.img`: pulled from Kata GitHub releases page
-* `vmlinuz.container`: pulled from Kata GitHub releases page
+* `kata-containers.img` and `kata-containers-initrd.img`: pulled from Kata GitHub releases page
+* `vmlinuz.container` and `vmlinuz-virtiofs.container`: pulled from Kata GitHub releases page
 
 ### DaemonSets and RBAC
 
