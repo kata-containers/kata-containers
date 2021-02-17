@@ -22,4 +22,4 @@ licensing and allows automated tooling to check the license of individual
 files.
 
 This SPDX licence identifier requirement is enforced by the
-[CI (Continuous Integration) system](https://github.com/kata-containers/tests/blob/master/.ci/static-checks.sh).
+[CI (Continuous Integration) system](https://github.com/kata-containers/tests/blob/main/.ci/static-checks.sh).
