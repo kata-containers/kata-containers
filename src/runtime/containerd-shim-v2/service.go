@@ -81,21 +81,6 @@ func New(ctx context.Context, id string, publisher events.Publisher) (cdshim.Shi
 	vci.SetLogger(ctx, shimLog)
 	katautils.SetLogger(ctx, shimLog, shimLog.Logger.Level)
 
-	// load runtime config so that tracing can start if enabled
-	_, runtimeConfig, err := katautils.LoadConfiguration("", false, true)
-	if err != nil {
-		return nil, err
-	}
-
-	// create tracer
-	_, err = katautils.CreateTracer("kata", &runtimeConfig)
-	if err != nil {
-		return nil, err
-	}
-	// create span
-	span, ctx := trace(ctx, "New")
-	defer span.End()
-
 	ctx, cancel := context.WithCancel(ctx)
 
 	s := &service{
@@ -103,7 +88,6 @@ func New(ctx context.Context, id string, publisher events.Publisher) (cdshim.Shi
 		pid:        uint32(os.Getpid()),
 		ctx:        ctx,
 		containers: make(map[string]*container),
-		config:     &runtimeConfig,
 		events:     make(chan interface{}, chSize),
 		ec:         make(chan exit, bufferSize),
 		cancel:     cancel,
@@ -186,13 +170,6 @@ func newCommand(ctx context.Context, containerdBinary, id, containerdAddress str
 // StartShim willl start a kata shimv2 daemon which will implemented the
 // ShimV2 APIs such as create/start/update etc containers.
 func (s *service) StartShim(ctx context.Context, id, containerdBinary, containerdAddress string) (string, error) {
-	// Stop tracing here since a new tracer will be created the next time New()
-	// is called again after StartShim()
-	defer katautils.StopTracing(s.ctx)
-
-	span, _ := trace(s.ctx, "StartShim")
-	defer span.End()
-
 	bundlePath, err := os.Getwd()
 	if err != nil {
 		return "", err
@@ -375,9 +352,6 @@ func (s *service) Cleanup(ctx context.Context) (_ *taskAPI.DeleteResponse, err e
 
 // Create a new sandbox or container with the underlying OCI runtime
 func (s *service) Create(ctx context.Context, r *taskAPI.CreateTaskRequest) (_ *taskAPI.CreateTaskResponse, err error) {
-	span, _ := trace(s.ctx, "Create")
-	defer span.End()
-
 	start := time.Now()
 	defer func() {
 		err = toGRPC(err)
