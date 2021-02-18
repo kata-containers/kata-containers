@@ -19,6 +19,7 @@ import (
 	"github.com/containerd/typeurl"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/pkg/errors"
+	otelTrace "go.opentelemetry.io/otel/trace"
 
 	// only register the proto type
 	_ "github.com/containerd/containerd/runtime/linux/runctypes"
@@ -59,10 +60,20 @@ func create(ctx context.Context, s *service, r *taskAPI.CreateTaskRequest) (*con
 			return nil, fmt.Errorf("cannot create another sandbox in sandbox: %s", s.sandbox.ID())
 		}
 
-		_, err := loadRuntimeConfig(s, r, ociSpec.Annotations)
+		s.config, err = loadRuntimeConfig(s, r, ociSpec.Annotations)
+
+		// create tracer
+		// This is the earliest location we can create the tracer because we must wait
+		// until the runtime config is loaded
+		_, err = katautils.CreateTracer("kata", s.config)
 		if err != nil {
 			return nil, err
 		}
+
+		// create span
+		var span otelTrace.Span
+		span, s.ctx = trace(s.ctx, "create")
+		defer span.End()
 
 		if rootFs.Mounted, err = checkAndMount(s, r); err != nil {
 			return nil, err
@@ -90,6 +101,10 @@ func create(ctx context.Context, s *service, r *taskAPI.CreateTaskRequest) (*con
 		go s.startManagementServer(ctx, ociSpec)
 
 	case vc.PodContainer:
+                var span otelTrace.Span
+                span, s.ctx = trace(s.ctx, "create")
+                defer span.End()
+
 		if s.sandbox == nil {
 			return nil, fmt.Errorf("BUG: Cannot start the container, since the sandbox hasn't been created")
 		}
