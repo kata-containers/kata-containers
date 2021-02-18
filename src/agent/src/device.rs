@@ -776,50 +776,56 @@ mod tests {
         assert_eq!(relpath.unwrap(), "/0000:00:02.0/0000:01:03.0/0000:02:04.0");
     }
 
-    #[tokio::test]
-    async fn test_get_device_name() {
-        let devname = "vda";
-        let busid = "0.0.0005";
-        let devpath = format!("/dev/ces/css0/0.0.0004/{}/virtio4/block/{}", busid, devname);
-
+    async fn one_test_get_device_name(sysname: &str, devname: &str, watchfor: &str) {
         let logger = slog::Logger::root(slog::Discard, o!());
         let sandbox = Arc::new(Mutex::new(Sandbox::new(&logger).unwrap()));
 
         let mut sb = sandbox.lock().await;
         sb.sys_to_dev_map
-            .insert(devpath.clone(), devname.to_string());
+            .insert(sysname.to_string(), devname.to_string());
         drop(sb); // unlock
 
-        let name = get_device_name(&sandbox, busid).await;
+        let name = get_device_name(&sandbox, &watchfor).await;
         assert!(name.is_ok(), "{}", name.unwrap_err());
         assert_eq!(name.unwrap(), format!("{}/{}", SYSTEM_DEV_PATH, devname));
 
         let mut sb = sandbox.lock().await;
-        sb.sys_to_dev_map.remove(&devpath);
+        sb.sys_to_dev_map.remove(sysname);
         drop(sb); // unlock
 
         let watcher_sandbox = Arc::clone(&sandbox);
+        let watchfor_copy = watchfor.to_string();
+        let devname_copy = devname.to_string();
         tokio::spawn(async move {
             loop {
                 let mut sb = watcher_sandbox.lock().await;
                 let matched_key = sb
                     .dev_watcher
                     .keys()
-                    .filter(|dev_addr| devpath.contains(*dev_addr))
+                    .filter(|dev_addr| watchfor_copy.contains(*dev_addr))
                     .cloned()
                     .next();
 
                 if let Some(k) = matched_key {
                     let sender = sb.dev_watcher.remove(&k).unwrap();
-                    let _ = sender.send(devname.to_string());
+                    let _ = sender.send(devname_copy);
                     return;
                 }
                 drop(sb); // unlock
             }
         });
 
-        let name = get_device_name(&sandbox, busid).await;
+        let name = get_device_name(&sandbox, &watchfor).await;
         assert!(name.is_ok(), "{}", name.unwrap_err());
         assert_eq!(name.unwrap(), format!("{}/{}", SYSTEM_DEV_PATH, devname));
+    }
+
+    #[tokio::test]
+    async fn test_get_device_name() {
+        let devname = "vda";
+        let busid = "0.0.0005";
+        let sysname = format!("/devices/css0/0.0.0004/{}/virtio4/block/{}", busid, devname);
+
+        one_test_get_device_name(&sysname, devname, busid).await;
     }
 }
