@@ -147,13 +147,6 @@ install_qemu() {
 	kata_version="${kata_version}" "${pkg_root_dir}/static-build/qemu/build-static-qemu.sh"
 }
 
-# Install static qemu-virtiofsd asset
-install_qemu_virtiofsd() {
-	kata_version=${1:-$kata_version}
-	info "build static qemu-virtiofs"
-	kata_version="${kata_version}" "${pkg_root_dir}/static-build/qemu-virtiofs/build-static-qemu-virtiofs.sh"
-}
-
 # Install static firecracker asset
 install_firecracker() {
 	kata_version=${1:-$kata_version}
@@ -211,8 +204,6 @@ install_kata_components() {
 untar_qemu_binaries() {
 	info "Install static qemu"
 	tar xf kata-static-qemu.tar.gz -C "${destdir}"
-	info "Install static qemu-virtiofs"
-	tar xf kata-static-qemu-virtiofsd.tar.gz -C "${destdir}"
 }
 
 main() {
@@ -242,7 +233,6 @@ main() {
 	install_kernel
 	install_clh
 	install_qemu
-	install_qemu_virtiofsd
 	install_firecracker
 	install_image
 
