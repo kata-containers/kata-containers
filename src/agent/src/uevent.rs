@@ -51,12 +51,10 @@ impl Uevent {
     // Check whether this is a device hot-add event.
     fn is_device_add_event(&self) -> bool {
         let pci_root_bus_path = create_pci_root_bus_path();
-        self.action == U_EVENT_ACTION_ADD
-            && {
-                self.devpath.starts_with(pci_root_bus_path.as_str())
-                    || self.devpath.starts_with(ACPI_DEV_PATH) // NVDIMM/PMEM devices
-            }
-            && self.devname != ""
+        self.action == U_EVENT_ACTION_ADD && {
+            self.devpath.starts_with(pci_root_bus_path.as_str())
+                || self.devpath.starts_with(ACPI_DEV_PATH) // NVDIMM/PMEM devices
+        }
     }
 
     async fn handle_device_add_event(&self, sandbox: &Arc<Mutex<Sandbox>>) {

@@ -828,4 +828,12 @@ mod tests {
 
         one_test_get_device_name(&sysname, devname, busid).await;
     }
+
+    #[tokio::test]
+    async fn test_get_device_name_empty_dev() {
+        let busid = "0000:01:00.0";
+        let sysname = format!("/devices/pci0000:00:0000:00:1c.0/{}", busid);
+
+        one_test_get_device_name(&sysname, "", busid).await;
+    }
 }
