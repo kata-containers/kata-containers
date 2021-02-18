@@ -103,32 +103,6 @@ jobs:
           name: kata-artifacts
           path: kata-static-qemu.tar.gz
 
-  build-nemu:
-    runs-on: ubuntu-16.04
-    needs: get-artifact-list
-    env:
-      buildstr: "install_nemu"
-    steps:
-      - uses: actions/checkout@v1
-      - name: get-artifact-list
-        uses: actions/download-artifact@master
-        with:
-          name: artifact-list
-      - name: build-nemu
-        run: |
-         if grep -q $buildstr ./artifact-list/artifact-list.txt; then
-           $GITHUB_WORKSPACE/.github/workflows/generate-artifact-tarball.sh $buildstr
-           echo "artifact-built=true" >> $GITHUB_ENV
-         else
-           echo "artifact-built=false" >> $GITHUB_ENV
-         fi
-      - name: store-artifacts
-        if: env.artifact-built == 'true'
-        uses: actions/upload-artifact@master
-        with:
-          name: kata-artifacts
-          path: kata-static-nemu.tar.gz
-
   # Job for building the image
   build-image:
     runs-on: ubuntu-16.04
@@ -239,7 +213,7 @@ jobs:
 
   gather-artifacts:
     runs-on: ubuntu-16.04
-    needs: [build-experimental-kernel, build-kernel, build-qemu, build-image, build-firecracker, build-kata-components, build-nemu, build-clh]
+    needs: [build-experimental-kernel, build-kernel, build-qemu, build-image, build-firecracker, build-kata-components, build-clh]
     steps:
       - uses: actions/checkout@v1
       - name: get-artifacts
