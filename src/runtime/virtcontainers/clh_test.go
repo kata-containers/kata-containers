@@ -101,7 +101,7 @@ func (c *clhClientMock) VmAddDevicePut(ctx context.Context, vmAddDevice chclient
 
 //nolint:golint
 func (c *clhClientMock) VmAddDiskPut(ctx context.Context, diskConfig chclient.DiskConfig) (chclient.PciDeviceInfo, *http.Response, error) {
-	return chclient.PciDeviceInfo{}, nil, nil
+	return chclient.PciDeviceInfo{Bdf: "0000:00:0a.0"}, nil, nil
 }
 
 //nolint:golint
