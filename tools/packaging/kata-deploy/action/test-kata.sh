@@ -116,7 +116,6 @@ function test_kata() {
     # apply runtime classes:
     kubectl apply -f "$YAMLPATH/k8s-1.14/kata-clh-runtimeClass.yaml"
     kubectl apply -f "$YAMLPATH/k8s-1.14/kata-qemu-runtimeClass.yaml"
-    kubectl apply -f "$YAMLPATH/k8s-1.14/kata-qemu-virtiofs-runtimeClass.yaml"
 
     kubectl get runtimeclasses
 

@@ -10,7 +10,6 @@ coverage.html
 /cli/config/configuration-fc.toml
 /cli/config/configuration-nemu.toml
 /cli/config/configuration-qemu.toml
-/cli/config/configuration-qemu-virtiofs.toml
 /cli/config/configuration-clh.toml
 /cli/config-generated.go
 /cli/containerd-shim-kata-v2/config-generated.go
