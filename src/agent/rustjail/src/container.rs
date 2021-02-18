@@ -5,11 +5,10 @@
 
 use anyhow::{anyhow, Context, Result};
 use libc::pid_t;
+use oci::{ContainerState, LinuxDevice, LinuxIDMapping};
 use oci::{Hook, Linux, LinuxNamespace, LinuxResources, Spec};
-use oci::{LinuxDevice, LinuxIDMapping};
 use std::clone::Clone;
 use std::ffi::{CStr, CString};
-use std::fmt;
 use std::fmt::Display;
 use std::fs;
 use std::os::unix::io::RawFd;
@@ -73,37 +72,29 @@ const FIFO_FD: &str = "FIFO_FD";
 const HOME_ENV_KEY: &str = "HOME";
 const PIDNS_FD: &str = "PIDNS_FD";
 
-#[derive(PartialEq, Clone, Copy)]
-pub enum Status {
-    CREATED,
-    RUNNING,
-    STOPPED,
-    PAUSED,
-}
-
 #[derive(Debug)]
 pub struct ContainerStatus {
-    pre_status: Status,
-    cur_status: Status,
+    pre_status: ContainerState,
+    cur_status: ContainerState,
 }
 
 impl ContainerStatus {
     fn new() -> Self {
         ContainerStatus {
-            pre_status: Status::CREATED,
-            cur_status: Status::CREATED,
+            pre_status: ContainerState::CREATED,
+            cur_status: ContainerState::CREATED,
         }
     }
 
-    fn status(&self) -> Status {
+    fn status(&self) -> ContainerState {
         self.cur_status
     }
 
-    fn pre_status(&self) -> Status {
+    fn pre_status(&self) -> ContainerState {
         self.pre_status
     }
 
-    fn transition(&mut self, to: Status) {
+    fn transition(&mut self, to: ContainerState) {
         self.pre_status = self.status();
         self.cur_status = to;
     }
@@ -111,17 +102,6 @@ impl ContainerStatus {
 
 pub type Config = CreateOpts;
 type NamespaceType = String;
-
-impl fmt::Debug for Status {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            Status::CREATED => write!(f, "{:?}", "created"),
-            Status::RUNNING => write!(f, "{:?}", "running"),
-            Status::STOPPED => write!(f, "{:?}", "stopped"),
-            Status::PAUSED => write!(f, "{:?}", "paused"),
-        }
-    }
-}
 
 lazy_static! {
     static ref NAMESPACES: HashMap<&'static str, CloneFlags> = {
@@ -222,7 +202,7 @@ pub struct BaseState {
 #[async_trait]
 pub trait BaseContainer {
     fn id(&self) -> String;
-    fn status(&self) -> Status;
+    fn status(&self) -> ContainerState;
     fn state(&self) -> Result<State>;
     fn oci_state(&self) -> Result<OCIState>;
     fn config(&self) -> Result<&Config>;
@@ -286,7 +266,7 @@ pub trait Container: BaseContainer {
 impl Container for LinuxContainer {
     fn pause(&mut self) -> Result<()> {
         let status = self.status();
-        if status != Status::RUNNING && status != Status::CREATED {
+        if status != ContainerState::RUNNING && status != ContainerState::CREATED {
             return Err(anyhow!(
                 "failed to pause container: current status is: {:?}",
                 status
@@ -299,7 +279,7 @@ impl Container for LinuxContainer {
                 .unwrap()
                 .freeze(FreezerState::Frozen)?;
 
-            self.status.transition(Status::PAUSED);
+            self.status.transition(ContainerState::PAUSED);
             return Ok(());
         }
         Err(anyhow!("failed to get container's cgroup manager"))
@@ -307,7 +287,7 @@ impl Container for LinuxContainer {
 
     fn resume(&mut self) -> Result<()> {
         let status = self.status();
-        if status != Status::PAUSED {
+        if status != ContainerState::PAUSED {
             return Err(anyhow!("container status is: {:?}, not paused", status));
         }
 
@@ -317,7 +297,7 @@ impl Container for LinuxContainer {
                 .unwrap()
                 .freeze(FreezerState::Thawed)?;
 
-            self.status.transition(Status::RUNNING);
+            self.status.transition(ContainerState::RUNNING);
             return Ok(());
         }
         Err(anyhow!("failed to get container's cgroup manager"))
@@ -736,7 +716,7 @@ impl BaseContainer for LinuxContainer {
         self.id.clone()
     }
 
-    fn status(&self) -> Status {
+    fn status(&self) -> ContainerState {
         self.status.status()
     }
 
@@ -751,7 +731,7 @@ impl BaseContainer for LinuxContainer {
         };
 
         let status = self.status();
-        let pid = if status != Status::STOPPED {
+        let pid = if status != ContainerState::STOPPED {
             self.init_process_pid
         } else {
             0
@@ -771,7 +751,7 @@ impl BaseContainer for LinuxContainer {
         Ok(OCIState {
             version: oci.version.clone(),
             id: self.id(),
-            status: format!("{:?}", status),
+            status,
             pid,
             bundle,
             annotations: oci.annotations.clone(),
@@ -1014,7 +994,7 @@ impl BaseContainer for LinuxContainer {
 
         if init {
             self.exec()?;
-            self.status.transition(Status::RUNNING);
+            self.status.transition(ContainerState::RUNNING);
         }
 
         Ok(())
@@ -1036,7 +1016,7 @@ impl BaseContainer for LinuxContainer {
             }
         }
 
-        self.status.transition(Status::STOPPED);
+        self.status.transition(ContainerState::STOPPED);
         mount::umount2(
             spec.root.as_ref().unwrap().path.as_str(),
             MntFlags::MNT_DETACH,
@@ -1072,7 +1052,7 @@ impl BaseContainer for LinuxContainer {
             .unwrap()
             .as_secs();
 
-        self.status.transition(Status::RUNNING);
+        self.status.transition(ContainerState::RUNNING);
         unistd::close(fd)?;
 
         Ok(())
@@ -1676,7 +1656,7 @@ mod tests {
             &OCIState {
                 version: "1.2.3".to_string(),
                 id: "321".to_string(),
-                status: "".to_string(),
+                status: ContainerState::RUNNING,
                 pid: 2,
                 bundle: "".to_string(),
                 annotations: Default::default(),
@@ -1689,11 +1669,11 @@ mod tests {
     #[test]
     fn test_status_transtition() {
         let mut status = ContainerStatus::new();
-        let status_table: [Status; 4] = [
-            Status::CREATED,
-            Status::RUNNING,
-            Status::PAUSED,
-            Status::STOPPED,
+        let status_table: [ContainerState; 4] = [
+            ContainerState::CREATED,
+            ContainerState::RUNNING,
+            ContainerState::PAUSED,
+            ContainerState::STOPPED,
         ];
 
         for s in status_table.iter() {
@@ -1725,14 +1705,6 @@ mod tests {
 
         // restore the uid
         set_stdio_permissions(old_uid).unwrap();
-    }
-
-    #[test]
-    fn test_status_fmt() {
-        assert_eq!("\"created\"", format!("{:?}", Status::CREATED));
-        assert_eq!("\"running\"", format!("{:?}", Status::RUNNING));
-        assert_eq!("\"paused\"", format!("{:?}", Status::PAUSED));
-        assert_eq!("\"stopped\"", format!("{:?}", Status::STOPPED));
     }
 
     #[test]
@@ -1838,7 +1810,7 @@ mod tests {
     fn test_linuxcontainer_pause_bad_status() {
         let ret = new_linux_container_and_then(|mut c: LinuxContainer| {
             // Change state to pause, c.pause() should fail
-            c.status.transition(Status::PAUSED);
+            c.status.transition(ContainerState::PAUSED);
             c.pause().map_err(|e| anyhow!(e))
         });
 
@@ -1870,7 +1842,7 @@ mod tests {
     fn test_linuxcontainer_resume_bad_status() {
         let ret = new_linux_container_and_then(|mut c: LinuxContainer| {
             // Change state to created, c.resume() should fail
-            c.status.transition(Status::CREATED);
+            c.status.transition(ContainerState::CREATED);
             c.resume().map_err(|e| anyhow!(e))
         });
 
@@ -1881,7 +1853,7 @@ mod tests {
     #[test]
     fn test_linuxcontainer_resume_cgroupmgr_is_none() {
         let ret = new_linux_container_and_then(|mut c: LinuxContainer| {
-            c.status.transition(Status::PAUSED);
+            c.status.transition(ContainerState::PAUSED);
             c.cgroup_manager = None;
             c.resume().map_err(|e| anyhow!(e))
         });
@@ -1894,7 +1866,7 @@ mod tests {
         let ret = new_linux_container_and_then(|mut c: LinuxContainer| {
             c.cgroup_manager = FsManager::new("").ok();
             // Change status to paused, this way we can resume it
-            c.status.transition(Status::PAUSED);
+            c.status.transition(ContainerState::PAUSED);
             c.resume().map_err(|e| anyhow!(e))
         });
 
