@@ -244,6 +244,7 @@ generate_dockerfile()
 			goarch=ppc64le
 			rustarch=powerpc64le
 			muslarch=powerpc64
+			libc=gnu
 			;;
 
 		"aarch64")
@@ -337,7 +338,7 @@ RUN ln -sf /usr/bin/g++ /bin/musl-g++
 			-e "s|@OS_VERSION@|${OS_VERSION:-}|g" \
 			-e "s|@INSTALL_MUSL@||g" \
 			-e "s|@INSTALL_GO@|${install_go//$'\n'/\\n}|g" \
-			-e "s|@INSTALL_RUST@||g" \
+			-e "s|@INSTALL_RUST@|${install_rust//$'\n'/\\n}|g" \
 			-e "s|@SET_PROXY@|${set_proxy:-}|g" \
 			"${dockerfile_template}" > Dockerfile
 	# no musl target on s390x, will use GNU
