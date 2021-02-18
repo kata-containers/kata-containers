@@ -273,9 +273,7 @@ generate_qemu_options() {
 
 	# Disable TCG support
 	case "$arch" in
-	aarch64)
-		echo $hypervisor | grep -q nemu && qemu_options+=(size:--disable-tcg)
-		;;
+	aarch64) ;;
 	x86_64) qemu_options+=(size:--disable-tcg) ;;
 	ppc64le) ;;
 	s390x) qemu_options+=(size:--disable-tcg) ;;
