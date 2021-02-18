@@ -100,21 +100,18 @@ AGENT_INIT          When set to "yes", use ${AGENT_BIN} as init process in place
                     of systemd.
                     Default value: no
 
-RUST_AGENT          When set to "no", build kata-agent from go agent instead of kata-rust-agent
-                    Default value: "yes"
-
-RUST_AGENT_PKG      URL of the Git repository hosting the agent package.
-                    Default value: ${RUST_AGENT_PKG}
-
-AGENT_VERSION       Version of the agent to include in the rootfs.
-                    Default value: ${AGENT_VERSION:-<not set>}
-
 AGENT_SOURCE_BIN    Path to the directory of agent binary.
                     If set, use the binary as agent but not build agent package.
                     Default value: <not set>
 
+AGENT_VERSION       Version of the agent to include in the rootfs.
+                    Default value: ${AGENT_VERSION:-<not set>}
+
 DISTRO_REPO         Use host repositories to install guest packages.
                     Default value: <not set>
+
+DOCKER_RUNTIME      Docker runtime to use when USE_DOCKER is set.
+                    Default value: runc
 
 GO_AGENT_PKG        URL of the Git repository hosting the agent package.
                     Default value: ${GO_AGENT_PKG}
@@ -126,12 +123,22 @@ GRACEFUL_EXIT       If set, and if the DISTRO configuration specifies a
                     specific distributions.
                     Default value: <not set>
 
+IMAGE_REGISTRY      Hostname for the image registry used to pull down the rootfs
+                    build image.
+                    Default value: docker.io
+
 KERNEL_MODULES_DIR  Path to a directory containing kernel modules to include in
                     the rootfs.
                     Default value: <empty>
 
 ROOTFS_DIR          Path to the directory that is populated with the rootfs.
                     Default value: <${script_name} path>/rootfs-<DISTRO-name>
+
+RUST_AGENT          When set to "no", build kata-agent from go agent instead of kata-rust-agent
+                    Default value: "yes"
+
+RUST_AGENT_PKG      URL of the Git repository hosting the agent package.
+                    Default value: ${RUST_AGENT_PKG}
 
 USE_DOCKER          If set, build the rootfs inside a container (requires
                     Docker).
@@ -140,9 +147,6 @@ USE_DOCKER          If set, build the rootfs inside a container (requires
 USE_PODMAN          If set and USE_DOCKER not set, then build the rootfs inside
                     a podman container (requires podman).
                     Default value: <not set>
-
-DOCKER_RUNTIME      Docker runtime to use when USE_DOCKER is set.
-                    Default value: runc
 
 Refer to the Platform-OS Compatibility Matrix for more details on the supported
 architectures:
@@ -371,9 +375,15 @@ build_rootfs_distro()
 
 		image_name="${distro}-rootfs-osbuilder"
 
+		REGISTRY_ARG=""
+		if [ -n "${IMAGE_REGISTRY}" ]; then
+			REGISTRY_ARG="--build-arg IMAGE_REGISTRY=${IMAGE_REGISTRY}"
+		fi
+
 		# setup to install go or rust here
 		generate_dockerfile "${distro_config_dir}"
 		"$container_engine" build  \
+			${REGISTRY_ARG} \
 			--build-arg http_proxy="${http_proxy}" \
 			--build-arg https_proxy="${https_proxy}" \
 			-t "${image_name}" "${distro_config_dir}"

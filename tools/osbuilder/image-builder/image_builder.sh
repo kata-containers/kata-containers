@@ -84,14 +84,15 @@ Options:
 	-r Free space of the root partition in MB ENV: ROOT_FREE_SPACE
 
 Extra environment variables:
-	AGENT_BIN:  Use it to change the expected agent binary name
-	AGENT_INIT: Use kata agent as init process
-	NSDAX_BIN:  Use to specify path to pre-compiled 'nsdax' tool.
-	FS_TYPE:    Filesystem type to use. Only xfs and ext4 are supported.
-	USE_DOCKER: If set will build image in a Docker Container (requries docker)
-		    DEFAULT: not set
-	USE_PODMAN: If set and USE_DOCKER not set, will build image in a Podman Container (requries podman)
-	            DEFAULT: not set
+	AGENT_BIN:      Use it to change the expected agent binary name
+	AGENT_INIT:     Use kata agent as init process
+	IMAGE_REGISTRY: Hostname for the image registry used to pull down the rootfs build image.
+	FS_TYPE:        Filesystem type to use. Only xfs and ext4 are supported.
+	NSDAX_BIN:      Use to specify path to pre-compiled 'nsdax' tool.
+	USE_DOCKER:     If set will build image in a Docker Container (requries docker)
+	                DEFAULT: not set
+	USE_PODMAN:     If set and USE_DOCKER not set, will build image in a Podman Container (requries podman)
+	                DEFAULT: not set
 
 
 Following diagram shows how the resulting image will look like
@@ -137,7 +138,13 @@ build_with_container() {
 	image_dir=$(readlink -f "$(dirname "${image}")")
 	image_name=$(basename "${image}")
 
+	REGISTRY_ARG=""
+	if [ -n "${IMAGE_REGISTRY}" ]; then
+		REGISTRY_ARG="--build-arg IMAGE_REGISTRY=${IMAGE_REGISTRY}"
+	fi
+
 	"${container_engine}" build  \
+		   ${REGISTRY_ARG} \
 		   --build-arg http_proxy="${http_proxy}" \
 		   --build-arg https_proxy="${https_proxy}" \
 		   -t "${container_image_name}" "${script_dir}"
