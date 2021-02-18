@@ -48,11 +48,10 @@ impl Uevent {
         event
     }
 
-    // Check whether this is a block device hot-add event.
-    fn is_block_add_event(&self) -> bool {
+    // Check whether this is a device hot-add event.
+    fn is_device_add_event(&self) -> bool {
         let pci_root_bus_path = create_pci_root_bus_path();
         self.action == U_EVENT_ACTION_ADD
-            && self.subsystem == "block"
             && {
                 self.devpath.starts_with(pci_root_bus_path.as_str())
                     || self.devpath.starts_with(ACPI_DEV_PATH) // NVDIMM/PMEM devices
@@ -60,7 +59,7 @@ impl Uevent {
             && self.devname != ""
     }
 
-    async fn handle_block_add_event(&self, sandbox: &Arc<Mutex<Sandbox>>) {
+    async fn handle_device_add_event(&self, sandbox: &Arc<Mutex<Sandbox>>) {
         let mut sb = sandbox.lock().await;
 
         // Add the device node name to the device map.
@@ -88,8 +87,8 @@ impl Uevent {
     }
 
     async fn process(&self, logger: &Logger, sandbox: &Arc<Mutex<Sandbox>>) {
-        if self.is_block_add_event() {
-            return self.handle_block_add_event(sandbox).await;
+        if self.is_device_add_event() {
+            return self.handle_device_add_event(sandbox).await;
         } else if self.action == U_EVENT_ACTION_ADD {
             let online_path = format!("{}/{}/online", SYSFS_DIR, &self.devpath);
             // It's a memory hot-add event.
