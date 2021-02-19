@@ -14,6 +14,7 @@ import (
 	"github.com/vishvananda/netlink"
 
 	persistapi "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist/api"
+	vcTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/types"
 )
 
 // TuntapEndpoint represents just a tap endpoint
@@ -22,7 +23,7 @@ type TuntapEndpoint struct {
 	TuntapInterface    TuntapInterface
 	EndpointProperties NetworkInfo
 	EndpointType       EndpointType
-	PCIAddr            string
+	PCIPath            vcTypes.PciPath
 	RxRateLimiter      bool
 	TxRateLimiter      bool
 }
@@ -47,14 +48,14 @@ func (endpoint *TuntapEndpoint) Type() EndpointType {
 	return endpoint.EndpointType
 }
 
-// PciAddr returns the PCI address of the endpoint.
-func (endpoint *TuntapEndpoint) PciAddr() string {
-	return endpoint.PCIAddr
+// PciPath returns the PCI path of the endpoint.
+func (endpoint *TuntapEndpoint) PciPath() vcTypes.PciPath {
+	return endpoint.PCIPath
 }
 
-// SetPciAddr sets the PCI address of the endpoint.
-func (endpoint *TuntapEndpoint) SetPciAddr(pciAddr string) {
-	endpoint.PCIAddr = pciAddr
+// SetPciPath sets the PCI path of the endpoint.
+func (endpoint *TuntapEndpoint) SetPciPath(pciPath vcTypes.PciPath) {
+	endpoint.PCIPath = pciPath
 }
 
 // NetworkPair returns the network pair of the endpoint.

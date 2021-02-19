@@ -16,6 +16,7 @@ import (
 
 	"github.com/go-ini/ini"
 	"golang.org/x/sys/unix"
+	vcTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/types"
 )
 
 // DeviceType indicates device type
@@ -156,8 +157,8 @@ type BlockDrive struct {
 	// MmioAddr is used to identify the slot at which the drive is attached (order?).
 	MmioAddr string
 
-	// PCIAddr is the PCI address used to identify the slot at which the drive is attached.
-	PCIAddr string
+	// PCIPath is the PCI path used to identify the slot at which the drive is attached.
+	PCIPath vcTypes.PciPath
 
 	// SCSI Address of the block device, in case the device is attached using SCSI driver
 	// SCSI address is in the format SCSI-Id:LUN
@@ -249,9 +250,10 @@ type VhostUserDeviceAttrs struct {
 	CacheSize uint32
 	Cache     string
 
-	// PCIAddr is the PCI address used to identify the slot at which the drive is attached.
-	// It is only meaningful for vhost user block devices
-	PCIAddr string
+	// PCIPath is the PCI path used to identify the slot at which
+	// the drive is attached.  It is only meaningful for vhost
+	// user block devices
+	PCIPath vcTypes.PciPath
 
 	// Block index of the device if assigned
 	Index int

@@ -1074,7 +1074,7 @@ func (k *kataAgent) appendBlockDevice(dev ContainerDevice, c *Container) *grpc.D
 		kataDevice.Id = d.DevNo
 	case config.VirtioBlock:
 		kataDevice.Type = kataBlkDevType
-		kataDevice.Id = d.PCIAddr
+		kataDevice.Id = d.PCIPath.String()
 		kataDevice.VmPath = d.VirtPath
 	case config.VirtioSCSI:
 		kataDevice.Type = kataSCSIDevType
@@ -1099,7 +1099,7 @@ func (k *kataAgent) appendVhostUserBlkDevice(dev ContainerDevice, c *Container) 
 	kataDevice := &grpc.Device{
 		ContainerPath: dev.ContainerPath,
 		Type:          kataBlkDevType,
-		Id:            d.PCIAddr,
+		Id:            d.PCIPath.String(),
 	}
 
 	return kataDevice
@@ -1178,10 +1178,10 @@ func (k *kataAgent) buildContainerRootfs(sandbox *Sandbox, c *Container, rootPat
 			rootfs.Source = blockDrive.DevNo
 		case sandbox.config.HypervisorConfig.BlockDeviceDriver == config.VirtioBlock:
 			rootfs.Driver = kataBlkDevType
-			if blockDrive.PCIAddr == "" {
+			if blockDrive.PCIPath.IsNil() {
 				rootfs.Source = blockDrive.VirtPath
 			} else {
-				rootfs.Source = blockDrive.PCIAddr
+				rootfs.Source = blockDrive.PCIPath.String()
 			}
 
 		case sandbox.config.HypervisorConfig.BlockDeviceDriver == config.VirtioSCSI:
@@ -1427,10 +1427,10 @@ func (k *kataAgent) handleDeviceBlockVolume(c *Container, m Mount, device api.De
 		vol.Source = blockDrive.DevNo
 	case c.sandbox.config.HypervisorConfig.BlockDeviceDriver == config.VirtioBlock:
 		vol.Driver = kataBlkDevType
-		if blockDrive.PCIAddr == "" {
+		if blockDrive.PCIPath.IsNil() {
 			vol.Source = blockDrive.VirtPath
 		} else {
-			vol.Source = blockDrive.PCIAddr
+			vol.Source = blockDrive.PCIPath.String()
 		}
 	case c.sandbox.config.HypervisorConfig.BlockDeviceDriver == config.VirtioMmio:
 		vol.Driver = kataMmioBlkDevType
@@ -1467,7 +1467,7 @@ func (k *kataAgent) handleVhostUserBlkVolume(c *Container, m Mount, device api.D
 	}
 
 	vol.Driver = kataBlkDevType
-	vol.Source = d.PCIAddr
+	vol.Source = d.PCIPath.String()
 	vol.Fstype = "bind"
 	vol.Options = []string{"bind"}
 	vol.MountPoint = m.Destination

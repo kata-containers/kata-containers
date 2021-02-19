@@ -6,6 +6,8 @@
 
 package persistapi
 
+import	vcTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/types"
+
 // ============= sandbox level resources =============
 
 // BlockDrive represents a block storage drive which may be used in case the storage
@@ -26,8 +28,8 @@ type BlockDrive struct {
 	// MmioAddr is used to identify the slot at which the drive is attached (order?).
 	MmioAddr string
 
-	// PCIAddr is the PCI address used to identify the slot at which the drive is attached.
-	PCIAddr string
+	// PCIPath is the PCI path used to identify the slot at which the drive is attached.
+	PCIPath vcTypes.PciPath
 
 	// SCSI Address of the block device, in case the device is attached using SCSI driver
 	// SCSI address is in the format SCSI-Id:LUN
@@ -71,9 +73,9 @@ type VhostUserDeviceAttrs struct {
 	// MacAddress is only meaningful for vhost user net device
 	MacAddress string
 
-	// PCIAddr is the PCI address used to identify the slot at which the drive is attached.
+	// PCIPath is the PCI path used to identify the slot at which the drive is attached.
 	// It is only meaningful for vhost user block devices
-	PCIAddr string
+	PCIPath vcTypes.PciPath
 
 	// Block index of the device if assigned
 	Index int

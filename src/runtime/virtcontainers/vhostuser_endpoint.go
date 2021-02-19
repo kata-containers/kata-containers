@@ -13,6 +13,7 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
 	persistapi "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist/api"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
+	vcTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/types"
 )
 
 // Long term, this should be made more configurable.  For now matching path
@@ -30,7 +31,7 @@ type VhostUserEndpoint struct {
 	IfaceName          string
 	EndpointProperties NetworkInfo
 	EndpointType       EndpointType
-	PCIAddr            string
+	PCIPath            vcTypes.PciPath
 }
 
 // Properties returns the properties of the interface.
@@ -58,14 +59,14 @@ func (endpoint *VhostUserEndpoint) SetProperties(properties NetworkInfo) {
 	endpoint.EndpointProperties = properties
 }
 
-// PciAddr returns the PCI address of the endpoint.
-func (endpoint *VhostUserEndpoint) PciAddr() string {
-	return endpoint.PCIAddr
+// PciPath returns the PCI path of the endpoint.
+func (endpoint *VhostUserEndpoint) PciPath() vcTypes.PciPath {
+	return endpoint.PCIPath
 }
 
-// SetPciAddr sets the PCI address of the endpoint.
-func (endpoint *VhostUserEndpoint) SetPciAddr(pciAddr string) {
-	endpoint.PCIAddr = pciAddr
+// SetPciPath sets the PCI path of the endpoint.
+func (endpoint *VhostUserEndpoint) SetPciPath(pciPath vcTypes.PciPath) {
+	endpoint.PCIPath = pciPath
 }
 
 // NetworkPair returns the network pair of the endpoint.
@@ -156,7 +157,7 @@ func (endpoint *VhostUserEndpoint) save() persistapi.NetworkEndpoint {
 		Type: string(endpoint.Type()),
 		VhostUser: &persistapi.VhostUserEndpoint{
 			IfaceName: endpoint.IfaceName,
-			PCIAddr:   endpoint.PCIAddr,
+			PCIPath:   endpoint.PCIPath,
 		},
 	}
 }
@@ -166,7 +167,7 @@ func (endpoint *VhostUserEndpoint) load(s persistapi.NetworkEndpoint) {
 
 	if s.VhostUser != nil {
 		endpoint.IfaceName = s.VhostUser.IfaceName
-		endpoint.PCIAddr = s.VhostUser.PCIAddr
+		endpoint.PCIPath = s.VhostUser.PCIPath
 	}
 }
 
