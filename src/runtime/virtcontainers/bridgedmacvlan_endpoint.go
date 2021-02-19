@@ -10,6 +10,7 @@ import (
 
 	"github.com/containernetworking/plugins/pkg/ns"
 	persistapi "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist/api"
+	vcTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/types"
 )
 
 // BridgedMacvlanEndpoint represents a macvlan endpoint that is bridged to the VM
@@ -17,7 +18,7 @@ type BridgedMacvlanEndpoint struct {
 	NetPair            NetworkInterfacePair
 	EndpointProperties NetworkInfo
 	EndpointType       EndpointType
-	PCIAddr            string
+	PCIPath            vcTypes.PciPath
 	RxRateLimiter      bool
 	TxRateLimiter      bool
 }
@@ -69,14 +70,14 @@ func (endpoint *BridgedMacvlanEndpoint) SetProperties(properties NetworkInfo) {
 	endpoint.EndpointProperties = properties
 }
 
-// PciAddr returns the PCI address of the endpoint.
-func (endpoint *BridgedMacvlanEndpoint) PciAddr() string {
-	return endpoint.PCIAddr
+// PciPath returns the PCI path of the endpoint.
+func (endpoint *BridgedMacvlanEndpoint) PciPath() vcTypes.PciPath {
+	return endpoint.PCIPath
 }
 
-// SetPciAddr sets the PCI address of the endpoint.
-func (endpoint *BridgedMacvlanEndpoint) SetPciAddr(pciAddr string) {
-	endpoint.PCIAddr = pciAddr
+// SetPciPath sets the PCI path of the endpoint.
+func (endpoint *BridgedMacvlanEndpoint) SetPciPath(pciPath vcTypes.PciPath) {
+	endpoint.PCIPath = pciPath
 }
 
 // NetworkPair returns the network pair of the endpoint.

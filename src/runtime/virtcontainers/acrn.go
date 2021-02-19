@@ -28,6 +28,7 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/uuid"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
+	vcTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/types"
 )
 
 // Since ACRN is using the store in a quite abnormal way, let's first draw it back from store to here
@@ -550,8 +551,8 @@ func (a *Acrn) updateBlockDevice(drive *config.BlockDrive) error {
 
 	slot := AcrnBlkdDevSlot[drive.Index]
 
-	//Explicitly set PCIAddr to NULL, so that VirtPath can be used
-	drive.PCIAddr = ""
+	//Explicitly set PCIPath to NULL, so that VirtPath can be used
+	drive.PCIPath = vcTypes.PciPath{}
 
 	args := []string{"blkrescan", a.acrnConfig.Name, fmt.Sprintf("%d,%s", slot, drive.File)}
 

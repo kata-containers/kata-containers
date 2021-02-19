@@ -49,6 +49,7 @@ mod mount;
 mod namespace;
 mod netlink;
 mod network;
+mod pci;
 pub mod random;
 mod sandbox;
 #[cfg(test)]

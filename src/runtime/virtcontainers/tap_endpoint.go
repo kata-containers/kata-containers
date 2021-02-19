@@ -13,6 +13,7 @@ import (
 
 	persistapi "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist/api"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/uuid"
+	vcTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/types"
 )
 
 // TapEndpoint represents just a tap endpoint
@@ -20,7 +21,7 @@ type TapEndpoint struct {
 	TapInterface       TapInterface
 	EndpointProperties NetworkInfo
 	EndpointType       EndpointType
-	PCIAddr            string
+	PCIPath            vcTypes.PciPath
 	RxRateLimiter      bool
 	TxRateLimiter      bool
 }
@@ -45,14 +46,14 @@ func (endpoint *TapEndpoint) Type() EndpointType {
 	return endpoint.EndpointType
 }
 
-// PciAddr returns the PCI address of the endpoint.
-func (endpoint *TapEndpoint) PciAddr() string {
-	return endpoint.PCIAddr
+// PciPath returns the PCI path of the endpoint.
+func (endpoint *TapEndpoint) PciPath() vcTypes.PciPath {
+	return endpoint.PCIPath
 }
 
-// SetPciAddr sets the PCI address of the endpoint.
-func (endpoint *TapEndpoint) SetPciAddr(pciAddr string) {
-	endpoint.PCIAddr = pciAddr
+// SetPciPath sets the PCI path of the endpoint.
+func (endpoint *TapEndpoint) SetPciPath(pciPath vcTypes.PciPath) {
+	endpoint.PCIPath = pciPath
 }
 
 // NetworkPair returns the network pair of the endpoint.

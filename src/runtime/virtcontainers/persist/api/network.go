@@ -7,6 +7,7 @@
 package persistapi
 
 import (
+	vcTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/types"
 	"github.com/vishvananda/netlink"
 )
 
@@ -48,7 +49,7 @@ type PhysicalEndpoint struct {
 type MacvtapEndpoint struct {
 	// This is for showing information.
 	// Remove this field won't impact anything.
-	PCIAddr string
+	PCIPath vcTypes.PciPath
 }
 
 type TapEndpoint struct {
@@ -75,7 +76,7 @@ type VhostUserEndpoint struct {
 	// This is for showing information.
 	// Remove these fields won't impact anything.
 	IfaceName string
-	PCIAddr   string
+	PCIPath   vcTypes.PciPath
 }
 
 // NetworkEndpoint contains network interface information

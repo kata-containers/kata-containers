@@ -10,6 +10,7 @@ import (
 	"os"
 
 	persistapi "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist/api"
+	vcTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/types"
 )
 
 // MacvtapEndpoint represents a macvtap endpoint
@@ -18,7 +19,7 @@ type MacvtapEndpoint struct {
 	EndpointType       EndpointType
 	VMFds              []*os.File
 	VhostFds           []*os.File
-	PCIAddr            string
+	PCIPath            vcTypes.PciPath
 	RxRateLimiter      bool
 	TxRateLimiter      bool
 }
@@ -93,14 +94,14 @@ func (endpoint *MacvtapEndpoint) HotDetach(h hypervisor, netNsCreated bool, netN
 	return fmt.Errorf("MacvtapEndpoint does not support Hot detach")
 }
 
-// PciAddr returns the PCI address of the endpoint.
-func (endpoint *MacvtapEndpoint) PciAddr() string {
-	return endpoint.PCIAddr
+// PciPath returns the PCI path of the endpoint.
+func (endpoint *MacvtapEndpoint) PciPath() vcTypes.PciPath {
+	return endpoint.PCIPath
 }
 
-// SetPciAddr sets the PCI address of the endpoint.
-func (endpoint *MacvtapEndpoint) SetPciAddr(pciAddr string) {
-	endpoint.PCIAddr = pciAddr
+// SetPciPath sets the PCI path of the endpoint.
+func (endpoint *MacvtapEndpoint) SetPciPath(pciPath vcTypes.PciPath) {
+	endpoint.PCIPath = pciPath
 }
 
 // NetworkPair returns the network pair of the endpoint.
@@ -113,7 +114,7 @@ func (endpoint *MacvtapEndpoint) save() persistapi.NetworkEndpoint {
 		Type: string(endpoint.Type()),
 
 		Macvtap: &persistapi.MacvtapEndpoint{
-			PCIAddr: endpoint.PCIAddr,
+			PCIPath: endpoint.PCIPath,
 		},
 	}
 }
@@ -121,7 +122,7 @@ func (endpoint *MacvtapEndpoint) load(s persistapi.NetworkEndpoint) {
 	endpoint.EndpointType = MacvtapEndpointType
 
 	if s.Macvtap != nil {
-		endpoint.PCIAddr = s.Macvtap.PCIAddr
+		endpoint.PCIPath = s.Macvtap.PCIPath
 	}
 }
 

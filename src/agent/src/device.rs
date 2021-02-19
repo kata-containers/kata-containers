@@ -9,11 +9,13 @@ use std::collections::HashMap;
 use std::fs;
 use std::os::unix::fs::MetadataExt;
 use std::path::Path;
+use std::str::FromStr;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
 use crate::linux_abi::*;
 use crate::mount::{DRIVER_BLK_TYPE, DRIVER_MMIO_BLK_TYPE, DRIVER_NVDIMM_TYPE, DRIVER_SCSI_TYPE};
+use crate::pci;
 use crate::sandbox::Sandbox;
 use crate::{AGENT_CONFIG, GLOBAL_DEVICE_WATCHER};
 use anyhow::{anyhow, Result};
@@ -45,58 +47,44 @@ pub fn online_device(path: &str) -> Result<()> {
     Ok(())
 }
 
-// get_pci_device_address fetches the complete PCI address in sysfs, based on the PCI
-// identifier provided. This should be in the format: "bridgeAddr/deviceAddr".
-// Here, bridgeAddr is the address at which the bridge is attached on the root bus,
-// while deviceAddr is the address at which the device is attached on the bridge.
-fn get_pci_device_address(pci_id: &str) -> Result<String> {
-    let tokens: Vec<&str> = pci_id.split('/').collect();
+// pciPathToSysfs fetches the sysfs path for a PCI path, relative to
+// the syfs path for the PCI host bridge, based on the PCI path
+// provided.
+fn pcipath_to_sysfs(root_bus_sysfs: &str, pcipath: &pci::Path) -> Result<String> {
+    let mut bus = "0000:00".to_string();
+    let mut relpath = String::new();
 
-    if tokens.len() != 2 {
-        return Err(anyhow!(
-            "PCI Identifier for device should be of format [bridgeAddr/deviceAddr], got {}",
-            pci_id
-        ));
+    for i in 0..pcipath.len() {
+        let bdf = format!("{}:{}.0", bus, pcipath[i]);
+
+        relpath = format!("{}/{}", relpath, bdf);
+
+        if i == pcipath.len() - 1 {
+            // Final device need not be a bridge
+            break;
+        }
+
+        // Find out the bus exposed by bridge
+        let bridgebuspath = format!("{}{}/pci_bus", root_bus_sysfs, relpath);
+        let mut files: Vec<_> = fs::read_dir(&bridgebuspath)?.collect();
+
+        if files.len() != 1 {
+            return Err(anyhow!(
+                "Expected exactly one PCI bus in {}, got {} instead",
+                bridgebuspath,
+                files.len()
+            ));
+        }
+
+        // unwrap is safe, because of the length test above
+        let busfile = files.pop().unwrap()?;
+        bus = busfile
+            .file_name()
+            .into_string()
+            .map_err(|e| anyhow!("Bad filename under {}: {:?}", &bridgebuspath, e))?;
     }
 
-    let bridge_id = tokens[0];
-    let device_id = tokens[1];
-
-    // Deduce the complete bridge address based on the bridge address identifier passed
-    // and the fact that bridges are attached on the main bus with function 0.
-    let pci_bridge_addr = format!("0000:00:{}.0", bridge_id);
-
-    // Find out the bus exposed by bridge
-    let bridge_bus_path = format!("{}/{}/pci_bus/", SYSFS_PCI_BUS_PREFIX, pci_bridge_addr);
-
-    let files_slice: Vec<_> = fs::read_dir(&bridge_bus_path)
-        .unwrap()
-        .map(|res| res.unwrap().path())
-        .collect();
-    let bus_num = files_slice.len();
-
-    if bus_num != 1 {
-        return Err(anyhow!(
-            "Expected an entry for bus in {}, got {} entries instead",
-            bridge_bus_path,
-            bus_num
-        ));
-    }
-
-    let bus = files_slice[0].file_name().unwrap().to_str().unwrap();
-
-    // Device address is based on the bus of the bridge to which it is attached.
-    // We do not pass devices as multifunction, hence the trailing 0 in the address.
-    let pci_device_addr = format!("{}:{}.0", bus, device_id);
-
-    let bridge_device_pci_addr = format!("{}/{}", pci_bridge_addr, pci_device_addr);
-
-    info!(
-        sl!(),
-        "Fetched PCI address for device PCIAddr:{}\n", bridge_device_pci_addr
-    );
-
-    Ok(bridge_device_pci_addr)
+    Ok(relpath)
 }
 
 async fn get_device_name(sandbox: &Arc<Mutex<Sandbox>>, dev_addr: &str) -> Result<String> {
@@ -155,11 +143,15 @@ pub async fn get_scsi_device_name(
     get_device_name(sandbox, &dev_sub_path).await
 }
 
-pub async fn get_pci_device_name(sandbox: &Arc<Mutex<Sandbox>>, pci_id: &str) -> Result<String> {
-    let pci_addr = get_pci_device_address(pci_id)?;
+pub async fn get_pci_device_name(
+    sandbox: &Arc<Mutex<Sandbox>>,
+    pcipath: &pci::Path,
+) -> Result<String> {
+    let root_bus_sysfs = format!("{}{}", SYSFS_DIR, create_pci_root_bus_path());
+    let sysfs_rel_path = pcipath_to_sysfs(&root_bus_sysfs, pcipath)?;
 
     rescan_pci_bus()?;
-    get_device_name(sandbox, &pci_addr).await
+    get_device_name(sandbox, &sysfs_rel_path).await
 }
 
 pub async fn get_pmem_device_name(
@@ -294,9 +286,7 @@ async fn virtiommio_blk_device_handler(
     update_spec_device_list(device, spec, devidx)
 }
 
-// device.Id should be the PCI address in the format  "bridgeAddr/deviceAddr".
-// Here, bridgeAddr is the address at which the brige is attached on the root bus,
-// while deviceAddr is the address at which the device is attached on the bridge.
+// device.Id should be a PCI path string
 async fn virtio_blk_device_handler(
     device: &Device,
     spec: &mut Spec,
@@ -305,10 +295,12 @@ async fn virtio_blk_device_handler(
 ) -> Result<()> {
     let mut dev = device.clone();
 
-    // When "Id (PCIAddr)" is not set, we allow to use the predicted "VmPath" passed from kata-runtime
-    // Note this is a special code path for cloud-hypervisor when BDF information is not available
+    // When "Id (PCI path)" is not set, we allow to use the predicted
+    // "VmPath" passed from kata-runtime Note this is a special code
+    // path for cloud-hypervisor when BDF information is not available
     if device.id != "" {
-        dev.vm_path = get_pci_device_name(sandbox, &device.id).await?;
+        let pcipath = pci::Path::from_str(&device.id)?;
+        dev.vm_path = get_pci_device_name(sandbox, &pcipath).await?;
     }
 
     update_spec_device_list(&dev, spec, devidx)
@@ -443,6 +435,7 @@ pub fn update_device_cgroup(spec: &mut Spec) -> Result<()> {
 mod tests {
     use super::*;
     use oci::Linux;
+    use tempfile::tempdir;
 
     #[test]
     fn test_update_device_cgroup() {
@@ -721,5 +714,69 @@ mod tests {
         assert_eq!(Some(guest_minor), specresources.devices[0].minor);
         assert_eq!(Some(host_major), specresources.devices[1].major);
         assert_eq!(Some(host_minor), specresources.devices[1].minor);
+    }
+
+    #[test]
+    fn test_pcipath_to_sysfs() {
+        let testdir = tempdir().expect("failed to create tmpdir");
+        let rootbuspath = testdir.path().to_str().unwrap();
+
+        let path2 = pci::Path::from_str("02").unwrap();
+        let path23 = pci::Path::from_str("02/03").unwrap();
+        let path234 = pci::Path::from_str("02/03/04").unwrap();
+
+        let relpath = pcipath_to_sysfs(rootbuspath, &path2);
+        assert_eq!(relpath.unwrap(), "/0000:00:02.0");
+
+        let relpath = pcipath_to_sysfs(rootbuspath, &path23);
+        assert!(relpath.is_err());
+
+        let relpath = pcipath_to_sysfs(rootbuspath, &path234);
+        assert!(relpath.is_err());
+
+        // Create mock sysfs files for the device at 0000:00:02.0
+        let bridge2path = format!("{}{}", rootbuspath, "/0000:00:02.0");
+
+        fs::create_dir_all(&bridge2path).unwrap();
+
+        let relpath = pcipath_to_sysfs(rootbuspath, &path2);
+        assert_eq!(relpath.unwrap(), "/0000:00:02.0");
+
+        let relpath = pcipath_to_sysfs(rootbuspath, &path23);
+        assert!(relpath.is_err());
+
+        let relpath = pcipath_to_sysfs(rootbuspath, &path234);
+        assert!(relpath.is_err());
+
+        // Create mock sysfs files to indicate that 0000:00:02.0 is a bridge to bus 01
+        let bridge2bus = "0000:01";
+        let bus2path = format!("{}/pci_bus/{}", bridge2path, bridge2bus);
+
+        fs::create_dir_all(bus2path).unwrap();
+
+        let relpath = pcipath_to_sysfs(rootbuspath, &path2);
+        assert_eq!(relpath.unwrap(), "/0000:00:02.0");
+
+        let relpath = pcipath_to_sysfs(rootbuspath, &path23);
+        assert_eq!(relpath.unwrap(), "/0000:00:02.0/0000:01:03.0");
+
+        let relpath = pcipath_to_sysfs(rootbuspath, &path234);
+        assert!(relpath.is_err());
+
+        // Create mock sysfs files for a bridge at 0000:01:03.0 to bus 02
+        let bridge3path = format!("{}/0000:01:03.0", bridge2path);
+        let bridge3bus = "0000:02";
+        let bus3path = format!("{}/pci_bus/{}", bridge3path, bridge3bus);
+
+        fs::create_dir_all(bus3path).unwrap();
+
+        let relpath = pcipath_to_sysfs(rootbuspath, &path2);
+        assert_eq!(relpath.unwrap(), "/0000:00:02.0");
+
+        let relpath = pcipath_to_sysfs(rootbuspath, &path23);
+        assert_eq!(relpath.unwrap(), "/0000:00:02.0/0000:01:03.0");
+
+        let relpath = pcipath_to_sysfs(rootbuspath, &path234);
+        assert_eq!(relpath.unwrap(), "/0000:00:02.0/0000:01:03.0/0000:02:04.0");
     }
 }

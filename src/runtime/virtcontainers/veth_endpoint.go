@@ -10,6 +10,7 @@ import (
 
 	"github.com/containernetworking/plugins/pkg/ns"
 	persistapi "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist/api"
+	vcTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/types"
 )
 
 // VethEndpoint gathers a network pair and its properties.
@@ -17,7 +18,7 @@ type VethEndpoint struct {
 	NetPair            NetworkInterfacePair
 	EndpointProperties NetworkInfo
 	EndpointType       EndpointType
-	PCIAddr            string
+	PCIPath            vcTypes.PciPath
 	RxRateLimiter      bool
 	TxRateLimiter      bool
 }
@@ -67,14 +68,14 @@ func (endpoint *VethEndpoint) Type() EndpointType {
 	return endpoint.EndpointType
 }
 
-// PciAddr returns the PCI address of the endpoint.
-func (endpoint *VethEndpoint) PciAddr() string {
-	return endpoint.PCIAddr
+// PciPath returns the PCI path of the endpoint.
+func (endpoint *VethEndpoint) PciPath() vcTypes.PciPath {
+	return endpoint.PCIPath
 }
 
-// SetPciAddr sets the PCI address of the endpoint.
-func (endpoint *VethEndpoint) SetPciAddr(pciAddr string) {
-	endpoint.PCIAddr = pciAddr
+// SetPciPath sets the PCI path of the endpoint.
+func (endpoint *VethEndpoint) SetPciPath(pciPath vcTypes.PciPath) {
+	endpoint.PCIPath = pciPath
 }
 
 // NetworkPair returns the network pair of the endpoint.

@@ -12,6 +12,7 @@ use std::os::unix::fs::PermissionsExt;
 
 use std::path::Path;
 use std::ptr::null;
+use std::str::FromStr;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
@@ -26,6 +27,7 @@ use crate::device::{
     get_pci_device_name, get_pmem_device_name, get_scsi_device_name, online_device,
 };
 use crate::linux_abi::*;
+use crate::pci;
 use crate::protocols::agent::Storage;
 use crate::Sandbox;
 use anyhow::{anyhow, Context, Result};
@@ -310,8 +312,8 @@ async fn virtio_blk_storage_handler(
     sandbox: Arc<Mutex<Sandbox>>,
 ) -> Result<String> {
     let mut storage = storage.clone();
-    // If hot-plugged, get the device node path based on the PCI address else
-    // use the virt path provided in Storage Source
+    // If hot-plugged, get the device node path based on the PCI path
+    // otherwise use the virt path provided in Storage Source
     if storage.source.starts_with("/dev") {
         let metadata = fs::metadata(&storage.source)
             .context(format!("get metadata on file {:?}", &storage.source))?;
@@ -321,7 +323,8 @@ async fn virtio_blk_storage_handler(
             return Err(anyhow!("Invalid device {}", &storage.source));
         }
     } else {
-        let dev_path = get_pci_device_name(&sandbox, &storage.source).await?;
+        let pcipath = pci::Path::from_str(&storage.source)?;
+        let dev_path = get_pci_device_name(&sandbox, &pcipath).await?;
         storage.source = dev_path;
     }
 

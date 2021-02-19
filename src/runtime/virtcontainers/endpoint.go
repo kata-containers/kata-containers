@@ -9,6 +9,7 @@ import (
 	"fmt"
 
 	persistapi "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist/api"
+	vcTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/types"
 )
 
 // Endpoint represents a physical or virtual network interface.
@@ -17,11 +18,11 @@ type Endpoint interface {
 	Name() string
 	HardwareAddr() string
 	Type() EndpointType
-	PciAddr() string
+	PciPath() vcTypes.PciPath
 	NetworkPair() *NetworkInterfacePair
 
 	SetProperties(NetworkInfo)
-	SetPciAddr(string)
+	SetPciPath(vcTypes.PciPath)
 	Attach(*Sandbox) error
 	Detach(netNsCreated bool, netNsPath string) error
 	HotAttach(h hypervisor) error
