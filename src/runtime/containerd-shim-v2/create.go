@@ -73,9 +73,14 @@ func create(ctx context.Context, s *service, r *taskAPI.CreateTaskRequest) (*con
 			return nil, err
 		}
 
+		// create root span
+		var rootSpan otelTrace.Span
+		rootSpan, s.rootCtx = trace(s.ctx, "root span")
+		defer rootSpan.End()
+
 		// create span
 		var span otelTrace.Span
-		span, s.ctx = trace(ctx, "create")
+		span, s.ctx = trace(s.rootCtx, "create")
 		defer span.End()
 
 		if rootFs.Mounted, err = checkAndMount(s, r); err != nil {
