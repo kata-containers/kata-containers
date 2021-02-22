@@ -64,11 +64,13 @@ use uevent::watch_uevents;
 
 use std::sync::Mutex as SyncMutex;
 
+use futures::future::join_all;
 use futures::StreamExt as _;
 use rustjail::pipestream::PipeStream;
 use tokio::{
     signal::unix::{signal, SignalKind},
     sync::{oneshot::Sender, Mutex, RwLock},
+    task::JoinHandle,
 };
 use tokio_vsock::{Incoming, VsockListener, VsockStream};
 
@@ -123,6 +125,9 @@ async fn get_vsock_stream(fd: RawFd) -> Result<VsockStream> {
 
 async fn real_main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     env::set_var("RUST_BACKTRACE", "full");
+
+    // List of tasks that need to be stopped for a clean shutdown
+    let mut tasks: Vec<JoinHandle<()>> = vec![];
 
     lazy_static::initialize(&SHELLS);
 
@@ -197,6 +202,8 @@ async fn real_main() -> std::result::Result<(), Box<dyn std::error::Error>> {
         let _ = tokio::io::copy(&mut reader, &mut stdout_writer).await;
     });
 
+    tasks.push(log_handle);
+
     let writer = unsafe { File::from_raw_fd(wfd) };
 
     // Recreate a logger with the log level get from "/proc/cmdline".
@@ -218,7 +225,13 @@ async fn real_main() -> std::result::Result<(), Box<dyn std::error::Error>> {
 
     start_sandbox(&logger, &config, init_mode).await?;
 
-    let _ = log_handle.await.unwrap();
+    let results = join_all(tasks).await;
+
+    for result in results {
+        if let Err(e) = result {
+            return Err(anyhow!(e).into());
+        }
+    }
 
     Ok(())
 }
