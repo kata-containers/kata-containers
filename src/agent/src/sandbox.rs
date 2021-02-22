@@ -317,7 +317,13 @@ impl Sandbox {
         tokio::spawn(async move {
             loop {
                 let event = rx.recv().await;
+                // None means the container has exited,
+                // and sender in OOM notifier is dropped.
+                if event.is_none() {
+                    return;
+                }
                 info!(logger, "got an OOM event {:?}", event);
+
                 let _ = tx
                     .send(container_id.clone())
                     .await
