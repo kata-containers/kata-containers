@@ -180,7 +180,7 @@ fn real_main() -> Result<()> {
 
     // Setup logger
     let writer = io::stdout();
-    let logger = logging::create_logger(name, name, log_level, writer);
+    let (logger, _logger_guard) = logging::create_logger(name, name, log_level, writer);
 
     announce(&logger, version);
 
