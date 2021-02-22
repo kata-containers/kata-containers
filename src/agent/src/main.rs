@@ -168,7 +168,8 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
             // Init a temporary logger used by init agent as init process
             // since before do the base mount, it wouldn't access "/proc/cmdline"
             // to get the customzied debug level.
-            let logger = logging::create_logger(NAME, "agent", slog::Level::Debug, writer);
+            let (logger, logger_async_guard) =
+                logging::create_logger(NAME, "agent", slog::Level::Debug, writer);
 
             // Must mount proc fs before parsing kernel command line
             general_mount(&logger).map_err(|e| {
@@ -180,6 +181,7 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
             config.parse_cmdline(KERNEL_CMDLINE_FILE)?;
 
             init_agent_as_init(&logger, config.unified_cgroup_hierarchy)?;
+            drop(logger_async_guard);
         } else {
             // once parsed cmdline and set the config, release the write lock
             // as soon as possible in case other thread would get read lock on
@@ -222,7 +224,8 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
         let writer = unsafe { File::from_raw_fd(wfd) };
 
         // Recreate a logger with the log level get from "/proc/cmdline".
-        let logger = logging::create_logger(NAME, "agent", config.log_level, writer);
+        let (logger, _logger_async_guard) =
+            logging::create_logger(NAME, "agent", config.log_level, writer);
 
         announce(&logger, &config);
 

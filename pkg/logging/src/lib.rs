@@ -21,7 +21,12 @@ const LOG_LEVELS: &[(&str, slog::Level)] = &[
 ];
 
 // XXX: 'writer' param used to make testing possible.
-pub fn create_logger<W>(name: &str, source: &str, level: slog::Level, writer: W) -> slog::Logger
+pub fn create_logger<W>(
+    name: &str,
+    source: &str,
+    level: slog::Level,
+    writer: W,
+) -> (slog::Logger, slog_async::AsyncGuard)
 where
     W: Write + Send + Sync + 'static,
 {
@@ -37,17 +42,21 @@ where
     let filter_drain = RuntimeLevelFilter::new(unique_drain, level).fuse();
 
     // Ensure the logger is thread-safe
-    let async_drain = slog_async::Async::new(filter_drain).build().fuse();
+    let (async_drain, guard) = slog_async::Async::new(filter_drain)
+        .thread_name("slog-async-logger".into())
+        .build_with_guard();
 
     // Add some "standard" fields
-    slog::Logger::root(
+    let logger = slog::Logger::root(
         async_drain.fuse(),
         o!("version" => env!("CARGO_PKG_VERSION"),
             "subsystem" => "root",
             "pid" => process::id().to_string(),
             "name" => name.to_string(),
             "source" => source.to_string()),
-    )
+    );
+
+    (logger, guard)
 }
 
 pub fn get_log_levels() -> Vec<&'static str> {
