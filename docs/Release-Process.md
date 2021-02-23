@@ -79,9 +79,9 @@
   ```
   $ cd ${GOPATH}/src/github.com/kata-containers/kata-containers/tools/packaging/release
   # Note: OLD_VERSION is where the script should start to get changes.
-  $ ./runtime-release-notes.sh ${OLD_VERSION} ${NEW_VERSION} > notes.md
+  $ ./release-notes.sh ${OLD_VERSION} ${NEW_VERSION} > notes.md
   # Edit the `notes.md` file to review and make any changes to the release notes.
-  # Add the release notes in GitHub runtime.
+  # Add the release notes in the project's GitHub.
   $ hub release edit -F notes.md "${NEW_VERSION}"
   ```
 
