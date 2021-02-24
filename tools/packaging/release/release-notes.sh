@@ -98,9 +98,6 @@ EOT
 
 	cat <<EOT
 
-## Compatibility with Docker
-Kata Containers ${runtime_version} is compatible with Docker ${docker_version}
-
 ## Compatibility with CRI-O
 Kata Containers ${runtime_version} is compatible with CRI-O ${crio_version}
 
