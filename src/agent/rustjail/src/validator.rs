@@ -78,12 +78,8 @@ fn rootfs(root: &str) -> Result<()> {
     Ok(())
 }
 
-fn network(_oci: &Spec) -> Result<()> {
-    Ok(())
-}
-
 fn hostname(oci: &Spec) -> Result<()> {
-    if oci.hostname.is_empty() || oci.hostname == "" {
+    if oci.hostname.is_empty() {
         return Ok(());
     }
 
@@ -301,7 +297,6 @@ pub fn validate(conf: &Config) -> Result<()> {
     };
 
     rootfs(root).context("rootfs")?;
-    network(oci).context("network")?;
     hostname(oci).context("hostname")?;
     security(oci).context("security")?;
     usernamespace(oci).context("usernamespace")?;
