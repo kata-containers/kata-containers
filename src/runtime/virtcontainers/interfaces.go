@@ -72,6 +72,7 @@ type VCSandbox interface {
 	ListRoutes() ([]*pbTypes.Route, error)
 
 	GetOOMEvent() (string, error)
+	GetHypervisorPid() (int, error)
 
 	UpdateRuntimeMetrics() error
 	GetAgentMetrics() (string, error)

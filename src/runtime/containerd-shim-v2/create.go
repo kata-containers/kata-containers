@@ -98,12 +98,18 @@ func create(ctx context.Context, s *service, r *taskAPI.CreateTaskRequest) (*con
 			return nil, err
 		}
 		s.sandbox = sandbox
+		pid, err := s.sandbox.GetHypervisorPid()
+		if err != nil {
+			return nil, err
+		}
+		s.hpid = uint32(pid)
+
 		go s.startManagementServer(ctx, ociSpec)
 
 	case vc.PodContainer:
-                var span otelTrace.Span
-                span, s.ctx = trace(s.ctx, "create")
-                defer span.End()
+		var span otelTrace.Span
+		span, s.ctx = trace(s.ctx, "create")
+		defer span.End()
 
 		if s.sandbox == nil {
 			return nil, fmt.Errorf("BUG: Cannot start the container, since the sandbox hasn't been created")
