@@ -624,13 +624,16 @@ mod tests {
     }
 
     fn create_dummy_opts() -> CreateOpts {
-        let mut root = Root::default();
-        root.path = String::from("/");
+        let root = Root {
+            path: String::from("/"),
+            ..Default::default()
+        };
 
-        let linux = Linux::default();
-        let mut spec = Spec::default();
-        spec.root = Some(root);
-        spec.linux = Some(linux);
+        let spec = Spec {
+            linux: Some(Linux::default()),
+            root: Some(root),
+            ..Default::default()
+        };
 
         CreateOpts {
             cgroup_name: "".to_string(),

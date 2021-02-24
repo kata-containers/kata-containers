@@ -1036,7 +1036,7 @@ fn update_namespaces(logger: &Logger, spec: &mut Spec, init_pid: RawFd) -> Resul
                 TYPETONAME.get(namespace.r#type.as_str()).unwrap()
             );
 
-            if namespace.path == "" {
+            if namespace.path.is_empty() {
                 namespace.path = ns_path;
             }
         }
@@ -1048,7 +1048,7 @@ fn update_namespaces(logger: &Logger, spec: &mut Spec, init_pid: RawFd) -> Resul
 fn get_pid_namespace(logger: &Logger, linux: &Linux) -> Result<Option<RawFd>> {
     for ns in &linux.namespaces {
         if ns.r#type == "pid" {
-            if ns.path == "" {
+            if ns.path.is_empty() {
                 return Ok(None);
             }
 
@@ -1076,7 +1076,7 @@ fn is_userns_enabled(linux: &Linux) -> bool {
     linux
         .namespaces
         .iter()
-        .any(|ns| ns.r#type == "user" && ns.path == "")
+        .any(|ns| ns.r#type == "user" && ns.path.is_empty())
 }
 
 fn get_namespaces(linux: &Linux) -> Vec<LinuxNamespace> {

@@ -310,7 +310,7 @@ impl agentService {
             "exec-id" => eid.clone(),
         );
 
-        if eid == "" {
+        if eid.is_empty() {
             init = true;
         }
 
@@ -1419,7 +1419,7 @@ fn find_process<'a>(
         .get_container(cid)
         .ok_or_else(|| anyhow!("Invalid container id"))?;
 
-    if init || eid == "" {
+    if init || eid.is_empty() {
         return ctr
             .processes
             .get_mut(&ctr.init_process_pid)
@@ -1487,8 +1487,10 @@ fn update_container_namespaces(
         }
     }
     // update pid namespace
-    let mut pid_ns = LinuxNamespace::default();
-    pid_ns.r#type = NSTYPEPID.to_string();
+    let mut pid_ns = LinuxNamespace {
+        r#type: NSTYPEPID.to_string(),
+        ..Default::default()
+    };
 
     // Use shared pid ns if useSandboxPidns has been set in either
     // the create_sandbox request or create_container request.
@@ -1688,7 +1690,7 @@ fn setup_bundle(cid: &str, spec: &mut Spec) -> Result<PathBuf> {
 }
 
 fn load_kernel_module(module: &protocols::agent::KernelModule) -> Result<()> {
-    if module.name == "" {
+    if module.name.is_empty() {
         return Err(anyhow!("Kernel module name is empty"));
     }
 
@@ -1753,10 +1755,12 @@ mod tests {
 
     #[test]
     fn test_load_kernel_module() {
-        let mut m = protocols::agent::KernelModule::default();
+        let mut m = protocols::agent::KernelModule {
+            name: "module_not_exists".to_string(),
+            ..Default::default()
+        };
 
         // case 1: module not exists
-        m.name = "module_not_exists".to_string();
         let result = load_kernel_module(&m);
         assert!(result.is_err(), "load module should failed");
 
