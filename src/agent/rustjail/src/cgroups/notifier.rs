@@ -191,7 +191,10 @@ async fn register_memory_event(
                     let content = fs::read_to_string(path.clone());
                     info!(
                         sl!(),
-                        "OOM event for container: {}, content: {:?}", &containere_id, content
+                        "cgroup event for container: {}, path: {:?}, content: {:?}",
+                        &containere_id,
+                        &path,
+                        content
                     );
                 }
             }
