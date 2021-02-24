@@ -695,7 +695,7 @@ fn set_stdio_permissions(uid: libc::uid_t) -> Result<()> {
         // According to the POSIX specification, -1 is used to indicate that owner and group
         // are not to be changed.  Since uid_t and gid_t are unsigned types, we have to wrap
         // around to get -1.
-        let gid = (0 as libc::gid_t).wrapping_sub(1);
+        let gid = 0u32.wrapping_sub(1);
 
         // We only change the uid owner (as it is possible for the mount to
         // prefer a different gid, and there's no reason for us to change it).
@@ -1114,7 +1114,7 @@ fn update_namespaces(logger: &Logger, spec: &mut Spec, init_pid: RawFd) -> Resul
                 TYPETONAME.get(namespace.r#type.as_str()).unwrap()
             );
 
-            if namespace.path == "" {
+            if namespace.path.is_empty() {
                 namespace.path = ns_path;
             }
         }
@@ -1126,7 +1126,7 @@ fn update_namespaces(logger: &Logger, spec: &mut Spec, init_pid: RawFd) -> Resul
 fn get_pid_namespace(logger: &Logger, linux: &Linux) -> Result<Option<RawFd>> {
     for ns in &linux.namespaces {
         if ns.r#type == "pid" {
-            if ns.path == "" {
+            if ns.path.is_empty() {
                 return Ok(None);
             }
 
@@ -1154,7 +1154,7 @@ fn is_userns_enabled(linux: &Linux) -> bool {
     linux
         .namespaces
         .iter()
-        .any(|ns| ns.r#type == "user" && ns.path == "")
+        .any(|ns| ns.r#type == "user" && ns.path.is_empty())
 }
 
 fn get_namespaces(linux: &Linux) -> Vec<LinuxNamespace> {

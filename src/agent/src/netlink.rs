@@ -513,7 +513,7 @@ impl Handle {
             .as_ref()
             .map(|to| to.address.as_str()) // Extract address field
             .and_then(|addr| if addr.is_empty() { None } else { Some(addr) }) // Make sure it's not empty
-            .ok_or_else(|| nix::Error::Sys(nix::errno::Errno::EINVAL))?;
+            .ok_or(nix::Error::Sys(nix::errno::Errno::EINVAL))?;
 
         let ip = IpAddr::from_str(&ip_address)
             .map_err(|e| anyhow!("Failed to parse IP {}: {:?}", ip_address, e))?;
@@ -611,7 +611,7 @@ fn parse_mac_address(addr: &str) -> Result<[u8; 6]> {
         let v = u8::from_str_radix(
             split
                 .next()
-                .ok_or_else(|| nix::Error::Sys(nix::errno::Errno::EINVAL))?,
+                .ok_or(nix::Error::Sys(nix::errno::Errno::EINVAL))?,
             16,
         )?;
         Ok(v)

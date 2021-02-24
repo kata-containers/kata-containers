@@ -58,7 +58,7 @@ impl Uevent {
                 self.devpath.starts_with(pci_root_bus_path.as_str())
                     || self.devpath.starts_with(ACPI_DEV_PATH) // NVDIMM/PMEM devices
             }
-            && self.devname != ""
+            && !self.devname.is_empty()
     }
 
     async fn handle_block_add_event(&self, sandbox: &Arc<Mutex<Sandbox>>) {
