@@ -91,7 +91,17 @@ async fn get_device_name(sandbox: &Arc<Mutex<Sandbox>>, dev_addr: &str) -> Resul
     let mut sb = sandbox.lock().await;
     for (key, value) in sb.sys_to_dev_map.iter() {
         if key.contains(dev_addr) {
+            if value == "" {
+                return Err(anyhow!("Empty devname {:?} => {:?}",
+                                   key, value))
+            }
             info!(sl!(), "Device {} found in device map", dev_addr);
+
+            // debugging sabotage
+            if true {
+                return Err(anyhow!("DEBUG: {:?}", &sandbox.lock().await.uevent_log));
+            }
+
             return Ok(format!("{}/{}", SYSTEM_DEV_PATH, value));
         }
     }
@@ -113,6 +123,10 @@ async fn get_device_name(sandbox: &Arc<Mutex<Sandbox>>, dev_addr: &str) -> Resul
     tokio::select! {
         v = rx => {
             dev_name = v?;
+            if dev_name == "" {
+                return Err(anyhow!("Empty dev_name {:?} => {:?}",
+                                   dev_addr, dev_name));
+            }
         }
         _ = timeout => {
             let mut sb = sandbox.lock().await;
@@ -126,6 +140,11 @@ async fn get_device_name(sandbox: &Arc<Mutex<Sandbox>>, dev_addr: &str) -> Resul
         }
     };
 
+    // debugging sabotage
+    if true {
+        return Err(anyhow!("DEBUG: {:?}", &sandbox.lock().await.uevent_log));
+    }
+    
     Ok(format!("{}/{}", SYSTEM_DEV_PATH, &dev_name))
 }
 

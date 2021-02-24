@@ -14,8 +14,8 @@ use std::os::unix::io::FromRawFd;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
-#[derive(Debug, Default)]
-struct Uevent {
+#[derive(Debug, Default, Clone)]
+pub struct Uevent {
     action: String,
     devpath: String,
     devname: String,
@@ -59,6 +59,12 @@ impl Uevent {
 
     async fn handle_device_add_event(&self, sandbox: &Arc<Mutex<Sandbox>>) {
         let mut sb = sandbox.lock().await;
+
+        sb.uevent_log.push(self.clone());
+
+        if self.devname == "" {
+            return;
+        }
 
         // Add the device node name to the device map.
         sb.sys_to_dev_map

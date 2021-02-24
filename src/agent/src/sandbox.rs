@@ -49,6 +49,7 @@ pub struct Sandbox {
     pub hooks: Option<Hooks>,
     pub event_rx: Arc<Mutex<Receiver<String>>>,
     pub event_tx: Sender<String>,
+    pub uevent_log: Vec<crate::uevent::Uevent>,
 }
 
 impl Sandbox {
@@ -79,6 +80,7 @@ impl Sandbox {
             hooks: None,
             event_rx,
             event_tx: tx,
+            uevent_log: Vec::new(),
         })
     }
 
