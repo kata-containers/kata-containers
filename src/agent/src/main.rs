@@ -28,7 +28,6 @@ use nix::sys::select::{select, FdSet};
 use nix::sys::socket::{self, AddressFamily, SockAddr, SockFlag, SockType};
 use nix::sys::wait;
 use nix::unistd::{self, close, dup, dup2, fork, setsid, ForkResult};
-use std::collections::HashMap;
 use std::env;
 use std::ffi::{CStr, CString, OsStr};
 use std::fs::{self, File};
@@ -72,7 +71,6 @@ use rustjail::pipestream::PipeStream;
 use tokio::{
     io::AsyncWrite,
     sync::{
-        oneshot::Sender,
         watch::{channel, Receiver},
         Mutex, RwLock,
     },
@@ -89,8 +87,6 @@ const CONSOLE_PATH: &str = "/dev/console";
 const DEFAULT_BUF_SIZE: usize = 8 * 1024;
 
 lazy_static! {
-    static ref GLOBAL_DEVICE_WATCHER: Arc<Mutex<HashMap<String, Option<Sender<String>>>>> =
-        Arc::new(Mutex::new(HashMap::new()));
     static ref AGENT_CONFIG: Arc<RwLock<AgentConfig>> =
         Arc::new(RwLock::new(config::AgentConfig::new()));
 }

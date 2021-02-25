@@ -6,7 +6,6 @@
 use crate::device::online_device;
 use crate::linux_abi::*;
 use crate::sandbox::Sandbox;
-use crate::GLOBAL_DEVICE_WATCHER;
 use slog::Logger;
 
 use anyhow::Result;
@@ -66,10 +65,6 @@ impl Uevent {
 
     async fn handle_block_add_event(&self, sandbox: &Arc<Mutex<Sandbox>>) {
         let pci_root_bus_path = create_pci_root_bus_path();
-
-        // Keep the same lock order as device::get_device_name(), otherwise it may cause deadlock.
-        let watcher = GLOBAL_DEVICE_WATCHER.clone();
-        let mut w = watcher.lock().await;
         let mut sb = sandbox.lock().await;
 
         // Add the device node name to the pci device map.
@@ -79,9 +74,10 @@ impl Uevent {
         // Notify watchers that are interested in the udev event.
         // Close the channel after watcher has been notified.
         let devpath = self.devpath.clone();
-        let empties: Vec<_> = w
-            .iter_mut()
-            .filter(|(dev_addr, _)| {
+        let keys: Vec<_> = sb
+            .dev_watcher
+            .keys()
+            .filter(|dev_addr| {
                 let pci_p = format!("{}{}", pci_root_bus_path, *dev_addr);
 
                 // blk block device
@@ -99,17 +95,16 @@ impl Uevent {
                         dev_addr.ends_with(pmem_suffix.as_str())
                 }
             })
-            .map(|(k, sender)| {
-                let devname = self.devname.clone();
-                let sender = sender.take().unwrap();
-                let _ = sender.send(devname);
-                k.clone()
-            })
+            .cloned()
             .collect();
 
-        // Remove notified nodes from the watcher map.
-        for empty in empties {
-            w.remove(&empty);
+        for k in keys {
+            let devname = self.devname.clone();
+            // unwrap() is safe because logic above ensures k exists
+            // in the map, and it's locked so no-one else can change
+            // that
+            let sender = sb.dev_watcher.remove(&k).unwrap();
+            let _ = sender.send(devname);
         }
     }
 
