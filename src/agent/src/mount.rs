@@ -44,6 +44,8 @@ pub const DRIVER_LOCAL_TYPE: &str = "local";
 
 pub const TYPE_ROOTFS: &str = "rootfs";
 
+pub const MOUNT_GUEST_TAG: &str = "kataShared";
+
 #[rustfmt::skip]
 lazy_static! {
     pub static ref FLAGS: HashMap<&'static str, (bool, MsFlags)> = {
@@ -383,6 +385,14 @@ async fn nvdimm_storage_handler(
 fn mount_storage(logger: &Logger, storage: &Storage) -> Result<()> {
     let logger = logger.new(o!("subsystem" => "mount"));
 
+    // Check share before attempting to mount to see if the destination is already a mount point.
+    // If so, skip doing the mount. This facilitates mounting the sharedfs automatically
+    // in the guest before the agent service starts.
+    if storage.source == MOUNT_GUEST_TAG && is_mounted(&storage.mount_point)? {
+        warn!(logger, "kataShared already mounted, ignoring...");
+        return Ok(());
+    }
+
     match storage.fstype.as_str() {
         DRIVER_9P_TYPE | DRIVER_VIRTIOFS_TYPE => {
             let dest_path = Path::new(storage.mount_point.as_str());
@@ -416,6 +426,24 @@ fn mount_storage(logger: &Logger, storage: &Storage) -> Result<()> {
     );
 
     bare_mount.mount()
+}
+
+/// Looks for `mount_point` entry in the /proc/mounts.
+fn is_mounted(mount_point: &str) -> Result<bool> {
+    let mount_point = mount_point.trim_end_matches('/');
+    let found = fs::metadata(mount_point).is_ok()
+        // Looks through /proc/mounts and check if the mount exists
+        && fs::read_to_string("/proc/mounts")?
+            .lines()
+            .any(|line| {
+                // The 2nd column reveals the mount point.
+                line.split_whitespace()
+                    .nth(1)
+                    .map(|target| mount_point.eq(target))
+                    .unwrap_or(false)
+            });
+
+    Ok(found)
 }
 
 fn parse_mount_flags_and_options(options_vec: Vec<&str>) -> (MsFlags, String) {
@@ -895,6 +923,14 @@ mod tests {
             let error_msg = format!("{}", err);
             assert!(error_msg.contains(d.error_contains), msg);
         }
+    }
+
+    #[test]
+    fn test_is_mounted() {
+        assert!(is_mounted("/proc").unwrap());
+        assert!(!is_mounted("").unwrap());
+        assert!(!is_mounted("!").unwrap());
+        assert!(!is_mounted("/not_existing_path").unwrap());
     }
 
     #[test]
