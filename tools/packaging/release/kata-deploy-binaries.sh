@@ -147,13 +147,6 @@ install_qemu() {
 	kata_version="${kata_version}" "${pkg_root_dir}/static-build/qemu/build-static-qemu.sh"
 }
 
-# Install static qemu-virtiofsd asset
-install_qemu_virtiofsd() {
-	kata_version=${1:-$kata_version}
-	info "build static qemu-virtiofs"
-	kata_version="${kata_version}" "${pkg_root_dir}/static-build/qemu-virtiofs/build-static-qemu-virtiofs.sh"
-}
-
 # Install static firecracker asset
 install_firecracker() {
 	kata_version=${1:-$kata_version}
@@ -180,18 +173,6 @@ install_clh() {
 	# create tarball for github release action
 	tar -czvf ../kata-static-clh.tar.gz *
 	popd
-}
-
-install_docker_config_script() {
-	local docker_config_script_name="kata-configure-docker.sh"
-	local docker_config_script="${pkg_root_dir}/static-build/scripts/${docker_config_script_name}"
-
-	local script_dest_dir="${destdir}/opt/kata/share/scripts"
-
-	mkdir -p "$script_dest_dir"
-
-	sudo install --owner root --group root --mode 0755 \
-		"$docker_config_script" "$script_dest_dir"
 }
 
 #Install all components that are not assets
@@ -223,8 +204,6 @@ install_kata_components() {
 untar_qemu_binaries() {
 	info "Install static qemu"
 	tar xf kata-static-qemu.tar.gz -C "${destdir}"
-	info "Install static qemu-virtiofs"
-	tar xf kata-static-qemu-virtiofsd.tar.gz -C "${destdir}"
 }
 
 main() {
@@ -254,10 +233,8 @@ main() {
 	install_kernel
 	install_clh
 	install_qemu
-	install_qemu_virtiofsd
 	install_firecracker
 	install_image
-	install_docker_config_script
 
 	untar_qemu_binaries
 

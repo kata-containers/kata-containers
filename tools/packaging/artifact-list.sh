@@ -11,14 +11,12 @@ set -o nounset
 
 supported_artifacts=(
   "install_clh"
-  "install_docker_config_script"
   "install_experimental_kernel"
   "install_firecracker"
   "install_image"
   "install_kata_components"
   "install_kernel"
   "install_qemu"
-  "install_qemu_virtiofsd"
 )
 
 for c in ${supported_artifacts[@]}; do echo $c; done
