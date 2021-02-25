@@ -734,8 +734,6 @@ impl BaseContainer for LinuxContainer {
         }
         let linux = spec.linux.as_ref().unwrap();
 
-        let st = self.oci_state()?;
-
         let (pfd_log, cfd_log) = unistd::pipe().context("failed to create pipe")?;
 
         let _ = fcntl::fcntl(pfd_log, FcntlArg::F_SETFD(FdFlag::FD_CLOEXEC))
@@ -864,6 +862,8 @@ impl BaseContainer for LinuxContainer {
         }
 
         info!(logger, "child pid: {}", p.pid);
+
+        let st = self.oci_state()?;
 
         join_namespaces(
             &logger,
