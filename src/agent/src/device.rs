@@ -17,7 +17,7 @@ use crate::linux_abi::*;
 use crate::mount::{DRIVER_BLK_TYPE, DRIVER_MMIO_BLK_TYPE, DRIVER_NVDIMM_TYPE, DRIVER_SCSI_TYPE};
 use crate::pci;
 use crate::sandbox::Sandbox;
-use crate::{AGENT_CONFIG, GLOBAL_DEVICE_WATCHER};
+use crate::AGENT_CONFIG;
 use anyhow::{anyhow, Result};
 use oci::{LinuxDeviceCgroup, LinuxResources, Spec};
 use protocols::agent::Device;
@@ -88,16 +88,13 @@ fn pcipath_to_sysfs(root_bus_sysfs: &str, pcipath: &pci::Path) -> Result<String>
 }
 
 async fn get_device_name(sandbox: &Arc<Mutex<Sandbox>>, dev_addr: &str) -> Result<String> {
-    // Keep the same lock order as uevent::handle_block_add_event(), otherwise it may cause deadlock.
-    let mut w = GLOBAL_DEVICE_WATCHER.lock().await;
-    let sb = sandbox.lock().await;
+    let mut sb = sandbox.lock().await;
     for (key, value) in sb.pci_device_map.iter() {
         if key.contains(dev_addr) {
             info!(sl!(), "Device {} found in pci device map", dev_addr);
             return Ok(format!("{}/{}", SYSTEM_DEV_PATH, value));
         }
     }
-    drop(sb);
 
     // If device is not found in the device map, hotplug event has not
     // been received yet, create and add channel to the watchers map.
@@ -105,8 +102,8 @@ async fn get_device_name(sandbox: &Arc<Mutex<Sandbox>>, dev_addr: &str) -> Resul
     // Note this is done inside the lock, not to miss any events from the
     // global udev listener.
     let (tx, rx) = tokio::sync::oneshot::channel::<String>();
-    w.insert(dev_addr.to_string(), Some(tx));
-    drop(w);
+    sb.dev_watcher.insert(dev_addr.to_string(), tx);
+    drop(sb); // unlock
 
     info!(sl!(), "Waiting on channel for device notification\n");
     let hotplug_timeout = AGENT_CONFIG.read().await.hotplug_timeout;
@@ -114,9 +111,8 @@ async fn get_device_name(sandbox: &Arc<Mutex<Sandbox>>, dev_addr: &str) -> Resul
     let dev_name = match tokio::time::timeout(hotplug_timeout, rx).await {
         Ok(v) => v?,
         Err(_) => {
-            let watcher = GLOBAL_DEVICE_WATCHER.clone();
-            let mut w = watcher.lock().await;
-            w.remove_entry(dev_addr);
+            let mut sb = sandbox.lock().await;
+            sb.dev_watcher.remove_entry(dev_addr);
 
             return Err(anyhow!(
                 "Timeout reached after {:?} waiting for device {}",
@@ -800,21 +796,23 @@ mod tests {
         sb.pci_device_map.remove(&devpath);
         drop(sb); // unlock
 
+        let watcher_sandbox = Arc::clone(&sandbox);
         tokio::spawn(async move {
             loop {
-                let mut w = GLOBAL_DEVICE_WATCHER.lock().await;
-                let matched_key = w
+                let mut sb = watcher_sandbox.lock().await;
+                let matched_key = sb
+                    .dev_watcher
                     .keys()
                     .filter(|dev_addr| devpath.contains(*dev_addr))
                     .cloned()
                     .next();
 
                 if let Some(k) = matched_key {
-                    let sender = w.remove(&k).unwrap().unwrap();
+                    let sender = sb.dev_watcher.remove(&k).unwrap();
                     let _ = sender.send(devname.to_string());
                     return;
                 }
-                drop(w); // unlock
+                drop(sb); // unlock
             }
         });
 
