@@ -47,8 +47,8 @@ pub fn online_device(path: &str) -> Result<()> {
     Ok(())
 }
 
-// pciPathToSysfs fetches the sysfs path for a PCI path, relative to
-// the syfs path for the PCI host bridge, based on the PCI path
+// pcipath_to_sysfs fetches the sysfs path for a PCI path, relative to
+// the sysfs path for the PCI host bridge, based on the PCI path
 // provided.
 fn pcipath_to_sysfs(root_bus_sysfs: &str, pcipath: &pci::Path) -> Result<String> {
     let mut bus = "0000:00".to_string();
