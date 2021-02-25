@@ -542,10 +542,6 @@ func TestAppendKnobsAllFalse(t *testing.T) {
 }
 
 func TestAppendMemoryHugePages(t *testing.T) {
-	if !isDimmSupported(nil) {
-		t.Skip("Dimm not supported")
-	}
-
 	conf := &Config{
 		Memory: Memory{
 			Size:   "1G",
@@ -563,17 +559,22 @@ func TestAppendMemoryHugePages(t *testing.T) {
 		FileBackedMem: true,
 		MemShared:     true,
 	}
-	knobsString := "-object memory-backend-file,id=dimm1,size=1G,mem-path=/dev/hugepages,share=on,prealloc=on -numa node,memdev=dimm1"
+	objMemString := "-object memory-backend-file,id=dimm1,size=1G,mem-path=/dev/hugepages,share=on,prealloc=on"
+	numaMemString := "-numa node,memdev=dimm1"
+	memBackendString := "-machine memory-backend=dimm1"
 	mlockFalseString := "-realtime mlock=off"
+
+	knobsString := objMemString + " "
+	if isDimmSupported(nil) {
+		knobsString += numaMemString
+	} else {
+		knobsString += memBackendString
+	}
 
 	testConfigAppend(conf, knobs, memString+" "+knobsString+" "+mlockFalseString, t)
 }
 
 func TestAppendMemoryMemPrealloc(t *testing.T) {
-	if !isDimmSupported(nil) {
-		t.Skip("Dimm not supported")
-	}
-
 	conf := &Config{
 		Memory: Memory{
 			Size:   "1G",
@@ -589,17 +590,22 @@ func TestAppendMemoryMemPrealloc(t *testing.T) {
 		MemPrealloc: true,
 		MemShared:   true,
 	}
-	knobsString := "-object memory-backend-ram,id=dimm1,size=1G,share=on,prealloc=on -numa node,memdev=dimm1"
+	objMemString := "-object memory-backend-ram,id=dimm1,size=1G,share=on,prealloc=on"
+	numaMemString := "-numa node,memdev=dimm1"
+	memBackendString := "-machine memory-backend=dimm1"
 	mlockFalseString := "-realtime mlock=off"
+
+	knobsString := objMemString + " "
+	if isDimmSupported(nil) {
+		knobsString += numaMemString
+	} else {
+		knobsString += memBackendString
+	}
 
 	testConfigAppend(conf, knobs, memString+" "+knobsString+" "+mlockFalseString, t)
 }
 
 func TestAppendMemoryMemShared(t *testing.T) {
-	if !isDimmSupported(nil) {
-		t.Skip("Dimm not supported")
-	}
-
 	conf := &Config{
 		Memory: Memory{
 			Size:   "1G",
@@ -615,17 +621,22 @@ func TestAppendMemoryMemShared(t *testing.T) {
 		FileBackedMem: true,
 		MemShared:     true,
 	}
-	knobsString := "-object memory-backend-file,id=dimm1,size=1G,mem-path=foobar,share=on -numa node,memdev=dimm1"
+	objMemString := "-object memory-backend-file,id=dimm1,size=1G,mem-path=foobar,share=on"
+	numaMemString := "-numa node,memdev=dimm1"
+	memBackendString := "-machine memory-backend=dimm1"
 	mlockFalseString := "-realtime mlock=off"
+
+	knobsString := objMemString + " "
+	if isDimmSupported(nil) {
+		knobsString += numaMemString
+	} else {
+		knobsString += memBackendString
+	}
 
 	testConfigAppend(conf, knobs, memString+" "+knobsString+" "+mlockFalseString, t)
 }
 
 func TestAppendMemoryFileBackedMem(t *testing.T) {
-	if !isDimmSupported(nil) {
-		t.Skip("Dimm not supported")
-	}
-
 	conf := &Config{
 		Memory: Memory{
 			Size:   "1G",
@@ -641,17 +652,22 @@ func TestAppendMemoryFileBackedMem(t *testing.T) {
 		FileBackedMem: true,
 		MemShared:     false,
 	}
-	knobsString := "-object memory-backend-file,id=dimm1,size=1G,mem-path=foobar -numa node,memdev=dimm1"
+	objMemString := "-object memory-backend-file,id=dimm1,size=1G,mem-path=foobar"
+	numaMemString := "-numa node,memdev=dimm1"
+	memBackendString := "-machine memory-backend=dimm1"
 	mlockFalseString := "-realtime mlock=off"
+
+	knobsString := objMemString + " "
+	if isDimmSupported(nil) {
+		knobsString += numaMemString
+	} else {
+		knobsString += memBackendString
+	}
 
 	testConfigAppend(conf, knobs, memString+" "+knobsString+" "+mlockFalseString, t)
 }
 
 func TestAppendMemoryFileBackedMemPrealloc(t *testing.T) {
-	if !isDimmSupported(nil) {
-		t.Skip("Dimm not supported")
-	}
-
 	conf := &Config{
 		Memory: Memory{
 			Size:   "1G",
@@ -668,8 +684,17 @@ func TestAppendMemoryFileBackedMemPrealloc(t *testing.T) {
 		MemShared:     true,
 		MemPrealloc:   true,
 	}
-	knobsString := "-object memory-backend-file,id=dimm1,size=1G,mem-path=foobar,share=on,prealloc=on -numa node,memdev=dimm1"
+	objMemString := "-object memory-backend-file,id=dimm1,size=1G,mem-path=foobar,share=on,prealloc=on"
+	numaMemString := "-numa node,memdev=dimm1"
+	memBackendString := "-machine memory-backend=dimm1"
 	mlockFalseString := "-realtime mlock=off"
+
+	knobsString := objMemString + " "
+	if isDimmSupported(nil) {
+		knobsString += numaMemString
+	} else {
+		knobsString += memBackendString
+	}
 
 	testConfigAppend(conf, knobs, memString+" "+knobsString+" "+mlockFalseString, t)
 }
