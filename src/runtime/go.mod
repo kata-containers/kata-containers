@@ -63,6 +63,7 @@ require (
 )
 
 replace (
+	github.com/kata-containers/govmm => github.com/Jakob-Naucke/govmm v0.0.0-20210225154910-fe1ddaa40bd9
 	github.com/uber-go/atomic => go.uber.org/atomic v1.5.1
 	google.golang.org/genproto => google.golang.org/genproto v0.0.0-20180817151627-c66870c02cf8
 	google.golang.org/grpc => google.golang.org/grpc v1.19.0
