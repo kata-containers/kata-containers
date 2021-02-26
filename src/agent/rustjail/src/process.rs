@@ -144,7 +144,7 @@ impl Process {
 
     pub fn notify_term_close(&mut self) {
         let notify = self.term_exit_notifier.clone();
-        notify.notify();
+        notify.notify_one();
     }
 
     fn get_fd(&self, stream_type: &StreamType) -> Option<RawFd> {

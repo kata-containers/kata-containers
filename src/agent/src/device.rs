@@ -110,14 +110,10 @@ async fn get_device_name(sandbox: &Arc<Mutex<Sandbox>>, dev_addr: &str) -> Resul
 
     info!(sl!(), "Waiting on channel for device notification\n");
     let hotplug_timeout = AGENT_CONFIG.read().await.hotplug_timeout;
-    let timeout = tokio::time::delay_for(hotplug_timeout);
 
-    let dev_name;
-    tokio::select! {
-        v = rx => {
-            dev_name = v?;
-        }
-        _ = timeout => {
+    let dev_name = match tokio::time::timeout(hotplug_timeout, rx).await {
+        Ok(v) => v?,
+        Err(_) => {
             let watcher = GLOBAL_DEVICE_WATCHER.clone();
             let mut w = watcher.lock().await;
             w.remove_entry(dev_addr);

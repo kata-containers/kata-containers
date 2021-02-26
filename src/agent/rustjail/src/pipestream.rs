@@ -5,52 +5,28 @@
 
 //! Async support for pipe or something has file descriptor
 
+use nix::unistd;
 use std::{
-    fmt, io, mem,
+    fmt, io,
+    io::{Read, Result, Write},
+    mem,
     os::unix::io::{AsRawFd, FromRawFd, IntoRawFd, RawFd},
     pin::Pin,
     task::{Context, Poll},
 };
 
-use mio::event::Evented;
-use mio::unix::EventedFd;
-use mio::{Poll as MioPoll, PollOpt, Ready, Token};
-use nix::unistd;
-use tokio::io::{AsyncRead, AsyncWrite, PollEvented};
+use futures::ready;
+use tokio::io::{unix::AsyncFd, AsyncRead, AsyncWrite, ReadBuf};
 
-unsafe fn set_nonblocking(fd: RawFd) {
-    libc::fcntl(fd, libc::F_SETFL, libc::O_NONBLOCK);
+fn set_nonblocking(fd: RawFd) {
+    unsafe {
+        libc::fcntl(fd, libc::F_SETFL, libc::O_NONBLOCK);
+    }
 }
 
 struct StreamFd(RawFd);
 
-impl Evented for StreamFd {
-    fn register(
-        &self,
-        poll: &MioPoll,
-        token: Token,
-        interest: Ready,
-        opts: PollOpt,
-    ) -> io::Result<()> {
-        EventedFd(&self.0).register(poll, token, interest, opts)
-    }
-
-    fn reregister(
-        &self,
-        poll: &MioPoll,
-        token: Token,
-        interest: Ready,
-        opts: PollOpt,
-    ) -> io::Result<()> {
-        EventedFd(&self.0).reregister(poll, token, interest, opts)
-    }
-
-    fn deregister(&self, poll: &MioPoll) -> io::Result<()> {
-        EventedFd(&self.0).deregister(poll)
-    }
-}
-
-impl io::Read for StreamFd {
+impl io::Read for &StreamFd {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         match unistd::read(self.0, buf) {
             Ok(l) => Ok(l),
@@ -59,7 +35,7 @@ impl io::Read for StreamFd {
     }
 }
 
-impl io::Write for StreamFd {
+impl io::Write for &StreamFd {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
         match unistd::write(self.0, buf) {
             Ok(l) => Ok(l),
@@ -87,10 +63,20 @@ impl Drop for StreamFd {
     }
 }
 
-/// Pipe read
-pub struct PipeStream(PollEvented<StreamFd>);
+impl AsRawFd for StreamFd {
+    fn as_raw_fd(&self) -> RawFd {
+        self.0
+    }
+}
+
+pub struct PipeStream(AsyncFd<StreamFd>);
 
 impl PipeStream {
+    pub fn new(fd: RawFd) -> Result<Self> {
+        set_nonblocking(fd);
+        Ok(Self(AsyncFd::new(StreamFd(fd))?))
+    }
+
     pub fn shutdown(&mut self) -> io::Result<()> {
         self.0.get_mut().close()
     }
@@ -100,25 +86,15 @@ impl PipeStream {
     }
 }
 
-impl AsyncRead for PipeStream {
-    fn poll_read(
-        mut self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-        buf: &mut [u8],
-    ) -> Poll<io::Result<usize>> {
-        Pin::new(&mut self.0).poll_read(cx, buf)
-    }
-}
-
 impl AsRawFd for PipeStream {
     fn as_raw_fd(&self) -> RawFd {
-        self.0.get_ref().0
+        self.0.as_raw_fd()
     }
 }
 
 impl IntoRawFd for PipeStream {
     fn into_raw_fd(self) -> RawFd {
-        let fd = self.0.get_ref().0;
+        let fd = self.as_raw_fd();
         mem::forget(self);
         fd
     }
@@ -126,8 +102,7 @@ impl IntoRawFd for PipeStream {
 
 impl FromRawFd for PipeStream {
     unsafe fn from_raw_fd(fd: RawFd) -> Self {
-        set_nonblocking(fd);
-        PipeStream(PollEvented::new(StreamFd(fd)).unwrap())
+        Self::new(fd).unwrap()
     }
 }
 
@@ -137,23 +112,59 @@ impl fmt::Debug for PipeStream {
     }
 }
 
+impl AsyncRead for PipeStream {
+    fn poll_read(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &mut ReadBuf<'_>,
+    ) -> Poll<Result<()>> {
+        let b;
+        unsafe {
+            b = &mut *(buf.unfilled_mut() as *mut [mem::MaybeUninit<u8>] as *mut [u8]);
+        };
+
+        loop {
+            let mut guard = ready!(self.0.poll_read_ready(cx))?;
+
+            match guard.try_io(|inner| inner.get_ref().read(b)) {
+                Ok(Ok(n)) => {
+                    unsafe {
+                        buf.assume_init(n);
+                    }
+                    buf.advance(n);
+                    return Ok(()).into();
+                }
+                Ok(Err(e)) => return Err(e).into(),
+                Err(_would_block) => {
+                    continue;
+                }
+            }
+        }
+    }
+}
+
 impl AsyncWrite for PipeStream {
     fn poll_write(
-        mut self: Pin<&mut Self>,
+        self: Pin<&mut Self>,
         cx: &mut Context<'_>,
         buf: &[u8],
-    ) -> Poll<Result<usize, io::Error>> {
-        Pin::new(&mut self.0).poll_write(cx, buf)
+    ) -> Poll<io::Result<usize>> {
+        loop {
+            let mut guard = ready!(self.0.poll_write_ready(cx))?;
+
+            match guard.try_io(|inner| inner.get_ref().write(buf)) {
+                Ok(result) => return Poll::Ready(result),
+                Err(_would_block) => continue,
+            }
+        }
     }
 
-    fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), io::Error>> {
-        Pin::new(&mut self.0).poll_flush(cx)
+    fn poll_flush(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+        Poll::Ready(Ok(()))
     }
 
-    fn poll_shutdown(
-        mut self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-    ) -> Poll<Result<(), io::Error>> {
-        Pin::new(&mut self.0).poll_shutdown(cx)
+    fn poll_shutdown(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+        self.get_mut().shutdown()?;
+        Poll::Ready(Ok(()))
     }
 }
