@@ -9,7 +9,7 @@ use crate::sandbox::Sandbox;
 use crate::GLOBAL_DEVICE_WATCHER;
 use slog::Logger;
 
-use netlink_sys::{Protocol, Socket, SocketAddr};
+use netlink_sys::{protocols, SocketAddr, TokioSocket};
 use nix::errno::Errno;
 use std::os::unix::io::FromRawFd;
 use std::sync::Arc;
@@ -143,9 +143,9 @@ pub async fn watch_uevents(sandbox: Arc<Mutex<Sandbox>>) {
             let fd = libc::socket(
                 libc::AF_NETLINK,
                 libc::SOCK_DGRAM | libc::SOCK_CLOEXEC,
-                Protocol::KObjectUevent as libc::c_int,
+                protocols::NETLINK_KOBJECT_UEVENT as libc::c_int,
             );
-            socket = Socket::from_raw_fd(fd);
+            socket = TokioSocket::from_raw_fd(fd);
         }
         socket.bind(&SocketAddr::new(0, 1)).unwrap();
 
