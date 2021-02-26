@@ -132,7 +132,7 @@ async fn register_memory_event_v2(
 // notify_on_oom returns channel on which you can expect event about OOM,
 // if process died without OOM this channel will be closed.
 async fn notify_on_oom(cid: &str, dir: String) -> Result<Receiver<String>> {
-    if dir == "" {
+    if dir.is_empty() {
         return Err(anyhow!("memory controller missing"));
     }
 
@@ -141,7 +141,7 @@ async fn notify_on_oom(cid: &str, dir: String) -> Result<Receiver<String>> {
 
 // level is one of "low", "medium", or "critical"
 async fn notify_memory_pressure(cid: &str, dir: String, level: &str) -> Result<Receiver<String>> {
-    if dir == "" {
+    if dir.is_empty() {
         return Err(anyhow!("memory controller missing"));
     }
 
@@ -165,7 +165,7 @@ async fn register_memory_event(
 
     let event_control_path = Path::new(&cg_dir).join("cgroup.event_control");
     let data;
-    if arg == "" {
+    if arg.is_empty() {
         data = format!("{} {}", eventfd, event_file.as_raw_fd());
     } else {
         data = format!("{} {} {}", eventfd, event_file.as_raw_fd(), arg);
