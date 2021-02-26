@@ -61,6 +61,9 @@ func create(ctx context.Context, s *service, r *taskAPI.CreateTaskRequest) (*con
 		}
 
 		s.config, err = loadRuntimeConfig(s, r, ociSpec.Annotations)
+		if err != nil {
+			return nil, err
+		}
 
 		// create tracer
 		// This is the earliest location we can create the tracer because we must wait
@@ -101,9 +104,9 @@ func create(ctx context.Context, s *service, r *taskAPI.CreateTaskRequest) (*con
 		go s.startManagementServer(ctx, ociSpec)
 
 	case vc.PodContainer:
-                var span otelTrace.Span
-                span, s.ctx = trace(s.ctx, "create")
-                defer span.End()
+		var span otelTrace.Span
+		span, s.ctx = trace(s.ctx, "create")
+		defer span.End()
 
 		if s.sandbox == nil {
 			return nil, fmt.Errorf("BUG: Cannot start the container, since the sandbox hasn't been created")
