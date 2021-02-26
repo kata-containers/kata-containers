@@ -7,7 +7,6 @@ use std::collections::HashMap;
 use std::ffi::CString;
 use std::fs;
 use std::io;
-use std::iter::FromIterator;
 use std::os::unix::fs::PermissionsExt;
 
 use std::path::Path;
@@ -396,7 +395,7 @@ fn mount_storage(logger: &Logger, storage: &Storage) -> Result<()> {
     }
 
     let options_vec = storage.options.to_vec();
-    let options_vec = Vec::from_iter(options_vec.iter().map(String::as_str));
+    let options_vec = options_vec.iter().map(String::as_str).collect();
     let (flags, options) = parse_mount_flags_and_options(options_vec);
 
     info!(logger, "mounting storage";
@@ -538,7 +537,7 @@ pub fn get_mount_fs_type(mount_point: &str) -> Result<String> {
 // get_mount_fs_type_from_file returns the FS type corresponding to the passed mount point and
 // any error ecountered.
 pub fn get_mount_fs_type_from_file(mount_file: &str, mount_point: &str) -> Result<String> {
-    if mount_point == "" {
+    if mount_point.is_empty() {
         return Err(anyhow!("Invalid mount point {}", mount_point));
     }
 
@@ -623,7 +622,7 @@ pub fn get_cgroup_mounts(
             }
         }
 
-        if fields[0] == "" {
+        if fields[0].is_empty() {
             continue;
         }
 
@@ -830,7 +829,7 @@ mod tests {
             let src_filename: String;
             let dest_filename: String;
 
-            if d.src != "" {
+            if !d.src.is_empty() {
                 src = dir.path().join(d.src.to_string());
                 src_filename = src
                     .to_str()
@@ -840,7 +839,7 @@ mod tests {
                 src_filename = "".to_owned();
             }
 
-            if d.dest != "" {
+            if !d.dest.is_empty() {
                 dest = dir.path().join(d.dest.to_string());
                 dest_filename = dest
                     .to_str()
@@ -852,7 +851,7 @@ mod tests {
 
             // Create the mount directories
             for d in [src_filename.clone(), dest_filename.clone()].iter() {
-                if d == "" {
+                if d.is_empty() {
                     continue;
                 }
 
@@ -872,7 +871,7 @@ mod tests {
 
             let msg = format!("{}: result: {:?}", msg, result);
 
-            if d.error_contains == "" {
+            if d.error_contains.is_empty() {
                 assert!(result.is_ok(), msg);
 
                 // Cleanup
@@ -990,7 +989,7 @@ mod tests {
 
             let msg = format!("{}: result: {:?}", msg, result);
 
-            if d.error_contains == "" {
+            if d.error_contains.is_empty() {
                 assert!(result.is_ok(), msg);
                 continue;
             }
@@ -1098,7 +1097,7 @@ mod tests {
             // add more details if an assertion fails
             let msg = format!("{}: result: {:?}", msg, result);
 
-            if d.error_contains == "" {
+            if d.error_contains.is_empty() {
                 let fs_type = result.unwrap();
 
                 assert!(d.fs_type == fs_type, msg);
@@ -1255,7 +1254,7 @@ mod tests {
             let result = get_cgroup_mounts(&logger, filename, false);
             let msg = format!("{}: result: {:?}", msg, result);
 
-            if d.error_contains != "" {
+            if !d.error_contains.is_empty() {
                 assert!(result.is_err(), msg);
 
                 let error_msg = format!("{}", result.unwrap_err());

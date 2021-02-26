@@ -103,21 +103,21 @@ impl CgroupManager for Manager {
 
         // set block_io resources
         if let Some(blkio) = &r.block_io {
-            set_block_io_resources(&self.cgroup, blkio, res)?;
+            set_block_io_resources(&self.cgroup, blkio, res);
         }
 
         // set hugepages resources
         if !r.hugepage_limits.is_empty() {
-            set_hugepages_resources(&self.cgroup, &r.hugepage_limits, res)?;
+            set_hugepages_resources(&self.cgroup, &r.hugepage_limits, res);
         }
 
         // set network resources
         if let Some(network) = &r.network {
-            set_network_resources(&self.cgroup, network, res)?;
+            set_network_resources(&self.cgroup, network, res);
         }
 
         // set devices resources
-        set_devices_resources(&self.cgroup, &r.devices, res)?;
+        set_devices_resources(&self.cgroup, &r.devices, res);
         info!(sl!(), "resources after processed {:?}", res);
 
         // apply resources
@@ -198,7 +198,7 @@ fn set_network_resources(
     _cg: &cgroups::Cgroup,
     network: &LinuxNetwork,
     res: &mut cgroups::Resources,
-) -> Result<()> {
+) {
     info!(sl!(), "cgroup manager set network");
 
     // set classid
@@ -219,14 +219,13 @@ fn set_network_resources(
     }
 
     res.network.priorities = priorities;
-    Ok(())
 }
 
 fn set_devices_resources(
     _cg: &cgroups::Cgroup,
     device_resources: &[LinuxDeviceCgroup],
     res: &mut cgroups::Resources,
-) -> Result<()> {
+) {
     info!(sl!(), "cgroup manager set devices");
     let mut devices = vec![];
 
@@ -249,15 +248,13 @@ fn set_devices_resources(
     }
 
     res.devices.devices = devices;
-
-    Ok(())
 }
 
 fn set_hugepages_resources(
     _cg: &cgroups::Cgroup,
     hugepage_limits: &[LinuxHugepageLimit],
     res: &mut cgroups::Resources,
-) -> Result<()> {
+) {
     info!(sl!(), "cgroup manager set hugepage");
     let mut limits = vec![];
 
@@ -269,15 +266,13 @@ fn set_hugepages_resources(
         limits.push(hr);
     }
     res.hugepages.limits = limits;
-
-    Ok(())
 }
 
 fn set_block_io_resources(
     _cg: &cgroups::Cgroup,
     blkio: &LinuxBlockIO,
     res: &mut cgroups::Resources,
-) -> Result<()> {
+) {
     info!(sl!(), "cgroup manager set block io");
 
     res.blkio.weight = blkio.weight;
@@ -303,8 +298,6 @@ fn set_block_io_resources(
         build_blk_io_device_throttle_resource(&blkio.throttle_read_iops_device);
     res.blkio.throttle_write_iops_device =
         build_blk_io_device_throttle_resource(&blkio.throttle_write_iops_device);
-
-    Ok(())
 }
 
 fn set_cpu_resources(cg: &cgroups::Cgroup, cpu: &LinuxCPU) -> Result<()> {
@@ -372,7 +365,7 @@ fn set_memory_resources(cg: &cgroups::Cgroup, memory: &LinuxMemory, update: bool
     }
 
     if let Some(swappiness) = memory.swappiness {
-        if swappiness >= 0 && swappiness <= 100 {
+        if (0..=100).contains(&swappiness) {
             mem_controller.set_swappiness(swappiness as u64)?;
         } else {
             return Err(anyhow!(
@@ -965,7 +958,7 @@ impl Manager {
     }
 
     pub fn update_cpuset_path(&self, guest_cpuset: &str, container_cpuset: &str) -> Result<()> {
-        if guest_cpuset == "" {
+        if guest_cpuset.is_empty() {
             return Ok(());
         }
         info!(sl!(), "update_cpuset_path to: {}", guest_cpuset);

@@ -57,7 +57,7 @@ impl Namespace {
 
     pub fn get_uts(mut self, hostname: &str) -> Self {
         self.ns_type = NamespaceType::UTS;
-        if hostname != "" {
+        if !hostname.is_empty() {
             self.hostname = Some(String::from(hostname));
         }
         self
