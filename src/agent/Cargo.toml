@@ -21,7 +21,7 @@ scopeguard = "1.0.0"
 regex = "1"
 
 async-trait = "0.1.42"
-tokio = { version = "1.2.0", features = ["rt", "sync", "macros", "io-util", "time", "signal", "io-std", "process"] }
+tokio = { version = "1.2.0", features = ["rt", "rt-multi-thread", "sync", "macros", "io-util", "time", "signal", "io-std", "process", "fs"] }
 futures = "0.3.12"
 netlink-sys = { version = "0.6.0", features = ["tokio_socket",]}
 tokio-vsock = "0.3.0"

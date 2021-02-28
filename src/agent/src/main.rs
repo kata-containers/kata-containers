@@ -55,6 +55,7 @@ mod sandbox;
 #[cfg(test)]
 mod test_utils;
 mod uevent;
+mod util;
 mod version;
 
 use mount::{cgroups_mount, general_mount};
@@ -70,7 +71,11 @@ use rustjail::pipestream::PipeStream;
 use tokio::{
     io::AsyncWrite,
     signal::unix::{signal, SignalKind},
-    sync::{oneshot::Sender, Mutex, RwLock},
+    sync::{
+        oneshot::Sender,
+        watch::{channel, Receiver},
+        Mutex, RwLock,
+    },
     task::JoinHandle,
 };
 use tokio_vsock::{Incoming, VsockListener, VsockStream};
@@ -126,7 +131,7 @@ async fn get_vsock_stream(fd: RawFd) -> Result<VsockStream> {
 
 // Create a thread to handle reading from the logger pipe. The thread will
 // output to the vsock port specified, or stdout.
-async fn create_logger_task(rfd: RawFd, vsock_port: u32) -> Result<()> {
+async fn create_logger_task(rfd: RawFd, vsock_port: u32, shutdown: Receiver<bool>) -> Result<()> {
     let mut reader = PipeStream::from_fd(rfd);
     let mut writer: Box<dyn AsyncWrite + Unpin + Send>;
 
@@ -147,7 +152,7 @@ async fn create_logger_task(rfd: RawFd, vsock_port: u32) -> Result<()> {
         writer = Box::new(tokio::io::stdout());
     }
 
-    let _ = tokio::io::copy(&mut reader, &mut writer).await;
+    let _ = util::interruptable_io_copier(&mut reader, &mut writer, shutdown).await;
 
     Ok(())
 }
@@ -164,6 +169,8 @@ async fn real_main() -> std::result::Result<(), Box<dyn std::error::Error>> {
 
     // support vsock log
     let (rfd, wfd) = unistd::pipe2(OFlag::O_CLOEXEC)?;
+
+    let (shutdown_tx, shutdown_rx) = channel(true);
 
     let agent_config = AGENT_CONFIG.clone();
 
@@ -203,7 +210,7 @@ async fn real_main() -> std::result::Result<(), Box<dyn std::error::Error>> {
 
     let log_vport = config.log_vport as u32;
 
-    let log_handle = tokio::spawn(create_logger_task(rfd, log_vport));
+    let log_handle = tokio::spawn(create_logger_task(rfd, log_vport, shutdown_rx.clone()));
 
     tasks.push(log_handle);
 
@@ -226,8 +233,15 @@ async fn real_main() -> std::result::Result<(), Box<dyn std::error::Error>> {
         _log_guard = Ok(slog_stdlog::init().map_err(|e| e)?);
     }
 
+    // Start the sandbox and wait for its ttRPC server to end
     start_sandbox(&logger, &config, init_mode).await?;
 
+    // Trigger a controlled shutdown
+    shutdown_tx
+        .send(true)
+        .map_err(|e| anyhow!(e).context("failed to request shutdown"))?;
+
+    // Wait for all threads to finish
     let results = join_all(tasks).await;
 
     for result in results {
@@ -235,6 +249,8 @@ async fn real_main() -> std::result::Result<(), Box<dyn std::error::Error>> {
             return Err(anyhow!(e).into());
         }
     }
+
+    eprintln!("{} shutdown complete", NAME);
 
     Ok(())
 }
@@ -259,7 +275,7 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
         exit(0);
     }
 
-    let rt = tokio::runtime::Builder::new_current_thread()
+    let rt = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()?;
 
