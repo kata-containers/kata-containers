@@ -217,24 +217,38 @@ async fn real_main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     let writer = unsafe { File::from_raw_fd(wfd) };
 
     // Recreate a logger with the log level get from "/proc/cmdline".
-    let (logger, _logger_async_guard) =
+    let (logger, logger_async_guard) =
         logging::create_logger(NAME, "agent", config.log_level, writer);
 
     announce(&logger, &config);
 
-    // This "unused" variable is required as it enables the global (and crucially static) logger,
+    // This variable is required as it enables the global (and crucially static) logger,
     // which is required to satisfy the the lifetime constraints of the auto-generated gRPC code.
-    let _guard = slog_scope::set_global_logger(logger.new(o!("subsystem" => "rpc")));
+    let global_logger = slog_scope::set_global_logger(logger.new(o!("subsystem" => "rpc")));
 
-    let mut _log_guard: Result<(), log::SetLoggerError> = Ok(());
+    // Allow the global logger to be modified later (for shutdown)
+    global_logger.cancel_reset();
+
+    let mut ttrpc_log_guard: Result<(), log::SetLoggerError> = Ok(());
 
     if config.log_level == slog::Level::Trace {
         // Redirect ttrpc log calls to slog iff full debug requested
-        _log_guard = Ok(slog_stdlog::init().map_err(|e| e)?);
+        ttrpc_log_guard = Ok(slog_stdlog::init().map_err(|e| e)?);
     }
 
     // Start the sandbox and wait for its ttRPC server to end
     start_sandbox(&logger, &config, init_mode).await?;
+
+    // Install a NOP logger for the remainder of the shutdown sequence
+    // to ensure any log calls made by local crates using the scope logger
+    // don't fail.
+    let global_logger_guard2 =
+        slog_scope::set_global_logger(slog::Logger::root(slog::Discard, o!()));
+    global_logger_guard2.cancel_reset();
+
+    drop(logger_async_guard);
+
+    drop(ttrpc_log_guard);
 
     // Trigger a controlled shutdown
     shutdown_tx
