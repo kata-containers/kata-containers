@@ -736,10 +736,10 @@ fn mount_from(
 
     let src = if m.r#type.as_str() == "bind" {
         let src = fs::canonicalize(m.source.as_str())?;
-        let dir = if src.is_file() {
-            Path::new(&dest).parent().unwrap()
-        } else {
+        let dir = if src.is_dir() {
             Path::new(&dest)
+        } else {
+            Path::new(&dest).parent().unwrap()
         };
 
         let _ = fs::create_dir_all(&dir).map_err(|e| {
@@ -752,7 +752,7 @@ fn mount_from(
         });
 
         // make sure file exists so we can bind over it
-        if src.is_file() {
+        if !src.is_dir() {
             let _ = OpenOptions::new().create(true).write(true).open(&dest);
         }
         src.to_str().unwrap().to_string()
