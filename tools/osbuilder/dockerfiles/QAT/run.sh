@@ -14,11 +14,11 @@ export ROOTFS_DIR=~/src/rootfs
 export GOPATH=~/src/go
 export PATH=${PATH}:/usr/local/go/bin:${GOPATH}/bin
 
-katarepo=github.com/kata-containers/kata-containers
-katarepopath=${GOPATH}/src/${katarepo}
+kata_repo=github.com/kata-containers/kata-containers
+kata_repo_path=${GOPATH}/src/${kata_repo}
 
-testsrepo=github.com/kata-containers/tests
-testsrepopath=${GOPATH}/src/${testsrepo}
+tests_repo=github.com/kata-containers/tests
+tests_repo_path=${GOPATH}/src/${tests_repo}
 
 grab_kata_repos()
 {
@@ -26,24 +26,24 @@ grab_kata_repos()
     # Only check out the branch needed, and make it shallow and thus space/bandwidth efficient
     # Use a green prompt with white text for easy viewing
     bin/echo -e "\n\e[1;42mClone and checkout Kata repos\e[0m" 
-    git clone --single-branch --branch $KATA_REPO_VERSION --depth=1 https://${katarepo} ${katarepopath}
-    git clone --single-branch --branch $KATA_REPO_VERSION --depth=1 https://${testsrepo} ${testsrepopath}
+    git clone --single-branch --branch $KATA_REPO_VERSION --depth=1 https://${kata_repo} ${kata_repo_path}
+    git clone --single-branch --branch $KATA_REPO_VERSION --depth=1 https://${tests_repo} ${tests_repo_path}
 }
 
 configure_kernel()
 {
-    cp /input/qat.conf ${katarepopath}/tools/packaging/kernel/configs/fragments/common/qat.conf
+    cp /input/qat.conf ${kata_repo_path}/tools/packaging/kernel/configs/fragments/common/qat.conf
     # We need yq and go to grab kernel versions etc.
-    ${testsrepopath}/.ci/install_yq.sh
-    ${testsrepopath}/.ci/install_go.sh -p
-    cd ${katarepopath}
+    ${tests_repo_path}/.ci/install_yq.sh
+    ${tests_repo_path}/.ci/install_go.sh -p
+    cd ${kata_repo_path}
     /bin/echo -e "\n\e[1;42mDownload and configure Kata kernel with CRYPTO support\e[0m"
     ./tools/packaging/kernel/build-kernel.sh setup
 }
 
 build_kernel()
 {
-    cd ${katarepopath}
+    cd ${kata_repo_path}
     LINUX_VER=$(ls -d kata-linux-*)
     sed -i 's/EXTRAVERSION =/EXTRAVERSION = .qat.container/' $LINUX_VER/Makefile
     /bin/echo -e "\n\e[1;42mBuild Kata kernel with CRYPTO support\e[0m" 
@@ -61,7 +61,7 @@ build_rootfs()
         cd /proc
     fi
     /bin/echo -e "\n\e[1;42mDownload ${ROOTFS_OS} based rootfs\e[0m"
-    SECCOMP=no EXTRA_PKGS='kmod' ${katarepopath}/tools/osbuilder/rootfs-builder/rootfs.sh $ROOTFS_OS 
+    sudo -E SECCOMP=no EXTRA_PKGS='kmod' ${kata_repo_path}/tools/osbuilder/rootfs-builder/rootfs.sh $ROOTFS_OS 
 }
 
 grab_qat_drivers()
@@ -75,8 +75,8 @@ grab_qat_drivers()
 build_qat_drivers()
 {
     /bin/echo -e "\n\e[1;42mCompile driver modules\e[0m"
-    cd ${katarepopath}
-    linux_kernel_path=${katarepopath}/${LINUX_VER}
+    cd ${kata_repo_path}
+    linux_kernel_path=${kata_repo_path}/${LINUX_VER}
     KERNEL_MAJOR_VERSION=$(awk '/^VERSION =/{print $NF}' ${linux_kernel_path}/Makefile)
     KERNEL_PATHLEVEL=$(awk '/^PATCHLEVEL =/{print $NF}' ${linux_kernel_path}/Makefile)
     KERNEL_SUBLEVEL=$(awk '/^SUBLEVEL =/{print $NF}' ${linux_kernel_path}/Makefile)
@@ -91,28 +91,28 @@ add_qat_to_rootfs()
 {
     /bin/echo -e "\n\e[1;42mCopy driver modules to rootfs\e[0m"
     cd $QAT_SRC
-    make INSTALL_MOD_PATH=${ROOTFS_DIR} qat-driver-install -j$(nproc)
-    cp $QAT_SRC/build/usdm_drv.ko ${ROOTFS_DIR}/lib/modules/${KERNEL_ROOTFS_DIR}/updates/drivers
-    depmod -a -b ${ROOTFS_DIR} ${KERNEL_ROOTFS_DIR}
-    cd ${katarepopath}/tools/osbuilder/image-builder
+    sudo -E make INSTALL_MOD_PATH=${ROOTFS_DIR} qat-driver-install -j$(nproc)
+    sudo cp $QAT_SRC/build/usdm_drv.ko ${ROOTFS_DIR}/lib/modules/${KERNEL_ROOTFS_DIR}/updates/drivers
+    sudo depmod -a -b ${ROOTFS_DIR} ${KERNEL_ROOTFS_DIR}
+    cd ${kata_repo_path}/tools/osbuilder/image-builder
     /bin/echo -e "\n\e[1;42mBuild rootfs image\e[0m"
-    ./image_builder.sh ${ROOTFS_DIR}
+    sudo -E ./image_builder.sh ${ROOTFS_DIR}
 }
 
 copy_outputs()
 {
     /bin/echo -e "\n\e[1;42mCopy kernel and rootfs to the output directory and provide sample configuration files\e[0m"
     mkdir -p ${OUTPUT_DIR} || true
-    cp ${linux_kernel_path}/arch/x86/boot/bzImage $OUTPUT_DIR/vmlinuz-${LINUX_VER}_qat
-    cp ${linux_kernel_path}/vmlinux $OUTPUT_DIR/vmlinux-${LINUX_VER}_qat
-    cp  ${katarepopath}/tools/osbuilder/image-builder/kata-containers.img $OUTPUT_DIR
-    mkdir -p ${OUTPUT_DIR}/configs || true
+    sudo cp ${linux_kernel_path}/arch/x86/boot/bzImage $OUTPUT_DIR/vmlinuz-${LINUX_VER}_qat
+    sudo cp ${linux_kernel_path}/vmlinux $OUTPUT_DIR/vmlinux-${LINUX_VER}_qat
+    sudo cp  ${kata_repo_path}/tools/osbuilder/image-builder/kata-containers.img $OUTPUT_DIR
+    sudo mkdir -p ${OUTPUT_DIR}/configs || true
     # Change extension from .conf.vm to just .conf and change the SSL section to 
     # SHIM so it works with Kata containers 
     for f in $QAT_SRC/quickassist/utilities/adf_ctl/conf_files/*.conf.vm; do
         output_conf_file=$(basename -- "$f" .conf.vm).conf
-        cp -- "$f" "${OUTPUT_DIR}/configs/${output_conf_file}"
-        sed -i 's/\[SSL\]/\[SHIM\]/g' ${OUTPUT_DIR}/configs/${output_conf_file}
+        sudo cp -- "$f" "${OUTPUT_DIR}/configs/${output_conf_file}"
+        sudo sed -i 's/\[SSL\]/\[SHIM\]/g' ${OUTPUT_DIR}/configs/${output_conf_file}
     done
 }
 
@@ -131,7 +131,7 @@ EOF
 main()
 {
     local check_in_container=${OUTPUT_DIR:-}
-	if [ -z "${check_in_container}" ]; then
+    if [ -z "${check_in_container}" ]; then
 		echo "Error: 'OUTPUT_DIR' not set" >&2
 		echo "$0 should be run using the Dockerfile supplied." >&2
 		exit -1

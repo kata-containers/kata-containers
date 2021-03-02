@@ -1,4 +1,4 @@
-# Copyright (c) 2021 Intel Corporation
+# Copyright (c) 2020 Intel Corporation
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -44,9 +44,16 @@ RUN dnf install -y \
     sudo \
     xz
 
+# Add in non-privileged user
+RUN useradd qatbuilder -p "" && \
+    echo "qatbuilder ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
+
 # Pull in our local files
 COPY ./run.sh /input/
 COPY ./qat.conf /input/
+
+# Change to a less privileged user before running the commands
+USER qatbuilder
 
 # Output is placed in the /output directory.
 # We could make this a VOLUME to force it to be attached to the host, but let's
