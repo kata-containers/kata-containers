@@ -16,7 +16,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/containerd/containerd/namespaces"
 	cdshim "github.com/containerd/containerd/runtime/v2/shim"
 	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
 	vcAnnotations "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/annotations"
@@ -189,9 +188,5 @@ func (s *service) mountPprofHandle(m *http.ServeMux, ociSpec *specs.Spec) {
 }
 
 func socketAddress(ctx context.Context, id string) (string, error) {
-	ns, err := namespaces.NamespaceRequired(ctx)
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(string(filepath.Separator), "containerd-shim", ns, id, "shim-monitor.sock"), nil
+	return filepath.Join(string(filepath.Separator), "run", "vc", id, "shim-monitor"), nil
 }
