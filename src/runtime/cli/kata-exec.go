@@ -94,7 +94,7 @@ var kataExecCLICommand = cli.Command{
 
 		span.SetAttributes(label.Key("sandbox").String(sandboxID))
 
-		conn, err := getConn(namespace, sandboxID, port)
+		conn, err := getConn(sandboxID, port)
 		if err != nil {
 			return err
 		}
@@ -177,8 +177,8 @@ func (s *iostream) Read(data []byte) (n int, err error) {
 	return s.conn.Read(data)
 }
 
-func getConn(namespace, sandboxID string, port uint64) (net.Conn, error) {
-	socketAddr := filepath.Join(string(filepath.Separator), "containerd-shim", namespace, sandboxID, "shim-monitor.sock")
+func getConn(sandboxID string, port uint64) (net.Conn, error) {
+	socketAddr := filepath.Join(string(filepath.Separator), "run", "vc", sandboxID, "shim-monitor")
 	client, err := kataMonitor.BuildUnixSocketClient(socketAddr, defaultTimeout)
 	if err != nil {
 		return nil, err
