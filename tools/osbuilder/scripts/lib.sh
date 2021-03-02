@@ -274,15 +274,24 @@ ENV PATH=\$PATH:\$GOROOT/bin:\$GOPATH/bin
 	# Rust agent
 	# rust installer should set path apropiately, just in case
 	# install musl for compiling rust-agent
+	local musl_source_url="https://git.zv.io/toolchains/musl-cross-make.git"
+	local musl_source_dir="musl-cross-make"
 	install_musl=
 	if [ "${muslarch}" == "aarch64" ]; then
 		local musl_tar="${muslarch}-linux-musl-native.tgz"
 		local musl_dir="${muslarch}-linux-musl-native"
+		local aarch64_musl_target="aarch64-linux-musl"
 		install_musl="
 RUN cd /tmp; \
-	curl -sLO https://musl.cc/${musl_tar}; tar -zxf ${musl_tar}; \
-	 mkdir -p /usr/local/musl/; \
-	cp -r ${musl_dir}/* /usr/local/musl/
+	mkdir -p /usr/local/musl/; \
+	if curl -sLO --fail https://musl.cc/${musl_tar}; then \
+	cp -r ${musl_dir}/* /usr/local/musl/; \
+	else \
+		git clone ${musl_source_url}; \
+		TARGET=${aarch64_musl_target} make -j$(nproc) -C ${musl_source_dir} install; \
+		cp -r ${musl_source_dir}/output/* /usr/local/musl/; \
+		cp /usr/local/musl/bin/aarch64-linux-musl-g++ /usr/local/musl/bin/g++; \
+	fi
 ENV PATH=\$PATH:/usr/local/musl/bin
 RUN ln -sf /usr/local/musl/bin/g++ /usr/bin/g++
 "

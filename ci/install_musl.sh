@@ -12,10 +12,11 @@ install_aarch64_musl() {
 		local musl_tar="${arch}-linux-musl-native.tgz"
 		local musl_dir="${arch}-linux-musl-native"
 		pushd /tmp
-		curl -sLO https://musl.cc/${musl_tar}
-		tar -zxf ${musl_tar}
-		mkdir -p /usr/local/musl/
-		cp -r ${musl_dir}/* /usr/local/musl/
+		if curl -sLO --fail https://musl.cc/${musl_tar}; then
+			tar -zxf ${musl_tar}
+			mkdir -p /usr/local/musl/
+			cp -r ${musl_dir}/* /usr/local/musl/
+		fi
 		popd
 	fi
 }
