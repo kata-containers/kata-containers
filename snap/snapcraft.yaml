@@ -278,7 +278,7 @@ parts:
       chmod +x ${configure_hypervisor}
       # static build. The --prefix, --libdir, --libexecdir, --datadir arguments are
       # based on PREFIX and set by configure-hypervisor.sh
-      echo "$(PREFIX=/snap/${SNAPCRAFT_PROJECT_NAME}/current/usr ${configure_hypervisor} -s qemu) \
+      echo "$(PREFIX=/snap/${SNAPCRAFT_PROJECT_NAME}/current/usr ${configure_hypervisor} -s kata-qemu) \
         --disable-rbd " \
         | xargs ./configure
 
@@ -294,7 +294,6 @@ parts:
       - -usr/bin/qemu-pr-helper
       - -usr/bin/virtfs-proxy-helper
       - -usr/include/
-      - -usr/libexec/
       - -usr/share/applications/
       - -usr/share/icons/
       - -usr/var/
