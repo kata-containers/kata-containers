@@ -17,14 +17,14 @@ use tokio::select;
 use tokio::sync::watch::Receiver;
 use tokio::sync::Mutex;
 
-#[derive(Debug, Default)]
-struct Uevent {
-    action: String,
-    devpath: String,
-    devname: String,
-    subsystem: String,
+#[derive(Debug, Default, Clone)]
+pub struct Uevent {
+    pub action: String,
+    pub devpath: String,
+    pub devname: String,
+    pub subsystem: String,
     seqnum: String,
-    interface: String,
+    pub interface: String,
 }
 
 impl Uevent {
@@ -67,9 +67,8 @@ impl Uevent {
         let pci_root_bus_path = create_pci_root_bus_path();
         let mut sb = sandbox.lock().await;
 
-        // Add the device node name to the pci device map.
-        sb.pci_device_map
-            .insert(self.devpath.clone(), self.devname.clone());
+        // Record the event by sysfs path
+        sb.uevent_map.insert(self.devpath.clone(), self.clone());
 
         // Notify watchers that are interested in the udev event.
         // Close the channel after watcher has been notified.

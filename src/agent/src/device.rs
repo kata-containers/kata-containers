@@ -89,10 +89,10 @@ fn pcipath_to_sysfs(root_bus_sysfs: &str, pcipath: &pci::Path) -> Result<String>
 
 async fn get_device_name(sandbox: &Arc<Mutex<Sandbox>>, dev_addr: &str) -> Result<String> {
     let mut sb = sandbox.lock().await;
-    for (key, value) in sb.pci_device_map.iter() {
+    for (key, uev) in sb.uevent_map.iter() {
         if key.contains(dev_addr) {
             info!(sl!(), "Device {} found in pci device map", dev_addr);
-            return Ok(format!("{}/{}", SYSTEM_DEV_PATH, value));
+            return Ok(format!("{}/{}", SYSTEM_DEV_PATH, uev.devname));
         }
     }
 
@@ -780,12 +780,15 @@ mod tests {
         let relpath = "/0000:00:0a.0/0000:03:0b.0";
         let devpath = format!("{}{}/virtio4/block/{}", root_bus, relpath, devname);
 
+        let mut uev = crate::uevent::Uevent::default();
+        uev.devpath = devpath.clone();
+        uev.devname = devname.to_string();
+
         let logger = slog::Logger::root(slog::Discard, o!());
         let sandbox = Arc::new(Mutex::new(Sandbox::new(&logger).unwrap()));
 
         let mut sb = sandbox.lock().await;
-        sb.pci_device_map
-            .insert(devpath.clone(), devname.to_string());
+        sb.uevent_map.insert(devpath.clone(), uev);
         drop(sb); // unlock
 
         let name = get_device_name(&sandbox, relpath).await;
@@ -793,7 +796,7 @@ mod tests {
         assert_eq!(name.unwrap(), format!("{}/{}", SYSTEM_DEV_PATH, devname));
 
         let mut sb = sandbox.lock().await;
-        sb.pci_device_map.remove(&devpath);
+        sb.uevent_map.remove(&devpath);
         drop(sb); // unlock
 
         let watcher_sandbox = Arc::clone(&sandbox);
