@@ -148,6 +148,7 @@ install: install-services
 clean:
 	@cargo clean
 	@rm -f $(GENERATED_FILES)
+	@rm -f tarpaulin-report.html
 
 #TARGET test: run cargo tests
 test:
@@ -192,6 +193,27 @@ help: Makefile show-summary
 	@echo ""
 	@echo "Targets:"
 	@sed -n 's/^##TARGET//p' $< | sort
+
+TARPAULIN_ARGS:=-v --workspace
+install-tarpaulin:
+	cargo install cargo-tarpaulin
+
+# Check if cargo tarpaulin is installed
+HAS_TARPAULIN:= $(shell cargo --list | grep tarpaulin 2>/dev/null)
+check_tarpaulin:
+ifndef  HAS_TARPAULIN
+	$(error "tarpaulin is not available please: run make install-tarpaulin ")
+else
+	$(info OK: tarpaulin installed)
+endif
+
+##TARGET codecov: Generate code coverage report
+codecov: check_tarpaulin
+	cargo tarpaulin $(TARPAULIN_ARGS)
+
+##TARGET codecov-html: Generate code coverage html report
+codecov-html: check_tarpaulin
+	cargo tarpaulin $(TARPAULIN_ARGS) -o Html
 
 .PHONY: \
 	help \
