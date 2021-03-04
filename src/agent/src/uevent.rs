@@ -66,19 +66,6 @@ impl Uevent {
             return;
         }
 
-        let pci_root_bus_path = create_pci_root_bus_path();
-
-        // Check whether this is a block device hot-add event.
-        if !(self.subsystem == "block"
-            && {
-                self.devpath.starts_with(pci_root_bus_path.as_str())
-                    || self.devpath.starts_with(ACPI_DEV_PATH) // NVDIMM/PMEM devices
-            }
-            && !self.devname.is_empty())
-        {
-            return;
-        }
-
         let mut sb = sandbox.lock().await;
 
         // Record the event by sysfs path
@@ -87,20 +74,36 @@ impl Uevent {
         // Notify watchers that are interested in the udev event.
         for watch in &mut sb.uevent_watchers {
             if let Some((dev_addr, _)) = watch {
+                let pci_root_bus_path = create_pci_root_bus_path();
                 let pci_p = format!("{}{}", pci_root_bus_path, dev_addr);
-                let pmem_suffix = format!("/{}/{}", SCSI_BLOCK_SUFFIX, self.devname);
 
-                if self.devpath.starts_with(pci_p.as_str()) || // blk block device
-                    (  // scsi block device
-                        dev_addr.ends_with(SCSI_BLOCK_SUFFIX) &&
-                            self.devpath.contains(dev_addr.as_str())
-                    ) ||
-                    ( // nvdimm/pmem device
-                        self.devpath.starts_with(ACPI_DEV_PATH) &&
-                            self.devpath.ends_with(pmem_suffix.as_str()) &&
-                            dev_addr.ends_with(pmem_suffix.as_str())
-                    )
-                {
+                let is_match = |uev: &Uevent| {
+                    let pmem_suffix = format!("/{}/{}", SCSI_BLOCK_SUFFIX, uev.devname);
+
+                    uev.subsystem == "block"
+                        && {
+                            uev.devpath.starts_with(pci_root_bus_path.as_str())
+                                || uev.devpath.starts_with(ACPI_DEV_PATH) // NVDIMM/PMEM devices
+                        }
+                        && !uev.devname.is_empty()
+                        && {
+                            // blk block device
+                            uev.devpath.starts_with(pci_p.as_str())
+                        // scsi block device
+                            || (
+                                dev_addr.ends_with(SCSI_BLOCK_SUFFIX) &&
+                                    uev.devpath.contains(dev_addr.as_str())
+                            )
+                        // nvdimm/pmem device
+                            || (
+                                uev.devpath.starts_with(ACPI_DEV_PATH) &&
+                                    uev.devpath.ends_with(pmem_suffix.as_str()) &&
+                                    dev_addr.ends_with(pmem_suffix.as_str())
+                            )
+                        }
+                };
+
+                if is_match(&self) {
                     let (_, sender) = watch.take().unwrap();
                     let _ = sender.send(self.clone());
                 }
