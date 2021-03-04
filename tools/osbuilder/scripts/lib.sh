@@ -285,7 +285,8 @@ ENV PATH=\$PATH:\$GOROOT/bin:\$GOPATH/bin
 RUN cd /tmp; \
 	mkdir -p /usr/local/musl/; \
 	if curl -sLO --fail https://musl.cc/${musl_tar}; then \
-	cp -r ${musl_dir}/* /usr/local/musl/; \
+		tar -zxf ${musl_tar}; \
+		cp -r ${musl_dir}/* /usr/local/musl/; \
 	else \
 		git clone ${musl_source_url}; \
 		TARGET=${aarch64_musl_target} make -j$(nproc) -C ${musl_source_dir} install; \
