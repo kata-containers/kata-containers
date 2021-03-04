@@ -71,38 +71,26 @@ impl Uevent {
         sb.uevent_map.insert(self.devpath.clone(), self.clone());
 
         // Notify watchers that are interested in the udev event.
-        // Close the channel after watcher has been notified.
-        let devpath = self.devpath.clone();
-        let keys: Vec<_> = sb
-            .dev_watcher
-            .keys()
-            .filter(|dev_addr| {
-                let pci_p = format!("{}{}", pci_root_bus_path, *dev_addr);
+        for watch in &mut sb.uevent_watchers {
+            if let Some((dev_addr, _)) = watch {
+                let pci_p = format!("{}{}", pci_root_bus_path, dev_addr);
+                let pmem_suffix = format!("/{}/{}", SCSI_BLOCK_SUFFIX, self.devname);
 
-                // blk block device
-                devpath.starts_with(pci_p.as_str()) ||
-                // scsi block device
+                if self.devpath.starts_with(pci_p.as_str()) || // blk block device
+                    (  // scsi block device
+                        dev_addr.ends_with(SCSI_BLOCK_SUFFIX) &&
+                            self.devpath.contains(dev_addr.as_str())
+                    ) ||
+                    ( // nvdimm/pmem device
+                        self.devpath.starts_with(ACPI_DEV_PATH) &&
+                            self.devpath.ends_with(pmem_suffix.as_str()) &&
+                            dev_addr.ends_with(pmem_suffix.as_str())
+                    )
                 {
-                    (*dev_addr).ends_with(SCSI_BLOCK_SUFFIX) &&
-                        devpath.contains(*dev_addr)
-                } ||
-                // nvdimm/pmem device
-                {
-                    let pmem_suffix = format!("/{}/{}", SCSI_BLOCK_SUFFIX, self.devname);
-                    devpath.starts_with(ACPI_DEV_PATH) &&
-                        devpath.ends_with(pmem_suffix.as_str()) &&
-                        dev_addr.ends_with(pmem_suffix.as_str())
+                    let (_, sender) = watch.take().unwrap();
+                    let _ = sender.send(self.clone());
                 }
-            })
-            .cloned()
-            .collect();
-
-        for k in keys {
-            // unwrap() is safe because logic above ensures k exists
-            // in the map, and it's locked so no-one else can change
-            // that
-            let sender = sb.dev_watcher.remove(&k).unwrap();
-            let _ = sender.send(self.clone());
+            }
         }
     }
 

@@ -103,7 +103,8 @@ async fn get_device_name(sandbox: &Arc<Mutex<Sandbox>>, dev_addr: &str) -> Resul
     // Note this is done inside the lock, not to miss any events from the
     // global udev listener.
     let (tx, rx) = tokio::sync::oneshot::channel::<Uevent>();
-    sb.dev_watcher.insert(dev_addr.to_string(), tx);
+    let idx = sb.uevent_watchers.len();
+    sb.uevent_watchers.push(Some((dev_addr.to_string(), tx)));
     drop(sb); // unlock
 
     info!(sl!(), "Waiting on channel for device notification\n");
@@ -113,7 +114,7 @@ async fn get_device_name(sandbox: &Arc<Mutex<Sandbox>>, dev_addr: &str) -> Resul
         Ok(v) => v?,
         Err(_) => {
             let mut sb = sandbox.lock().await;
-            sb.dev_watcher.remove_entry(dev_addr);
+            sb.uevent_watchers[idx].take();
 
             return Err(anyhow!(
                 "Timeout reached after {:?} waiting for device {}",
@@ -804,17 +805,14 @@ mod tests {
         tokio::spawn(async move {
             loop {
                 let mut sb = watcher_sandbox.lock().await;
-                let matched_key = sb
-                    .dev_watcher
-                    .keys()
-                    .filter(|dev_addr| devpath.contains(*dev_addr))
-                    .cloned()
-                    .next();
-
-                if let Some(k) = matched_key {
-                    let sender = sb.dev_watcher.remove(&k).unwrap();
-                    let _ = sender.send(uev);
-                    return;
+                for w in &mut sb.uevent_watchers {
+                    if let Some((dev_addr, _)) = w {
+                        if devpath.contains(dev_addr.as_str()) {
+                            let (_, sender) = w.take().unwrap();
+                            let _ = sender.send(uev);
+                            return;
+                        }
+                    }
                 }
                 drop(sb); // unlock
             }

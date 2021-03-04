@@ -26,6 +26,7 @@ use std::path::Path;
 use std::sync::Arc;
 use std::{thread, time};
 use tokio::sync::mpsc::{channel, Receiver, Sender};
+use tokio::sync::oneshot;
 use tokio::sync::Mutex;
 
 #[derive(Debug)]
@@ -38,7 +39,7 @@ pub struct Sandbox {
     pub mounts: Vec<String>,
     pub container_mounts: HashMap<String, Vec<String>>,
     pub uevent_map: HashMap<String, Uevent>,
-    pub dev_watcher: HashMap<String, tokio::sync::oneshot::Sender<Uevent>>,
+    pub uevent_watchers: Vec<Option<(String, oneshot::Sender<Uevent>)>>,
     pub shared_utsns: Namespace,
     pub shared_ipcns: Namespace,
     pub sandbox_pidns: Option<Namespace>,
@@ -68,7 +69,7 @@ impl Sandbox {
             mounts: Vec::new(),
             container_mounts: HashMap::new(),
             uevent_map: HashMap::new(),
-            dev_watcher: HashMap::new(),
+            uevent_watchers: Vec::new(),
             shared_utsns: Namespace::new(&logger),
             shared_ipcns: Namespace::new(&logger),
             sandbox_pidns: None,
