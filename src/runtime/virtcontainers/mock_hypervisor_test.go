@@ -53,7 +53,7 @@ func TestMockHypervisorStartSandbox(t *testing.T) {
 func TestMockHypervisorStopSandbox(t *testing.T) {
 	var m *mockHypervisor
 
-	assert.NoError(t, m.stopSandbox())
+	assert.NoError(t, m.stopSandbox(context.Background()))
 }
 
 func TestMockHypervisorAddDevice(t *testing.T) {
@@ -67,7 +67,7 @@ func TestMockHypervisorGetSandboxConsole(t *testing.T) {
 
 	expected := ""
 	expectedProto := ""
-	proto, result, err := m.getSandboxConsole("testSandboxID")
+	proto, result, err := m.getSandboxConsole(context.Background(), "testSandboxID")
 	assert.NoError(t, err)
 	assert.Equal(t, result, expected)
 	assert.Equal(t, proto, expectedProto)
@@ -82,7 +82,7 @@ func TestMockHypervisorSaveSandbox(t *testing.T) {
 func TestMockHypervisorDisconnect(t *testing.T) {
 	var m *mockHypervisor
 
-	m.disconnect()
+	m.disconnect(context.Background())
 }
 
 func TestMockHypervisorCheck(t *testing.T) {

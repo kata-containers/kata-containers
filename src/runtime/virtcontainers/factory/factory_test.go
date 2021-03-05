@@ -184,7 +184,7 @@ func TestFactoryGetVM(t *testing.T) {
 	vm, err := f.GetVM(ctx, vmConfig)
 	assert.Nil(err)
 
-	err = vm.Stop()
+	err = vm.Stop(ctx)
 	assert.Nil(err)
 
 	f.CloseFactory(ctx)
@@ -196,7 +196,7 @@ func TestFactoryGetVM(t *testing.T) {
 	vm, err = f.GetVM(ctx, vmConfig)
 	assert.Nil(err)
 
-	err = vm.Stop()
+	err = vm.Stop(ctx)
 	assert.Nil(err)
 
 	f.CloseFactory(ctx)
@@ -211,7 +211,7 @@ func TestFactoryGetVM(t *testing.T) {
 	vm, err = f.GetVM(ctx, vmConfig)
 	assert.Nil(err)
 
-	err = vm.Stop()
+	err = vm.Stop(ctx)
 	assert.Nil(err)
 
 	f.CloseFactory(ctx)
@@ -223,7 +223,7 @@ func TestFactoryGetVM(t *testing.T) {
 	vm, err = f.GetVM(ctx, vmConfig)
 	assert.Nil(err)
 
-	err = vm.Stop()
+	err = vm.Stop(ctx)
 	assert.Nil(err)
 
 	f.CloseFactory(ctx)
@@ -235,7 +235,7 @@ func TestFactoryGetVM(t *testing.T) {
 	vm, err = f.GetVM(ctx, vmConfig)
 	assert.Nil(err)
 
-	err = vm.Stop()
+	err = vm.Stop(ctx)
 	assert.Nil(err)
 
 	// CPU hotplug
@@ -243,7 +243,7 @@ func TestFactoryGetVM(t *testing.T) {
 	vm, err = f.GetVM(ctx, vmConfig)
 	assert.Nil(err)
 
-	err = vm.Stop()
+	err = vm.Stop(ctx)
 	assert.Nil(err)
 
 	// Memory hotplug
@@ -251,7 +251,7 @@ func TestFactoryGetVM(t *testing.T) {
 	vm, err = f.GetVM(ctx, vmConfig)
 	assert.Nil(err)
 
-	err = vm.Stop()
+	err = vm.Stop(ctx)
 	assert.Nil(err)
 
 	// checkConfig fall back
@@ -259,7 +259,7 @@ func TestFactoryGetVM(t *testing.T) {
 	vm, err = f.GetVM(ctx, vmConfig)
 	assert.Nil(err)
 
-	err = vm.Stop()
+	err = vm.Stop(ctx)
 	assert.Nil(err)
 
 	f.CloseFactory(ctx)

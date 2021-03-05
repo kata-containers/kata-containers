@@ -63,7 +63,7 @@ func TestTemplateFactory(t *testing.T) {
 	vm, err := f.GetBaseVM(ctx, vmConfig)
 	assert.Nil(err)
 
-	err = vm.Stop()
+	err = vm.Stop(ctx)
 	assert.Nil(err)
 
 	// Fetch
@@ -93,13 +93,13 @@ func TestTemplateFactory(t *testing.T) {
 	vm, err = tt.GetBaseVM(ctx, vmConfig)
 	assert.Nil(err)
 
-	err = vm.Stop()
+	err = vm.Stop(ctx)
 	assert.Nil(err)
 
 	vm, err = f.GetBaseVM(ctx, vmConfig)
 	assert.Nil(err)
 
-	err = vm.Stop()
+	err = vm.Stop(ctx)
 	assert.Nil(err)
 
 	err = tt.createTemplateVM(ctx)
@@ -108,13 +108,13 @@ func TestTemplateFactory(t *testing.T) {
 	vm, err = tt.GetBaseVM(ctx, vmConfig)
 	assert.Nil(err)
 
-	err = vm.Stop()
+	err = vm.Stop(ctx)
 	assert.Nil(err)
 
 	vm, err = f.GetBaseVM(ctx, vmConfig)
 	assert.Nil(err)
 
-	err = vm.Stop()
+	err = vm.Stop(ctx)
 	assert.Nil(err)
 
 	// CloseFactory

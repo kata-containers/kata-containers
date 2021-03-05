@@ -176,7 +176,7 @@ func TestAttachGenericDevice(t *testing.T) {
 	assert.True(t, ok)
 
 	devReceiver := &api.MockDeviceReceiver{}
-	err = device.Attach(devReceiver)
+	err = device.Attach(context.Background(), devReceiver)
 	assert.Nil(t, err)
 
 	err = device.Detach(context.Background(), devReceiver)
@@ -211,7 +211,7 @@ func TestAttachBlockDevice(t *testing.T) {
 	dm.blockDriver = VirtioSCSI
 	device, err = dm.NewDevice(deviceInfo)
 	assert.Nil(t, err)
-	err = device.Attach(devReceiver)
+	err = device.Attach(context.Background(), devReceiver)
 	assert.Nil(t, err)
 
 	err = device.Detach(context.Background(), devReceiver)

@@ -6,6 +6,7 @@
 package vcmock
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"syscall"

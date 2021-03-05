@@ -97,7 +97,7 @@ func TestContainerRemoveDrive(t *testing.T) {
 	}
 
 	container.state.Fstype = ""
-	err := container.removeDrive()
+	err := container.removeDrive(sandbox.ctx)
 
 	// hotplugRemoveDevice for hypervisor should not be called.
 	// test should pass without a hypervisor created for the container's sandbox.
@@ -116,12 +116,12 @@ func TestContainerRemoveDrive(t *testing.T) {
 	assert.Nil(t, err)
 	_, ok := device.(*drivers.BlockDevice)
 	assert.True(t, ok)
-	err = device.Attach(devReceiver)
+	err = device.Attach(sandbox.ctx, devReceiver)
 	assert.Nil(t, err)
 
 	container.state.Fstype = "xfs"
 	container.state.BlockDeviceID = device.DeviceID()
-	err = container.removeDrive()
+	err = container.removeDrive(sandbox.ctx)
 	assert.Nil(t, err, "remove drive should succeed")
 }
 
@@ -187,7 +187,7 @@ func TestUnmountHostMountsRemoveBindHostPath(t *testing.T) {
 		}
 		defer syscall.Unmount(devPath, 0)
 
-		err := c.unmountHostMounts()
+		err := c.unmountHostMounts(c.ctx)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -341,7 +341,7 @@ func TestContainerAddDriveDir(t *testing.T) {
 
 	container.state.Fstype = ""
 
-	err = container.hotplugDrive()
+	err = container.hotplugDrive(sandbox.ctx)
 	assert.NoError(err)
 
 	assert.NotEmpty(container.state.Fstype)
@@ -380,14 +380,14 @@ func TestContainerRootfsPath(t *testing.T) {
 		rootfsSuffix: "rootfs",
 	}
 
-	container.hotplugDrive()
+	container.hotplugDrive(sandbox.ctx)
 	assert.Empty(t, container.rootfsSuffix)
 
 	// Reset the value to test the other case
 	container.rootFs = RootFs{Target: fakeRootfs + "/rootfs", Mounted: true}
 	container.rootfsSuffix = "rootfs"
 
-	container.hotplugDrive()
+	container.hotplugDrive(sandbox.ctx)
 	assert.Equal(t, container.rootfsSuffix, "rootfs")
 }
 
@@ -428,18 +428,20 @@ func TestContainerEnterErrorsOnContainerStates(t *testing.T) {
 	}
 	cmd := types.Cmd{}
 
+	ctx := context.Background()
+
 	// Container state undefined
-	_, err := c.enter(cmd)
+	_, err := c.enter(ctx, cmd)
 	assert.Error(err)
 
 	// Container paused
 	c.state.State = types.StatePaused
-	_, err = c.enter(cmd)
+	_, err = c.enter(ctx, cmd)
 	assert.Error(err)
 
 	// Container stopped
 	c.state.State = types.StateStopped
-	_, err = c.enter(cmd)
+	_, err = c.enter(ctx, cmd)
 	assert.Error(err)
 }
 
@@ -454,18 +456,20 @@ func TestContainerWaitErrorState(t *testing.T) {
 	}
 	processID := "foobar"
 
+	ctx := context.Background()
+
 	// Container state undefined
-	_, err := c.wait(processID)
+	_, err := c.wait(ctx, processID)
 	assert.Error(err)
 
 	// Container paused
 	c.state.State = types.StatePaused
-	_, err = c.wait(processID)
+	_, err = c.wait(ctx, processID)
 	assert.Error(err)
 
 	// Container stopped
 	c.state.State = types.StateStopped
-	_, err = c.wait(processID)
+	_, err = c.wait(ctx, processID)
 	assert.Error(err)
 }
 
@@ -478,13 +482,16 @@ func TestKillContainerErrorState(t *testing.T) {
 			},
 		},
 	}
+
+	ctx := context.Background()
+
 	// Container state undefined
-	err := c.kill(syscall.SIGKILL, true)
+	err := c.kill(ctx, syscall.SIGKILL, true)
 	assert.Error(err)
 
 	// Container stopped
 	c.state.State = types.StateStopped
-	err = c.kill(syscall.SIGKILL, true)
+	err = c.kill(ctx, syscall.SIGKILL, true)
 	assert.Error(err)
 }
 
@@ -499,18 +506,20 @@ func TestWinsizeProcessErrorState(t *testing.T) {
 	}
 	processID := "foobar"
 
+	ctx := context.Background()
+
 	// Container state undefined
-	err := c.winsizeProcess(processID, 100, 200)
+	err := c.winsizeProcess(ctx, processID, 100, 200)
 	assert.Error(err)
 
 	// Container paused
 	c.state.State = types.StatePaused
-	err = c.winsizeProcess(processID, 100, 200)
+	err = c.winsizeProcess(ctx, processID, 100, 200)
 	assert.Error(err)
 
 	// Container stopped
 	c.state.State = types.StateStopped
-	err = c.winsizeProcess(processID, 100, 200)
+	err = c.winsizeProcess(ctx, processID, 100, 200)
 	assert.Error(err)
 }
 
