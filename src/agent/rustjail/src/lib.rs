@@ -45,8 +45,8 @@ pub mod process;
 pub mod specconv;
 pub mod sync;
 pub mod sync_with_async;
+pub mod utils;
 pub mod validator;
-
 // pub mod factory;
 //pub mod configs;
 // pub mod devices;
