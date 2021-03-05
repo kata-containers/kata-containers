@@ -41,16 +41,15 @@ fn clone_context(ctx: &Context) -> Context {
 // - 'options' can be read and written to, allowing commands to pass state to
 //   each other via well-known option names.
 type AgentCmdFp = fn(
-    cfg: &Config,
+    ctx: &Context,
     client: &AgentServiceClient,
     health: &HealthClient,
-    ctx: &Context,
     options: &mut Options,
     args: &str,
 ) -> Result<()>;
 
 // Builtin command handler type
-type BuiltinCmdFp = fn(cfg: &Config, options: &mut Options, args: &str) -> (Result<()>, bool);
+type BuiltinCmdFp = fn(args: &str) -> (Result<()>, bool);
 
 enum ServiceType {
     Agent,
@@ -629,9 +628,9 @@ fn handle_cmd(
         info!(sl!(), "Run command {:} ({})", cmd, count_msg);
 
         if first.is_lowercase() {
-            result = handle_builtin_cmd(cfg, options, cmd, &args);
+            result = handle_builtin_cmd(cmd, &args);
         } else {
-            result = handle_agent_cmd(cfg, client, health, ctx, options, cmd, &args);
+            result = handle_agent_cmd(ctx, client, health, options, cmd, &args);
         }
 
         if result.0.is_err() {
@@ -665,27 +664,21 @@ fn handle_cmd(
     }
 }
 
-fn handle_builtin_cmd(
-    cfg: &Config,
-    options: &mut Options,
-    cmd: &str,
-    args: &str,
-) -> (Result<()>, bool) {
+fn handle_builtin_cmd(cmd: &str, args: &str) -> (Result<()>, bool) {
     let f = match get_builtin_cmd_func(&cmd) {
         Ok(fp) => fp,
         Err(e) => return (Err(e), false),
     };
 
-    f(cfg, options, &args)
+    f(&args)
 }
 
 // Execute the ttRPC specified by the first field of "line". Return a result
 // along with a bool which if set means the client should shutdown.
 fn handle_agent_cmd(
-    cfg: &Config,
+    ctx: &Context,
     client: &AgentServiceClient,
     health: &HealthClient,
-    ctx: &Context,
     options: &mut Options,
     cmd: &str,
     args: &str,
@@ -695,8 +688,7 @@ fn handle_agent_cmd(
         Err(e) => return (Err(e), false),
     };
 
-    // BUG: FIXME: clone ctx here?
-    let result = f(cfg, client, health, ctx, options, &args);
+    let result = f(ctx, client, health, options, &args);
     if result.is_err() {
         return (result, false);
     }
@@ -713,7 +705,7 @@ fn interactive_client_loop(
     health: &HealthClient,
     ctx: &Context,
 ) -> Result<()> {
-    let result = builtin_cmd_list(cfg, options, "");
+    let result = builtin_cmd_list("");
     if result.0.is_err() {
         return result.0;
     }
@@ -768,10 +760,9 @@ fn readline(prompt: &str) -> std::result::Result<String, String> {
 }
 
 fn agent_cmd_health_check(
-    _cfg: &Config,
+    ctx: &Context,
     _client: &AgentServiceClient,
     health: &HealthClient,
-    ctx: &Context,
     _options: &mut Options,
     _args: &str,
 ) -> Result<()> {
@@ -795,10 +786,9 @@ fn agent_cmd_health_check(
 }
 
 fn agent_cmd_health_version(
-    _cfg: &Config,
+    ctx: &Context,
     _client: &AgentServiceClient,
     health: &HealthClient,
-    ctx: &Context,
     _options: &mut Options,
     _args: &str,
 ) -> Result<()> {
@@ -823,10 +813,9 @@ fn agent_cmd_health_version(
 }
 
 fn agent_cmd_sandbox_create(
-    _cfg: &Config,
+    ctx: &Context,
     client: &AgentServiceClient,
     _health: &HealthClient,
-    ctx: &Context,
     options: &mut Options,
     args: &str,
 ) -> Result<()> {
@@ -850,10 +839,9 @@ fn agent_cmd_sandbox_create(
 }
 
 fn agent_cmd_sandbox_destroy(
-    _cfg: &Config,
+    ctx: &Context,
     client: &AgentServiceClient,
     _health: &HealthClient,
-    ctx: &Context,
     _options: &mut Options,
     _args: &str,
 ) -> Result<()> {
@@ -874,10 +862,9 @@ fn agent_cmd_sandbox_destroy(
 }
 
 fn agent_cmd_container_create(
-    _cfg: &Config,
+    ctx: &Context,
     client: &AgentServiceClient,
     _health: &HealthClient,
-    ctx: &Context,
     options: &mut Options,
     args: &str,
 ) -> Result<()> {
@@ -909,10 +896,9 @@ fn agent_cmd_container_create(
 }
 
 fn agent_cmd_container_remove(
-    _cfg: &Config,
+    ctx: &Context,
     client: &AgentServiceClient,
     _health: &HealthClient,
-    ctx: &Context,
     options: &mut Options,
     args: &str,
 ) -> Result<()> {
@@ -937,10 +923,9 @@ fn agent_cmd_container_remove(
 }
 
 fn agent_cmd_container_exec(
-    cfg: &Config,
+    ctx: &Context,
     client: &AgentServiceClient,
     _health: &HealthClient,
-    ctx: &Context,
     options: &mut Options,
     args: &str,
 ) -> Result<()> {
@@ -953,12 +938,17 @@ fn agent_cmd_container_exec(
 
     let grpc_spec = utils::get_grpc_spec(options, &cid).map_err(|e| anyhow!(e))?;
 
+    let bundle_dir = options
+        .get("bundle-dir")
+        .ok_or("BUG: bundle-dir missing")
+        .map_err(|e| anyhow!(e))?;
+
     let process = grpc_spec
         .Process
         .into_option()
         .ok_or(format!(
             "failed to get process from OCI spec: {}",
-            cfg.bundle_dir
+            bundle_dir,
         ))
         .map_err(|e| anyhow!(e))?;
 
@@ -979,10 +969,9 @@ fn agent_cmd_container_exec(
 }
 
 fn agent_cmd_container_stats(
-    _cfg: &Config,
+    ctx: &Context,
     client: &AgentServiceClient,
     _health: &HealthClient,
-    ctx: &Context,
     options: &mut Options,
     args: &str,
 ) -> Result<()> {
@@ -1007,10 +996,9 @@ fn agent_cmd_container_stats(
 }
 
 fn agent_cmd_container_pause(
-    _cfg: &Config,
+    ctx: &Context,
     client: &AgentServiceClient,
     _health: &HealthClient,
-    ctx: &Context,
     options: &mut Options,
     args: &str,
 ) -> Result<()> {
@@ -1035,10 +1023,9 @@ fn agent_cmd_container_pause(
 }
 
 fn agent_cmd_container_resume(
-    _cfg: &Config,
+    ctx: &Context,
     client: &AgentServiceClient,
     _health: &HealthClient,
-    ctx: &Context,
     options: &mut Options,
     args: &str,
 ) -> Result<()> {
@@ -1063,10 +1050,9 @@ fn agent_cmd_container_resume(
 }
 
 fn agent_cmd_container_start(
-    _cfg: &Config,
+    ctx: &Context,
     client: &AgentServiceClient,
     _health: &HealthClient,
-    ctx: &Context,
     options: &mut Options,
     args: &str,
 ) -> Result<()> {
@@ -1091,10 +1077,9 @@ fn agent_cmd_container_start(
 }
 
 fn agent_cmd_sandbox_get_guest_details(
-    _cfg: &Config,
+    ctx: &Context,
     client: &AgentServiceClient,
     _health: &HealthClient,
-    ctx: &Context,
     _options: &mut Options,
     _args: &str,
 ) -> Result<()> {
@@ -1117,10 +1102,9 @@ fn agent_cmd_sandbox_get_guest_details(
 }
 
 fn agent_cmd_container_list_processes(
-    _cfg: &Config,
+    ctx: &Context,
     client: &AgentServiceClient,
     _health: &HealthClient,
-    ctx: &Context,
     options: &mut Options,
     args: &str,
 ) -> Result<()> {
@@ -1152,10 +1136,9 @@ fn agent_cmd_container_list_processes(
 }
 
 fn agent_cmd_container_wait_process(
-    _cfg: &Config,
+    ctx: &Context,
     client: &AgentServiceClient,
     _health: &HealthClient,
-    ctx: &Context,
     options: &mut Options,
     args: &str,
 ) -> Result<()> {
@@ -1182,10 +1165,9 @@ fn agent_cmd_container_wait_process(
 }
 
 fn agent_cmd_container_signal_process(
-    _cfg: &Config,
+    ctx: &Context,
     client: &AgentServiceClient,
     _health: &HealthClient,
-    ctx: &Context,
     options: &mut Options,
     args: &str,
 ) -> Result<()> {
@@ -1222,10 +1204,9 @@ fn agent_cmd_container_signal_process(
 }
 
 fn agent_cmd_sandbox_tracing_start(
-    _cfg: &Config,
+    ctx: &Context,
     client: &AgentServiceClient,
     _health: &HealthClient,
-    ctx: &Context,
     _options: &mut Options,
     _args: &str,
 ) -> Result<()> {
@@ -1246,10 +1227,9 @@ fn agent_cmd_sandbox_tracing_start(
 }
 
 fn agent_cmd_sandbox_tracing_stop(
-    _cfg: &Config,
+    ctx: &Context,
     client: &AgentServiceClient,
     _health: &HealthClient,
-    ctx: &Context,
     _options: &mut Options,
     _args: &str,
 ) -> Result<()> {
@@ -1270,10 +1250,9 @@ fn agent_cmd_sandbox_tracing_stop(
 }
 
 fn agent_cmd_sandbox_update_interface(
-    _cfg: &Config,
+    ctx: &Context,
     client: &AgentServiceClient,
     _health: &HealthClient,
-    ctx: &Context,
     _options: &mut Options,
     _args: &str,
 ) -> Result<()> {
@@ -1296,10 +1275,9 @@ fn agent_cmd_sandbox_update_interface(
 }
 
 fn agent_cmd_sandbox_update_routes(
-    _cfg: &Config,
+    ctx: &Context,
     client: &AgentServiceClient,
     _health: &HealthClient,
-    ctx: &Context,
     _options: &mut Options,
     _args: &str,
 ) -> Result<()> {
@@ -1323,10 +1301,9 @@ fn agent_cmd_sandbox_update_routes(
 }
 
 fn agent_cmd_sandbox_list_interfaces(
-    _cfg: &Config,
+    ctx: &Context,
     client: &AgentServiceClient,
     _health: &HealthClient,
-    ctx: &Context,
     _options: &mut Options,
     _args: &str,
 ) -> Result<()> {
@@ -1347,10 +1324,9 @@ fn agent_cmd_sandbox_list_interfaces(
 }
 
 fn agent_cmd_sandbox_list_routes(
-    _cfg: &Config,
+    ctx: &Context,
     client: &AgentServiceClient,
     _health: &HealthClient,
-    ctx: &Context,
     _options: &mut Options,
     _args: &str,
 ) -> Result<()> {
@@ -1371,10 +1347,9 @@ fn agent_cmd_sandbox_list_routes(
 }
 
 fn agent_cmd_container_tty_win_resize(
-    _cfg: &Config,
+    ctx: &Context,
     client: &AgentServiceClient,
     _health: &HealthClient,
-    ctx: &Context,
     options: &mut Options,
     args: &str,
 ) -> Result<()> {
@@ -1420,10 +1395,9 @@ fn agent_cmd_container_tty_win_resize(
 }
 
 fn agent_cmd_container_close_stdin(
-    _cfg: &Config,
+    ctx: &Context,
     client: &AgentServiceClient,
     _health: &HealthClient,
-    ctx: &Context,
     options: &mut Options,
     args: &str,
 ) -> Result<()> {
@@ -1450,10 +1424,9 @@ fn agent_cmd_container_close_stdin(
 }
 
 fn agent_cmd_container_read_stdout(
-    _cfg: &Config,
+    ctx: &Context,
     client: &AgentServiceClient,
     _health: &HealthClient,
-    ctx: &Context,
     options: &mut Options,
     args: &str,
 ) -> Result<()> {
@@ -1489,10 +1462,9 @@ fn agent_cmd_container_read_stdout(
 }
 
 fn agent_cmd_container_read_stderr(
-    _cfg: &Config,
+    ctx: &Context,
     client: &AgentServiceClient,
     _health: &HealthClient,
-    ctx: &Context,
     options: &mut Options,
     args: &str,
 ) -> Result<()> {
@@ -1528,10 +1500,9 @@ fn agent_cmd_container_read_stderr(
 }
 
 fn agent_cmd_container_write_stdin(
-    _cfg: &Config,
+    ctx: &Context,
     client: &AgentServiceClient,
     _health: &HealthClient,
-    ctx: &Context,
     options: &mut Options,
     args: &str,
 ) -> Result<()> {
@@ -1562,10 +1533,9 @@ fn agent_cmd_container_write_stdin(
 }
 
 fn agent_cmd_sandbox_get_metrics(
-    _cfg: &Config,
+    ctx: &Context,
     client: &AgentServiceClient,
     _health: &HealthClient,
-    ctx: &Context,
     _options: &mut Options,
     _args: &str,
 ) -> Result<()> {
@@ -1586,10 +1556,9 @@ fn agent_cmd_sandbox_get_metrics(
 }
 
 fn agent_cmd_sandbox_get_oom_event(
-    _cfg: &Config,
+    ctx: &Context,
     client: &AgentServiceClient,
     _health: &HealthClient,
-    ctx: &Context,
     _options: &mut Options,
     _args: &str,
 ) -> Result<()> {
@@ -1610,10 +1579,9 @@ fn agent_cmd_sandbox_get_oom_event(
 }
 
 fn agent_cmd_sandbox_copy_file(
-    _cfg: &Config,
+    ctx: &Context,
     client: &AgentServiceClient,
     _health: &HealthClient,
-    ctx: &Context,
     options: &mut Options,
     args: &str,
 ) -> Result<()> {
@@ -1703,10 +1671,9 @@ fn agent_cmd_sandbox_copy_file(
 }
 
 fn agent_cmd_sandbox_reseed_random_dev(
-    _cfg: &Config,
+    ctx: &Context,
     client: &AgentServiceClient,
     _health: &HealthClient,
-    ctx: &Context,
     options: &mut Options,
     args: &str,
 ) -> Result<()> {
@@ -1732,10 +1699,9 @@ fn agent_cmd_sandbox_reseed_random_dev(
 }
 
 fn agent_cmd_sandbox_online_cpu_mem(
-    _cfg: &Config,
+    ctx: &Context,
     client: &AgentServiceClient,
     _health: &HealthClient,
-    ctx: &Context,
     options: &mut Options,
     args: &str,
 ) -> Result<()> {
@@ -1786,10 +1752,9 @@ fn agent_cmd_sandbox_online_cpu_mem(
 }
 
 fn agent_cmd_sandbox_set_guest_date_time(
-    _cfg: &Config,
+    ctx: &Context,
     client: &AgentServiceClient,
     _health: &HealthClient,
-    ctx: &Context,
     options: &mut Options,
     args: &str,
 ) -> Result<()> {
@@ -1830,10 +1795,9 @@ fn agent_cmd_sandbox_set_guest_date_time(
 }
 
 fn agent_cmd_sandbox_add_arp_neighbors(
-    _cfg: &Config,
+    ctx: &Context,
     client: &AgentServiceClient,
     _health: &HealthClient,
-    ctx: &Context,
     _options: &mut Options,
     _args: &str,
 ) -> Result<()> {
@@ -1857,10 +1821,9 @@ fn agent_cmd_sandbox_add_arp_neighbors(
 }
 
 fn agent_cmd_sandbox_update_container(
-    _cfg: &Config,
+    ctx: &Context,
     client: &AgentServiceClient,
     _health: &HealthClient,
-    ctx: &Context,
     options: &mut Options,
     args: &str,
 ) -> Result<()> {
@@ -1888,10 +1851,9 @@ fn agent_cmd_sandbox_update_container(
 }
 
 fn agent_cmd_sandbox_mem_hotplug_by_probe(
-    _cfg: &Config,
+    ctx: &Context,
     client: &AgentServiceClient,
     _health: &HealthClient,
-    ctx: &Context,
     options: &mut Options,
     args: &str,
 ) -> Result<()> {
@@ -1935,7 +1897,7 @@ fn agent_cmd_sandbox_mem_hotplug_by_probe(
 }
 
 #[inline]
-fn builtin_cmd_repeat(_cfg: &Config, _options: &mut Options, _args: &str) -> (Result<()>, bool) {
+fn builtin_cmd_repeat(_args: &str) -> (Result<()>, bool) {
     // XXX: NOP implementation. Due to the way repeat has to work, providing a
     // handler like this is "too late" to be useful. However, a handler
     // is required as "repeat" is a valid command.
@@ -1947,7 +1909,7 @@ fn builtin_cmd_repeat(_cfg: &Config, _options: &mut Options, _args: &str) -> (Re
     (Ok(()), false)
 }
 
-fn builtin_cmd_sleep(_cfg: &Config, _options: &mut Options, args: &str) -> (Result<()>, bool) {
+fn builtin_cmd_sleep(args: &str) -> (Result<()>, bool) {
     let ns = match utils::human_time_to_ns(args) {
         Ok(t) => t,
         Err(e) => return (Err(e), false),
@@ -1958,17 +1920,17 @@ fn builtin_cmd_sleep(_cfg: &Config, _options: &mut Options, args: &str) -> (Resu
     (Ok(()), false)
 }
 
-fn builtin_cmd_echo(_cfg: &Config, _options: &mut Options, args: &str) -> (Result<()>, bool) {
+fn builtin_cmd_echo(args: &str) -> (Result<()>, bool) {
     println!("{}", args);
 
     (Ok(()), false)
 }
 
-fn builtin_cmd_quit(_cfg: &Config, _options: &mut Options, _args: &str) -> (Result<()>, bool) {
+fn builtin_cmd_quit(_args: &str) -> (Result<()>, bool) {
     (Ok(()), true)
 }
 
-fn builtin_cmd_list(_cfg: &Config, _options: &mut Options, _args: &str) -> (Result<()>, bool) {
+fn builtin_cmd_list(_args: &str) -> (Result<()>, bool) {
     let cmds = get_all_cmd_details();
 
     cmds.iter().for_each(|n| println!(" - {}", n));
