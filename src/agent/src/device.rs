@@ -135,8 +135,8 @@ async fn get_device_name(sandbox: &Arc<Mutex<Sandbox>>, dev_addr: &str) -> Resul
     let matcher = DevAddrMatcher::new(dev_addr);
 
     let mut sb = sandbox.lock().await;
-    for (key, uev) in sb.uevent_map.iter() {
-        if key.contains(dev_addr) {
+    for uev in sb.uevent_map.values() {
+        if matcher.is_match(uev) {
             info!(sl!(), "Device {} found in pci device map", dev_addr);
             return Ok(format!("{}/{}", SYSTEM_DEV_PATH, uev.devname));
         }
