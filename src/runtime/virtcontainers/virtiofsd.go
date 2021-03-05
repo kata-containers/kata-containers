@@ -284,6 +284,6 @@ func (v *virtiofsdMock) Start(ctx context.Context) (int, error) {
 	return 9999999, nil
 }
 
-func (v *virtiofsdMock) Stop() error {
+func (v *virtiofsdMock) Stop(ctx context.Context) error {
 	return nil
 }

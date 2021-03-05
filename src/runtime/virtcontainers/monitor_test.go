@@ -6,6 +6,7 @@
 package virtcontainers
 
 import (
+	"context"
 	"errors"
 	"testing"
 
@@ -25,11 +26,11 @@ func TestMonitorSuccess(t *testing.T) {
 
 	m := newMonitor(s)
 
-	ch, err := m.newWatcher()
+	ch, err := m.newWatcher(context.Background())
 	assert.Nil(err, "newWatcher failed: %v", err)
 
 	fakeErr := errors.New("foobar error")
-	m.notify(fakeErr)
+	m.notify(context.Background(), fakeErr)
 	resultErr := <-ch
 	assert.True(resultErr == fakeErr, "monitor notification mismatch %v vs. %v", resultErr, fakeErr)
 
@@ -49,12 +50,12 @@ func TestMonitorClosedChannel(t *testing.T) {
 
 	m := newMonitor(s)
 
-	ch, err := m.newWatcher()
+	ch, err := m.newWatcher(context.Background())
 	assert.Nil(err, "newWatcher failed: %v", err)
 
 	close(ch)
 	fakeErr := errors.New("foobar error")
-	m.notify(fakeErr)
+	m.notify(context.Background(), fakeErr)
 
 	m.stop()
 }

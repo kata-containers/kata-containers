@@ -42,7 +42,7 @@ func TestTemplateFactory(t *testing.T) {
 	vm, err := f.GetBaseVM(ctx, vmConfig)
 	assert.Nil(err)
 
-	err = vm.Stop()
+	err = vm.Stop(ctx)
 	assert.Nil(err)
 
 	// CloseFactory
