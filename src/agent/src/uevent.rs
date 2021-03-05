@@ -98,12 +98,11 @@ impl Uevent {
             .collect();
 
         for k in keys {
-            let devname = self.devname.clone();
             // unwrap() is safe because logic above ensures k exists
             // in the map, and it's locked so no-one else can change
             // that
             let sender = sb.dev_watcher.remove(&k).unwrap();
-            let _ = sender.send(devname);
+            let _ = sender.send(self.clone());
         }
     }
 

@@ -38,7 +38,7 @@ pub struct Sandbox {
     pub mounts: Vec<String>,
     pub container_mounts: HashMap<String, Vec<String>>,
     pub uevent_map: HashMap<String, Uevent>,
-    pub dev_watcher: HashMap<String, tokio::sync::oneshot::Sender<String>>,
+    pub dev_watcher: HashMap<String, tokio::sync::oneshot::Sender<Uevent>>,
     pub shared_utsns: Namespace,
     pub shared_ipcns: Namespace,
     pub sandbox_pidns: Option<Namespace>,
