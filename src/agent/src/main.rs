@@ -340,7 +340,9 @@ async fn start_sandbox(
 
     tasks.push(signal_handler_task);
 
-    watch_uevents(sandbox.clone()).await;
+    let uevents_handler_task = tokio::spawn(watch_uevents(sandbox.clone(), shutdown.clone()));
+
+    tasks.push(uevents_handler_task);
 
     let (tx, rx) = tokio::sync::oneshot::channel();
     sandbox.lock().await.sender = Some(tx);
