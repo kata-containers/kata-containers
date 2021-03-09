@@ -58,6 +58,8 @@ use async_trait::async_trait;
 use rlimit::{setrlimit, Resource, Rlim};
 use tokio::io::AsyncBufReadExt;
 
+use crate::utils;
+
 const STATE_FILENAME: &str = "state.json";
 const EXEC_FIFO_FILENAME: &str = "exec.fifo";
 const VER_MARKER: &str = "1.2.5";
@@ -634,8 +636,9 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
 
     // set the "HOME" env getting from "/etc/passwd"
     if env::var_os(HOME_ENV_KEY).is_none() {
-        if let Some(home_dir) = dirs::home_dir() {
-            env::set_var(HOME_ENV_KEY, home_dir);
+        match utils::home_dir(guser.uid) {
+            Ok(home_dir) => env::set_var(HOME_ENV_KEY, home_dir),
+            Err(e) => log_child!(cfd_log, "failed to get home dir: {:?}", e),
         }
     }
 
