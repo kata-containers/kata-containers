@@ -24,7 +24,7 @@ import (
 func cReap(s *service, status int, id, execid string, exitat time.Time) {
 	s.ec <- exit{
 		timestamp: exitat,
-		pid:       s.pid,
+		pid:       s.hpid,
 		status:    status,
 		id:        id,
 		execid:    execid,
