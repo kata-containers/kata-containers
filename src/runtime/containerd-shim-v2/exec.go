@@ -90,6 +90,10 @@ func newExec(c *container, stdin, stdout, stderr string, terminal bool, jspec *g
 		height = uint32(spec.ConsoleSize.Height)
 		width = uint32(spec.ConsoleSize.Width)
 	}
+	var extraGroups []string
+	for _, g := range spec.User.AdditionalGids {
+		extraGroups = append(extraGroups, fmt.Sprintf("%d", g))
+	}
 
 	tty := &tty{
 		stdin:    stdin,
@@ -101,14 +105,15 @@ func newExec(c *container, stdin, stdout, stderr string, terminal bool, jspec *g
 	}
 
 	cmds := &types.Cmd{
-		Args:            spec.Args,
-		Envs:            getEnvs(spec.Env),
-		User:            fmt.Sprintf("%d", spec.User.UID),
-		PrimaryGroup:    fmt.Sprintf("%d", spec.User.GID),
-		WorkDir:         spec.Cwd,
-		Interactive:     terminal,
-		Detach:          !terminal,
-		NoNewPrivileges: spec.NoNewPrivileges,
+		Args:                spec.Args,
+		Envs:                getEnvs(spec.Env),
+		User:                fmt.Sprintf("%d", spec.User.UID),
+		PrimaryGroup:        fmt.Sprintf("%d", spec.User.GID),
+		SupplementaryGroups: extraGroups,
+		WorkDir:             spec.Cwd,
+		Interactive:         terminal,
+		Detach:              !terminal,
+		NoNewPrivileges:     spec.NoNewPrivileges,
 	}
 
 	exec := &exec{
