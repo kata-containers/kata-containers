@@ -23,6 +23,7 @@ import (
 
 	// only register the proto type
 	_ "github.com/containerd/containerd/runtime/linux/runctypes"
+	v2runcoptions "github.com/containerd/containerd/runtime/v2/runc/options"
 	crioption "github.com/containerd/cri-containerd/pkg/api/runtimeoptions/v1"
 
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils"
@@ -178,6 +179,11 @@ func loadRuntimeConfig(s *service, r *taskAPI.CreateTaskRequest, anno map[string
 		// and we'll ignore it.
 		if ok {
 			configPath = option.ConfigPath
+		} else {
+			option, ok := v.(*v2runcoptions.Options)
+			if ok {
+				shimLog.Infof("parsed runc shim v2 options %+v", option)
+			}
 		}
 	}
 
