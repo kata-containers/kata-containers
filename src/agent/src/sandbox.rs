@@ -8,7 +8,7 @@ use crate::mount::{get_mount_fs_type, remove_mounts, TYPE_ROOTFS};
 use crate::namespace::Namespace;
 use crate::netlink::Handle;
 use crate::network::Network;
-use crate::uevent::Uevent;
+use crate::uevent::{Uevent, UeventMatcher};
 use anyhow::{anyhow, Context, Result};
 use libc::pid_t;
 use oci::{Hook, Hooks};
@@ -29,6 +29,8 @@ use tokio::sync::mpsc::{channel, Receiver, Sender};
 use tokio::sync::oneshot;
 use tokio::sync::Mutex;
 
+type UeventWatcher = (Box<dyn UeventMatcher>, oneshot::Sender<Uevent>);
+
 #[derive(Debug)]
 pub struct Sandbox {
     pub logger: Logger,
@@ -39,7 +41,7 @@ pub struct Sandbox {
     pub mounts: Vec<String>,
     pub container_mounts: HashMap<String, Vec<String>>,
     pub uevent_map: HashMap<String, Uevent>,
-    pub uevent_watchers: Vec<Option<(String, oneshot::Sender<Uevent>)>>,
+    pub uevent_watchers: Vec<Option<UeventWatcher>>,
     pub shared_utsns: Namespace,
     pub shared_ipcns: Namespace,
     pub sandbox_pidns: Option<Namespace>,

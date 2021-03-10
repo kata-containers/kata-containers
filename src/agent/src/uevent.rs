@@ -11,6 +11,7 @@ use slog::Logger;
 use anyhow::Result;
 use netlink_sys::{protocols, SocketAddr, TokioSocket};
 use nix::errno::Errno;
+use std::fmt::Debug;
 use std::os::unix::io::FromRawFd;
 use std::sync::Arc;
 use tokio::select;
@@ -25,6 +26,10 @@ pub struct Uevent {
     pub subsystem: String,
     seqnum: String,
     pub interface: String,
+}
+
+pub trait UeventMatcher: Sync + Send + Debug + 'static {
+    fn is_match(&self, uev: &Uevent) -> bool;
 }
 
 impl Uevent {
@@ -73,37 +78,8 @@ impl Uevent {
 
         // Notify watchers that are interested in the udev event.
         for watch in &mut sb.uevent_watchers {
-            if let Some((dev_addr, _)) = watch {
-                let pci_root_bus_path = create_pci_root_bus_path();
-                let pci_p = format!("{}{}", pci_root_bus_path, dev_addr);
-
-                let is_match = |uev: &Uevent| {
-                    let pmem_suffix = format!("/{}/{}", SCSI_BLOCK_SUFFIX, uev.devname);
-
-                    uev.subsystem == "block"
-                        && {
-                            uev.devpath.starts_with(pci_root_bus_path.as_str())
-                                || uev.devpath.starts_with(ACPI_DEV_PATH) // NVDIMM/PMEM devices
-                        }
-                        && !uev.devname.is_empty()
-                        && {
-                            // blk block device
-                            uev.devpath.starts_with(pci_p.as_str())
-                        // scsi block device
-                            || (
-                                dev_addr.ends_with(SCSI_BLOCK_SUFFIX) &&
-                                    uev.devpath.contains(dev_addr.as_str())
-                            )
-                        // nvdimm/pmem device
-                            || (
-                                uev.devpath.starts_with(ACPI_DEV_PATH) &&
-                                    uev.devpath.ends_with(pmem_suffix.as_str()) &&
-                                    dev_addr.ends_with(pmem_suffix.as_str())
-                            )
-                        }
-                };
-
-                if is_match(&self) {
+            if let Some((matcher, _)) = watch {
+                if matcher.is_match(&self) {
                     let (_, sender) = watch.take().unwrap();
                     let _ = sender.send(self.clone());
                 }
