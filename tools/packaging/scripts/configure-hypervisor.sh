@@ -38,6 +38,9 @@ typeset -A recognised_tags
 # Prefix were kata will be installed
 prefix=${PREFIX:-/usr}
 
+# The QEMU version on "major.minor" format.
+qemu_version=""
+
 recognised_tags=(
 	[arch]="architecture-specific"
 	[functionality]="required functionality"
@@ -47,6 +50,18 @@ recognised_tags=(
 	[size]="minimise binary size"
 	[speed]="maximise startup speed"
 )
+
+# Given $1 and $2 as version strings with 'x.y.z' format; if $1 >= $2 then
+# return 0. Otherwise return 1.
+# Use this function on conditionals to compare versions.
+#
+gt_eq() {
+	format='^[0-9]+(\.[0-9]+)*$'
+	if [[ ! ("$1" =~ $format && "$2" =~ $format) ]]; then
+		echo "ERROR: Malformed version string"
+	fi
+	echo -e "$1\n$2" | sort -V -r -C
+}
 
 # Display message to stderr and exit indicating script failed.
 die() {
@@ -207,7 +222,7 @@ generate_qemu_options() {
 
 	# Disabled options
 
-	if [ "${qemu_version_major}" -ge 5 ]; then
+	if gt_eq "${qemu_version}" "5.0.0" ; then
 		# Disable sheepdog block driver support
 		qemu_options+=(size:--disable-sheepdog)
 
@@ -241,7 +256,7 @@ generate_qemu_options() {
 
 	# Disable PAM authentication: it's a feature used together with VNC access
 	# that's not used. See QEMU commit 8953caf for more details
-	[ "${qemu_version_major}" -ge 4  ] && qemu_options+=(size:--disable-auth-pam)
+	gt_eq "${qemu_version}" "4.0.0" && qemu_options+=(size:--disable-auth-pam)
 
 	# Disable unused filesystem support
 	[ "$arch" == x86_64 ] && qemu_options+=(size:--disable-fdt)
@@ -250,7 +265,7 @@ generate_qemu_options() {
 	qemu_options+=(size:--disable-libnfs)
 
 	# Starting from QEMU 4.1, libssh replaces to libssh2
-	if [ "$(echo "${qemu_version_major}.${qemu_version_minor} >= 4.1" | bc)" == "1" ]; then
+	if gt_eq "${qemu_version}" "4.1.0" ; then
 		qemu_options+=(size:--disable-libssh)
 	else
 		qemu_options+=(size:--disable-libssh2)
@@ -281,7 +296,7 @@ generate_qemu_options() {
 
 	# SECURITY: Don't build a static binary (lowers security)
 	# needed if qemu version is less than 2.7
-	if [ "${qemu_version_major}" -eq 2 ] && [ "${qemu_version_minor}" -lt 7 ]; then
+	if ! gt_eq "${qemu_version}" "2.7.0" ; then
 		qemu_options+=(security:--disable-static)
 	fi
 
@@ -319,6 +334,16 @@ generate_qemu_options() {
 	# Don't build the qemu-io, qemu-nbd and qemu-image tools
 	qemu_options+=(size:--disable-tools)
 
+	# Kata Containers may be configured to use the virtiofs daemon.
+	#
+	# But since QEMU 5.2 the daemon is built as part of the tools set
+	# (disabled with --disable-tools) thus it needs to be explicitely
+	# enabled.
+	if gt_eq "${qemu_version}" "5.2.0" ; then
+		qemu_options+=(functionality:--enable-virtiofsd)
+		qemu_options+=(functionality:--enable-virtfs)
+	fi
+
 	# Don't build linux-user bsd-user
 	qemu_options+=(size:--disable-bsd-user)
 	qemu_options+=(size:--disable-linux-user)
@@ -345,12 +370,12 @@ generate_qemu_options() {
 	# Disable Capstone
 	qemu_options+=(size:--disable-capstone)
 
-	if [[ "${qemu_version_major}" -ge 3 ]]; then
+	if gt_eq "${qemu_version}" "3.0.0" ; then
 		# Disable graphics
 		qemu_options+=(size:--disable-virglrenderer)
 
 		# Due to qemu commit 3ebb9c4f52, we can't disable replication in v3.0
-		if [[ "${qemu_version_major}" -ge 4 || ( "${qemu_version_major}" -eq 3 && "${qemu_version_minor}" -ge 1 ) ]]; then
+		if gt_eq "${qemu_version}" "3.1.0" ; then
 			# Disable block replication
 			qemu_options+=(size:--disable-replication)
 		fi
@@ -371,7 +396,10 @@ generate_qemu_options() {
 		qemu_options+=(size:--disable-cloop)
 		qemu_options+=(size:--disable-dmg)
 		qemu_options+=(size:--disable-parallels)
-		if [ "${qemu_version_major}" -le 5 ] && [ "${qemu_version_minor}" -lt 1 ]; then
+
+		# vxhs was deprecated on QEMU 5.1 so it doesn't need to be
+		# explicitly disabled.
+		if ! gt_eq "${qemu_version}" "5.1.0" ; then
 			qemu_options+=(size:--disable-vxhs)
 		fi
 	fi
@@ -388,7 +416,7 @@ generate_qemu_options() {
 
 	# Always strip binaries
 	# needed if qemu version is less than 2.7
-	if [ "${qemu_version_major}" -eq 2 ] && [ "${qemu_version_minor}" -lt 7 ]; then
+	if ! gt_eq "${qemu_version}" "2.7.0" ; then
 		qemu_options+=(size:--enable-strip)
 	fi
 
@@ -405,12 +433,12 @@ generate_qemu_options() {
 	qemu_options+=(functionality:--enable-cap-ng)
 	qemu_options+=(functionality:--enable-seccomp)
 
-	if [[ "${qemu_version_major}" -ge 4 || ( "${qemu_version_major}" -eq 3  &&  "${qemu_version_minor}" -ge 1 ) ]]; then
+	if gt_eq "${qemu_version}" "3.1.0" ; then
 		# AVX2 is enabled by default by x86_64, make sure it's enabled only
 		# for that architecture
 		if [ "$arch" == x86_64 ]; then
 			qemu_options+=(speed:--enable-avx2)
-			if [ "${qemu_version_major}" -ge 5 ]; then
+			if gt_eq "${qemu_version}" "5.0.0" ; then
 				qemu_options+=(speed:--enable-avx512f)
 			fi
 			# According to QEMU's nvdimm documentation: When 'pmem' is 'on' and QEMU is
@@ -443,12 +471,15 @@ generate_qemu_options() {
 	_qemu_cflags=""
 
 	# compile with high level of optimisation
-	_qemu_cflags+=" -O3"
+	# On version 5.2.0 onward the Meson build system warns to not use -O3
+	if ! gt_eq "${qemu_version}" "5.2.0" ; then
+		_qemu_cflags+=" -O3"
+	fi
 
 	# Improve code quality by assuming identical semantics for interposed
 	# synmbols.
 	# Only enable if gcc is 5.3 or newer
-	if [ "${gcc_version_major}" -ge 5 ] && [ "${gcc_version_minor}" -ge 3 ]; then
+	if gt_eq "${gcc_version}" "5.3.0" ; then
 		_qemu_cflags+=" -fno-semantic-interposition"
 	fi
 
@@ -547,21 +578,25 @@ main() {
 	local qemu_version_file="VERSION"
 	[ -f ${qemu_version_file} ] || die "QEMU version file '$qemu_version_file' not found"
 
-	local qemu_version_major=$(cut -d. -f1 "${qemu_version_file}")
-	local qemu_version_minor=$(cut -d. -f2 "${qemu_version_file}")
+	# Remove any pre-release identifier so that it returns the version on
+	# major.minor.patch format (e.g 5.2.0-rc4 becomes 5.2.0)
+	qemu_version="$(awk 'BEGIN {FS = "-"} {print $1}' ${qemu_version_file})"
 
-	[ -n "${qemu_version_major}" ] ||
-		die "cannot determine qemu major version from file $qemu_version_file"
-	[ -n "${qemu_version_minor}" ] ||
-		die "cannot determine qemu minor version from file $qemu_version_file"
+	[ -n "${qemu_version}" ] ||
+		die "cannot determine qemu version from file $qemu_version_file"
 
 	local gcc_version_major=$(gcc -dumpversion | cut -f1 -d.)
-	local gcc_version_minor=$(gcc -dumpversion | cut -f2 -d.)
-
 	[ -n "${gcc_version_major}" ] ||
 		die "cannot determine gcc major version, please ensure it is installed"
+	# -dumpversion only returns the major version since GCC 7.0
+	if gt_eq "${gcc_version_major}" "7.0.0" ; then
+		local gcc_version_minor=$(gcc -dumpfullversion | cut -f2 -d.)
+	else
+		local gcc_version_minor=$(gcc -dumpversion | cut -f2 -d.)
+	fi
 	[ -n "${gcc_version_minor}" ] ||
 		die "cannot determine gcc minor version, please ensure it is installed"
+	local gcc_version="${gcc_version_major}.${gcc_version_minor}"
 
 	# Generate qemu options
 	generate_qemu_options

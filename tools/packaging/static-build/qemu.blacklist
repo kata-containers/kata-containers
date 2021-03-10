@@ -19,9 +19,11 @@ qemu_black_list=(
 */share/*/*.img
 */share/*/keymaps
 */share/*/multiboot.bin
+*/share/*/npcm7xx_bootrom.bin
 */share/*/openbios-ppc
 */share/*/openbios-sparc32
 */share/*/openbios-sparc64
+*/share/*/opensbi-riscv*
 */share/*/palcode-clipper
 */share/*/pxe-*
 */share/*/QEMU,*
