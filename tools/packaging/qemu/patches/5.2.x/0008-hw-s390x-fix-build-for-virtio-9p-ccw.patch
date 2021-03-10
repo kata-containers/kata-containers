@@ -1,0 +1,65 @@
+From 22b6a14e0b56989e4ac68377eb1cff7c404e14ae Mon Sep 17 00:00:00 2001
+From: Halil Pasic <pasic@linux.ibm.com>
+Date: Thu, 18 Feb 2021 04:40:59 +0100
+Subject: [PATCH] hw/s390x: fix build for virtio-9p-ccw
+
+Commit  2c44220d05 ("meson: convert hw/arch*"), which migrated the old
+Makefile.objs to meson.build  accidentally excluded virtio-ccw-9p.c and
+thus the virtio-9p-ccw device from the build (and potentially also
+included the file virtio-ccw-blk.c twice in the source set). And since
+CONFIG_VIRTFS can't be used the way it was used here (see commit
+2c9dce0196 ("meson: do not use CONFIG_VIRTFS")), the preconditions have
+to be written differently.
+
+Let's fix this!
+
+Signed-off-by: Halil Pasic <pasic@linux.ibm.com>
+Fixes: 2c44220d05 ("meson: convert hw/arch*")
+Reported-by: Jakob Naucke <jakob.naucke@ibm.com>
+Cc: qemu-stable@nongnu.org
+
+X-Backport-Note: add the definition of have_virtfs from 69202b406e3
+Origin: backport, https://lists.nongnu.org/archive/html/qemu-devel/2021-02/msg05793.html
+Bug-Ubuntu: https://bugs.launchpad.net/bugs/1916230
+Last-Update: 2021-02-22
+
+Cherry picked from https://git.launchpad.net/ubuntu/+source/qemu/plain/debian/patches/ubuntu/lp-1916230-hw-s390x-fix-build-for-virtio-9p-ccw.patch?id=e4d879c593bc0f3758248de4e2b4087d9f5dfc7e
+---
+ hw/s390x/meson.build | 4 +++-
+ meson.build          | 5 +++++
+ 2 files changed, 8 insertions(+), 1 deletion(-)
+
+diff --git a/hw/s390x/meson.build b/hw/s390x/meson.build
+index 2a7818d94b..91495b5631 100644
+--- a/hw/s390x/meson.build
++++ b/hw/s390x/meson.build
+@@ -40,7 +40,9 @@ virtio_ss.add(when: 'CONFIG_VIRTIO_NET', if_true: files('virtio-ccw-net.c'))
+ virtio_ss.add(when: 'CONFIG_VIRTIO_RNG', if_true: files('virtio-ccw-rng.c'))
+ virtio_ss.add(when: 'CONFIG_VIRTIO_SCSI', if_true: files('virtio-ccw-scsi.c'))
+ virtio_ss.add(when: 'CONFIG_VIRTIO_SERIAL', if_true: files('virtio-ccw-serial.c'))
+-virtio_ss.add(when: ['CONFIG_VIRTIO_9P', 'CONFIG_VIRTFS'], if_true: files('virtio-ccw-blk.c'))
++if have_virtfs
++  virtio_ss.add(when: 'CONFIG_VIRTIO_9P', if_true: files('virtio-ccw-9p.c'))
++endif
+ virtio_ss.add(when: 'CONFIG_VHOST_VSOCK', if_true: files('vhost-vsock-ccw.c'))
+ virtio_ss.add(when: 'CONFIG_VHOST_USER_FS', if_true: files('vhost-user-fs-ccw.c'))
+ s390x_ss.add_all(when: 'CONFIG_VIRTIO_CCW', if_true: virtio_ss)
+diff --git a/meson.build b/meson.build
+index e3386196ba..fcfe4fc0b9 100644
+--- a/meson.build
++++ b/meson.build
+@@ -777,6 +777,11 @@ endif
+ # config-host.h #
+ #################
+ 
++have_virtfs = (targetos == 'linux' and
++    have_system and
++    libattr.found() and
++    libcap_ng.found())
++
+ config_host_data.set_quoted('CONFIG_BINDIR', get_option('prefix') / get_option('bindir'))
+ config_host_data.set_quoted('CONFIG_PREFIX', get_option('prefix'))
+ config_host_data.set_quoted('CONFIG_QEMU_CONFDIR', get_option('prefix') / qemu_confdir)
+-- 
+2.26.2
+

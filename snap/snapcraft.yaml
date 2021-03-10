@@ -228,6 +228,7 @@ parts:
       - libffi-dev
       - libmount-dev
       - libselinux1-dev
+      - ninja-build
     override-build: |
       yq=${SNAPCRAFT_STAGE}/yq
       export GOPATH=${SNAPCRAFT_STAGE}/gopath
@@ -275,16 +276,14 @@ parts:
 
       configure_hypervisor=${kata_dir}/tools/packaging/scripts/configure-hypervisor.sh
       chmod +x ${configure_hypervisor}
-      # static build
-      echo "$(${configure_hypervisor} -s qemu) \
-        --disable-rbd
-        --prefix=/snap/${SNAPCRAFT_PROJECT_NAME}/current/usr \
-        --datadir=/snap/${SNAPCRAFT_PROJECT_NAME}/current/usr/share \
-        --libexecdir=/snap/${SNAPCRAFT_PROJECT_NAME}/current/usr/libexec/qemu" \
+      # static build. The --prefix, --libdir, --libexecdir, --datadir arguments are
+      # based on PREFIX and set by configure-hypervisor.sh
+      echo "$(PREFIX=/snap/${SNAPCRAFT_PROJECT_NAME}/current/usr ${configure_hypervisor} -s qemu) \
+        --disable-rbd " \
         | xargs ./configure
 
       # Copy QEMU configurations (Kconfigs)
-      cp -a ${kata_dir}/tools/packaging/qemu/default-configs/* default-configs/
+      cp -a ${kata_dir}/tools/packaging/qemu/default-configs/* default-configs/devices/
 
       # build and install
       make -j $(($(nproc)-1))
