@@ -6,9 +6,10 @@
 use crate::device::online_device;
 use crate::linux_abi::*;
 use crate::sandbox::Sandbox;
+use crate::AGENT_CONFIG;
 use slog::Logger;
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use netlink_sys::{protocols, SocketAddr, TokioSocket};
 use nix::errno::Errno;
 use std::fmt::Debug;
@@ -18,7 +19,14 @@ use tokio::select;
 use tokio::sync::watch::Receiver;
 use tokio::sync::Mutex;
 
-#[derive(Debug, Default, Clone)]
+// Convenience macro to obtain the scope logger
+macro_rules! sl {
+    () => {
+        slog_scope::logger().new(o!("subsystem" => "uevent"))
+    };
+}
+
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct Uevent {
     pub action: String,
     pub devpath: String,
@@ -95,6 +103,48 @@ impl Uevent {
     }
 }
 
+pub async fn wait_for_uevent(
+    sandbox: &Arc<Mutex<Sandbox>>,
+    matcher: impl UeventMatcher,
+) -> Result<Uevent> {
+    let mut sb = sandbox.lock().await;
+    for uev in sb.uevent_map.values() {
+        if matcher.is_match(uev) {
+            info!(sl!(), "Device {:?} found in pci device map", uev);
+            return Ok(uev.clone());
+        }
+    }
+
+    // If device is not found in the device map, hotplug event has not
+    // been received yet, create and add channel to the watchers map.
+    // The key of the watchers map is the device we are interested in.
+    // Note this is done inside the lock, not to miss any events from the
+    // global udev listener.
+    let (tx, rx) = tokio::sync::oneshot::channel::<Uevent>();
+    let idx = sb.uevent_watchers.len();
+    sb.uevent_watchers.push(Some((Box::new(matcher), tx)));
+    drop(sb); // unlock
+
+    info!(sl!(), "Waiting on channel for uevent notification\n");
+    let hotplug_timeout = AGENT_CONFIG.read().await.hotplug_timeout;
+
+    let uev = match tokio::time::timeout(hotplug_timeout, rx).await {
+        Ok(v) => v?,
+        Err(_) => {
+            let mut sb = sandbox.lock().await;
+            let matcher = sb.uevent_watchers[idx].take().unwrap().0;
+
+            return Err(anyhow!(
+                "Timeout after {:?} waiting for uevent {:?}",
+                hotplug_timeout,
+                &matcher
+            ));
+        }
+    };
+
+    Ok(uev)
+}
+
 pub async fn watch_uevents(
     sandbox: Arc<Mutex<Sandbox>>,
     mut shutdown: Receiver<bool>,
@@ -158,4 +208,70 @@ pub async fn watch_uevents(
     }
 
     Ok(())
+}
+
+// Used in the device module unit tests
+#[cfg(test)]
+pub(crate) fn spawn_test_watcher(sandbox: Arc<Mutex<Sandbox>>, uev: Uevent) {
+    tokio::spawn(async move {
+        loop {
+            let mut sb = sandbox.lock().await;
+            for w in &mut sb.uevent_watchers {
+                if let Some((matcher, _)) = w {
+                    if matcher.is_match(&uev) {
+                        let (_, sender) = w.take().unwrap();
+                        let _ = sender.send(uev);
+                        return;
+                    }
+                }
+            }
+            drop(sb); // unlock
+        }
+    });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[derive(Debug, Clone, Copy)]
+    struct AlwaysMatch();
+
+    impl UeventMatcher for AlwaysMatch {
+        fn is_match(&self, _: &Uevent) -> bool {
+            true
+        }
+    }
+
+    #[tokio::test]
+    async fn test_wait_for_uevent() {
+        let mut uev = crate::uevent::Uevent::default();
+        uev.action = crate::linux_abi::U_EVENT_ACTION_ADD.to_string();
+        uev.subsystem = "test".to_string();
+        uev.devpath = "/test/sysfs/path".to_string();
+        uev.devname = "testdevname".to_string();
+
+        let matcher = AlwaysMatch();
+
+        let logger = slog::Logger::root(slog::Discard, o!());
+        let sandbox = Arc::new(Mutex::new(Sandbox::new(&logger).unwrap()));
+
+        let mut sb = sandbox.lock().await;
+        sb.uevent_map.insert(uev.devpath.clone(), uev.clone());
+        drop(sb); // unlock
+
+        let uev2 = wait_for_uevent(&sandbox, matcher).await;
+        assert!(uev2.is_ok());
+        assert_eq!(uev2.unwrap(), uev);
+
+        let mut sb = sandbox.lock().await;
+        sb.uevent_map.remove(&uev.devpath).unwrap();
+        drop(sb); // unlock
+
+        spawn_test_watcher(sandbox.clone(), uev.clone());
+
+        let uev2 = wait_for_uevent(&sandbox, matcher).await;
+        assert!(uev2.is_ok());
+        assert_eq!(uev2.unwrap(), uev);
+    }
 }
