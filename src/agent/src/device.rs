@@ -5,6 +5,7 @@
 
 use libc::{c_uint, major, minor};
 use nix::sys::stat;
+use regex::Regex;
 use std::collections::HashMap;
 use std::fs;
 use std::os::unix::fs::MetadataExt;
@@ -148,15 +149,39 @@ pub async fn get_scsi_device_name(
     get_device_name(sandbox, &dev_sub_path).await
 }
 
-pub async fn get_pci_device_name(
+#[derive(Debug)]
+struct VirtioBlkPciMatcher {
+    rex: Regex,
+}
+
+impl VirtioBlkPciMatcher {
+    fn new(relpath: &str) -> Result<VirtioBlkPciMatcher> {
+        let root_bus = create_pci_root_bus_path();
+        let re = format!(r"^{}{}/virtio[0-9]+/block/", root_bus, relpath);
+        Ok(VirtioBlkPciMatcher {
+            rex: Regex::new(&re).unwrap(),
+        })
+    }
+}
+
+impl UeventMatcher for VirtioBlkPciMatcher {
+    fn is_match(&self, uev: &Uevent) -> bool {
+        uev.subsystem == "block" && self.rex.is_match(&uev.devpath) && !uev.devname.is_empty()
+    }
+}
+
+pub async fn get_virtio_blk_pci_device_name(
     sandbox: &Arc<Mutex<Sandbox>>,
     pcipath: &pci::Path,
 ) -> Result<String> {
     let root_bus_sysfs = format!("{}{}", SYSFS_DIR, create_pci_root_bus_path());
     let sysfs_rel_path = pcipath_to_sysfs(&root_bus_sysfs, pcipath)?;
+    let matcher = VirtioBlkPciMatcher::new(&sysfs_rel_path)?;
 
     rescan_pci_bus()?;
-    get_device_name(sandbox, &sysfs_rel_path).await
+
+    let uev = wait_for_uevent(sandbox, matcher).await?;
+    Ok(format!("{}/{}", SYSTEM_DEV_PATH, &uev.devname))
 }
 
 pub async fn get_pmem_device_name(
@@ -305,7 +330,7 @@ async fn virtio_blk_device_handler(
     // path for cloud-hypervisor when BDF information is not available
     if !device.id.is_empty() {
         let pcipath = pci::Path::from_str(&device.id)?;
-        dev.vm_path = get_pci_device_name(sandbox, &pcipath).await?;
+        dev.vm_path = get_virtio_blk_pci_device_name(sandbox, &pcipath).await?;
     }
 
     update_spec_device_list(&dev, spec, devidx)
@@ -820,5 +845,29 @@ mod tests {
         let name = get_device_name(&sandbox, relpath).await;
         assert!(name.is_ok(), "{}", name.unwrap_err());
         assert_eq!(name.unwrap(), format!("{}/{}", SYSTEM_DEV_PATH, devname));
+    }
+
+    #[tokio::test]
+    async fn test_virtio_blk_matcher() {
+        let root_bus = create_pci_root_bus_path();
+        let devname = "vda";
+
+        let mut uev_a = crate::uevent::Uevent::default();
+        let relpath_a = "/0000:00:0a.0";
+        uev_a.action = crate::linux_abi::U_EVENT_ACTION_ADD.to_string();
+        uev_a.subsystem = "block".to_string();
+        uev_a.devname = devname.to_string();
+        uev_a.devpath = format!("{}{}/virtio4/block/{}", root_bus, relpath_a, devname);
+        let matcher_a = VirtioBlkPciMatcher::new(&relpath_a).unwrap();
+
+        let mut uev_b = uev_a.clone();
+        let relpath_b = "/0000:00:0a.0/0000:00:0b.0";
+        uev_b.devpath = format!("{}{}/virtio0/block/{}", root_bus, relpath_b, devname);
+        let matcher_b = VirtioBlkPciMatcher::new(&relpath_b).unwrap();
+
+        assert!(matcher_a.is_match(&uev_a));
+        assert!(matcher_b.is_match(&uev_b));
+        assert!(!matcher_b.is_match(&uev_a));
+        assert!(!matcher_a.is_match(&uev_b));
     }
 }

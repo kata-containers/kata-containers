@@ -24,7 +24,7 @@ use std::fs::File;
 use std::io::{BufRead, BufReader};
 
 use crate::device::{
-    get_pci_device_name, get_pmem_device_name, get_scsi_device_name, online_device,
+    get_pmem_device_name, get_scsi_device_name, get_virtio_blk_pci_device_name, online_device,
 };
 use crate::linux_abi::*;
 use crate::pci;
@@ -342,7 +342,7 @@ async fn virtio_blk_storage_handler(
         }
     } else {
         let pcipath = pci::Path::from_str(&storage.source)?;
-        let dev_path = get_pci_device_name(&sandbox, &pcipath).await?;
+        let dev_path = get_virtio_blk_pci_device_name(&sandbox, &pcipath).await?;
         storage.source = dev_path;
     }
 
