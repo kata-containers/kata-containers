@@ -87,7 +87,7 @@ pub fn home_dir(uid: uid_t) -> Result<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::io::{self, Write};
+    use std::io::Write;
     use tempfile::Builder;
 
     #[test]
