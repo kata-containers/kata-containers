@@ -55,6 +55,8 @@ const (
 	// path to vfio devices
 	vfioPath = "/dev/vfio/"
 
+	sandboxMountsDir = "sandbox-mounts"
+
 	// enable debug console
 	kernelParamDebugConsole           = "agent.debug_console"
 	kernelParamDebugConsoleVPort      = "agent.debug_console_vport"
@@ -379,6 +381,50 @@ func (k *kataAgent) internalConfigure(h hypervisor, id string, config interface{
 	return nil
 }
 
+func setupSandboxBindMounts(sandbox *Sandbox) error {
+	if len(sandbox.config.SandboxBindMounts) == 0 {
+		return nil
+	}
+
+	// Create subdirectory in host shared path for sandbox mounts
+	sandboxMountDir := filepath.Join(getMountPath(sandbox.id), sandboxMountsDir)
+	sandboxShareDir := filepath.Join(getSharePath(sandbox.id), sandboxMountsDir)
+	if err := os.MkdirAll(sandboxMountDir, DirMode); err != nil {
+		return fmt.Errorf("Creating sandbox shared mount directory: %v: %w", sandboxMountDir, err)
+	}
+
+	for _, m := range sandbox.config.SandboxBindMounts {
+		mountDest := filepath.Join(sandboxMountDir, filepath.Base(m))
+		// bind-mount each sandbox mount that's defined into the sandbox mounts dir
+		if err := bindMount(context.Background(), m, mountDest, true, "private"); err != nil {
+			return fmt.Errorf("Mounting sandbox directory: %v to %v: %w", m, mountDest, err)
+		}
+
+		mountDest = filepath.Join(sandboxShareDir, filepath.Base(m))
+		if err := remountRo(context.Background(), mountDest); err != nil {
+			return fmt.Errorf("remount sandbox directory: %v to %v: %w", m, mountDest, err)
+		}
+
+	}
+
+	return nil
+}
+
+func cleanupSandboxBindMounts(sandbox *Sandbox) error {
+	if len(sandbox.config.SandboxBindMounts) == 0 {
+		return nil
+	}
+
+	for _, m := range sandbox.config.SandboxBindMounts {
+		mountPath := filepath.Join(getMountPath(sandbox.id), sandboxMountsDir, filepath.Base(m))
+		if err := syscall.Unmount(mountPath, syscall.MNT_DETACH|UmountNoFollow); err != nil {
+			return fmt.Errorf("Unmounting observe directory: %v: %w", mountPath, err)
+		}
+	}
+
+	return nil
+}
+
 func (k *kataAgent) configure(h hypervisor, id, sharePath string, config interface{}) error {
 	err := k.internalConfigure(h, id, config)
 	if err != nil {
@@ -438,6 +484,11 @@ func (k *kataAgent) setupSharedPath(sandbox *Sandbox) error {
 
 	// slave mount so that future mountpoints under mountPath are shown in sharePath as well
 	if err := bindMount(context.Background(), mountPath, sharePath, true, "slave"); err != nil {
+		return err
+	}
+
+	// Setup sandbox bindmounts, if specified:
+	if err := setupSandboxBindMounts(sandbox); err != nil {
 		return err
 	}
 
@@ -2099,6 +2150,10 @@ func (k *kataAgent) markDead() {
 }
 
 func (k *kataAgent) cleanup(s *Sandbox) {
+	if err := cleanupSandboxBindMounts(s); err != nil {
+		k.Logger().WithError(err).Errorf("failed to cleanup observability logs bindmount")
+	}
+
 	// Unmount shared path
 	path := getSharePath(s.id)
 	k.Logger().WithField("path", path).Infof("cleanup agent")

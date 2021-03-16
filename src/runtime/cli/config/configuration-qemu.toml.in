@@ -511,6 +511,12 @@ disable_guest_seccomp=@DEFDISABLEGUESTSECCOMP@
 # See: https://godoc.org/github.com/kata-containers/runtime/virtcontainers#ContainerType
 sandbox_cgroup_only=@DEFSANDBOXCGROUPONLY@
 
+# If specified, sandbox_bind_mounts identifieds host paths to be mounted (ro) into the sandboxes shared path.
+# This is only valid if filesystem sharing is utilized. The provided path(s) will be bindmounted into the shared fs directory.
+# If defaults are utilized, these mounts should be available in the guest at `/run/kata-containers/shared/containers/sandbox-mounts`
+# These will not be exposed to the container workloads, and are only provided for potential guest services.
+sandbox_bind_mounts=@DEFBINDMOUNTS@
+
 # Enabled experimental feature list, format: ["a", "b"].
 # Experimental features are features not stable enough for production,
 # they may break compatibility, and are prepared for a big version bump.

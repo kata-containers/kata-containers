@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"path/filepath"
 	goruntime "runtime"
 	"strings"
 
@@ -136,6 +137,7 @@ type runtime struct {
 	DisableNewNetNs     bool     `toml:"disable_new_netns"`
 	DisableGuestSeccomp bool     `toml:"disable_guest_seccomp"`
 	SandboxCgroupOnly   bool     `toml:"sandbox_cgroup_only"`
+	SandboxBindMounts   []string `toml:"sandbox_bind_mounts"`
 	Experimental        []string `toml:"experimental"`
 	InterNetworkModel   string   `toml:"internetworking_model"`
 	EnablePprof         bool     `toml:"enable_pprof"`
@@ -1158,11 +1160,41 @@ func LoadConfiguration(configPath string, ignoreLogging, builtIn bool) (resolved
 		config.Experimental = append(config.Experimental, *feature)
 	}
 
+	if err = validateBindMounts(tomlConf.Runtime.SandboxBindMounts); err != nil {
+		return "", config, err
+	}
+	config.SandboxBindMounts = tomlConf.Runtime.SandboxBindMounts
+
 	if err := checkConfig(config); err != nil {
 		return "", config, err
 	}
 
 	return resolved, config, nil
+}
+
+// Verify that bind mounts exist
+func validateBindMounts(mounts []string) error {
+	if len(mounts) == 0 {
+		return nil
+	}
+
+	bases := make(map[string]struct{})
+
+	for _, m := range mounts {
+		path, err := ResolvePath(m)
+		if err != nil {
+			return fmt.Errorf("sandbox-bindmounts: Failed to resolve path: %s: %v", m, err)
+		}
+
+		base := filepath.Base(path)
+		// check to make sure the base does not already exists.
+		if _, ok := bases[base]; !ok {
+			bases[base] = struct{}{}
+		} else {
+			return fmt.Errorf("sandbox-bindmounts: File %s has base that matches already specified bindmount", path)
+		}
+	}
+	return nil
 }
 
 func decodeConfig(configPath string) (tomlConfig, string, error) {
