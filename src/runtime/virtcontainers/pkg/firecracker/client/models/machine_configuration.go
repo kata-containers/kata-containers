@@ -28,6 +28,9 @@ type MachineConfiguration struct {
 	// Required: true
 	MemSizeMib *int64 `json:"mem_size_mib"`
 
+	// Enable dirty page tracking. If this is enabled, then incremental guest memory snapshots can be created. These belong to diff snapshots, which contain, besides the microVM state, only the memory dirtied since a previous snapshot. Full snapshots each contain a full copy of the guest memory.
+	TrackDirtyPages bool `json:"track_dirty_pages,omitempty"`
+
 	// Number of vCPUs (either 1 or an even number)
 	// Required: true
 	// Maximum: 32
