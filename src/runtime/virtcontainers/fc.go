@@ -273,20 +273,8 @@ func (fc *firecracker) vmRunning(ctx context.Context) bool {
 		fc.Logger().WithError(err).Error("getting vm status failed")
 		return false
 	}
-
-	// Be explicit
-	switch *resp.Payload.State {
-	case models.InstanceInfoStateStarting:
-		// Unsure what we should do here
-		fc.Logger().WithField("unexpected-state", models.InstanceInfoStateStarting).Debug("vmRunning")
-		return false
-	case models.InstanceInfoStateRunning:
-		return true
-	case models.InstanceInfoStateUninitialized:
-		return false
-	default:
-		return false
-	}
+	// The current state of the Firecracker instance (swagger:model InstanceInfo)
+	return resp.Payload.Started
 }
 
 func (fc *firecracker) getVersionNumber() (string, error) {
@@ -302,7 +290,7 @@ func (fc *firecracker) getVersionNumber() (string, error) {
 	fields := strings.Split(string(data), " ")
 	if len(fields) > 1 {
 		// The output format of `Firecracker --verion` is as follows
-		// Firecracker v0.21.1
+		// Firecracker v0.23.1
 		version = strings.TrimPrefix(strings.TrimSpace(fields[1]), "v")
 		return version, nil
 	}
@@ -612,16 +600,26 @@ func (fc *firecracker) fcSetLogger(ctx context.Context) error {
 		return fmt.Errorf("Failed setting log: %s", err)
 	}
 
+	fc.fcConfig.Logger = &models.Logger{
+		Level:   &fcLogLevel,
+		LogPath: &jailedLogFifo,
+	}
+
+	return err
+}
+
+func (fc *firecracker) fcSetMetrics(ctx context.Context) error {
+	span, _ := fc.trace(ctx, "fcSetMetrics")
+	defer span.End()
+
 	// listen to metrics file and transfer error info
 	jailedMetricsFifo, err := fc.fcListenToFifo(fcMetricsFifo, fc.updateMetrics)
 	if err != nil {
 		return fmt.Errorf("Failed setting log: %s", err)
 	}
 
-	fc.fcConfig.Logger = &models.Logger{
-		Level:       &fcLogLevel,
-		LogFifo:     &jailedLogFifo,
-		MetricsFifo: &jailedMetricsFifo,
+	fc.fcConfig.Metrics = &models.Metrics{
+		MetricsPath: &jailedMetricsFifo,
 	}
 
 	return err
@@ -742,6 +740,10 @@ func (fc *firecracker) fcInitConfiguration(ctx context.Context) error {
 	}
 
 	if err := fc.fcSetLogger(ctx); err != nil {
+		return err
+	}
+
+	if err := fc.fcSetMetrics(ctx); err != nil {
 		return err
 	}
 

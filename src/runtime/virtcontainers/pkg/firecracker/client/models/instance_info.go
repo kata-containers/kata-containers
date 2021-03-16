@@ -6,8 +6,6 @@ package models
 // Editing this file might prove futile when you re-run the swagger generate command
 
 import (
-	"encoding/json"
-
 	strfmt "github.com/go-openapi/strfmt"
 
 	"github.com/go-openapi/errors"
@@ -19,14 +17,15 @@ import (
 // swagger:model InstanceInfo
 type InstanceInfo struct {
 
+	// Application name.
+	AppName string `json:"app_name,omitempty"`
+
 	// MicroVM / instance ID.
 	// Required: true
 	ID *string `json:"id"`
 
 	// The current detailed state of the Firecracker instance. This value is read-only for the control-plane.
-	// Required: true
-	// Enum: [Uninitialized Starting Running]
-	State *string `json:"state"`
+	Started bool `json:"started,omitempty"`
 
 	// MicroVM hypervisor build version.
 	// Required: true
@@ -38,10 +37,6 @@ func (m *InstanceInfo) Validate(formats strfmt.Registry) error {
 	var res []error
 
 	if err := m.validateID(formats); err != nil {
-		res = append(res, err)
-	}
-
-	if err := m.validateState(formats); err != nil {
 		res = append(res, err)
 	}
 
@@ -58,52 +53,6 @@ func (m *InstanceInfo) Validate(formats strfmt.Registry) error {
 func (m *InstanceInfo) validateID(formats strfmt.Registry) error {
 
 	if err := validate.Required("id", "body", m.ID); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-var instanceInfoTypeStatePropEnum []interface{}
-
-func init() {
-	var res []string
-	if err := json.Unmarshal([]byte(`["Uninitialized","Starting","Running"]`), &res); err != nil {
-		panic(err)
-	}
-	for _, v := range res {
-		instanceInfoTypeStatePropEnum = append(instanceInfoTypeStatePropEnum, v)
-	}
-}
-
-const (
-
-	// InstanceInfoStateUninitialized captures enum value "Uninitialized"
-	InstanceInfoStateUninitialized string = "Uninitialized"
-
-	// InstanceInfoStateStarting captures enum value "Starting"
-	InstanceInfoStateStarting string = "Starting"
-
-	// InstanceInfoStateRunning captures enum value "Running"
-	InstanceInfoStateRunning string = "Running"
-)
-
-// prop value enum
-func (m *InstanceInfo) validateStateEnum(path, location string, value string) error {
-	if err := validate.Enum(path, location, value, instanceInfoTypeStatePropEnum); err != nil {
-		return err
-	}
-	return nil
-}
-
-func (m *InstanceInfo) validateState(formats strfmt.Registry) error {
-
-	if err := validate.Required("state", "body", m.State); err != nil {
-		return err
-	}
-
-	// value enum
-	if err := m.validateStateEnum("state", "body", *m.State); err != nil {
 		return err
 	}
 

@@ -32,8 +32,8 @@ func (o *GetMmdsReader) ReadResponse(response runtime.ClientResponse, consumer r
 		}
 		return result, nil
 
-	case 400:
-		result := NewGetMmdsBadRequest()
+	case 404:
+		result := NewGetMmdsNotFound()
 		if err := result.readResponse(response, consumer, o.formats); err != nil {
 			return nil, err
 		}
@@ -78,24 +78,24 @@ func (o *GetMmdsOK) readResponse(response runtime.ClientResponse, consumer runti
 	return nil
 }
 
-// NewGetMmdsBadRequest creates a GetMmdsBadRequest with default headers values
-func NewGetMmdsBadRequest() *GetMmdsBadRequest {
-	return &GetMmdsBadRequest{}
+// NewGetMmdsNotFound creates a GetMmdsNotFound with default headers values
+func NewGetMmdsNotFound() *GetMmdsNotFound {
+	return &GetMmdsNotFound{}
 }
 
-/*GetMmdsBadRequest handles this case with default header values.
+/*GetMmdsNotFound handles this case with default header values.
 
-Cannot get the MMDS data store due to bad input.
+The MMDS data store content can not be found.
 */
-type GetMmdsBadRequest struct {
+type GetMmdsNotFound struct {
 	Payload *models.Error
 }
 
-func (o *GetMmdsBadRequest) Error() string {
-	return fmt.Sprintf("[GET /mmds][%d] getMmdsBadRequest  %+v", 400, o.Payload)
+func (o *GetMmdsNotFound) Error() string {
+	return fmt.Sprintf("[GET /mmds][%d] getMmdsNotFound  %+v", 404, o.Payload)
 }
 
-func (o *GetMmdsBadRequest) readResponse(response runtime.ClientResponse, consumer runtime.Consumer, formats strfmt.Registry) error {
+func (o *GetMmdsNotFound) readResponse(response runtime.ClientResponse, consumer runtime.Consumer, formats strfmt.Registry) error {
 
 	o.Payload = new(models.Error)
 
