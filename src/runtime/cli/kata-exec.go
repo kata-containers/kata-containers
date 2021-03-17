@@ -87,9 +87,11 @@ var kataExecCLICommand = cli.Command{
 		span.SetAttributes(label.Key("port").Uint64(port))
 
 		sandboxID := context.Args().Get(0)
-		if sandboxID == "" {
-			return fmt.Errorf("SandboxID not found")
+
+		if err := katautils.VerifyContainerID(sandboxID); err != nil {
+			return err
 		}
+
 		span.SetAttributes(label.Key("sandbox").String(sandboxID))
 
 		conn, err := getConn(namespace, sandboxID, port)

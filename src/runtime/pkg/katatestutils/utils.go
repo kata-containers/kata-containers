@@ -47,6 +47,62 @@ type RuntimeConfigOptions struct {
 	JaegerPassword       string
 }
 
+// ContainerIDTestDataType is a type used to test Container and Sandbox ID's.
+type ContainerIDTestDataType struct {
+	ID    string
+	Valid bool
+}
+
+// Set of test data that lists valid and invalid Container IDs
+var ContainerIDTestData = []ContainerIDTestDataType{
+	{"", false},   // Cannot be blank
+	{" ", false},  // Cannot be a space
+	{".", false},  // Must start with an alphanumeric
+	{"-", false},  // Must start with an alphanumeric
+	{"_", false},  // Must start with an alphanumeric
+	{" a", false}, // Must start with an alphanumeric
+	{".a", false}, // Must start with an alphanumeric
+	{"-a", false}, // Must start with an alphanumeric
+	{"_a", false}, // Must start with an alphanumeric
+	{"..", false}, // Must start with an alphanumeric
+	{"a", false},  // Too short
+	{"z", false},  // Too short
+	{"A", false},  // Too short
+	{"Z", false},  // Too short
+	{"0", false},  // Too short
+	{"9", false},  // Too short
+	{"-1", false}, // Must start with an alphanumeric
+	{"/", false},
+	{"a/", false},
+	{"a/../", false},
+	{"../a", false},
+	{"../../a", false},
+	{"../../../a", false},
+	{"foo/../bar", false},
+	{"foo bar", false},
+	{"a.", true},
+	{"a..", true},
+	{"aa", true},
+	{"aa.", true},
+	{"hello..world", true},
+	{"hello/../world", false},
+	{"aa1245124sadfasdfgasdga.", true},
+	{"aAzZ0123456789_.-", true},
+	{"abcdefghijklmnopqrstuvwxyz0123456789.-_", true},
+	{"0123456789abcdefghijklmnopqrstuvwxyz.-_", true},
+	{" abcdefghijklmnopqrstuvwxyz0123456789.-_", false},
+	{".abcdefghijklmnopqrstuvwxyz0123456789.-_", false},
+	{"ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.-_", true},
+	{"0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ.-_", true},
+	{" ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.-_", false},
+	{".ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.-_", false},
+	{"/a/b/c", false},
+	{"a/b/c", false},
+	{"foo/../../../etc/passwd", false},
+	{"../../../../../../etc/motd", false},
+	{"/etc/passwd", false},
+}
+
 func MakeRuntimeConfigFileData(config RuntimeConfigOptions) string {
 	return `
 	# Runtime configuration file

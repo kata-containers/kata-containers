@@ -7,14 +7,20 @@
 package katautils
 
 import (
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"regexp"
 	"syscall"
 
 	"golang.org/x/sys/unix"
 )
+
+// validCIDRegex is a regular expression used to determine
+// if a container ID (or sandbox ID) is valid.
+const validCIDRegex = `^[a-zA-Z0-9][a-zA-Z0-9_.-]+$`
 
 // FileExists test is a file exiting or not
 func FileExists(path string) bool {
@@ -108,4 +114,23 @@ func GetFileContents(file string) (string, error) {
 	}
 
 	return string(bytes), nil
+}
+
+// VerifyContainerID checks if the specified container ID
+// (or sandbox ID) is valid.
+func VerifyContainerID(id string) error {
+	if id == "" {
+		return errors.New("ID cannot be blank")
+	}
+
+	// Note: no length check.
+	validPattern := regexp.MustCompile(validCIDRegex)
+
+	matches := validPattern.MatchString(id)
+
+	if !matches {
+		return fmt.Errorf("invalid container/sandbox ID (should match %q)", validCIDRegex)
+	}
+
+	return nil
 }
