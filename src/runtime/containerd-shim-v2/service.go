@@ -367,6 +367,10 @@ func (s *service) Create(ctx context.Context, r *taskAPI.CreateTaskRequest) (_ *
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	if err := katautils.VerifyContainerID(r.ID); err != nil {
+		return nil, err
+	}
+
 	type Result struct {
 		container *container
 		err       error
