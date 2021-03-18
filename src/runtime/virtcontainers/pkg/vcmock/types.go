@@ -21,11 +21,12 @@ import (
 
 // Sandbox is a fake Sandbox type used for testing
 type Sandbox struct {
-	MockID          string
-	MockURL         string
-	MockAnnotations map[string]string
-	MockContainers  []*Container
-	MockNetNs       string
+	MockID            string
+	MockURL           string
+	MockAnnotations   map[string]string
+	MockContainers    []*Container
+	MockNetNs         string
+	MockHypervisorPid int
 
 	// functions for mocks
 	AnnotationsFunc          func(key string) (string, error)

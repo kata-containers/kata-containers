@@ -255,3 +255,8 @@ func (s *Sandbox) GetAgentURL() (string, error) {
 	}
 	return "", nil
 }
+
+// GetHypervisorPid implements the VCSandbox function of the same name
+func (s *Sandbox) GetHypervisorPid() (int, error) {
+	return s.MockHypervisorPid, nil
+}
