@@ -47,7 +47,7 @@ pub struct Sandbox {
     pub rtnl: Handle,
     pub hooks: Option<Hooks>,
     pub event_rx: Arc<Mutex<Receiver<String>>>,
-    pub event_tx: Sender<String>,
+    pub event_tx: Option<Sender<String>>,
 }
 
 impl Sandbox {
@@ -76,7 +76,7 @@ impl Sandbox {
             rtnl: Handle::new()?,
             hooks: None,
             event_rx,
-            event_tx: tx,
+            event_tx: Some(tx),
         })
     }
 
@@ -311,8 +311,17 @@ impl Sandbox {
     }
 
     pub async fn run_oom_event_monitor(&self, mut rx: Receiver<String>, container_id: String) {
-        let tx = self.event_tx.clone();
         let logger = self.logger.clone();
+
+        if self.event_tx.is_none() {
+            error!(
+                logger,
+                "sandbox.event_tx not found in run_oom_event_monitor"
+            );
+            return;
+        }
+
+        let tx = self.event_tx.as_ref().unwrap().clone();
 
         tokio::spawn(async move {
             loop {
