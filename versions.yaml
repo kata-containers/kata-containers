@@ -88,8 +88,7 @@ assets:
     qemu:
       description: "VMM that uses KVM"
       url: "https://github.com/qemu/qemu"
-      version: "5.2.0"
-      tag: "v5.2.0"
+      version: "v5.2.0"
       # Do not include any non-full release versions
       # Break the line *without CR or space being appended*, to appease
       # yamllint, and note the deliberate ' ' at the end of the expression.
@@ -100,15 +99,15 @@ assets:
         .*/v?(\d\S+)\.tar\.gz
       architecture:
         aarch64:
-          version: "5.1.0"
+          version: "v5.1.0"
           branch: "master"
           tag: "v5.1.0"
           commit: "d0ed6a69d399ae193959225cdeaa9382746c91cc"
 
     qemu-experimental:
       description: "QEMU with virtiofs support"
-      url: "https://gitlab.com/virtio-fs/qemu.git"
-      tag: "qemu5.0-virtiofs-with51bits-dax"
+      url: "https://gitlab.com/virtio-fs/qemu"
+      version: "qemu5.0-virtiofs-with51bits-dax"
 
   image:
     description: |
