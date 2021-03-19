@@ -27,6 +27,22 @@ const VSOCK_PORT: u16 = 1024;
 const SERVER_ADDR_ENV_VAR: &str = "KATA_AGENT_SERVER_ADDR";
 const LOG_LEVEL_ENV_VAR: &str = "KATA_AGENT_LOG_LEVEL";
 
+const ERR_INVALID_LOG_LEVEL: &str = "invalid log level";
+const ERR_INVALID_LOG_LEVEL_PARAM: &str = "invalid log level parameter";
+const ERR_INVALID_GET_VALUE_PARAM: &str = "expected name=value";
+const ERR_INVALID_GET_VALUE_NO_NAME: &str = "name=value parameter missing name";
+const ERR_INVALID_GET_VALUE_NO_VALUE: &str = "name=value parameter missing value";
+const ERR_INVALID_LOG_LEVEL_KEY: &str = "invalid log level key name";
+
+const ERR_INVALID_HOTPLUG_TIMEOUT: &str = "invalid hotplug timeout parameter";
+const ERR_INVALID_HOTPLUG_TIMEOUT_PARAM: &str = "unable to parse hotplug timeout";
+const ERR_INVALID_HOTPLUG_TIMEOUT_KEY: &str = "invalid hotplug timeout key name";
+
+const ERR_INVALID_CONTAINER_PIPE_SIZE: &str = "invalid container pipe size parameter";
+const ERR_INVALID_CONTAINER_PIPE_SIZE_PARAM: &str = "unable to parse container pipe size";
+const ERR_INVALID_CONTAINER_PIPE_SIZE_KEY: &str = "invalid container pipe size key name";
+const ERR_INVALID_CONTAINER_PIPE_NEGATIVE: &str = "container pipe size should not be negative";
+
 #[derive(Debug)]
 pub struct AgentConfig {
     pub debug_console: bool,
@@ -184,7 +200,7 @@ fn logrus_to_slog_level(logrus_level: &str) -> Result<slog::Level> {
         "trace" => slog::Level::Trace,
 
         _ => {
-            return Err(anyhow!("invalid log level"));
+            return Err(anyhow!(ERR_INVALID_LOG_LEVEL));
         }
     };
 
@@ -195,11 +211,11 @@ fn get_log_level(param: &str) -> Result<slog::Level> {
     let fields: Vec<&str> = param.split('=').collect();
 
     if fields.len() != 2 {
-        return Err(anyhow!("invalid log level parameter"));
+        return Err(anyhow!(ERR_INVALID_LOG_LEVEL_PARAM));
     }
 
     if fields[0] != LOG_LEVEL_OPTION {
-        Err(anyhow!("invalid log level key name"))
+        Err(anyhow!(ERR_INVALID_LOG_LEVEL_KEY))
     } else {
         Ok(logrus_to_slog_level(fields[1])?)
     }
@@ -209,17 +225,17 @@ fn get_hotplug_timeout(param: &str) -> Result<time::Duration> {
     let fields: Vec<&str> = param.split('=').collect();
 
     if fields.len() != 2 {
-        return Err(anyhow!("invalid hotplug timeout parameter"));
+        return Err(anyhow!(ERR_INVALID_HOTPLUG_TIMEOUT));
     }
 
     let key = fields[0];
     if key != HOTPLUG_TIMOUT_OPTION {
-        return Err(anyhow!("invalid hotplug timeout key name"));
+        return Err(anyhow!(ERR_INVALID_HOTPLUG_TIMEOUT_KEY));
     }
 
     let value = fields[1].parse::<u64>();
     if value.is_err() {
-        return Err(anyhow!("unable to parse hotplug timeout"));
+        return Err(anyhow!(ERR_INVALID_HOTPLUG_TIMEOUT_PARAM));
     }
 
     Ok(time::Duration::from_secs(value.unwrap()))
@@ -253,17 +269,17 @@ fn get_string_value(param: &str) -> Result<String> {
     let fields: Vec<&str> = param.split('=').collect();
 
     if fields.len() < 2 {
-        return Err(anyhow!("expected name=value"));
+        return Err(anyhow!(ERR_INVALID_GET_VALUE_PARAM));
     }
 
     // We need name (but the value can be blank)
     if fields[0] == "" {
-        return Err(anyhow!("name=value parameter missing name"));
+        return Err(anyhow!(ERR_INVALID_GET_VALUE_NO_NAME));
     }
 
     let value = fields[1..].join("=");
     if value == "" {
-        return Err(anyhow!("name=value parameter missing value"));
+        return Err(anyhow!(ERR_INVALID_GET_VALUE_NO_VALUE));
     }
 
     Ok(value)
@@ -273,22 +289,22 @@ fn get_container_pipe_size(param: &str) -> Result<i32> {
     let fields: Vec<&str> = param.split('=').collect();
 
     if fields.len() != 2 {
-        return Err(anyhow!("invalid container pipe size parameter"));
+        return Err(anyhow!(ERR_INVALID_CONTAINER_PIPE_SIZE));
     }
 
     let key = fields[0];
     if key != CONTAINER_PIPE_SIZE_OPTION {
-        return Err(anyhow!("invalid container pipe size key name"));
+        return Err(anyhow!(ERR_INVALID_CONTAINER_PIPE_SIZE_KEY));
     }
 
     let res = fields[1].parse::<i32>();
     if res.is_err() {
-        return Err(anyhow!("unable to parse container pipe size"));
+        return Err(anyhow!(ERR_INVALID_CONTAINER_PIPE_SIZE_PARAM));
     }
 
     let value = res.unwrap();
     if value < 0 {
-        return Err(anyhow!("container pipe size should not be negative"));
+        return Err(anyhow!(ERR_INVALID_CONTAINER_PIPE_NEGATIVE));
     }
 
     Ok(value)
@@ -302,22 +318,6 @@ mod tests {
     use std::io::Write;
     use std::time;
     use tempfile::tempdir;
-
-    const ERR_INVALID_LOG_LEVEL: &str = "invalid log level";
-    const ERR_INVALID_LOG_LEVEL_PARAM: &str = "invalid log level parameter";
-    const ERR_INVALID_GET_VALUE_PARAM: &str = "expected name=value";
-    const ERR_INVALID_GET_VALUE_NO_NAME: &str = "name=value parameter missing name";
-    const ERR_INVALID_GET_VALUE_NO_VALUE: &str = "name=value parameter missing value";
-    const ERR_INVALID_LOG_LEVEL_KEY: &str = "invalid log level key name";
-
-    const ERR_INVALID_HOTPLUG_TIMEOUT: &str = "invalid hotplug timeout parameter";
-    const ERR_INVALID_HOTPLUG_TIMEOUT_PARAM: &str = "unable to parse hotplug timeout";
-    const ERR_INVALID_HOTPLUG_TIMEOUT_KEY: &str = "invalid hotplug timeout key name";
-
-    const ERR_INVALID_CONTAINER_PIPE_SIZE: &str = "invalid container pipe size parameter";
-    const ERR_INVALID_CONTAINER_PIPE_SIZE_PARAM: &str = "unable to parse container pipe size";
-    const ERR_INVALID_CONTAINER_PIPE_SIZE_KEY: &str = "invalid container pipe size key name";
-    const ERR_INVALID_CONTAINER_PIPE_NEGATIVE: &str = "container pipe size should not be negative";
 
     // helper function to make errors less crazy-long
     fn make_err(desc: &str) -> Error {
