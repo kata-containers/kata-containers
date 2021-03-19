@@ -5,7 +5,10 @@
 
 package types
 
-import "fmt"
+import (
+	"context"
+	"fmt"
+)
 
 // Type represents a type of bus and bridge.
 type Type string
@@ -64,7 +67,7 @@ func NewBridge(bt Type, id string, devices map[uint32]string, addr int) Bridge {
 	}
 }
 
-func (b *Bridge) AddDevice(ID string) (uint32, error) {
+func (b *Bridge) AddDevice(ctx context.Context, ID string) (uint32, error) {
 	var addr uint32
 
 	// looking for the first available address

@@ -6,6 +6,7 @@
 package containerdshim
 
 import (
+	"context"
 	"time"
 
 	mutils "github.com/kata-containers/kata-containers/src/runtime/pkg/utils"
@@ -135,15 +136,15 @@ func updateShimMetrics() error {
 }
 
 // statsSandbox returns a detailed sandbox stats.
-func (s *service) statsSandbox() (vc.SandboxStats, []vc.ContainerStats, error) {
-	sandboxStats, err := s.sandbox.Stats()
+func (s *service) statsSandbox(ctx context.Context) (vc.SandboxStats, []vc.ContainerStats, error) {
+	sandboxStats, err := s.sandbox.Stats(ctx)
 	if err != nil {
 		return vc.SandboxStats{}, []vc.ContainerStats{}, err
 	}
 
 	containerStats := []vc.ContainerStats{}
 	for _, c := range s.sandbox.GetAllContainers() {
-		cstats, err := s.sandbox.StatsContainer(c.ID())
+		cstats, err := s.sandbox.StatsContainer(ctx, c.ID())
 		if err != nil {
 			return vc.SandboxStats{}, []vc.ContainerStats{}, err
 		}
@@ -179,9 +180,9 @@ func calcOverhead(initialSandboxStats, finishSandboxStats vc.SandboxStats, initi
 	return float64(hostMemoryUsage - guestMemoryUsage), float64(cpuUsageHost - cpuUsageGuest)
 }
 
-func (s *service) getPodOverhead() (float64, float64, error) {
+func (s *service) getPodOverhead(ctx context.Context) (float64, float64, error) {
 	initTime := time.Now().UnixNano()
-	initialSandboxStats, initialContainerStats, err := s.statsSandbox()
+	initialSandboxStats, initialContainerStats, err := s.statsSandbox(ctx)
 	if err != nil {
 		return 0, 0, err
 	}
@@ -191,7 +192,7 @@ func (s *service) getPodOverhead() (float64, float64, error) {
 	finishtTime := time.Now().UnixNano()
 	deltaTime := float64(finishtTime - initTime)
 
-	finishSandboxStats, finishContainersStats, err := s.statsSandbox()
+	finishSandboxStats, finishContainersStats, err := s.statsSandbox(ctx)
 	if err != nil {
 		return 0, 0, err
 	}
@@ -199,8 +200,8 @@ func (s *service) getPodOverhead() (float64, float64, error) {
 	return mem, cpu, nil
 }
 
-func (s *service) setPodOverheadMetrics() error {
-	mem, cpu, err := s.getPodOverhead()
+func (s *service) setPodOverheadMetrics(ctx context.Context) error {
+	mem, cpu, err := s.getPodOverhead(ctx)
 	if err != nil {
 		return err
 	}

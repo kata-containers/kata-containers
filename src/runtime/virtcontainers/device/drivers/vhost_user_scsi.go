@@ -7,6 +7,7 @@
 package drivers
 
 import (
+	"context"
 	"encoding/hex"
 
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/api"
@@ -27,7 +28,7 @@ type VhostUserSCSIDevice struct {
 
 // Attach is standard interface of api.Device, it's used to add device to some
 // DeviceReceiver
-func (device *VhostUserSCSIDevice) Attach(devReceiver api.DeviceReceiver) (err error) {
+func (device *VhostUserSCSIDevice) Attach(ctx context.Context, devReceiver api.DeviceReceiver) (err error) {
 	skip, err := device.bumpAttachCount(true)
 	if err != nil {
 		return err
@@ -52,12 +53,12 @@ func (device *VhostUserSCSIDevice) Attach(devReceiver api.DeviceReceiver) (err e
 	device.DevID = id
 	device.Type = device.DeviceType()
 
-	return devReceiver.AppendDevice(device)
+	return devReceiver.AppendDevice(ctx, device)
 }
 
 // Detach is standard interface of api.Device, it's used to remove device from some
 // DeviceReceiver
-func (device *VhostUserSCSIDevice) Detach(devReceiver api.DeviceReceiver) error {
+func (device *VhostUserSCSIDevice) Detach(ctx context.Context, devReceiver api.DeviceReceiver) error {
 	_, err := device.bumpAttachCount(false)
 	return err
 }

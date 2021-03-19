@@ -6,6 +6,7 @@
 package virtcontainers
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -133,13 +134,15 @@ func TestUpdateCgroups(t *testing.T) {
 		config: &SandboxConfig{SandboxCgroupOnly: false},
 	}
 
+	ctx := context.Background()
+
 	// empty path
-	err := s.cgroupsUpdate()
+	err := s.cgroupsUpdate(ctx)
 	assert.NoError(err)
 
 	// path doesn't exist
 	s.state.CgroupPath = "/abc/123/rgb"
-	err = s.cgroupsUpdate()
+	err = s.cgroupsUpdate(ctx)
 	assert.Error(err)
 
 	if os.Getuid() != 0 {
@@ -153,7 +156,7 @@ func TestUpdateCgroups(t *testing.T) {
 	s.hypervisor = &mockHypervisor{mockPid: 0}
 
 	// bad pid
-	err = s.cgroupsUpdate()
+	err = s.cgroupsUpdate(ctx)
 	assert.Error(err)
 
 	// fake workload
@@ -162,7 +165,7 @@ func TestUpdateCgroups(t *testing.T) {
 	s.hypervisor = &mockHypervisor{mockPid: cmd.Process.Pid}
 
 	// no containers
-	err = s.cgroupsUpdate()
+	err = s.cgroupsUpdate(ctx)
 	assert.NoError(err)
 
 	s.config = &SandboxConfig{}
@@ -189,7 +192,7 @@ func TestUpdateCgroups(t *testing.T) {
 		},
 	}
 
-	err = s.cgroupsUpdate()
+	err = s.cgroupsUpdate(context.Background())
 	assert.NoError(err)
 
 	// cleanup

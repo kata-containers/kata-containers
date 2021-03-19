@@ -149,8 +149,8 @@ func (a *Acrn) kernelParameters() string {
 }
 
 // Adds all capabilities supported by Acrn implementation of hypervisor interface
-func (a *Acrn) capabilities() types.Capabilities {
-	span, _ := a.trace("capabilities")
+func (a *Acrn) capabilities(ctx context.Context) types.Capabilities {
+	span, _ := a.trace(ctx, "capabilities")
 	defer span.End()
 
 	return a.arch.capabilities()
@@ -207,14 +207,14 @@ func (a *Acrn) Logger() *logrus.Entry {
 	return virtLog.WithField("subsystem", "acrn")
 }
 
-func (a *Acrn) trace(name string) (otelTrace.Span, context.Context) {
-	if a.ctx == nil {
+func (a *Acrn) trace(parent context.Context, name string) (otelTrace.Span, context.Context) {
+	if parent == nil {
 		a.Logger().WithField("type", "bug").Error("trace called before context set")
-		a.ctx = context.Background()
+		parent = context.Background()
 	}
 
 	tracer := otel.Tracer("kata")
-	ctx, span := tracer.Start(a.ctx, name)
+	ctx, span := tracer.Start(parent, name)
 	span.SetAttributes([]label.KeyValue{label.Key("subsystem").String("hypervisor"), label.Key("type").String("acrn")}...)
 
 	return span, ctx
@@ -248,14 +248,14 @@ func (a *Acrn) appendImage(devices []Device, imagePath string) ([]Device, error)
 	return devices, nil
 }
 
-func (a *Acrn) buildDevices(imagePath string) ([]Device, error) {
+func (a *Acrn) buildDevices(ctx context.Context, imagePath string) ([]Device, error) {
 	var devices []Device
 
 	if imagePath == "" {
 		return nil, fmt.Errorf("Image Path should not be empty: %s", imagePath)
 	}
 
-	_, console, err := a.getSandboxConsole(a.id)
+	_, console, err := a.getSandboxConsole(ctx, a.id)
 	if err != nil {
 		return nil, err
 	}
@@ -278,7 +278,7 @@ func (a *Acrn) buildDevices(imagePath string) ([]Device, error) {
 	// holder for container rootfs (as acrn doesn't support hot-plug).
 	// Once the container rootfs is known, replace the dummy backend
 	// with actual path (using block rescan feature in acrn)
-	devices, err = a.createDummyVirtioBlkDev(devices)
+	devices, err = a.createDummyVirtioBlkDev(ctx, devices)
 	if err != nil {
 		return nil, err
 	}
@@ -287,8 +287,8 @@ func (a *Acrn) buildDevices(imagePath string) ([]Device, error) {
 }
 
 // setup sets the Acrn structure up.
-func (a *Acrn) setup(id string, hypervisorConfig *HypervisorConfig) error {
-	span, _ := a.trace("setup")
+func (a *Acrn) setup(ctx context.Context, id string, hypervisorConfig *HypervisorConfig) error {
+	span, _ := a.trace(ctx, "setup")
 	defer span.End()
 
 	err := hypervisorConfig.valid()
@@ -330,8 +330,8 @@ func (a *Acrn) setup(id string, hypervisorConfig *HypervisorConfig) error {
 	return nil
 }
 
-func (a *Acrn) createDummyVirtioBlkDev(devices []Device) ([]Device, error) {
-	span, _ := a.trace("createDummyVirtioBlkDev")
+func (a *Acrn) createDummyVirtioBlkDev(ctx context.Context, devices []Device) ([]Device, error) {
+	span, _ := a.trace(ctx, "createDummyVirtioBlkDev")
 	defer span.End()
 
 	// Since acrn doesn't support hot-plug, dummy virtio-blk
@@ -354,10 +354,11 @@ func (a *Acrn) createSandbox(ctx context.Context, id string, networkNS NetworkNa
 	// Save the tracing context
 	a.ctx = ctx
 
-	span, _ := a.trace("createSandbox")
+	var span otelTrace.Span
+	span, ctx = a.trace(ctx, "createSandbox")
 	defer span.End()
 
-	if err := a.setup(id, hypervisorConfig); err != nil {
+	if err := a.setup(ctx, id, hypervisorConfig); err != nil {
 		return err
 	}
 
@@ -386,7 +387,7 @@ func (a *Acrn) createSandbox(ctx context.Context, id string, networkNS NetworkNa
 		return fmt.Errorf("ACRN UUID should not be empty")
 	}
 
-	devices, err := a.buildDevices(imagePath)
+	devices, err := a.buildDevices(ctx, imagePath)
 	if err != nil {
 		return err
 	}
@@ -418,8 +419,8 @@ func (a *Acrn) createSandbox(ctx context.Context, id string, networkNS NetworkNa
 }
 
 // startSandbox will start the Sandbox's VM.
-func (a *Acrn) startSandbox(timeoutSecs int) error {
-	span, _ := a.trace("startSandbox")
+func (a *Acrn) startSandbox(ctx context.Context, timeoutSecs int) error {
+	span, ctx := a.trace(ctx, "startSandbox")
 	defer span.End()
 
 	if a.config.Debug {
@@ -455,7 +456,7 @@ func (a *Acrn) startSandbox(timeoutSecs int) error {
 	}
 	a.state.PID = PID
 
-	if err = a.waitSandbox(timeoutSecs); err != nil {
+	if err = a.waitSandbox(ctx, timeoutSecs); err != nil {
 		a.Logger().WithField("acrn wait failed:", err).Debug()
 		return err
 	}
@@ -464,8 +465,8 @@ func (a *Acrn) startSandbox(timeoutSecs int) error {
 }
 
 // waitSandbox will wait for the Sandbox's VM to be up and running.
-func (a *Acrn) waitSandbox(timeoutSecs int) error {
-	span, _ := a.trace("waitSandbox")
+func (a *Acrn) waitSandbox(ctx context.Context, timeoutSecs int) error {
+	span, _ := a.trace(ctx, "waitSandbox")
 	defer span.End()
 
 	if timeoutSecs < 0 {
@@ -478,8 +479,8 @@ func (a *Acrn) waitSandbox(timeoutSecs int) error {
 }
 
 // stopSandbox will stop the Sandbox's VM.
-func (a *Acrn) stopSandbox() (err error) {
-	span, _ := a.trace("stopSandbox")
+func (a *Acrn) stopSandbox(ctx context.Context) (err error) {
+	span, _ := a.trace(ctx, "stopSandbox")
 	defer span.End()
 
 	a.Logger().Info("Stopping acrn VM")
@@ -568,8 +569,8 @@ func (a *Acrn) updateBlockDevice(drive *config.BlockDrive) error {
 	return err
 }
 
-func (a *Acrn) hotplugAddDevice(devInfo interface{}, devType deviceType) (interface{}, error) {
-	span, _ := a.trace("hotplugAddDevice")
+func (a *Acrn) hotplugAddDevice(ctx context.Context, devInfo interface{}, devType deviceType) (interface{}, error) {
+	span, ctx := a.trace(ctx, "hotplugAddDevice")
 	defer span.End()
 
 	switch devType {
@@ -582,8 +583,8 @@ func (a *Acrn) hotplugAddDevice(devInfo interface{}, devType deviceType) (interf
 	}
 }
 
-func (a *Acrn) hotplugRemoveDevice(devInfo interface{}, devType deviceType) (interface{}, error) {
-	span, _ := a.trace("hotplugRemoveDevice")
+func (a *Acrn) hotplugRemoveDevice(ctx context.Context, devInfo interface{}, devType deviceType) (interface{}, error) {
+	span, ctx := a.trace(ctx, "hotplugRemoveDevice")
 	defer span.End()
 
 	// Not supported. return success
@@ -591,8 +592,8 @@ func (a *Acrn) hotplugRemoveDevice(devInfo interface{}, devType deviceType) (int
 	return nil, nil
 }
 
-func (a *Acrn) pauseSandbox() error {
-	span, _ := a.trace("pauseSandbox")
+func (a *Acrn) pauseSandbox(ctx context.Context) error {
+	span, _ := a.trace(ctx, "pauseSandbox")
 	defer span.End()
 
 	// Not supported. return success
@@ -600,8 +601,8 @@ func (a *Acrn) pauseSandbox() error {
 	return nil
 }
 
-func (a *Acrn) resumeSandbox() error {
-	span, _ := a.trace("resumeSandbox")
+func (a *Acrn) resumeSandbox(ctx context.Context) error {
+	span, _ := a.trace(ctx, "resumeSandbox")
 	defer span.End()
 
 	// Not supported. return success
@@ -610,9 +611,9 @@ func (a *Acrn) resumeSandbox() error {
 }
 
 // addDevice will add extra devices to acrn command line.
-func (a *Acrn) addDevice(devInfo interface{}, devType deviceType) error {
+func (a *Acrn) addDevice(ctx context.Context, devInfo interface{}, devType deviceType) error {
 	var err error
-	span, _ := a.trace("addDevice")
+	span, _ := a.trace(ctx, "addDevice")
 	defer span.End()
 
 	switch v := devInfo.(type) {
@@ -644,8 +645,8 @@ func (a *Acrn) addDevice(devInfo interface{}, devType deviceType) error {
 
 // getSandboxConsole builds the path of the console where we can read
 // logs coming from the sandbox.
-func (a *Acrn) getSandboxConsole(id string) (string, string, error) {
-	span, _ := a.trace("getSandboxConsole")
+func (a *Acrn) getSandboxConsole(ctx context.Context, id string) (string, string, error) {
+	span, _ := a.trace(ctx, "getSandboxConsole")
 	defer span.End()
 
 	consoleURL, err := utils.BuildSocketPath(a.store.RunVMStoragePath(), id, acrnConsoleSocket)
@@ -664,15 +665,15 @@ func (a *Acrn) saveSandbox() error {
 	return nil
 }
 
-func (a *Acrn) disconnect() {
-	span, _ := a.trace("disconnect")
+func (a *Acrn) disconnect(ctx context.Context) {
+	span, _ := a.trace(ctx, "disconnect")
 	defer span.End()
 
 	// Not supported.
 }
 
-func (a *Acrn) getThreadIDs() (vcpuThreadIDs, error) {
-	span, _ := a.trace("getThreadIDs")
+func (a *Acrn) getThreadIDs(ctx context.Context) (vcpuThreadIDs, error) {
+	span, _ := a.trace(ctx, "getThreadIDs")
 	defer span.End()
 
 	// Not supported. return success
@@ -681,16 +682,16 @@ func (a *Acrn) getThreadIDs() (vcpuThreadIDs, error) {
 	return vcpuThreadIDs{}, nil
 }
 
-func (a *Acrn) resizeMemory(reqMemMB uint32, memoryBlockSizeMB uint32, probe bool) (uint32, memoryDevice, error) {
+func (a *Acrn) resizeMemory(ctx context.Context, reqMemMB uint32, memoryBlockSizeMB uint32, probe bool) (uint32, memoryDevice, error) {
 	return 0, memoryDevice{}, nil
 }
 
-func (a *Acrn) resizeVCPUs(reqVCPUs uint32) (currentVCPUs uint32, newVCPUs uint32, err error) {
+func (a *Acrn) resizeVCPUs(ctx context.Context, reqVCPUs uint32) (currentVCPUs uint32, newVCPUs uint32, err error) {
 	return 0, 0, nil
 }
 
-func (a *Acrn) cleanup() error {
-	span, _ := a.trace("cleanup")
+func (a *Acrn) cleanup(ctx context.Context) error {
+	span, _ := a.trace(ctx, "cleanup")
 	defer span.End()
 
 	return nil
@@ -704,7 +705,7 @@ func (a *Acrn) fromGrpc(ctx context.Context, hypervisorConfig *HypervisorConfig,
 	return errors.New("acrn is not supported by VM cache")
 }
 
-func (a *Acrn) toGrpc() ([]byte, error) {
+func (a *Acrn) toGrpc(ctx context.Context) ([]byte, error) {
 	return nil, errors.New("acrn is not supported by VM cache")
 }
 

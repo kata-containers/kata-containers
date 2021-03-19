@@ -353,14 +353,14 @@ func (c *Container) Logger() *logrus.Entry {
 	})
 }
 
-func (c *Container) trace(name string) (otelTrace.Span, context.Context) {
-	if c.ctx == nil {
+func (c *Container) trace(parent context.Context, name string) (otelTrace.Span, context.Context) {
+	if parent == nil {
 		c.Logger().WithField("type", "bug").Error("trace called before context set")
-		c.ctx = context.Background()
+		parent = context.Background()
 	}
 
 	tracer := otel.Tracer("kata")
-	ctx, span := tracer.Start(c.ctx, name)
+	ctx, span := tracer.Start(parent, name)
 	span.SetAttributes(otelLabel.Key("subsystem").String("container"))
 
 	return span, ctx
@@ -437,7 +437,7 @@ func (c *Container) setContainerState(state types.StateString) error {
 	return nil
 }
 
-func (c *Container) shareFiles(m Mount, idx int, hostSharedDir, hostMountDir, guestSharedDir string) (string, bool, error) {
+func (c *Container) shareFiles(ctx context.Context, m Mount, idx int, hostSharedDir, hostMountDir, guestSharedDir string) (string, bool, error) {
 	randBytes, err := utils.GenerateRandomBytes(8)
 	if err != nil {
 		return "", false, err
@@ -448,7 +448,7 @@ func (c *Container) shareFiles(m Mount, idx int, hostSharedDir, hostMountDir, gu
 
 	// copy file to contaier's rootfs if filesystem sharing is not supported, otherwise
 	// bind mount it in the shared directory.
-	caps := c.sandbox.hypervisor.capabilities()
+	caps := c.sandbox.hypervisor.capabilities(ctx)
 	if !caps.IsFsSharingSupported() {
 		c.Logger().Debug("filesystem sharing is not supported, files will be copied")
 
@@ -466,13 +466,13 @@ func (c *Container) shareFiles(m Mount, idx int, hostSharedDir, hostMountDir, gu
 			return "", true, nil
 		}
 
-		if err := c.sandbox.agent.copyFile(m.Source, guestDest); err != nil {
+		if err := c.sandbox.agent.copyFile(ctx, m.Source, guestDest); err != nil {
 			return "", false, err
 		}
 	} else {
 		// These mounts are created in the shared dir
 		mountDest := filepath.Join(hostMountDir, filename)
-		if err := bindMount(c.ctx, m.Source, mountDest, m.ReadOnly, "private"); err != nil {
+		if err := bindMount(ctx, m.Source, mountDest, m.ReadOnly, "private"); err != nil {
 			return "", false, err
 		}
 		// Save HostPath mount value into the mount list of the container.
@@ -494,14 +494,14 @@ func (c *Container) shareFiles(m Mount, idx int, hostSharedDir, hostMountDir, gu
 // It also updates the container mount list with the HostPath info, and store
 // container mounts to the storage. This way, we will have the HostPath info
 // available when we will need to unmount those mounts.
-func (c *Container) mountSharedDirMounts(hostSharedDir, hostMountDir, guestSharedDir string) (sharedDirMounts map[string]Mount, ignoredMounts map[string]Mount, err error) {
+func (c *Container) mountSharedDirMounts(ctx context.Context, hostSharedDir, hostMountDir, guestSharedDir string) (sharedDirMounts map[string]Mount, ignoredMounts map[string]Mount, err error) {
 	sharedDirMounts = make(map[string]Mount)
 	ignoredMounts = make(map[string]Mount)
 	var devicesToDetach []string
 	defer func() {
 		if err != nil {
 			for _, id := range devicesToDetach {
-				c.sandbox.devManager.DetachDevice(id, c.sandbox)
+				c.sandbox.devManager.DetachDevice(ctx, id, c.sandbox)
 			}
 		}
 	}()
@@ -517,7 +517,7 @@ func (c *Container) mountSharedDirMounts(hostSharedDir, hostMountDir, guestShare
 		// instead of passing this as a shared mount:
 		if len(m.BlockDeviceID) > 0 {
 			// Attach this block device, all other devices passed in the config have been attached at this point
-			if err = c.sandbox.devManager.AttachDevice(m.BlockDeviceID, c.sandbox); err != nil {
+			if err = c.sandbox.devManager.AttachDevice(ctx, m.BlockDeviceID, c.sandbox); err != nil {
 				return nil, nil, err
 			}
 			devicesToDetach = append(devicesToDetach, m.BlockDeviceID)
@@ -545,7 +545,7 @@ func (c *Container) mountSharedDirMounts(hostSharedDir, hostMountDir, guestShare
 
 		var ignore bool
 		var guestDest string
-		guestDest, ignore, err = c.shareFiles(m, idx, hostSharedDir, hostMountDir, guestSharedDir)
+		guestDest, ignore, err = c.shareFiles(ctx, m, idx, hostSharedDir, hostMountDir, guestSharedDir)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -570,14 +570,14 @@ func (c *Container) mountSharedDirMounts(hostSharedDir, hostMountDir, guestShare
 	return sharedDirMounts, ignoredMounts, nil
 }
 
-func (c *Container) unmountHostMounts() error {
+func (c *Container) unmountHostMounts(ctx context.Context) error {
 	var span otelTrace.Span
-	span, c.ctx = c.trace("unmountHostMounts")
+	span, ctx = c.trace(ctx, "unmountHostMounts")
 	defer span.End()
 
 	for _, m := range c.mounts {
 		if m.HostPath != "" {
-			span, _ := c.trace("unmount")
+			span, _ := c.trace(ctx, "unmount")
 			span.SetAttributes(otelLabel.Key("host-path").String(m.HostPath))
 
 			if err := syscall.Unmount(m.HostPath, syscall.MNT_DETACH|UmountNoFollow); err != nil {
@@ -634,8 +634,8 @@ func filterDevices(c *Container, devices []ContainerDevice) (ret []ContainerDevi
 // Add any mount based block devices to the device manager and save the
 // device ID for the particular mount. This'll occur when the mountpoint source
 // is a block device.
-func (c *Container) createBlockDevices() error {
-	if !c.checkBlockDeviceSupport() {
+func (c *Container) createBlockDevices(ctx context.Context) error {
+	if !c.checkBlockDeviceSupport(ctx) {
 		c.Logger().Warn("Block device not supported")
 		return nil
 	}
@@ -699,8 +699,8 @@ func (c *Container) createBlockDevices() error {
 }
 
 // newContainer creates a Container structure from a sandbox and a container configuration.
-func newContainer(sandbox *Sandbox, contConfig *ContainerConfig) (*Container, error) {
-	span, _ := sandbox.trace("newContainer")
+func newContainer(ctx context.Context, sandbox *Sandbox, contConfig *ContainerConfig) (*Container, error) {
+	span, ctx := sandbox.trace(ctx, "newContainer")
 	defer span.End()
 
 	if !contConfig.valid() {
@@ -734,7 +734,7 @@ func newContainer(sandbox *Sandbox, contConfig *ContainerConfig) (*Container, er
 	}
 
 	// If mounts are block devices, add to devmanager
-	if err := c.createMounts(); err != nil {
+	if err := c.createMounts(ctx); err != nil {
 		return nil, err
 	}
 
@@ -746,9 +746,9 @@ func newContainer(sandbox *Sandbox, contConfig *ContainerConfig) (*Container, er
 	return c, nil
 }
 
-func (c *Container) createMounts() error {
+func (c *Container) createMounts(ctx context.Context) error {
 	// Create block devices for newly created container
-	return c.createBlockDevices()
+	return c.createBlockDevices(ctx)
 }
 
 func (c *Container) createDevices(contConfig *ContainerConfig) error {
@@ -777,25 +777,25 @@ func (c *Container) createDevices(contConfig *ContainerConfig) error {
 // been performed before the container creation failed.
 // - Unplug CPU and memory resources from the VM.
 // - Unplug devices from the VM.
-func (c *Container) rollbackFailingContainerCreation() {
-	if err := c.detachDevices(); err != nil {
+func (c *Container) rollbackFailingContainerCreation(ctx context.Context) {
+	if err := c.detachDevices(ctx); err != nil {
 		c.Logger().WithError(err).Error("rollback failed detachDevices()")
 	}
-	if err := c.removeDrive(); err != nil {
+	if err := c.removeDrive(ctx); err != nil {
 		c.Logger().WithError(err).Error("rollback failed removeDrive()")
 	}
-	if err := c.unmountHostMounts(); err != nil {
+	if err := c.unmountHostMounts(ctx); err != nil {
 		c.Logger().WithError(err).Error("rollback failed unmountHostMounts()")
 	}
-	if err := bindUnmountContainerRootfs(c.ctx, getMountPath(c.sandbox.id), c.id); err != nil {
+	if err := bindUnmountContainerRootfs(ctx, getMountPath(c.sandbox.id), c.id); err != nil {
 		c.Logger().WithError(err).Error("rollback failed bindUnmountContainerRootfs()")
 	}
 }
 
-func (c *Container) checkBlockDeviceSupport() bool {
+func (c *Container) checkBlockDeviceSupport(ctx context.Context) bool {
 	if !c.sandbox.config.HypervisorConfig.DisableBlockDeviceUse {
 		agentCaps := c.sandbox.agent.capabilities()
-		hypervisorCaps := c.sandbox.hypervisor.capabilities()
+		hypervisorCaps := c.sandbox.hypervisor.capabilities(ctx)
 
 		if agentCaps.IsBlockDeviceSupported() && hypervisorCaps.IsBlockDeviceHotplugSupported() {
 			return true
@@ -807,19 +807,19 @@ func (c *Container) checkBlockDeviceSupport() bool {
 
 // createContainer creates and start a container inside a Sandbox. It has to be
 // called only when a new container, not known by the sandbox, has to be created.
-func (c *Container) create() (err error) {
+func (c *Container) create(ctx context.Context) (err error) {
 	// In case the container creation fails, the following takes care
 	// of rolling back all the actions previously performed.
 	defer func() {
 		if err != nil {
 			c.Logger().WithError(err).Error("container create failed")
-			c.rollbackFailingContainerCreation()
+			c.rollbackFailingContainerCreation(ctx)
 		}
 	}()
 
-	if c.checkBlockDeviceSupport() {
+	if c.checkBlockDeviceSupport(ctx) {
 		// If the rootfs is backed by a block device, go ahead and hotplug it to the guest
-		if err = c.hotplugDrive(); err != nil {
+		if err = c.hotplugDrive(ctx); err != nil {
 			return
 		}
 	}
@@ -853,7 +853,7 @@ func (c *Container) create() (err error) {
 		"devices":      normalAttachedDevs,
 	}).Info("normal attach devices")
 	if len(normalAttachedDevs) > 0 {
-		if err = c.attachDevices(normalAttachedDevs); err != nil {
+		if err = c.attachDevices(ctx, normalAttachedDevs); err != nil {
 			return
 		}
 	}
@@ -862,7 +862,7 @@ func (c *Container) create() (err error) {
 	// inside the VM
 	c.getSystemMountInfo()
 
-	process, err := c.sandbox.agent.createContainer(c.sandbox, c)
+	process, err := c.sandbox.agent.createContainer(ctx, c.sandbox, c)
 	if err != nil {
 		return err
 	}
@@ -874,7 +874,7 @@ func (c *Container) create() (err error) {
 			"machine_type": machineType,
 			"devices":      delayAttachedDevs,
 		}).Info("lazy attach devices")
-		if err = c.attachDevices(delayAttachedDevs); err != nil {
+		if err = c.attachDevices(ctx, delayAttachedDevs); err != nil {
 			return
 		}
 	}
@@ -892,7 +892,7 @@ func (c *Container) create() (err error) {
 	return nil
 }
 
-func (c *Container) delete() error {
+func (c *Container) delete(ctx context.Context) error {
 	if c.state.State != types.StateReady &&
 		c.state.State != types.StateStopped {
 		return fmt.Errorf("Container not ready or stopped, impossible to delete")
@@ -910,7 +910,7 @@ func (c *Container) delete() error {
 		}
 	}
 
-	return c.sandbox.storeSandbox()
+	return c.sandbox.storeSandbox(ctx)
 }
 
 // checkSandboxRunning validates the container state.
@@ -943,7 +943,7 @@ func (c *Container) getSystemMountInfo() {
 	// TODO Deduce /dev/shm size. See https://github.com/clearcontainers/runtime/issues/138
 }
 
-func (c *Container) start() error {
+func (c *Container) start(ctx context.Context) error {
 	if err := c.checkSandboxRunning("start"); err != nil {
 		return err
 	}
@@ -957,10 +957,10 @@ func (c *Container) start() error {
 		return err
 	}
 
-	if err := c.sandbox.agent.startContainer(c.sandbox, c); err != nil {
+	if err := c.sandbox.agent.startContainer(ctx, c.sandbox, c); err != nil {
 		c.Logger().WithError(err).Error("Failed to start container")
 
-		if err := c.stop(true); err != nil {
+		if err := c.stop(ctx, true); err != nil {
 			c.Logger().WithError(err).Warn("Failed to stop container")
 		}
 		return err
@@ -969,8 +969,9 @@ func (c *Container) start() error {
 	return c.setContainerState(types.StateRunning)
 }
 
-func (c *Container) stop(force bool) error {
-	span, _ := c.trace("stop")
+func (c *Container) stop(ctx context.Context, force bool) error {
+	var span otelTrace.Span
+	span, ctx = c.trace(ctx, "stop")
 	defer span.End()
 
 	// In case the container status has been updated implicitly because
@@ -992,13 +993,13 @@ func (c *Container) stop(force bool) error {
 	// Force the container to be killed. For most of the cases, this
 	// should not matter and it should return an error that will be
 	// ignored.
-	c.kill(syscall.SIGKILL, true)
+	c.kill(ctx, syscall.SIGKILL, true)
 
 	// Since the agent has supported the MultiWaitProcess, it's better to
 	// wait the process here to make sure the process has exited before to
 	// issue stopContainer, otherwise the RemoveContainerRequest in it will
 	// get failed if the process hasn't exited.
-	c.sandbox.agent.waitProcess(c, c.id)
+	c.sandbox.agent.waitProcess(ctx, c, c.id)
 
 	defer func() {
 		// Save device and drive data.
@@ -1008,23 +1009,23 @@ func (c *Container) stop(force bool) error {
 		}
 	}()
 
-	if err := c.sandbox.agent.stopContainer(c.sandbox, *c); err != nil && !force {
+	if err := c.sandbox.agent.stopContainer(ctx, c.sandbox, *c); err != nil && !force {
 		return err
 	}
 
-	if err := c.unmountHostMounts(); err != nil && !force {
+	if err := c.unmountHostMounts(ctx); err != nil && !force {
 		return err
 	}
 
-	if err := bindUnmountContainerRootfs(c.ctx, getMountPath(c.sandbox.id), c.id); err != nil && !force {
+	if err := bindUnmountContainerRootfs(ctx, getMountPath(c.sandbox.id), c.id); err != nil && !force {
 		return err
 	}
 
-	if err := c.detachDevices(); err != nil && !force {
+	if err := c.detachDevices(ctx); err != nil && !force {
 		return err
 	}
 
-	if err := c.removeDrive(); err != nil && !force {
+	if err := c.removeDrive(ctx); err != nil && !force {
 		return err
 	}
 
@@ -1043,7 +1044,7 @@ func (c *Container) stop(force bool) error {
 	return nil
 }
 
-func (c *Container) enter(cmd types.Cmd) (*Process, error) {
+func (c *Container) enter(ctx context.Context, cmd types.Cmd) (*Process, error) {
 	if err := c.checkSandboxRunning("enter"); err != nil {
 		return nil, err
 	}
@@ -1054,7 +1055,7 @@ func (c *Container) enter(cmd types.Cmd) (*Process, error) {
 			"impossible to enter")
 	}
 
-	process, err := c.sandbox.agent.exec(c.sandbox, *c, cmd)
+	process, err := c.sandbox.agent.exec(ctx, c.sandbox, *c, cmd)
 	if err != nil {
 		return nil, err
 	}
@@ -1062,21 +1063,21 @@ func (c *Container) enter(cmd types.Cmd) (*Process, error) {
 	return process, nil
 }
 
-func (c *Container) wait(processID string) (int32, error) {
+func (c *Container) wait(ctx context.Context, processID string) (int32, error) {
 	if c.state.State != types.StateReady &&
 		c.state.State != types.StateRunning {
 		return 0, fmt.Errorf("Container not ready or running, " +
 			"impossible to wait")
 	}
 
-	return c.sandbox.agent.waitProcess(c, processID)
+	return c.sandbox.agent.waitProcess(ctx, c, processID)
 }
 
-func (c *Container) kill(signal syscall.Signal, all bool) error {
-	return c.signalProcess(c.process.Token, signal, all)
+func (c *Container) kill(ctx context.Context, signal syscall.Signal, all bool) error {
+	return c.signalProcess(ctx, c.process.Token, signal, all)
 }
 
-func (c *Container) signalProcess(processID string, signal syscall.Signal, all bool) error {
+func (c *Container) signalProcess(ctx context.Context, processID string, signal syscall.Signal, all bool) error {
 	if c.sandbox.state.State != types.StateReady && c.sandbox.state.State != types.StateRunning {
 		return fmt.Errorf("Sandbox not ready or running, impossible to signal the container")
 	}
@@ -1085,15 +1086,15 @@ func (c *Container) signalProcess(processID string, signal syscall.Signal, all b
 		return fmt.Errorf("Container not ready, running or paused, impossible to signal the container")
 	}
 
-	return c.sandbox.agent.signalProcess(c, processID, signal, all)
+	return c.sandbox.agent.signalProcess(ctx, c, processID, signal, all)
 }
 
-func (c *Container) winsizeProcess(processID string, height, width uint32) error {
+func (c *Container) winsizeProcess(ctx context.Context, processID string, height, width uint32) error {
 	if c.state.State != types.StateReady && c.state.State != types.StateRunning {
 		return fmt.Errorf("Container not ready or running, impossible to signal the container")
 	}
 
-	return c.sandbox.agent.winsizeProcess(c, processID, height, width)
+	return c.sandbox.agent.winsizeProcess(ctx, c, processID, height, width)
 }
 
 func (c *Container) ioStream(processID string) (io.WriteCloser, io.Reader, io.Reader, error) {
@@ -1106,7 +1107,7 @@ func (c *Container) ioStream(processID string) (io.WriteCloser, io.Reader, io.Re
 	return stream.stdin(), stream.stdout(), stream.stderr(), nil
 }
 
-func (c *Container) processList(options ProcessListOptions) (ProcessList, error) {
+func (c *Container) processList(ctx context.Context, options ProcessListOptions) (ProcessList, error) {
 	if err := c.checkSandboxRunning("ps"); err != nil {
 		return nil, err
 	}
@@ -1115,17 +1116,17 @@ func (c *Container) processList(options ProcessListOptions) (ProcessList, error)
 		return nil, fmt.Errorf("Container not running, impossible to list processes")
 	}
 
-	return c.sandbox.agent.processListContainer(c.sandbox, *c, options)
+	return c.sandbox.agent.processListContainer(ctx, c.sandbox, *c, options)
 }
 
-func (c *Container) stats() (*ContainerStats, error) {
+func (c *Container) stats(ctx context.Context) (*ContainerStats, error) {
 	if err := c.checkSandboxRunning("stats"); err != nil {
 		return nil, err
 	}
-	return c.sandbox.agent.statsContainer(c.sandbox, *c)
+	return c.sandbox.agent.statsContainer(ctx, c.sandbox, *c)
 }
 
-func (c *Container) update(resources specs.LinuxResources) error {
+func (c *Container) update(ctx context.Context, resources specs.LinuxResources) error {
 	if err := c.checkSandboxRunning("update"); err != nil {
 		return err
 	}
@@ -1161,7 +1162,7 @@ func (c *Container) update(resources specs.LinuxResources) error {
 		c.config.Resources.Memory.Limit = mem.Limit
 	}
 
-	if err := c.sandbox.updateResources(); err != nil {
+	if err := c.sandbox.updateResources(ctx); err != nil {
 		return err
 	}
 
@@ -1179,10 +1180,10 @@ func (c *Container) update(resources specs.LinuxResources) error {
 		resources.CPU.Cpus = ""
 	}
 
-	return c.sandbox.agent.updateContainer(c.sandbox, *c, resources)
+	return c.sandbox.agent.updateContainer(ctx, c.sandbox, *c, resources)
 }
 
-func (c *Container) pause() error {
+func (c *Container) pause(ctx context.Context) error {
 	if err := c.checkSandboxRunning("pause"); err != nil {
 		return err
 	}
@@ -1191,14 +1192,14 @@ func (c *Container) pause() error {
 		return fmt.Errorf("Container not running, impossible to pause")
 	}
 
-	if err := c.sandbox.agent.pauseContainer(c.sandbox, *c); err != nil {
+	if err := c.sandbox.agent.pauseContainer(ctx, c.sandbox, *c); err != nil {
 		return err
 	}
 
 	return c.setContainerState(types.StatePaused)
 }
 
-func (c *Container) resume() error {
+func (c *Container) resume(ctx context.Context) error {
 	if err := c.checkSandboxRunning("resume"); err != nil {
 		return err
 	}
@@ -1207,7 +1208,7 @@ func (c *Container) resume() error {
 		return fmt.Errorf("Container not paused, impossible to resume")
 	}
 
-	if err := c.sandbox.agent.resumeContainer(c.sandbox, *c); err != nil {
+	if err := c.sandbox.agent.resumeContainer(ctx, c.sandbox, *c); err != nil {
 		return err
 	}
 
@@ -1216,7 +1217,7 @@ func (c *Container) resume() error {
 
 // hotplugDrive will attempt to hotplug the container rootfs if it is backed by a
 // block device
-func (c *Container) hotplugDrive() error {
+func (c *Container) hotplugDrive(ctx context.Context) error {
 	var dev device
 	var err error
 
@@ -1276,7 +1277,7 @@ func (c *Container) hotplugDrive() error {
 		"fs-type":     fsType,
 	}).Info("Block device detected")
 
-	if err = c.plugDevice(devicePath); err != nil {
+	if err = c.plugDevice(ctx, devicePath); err != nil {
 		return err
 	}
 
@@ -1284,13 +1285,13 @@ func (c *Container) hotplugDrive() error {
 }
 
 // plugDevice will attach the rootfs if blockdevice is supported (this is rootfs specific)
-func (c *Container) plugDevice(devicePath string) error {
+func (c *Container) plugDevice(ctx context.Context, devicePath string) error {
 	var stat unix.Stat_t
 	if err := unix.Stat(devicePath, &stat); err != nil {
 		return fmt.Errorf("stat %q failed: %v", devicePath, err)
 	}
 
-	if c.checkBlockDeviceSupport() && stat.Mode&unix.S_IFBLK == unix.S_IFBLK {
+	if c.checkBlockDeviceSupport(ctx) && stat.Mode&unix.S_IFBLK == unix.S_IFBLK {
 		b, err := c.sandbox.devManager.NewDevice(config.DeviceInfo{
 			HostPath:      devicePath,
 			ContainerPath: filepath.Join(kataGuestSharedDir(), c.id),
@@ -1305,7 +1306,7 @@ func (c *Container) plugDevice(devicePath string) error {
 		c.state.BlockDeviceID = b.DeviceID()
 
 		// attach rootfs device
-		if err := c.sandbox.devManager.AttachDevice(b.DeviceID(), c.sandbox); err != nil {
+		if err := c.sandbox.devManager.AttachDevice(ctx, b.DeviceID(), c.sandbox); err != nil {
 			return err
 		}
 	}
@@ -1317,12 +1318,12 @@ func (c *Container) isDriveUsed() bool {
 	return !(c.state.Fstype == "")
 }
 
-func (c *Container) removeDrive() (err error) {
+func (c *Container) removeDrive(ctx context.Context) (err error) {
 	if c.isDriveUsed() {
 		c.Logger().Info("unplugging block device")
 
 		devID := c.state.BlockDeviceID
-		err := c.sandbox.devManager.DetachDevice(devID, c.sandbox)
+		err := c.sandbox.devManager.DetachDevice(ctx, devID, c.sandbox)
 		if err != nil && err != manager.ErrDeviceNotAttached {
 			return err
 		}
@@ -1343,7 +1344,7 @@ func (c *Container) removeDrive() (err error) {
 	return nil
 }
 
-func (c *Container) attachDevices(devices []ContainerDevice) error {
+func (c *Container) attachDevices(ctx context.Context, devices []ContainerDevice) error {
 	// there's no need to do rollback when error happens,
 	// because if attachDevices fails, container creation will fail too,
 	// and rollbackFailingContainerCreation could do all the rollbacks
@@ -1352,16 +1353,16 @@ func (c *Container) attachDevices(devices []ContainerDevice) error {
 	// the devices need to be split into two lists, normalAttachedDevs and delayAttachedDevs.
 	// so c.device is not used here. See issue https://github.com/kata-containers/runtime/issues/2460.
 	for _, dev := range devices {
-		if err := c.sandbox.devManager.AttachDevice(dev.ID, c.sandbox); err != nil {
+		if err := c.sandbox.devManager.AttachDevice(ctx, dev.ID, c.sandbox); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (c *Container) detachDevices() error {
+func (c *Container) detachDevices(ctx context.Context) error {
 	for _, dev := range c.devices {
-		err := c.sandbox.devManager.DetachDevice(dev.ID, c.sandbox)
+		err := c.sandbox.devManager.DetachDevice(ctx, dev.ID, c.sandbox)
 		if err != nil && err != manager.ErrDeviceNotAttached {
 			return err
 		}

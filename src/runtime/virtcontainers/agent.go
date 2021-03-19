@@ -74,13 +74,13 @@ type agent interface {
 	capabilities() types.Capabilities
 
 	// check will check the agent liveness
-	check() error
+	check(ctx context.Context) error
 
 	// tell whether the agent is long  live connected or not
 	longLiveConn() bool
 
 	// disconnect will disconnect the connection to the agent
-	disconnect() error
+	disconnect(ctx context.Context) error
 
 	// get agent url
 	getAgentURL() (string, error)
@@ -92,111 +92,111 @@ type agent interface {
 	reuseAgent(agent agent) error
 
 	// createSandbox will tell the agent to perform necessary setup for a Sandbox.
-	createSandbox(sandbox *Sandbox) error
+	createSandbox(ctx context.Context, sandbox *Sandbox) error
 
 	// exec will tell the agent to run a command in an already running container.
-	exec(sandbox *Sandbox, c Container, cmd types.Cmd) (*Process, error)
+	exec(ctx context.Context, sandbox *Sandbox, c Container, cmd types.Cmd) (*Process, error)
 
 	// startSandbox will tell the agent to start all containers related to the Sandbox.
-	startSandbox(sandbox *Sandbox) error
+	startSandbox(ctx context.Context, sandbox *Sandbox) error
 
 	// stopSandbox will tell the agent to stop all containers related to the Sandbox.
-	stopSandbox(sandbox *Sandbox) error
+	stopSandbox(ctx context.Context, sandbox *Sandbox) error
 
 	// createContainer will tell the agent to create a container related to a Sandbox.
-	createContainer(sandbox *Sandbox, c *Container) (*Process, error)
+	createContainer(ctx context.Context, sandbox *Sandbox, c *Container) (*Process, error)
 
 	// startContainer will tell the agent to start a container related to a Sandbox.
-	startContainer(sandbox *Sandbox, c *Container) error
+	startContainer(ctx context.Context, sandbox *Sandbox, c *Container) error
 
 	// stopContainer will tell the agent to stop a container related to a Sandbox.
-	stopContainer(sandbox *Sandbox, c Container) error
+	stopContainer(ctx context.Context, sandbox *Sandbox, c Container) error
 
 	// signalProcess will tell the agent to send a signal to a
 	// container or a process related to a Sandbox. If all is true, all processes in
 	// the container will be sent the signal.
-	signalProcess(c *Container, processID string, signal syscall.Signal, all bool) error
+	signalProcess(ctx context.Context, c *Container, processID string, signal syscall.Signal, all bool) error
 
 	// winsizeProcess will tell the agent to set a process' tty size
-	winsizeProcess(c *Container, processID string, height, width uint32) error
+	winsizeProcess(ctx context.Context, c *Container, processID string, height, width uint32) error
 
 	// writeProcessStdin will tell the agent to write a process stdin
-	writeProcessStdin(c *Container, ProcessID string, data []byte) (int, error)
+	writeProcessStdin(ctx context.Context, c *Container, ProcessID string, data []byte) (int, error)
 
 	// closeProcessStdin will tell the agent to close a process stdin
-	closeProcessStdin(c *Container, ProcessID string) error
+	closeProcessStdin(ctx context.Context, c *Container, ProcessID string) error
 
 	// readProcessStdout will tell the agent to read a process stdout
-	readProcessStdout(c *Container, processID string, data []byte) (int, error)
+	readProcessStdout(ctx context.Context, c *Container, processID string, data []byte) (int, error)
 
 	// readProcessStderr will tell the agent to read a process stderr
-	readProcessStderr(c *Container, processID string, data []byte) (int, error)
+	readProcessStderr(ctx context.Context, c *Container, processID string, data []byte) (int, error)
 
 	// processListContainer will list the processes running inside the container
-	processListContainer(sandbox *Sandbox, c Container, options ProcessListOptions) (ProcessList, error)
+	processListContainer(ctx context.Context, sandbox *Sandbox, c Container, options ProcessListOptions) (ProcessList, error)
 
 	// updateContainer will update the resources of a running container
-	updateContainer(sandbox *Sandbox, c Container, resources specs.LinuxResources) error
+	updateContainer(ctx context.Context, sandbox *Sandbox, c Container, resources specs.LinuxResources) error
 
 	// waitProcess will wait for the exit code of a process
-	waitProcess(c *Container, processID string) (int32, error)
+	waitProcess(ctx context.Context, c *Container, processID string) (int32, error)
 
 	// onlineCPUMem will online CPUs and Memory inside the Sandbox.
 	// This function should be called after hot adding vCPUs or Memory.
 	// cpus specifies the number of CPUs that were added and the agent should online
 	// cpuOnly specifies that we should online cpu or online memory or both
-	onlineCPUMem(cpus uint32, cpuOnly bool) error
+	onlineCPUMem(ctx context.Context, cpus uint32, cpuOnly bool) error
 
 	// memHotplugByProbe will notify the guest kernel about memory hotplug event through
 	// probe interface.
 	// This function should be called after hot adding Memory and before online memory.
 	// addr specifies the address of the recently hotplugged or unhotplugged memory device.
-	memHotplugByProbe(addr uint64, sizeMB uint32, memorySectionSizeMB uint32) error
+	memHotplugByProbe(ctx context.Context, addr uint64, sizeMB uint32, memorySectionSizeMB uint32) error
 
 	// statsContainer will tell the agent to get stats from a container related to a Sandbox
-	statsContainer(sandbox *Sandbox, c Container) (*ContainerStats, error)
+	statsContainer(ctx context.Context, sandbox *Sandbox, c Container) (*ContainerStats, error)
 
 	// pauseContainer will pause a container
-	pauseContainer(sandbox *Sandbox, c Container) error
+	pauseContainer(ctx context.Context, sandbox *Sandbox, c Container) error
 
 	// resumeContainer will resume a paused container
-	resumeContainer(sandbox *Sandbox, c Container) error
+	resumeContainer(ctx context.Context, sandbox *Sandbox, c Container) error
 
 	// configure will update agent settings based on provided arguments
-	configure(h hypervisor, id, sharePath string, config interface{}) error
+	configure(ctx context.Context, h hypervisor, id, sharePath string, config interface{}) error
 
 	// configureFromGrpc will update agent settings based on provided arguments which from Grpc
 	configureFromGrpc(h hypervisor, id string, config interface{}) error
 
 	// reseedRNG will reseed the guest random number generator
-	reseedRNG(data []byte) error
+	reseedRNG(ctx context.Context, data []byte) error
 
 	// updateInterface will tell the agent to update a nic for an existed Sandbox.
-	updateInterface(inf *pbTypes.Interface) (*pbTypes.Interface, error)
+	updateInterface(ctx context.Context, inf *pbTypes.Interface) (*pbTypes.Interface, error)
 
 	// listInterfaces will tell the agent to list interfaces of an existed Sandbox
-	listInterfaces() ([]*pbTypes.Interface, error)
+	listInterfaces(ctx context.Context) ([]*pbTypes.Interface, error)
 
 	// updateRoutes will tell the agent to update route table for an existed Sandbox.
-	updateRoutes(routes []*pbTypes.Route) ([]*pbTypes.Route, error)
+	updateRoutes(ctx context.Context, routes []*pbTypes.Route) ([]*pbTypes.Route, error)
 
 	// listRoutes will tell the agent to list routes of an existed Sandbox
-	listRoutes() ([]*pbTypes.Route, error)
+	listRoutes(ctx context.Context) ([]*pbTypes.Route, error)
 
 	// getGuestDetails will tell the agent to get some information of guest
-	getGuestDetails(*grpc.GuestDetailsRequest) (*grpc.GuestDetailsResponse, error)
+	getGuestDetails(context.Context, *grpc.GuestDetailsRequest) (*grpc.GuestDetailsResponse, error)
 
 	// setGuestDateTime asks the agent to set guest time to the provided one
-	setGuestDateTime(time.Time) error
+	setGuestDateTime(context.Context, time.Time) error
 
 	// copyFile copies file from host to container's rootfs
-	copyFile(src, dst string) error
+	copyFile(ctx context.Context, src, dst string) error
 
 	// markDead tell agent that the guest is dead
-	markDead()
+	markDead(ctx context.Context)
 
 	// cleanup removes all on disk information generated by the agent
-	cleanup(s *Sandbox)
+	cleanup(ctx context.Context, s *Sandbox)
 
 	// return data for saving
 	save() persistapi.AgentState
@@ -206,8 +206,8 @@ type agent interface {
 
 	// getOOMEvent will wait on OOM events that occur in the sandbox.
 	// Will return the ID of the container where the event occurred.
-	getOOMEvent() (string, error)
+	getOOMEvent(ctx context.Context, ) (string, error)
 
 	// getAgentMetrics get metrics of agent and guest through agent
-	getAgentMetrics(*grpc.GetMetricsRequest) (*grpc.Metrics, error)
+	getAgentMetrics(context.Context, *grpc.GetMetricsRequest) (*grpc.Metrics, error)
 }

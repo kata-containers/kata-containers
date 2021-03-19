@@ -6,6 +6,7 @@
 package virtcontainers
 
 import (
+	"context"
 	"fmt"
 	"os"
 
@@ -59,7 +60,7 @@ func (endpoint *MacvtapEndpoint) SetProperties(properties NetworkInfo) {
 }
 
 // Attach for macvtap endpoint passes macvtap device to the hypervisor.
-func (endpoint *MacvtapEndpoint) Attach(s *Sandbox) error {
+func (endpoint *MacvtapEndpoint) Attach(ctx context.Context, s *Sandbox) error {
 	var err error
 	h := s.hypervisor
 
@@ -76,21 +77,21 @@ func (endpoint *MacvtapEndpoint) Attach(s *Sandbox) error {
 		endpoint.VhostFds = vhostFds
 	}
 
-	return h.addDevice(endpoint, netDev)
+	return h.addDevice(ctx, endpoint, netDev)
 }
 
 // Detach for macvtap endpoint does nothing.
-func (endpoint *MacvtapEndpoint) Detach(netNsCreated bool, netNsPath string) error {
+func (endpoint *MacvtapEndpoint) Detach(ctx context.Context, netNsCreated bool, netNsPath string) error {
 	return nil
 }
 
 // HotAttach for macvtap endpoint not supported yet
-func (endpoint *MacvtapEndpoint) HotAttach(h hypervisor) error {
+func (endpoint *MacvtapEndpoint) HotAttach(ctx context.Context, h hypervisor) error {
 	return fmt.Errorf("MacvtapEndpoint does not support Hot attach")
 }
 
 // HotDetach for macvtap endpoint not supported yet
-func (endpoint *MacvtapEndpoint) HotDetach(h hypervisor, netNsCreated bool, netNsPath string) error {
+func (endpoint *MacvtapEndpoint) HotDetach(ctx context.Context, h hypervisor, netNsCreated bool, netNsPath string) error {
 	return fmt.Errorf("MacvtapEndpoint does not support Hot detach")
 }
 

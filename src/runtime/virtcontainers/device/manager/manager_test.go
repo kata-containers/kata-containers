@@ -7,6 +7,7 @@
 package manager
 
 import (
+	"context"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -150,10 +151,10 @@ func TestAttachVFIODevice(t *testing.T) {
 	assert.True(t, ok)
 
 	devReceiver := &api.MockDeviceReceiver{}
-	err = device.Attach(devReceiver)
+	err = device.Attach(context.Background(), devReceiver)
 	assert.Nil(t, err)
 
-	err = device.Detach(devReceiver)
+	err = device.Detach(context.Background(), devReceiver)
 	assert.Nil(t, err)
 }
 
@@ -175,10 +176,10 @@ func TestAttachGenericDevice(t *testing.T) {
 	assert.True(t, ok)
 
 	devReceiver := &api.MockDeviceReceiver{}
-	err = device.Attach(devReceiver)
+	err = device.Attach(context.Background(), devReceiver)
 	assert.Nil(t, err)
 
-	err = device.Detach(devReceiver)
+	err = device.Detach(context.Background(), devReceiver)
 	assert.Nil(t, err)
 }
 
@@ -200,20 +201,20 @@ func TestAttachBlockDevice(t *testing.T) {
 	_, ok := device.(*drivers.BlockDevice)
 	assert.True(t, ok)
 
-	err = device.Attach(devReceiver)
+	err = device.Attach(context.Background(), devReceiver)
 	assert.Nil(t, err)
 
-	err = device.Detach(devReceiver)
+	err = device.Detach(context.Background(), devReceiver)
 	assert.Nil(t, err)
 
 	// test virtio SCSI driver
 	dm.blockDriver = VirtioSCSI
 	device, err = dm.NewDevice(deviceInfo)
 	assert.Nil(t, err)
-	err = device.Attach(devReceiver)
+	err = device.Attach(context.Background(), devReceiver)
 	assert.Nil(t, err)
 
-	err = device.Detach(devReceiver)
+	err = device.Detach(context.Background(), devReceiver)
 	assert.Nil(t, err)
 }
 
@@ -287,10 +288,10 @@ func TestAttachVhostUserBlkDevice(t *testing.T) {
 	_, ok := device.(*drivers.VhostUserBlkDevice)
 	assert.True(t, ok)
 
-	err = device.Attach(devReceiver)
+	err = device.Attach(context.Background(), devReceiver)
 	assert.Nil(t, err)
 
-	err = device.Detach(devReceiver)
+	err = device.Detach(context.Background(), devReceiver)
 	assert.Nil(t, err)
 }
 
@@ -309,15 +310,15 @@ func TestAttachDetachDevice(t *testing.T) {
 	assert.Nil(t, err)
 
 	// attach non-exist device
-	err = dm.AttachDevice("non-exist", devReceiver)
+	err = dm.AttachDevice(context.Background(), "non-exist", devReceiver)
 	assert.NotNil(t, err)
 
 	// attach device
-	err = dm.AttachDevice(device.DeviceID(), devReceiver)
+	err = dm.AttachDevice(context.Background(), device.DeviceID(), devReceiver)
 	assert.Nil(t, err)
 	assert.Equal(t, device.GetAttachCount(), uint(1), "attach device count should be 1")
 	// attach device again(twice)
-	err = dm.AttachDevice(device.DeviceID(), devReceiver)
+	err = dm.AttachDevice(context.Background(), device.DeviceID(), devReceiver)
 	assert.Nil(t, err)
 	assert.Equal(t, device.GetAttachCount(), uint(2), "attach device count should be 2")
 
@@ -325,15 +326,15 @@ func TestAttachDetachDevice(t *testing.T) {
 	assert.True(t, attached)
 
 	// detach device
-	err = dm.DetachDevice(device.DeviceID(), devReceiver)
+	err = dm.DetachDevice(context.Background(), device.DeviceID(), devReceiver)
 	assert.Nil(t, err)
 	assert.Equal(t, device.GetAttachCount(), uint(1), "attach device count should be 1")
 	// detach device again(twice)
-	err = dm.DetachDevice(device.DeviceID(), devReceiver)
+	err = dm.DetachDevice(context.Background(), device.DeviceID(), devReceiver)
 	assert.Nil(t, err)
 	assert.Equal(t, device.GetAttachCount(), uint(0), "attach device count should be 0")
 	// detach device again should report error
-	err = dm.DetachDevice(device.DeviceID(), devReceiver)
+	err = dm.DetachDevice(context.Background(), device.DeviceID(), devReceiver)
 	assert.NotNil(t, err)
 	assert.Equal(t, err, ErrDeviceNotAttached, "")
 	assert.Equal(t, device.GetAttachCount(), uint(0), "attach device count should be 0")

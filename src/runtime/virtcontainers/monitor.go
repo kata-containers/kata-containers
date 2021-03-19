@@ -6,6 +6,7 @@
 package virtcontainers
 
 import (
+	"context"
 	"sync"
 	"time"
 
@@ -36,7 +37,7 @@ func newMonitor(s *Sandbox) *monitor {
 	}
 }
 
-func (m *monitor) newWatcher() (chan error, error) {
+func (m *monitor) newWatcher(ctx context.Context) (chan error, error) {
 	m.Lock()
 	defer m.Unlock()
 
@@ -57,8 +58,8 @@ func (m *monitor) newWatcher() (chan error, error) {
 					m.wg.Done()
 					return
 				case <-tick.C:
-					m.watchHypervisor()
-					m.watchAgent()
+					m.watchHypervisor(ctx)
+					m.watchAgent(ctx)
 				}
 			}
 		}()
@@ -67,8 +68,8 @@ func (m *monitor) newWatcher() (chan error, error) {
 	return watcher, nil
 }
 
-func (m *monitor) notify(err error) {
-	m.sandbox.agent.markDead()
+func (m *monitor) notify(ctx context.Context, err error) {
+	m.sandbox.agent.markDead(ctx)
 
 	m.Lock()
 	defer m.Unlock()
@@ -127,17 +128,17 @@ func (m *monitor) stop() {
 	}
 }
 
-func (m *monitor) watchAgent() {
-	err := m.sandbox.agent.check()
+func (m *monitor) watchAgent(ctx context.Context) {
+	err := m.sandbox.agent.check(ctx)
 	if err != nil {
 		// TODO: define and export error types
-		m.notify(errors.Wrapf(err, "failed to ping agent"))
+		m.notify(ctx, errors.Wrapf(err, "failed to ping agent"))
 	}
 }
 
-func (m *monitor) watchHypervisor() error {
+func (m *monitor) watchHypervisor(ctx context.Context) error {
 	if err := m.sandbox.hypervisor.check(); err != nil {
-		m.notify(errors.Wrapf(err, "failed to ping hypervisor process"))
+		m.notify(ctx, errors.Wrapf(err, "failed to ping hypervisor process"))
 		return err
 	}
 	return nil

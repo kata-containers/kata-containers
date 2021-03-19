@@ -7,6 +7,8 @@
 package api
 
 import (
+	"context"
+
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
 	persistapi "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist/api"
 	"github.com/sirupsen/logrus"
@@ -29,8 +31,8 @@ func DeviceLogger() *logrus.Entry {
 // a device should be attached/added/plugged to a DeviceReceiver
 type DeviceReceiver interface {
 	// these are for hotplug/hot-unplug devices to/from hypervisor
-	HotplugAddDevice(Device, config.DeviceType) error
-	HotplugRemoveDevice(Device, config.DeviceType) error
+	HotplugAddDevice(context.Context, Device, config.DeviceType) error
+	HotplugRemoveDevice(context.Context, Device, config.DeviceType) error
 
 	// this is only for virtio-blk and virtio-scsi support
 	GetAndSetSandboxBlockIndex() (int, error)
@@ -38,13 +40,13 @@ type DeviceReceiver interface {
 	GetHypervisorType() string
 
 	// this is for appending device to hypervisor boot params
-	AppendDevice(Device) error
+	AppendDevice(context.Context, Device) error
 }
 
 // Device is the virtcontainers device interface.
 type Device interface {
-	Attach(DeviceReceiver) error
-	Detach(DeviceReceiver) error
+	Attach(context.Context, DeviceReceiver) error
+	Detach(context.Context, DeviceReceiver) error
 
 	// ID returns device identifier
 	DeviceID() string
@@ -87,8 +89,8 @@ type Device interface {
 type DeviceManager interface {
 	NewDevice(config.DeviceInfo) (Device, error)
 	RemoveDevice(string) error
-	AttachDevice(string, DeviceReceiver) error
-	DetachDevice(string, DeviceReceiver) error
+	AttachDevice(context.Context, string, DeviceReceiver) error
+	DetachDevice(context.Context, string, DeviceReceiver) error
 	IsDeviceAttached(string) bool
 	GetDeviceByID(string) Device
 	GetAllDevices() []Device

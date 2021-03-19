@@ -71,7 +71,7 @@ func Example_createAndStartSandbox() {
 	}
 
 	// Start the sandbox
-	err = s.Start()
+	err = s.Start(context.Background())
 	if err != nil {
 		fmt.Printf("Could not start sandbox: %s", err)
 	}

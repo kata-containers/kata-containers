@@ -7,6 +7,8 @@
 package drivers
 
 import (
+	"context"
+
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/api"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
 	persistapi "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist/api"
@@ -36,7 +38,7 @@ func NewVhostUserBlkDevice(devInfo *config.DeviceInfo) *VhostUserBlkDevice {
 
 // Attach is standard interface of api.Device, it's used to add device to some
 // DeviceReceiver
-func (device *VhostUserBlkDevice) Attach(devReceiver api.DeviceReceiver) (err error) {
+func (device *VhostUserBlkDevice) Attach(ctx context.Context, devReceiver api.DeviceReceiver) (err error) {
 	skip, err := device.bumpAttachCount(true)
 	if err != nil {
 		return err
@@ -85,7 +87,7 @@ func (device *VhostUserBlkDevice) Attach(devReceiver api.DeviceReceiver) (err er
 	}).Info("Attaching device")
 
 	device.VhostUserDeviceAttrs = vAttrs
-	if err = devReceiver.HotplugAddDevice(device, config.VhostUserBlk); err != nil {
+	if err = devReceiver.HotplugAddDevice(ctx, device, config.VhostUserBlk); err != nil {
 		return err
 	}
 
@@ -114,7 +116,7 @@ func isVirtioBlkBlockDriver(customOptions map[string]string) bool {
 
 // Detach is standard interface of api.Device, it's used to remove device from some
 // DeviceReceiver
-func (device *VhostUserBlkDevice) Detach(devReceiver api.DeviceReceiver) error {
+func (device *VhostUserBlkDevice) Detach(ctx context.Context, devReceiver api.DeviceReceiver) error {
 	skip, err := device.bumpAttachCount(false)
 	if err != nil {
 		return err
@@ -136,7 +138,7 @@ func (device *VhostUserBlkDevice) Detach(devReceiver api.DeviceReceiver) error {
 
 	deviceLogger().WithField("device", device.DeviceInfo.HostPath).Info("Unplugging vhost-user-blk device")
 
-	if err = devReceiver.HotplugRemoveDevice(device, config.VhostUserBlk); err != nil {
+	if err = devReceiver.HotplugRemoveDevice(ctx, device, config.VhostUserBlk); err != nil {
 		deviceLogger().WithError(err).Error("Failed to unplug vhost-user-blk device")
 		return err
 	}

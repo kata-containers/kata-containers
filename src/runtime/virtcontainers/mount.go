@@ -219,7 +219,7 @@ const mountPerm = os.FileMode(0755)
 // * recursively create the destination
 // pgtypes stands for propagation types, which are shared, private, slave, and ubind.
 func bindMount(ctx context.Context, source, destination string, readonly bool, pgtypes string) error {
-	span, _ := trace(ctx, "bindMount")
+	span, ctx := trace(ctx, "bindMount")
 	defer span.End()
 
 	if source == "" {
@@ -347,7 +347,7 @@ func bindUnmountContainerRootfs(ctx context.Context, sharedDir, cID string) erro
 }
 
 func bindUnmountAllRootfs(ctx context.Context, sharedDir string, sandbox *Sandbox) error {
-	span, _ := trace(ctx, "bindUnmountAllRootfs")
+	span, ctx := trace(ctx, "bindUnmountAllRootfs")
 	defer span.End()
 
 	var errors *merr.Error
@@ -356,11 +356,11 @@ func bindUnmountAllRootfs(ctx context.Context, sharedDir string, sandbox *Sandbo
 			mountLogger().WithField("container", c.id).Warnf("container dir is a symlink, malicious guest?")
 			continue
 		}
-		c.unmountHostMounts()
+		c.unmountHostMounts(ctx)
 		if c.state.Fstype == "" {
 			// even if error found, don't break out of loop until all mounts attempted
 			// to be unmounted, and collect all errors
-			errors = merr.Append(errors, bindUnmountContainerRootfs(c.ctx, sharedDir, c.id))
+			errors = merr.Append(errors, bindUnmountContainerRootfs(ctx, sharedDir, c.id))
 		}
 	}
 	return errors.ErrorOrNil()

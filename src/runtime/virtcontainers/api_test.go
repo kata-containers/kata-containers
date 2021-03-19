@@ -258,7 +258,7 @@ func createAndStartSandbox(ctx context.Context, config SandboxConfig) (sandbox V
 	}
 
 	// Start sandbox
-	err = sandbox.Start()
+	err = sandbox.Start(ctx)
 	if err != nil {
 		return nil, "", err
 	}
@@ -276,7 +276,7 @@ func TestReleaseSandbox(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, s)
 
-	err = s.Release()
+	err = s.Release(ctx)
 	assert.Nil(t, err, "sandbox release failed: %v", err)
 }
 
@@ -295,12 +295,12 @@ func TestCleanupContainer(t *testing.T) {
 	for _, contID := range contIDs {
 		contConfig := newTestContainerConfigNoop(contID)
 
-		c, err := p.CreateContainer(contConfig)
+		c, err := p.CreateContainer(ctx, contConfig)
 		if c == nil || err != nil {
 			t.Fatal(err)
 		}
 
-		c, err = p.StartContainer(c.ID())
+		c, err = p.StartContainer(context.Background(), c.ID())
 		if c == nil || err != nil {
 			t.Fatal(err)
 		}
