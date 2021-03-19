@@ -11,34 +11,11 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestEnableSystemdCgroup(t *testing.T) {
-	assert := assert.New(t)
-
-	orgSystemdCgroup := systemdCgroup
-	defer func() {
-		systemdCgroup = orgSystemdCgroup
-	}()
-
-	useSystemdCgroup := UseSystemdCgroup()
-	if systemdCgroup != nil {
-		assert.Equal(*systemdCgroup, useSystemdCgroup)
-	} else {
-		assert.False(useSystemdCgroup)
-	}
-
-	EnableSystemdCgroup()
-	assert.True(UseSystemdCgroup())
-}
-
+//very very basic test; should be expanded
 func TestNew(t *testing.T) {
 	assert := assert.New(t)
-	useSystemdCgroup := false
-	orgSystemdCgroup := systemdCgroup
-	defer func() {
-		systemdCgroup = orgSystemdCgroup
-	}()
-	systemdCgroup = &useSystemdCgroup
 
+	// create a cgroupfs cgroup manager
 	c := &Config{
 		Cgroups:    nil,
 		CgroupPath: "",
@@ -48,8 +25,14 @@ func TestNew(t *testing.T) {
 	assert.NoError(err)
 	assert.NotNil(mgr.mgr)
 
-	useSystemdCgroup = true
-	mgr, err = New(c)
-	assert.Error(err)
-	assert.Nil(mgr)
+	// create a systemd cgroup manager
+	s := &Config{
+		Cgroups:    nil,
+		CgroupPath: "system.slice:kubepod:container",
+	}
+
+	mgr, err = New(s)
+	assert.NoError(err)
+	assert.NotNil(mgr.mgr)
+
 }
