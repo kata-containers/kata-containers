@@ -7,6 +7,7 @@
 package drivers
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/api"
@@ -32,13 +33,13 @@ func NewGenericDevice(devInfo *config.DeviceInfo) *GenericDevice {
 }
 
 // Attach is standard interface of api.Device
-func (device *GenericDevice) Attach(devReceiver api.DeviceReceiver) error {
+func (device *GenericDevice) Attach(ctx context.Context, devReceiver api.DeviceReceiver) error {
 	_, err := device.bumpAttachCount(true)
 	return err
 }
 
 // Detach is standard interface of api.Device
-func (device *GenericDevice) Detach(devReceiver api.DeviceReceiver) error {
+func (device *GenericDevice) Detach(ctx context.Context, devReceiver api.DeviceReceiver) error {
 	_, err := device.bumpAttachCount(false)
 	return err
 }

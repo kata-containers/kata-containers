@@ -212,7 +212,7 @@ func testQemuAddDevice(t *testing.T, devInfo interface{}, devType deviceType, ex
 		arch: &qemuArchBase{},
 	}
 
-	err := q.addDevice(devInfo, devType)
+	err := q.addDevice(context.Background(), devInfo, devType)
 	assert.NoError(err)
 	assert.Exactly(q.qemuConfig.Devices, expected)
 }
@@ -333,7 +333,7 @@ func TestQemuGetSandboxConsole(t *testing.T) {
 	sandboxID := "testSandboxID"
 	expected := filepath.Join(q.store.RunVMStoragePath(), sandboxID, consoleSocket)
 
-	proto, result, err := q.getSandboxConsole(sandboxID)
+	proto, result, err := q.getSandboxConsole(q.ctx, sandboxID)
 	assert.NoError(err)
 	assert.Equal(result, expected)
 	assert.Equal(proto, consoleProtoUnix)
@@ -346,7 +346,7 @@ func TestQemuCapabilities(t *testing.T) {
 		arch: &qemuArchBase{},
 	}
 
-	caps := q.capabilities()
+	caps := q.capabilities(q.ctx)
 	assert.True(caps.IsBlockDeviceHotplugSupported())
 }
 
@@ -402,9 +402,9 @@ func TestHotplugUnsupportedDeviceType(t *testing.T) {
 		config: qemuConfig,
 	}
 
-	_, err := q.hotplugAddDevice(&memoryDevice{0, 128, uint64(0), false}, fsDev)
+	_, err := q.hotplugAddDevice(context.Background(), &memoryDevice{0, 128, uint64(0), false}, fsDev)
 	assert.Error(err)
-	_, err = q.hotplugRemoveDevice(&memoryDevice{0, 128, uint64(0), false}, fsDev)
+	_, err = q.hotplugRemoveDevice(context.Background(), &memoryDevice{0, 128, uint64(0), false}, fsDev)
 	assert.Error(err)
 }
 
@@ -431,7 +431,7 @@ func TestQemuCleanup(t *testing.T) {
 		config: newQemuConfig(),
 	}
 
-	err := q.cleanup()
+	err := q.cleanup(q.ctx)
 	assert.Nil(err)
 }
 
@@ -444,7 +444,7 @@ func TestQemuGrpc(t *testing.T) {
 		config: config,
 	}
 
-	json, err := q.toGrpc()
+	json, err := q.toGrpc(context.Background())
 	assert.Nil(err)
 
 	var q2 qemu

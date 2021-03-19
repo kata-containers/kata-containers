@@ -6,6 +6,7 @@
 package drivers
 
 import (
+	"context"
 	"encoding/hex"
 
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/api"
@@ -21,7 +22,7 @@ type VhostUserFSDevice struct {
 
 // Device interface
 
-func (device *VhostUserFSDevice) Attach(devReceiver api.DeviceReceiver) (err error) {
+func (device *VhostUserFSDevice) Attach(ctx context.Context, devReceiver api.DeviceReceiver) (err error) {
 	skip, err := device.bumpAttachCount(true)
 	if err != nil {
 		return err
@@ -46,10 +47,10 @@ func (device *VhostUserFSDevice) Attach(devReceiver api.DeviceReceiver) (err err
 	device.DevID = id
 	device.Type = device.DeviceType()
 
-	return devReceiver.AppendDevice(device)
+	return devReceiver.AppendDevice(ctx, device)
 }
 
-func (device *VhostUserFSDevice) Detach(devReceiver api.DeviceReceiver) error {
+func (device *VhostUserFSDevice) Detach(ctx context.Context, devReceiver api.DeviceReceiver) error {
 	_, err := device.bumpAttachCount(false)
 	return err
 }

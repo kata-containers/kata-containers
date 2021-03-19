@@ -63,7 +63,7 @@ func TestKataAgentConnect(t *testing.T) {
 		},
 	}
 
-	err = k.connect()
+	err = k.connect(context.Background())
 	assert.NoError(err)
 	assert.NotNil(k.client)
 }
@@ -86,8 +86,8 @@ func TestKataAgentDisconnect(t *testing.T) {
 		},
 	}
 
-	assert.NoError(k.connect())
-	assert.NoError(k.disconnect())
+	assert.NoError(k.connect(context.Background()))
+	assert.NoError(k.disconnect(context.Background()))
 	assert.Nil(k.client)
 }
 
@@ -123,8 +123,10 @@ func TestKataAgentSendReq(t *testing.T) {
 		},
 	}
 
+	ctx := context.Background()
+
 	for _, req := range reqList {
-		_, err = k.sendReq(req)
+		_, err = k.sendReq(ctx, req)
 		assert.Nil(err)
 	}
 
@@ -132,52 +134,52 @@ func TestKataAgentSendReq(t *testing.T) {
 	container := &Container{}
 	execid := "processFooBar"
 
-	err = k.startContainer(sandbox, container)
+	err = k.startContainer(ctx, sandbox, container)
 	assert.Nil(err)
 
-	err = k.signalProcess(container, execid, syscall.SIGKILL, true)
+	err = k.signalProcess(ctx, container, execid, syscall.SIGKILL, true)
 	assert.Nil(err)
 
-	err = k.winsizeProcess(container, execid, 100, 200)
+	err = k.winsizeProcess(ctx, container, execid, 100, 200)
 	assert.Nil(err)
 
-	_, err = k.processListContainer(sandbox, Container{}, ProcessListOptions{})
+	_, err = k.processListContainer(ctx, sandbox, Container{}, ProcessListOptions{})
 	assert.Nil(err)
 
-	err = k.updateContainer(sandbox, Container{}, specs.LinuxResources{})
+	err = k.updateContainer(ctx, sandbox, Container{}, specs.LinuxResources{})
 	assert.Nil(err)
 
-	err = k.pauseContainer(sandbox, Container{})
+	err = k.pauseContainer(ctx, sandbox, Container{})
 	assert.Nil(err)
 
-	err = k.resumeContainer(sandbox, Container{})
+	err = k.resumeContainer(ctx, sandbox, Container{})
 	assert.Nil(err)
 
-	err = k.onlineCPUMem(1, true)
+	err = k.onlineCPUMem(ctx, 1, true)
 	assert.Nil(err)
 
-	_, err = k.statsContainer(sandbox, Container{})
+	_, err = k.statsContainer(ctx, sandbox, Container{})
 	assert.Nil(err)
 
-	err = k.check()
+	err = k.check(ctx)
 	assert.Nil(err)
 
-	_, err = k.waitProcess(container, execid)
+	_, err = k.waitProcess(ctx, container, execid)
 	assert.Nil(err)
 
-	_, err = k.writeProcessStdin(container, execid, []byte{'c'})
+	_, err = k.writeProcessStdin(ctx, container, execid, []byte{'c'})
 	assert.Nil(err)
 
-	err = k.closeProcessStdin(container, execid)
+	err = k.closeProcessStdin(ctx, container, execid)
 	assert.Nil(err)
 
-	_, err = k.readProcessStdout(container, execid, []byte{})
+	_, err = k.readProcessStdout(ctx, container, execid, []byte{})
 	assert.Nil(err)
 
-	_, err = k.readProcessStderr(container, execid, []byte{})
+	_, err = k.readProcessStderr(ctx, container, execid, []byte{})
 	assert.Nil(err)
 
-	_, err = k.getOOMEvent()
+	_, err = k.getOOMEvent(ctx)
 	assert.Nil(err)
 }
 
@@ -753,15 +755,16 @@ func TestAgentConfigure(t *testing.T) {
 	h := &mockHypervisor{}
 	c := KataAgentConfig{}
 	id := "foobar"
+	ctx := context.Background()
 
-	err = k.configure(h, id, dir, c)
+	err = k.configure(ctx, h, id, dir, c)
 	assert.Nil(err)
 
-	err = k.configure(h, id, dir, c)
+	err = k.configure(ctx, h, id, dir, c)
 	assert.Nil(err)
 	assert.Empty(k.state.URL)
 
-	err = k.configure(h, id, dir, c)
+	err = k.configure(ctx, h, id, dir, c)
 	assert.Nil(err)
 }
 
@@ -864,11 +867,11 @@ func TestAgentCreateContainer(t *testing.T) {
 	assert.Nil(err)
 	defer os.RemoveAll(dir)
 
-	err = k.configure(&mockHypervisor{}, sandbox.id, dir, KataAgentConfig{})
+	err = k.configure(context.Background(), &mockHypervisor{}, sandbox.id, dir, KataAgentConfig{})
 	assert.Nil(err)
 
 	// We'll fail on container metadata file creation, but it helps increasing coverage...
-	_, err = k.createContainer(sandbox, container)
+	_, err = k.createContainer(context.Background(), sandbox, container)
 	assert.Error(err)
 }
 
@@ -890,16 +893,16 @@ func TestAgentNetworkOperation(t *testing.T) {
 		},
 	}
 
-	_, err = k.updateInterface(nil)
+	_, err = k.updateInterface(k.ctx, nil)
 	assert.Nil(err)
 
-	_, err = k.listInterfaces()
+	_, err = k.listInterfaces(k.ctx)
 	assert.Nil(err)
 
-	_, err = k.updateRoutes([]*pbTypes.Route{})
+	_, err = k.updateRoutes(k.ctx, []*pbTypes.Route{})
 	assert.Nil(err)
 
-	_, err = k.listRoutes()
+	_, err = k.listRoutes(k.ctx)
 	assert.Nil(err)
 }
 
@@ -938,7 +941,7 @@ func TestKataCopyFile(t *testing.T) {
 		},
 	}
 
-	err = k.copyFile("/abc/xyz/123", "/tmp")
+	err = k.copyFile(context.Background(), "/abc/xyz/123", "/tmp")
 	assert.Error(err)
 
 	src, err := ioutil.TempFile("", "src")
@@ -961,7 +964,7 @@ func TestKataCopyFile(t *testing.T) {
 		grpcMaxDataSize = orgGrpcMaxDataSize
 	}()
 
-	err = k.copyFile(src.Name(), dst.Name())
+	err = k.copyFile(context.Background(), src.Name(), dst.Name())
 	assert.NoError(err)
 }
 
@@ -987,7 +990,7 @@ func TestKataCleanupSandbox(t *testing.T) {
 	assert.Nil(err)
 
 	k := &kataAgent{ctx: context.Background()}
-	k.cleanup(&s)
+	k.cleanup(context.Background(), &s)
 
 	_, err = os.Stat(dir)
 	assert.False(os.IsExist(err))

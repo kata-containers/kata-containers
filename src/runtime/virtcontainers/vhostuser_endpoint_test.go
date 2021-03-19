@@ -6,6 +6,7 @@
 package virtcontainers
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"os"
@@ -82,7 +83,7 @@ func TestVhostUserEndpointAttach(t *testing.T) {
 		hypervisor: &mockHypervisor{},
 	}
 
-	err := v.Attach(s)
+	err := v.Attach(context.Background(), s)
 	assert.NoError(err)
 }
 
@@ -96,7 +97,7 @@ func TestVhostUserEndpoint_HotAttach(t *testing.T) {
 
 	h := &mockHypervisor{}
 
-	err := v.HotAttach(h)
+	err := v.HotAttach(context.Background(), h)
 	assert.Error(err)
 }
 
@@ -110,7 +111,7 @@ func TestVhostUserEndpoint_HotDetach(t *testing.T) {
 
 	h := &mockHypervisor{}
 
-	err := v.HotDetach(h, true, "")
+	err := v.HotDetach(context.Background(), h, true, "")
 	assert.Error(err)
 }
 

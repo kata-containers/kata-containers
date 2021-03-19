@@ -6,6 +6,7 @@
 package virtcontainers
 
 import (
+	"context"
 	"fmt"
 	"io/ioutil"
 	"net"
@@ -146,12 +147,12 @@ func TestQemuAddDeviceToBridge(t *testing.T) {
 
 	q.bridges(1)
 	for i := uint32(1); i <= types.PCIBridgeMaxCapacity; i++ {
-		_, _, err := q.addDeviceToBridge(fmt.Sprintf("qemu-bridge-%d", i), types.PCI)
+		_, _, err := q.addDeviceToBridge(context.Background(), fmt.Sprintf("qemu-bridge-%d", i), types.PCI)
 		assert.Nil(err)
 	}
 
 	// fail to add device to bridge cause no more available bridge slot
-	_, _, err := q.addDeviceToBridge("qemu-bridge-31", types.PCI)
+	_, _, err := q.addDeviceToBridge(context.Background(), "qemu-bridge-31", types.PCI)
 	exceptErr := errors.New("no more bridge slots available")
 	assert.Equal(exceptErr.Error(), err.Error())
 
@@ -159,7 +160,7 @@ func TestQemuAddDeviceToBridge(t *testing.T) {
 	q = newQemuArchBase()
 	q.qemuMachine.Type = QemuPCLite
 	q.bridges(0)
-	_, _, err = q.addDeviceToBridge("qemu-bridge", types.PCI)
+	_, _, err = q.addDeviceToBridge(context.Background(), "qemu-bridge", types.PCI)
 	if assert.Error(err) {
 		exceptErr = errors.New("failed to get available address from bridges")
 		assert.Equal(exceptErr.Error(), err.Error())

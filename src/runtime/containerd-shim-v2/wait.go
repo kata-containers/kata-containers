@@ -22,7 +22,7 @@ import (
 
 const defaultCheckInterval = 1 * time.Second
 
-func wait(s *service, c *container, execID string) (int32, error) {
+func wait(ctx context.Context, s *service, c *container, execID string) (int32, error) {
 	var execs *exec
 	var err error
 
@@ -43,7 +43,7 @@ func wait(s *service, c *container, execID string) (int32, error) {
 		processID = execs.id
 	}
 
-	ret, err := s.sandbox.WaitProcess(c.id, processID)
+	ret, err := s.sandbox.WaitProcess(ctx, c.id, processID)
 	if err != nil {
 		shimLog.WithError(err).WithFields(logrus.Fields{
 			"container": c.id,
@@ -65,15 +65,15 @@ func wait(s *service, c *container, execID string) (int32, error) {
 			if s.monitor != nil {
 				s.monitor <- nil
 			}
-			if err = s.sandbox.Stop(true); err != nil {
+			if err = s.sandbox.Stop(ctx, true); err != nil {
 				shimLog.WithField("sandbox", s.sandbox.ID()).Error("failed to stop sandbox")
 			}
 
-			if err = s.sandbox.Delete(); err != nil {
+			if err = s.sandbox.Delete(ctx); err != nil {
 				shimLog.WithField("sandbox", s.sandbox.ID()).Error("failed to delete sandbox")
 			}
 		} else {
-			if _, err = s.sandbox.StopContainer(c.id, false); err != nil {
+			if _, err = s.sandbox.StopContainer(ctx, c.id, false); err != nil {
 				shimLog.WithError(err).WithField("container", c.id).Warn("stop container failed")
 			}
 		}
@@ -97,7 +97,7 @@ func wait(s *service, c *container, execID string) (int32, error) {
 	return ret, nil
 }
 
-func watchSandbox(s *service) {
+func watchSandbox(ctx context.Context, s *service) {
 	if s.monitor == nil {
 		return
 	}
@@ -111,11 +111,11 @@ func watchSandbox(s *service) {
 	defer s.mu.Unlock()
 	// sandbox malfunctioning, cleanup as much as we can
 	shimLog.WithError(err).Warn("sandbox stopped unexpectedly")
-	err = s.sandbox.Stop(true)
+	err = s.sandbox.Stop(ctx, true)
 	if err != nil {
 		shimLog.WithError(err).Warn("stop sandbox failed")
 	}
-	err = s.sandbox.Delete()
+	err = s.sandbox.Delete(ctx)
 	if err != nil {
 		shimLog.WithError(err).Warn("delete sandbox failed")
 	}
@@ -145,7 +145,7 @@ func watchOOMEvents(ctx context.Context, s *service) {
 		case <-ctx.Done():
 			return
 		default:
-			containerID, err := s.sandbox.GetOOMEvent()
+			containerID, err := s.sandbox.GetOOMEvent(ctx)
 			if err != nil {
 				shimLog.WithError(err).Warn("failed to get OOM event from sandbox")
 				// If the GetOOMEvent call is not implemented, then the agent is most likely an older version,

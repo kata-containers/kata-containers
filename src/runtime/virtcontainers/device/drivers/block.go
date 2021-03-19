@@ -7,6 +7,7 @@
 package drivers
 
 import (
+	"context"
 	"path/filepath"
 
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/api"
@@ -35,7 +36,7 @@ func NewBlockDevice(devInfo *config.DeviceInfo) *BlockDevice {
 
 // Attach is standard interface of api.Device, it's used to add device to some
 // DeviceReceiver
-func (device *BlockDevice) Attach(devReceiver api.DeviceReceiver) (err error) {
+func (device *BlockDevice) Attach(ctx context.Context, devReceiver api.DeviceReceiver) (err error) {
 	skip, err := device.bumpAttachCount(true)
 	if err != nil {
 		return err
@@ -112,7 +113,7 @@ func (device *BlockDevice) Attach(devReceiver api.DeviceReceiver) (err error) {
 
 	deviceLogger().WithField("device", device.DeviceInfo.HostPath).WithField("VirtPath", drive.VirtPath).Infof("Attaching %s device", customOptions["block-driver"])
 	device.BlockDrive = drive
-	if err = devReceiver.HotplugAddDevice(device, config.DeviceBlock); err != nil {
+	if err = devReceiver.HotplugAddDevice(ctx, device, config.DeviceBlock); err != nil {
 		return err
 	}
 
@@ -121,7 +122,7 @@ func (device *BlockDevice) Attach(devReceiver api.DeviceReceiver) (err error) {
 
 // Detach is standard interface of api.Device, it's used to remove device from some
 // DeviceReceiver
-func (device *BlockDevice) Detach(devReceiver api.DeviceReceiver) error {
+func (device *BlockDevice) Detach(ctx context.Context, devReceiver api.DeviceReceiver) error {
 	skip, err := device.bumpAttachCount(false)
 	if err != nil {
 		return err
@@ -140,7 +141,7 @@ func (device *BlockDevice) Detach(devReceiver api.DeviceReceiver) error {
 
 	deviceLogger().WithField("device", device.DeviceInfo.HostPath).Info("Unplugging block device")
 
-	if err = devReceiver.HotplugRemoveDevice(device, config.DeviceBlock); err != nil {
+	if err = devReceiver.HotplugRemoveDevice(ctx, device, config.DeviceBlock); err != nil {
 		deviceLogger().WithError(err).Error("Failed to unplug block device")
 		return err
 	}

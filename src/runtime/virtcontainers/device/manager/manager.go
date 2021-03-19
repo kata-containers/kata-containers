@@ -7,6 +7,7 @@
 package manager
 
 import (
+	"context"
 	"encoding/hex"
 	"errors"
 	"sync"
@@ -189,7 +190,7 @@ func (dm *deviceManager) newDeviceID() (string, error) {
 	return "", ErrIDExhausted
 }
 
-func (dm *deviceManager) AttachDevice(id string, dr api.DeviceReceiver) error {
+func (dm *deviceManager) AttachDevice(ctx context.Context, id string, dr api.DeviceReceiver) error {
 	dm.Lock()
 	defer dm.Unlock()
 
@@ -198,13 +199,13 @@ func (dm *deviceManager) AttachDevice(id string, dr api.DeviceReceiver) error {
 		return ErrDeviceNotExist
 	}
 
-	if err := d.Attach(dr); err != nil {
+	if err := d.Attach(ctx, dr); err != nil {
 		return err
 	}
 	return nil
 }
 
-func (dm *deviceManager) DetachDevice(id string, dr api.DeviceReceiver) error {
+func (dm *deviceManager) DetachDevice(ctx context.Context, id string, dr api.DeviceReceiver) error {
 	dm.Lock()
 	defer dm.Unlock()
 
@@ -216,7 +217,7 @@ func (dm *deviceManager) DetachDevice(id string, dr api.DeviceReceiver) error {
 		return ErrDeviceNotAttached
 	}
 
-	if err := d.Detach(dr); err != nil {
+	if err := d.Detach(ctx, dr); err != nil {
 		return err
 	}
 	return nil

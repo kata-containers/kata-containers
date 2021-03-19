@@ -266,7 +266,7 @@ func TestClooudHypervisorStartSandbox(t *testing.T) {
 		store:     store,
 	}
 
-	err = clh.startSandbox(10)
+	err = clh.startSandbox(context.Background(), 10)
 	assert.NoError(err)
 }
 
@@ -300,7 +300,7 @@ func TestCloudHypervisorResizeMemory(t *testing.T) {
 			clh.APIClient = mockClient
 			clh.config = clhConfig
 
-			newMem, memDev, err := clh.resizeMemory(tt.args.reqMemMB, tt.args.memoryBlockSizeMB, false)
+			newMem, memDev, err := clh.resizeMemory(context.Background(), tt.args.reqMemMB, tt.args.memoryBlockSizeMB, false)
 
 			if (err != nil) != tt.wantErr {
 				t.Errorf("cloudHypervisor.resizeMemory() error = %v, expected to fail = %v", err, tt.wantErr)
@@ -400,12 +400,12 @@ func TestCloudHypervisorHotplugRemoveDevice(t *testing.T) {
 	clh.config = clhConfig
 	clh.APIClient = &clhClientMock{}
 
-	_, err = clh.hotplugRemoveDevice(&config.BlockDrive{}, blockDev)
+	_, err = clh.hotplugRemoveDevice(context.Background(), &config.BlockDrive{}, blockDev)
 	assert.NoError(err, "Hotplug remove block device expected no error")
 
-	_, err = clh.hotplugRemoveDevice(&config.VFIODev{}, vfioDev)
+	_, err = clh.hotplugRemoveDevice(context.Background(), &config.VFIODev{}, vfioDev)
 	assert.NoError(err, "Hotplug remove vfio block device expected no error")
 
-	_, err = clh.hotplugRemoveDevice(nil, netDev)
+	_, err = clh.hotplugRemoveDevice(context.Background(), nil, netDev)
 	assert.Error(err, "Hotplug remove pmem block device expected error")
 }

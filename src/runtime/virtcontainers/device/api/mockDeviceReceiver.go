@@ -6,6 +6,8 @@
 package api
 
 import (
+	"context"
+
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
 )
 
@@ -13,12 +15,12 @@ import (
 type MockDeviceReceiver struct{}
 
 // HotplugAddDevice adds a new device
-func (mockDC *MockDeviceReceiver) HotplugAddDevice(Device, config.DeviceType) error {
+func (mockDC *MockDeviceReceiver) HotplugAddDevice(context.Context, Device, config.DeviceType) error {
 	return nil
 }
 
 // HotplugRemoveDevice removes a device
-func (mockDC *MockDeviceReceiver) HotplugRemoveDevice(Device, config.DeviceType) error {
+func (mockDC *MockDeviceReceiver) HotplugRemoveDevice(context.Context, Device, config.DeviceType) error {
 	return nil
 }
 
@@ -33,7 +35,7 @@ func (mockDC *MockDeviceReceiver) UnsetSandboxBlockIndex(int) error {
 }
 
 // AppendDevice adds new vhost user device
-func (mockDC *MockDeviceReceiver) AppendDevice(Device) error {
+func (mockDC *MockDeviceReceiver) AppendDevice(context.Context, Device) error {
 	return nil
 }
 

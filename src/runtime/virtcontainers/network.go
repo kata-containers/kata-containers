@@ -406,11 +406,11 @@ func getLinkByName(netHandle *netlink.Handle, name string, expectedLink netlink.
 }
 
 // The endpoint type should dictate how the connection needs to happen.
-func xConnectVMNetwork(endpoint Endpoint, h hypervisor) error {
+func xConnectVMNetwork(ctx context.Context, endpoint Endpoint, h hypervisor) error {
 	netPair := endpoint.NetworkPair()
 
 	queues := 0
-	caps := h.capabilities()
+	caps := h.capabilities(ctx)
 	if caps.IsMultiQueueSupported() {
 		queues = int(h.hypervisorConfig().NumVCPUs)
 	}
@@ -1262,8 +1262,8 @@ func (n *Network) trace(ctx context.Context, name string) (otelTrace.Span, conte
 }
 
 // Run runs a callback in the specified network namespace.
-func (n *Network) Run(networkNSPath string, cb func() error) error {
-	span, _ := n.trace(context.Background(), "run")
+func (n *Network) Run(ctx context.Context, networkNSPath string, cb func() error) error {
+	span, _ := n.trace(ctx, "Run")
 	defer span.End()
 
 	return doNetNS(networkNSPath, func(_ ns.NetNS) error {
@@ -1273,7 +1273,7 @@ func (n *Network) Run(networkNSPath string, cb func() error) error {
 
 // Add adds all needed interfaces inside the network namespace.
 func (n *Network) Add(ctx context.Context, config *NetworkConfig, s *Sandbox, hotplug bool) ([]Endpoint, error) {
-	span, _ := n.trace(ctx, "add")
+	span, ctx := n.trace(ctx, "Add")
 	defer span.End()
 
 	endpoints, err := createEndpointsFromScan(config.NetNSPath, config)
@@ -1285,11 +1285,11 @@ func (n *Network) Add(ctx context.Context, config *NetworkConfig, s *Sandbox, ho
 		for _, endpoint := range endpoints {
 			networkLogger().WithField("endpoint-type", endpoint.Type()).WithField("hotplug", hotplug).Info("Attaching endpoint")
 			if hotplug {
-				if err := endpoint.HotAttach(s.hypervisor); err != nil {
+				if err := endpoint.HotAttach(ctx, s.hypervisor); err != nil {
 					return err
 				}
 			} else {
-				if err := endpoint.Attach(s); err != nil {
+				if err := endpoint.Attach(ctx, s); err != nil {
 					return err
 				}
 			}
@@ -1354,7 +1354,7 @@ func (n *Network) PostAdd(ctx context.Context, ns *NetworkNamespace, hotplug boo
 // Remove network endpoints in the network namespace. It also deletes the network
 // namespace in case the namespace has been created by us.
 func (n *Network) Remove(ctx context.Context, ns *NetworkNamespace, hypervisor hypervisor) error {
-	span, _ := n.trace(ctx, "remove")
+	span, ctx := n.trace(ctx, "Remove")
 	defer span.End()
 
 	for _, endpoint := range ns.Endpoints {
@@ -1377,7 +1377,7 @@ func (n *Network) Remove(ctx context.Context, ns *NetworkNamespace, hypervisor h
 		// Detach for an endpoint should enter the network namespace
 		// if required.
 		networkLogger().WithField("endpoint-type", endpoint.Type()).Info("Detaching endpoint")
-		if err := endpoint.Detach(ns.NetNsCreated, ns.NetNsPath); err != nil {
+		if err := endpoint.Detach(ctx, ns.NetNsCreated, ns.NetNsPath); err != nil {
 			return err
 		}
 	}

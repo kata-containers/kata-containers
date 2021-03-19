@@ -6,6 +6,7 @@
 package virtcontainers
 
 import (
+	"context"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -74,7 +75,7 @@ func (endpoint *PhysicalEndpoint) NetworkPair() *NetworkInterfacePair {
 
 // Attach for physical endpoint binds the physical network interface to
 // vfio-pci and adds device to the hypervisor with vfio-passthrough.
-func (endpoint *PhysicalEndpoint) Attach(s *Sandbox) error {
+func (endpoint *PhysicalEndpoint) Attach(ctx context.Context, s *Sandbox) error {
 	// Unbind physical interface from host driver and bind to vfio
 	// so that it can be passed to qemu.
 	vfioPath, err := bindNICToVFIO(endpoint)
@@ -95,13 +96,13 @@ func (endpoint *PhysicalEndpoint) Attach(s *Sandbox) error {
 		ColdPlug:      true,
 	}
 
-	_, err = s.AddDevice(d)
+	_, err = s.AddDevice(ctx, d)
 	return err
 }
 
 // Detach for physical endpoint unbinds the physical network interface from vfio-pci
 // and binds it back to the saved host driver.
-func (endpoint *PhysicalEndpoint) Detach(netNsCreated bool, netNsPath string) error {
+func (endpoint *PhysicalEndpoint) Detach(ctx context.Context, netNsCreated bool, netNsPath string) error {
 	// Bind back the physical network interface to host.
 	// We need to do this even if a new network namespace has not
 	// been created by virtcontainers.
@@ -112,12 +113,12 @@ func (endpoint *PhysicalEndpoint) Detach(netNsCreated bool, netNsPath string) er
 }
 
 // HotAttach for physical endpoint not supported yet
-func (endpoint *PhysicalEndpoint) HotAttach(h hypervisor) error {
+func (endpoint *PhysicalEndpoint) HotAttach(ctx context.Context, h hypervisor) error {
 	return fmt.Errorf("PhysicalEndpoint does not support Hot attach")
 }
 
 // HotDetach for physical endpoint not supported yet
-func (endpoint *PhysicalEndpoint) HotDetach(h hypervisor, netNsCreated bool, netNsPath string) error {
+func (endpoint *PhysicalEndpoint) HotDetach(ctx context.Context, h hypervisor, netNsCreated bool, netNsPath string) error {
 	return fmt.Errorf("PhysicalEndpoint does not support Hot detach")
 }
 

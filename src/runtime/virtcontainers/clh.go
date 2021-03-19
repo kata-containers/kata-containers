@@ -169,7 +169,8 @@ func (clh *cloudHypervisor) checkVersion() error {
 func (clh *cloudHypervisor) createSandbox(ctx context.Context, id string, networkNS NetworkNamespace, hypervisorConfig *HypervisorConfig) error {
 	clh.ctx = ctx
 
-	span, _ := clh.trace("createSandbox")
+	var span otelTrace.Span
+	span, clh.ctx = clh.trace(clh.ctx, "createSandbox")
 	defer span.End()
 
 	err := hypervisorConfig.valid()
@@ -337,8 +338,8 @@ func (clh *cloudHypervisor) createSandbox(ctx context.Context, id string, networ
 }
 
 // startSandbox will start the VMM and boot the virtual machine for the given sandbox.
-func (clh *cloudHypervisor) startSandbox(timeout int) error {
-	span, _ := clh.trace("startSandbox")
+func (clh *cloudHypervisor) startSandbox(ctx context.Context, timeout int) error {
+	span, ctx := clh.trace(ctx, "startSandbox")
 	defer span.End()
 
 	ctx, cancel := context.WithTimeout(context.Background(), clhAPITimeout*time.Second)
@@ -378,7 +379,7 @@ func (clh *cloudHypervisor) startSandbox(timeout int) error {
 
 	pid, err := clh.LaunchClh()
 	if err != nil {
-		if shutdownErr := clh.virtiofsd.Stop(); shutdownErr != nil {
+		if shutdownErr := clh.virtiofsd.Stop(ctx); shutdownErr != nil {
 			clh.Logger().WithField("error", shutdownErr).Warn("error shutting down Virtiofsd")
 		}
 		return fmt.Errorf("failed to launch cloud-hypervisor: %q", err)
@@ -395,7 +396,7 @@ func (clh *cloudHypervisor) startSandbox(timeout int) error {
 
 // getSandboxConsole builds the path of the console where we can read
 // logs coming from the sandbox.
-func (clh *cloudHypervisor) getSandboxConsole(id string) (string, string, error) {
+func (clh *cloudHypervisor) getSandboxConsole(ctx context.Context, id string) (string, string, error) {
 	clh.Logger().WithField("function", "getSandboxConsole").WithField("id", id).Info("Get Sandbox Console")
 	master, slave, err := console.NewPty()
 	if err != nil {
@@ -407,11 +408,11 @@ func (clh *cloudHypervisor) getSandboxConsole(id string) (string, string, error)
 	return consoleProtoPty, slave, nil
 }
 
-func (clh *cloudHypervisor) disconnect() {
+func (clh *cloudHypervisor) disconnect(ctx context.Context) {
 	clh.Logger().WithField("function", "disconnect").Info("Disconnecting Sandbox Console")
 }
 
-func (clh *cloudHypervisor) getThreadIDs() (vcpuThreadIDs, error) {
+func (clh *cloudHypervisor) getThreadIDs(ctx context.Context) (vcpuThreadIDs, error) {
 
 	clh.Logger().WithField("function", "getThreadIDs").Info("get thread ID's")
 
@@ -473,8 +474,8 @@ func (clh *cloudHypervisor) hotPlugVFIODevice(device config.VFIODev) error {
 	return err
 }
 
-func (clh *cloudHypervisor) hotplugAddDevice(devInfo interface{}, devType deviceType) (interface{}, error) {
-	span, _ := clh.trace("hotplugAddDevice")
+func (clh *cloudHypervisor) hotplugAddDevice(ctx context.Context, devInfo interface{}, devType deviceType) (interface{}, error) {
+	span, _ := clh.trace(ctx, "hotplugAddDevice")
 	defer span.End()
 
 	switch devType {
@@ -490,8 +491,8 @@ func (clh *cloudHypervisor) hotplugAddDevice(devInfo interface{}, devType device
 
 }
 
-func (clh *cloudHypervisor) hotplugRemoveDevice(devInfo interface{}, devType deviceType) (interface{}, error) {
-	span, _ := clh.trace("hotplugRemoveDevice")
+func (clh *cloudHypervisor) hotplugRemoveDevice(ctx context.Context, devInfo interface{}, devType deviceType) (interface{}, error) {
+	span, ctx := clh.trace(ctx, "hotplugRemoveDevice")
 	defer span.End()
 
 	var deviceID string
@@ -525,7 +526,7 @@ func (clh *cloudHypervisor) hypervisorConfig() HypervisorConfig {
 	return clh.config
 }
 
-func (clh *cloudHypervisor) resizeMemory(reqMemMB uint32, memoryBlockSizeMB uint32, probe bool) (uint32, memoryDevice, error) {
+func (clh *cloudHypervisor) resizeMemory(ctx context.Context, reqMemMB uint32, memoryBlockSizeMB uint32, probe bool) (uint32, memoryDevice, error) {
 
 	// TODO: Add support for virtio-mem
 
@@ -590,7 +591,7 @@ func (clh *cloudHypervisor) resizeMemory(reqMemMB uint32, memoryBlockSizeMB uint
 	return uint32(newMem.ToMiB()), memoryDevice{sizeMB: int(hotplugSize.ToMiB())}, nil
 }
 
-func (clh *cloudHypervisor) resizeVCPUs(reqVCPUs uint32) (currentVCPUs uint32, newVCPUs uint32, err error) {
+func (clh *cloudHypervisor) resizeVCPUs(ctx context.Context, reqVCPUs uint32) (currentVCPUs uint32, newVCPUs uint32, err error) {
 	cl := clh.client()
 
 	// Retrieve the number of current vCPUs via HTTP API
@@ -630,12 +631,12 @@ func (clh *cloudHypervisor) resizeVCPUs(reqVCPUs uint32) (currentVCPUs uint32, n
 	return currentVCPUs, newVCPUs, nil
 }
 
-func (clh *cloudHypervisor) cleanup() error {
+func (clh *cloudHypervisor) cleanup(ctx context.Context) error {
 	clh.Logger().WithField("function", "cleanup").Info("cleanup")
 	return nil
 }
 
-func (clh *cloudHypervisor) pauseSandbox() error {
+func (clh *cloudHypervisor) pauseSandbox(ctx context.Context) error {
 	clh.Logger().WithField("function", "pauseSandbox").Info("Pause Sandbox")
 	return nil
 }
@@ -645,24 +646,24 @@ func (clh *cloudHypervisor) saveSandbox() error {
 	return nil
 }
 
-func (clh *cloudHypervisor) resumeSandbox() error {
+func (clh *cloudHypervisor) resumeSandbox(ctx context.Context) error {
 	clh.Logger().WithField("function", "resumeSandbox").Info("Resume Sandbox")
 	return nil
 }
 
 // stopSandbox will stop the Sandbox's VM.
-func (clh *cloudHypervisor) stopSandbox() (err error) {
-	span, _ := clh.trace("stopSandbox")
+func (clh *cloudHypervisor) stopSandbox(ctx context.Context) (err error) {
+	span, ctx := clh.trace(ctx, "stopSandbox")
 	defer span.End()
 	clh.Logger().WithField("function", "stopSandbox").Info("Stop Sandbox")
-	return clh.terminate()
+	return clh.terminate(ctx)
 }
 
 func (clh *cloudHypervisor) fromGrpc(ctx context.Context, hypervisorConfig *HypervisorConfig, j []byte) error {
 	return errors.New("cloudHypervisor is not supported by VM cache")
 }
 
-func (clh *cloudHypervisor) toGrpc() ([]byte, error) {
+func (clh *cloudHypervisor) toGrpc(ctx context.Context) ([]byte, error) {
 	return nil, errors.New("cloudHypervisor is not supported by VM cache")
 }
 
@@ -697,8 +698,8 @@ func (clh *cloudHypervisor) getPids() []int {
 	return pids
 }
 
-func (clh *cloudHypervisor) addDevice(devInfo interface{}, devType deviceType) error {
-	span, _ := clh.trace("addDevice")
+func (clh *cloudHypervisor) addDevice(ctx context.Context, devInfo interface{}, devType deviceType) error {
+	span, _ := clh.trace(ctx, "addDevice")
 	defer span.End()
 
 	var err error
@@ -731,8 +732,8 @@ func (clh *cloudHypervisor) Logger() *log.Entry {
 }
 
 // Adds all capabilities supported by cloudHypervisor implementation of hypervisor interface
-func (clh *cloudHypervisor) capabilities() types.Capabilities {
-	span, _ := clh.trace("capabilities")
+func (clh *cloudHypervisor) capabilities(ctx context.Context) types.Capabilities {
+	span, _ := clh.trace(ctx, "capabilities")
 	defer span.End()
 
 	clh.Logger().WithField("function", "capabilities").Info("get Capabilities")
@@ -742,21 +743,21 @@ func (clh *cloudHypervisor) capabilities() types.Capabilities {
 	return caps
 }
 
-func (clh *cloudHypervisor) trace(name string) (otelTrace.Span, context.Context) {
-	if clh.ctx == nil {
+func (clh *cloudHypervisor) trace(parent context.Context, name string) (otelTrace.Span, context.Context) {
+	if parent == nil {
 		clh.Logger().WithField("type", "bug").Error("trace called before context set")
-		clh.ctx = context.Background()
+		parent = context.Background()
 	}
 
 	tracer := otel.Tracer("kata")
-	ctx, span := tracer.Start(clh.ctx, name)
+	ctx, span := tracer.Start(parent, name)
 	span.SetAttributes([]otelLabel.KeyValue{otelLabel.Key("subsystem").String("hypervisor"), otelLabel.Key("type").String("clh")}...)
 
 	return span, ctx
 }
 
-func (clh *cloudHypervisor) terminate() (err error) {
-	span, _ := clh.trace("terminate")
+func (clh *cloudHypervisor) terminate(ctx context.Context) (err error) {
+	span, ctx := clh.trace(ctx, "terminate")
 	defer span.End()
 
 	pid := clh.state.PID
@@ -817,7 +818,7 @@ func (clh *cloudHypervisor) terminate() (err error) {
 	}
 
 	clh.Logger().Debug("stop virtiofsd")
-	if err = clh.virtiofsd.Stop(); err != nil {
+	if err = clh.virtiofsd.Stop(ctx); err != nil {
 		clh.Logger().Error("failed to stop virtiofsd")
 	}
 

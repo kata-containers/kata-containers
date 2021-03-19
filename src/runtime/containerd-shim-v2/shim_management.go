@@ -75,7 +75,8 @@ func (s *service) serveMetrics(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// get metrics from agent
-	agentMetrics, err := s.sandbox.GetAgentMetrics()
+	// can not pass context to serveMetrics, so use background context
+	agentMetrics, err := s.sandbox.GetAgentMetrics(context.Background())
 	if err != nil {
 		shimMgtLog.WithError(err).Error("failed GetAgentMetrics")
 		if isGRPCErrorCode(codes.NotFound, err) {
@@ -96,7 +97,7 @@ func (s *service) serveMetrics(w http.ResponseWriter, r *http.Request) {
 	// collect pod overhead metrics need sleep to get the changes of cpu/memory resources usage
 	// so here only trigger the collect operation, and the data will be gathered
 	// next time collection request from Prometheus server
-	go s.setPodOverheadMetrics()
+	go s.setPodOverheadMetrics(context.Background())
 }
 
 func decodeAgentMetrics(body string) []*dto.MetricFamily {
