@@ -71,8 +71,10 @@ RUN stable_branch=$(cat VERSION | awk 'BEGIN{FS=OFS="."}{print $1 "." $2 ".x"}')
 
 RUN echo "Apply patches for specific qemu version"
 RUN /root/apply_patches.sh "/root/kata_qemu/patches/tag_patches/${QEMU_VERSION}"
-RUN PREFIX="${PREFIX}" /root/configure-hypervisor.sh -s kata-qemu | xargs ./configure \
-	--with-pkgversion=kata-static
+
+ARG BUILD_SUFFIX
+RUN PREFIX="${PREFIX}" /root/configure-hypervisor.sh -s "kata-qemu${BUILD_SUFFIX}" | xargs ./configure \
+	--with-pkgversion="kata-static${BUILD_SUFFIX}"
 
 RUN make -j$(nproc)
 RUN make install DESTDIR="${QEMU_DESTDIR}"
