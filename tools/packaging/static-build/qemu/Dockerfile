@@ -12,6 +12,12 @@ ARG QEMU_TARBALL
 ARG PREFIX
 
 WORKDIR /root/qemu
+
+# CACHE_TIMEOUT: date to invalid cache, if the date changes the image will be rebuild
+# This is required to keep build dependencies with security fixes.
+ARG CACHE_TIMEOUT
+RUN echo "$CACHE_TIMEOUT"
+
 RUN apt-get update && apt-get upgrade -y
 RUN apt-get --no-install-recommends install -y \
 	    apt-utils \
