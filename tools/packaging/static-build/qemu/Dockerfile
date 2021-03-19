@@ -59,9 +59,12 @@ ADD qemu /root/kata_qemu
 ADD scripts/apply_patches.sh /root/apply_patches.sh
 ADD static-build /root/static-build
 
+RUN echo "Apply patches for base version"
 RUN stable_branch=$(cat VERSION | awk 'BEGIN{FS=OFS="."}{print $1 "." $2 ".x"}') && \
 	/root/apply_patches.sh "/root/kata_qemu/patches/${stable_branch}"
 
+RUN echo "Apply patches for specific qemu version"
+RUN /root/apply_patches.sh "/root/kata_qemu/patches/tag_patches/${QEMU_VERSION}"
 RUN PREFIX="${PREFIX}" /root/configure-hypervisor.sh -s kata-qemu | xargs ./configure \
 	--with-pkgversion=kata-static
 
