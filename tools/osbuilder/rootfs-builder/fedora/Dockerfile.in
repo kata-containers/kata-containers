@@ -26,6 +26,7 @@ RUN dnf -y update && dnf install -y \
     libseccomp-devel \
     libstdc++-devel \
     libstdc++-static \
+    protobuf-compiler \
     m4 \
     make \
     pkgconfig \
