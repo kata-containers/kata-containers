@@ -1,3 +1,9 @@
+#!/usr/bin/env bash
+# Copyright (c) 2021 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+
 FROM centos/systemd
 ARG KUBE_ARCH=amd64
 ARG KATA_ARTIFACTS=./kata-static.tar.xz

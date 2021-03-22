@@ -147,7 +147,7 @@ DOCKER_RUNTIME      Docker runtime to use when USE_DOCKER is set.
 
 Refer to the Platform-OS Compatibility Matrix for more details on the supported
 architectures:
-https://github.com/kata-containers/osbuilder#platform-distro-compatibility-matrix
+https://github.com/kata-containers/kata-containers/tree/main/tools/osbuilder#platform-distro-compatibility-matrix
 
 EOT
 exit "${error}"
@@ -566,7 +566,7 @@ EOT
 	AGENT_DEST="${AGENT_DIR}/${AGENT_BIN}"
 
 	if [ -z "${AGENT_SOURCE_BIN}" ] ; then
-		[ "$ARCH" == "ppc64le" ] && ([ "$LIBC" == "gnu" ] || die "LIBC type for ppc64le should be gnu")
+		[ "$ARCH" == "ppc64le" ] && ([ "$LIBC" == "gnu" ] || (LIBC=gnu && echo "WARNING: LIBC type for ppc64le should be gnu"))
 		bash ${script_dir}/../../../ci/install_musl.sh
 		# rust agent needs ${arch}-unknown-linux-${LIBC}
 		rustup show | grep linux-${LIBC} > /dev/null || bash ${script_dir}/../../../ci/install_rust.sh

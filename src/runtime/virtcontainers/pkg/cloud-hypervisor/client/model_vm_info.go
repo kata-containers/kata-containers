@@ -13,4 +13,5 @@ type VmInfo struct {
 	Config VmConfig `json:"config"`
 	State string `json:"state"`
 	MemoryActualSize int64 `json:"memory_actual_size,omitempty"`
+	DeviceTree map[string]DeviceNode `json:"device_tree,omitempty"`
 }

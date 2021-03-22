@@ -282,7 +282,7 @@ ifneq (,$(CLHCMD))
     DEFENABLEHUGEPAGES_CLH := true
     DEFNETWORKMODEL_CLH := tcfilter
     KERNELTYPE_CLH = uncompressed
-    KERNEL_NAME_CLH = $(call MAKE_KERNEL_VIRTIOFS_NAME,$(KERNELTYPE_CLH))
+    KERNEL_NAME_CLH = $(call MAKE_KERNEL_NAME,$(KERNELTYPE_CLH))
     KERNELPATH_CLH = $(KERNELDIR)/$(KERNEL_NAME_CLH)
 endif
 
@@ -600,8 +600,9 @@ $(SHIMV2_OUTPUT): $(SOURCES) $(GENERATED_FILES) $(MAKEFILE_LIST)
 	$(QUIET_BUILD)(cd $(SHIMV2_DIR)/ && ln -fs $(GENERATED_CONFIG))
 	$(QUIET_BUILD)(cd $(SHIMV2_DIR)/ && go build $(KATA_LDFLAGS) $(BUILDFLAGS) -o $@ .)
 
-$(MONITOR_OUTPUT): $(SOURCES) $(GENERATED_FILES) $(MAKEFILE_LIST)
-	$(QUIET_BUILD)(cd $(MONITOR_DIR)/ && go build $(KATA_LDFLAGS) $(BUILDFLAGS) -o $@ .)
+$(MONITOR_OUTPUT): $(SOURCES) $(GENERATED_FILES) $(MAKEFILE_LIST) .git-commit
+	$(QUIET_BUILD)(cd $(MONITOR_DIR)/ && CGO_ENABLED=0 go build \
+		--ldflags "-X main.GitCommit=$(shell cat .git-commit)" $(BUILDFLAGS) -buildmode=exe -o $@ .)
 
 .PHONY: \
 	check \

@@ -113,7 +113,7 @@ Rootfs: partition that contains the root filesystem (/usr, /bin, ect).
 
 Kernels and hypervisors that support DAX/NVDIMM read the MBR #2, otherwise MBR #1 is read.
 
-[1] - https://github.com/kata-containers/osbuilder/blob/master/image-builder/nsdax.gpl.c
+[1] - https://github.com/kata-containers/kata-containers/blob/main/tools/osbuilder/image-builder/nsdax.gpl.c
 [2] - https://github.com/torvalds/linux/blob/master/drivers/nvdimm/pfn.h
 
 EOT

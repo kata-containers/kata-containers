@@ -185,7 +185,7 @@ in Kibana:
 ![Kata tags in EFK](./images/efk_syslog_entry_detail.png).
 
 We can however further sub-parse the Kata entries using the
-[Fluentd plugins](https://docs.fluentbit.io/manual/parser/logfmt) that will parse
+[Fluentd plugins](https://docs.fluentbit.io/manual/v/1.3/parser/logfmt) that will parse
 `logfmt` formatted data. We can utilise these to parse the sub-fields using a Fluentd filter
 section. At the same time, we will prefix the new fields with `kata_` to make it clear where
 they have come from:

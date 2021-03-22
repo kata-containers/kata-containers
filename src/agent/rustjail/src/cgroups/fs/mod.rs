@@ -320,37 +320,23 @@ fn set_hugepages_resources(
 }
 
 fn set_block_io_resources(
-    cg: &cgroups::Cgroup,
+    _cg: &cgroups::Cgroup,
     blkio: &LinuxBlockIO,
     res: &mut cgroups::Resources,
 ) -> Result<()> {
     info!(sl!(), "cgroup manager set block io");
     res.blkio.update_values = true;
 
-    if cg.v2() {
-        res.blkio.weight = convert_blk_io_to_v2_value(blkio.weight);
-        res.blkio.leaf_weight = convert_blk_io_to_v2_value(blkio.leaf_weight);
-    } else {
-        res.blkio.weight = blkio.weight;
-        res.blkio.leaf_weight = blkio.leaf_weight;
-    }
+    res.blkio.weight = blkio.weight;
+    res.blkio.leaf_weight = blkio.leaf_weight;
 
     let mut blk_device_resources = vec![];
     for d in blkio.weight_device.iter() {
-        let (w, lw) = if cg.v2() {
-            (
-                convert_blk_io_to_v2_value(blkio.weight),
-                convert_blk_io_to_v2_value(blkio.leaf_weight),
-            )
-        } else {
-            (blkio.weight, blkio.leaf_weight)
-        };
-
         let dr = BlkIoDeviceResource {
             major: d.blk.major as u64,
             minor: d.blk.minor as u64,
-            weight: w,
-            leaf_weight: lw,
+            weight: blkio.weight,
+            leaf_weight: blkio.leaf_weight,
         };
         blk_device_resources.push(dr);
     }
@@ -1147,20 +1133,6 @@ fn convert_memory_swap_to_v2_value(memory_swap: i64, memory: i64) -> Result<i64>
         return Err(anyhow!("memory+swap limit should be >= memory limit"));
     }
     Ok(memory_swap - memory)
-}
-
-// Since the OCI spec is designed for cgroup v1, in some cases
-// there is need to convert from the cgroup v1 configuration to cgroup v2
-// the formula for BlkIOWeight is y = (1 + (x - 10) * 9999 / 990)
-// convert linearly from [10-1000] to [1-10000]
-// https://github.com/opencontainers/runc/blob/a5847db387ae28c0ca4ebe4beee1a76900c86414/libcontainer/cgroups/utils.go#L382
-fn convert_blk_io_to_v2_value(blk_io_weight: Option<u16>) -> Option<u16> {
-    let v = blk_io_weight.unwrap_or(0);
-    if v != 0 {
-        return None;
-    }
-
-    Some(1 + (v - 10) * 9999 / 990 as u16)
 }
 
 #[cfg(test)]

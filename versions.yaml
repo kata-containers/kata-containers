@@ -75,7 +75,7 @@ assets:
       url: "https://github.com/cloud-hypervisor/cloud-hypervisor"
       uscan-url: >-
         https://github.com/cloud-hypervisor/cloud-hypervisor/tags.*/v?(\d\S+)\.tar\.gz
-      version: "270631922deee9bdea13635a104e111768446c7b"
+      version: "v0.12.0"
 
     firecracker:
       description: "Firecracker micro-VMM"
@@ -179,7 +179,7 @@ externals:
     description: |
       OCI-based Kubernetes Container Runtime Interface implementation
     url: "https://github.com/cri-o/cri-o"
-    version: "v1.18.3"
+    version: "v1.18.4-2-gee9128444"
     meta:
       openshift: "6273bea4c9ed788aeb3d051ebf2d030060c05b6c"
       crictl: 1.0.0-beta.2

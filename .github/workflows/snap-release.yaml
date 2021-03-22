@@ -21,8 +21,8 @@ jobs:
           kata_url="https://github.com/kata-containers/kata-containers"
           latest_version=$(git ls-remote --tags ${kata_url} | egrep -o "refs.*" | egrep -o "[[:digit:]]+\.[[:digit:]]+\.[[:digit:]]+" | sort -V -r -u | head -1)
           current_version="$(echo ${GITHUB_REF} | cut -d/ -f3)"
-          # Check if the current tag is the latest tag
-          if echo -e "$latest_version\n$current_version" | sort -C -V; then
+          # Check semantic versioning format (x.y.z) and if the current tag is the latest tag
+          if echo "${current_version}" | grep -q "^[[:digit:]]\+\.[[:digit:]]\+\.[[:digit:]]\+$" && echo -e "$latest_version\n$current_version" | sort -C -V; then
             # Current version is the latest version, build it
             snapcraft -d snap --destructive-mode
           fi
