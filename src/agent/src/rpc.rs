@@ -1040,6 +1040,10 @@ impl protocols::agent_ttrpc::AgentService for AgentService {
         // destroy all containers, clean up, notify agent to exit
         // etc.
         sandbox.destroy().await.unwrap();
+        // Close get_oom_event connection,
+        // otherwise it will block the shutdown of ttrpc.
+        sandbox.event_tx.take();
+
         sandbox.sender.take().unwrap().send(1).unwrap();
 
         Ok(Empty::new())
@@ -1188,15 +1192,16 @@ impl protocols::agent_ttrpc::AgentService for AgentService {
         drop(s);
         drop(sandbox);
 
-        match event_rx.recv().await {
-            None => Err(ttrpc_error(ttrpc::Code::INTERNAL, "")),
-            Some(container_id) => {
-                info!(sl!(), "get_oom_event return {}", &container_id);
-                let mut resp = OOMEvent::new();
-                resp.container_id = container_id;
-                Ok(resp)
-            }
+        if let Some(container_id) = event_rx.recv().await {
+            info!(sl!(), "get_oom_event return {}", &container_id);
+
+            let mut resp = OOMEvent::new();
+            resp.container_id = container_id;
+
+            return Ok(resp);
         }
+
+        Err(ttrpc_error(ttrpc::Code::INTERNAL, ""))
     }
 }
 
