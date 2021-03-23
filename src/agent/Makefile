@@ -141,6 +141,9 @@ clippy: $(GENERATED_CODE)
 		-Aclippy::redundant_allocation \
 		-D warnings
 
+format:
+	cargo fmt -- --check
+
 
 ##TARGET install: install agent
 install: install-services
@@ -157,7 +160,7 @@ test:
 	@cargo test --all --target $(TRIPLE)
 
 ##TARGET check: run test
-check: test
+check: clippy format
 
 ##TARGET run: build and run agent
 run:

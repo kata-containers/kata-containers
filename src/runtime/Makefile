@@ -642,7 +642,6 @@ go-test: $(GENERATED_FILES)
 	go test -v -mod=vendor ./...
 
 check-go-static:
-	$(QUIET_CHECK)../../ci/static-checks.sh
 	$(QUIET_CHECK)../../ci/go-no-os-exit.sh ./cli
 	$(QUIET_CHECK)../../ci/go-no-os-exit.sh ./virtcontainers
 
