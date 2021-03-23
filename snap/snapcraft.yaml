@@ -245,10 +245,11 @@ parts:
         ;;
 
         *)
-          branch="$(${yq} r ${versions_file} assets.hypervisor.qemu.tag)"
+          branch="$(${yq} r ${versions_file} assets.hypervisor.qemu.version)"
           url="$(${yq} r ${versions_file} assets.hypervisor.qemu.url)"
           commit=""
           patches_dir="${kata_dir}/tools/packaging/qemu/patches/$(echo ${branch} | sed -e 's/.[[:digit:]]*$//' -e 's/^v//').x"
+          patches_version_dir="${kata_dir}/tools/packaging/qemu/patches/tag_patches/${branch}"
         ;;
       esac
 
@@ -261,15 +262,9 @@ parts:
       [ -n "$(ls -A ui/keycodemapdb)" ] || git clone https://github.com/qemu/keycodemapdb ui/keycodemapdb/
       [ -n "$(ls -A capstone)" ] || git clone https://github.com/qemu/capstone capstone
 
-      # Apply patches
-      for patch in ${patches_dir}/*.patch; do
-        echo "Applying $(basename "$patch") ..."
-        patch \
-          --batch \
-          --forward \
-          --strip 1 \
-          --input "$patch"
-      done
+      # Apply branch patches
+      ${kata_dir}/tools/packaging/scripts/apply_patches.sh "${patches_dir}"
+      ${kata_dir}/tools/packaging/scripts/apply_patches.sh "${patches_version_dir}"
 
       # Only x86_64 supports libpmem
       [ "$(uname -m)" = "x86_64" ] && sudo apt-get --no-install-recommends install -y apt-utils ca-certificates libpmem-dev libseccomp-dev
