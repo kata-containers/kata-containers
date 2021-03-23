@@ -71,12 +71,12 @@ func (s *Sandbox) Release(ctx context.Context) error {
 }
 
 // Start implements the VCSandbox function of the same name.
-func (s *Sandbox) Start() error {
+func (s *Sandbox) Start(ctx context.Context) error {
 	return nil
 }
 
 // Stop implements the VCSandbox function of the same name.
-func (s *Sandbox) Stop(force bool) error {
+func (s *Sandbox) Stop(ctx context.Context, force bool) error {
 	return nil
 }
 
@@ -114,7 +114,7 @@ func (s *Sandbox) StartContainer(ctx context.Context, contID string) (vc.VCConta
 }
 
 // StopContainer implements the VCSandbox function of the same name.
-func (s *Sandbox) StopContainer(contID string, force bool) (vc.VCContainer, error) {
+func (s *Sandbox) StopContainer(ctx context.Context, contID string, force bool) (vc.VCContainer, error) {
 	return &Container{}, nil
 }
 

@@ -7,6 +7,7 @@
 package containerdshim
 
 import (
+	"context"
 	"testing"
 
 	"github.com/containerd/cgroups"
@@ -50,7 +51,7 @@ func TestStatNetworkMetric(t *testing.T) {
 		sandbox.StatsContainerFunc = nil
 	}()
 
-	resp, err := sandbox.StatsContainer(testContainerID)
+	resp, err := sandbox.StatsContainer(context.Background(), testContainerID)
 	assert.NoError(err)
 
 	metrics := statsToMetrics(&resp)
