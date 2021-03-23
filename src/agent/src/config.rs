@@ -10,6 +10,7 @@ use std::time;
 const DEBUG_CONSOLE_FLAG: &str = "agent.debug_console";
 const DEV_MODE_FLAG: &str = "agent.devmode";
 const LOG_LEVEL_OPTION: &str = "agent.log";
+const SERVER_ADDR_OPTION: &str = "agent.server_addr";
 const HOTPLUG_TIMOUT_OPTION: &str = "agent.hotplug_timeout";
 const DEBUG_CONSOLE_VPORT_OPTION: &str = "agent.debug_console_vport";
 const LOG_VPORT_OPTION: &str = "agent.log_vport";
@@ -25,6 +26,22 @@ const VSOCK_PORT: u16 = 1024;
 // Environment variables used for development and testing
 const SERVER_ADDR_ENV_VAR: &str = "KATA_AGENT_SERVER_ADDR";
 const LOG_LEVEL_ENV_VAR: &str = "KATA_AGENT_LOG_LEVEL";
+
+const ERR_INVALID_LOG_LEVEL: &str = "invalid log level";
+const ERR_INVALID_LOG_LEVEL_PARAM: &str = "invalid log level parameter";
+const ERR_INVALID_GET_VALUE_PARAM: &str = "expected name=value";
+const ERR_INVALID_GET_VALUE_NO_NAME: &str = "name=value parameter missing name";
+const ERR_INVALID_GET_VALUE_NO_VALUE: &str = "name=value parameter missing value";
+const ERR_INVALID_LOG_LEVEL_KEY: &str = "invalid log level key name";
+
+const ERR_INVALID_HOTPLUG_TIMEOUT: &str = "invalid hotplug timeout parameter";
+const ERR_INVALID_HOTPLUG_TIMEOUT_PARAM: &str = "unable to parse hotplug timeout";
+const ERR_INVALID_HOTPLUG_TIMEOUT_KEY: &str = "invalid hotplug timeout key name";
+
+const ERR_INVALID_CONTAINER_PIPE_SIZE: &str = "invalid container pipe size parameter";
+const ERR_INVALID_CONTAINER_PIPE_SIZE_PARAM: &str = "unable to parse container pipe size";
+const ERR_INVALID_CONTAINER_PIPE_SIZE_KEY: &str = "invalid container pipe size key name";
+const ERR_INVALID_CONTAINER_PIPE_NEGATIVE: &str = "container pipe size should not be negative";
 
 #[derive(Debug)]
 pub struct AgentConfig {
@@ -94,6 +111,12 @@ impl AgentConfig {
 
             // parse cmdline options
             parse_cmdline_param!(param, LOG_LEVEL_OPTION, self.log_level, get_log_level);
+            parse_cmdline_param!(
+                param,
+                SERVER_ADDR_OPTION,
+                self.server_addr,
+                get_string_value
+            );
 
             // ensure the timeout is a positive value
             parse_cmdline_param!(
@@ -177,7 +200,7 @@ fn logrus_to_slog_level(logrus_level: &str) -> Result<slog::Level> {
         "trace" => slog::Level::Trace,
 
         _ => {
-            return Err(anyhow!("invalid log level"));
+            return Err(anyhow!(ERR_INVALID_LOG_LEVEL));
         }
     };
 
@@ -188,11 +211,11 @@ fn get_log_level(param: &str) -> Result<slog::Level> {
     let fields: Vec<&str> = param.split('=').collect();
 
     if fields.len() != 2 {
-        return Err(anyhow!("invalid log level parameter"));
+        return Err(anyhow!(ERR_INVALID_LOG_LEVEL_PARAM));
     }
 
     if fields[0] != LOG_LEVEL_OPTION {
-        Err(anyhow!("invalid log level key name"))
+        Err(anyhow!(ERR_INVALID_LOG_LEVEL_KEY))
     } else {
         Ok(logrus_to_slog_level(fields[1])?)
     }
@@ -202,17 +225,17 @@ fn get_hotplug_timeout(param: &str) -> Result<time::Duration> {
     let fields: Vec<&str> = param.split('=').collect();
 
     if fields.len() != 2 {
-        return Err(anyhow!("invalid hotplug timeout parameter"));
+        return Err(anyhow!(ERR_INVALID_HOTPLUG_TIMEOUT));
     }
 
     let key = fields[0];
     if key != HOTPLUG_TIMOUT_OPTION {
-        return Err(anyhow!("invalid hotplug timeout key name"));
+        return Err(anyhow!(ERR_INVALID_HOTPLUG_TIMEOUT_KEY));
     }
 
     let value = fields[1].parse::<u64>();
     if value.is_err() {
-        return Err(anyhow!("unable to parse hotplug timeout"));
+        return Err(anyhow!(ERR_INVALID_HOTPLUG_TIMEOUT_PARAM));
     }
 
     Ok(time::Duration::from_secs(value.unwrap()))
@@ -234,26 +257,54 @@ fn get_bool_value(param: &str) -> Result<bool> {
     })
 }
 
+// Return the value from a "name=value" string.
+//
+// Note:
+//
+// - A name *and* a value is required.
+// - A value can contain any number of equal signs.
+// - We could/should maybe check if the name is pure whitespace
+//   since this is considered to be invalid.
+fn get_string_value(param: &str) -> Result<String> {
+    let fields: Vec<&str> = param.split('=').collect();
+
+    if fields.len() < 2 {
+        return Err(anyhow!(ERR_INVALID_GET_VALUE_PARAM));
+    }
+
+    // We need name (but the value can be blank)
+    if fields[0] == "" {
+        return Err(anyhow!(ERR_INVALID_GET_VALUE_NO_NAME));
+    }
+
+    let value = fields[1..].join("=");
+    if value == "" {
+        return Err(anyhow!(ERR_INVALID_GET_VALUE_NO_VALUE));
+    }
+
+    Ok(value)
+}
+
 fn get_container_pipe_size(param: &str) -> Result<i32> {
     let fields: Vec<&str> = param.split('=').collect();
 
     if fields.len() != 2 {
-        return Err(anyhow!("invalid container pipe size parameter"));
+        return Err(anyhow!(ERR_INVALID_CONTAINER_PIPE_SIZE));
     }
 
     let key = fields[0];
     if key != CONTAINER_PIPE_SIZE_OPTION {
-        return Err(anyhow!("invalid container pipe size key name"));
+        return Err(anyhow!(ERR_INVALID_CONTAINER_PIPE_SIZE_KEY));
     }
 
     let res = fields[1].parse::<i32>();
     if res.is_err() {
-        return Err(anyhow!("unable to parse container pipe size"));
+        return Err(anyhow!(ERR_INVALID_CONTAINER_PIPE_SIZE_PARAM));
     }
 
     let value = res.unwrap();
     if value < 0 {
-        return Err(anyhow!("container pipe size should not be negative"));
+        return Err(anyhow!(ERR_INVALID_CONTAINER_PIPE_NEGATIVE));
     }
 
     Ok(value)
@@ -267,19 +318,6 @@ mod tests {
     use std::io::Write;
     use std::time;
     use tempfile::tempdir;
-
-    const ERR_INVALID_LOG_LEVEL: &str = "invalid log level";
-    const ERR_INVALID_LOG_LEVEL_PARAM: &str = "invalid log level parameter";
-    const ERR_INVALID_LOG_LEVEL_KEY: &str = "invalid log level key name";
-
-    const ERR_INVALID_HOTPLUG_TIMEOUT: &str = "invalid hotplug timeout parameter";
-    const ERR_INVALID_HOTPLUG_TIMEOUT_PARAM: &str = "unable to parse hotplug timeout";
-    const ERR_INVALID_HOTPLUG_TIMEOUT_KEY: &str = "invalid hotplug timeout key name";
-
-    const ERR_INVALID_CONTAINER_PIPE_SIZE: &str = "invalid container pipe size parameter";
-    const ERR_INVALID_CONTAINER_PIPE_SIZE_PARAM: &str = "unable to parse container pipe size";
-    const ERR_INVALID_CONTAINER_PIPE_SIZE_KEY: &str = "invalid container pipe size key name";
-    const ERR_INVALID_CONTAINER_PIPE_NEGATIVE: &str = "container pipe size should not be negative";
 
     // helper function to make errors less crazy-long
     fn make_err(desc: &str) -> Error {
@@ -809,6 +847,61 @@ mod tests {
                 server_addr: TEST_SERVER_ADDR,
                 unified_cgroup_hierarchy: false,
             },
+            TestData {
+                contents: "server_addr=unix:///tmp/foo.socket",
+                env_vars: Vec::new(),
+                debug_console: false,
+                dev_mode: false,
+                log_level: DEFAULT_LOG_LEVEL,
+                hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
+                container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+                server_addr: TEST_SERVER_ADDR,
+                unified_cgroup_hierarchy: false,
+            },
+            TestData {
+                contents: "agent.server_address=unix:///tmp/foo.socket",
+                env_vars: Vec::new(),
+                debug_console: false,
+                dev_mode: false,
+                log_level: DEFAULT_LOG_LEVEL,
+                hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
+                container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+                server_addr: TEST_SERVER_ADDR,
+                unified_cgroup_hierarchy: false,
+            },
+            TestData {
+                contents: "agent.server_addr=unix:///tmp/foo.socket",
+                env_vars: Vec::new(),
+                debug_console: false,
+                dev_mode: false,
+                log_level: DEFAULT_LOG_LEVEL,
+                hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
+                container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+                server_addr: "unix:///tmp/foo.socket",
+                unified_cgroup_hierarchy: false,
+            },
+            TestData {
+                contents: " agent.server_addr=unix:///tmp/foo.socket",
+                env_vars: Vec::new(),
+                debug_console: false,
+                dev_mode: false,
+                log_level: DEFAULT_LOG_LEVEL,
+                hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
+                container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+                server_addr: "unix:///tmp/foo.socket",
+                unified_cgroup_hierarchy: false,
+            },
+            TestData {
+                contents: " agent.server_addr=unix:///tmp/foo.socket a",
+                env_vars: Vec::new(),
+                debug_console: false,
+                dev_mode: false,
+                log_level: DEFAULT_LOG_LEVEL,
+                hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
+                container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+                server_addr: "unix:///tmp/foo.socket",
+                unified_cgroup_hierarchy: false,
+            },
         ];
 
         let dir = tempdir().expect("failed to create tmpdir");
@@ -1189,6 +1282,84 @@ mod tests {
             let msg = format!("test[{}]: {:?}", i, d);
 
             let result = get_container_pipe_size(d.param);
+
+            let msg = format!("{}: result: {:?}", msg, result);
+
+            assert_result!(d.result, result, msg);
+        }
+    }
+
+    #[test]
+    fn test_get_string_value() {
+        #[derive(Debug)]
+        struct TestData<'a> {
+            param: &'a str,
+            result: Result<String>,
+        }
+
+        let tests = &[
+            TestData {
+                param: "",
+                result: Err(make_err(ERR_INVALID_GET_VALUE_PARAM)),
+            },
+            TestData {
+                param: "=",
+                result: Err(make_err(ERR_INVALID_GET_VALUE_NO_NAME)),
+            },
+            TestData {
+                param: "==",
+                result: Err(make_err(ERR_INVALID_GET_VALUE_NO_NAME)),
+            },
+            TestData {
+                param: "x=",
+                result: Err(make_err(ERR_INVALID_GET_VALUE_NO_VALUE)),
+            },
+            TestData {
+                param: "x==",
+                result: Ok("=".into()),
+            },
+            TestData {
+                param: "x===",
+                result: Ok("==".into()),
+            },
+            TestData {
+                param: "x==x",
+                result: Ok("=x".into()),
+            },
+            TestData {
+                param: "x=x",
+                result: Ok("x".into()),
+            },
+            TestData {
+                param: "x=x=",
+                result: Ok("x=".into()),
+            },
+            TestData {
+                param: "x=x=x",
+                result: Ok("x=x".into()),
+            },
+            TestData {
+                param: "foo=bar",
+                result: Ok("bar".into()),
+            },
+            TestData {
+                param: "x= =",
+                result: Ok(" =".into()),
+            },
+            TestData {
+                param: "x= =",
+                result: Ok(" =".into()),
+            },
+            TestData {
+                param: "x= = ",
+                result: Ok(" = ".into()),
+            },
+        ];
+
+        for (i, d) in tests.iter().enumerate() {
+            let msg = format!("test[{}]: {:?}", i, d);
+
+            let result = get_string_value(d.param);
 
             let msg = format!("{}: result: {:?}", msg, result);
 
