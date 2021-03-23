@@ -381,7 +381,7 @@ install_kata() {
 
 	suffix=""
 	if [[ ${experimental_kernel} == "true" ]]; then
-		suffix="-virtiofs"
+		suffix="-experimental"
 	fi
 	if [[ ${gpu_vendor} != "" ]];then
 		suffix="-${gpu_vendor}-gpu${suffix}"
