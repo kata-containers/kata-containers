@@ -34,7 +34,7 @@ install_yq() {
 
 get_from_kata_deps() {
 	local dependency="$1"
-	BRANCH=${branch:-master}
+	BRANCH=${branch:-main}
 	local branch="${2:-${BRANCH}}"
 	GOPATH=${GOPATH:-${HOME}/go}
 	# For our CI, we will query the local versions.yaml file both for kernel and
