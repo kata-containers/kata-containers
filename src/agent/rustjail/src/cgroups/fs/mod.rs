@@ -37,6 +37,8 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 
+const GUEST_CPUS_PATH: &str = "/sys/devices/system/cpu/online";
+
 // Convenience macro to obtain the scope logger
 macro_rules! sl {
     () => {
@@ -1027,23 +1029,10 @@ impl Manager {
     }
 }
 
+// get the guest's online cpus.
 pub fn get_guest_cpuset() -> Result<String> {
-    // for cgroup v2
-    if cgroups::hierarchies::is_cgroup2_unified_mode() {
-        let c = fs::read_to_string("/sys/fs/cgroup/cpuset.cpus.effective")?;
-        return Ok(c);
-    }
-
-    // for cgroup v1
-    let m = get_mounts()?;
-    if m.get("cpuset").is_none() {
-        warn!(sl!(), "no cpuset cgroup!");
-        return Err(nix::Error::Sys(Errno::ENOENT).into());
-    }
-
-    let p = format!("{}/cpuset.cpus", m.get("cpuset").unwrap());
-    let c = fs::read_to_string(p.as_str())?;
-    Ok(c)
+    let c = fs::read_to_string(GUEST_CPUS_PATH)?;
+    Ok(c.trim().to_string())
 }
 
 // Since the OCI spec is designed for cgroup v1, in some cases
