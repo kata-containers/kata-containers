@@ -246,6 +246,16 @@ func (s *Sandbox) GetNetNs() string {
 	return s.networkNS.NetNsPath
 }
 
+// GetHypervisorPid returns the hypervisor's pid.
+func (s *Sandbox) GetHypervisorPid() (int, error) {
+	pids := s.hypervisor.getPids()
+	if len(pids) == 0 || pids[0] == 0 {
+		return -1, fmt.Errorf("Invalid hypervisor PID: %+v", pids)
+	}
+
+	return pids[0], nil
+}
+
 // GetAllContainers returns all containers.
 func (s *Sandbox) GetAllContainers() []VCContainer {
 	ifa := make([]VCContainer, len(s.containers))

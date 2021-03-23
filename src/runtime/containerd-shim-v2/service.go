@@ -113,9 +113,12 @@ type service struct {
 	mu          sync.Mutex
 	eventSendMu sync.Mutex
 
-	// pid Since this shimv2 cannot get the container processes pid from VM,
-	// thus for the returned values needed pid, just return this shim's
+	// hypervisor pid, Since this shimv2 cannot get the container processes pid from VM,
+	// thus for the returned values needed pid, just return the hypervisor's
 	// pid directly.
+	hpid uint32
+
+	// shim's pid
 	pid uint32
 
 	ctx        context.Context
@@ -370,11 +373,11 @@ func (s *service) Create(ctx context.Context, r *taskAPI.CreateTaskRequest) (_ *
 			Terminal: r.Terminal,
 		},
 		Checkpoint: r.Checkpoint,
-		Pid:        s.pid,
+		Pid:        s.hpid,
 	})
 
 	return &taskAPI.CreateTaskResponse{
-		Pid: s.pid,
+		Pid: s.hpid,
 	}, nil
 }
 
@@ -406,7 +409,7 @@ func (s *service) Start(ctx context.Context, r *taskAPI.StartRequest) (_ *taskAP
 		}
 		s.send(&eventstypes.TaskStart{
 			ContainerID: c.id,
-			Pid:         s.pid,
+			Pid:         s.hpid,
 		})
 	} else {
 		//start an exec
@@ -417,12 +420,12 @@ func (s *service) Start(ctx context.Context, r *taskAPI.StartRequest) (_ *taskAP
 		s.send(&eventstypes.TaskExecStarted{
 			ContainerID: c.id,
 			ExecID:      r.ExecID,
-			Pid:         s.pid,
+			Pid:         s.hpid,
 		})
 	}
 
 	return &taskAPI.StartResponse{
-		Pid: s.pid,
+		Pid: s.hpid,
 	}, nil
 }
 
@@ -449,7 +452,7 @@ func (s *service) Delete(ctx context.Context, r *taskAPI.DeleteRequest) (_ *task
 
 		s.send(&eventstypes.TaskDelete{
 			ContainerID: c.id,
-			Pid:         s.pid,
+			Pid:         s.hpid,
 			ExitStatus:  c.exit,
 			ExitedAt:    c.exitTime,
 		})
@@ -457,7 +460,7 @@ func (s *service) Delete(ctx context.Context, r *taskAPI.DeleteRequest) (_ *task
 		return &taskAPI.DeleteResponse{
 			ExitStatus: c.exit,
 			ExitedAt:   c.exitTime,
-			Pid:        s.pid,
+			Pid:        s.hpid,
 		}, nil
 	}
 	//deal with the exec case
@@ -471,7 +474,7 @@ func (s *service) Delete(ctx context.Context, r *taskAPI.DeleteRequest) (_ *task
 	return &taskAPI.DeleteResponse{
 		ExitStatus: uint32(execs.exitCode),
 		ExitedAt:   execs.exitTime,
-		Pid:        s.pid,
+		Pid:        s.hpid,
 	}, nil
 }
 
@@ -566,7 +569,7 @@ func (s *service) State(ctx context.Context, r *taskAPI.StateRequest) (_ *taskAP
 		return &taskAPI.StateResponse{
 			ID:         c.id,
 			Bundle:     c.bundle,
-			Pid:        s.pid,
+			Pid:        s.hpid,
 			Status:     c.status,
 			Stdin:      c.stdin,
 			Stdout:     c.stdout,
@@ -585,7 +588,7 @@ func (s *service) State(ctx context.Context, r *taskAPI.StateRequest) (_ *taskAP
 	return &taskAPI.StateResponse{
 		ID:         execs.id,
 		Bundle:     c.bundle,
-		Pid:        s.pid,
+		Pid:        s.hpid,
 		Status:     execs.status,
 		Stdin:      execs.tty.stdin,
 		Stdout:     execs.tty.stdout,
@@ -735,7 +738,7 @@ func (s *service) Pids(ctx context.Context, r *taskAPI.PidsRequest) (_ *taskAPI.
 	}()
 
 	pInfo := task.ProcessInfo{
-		Pid: s.pid,
+		Pid: s.hpid,
 	}
 	processes = append(processes, &pInfo)
 
@@ -807,7 +810,7 @@ func (s *service) Connect(ctx context.Context, r *taskAPI.ConnectRequest) (_ *ta
 	return &taskAPI.ConnectResponse{
 		ShimPid: s.pid,
 		//Since kata cannot get the container's pid in VM, thus only return the shim's pid.
-		TaskPid: s.pid,
+		TaskPid: s.hpid,
 	}, nil
 }
 

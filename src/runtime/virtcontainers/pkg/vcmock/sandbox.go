@@ -254,3 +254,7 @@ func (s *Sandbox) GetAgentURL() (string, error) {
 	}
 	return "", nil
 }
+
+func (s *Sandbox) GetHypervisorPid() (int, error) {
+	return 0, nil
+}
