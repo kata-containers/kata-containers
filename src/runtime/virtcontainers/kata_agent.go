@@ -411,7 +411,7 @@ func setupSandboxBindMounts(sandbox *Sandbox) error {
 }
 
 func cleanupSandboxBindMounts(sandbox *Sandbox) error {
-	if len(sandbox.config.SandboxBindMounts) == 0 {
+	if sandbox.config == nil || len(sandbox.config.SandboxBindMounts) == 0 {
 		return nil
 	}
 
