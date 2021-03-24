@@ -1240,3 +1240,20 @@ func TestAppendPVPanicDevice(t *testing.T) {
 		testAppend(tc.dev, tc.out, t)
 	}
 }
+
+func TestLoaderDevice(t *testing.T) {
+	testCases := []struct {
+		dev Device
+		out string
+	}{
+		{nil, ""},
+		{LoaderDevice{}, ""},
+		{LoaderDevice{File: "f"}, ""},
+		{LoaderDevice{ID: "id"}, ""},
+		{LoaderDevice{File: "f", ID: "id"}, "-device loader,file=f,id=id"},
+	}
+
+	for _, tc := range testCases {
+		testAppend(tc.dev, tc.out, t)
+	}
+}
