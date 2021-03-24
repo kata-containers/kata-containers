@@ -23,6 +23,12 @@ for pattern in ${qemu_black_list[@]}; do
 	find . -path "$pattern" | xargs rm -rfv
 done
 
+if [[ -n "${BUILD_SUFFIX}" ]]; then
+	echo "Rename binaries using $BUILD_SUFFIX"
+	find -name 'qemu-system-*' -exec mv {} {}-experimental \;
+	find -name 'virtiofsd' -exec mv {} {}-experimental \;
+fi
+
 echo "INFO: create the tarball"
 tar -czvf "${QEMU_TARBALL}" *
 popd

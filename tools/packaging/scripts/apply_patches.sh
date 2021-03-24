@@ -44,5 +44,7 @@ if [ -d "$patches_dir" ]; then
 			{ echo >&2 "ERROR: Not applied. Exiting..."; exit 1; }
 	done
 else
-	echo "INFO: Patches directory does not exist"
+	echo "INFO: Patches directory does not exist: ${patches_dir}"
+	echo "INFO: Create a ${patches_dir}/no_patches file if the current qemu version has no patches"
+	exit 1;
 fi
