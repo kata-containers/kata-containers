@@ -18,6 +18,7 @@ import (
 	"syscall"
 	"testing"
 
+	ktu "github.com/kata-containers/kata-containers/src/runtime/pkg/katatestutils"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/utils"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/compatoci"
 	"github.com/stretchr/testify/assert"
@@ -364,5 +365,20 @@ func TestGetFileContents(t *testing.T) {
 		contents, err := GetFileContents(file)
 		assert.NoError(t, err)
 		assert.Equal(t, contents, d.contents)
+	}
+}
+
+func TestVerifyContainerID(t *testing.T) {
+	assert := assert.New(t)
+
+	for i, d := range ktu.ContainerIDTestData {
+		msg := fmt.Sprintf("test[%d]: %+v", i, d)
+
+		err := VerifyContainerID(d.ID)
+		if d.Valid {
+			assert.NoError(err, msg)
+		} else {
+			assert.Error(err, msg)
+		}
 	}
 }
