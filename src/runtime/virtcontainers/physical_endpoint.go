@@ -17,8 +17,8 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/drivers"
 	persistapi "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist/api"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/cgroups"
-	"github.com/safchain/ethtool"
 	vcTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/types"
+	"github.com/safchain/ethtool"
 )
 
 // PhysicalEndpoint gathers a physical network interface and its properties

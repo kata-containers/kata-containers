@@ -6653,7 +6653,7 @@ func (this *Spec) String() string {
 	}
 	repeatedStringForMounts += "}"
 	keysForAnnotations := make([]string, 0, len(this.Annotations))
-	for k, _ := range this.Annotations {
+	for k := range this.Annotations {
 		keysForAnnotations = append(keysForAnnotations, k)
 	}
 	github_com_gogo_protobuf_sortkeys.Strings(keysForAnnotations)
@@ -6852,7 +6852,7 @@ func (this *Linux) String() string {
 	}
 	repeatedStringForDevices += "}"
 	keysForSysctl := make([]string, 0, len(this.Sysctl))
-	for k, _ := range this.Sysctl {
+	for k := range this.Sysctl {
 		keysForSysctl = append(keysForSysctl, k)
 	}
 	github_com_gogo_protobuf_sortkeys.Strings(keysForSysctl)

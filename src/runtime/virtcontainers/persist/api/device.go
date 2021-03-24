@@ -6,7 +6,7 @@
 
 package persistapi
 
-import	vcTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/types"
+import vcTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/types"
 
 // ============= sandbox level resources =============
 

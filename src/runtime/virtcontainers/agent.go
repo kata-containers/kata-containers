@@ -206,7 +206,7 @@ type agent interface {
 
 	// getOOMEvent will wait on OOM events that occur in the sandbox.
 	// Will return the ID of the container where the event occurred.
-	getOOMEvent(ctx context.Context, ) (string, error)
+	getOOMEvent(ctx context.Context) (string, error)
 
 	// getAgentMetrics get metrics of agent and guest through agent
 	getAgentMetrics(context.Context, *grpc.GetMetricsRequest) (*grpc.Metrics, error)

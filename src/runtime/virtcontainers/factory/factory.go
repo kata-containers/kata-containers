@@ -191,7 +191,7 @@ func (f *factory) GetVM(ctx context.Context, config vc.VMConfig) (*vc.VM, error)
 	online := false
 	baseConfig := f.base.Config().HypervisorConfig
 	if baseConfig.NumVCPUs < hypervisorConfig.NumVCPUs {
-		err = vm.AddCPUs(ctx, hypervisorConfig.NumVCPUs - baseConfig.NumVCPUs)
+		err = vm.AddCPUs(ctx, hypervisorConfig.NumVCPUs-baseConfig.NumVCPUs)
 		if err != nil {
 			return nil, err
 		}
@@ -199,7 +199,7 @@ func (f *factory) GetVM(ctx context.Context, config vc.VMConfig) (*vc.VM, error)
 	}
 
 	if baseConfig.MemorySize < hypervisorConfig.MemorySize {
-		err = vm.AddMemory(ctx, hypervisorConfig.MemorySize - baseConfig.MemorySize)
+		err = vm.AddMemory(ctx, hypervisorConfig.MemorySize-baseConfig.MemorySize)
 		if err != nil {
 			return nil, err
 		}

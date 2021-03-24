@@ -30,9 +30,9 @@ import (
 	otelTrace "go.opentelemetry.io/otel/trace"
 
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
+	vcTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/types"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
-	vcTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/types"
 )
 
 //
