@@ -65,8 +65,7 @@ func (s *service) serveMetrics(w http.ResponseWriter, r *http.Request) {
 	// encode the metrics
 	encoder := expfmt.NewEncoder(w, expfmt.FmtText)
 	for _, mf := range mfs {
-		if err := encoder.Encode(mf); err != nil {
-		}
+		encoder.Encode(mf)
 	}
 
 	// if using an old agent, only collect shim/sandbox metrics.
@@ -150,7 +149,7 @@ func (s *service) startManagementServer(ctx context.Context, ociSpec *specs.Spec
 
 	shimMgtLog.Info("kata management inited")
 
-	// bind hanlder
+	// bind handler
 	m := http.NewServeMux()
 	m.Handle("/metrics", http.HandlerFunc(s.serveMetrics))
 	m.Handle("/agent-url", http.HandlerFunc(s.agentURL))

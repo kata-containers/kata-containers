@@ -25,7 +25,7 @@ func commonServeError(w http.ResponseWriter, status int, err error) {
 	}
 }
 
-func getSandboxIdFromReq(r *http.Request) (string, error) {
+func getSandboxIDFromReq(r *http.Request) (string, error) {
 	sandbox := r.URL.Query().Get("sandbox")
 	if sandbox != "" {
 		return sandbox, nil

@@ -360,6 +360,7 @@ func TestHandleBlockVolume(t *testing.T) {
 	bPCIPath, err := vcTypes.PciPathFromString("03/04")
 	assert.NoError(t, err)
 	dPCIPath, err := vcTypes.PciPathFromString("04/05")
+	assert.NoError(t, err)
 
 	vDev := drivers.NewVhostUserBlkDevice(&config.DeviceInfo{ID: vDevID})
 	bDev := drivers.NewBlockDevice(&config.DeviceInfo{ID: bDevID})

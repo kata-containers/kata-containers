@@ -301,7 +301,7 @@ func trace(ctx context.Context, name string) (otelTrace.Span, context.Context) {
 }
 
 func (s *service) Cleanup(ctx context.Context) (_ *taskAPI.DeleteResponse, err error) {
-	span, ctx := trace(s.rootCtx, "Cleanup")
+	span, _ := trace(s.rootCtx, "Cleanup")
 	defer span.End()
 
 	//Since the binary cleanup will return the DeleteResponse from stdout to
@@ -412,7 +412,7 @@ func (s *service) Create(ctx context.Context, r *taskAPI.CreateTaskRequest) (_ *
 
 // Start a process
 func (s *service) Start(ctx context.Context, r *taskAPI.StartRequest) (_ *taskAPI.StartResponse, err error) {
-	span, ctx := trace(s.rootCtx, "Start")
+	span, _ := trace(s.rootCtx, "Start")
 	defer span.End()
 
 	start := time.Now()
@@ -463,7 +463,7 @@ func (s *service) Start(ctx context.Context, r *taskAPI.StartRequest) (_ *taskAP
 
 // Delete the initial process and container
 func (s *service) Delete(ctx context.Context, r *taskAPI.DeleteRequest) (_ *taskAPI.DeleteResponse, err error) {
-	span, ctx := trace(s.rootCtx, "Delete")
+	span, _ := trace(s.rootCtx, "Delete")
 	defer span.End()
 
 	start := time.Now()
@@ -515,7 +515,7 @@ func (s *service) Delete(ctx context.Context, r *taskAPI.DeleteRequest) (_ *task
 
 // Exec an additional process inside the container
 func (s *service) Exec(ctx context.Context, r *taskAPI.ExecProcessRequest) (_ *ptypes.Empty, err error) {
-	span, ctx := trace(s.rootCtx, "Exec")
+	span, _ := trace(s.rootCtx, "Exec")
 	defer span.End()
 
 	start := time.Now()
@@ -553,7 +553,7 @@ func (s *service) Exec(ctx context.Context, r *taskAPI.ExecProcessRequest) (_ *p
 
 // ResizePty of a process
 func (s *service) ResizePty(ctx context.Context, r *taskAPI.ResizePtyRequest) (_ *ptypes.Empty, err error) {
-	span, ctx := trace(s.rootCtx, "ResizePty")
+	span, _ := trace(s.rootCtx, "ResizePty")
 	defer span.End()
 
 	start := time.Now()
@@ -592,7 +592,7 @@ func (s *service) ResizePty(ctx context.Context, r *taskAPI.ResizePtyRequest) (_
 
 // State returns runtime state information for a process
 func (s *service) State(ctx context.Context, r *taskAPI.StateRequest) (_ *taskAPI.StateResponse, err error) {
-	span, ctx := trace(s.rootCtx, "State")
+	span, _ := trace(s.rootCtx, "State")
 	defer span.End()
 
 	start := time.Now()
@@ -644,7 +644,7 @@ func (s *service) State(ctx context.Context, r *taskAPI.StateRequest) (_ *taskAP
 
 // Pause the container
 func (s *service) Pause(ctx context.Context, r *taskAPI.PauseRequest) (_ *ptypes.Empty, err error) {
-	span, ctx := trace(s.rootCtx, "Pause")
+	span, _ := trace(s.rootCtx, "Pause")
 	defer span.End()
 
 	start := time.Now()
@@ -683,7 +683,7 @@ func (s *service) Pause(ctx context.Context, r *taskAPI.PauseRequest) (_ *ptypes
 
 // Resume the container
 func (s *service) Resume(ctx context.Context, r *taskAPI.ResumeRequest) (_ *ptypes.Empty, err error) {
-	span, ctx := trace(s.rootCtx, "Resume")
+	span, _ := trace(s.rootCtx, "Resume")
 	defer span.End()
 
 	start := time.Now()
@@ -720,7 +720,7 @@ func (s *service) Resume(ctx context.Context, r *taskAPI.ResumeRequest) (_ *ptyp
 
 // Kill a process with the provided signal
 func (s *service) Kill(ctx context.Context, r *taskAPI.KillRequest) (_ *ptypes.Empty, err error) {
-	span, ctx := trace(s.rootCtx, "Kill")
+	span, _ := trace(s.rootCtx, "Kill")
 	defer span.End()
 
 	start := time.Now()
@@ -781,7 +781,7 @@ func (s *service) Kill(ctx context.Context, r *taskAPI.KillRequest) (_ *ptypes.E
 // Since for kata, it cannot get the process's pid from VM,
 // thus only return the Shim's pid directly.
 func (s *service) Pids(ctx context.Context, r *taskAPI.PidsRequest) (_ *taskAPI.PidsResponse, err error) {
-	span, ctx := trace(s.rootCtx, "Pids")
+	span, _ := trace(s.rootCtx, "Pids")
 	defer span.End()
 
 	var processes []*task.ProcessInfo
@@ -804,7 +804,7 @@ func (s *service) Pids(ctx context.Context, r *taskAPI.PidsRequest) (_ *taskAPI.
 
 // CloseIO of a process
 func (s *service) CloseIO(ctx context.Context, r *taskAPI.CloseIORequest) (_ *ptypes.Empty, err error) {
-	span, ctx := trace(s.rootCtx, "CloseIO")
+	span, _ := trace(s.rootCtx, "CloseIO")
 	defer span.End()
 
 	start := time.Now()
@@ -845,7 +845,7 @@ func (s *service) CloseIO(ctx context.Context, r *taskAPI.CloseIORequest) (_ *pt
 
 // Checkpoint the container
 func (s *service) Checkpoint(ctx context.Context, r *taskAPI.CheckpointTaskRequest) (_ *ptypes.Empty, err error) {
-	span, ctx := trace(s.rootCtx, "Checkpoint")
+	span, _ := trace(s.rootCtx, "Checkpoint")
 	defer span.End()
 
 	start := time.Now()
@@ -859,7 +859,7 @@ func (s *service) Checkpoint(ctx context.Context, r *taskAPI.CheckpointTaskReque
 
 // Connect returns shim information such as the shim's pid
 func (s *service) Connect(ctx context.Context, r *taskAPI.ConnectRequest) (_ *taskAPI.ConnectResponse, err error) {
-	span, ctx := trace(s.rootCtx, "Connect")
+	span, _ := trace(s.rootCtx, "Connect")
 	defer span.End()
 
 	start := time.Now()
@@ -879,7 +879,7 @@ func (s *service) Connect(ctx context.Context, r *taskAPI.ConnectRequest) (_ *ta
 }
 
 func (s *service) Shutdown(ctx context.Context, r *taskAPI.ShutdownRequest) (_ *ptypes.Empty, err error) {
-	span, ctx := trace(s.rootCtx, "Shutdown")
+	span, _ := trace(s.rootCtx, "Shutdown")
 
 	start := time.Now()
 	defer func() {
@@ -907,7 +907,7 @@ func (s *service) Shutdown(ctx context.Context, r *taskAPI.ShutdownRequest) (_ *
 }
 
 func (s *service) Stats(ctx context.Context, r *taskAPI.StatsRequest) (_ *taskAPI.StatsResponse, err error) {
-	span, ctx := trace(s.rootCtx, "Stats")
+	span, _ := trace(s.rootCtx, "Stats")
 	defer span.End()
 
 	start := time.Now()
@@ -936,7 +936,7 @@ func (s *service) Stats(ctx context.Context, r *taskAPI.StatsRequest) (_ *taskAP
 
 // Update a running container
 func (s *service) Update(ctx context.Context, r *taskAPI.UpdateTaskRequest) (_ *ptypes.Empty, err error) {
-	span, ctx := trace(s.rootCtx, "Update")
+	span, _ := trace(s.rootCtx, "Update")
 	defer span.End()
 
 	start := time.Now()
@@ -968,7 +968,7 @@ func (s *service) Update(ctx context.Context, r *taskAPI.UpdateTaskRequest) (_ *
 
 // Wait for a process to exit
 func (s *service) Wait(ctx context.Context, r *taskAPI.WaitRequest) (_ *taskAPI.WaitResponse, err error) {
-	span, ctx := trace(s.rootCtx, "Wait")
+	span, _ := trace(s.rootCtx, "Wait")
 	defer span.End()
 
 	var ret uint32

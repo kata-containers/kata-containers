@@ -64,9 +64,6 @@ var originalLoggerLevel = logrus.WarnLevel
 
 var debug = false
 
-// if true, coredump when an internal error occurs or a fatal signal is received
-var crashOnError = false
-
 // concrete virtcontainer implementation
 var virtcontainersImpl = &vc.VCImpl{}
 
@@ -328,7 +325,6 @@ func beforeSubcommands(c *cli.Context) error {
 	}
 	if !subCmdIsCheckCmd {
 		debug = runtimeConfig.Debug
-		crashOnError = runtimeConfig.Debug
 
 		if traceRootSpan != "" {
 			// Create the tracer.

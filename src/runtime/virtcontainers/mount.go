@@ -219,7 +219,7 @@ const mountPerm = os.FileMode(0755)
 // * recursively create the destination
 // pgtypes stands for propagation types, which are shared, private, slave, and ubind.
 func bindMount(ctx context.Context, source, destination string, readonly bool, pgtypes string) error {
-	span, ctx := trace(ctx, "bindMount")
+	span, _ := trace(ctx, "bindMount")
 	defer span.End()
 
 	if source == "" {
@@ -347,7 +347,7 @@ func bindUnmountContainerRootfs(ctx context.Context, sharedDir, cID string) erro
 }
 
 func bindUnmountAllRootfs(ctx context.Context, sharedDir string, sandbox *Sandbox) error {
-	span, ctx := trace(ctx, "bindUnmountAllRootfs")
+	span, _ := trace(ctx, "bindUnmountAllRootfs")
 	defer span.End()
 
 	var errors *merr.Error

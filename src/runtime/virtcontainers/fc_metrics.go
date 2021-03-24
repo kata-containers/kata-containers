@@ -174,11 +174,11 @@ func registerFirecrackerMetrics() {
 
 // updateFirecrackerMetrics update all metrics to the latest values.
 func updateFirecrackerMetrics(fm *FirecrackerMetrics) {
-	// set metrics for ApiServerMetrics
-	apiServerMetrics.WithLabelValues("process_startup_time_us").Set(float64(fm.ApiServer.ProcessStartupTimeUs))
-	apiServerMetrics.WithLabelValues("process_startup_time_cpu_us").Set(float64(fm.ApiServer.ProcessStartupTimeCpuUs))
-	apiServerMetrics.WithLabelValues("sync_response_fails").Set(float64(fm.ApiServer.SyncResponseFails))
-	apiServerMetrics.WithLabelValues("sync_vmm_send_timeout_count").Set(float64(fm.ApiServer.SyncVmmSendTimeoutCount))
+	// set metrics for APIServerMetrics
+	apiServerMetrics.WithLabelValues("process_startup_time_us").Set(float64(fm.APIServer.ProcessStartupTimeUs))
+	apiServerMetrics.WithLabelValues("process_startup_time_cpu_us").Set(float64(fm.APIServer.ProcessStartupTimeCPUUs))
+	apiServerMetrics.WithLabelValues("sync_response_fails").Set(float64(fm.APIServer.SyncResponseFails))
+	apiServerMetrics.WithLabelValues("sync_vmm_send_timeout_count").Set(float64(fm.APIServer.SyncVmmSendTimeoutCount))
 
 	// set metrics for BlockDeviceMetrics
 	blockDeviceMetrics.WithLabelValues("activate_fails").Set(float64(fm.Block.ActivateFails))
@@ -199,10 +199,10 @@ func updateFirecrackerMetrics(fm *FirecrackerMetrics) {
 	blockDeviceMetrics.WithLabelValues("rate_limiter_throttled_events").Set(float64(fm.Block.RateLimiterThrottledEvents))
 
 	// set metrics for GetRequestsMetrics
-	getRequestsMetrics.WithLabelValues("instance_info_count").Set(float64(fm.GetApiRequests.InstanceInfoCount))
-	getRequestsMetrics.WithLabelValues("instance_info_fails").Set(float64(fm.GetApiRequests.InstanceInfoFails))
-	getRequestsMetrics.WithLabelValues("machine_cfg_count").Set(float64(fm.GetApiRequests.MachineCfgCount))
-	getRequestsMetrics.WithLabelValues("machine_cfg_fails").Set(float64(fm.GetApiRequests.MachineCfgFails))
+	getRequestsMetrics.WithLabelValues("instance_info_count").Set(float64(fm.GetAPIRequests.InstanceInfoCount))
+	getRequestsMetrics.WithLabelValues("instance_info_fails").Set(float64(fm.GetAPIRequests.InstanceInfoFails))
+	getRequestsMetrics.WithLabelValues("machine_cfg_count").Set(float64(fm.GetAPIRequests.MachineCfgCount))
+	getRequestsMetrics.WithLabelValues("machine_cfg_fails").Set(float64(fm.GetAPIRequests.MachineCfgFails))
 
 	// set metrics for I8042DeviceMetrics
 	i8042DeviceMetrics.WithLabelValues("error_count").Set(float64(fm.I8042.ErrorCount))
@@ -216,13 +216,13 @@ func updateFirecrackerMetrics(fm *FirecrackerMetrics) {
 	performanceMetrics.WithLabelValues("full_create_snapshot").Set(float64(fm.LatenciesUs.FullCreateSnapshot))
 	performanceMetrics.WithLabelValues("diff_create_snapshot").Set(float64(fm.LatenciesUs.DiffCreateSnapshot))
 	performanceMetrics.WithLabelValues("load_snapshot").Set(float64(fm.LatenciesUs.LoadSnapshot))
-	performanceMetrics.WithLabelValues("pause_vm").Set(float64(fm.LatenciesUs.PauseVm))
-	performanceMetrics.WithLabelValues("resume_vm").Set(float64(fm.LatenciesUs.ResumeVm))
+	performanceMetrics.WithLabelValues("pause_vm").Set(float64(fm.LatenciesUs.PauseVM))
+	performanceMetrics.WithLabelValues("resume_vm").Set(float64(fm.LatenciesUs.ResumeVM))
 	performanceMetrics.WithLabelValues("vmm_full_create_snapshot").Set(float64(fm.LatenciesUs.VmmFullCreateSnapshot))
 	performanceMetrics.WithLabelValues("vmm_diff_create_snapshot").Set(float64(fm.LatenciesUs.VmmDiffCreateSnapshot))
 	performanceMetrics.WithLabelValues("vmm_load_snapshot").Set(float64(fm.LatenciesUs.VmmLoadSnapshot))
-	performanceMetrics.WithLabelValues("vmm_pause_vm").Set(float64(fm.LatenciesUs.VmmPauseVm))
-	performanceMetrics.WithLabelValues("vmm_resume_vm").Set(float64(fm.LatenciesUs.VmmResumeVm))
+	performanceMetrics.WithLabelValues("vmm_pause_vm").Set(float64(fm.LatenciesUs.VmmPauseVM))
+	performanceMetrics.WithLabelValues("vmm_resume_vm").Set(float64(fm.LatenciesUs.VmmResumeVM))
 
 	// set metrics for LoggerSystemMetrics
 	loggerSystemMetrics.WithLabelValues("missed_metrics_count").Set(float64(fm.Logger.MissedMetricsCount))
@@ -273,28 +273,28 @@ func updateFirecrackerMetrics(fm *FirecrackerMetrics) {
 	netDeviceMetrics.WithLabelValues("tx_spoofed_mac_count").Set(float64(fm.Net.TxSpoofedMacCount))
 
 	// set metrics for PatchRequestsMetrics
-	patchRequestsMetrics.WithLabelValues("drive_count").Set(float64(fm.PatchApiRequests.DriveCount))
-	patchRequestsMetrics.WithLabelValues("drive_fails").Set(float64(fm.PatchApiRequests.DriveFails))
-	patchRequestsMetrics.WithLabelValues("network_count").Set(float64(fm.PatchApiRequests.NetworkCount))
-	patchRequestsMetrics.WithLabelValues("network_fails").Set(float64(fm.PatchApiRequests.NetworkFails))
-	patchRequestsMetrics.WithLabelValues("machine_cfg_count").Set(float64(fm.PatchApiRequests.MachineCfgCount))
-	patchRequestsMetrics.WithLabelValues("machine_cfg_fails").Set(float64(fm.PatchApiRequests.MachineCfgFails))
+	patchRequestsMetrics.WithLabelValues("drive_count").Set(float64(fm.PatchAPIRequests.DriveCount))
+	patchRequestsMetrics.WithLabelValues("drive_fails").Set(float64(fm.PatchAPIRequests.DriveFails))
+	patchRequestsMetrics.WithLabelValues("network_count").Set(float64(fm.PatchAPIRequests.NetworkCount))
+	patchRequestsMetrics.WithLabelValues("network_fails").Set(float64(fm.PatchAPIRequests.NetworkFails))
+	patchRequestsMetrics.WithLabelValues("machine_cfg_count").Set(float64(fm.PatchAPIRequests.MachineCfgCount))
+	patchRequestsMetrics.WithLabelValues("machine_cfg_fails").Set(float64(fm.PatchAPIRequests.MachineCfgFails))
 
 	// set metrics for PutRequestsMetrics
-	putRequestsMetrics.WithLabelValues("actions_count").Set(float64(fm.PutApiRequests.ActionsCount))
-	putRequestsMetrics.WithLabelValues("actions_fails").Set(float64(fm.PutApiRequests.ActionsFails))
-	putRequestsMetrics.WithLabelValues("boot_source_count").Set(float64(fm.PutApiRequests.BootSourceCount))
-	putRequestsMetrics.WithLabelValues("boot_source_fails").Set(float64(fm.PutApiRequests.BootSourceFails))
-	putRequestsMetrics.WithLabelValues("drive_count").Set(float64(fm.PutApiRequests.DriveCount))
-	putRequestsMetrics.WithLabelValues("drive_fails").Set(float64(fm.PutApiRequests.DriveFails))
-	putRequestsMetrics.WithLabelValues("logger_count").Set(float64(fm.PutApiRequests.LoggerCount))
-	putRequestsMetrics.WithLabelValues("logger_fails").Set(float64(fm.PutApiRequests.LoggerFails))
-	putRequestsMetrics.WithLabelValues("machine_cfg_count").Set(float64(fm.PutApiRequests.MachineCfgCount))
-	putRequestsMetrics.WithLabelValues("machine_cfg_fails").Set(float64(fm.PutApiRequests.MachineCfgFails))
-	putRequestsMetrics.WithLabelValues("metrics_count").Set(float64(fm.PutApiRequests.MetricsCount))
-	putRequestsMetrics.WithLabelValues("metrics_fails").Set(float64(fm.PutApiRequests.MetricsFails))
-	putRequestsMetrics.WithLabelValues("network_count").Set(float64(fm.PutApiRequests.NetworkCount))
-	putRequestsMetrics.WithLabelValues("network_fails").Set(float64(fm.PutApiRequests.NetworkFails))
+	putRequestsMetrics.WithLabelValues("actions_count").Set(float64(fm.PutAPIRequests.ActionsCount))
+	putRequestsMetrics.WithLabelValues("actions_fails").Set(float64(fm.PutAPIRequests.ActionsFails))
+	putRequestsMetrics.WithLabelValues("boot_source_count").Set(float64(fm.PutAPIRequests.BootSourceCount))
+	putRequestsMetrics.WithLabelValues("boot_source_fails").Set(float64(fm.PutAPIRequests.BootSourceFails))
+	putRequestsMetrics.WithLabelValues("drive_count").Set(float64(fm.PutAPIRequests.DriveCount))
+	putRequestsMetrics.WithLabelValues("drive_fails").Set(float64(fm.PutAPIRequests.DriveFails))
+	putRequestsMetrics.WithLabelValues("logger_count").Set(float64(fm.PutAPIRequests.LoggerCount))
+	putRequestsMetrics.WithLabelValues("logger_fails").Set(float64(fm.PutAPIRequests.LoggerFails))
+	putRequestsMetrics.WithLabelValues("machine_cfg_count").Set(float64(fm.PutAPIRequests.MachineCfgCount))
+	putRequestsMetrics.WithLabelValues("machine_cfg_fails").Set(float64(fm.PutAPIRequests.MachineCfgFails))
+	putRequestsMetrics.WithLabelValues("metrics_count").Set(float64(fm.PutAPIRequests.MetricsCount))
+	putRequestsMetrics.WithLabelValues("metrics_fails").Set(float64(fm.PutAPIRequests.MetricsFails))
+	putRequestsMetrics.WithLabelValues("network_count").Set(float64(fm.PutAPIRequests.NetworkCount))
+	putRequestsMetrics.WithLabelValues("network_fails").Set(float64(fm.PutAPIRequests.NetworkFails))
 
 	// set metrics for RTCDeviceMetrics
 	rTCDeviceMetrics.WithLabelValues("error_count").Set(float64(fm.Rtc.ErrorCount))
@@ -310,7 +310,7 @@ func updateFirecrackerMetrics(fm *FirecrackerMetrics) {
 	vcpuMetrics.WithLabelValues("exit_mmio_read").Set(float64(fm.Vcpu.ExitMmioRead))
 	vcpuMetrics.WithLabelValues("exit_mmio_write").Set(float64(fm.Vcpu.ExitMmioWrite))
 	vcpuMetrics.WithLabelValues("failures").Set(float64(fm.Vcpu.Failures))
-	vcpuMetrics.WithLabelValues("filter_cpuid").Set(float64(fm.Vcpu.FilterCpuid))
+	vcpuMetrics.WithLabelValues("filter_cpuid").Set(float64(fm.Vcpu.FilterCPUid))
 
 	// set metrics for VmmMetrics
 	vmmMetrics.WithLabelValues("device_events").Set(float64(fm.Vmm.DeviceEvents))
@@ -355,11 +355,11 @@ func updateFirecrackerMetrics(fm *FirecrackerMetrics) {
 //  Structure storing all metrics while enforcing serialization support on them.
 type FirecrackerMetrics struct {
 	// API Server related metrics.
-	ApiServer ApiServerMetrics `json:"api_server"`
+	APIServer APIServerMetrics `json:"api_server"`
 	// A block device's related metrics.
 	Block BlockDeviceMetrics `json:"block"`
 	// Metrics related to API GET requests.
-	GetApiRequests GetRequestsMetrics `json:"get_api_requests"`
+	GetAPIRequests GetRequestsMetrics `json:"get_api_requests"`
 	// Metrics related to the i8042 device.
 	I8042 I8042DeviceMetrics `json:"i8042"`
 	// Metrics related to performance measurements.
@@ -371,9 +371,9 @@ type FirecrackerMetrics struct {
 	// A network device's related metrics.
 	Net NetDeviceMetrics `json:"net"`
 	// Metrics related to API PATCH requests.
-	PatchApiRequests PatchRequestsMetrics `json:"patch_api_requests"`
+	PatchAPIRequests PatchRequestsMetrics `json:"patch_api_requests"`
 	// Metrics related to API PUT requests.
-	PutApiRequests PutRequestsMetrics `json:"put_api_requests"`
+	PutAPIRequests PutRequestsMetrics `json:"put_api_requests"`
 	// Metrics related to the RTC device.
 	Rtc RTCDeviceMetrics `json:"rtc"`
 	// Metrics related to seccomp filtering.
@@ -391,11 +391,11 @@ type FirecrackerMetrics struct {
 }
 
 //  API Server related metrics.
-type ApiServerMetrics struct {
+type APIServerMetrics struct {
 	// Measures the process's startup time in microseconds.
 	ProcessStartupTimeUs uint64 `json:"process_startup_time_us"`
 	// Measures the cpu's startup time in microseconds.
-	ProcessStartupTimeCpuUs uint64 `json:"process_startup_time_cpu_us"`
+	ProcessStartupTimeCPUUs uint64 `json:"process_startup_time_cpu_us"`
 	// Number of failures on API requests triggered by internal errors.
 	SyncResponseFails uint64 `json:"sync_response_fails"`
 	// Number of timeouts during communication with the VMM.
@@ -475,9 +475,9 @@ type PerformanceMetrics struct {
 	// Measures the snapshot load time, at the API (user) level, in microseconds.
 	LoadSnapshot uint64 `json:"load_snapshot"`
 	// Measures the microVM pausing duration, at the API (user) level, in microseconds.
-	PauseVm uint64 `json:"pause_vm"`
+	PauseVM uint64 `json:"pause_vm"`
 	// Measures the microVM resuming duration, at the API (user) level, in microseconds.
-	ResumeVm uint64 `json:"resume_vm"`
+	ResumeVM uint64 `json:"resume_vm"`
 	// Measures the snapshot full create time, at the VMM level, in microseconds.
 	VmmFullCreateSnapshot uint64 `json:"vmm_full_create_snapshot"`
 	// Measures the snapshot diff create time, at the VMM level, in microseconds.
@@ -485,9 +485,9 @@ type PerformanceMetrics struct {
 	// Measures the snapshot load time, at the VMM level, in microseconds.
 	VmmLoadSnapshot uint64 `json:"vmm_load_snapshot"`
 	// Measures the microVM pausing duration, at the VMM level, in microseconds.
-	VmmPauseVm uint64 `json:"vmm_pause_vm"`
+	VmmPauseVM uint64 `json:"vmm_pause_vm"`
 	// Measures the microVM resuming duration, at the VMM level, in microseconds.
-	VmmResumeVm uint64 `json:"vmm_resume_vm"`
+	VmmResumeVM uint64 `json:"vmm_resume_vm"`
 }
 
 //  Logging related metrics.
@@ -662,7 +662,7 @@ type VcpuMetrics struct {
 	// Number of errors during this VCPU's run.
 	Failures uint64 `json:"failures"`
 	// Failures in configuring the CPUID.
-	FilterCpuid uint64 `json:"filter_cpuid"`
+	FilterCPUid uint64 `json:"filter_cpuid"`
 }
 
 //  Metrics related to the virtual machine manager.

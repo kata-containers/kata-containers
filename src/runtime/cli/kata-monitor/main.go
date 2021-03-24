@@ -48,9 +48,9 @@ var versionTemplate = `{{.AppName}}
 `
 
 func printVersion(ver versionInfo) {
-	t, err := template.New("version").Parse(versionTemplate)
+	t, _ := template.New("version").Parse(versionTemplate)
 
-	if err = t.Execute(os.Stdout, ver); err != nil {
+	if err := t.Execute(os.Stdout, ver); err != nil {
 		panic(err)
 	}
 }

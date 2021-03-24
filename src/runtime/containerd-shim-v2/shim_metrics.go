@@ -177,7 +177,7 @@ func calcOverhead(initialSandboxStats, finishSandboxStats vc.SandboxStats, initi
 	cpuUsageGuest := float64(guestFinalCPU-guestInitCPU) / deltaTime * 100
 	cpuUsageHost := float64(hostFinalCPU-hostInitCPU) / deltaTime * 100
 
-	return float64(hostMemoryUsage - guestMemoryUsage), float64(cpuUsageHost - cpuUsageGuest)
+	return float64(hostMemoryUsage - guestMemoryUsage), cpuUsageHost - cpuUsageGuest
 }
 
 func (s *service) getPodOverhead(ctx context.Context) (float64, float64, error) {
