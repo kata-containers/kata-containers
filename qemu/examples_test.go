@@ -34,7 +34,7 @@ func Example() {
 	// kvm
 	params = append(params, "-enable-kvm", "-cpu", "host")
 	// qmp socket
-	params = append(params, "-daemonize", "-qmp", "unix:/tmp/qmp-socket,server,nowait")
+	params = append(params, "-daemonize", "-qmp", "unix:/tmp/qmp-socket,server=on,wait=off")
 	// resources
 	params = append(params, "-m", "370", "-smp", "cpus=2")
 
