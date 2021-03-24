@@ -458,7 +458,7 @@ func TestGetNewReleaseType(t *testing.T) {
 	}
 
 	data := []testData{
-		// Check build metadata (ignored for version comparisions)
+		// Check build metadata (ignored for version comparisons)
 		{"2.0.0+build", "2.0.0", true, ""},
 		{"2.0.0+build-1", "2.0.0+build-2", true, ""},
 		{"1.12.0+build", "1.12.0", true, ""},

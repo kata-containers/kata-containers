@@ -53,7 +53,7 @@ func SetLogger(ctx context.Context, logger *logrus.Entry) {
 // CreateSandbox is the virtcontainers sandbox creation entry point.
 // CreateSandbox creates a sandbox and its containers. It does not start them.
 func CreateSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factory) (VCSandbox, error) {
-	span, ctx := trace(ctx, "CreateSandbox")
+	span, _ := trace(ctx, "CreateSandbox")
 	defer span.End()
 
 	s, err := createSandboxFromConfig(ctx, sandboxConfig, factory)
@@ -62,7 +62,7 @@ func CreateSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Fac
 }
 
 func createSandboxFromConfig(ctx context.Context, sandboxConfig SandboxConfig, factory Factory) (_ *Sandbox, err error) {
-	span, ctx := trace(ctx, "createSandboxFromConfig")
+	span, _ := trace(ctx, "createSandboxFromConfig")
 	defer span.End()
 
 	// Create the sandbox.
@@ -136,7 +136,7 @@ func createSandboxFromConfig(ctx context.Context, sandboxConfig SandboxConfig, f
 // in the sandbox left, do stop the sandbox and delete it. Those serial operations will be done exclusively by
 // locking the sandbox.
 func CleanupContainer(ctx context.Context, sandboxID, containerID string, force bool) error {
-	span, ctx := trace(ctx, "CleanupContainer")
+	span, _ := trace(ctx, "CleanupContainer")
 	defer span.End()
 
 	if sandboxID == "" {

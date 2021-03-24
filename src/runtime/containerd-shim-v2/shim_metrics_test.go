@@ -97,7 +97,7 @@ func TestStatsSandbox(t *testing.T) {
 	sandbox.StatsFunc = getSandboxCPUFunc(2000, 110000)
 	sandbox.StatsContainerFunc = getStatsContainerCPUFunc(200, 400, 20000, 40000)
 
-	finishSandboxStats, finishContainersStats, err := s.statsSandbox(context.Background())
+	finishSandboxStats, finishContainersStats, _ := s.statsSandbox(context.Background())
 
 	// calc overhead
 	mem, cpu := calcOverhead(initialSandboxStats, finishSandboxStats, initialContainerStats, finishContainersStats, 1e9)

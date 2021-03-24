@@ -38,7 +38,7 @@ type KataMonitor struct {
 // NewKataMonitor create and return a new KataMonitor instance
 func NewKataMonitor(containerdAddr, containerdConfigFile string) (*KataMonitor, error) {
 	if containerdAddr == "" {
-		return nil, fmt.Errorf("Containerd serve address missing.")
+		return nil, fmt.Errorf("containerd serve address missing")
 	}
 
 	containerdConf := &srvconfig.Config{
@@ -82,7 +82,7 @@ func (km *KataMonitor) initSandboxCache() error {
 
 // GetAgentURL returns agent URL
 func (km *KataMonitor) GetAgentURL(w http.ResponseWriter, r *http.Request) {
-	sandboxID, err := getSandboxIdFromReq(r)
+	sandboxID, err := getSandboxIDFromReq(r)
 	if err != nil {
 		commonServeError(w, http.StatusBadRequest, err)
 		return
