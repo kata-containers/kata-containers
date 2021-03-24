@@ -59,8 +59,12 @@ func TestNewFactory(t *testing.T) {
 		t.Skip(testDisabledAsNonRoot)
 	}
 
+	url, err := mock.GenerateKataMockHybridVSock()
+	assert.NoError(err)
+	vc.MockHybridVSockPath = url
+
 	hybridVSockTTRPCMock := mock.HybridVSockTTRPCMock{}
-	err = hybridVSockTTRPCMock.Start(fmt.Sprintf("mock://%s", vc.MockHybridVSockPath))
+	err = hybridVSockTTRPCMock.Start(fmt.Sprintf("mock://%s", url))
 	assert.NoError(err)
 	defer hybridVSockTTRPCMock.Stop()
 
@@ -173,8 +177,12 @@ func TestFactoryGetVM(t *testing.T) {
 		t.Skip(testDisabledAsNonRoot)
 	}
 
+	url, err := mock.GenerateKataMockHybridVSock()
+	assert.NoError(err)
+	vc.MockHybridVSockPath = url
+
 	hybridVSockTTRPCMock := mock.HybridVSockTTRPCMock{}
-	err = hybridVSockTTRPCMock.Start(fmt.Sprintf("mock://%s", vc.MockHybridVSockPath))
+	err = hybridVSockTTRPCMock.Start(fmt.Sprintf("mock://%s", url))
 	assert.NoError(err)
 	defer hybridVSockTTRPCMock.Stop()
 
