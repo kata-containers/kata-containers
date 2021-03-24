@@ -131,6 +131,9 @@ const (
 
 	// PCIeRootPort is a PCIe Root Port, the PCIe device should be hotplugged to this port.
 	PCIeRootPort DeviceDriver = "pcie-root-port"
+
+	// Loader is the Loader device driver.
+	Loader DeviceDriver = "loader"
 )
 
 func isDimmSupported(config *Config) bool {
@@ -1136,6 +1139,40 @@ func (dev PVPanicDevice) QemuParams(config *Config) []string {
 		return []string{"-device", "pvpanic", "-no-shutdown"}
 	}
 	return []string{"-device", "pvpanic"}
+}
+
+// LoaderDevice represents a qemu loader device.
+type LoaderDevice struct {
+	File string
+	ID   string
+}
+
+// Valid returns true if there is a valid structure defined for LoaderDevice
+func (dev LoaderDevice) Valid() bool {
+	if dev.File == "" {
+		return false
+	}
+
+	if dev.ID == "" {
+		return false
+	}
+
+	return true
+}
+
+// QemuParams returns the qemu parameters built out of this loader device.
+func (dev LoaderDevice) QemuParams(config *Config) []string {
+	var qemuParams []string
+	var devParams []string
+
+	devParams = append(devParams, "loader")
+	devParams = append(devParams, fmt.Sprintf("file=%s", dev.File))
+	devParams = append(devParams, fmt.Sprintf("id=%s", dev.ID))
+
+	qemuParams = append(qemuParams, "-device")
+	qemuParams = append(qemuParams, strings.Join(devParams, ","))
+
+	return qemuParams
 }
 
 // VhostUserDevice represents a qemu vhost-user device meant to be passed
