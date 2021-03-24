@@ -34,26 +34,12 @@ install_yq() {
 
 get_from_kata_deps() {
 	local dependency="$1"
-	BRANCH=${branch:-master}
-	local branch="${2:-${BRANCH}}"
 	GOPATH=${GOPATH:-${HOME}/go}
-	# For our CI, we will query the local versions.yaml file both for kernel and
-	# all other subsystems. eg: a new version of NEMU would be good to test
-	# through CI. For the kernel, .ci/install_kata_kernel.sh file in tests
-	# repository will pass the kernel version as an override to this function to
-	# allow testing of kernels before they land in tree.
-	if [ "${CI:-}" = "true" ]; then
-		versions_file="${this_script_dir}/../../../versions.yaml"
-	else
-		versions_file="versions-${branch}.yaml"
-	fi
+	versions_file="${this_script_dir}/../../../versions.yaml"
 
 	#make sure yq is installed
 	install_yq >&2
 
-	if [ ! -e "${versions_file}" ]; then
-		cp "${this_script_dir}/../../../versions.yaml" ${versions_file}
-	fi
 	result=$("${GOPATH}/bin/yq" read -X "$versions_file" "$dependency")
 	[ "$result" = "null" ] && result=""
 	echo "$result"
