@@ -8,6 +8,7 @@
  */
 
 package openapi
+
 // KernelConfig struct for KernelConfig
 type KernelConfig struct {
 	Path string `json:"path"`

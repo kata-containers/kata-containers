@@ -8,8 +8,9 @@
  */
 
 package openapi
+
 // RestoreConfig struct for RestoreConfig
 type RestoreConfig struct {
 	SourceUrl string `json:"source_url"`
-	Prefault bool `json:"prefault,omitempty"`
+	Prefault  bool   `json:"prefault,omitempty"`
 }
