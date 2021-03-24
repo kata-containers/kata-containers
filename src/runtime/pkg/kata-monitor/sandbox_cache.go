@@ -157,7 +157,7 @@ func (sc *sandboxCache) startEventsListener(addr string) error {
 				// if the container is a sandbox container,
 				// means the VM is started, and can start to collect metrics from the VM.
 				if isSandboxContainer(&c) {
-					// we can simply put the contaienrid in sandboxes list if the conatiner is a sandbox container
+					// we can simply put the contaienrid in sandboxes list if the container is a sandbox container
 					sc.putIfNotExists(cc.ID, e.Namespace)
 					monitorLog.WithField("container", cc.ID).Info("add sandbox to cache")
 				}

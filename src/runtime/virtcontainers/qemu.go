@@ -111,12 +111,8 @@ const (
 
 	scsiControllerID         = "scsi0"
 	rngID                    = "rng0"
-	vsockKernelOption        = "agent.use_vsock"
 	fallbackFileBackedMemDir = "/dev/shm"
 )
-
-var qemuMajorVersion int
-var qemuMinorVersion int
 
 // agnostic list of kernel parameters
 var defaultKernelParameters = []Param{
@@ -458,8 +454,8 @@ func (q *qemu) createSandbox(ctx context.Context, id string, networkNS NetworkNa
 	// Save the tracing context
 	q.ctx = ctx
 
-	span, _ := q.trace("createSandbox")
-	defer span.Finish()
+	span, _ := q.trace(ctx, "createSandbox")
+	defer span.End()
 
 	if err := q.setup(id, hypervisorConfig); err != nil {
 		return err
@@ -756,9 +752,9 @@ func (q *qemu) setupVirtioMem() error {
 }
 
 // startSandbox will start the Sandbox's VM.
-func (q *qemu) startSandbox(timeout int) error {
-	span, _ := q.trace("startSandbox")
-	defer span.Finish()
+func (q *qemu) startSandbox(ctx context.Context, timeout int) error {
+	span, _ := q.trace(ctx, "startSandbox")
+	defer span.End()
 
 	if q.config.Debug {
 		params := q.arch.kernelParameters(q.config.Debug)
@@ -903,9 +899,6 @@ func (q *qemu) waitSandbox(timeout int) error {
 	q.qmpMonitorCh.disconn = disconnectCh
 	defer q.qmpShutdown()
 
-	qemuMajorVersion = ver.Major
-	qemuMinorVersion = ver.Minor
-
 	q.Logger().WithFields(logrus.Fields{
 		"qmp-major-version": ver.Major,
 		"qmp-minor-version": ver.Minor,
@@ -1007,16 +1000,9 @@ func (q *qemu) togglePauseSandbox(pause bool) error {
 	}
 
 	if pause {
-		err = q.qmpMonitorCh.qmp.ExecuteStop(q.qmpMonitorCh.ctx)
-	} else {
-		err = q.qmpMonitorCh.qmp.ExecuteCont(q.qmpMonitorCh.ctx)
+		return q.qmpMonitorCh.qmp.ExecuteStop(q.qmpMonitorCh.ctx)
 	}
-
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return q.qmpMonitorCh.qmp.ExecuteCont(q.qmpMonitorCh.ctx)
 }
 
 func (q *qemu) qmpSetup() error {
@@ -1047,6 +1033,129 @@ func (q *qemu) qmpSetup() error {
 	q.qmpMonitorCh.qmp = qmp
 	q.qmpMonitorCh.disconn = disconnectCh
 
+	return nil
+}
+
+func (q *qemu) loopQMPEvent(event chan govmmQemu.QMPEvent) {
+	for e := range event {
+		q.Logger().WithField("event", e).Debug("got QMP event")
+		if e.Name == "GUEST_PANICKED" {
+			go q.handleGuestPanic()
+		}
+	}
+	q.Logger().Infof("QMP event channel closed")
+}
+
+func (q *qemu) handleGuestPanic() {
+	if err := q.dumpGuestMemory(q.config.GuestMemoryDumpPath); err != nil {
+		q.Logger().WithError(err).Error("failed to dump guest memory")
+	}
+
+	// TODO: how to notify the upper level sandbox to handle the error
+	// to do a fast fail(shutdown or others).
+	// tracked by https://github.com/kata-containers/kata-containers/issues/1026
+}
+
+// canDumpGuestMemory check if can do a guest memory dump operation.
+// for now it only ensure there must be double of VM size for free disk spaces
+func (q *qemu) canDumpGuestMemory(dumpSavePath string) error {
+	fs := unix.Statfs_t{}
+	if err := unix.Statfs(dumpSavePath, &fs); err != nil {
+		q.Logger().WithError(err).WithField("dumpSavePath", dumpSavePath).Error("failed to call Statfs")
+		return nil
+	}
+	availSpaceInBytes := fs.Bavail * uint64(fs.Bsize)
+	q.Logger().WithFields(
+		logrus.Fields{
+			"dumpSavePath":      dumpSavePath,
+			"availSpaceInBytes": availSpaceInBytes,
+		}).Info("get avail space")
+
+	// get guest memory size
+	guestMemorySizeInBytes := (uint64(q.config.MemorySize) + uint64(q.state.HotpluggedMemory)) << utils.MibToBytesShift
+	q.Logger().WithField("guestMemorySizeInBytes", guestMemorySizeInBytes).Info("get guest memory size")
+
+	// default we want ensure there are at least double of VM memory size free spaces available,
+	// this may complete one dump operation for one sandbox
+	exceptMemorySize := guestMemorySizeInBytes * 2
+	if availSpaceInBytes >= exceptMemorySize {
+		return nil
+	}
+	return fmt.Errorf("there are not enough free space to store memory dump file. Except %d bytes, but only %d bytes available", exceptMemorySize, availSpaceInBytes)
+}
+
+// dumpSandboxMetaInfo save meta information for debug purpose, includes:
+// hypervisor version, sandbox/container state, hypervisor config
+func (q *qemu) dumpSandboxMetaInfo(dumpSavePath string) {
+	dumpStatePath := filepath.Join(dumpSavePath, "state")
+
+	// copy state from /run/vc/sbs to memory dump directory
+	statePath := filepath.Join(q.store.RunStoragePath(), q.id)
+	command := []string{"/bin/cp", "-ar", statePath, dumpStatePath}
+	q.Logger().WithField("command", command).Info("try to save sandbox state")
+	if output, err := pkgUtils.RunCommandFull(command, true); err != nil {
+		q.Logger().WithError(err).WithField("output", output).Error("failed to save state")
+	}
+	// save hypervisor meta information
+	fileName := filepath.Join(dumpSavePath, "hypervisor.conf")
+	data, _ := json.MarshalIndent(q.config, "", " ")
+	if err := ioutil.WriteFile(fileName, data, defaultFilePerms); err != nil {
+		q.Logger().WithError(err).WithField("hypervisor.conf", data).Error("write to hypervisor.conf file failed")
+	}
+
+	// save hypervisor version
+	hyperVisorVersion, err := pkgUtils.RunCommand([]string{q.config.HypervisorPath, "--version"})
+	if err != nil {
+		q.Logger().WithError(err).WithField("HypervisorPath", data).Error("failed to get hypervisor version")
+	}
+
+	fileName = filepath.Join(dumpSavePath, "hypervisor.version")
+	if err := ioutil.WriteFile(fileName, []byte(hyperVisorVersion), defaultFilePerms); err != nil {
+		q.Logger().WithError(err).WithField("hypervisor.version", data).Error("write to hypervisor.version file failed")
+	}
+}
+
+func (q *qemu) dumpGuestMemory(dumpSavePath string) error {
+	if dumpSavePath == "" {
+		return nil
+	}
+
+	q.memoryDumpFlag.Lock()
+	defer q.memoryDumpFlag.Unlock()
+
+	q.Logger().WithField("dumpSavePath", dumpSavePath).Info("try to dump guest memory")
+
+	dumpSavePath = filepath.Join(dumpSavePath, q.id)
+	dumpStatePath := filepath.Join(dumpSavePath, "state")
+	if err := pkgUtils.EnsureDir(dumpStatePath, DirMode); err != nil {
+		return err
+	}
+
+	// save meta information for sandbox
+	q.dumpSandboxMetaInfo(dumpSavePath)
+	q.Logger().Info("dump sandbox meta information completed")
+
+	// check device free space and estimated dump size
+	if err := q.canDumpGuestMemory(dumpSavePath); err != nil {
+		q.Logger().Warnf("can't dump guest memory: %s", err.Error())
+		return err
+	}
+
+	// dump guest memory
+	protocol := fmt.Sprintf("file:%s/vmcore-%s.%s", dumpSavePath, time.Now().Format("20060102150405.999"), memoryDumpFormat)
+	q.Logger().Infof("try to dump guest memory to %s", protocol)
+
+	if err := q.qmpSetup(); err != nil {
+		q.Logger().WithError(err).Error("setup manage QMP failed")
+		return err
+	}
+
+	if err := q.qmpMonitorCh.qmp.ExecuteDumpGuestMemory(q.qmpMonitorCh.ctx, protocol, q.config.GuestMemoryDumpPaging, memoryDumpFormat); err != nil {
+		q.Logger().WithError(err).Error("dump guest memory failed")
+		return err
+	}
+
+	q.Logger().Info("dump guest memory completed")
 	return nil
 }
 
@@ -1214,24 +1323,19 @@ func (q *qemu) hotplugBlockDevice(drive *config.BlockDrive, op operation) error 
 	devID := "virtio-" + drive.ID
 
 	if op == addDevice {
-		err = q.hotplugAddBlockDevice(drive, op, devID)
-	} else {
-		if q.config.BlockDeviceDriver == config.VirtioBlock {
-			if err := q.arch.removeDeviceFromBridge(drive.ID); err != nil {
-				return err
-			}
-		}
-
-		if err := q.qmpMonitorCh.qmp.ExecuteDeviceDel(q.qmpMonitorCh.ctx, devID); err != nil {
-			return err
-		}
-
-		if err := q.qmpMonitorCh.qmp.ExecuteBlockdevDel(q.qmpMonitorCh.ctx, drive.ID); err != nil {
+		return q.hotplugAddBlockDevice(ctx, drive, op, devID)
+	}
+	if q.config.BlockDeviceDriver == config.VirtioBlock {
+		if err := q.arch.removeDeviceFromBridge(drive.ID); err != nil {
 			return err
 		}
 	}
 
-	return err
+	if err := q.qmpMonitorCh.qmp.ExecuteDeviceDel(q.qmpMonitorCh.ctx, devID); err != nil {
+		return err
+	}
+
+	return q.qmpMonitorCh.qmp.ExecuteBlockdevDel(q.qmpMonitorCh.ctx, drive.ID)
 }
 
 func (q *qemu) hotplugVhostUserDevice(vAttr *config.VhostUserDeviceAttrs, op operation) error {
@@ -1472,9 +1576,9 @@ func (q *qemu) hotplugDevice(devInfo interface{}, devType deviceType, op operati
 	}
 }
 
-func (q *qemu) hotplugAddDevice(devInfo interface{}, devType deviceType) (interface{}, error) {
-	span, _ := q.trace("hotplugAddDevice")
-	defer span.Finish()
+func (q *qemu) hotplugAddDevice(ctx context.Context, devInfo interface{}, devType deviceType) (interface{}, error) {
+	span, _ := q.trace(ctx, "hotplugAddDevice")
+	defer span.End()
 
 	data, err := q.hotplugDevice(devInfo, devType, addDevice)
 	if err != nil {
@@ -1484,9 +1588,9 @@ func (q *qemu) hotplugAddDevice(devInfo interface{}, devType deviceType) (interf
 	return data, nil
 }
 
-func (q *qemu) hotplugRemoveDevice(devInfo interface{}, devType deviceType) (interface{}, error) {
-	span, _ := q.trace("hotplugRemoveDevice")
-	defer span.Finish()
+func (q *qemu) hotplugRemoveDevice(ctx context.Context, devInfo interface{}, devType deviceType) (interface{}, error) {
+	span, _ := q.trace(ctx, "hotplugRemoveDevice")
+	defer span.End()
 
 	data, err := q.hotplugDevice(devInfo, devType, removeDevice)
 	if err != nil {
@@ -1698,17 +1802,16 @@ func (q *qemu) hotplugAddMemory(memDev *memoryDevice) (int, error) {
 	return memDev.sizeMB, nil
 }
 
-func (q *qemu) pauseSandbox() error {
-	span, _ := q.trace("pauseSandbox")
-	defer span.Finish()
 
+func (q *qemu) pauseSandbox(ctx context.Context) error {
+	span, _ := q.trace(ctx, "pauseSandbox")
+	defer span.End()
 	return q.togglePauseSandbox(true)
 }
 
-func (q *qemu) resumeSandbox() error {
-	span, _ := q.trace("resumeSandbox")
-	defer span.Finish()
-
+func (q *qemu) resumeSandbox(ctx context.Context) error {
+	span, _ := q.trace(ctx, "resumeSandbox")
+	defer span.End()
 	return q.togglePauseSandbox(false)
 }
 

@@ -417,9 +417,9 @@ func (a *Acrn) createSandbox(ctx context.Context, id string, networkNS NetworkNa
 }
 
 // startSandbox will start the Sandbox's VM.
-func (a *Acrn) startSandbox(timeoutSecs int) error {
-	span, _ := a.trace("startSandbox")
-	defer span.Finish()
+func (a *Acrn) startSandbox(ctx context.Context, timeoutSecs int) error {
+	span, _ := a.trace(ctx, "startSandbox")
+	defer span.End()
 
 	if a.config.Debug {
 		params := a.arch.kernelParameters(a.config.Debug)
@@ -567,9 +567,9 @@ func (a *Acrn) updateBlockDevice(drive *config.BlockDrive) error {
 	return err
 }
 
-func (a *Acrn) hotplugAddDevice(devInfo interface{}, devType deviceType) (interface{}, error) {
-	span, _ := a.trace("hotplugAddDevice")
-	defer span.Finish()
+func (a *Acrn) hotplugAddDevice(ctx context.Context, devInfo interface{}, devType deviceType) (interface{}, error) {
+	span, _ := a.trace(ctx, "hotplugAddDevice")
+	defer span.End()
 
 	switch devType {
 	case blockDev:
@@ -581,9 +581,9 @@ func (a *Acrn) hotplugAddDevice(devInfo interface{}, devType deviceType) (interf
 	}
 }
 
-func (a *Acrn) hotplugRemoveDevice(devInfo interface{}, devType deviceType) (interface{}, error) {
-	span, _ := a.trace("hotplugRemoveDevice")
-	defer span.Finish()
+func (a *Acrn) hotplugRemoveDevice(ctx context.Context, devInfo interface{}, devType deviceType) (interface{}, error) {
+	span, _ := a.trace(ctx, "hotplugRemoveDevice")
+	defer span.End()
 
 	// Not supported. return success
 

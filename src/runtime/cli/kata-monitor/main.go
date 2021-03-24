@@ -20,6 +20,40 @@ var containerdAddr = flag.String("containerd-address", "/run/containerd/containe
 var containerdConfig = flag.String("containerd-conf", "/etc/containerd/config.toml", "Containerd config file.")
 var logLevel = flag.String("log-level", "info", "Log level of logrus(trace/debug/info/warn/error/fatal/panic).")
 
+
+// These values are overridden via ldflags
+var (
+	appName = "kata-monitor"
+	// version is the kata monitor version.
+	version = "0.1.0"
+
+	GitCommit = "unknown-commit"
+)
+
+type versionInfo struct {
+	AppName   string
+	Version   string
+	GitCommit string
+	GoVersion string
+	Os        string
+	Arch      string
+}
+
+var versionTemplate = `{{.AppName}}
+ Version:	{{.Version}}
+ Go version:	{{.GoVersion}}
+ Git commit:	{{.GitCommit}}
+ OS/Arch:	{{.Os}}/{{.Arch}}
+`
+
+func printVersion(ver versionInfo) {
+	t, _ := template.New("version").Parse(versionTemplate)
+
+	if err := t.Execute(os.Stdout, ver); err != nil {
+		panic(err)
+	}
+}
+
 func main() {
 	flag.Parse()
 

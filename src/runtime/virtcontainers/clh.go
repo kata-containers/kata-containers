@@ -325,9 +325,9 @@ func (clh *cloudHypervisor) createSandbox(ctx context.Context, id string, networ
 }
 
 // startSandbox will start the VMM and boot the virtual machine for the given sandbox.
-func (clh *cloudHypervisor) startSandbox(timeout int) error {
-	span, _ := clh.trace("startSandbox")
-	defer span.Finish()
+func (clh *cloudHypervisor) startSandbox(ctx context.Context, timeout int) error {
+	span, _ := clh.trace(ctx, "startSandbox")
+	defer span.End()
 
 	ctx, cancel := context.WithTimeout(context.Background(), clhAPITimeout*time.Second)
 	defer cancel()
@@ -478,10 +478,9 @@ func (clh *cloudHypervisor) hotplugAddDevice(devInfo interface{}, devType device
 
 }
 
-func (clh *cloudHypervisor) hotplugRemoveBlockDevice(drive *config.BlockDrive) error {
-	cl := clh.client()
-	ctx, cancel := context.WithTimeout(context.Background(), clhHotPlugAPITimeout*time.Second)
-	defer cancel()
+func (clh *cloudHypervisor) hotplugRemoveDevice(ctx context.Context, devInfo interface{}, devType deviceType) (interface{}, error) {
+	span, _ := clh.trace(ctx, "hotplugRemoveDevice")
+	defer span.End()
 
 	driveID := clhDriveIndexToID(drive.Index)
 
@@ -583,7 +582,7 @@ func (clh *cloudHypervisor) resizeMemory(reqMemMB uint32, memoryBlockSizeMB uint
 	}
 
 	cl := clh.client()
-	ctx, cancelResize := context.WithTimeout(context.Background(), clhAPITimeout*time.Second)
+	ctx, cancelResize := context.WithTimeout(ctx, clhAPITimeout*time.Second)
 	defer cancelResize()
 
 	// OpenApi does not support uint64, convert to int64
@@ -627,7 +626,7 @@ func (clh *cloudHypervisor) resizeVCPUs(reqVCPUs uint32) (currentVCPUs uint32, n
 	}
 
 	// Resize (hot-plug) vCPUs via HTTP API
-	ctx, cancel := context.WithTimeout(context.Background(), clhAPITimeout*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, clhAPITimeout*time.Second)
 	defer cancel()
 	if _, err = cl.VmResizePut(ctx, chclient.VmResize{DesiredVcpus: int32(reqVCPUs)}); err != nil {
 		return currentVCPUs, newVCPUs, errors.Wrap(err, "[clh] VmResizePut failed")
@@ -659,9 +658,9 @@ func (clh *cloudHypervisor) resumeSandbox() error {
 }
 
 // stopSandbox will stop the Sandbox's VM.
-func (clh *cloudHypervisor) stopSandbox() (err error) {
-	span, _ := clh.trace("stopSandbox")
-	defer span.Finish()
+func (clh *cloudHypervisor) stopSandbox(ctx context.Context) (err error) {
+	span, _ := clh.trace(ctx, "stopSandbox")
+	defer span.End()
 	clh.Logger().WithField("function", "stopSandbox").Info("Stop Sandbox")
 	return clh.terminate()
 }
@@ -765,9 +764,9 @@ func (clh *cloudHypervisor) trace(name string) (opentracing.Span, context.Contex
 	return span, ctx
 }
 
-func (clh *cloudHypervisor) terminate() (err error) {
-	span, _ := clh.trace("terminate")
-	defer span.Finish()
+func (clh *cloudHypervisor) terminate(ctx context.Context) (err error) {
+	span, _ := clh.trace(ctx, "terminate")
+	defer span.End()
 
 	pid := clh.state.PID
 	pidRunning := true

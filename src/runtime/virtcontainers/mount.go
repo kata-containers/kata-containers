@@ -373,7 +373,7 @@ func bindUnmountContainerRootfs(ctx context.Context, sharedDir, cID string) erro
 
 func bindUnmountAllRootfs(ctx context.Context, sharedDir string, sandbox *Sandbox) error {
 	span, _ := trace(ctx, "bindUnmountAllRootfs")
-	defer span.Finish()
+	defer span.End()
 
 	var errors *merr.Error
 	for _, c := range sandbox.containers {

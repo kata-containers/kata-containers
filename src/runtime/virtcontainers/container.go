@@ -715,9 +715,9 @@ func (c *Container) createBlockDevices() error {
 }
 
 // newContainer creates a Container structure from a sandbox and a container configuration.
-func newContainer(sandbox *Sandbox, contConfig *ContainerConfig) (*Container, error) {
-	span, _ := sandbox.trace("newContainer")
-	defer span.Finish()
+func newContainer(ctx context.Context, sandbox *Sandbox, contConfig *ContainerConfig) (*Container, error) {
+	span, _ := sandbox.trace(ctx, "newContainer")
+	defer span.End()
 
 	if !contConfig.valid() {
 		return &Container{}, fmt.Errorf("Invalid container configuration")

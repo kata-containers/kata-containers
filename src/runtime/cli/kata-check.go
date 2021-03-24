@@ -63,7 +63,6 @@ const (
 	moduleParamDir        = "parameters"
 	successMessageCapable = "System is capable of running " + project
 	successMessageCreate  = "System can currently create " + project
-	successMessageVersion = "Version consistency of " + project + " is verified"
 	failMessage           = "System is not capable of running " + project
 	kernelPropertyCorrect = "Kernel property value correct"
 
@@ -389,7 +388,7 @@ EXAMPLES:
 		span, _ := katautils.Trace(ctx, "kata-check")
 		defer span.Finish()
 
-		if context.Bool("no-network-checks") == false && os.Getenv(noNetworkEnvVar) == "" {
+		if !context.Bool("no-network-checks") && os.Getenv(noNetworkEnvVar) == "" {
 			cmd := RelCmdCheck
 
 			if context.Bool("only-list-releases") {

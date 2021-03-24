@@ -21,7 +21,7 @@ func serveError(w http.ResponseWriter, status int, txt string) {
 }
 
 func (km *KataMonitor) composeSocketAddress(r *http.Request) (string, error) {
-	sandbox, err := getSandboxIdFromReq(r)
+	sandbox, err := getSandboxIDFromReq(r)
 	if err != nil {
 		return "", err
 	}

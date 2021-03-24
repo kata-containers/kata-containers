@@ -1272,8 +1272,8 @@ func (n *Network) Run(networkNSPath string, cb func() error) error {
 
 // Add adds all needed interfaces inside the network namespace.
 func (n *Network) Add(ctx context.Context, config *NetworkConfig, s *Sandbox, hotplug bool) ([]Endpoint, error) {
-	span, _ := n.trace(ctx, "add")
-	defer span.Finish()
+	span, _ := n.trace(ctx, "Add")
+	defer span.End()
 
 	endpoints, err := createEndpointsFromScan(config.NetNSPath, config)
 	if err != nil {
@@ -1353,8 +1353,8 @@ func (n *Network) PostAdd(ctx context.Context, ns *NetworkNamespace, hotplug boo
 // Remove network endpoints in the network namespace. It also deletes the network
 // namespace in case the namespace has been created by us.
 func (n *Network) Remove(ctx context.Context, ns *NetworkNamespace, hypervisor hypervisor) error {
-	span, _ := n.trace(ctx, "remove")
-	defer span.Finish()
+	span, _ := n.trace(ctx, "Remove")
+	defer span.End()
 
 	for _, endpoint := range ns.Endpoints {
 		if endpoint.GetRxRateLimiter() {

@@ -352,9 +352,12 @@ func TestHandleBlockVolume(t *testing.T) {
 	vDestination := "/VhostUserBlk/destination"
 	bDestination := "/DeviceBlock/destination"
 	dDestination := "/DeviceDirectBlock/destination"
-	vPCIAddr := "0001:01"
-	bPCIAddr := "0002:01"
-	dPCIAddr := "0003:01"
+	vPCIPath, err := vcTypes.PciPathFromString("01/02")
+	assert.NoError(t, err)
+	bPCIPath, err := vcTypes.PciPathFromString("03/04")
+	assert.NoError(t, err)
+	dPCIPath, err := vcTypes.PciPathFromString("04/05")
+	assert.NoError(t, err)
 
 	vDev := drivers.NewVhostUserBlkDevice(&config.DeviceInfo{ID: vDevID})
 	bDev := drivers.NewBlockDevice(&config.DeviceInfo{ID: bDevID})

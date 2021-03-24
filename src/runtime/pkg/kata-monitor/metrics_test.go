@@ -107,14 +107,14 @@ func TestEncodeMetricFamily(t *testing.T) {
 	scrapeCount.Inc()
 	scrapeCount.Inc()
 
-	mfs, err := prometheus.DefaultGatherer.Gather()
+	mfs, _ := prometheus.DefaultGatherer.Gather()
 
 	// create encoder
 	buf := bytes.NewBufferString("")
 	encoder := expfmt.NewEncoder(buf, expfmt.FmtText)
 
 	// encode metrics to text format
-	err = encodeMetricFamily(mfs, encoder)
+	err := encodeMetricFamily(mfs, encoder)
 	assert.Nil(err, "encodeMetricFamily should not return error")
 
 	// here will be to many metrics,

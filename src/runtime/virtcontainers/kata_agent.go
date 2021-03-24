@@ -26,7 +26,6 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols/grpc"
 	vcAnnotations "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/annotations"
 	vccgroups "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/cgroups"
-	ns "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/nsenter"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/rootless"
 	vcTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/types"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/uuid"
@@ -448,9 +447,9 @@ func (k *kataAgent) setupSharedPath(sandbox *Sandbox) error {
 	return nil
 }
 
-func (k *kataAgent) createSandbox(sandbox *Sandbox) error {
-	span, _ := k.trace("createSandbox")
-	defer span.Finish()
+func (k *kataAgent) createSandbox(ctx context.Context, sandbox *Sandbox) error {
+	span, _ := k.trace(ctx, "createSandbox")
+	defer span.End()
 
 	if err := k.setupSharedPath(sandbox); err != nil {
 		return err
@@ -535,9 +534,10 @@ func cmdEnvsToStringSlice(ev []types.EnvVar) []string {
 	return env
 }
 
-func (k *kataAgent) exec(sandbox *Sandbox, c Container, cmd types.Cmd) (*Process, error) {
-	span, _ := k.trace("exec")
-	defer span.Finish()
+
+func (k *kataAgent) exec(ctx context.Context, sandbox *Sandbox, c Container, cmd types.Cmd) (*Process, error) {
+	span, _ := k.trace(ctx, "exec")
+	defer span.End()
 
 	var kataProcess *grpc.Process
 
@@ -707,9 +707,9 @@ func (k *kataAgent) getDNS(sandbox *Sandbox) ([]string, error) {
 	return nil, nil
 }
 
-func (k *kataAgent) startSandbox(sandbox *Sandbox) error {
-	span, _ := k.trace("startSandbox")
-	defer span.Finish()
+func (k *kataAgent) startSandbox(ctx context.Context, sandbox *Sandbox) error {
+	span, _ := k.trace(ctx, "startSandbox")
+	defer span.End()
 
 	if err := k.setAgentURL(); err != nil {
 		return err
@@ -862,9 +862,9 @@ func setupStorages(sandbox *Sandbox) []*grpc.Storage {
 	return storages
 }
 
-func (k *kataAgent) stopSandbox(sandbox *Sandbox) error {
-	span, _ := k.trace("stopSandbox")
-	defer span.Finish()
+func (k *kataAgent) stopSandbox(ctx context.Context, sandbox *Sandbox) error {
+	span, _ := k.trace(ctx, "stopSandbox")
+	defer span.End()
 
 	req := &grpc.DestroySandboxRequest{}
 
@@ -1224,10 +1224,9 @@ func (k *kataAgent) buildContainerRootfs(sandbox *Sandbox, c *Container, rootPat
 	return nil, nil
 }
 
-func (k *kataAgent) createContainer(sandbox *Sandbox, c *Container) (p *Process, err error) {
-	span, _ := k.trace("createContainer")
-	defer span.Finish()
-
+func (k *kataAgent) createContainer(ctx context.Context, sandbox *Sandbox, c *Container) (p *Process, err error) {
+	span, _ := k.trace(ctx, "createContainer")
+	defer span.End()
 	var ctrStorages []*grpc.Storage
 	var ctrDevices []*grpc.Device
 	var rootfs *grpc.Storage
@@ -1335,14 +1334,6 @@ func (k *kataAgent) createContainer(sandbox *Sandbox, c *Container) (p *Process,
 
 	if _, err = k.sendReq(req); err != nil {
 		return nil, err
-	}
-
-	enterNSList := []ns.Namespace{}
-	if sandbox.networkNS.NetNsPath != "" {
-		enterNSList = append(enterNSList, ns.Namespace{
-			Path: sandbox.networkNS.NetNsPath,
-			Type: ns.NSTypeNet,
-		})
 	}
 
 	return buildProcessFromExecID(req.ExecId)
@@ -1554,10 +1545,9 @@ func (k *kataAgent) handlePidNamespace(grpcSpec *grpc.Spec, sandbox *Sandbox) bo
 	return sharedPidNs
 }
 
-func (k *kataAgent) startContainer(sandbox *Sandbox, c *Container) error {
-	span, _ := k.trace("startContainer")
-	defer span.Finish()
-
+func (k *kataAgent) startContainer(ctx context.Context, sandbox *Sandbox, c *Container) error {
+	span, _ := k.trace(ctx, "startContainer")
+	defer span.End()
 	req := &grpc.StartContainerRequest{
 		ContainerId: c.id,
 	}
@@ -1566,10 +1556,9 @@ func (k *kataAgent) startContainer(sandbox *Sandbox, c *Container) error {
 	return err
 }
 
-func (k *kataAgent) stopContainer(sandbox *Sandbox, c Container) error {
-	span, _ := k.trace("stopContainer")
-	defer span.Finish()
-
+func (k *kataAgent) stopContainer(ctx context.Context, sandbox *Sandbox, c Container) error {
+	span, _ := k.trace(ctx, "stopContainer")
+	defer span.End()
 	_, err := k.sendReq(&grpc.RemoveContainerRequest{ContainerId: c.id})
 	return err
 }
@@ -1731,9 +1720,8 @@ func (k *kataAgent) connect() error {
 		return nil
 	}
 
-	span, _ := k.trace("connect")
-	defer span.Finish()
-
+	span, _ := k.trace(ctx, "connect")
+	defer span.End()
 	// This is for the first connection only, to prevent race
 	k.Lock()
 	defer k.Unlock()
@@ -1776,9 +1764,9 @@ func (k *kataAgent) disconnect() error {
 }
 
 // check grpc server is serving
-func (k *kataAgent) check() error {
-	span, _ := k.trace("check")
-	defer span.Finish()
+func (k *kataAgent) check(ctx context.Context) error {
+	span, _ := k.trace(ctx, "check")
+	defer span.End()
 
 	_, err := k.sendReq(&grpc.CheckRequest{})
 	if err != nil {
@@ -1787,9 +1775,9 @@ func (k *kataAgent) check() error {
 	return err
 }
 
-func (k *kataAgent) waitProcess(c *Container, processID string) (int32, error) {
-	span, _ := k.trace("waitProcess")
-	defer span.Finish()
+func (k *kataAgent) waitProcess(ctx context.Context, c *Container, processID string) (int32, error) {
+	span, _ := k.trace(ctx, "waitProcess")
+	defer span.End()
 
 	resp, err := k.sendReq(&grpc.WaitProcessRequest{
 		ContainerId: c.id,
@@ -1975,7 +1963,7 @@ func (k *kataAgent) sendReq(request interface{}) (interface{}, error) {
 	k.Logger().WithField("name", msgName).WithField("req", message.String()).Debug("sending request")
 
 	defer func() {
-		agentRpcDurationsHistogram.WithLabelValues(msgName).Observe(float64(time.Since(start).Nanoseconds() / int64(time.Millisecond)))
+		agentRPCDurationsHistogram.WithLabelValues(msgName).Observe(float64(time.Since(start).Nanoseconds() / int64(time.Millisecond)))
 	}()
 	return handler(ctx, request)
 }

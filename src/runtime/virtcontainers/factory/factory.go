@@ -140,7 +140,7 @@ func (f *factory) checkConfig(config vc.VMConfig) error {
 // GetVM returns a working blank VM created by the factory.
 func (f *factory) GetVM(ctx context.Context, config vc.VMConfig) (*vc.VM, error) {
 	span, _ := trace(ctx, "GetVM")
-	defer span.Finish()
+	defer span.End()
 
 	hypervisorConfig := config.HypervisorConfig
 	if err := config.Valid(); err != nil {

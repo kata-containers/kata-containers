@@ -198,8 +198,9 @@ func (fc *firecracker) truncateID(id string) string {
 func (fc *firecracker) createSandbox(ctx context.Context, id string, networkNS NetworkNamespace, hypervisorConfig *HypervisorConfig) error {
 	fc.ctx = ctx
 
-	span, _ := fc.trace("createSandbox")
-	defer span.Finish()
+	var span otelTrace.Span
+	span, _ = fc.trace(ctx, "createSandbox")
+	defer span.End()
 
 	//TODO: check validity of the hypervisor config provided
 	//https://github.com/kata-containers/runtime/issues/1065
@@ -322,9 +323,9 @@ func (fc *firecracker) checkVersion(version string) error {
 }
 
 // waitVMMRunning will wait for timeout seconds for the VMM to be up and running.
-func (fc *firecracker) waitVMMRunning(timeout int) error {
-	span, _ := fc.trace("wait VMM to be running")
-	defer span.Finish()
+func (fc *firecracker) waitVMMRunning(ctx context.Context, timeout int) error {
+	span, _ := fc.trace(ctx, "wait VMM to be running")
+	defer span.End()
 
 	if timeout < 0 {
 		return fmt.Errorf("Invalid timeout %ds", timeout)
@@ -344,9 +345,9 @@ func (fc *firecracker) waitVMMRunning(timeout int) error {
 	}
 }
 
-func (fc *firecracker) fcInit(timeout int) error {
-	span, _ := fc.trace("fcInit")
-	defer span.Finish()
+func (fc *firecracker) fcInit(ctx context.Context, timeout int) error {
+	span, _ := fc.trace(ctx, "fcInit")
+	defer span.End()
 
 	var err error
 	//FC version set and check
@@ -464,9 +465,9 @@ func (fc *firecracker) fcEnd() (err error) {
 	return syscall.Kill(pid, syscall.SIGKILL)
 }
 
-func (fc *firecracker) client() *client.Firecracker {
-	span, _ := fc.trace("client")
-	defer span.Finish()
+func (fc *firecracker) client(ctx context.Context) *client.Firecracker {
+	span, _ := fc.trace(ctx, "client")
+	defer span.End()
 
 	if fc.connection == nil {
 		fc.connection = fc.newFireClient()
@@ -759,9 +760,9 @@ func (fc *firecracker) fcInitConfiguration() error {
 // startSandbox will start the hypervisor for the given sandbox.
 // In the context of firecracker, this will start the hypervisor,
 // for configuration, but not yet start the actual virtual machine
-func (fc *firecracker) startSandbox(timeout int) error {
-	span, _ := fc.trace("startSandbox")
-	defer span.Finish()
+func (fc *firecracker) startSandbox(ctx context.Context, timeout int) error {
+	span, _ := fc.trace(ctx, "startSandbox")
+	defer span.End()
 
 	if err := fc.fcInitConfiguration(); err != nil {
 		return err
@@ -872,9 +873,9 @@ func (fc *firecracker) cleanupJail() {
 }
 
 // stopSandbox will stop the Sandbox's VM.
-func (fc *firecracker) stopSandbox() (err error) {
-	span, _ := fc.trace("stopSandbox")
-	defer span.Finish()
+func (fc *firecracker) stopSandbox(ctx context.Context) (err error) {
+	span, _ := fc.trace(ctx, "stopSandbox")
+	defer span.End()
 
 	return fc.fcEnd()
 }
@@ -993,9 +994,9 @@ func (fc *firecracker) fcAddBlockDrive(drive config.BlockDrive) error {
 }
 
 // Firecracker supports replacing the host drive used once the VM has booted up
-func (fc *firecracker) fcUpdateBlockDrive(path, id string) error {
-	span, _ := fc.trace("fcUpdateBlockDrive")
-	defer span.Finish()
+func (fc *firecracker) fcUpdateBlockDrive(ctx context.Context, path, id string) error {
+	span, _ := fc.trace(ctx, "fcUpdateBlockDrive")
+	defer span.End()
 
 	// Use the global block index as an index into the pool of the devices
 	// created for firecracker.
@@ -1017,9 +1018,9 @@ func (fc *firecracker) fcUpdateBlockDrive(path, id string) error {
 
 // addDevice will add extra devices to firecracker.  Limited to configure before the
 // virtual machine starts.  Devices include drivers and network interfaces only.
-func (fc *firecracker) addDevice(devInfo interface{}, devType deviceType) error {
-	span, _ := fc.trace("addDevice")
-	defer span.Finish()
+func (fc *firecracker) addDevice(ctx context.Context, devInfo interface{}, devType deviceType) error {
+	span, _ := fc.trace(ctx, "addDevice")
+	defer span.End()
 
 	fc.state.RLock()
 	defer fc.state.RUnlock()
@@ -1078,9 +1079,9 @@ func (fc *firecracker) hotplugBlockDevice(drive config.BlockDrive, op operation)
 }
 
 // hotplugAddDevice supported in Firecracker VMM
-func (fc *firecracker) hotplugAddDevice(devInfo interface{}, devType deviceType) (interface{}, error) {
-	span, _ := fc.trace("hotplugAddDevice")
-	defer span.Finish()
+func (fc *firecracker) hotplugAddDevice(ctx context.Context, devInfo interface{}, devType deviceType) (interface{}, error) {
+	span, _ := fc.trace(ctx, "hotplugAddDevice")
+	defer span.End()
 
 	switch devType {
 	case blockDev:
@@ -1094,9 +1095,9 @@ func (fc *firecracker) hotplugAddDevice(devInfo interface{}, devType deviceType)
 }
 
 // hotplugRemoveDevice supported in Firecracker VMM
-func (fc *firecracker) hotplugRemoveDevice(devInfo interface{}, devType deviceType) (interface{}, error) {
-	span, _ := fc.trace("hotplugRemoveDevice")
-	defer span.Finish()
+func (fc *firecracker) hotplugRemoveDevice(ctx context.Context, devInfo interface{}, devType deviceType) (interface{}, error) {
+	span, _ := fc.trace(ctx, "hotplugRemoveDevice")
+	defer span.End()
 
 	switch devType {
 	case blockDev:
@@ -1243,7 +1244,6 @@ func revertBytes(num uint64) uint64 {
 	b := num % 1000
 	if a == 0 {
 		return num
-	} else {
-		return 1024*revertBytes(a) + b
 	}
+	return 1024*revertBytes(a) + b
 }
