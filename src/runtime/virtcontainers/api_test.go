@@ -170,8 +170,12 @@ func TestCreateSandboxKataAgentSuccessful(t *testing.T) {
 
 	config := newTestSandboxConfigKataAgent()
 
+	url, err := mock.GenerateKataMockHybridVSock()
+	assert.NoError(err)
+	MockHybridVSockPath = url
+
 	hybridVSockTTRPCMock := mock.HybridVSockTTRPCMock{}
-	err := hybridVSockTTRPCMock.Start(fmt.Sprintf("mock://%s", MockHybridVSockPath))
+	err = hybridVSockTTRPCMock.Start(fmt.Sprintf("mock://%s", url))
 	assert.NoError(err)
 	defer hybridVSockTTRPCMock.Stop()
 
