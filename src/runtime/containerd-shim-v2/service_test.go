@@ -19,12 +19,12 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func NewService(id string) (service, error) {
+func newService(id string) (*service, error) {
 	ctx := context.Background()
 
 	ctx, cancel := context.WithCancel(ctx)
 
-	s := service{
+	s := &service{
 		id:         id,
 		pid:        uint32(os.Getpid()),
 		ctx:        ctx,
@@ -43,16 +43,16 @@ func TestServiceCreate(t *testing.T) {
 
 	assert := assert.New(t)
 
-	tmpdir, err := ioutil.TempDir("", "")
+	tmpdir, _ := ioutil.TempDir("", "")
 	defer os.RemoveAll(tmpdir)
 
 	bundleDir := filepath.Join(tmpdir, "bundle")
-	err = makeOCIBundle(bundleDir)
+	err := makeOCIBundle(bundleDir)
 	assert.NoError(err)
 
 	ctx := context.Background()
 
-	s, err := NewService("foo")
+	s, err := newService("foo")
 	assert.NoError(err)
 
 	for i, d := range ktu.ContainerIDTestData {
