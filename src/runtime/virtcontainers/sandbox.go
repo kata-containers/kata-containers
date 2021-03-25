@@ -445,7 +445,7 @@ func (s *Sandbox) getAndStoreGuestDetails(ctx context.Context) error {
 // to physically create that sandbox i.e. starts a VM for that sandbox to eventually
 // be started.
 func createSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factory) (*Sandbox, error) {
-	span, _ := trace(ctx, "createSandbox")
+	span, ctx := trace(ctx, "createSandbox")
 	defer span.End()
 
 	if err := createAssets(ctx, &sandboxConfig); err != nil {
@@ -483,7 +483,7 @@ func createSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Fac
 }
 
 func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factory) (sb *Sandbox, retErr error) {
-	span, _ := trace(ctx, "newSandbox")
+	span, ctx := trace(ctx, "newSandbox")
 	defer span.End()
 
 	if !sandboxConfig.valid() {
@@ -752,7 +752,7 @@ func (s *Sandbox) createNetwork(ctx context.Context) error {
 		return nil
 	}
 
-	span, _ := s.trace(ctx, "createNetwork")
+	span, ctx := s.trace(ctx, "createNetwork")
 	defer span.End()
 
 	s.networkNS = NetworkNamespace{
@@ -994,7 +994,7 @@ func (cw *consoleWatcher) stop() {
 
 // startVM starts the VM.
 func (s *Sandbox) startVM(ctx context.Context) (err error) {
-	span, _ := s.trace(ctx, "startVM")
+	span, ctx := s.trace(ctx, "startVM")
 	defer span.End()
 
 	s.Logger().Info("Starting VM")
@@ -1075,7 +1075,7 @@ func (s *Sandbox) startVM(ctx context.Context) (err error) {
 
 // stopVM: stop the sandbox's VM
 func (s *Sandbox) stopVM(ctx context.Context) error {
-	span, _ := s.trace(ctx, "stopVM")
+	span, ctx := s.trace(ctx, "stopVM")
 	defer span.End()
 
 	s.Logger().Info("Stopping sandbox in the VM")
@@ -1451,7 +1451,7 @@ func (s *Sandbox) ResumeContainer(ctx context.Context, containerID string) error
 // createContainers registers all containers, create the
 // containers in the guest and starts one shim per container.
 func (s *Sandbox) createContainers(ctx context.Context) error {
-	span, _ := s.trace(ctx, "createContainers")
+	span, ctx := s.trace(ctx, "createContainers")
 	defer span.End()
 
 	for _, contConfig := range s.config.Containers {
@@ -1523,7 +1523,7 @@ func (s *Sandbox) Start(ctx context.Context) error {
 // will be destroyed.
 // When force is true, ignore guest related stop failures.
 func (s *Sandbox) Stop(ctx context.Context, force bool) error {
-	span, _ := s.trace(ctx, "Stop")
+	span, ctx := s.trace(ctx, "Stop")
 	defer span.End()
 
 	if s.state.State == types.StateStopped {
@@ -1634,7 +1634,7 @@ func (s *Sandbox) unsetSandboxBlockIndex(index int) error {
 // HotplugAddDevice is used for add a device to sandbox
 // Sandbox implement DeviceReceiver interface from device/api/interface.go
 func (s *Sandbox) HotplugAddDevice(ctx context.Context, device api.Device, devType config.DeviceType) error {
-	span, _ := s.trace(ctx, "HotplugAddDevice")
+	span, ctx := s.trace(ctx, "HotplugAddDevice")
 	defer span.End()
 
 	if s.config.SandboxCgroupOnly {

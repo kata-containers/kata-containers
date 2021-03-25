@@ -420,7 +420,7 @@ func (a *Acrn) createSandbox(ctx context.Context, id string, networkNS NetworkNa
 
 // startSandbox will start the Sandbox's VM.
 func (a *Acrn) startSandbox(ctx context.Context, timeoutSecs int) error {
-	span, _ := a.trace(ctx, "startSandbox")
+	span, ctx := a.trace(ctx, "startSandbox")
 	defer span.End()
 
 	if a.config.Debug {
