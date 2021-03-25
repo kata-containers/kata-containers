@@ -15,8 +15,8 @@ import (
 	"strings"
 
 	"github.com/go-ini/ini"
-	"golang.org/x/sys/unix"
 	vcTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/types"
+	"golang.org/x/sys/unix"
 )
 
 // DeviceType indicates device type

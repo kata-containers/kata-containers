@@ -64,9 +64,6 @@ var originalLoggerLevel = logrus.WarnLevel
 
 var debug = false
 
-// if true, coredump when an internal error occurs or a fatal signal is received
-var crashOnError = false
-
 // concrete virtcontainer implementation
 var virtcontainersImpl = &vc.VCImpl{}
 
@@ -86,8 +83,8 @@ var defaultErrorFile = os.Stderr
 // runtimeFlags is the list of supported global command-line flags
 var runtimeFlags = []cli.Flag{
 	cli.StringFlag{
-		Name:    "config, kata-config",
-		Usage:   project + " config file path",
+		Name:  "config, kata-config",
+		Usage: project + " config file path",
 	},
 	cli.StringFlag{
 		Name:  "log",
@@ -110,8 +107,8 @@ var runtimeFlags = []cli.Flag{
 		Usage: "ignore cgroup permission errors ('true', 'false', or 'auto')",
 	},
 	cli.BoolFlag{
-		Name:    "show-default-config-paths, kata-show-default-config-paths",
-		Usage:   "show config file paths that will be checked for (in order)",
+		Name:  "show-default-config-paths, kata-show-default-config-paths",
+		Usage: "show config file paths that will be checked for (in order)",
 	},
 	cli.BoolFlag{
 		Name:  "systemd-cgroup",
@@ -322,13 +319,12 @@ func beforeSubcommands(c *cli.Context) error {
 		}
 	}
 
-	configFile, runtimeConfig, err = katautils.LoadConfiguration(c.GlobalString("config"), ignoreConfigLogs, false)
+	configFile, runtimeConfig, err = katautils.LoadConfiguration(c.GlobalString("kata-config"), ignoreConfigLogs, false)
 	if err != nil {
 		fatal(err)
 	}
 	if !subCmdIsCheckCmd {
 		debug = runtimeConfig.Debug
-		crashOnError = runtimeConfig.Debug
 
 		if traceRootSpan != "" {
 			// Create the tracer.

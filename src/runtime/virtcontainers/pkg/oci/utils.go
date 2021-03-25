@@ -100,18 +100,24 @@ type RuntimeConfig struct {
 
 	AgentConfig vc.KataAgentConfig
 
-	Console string
-
 	//Determines how the VM should be connected to the
 	//the container network interface
 	InterNetworkModel vc.NetInterworkingModel
 	FactoryConfig     FactoryConfig
-	Debug             bool
-	Trace             bool
 
+	Console        string
 	JaegerEndpoint string
 	JaegerUser     string
 	JaegerPassword string
+
+	//Paths to be bindmounted RO into the guest.
+	SandboxBindMounts []string
+
+	//Experimental features enabled
+	Experimental []exp.Feature
+
+	Debug bool
+	Trace bool
 
 	//Determines if seccomp should be applied inside guest
 	DisableGuestSeccomp bool
@@ -121,12 +127,6 @@ type RuntimeConfig struct {
 
 	//Determines kata processes are managed only in sandbox cgroup
 	SandboxCgroupOnly bool
-
-	//Paths to be bindmounted RO into the guest.
-	SandboxBindMounts []string
-
-	//Experimental features enabled
-	Experimental []exp.Feature
 
 	// Determines if enable pprof
 	EnablePprof bool
@@ -819,7 +819,7 @@ func addHypervisporNetworkOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConf
 
 	if value, ok := ocispec.Annotations[vcAnnotations.RxRateLimiterMaxRate]; ok {
 		rxRateLimiterMaxRate, err := strconv.ParseUint(value, 10, 64)
-		if err != nil || rxRateLimiterMaxRate < 0 {
+		if err != nil {
 			return fmt.Errorf("Error parsing annotation for rx_rate_limiter_max_rate: %v, Please specify an integer greater than or equal to 0", err)
 		}
 		sbConfig.HypervisorConfig.RxRateLimiterMaxRate = rxRateLimiterMaxRate
@@ -827,7 +827,7 @@ func addHypervisporNetworkOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConf
 
 	if value, ok := ocispec.Annotations[vcAnnotations.TxRateLimiterMaxRate]; ok {
 		txRateLimiterMaxRate, err := strconv.ParseUint(value, 10, 64)
-		if err != nil || txRateLimiterMaxRate < 0 {
+		if err != nil {
 			return fmt.Errorf("Error parsing annotation for tx_rate_limiter_max_rate: %v, Please specify an integer greater than or equal to 0", err)
 		}
 		sbConfig.HypervisorConfig.TxRateLimiterMaxRate = txRateLimiterMaxRate

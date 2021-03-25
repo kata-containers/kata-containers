@@ -157,7 +157,7 @@ type qemuArchBase struct {
 	kernelParamsDebug    []Param
 	kernelParams         []Param
 	Bridges              []types.Bridge
-	PFlash		     []string
+	PFlash               []string
 }
 
 const (

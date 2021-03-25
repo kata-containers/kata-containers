@@ -6,6 +6,7 @@
 package containerdshim
 
 import (
+	"context"
 	"testing"
 
 	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
@@ -83,7 +84,7 @@ func TestStatsSandbox(t *testing.T) {
 		containers: make(map[string]*container),
 	}
 
-	initialSandboxStats, initialContainerStats, err := s.statsSandbox()
+	initialSandboxStats, initialContainerStats, err := s.statsSandbox(context.Background())
 	assert.Nil(err)
 	assert.Equal(uint64(1000*1e9), initialSandboxStats.CgroupStats.CPUStats.CPUUsage.TotalUsage)
 	assert.Equal(2, len(initialContainerStats))
@@ -96,7 +97,7 @@ func TestStatsSandbox(t *testing.T) {
 	sandbox.StatsFunc = getSandboxCPUFunc(2000, 110000)
 	sandbox.StatsContainerFunc = getStatsContainerCPUFunc(200, 400, 20000, 40000)
 
-	finishSandboxStats, finishContainersStats, err := s.statsSandbox()
+	finishSandboxStats, finishContainersStats, _ := s.statsSandbox(context.Background())
 
 	// calc overhead
 	mem, cpu := calcOverhead(initialSandboxStats, finishSandboxStats, initialContainerStats, finishContainersStats, 1e9)

@@ -13,8 +13,8 @@ import (
 	"github.com/vishvananda/netlink"
 
 	persistapi "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist/api"
-	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/uuid"
 	vcTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/types"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/uuid"
 )
 
 // TapEndpoint represents just a tap endpoint

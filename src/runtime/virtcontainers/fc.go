@@ -200,7 +200,7 @@ func (fc *firecracker) createSandbox(ctx context.Context, id string, networkNS N
 	fc.ctx = ctx
 
 	var span otelTrace.Span
-	span, ctx = fc.trace(ctx, "createSandbox")
+	span, _ = fc.trace(ctx, "createSandbox")
 	defer span.End()
 
 	//TODO: check validity of the hypervisor config provided
@@ -325,7 +325,7 @@ func (fc *firecracker) checkVersion(version string) error {
 
 // waitVMMRunning will wait for timeout seconds for the VMM to be up and running.
 func (fc *firecracker) waitVMMRunning(ctx context.Context, timeout int) error {
-	span, ctx := fc.trace(ctx, "wait VMM to be running")
+	span, _ := fc.trace(ctx, "wait VMM to be running")
 	defer span.End()
 
 	if timeout < 0 {
@@ -347,7 +347,7 @@ func (fc *firecracker) waitVMMRunning(ctx context.Context, timeout int) error {
 }
 
 func (fc *firecracker) fcInit(ctx context.Context, timeout int) error {
-	span, ctx := fc.trace(ctx, "fcInit")
+	span, _ := fc.trace(ctx, "fcInit")
 	defer span.End()
 
 	var err error
@@ -467,7 +467,7 @@ func (fc *firecracker) fcEnd(ctx context.Context) (err error) {
 }
 
 func (fc *firecracker) client(ctx context.Context) *client.Firecracker {
-	span, ctx := fc.trace(ctx, "client")
+	span, _ := fc.trace(ctx, "client")
 	defer span.End()
 
 	if fc.connection == nil {
@@ -762,7 +762,7 @@ func (fc *firecracker) fcInitConfiguration(ctx context.Context) error {
 // In the context of firecracker, this will start the hypervisor,
 // for configuration, but not yet start the actual virtual machine
 func (fc *firecracker) startSandbox(ctx context.Context, timeout int) error {
-	span, ctx := fc.trace(ctx, "startSandbox")
+	span, _ := fc.trace(ctx, "startSandbox")
 	defer span.End()
 
 	if err := fc.fcInitConfiguration(ctx); err != nil {
@@ -875,7 +875,7 @@ func (fc *firecracker) cleanupJail(ctx context.Context) {
 
 // stopSandbox will stop the Sandbox's VM.
 func (fc *firecracker) stopSandbox(ctx context.Context) (err error) {
-	span, ctx := fc.trace(ctx, "stopSandbox")
+	span, _ := fc.trace(ctx, "stopSandbox")
 	defer span.End()
 
 	return fc.fcEnd(ctx)
@@ -996,7 +996,7 @@ func (fc *firecracker) fcAddBlockDrive(ctx context.Context, drive config.BlockDr
 
 // Firecracker supports replacing the host drive used once the VM has booted up
 func (fc *firecracker) fcUpdateBlockDrive(ctx context.Context, path, id string) error {
-	span, ctx := fc.trace(ctx, "fcUpdateBlockDrive")
+	span, _ := fc.trace(ctx, "fcUpdateBlockDrive")
 	defer span.End()
 
 	// Use the global block index as an index into the pool of the devices
@@ -1020,7 +1020,7 @@ func (fc *firecracker) fcUpdateBlockDrive(ctx context.Context, path, id string) 
 // addDevice will add extra devices to firecracker.  Limited to configure before the
 // virtual machine starts.  Devices include drivers and network interfaces only.
 func (fc *firecracker) addDevice(ctx context.Context, devInfo interface{}, devType deviceType) error {
-	span, ctx := fc.trace(ctx, "addDevice")
+	span, _ := fc.trace(ctx, "addDevice")
 	defer span.End()
 
 	fc.state.RLock()
@@ -1081,7 +1081,7 @@ func (fc *firecracker) hotplugBlockDevice(ctx context.Context, drive config.Bloc
 
 // hotplugAddDevice supported in Firecracker VMM
 func (fc *firecracker) hotplugAddDevice(ctx context.Context, devInfo interface{}, devType deviceType) (interface{}, error) {
-	span, ctx := fc.trace(ctx, "hotplugAddDevice")
+	span, _ := fc.trace(ctx, "hotplugAddDevice")
 	defer span.End()
 
 	switch devType {
@@ -1097,7 +1097,7 @@ func (fc *firecracker) hotplugAddDevice(ctx context.Context, devInfo interface{}
 
 // hotplugRemoveDevice supported in Firecracker VMM
 func (fc *firecracker) hotplugRemoveDevice(ctx context.Context, devInfo interface{}, devType deviceType) (interface{}, error) {
-	span, ctx := fc.trace(ctx, "hotplugRemoveDevice")
+	span, _ := fc.trace(ctx, "hotplugRemoveDevice")
 	defer span.End()
 
 	switch devType {
@@ -1245,9 +1245,8 @@ func revertBytes(num uint64) uint64 {
 	b := num % 1000
 	if a == 0 {
 		return num
-	} else {
-		return 1024*revertBytes(a) + b
 	}
+	return 1024*revertBytes(a) + b
 }
 
 func (fc *firecracker) setSandbox(sandbox *Sandbox) {

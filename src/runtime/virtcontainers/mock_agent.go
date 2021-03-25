@@ -22,6 +22,7 @@ import (
 type mockAgent struct {
 }
 
+// nolint:golint
 func NewMockAgent() agent {
 	return &mockAgent{}
 }
@@ -237,6 +238,6 @@ func (n *mockAgent) getOOMEvent(ctx context.Context) (string, error) {
 	return "", nil
 }
 
-func (k *mockAgent) getAgentMetrics(ctx context.Context, req *grpc.GetMetricsRequest) (*grpc.Metrics, error) {
+func (n *mockAgent) getAgentMetrics(ctx context.Context, req *grpc.GetMetricsRequest) (*grpc.Metrics, error) {
 	return nil, nil
 }
