@@ -30,9 +30,9 @@ import (
 	otelTrace "go.opentelemetry.io/otel/trace"
 
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
+	vcTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/types"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
-	vcTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/types"
 )
 
 //
@@ -339,7 +339,7 @@ func (clh *cloudHypervisor) createSandbox(ctx context.Context, id string, networ
 
 // startSandbox will start the VMM and boot the virtual machine for the given sandbox.
 func (clh *cloudHypervisor) startSandbox(ctx context.Context, timeout int) error {
-	span, ctx := clh.trace(ctx, "startSandbox")
+	span, _ := clh.trace(ctx, "startSandbox")
 	defer span.End()
 
 	ctx, cancel := context.WithTimeout(context.Background(), clhAPITimeout*time.Second)
@@ -492,7 +492,7 @@ func (clh *cloudHypervisor) hotplugAddDevice(ctx context.Context, devInfo interf
 }
 
 func (clh *cloudHypervisor) hotplugRemoveDevice(ctx context.Context, devInfo interface{}, devType deviceType) (interface{}, error) {
-	span, ctx := clh.trace(ctx, "hotplugRemoveDevice")
+	span, _ := clh.trace(ctx, "hotplugRemoveDevice")
 	defer span.End()
 
 	var deviceID string
@@ -576,7 +576,7 @@ func (clh *cloudHypervisor) resizeMemory(ctx context.Context, reqMemMB uint32, m
 	}
 
 	cl := clh.client()
-	ctx, cancelResize := context.WithTimeout(context.Background(), clhAPITimeout*time.Second)
+	ctx, cancelResize := context.WithTimeout(ctx, clhAPITimeout*time.Second)
 	defer cancelResize()
 
 	// OpenApi does not support uint64, convert to int64
@@ -620,7 +620,7 @@ func (clh *cloudHypervisor) resizeVCPUs(ctx context.Context, reqVCPUs uint32) (c
 	}
 
 	// Resize (hot-plug) vCPUs via HTTP API
-	ctx, cancel := context.WithTimeout(context.Background(), clhAPITimeout*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, clhAPITimeout*time.Second)
 	defer cancel()
 	if _, err = cl.VmResizePut(ctx, chclient.VmResize{DesiredVcpus: int32(reqVCPUs)}); err != nil {
 		return currentVCPUs, newVCPUs, errors.Wrap(err, "[clh] VmResizePut failed")
@@ -653,7 +653,7 @@ func (clh *cloudHypervisor) resumeSandbox(ctx context.Context) error {
 
 // stopSandbox will stop the Sandbox's VM.
 func (clh *cloudHypervisor) stopSandbox(ctx context.Context) (err error) {
-	span, ctx := clh.trace(ctx, "stopSandbox")
+	span, _ := clh.trace(ctx, "stopSandbox")
 	defer span.End()
 	clh.Logger().WithField("function", "stopSandbox").Info("Stop Sandbox")
 	return clh.terminate(ctx)
@@ -757,7 +757,7 @@ func (clh *cloudHypervisor) trace(parent context.Context, name string) (otelTrac
 }
 
 func (clh *cloudHypervisor) terminate(ctx context.Context) (err error) {
-	span, ctx := clh.trace(ctx, "terminate")
+	span, _ := clh.trace(ctx, "terminate")
 	defer span.End()
 
 	pid := clh.state.PID

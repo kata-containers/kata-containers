@@ -8,16 +8,17 @@
  */
 
 package openapi
+
 // NetConfig struct for NetConfig
 type NetConfig struct {
-	Tap string `json:"tap,omitempty"`
-	Ip string `json:"ip,omitempty"`
-	Mask string `json:"mask,omitempty"`
-	Mac string `json:"mac,omitempty"`
-	Iommu bool `json:"iommu,omitempty"`
-	NumQueues int32 `json:"num_queues,omitempty"`
-	QueueSize int32 `json:"queue_size,omitempty"`
-	VhostUser bool `json:"vhost_user,omitempty"`
+	Tap         string `json:"tap,omitempty"`
+	Ip          string `json:"ip,omitempty"`
+	Mask        string `json:"mask,omitempty"`
+	Mac         string `json:"mac,omitempty"`
+	Iommu       bool   `json:"iommu,omitempty"`
+	NumQueues   int32  `json:"num_queues,omitempty"`
+	QueueSize   int32  `json:"queue_size,omitempty"`
+	VhostUser   bool   `json:"vhost_user,omitempty"`
 	VhostSocket string `json:"vhost_socket,omitempty"`
-	Id string `json:"id,omitempty"`
+	Id          string `json:"id,omitempty"`
 }

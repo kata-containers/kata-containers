@@ -36,10 +36,10 @@ import (
 	pkgUtils "github.com/kata-containers/kata-containers/src/runtime/pkg/utils"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
 	persistapi "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist/api"
+	vcTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/types"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/uuid"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
-	vcTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/types"
 )
 
 // romFile is the file name of the ROM that can be used for virtio-pci devices.
@@ -121,12 +121,8 @@ const (
 
 	scsiControllerID         = "scsi0"
 	rngID                    = "rng0"
-	vsockKernelOption        = "agent.use_vsock"
 	fallbackFileBackedMemDir = "/dev/shm"
 )
-
-var qemuMajorVersion int
-var qemuMinorVersion int
 
 // agnostic list of kernel parameters
 var defaultKernelParameters = []Param{
@@ -472,7 +468,7 @@ func (q *qemu) createSandbox(ctx context.Context, id string, networkNS NetworkNa
 	// Save the tracing context
 	q.ctx = ctx
 
-	span, ctx := q.trace(ctx, "createSandbox")
+	span, _ := q.trace(ctx, "createSandbox")
 	defer span.End()
 
 	if err := q.setup(ctx, id, hypervisorConfig); err != nil {
@@ -776,7 +772,7 @@ func (q *qemu) setupVirtioMem() error {
 
 // startSandbox will start the Sandbox's VM.
 func (q *qemu) startSandbox(ctx context.Context, timeout int) error {
-	span, ctx := q.trace(ctx, "startSandbox")
+	span, _ := q.trace(ctx, "startSandbox")
 	defer span.End()
 
 	if q.config.Debug {
@@ -921,9 +917,6 @@ func (q *qemu) waitSandbox(ctx context.Context, timeout int) error {
 	q.qmpMonitorCh.disconn = disconnectCh
 	defer q.qmpShutdown()
 
-	qemuMajorVersion = ver.Major
-	qemuMinorVersion = ver.Minor
-
 	q.Logger().WithFields(logrus.Fields{
 		"qmp-major-version": ver.Major,
 		"qmp-minor-version": ver.Minor,
@@ -1024,9 +1017,8 @@ func (q *qemu) togglePauseSandbox(ctx context.Context, pause bool) error {
 
 	if pause {
 		return q.qmpMonitorCh.qmp.ExecuteStop(q.qmpMonitorCh.ctx)
-	} else {
-		return q.qmpMonitorCh.qmp.ExecuteCont(q.qmpMonitorCh.ctx)
 	}
+	return q.qmpMonitorCh.qmp.ExecuteCont(q.qmpMonitorCh.ctx)
 }
 
 func (q *qemu) qmpSetup() error {
@@ -1067,19 +1059,13 @@ func (q *qemu) qmpSetup() error {
 }
 
 func (q *qemu) loopQMPEvent(event chan govmmQemu.QMPEvent) {
-	for {
-		select {
-		case e, open := <-event:
-			if !open {
-				q.Logger().Infof("QMP event channel closed")
-				return
-			}
-			q.Logger().WithField("event", e).Debug("got QMP event")
-			if e.Name == "GUEST_PANICKED" {
-				go q.handleGuestPanic()
-			}
+	for e := range event {
+		q.Logger().WithField("event", e).Debug("got QMP event")
+		if e.Name == "GUEST_PANICKED" {
+			go q.handleGuestPanic()
 		}
 	}
+	q.Logger().Infof("QMP event channel closed")
 }
 
 func (q *qemu) handleGuestPanic() {
@@ -1116,13 +1102,12 @@ func (q *qemu) canDumpGuestMemory(dumpSavePath string) error {
 	exceptMemorySize := guestMemorySizeInBytes * 2
 	if availSpaceInBytes >= exceptMemorySize {
 		return nil
-	} else {
-		return fmt.Errorf("there are not enough free space to store memory dump file. Except %d bytes, but only %d bytes available", exceptMemorySize, availSpaceInBytes)
 	}
+	return fmt.Errorf("there are not enough free space to store memory dump file. Except %d bytes, but only %d bytes available", exceptMemorySize, availSpaceInBytes)
 }
 
 // dumpSandboxMetaInfo save meta information for debug purpose, includes:
-// hypervisor verison, sandbox/container state, hypervisor config
+// hypervisor version, sandbox/container state, hypervisor config
 func (q *qemu) dumpSandboxMetaInfo(dumpSavePath string) {
 	dumpStatePath := filepath.Join(dumpSavePath, "state")
 
@@ -1377,19 +1362,18 @@ func (q *qemu) hotplugBlockDevice(ctx context.Context, drive *config.BlockDrive,
 
 	if op == addDevice {
 		return q.hotplugAddBlockDevice(ctx, drive, op, devID)
-	} else {
-		if q.config.BlockDeviceDriver == config.VirtioBlock {
-			if err := q.arch.removeDeviceFromBridge(drive.ID); err != nil {
-				return err
-			}
-		}
-
-		if err := q.qmpMonitorCh.qmp.ExecuteDeviceDel(q.qmpMonitorCh.ctx, devID); err != nil {
+	}
+	if q.config.BlockDeviceDriver == config.VirtioBlock {
+		if err := q.arch.removeDeviceFromBridge(drive.ID); err != nil {
 			return err
 		}
-
-		return q.qmpMonitorCh.qmp.ExecuteBlockdevDel(q.qmpMonitorCh.ctx, drive.ID)
 	}
+
+	if err := q.qmpMonitorCh.qmp.ExecuteDeviceDel(q.qmpMonitorCh.ctx, devID); err != nil {
+		return err
+	}
+
+	return q.qmpMonitorCh.qmp.ExecuteBlockdevDel(q.qmpMonitorCh.ctx, drive.ID)
 }
 
 func (q *qemu) hotplugVhostUserDevice(ctx context.Context, vAttr *config.VhostUserDeviceAttrs, op operation) error {
@@ -1625,7 +1609,7 @@ func (q *qemu) hotplugDevice(ctx context.Context, devInfo interface{}, devType d
 }
 
 func (q *qemu) hotplugAddDevice(ctx context.Context, devInfo interface{}, devType deviceType) (interface{}, error) {
-	span, ctx := q.trace(ctx, "hotplugAddDevice")
+	span, _ := q.trace(ctx, "hotplugAddDevice")
 	defer span.End()
 
 	data, err := q.hotplugDevice(ctx, devInfo, devType, addDevice)
@@ -1637,7 +1621,7 @@ func (q *qemu) hotplugAddDevice(ctx context.Context, devInfo interface{}, devTyp
 }
 
 func (q *qemu) hotplugRemoveDevice(ctx context.Context, devInfo interface{}, devType deviceType) (interface{}, error) {
-	span, ctx := q.trace(ctx, "hotplugRemoveDevice")
+	span, _ := q.trace(ctx, "hotplugRemoveDevice")
 	defer span.End()
 
 	data, err := q.hotplugDevice(ctx, devInfo, devType, removeDevice)
@@ -1849,14 +1833,14 @@ func (q *qemu) hotplugAddMemory(memDev *memoryDevice) (int, error) {
 }
 
 func (q *qemu) pauseSandbox(ctx context.Context) error {
-	span, ctx := q.trace(ctx, "pauseSandbox")
+	span, _ := q.trace(ctx, "pauseSandbox")
 	defer span.End()
 
 	return q.togglePauseSandbox(ctx, true)
 }
 
 func (q *qemu) resumeSandbox(ctx context.Context) error {
-	span, ctx := q.trace(ctx, "resumeSandbox")
+	span, _ := q.trace(ctx, "resumeSandbox")
 	defer span.End()
 
 	return q.togglePauseSandbox(ctx, false)

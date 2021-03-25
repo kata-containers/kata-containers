@@ -62,7 +62,7 @@ var (
 		Help:      "Open FDs for hypervisor.",
 	})
 
-	agentRpcDurationsHistogram = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+	agentRPCDurationsHistogram = prometheus.NewHistogramVec(prometheus.HistogramOpts{
 		Namespace: namespaceKatashim,
 		Name:      "agent_rpc_durations_histogram_milliseconds",
 		Help:      "RPC latency distributions.",
@@ -79,7 +79,7 @@ func RegisterMetrics() {
 	prometheus.MustRegister(hypervisorNetdev)
 	prometheus.MustRegister(hypervisorIOStat)
 	prometheus.MustRegister(hypervisorOpenFDs)
-	prometheus.MustRegister(agentRpcDurationsHistogram)
+	prometheus.MustRegister(agentRPCDurationsHistogram)
 }
 
 // UpdateRuntimeMetrics update shim/hypervisor's metrics

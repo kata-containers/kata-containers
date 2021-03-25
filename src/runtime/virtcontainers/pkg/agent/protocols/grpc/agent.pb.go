@@ -7248,7 +7248,7 @@ func (this *MemoryStats) String() string {
 		return "nil"
 	}
 	keysForStats := make([]string, 0, len(this.Stats))
-	for k, _ := range this.Stats {
+	for k := range this.Stats {
 		keysForStats = append(keysForStats, k)
 	}
 	github_com_gogo_protobuf_sortkeys.Strings(keysForStats)
@@ -7359,7 +7359,7 @@ func (this *CgroupStats) String() string {
 		return "nil"
 	}
 	keysForHugetlbStats := make([]string, 0, len(this.HugetlbStats))
-	for k, _ := range this.HugetlbStats {
+	for k := range this.HugetlbStats {
 		keysForHugetlbStats = append(keysForHugetlbStats, k)
 	}
 	github_com_gogo_protobuf_sortkeys.Strings(keysForHugetlbStats)

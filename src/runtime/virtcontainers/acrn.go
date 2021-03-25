@@ -25,10 +25,10 @@ import (
 
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
 	persistapi "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist/api"
+	vcTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/types"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/uuid"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
-	vcTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/types"
 )
 
 // Since ACRN is using the store in a quite abnormal way, let's first draw it back from store to here
@@ -420,7 +420,7 @@ func (a *Acrn) createSandbox(ctx context.Context, id string, networkNS NetworkNa
 
 // startSandbox will start the Sandbox's VM.
 func (a *Acrn) startSandbox(ctx context.Context, timeoutSecs int) error {
-	span, ctx := a.trace(ctx, "startSandbox")
+	span, _ := a.trace(ctx, "startSandbox")
 	defer span.End()
 
 	if a.config.Debug {
@@ -570,7 +570,7 @@ func (a *Acrn) updateBlockDevice(drive *config.BlockDrive) error {
 }
 
 func (a *Acrn) hotplugAddDevice(ctx context.Context, devInfo interface{}, devType deviceType) (interface{}, error) {
-	span, ctx := a.trace(ctx, "hotplugAddDevice")
+	span, _ := a.trace(ctx, "hotplugAddDevice")
 	defer span.End()
 
 	switch devType {
@@ -584,7 +584,7 @@ func (a *Acrn) hotplugAddDevice(ctx context.Context, devInfo interface{}, devTyp
 }
 
 func (a *Acrn) hotplugRemoveDevice(ctx context.Context, devInfo interface{}, devType deviceType) (interface{}, error) {
-	span, ctx := a.trace(ctx, "hotplugRemoveDevice")
+	span, _ := a.trace(ctx, "hotplugRemoveDevice")
 	defer span.End()
 
 	// Not supported. return success

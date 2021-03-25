@@ -700,7 +700,7 @@ func (c *Container) createBlockDevices(ctx context.Context) error {
 
 // newContainer creates a Container structure from a sandbox and a container configuration.
 func newContainer(ctx context.Context, sandbox *Sandbox, contConfig *ContainerConfig) (*Container, error) {
-	span, ctx := sandbox.trace(ctx, "newContainer")
+	span, _ := sandbox.trace(ctx, "newContainer")
 	defer span.End()
 
 	if !contConfig.valid() {

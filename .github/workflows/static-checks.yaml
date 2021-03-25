@@ -8,13 +8,11 @@ jobs:
         os: [ubuntu-20.04]
     runs-on: ${{ matrix.os }}
     env:
-      GO111MODULE: off
       TRAVIS: "true"
       TRAVIS_BRANCH: ${{ github.base_ref }}
       TRAVIS_PULL_REQUEST_BRANCH: ${{ github.head_ref }}
       TRAVIS_PULL_REQUEST_SHA : ${{ github.event.pull_request.head.sha }}
       RUST_BACKTRACE: "1"
-      RUST_AGENT: "yes"
       target_branch: ${TRAVIS_BRANCH}
     steps:
     - name: Install Go
@@ -25,9 +23,6 @@ jobs:
         GOPATH: ${{ runner.workspace }}/kata-containers
     - name: Setup GOPATH
       run: |
-        gopath_org=$(go env GOPATH)/src/github.com/kata-containers/
-        mkdir -p ${gopath_org}
-        ln -s ${PWD} ${gopath_org}
         echo "TRAVIS_BRANCH: ${TRAVIS_BRANCH}"
         echo "TRAVIS_PULL_REQUEST_BRANCH: ${TRAVIS_PULL_REQUEST_BRANCH}"
         echo "TRAVIS_PULL_REQUEST_SHA: ${TRAVIS_PULL_REQUEST_SHA}"
@@ -43,29 +38,29 @@ jobs:
         path: ./src/github.com/${{ github.repository }}
     - name: Setup travis references
       run: |
-        echo "TRAVIS_BRANCH=${TRAVIS_BRANCH:-$(echo $GITHUB_REF | awk 'BEGIN { FS = \"/\" } ; { print $3 }')}" 
+        echo "TRAVIS_BRANCH=${TRAVIS_BRANCH:-$(echo $GITHUB_REF | awk 'BEGIN { FS = \"/\" } ; { print $3 }')}"
         target_branch=${TRAVIS_BRANCH}
     - name: Setup
       run: |
-        cd ${GOPATH}/src/github.com/kata-containers/kata-containers && ./ci/setup.sh
+        cd ${GOPATH}/src/github.com/${{ github.repository }} && ./ci/setup.sh
       env:
         GOPATH: ${{ runner.workspace }}/kata-containers
     - name: Building rust
       run: |
-        cd ${GOPATH}/src/github.com/kata-containers/kata-containers && ./ci/install_rust.sh
+        cd ${GOPATH}/src/github.com/${{ github.repository }} && ./ci/install_rust.sh
         PATH=$PATH:"$HOME/.cargo/bin"
-    - name: Make clippy
+        rustup target add x86_64-unknown-linux-musl
+        rustup component add rustfmt clippy
+    # Must build before static checks as we depend on some generated code in runtime and agent
+    - name: Build
       run: |
-        cd ${GOPATH}/src/github.com/kata-containers/kata-containers/src/agent && rustup target add x86_64-unknown-linux-musl && rustup component add rustfmt && rustup component add clippy && make clippy
-    - name: Static checks
+        cd ${GOPATH}/src/github.com/${{ github.repository }} && make
+    - name: Static Checks
       run: |
-        cd ${GOPATH}/src/github.com/kata-containers/kata-containers && ./ci/static-checks.sh
-    - name: Build agent
+        cd ${GOPATH}/src/github.com/${{ github.repository }} && ./ci/static-checks.sh
+    - name: Run Compiler Checks
       run: |
-        cd ${GOPATH}/src/github.com/kata-containers/kata-containers/src/agent && make
-    - name: Run agent unit tests
+        cd ${GOPATH}/src/github.com/${{ github.repository }} && make check
+    - name: Run Unit Tests
       run: |
-        cd ${GOPATH}/src/github.com/kata-containers/kata-containers/src/agent && make check
-    - name: Build agent-ctl tool (must be buildable against current agent)
-      run: |
-        cd ${GOPATH}/src/github.com/kata-containers/kata-containers/tools/agent-ctl && make
+        cd ${GOPATH}/src/github.com/${{ github.repository }} && make test

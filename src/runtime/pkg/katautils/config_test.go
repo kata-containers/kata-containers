@@ -172,6 +172,7 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (config testRuntimeConf
 		SharedFS:              sharedFS,
 		VirtioFSDaemon:        virtioFSdaemon,
 		VirtioFSCache:         defaultVirtioFSCacheMode,
+		PFlash:                []string{},
 		SGXEPCSize:            epcSize,
 	}
 
