@@ -636,7 +636,14 @@ generate-config: $(CONFIGS)
 
 check: check-go-static
 
-test: go-test
+test: install-hook go-test
+
+install-hook:
+	make -C virtcontainers hook
+ifeq ($(shell id -u), 0)
+	echo "installing mock hook"
+	make -C virtcontainers install
+endif
 
 go-test: $(GENERATED_FILES)
 	go test -v -mod=vendor ./...
@@ -698,7 +705,8 @@ show-usage: show-header
 	@printf "• Additional targets:\n"
 	@printf "\n"
 	@printf "\tbuild                      : standard build (build everything).\n"
-	@printf "\tcheck                      : run tests.\n"
+	@printf "\ttest                       : run tests.\n"
+	@printf "\tcheck                      : run code checks.\n"
 	@printf "\tclean                      : remove built files.\n"
 	@printf "\tcontainerd-shim-v2         : only build containerd shim v2.\n"
 	@printf "\tcoverage                   : run coverage tests.\n"
