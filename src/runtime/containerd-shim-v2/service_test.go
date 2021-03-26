@@ -44,6 +44,7 @@ func TestServiceCreate(t *testing.T) {
 	assert := assert.New(t)
 
 	tmpdir, err := ioutil.TempDir("", "")
+	assert.NoError(err)
 	defer os.RemoveAll(tmpdir)
 
 	bundleDir := filepath.Join(tmpdir, "bundle")
