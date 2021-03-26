@@ -301,7 +301,7 @@ func trace(ctx context.Context, name string) (otelTrace.Span, context.Context) {
 }
 
 func (s *service) Cleanup(ctx context.Context) (_ *taskAPI.DeleteResponse, err error) {
-	span, _ := trace(s.rootCtx, "Cleanup")
+	span, spanCtx := trace(s.rootCtx, "Cleanup")
 	defer span.End()
 
 	//Since the binary cleanup will return the DeleteResponse from stdout to
@@ -335,7 +335,7 @@ func (s *service) Cleanup(ctx context.Context) (_ *taskAPI.DeleteResponse, err e
 
 	switch containerType {
 	case vc.PodSandbox:
-		err = cleanupContainer(ctx, s.id, s.id, path)
+		err = cleanupContainer(spanCtx, s.id, s.id, path)
 		if err != nil {
 			return nil, err
 		}
@@ -345,7 +345,7 @@ func (s *service) Cleanup(ctx context.Context) (_ *taskAPI.DeleteResponse, err e
 			return nil, err
 		}
 
-		err = cleanupContainer(ctx, sandboxID, s.id, path)
+		err = cleanupContainer(spanCtx, sandboxID, s.id, path)
 		if err != nil {
 			return nil, err
 		}
@@ -416,7 +416,7 @@ func (s *service) Create(ctx context.Context, r *taskAPI.CreateTaskRequest) (_ *
 
 // Start a process
 func (s *service) Start(ctx context.Context, r *taskAPI.StartRequest) (_ *taskAPI.StartResponse, err error) {
-	span, _ := trace(s.rootCtx, "Start")
+	span, spanCtx := trace(s.rootCtx, "Start")
 	defer span.End()
 
 	start := time.Now()
@@ -439,7 +439,7 @@ func (s *service) Start(ctx context.Context, r *taskAPI.StartRequest) (_ *taskAP
 
 	//start a container
 	if r.ExecID == "" {
-		err = startContainer(ctx, s, c)
+		err = startContainer(spanCtx, s, c)
 		if err != nil {
 			return nil, errdefs.ToGRPC(err)
 		}
@@ -449,7 +449,7 @@ func (s *service) Start(ctx context.Context, r *taskAPI.StartRequest) (_ *taskAP
 		})
 	} else {
 		//start an exec
-		_, err = startExec(ctx, s, r.ID, r.ExecID)
+		_, err = startExec(spanCtx, s, r.ID, r.ExecID)
 		if err != nil {
 			return nil, errdefs.ToGRPC(err)
 		}
@@ -467,7 +467,7 @@ func (s *service) Start(ctx context.Context, r *taskAPI.StartRequest) (_ *taskAP
 
 // Delete the initial process and container
 func (s *service) Delete(ctx context.Context, r *taskAPI.DeleteRequest) (_ *taskAPI.DeleteResponse, err error) {
-	span, _ := trace(s.rootCtx, "Delete")
+	span, spanCtx := trace(s.rootCtx, "Delete")
 	defer span.End()
 
 	start := time.Now()
@@ -485,7 +485,7 @@ func (s *service) Delete(ctx context.Context, r *taskAPI.DeleteRequest) (_ *task
 	}
 
 	if r.ExecID == "" {
-		if err = deleteContainer(ctx, s, c); err != nil {
+		if err = deleteContainer(spanCtx, s, c); err != nil {
 			return nil, err
 		}
 
@@ -557,7 +557,7 @@ func (s *service) Exec(ctx context.Context, r *taskAPI.ExecProcessRequest) (_ *p
 
 // ResizePty of a process
 func (s *service) ResizePty(ctx context.Context, r *taskAPI.ResizePtyRequest) (_ *ptypes.Empty, err error) {
-	span, _ := trace(s.rootCtx, "ResizePty")
+	span, spanCtx := trace(s.rootCtx, "ResizePty")
 	defer span.End()
 
 	start := time.Now()
@@ -586,7 +586,7 @@ func (s *service) ResizePty(ctx context.Context, r *taskAPI.ResizePtyRequest) (_
 		processID = execs.id
 
 	}
-	err = s.sandbox.WinsizeProcess(ctx, c.id, processID, r.Height, r.Width)
+	err = s.sandbox.WinsizeProcess(spanCtx, c.id, processID, r.Height, r.Width)
 	if err != nil {
 		return nil, err
 	}
@@ -648,7 +648,7 @@ func (s *service) State(ctx context.Context, r *taskAPI.StateRequest) (_ *taskAP
 
 // Pause the container
 func (s *service) Pause(ctx context.Context, r *taskAPI.PauseRequest) (_ *ptypes.Empty, err error) {
-	span, _ := trace(s.rootCtx, "Pause")
+	span, spanCtx := trace(s.rootCtx, "Pause")
 	defer span.End()
 
 	start := time.Now()
@@ -667,7 +667,7 @@ func (s *service) Pause(ctx context.Context, r *taskAPI.PauseRequest) (_ *ptypes
 
 	c.status = task.StatusPausing
 
-	err = s.sandbox.PauseContainer(ctx, r.ID)
+	err = s.sandbox.PauseContainer(spanCtx, r.ID)
 	if err == nil {
 		c.status = task.StatusPaused
 		s.send(&eventstypes.TaskPaused{
@@ -687,7 +687,7 @@ func (s *service) Pause(ctx context.Context, r *taskAPI.PauseRequest) (_ *ptypes
 
 // Resume the container
 func (s *service) Resume(ctx context.Context, r *taskAPI.ResumeRequest) (_ *ptypes.Empty, err error) {
-	span, _ := trace(s.rootCtx, "Resume")
+	span, spanCtx := trace(s.rootCtx, "Resume")
 	defer span.End()
 
 	start := time.Now()
@@ -704,7 +704,7 @@ func (s *service) Resume(ctx context.Context, r *taskAPI.ResumeRequest) (_ *ptyp
 		return nil, err
 	}
 
-	err = s.sandbox.ResumeContainer(ctx, c.id)
+	err = s.sandbox.ResumeContainer(spanCtx, c.id)
 	if err == nil {
 		c.status = task.StatusRunning
 		s.send(&eventstypes.TaskResumed{
@@ -724,7 +724,7 @@ func (s *service) Resume(ctx context.Context, r *taskAPI.ResumeRequest) (_ *ptyp
 
 // Kill a process with the provided signal
 func (s *service) Kill(ctx context.Context, r *taskAPI.KillRequest) (_ *ptypes.Empty, err error) {
-	span, _ := trace(s.rootCtx, "Kill")
+	span, spanCtx := trace(s.rootCtx, "Kill")
 	defer span.End()
 
 	start := time.Now()
@@ -778,7 +778,7 @@ func (s *service) Kill(ctx context.Context, r *taskAPI.KillRequest) (_ *ptypes.E
 		return empty, nil
 	}
 
-	return empty, s.sandbox.SignalProcess(ctx, c.id, processID, signum, r.All)
+	return empty, s.sandbox.SignalProcess(spanCtx, c.id, processID, signum, r.All)
 }
 
 // Pids returns all pids inside the container
@@ -911,7 +911,7 @@ func (s *service) Shutdown(ctx context.Context, r *taskAPI.ShutdownRequest) (_ *
 }
 
 func (s *service) Stats(ctx context.Context, r *taskAPI.StatsRequest) (_ *taskAPI.StatsResponse, err error) {
-	span, _ := trace(s.rootCtx, "Stats")
+	span, spanCtx := trace(s.rootCtx, "Stats")
 	defer span.End()
 
 	start := time.Now()
@@ -928,7 +928,7 @@ func (s *service) Stats(ctx context.Context, r *taskAPI.StatsRequest) (_ *taskAP
 		return nil, err
 	}
 
-	data, err := marshalMetrics(ctx, s, c.id)
+	data, err := marshalMetrics(spanCtx, s, c.id)
 	if err != nil {
 		return nil, err
 	}
@@ -940,7 +940,7 @@ func (s *service) Stats(ctx context.Context, r *taskAPI.StatsRequest) (_ *taskAP
 
 // Update a running container
 func (s *service) Update(ctx context.Context, r *taskAPI.UpdateTaskRequest) (_ *ptypes.Empty, err error) {
-	span, _ := trace(s.rootCtx, "Update")
+	span, spanCtx := trace(s.rootCtx, "Update")
 	defer span.End()
 
 	start := time.Now()
@@ -962,7 +962,7 @@ func (s *service) Update(ctx context.Context, r *taskAPI.UpdateTaskRequest) (_ *
 		return nil, errdefs.ToGRPCf(errdefs.ErrInvalidArgument, "Invalid resources type for %s", s.id)
 	}
 
-	err = s.sandbox.UpdateContainer(ctx, r.ID, *resources)
+	err = s.sandbox.UpdateContainer(spanCtx, r.ID, *resources)
 	if err != nil {
 		return nil, errdefs.ToGRPC(err)
 	}

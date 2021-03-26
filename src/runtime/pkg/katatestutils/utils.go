@@ -53,7 +53,7 @@ type ContainerIDTestDataType struct {
 	Valid bool
 }
 
-// Set of test data that lists valid and invalid Container IDs
+// ContainerIDTestData is a set of test data that lists valid and invalid Container IDs
 var ContainerIDTestData = []ContainerIDTestDataType{
 	{"", false},   // Cannot be blank
 	{" ", false},  // Cannot be a space
