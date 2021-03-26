@@ -1044,7 +1044,7 @@ func (c *Container) stop(force bool) error {
 		return err
 	}
 
-	shareDir := filepath.Join(kataHostSharedDir(), c.sandbox.id, c.id)
+	shareDir := filepath.Join(getMountPath(c.sandbox.id), c.id)
 	if err := syscall.Rmdir(shareDir); err != nil {
 		c.Logger().WithError(err).WithField("share-dir", shareDir).Warn("Could not remove container share dir")
 	}
