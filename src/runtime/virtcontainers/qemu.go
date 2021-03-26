@@ -468,7 +468,7 @@ func (q *qemu) createSandbox(ctx context.Context, id string, networkNS NetworkNa
 	// Save the tracing context
 	q.ctx = ctx
 
-	span, _ := q.trace(ctx, "createSandbox")
+	span, ctx := q.trace(ctx, "createSandbox")
 	defer span.End()
 
 	if err := q.setup(ctx, id, hypervisorConfig); err != nil {
@@ -772,7 +772,7 @@ func (q *qemu) setupVirtioMem() error {
 
 // startSandbox will start the Sandbox's VM.
 func (q *qemu) startSandbox(ctx context.Context, timeout int) error {
-	span, _ := q.trace(ctx, "startSandbox")
+	span, ctx := q.trace(ctx, "startSandbox")
 	defer span.End()
 
 	if q.config.Debug {
@@ -1609,7 +1609,7 @@ func (q *qemu) hotplugDevice(ctx context.Context, devInfo interface{}, devType d
 }
 
 func (q *qemu) hotplugAddDevice(ctx context.Context, devInfo interface{}, devType deviceType) (interface{}, error) {
-	span, _ := q.trace(ctx, "hotplugAddDevice")
+	span, ctx := q.trace(ctx, "hotplugAddDevice")
 	defer span.End()
 
 	data, err := q.hotplugDevice(ctx, devInfo, devType, addDevice)
@@ -1621,7 +1621,7 @@ func (q *qemu) hotplugAddDevice(ctx context.Context, devInfo interface{}, devTyp
 }
 
 func (q *qemu) hotplugRemoveDevice(ctx context.Context, devInfo interface{}, devType deviceType) (interface{}, error) {
-	span, _ := q.trace(ctx, "hotplugRemoveDevice")
+	span, ctx := q.trace(ctx, "hotplugRemoveDevice")
 	defer span.End()
 
 	data, err := q.hotplugDevice(ctx, devInfo, devType, removeDevice)
@@ -1833,14 +1833,14 @@ func (q *qemu) hotplugAddMemory(memDev *memoryDevice) (int, error) {
 }
 
 func (q *qemu) pauseSandbox(ctx context.Context) error {
-	span, _ := q.trace(ctx, "pauseSandbox")
+	span, ctx := q.trace(ctx, "pauseSandbox")
 	defer span.End()
 
 	return q.togglePauseSandbox(ctx, true)
 }
 
 func (q *qemu) resumeSandbox(ctx context.Context) error {
-	span, _ := q.trace(ctx, "resumeSandbox")
+	span, ctx := q.trace(ctx, "resumeSandbox")
 	defer span.End()
 
 	return q.togglePauseSandbox(ctx, false)
