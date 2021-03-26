@@ -19,12 +19,12 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func NewService(id string) (service, error) {
+func newService(id string) (*service, error) {
 	ctx := context.Background()
 
 	ctx, cancel := context.WithCancel(ctx)
 
-	s := service{
+	s := &service{
 		id:         id,
 		pid:        uint32(os.Getpid()),
 		ctx:        ctx,
@@ -53,7 +53,7 @@ func TestServiceCreate(t *testing.T) {
 
 	ctx := context.Background()
 
-	s, err := NewService("foo")
+	s, err := newService("foo")
 	assert.NoError(err)
 
 	for i, d := range ktu.ContainerIDTestData {
