@@ -435,7 +435,7 @@ func (c *Container) setContainerState(state types.StateString) error {
 	return nil
 }
 
-func (c *Container) shareFiles(m Mount, idx int, hostSharedDir, guestSharedDir string) (string, bool, error) {
+func (c *Container) shareFiles(m Mount, idx int, hostSharedDir, hostMountDir, guestSharedDir string) (string, bool, error) {
 	randBytes, err := utils.GenerateRandomBytes(8)
 	if err != nil {
 		return "", false, err
@@ -469,9 +469,34 @@ func (c *Container) shareFiles(m Mount, idx int, hostSharedDir, guestSharedDir s
 		}
 	} else {
 		// These mounts are created in the shared dir
-		mountDest := filepath.Join(hostSharedDir, filename)
-		if err := bindMount(c.ctx, m.Source, mountDest, false, "private"); err != nil {
-			return "", false, err
+		mountDest := filepath.Join(hostMountDir, filename)
+		if !m.ReadOnly {
+			if err := bindMount(c.ctx, m.Source, mountDest, false, "private"); err != nil {
+				return "", false, err
+			}
+		} else {
+			// For RO mounts, bindmount remount event is not propagated to mount subtrees,
+			// and it doesn't present in the virtiofsd standalone mount namespace either.
+			// So we end up a bit tricky:
+			// 1. make a private bind mount to the mount source
+			// 2. make another ro bind mount on the private mount
+			// 3. move the ro bind mount to mountDest
+			// 4. umount the private bind mount created in step 1
+			privateDest := filepath.Join(getPrivatePath(c.sandboxID), filename)
+			if err := bindMount(c.ctx, m.Source, privateDest, false, "private"); err != nil {
+				return "", false, err
+			}
+			defer func() {
+				syscall.Unmount(privateDest, syscall.MNT_DETACH|UmountNoFollow)
+			}()
+			if err := bindMount(c.ctx, privateDest, privateDest, true, "private"); err != nil {
+				return "", false, err
+			}
+			if err := moveMount(c.ctx, privateDest, mountDest); err != nil {
+				return "", false, err
+			}
+
+			syscall.Unmount(privateDest, syscall.MNT_DETACH|UmountNoFollow)
 		}
 		// Save HostPath mount value into the mount list of the container.
 		c.mounts[idx].HostPath = mountDest
@@ -485,7 +510,7 @@ func (c *Container) shareFiles(m Mount, idx int, hostSharedDir, guestSharedDir s
 // It also updates the container mount list with the HostPath info, and store
 // container mounts to the storage. This way, we will have the HostPath info
 // available when we will need to unmount those mounts.
-func (c *Container) mountSharedDirMounts(hostSharedDir, guestSharedDir string) (sharedDirMounts map[string]Mount, ignoredMounts map[string]Mount, err error) {
+func (c *Container) mountSharedDirMounts(hostSharedDir, hostMountDir, guestSharedDir string) (sharedDirMounts map[string]Mount, ignoredMounts map[string]Mount, err error) {
 	sharedDirMounts = make(map[string]Mount)
 	ignoredMounts = make(map[string]Mount)
 	var devicesToDetach []string
@@ -536,7 +561,7 @@ func (c *Container) mountSharedDirMounts(hostSharedDir, guestSharedDir string) (
 
 		var ignore bool
 		var guestDest string
-		guestDest, ignore, err = c.shareFiles(m, idx, hostSharedDir, guestSharedDir)
+		guestDest, ignore, err = c.shareFiles(m, idx, hostSharedDir, hostMountDir, guestSharedDir)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -547,22 +572,12 @@ func (c *Container) mountSharedDirMounts(hostSharedDir, guestSharedDir string) (
 			continue
 		}
 
-		// Check if mount is readonly, let the agent handle the readonly mount
-		// within the VM.
-		readonly := false
-		for _, flag := range m.Options {
-			if flag == "ro" {
-				readonly = true
-				break
-			}
-		}
-
 		sharedDirMount := Mount{
 			Source:      guestDest,
 			Destination: m.Destination,
 			Type:        m.Type,
 			Options:     m.Options,
-			ReadOnly:    readonly,
+			ReadOnly:    m.ReadOnly,
 		}
 
 		sharedDirMounts[sharedDirMount.Destination] = sharedDirMount

@@ -149,9 +149,10 @@ var kataHostSharedDir = func() string {
 }
 
 // Shared path handling:
-// 1. create two directories for each sandbox:
+// 1. create three directories for each sandbox:
 // -. /run/kata-containers/shared/sandboxes/$sbx_id/mounts/, a directory to hold all host/guest shared mounts
 // -. /run/kata-containers/shared/sandboxes/$sbx_id/shared/, a host/guest shared directory (9pfs/virtiofs source dir)
+// -. /run/kata-containers/shared/sandboxes/$sbx_id/private/, a directory to hold all temporary private mounts when creating ro mounts
 //
 // 2. /run/kata-containers/shared/sandboxes/$sbx_id/mounts/ is bind mounted readonly to /run/kata-containers/shared/sandboxes/$sbx_id/shared/, so guest cannot modify it
 //
@@ -162,6 +163,10 @@ func getSharePath(id string) string {
 
 func getMountPath(id string) string {
 	return filepath.Join(kataHostSharedDir(), id, "mounts")
+}
+
+func getPrivatePath(id string) string {
+	return filepath.Join(kataHostSharedDir(), id, "private")
 }
 
 func getSandboxPath(id string) string {
@@ -1261,7 +1266,7 @@ func (k *kataAgent) createContainer(sandbox *Sandbox, c *Container) (p *Process,
 	}
 
 	// Handle container mounts
-	newMounts, ignoredMounts, err := c.mountSharedDirMounts(getMountPath(sandbox.id), kataGuestSharedDir())
+	newMounts, ignoredMounts, err := c.mountSharedDirMounts(getSharePath(sandbox.id), getMountPath(sandbox.id), kataGuestSharedDir())
 	if err != nil {
 		return nil, err
 	}
