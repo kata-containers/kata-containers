@@ -52,10 +52,12 @@ const MOUNTINFOFORMAT: &str = "{d} {d} {d}:{d} {} {} {} {}";
 const PROC_PATH: &str = "/proc";
 
 // since libc didn't defined this const for musl, thus redefined it here.
-#[cfg(all(target_os = "linux", target_env = "gnu"))]
+#[cfg(all(target_os = "linux", target_env = "gnu", not(target_arch = "s390x")))]
 const PROC_SUPER_MAGIC: libc::c_long = 0x00009fa0;
 #[cfg(all(target_os = "linux", target_env = "musl"))]
 const PROC_SUPER_MAGIC: libc::c_ulong = 0x00009fa0;
+#[cfg(all(target_os = "linux", target_env = "gnu", target_arch = "s390x"))]
+const PROC_SUPER_MAGIC: libc::c_uint = 0x00009fa0;
 
 lazy_static! {
     static ref PROPAGATION: HashMap<&'static str, MsFlags> = {
