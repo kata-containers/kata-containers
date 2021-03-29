@@ -20,11 +20,9 @@ extern crate scopeguard;
 extern crate slog;
 
 use anyhow::{anyhow, Context, Result};
-use nix::fcntl::{self, OFlag};
-use nix::fcntl::{FcntlArg, FdFlag};
+use nix::fcntl::OFlag;
 use nix::sys::socket::{self, AddressFamily, SockAddr, SockFlag, SockType};
 use nix::unistd::{self, dup, Pid};
-use std::collections::HashMap;
 use std::env;
 use std::ffi::OsStr;
 use std::fs::{self, File};
@@ -61,7 +59,6 @@ use slog::Logger;
 use uevent::watch_uevents;
 
 use futures::future::join_all;
-use futures::StreamExt as _;
 use rustjail::pipestream::PipeStream;
 use tokio::{
     io::AsyncWrite,
@@ -71,7 +68,6 @@ use tokio::{
     },
     task::JoinHandle,
 };
-use tokio_vsock::{Incoming, VsockListener, VsockStream};
 
 mod rpc;
 
@@ -96,27 +92,6 @@ fn announce(logger: &Logger, config: &AgentConfig) {
     );
 }
 
-fn set_fd_close_exec(fd: RawFd) -> Result<RawFd> {
-    if let Err(e) = fcntl::fcntl(fd, FcntlArg::F_SETFD(FdFlag::FD_CLOEXEC)) {
-        return Err(anyhow!("failed to set fd: {} as close-on-exec: {}", fd, e));
-    }
-    Ok(fd)
-}
-
-fn get_vsock_incoming(fd: RawFd) -> Incoming {
-    let incoming;
-    unsafe {
-        incoming = VsockListener::from_raw_fd(fd).incoming();
-    }
-    incoming
-}
-
-async fn get_vsock_stream(fd: RawFd) -> Result<VsockStream> {
-    let stream = get_vsock_incoming(fd).next().await.unwrap().unwrap();
-    set_fd_close_exec(stream.as_raw_fd())?;
-    Ok(stream)
-}
-
 // Create a thread to handle reading from the logger pipe. The thread will
 // output to the vsock port specified, or stdout.
 async fn create_logger_task(rfd: RawFd, vsock_port: u32, shutdown: Receiver<bool>) -> Result<()> {
@@ -135,7 +110,7 @@ async fn create_logger_task(rfd: RawFd, vsock_port: u32, shutdown: Receiver<bool
         socket::bind(listenfd, &addr).unwrap();
         socket::listen(listenfd, 1).unwrap();
 
-        writer = Box::new(get_vsock_stream(listenfd).await.unwrap());
+        writer = Box::new(util::get_vsock_stream(listenfd).await.unwrap());
     } else {
         writer = Box::new(tokio::io::stdout());
     }
