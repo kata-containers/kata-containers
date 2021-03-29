@@ -337,12 +337,15 @@ mod tests {
                 assert!(*expected_level == actual_level, $msg);
             } else {
                 let expected_error = $expected_result.as_ref().unwrap_err();
-                let actual_error = $actual_result.unwrap_err();
-
                 let expected_error_msg = format!("{:?}", expected_error);
-                let actual_error_msg = format!("{:?}", actual_error);
 
-                assert!(expected_error_msg == actual_error_msg, $msg);
+                if let Err(actual_error) = $actual_result {
+                    let actual_error_msg = format!("{:?}", actual_error);
+
+                    assert!(expected_error_msg == actual_error_msg, $msg);
+                } else {
+                    assert!(expected_error_msg == "expected error, got OK", $msg);
+                }
             }
         };
     }

@@ -142,7 +142,7 @@ fn connect(name: &str, global_args: clap::ArgMatches) -> Result<()> {
     let log_level = logging::level_name_to_slog_level(log_level_name).map_err(|e| anyhow!(e))?;
 
     let writer = io::stdout();
-    let logger = logging::create_logger(name, crate_name!(), log_level, writer);
+    let (logger, _guard) = logging::create_logger(name, crate_name!(), log_level, writer);
 
     let timeout_nano: i64 = match args.value_of("timeout") {
         Some(t) => utils::human_time_to_ns(t).map_err(|e| e)?,
