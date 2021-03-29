@@ -552,7 +552,7 @@ func (cdev CharDevice) QemuParams(config *Config) []string {
 	cdevParams = append(cdevParams, string(cdev.Backend))
 	cdevParams = append(cdevParams, fmt.Sprintf(",id=%s", cdev.ID))
 	if cdev.Backend == Socket {
-		cdevParams = append(cdevParams, fmt.Sprintf(",path=%s,server,nowait", cdev.Path))
+		cdevParams = append(cdevParams, fmt.Sprintf(",path=%s,server=on,wait=off", cdev.Path))
 	} else {
 		cdevParams = append(cdevParams, fmt.Sprintf(",path=%s", cdev.Path))
 	}
@@ -2385,9 +2385,9 @@ func (config *Config) appendQMPSockets() {
 		qmpParams := append([]string{}, fmt.Sprintf("%s:", q.Type))
 		qmpParams = append(qmpParams, q.Name)
 		if q.Server {
-			qmpParams = append(qmpParams, ",server")
+			qmpParams = append(qmpParams, ",server=on")
 			if q.NoWait {
-				qmpParams = append(qmpParams, ",nowait")
+				qmpParams = append(qmpParams, ",wait=off")
 			}
 		}
 

@@ -288,7 +288,7 @@ func TestAppendDeviceSerial(t *testing.T) {
 	testAppend(sdev, deviceSerialString, t)
 }
 
-var deviceSerialPortString = "-device virtserialport,chardev=char0,id=channel0,name=channel.0 -chardev socket,id=char0,path=/tmp/char.sock,server,nowait"
+var deviceSerialPortString = "-device virtserialport,chardev=char0,id=channel0,name=channel.0 -chardev socket,id=char0,path=/tmp/char.sock,server=on,wait=off"
 
 func TestAppendDeviceSerialPort(t *testing.T) {
 	chardev := CharDevice{
@@ -741,7 +741,7 @@ func TestFailToAppendCPUs(t *testing.T) {
 	}
 }
 
-var qmpSingleSocketServerString = "-qmp unix:cc-qmp,server,nowait"
+var qmpSingleSocketServerString = "-qmp unix:cc-qmp,server=on,wait=off"
 var qmpSingleSocketString = "-qmp unix:cc-qmp"
 
 func TestAppendSingleQMPSocketServer(t *testing.T) {
@@ -765,7 +765,7 @@ func TestAppendSingleQMPSocket(t *testing.T) {
 	testAppend(qmp, qmpSingleSocketString, t)
 }
 
-var qmpSocketServerString = "-qmp unix:cc-qmp-1,server,nowait -qmp unix:cc-qmp-2,server,nowait"
+var qmpSocketServerString = "-qmp unix:cc-qmp-1,server=on,wait=off -qmp unix:cc-qmp-2,server=on,wait=off"
 
 func TestAppendQMPSocketServer(t *testing.T) {
 	qmp := []QMPSocket{
