@@ -251,7 +251,6 @@ type SandboxConfig struct {
 	// only one agent config can be non-nil according to agent type
 	KataAgentConfig *KataAgentConfig `json:",omitempty"`
 
-	ShimType       string
 	KataShimConfig *ShimConfig
 
 	NetworkConfig NetworkConfig

@@ -9,14 +9,10 @@ Table of Contents
     * [Sandboxes](#sandboxes)
     * [Hypervisors](#hypervisors)
     * [Agents](#agents)
-    * [Shim](#shim)
 * [API](#api)
-    * [Sandbox API](#sandbox-api)
-    * [Container API](#container-api)
 * [Networking](#networking)
     * [CNM](#cnm)
 * [Storage](#storage)
-    * [How to check if container uses devicemapper block device as its rootfs](#how-to-check-if-container-uses-devicemapper-block-device-as-its-rootfs)
 * [Devices](#devices)
     * [How to pass a device using VFIO-PCI passthrough](#how-to-pass-a-device-using-vfio-pci-passthrough)
     * [How to pass a device using VFIO-AP passthrough](#how-to-pass-a-device-using-vfio-ap-passthrough)
@@ -92,66 +88,9 @@ error output, and so on.
 There are many existing and potential solutions to resolve that problem and `virtcontainers` abstracts
 this through the Agent interface.
 
-## Shim
-
-In some cases the runtime will need a translation shim between the higher level container
-stack (e.g. Docker) and the virtual machine holding the container workload. This is needed
-for container stacks that make strong assumptions on the nature of the container they're
-monitoring. In cases where they assume containers are simply regular host processes, a shim
-layer is needed to translate host specific semantics into e.g. agent controlled virtual
-machine ones.
-
 # API
 
-The high level `virtcontainers` API is the following one:
-
-## Sandbox API
-
-* `CreateSandbox(sandboxConfig SandboxConfig)` creates a Sandbox.
-The virtual machine is started and the Sandbox is prepared.
-
-* `DeleteSandbox(sandboxID string)` deletes a Sandbox.
-The virtual machine is shut down and all information related to the Sandbox are removed.
-The function will fail if the Sandbox is running. In that case `StopSandbox()` has to be called first.
-
-* `StartSandbox(sandboxID string)` starts an already created Sandbox.
-The Sandbox and all its containers are started.
-
-* `RunSandbox(sandboxConfig SandboxConfig)` creates and starts a Sandbox.
-This performs `CreateSandbox()` + `StartSandbox()`.
-
-* `StopSandbox(sandboxID string)` stops an already running Sandbox.
-The Sandbox and all its containers are stopped.
-
-* `PauseSandbox(sandboxID string)` pauses an existing Sandbox.
-
-* `ResumeSandbox(sandboxID string)` resume a paused Sandbox.
-
-* `StatusSandbox(sandboxID string)` returns a detailed Sandbox status.
-
-* `ListSandbox()` lists all Sandboxes on the host.
-It returns a detailed status for every Sandbox.
-
-## Container API
-
-* `CreateContainer(sandboxID string, containerConfig ContainerConfig)` creates a Container on an existing Sandbox.
-
-* `DeleteContainer(sandboxID, containerID string)` deletes a Container from a Sandbox.
-If the Container is running it has to be stopped first.
-
-* `StartContainer(sandboxID, containerID string)` starts an already created Container.
-The Sandbox has to be running.
-
-* `StopContainer(sandboxID, containerID string)` stops an already running Container.
-
-* `EnterContainer(sandboxID, containerID string, cmd Cmd)` enters an already running Container and runs a given command.
-
-* `StatusContainer(sandboxID, containerID string)` returns a detailed Container status.
-
-* `KillContainer(sandboxID, containerID string, signal syscall.Signal, all bool)` sends a signal to all or one container inside a Sandbox.
-
-An example tool using the `virtcontainers` API is provided in the `hack/virtc` package.
-
+The high level `virtcontainers` API includes `Sandbox API` and `Container API`.
 For further details, see the [API documentation](documentation/api/1.0/api.md).
 
 # Networking
@@ -218,23 +157,7 @@ There are three drawbacks about using CNM instead of CNI:
 
 # Storage
 
-Container workloads are shared with the virtualized environment through 9pfs.
-The devicemapper storage driver is a special case. The driver uses dedicated block devices rather than formatted filesystems, and operates at the block level rather than the file level. This knowledge has been used to directly use the underlying block device instead of the overlay file system for the container root file system. The block device maps to the top read-write layer for the overlay. This approach gives much better I/O performance compared to using 9pfs to share the container file system.
-
-The approach above does introduce a limitation in terms of dynamic file copy in/out of the container via `docker cp` operations.
-The copy operation from host to container accesses the mounted file system on the host side. This is not expected to work and may lead to inconsistencies as the block device will be simultaneously written to, from two different mounts.
-The copy operation from container to host will work, provided the user calls `sync(1)` from within the container prior to the copy to make sure any outstanding cached data is written to the block device.
-
-```
-docker cp [OPTIONS] CONTAINER:SRC_PATH HOST:DEST_PATH
-docker cp [OPTIONS] HOST:SRC_PATH CONTAINER:DEST_PATH
-```
-
-Ability to hotplug block devices has been added, which makes it possible to use block devices for containers started after the VM has been launched.
-
-## How to check if container uses devicemapper block device as its rootfs
-
-Start a container. Call `mount(8)` within the container. You should see `/` mounted on `/dev/vda` device.
+See [Kata Containers Architecture](../../../docs/design/architecture.md#storage).
 
 # Devices
 
