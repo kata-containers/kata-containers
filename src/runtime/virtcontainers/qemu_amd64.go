@@ -6,6 +6,7 @@
 package virtcontainers
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -179,11 +180,11 @@ func (q *qemuAmd64) supportGuestMemoryHotplug() bool {
 	return q.qemuMachine.Type != govmmQemu.MachineTypeMicrovm
 }
 
-func (q *qemuAmd64) appendImage(devices []govmmQemu.Device, path string) ([]govmmQemu.Device, error) {
+func (q *qemuAmd64) appendImage(ctx context.Context, devices []govmmQemu.Device, path string) ([]govmmQemu.Device, error) {
 	if !q.disableNvdimm {
 		return q.appendNvdimmImage(devices, path)
 	}
-	return q.appendBlockImage(devices, path)
+	return q.appendBlockImage(ctx, devices, path)
 }
 
 // appendBridges appends to devices the given bridges

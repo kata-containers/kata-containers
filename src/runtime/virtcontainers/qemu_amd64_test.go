@@ -6,6 +6,7 @@
 package virtcontainers
 
 import (
+	"context"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -155,7 +156,7 @@ func TestQemuAmd64AppendImage(t *testing.T) {
 		},
 	}
 
-	devices, err := amd64.appendImage(nil, f.Name())
+	devices, err := amd64.appendImage(context.Background(), nil, f.Name())
 	assert.NoError(err)
 	assert.Equal(expectedOut, devices)
 
@@ -168,7 +169,7 @@ func TestQemuAmd64AppendImage(t *testing.T) {
 	assert.NotContains(amd64.machine().Options, qemuNvdimmOption)
 
 	found := false
-	devices, err = amd64.appendImage(nil, f.Name())
+	devices, err = amd64.appendImage(context.Background(), nil, f.Name())
 	assert.NoError(err)
 	for _, d := range devices {
 		if b, ok := d.(govmmQemu.BlockDevice); ok {

@@ -346,14 +346,14 @@ func (q *qemu) getQemuMachine() (govmmQemu.Machine, error) {
 	return machine, nil
 }
 
-func (q *qemu) appendImage(devices []govmmQemu.Device) ([]govmmQemu.Device, error) {
+func (q *qemu) appendImage(ctx context.Context, devices []govmmQemu.Device) ([]govmmQemu.Device, error) {
 	imagePath, err := q.config.ImageAssetPath()
 	if err != nil {
 		return nil, err
 	}
 
 	if imagePath != "" {
-		devices, err = q.arch.appendImage(devices, imagePath)
+		devices, err = q.arch.appendImage(ctx, devices, imagePath)
 		if err != nil {
 			return nil, err
 		}
@@ -395,13 +395,13 @@ func (q *qemu) buildDevices(ctx context.Context, initrdPath string) ([]govmmQemu
 	// bridge gets the first available PCI address i.e bridgePCIStartAddr
 	devices = q.arch.appendBridges(devices)
 
-	devices, err = q.arch.appendConsole(devices, console)
+	devices, err = q.arch.appendConsole(ctx, devices, console)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	if initrdPath == "" {
-		devices, err = q.appendImage(devices)
+		devices, err = q.appendImage(ctx, devices)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -421,7 +421,7 @@ func (q *qemu) buildDevices(ctx context.Context, initrdPath string) ([]govmmQemu
 
 	var ioThread *govmmQemu.IOThread
 	if q.config.BlockDeviceDriver == config.VirtioSCSI {
-		return q.arch.appendSCSIController(devices, q.config.EnableIOThreads)
+		return q.arch.appendSCSIController(ctx, devices, q.config.EnableIOThreads)
 	}
 
 	return devices, ioThread, nil
@@ -611,7 +611,7 @@ func (q *qemu) createSandbox(ctx context.Context, id string, networkNS NetworkNa
 		ID:       rngID,
 		Filename: q.config.EntropySource,
 	}
-	qemuConfig.Devices, err = q.arch.appendRNGDevice(qemuConfig.Devices, rngDev)
+	qemuConfig.Devices, err = q.arch.appendRNGDevice(ctx, qemuConfig.Devices, rngDev)
 	if err != nil {
 		return err
 	}
@@ -1882,17 +1882,17 @@ func (q *qemu) addDevice(ctx context.Context, devInfo interface{}, devType devic
 			q.qemuConfig.Devices, err = q.arch.appendVhostUserDevice(q.qemuConfig.Devices, vhostDev)
 		} else {
 			q.Logger().WithField("volume-type", "virtio-9p").Info("adding volume")
-			q.qemuConfig.Devices, err = q.arch.append9PVolume(q.qemuConfig.Devices, v)
+			q.qemuConfig.Devices, err = q.arch.append9PVolume(ctx, q.qemuConfig.Devices, v)
 		}
 	case types.Socket:
 		q.qemuConfig.Devices = q.arch.appendSocket(q.qemuConfig.Devices, v)
 	case types.VSock:
 		q.fds = append(q.fds, v.VhostFd)
-		q.qemuConfig.Devices, err = q.arch.appendVSock(q.qemuConfig.Devices, v)
+		q.qemuConfig.Devices, err = q.arch.appendVSock(ctx, q.qemuConfig.Devices, v)
 	case Endpoint:
-		q.qemuConfig.Devices, err = q.arch.appendNetwork(q.qemuConfig.Devices, v)
+		q.qemuConfig.Devices, err = q.arch.appendNetwork(ctx, q.qemuConfig.Devices, v)
 	case config.BlockDrive:
-		q.qemuConfig.Devices, err = q.arch.appendBlockDevice(q.qemuConfig.Devices, v)
+		q.qemuConfig.Devices, err = q.arch.appendBlockDevice(ctx, q.qemuConfig.Devices, v)
 	case config.VhostUserDeviceAttrs:
 		q.qemuConfig.Devices, err = q.arch.appendVhostUserDevice(q.qemuConfig.Devices, v)
 	case config.VFIODev:

@@ -6,6 +6,7 @@
 package virtcontainers
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -87,9 +88,9 @@ func (q *qemuS390x) bridges(number uint32) {
 
 // appendConsole appends a console to devices.
 // The function has been overwriten to correctly set the driver to the CCW device
-func (q *qemuS390x) appendConsole(devices []govmmQemu.Device, path string) ([]govmmQemu.Device, error) {
+func (q *qemuS390x) appendConsole(ctx context.Context, devices []govmmQemu.Device, path string) ([]govmmQemu.Device, error) {
 	id := "serial0"
-	addr, b, err := q.addDeviceToBridge(id, types.CCW)
+	addr, b, err := q.addDeviceToBridge(ctx, id, types.CCW)
 	if err != nil {
 		return devices, fmt.Errorf("Failed to append console %v", err)
 	}
@@ -122,24 +123,24 @@ func (q *qemuS390x) appendConsole(devices []govmmQemu.Device, path string) ([]go
 	return devices, nil
 }
 
-func (q *qemuS390x) appendImage(devices []govmmQemu.Device, path string) ([]govmmQemu.Device, error) {
+func (q *qemuS390x) appendImage(ctx context.Context, devices []govmmQemu.Device, path string) ([]govmmQemu.Device, error) {
 	drive, err := genericImage(path)
 	if err != nil {
 		return nil, err
 	}
-	return q.appendCCWBlockDevice(devices, drive)
+	return q.appendCCWBlockDevice(ctx, devices, drive)
 }
 
-func (q *qemuS390x) appendBlockDevice(devices []govmmQemu.Device, drive config.BlockDrive) ([]govmmQemu.Device, error) {
-	return q.appendCCWBlockDevice(devices, drive)
+func (q *qemuS390x) appendBlockDevice(ctx context.Context, devices []govmmQemu.Device, drive config.BlockDrive) ([]govmmQemu.Device, error) {
+	return q.appendCCWBlockDevice(ctx, devices, drive)
 }
 
-func (q *qemuS390x) appendCCWBlockDevice(devices []govmmQemu.Device, drive config.BlockDrive) ([]govmmQemu.Device, error) {
+func (q *qemuS390x) appendCCWBlockDevice(ctx context.Context, devices []govmmQemu.Device, drive config.BlockDrive) ([]govmmQemu.Device, error) {
 	d, err := genericBlockDevice(drive, false)
 	if err != nil {
 		return devices, fmt.Errorf("Failed to append blk-dev %v", err)
 	}
-	addr, b, err := q.addDeviceToBridge(drive.ID, types.CCW)
+	addr, b, err := q.addDeviceToBridge(ctx, drive.ID, types.CCW)
 	if err != nil {
 		return devices, fmt.Errorf("Failed to append blk-dev %v", err)
 	}
@@ -163,13 +164,13 @@ func (q *qemuS390x) supportGuestMemoryHotplug() bool {
 	return false
 }
 
-func (q *qemuS390x) appendNetwork(devices []govmmQemu.Device, endpoint Endpoint) ([]govmmQemu.Device, error) {
+func (q *qemuS390x) appendNetwork(ctx context.Context, devices []govmmQemu.Device, endpoint Endpoint) ([]govmmQemu.Device, error) {
 	d, err := genericNetwork(endpoint, false, false, q.networkIndex)
 	if err != nil {
 		return devices, fmt.Errorf("Failed to append network %v", err)
 	}
 	q.networkIndex++
-	addr, b, err := q.addDeviceToBridge(d.ID, types.CCW)
+	addr, b, err := q.addDeviceToBridge(ctx, d.ID, types.CCW)
 	if err != nil {
 		return devices, fmt.Errorf("Failed to append network %v", err)
 	}
@@ -182,8 +183,8 @@ func (q *qemuS390x) appendNetwork(devices []govmmQemu.Device, endpoint Endpoint)
 	return devices, nil
 }
 
-func (q *qemuS390x) appendRNGDevice(devices []govmmQemu.Device, rngDev config.RNGDev) ([]govmmQemu.Device, error) {
-	addr, b, err := q.addDeviceToBridge(rngDev.ID, types.CCW)
+func (q *qemuS390x) appendRNGDevice(ctx context.Context, devices []govmmQemu.Device, rngDev config.RNGDev) ([]govmmQemu.Device, error) {
+	addr, b, err := q.addDeviceToBridge(ctx, rngDev.ID, types.CCW)
 	if err != nil {
 		return devices, fmt.Errorf("Failed to append RNG-Device %v", err)
 	}
@@ -204,12 +205,12 @@ func (q *qemuS390x) appendRNGDevice(devices []govmmQemu.Device, rngDev config.RN
 	return devices, nil
 }
 
-func (q *qemuS390x) append9PVolume(devices []govmmQemu.Device, volume types.Volume) ([]govmmQemu.Device, error) {
+func (q *qemuS390x) append9PVolume(ctx context.Context, devices []govmmQemu.Device, volume types.Volume) ([]govmmQemu.Device, error) {
 	if volume.MountTag == "" || volume.HostPath == "" {
 		return devices, nil
 	}
 	d := generic9PVolume(volume, false)
-	addr, b, err := q.addDeviceToBridge(d.ID, types.CCW)
+	addr, b, err := q.addDeviceToBridge(ctx, d.ID, types.CCW)
 	if err != nil {
 		return devices, fmt.Errorf("Failed to append 9p-Volume %v", err)
 	}
@@ -226,9 +227,9 @@ func (q *qemuS390x) appendBridges(devices []govmmQemu.Device) []govmmQemu.Device
 	return genericAppendBridges(devices, q.Bridges, q.qemuMachine.Type)
 }
 
-func (q *qemuS390x) appendSCSIController(devices []govmmQemu.Device, enableIOThreads bool) ([]govmmQemu.Device, *govmmQemu.IOThread, error) {
+func (q *qemuS390x) appendSCSIController(ctx context.Context, devices []govmmQemu.Device, enableIOThreads bool) ([]govmmQemu.Device, *govmmQemu.IOThread, error) {
 	d, t := genericSCSIController(enableIOThreads, q.nestedRun)
-	addr, b, err := q.addDeviceToBridge(d.ID, types.CCW)
+	addr, b, err := q.addDeviceToBridge(ctx, d.ID, types.CCW)
 	if err != nil {
 		return devices, nil, fmt.Errorf("Failed to append scsi-controller %v", err)
 	}
@@ -241,10 +242,10 @@ func (q *qemuS390x) appendSCSIController(devices []govmmQemu.Device, enableIOThr
 	return devices, t, nil
 }
 
-func (q *qemuS390x) appendVSock(devices []govmmQemu.Device, vsock types.VSock) ([]govmmQemu.Device, error) {
+func (q *qemuS390x) appendVSock(ctx context.Context, devices []govmmQemu.Device, vsock types.VSock) ([]govmmQemu.Device, error) {
 	var devno string
 	id := fmt.Sprintf("vsock-%d", vsock.ContextID)
-	addr, b, err := q.addDeviceToBridge(id, types.CCW)
+	addr, b, err := q.addDeviceToBridge(ctx, id, types.CCW)
 	if err != nil {
 		return devices, fmt.Errorf("Failed to append VSock: %v", err)
 	}
@@ -270,8 +271,8 @@ func (q *qemuS390x) appendIOMMU(devices []govmmQemu.Device) ([]govmmQemu.Device,
 	return devices, fmt.Errorf("S390x does not support appending a vIOMMU")
 }
 
-func (q *qemuS390x) addDeviceToBridge(ID string, t types.Type) (string, types.Bridge, error) {
-	addr, b, err := genericAddDeviceToBridge(q.Bridges, ID, types.CCW)
+func (q *qemuS390x) addDeviceToBridge(ctx context.Context, ID string, t types.Type) (string, types.Bridge, error) {
+	addr, b, err := genericAddDeviceToBridge(ctx, q.Bridges, ID, types.CCW)
 	if err != nil {
 		return "", b, err
 	}
