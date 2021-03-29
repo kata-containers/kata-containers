@@ -26,9 +26,8 @@ use nix::libc::{STDERR_FILENO, STDIN_FILENO, STDOUT_FILENO};
 use nix::pty;
 use nix::sys::select::{select, FdSet};
 use nix::sys::socket::{self, AddressFamily, SockAddr, SockFlag, SockType};
-use nix::sys::wait::{self, WaitStatus};
+use nix::sys::wait;
 use nix::unistd::{self, close, dup, dup2, fork, setsid, ForkResult};
-use prctl::set_child_subreaper;
 use std::collections::HashMap;
 use std::env;
 use std::ffi::{CStr, CString, OsStr};
@@ -52,23 +51,32 @@ mod network;
 mod pci;
 pub mod random;
 mod sandbox;
+mod signal;
 #[cfg(test)]
 mod test_utils;
 mod uevent;
+mod util;
 mod version;
 
 use mount::{cgroups_mount, general_mount};
 use sandbox::Sandbox;
+use signal::setup_signal_handler;
 use slog::Logger;
 use uevent::watch_uevents;
 
 use std::sync::Mutex as SyncMutex;
 
+use futures::future::join_all;
 use futures::StreamExt as _;
 use rustjail::pipestream::PipeStream;
 use tokio::{
-    signal::unix::{signal, SignalKind},
-    sync::{oneshot::Sender, Mutex, RwLock},
+    io::AsyncWrite,
+    sync::{
+        oneshot::Sender,
+        watch::{channel, Receiver},
+        Mutex, RwLock,
+    },
+    task::JoinHandle,
 };
 use tokio_vsock::{Incoming, VsockListener, VsockStream};
 
@@ -121,6 +129,146 @@ async fn get_vsock_stream(fd: RawFd) -> Result<VsockStream> {
     Ok(stream)
 }
 
+// Create a thread to handle reading from the logger pipe. The thread will
+// output to the vsock port specified, or stdout.
+async fn create_logger_task(rfd: RawFd, vsock_port: u32, shutdown: Receiver<bool>) -> Result<()> {
+    let mut reader = PipeStream::from_fd(rfd);
+    let mut writer: Box<dyn AsyncWrite + Unpin + Send>;
+
+    if vsock_port > 0 {
+        let listenfd = socket::socket(
+            AddressFamily::Vsock,
+            SockType::Stream,
+            SockFlag::SOCK_CLOEXEC,
+            None,
+        )?;
+
+        let addr = SockAddr::new_vsock(libc::VMADDR_CID_ANY, vsock_port);
+        socket::bind(listenfd, &addr).unwrap();
+        socket::listen(listenfd, 1).unwrap();
+
+        writer = Box::new(get_vsock_stream(listenfd).await.unwrap());
+    } else {
+        writer = Box::new(tokio::io::stdout());
+    }
+
+    let _ = util::interruptable_io_copier(&mut reader, &mut writer, shutdown).await;
+
+    Ok(())
+}
+
+async fn real_main() -> std::result::Result<(), Box<dyn std::error::Error>> {
+    env::set_var("RUST_BACKTRACE", "full");
+
+    // List of tasks that need to be stopped for a clean shutdown
+    let mut tasks: Vec<JoinHandle<Result<()>>> = vec![];
+
+    lazy_static::initialize(&SHELLS);
+
+    lazy_static::initialize(&AGENT_CONFIG);
+
+    // support vsock log
+    let (rfd, wfd) = unistd::pipe2(OFlag::O_CLOEXEC)?;
+
+    let (shutdown_tx, shutdown_rx) = channel(true);
+
+    let agent_config = AGENT_CONFIG.clone();
+
+    let init_mode = unistd::getpid() == Pid::from_raw(1);
+    if init_mode {
+        // dup a new file descriptor for this temporary logger writer,
+        // since this logger would be dropped and it's writer would
+        // be closed out of this code block.
+        let newwfd = dup(wfd)?;
+        let writer = unsafe { File::from_raw_fd(newwfd) };
+
+        // Init a temporary logger used by init agent as init process
+        // since before do the base mount, it wouldn't access "/proc/cmdline"
+        // to get the customzied debug level.
+        let (logger, logger_async_guard) =
+            logging::create_logger(NAME, "agent", slog::Level::Debug, writer);
+
+        // Must mount proc fs before parsing kernel command line
+        general_mount(&logger).map_err(|e| {
+            error!(logger, "fail general mount: {}", e);
+            e
+        })?;
+
+        let mut config = agent_config.write().await;
+        config.parse_cmdline(KERNEL_CMDLINE_FILE)?;
+
+        init_agent_as_init(&logger, config.unified_cgroup_hierarchy)?;
+        drop(logger_async_guard);
+    } else {
+        // once parsed cmdline and set the config, release the write lock
+        // as soon as possible in case other thread would get read lock on
+        // it.
+        let mut config = agent_config.write().await;
+        config.parse_cmdline(KERNEL_CMDLINE_FILE)?;
+    }
+    let config = agent_config.read().await;
+
+    let log_vport = config.log_vport as u32;
+
+    let log_handle = tokio::spawn(create_logger_task(rfd, log_vport, shutdown_rx.clone()));
+
+    tasks.push(log_handle);
+
+    let writer = unsafe { File::from_raw_fd(wfd) };
+
+    // Recreate a logger with the log level get from "/proc/cmdline".
+    let (logger, logger_async_guard) =
+        logging::create_logger(NAME, "agent", config.log_level, writer);
+
+    announce(&logger, &config);
+
+    // This variable is required as it enables the global (and crucially static) logger,
+    // which is required to satisfy the the lifetime constraints of the auto-generated gRPC code.
+    let global_logger = slog_scope::set_global_logger(logger.new(o!("subsystem" => "rpc")));
+
+    // Allow the global logger to be modified later (for shutdown)
+    global_logger.cancel_reset();
+
+    let mut ttrpc_log_guard: Result<(), log::SetLoggerError> = Ok(());
+
+    if config.log_level == slog::Level::Trace {
+        // Redirect ttrpc log calls to slog iff full debug requested
+        ttrpc_log_guard = Ok(slog_stdlog::init().map_err(|e| e)?);
+    }
+
+    // Start the sandbox and wait for its ttRPC server to end
+    start_sandbox(&logger, &config, init_mode, &mut tasks, shutdown_rx.clone()).await?;
+
+    // Install a NOP logger for the remainder of the shutdown sequence
+    // to ensure any log calls made by local crates using the scope logger
+    // don't fail.
+    let global_logger_guard2 =
+        slog_scope::set_global_logger(slog::Logger::root(slog::Discard, o!()));
+    global_logger_guard2.cancel_reset();
+
+    drop(logger_async_guard);
+
+    drop(ttrpc_log_guard);
+
+    // Trigger a controlled shutdown
+    shutdown_tx
+        .send(true)
+        .map_err(|e| anyhow!(e).context("failed to request shutdown"))?;
+
+    // Wait for all threads to finish
+    let results = join_all(tasks).await;
+
+    for result in results {
+        if let Err(e) = result {
+            return Err(anyhow!(e).into());
+        }
+    }
+
+    eprintln!("{} shutdown complete", NAME);
+
+    Ok(())
+}
+
 fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     let args: Vec<String> = env::args().collect();
 
@@ -141,111 +289,20 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
         exit(0);
     }
 
-    let rt = tokio::runtime::Builder::new_current_thread()
+    let rt = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()?;
 
-    rt.block_on(async {
-        env::set_var("RUST_BACKTRACE", "full");
-
-        lazy_static::initialize(&SHELLS);
-
-        lazy_static::initialize(&AGENT_CONFIG);
-
-        // support vsock log
-        let (rfd, wfd) = unistd::pipe2(OFlag::O_CLOEXEC)?;
-
-        let agent_config = AGENT_CONFIG.clone();
-
-        let init_mode = unistd::getpid() == Pid::from_raw(1);
-        if init_mode {
-            // dup a new file descriptor for this temporary logger writer,
-            // since this logger would be dropped and it's writer would
-            // be closed out of this code block.
-            let newwfd = dup(wfd)?;
-            let writer = unsafe { File::from_raw_fd(newwfd) };
-
-            // Init a temporary logger used by init agent as init process
-            // since before do the base mount, it wouldn't access "/proc/cmdline"
-            // to get the customzied debug level.
-            let logger = logging::create_logger(NAME, "agent", slog::Level::Debug, writer);
-
-            // Must mount proc fs before parsing kernel command line
-            general_mount(&logger).map_err(|e| {
-                error!(logger, "fail general mount: {}", e);
-                e
-            })?;
-
-            let mut config = agent_config.write().await;
-            config.parse_cmdline(KERNEL_CMDLINE_FILE)?;
-
-            init_agent_as_init(&logger, config.unified_cgroup_hierarchy)?;
-        } else {
-            // once parsed cmdline and set the config, release the write lock
-            // as soon as possible in case other thread would get read lock on
-            // it.
-            let mut config = agent_config.write().await;
-            config.parse_cmdline(KERNEL_CMDLINE_FILE)?;
-        }
-        let config = agent_config.read().await;
-
-        let log_vport = config.log_vport as u32;
-        let log_handle = tokio::spawn(async move {
-            let mut reader = PipeStream::from_fd(rfd);
-
-            if log_vport > 0 {
-                let listenfd = socket::socket(
-                    AddressFamily::Vsock,
-                    SockType::Stream,
-                    SockFlag::SOCK_CLOEXEC,
-                    None,
-                )
-                .unwrap();
-
-                let addr = SockAddr::new_vsock(libc::VMADDR_CID_ANY, log_vport);
-                socket::bind(listenfd, &addr).unwrap();
-                socket::listen(listenfd, 1).unwrap();
-
-                let mut vsock_stream = get_vsock_stream(listenfd).await.unwrap();
-
-                // copy log to stdout
-                tokio::io::copy(&mut reader, &mut vsock_stream)
-                    .await
-                    .unwrap();
-            }
-
-            // copy log to stdout
-            let mut stdout_writer = tokio::io::stdout();
-            let _ = tokio::io::copy(&mut reader, &mut stdout_writer).await;
-        });
-
-        let writer = unsafe { File::from_raw_fd(wfd) };
-
-        // Recreate a logger with the log level get from "/proc/cmdline".
-        let logger = logging::create_logger(NAME, "agent", config.log_level, writer);
-
-        announce(&logger, &config);
-
-        // This "unused" variable is required as it enables the global (and crucially static) logger,
-        // which is required to satisfy the the lifetime constraints of the auto-generated gRPC code.
-        let _guard = slog_scope::set_global_logger(logger.new(o!("subsystem" => "rpc")));
-
-        let mut _log_guard: Result<(), log::SetLoggerError> = Ok(());
-
-        if config.log_level == slog::Level::Trace {
-            // Redirect ttrpc log calls to slog iff full debug requested
-            _log_guard = Ok(slog_stdlog::init().map_err(|e| e)?);
-        }
-
-        start_sandbox(&logger, &config, init_mode).await?;
-
-        let _ = log_handle.await.unwrap();
-
-        Ok(())
-    })
+    rt.block_on(real_main())
 }
 
-async fn start_sandbox(logger: &Logger, config: &AgentConfig, init_mode: bool) -> Result<()> {
+async fn start_sandbox(
+    logger: &Logger,
+    config: &AgentConfig,
+    init_mode: bool,
+    tasks: &mut Vec<JoinHandle<Result<()>>>,
+    shutdown: Receiver<bool>,
+) -> Result<()> {
     let shells = SHELLS.clone();
     let debug_console_vport = config.debug_console_vport as u32;
 
@@ -275,10 +332,17 @@ async fn start_sandbox(logger: &Logger, config: &AgentConfig, init_mode: bool) -
 
     let sandbox = Arc::new(Mutex::new(s));
 
-    setup_signal_handler(&logger, sandbox.clone())
-        .await
-        .unwrap();
-    watch_uevents(sandbox.clone()).await;
+    let signal_handler_task = tokio::spawn(setup_signal_handler(
+        logger.clone(),
+        sandbox.clone(),
+        shutdown.clone(),
+    ));
+
+    tasks.push(signal_handler_task);
+
+    let uevents_handler_task = tokio::spawn(watch_uevents(sandbox.clone(), shutdown.clone()));
+
+    tasks.push(uevents_handler_task);
 
     let (tx, rx) = tokio::sync::oneshot::channel();
     sandbox.lock().await.sender = Some(tx);
@@ -294,93 +358,6 @@ async fn start_sandbox(logger: &Logger, config: &AgentConfig, init_mode: bool) -
         handle.await.map_err(|e| anyhow!("{:?}", e))?;
     }
 
-    Ok(())
-}
-
-use nix::sys::wait::WaitPidFlag;
-
-async fn setup_signal_handler(logger: &Logger, sandbox: Arc<Mutex<Sandbox>>) -> Result<()> {
-    let logger = logger.new(o!("subsystem" => "signals"));
-
-    set_child_subreaper(true)
-        .map_err(|err| anyhow!(err).context("failed to setup agent as a child subreaper"))?;
-
-    let mut signal_stream = signal(SignalKind::child())?;
-
-    tokio::spawn(async move {
-        'outer: loop {
-            signal_stream.recv().await;
-            info!(logger, "received signal"; "signal" => "SIGCHLD");
-
-            // sevral signals can be combined together
-            // as one. So loop around to reap all
-            // exited children
-            'inner: loop {
-                let wait_status = match wait::waitpid(
-                    Some(Pid::from_raw(-1)),
-                    Some(WaitPidFlag::WNOHANG | WaitPidFlag::__WALL),
-                ) {
-                    Ok(s) => {
-                        if s == WaitStatus::StillAlive {
-                            continue 'outer;
-                        }
-                        s
-                    }
-                    Err(e) => {
-                        info!(
-                            logger,
-                            "waitpid reaper failed";
-                            "error" => e.as_errno().unwrap().desc()
-                        );
-                        continue 'outer;
-                    }
-                };
-                info!(logger, "wait_status"; "wait_status result" => format!("{:?}", wait_status));
-
-                let pid = wait_status.pid();
-                if let Some(pid) = pid {
-                    let raw_pid = pid.as_raw();
-                    let child_pid = format!("{}", raw_pid);
-
-                    let logger = logger.new(o!("child-pid" => child_pid));
-
-                    let mut sandbox = sandbox.lock().await;
-                    let process = sandbox.find_process(raw_pid);
-                    if process.is_none() {
-                        info!(logger, "child exited unexpectedly");
-                        continue 'inner;
-                    }
-
-                    let mut p = process.unwrap();
-
-                    if p.exit_pipe_w.is_none() {
-                        error!(logger, "the process's exit_pipe_w isn't set");
-                        continue 'inner;
-                    }
-                    let pipe_write = p.exit_pipe_w.unwrap();
-                    let ret: i32;
-
-                    match wait_status {
-                        WaitStatus::Exited(_, c) => ret = c,
-                        WaitStatus::Signaled(_, sig, _) => ret = sig as i32,
-                        _ => {
-                            info!(logger, "got wrong status for process";
-                                  "child-status" => format!("{:?}", wait_status));
-                            continue 'inner;
-                        }
-                    }
-
-                    p.exit_code = ret;
-                    let _ = unistd::close(pipe_write);
-
-                    info!(logger, "notify term to close");
-                    // close the socket file to notify readStdio to close terminal specifically
-                    // in case this process's terminal has been inherited by its children.
-                    p.notify_term_close();
-                }
-            }
-        }
-    });
     Ok(())
 }
 
