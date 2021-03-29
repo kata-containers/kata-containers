@@ -3,10 +3,14 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
+use anyhow::Result;
+use futures::StreamExt;
 use std::io;
 use std::io::ErrorKind;
+use std::os::unix::io::{FromRawFd, RawFd};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::sync::watch::Receiver;
+use tokio_vsock::{Incoming, VsockListener, VsockStream};
 
 // Size of I/O read buffer
 const BUF_SIZE: usize = 8192;
@@ -50,6 +54,15 @@ where
     }
 
     Ok(total_bytes)
+}
+
+pub fn get_vsock_incoming(fd: RawFd) -> Incoming {
+    unsafe { VsockListener::from_raw_fd(fd).incoming() }
+}
+
+pub async fn get_vsock_stream(fd: RawFd) -> Result<VsockStream> {
+    let stream = get_vsock_incoming(fd).next().await.unwrap()?;
+    Ok(stream)
 }
 
 #[cfg(test)]
