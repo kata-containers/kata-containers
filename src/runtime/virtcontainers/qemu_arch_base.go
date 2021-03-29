@@ -201,7 +201,7 @@ const (
 
 	qmpCapMigrationIgnoreShared = "x-ignore-shared"
 
-	qemuNvdimmOption = "nvdimm"
+	qemuNvdimmOption = "nvdimm=on"
 )
 
 // kernelParamsNonDebug is a list of the default kernel
