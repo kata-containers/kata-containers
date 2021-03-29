@@ -2565,9 +2565,6 @@ func (config *Config) appendMemoryKnobs() {
 	if config.Memory.Size == "" {
 		return
 	}
-	if !isDimmSupported(config) {
-		return
-	}
 	var objMemParam, numaMemParam string
 	dimmName := "dimm1"
 	if config.Knobs.HugePages {
@@ -2590,8 +2587,13 @@ func (config *Config) appendMemoryKnobs() {
 	config.qemuParams = append(config.qemuParams, "-object")
 	config.qemuParams = append(config.qemuParams, objMemParam)
 
-	config.qemuParams = append(config.qemuParams, "-numa")
-	config.qemuParams = append(config.qemuParams, numaMemParam)
+	if isDimmSupported(config) {
+		config.qemuParams = append(config.qemuParams, "-numa")
+		config.qemuParams = append(config.qemuParams, numaMemParam)
+	} else {
+		config.qemuParams = append(config.qemuParams, "-machine")
+		config.qemuParams = append(config.qemuParams, "memory-backend="+dimmName)
+	}
 }
 
 func (config *Config) appendKnobs() {
