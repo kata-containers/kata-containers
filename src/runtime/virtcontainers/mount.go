@@ -212,6 +212,42 @@ func isDeviceMapper(major, minor int) (bool, error) {
 
 const mountPerm = os.FileMode(0755)
 
+func evalMountPath(source, destination string) (string, string, error) {
+	if source == "" {
+		return "", "", fmt.Errorf("source must be specified")
+	}
+	if destination == "" {
+		return "", "", fmt.Errorf("destination must be specified")
+	}
+
+	absSource, err := filepath.EvalSymlinks(source)
+	if err != nil {
+		return "", "", fmt.Errorf("Could not resolve symlink for source %v", source)
+	}
+
+	if err := ensureDestinationExists(absSource, destination); err != nil {
+		return "", "", fmt.Errorf("Could not create destination mount point %v: %v", destination, err)
+	}
+
+	return absSource, destination, nil
+}
+
+// moveMount moves a mountpoint to another path with some bookkeeping:
+// * evaluate all symlinks
+// * ensure the source exists
+// * recursively create the destination
+func moveMount(ctx context.Context, source, destination string) error {
+	span, _ := trace(ctx, "moveMount")
+	defer span.End()
+
+	source, destination, err := evalMountPath(source, destination)
+	if err != nil {
+		return err
+	}
+
+	return syscall.Mount(source, destination, "move", syscall.MS_MOVE, "")
+}
+
 // bindMount bind mounts a source in to a destination. This will
 // do some bookkeeping:
 // * evaluate all symlinks
@@ -222,20 +258,9 @@ func bindMount(ctx context.Context, source, destination string, readonly bool, p
 	span, _ := trace(ctx, "bindMount")
 	defer span.End()
 
-	if source == "" {
-		return fmt.Errorf("source must be specified")
-	}
-	if destination == "" {
-		return fmt.Errorf("destination must be specified")
-	}
-
-	absSource, err := filepath.EvalSymlinks(source)
+	absSource, destination, err := evalMountPath(source, destination)
 	if err != nil {
-		return fmt.Errorf("Could not resolve symlink for source %v", source)
-	}
-
-	if err := ensureDestinationExists(absSource, destination); err != nil {
-		return fmt.Errorf("Could not create destination mount point %v: %v", destination, err)
+		return err
 	}
 
 	if err := syscall.Mount(absSource, destination, "bind", syscall.MS_BIND, ""); err != nil {

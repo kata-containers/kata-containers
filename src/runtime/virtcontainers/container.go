@@ -472,18 +472,36 @@ func (c *Container) shareFiles(ctx context.Context, m Mount, idx int, hostShared
 	} else {
 		// These mounts are created in the shared dir
 		mountDest := filepath.Join(hostMountDir, filename)
-		if err := bindMount(ctx, m.Source, mountDest, m.ReadOnly, "private"); err != nil {
-			return "", false, err
+		if !m.ReadOnly {
+			if err := bindMount(c.ctx, m.Source, mountDest, false, "private"); err != nil {
+				return "", false, err
+			}
+		} else {
+			// For RO mounts, bindmount remount event is not propagated to mount subtrees,
+			// and it doesn't present in the virtiofsd standalone mount namespace either.
+			// So we end up a bit tricky:
+			// 1. make a private bind mount to the mount source
+			// 2. make another ro bind mount on the private mount
+			// 3. move the ro bind mount to mountDest
+			// 4. umount the private bind mount created in step 1
+			privateDest := filepath.Join(getPrivatePath(c.sandboxID), filename)
+			if err := bindMount(c.ctx, m.Source, privateDest, false, "private"); err != nil {
+				return "", false, err
+			}
+			defer func() {
+				syscall.Unmount(privateDest, syscall.MNT_DETACH|UmountNoFollow)
+			}()
+			if err := bindMount(c.ctx, privateDest, privateDest, true, "private"); err != nil {
+				return "", false, err
+			}
+			if err := moveMount(c.ctx, privateDest, mountDest); err != nil {
+				return "", false, err
+			}
+
+			syscall.Unmount(privateDest, syscall.MNT_DETACH|UmountNoFollow)
 		}
 		// Save HostPath mount value into the mount list of the container.
 		c.mounts[idx].HostPath = mountDest
-		// bindmount remount event is not propagated to mount subtrees, so we have to remount the shared dir mountpoint directly.
-		if m.ReadOnly {
-			mountDest = filepath.Join(hostSharedDir, filename)
-			if err := remountRo(c.ctx, mountDest); err != nil {
-				return "", false, err
-			}
-		}
 	}
 
 	return guestDest, false, nil
