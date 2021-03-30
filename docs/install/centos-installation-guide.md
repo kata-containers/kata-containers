@@ -3,15 +3,9 @@
 1. Install the Kata Containers components with the following commands:
 
    ```bash
+   $ sudo -E dnf install -y centos-release-advanced-virtualization
+   $ sudo -E dnf module disable -y virt:rhel
    $ source /etc/os-release
-   $ cat <<EOF | sudo -E tee /etc/yum.repos.d/advanced-virt.repo
-     [advanced-virt]
-     name=Advanced Virtualization
-     baseurl=http://mirror.centos.org/\$contentdir/\$releasever/virt/\$basearch/advanced-virtualization
-     enabled=1
-     gpgcheck=1
-     skip_if_unavailable=1
-     EOF
    $ cat <<EOF | sudo -E tee /etc/yum.repos.d/kata-containers.repo
      [kata-containers]
      name=Kata Containers
@@ -20,8 +14,7 @@
      gpgcheck=1
      skip_if_unavailable=1
      EOF
-   $ sudo -E dnf module disable -y virt:rhel
-   $ sudo -E dnf install -y kata-runtime
+   $ sudo -E dnf install -y kata-containers
    ```
 
 2. Decide which container manager to use and select the corresponding link that follows:
