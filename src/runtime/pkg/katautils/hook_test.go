@@ -12,7 +12,6 @@ import (
 	"testing"
 
 	ktu "github.com/kata-containers/kata-containers/src/runtime/pkg/katatestutils"
-	. "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/mock"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/stretchr/testify/assert"
 )
@@ -25,11 +24,7 @@ var testBinHookPath = "/usr/bin/virtcontainers/bin/test/hook"
 var testBundlePath = "/test/bundle"
 
 func getMockHookBinPath() string {
-	if DefaultMockHookBinPath == "" {
-		return testBinHookPath
-	}
-
-	return DefaultMockHookBinPath
+	return testBinHookPath
 }
 
 func createHook(timeout int) specs.Hook {
