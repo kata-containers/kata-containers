@@ -227,6 +227,9 @@ type ObjectType string
 const (
 	// MemoryBackendFile represents a guest memory mapped file.
 	MemoryBackendFile ObjectType = "memory-backend-file"
+
+	// TDXGuest represents a TDX object
+	TDXGuest ObjectType = "tdx-guest"
 )
 
 // Object is a qemu object representation.
@@ -249,6 +252,12 @@ type Object struct {
 
 	// Size is the object size in bytes
 	Size uint64
+
+	// Debug this is a debug object
+	Debug bool
+
+	// File is the device file
+	File string
 }
 
 // Valid returns true if the Object structure is valid and complete.
@@ -256,6 +265,11 @@ func (object Object) Valid() bool {
 	switch object.Type {
 	case MemoryBackendFile:
 		if object.ID == "" || object.MemPath == "" || object.Size == 0 {
+			return false
+		}
+
+	case TDXGuest:
+		if object.ID == "" || object.File == "" || object.DeviceID == "" {
 			return false
 		}
 
@@ -283,6 +297,13 @@ func (object Object) QemuParams(config *Config) []string {
 		objectParams = append(objectParams, fmt.Sprintf(",size=%d", object.Size))
 
 		deviceParams = append(deviceParams, fmt.Sprintf(",memdev=%s", object.ID))
+	case TDXGuest:
+		objectParams = append(objectParams, string(object.Type))
+		objectParams = append(objectParams, fmt.Sprintf(",id=%s", object.ID))
+		if object.Debug {
+			objectParams = append(objectParams, ",debug=on")
+		}
+		deviceParams = append(deviceParams, fmt.Sprintf(",file=%s", object.File))
 	}
 
 	qemuParams = append(qemuParams, "-device")
