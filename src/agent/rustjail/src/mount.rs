@@ -5,6 +5,7 @@
 
 use anyhow::{anyhow, bail, Context, Result};
 use libc::uid_t;
+use libc::gid_t;
 use nix::errno::Errno;
 use nix::fcntl::{self, OFlag};
 #[cfg(not(test))]
@@ -877,7 +878,7 @@ fn mknod_dev(dev: &LinuxDevice) -> Result<()> {
     unistd::chown(
         &dev.path[1..],
         Some(Uid::from_raw(dev.uid.unwrap_or(0) as uid_t)),
-        Some(Gid::from_raw(dev.gid.unwrap_or(0) as uid_t)),
+        Some(Gid::from_raw(dev.gid.unwrap_or(0) as gid_t)),
     )?;
 
     Ok(())
