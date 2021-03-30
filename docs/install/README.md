@@ -50,7 +50,7 @@ Kata packages are provided by official distribution repositories for:
 | Distribution (link to installation guide)                | Minimum versions                                                               |
 |----------------------------------------------------------|--------------------------------------------------------------------------------|
 | [CentOS](centos-installation-guide.md)                   | 8                                                                              |
-| [Fedora](fedora-installation-guide.md)                   | 32, Rawhide                                                                    |
+| [Fedora](fedora-installation-guide.md)                   | 34                                                                             |
 
 > **Note::**
 >
