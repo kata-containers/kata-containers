@@ -10,7 +10,6 @@ import (
 	"testing"
 
 	govmmQemu "github.com/kata-containers/govmm/qemu"
-	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
 	"github.com/stretchr/testify/assert"
 )
 

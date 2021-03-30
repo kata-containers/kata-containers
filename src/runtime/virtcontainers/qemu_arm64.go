@@ -93,11 +93,11 @@ func (q *qemuArm64) appendBridges(devices []govmmQemu.Device) []govmmQemu.Device
 	return genericAppendBridges(devices, q.Bridges, q.qemuMachine.Type)
 }
 
-func (q *qemuArm64) appendImage(devices []govmmQemu.Device, path string) ([]govmmQemu.Device, error) {
+func (q *qemuArm64) appendImage(ctx context.Context, devices []govmmQemu.Device, path string) ([]govmmQemu.Device, error) {
 	if !q.disableNvdimm {
 		return q.appendNvdimmImage(devices, path)
 	}
-	return q.appendBlockImage(devices, path)
+	return q.appendBlockImage(ctx, devices, path)
 }
 
 func (q *qemuArm64) setIgnoreSharedMemoryMigrationCaps(_ context.Context, _ *govmmQemu.QMP) error {
@@ -109,7 +109,7 @@ func (q *qemuArm64) appendIOMMU(devices []govmmQemu.Device) ([]govmmQemu.Device,
 	return devices, fmt.Errorf("Arm64 architecture does not support vIOMMU")
 }
 
-func (q *qemuArm64) append9PVolume(devices []govmmQemu.Device, volume types.Volume) ([]govmmQemu.Device, error) {
+func (q *qemuArm64) append9PVolume(_ context.Context, devices []govmmQemu.Device, volume types.Volume) ([]govmmQemu.Device, error) {
 	d, err := genericAppend9PVolume(devices, volume, q.nestedRun)
 	if err != nil {
 		return nil, err

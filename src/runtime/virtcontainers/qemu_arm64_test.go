@@ -6,6 +6,7 @@
 package virtcontainers
 
 import (
+	"context"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -121,7 +122,7 @@ func TestQemuArm64AppendImage(t *testing.T) {
 		},
 	}
 
-	devices, err = arm64.appendImage(devices, f.Name())
+	devices, err = arm64.appendImage(context.Background(), devices, f.Name())
 	assert.NoError(err)
 	assert.Equal(expectedOut, devices)
 
