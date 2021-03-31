@@ -17,6 +17,7 @@ use tokio::sync::Mutex;
 
 use libc::{c_void, mount};
 use nix::mount::{self, MsFlags};
+use nix::unistd::Gid;
 
 use regex::Regex;
 use std::fs::File;
@@ -44,6 +45,9 @@ pub const DRIVER_LOCAL_TYPE: &str = "local";
 pub const TYPE_ROOTFS: &str = "rootfs";
 
 pub const MOUNT_GUEST_TAG: &str = "kataShared";
+
+// Allocating an FSGroup that owns the pod's volumes
+const FS_GID: &str = "fsgid";
 
 #[rustfmt::skip]
 lazy_static! {
@@ -266,11 +270,24 @@ async fn local_storage_handler(
     let opts_vec: Vec<String> = storage.options.to_vec();
 
     let opts = parse_options(opts_vec);
-    let mode = opts.get("mode");
-    if let Some(mode) = mode {
+
+    let mut need_set_fsgid = false;
+    if let Some(fsgid) = opts.get(FS_GID) {
+        let gid = fsgid.parse::<u32>()?;
+
+        nix::unistd::chown(storage.mount_point.as_str(), None, Some(Gid::from_raw(gid)))?;
+        need_set_fsgid = true;
+    }
+
+    if let Some(mode) = opts.get("mode") {
         let mut permission = fs::metadata(&storage.mount_point)?.permissions();
 
-        let o_mode = u32::from_str_radix(mode, 8)?;
+        let mut o_mode = u32::from_str_radix(mode, 8)?;
+
+        if need_set_fsgid {
+            // set SetGid mode mask.
+            o_mode |= 0o2000;
+        }
         permission.set_mode(o_mode);
 
         fs::set_permissions(&storage.mount_point, permission)?;
