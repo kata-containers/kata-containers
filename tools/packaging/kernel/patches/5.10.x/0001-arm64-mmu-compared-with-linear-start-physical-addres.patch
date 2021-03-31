@@ -1,0 +1,31 @@
+From 0b0f3b3cd9c00bc5bce5686303ef008212ce9b99 Mon Sep 17 00:00:00 2001
+From: Jianyong Wu <jianyong.wu@arm.com>
+Date: Wed, 31 Mar 2021 10:00:53 +0800
+Subject: [PATCH] arm64/mmu: compared with linear start physical address as
+ signed
+
+When CONFIG_RANDOM_BASE is enabled, the physical base address can be
+a negative number. It may lead to bug if it is compared as a unsigned
+number. So cast it before comparison.
+
+Signed-off-by: Jianyong Wu <jianyong.wu@arm.com>
+---
+ arch/arm64/mm/mmu.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/arch/arm64/mm/mmu.c b/arch/arm64/mm/mmu.c
+index ca692a815731..24b36c85edf4 100644
+--- a/arch/arm64/mm/mmu.c
++++ b/arch/arm64/mm/mmu.c
+@@ -1453,7 +1453,7 @@ static bool inside_linear_region(u64 start, u64 size)
+ 	 * range which can be mapped inside this linear mapping range, must
+ 	 * also be derived from its end points.
+ 	 */
+-	return start >= __pa(_PAGE_OFFSET(vabits_actual)) &&
++	return (s64)start >= (s64)(__pa(_PAGE_OFFSET(vabits_actual))) &&
+ 	       (start + size - 1) <= __pa(PAGE_END - 1);
+ }
+ 
+-- 
+2.17.1
+
