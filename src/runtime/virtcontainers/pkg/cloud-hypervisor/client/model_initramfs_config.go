@@ -8,7 +8,6 @@
  */
 
 package openapi
-
 // InitramfsConfig struct for InitramfsConfig
 type InitramfsConfig struct {
 	Path string `json:"path"`

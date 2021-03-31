@@ -8,9 +8,8 @@
  */
 
 package openapi
-
 // RngConfig struct for RngConfig
 type RngConfig struct {
-	Src   string `json:"src"`
-	Iommu bool   `json:"iommu,omitempty"`
+	Src string `json:"src"`
+	Iommu bool `json:"iommu,omitempty"`
 }
