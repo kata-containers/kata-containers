@@ -182,7 +182,7 @@ This image contains all the necessary artifacts for running Kata Containers, all
 from the [Kata Containers release page](https://github.com/kata-containers/runtime/releases).
 
 Host artifacts:
-* `cloud-hypervisor`, `firecracker`, `qemu-system-x86_64`, `qemu-virtiofs-system-x86_64` and supporting binaries
+* `cloud-hypervisor`, `firecracker`, `qemu-system-x86_64`, and supporting binaries
 * `containerd-shim-kata-v2`
 * `kata-clh`
 * `kata-collect-data.sh`

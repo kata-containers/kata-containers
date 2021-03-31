@@ -104,32 +104,6 @@ jobs:
           name: kata-artifacts
           path: kata-static-qemu.tar.gz
 
-  build-qemu-virtiofsd:
-    runs-on: ubuntu-16.04
-    needs: get-artifact-list
-    env:
-      buildstr: "install_qemu_virtiofsd"
-    steps:
-      - uses: actions/checkout@v2
-      - name: get-artifact-list
-        uses: actions/download-artifact@v2
-        with:
-          name: artifact-list
-      - name: build-qemu-virtiofsd
-        run: |
-         if grep -q $buildstr artifact-list.txt; then
-           $GITHUB_WORKSPACE/.github/workflows/generate-local-artifact-tarball.sh $buildstr
-           echo "artifact-built=true" >> $GITHUB_ENV
-         else
-           echo "artifact-built=false" >> $GITHUB_ENV
-         fi
-      - name: store-artifacts
-        if: env.artifact-built == 'true'
-        uses: actions/upload-artifact@v2
-        with:
-          name: kata-artifacts
-          path: kata-static-qemu-virtiofsd.tar.gz
-
   build-image:
     runs-on: ubuntu-16.04
     needs: get-artifact-list
@@ -237,7 +211,7 @@ jobs:
 
   gather-artifacts:
     runs-on: ubuntu-16.04
-    needs: [build-experimental-kernel, build-kernel, build-qemu, build-qemu-virtiofsd, build-image, build-firecracker, build-kata-components, build-clh]
+    needs: [build-experimental-kernel, build-kernel, build-qemu, build-image, build-firecracker, build-kata-components, build-clh]
     steps:
       - uses: actions/checkout@v2
       - name: get-artifacts

@@ -24,5 +24,4 @@ chmod +x /bin/kubectl
 
 COPY scripts ${DESTINATION}/scripts
 RUN \
-ln -s ${DESTINATION}/scripts/kata-deploy-docker.sh /usr/bin/kata-deploy-docker && \
 ln -s ${DESTINATION}/scripts/kata-deploy.sh /usr/bin/kata-deploy
