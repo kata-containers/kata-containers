@@ -8,6 +8,7 @@
  */
 
 package openapi
+
 // BalloonConfig struct for BalloonConfig
 type BalloonConfig struct {
 	Size int64 `json:"size"`
