@@ -8,13 +8,14 @@
  */
 
 package openapi
+
 // FsConfig struct for FsConfig
 type FsConfig struct {
-	Tag string `json:"tag"`
-	Socket string `json:"socket"`
-	NumQueues int32 `json:"num_queues"`
-	QueueSize int32 `json:"queue_size"`
-	Dax bool `json:"dax"`
-	CacheSize int64 `json:"cache_size"`
-	Id string `json:"id,omitempty"`
+	Tag       string `json:"tag"`
+	Socket    string `json:"socket"`
+	NumQueues int32  `json:"num_queues"`
+	QueueSize int32  `json:"queue_size"`
+	Dax       bool   `json:"dax"`
+	CacheSize int64  `json:"cache_size"`
+	Id        string `json:"id,omitempty"`
 }

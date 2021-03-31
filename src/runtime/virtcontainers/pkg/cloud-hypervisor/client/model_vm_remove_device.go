@@ -8,6 +8,7 @@
  */
 
 package openapi
+
 // VmRemoveDevice struct for VmRemoveDevice
 type VmRemoveDevice struct {
 	Id string `json:"id,omitempty"`
