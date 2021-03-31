@@ -51,6 +51,9 @@ const (
 	// containers.
 	KataLocalDevType = "local"
 
+	// Allocating an FSGroup that owns the pod's volumes
+	fsGid = "fsgid"
+
 	// path to vfio devices
 	vfioPath = "/dev/vfio/"
 
@@ -1327,7 +1330,11 @@ func (k *kataAgent) createContainer(ctx context.Context, sandbox *Sandbox, c *Co
 	epheStorages := k.handleEphemeralStorage(ociSpec.Mounts)
 	ctrStorages = append(ctrStorages, epheStorages...)
 
-	localStorages := k.handleLocalStorage(ociSpec.Mounts, sandbox.id, c.rootfsSuffix)
+	localStorages, err := k.handleLocalStorage(ociSpec.Mounts, sandbox.id, c.rootfsSuffix)
+	if err != nil {
+		return nil, err
+	}
+
 	ctrStorages = append(ctrStorages, localStorages...)
 
 	// We replace all OCI mount sources that match our container mount
@@ -1426,10 +1433,27 @@ func (k *kataAgent) handleEphemeralStorage(mounts []specs.Mount) []*grpc.Storage
 
 // handleLocalStorage handles local storage within the VM
 // by creating a directory in the VM from the source of the mount point.
-func (k *kataAgent) handleLocalStorage(mounts []specs.Mount, sandboxID string, rootfsSuffix string) []*grpc.Storage {
+func (k *kataAgent) handleLocalStorage(mounts []specs.Mount, sandboxID string, rootfsSuffix string) ([]*grpc.Storage, error) {
 	var localStorages []*grpc.Storage
 	for idx, mnt := range mounts {
 		if mnt.Type == KataLocalDevType {
+			origin_src := mounts[idx].Source
+			stat := syscall.Stat_t{}
+			err := syscall.Stat(origin_src, &stat)
+			if err != nil {
+				k.Logger().WithError(err).Errorf("failed to stat %s", origin_src)
+				return nil, err
+			}
+
+			dir_options := localDirOptions
+
+			// if volume's gid isn't root group(default group), this means there's
+			// an specific fsGroup is set on this local volume, then it should pass
+			// to guest.
+			if stat.Gid != 0 {
+				dir_options = append(dir_options, fmt.Sprintf("%s=%d", fsGid, stat.Gid))
+			}
+
 			// Set the mount source path to a the desired directory point in the VM.
 			// In this case it is located in the sandbox directory.
 			// We rely on the fact that the first container in the VM has the same ID as the sandbox ID.
@@ -1444,12 +1468,12 @@ func (k *kataAgent) handleLocalStorage(mounts []specs.Mount, sandboxID string, r
 				Source:     KataLocalDevType,
 				Fstype:     KataLocalDevType,
 				MountPoint: mounts[idx].Source,
-				Options:    localDirOptions,
+				Options:    dir_options,
 			}
 			localStorages = append(localStorages, localStorage)
 		}
 	}
-	return localStorages
+	return localStorages, nil
 }
 
 // handleDeviceBlockVolume handles volume that is block device file
