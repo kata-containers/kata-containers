@@ -10,6 +10,7 @@ Name | Type | Description | Notes
 **Mergeable** | **bool** |  | [optional] [default to false]
 **Shared** | **bool** |  | [optional] [default to false]
 **Hugepages** | **bool** |  | [optional] [default to false]
+**HugepageSize** | **int64** |  | [optional] 
 **HostNumaNode** | **int32** |  | [optional] 
 **HotplugSize** | **int64** |  | [optional] 
 **HotpluggedSize** | **int64** |  | [optional] 
