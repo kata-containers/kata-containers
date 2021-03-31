@@ -8,13 +8,12 @@
  */
 
 package openapi
-
 // VsockConfig struct for VsockConfig
 type VsockConfig struct {
 	// Guest Vsock CID
 	Cid int64 `json:"cid"`
 	// Path to UNIX domain socket, used to proxy vsock connections.
 	Socket string `json:"socket"`
-	Iommu  bool   `json:"iommu,omitempty"`
-	Id     string `json:"id,omitempty"`
+	Iommu bool `json:"iommu,omitempty"`
+	Id string `json:"id,omitempty"`
 }

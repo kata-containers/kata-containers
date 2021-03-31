@@ -8,10 +8,9 @@
  */
 
 package openapi
-
 // VmAddDevice struct for VmAddDevice
 type VmAddDevice struct {
-	Path  string `json:"path,omitempty"`
-	Iommu bool   `json:"iommu,omitempty"`
-	Id    string `json:"id,omitempty"`
+	Path string `json:"path,omitempty"`
+	Iommu bool `json:"iommu,omitempty"`
+	Id string `json:"id,omitempty"`
 }

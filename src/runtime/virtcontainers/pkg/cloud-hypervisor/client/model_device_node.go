@@ -8,11 +8,10 @@
  */
 
 package openapi
-
 // DeviceNode struct for DeviceNode
 type DeviceNode struct {
-	Id        string                   `json:"id,omitempty"`
+	Id string `json:"id,omitempty"`
 	Resources []map[string]interface{} `json:"resources,omitempty"`
-	Children  []string                 `json:"children,omitempty"`
-	PciBdf    int32                    `json:"pci_bdf,omitempty"`
+	Children []string `json:"children,omitempty"`
+	PciBdf int32 `json:"pci_bdf,omitempty"`
 }
