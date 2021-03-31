@@ -21,4 +21,6 @@ type FcConfig struct {
 	NetworkInterfaces []*models.NetworkInterface `json:"network-interfaces,omitempty"`
 
 	Logger *models.Logger `json:"logger,omitempty"`
+
+	Metrics *models.Metrics `json:"metrics,omitempty"`
 }
