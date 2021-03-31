@@ -20,6 +20,9 @@ type BootSource struct {
 	// Kernel boot arguments
 	BootArgs string `json:"boot_args,omitempty"`
 
+	// Host level path to the initrd image used to boot the guest
+	InitrdPath string `json:"initrd_path,omitempty"`
+
 	// Host level path to the kernel image used to boot the guest
 	// Required: true
 	KernelImagePath *string `json:"kernel_image_path"`

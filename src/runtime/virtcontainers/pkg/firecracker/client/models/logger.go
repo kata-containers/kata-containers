@@ -19,17 +19,13 @@ import (
 // swagger:model Logger
 type Logger struct {
 
-	// Set the level.
+	// Set the level. The possible values are case-insensitive.
 	// Enum: [Error Warning Info Debug]
 	Level *string `json:"level,omitempty"`
 
-	// The named pipe for the human readable log output.
+	// Path to the named pipe or file for the human readable log output.
 	// Required: true
-	LogFifo *string `json:"log_fifo"`
-
-	// The named pipe where the JSON-formatted metrics will be flushed.
-	// Required: true
-	MetricsFifo *string `json:"metrics_fifo"`
+	LogPath *string `json:"log_path"`
 
 	// Whether or not to output the level in the logs.
 	ShowLevel *bool `json:"show_level,omitempty"`
@@ -46,11 +42,7 @@ func (m *Logger) Validate(formats strfmt.Registry) error {
 		res = append(res, err)
 	}
 
-	if err := m.validateLogFifo(formats); err != nil {
-		res = append(res, err)
-	}
-
-	if err := m.validateMetricsFifo(formats); err != nil {
+	if err := m.validateLogPath(formats); err != nil {
 		res = append(res, err)
 	}
 
@@ -109,18 +101,9 @@ func (m *Logger) validateLevel(formats strfmt.Registry) error {
 	return nil
 }
 
-func (m *Logger) validateLogFifo(formats strfmt.Registry) error {
+func (m *Logger) validateLogPath(formats strfmt.Registry) error {
 
-	if err := validate.Required("log_fifo", "body", m.LogFifo); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (m *Logger) validateMetricsFifo(formats strfmt.Registry) error {
-
-	if err := validate.Required("metrics_fifo", "body", m.MetricsFifo); err != nil {
+	if err := validate.Required("log_path", "body", m.LogPath); err != nil {
 		return err
 	}
 
