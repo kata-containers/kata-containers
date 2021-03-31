@@ -19,5 +19,6 @@ type DiskConfig struct {
 	VhostUser bool `json:"vhost_user,omitempty"`
 	VhostSocket string `json:"vhost_socket,omitempty"`
 	PollQueue bool `json:"poll_queue,omitempty"`
+	RateLimiterConfig RateLimiterConfig `json:"rate_limiter_config,omitempty"`
 	Id string `json:"id,omitempty"`
 }

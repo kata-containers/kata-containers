@@ -20,4 +20,5 @@ type NetConfig struct {
 	VhostUser bool `json:"vhost_user,omitempty"`
 	VhostSocket string `json:"vhost_socket,omitempty"`
 	Id string `json:"id,omitempty"`
+	Fd []int32 `json:"fd,omitempty"`
 }

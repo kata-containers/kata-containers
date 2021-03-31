@@ -16,6 +16,7 @@ type MemoryZoneConfig struct {
 	Mergeable bool `json:"mergeable,omitempty"`
 	Shared bool `json:"shared,omitempty"`
 	Hugepages bool `json:"hugepages,omitempty"`
+	HugepageSize int64 `json:"hugepage_size,omitempty"`
 	HostNumaNode int32 `json:"host_numa_node,omitempty"`
 	HotplugSize int64 `json:"hotplug_size,omitempty"`
 	HotpluggedSize int64 `json:"hotplugged_size,omitempty"`

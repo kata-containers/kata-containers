@@ -17,5 +17,6 @@ type MemoryConfig struct {
 	HotplugMethod string `json:"hotplug_method,omitempty"`
 	Shared bool `json:"shared,omitempty"`
 	Hugepages bool `json:"hugepages,omitempty"`
+	HugepageSize int64 `json:"hugepage_size,omitempty"`
 	Zones []MemoryZoneConfig `json:"zones,omitempty"`
 }
