@@ -8,6 +8,7 @@
  */
 
 package openapi
+
 // VmResize struct for VmResize
 type VmResize struct {
 	DesiredVcpus int32 `json:"desired_vcpus,omitempty"`

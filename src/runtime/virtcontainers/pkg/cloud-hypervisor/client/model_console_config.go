@@ -8,9 +8,10 @@
  */
 
 package openapi
+
 // ConsoleConfig struct for ConsoleConfig
 type ConsoleConfig struct {
-	File string `json:"file,omitempty"`
-	Mode string `json:"mode"`
-	Iommu bool `json:"iommu,omitempty"`
+	File  string `json:"file,omitempty"`
+	Mode  string `json:"mode"`
+	Iommu bool   `json:"iommu,omitempty"`
 }

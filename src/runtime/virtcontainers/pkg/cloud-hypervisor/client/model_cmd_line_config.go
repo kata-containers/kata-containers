@@ -8,6 +8,7 @@
  */
 
 package openapi
+
 // CmdLineConfig struct for CmdLineConfig
 type CmdLineConfig struct {
 	Args string `json:"args"`

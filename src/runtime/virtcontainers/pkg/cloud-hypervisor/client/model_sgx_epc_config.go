@@ -8,8 +8,9 @@
  */
 
 package openapi
+
 // SgxEpcConfig struct for SgxEpcConfig
 type SgxEpcConfig struct {
-	Size int64 `json:"size"`
-	Prefault bool `json:"prefault,omitempty"`
+	Size     int64 `json:"size"`
+	Prefault bool  `json:"prefault,omitempty"`
 }
