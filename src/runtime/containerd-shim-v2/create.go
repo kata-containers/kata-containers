@@ -23,6 +23,7 @@ import (
 
 	// only register the proto type
 	_ "github.com/containerd/containerd/runtime/linux/runctypes"
+	_ "github.com/containerd/containerd/runtime/v2/runc/options"
 	crioption "github.com/containerd/cri-containerd/pkg/api/runtimeoptions/v1"
 
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils"
