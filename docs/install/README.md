@@ -51,8 +51,6 @@ Kata packages are provided by official distribution repositories for:
 |----------------------------------------------------------|--------------------------------------------------------------------------------|
 | [CentOS](centos-installation-guide.md)                   | 8                                                                              |
 | [Fedora](fedora-installation-guide.md)                   | 32, Rawhide                                                                    |
-| [openSUSE](opensuse-installation-guide.md)               | [Leap 15.1](opensuse-leap-15.1-installation-guide.md)<br>Leap 15.2, Tumbleweed |
-| [SUSE Linux Enterprise (SLE)](sle-installation-guide.md) | SLE 15 SP1, 15 SP2                                                             |
 
 > **Note::**
 >
