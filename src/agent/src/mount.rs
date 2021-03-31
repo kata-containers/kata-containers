@@ -405,7 +405,10 @@ fn mount_storage(logger: &Logger, storage: &Storage) -> Result<()> {
     // If so, skip doing the mount. This facilitates mounting the sharedfs automatically
     // in the guest before the agent service starts.
     if storage.source == MOUNT_GUEST_TAG && is_mounted(&storage.mount_point)? {
-        warn!(logger, "kataShared already mounted, ignoring...");
+        warn!(
+            logger,
+            "{} already mounted on {}, ignoring...", MOUNT_GUEST_TAG, &storage.mount_point
+        );
         return Ok(());
     }
 
