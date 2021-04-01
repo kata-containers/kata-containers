@@ -176,12 +176,12 @@ func (n *mockAgent) resumeContainer(ctx context.Context, sandbox *Sandbox, c Con
 	return nil
 }
 
-// configHypervisor is the Noop agent hypervisor configuration implementation. It does nothing.
-func (n *mockAgent) configure(ctx context.Context, h hypervisor, id, sharePath string, config interface{}) error {
+// configure is the Noop agent configuration implementation. It does nothing.
+func (n *mockAgent) configure(ctx context.Context, h hypervisor, id, sharePath string, config KataAgentConfig) error {
 	return nil
 }
 
-func (n *mockAgent) configureFromGrpc(h hypervisor, id string, config interface{}) error {
+func (n *mockAgent) configureFromGrpc(h hypervisor, id string, config KataAgentConfig) error {
 	return nil
 }
 
