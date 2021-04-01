@@ -368,19 +368,12 @@ func (k *kataAgent) capabilities() types.Capabilities {
 	return caps
 }
 
-func (k *kataAgent) internalConfigure(h hypervisor, id string, config interface{}) error {
+func (k *kataAgent) internalConfigure(h hypervisor, id string, config KataAgentConfig) error {
 	var err error
-	if config != nil {
-		switch c := config.(type) {
-		case KataAgentConfig:
-			if k.vmSocket, err = h.generateSocket(id); err != nil {
-				return err
-			}
-			k.keepConn = c.LongLiveConn
-		default:
-			return vcTypes.ErrInvalidConfigType
-		}
+	if k.vmSocket, err = h.generateSocket(id); err != nil {
+		return err
 	}
+	k.keepConn = config.LongLiveConn
 
 	return nil
 }
@@ -429,7 +422,7 @@ func cleanupSandboxBindMounts(sandbox *Sandbox) error {
 	return nil
 }
 
-func (k *kataAgent) configure(ctx context.Context, h hypervisor, id, sharePath string, config interface{}) error {
+func (k *kataAgent) configure(ctx context.Context, h hypervisor, id, sharePath string, config KataAgentConfig) error {
 	err := k.internalConfigure(h, id, config)
 	if err != nil {
 		return err
@@ -471,7 +464,7 @@ func (k *kataAgent) configure(ctx context.Context, h hypervisor, id, sharePath s
 	return h.addDevice(ctx, sharedVolume, fsDev)
 }
 
-func (k *kataAgent) configureFromGrpc(h hypervisor, id string, config interface{}) error {
+func (k *kataAgent) configureFromGrpc(h hypervisor, id string, config KataAgentConfig) error {
 	return k.internalConfigure(h, id, config)
 }
 
