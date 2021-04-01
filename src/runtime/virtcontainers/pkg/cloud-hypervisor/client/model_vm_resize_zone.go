@@ -8,6 +8,7 @@
  */
 
 package openapi
+
 // VmResizeZone struct for VmResizeZone
 type VmResizeZone struct {
 	Id string `json:"id,omitempty"`

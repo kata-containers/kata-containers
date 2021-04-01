@@ -8,8 +8,9 @@
  */
 
 package openapi
+
 // PciDeviceInfo Information about a PCI device
 type PciDeviceInfo struct {
-	Id string `json:"id"`
+	Id  string `json:"id"`
 	Bdf string `json:"bdf"`
 }
