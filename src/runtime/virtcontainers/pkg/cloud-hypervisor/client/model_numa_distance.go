@@ -8,8 +8,9 @@
  */
 
 package openapi
+
 // NumaDistance struct for NumaDistance
 type NumaDistance struct {
 	Destination int32 `json:"destination"`
-	Distance int32 `json:"distance"`
+	Distance    int32 `json:"distance"`
 }

@@ -8,6 +8,7 @@
  */
 
 package openapi
+
 // VmmPingResponse Virtual Machine Monitor information
 type VmmPingResponse struct {
 	Version string `json:"version"`

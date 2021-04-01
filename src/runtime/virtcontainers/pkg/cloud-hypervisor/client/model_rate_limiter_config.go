@@ -8,8 +8,9 @@
  */
 
 package openapi
+
 // RateLimiterConfig Defines an IO rate limiter with independent bytes/s and ops/s limits. Limits are defined by configuring each of the _bandwidth_ and _ops_ token buckets.
 type RateLimiterConfig struct {
 	Bandwidth TokenBucket `json:"bandwidth,omitempty"`
-	Ops TokenBucket `json:"ops,omitempty"`
+	Ops       TokenBucket `json:"ops,omitempty"`
 }

@@ -4,7 +4,7 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
-all: | update-yaml generate-client-code
+all: | update-yaml generate-client-code go-fmt
 MK_DIR := $(dir $(realpath $(firstword $(MAKEFILE_LIST))))
 YQ_INSTALLER := "$(MK_DIR)/../../../../../ci/install_yq.sh"
 VERSIONS_FILE := "$(MK_DIR)/../../../../../versions.yaml"
@@ -17,8 +17,9 @@ generate-client-code: clean-generated-code
 		-i /local/cloud-hypervisor.yaml \
 		-g go \
 		-o /local/client
-
-
+go-fmt:
+	rm client/go.mod; \
+	go fmt ./...
 
 update-yaml:
 ifndef YQ
