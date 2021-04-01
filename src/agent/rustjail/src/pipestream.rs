@@ -77,10 +77,6 @@ impl PipeStream {
         Ok(Self(AsyncFd::new(StreamFd(fd))?))
     }
 
-    pub fn shutdown(&mut self) -> io::Result<()> {
-        self.0.get_mut().close()
-    }
-
     pub fn from_fd(fd: RawFd) -> Self {
         unsafe { Self::from_raw_fd(fd) }
     }
@@ -164,7 +160,10 @@ impl AsyncWrite for PipeStream {
     }
 
     fn poll_shutdown(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<io::Result<()>> {
-        self.get_mut().shutdown()?;
+        // Do nothing in shutdown is very important
+        // The only right way to shutdown pipe is drop it
+        // Otherwise PipeStream will conflict with its twins
+        // Because they both have same fd, and both registered.
         Poll::Ready(Ok(()))
     }
 }
