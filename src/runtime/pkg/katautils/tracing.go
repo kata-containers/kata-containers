@@ -30,7 +30,7 @@ var _ export.SpanExporter = (*kataSpanExporter)(nil)
 // ExportSpans exports SpanData to Jaeger.
 func (e *kataSpanExporter) ExportSpans(ctx context.Context, spans []*export.SpanData) error {
 	for _, span := range spans {
-		kataUtilsLogger.Infof("Reporting span %+v", span)
+		kataUtilsLogger.Tracef("Reporting span %+v", span)
 	}
 	return nil
 }
