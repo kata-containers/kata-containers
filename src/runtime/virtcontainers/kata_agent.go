@@ -2010,7 +2010,7 @@ func (k *kataAgent) sendReq(spanCtx context.Context, request interface{}) (inter
 	if cancel != nil {
 		defer cancel()
 	}
-	k.Logger().WithField("name", msgName).WithField("req", message.String()).Debug("sending request")
+	k.Logger().WithField("name", msgName).WithField("req", message.String()).Trace("sending request")
 
 	defer func() {
 		agentRPCDurationsHistogram.WithLabelValues(msgName).Observe(float64(time.Since(start).Nanoseconds() / int64(time.Millisecond)))
