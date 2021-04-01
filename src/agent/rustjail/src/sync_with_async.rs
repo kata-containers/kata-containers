@@ -117,28 +117,20 @@ pub async fn write_async(pipe_w: &mut PipeStream, msg_type: i32, data_str: &str)
     }
 
     match msg_type {
-        SYNC_FAILED => match write_count(pipe_w, data_str.as_bytes(), data_str.len()).await {
-            Ok(_) => pipe_w.shutdown()?,
-            Err(e) => {
-                pipe_w.shutdown()?;
+        SYNC_FAILED => {
+            if let Err(e) = write_count(pipe_w, data_str.as_bytes(), data_str.len()).await {
                 return Err(anyhow!(e).context("error in send message to process"));
             }
-        },
+        }
         SYNC_DATA => {
             let length: i32 = data_str.len() as i32;
             write_count(pipe_w, &length.to_be_bytes(), MSG_SIZE)
                 .await
-                .or_else(|e| {
-                    pipe_w.shutdown()?;
-                    Err(anyhow!(e).context("error in send message to process"))
-                })?;
+                .map_err(|e| anyhow!(e).context("error in send message to process"))?;
 
             write_count(pipe_w, data_str.as_bytes(), data_str.len())
                 .await
-                .or_else(|e| {
-                    pipe_w.shutdown()?;
-                    Err(anyhow!(e).context("error in send message to process"))
-                })?;
+                .map_err(|e| anyhow!(e).context("error in send message to process"))?;
         }
 
         _ => (),
