@@ -163,10 +163,10 @@ type agent interface {
 	resumeContainer(ctx context.Context, sandbox *Sandbox, c Container) error
 
 	// configure will update agent settings based on provided arguments
-	configure(ctx context.Context, h hypervisor, id, sharePath string, config interface{}) error
+	configure(ctx context.Context, h hypervisor, id, sharePath string, config KataAgentConfig) error
 
 	// configureFromGrpc will update agent settings based on provided arguments which from Grpc
-	configureFromGrpc(h hypervisor, id string, config interface{}) error
+	configureFromGrpc(h hypervisor, id string, config KataAgentConfig) error
 
 	// reseedRNG will reseed the guest random number generator
 	reseedRNG(ctx context.Context, data []byte) error
