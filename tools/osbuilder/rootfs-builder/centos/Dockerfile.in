@@ -3,7 +3,8 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-From registry.centos.org/centos:@OS_VERSION@
+ARG IMAGE_REGISTRY=registry.centos.org
+FROM ${IMAGE_REGISTRY}/centos:@OS_VERSION@
 
 @SET_PROXY@
 

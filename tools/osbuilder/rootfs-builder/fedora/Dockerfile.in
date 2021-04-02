@@ -2,8 +2,8 @@
 # Copyright (c) 2018 Intel Corporation
 #
 # SPDX-License-Identifier: Apache-2.0
-
-From registry.fedoraproject.org/fedora:@OS_VERSION@
+ARG IMAGE_REGISTRY=registry.fedoraproject.org
+FROM ${IMAGE_REGISTRY}/fedora:@OS_VERSION@
 
 @SET_PROXY@
 
