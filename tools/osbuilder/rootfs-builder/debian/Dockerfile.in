@@ -3,8 +3,9 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+ARG IMAGE_REGISTRY=docker.io
 # NOTE: OS_VERSION is set according to config.sh
-from docker.io/debian:@OS_VERSION@
+FROM ${IMAGE_REGISTRY}/debian:@OS_VERSION@
 
 # RUN commands
 RUN apt-get update && apt-get --no-install-recommends install -y \

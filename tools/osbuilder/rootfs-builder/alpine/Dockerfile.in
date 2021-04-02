@@ -3,7 +3,8 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-From docker.io/alpine:3.11.6
+ARG IMAGE_REGISTRY=docker.io
+FROM ${IMAGE_REGISTRY}/alpine:3.11.6
 
 RUN apk update && apk add \
 		  bash \
