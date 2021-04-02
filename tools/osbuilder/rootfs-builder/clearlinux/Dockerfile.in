@@ -3,7 +3,8 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-From docker.io/fedora:30
+ARG IMAGE_REGISTRY=docker.io
+FROM ${IMAGE_REGISTRY}/fedora:30
 
 @SET_PROXY@
 
