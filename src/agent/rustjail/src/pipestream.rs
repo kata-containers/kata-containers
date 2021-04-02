@@ -167,3 +167,37 @@ impl AsyncWrite for PipeStream {
         Poll::Ready(Ok(()))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use nix::fcntl::OFlag;
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+    #[tokio::test]
+    // Shutdown should never close the inner fd.
+    async fn test_pipestream_shutdown() {
+        let (_, wfd1) = unistd::pipe2(OFlag::O_CLOEXEC).unwrap();
+        let mut writer1 = PipeStream::new(wfd1).unwrap();
+
+        // if close fd in shutdown, the fd will be reused
+        // and the test will failed
+        let _ = writer1.shutdown().await.unwrap();
+
+        // let _ = unistd::close(wfd1);
+
+        let (rfd2, wfd2) = unistd::pipe2(OFlag::O_CLOEXEC).unwrap(); // reuse fd number, rfd2 == wfd1
+
+        let mut reader2 = PipeStream::new(rfd2).unwrap();
+        let mut writer2 = PipeStream::new(wfd2).unwrap();
+
+        // deregister writer1, then reader2 which has the same fd will be deregistered from epoll
+        drop(writer1);
+
+        let _ = writer2.write(b"1").await;
+
+        let mut content = vec![0u8; 1];
+        // Will Block here if shutdown close the fd.
+        let _ = reader2.read(&mut content).await;
+    }
+}
