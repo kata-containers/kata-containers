@@ -1,0 +1,110 @@
+From 800ce0d08e09320ac2f1bd9125cb07d14a2689fe Mon Sep 17 00:00:00 2001
+From: "Dr. David Alan Gilbert" <dgilbert@redhat.com>
+Date: Thu, 7 Feb 2019 18:39:31 +0000
+Subject: [PATCH 03/29] DAX contrib/libvhost-user: Add virtio-fs slave types
+
+Add virtio-fs definitions to libvhost-user
+
+Signed-off-by: Dr. David Alan Gilbert <dgilbert@redhat.com>
+---
+ subprojects/libvhost-user/libvhost-user.c | 32 +++++++++++++++++++++++
+ subprojects/libvhost-user/libvhost-user.h | 31 ++++++++++++++++++++++
+ 2 files changed, 63 insertions(+)
+
+diff --git a/subprojects/libvhost-user/libvhost-user.c b/subprojects/libvhost-user/libvhost-user.c
+index 3b1b5c385f..9b8223b5d5 100644
+--- a/subprojects/libvhost-user/libvhost-user.c
++++ b/subprojects/libvhost-user/libvhost-user.c
+@@ -2910,3 +2910,35 @@ vu_queue_push(VuDev *dev, VuVirtq *vq,
+     vu_queue_flush(dev, vq, 1);
+     vu_queue_inflight_post_put(dev, vq, elem->index);
+ }
++
++bool vu_fs_cache_request(VuDev *dev, VhostUserSlaveRequest req, int fd,
++                         VhostUserFSSlaveMsg *fsm)
++{
++    int fd_num = 0;
++    VhostUserMsg vmsg = {
++        .request = req,
++        .flags = VHOST_USER_VERSION | VHOST_USER_NEED_REPLY_MASK,
++        .size = sizeof(vmsg.payload.fs),
++        .payload.fs = *fsm,
++    };
++
++    if (fd != -1) {
++        vmsg.fds[fd_num++] = fd;
++    }
++
++    vmsg.fd_num = fd_num;
++
++    if (!vu_has_protocol_feature(dev, VHOST_USER_PROTOCOL_F_SLAVE_SEND_FD)) {
++        return false;
++    }
++
++    pthread_mutex_lock(&dev->slave_mutex);
++    if (!vu_message_write(dev, dev->slave_fd, &vmsg)) {
++        pthread_mutex_unlock(&dev->slave_mutex);
++        return false;
++    }
++
++    /* Also unlocks the slave_mutex */
++    return vu_process_message_reply(dev, &vmsg);
++}
++
+diff --git a/subprojects/libvhost-user/libvhost-user.h b/subprojects/libvhost-user/libvhost-user.h
+index f0aca2b216..f3b0998eea 100644
+--- a/subprojects/libvhost-user/libvhost-user.h
++++ b/subprojects/libvhost-user/libvhost-user.h
+@@ -122,6 +122,24 @@ typedef enum VhostUserSlaveRequest {
+     VHOST_USER_SLAVE_MAX
+ }  VhostUserSlaveRequest;
+ 
++/* Structures carried over the slave channel back to QEMU */
++#define VHOST_USER_FS_SLAVE_ENTRIES 8
++
++/* For the flags field of VhostUserFSSlaveMsg */
++#define VHOST_USER_FS_FLAG_MAP_R (1ull << 0)
++#define VHOST_USER_FS_FLAG_MAP_W (1ull << 1)
++
++typedef struct {
++    /* Offsets within the file being mapped */
++    uint64_t fd_offset[VHOST_USER_FS_SLAVE_ENTRIES];
++    /* Offsets within the cache */
++    uint64_t c_offset[VHOST_USER_FS_SLAVE_ENTRIES];
++    /* Lengths of sections */
++    uint64_t len[VHOST_USER_FS_SLAVE_ENTRIES];
++    /* Flags, from VHOST_USER_FS_FLAG_* */
++    uint64_t flags[VHOST_USER_FS_SLAVE_ENTRIES];
++} VhostUserFSSlaveMsg;
++
+ typedef struct VhostUserMemoryRegion {
+     uint64_t guest_phys_addr;
+     uint64_t memory_size;
+@@ -197,6 +215,7 @@ typedef struct VhostUserMsg {
+         VhostUserConfig config;
+         VhostUserVringArea area;
+         VhostUserInflight inflight;
++        VhostUserFSSlaveMsg fs;
+     } payload;
+ 
+     int fds[VHOST_MEMORY_BASELINE_NREGIONS];
+@@ -693,4 +712,16 @@ void vu_queue_get_avail_bytes(VuDev *vdev, VuVirtq *vq, unsigned int *in_bytes,
+ bool vu_queue_avail_bytes(VuDev *dev, VuVirtq *vq, unsigned int in_bytes,
+                           unsigned int out_bytes);
+ 
++/**
++ * vu_fs_cache_request: Send a slave message for an fs client
++ * @dev: a VuDev context
++ * @req: The request type (map, unmap, sync)
++ * @fd: an fd (only required for map, else must be -1)
++ * @fsm: The body of the message
++ *
++ * Returns: true if the reply was 0
++ */
++bool vu_fs_cache_request(VuDev *dev, VhostUserSlaveRequest req, int fd,
++                         VhostUserFSSlaveMsg *fsm);
++
+ #endif /* LIBVHOST_USER_H */
+-- 
+2.25.1
+
