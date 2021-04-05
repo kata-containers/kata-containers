@@ -4,7 +4,6 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-set -e
 set -u
 
 # NOTE: Some env variables are set in the Dockerfile - those that are
@@ -20,12 +19,27 @@ kata_repo_path=${GOPATH}/src/${kata_repo}
 tests_repo=github.com/kata-containers/tests
 tests_repo_path=${GOPATH}/src/${tests_repo}
 
+grab_qat_drivers()
+{
+    /bin/echo -e "\n\e[1;42mDownload and extract the drivers\e[0m" 
+    mkdir -p $QAT_SRC
+    cd $QAT_SRC
+    wget $QAT_DRIVER_URL
+    if [ ! -f ${QAT_SRC}/${QAT_DRIVER_VER} ];then
+         /bin/echo -e "\e[1;41mQAT Driver ${QAT_DRIVER_VER} doesn't exist\e[0m"
+         echo "Check https://01.org/intel-quickassist-technology to find the latest"
+         echo "QAT driver version, update the Dockerfile, and try again."
+         exit 1
+    fi
+    tar xzf ${QAT_DRIVER_VER}
+}
+
 grab_kata_repos()
 {
     # Check out all the repos we will use now, so we can try and ensure they use the specified branch
     # Only check out the branch needed, and make it shallow and thus space/bandwidth efficient
     # Use a green prompt with white text for easy viewing
-    bin/echo -e "\n\e[1;42mClone and checkout Kata repos\e[0m" 
+    /bin/echo -e "\n\e[1;42mClone and checkout Kata repos\e[0m" 
     git clone --single-branch --branch $KATA_REPO_VERSION --depth=1 https://${kata_repo} ${kata_repo_path}
     git clone --single-branch --branch $KATA_REPO_VERSION --depth=1 https://${tests_repo} ${tests_repo_path}
 }
@@ -62,14 +76,6 @@ build_rootfs()
     fi
     /bin/echo -e "\n\e[1;42mDownload ${ROOTFS_OS} based rootfs\e[0m"
     sudo -E SECCOMP=no EXTRA_PKGS='kmod' ${kata_repo_path}/tools/osbuilder/rootfs-builder/rootfs.sh $ROOTFS_OS 
-}
-
-grab_qat_drivers()
-{
-    /bin/echo -e "\n\e[1;42mDownload and extract the drivers\e[0m" 
-    mkdir -p $QAT_SRC
-    cd $QAT_SRC
-    curl -L $QAT_DRIVER_URL | tar zx
 }
 
 build_qat_drivers()
@@ -157,11 +163,11 @@ main()
 	done
 	shift $((OPTIND-1))
 
+	grab_qat_drivers
 	grab_kata_repos
 	configure_kernel
 	build_kernel
 	build_rootfs
-	grab_qat_drivers
 	build_qat_drivers
 	add_qat_to_rootfs
 	copy_outputs
