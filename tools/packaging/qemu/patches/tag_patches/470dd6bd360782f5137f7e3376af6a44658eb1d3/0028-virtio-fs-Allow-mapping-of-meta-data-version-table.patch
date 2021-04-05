@@ -1,0 +1,167 @@
+From 119990ab3a30564c7e44f4e39344be48fc998f26 Mon Sep 17 00:00:00 2001
+From: "Dr. David Alan Gilbert" <dgilbert@redhat.com>
+Date: Fri, 27 Jul 2018 10:36:41 +0100
+Subject: [PATCH 28/29] virtio-fs: Allow mapping of meta data version table
+
+The 'meta data version table' is a block of shared memory mapped between
+multiple QEMUs and fuse daemons, so that they can be informed
+of metadata updates.  It's typically a shmfs file, and
+it's specified as :
+
+   -device vhost-user-fs-pci,chardev=char0,tag=myfs,cache-size=1G,versiontable=/dev/shm/mdvt1
+
+It gets mapped into the PCI bar after the data cache; it's read only.
+
+Signed-off-by: Dr. David Alan Gilbert <dgilbert@redhat.com>
+---
+ hw/virtio/vhost-user-fs-pci.c              | 16 +++++++++--
+ hw/virtio/vhost-user-fs.c                  | 32 ++++++++++++++++++++++
+ include/hw/virtio/vhost-user-fs.h          |  4 +++
+ include/standard-headers/linux/virtio_fs.h |  1 +
+ 4 files changed, 51 insertions(+), 2 deletions(-)
+
+diff --git a/hw/virtio/vhost-user-fs-pci.c b/hw/virtio/vhost-user-fs-pci.c
+index 19aaa8d722..aad0128fa5 100644
+--- a/hw/virtio/vhost-user-fs-pci.c
++++ b/hw/virtio/vhost-user-fs-pci.c
+@@ -42,6 +42,7 @@ static void vhost_user_fs_pci_realize(VirtIOPCIProxy *vpci_dev, Error **errp)
+     VHostUserFSPCI *dev = VHOST_USER_FS_PCI(vpci_dev);
+     DeviceState *vdev = DEVICE(&dev->vdev);
+     uint64_t cachesize;
++    uint64_t totalsize;
+ 
+     if (vpci_dev->nvectors == DEV_NVECTORS_UNSPECIFIED) {
+         /* Also reserve config change and hiprio queue vectors */
+@@ -51,18 +52,29 @@ static void vhost_user_fs_pci_realize(VirtIOPCIProxy *vpci_dev, Error **errp)
+     qdev_realize(vdev, BUS(&vpci_dev->bus), errp);
+     cachesize = dev->vdev.conf.cache_size;
+ 
++    /* PCIe bar needs to be a power of 2 */
++    totalsize = pow2ceil(cachesize + dev->vdev.mdvt_size);
++
+     /*
+      * The bar starts with the data/DAX cache
+-     * Others will be added later.
++     * followed by the metadata cache.
+      */
+     memory_region_init(&dev->cachebar, OBJECT(vpci_dev),
+-                       "vhost-fs-pci-cachebar", cachesize);
++                       "vhost-fs-pci-cachebar", totalsize);
+     if (cachesize) {
+         memory_region_add_subregion(&dev->cachebar, 0, &dev->vdev.cache);
+         virtio_pci_add_shm_cap(vpci_dev, VIRTIO_FS_PCI_CACHE_BAR, 0, cachesize,
+                                VIRTIO_FS_SHMCAP_ID_CACHE);
+     }
+ 
++    if (dev->vdev.mdvt_size) {
++        memory_region_add_subregion(&dev->cachebar, cachesize,
++                                    &dev->vdev.mdvt);
++        virtio_pci_add_shm_cap(vpci_dev, VIRTIO_FS_PCI_CACHE_BAR,
++                               cachesize, dev->vdev.mdvt_size,
++                               VIRTIO_FS_SHMCAP_ID_VERTAB);
++    }
++
+     /* After 'realized' so the memory region exists */
+     pci_register_bar(&vpci_dev->pci_dev, VIRTIO_FS_PCI_CACHE_BAR,
+                      PCI_BASE_ADDRESS_SPACE_MEMORY |
+diff --git a/hw/virtio/vhost-user-fs.c b/hw/virtio/vhost-user-fs.c
+index b43725824f..fb16db7e0d 100644
+--- a/hw/virtio/vhost-user-fs.c
++++ b/hw/virtio/vhost-user-fs.c
+@@ -432,6 +432,7 @@ static void vuf_device_realize(DeviceState *dev, Error **errp)
+     unsigned int i;
+     size_t len;
+     int ret;
++    int mdvtfd = -1;
+ 
+     if (!fs->conf.chardev.chr) {
+         error_setg(errp, "missing chardev");
+@@ -475,6 +476,28 @@ static void vuf_device_realize(DeviceState *dev, Error **errp)
+                          "no smaller than the page size");
+         return;
+     }
++    if (fs->conf.mdvtpath) {
++        struct stat statbuf;
++
++        mdvtfd = open(fs->conf.mdvtpath, O_RDWR);
++        if (mdvtfd < 0) {
++            error_setg_errno(errp, errno,
++                             "Failed to open meta-data version table '%s'",
++                             fs->conf.mdvtpath);
++
++            return;
++        }
++        if (fstat(mdvtfd, &statbuf) == -1) {
++            error_setg_errno(errp, errno,
++                             "Failed to stat meta-data version table '%s'",
++                             fs->conf.mdvtpath);
++            close(mdvtfd);
++            return;
++        }
++
++        fs->mdvt_size = statbuf.st_size;
++    }
++
+     if (fs->conf.cache_size) {
+         /* Anonymous, private memory is not counted as overcommit */
+         cache_ptr = mmap(NULL, fs->conf.cache_size, DAX_WINDOW_PROT,
+@@ -489,6 +512,14 @@ static void vuf_device_realize(DeviceState *dev, Error **errp)
+                                    fs->conf.cache_size, cache_ptr);
+     }
+ 
++    if (mdvtfd) {
++        memory_region_init_ram_from_fd(&fs->mdvt, OBJECT(vdev),
++                       "virtio-fs-mdvt",
++                       fs->mdvt_size, true, mdvtfd, NULL);
++        /* The version table is read-only by the guest */
++        memory_region_set_readonly(&fs->mdvt, true);
++    }
++
+     if (!vhost_user_init(&fs->vhost_user, &fs->conf.chardev, errp)) {
+         return;
+     }
+@@ -564,6 +595,7 @@ static Property vuf_properties[] = {
+                        conf.num_request_queues, 1),
+     DEFINE_PROP_UINT16("queue-size", VHostUserFS, conf.queue_size, 128),
+     DEFINE_PROP_SIZE("cache-size", VHostUserFS, conf.cache_size, 0),
++    DEFINE_PROP_STRING("versiontable", VHostUserFS, conf.mdvtpath),
+     DEFINE_PROP_END_OF_LIST(),
+ };
+ 
+diff --git a/include/hw/virtio/vhost-user-fs.h b/include/hw/virtio/vhost-user-fs.h
+index 845cdb0177..83015ac0fc 100644
+--- a/include/hw/virtio/vhost-user-fs.h
++++ b/include/hw/virtio/vhost-user-fs.h
+@@ -47,6 +47,7 @@ typedef struct {
+     uint16_t num_request_queues;
+     uint16_t queue_size;
+     uint64_t cache_size;
++    char *mdvtpath;
+ } VHostUserFSConf;
+ 
+ struct VHostUserFS {
+@@ -61,6 +62,9 @@ struct VHostUserFS {
+ 
+     /*< public >*/
+     MemoryRegion cache;
++    /* Metadata version table */
++    size_t mdvt_size;
++    MemoryRegion mdvt;
+ };
+ 
+ /* Callbacks from the vhost-user code for slave commands */
+diff --git a/include/standard-headers/linux/virtio_fs.h b/include/standard-headers/linux/virtio_fs.h
+index 808aa3a402..a17b5172a8 100644
+--- a/include/standard-headers/linux/virtio_fs.h
++++ b/include/standard-headers/linux/virtio_fs.h
+@@ -18,6 +18,7 @@ struct virtio_fs_config {
+ 
+ /* For the id field in virtio_pci_shm_cap */
+ #define VIRTIO_FS_SHMCAP_ID_CACHE 0
++#define VIRTIO_FS_SHMCAP_ID_VERTAB 1
+ 
+ #define VIRTIO_FS_PCI_CACHE_BAR 2
+ 
+-- 
+2.25.1
+

@@ -1,0 +1,43 @@
+From 17cf13d652885b2c3a09fbbab1cb503f53c27d96 Mon Sep 17 00:00:00 2001
+From: Vivek Goyal <vgoyal@redhat.com>
+Date: Mon, 13 Aug 2018 11:52:43 -0400
+Subject: [PATCH 12/29] DAX: virtiofsd: Make lo_removemapping() work
+
+Let guest pass in the offset in dax window a mapping is currently
+mapped at and needs to be removed.
+
+Signed-off-by: Vivek Goyal <vgoyal@redhat.com>
+---
+ tools/virtiofsd/passthrough_ll.c | 16 ++++++++++++++--
+ 1 file changed, 14 insertions(+), 2 deletions(-)
+
+diff --git a/tools/virtiofsd/passthrough_ll.c b/tools/virtiofsd/passthrough_ll.c
+index b57cb4079e..056b395574 100644
+--- a/tools/virtiofsd/passthrough_ll.c
++++ b/tools/virtiofsd/passthrough_ll.c
+@@ -2923,8 +2923,20 @@ static void lo_removemapping(fuse_req_t req, struct fuse_session *se,
+                              fuse_ino_t ino, unsigned num,
+                              struct fuse_removemapping_one *argp)
+ {
+-    // TODO
+-    fuse_reply_err(req, ENOSYS);
++    VhostUserFSSlaveMsg msg = { 0 };
++    int ret = 0;
++
++    msg.len[0] = argp->len;
++    msg.c_offset[0] = argp->moffset;
++    if (fuse_virtio_unmap(se, &msg)) {
++        fprintf(stderr,
++                "%s: unmap over virtio failed "
++                "(offset=0x%lx, len=0x%lx)\n",
++                __func__, argp->moffset, argp->len);
++        ret = EINVAL;
++    }
++
++    fuse_reply_err(req, ret);
+ }
+ 
+ static struct fuse_lowlevel_ops lo_oper = {
+-- 
+2.25.1
+
