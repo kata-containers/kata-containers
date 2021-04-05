@@ -63,13 +63,9 @@ RUN git clone https://github.com/qemu/keycodemapdb.git ui/keycodemapdb
 ADD scripts/configure-hypervisor.sh /root/configure-hypervisor.sh
 ADD qemu /root/kata_qemu
 ADD scripts/apply_patches.sh /root/apply_patches.sh
+ADD scripts/patch_qemu.sh /root/patch_qemu.sh
 
-RUN echo "Apply patches for base version"
-RUN stable_branch=$(cat VERSION | awk 'BEGIN{FS=OFS="."}{print $1 "." $2 ".x"}') && \
-	/root/apply_patches.sh "/root/kata_qemu/patches/${stable_branch}"
-
-RUN echo "Apply patches for specific qemu version"
-RUN /root/apply_patches.sh "/root/kata_qemu/patches/tag_patches/${QEMU_VERSION}"
+RUN /root/patch_qemu.sh "${QEMU_VERSION}" "/root/kata_qemu/patches"
 
 ARG PREFIX
 ARG BUILD_SUFFIX
