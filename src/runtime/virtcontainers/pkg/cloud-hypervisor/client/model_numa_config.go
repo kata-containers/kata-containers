@@ -8,10 +8,11 @@
  */
 
 package openapi
+
 // NumaConfig struct for NumaConfig
 type NumaConfig struct {
-	GuestNumaId int32 `json:"guest_numa_id"`
-	Cpus []int32 `json:"cpus,omitempty"`
-	Distances []NumaDistance `json:"distances,omitempty"`
-	MemoryZones []string `json:"memory_zones,omitempty"`
+	GuestNumaId int32          `json:"guest_numa_id"`
+	Cpus        []int32        `json:"cpus,omitempty"`
+	Distances   []NumaDistance `json:"distances,omitempty"`
+	MemoryZones []string       `json:"memory_zones,omitempty"`
 }

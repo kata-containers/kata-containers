@@ -134,6 +134,18 @@ paths:
         405:
           description: The VM instance could not reboot because it is not booted.
 
+  /vm.power-button:
+    put:
+      summary: Trigger a power button in the VM
+      operationId: power-buttonVM
+      responses:
+        204:
+          description: Power button successfully triggered in the VM
+        404:
+          description: The button could not be triggered because it is not created yet
+        405:
+          description: The button could not be triggered because it is not booted.
+
   /vm.resize:
     put:
       summary: Resize the VM
@@ -386,7 +398,7 @@ components:
         pci_bdf:
           type: integer
           format: int32
-        
+
     VmCounters:
       type: object
       additionalProperties:
@@ -522,6 +534,9 @@ components:
         hugepages:
           type: boolean
           default: false
+        hugepage_size:
+          type: integer
+          format: int64
         host_numa_node:
           type: integer
           format: int32
@@ -559,6 +574,9 @@ components:
         hugepages:
           type: boolean
           default: false
+        hugepage_size:
+          type: integer
+          format: int64
         zones:
           type: array
           items:
@@ -588,6 +606,48 @@ components:
       properties:
         args:
           type: string
+
+    TokenBucket:
+      required:
+      - size
+      - refill_time
+      type: object
+      properties:
+        size:
+          type: integer
+          format: int64
+          minimum: 0
+          description: The total number of tokens this bucket can hold.
+        one_time_burst:
+          type: integer
+          format: int64
+          minimum: 0
+          description: The initial size of a token bucket.
+        refill_time:
+          type: integer
+          format: int64
+          minimum: 0
+          description: The amount of milliseconds it takes for the bucket to refill.
+      description:
+        Defines a token bucket with a maximum capacity (_size_), an initial burst size
+        (_one_time_burst_) and an interval for refilling purposes (_refill_time_).
+        The refill-rate is derived from _size_ and _refill_time_, and it is the constant
+        rate at which the tokens replenish. The refill process only starts happening after
+        the initial burst budget is consumed.
+        Consumption from the token bucket is unbounded in speed which allows for bursts
+        bound in size by the amount of tokens available.
+        Once the token bucket is empty, consumption speed is bound by the refill-rate.
+
+    RateLimiterConfig:
+      type: object
+      properties:
+        bandwidth:
+          $ref: '#/components/schemas/TokenBucket'
+        ops:
+          $ref: '#/components/schemas/TokenBucket'
+      description:
+        Defines an IO rate limiter with independent bytes/s and ops/s limits.
+        Limits are defined by configuring each of the _bandwidth_ and _ops_ token buckets.
 
     DiskConfig:
       required:
@@ -619,6 +679,8 @@ components:
         poll_queue:
           type: boolean
           default: true
+        rate_limiter_config:
+            $ref: '#/components/schemas/RateLimiterConfig'
         id:
           type: string
 
@@ -652,6 +714,11 @@ components:
           type: string
         id:
           type: string
+        fd:
+          type: array
+          items:
+            type: integer
+            format: int32
 
     RngConfig:
       required:
@@ -735,7 +802,7 @@ components:
           type: string
         mode:
           type: string
-          enum: [Off, Tty, File, Null]
+          enum: [Off, Pty, Tty, File, Null]
         iommu:
           type: boolean
           default: false

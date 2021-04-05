@@ -13,6 +13,7 @@ Name | Type | Description | Notes
 **VhostUser** | **bool** |  | [optional] [default to false]
 **VhostSocket** | **string** |  | [optional] 
 **PollQueue** | **bool** |  | [optional] [default to true]
+**RateLimiterConfig** | [**RateLimiterConfig**](RateLimiterConfig.md) |  | [optional] 
 **Id** | **string** |  | [optional] 
 
 [[Back to Model list]](../README.md#documentation-for-models) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to README]](../README.md)

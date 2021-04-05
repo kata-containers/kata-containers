@@ -8,10 +8,11 @@
  */
 
 package openapi
+
 // CpuTopology struct for CpuTopology
 type CpuTopology struct {
 	ThreadsPerCore int32 `json:"threads_per_core,omitempty"`
-	CoresPerDie int32 `json:"cores_per_die,omitempty"`
+	CoresPerDie    int32 `json:"cores_per_die,omitempty"`
 	DiesPerPackage int32 `json:"dies_per_package,omitempty"`
-	Packages int32 `json:"packages,omitempty"`
+	Packages       int32 `json:"packages,omitempty"`
 }

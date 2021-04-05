@@ -8,16 +8,18 @@
  */
 
 package openapi
+
 // DiskConfig struct for DiskConfig
 type DiskConfig struct {
-	Path string `json:"path"`
-	Readonly bool `json:"readonly,omitempty"`
-	Direct bool `json:"direct,omitempty"`
-	Iommu bool `json:"iommu,omitempty"`
-	NumQueues int32 `json:"num_queues,omitempty"`
-	QueueSize int32 `json:"queue_size,omitempty"`
-	VhostUser bool `json:"vhost_user,omitempty"`
-	VhostSocket string `json:"vhost_socket,omitempty"`
-	PollQueue bool `json:"poll_queue,omitempty"`
-	Id string `json:"id,omitempty"`
+	Path              string            `json:"path"`
+	Readonly          bool              `json:"readonly,omitempty"`
+	Direct            bool              `json:"direct,omitempty"`
+	Iommu             bool              `json:"iommu,omitempty"`
+	NumQueues         int32             `json:"num_queues,omitempty"`
+	QueueSize         int32             `json:"queue_size,omitempty"`
+	VhostUser         bool              `json:"vhost_user,omitempty"`
+	VhostSocket       string            `json:"vhost_socket,omitempty"`
+	PollQueue         bool              `json:"poll_queue,omitempty"`
+	RateLimiterConfig RateLimiterConfig `json:"rate_limiter_config,omitempty"`
+	Id                string            `json:"id,omitempty"`
 }

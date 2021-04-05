@@ -8,6 +8,7 @@
  */
 
 package openapi
+
 // VmSnapshotConfig struct for VmSnapshotConfig
 type VmSnapshotConfig struct {
 	DestinationUrl string `json:"destination_url,omitempty"`
