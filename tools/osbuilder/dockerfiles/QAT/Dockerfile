@@ -9,9 +9,9 @@ FROM fedora:latest
 # images being pulled from the registry.
 # Set AGENT_VERSION as an env variable to specify a specific version of Kata Agent to install
 
-LABEL DOCKERFILE_VERSION="2.0"
+LABEL DOCKERFILE_VERSION="2.1"
 
-ENV QAT_DRIVER_VER "qat1.7.l.4.12.0-00011.tar.gz"
+ENV QAT_DRIVER_VER "QAT1.7.L.4.13.0-00009.tar.gz"
 ENV QAT_DRIVER_URL "https://downloadmirror.intel.com/30178/eng/${QAT_DRIVER_VER}"
 ENV QAT_CONFIGURE_OPTIONS "--enable-icp-sriov=guest"
 ENV KATA_REPO_VERSION "main"
@@ -22,7 +22,6 @@ ENV OUTPUT_DIR "/output"
 RUN dnf install -y \
     bc \
     bison \
-    curl \
     debootstrap \
     diffutils \
     e2fsprogs \
