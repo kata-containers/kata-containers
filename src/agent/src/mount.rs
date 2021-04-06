@@ -900,7 +900,7 @@ mod tests {
             let msg = format!("{}: result: {:?}", msg, result);
 
             if d.error_contains.is_empty() {
-                assert!(result.is_ok(), msg);
+                assert!(result.is_ok(), "{}", msg);
 
                 // Cleanup
                 unsafe {
@@ -912,7 +912,7 @@ mod tests {
 
                     let msg = format!("{}: umount result: {:?}", msg, result);
 
-                    assert!(ret == 0, msg);
+                    assert!(ret == 0, "{}", msg);
                 };
 
                 continue;
@@ -920,7 +920,7 @@ mod tests {
 
             let err = result.unwrap_err();
             let error_msg = format!("{}", err);
-            assert!(error_msg.contains(d.error_contains), msg);
+            assert!(error_msg.contains(d.error_contains), "{}", msg);
         }
     }
 
@@ -1026,13 +1026,13 @@ mod tests {
             let msg = format!("{}: result: {:?}", msg, result);
 
             if d.error_contains.is_empty() {
-                assert!(result.is_ok(), msg);
+                assert!(result.is_ok(), "{}", msg);
                 continue;
             }
 
             let error_msg = format!("{:#}", result.unwrap_err());
 
-            assert!(error_msg.contains(d.error_contains), msg);
+            assert!(error_msg.contains(d.error_contains), "{}", msg);
         }
     }
 
@@ -1108,6 +1108,7 @@ mod tests {
 
             assert!(
                 format!("{}", err).contains("No such file or directory"),
+                "{}",
                 msg
             );
         }
@@ -1136,13 +1137,13 @@ mod tests {
             if d.error_contains.is_empty() {
                 let fs_type = result.unwrap();
 
-                assert!(d.fs_type == fs_type, msg);
+                assert!(d.fs_type == fs_type, "{}", msg);
 
                 continue;
             }
 
             let error_msg = format!("{}", result.unwrap_err());
-            assert!(error_msg.contains(d.error_contains), msg);
+            assert!(error_msg.contains(d.error_contains), "{}", msg);
         }
     }
 
@@ -1291,34 +1292,34 @@ mod tests {
             let msg = format!("{}: result: {:?}", msg, result);
 
             if !d.error_contains.is_empty() {
-                assert!(result.is_err(), msg);
+                assert!(result.is_err(), "{}", msg);
 
                 let error_msg = format!("{}", result.unwrap_err());
-                assert!(error_msg.contains(d.error_contains), msg);
+                assert!(error_msg.contains(d.error_contains), "{}", msg);
                 continue;
             }
 
-            assert!(result.is_ok(), msg);
+            assert!(result.is_ok(), "{}", msg);
 
             let mounts = result.unwrap();
             let count = mounts.len();
 
             if !d.devices_cgroup {
-                assert!(count == 0, msg);
+                assert!(count == 0, "{}", msg);
                 continue;
             }
 
             // get_cgroup_mounts() adds the device cgroup plus two other mounts.
-            assert!(count == (1 + 2), msg);
+            assert!(count == (1 + 2), "{}", msg);
 
             // First mount
-            assert!(mounts[0].eq(&first_mount), msg);
+            assert!(mounts[0].eq(&first_mount), "{}", msg);
 
             // Last mount
-            assert!(mounts[2].eq(&last_mount), msg);
+            assert!(mounts[2].eq(&last_mount), "{}", msg);
 
             // Devices cgroup
-            assert!(mounts[1].eq(&cg_devices_mount), msg);
+            assert!(mounts[1].eq(&cg_devices_mount), "{}", msg);
         }
     }
 }

@@ -2018,9 +2018,9 @@ mod tests {
             let msg = format!("{}, result: {:?}", msg, result);
 
             if result.is_ok() {
-                assert!(!d.expect_error, msg);
+                assert!(!d.expect_error, "{}", msg);
             } else {
-                assert!(d.expect_error, msg);
+                assert!(d.expect_error, "{}", msg);
             }
         }
     }
