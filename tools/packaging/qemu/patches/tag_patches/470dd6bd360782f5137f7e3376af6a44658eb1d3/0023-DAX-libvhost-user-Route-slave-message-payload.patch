@@ -1,0 +1,97 @@
+From 55b6372e1b893e77c6c4d5e87bd1a0765126399c Mon Sep 17 00:00:00 2001
+From: "Dr. David Alan Gilbert" <dgilbert@redhat.com>
+Date: Mon, 20 May 2019 20:02:29 +0100
+Subject: [PATCH 23/29] DAX: libvhost-user: Route slave message payload
+
+Route the uint64 payload from message replies on the slave back up
+through vu_process_message_reply and to the callers.
+
+Signed-off-by: Dr. David Alan Gilbert <dgilbert@redhat.com>
+---
+ subprojects/libvhost-user/libvhost-user.c | 20 ++++++++++++++++----
+ tools/virtiofsd/fuse_virtio.c             |  2 ++
+ 2 files changed, 18 insertions(+), 4 deletions(-)
+
+diff --git a/subprojects/libvhost-user/libvhost-user.c b/subprojects/libvhost-user/libvhost-user.c
+index 9b8223b5d5..a1cbb626d2 100644
+--- a/subprojects/libvhost-user/libvhost-user.c
++++ b/subprojects/libvhost-user/libvhost-user.c
+@@ -403,9 +403,11 @@ vu_send_reply(VuDev *dev, int conn_fd, VhostUserMsg *vmsg)
+  * Processes a reply on the slave channel.
+  * Entered with slave_mutex held and releases it before exit.
+  * Returns true on success.
++ * *payload is written on success
+  */
+ static bool
+-vu_process_message_reply(VuDev *dev, const VhostUserMsg *vmsg)
++vu_process_message_reply(VuDev *dev, const VhostUserMsg *vmsg,
++                         uint64_t *payload)
+ {
+     VhostUserMsg msg_reply;
+     bool result = false;
+@@ -425,7 +427,8 @@ vu_process_message_reply(VuDev *dev, const VhostUserMsg *vmsg)
+         goto out;
+     }
+ 
+-    result = msg_reply.payload.u64 == 0;
++    *payload = msg_reply.payload.u64;
++    result = true;
+ 
+ out:
+     pthread_mutex_unlock(&dev->slave_mutex);
+@@ -1312,6 +1315,8 @@ bool vu_set_queue_host_notifier(VuDev *dev, VuVirtq *vq, int fd,
+ {
+     int qidx = vq - dev->vq;
+     int fd_num = 0;
++    bool res;
++    uint64_t payload = 0;
+     VhostUserMsg vmsg = {
+         .request = VHOST_USER_SLAVE_VRING_HOST_NOTIFIER_MSG,
+         .flags = VHOST_USER_VERSION | VHOST_USER_NEED_REPLY_MASK,
+@@ -1342,7 +1347,10 @@ bool vu_set_queue_host_notifier(VuDev *dev, VuVirtq *vq, int fd,
+     }
+ 
+     /* Also unlocks the slave_mutex */
+-    return vu_process_message_reply(dev, &vmsg);
++    res = vu_process_message_reply(dev, &vmsg, &payload);
++    res = res && (payload == 0);
++
++    return res;
+ }
+ 
+ static bool
+@@ -2915,6 +2923,8 @@ bool vu_fs_cache_request(VuDev *dev, VhostUserSlaveRequest req, int fd,
+                          VhostUserFSSlaveMsg *fsm)
+ {
+     int fd_num = 0;
++    bool res;
++    uint64_t payload = 0;
+     VhostUserMsg vmsg = {
+         .request = req,
+         .flags = VHOST_USER_VERSION | VHOST_USER_NEED_REPLY_MASK,
+@@ -2939,6 +2949,8 @@ bool vu_fs_cache_request(VuDev *dev, VhostUserSlaveRequest req, int fd,
+     }
+ 
+     /* Also unlocks the slave_mutex */
+-    return vu_process_message_reply(dev, &vmsg);
++    res = vu_process_message_reply(dev, &vmsg, &payload);
++    res = res && (payload == 0);
++    return res;
+ }
+ 
+diff --git a/tools/virtiofsd/fuse_virtio.c b/tools/virtiofsd/fuse_virtio.c
+index 1f4c7fff35..416d285844 100644
+--- a/tools/virtiofsd/fuse_virtio.c
++++ b/tools/virtiofsd/fuse_virtio.c
+@@ -419,6 +419,8 @@ int virtio_send_data_iov(struct fuse_session *se, struct fuse_chan *ch,
+                 buf->buf[0].pos += msg.len[0];
+                 in_sg_ptr++;
+                 bad_in_num--;
++            } else if (req_res == 0) {
++                break;
+             } else {
+                 ret = EIO;
+                 free(in_sg_cpy);
+-- 
+2.25.1
+

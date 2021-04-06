@@ -107,8 +107,8 @@ assets:
 
     qemu-experimental:
       description: "QEMU with virtiofs support"
-      url: "https://gitlab.com/virtio-fs/qemu"
-      version: "qemu5.0-virtiofs-with51bits-dax"
+      url: "https://github.com/qemu/qemu"
+      version: "470dd6bd360782f5137f7e3376af6a44658eb1d3"
 
   image:
     description: |

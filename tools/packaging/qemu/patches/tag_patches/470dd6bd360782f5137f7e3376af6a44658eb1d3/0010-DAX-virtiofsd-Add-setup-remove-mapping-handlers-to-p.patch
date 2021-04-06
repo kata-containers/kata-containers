@@ -1,0 +1,50 @@
+From 7029506e6b23fc15f2b7c4a6a62aa3a0ee58fb02 Mon Sep 17 00:00:00 2001
+From: "Dr. David Alan Gilbert" <dgilbert@redhat.com>
+Date: Fri, 6 Jul 2018 19:52:49 +0100
+Subject: [PATCH 10/29] DAX: virtiofsd: Add setup/remove mapping handlers to
+ passthrough_ll
+
+Signed-off-by: Dr. David Alan Gilbert <dgilbert@redhat.com>
+---
+ tools/virtiofsd/passthrough_ll.c | 18 ++++++++++++++++++
+ 1 file changed, 18 insertions(+)
+
+diff --git a/tools/virtiofsd/passthrough_ll.c b/tools/virtiofsd/passthrough_ll.c
+index 5fb36d9407..784bdcff34 100644
+--- a/tools/virtiofsd/passthrough_ll.c
++++ b/tools/virtiofsd/passthrough_ll.c
+@@ -2891,6 +2891,22 @@ static void lo_destroy(void *userdata)
+     pthread_mutex_unlock(&lo->mutex);
+ }
+ 
++static void lo_setupmapping(fuse_req_t req, fuse_ino_t ino, uint64_t foffset,
++                            uint64_t len, uint64_t moffset, uint64_t flags,
++                            struct fuse_file_info *fi)
++{
++    // TODO
++    fuse_reply_err(req, ENOSYS);
++}
++
++static void lo_removemapping(fuse_req_t req, struct fuse_session *se,
++                             fuse_ino_t ino, unsigned num,
++                             struct fuse_removemapping_one *argp)
++{
++    // TODO
++    fuse_reply_err(req, ENOSYS);
++}
++
+ static struct fuse_lowlevel_ops lo_oper = {
+     .init = lo_init,
+     .lookup = lo_lookup,
+@@ -2932,6 +2948,8 @@ static struct fuse_lowlevel_ops lo_oper = {
+ #endif
+     .lseek = lo_lseek,
+     .destroy = lo_destroy,
++    .setupmapping = lo_setupmapping,
++    .removemapping = lo_removemapping,
+ };
+ 
+ /* Print vhost-user.json backend program capabilities */
+-- 
+2.25.1
+
