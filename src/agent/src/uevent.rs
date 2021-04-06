@@ -82,7 +82,7 @@ impl Uevent {
         let empties: Vec<_> = w
             .iter_mut()
             .filter(|(dev_addr, _)| {
-                let pci_p = format!("{}/{}", pci_root_bus_path, *dev_addr);
+                let pci_p = format!("{}{}", pci_root_bus_path, *dev_addr);
 
                 // blk block device
                 devpath.starts_with(pci_p.as_str()) ||
