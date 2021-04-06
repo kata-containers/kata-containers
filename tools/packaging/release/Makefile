@@ -9,7 +9,7 @@ MK_DIR :=$(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
 .PHONY: bump-kata-version
 
 NEW_VERSION :=
-TARGET_BRANCH ?= "master"
+TARGET_BRANCH ?= "main"
 
 # Run update-repository-version.sh
 # $1 : repository to bump
