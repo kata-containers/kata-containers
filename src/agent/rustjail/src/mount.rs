@@ -1365,7 +1365,7 @@ mod tests {
             let msg = format!("{}, result: {:?}", msg, result);
 
             // Perform the checks
-            assert!(result == t.result, msg);
+            assert!(result == t.result, "{}", msg);
         }
     }
 }

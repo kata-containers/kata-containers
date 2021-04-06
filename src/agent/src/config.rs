@@ -334,7 +334,7 @@ mod tests {
             if $expected_result.is_ok() {
                 let expected_level = $expected_result.as_ref().unwrap();
                 let actual_level = $actual_result.unwrap();
-                assert!(*expected_level == actual_level, $msg);
+                assert!(*expected_level == actual_level, "{}", $msg);
             } else {
                 let expected_error = $expected_result.as_ref().unwrap_err();
                 let expected_error_msg = format!("{:?}", expected_error);
@@ -342,9 +342,9 @@ mod tests {
                 if let Err(actual_error) = $actual_result {
                     let actual_error_msg = format!("{:?}", actual_error);
 
-                    assert!(expected_error_msg == actual_error_msg, $msg);
+                    assert!(expected_error_msg == actual_error_msg, "{}", $msg);
                 } else {
-                    assert!(expected_error_msg == "expected error, got OK", $msg);
+                    assert!(expected_error_msg == "expected error, got OK", "{}", $msg);
                 }
             }
         };
