@@ -81,7 +81,7 @@ verify_hub() {
 		go get -d ${hub_repo} || true
 		pushd ${GOPATH}/src/${hub_repo}
 		make
-		make install prefix=/usr/local
+		sudo -E make install prefix=/usr/local
 		popd
 	fi
 }
