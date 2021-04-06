@@ -1,0 +1,211 @@
+From a238faf5a53668aac037f7ce026d1bf785ee4186 Mon Sep 17 00:00:00 2001
+From: "Dr. David Alan Gilbert" <dgilbert@redhat.com>
+Date: Mon, 20 May 2019 11:54:02 +0100
+Subject: [PATCH 17/29] DAX/unmap: virtiofsd: Add VHOST_USER_SLAVE_FS_IO
+
+Define a new slave command 'VHOST_USER_SLAVE_FS_IO' for a
+client to ask qemu to perform a read/write from an fd directly
+to GPA.
+
+Signed-off-by: Dr. David Alan Gilbert <dgilbert@redhat.com>
+---
+ docs/interop/vhost-user.rst               | 11 +++
+ hw/virtio/trace-events                    |  6 ++
+ hw/virtio/vhost-user-fs.c                 | 87 +++++++++++++++++++++++
+ hw/virtio/vhost-user.c                    |  4 ++
+ include/hw/virtio/vhost-user-fs.h         |  1 +
+ subprojects/libvhost-user/libvhost-user.h |  1 +
+ 6 files changed, 110 insertions(+)
+
+diff --git a/docs/interop/vhost-user.rst b/docs/interop/vhost-user.rst
+index 056f94c6fb..8d6ec92881 100644
+--- a/docs/interop/vhost-user.rst
++++ b/docs/interop/vhost-user.rst
+@@ -1455,6 +1455,17 @@ Slave message types
+ ``VHOST_USER_SLAVE_FS_SYNC``
+   [Semantic details TBD]
+ 
++``VHOST_USER_SLAVE_FS_IO``
++  :id: 9
++  :equivalent ioctl: N/A
++  :slave payload: fd + n * (offset + address + len)
++  :master payload: N/A
++
++  Requests that the QEMU performs IO directly from an fd to guest memory
++  on behalf of the daemon; this is normally for a case where a memory region
++  isn't visible to the daemon.
++  [Semantic details TBD]
++
+ .. _reply_ack:
+ 
+ VHOST_USER_PROTOCOL_F_REPLY_ACK
+diff --git a/hw/virtio/trace-events b/hw/virtio/trace-events
+index 2060a144a2..a35adf5caf 100644
+--- a/hw/virtio/trace-events
++++ b/hw/virtio/trace-events
+@@ -53,6 +53,12 @@ vhost_vdpa_get_features(void *dev, uint64_t features) "dev: %p features: 0x%"PRI
+ vhost_vdpa_set_owner(void *dev) "dev: %p"
+ vhost_vdpa_vq_get_addr(void *dev, void *vq, uint64_t desc_user_addr, uint64_t avail_user_addr, uint64_t used_user_addr) "dev: %p vq: %p desc_user_addr: 0x%"PRIx64" avail_user_addr: 0x%"PRIx64" used_user_addr: 0x%"PRIx64
+ 
++# vhost-user-fs.c
++
++vhost_user_fs_slave_io_loop(const char *name, uint64_t owr, int is_ram, int is_romd, size_t size) "region %s with internal offset 0x%"PRIx64 " ram=%d romd=%d mrs.size=%zd"
++vhost_user_fs_slave_io_loop_res(ssize_t transferred) "%zd"
++vhost_user_fs_slave_io_exit(int res, size_t done) "res: %d done: %zd"
++
+ # virtio.c
+ virtqueue_alloc_element(void *elem, size_t sz, unsigned in_num, unsigned out_num) "elem %p size %zd in_num %u out_num %u"
+ virtqueue_fill(void *vq, const void *elem, unsigned int len, unsigned int idx) "vq %p elem %p len %u idx %u"
+diff --git a/hw/virtio/vhost-user-fs.c b/hw/virtio/vhost-user-fs.c
+index 98cec993f7..82a32492a7 100644
+--- a/hw/virtio/vhost-user-fs.c
++++ b/hw/virtio/vhost-user-fs.c
+@@ -22,6 +22,8 @@
+ #include "qemu/error-report.h"
+ #include "hw/virtio/vhost-user-fs.h"
+ #include "monitor/monitor.h"
++#include "exec/address-spaces.h"
++#include "trace.h"
+ 
+ /*
+  * The powerpc kernel code expects the memory to be accessible during
+@@ -201,6 +203,91 @@ int vhost_user_fs_slave_sync(struct vhost_dev *dev, VhostUserFSSlaveMsg *sm)
+     return res;
+ }
+ 
++int vhost_user_fs_slave_io(struct vhost_dev *dev, VhostUserFSSlaveMsg *sm,
++                           int fd)
++{
++    VHostUserFS *fs = VHOST_USER_FS(dev->vdev);
++    if (!fs) {
++        /* Shouldn't happen - but seen it in error paths */
++        fprintf(stderr, "%s: Bad fs ptr\n", __func__);
++        return -1;
++    }
++
++    unsigned int i;
++    int res = 0;
++    size_t done = 0;
++
++    if (fd < 0) {
++        fprintf(stderr, "%s: Bad fd for map\n", __func__);
++        return -1;
++    }
++
++    for (i = 0; i < VHOST_USER_FS_SLAVE_ENTRIES && !res; i++) {
++        if (sm->len[i] == 0) {
++            continue;
++        }
++
++        size_t len = sm->len[i];
++        hwaddr gpa = sm->c_offset[i];
++
++        while (len && !res) {
++            MemoryRegionSection mrs = memory_region_find(get_system_memory(),
++                                                         gpa, len);
++            size_t mrs_size = (size_t)int128_get64(mrs.size);
++
++            if (!mrs_size) {
++                fprintf(stderr,
++                        "%s: No guest region found for 0x%" HWADDR_PRIx "\n",
++                        __func__, gpa);
++                res = -EFAULT;
++                break;
++            }
++
++            trace_vhost_user_fs_slave_io_loop(mrs.mr->name,
++                                          (uint64_t)mrs.offset_within_region,
++                                          memory_region_is_ram(mrs.mr),
++                                          memory_region_is_romd(mrs.mr),
++                                          (size_t)mrs_size);
++
++            void *hostptr = qemu_map_ram_ptr(mrs.mr->ram_block,
++                                             mrs.offset_within_region);
++            ssize_t transferred;
++            if (sm->flags[i] & VHOST_USER_FS_FLAG_MAP_R) {
++                /* Read from file into RAM */
++                if (mrs.mr->readonly) {
++                    res = -EFAULT;
++                    break;
++                }
++                transferred = pread(fd, hostptr, mrs_size, sm->fd_offset[i]);
++            } else {
++                /* Write into file from RAM */
++                assert((sm->flags[i] & VHOST_USER_FS_FLAG_MAP_W));
++                transferred = pwrite(fd, hostptr, mrs_size, sm->fd_offset[i]);
++            }
++            trace_vhost_user_fs_slave_io_loop_res(transferred);
++            if (transferred < 0) {
++                res = -errno;
++                break;
++            }
++            if (!transferred) {
++                /* EOF */
++                break;
++            }
++
++            done += transferred;
++            len -= transferred;
++        }
++    }
++    close(fd);
++
++    trace_vhost_user_fs_slave_io_exit(res, done);
++    /*
++     * TODO! We should be returning 'done' if possible but our error handling
++     * doesn't know about that yet.
++     */
++    return res;
++}
++
+ static void vuf_get_config(VirtIODevice *vdev, uint8_t *config)
+ {
+     VHostUserFS *fs = VHOST_USER_FS(vdev);
+diff --git a/hw/virtio/vhost-user.c b/hw/virtio/vhost-user.c
+index 757dee0d1e..b4ef0102ad 100644
+--- a/hw/virtio/vhost-user.c
++++ b/hw/virtio/vhost-user.c
+@@ -138,6 +138,7 @@ typedef enum VhostUserSlaveRequest {
+     VHOST_USER_SLAVE_FS_MAP = 6,
+     VHOST_USER_SLAVE_FS_UNMAP = 7,
+     VHOST_USER_SLAVE_FS_SYNC = 8,
++    VHOST_USER_SLAVE_FS_IO = 9,
+     VHOST_USER_SLAVE_MAX
+ }  VhostUserSlaveRequest;
+ 
+@@ -1487,6 +1488,9 @@ static void slave_read(void *opaque)
+     case VHOST_USER_SLAVE_FS_SYNC:
+         ret = vhost_user_fs_slave_sync(dev, &payload.fs);
+         break;
++    case VHOST_USER_SLAVE_FS_IO:
++        ret = vhost_user_fs_slave_io(dev, &payload.fs, fd[0]);
++        break;
+ #endif
+     default:
+         error_report("Received unexpected msg type: %d.", hdr.request);
+diff --git a/include/hw/virtio/vhost-user-fs.h b/include/hw/virtio/vhost-user-fs.h
+index 69cc6340ed..0750687463 100644
+--- a/include/hw/virtio/vhost-user-fs.h
++++ b/include/hw/virtio/vhost-user-fs.h
+@@ -68,5 +68,6 @@ int vhost_user_fs_slave_map(struct vhost_dev *dev, VhostUserFSSlaveMsg *sm,
+                             int fd);
+ int vhost_user_fs_slave_unmap(struct vhost_dev *dev, VhostUserFSSlaveMsg *sm);
+ int vhost_user_fs_slave_sync(struct vhost_dev *dev, VhostUserFSSlaveMsg *sm);
++int vhost_user_fs_slave_io(struct vhost_dev *dev, VhostUserFSSlaveMsg *sm, int fd);
+ 
+ #endif /* _QEMU_VHOST_USER_FS_H */
+diff --git a/subprojects/libvhost-user/libvhost-user.h b/subprojects/libvhost-user/libvhost-user.h
+index c63a590069..4b6e681a3e 100644
+--- a/subprojects/libvhost-user/libvhost-user.h
++++ b/subprojects/libvhost-user/libvhost-user.h
+@@ -122,6 +122,7 @@ typedef enum VhostUserSlaveRequest {
+     VHOST_USER_SLAVE_FS_MAP = 6,
+     VHOST_USER_SLAVE_FS_UNMAP = 7,
+     VHOST_USER_SLAVE_FS_SYNC = 8,
++    VHOST_USER_SLAVE_FS_IO = 9,
+     VHOST_USER_SLAVE_MAX
+ }  VhostUserSlaveRequest;
+ 
+-- 
+2.25.1
+

@@ -1,0 +1,350 @@
+From 2a64df420827ff0b127a30f2ac877a7b1ded925b Mon Sep 17 00:00:00 2001
+From: "Dr. David Alan Gilbert" <dgilbert@redhat.com>
+Date: Mon, 20 May 2019 18:08:41 +0100
+Subject: [PATCH 22/29] DAX: vhost-user: Rework slave return values
+
+All the current slave handlers on the qemu side generate an 'int'
+return value that's squashed down to a bool (!!ret) and stuffed into
+a uint64_t (field of a union) to be returned.
+
+Move the uint64_t type back up through the individual handlers so
+that we can mkae one actually return a full uint64_t.
+
+Note that the definition in the interop spec says most of these
+cases are defined as returning 0 on success and non-0 for failure,
+so it's OK to change from a bool to another non-0.
+
+Signed-off-by: Dr. David Alan Gilbert <dgilbert@redhat.com>
+---
+ hw/virtio/vhost-backend.c         |  4 +--
+ hw/virtio/vhost-user-fs.c         | 42 ++++++++++++++++---------------
+ hw/virtio/vhost-user.c            | 32 ++++++++++++-----------
+ include/hw/virtio/vhost-backend.h |  2 +-
+ include/hw/virtio/vhost-user-fs.h | 13 ++++++----
+ 5 files changed, 50 insertions(+), 43 deletions(-)
+
+diff --git a/hw/virtio/vhost-backend.c b/hw/virtio/vhost-backend.c
+index 222bbcc62d..e81083ddda 100644
+--- a/hw/virtio/vhost-backend.c
++++ b/hw/virtio/vhost-backend.c
+@@ -401,7 +401,7 @@ int vhost_backend_invalidate_device_iotlb(struct vhost_dev *dev,
+     return -ENODEV;
+ }
+ 
+-int vhost_backend_handle_iotlb_msg(struct vhost_dev *dev,
++uint64_t vhost_backend_handle_iotlb_msg(struct vhost_dev *dev,
+                                           struct vhost_iotlb_msg *imsg)
+ {
+     int ret = 0;
+@@ -424,5 +424,5 @@ int vhost_backend_handle_iotlb_msg(struct vhost_dev *dev,
+         break;
+     }
+ 
+-    return ret;
++    return !!ret;
+ }
+diff --git a/hw/virtio/vhost-user-fs.c b/hw/virtio/vhost-user-fs.c
+index 82a32492a7..c02dcaeca7 100644
+--- a/hw/virtio/vhost-user-fs.c
++++ b/hw/virtio/vhost-user-fs.c
+@@ -35,19 +35,19 @@
+ #define DAX_WINDOW_PROT PROT_NONE
+ #endif
+ 
+-int vhost_user_fs_slave_map(struct vhost_dev *dev, VhostUserFSSlaveMsg *sm,
+-                            int fd)
++uint64_t vhost_user_fs_slave_map(struct vhost_dev *dev, VhostUserFSSlaveMsg *sm,
++                                 int fd)
+ {
+     VHostUserFS *fs = VHOST_USER_FS(dev->vdev);
+     if (!fs) {
+         /* Shouldn't happen - but seen on error path */
+         fprintf(stderr, "%s: Bad fs ptr\n", __func__);
+-        return -1;
++        return (uint64_t)-1;
+     }
+     size_t cache_size = fs->conf.cache_size;
+     if (!cache_size) {
+         fprintf(stderr, "%s: map when DAX cache not present\n", __func__);
+-        return -1;
++        return (uint64_t)-1;
+     }
+     void *cache_host = memory_region_get_ram_ptr(&fs->cache);
+ 
+@@ -56,7 +56,7 @@ int vhost_user_fs_slave_map(struct vhost_dev *dev, VhostUserFSSlaveMsg *sm,
+ 
+     if (fd < 0) {
+         fprintf(stderr, "%s: Bad fd for map\n", __func__);
+-        return -1;
++        return (uint64_t)-1;
+     }
+ 
+     for (i = 0; i < VHOST_USER_FS_SLAVE_ENTRIES; i++) {
+@@ -78,11 +78,11 @@ int vhost_user_fs_slave_map(struct vhost_dev *dev, VhostUserFSSlaveMsg *sm,
+                  ((sm->flags[i] & VHOST_USER_FS_FLAG_MAP_W) ? PROT_WRITE : 0),
+                  MAP_SHARED | MAP_FIXED,
+                  fd, sm->fd_offset[i]) != (cache_host + sm->c_offset[i])) {
++            res = -errno;
+             fprintf(stderr, "%s: map failed err %d [%d] %"
+                             PRIx64 "+%" PRIx64 " from %" PRIx64 "\n", __func__,
+                             errno, i, sm->c_offset[i], sm->len[i],
+                             sm->fd_offset[i]);
+-            res = -1;
+             break;
+         }
+     }
+@@ -91,10 +91,11 @@ int vhost_user_fs_slave_map(struct vhost_dev *dev, VhostUserFSSlaveMsg *sm,
+         /* Something went wrong, unmap them all */
+         vhost_user_fs_slave_unmap(dev, sm);
+     }
+-    return res;
++    return (uint64_t)res;
+ }
+ 
+-int vhost_user_fs_slave_unmap(struct vhost_dev *dev, VhostUserFSSlaveMsg *sm)
++uint64_t vhost_user_fs_slave_unmap(struct vhost_dev *dev,
++                                   VhostUserFSSlaveMsg *sm)
+ {
+     VHostUserFS *fs = VHOST_USER_FS(dev->vdev);
+     if (!fs) {
+@@ -114,7 +115,7 @@ int vhost_user_fs_slave_unmap(struct vhost_dev *dev, VhostUserFSSlaveMsg *sm)
+         }
+ 
+         fprintf(stderr, "%s: unmap when DAX cache not present\n", __func__);
+-        return -1;
++        return (uint64_t)-1;
+     }
+     void *cache_host = memory_region_get_ram_ptr(&fs->cache);
+ 
+@@ -148,26 +149,27 @@ int vhost_user_fs_slave_unmap(struct vhost_dev *dev, VhostUserFSSlaveMsg *sm)
+         ptr = mmap(cache_host + sm->c_offset[i], sm->len[i], DAX_WINDOW_PROT,
+                    MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED, -1, 0);
+         if (ptr != (cache_host + sm->c_offset[i])) {
++            res = -errno;
+             fprintf(stderr, "%s: mmap failed (%s) [%d] %"
+                             PRIx64 "+%" PRIx64 " from %" PRIx64 " res: %p\n",
+                             __func__,
+                             strerror(errno),
+                             i, sm->c_offset[i], sm->len[i],
+                             sm->fd_offset[i], ptr);
+-            res = -1;
+         }
+     }
+ 
+-    return res;
++    return (uint64_t)res;
+ }
+ 
+-int vhost_user_fs_slave_sync(struct vhost_dev *dev, VhostUserFSSlaveMsg *sm)
++uint64_t vhost_user_fs_slave_sync(struct vhost_dev *dev,
++                                  VhostUserFSSlaveMsg *sm)
+ {
+     VHostUserFS *fs = VHOST_USER_FS(dev->vdev);
+     size_t cache_size = fs->conf.cache_size;
+     if (!cache_size) {
+         fprintf(stderr, "%s: sync when DAX cache not present\n", __func__);
+-        return -1;
++        return (uint64_t)-1;
+     }
+     void *cache_host = memory_region_get_ram_ptr(&fs->cache);
+ 
+@@ -191,26 +193,26 @@ int vhost_user_fs_slave_sync(struct vhost_dev *dev, VhostUserFSSlaveMsg *sm)
+ 
+         if (msync(cache_host + sm->c_offset[i], sm->len[i],
+                   MS_SYNC /* ?? */)) {
++            res = -errno;
+             fprintf(stderr, "%s: msync failed (%s) [%d] %"
+                             PRIx64 "+%" PRIx64 " from %" PRIx64 "\n", __func__,
+                             strerror(errno),
+                             i, sm->c_offset[i], sm->len[i],
+                             sm->fd_offset[i]);
+-            res = -1;
+         }
+     }
+ 
+-    return res;
++    return (uint64_t)res;
+ }
+ 
+-int vhost_user_fs_slave_io(struct vhost_dev *dev, VhostUserFSSlaveMsg *sm,
+-                           int fd)
++uint64_t vhost_user_fs_slave_io(struct vhost_dev *dev, VhostUserFSSlaveMsg *sm,
++                                int fd)
+ {
+     VHostUserFS *fs = VHOST_USER_FS(dev->vdev);
+     if (!fs) {
+         /* Shouldn't happen - but seen it in error paths */
+         fprintf(stderr, "%s: Bad fs ptr\n", __func__);
+-        return -1;
++        return (uint64_t)-1;
+     }
+ 
+     unsigned int i;
+@@ -219,7 +221,7 @@ int vhost_user_fs_slave_io(struct vhost_dev *dev, VhostUserFSSlaveMsg *sm,
+ 
+     if (fd < 0) {
+         fprintf(stderr, "%s: Bad fd for map\n", __func__);
+-        return -1;
++        return (uint64_t)-1;
+     }
+ 
+     for (i = 0; i < VHOST_USER_FS_SLAVE_ENTRIES && !res; i++) {
+@@ -285,7 +287,7 @@ int vhost_user_fs_slave_io(struct vhost_dev *dev, VhostUserFSSlaveMsg *sm,
+      * TODO! We should be returning 'done' if possible but our error handling
+      * doesn't know about that yet.
+      */
+-    return res;
++    return (uint64_t)res;
+ }
+ 
+ static void vuf_get_config(VirtIODevice *vdev, uint8_t *config)
+diff --git a/hw/virtio/vhost-user.c b/hw/virtio/vhost-user.c
+index b4ef0102ad..d95dbc39e3 100644
+--- a/hw/virtio/vhost-user.c
++++ b/hw/virtio/vhost-user.c
+@@ -1325,24 +1325,25 @@ static int vhost_user_reset_device(struct vhost_dev *dev)
+     return 0;
+ }
+ 
+-static int vhost_user_slave_handle_config_change(struct vhost_dev *dev)
++static uint64_t vhost_user_slave_handle_config_change(struct vhost_dev *dev)
+ {
+     int ret = -1;
+ 
+     if (!dev->config_ops) {
+-        return -1;
++        return true;
+     }
+ 
+     if (dev->config_ops->vhost_dev_config_notifier) {
+         ret = dev->config_ops->vhost_dev_config_notifier(dev);
+     }
+ 
+-    return ret;
++    return !!ret;
+ }
+ 
+-static int vhost_user_slave_handle_vring_host_notifier(struct vhost_dev *dev,
+-                                                       VhostUserVringArea *area,
+-                                                       int fd)
++static uint64_t vhost_user_slave_handle_vring_host_notifier(
++                struct vhost_dev *dev,
++               VhostUserVringArea *area,
++               int fd)
+ {
+     int queue_idx = area->u64 & VHOST_USER_VRING_IDX_MASK;
+     size_t page_size = qemu_real_host_page_size;
+@@ -1356,7 +1357,7 @@ static int vhost_user_slave_handle_vring_host_notifier(struct vhost_dev *dev,
+     if (!virtio_has_feature(dev->protocol_features,
+                             VHOST_USER_PROTOCOL_F_HOST_NOTIFIER) ||
+         vdev == NULL || queue_idx >= virtio_get_num_queues(vdev)) {
+-        return -1;
++        return true;
+     }
+ 
+     n = &user->notifier[queue_idx];
+@@ -1369,18 +1370,18 @@ static int vhost_user_slave_handle_vring_host_notifier(struct vhost_dev *dev,
+     }
+ 
+     if (area->u64 & VHOST_USER_VRING_NOFD_MASK) {
+-        return 0;
++        return false;
+     }
+ 
+     /* Sanity check. */
+     if (area->size != page_size) {
+-        return -1;
++        return true;
+     }
+ 
+     addr = mmap(NULL, page_size, PROT_READ | PROT_WRITE, MAP_SHARED,
+                 fd, area->offset);
+     if (addr == MAP_FAILED) {
+-        return -1;
++        return true;
+     }
+ 
+     name = g_strdup_printf("vhost-user/host-notifier@%p mmaps[%d]",
+@@ -1391,13 +1392,13 @@ static int vhost_user_slave_handle_vring_host_notifier(struct vhost_dev *dev,
+ 
+     if (virtio_queue_set_host_notifier_mr(vdev, queue_idx, &n->mr, true)) {
+         munmap(addr, page_size);
+-        return -1;
++        return true;
+     }
+ 
+     n->addr = addr;
+     n->set = true;
+ 
+-    return 0;
++    return false;
+ }
+ 
+ static void slave_read(void *opaque)
+@@ -1406,7 +1407,8 @@ static void slave_read(void *opaque)
+     struct vhost_user *u = dev->opaque;
+     VhostUserHeader hdr = { 0, };
+     VhostUserPayload payload = { 0, };
+-    int size, ret = 0;
++    int size;
++    uint64_t ret = 0;
+     struct iovec iov;
+     struct msghdr msgh;
+     int fd[VHOST_USER_SLAVE_MAX_FDS];
+@@ -1494,7 +1496,7 @@ static void slave_read(void *opaque)
+ #endif
+     default:
+         error_report("Received unexpected msg type: %d.", hdr.request);
+-        ret = -EINVAL;
++        ret = (uint64_t)-EINVAL;
+     }
+ 
+     /* Close the remaining file descriptors. */
+@@ -1515,7 +1517,7 @@ static void slave_read(void *opaque)
+         hdr.flags &= ~VHOST_USER_NEED_REPLY_MASK;
+         hdr.flags |= VHOST_USER_REPLY_MASK;
+ 
+-        payload.u64 = !!ret;
++        payload.u64 = ret;
+         hdr.size = sizeof(payload.u64);
+ 
+         iovec[0].iov_base = &hdr;
+diff --git a/include/hw/virtio/vhost-backend.h b/include/hw/virtio/vhost-backend.h
+index 8a6f8e2a7a..64ac6b6444 100644
+--- a/include/hw/virtio/vhost-backend.h
++++ b/include/hw/virtio/vhost-backend.h
+@@ -186,7 +186,7 @@ int vhost_backend_update_device_iotlb(struct vhost_dev *dev,
+ int vhost_backend_invalidate_device_iotlb(struct vhost_dev *dev,
+                                                  uint64_t iova, uint64_t len);
+ 
+-int vhost_backend_handle_iotlb_msg(struct vhost_dev *dev,
++uint64_t vhost_backend_handle_iotlb_msg(struct vhost_dev *dev,
+                                           struct vhost_iotlb_msg *imsg);
+ 
+ int vhost_user_gpu_set_socket(struct vhost_dev *dev, int fd);
+diff --git a/include/hw/virtio/vhost-user-fs.h b/include/hw/virtio/vhost-user-fs.h
+index 0750687463..845cdb0177 100644
+--- a/include/hw/virtio/vhost-user-fs.h
++++ b/include/hw/virtio/vhost-user-fs.h
+@@ -64,10 +64,13 @@ struct VHostUserFS {
+ };
+ 
+ /* Callbacks from the vhost-user code for slave commands */
+-int vhost_user_fs_slave_map(struct vhost_dev *dev, VhostUserFSSlaveMsg *sm,
+-                            int fd);
+-int vhost_user_fs_slave_unmap(struct vhost_dev *dev, VhostUserFSSlaveMsg *sm);
+-int vhost_user_fs_slave_sync(struct vhost_dev *dev, VhostUserFSSlaveMsg *sm);
+-int vhost_user_fs_slave_io(struct vhost_dev *dev, VhostUserFSSlaveMsg *sm, int fd);
++uint64_t vhost_user_fs_slave_map(struct vhost_dev *dev, VhostUserFSSlaveMsg *sm,
++                                 int fd);
++uint64_t vhost_user_fs_slave_unmap(struct vhost_dev *dev,
++                                   VhostUserFSSlaveMsg *sm);
++uint64_t vhost_user_fs_slave_sync(struct vhost_dev *dev,
++                                  VhostUserFSSlaveMsg *sm);
++uint64_t vhost_user_fs_slave_io(struct vhost_dev *dev,
++                                VhostUserFSSlaveMsg *sm, int fd);
+ 
+ #endif /* _QEMU_VHOST_USER_FS_H */
+-- 
+2.25.1
+
