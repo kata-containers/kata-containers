@@ -23,7 +23,7 @@ scan_fmt = "0.2"
 regex = "1.1"
 path-absolutize = "1.2.0"
 anyhow = "1.0.32"
-cgroups = { package = "cgroups-rs", version = "0.2.1" }
+cgroups = { package = "cgroups-rs", version = "0.2.5" }
 tempfile = "3.1.0"
 rlimit = "0.5.3"
 
