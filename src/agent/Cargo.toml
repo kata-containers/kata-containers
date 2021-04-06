@@ -45,7 +45,7 @@ tempfile = "3.1.0"
 prometheus = { version = "0.9.0", features = ["process"] }
 procfs = "0.7.9"
 anyhow = "1.0.32"
-cgroups = { package = "cgroups-rs", version = "0.2.2" }
+cgroups = { package = "cgroups-rs", version = "0.2.5" }
 
 [workspace]
 members = [
