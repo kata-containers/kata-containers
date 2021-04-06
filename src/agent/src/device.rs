@@ -780,8 +780,9 @@ mod tests {
     #[tokio::test]
     async fn test_get_device_name() {
         let devname = "vda";
-        let busid = "0.0.0005";
-        let devpath = format!("/dev/ces/css0/0.0.0004/{}/virtio4/block/{}", busid, devname);
+        let root_bus = create_pci_root_bus_path();
+        let relpath = "/0000:00:0a.0/0000:03:0b.0";
+        let devpath = format!("{}{}/virtio4/block/{}", root_bus, relpath, devname);
 
         let logger = slog::Logger::root(slog::Discard, o!());
         let sandbox = Arc::new(Mutex::new(Sandbox::new(&logger).unwrap()));
@@ -791,7 +792,7 @@ mod tests {
             .insert(devpath.clone(), devname.to_string());
         drop(sb); // unlock
 
-        let name = get_device_name(&sandbox, busid).await;
+        let name = get_device_name(&sandbox, relpath).await;
         assert!(name.is_ok(), "{}", name.unwrap_err());
         assert_eq!(name.unwrap(), format!("{}/{}", SYSTEM_DEV_PATH, devname));
 
@@ -817,7 +818,7 @@ mod tests {
             }
         });
 
-        let name = get_device_name(&sandbox, busid).await;
+        let name = get_device_name(&sandbox, relpath).await;
         assert!(name.is_ok(), "{}", name.unwrap_err());
         assert_eq!(name.unwrap(), format!("{}/{}", SYSTEM_DEV_PATH, devname));
     }
