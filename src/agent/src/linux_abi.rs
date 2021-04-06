@@ -78,10 +78,6 @@ pub const SYSFS_MEMORY_BLOCK_SIZE_PATH: &str = "/sys/devices/system/memory/block
 pub const SYSFS_MEMORY_HOTPLUG_PROBE_PATH: &str = "/sys/devices/system/memory/probe";
 pub const SYSFS_MEMORY_ONLINE_PATH: &str = "/sys/devices/system/memory";
 
-// Here in "0:0", the first number is the SCSI host number because
-// only one SCSI controller has been plugged, while the second number
-// is always 0.
-pub const SCSI_HOST_CHANNEL: &str = "0:0:";
 pub const SCSI_BLOCK_SUFFIX: &str = "block";
 pub const SYSFS_SCSI_HOST_PATH: &str = "/sys/class/scsi_host";
 

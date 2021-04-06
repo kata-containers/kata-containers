@@ -139,14 +139,36 @@ async fn get_device_name(sandbox: &Arc<Mutex<Sandbox>>, dev_addr: &str) -> Resul
     Ok(format!("{}/{}", SYSTEM_DEV_PATH, &uev.devname))
 }
 
+// FIXME: This matcher is only correct if the guest has at most one
+// SCSI host.
+#[derive(Debug)]
+struct ScsiBlockMatcher {
+    search: String,
+}
+
+impl ScsiBlockMatcher {
+    fn new(scsi_addr: &str) -> Result<ScsiBlockMatcher> {
+        let search = format!(r"/0:0:{}/block/", scsi_addr);
+
+        Ok(ScsiBlockMatcher { search })
+    }
+}
+
+impl UeventMatcher for ScsiBlockMatcher {
+    fn is_match(&self, uev: &Uevent) -> bool {
+        uev.subsystem == "block" && uev.devpath.contains(&self.search) && !uev.devname.is_empty()
+    }
+}
+
 pub async fn get_scsi_device_name(
     sandbox: &Arc<Mutex<Sandbox>>,
     scsi_addr: &str,
 ) -> Result<String> {
-    let dev_sub_path = format!("{}{}/{}", SCSI_HOST_CHANNEL, scsi_addr, SCSI_BLOCK_SUFFIX);
+    let matcher = ScsiBlockMatcher::new(scsi_addr)?;
 
     scan_scsi_bus(scsi_addr)?;
-    get_device_name(sandbox, &dev_sub_path).await
+    let uev = wait_for_uevent(sandbox, matcher).await?;
+    Ok(format!("{}/{}", SYSTEM_DEV_PATH, &uev.devname))
 }
 
 #[derive(Debug)]
@@ -864,6 +886,36 @@ mod tests {
         let relpath_b = "/0000:00:0a.0/0000:00:0b.0";
         uev_b.devpath = format!("{}{}/virtio0/block/{}", root_bus, relpath_b, devname);
         let matcher_b = VirtioBlkPciMatcher::new(&relpath_b).unwrap();
+
+        assert!(matcher_a.is_match(&uev_a));
+        assert!(matcher_b.is_match(&uev_b));
+        assert!(!matcher_b.is_match(&uev_a));
+        assert!(!matcher_a.is_match(&uev_b));
+    }
+
+    #[tokio::test]
+    async fn test_scsi_block_matcher() {
+        let root_bus = create_pci_root_bus_path();
+        let devname = "sda";
+
+        let mut uev_a = crate::uevent::Uevent::default();
+        let addr_a = "0:0";
+        uev_a.action = crate::linux_abi::U_EVENT_ACTION_ADD.to_string();
+        uev_a.subsystem = "block".to_string();
+        uev_a.devname = devname.to_string();
+        uev_a.devpath = format!(
+            "{}/0000:00:00.0/virtio0/host0/target0:0:0/0:0:{}/block/sda",
+            root_bus, addr_a
+        );
+        let matcher_a = ScsiBlockMatcher::new(&addr_a).unwrap();
+
+        let mut uev_b = uev_a.clone();
+        let addr_b = "2:0";
+        uev_b.devpath = format!(
+            "{}/0000:00:00.0/virtio0/host0/target0:0:2/0:0:{}/block/sdb",
+            root_bus, addr_b
+        );
+        let matcher_b = ScsiBlockMatcher::new(&addr_b).unwrap();
 
         assert!(matcher_a.is_match(&uev_a));
         assert!(matcher_b.is_match(&uev_b));
