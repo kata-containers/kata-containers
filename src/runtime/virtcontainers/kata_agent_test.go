@@ -205,7 +205,8 @@ func TestHandleEphemeralStorage(t *testing.T) {
 func TestHandleLocalStorage(t *testing.T) {
 	k := kataAgent{}
 	var ociMounts []specs.Mount
-	mountSource := "mountPoint"
+	mountSource := "/tmp/mountPoint"
+	os.Mkdir(mountSource, 0755)
 
 	mount := specs.Mount{
 		Type:   KataLocalDevType,
@@ -216,7 +217,7 @@ func TestHandleLocalStorage(t *testing.T) {
 	rootfsSuffix := "rootfs"
 
 	ociMounts = append(ociMounts, mount)
-	localStorages := k.handleLocalStorage(ociMounts, sandboxID, rootfsSuffix)
+	localStorages, _ := k.handleLocalStorage(ociMounts, sandboxID, rootfsSuffix)
 
 	assert.NotNil(t, localStorages)
 	assert.Equal(t, len(localStorages), 1)
