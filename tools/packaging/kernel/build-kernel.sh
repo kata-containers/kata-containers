@@ -123,12 +123,6 @@ get_kernel() {
 	[ ! -d "${kernel_path}" ] || die "kernel_path already exist"
 
 
-	if [[ ${experimental_kernel} == "true" ]]; then
-		kernel_tarball="linux-${version}.tar.gz"
-		curl --fail -OL "https://gitlab.com/virtio-fs/linux/-/archive/${version}/${kernel_tarball}"
-		tar xf "${kernel_tarball}"
-		mv "linux-${version}" "${kernel_path}"
-	else
 
 		#Remove extra 'v'
 		version=${version#v}
@@ -159,7 +153,6 @@ get_kernel() {
 		tar xf "${kernel_tarball}"
 
 		mv "linux-${version}" "${kernel_path}"
-	fi
 }
 
 get_major_kernel_version() {
@@ -338,6 +331,7 @@ setup_kernel() {
 	local major_kernel
 	major_kernel=$(get_major_kernel_version "${kernel_version}")
 	local patches_dir_for_version="${patches_path}/${major_kernel}.x"
+	local experimental_patches_dir="${patches_path}/${major_kernel}.x/experimental"
 
 	[ -n "${arch_target}" ] || arch_target="$(uname -m)"
 	arch_target=$(arch_to_kernel "${arch_target}")
@@ -346,6 +340,12 @@ setup_kernel() {
 
 	# Apply version specific patches
 	${packaging_scripts_dir}/apply_patches.sh "${patches_dir_for_version}"
+
+	# Apply version specific patches for experimental build
+	if [ "${experimental_kernel}" == "true" ] ;then
+		info "Apply experimental patches"
+		${packaging_scripts_dir}/apply_patches.sh "${experimental_patches_dir}"
+	fi
 
 	[ -n "${hypervisor_target}" ] || hypervisor_target="kvm"
 	[ -n "${kernel_config_path}" ] || kernel_config_path=$(get_default_kernel_config "${kernel_version}" "${hypervisor_target}" "${arch_target}" "${kernel_path}")
@@ -474,6 +474,8 @@ main() {
 	if [ -z "$kernel_version" ]; then
 		if [[ ${experimental_kernel} == "true" ]]; then
 			kernel_version=$(get_from_kata_deps "assets.kernel-experimental.tag" "${kata_version}")
+			#Remove extra 'v'
+			kernel_version="${kernel_version#v}"
 		else
 			kernel_version=$(get_from_kata_deps "assets.kernel.version" "${kata_version}")
 			#Remove extra 'v'
