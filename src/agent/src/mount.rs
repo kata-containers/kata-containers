@@ -24,7 +24,7 @@ use std::fs::File;
 use std::io::{BufRead, BufReader};
 
 use crate::device::{
-    get_pmem_device_name, get_scsi_device_name, get_virtio_blk_pci_device_name, online_device,
+    get_scsi_device_name, get_virtio_blk_pci_device_name, online_device, wait_for_pmem_device,
 };
 use crate::linux_abi::*;
 use crate::pci;
@@ -377,22 +377,10 @@ async fn nvdimm_storage_handler(
     storage: &Storage,
     sandbox: Arc<Mutex<Sandbox>>,
 ) -> Result<String> {
-    let mut storage = storage.clone();
-    // If hot-plugged, get the device node path based on the PCI address else
-    // use the virt path provided in Storage Source
-    let pmem_devname = match storage.source.strip_prefix("/dev/") {
-        Some(dev) => dev,
-        None => {
-            return Err(anyhow!(
-                "Storage source '{}' must start with /dev/",
-                storage.source
-            ))
-        }
-    };
+    let storage = storage.clone();
 
     // Retrieve the device path from NVDIMM address.
-    let dev_path = get_pmem_device_name(&sandbox, pmem_devname).await?;
-    storage.source = dev_path;
+    wait_for_pmem_device(&sandbox, &storage.source).await?;
 
     common_storage_handler(logger, &storage)
 }

@@ -206,12 +206,49 @@ pub async fn get_virtio_blk_pci_device_name(
     Ok(format!("{}/{}", SYSTEM_DEV_PATH, &uev.devname))
 }
 
-pub async fn get_pmem_device_name(
-    sandbox: &Arc<Mutex<Sandbox>>,
-    pmem_devname: &str,
-) -> Result<String> {
-    let dev_sub_path = format!("/{}/{}", SCSI_BLOCK_SUFFIX, pmem_devname);
-    get_device_name(sandbox, &dev_sub_path).await
+#[derive(Debug)]
+struct PmemBlockMatcher {
+    suffix: String,
+}
+
+impl PmemBlockMatcher {
+    fn new(devname: &str) -> Result<PmemBlockMatcher> {
+        let suffix = format!(r"/block/{}", devname);
+
+        Ok(PmemBlockMatcher { suffix })
+    }
+}
+
+impl UeventMatcher for PmemBlockMatcher {
+    fn is_match(&self, uev: &Uevent) -> bool {
+        uev.subsystem == "block"
+            && uev.devpath.starts_with(ACPI_DEV_PATH)
+            && uev.devpath.ends_with(&self.suffix)
+            && !uev.devname.is_empty()
+    }
+}
+
+pub async fn wait_for_pmem_device(sandbox: &Arc<Mutex<Sandbox>>, devpath: &str) -> Result<()> {
+    let devname = match devpath.strip_prefix("/dev/") {
+        Some(dev) => dev,
+        None => {
+            return Err(anyhow!(
+                "Storage source '{}' must start with /dev/",
+                devpath
+            ))
+        }
+    };
+
+    let matcher = PmemBlockMatcher::new(devname)?;
+    let uev = wait_for_uevent(sandbox, matcher).await?;
+    if uev.devname != devname {
+        return Err(anyhow!(
+            "Unexpected device name {} for pmem device (expected {})",
+            uev.devname,
+            devname
+        ));
+    }
+    Ok(())
 }
 
 /// Scan SCSI bus for the given SCSI address(SCSI-Id and LUN)
