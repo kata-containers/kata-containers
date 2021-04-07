@@ -78,7 +78,7 @@ use tokio::{
     },
     task::JoinHandle,
 };
-use tokio_vsock::{Incoming, VsockListener, VsockStream};
+use tokio_vsock::{VsockListener, VsockStream};
 
 mod rpc;
 
@@ -115,16 +115,15 @@ fn set_fd_close_exec(fd: RawFd) -> Result<RawFd> {
     Ok(fd)
 }
 
-fn get_vsock_incoming(fd: RawFd) -> Incoming {
-    let incoming;
-    unsafe {
-        incoming = VsockListener::from_raw_fd(fd).incoming();
-    }
-    incoming
-}
-
 async fn get_vsock_stream(fd: RawFd) -> Result<VsockStream> {
-    let stream = get_vsock_incoming(fd).next().await.unwrap().unwrap();
+    let stream = unsafe {
+        VsockListener::from_raw_fd(fd)
+            .incoming()
+            .next()
+            .await
+            .unwrap()
+            .unwrap()
+    };
     set_fd_close_exec(stream.as_raw_fd())?;
     Ok(stream)
 }
@@ -152,7 +151,7 @@ async fn create_logger_task(rfd: RawFd, vsock_port: u32, shutdown: Receiver<bool
         writer = Box::new(tokio::io::stdout());
     }
 
-    let _ = util::interruptable_io_copier(&mut reader, &mut writer, shutdown).await;
+    util::interruptable_io_copier(&mut reader, &mut writer, shutdown).await?;
 
     Ok(())
 }
