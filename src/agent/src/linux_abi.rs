@@ -78,7 +78,6 @@ pub const SYSFS_MEMORY_BLOCK_SIZE_PATH: &str = "/sys/devices/system/memory/block
 pub const SYSFS_MEMORY_HOTPLUG_PROBE_PATH: &str = "/sys/devices/system/memory/probe";
 pub const SYSFS_MEMORY_ONLINE_PATH: &str = "/sys/devices/system/memory";
 
-pub const SCSI_BLOCK_SUFFIX: &str = "block";
 pub const SYSFS_SCSI_HOST_PATH: &str = "/sys/class/scsi_host";
 
 pub const SYSFS_CGROUPPATH: &str = "/sys/fs/cgroup";
