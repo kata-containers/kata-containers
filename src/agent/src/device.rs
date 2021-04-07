@@ -17,7 +17,7 @@ use crate::linux_abi::*;
 use crate::mount::{DRIVER_BLK_TYPE, DRIVER_MMIO_BLK_TYPE, DRIVER_NVDIMM_TYPE, DRIVER_SCSI_TYPE};
 use crate::pci;
 use crate::sandbox::Sandbox;
-use crate::{AGENT_CONFIG, GLOBAL_DEVICE_WATCHER};
+use crate::uevent::{wait_for_uevent, Uevent, UeventMatcher};
 use anyhow::{anyhow, Result};
 use oci::{LinuxDeviceCgroup, LinuxResources, Spec};
 use protocols::agent::Device;
@@ -87,46 +87,55 @@ fn pcipath_to_sysfs(root_bus_sysfs: &str, pcipath: &pci::Path) -> Result<String>
     Ok(relpath)
 }
 
-async fn get_device_name(sandbox: &Arc<Mutex<Sandbox>>, dev_addr: &str) -> Result<String> {
-    // Keep the same lock order as uevent::handle_block_add_event(), otherwise it may cause deadlock.
-    let mut w = GLOBAL_DEVICE_WATCHER.lock().await;
-    let sb = sandbox.lock().await;
-    for (key, value) in sb.pci_device_map.iter() {
-        if key.contains(dev_addr) {
-            info!(sl!(), "Device {} found in pci device map", dev_addr);
-            return Ok(format!("{}/{}", SYSTEM_DEV_PATH, value));
+#[derive(Debug, Clone)]
+struct DevAddrMatcher {
+    dev_addr: String,
+}
+
+impl DevAddrMatcher {
+    fn new(dev_addr: &str) -> DevAddrMatcher {
+        DevAddrMatcher {
+            dev_addr: dev_addr.to_string(),
         }
     }
-    drop(sb);
+}
 
-    // If device is not found in the device map, hotplug event has not
-    // been received yet, create and add channel to the watchers map.
-    // The key of the watchers map is the device we are interested in.
-    // Note this is done inside the lock, not to miss any events from the
-    // global udev listener.
-    let (tx, rx) = tokio::sync::oneshot::channel::<String>();
-    w.insert(dev_addr.to_string(), Some(tx));
-    drop(w);
+impl UeventMatcher for DevAddrMatcher {
+    fn is_match(&self, uev: &Uevent) -> bool {
+        let pci_root_bus_path = create_pci_root_bus_path();
+        let pci_p = format!("{}{}", pci_root_bus_path, self.dev_addr);
+        let pmem_suffix = format!("/{}/{}", SCSI_BLOCK_SUFFIX, uev.devname);
 
-    info!(sl!(), "Waiting on channel for device notification\n");
-    let hotplug_timeout = AGENT_CONFIG.read().await.hotplug_timeout;
+        uev.subsystem == "block"
+            && {
+                uev.devpath.starts_with(pci_root_bus_path.as_str())
+                    || uev.devpath.starts_with(ACPI_DEV_PATH) // NVDIMM/PMEM devices
+            }
+            && !uev.devname.is_empty()
+            && {
+                // blk block device
+                uev.devpath.starts_with(pci_p.as_str())
+                // scsi block device
+                    || (
+                        self.dev_addr.ends_with(SCSI_BLOCK_SUFFIX) &&
+                            uev.devpath.contains(self.dev_addr.as_str())
+                    )
+                // nvdimm/pmem device
+                    || (
+                        uev.devpath.starts_with(ACPI_DEV_PATH) &&
+                            uev.devpath.ends_with(pmem_suffix.as_str()) &&
+                            self.dev_addr.ends_with(pmem_suffix.as_str())
+                    )
+            }
+    }
+}
 
-    let dev_name = match tokio::time::timeout(hotplug_timeout, rx).await {
-        Ok(v) => v?,
-        Err(_) => {
-            let watcher = GLOBAL_DEVICE_WATCHER.clone();
-            let mut w = watcher.lock().await;
-            w.remove_entry(dev_addr);
+async fn get_device_name(sandbox: &Arc<Mutex<Sandbox>>, dev_addr: &str) -> Result<String> {
+    let matcher = DevAddrMatcher::new(dev_addr);
 
-            return Err(anyhow!(
-                "Timeout reached after {:?} waiting for device {}",
-                hotplug_timeout,
-                dev_addr
-            ));
-        }
-    };
+    let uev = wait_for_uevent(sandbox, matcher).await?;
 
-    Ok(format!("{}/{}", SYSTEM_DEV_PATH, &dev_name))
+    Ok(format!("{}/{}", SYSTEM_DEV_PATH, &uev.devname))
 }
 
 pub async fn get_scsi_device_name(
@@ -430,6 +439,7 @@ pub fn update_device_cgroup(spec: &mut Spec) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::uevent::spawn_test_watcher;
     use oci::Linux;
     use tempfile::tempdir;
 
@@ -775,5 +785,40 @@ mod tests {
 
         let relpath = pcipath_to_sysfs(rootbuspath, &path234);
         assert_eq!(relpath.unwrap(), "/0000:00:02.0/0000:01:03.0/0000:02:04.0");
+    }
+
+    #[tokio::test]
+    async fn test_get_device_name() {
+        let devname = "vda";
+        let root_bus = create_pci_root_bus_path();
+        let relpath = "/0000:00:0a.0/0000:03:0b.0";
+        let devpath = format!("{}{}/virtio4/block/{}", root_bus, relpath, devname);
+
+        let mut uev = crate::uevent::Uevent::default();
+        uev.action = crate::linux_abi::U_EVENT_ACTION_ADD.to_string();
+        uev.subsystem = "block".to_string();
+        uev.devpath = devpath.clone();
+        uev.devname = devname.to_string();
+
+        let logger = slog::Logger::root(slog::Discard, o!());
+        let sandbox = Arc::new(Mutex::new(Sandbox::new(&logger).unwrap()));
+
+        let mut sb = sandbox.lock().await;
+        sb.uevent_map.insert(devpath.clone(), uev);
+        drop(sb); // unlock
+
+        let name = get_device_name(&sandbox, relpath).await;
+        assert!(name.is_ok(), "{}", name.unwrap_err());
+        assert_eq!(name.unwrap(), format!("{}/{}", SYSTEM_DEV_PATH, devname));
+
+        let mut sb = sandbox.lock().await;
+        let uev = sb.uevent_map.remove(&devpath).unwrap();
+        drop(sb); // unlock
+
+        spawn_test_watcher(sandbox.clone(), uev);
+
+        let name = get_device_name(&sandbox, relpath).await;
+        assert!(name.is_ok(), "{}", name.unwrap_err());
+        assert_eq!(name.unwrap(), format!("{}/{}", SYSTEM_DEV_PATH, devname));
     }
 }
