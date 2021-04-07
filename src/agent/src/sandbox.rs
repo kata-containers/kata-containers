@@ -8,6 +8,7 @@ use crate::mount::{get_mount_fs_type, remove_mounts, TYPE_ROOTFS};
 use crate::namespace::Namespace;
 use crate::netlink::Handle;
 use crate::network::Network;
+use crate::uevent::{Uevent, UeventMatcher};
 use anyhow::{anyhow, Context, Result};
 use libc::pid_t;
 use oci::{Hook, Hooks};
@@ -25,7 +26,10 @@ use std::path::Path;
 use std::sync::Arc;
 use std::{thread, time};
 use tokio::sync::mpsc::{channel, Receiver, Sender};
+use tokio::sync::oneshot;
 use tokio::sync::Mutex;
+
+type UeventWatcher = (Box<dyn UeventMatcher>, oneshot::Sender<Uevent>);
 
 #[derive(Debug)]
 pub struct Sandbox {
@@ -36,7 +40,8 @@ pub struct Sandbox {
     pub network: Network,
     pub mounts: Vec<String>,
     pub container_mounts: HashMap<String, Vec<String>>,
-    pub pci_device_map: HashMap<String, String>,
+    pub uevent_map: HashMap<String, Uevent>,
+    pub uevent_watchers: Vec<Option<UeventWatcher>>,
     pub shared_utsns: Namespace,
     pub shared_ipcns: Namespace,
     pub sandbox_pidns: Option<Namespace>,
@@ -65,7 +70,8 @@ impl Sandbox {
             containers: HashMap::new(),
             mounts: Vec::new(),
             container_mounts: HashMap::new(),
-            pci_device_map: HashMap::new(),
+            uevent_map: HashMap::new(),
+            uevent_watchers: Vec::new(),
             shared_utsns: Namespace::new(&logger),
             shared_ipcns: Namespace::new(&logger),
             sandbox_pidns: None,
