@@ -1,4 +1,4 @@
-// Copyright (c) 2019 Ant Financial
+// Copyright (c) 2021 Ant Group
 // Copyright (c) 2021 Intel Corporation
 //
 // SPDX-License-Identifier: Apache-2.0
@@ -232,23 +232,27 @@ async fn run_debug_console_serial(shell: String, fd: RawFd) -> Result<()> {
     Ok(())
 }
 
-// BUG: FIXME:
 #[cfg(test)]
 mod tests {
     use super::*;
     use tempfile::tempdir;
+    use tokio::sync::watch;
 
-    #[test]
-    fn test_setup_debug_console_no_shells() {
-        // Guarantee no shells have been added
-        // (required to avoid racing with
-        // test_setup_debug_console_invalid_shell()).
-        let shells_ref = SHELLS.clone();
-        let mut shells = shells_ref.lock().unwrap();
-        shells.clear();
+    #[tokio::test]
+    async fn test_setup_debug_console_no_shells() {
+        {
+            // Guarantee no shells have been added
+            // (required to avoid racing with
+            // test_setup_debug_console_invalid_shell()).
+            let shells_ref = SHELLS.clone();
+            let mut shells = shells_ref.lock().unwrap();
+            shells.clear();
+        }
+
         let logger = slog_scope::logger();
 
-        let result = setup_debug_console(&logger, shells.to_vec(), 0);
+        let (_, rx) = watch::channel(true);
+        let result = debug_console_handler(logger, 0, rx).await;
 
         assert!(result.is_err());
         assert_eq!(
@@ -257,25 +261,29 @@ mod tests {
         );
     }
 
-    #[test]
-    fn test_setup_debug_console_invalid_shell() {
-        let shells_ref = SHELLS.clone();
-        let mut shells = shells_ref.lock().unwrap();
+    #[tokio::test]
+    async fn test_setup_debug_console_invalid_shell() {
+        {
+            let shells_ref = SHELLS.clone();
+            let mut shells = shells_ref.lock().unwrap();
 
-        let dir = tempdir().expect("failed to create tmpdir");
+            let dir = tempdir().expect("failed to create tmpdir");
 
-        // Add an invalid shell
-        let shell = dir
-            .path()
-            .join("enoent")
-            .to_str()
-            .expect("failed to construct shell path")
-            .to_string();
+            // Add an invalid shell
+            let shell = dir
+                .path()
+                .join("enoent")
+                .to_str()
+                .expect("failed to construct shell path")
+                .to_string();
 
-        shells.push(shell);
+            shells.push(shell);
+        }
+
         let logger = slog_scope::logger();
 
-        let result = setup_debug_console(&logger, shells.to_vec(), 0);
+        let (_, rx) = watch::channel(true);
+        let result = debug_console_handler(logger, 0, rx).await;
 
         assert!(result.is_err());
         assert_eq!(
