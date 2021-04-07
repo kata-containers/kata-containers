@@ -1,0 +1,9 @@
+# Copyright (c) 2021 Red Hat, Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+# This is the build root image for Kata Containers on OpenShift CI.
+#
+FROM centos:8
+
+RUN yum -y update && yum -y install git sudo wget
