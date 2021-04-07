@@ -634,12 +634,12 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
         env::set_var(v[0], v[1]);
     }
 
-    // set the "HOME" env getting from "/etc/passwd"
+    // set the "HOME" env getting from "/etc/passwd", if
+    // there's no uid entry in /etc/passwd, set "/" as the
+    // home env.
     if env::var_os(HOME_ENV_KEY).is_none() {
-        match utils::home_dir(guser.uid) {
-            Ok(home_dir) => env::set_var(HOME_ENV_KEY, home_dir),
-            Err(e) => log_child!(cfd_log, "failed to get home dir: {:?}", e),
-        }
+        let home_dir = utils::home_dir(guser.uid).unwrap_or_else(|_| String::from("/"));
+        env::set_var(HOME_ENV_KEY, home_dir);
     }
 
     let exec_file = Path::new(&args[0]);
