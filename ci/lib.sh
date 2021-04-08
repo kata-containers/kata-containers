@@ -5,7 +5,7 @@
 
 export tests_repo="${tests_repo:-github.com/kata-containers/tests}"
 export tests_repo_dir="$GOPATH/src/$tests_repo"
-export branch="${branch:-main}"
+export branch="${branch:-$TRAVIS_BRANCH}"
 
 clone_tests_repo()
 {
