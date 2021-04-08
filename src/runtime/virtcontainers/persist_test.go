@@ -38,9 +38,9 @@ func TestSandboxRestore(t *testing.T) {
 		state:      types.SandboxState{BlockIndexMap: make(map[int]struct{})},
 	}
 
-	sandbox.newStore, err = persist.GetDriver()
+	sandbox.store, err = persist.GetDriver()
 	assert.NoError(err)
-	assert.NotNil(sandbox.newStore)
+	assert.NotNil(sandbox.store)
 
 	// if we don't call Save(), we can get nothing from disk
 	err = sandbox.Restore()
@@ -67,7 +67,7 @@ func TestSandboxRestore(t *testing.T) {
 
 	// empty the sandbox
 	sandbox.state = types.SandboxState{}
-	if sandbox.newStore, err = persist.GetDriver(); err != nil || sandbox.newStore == nil {
+	if sandbox.store, err = persist.GetDriver(); err != nil || sandbox.store == nil {
 		t.Fatal("failed to get persist driver")
 	}
 

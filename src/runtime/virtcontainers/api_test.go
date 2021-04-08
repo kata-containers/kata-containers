@@ -144,7 +144,7 @@ func TestCreateSandboxNoopAgentSuccessful(t *testing.T) {
 	assert.True(ok)
 	assert.NotNil(s)
 
-	sandboxDir := filepath.Join(s.newStore.RunStoragePath(), p.ID())
+	sandboxDir := filepath.Join(s.store.RunStoragePath(), p.ID())
 	_, err = os.Stat(sandboxDir)
 	assert.NoError(err)
 }
@@ -175,7 +175,7 @@ func TestCreateSandboxKataAgentSuccessful(t *testing.T) {
 
 	s, ok := p.(*Sandbox)
 	assert.True(ok)
-	sandboxDir := filepath.Join(s.newStore.RunStoragePath(), p.ID())
+	sandboxDir := filepath.Join(s.store.RunStoragePath(), p.ID())
 	_, err = os.Stat(sandboxDir)
 	assert.NoError(err)
 }
@@ -224,7 +224,7 @@ func createAndStartSandbox(ctx context.Context, config SandboxConfig) (sandbox V
 	if !ok {
 		return nil, "", fmt.Errorf("Could not get Sandbox")
 	}
-	sandboxDir = filepath.Join(s.newStore.RunStoragePath(), sandbox.ID())
+	sandboxDir = filepath.Join(s.store.RunStoragePath(), sandbox.ID())
 	_, err = os.Stat(sandboxDir)
 	if err != nil {
 		return nil, "", err
@@ -285,7 +285,7 @@ func TestCleanupContainer(t *testing.T) {
 
 	s, ok := p.(*Sandbox)
 	assert.True(ok)
-	sandboxDir := filepath.Join(s.newStore.RunStoragePath(), p.ID())
+	sandboxDir := filepath.Join(s.store.RunStoragePath(), p.ID())
 
 	_, err = os.Stat(sandboxDir)
 	if err == nil {
