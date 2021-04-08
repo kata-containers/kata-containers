@@ -7,9 +7,10 @@
     * [Configure Kubelet to use containerd](#configure-kubelet-to-use-containerd)
     * [Configure HTTP proxy - OPTIONAL](#configure-http-proxy---optional)
 * [Start Kubernetes](#start-kubernetes)
-* [Install a Pod Network](#install-a-pod-network)
+* [Configure Pod Network](#configure-pod-network)
 * [Allow pods to run in the master node](#allow-pods-to-run-in-the-master-node)
-* [Create an untrusted pod using Kata Containers](#create-an-untrusted-pod-using-kata-containers)
+* [Create runtime class for Kata Containers](#create-runtime-class-for-kata-containers)
+* [Run pod in Kata Containers](#run-pod-in-kata-containers)
 * [Delete created pod](#delete-created-pod)
 
 This document describes how to set up a single-machine Kubernetes (k8s) cluster.
@@ -17,9 +18,6 @@ This document describes how to set up a single-machine Kubernetes (k8s) cluster.
 The Kubernetes cluster will use the
 [CRI containerd plugin](https://github.com/containerd/cri) and
 [Kata Containers](https://katacontainers.io) to launch untrusted workloads.
-
-For Kata Containers 1.5.0-rc2 and above, we will use `containerd-shim-kata-v2` (short as `shimv2` in this documentation)
-to launch Kata Containers. For the previous version of Kata Containers, the Pods are launched with `kata-runtime`.
 
 ## Requirements
 
@@ -125,43 +123,33 @@ $ sudo systemctl daemon-reload
   $ sudo -E kubectl get pods
   ```
 
-## Install a Pod Network
+## Configure Pod Network
 
 A pod network plugin is needed to allow pods to communicate with each other.
+You can find more about CNI plugins from the [Creating a cluster with `kubeadm`](https://kubernetes.io/docs/setup/independent/create-cluster-kubeadm/#instructions) guide.
 
-- Install the `flannel` plugin by following the
-  [Using `kubeadm` to Create a Cluster](https://kubernetes.io/docs/setup/independent/create-cluster-kubeadm/#instructions)
-  guide, starting from the **Installing a pod network** section.
-
-- Create a pod network using flannel
-
-  > **Note:** There is no known way to determine programmatically the best version (commit) to use.
-  > See https://github.com/coreos/flannel/issues/995.
+By default the CNI plugin binaries is installed under `/opt/cni/bin` (in package `kubernetes-cni`), you only need to create a configuration file for CNI plugin.
 
   ```bash
-  $ sudo -E kubectl apply -f https://raw.githubusercontent.com/coreos/flannel/master/Documentation/kube-flannel.yml
-  ```
+  $ sudo -E mkdir -p /etc/cni/net.d
 
-- Wait for the pod network to become available
-
-  ```bash
-  # number of seconds to wait for pod network to become available
-  $ timeout_dns=420
-
-  $ while [ "$timeout_dns" -gt 0 ]; do
-      if sudo -E kubectl get pods --all-namespaces | grep dns | grep Running; then
-          break
-      fi
-
-      sleep 1s
-      ((timeout_dns--))
-   done
-  ```
-
-- Check the pod network is running
-
-  ```bash
-  $ sudo -E kubectl get pods --all-namespaces | grep dns | grep Running && echo "OK" || ( echo "FAIL" && false )
+  $ sudo -E cat > /etc/cni/net.d/10-mynet.conf <<EOF
+  {
+    "cniVersion": "0.2.0",
+    "name": "mynet",
+    "type": "bridge",
+    "bridge": "cni0",
+    "isGateway": true,
+    "ipMasq": true,
+    "ipam": {
+      "type": "host-local",
+      "subnet": "172.19.0.0/24",
+      "routes": [
+        { "dst": "0.0.0.0/0" }
+      ]
+    }
+  }
+  EOF
   ```
 
 ## Allow pods to run in the master node
@@ -172,24 +160,38 @@ By default, the cluster will not schedule pods in the master node. To enable mas
 $ sudo -E kubectl taint nodes --all node-role.kubernetes.io/master-
 ```
 
-## Create an untrusted pod using Kata Containers
+## Create runtime class for Kata Containers
 
 By default, all pods are created with the default runtime configured in CRI containerd plugin.
+From Kubernetes v1.12, users can use [`RuntimeClass`](https://kubernetes.io/docs/concepts/containers/runtime-class/#runtime-class) to specify a different runtime for Pods.
 
-If a pod has the `io.kubernetes.cri.untrusted-workload` annotation set to `"true"`, the CRI plugin runs the pod with the
+```bash
+$ cat > runtime.yaml <<EOF
+apiVersion: node.k8s.io/v1beta1
+kind: RuntimeClass
+metadata:
+  name: kata
+handler: kata
+EOF
+
+$ sudo -E kubectl apply -f runtime.yaml
+```
+
+## Run pod in Kata Containers
+
+If a pod has the `runtimeClassName` set to `kata`, the CRI plugin runs the pod with the
 [Kata Containers runtime](../../src/runtime/README.md).
 
-- Create an untrusted pod configuration
+- Create an pod configuration that using Kata Containers runtime
 
   ```bash
-  $ cat << EOT | tee nginx-untrusted.yaml
+  $ cat << EOT | tee nginx-kata.yaml
   apiVersion: v1
   kind: Pod
   metadata:
-    name: nginx-untrusted
-    annotations:
-      io.kubernetes.cri.untrusted-workload: "true"
+    name: nginx-kata
   spec:
+    runtimeClassName: kata
     containers:
     - name: nginx
       image: nginx
@@ -197,9 +199,9 @@ If a pod has the `io.kubernetes.cri.untrusted-workload` annotation set to `"true
   EOT
   ```
 
-- Create an untrusted pod
+- Create the pod
   ```bash
-  $ sudo -E kubectl apply -f nginx-untrusted.yaml
+  $ sudo -E kubectl apply -f nginx-kata.yaml
   ```
 
 - Check pod is running
@@ -216,5 +218,5 @@ If a pod has the `io.kubernetes.cri.untrusted-workload` annotation set to `"true
 ## Delete created pod
 
 ```bash
-$ sudo -E kubectl delete -f nginx-untrusted.yaml
+$ sudo -E kubectl delete -f nginx-kata.yaml
 ```
