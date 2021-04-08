@@ -49,6 +49,6 @@ OK
 
 echo "Local update version update should work"
 new_version="50.0.0-rc0"
-out=$("${script_dir}/update-repository-version.sh" "${new_version}" "master" 2>&1)
+out=$("${script_dir}/update-repository-version.sh" "${new_version}" "main" 2>&1)
 output_should_contain "${out}" "release: Kata Containers ${new_version}"
 OK
