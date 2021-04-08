@@ -1,0 +1,40 @@
+---
+kind: RuntimeClass
+apiVersion: node.k8s.io/v1beta1
+metadata:
+    name: kata-qemu-virtiofs
+handler: kata-qemu-virtiofs
+overhead:
+    podFixed:
+        memory: "160Mi"
+        cpu: "250m"
+---
+kind: RuntimeClass
+apiVersion: node.k8s.io/v1beta1
+metadata:
+    name: kata-qemu
+handler: kata-qemu
+overhead:
+    podFixed:
+        memory: "160Mi"
+        cpu: "250m"
+---
+kind: RuntimeClass
+apiVersion: node.k8s.io/v1beta1
+metadata:
+    name: kata-clh
+handler: kata-clh
+overhead:
+    podFixed:
+        memory: "130Mi"
+        cpu: "250m"
+---
+kind: RuntimeClass
+apiVersion: node.k8s.io/v1beta1
+metadata:
+    name: kata-fc
+handler: kata-fc
+overhead:
+    podFixed:
+        memory: "130Mi"
+        cpu: "250m"
