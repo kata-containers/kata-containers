@@ -287,7 +287,7 @@ func (s *Sandbox) Save() error {
 	s.dumpNetwork(&ss)
 	s.dumpConfig(&ss)
 
-	if err := s.newStore.ToDisk(ss, cs); err != nil {
+	if err := s.store.ToDisk(ss, cs); err != nil {
 		return err
 	}
 
@@ -397,7 +397,7 @@ func (s *Sandbox) loadNetwork(netInfo persistapi.NetworkInfo) {
 
 // Restore will restore sandbox data from persist file on disk
 func (s *Sandbox) Restore() error {
-	ss, _, err := s.newStore.FromDisk(s.id)
+	ss, _, err := s.store.FromDisk(s.id)
 	if err != nil {
 		return err
 	}
@@ -412,7 +412,7 @@ func (s *Sandbox) Restore() error {
 
 // Restore will restore container data from persist file on disk
 func (c *Container) Restore() error {
-	_, css, err := c.sandbox.newStore.FromDisk(c.sandbox.id)
+	_, css, err := c.sandbox.store.FromDisk(c.sandbox.id)
 	if err != nil {
 		return err
 	}
