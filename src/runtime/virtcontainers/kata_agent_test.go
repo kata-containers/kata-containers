@@ -831,10 +831,10 @@ func TestAgentCreateContainer(t *testing.T) {
 		hypervisor: &mockHypervisor{},
 	}
 
-	newStore, err := persist.GetDriver()
+	store, err := persist.GetDriver()
 	assert.NoError(err)
-	assert.NotNil(newStore)
-	sandbox.newStore = newStore
+	assert.NotNil(store)
+	sandbox.store = store
 
 	container := &Container{
 		ctx:       sandbox.ctx,

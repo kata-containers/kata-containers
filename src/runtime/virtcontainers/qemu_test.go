@@ -194,7 +194,7 @@ func TestQemuKnobs(t *testing.T) {
 	assert.NoError(err)
 
 	q := &qemu{
-		store: sandbox.newStore,
+		store: sandbox.store,
 	}
 	err = q.createSandbox(context.Background(), sandbox.id, NetworkNamespace{}, &sandbox.config.HypervisorConfig)
 	assert.NoError(err)
@@ -462,7 +462,7 @@ func TestQemuFileBackedMem(t *testing.T) {
 	assert.NoError(err)
 
 	q := &qemu{
-		store: sandbox.newStore,
+		store: sandbox.store,
 	}
 	sandbox.config.HypervisorConfig.SharedFS = config.VirtioFS
 	err = q.createSandbox(context.Background(), sandbox.id, NetworkNamespace{}, &sandbox.config.HypervisorConfig)
@@ -477,7 +477,7 @@ func TestQemuFileBackedMem(t *testing.T) {
 	assert.NoError(err)
 
 	q = &qemu{
-		store: sandbox.newStore,
+		store: sandbox.store,
 	}
 	sandbox.config.HypervisorConfig.BootToBeTemplate = true
 	sandbox.config.HypervisorConfig.SharedFS = config.VirtioFS
@@ -493,7 +493,7 @@ func TestQemuFileBackedMem(t *testing.T) {
 	assert.NoError(err)
 
 	q = &qemu{
-		store: sandbox.newStore,
+		store: sandbox.store,
 	}
 	sandbox.config.HypervisorConfig.FileBackedMemRootDir = "/tmp/xyzabc"
 	err = q.createSandbox(context.Background(), sandbox.id, NetworkNamespace{}, &sandbox.config.HypervisorConfig)
@@ -507,7 +507,7 @@ func TestQemuFileBackedMem(t *testing.T) {
 	assert.NoError(err)
 
 	q = &qemu{
-		store: sandbox.newStore,
+		store: sandbox.store,
 	}
 	sandbox.config.HypervisorConfig.EnableVhostUserStore = true
 	sandbox.config.HypervisorConfig.HugePages = true
@@ -520,7 +520,7 @@ func TestQemuFileBackedMem(t *testing.T) {
 	assert.NoError(err)
 
 	q = &qemu{
-		store: sandbox.newStore,
+		store: sandbox.store,
 	}
 	sandbox.config.HypervisorConfig.EnableVhostUserStore = true
 	sandbox.config.HypervisorConfig.HugePages = false
@@ -541,11 +541,11 @@ func createQemuSandboxConfig() (*Sandbox, error) {
 		},
 	}
 
-	newStore, err := persist.GetDriver()
+	store, err := persist.GetDriver()
 	if err != nil {
 		return &Sandbox{}, err
 	}
-	sandbox.newStore = newStore
+	sandbox.store = store
 
 	return &sandbox, nil
 }
