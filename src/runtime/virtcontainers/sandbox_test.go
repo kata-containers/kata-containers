@@ -1009,7 +1009,7 @@ func TestDeleteStoreWhenNewContainerFail(t *testing.T) {
 	}
 	_, err = newContainer(context.Background(), p, &contConfig)
 	assert.NotNil(t, err, "New container with invalid device info should fail")
-	storePath := filepath.Join(p.newStore.RunStoragePath(), testSandboxID, contID)
+	storePath := filepath.Join(p.store.RunStoragePath(), testSandboxID, contID)
 	_, err = os.Stat(storePath)
 	assert.NotNil(t, err, "Should delete configuration root after failed to create a container")
 }

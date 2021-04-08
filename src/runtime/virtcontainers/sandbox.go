@@ -168,7 +168,7 @@ type Sandbox struct {
 	factory    Factory
 	hypervisor hypervisor
 	agent      agent
-	newStore   persistapi.PersistDriver
+	store      persistapi.PersistDriver
 
 	network Network
 	monitor *monitor
@@ -282,7 +282,7 @@ func (s *Sandbox) GetContainer(containerID string) VCContainer {
 	return nil
 }
 
-// Release closes the agent connection and removes sandbox from internal list.
+// Release closes the agent connection.
 func (s *Sandbox) Release(ctx context.Context) error {
 	s.Logger().Info("release sandbox")
 	if s.monitor != nil {
@@ -293,7 +293,6 @@ func (s *Sandbox) Release(ctx context.Context) error {
 }
 
 // Status gets the status of the sandbox
-// TODO: update container status properly, see kata-containers/runtime#253
 func (s *Sandbox) Status() SandboxStatus {
 	var contStatusList []ContainerStatus
 	for _, c := range s.containers {
@@ -491,8 +490,7 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 	}
 
 	// create agent instance
-	newAagentFunc := getNewAgentFunc(ctx)
-	agent := newAagentFunc()
+	agent := getNewAgentFunc(ctx)()
 
 	hypervisor, err := newHypervisor(sandboxConfig.HypervisorType)
 	if err != nil {
@@ -518,14 +516,14 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 
 	hypervisor.setSandbox(s)
 
-	if s.newStore, err = persist.GetDriver(); err != nil || s.newStore == nil {
+	if s.store, err = persist.GetDriver(); err != nil || s.store == nil {
 		return nil, fmt.Errorf("failed to get fs persist driver: %v", err)
 	}
 
 	defer func() {
 		if retErr != nil {
-			s.Logger().WithError(retErr).WithField("sandboxid", s.id).Error("Create new sandbox failed")
-			s.newStore.Destroy(s.id)
+			s.Logger().WithError(retErr).Error("Create new sandbox failed")
+			s.store.Destroy(s.id)
 		}
 	}()
 
@@ -543,7 +541,7 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 		s.Logger().WithError(err).Debug("restore sandbox failed")
 	}
 
-	// new store doesn't require hypervisor to be stored immediately
+	// store doesn't require hypervisor to be stored immediately
 	if err = s.hypervisor.createSandbox(ctx, s.id, s.networkNS, &sandboxConfig.HypervisorConfig); err != nil {
 		return nil, err
 	}
@@ -708,7 +706,7 @@ func (s *Sandbox) Delete(ctx context.Context) error {
 
 	s.agent.cleanup(ctx, s)
 
-	return s.newStore.Destroy(s.id)
+	return s.store.Destroy(s.id)
 }
 
 func (s *Sandbox) startNetworkMonitor(ctx context.Context) error {
@@ -2283,7 +2281,7 @@ func fetchSandbox(ctx context.Context, sandboxID string) (sandbox *Sandbox, err 
 	// load sandbox config fromld store.
 	c, err := loadSandboxConfig(sandboxID)
 	if err != nil {
-		virtLog.WithError(err).Warning("failed to get sandbox config from new store")
+		virtLog.WithError(err).Warning("failed to get sandbox config from store")
 		return nil, err
 	}
 

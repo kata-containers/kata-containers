@@ -316,11 +316,11 @@ func TestContainerAddDriveDir(t *testing.T) {
 		},
 	}
 
-	sandbox.newStore, err = persist.GetDriver()
+	sandbox.store, err = persist.GetDriver()
 	assert.NoError(err)
-	assert.NotNil(sandbox.newStore)
+	assert.NotNil(sandbox.store)
 
-	defer sandbox.newStore.Destroy(sandbox.id)
+	defer sandbox.store.Destroy(sandbox.id)
 
 	contID := "100"
 	container := Container{
