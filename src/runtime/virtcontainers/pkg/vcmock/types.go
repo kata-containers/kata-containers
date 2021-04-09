@@ -53,7 +53,6 @@ type Sandbox struct {
 	EnterContainerFunc       func(containerID string, cmd types.Cmd) (vc.VCContainer, *vc.Process, error)
 	MonitorFunc              func() (chan error, error)
 	UpdateContainerFunc      func(containerID string, resources specs.LinuxResources) error
-	ProcessListContainerFunc func(containerID string, options vc.ProcessListOptions) (vc.ProcessList, error)
 	WaitProcessFunc          func(containerID, processID string) (int32, error)
 	SignalProcessFunc        func(containerID, processID string, signal syscall.Signal, all bool) error
 	WinsizeProcessFunc       func(containerID, processID string, height, width uint32) error

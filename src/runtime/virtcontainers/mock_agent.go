@@ -86,11 +86,6 @@ func (n *mockAgent) signalProcess(ctx context.Context, c *Container, processID s
 	return nil
 }
 
-// processListContainer is the Noop agent Container ps implementation. It does nothing.
-func (n *mockAgent) processListContainer(ctx context.Context, sandbox *Sandbox, c Container, options ProcessListOptions) (ProcessList, error) {
-	return nil, nil
-}
-
 // updateContainer is the Noop agent Container update implementation. It does nothing.
 func (n *mockAgent) updateContainer(ctx context.Context, sandbox *Sandbox, c Container, resources specs.LinuxResources) error {
 	return nil

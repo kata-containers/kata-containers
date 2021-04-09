@@ -132,9 +132,6 @@ type agent interface {
 	// readProcessStderr will tell the agent to read a process stderr
 	readProcessStderr(ctx context.Context, c *Container, processID string, data []byte) (int, error)
 
-	// processListContainer will list the processes running inside the container
-	processListContainer(ctx context.Context, sandbox *Sandbox, c Container, options ProcessListOptions) (ProcessList, error)
-
 	// updateContainer will update the resources of a running container
 	updateContainer(ctx context.Context, sandbox *Sandbox, c Container, resources specs.LinuxResources) error
 
