@@ -17,10 +17,6 @@ use tokio::sync::Mutex;
 #[cfg(target_arch = "s390x")]
 use crate::ccw;
 use crate::linux_abi::*;
-use crate::mount::{
-    DRIVER_BLK_CCW_TYPE, DRIVER_BLK_TYPE, DRIVER_MMIO_BLK_TYPE, DRIVER_NVDIMM_TYPE,
-    DRIVER_SCSI_TYPE,
-};
 use crate::pci;
 use crate::sandbox::Sandbox;
 use crate::uevent::{wait_for_uevent, Uevent, UeventMatcher};
@@ -37,6 +33,17 @@ macro_rules! sl {
 }
 
 const VM_ROOTFS: &str = "/";
+
+pub const DRIVER_9P_TYPE: &str = "9p";
+pub const DRIVER_VIRTIOFS_TYPE: &str = "virtio-fs";
+pub const DRIVER_BLK_TYPE: &str = "blk";
+pub const DRIVER_BLK_CCW_TYPE: &str = "blk-ccw";
+pub const DRIVER_MMIO_BLK_TYPE: &str = "mmioblk";
+pub const DRIVER_SCSI_TYPE: &str = "scsi";
+pub const DRIVER_NVDIMM_TYPE: &str = "nvdimm";
+pub const DRIVER_EPHEMERAL_TYPE: &str = "ephemeral";
+pub const DRIVER_LOCAL_TYPE: &str = "local";
+pub const DRIVER_WATCHABLE_BIND_TYPE: &str = "watchable-bind";
 
 #[derive(Debug)]
 struct DevIndexEntry {

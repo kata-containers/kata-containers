@@ -22,6 +22,9 @@ use regex::Regex;
 
 use crate::device::{
     get_scsi_device_name, get_virtio_blk_pci_device_name, online_device, wait_for_pmem_device,
+    DRIVER_9P_TYPE, DRIVER_BLK_CCW_TYPE, DRIVER_BLK_TYPE, DRIVER_EPHEMERAL_TYPE, DRIVER_LOCAL_TYPE,
+    DRIVER_MMIO_BLK_TYPE, DRIVER_NVDIMM_TYPE, DRIVER_SCSI_TYPE, DRIVER_VIRTIOFS_TYPE,
+    DRIVER_WATCHABLE_BIND_TYPE,
 };
 use crate::linux_abi::*;
 use crate::pci;
@@ -32,17 +35,6 @@ use crate::{ccw, device::get_virtio_blk_ccw_device_name};
 use anyhow::{anyhow, Context, Result};
 use slog::Logger;
 use tracing::instrument;
-
-pub const DRIVER_9P_TYPE: &str = "9p";
-pub const DRIVER_VIRTIOFS_TYPE: &str = "virtio-fs";
-pub const DRIVER_BLK_TYPE: &str = "blk";
-pub const DRIVER_BLK_CCW_TYPE: &str = "blk-ccw";
-pub const DRIVER_MMIO_BLK_TYPE: &str = "mmioblk";
-pub const DRIVER_SCSI_TYPE: &str = "scsi";
-pub const DRIVER_NVDIMM_TYPE: &str = "nvdimm";
-pub const DRIVER_EPHEMERAL_TYPE: &str = "ephemeral";
-pub const DRIVER_LOCAL_TYPE: &str = "local";
-pub const DRIVER_WATCHABLE_BIND_TYPE: &str = "watchable-bind";
 
 pub const TYPE_ROOTFS: &str = "rootfs";
 
