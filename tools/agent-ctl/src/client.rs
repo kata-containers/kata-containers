@@ -79,9 +79,6 @@ const CMD_REPEAT: &'static str = "repeat";
 
 const DEFAULT_PROC_SIGNAL: &'static str = "SIGKILL";
 
-// Format is either "json" or "table".
-const DEFAULT_PS_FORMAT: &str = "json";
-
 const ERR_API_FAILED: &str = "API failed";
 
 static AGENT_CMDS: &'static [AgentCmd] = &[
@@ -154,11 +151,6 @@ static AGENT_CMDS: &'static [AgentCmd] = &[
         name: "ListRoutes",
         st: ServiceType::Agent,
         fp: agent_cmd_sandbox_list_routes,
-    },
-    AgentCmd {
-        name: "ListProcesses",
-        st: ServiceType::Agent,
-        fp: agent_cmd_container_list_processes,
     },
     AgentCmd {
         name: "MemHotplugByProbe",
@@ -1093,40 +1085,6 @@ fn agent_cmd_sandbox_get_guest_details(
 
     let reply = client
         .get_guest_details(ctx, &req)
-        .map_err(|e| anyhow!("{:?}", e).context(ERR_API_FAILED))?;
-
-    info!(sl!(), "response received";
-        "response" => format!("{:?}", reply));
-
-    Ok(())
-}
-
-fn agent_cmd_container_list_processes(
-    ctx: &Context,
-    client: &AgentServiceClient,
-    _health: &HealthClient,
-    options: &mut Options,
-    args: &str,
-) -> Result<()> {
-    let mut req = ListProcessesRequest::default();
-
-    let ctx = clone_context(ctx);
-
-    let cid = utils::get_option("cid", options, args);
-
-    let mut list_format = utils::get_option("format", options, args);
-
-    if list_format == "" {
-        list_format = DEFAULT_PS_FORMAT.to_string();
-    }
-
-    req.set_container_id(cid);
-    req.set_format(list_format);
-
-    debug!(sl!(), "sending request"; "request" => format!("{:?}", req));
-
-    let reply = client
-        .list_processes(ctx, &req)
         .map_err(|e| anyhow!("{:?}", e).context(ERR_API_FAILED))?;
 
     info!(sl!(), "response received";

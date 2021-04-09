@@ -20,9 +20,8 @@ use anyhow::{anyhow, Context, Result};
 use oci::{LinuxNamespace, Root, Spec};
 use protobuf::{RepeatedField, SingularPtrField};
 use protocols::agent::{
-    AgentDetails, CopyFileRequest, GuestDetailsResponse, Interfaces, ListProcessesResponse,
-    Metrics, OOMEvent, ReadStreamResponse, Routes, StatsContainerResponse, WaitProcessResponse,
-    WriteStreamResponse,
+    AgentDetails, CopyFileRequest, GuestDetailsResponse, Interfaces, Metrics, OOMEvent,
+    ReadStreamResponse, Routes, StatsContainerResponse, WaitProcessResponse, WriteStreamResponse,
 };
 use protocols::empty::Empty;
 use protocols::health::{
@@ -574,91 +573,6 @@ impl protocols::agent_ttrpc::AgentService for AgentService {
         self.do_wait_process(req)
             .await
             .map_err(|e| ttrpc_error(ttrpc::Code::INTERNAL, e.to_string()))
-    }
-
-    async fn list_processes(
-        &self,
-        _ctx: &TtrpcContext,
-        req: protocols::agent::ListProcessesRequest,
-    ) -> ttrpc::Result<ListProcessesResponse> {
-        let cid = req.container_id.clone();
-        let format = req.format.clone();
-        let mut args = req.args.into_vec();
-        let mut resp = ListProcessesResponse::new();
-
-        let s = Arc::clone(&self.sandbox);
-        let mut sandbox = s.lock().await;
-
-        let ctr = sandbox.get_container(&cid).ok_or_else(|| {
-            ttrpc_error(
-                ttrpc::Code::INVALID_ARGUMENT,
-                "invalid container id".to_string(),
-            )
-        })?;
-
-        let pids = ctr.processes().unwrap();
-
-        match format.as_str() {
-            "table" => {}
-            "json" => {
-                resp.process_list = serde_json::to_vec(&pids).unwrap();
-                return Ok(resp);
-            }
-            _ => {
-                return Err(ttrpc_error(
-                    ttrpc::Code::INVALID_ARGUMENT,
-                    "invalid format!".to_string(),
-                ));
-            }
-        }
-
-        // format "table"
-        if args.is_empty() {
-            // default argument
-            args = vec!["-ef".to_string()];
-        }
-
-        let output = tokio::process::Command::new("ps")
-            .args(args.as_slice())
-            .stdout(Stdio::piped())
-            .output()
-            .await
-            .expect("ps failed");
-
-        let out: String = String::from_utf8(output.stdout).unwrap();
-        let mut lines: Vec<String> = out.split('\n').map(|v| v.to_string()).collect();
-
-        let pid_index = lines[0]
-            .split_whitespace()
-            .position(|v| v == "PID")
-            .unwrap();
-
-        let mut result = String::new();
-        result.push_str(lines[0].as_str());
-
-        lines.remove(0);
-        for line in &lines {
-            if line.trim().is_empty() {
-                continue;
-            }
-
-            let fields: Vec<String> = line.split_whitespace().map(|v| v.to_string()).collect();
-
-            if fields.len() < pid_index + 1 {
-                warn!(sl!(), "corrupted output?");
-                continue;
-            }
-            let pid = fields[pid_index].trim().parse::<i32>().unwrap();
-
-            for p in &pids {
-                if pid == *p {
-                    result.push_str(line.as_str());
-                }
-            }
-        }
-
-        resp.process_list = Vec::from(result);
-        Ok(resp)
     }
 
     async fn update_container(

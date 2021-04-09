@@ -1125,18 +1125,6 @@ func (c *Container) ioStream(processID string) (io.WriteCloser, io.Reader, io.Re
 	return stream.stdin(), stream.stdout(), stream.stderr(), nil
 }
 
-func (c *Container) processList(ctx context.Context, options ProcessListOptions) (ProcessList, error) {
-	if err := c.checkSandboxRunning("ps"); err != nil {
-		return nil, err
-	}
-
-	if c.state.State != types.StateRunning {
-		return nil, fmt.Errorf("Container not running, impossible to list processes")
-	}
-
-	return c.sandbox.agent.processListContainer(ctx, c.sandbox, *c, options)
-}
-
 func (c *Container) stats(ctx context.Context) (*ContainerStats, error) {
 	if err := c.checkSandboxRunning("stats"); err != nil {
 		return nil, err
