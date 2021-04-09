@@ -115,6 +115,9 @@ bump_repo() {
 		sed -i "s#katadocker/kata-deploy:${current_version}#katadocker/kata-deploy:${new_version}#g" tools/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml
 		sed -i "s#katadocker/kata-deploy:${current_version}#katadocker/kata-deploy:${new_version}#g" tools/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml
 		git diff
+
+		git add tools/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml
+		git add tools/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml
 	fi
 
 	info "Creating PR message"
@@ -135,8 +138,6 @@ EOT
 		info "OK"
 	fi
 
-	git add tools/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml
-	git add tools/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml
 	git add VERSION
 	info "Creating commit with new changes"
 	commit_msg="$(generate_commit $new_version $current_version)"
