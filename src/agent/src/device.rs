@@ -5,6 +5,7 @@
 
 use libc::{c_uint, major, minor};
 use nix::sys::stat;
+use regex::Regex;
 use std::collections::HashMap;
 use std::fs;
 use std::os::unix::fs::MetadataExt;
@@ -87,84 +88,116 @@ fn pcipath_to_sysfs(root_bus_sysfs: &str, pcipath: &pci::Path) -> Result<String>
     Ok(relpath)
 }
 
-#[derive(Debug, Clone)]
-struct DevAddrMatcher {
-    dev_addr: String,
+// FIXME: This matcher is only correct if the guest has at most one
+// SCSI host.
+#[derive(Debug)]
+struct ScsiBlockMatcher {
+    search: String,
 }
 
-impl DevAddrMatcher {
-    fn new(dev_addr: &str) -> DevAddrMatcher {
-        DevAddrMatcher {
-            dev_addr: dev_addr.to_string(),
-        }
+impl ScsiBlockMatcher {
+    fn new(scsi_addr: &str) -> Result<ScsiBlockMatcher> {
+        let search = format!(r"/0:0:{}/block/", scsi_addr);
+
+        Ok(ScsiBlockMatcher { search })
     }
 }
 
-impl UeventMatcher for DevAddrMatcher {
+impl UeventMatcher for ScsiBlockMatcher {
     fn is_match(&self, uev: &Uevent) -> bool {
-        let pci_root_bus_path = create_pci_root_bus_path();
-        let pci_p = format!("{}{}", pci_root_bus_path, self.dev_addr);
-        let pmem_suffix = format!("/{}/{}", SCSI_BLOCK_SUFFIX, uev.devname);
-
-        uev.subsystem == "block"
-            && {
-                uev.devpath.starts_with(pci_root_bus_path.as_str())
-                    || uev.devpath.starts_with(ACPI_DEV_PATH) // NVDIMM/PMEM devices
-            }
-            && !uev.devname.is_empty()
-            && {
-                // blk block device
-                uev.devpath.starts_with(pci_p.as_str())
-                // scsi block device
-                    || (
-                        self.dev_addr.ends_with(SCSI_BLOCK_SUFFIX) &&
-                            uev.devpath.contains(self.dev_addr.as_str())
-                    )
-                // nvdimm/pmem device
-                    || (
-                        uev.devpath.starts_with(ACPI_DEV_PATH) &&
-                            uev.devpath.ends_with(pmem_suffix.as_str()) &&
-                            self.dev_addr.ends_with(pmem_suffix.as_str())
-                    )
-            }
+        uev.subsystem == "block" && uev.devpath.contains(&self.search) && !uev.devname.is_empty()
     }
-}
-
-async fn get_device_name(sandbox: &Arc<Mutex<Sandbox>>, dev_addr: &str) -> Result<String> {
-    let matcher = DevAddrMatcher::new(dev_addr);
-
-    let uev = wait_for_uevent(sandbox, matcher).await?;
-
-    Ok(format!("{}/{}", SYSTEM_DEV_PATH, &uev.devname))
 }
 
 pub async fn get_scsi_device_name(
     sandbox: &Arc<Mutex<Sandbox>>,
     scsi_addr: &str,
 ) -> Result<String> {
-    let dev_sub_path = format!("{}{}/{}", SCSI_HOST_CHANNEL, scsi_addr, SCSI_BLOCK_SUFFIX);
+    let matcher = ScsiBlockMatcher::new(scsi_addr)?;
 
     scan_scsi_bus(scsi_addr)?;
-    get_device_name(sandbox, &dev_sub_path).await
+    let uev = wait_for_uevent(sandbox, matcher).await?;
+    Ok(format!("{}/{}", SYSTEM_DEV_PATH, &uev.devname))
 }
 
-pub async fn get_pci_device_name(
+#[derive(Debug)]
+struct VirtioBlkPciMatcher {
+    rex: Regex,
+}
+
+impl VirtioBlkPciMatcher {
+    fn new(relpath: &str) -> Result<VirtioBlkPciMatcher> {
+        let root_bus = create_pci_root_bus_path();
+        let re = format!(r"^{}{}/virtio[0-9]+/block/", root_bus, relpath);
+        Ok(VirtioBlkPciMatcher {
+            rex: Regex::new(&re).unwrap(),
+        })
+    }
+}
+
+impl UeventMatcher for VirtioBlkPciMatcher {
+    fn is_match(&self, uev: &Uevent) -> bool {
+        uev.subsystem == "block" && self.rex.is_match(&uev.devpath) && !uev.devname.is_empty()
+    }
+}
+
+pub async fn get_virtio_blk_pci_device_name(
     sandbox: &Arc<Mutex<Sandbox>>,
     pcipath: &pci::Path,
 ) -> Result<String> {
     let root_bus_sysfs = format!("{}{}", SYSFS_DIR, create_pci_root_bus_path());
     let sysfs_rel_path = pcipath_to_sysfs(&root_bus_sysfs, pcipath)?;
+    let matcher = VirtioBlkPciMatcher::new(&sysfs_rel_path)?;
 
     rescan_pci_bus()?;
-    get_device_name(sandbox, &sysfs_rel_path).await
+
+    let uev = wait_for_uevent(sandbox, matcher).await?;
+    Ok(format!("{}/{}", SYSTEM_DEV_PATH, &uev.devname))
 }
 
-pub async fn get_pmem_device_name(
-    sandbox: &Arc<Mutex<Sandbox>>,
-    pmem_devname: &str,
-) -> Result<String> {
-    let dev_sub_path = format!("/{}/{}", SCSI_BLOCK_SUFFIX, pmem_devname);
-    get_device_name(sandbox, &dev_sub_path).await
+#[derive(Debug)]
+struct PmemBlockMatcher {
+    suffix: String,
+}
+
+impl PmemBlockMatcher {
+    fn new(devname: &str) -> Result<PmemBlockMatcher> {
+        let suffix = format!(r"/block/{}", devname);
+
+        Ok(PmemBlockMatcher { suffix })
+    }
+}
+
+impl UeventMatcher for PmemBlockMatcher {
+    fn is_match(&self, uev: &Uevent) -> bool {
+        uev.subsystem == "block"
+            && uev.devpath.starts_with(ACPI_DEV_PATH)
+            && uev.devpath.ends_with(&self.suffix)
+            && !uev.devname.is_empty()
+    }
+}
+
+pub async fn wait_for_pmem_device(sandbox: &Arc<Mutex<Sandbox>>, devpath: &str) -> Result<()> {
+    let devname = match devpath.strip_prefix("/dev/") {
+        Some(dev) => dev,
+        None => {
+            return Err(anyhow!(
+                "Storage source '{}' must start with /dev/",
+                devpath
+            ))
+        }
+    };
+
+    let matcher = PmemBlockMatcher::new(devname)?;
+    let uev = wait_for_uevent(sandbox, matcher).await?;
+    if uev.devname != devname {
+        return Err(anyhow!(
+            "Unexpected device name {} for pmem device (expected {})",
+            uev.devname,
+            devname
+        ));
+    }
+    Ok(())
 }
 
 /// Scan SCSI bus for the given SCSI address(SCSI-Id and LUN)
@@ -305,7 +338,7 @@ async fn virtio_blk_device_handler(
     // path for cloud-hypervisor when BDF information is not available
     if !device.id.is_empty() {
         let pcipath = pci::Path::from_str(&device.id)?;
-        dev.vm_path = get_pci_device_name(sandbox, &pcipath).await?;
+        dev.vm_path = get_virtio_blk_pci_device_name(sandbox, &pcipath).await?;
     }
 
     update_spec_device_list(&dev, spec, devidx)
@@ -787,6 +820,20 @@ mod tests {
         assert_eq!(relpath.unwrap(), "/0000:00:02.0/0000:01:03.0/0000:02:04.0");
     }
 
+    // We use device specific variants of this for real cases, but
+    // they have some complications that make them troublesome to unit
+    // test
+    async fn example_get_device_name(
+        sandbox: &Arc<Mutex<Sandbox>>,
+        relpath: &str,
+    ) -> Result<String> {
+        let matcher = VirtioBlkPciMatcher::new(relpath)?;
+
+        let uev = wait_for_uevent(sandbox, matcher).await?;
+
+        Ok(uev.devname)
+    }
+
     #[tokio::test]
     async fn test_get_device_name() {
         let devname = "vda";
@@ -807,9 +854,9 @@ mod tests {
         sb.uevent_map.insert(devpath.clone(), uev);
         drop(sb); // unlock
 
-        let name = get_device_name(&sandbox, relpath).await;
+        let name = example_get_device_name(&sandbox, relpath).await;
         assert!(name.is_ok(), "{}", name.unwrap_err());
-        assert_eq!(name.unwrap(), format!("{}/{}", SYSTEM_DEV_PATH, devname));
+        assert_eq!(name.unwrap(), devname);
 
         let mut sb = sandbox.lock().await;
         let uev = sb.uevent_map.remove(&devpath).unwrap();
@@ -817,8 +864,62 @@ mod tests {
 
         spawn_test_watcher(sandbox.clone(), uev);
 
-        let name = get_device_name(&sandbox, relpath).await;
+        let name = example_get_device_name(&sandbox, relpath).await;
         assert!(name.is_ok(), "{}", name.unwrap_err());
-        assert_eq!(name.unwrap(), format!("{}/{}", SYSTEM_DEV_PATH, devname));
+        assert_eq!(name.unwrap(), devname);
+    }
+
+    #[tokio::test]
+    async fn test_virtio_blk_matcher() {
+        let root_bus = create_pci_root_bus_path();
+        let devname = "vda";
+
+        let mut uev_a = crate::uevent::Uevent::default();
+        let relpath_a = "/0000:00:0a.0";
+        uev_a.action = crate::linux_abi::U_EVENT_ACTION_ADD.to_string();
+        uev_a.subsystem = "block".to_string();
+        uev_a.devname = devname.to_string();
+        uev_a.devpath = format!("{}{}/virtio4/block/{}", root_bus, relpath_a, devname);
+        let matcher_a = VirtioBlkPciMatcher::new(&relpath_a).unwrap();
+
+        let mut uev_b = uev_a.clone();
+        let relpath_b = "/0000:00:0a.0/0000:00:0b.0";
+        uev_b.devpath = format!("{}{}/virtio0/block/{}", root_bus, relpath_b, devname);
+        let matcher_b = VirtioBlkPciMatcher::new(&relpath_b).unwrap();
+
+        assert!(matcher_a.is_match(&uev_a));
+        assert!(matcher_b.is_match(&uev_b));
+        assert!(!matcher_b.is_match(&uev_a));
+        assert!(!matcher_a.is_match(&uev_b));
+    }
+
+    #[tokio::test]
+    async fn test_scsi_block_matcher() {
+        let root_bus = create_pci_root_bus_path();
+        let devname = "sda";
+
+        let mut uev_a = crate::uevent::Uevent::default();
+        let addr_a = "0:0";
+        uev_a.action = crate::linux_abi::U_EVENT_ACTION_ADD.to_string();
+        uev_a.subsystem = "block".to_string();
+        uev_a.devname = devname.to_string();
+        uev_a.devpath = format!(
+            "{}/0000:00:00.0/virtio0/host0/target0:0:0/0:0:{}/block/sda",
+            root_bus, addr_a
+        );
+        let matcher_a = ScsiBlockMatcher::new(&addr_a).unwrap();
+
+        let mut uev_b = uev_a.clone();
+        let addr_b = "2:0";
+        uev_b.devpath = format!(
+            "{}/0000:00:00.0/virtio0/host0/target0:0:2/0:0:{}/block/sdb",
+            root_bus, addr_b
+        );
+        let matcher_b = ScsiBlockMatcher::new(&addr_b).unwrap();
+
+        assert!(matcher_a.is_match(&uev_a));
+        assert!(matcher_b.is_match(&uev_b));
+        assert!(!matcher_b.is_match(&uev_a));
+        assert!(!matcher_a.is_match(&uev_b));
     }
 }
