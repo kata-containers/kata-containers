@@ -236,14 +236,29 @@ impl Sandbox {
             return Ok(());
         }
 
-        let cpuset = rustjail_cgroups::fs::get_guest_cpuset()?;
+        let guest_cpuset = rustjail_cgroups::fs::get_guest_cpuset()?;
 
         for (_, ctr) in self.containers.iter() {
+            let cpu = ctr
+                .config
+                .spec
+                .as_ref()
+                .unwrap()
+                .linux
+                .as_ref()
+                .unwrap()
+                .resources
+                .as_ref()
+                .unwrap()
+                .cpu
+                .as_ref();
+            let container_cpust = if let Some(c) = cpu { &c.cpus } else { "" };
+
             info!(self.logger, "updating {}", ctr.id.as_str());
             ctr.cgroup_manager
                 .as_ref()
                 .unwrap()
-                .update_cpuset_path(cpuset.as_str())?;
+                .update_cpuset_path(guest_cpuset.as_str(), &container_cpust)?;
         }
 
         Ok(())
