@@ -107,10 +107,6 @@ func (p *HybridVSockTTRPCMockImp) WaitProcess(ctx context.Context, req *pb.WaitP
 	return &pb.WaitProcessResponse{}, nil
 }
 
-func (p *HybridVSockTTRPCMockImp) ListProcesses(ctx context.Context, req *pb.ListProcessesRequest) (*pb.ListProcessesResponse, error) {
-	return &pb.ListProcessesResponse{}, nil
-}
-
 func (p *HybridVSockTTRPCMockImp) UpdateContainer(ctx context.Context, req *pb.UpdateContainerRequest) (*gpb.Empty, error) {
 	return emptyResp, nil
 }

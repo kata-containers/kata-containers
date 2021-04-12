@@ -32,7 +32,6 @@ service AgentService {
 	rpc ExecProcess(ExecProcessRequest) returns (google.protobuf.Empty);
 	rpc SignalProcess(SignalProcessRequest) returns (google.protobuf.Empty);
 	rpc WaitProcess(WaitProcessRequest) returns (WaitProcessResponse); // wait & reap like waitpid(2)
-	rpc ListProcesses(ListProcessesRequest) returns (ListProcessesResponse);
 	rpc UpdateContainer(UpdateContainerRequest) returns (google.protobuf.Empty);
 	rpc StatsContainer(StatsContainerRequest) returns (StatsContainerResponse);
 	rpc PauseContainer(PauseContainerRequest) returns (google.protobuf.Empty);
@@ -124,18 +123,6 @@ message WaitProcessRequest {
 
 message WaitProcessResponse {
 	int32 status = 1;
-}
-
-// ListProcessesRequest contains the options used to list running processes inside the container
-message ListProcessesRequest {
-	string container_id = 1;
-	string format = 2;
-	repeated string args = 3;
-}
-
-// ListProcessesResponse represents the list of running processes inside the container
-message ListProcessesResponse {
-	bytes process_list = 1;
 }
 
 message UpdateContainerRequest {

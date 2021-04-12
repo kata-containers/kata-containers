@@ -65,7 +65,7 @@ $GOPATH/src/github.com/kata-containers/kata-containers/src/agent/protocols/proto
 }
 
 if [ "$(basename $(pwd))" != "agent" ]; then
-	die "Please go to directory of protocols before execute this shell"
+	die "Please go to root directory of agent before execute this shell"
 fi
 
 # Protocol buffer files required to generate golang/rust bindings.
