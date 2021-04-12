@@ -120,7 +120,6 @@ const (
 	grpcListRoutesRequest        = "grpc.ListRoutesRequest"
 	grpcAddARPNeighborsRequest   = "grpc.AddARPNeighborsRequest"
 	grpcOnlineCPUMemRequest      = "grpc.OnlineCPUMemRequest"
-	grpcListProcessesRequest     = "grpc.ListProcessesRequest"
 	grpcUpdateContainerRequest   = "grpc.UpdateContainerRequest"
 	grpcWaitProcessRequest       = "grpc.WaitProcessRequest"
 	grpcTtyWinResizeRequest      = "grpc.TtyWinResizeRequest"
@@ -1662,26 +1661,6 @@ func (k *kataAgent) winsizeProcess(ctx context.Context, c *Container, processID 
 	return err
 }
 
-func (k *kataAgent) processListContainer(ctx context.Context, sandbox *Sandbox, c Container, options ProcessListOptions) (ProcessList, error) {
-	req := &grpc.ListProcessesRequest{
-		ContainerId: c.id,
-		Format:      options.Format,
-		Args:        options.Args,
-	}
-
-	resp, err := k.sendReq(ctx, req)
-	if err != nil {
-		return nil, err
-	}
-
-	processList, ok := resp.(*grpc.ListProcessesResponse)
-	if !ok {
-		return nil, fmt.Errorf("Bad list processes response")
-	}
-
-	return processList.ProcessList, nil
-}
-
 func (k *kataAgent) updateContainer(ctx context.Context, sandbox *Sandbox, c Container, resources specs.LinuxResources) error {
 	grpcResources, err := grpc.ResourcesOCItoGRPC(&resources)
 	if err != nil {
@@ -1938,9 +1917,6 @@ func (k *kataAgent) installReqFunc(c *kataclient.AgentClient) {
 	}
 	k.reqHandlers[grpcOnlineCPUMemRequest] = func(ctx context.Context, req interface{}) (interface{}, error) {
 		return k.client.AgentServiceClient.OnlineCPUMem(ctx, req.(*grpc.OnlineCPUMemRequest))
-	}
-	k.reqHandlers[grpcListProcessesRequest] = func(ctx context.Context, req interface{}) (interface{}, error) {
-		return k.client.AgentServiceClient.ListProcesses(ctx, req.(*grpc.ListProcessesRequest))
 	}
 	k.reqHandlers[grpcUpdateContainerRequest] = func(ctx context.Context, req interface{}) (interface{}, error) {
 		return k.client.AgentServiceClient.UpdateContainer(ctx, req.(*grpc.UpdateContainerRequest))

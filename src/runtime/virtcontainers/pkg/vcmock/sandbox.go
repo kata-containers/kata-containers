@@ -166,11 +166,6 @@ func (s *Sandbox) UpdateContainer(ctx context.Context, containerID string, resou
 	return nil
 }
 
-// ProcessListContainer implements the VCSandbox function of the same name.
-func (s *Sandbox) ProcessListContainer(ctx context.Context, containerID string, options vc.ProcessListOptions) (vc.ProcessList, error) {
-	return nil, nil
-}
-
 // WaitProcess implements the VCSandbox function of the same name.
 func (s *Sandbox) WaitProcess(ctx context.Context, containerID, processID string) (int32, error) {
 	return 0, nil

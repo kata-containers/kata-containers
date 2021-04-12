@@ -143,9 +143,6 @@ func TestKataAgentSendReq(t *testing.T) {
 	err = k.winsizeProcess(ctx, container, execid, 100, 200)
 	assert.Nil(err)
 
-	_, err = k.processListContainer(ctx, sandbox, Container{}, ProcessListOptions{})
-	assert.Nil(err)
-
 	err = k.updateContainer(ctx, sandbox, Container{}, specs.LinuxResources{})
 	assert.Nil(err)
 
