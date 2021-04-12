@@ -18,8 +18,7 @@
 ## Requirements
 
 - [hub](https://github.com/github/hub)
-
-- OBS account with permissions on [`/home:katacontainers`](https://build.opensuse.org/project/subprojects/home:katacontainers)
+  * Using an [application token](https://github.com/settings/tokens) is required for hub.
 
 - GitHub permissions to push tags and create releases in Kata repositories.
 
@@ -32,14 +31,9 @@
 
 ### Bump all Kata repositories
 
-  - We have set up a Jenkins job to bump the version in the `VERSION` file in all Kata repositories. Go to the [Jenkins bump-job page](http://jenkins.katacontainers.io/job/release/build) to trigger a new job.
-  - Start a new job with variables for the job passed as:
-     - `BRANCH=<the-branch-you-want-to-bump>`
-     - `NEW_VERSION=<the-new-kata-version>`
-
-     For example, in the case where you want to make a patch release `1.10.2`, the variable `NEW_VERSION` should be `1.10.2` and `BRANCH` should point to  `stable-1.10`. In case of an alpha or release candidate release, `BRANCH` should point to `master` branch.
-
-  Alternatively, you can also bump the repositories using a script in the Kata packaging repo
+  Bump the repositories using a script in the Kata packaging repo, where:
+  - `BRANCH=<the-branch-you-want-to-bump>`
+  - `NEW_VERSION=<the-new-kata-version>`
   ```
   $ cd ${GOPATH}/src/github.com/kata-containers/kata-containers/tools/packaging/release
   $ export NEW_VERSION=<the-new-kata-version>
