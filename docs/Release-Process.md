@@ -18,6 +18,7 @@
 ## Requirements
 
 - [hub](https://github.com/github/hub)
+  * Using an [application token](https://github.com/settings/tokens) is required for hub.
 
 - GitHub permissions to push tags and create releases in Kata repositories.
 
