@@ -19,8 +19,6 @@
 
 - [hub](https://github.com/github/hub)
 
-- OBS account with permissions on [`/home:katacontainers`](https://build.opensuse.org/project/subprojects/home:katacontainers)
-
 - GitHub permissions to push tags and create releases in Kata repositories.
 
 - GPG configured to sign git tags. https://help.github.com/articles/generating-a-new-gpg-key/
