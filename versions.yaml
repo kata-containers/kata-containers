@@ -193,7 +193,7 @@ externals:
   critools:
     description: "CLI tool for Container Runtime Interface (CRI)"
     url: "https://github.com/kubernetes-sigs/cri-tools"
-    version: "1.18.0"
+    version: "1.21.0"
 
   kubernetes:
     description: "Kubernetes project container manager"
