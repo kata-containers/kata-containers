@@ -869,7 +869,7 @@ func TestMainCreateRuntime(t *testing.T) {
 	assert := assert.New(t)
 
 	const cmd = "foo"
-	const msg = "moo FAILURE"
+	const msg = "moo message"
 
 	resetCLIGlobals()
 
@@ -942,7 +942,7 @@ func TestMainFatalWriter(t *testing.T) {
 	assert := assert.New(t)
 
 	const cmd = "foo"
-	const msg = "moo FAILURE"
+	const msg = "moo message"
 
 	// create buffer to save logger output
 	buf := &bytes.Buffer{}
