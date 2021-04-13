@@ -213,17 +213,6 @@ externals:
       .*/v?([\d\.]+)\.tar\.gz
     version: "1.18.9-00"
 
-  openshift:
-    description: |
-      Distribution of Kubernetes optimized for continuous application
-      development and multi-tenant deployment.
-    url: "https://github.com/openshift/origin"
-    uscan-url: >-
-      https://github.com/openshift/origin/tags
-      .*/v?([\d\.]+)\.tar\.gz
-    version: "v3.10.0"
-    commit: "dd10d17"
-
   runc:
     description: "OCI CLI reference runtime implementation"
     url: "https://github.com/opencontainers/runc"
