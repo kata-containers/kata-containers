@@ -44,6 +44,8 @@ pub const DRIVER_NVDIMM_TYPE: &str = "nvdimm";
 pub const DRIVER_EPHEMERAL_TYPE: &str = "ephemeral";
 pub const DRIVER_LOCAL_TYPE: &str = "local";
 pub const DRIVER_WATCHABLE_BIND_TYPE: &str = "watchable-bind";
+// VFIO device to be bound to a guest kernel driver
+pub const DRIVER_VFIO_GK_TYPE: &str = "vfio-gk";
 
 #[derive(Debug)]
 struct DevIndexEntry {
@@ -262,6 +264,35 @@ pub async fn wait_for_pmem_device(sandbox: &Arc<Mutex<Sandbox>>, devpath: &str) 
     Ok(())
 }
 
+#[derive(Debug)]
+struct PciMatcher {
+    devpath: String,
+}
+
+impl PciMatcher {
+    fn new(relpath: &str) -> Result<PciMatcher> {
+        let root_bus = create_pci_root_bus_path();
+        Ok(PciMatcher {
+            devpath: format!("{}{}", root_bus, relpath),
+        })
+    }
+}
+
+impl UeventMatcher for PciMatcher {
+    fn is_match(&self, uev: &Uevent) -> bool {
+        uev.devpath == self.devpath
+    }
+}
+
+pub async fn wait_for_pci_device(sandbox: &Arc<Mutex<Sandbox>>, pcipath: &pci::Path) -> Result<()> {
+    let root_bus_sysfs = format!("{}{}", SYSFS_DIR, create_pci_root_bus_path());
+    let sysfs_rel_path = pcipath_to_sysfs(&root_bus_sysfs, pcipath)?;
+    let matcher = PciMatcher::new(&sysfs_rel_path)?;
+
+    let _ = wait_for_uevent(sandbox, matcher).await?;
+    Ok(())
+}
+
 /// Scan SCSI bus for the given SCSI address(SCSI-Id and LUN)
 #[instrument]
 fn scan_scsi_bus(scsi_addr: &str) -> Result<()> {
@@ -458,6 +489,37 @@ async fn virtio_nvdimm_device_handler(
     update_spec_device_list(device, spec, devidx)
 }
 
+fn split_vfio_option(opt: &str) -> Option<(&str, &str)> {
+    let mut tokens = opt.split('=');
+    let hostbdf = tokens.next()?;
+    let path = tokens.next()?;
+    if tokens.next().is_some() {
+        None
+    } else {
+        Some((hostbdf, path))
+    }
+}
+
+// device.options should have one entry for each PCI device in the VFIO group
+// Each option should have the form "DDDD:BB:DD.F=<pcipath>"
+//     DDDD:BB:DD.F is the device's PCI address in the host
+//     <pcipath> is a PCI path to the device in the guest (see pci.rs)
+async fn vfio_gk_device_handler(
+    device: &Device,
+    _: &mut Spec,
+    sandbox: &Arc<Mutex<Sandbox>>,
+    _: &DevIndex,
+) -> Result<()> {
+    for opt in device.options.iter() {
+        let (_, pcipath) =
+            split_vfio_option(opt).ok_or_else(|| anyhow!("Malformed VFIO option {:?}", opt))?;
+        let pcipath = pci::Path::from_str(pcipath)?;
+
+        wait_for_pci_device(sandbox, &pcipath).await?;
+    }
+    Ok(())
+}
+
 impl DevIndex {
     fn new(spec: &Spec) -> DevIndex {
         let mut map = HashMap::new();
@@ -527,6 +589,7 @@ async fn add_device(
         DRIVER_MMIO_BLK_TYPE => virtiommio_blk_device_handler(device, spec, sandbox, devidx).await,
         DRIVER_NVDIMM_TYPE => virtio_nvdimm_device_handler(device, spec, sandbox, devidx).await,
         DRIVER_SCSI_TYPE => virtio_scsi_device_handler(device, spec, sandbox, devidx).await,
+        DRIVER_VFIO_GK_TYPE => vfio_gk_device_handler(device, spec, sandbox, devidx).await,
         _ => Err(anyhow!("Unknown device type {}", device.field_type)),
     }
 }
@@ -1074,5 +1137,15 @@ mod tests {
         assert!(matcher_b.is_match(&uev_b));
         assert!(!matcher_b.is_match(&uev_a));
         assert!(!matcher_a.is_match(&uev_b));
+    }
+
+    #[test]
+    fn test_split_vfio_option() {
+        assert_eq!(
+            split_vfio_option("0000:01:00.0=02/01"),
+            Some(("0000:01:00.0", "02/01"))
+        );
+        assert_eq!(split_vfio_option("0000:01:00.0=02/01=rubbish"), None);
+        assert_eq!(split_vfio_option("0000:01:00.0"), None);
     }
 }
