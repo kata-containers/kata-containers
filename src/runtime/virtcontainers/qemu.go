@@ -1474,39 +1474,42 @@ func (q *qemu) hotplugVFIODevice(ctx context.Context, device *config.VFIODev, op
 
 			switch device.Type {
 			case config.VFIODeviceNormalType:
-				return q.qmpMonitorCh.qmp.ExecuteVFIODeviceAdd(q.qmpMonitorCh.ctx, devID, device.BDF, device.Bus, romFile)
+				err = q.qmpMonitorCh.qmp.ExecuteVFIODeviceAdd(q.qmpMonitorCh.ctx, devID, device.BDF, device.Bus, romFile)
 			case config.VFIODeviceMediatedType:
 				if utils.IsAPVFIOMediatedDevice(device.SysfsDev) {
-					return q.qmpMonitorCh.qmp.ExecuteAPVFIOMediatedDeviceAdd(q.qmpMonitorCh.ctx, device.SysfsDev)
+					err = q.qmpMonitorCh.qmp.ExecuteAPVFIOMediatedDeviceAdd(q.qmpMonitorCh.ctx, device.SysfsDev)
+				} else {
+					err = q.qmpMonitorCh.qmp.ExecutePCIVFIOMediatedDeviceAdd(q.qmpMonitorCh.ctx, devID, device.SysfsDev, "", device.Bus, romFile)
 				}
-				return q.qmpMonitorCh.qmp.ExecutePCIVFIOMediatedDeviceAdd(q.qmpMonitorCh.ctx, devID, device.SysfsDev, "", device.Bus, romFile)
+			default:
+				return fmt.Errorf("Incorrect VFIO device type found")
+			}
+		} else {
+			addr, bridge, err := q.arch.addDeviceToBridge(ctx, devID, types.PCI)
+			if err != nil {
+				return err
+			}
+
+			defer func() {
+				if err != nil {
+					q.arch.removeDeviceFromBridge(devID)
+				}
+			}()
+
+			switch device.Type {
+			case config.VFIODeviceNormalType:
+				err = q.qmpMonitorCh.qmp.ExecutePCIVFIODeviceAdd(q.qmpMonitorCh.ctx, devID, device.BDF, addr, bridge.ID, romFile)
+			case config.VFIODeviceMediatedType:
+				if utils.IsAPVFIOMediatedDevice(device.SysfsDev) {
+					err = q.qmpMonitorCh.qmp.ExecuteAPVFIOMediatedDeviceAdd(q.qmpMonitorCh.ctx, device.SysfsDev)
+				} else {
+					err = q.qmpMonitorCh.qmp.ExecutePCIVFIOMediatedDeviceAdd(q.qmpMonitorCh.ctx, devID, device.SysfsDev, addr, bridge.ID, romFile)
+				}
 			default:
 				return fmt.Errorf("Incorrect VFIO device type found")
 			}
 		}
-
-		addr, bridge, err := q.arch.addDeviceToBridge(ctx, devID, types.PCI)
-		if err != nil {
-			return err
-		}
-
-		defer func() {
-			if err != nil {
-				q.arch.removeDeviceFromBridge(devID)
-			}
-		}()
-
-		switch device.Type {
-		case config.VFIODeviceNormalType:
-			return q.qmpMonitorCh.qmp.ExecutePCIVFIODeviceAdd(q.qmpMonitorCh.ctx, devID, device.BDF, addr, bridge.ID, romFile)
-		case config.VFIODeviceMediatedType:
-			if utils.IsAPVFIOMediatedDevice(device.SysfsDev) {
-				return q.qmpMonitorCh.qmp.ExecuteAPVFIOMediatedDeviceAdd(q.qmpMonitorCh.ctx, device.SysfsDev)
-			}
-			return q.qmpMonitorCh.qmp.ExecutePCIVFIOMediatedDeviceAdd(q.qmpMonitorCh.ctx, devID, device.SysfsDev, addr, bridge.ID, romFile)
-		default:
-			return fmt.Errorf("Incorrect VFIO device type found")
-		}
+		return err
 	} else {
 		q.Logger().WithField("dev-id", devID).Info("Start hot-unplug VFIO device")
 
