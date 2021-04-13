@@ -1144,9 +1144,7 @@ func (k *kataAgent) handleShm(mounts []specs.Mount, sandbox *Sandbox) {
 	}
 }
 
-func (k *kataAgent) appendBlockDevice(dev ContainerDevice, c *Container) *grpc.Device {
-	device := c.sandbox.devManager.GetDeviceByID(dev.ID)
-
+func (k *kataAgent) appendBlockDevice(dev ContainerDevice, device api.Device, c *Container) *grpc.Device {
 	d, ok := device.GetDeviceInfo().(*config.BlockDrive)
 	if !ok || d == nil {
 		k.Logger().WithField("device", device).Error("malformed block drive")
@@ -1187,9 +1185,7 @@ func (k *kataAgent) appendBlockDevice(dev ContainerDevice, c *Container) *grpc.D
 	return kataDevice
 }
 
-func (k *kataAgent) appendVhostUserBlkDevice(dev ContainerDevice, c *Container) *grpc.Device {
-	device := c.sandbox.devManager.GetDeviceByID(dev.ID)
-
+func (k *kataAgent) appendVhostUserBlkDevice(dev ContainerDevice, device api.Device, c *Container) *grpc.Device {
 	d, ok := device.GetDeviceInfo().(*config.VhostUserDeviceAttrs)
 	if !ok || d == nil {
 		k.Logger().WithField("device", device).Error("malformed vhost-user-blk drive")
@@ -1217,9 +1213,9 @@ func (k *kataAgent) appendDevices(deviceList []*grpc.Device, c *Container) []*gr
 
 		switch device.DeviceType() {
 		case config.DeviceBlock:
-			kataDevice = k.appendBlockDevice(dev, c)
+			kataDevice = k.appendBlockDevice(dev, device, c)
 		case config.VhostUserBlk:
-			kataDevice = k.appendVhostUserBlkDevice(dev, c)
+			kataDevice = k.appendVhostUserBlkDevice(dev, device, c)
 		}
 
 		if kataDevice == nil {
