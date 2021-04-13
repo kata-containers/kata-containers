@@ -203,7 +203,7 @@ externals:
     uscan-url: >-
       https://github.com/kubernetes/kubernetes/tags
       .*/v?([\d\.]+)\.tar\.gz
-    version: "1.18.9-00"
+    version: "1.21.0-00"
 
   runc:
     description: "OCI CLI reference runtime implementation"
