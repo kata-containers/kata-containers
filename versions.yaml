@@ -213,7 +213,7 @@ externals:
     uscan-url: >-
       https://github.com/opencontainers/runc/tags
       .*/v?(\d\S+)\.tar\.gz
-    version: "v1.0.0-rc5"
+    version: "v1.0.0-rc93"
 
   musl:
     description: |
