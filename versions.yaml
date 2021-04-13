@@ -195,14 +195,6 @@ externals:
     url: "https://github.com/kubernetes-sigs/cri-tools"
     version: "1.18.0"
 
-  docker:
-    description: "Moby project container manager"
-    notes: "Docker Swarm requires an older version of Docker."
-    url: "https://github.com/moby/moby"
-    version: "v18.06-ce"
-    meta:
-      swarm-version: "1.12.1"
-
   kubernetes:
     description: "Kubernetes project container manager"
     url: "https://github.com/kubernetes/kubernetes"
