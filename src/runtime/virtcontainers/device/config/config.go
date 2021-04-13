@@ -224,6 +224,9 @@ type VFIODev struct {
 	// Bus of VFIO PCIe device
 	Bus string
 
+	// Guest PCI path of device
+	GuestPciPath vcTypes.PciPath
+
 	// Type of VFIO device
 	Type VFIODeviceType
 
