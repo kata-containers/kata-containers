@@ -1,24 +1,29 @@
-From c3273cefbec6f5637189ad1cb9a8b7722cc01294 Mon Sep 17 00:00:00 2001
+From 56658528571be92dcb393ffcc7a77f6a0f0fd822 Mon Sep 17 00:00:00 2001
 From: "Dr. David Alan Gilbert" <dgilbert@redhat.com>
-Date: Fri, 6 Jul 2018 18:03:49 +0100
-Subject: [PATCH 09/29] DAX: virtiofsd: Add setup/remove mappings fuse commands
+Date: Wed, 14 Apr 2021 16:51:23 +0100
+Subject: [PATCH 11/25] DAX: virtiofsd: Add setup/remove mappings fuse commands
 
 Add commands so that the guest kernel can ask the daemon to map file
 sections into a guest kernel visible cache.
 
+Note: Catherine Ho had sent a patch to fix an issue with multiple
+removemapping. It was a merge issue though.
+
 Signed-off-by: Dr. David Alan Gilbert <dgilbert@redhat.com>
 Signed-off-by: Vivek Goyal <vgoyal@redhat.com>
 Signed-off-by: Peng Tao <tao.peng@linux.alibaba.com>
+Including-fixes: Catherine Ho <catherine.hecx@gmail.com>
+Signed-off-by: Catherine Ho <catherine.hecx@gmail.com>
 ---
- tools/virtiofsd/fuse_lowlevel.c | 67 +++++++++++++++++++++++++++++++++
+ tools/virtiofsd/fuse_lowlevel.c | 69 +++++++++++++++++++++++++++++++++
  tools/virtiofsd/fuse_lowlevel.h | 23 ++++++++++-
- 2 files changed, 89 insertions(+), 1 deletion(-)
+ 2 files changed, 91 insertions(+), 1 deletion(-)
 
 diff --git a/tools/virtiofsd/fuse_lowlevel.c b/tools/virtiofsd/fuse_lowlevel.c
-index e94b71110b..1c3790130a 100644
+index 58e32fc..1a00307 100644
 --- a/tools/virtiofsd/fuse_lowlevel.c
 +++ b/tools/virtiofsd/fuse_lowlevel.c
-@@ -1868,6 +1868,71 @@ static void do_lseek(fuse_req_t req, fuse_ino_t nodeid,
+@@ -1870,6 +1870,73 @@ static void do_lseek(fuse_req_t req, fuse_ino_t nodeid,
      }
  }
  
@@ -65,12 +70,14 @@ index e94b71110b..1c3790130a 100644
 +    struct fuse_removemapping_one *one;
 +
 +    arg = fuse_mbuf_iter_advance(iter, sizeof(*arg));
-+    if (!arg) {
++    if (!arg || !arg->count ||
++        (uint64_t)arg->count * sizeof(*one) >= SIZE_MAX) {
++        fuse_log(FUSE_LOG_ERR, "do_removemapping: invalid arg %p\n", arg);
 +        fuse_reply_err(req, EINVAL);
 +        return;
 +    }
 +
-+    one = fuse_mbuf_iter_advance(iter, sizeof(*one));
++    one = fuse_mbuf_iter_advance(iter, arg->count * sizeof(*one));
 +    if (!one) {
 +        fuse_log(
 +            FUSE_LOG_ERR,
@@ -90,7 +97,7 @@ index e94b71110b..1c3790130a 100644
  static void do_init(fuse_req_t req, fuse_ino_t nodeid,
                      struct fuse_mbuf_iter *iter)
  {
-@@ -2258,6 +2323,8 @@ static struct {
+@@ -2267,6 +2334,8 @@ static struct {
      [FUSE_RENAME2] = { do_rename2, "RENAME2" },
      [FUSE_COPY_FILE_RANGE] = { do_copy_file_range, "COPY_FILE_RANGE" },
      [FUSE_LSEEK] = { do_lseek, "LSEEK" },
@@ -100,7 +107,7 @@ index e94b71110b..1c3790130a 100644
  
  #define FUSE_MAXOP (sizeof(fuse_ll_ops) / sizeof(fuse_ll_ops[0]))
 diff --git a/tools/virtiofsd/fuse_lowlevel.h b/tools/virtiofsd/fuse_lowlevel.h
-index b0d111bcb2..2851840cc2 100644
+index 3383e3a..0bf2062 100644
 --- a/tools/virtiofsd/fuse_lowlevel.h
 +++ b/tools/virtiofsd/fuse_lowlevel.h
 @@ -24,6 +24,7 @@
@@ -111,7 +118,7 @@ index b0d111bcb2..2851840cc2 100644
  
  #include <sys/statvfs.h>
  #include <sys/uio.h>
-@@ -1170,7 +1171,6 @@ struct fuse_lowlevel_ops {
+@@ -1171,7 +1172,6 @@ struct fuse_lowlevel_ops {
       */
      void (*readdirplus)(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
                          struct fuse_file_info *fi);
@@ -119,7 +126,7 @@ index b0d111bcb2..2851840cc2 100644
      /**
       * Copy a range of data from one file to another
       *
-@@ -1226,6 +1226,27 @@ struct fuse_lowlevel_ops {
+@@ -1227,6 +1227,27 @@ struct fuse_lowlevel_ops {
       */
      void (*lseek)(fuse_req_t req, fuse_ino_t ino, off_t off, int whence,
                    struct fuse_file_info *fi);

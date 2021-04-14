@@ -1,7 +1,7 @@
-From 1586d4a5525f44c51cbcbd5004b9a79bfc8c495c Mon Sep 17 00:00:00 2001
+From 58469fbd8bf9ee4e641ed58d47eef585b41442ca Mon Sep 17 00:00:00 2001
 From: "Dr. David Alan Gilbert" <dgilbert@redhat.com>
-Date: Mon, 20 May 2019 13:26:09 +0100
-Subject: [PATCH 19/29] DAX/unmap virtiofsd: Parse unmappable elements
+Date: Wed, 14 Apr 2021 16:51:31 +0100
+Subject: [PATCH 19/25] DAX/unmap virtiofsd: Parse unmappable elements
 
 For some read/writes the virtio queue elements are unmappable by
 the daemon; these are cases where the data is to be read/written
@@ -20,11 +20,11 @@ Signed-off-by: Liu Bo <bo.liu@linux.alibaba.com>
 ---
  tools/virtiofsd/buffer.c      |   4 +-
  tools/virtiofsd/fuse_common.h |   7 ++
- tools/virtiofsd/fuse_virtio.c | 191 ++++++++++++++++++++++++----------
- 3 files changed, 145 insertions(+), 57 deletions(-)
+ tools/virtiofsd/fuse_virtio.c | 230 ++++++++++++++++++++++++----------
+ 3 files changed, 173 insertions(+), 68 deletions(-)
 
 diff --git a/tools/virtiofsd/buffer.c b/tools/virtiofsd/buffer.c
-index 874f01c488..1a050aa441 100644
+index 874f01c..1a050aa 100644
 --- a/tools/virtiofsd/buffer.c
 +++ b/tools/virtiofsd/buffer.c
 @@ -77,6 +77,7 @@ static ssize_t fuse_buf_write(const struct fuse_buf *dst, size_t dst_off,
@@ -46,10 +46,10 @@ index 874f01c488..1a050aa441 100644
          }
      }
 diff --git a/tools/virtiofsd/fuse_common.h b/tools/virtiofsd/fuse_common.h
-index a090040bb2..ed9280de91 100644
+index fa96718..af43cf1 100644
 --- a/tools/virtiofsd/fuse_common.h
 +++ b/tools/virtiofsd/fuse_common.h
-@@ -611,6 +611,13 @@ enum fuse_buf_flags {
+@@ -626,6 +626,13 @@ enum fuse_buf_flags {
       * detected.
       */
      FUSE_BUF_FD_RETRY = (1 << 3),
@@ -64,7 +64,7 @@ index a090040bb2..ed9280de91 100644
  
  /**
 diff --git a/tools/virtiofsd/fuse_virtio.c b/tools/virtiofsd/fuse_virtio.c
-index abac0d0d2e..31f17ab043 100644
+index 402e94d..5ed78bd 100644
 --- a/tools/virtiofsd/fuse_virtio.c
 +++ b/tools/virtiofsd/fuse_virtio.c
 @@ -49,6 +49,10 @@ typedef struct {
@@ -78,7 +78,7 @@ index abac0d0d2e..31f17ab043 100644
      /* Used to complete requests that involve no reply */
      bool reply_sent;
  } FVRequest;
-@@ -291,8 +295,10 @@ int virtio_send_data_iov(struct fuse_session *se, struct fuse_chan *ch,
+@@ -353,8 +357,10 @@ int virtio_send_data_iov(struct fuse_session *se, struct fuse_chan *ch,
  
      /* The 'in' part of the elem is to qemu */
      unsigned int in_num = elem->in_num;
@@ -89,7 +89,7 @@ index abac0d0d2e..31f17ab043 100644
      fuse_log(FUSE_LOG_DEBUG, "%s: elem %d: with %d in desc of length %zd\n",
               __func__, elem->index, in_num, in_len);
  
-@@ -300,7 +306,7 @@ int virtio_send_data_iov(struct fuse_session *se, struct fuse_chan *ch,
+@@ -362,7 +368,7 @@ int virtio_send_data_iov(struct fuse_session *se, struct fuse_chan *ch,
       * The elem should have room for a 'fuse_out_header' (out from fuse)
       * plus the data based on the len in the header.
       */
@@ -98,7 +98,7 @@ index abac0d0d2e..31f17ab043 100644
          fuse_log(FUSE_LOG_ERR, "%s: elem %d too short for out_header\n",
                   __func__, elem->index);
          ret = E2BIG;
-@@ -327,7 +333,7 @@ int virtio_send_data_iov(struct fuse_session *se, struct fuse_chan *ch,
+@@ -389,7 +395,7 @@ int virtio_send_data_iov(struct fuse_session *se, struct fuse_chan *ch,
      memcpy(in_sg_cpy, in_sg, sizeof(struct iovec) * in_num);
      /* These get updated as we skip */
      struct iovec *in_sg_ptr = in_sg_cpy;
@@ -107,7 +107,7 @@ index abac0d0d2e..31f17ab043 100644
  
      /* skip over parts of in_sg that contained the header iov */
      size_t skip_size = iov_len;
-@@ -460,17 +466,21 @@ static void fv_queue_worker(gpointer data, gpointer user_data)
+@@ -523,17 +529,21 @@ static void fv_queue_worker(gpointer data, gpointer user_data)
  
      /* The 'out' part of the elem is from qemu */
      unsigned int out_num = elem->out_num;
@@ -132,14 +132,19 @@ index abac0d0d2e..31f17ab043 100644
          fuse_log(FUSE_LOG_ERR, "%s: elem %d too short for in_header\n",
                   __func__, elem->index);
          assert(0); /* TODO */
-@@ -484,63 +494,129 @@ static void fv_queue_worker(gpointer data, gpointer user_data)
-     copy_from_iov(&fbuf, 1, out_sg);
+@@ -544,80 +554,163 @@ static void fv_queue_worker(gpointer data, gpointer user_data)
+         assert(0); /* TODO */
+     }
+     /* Copy just the fuse_in_header and look at it */
+-    copy_from_iov(&fbuf, out_num, out_sg,
++    copy_from_iov(&fbuf, out_num_readable, out_sg,
+                   sizeof(struct fuse_in_header));
+     memcpy(&inh, fbuf.mem, sizeof(struct fuse_in_header));
  
      pbufv = NULL; /* Compiler thinks an unitialised path */
--    if (out_num > 2 &&
--        out_sg[0].iov_len == sizeof(struct fuse_in_header) &&
--        ((struct fuse_in_header *)fbuf.mem)->opcode == FUSE_WRITE &&
--        out_sg[1].iov_len == sizeof(struct fuse_write_in)) {
+-    if (inh.opcode == FUSE_WRITE &&
+-        out_len >= (sizeof(struct fuse_in_header) +
+-                    sizeof(struct fuse_write_in))) {
 -        /*
 -         * For a write we don't actually need to copy the
 -         * data, we can just do it straight out of guest memory
@@ -148,15 +153,15 @@ index abac0d0d2e..31f17ab043 100644
 -         */
 -        fuse_log(FUSE_LOG_DEBUG, "%s: Write special case\n", __func__);
 -
--        /* copy the fuse_write_in header afte rthe fuse_in_header */
--        fbuf.mem += out_sg->iov_len;
--        copy_from_iov(&fbuf, 1, out_sg + 1);
--        fbuf.mem -= out_sg->iov_len;
--        fbuf.size = out_sg[0].iov_len + out_sg[1].iov_len;
+-        fbuf.size = copy_from_iov(&fbuf, out_num, out_sg,
+-                                  sizeof(struct fuse_in_header) +
+-                                  sizeof(struct fuse_write_in));
+-        /* That copy reread the in_header, make sure we use the original */
+-        memcpy(fbuf.mem, &inh, sizeof(struct fuse_in_header));
 -
 -        /* Allocate the bufv, with space for the rest of the iov */
 -        pbufv = malloc(sizeof(struct fuse_bufvec) +
--                       sizeof(struct fuse_buf) * (out_num - 2));
+-                       sizeof(struct fuse_buf) * out_num);
 -        if (!pbufv) {
 -            fuse_log(FUSE_LOG_ERR, "%s: pbufv malloc failed\n",
 -                    __func__);
@@ -165,21 +170,22 @@ index abac0d0d2e..31f17ab043 100644
 +    if (req->bad_in_num || req->bad_out_num) {
 +        bool handled_unmappable = false;
 +
-+        if (out_num > 2 && out_num_readable >= 2 && !req->bad_in_num &&
-+            out_sg[0].iov_len == sizeof(struct fuse_in_header) &&
-+            ((struct fuse_in_header *)fbuf.mem)->opcode == FUSE_WRITE &&
-+            out_sg[1].iov_len == sizeof(struct fuse_write_in)) {
++        if (!req->bad_in_num &&
++            inh.opcode == FUSE_WRITE &&
++            out_len_readable >= (sizeof(struct fuse_in_header) +
++                                 sizeof(struct fuse_write_in))) {
 +            handled_unmappable = true;
 +
 +            /* copy the fuse_write_in header after fuse_in_header */
-+            fbuf.mem += out_sg->iov_len;
-+            copy_from_iov(&fbuf, 1, out_sg + 1);
-+            fbuf.mem -= out_sg->iov_len;
-+            fbuf.size = out_sg[0].iov_len + out_sg[1].iov_len;
++            fbuf.size = copy_from_iov(&fbuf, out_num_readable, out_sg,
++                                      sizeof(struct fuse_in_header) +
++                                      sizeof(struct fuse_write_in));
++            /* That copy reread the in_header, make sure we use the original */
++            memcpy(fbuf.mem, &inh, sizeof(struct fuse_in_header));
 +
 +            /* Allocate the bufv, with space for the rest of the iov */
 +            pbufv = malloc(sizeof(struct fuse_bufvec) +
-+                           sizeof(struct fuse_buf) * (out_num - 2));
++                           sizeof(struct fuse_buf) * out_num);
 +            if (!pbufv) {
 +                fuse_log(FUSE_LOG_ERR, "%s: pbufv malloc failed\n",
 +                        __func__);
@@ -192,11 +198,40 @@ index abac0d0d2e..31f17ab043 100644
 +            allocated_bufv = true;
 +            pbufv->count = 1;
 +            pbufv->buf[0] = fbuf;
-+
-+            size_t iovindex, pbufvindex;
-+            iovindex = 2; /* 2 headers, separate iovs */
+ 
+-        size_t iovindex, pbufvindex, iov_bytes_skip;
+-        pbufvindex = 1; /* 2 headers, 1 fusebuf */
++            size_t iovindex, pbufvindex, iov_bytes_skip;
 +            pbufvindex = 1; /* 2 headers, 1 fusebuf */
-+
+ 
+-        if (!skip_iov(out_sg, out_num,
+-                      sizeof(struct fuse_in_header) +
+-                      sizeof(struct fuse_write_in),
+-                      &iovindex, &iov_bytes_skip)) {
+-            fuse_log(FUSE_LOG_ERR, "%s: skip failed\n",
+-                    __func__);
+-            goto out;
+-        }
++            if (!skip_iov(out_sg, out_num,
++                          sizeof(struct fuse_in_header) +
++                          sizeof(struct fuse_write_in),
++                          &iovindex, &iov_bytes_skip)) {
++                fuse_log(FUSE_LOG_ERR, "%s: skip failed\n",
++                        __func__);
++                goto out;
++            }
+ 
+-        for (; iovindex < out_num; iovindex++, pbufvindex++) {
+-            pbufv->count++;
+-            pbufv->buf[pbufvindex].pos = ~0; /* Dummy */
+-            pbufv->buf[pbufvindex].flags = 0;
+-            pbufv->buf[pbufvindex].mem = out_sg[iovindex].iov_base;
+-            pbufv->buf[pbufvindex].size = out_sg[iovindex].iov_len;
+-
+-            if (iov_bytes_skip) {
+-                pbufv->buf[pbufvindex].mem += iov_bytes_skip;
+-                pbufv->buf[pbufvindex].size -= iov_bytes_skip;
+-                iov_bytes_skip = 0;
 +            for (; iovindex < out_num; iovindex++, pbufvindex++) {
 +                pbufv->count++;
 +                pbufv->buf[pbufvindex].pos = ~0; /* Dummy */
@@ -205,45 +240,45 @@ index abac0d0d2e..31f17ab043 100644
 +                                                    FUSE_BUF_PHYS_ADDR;
 +                pbufv->buf[pbufvindex].mem = out_sg[iovindex].iov_base;
 +                pbufv->buf[pbufvindex].size = out_sg[iovindex].iov_len;
-+            }
-+        }
++
++                if (iov_bytes_skip) {
++                    pbufv->buf[pbufvindex].mem += iov_bytes_skip;
++                    pbufv->buf[pbufvindex].size -= iov_bytes_skip;
++                    iov_bytes_skip = 0;
++                }
+             }
+         }
+-    } else {
+-        /* Normal (non fast write) path */
  
--        size_t iovindex, pbufvindex;
--        iovindex = 2; /* 2 headers, separate iovs */
--        pbufvindex = 1; /* 2 headers, 1 fusebuf */
-+        if (out_num == 2 && out_num_readable == 2 && req->bad_in_num &&
-+            out_sg[0].iov_len == sizeof(struct fuse_in_header) &&
-+            ((struct fuse_in_header *)fbuf.mem)->opcode == FUSE_READ &&
-+            out_sg[1].iov_len == sizeof(struct fuse_read_in)) {
+-        copy_from_iov(&fbuf, out_num, out_sg, se->bufsize);
+-        /* That copy reread the in_header, make sure we use the original */
+-        memcpy(fbuf.mem, &inh, sizeof(struct fuse_in_header));
+-        fbuf.size = out_len;
++        if (req->bad_in_num &&
++            inh.opcode == FUSE_READ &&
++            out_len_readable >=
++                (sizeof(struct fuse_in_header) + sizeof(struct fuse_read_in))) {
 +            fuse_log(FUSE_LOG_DEBUG,
 +                     "Unmappable read case "
 +                     "in_num=%d bad_in_num=%d\n",
 +                     elem->in_num, req->bad_in_num);
 +            handled_unmappable = true;
 +        }
- 
--        for (; iovindex < out_num; iovindex++, pbufvindex++) {
--            pbufv->count++;
--            pbufv->buf[pbufvindex].pos = ~0; /* Dummy */
--            pbufv->buf[pbufvindex].flags = 0;
--            pbufv->buf[pbufvindex].mem = out_sg[iovindex].iov_base;
--            pbufv->buf[pbufvindex].size = out_sg[iovindex].iov_len;
++
 +        if (!handled_unmappable) {
 +            fuse_log(FUSE_LOG_ERR,
 +                     "Unhandled unmappable element: out: %d(b:%d) in: "
 +                     "%d(b:%d)",
 +                     out_num, req->bad_out_num, elem->in_num, req->bad_in_num);
 +            fv_panic(dev, "Unhandled unmappable element");
-         }
--    } else {
--        /* Normal (non fast write) path */
++        }
 +    }
 +
 +    if (!req->bad_out_num) {
-+        if (out_num > 2 &&
-+            out_sg[0].iov_len == sizeof(struct fuse_in_header) &&
-+            ((struct fuse_in_header *)fbuf.mem)->opcode == FUSE_WRITE &&
-+            out_sg[1].iov_len == sizeof(struct fuse_write_in)) {
++        if (inh.opcode == FUSE_WRITE &&
++            out_len_readable >= (sizeof(struct fuse_in_header) +
++                                 sizeof(struct fuse_write_in))) {
 +            /*
 +             * For a write we don't actually need to copy the
 +             * data, we can just do it straight out of guest memory
@@ -253,53 +288,63 @@ index abac0d0d2e..31f17ab043 100644
 +            fuse_log(FUSE_LOG_DEBUG, "%s: Write special case\n",
 +                     __func__);
 +
-+            /* copy the fuse_write_in header after fuse_in_header */
-+            fbuf.mem += out_sg->iov_len;
-+            copy_from_iov(&fbuf, 1, out_sg + 1);
-+            fbuf.mem -= out_sg->iov_len;
-+            fbuf.size = out_sg[0].iov_len + out_sg[1].iov_len;
++            fbuf.size = copy_from_iov(&fbuf, out_num, out_sg,
++                                      sizeof(struct fuse_in_header) +
++                                      sizeof(struct fuse_write_in));
++            /* That copy reread the in_header, make sure we use the original */
++            memcpy(fbuf.mem, &inh, sizeof(struct fuse_in_header));
 +
 +            /* Allocate the bufv, with space for the rest of the iov */
 +            pbufv = malloc(sizeof(struct fuse_bufvec) +
-+                           sizeof(struct fuse_buf) * (out_num - 2));
++                           sizeof(struct fuse_buf) * out_num);
 +            if (!pbufv) {
 +                fuse_log(FUSE_LOG_ERR, "%s: pbufv malloc failed\n",
 +                        __func__);
 +                goto out;
 +            }
- 
--        /* Copy the rest of the buffer */
--        fbuf.mem += out_sg->iov_len;
--        copy_from_iov(&fbuf, out_num - 1, out_sg + 1);
--        fbuf.mem -= out_sg->iov_len;
--        fbuf.size = out_len;
++
 +            allocated_bufv = true;
 +            pbufv->count = 1;
 +            pbufv->buf[0] = fbuf;
  
 -        /* TODO! Endianness of header */
-+            size_t iovindex, pbufvindex;
-+            iovindex = 2; /* 2 headers, separate iovs */
++            size_t iovindex, pbufvindex, iov_bytes_skip;
 +            pbufvindex = 1; /* 2 headers, 1 fusebuf */
  
 -        /* TODO: Add checks for fuse_session_exited */
 -        bufv.buf[0] = fbuf;
 -        bufv.count = 1;
 -        pbufv = &bufv;
++            if (!skip_iov(out_sg, out_num,
++                          sizeof(struct fuse_in_header) +
++                          sizeof(struct fuse_write_in),
++                          &iovindex, &iov_bytes_skip)) {
++                fuse_log(FUSE_LOG_ERR, "%s: skip failed\n",
++                        __func__);
++                goto out;
++            }
++
 +            for (; iovindex < out_num; iovindex++, pbufvindex++) {
 +                pbufv->count++;
 +                pbufv->buf[pbufvindex].pos = ~0; /* Dummy */
 +                pbufv->buf[pbufvindex].flags = 0;
 +                pbufv->buf[pbufvindex].mem = out_sg[iovindex].iov_base;
 +                pbufv->buf[pbufvindex].size = out_sg[iovindex].iov_len;
++
++                if (iov_bytes_skip) {
++                    pbufv->buf[pbufvindex].mem += iov_bytes_skip;
++                    pbufv->buf[pbufvindex].size -= iov_bytes_skip;
++                    iov_bytes_skip = 0;
++                }
 +            }
 +        } else {
 +            /* Normal (non fast write) path */
 +
 +            /* Copy the rest of the buffer */
-+            fbuf.mem += out_sg->iov_len;
-+            copy_from_iov(&fbuf, out_num - 1, out_sg + 1);
-+            fbuf.mem -= out_sg->iov_len;
++            copy_from_iov(&fbuf, out_num, out_sg, se->bufsize);
++            /* That copy reread the in_header, make sure we use the original */
++            memcpy(fbuf.mem, &inh, sizeof(struct fuse_in_header));
++
 +            fbuf.size = out_len;
 +
 +            /* TODO! Endianness of header */
@@ -312,7 +357,7 @@ index abac0d0d2e..31f17ab043 100644
      }
      pbufv->idx = 0;
      pbufv->off = 0;
-@@ -657,13 +733,16 @@ static void *fv_queue_thread(void *opaque)
+@@ -732,13 +825,16 @@ static void *fv_queue_thread(void *opaque)
                   __func__, qi->qidx, (size_t)evalue, in_bytes, out_bytes);
  
          while (1) {

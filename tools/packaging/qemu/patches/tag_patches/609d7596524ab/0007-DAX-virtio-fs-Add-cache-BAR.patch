@@ -1,7 +1,7 @@
-From 3996e9086ddd591494f9cb7f0eb7048a1b52200c Mon Sep 17 00:00:00 2001
+From 6e9d9b09ec3c7e7d2e5be698a830e965d6de4e0e Mon Sep 17 00:00:00 2001
 From: "Dr. David Alan Gilbert" <dgilbert@redhat.com>
-Date: Tue, 3 Jul 2018 16:33:52 +0100
-Subject: [PATCH 05/29] DAX: virtio-fs: Add cache BAR
+Date: Wed, 14 Apr 2021 16:51:19 +0100
+Subject: [PATCH 07/25] DAX: virtio-fs: Add cache BAR
 
 Add a cache BAR into which files will be directly mapped.
 The size can be set with the cache-size= property, e.g.
@@ -13,21 +13,27 @@ Signed-off-by: Dr. David Alan Gilbert <dgilbert@redhat.com>
 with PPC fixes by:
 Signed-off-by: Fabiano Rosas <farosas@linux.ibm.com>
 ---
- hw/virtio/vhost-user-fs-pci.c              | 23 ++++++++++++++++
- hw/virtio/vhost-user-fs.c                  | 32 ++++++++++++++++++++++
- include/hw/virtio/vhost-user-fs.h          |  2 ++
- include/standard-headers/linux/virtio_fs.h |  2 ++
- 4 files changed, 59 insertions(+)
+ hw/virtio/vhost-user-fs-pci.c     | 32 +++++++++++++++++++++++++++++++
+ hw/virtio/vhost-user-fs.c         | 32 +++++++++++++++++++++++++++++++
+ include/hw/virtio/vhost-user-fs.h |  2 ++
+ 3 files changed, 66 insertions(+)
 
 diff --git a/hw/virtio/vhost-user-fs-pci.c b/hw/virtio/vhost-user-fs-pci.c
-index 8bb389bd28..19aaa8d722 100644
+index 2ed8492..20e4476 100644
 --- a/hw/virtio/vhost-user-fs-pci.c
 +++ b/hw/virtio/vhost-user-fs-pci.c
-@@ -16,10 +16,12 @@
+@@ -12,14 +12,19 @@
+  */
+ 
+ #include "qemu/osdep.h"
++#include "qapi/error.h"
+ #include "hw/qdev-properties.h"
  #include "hw/virtio/vhost-user-fs.h"
  #include "virtio-pci.h"
  #include "qom/object.h"
 +#include "standard-headers/linux/virtio_fs.h"
++
++#define VIRTIO_FS_PCI_CACHE_BAR 2
  
  struct VHostUserFSPCI {
      VirtIOPCIProxy parent_obj;
@@ -36,48 +42,55 @@ index 8bb389bd28..19aaa8d722 100644
  };
  
  typedef struct VHostUserFSPCI VHostUserFSPCI;
-@@ -39,6 +41,7 @@ static void vhost_user_fs_pci_realize(VirtIOPCIProxy *vpci_dev, Error **errp)
+@@ -38,7 +43,9 @@ static Property vhost_user_fs_pci_properties[] = {
+ static void vhost_user_fs_pci_realize(VirtIOPCIProxy *vpci_dev, Error **errp)
  {
      VHostUserFSPCI *dev = VHOST_USER_FS_PCI(vpci_dev);
++    bool modern_pio = vpci_dev->flags & VIRTIO_PCI_FLAG_MODERN_PIO_NOTIFY;
      DeviceState *vdev = DEVICE(&dev->vdev);
 +    uint64_t cachesize;
  
      if (vpci_dev->nvectors == DEV_NVECTORS_UNSPECIFIED) {
          /* Also reserve config change and hiprio queue vectors */
-@@ -46,6 +49,26 @@ static void vhost_user_fs_pci_realize(VirtIOPCIProxy *vpci_dev, Error **errp)
+@@ -46,6 +53,31 @@ static void vhost_user_fs_pci_realize(VirtIOPCIProxy *vpci_dev, Error **errp)
      }
  
      qdev_realize(vdev, BUS(&vpci_dev->bus), errp);
 +    cachesize = dev->vdev.conf.cache_size;
++
++    if (cachesize && modern_pio) {
++        error_setg(errp, "DAX Cache can not be used together with modern_pio");
++        return;
++    }
 +
 +    /*
 +     * The bar starts with the data/DAX cache
 +     * Others will be added later.
 +     */
 +    memory_region_init(&dev->cachebar, OBJECT(vpci_dev),
-+                       "vhost-fs-pci-cachebar", cachesize);
++                       "vhost-user-fs-pci-cachebar", cachesize);
 +    if (cachesize) {
 +        memory_region_add_subregion(&dev->cachebar, 0, &dev->vdev.cache);
 +        virtio_pci_add_shm_cap(vpci_dev, VIRTIO_FS_PCI_CACHE_BAR, 0, cachesize,
 +                               VIRTIO_FS_SHMCAP_ID_CACHE);
-+    }
 +
-+    /* After 'realized' so the memory region exists */
-+    pci_register_bar(&vpci_dev->pci_dev, VIRTIO_FS_PCI_CACHE_BAR,
-+                     PCI_BASE_ADDRESS_SPACE_MEMORY |
-+                     PCI_BASE_ADDRESS_MEM_PREFETCH |
-+                     PCI_BASE_ADDRESS_MEM_TYPE_64,
-+                     &dev->cachebar);
++        /* After 'realized' so the memory region exists */
++        pci_register_bar(&vpci_dev->pci_dev, VIRTIO_FS_PCI_CACHE_BAR,
++                         PCI_BASE_ADDRESS_SPACE_MEMORY |
++                         PCI_BASE_ADDRESS_MEM_PREFETCH |
++                         PCI_BASE_ADDRESS_MEM_TYPE_64,
++                         &dev->cachebar);
++    }
  }
  
  static void vhost_user_fs_pci_class_init(ObjectClass *klass, void *data)
 diff --git a/hw/virtio/vhost-user-fs.c b/hw/virtio/vhost-user-fs.c
-index ed036ad9c1..d111bf2af3 100644
+index 6f7f915..dd0a02a 100644
 --- a/hw/virtio/vhost-user-fs.c
 +++ b/hw/virtio/vhost-user-fs.c
-@@ -23,6 +23,16 @@
- #include "hw/virtio/vhost-user-fs.h"
- #include "monitor/monitor.h"
+@@ -35,6 +35,16 @@ static const int user_feature_bits[] = {
+     VHOST_INVALID_FEATURE_BIT
+ };
  
 +/*
 + * The powerpc kernel code expects the memory to be accessible during
@@ -92,7 +105,7 @@ index ed036ad9c1..d111bf2af3 100644
  static void vuf_get_config(VirtIODevice *vdev, uint8_t *config)
  {
      VHostUserFS *fs = VHOST_USER_FS(vdev);
-@@ -162,6 +172,7 @@ static void vuf_device_realize(DeviceState *dev, Error **errp)
+@@ -175,6 +185,7 @@ static void vuf_device_realize(DeviceState *dev, Error **errp)
  {
      VirtIODevice *vdev = VIRTIO_DEVICE(dev);
      VHostUserFS *fs = VHOST_USER_FS(dev);
@@ -100,13 +113,13 @@ index ed036ad9c1..d111bf2af3 100644
      unsigned int i;
      size_t len;
      int ret;
-@@ -201,6 +212,26 @@ static void vuf_device_realize(DeviceState *dev, Error **errp)
+@@ -214,6 +225,26 @@ static void vuf_device_realize(DeviceState *dev, Error **errp)
                     VIRTQUEUE_MAX_SIZE);
          return;
      }
 +    if (fs->conf.cache_size &&
 +        (!is_power_of_2(fs->conf.cache_size) ||
-+          fs->conf.cache_size < sysconf(_SC_PAGESIZE))) {
++          fs->conf.cache_size < qemu_real_host_page_size)) {
 +        error_setg(errp, "cache-size property must be a power of 2 "
 +                         "no smaller than the page size");
 +        return;
@@ -127,7 +140,7 @@ index ed036ad9c1..d111bf2af3 100644
  
      if (!vhost_user_init(&fs->vhost_user, &fs->conf.chardev, errp)) {
          return;
-@@ -276,6 +307,7 @@ static Property vuf_properties[] = {
+@@ -289,6 +320,7 @@ static Property vuf_properties[] = {
      DEFINE_PROP_UINT16("num-request-queues", VHostUserFS,
                         conf.num_request_queues, 1),
      DEFINE_PROP_UINT16("queue-size", VHostUserFS, conf.queue_size, 128),
@@ -136,7 +149,7 @@ index ed036ad9c1..d111bf2af3 100644
  };
  
 diff --git a/include/hw/virtio/vhost-user-fs.h b/include/hw/virtio/vhost-user-fs.h
-index 6985752771..df6bf2a926 100644
+index 0d62834..0459679 100644
 --- a/include/hw/virtio/vhost-user-fs.h
 +++ b/include/hw/virtio/vhost-user-fs.h
 @@ -28,6 +28,7 @@ typedef struct {
@@ -147,25 +160,14 @@ index 6985752771..df6bf2a926 100644
  } VHostUserFSConf;
  
  struct VHostUserFS {
-@@ -41,6 +42,7 @@ struct VHostUserFS {
-     VirtQueue *hiprio_vq;
+@@ -42,6 +43,7 @@ struct VHostUserFS {
+     int32_t bootindex;
  
      /*< public >*/
 +    MemoryRegion cache;
  };
  
  #endif /* _QEMU_VHOST_USER_FS_H */
-diff --git a/include/standard-headers/linux/virtio_fs.h b/include/standard-headers/linux/virtio_fs.h
-index a32fe8a64c..808aa3a402 100644
---- a/include/standard-headers/linux/virtio_fs.h
-+++ b/include/standard-headers/linux/virtio_fs.h
-@@ -19,4 +19,6 @@ struct virtio_fs_config {
- /* For the id field in virtio_pci_shm_cap */
- #define VIRTIO_FS_SHMCAP_ID_CACHE 0
- 
-+#define VIRTIO_FS_PCI_CACHE_BAR 2
-+
- #endif /* _LINUX_VIRTIO_FS_H */
 -- 
 2.25.1
 

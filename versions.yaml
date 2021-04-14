@@ -88,8 +88,8 @@ assets:
     qemu:
       description: "VMM that uses KVM"
       url: "https://github.com/qemu/qemu"
-      version: "v5.2.0"
-      tag: "v5.2.0"
+      version: "v6.0.0"
+      tag: "v6.0.0"
       # Do not include any non-full release versions
       # Break the line *without CR or space being appended*, to appease
       # yamllint, and note the deliberate ' ' at the end of the expression.
@@ -108,7 +108,7 @@ assets:
     qemu-experimental:
       description: "QEMU with virtiofs support"
       url: "https://github.com/qemu/qemu"
-      version: "470dd6bd360782f5137f7e3376af6a44658eb1d3"
+      version: "609d7596524ab"
 
   image:
     description: |
