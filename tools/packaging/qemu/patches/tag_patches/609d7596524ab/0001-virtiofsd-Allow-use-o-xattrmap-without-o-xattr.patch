@@ -1,0 +1,30 @@
+From 7bd49e3bdbd3c602a31d184c30fad32ff1e38f0c Mon Sep 17 00:00:00 2001
+From: Carlos Venegas <jose.carlos.venegas.munoz@intel.com>
+Date: Wed, 14 Apr 2021 20:12:06 +0000
+Subject: [PATCH 1/2] virtiofsd: Allow use "-o xattrmap" without "-o xattr"
+
+When -o xattrmap is used, it will not work unless xattr is enabled.
+
+This patch enables xattr when -o xattrmap is used.
+
+Signed-off-by: Carlos Venegas <jose.carlos.venegas.munoz@intel.com>
+Reviewed-by: Connor Kuehl <ckuehl@redhat.com>
+---
+ tools/virtiofsd/passthrough_ll.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/tools/virtiofsd/passthrough_ll.c b/tools/virtiofsd/passthrough_ll.c
+index d0fa7de..1db4b13 100644
+--- a/tools/virtiofsd/passthrough_ll.c
++++ b/tools/virtiofsd/passthrough_ll.c
+@@ -3939,6 +3939,7 @@ int main(int argc, char *argv[])
+     }
+ 
+     if (lo.xattrmap) {
++        lo.xattr = 1;
+         parse_xattrmap(&lo);
+     }
+ 
+-- 
+2.25.1
+
