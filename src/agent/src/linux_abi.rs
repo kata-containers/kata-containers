@@ -9,7 +9,6 @@
 use std::fs;
 
 pub const SYSFS_DIR: &str = "/sys";
-pub const SYSFS_PCI_BUS_RESCAN_FILE: &str = "/sys/bus/pci/rescan";
 #[cfg(any(
     target_arch = "powerpc64",
     target_arch = "s390x",

@@ -43,9 +43,7 @@ use nix::sys::stat;
 use nix::unistd::{self, Pid};
 use rustjail::process::ProcessOperations;
 
-use crate::device::{
-    add_devices, get_virtio_blk_pci_device_name, rescan_pci_bus, update_device_cgroup,
-};
+use crate::device::{add_devices, get_virtio_blk_pci_device_name, update_device_cgroup};
 use crate::linux_abi::*;
 use crate::metrics::get_metrics;
 use crate::mount::{add_storages, baremount, remove_mounts, STORAGE_HANDLER_LIST};
@@ -135,10 +133,6 @@ impl AgentService {
         };
 
         info!(sl!(), "receive createcontainer, spec: {:?}", &oci);
-
-        // re-scan PCI bus
-        // looking for hidden devices
-        rescan_pci_bus().context("Could not rescan PCI bus")?;
 
         // Some devices need some extra processing (the ones invoked with
         // --device for instance), and that's what this call is doing. It

@@ -57,11 +57,6 @@ struct DevIndexEntry {
 struct DevIndex(HashMap<String, DevIndexEntry>);
 
 #[instrument]
-pub fn rescan_pci_bus() -> Result<()> {
-    online_device(SYSFS_PCI_BUS_RESCAN_FILE)
-}
-
-#[instrument]
 pub fn online_device(path: &str) -> Result<()> {
     fs::write(path, "1")?;
     Ok(())
@@ -170,8 +165,6 @@ pub async fn get_virtio_blk_pci_device_name(
     let root_bus_sysfs = format!("{}{}", SYSFS_DIR, create_pci_root_bus_path());
     let sysfs_rel_path = pcipath_to_sysfs(&root_bus_sysfs, pcipath)?;
     let matcher = VirtioBlkPciMatcher::new(&sysfs_rel_path);
-
-    rescan_pci_bus()?;
 
     let uev = wait_for_uevent(sandbox, matcher).await?;
     Ok(format!("{}/{}", SYSTEM_DEV_PATH, &uev.devname))
