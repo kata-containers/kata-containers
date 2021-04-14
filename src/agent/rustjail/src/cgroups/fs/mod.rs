@@ -24,7 +24,7 @@ use anyhow::{anyhow, Context, Result};
 use libc::{self, pid_t};
 use nix::errno::Errno;
 use oci::{
-    LinuxBlockIO, LinuxCPU, LinuxDevice, LinuxDeviceCgroup, LinuxHugepageLimit, LinuxMemory,
+    LinuxBlockIo, LinuxCpu, LinuxDevice, LinuxDeviceCgroup, LinuxHugepageLimit, LinuxMemory,
     LinuxNetwork, LinuxPids, LinuxResources,
 };
 
@@ -272,7 +272,7 @@ fn set_hugepages_resources(
 
 fn set_block_io_resources(
     _cg: &cgroups::Cgroup,
-    blkio: &LinuxBlockIO,
+    blkio: &LinuxBlockIo,
     res: &mut cgroups::Resources,
 ) {
     info!(sl!(), "cgroup manager set block io");
@@ -302,7 +302,7 @@ fn set_block_io_resources(
         build_blk_io_device_throttle_resource(&blkio.throttle_write_iops_device);
 }
 
-fn set_cpu_resources(cg: &cgroups::Cgroup, cpu: &LinuxCPU) -> Result<()> {
+fn set_cpu_resources(cg: &cgroups::Cgroup, cpu: &LinuxCpu) -> Result<()> {
     info!(sl!(), "cgroup manager set cpu");
 
     let cpuset_controller: &CpuSetController = cg.controller_of().unwrap();
