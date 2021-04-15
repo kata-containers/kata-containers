@@ -345,37 +345,40 @@ func WaitLocalProcess(pid int, timeoutSecs uint, initialSignal syscall.Signal, l
 
 	pidRunning := true
 
+	secs := time.Duration(timeoutSecs)
+	timeout := time.After(secs * time.Second)
+
 	// Wait for the VM process to terminate
-	startTime := time.Now()
-
+outer:
 	for {
-		var _status syscall.WaitStatus
-		var _rusage syscall.Rusage
-		var waitedPid int
+		select {
+		case <-time.After(50 * time.Millisecond):
+			// Check if the process is running periodically to avoid a busy loop
 
-		// "A watched pot never boils" and an unwaited-for process never appears to die!
-		waitedPid, err = syscall.Wait4(pid, &_status, syscall.WNOHANG, &_rusage)
+			var _status syscall.WaitStatus
+			var _rusage syscall.Rusage
+			var waitedPid int
 
-		if waitedPid == pid && err == nil {
-			pidRunning = false
+			// "A watched pot never boils" and an unwaited-for process never appears to die!
+			waitedPid, err = syscall.Wait4(pid, &_status, syscall.WNOHANG, &_rusage)
+
+			if waitedPid == pid && err == nil {
+				pidRunning = false
+				break outer
+			}
+
+			if err = syscall.Kill(pid, syscall.Signal(0)); err != nil {
+				pidRunning = false
+				break outer
+			}
+
 			break
-		}
 
-		if err = syscall.Kill(pid, syscall.Signal(0)); err != nil {
-			pidRunning = false
-			break
-		}
-
-		if time.Since(startTime).Seconds() >= float64(timeoutSecs) {
-			pidRunning = true
-
+		case <-timeout:
 			logger.Warnf("process %v still running after waiting %ds", pid, timeoutSecs)
 
-			break
+			break outer
 		}
-
-		// Brief pause to avoid a busy loop
-		time.Sleep(time.Duration(50) * time.Millisecond)
 	}
 
 	if pidRunning {
