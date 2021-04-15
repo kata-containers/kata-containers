@@ -349,6 +349,18 @@ func WaitLocalProcess(pid int, timeoutSecs uint, initialSignal syscall.Signal, l
 	startTime := time.Now()
 
 	for {
+		var _status syscall.WaitStatus
+		var _rusage syscall.Rusage
+		var waitedPid int
+
+		// "A watched pot never boils" and an unwaited-for process never appears to die!
+		waitedPid, err = syscall.Wait4(pid, &_status, syscall.WNOHANG, &_rusage)
+
+		if waitedPid == pid && err == nil {
+			pidRunning = false
+			break
+		}
+
 		if err = syscall.Kill(pid, syscall.Signal(0)); err != nil {
 			pidRunning = false
 			break
