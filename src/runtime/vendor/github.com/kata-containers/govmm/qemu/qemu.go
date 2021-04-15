@@ -405,7 +405,7 @@ func (fsdev FSDevice) QemuParams(config *Config) []string {
 	}
 	deviceParams = append(deviceParams, fmt.Sprintf(",fsdev=%s", fsdev.ID))
 	deviceParams = append(deviceParams, fmt.Sprintf(",mount_tag=%s", fsdev.MountTag))
-	if fsdev.Transport.isVirtioPCI(config) {
+	if fsdev.Transport.isVirtioPCI(config) && fsdev.ROMFile != "" {
 		deviceParams = append(deviceParams, fmt.Sprintf(",romfile=%s", fsdev.ROMFile))
 	}
 	if fsdev.Transport.isVirtioCCW(config) {
@@ -538,7 +538,7 @@ func (cdev CharDevice) QemuParams(config *Config) []string {
 	if cdev.Name != "" {
 		deviceParams = append(deviceParams, fmt.Sprintf(",name=%s", cdev.Name))
 	}
-	if cdev.Driver == VirtioSerial && cdev.Transport.isVirtioPCI(config) {
+	if cdev.Driver == VirtioSerial && cdev.Transport.isVirtioPCI(config) && cdev.ROMFile != "" {
 		deviceParams = append(deviceParams, fmt.Sprintf(",romfile=%s", cdev.ROMFile))
 	}
 
@@ -808,7 +808,7 @@ func (netdev NetDevice) QemuDeviceParams(config *Config) []string {
 		deviceParams = append(deviceParams, netdev.mqParameter(config))
 	}
 
-	if netdev.Transport.isVirtioPCI(config) {
+	if netdev.Transport.isVirtioPCI(config) && netdev.ROMFile != "" {
 		deviceParams = append(deviceParams, fmt.Sprintf(",romfile=%s", netdev.ROMFile))
 	}
 
@@ -941,7 +941,7 @@ func (dev SerialDevice) QemuParams(config *Config) []string {
 		deviceParams = append(deviceParams, fmt.Sprintf(",%s", s))
 	}
 	deviceParams = append(deviceParams, fmt.Sprintf(",id=%s", dev.ID))
-	if dev.Transport.isVirtioPCI(config) {
+	if dev.Transport.isVirtioPCI(config) && dev.ROMFile != "" {
 		deviceParams = append(deviceParams, fmt.Sprintf(",romfile=%s", dev.ROMFile))
 		if dev.Driver == VirtioSerial && dev.MaxPorts != 0 {
 			deviceParams = append(deviceParams, fmt.Sprintf(",max_ports=%d", dev.MaxPorts))
@@ -1072,7 +1072,7 @@ func (blkdev BlockDevice) QemuParams(config *Config) []string {
 		deviceParams = append(deviceParams, ",config-wce=off")
 	}
 
-	if blkdev.Transport.isVirtioPCI(config) {
+	if blkdev.Transport.isVirtioPCI(config) && blkdev.ROMFile != "" {
 		deviceParams = append(deviceParams, fmt.Sprintf(",romfile=%s", blkdev.ROMFile))
 	}
 
@@ -1283,7 +1283,7 @@ func (vhostuserDev VhostUserDevice) QemuParams(config *Config) []string {
 		return nil
 	}
 
-	if vhostuserDev.Transport.isVirtioPCI(config) {
+	if vhostuserDev.Transport.isVirtioPCI(config) && vhostuserDev.ROMFile != "" {
 		devParams = append(devParams, fmt.Sprintf("romfile=%s", vhostuserDev.ROMFile))
 	}
 
@@ -1473,7 +1473,9 @@ func (vfioDev VFIODevice) QemuParams(config *Config) []string {
 		if vfioDev.DeviceID != "" {
 			deviceParams = append(deviceParams, fmt.Sprintf(",x-pci-device-id=%s", vfioDev.DeviceID))
 		}
-		deviceParams = append(deviceParams, fmt.Sprintf(",romfile=%s", vfioDev.ROMFile))
+		if vfioDev.ROMFile != "" {
+			deviceParams = append(deviceParams, fmt.Sprintf(",romfile=%s", vfioDev.ROMFile))
+		}
 	}
 
 	if vfioDev.Bus != "" {
@@ -1558,7 +1560,7 @@ func (scsiCon SCSIController) QemuParams(config *Config) []string {
 	if scsiCon.IOThread != "" {
 		devParams = append(devParams, fmt.Sprintf("iothread=%s", scsiCon.IOThread))
 	}
-	if scsiCon.Transport.isVirtioPCI(config) {
+	if scsiCon.Transport.isVirtioPCI(config) && scsiCon.ROMFile != "" {
 		devParams = append(devParams, fmt.Sprintf("romfile=%s", scsiCon.ROMFile))
 	}
 
@@ -1664,7 +1666,7 @@ func (bridgeDev BridgeDevice) QemuParams(config *Config) []string {
 	}
 
 	var transport VirtioTransport
-	if transport.isVirtioPCI(config) {
+	if transport.isVirtioPCI(config) && bridgeDev.ROMFile != "" {
 		deviceParam = append(deviceParam, fmt.Sprintf(",romfile=%s", bridgeDev.ROMFile))
 	}
 
@@ -1743,7 +1745,7 @@ func (vsock VSOCKDevice) QemuParams(config *Config) []string {
 	deviceParams = append(deviceParams, fmt.Sprintf(",id=%s", vsock.ID))
 	deviceParams = append(deviceParams, fmt.Sprintf(",%s=%d", VSOCKGuestCID, vsock.ContextID))
 
-	if vsock.Transport.isVirtioPCI(config) {
+	if vsock.Transport.isVirtioPCI(config) && vsock.ROMFile != "" {
 		deviceParams = append(deviceParams, fmt.Sprintf(",romfile=%s", vsock.ROMFile))
 	}
 
@@ -1816,7 +1818,7 @@ func (v RngDevice) QemuParams(config *Config) []string {
 	deviceParams = append(deviceParams, v.deviceName(config))
 	deviceParams = append(deviceParams, "rng="+v.ID)
 
-	if v.Transport.isVirtioPCI(config) {
+	if v.Transport.isVirtioPCI(config) && v.ROMFile != "" {
 		deviceParams = append(deviceParams, fmt.Sprintf("romfile=%s", v.ROMFile))
 	}
 
@@ -1893,7 +1895,7 @@ func (b BalloonDevice) QemuParams(config *Config) []string {
 		deviceParams = append(deviceParams, "id="+b.ID)
 	}
 
-	if b.Transport.isVirtioPCI(config) {
+	if b.Transport.isVirtioPCI(config) && b.ROMFile != "" {
 		deviceParams = append(deviceParams, fmt.Sprintf("romfile=%s", b.ROMFile))
 	}
 
