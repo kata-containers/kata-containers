@@ -786,31 +786,8 @@ func (clh *cloudHypervisor) terminate(ctx context.Context) (err error) {
 		}
 	}
 
-	// At this point the VMM was stop nicely, but need to check if PID is still running
-	// Wait for the VM process to terminate
-	tInit := time.Now()
-	for {
-		if err = syscall.Kill(pid, syscall.Signal(0)); err != nil {
-			pidRunning = false
-			break
-		}
-
-		if time.Since(tInit).Seconds() >= clhStopSandboxTimeout {
-			pidRunning = true
-			clh.Logger().Warnf("VM still running after waiting %ds", clhStopSandboxTimeout)
-			break
-		}
-
-		// Let's avoid to run a too busy loop
-		time.Sleep(time.Duration(50) * time.Millisecond)
-	}
-
-	// Let's try with a hammer now, a SIGKILL should get rid of the
-	// VM process.
-	if pidRunning {
-		if err = syscall.Kill(pid, syscall.SIGKILL); err != nil {
-			return fmt.Errorf("Fatal, failed to kill hypervisor process, error: %s", err)
-		}
+	if err = utils.WaitLocalProcess(pid, clhStopSandboxTimeout, syscall.Signal(0), clh.Logger()); err != nil {
+		return err
 	}
 
 	if clh.virtiofsd == nil {

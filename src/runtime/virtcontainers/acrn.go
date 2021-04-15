@@ -511,36 +511,9 @@ func (a *Acrn) stopSandbox(ctx context.Context) (err error) {
 
 	pid := a.state.PID
 
-	// Send signal to the VM process to try to stop it properly
-	if err = syscall.Kill(pid, syscall.SIGINT); err != nil {
-		if err == syscall.ESRCH {
-			return nil
-		}
-		a.Logger().Info("Sending signal to stop acrn VM failed")
-		return err
-	}
+	shutdownSignal := syscall.SIGINT
 
-	// Wait for the VM process to terminate
-	tInit := time.Now()
-	for {
-		if err = syscall.Kill(pid, syscall.Signal(0)); err != nil {
-			a.Logger().Info("acrn VM stopped after sending signal")
-			return nil
-		}
-
-		if time.Since(tInit).Seconds() >= acrnStopSandboxTimeoutSecs {
-			a.Logger().Warnf("VM still running after waiting %ds", acrnStopSandboxTimeoutSecs)
-			break
-		}
-
-		// Let's avoid to run a too busy loop
-		time.Sleep(time.Duration(50) * time.Millisecond)
-	}
-
-	// Let's try with a hammer now, a SIGKILL should get rid of the
-	// VM process.
-	return syscall.Kill(pid, syscall.SIGKILL)
-
+	return utils.WaitLocalProcess(pid, acrnStopSandboxTimeoutSecs, shutdownSignal, a.Logger())
 }
 
 func (a *Acrn) updateBlockDevice(drive *config.BlockDrive) error {
