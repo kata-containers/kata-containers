@@ -12,7 +12,10 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"syscall"
+	"time"
 
+	"github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 
 	pbTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols"
@@ -311,4 +314,64 @@ func ConvertNetlinkFamily(netlinkFamily int32) pbTypes.IPFamily {
 	default:
 		return pbTypes.IPFamily_v4
 	}
+}
+
+// WaitLocalProcess waits for the specified process for up to timeoutSecs seconds.
+//
+// Notes:
+//
+// - If the initial signal is zero, the specified process is assumed to be
+//   attempting to stop itself.
+// - If the initial signal is not zero, it will be sent to the process before
+//   checking if it is running.
+// - If the process has not ended after the timeout value, it will be forcibly killed.
+func WaitLocalProcess(pid int, timeoutSecs uint, initialSignal syscall.Signal, logger *logrus.Entry) error {
+	var err error
+
+	// Don't support process groups
+	if pid <= 0 {
+		return errors.New("can only wait for a single process")
+	}
+
+	if initialSignal != syscall.Signal(0) {
+		if err = syscall.Kill(pid, initialSignal); err != nil {
+			if err == syscall.ESRCH {
+				return nil
+			}
+
+			return fmt.Errorf("Failed to send initial signal %v to process %v: %v", initialSignal, pid, err)
+		}
+	}
+
+	pidRunning := true
+
+	// Wait for the VM process to terminate
+	startTime := time.Now()
+
+	for {
+		if err = syscall.Kill(pid, syscall.Signal(0)); err != nil {
+			pidRunning = false
+			break
+		}
+
+		if time.Since(startTime).Seconds() >= float64(timeoutSecs) {
+			pidRunning = true
+
+			logger.Warnf("process %v still running after waiting %ds", pid, timeoutSecs)
+
+			break
+		}
+
+		// Brief pause to avoid a busy loop
+		time.Sleep(time.Duration(50) * time.Millisecond)
+	}
+
+	if pidRunning {
+		// Force process to die
+		if err = syscall.Kill(pid, syscall.SIGKILL); err != nil {
+			return fmt.Errorf("Failed to stop process %v: %s", pid, err)
+		}
+	}
+
+	return nil
 }

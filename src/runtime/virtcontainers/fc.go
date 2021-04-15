@@ -425,33 +425,10 @@ func (fc *firecracker) fcEnd(ctx context.Context) (err error) {
 
 	pid := fc.info.PID
 
-	// Send a SIGTERM to the VM process to try to stop it properly
-	if err = syscall.Kill(pid, syscall.SIGTERM); err != nil {
-		if err == syscall.ESRCH {
-			return nil
-		}
-		return err
-	}
+	shutdownSignal := syscall.SIGTERM
 
 	// Wait for the VM process to terminate
-	tInit := time.Now()
-	for {
-		if err = syscall.Kill(pid, syscall.Signal(0)); err != nil {
-			return nil
-		}
-
-		if time.Since(tInit).Seconds() >= fcStopSandboxTimeout {
-			fc.Logger().Warnf("VM still running after waiting %ds", fcStopSandboxTimeout)
-			break
-		}
-
-		// Let's avoid to run a too busy loop
-		time.Sleep(time.Duration(50) * time.Millisecond)
-	}
-
-	// Let's try with a hammer now, a SIGKILL should get rid of the
-	// VM process.
-	return syscall.Kill(pid, syscall.SIGKILL)
+	return utils.WaitLocalProcess(pid, fcStopSandboxTimeout, shutdownSignal, fc.Logger())
 }
 
 func (fc *firecracker) client(ctx context.Context) *client.Firecracker {
