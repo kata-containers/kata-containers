@@ -1027,7 +1027,7 @@ func (s *Sandbox) startVM(ctx context.Context) (err error) {
 
 	defer func() {
 		if err != nil {
-			s.hypervisor.stopSandbox(ctx)
+			s.hypervisor.stopSandbox(ctx, false)
 		}
 	}()
 
@@ -1081,14 +1081,9 @@ func (s *Sandbox) stopVM(ctx context.Context) error {
 		s.Logger().WithError(err).WithField("sandboxid", s.id).Warning("Agent did not stop sandbox")
 	}
 
-	if s.disableVMShutdown {
-		// Do not kill the VM - allow the agent to shut it down
-		// (only used to support static agent tracing).
-		return nil
-	}
-
 	s.Logger().Info("Stopping VM")
-	return s.hypervisor.stopSandbox(ctx)
+
+	return s.hypervisor.stopSandbox(ctx, s.disableVMShutdown)
 }
 
 func (s *Sandbox) addContainer(c *Container) error {

@@ -787,7 +787,9 @@ func generateVMSocket(id string, vmStogarePath string) (interface{}, error) {
 type hypervisor interface {
 	createSandbox(ctx context.Context, id string, networkNS NetworkNamespace, hypervisorConfig *HypervisorConfig) error
 	startSandbox(ctx context.Context, timeout int) error
-	stopSandbox(ctx context.Context) error
+	// If wait is set, don't actively stop the sandbox:
+	// just perform cleanup.
+	stopSandbox(ctx context.Context, waitOnly bool) error
 	pauseSandbox(ctx context.Context) error
 	saveSandbox() error
 	resumeSandbox(ctx context.Context) error

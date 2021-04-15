@@ -137,7 +137,7 @@ func NewVM(ctx context.Context, config VMConfig) (*VM, error) {
 	defer func() {
 		if err != nil {
 			virtLog.WithField("vm", id).WithError(err).Info("clean up vm")
-			hypervisor.stopSandbox(ctx)
+			hypervisor.stopSandbox(ctx, false)
 		}
 	}()
 
@@ -251,7 +251,7 @@ func (v *VM) Disconnect(ctx context.Context) error {
 func (v *VM) Stop(ctx context.Context) error {
 	v.logger().Info("stop vm")
 
-	if err := v.hypervisor.stopSandbox(ctx); err != nil {
+	if err := v.hypervisor.stopSandbox(ctx, false); err != nil {
 		return err
 	}
 
