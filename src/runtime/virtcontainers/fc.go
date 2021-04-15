@@ -409,7 +409,7 @@ func (fc *firecracker) fcInit(ctx context.Context, timeout int) error {
 	return nil
 }
 
-func (fc *firecracker) fcEnd(ctx context.Context) (err error) {
+func (fc *firecracker) fcEnd(ctx context.Context, waitOnly bool) (err error) {
 	span, _ := fc.trace(ctx, "fcEnd")
 	defer span.End()
 
@@ -426,6 +426,11 @@ func (fc *firecracker) fcEnd(ctx context.Context) (err error) {
 	pid := fc.info.PID
 
 	shutdownSignal := syscall.SIGTERM
+
+	if waitOnly {
+		// NOP
+		shutdownSignal = syscall.Signal(0)
+	}
 
 	// Wait for the VM process to terminate
 	return utils.WaitLocalProcess(pid, fcStopSandboxTimeout, shutdownSignal, fc.Logger())
@@ -760,7 +765,7 @@ func (fc *firecracker) startSandbox(ctx context.Context, timeout int) error {
 	var err error
 	defer func() {
 		if err != nil {
-			fc.fcEnd(ctx)
+			fc.fcEnd(ctx, false)
 		}
 	}()
 
@@ -853,11 +858,11 @@ func (fc *firecracker) cleanupJail(ctx context.Context) {
 }
 
 // stopSandbox will stop the Sandbox's VM.
-func (fc *firecracker) stopSandbox(ctx context.Context) (err error) {
+func (fc *firecracker) stopSandbox(ctx context.Context, waitOnly bool) (err error) {
 	span, _ := fc.trace(ctx, "stopSandbox")
 	defer span.End()
 
-	return fc.fcEnd(ctx)
+	return fc.fcEnd(ctx, waitOnly)
 }
 
 func (fc *firecracker) pauseSandbox(ctx context.Context) error {

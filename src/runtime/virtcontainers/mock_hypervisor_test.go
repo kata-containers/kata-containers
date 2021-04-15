@@ -53,7 +53,7 @@ func TestMockHypervisorStartSandbox(t *testing.T) {
 func TestMockHypervisorStopSandbox(t *testing.T) {
 	var m *mockHypervisor
 
-	assert.NoError(t, m.stopSandbox(context.Background()))
+	assert.NoError(t, m.stopSandbox(context.Background(), false))
 }
 
 func TestMockHypervisorAddDevice(t *testing.T) {

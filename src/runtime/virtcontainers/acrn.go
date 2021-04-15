@@ -479,7 +479,7 @@ func (a *Acrn) waitSandbox(ctx context.Context, timeoutSecs int) error {
 }
 
 // stopSandbox will stop the Sandbox's VM.
-func (a *Acrn) stopSandbox(ctx context.Context) (err error) {
+func (a *Acrn) stopSandbox(ctx context.Context, waitOnly bool) (err error) {
 	span, _ := a.trace(ctx, "stopSandbox")
 	defer span.End()
 
@@ -512,6 +512,11 @@ func (a *Acrn) stopSandbox(ctx context.Context) (err error) {
 	pid := a.state.PID
 
 	shutdownSignal := syscall.SIGINT
+
+	if waitOnly {
+		// NOP
+		shutdownSignal = syscall.Signal(0)
+	}
 
 	return utils.WaitLocalProcess(pid, acrnStopSandboxTimeoutSecs, shutdownSignal, a.Logger())
 }

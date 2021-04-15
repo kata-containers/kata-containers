@@ -652,11 +652,11 @@ func (clh *cloudHypervisor) resumeSandbox(ctx context.Context) error {
 }
 
 // stopSandbox will stop the Sandbox's VM.
-func (clh *cloudHypervisor) stopSandbox(ctx context.Context) (err error) {
+func (clh *cloudHypervisor) stopSandbox(ctx context.Context, waitOnly bool) (err error) {
 	span, _ := clh.trace(ctx, "stopSandbox")
 	defer span.End()
 	clh.Logger().WithField("function", "stopSandbox").Info("Stop Sandbox")
-	return clh.terminate(ctx)
+	return clh.terminate(ctx, waitOnly)
 }
 
 func (clh *cloudHypervisor) fromGrpc(ctx context.Context, hypervisorConfig *HypervisorConfig, j []byte) error {
@@ -756,7 +756,7 @@ func (clh *cloudHypervisor) trace(parent context.Context, name string) (otelTrac
 	return span, ctx
 }
 
-func (clh *cloudHypervisor) terminate(ctx context.Context) (err error) {
+func (clh *cloudHypervisor) terminate(ctx context.Context, waitOnly bool) (err error) {
 	span, _ := clh.trace(ctx, "terminate")
 	defer span.End()
 
@@ -775,7 +775,7 @@ func (clh *cloudHypervisor) terminate(ctx context.Context) (err error) {
 
 	clh.Logger().Debug("Stopping Cloud Hypervisor")
 
-	if pidRunning {
+	if pidRunning && !waitOnly {
 		clhRunning, _ := clh.isClhRunning(clhStopSandboxTimeout)
 		if clhRunning {
 			ctx, cancel := context.WithTimeout(context.Background(), clhStopSandboxTimeout*time.Second)
