@@ -1528,28 +1528,23 @@ async fn execute_hook(logger: &Logger, h: &Hook, st: &OCIState) -> Result<()> {
 
         match child.wait().await {
             Ok(exit) => {
-                let code = match exit.code() {
-                    Some(c) => c,
-                    None => {
-                        return Err(anyhow!("hook exit status has no status code"));
-                    }
-                };
+                let code = exit
+                    .code()
+                    .ok_or_else(|| anyhow!("hook exit status has no status code"))?;
 
-                if code == 0 {
-                    debug!(logger, "hook {} exit status is 0", &path);
-                    return Ok(());
-                } else {
+                if code != 0 {
                     error!(logger, "hook {} exit status is {}", &path, code);
                     return Err(anyhow!(nix::Error::from_errno(Errno::UnknownErrno)));
                 }
+
+                debug!(logger, "hook {} exit status is 0", &path);
+                Ok(())
             }
-            Err(e) => {
-                return Err(anyhow!(
-                    "wait child error: {} {}",
-                    e,
-                    e.raw_os_error().unwrap()
-                ));
-            }
+            Err(e) => Err(anyhow!(
+                "wait child error: {} {}",
+                e,
+                e.raw_os_error().unwrap()
+            )),
         }
     });
 
