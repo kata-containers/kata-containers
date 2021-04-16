@@ -1319,7 +1319,11 @@ func (k *kataAgent) createContainer(ctx context.Context, sandbox *Sandbox, c *Co
 
 	k.handleShm(ociSpec.Mounts, sandbox)
 
-	epheStorages := k.handleEphemeralStorage(ociSpec.Mounts)
+	epheStorages, err := k.handleEphemeralStorage(ociSpec.Mounts)
+	if err != nil {
+		return nil, err
+	}
+
 	ctrStorages = append(ctrStorages, epheStorages...)
 
 	localStorages, err := k.handleLocalStorage(ociSpec.Mounts, sandbox.id, c.rootfsSuffix)
@@ -1400,10 +1404,27 @@ func buildProcessFromExecID(token string) (*Process, error) {
 
 // handleEphemeralStorage handles ephemeral storages by
 // creating a Storage from corresponding source of the mount point
-func (k *kataAgent) handleEphemeralStorage(mounts []specs.Mount) []*grpc.Storage {
+func (k *kataAgent) handleEphemeralStorage(mounts []specs.Mount) ([]*grpc.Storage, error) {
 	var epheStorages []*grpc.Storage
 	for idx, mnt := range mounts {
 		if mnt.Type == KataEphemeralDevType {
+			origin_src := mounts[idx].Source
+			stat := syscall.Stat_t{}
+			err := syscall.Stat(origin_src, &stat)
+			if err != nil {
+				k.Logger().WithError(err).Errorf("failed to stat %s", origin_src)
+				return nil, err
+			}
+
+			var dir_options []string
+
+			// if volume's gid isn't root group(default group), this means there's
+			// an specific fsGroup is set on this local volume, then it should pass
+			// to guest.
+			if stat.Gid != 0 {
+				dir_options = append(dir_options, fmt.Sprintf("%s=%d", fsGid, stat.Gid))
+			}
+
 			// Set the mount source path to a path that resides inside the VM
 			mounts[idx].Source = filepath.Join(ephemeralPath(), filepath.Base(mnt.Source))
 			// Set the mount type to "bind"
@@ -1416,11 +1437,12 @@ func (k *kataAgent) handleEphemeralStorage(mounts []specs.Mount) []*grpc.Storage
 				Source:     "tmpfs",
 				Fstype:     "tmpfs",
 				MountPoint: mounts[idx].Source,
+				Options:    dir_options,
 			}
 			epheStorages = append(epheStorages, epheStorage)
 		}
 	}
-	return epheStorages
+	return epheStorages, nil
 }
 
 // handleLocalStorage handles local storage within the VM
