@@ -184,6 +184,7 @@ func TestHandleEphemeralStorage(t *testing.T) {
 	k := kataAgent{}
 	var ociMounts []specs.Mount
 	mountSource := "/tmp/mountPoint"
+	os.Mkdir(mountSource, 0755)
 
 	mount := specs.Mount{
 		Type:   KataEphemeralDevType,
@@ -191,7 +192,8 @@ func TestHandleEphemeralStorage(t *testing.T) {
 	}
 
 	ociMounts = append(ociMounts, mount)
-	epheStorages := k.handleEphemeralStorage(ociMounts)
+	epheStorages, err := k.handleEphemeralStorage(ociMounts)
+	assert.Nil(t, err)
 
 	epheMountPoint := epheStorages[0].MountPoint
 	expected := filepath.Join(ephemeralPath(), filepath.Base(mountSource))
@@ -664,6 +666,7 @@ func TestHandleShm(t *testing.T) {
 	// shared with the sandbox shm.
 	ociMounts[0].Type = KataEphemeralDevType
 	mountSource := "/tmp/mountPoint"
+	os.Mkdir(mountSource, 0755)
 	ociMounts[0].Source = mountSource
 	k.handleShm(ociMounts, sandbox)
 
@@ -671,7 +674,9 @@ func TestHandleShm(t *testing.T) {
 	assert.Equal(ociMounts[0].Type, KataEphemeralDevType)
 	assert.NotEmpty(ociMounts[0].Source, mountSource)
 
-	epheStorages := k.handleEphemeralStorage(ociMounts)
+	epheStorages, err := k.handleEphemeralStorage(ociMounts)
+	assert.Nil(err)
+
 	epheMountPoint := epheStorages[0].MountPoint
 	expected := filepath.Join(ephemeralPath(), filepath.Base(mountSource))
 	assert.Equal(epheMountPoint, expected,
