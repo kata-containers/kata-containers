@@ -117,12 +117,12 @@ async fn register_memory_event_v2(
                     return;
                 }
             }
-        }
 
-        // When a cgroup is destroyed, an event is sent to eventfd.
-        // So if the control path is gone, return instead of notifying.
-        if !Path::new(&event_control_path).exists() {
-            return;
+            // When a cgroup is destroyed, an event is sent to eventfd.
+            // So if the control path is gone, return instead of notifying.
+            if !Path::new(&event_control_path).exists() {
+                return;
+            }
         }
     });
 
