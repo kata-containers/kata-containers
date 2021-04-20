@@ -1,0 +1,87 @@
+From 314d091fba1a0608d631d5b083e98e40ef3048ee Mon Sep 17 00:00:00 2001
+From: Kevin Wolf <kwolf@redhat.com>
+Date: Fri, 12 Feb 2021 18:20:27 +0100
+Subject: [PATCH 1/1] monitor: Fix assertion failure on shutdown
+
+Commit 357bda95 already tried to fix the order in monitor_cleanup() by
+moving shutdown of the dispatcher coroutine further to the start.
+However, it didn't go far enough:
+
+iothread_stop() makes sure that all pending work (bottom halves) in the
+AioContext of the monitor iothread is completed. iothread_destroy()
+depends on this and fails an assertion if there is still a pending BH.
+
+While the dispatcher coroutine is running, it will try to resume the
+monitor after taking a request out of the queue, which involves a BH.
+The dispatcher is run until it terminates in the AIO_WAIT_WHILE() loop.
+However, adding new BHs between iothread_stop() and iothread_destroy()
+is forbidden.
+
+Fix this by stopping the dispatcher first before shutting down the other
+parts of the monitor. This means we can now receive requests that aren't
+handled any more when QEMU is shutting down, but this is unlikely to be
+a problem for QMP clients.
+
+Fixes: 357bda9590784ff75803d52de43150d4107ed98e
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+Message-Id: <20210212172028.288825-2-kwolf@redhat.com>
+Tested-by: Markus Armbruster <armbru@redhat.com>
+Reviewed-by: Markus Armbruster <armbru@redhat.com>
+Signed-off-by: Kevin Wolf <kwolf@redhat.com>
+---
+ monitor/monitor.c | 25 +++++++++++++++----------
+ 1 file changed, 15 insertions(+), 10 deletions(-)
+
+diff --git a/monitor/monitor.c b/monitor/monitor.c
+index 84222cd130..27573348f3 100644
+--- a/monitor/monitor.c
++++ b/monitor/monitor.c
+@@ -622,16 +622,6 @@ void monitor_data_destroy(Monitor *mon)
+ 
+ void monitor_cleanup(void)
+ {
+-    /*
+-     * We need to explicitly stop the I/O thread (but not destroy it),
+-     * clean up the monitor resources, then destroy the I/O thread since
+-     * we need to unregister from chardev below in
+-     * monitor_data_destroy(), and chardev is not thread-safe yet
+-     */
+-    if (mon_iothread) {
+-        iothread_stop(mon_iothread);
+-    }
+-
+     /*
+      * The dispatcher needs to stop before destroying the monitor and
+      * the I/O thread.
+@@ -641,6 +631,11 @@ void monitor_cleanup(void)
+      * eventually terminates.  qemu_aio_context is automatically
+      * polled by calling AIO_WAIT_WHILE on it, but we must poll
+      * iohandler_ctx manually.
++     *
++     * Letting the iothread continue while shutting down the dispatcher
++     * means that new requests may still be coming in. This is okay,
++     * we'll just leave them in the queue without sending a response
++     * and monitor_data_destroy() will free them.
+      */
+     qmp_dispatcher_co_shutdown = true;
+     if (!qatomic_xchg(&qmp_dispatcher_co_busy, true)) {
+@@ -651,6 +646,16 @@ void monitor_cleanup(void)
+                    (aio_poll(iohandler_get_aio_context(), false),
+                     qatomic_mb_read(&qmp_dispatcher_co_busy)));
+ 
++    /*
++     * We need to explicitly stop the I/O thread (but not destroy it),
++     * clean up the monitor resources, then destroy the I/O thread since
++     * we need to unregister from chardev below in
++     * monitor_data_destroy(), and chardev is not thread-safe yet
++     */
++    if (mon_iothread) {
++        iothread_stop(mon_iothread);
++    }
++
+     /* Flush output buffers and destroy monitors */
+     qemu_mutex_lock(&monitor_lock);
+     monitor_destroyed = true;
+-- 
+2.24.3 (Apple Git-128)
+
