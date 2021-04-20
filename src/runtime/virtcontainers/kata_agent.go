@@ -1816,9 +1816,6 @@ func (k *kataAgent) disconnect(ctx context.Context) error {
 
 // check grpc server is serving
 func (k *kataAgent) check(ctx context.Context) error {
-	span, ctx := k.trace(ctx, "check")
-	defer span.End()
-
 	_, err := k.sendReq(ctx, &grpc.CheckRequest{})
 	if err != nil {
 		err = fmt.Errorf("Failed to check if grpc server is working: %s", err)
@@ -1987,9 +1984,6 @@ func (k *kataAgent) getReqContext(reqName string) (ctx context.Context, cancel c
 
 func (k *kataAgent) sendReq(spanCtx context.Context, request interface{}) (interface{}, error) {
 	start := time.Now()
-	span, spanCtx := k.trace(spanCtx, "sendReq")
-	span.SetAttributes(label.Key("request").String(fmt.Sprintf("%+v", request)))
-	defer span.End()
 
 	if err := k.connect(spanCtx); err != nil {
 		return nil, err
