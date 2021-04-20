@@ -7,6 +7,7 @@ package containerdshim
 
 import (
 	"context"
+	"encoding/json"
 	"expvar"
 	"fmt"
 	"io"
@@ -98,6 +99,38 @@ func (s *service) serveMetrics(w http.ResponseWriter, r *http.Request) {
 	go s.setPodOverheadMetrics(context.Background())
 }
 
+type FsStatsRequest struct {
+	BlkDevice string `json:"blkDevice,omitempty"`
+}
+
+// getVolumeStats: For the requested block device on the host, get the filesystem stats
+// for the volume from within the guest
+func (s *service) getVolumeStats(w http.ResponseWriter, r *http.Request) {
+	var req FsStatsRequest
+	err := json.NewDecoder(r.Body).Decode(&req)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+	}
+
+	// Get the filesystem stats
+	stats, err := s.sandbox.GetFsStats(req.BlkDevice)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprint(w, err.Error())
+		return
+	}
+
+	// Return the filesystem stats as a json blob
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(stats)
+}
+
+func (s *service) resizeVolume(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusBadRequest)
+	fmt.Fprintf(w, "resizeVolume not supported")
+}
+
 func decodeAgentMetrics(body string) []*dto.MetricFamily {
 	// decode agent metrics
 	reader := strings.NewReader(body)
@@ -148,6 +181,10 @@ func (s *service) startManagementServer(ctx context.Context, ociSpec *specs.Spec
 	m := http.NewServeMux()
 	m.Handle("/metrics", http.HandlerFunc(s.serveMetrics))
 	m.Handle("/agent-url", http.HandlerFunc(s.agentURL))
+
+	m.Handle("/fs-stats", http.HandlerFunc(s.getVolumeStats))
+	m.Handle("/fs-resize", http.HandlerFunc(s.resizeVolume))
+
 	s.mountPprofHandle(m, ociSpec)
 
 	// register shim metrics
