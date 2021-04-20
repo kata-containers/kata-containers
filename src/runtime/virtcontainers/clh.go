@@ -427,6 +427,27 @@ func clhDriveIndexToID(i int) string {
 	return "clh_drive_" + strconv.Itoa(i)
 }
 
+// Various cloud-hypervisor APIs report a PCI address in "BB:DD.F"
+// form within the PciDeviceInfo struct.  This is a broken API,
+// because there's no way clh can reliably know the guest side bdf for
+// a device, since the bus number depends on how the guest firmware
+// and/or kernel enumerates it.  They get away with it only because
+// they don't use bridges, and so the bus is always 0.  Under that
+// assumption convert a clh PciDeviceInfo into a PCI path
+func clhPciInfoToPath(pciInfo chclient.PciDeviceInfo) (vcTypes.PciPath, error) {
+	tokens := strings.Split(pciInfo.Bdf, ":")
+	if len(tokens) != 3 || tokens[0] != "0000" || tokens[1] != "00" {
+		return vcTypes.PciPath{}, fmt.Errorf("Unexpected PCI address %q from clh hotplug", pciInfo.Bdf)
+	}
+
+	tokens = strings.Split(tokens[2], ".")
+	if len(tokens) != 2 || tokens[1] != "0" || len(tokens[0]) != 2 {
+		return vcTypes.PciPath{}, fmt.Errorf("Unexpected PCI address %q from clh hotplug", pciInfo.Bdf)
+	}
+
+	return vcTypes.PciPathFromString(tokens[0])
+}
+
 func (clh *cloudHypervisor) hotplugAddBlockDevice(drive *config.BlockDrive) error {
 	if clh.config.BlockDeviceDriver != config.VirtioBlock {
 		return fmt.Errorf("incorrect hypervisor configuration on 'block_device_driver':"+
@@ -441,24 +462,24 @@ func (clh *cloudHypervisor) hotplugAddBlockDevice(drive *config.BlockDrive) erro
 
 	driveID := clhDriveIndexToID(drive.Index)
 
-	//Explicitly set PCIPath to NULL, so that VirtPath can be used
-	drive.PCIPath = vcTypes.PciPath{}
-
 	if drive.Pmem {
-		err = fmt.Errorf("pmem device hotplug not supported")
-	} else {
-		blkDevice := chclient.DiskConfig{
-			Path:      drive.File,
-			Readonly:  drive.ReadOnly,
-			VhostUser: false,
-			Id:        driveID,
-		}
-		_, _, err = cl.VmAddDiskPut(ctx, blkDevice)
+		return fmt.Errorf("pmem device hotplug not supported")
 	}
+
+	blkDevice := chclient.DiskConfig{
+		Path:      drive.File,
+		Readonly:  drive.ReadOnly,
+		VhostUser: false,
+		Id:        driveID,
+	}
+	pciInfo, _, err := cl.VmAddDiskPut(ctx, blkDevice)
 
 	if err != nil {
-		err = fmt.Errorf("failed to hotplug block device %+v %s", drive, openAPIClientError(err))
+		return fmt.Errorf("failed to hotplug block device %+v %s", drive, openAPIClientError(err))
 	}
+
+	drive.PCIPath, err = clhPciInfoToPath(pciInfo)
+
 	return err
 }
 

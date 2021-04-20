@@ -282,18 +282,6 @@ func TestHandleDeviceBlockVolume(t *testing.T) {
 			},
 		},
 		{
-			BlockDeviceDriver: config.VirtioBlock,
-			inputDev: &drivers.BlockDevice{
-				BlockDrive: &config.BlockDrive{
-					VirtPath: testVirtPath,
-				},
-			},
-			resultVol: &pb.Storage{
-				Driver: kataBlkDevType,
-				Source: testVirtPath,
-			},
-		},
-		{
 			BlockDeviceDriver: config.VirtioMmio,
 			inputDev: &drivers.BlockDevice{
 				BlockDrive: &config.BlockDrive{
