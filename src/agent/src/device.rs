@@ -332,14 +332,9 @@ async fn virtio_blk_device_handler(
     devidx: &DevIndex,
 ) -> Result<()> {
     let mut dev = device.clone();
+    let pcipath = pci::Path::from_str(&device.id)?;
 
-    // When "Id (PCI path)" is not set, we allow to use the predicted
-    // "VmPath" passed from kata-runtime Note this is a special code
-    // path for cloud-hypervisor when BDF information is not available
-    if !device.id.is_empty() {
-        let pcipath = pci::Path::from_str(&device.id)?;
-        dev.vm_path = get_virtio_blk_pci_device_name(sandbox, &pcipath).await?;
-    }
+    dev.vm_path = get_virtio_blk_pci_device_name(sandbox, &pcipath).await?;
 
     update_spec_device_list(&dev, spec, devidx)
 }
