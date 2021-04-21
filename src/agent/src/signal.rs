@@ -55,13 +55,6 @@ async fn handle_sigchild(logger: Logger, sandbox: Arc<Mutex<Sandbox>>) -> Result
             }
 
             let mut p = process.unwrap();
-
-            if p.exit_pipe_w.is_none() {
-                info!(logger, "process exit pipe not set");
-                continue;
-            }
-
-            let pipe_write = p.exit_pipe_w.unwrap();
             let ret: i32;
 
             match wait_status {
@@ -75,7 +68,7 @@ async fn handle_sigchild(logger: Logger, sandbox: Arc<Mutex<Sandbox>>) -> Result
             }
 
             p.exit_code = ret;
-            let _ = unistd::close(pipe_write);
+            let _ = p.exit_tx.take();
 
             info!(logger, "notify term to close");
             // close the socket file to notify readStdio to close terminal specifically
