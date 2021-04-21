@@ -597,6 +597,7 @@ type VCSandbox interface {
 	UpdateRuntimeMetrics() error
 	GetAgentMetrics(ctx context.Context) (string, error)
 	GetAgentURL() (string, error)
+	GetFsStats(source string) (string, error)
 }
 ```
 

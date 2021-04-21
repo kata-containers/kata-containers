@@ -96,6 +96,11 @@ type SandboxStats struct {
 	Cpus        int
 }
 
+type FsStats struct {
+	Metrics map[string]int64
+	Status  string
+}
+
 // SandboxConfig is a Sandbox configuration.
 type SandboxConfig struct {
 	// Volumes is a list of shared volumes between the host and the Sandbox.
@@ -2411,6 +2416,35 @@ func (s *Sandbox) GetOOMEvent(ctx context.Context) (string, error) {
 
 func (s *Sandbox) GetAgentURL() (string, error) {
 	return s.agent.getAgentURL()
+}
+
+func (s *Sandbox) GetFsStats(source string) (FsStats, error) {
+
+	stats := FsStats{}
+	// verify the device even exists
+	if _, err := os.Stat(source); err != nil {
+		s.Logger().WithError(err).WithField("source", source).Error("Cannot get stats for device that doesn't exist")
+		return stats, err
+	}
+
+	// verify that we have a mount in this sandbox who's source maps to this
+	for _, c := range s.containers {
+		for _, m := range c.mounts {
+			if source != m.Source {
+				continue
+			}
+
+			resp, err := s.agent.getFsMountMetrics(context.Background(), m.GuestDeviceMount)
+			if err != nil {
+				return stats, err
+			}
+
+			stats.Metrics = resp.Metrics
+			stats.Status = resp.Status
+			return stats, nil
+		}
+	}
+	return stats, fmt.Errorf("GetFsStats: mount %s not found in sandbox", source)
 }
 
 // getSandboxCPUSet returns the union of each of the sandbox's containers' CPU sets'
