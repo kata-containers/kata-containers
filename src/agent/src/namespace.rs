@@ -45,18 +45,18 @@ impl Namespace {
             logger: logger.clone(),
             path: String::from(""),
             persistent_ns_dir: String::from(PERSISTENT_NS_DIR),
-            ns_type: NamespaceType::IPC,
+            ns_type: NamespaceType::Ipc,
             hostname: None,
         }
     }
 
     pub fn get_ipc(mut self) -> Self {
-        self.ns_type = NamespaceType::IPC;
+        self.ns_type = NamespaceType::Ipc;
         self
     }
 
     pub fn get_uts(mut self, hostname: &str) -> Self {
-        self.ns_type = NamespaceType::UTS;
+        self.ns_type = NamespaceType::Uts;
         if !hostname.is_empty() {
             self.hostname = Some(String::from(hostname));
         }
@@ -64,7 +64,7 @@ impl Namespace {
     }
 
     pub fn get_pid(mut self) -> Self {
-        self.ns_type = NamespaceType::PID;
+        self.ns_type = NamespaceType::Pid;
         self
     }
 
@@ -81,7 +81,7 @@ impl Namespace {
 
         let ns_path = PathBuf::from(&self.persistent_ns_dir);
         let ns_type = self.ns_type;
-        if ns_type == NamespaceType::PID {
+        if ns_type == NamespaceType::Pid {
             return Err(anyhow!("Cannot persist namespace of PID type"));
         }
         let logger = self.logger.clone();
@@ -104,7 +104,7 @@ impl Namespace {
 
                 unshare(cf)?;
 
-                if ns_type == NamespaceType::UTS && hostname.is_some() {
+                if ns_type == NamespaceType::Uts && hostname.is_some() {
                     nix::unistd::sethostname(hostname.unwrap())?;
                 }
                 // Bind mount the new namespace from the current thread onto the mount point to persist it.
@@ -147,27 +147,27 @@ impl Namespace {
 /// Represents the Namespace type.
 #[derive(Clone, Copy, PartialEq)]
 enum NamespaceType {
-    IPC,
-    UTS,
-    PID,
+    Ipc,
+    Uts,
+    Pid,
 }
 
 impl NamespaceType {
     /// Get the string representation of the namespace type.
     pub fn get(&self) -> &str {
         match *self {
-            Self::IPC => "ipc",
-            Self::UTS => "uts",
-            Self::PID => "pid",
+            Self::Ipc => "ipc",
+            Self::Uts => "uts",
+            Self::Pid => "pid",
         }
     }
 
     /// Get the associate flags with the namespace type.
     pub fn get_flags(&self) -> CloneFlags {
         match *self {
-            Self::IPC => CloneFlags::CLONE_NEWIPC,
-            Self::UTS => CloneFlags::CLONE_NEWUTS,
-            Self::PID => CloneFlags::CLONE_NEWPID,
+            Self::Ipc => CloneFlags::CLONE_NEWIPC,
+            Self::Uts => CloneFlags::CLONE_NEWUTS,
+            Self::Pid => CloneFlags::CLONE_NEWPID,
         }
     }
 }
@@ -180,7 +180,7 @@ impl fmt::Debug for NamespaceType {
 
 impl Default for NamespaceType {
     fn default() -> Self {
-        NamespaceType::IPC
+        NamespaceType::Ipc
     }
 }
 
@@ -234,15 +234,15 @@ mod tests {
 
     #[test]
     fn test_namespace_type() {
-        let ipc = NamespaceType::IPC;
+        let ipc = NamespaceType::Ipc;
         assert_eq!("ipc", ipc.get());
         assert_eq!(CloneFlags::CLONE_NEWIPC, ipc.get_flags());
 
-        let uts = NamespaceType::UTS;
+        let uts = NamespaceType::Uts;
         assert_eq!("uts", uts.get());
         assert_eq!(CloneFlags::CLONE_NEWUTS, uts.get_flags());
 
-        let pid = NamespaceType::PID;
+        let pid = NamespaceType::Pid;
         assert_eq!("pid", pid.get());
         assert_eq!(CloneFlags::CLONE_NEWPID, pid.get_flags());
     }
