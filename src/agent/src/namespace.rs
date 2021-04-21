@@ -178,12 +178,6 @@ impl fmt::Debug for NamespaceType {
     }
 }
 
-impl Default for NamespaceType {
-    fn default() -> Self {
-        NamespaceType::Ipc
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::{Namespace, NamespaceType};
