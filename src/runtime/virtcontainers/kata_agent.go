@@ -147,6 +147,7 @@ const (
 	grpcGetOOMEventRequest       = "grpc.GetOOMEventRequest"
 	grpcGetMetricsRequest        = "grpc.GetMetricsRequest"
 	grpcAddSwapRequest           = "grpc.AddSwapRequest"
+	grpcGetFsMountMetricsRequest = "grpc.GetFsMountMetricsRequest"
 )
 
 // newKataAgent returns an agent from an agent type.
@@ -2029,6 +2030,9 @@ func (k *kataAgent) installReqFunc(c *kataclient.AgentClient) {
 	k.reqHandlers[grpcAddSwapRequest] = func(ctx context.Context, req interface{}) (interface{}, error) {
 		return k.client.AgentServiceClient.AddSwap(ctx, req.(*grpc.AddSwapRequest))
 	}
+	k.reqHandlers[grpcGetFsMountMetricsRequest] = func(ctx context.Context, req interface{}) (interface{}, error) {
+		return k.client.AgentServiceClient.GetFsMountMetrics(ctx, req.(*grpc.GetFsMountMetricsRequest))
+	}
 }
 
 func (k *kataAgent) getReqContext(ctx context.Context, reqName string) (newCtx context.Context, cancel context.CancelFunc) {
@@ -2254,4 +2258,17 @@ func (k *kataAgent) getAgentMetrics(ctx context.Context, req *grpc.GetMetricsReq
 	}
 
 	return resp.(*grpc.Metrics), nil
+}
+
+func (k *kataAgent) getFsMountMetrics(ctx context.Context, mntPath string) (*grpc.FsMountMetrics, error) {
+	req := &grpc.GetFsMountMetricsRequest{
+		Mount: mntPath,
+	}
+
+	resp, err := k.sendReq(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	return resp.(*grpc.FsMountMetrics), nil
 }

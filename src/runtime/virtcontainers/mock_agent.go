@@ -242,3 +242,7 @@ func (n *mockAgent) getOOMEvent(ctx context.Context) (string, error) {
 func (n *mockAgent) getAgentMetrics(ctx context.Context, req *grpc.GetMetricsRequest) (*grpc.Metrics, error) {
 	return nil, nil
 }
+
+func (n *mockAgent) getFsMountMetrics(ctx context.Context, mntPath string) (*grpc.FsMountMetrics, error) {
+	return nil, nil
+}
