@@ -542,12 +542,10 @@ impl Handle {
                 ntype: NDA_UNSPEC as u8,
             },
             nlas: {
-                let mut nlas = vec![];
-
-                nlas.push(Nla::Destination(match ip {
+                let mut nlas = vec![Nla::Destination(match ip {
                     IpAddr::V4(v4) => v4.octets().to_vec(),
                     IpAddr::V6(v6) => v6.octets().to_vec(),
-                }));
+                })];
 
                 if !neigh.lladdr.is_empty() {
                     nlas.push(Nla::LinkLocalAddress(
