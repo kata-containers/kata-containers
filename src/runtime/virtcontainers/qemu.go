@@ -122,6 +122,8 @@ const (
 	scsiControllerID         = "scsi0"
 	rngID                    = "rng0"
 	fallbackFileBackedMemDir = "/dev/shm"
+
+	qemuStopSandboxTimeoutSecs = 15
 )
 
 // agnostic list of kernel parameters
@@ -703,7 +705,7 @@ func (q *qemu) setupVirtiofsd(ctx context.Context) (err error) {
 		q.Logger().Info("virtiofsd quits")
 		// Wait to release resources of virtiofsd process
 		cmd.Process.Wait()
-		q.stopSandbox(ctx)
+		q.stopSandbox(ctx, false)
 	}()
 	return err
 }
@@ -933,7 +935,7 @@ func (q *qemu) waitSandbox(ctx context.Context, timeout int) error {
 }
 
 // stopSandbox will stop the Sandbox's VM.
-func (q *qemu) stopSandbox(ctx context.Context) error {
+func (q *qemu) stopSandbox(ctx context.Context, waitOnly bool) error {
 	span, _ := q.trace(ctx, "stopSandbox")
 	defer span.End()
 
@@ -965,10 +967,24 @@ func (q *qemu) stopSandbox(ctx context.Context) error {
 		return err
 	}
 
-	err := q.qmpMonitorCh.qmp.ExecuteQuit(q.qmpMonitorCh.ctx)
-	if err != nil {
-		q.Logger().WithError(err).Error("Fail to execute qmp QUIT")
-		return err
+	if waitOnly {
+		pids := q.getPids()
+		if len(pids) == 0 {
+			return errors.New("cannot determine QEMU PID")
+		}
+
+		pid := pids[0]
+
+		err := utils.WaitLocalProcess(pid, qemuStopSandboxTimeoutSecs, syscall.Signal(0), q.Logger())
+		if err != nil {
+			return err
+		}
+	} else {
+		err := q.qmpMonitorCh.qmp.ExecuteQuit(q.qmpMonitorCh.ctx)
+		if err != nil {
+			q.Logger().WithError(err).Error("Fail to execute qmp QUIT")
+			return err
+		}
 	}
 
 	return nil
