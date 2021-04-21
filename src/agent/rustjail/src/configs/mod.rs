@@ -54,6 +54,8 @@ pub struct Seccomp {
     #[serde(default)]
     architectures: Vec<String>,
     #[serde(default)]
+    flags: Vec<String>,
+    #[serde(default)]
     syscalls: Vec<Syscall>,
 }
 
@@ -74,9 +76,11 @@ pub struct Arg {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Syscall {
     #[serde(default, skip_serializing_if = "String::is_empty")]
-    name: String,
+    names: String,
     #[serde(default)]
     action: Action,
+    #[serde(default, rename = "errnoRet")]
+    errno_ret: u32,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     args: Vec<Arg>,
 }
