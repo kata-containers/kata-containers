@@ -399,6 +399,13 @@ fn seccomp_grpc_to_oci(sec: &grpcLinuxSeccomp) -> ociLinuxSeccomp {
 
         for sys in sec.Syscalls.iter() {
             let mut args = Vec::new();
+            let errno_ret: u32;
+
+            if sys.has_errnoret() {
+                errno_ret = sys.get_errnoret();
+            } else {
+                errno_ret = libc::EPERM as u32;
+            }
 
             for arg in sys.Args.iter() {
                 args.push(ociLinuxSeccompArg {
@@ -412,7 +419,7 @@ fn seccomp_grpc_to_oci(sec: &grpcLinuxSeccomp) -> ociLinuxSeccomp {
             r.push(ociLinuxSyscall {
                 names: sys.Names.clone().into_vec(),
                 action: sys.Action.clone(),
-                errno_ret: sys.ErrnoRet,
+                errno_ret,
                 args,
             });
         }

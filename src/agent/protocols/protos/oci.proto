@@ -455,7 +455,9 @@ message LinuxSeccompArg {
 message LinuxSyscall {
 	repeated string Names = 1;
 	string Action = 2;
-	uint32 ErrnoRet = 3;
+	oneof ErrnoRet {
+		uint32 errnoret = 3;
+	}
 	repeated LinuxSeccompArg Args = 4  [(gogoproto.nullable) = false];
 }
 
