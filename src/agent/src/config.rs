@@ -273,12 +273,12 @@ fn get_string_value(param: &str) -> Result<String> {
     }
 
     // We need name (but the value can be blank)
-    if fields[0] == "" {
+    if fields[0].is_empty() {
         return Err(anyhow!(ERR_INVALID_GET_VALUE_NO_NAME));
     }
 
     let value = fields[1..].join("=");
-    if value == "" {
+    if value.is_empty() {
         return Err(anyhow!(ERR_INVALID_GET_VALUE_NO_VALUE));
     }
 
