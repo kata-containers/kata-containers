@@ -29,7 +29,6 @@ pub enum StreamType {
     Stdin,
     Stdout,
     Stderr,
-    ExitPipeR,
     TermMaster,
     ParentStdin,
     ParentStdout,
@@ -45,8 +44,8 @@ pub struct Process {
     pub stdin: Option<RawFd>,
     pub stdout: Option<RawFd>,
     pub stderr: Option<RawFd>,
-    pub exit_pipe_r: Option<RawFd>,
-    pub exit_pipe_w: Option<RawFd>,
+    pub exit_tx: Option<tokio::sync::watch::Sender<bool>>,
+    pub exit_rx: Option<tokio::sync::watch::Receiver<bool>>,
     pub extra_files: Vec<File>,
     pub term_master: Option<RawFd>,
     pub tty: bool,
@@ -97,14 +96,15 @@ impl Process {
         pipe_size: i32,
     ) -> Result<Self> {
         let logger = logger.new(o!("subsystem" => "process"));
+        let (exit_tx, exit_rx) = tokio::sync::watch::channel(false);
 
         let mut p = Process {
             exec_id: String::from(id),
             stdin: None,
             stdout: None,
             stderr: None,
-            exit_pipe_w: None,
-            exit_pipe_r: None,
+            exit_tx: Some(exit_tx),
+            exit_rx: Some(exit_rx),
             extra_files: Vec::new(),
             tty: ocip.terminal,
             term_master: None,
@@ -152,7 +152,6 @@ impl Process {
             StreamType::Stdin => self.stdin,
             StreamType::Stdout => self.stdout,
             StreamType::Stderr => self.stderr,
-            StreamType::ExitPipeR => self.exit_pipe_r,
             StreamType::TermMaster => self.term_master,
             StreamType::ParentStdin => self.parent_stdin,
             StreamType::ParentStdout => self.parent_stdout,

@@ -369,7 +369,6 @@ impl AgentService {
         let s = self.sandbox.clone();
         let mut resp = WaitProcessResponse::new();
         let pid: pid_t;
-        let stream;
 
         let (exit_send, mut exit_recv) = tokio::sync::mpsc::channel(100);
 
@@ -380,22 +379,20 @@ impl AgentService {
             "exec-id" => eid.clone()
         );
 
-        {
+        let exit_rx = {
             let mut sandbox = s.lock().await;
             let p = find_process(&mut sandbox, cid.as_str(), eid.as_str(), false)?;
 
-            stream = p.get_reader(StreamType::ExitPipeR);
-
             p.exit_watchers.push(exit_send);
             pid = p.pid;
-        }
 
-        if stream.is_some() {
-            info!(sl!(), "reading exit pipe");
+            p.exit_rx.clone()
+        };
 
-            let reader = stream.unwrap();
-            let mut content: Vec<u8> = vec![0, 1];
-            let _ = reader.lock().await.read(&mut content).await;
+        if let Some(mut exit_rx) = exit_rx {
+            info!(sl!(), "cid {} eid {} waiting for exit signal", &cid, &eid);
+            while exit_rx.changed().await.is_ok() {}
+            info!(sl!(), "cid {} eid {} received exit signal", &cid, &eid);
         }
 
         let mut sandbox = s.lock().await;
@@ -1548,11 +1545,6 @@ fn cleanup_process(p: &mut Process) -> Result<()> {
     if p.term_master.is_some() {
         p.close_stream(StreamType::TermMaster);
         let _ = unistd::close(p.term_master.unwrap())?;
-    }
-
-    if p.exit_pipe_r.is_some() {
-        p.close_stream(StreamType::ExitPipeR);
-        let _ = unistd::close(p.exit_pipe_r.unwrap())?;
     }
 
     p.notify_term_close();
