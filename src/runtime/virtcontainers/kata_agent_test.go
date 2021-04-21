@@ -397,24 +397,28 @@ func TestHandleBlockVolume(t *testing.T) {
 	containers[c.id].sandbox = &sandbox
 	containers[c.id].mounts = mounts
 
-	volumeStorages, err := k.handleBlockVolumes(c)
+	vStorage, err := k.createBlkStorageObject(c, vMount)
+	assert.Nil(t, err, "Error while handling block volumes")
+	bStorage, err := k.createBlkStorageObject(c, bMount)
+	assert.Nil(t, err, "Error while handling block volumes")
+	dStorage, err := k.createBlkStorageObject(c, dMount)
 	assert.Nil(t, err, "Error while handling block volumes")
 
-	vStorage := &pb.Storage{
+	vStorageExpected := &pb.Storage{
 		MountPoint: vDestination,
 		Fstype:     "bind",
 		Options:    []string{"bind"},
 		Driver:     kataBlkDevType,
 		Source:     vPCIPath.String(),
 	}
-	bStorage := &pb.Storage{
+	bStorageExpected := &pb.Storage{
 		MountPoint: bDestination,
 		Fstype:     "bind",
 		Options:    []string{"bind"},
 		Driver:     kataBlkDevType,
 		Source:     bPCIPath.String(),
 	}
-	dStorage := &pb.Storage{
+	dStorageExpected := &pb.Storage{
 		MountPoint: dDestination,
 		Fstype:     "ext4",
 		Options:    []string{"ro"},
@@ -422,9 +426,9 @@ func TestHandleBlockVolume(t *testing.T) {
 		Source:     dPCIPath.String(),
 	}
 
-	assert.Equal(t, vStorage, volumeStorages[0], "Error while handle VhostUserBlk type block volume")
-	assert.Equal(t, bStorage, volumeStorages[1], "Error while handle BlockDevice type block volume")
-	assert.Equal(t, dStorage, volumeStorages[2], "Error while handle direct BlockDevice type block volume")
+	assert.Equal(t, vStorage, vStorageExpected, "Error while handle VhostUserBlk type block volume")
+	assert.Equal(t, bStorage, bStorageExpected, "Error while handle BlockDevice type block volume")
+	assert.Equal(t, dStorage, dStorageExpected, "Error while handle direct BlockDevice type block volume")
 }
 
 func TestAppendDevicesEmptyContainerDeviceList(t *testing.T) {

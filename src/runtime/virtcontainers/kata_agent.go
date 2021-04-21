@@ -961,33 +961,78 @@ func (k *kataAgent) removeIgnoredOCIMount(spec *specs.Spec, ignoredMounts map[st
 	return nil
 }
 
-func (k *kataAgent) replaceOCIMountsForStorages(spec *specs.Spec, volumeStorages []*grpc.Storage) error {
-	ociMounts := spec.Mounts
-	var index int
-	var m specs.Mount
+func (k *kataAgent) createBlkStorageObject(c *Container, m Mount) (*grpc.Storage, error) {
+	var vol *grpc.Storage
 
-	for i, v := range volumeStorages {
-		for index, m = range ociMounts {
-			if m.Destination != v.MountPoint {
+	id := m.BlockDeviceID
+	device := c.sandbox.devManager.GetDeviceByID(id)
+	if device == nil {
+		k.Logger().WithField("device", id).Error("failed to find device by id")
+		return nil, fmt.Errorf("Failed to find device by id (id=%s)", id)
+	}
+
+	var err error
+	switch device.DeviceType() {
+	case config.DeviceBlock:
+		vol, err = k.handleDeviceBlockVolume(c, m, device)
+	case config.VhostUserBlk:
+		vol, err = k.handleVhostUserBlkVolume(c, m, device)
+	default:
+		return nil, fmt.Errorf("Unknown device type")
+	}
+
+	return vol, err
+}
+
+// handleBlkOCIMounts will create a unique destination mountpoint in the guest for each volume in the
+// given container and will update the OCI spec to utilize this mount point as the new source for the
+// container volume. The container mount structure is updated to store the guest destination mountpoint.
+func (k *kataAgent) handleBlkOCIMounts(c *Container, spec *specs.Spec) ([]*grpc.Storage, error) {
+
+	var volumeStorages []*grpc.Storage
+
+	for i, m := range c.mounts {
+		id := m.BlockDeviceID
+
+		if len(id) == 0 {
+			continue
+		}
+
+		// Add the block device to the list of container devices, to make sure the
+		// device is detached with detachDevices() for a container.
+		c.devices = append(c.devices, ContainerDevice{ID: id, ContainerPath: m.Destination})
+
+		// Create Storage structure
+		vol, err := k.createBlkStorageObject(c, m)
+		if vol == nil || err != nil {
+			return nil, err
+		}
+
+		// The device will be mounted at a unique location within the VM. Mounting
+		// to the container specific location is handled within the OCI spec. Let's ensure that
+		// the storage mount point is unique, and that this is utilized as the source in the OCI
+		// spec.
+		filename := fmt.Sprintf("%s-%s", uuid.Generate().String(), filepath.Base(vol.MountPoint))
+		path := filepath.Join(kataGuestSandboxStorageDir(), filename)
+
+		// Update applicable OCI mount source
+		for idx, ociMount := range spec.Mounts {
+			if ociMount.Destination != vol.MountPoint {
 				continue
 			}
-
-			// Create a temporary location to mount the Storage. Mounting to the correct location
-			// will be handled by the OCI mount structure.
-			filename := fmt.Sprintf("%s-%s", uuid.Generate().String(), filepath.Base(m.Destination))
-			path := filepath.Join(kataGuestSandboxStorageDir(), filename)
-
-			k.Logger().Debugf("Replacing OCI mount source (%s) with %s", m.Source, path)
-			ociMounts[index].Source = path
-			volumeStorages[i].MountPoint = path
-
+			k.Logger().Debugf("Replacing OCI mount source (%s) with %s", ociMount.Source, path)
+			spec.Mounts[idx].Source = path
 			break
 		}
-		if index == len(ociMounts) {
-			return fmt.Errorf("OCI mount not found for block volume %s", v.MountPoint)
-		}
+
+		// Update storage mountpoint, and save guest device mount path to container mount struct:
+		vol.MountPoint = path
+		c.mounts[i].GuestDeviceMount = path
+
+		volumeStorages = append(volumeStorages, vol)
 	}
-	return nil
+
+	return volumeStorages, nil
 }
 
 func (k *kataAgent) constraintGRPCSpec(grpcSpec *grpc.Spec, passSeccomp bool) {
@@ -1345,16 +1390,10 @@ func (k *kataAgent) createContainer(ctx context.Context, sandbox *Sandbox, c *Co
 	// Append container devices for block devices passed with --device.
 	ctrDevices = k.appendDevices(ctrDevices, c)
 
-	// Handle all the volumes that are block device files.
-	// Note this call modifies the list of container devices to make sure
-	// all hotplugged devices are unplugged, so this needs be done
-	// after devices passed with --device are handled.
-	volumeStorages, err := k.handleBlockVolumes(c)
+	// Block based volumes will require some adjustments in the OCI spec, and creation of
+	// storage objects to pass to the agent.
+	volumeStorages, err := k.handleBlkOCIMounts(c, ociSpec)
 	if err != nil {
-		return nil, err
-	}
-
-	if err := k.replaceOCIMountsForStorages(ociSpec, volumeStorages); err != nil {
 		return nil, err
 	}
 
@@ -1552,52 +1591,6 @@ func (k *kataAgent) handleVhostUserBlkVolume(c *Container, m Mount, device api.D
 	vol.MountPoint = m.Destination
 
 	return vol, nil
-}
-
-// handleBlockVolumes handles volumes that are block devices files
-// by passing the block devices as Storage to the agent.
-func (k *kataAgent) handleBlockVolumes(c *Container) ([]*grpc.Storage, error) {
-
-	var volumeStorages []*grpc.Storage
-
-	for _, m := range c.mounts {
-		id := m.BlockDeviceID
-
-		if len(id) == 0 {
-			continue
-		}
-
-		// Add the block device to the list of container devices, to make sure the
-		// device is detached with detachDevices() for a container.
-		c.devices = append(c.devices, ContainerDevice{ID: id, ContainerPath: m.Destination})
-
-		var vol *grpc.Storage
-
-		device := c.sandbox.devManager.GetDeviceByID(id)
-		if device == nil {
-			k.Logger().WithField("device", id).Error("failed to find device by id")
-			return nil, fmt.Errorf("Failed to find device by id (id=%s)", id)
-		}
-
-		var err error
-		switch device.DeviceType() {
-		case config.DeviceBlock:
-			vol, err = k.handleDeviceBlockVolume(c, m, device)
-		case config.VhostUserBlk:
-			vol, err = k.handleVhostUserBlkVolume(c, m, device)
-		default:
-			k.Logger().Error("Unknown device type")
-			continue
-		}
-
-		if vol == nil || err != nil {
-			return nil, err
-		}
-
-		volumeStorages = append(volumeStorages, vol)
-	}
-
-	return volumeStorages, nil
 }
 
 // handlePidNamespace checks if Pid namespace for a container needs to be shared with its sandbox

@@ -320,7 +320,10 @@ func bindMountContainerRootfs(ctx context.Context, shareDir, cid, cRootFs string
 
 // Mount describes a container mount.
 type Mount struct {
-	Source      string
+	// The source of the mount
+	Source string
+
+	// Destination of the mount (within the container)
 	Destination string
 
 	// Type specifies the type of filesystem to mount.
@@ -334,6 +337,11 @@ type Mount struct {
 
 	// ReadOnly specifies if the mount should be read only or not
 	ReadOnly bool
+
+	// GuestDeviceMount represents the path within the VM that the device
+	// is mounted. Only relevant for block devices. This is tracked in the event
+	// runtime wants to query the agent for mount stats.
+	GuestDeviceMount string
 
 	// BlockDeviceID represents block device that is attached to the
 	// VM in case this mount is a block device file or a directory
