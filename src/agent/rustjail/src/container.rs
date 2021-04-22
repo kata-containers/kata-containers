@@ -5,7 +5,7 @@
 
 use anyhow::{anyhow, Context, Result};
 use libc::pid_t;
-use oci::{ContainerState, LinuxDevice, LinuxIDMapping};
+use oci::{ContainerState, LinuxDevice, LinuxIdMapping};
 use oci::{Hook, Linux, LinuxNamespace, LinuxResources, Spec};
 use std::clone::Clone;
 use std::ffi::{CStr, CString};
@@ -83,8 +83,8 @@ pub struct ContainerStatus {
 impl ContainerStatus {
     fn new() -> Self {
         ContainerStatus {
-            pre_status: ContainerState::CREATED,
-            cur_status: ContainerState::CREATED,
+            pre_status: ContainerState::Created,
+            cur_status: ContainerState::Created,
         }
     }
 
@@ -132,62 +132,62 @@ lazy_static! {
     };
 
     pub static ref DEFAULT_DEVICES: Vec<LinuxDevice> = {
-        let mut v = Vec::new();
-        v.push(LinuxDevice {
-            path: "/dev/null".to_string(),
-            r#type: "c".to_string(),
-            major: 1,
-            minor: 3,
-            file_mode: Some(0o666),
-            uid: Some(0xffffffff),
-            gid: Some(0xffffffff),
-        });
-        v.push(LinuxDevice {
-            path: "/dev/zero".to_string(),
-            r#type: "c".to_string(),
-            major: 1,
-            minor: 5,
-            file_mode: Some(0o666),
-            uid: Some(0xffffffff),
-            gid: Some(0xffffffff),
-        });
-        v.push(LinuxDevice {
-            path: "/dev/full".to_string(),
-            r#type: String::from("c"),
-            major: 1,
-            minor: 7,
-            file_mode: Some(0o666),
-            uid: Some(0xffffffff),
-            gid: Some(0xffffffff),
-        });
-        v.push(LinuxDevice {
-            path: "/dev/tty".to_string(),
-            r#type: "c".to_string(),
-            major: 5,
-            minor: 0,
-            file_mode: Some(0o666),
-            uid: Some(0xffffffff),
-            gid: Some(0xffffffff),
-        });
-        v.push(LinuxDevice {
-            path: "/dev/urandom".to_string(),
-            r#type: "c".to_string(),
-            major: 1,
-            minor: 9,
-            file_mode: Some(0o666),
-            uid: Some(0xffffffff),
-            gid: Some(0xffffffff),
-        });
-        v.push(LinuxDevice {
-            path: "/dev/random".to_string(),
-            r#type: "c".to_string(),
-            major: 1,
-            minor: 8,
-            file_mode: Some(0o666),
-            uid: Some(0xffffffff),
-            gid: Some(0xffffffff),
-        });
-        v
+        vec![
+            LinuxDevice {
+                path: "/dev/null".to_string(),
+                r#type: "c".to_string(),
+                major: 1,
+                minor: 3,
+                file_mode: Some(0o666),
+                uid: Some(0xffffffff),
+                gid: Some(0xffffffff),
+            },
+            LinuxDevice {
+                path: "/dev/zero".to_string(),
+                r#type: "c".to_string(),
+                major: 1,
+                minor: 5,
+                file_mode: Some(0o666),
+                uid: Some(0xffffffff),
+                gid: Some(0xffffffff),
+            },
+            LinuxDevice {
+                path: "/dev/full".to_string(),
+                r#type: String::from("c"),
+                major: 1,
+                minor: 7,
+                file_mode: Some(0o666),
+                uid: Some(0xffffffff),
+                gid: Some(0xffffffff),
+            },
+            LinuxDevice {
+                path: "/dev/tty".to_string(),
+                r#type: "c".to_string(),
+                major: 5,
+                minor: 0,
+                file_mode: Some(0o666),
+                uid: Some(0xffffffff),
+                gid: Some(0xffffffff),
+            },
+            LinuxDevice {
+                path: "/dev/urandom".to_string(),
+                r#type: "c".to_string(),
+                major: 1,
+                minor: 9,
+                file_mode: Some(0o666),
+                uid: Some(0xffffffff),
+                gid: Some(0xffffffff),
+            },
+            LinuxDevice {
+                path: "/dev/random".to_string(),
+                r#type: "c".to_string(),
+                major: 1,
+                minor: 8,
+                file_mode: Some(0o666),
+                uid: Some(0xffffffff),
+                gid: Some(0xffffffff),
+            },
+        ]
     };
 }
 
@@ -255,7 +255,7 @@ pub struct State {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct SyncPC {
+pub struct SyncPc {
     #[serde(default)]
     pid: pid_t,
 }
@@ -268,7 +268,7 @@ pub trait Container: BaseContainer {
 impl Container for LinuxContainer {
     fn pause(&mut self) -> Result<()> {
         let status = self.status();
-        if status != ContainerState::RUNNING && status != ContainerState::CREATED {
+        if status != ContainerState::Running && status != ContainerState::Created {
             return Err(anyhow!(
                 "failed to pause container: current status is: {:?}",
                 status
@@ -281,7 +281,7 @@ impl Container for LinuxContainer {
                 .unwrap()
                 .freeze(FreezerState::Frozen)?;
 
-            self.status.transition(ContainerState::PAUSED);
+            self.status.transition(ContainerState::Paused);
             return Ok(());
         }
         Err(anyhow!("failed to get container's cgroup manager"))
@@ -289,7 +289,7 @@ impl Container for LinuxContainer {
 
     fn resume(&mut self) -> Result<()> {
         let status = self.status();
-        if status != ContainerState::PAUSED {
+        if status != ContainerState::Paused {
             return Err(anyhow!("container status is: {:?}, not paused", status));
         }
 
@@ -299,7 +299,7 @@ impl Container for LinuxContainer {
                 .unwrap()
                 .freeze(FreezerState::Thawed)?;
 
-            self.status.transition(ContainerState::RUNNING);
+            self.status.transition(ContainerState::Running);
             return Ok(());
         }
         Err(anyhow!("failed to get container's cgroup manager"))
@@ -734,7 +734,7 @@ impl BaseContainer for LinuxContainer {
         };
 
         let status = self.status();
-        let pid = if status != ContainerState::STOPPED {
+        let pid = if status != ContainerState::Stopped {
             self.init_process_pid
         } else {
             0
@@ -984,7 +984,7 @@ impl BaseContainer for LinuxContainer {
 
         if init {
             self.exec()?;
-            self.status.transition(ContainerState::RUNNING);
+            self.status.transition(ContainerState::Running);
         }
 
         Ok(())
@@ -1006,7 +1006,7 @@ impl BaseContainer for LinuxContainer {
             }
         }
 
-        self.status.transition(ContainerState::STOPPED);
+        self.status.transition(ContainerState::Stopped);
         mount::umount2(
             spec.root.as_ref().unwrap().path.as_str(),
             MntFlags::MNT_DETACH,
@@ -1042,7 +1042,7 @@ impl BaseContainer for LinuxContainer {
             .unwrap()
             .as_secs();
 
-        self.status.transition(ContainerState::RUNNING);
+        self.status.transition(ContainerState::Running);
         unistd::close(fd)?;
 
         Ok(())
@@ -1289,7 +1289,7 @@ async fn join_namespaces(
     Ok(())
 }
 
-fn write_mappings(logger: &Logger, path: &str, maps: &[LinuxIDMapping]) -> Result<()> {
+fn write_mappings(logger: &Logger, path: &str, maps: &[LinuxIdMapping]) -> Result<()> {
     let data = maps
         .iter()
         .filter(|m| m.size != 0)
@@ -1515,28 +1515,23 @@ async fn execute_hook(logger: &Logger, h: &Hook, st: &OCIState) -> Result<()> {
 
         match child.wait().await {
             Ok(exit) => {
-                let code = match exit.code() {
-                    Some(c) => c,
-                    None => {
-                        return Err(anyhow!("hook exit status has no status code"));
-                    }
-                };
+                let code = exit
+                    .code()
+                    .ok_or_else(|| anyhow!("hook exit status has no status code"))?;
 
-                if code == 0 {
-                    debug!(logger, "hook {} exit status is 0", &path);
-                    return Ok(());
-                } else {
+                if code != 0 {
                     error!(logger, "hook {} exit status is {}", &path, code);
                     return Err(anyhow!(nix::Error::from_errno(Errno::UnknownErrno)));
                 }
+
+                debug!(logger, "hook {} exit status is 0", &path);
+                Ok(())
             }
-            Err(e) => {
-                return Err(anyhow!(
-                    "wait child error: {} {}",
-                    e,
-                    e.raw_os_error().unwrap()
-                ));
-            }
+            Err(e) => Err(anyhow!(
+                "wait child error: {} {}",
+                e,
+                e.raw_os_error().unwrap()
+            )),
         }
     });
 
@@ -1575,7 +1570,7 @@ mod tests {
             &OCIState {
                 version: "1.2.3".to_string(),
                 id: "321".to_string(),
-                status: ContainerState::RUNNING,
+                status: ContainerState::Running,
                 pid: 2,
                 bundle: "".to_string(),
                 annotations: Default::default(),
@@ -1598,7 +1593,7 @@ mod tests {
             &OCIState {
                 version: "1.2.3".to_string(),
                 id: "321".to_string(),
-                status: ContainerState::RUNNING,
+                status: ContainerState::Running,
                 pid: 2,
                 bundle: "".to_string(),
                 annotations: Default::default(),
@@ -1617,10 +1612,10 @@ mod tests {
     fn test_status_transtition() {
         let mut status = ContainerStatus::new();
         let status_table: [ContainerState; 4] = [
-            ContainerState::CREATED,
-            ContainerState::RUNNING,
-            ContainerState::PAUSED,
-            ContainerState::STOPPED,
+            ContainerState::Created,
+            ContainerState::Running,
+            ContainerState::Paused,
+            ContainerState::Stopped,
         ];
 
         for s in status_table.iter() {
@@ -1757,7 +1752,7 @@ mod tests {
     fn test_linuxcontainer_pause_bad_status() {
         let ret = new_linux_container_and_then(|mut c: LinuxContainer| {
             // Change state to pause, c.pause() should fail
-            c.status.transition(ContainerState::PAUSED);
+            c.status.transition(ContainerState::Paused);
             c.pause().map_err(|e| anyhow!(e))
         });
 
@@ -1789,7 +1784,7 @@ mod tests {
     fn test_linuxcontainer_resume_bad_status() {
         let ret = new_linux_container_and_then(|mut c: LinuxContainer| {
             // Change state to created, c.resume() should fail
-            c.status.transition(ContainerState::CREATED);
+            c.status.transition(ContainerState::Created);
             c.resume().map_err(|e| anyhow!(e))
         });
 
@@ -1800,7 +1795,7 @@ mod tests {
     #[test]
     fn test_linuxcontainer_resume_cgroupmgr_is_none() {
         let ret = new_linux_container_and_then(|mut c: LinuxContainer| {
-            c.status.transition(ContainerState::PAUSED);
+            c.status.transition(ContainerState::Paused);
             c.cgroup_manager = None;
             c.resume().map_err(|e| anyhow!(e))
         });
@@ -1813,7 +1808,7 @@ mod tests {
         let ret = new_linux_container_and_then(|mut c: LinuxContainer| {
             c.cgroup_manager = FsManager::new("").ok();
             // Change status to paused, this way we can resume it
-            c.status.transition(ContainerState::PAUSED);
+            c.status.transition(ContainerState::Paused);
             c.resume().map_err(|e| anyhow!(e))
         });
 
