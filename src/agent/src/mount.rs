@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use std::ffi::CString;
 use std::fs;
 use std::io;
-use std::os::unix::fs::PermissionsExt;
+use std::os::unix::fs::{MetadataExt, PermissionsExt};
 
 use std::path::Path;
 use std::ptr::null;
@@ -245,7 +245,35 @@ async fn ephemeral_storage_handler(
     }
 
     fs::create_dir_all(Path::new(&storage.mount_point))?;
-    common_storage_handler(logger, storage)?;
+
+    // By now we only support one option field: "fsGroup" which
+    // isn't an valid mount option, thus we should remove it when
+    // do mount.
+    if storage.options.len() > 0 {
+        // ephemeral_storage didn't support mount options except fsGroup.
+        let mut new_storage = storage.clone();
+        new_storage.options = protobuf::RepeatedField::default();
+        common_storage_handler(logger, &new_storage)?;
+
+        let opts_vec: Vec<String> = storage.options.to_vec();
+
+        let opts = parse_options(opts_vec);
+
+        if let Some(fsgid) = opts.get(FS_GID) {
+            let gid = fsgid.parse::<u32>()?;
+
+            nix::unistd::chown(storage.mount_point.as_str(), None, Some(Gid::from_raw(gid)))?;
+
+            let meta = fs::metadata(&storage.mount_point)?;
+            let mut permission = meta.permissions();
+
+            let o_mode = meta.mode() | 0o2000;
+            permission.set_mode(o_mode);
+            fs::set_permissions(&storage.mount_point, permission)?;
+        }
+    } else {
+        common_storage_handler(logger, &storage)?;
+    }
 
     Ok("".to_string())
 }
