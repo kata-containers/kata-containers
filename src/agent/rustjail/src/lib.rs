@@ -58,13 +58,12 @@ pub mod validator;
 // pub mod user;
 //pub mod intelrdt;
 
-use protocols::oci as grpc;
-
-// construtc ociSpec from grpc::Spec, which is needed for hook
-// execution. since hooks read config.json
-
 use std::collections::HashMap;
 
+use protocols::oci as grpc;
+
+// construct ociSpec from grpc::Spec, which is needed for hook
+// execution. since hooks read config.json
 pub fn process_grpc_to_oci(p: &grpc::Process) -> oci::Process {
     let console_size = if p.ConsoleSize.is_some() {
         let c = p.ConsoleSize.as_ref().unwrap();
