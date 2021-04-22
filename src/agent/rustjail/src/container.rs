@@ -908,7 +908,7 @@ impl BaseContainer for LinuxContainer {
             child = child.env(PIDNS_FD, format!("{}", pidns.unwrap()));
         }
 
-        let child = child.spawn()?;
+        child.spawn()?;
 
         unistd::close(crfd)?;
         unistd::close(cwfd)?;
@@ -963,19 +963,6 @@ impl BaseContainer for LinuxContainer {
         info!(logger, "entered namespaces!");
 
         self.created = SystemTime::now();
-
-        // create the pipes for notify process exited
-        let (exit_pipe_r, exit_pipe_w) = unistd::pipe2(OFlag::O_CLOEXEC)
-            .context("failed to create pipe")
-            .map_err(|e| {
-                let _ = signal::kill(Pid::from_raw(child.id() as i32), Some(Signal::SIGKILL))
-                    .map_err(|e| warn!(logger, "signal::kill creating pipe {:?}", e));
-
-                e
-            })?;
-
-        p.exit_pipe_w = Some(exit_pipe_w);
-        p.exit_pipe_r = Some(exit_pipe_r);
 
         if p.init {
             let spec = self.config.spec.as_mut().unwrap();
