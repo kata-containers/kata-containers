@@ -36,7 +36,7 @@ func newClhConfig() (HypervisorConfig, error) {
 	}
 
 	if testVirtiofsdPath == "" {
-		return HypervisorConfig{}, errors.New("hypervisor fake path is empty")
+		return HypervisorConfig{}, errors.New("virtiofsd fake path is empty")
 	}
 
 	if _, err := os.Stat(testClhPath); os.IsNotExist(err) {
