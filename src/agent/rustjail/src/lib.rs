@@ -58,24 +58,16 @@ pub mod validator;
 // pub mod user;
 //pub mod intelrdt;
 
-// construtc ociSpec from grpcSpec, which is needed for hook
-// execution. since hooks read config.json
-
-use oci::{
-    Box as ociBox, Hooks as ociHooks, Linux as ociLinux, LinuxCapabilities as ociLinuxCapabilities,
-    Mount as ociMount, POSIXRlimit as ociPOSIXRlimit, Process as ociProcess, Root as ociRoot,
-    Spec as ociSpec, User as ociUser,
-};
-use protocols::oci::{
-    Hooks as grpcHooks, Linux as grpcLinux, Mount as grpcMount, Process as grpcProcess,
-    Root as grpcRoot, Spec as grpcSpec,
-};
 use std::collections::HashMap;
 
-pub fn process_grpc_to_oci(p: &grpcProcess) -> ociProcess {
+use protocols::oci as grpc;
+
+// construct ociSpec from grpc::Spec, which is needed for hook
+// execution. since hooks read config.json
+pub fn process_grpc_to_oci(p: &grpc::Process) -> oci::Process {
     let console_size = if p.ConsoleSize.is_some() {
         let c = p.ConsoleSize.as_ref().unwrap();
-        Some(ociBox {
+        Some(oci::Box {
             height: c.Height,
             width: c.Width,
         })
@@ -85,14 +77,14 @@ pub fn process_grpc_to_oci(p: &grpcProcess) -> ociProcess {
 
     let user = if p.User.is_some() {
         let u = p.User.as_ref().unwrap();
-        ociUser {
+        oci::User {
             uid: u.UID,
             gid: u.GID,
             additional_gids: u.AdditionalGids.clone(),
             username: u.Username.clone(),
         }
     } else {
-        ociUser {
+        oci::User {
             uid: 0,
             gid: 0,
             additional_gids: vec![],
@@ -103,7 +95,7 @@ pub fn process_grpc_to_oci(p: &grpcProcess) -> ociProcess {
     let capabilities = if p.Capabilities.is_some() {
         let cap = p.Capabilities.as_ref().unwrap();
 
-        Some(ociLinuxCapabilities {
+        Some(oci::LinuxCapabilities {
             bounding: cap.Bounding.clone().into_vec(),
             effective: cap.Effective.clone().into_vec(),
             inheritable: cap.Inheritable.clone().into_vec(),
@@ -117,7 +109,7 @@ pub fn process_grpc_to_oci(p: &grpcProcess) -> ociProcess {
     let rlimits = {
         let mut r = Vec::new();
         for lm in p.Rlimits.iter() {
-            r.push(ociPOSIXRlimit {
+            r.push(oci::PosixRlimit {
                 r#type: lm.Type.clone(),
                 hard: lm.Hard,
                 soft: lm.Soft,
@@ -126,7 +118,7 @@ pub fn process_grpc_to_oci(p: &grpcProcess) -> ociProcess {
         r
     };
 
-    ociProcess {
+    oci::Process {
         terminal: p.Terminal,
         console_size,
         user,
@@ -142,15 +134,15 @@ pub fn process_grpc_to_oci(p: &grpcProcess) -> ociProcess {
     }
 }
 
-fn root_grpc_to_oci(root: &grpcRoot) -> ociRoot {
-    ociRoot {
+fn root_grpc_to_oci(root: &grpc::Root) -> oci::Root {
+    oci::Root {
         path: root.Path.clone(),
         readonly: root.Readonly,
     }
 }
 
-fn mount_grpc_to_oci(m: &grpcMount) -> ociMount {
-    ociMount {
+fn mount_grpc_to_oci(m: &grpc::Mount) -> oci::Mount {
+    oci::Mount {
         destination: m.destination.clone(),
         r#type: m.field_type.clone(),
         source: m.source.clone(),
@@ -158,13 +150,12 @@ fn mount_grpc_to_oci(m: &grpcMount) -> ociMount {
     }
 }
 
-use oci::Hook as ociHook;
 use protocols::oci::Hook as grpcHook;
 
-fn hook_grpc_to_oci(h: &[grpcHook]) -> Vec<ociHook> {
+fn hook_grpc_to_oci(h: &[grpcHook]) -> Vec<oci::Hook> {
     let mut r = Vec::new();
     for e in h.iter() {
-        r.push(ociHook {
+        r.push(oci::Hook {
             path: e.Path.clone(),
             args: e.Args.clone().into_vec(),
             env: e.Env.clone().into_vec(),
@@ -174,39 +165,29 @@ fn hook_grpc_to_oci(h: &[grpcHook]) -> Vec<ociHook> {
     r
 }
 
-fn hooks_grpc_to_oci(h: &grpcHooks) -> ociHooks {
+fn hooks_grpc_to_oci(h: &grpc::Hooks) -> oci::Hooks {
     let prestart = hook_grpc_to_oci(h.Prestart.as_ref());
 
     let poststart = hook_grpc_to_oci(h.Poststart.as_ref());
 
     let poststop = hook_grpc_to_oci(h.Poststop.as_ref());
 
-    ociHooks {
+    oci::Hooks {
         prestart,
         poststart,
         poststop,
     }
 }
 
-use oci::{
-    LinuxDevice as ociLinuxDevice, LinuxIDMapping as ociLinuxIDMapping,
-    LinuxIntelRdt as ociLinuxIntelRdt, LinuxNamespace as ociLinuxNamespace,
-    LinuxResources as ociLinuxResources, LinuxSeccomp as ociLinuxSeccomp,
-};
-use protocols::oci::{
-    LinuxIDMapping as grpcLinuxIDMapping, LinuxResources as grpcLinuxResources,
-    LinuxSeccomp as grpcLinuxSeccomp,
-};
-
-fn idmap_grpc_to_oci(im: &grpcLinuxIDMapping) -> ociLinuxIDMapping {
-    ociLinuxIDMapping {
+fn idmap_grpc_to_oci(im: &grpc::LinuxIDMapping) -> oci::LinuxIdMapping {
+    oci::LinuxIdMapping {
         container_id: im.ContainerID,
         host_id: im.HostID,
         size: im.Size,
     }
 }
 
-fn idmaps_grpc_to_oci(ims: &[grpcLinuxIDMapping]) -> Vec<ociLinuxIDMapping> {
+fn idmaps_grpc_to_oci(ims: &[grpc::LinuxIDMapping]) -> Vec<oci::LinuxIdMapping> {
     let mut r = Vec::new();
     for im in ims.iter() {
         r.push(idmap_grpc_to_oci(im));
@@ -214,24 +195,13 @@ fn idmaps_grpc_to_oci(ims: &[grpcLinuxIDMapping]) -> Vec<ociLinuxIDMapping> {
     r
 }
 
-use oci::{
-    LinuxBlockIO as ociLinuxBlockIO, LinuxBlockIODevice as ociLinuxBlockIODevice,
-    LinuxCPU as ociLinuxCPU, LinuxDeviceCgroup as ociLinuxDeviceCgroup,
-    LinuxHugepageLimit as ociLinuxHugepageLimit,
-    LinuxInterfacePriority as ociLinuxInterfacePriority, LinuxMemory as ociLinuxMemory,
-    LinuxNetwork as ociLinuxNetwork, LinuxPids as ociLinuxPids,
-    LinuxThrottleDevice as ociLinuxThrottleDevice, LinuxWeightDevice as ociLinuxWeightDevice,
-};
-use protocols::oci::{
-    LinuxBlockIO as grpcLinuxBlockIO, LinuxThrottleDevice as grpcLinuxThrottleDevice,
-    LinuxWeightDevice as grpcLinuxWeightDevice,
-};
-
-fn throttle_devices_grpc_to_oci(tds: &[grpcLinuxThrottleDevice]) -> Vec<ociLinuxThrottleDevice> {
+fn throttle_devices_grpc_to_oci(
+    tds: &[grpc::LinuxThrottleDevice],
+) -> Vec<oci::LinuxThrottleDevice> {
     let mut r = Vec::new();
     for td in tds.iter() {
-        r.push(ociLinuxThrottleDevice {
-            blk: ociLinuxBlockIODevice {
+        r.push(oci::LinuxThrottleDevice {
+            blk: oci::LinuxBlockIoDevice {
                 major: td.Major,
                 minor: td.Minor,
             },
@@ -241,11 +211,11 @@ fn throttle_devices_grpc_to_oci(tds: &[grpcLinuxThrottleDevice]) -> Vec<ociLinux
     r
 }
 
-fn weight_devices_grpc_to_oci(wds: &[grpcLinuxWeightDevice]) -> Vec<ociLinuxWeightDevice> {
+fn weight_devices_grpc_to_oci(wds: &[grpc::LinuxWeightDevice]) -> Vec<oci::LinuxWeightDevice> {
     let mut r = Vec::new();
     for wd in wds.iter() {
-        r.push(ociLinuxWeightDevice {
-            blk: ociLinuxBlockIODevice {
+        r.push(oci::LinuxWeightDevice {
+            blk: oci::LinuxBlockIoDevice {
                 major: wd.Major,
                 minor: wd.Minor,
             },
@@ -256,7 +226,7 @@ fn weight_devices_grpc_to_oci(wds: &[grpcLinuxWeightDevice]) -> Vec<ociLinuxWeig
     r
 }
 
-fn blockio_grpc_to_oci(blk: &grpcLinuxBlockIO) -> ociLinuxBlockIO {
+fn blockio_grpc_to_oci(blk: &grpc::LinuxBlockIO) -> oci::LinuxBlockIo {
     let weight_device = weight_devices_grpc_to_oci(blk.WeightDevice.as_ref());
     let throttle_read_bps_device = throttle_devices_grpc_to_oci(blk.ThrottleReadBpsDevice.as_ref());
     let throttle_write_bps_device =
@@ -266,7 +236,7 @@ fn blockio_grpc_to_oci(blk: &grpcLinuxBlockIO) -> ociLinuxBlockIO {
     let throttle_write_iops_device =
         throttle_devices_grpc_to_oci(blk.ThrottleWriteIOPSDevice.as_ref());
 
-    ociLinuxBlockIO {
+    oci::LinuxBlockIo {
         weight: Some(blk.Weight as u16),
         leaf_weight: Some(blk.LeafWeight as u16),
         weight_device,
@@ -277,7 +247,7 @@ fn blockio_grpc_to_oci(blk: &grpcLinuxBlockIO) -> ociLinuxBlockIO {
     }
 }
 
-pub fn resources_grpc_to_oci(res: &grpcLinuxResources) -> ociLinuxResources {
+pub fn resources_grpc_to_oci(res: &grpc::LinuxResources) -> oci::LinuxResources {
     let devices = {
         let mut d = Vec::new();
         for dev in res.Devices.iter() {
@@ -292,7 +262,7 @@ pub fn resources_grpc_to_oci(res: &grpcLinuxResources) -> ociLinuxResources {
             } else {
                 Some(dev.Minor)
             };
-            d.push(ociLinuxDeviceCgroup {
+            d.push(oci::LinuxDeviceCgroup {
                 allow: dev.Allow,
                 r#type: dev.Type.clone(),
                 major,
@@ -305,7 +275,7 @@ pub fn resources_grpc_to_oci(res: &grpcLinuxResources) -> ociLinuxResources {
 
     let memory = if res.Memory.is_some() {
         let mem = res.Memory.as_ref().unwrap();
-        Some(ociLinuxMemory {
+        Some(oci::LinuxMemory {
             limit: Some(mem.Limit),
             reservation: Some(mem.Reservation),
             swap: Some(mem.Swap),
@@ -320,7 +290,7 @@ pub fn resources_grpc_to_oci(res: &grpcLinuxResources) -> ociLinuxResources {
 
     let cpu = if res.CPU.is_some() {
         let c = res.CPU.as_ref().unwrap();
-        Some(ociLinuxCPU {
+        Some(oci::LinuxCpu {
             shares: Some(c.Shares),
             quota: Some(c.Quota),
             period: Some(c.Period),
@@ -335,7 +305,7 @@ pub fn resources_grpc_to_oci(res: &grpcLinuxResources) -> ociLinuxResources {
 
     let pids = if res.Pids.is_some() {
         let p = res.Pids.as_ref().unwrap();
-        Some(ociLinuxPids { limit: p.Limit })
+        Some(oci::LinuxPids { limit: p.Limit })
     } else {
         None
     };
@@ -351,7 +321,7 @@ pub fn resources_grpc_to_oci(res: &grpcLinuxResources) -> ociLinuxResources {
     let hugepage_limits = {
         let mut r = Vec::new();
         for hl in res.HugepageLimits.iter() {
-            r.push(ociLinuxHugepageLimit {
+            r.push(oci::LinuxHugepageLimit {
                 page_size: hl.Pagesize.clone(),
                 limit: hl.Limit,
             });
@@ -364,14 +334,14 @@ pub fn resources_grpc_to_oci(res: &grpcLinuxResources) -> ociLinuxResources {
         let priorities = {
             let mut r = Vec::new();
             for pr in net.Priorities.iter() {
-                r.push(ociLinuxInterfacePriority {
+                r.push(oci::LinuxInterfacePriority {
                     name: pr.Name.clone(),
                     priority: pr.Priority,
                 });
             }
             r
         };
-        Some(ociLinuxNetwork {
+        Some(oci::LinuxNetwork {
             class_id: Some(net.ClassID),
             priorities,
         })
@@ -379,7 +349,7 @@ pub fn resources_grpc_to_oci(res: &grpcLinuxResources) -> ociLinuxResources {
         None
     };
 
-    ociLinuxResources {
+    oci::LinuxResources {
         devices,
         memory,
         cpu,
@@ -391,9 +361,7 @@ pub fn resources_grpc_to_oci(res: &grpcLinuxResources) -> ociLinuxResources {
     }
 }
 
-use oci::{LinuxSeccompArg as ociLinuxSeccompArg, LinuxSyscall as ociLinuxSyscall};
-
-fn seccomp_grpc_to_oci(sec: &grpcLinuxSeccomp) -> ociLinuxSeccomp {
+fn seccomp_grpc_to_oci(sec: &grpc::LinuxSeccomp) -> oci::LinuxSeccomp {
     let syscalls = {
         let mut r = Vec::new();
 
@@ -401,7 +369,7 @@ fn seccomp_grpc_to_oci(sec: &grpcLinuxSeccomp) -> ociLinuxSeccomp {
             let mut args = Vec::new();
 
             for arg in sys.Args.iter() {
-                args.push(ociLinuxSeccompArg {
+                args.push(oci::LinuxSeccompArg {
                     index: arg.Index as u32,
                     value: arg.Value,
                     value_two: arg.ValueTwo,
@@ -409,7 +377,7 @@ fn seccomp_grpc_to_oci(sec: &grpcLinuxSeccomp) -> ociLinuxSeccomp {
                 });
             }
 
-            r.push(ociLinuxSyscall {
+            r.push(oci::LinuxSyscall {
                 names: sys.Names.clone().into_vec(),
                 action: sys.Action.clone(),
                 errno_ret: sys.ErrnoRet,
@@ -419,7 +387,7 @@ fn seccomp_grpc_to_oci(sec: &grpcLinuxSeccomp) -> ociLinuxSeccomp {
         r
     };
 
-    ociLinuxSeccomp {
+    oci::LinuxSeccomp {
         default_action: sec.DefaultAction.clone(),
         architectures: sec.Architectures.clone().into_vec(),
         flags: sec.Flags.clone().into_vec(),
@@ -427,7 +395,7 @@ fn seccomp_grpc_to_oci(sec: &grpcLinuxSeccomp) -> ociLinuxSeccomp {
     }
 }
 
-fn linux_grpc_to_oci(l: &grpcLinux) -> ociLinux {
+fn linux_grpc_to_oci(l: &grpc::Linux) -> oci::Linux {
     let uid_mappings = idmaps_grpc_to_oci(l.UIDMappings.as_ref());
     let gid_mappings = idmaps_grpc_to_oci(l.GIDMappings.as_ref());
 
@@ -447,7 +415,7 @@ fn linux_grpc_to_oci(l: &grpcLinux) -> ociLinux {
         let mut r = Vec::new();
 
         for ns in l.Namespaces.iter() {
-            r.push(ociLinuxNamespace {
+            r.push(oci::LinuxNamespace {
                 r#type: ns.Type.clone(),
                 path: ns.Path.clone(),
             });
@@ -459,7 +427,7 @@ fn linux_grpc_to_oci(l: &grpcLinux) -> ociLinux {
         let mut r = Vec::new();
 
         for d in l.Devices.iter() {
-            r.push(ociLinuxDevice {
+            r.push(oci::LinuxDevice {
                 path: d.Path.clone(),
                 r#type: d.Type.clone(),
                 major: d.Major,
@@ -475,14 +443,14 @@ fn linux_grpc_to_oci(l: &grpcLinux) -> ociLinux {
     let intel_rdt = if l.IntelRdt.is_some() {
         let rdt = l.IntelRdt.as_ref().unwrap();
 
-        Some(ociLinuxIntelRdt {
+        Some(oci::LinuxIntelRdt {
             l3_cache_schema: rdt.L3CacheSchema.clone(),
         })
     } else {
         None
     };
 
-    ociLinux {
+    oci::Linux {
         uid_mappings,
         gid_mappings,
         sysctl: l.Sysctl.clone(),
@@ -499,11 +467,11 @@ fn linux_grpc_to_oci(l: &grpcLinux) -> ociLinux {
     }
 }
 
-fn linux_oci_to_grpc(_l: &ociLinux) -> grpcLinux {
-    grpcLinux::default()
+fn linux_oci_to_grpc(_l: &oci::Linux) -> grpc::Linux {
+    grpc::Linux::default()
 }
 
-pub fn grpc_to_oci(grpc: &grpcSpec) -> ociSpec {
+pub fn grpc_to_oci(grpc: &grpc::Spec) -> oci::Spec {
     // process
     let process = if grpc.Process.is_some() {
         Some(process_grpc_to_oci(grpc.Process.as_ref().unwrap()))
@@ -541,7 +509,7 @@ pub fn grpc_to_oci(grpc: &grpcSpec) -> ociSpec {
         None
     };
 
-    ociSpec {
+    oci::Spec {
         version: grpc.Version.clone(),
         process,
         root,

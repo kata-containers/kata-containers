@@ -24,7 +24,7 @@ use anyhow::{anyhow, Context, Result};
 use libc::{self, pid_t};
 use nix::errno::Errno;
 use oci::{
-    LinuxBlockIO, LinuxCPU, LinuxDevice, LinuxDeviceCgroup, LinuxHugepageLimit, LinuxMemory,
+    LinuxBlockIo, LinuxCpu, LinuxDevice, LinuxDeviceCgroup, LinuxHugepageLimit, LinuxMemory,
     LinuxNetwork, LinuxPids, LinuxResources,
 };
 
@@ -272,7 +272,7 @@ fn set_hugepages_resources(
 
 fn set_block_io_resources(
     _cg: &cgroups::Cgroup,
-    blkio: &LinuxBlockIO,
+    blkio: &LinuxBlockIo,
     res: &mut cgroups::Resources,
 ) {
     info!(sl!(), "cgroup manager set block io");
@@ -302,7 +302,7 @@ fn set_block_io_resources(
         build_blk_io_device_throttle_resource(&blkio.throttle_write_iops_device);
 }
 
-fn set_cpu_resources(cg: &cgroups::Cgroup, cpu: &LinuxCPU) -> Result<()> {
+fn set_cpu_resources(cg: &cgroups::Cgroup, cpu: &LinuxCpu) -> Result<()> {
     info!(sl!(), "cgroup manager set cpu");
 
     let cpuset_controller: &CpuSetController = cg.controller_of().unwrap();
@@ -489,63 +489,61 @@ lazy_static! {
     };
 
     pub static ref DEFAULT_ALLOWED_DEVICES: Vec<LinuxDeviceCgroup> = {
-        let mut v = Vec::new();
+        vec![
+            // all mknod to all char devices
+            LinuxDeviceCgroup {
+                allow: true,
+                r#type: "c".to_string(),
+                major: Some(WILDCARD),
+                minor: Some(WILDCARD),
+                access: "m".to_string(),
+            },
 
-        // all mknod to all char devices
-        v.push(LinuxDeviceCgroup {
-            allow: true,
-            r#type: "c".to_string(),
-            major: Some(WILDCARD),
-            minor: Some(WILDCARD),
-            access: "m".to_string(),
-        });
+            // all mknod to all block devices
+            LinuxDeviceCgroup {
+                allow: true,
+                r#type: "b".to_string(),
+                major: Some(WILDCARD),
+                minor: Some(WILDCARD),
+                access: "m".to_string(),
+            },
 
-        // all mknod to all block devices
-        v.push(LinuxDeviceCgroup {
-            allow: true,
-            r#type: "b".to_string(),
-            major: Some(WILDCARD),
-            minor: Some(WILDCARD),
-            access: "m".to_string(),
-        });
+            // all read/write/mknod to char device /dev/console
+            LinuxDeviceCgroup {
+                allow: true,
+                r#type: "c".to_string(),
+                major: Some(5),
+                minor: Some(1),
+                access: "rwm".to_string(),
+            },
 
-        // all read/write/mknod to char device /dev/console
-        v.push(LinuxDeviceCgroup {
-            allow: true,
-            r#type: "c".to_string(),
-            major: Some(5),
-            minor: Some(1),
-            access: "rwm".to_string(),
-        });
+            // all read/write/mknod to char device /dev/pts/<N>
+            LinuxDeviceCgroup {
+                allow: true,
+                r#type: "c".to_string(),
+                major: Some(136),
+                minor: Some(WILDCARD),
+                access: "rwm".to_string(),
+            },
 
-        // all read/write/mknod to char device /dev/pts/<N>
-        v.push(LinuxDeviceCgroup {
-            allow: true,
-            r#type: "c".to_string(),
-            major: Some(136),
-            minor: Some(WILDCARD),
-            access: "rwm".to_string(),
-        });
+            // all read/write/mknod to char device /dev/ptmx
+            LinuxDeviceCgroup {
+                allow: true,
+                r#type: "c".to_string(),
+                major: Some(5),
+                minor: Some(2),
+                access: "rwm".to_string(),
+            },
 
-        // all read/write/mknod to char device /dev/ptmx
-        v.push(LinuxDeviceCgroup {
-            allow: true,
-            r#type: "c".to_string(),
-            major: Some(5),
-            minor: Some(2),
-            access: "rwm".to_string(),
-        });
-
-        // all read/write/mknod to char device /dev/net/tun
-        v.push(LinuxDeviceCgroup {
-            allow: true,
-            r#type: "c".to_string(),
-            major: Some(10),
-            minor: Some(200),
-            access: "rwm".to_string(),
-        });
-
-        v
+            // all read/write/mknod to char device /dev/net/tun
+            LinuxDeviceCgroup {
+                allow: true,
+                r#type: "c".to_string(),
+                major: Some(10),
+                minor: Some(200),
+                access: "rwm".to_string(),
+            },
+        ]
     };
 }
 

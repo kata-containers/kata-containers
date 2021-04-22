@@ -245,11 +245,13 @@ mod tests {
 
     #[tokio::test]
     async fn test_wait_for_uevent() {
-        let mut uev = crate::uevent::Uevent::default();
-        uev.action = crate::linux_abi::U_EVENT_ACTION_ADD.to_string();
-        uev.subsystem = "test".to_string();
-        uev.devpath = "/test/sysfs/path".to_string();
-        uev.devname = "testdevname".to_string();
+        let uev = Uevent {
+            action: crate::linux_abi::U_EVENT_ACTION_ADD.to_string(),
+            subsystem: "test".to_string(),
+            devpath: "/test/sysfs/path".to_string(),
+            devname: "testdevname".to_string(),
+            ..Default::default()
+        };
 
         let matcher = AlwaysMatch();
 

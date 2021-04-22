@@ -96,10 +96,10 @@ struct ScsiBlockMatcher {
 }
 
 impl ScsiBlockMatcher {
-    fn new(scsi_addr: &str) -> Result<ScsiBlockMatcher> {
+    fn new(scsi_addr: &str) -> ScsiBlockMatcher {
         let search = format!(r"/0:0:{}/block/", scsi_addr);
 
-        Ok(ScsiBlockMatcher { search })
+        ScsiBlockMatcher { search }
     }
 }
 
@@ -113,7 +113,7 @@ pub async fn get_scsi_device_name(
     sandbox: &Arc<Mutex<Sandbox>>,
     scsi_addr: &str,
 ) -> Result<String> {
-    let matcher = ScsiBlockMatcher::new(scsi_addr)?;
+    let matcher = ScsiBlockMatcher::new(scsi_addr);
 
     scan_scsi_bus(scsi_addr)?;
     let uev = wait_for_uevent(sandbox, matcher).await?;
@@ -126,12 +126,12 @@ struct VirtioBlkPciMatcher {
 }
 
 impl VirtioBlkPciMatcher {
-    fn new(relpath: &str) -> Result<VirtioBlkPciMatcher> {
+    fn new(relpath: &str) -> VirtioBlkPciMatcher {
         let root_bus = create_pci_root_bus_path();
         let re = format!(r"^{}{}/virtio[0-9]+/block/", root_bus, relpath);
-        Ok(VirtioBlkPciMatcher {
+        VirtioBlkPciMatcher {
             rex: Regex::new(&re).unwrap(),
-        })
+        }
     }
 }
 
@@ -147,7 +147,7 @@ pub async fn get_virtio_blk_pci_device_name(
 ) -> Result<String> {
     let root_bus_sysfs = format!("{}{}", SYSFS_DIR, create_pci_root_bus_path());
     let sysfs_rel_path = pcipath_to_sysfs(&root_bus_sysfs, pcipath)?;
-    let matcher = VirtioBlkPciMatcher::new(&sysfs_rel_path)?;
+    let matcher = VirtioBlkPciMatcher::new(&sysfs_rel_path);
 
     rescan_pci_bus()?;
 
@@ -161,10 +161,10 @@ struct PmemBlockMatcher {
 }
 
 impl PmemBlockMatcher {
-    fn new(devname: &str) -> Result<PmemBlockMatcher> {
+    fn new(devname: &str) -> PmemBlockMatcher {
         let suffix = format!(r"/block/{}", devname);
 
-        Ok(PmemBlockMatcher { suffix })
+        PmemBlockMatcher { suffix }
     }
 }
 
@@ -188,7 +188,7 @@ pub async fn wait_for_pmem_device(sandbox: &Arc<Mutex<Sandbox>>, devpath: &str) 
         }
     };
 
-    let matcher = PmemBlockMatcher::new(devname)?;
+    let matcher = PmemBlockMatcher::new(devname);
     let uev = wait_for_uevent(sandbox, matcher).await?;
     if uev.devname != devname {
         return Err(anyhow!(
@@ -822,7 +822,7 @@ mod tests {
         sandbox: &Arc<Mutex<Sandbox>>,
         relpath: &str,
     ) -> Result<String> {
-        let matcher = VirtioBlkPciMatcher::new(relpath)?;
+        let matcher = VirtioBlkPciMatcher::new(relpath);
 
         let uev = wait_for_uevent(sandbox, matcher).await?;
 
@@ -875,12 +875,12 @@ mod tests {
         uev_a.subsystem = "block".to_string();
         uev_a.devname = devname.to_string();
         uev_a.devpath = format!("{}{}/virtio4/block/{}", root_bus, relpath_a, devname);
-        let matcher_a = VirtioBlkPciMatcher::new(&relpath_a).unwrap();
+        let matcher_a = VirtioBlkPciMatcher::new(&relpath_a);
 
         let mut uev_b = uev_a.clone();
         let relpath_b = "/0000:00:0a.0/0000:00:0b.0";
         uev_b.devpath = format!("{}{}/virtio0/block/{}", root_bus, relpath_b, devname);
-        let matcher_b = VirtioBlkPciMatcher::new(&relpath_b).unwrap();
+        let matcher_b = VirtioBlkPciMatcher::new(&relpath_b);
 
         assert!(matcher_a.is_match(&uev_a));
         assert!(matcher_b.is_match(&uev_b));
@@ -902,7 +902,7 @@ mod tests {
             "{}/0000:00:00.0/virtio0/host0/target0:0:0/0:0:{}/block/sda",
             root_bus, addr_a
         );
-        let matcher_a = ScsiBlockMatcher::new(&addr_a).unwrap();
+        let matcher_a = ScsiBlockMatcher::new(&addr_a);
 
         let mut uev_b = uev_a.clone();
         let addr_b = "2:0";
@@ -910,7 +910,7 @@ mod tests {
             "{}/0000:00:00.0/virtio0/host0/target0:0:2/0:0:{}/block/sdb",
             root_bus, addr_b
         );
-        let matcher_b = ScsiBlockMatcher::new(&addr_b).unwrap();
+        let matcher_b = ScsiBlockMatcher::new(&addr_b);
 
         assert!(matcher_a.is_match(&uev_a));
         assert!(matcher_b.is_match(&uev_b));
