@@ -1,0 +1,32 @@
+From 867a0cc44a2ef5ca505ef5da23f4c1ba9db24b3c Mon Sep 17 00:00:00 2001
+From: N Raj <nitin.raj99@outlook.com>
+Date: Thu, 22 Apr 2021 09:39:50 -0700
+Subject: [PATCH] skip virtio fs cache section
+
+---
+ hw/vfio/common.c | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+diff --git a/hw/vfio/common.c b/hw/vfio/common.c
+index 6ff1daa763..88b231c68a 100644
+--- a/hw/vfio/common.c
++++ b/hw/vfio/common.c
+@@ -674,6 +674,15 @@ static void vfio_listener_region_add(MemoryListener *listener,
+         return;
+     }
+ 
++    /* Do not add virtio fs cache section */                  
++    if (!strcmp(memory_region_name(section->mr), "virtio-fs-cache")) {
++        trace_vfio_listener_region_add_skip(
++                section->offset_within_address_space,
++                section->offset_within_address_space +
++                int128_get64(int128_sub(section->size, int128_one())));
++        return;
++    }         
++
+     if (unlikely((section->offset_within_address_space & ~TARGET_PAGE_MASK) !=
+                  (section->offset_within_region & ~TARGET_PAGE_MASK))) {
+         error_report("%s received unaligned region", __func__);
+-- 
+2.25.1
+
