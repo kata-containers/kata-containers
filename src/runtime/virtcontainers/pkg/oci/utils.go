@@ -7,6 +7,7 @@ package oci
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"path/filepath"
@@ -770,6 +771,15 @@ func addHypervisorVirtioFsOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConf
 			return fmt.Errorf("virtiofs daemon %v required from annotation is not valid", value)
 		}
 		sbConfig.HypervisorConfig.VirtioFSDaemon = value
+	}
+
+	if value, ok := ocispec.Annotations[vcAnnotations.VirtioFSExtraArgs]; ok {
+		var parsedValue []string
+		err := json.Unmarshal([]byte(value), &parsedValue)
+		if err != nil {
+			return fmt.Errorf("Error parsing virtiofsd extra arguments: %v", err)
+		}
+		sbConfig.HypervisorConfig.VirtioFSExtraArgs = append(sbConfig.HypervisorConfig.VirtioFSExtraArgs, parsedValue...)
 	}
 
 	if sbConfig.HypervisorConfig.SharedFS == config.VirtioFS && sbConfig.HypervisorConfig.VirtioFSDaemon == "" {
