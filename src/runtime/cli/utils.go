@@ -189,21 +189,3 @@ func constructVersionInfo(version string) VersionInfo {
 	}
 
 }
-
-func versionEqual(a VersionInfo, b VersionInfo) bool {
-	av, err := semver.Make(a.Semver)
-	if err != nil {
-		return false
-	}
-
-	bv, err := semver.Make(b.Semver)
-	if err != nil {
-		return false
-	}
-
-	if av.Major == bv.Major && av.Minor == bv.Minor && av.Patch == bv.Patch {
-		return true
-	}
-
-	return false
-}

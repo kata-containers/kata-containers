@@ -26,7 +26,6 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols/grpc"
 	vcAnnotations "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/annotations"
 	vccgroups "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/cgroups"
-	ns "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/nsenter"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/rootless"
 	vcTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/types"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/uuid"
@@ -1337,14 +1336,6 @@ func (k *kataAgent) createContainer(sandbox *Sandbox, c *Container) (p *Process,
 		return nil, err
 	}
 
-	enterNSList := []ns.Namespace{}
-	if sandbox.networkNS.NetNsPath != "" {
-		enterNSList = append(enterNSList, ns.Namespace{
-			Path: sandbox.networkNS.NetNsPath,
-			Type: ns.NSTypeNet,
-		})
-	}
-
 	return buildProcessFromExecID(req.ExecId)
 }
 
@@ -1975,7 +1966,7 @@ func (k *kataAgent) sendReq(request interface{}) (interface{}, error) {
 	k.Logger().WithField("name", msgName).WithField("req", message.String()).Debug("sending request")
 
 	defer func() {
-		agentRpcDurationsHistogram.WithLabelValues(msgName).Observe(float64(time.Since(start).Nanoseconds() / int64(time.Millisecond)))
+		agentRPCDurationsHistogram.WithLabelValues(msgName).Observe(float64(time.Since(start).Nanoseconds() / int64(time.Millisecond)))
 	}()
 	return handler(ctx, request)
 }

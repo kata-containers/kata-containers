@@ -1243,7 +1243,6 @@ func revertBytes(num uint64) uint64 {
 	b := num % 1000
 	if a == 0 {
 		return num
-	} else {
-		return 1024*revertBytes(a) + b
 	}
+	return 1024*revertBytes(a) + b
 }

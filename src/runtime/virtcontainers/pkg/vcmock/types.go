@@ -87,6 +87,6 @@ type VCMock struct {
 	SetLoggerFunc  func(ctx context.Context, logger *logrus.Entry)
 	SetFactoryFunc func(ctx context.Context, factory vc.Factory)
 
-	CreateSandboxFunc  func(ctx context.Context, sandboxConfig vc.SandboxConfig) (vc.VCSandbox, error)
+	CreateSandboxFunc    func(ctx context.Context, sandboxConfig vc.SandboxConfig) (vc.VCSandbox, error)
 	CleanupContainerFunc func(ctx context.Context, sandboxID, containerID string, force bool) error
 }

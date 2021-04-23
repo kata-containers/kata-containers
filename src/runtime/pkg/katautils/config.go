@@ -71,12 +71,9 @@ type factory struct {
 
 type hypervisor struct {
 	Path                    string   `toml:"path"`
-	HypervisorPathList      []string `toml:"valid_hypervisor_paths"`
 	JailerPath              string   `toml:"jailer_path"`
-	JailerPathList          []string `toml:"valid_jailer_paths"`
 	Kernel                  string   `toml:"kernel"`
 	CtlPath                 string   `toml:"ctlpath"`
-	CtlPathList             []string `toml:"valid_ctlpaths"`
 	Initrd                  string   `toml:"initrd"`
 	Image                   string   `toml:"image"`
 	Firmware                string   `toml:"firmware"`
@@ -88,16 +85,23 @@ type hypervisor struct {
 	EntropySource           string   `toml:"entropy_source"`
 	SharedFS                string   `toml:"shared_fs"`
 	VirtioFSDaemon          string   `toml:"virtio_fs_daemon"`
-	VirtioFSDaemonList      []string `toml:"valid_virtio_fs_daemon_paths"`
 	VirtioFSCache           string   `toml:"virtio_fs_cache"`
-	VirtioFSExtraArgs       []string `toml:"virtio_fs_extra_args"`
-	VirtioFSCacheSize       uint32   `toml:"virtio_fs_cache_size"`
-	BlockDeviceCacheSet     bool     `toml:"block_device_cache_set"`
-	BlockDeviceCacheDirect  bool     `toml:"block_device_cache_direct"`
-	BlockDeviceCacheNoflush bool     `toml:"block_device_cache_noflush"`
-	EnableVhostUserStore    bool     `toml:"enable_vhost_user_store"`
 	VhostUserStorePath      string   `toml:"vhost_user_store_path"`
+	FileBackedMemRootDir    string   `toml:"file_mem_backend"`
+	GuestHookPath           string   `toml:"guest_hook_path"`
+	GuestMemoryDumpPath     string   `toml:"guest_memory_dump_path"`
+	HypervisorPathList      []string `toml:"valid_hypervisor_paths"`
+	JailerPathList          []string `toml:"valid_jailer_paths"`
+	CtlPathList             []string `toml:"valid_ctlpaths"`
+	VirtioFSDaemonList      []string `toml:"valid_virtio_fs_daemon_paths"`
+	VirtioFSExtraArgs       []string `toml:"virtio_fs_extra_args"`
+	PFlashList              []string `toml:"pflashes"`
 	VhostUserStorePathList  []string `toml:"valid_vhost_user_store_paths"`
+	FileBackedMemRootList   []string `toml:"valid_file_mem_backends"`
+	EnableAnnotations       []string `toml:"enable_annotations"`
+	RxRateLimiterMaxRate    uint64   `toml:"rx_rate_limiter_max_rate"`
+	TxRateLimiterMaxRate    uint64   `toml:"tx_rate_limiter_max_rate"`
+	VirtioFSCacheSize       uint32   `toml:"virtio_fs_cache_size"`
 	NumVCPUs                int32    `toml:"default_vcpus"`
 	DefaultMaxVCPUs         uint32   `toml:"default_maxvcpus"`
 	MemorySize              uint32   `toml:"default_memory"`
@@ -106,14 +110,16 @@ type hypervisor struct {
 	DefaultBridges          uint32   `toml:"default_bridges"`
 	Msize9p                 uint32   `toml:"msize_9p"`
 	PCIeRootPort            uint32   `toml:"pcie_root_port"`
+	BlockDeviceCacheSet     bool     `toml:"block_device_cache_set"`
+	BlockDeviceCacheDirect  bool     `toml:"block_device_cache_direct"`
+	BlockDeviceCacheNoflush bool     `toml:"block_device_cache_noflush"`
+	EnableVhostUserStore    bool     `toml:"enable_vhost_user_store"`
 	DisableBlockDeviceUse   bool     `toml:"disable_block_device_use"`
 	MemPrealloc             bool     `toml:"enable_mem_prealloc"`
 	HugePages               bool     `toml:"enable_hugepages"`
 	VirtioMem               bool     `toml:"enable_virtio_mem"`
 	IOMMU                   bool     `toml:"enable_iommu"`
 	IOMMUPlatform           bool     `toml:"enable_iommu_platform"`
-	FileBackedMemRootDir    string   `toml:"file_mem_backend"`
-	FileBackedMemRootList   []string `toml:"valid_file_mem_backends"`
 	Swap                    bool     `toml:"enable_swap"`
 	Debug                   bool     `toml:"enable_debug"`
 	DisableNestingChecks    bool     `toml:"disable_nesting_checks"`
@@ -121,29 +127,30 @@ type hypervisor struct {
 	DisableImageNvdimm      bool     `toml:"disable_image_nvdimm"`
 	HotplugVFIOOnRootBus    bool     `toml:"hotplug_vfio_on_root_bus"`
 	DisableVhostNet         bool     `toml:"disable_vhost_net"`
-	GuestHookPath           string   `toml:"guest_hook_path"`
-	RxRateLimiterMaxRate    uint64   `toml:"rx_rate_limiter_max_rate"`
-	TxRateLimiterMaxRate    uint64   `toml:"tx_rate_limiter_max_rate"`
-	EnableAnnotations       []string `toml:"enable_annotations"`
+	GuestMemoryDumpPaging   bool     `toml:"guest_memory_dump_paging"`
 }
 
 type runtime struct {
+	InterNetworkModel   string   `toml:"internetworking_model"`
+	JaegerEndpoint      string   `toml:"jaeger_endpoint"`
+	JaegerUser          string   `toml:"jaeger_user"`
+	JaegerPassword      string   `toml:"jaeger_password"`
+	SandboxBindMounts   []string `toml:"sandbox_bind_mounts"`
+	Experimental        []string `toml:"experimental"`
 	Debug               bool     `toml:"enable_debug"`
 	Tracing             bool     `toml:"enable_tracing"`
 	DisableNewNetNs     bool     `toml:"disable_new_netns"`
 	DisableGuestSeccomp bool     `toml:"disable_guest_seccomp"`
 	SandboxCgroupOnly   bool     `toml:"sandbox_cgroup_only"`
-	Experimental        []string `toml:"experimental"`
-	InterNetworkModel   string   `toml:"internetworking_model"`
 	EnablePprof         bool     `toml:"enable_pprof"`
 }
 
 type agent struct {
-	Debug               bool     `toml:"enable_debug"`
-	Tracing             bool     `toml:"enable_tracing"`
 	TraceMode           string   `toml:"trace_mode"`
 	TraceType           string   `toml:"trace_type"`
 	KernelModules       []string `toml:"kernel_modules"`
+	Debug               bool     `toml:"enable_debug"`
+	Tracing             bool     `toml:"enable_tracing"`
 	DebugConsoleEnabled bool     `toml:"debug_console_enabled"`
 }
 
@@ -424,20 +431,12 @@ func (h hypervisor) getInitrdAndImage() (initrd string, image string, err error)
 	return
 }
 
-func (h hypervisor) getRxRateLimiterCfg() (uint64, error) {
-	if h.RxRateLimiterMaxRate < 0 {
-		return 0, fmt.Errorf("rx Rate Limiter configuration must be greater than or equal to 0, max_rate %v", h.RxRateLimiterMaxRate)
-	}
-
-	return h.RxRateLimiterMaxRate, nil
+func (h hypervisor) getRxRateLimiterCfg() uint64 {
+	return h.RxRateLimiterMaxRate
 }
 
-func (h hypervisor) getTxRateLimiterCfg() (uint64, error) {
-	if h.TxRateLimiterMaxRate < 0 {
-		return 0, fmt.Errorf("tx Rate Limiter configuration must be greater than or equal to 0, max_rate %v", h.TxRateLimiterMaxRate)
-	}
-
-	return h.TxRateLimiterMaxRate, nil
+func (h hypervisor) getTxRateLimiterCfg() uint64 {
+	return h.TxRateLimiterMaxRate
 }
 
 func (h hypervisor) getIOMMUPlatform() bool {
@@ -522,15 +521,8 @@ func newFirecrackerHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		return vc.HypervisorConfig{}, err
 	}
 
-	rxRateLimiterMaxRate, err := h.getRxRateLimiterCfg()
-	if err != nil {
-		return vc.HypervisorConfig{}, err
-	}
-
-	txRateLimiterMaxRate, err := h.getTxRateLimiterCfg()
-	if err != nil {
-		return vc.HypervisorConfig{}, err
-	}
+	rxRateLimiterMaxRate := h.getRxRateLimiterCfg()
+	txRateLimiterMaxRate := h.getTxRateLimiterCfg()
 
 	return vc.HypervisorConfig{
 		HypervisorPath:        hypervisor,
@@ -626,15 +618,8 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		return vc.HypervisorConfig{}, err
 	}
 
-	rxRateLimiterMaxRate, err := h.getRxRateLimiterCfg()
-	if err != nil {
-		return vc.HypervisorConfig{}, err
-	}
-
-	txRateLimiterMaxRate, err := h.getTxRateLimiterCfg()
-	if err != nil {
-		return vc.HypervisorConfig{}, err
-	}
+	rxRateLimiterMaxRate := h.getRxRateLimiterCfg()
+	txRateLimiterMaxRate := h.getTxRateLimiterCfg()
 
 	return vc.HypervisorConfig{
 		HypervisorPath:          hypervisor,

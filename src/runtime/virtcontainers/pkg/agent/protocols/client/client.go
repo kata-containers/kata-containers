@@ -36,7 +36,6 @@ const (
 )
 
 var defaultDialTimeout = 30 * time.Second
-var defaultCloseTimeout = 5 * time.Second
 
 var hybridVSockPort uint32
 
@@ -72,8 +71,7 @@ func NewAgentClient(ctx context.Context, sock string) (*AgentClient, error) {
 	}
 
 	var conn net.Conn
-	var d dialer
-	d = agentDialer(parsedAddr)
+	var d = agentDialer(parsedAddr)
 	conn, err = d(grpcAddr, defaultDialTimeout)
 	if err != nil {
 		return nil, err

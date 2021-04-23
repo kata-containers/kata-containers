@@ -111,12 +111,8 @@ const (
 
 	scsiControllerID         = "scsi0"
 	rngID                    = "rng0"
-	vsockKernelOption        = "agent.use_vsock"
 	fallbackFileBackedMemDir = "/dev/shm"
 )
-
-var qemuMajorVersion int
-var qemuMinorVersion int
 
 // agnostic list of kernel parameters
 var defaultKernelParameters = []Param{
@@ -931,9 +927,6 @@ func (q *qemu) waitSandbox(timeout int) error {
 	q.qmpMonitorCh.qmp = qmp
 	q.qmpMonitorCh.disconn = disconnectCh
 	defer q.qmpShutdown()
-
-	qemuMajorVersion = ver.Major
-	qemuMinorVersion = ver.Minor
 
 	q.Logger().WithFields(logrus.Fields{
 		"qmp-major-version": ver.Major,
