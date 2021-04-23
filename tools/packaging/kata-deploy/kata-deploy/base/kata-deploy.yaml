@@ -14,6 +14,11 @@ spec:
           name: kata-deploy
     spec:
       serviceAccountName: kata-label-node
+      tolerations:
+        - key: "node-role.kubernetes.io/master"
+          operator: "Equal"
+          value: ""
+          effect: "NoSchedule"
       containers:
       - name: kube-kata
         image: katadocker/kata-deploy:2.1.0-alpha2
