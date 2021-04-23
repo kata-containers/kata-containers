@@ -202,19 +202,19 @@ $ make BUILD_METHOD=dracut DRACUT_KVERSION=5.2.1-23-kata AGENT_INIT=yes initrd
 
 ### Custom images
 
-The Kata Containers kernel and rootfs images are by design "minimal". If advanced, 
-site specific, or customized features are required, then building a customized 
+The Kata Containers kernel and rootfs images are by design "minimal". If advanced,
+site specific, or customized features are required, then building a customized
 kernel and/or rootfs may be required.
 
-The below are some examples which may help or be useful for generating a 
+The below are some examples which may help or be useful for generating a
 customized system.
 
 #### Intel® QuickAssist Technology (QAT) customized kernel and rootfs
 
 As documented in the
 [Intel® QAT Kata use-case documentation](../../docs/use-cases/using-Intel-QAT-and-kata.md),
-enabling this hardware requires a customized kernel and rootfs to work with Kata. 
-To ease building of the kernel and rootfs, a [Dockerfile](./dockerfiles/QAT) is 
+enabling this hardware requires a customized kernel and rootfs to work with Kata.
+To ease building of the kernel and rootfs, a [Dockerfile](./dockerfiles/QAT) is
 supplied, that when run, generates the required kernel and rootfs binaries.
 
 ## Testing

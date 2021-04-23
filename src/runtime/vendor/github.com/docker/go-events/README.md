@@ -36,7 +36,7 @@ func (h *httpSink) Write(event Event) error {
 		return err
 	}
 	defer resp.Body.Close()
-	
+
 	if resp.Status != 200 {
 		return errors.New("unexpected status")
 	}

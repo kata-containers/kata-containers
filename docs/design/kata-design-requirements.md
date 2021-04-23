@@ -71,7 +71,7 @@ The Kata Containers runtime **MUST** support scalable I/O through the SRIOV tech
 ### Virtualization overhead reduction
 A compelling aspect of containers is their minimal overhead compared to bare metal applications.
 A container runtime should keep the overhead to a minimum in order to provide the expected user
-experience. 
+experience.
 The Kata Containers runtime implementation **SHOULD** be optimized for:
 
 * Minimal workload boot and shutdown times

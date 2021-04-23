@@ -66,7 +66,7 @@ $ make -C ${dir}/kata-containers/src/agent
    * Firstly, install Kata as noted by ["how to install Kata"](../../docs/install/README.md)
    * Secondly, build your own Kata initrd/image following the steps in ["how to build your own initrd/image"](../../docs/Developer-Guide.md#create-and-install-rootfs-and-initrd-image).
 notes: Please use your rust agent instead of the go agent when building your initrd/image.
-   * Clone the Kata CI test cases from: https://github.com/kata-containers/tests.git, and then run the CRI test with: 
+   * Clone the Kata CI test cases from: https://github.com/kata-containers/tests.git, and then run the CRI test with:
 
 ```bash
 $sudo -E PATH=$PATH -E GOPATH=$GOPATH integration/containerd/shimv2/shimv2-tests.sh

@@ -35,7 +35,7 @@ through the [CRI-O\*](https://github.com/kubernetes-incubator/cri-o) and
 
 Kata Containers creates a QEMU\*/KVM virtual machine for pod that `kubelet` (Kubernetes) creates respectively.
 
-The [`containerd-shim-kata-v2` (shown as `shimv2` from this point onwards)](../../src/runtime/containerd-shim-v2) 
+The [`containerd-shim-kata-v2` (shown as `shimv2` from this point onwards)](../../src/runtime/containerd-shim-v2)
 is the Kata Containers entrypoint, which
 implements the [Containerd Runtime V2 (Shim API)](https://github.com/containerd/containerd/tree/master/runtime/v2) for Kata.
 
@@ -156,7 +156,7 @@ In order to do so, container engines will usually add one end of a virtual
 ethernet (`veth`) pair into the container networking namespace. The other end of
 the `veth` pair is added to the host networking namespace.
 
-This is a very namespace-centric approach as many hypervisors/VMMs cannot handle `veth` 
+This is a very namespace-centric approach as many hypervisors/VMMs cannot handle `veth`
 interfaces. Typically, `TAP` interfaces are created for VM connectivity.
 
 To overcome incompatibility between typical container engines expectations

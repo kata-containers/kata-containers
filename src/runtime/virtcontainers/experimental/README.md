@@ -7,7 +7,7 @@
 
 ## What are "experimental" features?
 
-"Experimental" features are features living in master branch, 
+"Experimental" features are features living in master branch,
 but Kata community thinks they're not ready for production use.
 They are **always disabled** by default in Kata components releases,
 and can only be enabled by users when they want to have a try.
@@ -38,7 +38,7 @@ the feature can be marked as "experimental" first, and users can test it manuall
 We make no guarantees about experimental features, they can be removed entirely at any point,
 or become non-experimental at some release, so relative configuration options can change radically.
 
-An experimental feature **MUST** have a descriptive name containing only lower-case characters, numbers or `_`, 
+An experimental feature **MUST** have a descriptive name containing only lower-case characters, numbers or `_`,
 e.g. `new_hypervisor_2`, the name **MUST** be unique and will never be re-used in future.
 
 ## What's the difference between "WIP" and "experimental"?
@@ -58,7 +58,7 @@ But for a new feature who becomes stable and ready, we can release it formally i
 
 Check Kata Container [versioning rules](https://github.com/kata-containers/documentation/blob/c556f1853f2e3df69d336de01ad4bb38e64ecc1b/Releases.md#versioning).
 
-The experimental feature should state clearly in documentation the rationale for it to be experimental, 
+The experimental feature should state clearly in documentation the rationale for it to be experimental,
 and when it is expected to be non-experimental,
 so that maintainers can consider to make it formal in right release.
 

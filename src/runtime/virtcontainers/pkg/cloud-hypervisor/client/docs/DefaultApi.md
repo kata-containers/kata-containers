@@ -70,7 +70,7 @@ Create the cloud-hypervisor Virtual Machine (VM) instance. The instance is not b
 Name | Type | Description  | Notes
 ------------- | ------------- | ------------- | -------------
 **ctx** | **context.Context** | context for authentication, logging, cancellation, deadlines, tracing, etc.
-**vmConfig** | [**VmConfig**](VmConfig.md)| The VM configuration | 
+**vmConfig** | [**VmConfig**](VmConfig.md)| The VM configuration |
 
 ### Return type
 
@@ -298,7 +298,7 @@ Add a new device to the VM
 Name | Type | Description  | Notes
 ------------- | ------------- | ------------- | -------------
 **ctx** | **context.Context** | context for authentication, logging, cancellation, deadlines, tracing, etc.
-**vmAddDevice** | [**VmAddDevice**](VmAddDevice.md)| The path of the new device | 
+**vmAddDevice** | [**VmAddDevice**](VmAddDevice.md)| The path of the new device |
 
 ### Return type
 
@@ -330,7 +330,7 @@ Add a new disk to the VM
 Name | Type | Description  | Notes
 ------------- | ------------- | ------------- | -------------
 **ctx** | **context.Context** | context for authentication, logging, cancellation, deadlines, tracing, etc.
-**diskConfig** | [**DiskConfig**](DiskConfig.md)| The details of the new disk | 
+**diskConfig** | [**DiskConfig**](DiskConfig.md)| The details of the new disk |
 
 ### Return type
 
@@ -362,7 +362,7 @@ Add a new virtio-fs device to the VM
 Name | Type | Description  | Notes
 ------------- | ------------- | ------------- | -------------
 **ctx** | **context.Context** | context for authentication, logging, cancellation, deadlines, tracing, etc.
-**fsConfig** | [**FsConfig**](FsConfig.md)| The details of the new virtio-fs | 
+**fsConfig** | [**FsConfig**](FsConfig.md)| The details of the new virtio-fs |
 
 ### Return type
 
@@ -394,7 +394,7 @@ Add a new network device to the VM
 Name | Type | Description  | Notes
 ------------- | ------------- | ------------- | -------------
 **ctx** | **context.Context** | context for authentication, logging, cancellation, deadlines, tracing, etc.
-**netConfig** | [**NetConfig**](NetConfig.md)| The details of the new network device | 
+**netConfig** | [**NetConfig**](NetConfig.md)| The details of the new network device |
 
 ### Return type
 
@@ -426,7 +426,7 @@ Add a new pmem device to the VM
 Name | Type | Description  | Notes
 ------------- | ------------- | ------------- | -------------
 **ctx** | **context.Context** | context for authentication, logging, cancellation, deadlines, tracing, etc.
-**pmemConfig** | [**PmemConfig**](PmemConfig.md)| The details of the new pmem device | 
+**pmemConfig** | [**PmemConfig**](PmemConfig.md)| The details of the new pmem device |
 
 ### Return type
 
@@ -458,7 +458,7 @@ Add a new vsock device to the VM
 Name | Type | Description  | Notes
 ------------- | ------------- | ------------- | -------------
 **ctx** | **context.Context** | context for authentication, logging, cancellation, deadlines, tracing, etc.
-**vsockConfig** | [**VsockConfig**](VsockConfig.md)| The details of the new vsock device | 
+**vsockConfig** | [**VsockConfig**](VsockConfig.md)| The details of the new vsock device |
 
 ### Return type
 
@@ -546,7 +546,7 @@ Remove a device from the VM
 Name | Type | Description  | Notes
 ------------- | ------------- | ------------- | -------------
 **ctx** | **context.Context** | context for authentication, logging, cancellation, deadlines, tracing, etc.
-**vmRemoveDevice** | [**VmRemoveDevice**](VmRemoveDevice.md)| The identifier of the device | 
+**vmRemoveDevice** | [**VmRemoveDevice**](VmRemoveDevice.md)| The identifier of the device |
 
 ### Return type
 
@@ -578,7 +578,7 @@ Resize the VM
 Name | Type | Description  | Notes
 ------------- | ------------- | ------------- | -------------
 **ctx** | **context.Context** | context for authentication, logging, cancellation, deadlines, tracing, etc.
-**vmResize** | [**VmResize**](VmResize.md)| The target size for the VM | 
+**vmResize** | [**VmResize**](VmResize.md)| The target size for the VM |
 
 ### Return type
 
@@ -610,7 +610,7 @@ Resize a memory zone
 Name | Type | Description  | Notes
 ------------- | ------------- | ------------- | -------------
 **ctx** | **context.Context** | context for authentication, logging, cancellation, deadlines, tracing, etc.
-**vmResizeZone** | [**VmResizeZone**](VmResizeZone.md)| The target size for the memory zone | 
+**vmResizeZone** | [**VmResizeZone**](VmResizeZone.md)| The target size for the memory zone |
 
 ### Return type
 
@@ -642,7 +642,7 @@ Restore a VM from a snapshot.
 Name | Type | Description  | Notes
 ------------- | ------------- | ------------- | -------------
 **ctx** | **context.Context** | context for authentication, logging, cancellation, deadlines, tracing, etc.
-**restoreConfig** | [**RestoreConfig**](RestoreConfig.md)| The restore configuration | 
+**restoreConfig** | [**RestoreConfig**](RestoreConfig.md)| The restore configuration |
 
 ### Return type
 
@@ -674,7 +674,7 @@ Returns a VM snapshot.
 Name | Type | Description  | Notes
 ------------- | ------------- | ------------- | -------------
 **ctx** | **context.Context** | context for authentication, logging, cancellation, deadlines, tracing, etc.
-**vmSnapshotConfig** | [**VmSnapshotConfig**](VmSnapshotConfig.md)| The snapshot configuration | 
+**vmSnapshotConfig** | [**VmSnapshotConfig**](VmSnapshotConfig.md)| The snapshot configuration |
 
 ### Return type
 

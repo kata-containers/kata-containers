@@ -58,7 +58,7 @@ if err := control.Add(cgroups.Process{Pid:1234}); err != nil {
 }
 ```
 
-###  Update the cgroup 
+###  Update the cgroup
 
 To update the resources applied in the cgroup
 

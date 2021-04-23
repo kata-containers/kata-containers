@@ -224,7 +224,7 @@ Privileged support in Kata is essentially different from `runc` containers.
 Kata does support `docker run --privileged` command, but in this case full access
 to the guest VM is provided in addition to some host access.
 
-The container runs with elevated capabilities within the guest and is granted 
+The container runs with elevated capabilities within the guest and is granted
 access to guest devices instead of the host devices.
 This is also true with using `securityContext privileged=true` with Kubernetes.
 

@@ -90,7 +90,7 @@ Assuming you created a nested-enabled image using the previous instructions, ver
 
     ```bash
     $ gcloud compute ssh kata-testing
-    
+
     # While ssh'd into the VM:
     $ [ -z "$(lscpu|grep GenuineIntel)" ] && { echo "ERROR: Need an Intel CPU"; exit 1; }
     ```

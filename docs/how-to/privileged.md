@@ -10,13 +10,13 @@ that is not normally granted).
 
 ## Warnings
 
-**Warning:** Whilst this functionality is supported, it can decrease the security of Kata Containers if not configured 
+**Warning:** Whilst this functionality is supported, it can decrease the security of Kata Containers if not configured
 correctly.
 
 ### Host Devices
 
 By default, when privileged is enabled for a container, all the `/dev/*` block devices from the host are mounted
-into the guest. This will allow the privileged container inside the Kata guest to gain access to mount any block device 
+into the guest. This will allow the privileged container inside the Kata guest to gain access to mount any block device
 from the host, a potentially undesirable side-effect that decreases the security of Kata.
 
 The following sections document how to configure this behavior in different container runtimes.
@@ -24,7 +24,7 @@ The following sections document how to configure this behavior in different cont
 #### Containerd and CRI
 
 The Containerd CRI allows configuring the privileged host devices behavior for each runtime in the CRI config. This is
-done with the `privileged_without_host_devices` option. Setting this to `true` will disable hot plugging of the host 
+done with the `privileged_without_host_devices` option. Setting this to `true` will disable hot plugging of the host
 devices into the guest, even when privileged is enabled.
 
 Support for configuring privileged host devices behaviour was added in containerd `1.3.0` version.
@@ -51,7 +51,7 @@ See below example config:
 #### CRI-O
 
 Similar to containerd, CRI-O allows configuring the privileged host devices
-behavior for each runtime in the CRI config. This is done with the 
+behavior for each runtime in the CRI config. This is done with the
 `privileged_without_host_devices` option. Setting this to `true` will disable
  hot plugging of the host devices into the guest, even when privileged is enabled.
 
@@ -76,4 +76,4 @@ See below example config:
 ```
 
  - [Kata Containers with CRI-O](../how-to/run-kata-with-k8s.md#cri-o)
-  
+

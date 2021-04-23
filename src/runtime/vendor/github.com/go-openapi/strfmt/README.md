@@ -10,7 +10,7 @@ This package exposes a registry of data types to support string formats in the g
 strfmt represents a well known string format such as credit card or email. The go toolkit for OpenAPI specifications knows how to deal with those.
 
 ## Supported data formats
-go-openapi/strfmt follows the swagger 2.0 specification with the following formats 
+go-openapi/strfmt follows the swagger 2.0 specification with the following formats
 defined [here](https://github.com/OAI/OpenAPI-Specification/blob/master/versions/2.0.md#data-types).
 
 It also provides convenient extensions to go-openapi users.
@@ -38,11 +38,11 @@ It also provides convenient extensions to go-openapi users.
   - ssn
   - uuid, uuid3, uuid4, uuid5
 
-> NOTE: as the name stands for, this package is intended to support string formatting only. 
-> It does not provide validation for numerical values with swagger format extension for JSON types "number" or  
+> NOTE: as the name stands for, this package is intended to support string formatting only.
+> It does not provide validation for numerical values with swagger format extension for JSON types "number" or
 > "integer" (e.g. float, double, int32...).
 
-## Format types 
+## Format types
 Types defined in strfmt expose marshaling and validation capabilities.
 
 List of defined types:

@@ -87,7 +87,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - The `go.opentelemetry.io/otel/api/global` packages global TextMapPropagator now delegates functionality to a globally set delegate for all previously returned propagators. (#1258)
 - Fix condition in `label.Any`. (#1299)
 - Fix global `TracerProvider` to pass options to its configured provider. (#1329)
-- Fix missing handler for `ExactKind` aggregator in OTLP metrics transformer (#1309) 
+- Fix missing handler for `ExactKind` aggregator in OTLP metrics transformer (#1309)
 
 ## [0.13.0] - 2020-10-08
 

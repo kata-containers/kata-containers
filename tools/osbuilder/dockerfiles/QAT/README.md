@@ -6,10 +6,10 @@
 ## Introduction
 
 The files in this directory can be used to build a modified Kata Containers rootfs
-and kernel with modifications to support Intel® QuickAssist Technology (QAT) 
+and kernel with modifications to support Intel® QuickAssist Technology (QAT)
 hardware. It is designed to work with Kata Container versions 2.0 and higher.
 
-To properly load the driver modules, systemd init must be used. It is not adequate 
+To properly load the driver modules, systemd init must be used. It is not adequate
 to use the agent as the init. Because of this, alpine is not a valid base OS image
 to use. The following rootfs OS's have been tested with this Dockerfile.
 
@@ -18,24 +18,24 @@ to use. The following rootfs OS's have been tested with this Dockerfile.
 * Debian
 * Fedora
 * SUSE
-* Ubuntu 
+* Ubuntu
 
 The generated files will need to be copied and configured into your Kata Containers
 setup.
 
-Please see the 
+Please see the
 [Using Intel® QuickAssist Technology and Kata](../../../../docs/use-cases/using-Intel-QAT-and-kata.md)
-documentation for more specific details on how to configure a host system and 
+documentation for more specific details on how to configure a host system and
 enable acceleration of workloads.
 
 ## Building
 
-The image build and run are executed using Docker, from within this `QAT` folder. 
-It is required to use **all** the files in this directory to build the Docker 
+The image build and run are executed using Docker, from within this `QAT` folder.
+It is required to use **all** the files in this directory to build the Docker
 image:
 
 ```sh
-$ docker build --label kataqat --tag kataqat:latest . 
+$ docker build --label kataqat --tag kataqat:latest .
 $ mkdir ./output
 $ docker run -ti --rm --privileged -v /dev:/dev -v $(pwd)/output:/output kataqat
 ```
@@ -44,7 +44,7 @@ $ docker run -ti --rm --privileged -v /dev:/dev -v $(pwd)/output:/output kataqat
 > necessary, to enable the scripts within the container to generate a roofs file system.
 
 When complete, the generated files will be placed into the output directory.
-Sample config files that have been modified with a `[SHIM`] section are also 
+Sample config files that have been modified with a `[SHIM`] section are also
 placed into the `config` subdirectory as a reference that can be used with
 Kata Containers.
 
@@ -69,7 +69,7 @@ total 20
 
 A number of parameters to the scripts are configured in the `Dockerfile`, and thus can be modified
 on the commandline. The `AGENT_VERSION` is not set and by default will use the
-latest stable version of Kata Containers. 
+latest stable version of Kata Containers.
 
 
 | Variable | Definition | Default value |

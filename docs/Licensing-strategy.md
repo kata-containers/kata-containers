@@ -2,7 +2,7 @@
 
 * [Project License](#project-license)
 * [License file](#license-file)
-* [License for individual files](#license-for-individual-files)      
+* [License for individual files](#license-for-individual-files)
 
 ## Project License
 

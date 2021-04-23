@@ -1,6 +1,6 @@
 # OpenTelemetry-Go Jaeger Exporter
 
-OpenTelemetry Jaeger exporter 
+OpenTelemetry Jaeger exporter
 
 ## Installation
 ```

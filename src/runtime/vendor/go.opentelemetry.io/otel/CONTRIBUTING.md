@@ -19,7 +19,7 @@ You can view and edit the source code by cloning this repository:
 git clone https://github.com/open-telemetry/opentelemetry-go.git
 ```
 
-Run `make test` to run the tests instead of `go test`. 
+Run `make test` to run the tests instead of `go test`.
 
 There are some generated files checked into the repo. To make sure
 that the generated files are up-to-date, run `make` (or `make

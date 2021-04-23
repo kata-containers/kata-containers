@@ -546,7 +546,7 @@ section when using rootfs, or when using initrd, complete the steps in the [Buil
 
 Install the image:
 
->**Note**: When using an initrd image, replace the below rootfs image name `kata-containers.img` 
+>**Note**: When using an initrd image, replace the below rootfs image name `kata-containers.img`
 >with the initrd image name `kata-containers-initrd.img`.
 
 ```
@@ -579,25 +579,25 @@ $ sudo crictl run -r kata container.yaml pod.yaml
 
 The steps required to enable debug console for QEMU slightly differ with
 those for firecracker / cloud-hypervisor.
- 
+
 ##### Enabling debug console for QEMU
 
-Add `agent.debug_console` to the guest kernel command line to allow the agent process to start a debug console. 
+Add `agent.debug_console` to the guest kernel command line to allow the agent process to start a debug console.
 
 ```
 $ sudo sed -i -e 's/^kernel_params = "\(.*\)"/kernel_params = "\1 agent.debug_console"/g' "${kata_configuration_file}"
 ```
 
-Here `kata_configuration_file` could point to `/etc/kata-containers/configuration.toml` 
+Here `kata_configuration_file` could point to `/etc/kata-containers/configuration.toml`
 or `/usr/share/defaults/kata-containers/configuration.toml`
 or `/opt/kata/share/defaults/kata-containers/configuration-{hypervisor}.toml`, if
 you installed Kata Containers using `kata-deploy`.
 
 ##### Enabling debug console for cloud-hypervisor / firecracker
 
-Slightly different configuration is required in case of firecracker and cloud hypervisor. 
-Firecracker and cloud-hypervisor don't have a UNIX socket connected to `/dev/console`. 
-Hence, the kernel command line option `agent.debug_console` will not work for them. 
+Slightly different configuration is required in case of firecracker and cloud hypervisor.
+Firecracker and cloud-hypervisor don't have a UNIX socket connected to `/dev/console`.
+Hence, the kernel command line option `agent.debug_console` will not work for them.
 These hypervisors support `hybrid vsocks`,  which can be used for communication
 between the host and the guest. The kernel command line option `agent.debug_console_vport`
  was added to allow developers specify on which `vsock` port the debugging console should be connected.
@@ -610,7 +610,7 @@ sudo sed -i -e 's/^kernel_params = "\(.*\)"/kernel_params = "\1 agent.debug_cons
 ```
 
 > **Note** Ports 1024 and 1025 are reserved for communication with the agent
-> and gathering of agent logs respectively. 
+> and gathering of agent logs respectively.
 
 ##### Connecting to the debug console
 

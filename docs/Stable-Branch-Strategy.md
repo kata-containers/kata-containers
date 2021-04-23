@@ -1,12 +1,12 @@
 Branch and release maintenance for the Kata Containers project.
 
-## Introduction 
+## Introduction
 
 This document provides details about Kata Containers releases.
 
 ## Versioning
 
-The Kata Containers project uses [semantic versioning](http://semver.org/) for all releases. 
+The Kata Containers project uses [semantic versioning](http://semver.org/) for all releases.
 Semantic versions are comprised of three fields in the form:
 
 ```
@@ -15,17 +15,17 @@ MAJOR.MINOR.PATCH
 
 For examples: `1.0.0`, `1.0.0-rc.5`, and `99.123.77+foo.bar.baz.5`.
 
-Semantic versioning is used since the version number is able to convey clear 
-information about how a new version relates to the previous version. 
-For example, semantic versioning can also provide assurances to allow users to know 
+Semantic versioning is used since the version number is able to convey clear
+information about how a new version relates to the previous version.
+For example, semantic versioning can also provide assurances to allow users to know
 when they must upgrade compared with when they might want to upgrade:
 
 - When `PATCH` increases, the new release contains important **security fixes**
   and an upgrade is recommended.
 
-  The patch field can contain extra details after the number. 
+  The patch field can contain extra details after the number.
 Dashes denote pre-release versions. `1.0.0-rc.5` in the example denotes the fifth release
- candidate for release `1.0.0`. Plus signs denote other details. In our example, `+foo.bar.baz.5` 
+ candidate for release `1.0.0`. Plus signs denote other details. In our example, `+foo.bar.baz.5`
 provides additional information regarding release `99.123.77` in the previous example.
 
 - When `MINOR` increases, the new release adds **new features** but *without
@@ -34,13 +34,13 @@ provides additional information regarding release `99.123.77` in the previous ex
 - When `MAJOR` increases, the new release adds **new features, bug fixes, or
   both** and which *changes the behavior from the previous release* (incompatible with previous releases).
 
-  A major release will also likely require a change of the container manager version used, 
+  A major release will also likely require a change of the container manager version used,
 for example Docker\*. Please refer to the release notes for further details.
 
 ## Release Strategy
 
 Any new features added since the last release will be available in the next minor
-release. These will include bug fixes as well. To facilitate a stable user environment, 
+release. These will include bug fixes as well. To facilitate a stable user environment,
 Kata provides stable branch-based releases and a master branch release.
 
 ## Stable branch patch criteria
@@ -91,8 +91,8 @@ create a couple of alpha releases gathering features targeted for that particula
 this case 1.4.0), followed by a release candidate. The release candidate marks a feature freeze.
 A new stable branch is created for the release candidate. Only bug fixes and any security issues
 are added to the branch going forward until release 1.4.0 is made.
-   
-## Backporting Process 
+
+## Backporting Process
 
 Development that occurs against the master branch and applicable code commits should also be submitted
 against the stable branches. Some guidelines for this process follow::
@@ -102,7 +102,7 @@ against the stable branches. Some guidelines for this process follow::
  should also be submitted against the stable branches. It is the responsibility of the submitter
  to apply their pull request against stable, and it is the responsibility of the
  reviewers to help identify stable-candidate pull requests.
- 
+
 ## Continuous Integration Testing
 
 The test repository is forked to create stable branches from master. Full CI
@@ -135,13 +135,13 @@ The process followed for making a release can be found at [Release Process](Rele
 
 ###  Frequency
 Minor releases are less frequent in order to provide a more stable baseline for users. They are currently
-running on a twelve week cadence. As the Kata Containers code base has reached a certain level of 
+running on a twelve week cadence. As the Kata Containers code base has reached a certain level of
 maturity, we have increased the cadence from six weeks to twelve weeks. The release schedule can be seen on the
 [release rotation wiki page](https://github.com/kata-containers/community/wiki/Release-Team-Rota).
 
 ### Compatibility
-Kata guarantees compatibility between components that are within one minor release of each other. 
- 
+Kata guarantees compatibility between components that are within one minor release of each other.
+
 This is critical for dependencies which cross between host (runtime, shim, proxy) and
 the guest (hypervisor, rootfs and agent).  For example, consider a cluster with a long-running
 deployment, workload-never-dies, all on Kata version 1.1.3 components. If the operator updates

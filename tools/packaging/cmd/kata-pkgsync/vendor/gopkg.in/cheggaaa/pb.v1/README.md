@@ -1,16 +1,16 @@
-# Terminal progress bar for Go  
+# Terminal progress bar for Go
 
-Simple progress bar for console programs.    
-   
+Simple progress bar for console programs.
+
 Please check the new version https://github.com/cheggaaa/pb/tree/v2 (currently, it's beta)
 
 ## Installation
 
 ```
 go get gopkg.in/cheggaaa/pb.v1
-```   
+```
 
-## Usage   
+## Usage
 
 ```Go
 package main
@@ -41,7 +41,7 @@ Result will be like this:
 
 ## Customization
 
-```Go  
+```Go
 // create bar
 bar := pb.New(count)
 
@@ -74,7 +74,7 @@ bar.SetUnits(pb.U_BYTES)
 
 // and start
 bar.Start()
-``` 
+```
 
 ## Progress bar for IO Operations
 
@@ -170,7 +170,7 @@ func main() {
 The result will be as follows:
 
 ```
-$ go run example/multiple.go 
+$ go run example/multiple.go
 First  34 / 200 [=========>---------------------------------------------]  17.00% 00m08s
 Second  42 / 200 [===========>------------------------------------------]  21.00% 00m06s
 Third  36 / 200 [=========>---------------------------------------------]  18.00% 00m08s

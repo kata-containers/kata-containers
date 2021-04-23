@@ -13,7 +13,7 @@
 
 
 An Nvidia GPU device can be passed to a Kata Containers container using GPU passthrough
-(Nvidia GPU pass-through mode) as well as GPU mediated passthrough (Nvidia vGPU mode). 
+(Nvidia GPU pass-through mode) as well as GPU mediated passthrough (Nvidia vGPU mode).
 
 Nvidia GPU pass-through mode, an entire physical GPU is directly assigned to one VM,
 bypassing the Nvidia Virtual GPU Manager. In this mode of operation, the GPU is accessed
@@ -151,7 +151,7 @@ $ sudo -E ./build-kernel.sh -v 4.19.86 -g nvidia install
 /usr/share/kata-containers/vmlinuz-nvidia-gpu.container -> vmlinuz-4.19.86-70-nvidia-gpu
 ```
 
-To build Nvidia Driver in Kata container, `kernel-devel` is required.  
+To build Nvidia Driver in Kata container, `kernel-devel` is required.
 This is a way to generate rpm packages for `kernel-devel`:
 ```
 $ cd kata-linux-4.19.86-68

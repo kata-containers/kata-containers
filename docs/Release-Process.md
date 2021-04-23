@@ -50,7 +50,7 @@
 ### Tag all Kata repositories
 
   Once all the pull requests to bump versions in all Kata repositories are merged,
-  tag all the repositories as shown below.  
+  tag all the repositories as shown below.
   ```
   $ cd ${GOPATH}/src/github.com/kata-containers/kata-containers/tools/packaging/release
   $ git checkout  <kata-branch-to-release>
