@@ -489,6 +489,9 @@ func addHypervisorConfigOverrides(ocispec specs.Spec, config *vc.SandboxConfig, 
 	}
 
 	if value, ok := ocispec.Annotations[vcAnnotations.EntropySource]; ok {
+		if !checkPathIsInGlobs(runtime.HypervisorConfig.EntropySourceList, value) {
+			return fmt.Errorf("entropy source %v required from annotation is not valid", value)
+		}
 		if value != "" {
 			config.HypervisorConfig.EntropySource = value
 		}

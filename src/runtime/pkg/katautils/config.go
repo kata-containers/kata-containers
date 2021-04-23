@@ -99,6 +99,7 @@ type hypervisor struct {
 	PFlashList              []string `toml:"pflashes"`
 	VhostUserStorePathList  []string `toml:"valid_vhost_user_store_paths"`
 	FileBackedMemRootList   []string `toml:"valid_file_mem_backends"`
+	EntropySourceList       []string `toml:"valid_entropy_sources"`
 	EnableAnnotations       []string `toml:"enable_annotations"`
 	RxRateLimiterMaxRate    uint64   `toml:"rx_rate_limiter_max_rate"`
 	TxRateLimiterMaxRate    uint64   `toml:"tx_rate_limiter_max_rate"`
@@ -557,6 +558,7 @@ func newFirecrackerHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		MemorySize:            h.defaultMemSz(),
 		MemSlots:              h.defaultMemSlots(),
 		EntropySource:         h.GetEntropySource(),
+		EntropySourceList:     h.EntropySourceList,
 		DefaultBridges:        h.defaultBridges(),
 		DisableBlockDeviceUse: h.DisableBlockDeviceUse,
 		HugePages:             h.HugePages,
@@ -663,6 +665,7 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		MemOffset:               h.defaultMemOffset(),
 		VirtioMem:               h.VirtioMem,
 		EntropySource:           h.GetEntropySource(),
+		EntropySourceList:       h.EntropySourceList,
 		DefaultBridges:          h.defaultBridges(),
 		DisableBlockDeviceUse:   h.DisableBlockDeviceUse,
 		SharedFS:                sharedFS,
@@ -754,6 +757,7 @@ func newAcrnHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		MemorySize:            h.defaultMemSz(),
 		MemSlots:              h.defaultMemSlots(),
 		EntropySource:         h.GetEntropySource(),
+		EntropySourceList:     h.EntropySourceList,
 		DefaultBridges:        h.defaultBridges(),
 		HugePages:             h.HugePages,
 		Mlock:                 !h.Swap,
@@ -830,6 +834,7 @@ func newClhHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		MemOffset:               h.defaultMemOffset(),
 		VirtioMem:               h.VirtioMem,
 		EntropySource:           h.GetEntropySource(),
+		EntropySourceList:       h.EntropySourceList,
 		DefaultBridges:          h.defaultBridges(),
 		DisableBlockDeviceUse:   h.DisableBlockDeviceUse,
 		SharedFS:                sharedFS,
