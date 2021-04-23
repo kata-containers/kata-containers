@@ -60,7 +60,7 @@ There are several kinds of Kata configurations and they are listed below.
 | `io.katacontainers.config.hypervisor.enable_swap` | `boolean` | enable swap of VM memory |
 | `io.katacontainers.config.hypervisor.enable_vhost_user_store` | `boolean` | enable vhost-user storage device (QEMU) |
 | `io.katacontainers.config.hypervisor.enable_virtio_mem` | `boolean` | enable virtio-mem (QEMU) |
-| `io.katacontainers.config.hypervisor.entropy_source` | string| the path to a host source of entropy (`/dev/random`, `/dev/urandom` or real hardware RNG device) |
+| `io.katacontainers.config.hypervisor.entropy_source` (R) | string| the path to a host source of entropy (`/dev/random`, `/dev/urandom` or real hardware RNG device) |
 | `io.katacontainers.config.hypervisor.file_mem_backend` (R) | string | file based memory backend root directory |
 | `io.katacontainers.config.hypervisor.firmware_hash` | string | container firmware SHA-512 hash value |
 | `io.katacontainers.config.hypervisor.firmware` | string | the guest firmware that will run the container VM |
@@ -197,6 +197,7 @@ the configuration entry:
 | Key | Config file entry | Comments |
 |-------| ----- | ----- |
 | `ctlpath`  | `valid_ctlpaths` | Valid paths for `acrnctl` binary |
+| `entropy_source` | `valid_entropy_sources` | Valid entropy sources, e.g. `/dev/random` |
 | `file_mem_backend`  | `valid_file_mem_backends` | Valid locations for the file-based memory backend root directory |
 | `jailer_path`  | `valid_jailer_paths`| Valid paths for the jailer constraining the container VM (Firecracker) |
 | `path`  | `valid_hypervisor_paths` | Valid hypervisors to run the container VM |

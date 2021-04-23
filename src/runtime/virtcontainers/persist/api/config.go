@@ -96,6 +96,9 @@ type HypervisorConfig struct {
 	// entropy (/dev/random, /dev/urandom or real hardware RNG device)
 	EntropySource string
 
+	// EntropySourceList is the list of valid entropy sources
+	EntropySourceList []string
+
 	// Shared file system type:
 	//   - virtio-9p (default)
 	//   - virtio-fs
