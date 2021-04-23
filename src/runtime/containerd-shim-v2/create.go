@@ -192,7 +192,7 @@ func loadRuntimeConfig(s *service, r *taskAPI.CreateTaskRequest, anno map[string
 		configPath = os.Getenv("KATA_CONF_FILE")
 	}
 
-	_, runtimeConfig, err := katautils.LoadConfiguration(configPath, false, true)
+	_, runtimeConfig, err := katautils.LoadConfiguration(configPath, false)
 	if err != nil {
 		return nil, err
 	}
