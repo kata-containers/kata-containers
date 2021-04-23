@@ -905,7 +905,7 @@ func updateRuntimeConfigHypervisor(configPath string, tomlConf tomlConfig, confi
 	return nil
 }
 
-func updateRuntimeConfigAgent(configPath string, tomlConf tomlConfig, config *oci.RuntimeConfig, builtIn bool) error {
+func updateRuntimeConfigAgent(configPath string, tomlConf tomlConfig, config *oci.RuntimeConfig) error {
 	for _, agent := range tomlConf.Agent {
 		config.AgentConfig = vc.KataAgentConfig{
 			LongLiveConn:       true,
@@ -980,12 +980,12 @@ func SetKernelParams(runtimeConfig *oci.RuntimeConfig) error {
 	return nil
 }
 
-func updateRuntimeConfig(configPath string, tomlConf tomlConfig, config *oci.RuntimeConfig, builtIn bool) error {
+func updateRuntimeConfig(configPath string, tomlConf tomlConfig, config *oci.RuntimeConfig) error {
 	if err := updateRuntimeConfigHypervisor(configPath, tomlConf, config); err != nil {
 		return err
 	}
 
-	if err := updateRuntimeConfigAgent(configPath, tomlConf, config, builtIn); err != nil {
+	if err := updateRuntimeConfigAgent(configPath, tomlConf, config); err != nil {
 		return err
 	}
 
@@ -1076,7 +1076,7 @@ func initConfig() (config oci.RuntimeConfig, err error) {
 //
 // All paths are resolved fully meaning if this function does not return an
 // error, all paths are valid at the time of the call.
-func LoadConfiguration(configPath string, ignoreLogging, builtIn bool) (resolvedConfigPath string, config oci.RuntimeConfig, err error) {
+func LoadConfiguration(configPath string, ignoreLogging bool) (resolvedConfigPath string, config oci.RuntimeConfig, err error) {
 
 	config, err = initConfig()
 	if err != nil {
@@ -1118,7 +1118,7 @@ func LoadConfiguration(configPath string, ignoreLogging, builtIn bool) (resolved
 			}).Info("loaded configuration")
 	}
 
-	if err := updateRuntimeConfig(resolved, tomlConf, &config, builtIn); err != nil {
+	if err := updateRuntimeConfig(resolved, tomlConf, &config); err != nil {
 		return "", config, err
 	}
 
