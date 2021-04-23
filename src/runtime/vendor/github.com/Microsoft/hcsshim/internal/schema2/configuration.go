@@ -37,10 +37,10 @@ var (
  	ContextAPIKey 		= contextKey("apikey")
 )
 
-// BasicAuth provides basic http authentication to a request passed via context using ContextBasicAuth 
+// BasicAuth provides basic http authentication to a request passed via context using ContextBasicAuth
 type BasicAuth struct {
 	UserName      string            `json:"userName,omitempty"`
-	Password      string            `json:"password,omitempty"`	
+	Password      string            `json:"password,omitempty"`
 }
 
 // APIKey provides API key based authentication to a request passed via context using ContextAPIKey

@@ -423,7 +423,7 @@ func (e *Ethtool) Change(intf string, config map[string]bool) error {
 	return e.ioctl(intf, uintptr(unsafe.Pointer(&features)))
 }
 
-// Get state of a link. 
+// Get state of a link.
 func (e *Ethtool) LinkState(intf string) (uint32, error) {
 	x := ethtoolLink{
 		cmd: ETHTOOL_GLINK,
