@@ -20,6 +20,7 @@
         * [docker --net=host](#docker---nethost)
         * [docker run --link](#docker-run---link)
     * [Storage limitations](#storage-limitations)
+        * [Block devices](#block-devices)
         * [Kubernetes `volumeMounts.subPaths`](#kubernetes-volumemountssubpaths)
     * [Host resource sharing](#host-resource-sharing)
         * [docker run --privileged](#docker-run---privileged)
@@ -219,6 +220,16 @@ See more documentation at
 [docs.docker.com](https://docs.docker.com/engine/userguide/networking/default_network/dockerlinks/).
 
 ## Storage limitations
+
+### Block devices
+
+Currently, block devices are mounted on the host and passed to the guest VM
+using a shared filesystem, `virtiofs`. This has consequences notably in terms of
+performance, although it should generally behave as expected as far as
+functionality is concerned.
+
+A [proposal to address this](https://github.com/egernst/kata-containers/blob/da-proposal/docs/design/direct-assign-volume.md)
+is under consideration.
 
 ### Kubernetes `volumeMounts.subPaths`
 
