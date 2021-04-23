@@ -1,0 +1,33 @@
+From 94e80725bc4beeab6556070d77cc66c9eca0696b Mon Sep 17 00:00:00 2001
+From: Edge NFV <edgenfv@gmail.com>
+Date: Fri, 23 Apr 2021 04:58:43 -0700
+Subject: [PATCH] Make vfio and DAX cache work together by skipping virtio fs
+ cache section during region add
+
+---
+ hw/vfio/common.c | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+diff --git a/hw/vfio/common.c b/hw/vfio/common.c
+index 6ff1daa763..befc9f10db 100644
+--- a/hw/vfio/common.c
++++ b/hw/vfio/common.c
+@@ -674,6 +674,15 @@ static void vfio_listener_region_add(MemoryListener *listener,
+         return;
+     }
+ 
++    /* Do not add virtio fs cache section */                  
++    if (!strcmp(memory_region_name(section->mr), "virtio-fs-cache")) {
++        trace_vfio_listener_region_add_skip(
++                section->offset_within_address_space,
++                section->offset_within_address_space +
++                int128_get64(int128_sub(section->size, int128_one())));
++        return;
++    }      
++    
+     if (unlikely((section->offset_within_address_space & ~TARGET_PAGE_MASK) !=
+                  (section->offset_within_region & ~TARGET_PAGE_MASK))) {
+         error_report("%s received unaligned region", __func__);
+-- 
+2.25.1
+
