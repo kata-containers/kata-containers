@@ -260,7 +260,7 @@ func testLoadConfiguration(t *testing.T, dir string,
 					assert.NoError(t, err)
 				}
 
-				resolvedConfigPath, config, err := LoadConfiguration(file, ignoreLogging, false)
+				resolvedConfigPath, config, err := LoadConfiguration(file, ignoreLogging)
 				if expectFail {
 					assert.Error(t, err)
 
@@ -566,7 +566,7 @@ func TestMinimalRuntimeConfig(t *testing.T) {
 		t.Error(err)
 	}
 
-	_, config, err := LoadConfiguration(configPath, false, false)
+	_, config, err := LoadConfiguration(configPath, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1398,7 +1398,7 @@ func TestUpdateRuntimeConfigurationVMConfig(t *testing.T) {
 		},
 	}
 
-	err := updateRuntimeConfig("", tomlConf, &config, false)
+	err := updateRuntimeConfig("", tomlConf, &config)
 	assert.NoError(err)
 
 	assert.Equal(expectedVMConfig, config.HypervisorConfig.MemorySize)
@@ -1416,7 +1416,7 @@ func TestUpdateRuntimeConfigurationFactoryConfig(t *testing.T) {
 
 	tomlConf := tomlConfig{Factory: factory{Template: true}}
 
-	err := updateRuntimeConfig("", tomlConf, &config, false)
+	err := updateRuntimeConfig("", tomlConf, &config)
 	assert.NoError(err)
 
 	assert.Equal(expectedFactoryConfig, config.FactoryConfig)
@@ -1443,7 +1443,7 @@ func TestUpdateRuntimeConfigurationInvalidKernelParams(t *testing.T) {
 		}
 	}
 
-	err := updateRuntimeConfig("", tomlConf, &config, false)
+	err := updateRuntimeConfig("", tomlConf, &config)
 	assert.EqualError(err, "Empty kernel parameter")
 }
 
