@@ -6,7 +6,6 @@
 package main
 
 import (
-	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils"
 	"github.com/urfave/cli"
 )
 
@@ -14,14 +13,6 @@ var versionCLICommand = cli.Command{
 	Name:  "version",
 	Usage: "display version details",
 	Action: func(context *cli.Context) error {
-		ctx, err := cliContextToContext(context)
-		if err != nil {
-			return err
-		}
-
-		span, _ := katautils.Trace(ctx, "version")
-		defer span.End()
-
 		cli.VersionPrinter(context)
 		return nil
 	},
