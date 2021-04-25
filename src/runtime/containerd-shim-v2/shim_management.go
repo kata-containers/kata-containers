@@ -166,7 +166,7 @@ func (s *service) startManagementServer(ctx context.Context, ociSpec *specs.Spec
 	svr.Serve(listener)
 }
 
-// mountServeDebug provides a debug endpoint
+// mountPprofHandle provides a debug endpoint
 func (s *service) mountPprofHandle(m *http.ServeMux, ociSpec *specs.Spec) {
 
 	// return if not enabled
