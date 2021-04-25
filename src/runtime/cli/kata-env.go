@@ -13,7 +13,6 @@ import (
 	"strings"
 
 	"github.com/BurntSushi/toml"
-	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/utils"
 	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
 	exp "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/experimental"
@@ -448,14 +447,6 @@ var kataEnvCLICommand = cli.Command{
 		},
 	},
 	Action: func(context *cli.Context) error {
-		ctx, err := cliContextToContext(context)
-		if err != nil {
-			return err
-		}
-
-		span, _ := katautils.Trace(ctx, "kata-env")
-		defer span.End()
-
 		return handleSettings(defaultOutputFile, context)
 	},
 }
