@@ -26,7 +26,6 @@ import (
 	clientUtils "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols/client"
 	"github.com/pkg/errors"
 	"github.com/urfave/cli"
-	"go.opentelemetry.io/otel/label"
 )
 
 const (
@@ -67,32 +66,21 @@ var kataExecCLICommand = cli.Command{
 		},
 	},
 	Action: func(context *cli.Context) error {
-		ctx, err := cliContextToContext(context)
-		if err != nil {
-			return err
-		}
-		span, _ := katautils.Trace(ctx, subCommandName)
-		defer span.End()
-
 		namespace := context.String(paramRuntimeNamespace)
 		if namespace == "" {
 			namespace = defaultRuntimeNamespace
 		}
-		span.SetAttributes(label.Key("namespace").String(namespace))
 
 		port := context.Uint64(paramDebugConsolePort)
 		if port == 0 {
 			port = defaultKernelParamDebugConsoleVPortValue
 		}
-		span.SetAttributes(label.Key("port").Uint64(port))
 
 		sandboxID := context.Args().Get(0)
 
 		if err := katautils.VerifyContainerID(sandboxID); err != nil {
 			return err
 		}
-
-		span.SetAttributes(label.Key("sandbox").String(sandboxID))
 
 		conn, err := getConn(namespace, sandboxID, port)
 		if err != nil {
