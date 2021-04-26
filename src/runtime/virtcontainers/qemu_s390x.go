@@ -152,6 +152,12 @@ func (q *qemuS390x) appendCCWBlockDevice(ctx context.Context, devices []govmmQem
 	return devices, nil
 }
 
+// appendVhostUserDevice throws an error if vhost devices are tried to be used.
+// See issue https://github.com/kata-containers/runtime/issues/659
+func (q *qemuS390x) appendVhostUserDevice(devices []govmmQemu.Device, attr config.VhostUserDeviceAttrs) ([]govmmQemu.Device, error) {
+	return nil, fmt.Errorf("No vhost-user devices supported on s390x")
+}
+
 // supportGuestMemoryHotplug return false for s390x architecture. The pc-dimm backend device for s390x
 // is not support. PC-DIMM is not listed in the devices supported by qemu-system-s390x -device help
 func (q *qemuS390x) supportGuestMemoryHotplug() bool {

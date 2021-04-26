@@ -96,7 +96,7 @@ type qemuArch interface {
 	appendBlockDevice(ctx context.Context, devices []govmmQemu.Device, drive config.BlockDrive) ([]govmmQemu.Device, error)
 
 	// appendVhostUserDevice appends a vhost user device to devices
-	appendVhostUserDevice(devices []govmmQemu.Device, drive config.VhostUserDeviceAttrs) []govmmQemu.Device
+	appendVhostUserDevice(devices []govmmQemu.Device, drive config.VhostUserDeviceAttrs) ([]govmmQemu.Device, error)
 
 	// appendVFIODevice appends a VFIO device to devices
 	appendVFIODevice(devices []govmmQemu.Device, vfioDevice config.VFIODev) []govmmQemu.Device
@@ -633,7 +633,7 @@ func (q *qemuArchBase) appendBlockDevice(_ context.Context, devices []govmmQemu.
 	return devices, nil
 }
 
-func (q *qemuArchBase) appendVhostUserDevice(devices []govmmQemu.Device, attr config.VhostUserDeviceAttrs) []govmmQemu.Device {
+func (q *qemuArchBase) appendVhostUserDevice(devices []govmmQemu.Device, attr config.VhostUserDeviceAttrs) ([]govmmQemu.Device, error) {
 	qemuVhostUserDevice := govmmQemu.VhostUserDevice{}
 
 	switch attr.Type {
@@ -658,7 +658,7 @@ func (q *qemuArchBase) appendVhostUserDevice(devices []govmmQemu.Device, attr co
 
 	devices = append(devices, qemuVhostUserDevice)
 
-	return devices
+	return devices, nil
 }
 
 func (q *qemuArchBase) appendVFIODevice(devices []govmmQemu.Device, vfioDev config.VFIODev) []govmmQemu.Device {
