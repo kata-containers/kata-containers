@@ -52,3 +52,17 @@ func TestQemuS390xMemoryTopology(t *testing.T) {
 	m := s390x.memoryTopology(mem, hostMem, slots)
 	assert.Equal(expectedMemory, m)
 }
+
+func TestQemuS390xAppendVhostUserDevice(t *testing.T) {
+	macAddress := "00:11:22:33:44:55:66"
+	qemu := qemuS390x{}
+	assert := assert.New(t)
+
+	vhostUserDevice := config.VhostUserDeviceAttrs{
+		Type:       config.VhostUserNet,
+		MacAddress: macAddress,
+	}
+
+	_, err := qemu.appendVhostUserDevice(nil, vhostUserDevice)
+	assert.Error(err)
+}
