@@ -6,11 +6,14 @@
 package virtcontainers
 
 import (
+	"context"
 	"fmt"
 	"testing"
 
 	govmmQemu "github.com/kata-containers/govmm/qemu"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
 )
 
 func newTestQemu(assert *assert.Assertions, machineType string) qemuArch {
@@ -54,15 +57,47 @@ func TestQemuS390xMemoryTopology(t *testing.T) {
 }
 
 func TestQemuS390xAppendVhostUserDevice(t *testing.T) {
-	macAddress := "00:11:22:33:44:55:66"
-	qemu := qemuS390x{}
 	assert := assert.New(t)
+	qemu := newTestQemu(assert, QemuCCWVirtio)
 
-	vhostUserDevice := config.VhostUserDeviceAttrs{
-		Type:       config.VhostUserNet,
-		MacAddress: macAddress,
+	// test devices that should not work
+	for _, deviceType := range []config.DeviceType{config.VhostUserSCSI, config.VhostUserNet, config.VhostUserBlk} {
+		vhostUserDevice := config.VhostUserDeviceAttrs{
+			Type: deviceType,
+		}
+		_, err := qemu.appendVhostUserDevice(context.Background(), nil, vhostUserDevice)
+		assert.Error(err)
 	}
 
-	_, err := qemu.appendVhostUserDevice(nil, vhostUserDevice)
-	assert.Error(err)
+	// test vhost user fs (virtio-fs)
+	socketPath := "nonexistentpath.sock"
+	id := "deadbeef"
+	tag := "shared"
+	var cacheSize uint32 = 0
+
+	expected := []govmmQemu.Device{
+		govmmQemu.VhostUserDevice{
+			SocketPath:    socketPath,
+			CharDevID:     fmt.Sprintf("char-%s", id),
+			TypeDevID:     fmt.Sprintf("fs-%s", id),
+			Tag:           tag,
+			CacheSize:     cacheSize,
+			VhostUserType: govmmQemu.VhostUserFS,
+			DevNo:         "fe.0.0001",
+		},
+	}
+
+	vhostUserDevice := config.VhostUserDeviceAttrs{
+		DevID:      id,
+		SocketPath: socketPath,
+		Type:       config.VhostUserFS,
+		Tag:        tag,
+		CacheSize:  cacheSize,
+	}
+
+	var devices []govmmQemu.Device
+	devices, err := qemu.appendVhostUserDevice(context.Background(), devices, vhostUserDevice)
+
+	assert.NoError(err)
+	assert.Equal(devices, expected)
 }
