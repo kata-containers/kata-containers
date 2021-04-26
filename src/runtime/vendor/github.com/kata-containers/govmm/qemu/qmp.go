@@ -267,10 +267,6 @@ func (q *QMP) readLoop(fromVMCh chan<- []byte) {
 
 	for scanner.Scan() {
 		line := scanner.Bytes()
-		if q.cfg.Logger.V(1) {
-			q.cfg.Logger.Infof("read from QMP: %s", string(line))
-		}
-
 		// Since []byte channel type transfer slice info(include slice underlying array pointer, len, cap)
 		// between channel sender and receiver. scanner.Bytes() returned slice's underlying array
 		// may point to data that will be overwritten by a subsequent call to Scan(reference from:
@@ -442,7 +438,6 @@ func (q *QMP) writeNextQMPCommand(cmdQueue *list.List) {
 		}
 		cmdQueue.Remove(cmdEl)
 	}
-	q.cfg.Logger.Infof("%s", string(encodedCmd))
 	encodedCmd = append(encodedCmd, '\n')
 	if unixConn, ok := q.conn.(*net.UnixConn); ok && len(cmd.oob) > 0 {
 		_, _, err = unixConn.WriteMsgUnix(encodedCmd, cmd.oob, nil)
