@@ -13,6 +13,7 @@ import (
 	govmmQemu "github.com/kata-containers/govmm/qemu"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
 )
 
 type qemuS390x struct {
@@ -152,10 +153,33 @@ func (q *qemuS390x) appendCCWBlockDevice(ctx context.Context, devices []govmmQem
 	return devices, nil
 }
 
-// appendVhostUserDevice throws an error if vhost devices are tried to be used.
-// See issue https://github.com/kata-containers/runtime/issues/659
-func (q *qemuS390x) appendVhostUserDevice(devices []govmmQemu.Device, attr config.VhostUserDeviceAttrs) ([]govmmQemu.Device, error) {
-	return nil, fmt.Errorf("No vhost-user devices supported on s390x")
+func (q *qemuS390x) appendVhostUserDevice(ctx context.Context, devices []govmmQemu.Device, attr config.VhostUserDeviceAttrs) ([]govmmQemu.Device, error) {
+	if attr.Type != config.VhostUserFS {
+		return devices, fmt.Errorf("vhost-user device of type %s not supported on s390x, only vhost-user-fs-ccw is supported", attr.Type)
+	}
+
+	addr, b, err := q.addDeviceToBridge(ctx, attr.DevID, types.CCW)
+	if err != nil {
+		return devices, fmt.Errorf("Failed to append vhost user device: %s", err)
+	}
+	var devno string
+	devno, err = b.AddressFormatCCW(addr)
+	if err != nil {
+		return devices, fmt.Errorf("Failed to append vhost user device: %s", err)
+	}
+
+	qemuVhostUserDevice := govmmQemu.VhostUserDevice{
+		SocketPath:    attr.SocketPath,
+		CharDevID:     utils.MakeNameID("char", attr.DevID, maxDevIDSize),
+		TypeDevID:     utils.MakeNameID("fs", attr.DevID, maxDevIDSize),
+		Tag:           attr.Tag,
+		CacheSize:     attr.CacheSize,
+		VhostUserType: govmmQemu.VhostUserFS,
+		DevNo:         devno,
+	}
+
+	devices = append(devices, qemuVhostUserDevice)
+	return devices, nil
 }
 
 // supportGuestMemoryHotplug return false for s390x architecture. The pc-dimm backend device for s390x
