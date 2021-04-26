@@ -14,7 +14,7 @@ import (
 )
 
 func startContainer(ctx context.Context, s *service, c *container) error {
-	//start a container
+	// start a container
 	if c.cType == "" {
 		err := fmt.Errorf("Bug, the container %s type is empty", c.id)
 		return err
@@ -37,8 +37,8 @@ func startContainer(ctx context.Context, s *service, c *container) error {
 		}
 		go watchSandbox(ctx, s)
 
-		// We don't rely on the context passed to startContainer as it can be cancelled after
-		// this rpc call.
+		// We use s.ctx(`ctx` derived from `s.ctx`) to check for cancellation of the
+		// shim context and the context passed to startContainer for tracing.
 		go watchOOMEvents(ctx, s)
 	} else {
 		_, err := s.sandbox.StartContainer(ctx, c.id)
@@ -74,10 +74,10 @@ func startContainer(ctx context.Context, s *service, c *container) error {
 		c.ttyio = tty
 		go ioCopy(c.exitIOch, c.stdinCloser, tty, stdin, stdout, stderr)
 	} else {
-		//close the io exit channel, since there is no io for this container,
-		//otherwise the following wait goroutine will hang on this channel.
+		// close the io exit channel, since there is no io for this container,
+		// otherwise the following wait goroutine will hang on this channel.
 		close(c.exitIOch)
-		//close the stdin closer channel to notify that it's safe to close process's
+		// close the stdin closer channel to notify that it's safe to close process's
 		// io.
 		close(c.stdinCloser)
 	}
@@ -88,7 +88,7 @@ func startContainer(ctx context.Context, s *service, c *container) error {
 }
 
 func startExec(ctx context.Context, s *service, containerID, execID string) (*exec, error) {
-	//start an exec
+	// start an exec
 	c, err := s.getContainer(containerID)
 	if err != nil {
 		return nil, err
