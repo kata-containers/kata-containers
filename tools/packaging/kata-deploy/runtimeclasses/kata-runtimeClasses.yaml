@@ -8,6 +8,9 @@ overhead:
     podFixed:
         memory: "160Mi"
         cpu: "250m"
+scheduling:
+  nodeSelector:
+    katacontainers.io/kata-runtime: "true"
 ---
 kind: RuntimeClass
 apiVersion: node.k8s.io/v1beta1
@@ -18,6 +21,9 @@ overhead:
     podFixed:
         memory: "160Mi"
         cpu: "250m"
+scheduling:
+  nodeSelector:
+    katacontainers.io/kata-runtime: "true"
 ---
 kind: RuntimeClass
 apiVersion: node.k8s.io/v1beta1
@@ -28,6 +34,9 @@ overhead:
     podFixed:
         memory: "130Mi"
         cpu: "250m"
+scheduling:
+  nodeSelector:
+    katacontainers.io/kata-runtime: "true"
 ---
 kind: RuntimeClass
 apiVersion: node.k8s.io/v1beta1
@@ -38,3 +47,6 @@ overhead:
     podFixed:
         memory: "130Mi"
         cpu: "250m"
+scheduling:
+  nodeSelector:
+    katacontainers.io/kata-runtime: "true"
