@@ -1211,6 +1211,9 @@ type VhostUserDevice struct {
 	// ROMFile specifies the ROM file being used for this device.
 	ROMFile string
 
+	// DevNo identifies the CCW device for s390x.
+	DevNo string
+
 	// Transport is the virtio transport for this device.
 	Transport VirtioTransport
 }
@@ -1374,6 +1377,9 @@ func (vhostuserDev VhostUserDevice) QemuFSParams(config *Config) []string {
 	}
 	if vhostuserDev.SharedVersions {
 		devParams = append(devParams, "versiontable=/dev/shm/fuse_shared_versions")
+	}
+	if vhostuserDev.Transport.isVirtioCCW(config) {
+		devParams = append(devParams, fmt.Sprintf("devno=%s", vhostuserDev.DevNo))
 	}
 	if vhostuserDev.Transport.isVirtioPCI(config) && vhostuserDev.ROMFile != "" {
 		devParams = append(devParams, fmt.Sprintf("romfile=%s", vhostuserDev.ROMFile))
