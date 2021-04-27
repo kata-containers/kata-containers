@@ -7,7 +7,7 @@ LABEL com.github.actions.name="Test kata-deploy in an AKS cluster"
 LABEL com.github.actions.description="Test kata-deploy in an AKS cluster"
 
 # Default to latest validated AKS-engine version
-ARG AKS_ENGINE_VER="v0.42.0"
+ARG AKS_ENGINE_VER="v0.62.0"
 ARG ARCH=amd64
 
 ENV GITHUB_ACTION_NAME="Test kata-deploy in an AKS cluster"

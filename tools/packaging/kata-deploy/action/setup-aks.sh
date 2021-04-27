@@ -47,5 +47,5 @@ function setup_aks() {
     kubectl wait --timeout=10m --for=condition=Ready --all nodes
 
     # make sure coredns is up before moving forward:
-    kubectl wait --timeout=10m -n kube-system --for=condition=Available deployment.extensions/coredns
+    kubectl wait --timeout=10m -n kube-system --for=condition=Available deployment/coredns
 }
