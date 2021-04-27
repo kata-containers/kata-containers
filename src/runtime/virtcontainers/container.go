@@ -1415,8 +1415,6 @@ func (c *Container) cgroupsCreate() (err error) {
 		return fmt.Errorf("Could not create cgroup for %v: %v", c.state.CgroupPath, err)
 	}
 
-	c.config.Resources = resources
-
 	// Add shim into cgroup
 	if c.process.Pid > 0 {
 		if err := cgroup.Add(cgroups.Process{Pid: c.process.Pid}); err != nil {
