@@ -31,7 +31,7 @@ readonly kernel_config_repo="github.com/${project_name}/kata-containers/tools/pa
 readonly patches_repo="github.com/${project_name}/kata-containers/tools/packaging"
 readonly patches_repo_dir="${GOPATH}/src/${patches_repo}"
 # Default path to search patches to apply to kernel
-readonly default_patches_dir="${script_dir}/patches/"
+readonly default_patches_dir="${script_dir}/patches"
 # Default path to search config for kata
 readonly default_kernel_config_dir="${script_dir}/configs"
 # Default path to search for kernel config fragments
@@ -322,11 +322,11 @@ setup_kernel() {
 		fi
 
 		[ -n "$kernel_path" ] || die "failed to find kernel source path"
-
-		get_config_and_patches
-
-		[ -d "${patches_path}" ] || die " patches path '${patches_path}' does not exist"
 	fi
+
+	get_config_and_patches
+
+	[ -d "${patches_path}" ] || die " patches path '${patches_path}' does not exist"
 
 	local major_kernel
 	major_kernel=$(get_major_kernel_version "${kernel_version}")
