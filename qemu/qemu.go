@@ -1275,88 +1275,147 @@ func (vhostuserDev VhostUserDevice) Valid() bool {
 	return true
 }
 
-// QemuParams returns the qemu parameters built out of this vhostuser device.
-func (vhostuserDev VhostUserDevice) QemuParams(config *Config) []string {
+// QemuNetParams builds QEMU netdev and device parameters for a VhostUserNet device
+func (vhostuserDev VhostUserDevice) QemuNetParams(config *Config) []string {
 	var qemuParams []string
-	var charParams []string
 	var netParams []string
 	var devParams []string
-	var driver string
 
-	charParams = append(charParams, "socket")
-	charParams = append(charParams, fmt.Sprintf("id=%s", vhostuserDev.CharDevID))
-	charParams = append(charParams, fmt.Sprintf("path=%s", vhostuserDev.SocketPath))
-
-	switch vhostuserDev.VhostUserType {
-	// if network based vhost device:
-	case VhostUserNet:
-		driver = vhostuserDev.deviceName(config)
-		if driver == "" {
-			return nil
-		}
-
-		netParams = append(netParams, "type=vhost-user")
-		netParams = append(netParams, fmt.Sprintf("id=%s", vhostuserDev.TypeDevID))
-		netParams = append(netParams, fmt.Sprintf("chardev=%s", vhostuserDev.CharDevID))
-		netParams = append(netParams, "vhostforce")
-
-		devParams = append(devParams, driver)
-		devParams = append(devParams, fmt.Sprintf("netdev=%s", vhostuserDev.TypeDevID))
-		devParams = append(devParams, fmt.Sprintf("mac=%s", vhostuserDev.Address))
-	case VhostUserSCSI:
-		driver = vhostuserDev.deviceName(config)
-		if driver == "" {
-			return nil
-		}
-
-		devParams = append(devParams, driver)
-		devParams = append(devParams, fmt.Sprintf("id=%s", vhostuserDev.TypeDevID))
-		devParams = append(devParams, fmt.Sprintf("chardev=%s", vhostuserDev.CharDevID))
-	case VhostUserBlk:
-		driver = vhostuserDev.deviceName(config)
-		if driver == "" {
-			return nil
-		}
-
-		devParams = append(devParams, driver)
-		devParams = append(devParams, "logical_block_size=4096")
-		devParams = append(devParams, "size=512M")
-		devParams = append(devParams, fmt.Sprintf("chardev=%s", vhostuserDev.CharDevID))
-	case VhostUserFS:
-		driver = vhostuserDev.deviceName(config)
-		if driver == "" {
-			return nil
-		}
-
-		devParams = append(devParams, driver)
-		devParams = append(devParams, fmt.Sprintf("chardev=%s", vhostuserDev.CharDevID))
-		devParams = append(devParams, fmt.Sprintf("tag=%s", vhostuserDev.Tag))
-		if vhostuserDev.CacheSize != 0 {
-			devParams = append(devParams, fmt.Sprintf("cache-size=%dM", vhostuserDev.CacheSize))
-		}
-		if vhostuserDev.SharedVersions {
-			devParams = append(devParams, "versiontable=/dev/shm/fuse_shared_versions")
-		}
-	default:
+	driver := vhostuserDev.deviceName(config)
+	if driver == "" {
 		return nil
 	}
+
+	netParams = append(netParams, "type=vhost-user")
+	netParams = append(netParams, fmt.Sprintf("id=%s", vhostuserDev.TypeDevID))
+	netParams = append(netParams, fmt.Sprintf("chardev=%s", vhostuserDev.CharDevID))
+	netParams = append(netParams, "vhostforce")
+
+	devParams = append(devParams, driver)
+	devParams = append(devParams, fmt.Sprintf("netdev=%s", vhostuserDev.TypeDevID))
+	devParams = append(devParams, fmt.Sprintf("mac=%s", vhostuserDev.Address))
 
 	if vhostuserDev.Transport.isVirtioPCI(config) && vhostuserDev.ROMFile != "" {
 		devParams = append(devParams, fmt.Sprintf("romfile=%s", vhostuserDev.ROMFile))
 	}
 
-	qemuParams = append(qemuParams, "-chardev")
-	qemuParams = append(qemuParams, strings.Join(charParams, ","))
-
-	// if network based vhost device:
-	if vhostuserDev.VhostUserType == VhostUserNet {
-		qemuParams = append(qemuParams, "-netdev")
-		qemuParams = append(qemuParams, strings.Join(netParams, ","))
-	}
+	qemuParams = append(qemuParams, "-netdev")
+	qemuParams = append(qemuParams, strings.Join(netParams, ","))
 	qemuParams = append(qemuParams, "-device")
 	qemuParams = append(qemuParams, strings.Join(devParams, ","))
 
 	return qemuParams
+}
+
+// QemuSCSIParams builds QEMU device parameters for a VhostUserSCSI device
+func (vhostuserDev VhostUserDevice) QemuSCSIParams(config *Config) []string {
+	var qemuParams []string
+	var devParams []string
+
+	driver := vhostuserDev.deviceName(config)
+	if driver == "" {
+		return nil
+	}
+
+	devParams = append(devParams, driver)
+	devParams = append(devParams, fmt.Sprintf("id=%s", vhostuserDev.TypeDevID))
+	devParams = append(devParams, fmt.Sprintf("chardev=%s", vhostuserDev.CharDevID))
+
+	if vhostuserDev.Transport.isVirtioPCI(config) && vhostuserDev.ROMFile != "" {
+		devParams = append(devParams, fmt.Sprintf("romfile=%s", vhostuserDev.ROMFile))
+	}
+
+	qemuParams = append(qemuParams, "-device")
+	qemuParams = append(qemuParams, strings.Join(devParams, ","))
+
+	return qemuParams
+}
+
+// QemuBlkParams builds QEMU device parameters for a VhostUserBlk device
+func (vhostuserDev VhostUserDevice) QemuBlkParams(config *Config) []string {
+	var qemuParams []string
+	var devParams []string
+
+	driver := vhostuserDev.deviceName(config)
+	if driver == "" {
+		return nil
+	}
+
+	devParams = append(devParams, driver)
+	devParams = append(devParams, "logical_block_size=4096")
+	devParams = append(devParams, "size=512M")
+	devParams = append(devParams, fmt.Sprintf("chardev=%s", vhostuserDev.CharDevID))
+
+	if vhostuserDev.Transport.isVirtioPCI(config) && vhostuserDev.ROMFile != "" {
+		devParams = append(devParams, fmt.Sprintf("romfile=%s", vhostuserDev.ROMFile))
+	}
+
+	qemuParams = append(qemuParams, "-device")
+	qemuParams = append(qemuParams, strings.Join(devParams, ","))
+
+	return qemuParams
+}
+
+// QemuFSParams builds QEMU device parameters for a VhostUserFS device
+func (vhostuserDev VhostUserDevice) QemuFSParams(config *Config) []string {
+	var qemuParams []string
+	var devParams []string
+
+	driver := vhostuserDev.deviceName(config)
+	if driver == "" {
+		return nil
+	}
+
+	devParams = append(devParams, driver)
+	devParams = append(devParams, fmt.Sprintf("chardev=%s", vhostuserDev.CharDevID))
+	devParams = append(devParams, fmt.Sprintf("tag=%s", vhostuserDev.Tag))
+	if vhostuserDev.CacheSize != 0 {
+		devParams = append(devParams, fmt.Sprintf("cache-size=%dM", vhostuserDev.CacheSize))
+	}
+	if vhostuserDev.SharedVersions {
+		devParams = append(devParams, "versiontable=/dev/shm/fuse_shared_versions")
+	}
+	if vhostuserDev.Transport.isVirtioPCI(config) && vhostuserDev.ROMFile != "" {
+		devParams = append(devParams, fmt.Sprintf("romfile=%s", vhostuserDev.ROMFile))
+	}
+
+	qemuParams = append(qemuParams, "-device")
+	qemuParams = append(qemuParams, strings.Join(devParams, ","))
+
+	return qemuParams
+}
+
+// QemuParams returns the qemu parameters built out of this vhostuser device.
+func (vhostuserDev VhostUserDevice) QemuParams(config *Config) []string {
+	var qemuParams []string
+	var charParams []string
+	var devParams []string
+
+	charParams = append(charParams, "socket")
+	charParams = append(charParams, fmt.Sprintf("id=%s", vhostuserDev.CharDevID))
+	charParams = append(charParams, fmt.Sprintf("path=%s", vhostuserDev.SocketPath))
+
+	qemuParams = append(qemuParams, "-chardev")
+	qemuParams = append(qemuParams, strings.Join(charParams, ","))
+
+	switch vhostuserDev.VhostUserType {
+	case VhostUserNet:
+		devParams = vhostuserDev.QemuNetParams(config)
+	case VhostUserSCSI:
+		devParams = vhostuserDev.QemuSCSIParams(config)
+	case VhostUserBlk:
+		devParams = vhostuserDev.QemuBlkParams(config)
+	case VhostUserFS:
+		devParams = vhostuserDev.QemuFSParams(config)
+	default:
+		return nil
+	}
+
+	if devParams != nil {
+		return append(qemuParams, devParams...)
+	}
+
+	return nil
 }
 
 // deviceName returns the QEMU device name for the current combination of
