@@ -36,10 +36,11 @@ $ kubectl apply -k kata-deploy/overlays/k3s
 
 ### Run a sample workload
 
-Workloads which utilize Kata can node-select based on `katacontainers.io/kata-runtime=true`, and are
-run through an applicable runtime if they are marked with the appropriate `runtimeClass` object.
+Workloads specify the runtime they'd like to utilize by setting the appropriate `runtimeClass` object within
+the `Pod` specification. The `runtimeClass` examples provided define a node selector to match node label `katacontainers.io/kata-runtime:"true"`,
+which will ensure the workload is only scheduled on a node that has Kata Containers installed
 
-`runtimeClass` is a built-in type in Kubernetes. To apply the Kata runtimeclasses:
+`runtimeClass` is a built-in type in Kubernetes. To apply each Kata Containers `runtimeClass`:
 ```sh
   $ cd $GOPATH/src/github.com/kata-containers/kata-containers/tools/packaging/kata-deploy/runtimeclasses
   $ kubectl apply -f kata-runtimeClasses.yaml
