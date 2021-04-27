@@ -116,7 +116,7 @@ const (
 	// memory dump format will be set to elf
 	memoryDumpFormat = "elf"
 
-	qmpCapErrMsg  = "Failed to negoatiate QMP capabilities"
+	qmpCapErrMsg  = "Failed to negotiate QMP capabilities"
 	qmpExecCatCmd = "exec:cat"
 
 	scsiControllerID         = "scsi0"
