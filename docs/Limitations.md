@@ -19,6 +19,8 @@
         * [Support for joining an existing VM network](#support-for-joining-an-existing-vm-network)
         * [docker --net=host](#docker---nethost)
         * [docker run --link](#docker-run---link)
+    * [Storage limitations](#storage-limitations)
+        * [Kubernetes `volumeMounts.subPaths`](#kubernetes-volumemountssubpaths)
     * [Host resource sharing](#host-resource-sharing)
         * [docker run --privileged](#docker-run---privileged)
 * [Miscellaneous](#miscellaneous)
@@ -216,6 +218,17 @@ Equivalent functionality can be achieved with the newer docker networking comman
 See more documentation at
 [docs.docker.com](https://docs.docker.com/engine/userguide/networking/default_network/dockerlinks/).
 
+## Storage limitations
+
+### Kubernetes `volumeMounts.subPaths`
+
+Kubernetes `volumeMount.subPath` is not supported by Kata Containers at the
+moment.
+
+See [this issue](https://github.com/kata-containers/runtime/issues/2812) for more details.
+[Another issue](https://github.com/kata-containers/kata-containers/issues/1728) focuses on the case of `emptyDir`.
+
+
 ## Host resource sharing
 
 ### docker run --privileged
@@ -224,7 +237,7 @@ Privileged support in Kata is essentially different from `runc` containers.
 Kata does support `docker run --privileged` command, but in this case full access
 to the guest VM is provided in addition to some host access.
 
-The container runs with elevated capabilities within the guest and is granted 
+The container runs with elevated capabilities within the guest and is granted
 access to guest devices instead of the host devices.
 This is also true with using `securityContext privileged=true` with Kubernetes.
 
