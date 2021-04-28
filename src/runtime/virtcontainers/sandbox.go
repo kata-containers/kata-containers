@@ -1099,14 +1099,10 @@ func (s *Sandbox) addContainer(c *Container) error {
 // This should be called only when the sandbox is already created.
 // It will add new container config to sandbox.config.Containers
 func (s *Sandbox) CreateContainer(ctx context.Context, contConfig ContainerConfig) (VCContainer, error) {
-	// Create the container object, add devices to the sandbox's device-manager:
-	c, err := newContainer(ctx, s, &contConfig)
-	if err != nil {
-		return nil, err
-	}
-
 	// Update sandbox config to include the new container's config
 	s.config.Containers = append(s.config.Containers, contConfig)
+
+	var err error
 
 	defer func() {
 		if err != nil {
@@ -1116,6 +1112,12 @@ func (s *Sandbox) CreateContainer(ctx context.Context, contConfig ContainerConfi
 			}
 		}
 	}()
+
+	// Create the container object, add devices to the sandbox's device-manager:
+	c, err := newContainer(ctx, s, &s.config.Containers[len(s.config.Containers)-1])
+	if err != nil {
+		return nil, err
+	}
 
 	// create and start the container
 	err = c.create(ctx)
@@ -1434,9 +1436,9 @@ func (s *Sandbox) createContainers(ctx context.Context) error {
 	span, ctx := s.trace(ctx, "createContainers")
 	defer span.End()
 
-	for _, contConfig := range s.config.Containers {
+	for i := range s.config.Containers {
 
-		c, err := newContainer(ctx, s, &contConfig)
+		c, err := newContainer(ctx, s, &s.config.Containers[i])
 		if err != nil {
 			return err
 		}
