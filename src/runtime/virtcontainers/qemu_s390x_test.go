@@ -101,3 +101,50 @@ func TestQemuS390xAppendVhostUserDevice(t *testing.T) {
 	assert.NoError(err)
 	assert.Equal(devices, expected)
 }
+
+func TestQemuS390xAppendProtectionDevice(t *testing.T) {
+	assert := assert.New(t)
+	s390x := newTestQemu(assert, QemuCCWVirtio)
+
+	var devices []govmmQemu.Device
+	var bios, firmware string
+	var err error
+	devices, bios, err = s390x.appendProtectionDevice(devices, firmware)
+	assert.NoError(err)
+
+	// no protection
+	assert.Empty(bios)
+
+	// PEF protection
+	s390x.(*qemuS390x).protection = pefProtection
+	devices, bios, err = s390x.appendProtectionDevice(devices, firmware)
+	assert.Error(err)
+	assert.Empty(bios)
+
+	// TDX protection
+	s390x.(*qemuS390x).protection = tdxProtection
+	devices, bios, err = s390x.appendProtectionDevice(devices, firmware)
+	assert.Error(err)
+	assert.Empty(bios)
+
+	// SEV protection
+	s390x.(*qemuS390x).protection = sevProtection
+	devices, bios, err = s390x.appendProtectionDevice(devices, firmware)
+	assert.Error(err)
+	assert.Empty(bios)
+
+	// Secure Execution protection
+	s390x.(*qemuS390x).protection = seProtection
+
+	devices, bios, err = s390x.appendProtectionDevice(devices, firmware)
+	assert.NoError(err)
+	assert.Empty(bios)
+
+	expectedOut := []govmmQemu.Device{
+		govmmQemu.Object{
+			Type: govmmQemu.SecExecGuest,
+			ID:   secExecID,
+		},
+	}
+	assert.Equal(expectedOut, devices)
+}

@@ -299,6 +299,12 @@ func TestQemuAmd64AppendProtectionDevice(t *testing.T) {
 	assert.Error(err)
 	assert.Empty(bios)
 
+	// Secure Execution protection
+	amd64.(*qemuAmd64).protection = seProtection
+	devices, bios, err = amd64.appendProtectionDevice(devices, firmware)
+	assert.Error(err)
+	assert.Empty(bios)
+
 	// sev protection
 	// TODO: update once it's supported
 	amd64.(*qemuAmd64).protection = sevProtection
