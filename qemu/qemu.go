@@ -233,6 +233,9 @@ const (
 
 	// SEVGuest represents an SEV guest object
 	SEVGuest ObjectType = "sev-guest"
+
+	// SecExecGuest represents an s390x Secure Execution (Protected Virtualization in QEMU) object
+	SecExecGuest ObjectType = "s390-pv-guest"
 )
 
 // Object is a qemu object representation.
@@ -280,6 +283,8 @@ func (object Object) Valid() bool {
 		return object.ID != "" && object.File != "" && object.DeviceID != ""
 	case SEVGuest:
 		return object.ID != "" && object.File != "" && object.CBitPos != 0 && object.ReducedPhysBits != 0
+	case SecExecGuest:
+		return object.ID != ""
 	default:
 		return false
 	}
@@ -319,6 +324,9 @@ func (object Object) QemuParams(config *Config) []string {
 
 		driveParams = append(driveParams, "if=pflash,format=raw,readonly=on")
 		driveParams = append(driveParams, fmt.Sprintf(",file=%s", object.File))
+	case SecExecGuest:
+		objectParams = append(objectParams, string(object.Type))
+		objectParams = append(objectParams, fmt.Sprintf(",id=%s", object.ID))
 	}
 
 	if len(deviceParams) > 0 {
