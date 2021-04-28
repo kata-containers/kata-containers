@@ -21,15 +21,13 @@ type qemuS390x struct {
 	qemuArchBase
 }
 
-const defaultQemuPath = "/usr/bin/qemu-system-s390x"
-
-const defaultQemuMachineType = QemuCCWVirtio
-
-const defaultQemuMachineOptions = "accel=kvm"
-
-const virtioSerialCCW = "virtio-serial-ccw"
-
-const qmpMigrationWaitTimeout = 5 * time.Second
+const (
+	defaultQemuPath           = "/usr/bin/qemu-system-s390x"
+	defaultQemuMachineType    = QemuCCWVirtio
+	defaultQemuMachineOptions = "accel=kvm"
+	virtioSerialCCW           = "virtio-serial-ccw"
+	qmpMigrationWaitTimeout   = 5 * time.Second
+)
 
 // Verify needed parameters
 var kernelParams = []Param{
