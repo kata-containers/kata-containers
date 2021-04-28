@@ -275,24 +275,14 @@ type Object struct {
 func (object Object) Valid() bool {
 	switch object.Type {
 	case MemoryBackendFile:
-		if object.ID == "" || object.MemPath == "" || object.Size == 0 {
-			return false
-		}
-
+		return object.ID != "" && object.MemPath != "" && object.Size != 0
 	case TDXGuest:
-		if object.ID == "" || object.File == "" || object.DeviceID == "" {
-			return false
-		}
+		return object.ID != "" && object.File != "" && object.DeviceID != ""
 	case SEVGuest:
-		if object.ID == "" || object.File == "" || object.CBitPos == 0 || object.ReducedPhysBits == 0 {
-			return false
-		}
-
+		return object.ID != "" && object.File != "" && object.CBitPos != 0 && object.ReducedPhysBits != 0
 	default:
 		return false
 	}
-
-	return true
 }
 
 // QemuParams returns the qemu parameters built out of this Object device.
