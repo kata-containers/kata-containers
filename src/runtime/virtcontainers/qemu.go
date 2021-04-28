@@ -710,6 +710,28 @@ func (q *qemu) setupVirtiofsd(ctx context.Context) (err error) {
 	return err
 }
 
+func (q *qemu) stopVirtiofsd(ctx context.Context) (err error) {
+
+	// kill virtiofsd
+	if q.state.VirtiofsdPid == 0 {
+		return errors.New("invalid virtiofsd PID(0)")
+	}
+
+	err = syscall.Kill(q.state.VirtiofsdPid, syscall.SIGKILL)
+	if err != nil {
+		return err
+	}
+	q.state.VirtiofsdPid = 0
+
+	// remove virtiofsd socket
+	sockPath, err := q.vhostFSSocketPath(q.id)
+	if err != nil {
+		return err
+	}
+
+	return os.Remove(sockPath)
+}
+
 func (q *qemu) getMemArgs() (bool, string, string, error) {
 	share := false
 	target := ""
@@ -830,6 +852,14 @@ func (q *qemu) startSandbox(ctx context.Context, timeout int) error {
 		if err != nil {
 			return err
 		}
+		defer func() {
+			if err != nil {
+				if shutdownErr := q.stopVirtiofsd(ctx); shutdownErr != nil {
+					q.Logger().WithError(shutdownErr).Warn("failed to stop virtiofsd")
+				}
+			}
+		}()
+
 	}
 
 	var strErr string
@@ -841,7 +871,6 @@ func (q *qemu) startSandbox(ctx context.Context, timeout int) error {
 				strErr += string(b)
 			}
 		}
-
 		q.Logger().WithError(err).Errorf("failed to launch qemu: %s", strErr)
 		return fmt.Errorf("failed to launch qemu: %s, error messages from qemu log: %s", err, strErr)
 	}
