@@ -401,6 +401,21 @@ func TestGetHostMemorySizeKb(t *testing.T) {
 	}
 }
 
+func TestCheckCmdline(t *testing.T) {
+	assert := assert.New(t)
+
+	cmdlineFp, err := ioutil.TempFile("", "")
+	assert.NoError(err)
+	_, err = cmdlineFp.WriteString("quiet root=/dev/sda2")
+	assert.NoError(err)
+	cmdlinePath := cmdlineFp.Name()
+	defer os.Remove(cmdlinePath)
+
+	assert.True(CheckCmdline(cmdlinePath, "quiet", []string{}))
+	assert.True(CheckCmdline(cmdlinePath, "root", []string{"/dev/sda1", "/dev/sda2"}))
+	assert.False(CheckCmdline(cmdlinePath, "ro", []string{}))
+}
+
 // nolint: unused, deadcode
 type testNestedVMMData struct {
 	content     []byte
