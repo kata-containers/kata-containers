@@ -35,6 +35,9 @@
     "servicePrincipalProfile": {
       "clientId": "",
       "secret": ""
+    },
+    "linuxProfile": {
+      "runUnattendedUpgradesOnBootstrap": false
     }
   }
 }
