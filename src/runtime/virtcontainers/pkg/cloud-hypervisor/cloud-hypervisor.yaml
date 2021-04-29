@@ -719,6 +719,8 @@ components:
           items:
             type: integer
             format: int32
+        rate_limiter_config:
+            $ref: '#/components/schemas/RateLimiterConfig'
 
     RngConfig:
       required:
