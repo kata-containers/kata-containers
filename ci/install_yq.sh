@@ -18,7 +18,9 @@ function install_yq() {
 	GOPATH=${GOPATH:-${HOME}/go}
 	local yq_path="${GOPATH}/bin/yq"
 	local yq_pkg="github.com/mikefarah/yq"
-	[ -x  "${GOPATH}/bin/yq" ] && return
+	local yq_version=3.4.1
+
+	[ -x  "${GOPATH}/bin/yq" ] && [ "`${GOPATH}/bin/yq --version`"X == "yq version ${yq_version}"X ] && return
 
 	read -r -a sysInfo <<< "$(uname -sm)"
 
@@ -55,8 +57,6 @@ function install_yq() {
 	if ! command -v "curl" >/dev/null; then
 		die "Please install curl"
 	fi
-
-	local yq_version=3.4.1
 
 	## NOTE: ${var,,} => gives lowercase value of var
 	local yq_url="https://${yq_pkg}/releases/download/${yq_version}/yq_${goos,,}_${goarch}"
