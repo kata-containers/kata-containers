@@ -28,16 +28,6 @@ fn contain_namespace(nses: &[LinuxNamespace], key: &str) -> bool {
     false
 }
 
-fn get_namespace_path(nses: &[LinuxNamespace], key: &str) -> Result<String> {
-    for ns in nses {
-        if ns.r#type.as_str() == key {
-            return Ok(ns.path.clone());
-        }
-    }
-
-    Err(einval())
-}
-
 fn rootfs(root: &str) -> Result<()> {
     let path = PathBuf::from(root);
     // not absolute path or not exists
@@ -164,31 +154,6 @@ lazy_static! {
         m.insert("kernel.shm_rmid_forced", true);
         m
     };
-}
-
-fn check_host_ns(path: &str) -> Result<()> {
-    let cpath = PathBuf::from(path);
-    let hpath = PathBuf::from("/proc/self/ns/net");
-
-    let real_hpath = hpath
-        .read_link()
-        .context(format!("read link {:?}", hpath))?;
-    let meta = cpath
-        .symlink_metadata()
-        .context(format!("symlink metadata {:?}", cpath))?;
-    let file_type = meta.file_type();
-
-    if !file_type.is_symlink() {
-        return Ok(());
-    }
-    let real_cpath = cpath
-        .read_link()
-        .context(format!("read link {:?}", cpath))?;
-    if real_cpath == real_hpath {
-        return Err(einval());
-    }
-
-    Ok(())
 }
 
 fn sysctl(oci: &Spec) -> Result<()> {
@@ -334,19 +299,6 @@ mod tests {
         assert_eq!(contain_namespace(&namespaces, ""), false);
         assert_eq!(contain_namespace(&namespaces, "Net"), false);
         assert_eq!(contain_namespace(&namespaces, "ipc"), false);
-
-        assert_eq!(
-            get_namespace_path(&namespaces, "net").unwrap(),
-            "/sys/cgroups/net"
-        );
-        assert_eq!(
-            get_namespace_path(&namespaces, "uts").unwrap(),
-            "/sys/cgroups/uts"
-        );
-
-        get_namespace_path(&namespaces, "").unwrap_err();
-        get_namespace_path(&namespaces, "Uts").unwrap_err();
-        get_namespace_path(&namespaces, "ipc").unwrap_err();
     }
 
     #[test]
@@ -526,12 +478,6 @@ mod tests {
             }),
         ];
         rootless_euid(&spec).unwrap();
-    }
-
-    #[test]
-    fn test_check_host_ns() {
-        check_host_ns("/proc/self/ns/net").unwrap_err();
-        check_host_ns("/proc/sys/net/ipv4/tcp_sack").unwrap();
     }
 
     #[test]
