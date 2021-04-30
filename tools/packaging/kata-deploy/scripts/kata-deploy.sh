@@ -149,11 +149,6 @@ function configure_crio() {
 	for shim in "${shims[@]}"; do
 		configure_crio_runtime $shim
 	done
-
-	# Replace if exists, insert otherwise
-	grep -Fq 'manage_network_ns_lifecycle =' $crio_conf_file \
-		&& sed -i '/manage_network_ns_lifecycle =/c manage_network_ns_lifecycle = true' $crio_conf_file \
-		|| sed -i '/\[crio.runtime\]/a manage_network_ns_lifecycle = true' $crio_conf_file
 }
 
 function configure_containerd_runtime() {
