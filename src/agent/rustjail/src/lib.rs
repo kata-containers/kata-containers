@@ -47,16 +47,6 @@ pub mod sync;
 pub mod sync_with_async;
 pub mod utils;
 pub mod validator;
-// pub mod factory;
-//pub mod configs;
-// pub mod devices;
-// pub mod init;
-// pub mod rootfs;
-// pub mod capabilities;
-// pub mod console;
-// pub mod stats;
-// pub mod user;
-//pub mod intelrdt;
 
 use std::collections::HashMap;
 
