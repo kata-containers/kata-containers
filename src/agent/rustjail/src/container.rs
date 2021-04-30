@@ -607,8 +607,6 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
 
     if init {
         // notify parent to run poststart hooks
-        // cfd is closed when return from join_namespaces
-        // should retunr cfile instead of cfd?
         write_sync(cwfd, SYNC_SUCCESS, "")?;
     }
 
