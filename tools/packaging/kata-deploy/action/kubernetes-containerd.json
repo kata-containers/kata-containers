@@ -3,11 +3,10 @@
   "properties": {
     "orchestratorProfile": {
       "orchestratorType": "Kubernetes",
-      "orchestratorVersion": "1.15.4",
+      "orchestratorVersion": "1.20.5",
       "kubernetesConfig": {
-        "networkPlugin": "flannel",
         "containerRuntime": "containerd",
-        "containerdVersion": "1.2.4"
+        "useManagedIdentity": false
       }
     },
     "masterProfile": {
@@ -36,6 +35,9 @@
     "servicePrincipalProfile": {
       "clientId": "",
       "secret": ""
+    },
+    "linuxProfile": {
+      "runUnattendedUpgradesOnBootstrap": false
     }
   }
 }

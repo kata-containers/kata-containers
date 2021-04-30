@@ -36,51 +36,23 @@ $ kubectl apply -k kata-deploy/overlays/k3s
 
 ### Run a sample workload
 
+Workloads specify the runtime they'd like to utilize by setting the appropriate `runtimeClass` object within
+the `Pod` specification. The `runtimeClass` examples provided define a node selector to match node label `katacontainers.io/kata-runtime:"true"`,
+which will ensure the workload is only scheduled on a node that has Kata Containers installed
 
-Workloads which utilize Kata can node-select based on `katacontainers.io/kata-runtime=true`, and are
-run through an applicable runtime if they are marked with the appropriate `runtimeClass` annotation.
-
-`runtimeClass` is a built-in type in Kubernetes versions 1.14 and greater. In Kubernetes 1.13, `runtimeClass`
-is defined through a custom resource definition. For Kubernetes 1.13:
+`runtimeClass` is a built-in type in Kubernetes. To apply each Kata Containers `runtimeClass`:
 ```sh
-  $ cd $GOPATH/src/github.com/kata-containers/kata-containers/tools/packaging/kata-deploy/k8s-1.13
-  $ kubectl apply -f runtimeclass-crd.yaml
+  $ cd $GOPATH/src/github.com/kata-containers/kata-containers/tools/packaging/kata-deploy/runtimeclasses
+  $ kubectl apply -f kata-runtimeClasses.yaml
 ```
 
-In order to use a workload Kata with QEMU, first add a `RuntimeClass` as:
-- For Kubernetes 1.14:
-  ```sh
-  $ cd $GOPATH/src/github.com/kata-containers/kata-containers/tools/packaging/kata-deploy/k8s-1.14
-  $ kubectl apply -f kata-qemu-runtimeClass.yaml
-  ```
-
-- For Kubernetes 1.13:
-  ```sh
-  $ cd $GOPATH/src/github.com/kata-containers/kata-containers/tools/packaging/kata-deploy/k8s-1.13
-  $ kubectl apply -f kata-qemu-runtimeClass.yaml
-  ```
-
-
-In order to use a workload Kata with Firecracker, first add a `RuntimeClass` as:
-- For Kubernetes 1.14:
-  ```sh
-  $ cd $GOPATH/src/github.com/kata-containers/kata-containers/tools/packaging/kata-deploy/k8s-1.14
-  $ kubectl apply -f kata-fc-runtimeClass.yaml
-  ```
-
-- For Kubernetes  1.13:
-  ```sh
-  $ cd $GOPATH/src/github.com/kata-containers/kata-containers/tools/packaging/kata-deploy/k8s-1.13
-  $ kubectl apply -f kata-fc-runtimeClass.yaml
-  ```
-
-The following YAML snippet shows how to specify a workload should use Kata with QEMU:
+The following YAML snippet shows how to specify a workload should use Kata with Cloud Hypervisor:
 
 ```yaml
 spec:
   template:
     spec:
-      runtimeClassName: kata-qemu
+      runtimeClassName: kata-clh
 ```
 
 The following YAML snippet shows how to specify a workload should use Kata with Firecracker:
@@ -90,6 +62,15 @@ spec:
   template:
     spec:
       runtimeClassName: kata-fc
+```
+
+The following YAML snippet shows how to specify a workload should use Kata with QEMU:
+
+```yaml
+spec:
+  template:
+    spec:
+      runtimeClassName: kata-qemu
 ```
 
 To run an example with `kata-qemu`:
@@ -122,6 +103,7 @@ $ kubectl delete -f kata-deploy/base/kata-deploy.yaml
 $ kubectl apply -f kata-cleanup/base/kata-cleanup.yaml
 $ kubectl delete -f kata-cleanup/base/kata-cleanup.yaml
 $ kubectl delete -f kata-rbac/base/kata-rbac.yaml
+$ kubectl delete -f runtimeclasses/kata-runtimeClasses.yaml
 ```
 
 ## `kata-deploy` details
@@ -151,9 +133,9 @@ applying labels to the nodes.
 
 This DaemonSet installs the necessary Kata binaries, configuration files, and virtual machine artifacts on
 the node. Once installed, the DaemonSet adds a node label `katacontainers.io/kata-runtime=true` and reconfigures
-either CRI-O or containerd to register two `runtimeClasses`: `kata-qemu` (for QEMU isolation) and `kata-fc` (for Firecracker isolation).
-As a final step the DaemonSet restarts either CRI-O or containerd. Upon deletion, the DaemonSet removes the
-Kata binaries and VM artifacts and updates the node label to `katacontainers.io/kata-runtime=cleanup`.
+either CRI-O or containerd to register three `runtimeClasses`: `kata-clh` (for Cloud Hypervisor isolation), `kata-qemu` (for QEMU isolation),
+and `kata-fc` (for Firecracker isolation). As a final step the DaemonSet restarts either CRI-O or containerd. Upon deletion,
+the DaemonSet removes the Kata binaries and VM artifacts and updates the node label to `katacontainers.io/kata-runtime=cleanup`.
 
 #### Kata cleanup
 
