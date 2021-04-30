@@ -179,10 +179,7 @@ externals:
     description: |
       OCI-based Kubernetes Container Runtime Interface implementation
     url: "https://github.com/cri-o/cri-o"
-    version: "v1.18.4-4-g6dee3891e"
-    meta:
-      openshift: "6273bea4c9ed788aeb3d051ebf2d030060c05b6c"
-      crictl: 1.0.0-beta.2
+    branch: "release-1.21"
 
   cri-containerd:
     description: |
@@ -196,15 +193,7 @@ externals:
   critools:
     description: "CLI tool for Container Runtime Interface (CRI)"
     url: "https://github.com/kubernetes-sigs/cri-tools"
-    version: "1.18.0"
-
-  docker:
-    description: "Moby project container manager"
-    notes: "Docker Swarm requires an older version of Docker."
-    url: "https://github.com/moby/moby"
-    version: "v18.06-ce"
-    meta:
-      swarm-version: "1.12.1"
+    version: "1.21.0"
 
   kubernetes:
     description: "Kubernetes project container manager"
@@ -214,18 +203,7 @@ externals:
     uscan-url: >-
       https://github.com/kubernetes/kubernetes/tags
       .*/v?([\d\.]+)\.tar\.gz
-    version: "1.18.9-00"
-
-  openshift:
-    description: |
-      Distribution of Kubernetes optimized for continuous application
-      development and multi-tenant deployment.
-    url: "https://github.com/openshift/origin"
-    uscan-url: >-
-      https://github.com/openshift/origin/tags
-      .*/v?([\d\.]+)\.tar\.gz
-    version: "v3.10.0"
-    commit: "dd10d17"
+    version: "1.21.0-00"
 
   runc:
     description: "OCI CLI reference runtime implementation"
@@ -235,7 +213,7 @@ externals:
     uscan-url: >-
       https://github.com/opencontainers/runc/tags
       .*/v?(\d\S+)\.tar\.gz
-    version: "v1.0.0-rc5"
+    version: "v1.0.0-rc93"
 
   musl:
     description: |
