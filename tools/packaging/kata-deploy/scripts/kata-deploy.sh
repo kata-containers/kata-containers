@@ -8,8 +8,8 @@ set -o errexit
 set -o pipefail
 set -o nounset
 
-crio_conf_file="/etc/crio/crio.conf"
-crio_conf_file_backup="${crio_conf_file}.bak"
+crio_drop_in_conf_dir="/etc/crio/crio.conf.d/"
+crio_drop_in_conf_file="${crio_drop_in_conf_dir}/99-kata-deploy"
 containerd_conf_file="/etc/containerd/config.toml"
 containerd_conf_file_backup="${containerd_conf_file}.bak"
 
@@ -123,12 +123,7 @@ function configure_crio_runtime() {
 	local kata_path="/usr/local/bin/containerd-shim-${runtime}-v2"
 	local kata_conf="crio.runtime.runtimes.${runtime}"
 
-	if grep -qEe "^\[$kata_conf\]" $crio_conf_file; then
-		echo "Configuration exists $kata_conf, overwriting"
-		sed -i "/\[$kata_conf\]/\[$kata_conf-original\]/" $crio_conf_file
-	fi
-
-	cat <<EOT | tee -a "$crio_conf_file"
+	cat <<EOT | tee -a "$crio_drop_in_conf_file"
 
 # Path to the Kata Containers runtime binary that uses the $1
 [$kata_conf]
@@ -143,17 +138,16 @@ function configure_crio() {
 	# Configure crio to use Kata:
 	echo "Add Kata Containers as a supported runtime for CRIO:"
 
-	# backup the CRIO.conf only if a backup doesn't already exist (don't override original)
-	cp -n "$crio_conf_file" "$crio_conf_file_backup"
+	# As we don't touch the original configuration file in any way,
+	# let's just ensure we remove any exist configuration from a
+	# previous deployment.
+	mkdir -p "$crio_drop_in_conf_dir"
+	rm -f "$crio_drop_in_conf_file"
+	touch "$crio_drop_in_conf_file"
 
 	for shim in "${shims[@]}"; do
 		configure_crio_runtime $shim
 	done
-
-	# Replace if exists, insert otherwise
-	grep -Fq 'manage_network_ns_lifecycle =' $crio_conf_file \
-		&& sed -i '/manage_network_ns_lifecycle =/c manage_network_ns_lifecycle = true' $crio_conf_file \
-		|| sed -i '/\[crio.runtime\]/a manage_network_ns_lifecycle = true' $crio_conf_file
 }
 
 function configure_containerd_runtime() {
@@ -233,9 +227,7 @@ function cleanup_cri_runtime() {
 }
 
 function cleanup_crio() {
-	if [ -f "$crio_conf_file_backup" ]; then
-		cp "$crio_conf_file_backup" "$crio_conf_file"
-	fi
+	rm $crio_drop_in_conf_file
 }
 
 function cleanup_containerd() {
