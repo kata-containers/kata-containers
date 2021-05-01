@@ -34,6 +34,8 @@ pub mod container;
 pub mod mount;
 pub mod pipestream;
 pub mod process;
+#[cfg(feature = "seccomp")]
+pub mod seccomp;
 pub mod specconv;
 pub mod sync;
 pub mod sync_with_async;
