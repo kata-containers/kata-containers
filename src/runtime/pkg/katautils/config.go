@@ -154,6 +154,7 @@ type agent struct {
 	Debug               bool     `toml:"enable_debug"`
 	Tracing             bool     `toml:"enable_tracing"`
 	DebugConsoleEnabled bool     `toml:"debug_console_enabled"`
+	DialTimeout         uint32   `toml:"dial_timeout"`
 }
 
 type netmon struct {
@@ -469,6 +470,10 @@ func (h hypervisor) getIOMMUPlatform() bool {
 
 func (a agent) debugConsoleEnabled() bool {
 	return a.DebugConsoleEnabled
+}
+
+func (a agent) dialTimout() uint32 {
+	return a.DialTimeout
 }
 
 func (a agent) debug() bool {
@@ -920,6 +925,7 @@ func updateRuntimeConfigAgent(configPath string, tomlConf tomlConfig, config *oc
 			TraceType:          agent.traceType(),
 			KernelModules:      agent.kernelModules(),
 			EnableDebugConsole: agent.debugConsoleEnabled(),
+			DialTimeout:        agent.dialTimout(),
 		}
 	}
 
