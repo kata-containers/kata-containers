@@ -217,6 +217,7 @@ type KataAgentConfig struct {
 	ContainerPipeSize  uint32
 	TraceMode          string
 	TraceType          string
+	DialTimeout        uint32
 	KernelModules      []string
 }
 
@@ -236,6 +237,7 @@ type kataAgent struct {
 	keepConn       bool
 	dynamicTracing bool
 	dead           bool
+	dialTimout     uint32
 	kmodules       []string
 
 	vmSocket interface{}
@@ -344,6 +346,7 @@ func (k *kataAgent) init(ctx context.Context, sandbox *Sandbox, config KataAgent
 	disableVMShutdown = k.handleTraceSettings(config)
 	k.keepConn = config.LongLiveConn
 	k.kmodules = config.KernelModules
+	k.dialTimout = config.DialTimeout
 
 	return disableVMShutdown, nil
 }
@@ -1794,7 +1797,7 @@ func (k *kataAgent) connect(ctx context.Context) error {
 	}
 
 	k.Logger().WithField("url", k.state.URL).Info("New client")
-	client, err := kataclient.NewAgentClient(k.ctx, k.state.URL)
+	client, err := kataclient.NewAgentClient(k.ctx, k.state.URL, k.dialTimout)
 	if err != nil {
 		k.dead = true
 		return err
