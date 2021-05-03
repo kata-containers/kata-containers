@@ -547,6 +547,10 @@ func (conf *HypervisorConfig) Valid() error {
 		return fmt.Errorf("Missing image and initrd path")
 	}
 
+	if conf.ImagePath != "" && conf.InitrdPath != "" {
+		return fmt.Errorf("Image and initrd path cannot be both set")
+	}
+
 	if err := conf.CheckTemplateConfig(); err != nil {
 		return err
 	}
