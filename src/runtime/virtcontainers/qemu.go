@@ -768,8 +768,8 @@ func (q *qemu) setupVirtioMem() error {
 	if err != nil {
 		return err
 	}
-	// 1024 is size for nvdimm
-	sizeMB := int(maxMem) - int(q.config.MemorySize)
+	// backend memory size must be multiple of 2Mib
+	sizeMB := (int(maxMem) - int(q.config.MemorySize)) >> 2 << 2
 
 	share, target, memoryBack, err := q.getMemArgs()
 	if err != nil {
