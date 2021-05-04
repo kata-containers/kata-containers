@@ -216,7 +216,7 @@ mod tests {
         let tmpdir = Builder::new().prefix("pid").tempdir().unwrap();
 
         let ns_pid = Namespace::new(&logger)
-            .as_pid()
+            .get_pid()
             .set_root_dir(tmpdir.path().to_str().unwrap())
             .setup();
 
