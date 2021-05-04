@@ -230,6 +230,9 @@ const (
 
 	// TDXGuest represents a TDX object
 	TDXGuest ObjectType = "tdx-guest"
+
+	// SEVGuest represents an SEV guest object
+	SEVGuest ObjectType = "sev-guest"
 )
 
 // Object is a qemu object representation.
@@ -258,6 +261,14 @@ type Object struct {
 
 	// File is the device file
 	File string
+
+	// CBitPos is the location of the C-bit in a guest page table entry
+	// This is only relevant for sev-guest objects
+	CBitPos uint32
+
+	// ReducedPhysBits is the reduction in the guest physical address space
+	// This is only relevant for sev-guest objects
+	ReducedPhysBits uint32
 }
 
 // Valid returns true if the Object structure is valid and complete.
@@ -272,6 +283,10 @@ func (object Object) Valid() bool {
 		if object.ID == "" || object.File == "" || object.DeviceID == "" {
 			return false
 		}
+	case SEVGuest:
+		if object.ID == "" || object.File == "" || object.CBitPos == 0 || object.ReducedPhysBits == 0 {
+			return false
+		}
 
 	default:
 		return false
@@ -284,10 +299,8 @@ func (object Object) Valid() bool {
 func (object Object) QemuParams(config *Config) []string {
 	var objectParams []string
 	var deviceParams []string
+	var driveParams []string
 	var qemuParams []string
-
-	deviceParams = append(deviceParams, string(object.Driver))
-	deviceParams = append(deviceParams, fmt.Sprintf(",id=%s", object.DeviceID))
 
 	switch object.Type {
 	case MemoryBackendFile:
@@ -296,6 +309,8 @@ func (object Object) QemuParams(config *Config) []string {
 		objectParams = append(objectParams, fmt.Sprintf(",mem-path=%s", object.MemPath))
 		objectParams = append(objectParams, fmt.Sprintf(",size=%d", object.Size))
 
+		deviceParams = append(deviceParams, string(object.Driver))
+		deviceParams = append(deviceParams, fmt.Sprintf(",id=%s", object.DeviceID))
 		deviceParams = append(deviceParams, fmt.Sprintf(",memdev=%s", object.ID))
 	case TDXGuest:
 		objectParams = append(objectParams, string(object.Type))
@@ -303,14 +318,33 @@ func (object Object) QemuParams(config *Config) []string {
 		if object.Debug {
 			objectParams = append(objectParams, ",debug=on")
 		}
+		deviceParams = append(deviceParams, string(object.Driver))
+		deviceParams = append(deviceParams, fmt.Sprintf(",id=%s", object.DeviceID))
 		deviceParams = append(deviceParams, fmt.Sprintf(",file=%s", object.File))
+	case SEVGuest:
+		objectParams = append(objectParams, string(object.Type))
+		objectParams = append(objectParams, fmt.Sprintf(",id=%s", object.ID))
+		objectParams = append(objectParams, fmt.Sprintf(",cbitpos=%d", object.CBitPos))
+		objectParams = append(objectParams, fmt.Sprintf(",reduced-phys-bits=%d", object.ReducedPhysBits))
+
+		driveParams = append(driveParams, "if=pflash,format=raw,readonly=on")
+		driveParams = append(driveParams, fmt.Sprintf(",file=%s", object.File))
 	}
 
-	qemuParams = append(qemuParams, "-device")
-	qemuParams = append(qemuParams, strings.Join(deviceParams, ""))
+	if len(deviceParams) > 0 {
+		qemuParams = append(qemuParams, "-device")
+		qemuParams = append(qemuParams, strings.Join(deviceParams, ""))
+	}
 
-	qemuParams = append(qemuParams, "-object")
-	qemuParams = append(qemuParams, strings.Join(objectParams, ""))
+	if len(objectParams) > 0 {
+		qemuParams = append(qemuParams, "-object")
+		qemuParams = append(qemuParams, strings.Join(objectParams, ""))
+	}
+
+	if len(driveParams) > 0 {
+		qemuParams = append(qemuParams, "-drive")
+		qemuParams = append(qemuParams, strings.Join(driveParams, ""))
+	}
 
 	return qemuParams
 }
