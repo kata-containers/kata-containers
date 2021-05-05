@@ -106,17 +106,17 @@ func newQemuArch(config HypervisorConfig) (qemuArch, error) {
 		factory = true
 	}
 
-	if config.IOMMU {
-		var q35QemuIOMMUOptions = "accel=kvm,kernel_irqchip=split"
+	// IOMMU and Guest Protection require a split IRQ controller for handling interrupts
+	// otherwise QEMU won't be able to create the kernel irqchip
+	if config.IOMMU || config.ConfidentialGuest {
+		mp.Options = "accel=kvm,kernel_irqchip=split"
+	}
 
+	if config.IOMMU {
 		kernelParams = append(kernelParams,
 			Param{"intel_iommu", "on"})
 		kernelParams = append(kernelParams,
 			Param{"iommu", "pt"})
-
-		if mp.Type == QemuQ35 {
-			mp.Options = q35QemuIOMMUOptions
-		}
 	}
 
 	q := &qemuAmd64{
@@ -129,8 +129,15 @@ func newQemuArch(config HypervisorConfig) (qemuArch, error) {
 			kernelParams:         kernelParams,
 			disableNvdimm:        config.DisableImageNvdimm,
 			dax:                  true,
+			protection:           noneProtection,
 		},
 		vmFactory: factory,
+	}
+
+	if config.ConfidentialGuest {
+		if err := q.enableProtection(); err != nil {
+			return nil, err
+		}
 	}
 
 	q.handleImagePath(config)
@@ -190,4 +197,14 @@ func (q *qemuAmd64) appendImage(ctx context.Context, devices []govmmQemu.Device,
 // appendBridges appends to devices the given bridges
 func (q *qemuAmd64) appendBridges(devices []govmmQemu.Device) []govmmQemu.Device {
 	return genericAppendBridges(devices, q.Bridges, q.qemuMachine.Type)
+}
+
+// enable protection
+func (q *qemuAmd64) enableProtection() error {
+	return nil
+}
+
+// append protection device
+func (q *qemuAmd64) appendProtectionDevice(devices []govmmQemu.Device, firmware string) ([]govmmQemu.Device, string, error) {
+	return devices, firmware, nil
 }

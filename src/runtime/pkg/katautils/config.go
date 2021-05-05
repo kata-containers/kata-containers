@@ -1,4 +1,4 @@
-// Copyright (c) 2018 Intel Corporation
+// Copyright (c) 2018-2021 Intel Corporation
 // Copyright (c) 2018 HyperHQ Inc.
 //
 // SPDX-License-Identifier: Apache-2.0
@@ -61,6 +61,12 @@ type tomlConfig struct {
 	Runtime    runtime
 	Factory    factory
 	Netmon     netmon
+	Image      image
+}
+
+type image struct {
+	ServiceOffload bool   `toml:"service_offload"`
+	Provision      string `toml:"provision"`
 }
 
 type factory struct {
@@ -130,6 +136,7 @@ type hypervisor struct {
 	HotplugVFIOOnRootBus    bool     `toml:"hotplug_vfio_on_root_bus"`
 	DisableVhostNet         bool     `toml:"disable_vhost_net"`
 	GuestMemoryDumpPaging   bool     `toml:"guest_memory_dump_paging"`
+	ConfidentialGuest       bool     `toml:"confidential_guest"`
 }
 
 type runtime struct {
@@ -702,6 +709,7 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		EnableAnnotations:       h.EnableAnnotations,
 		GuestMemoryDumpPath:     h.GuestMemoryDumpPath,
 		GuestMemoryDumpPaging:   h.GuestMemoryDumpPaging,
+		ConfidentialGuest:       h.ConfidentialGuest,
 	}, nil
 }
 
@@ -1055,6 +1063,7 @@ func GetDefaultHypervisorConfig() vc.HypervisorConfig {
 		RxRateLimiterMaxRate:    defaultRxRateLimiterMaxRate,
 		TxRateLimiterMaxRate:    defaultTxRateLimiterMaxRate,
 		SGXEPCSize:              defaultSGXEPCSize,
+		ConfidentialGuest:       defaultConfidentialGuest,
 	}
 }
 
