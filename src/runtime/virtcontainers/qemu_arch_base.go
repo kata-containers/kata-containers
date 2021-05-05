@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"runtime"
 	"strconv"
 	"strings"
 
@@ -142,7 +143,32 @@ type qemuArch interface {
 
 	// append pvpanic device
 	appendPVPanicDevice(devices []govmmQemu.Device) ([]govmmQemu.Device, error)
+
+	// append protection device.
+	// This implementation is architecture specific, some archs may need
+	// a firmware, returns a string containing the path to the firmware that should
+	// be used with the -bios option, ommit -bios option if the path is empty.
+	appendProtectionDevice(devices []govmmQemu.Device, firmware string) ([]govmmQemu.Device, string, error)
 }
+
+// Kind of guest protection
+type guestProtection uint8
+
+const (
+	noneProtection guestProtection = iota
+
+	//Intel Trust Domain Extensions
+	//https://software.intel.com/content/www/us/en/develop/articles/intel-trust-domain-extensions.html
+	tdxProtection
+
+	// AMD Secure Encrypted Virtualization
+	// https://developer.amd.com/sev/
+	sevProtection
+
+	// IBM POWER 9 Protected Execution Facility
+	// https://www.kernel.org/doc/html/latest/powerpc/ultravisor.html
+	pefProtection
+)
 
 type qemuArchBase struct {
 	qemuMachine          govmmQemu.Machine
@@ -158,6 +184,7 @@ type qemuArchBase struct {
 	kernelParams         []Param
 	Bridges              []types.Bridge
 	PFlash               []string
+	protection           guestProtection
 }
 
 const (
@@ -812,4 +839,10 @@ func (q *qemuArchBase) getPFlash() ([]string, error) {
 
 func (q *qemuArchBase) setPFlash(p []string) {
 	q.PFlash = p
+}
+
+// append protection device
+func (q *qemuArchBase) appendProtectionDevice(devices []govmmQemu.Device, firmware string) ([]govmmQemu.Device, string, error) {
+	virtLog.WithField("arch", runtime.GOARCH).Warnf("Confidential Computing has not been implemented for this architecture")
+	return devices, firmware, nil
 }

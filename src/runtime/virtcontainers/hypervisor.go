@@ -453,6 +453,11 @@ type HypervisorConfig struct {
 	// GuestMemoryDumpPaging is used to indicate if enable paging
 	// for QEMU dump-guest-memory command
 	GuestMemoryDumpPaging bool
+
+	// Enable confidential guest support.
+	// Enable or disable different hardware features, ranging
+	// from memory encryption to both memory and CPU-state encryption and integrity.
+	ConfidentialGuest bool
 }
 
 // vcpu mapping from vcpu number to thread number
