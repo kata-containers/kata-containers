@@ -276,3 +276,53 @@ func TestQemuAmd64Microvm(t *testing.T) {
 
 	assert.False(amd64.supportGuestMemoryHotplug())
 }
+
+func TestQemuAmd64AppendProtectionDevice(t *testing.T) {
+	var devices []govmmQemu.Device
+	assert := assert.New(t)
+
+	amd64 := newTestQemu(assert, QemuPC)
+
+	id := amd64.(*qemuAmd64).devLoadersCount
+	firmware := "tdvf.fd"
+	var bios string
+	var err error
+	devices, bios, err = amd64.appendProtectionDevice(devices, firmware)
+	assert.NoError(err)
+
+	// non-protection
+	assert.NotEmpty(bios)
+
+	// pef protection
+	amd64.(*qemuAmd64).protection = pefProtection
+	devices, bios, err = amd64.appendProtectionDevice(devices, firmware)
+	assert.Error(err)
+	assert.Empty(bios)
+
+	// sev protection
+	// TODO: update once it's supported
+	amd64.(*qemuAmd64).protection = sevProtection
+	devices, bios, err = amd64.appendProtectionDevice(devices, firmware)
+	assert.Error(err)
+	assert.Empty(bios)
+
+	// tdxProtection
+	amd64.(*qemuAmd64).protection = tdxProtection
+
+	devices, bios, err = amd64.appendProtectionDevice(devices, firmware)
+	assert.NoError(err)
+	assert.Empty(bios)
+
+	expectedOut := []govmmQemu.Device{
+		govmmQemu.Object{
+			Driver:   govmmQemu.Loader,
+			Type:     govmmQemu.TDXGuest,
+			ID:       "tdx",
+			DeviceID: fmt.Sprintf("fd%d", id),
+			Debug:    false,
+			File:     firmware,
+		},
+	}
+
+	assert.Equal(expectedOut, devices)
+}

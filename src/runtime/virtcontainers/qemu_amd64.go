@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
+	"github.com/sirupsen/logrus"
 
 	govmmQemu "github.com/kata-containers/govmm/qemu"
 )
@@ -20,6 +21,8 @@ type qemuAmd64 struct {
 	qemuArchBase
 
 	vmFactory bool
+
+	devLoadersCount uint32
 }
 
 const (
@@ -30,6 +33,10 @@ const (
 	defaultQemuMachineOptions = "accel=kvm,kernel_irqchip"
 
 	qmpMigrationWaitTimeout = 5 * time.Second
+
+	tdxSysFirmwareDir = "/sys/firmware/tdx_seam/"
+
+	tdxCPUFlag = "tdx"
 )
 
 var qemuPaths = map[string]string{
@@ -201,10 +208,52 @@ func (q *qemuAmd64) appendBridges(devices []govmmQemu.Device) []govmmQemu.Device
 
 // enable protection
 func (q *qemuAmd64) enableProtection() error {
-	return nil
+	var err error
+	q.protection, err = availableGuestProtection()
+	if err != nil {
+		return err
+	}
+
+	switch q.protection {
+	case tdxProtection:
+		if q.qemuMachine.Options != "" {
+			q.qemuMachine.Options += ","
+		}
+		q.qemuMachine.Options += "kvm-type=tdx,confidential-guest-support=tdx"
+		q.kernelParams = append(q.kernelParams, Param{"tdx_guest", ""})
+		virtLog.WithFields(logrus.Fields{
+			"subsystem":     "qemuAmd64",
+			"machine":       q.qemuMachine,
+			"kernel-params": q.kernelParameters}).
+			Info("Enabling TDX guest protection")
+		return nil
+
+	// TODO: Add support for other x86_64 technologies: SEV
+
+	default:
+		return fmt.Errorf("This system doesn't support Confidential Computing (Guest Protection)")
+	}
 }
 
 // append protection device
 func (q *qemuAmd64) appendProtectionDevice(devices []govmmQemu.Device, firmware string) ([]govmmQemu.Device, string, error) {
-	return devices, firmware, nil
+	switch q.protection {
+	case tdxProtection:
+		id := q.devLoadersCount
+		q.devLoadersCount += 1
+		return append(devices,
+			govmmQemu.Object{
+				Driver:   govmmQemu.Loader,
+				Type:     govmmQemu.TDXGuest,
+				ID:       "tdx",
+				DeviceID: fmt.Sprintf("fd%d", id),
+				Debug:    false,
+				File:     firmware,
+			}), "", nil
+	case noneProtection:
+		return devices, firmware, nil
+
+	default:
+		return devices, "", fmt.Errorf("Unsupported guest protection technology: %v", q.protection)
+	}
 }
