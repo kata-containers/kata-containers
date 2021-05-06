@@ -176,7 +176,7 @@ func (km *KataMonitor) aggregateSandboxMetrics(encoder expfmt.Encoder) error {
 	for sandboxID, namespace := range sandboxes {
 		wg.Add(1)
 		go func(sandboxID, namespace string, results chan<- []*dto.MetricFamily) {
-			sandboxMetrics, err := getSandboxMetrics(sandboxID)
+			sandboxMetrics, err := getParsedMetrics(sandboxID)
 			if err != nil {
 				monitorLog.WithError(err).WithField("sandbox_id", sandboxID).Errorf("failed to get metrics for sandbox")
 			}
@@ -229,18 +229,27 @@ func (km *KataMonitor) aggregateSandboxMetrics(encoder expfmt.Encoder) error {
 			return err
 		}
 	}
-
 	return nil
+
 }
 
-// getSandboxMetrics will get sandbox's metrics from shim
-func getSandboxMetrics(sandboxID string) ([]*dto.MetricFamily, error) {
+func getParsedMetrics(sandboxID string) ([]*dto.MetricFamily, error) {
 	body, err := doGet(sandboxID, defaultTimeout, "metrics")
 	if err != nil {
 		return nil, err
 	}
 
 	return parsePrometheusMetrics(sandboxID, body)
+}
+
+// GetSandboxMetrics will get sandbox's metrics from shim
+func GetSandboxMetrics(sandboxID string) (string, error) {
+	body, err := doGet(sandboxID, defaultTimeout, "metrics")
+	if err != nil {
+		return "", err
+	}
+
+	return string(body), nil
 }
 
 // parsePrometheusMetrics will decode metrics from Prometheus text format
