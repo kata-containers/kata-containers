@@ -525,6 +525,15 @@ components:
             vhost_user: false
             ip: 192.168.249.1
             id: id
+            rate_limiter_config:
+              ops:
+                size: 0
+                one_time_burst: 0
+                refill_time: 0
+              bandwidth:
+                size: 0
+                one_time_burst: 0
+                refill_time: 0
             mac: mac
             fd:
             - 8
@@ -538,6 +547,15 @@ components:
             vhost_user: false
             ip: 192.168.249.1
             id: id
+            rate_limiter_config:
+              ops:
+                size: 0
+                one_time_burst: 0
+                refill_time: 0
+              bandwidth:
+                size: 0
+                one_time_burst: 0
+                refill_time: 0
             mac: mac
             fd:
             - 8
@@ -801,6 +819,15 @@ components:
           vhost_user: false
           ip: 192.168.249.1
           id: id
+          rate_limiter_config:
+            ops:
+              size: 0
+              one_time_burst: 0
+              refill_time: 0
+            bandwidth:
+              size: 0
+              one_time_burst: 0
+              refill_time: 0
           mac: mac
           fd:
           - 8
@@ -814,6 +841,15 @@ components:
           vhost_user: false
           ip: 192.168.249.1
           id: id
+          rate_limiter_config:
+            ops:
+              size: 0
+              one_time_burst: 0
+              refill_time: 0
+            bandwidth:
+              size: 0
+              one_time_burst: 0
+              refill_time: 0
           mac: mac
           fd:
           - 8
@@ -1172,6 +1208,15 @@ components:
         vhost_user: false
         ip: 192.168.249.1
         id: id
+        rate_limiter_config:
+          ops:
+            size: 0
+            one_time_burst: 0
+            refill_time: 0
+          bandwidth:
+            size: 0
+            one_time_burst: 0
+            refill_time: 0
         mac: mac
         fd:
         - 8
@@ -1210,6 +1255,8 @@ components:
             format: int32
             type: integer
           type: array
+        rate_limiter_config:
+          $ref: '#/components/schemas/RateLimiterConfig'
       type: object
     RngConfig:
       example:
