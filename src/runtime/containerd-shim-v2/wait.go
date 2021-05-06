@@ -142,7 +142,7 @@ func watchOOMEvents(ctx context.Context, s *service) {
 
 	for {
 		select {
-		case <-ctx.Done():
+		case <-s.ctx.Done():
 			return
 		default:
 			containerID, err := s.sandbox.GetOOMEvent(ctx)
