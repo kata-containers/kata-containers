@@ -139,7 +139,7 @@ assets:
     architecture:
       aarch64:
         name: &default-initrd-name "alpine"
-        version: &default-initrd-version "3.12"
+        version: &default-initrd-version "3.13.5"
       ppc64le:
         name: *default-initrd-name
         version: *default-initrd-version
