@@ -768,8 +768,8 @@ func (q *qemu) setupVirtioMem() error {
 	if err != nil {
 		return err
 	}
-	// 1024 is size for nvdimm
-	sizeMB := int(maxMem) - int(q.config.MemorySize)
+	// backend memory size must be multiple of 2Mib
+	sizeMB := (int(maxMem) - int(q.config.MemorySize)) >> 2 << 2
 
 	share, target, memoryBack, err := q.getMemArgs()
 	if err != nil {
@@ -2043,8 +2043,9 @@ func (q *qemu) resizeMemory(ctx context.Context, reqMemMB uint32, memoryBlockSiz
 	var addMemDevice memoryDevice
 	if q.config.VirtioMem && currentMemory != reqMemMB {
 		q.Logger().WithField("hotplug", "memory").Debugf("resize memory from %dMB to %dMB", currentMemory, reqMemMB)
-		sizeByte := (reqMemMB - q.config.MemorySize) * 1024 * 1024
-		err := q.qmpMonitorCh.qmp.ExecQomSet(q.qmpMonitorCh.ctx, "virtiomem0", "requested-size", uint64(sizeByte))
+		sizeByte := uint64(reqMemMB - q.config.MemorySize)
+		sizeByte = sizeByte * 1024 * 1024
+		err := q.qmpMonitorCh.qmp.ExecQomSet(q.qmpMonitorCh.ctx, "virtiomem0", "requested-size", sizeByte)
 		if err != nil {
 			return 0, memoryDevice{}, err
 		}
