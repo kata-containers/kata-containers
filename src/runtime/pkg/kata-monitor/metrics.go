@@ -176,7 +176,7 @@ func (km *KataMonitor) aggregateSandboxMetrics(encoder expfmt.Encoder) error {
 	for sandboxID, namespace := range sandboxes {
 		wg.Add(1)
 		go func(sandboxID, namespace string, results chan<- []*dto.MetricFamily) {
-			sandboxMetrics, err := km.getSandboxMetrics(sandboxID, namespace)
+			sandboxMetrics, err := getSandboxMetrics(sandboxID)
 			if err != nil {
 				monitorLog.WithError(err).WithField("sandbox_id", sandboxID).Errorf("failed to get metrics for sandbox")
 			}
@@ -234,8 +234,8 @@ func (km *KataMonitor) aggregateSandboxMetrics(encoder expfmt.Encoder) error {
 }
 
 // getSandboxMetrics will get sandbox's metrics from shim
-func (km *KataMonitor) getSandboxMetrics(sandboxID, namespace string) ([]*dto.MetricFamily, error) {
-	body, err := km.doGet(sandboxID, namespace, defaultTimeout, "metrics")
+func getSandboxMetrics(sandboxID string) ([]*dto.MetricFamily, error) {
+	body, err := doGet(sandboxID, defaultTimeout, "metrics")
 	if err != nil {
 		return nil, err
 	}
