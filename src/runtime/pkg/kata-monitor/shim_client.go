@@ -11,6 +11,8 @@ import (
 	"net"
 	"net/http"
 	"time"
+
+	shim "github.com/kata-containers/kata-containers/src/runtime/containerd-shim-v2"
 )
 
 const (
@@ -33,16 +35,13 @@ func getSandboxIDFromReq(r *http.Request) (string, error) {
 	return "", fmt.Errorf("sandbox not found in %+v", r.URL.Query())
 }
 
-func (km *KataMonitor) buildShimClient(sandboxID, namespace string, timeout time.Duration) (*http.Client, error) {
-	socketAddr, err := km.getMonitorAddress(sandboxID, namespace)
-	if err != nil {
-		return nil, err
-	}
-	return BuildUnixSocketClient(socketAddr, timeout)
+// BuildShimClient builds and returns an http client for communicating with the provided sandbox
+func BuildShimClient(sandboxID string, timeout time.Duration) (*http.Client, error) {
+	return buildUnixSocketClient(shim.SocketAddress(sandboxID), timeout)
 }
 
-// BuildUnixSocketClient build http client for Unix socket
-func BuildUnixSocketClient(socketAddr string, timeout time.Duration) (*http.Client, error) {
+// buildUnixSocketClient build http client for Unix socket
+func buildUnixSocketClient(socketAddr string, timeout time.Duration) (*http.Client, error) {
 	transport := &http.Transport{
 		DisableKeepAlives: true,
 		Dial: func(proto, addr string) (conn net.Conn, err error) {
@@ -61,8 +60,8 @@ func BuildUnixSocketClient(socketAddr string, timeout time.Duration) (*http.Clie
 	return client, nil
 }
 
-func (km *KataMonitor) doGet(sandboxID, namespace string, timeoutInSeconds time.Duration, urlPath string) ([]byte, error) {
-	client, err := km.buildShimClient(sandboxID, namespace, timeoutInSeconds)
+func doGet(sandboxID string, timeoutInSeconds time.Duration, urlPath string) ([]byte, error) {
+	client, err := BuildShimClient(sandboxID, timeoutInSeconds)
 	if err != nil {
 		return nil, err
 	}
