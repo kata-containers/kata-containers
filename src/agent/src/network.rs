@@ -48,7 +48,7 @@ pub fn setup_guest_dns(logger: Logger, dns_list: Vec<String>) -> Result<()> {
 fn do_setup_guest_dns(logger: Logger, dns_list: Vec<String>, src: &str, dst: &str) -> Result<()> {
     let logger = logger.new(o!( "subsystem" => "network"));
 
-    if dns_list.len() == 0 {
+    if dns_list.is_empty() {
         info!(
             logger,
             "Did not set sandbox DNS as DNS not received as part of request."
@@ -117,12 +117,12 @@ mod tests {
         ];
 
         // write to /run/kata-containers/sandbox/resolv.conf
-        let mut src_file =
-            File::create(src_filename).expect(&format!("failed to create file {:?}", src_filename));
+        let mut src_file = File::create(src_filename)
+            .unwrap_or_else(|_| panic!("failed to create file {:?}", src_filename));
         let content = dns.join("\n");
         src_file
             .write_all(content.as_bytes())
-            .expect(&format!("failed to write file contents"));
+            .expect("failed to write file contents");
 
         // call do_setup_guest_dns
         let result = do_setup_guest_dns(logger, dns.clone(), src_filename, dst_filename);

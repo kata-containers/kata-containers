@@ -5,13 +5,12 @@
 
 use crate::container::Config;
 use anyhow::{anyhow, Context, Result};
-use lazy_static;
 use nix::errno::Errno;
 use oci::{LinuxIDMapping, LinuxNamespace, Spec};
 use std::collections::HashMap;
 use std::path::{Component, PathBuf};
 
-fn contain_namespace(nses: &Vec<LinuxNamespace>, key: &str) -> bool {
+fn contain_namespace(nses: &[LinuxNamespace], key: &str) -> bool {
     for ns in nses {
         if ns.r#type.as_str() == key {
             return true;
@@ -21,7 +20,7 @@ fn contain_namespace(nses: &Vec<LinuxNamespace>, key: &str) -> bool {
     false
 }
 
-fn get_namespace_path(nses: &Vec<LinuxNamespace>, key: &str) -> Result<String> {
+fn get_namespace_path(nses: &[LinuxNamespace], key: &str) -> Result<String> {
     for ns in nses {
         if ns.r#type.as_str() == key {
             return Ok(ns.path.clone());
@@ -41,10 +40,8 @@ fn rootfs(root: &str) -> Result<()> {
     // symbolic link? ..?
     let mut stack: Vec<String> = Vec::new();
     for c in path.components() {
-        if stack.is_empty() {
-            if c == Component::RootDir || c == Component::ParentDir {
-                continue;
-            }
+        if stack.is_empty() && (c == Component::RootDir || c == Component::ParentDir) {
+            continue;
         }
 
         if c == Component::ParentDir {
@@ -73,12 +70,8 @@ fn rootfs(root: &str) -> Result<()> {
     Ok(())
 }
 
-fn network(_oci: &Spec) -> Result<()> {
-    Ok(())
-}
-
 fn hostname(oci: &Spec) -> Result<()> {
-    if oci.hostname.is_empty() || oci.hostname == "".to_string() {
+    if oci.hostname.is_empty() {
         return Ok(());
     }
 
@@ -111,7 +104,7 @@ fn security(oci: &Spec) -> Result<()> {
     Ok(())
 }
 
-fn idmapping(maps: &Vec<LinuxIDMapping>) -> Result<()> {
+fn idmapping(maps: &[LinuxIDMapping]) -> Result<()> {
     for map in maps {
         if map.size > 0 {
             return Ok(());
@@ -137,7 +130,7 @@ fn usernamespace(oci: &Spec) -> Result<()> {
         idmapping(&linux.gid_mappings).context("idmapping gid")?;
     } else {
         // no user namespace but idmap
-        if linux.uid_mappings.len() != 0 || linux.gid_mappings.len() != 0 {
+        if !linux.uid_mappings.is_empty() || !linux.gid_mappings.is_empty() {
             return Err(anyhow!(nix::Error::from_errno(Errno::EINVAL)));
         }
     }
@@ -242,7 +235,7 @@ fn rootless_euid_mapping(oci: &Spec) -> Result<()> {
         return Err(anyhow!(nix::Error::from_errno(Errno::EINVAL)));
     }
 
-    if linux.uid_mappings.len() == 0 || linux.gid_mappings.len() == 0 {
+    if linux.uid_mappings.is_empty() || linux.gid_mappings.is_empty() {
         // rootless containers requires at least one UID/GID mapping
         return Err(anyhow!(nix::Error::from_errno(Errno::EINVAL)));
     }
@@ -250,7 +243,7 @@ fn rootless_euid_mapping(oci: &Spec) -> Result<()> {
     Ok(())
 }
 
-fn has_idmapping(maps: &Vec<LinuxIDMapping>, id: u32) -> bool {
+fn has_idmapping(maps: &[LinuxIDMapping], id: u32) -> bool {
     for map in maps {
         if id >= map.container_id && id < map.container_id + map.size {
             return true;
@@ -279,16 +272,12 @@ fn rootless_euid_mount(oci: &Spec) -> Result<()> {
                     .parse::<u32>()
                     .context(format!("parse field {}", &fields[1]))?;
 
-                if opt.starts_with("uid=") {
-                    if !has_idmapping(&linux.uid_mappings, id) {
-                        return Err(anyhow!(nix::Error::from_errno(Errno::EINVAL)));
-                    }
+                if opt.starts_with("uid=") && !has_idmapping(&linux.uid_mappings, id) {
+                    return Err(anyhow!(nix::Error::from_errno(Errno::EINVAL)));
                 }
 
-                if opt.starts_with("gid=") {
-                    if !has_idmapping(&linux.gid_mappings, id) {
-                        return Err(anyhow!(nix::Error::from_errno(Errno::EINVAL)));
-                    }
+                if opt.starts_with("gid=") && !has_idmapping(&linux.gid_mappings, id) {
+                    return Err(anyhow!(nix::Error::from_errno(Errno::EINVAL)));
                 }
             }
         }
@@ -319,7 +308,6 @@ pub fn validate(conf: &Config) -> Result<()> {
     };
 
     rootfs(root).context("rootfs")?;
-    network(oci).context("network")?;
     hostname(oci).context("hostname")?;
     security(oci).context("security")?;
     usernamespace(oci).context("usernamespace")?;

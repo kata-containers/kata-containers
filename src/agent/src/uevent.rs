@@ -51,7 +51,7 @@ impl Uevent {
         self.action == U_EVENT_ACTION_ADD
             && self.subsystem == "block"
             && self.devpath.starts_with(PCI_ROOT_BUS_PATH)
-            && self.devname != ""
+            && !self.devname.is_empty()
     }
 
     fn handle_block_add_event(&self, sandbox: &Arc<Mutex<Sandbox>>) {

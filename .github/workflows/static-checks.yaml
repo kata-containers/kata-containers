@@ -1,0 +1,66 @@
+on: ["pull_request"]
+name: Static checks
+jobs:
+  test:
+    strategy:
+      matrix:
+        go-version: [1.13.x, 1.14.x, 1.15.x]
+        os: [ubuntu-20.04]
+    runs-on: ${{ matrix.os }}
+    env:
+      TRAVIS: "true"
+      TRAVIS_BRANCH: ${{ github.base_ref }}
+      TRAVIS_PULL_REQUEST_BRANCH: ${{ github.head_ref }}
+      TRAVIS_PULL_REQUEST_SHA : ${{ github.event.pull_request.head.sha }}
+      RUST_BACKTRACE: "1"
+      target_branch: ${TRAVIS_BRANCH}
+    steps:
+    - name: Install Go
+      uses: actions/setup-go@v2
+      with:
+        go-version: ${{ matrix.go-version }}
+      env:
+        GOPATH: ${{ runner.workspace }}/kata-containers
+    - name: Setup GOPATH
+      run: |
+        echo "TRAVIS_BRANCH: ${TRAVIS_BRANCH}"
+        echo "TRAVIS_PULL_REQUEST_BRANCH: ${TRAVIS_PULL_REQUEST_BRANCH}"
+        echo "TRAVIS_PULL_REQUEST_SHA: ${TRAVIS_PULL_REQUEST_SHA}"
+        echo "TRAVIS: ${TRAVIS}"
+    - name: Set env
+      run: |
+        echo "GOPATH=${{ github.workspace }}" >> $GITHUB_ENV
+        echo "${{ github.workspace }}/bin" >> $GITHUB_PATH
+    - name: Checkout code
+      uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+        path: ./src/github.com/${{ github.repository }}
+    - name: Setup travis references
+      run: |
+        echo "TRAVIS_BRANCH=${TRAVIS_BRANCH:-$(echo $GITHUB_REF | awk 'BEGIN { FS = \"/\" } ; { print $3 }')}"
+        target_branch=${TRAVIS_BRANCH}
+    - name: Setup
+      run: |
+        cd ${GOPATH}/src/github.com/${{ github.repository }} && ./ci/setup.sh
+      env:
+        GOPATH: ${{ runner.workspace }}/kata-containers
+    - name: Building rust
+      run: |
+        cd ${GOPATH}/src/github.com/${{ github.repository }} && ./ci/install_rust.sh
+        PATH=$PATH:"$HOME/.cargo/bin"
+        rustup target add x86_64-unknown-linux-musl
+        rustup component add rustfmt clippy
+    # Must build before static checks as we depend on some generated code in runtime and agent
+    - name: Build
+      run: |
+        cd ${GOPATH}/src/github.com/${{ github.repository }} && make
+    - name: Static Checks
+      run: |
+        cd ${GOPATH}/src/github.com/${{ github.repository }} && ./ci/static-checks.sh
+    - name: Run Compiler Checks
+      run: |
+        cd ${GOPATH}/src/github.com/${{ github.repository }} && make check
+    - name: Run Unit Tests
+      run: |
+        cd ${GOPATH}/src/github.com/${{ github.repository }} && make test

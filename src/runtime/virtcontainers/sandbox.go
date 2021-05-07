@@ -635,15 +635,6 @@ func (s *Sandbox) storeSandbox() error {
 	return nil
 }
 
-func rLockSandbox(sandboxID string) (func() error, error) {
-	store, err := persist.GetDriver()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get fs persist driver: %v", err)
-	}
-
-	return store.Lock(sandboxID, false)
-}
-
 func rwLockSandbox(sandboxID string) (func() error, error) {
 	store, err := persist.GetDriver()
 	if err != nil {
@@ -1002,7 +993,7 @@ func (cw *consoleWatcher) start(s *Sandbox) (err error) {
 		scanner = bufio.NewScanner(cw.conn)
 	case consoleProtoPty:
 		// read-only
-		cw.ptyConsole, err = os.Open(cw.consoleURL)
+		cw.ptyConsole, _ = os.Open(cw.consoleURL)
 		scanner = bufio.NewScanner(cw.ptyConsole)
 	default:
 		return fmt.Errorf("unknown console proto %s", cw.proto)

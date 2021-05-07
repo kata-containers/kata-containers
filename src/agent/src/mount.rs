@@ -7,7 +7,6 @@ use std::collections::HashMap;
 use std::ffi::CString;
 use std::fs;
 use std::io;
-use std::iter::FromIterator;
 use std::os::unix::fs::PermissionsExt;
 
 use std::path::Path;
@@ -39,7 +38,7 @@ pub const DRIVERLOCALTYPE: &str = "local";
 
 pub const TYPEROOTFS: &str = "rootfs";
 
-#[cfg_attr(rustfmt, rustfmt_skip)]
+#[rustfmt::skip]
 lazy_static! {
     pub static ref FLAGS: HashMap<&'static str, (bool, MsFlags)> = {
         let mut m = HashMap::new();
@@ -88,7 +87,7 @@ pub struct INIT_MOUNT {
     options: Vec<&'static str>,
 }
 
-#[cfg_attr(rustfmt, rustfmt_skip)]
+#[rustfmt::skip]
 lazy_static!{
     static ref CGROUPS: HashMap<&'static str, &'static str> = {
         let mut m = HashMap::new();
@@ -109,7 +108,7 @@ lazy_static!{
     };
 }
 
-#[cfg_attr(rustfmt, rustfmt_skip)]
+#[rustfmt::skip]
 lazy_static! {
     pub static ref INIT_ROOTFS_MOUNTS: Vec<INIT_MOUNT> = vec![
         INIT_MOUNT{fstype: "proc", src: "proc", dest: "/proc", options: vec!["nosuid", "nodev", "noexec"]},
@@ -126,7 +125,7 @@ lazy_static! {
 type StorageHandler = fn(&Logger, &Storage, Arc<Mutex<Sandbox>>) -> Result<String>;
 
 // STORAGEHANDLERLIST lists the supported drivers.
-#[cfg_attr(rustfmt, rustfmt_skip)]
+#[rustfmt::skip]
 lazy_static! {
     pub static ref STORAGEHANDLERLIST: HashMap<&'static str, StorageHandler> = {
     	let mut m = HashMap::new();
@@ -173,9 +172,9 @@ impl<'a> BareMount<'a> {
         BareMount {
             source: s,
             destination: d,
-            fs_type: fs_type,
-            flags: flags,
-            options: options,
+            fs_type,
+            flags,
+            options,
             logger: logger.new(o!("subsystem" => "baremount")),
         }
     }
@@ -190,11 +189,11 @@ impl<'a> BareMount<'a> {
         let cstr_dest: CString;
         let cstr_fs_type: CString;
 
-        if self.source.len() == 0 {
+        if self.source.is_empty() {
             return Err(anyhow!("need mount source"));
         }
 
-        if self.destination.len() == 0 {
+        if self.destination.is_empty() {
             return Err(anyhow!("need mount destination"));
         }
 
@@ -204,14 +203,14 @@ impl<'a> BareMount<'a> {
         cstr_dest = CString::new(self.destination)?;
         dest = cstr_dest.as_ptr();
 
-        if self.fs_type.len() == 0 {
+        if self.fs_type.is_empty() {
             return Err(anyhow!("need mount FS type"));
         }
 
         cstr_fs_type = CString::new(self.fs_type)?;
         fs_type = cstr_fs_type.as_ptr();
 
-        if self.options.len() > 0 {
+        if !self.options.is_empty() {
             cstr_options = CString::new(self.options)?;
             options = cstr_options.as_ptr() as *const c_void;
         }
@@ -243,8 +242,7 @@ fn ephemeral_storage_handler(
     storage: &Storage,
     sandbox: Arc<Mutex<Sandbox>>,
 ) -> Result<String> {
-    let s = sandbox.clone();
-    let mut sb = s.lock().unwrap();
+    let mut sb = sandbox.lock().unwrap();
     let new_storage = sb.set_sandbox_storage(&storage.mount_point);
 
     if !new_storage {
@@ -262,8 +260,7 @@ fn local_storage_handler(
     storage: &Storage,
     sandbox: Arc<Mutex<Sandbox>>,
 ) -> Result<String> {
-    let s = sandbox.clone();
-    let mut sb = s.lock().unwrap();
+    let mut sb = sandbox.lock().unwrap();
     let new_storage = sb.set_sandbox_storage(&storage.mount_point);
 
     if !new_storage {
@@ -279,8 +276,7 @@ fn local_storage_handler(
 
     let opts = parse_options(opts_vec);
     let mode = opts.get("mode");
-    if mode.is_some() {
-        let mode = mode.unwrap();
+    if let Some(mode) = mode {
         let mut permission = fs::metadata(&storage.mount_point)?.permissions();
 
         let o_mode = u32::from_str_radix(mode, 8)?;
@@ -383,7 +379,7 @@ fn mount_storage(logger: &Logger, storage: &Storage) -> Result<()> {
     }
 
     let options_vec = storage.options.to_vec();
-    let options_vec = Vec::from_iter(options_vec.iter().map(String::as_str));
+    let options_vec = options_vec.iter().map(String::as_str).collect();
     let (flags, options) = parse_mount_flags_and_options(options_vec);
 
     info!(logger, "mounting storage";
@@ -410,17 +406,17 @@ fn parse_mount_flags_and_options(options_vec: Vec<&str>) -> (MsFlags, String) {
     let mut options: String = "".to_string();
 
     for opt in options_vec {
-        if opt.len() != 0 {
+        if !opt.is_empty() {
             match FLAGS.get(opt) {
                 Some(x) => {
                     let (_, f) = *x;
-                    flags = flags | f;
+                    flags |= f;
                 }
                 None => {
-                    if options.len() > 0 {
+                    if !options.is_empty() {
                         options.push_str(format!(",{}", opt).as_str());
                     } else {
-                        options.push_str(format!("{}", opt).as_str());
+                        options.push_str(opt.to_string().as_str());
                     }
                 }
             };
@@ -458,7 +454,7 @@ pub fn add_storages(
         // Todo need to rollback the mounted storage if err met.
         let mount_point = handler(&logger, &storage, sandbox.clone())?;
 
-        if mount_point.len() > 0 {
+        if !mount_point.is_empty() {
             mount_list.push(mount_point);
         }
     }
@@ -509,7 +505,7 @@ pub fn get_mount_fs_type(mount_point: &str) -> Result<String> {
 // get_mount_fs_type_from_file returns the FS type corresponding to the passed mount point and
 // any error ecountered.
 pub fn get_mount_fs_type_from_file(mount_file: &str, mount_point: &str) -> Result<String> {
-    if mount_point == "" {
+    if mount_point.is_empty() {
         return Err(anyhow!("Invalid mount point {}", mount_point));
     }
 
@@ -570,10 +566,10 @@ pub fn get_cgroup_mounts(
     'outer: for (_, line) in reader.lines().enumerate() {
         let line = line?;
 
-        let fields: Vec<&str> = line.split("\t").collect();
+        let fields: Vec<&str> = line.split('\t').collect();
 
         // Ignore comment header
-        if fields[0].starts_with("#") {
+        if fields[0].starts_with('#') {
             continue;
         }
 
@@ -594,7 +590,7 @@ pub fn get_cgroup_mounts(
             }
         }
 
-        if fields[0] == "" {
+        if fields[0].is_empty() {
             continue;
         }
 
@@ -643,7 +639,7 @@ pub fn cgroups_mount(logger: &Logger, unified_cgroup_hierarchy: bool) -> Result<
     Ok(())
 }
 
-pub fn remove_mounts(mounts: &Vec<String>) -> Result<()> {
+pub fn remove_mounts(mounts: &[String]) -> Result<()> {
     for m in mounts.iter() {
         mount::umount(m.as_str()).context(format!("failed to umount {:?}", m))?;
     }
@@ -675,7 +671,7 @@ fn ensure_destination_exists(destination: &str, fs_type: &str) -> Result<()> {
 fn parse_options(option_list: Vec<String>) -> HashMap<String, String> {
     let mut options = HashMap::new();
     for opt in option_list.iter() {
-        let fields: Vec<&str> = opt.split("=").collect();
+        let fields: Vec<&str> = opt.split('=').collect();
         if fields.len() != 2 {
             continue;
         }
@@ -801,7 +797,7 @@ mod tests {
             let src_filename: String;
             let dest_filename: String;
 
-            if d.src != "" {
+            if !d.src.is_empty() {
                 src = dir.path().join(d.src.to_string());
                 src_filename = src
                     .to_str()
@@ -811,7 +807,7 @@ mod tests {
                 src_filename = "".to_owned();
             }
 
-            if d.dest != "" {
+            if !d.dest.is_empty() {
                 dest = dir.path().join(d.dest.to_string());
                 dest_filename = dest
                     .to_str()
@@ -823,7 +819,7 @@ mod tests {
 
             // Create the mount directories
             for d in [src_filename.clone(), dest_filename.clone()].iter() {
-                if d == "" {
+                if d.is_empty() {
                     continue;
                 }
 
@@ -843,7 +839,7 @@ mod tests {
 
             let msg = format!("{}: result: {:?}", msg, result);
 
-            if d.error_contains == "" {
+            if d.error_contains.is_empty() {
                 assert!(result.is_ok(), msg);
 
                 // Cleanup
@@ -856,7 +852,7 @@ mod tests {
 
                     let msg = format!("{}: umount result: {:?}", msg, result);
 
-                    assert!(ret == 0, format!("{}", msg));
+                    assert!(ret == 0, msg);
                 };
 
                 continue;
@@ -914,7 +910,8 @@ mod tests {
             .expect("failed to create mount destination filename");
 
         for d in [test_dir_filename, mnt_src_filename, mnt_dest_filename].iter() {
-            std::fs::create_dir_all(d).expect(&format!("failed to create directory {}", d));
+            std::fs::create_dir_all(d)
+                .unwrap_or_else(|_| panic!("failed to create directory {}", d));
         }
 
         // Create an actual mount
@@ -960,7 +957,7 @@ mod tests {
 
             let msg = format!("{}: result: {:?}", msg, result);
 
-            if d.error_contains == "" {
+            if d.error_contains.is_empty() {
                 assert!(result.is_ok(), msg);
                 continue;
             }
@@ -1055,20 +1052,20 @@ mod tests {
 
             let filename = file_path
                 .to_str()
-                .expect(&format!("{}: failed to create filename", msg));
+                .unwrap_or_else(|| panic!("{}: failed to create filename", msg));
 
             let mut file =
-                File::create(filename).expect(&format!("{}: failed to create file", msg));
+                File::create(filename).unwrap_or_else(|_| panic!("{}: failed to create file", msg));
 
             file.write_all(d.contents.as_bytes())
-                .expect(&format!("{}: failed to write file contents", msg));
+                .unwrap_or_else(|_| panic!("{}: failed to write file contents", msg));
 
             let result = get_mount_fs_type_from_file(filename, d.mount_point);
 
             // add more details if an assertion fails
             let msg = format!("{}: result: {:?}", msg, result);
 
-            if d.error_contains == "" {
+            if d.error_contains.is_empty() {
                 let fs_type = result.unwrap();
 
                 assert!(d.fs_type == fs_type, msg);
@@ -1217,15 +1214,15 @@ mod tests {
                 .expect("failed to create cgroup file filename");
 
             let mut file =
-                File::create(filename).expect(&format!("{}: failed to create file", msg));
+                File::create(filename).unwrap_or_else(|_| panic!("{}: failed to create file", msg));
 
             file.write_all(d.contents.as_bytes())
-                .expect(&format!("{}: failed to write file contents", msg));
+                .unwrap_or_else(|_| panic!("{}: failed to write file contents", msg));
 
             let result = get_cgroup_mounts(&logger, filename, false);
             let msg = format!("{}: result: {:?}", msg, result);
 
-            if d.error_contains != "" {
+            if !d.error_contains.is_empty() {
                 assert!(result.is_err(), msg);
 
                 let error_msg = format!("{}", result.unwrap_err());

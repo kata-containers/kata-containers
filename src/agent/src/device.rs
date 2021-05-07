@@ -38,8 +38,8 @@ struct DevIndex(HashMap<String, DevIndexEntry>);
 // DeviceHandler is the type of callback to be defined to handle every type of device driver.
 type DeviceHandler = fn(&Device, &mut Spec, &Arc<Mutex<Sandbox>>, &DevIndex) -> Result<()>;
 
-// DeviceHandlerList lists the supported drivers.
-#[cfg_attr(rustfmt, rustfmt_skip)]
+// DEVICEHANDLERLIST lists the supported drivers.
+#[rustfmt::skip]
 lazy_static! {
     static ref DEVICEHANDLERLIST: HashMap<&'static str, DeviceHandler> = {
         let mut m: HashMap<&'static str, DeviceHandler> = HashMap::new();
@@ -65,7 +65,7 @@ pub fn online_device(path: &str) -> Result<()> {
 // Here, bridgeAddr is the address at which the bridge is attached on the root bus,
 // while deviceAddr is the address at which the device is attached on the bridge.
 fn get_pci_device_address(pci_id: &str) -> Result<String> {
-    let tokens: Vec<&str> = pci_id.split("/").collect();
+    let tokens: Vec<&str> = pci_id.split('/').collect();
 
     if tokens.len() != 2 {
         return Err(anyhow!(
@@ -165,7 +165,7 @@ pub fn get_pci_device_name(sandbox: &Arc<Mutex<Sandbox>>, pci_id: &str) -> Resul
 
 /// Scan SCSI bus for the given SCSI address(SCSI-Id and LUN)
 fn scan_scsi_bus(scsi_addr: &str) -> Result<()> {
-    let tokens: Vec<&str> = scsi_addr.split(":").collect();
+    let tokens: Vec<&str> = scsi_addr.split(':').collect();
     if tokens.len() != 2 {
         return Err(anyhow!(
             "Unexpected format for SCSI Address: {}, expect SCSIID:LUA",
@@ -204,7 +204,7 @@ fn update_spec_device_list(device: &Device, spec: &mut Spec, devidx: &DevIndex) 
 
     // If no container_path is provided, we won't be able to match and
     // update the device in the OCI spec device list. This is an error.
-    if device.container_path == "" {
+    if device.container_path.is_empty() {
         return Err(anyhow!(
             "container_path cannot empty for device {:?}",
             device
@@ -280,7 +280,7 @@ fn virtiommio_blk_device_handler(
     _sandbox: &Arc<Mutex<Sandbox>>,
     devidx: &DevIndex,
 ) -> Result<()> {
-    if device.vm_path == "" {
+    if device.vm_path.is_empty() {
         return Err(anyhow!("Invalid path for virtio mmio blk device"));
     }
 
@@ -300,7 +300,7 @@ fn virtio_blk_device_handler(
 
     // When "Id (PCIAddr)" is not set, we allow to use the predicted "VmPath" passed from kata-runtime
     // Note this is a special code path for cloud-hypervisor when BDF information is not available
-    if device.id != "" {
+    if !device.id.is_empty() {
         dev.vm_path = get_pci_device_name(sandbox, &device.id)?;
     }
 
@@ -325,7 +325,7 @@ fn virtio_nvdimm_device_handler(
     _sandbox: &Arc<Mutex<Sandbox>>,
     devidx: &DevIndex,
 ) -> Result<()> {
-    if device.vm_path == "" {
+    if device.vm_path.is_empty() {
         return Err(anyhow!("Invalid path for nvdimm device"));
     }
 
@@ -336,11 +336,11 @@ impl DevIndex {
     fn new(spec: &Spec) -> DevIndex {
         let mut map = HashMap::new();
 
-        for linux in spec.linux.as_ref() {
+        if let Some(linux) = spec.linux.as_ref() {
             for (i, d) in linux.devices.iter().enumerate() {
                 let mut residx = Vec::new();
 
-                for linuxres in linux.resources.as_ref() {
+                if let Some(linuxres) = linux.resources.as_ref() {
                     for (j, r) in linuxres.devices.iter().enumerate() {
                         if r.r#type == d.r#type
                             && r.major == Some(d.major)
@@ -381,15 +381,15 @@ fn add_device(
     info!(sl!(), "device-id: {}, device-type: {}, device-vm-path: {}, device-container-path: {}, device-options: {:?}",
           device.id, device.field_type, device.vm_path, device.container_path, device.options);
 
-    if device.field_type == "" {
+    if device.field_type.is_empty() {
         return Err(anyhow!("invalid type for device {:?}", device));
     }
 
-    if device.id == "" && device.vm_path == "" {
+    if device.id.is_empty() && device.vm_path.is_empty() {
         return Err(anyhow!("invalid ID and VM path for device {:?}", device));
     }
 
-    if device.container_path == "" {
+    if device.container_path.is_empty() {
         return Err(anyhow!("invalid container path for device {:?}", device));
     }
 
@@ -436,9 +436,10 @@ mod tests {
 
     #[test]
     fn test_update_device_cgroup() {
-        let mut spec = Spec::default();
-
-        spec.linux = Some(Linux::default());
+        let mut spec = Spec {
+            linux: Some(Linux::default()),
+            ..Default::default()
+        };
 
         update_device_cgroup(&mut spec).unwrap();
 

@@ -3,6 +3,11 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
+# To show variables or targets help on `make help`
+# Use the following format:
+# '##VAR VARIABLE_NAME: help about variable'
+# '##TARGET TARGET_NAME: help about target'
+
 PROJECT_NAME = Kata Containers
 PROJECT_URL = https://github.com/kata-containers
 PROJECT_COMPONENT = kata-agent
@@ -23,9 +28,12 @@ COMMIT_MSG = $(if $(COMMIT),$(COMMIT),unknown)
 # Exported to allow cargo to see it
 export VERSION_COMMIT := $(if $(COMMIT),$(VERSION)-$(COMMIT),$(VERSION))
 
+##VAR BUILD_TYPE=release|debug type of rust build
 BUILD_TYPE = release
 
+##VAR ARCH=arch target to build (format: uname -m)
 ARCH = $(shell uname -m)
+##VAR LIBC=musl|gnu
 LIBC ?= musl
 ifneq ($(LIBC),musl)
     ifeq ($(LIBC),gnu)
@@ -57,10 +65,12 @@ TRIPLE = $(ARCH)-unknown-linux-$(LIBC)
 
 TARGET_PATH = target/$(TRIPLE)/$(BUILD_TYPE)/$(TARGET)
 
+##VAR DESTDIR=<path> is a directory prepended to each installed target file
 DESTDIR :=
+##VAR BINDIR=<path> is a directory for installing executable programs
 BINDIR := /usr/bin
 
-# Define if agent will be installed as init
+##VAR INIT=yes|no define if agent will be installed as init
 INIT := no
 
 # Path to systemd unit directory if installed as not init.
@@ -108,6 +118,7 @@ define INSTALL_FILE
 	install -D -m 644 $1 $(DESTDIR)$2/$1 || exit 1;
 endef
 
+##TARGET default: build code
 default: $(TARGET) show-header
 
 $(TARGET): $(GENERATED_CODE) $(TARGET_PATH)
@@ -115,35 +126,53 @@ $(TARGET): $(GENERATED_CODE) $(TARGET_PATH)
 $(TARGET_PATH): $(SOURCES) | show-summary
 	@RUSTFLAGS="$(EXTRA_RUSTFLAGS) --deny warnings" cargo build --target $(TRIPLE) --$(BUILD_TYPE)
 
-optimize: $(SOURCES) | show-summary show-header
-	@RUSTFLAGS="-C link-arg=-s $(EXTRA_RUSTFLAGS) --deny-warnings" cargo build --target $(TRIPLE) --$(BUILD_TYPE)
-
-show-header:
-	@printf "%s - version %s (commit %s)\n\n" "$(TARGET)" "$(VERSION)" "$(COMMIT_MSG)"
-
 $(GENERATED_FILES): %: %.in
 	@sed $(foreach r,$(GENERATED_REPLACEMENTS),-e 's|@$r@|$($r)|g') "$<" > "$@"
 
-install: build-service
+##TARGET optimize: optimized  build
+optimize: $(SOURCES) | show-summary show-header
+	@RUSTFLAGS="-C link-arg=-s $(EXTRA_RUSTFLAGS) --deny-warnings" cargo build --target $(TRIPLE) --$(BUILD_TYPE)
+
+##TARGET clippy: run clippy linter
+clippy: $(GENERATED_CODE)
+	cargo clippy --all-targets --all-features --release \
+		-- \
+		-Aclippy::redundant_allocation \
+		-D warnings
+
+format:
+	cargo fmt -- --check
+
+
+##TARGET install: install agent
+install: install-services
 	@install -D $(TARGET_PATH) $(DESTDIR)/$(BINDIR)/$(TARGET)
 
+##TARGET clean: clean build
 clean:
 	@cargo clean
 	@rm -f $(GENERATED_FILES)
+	@rm -f tarpaulin-report.html
 
+#TARGET test: run cargo tests
 test:
 	@cargo test --all --target $(TRIPLE)
 
-check: test
+##TARGET check: run test
+check: clippy format
 
+##TARGET run: build and run agent
 run:
 	@cargo run --target $(TRIPLE)
 
-build-service: $(GENERATED_FILES)
+install-services: $(GENERATED_FILES)
 ifeq ($(INIT),no)
 	@echo "Installing systemd unit files..."
 	$(foreach f,$(UNIT_FILES),$(call INSTALL_FILE,$f,$(UNIT_DIR)))
 endif
+
+show-header:
+	@printf "%s - version %s (commit %s)\n\n" "$(TARGET)" "$(VERSION)" "$(COMMIT_MSG)"
 
 show-summary: show-header
 	@printf "project:\n"
@@ -160,7 +189,35 @@ show-summary: show-header
 	@printf "  %s\n" "$(call get_toolchain_version)"
 	@printf "\n"
 
-help: show-summary
+## help: Show help comments that start with `##VAR` and `##TARGET`
+help: Makefile show-summary
+	@echo "==========================Help============================="
+	@echo "Variables:"
+	@sed -n 's/^##VAR//p' $< | sort
+	@echo ""
+	@echo "Targets:"
+	@sed -n 's/^##TARGET//p' $< | sort
+
+TARPAULIN_ARGS:=-v --workspace
+install-tarpaulin:
+	cargo install cargo-tarpaulin
+
+# Check if cargo tarpaulin is installed
+HAS_TARPAULIN:= $(shell cargo --list | grep tarpaulin 2>/dev/null)
+check_tarpaulin:
+ifndef  HAS_TARPAULIN
+	$(error "tarpaulin is not available please: run make install-tarpaulin ")
+else
+	$(info OK: tarpaulin installed)
+endif
+
+##TARGET codecov: Generate code coverage report
+codecov: check_tarpaulin
+	cargo tarpaulin $(TARPAULIN_ARGS)
+
+##TARGET codecov-html: Generate code coverage html report
+codecov-html: check_tarpaulin
+	cargo tarpaulin $(TARPAULIN_ARGS) -o Html
 
 .PHONY: \
 	help \
@@ -168,5 +225,6 @@ help: show-summary
 	show-summary \
 	optimize
 
+##TARGET generate-protocols: generate/update grpc agent protocols
 generate-protocols:
 	protocols/hack/update-generated-proto.sh all

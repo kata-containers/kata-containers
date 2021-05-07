@@ -41,7 +41,7 @@ fn get_value_from_cgroup(path: &PathBuf, key: &str) -> Result<i64> {
     );
 
     for line in content.lines() {
-        let arr: Vec<&str> = line.split(" ").collect();
+        let arr: Vec<&str> = line.split(' ').collect();
         if arr.len() == 2 && arr[0] == key {
             let r = arr[1].parse::<i64>()?;
             return Ok(r);
@@ -130,7 +130,7 @@ fn register_memory_event_v2(
 // notify_on_oom returns channel on which you can expect event about OOM,
 // if process died without OOM this channel will be closed.
 fn notify_on_oom(cid: &str, dir: String) -> Result<Receiver<String>> {
-    if dir == "" {
+    if dir.is_empty() {
         return Err(anyhow!("memory controller missing"));
     }
 
@@ -139,7 +139,7 @@ fn notify_on_oom(cid: &str, dir: String) -> Result<Receiver<String>> {
 
 // level is one of "low", "medium", or "critical"
 fn notify_memory_pressure(cid: &str, dir: String, level: &str) -> Result<Receiver<String>> {
-    if dir == "" {
+    if dir.is_empty() {
         return Err(anyhow!("memory controller missing"));
     }
 
@@ -163,7 +163,7 @@ fn register_memory_event(
 
     let event_control_path = Path::new(&cg_dir).join("cgroup.event_control");
     let data;
-    if arg == "" {
+    if arg.is_empty() {
         data = format!("{} {}", eventfd, event_file.as_raw_fd());
     } else {
         data = format!("{} {} {}", eventfd, event_file.as_raw_fd(), arg);

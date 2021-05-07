@@ -4,7 +4,6 @@
 //
 
 use serde::{Deserialize, Serialize};
-use serde_json;
 
 use std::error;
 use std::fmt::{Display, Formatter, Result as FmtResult};

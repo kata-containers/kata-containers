@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use anyhow::{anyhow, bail, Context, Error, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use libc::uid_t;
 use nix::errno::Errno;
 use nix::fcntl::{self, OFlag};
@@ -22,13 +22,11 @@ use std::os::unix::io::RawFd;
 use std::path::{Path, PathBuf};
 
 use path_absolutize::*;
-use scan_fmt;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 
 use crate::container::DEFAULT_DEVICES;
 use crate::sync::write_count;
-use lazy_static;
 use std::string::ToString;
 
 use crate::log_child;
@@ -50,7 +48,7 @@ pub struct Info {
     vfs_opts: String,
 }
 
-const MOUNTINFOFORMAT: &'static str = "{d} {d} {d}:{d} {} {} {} {}";
+const MOUNTINFOFORMAT: &str = "{d} {d} {d}:{d} {} {} {} {}";
 const PROC_PATH: &str = "/proc";
 
 // since libc didn't defined this const for musl, thus redefined it here.
@@ -153,7 +151,7 @@ pub fn init_rootfs(
     let linux = &spec
         .linux
         .as_ref()
-        .ok_or::<Error>(anyhow!("Could not get linux configuration from spec"))?;
+        .ok_or_else(|| anyhow!("Could not get linux configuration from spec"))?;
 
     let mut flags = MsFlags::MS_REC;
     match PROPAGATION.get(&linux.rootfs_propagation.as_str()) {
@@ -164,14 +162,14 @@ pub fn init_rootfs(
     let root = spec
         .root
         .as_ref()
-        .ok_or(anyhow!("Could not get rootfs path from spec"))
+        .ok_or_else(|| anyhow!("Could not get rootfs path from spec"))
         .and_then(|r| {
             fs::canonicalize(r.path.as_str()).context("Could not canonicalize rootfs path")
         })?;
 
     let rootfs = (*root)
         .to_str()
-        .ok_or(anyhow!("Could not convert rootfs path to string"))?;
+        .ok_or_else(|| anyhow!("Could not convert rootfs path to string"))?;
 
     mount(None::<&str>, "/", None::<&str>, flags, None::<&str>)?;
 
@@ -188,7 +186,7 @@ pub fn init_rootfs(
     let mut bind_mount_dev = false;
     for m in &spec.mounts {
         let (mut flags, data) = parse_mount(&m);
-        if !m.destination.starts_with("/") || m.destination.contains("..") {
+        if !m.destination.starts_with('/') || m.destination.contains("..") {
             return Err(anyhow!(
                 "the mount destination {} is invalid",
                 m.destination
@@ -282,9 +280,9 @@ fn check_proc_mount(m: &Mount) -> Result<()> {
         // only allow a mount on-top of proc if it's source is "proc"
         unsafe {
             let mut stats = MaybeUninit::<libc::statfs>::uninit();
-            if let Ok(_) = m
-                .source
+            if m.source
                 .with_nix_path(|path| libc::statfs(path.as_ptr(), stats.as_mut_ptr()))
+                .is_ok()
             {
                 if stats.assume_init().f_type == PROC_SUPER_MAGIC {
                     return Ok(());
@@ -307,7 +305,7 @@ fn check_proc_mount(m: &Mount) -> Result<()> {
         )));
     }
 
-    return Ok(());
+    Ok(())
 }
 
 fn mount_cgroups_v2(cfd_log: RawFd, m: &Mount, rootfs: &str, flags: MsFlags) -> Result<()> {
@@ -595,15 +593,14 @@ pub fn ms_move_root(rootfs: &str) -> Result<bool> {
     let abs_root_buf = root_path.absolutize()?;
     let abs_root = abs_root_buf
         .to_str()
-        .ok_or::<Error>(anyhow!("failed to parse {} to absolute path", rootfs))?;
+        .ok_or_else(|| anyhow!("failed to parse {} to absolute path", rootfs))?;
 
     for info in mount_infos.iter() {
         let mount_point = Path::new(&info.mount_point);
         let abs_mount_buf = mount_point.absolutize()?;
-        let abs_mount_point = abs_mount_buf.to_str().ok_or::<Error>(anyhow!(
-            "failed to parse {} to absolute path",
-            info.mount_point
-        ))?;
+        let abs_mount_point = abs_mount_buf
+            .to_str()
+            .ok_or_else(|| anyhow!("failed to parse {} to absolute path", info.mount_point))?;
         let abs_mount_point_string = String::from(abs_mount_point);
 
         // Umount every syfs and proc file systems, except those under the container rootfs
@@ -810,7 +807,7 @@ fn mount_from(
     Ok(())
 }
 
-static SYMLINKS: &'static [(&'static str, &'static str)] = &[
+static SYMLINKS: &[(&str, &str)] = &[
     ("/proc/self/fd", "dev/fd"),
     ("/proc/self/fd/0", "dev/stdin"),
     ("/proc/self/fd/1", "dev/stdout"),
@@ -943,7 +940,7 @@ pub fn finish_rootfs(cfd_log: RawFd, spec: &Spec) -> Result<()> {
 }
 
 fn mask_path(path: &str) -> Result<()> {
-    if !path.starts_with("/") || path.contains("..") {
+    if !path.starts_with('/') || path.contains("..") {
         return Err(nix::Error::Sys(Errno::EINVAL).into());
     }
 
@@ -972,7 +969,7 @@ fn mask_path(path: &str) -> Result<()> {
 }
 
 fn readonly_path(path: &str) -> Result<()> {
-    if !path.starts_with("/") || path.contains("..") {
+    if !path.starts_with('/') || path.contains("..") {
         return Err(nix::Error::Sys(Errno::EINVAL).into());
     }
 
