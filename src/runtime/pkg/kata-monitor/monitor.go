@@ -87,13 +87,8 @@ func (km *KataMonitor) GetAgentURL(w http.ResponseWriter, r *http.Request) {
 		commonServeError(w, http.StatusBadRequest, err)
 		return
 	}
-	namespace, err := km.getSandboxNamespace(sandboxID)
-	if err != nil {
-		commonServeError(w, http.StatusBadRequest, err)
-		return
-	}
 
-	data, err := km.doGet(sandboxID, namespace, defaultTimeout, "agent-url")
+	data, err := doGet(sandboxID, defaultTimeout, "agent-url")
 	if err != nil {
 		commonServeError(w, http.StatusBadRequest, err)
 		return

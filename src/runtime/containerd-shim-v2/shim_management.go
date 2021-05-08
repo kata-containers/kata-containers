@@ -16,7 +16,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/containerd/containerd/namespaces"
 	cdshim "github.com/containerd/containerd/runtime/v2/shim"
 	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
 	vcAnnotations "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/annotations"
@@ -129,11 +128,7 @@ func decodeAgentMetrics(body string) []*dto.MetricFamily {
 
 func (s *service) startManagementServer(ctx context.Context, ociSpec *specs.Spec) {
 	// metrics socket will under sandbox's bundle path
-	metricsAddress, err := socketAddress(ctx, s.id)
-	if err != nil {
-		shimMgtLog.WithError(err).Error("failed to create socket address")
-		return
-	}
+	metricsAddress := SocketAddress(s.id)
 
 	listener, err := cdshim.NewSocket(metricsAddress)
 	if err != nil {
@@ -188,10 +183,8 @@ func (s *service) mountPprofHandle(m *http.ServeMux, ociSpec *specs.Spec) {
 	m.Handle("/debug/pprof/trace", http.HandlerFunc(pprof.Trace))
 }
 
-func socketAddress(ctx context.Context, id string) (string, error) {
-	ns, err := namespaces.NamespaceRequired(ctx)
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(string(filepath.Separator), "containerd-shim", ns, id, "shim-monitor.sock"), nil
+// SocketAddress returns the address of the abstract domain socket for communicating with the
+// shim management endpoint
+func SocketAddress(id string) string {
+	return filepath.Join(string(filepath.Separator), "run", "vc", id, "shim-monitor")
 }
