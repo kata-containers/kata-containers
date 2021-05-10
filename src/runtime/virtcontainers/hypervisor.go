@@ -453,6 +453,11 @@ type HypervisorConfig struct {
 	// GuestMemoryDumpPaging is used to indicate if enable paging
 	// for QEMU dump-guest-memory command
 	GuestMemoryDumpPaging bool
+
+	// Enable confidential guest support.
+	// Enable or disable different hardware features, ranging
+	// from memory encryption to both memory and CPU-state encryption and integrity.
+	ConfidentialGuest bool
 }
 
 // vcpu mapping from vcpu number to thread number
@@ -717,21 +722,16 @@ func getHostMemorySizeKb(memInfoPath string) (uint64, error) {
 	return 0, fmt.Errorf("unable get MemTotal from %s", memInfoPath)
 }
 
-// RunningOnVMM checks if the system is running inside a VM.
-func RunningOnVMM(cpuInfoPath string) (bool, error) {
-	if runtime.GOARCH == "arm64" || runtime.GOARCH == "ppc64le" || runtime.GOARCH == "s390x" {
-		virtLog.Info("Unable to know if the system is running inside a VM")
-		return false, nil
-	}
-
+func CPUFlags(cpuInfoPath string) (map[string]bool, error) {
 	flagsField := "flags"
 
 	f, err := os.Open(cpuInfoPath)
 	if err != nil {
-		return false, err
+		return map[string]bool{}, err
 	}
 	defer f.Close()
 
+	flags := make(map[string]bool)
 	scanner := bufio.NewScanner(f)
 	for scanner.Scan() {
 		// Expected format: ["flags", ":", ...] or ["flags:", ...]
@@ -745,23 +745,31 @@ func RunningOnVMM(cpuInfoPath string) (bool, error) {
 		}
 
 		for _, field := range fields[1:] {
-			if field == "hypervisor" {
-				return true, nil
-			}
+			flags[field] = true
 		}
 
-		// As long as we have been able to analyze the fields from
-		// "flags", there is no reason to check what comes next from
-		// /proc/cpuinfo, because we already know we are not running
-		// on a VMM.
-		return false, nil
+		return flags, nil
 	}
 
 	if err := scanner.Err(); err != nil {
-		return false, err
+		return map[string]bool{}, err
 	}
 
-	return false, fmt.Errorf("Couldn't find %q from %q output", flagsField, cpuInfoPath)
+	return map[string]bool{}, fmt.Errorf("Couldn't find %q from %q output", flagsField, cpuInfoPath)
+}
+
+// RunningOnVMM checks if the system is running inside a VM.
+func RunningOnVMM(cpuInfoPath string) (bool, error) {
+	if runtime.GOARCH == "amd64" {
+		flags, err := CPUFlags(cpuInfoPath)
+		if err != nil {
+			return false, err
+		}
+		return flags["hypervisor"], nil
+	}
+
+	virtLog.WithField("arch", runtime.GOARCH).Info("Unable to know if the system is running inside a VM")
+	return false, nil
 }
 
 func getHypervisorPid(h hypervisor) int {

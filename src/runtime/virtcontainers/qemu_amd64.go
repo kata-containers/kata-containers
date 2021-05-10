@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
+	"github.com/sirupsen/logrus"
 
 	govmmQemu "github.com/kata-containers/govmm/qemu"
 )
@@ -20,6 +21,8 @@ type qemuAmd64 struct {
 	qemuArchBase
 
 	vmFactory bool
+
+	devLoadersCount uint32
 }
 
 const (
@@ -30,6 +33,10 @@ const (
 	defaultQemuMachineOptions = "accel=kvm,kernel_irqchip"
 
 	qmpMigrationWaitTimeout = 5 * time.Second
+
+	tdxSysFirmwareDir = "/sys/firmware/tdx_seam/"
+
+	tdxCPUFlag = "tdx"
 )
 
 var qemuPaths = map[string]string{
@@ -106,17 +113,17 @@ func newQemuArch(config HypervisorConfig) (qemuArch, error) {
 		factory = true
 	}
 
-	if config.IOMMU {
-		var q35QemuIOMMUOptions = "accel=kvm,kernel_irqchip=split"
+	// IOMMU and Guest Protection require a split IRQ controller for handling interrupts
+	// otherwise QEMU won't be able to create the kernel irqchip
+	if config.IOMMU || config.ConfidentialGuest {
+		mp.Options = "accel=kvm,kernel_irqchip=split"
+	}
 
+	if config.IOMMU {
 		kernelParams = append(kernelParams,
 			Param{"intel_iommu", "on"})
 		kernelParams = append(kernelParams,
 			Param{"iommu", "pt"})
-
-		if mp.Type == QemuQ35 {
-			mp.Options = q35QemuIOMMUOptions
-		}
 	}
 
 	q := &qemuAmd64{
@@ -129,8 +136,15 @@ func newQemuArch(config HypervisorConfig) (qemuArch, error) {
 			kernelParams:         kernelParams,
 			disableNvdimm:        config.DisableImageNvdimm,
 			dax:                  true,
+			protection:           noneProtection,
 		},
 		vmFactory: factory,
+	}
+
+	if config.ConfidentialGuest {
+		if err := q.enableProtection(); err != nil {
+			return nil, err
+		}
 	}
 
 	q.handleImagePath(config)
@@ -190,4 +204,56 @@ func (q *qemuAmd64) appendImage(ctx context.Context, devices []govmmQemu.Device,
 // appendBridges appends to devices the given bridges
 func (q *qemuAmd64) appendBridges(devices []govmmQemu.Device) []govmmQemu.Device {
 	return genericAppendBridges(devices, q.Bridges, q.qemuMachine.Type)
+}
+
+// enable protection
+func (q *qemuAmd64) enableProtection() error {
+	var err error
+	q.protection, err = availableGuestProtection()
+	if err != nil {
+		return err
+	}
+
+	switch q.protection {
+	case tdxProtection:
+		if q.qemuMachine.Options != "" {
+			q.qemuMachine.Options += ","
+		}
+		q.qemuMachine.Options += "kvm-type=tdx,confidential-guest-support=tdx"
+		q.kernelParams = append(q.kernelParams, Param{"tdx_guest", ""})
+		virtLog.WithFields(logrus.Fields{
+			"subsystem":     "qemuAmd64",
+			"machine":       q.qemuMachine,
+			"kernel-params": q.kernelParameters}).
+			Info("Enabling TDX guest protection")
+		return nil
+
+	// TODO: Add support for other x86_64 technologies: SEV
+
+	default:
+		return fmt.Errorf("This system doesn't support Confidential Computing (Guest Protection)")
+	}
+}
+
+// append protection device
+func (q *qemuAmd64) appendProtectionDevice(devices []govmmQemu.Device, firmware string) ([]govmmQemu.Device, string, error) {
+	switch q.protection {
+	case tdxProtection:
+		id := q.devLoadersCount
+		q.devLoadersCount += 1
+		return append(devices,
+			govmmQemu.Object{
+				Driver:   govmmQemu.Loader,
+				Type:     govmmQemu.TDXGuest,
+				ID:       "tdx",
+				DeviceID: fmt.Sprintf("fd%d", id),
+				Debug:    false,
+				File:     firmware,
+			}), "", nil
+	case noneProtection:
+		return devices, firmware, nil
+
+	default:
+		return devices, "", fmt.Errorf("Unsupported guest protection technology: %v", q.protection)
+	}
 }
