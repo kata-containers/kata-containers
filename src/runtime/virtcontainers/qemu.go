@@ -605,6 +605,11 @@ func (q *qemu) createSandbox(ctx context.Context, id string, networkNS NetworkNa
 		PidFile:     filepath.Join(q.store.RunVMStoragePath(), q.id, "pid"),
 	}
 
+	qemuConfig.Devices, qemuConfig.Bios, err = q.arch.appendProtectionDevice(qemuConfig.Devices, firmwarePath)
+	if err != nil {
+		return err
+	}
+
 	if ioThread != nil {
 		qemuConfig.IOThreads = []govmmQemu.IOThread{*ioThread}
 	}
