@@ -844,19 +844,28 @@ func (c *Container) create(ctx context.Context) (err error) {
 
 	var (
 		machineType        = c.sandbox.config.HypervisorConfig.HypervisorMachineType
+		delayAttachSeconds = c.sandbox.config.HypervisorConfig.PCIeLazyAttachDelay
 		normalAttachedDevs []ContainerDevice //for q35: normally attached devices
 		delayAttachedDevs  []ContainerDevice //for q35: delay attached devices, for example, large bar space device
 	)
 	// Fix: https://github.com/kata-containers/runtime/issues/2460
 	if machineType == QemuQ35 {
-		// add Large Bar space device to delayAttachedDevs
+		// Check if the VFIO device needs to be lazily attached
 		for _, device := range c.devices {
-			var isLargeBarSpace bool
-			isLargeBarSpace, err = manager.IsVFIOLargeBarSpaceDevice(device.ContainerPath)
+			var needDelay bool
+			needDelay, err = manager.CheckVendorDelay(device.ContainerPath, c.sandbox.config.HypervisorConfig.PCIeLazyAttachVendor)
 			if err != nil {
+				c.Logger().WithError(err).WithFields(logrus.Fields{
+					"machine_type": machineType,
+					"host_path":    device.ContainerPath,
+				}).Warn("Failed to check if the VFIO device needs to be lazily attached")
 				return
 			}
-			if isLargeBarSpace {
+			c.Logger().WithFields(logrus.Fields{
+				"machine_type": machineType,
+				"host_path":    device.ContainerPath,
+			}).Infof("VFIO devices need to be lazily attached %v", needDelay)
+			if needDelay {
 				delayAttachedDevs = append(delayAttachedDevs, device)
 			} else {
 				normalAttachedDevs = append(normalAttachedDevs, device)
@@ -889,9 +898,12 @@ func (c *Container) create(ctx context.Context) (err error) {
 	// lazy attach device after createContainer for q35
 	if machineType == QemuQ35 && len(delayAttachedDevs) > 0 {
 		c.Logger().WithFields(logrus.Fields{
-			"machine_type": machineType,
-			"devices":      delayAttachedDevs,
-		}).Info("lazy attach devices")
+			"machine_type":           machineType,
+			"devices":                delayAttachedDevs,
+			"pcie_lazy_attach_delay": delayAttachSeconds,
+		}).Info("lazy attach VFIO devices")
+		// fix: https://github.com/kata-containers/kata-containers/issues/835
+		time.Sleep(time.Duration(delayAttachSeconds) * time.Second)
 		if err = c.attachDevices(ctx, delayAttachedDevs); err != nil {
 			return
 		}

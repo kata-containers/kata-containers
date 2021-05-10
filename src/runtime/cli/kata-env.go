@@ -106,9 +106,12 @@ type HypervisorInfo struct {
 	EntropySource        string
 	SharedFS             string
 	VirtioFSDaemon       string
+	EnableAnnotations    []string
 	Msize9p              uint32
 	MemorySlots          uint32
 	PCIeRootPort         uint32
+	PCIeLazyAttachVendor []string
+	PCIeLazyAttachDelay  uint32
 	HotplugVFIOOnRootBus bool
 	Debug                bool
 }
@@ -329,6 +332,9 @@ func getHypervisorInfo(config oci.RuntimeConfig) HypervisorInfo {
 
 		HotplugVFIOOnRootBus: config.HypervisorConfig.HotplugVFIOOnRootBus,
 		PCIeRootPort:         config.HypervisorConfig.PCIeRootPort,
+		PCIeLazyAttachVendor: config.HypervisorConfig.PCIeLazyAttachVendor,
+		PCIeLazyAttachDelay:  config.HypervisorConfig.PCIeLazyAttachDelay,
+		EnableAnnotations:    config.HypervisorConfig.EnableAnnotations,
 	}
 }
 

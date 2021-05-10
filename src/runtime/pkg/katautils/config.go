@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"path/filepath"
+	"regexp"
 	goruntime "runtime"
 	"strings"
 
@@ -116,6 +117,8 @@ type hypervisor struct {
 	BlockDeviceCacheDirect  bool     `toml:"block_device_cache_direct"`
 	BlockDeviceCacheNoflush bool     `toml:"block_device_cache_noflush"`
 	EnableVhostUserStore    bool     `toml:"enable_vhost_user_store"`
+	PCIeLazyAttachVendor    []string `toml:"pcie_lazy_attach_vendor"`
+	PCIeLazyAttachDelay     uint32   `toml:"pcie_lazy_attach_delay"`
 	DisableBlockDeviceUse   bool     `toml:"disable_block_device_use"`
 	MemPrealloc             bool     `toml:"enable_mem_prealloc"`
 	HugePages               bool     `toml:"enable_hugepages"`
@@ -692,6 +695,8 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		DisableImageNvdimm:      h.DisableImageNvdimm,
 		HotplugVFIOOnRootBus:    h.HotplugVFIOOnRootBus,
 		PCIeRootPort:            h.PCIeRootPort,
+		PCIeLazyAttachVendor:    h.PCIeLazyAttachVendor,
+		PCIeLazyAttachDelay:     h.PCIeLazyAttachDelay,
 		DisableVhostNet:         h.DisableVhostNet,
 		EnableVhostUserStore:    h.EnableVhostUserStore,
 		VhostUserStorePath:      h.vhostUserStorePath(),
@@ -857,6 +862,8 @@ func newClhHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		Msize9p:                 h.msize9p(),
 		HotplugVFIOOnRootBus:    h.HotplugVFIOOnRootBus,
 		PCIeRootPort:            h.PCIeRootPort,
+		PCIeLazyAttachVendor:    h.PCIeLazyAttachVendor,
+		PCIeLazyAttachDelay:     h.PCIeLazyAttachDelay,
 		DisableVhostNet:         true,
 		GuestHookPath:           h.guestHookPath(),
 		VirtioFSExtraArgs:       h.VirtioFSExtraArgs,
@@ -1048,6 +1055,7 @@ func GetDefaultHypervisorConfig() vc.HypervisorConfig {
 		Msize9p:                 defaultMsize9p,
 		HotplugVFIOOnRootBus:    defaultHotplugVFIOOnRootBus,
 		PCIeRootPort:            defaultPCIeRootPort,
+		PCIeLazyAttachDelay:     defaultPCIeLazyAttachDelay,
 		GuestHookPath:           defaultGuestHookPath,
 		VhostUserStorePath:      defaultVhostUserStorePath,
 		VirtioFSCache:           defaultVirtioFSCacheMode,
@@ -1319,6 +1327,21 @@ func checkHypervisorConfig(config vc.HypervisorConfig) error {
 				kataUtilsLogger.Warn(msg)
 			}
 		}
+	}
+
+	if config.PCIeRootPort > vc.MaxPCIeRootPort {
+		return fmt.Errorf("pcie_root_port should be in [0, %v], current value is %v", vc.MaxPCIeRootPort, config.PCIeRootPort)
+	}
+
+	reg := regexp.MustCompile(vc.VendorIdRE)
+	for _, v := range config.PCIeLazyAttachVendor {
+		if !reg.MatchString(v) {
+			return fmt.Errorf("pcie_lazy_attach_vendor shoulb be valid vendor id format 0x????, current value is %v", v)
+		}
+	}
+
+	if config.PCIeLazyAttachDelay > vc.MaxPCIeLazyAttachDelay {
+		return fmt.Errorf("pcie_lazy_attach_delay should be in [0, %v], current value is %v", vc.MaxPCIeLazyAttachDelay, config.PCIeLazyAttachDelay)
 	}
 
 	return nil

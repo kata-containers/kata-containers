@@ -74,6 +74,17 @@ const (
 	MinHypervisorMemory = 256
 )
 
+const (
+	// MaxPCIeRootPort is the maximum value of pcie_root_port
+	MaxPCIeRootPort = 2
+
+	// MaxPCIeLazyAttachDelay is the maximum seconds of pcie_lazy_attach_delay
+	MaxPCIeLazyAttachDelay = 5
+
+	// VendorIdRE is regular expression of vendor id
+	VendorIdRE = `^0[xX][0-1a-f]{4}$`
+)
+
 // In some architectures the maximum number of vCPUs depends on the number of physical cores.
 var defaultMaxQemuVCPUs = MaxQemuVCPUs()
 
@@ -453,6 +464,13 @@ type HypervisorConfig struct {
 	// GuestMemoryDumpPaging is used to indicate if enable paging
 	// for QEMU dump-guest-memory command
 	GuestMemoryDumpPaging bool
+
+	// PCIeLazyAttachDelay is a sandbox annotation used to indicate if devices whether to hot-plug
+	// the device after a few seconds delay
+	PCIeLazyAttachDelay uint32
+
+	// PCIeLazyAttachVendor specify the vendor id of the PCIe device that needs to be lazily attached
+	PCIeLazyAttachVendor []string
 }
 
 // vcpu mapping from vcpu number to thread number
