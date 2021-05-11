@@ -389,13 +389,6 @@ EXAMPLES:
 		if verbose {
 			kataLog.Logger.SetLevel(logrus.InfoLevel)
 		}
-		ctx, err := cliContextToContext(context)
-		if err != nil {
-			return err
-		}
-
-		span, _ := katautils.Trace(ctx, "check")
-		defer span.End()
 
 		if !context.Bool("no-network-checks") && os.Getenv(noNetworkEnvVar) == "" {
 			cmd := RelCmdCheck
@@ -407,8 +400,7 @@ EXAMPLES:
 			if os.Geteuid() == 0 {
 				kataLog.Warn("Not running network checks as super user")
 			} else {
-
-				err = HandleReleaseVersions(cmd, version, context.Bool("include-all-releases"))
+				err := HandleReleaseVersions(cmd, version, context.Bool("include-all-releases"))
 				if err != nil {
 					return err
 				}
@@ -424,7 +416,7 @@ EXAMPLES:
 			return errors.New("check: cannot determine runtime config")
 		}
 
-		err = setCPUtype(runtimeConfig.HypervisorType)
+		err := setCPUtype(runtimeConfig.HypervisorType)
 		if err != nil {
 			return err
 		}
@@ -437,7 +429,6 @@ EXAMPLES:
 		}
 
 		err = hostIsVMContainerCapable(details)
-
 		if err != nil {
 			return err
 		}

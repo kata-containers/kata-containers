@@ -14,7 +14,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"sync"
@@ -26,7 +25,6 @@ import (
 	clientUtils "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols/client"
 	"github.com/pkg/errors"
 	"github.com/urfave/cli"
-	"go.opentelemetry.io/otel/label"
 )
 
 const (
@@ -38,10 +36,8 @@ const (
 
 	subCommandName = "exec"
 	// command-line parameters name
-	paramRuntimeNamespace                    = "runtime-namespace"
 	paramDebugConsolePort                    = "kata-debug-port"
 	defaultKernelParamDebugConsoleVPortValue = 1026
-	defaultRuntimeNamespace                  = "k8s.io"
 )
 
 var (
@@ -57,34 +53,16 @@ var kataExecCLICommand = cli.Command{
 	Name:  subCommandName,
 	Usage: "Enter into guest by debug console",
 	Flags: []cli.Flag{
-		cli.StringFlag{
-			Name:  paramRuntimeNamespace,
-			Usage: "Namespace that containerd or CRI-O are using for containers. (Default: k8s.io, only works for containerd)",
-		},
 		cli.Uint64Flag{
 			Name:  paramDebugConsolePort,
 			Usage: "Port that debug console is listening on. (Default: 1026)",
 		},
 	},
 	Action: func(context *cli.Context) error {
-		ctx, err := cliContextToContext(context)
-		if err != nil {
-			return err
-		}
-		span, _ := katautils.Trace(ctx, subCommandName)
-		defer span.End()
-
-		namespace := context.String(paramRuntimeNamespace)
-		if namespace == "" {
-			namespace = defaultRuntimeNamespace
-		}
-		span.SetAttributes(label.Key("namespace").String(namespace))
-
 		port := context.Uint64(paramDebugConsolePort)
 		if port == 0 {
 			port = defaultKernelParamDebugConsoleVPortValue
 		}
-		span.SetAttributes(label.Key("port").Uint64(port))
 
 		sandboxID := context.Args().Get(0)
 
@@ -92,9 +70,8 @@ var kataExecCLICommand = cli.Command{
 			return err
 		}
 
-		span.SetAttributes(label.Key("sandbox").String(sandboxID))
+		conn, err := getConn(sandboxID, port)
 
-		conn, err := getConn(namespace, sandboxID, port)
 		if err != nil {
 			return err
 		}
@@ -177,9 +154,8 @@ func (s *iostream) Read(data []byte) (n int, err error) {
 	return s.conn.Read(data)
 }
 
-func getConn(namespace, sandboxID string, port uint64) (net.Conn, error) {
-	socketAddr := filepath.Join(string(filepath.Separator), "containerd-shim", namespace, sandboxID, "shim-monitor.sock")
-	client, err := kataMonitor.BuildUnixSocketClient(socketAddr, defaultTimeout)
+func getConn(sandboxID string, port uint64) (net.Conn, error) {
+	client, err := kataMonitor.BuildShimClient(sandboxID, defaultTimeout)
 	if err != nil {
 		return nil, err
 	}
@@ -190,7 +166,7 @@ func getConn(namespace, sandboxID string, port uint64) (net.Conn, error) {
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("Failed to get %s: %d", socketAddr, resp.StatusCode)
+		return nil, fmt.Errorf("Failure from %s shim-monitor: %d", sandboxID, resp.StatusCode)
 	}
 
 	defer resp.Body.Close()
