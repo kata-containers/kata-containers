@@ -150,6 +150,10 @@ block_device_driver = "@DEFBLOCKSTORAGEDRIVER_ACRN@"
 
 #debug_console_enabled = true
 
+# Agent connection dialing timeout value in seconds
+# (default: 30)
+#dial_timeout = 30
+
 [netmon]
 # If enabled, the network monitoring process gets started when the
 # sandbox is created. This allows for the detection of some additional
