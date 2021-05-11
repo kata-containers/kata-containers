@@ -29,6 +29,7 @@
 
 ## Release Process
 
+
 ### Bump all Kata repositories
 
   Bump the repositories using a script in the Kata packaging repo, where:
@@ -41,6 +42,23 @@
   $ ./update-repository-version.sh -p "$NEW_VERSION" "$BRANCH"
   ```
 
+### Point tests repository to stable branch
+
+  If you create a new stable branch, i.e. if your release changes a major or minor version number (not a patch release), then
+  you should modify the `tests` repository to point to that newly created stable branch and not the `main` branch.
+  The objective is that changes in the CI on the main branch will not impact the stable branch.
+
+  In the test directory, change references the main branch in:
+  * `README.md`
+  * `versions.yaml`
+  * `cmd/github-labels/labels.yaml.in`
+  * `cmd/pmemctl/pmemctl.sh`
+  * `.ci/lib.sh`
+  * `.ci/static-checks.sh`
+
+  See the commits in [the corresponding PR for stable-2.1](https://github.com/kata-containers/tests/pull/3504) for an example of the changes.
+
+
 ### Merge all bump version Pull requests
 
   - The above step will create a GitHub pull request in the Kata projects. Trigger the CI using `/test` command on each bump Pull request.
@@ -50,7 +68,7 @@
 ### Tag all Kata repositories
 
   Once all the pull requests to bump versions in all Kata repositories are merged,
-  tag all the repositories as shown below.  
+  tag all the repositories as shown below.
   ```
   $ cd ${GOPATH}/src/github.com/kata-containers/kata-containers/tools/packaging/release
   $ git checkout  <kata-branch-to-release>
