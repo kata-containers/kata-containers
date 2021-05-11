@@ -28,7 +28,7 @@
 * [Appendices](#appendices)
     * [The constraints challenge](#the-constraints-challenge)
 
----
+***
 
 # Overview
 
@@ -94,7 +94,9 @@ This section lists items that might be possible to fix.
 ### checkpoint and restore
 
 The runtime does not provide `checkpoint` and `restore` commands. There
-are discussions about using VM save and restore to give [`criu`](https://github.com/checkpoint-restore/criu)-like functionality, which might provide a solution.
+are discussions about using VM save and restore to give us a
+`[criu](https://github.com/checkpoint-restore/criu)`-like functionality,
+which might provide a solution.
 
 Note that the OCI standard does not specify `checkpoint` and `restore`
 commands.
