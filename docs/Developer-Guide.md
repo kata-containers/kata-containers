@@ -393,14 +393,26 @@ You may choose to manually build your VMM/hypervisor.
 Kata Containers makes use of upstream QEMU branch. The exact version
 and repository utilized can be found by looking at the [versions file](../versions.yaml).
 
-Kata often utilizes patches for not-yet-upstream fixes for components,
-including QEMU. These can be found in the [packaging/QEMU directory](../tools/packaging/qemu/patches)
+There are scripts to manage the build and packaging of QEMU. For the examples below, set your
+environment as:
+```
+$ go get -d github.com/kata-containers/kata-containers
+$ packaging_dir="${GOPATH}/src/github.com/kata-containers/kata-containers/tools/packaging"
+```
+
+Kata often utilizes patches for not-yet-upstream and/or backported fixes for components,
+including QEMU. These can be found in the [packaging/QEMU directory](../tools/packaging/qemu/patches),
+and it's *recommended* that you apply them. For example, suppose that you are going to build QEMU
+version 5.2.0, do:
+```
+$ cd $your_qemu_directory
+$ $packaging_dir/scripts/apply_patches.sh $packaging_dir/qemu/patches/5.2.x/
+```
 
 To build utilizing the same options as Kata, you should make use of the `configure-hypervisor.sh` script. For example:
 ```
-$ go get -d github.com/kata-containers/kata-containers/tools/packaging
 $ cd $your_qemu_directory
-$ ${GOPATH}/src/github.com/kata-containers/kata-containers/tools/packaging/scripts/configure-hypervisor.sh kata-qemu > kata.cfg
+$ $packaging_dir/scripts/configure-hypervisor.sh kata-qemu > kata.cfg
 $ eval ./configure "$(cat kata.cfg)"
 $ make -j $(nproc)
 $ sudo -E make install
