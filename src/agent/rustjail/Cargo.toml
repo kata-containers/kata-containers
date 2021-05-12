@@ -24,7 +24,6 @@ regex = "1.1"
 path-absolutize = "1.2.0"
 anyhow = "1.0.32"
 cgroups = { package = "cgroups-rs", version = "0.2.5" }
-tempfile = "3.1.0"
 rlimit = "0.5.3"
 
 tokio = { version = "1.2.0", features = ["sync", "io-util", "process", "time", "macros"] }
@@ -34,3 +33,4 @@ inotify = "0.9.2"
 
 [dev-dependencies]
 serial_test = "0.5.0"
+tempfile = "3.1.0"
