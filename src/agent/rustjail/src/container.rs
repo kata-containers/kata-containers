@@ -48,6 +48,7 @@ use oci::State as OCIState;
 use std::collections::HashMap;
 use std::os::unix::io::FromRawFd;
 use std::str::FromStr;
+use std::sync::Arc;
 
 use slog::{info, o, Logger};
 
@@ -57,6 +58,7 @@ use crate::sync_with_async::{read_async, write_async};
 use async_trait::async_trait;
 use rlimit::{setrlimit, Resource, Rlim};
 use tokio::io::AsyncBufReadExt;
+use tokio::sync::Mutex;
 
 use crate::utils;
 
@@ -106,6 +108,9 @@ pub type Config = CreateOpts;
 type NamespaceType = String;
 
 lazy_static! {
+    // This locker ensures the child exit signal will be received by the right receiver.
+    pub static ref WAIT_PID_LOCKER: Arc<Mutex<bool>> = Arc::new(Mutex::new(false));
+
     static ref NAMESPACES: HashMap<&'static str, CloneFlags> = {
         let mut m = HashMap::new();
         m.insert("user", CloneFlags::CLONE_NEWUSER);
@@ -1467,6 +1472,8 @@ async fn execute_hook(logger: &Logger, h: &Hook, st: &OCIState) -> Result<()> {
         })
         .collect();
 
+    // Avoid the exit signal to be reaped by the global reaper.
+    let _wait_locker = WAIT_PID_LOCKER.lock().await;
     let mut child = tokio::process::Command::new(path)
         .args(args.iter())
         .envs(env.iter())
