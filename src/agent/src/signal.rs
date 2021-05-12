@@ -22,6 +22,9 @@ async fn handle_sigchild(logger: Logger, sandbox: Arc<Mutex<Sandbox>>) -> Result
     info!(logger, "handling signal"; "signal" => "SIGCHLD");
 
     loop {
+        // Avoid reaping the undesirable child's signal, e.g., execute_hook's
+        // The lock should be released immediately.
+        rustjail::container::WAIT_PID_LOCKER.lock().await;
         let result = wait::waitpid(
             Some(Pid::from_raw(-1)),
             Some(WaitPidFlag::WNOHANG | WaitPidFlag::__WALL),
