@@ -87,6 +87,7 @@ func newTtyIO(ctx context.Context, stdin, stdout, stderr string, console bool) (
 
 func ioCopy(exitch, stdinCloser chan struct{}, tty *ttyIO, stdinPipe io.WriteCloser, stdoutPipe, stderrPipe io.Reader) {
 	var wg sync.WaitGroup
+	var closeOnce sync.Once
 
 	if tty.Stdin != nil {
 		wg.Add(1)
@@ -108,11 +109,7 @@ func ioCopy(exitch, stdinCloser chan struct{}, tty *ttyIO, stdinPipe io.WriteClo
 			defer bufPool.Put(p)
 			io.CopyBuffer(tty.Stdout, stdoutPipe, *p)
 			wg.Done()
-			if tty.Stdin != nil {
-				// close stdin to make the other routine stop
-				tty.Stdin.Close()
-				tty.Stdin = nil
-			}
+			closeOnce.Do(tty.close)
 		}()
 	}
 
@@ -127,6 +124,6 @@ func ioCopy(exitch, stdinCloser chan struct{}, tty *ttyIO, stdinPipe io.WriteClo
 	}
 
 	wg.Wait()
-	tty.close()
+	closeOnce.Do(tty.close)
 	close(exitch)
 }
