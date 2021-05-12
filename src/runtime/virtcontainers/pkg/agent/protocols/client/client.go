@@ -62,15 +62,21 @@ type dialer func(string, time.Duration) (net.Conn, error)
 //     model, and mediates communication between AF_UNIX sockets (on the host end)
 //     and AF_VSOCK sockets (on the guest end).
 //   - mock://<path>. just for test use.
-func NewAgentClient(ctx context.Context, sock string) (*AgentClient, error) {
+func NewAgentClient(ctx context.Context, sock string, timeout uint32) (*AgentClient, error) {
 	grpcAddr, parsedAddr, err := parse(sock)
 	if err != nil {
 		return nil, err
 	}
 
+	dialTimeout := defaultDialTimeout
+	if timeout > 0 {
+		dialTimeout = time.Duration(timeout) * time.Second
+		agentClientLog.WithField("timeout", timeout).Debug("custom dialing timeout has been set")
+	}
+
 	var conn net.Conn
 	var d = agentDialer(parsedAddr)
-	conn, err = d(grpcAddr, defaultDialTimeout)
+	conn, err = d(grpcAddr, dialTimeout)
 	if err != nil {
 		return nil, err
 	}
@@ -92,7 +98,7 @@ func NewAgentClient(ctx context.Context, sock string) (*AgentClient, error) {
 				grpc.WithStreamInterceptor(otgrpc.OpenTracingStreamClientInterceptor(tracer)))
 		}
 
-		ctx, cancel := context.WithTimeout(ctx, defaultDialTimeout)
+		ctx, cancel := context.WithTimeout(ctx, dialTimeout)
 		defer cancel()
 		conn, err := grpc.DialContext(ctx, grpcAddr, dialOpts...)
 		if err != nil {
