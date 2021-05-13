@@ -686,13 +686,13 @@ func (s *Sandbox) Delete(ctx context.Context) error {
 
 	for _, c := range s.containers {
 		if err := c.delete(ctx); err != nil {
-			return err
+			s.Logger().WithError(err).WithField("cid", c.id).Debug("failed to delete container")
 		}
 	}
 
 	if !rootless.IsRootless() {
 		if err := s.cgroupsDelete(); err != nil {
-			return err
+			s.Logger().WithError(err).Error("failed to cleanup cgroups")
 		}
 	}
 
