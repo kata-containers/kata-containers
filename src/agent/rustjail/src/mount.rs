@@ -68,6 +68,8 @@ lazy_static! {
         m.insert("rprivate", MsFlags::MS_PRIVATE | MsFlags::MS_REC);
         m.insert("slave", MsFlags::MS_SLAVE);
         m.insert("rslave", MsFlags::MS_SLAVE | MsFlags::MS_REC);
+        m.insert("unbindable", MsFlags::MS_UNBINDABLE);
+        m.insert("runbindable", MsFlags::MS_UNBINDABLE | MsFlags::MS_REC);
         m
     };
     static ref OPTIONS: HashMap<&'static str, (bool, MsFlags)> = {
@@ -93,17 +95,6 @@ lazy_static! {
         m.insert("nodiratime", (false, MsFlags::MS_NODIRATIME));
         m.insert("bind", (false, MsFlags::MS_BIND));
         m.insert("rbind", (false, MsFlags::MS_BIND | MsFlags::MS_REC));
-        m.insert("unbindable", (false, MsFlags::MS_UNBINDABLE));
-        m.insert(
-            "runbindable",
-            (false, MsFlags::MS_UNBINDABLE | MsFlags::MS_REC),
-        );
-        m.insert("private", (false, MsFlags::MS_PRIVATE));
-        m.insert("rprivate", (false, MsFlags::MS_PRIVATE | MsFlags::MS_REC));
-        m.insert("shared", (false, MsFlags::MS_SHARED));
-        m.insert("rshared", (false, MsFlags::MS_SHARED | MsFlags::MS_REC));
-        m.insert("slave", (false, MsFlags::MS_SLAVE));
-        m.insert("rslave", (false, MsFlags::MS_SLAVE | MsFlags::MS_REC));
         m.insert("relatime", (false, MsFlags::MS_RELATIME));
         m.insert("norelatime", (true, MsFlags::MS_RELATIME));
         m.insert("strictatime", (false, MsFlags::MS_STRICTATIME));
@@ -192,7 +183,7 @@ pub fn init_rootfs(
 
     let mut bind_mount_dev = false;
     for m in &spec.mounts {
-        let (mut flags, data) = parse_mount(&m);
+        let (mut flags, pgflags, data) = parse_mount(&m);
         if !m.destination.starts_with('/') || m.destination.contains("..") {
             return Err(anyhow!(
                 "the mount destination {} is invalid",
@@ -234,13 +225,15 @@ pub fn init_rootfs(
             // effective.
             // first check that we have non-default options required before attempting a
             // remount
-            if m.r#type == "bind" {
-                for o in &m.options {
-                    if let Some(fl) = PROPAGATION.get(o.as_str()) {
-                        let dest = secure_join(rootfs, &m.destination);
-                        mount(None::<&str>, dest.as_str(), None::<&str>, *fl, None::<&str>)?;
-                    }
-                }
+            if m.r#type == "bind" && !pgflags.is_empty() {
+                let dest = secure_join(rootfs, &m.destination);
+                mount(
+                    None::<&str>,
+                    dest.as_str(),
+                    None::<&str>,
+                    pgflags,
+                    None::<&str>,
+                )?;
             }
         }
     }
@@ -657,26 +650,27 @@ pub fn ms_move_root(rootfs: &str) -> Result<bool> {
     Ok(true)
 }
 
-fn parse_mount(m: &Mount) -> (MsFlags, String) {
+fn parse_mount(m: &Mount) -> (MsFlags, MsFlags, String) {
     let mut flags = MsFlags::empty();
+    let mut pgflags = MsFlags::empty();
     let mut data = Vec::new();
 
     for o in &m.options {
-        match OPTIONS.get(o.as_str()) {
-            Some(v) => {
-                let (clear, fl) = *v;
-                if clear {
-                    flags &= !fl;
-                } else {
-                    flags |= fl;
-                }
+        if let Some(v) = OPTIONS.get(o.as_str()) {
+            let (clear, fl) = *v;
+            if clear {
+                flags &= !fl;
+            } else {
+                flags |= fl;
             }
-
-            None => data.push(o.clone()),
+        } else if let Some(fl) = PROPAGATION.get(o.as_str()) {
+            pgflags |= *fl;
+        } else {
+            data.push(o.clone());
         }
     }
 
-    (flags, data.join(","))
+    (flags, pgflags, data.join(","))
 }
 
 // This function constructs a canonicalized path by combining the `rootfs` and `unsafe_path` elements.
@@ -922,7 +916,7 @@ pub fn finish_rootfs(cfd_log: RawFd, spec: &Spec) -> Result<()> {
 
     for m in spec.mounts.iter() {
         if m.destination == "/dev" {
-            let (flags, _) = parse_mount(m);
+            let (flags, _, _) = parse_mount(m);
             if flags.contains(MsFlags::MS_RDONLY) {
                 mount(
                     Some("/dev"),
