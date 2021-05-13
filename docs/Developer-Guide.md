@@ -37,6 +37,7 @@
   - [Set up a debug console](#set-up-a-debug-console)
     - [Simple debug console setup](#simple-debug-console-setup)
       - [Enable agent debug console](#enable-agent-debug-console)
+      - [Start `kata-monitor` - ONLY NEEDED FOR 2.0.x](#start-kata-monitor---only-needed-for-20x)
       - [Connect to debug console](#connect-to-debug-console)
     - [Traditional debug console setup](#traditional-debug-console-setup)
       - [Create a custom image containing a shell](#create-a-custom-image-containing-a-shell)
@@ -486,6 +487,16 @@ debug_console_enabled = true
 ```
 
 This will pass `agent.debug_console agent.debug_console_vport=1026` to agent as kernel parameters, and sandboxes created using this parameters will start a shell in guest if new connection is accept from VSOCK.
+
+#### Start `kata-monitor` - ONLY NEEDED FOR 2.0.x
+
+For Kata Containers `2.0.x` releases, the `kata-runtime exec` command depends on the`kata-monitor` running, in order to get the sandbox's `vsock` address to connect to. Thus, first start the `kata-monitor` process.
+
+```
+$ sudo kata-monitor
+```
+
+`kata-monitor` will serve at `localhost:8090` by default.
 
 #### Connect to debug console
 
