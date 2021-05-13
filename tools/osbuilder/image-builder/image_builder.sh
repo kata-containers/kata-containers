@@ -63,11 +63,8 @@ readonly -a systemd_files=(
 # Set a default value
 AGENT_INIT=${AGENT_INIT:-no}
 
-# Align image to (size in MB) according to different architecture.
-case "$(uname -m)" in
-	aarch64) readonly mem_boundary_mb=16 ;;
-	*) readonly mem_boundary_mb=128 ;;
-esac
+# Align image to 128M
+readonly mem_boundary_mb=128
 
 # shellcheck source=../scripts/lib.sh
 source "${lib_file}"
