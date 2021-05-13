@@ -1,0 +1,51 @@
+# Copyright (c) 2020 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+
+name: Ensure PR has required porting labels
+
+on:
+  pull_request_target:
+    types:
+      - opened
+      - reopened
+      - labeled
+      - unlabeled
+
+jobs:
+  check-pr-porting-labels:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install hub
+        run: |
+          HUB_ARCH="amd64"
+          HUB_VER=$(curl -sL "https://api.github.com/repos/github/hub/releases/latest" |\
+            jq -r .tag_name | sed 's/^v//')
+          curl -sL \
+            "https://github.com/github/hub/releases/download/v${HUB_VER}/hub-linux-${HUB_ARCH}-${HUB_VER}.tgz" |\
+          tar xz --strip-components=2 --wildcards '*/bin/hub' && \
+          sudo install hub /usr/local/bin
+
+      - name: Checkout code to allow hub to communicate with the project
+        uses: actions/checkout@v2
+        with:
+          token: ${{ secrets.KATA_GITHUB_ACTIONS_TOKEN }}
+
+      - name: Install porting checker script
+        run: |
+          # Clone into a temporary directory to avoid overwriting
+          # any existing github directory.
+          pushd $(mktemp -d) &>/dev/null
+          git clone --single-branch --depth 1 "https://github.com/kata-containers/.github" && cd .github/scripts
+          sudo install pr-porting-checks.sh /usr/local/bin
+          popd &>/dev/null
+
+      - name: Stop PR being merged unless it has a correct set of porting labels
+        env:
+          GITHUB_TOKEN: ${{ secrets.KATA_GITHUB_ACTIONS_TOKEN }}
+        run: |
+          pr=${{ github.event.number }}
+          repo=${{ github.repository }}
+
+          pr-porting-checks.sh "$pr" "$repo"
