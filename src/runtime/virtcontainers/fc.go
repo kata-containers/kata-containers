@@ -175,8 +175,7 @@ func (fc *firecracker) trace(parent context.Context, name string) (otelTrace.Spa
 	}
 
 	tracer := otel.Tracer("kata")
-	ctx, span := tracer.Start(parent, name)
-	span.SetAttributes([]otelLabel.KeyValue{otelLabel.Key("subsystem").String("hypervisor"), otelLabel.Key("type").String("firecracker")}...)
+	ctx, span := tracer.Start(parent, name, otelTrace.WithAttributes(otelLabel.String("source", "runtime"), otelLabel.String("package", "virtcontainers"), otelLabel.String("subsystem", "hypervisor"), otelLabel.String("type", "firecracker")))
 
 	return span, ctx
 }

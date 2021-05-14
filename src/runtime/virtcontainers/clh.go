@@ -764,8 +764,7 @@ func (clh *cloudHypervisor) trace(parent context.Context, name string) (otelTrac
 	}
 
 	tracer := otel.Tracer("kata")
-	ctx, span := tracer.Start(parent, name)
-	span.SetAttributes([]otelLabel.KeyValue{otelLabel.Key("subsystem").String("hypervisor"), otelLabel.Key("type").String("clh")}...)
+	ctx, span := tracer.Start(parent, name, otelTrace.WithAttributes(otelLabel.String("source", "runtime"), otelLabel.String("package", "virtcontainers"), otelLabel.String("subsystem", "hypervisor"), otelLabel.String("type", "clh")))
 
 	return span, ctx
 }

@@ -210,8 +210,7 @@ func (v *virtiofsd) trace(parent context.Context, name string) (otelTrace.Span, 
 	}
 
 	tracer := otel.Tracer("kata")
-	ctx, span := tracer.Start(parent, name)
-	span.SetAttributes(label.Key("subsystem").String("virtiofds"))
+	ctx, span := tracer.Start(parent, name, otelTrace.WithAttributes(label.String("source", "runtime"), label.String("package", "virtcontainers"), label.String("subsystem", "virtiofsd")))
 
 	return span, ctx
 }
