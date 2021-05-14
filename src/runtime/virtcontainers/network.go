@@ -1255,8 +1255,7 @@ type Network struct {
 
 func (n *Network) trace(ctx context.Context, name string) (otelTrace.Span, context.Context) {
 	tracer := otel.Tracer("kata")
-	ctx, span := tracer.Start(ctx, name)
-	span.SetAttributes([]otelLabel.KeyValue{otelLabel.Key("subsystem").String("network"), otelLabel.Key("type").String("default")}...)
+	ctx, span := tracer.Start(ctx, name, otelTrace.WithAttributes(otelLabel.String("source", "runtime"), otelLabel.String("package", "virtcontainers"), otelLabel.String("subsystem", "network"), otelLabel.String("type", "default")))
 
 	return span, ctx
 }

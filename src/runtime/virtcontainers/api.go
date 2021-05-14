@@ -30,11 +30,7 @@ var virtLog = logrus.WithField("source", "virtcontainers")
 // context.
 func trace(parent context.Context, name string) (otelTrace.Span, context.Context) {
 	tracer := otel.Tracer("kata")
-	ctx, span := tracer.Start(parent, name)
-	span.SetAttributes([]label.KeyValue{
-		label.Key("source").String("virtcontainers"),
-		label.Key("component").String("virtcontainers"),
-		label.Key("subsystem").String("api")}...)
+	ctx, span := tracer.Start(parent, name, otelTrace.WithAttributes(label.String("source", "runtime"), label.String("packages", "virtcontainers"), label.String("subsystem", "api")))
 
 	return span, ctx
 }
