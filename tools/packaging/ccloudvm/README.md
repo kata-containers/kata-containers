@@ -2,7 +2,8 @@
 
 * [How to use Kata workloads for `ccloudvm`](#how-to-use-kata-workloads-for-ccloudvm)
     * [Create Docker\* and Kata Containers virtualized environment](#create-docker-and-kata-containers-virtualized-environment)
----
+
+***
 
 The [ccloudvm](https://github.com/intel/ccloudvm/) tool is a command
 to create development and demo environments. The tool sets up these development
