@@ -10,7 +10,7 @@ INITRD_BUILDER := $(MK_DIR)/initrd-builder/initrd_builder.sh
 IMAGE_BUILDER  := $(MK_DIR)/image-builder/image_builder.sh
 
 DISTRO                ?= centos
-BUILD_METHOD          := distro
+BUILD_METHOD          ?= distro
 BUILD_METHOD_LIST     := distro dracut
 AGENT_INIT            ?= no
 USE_DOCKER            ?= true
