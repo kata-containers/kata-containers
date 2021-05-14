@@ -12,6 +12,9 @@ on:
       - reopened
       - labeled
       - unlabeled
+   pull_request:
+     branches:
+      - main
 
 jobs:
   check-pr-porting-labels:
