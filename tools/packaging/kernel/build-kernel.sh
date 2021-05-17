@@ -49,6 +49,8 @@ experimental_kernel="false"
 force_setup_generate_config="false"
 #GPU kernel support
 gpu_vendor=""
+#Confidential guest type 
+conf_guest=""
 #
 patches_path=""
 #
@@ -98,6 +100,7 @@ Options:
 	-p <path>   	: Path to a directory with patches to apply to kernel.
 	-t <hypervisor>	: Hypervisor_target.
 	-v <version>	: Kernel version to use if kernel path not provided.
+	-x <type>	: Confidential guest protection type, such as sev
 EOT
 	exit "$exit_code"
 }
@@ -207,6 +210,12 @@ get_kernel_frag_path() {
 		info "Add kernel config for GPU due to '-g ${gpu_vendor}'"
 		local gpu_configs="$(ls ${gpu_path}/${gpu_vendor}.conf)"
 		all_configs="${all_configs} ${gpu_configs}"
+	fi
+
+	if [[ "${conf_guest}" != "" ]];then
+		info "Enabling config for '${conf_guest}' confidential guest protection"
+		local conf_configs="$(ls ${arch_path}/${conf_guest}/*.conf)"
+		all_configs="${all_configs} ${conf_configs}"
 	fi
 
 	info "Constructing config from fragments: ${config_path}"
@@ -387,6 +396,10 @@ install_kata() {
 		suffix="-${gpu_vendor}-gpu${suffix}"
 	fi
 
+	if [[ ${conf_guest} != "" ]];then
+		suffix="-${conf_guest}${suffix}"
+	fi
+
 	vmlinuz="vmlinuz-${kernel_version}-${config_version}${suffix}"
 	vmlinux="vmlinux-${kernel_version}-${config_version}${suffix}"
 
@@ -424,7 +437,7 @@ install_kata() {
 }
 
 main() {
-	while getopts "a:c:defg:hk:p:t:v:" opt; do
+	while getopts "a:c:defg:hk:p:t:v:x:" opt; do
 		case "$opt" in
 			a)
 				arch_target="${OPTARG}"
@@ -460,6 +473,13 @@ main() {
 				;;
 			v)
 				kernel_version="${OPTARG}"
+				;;
+			x)
+				conf_guest="${OPTARG}"
+				case "$conf_guest" in
+					sev) ;;
+					*) die "Confidential guest type '$conf_guest' not supported" ;;
+				esac
 				;;
 		esac
 	done
