@@ -67,31 +67,31 @@ stable branch.
 
 | Branch | Original version | New version |
 |--|--|--|
-| `main` | `1.3.0-rc0` | `1.3.0-rc1` |
-| `stable-1.2` | `1.2.0` | `1.2.1` |
-| `stable-1.1` | (unmaintained) | (unmaintained) |
+| `main` | `2.3.0-rc0` | `2.3.0-rc1` |
+| `stable-2.2` | `2.2.0` | `2.2.1` |
+| `stable-2.1` | (unmaintained) | (unmaintained) |
 
 
 ### New release made feature or change adding new inter-component dependency
 
 A new feature is introduced, which adds a new inter-component dependency. In this case a new stable
-branch is created (stable-1.3) starting from main and the previous stable branch (stable-1.2)
+branch is created (stable-2.3) starting from main and the previous stable branch (stable-2.2)
 is dropped from maintenance.
 
 
 | Branch | Original version | New version |
 |--|--|--|
-| `main` | `1.3.0-rc1` | `1.3.0` |
-| `stable-1.3` | N/A| `1.3.0` |
-| `stable-1.2` | `1.2.1` | (unmaintained) |
-| `stable-1.1` | (unmaintained) | (unmaintained) |
+| `main` | `2.3.0-rc1` | `2.3.0` |
+| `stable-2.3` | N/A| `2.3.0` |
+| `stable-2.2` | `2.2.1` | (unmaintained) |
+| `stable-2.1` | (unmaintained) | (unmaintained) |
 
-Note, the stable-1.2 branch will still exist with tag 1.2.1, but under current plans it is
-not maintained further. The next tag applied to main will be 1.4.0-alpha0. We would then
+Note, the stable-2.2 branch will still exist with tag 2.2.1, but under current plans it is
+not maintained further. The next tag applied to main will be 2.4.0-alpha0. We would then
 create a couple of alpha releases gathering features targeted for that particular release (in
-this case 1.4.0), followed by a release candidate. The release candidate marks a feature freeze.
+this case 2.4.0), followed by a release candidate. The release candidate marks a feature freeze.
 A new stable branch is created for the release candidate. Only bug fixes and any security issues
-are added to the branch going forward until release 1.4.0 is made.
+are added to the branch going forward until release 2.4.0 is made.
    
 ## Backporting Process 
 
@@ -145,8 +145,8 @@ Kata guarantees compatibility between components that are within one minor relea
  
 This is critical for dependencies which cross between host (runtime, shim, proxy) and
 the guest (hypervisor, rootfs and agent).  For example, consider a cluster with a long-running
-deployment, workload-never-dies, all on Kata version 1.1.3 components. If the operator updates
-the Kata components to the next new minor release (i.e. 1.2.0), we need to guarantee that the 1.2.0
-runtime still communicates with 1.1.3 agent within workload-never-dies.
+deployment, workload-never-dies, all on Kata version 2.1.3 components. If the operator updates
+the Kata components to the next new minor release (i.e. 2.2.0), we need to guarantee that the 2.2.0
+runtime still communicates with 2.1.3 agent within workload-never-dies.
 
 Handling live-update is out of the scope of this document. See this [`kata-runtime` issue](https://github.com/kata-containers/runtime/issues/492) for details.
