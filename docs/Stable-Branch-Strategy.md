@@ -49,9 +49,10 @@ No new features should be introduced to stable branches.  This is intended to li
 providing only bug and security fixes.
 
 ## Branch Management
-Kata Containers will maintain two stable release branches in addition to the main branch.
+Kata Containers will maintain **one** stable release branch, in addition to the main branch, for
+each active major release.
 Once a new MAJOR or MINOR release is created from main, a new stable branch is created for
-the prior MAJOR or MINOR release and the older stable branch is no longer maintained. End of
+the prior MAJOR or MINOR release and the previous stable branch is no longer maintained. End of
 maintenance for a branch is announced on the Kata Containers mailing list.  Users can determine
 the version currently installed by running `kata-runtime kata-env`. It is recommended to use the
 latest stable branch available.
@@ -68,13 +69,13 @@ stable branch.
 |--|--|--|
 | `main` | `1.3.0-rc0` | `1.3.0-rc1` |
 | `stable-1.2` | `1.2.0` | `1.2.1` |
-| `stable-1.1` | `1.1.2` | `1.1.3` |
+| `stable-1.1` | (unmaintained) | (unmaintained) |
 
 
 ### New release made feature or change adding new inter-component dependency
 
 A new feature is introduced, which adds a new inter-component dependency. In this case a new stable
-branch is created (stable-1.3) starting from main and the older stable branch (stable-1.1)
+branch is created (stable-1.3) starting from main and the previous stable branch (stable-1.2)
 is dropped from maintenance.
 
 
@@ -82,10 +83,10 @@ is dropped from maintenance.
 |--|--|--|
 | `main` | `1.3.0-rc1` | `1.3.0` |
 | `stable-1.3` | N/A| `1.3.0` |
-| `stable-1.2` | `1.2.1` | `1.2.2` |
-| `stable-1.1` | `1.1.3` | (unmaintained) |
+| `stable-1.2` | `1.2.1` | (unmaintained) |
+| `stable-1.1` | (unmaintained) | (unmaintained) |
 
-Note, the stable-1.1 branch will still exist with tag 1.1.3, but under current plans it is
+Note, the stable-1.2 branch will still exist with tag 1.2.1, but under current plans it is
 not maintained further. The next tag applied to main will be 1.4.0-alpha0. We would then
 create a couple of alpha releases gathering features targeted for that particular release (in
 this case 1.4.0), followed by a release candidate. The release candidate marks a feature freeze.
