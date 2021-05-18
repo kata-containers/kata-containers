@@ -143,10 +143,10 @@ maturity, we have increased the cadence from six weeks to twelve weeks. The rele
 ### Compatibility
 Kata guarantees compatibility between components that are within one minor release of each other. 
  
-This is critical for dependencies which cross between host (runtime, shim, proxy) and
+This is critical for dependencies which cross between host (shimv2 runtime) and
 the guest (hypervisor, rootfs and agent).  For example, consider a cluster with a long-running
 deployment, workload-never-dies, all on Kata version 2.1.3 components. If the operator updates
 the Kata components to the next new minor release (i.e. 2.2.0), we need to guarantee that the 2.2.0
-runtime still communicates with 2.1.3 agent within workload-never-dies.
+shimv2 runtime still communicates with 2.1.3 agent within workload-never-dies.
 
 Handling live-update is out of the scope of this document. See this [`kata-runtime` issue](https://github.com/kata-containers/runtime/issues/492) for details.
