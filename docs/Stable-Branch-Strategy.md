@@ -35,7 +35,7 @@ provides additional information regarding release `99.123.77` in the previous ex
   both** and which **changes the behavior from the previous release** (incompatible with previous releases).
 
   A major release will also likely require a change of the container manager version used, 
-for example Docker\*. Please refer to the release notes for further details.
+for example Containerd or CRI-O. Please refer to the release notes for further details.
 
 ## Release Strategy
 
