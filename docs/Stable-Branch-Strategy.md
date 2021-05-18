@@ -32,7 +32,7 @@ provides additional information regarding release `99.123.77` in the previous ex
   changing the existing behavior*.
 
 - When `MAJOR` increases, the new release adds **new features, bug fixes, or
-  both** and which *changes the behavior from the previous release* (incompatible with previous releases).
+  both** and which **changes the behavior from the previous release** (incompatible with previous releases).
 
   A major release will also likely require a change of the container manager version used, 
 for example Docker\*. Please refer to the release notes for further details.
