@@ -1,0 +1,41 @@
+From 0a153bdd2c31932c8357970c8f71f710dbfc7d11 Mon Sep 17 00:00:00 2001
+From: Yuanzhe Liu <yuanzheliu09@gmail.com>
+Date: Wed, 19 May 2021 14:17:03 +0000
+Subject: [PATCH] qemu: align before memory hotplug on arm64
+
+When hotplug memory on arm64 in kata, kernel will shout:
+
+[ 0.396551] Block size [0x40000000] unaligned hotplug range: start 0xc8000000, size 0x40000000
+[ 0.396556] acpi PNP0C80:01: add_memory failed
+[ 0.396834] acpi PNP0C80:01: acpi_memory_enable_device() error
+[ 0.396948] acpi PNP0C80:01: Enumeration failure
+
+It means that kernel will check if the memory range to be hotplugged
+align with 1G before plug the memory. So we should twist the qemu to
+make sure the memory range align with 1G to pass the kernel check.
+
+Signed-off-by: Yuanzhe Liu <yuanzheliu09@gmail.com>
+---
+ hw/arm/virt.c | 5 ++++-
+ 1 file changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/hw/arm/virt.c b/hw/arm/virt.c
+index 09eb6c06e4..513f191dfe 100644
+--- a/hw/arm/virt.c
++++ b/hw/arm/virt.c
+@@ -2217,8 +2217,11 @@ static void virt_memory_plug(HotplugHandler *hotplug_dev,
+     MachineState *ms = MACHINE(hotplug_dev);
+     bool is_nvdimm = object_dynamic_cast(OBJECT(dev), TYPE_NVDIMM);
+     Error *local_err = NULL;
++    PCDIMMDevice *dimm = PC_DIMM(dev);
+ 
+-    pc_dimm_plug(PC_DIMM(dev), MACHINE(vms), &local_err);
++    dimm->addr = QEMU_ALIGN_UP(dimm->addr, 0x40000000);
++
++    pc_dimm_plug(dimm, MACHINE(vms), &local_err);
+     if (local_err) {
+         goto out;
+     }
+-- 
+2.20.1
+
