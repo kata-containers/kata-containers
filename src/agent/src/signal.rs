@@ -6,10 +6,10 @@
 
 use crate::sandbox::Sandbox;
 use anyhow::{anyhow, Result};
+use capctl::prctl::set_subreaper;
 use nix::sys::wait::WaitPidFlag;
 use nix::sys::wait::{self, WaitStatus};
 use nix::unistd;
-use prctl::set_child_subreaper;
 use slog::{error, info, o, Logger};
 use std::sync::Arc;
 use tokio::select;
@@ -88,7 +88,7 @@ pub async fn setup_signal_handler(
 ) -> Result<()> {
     let logger = logger.new(o!("subsystem" => "signals"));
 
-    set_child_subreaper(true)
+    set_subreaper(true)
         .map_err(|err| anyhow!(err).context("failed to setup agent as a child subreaper"))?;
 
     let mut sigchild_stream = signal(SignalKind::child())?;
