@@ -16,6 +16,7 @@ import (
 	pb "github.com/kata-containers/kata-containers/src/runtime/protocols/cache"
 	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/factory/base"
+	"github.com/sirupsen/logrus"
 )
 
 type template struct {
@@ -24,6 +25,7 @@ type template struct {
 }
 
 var templateWaitForAgent = 2 * time.Second
+var templateLog = logrus.WithField("source", "virtcontainers/factory/template")
 
 // Fetch finds and returns a pre-built template factory.
 // TODO: save template metadata and fetch from storage.
@@ -86,8 +88,13 @@ func (t *template) GetVMStatus() []*pb.GrpcVMStatus {
 }
 
 func (t *template) close() {
-	syscall.Unmount(t.statePath, 0)
-	os.RemoveAll(t.statePath)
+	if err := syscall.Unmount(t.statePath, syscall.MNT_DETACH); err != nil {
+		t.Logger().WithError(err).Errorf("failed to unmount %s", t.statePath)
+	}
+
+	if err := os.RemoveAll(t.statePath); err != nil {
+		t.Logger().WithError(err).Errorf("failed to remove %s", t.statePath)
+	}
 }
 
 func (t *template) prepareTemplateFiles() error {
@@ -167,4 +174,20 @@ func (t *template) checkTemplateVM() error {
 
 	_, err = os.Stat(t.statePath + "/state")
 	return err
+}
+
+// Logger returns a logrus logger appropriate for logging template messages
+func (t *template) Logger() *logrus.Entry {
+	return templateLog.WithFields(logrus.Fields{
+		"subsystem": "template",
+	})
+}
+
+// SetLogger sets the logger for the factory template.
+func SetLogger(ctx context.Context, logger logrus.FieldLogger) {
+	fields := logrus.Fields{
+		"source": "virtcontainers",
+	}
+
+	templateLog = logger.WithFields(fields)
 }
