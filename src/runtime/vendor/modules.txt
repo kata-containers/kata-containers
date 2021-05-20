@@ -222,7 +222,7 @@ github.com/hashicorp/errwrap
 # github.com/hashicorp/go-multierror v1.0.0
 ## explicit
 github.com/hashicorp/go-multierror
-# github.com/kata-containers/govmm v0.0.0-20210428163604-f0e9a35308ee
+# github.com/kata-containers/govmm v0.0.0-20210428163604-f0e9a35308ee => github.com/Jakob-Naucke/govmm v0.0.0-20210520084539-03b55ea51dca
 ## explicit
 github.com/kata-containers/govmm/qemu
 # github.com/konsorten/go-windows-terminal-sequences v1.0.1
@@ -462,6 +462,7 @@ gopkg.in/yaml.v3
 # k8s.io/apimachinery v0.18.2
 ## explicit
 k8s.io/apimachinery/pkg/api/resource
+# github.com/kata-containers/govmm => github.com/Jakob-Naucke/govmm v0.0.0-20210520084539-03b55ea51dca
 # github.com/uber-go/atomic => go.uber.org/atomic v1.5.1
 # google.golang.org/genproto => google.golang.org/genproto v0.0.0-20180817151627-c66870c02cf8
 # google.golang.org/grpc => google.golang.org/grpc v1.19.0
