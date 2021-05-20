@@ -134,6 +134,9 @@ const (
 
 	// Loader is the Loader device driver.
 	Loader DeviceDriver = "loader"
+
+	// SpaprTPMProxy is used for enabling guest to run in secure mode on ppc64le.
+	SpaprTPMProxy DeviceDriver = "spapr-tpm-proxy"
 )
 
 func isDimmSupported(config *Config) bool {
@@ -236,6 +239,8 @@ const (
 
 	// SecExecGuest represents an s390x Secure Execution (Protected Virtualization in QEMU) object
 	SecExecGuest ObjectType = "s390-pv-guest"
+	// PEFGuest represent ppc64le PEF(Protected Execution Facility) object.
+	PEFGuest ObjectType = "pef-guest"
 )
 
 // Object is a qemu object representation.
@@ -285,6 +290,9 @@ func (object Object) Valid() bool {
 		return object.ID != "" && object.File != "" && object.CBitPos != 0 && object.ReducedPhysBits != 0
 	case SecExecGuest:
 		return object.ID != ""
+	case PEFGuest:
+		return object.ID != "" && object.File != ""
+
 	default:
 		return false
 	}
@@ -327,6 +335,14 @@ func (object Object) QemuParams(config *Config) []string {
 	case SecExecGuest:
 		objectParams = append(objectParams, string(object.Type))
 		objectParams = append(objectParams, fmt.Sprintf(",id=%s", object.ID))
+	case PEFGuest:
+		objectParams = append(objectParams, string(object.Type))
+		objectParams = append(objectParams, fmt.Sprintf(",id=%s", object.ID))
+
+		deviceParams = append(deviceParams, string(object.Driver))
+		deviceParams = append(deviceParams, fmt.Sprintf(",id=%s", object.DeviceID))
+		deviceParams = append(deviceParams, fmt.Sprintf(",host-path=%s", object.File))
+
 	}
 
 	if len(deviceParams) > 0 {
