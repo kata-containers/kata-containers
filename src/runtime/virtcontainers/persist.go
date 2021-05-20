@@ -191,6 +191,8 @@ func (s *Sandbox) dumpConfig(ss *persistapi.SandboxState) {
 		Cgroups:             sconfig.Cgroups,
 	}
 
+	ss.Config.SandboxBindMounts = append(ss.Config.SandboxBindMounts, sconfig.SandboxBindMounts...)
+
 	for _, e := range sconfig.Experimental {
 		ss.Config.Experimental = append(ss.Config.Experimental, e.Name)
 	}
@@ -459,6 +461,7 @@ func loadSandboxConfig(id string) (*SandboxConfig, error) {
 		DisableGuestSeccomp: savedConf.DisableGuestSeccomp,
 		Cgroups:             savedConf.Cgroups,
 	}
+	sconfig.SandboxBindMounts = append(sconfig.SandboxBindMounts, savedConf.SandboxBindMounts...)
 
 	for _, name := range savedConf.Experimental {
 		sconfig.Experimental = append(sconfig.Experimental, *exp.Get(name))
