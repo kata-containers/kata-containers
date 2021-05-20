@@ -805,7 +805,7 @@ func (c *Container) rollbackFailingContainerCreation(ctx context.Context) {
 	if err := c.unmountHostMounts(ctx); err != nil {
 		c.Logger().WithError(err).Error("rollback failed unmountHostMounts()")
 	}
-	if err := bindUnmountContainerRootfs(ctx, getMountPath(c.sandbox.id), c.id); err != nil {
+	if err := bindUnmountContainerRootfs(ctx, getMountPath(c.sandbox.id), c); err != nil {
 		c.Logger().WithError(err).Error("rollback failed bindUnmountContainerRootfs()")
 	}
 }
@@ -1035,7 +1035,7 @@ func (c *Container) stop(ctx context.Context, force bool) error {
 		return err
 	}
 
-	if err := bindUnmountContainerRootfs(ctx, getMountPath(c.sandbox.id), c.id); err != nil && !force {
+	if err := bindUnmountContainerRootfs(ctx, getMountPath(c.sandbox.id), c); err != nil && !force {
 		return err
 	}
 

@@ -19,6 +19,7 @@ import (
 	"testing"
 
 	ktu "github.com/kata-containers/kata-containers/src/runtime/pkg/katatestutils"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -378,6 +379,10 @@ func TestBindUnmountContainerRootfsENOENTNotError(t *testing.T) {
 	testMnt := "/tmp/test_mount"
 	sID := "sandIDTest"
 	cID := "contIDTest"
+	container := &Container{
+		id: cID,
+	}
+
 	assert := assert.New(t)
 
 	// check to make sure the file doesn't exist
@@ -386,7 +391,7 @@ func TestBindUnmountContainerRootfsENOENTNotError(t *testing.T) {
 		assert.NoError(os.Remove(testPath))
 	}
 
-	err := bindUnmountContainerRootfs(context.Background(), filepath.Join(testMnt, sID), cID)
+	err := bindUnmountContainerRootfs(context.Background(), filepath.Join(testMnt, sID), container)
 	assert.NoError(err)
 }
 
@@ -398,6 +403,9 @@ func TestBindUnmountContainerRootfsRemoveRootfsDest(t *testing.T) {
 
 	sID := "sandIDTestRemoveRootfsDest"
 	cID := "contIDTestRemoveRootfsDest"
+	container := &Container{
+		id: cID,
+	}
 
 	testPath := filepath.Join(testDir, sID, cID, rootfsDir)
 	syscall.Unmount(testPath, 0)
@@ -407,11 +415,55 @@ func TestBindUnmountContainerRootfsRemoveRootfsDest(t *testing.T) {
 	assert.NoError(err)
 	defer os.RemoveAll(filepath.Join(testDir, sID))
 
-	bindUnmountContainerRootfs(context.Background(), filepath.Join(testDir, sID), cID)
+	bindUnmountContainerRootfs(context.Background(), filepath.Join(testDir, sID), container)
 
 	if _, err := os.Stat(testPath); err == nil {
 		t.Fatal("empty rootfs dest should be removed")
 	} else if !os.IsNotExist(err) {
 		t.Fatal(err)
+	}
+}
+
+func TestBindUnmountContainerRootfsDevicemapper(t *testing.T) {
+	assert := assert.New(t)
+	if tc.NotValid(ktu.NeedRoot()) {
+		t.Skip(ktu.TestDisabledNeedRoot)
+	}
+
+	sID := "sandIDDevicemapper"
+
+	cID1 := "contIDDevicemapper1"
+	container := &Container{
+		id: cID1,
+		state: types.ContainerState{
+			Fstype:        "xfs",
+			BlockDeviceID: "4b073a87f3c9242a",
+		},
+	}
+
+	testPath1 := filepath.Join(testDir, sID, cID1, rootfsDir)
+	err := os.MkdirAll(testPath1, mountPerm)
+	assert.NoError(err)
+
+	bindUnmountContainerRootfs(context.Background(), filepath.Join(testDir, sID), container)
+
+	// expect testPath1 exist, if not exist, it means this case failed.
+	if _, err := os.Stat(testPath1); err != nil && !os.IsExist(err) {
+		t.Fatal("testPath should not be removed")
+	}
+
+	cID2 := "contIDDevicemapper2"
+	container.state.Fstype = ""
+	container.id = cID2
+	testPath2 := filepath.Join(testDir, sID, cID2, rootfsDir)
+	err = os.MkdirAll(testPath2, mountPerm)
+	assert.NoError(err)
+
+	defer os.RemoveAll(filepath.Join(testDir, sID))
+
+	// expect testPath2 not exist, if exist, it means this case failed.
+	bindUnmountContainerRootfs(context.Background(), filepath.Join(testDir, sID), container)
+	if _, err := os.Stat(testPath2); err == nil || os.IsExist(err) {
+		t.Fatal("testPath should be removed")
 	}
 }
