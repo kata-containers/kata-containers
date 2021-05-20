@@ -1216,3 +1216,98 @@ func TestKataAgentDirs(t *testing.T) {
 		assert.Equal(ephemeralPath(), defaultEphemeralPath)
 	}
 }
+
+func TestSandboxBindMount(t *testing.T) {
+	assert := assert.New(t)
+	// create temporary files to mount:
+	testMountPath, err := ioutil.TempDir("", "sandbox-test")
+	assert.NoError(err)
+	defer os.RemoveAll(testMountPath)
+
+	// create a new shared directory for our test:
+	kataHostSharedDirSaved := kataHostSharedDir
+	testHostDir, err := ioutil.TempDir("", "kata-cleanup")
+	assert.NoError(err)
+	kataHostSharedDir = func() string {
+		return testHostDir
+	}
+	defer func() {
+		kataHostSharedDir = kataHostSharedDirSaved
+	}()
+
+	m1Path := filepath.Join(testMountPath, "foo.txt")
+	f1, err := os.Create(m1Path)
+	assert.NoError(err)
+	defer f1.Close()
+
+	m2Path := filepath.Join(testMountPath, "bar.txt")
+	f2, err := os.Create(m2Path)
+	assert.NoError(err)
+	defer f2.Close()
+
+	// create sandbox for mounting into
+	sandbox := &Sandbox{
+		ctx: context.Background(),
+		id:  "foobar",
+		config: &SandboxConfig{
+			SandboxBindMounts: []string{m1Path, m2Path},
+		},
+	}
+	k := &kataAgent{ctx: context.Background()}
+
+	// make the shared directory for our test:
+	dir := kataHostSharedDir()
+	err = os.MkdirAll(path.Join(dir, sandbox.id), 0777)
+	assert.Nil(err)
+	defer os.RemoveAll(dir)
+
+	sharePath := getSharePath(sandbox.id)
+	mountPath := getMountPath(sandbox.id)
+
+	err = os.MkdirAll(sharePath, DirMode)
+	assert.Nil(err)
+	err = os.MkdirAll(mountPath, DirMode)
+	assert.Nil(err)
+
+	// setup the expeted slave mount:
+	err = bindMount(sandbox.ctx, mountPath, sharePath, true, "slave")
+	assert.Nil(err)
+	defer syscall.Unmount(sharePath, syscall.MNT_DETACH|UmountNoFollow)
+
+	// Test the function. We expect it to succeed and for the mount to exist
+	err = k.setupSandboxBindMounts(sandbox)
+	assert.NoError(err)
+
+	// Test the cleanup function. We expect it to succeed for the mount to be removed.
+	err = k.cleanupSandboxBindMounts(sandbox)
+	assert.NoError(err)
+
+	// After successful cleanup, verify there are not any mounts left behind:
+	stat := syscall.Stat_t{}
+	mount1CheckPath := filepath.Join(getMountPath(sandbox.id), sandboxMountsDir, dir, filepath.Base(m1Path))
+	err = syscall.Stat(mount1CheckPath, &stat)
+	assert.Error(err)
+	assert.True(os.IsNotExist(err))
+
+	mount2CheckPath := filepath.Join(getMountPath(sandbox.id), sandboxMountsDir, dir, filepath.Base(m2Path))
+	err = syscall.Stat(mount2CheckPath, &stat)
+	assert.Error(err)
+	assert.True(os.IsNotExist(err))
+
+	//
+	// Create a mount that we know will cause an error:
+	//
+	sandbox.config.SandboxBindMounts = append(sandbox.config.SandboxBindMounts, "oh-nos")
+	err = k.setupSandboxBindMounts(sandbox)
+	assert.Error(err)
+
+	// Verify there aren't any mounts left behind
+	stat = syscall.Stat_t{}
+	err = syscall.Stat(mount1CheckPath, &stat)
+	assert.Error(err)
+	assert.True(os.IsNotExist(err))
+
+	err = syscall.Stat(mount2CheckPath, &stat)
+	assert.Error(err)
+	assert.True(os.IsNotExist(err))
+}
