@@ -469,7 +469,7 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
     // Ref: https://github.com/opencontainers/runc/commit/50a19c6ff828c58e5dab13830bd3dacde268afe5
     //
     if !nses.is_empty() {
-        prctl::set_dumpable(false)
+        capctl::prctl::set_dumpable(false)
             .map_err(|e| anyhow!(e).context("set process non-dumpable failed"))?;
     }
 
@@ -602,7 +602,7 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
 
     // NoNewPeiviledges, Drop capabilities
     if oci_process.no_new_privileges {
-        prctl::set_no_new_privileges(true).map_err(|_| anyhow!("cannot set no new privileges"))?;
+        capctl::prctl::set_no_new_privs().map_err(|_| anyhow!("cannot set no new privileges"))?;
     }
 
     if oci_process.capabilities.is_some() {
@@ -1314,7 +1314,7 @@ fn write_mappings(logger: &Logger, path: &str, maps: &[LinuxIdMapping]) -> Resul
 
 fn setid(uid: Uid, gid: Gid) -> Result<()> {
     // set uid/gid
-    prctl::set_keep_capabilities(true)
+    capctl::prctl::set_keepcaps(true)
         .map_err(|e| anyhow!(e).context("set keep capabilities returned"))?;
 
     {
@@ -1328,7 +1328,7 @@ fn setid(uid: Uid, gid: Gid) -> Result<()> {
         capabilities::reset_effective()?;
     }
 
-    prctl::set_keep_capabilities(false)
+    capctl::prctl::set_keepcaps(false)
         .map_err(|e| anyhow!(e).context("set keep capabilities returned"))?;
 
     Ok(())
