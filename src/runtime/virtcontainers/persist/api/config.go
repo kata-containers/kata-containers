@@ -275,6 +275,9 @@ type SandboxConfig struct {
 
 	DisableGuestSeccomp bool
 
+	// SandboxBindMounts - list of paths to mount into guest
+	SandboxBindMounts []string
+
 	// Experimental enables experimental features
 	Experimental []string
 
