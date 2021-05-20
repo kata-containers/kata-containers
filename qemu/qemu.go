@@ -233,6 +233,9 @@ const (
 
 	// SEVGuest represents an SEV guest object
 	SEVGuest ObjectType = "sev-guest"
+
+	// SecExecGuest represents an s390x Secure Execution (Protected Virtualization in QEMU) object
+	SecExecGuest ObjectType = "s390-pv-guest"
 )
 
 // Object is a qemu object representation.
@@ -275,24 +278,16 @@ type Object struct {
 func (object Object) Valid() bool {
 	switch object.Type {
 	case MemoryBackendFile:
-		if object.ID == "" || object.MemPath == "" || object.Size == 0 {
-			return false
-		}
-
+		return object.ID != "" && object.MemPath != "" && object.Size != 0
 	case TDXGuest:
-		if object.ID == "" || object.File == "" || object.DeviceID == "" {
-			return false
-		}
+		return object.ID != "" && object.File != "" && object.DeviceID != ""
 	case SEVGuest:
-		if object.ID == "" || object.File == "" || object.CBitPos == 0 || object.ReducedPhysBits == 0 {
-			return false
-		}
-
+		return object.ID != "" && object.File != "" && object.CBitPos != 0 && object.ReducedPhysBits != 0
+	case SecExecGuest:
+		return object.ID != ""
 	default:
 		return false
 	}
-
-	return true
 }
 
 // QemuParams returns the qemu parameters built out of this Object device.
@@ -329,6 +324,9 @@ func (object Object) QemuParams(config *Config) []string {
 
 		driveParams = append(driveParams, "if=pflash,format=raw,readonly=on")
 		driveParams = append(driveParams, fmt.Sprintf(",file=%s", object.File))
+	case SecExecGuest:
+		objectParams = append(objectParams, string(object.Type))
+		objectParams = append(objectParams, fmt.Sprintf(",id=%s", object.ID))
 	}
 
 	if len(deviceParams) > 0 {
