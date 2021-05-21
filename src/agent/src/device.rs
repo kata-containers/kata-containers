@@ -22,6 +22,7 @@ use crate::uevent::{wait_for_uevent, Uevent, UeventMatcher};
 use anyhow::{anyhow, Result};
 use oci::{LinuxDeviceCgroup, LinuxResources, Spec};
 use protocols::agent::Device;
+use tracing::instrument;
 
 // Convenience macro to obtain the scope logger
 macro_rules! sl {
@@ -32,17 +33,21 @@ macro_rules! sl {
 
 const VM_ROOTFS: &str = "/";
 
+#[derive(Debug)]
 struct DevIndexEntry {
     idx: usize,
     residx: Vec<usize>,
 }
 
+#[derive(Debug)]
 struct DevIndex(HashMap<String, DevIndexEntry>);
 
+#[instrument]
 pub fn rescan_pci_bus() -> Result<()> {
     online_device(SYSFS_PCI_BUS_RESCAN_FILE)
 }
 
+#[instrument]
 pub fn online_device(path: &str) -> Result<()> {
     fs::write(path, "1")?;
     Ok(())
@@ -51,6 +56,7 @@ pub fn online_device(path: &str) -> Result<()> {
 // pcipath_to_sysfs fetches the sysfs path for a PCI path, relative to
 // the sysfs path for the PCI host bridge, based on the PCI path
 // provided.
+#[instrument]
 fn pcipath_to_sysfs(root_bus_sysfs: &str, pcipath: &pci::Path) -> Result<String> {
     let mut bus = "0000:00".to_string();
     let mut relpath = String::new();
@@ -109,6 +115,7 @@ impl UeventMatcher for ScsiBlockMatcher {
     }
 }
 
+#[instrument]
 pub async fn get_scsi_device_name(
     sandbox: &Arc<Mutex<Sandbox>>,
     scsi_addr: &str,
@@ -141,6 +148,7 @@ impl UeventMatcher for VirtioBlkPciMatcher {
     }
 }
 
+#[instrument]
 pub async fn get_virtio_blk_pci_device_name(
     sandbox: &Arc<Mutex<Sandbox>>,
     pcipath: &pci::Path,
@@ -177,6 +185,7 @@ impl UeventMatcher for PmemBlockMatcher {
     }
 }
 
+#[instrument]
 pub async fn wait_for_pmem_device(sandbox: &Arc<Mutex<Sandbox>>, devpath: &str) -> Result<()> {
     let devname = match devpath.strip_prefix("/dev/") {
         Some(dev) => dev,
@@ -201,6 +210,7 @@ pub async fn wait_for_pmem_device(sandbox: &Arc<Mutex<Sandbox>>, devpath: &str) 
 }
 
 /// Scan SCSI bus for the given SCSI address(SCSI-Id and LUN)
+#[instrument]
 fn scan_scsi_bus(scsi_addr: &str) -> Result<()> {
     let tokens: Vec<&str> = scsi_addr.split(':').collect();
     if tokens.len() != 2 {
@@ -235,6 +245,7 @@ fn scan_scsi_bus(scsi_addr: &str) -> Result<()> {
 // the same device in the list of devices provided through the OCI spec.
 // This is needed to update information about minor/major numbers that cannot
 // be predicted from the caller.
+#[instrument]
 fn update_spec_device_list(device: &Device, spec: &mut Spec, devidx: &DevIndex) -> Result<()> {
     let major_id: c_uint;
     let minor_id: c_uint;
@@ -311,6 +322,7 @@ fn update_spec_device_list(device: &Device, spec: &mut Spec, devidx: &DevIndex) 
 
 // device.Id should be the predicted device name (vda, vdb, ...)
 // device.VmPath already provides a way to send it in
+#[instrument]
 async fn virtiommio_blk_device_handler(
     device: &Device,
     spec: &mut Spec,
@@ -325,6 +337,7 @@ async fn virtiommio_blk_device_handler(
 }
 
 // device.Id should be a PCI path string
+#[instrument]
 async fn virtio_blk_device_handler(
     device: &Device,
     spec: &mut Spec,
@@ -340,6 +353,7 @@ async fn virtio_blk_device_handler(
 }
 
 // device.Id should be the SCSI address of the disk in the format "scsiID:lunID"
+#[instrument]
 async fn virtio_scsi_device_handler(
     device: &Device,
     spec: &mut Spec,
@@ -351,6 +365,7 @@ async fn virtio_scsi_device_handler(
     update_spec_device_list(&dev, spec, devidx)
 }
 
+#[instrument]
 async fn virtio_nvdimm_device_handler(
     device: &Device,
     spec: &mut Spec,
@@ -389,6 +404,7 @@ impl DevIndex {
     }
 }
 
+#[instrument]
 pub async fn add_devices(
     devices: &[Device],
     spec: &mut Spec,
@@ -403,6 +419,7 @@ pub async fn add_devices(
     Ok(())
 }
 
+#[instrument]
 async fn add_device(
     device: &Device,
     spec: &mut Spec,
@@ -437,6 +454,7 @@ async fn add_device(
 // update_device_cgroup update the device cgroup for container
 // to not allow access to the guest root partition. This prevents
 // the container from being able to access the VM rootfs.
+#[instrument]
 pub fn update_device_cgroup(spec: &mut Spec) -> Result<()> {
     let meta = fs::metadata(VM_ROOTFS)?;
     let rdev = meta.dev();

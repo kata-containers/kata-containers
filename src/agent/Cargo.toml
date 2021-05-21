@@ -45,6 +45,12 @@ procfs = "0.7.9"
 anyhow = "1.0.32"
 cgroups = { package = "cgroups-rs", version = "0.2.5" }
 
+# Tracing
+tracing = "0.1.26"
+tracing-subscriber = "0.2.18"
+tracing-opentelemetry = "0.13.0"
+opentelemetry = "0.14.0"
+
 [dev-dependencies]
 tempfile = "3.1.0"
 
