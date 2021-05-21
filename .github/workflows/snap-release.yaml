@@ -33,5 +33,5 @@ jobs:
           snap_file="kata-containers_${snap_version}_amd64.snap"
           # Upload the snap if it exists
           if [ -f ${snap_file} ]; then
-            snapcraft upload --release=candidate ${snap_file}
+            snapcraft upload --release=stable ${snap_file}
           fi

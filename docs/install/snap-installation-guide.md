@@ -14,7 +14,7 @@ Kata Containers can be installed in any Linux distribution that supports
 Run the following command to install **Kata Containers**:
 
 ```sh
-$ sudo snap install kata-containers --candidate --classic
+$ sudo snap install kata-containers --stable --classic
 ```
 
 ## Configure Kata Containers
