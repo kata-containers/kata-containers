@@ -253,11 +253,14 @@ impl AgentService {
         if req.timeout == 0 {
             let s = Arc::clone(&self.sandbox);
             let mut sandbox = s.lock().await;
-            let ctr = sandbox
-                .get_container(&cid)
-                .ok_or_else(|| anyhow!("Invalid container id"))?;
 
-            ctr.destroy().await?;
+            sandbox.bind_watcher.remove_container(&cid).await;
+
+            sandbox
+                .get_container(&cid)
+                .ok_or_else(|| anyhow!("Invalid container id"))?
+                .destroy()
+                .await?;
 
             remove_container_resources(&mut sandbox)?;
 
@@ -273,6 +276,7 @@ impl AgentService {
             let mut sandbox = s.lock().await;
             if let Some(ctr) = sandbox.get_container(&cid2) {
                 ctr.destroy().await.unwrap();
+                sandbox.bind_watcher.remove_container(&cid2).await;
                 tx.send(1).unwrap();
             };
         });
