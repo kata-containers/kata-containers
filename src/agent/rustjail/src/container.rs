@@ -545,7 +545,7 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
         // notify parent to run prestart hooks
         write_sync(cwfd, SYNC_SUCCESS, "")?;
         // wait parent run prestart hooks
-        let _ = read_sync(crfd)?;
+        read_sync(crfd)?;
     }
 
     if mount_fd != -1 {
@@ -1254,7 +1254,7 @@ async fn join_namespaces(
 
     if p.init {
         info!(logger, "notify child parent ready to run prestart hook!");
-        let _ = read_async(pipe_r).await?;
+        read_async(pipe_r).await?;
 
         info!(logger, "get ready to run prestart hook!");
 

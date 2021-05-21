@@ -37,10 +37,10 @@ pub fn reseed_rng(data: &[u8]) -> Result<()> {
             &len as *const libc::c_long,
         )
     };
-    let _ = Errno::result(ret).map(drop)?;
+    Errno::result(ret).map(drop)?;
 
     let ret = unsafe { libc::ioctl(f.as_raw_fd(), RNDRESEEDRNG as IoctlRequestType, 0) };
-    let _ = Errno::result(ret).map(drop)?;
+    Errno::result(ret).map(drop)?;
 
     Ok(())
 }
