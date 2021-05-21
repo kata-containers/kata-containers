@@ -6,6 +6,7 @@ use anyhow::{anyhow, Result};
 use std::env;
 use std::fs;
 use std::time;
+use tracing::instrument;
 
 const DEBUG_CONSOLE_FLAG: &str = "agent.debug_console";
 const DEV_MODE_FLAG: &str = "agent.devmode";
@@ -101,6 +102,7 @@ impl AgentConfig {
         }
     }
 
+    #[instrument]
     pub fn parse_cmdline(&mut self, file: &str) -> Result<()> {
         let cmdline = fs::read_to_string(file)?;
         let params: Vec<&str> = cmdline.split_ascii_whitespace().collect();
@@ -171,6 +173,7 @@ impl AgentConfig {
     }
 }
 
+#[instrument]
 fn get_vsock_port(p: &str) -> Result<i32> {
     let fields: Vec<&str> = p.split('=').collect();
     if fields.len() != 2 {
@@ -185,6 +188,7 @@ fn get_vsock_port(p: &str) -> Result<i32> {
 //
 // Note: Logrus names are used for compatability with the previous
 // golang-based agent.
+#[instrument]
 fn logrus_to_slog_level(logrus_level: &str) -> Result<slog::Level> {
     let level = match logrus_level {
         // Note: different semantics to logrus: log, but don't panic.
@@ -207,6 +211,7 @@ fn logrus_to_slog_level(logrus_level: &str) -> Result<slog::Level> {
     Ok(level)
 }
 
+#[instrument]
 fn get_log_level(param: &str) -> Result<slog::Level> {
     let fields: Vec<&str> = param.split('=').collect();
 
@@ -221,6 +226,7 @@ fn get_log_level(param: &str) -> Result<slog::Level> {
     }
 }
 
+#[instrument]
 fn get_hotplug_timeout(param: &str) -> Result<time::Duration> {
     let fields: Vec<&str> = param.split('=').collect();
 
@@ -241,6 +247,7 @@ fn get_hotplug_timeout(param: &str) -> Result<time::Duration> {
     Ok(time::Duration::from_secs(value.unwrap()))
 }
 
+#[instrument]
 fn get_bool_value(param: &str) -> Result<bool> {
     let fields: Vec<&str> = param.split('=').collect();
 
@@ -265,6 +272,7 @@ fn get_bool_value(param: &str) -> Result<bool> {
 // - A value can contain any number of equal signs.
 // - We could/should maybe check if the name is pure whitespace
 //   since this is considered to be invalid.
+#[instrument]
 fn get_string_value(param: &str) -> Result<String> {
     let fields: Vec<&str> = param.split('=').collect();
 
@@ -285,6 +293,7 @@ fn get_string_value(param: &str) -> Result<String> {
     Ok(value)
 }
 
+#[instrument]
 fn get_container_pipe_size(param: &str) -> Result<i32> {
     let fields: Vec<&str> = param.split('=').collect();
 

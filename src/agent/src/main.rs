@@ -32,6 +32,7 @@ use std::os::unix::io::AsRawFd;
 use std::path::Path;
 use std::process::exit;
 use std::sync::Arc;
+use tracing::instrument;
 
 mod config;
 mod console;
@@ -79,6 +80,7 @@ lazy_static! {
         Arc::new(RwLock::new(config::AgentConfig::new()));
 }
 
+#[instrument]
 fn announce(logger: &Logger, config: &AgentConfig) {
     info!(logger, "announce";
     "agent-commit" => version::VERSION_COMMIT,
@@ -259,6 +261,7 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     rt.block_on(real_main())
 }
 
+#[instrument]
 async fn start_sandbox(
     logger: &Logger,
     config: &AgentConfig,
@@ -345,6 +348,7 @@ fn init_agent_as_init(logger: &Logger, unified_cgroup_hierarchy: bool) -> Result
     Ok(())
 }
 
+#[instrument]
 fn sethostname(hostname: &OsStr) -> Result<()> {
     let size = hostname.len() as usize;
 
