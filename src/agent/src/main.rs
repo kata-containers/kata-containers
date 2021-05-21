@@ -305,7 +305,7 @@ async fn start_sandbox(
     let mut server = rpc::start(sandbox.clone(), config.server_addr.as_str());
     server.start().await?;
 
-    let _ = rx.await?;
+    rx.await?;
     server.shutdown().await?;
 
     Ok(())

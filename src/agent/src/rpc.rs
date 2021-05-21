@@ -103,7 +103,7 @@ impl AgentService {
     ) -> Result<()> {
         let cid = req.container_id.clone();
 
-        let _ = verify_cid(&cid)?;
+        verify_cid(&cid)?;
 
         let mut oci_spec = req.OCI.clone();
         let use_sandbox_pidns = req.get_sandbox_pidns();
@@ -926,7 +926,7 @@ impl protocols::agent_ttrpc::AgentService for AgentService {
             }
 
             for m in req.kernel_modules.iter() {
-                let _ = load_kernel_module(m)
+                load_kernel_module(m)
                     .map_err(|e| ttrpc_error(ttrpc::Code::INTERNAL, e.to_string()))?;
             }
 
@@ -1529,22 +1529,22 @@ fn setup_bundle(cid: &str, spec: &mut Spec) -> Result<PathBuf> {
 fn cleanup_process(p: &mut Process) -> Result<()> {
     if p.parent_stdin.is_some() {
         p.close_stream(StreamType::ParentStdin);
-        let _ = unistd::close(p.parent_stdin.unwrap())?;
+        unistd::close(p.parent_stdin.unwrap())?;
     }
 
     if p.parent_stdout.is_some() {
         p.close_stream(StreamType::ParentStdout);
-        let _ = unistd::close(p.parent_stdout.unwrap())?;
+        unistd::close(p.parent_stdout.unwrap())?;
     }
 
     if p.parent_stderr.is_some() {
         p.close_stream(StreamType::ParentStderr);
-        let _ = unistd::close(p.parent_stderr.unwrap())?;
+        unistd::close(p.parent_stderr.unwrap())?;
     }
 
     if p.term_master.is_some() {
         p.close_stream(StreamType::TermMaster);
-        let _ = unistd::close(p.term_master.unwrap())?;
+        unistd::close(p.term_master.unwrap())?;
     }
 
     p.notify_term_close();
