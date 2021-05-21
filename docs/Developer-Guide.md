@@ -305,7 +305,7 @@ You MUST choose one of `alpine`, `centos`, `clearlinux`, `debian`, `euleros`, `f
 > - You should only do this step if you are testing with the latest version of the agent.
 
 ```
-$ sudo install -o root -g root -m 0550 -t ${ROOTFS_DIR}/bin ../../../src/agent/target/x86_64-unknown-linux-musl/release/kata-agent
+$ sudo install -o root -g root -m 0550 -t ${ROOTFS_DIR}/usr/bin ../../../src/agent/target/x86_64-unknown-linux-musl/release/kata-agent
 $ sudo install -o root -g root -m 0440 ../../../src/agent/kata-agent.service ${ROOTFS_DIR}/usr/lib/systemd/system/
 $ sudo install -o root -g root -m 0440 ../../../src/agent/kata-containers.target ${ROOTFS_DIR}/usr/lib/systemd/system/
 ```
