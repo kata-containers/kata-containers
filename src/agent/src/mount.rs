@@ -6,13 +6,16 @@
 use std::collections::HashMap;
 use std::ffi::CString;
 use std::fs;
+use std::fs::File;
 use std::io;
+use std::io::{BufRead, BufReader};
+use std::iter;
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
-
 use std::path::Path;
 use std::ptr::null;
 use std::str::FromStr;
 use std::sync::Arc;
+
 use tokio::sync::Mutex;
 
 use libc::{c_void, mount};
@@ -20,8 +23,6 @@ use nix::mount::{self, MsFlags};
 use nix::unistd::Gid;
 
 use regex::Regex;
-use std::fs::File;
-use std::io::{BufRead, BufReader};
 
 use crate::device::{
     get_scsi_device_name, get_virtio_blk_pci_device_name, online_device, wait_for_pmem_device,
@@ -42,6 +43,7 @@ pub const DRIVER_SCSI_TYPE: &str = "scsi";
 pub const DRIVER_NVDIMM_TYPE: &str = "nvdimm";
 pub const DRIVER_EPHEMERAL_TYPE: &str = "ephemeral";
 pub const DRIVER_LOCAL_TYPE: &str = "local";
+pub const DRIVER_WATCHABLE_BIND_TYPE: &str = "watchable-bind";
 
 pub const TYPE_ROOTFS: &str = "rootfs";
 
@@ -132,7 +134,7 @@ lazy_static! {
     ];
 }
 
-pub const STORAGE_HANDLER_LIST: [&str; 8] = [
+pub const STORAGE_HANDLER_LIST: &[&str] = &[
     DRIVER_BLK_TYPE,
     DRIVER_9P_TYPE,
     DRIVER_VIRTIOFS_TYPE,
@@ -141,6 +143,7 @@ pub const STORAGE_HANDLER_LIST: [&str; 8] = [
     DRIVER_LOCAL_TYPE,
     DRIVER_SCSI_TYPE,
     DRIVER_NVDIMM_TYPE,
+    DRIVER_WATCHABLE_BIND_TYPE,
 ];
 
 #[derive(Debug, Clone)]
@@ -425,6 +428,20 @@ async fn nvdimm_storage_handler(
     common_storage_handler(logger, &storage)
 }
 
+async fn bind_watcher_storage_handler(
+    logger: &Logger,
+    storage: &Storage,
+    sandbox: Arc<Mutex<Sandbox>>,
+) -> Result<()> {
+    let mut locked = sandbox.lock().await;
+    let container_id = locked.id.clone();
+
+    locked
+        .bind_watcher
+        .add_container(container_id, iter::once(storage.clone()), logger)
+        .await
+}
+
 // mount_storage performs the mount described by the storage structure.
 #[instrument]
 fn mount_storage(logger: &Logger, storage: &Storage) -> Result<()> {
@@ -478,7 +495,7 @@ fn mount_storage(logger: &Logger, storage: &Storage) -> Result<()> {
 
 /// Looks for `mount_point` entry in the /proc/mounts.
 #[instrument]
-fn is_mounted(mount_point: &str) -> Result<bool> {
+pub fn is_mounted(mount_point: &str) -> Result<bool> {
     let mount_point = mount_point.trim_end_matches('/');
     let found = fs::metadata(mount_point).is_ok()
         // Looks through /proc/mounts and check if the mount exists
@@ -555,6 +572,11 @@ pub async fn add_storages(
                 virtio_scsi_storage_handler(&logger, &storage, sandbox.clone()).await
             }
             DRIVER_NVDIMM_TYPE => nvdimm_storage_handler(&logger, &storage, sandbox.clone()).await,
+            DRIVER_WATCHABLE_BIND_TYPE => {
+                bind_watcher_storage_handler(&logger, &storage, sandbox.clone()).await?;
+                // Don't register watch mounts, they're hanlded separately by the watcher.
+                Ok(String::new())
+            }
             _ => {
                 return Err(anyhow!(
                     "Failed to find the storage handler {}",
