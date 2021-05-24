@@ -394,6 +394,20 @@ You may choose to manually build your VMM/hypervisor.
 Kata Containers makes use of upstream QEMU branch. The exact version
 and repository utilized can be found by looking at the [versions file](../versions.yaml).
 
+Find the correct version of QEMU from the versions file:
+```
+$ source ${GOPATH}/src/github.com/kata-containers/kata-containers/tools/packaging/scripts/lib.sh
+$ qemu_version=$(get_from_kata_deps "assets.hypervisor.qemu.version")
+$ echo ${qemu_version}
+```
+Get source from the matching branch of QEMU:
+```
+$ go get -d github.com/qemu/qemu
+$ cd ${GOPATH}/src/github.com/qemu/qemu
+$ git checkout ${qemu_version}
+$ your_qemu_directory=${GOPATH}/src/github.com/qemu/qemu
+```
+
 There are scripts to manage the build and packaging of QEMU. For the examples below, set your
 environment as:
 ```
