@@ -3,13 +3,12 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
+use anyhow::{anyhow, Context, Result};
 use byteorder::{ByteOrder, NetworkEndian};
-use opentelemetry::exporter::trace::SpanData;
-use opentelemetry::exporter::trace::{ExportResult, SpanExporter};
+use opentelemetry::sdk::export::trace::{SpanData, SpanExporter};
 use slog::{debug, info, o, Logger};
 use std::io::{ErrorKind, Read};
 use std::net::Shutdown;
-use std::sync::Arc;
 use vsock::VsockStream;
 
 // The VSOCK "packet" protocol used comprises two elements:
@@ -26,17 +25,18 @@ fn mk_io_err(msg: &str) -> std::io::Error {
     std::io::Error::new(std::io::ErrorKind::Other, msg.to_string())
 }
 
-pub fn handle_connection(
+pub async fn handle_connection<'a>(
     logger: Logger,
     mut conn: VsockStream,
-    exporter: &dyn SpanExporter,
-) -> Result<(), std::io::Error> {
+    exporter: &'a mut dyn SpanExporter,
+) -> Result<()> {
     let logger = logger.new(o!("subsystem" => "handler",
             "connection" => format!("{:?}", conn)));
 
     debug!(logger, "handling connection");
 
     handle_trace_data(logger.clone(), &mut conn, exporter)
+        .await
         .map_err(|e| mk_io_err(&format!("failed to handle data: {:}", e)))?;
 
     debug!(&logger, "handled data");
@@ -49,11 +49,11 @@ pub fn handle_connection(
     Ok(())
 }
 
-fn handle_trace_data(
+async fn handle_trace_data<'a>(
     logger: Logger,
-    reader: &mut dyn Read,
-    exporter: &dyn SpanExporter,
-) -> Result<(), String> {
+    reader: &'a mut dyn Read,
+    exporter: &'a mut dyn SpanExporter,
+) -> Result<()> {
     loop {
         let mut header: [u8; HEADER_SIZE_BYTES as usize] = [0; HEADER_SIZE_BYTES as usize];
 
@@ -67,7 +67,7 @@ fn handle_trace_data(
                     break;
                 }
 
-                return Err(format!("failed to read header: {:}", e));
+                return Err(anyhow!("failed to read header: {:}", e));
             }
         };
 
@@ -78,7 +78,7 @@ fn handle_trace_data(
 
         reader
             .read_exact(&mut encoded_payload)
-            .map_err(|e| format!("failed to read payload: {:}", e))?;
+            .with_context(|| format!("failed to read payload"))?;
 
         debug!(logger, "read payload");
 
@@ -87,15 +87,15 @@ fn handle_trace_data(
 
         debug!(logger, "deserialised payload");
 
-        let mut batch = Vec::<Arc<SpanData>>::new();
+        let mut batch = Vec::<SpanData>::new();
 
-        batch.push(Arc::new(span_data));
+        batch.push(span_data);
 
         // Call low-level Jaeger exporter to send the trace span immediately.
-        let result = exporter.export(batch);
+        let result = exporter.export(batch).await;
 
-        if result != ExportResult::Success {
-            return Err(format!("failed to export trace spans: {:?}", result));
+        if result.is_err() {
+            return Err(anyhow!("failed to export trace spans: {:?}", result));
         }
 
         debug!(logger, "exported trace spans");
