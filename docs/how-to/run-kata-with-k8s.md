@@ -171,10 +171,10 @@ $ sudo systemctl daemon-reload
 $ sudo systemctl restart kubelet
 
 # If using CRI-O
-$ sudo kubeadm init --skip-preflight-checks --cri-socket /var/run/crio/crio.sock --pod-network-cidr=10.244.0.0/16
+$ sudo kubeadm init --ignore-preflight-errors=all --cri-socket /var/run/crio/crio.sock --pod-network-cidr=10.244.0.0/16
 
 # If using CRI-containerd
-$ sudo kubeadm init --skip-preflight-checks --cri-socket /run/containerd/containerd.sock --pod-network-cidr=10.244.0.0/16
+$ sudo kubeadm init --ignore-preflight-errors=all --cri-socket /run/containerd/containerd.sock --pod-network-cidr=10.244.0.0/16
 
 $ export KUBECONFIG=/etc/kubernetes/admin.conf
 ```
