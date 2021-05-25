@@ -27,6 +27,14 @@ const defaultQemuMachineOptions = "accel=kvm,usb=off"
 
 const qmpMigrationWaitTimeout = 5 * time.Second
 
+const pefSysFirmwareDir = "/sys/firmware/ultravisor/"
+
+const pefID = "pef0"
+
+const tpmID = "tpm0"
+
+const tpmHostPath = "/dev/tpmrm0"
+
 var kernelParams = []Param{
 	{"rcupdate.rcu_expedited", "1"},
 	{"reboot", "k"},
@@ -43,7 +51,7 @@ var supportedQemuMachine = govmmQemu.Machine{
 
 // Logger returns a logrus logger appropriate for logging qemu messages
 func (q *qemuPPC64le) Logger() *logrus.Entry {
-	return virtLog.WithField("subsystem", "qemu")
+	return virtLog.WithField("subsystem", "qemuPPC64le")
 }
 
 // MaxQemuVCPUs returns the maximum number of vCPUs supported
@@ -69,7 +77,14 @@ func newQemuArch(config HypervisorConfig) (qemuArch, error) {
 			kernelParamsNonDebug: kernelParamsNonDebug,
 			kernelParamsDebug:    kernelParamsDebug,
 			kernelParams:         kernelParams,
+			protection:           noneProtection,
 		},
+	}
+
+	if config.ConfidentialGuest {
+		if err := q.enableProtection(); err != nil {
+			return nil, err
+		}
 	}
 
 	q.handleImagePath(config)
@@ -115,4 +130,50 @@ func (q *qemuPPC64le) appendBridges(devices []govmmQemu.Device) []govmmQemu.Devi
 
 func (q *qemuPPC64le) appendIOMMU(devices []govmmQemu.Device) ([]govmmQemu.Device, error) {
 	return devices, fmt.Errorf("PPC64le does not support appending a vIOMMU")
+}
+
+// Enables guest protection
+func (q *qemuPPC64le) enableProtection() error {
+	var err error
+	q.protection, err = availableGuestProtection()
+	if err != nil {
+		return err
+	}
+
+	switch q.protection {
+	case pefProtection:
+		if q.qemuMachine.Options != "" {
+			q.qemuMachine.Options += ","
+		}
+		q.qemuMachine.Options += fmt.Sprintf("confidential-guest-support=%s", pefID)
+		virtLog.WithFields(logrus.Fields{
+			"subsystem":     "qemuPPC64le",
+			"machine":       q.qemuMachine,
+			"kernel-params": q.kernelParams,
+		}).Info("Enabling PEF protection")
+		return nil
+
+	default:
+		return fmt.Errorf("This system doesn't support Confidential Computing (Guest Protection)")
+	}
+}
+
+// append protection device
+func (q *qemuPPC64le) appendProtectionDevice(devices []govmmQemu.Device, firmware string) ([]govmmQemu.Device, string, error) {
+	switch q.protection {
+	case pefProtection:
+		return append(devices,
+			govmmQemu.Object{
+				Driver:   govmmQemu.SpaprTPMProxy,
+				Type:     govmmQemu.PEFGuest,
+				ID:       pefID,
+				DeviceID: tpmID,
+				File:     tpmHostPath,
+			}), firmware, nil
+	case noneProtection:
+		return devices, firmware, nil
+
+	default:
+		return devices, "", fmt.Errorf("Unsupported guest protection technology: %v", q.protection)
+	}
 }
