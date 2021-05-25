@@ -822,7 +822,7 @@ impl BaseContainer for LinuxContainer {
             if stat::stat(fifo_file.as_str()).is_ok() {
                 return Err(anyhow!("exec fifo exists"));
             }
-            unistd::mkfifo(fifo_file.as_str(), Mode::from_bits(0o622).unwrap())?;
+            unistd::mkfifo(fifo_file.as_str(), Mode::from_bits(0o644).unwrap())?;
 
             fifofd = fcntl::open(
                 fifo_file.as_str(),
