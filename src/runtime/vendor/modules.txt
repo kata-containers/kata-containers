@@ -222,7 +222,7 @@ github.com/hashicorp/errwrap
 # github.com/hashicorp/go-multierror v1.0.0
 ## explicit
 github.com/hashicorp/go-multierror
-# github.com/kata-containers/govmm v0.0.0-20210428163604-f0e9a35308ee
+# github.com/kata-containers/govmm v0.0.0-20210520142420-eb57f004d89f
 ## explicit
 github.com/kata-containers/govmm/qemu
 # github.com/konsorten/go-windows-terminal-sequences v1.0.1
