@@ -32,7 +32,7 @@ use std::os::unix::io::AsRawFd;
 use std::path::Path;
 use std::process::exit;
 use std::sync::Arc;
-use tracing::instrument;
+use tracing::{instrument, span};
 
 mod config;
 mod console;
@@ -56,7 +56,7 @@ mod version;
 use mount::{cgroups_mount, general_mount};
 use sandbox::Sandbox;
 use signal::setup_signal_handler;
-use slog::Logger;
+use slog::{error, info, o, warn, Logger};
 use uevent::watch_uevents;
 
 use futures::future::join_all;
@@ -71,6 +71,7 @@ use tokio::{
 };
 
 mod rpc;
+mod tracer;
 
 const NAME: &str = "kata-agent";
 const KERNEL_CMDLINE_FILE: &str = "/proc/cmdline";
@@ -201,6 +202,17 @@ async fn real_main() -> std::result::Result<(), Box<dyn std::error::Error>> {
         ttrpc_log_guard = Ok(slog_stdlog::init().map_err(|e| e)?);
     }
 
+    if config.tracing != tracer::TraceType::Disabled {
+        let _ = tracer::setup_tracing(NAME, &logger, &config)?;
+    }
+
+    let root = span!(tracing::Level::TRACE, "root-span", work_units = 2);
+
+    // XXX: Start the root trace transaction.
+    //
+    // XXX: Note that *ALL* spans needs to start after this point!!
+    let _enter = root.enter();
+
     // Start the sandbox and wait for its ttRPC server to end
     start_sandbox(&logger, &config, init_mode, &mut tasks, shutdown_rx.clone()).await?;
 
@@ -227,6 +239,10 @@ async fn real_main() -> std::result::Result<(), Box<dyn std::error::Error>> {
         if let Err(e) = result {
             return Err(anyhow!(e).into());
         }
+    }
+
+    if config.tracing != tracer::TraceType::Disabled {
+        tracer::end_tracing();
     }
 
     eprintln!("{} shutdown complete", NAME);

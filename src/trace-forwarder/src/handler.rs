@@ -19,6 +19,9 @@ use vsock::VsockStream;
 // This constant defines the number of bytes used to encode the header on the
 // wire. In other words, the first 64-bits of the packet contain a number
 // specifying how many bytes are in the remainder of the packet.
+//
+// Must match the value of the variable of the same name in the agents
+// vsock-exporter.
 const HEADER_SIZE_BYTES: u64 = std::mem::size_of::<u64>() as u64;
 
 fn mk_io_err(msg: &str) -> std::io::Error {

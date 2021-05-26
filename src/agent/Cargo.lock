@@ -84,6 +84,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "bincode"
+version = "1.3.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b1f45e9417d87227c7a56d22e471c6206462cba514c7590c09aff4cf6d1ddcad"
+dependencies = [
+ "serde",
+]
+
+[[package]]
 name = "bitflags"
 version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -538,6 +547,7 @@ dependencies = [
  "tracing-opentelemetry",
  "tracing-subscriber",
  "ttrpc",
+ "vsock-exporter",
 ]
 
 [[package]]
@@ -843,6 +853,7 @@ dependencies = [
  "percent-encoding",
  "pin-project",
  "rand",
+ "serde",
  "thiserror",
 ]
 
@@ -1301,6 +1312,9 @@ name = "serde"
 version = "1.0.126"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ec7505abeacaec74ae4778d9d9328fe5a5d04253220a85c4ee022239fc996d03"
+dependencies = [
+ "serde_derive",
+]
 
 [[package]]
 name = "serde_derive"
@@ -1754,6 +1768,22 @@ checksum = "50e2ef09834e1d203d24556512c0e58e66de203440bd9d74c30a33f7240091c6"
 dependencies = [
  "libc",
  "nix 0.19.1",
+]
+
+[[package]]
+name = "vsock-exporter"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "bincode",
+ "byteorder",
+ "libc",
+ "nix 0.20.0",
+ "opentelemetry",
+ "serde",
+ "slog",
+ "thiserror",
+ "vsock",
 ]
 
 [[package]]
