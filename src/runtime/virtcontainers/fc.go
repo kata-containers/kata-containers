@@ -1181,6 +1181,10 @@ func (fc *firecracker) getPids() []int {
 	return []int{fc.info.PID}
 }
 
+func (fc *firecracker) getVirtioFsPid() *int {
+	return nil
+}
+
 func (fc *firecracker) fromGrpc(ctx context.Context, hypervisorConfig *HypervisorConfig, j []byte) error {
 	return errors.New("firecracker is not supported by VM cache")
 }

@@ -712,6 +712,10 @@ func (clh *cloudHypervisor) getPids() []int {
 	return pids
 }
 
+func (clh *cloudHypervisor) getVirtioFsPid() *int {
+	return &clh.state.VirtiofsdPID
+}
+
 func (clh *cloudHypervisor) addDevice(ctx context.Context, devInfo interface{}, devType deviceType) error {
 	span, _ := clh.trace(ctx, "addDevice")
 	defer span.End()

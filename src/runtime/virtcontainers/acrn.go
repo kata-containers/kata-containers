@@ -679,6 +679,10 @@ func (a *Acrn) getPids() []int {
 	return []int{a.state.PID}
 }
 
+func (a *Acrn) getVirtioFsPid() *int {
+	return nil
+}
+
 func (a *Acrn) fromGrpc(ctx context.Context, hypervisorConfig *HypervisorConfig, j []byte) error {
 	return errors.New("acrn is not supported by VM cache")
 }
