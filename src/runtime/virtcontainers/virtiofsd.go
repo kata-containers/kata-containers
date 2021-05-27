@@ -75,6 +75,8 @@ func (v *virtiofsd) getSocketFD() (*os.File, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	// no longer needed since fd is a dup
 	defer listener.Close()
 
 	listener.SetUnlinkOnClose(false)
@@ -98,6 +100,7 @@ func (v *virtiofsd) Start(ctx context.Context) (int, error) {
 	if err != nil {
 		return 0, err
 	}
+	defer socketFD.Close()
 
 	cmd.ExtraFiles = append(cmd.ExtraFiles, socketFD)
 
@@ -128,7 +131,7 @@ func (v *virtiofsd) Start(ctx context.Context) (int, error) {
 		v.wait = waitVirtiofsReady
 	}
 
-	return pid, socketFD.Close()
+	return cmd.Process.Pid, nil
 }
 
 func (v *virtiofsd) Stop(ctx context.Context) error {
