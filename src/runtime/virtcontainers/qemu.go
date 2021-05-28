@@ -13,9 +13,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"math"
-	"net"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -106,6 +104,8 @@ type qemu struct {
 
 	// if in memory dump progress
 	memoryDumpFlag sync.Mutex
+
+	virtiofsd Virtiofsd
 }
 
 const (
@@ -632,6 +632,20 @@ func (q *qemu) createSandbox(ctx context.Context, id string, networkNS NetworkNa
 
 	q.qemuConfig = qemuConfig
 
+	virtiofsdSocketPath, err := q.vhostFSSocketPath(q.id)
+	if err != nil {
+		return err
+	}
+
+	q.virtiofsd = &virtiofsd{
+		path:       q.config.VirtioFSDaemon,
+		sourcePath: filepath.Join(getSharePath(q.id)),
+		socketPath: virtiofsdSocketPath,
+		extraArgs:  q.config.VirtioFSExtraArgs,
+		debug:      q.config.Debug,
+		cache:      q.config.VirtioFSCache,
+	}
+
 	return nil
 }
 
@@ -639,102 +653,29 @@ func (q *qemu) vhostFSSocketPath(id string) (string, error) {
 	return utils.BuildSocketPath(q.store.RunVMStoragePath(), id, vhostFSSocket)
 }
 
-func (q *qemu) virtiofsdArgs(fd uintptr) []string {
-	// The daemon will terminate when the vhost-user socket
-	// connection with QEMU closes.  Therefore we do not keep track
-	// of this child process after returning from this function.
-	sourcePath := filepath.Join(getSharePath(q.id))
-	args := []string{
-		fmt.Sprintf("--fd=%v", fd),
-		"-o", "source=" + sourcePath,
-		"-o", "cache=" + q.config.VirtioFSCache,
-		"--syslog", "-o", "no_posix_lock"}
-	if q.config.Debug {
-		args = append(args, "-d")
-	} else {
-		args = append(args, "-f")
-	}
-
-	if len(q.config.VirtioFSExtraArgs) != 0 {
-		args = append(args, q.config.VirtioFSExtraArgs...)
-	}
-	return args
-}
-
 func (q *qemu) setupVirtiofsd(ctx context.Context) (err error) {
-	var listener *net.UnixListener
-	var fd *os.File
-
-	sockPath, err := q.vhostFSSocketPath(q.id)
-	if err != nil {
-		return err
-	}
-
-	listener, err = net.ListenUnix("unix", &net.UnixAddr{
-		Name: sockPath,
-		Net:  "unix",
+	pid, err := q.virtiofsd.Start(ctx, func() {
+		q.stopSandbox(ctx, false)
 	})
 	if err != nil {
 		return err
 	}
-	listener.SetUnlinkOnClose(false)
+	q.state.VirtiofsdPid = pid
 
-	fd, err = listener.File()
-	listener.Close() // no longer needed since fd is a dup
-	listener = nil
-	if err != nil {
-		return err
-	}
-	defer fd.Close()
-
-	const sockFd = 3 // Cmd.ExtraFiles[] fds are numbered starting from 3
-	cmd := exec.Command(q.config.VirtioFSDaemon, q.virtiofsdArgs(sockFd)...)
-	cmd.ExtraFiles = append(cmd.ExtraFiles, fd)
-	stderr, err := cmd.StderrPipe()
-	if err != nil {
-		return err
-	}
-
-	err = cmd.Start()
-	if err != nil {
-		return fmt.Errorf("virtiofs daemon %v returned with error: %v", q.config.VirtioFSDaemon, err)
-	}
-	q.state.VirtiofsdPid = cmd.Process.Pid
-
-	// Monitor virtiofsd's stderr and stop sandbox if virtiofsd quits
-	go func() {
-		scanner := bufio.NewScanner(stderr)
-		for scanner.Scan() {
-			q.Logger().WithField("source", "virtiofsd").Info(scanner.Text())
-		}
-		q.Logger().Info("virtiofsd quits")
-		// Wait to release resources of virtiofsd process
-		cmd.Process.Wait()
-		q.stopSandbox(ctx, false)
-	}()
-	return err
+	return nil
 }
 
 func (q *qemu) stopVirtiofsd(ctx context.Context) (err error) {
-
-	// kill virtiofsd
 	if q.state.VirtiofsdPid == 0 {
 		return errors.New("invalid virtiofsd PID(0)")
 	}
 
-	err = syscall.Kill(q.state.VirtiofsdPid, syscall.SIGKILL)
+	err = q.virtiofsd.Stop(ctx)
 	if err != nil {
 		return err
 	}
 	q.state.VirtiofsdPid = 0
-
-	// remove virtiofsd socket
-	sockPath, err := q.vhostFSSocketPath(q.id)
-	if err != nil {
-		return err
-	}
-
-	return os.Remove(sockPath)
+	return nil
 }
 
 func (q *qemu) getMemArgs() (bool, string, string, error) {
