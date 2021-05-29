@@ -248,6 +248,7 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     }
 
     if args.len() == 2 && args[1] == "init" {
+        reset_sigpipe();
         rustjail::container::init_child();
         exit(0);
     }
@@ -355,6 +356,17 @@ fn sethostname(hostname: &OsStr) -> Result<()> {
         Err(anyhow!("failed to set hostname"))
     } else {
         Ok(())
+    }
+}
+
+// The Rust standard library had suppressed the default SIGPIPE behavior,
+// see https://github.com/rust-lang/rust/pull/13158.
+// Since the parent's signal handler would be inherited by it's child process,
+// thus we should re-enable the standard SIGPIPE behavior as a workaround to
+// fix the issue of https://github.com/kata-containers/kata-containers/issues/1887.
+fn reset_sigpipe() {
+    unsafe {
+        libc::signal(libc::SIGPIPE, libc::SIG_DFL);
     }
 }
 
