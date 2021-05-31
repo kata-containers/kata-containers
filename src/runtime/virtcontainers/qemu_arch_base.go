@@ -212,9 +212,6 @@ const (
 	// QemuPCLite is the QEMU pc-lite machine type for amd64
 	QemuPCLite = "pc-lite"
 
-	// QemuPC is the QEMU pc machine type for amd64
-	QemuPC = "pc"
-
 	// QemuQ35 is the QEMU Q35 machine type for amd64
 	QemuQ35 = "q35"
 

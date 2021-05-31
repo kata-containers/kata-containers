@@ -65,8 +65,8 @@ configuration in the Kata `configuration.toml` file as shown below.
 $ sudo sed -i -e 's/^# *\(hotplug_vfio_on_root_bus\).*=.*$/\1 = true/g' /usr/share/defaults/kata-containers/configuration.toml
 ```
 
-Make sure you are using the `pc` machine type by verifying `machine_type = "pc"` is
-set in the `configuration.toml`.
+Make sure you are using the `q35` machine type by verifying `machine_type = "q35"` is
+set in the `configuration.toml`. Make sure `pcie_root_port` is set to a positive value.
 
 ## Build Kata Containers kernel with GPU support
 

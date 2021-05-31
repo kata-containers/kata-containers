@@ -2095,8 +2095,6 @@ func genericBridges(number uint32, machineType string) []types.Bridge {
 	case QemuQ35:
 		// currently only pci bridges are supported
 		// qemu-2.10 will introduce pcie bridges
-		fallthrough
-	case QemuPC:
 		bt = types.PCI
 	case QemuVirt:
 		bt = types.PCI
