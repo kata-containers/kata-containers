@@ -159,6 +159,8 @@ github.com/docker/docker/pkg/stringid
 github.com/docker/go-events
 # github.com/docker/go-units v0.3.3
 github.com/docker/go-units
+# github.com/egernst/direct-assign-volumes v0.0.0-20210422020601-947241a0d6f9
+## explicit
 # github.com/globalsign/mgo v0.0.0-20181015135952-eeefdecb41b8
 github.com/globalsign/mgo/bson
 github.com/globalsign/mgo/internal/json
@@ -222,6 +224,9 @@ github.com/hashicorp/errwrap
 # github.com/hashicorp/go-multierror v1.0.0
 ## explicit
 github.com/hashicorp/go-multierror
+# github.com/kata-containers/directvolume v0.0.0-20210510181835-268cd4a76ddf
+## explicit
+github.com/kata-containers/directvolume
 # github.com/kata-containers/govmm v0.0.0-20210428163604-f0e9a35308ee
 ## explicit
 github.com/kata-containers/govmm/qemu

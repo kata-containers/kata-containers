@@ -65,6 +65,7 @@ type Sandbox struct {
 	ListRoutesFunc           func() ([]*pbTypes.Route, error)
 	UpdateRuntimeMetricsFunc func() error
 	GetAgentMetricsFunc      func() (string, error)
+	GetFsStatsFunc           func(source string) (vc.FsStats, error)
 	StatsFunc                func() (vc.SandboxStats, error)
 	GetAgentURLFunc          func() (string, error)
 }

@@ -274,10 +274,8 @@ github.com/juju/errors v0.0.0-20180806074554-22422dad46e1/go.mod h1:W54LbzXuIE0b
 github.com/juju/loggo v0.0.0-20190526231331-6e530bcce5d8/go.mod h1:vgyd7OREkbtVEN/8IXZe5Ooef3LQePvuBm9UWj6ZL8U=
 github.com/juju/testing v0.0.0-20190613124551-e81189438503/go.mod h1:63prj8cnj0tU0S9OHjGJn+b1h0ZghCndfnbQolrYTwA=
 github.com/julienschmidt/httprouter v1.2.0/go.mod h1:SYymIcj16QtmaHHD7aYtjjsJG7VTCxuUUipMqKk8s4w=
-github.com/kata-containers/govmm v0.0.0-20210112013750-7d320e8f5dca h1:UdXFthwasAPnmv37gLJUEFsW9FaabYA+mM6FoSi8kzU=
-github.com/kata-containers/govmm v0.0.0-20210112013750-7d320e8f5dca/go.mod h1:VmAHbsL5lLfzHW/MNL96NVLF840DNEV5i683kISgFKk=
-github.com/kata-containers/govmm v0.0.0-20210329205824-7fbc685865d2 h1:oDJsQ5avmW8PFUkSJdsuaGL3SR4/YQRno51GNGl+IDU=
-github.com/kata-containers/govmm v0.0.0-20210329205824-7fbc685865d2/go.mod h1:VmAHbsL5lLfzHW/MNL96NVLF840DNEV5i683kISgFKk=
+github.com/kata-containers/directvolume v0.0.0-20210510181835-268cd4a76ddf h1:TPTZ47pmsVgf4YMRQIx8FBrl9U39w0TEfEGOEkh7ZEA=
+github.com/kata-containers/directvolume v0.0.0-20210510181835-268cd4a76ddf/go.mod h1:wdK5bWo/eUSK0GMCFynEX0+KrI2xlBWTAkUZ8qg/PlQ=
 github.com/kata-containers/govmm v0.0.0-20210428163604-f0e9a35308ee h1:M4N7AdSHgWz/ubV5AZQdeqmK+9Ztpea6oqeXgk8GCHk=
 github.com/kata-containers/govmm v0.0.0-20210428163604-f0e9a35308ee/go.mod h1:VmAHbsL5lLfzHW/MNL96NVLF840DNEV5i683kISgFKk=
 github.com/kisielk/errcheck v1.2.0/go.mod h1:/BMXB+zMLi60iA8Vv6Ksmxu/1UDYcXs4uQLJ+jE2L00=
