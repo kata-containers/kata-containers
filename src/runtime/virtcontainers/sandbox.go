@@ -134,8 +134,7 @@ func (s *Sandbox) trace(parent context.Context, name string) (otelTrace.Span, co
 	}
 
 	tracer := otel.Tracer("kata")
-	ctx, span := tracer.Start(parent, name)
-	span.SetAttributes(otelLabel.Key("subsystem").String("sandbox"))
+	ctx, span := tracer.Start(parent, name, otelTrace.WithAttributes(otelLabel.String("source", "runtime"), otelLabel.String("package", "virtcontainers"), otelLabel.String("subsystem", "sandbox")))
 
 	return span, ctx
 }

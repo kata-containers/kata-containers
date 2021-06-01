@@ -294,8 +294,7 @@ func trace(ctx context.Context, name string) (otelTrace.Span, context.Context) {
 		ctx = context.Background()
 	}
 	tracer := otel.Tracer("kata")
-	ctx, span := tracer.Start(ctx, name)
-	span.SetAttributes([]label.KeyValue{label.Key("source").String("runtime"), label.Key("package").String("containerdshim")}...)
+	ctx, span := tracer.Start(ctx, name, otelTrace.WithAttributes(label.String("source", "runtime"), label.String("package", "containerdshim")))
 
 	return span, ctx
 }

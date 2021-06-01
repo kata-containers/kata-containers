@@ -110,12 +110,11 @@ func StopTracing(ctx context.Context) {
 }
 
 // Trace creates a new tracing span based on the specified name and parent
-// context.
-func Trace(parent context.Context, name string) (otelTrace.Span, context.Context) {
+// context and an opentelemetry label.KeyValue slice for span attributes.
+func Trace(parent context.Context, name string, tags ...label.KeyValue) (otelTrace.Span, context.Context) {
 
 	tracer := otel.Tracer("kata")
-	ctx, span := tracer.Start(parent, name)
-	span.SetAttributes(label.Key("source").String("runtime"))
+	ctx, span := tracer.Start(parent, name, otelTrace.WithAttributes(tags...))
 
 	// This is slightly confusing: when tracing is disabled, trace spans
 	// are still created - but the tracer used is a NOP. Therefore, only
