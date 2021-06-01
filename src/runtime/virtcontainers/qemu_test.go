@@ -11,7 +11,6 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	govmmQemu "github.com/kata-containers/govmm/qemu"
@@ -548,35 +547,6 @@ func createQemuSandboxConfig() (*Sandbox, error) {
 	sandbox.store = store
 
 	return &sandbox, nil
-}
-
-func TestQemuVirtiofsdArgs(t *testing.T) {
-	assert := assert.New(t)
-
-	q := &qemu{
-		id: "foo",
-		config: HypervisorConfig{
-			VirtioFSCache: "none",
-			Debug:         true,
-		},
-	}
-
-	savedKataHostSharedDir := kataHostSharedDir
-	kataHostSharedDir = func() string {
-		return "test-share-dir"
-	}
-	defer func() {
-		kataHostSharedDir = savedKataHostSharedDir
-	}()
-
-	result := "--fd=123 -o source=test-share-dir/foo/shared -o cache=none --syslog -o no_posix_lock -d"
-	args := q.virtiofsdArgs(123)
-	assert.Equal(strings.Join(args, " "), result)
-
-	q.config.Debug = false
-	result = "--fd=123 -o source=test-share-dir/foo/shared -o cache=none --syslog -o no_posix_lock -f"
-	args = q.virtiofsdArgs(123)
-	assert.Equal(strings.Join(args, " "), result)
 }
 
 func TestQemuGetpids(t *testing.T) {
