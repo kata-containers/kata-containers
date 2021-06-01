@@ -34,7 +34,6 @@ type SandboxState struct {
 
 	// CgroupPath is the cgroup hierarchy where sandbox's processes
 	// including the hypervisor are placed.
-	// FIXME: sandbox can reuse "SandboxContainer"'s CgroupPath so we can remove this field.
 	CgroupPath string
 
 	// CgroupPath is the cgroup hierarchy where sandbox's processes

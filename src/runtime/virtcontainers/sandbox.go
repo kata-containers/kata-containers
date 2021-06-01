@@ -1270,7 +1270,6 @@ func (s *Sandbox) DeleteContainer(ctx context.Context, containerID string) (VCCo
 }
 
 // StatusContainer gets the status of a container
-// TODO: update container status properly, see kata-containers/runtime#253
 func (s *Sandbox) StatusContainer(containerID string) (ContainerStatus, error) {
 	if containerID == "" {
 		return ContainerStatus{}, vcTypes.ErrNeedContainerID
