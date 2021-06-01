@@ -8,7 +8,6 @@ package virtcontainers
 import (
 	"fmt"
 	"net"
-	"os"
 	"reflect"
 	"testing"
 
@@ -19,23 +18,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/vishvananda/netlink"
 )
-
-func TestCreateDeleteNetNS(t *testing.T) {
-	assert := assert.New(t)
-	if tc.NotValid(ktu.NeedRoot()) {
-		t.Skip(testDisabledAsNonRoot)
-	}
-
-	netNSPath, err := createNetNS()
-	assert.NoError(err)
-	assert.NotEmpty(netNSPath)
-
-	_, err = os.Stat(netNSPath)
-	assert.NoError(err)
-
-	err = deleteNetNS(netNSPath)
-	assert.NoError(err)
-}
 
 func TestGenerateInterfacesAndRoutes(t *testing.T) {
 	//
