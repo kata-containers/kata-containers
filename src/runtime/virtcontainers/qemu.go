@@ -219,7 +219,7 @@ func (q *qemu) trace(parent context.Context, name string) (otelTrace.Span, conte
 	}
 
 	tracer := otel.Tracer("kata")
-	ctx, span := tracer.Start(parent, name, otelTrace.WithAttributes(otelLabel.String("source", "runtime"), otelLabel.String("package", "virtcontainers"), otelLabel.String("subsystem", "hypervisor"), otelLabel.String("type", "qemu")))
+	ctx, span := tracer.Start(parent, name, otelTrace.WithAttributes(otelLabel.String("source", "runtime"), otelLabel.String("package", "virtcontainers"), otelLabel.String("subsystem", "hypervisor"), otelLabel.String("type", "qemu"), otelLabel.String("sandbox_id", q.id)))
 
 	return span, ctx
 }

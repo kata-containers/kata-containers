@@ -360,7 +360,7 @@ func (c *Container) trace(parent context.Context, name string) (otelTrace.Span, 
 	}
 
 	tracer := otel.Tracer("kata")
-	ctx, span := tracer.Start(parent, name, otelTrace.WithAttributes(otelLabel.String("source", "runtime"), otelLabel.String("package", "virtcontainers"), otelLabel.String("subsystem", "container")))
+	ctx, span := tracer.Start(parent, name, otelTrace.WithAttributes(otelLabel.String("source", "runtime"), otelLabel.String("package", "virtcontainers"), otelLabel.String("subsystem", "container"), otelLabel.String("container_id", c.id)))
 
 	return span, ctx
 }
