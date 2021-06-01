@@ -26,10 +26,8 @@ func hookLogger() *logrus.Entry {
 }
 
 func runHook(ctx context.Context, hook specs.Hook, cid, bundlePath string) error {
-	span, _ := Trace(ctx, "hook")
+	span, _ := Trace(ctx, "runHook", []label.KeyValue{label.Key("source").String("runtime"), label.Key("package").String("katautils"), label.Key("subsystem").String("hook")}...)
 	defer span.End()
-
-	span.SetAttributes(label.Key("subsystem").String("runHook"))
 
 	// FIXME
 	// span.LogFields(
@@ -90,10 +88,8 @@ func runHook(ctx context.Context, hook specs.Hook, cid, bundlePath string) error
 }
 
 func runHooks(ctx context.Context, hooks []specs.Hook, cid, bundlePath, hookType string) error {
-	span, _ := Trace(ctx, "hooks")
+	span, _ := Trace(ctx, "runHooks", []label.KeyValue{label.Key("source").String("runtime"), label.Key("package").String("katautils"), label.Key("subsystem").String("hook"), label.Key("type").String(hookType)}...)
 	defer span.End()
-
-	span.SetAttributes(label.Key("subsystem").String(hookType))
 
 	for _, hook := range hooks {
 		if err := runHook(ctx, hook, cid, bundlePath); err != nil {

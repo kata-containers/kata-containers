@@ -251,8 +251,7 @@ func (k *kataAgent) trace(parent context.Context, name string) (otelTrace.Span, 
 	}
 
 	tracer := otel.Tracer("kata")
-	ctx, span := tracer.Start(parent, name)
-	span.SetAttributes([]label.KeyValue{label.Key("subsystem").String("agent"), label.Key("type").String("kata")}...)
+	ctx, span := tracer.Start(parent, name, otelTrace.WithAttributes(label.String("source", "runtime"), label.String("package", "virtcontainers"), label.String("subsystem", "agent")))
 
 	return span, ctx
 }

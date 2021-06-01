@@ -42,8 +42,7 @@ type factory struct {
 
 func trace(parent context.Context, name string) (otelTrace.Span, context.Context) {
 	tracer := otel.Tracer("kata")
-	ctx, span := tracer.Start(parent, name)
-	span.SetAttributes(label.Key("subsystem").String("factory"))
+	ctx, span := tracer.Start(parent, name, otelTrace.WithAttributes(label.String("source", "runtime"), label.String("package", "factory"), label.String("subsystem", "factory")))
 
 	return span, ctx
 }

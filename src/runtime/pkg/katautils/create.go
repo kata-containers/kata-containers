@@ -104,7 +104,7 @@ func SetEphemeralStorageType(ociSpec specs.Spec) specs.Spec {
 // CreateSandbox create a sandbox container
 func CreateSandbox(ctx context.Context, vci vc.VC, ociSpec specs.Spec, runtimeConfig oci.RuntimeConfig, rootFs vc.RootFs,
 	containerID, bundlePath, console string, disableOutput, systemdCgroup bool) (_ vc.VCSandbox, _ vc.Process, err error) {
-	span, ctx := Trace(ctx, "createSandbox")
+	span, ctx := Trace(ctx, "CreateSandbox", []label.KeyValue{label.Key("source").String("runtime"), label.Key("package").String("katautils"), label.Key("subsystem").String("sandbox")}...)
 	defer span.End()
 
 	sandboxConfig, err := oci.SandboxConfig(ociSpec, runtimeConfig, bundlePath, containerID, console, disableOutput, systemdCgroup)
@@ -159,7 +159,7 @@ func CreateSandbox(ctx context.Context, vci vc.VC, ociSpec specs.Spec, runtimeCo
 
 	sid := sandbox.ID()
 	kataUtilsLogger = kataUtilsLogger.WithField("sandbox", sid)
-	span.SetAttributes(label.Key("sandbox").String(sid))
+	span.SetAttributes(label.Key("sandbox_id").String(sid))
 
 	containers := sandbox.GetAllContainers()
 	if len(containers) != 1 {
@@ -202,7 +202,7 @@ func checkForFIPS(sandboxConfig *vc.SandboxConfig) error {
 func CreateContainer(ctx context.Context, sandbox vc.VCSandbox, ociSpec specs.Spec, rootFs vc.RootFs, containerID, bundlePath, console string, disableOutput bool) (vc.Process, error) {
 	var c vc.VCContainer
 
-	span, ctx := Trace(ctx, "createContainer")
+	span, ctx := Trace(ctx, "CreateContainer", []label.KeyValue{label.Key("source").String("runtime"), label.Key("package").String("katautils"), label.Key("subsystem").String("sandbox")}...)
 	defer span.End()
 
 	ociSpec = SetEphemeralStorageType(ociSpec)
@@ -228,7 +228,7 @@ func CreateContainer(ctx context.Context, sandbox vc.VCSandbox, ociSpec specs.Sp
 		return vc.Process{}, err
 	}
 
-	span.SetAttributes(label.Key("sandbox").String(sandboxID))
+	span.SetAttributes(label.Key("sandbox_id").String(sandboxID))
 
 	c, err = sandbox.CreateContainer(ctx, contConfig)
 	if err != nil {
