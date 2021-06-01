@@ -72,7 +72,22 @@ const (
 	noneNetModelStr = "none"
 )
 
-// SetModel change the model string value
+//GetModel returns the string value of a NetInterworkingModel
+func (n *NetInterworkingModel) GetModel() string {
+	switch *n {
+	case DefaultNetInterworkingModel:
+		return defaultNetModelStr
+	case NetXConnectMacVtapModel:
+		return macvtapNetModelStr
+	case NetXConnectTCFilterModel:
+		return tcFilterNetModelStr
+	case NetXConnectNoneModel:
+		return noneNetModelStr
+	}
+	return "unknown"
+}
+
+//SetModel change the model string value
 func (n *NetInterworkingModel) SetModel(modelName string) error {
 	switch modelName {
 	case defaultNetModelStr:
@@ -1248,7 +1263,7 @@ type Network struct {
 
 func (n *Network) trace(ctx context.Context, name string) (otelTrace.Span, context.Context) {
 	tracer := otel.Tracer("kata")
-	ctx, span := tracer.Start(ctx, name, otelTrace.WithAttributes(otelLabel.String("source", "runtime"), otelLabel.String("package", "virtcontainers"), otelLabel.String("subsystem", "network"), otelLabel.String("type", "default")))
+	ctx, span := tracer.Start(ctx, name, otelTrace.WithAttributes(otelLabel.String("source", "runtime"), otelLabel.String("package", "virtcontainers"), otelLabel.String("subsystem", "network")))
 
 	return span, ctx
 }
@@ -1266,6 +1281,7 @@ func (n *Network) Run(ctx context.Context, networkNSPath string, cb func() error
 // Add adds all needed interfaces inside the network namespace.
 func (n *Network) Add(ctx context.Context, config *NetworkConfig, s *Sandbox, hotplug bool) ([]Endpoint, error) {
 	span, ctx := n.trace(ctx, "Add")
+	span.SetAttributes(otelLabel.String("type", config.InterworkingModel.GetModel()))
 	defer span.End()
 
 	endpoints, err := createEndpointsFromScan(config.NetNSPath, config)
