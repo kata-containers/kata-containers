@@ -362,7 +362,9 @@ func (clh *cloudHypervisor) startSandbox(ctx context.Context, timeout int) error
 
 	if clh.config.SharedFS == config.VirtioFS {
 		clh.Logger().WithField("function", "startSandbox").Info("Starting virtiofsd")
-		pid, err := clh.virtiofsd.Start(ctx)
+		pid, err := clh.virtiofsd.Start(ctx, func() {
+			clh.stopSandbox(ctx, false)
+		})
 		if err != nil {
 			return err
 		}

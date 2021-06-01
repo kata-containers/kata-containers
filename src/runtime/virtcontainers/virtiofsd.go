@@ -9,14 +9,12 @@ import (
 	"bufio"
 	"context"
 	"fmt"
-	"io"
 	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"syscall"
-	"time"
 
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
 	"github.com/pkg/errors"
@@ -26,20 +24,22 @@ import (
 	otelTrace "go.opentelemetry.io/otel/trace"
 )
 
-const (
-	//Timeout to wait in secounds
-	virtiofsdStartTimeout = 5
+var (
+	errVirtiofsdDaemonPathEmpty    = errors.New("virtiofsd daemon path is empty")
+	errVirtiofsdSocketPathEmpty    = errors.New("virtiofsd socket path is empty")
+	errVirtiofsdSourcePathEmpty    = errors.New("virtiofsd source path is empty")
+	errVirtiofsdSourceNotAvailable = errors.New("virtiofsd source path not available")
 )
 
 type Virtiofsd interface {
 	// Start virtiofsd, return pid of virtiofsd process
-	Start(context.Context) (pid int, err error)
+	Start(context.Context, onQuitFunc) (pid int, err error)
 	// Stop virtiofsd process
 	Stop(context.Context) error
 }
 
-// Helper function to check virtiofsd is serving
-type virtiofsdWaitFunc func(runningCmd *exec.Cmd, stderr io.ReadCloser, debug bool) error
+// Helper function to execute when virtiofsd quit
+type onQuitFunc func()
 
 type virtiofsd struct {
 	// path to virtiofsd daemon
@@ -58,8 +58,6 @@ type virtiofsd struct {
 	PID int
 	// Neded by tracing
 	ctx context.Context
-	// wait helper function to check if virtiofsd is serving
-	wait virtiofsdWaitFunc
 }
 
 // Open socket on behalf of virtiofsd
@@ -85,7 +83,7 @@ func (v *virtiofsd) getSocketFD() (*os.File, error) {
 }
 
 // Start the virtiofsd daemon
-func (v *virtiofsd) Start(ctx context.Context) (int, error) {
+func (v *virtiofsd) Start(ctx context.Context, onQuit onQuitFunc) (int, error) {
 	span, _ := v.trace(ctx, "Start")
 	defer span.End()
 	pid := 0
@@ -116,20 +114,28 @@ func (v *virtiofsd) Start(ctx context.Context) (int, error) {
 
 	v.Logger().WithField("path", v.path).Info()
 	v.Logger().WithField("args", strings.Join(args, " ")).Info()
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		return pid, err
+	}
 
 	if err = utils.StartCmd(cmd); err != nil {
 		return pid, err
 	}
 
-	defer func() {
-		if err != nil {
-			cmd.Process.Kill()
+	// Monitor virtiofsd's stderr and stop sandbox if virtiofsd quits
+	go func() {
+		scanner := bufio.NewScanner(stderr)
+		for scanner.Scan() {
+			v.Logger().WithField("source", "virtiofsd").Info(scanner.Text())
+		}
+		v.Logger().Info("virtiofsd quits")
+		// Wait to release resources of virtiofsd process
+		cmd.Process.Wait()
+		if onQuit != nil {
+			onQuit()
 		}
 	}()
-
-	if v.wait == nil {
-		v.wait = waitVirtiofsReady
-	}
 
 	return cmd.Process.Pid, nil
 }
@@ -137,10 +143,6 @@ func (v *virtiofsd) Start(ctx context.Context) (int, error) {
 func (v *virtiofsd) Stop(ctx context.Context) error {
 	if err := v.kill(ctx); err != nil {
 		return nil
-	}
-
-	if v.socketPath == "" {
-		return errors.New("vitiofsd socket path is empty")
 	}
 
 	err := os.Remove(v.socketPath)
@@ -151,19 +153,10 @@ func (v *virtiofsd) Stop(ctx context.Context) error {
 }
 
 func (v *virtiofsd) args(FdSocketNumber uint) ([]string, error) {
-	if v.sourcePath == "" {
-		return []string{}, errors.New("vitiofsd source path is empty")
-	}
-
-	if _, err := os.Stat(v.sourcePath); os.IsNotExist(err) {
-		return nil, err
-	}
 
 	args := []string{
 		// Send logs to syslog
 		"--syslog",
-		// foreground operation
-		"-f",
 		// cache mode for virtiofsd
 		"-o", "cache=" + v.cache,
 		// disable posix locking in daemon: bunch of basic posix locks properties are broken
@@ -176,7 +169,11 @@ func (v *virtiofsd) args(FdSocketNumber uint) ([]string, error) {
 	}
 
 	if v.debug {
-		args = append(args, "-o", "debug")
+		// enable debug output (implies -f)
+		args = append(args, "-d")
+	} else {
+		// foreground operation
+		args = append(args, "-f")
 	}
 
 	if len(v.extraArgs) != 0 {
@@ -188,18 +185,20 @@ func (v *virtiofsd) args(FdSocketNumber uint) ([]string, error) {
 
 func (v *virtiofsd) valid() error {
 	if v.path == "" {
-		errors.New("virtiofsd path is empty")
+		return errVirtiofsdDaemonPathEmpty
 	}
 
 	if v.socketPath == "" {
-		errors.New("Virtiofsd socket path is empty")
+		return errVirtiofsdSocketPathEmpty
 	}
 
 	if v.sourcePath == "" {
-		errors.New("virtiofsd source path is empty")
-
+		return errVirtiofsdSourcePathEmpty
 	}
 
+	if _, err := os.Stat(v.sourcePath); err != nil {
+		return errVirtiofsdSourceNotAvailable
+	}
 	return nil
 }
 
@@ -217,49 +216,6 @@ func (v *virtiofsd) trace(parent context.Context, name string) (otelTrace.Span, 
 	span.SetAttributes(label.Key("subsystem").String("virtiofds"))
 
 	return span, ctx
-}
-
-func waitVirtiofsReady(cmd *exec.Cmd, stderr io.ReadCloser, debug bool) error {
-	if cmd == nil {
-		return errors.New("cmd is nil")
-	}
-
-	sockReady := make(chan error, 1)
-	go func() {
-		scanner := bufio.NewScanner(stderr)
-		var sent bool
-		for scanner.Scan() {
-			if debug {
-				virtLog.WithField("source", "virtiofsd").Debug(scanner.Text())
-			}
-			if !sent && strings.Contains(scanner.Text(), "Waiting for vhost-user socket connection...") {
-				sockReady <- nil
-				sent = true
-			}
-
-		}
-		if !sent {
-			if err := scanner.Err(); err != nil {
-				sockReady <- err
-
-			} else {
-				sockReady <- fmt.Errorf("virtiofsd did not announce socket connection")
-
-			}
-
-		}
-		// Wait to release resources of virtiofsd process
-		cmd.Process.Wait()
-	}()
-
-	var err error
-	select {
-	case err = <-sockReady:
-	case <-time.After(virtiofsdStartTimeout * time.Second):
-		err = fmt.Errorf("timed out waiting for vitiofsd ready mesage pid=%d", cmd.Process.Pid)
-	}
-
-	return err
 }
 
 func (v *virtiofsd) kill(ctx context.Context) (err error) {
@@ -283,7 +239,7 @@ type virtiofsdMock struct {
 }
 
 // Start the virtiofsd daemon
-func (v *virtiofsdMock) Start(ctx context.Context) (int, error) {
+func (v *virtiofsdMock) Start(ctx context.Context, onQuit onQuitFunc) (int, error) {
 	return 9999999, nil
 }
 
