@@ -349,14 +349,34 @@ fn set_memory_resources(cg: &cgroups::Cgroup, memory: &LinuxMemory, update: bool
         mem_controller.set_kmem_limit(-1)?;
     }
 
-    set_resource!(mem_controller, set_limit, memory, limit);
-    set_resource!(mem_controller, set_soft_limit, memory, reservation);
-    set_resource!(mem_controller, set_kmem_limit, memory, kernel);
-    set_resource!(mem_controller, set_tcp_limit, memory, kernel_tcp);
+    // If the memory update is set to -1 we should also
+    // set swap to -1, it means unlimited memory.
+    let mut swap = memory.swap.unwrap_or(0);
+    if memory.limit == Some(-1) {
+        swap = -1;
+    }
 
-    if let Some(swap) = memory.swap {
-        // set memory swap
-        let swap = if cg.v2() {
+    if memory.limit.is_some() && swap != 0 {
+        let memstat = get_memory_stats(cg)
+            .into_option()
+            .ok_or_else(|| anyhow!("failed to get the cgroup memory stats"))?;
+        let memusage = memstat.get_usage();
+
+        // When update memory limit, the kernel would check the current memory limit
+        // set against the new swap setting, if the current memory limit is large than
+        // the new swap, then set limit first, otherwise the kernel would complain and
+        // refused to set; on the other hand, if the current memory limit is smaller than
+        // the new swap, then we should set the swap first and then set the memor limit.
+        if swap == -1 || memusage.get_limit() < swap as u64 {
+            mem_controller.set_memswap_limit(swap)?;
+            set_resource!(mem_controller, set_limit, memory, limit);
+        } else {
+            set_resource!(mem_controller, set_limit, memory, limit);
+            mem_controller.set_memswap_limit(swap)?;
+        }
+    } else {
+        set_resource!(mem_controller, set_limit, memory, limit);
+        swap = if cg.v2() {
             convert_memory_swap_to_v2_value(swap, memory.limit.unwrap_or(0))?
         } else {
             swap
@@ -365,6 +385,10 @@ fn set_memory_resources(cg: &cgroups::Cgroup, memory: &LinuxMemory, update: bool
             mem_controller.set_memswap_limit(swap)?;
         }
     }
+
+    set_resource!(mem_controller, set_soft_limit, memory, reservation);
+    set_resource!(mem_controller, set_kmem_limit, memory, kernel);
+    set_resource!(mem_controller, set_tcp_limit, memory, kernel_tcp);
 
     if let Some(swappiness) = memory.swappiness {
         if (0..=100).contains(&swappiness) {
