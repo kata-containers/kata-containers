@@ -811,9 +811,7 @@ func (k *kataAgent) startSandbox(ctx context.Context, sandbox *Sandbox) error {
 		return err
 	}
 
-	//
 	// Setup network interfaces and routes
-	//
 	interfaces, routes, neighs, err := generateVCNetworkStructures(sandbox.networkNS)
 	if err != nil {
 		return err
