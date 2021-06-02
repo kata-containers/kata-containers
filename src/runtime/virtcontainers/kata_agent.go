@@ -1340,7 +1340,10 @@ func (k *kataAgent) createContainer(ctx context.Context, sandbox *Sandbox, c *Co
 	}
 
 	// Handle container mounts
-	newMounts, ignoredMounts, err := c.mountSharedDirMounts(ctx, getSharePath(sandbox.id), getMountPath(sandbox.id), kataGuestSharedDir())
+	sharedDirMounts := make(map[string]Mount)
+	ignoredMounts := make(map[string]Mount)
+
+	err = c.mountSharedDirMounts(ctx, sharedDirMounts, ignoredMounts)
 	if err != nil {
 		return nil, err
 	}
@@ -1363,7 +1366,7 @@ func (k *kataAgent) createContainer(ctx context.Context, sandbox *Sandbox, c *Co
 
 	// We replace all OCI mount sources that match our container mount
 	// with the right source path (The guest one).
-	if err = k.replaceOCIMountSource(ociSpec, newMounts); err != nil {
+	if err = k.replaceOCIMountSource(ociSpec, sharedDirMounts); err != nil {
 		return nil, err
 	}
 
