@@ -543,6 +543,22 @@ func isSecret(path string) bool {
 	return checkKubernetesVolume(path, K8sSecret)
 }
 
+func isIdentityCert(path string) bool {
+	if !isEmptyDir(path) {
+		return false
+	}
+	// example": "/srv/kubelet/pods/foobar/volumes/kubernetes.io~empty-dir/identity-certs"
+	splitSourceSlice := strings.Split(path, "/")
+	if len(splitSourceSlice) > 1 {
+		storageType := splitSourceSlice[len(splitSourceSlice)-1]
+		if storageType == "identity-certs" {
+			return true
+		}
+	}
+
+	return false
+}
+
 // countFiles will return the number of files within a given path. If the total number of
 // files observed is greater than limit, break and return -1
 func countFiles(path string, limit int) (numFiles int, err error) {
@@ -581,7 +597,7 @@ func countFiles(path string, limit int) (numFiles int, err error) {
 }
 
 func isWatchableMount(path string) bool {
-	if isSecret(path) || isConfigMap(path) {
+	if isSecret(path) || isConfigMap(path) || isIdentityCert(path) {
 		// we have a cap on number of FDs which can be present in mount
 		// to determine if watchable. A similar Check exists within the agent,
 		// which may or may not help handle case where extra files are added to

@@ -495,6 +495,7 @@ func (c *Container) mountSharedDirMounts(ctx context.Context, sharedDirMounts, i
 		// mounts that are commonly 'watched'. "watchable" mounts include:
 		//  - Kubernetes configmap
 		//  - Kubernetes secret
+		//  - identity-certs
 		// If we identify one of these, we'll need to carry out polling in the guest in order to present the
 		// container with a mount that supports inotify. To do this, we create a Storage object for
 		// the "watchable-bind" driver. This will have the agent create a new mount that is watchable,

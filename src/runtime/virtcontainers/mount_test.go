@@ -302,6 +302,20 @@ func TestIsSecret(t *testing.T) {
 	assert.False(result)
 }
 
+func TestIsIdentityCert(t *testing.T) {
+	assert := assert.New(t)
+	path := "/var/lib/kubelet/pods/5f0861a0-a987-4a3a-bb0f-1058ddb9678f/volumes/kubernetes.io~empty-dir"
+	result := isIdentityCert(path)
+	assert.False(result)
+
+	// expect the basename to be identity-certs
+	result = isIdentityCert(filepath.Join(path, "identity-certs"))
+	assert.True(result)
+
+	result = isIdentityCert(filepath.Join(path, "identity-certs", "meaculpa"))
+	assert.False(result)
+}
+
 func TestIsWatchable(t *testing.T) {
 	if os.Getuid() != 0 {
 		t.Skip("Test disabled as requires root user")
@@ -321,6 +335,19 @@ func TestIsWatchable(t *testing.T) {
 	testPath, err := os.MkdirTemp("", "")
 	assert.NoError(err)
 	defer os.RemoveAll(testPath)
+
+	// Verify identity-certs scenario:
+	// /tmppath/kubernetes.io~empty-dir/identity-certs/
+	// 			                  | - certs
+	// 			                  | - stuff
+	emptyDir := filepath.Join(testPath, K8sEmptyDir, "identity-certs")
+	err = os.MkdirAll(emptyDir, 0777)
+	assert.NoError(err)
+	_, err = os.Create(filepath.Join(emptyDir, "certs"))
+	_, err = os.Create(filepath.Join(emptyDir, "stuff"))
+	assert.NoError(err)
+	result = isWatchableMount(emptyDir)
+	assert.True(result)
 
 	// Verify secret is successful (single file mount):
 	//   /tmppath/kubernetes.io~secret/super-secret-thing
