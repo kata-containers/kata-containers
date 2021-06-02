@@ -436,14 +436,14 @@ func (c *Container) setContainerState(state types.StateString) error {
 	return nil
 }
 
-func (c *Container) shareFiles(ctx context.Context, m Mount, idx int, hostSharedDir, hostMountDir, guestSharedDir string) (string, bool, error) {
+func (c *Container) shareFiles(ctx context.Context, m Mount, idx int) (string, bool, error) {
 	randBytes, err := utils.GenerateRandomBytes(8)
 	if err != nil {
 		return "", false, err
 	}
 
 	filename := fmt.Sprintf("%s-%s-%s", c.id, hex.EncodeToString(randBytes), filepath.Base(m.Destination))
-	guestDest := filepath.Join(guestSharedDir, filename)
+	guestDest := filepath.Join(kataGuestSharedDir(), filename)
 
 	// copy file to contaier's rootfs if filesystem sharing is not supported, otherwise
 	// bind mount it in the shared directory.
@@ -470,7 +470,7 @@ func (c *Container) shareFiles(ctx context.Context, m Mount, idx int, hostShared
 		}
 	} else {
 		// These mounts are created in the shared dir
-		mountDest := filepath.Join(hostMountDir, filename)
+		mountDest := filepath.Join(getMountPath(c.sandboxID), filename)
 		if !m.ReadOnly {
 			if err := bindMount(c.ctx, m.Source, mountDest, false, "private"); err != nil {
 				return "", false, err
@@ -511,9 +511,8 @@ func (c *Container) shareFiles(ctx context.Context, m Mount, idx int, hostShared
 // It also updates the container mount list with the HostPath info, and store
 // container mounts to the storage. This way, we will have the HostPath info
 // available when we will need to unmount those mounts.
-func (c *Container) mountSharedDirMounts(ctx context.Context, hostSharedDir, hostMountDir, guestSharedDir string) (sharedDirMounts map[string]Mount, ignoredMounts map[string]Mount, err error) {
-	sharedDirMounts = make(map[string]Mount)
-	ignoredMounts = make(map[string]Mount)
+func (c *Container) mountSharedDirMounts(ctx context.Context, sharedDirMounts, ignoredMounts map[string]Mount) (err error) {
+
 	var devicesToDetach []string
 	defer func() {
 		if err != nil {
@@ -535,7 +534,7 @@ func (c *Container) mountSharedDirMounts(ctx context.Context, hostSharedDir, hos
 		if len(m.BlockDeviceID) > 0 {
 			// Attach this block device, all other devices passed in the config have been attached at this point
 			if err = c.sandbox.devManager.AttachDevice(ctx, m.BlockDeviceID, c.sandbox); err != nil {
-				return nil, nil, err
+				return err
 			}
 			devicesToDetach = append(devicesToDetach, m.BlockDeviceID)
 			continue
@@ -562,9 +561,9 @@ func (c *Container) mountSharedDirMounts(ctx context.Context, hostSharedDir, hos
 
 		var ignore bool
 		var guestDest string
-		guestDest, ignore, err = c.shareFiles(ctx, m, idx, hostSharedDir, hostMountDir, guestSharedDir)
+		guestDest, ignore, err = c.shareFiles(ctx, m, idx)
 		if err != nil {
-			return nil, nil, err
+			return err
 		}
 
 		// Expand the list of mounts to ignore.
@@ -584,7 +583,7 @@ func (c *Container) mountSharedDirMounts(ctx context.Context, hostSharedDir, hos
 		sharedDirMounts[sharedDirMount.Destination] = sharedDirMount
 	}
 
-	return sharedDirMounts, ignoredMounts, nil
+	return nil
 }
 
 func (c *Container) unmountHostMounts(ctx context.Context) error {
