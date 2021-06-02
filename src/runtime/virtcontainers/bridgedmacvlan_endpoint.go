@@ -14,6 +14,8 @@ import (
 	vcTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/types"
 )
 
+var macvlanTrace = getNetworkTrace(BridgedMacvlanEndpointType)
+
 // BridgedMacvlanEndpoint represents a macvlan endpoint that is bridged to the VM
 type BridgedMacvlanEndpoint struct {
 	NetPair            NetworkInterfacePair
@@ -89,6 +91,9 @@ func (endpoint *BridgedMacvlanEndpoint) NetworkPair() *NetworkInterfacePair {
 // Attach for virtual endpoint bridges the network pair and adds the
 // tap interface of the network pair to the hypervisor.
 func (endpoint *BridgedMacvlanEndpoint) Attach(ctx context.Context, s *Sandbox) error {
+	span, ctx := macvlanTrace(ctx, "Attach", endpoint)
+	defer span.End()
+
 	h := s.hypervisor
 	if err := xConnectVMNetwork(ctx, endpoint, h); err != nil {
 		networkLogger().WithError(err).Error("Error bridging virtual ep")
@@ -107,8 +112,11 @@ func (endpoint *BridgedMacvlanEndpoint) Detach(ctx context.Context, netNsCreated
 		return nil
 	}
 
+	span, ctx := macvlanTrace(ctx, "Detach", endpoint)
+	defer span.End()
+
 	return doNetNS(netNsPath, func(_ ns.NetNS) error {
-		return xDisconnectVMNetwork(endpoint)
+		return xDisconnectVMNetwork(ctx, endpoint)
 	})
 }
 

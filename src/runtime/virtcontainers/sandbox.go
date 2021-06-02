@@ -760,6 +760,9 @@ func (s *Sandbox) createNetwork(ctx context.Context) error {
 		NetNsCreated: s.config.NetworkConfig.NetNsCreated,
 	}
 
+	span.SetAttributes(otelLabel.Any("networkNS", s.networkNS))
+	span.SetAttributes(otelLabel.Any("NetworkConfig", s.config.NetworkConfig))
+
 	// In case there is a factory, network interfaces are hotplugged
 	// after vm is started.
 	if s.factory == nil {

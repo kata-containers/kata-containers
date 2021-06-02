@@ -17,6 +17,8 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/uuid"
 )
 
+var tapTrace = getNetworkTrace(TapEndpointType)
+
 // TapEndpoint represents just a tap endpoint
 type TapEndpoint struct {
 	TapInterface       TapInterface
@@ -78,6 +80,9 @@ func (endpoint *TapEndpoint) Detach(ctx context.Context, netNsCreated bool, netN
 		return nil
 	}
 
+	span, _ := tapTrace(ctx, "Detach", endpoint)
+	defer span.End()
+
 	networkLogger().WithField("endpoint-type", TapEndpointType).Info("Detaching endpoint")
 	return doNetNS(netNsPath, func(_ ns.NetNS) error {
 		return unTapNetwork(endpoint.TapInterface.TAPIface.Name)
@@ -87,6 +92,10 @@ func (endpoint *TapEndpoint) Detach(ctx context.Context, netNsCreated bool, netN
 // HotAttach for the tap endpoint uses hot plug device
 func (endpoint *TapEndpoint) HotAttach(ctx context.Context, h hypervisor) error {
 	networkLogger().Info("Hot attaching tap endpoint")
+
+	span, ctx := tapTrace(ctx, "HotAttach", endpoint)
+	defer span.End()
+
 	if err := tapNetwork(endpoint, h.hypervisorConfig().NumVCPUs, h.hypervisorConfig().DisableVhostNet); err != nil {
 		networkLogger().WithError(err).Error("Error bridging tap ep")
 		return err
@@ -102,6 +111,10 @@ func (endpoint *TapEndpoint) HotAttach(ctx context.Context, h hypervisor) error 
 // HotDetach for the tap endpoint uses hot pull device
 func (endpoint *TapEndpoint) HotDetach(ctx context.Context, h hypervisor, netNsCreated bool, netNsPath string) error {
 	networkLogger().Info("Hot detaching tap endpoint")
+
+	span, ctx := tapTrace(ctx, "HotDetach", endpoint)
+	defer span.End()
+
 	if err := doNetNS(netNsPath, func(_ ns.NetNS) error {
 		return unTapNetwork(endpoint.TapInterface.TAPIface.Name)
 	}); err != nil {

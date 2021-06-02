@@ -6,6 +6,7 @@
 package virtcontainers
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"reflect"
@@ -74,7 +75,7 @@ func TestGenerateInterfacesAndRoutes(t *testing.T) {
 
 	nns := NetworkNamespace{NetNsPath: "foobar", NetNsCreated: true, Endpoints: endpoints}
 
-	resInterfaces, resRoutes, resNeighs, err := generateVCNetworkStructures(nns)
+	resInterfaces, resRoutes, resNeighs, err := generateVCNetworkStructures(context.Background(), nns)
 
 	//
 	// Build expected results:
@@ -275,10 +276,10 @@ func TestTcRedirectNetwork(t *testing.T) {
 	err = netHandle.LinkSetUp(link)
 	assert.NoError(err)
 
-	err = setupTCFiltering(endpoint, 1, true)
+	err = setupTCFiltering(context.Background(), endpoint, 1, true)
 	assert.NoError(err)
 
-	err = removeTCFiltering(endpoint)
+	err = removeTCFiltering(context.Background(), endpoint)
 	assert.NoError(err)
 
 	// Remove the veth created for testing.
@@ -313,7 +314,7 @@ func TestRxRateLimiter(t *testing.T) {
 	err = netHandle.LinkSetUp(link)
 	assert.NoError(err)
 
-	err = setupTCFiltering(endpoint, 1, true)
+	err = setupTCFiltering(context.Background(), endpoint, 1, true)
 	assert.NoError(err)
 
 	// 10Mb
@@ -327,7 +328,7 @@ func TestRxRateLimiter(t *testing.T) {
 	err = removeRxRateLimiter(endpoint, currentNS.Path())
 	assert.NoError(err)
 
-	err = removeTCFiltering(endpoint)
+	err = removeTCFiltering(context.Background(), endpoint)
 	assert.NoError(err)
 
 	// Remove the veth created for testing.
@@ -362,7 +363,7 @@ func TestTxRateLimiter(t *testing.T) {
 	err = netHandle.LinkSetUp(link)
 	assert.NoError(err)
 
-	err = setupTCFiltering(endpoint, 1, true)
+	err = setupTCFiltering(context.Background(), endpoint, 1, true)
 	assert.NoError(err)
 
 	// 10Mb
@@ -376,7 +377,7 @@ func TestTxRateLimiter(t *testing.T) {
 	err = removeTxRateLimiter(endpoint, currentNS.Path())
 	assert.NoError(err)
 
-	err = removeTCFiltering(endpoint)
+	err = removeTCFiltering(context.Background(), endpoint)
 	assert.NoError(err)
 
 	// Remove the veth created for testing.
