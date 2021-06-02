@@ -24,7 +24,7 @@ async-trait = "0.1.42"
 tokio = { version = "1.2.0", features = ["rt", "rt-multi-thread", "sync", "macros", "io-util", "time", "signal", "io-std", "process", "fs"] }
 futures = "0.3.12"
 netlink-sys = { version = "0.6.0", features = ["tokio_socket",]}
-tokio-vsock = "0.3.0"
+tokio-vsock = "0.3.1"
 rtnetlink = "0.7.0"
 netlink-packet-utils = "0.4.0"
 ipnetwork = "0.17.0"

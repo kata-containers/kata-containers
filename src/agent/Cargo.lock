@@ -1494,9 +1494,9 @@ dependencies = [
 
 [[package]]
 name = "tokio-vsock"
-version = "0.3.0"
+version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "70c401a3d0e82328c6fa900e9e2c4152737a4caa304558b762f0154a8b306456"
+checksum = "9e0723fc001950a3b018947b05eeb45014fd2b7c6e8f292502193ab74486bdb6"
 dependencies = [
  "bytes 0.4.12",
  "futures",
@@ -1577,9 +1577,9 @@ checksum = "6a02e4885ed3bc0f2de90ea6dd45ebcbb66dacffe03547fadbb0eeae2770887d"
 
 [[package]]
 name = "vsock"
-version = "0.2.3"
+version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "50e2ef09834e1d203d24556512c0e58e66de203440bd9d74c30a33f7240091c6"
+checksum = "c932be691560e8f3f7b2be5a47df1b8f45387e1d1df40d45b2e62284b9e9150e"
 dependencies = [
  "libc",
  "nix 0.19.1",
