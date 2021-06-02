@@ -9,6 +9,7 @@ use nix::fcntl::{self, OFlag};
 use nix::sys::stat::Mode;
 use std::fs;
 use std::os::unix::io::{AsRawFd, FromRawFd};
+use tracing::instrument;
 
 pub const RNGDEV: &str = "/dev/random";
 pub const RNDADDTOENTCNT: libc::c_int = 0x40045201;
@@ -20,6 +21,7 @@ type IoctlRequestType = libc::c_int;
 #[cfg(target_env = "gnu")]
 type IoctlRequestType = libc::c_ulong;
 
+#[instrument]
 pub fn reseed_rng(data: &[u8]) -> Result<()> {
     let len = data.len() as libc::c_long;
     fs::write(RNGDEV, data)?;

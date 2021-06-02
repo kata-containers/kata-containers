@@ -1,9 +1,9 @@
-// Copyright (c) 2020 Intel Corporation
+// Copyright (c) 2020-2021 Intel Corporation
 //
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use opentelemetry::api::Key;
+use opentelemetry::KeyValue;
 use std::net::SocketAddr;
 
 pub fn create_jaeger_trace_exporter(
@@ -15,11 +15,6 @@ pub fn create_jaeger_trace_exporter(
 
     let jaeger_addr = format!("{}:{}", jaeger_host, jaeger_port);
 
-    let process = opentelemetry_jaeger::Process {
-        service_name: jaeger_service_name,
-        tags: vec![Key::new("exporter").string(exporter_type)],
-    };
-
     let socket_addr: SocketAddr = match jaeger_addr.parse() {
         Ok(a) => a,
         Err(e) => {
@@ -30,10 +25,11 @@ pub fn create_jaeger_trace_exporter(
         }
     };
 
-    let exporter = match opentelemetry_jaeger::Exporter::builder()
+    let exporter = match opentelemetry_jaeger::new_pipeline()
+        .with_service_name(jaeger_service_name)
         .with_agent_endpoint(socket_addr.to_string())
-        .with_process(process)
-        .init()
+        .with_tags(vec![KeyValue::new("exporter", exporter_type)])
+        .init_exporter()
     {
         Ok(x) => x,
         Err(e) => {

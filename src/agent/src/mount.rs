@@ -32,6 +32,7 @@ use crate::protocols::agent::Storage;
 use crate::Sandbox;
 use anyhow::{anyhow, Context, Result};
 use slog::Logger;
+use tracing::instrument;
 
 pub const DRIVER_9P_TYPE: &str = "9p";
 pub const DRIVER_VIRTIOFS_TYPE: &str = "virtio-fs";
@@ -156,6 +157,7 @@ pub struct BareMount<'a> {
 // * evaluate all symlinks
 // * ensure the source exists
 impl<'a> BareMount<'a> {
+    #[instrument]
     pub fn new(
         s: &'a str,
         d: &'a str,
@@ -174,6 +176,7 @@ impl<'a> BareMount<'a> {
         }
     }
 
+    #[instrument]
     pub fn mount(&self) -> Result<()> {
         let source;
         let dest;
@@ -232,6 +235,7 @@ impl<'a> BareMount<'a> {
     }
 }
 
+#[instrument]
 async fn ephemeral_storage_handler(
     logger: &Logger,
     storage: &Storage,
@@ -278,6 +282,7 @@ async fn ephemeral_storage_handler(
     Ok("".to_string())
 }
 
+#[instrument]
 async fn local_storage_handler(
     _logger: &Logger,
     storage: &Storage,
@@ -324,6 +329,7 @@ async fn local_storage_handler(
     Ok("".to_string())
 }
 
+#[instrument]
 async fn virtio9p_storage_handler(
     logger: &Logger,
     storage: &Storage,
@@ -333,6 +339,7 @@ async fn virtio9p_storage_handler(
 }
 
 // virtiommio_blk_storage_handler handles the storage for mmio blk driver.
+#[instrument]
 async fn virtiommio_blk_storage_handler(
     logger: &Logger,
     storage: &Storage,
@@ -343,6 +350,7 @@ async fn virtiommio_blk_storage_handler(
 }
 
 // virtiofs_storage_handler handles the storage for virtio-fs.
+#[instrument]
 async fn virtiofs_storage_handler(
     logger: &Logger,
     storage: &Storage,
@@ -352,6 +360,7 @@ async fn virtiofs_storage_handler(
 }
 
 // virtio_blk_storage_handler handles the storage for blk driver.
+#[instrument]
 async fn virtio_blk_storage_handler(
     logger: &Logger,
     storage: &Storage,
@@ -377,7 +386,8 @@ async fn virtio_blk_storage_handler(
     common_storage_handler(logger, &storage)
 }
 
-// virtio_scsi_storage_handler handles the storage for scsi driver.
+// virtio_scsi_storage_handler handles the  storage for scsi driver.
+#[instrument]
 async fn virtio_scsi_storage_handler(
     logger: &Logger,
     storage: &Storage,
@@ -392,6 +402,7 @@ async fn virtio_scsi_storage_handler(
     common_storage_handler(logger, &storage)
 }
 
+#[instrument]
 fn common_storage_handler(logger: &Logger, storage: &Storage) -> Result<String> {
     // Mount the storage device.
     let mount_point = storage.mount_point.to_string();
@@ -400,6 +411,7 @@ fn common_storage_handler(logger: &Logger, storage: &Storage) -> Result<String> 
 }
 
 // nvdimm_storage_handler handles the storage for NVDIMM driver.
+#[instrument]
 async fn nvdimm_storage_handler(
     logger: &Logger,
     storage: &Storage,
@@ -414,6 +426,7 @@ async fn nvdimm_storage_handler(
 }
 
 // mount_storage performs the mount described by the storage structure.
+#[instrument]
 fn mount_storage(logger: &Logger, storage: &Storage) -> Result<()> {
     let logger = logger.new(o!("subsystem" => "mount"));
 
@@ -464,6 +477,7 @@ fn mount_storage(logger: &Logger, storage: &Storage) -> Result<()> {
 }
 
 /// Looks for `mount_point` entry in the /proc/mounts.
+#[instrument]
 fn is_mounted(mount_point: &str) -> Result<bool> {
     let mount_point = mount_point.trim_end_matches('/');
     let found = fs::metadata(mount_point).is_ok()
@@ -481,6 +495,7 @@ fn is_mounted(mount_point: &str) -> Result<bool> {
     Ok(found)
 }
 
+#[instrument]
 fn parse_mount_flags_and_options(options_vec: Vec<&str>) -> (MsFlags, String) {
     let mut flags = MsFlags::empty();
     let mut options: String = "".to_string();
@@ -509,6 +524,7 @@ fn parse_mount_flags_and_options(options_vec: Vec<&str>) -> (MsFlags, String) {
 // associated operations such as waiting for the device to show up, and mount
 // it to a specific location, according to the type of handler chosen, and for
 // each storage.
+#[instrument]
 pub async fn add_storages(
     logger: Logger,
     storages: Vec<Storage>,
@@ -558,6 +574,7 @@ pub async fn add_storages(
     Ok(mount_list)
 }
 
+#[instrument]
 fn mount_to_rootfs(logger: &Logger, m: &InitMount) -> Result<()> {
     let options_vec: Vec<&str> = m.options.clone();
 
@@ -583,6 +600,7 @@ fn mount_to_rootfs(logger: &Logger, m: &InitMount) -> Result<()> {
     Ok(())
 }
 
+#[instrument]
 pub fn general_mount(logger: &Logger) -> Result<()> {
     let logger = logger.new(o!("subsystem" => "mount"));
 
@@ -600,6 +618,7 @@ pub fn get_mount_fs_type(mount_point: &str) -> Result<String> {
 
 // get_mount_fs_type_from_file returns the FS type corresponding to the passed mount point and
 // any error ecountered.
+#[instrument]
 pub fn get_mount_fs_type_from_file(mount_file: &str, mount_point: &str) -> Result<String> {
     if mount_point.is_empty() {
         return Err(anyhow!("Invalid mount point {}", mount_point));
@@ -630,6 +649,7 @@ pub fn get_mount_fs_type_from_file(mount_file: &str, mount_point: &str) -> Resul
     ))
 }
 
+#[instrument]
 pub fn get_cgroup_mounts(
     logger: &Logger,
     cg_path: &str,
@@ -720,6 +740,7 @@ pub fn get_cgroup_mounts(
     Ok(cg_mounts)
 }
 
+#[instrument]
 pub fn cgroups_mount(logger: &Logger, unified_cgroup_hierarchy: bool) -> Result<()> {
     let logger = logger.new(o!("subsystem" => "mount"));
 
@@ -735,6 +756,7 @@ pub fn cgroups_mount(logger: &Logger, unified_cgroup_hierarchy: bool) -> Result<
     Ok(())
 }
 
+#[instrument]
 pub fn remove_mounts(mounts: &[String]) -> Result<()> {
     for m in mounts.iter() {
         mount::umount(m.as_str()).context(format!("failed to umount {:?}", m))?;
@@ -744,6 +766,7 @@ pub fn remove_mounts(mounts: &[String]) -> Result<()> {
 
 // ensure_destination_exists will recursively create a given mountpoint. If directories
 // are created, their permissions are initialized to mountPerm(0755)
+#[instrument]
 fn ensure_destination_exists(destination: &str, fs_type: &str) -> Result<()> {
     let d = Path::new(destination);
     if !d.exists() {
@@ -764,6 +787,7 @@ fn ensure_destination_exists(destination: &str, fs_type: &str) -> Result<()> {
     Ok(())
 }
 
+#[instrument]
 fn parse_options(option_list: Vec<String>) -> HashMap<String, String> {
     let mut options = HashMap::new();
     for opt in option_list.iter() {

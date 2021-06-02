@@ -11,6 +11,7 @@ use std::fmt;
 use std::fs;
 use std::fs::File;
 use std::path::{Path, PathBuf};
+use tracing::instrument;
 
 use crate::mount::{BareMount, FLAGS};
 use slog::Logger;
@@ -20,6 +21,7 @@ pub const NSTYPEIPC: &str = "ipc";
 pub const NSTYPEUTS: &str = "uts";
 pub const NSTYPEPID: &str = "pid";
 
+#[instrument]
 pub fn get_current_thread_ns_path(ns_type: &str) -> String {
     format!(
         "/proc/{}/task/{}/ns/{}",
@@ -40,6 +42,7 @@ pub struct Namespace {
 }
 
 impl Namespace {
+    #[instrument]
     pub fn new(logger: &Logger) -> Self {
         Namespace {
             logger: logger.clone(),
@@ -50,11 +53,13 @@ impl Namespace {
         }
     }
 
+    #[instrument]
     pub fn get_ipc(mut self) -> Self {
         self.ns_type = NamespaceType::Ipc;
         self
     }
 
+    #[instrument]
     pub fn get_uts(mut self, hostname: &str) -> Self {
         self.ns_type = NamespaceType::Uts;
         if !hostname.is_empty() {
@@ -63,6 +68,7 @@ impl Namespace {
         self
     }
 
+    #[instrument]
     pub fn get_pid(mut self) -> Self {
         self.ns_type = NamespaceType::Pid;
         self
@@ -76,6 +82,7 @@ impl Namespace {
 
     // setup creates persistent namespace without switching to it.
     // Note, pid namespaces cannot be persisted.
+    #[instrument]
     pub async fn setup(mut self) -> Result<Self> {
         fs::create_dir_all(&self.persistent_ns_dir)?;
 

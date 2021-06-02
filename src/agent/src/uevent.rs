@@ -18,6 +18,7 @@ use std::sync::Arc;
 use tokio::select;
 use tokio::sync::watch::Receiver;
 use tokio::sync::Mutex;
+use tracing::instrument;
 
 // Convenience macro to obtain the scope logger
 macro_rules! sl {
@@ -64,6 +65,7 @@ impl Uevent {
         event
     }
 
+    #[instrument]
     async fn process_add(&self, logger: &Logger, sandbox: &Arc<Mutex<Sandbox>>) {
         // Special case for memory hot-adds first
         let online_path = format!("{}/{}/online", SYSFS_DIR, &self.devpath);
@@ -95,6 +97,7 @@ impl Uevent {
         }
     }
 
+    #[instrument]
     async fn process(&self, logger: &Logger, sandbox: &Arc<Mutex<Sandbox>>) {
         if self.action == U_EVENT_ACTION_ADD {
             return self.process_add(logger, sandbox).await;
@@ -103,6 +106,7 @@ impl Uevent {
     }
 }
 
+#[instrument]
 pub async fn wait_for_uevent(
     sandbox: &Arc<Mutex<Sandbox>>,
     matcher: impl UeventMatcher,
@@ -145,6 +149,7 @@ pub async fn wait_for_uevent(
     Ok(uev)
 }
 
+#[instrument]
 pub async fn watch_uevents(
     sandbox: Arc<Mutex<Sandbox>>,
     mut shutdown: Receiver<bool>,
