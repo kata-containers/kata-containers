@@ -1,13 +1,13 @@
-// Copyright (c) 2020 Intel Corporation
+// Copyright (c) 2020-2021 Intel Corporation
 //
 // SPDX-License-Identifier: Apache-2.0
 //
 
 use crate::handler;
-use nix::sys::socket::{SockAddr, VsockAddr};
+use anyhow::Result;
+use futures::executor::block_on;
 use slog::{debug, error, info, o, Logger};
-use std::io;
-use vsock::VsockListener;
+use vsock::{SockAddr, VsockListener};
 
 use crate::tracer;
 
@@ -44,9 +44,8 @@ impl VsockTraceServer {
         }
     }
 
-    pub fn start(&mut self) -> Result<(), io::Error> {
-        let vsock_addr = VsockAddr::new(self.vsock_cid, self.vsock_port);
-        let sock_addr = SockAddr::Vsock(vsock_addr);
+    pub fn start(&mut self) -> Result<()> {
+        let sock_addr = SockAddr::new_vsock(self.vsock_cid, self.vsock_port);
 
         let listener = VsockListener::bind(&sock_addr)?;
 
@@ -58,7 +57,7 @@ impl VsockTraceServer {
             self.jaeger_port,
         );
 
-        let exporter = result?;
+        let mut exporter = result?;
 
         for conn in listener.incoming() {
             debug!(self.logger, "got client connection");
@@ -72,7 +71,9 @@ impl VsockTraceServer {
 
                     let logger = self.logger.new(o!());
 
-                    handler::handle_connection(logger, conn, &exporter)?;
+                    let f = handler::handle_connection(logger, conn, &mut exporter);
+
+                    block_on(f)?;
                 }
             }
 

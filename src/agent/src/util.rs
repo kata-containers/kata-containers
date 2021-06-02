@@ -11,6 +11,7 @@ use std::os::unix::io::{FromRawFd, RawFd};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::sync::watch::Receiver;
 use tokio_vsock::{Incoming, VsockListener, VsockStream};
+use tracing::instrument;
 
 // Size of I/O read buffer
 const BUF_SIZE: usize = 8192;
@@ -56,10 +57,12 @@ where
     Ok(total_bytes)
 }
 
+#[instrument]
 pub fn get_vsock_incoming(fd: RawFd) -> Incoming {
     unsafe { VsockListener::from_raw_fd(fd).incoming() }
 }
 
+#[instrument]
 pub async fn get_vsock_stream(fd: RawFd) -> Result<VsockStream> {
     let stream = get_vsock_incoming(fd).next().await.unwrap()?;
     Ok(stream)

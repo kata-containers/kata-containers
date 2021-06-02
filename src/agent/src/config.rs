@@ -2,13 +2,16 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 //
+use crate::tracer;
 use anyhow::{anyhow, Result};
 use std::env;
 use std::fs;
 use std::time;
+use tracing::instrument;
 
 const DEBUG_CONSOLE_FLAG: &str = "agent.debug_console";
 const DEV_MODE_FLAG: &str = "agent.devmode";
+const TRACE_MODE_OPTION: &str = "agent.trace";
 const LOG_LEVEL_OPTION: &str = "agent.log";
 const SERVER_ADDR_OPTION: &str = "agent.server_addr";
 const HOTPLUG_TIMOUT_OPTION: &str = "agent.hotplug_timeout";
@@ -26,6 +29,7 @@ const VSOCK_PORT: u16 = 1024;
 // Environment variables used for development and testing
 const SERVER_ADDR_ENV_VAR: &str = "KATA_AGENT_SERVER_ADDR";
 const LOG_LEVEL_ENV_VAR: &str = "KATA_AGENT_LOG_LEVEL";
+const TRACE_TYPE_ENV_VAR: &str = "KATA_AGENT_TRACE_TYPE";
 
 const ERR_INVALID_LOG_LEVEL: &str = "invalid log level";
 const ERR_INVALID_LOG_LEVEL_PARAM: &str = "invalid log level parameter";
@@ -54,6 +58,7 @@ pub struct AgentConfig {
     pub container_pipe_size: i32,
     pub server_addr: String,
     pub unified_cgroup_hierarchy: bool,
+    pub tracing: tracer::TraceType,
 }
 
 // parse_cmdline_param parse commandline parameters.
@@ -98,9 +103,11 @@ impl AgentConfig {
             container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
             server_addr: format!("{}:{}", VSOCK_ADDR, VSOCK_PORT),
             unified_cgroup_hierarchy: false,
+            tracing: tracer::TraceType::Disabled,
         }
     }
 
+    #[instrument]
     pub fn parse_cmdline(&mut self, file: &str) -> Result<()> {
         let cmdline = fs::read_to_string(file)?;
         let params: Vec<&str> = cmdline.split_ascii_whitespace().collect();
@@ -108,6 +115,15 @@ impl AgentConfig {
             // parse cmdline flags
             parse_cmdline_param!(param, DEBUG_CONSOLE_FLAG, self.debug_console);
             parse_cmdline_param!(param, DEV_MODE_FLAG, self.dev_mode);
+
+            // Support "bare" tracing option for backwards compatibility with
+            // Kata 1.x.
+            if param == &TRACE_MODE_OPTION {
+                self.tracing = tracer::TraceType::Isolated;
+                continue;
+            }
+
+            parse_cmdline_param!(param, TRACE_MODE_OPTION, self.tracing, get_trace_type);
 
             // parse cmdline options
             parse_cmdline_param!(param, LOG_LEVEL_OPTION, self.log_level, get_log_level);
@@ -167,10 +183,17 @@ impl AgentConfig {
             }
         }
 
+        if let Ok(value) = env::var(TRACE_TYPE_ENV_VAR) {
+            if let Ok(result) = value.parse::<tracer::TraceType>() {
+                self.tracing = result;
+            }
+        }
+
         Ok(())
     }
 }
 
+#[instrument]
 fn get_vsock_port(p: &str) -> Result<i32> {
     let fields: Vec<&str> = p.split('=').collect();
     if fields.len() != 2 {
@@ -185,6 +208,7 @@ fn get_vsock_port(p: &str) -> Result<i32> {
 //
 // Note: Logrus names are used for compatability with the previous
 // golang-based agent.
+#[instrument]
 fn logrus_to_slog_level(logrus_level: &str) -> Result<slog::Level> {
     let level = match logrus_level {
         // Note: different semantics to logrus: log, but don't panic.
@@ -207,6 +231,7 @@ fn logrus_to_slog_level(logrus_level: &str) -> Result<slog::Level> {
     Ok(level)
 }
 
+#[instrument]
 fn get_log_level(param: &str) -> Result<slog::Level> {
     let fields: Vec<&str> = param.split('=').collect();
 
@@ -221,6 +246,28 @@ fn get_log_level(param: &str) -> Result<slog::Level> {
     }
 }
 
+#[instrument]
+fn get_trace_type(param: &str) -> Result<tracer::TraceType> {
+    if param.is_empty() {
+        return Err(anyhow!("invalid trace type parameter"));
+    }
+
+    let fields: Vec<&str> = param.split('=').collect();
+
+    if fields[0] != TRACE_MODE_OPTION {
+        return Err(anyhow!("invalid trace type key name"));
+    }
+
+    if fields.len() == 1 {
+        return Ok(tracer::TraceType::Isolated);
+    }
+
+    let result = fields[1].parse::<tracer::TraceType>()?;
+
+    Ok(result)
+}
+
+#[instrument]
 fn get_hotplug_timeout(param: &str) -> Result<time::Duration> {
     let fields: Vec<&str> = param.split('=').collect();
 
@@ -241,6 +288,7 @@ fn get_hotplug_timeout(param: &str) -> Result<time::Duration> {
     Ok(time::Duration::from_secs(value.unwrap()))
 }
 
+#[instrument]
 fn get_bool_value(param: &str) -> Result<bool> {
     let fields: Vec<&str> = param.split('=').collect();
 
@@ -265,6 +313,7 @@ fn get_bool_value(param: &str) -> Result<bool> {
 // - A value can contain any number of equal signs.
 // - We could/should maybe check if the name is pure whitespace
 //   since this is considered to be invalid.
+#[instrument]
 fn get_string_value(param: &str) -> Result<String> {
     let fields: Vec<&str> = param.split('=').collect();
 
@@ -285,6 +334,7 @@ fn get_string_value(param: &str) -> Result<String> {
     Ok(value)
 }
 
+#[instrument]
 fn get_container_pipe_size(param: &str) -> Result<i32> {
     let fields: Vec<&str> = param.split('=').collect();
 
@@ -318,6 +368,10 @@ mod tests {
     use std::io::Write;
     use std::time;
     use tempfile::tempdir;
+
+    const ERR_INVALID_TRACE_TYPE_PARAM: &str = "invalid trace type parameter";
+    const ERR_INVALID_TRACE_TYPE: &str = "invalid trace type";
+    const ERR_INVALID_TRACE_TYPE_KEY: &str = "invalid trace type key name";
 
     // helper function to make errors less crazy-long
     fn make_err(desc: &str) -> Error {
@@ -374,6 +428,7 @@ mod tests {
             container_pipe_size: i32,
             server_addr: &'a str,
             unified_cgroup_hierarchy: bool,
+            tracing: tracer::TraceType,
         }
 
         let tests = &[
@@ -387,6 +442,7 @@ mod tests {
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
                 server_addr: TEST_SERVER_ADDR,
                 unified_cgroup_hierarchy: false,
+                tracing: tracer::TraceType::Disabled,
             },
             TestData {
                 contents: "agent.debug_console agent.devmodex",
@@ -398,6 +454,7 @@ mod tests {
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
                 server_addr: TEST_SERVER_ADDR,
                 unified_cgroup_hierarchy: false,
+                tracing: tracer::TraceType::Disabled,
             },
             TestData {
                 contents: "agent.logx=debug",
@@ -409,6 +466,7 @@ mod tests {
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
                 server_addr: TEST_SERVER_ADDR,
                 unified_cgroup_hierarchy: false,
+                tracing: tracer::TraceType::Disabled,
             },
             TestData {
                 contents: "agent.log=debug",
@@ -420,6 +478,7 @@ mod tests {
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
                 server_addr: TEST_SERVER_ADDR,
                 unified_cgroup_hierarchy: false,
+                tracing: tracer::TraceType::Disabled,
             },
             TestData {
                 contents: "agent.log=debug",
@@ -431,6 +490,7 @@ mod tests {
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
                 server_addr: TEST_SERVER_ADDR,
                 unified_cgroup_hierarchy: false,
+                tracing: tracer::TraceType::Disabled,
             },
             TestData {
                 contents: "",
@@ -442,6 +502,7 @@ mod tests {
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
                 server_addr: TEST_SERVER_ADDR,
                 unified_cgroup_hierarchy: false,
+                tracing: tracer::TraceType::Disabled,
             },
             TestData {
                 contents: "foo",
@@ -453,6 +514,7 @@ mod tests {
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
                 server_addr: TEST_SERVER_ADDR,
                 unified_cgroup_hierarchy: false,
+                tracing: tracer::TraceType::Disabled,
             },
             TestData {
                 contents: "foo bar",
@@ -464,6 +526,7 @@ mod tests {
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
                 server_addr: TEST_SERVER_ADDR,
                 unified_cgroup_hierarchy: false,
+                tracing: tracer::TraceType::Disabled,
             },
             TestData {
                 contents: "foo bar",
@@ -475,6 +538,7 @@ mod tests {
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
                 server_addr: TEST_SERVER_ADDR,
                 unified_cgroup_hierarchy: false,
+                tracing: tracer::TraceType::Disabled,
             },
             TestData {
                 contents: "foo agent bar",
@@ -486,6 +550,7 @@ mod tests {
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
                 server_addr: TEST_SERVER_ADDR,
                 unified_cgroup_hierarchy: false,
+                tracing: tracer::TraceType::Disabled,
             },
             TestData {
                 contents: "foo debug_console agent bar devmode",
@@ -497,6 +562,7 @@ mod tests {
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
                 server_addr: TEST_SERVER_ADDR,
                 unified_cgroup_hierarchy: false,
+                tracing: tracer::TraceType::Disabled,
             },
             TestData {
                 contents: "agent.debug_console",
@@ -508,6 +574,7 @@ mod tests {
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
                 server_addr: TEST_SERVER_ADDR,
                 unified_cgroup_hierarchy: false,
+                tracing: tracer::TraceType::Disabled,
             },
             TestData {
                 contents: "   agent.debug_console ",
@@ -519,6 +586,7 @@ mod tests {
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
                 server_addr: TEST_SERVER_ADDR,
                 unified_cgroup_hierarchy: false,
+                tracing: tracer::TraceType::Disabled,
             },
             TestData {
                 contents: "agent.debug_console foo",
@@ -530,6 +598,7 @@ mod tests {
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
                 server_addr: TEST_SERVER_ADDR,
                 unified_cgroup_hierarchy: false,
+                tracing: tracer::TraceType::Disabled,
             },
             TestData {
                 contents: " agent.debug_console foo",
@@ -541,6 +610,7 @@ mod tests {
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
                 server_addr: TEST_SERVER_ADDR,
                 unified_cgroup_hierarchy: false,
+                tracing: tracer::TraceType::Disabled,
             },
             TestData {
                 contents: "foo agent.debug_console bar",
@@ -552,6 +622,7 @@ mod tests {
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
                 server_addr: TEST_SERVER_ADDR,
                 unified_cgroup_hierarchy: false,
+                tracing: tracer::TraceType::Disabled,
             },
             TestData {
                 contents: "foo agent.debug_console",
@@ -563,6 +634,7 @@ mod tests {
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
                 server_addr: TEST_SERVER_ADDR,
                 unified_cgroup_hierarchy: false,
+                tracing: tracer::TraceType::Disabled,
             },
             TestData {
                 contents: "foo agent.debug_console ",
@@ -574,6 +646,7 @@ mod tests {
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
                 server_addr: TEST_SERVER_ADDR,
                 unified_cgroup_hierarchy: false,
+                tracing: tracer::TraceType::Disabled,
             },
             TestData {
                 contents: "agent.devmode",
@@ -585,6 +658,7 @@ mod tests {
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
                 server_addr: TEST_SERVER_ADDR,
                 unified_cgroup_hierarchy: false,
+                tracing: tracer::TraceType::Disabled,
             },
             TestData {
                 contents: "   agent.devmode ",
@@ -596,6 +670,7 @@ mod tests {
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
                 server_addr: TEST_SERVER_ADDR,
                 unified_cgroup_hierarchy: false,
+                tracing: tracer::TraceType::Disabled,
             },
             TestData {
                 contents: "agent.devmode foo",
@@ -607,6 +682,7 @@ mod tests {
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
                 server_addr: TEST_SERVER_ADDR,
                 unified_cgroup_hierarchy: false,
+                tracing: tracer::TraceType::Disabled,
             },
             TestData {
                 contents: " agent.devmode foo",
@@ -618,6 +694,7 @@ mod tests {
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
                 server_addr: TEST_SERVER_ADDR,
                 unified_cgroup_hierarchy: false,
+                tracing: tracer::TraceType::Disabled,
             },
             TestData {
                 contents: "foo agent.devmode bar",
@@ -629,6 +706,7 @@ mod tests {
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
                 server_addr: TEST_SERVER_ADDR,
                 unified_cgroup_hierarchy: false,
+                tracing: tracer::TraceType::Disabled,
             },
             TestData {
                 contents: "foo agent.devmode",
@@ -640,6 +718,7 @@ mod tests {
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
                 server_addr: TEST_SERVER_ADDR,
                 unified_cgroup_hierarchy: false,
+                tracing: tracer::TraceType::Disabled,
             },
             TestData {
                 contents: "foo agent.devmode ",
@@ -651,6 +730,7 @@ mod tests {
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
                 server_addr: TEST_SERVER_ADDR,
                 unified_cgroup_hierarchy: false,
+                tracing: tracer::TraceType::Disabled,
             },
             TestData {
                 contents: "agent.devmode agent.debug_console",
@@ -662,6 +742,7 @@ mod tests {
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
                 server_addr: TEST_SERVER_ADDR,
                 unified_cgroup_hierarchy: false,
+                tracing: tracer::TraceType::Disabled,
             },
             TestData {
                 contents: "agent.devmode agent.debug_console agent.hotplug_timeout=100 agent.unified_cgroup_hierarchy=a",
@@ -673,6 +754,7 @@ mod tests {
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
                 server_addr: TEST_SERVER_ADDR,
                 unified_cgroup_hierarchy: false,
+                tracing: tracer::TraceType::Disabled,
             },
             TestData {
                 contents: "agent.devmode agent.debug_console agent.hotplug_timeout=0 agent.unified_cgroup_hierarchy=11",
@@ -684,6 +766,7 @@ mod tests {
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
                 server_addr: TEST_SERVER_ADDR,
                 unified_cgroup_hierarchy: true,
+                tracing: tracer::TraceType::Disabled,
             },
             TestData {
                 contents: "agent.devmode agent.debug_console agent.container_pipe_size=2097152 agent.unified_cgroup_hierarchy=false",
@@ -695,6 +778,7 @@ mod tests {
                 container_pipe_size: 2097152,
                 server_addr: TEST_SERVER_ADDR,
                 unified_cgroup_hierarchy: false,
+                tracing: tracer::TraceType::Disabled,
             },
             TestData {
                 contents: "agent.devmode agent.debug_console agent.container_pipe_size=100 agent.unified_cgroup_hierarchy=true",
@@ -706,6 +790,7 @@ mod tests {
                 container_pipe_size: 100,
                 server_addr: TEST_SERVER_ADDR,
                 unified_cgroup_hierarchy: true,
+                tracing: tracer::TraceType::Disabled,
             },
             TestData {
                 contents: "agent.devmode agent.debug_console agent.container_pipe_size=0 agent.unified_cgroup_hierarchy=0",
@@ -717,6 +802,7 @@ mod tests {
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
                 server_addr: TEST_SERVER_ADDR,
                 unified_cgroup_hierarchy: false,
+                tracing: tracer::TraceType::Disabled,
             },
             TestData {
                 contents: "agent.devmode agent.debug_console agent.container_pip_siz=100 agent.unified_cgroup_hierarchy=1",
@@ -728,6 +814,7 @@ mod tests {
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
                 server_addr: TEST_SERVER_ADDR,
                 unified_cgroup_hierarchy: true,
+                tracing: tracer::TraceType::Disabled,
             },
             TestData {
                 contents: "",
@@ -739,6 +826,7 @@ mod tests {
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
                 server_addr: TEST_SERVER_ADDR,
                 unified_cgroup_hierarchy: false,
+                tracing: tracer::TraceType::Disabled,
             },
             TestData {
                 contents: "",
@@ -750,6 +838,7 @@ mod tests {
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
                 server_addr: "foo",
                 unified_cgroup_hierarchy: false,
+                tracing: tracer::TraceType::Disabled,
             },
             TestData {
                 contents: "",
@@ -761,6 +850,7 @@ mod tests {
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
                 server_addr: "=",
                 unified_cgroup_hierarchy: false,
+                tracing: tracer::TraceType::Disabled,
             },
             TestData {
                 contents: "",
@@ -772,6 +862,7 @@ mod tests {
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
                 server_addr: "=foo",
                 unified_cgroup_hierarchy: false,
+                tracing: tracer::TraceType::Disabled,
             },
             TestData {
                 contents: "",
@@ -783,6 +874,7 @@ mod tests {
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
                 server_addr: "foo=bar=baz=",
                 unified_cgroup_hierarchy: false,
+                tracing: tracer::TraceType::Disabled,
             },
             TestData {
                 contents: "",
@@ -794,6 +886,7 @@ mod tests {
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
                 server_addr: "unix:///tmp/foo.socket",
                 unified_cgroup_hierarchy: false,
+                tracing: tracer::TraceType::Disabled,
             },
             TestData {
                 contents: "",
@@ -805,6 +898,7 @@ mod tests {
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
                 server_addr: "unix://@/tmp/foo.socket",
                 unified_cgroup_hierarchy: false,
+                tracing: tracer::TraceType::Disabled,
             },
             TestData {
                 contents: "",
@@ -816,6 +910,7 @@ mod tests {
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
                 server_addr: TEST_SERVER_ADDR,
                 unified_cgroup_hierarchy: false,
+                tracing: tracer::TraceType::Disabled,
             },
             TestData {
                 contents: "",
@@ -827,6 +922,7 @@ mod tests {
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
                 server_addr: TEST_SERVER_ADDR,
                 unified_cgroup_hierarchy: false,
+                tracing: tracer::TraceType::Disabled,
             },
             TestData {
                 contents: "",
@@ -838,6 +934,7 @@ mod tests {
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
                 server_addr: TEST_SERVER_ADDR,
                 unified_cgroup_hierarchy: false,
+                tracing: tracer::TraceType::Disabled,
             },
             TestData {
                 contents: "",
@@ -849,6 +946,7 @@ mod tests {
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
                 server_addr: TEST_SERVER_ADDR,
                 unified_cgroup_hierarchy: false,
+                tracing: tracer::TraceType::Disabled,
             },
             TestData {
                 contents: "server_addr=unix:///tmp/foo.socket",
@@ -860,6 +958,7 @@ mod tests {
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
                 server_addr: TEST_SERVER_ADDR,
                 unified_cgroup_hierarchy: false,
+                tracing: tracer::TraceType::Disabled,
             },
             TestData {
                 contents: "agent.server_address=unix:///tmp/foo.socket",
@@ -871,6 +970,7 @@ mod tests {
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
                 server_addr: TEST_SERVER_ADDR,
                 unified_cgroup_hierarchy: false,
+                tracing: tracer::TraceType::Disabled,
             },
             TestData {
                 contents: "agent.server_addr=unix:///tmp/foo.socket",
@@ -882,6 +982,7 @@ mod tests {
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
                 server_addr: "unix:///tmp/foo.socket",
                 unified_cgroup_hierarchy: false,
+                tracing: tracer::TraceType::Disabled,
             },
             TestData {
                 contents: " agent.server_addr=unix:///tmp/foo.socket",
@@ -893,6 +994,7 @@ mod tests {
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
                 server_addr: "unix:///tmp/foo.socket",
                 unified_cgroup_hierarchy: false,
+                tracing: tracer::TraceType::Disabled,
             },
             TestData {
                 contents: " agent.server_addr=unix:///tmp/foo.socket a",
@@ -904,6 +1006,115 @@ mod tests {
                 container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
                 server_addr: "unix:///tmp/foo.socket",
                 unified_cgroup_hierarchy: false,
+                tracing: tracer::TraceType::Disabled,
+            },
+            TestData {
+                contents: "trace",
+                env_vars: Vec::new(),
+                debug_console: false,
+                dev_mode: false,
+                log_level: DEFAULT_LOG_LEVEL,
+                hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
+                container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+                server_addr: TEST_SERVER_ADDR,
+                unified_cgroup_hierarchy: false,
+                tracing: tracer::TraceType::Disabled,
+            },
+            TestData {
+                contents: ".trace",
+                env_vars: Vec::new(),
+                debug_console: false,
+                dev_mode: false,
+                log_level: DEFAULT_LOG_LEVEL,
+                hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
+                container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+                server_addr: TEST_SERVER_ADDR,
+                unified_cgroup_hierarchy: false,
+                tracing: tracer::TraceType::Disabled,
+            },
+            TestData {
+                contents: "agent.tracer",
+                env_vars: Vec::new(),
+                debug_console: false,
+                dev_mode: false,
+                log_level: DEFAULT_LOG_LEVEL,
+                hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
+                container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+                server_addr: TEST_SERVER_ADDR,
+                unified_cgroup_hierarchy: false,
+                tracing: tracer::TraceType::Disabled,
+            },
+            TestData {
+                contents: "agent.trac",
+                env_vars: Vec::new(),
+                debug_console: false,
+                dev_mode: false,
+                log_level: DEFAULT_LOG_LEVEL,
+                hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
+                container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+                server_addr: TEST_SERVER_ADDR,
+                unified_cgroup_hierarchy: false,
+                tracing: tracer::TraceType::Disabled,
+            },
+            TestData {
+                contents: "agent.trace",
+                env_vars: Vec::new(),
+                debug_console: false,
+                dev_mode: false,
+                log_level: DEFAULT_LOG_LEVEL,
+                hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
+                container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+                server_addr: TEST_SERVER_ADDR,
+                unified_cgroup_hierarchy: false,
+                tracing: tracer::TraceType::Isolated,
+            },
+            TestData {
+                contents: "agent.trace=isolated",
+                env_vars: Vec::new(),
+                debug_console: false,
+                dev_mode: false,
+                log_level: DEFAULT_LOG_LEVEL,
+                hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
+                container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+                server_addr: TEST_SERVER_ADDR,
+                unified_cgroup_hierarchy: false,
+                tracing: tracer::TraceType::Isolated,
+            },
+            TestData {
+                contents: "agent.trace=disabled",
+                env_vars: Vec::new(),
+                debug_console: false,
+                dev_mode: false,
+                log_level: DEFAULT_LOG_LEVEL,
+                hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
+                container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+                server_addr: TEST_SERVER_ADDR,
+                unified_cgroup_hierarchy: false,
+                tracing: tracer::TraceType::Disabled,
+            },
+            TestData {
+                contents: "",
+                env_vars: vec!["KATA_AGENT_TRACE_TYPE=isolated"],
+                debug_console: false,
+                dev_mode: false,
+                log_level: DEFAULT_LOG_LEVEL,
+                hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
+                container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+                server_addr: TEST_SERVER_ADDR,
+                unified_cgroup_hierarchy: false,
+                tracing: tracer::TraceType::Isolated,
+            },
+            TestData {
+                contents: "",
+                env_vars: vec!["KATA_AGENT_TRACE_TYPE=disabled"],
+                debug_console: false,
+                dev_mode: false,
+                log_level: DEFAULT_LOG_LEVEL,
+                hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
+                container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
+                server_addr: TEST_SERVER_ADDR,
+                unified_cgroup_hierarchy: false,
+                tracing: tracer::TraceType::Disabled,
             },
         ];
 
@@ -958,6 +1169,7 @@ mod tests {
             );
             assert_eq!(config.container_pipe_size, 0, "{}", msg);
             assert_eq!(config.server_addr, TEST_SERVER_ADDR, "{}", msg);
+            assert_eq!(config.tracing, tracer::TraceType::Disabled, "{}", msg);
 
             let result = config.parse_cmdline(filename);
             assert!(result.is_ok(), "{}", msg);
@@ -973,6 +1185,7 @@ mod tests {
             assert_eq!(d.hotplug_timeout, config.hotplug_timeout, "{}", msg);
             assert_eq!(d.container_pipe_size, config.container_pipe_size, "{}", msg);
             assert_eq!(d.server_addr, config.server_addr, "{}", msg);
+            assert_eq!(d.tracing, config.tracing, "{}", msg);
 
             for v in vars_to_unset {
                 env::remove_var(v);
@@ -1363,6 +1576,64 @@ mod tests {
             let msg = format!("test[{}]: {:?}", i, d);
 
             let result = get_string_value(d.param);
+
+            let msg = format!("{}: result: {:?}", msg, result);
+
+            assert_result!(d.result, result, msg);
+        }
+    }
+
+    #[test]
+    fn test_get_trace_type() {
+        #[derive(Debug)]
+        struct TestData<'a> {
+            param: &'a str,
+            result: Result<tracer::TraceType>,
+        }
+
+        let tests = &[
+            TestData {
+                param: "",
+                result: Err(make_err(ERR_INVALID_TRACE_TYPE_PARAM)),
+            },
+            TestData {
+                param: "agent.tracer",
+                result: Err(make_err(ERR_INVALID_TRACE_TYPE_KEY)),
+            },
+            TestData {
+                param: "agent.trac",
+                result: Err(make_err(ERR_INVALID_TRACE_TYPE_KEY)),
+            },
+            TestData {
+                param: "agent.trace=",
+                result: Err(make_err(ERR_INVALID_TRACE_TYPE)),
+            },
+            TestData {
+                param: "agent.trace==",
+                result: Err(make_err(ERR_INVALID_TRACE_TYPE)),
+            },
+            TestData {
+                param: "agent.trace=foo",
+                result: Err(make_err(ERR_INVALID_TRACE_TYPE)),
+            },
+            TestData {
+                param: "agent.trace",
+                result: Ok(tracer::TraceType::Isolated),
+            },
+            TestData {
+                param: "agent.trace=isolated",
+                result: Ok(tracer::TraceType::Isolated),
+            },
+            TestData {
+                param: "agent.trace=disabled",
+                result: Ok(tracer::TraceType::Disabled),
+            },
+        ];
+
+        for (i, d) in tests.iter().enumerate() {
+            let msg = format!("test[{}]: {:?}", i, d);
+
+            let result = get_trace_type(d.param);
 
             let msg = format!("{}: result: {:?}", msg, result);
 
