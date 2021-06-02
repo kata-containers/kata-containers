@@ -21,7 +21,9 @@ type mockHypervisor struct {
 }
 
 func (m *mockHypervisor) capabilities(ctx context.Context) types.Capabilities {
-	return types.Capabilities{}
+	caps := types.Capabilities{}
+	caps.SetFsSharingSupport()
+	return caps
 }
 
 func (m *mockHypervisor) hypervisorConfig() HypervisorConfig {

@@ -83,6 +83,7 @@ var (
 	kataSCSIDevType             = "scsi"
 	kataNvdimmDevType           = "nvdimm"
 	kataVirtioFSDevType         = "virtio-fs"
+	kataWatchableBindDevType    = "watchable-bind"
 	sharedDir9pOptions          = []string{"trans=virtio,version=9p2000.L,cache=mmap", "nodev"}
 	sharedDirVirtioFSOptions    = []string{}
 	sharedDirVirtioFSDaxOptions = "dax"
@@ -1343,10 +1344,11 @@ func (k *kataAgent) createContainer(ctx context.Context, sandbox *Sandbox, c *Co
 	sharedDirMounts := make(map[string]Mount)
 	ignoredMounts := make(map[string]Mount)
 
-	err = c.mountSharedDirMounts(ctx, sharedDirMounts, ignoredMounts)
+	shareStorages, err := c.mountSharedDirMounts(ctx, sharedDirMounts, ignoredMounts)
 	if err != nil {
 		return nil, err
 	}
+	ctrStorages = append(ctrStorages, shareStorages...)
 
 	k.handleShm(ociSpec.Mounts, sandbox)
 
