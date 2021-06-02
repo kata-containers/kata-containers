@@ -222,6 +222,9 @@ github.com/hashicorp/errwrap
 # github.com/hashicorp/go-multierror v1.0.0
 ## explicit
 github.com/hashicorp/go-multierror
+# github.com/intel-go/cpuid v0.0.0-20210602155658-5747e5cec0d9
+## explicit
+github.com/intel-go/cpuid
 # github.com/kata-containers/govmm v0.0.0-20210520142420-eb57f004d89f
 ## explicit
 github.com/kata-containers/govmm/qemu
