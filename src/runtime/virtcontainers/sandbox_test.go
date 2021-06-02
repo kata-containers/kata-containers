@@ -1299,7 +1299,7 @@ func TestPreAddDevice(t *testing.T) {
 
 	mounts := make(map[string]Mount)
 	ignoreMounts := make(map[string]Mount)
-	err = container.mountSharedDirMounts(context.Background(), mounts, ignoreMounts)
+	_, err = container.mountSharedDirMounts(context.Background(), mounts, ignoreMounts)
 
 	assert.Nil(t, err)
 	assert.Equal(t, len(mounts), 0,

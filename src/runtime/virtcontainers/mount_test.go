@@ -267,6 +267,98 @@ func TestIsEphemeralStorage(t *testing.T) {
 	assert.False(isHostEmptyDir)
 }
 
+func TestIsEmtpyDir(t *testing.T) {
+	assert := assert.New(t)
+	path := "/var/lib/kubelet/pods/5f0861a0-a987-4a3a-bb0f-1058ddb9678f/volumes/kubernetes.io~empty-dir/foobar"
+	result := isEmptyDir(path)
+	assert.True(result)
+
+	// expect the empty-dir to be second to last in path
+	result = isEmptyDir(filepath.Join(path, "bazzzzz"))
+	assert.False(result)
+}
+
+func TestIsConfigMap(t *testing.T) {
+	assert := assert.New(t)
+	path := "/var/lib/kubelet/pods/5f0861a0-a987-4a3a-bb0f-1058ddb9678f/volumes/kubernetes.io~configmap/config"
+	result := isConfigMap(path)
+	assert.True(result)
+
+	// expect the empty-dir to be second to last in path
+	result = isConfigMap(filepath.Join(path, "bazzzzz"))
+	assert.False(result)
+
+}
+func TestIsSecret(t *testing.T) {
+	assert := assert.New(t)
+	path := "/var/lib/kubelet/pods/5f0861a0-a987-4a3a-bb0f-1058ddb9678f/volumes/kubernetes.io~secret"
+	result := isSecret(path)
+	assert.False(result)
+
+	// expect the empty-dir to be second to last in path
+	result = isSecret(filepath.Join(path, "sweet-token"))
+	assert.True(result)
+
+	result = isConfigMap(filepath.Join(path, "sweet-token-dir", "whoops"))
+	assert.False(result)
+}
+
+func TestIsWatchable(t *testing.T) {
+	if os.Getuid() != 0 {
+		t.Skip("Test disabled as requires root user")
+	}
+
+	assert := assert.New(t)
+
+	path := ""
+	result := isWatchableMount(path)
+	assert.False(result)
+
+	// path does not exist, failure expected:
+	path = "/var/lib/kubelet/pods/5f0861a0-a987-4a3a-bb0f-1058ddb9678f/volumes/kubernetes.io~empty-dir/foobar"
+	result = isWatchableMount(path)
+	assert.False(result)
+
+	testPath, err := ioutil.TempDir("", "")
+	assert.NoError(err)
+	defer os.RemoveAll(testPath)
+
+	// Verify secret is successful (single file mount):
+	//   /tmppath/kubernetes.io~secret/super-secret-thing
+	secretpath := filepath.Join(testPath, K8sSecret)
+	err = os.MkdirAll(secretpath, 0777)
+	assert.NoError(err)
+	secret := filepath.Join(secretpath, "super-secret-thing")
+	_, err = os.Create(secret)
+	assert.NoError(err)
+	result = isWatchableMount(secret)
+	assert.True(result)
+
+	// Verify that if we have too many files, it will no longer be watchable:
+	// /tmp/kubernetes.io~configmap/amazing-dir-of-configs/
+	//                                  | - c0
+	//                                  | - c1
+	//                                    ...
+	//                                  | - c7
+	// should be okay.
+	//
+	// 9 files should cause the mount to be deemed "not watchable"
+	configs := filepath.Join(testPath, K8sConfigMap, "amazing-dir-of-configs")
+	err = os.MkdirAll(configs, 0777)
+	assert.NoError(err)
+
+	for i := 0; i < 8; i++ {
+		_, err := os.Create(filepath.Join(configs, fmt.Sprintf("c%v", i)))
+		assert.NoError(err)
+		result = isWatchableMount(configs)
+		assert.True(result)
+	}
+	_, err = os.Create(filepath.Join(configs, "toomuch"))
+	assert.NoError(err)
+	result = isWatchableMount(configs)
+	assert.False(result)
+}
+
 func TestBindMountInvalidSourceSymlink(t *testing.T) {
 	source := filepath.Join(testDir, "fooFile")
 	os.Remove(source)

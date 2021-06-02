@@ -9,6 +9,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -408,7 +409,9 @@ func IsDockerVolume(path string) bool {
 
 const (
 	// K8sEmptyDir is the k8s specific path for `empty-dir` volumes
-	K8sEmptyDir = "kubernetes.io~empty-dir"
+	K8sEmptyDir  = "kubernetes.io~empty-dir"
+	K8sConfigMap = "kubernetes.io~configmap"
+	K8sSecret    = "kubernetes.io~secret"
 )
 
 // IsEphemeralStorage returns true if the given path
@@ -446,13 +449,78 @@ func Isk8sHostEmptyDir(path string) bool {
 	return false
 }
 
-func isEmptyDir(path string) bool {
+func checkKubernetesVolume(path, volumeType string) bool {
 	splitSourceSlice := strings.Split(path, "/")
 	if len(splitSourceSlice) > 1 {
 		storageType := splitSourceSlice[len(splitSourceSlice)-2]
-		if storageType == K8sEmptyDir {
+		if storageType == volumeType {
 			return true
 		}
 	}
+
+	return false
+}
+
+func isEmptyDir(path string) bool {
+	return checkKubernetesVolume(path, K8sEmptyDir)
+}
+
+func isConfigMap(path string) bool {
+	return checkKubernetesVolume(path, K8sConfigMap)
+}
+
+func isSecret(path string) bool {
+	return checkKubernetesVolume(path, K8sSecret)
+}
+
+// countFiles will return the number of files within a given path. If the total number of
+// files observed is greater than limit, break and return -1
+func countFiles(path string, limit int) (numFiles int, err error) {
+
+	// First, check to see if the path exists
+	file, err := os.Stat(path)
+	if os.IsNotExist(err) {
+		return 0, err
+	}
+
+	// Special case if this is just a file, not a directory:
+	if !file.IsDir() {
+		return 1, nil
+	}
+
+	files, err := ioutil.ReadDir(path)
+	if err != nil {
+		return 0, err
+	}
+
+	for _, file := range files {
+		if file.IsDir() {
+			inc, err := countFiles(filepath.Join(path, file.Name()), (limit - numFiles))
+			if err != nil {
+				return numFiles, err
+			}
+			numFiles = numFiles + inc
+		} else {
+			numFiles++
+		}
+		if numFiles > limit {
+			return -1, nil
+		}
+	}
+	return numFiles, nil
+}
+
+func isWatchableMount(path string) bool {
+	if isSecret(path) || isConfigMap(path) {
+		// we have a cap on number of FDs which can be present in mount
+		// to determine if watchable. A similar check exists within the agent,
+		// which may or may not help handle case where extra files are added to
+		// a mount after the fact
+		count, _ := countFiles(path, 8)
+		if count > 0 {
+			return true
+		}
+	}
+
 	return false
 }

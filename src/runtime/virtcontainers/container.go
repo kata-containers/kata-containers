@@ -18,6 +18,7 @@ import (
 
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/manager"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols/grpc"
 	vccgroups "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/cgroups"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/rootless"
 	vcTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/types"
@@ -511,8 +512,7 @@ func (c *Container) shareFiles(ctx context.Context, m Mount, idx int) (string, b
 // It also updates the container mount list with the HostPath info, and store
 // container mounts to the storage. This way, we will have the HostPath info
 // available when we will need to unmount those mounts.
-func (c *Container) mountSharedDirMounts(ctx context.Context, sharedDirMounts, ignoredMounts map[string]Mount) (err error) {
-
+func (c *Container) mountSharedDirMounts(ctx context.Context, sharedDirMounts, ignoredMounts map[string]Mount) (storages []*grpc.Storage, err error) {
 	var devicesToDetach []string
 	defer func() {
 		if err != nil {
@@ -534,7 +534,7 @@ func (c *Container) mountSharedDirMounts(ctx context.Context, sharedDirMounts, i
 		if len(m.BlockDeviceID) > 0 {
 			// Attach this block device, all other devices passed in the config have been attached at this point
 			if err = c.sandbox.devManager.AttachDevice(ctx, m.BlockDeviceID, c.sandbox); err != nil {
-				return err
+				return storages, err
 			}
 			devicesToDetach = append(devicesToDetach, m.BlockDeviceID)
 			continue
@@ -563,7 +563,7 @@ func (c *Container) mountSharedDirMounts(ctx context.Context, sharedDirMounts, i
 		var guestDest string
 		guestDest, ignore, err = c.shareFiles(ctx, m, idx)
 		if err != nil {
-			return err
+			return storages, err
 		}
 
 		// Expand the list of mounts to ignore.
@@ -571,7 +571,6 @@ func (c *Container) mountSharedDirMounts(ctx context.Context, sharedDirMounts, i
 			ignoredMounts[m.Source] = Mount{Source: m.Source}
 			continue
 		}
-
 		sharedDirMount := Mount{
 			Source:      guestDest,
 			Destination: m.Destination,
@@ -580,10 +579,46 @@ func (c *Container) mountSharedDirMounts(ctx context.Context, sharedDirMounts, i
 			ReadOnly:    m.ReadOnly,
 		}
 
+		// virtiofs does not support inotify. To workaround this limitation, we want to special case
+		// mounts that are commonly 'watched'. "watchable" mounts include:
+		//  - Kubernetes configmap
+		//  - Kubernetes secret
+		// If we identify one of these, we'll need to carry out polling in the guest in order to present the
+		// container with a mount that supports inotify. To do this, we create a Storage object for
+		// the "watchable-bind" driver. This will have the agent create a new mount that is watchable,
+		// who's effective source is the original mount (the agent will poll the original mount for changes and
+		// manually update the path that is mounted into the container).
+		// Based on this, let's make sure we update the sharedDirMount structure with the new watchable-mount as
+		// the source (this is what is utilized to update the OCI spec).
+		caps := c.sandbox.hypervisor.capabilities(ctx)
+		if isWatchableMount(m.Source) && caps.IsFsSharingSupported() {
+
+			// Create path in shared directory for creating watchable mount:
+			watchableHostPath := filepath.Join(getMountPath(c.sandboxID), "watchable")
+			if err := os.MkdirAll(watchableHostPath, DirMode); err != nil {
+				return storages, fmt.Errorf("unable to create watchable path: %s: %v", watchableHostPath, err)
+			}
+
+			watchableGuestMount := filepath.Join(kataGuestSharedDir(), "watchable", filepath.Base(guestDest))
+
+			storage := &grpc.Storage{
+				Driver:     kataWatchableBindDevType,
+				Source:     guestDest,
+				Fstype:     "bind",
+				MountPoint: watchableGuestMount,
+				Options:    m.Options,
+			}
+			storages = append(storages, storage)
+
+			// Update the sharedDirMount, in order to identify what will
+			// change in the OCI spec.
+			sharedDirMount.Source = watchableGuestMount
+		}
+
 		sharedDirMounts[sharedDirMount.Destination] = sharedDirMount
 	}
 
-	return nil
+	return storages, nil
 }
 
 func (c *Container) unmountHostMounts(ctx context.Context) error {
