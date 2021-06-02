@@ -14,6 +14,8 @@ import (
 	vcTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/types"
 )
 
+var ipvlanTrace = getNetworkTrace(IPVlanEndpointType)
+
 // IPVlanEndpoint represents a ipvlan endpoint that is bridged to the VM
 type IPVlanEndpoint struct {
 	NetPair            NetworkInterfacePair
@@ -92,6 +94,9 @@ func (endpoint *IPVlanEndpoint) NetworkPair() *NetworkInterfacePair {
 // Attach for virtual endpoint bridges the network pair and adds the
 // tap interface of the network pair to the hypervisor.
 func (endpoint *IPVlanEndpoint) Attach(ctx context.Context, s *Sandbox) error {
+	span, ctx := ipvlanTrace(ctx, "Attach", endpoint)
+	defer span.End()
+
 	h := s.hypervisor
 	if err := xConnectVMNetwork(ctx, endpoint, h); err != nil {
 		networkLogger().WithError(err).Error("Error bridging virtual ep")
@@ -110,8 +115,11 @@ func (endpoint *IPVlanEndpoint) Detach(ctx context.Context, netNsCreated bool, n
 		return nil
 	}
 
+	span, ctx := ipvlanTrace(ctx, "Detach", endpoint)
+	defer span.End()
+
 	return doNetNS(netNsPath, func(_ ns.NetNS) error {
-		return xDisconnectVMNetwork(endpoint)
+		return xDisconnectVMNetwork(ctx, endpoint)
 	})
 }
 

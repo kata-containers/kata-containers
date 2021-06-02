@@ -14,6 +14,8 @@ import (
 	vcTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/types"
 )
 
+var vethTrace = getNetworkTrace(VethEndpointType)
+
 // VethEndpoint gathers a network pair and its properties.
 type VethEndpoint struct {
 	NetPair            NetworkInterfacePair
@@ -92,6 +94,9 @@ func (endpoint *VethEndpoint) SetProperties(properties NetworkInfo) {
 // Attach for veth endpoint bridges the network pair and adds the
 // tap interface of the network pair to the hypervisor.
 func (endpoint *VethEndpoint) Attach(ctx context.Context, s *Sandbox) error {
+	span, ctx := vethTrace(ctx, "Attach", endpoint)
+	defer span.End()
+
 	h := s.hypervisor
 	if err := xConnectVMNetwork(ctx, endpoint, h); err != nil {
 		networkLogger().WithError(err).Error("Error bridging virtual endpoint")
@@ -110,13 +115,19 @@ func (endpoint *VethEndpoint) Detach(ctx context.Context, netNsCreated bool, net
 		return nil
 	}
 
+	span, ctx := vethTrace(ctx, "Detach", endpoint)
+	defer span.End()
+
 	return doNetNS(netNsPath, func(_ ns.NetNS) error {
-		return xDisconnectVMNetwork(endpoint)
+		return xDisconnectVMNetwork(ctx, endpoint)
 	})
 }
 
 // HotAttach for the veth endpoint uses hot plug device
 func (endpoint *VethEndpoint) HotAttach(ctx context.Context, h hypervisor) error {
+	span, ctx := vethTrace(ctx, "HotAttach", endpoint)
+	defer span.End()
+
 	if err := xConnectVMNetwork(ctx, endpoint, h); err != nil {
 		networkLogger().WithError(err).Error("Error bridging virtual ep")
 		return err
@@ -135,8 +146,11 @@ func (endpoint *VethEndpoint) HotDetach(ctx context.Context, h hypervisor, netNs
 		return nil
 	}
 
+	span, ctx := vethTrace(ctx, "HotDetach", endpoint)
+	defer span.End()
+
 	if err := doNetNS(netNsPath, func(_ ns.NetNS) error {
-		return xDisconnectVMNetwork(endpoint)
+		return xDisconnectVMNetwork(ctx, endpoint)
 	}); err != nil {
 		networkLogger().WithError(err).Warn("Error un-bridging virtual ep")
 	}

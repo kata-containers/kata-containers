@@ -23,6 +23,8 @@ import (
 // using this path.
 const hostSocketSearchPath = "/tmp/vhostuser_%s/vhu.sock"
 
+var vhostuserTrace = getNetworkTrace(VhostUserEndpointType)
+
 // VhostUserEndpoint represents a vhost-user socket based network interface
 type VhostUserEndpoint struct {
 	// Path to the vhost-user socket on the host system
@@ -77,6 +79,9 @@ func (endpoint *VhostUserEndpoint) NetworkPair() *NetworkInterfacePair {
 
 // Attach for vhostuser endpoint
 func (endpoint *VhostUserEndpoint) Attach(ctx context.Context, s *Sandbox) error {
+	span, ctx := vhostuserTrace(ctx, "Attach", endpoint)
+	defer span.End()
+
 	// Generate a unique ID to be used for hypervisor commandline fields
 	randBytes, err := utils.GenerateRandomBytes(8)
 	if err != nil {
