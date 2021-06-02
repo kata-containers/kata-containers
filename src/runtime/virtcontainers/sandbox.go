@@ -1527,7 +1527,7 @@ func (s *Sandbox) Stop(ctx context.Context, force bool) error {
 
 	// shutdown console watcher if exists
 	if s.cw != nil {
-		s.Logger().Debug("stop the sandbox")
+		s.Logger().Debug("stop the console watcher")
 		s.cw.stop()
 	}
 

@@ -19,7 +19,6 @@ import (
 	"time"
 
 	"github.com/containernetworking/plugins/pkg/ns"
-	"github.com/containernetworking/plugins/pkg/testutils"
 	"github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 	"github.com/vishvananda/netns"
@@ -58,7 +57,7 @@ const (
 	NetXConnectInvalidModel
 )
 
-//IsValid checks if a model is valid
+// IsValid checks if a model is valid
 func (n NetInterworkingModel) IsValid() bool {
 	return 0 <= int(n) && int(n) < int(NetXConnectInvalidModel)
 }
@@ -73,7 +72,7 @@ const (
 	noneNetModelStr = "none"
 )
 
-//SetModel change the model string value
+// SetModel change the model string value
 func (n *NetInterworkingModel) SetModel(modelName string) error {
 	switch modelName {
 	case defaultNetModelStr:
@@ -428,8 +427,10 @@ func xConnectVMNetwork(ctx context.Context, endpoint Endpoint, h hypervisor) err
 
 	switch netPair.NetInterworkingModel {
 	case NetXConnectMacVtapModel:
+		networkLogger().Info("connect macvtap to VM network")
 		return tapNetworkPair(endpoint, queues, disableVhostNet)
 	case NetXConnectTCFilterModel:
+		networkLogger().Info("connect TCFilter to VM network")
 		return setupTCFiltering(endpoint, queues, disableVhostNet)
 	default:
 		return fmt.Errorf("Invalid internetworking model")
@@ -696,7 +697,7 @@ func setupTCFiltering(endpoint Endpoint, queues int, disableVhostNet bool) error
 	return nil
 }
 
-// addQdiscIngress creates a new qdisc for nwtwork interface with the specified network index
+// addQdiscIngress creates a new qdisc for network interface with the specified network index
 // on "ingress". qdiscs normally don't work on ingress so this is really a special qdisc
 // that you can consider an "alternate root" for inbound packets.
 // Handle for ingress qdisc defaults to "ffff:"
@@ -882,15 +883,6 @@ func removeTCFiltering(endpoint Endpoint) error {
 	return nil
 }
 
-func createNetNS() (string, error) {
-	n, err := testutils.NewNS()
-	if err != nil {
-		return "", err
-	}
-
-	return n.Path(), nil
-}
-
 // doNetNS is free from any call to a go routine, and it calls
 // into runtime.LockOSThread(), meaning it won't be executed in a
 // different thread than the one expected by the caller.
@@ -946,7 +938,6 @@ func deleteNetNS(netNSPath string) error {
 }
 
 func generateVCNetworkStructures(networkNS NetworkNamespace) ([]*pbTypes.Interface, []*pbTypes.Route, []*pbTypes.ARPNeighbor, error) {
-
 	if networkNS.NetNsPath == "" {
 		return nil, nil, nil, nil
 	}
@@ -956,7 +947,6 @@ func generateVCNetworkStructures(networkNS NetworkNamespace) ([]*pbTypes.Interfa
 	var neighs []*pbTypes.ARPNeighbor
 
 	for _, endpoint := range networkNS.Endpoints {
-
 		var ipAddresses []*pbTypes.IPAddress
 		for _, addr := range endpoint.Properties().Addrs {
 			// Skip localhost interface
@@ -1041,6 +1031,7 @@ func generateVCNetworkStructures(networkNS NetworkNamespace) ([]*pbTypes.Interfa
 			neighs = append(neighs, &n)
 		}
 	}
+
 	return ifaces, routes, neighs, nil
 }
 
@@ -1238,8 +1229,10 @@ func createEndpoint(netInfo NetworkInfo, idx int, model NetInterworkingModel, li
 				}
 			}
 		} else if netInfo.Iface.Type == "veth" {
+			networkLogger().Info("veth interface found")
 			endpoint, err = createVethNetworkEndpoint(idx, netInfo.Iface.Name, model)
 		} else if netInfo.Iface.Type == "ipvlan" {
+			networkLogger().Info("ipvlan interface found")
 			endpoint, err = createIPVlanNetworkEndpoint(idx, netInfo.Iface.Name)
 		} else {
 			return nil, fmt.Errorf("Unsupported network interface: %s", netInfo.Iface.Type)
@@ -1308,9 +1301,7 @@ func (n *Network) Add(ctx context.Context, config *NetworkConfig, s *Sandbox, ho
 						return err
 					}
 				}
-
 			}
-
 		}
 
 		return nil
@@ -1542,7 +1533,7 @@ func addIFBRedirecting(sourceIndex int, ifbIndex int) error {
 	return nil
 }
 
-// func addTxRateLmiter implements tx rate limiter to control network I/O outbound traffic
+// addTxRateLimiter implements tx rate limiter to control network I/O outbound traffic
 // on VM level for hypervisors which don't implement rate limiter in itself, like qemu, etc.
 // We adopt different actions, based on different inter-networking models.
 // For tcfilters as inter-networking model, we simply apply htb qdisc discipline to the virtual netpair.
