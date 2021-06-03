@@ -2268,6 +2268,10 @@ func (q *qemu) getPids() []int {
 	return pids
 }
 
+func (q *qemu) getVirtioFsPid() *int {
+	return &q.state.VirtiofsdPid
+}
+
 type qemuGrpc struct {
 	ID             string
 	QmpChannelpath string
