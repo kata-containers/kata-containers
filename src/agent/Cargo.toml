@@ -25,7 +25,10 @@ tokio = { version = "1.2.0", features = ["rt", "rt-multi-thread", "sync", "macro
 futures = "0.3.12"
 netlink-sys = { version = "0.6.0", features = ["tokio_socket",]}
 tokio-vsock = "0.3.1"
-rtnetlink = "0.7.0"
+# Because the author has no time to maintain the crate, we switch the dependency to github,
+# Once the new version released on crates.io, we switch it back.
+# https://github.com/little-dude/netlink/issues/161
+rtnetlink = { git = "https://github.com/little-dude/netlink", rev = "a9367bc4700496ddebc088110c28f40962923326" }
 netlink-packet-utils = "0.4.0"
 ipnetwork = "0.17.0"
 
