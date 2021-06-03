@@ -818,6 +818,7 @@ type hypervisor interface {
 	// getPids returns a slice of hypervisor related process ids.
 	// The hypervisor pid must be put at index 0.
 	getPids() []int
+	getVirtioFsPid() *int
 	fromGrpc(ctx context.Context, hypervisorConfig *HypervisorConfig, j []byte) error
 	toGrpc(ctx context.Context) ([]byte, error)
 	check() error

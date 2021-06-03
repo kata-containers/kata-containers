@@ -109,6 +109,10 @@ func (m *mockHypervisor) getPids() []int {
 	return []int{m.mockPid}
 }
 
+func (m *mockHypervisor) getVirtioFsPid() *int {
+	return nil
+}
+
 func (m *mockHypervisor) fromGrpc(ctx context.Context, hypervisorConfig *HypervisorConfig, j []byte) error {
 	return errors.New("mockHypervisor is not supported by VM cache")
 }
