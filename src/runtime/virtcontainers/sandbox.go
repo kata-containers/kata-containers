@@ -134,7 +134,7 @@ func (s *Sandbox) trace(parent context.Context, name string) (otelTrace.Span, co
 	}
 
 	tracer := otel.Tracer("kata")
-	ctx, span := tracer.Start(parent, name, otelTrace.WithAttributes(otelLabel.String("source", "runtime"), otelLabel.String("package", "virtcontainers"), otelLabel.String("subsystem", "sandbox")))
+	ctx, span := tracer.Start(parent, name, otelTrace.WithAttributes(otelLabel.String("source", "runtime"), otelLabel.String("package", "virtcontainers"), otelLabel.String("subsystem", "sandbox"), otelLabel.String("sandbox_id", s.id)))
 
 	return span, ctx
 }
@@ -394,6 +394,7 @@ func (s *Sandbox) IOStream(containerID, processID string) (io.WriteCloser, io.Re
 
 func createAssets(ctx context.Context, sandboxConfig *SandboxConfig) error {
 	span, _ := trace(ctx, "createAssets")
+	span.SetAttributes(otelLabel.String("sandbox_id", sandboxConfig.ID), otelLabel.String("subsystem", "sandbox"))
 	defer span.End()
 
 	for _, name := range types.AssetTypes() {
@@ -444,6 +445,7 @@ func (s *Sandbox) getAndStoreGuestDetails(ctx context.Context) error {
 // be started.
 func createSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factory) (*Sandbox, error) {
 	span, ctx := trace(ctx, "createSandbox")
+	span.SetAttributes(otelLabel.String("sandbox_id", sandboxConfig.ID), otelLabel.String("subsystem", "sandbox"))
 	defer span.End()
 
 	if err := createAssets(ctx, &sandboxConfig); err != nil {
@@ -482,6 +484,7 @@ func createSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Fac
 
 func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factory) (sb *Sandbox, retErr error) {
 	span, ctx := trace(ctx, "newSandbox")
+	span.SetAttributes(otelLabel.String("sandbox_id", sandboxConfig.ID), otelLabel.String("subsystem", "sandbox"))
 	defer span.End()
 
 	if !sandboxConfig.valid() {
