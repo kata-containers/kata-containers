@@ -214,7 +214,7 @@ func (a *Acrn) trace(parent context.Context, name string) (otelTrace.Span, conte
 	}
 
 	tracer := otel.Tracer("kata")
-	ctx, span := tracer.Start(parent, name, otelTrace.WithAttributes(label.String("source", "runtime"), label.String("package", "virtcontainers"), label.String("subsystem", "hypervisor"), label.String("type", "acrn")))
+	ctx, span := tracer.Start(parent, name, otelTrace.WithAttributes(label.String("source", "runtime"), label.String("package", "virtcontainers"), label.String("subsystem", "hypervisor"), label.String("type", "acrn"), label.String("sandbox_id", a.id)))
 
 	return span, ctx
 }
