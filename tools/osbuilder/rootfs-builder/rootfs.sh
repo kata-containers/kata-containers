@@ -570,7 +570,10 @@ EOT
 	AGENT_DEST="${AGENT_DIR}/${AGENT_BIN}"
 
 	if [ -z "${AGENT_SOURCE_BIN}" ] ; then
-		[ "$ARCH" == "ppc64le" ] && { LIBC=gnu; echo "WARNING: Forcing LIBC=gnu for ppc64le because musl toolchain is not supported on ppc64le"; }
+		if [ "$ARCH" == "ppc64le" ] || [ "$ARCH" == "s390x" ]; then
+			LIBC=gnu
+			echo "WARNING: Forcing LIBC=gnu because $ARCH has no musl Rust target"
+		fi
 		[ "$LIBC" == "musl" ] && bash ${script_dir}/../../../ci/install_musl.sh
 		# rust agent needs ${arch}-unknown-linux-${LIBC}
 		rustup show | grep linux-${LIBC} > /dev/null || bash ${script_dir}/../../../ci/install_rust.sh
