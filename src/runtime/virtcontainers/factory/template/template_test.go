@@ -121,7 +121,14 @@ func TestTemplateFactory(t *testing.T) {
 	err = vm.Stop(ctx)
 	assert.Nil(err)
 
-	// CloseFactory
+	// make tt.statePath is busy
+	os.Chdir(tt.statePath)
+
+	// CloseFactory, there is no need to call tt.CloseFactory(ctx)
 	f.CloseFactory(ctx)
-	tt.CloseFactory(ctx)
+
+	// expect tt.statePath not exist, if exist, it means this case failed.
+	_, err = os.Stat(tt.statePath)
+	assert.Error(err)
+	assert.True(os.IsNotExist(err))
 }
