@@ -59,6 +59,9 @@ ARG QEMU_VERSION
 RUN git checkout "${QEMU_VERSION}"
 RUN git clone https://github.com/qemu/capstone.git capstone
 RUN git clone https://github.com/qemu/keycodemapdb.git ui/keycodemapdb
+RUN git clone https://github.com/qemu/meson.git meson
+RUN git clone https://github.com/qemu/berkeley-softfloat-3.git tests/fp/berkeley-softfloat-3
+RUN git clone https://github.com/qemu/berkeley-testfloat-3.git tests/fp/berkeley-testfloat-3
 
 ADD scripts/configure-hypervisor.sh /root/configure-hypervisor.sh
 ADD qemu /root/kata_qemu
