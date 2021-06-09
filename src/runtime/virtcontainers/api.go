@@ -120,11 +120,6 @@ func createSandboxFromConfig(ctx context.Context, sandboxConfig SandboxConfig, f
 		return nil, err
 	}
 
-	// The sandbox is completely created now, we can store it.
-	if err = s.storeSandbox(ctx); err != nil {
-		return nil, err
-	}
-
 	return s, nil
 }
 
