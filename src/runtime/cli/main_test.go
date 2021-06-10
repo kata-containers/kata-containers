@@ -20,7 +20,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dlespiau/covertool/pkg/cover"
 	ktu "github.com/kata-containers/kata-containers/src/runtime/pkg/katatestutils"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/utils"
@@ -152,16 +151,6 @@ func runUnitTests(m *testing.M) {
 // TestMain is the common main function used by ALL the test functions
 // for this package.
 func TestMain(m *testing.M) {
-	// Parse the command line using the stdlib flag package so the flags defined
-	// in the testing package get populated.
-	cover.ParseAndStripTestFlags()
-
-	// Make sure we have the opportunity to flush the coverage report to disk when
-	// terminating the process.
-	defer func() {
-		cover.FlushProfiles()
-	}()
-
 	// If the test binary name is kata-runtime.coverage, we've are being asked to
 	// run the coverage-instrumented kata-runtime.
 	if path.Base(os.Args[0]) == name+".coverage" ||
