@@ -519,12 +519,8 @@ components:
           net:
           - tap: tap
             num_queues: 9
-            iommu: false
             queue_size: 6
-            vhost_socket: vhost_socket
-            vhost_user: false
             ip: 192.168.249.1
-            id: id
             rate_limiter_config:
               ops:
                 size: 0
@@ -535,18 +531,19 @@ components:
                 one_time_burst: 0
                 refill_time: 0
             mac: mac
+            vhost_mode: client
+            iommu: false
+            vhost_socket: vhost_socket
+            vhost_user: false
+            id: id
             fd:
             - 8
             - 8
             mask: 255.255.255.0
           - tap: tap
             num_queues: 9
-            iommu: false
             queue_size: 6
-            vhost_socket: vhost_socket
-            vhost_user: false
             ip: 192.168.249.1
-            id: id
             rate_limiter_config:
               ops:
                 size: 0
@@ -557,6 +554,11 @@ components:
                 one_time_burst: 0
                 refill_time: 0
             mac: mac
+            vhost_mode: client
+            iommu: false
+            vhost_socket: vhost_socket
+            vhost_user: false
+            id: id
             fd:
             - 8
             - 8
@@ -813,12 +815,8 @@ components:
         net:
         - tap: tap
           num_queues: 9
-          iommu: false
           queue_size: 6
-          vhost_socket: vhost_socket
-          vhost_user: false
           ip: 192.168.249.1
-          id: id
           rate_limiter_config:
             ops:
               size: 0
@@ -829,18 +827,19 @@ components:
               one_time_burst: 0
               refill_time: 0
           mac: mac
+          vhost_mode: client
+          iommu: false
+          vhost_socket: vhost_socket
+          vhost_user: false
+          id: id
           fd:
           - 8
           - 8
           mask: 255.255.255.0
         - tap: tap
           num_queues: 9
-          iommu: false
           queue_size: 6
-          vhost_socket: vhost_socket
-          vhost_user: false
           ip: 192.168.249.1
-          id: id
           rate_limiter_config:
             ops:
               size: 0
@@ -851,6 +850,11 @@ components:
               one_time_burst: 0
               refill_time: 0
           mac: mac
+          vhost_mode: client
+          iommu: false
+          vhost_socket: vhost_socket
+          vhost_user: false
+          id: id
           fd:
           - 8
           - 8
@@ -1202,12 +1206,8 @@ components:
       example:
         tap: tap
         num_queues: 9
-        iommu: false
         queue_size: 6
-        vhost_socket: vhost_socket
-        vhost_user: false
         ip: 192.168.249.1
-        id: id
         rate_limiter_config:
           ops:
             size: 0
@@ -1218,6 +1218,11 @@ components:
             one_time_burst: 0
             refill_time: 0
         mac: mac
+        vhost_mode: client
+        iommu: false
+        vhost_socket: vhost_socket
+        vhost_user: false
+        id: id
         fd:
         - 8
         - 8
@@ -1247,6 +1252,9 @@ components:
           default: false
           type: boolean
         vhost_socket:
+          type: string
+        vhost_mode:
+          default: client
           type: string
         id:
           type: string
