@@ -712,6 +712,9 @@ components:
           default: false
         vhost_socket:
           type: string
+        vhost_mode:
+          type: string
+          default: "client"
         id:
           type: string
         fd:
