@@ -562,10 +562,6 @@ EOT
 		       -e '/^\[Unit\]/a ConditionPathExists=\/dev\/ptp0' ${chrony_systemd_service}
 	fi
 
-	# The CC on s390x for fedora needs to be manually set to gcc when the golang is downloaded from the main page.
-	# See issue: https://github.com/kata-containers/osbuilder/issues/217
-	[ "$distro" == "fedora" ] && [ "$ARCH" == "s390x" ] && export CC=gcc
-
 	AGENT_DIR="${ROOTFS_DIR}/usr/bin"
 	AGENT_DEST="${AGENT_DIR}/${AGENT_BIN}"
 
