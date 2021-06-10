@@ -14,6 +14,7 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
+	"github.com/sirupsen/logrus"
 )
 
 type qemuS390x struct {
@@ -21,15 +22,18 @@ type qemuS390x struct {
 	qemuArchBase
 }
 
-const defaultQemuPath = "/usr/bin/qemu-system-s390x"
+const (
+	defaultQemuPath           = "/usr/bin/qemu-system-s390x"
+	defaultQemuMachineType    = QemuCCWVirtio
+	defaultQemuMachineOptions = "accel=kvm"
+	virtioSerialCCW           = "virtio-serial-ccw"
+	qmpMigrationWaitTimeout   = 5 * time.Second
+	logSubsystem              = "qemuS390x"
 
-const defaultQemuMachineType = QemuCCWVirtio
-
-const defaultQemuMachineOptions = "accel=kvm"
-
-const virtioSerialCCW = "virtio-serial-ccw"
-
-const qmpMigrationWaitTimeout = 5 * time.Second
+	// Secure Execution, also known as Protected Virtualization
+	// https://qemu.readthedocs.io/en/latest/system/s390x/protvirt.html
+	secExecID = "pv0"
+)
 
 // Verify needed parameters
 var kernelParams = []Param{
@@ -73,6 +77,12 @@ func newQemuArch(config HypervisorConfig) (qemuArch, error) {
 	}
 	// Set first bridge type to CCW
 	q.Bridges = append(q.Bridges, ccwbridge)
+
+	if config.ConfidentialGuest {
+		if err := q.enableProtection(); err != nil {
+			return nil, err
+		}
+	}
 
 	if config.ImagePath != "" {
 		q.kernelParams = append(q.kernelParams, commonVirtioblkKernelRootParams...)
@@ -302,4 +312,43 @@ func (q *qemuS390x) addDeviceToBridge(ctx context.Context, ID string, t types.Ty
 	}
 
 	return fmt.Sprintf("%04x", addr), b, nil
+}
+
+// enableProtection enables guest protection for QEMU's machine option.
+func (q *qemuS390x) enableProtection() error {
+	protection, err := availableGuestProtection()
+	if err != nil {
+		return err
+	}
+	if protection != seProtection {
+		return fmt.Errorf("Got unexpected protection %v, only seProtection (Secure Execution) is supported", protection)
+	}
+
+	q.protection = protection
+	if q.qemuMachine.Options != "" {
+		q.qemuMachine.Options += ","
+	}
+	q.qemuMachine.Options += fmt.Sprintf("confidential-guest-support=%s", secExecID)
+	virtLog.WithFields(logrus.Fields{
+		"subsystem": logSubsystem,
+		"machine":   q.qemuMachine}).
+		Info("Enabling guest protection with Secure Execution")
+	return nil
+}
+
+// appendProtectionDevice appends a QEMU object for Secure Execution.
+// Takes devices and returns updated version. Takes BIOS and returns it (no modification on s390x).
+func (q *qemuS390x) appendProtectionDevice(devices []govmmQemu.Device, firmware string) ([]govmmQemu.Device, string, error) {
+	switch q.protection {
+	case seProtection:
+		return append(devices,
+			govmmQemu.Object{
+				Type: govmmQemu.SecExecGuest,
+				ID:   secExecID,
+			}), firmware, nil
+	case noneProtection:
+		return devices, firmware, nil
+	default:
+		return devices, firmware, fmt.Errorf("Unsupported guest protection technology: %v", q.protection)
+	}
 }
