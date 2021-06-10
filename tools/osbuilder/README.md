@@ -1,5 +1,3 @@
-[![Build Status](https://travis-ci.org/kata-containers/osbuilder.svg?branch=master)](https://travis-ci.org/kata-containers/osbuilder)
-
 # osbuilder
 
 * [osbuilder](#osbuilder)
