@@ -145,9 +145,10 @@ fn run_in_child(slave_fd: libc::c_int, shell: String) -> Result<()> {
     }
 
     let cmd = CString::new(shell).unwrap();
+    let args: Vec<CString> = Vec::new();
 
     // run shell
-    let _ = unistd::execvp(cmd.as_c_str(), &[]).map_err(|e| match e {
+    let _ = unistd::execvp(cmd.as_c_str(), &args).map_err(|e| match e {
         nix::Error::Sys(errno) => {
             std::process::exit(errno as i32);
         }
@@ -205,7 +206,7 @@ async fn run_debug_console_vsock<T: AsyncRead + AsyncWrite>(
 
     let slave_fd = pseudo.slave;
 
-    match fork() {
+    match unsafe { fork() } {
         Ok(ForkResult::Child) => run_in_child(slave_fd, shell),
         Ok(ForkResult::Parent { child: child_pid }) => {
             run_in_parent(logger.clone(), stream, pseudo, child_pid).await
