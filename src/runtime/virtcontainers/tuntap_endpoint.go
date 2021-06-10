@@ -18,6 +18,8 @@ import (
 	vcTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/types"
 )
 
+var tuntapTrace = getNetworkTrace(TuntapEndpointType)
+
 // TuntapEndpoint represents just a tap endpoint
 type TuntapEndpoint struct {
 	NetPair            NetworkInterfacePair
@@ -71,11 +73,15 @@ func (endpoint *TuntapEndpoint) SetProperties(properties NetworkInfo) {
 
 // Attach for tap endpoint adds the tap interface to the hypervisor.
 func (endpoint *TuntapEndpoint) Attach(ctx context.Context, s *Sandbox) error {
+	span, ctx := tuntapTrace(ctx, "Attach", endpoint)
+	defer span.End()
+
 	h := s.hypervisor
 	if err := xConnectVMNetwork(ctx, endpoint, h); err != nil {
 		networkLogger().WithError(err).Error("Error bridging virtual endpoint")
 		return err
 	}
+
 	return h.addDevice(ctx, endpoint, netDev)
 }
 
@@ -84,6 +90,9 @@ func (endpoint *TuntapEndpoint) Detach(ctx context.Context, netNsCreated bool, n
 	if !netNsCreated && netNsPath != "" {
 		return nil
 	}
+
+	span, _ := tuntapTrace(ctx, "Detach", endpoint)
+	defer span.End()
 
 	networkLogger().WithField("endpoint-type", TuntapEndpointType).Info("Detaching endpoint")
 	return doNetNS(netNsPath, func(_ ns.NetNS) error {
@@ -94,6 +103,10 @@ func (endpoint *TuntapEndpoint) Detach(ctx context.Context, netNsCreated bool, n
 // HotAttach for the tap endpoint uses hot plug device
 func (endpoint *TuntapEndpoint) HotAttach(ctx context.Context, h hypervisor) error {
 	networkLogger().Info("Hot attaching tap endpoint")
+
+	span, ctx := tuntapTrace(ctx, "HotAttach", endpoint)
+	defer span.End()
+
 	if err := tuntapNetwork(endpoint, h.hypervisorConfig().NumVCPUs, h.hypervisorConfig().DisableVhostNet); err != nil {
 		networkLogger().WithError(err).Error("Error bridging tap ep")
 		return err
@@ -109,6 +122,10 @@ func (endpoint *TuntapEndpoint) HotAttach(ctx context.Context, h hypervisor) err
 // HotDetach for the tap endpoint uses hot pull device
 func (endpoint *TuntapEndpoint) HotDetach(ctx context.Context, h hypervisor, netNsCreated bool, netNsPath string) error {
 	networkLogger().Info("Hot detaching tap endpoint")
+
+	span, ctx := tuntapTrace(ctx, "HotDetach", endpoint)
+	defer span.End()
+
 	if err := doNetNS(netNsPath, func(_ ns.NetNS) error {
 		return unTuntapNetwork(endpoint.TuntapInterface.TAPIface.Name)
 	}); err != nil {

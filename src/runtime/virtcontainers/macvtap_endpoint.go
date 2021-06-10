@@ -14,6 +14,8 @@ import (
 	vcTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/types"
 )
 
+var macvtapTrace = getNetworkTrace(MacvtapEndpointType)
+
 // MacvtapEndpoint represents a macvtap endpoint
 type MacvtapEndpoint struct {
 	EndpointProperties NetworkInfo
@@ -62,6 +64,9 @@ func (endpoint *MacvtapEndpoint) SetProperties(properties NetworkInfo) {
 // Attach for macvtap endpoint passes macvtap device to the hypervisor.
 func (endpoint *MacvtapEndpoint) Attach(ctx context.Context, s *Sandbox) error {
 	var err error
+	span, ctx := macvtapTrace(ctx, "Attach", endpoint)
+	defer span.End()
+
 	h := s.hypervisor
 
 	endpoint.VMFds, err = createMacvtapFds(endpoint.EndpointProperties.Iface.Index, int(h.hypervisorConfig().NumVCPUs))
