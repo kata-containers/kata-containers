@@ -722,6 +722,51 @@ func getHostMemorySizeKb(memInfoPath string) (uint64, error) {
 	return 0, fmt.Errorf("unable get MemTotal from %s", memInfoPath)
 }
 
+// CheckCmdline checks whether an option or parameter is present in the kernel command line.
+// Search is case-insensitive.
+// Takes path to file that contains the kernel command line, desired option, and permitted values
+// (empty values to check for options).
+func CheckCmdline(kernelCmdlinePath, searchParam string, searchValues []string) (bool, error) {
+	f, err := os.Open(kernelCmdlinePath)
+	if err != nil {
+		return false, err
+	}
+	defer f.Close()
+
+	// Create check function -- either check for verbatim option
+	// or check for parameter and permitted values
+	var check func(string, string, []string) bool
+	if len(searchValues) == 0 {
+		check = func(option, searchParam string, _ []string) bool {
+			return strings.EqualFold(option, searchParam)
+		}
+	} else {
+		check = func(param, searchParam string, searchValues []string) bool {
+			// split parameter and value
+			split := strings.SplitN(param, "=", 2)
+			if len(split) < 2 || split[0] != searchParam {
+				return false
+			}
+			for _, value := range searchValues {
+				if strings.EqualFold(value, split[1]) {
+					return true
+				}
+			}
+			return false
+		}
+	}
+
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		for _, field := range strings.Fields(scanner.Text()) {
+			if check(field, searchParam, searchValues) {
+				return true, nil
+			}
+		}
+	}
+	return false, err
+}
+
 func CPUFlags(cpuInfoPath string) (map[string]bool, error) {
 	flagsField := "flags"
 

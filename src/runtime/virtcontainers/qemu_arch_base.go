@@ -168,6 +168,10 @@ const (
 	// IBM POWER 9 Protected Execution Facility
 	// https://www.kernel.org/doc/html/latest/powerpc/ultravisor.html
 	pefProtection
+
+	// IBM Secure Execution (IBM Z & LinuxONE)
+	// https://www.kernel.org/doc/html/latest/virt/kvm/s390-pv.html
+	seProtection
 )
 
 type qemuArchBase struct {
