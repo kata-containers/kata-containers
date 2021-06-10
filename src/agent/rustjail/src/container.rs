@@ -8,7 +8,7 @@ use libc::pid_t;
 use oci::{ContainerState, LinuxDevice, LinuxIdMapping};
 use oci::{Hook, Linux, LinuxNamespace, LinuxResources, Spec};
 use std::clone::Clone;
-use std::ffi::{CStr, CString};
+use std::ffi::CString;
 use std::fmt::Display;
 use std::fs;
 use std::os::unix::io::RawFd;
@@ -346,7 +346,7 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
         Err(_e) => sched::unshare(CloneFlags::CLONE_NEWPID)?,
     }
 
-    match fork() {
+    match unsafe { fork() } {
         Ok(ForkResult::Parent { child, .. }) => {
             log_child!(
                 cfd_log,
@@ -1079,9 +1079,8 @@ fn do_exec(args: &[String]) -> ! {
         .iter()
         .map(|s| CString::new(s.to_string()).unwrap_or_default())
         .collect();
-    let a: Vec<&CStr> = sa.iter().map(|s| s.as_c_str()).collect();
 
-    let _ = unistd::execvp(p.as_c_str(), a.as_slice()).map_err(|e| match e {
+    let _ = unistd::execvp(p.as_c_str(), &sa).map_err(|e| match e {
         nix::Error::Sys(errno) => {
             std::process::exit(errno as i32);
         }
