@@ -421,6 +421,11 @@ func getLinkByName(netHandle *netlink.Handle, name string, expectedLink netlink.
 
 // The endpoint type should dictate how the connection needs to happen.
 func xConnectVMNetwork(ctx context.Context, endpoint Endpoint, h hypervisor) error {
+	var err error
+
+	span, ctx := networkTrace(ctx, "xConnectVMNetwork", endpoint)
+	defer closeSpan(span, err)
+
 	netPair := endpoint.NetworkPair()
 
 	queues := 0
@@ -443,17 +448,23 @@ func xConnectVMNetwork(ctx context.Context, endpoint Endpoint, h hypervisor) err
 	switch netPair.NetInterworkingModel {
 	case NetXConnectMacVtapModel:
 		networkLogger().Info("connect macvtap to VM network")
-		return tapNetworkPair(endpoint, queues, disableVhostNet)
+		err = tapNetworkPair(ctx, endpoint, queues, disableVhostNet)
 	case NetXConnectTCFilterModel:
 		networkLogger().Info("connect TCFilter to VM network")
-		return setupTCFiltering(endpoint, queues, disableVhostNet)
+		err = setupTCFiltering(ctx, endpoint, queues, disableVhostNet)
 	default:
-		return fmt.Errorf("Invalid internetworking model")
+		err = fmt.Errorf("Invalid internetworking model")
 	}
+	return err
 }
 
 // The endpoint type should dictate how the disconnection needs to happen.
-func xDisconnectVMNetwork(endpoint Endpoint) error {
+func xDisconnectVMNetwork(ctx context.Context, endpoint Endpoint) error {
+	var err error
+
+	span, ctx := networkTrace(ctx, "xDisconnectVMNetwork", endpoint)
+	defer closeSpan(span, err)
+
 	netPair := endpoint.NetworkPair()
 
 	if netPair.NetInterworkingModel == NetXConnectDefaultModel {
@@ -462,12 +473,13 @@ func xDisconnectVMNetwork(endpoint Endpoint) error {
 
 	switch netPair.NetInterworkingModel {
 	case NetXConnectMacVtapModel:
-		return untapNetworkPair(endpoint)
+		err = untapNetworkPair(ctx, endpoint)
 	case NetXConnectTCFilterModel:
-		return removeTCFiltering(endpoint)
+		err = removeTCFiltering(ctx, endpoint)
 	default:
-		return fmt.Errorf("Invalid internetworking model")
+		err = fmt.Errorf("Invalid internetworking model")
 	}
+	return err
 }
 
 func createMacvtapFds(linkIndex int, queues int) ([]*os.File, error) {
@@ -549,7 +561,10 @@ func setIPs(link netlink.Link, addrs []netlink.Addr) error {
 	return nil
 }
 
-func tapNetworkPair(endpoint Endpoint, queues int, disableVhostNet bool) error {
+func tapNetworkPair(ctx context.Context, endpoint Endpoint, queues int, disableVhostNet bool) error {
+	span, _ := networkTrace(ctx, "tapNetworkPair", endpoint)
+	defer span.End()
+
 	netHandle, err := netlink.NewHandle()
 	if err != nil {
 		return err
@@ -643,7 +658,10 @@ func tapNetworkPair(endpoint Endpoint, queues int, disableVhostNet bool) error {
 	return nil
 }
 
-func setupTCFiltering(endpoint Endpoint, queues int, disableVhostNet bool) error {
+func setupTCFiltering(ctx context.Context, endpoint Endpoint, queues int, disableVhostNet bool) error {
+	span, _ := networkTrace(ctx, "setupTCFiltering", endpoint)
+	defer span.End()
+
 	netHandle, err := netlink.NewHandle()
 	if err != nil {
 		return err
@@ -815,7 +833,10 @@ func removeQdiscIngress(link netlink.Link) error {
 	return nil
 }
 
-func untapNetworkPair(endpoint Endpoint) error {
+func untapNetworkPair(ctx context.Context, endpoint Endpoint) error {
+	span, _ := networkTrace(ctx, "untapNetworkPair", endpoint)
+	defer span.End()
+
 	netHandle, err := netlink.NewHandle()
 	if err != nil {
 		return err
@@ -856,7 +877,10 @@ func untapNetworkPair(endpoint Endpoint) error {
 	return err
 }
 
-func removeTCFiltering(endpoint Endpoint) error {
+func removeTCFiltering(ctx context.Context, endpoint Endpoint) error {
+	span, _ := networkTrace(ctx, "removeTCFiltering", endpoint)
+	defer span.End()
+
 	netHandle, err := netlink.NewHandle()
 	if err != nil {
 		return err
@@ -952,10 +976,12 @@ func deleteNetNS(netNSPath string) error {
 	return nil
 }
 
-func generateVCNetworkStructures(networkNS NetworkNamespace) ([]*pbTypes.Interface, []*pbTypes.Route, []*pbTypes.ARPNeighbor, error) {
+func generateVCNetworkStructures(ctx context.Context, networkNS NetworkNamespace) ([]*pbTypes.Interface, []*pbTypes.Route, []*pbTypes.ARPNeighbor, error) {
 	if networkNS.NetNsPath == "" {
 		return nil, nil, nil, nil
 	}
+	span, _ := networkTrace(ctx, "generateVCNetworkStructures", nil)
+	defer span.End()
 
 	var routes []*pbTypes.Route
 	var ifaces []*pbTypes.Interface
@@ -1261,11 +1287,31 @@ func createEndpoint(netInfo NetworkInfo, idx int, model NetInterworkingModel, li
 type Network struct {
 }
 
-func (n *Network) trace(ctx context.Context, name string) (otelTrace.Span, context.Context) {
-	tracer := otel.Tracer("kata")
-	ctx, span := tracer.Start(ctx, name, otelTrace.WithAttributes(otelLabel.String("source", "runtime"), otelLabel.String("package", "virtcontainers"), otelLabel.String("subsystem", "network")))
+var networkTrace = getNetworkTrace("")
 
-	return span, ctx
+func (n *Network) trace(ctx context.Context, name string) (otelTrace.Span, context.Context) {
+	return networkTrace(ctx, name, nil)
+}
+
+func getNetworkTrace(networkType EndpointType) func(ctx context.Context, name string, endpoint interface{}) (otelTrace.Span, context.Context) {
+	return func(ctx context.Context, name string, endpoint interface{}) (otelTrace.Span, context.Context) {
+		tracer := otel.Tracer("kata")
+		ctx, span := tracer.Start(ctx, name, otelTrace.WithAttributes(otelLabel.String("source", "runtime"), otelLabel.String("package", "virtcontainers"), otelLabel.String("subsystem", "network")))
+		if networkType != "" {
+			span.SetAttributes(otelLabel.Any("type", string(networkType)))
+		}
+		if endpoint != nil {
+			span.SetAttributes(otelLabel.Any("endpoint", endpoint))
+		}
+		return span, ctx
+	}
+}
+
+func closeSpan(span otelTrace.Span, err error) {
+	if err != nil {
+		span.SetAttributes(otelLabel.Any("error", err))
+	}
+	span.End()
 }
 
 // Run runs a callback in the specified network namespace.
@@ -1288,6 +1334,8 @@ func (n *Network) Add(ctx context.Context, config *NetworkConfig, s *Sandbox, ho
 	if err != nil {
 		return endpoints, err
 	}
+	span.SetAttributes(otelLabel.Any("endpoints", endpoints))
+	span.SetAttributes(otelLabel.Bool("hotplug", hotplug))
 
 	err = doNetNS(config.NetNSPath, func(_ ns.NetNS) error {
 		for _, endpoint := range endpoints {

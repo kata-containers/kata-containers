@@ -21,6 +21,8 @@ import (
 	"github.com/safchain/ethtool"
 )
 
+var physicalTrace = getNetworkTrace(PhysicalEndpointType)
+
 // PhysicalEndpoint gathers a physical network interface and its properties
 type PhysicalEndpoint struct {
 	IfaceName          string
@@ -76,6 +78,9 @@ func (endpoint *PhysicalEndpoint) NetworkPair() *NetworkInterfacePair {
 // Attach for physical endpoint binds the physical network interface to
 // vfio-pci and adds device to the hypervisor with vfio-passthrough.
 func (endpoint *PhysicalEndpoint) Attach(ctx context.Context, s *Sandbox) error {
+	span, ctx := physicalTrace(ctx, "Attach", endpoint)
+	defer span.End()
+
 	// Unbind physical interface from host driver and bind to vfio
 	// so that it can be passed to qemu.
 	vfioPath, err := bindNICToVFIO(endpoint)
@@ -103,6 +108,9 @@ func (endpoint *PhysicalEndpoint) Attach(ctx context.Context, s *Sandbox) error 
 // Detach for physical endpoint unbinds the physical network interface from vfio-pci
 // and binds it back to the saved host driver.
 func (endpoint *PhysicalEndpoint) Detach(ctx context.Context, netNsCreated bool, netNsPath string) error {
+	span, _ := physicalTrace(ctx, "Detach", endpoint)
+	defer span.End()
+
 	// Bind back the physical network interface to host.
 	// We need to do this even if a new network namespace has not
 	// been created by virtcontainers.
