@@ -268,8 +268,6 @@ github.com/juju/errors v0.0.0-20180806074554-22422dad46e1/go.mod h1:W54LbzXuIE0b
 github.com/juju/loggo v0.0.0-20190526231331-6e530bcce5d8/go.mod h1:vgyd7OREkbtVEN/8IXZe5Ooef3LQePvuBm9UWj6ZL8U=
 github.com/juju/testing v0.0.0-20190613124551-e81189438503/go.mod h1:63prj8cnj0tU0S9OHjGJn+b1h0ZghCndfnbQolrYTwA=
 github.com/julienschmidt/httprouter v1.2.0/go.mod h1:SYymIcj16QtmaHHD7aYtjjsJG7VTCxuUUipMqKk8s4w=
-github.com/kata-containers/govmm v0.0.0-20210428163604-f0e9a35308ee h1:M4N7AdSHgWz/ubV5AZQdeqmK+9Ztpea6oqeXgk8GCHk=
-github.com/kata-containers/govmm v0.0.0-20210428163604-f0e9a35308ee/go.mod h1:VmAHbsL5lLfzHW/MNL96NVLF840DNEV5i683kISgFKk=
 github.com/kata-containers/govmm v0.0.0-20210520142420-eb57f004d89f h1:jXMZY7GIz5kSv3/Rdiesg1WMvgXJKNOk3KxwxgNWAVk=
 github.com/kata-containers/govmm v0.0.0-20210520142420-eb57f004d89f/go.mod h1:VmAHbsL5lLfzHW/MNL96NVLF840DNEV5i683kISgFKk=
 github.com/kisielk/errcheck v1.2.0/go.mod h1:/BMXB+zMLi60iA8Vv6Ksmxu/1UDYcXs4uQLJ+jE2L00=
