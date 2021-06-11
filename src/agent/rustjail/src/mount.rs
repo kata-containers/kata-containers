@@ -97,8 +97,16 @@ lazy_static! {
         m.insert("rbind", (false, MsFlags::MS_BIND | MsFlags::MS_REC));
         m.insert("relatime", (false, MsFlags::MS_RELATIME));
         m.insert("norelatime", (true, MsFlags::MS_RELATIME));
+        m.insert("silent", (false, MsFlags::MS_SILENT));
+        m.insert("loud", (true, MsFlags::MS_SILENT));
+        m.insert("acl", (false, MsFlags::MS_POSIXACL));
+        m.insert("noacl", (true, MsFlags::MS_POSIXACL));
+        m.insert("iversion", (false, MsFlags::MS_I_VERSION));
+        m.insert("noiversion", (true, MsFlags::MS_I_VERSION));
         m.insert("strictatime", (false, MsFlags::MS_STRICTATIME));
         m.insert("nostrictatime", (true, MsFlags::MS_STRICTATIME));
+        m.insert("lazytime", (false, MsFlags::MS_LAZYTIME));
+        m.insert("nolazytime", (true, MsFlags::MS_LAZYTIME));
         m
     };
 }
