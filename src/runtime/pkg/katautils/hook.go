@@ -88,7 +88,7 @@ func runHook(ctx context.Context, hook specs.Hook, cid, bundlePath string) error
 }
 
 func runHooks(ctx context.Context, hooks []specs.Hook, cid, bundlePath, hookType string) error {
-	span, _ := Trace(ctx, "runHooks", []label.KeyValue{label.Key("source").String("runtime"), label.Key("package").String("katautils"), label.Key("subsystem").String("hook"), label.Key("type").String(hookType)}...)
+	span, ctx := Trace(ctx, "runHooks", []label.KeyValue{label.Key("source").String("runtime"), label.Key("package").String("katautils"), label.Key("subsystem").String("hook"), label.Key("type").String(hookType)}...)
 	defer span.End()
 
 	for _, hook := range hooks {
