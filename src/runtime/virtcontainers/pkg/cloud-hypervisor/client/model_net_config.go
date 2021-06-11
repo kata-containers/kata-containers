@@ -20,6 +20,7 @@ type NetConfig struct {
 	QueueSize         int32             `json:"queue_size,omitempty"`
 	VhostUser         bool              `json:"vhost_user,omitempty"`
 	VhostSocket       string            `json:"vhost_socket,omitempty"`
+	VhostMode         string            `json:"vhost_mode,omitempty"`
 	Id                string            `json:"id,omitempty"`
 	Fd                []int32           `json:"fd,omitempty"`
 	RateLimiterConfig RateLimiterConfig `json:"rate_limiter_config,omitempty"`

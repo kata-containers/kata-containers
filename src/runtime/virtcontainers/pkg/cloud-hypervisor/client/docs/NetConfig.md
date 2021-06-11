@@ -13,6 +13,7 @@ Name | Type | Description | Notes
 **QueueSize** | **int32** |  | [optional] [default to 256]
 **VhostUser** | **bool** |  | [optional] [default to false]
 **VhostSocket** | **string** |  | [optional] 
+**VhostMode** | **string** |  | [optional] [default to client]
 **Id** | **string** |  | [optional] 
 **Fd** | **[]int32** |  | [optional] 
 **RateLimiterConfig** | [**RateLimiterConfig**](RateLimiterConfig.md) |  | [optional] 
