@@ -176,7 +176,7 @@ func (n *mockAgent) configure(ctx context.Context, h hypervisor, id, sharePath s
 	return nil
 }
 
-func (n *mockAgent) configureFromGrpc(h hypervisor, id string, config KataAgentConfig) error {
+func (n *mockAgent) configureFromGrpc(ctx context.Context, h hypervisor, id string, config KataAgentConfig) error {
 	return nil
 }
 

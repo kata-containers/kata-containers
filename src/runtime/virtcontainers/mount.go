@@ -17,6 +17,7 @@ import (
 	merr "github.com/hashicorp/go-multierror"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
 	"github.com/sirupsen/logrus"
+	otelLabel "go.opentelemetry.io/otel/label"
 )
 
 // DefaultShmSize is the default shm size to be used in case host
@@ -257,11 +258,13 @@ func moveMount(ctx context.Context, source, destination string) error {
 func bindMount(ctx context.Context, source, destination string, readonly bool, pgtypes string) error {
 	span, _ := trace(ctx, "bindMount")
 	defer span.End()
+	span.SetAttributes(otelLabel.String("source", source), otelLabel.String("destination", destination))
 
 	absSource, destination, err := evalMountPath(source, destination)
 	if err != nil {
 		return err
 	}
+	span.SetAttributes(otelLabel.String("source_after_eval", absSource))
 
 	if err := syscall.Mount(absSource, destination, "bind", syscall.MS_BIND, ""); err != nil {
 		return fmt.Errorf("Could not bind mount %v to %v: %v", absSource, destination, err)
@@ -290,10 +293,15 @@ func bindMount(ctx context.Context, source, destination string, readonly bool, p
 // The mountflags should match the values used in the original mount() call,
 // except for those parameters that you are trying to change.
 func remount(ctx context.Context, mountflags uintptr, src string) error {
+	span, _ := trace(ctx, "remount")
+	defer span.End()
+	span.SetAttributes(otelLabel.String("source", src))
+
 	absSrc, err := filepath.EvalSymlinks(src)
 	if err != nil {
 		return fmt.Errorf("Could not resolve symlink for %s", src)
 	}
+	span.SetAttributes(otelLabel.String("source_after_eval", absSrc))
 
 	if err := syscall.Mount(absSrc, absSrc, "", syscall.MS_REMOUNT|mountflags, ""); err != nil {
 		return fmt.Errorf("remount %s failed: %v", absSrc, err)
@@ -352,6 +360,7 @@ func isSymlink(path string) bool {
 func bindUnmountContainerRootfs(ctx context.Context, sharedDir, cID string) error {
 	span, _ := trace(ctx, "bindUnmountContainerRootfs")
 	defer span.End()
+	span.SetAttributes(otelLabel.String("shared_dir", sharedDir), otelLabel.String("container_id", cID))
 
 	rootfsDest := filepath.Join(sharedDir, cID, rootfsDir)
 	if isSymlink(filepath.Join(sharedDir, cID)) || isSymlink(rootfsDest) {
@@ -374,6 +383,7 @@ func bindUnmountContainerRootfs(ctx context.Context, sharedDir, cID string) erro
 func bindUnmountAllRootfs(ctx context.Context, sharedDir string, sandbox *Sandbox) error {
 	span, ctx := trace(ctx, "bindUnmountAllRootfs")
 	defer span.End()
+	span.SetAttributes(otelLabel.String("shared_dir", sharedDir), otelLabel.String("sandbox_id", sandbox.id))
 
 	var errors *merr.Error
 	for _, c := range sandbox.containers {
