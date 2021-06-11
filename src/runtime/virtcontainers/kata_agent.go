@@ -32,6 +32,7 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/label"
+	otelLabel "go.opentelemetry.io/otel/label"
 	otelTrace "go.opentelemetry.io/otel/trace"
 
 	"github.com/gogo/protobuf/proto"
@@ -372,17 +373,25 @@ func (k *kataAgent) capabilities() types.Capabilities {
 	return caps
 }
 
-func (k *kataAgent) internalConfigure(h hypervisor, id string, config KataAgentConfig) error {
+func (k *kataAgent) internalConfigure(ctx context.Context, h hypervisor, id string, config KataAgentConfig) error {
+	span, _ := k.trace(ctx, "configure")
+	defer span.End()
+
 	var err error
 	if k.vmSocket, err = h.generateSocket(id); err != nil {
 		return err
 	}
 	k.keepConn = config.LongLiveConn
 
+	span.SetAttributes(otelLabel.Any("socket", k.vmSocket))
+
 	return nil
 }
 
-func (k *kataAgent) setupSandboxBindMounts(sandbox *Sandbox) (err error) {
+func (k *kataAgent) setupSandboxBindMounts(ctx context.Context, sandbox *Sandbox) (err error) {
+	span, ctx := k.trace(ctx, "setupSandboxBindMounts")
+	defer span.End()
+
 	if len(sandbox.config.SandboxBindMounts) == 0 {
 		return nil
 	}
@@ -411,13 +420,13 @@ func (k *kataAgent) setupSandboxBindMounts(sandbox *Sandbox) (err error) {
 	for _, m := range sandbox.config.SandboxBindMounts {
 		mountDest := filepath.Join(sandboxMountDir, filepath.Base(m))
 		// bind-mount each sandbox mount that's defined into the sandbox mounts dir
-		if err := bindMount(context.Background(), m, mountDest, true, "private"); err != nil {
+		if err := bindMount(ctx, m, mountDest, true, "private"); err != nil {
 			return fmt.Errorf("Mounting sandbox directory: %v to %v: %w", m, mountDest, err)
 		}
 		mountedList = append(mountedList, mountDest)
 
 		mountDest = filepath.Join(sandboxShareDir, filepath.Base(m))
-		if err := remountRo(context.Background(), mountDest); err != nil {
+		if err := remountRo(ctx, mountDest); err != nil {
 			return fmt.Errorf("remount sandbox directory: %v to %v: %w", m, mountDest, err)
 		}
 
@@ -453,7 +462,10 @@ func (k *kataAgent) cleanupSandboxBindMounts(sandbox *Sandbox) error {
 }
 
 func (k *kataAgent) configure(ctx context.Context, h hypervisor, id, sharePath string, config KataAgentConfig) error {
-	err := k.internalConfigure(h, id, config)
+	span, ctx := k.trace(ctx, "configure")
+	defer span.End()
+
+	err := k.internalConfigure(ctx, h, id, config)
 	if err != nil {
 		return err
 	}
@@ -494,11 +506,14 @@ func (k *kataAgent) configure(ctx context.Context, h hypervisor, id, sharePath s
 	return h.addDevice(ctx, sharedVolume, fsDev)
 }
 
-func (k *kataAgent) configureFromGrpc(h hypervisor, id string, config KataAgentConfig) error {
-	return k.internalConfigure(h, id, config)
+func (k *kataAgent) configureFromGrpc(ctx context.Context, h hypervisor, id string, config KataAgentConfig) error {
+	return k.internalConfigure(ctx, h, id, config)
 }
 
 func (k *kataAgent) setupSharedPath(ctx context.Context, sandbox *Sandbox) (err error) {
+	span, ctx := k.trace(ctx, "setupSharedPath")
+	defer span.End()
+
 	// create shared path structure
 	sharePath := getSharePath(sandbox.id)
 	mountPath := getMountPath(sandbox.id)
@@ -522,7 +537,7 @@ func (k *kataAgent) setupSharedPath(ctx context.Context, sandbox *Sandbox) (err 
 	}()
 
 	// Setup sandbox bindmounts, if specified:
-	if err = k.setupSandboxBindMounts(sandbox); err != nil {
+	if err = k.setupSandboxBindMounts(ctx, sandbox); err != nil {
 		return err
 	}
 

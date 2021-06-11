@@ -1601,6 +1601,7 @@ func (q *qemu) hotplugDevice(ctx context.Context, devInfo interface{}, devType d
 func (q *qemu) hotplugAddDevice(ctx context.Context, devInfo interface{}, devType deviceType) (interface{}, error) {
 	span, ctx := q.trace(ctx, "hotplugAddDevice")
 	defer span.End()
+	span.SetAttributes(otelLabel.Any("device", devInfo))
 
 	data, err := q.hotplugDevice(ctx, devInfo, devType, addDevice)
 	if err != nil {
@@ -1613,6 +1614,7 @@ func (q *qemu) hotplugAddDevice(ctx context.Context, devInfo interface{}, devTyp
 func (q *qemu) hotplugRemoveDevice(ctx context.Context, devInfo interface{}, devType deviceType) (interface{}, error) {
 	span, ctx := q.trace(ctx, "hotplugRemoveDevice")
 	defer span.End()
+	span.SetAttributes(otelLabel.Any("device", devInfo))
 
 	data, err := q.hotplugDevice(ctx, devInfo, devType, removeDevice)
 	if err != nil {
@@ -1841,6 +1843,7 @@ func (q *qemu) addDevice(ctx context.Context, devInfo interface{}, devType devic
 	var err error
 	span, _ := q.trace(ctx, "addDevice")
 	defer span.End()
+	span.SetAttributes(otelLabel.Any("device", devInfo))
 
 	switch v := devInfo.(type) {
 	case types.Volume:

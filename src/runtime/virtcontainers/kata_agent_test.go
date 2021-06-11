@@ -1279,7 +1279,7 @@ func TestSandboxBindMount(t *testing.T) {
 	defer syscall.Unmount(sharePath, syscall.MNT_DETACH|UmountNoFollow)
 
 	// Test the function. We expect it to succeed and for the mount to exist
-	err = k.setupSandboxBindMounts(sandbox)
+	err = k.setupSandboxBindMounts(context.Background(), sandbox)
 	assert.NoError(err)
 
 	// Test the cleanup function. We expect it to succeed for the mount to be removed.
@@ -1303,9 +1303,9 @@ func TestSandboxBindMount(t *testing.T) {
 	// We expect cleanup to fail on the first time, since it cannot remove the sandbox-bindmount directory because
 	// there are leftover mounts.   If we run it a second time, however, it should succeed since it'll remove the
 	// second set of mounts:
-	err = k.setupSandboxBindMounts(sandbox)
+	err = k.setupSandboxBindMounts(context.Background(), sandbox)
 	assert.NoError(err)
-	err = k.setupSandboxBindMounts(sandbox)
+	err = k.setupSandboxBindMounts(context.Background(), sandbox)
 	assert.NoError(err)
 	// Test the cleanup function. We expect it to succeed for the mount to be removed.
 	err = k.cleanupSandboxBindMounts(sandbox)
@@ -1317,7 +1317,7 @@ func TestSandboxBindMount(t *testing.T) {
 	// Now, let's setup the sandbox bindmount to fail, and verify that no mounts are left behind
 	//
 	sandbox.config.SandboxBindMounts = append(sandbox.config.SandboxBindMounts, "oh-nos")
-	err = k.setupSandboxBindMounts(sandbox)
+	err = k.setupSandboxBindMounts(context.Background(), sandbox)
 	assert.Error(err)
 	// Verify there aren't any mounts left behind
 	stat = syscall.Stat_t{}
