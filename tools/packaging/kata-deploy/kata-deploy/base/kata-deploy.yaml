@@ -16,7 +16,7 @@ spec:
       serviceAccountName: kata-label-node
       containers:
       - name: kube-kata
-        image: katadocker/kata-deploy:2.1.0-rc0
+        image: katadocker/kata-deploy:2.2.0-alpha0
         imagePullPolicy: Always
         lifecycle:
           preStop:
