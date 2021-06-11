@@ -181,7 +181,6 @@ impl Sandbox {
         Ok(true)
     }
 
-    #[instrument]
     pub fn add_container(&mut self, c: LinuxContainer) {
         self.containers.insert(c.id.clone(), c);
     }
@@ -210,12 +209,10 @@ impl Sandbox {
         Ok(())
     }
 
-    #[instrument]
     pub fn get_container(&mut self, id: &str) -> Option<&mut LinuxContainer> {
         self.containers.get_mut(id)
     }
 
-    #[instrument]
     pub fn find_process(&mut self, pid: pid_t) -> Option<&mut Process> {
         for (_, c) in self.containers.iter_mut() {
             if c.processes.get(&pid).is_some() {
