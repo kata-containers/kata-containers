@@ -327,7 +327,7 @@ func TestQemuAmd64AppendProtectionDevice(t *testing.T) {
 	assert.NoError(err)
 	assert.Empty(bios)
 
-	expectedOut = []govmmQemu.Device{
+	expectedOut = append(expectedOut,
 		govmmQemu.Object{
 			Driver:   govmmQemu.Loader,
 			Type:     govmmQemu.TDXGuest,
@@ -336,7 +336,7 @@ func TestQemuAmd64AppendProtectionDevice(t *testing.T) {
 			Debug:    false,
 			File:     firmware,
 		},
-	}
+	)
 
 	assert.Equal(expectedOut, devices)
 }
