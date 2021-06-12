@@ -55,6 +55,12 @@ tracing-opentelemetry = "0.13.0"
 opentelemetry = "0.14.0"
 vsock-exporter = { path = "vsock-exporter" }
 
+[patch.crates-io]
+# TODO: remove when switching to stable rtnetlink release
+netlink-packet-utils = { git = "https://github.com/little-dude/netlink", rev = "a9367bc4700496ddebc088110c28f40962923326" }
+# TODO: remove when switching to stable rtnetlink release
+netlink-sys = { git = "https://github.com/little-dude/netlink", rev = "a9367bc4700496ddebc088110c28f40962923326" }
+
 [dev-dependencies]
 tempfile = "3.1.0"
 
