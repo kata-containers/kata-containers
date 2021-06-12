@@ -6,6 +6,7 @@
 package virtcontainers
 
 import "os"
+import "io/ioutil"
 
 // Implementation of this function is architecture specific
 func availableGuestProtection() (guestProtection, error) {
@@ -18,8 +19,12 @@ func availableGuestProtection() (guestProtection, error) {
 	if d, err := os.Stat(tdxSysFirmwareDir); (err == nil && d.IsDir()) || flags[tdxCPUFlag] {
 		return tdxProtection, nil
 	}
-
-	// TODO: Add support for other technologies: SEV
+	// SEV is supported and enabled when the kvm module `sev` parameter is set to `1`
+	if _, err := os.Stat(sevKvmParameterPath); err == nil {
+		if c, err := ioutil.ReadFile(sevKvmParameterPath); err == nil && len(c) > 0 && c[0] == '1' {
+			return sevProtection, nil
+		}
+	}
 
 	return noneProtection, nil
 }
