@@ -510,6 +510,8 @@ func (conf *HypervisorConfig) valid() error {
 
 	if conf.BlockDeviceDriver == "" {
 		conf.BlockDeviceDriver = defaultBlockDriver
+	} else if conf.BlockDeviceDriver == config.VirtioBlock && conf.HypervisorMachineType == "s390-ccw-virtio" {
+		conf.BlockDeviceDriver = config.VirtioBlockCCW
 	}
 
 	if conf.DefaultMaxVCPUs == 0 {
