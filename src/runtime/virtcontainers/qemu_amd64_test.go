@@ -109,7 +109,7 @@ func TestQemuAmd64CPUModel(t *testing.T) {
 func TestQemuAmd64MemoryTopology(t *testing.T) {
 	assert := assert.New(t)
 	amd64 := newTestQemu(assert, QemuPC)
-	memoryOffset := 1024
+	memoryOffset := uint64(1024)
 
 	hostMem := uint64(100)
 	mem := uint64(120)
@@ -117,7 +117,7 @@ func TestQemuAmd64MemoryTopology(t *testing.T) {
 	expectedMemory := govmmQemu.Memory{
 		Size:   fmt.Sprintf("%dM", mem),
 		Slots:  slots,
-		MaxMem: fmt.Sprintf("%dM", hostMem+uint64(memoryOffset)),
+		MaxMem: fmt.Sprintf("%dM", hostMem+memoryOffset),
 	}
 
 	m := amd64.memoryTopology(mem, hostMem, slots)

@@ -870,7 +870,7 @@ func TestAddHypervisorAnnotations(t *testing.T) {
 	assert.Equal(config.HypervisorConfig.DefaultMaxVCPUs, uint32(1))
 	assert.Equal(config.HypervisorConfig.MemorySize, uint32(1024))
 	assert.Equal(config.HypervisorConfig.MemSlots, uint32(20))
-	assert.Equal(config.HypervisorConfig.MemOffset, uint32(512))
+	assert.Equal(config.HypervisorConfig.MemOffset, uint64(512))
 	assert.Equal(config.HypervisorConfig.VirtioMem, true)
 	assert.Equal(config.HypervisorConfig.MemPrealloc, true)
 	assert.Equal(config.HypervisorConfig.Mlock, false)
