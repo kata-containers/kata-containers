@@ -1,17 +1,5 @@
 # Kata Containers installation user guides
 
-* [Kata Containers installation user guides](#kata-containers-installation-user-guides)
-    * [Prerequisites](#prerequisites)
-    * [Legacy installation](#legacy-installation)
-    * [Packaged installation methods](#packaged-installation-methods)
-        * [Official packages](#official-packages)
-        * [Snap Installation](#snap-installation)
-        * [Automatic Installation](#automatic-installation)
-        * [Manual Installation](#manual-installation)
-    * [Build from source installation](#build-from-source-installation)
-    * [Installing on a Cloud Service Platform](#installing-on-a-cloud-service-platform)
-    * [Further information](#further-information)
-
 The following is an overview of the different installation methods available. All of these methods equally result
 in a system configured to run Kata Containers.
 
@@ -52,7 +40,7 @@ Kata packages are provided by official distribution repositories for:
 | [CentOS](centos-installation-guide.md)                   | 8                                                                              |
 | [Fedora](fedora-installation-guide.md)                   | 34                                                                             |
 
-> **Note::**
+> **Note:**
 >
 > All users are encouraged to uses the official distribution versions of Kata
 > Containers unless they understand the implications of alternative methods.
@@ -75,11 +63,11 @@ Follow the [containerd installation guide](container-manager/containerd/containe
 
 ## Build from source installation
 
-> **Notes:**
+> **Note:**
 >
-> - Power users who decide to build from sources should be aware of the
->   implications of using an unpackaged system which will not be automatically
->   updated as new [releases](../Stable-Branch-Strategy.md) are made available.
+> Power users who decide to build from sources should be aware of the
+> implications of using an unpackaged system which will not be automatically
+> updated as new [releases](../Stable-Branch-Strategy.md) are made available.
 
 [Building from sources](../Developer-Guide.md#initial-setup)  allows power users
 who are comfortable building software from source to use the latest component

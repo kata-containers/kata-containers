@@ -1,17 +1,5 @@
 # Kata Containers packaging
 
-* [Introduction](#introduction)
-* [Build in a container](#build-in-a-container)
-* [Build a snap package](#build-a-snap-package)
-* [Build static binaries](#build-static-binaries)
-* [Build Kata Containers Kernel](#build-kata-containers-kernel)
-* [Build QEMU](#build-qemu)
-* [Test Kata using ccloudvm](#test-kata-using-ccloudvm)
-* [Create a Kata Containers release](#create-a-kata-containers-release)
-* [Jenkins files](#jenkins-files)
-* [Packaging scripts](#packaging-scripts)
-* [Credits](#credits)
-
 ## Introduction
 
 Kata Containers currently supports packages for many distributions. Tooling to

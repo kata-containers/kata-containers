@@ -1,20 +1,5 @@
 # Kata 2.0 Metrics Design
 
-* [Limitations of Kata 1.x and the target of Kata 2.0](#limitations-of-kata-1x-and-the-target-of-kata-20)
-* [Metrics architecture](#metrics-architecture)
-  * [Kata monitor](#kata-monitor)
-  * [Kata runtime](#kata-runtime)
-  * [Kata agent](#kata-agent)
-  * [Performance and overhead](#performance-and-overhead)
-* [Metrics list](#metrics-list)
-  * [Metric types](#metric-types)
-  * [Kata agent metrics](#kata-agent-metrics)
-  * [Firecracker metrics](#firecracker-metrics)
-  * [Kata guest OS metrics](#kata-guest-os-metrics)
-  * [Hypervisor metrics](#hypervisor-metrics)
-  * [Kata monitor metrics](#kata-monitor-metrics)
-  * [Kata containerd shim v2 metrics](#kata-containerd-shim-v2-metrics)
-
 Kata implement CRI's API and support [`ContainerStats`](https://github.com/kubernetes/kubernetes/blob/release-1.18/staging/src/k8s.io/cri-api/pkg/apis/runtime/v1alpha2/api.proto#L101) and [`ListContainerStats`](https://github.com/kubernetes/kubernetes/blob/release-1.18/staging/src/k8s.io/cri-api/pkg/apis/runtime/v1alpha2/api.proto#L103) interfaces to expose containers metrics. User can use these interface to get basic metrics about container.
 
 But unlike `runc`, Kata is a VM-based runtime and has a different architecture.

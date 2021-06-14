@@ -2,23 +2,6 @@
 
 # Kata Containers
 
-* [Kata Containers](#kata-containers)
-    * [Introduction](#introduction)
-    * [Getting started](#getting-started)
-    * [Documentation](#documentation)
-    * [Community](#community)
-    * [Getting help](#getting-help)
-        * [Raising issues](#raising-issues)
-            * [Kata Containers 1.x versions](#kata-containers-1x-versions)
-    * [Developers](#developers)
-        * [Components](#components)
-            * [Kata Containers 1.x components](#kata-containers-1x-components)
-        * [Common repositories](#common-repositories)
-        * [Packaging and releases](#packaging-and-releases)
-    * [Glossary of Terms](#glossary-of-terms)
-
----
-
 Welcome to Kata Containers!
 
 This repository is the home of the Kata Containers code for the 2.0 and newer

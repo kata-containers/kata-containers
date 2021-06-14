@@ -1,25 +1,3 @@
-Table of Contents
-=================
-
-* [What is it?](#what-is-it)
-* [Background](#background)
-* [Out of scope](#out-of-scope)
-    * [virtcontainers and Kubernetes CRI](#virtcontainers-and-kubernetes-cri)
-* [Design](#design)
-    * [Sandboxes](#sandboxes)
-    * [Hypervisors](#hypervisors)
-    * [Agents](#agents)
-* [API](#api)
-* [Networking](#networking)
-    * [CNM](#cnm)
-* [Storage](#storage)
-* [Devices](#devices)
-    * [How to pass a device using VFIO-PCI passthrough](#how-to-pass-a-device-using-vfio-pci-passthrough)
-    * [How to pass a device using VFIO-AP passthrough](#how-to-pass-a-device-using-vfio-ap-passthrough)
-* [Developers](#developers)
-* [Persistent storage plugin support](#persistent-storage-plugin-support)
-* [Experimental features](#experimental-features)
-
 # What is it?
 
 `virtcontainers` is a Go library that can be used to build hardware-virtualized container

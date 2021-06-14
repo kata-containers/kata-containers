@@ -1,6 +1,3 @@
-* [Run the osbuilder tests](#run-the-osbuilder-tests)
-* [Further information](#further-information)
-
 ## Run the osbuilder tests
 
 osbuilder provides a test script that creates all rootfs disk images and

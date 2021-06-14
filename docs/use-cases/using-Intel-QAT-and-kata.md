@@ -1,33 +1,5 @@
 # Table of Contents
 
-- [Table of Contents](#table-of-contents)
-- [Introduction](#introduction)
-  - [Helpful Links before starting](#helpful-links-before-starting)
-  - [Steps to enable Intel® QAT in Kata Containers](#steps-to-enable-intel-qat-in-kata-containers)
-  - [Script variables](#script-variables)
-    - [Set environment variables (Every Reboot)](#set-environment-variables-every-reboot)
-  - [Prepare the Ubuntu Host](#prepare-the-ubuntu-host)
-    - [Identify which PCI Bus the Intel® QAT card is on](#identify-which-pci-bus-the-intel-qat-card-is-on)
-    - [Install necessary packages for Ubuntu](#install-necessary-packages-for-ubuntu)
-    - [Download Intel® QAT drivers](#download-intel-qat-drivers)
-    - [Copy Intel® QAT configuration files and enable virtual functions](#copy-intel-qat-configuration-files-and-enable-virtual-functions)
-    - [Expose and Bind Intel® QAT virtual functions to VFIO-PCI (Every reboot)](#expose-and-bind-intel-qat-virtual-functions-to-vfio-pci-every-reboot)
-    - [Check Intel® QAT virtual functions are enabled](#check-intel-qat-virtual-functions-are-enabled)
-  - [Prepare Kata Containers](#prepare-kata-containers)
-    - [Download Kata kernel Source](#download-kata-kernel-source)
-    - [Build Kata kernel](#build-kata-kernel)
-    - [Copy Kata kernel](#copy-kata-kernel)
-    - [Prepare Kata root filesystem](#prepare-kata-root-filesystem)
-    - [Compile Intel® QAT drivers for Kata Containers kernel and add to Kata Containers rootfs](#compile-intel-qat-drivers-for-kata-containers-kernel-and-add-to-kata-containers-rootfs)
-    - [Copy Kata rootfs](#copy-kata-rootfs)
-  - [Verify Intel® QAT works in a container](#verify-intel-qat-works-in-a-container)
-    - [Build OpenSSL Intel® QAT engine container](#build-openssl-intel-qat-engine-container)
-    - [Test Intel® QAT with the ctr tool](#test-intel-qat-with-the-ctr-tool)
-    - [Test Intel® QAT in Kubernetes](#test-intel-qat-in-kubernetes)
-    - [Troubleshooting](#troubleshooting)
-  - [Optional Scripts](#optional-scripts)
-    - [Verify Intel® QAT card counters are incremented](#verify-intel-qat-card-counters-are-incremented)
-
 # Introduction
 
 Intel® QuickAssist Technology (QAT) provides hardware acceleration 

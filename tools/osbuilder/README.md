@@ -1,27 +1,5 @@
 # osbuilder
 
-* [osbuilder](#osbuilder)
-    * [Introduction](#introduction)
-    * [Terms](#terms)
-    * [Building](#building)
-        * [Rootfs creation](#rootfs-creation)
-            * [Rootfs with systemd as init](#rootfs-with-systemd-as-init)
-            * [Rootfs with the agent as init](#rootfs-with-the-agent-as-init)
-            * [dracut based rootfs](#dracut-based-rootfs)
-        * [Image creation](#image-creation)
-            * [Image with systemd as init](#image-with-systemd-as-init)
-            * [Image with the agent as init](#image-with-the-agent-as-init)
-            * [dracut based image](#dracut-based-image)
-        * [Initrd creation](#initrd-creation)
-            * [Rootfs based initrd](#rootfs-based-initrd)
-            * [dracut based initrd](#dracut-based-initrd)
-        * [dracut options](#dracut-options)
-            * [Add kernel modules](#add-kernel-modules)
-        * [Custom images](#custom-images)
-            * [Intel® QuickAssist Technology (QAT) customized kernel and rootfs](#intel-quickassist-technology-qat-customized-kernel-and-rootfs)
-    * [Testing](#testing)
-    * [Platform-Distro Compatibility Matrix](#platform-distro-compatibility-matrix)
-
 ## Introduction
 
 The Kata Containers runtime creates a virtual machine (VM) to isolate a set of
