@@ -34,7 +34,7 @@ $ ./update-repository-version.sh -h
 To update project version for Kata Containers, use the following:
 
 ```bash
-$ make bump-kata-version NEW_VERSION=<new-version>
+$ make bump-kata-version NEW_VERSION="${new_version}"
 ```
 
 The makefile target `bump-kata-version` creates a GitHub pull request in the
