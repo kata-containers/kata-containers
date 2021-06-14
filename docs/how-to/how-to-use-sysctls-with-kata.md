@@ -16,11 +16,10 @@ To get a complete list of kernel parameters, run:
 $ sudo sysctl -a
 ```
 
-Both Docker and Kubernetes provide mechanisms for setting namespaced sysctls. 
-Namespaced sysctls can be set per pod in the case of Kubernetes or per container
-in case of Docker.
+Kubernetes provide mechanisms for setting namespaced sysctls. 
+Namespaced sysctls can be set per pod in the case of Kubernetes.
 The following sysctls are known to be namespaced and can be set with 
-Docker and Kubernetes:
+Kubernetes:
 
 - `kernel.shm*`
 - `kernel.msg*`
@@ -30,30 +29,9 @@ Docker and Kubernetes:
 
 ### Namespaced Sysctls:
 
-Kata Containers supports setting namespaced sysctls with Docker and Kubernetes.
+Kata Containers supports setting namespaced sysctls with Kubernetes.
 All namespaced sysctls can be set in the same way as regular Linux based
 containers, the difference being, in the case of Kata they are set inside the guest.
-
-#### Setting Namespaced Sysctls with Docker:
-
-```
-$ sudo docker run --runtime=kata-runtime -it alpine cat /proc/sys/fs/mqueue/queues_max
-256
-$ sudo docker run --runtime=kata-runtime --sysctl fs.mqueue.queues_max=512 -it alpine cat /proc/sys/fs/mqueue/queues_max
-512
-```
-
-... and:
-
-```
-$ sudo docker run --runtime=kata-runtime -it alpine cat /proc/sys/kernel/shmmax
-18446744073692774399
-$ sudo docker run --runtime=kata-runtime --sysctl kernel.shmmax=1024 -it alpine cat /proc/sys/kernel/shmmax
-1024
-```
-
-For additional documentation on setting sysctls with Docker please refer to [Docker-sysctl-doc](https://docs.docker.com/engine/reference/commandline/run/#configure-namespaced-kernel-parameters-sysctls-at-runtime).
-
 
 #### Setting Namespaced Sysctls with Kubernetes:
 
@@ -100,7 +78,7 @@ spec:
 
 ### Non-Namespaced Sysctls:
 
-Docker and Kubernetes disallow sysctls without a namespace.
+Kubernetes disallow sysctls without a namespace.
 The recommendation is to set them directly on the host or use a privileged
 container in the case of Kubernetes.
 
