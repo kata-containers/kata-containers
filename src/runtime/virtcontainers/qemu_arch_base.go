@@ -177,7 +177,7 @@ const (
 type qemuArchBase struct {
 	qemuMachine          govmmQemu.Machine
 	qemuExePath          string
-	memoryOffset         uint32
+	memoryOffset         uint64
 	nestedRun            bool
 	vhost                bool
 	disableNvdimm        bool
