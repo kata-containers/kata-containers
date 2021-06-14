@@ -1,17 +1,5 @@
 # Using Nvidia GPU device with Kata Containers
 
-- [Using Nvidia GPU device with Kata Containers](#using-nvidia-gpu-device-with-kata-containers)
-	- [Hardware Requirements](#hardware-requirements)
-	- [Host BIOS Requirements](#host-bios-requirements)
-	- [Host Kernel Requirements](#host-kernel-requirements)
-	- [Install and configure Kata Containers](#install-and-configure-kata-containers)
-	- [Build Kata Containers kernel with GPU support](#build-kata-containers-kernel-with-gpu-support)
-	- [Nvidia GPU pass-through mode with Kata Containers](#nvidia-gpu-pass-through-mode-with-kata-containers)
-	- [Nvidia vGPU mode with Kata Containers](#nvidia-vgpu-mode-with-kata-containers)
-	- [Install Nvidia Driver in Kata Containers](#install-nvidia-driver-in-kata-containers)
-	- [References](#references)
-
-
 An Nvidia GPU device can be passed to a Kata Containers container using GPU passthrough
 (Nvidia GPU pass-through mode) as well as GPU mediated passthrough (Nvidia vGPU mode). 
 

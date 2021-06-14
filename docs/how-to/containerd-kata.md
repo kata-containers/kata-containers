@@ -1,23 +1,5 @@
 # How to use Kata Containers and Containerd
 
-- [Concepts](#concepts)
-    - [Kubernetes `RuntimeClass`](#kubernetes-runtimeclass)
-    - [Containerd Runtime V2 API: Shim V2 API](#containerd-runtime-v2-api-shim-v2-api)
-- [Install](#install)
-    - [Install Kata Containers](#install-kata-containers)
-    - [Install containerd with CRI plugin](#install-containerd-with-cri-plugin)
-    - [Install CNI plugins](#install-cni-plugins)
-    - [Install `cri-tools`](#install-cri-tools)
-- [Configuration](#configuration)
-    - [Configure containerd to use Kata Containers](#configure-containerd-to-use-kata-containers)
-        - [Kata Containers as a `RuntimeClass`](#kata-containers-as-a-runtimeclass)
-        - [Kata Containers as the runtime for untrusted workload](#kata-containers-as-the-runtime-for-untrusted-workload)
-    - [Kata Containers as the default runtime](#kata-containers-as-the-default-runtime)
-    - [Configuration for `cri-tools`](#configuration-for-cri-tools)
-- [Run](#run)
-    - [Launch containers with `ctr` command line](#launch-containers-with-ctr-command-line)
-    - [Launch Pods with `crictl` command line](#launch-pods-with-crictl-command-line)
-
 This document covers the installation and configuration of [containerd](https://containerd.io/) 
 and [Kata Containers](https://katacontainers.io). The containerd provides not only the `ctr`
 command line tool, but also the [CRI](https://kubernetes.io/blog/2016/12/container-runtime-interface-cri-in-kubernetes/) 

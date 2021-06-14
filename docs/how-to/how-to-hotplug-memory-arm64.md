@@ -1,9 +1,5 @@
 # How to use memory hotplug feature in Kata Containers on arm64
 
-- [Introduction](#introduction)
-- [Install UEFI ROM](#install-uefi-rom)
-- [Run for test](#run-for-test)
-
 ## Introduction
 
 Memory hotplug is a key feature for containers to allocate memory dynamically in deployment.

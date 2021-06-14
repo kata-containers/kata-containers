@@ -1,21 +1,5 @@
 # Kata Containers and service mesh for Kubernetes
 
-* [Assumptions](#assumptions)
-* [How they work](#how-they-work)
-* [Prerequisites](#prerequisites)
-    * [Kata and Kubernetes](#kata-and-kubernetes)
-    * [Restrictions](#restrictions)
-* [Install and deploy your service mesh](#install-and-deploy-your-service-mesh)
-    * [Service Mesh Istio](#service-mesh-istio)
-    * [Service Mesh Linkerd](#service-mesh-linkerd)
-* [Inject your services with sidecars](#inject-your-services-with-sidecars)
-    * [Sidecar Istio](#sidecar-istio)
-    * [Sidecar Linkerd](#sidecar-linkerd)
-* [Run your services with Kata](#run-your-services-with-kata)
-    * [Lower privileges](#lower-privileges)
-    * [Add annotations](#add-annotations)
-    * [Deploy](#deploy)
-
 A service mesh is a way to monitor and control the traffic between
 micro-services running in your Kubernetes cluster. It is a powerful
 tool that you might want to use in combination with the security

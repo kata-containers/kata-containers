@@ -1,16 +1,5 @@
 # Documentation
 
-* [Getting Started](#getting-started)
-* [More User Guides](#more-user-guides)
-* [Kata Use-Cases](#kata-use-cases)
-* [Developer Guide](#developer-guide)
-    * [Design and Implementations](#design-and-implementations)
-    * [How to Contribute](#how-to-contribute)
-    * [Code Licensing](#code-licensing)
-    * [The Release Process](#the-release-process)
-* [Help Improving the Documents](#help-improving-the-documents)
-* [Website Changes](#website-changes)
-
 The [Kata Containers](https://github.com/kata-containers)
 documentation repository hosts overall system documentation, with information
 common to multiple components.

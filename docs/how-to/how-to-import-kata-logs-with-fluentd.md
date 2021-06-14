@@ -1,20 +1,5 @@
 # Importing Kata Containers logs with Fluentd
 
-* [Introduction](#introduction)
-* [Overview](#overview)
-    * [Test stack](#test-stack)
-    * [Importing the logs](#importing-the-logs)
-    * [Direct import `logfmt` from `systemd`](#direct-import-logfmt-from-systemd)
-        * [Configuring `minikube`](#configuring-minikube)
-        * [Pull from `systemd`](#pull-from-systemd)
-        * [Systemd Summary](#systemd-summary)
-    * [Directly importing JSON](#directly-importing-json)
-        * [JSON in files](#json-in-files)
-            * [Prefixing all keys](#prefixing-all-keys)
-* [Kata `shimv2`](#kata-shimv2)
-* [Caveats](#caveats)
-* [Summary](#summary)
-
 # Introduction
 
 This document describes how to import Kata Containers logs into [Fluentd](https://www.fluentd.org/),

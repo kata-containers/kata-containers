@@ -1,12 +1,5 @@
 # Release information
 
-* [Introduction](#introduction)
-* [Create a Kata Containers release](#create-a-kata-containers-release)
-* [Release tools](#release-tools)
-  - [`update-repository-version.sh`](#update-repository-versionsh)
-  - [Update Kata projects to a new version](#update-kata-projects-to-a-new-version)
-  - [`tag_repos.sh`](#tag_repossh)
-
 ## Introduction
 
 This directory contains information of the process and

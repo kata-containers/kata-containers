@@ -1,10 +1,5 @@
 # What Is VMCache and How To Enable It
 
-* [What is VMCache](#what-is-vmcache)
-* [How is this different to VM templating](#how-is-this-different-to-vm-templating)
-* [How to enable VMCache](#how-to-enable-vmcache)
-* [Limitations](#limitations)
-
 ### What is VMCache
 
 VMCache is a new function that creates VMs as caches before using it.

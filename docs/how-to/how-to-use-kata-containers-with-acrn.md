@@ -2,11 +2,6 @@
 
 This document provides an overview on how to run Kata containers with ACRN hypervisor and device model.
 
-- [Introduction](#introduction)
-- [Pre-requisites](#pre-requisites)
-- [Configure Docker](#configure-docker)
-- [Configure Kata Containers with ACRN](#configure-kata-containers-with-acrn)
-
 ## Introduction
 
 ACRN is a flexible, lightweight Type-1 reference hypervisor built with real-time and safety-criticality in mind. ACRN uses an open source platform making it optimized to streamline embedded development.
