@@ -176,5 +176,5 @@ repository and which pull request [it depends on][depends-on-docs].
 
 [kata-containers-versions-file]: ../../../versions.yaml
 [patches-dir]: patches
-[depends-on-docs]: https://github.com/kata-containers/tests/blob/master/README.md#breaking-compatibility
+[depends-on-docs]: https://github.com/kata-containers/tests/blob/main/README.md#breaking-compatibility
 [cache-job]: http://jenkins.katacontainers.io/job/image-nightly-x86_64/
