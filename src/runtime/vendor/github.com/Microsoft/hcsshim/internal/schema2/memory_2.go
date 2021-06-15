@@ -10,7 +10,7 @@
 package hcsschema
 
 type Memory2 struct {
-	SizeInMB int32 `json:"SizeInMB,omitempty"`
+	SizeInMB uint64 `json:"SizeInMB,omitempty"`
 
 	AllowOvercommit bool `json:"AllowOvercommit,omitempty"`
 
@@ -22,4 +22,28 @@ type Memory2 struct {
 
 	// EnableDeferredCommit is private in the schema. If regenerated need to add back.
 	EnableDeferredCommit bool `json:"EnableDeferredCommit,omitempty"`
+
+	// EnableColdDiscardHint if enabled, then the memory cold discard hint feature is exposed
+	// to the VM, allowing it to trim non-zeroed pages from the working set (if supported by
+	// the guest operating system).
+	EnableColdDiscardHint bool `json:"EnableColdDiscardHint,omitempty"`
+
+	// LowMmioGapInMB is the low MMIO region allocated below 4GB.
+	//
+	// TODO: This is pre-release support in schema 2.3. Need to add build number
+	// docs when a public build with this is out.
+	LowMMIOGapInMB uint64 `json:"LowMmioGapInMB,omitempty"`
+
+	// HighMmioBaseInMB is the high MMIO region allocated above 4GB (base and
+	// size).
+	//
+	// TODO: This is pre-release support in schema 2.3. Need to add build number
+	// docs when a public build with this is out.
+	HighMMIOBaseInMB uint64 `json:"HighMmioBaseInMB,omitempty"`
+
+	// HighMmioGapInMB is the high MMIO region.
+	//
+	// TODO: This is pre-release support in schema 2.3. Need to add build number
+	// docs when a public build with this is out.
+	HighMMIOGapInMB uint64 `json:"HighMmioGapInMB,omitempty"`
 }

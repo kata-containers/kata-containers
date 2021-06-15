@@ -16,6 +16,16 @@
 
 package images
 
+import (
+	"context"
+	"sort"
+	"strings"
+
+	"github.com/containerd/containerd/errdefs"
+	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
+	"github.com/pkg/errors"
+)
+
 // mediatype definitions for image components handled in containerd.
 //
 // oci components are generally referenced directly, although we may centralize
@@ -39,4 +49,156 @@ const (
 	MediaTypeContainerd1CheckpointRuntimeOptions = "application/vnd.containerd.container.checkpoint.runtime.options+proto"
 	// Legacy Docker schema1 manifest
 	MediaTypeDockerSchema1Manifest = "application/vnd.docker.distribution.manifest.v1+prettyjws"
+	// Encypted media types
+	MediaTypeImageLayerEncrypted     = ocispec.MediaTypeImageLayer + "+encrypted"
+	MediaTypeImageLayerGzipEncrypted = ocispec.MediaTypeImageLayerGzip + "+encrypted"
 )
+
+// DiffCompression returns the compression as defined by the layer diff media
+// type. For Docker media types without compression, "unknown" is returned to
+// indicate that the media type may be compressed. If the media type is not
+// recognized as a layer diff, then it returns errdefs.ErrNotImplemented
+func DiffCompression(ctx context.Context, mediaType string) (string, error) {
+	base, ext := parseMediaTypes(mediaType)
+	switch base {
+	case MediaTypeDockerSchema2Layer, MediaTypeDockerSchema2LayerForeign:
+		if len(ext) > 0 {
+			// Type is wrapped
+			return "", nil
+		}
+		// These media types may have been compressed but failed to
+		// use the correct media type. The decompression function
+		// should detect and handle this case.
+		return "unknown", nil
+	case MediaTypeDockerSchema2LayerGzip, MediaTypeDockerSchema2LayerForeignGzip:
+		if len(ext) > 0 {
+			// Type is wrapped
+			return "", nil
+		}
+		return "gzip", nil
+	case ocispec.MediaTypeImageLayer, ocispec.MediaTypeImageLayerNonDistributable:
+		if len(ext) > 0 {
+			switch ext[len(ext)-1] {
+			case "gzip":
+				return "gzip", nil
+			case "zstd":
+				return "zstd", nil
+			}
+		}
+		return "", nil
+	default:
+		return "", errors.Wrapf(errdefs.ErrNotImplemented, "unrecognised mediatype %s", mediaType)
+	}
+}
+
+// parseMediaTypes splits the media type into the base type and
+// an array of sorted extensions
+func parseMediaTypes(mt string) (string, []string) {
+	if mt == "" {
+		return "", []string{}
+	}
+
+	s := strings.Split(mt, "+")
+	ext := s[1:]
+	sort.Strings(ext)
+
+	return s[0], ext
+}
+
+// IsNonDistributable returns true if the media type is non-distributable.
+func IsNonDistributable(mt string) bool {
+	return strings.HasPrefix(mt, "application/vnd.oci.image.layer.nondistributable.") ||
+		strings.HasPrefix(mt, "application/vnd.docker.image.rootfs.foreign.")
+}
+
+// IsLayerType returns true if the media type is a layer
+func IsLayerType(mt string) bool {
+	if strings.HasPrefix(mt, "application/vnd.oci.image.layer.") {
+		return true
+	}
+
+	// Parse Docker media types, strip off any + suffixes first
+	base, _ := parseMediaTypes(mt)
+	switch base {
+	case MediaTypeDockerSchema2Layer, MediaTypeDockerSchema2LayerGzip,
+		MediaTypeDockerSchema2LayerForeign, MediaTypeDockerSchema2LayerForeignGzip:
+		return true
+	}
+	return false
+}
+
+// IsDockerType returns true if the media type has "application/vnd.docker." prefix
+func IsDockerType(mt string) bool {
+	return strings.HasPrefix(mt, "application/vnd.docker.")
+}
+
+// IsManifestType returns true if the media type is an OCI-compatible manifest.
+// No support for schema1 manifest.
+func IsManifestType(mt string) bool {
+	switch mt {
+	case MediaTypeDockerSchema2Manifest, ocispec.MediaTypeImageManifest:
+		return true
+	default:
+		return false
+	}
+}
+
+// IsIndexType returns true if the media type is an OCI-compatible index.
+func IsIndexType(mt string) bool {
+	switch mt {
+	case ocispec.MediaTypeImageIndex, MediaTypeDockerSchema2ManifestList:
+		return true
+	default:
+		return false
+	}
+}
+
+// IsConfigType returns true if the media type is an OCI-compatible image config.
+// No support for containerd checkpoint configs.
+func IsConfigType(mt string) bool {
+	switch mt {
+	case MediaTypeDockerSchema2Config, ocispec.MediaTypeImageConfig:
+		return true
+	default:
+		return false
+	}
+}
+
+// IsKnownConfig returns true if the media type is a known config type,
+// including containerd checkpoint configs
+func IsKnownConfig(mt string) bool {
+	switch mt {
+	case MediaTypeDockerSchema2Config, ocispec.MediaTypeImageConfig,
+		MediaTypeContainerd1Checkpoint, MediaTypeContainerd1CheckpointConfig:
+		return true
+	}
+	return false
+}
+
+// ChildGCLabels returns the label for a given descriptor to reference it
+func ChildGCLabels(desc ocispec.Descriptor) []string {
+	mt := desc.MediaType
+	if IsKnownConfig(mt) {
+		return []string{"containerd.io/gc.ref.content.config"}
+	}
+
+	switch mt {
+	case MediaTypeDockerSchema2Manifest, ocispec.MediaTypeImageManifest:
+		return []string{"containerd.io/gc.ref.content.m."}
+	}
+
+	if IsLayerType(mt) {
+		return []string{"containerd.io/gc.ref.content.l."}
+	}
+
+	return []string{"containerd.io/gc.ref.content."}
+}
+
+// ChildGCLabelsFilterLayers returns the labels for a given descriptor to
+// reference it, skipping layer media types
+func ChildGCLabelsFilterLayers(desc ocispec.Descriptor) []string {
+	if IsLayerType(desc.MediaType) {
+		return nil
+	}
+	return ChildGCLabels(desc)
+}

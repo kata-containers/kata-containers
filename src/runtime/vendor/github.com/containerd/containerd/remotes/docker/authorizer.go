@@ -19,277 +19,297 @@ package docker
 import (
 	"context"
 	"encoding/base64"
-	"encoding/json"
 	"fmt"
-	"io"
-	"io/ioutil"
 	"net/http"
-	"net/url"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/containerd/containerd/errdefs"
 	"github.com/containerd/containerd/log"
+	"github.com/containerd/containerd/remotes/docker/auth"
+	remoteerrors "github.com/containerd/containerd/remotes/errors"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
-	"golang.org/x/net/context/ctxhttp"
 )
 
 type dockerAuthorizer struct {
 	credentials func(string) (string, string, error)
 
 	client *http.Client
+	header http.Header
 	mu     sync.Mutex
 
-	auth map[string]string
+	// indexed by host name
+	handlers map[string]*authHandler
 }
 
 // NewAuthorizer creates a Docker authorizer using the provided function to
 // get credentials for the token server or basic auth.
+// Deprecated: Use NewDockerAuthorizer
 func NewAuthorizer(client *http.Client, f func(string) (string, string, error)) Authorizer {
-	if client == nil {
-		client = http.DefaultClient
-	}
-	return &dockerAuthorizer{
-		credentials: f,
-		client:      client,
-		auth:        map[string]string{},
+	return NewDockerAuthorizer(WithAuthClient(client), WithAuthCreds(f))
+}
+
+type authorizerConfig struct {
+	credentials func(string) (string, string, error)
+	client      *http.Client
+	header      http.Header
+}
+
+// AuthorizerOpt configures an authorizer
+type AuthorizerOpt func(*authorizerConfig)
+
+// WithAuthClient provides the HTTP client for the authorizer
+func WithAuthClient(client *http.Client) AuthorizerOpt {
+	return func(opt *authorizerConfig) {
+		opt.client = client
 	}
 }
 
-func (a *dockerAuthorizer) Authorize(ctx context.Context, req *http.Request) error {
-	// TODO: Lookup matching challenge and scope rather than just host
-	if auth := a.getAuth(req.URL.Host); auth != "" {
-		req.Header.Set("Authorization", auth)
+// WithAuthCreds provides a credential function to the authorizer
+func WithAuthCreds(creds func(string) (string, string, error)) AuthorizerOpt {
+	return func(opt *authorizerConfig) {
+		opt.credentials = creds
+	}
+}
+
+// WithAuthHeader provides HTTP headers for authorization
+func WithAuthHeader(hdr http.Header) AuthorizerOpt {
+	return func(opt *authorizerConfig) {
+		opt.header = hdr
+	}
+}
+
+// NewDockerAuthorizer creates an authorizer using Docker's registry
+// authentication spec.
+// See https://docs.docker.com/registry/spec/auth/
+func NewDockerAuthorizer(opts ...AuthorizerOpt) Authorizer {
+	var ao authorizerConfig
+	for _, opt := range opts {
+		opt(&ao)
 	}
 
+	if ao.client == nil {
+		ao.client = http.DefaultClient
+	}
+
+	return &dockerAuthorizer{
+		credentials: ao.credentials,
+		client:      ao.client,
+		header:      ao.header,
+		handlers:    make(map[string]*authHandler),
+	}
+}
+
+// Authorize handles auth request.
+func (a *dockerAuthorizer) Authorize(ctx context.Context, req *http.Request) error {
+	// skip if there is no auth handler
+	ah := a.getAuthHandler(req.URL.Host)
+	if ah == nil {
+		return nil
+	}
+
+	auth, err := ah.authorize(ctx)
+	if err != nil {
+		return err
+	}
+
+	req.Header.Set("Authorization", auth)
 	return nil
+}
+
+func (a *dockerAuthorizer) getAuthHandler(host string) *authHandler {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	return a.handlers[host]
 }
 
 func (a *dockerAuthorizer) AddResponses(ctx context.Context, responses []*http.Response) error {
 	last := responses[len(responses)-1]
 	host := last.Request.URL.Host
-	for _, c := range parseAuthHeader(last.Header) {
-		if c.scheme == bearerAuth {
+
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	for _, c := range auth.ParseAuthHeader(last.Header) {
+		if c.Scheme == auth.BearerAuth {
 			if err := invalidAuthorization(c, responses); err != nil {
-				// TODO: Clear token
-				a.setAuth(host, "")
+				delete(a.handlers, host)
 				return err
 			}
 
-			// TODO(dmcg): Store challenge, not token
-			// Move token fetching to authorize
-			return a.setTokenAuth(ctx, host, c.parameters)
-		} else if c.scheme == basicAuth && a.credentials != nil {
-			// TODO: Resolve credentials on authorize
+			// reuse existing handler
+			//
+			// assume that one registry will return the common
+			// challenge information, including realm and service.
+			// and the resource scope is only different part
+			// which can be provided by each request.
+			if _, ok := a.handlers[host]; ok {
+				return nil
+			}
+
+			var username, secret string
+			if a.credentials != nil {
+				var err error
+				username, secret, err = a.credentials(host)
+				if err != nil {
+					return err
+				}
+			}
+
+			common, err := auth.GenerateTokenOptions(ctx, host, username, secret, c)
+			if err != nil {
+				return err
+			}
+
+			a.handlers[host] = newAuthHandler(a.client, a.header, c.Scheme, common)
+			return nil
+		} else if c.Scheme == auth.BasicAuth && a.credentials != nil {
 			username, secret, err := a.credentials(host)
 			if err != nil {
 				return err
 			}
+
 			if username != "" && secret != "" {
-				auth := username + ":" + secret
-				a.setAuth(host, fmt.Sprintf("Basic %s", base64.StdEncoding.EncodeToString([]byte(auth))))
+				common := auth.TokenOptions{
+					Username: username,
+					Secret:   secret,
+				}
+
+				a.handlers[host] = newAuthHandler(a.client, a.header, c.Scheme, common)
 				return nil
 			}
 		}
 	}
-
 	return errors.Wrap(errdefs.ErrNotImplemented, "failed to find supported auth scheme")
 }
 
-func (a *dockerAuthorizer) getAuth(host string) string {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-
-	return a.auth[host]
+// authResult is used to control limit rate.
+type authResult struct {
+	sync.WaitGroup
+	token string
+	err   error
 }
 
-func (a *dockerAuthorizer) setAuth(host string, auth string) bool {
-	a.mu.Lock()
-	defer a.mu.Unlock()
+// authHandler is used to handle auth request per registry server.
+type authHandler struct {
+	sync.Mutex
 
-	changed := a.auth[host] != auth
-	a.auth[host] = auth
+	header http.Header
 
-	return changed
+	client *http.Client
+
+	// only support basic and bearer schemes
+	scheme auth.AuthenticationScheme
+
+	// common contains common challenge answer
+	common auth.TokenOptions
+
+	// scopedTokens caches token indexed by scopes, which used in
+	// bearer auth case
+	scopedTokens map[string]*authResult
 }
 
-func (a *dockerAuthorizer) setTokenAuth(ctx context.Context, host string, params map[string]string) error {
-	realm, ok := params["realm"]
-	if !ok {
-		return errors.New("no realm specified for token auth challenge")
+func newAuthHandler(client *http.Client, hdr http.Header, scheme auth.AuthenticationScheme, opts auth.TokenOptions) *authHandler {
+	return &authHandler{
+		header:       hdr,
+		client:       client,
+		scheme:       scheme,
+		common:       opts,
+		scopedTokens: map[string]*authResult{},
+	}
+}
+
+func (ah *authHandler) authorize(ctx context.Context) (string, error) {
+	switch ah.scheme {
+	case auth.BasicAuth:
+		return ah.doBasicAuth(ctx)
+	case auth.BearerAuth:
+		return ah.doBearerAuth(ctx)
+	default:
+		return "", errors.Wrapf(errdefs.ErrNotImplemented, "failed to find supported auth scheme: %s", string(ah.scheme))
+	}
+}
+
+func (ah *authHandler) doBasicAuth(ctx context.Context) (string, error) {
+	username, secret := ah.common.Username, ah.common.Secret
+
+	if username == "" || secret == "" {
+		return "", fmt.Errorf("failed to handle basic auth because missing username or secret")
 	}
 
-	realmURL, err := url.Parse(realm)
-	if err != nil {
-		return errors.Wrap(err, "invalid token auth challenge realm")
+	auth := base64.StdEncoding.EncodeToString([]byte(username + ":" + secret))
+	return fmt.Sprintf("Basic %s", auth), nil
+}
+
+func (ah *authHandler) doBearerAuth(ctx context.Context) (token string, err error) {
+	// copy common tokenOptions
+	to := ah.common
+
+	to.Scopes = GetTokenScopes(ctx, to.Scopes)
+
+	// Docs: https://docs.docker.com/registry/spec/auth/scope
+	scoped := strings.Join(to.Scopes, " ")
+
+	ah.Lock()
+	if r, exist := ah.scopedTokens[scoped]; exist {
+		ah.Unlock()
+		r.Wait()
+		return r.token, r.err
 	}
 
-	to := tokenOptions{
-		realm:   realmURL.String(),
-		service: params["service"],
-	}
+	// only one fetch token job
+	r := new(authResult)
+	r.Add(1)
+	ah.scopedTokens[scoped] = r
+	ah.Unlock()
 
-	to.scopes = getTokenScopes(ctx, params)
-	if len(to.scopes) == 0 {
-		return errors.Errorf("no scope specified for token auth challenge")
-	}
+	defer func() {
+		token = fmt.Sprintf("Bearer %s", token)
+		r.token, r.err = token, err
+		r.Done()
+	}()
 
-	if a.credentials != nil {
-		to.username, to.secret, err = a.credentials(host)
+	// fetch token for the resource scope
+	if to.Secret != "" {
+		defer func() {
+			err = errors.Wrap(err, "failed to fetch oauth token")
+		}()
+		// credential information is provided, use oauth POST endpoint
+		// TODO: Allow setting client_id
+		resp, err := auth.FetchTokenWithOAuth(ctx, ah.client, ah.header, "containerd-client", to)
 		if err != nil {
-			return err
+			var errStatus remoteerrors.ErrUnexpectedStatus
+			if errors.As(err, &errStatus) {
+				// Registries without support for POST may return 404 for POST /v2/token.
+				// As of September 2017, GCR is known to return 404.
+				// As of February 2018, JFrog Artifactory is known to return 401.
+				if (errStatus.StatusCode == 405 && to.Username != "") || errStatus.StatusCode == 404 || errStatus.StatusCode == 401 {
+					resp, err := auth.FetchToken(ctx, ah.client, ah.header, to)
+					if err != nil {
+						return "", err
+					}
+					return resp.Token, nil
+				}
+				log.G(ctx).WithFields(logrus.Fields{
+					"status": errStatus.Status,
+					"body":   string(errStatus.Body),
+				}).Debugf("token request failed")
+			}
+			return "", err
 		}
+		return resp.AccessToken, nil
 	}
-
-	var token string
-	if to.secret != "" {
-		// Credential information is provided, use oauth POST endpoint
-		token, err = a.fetchTokenWithOAuth(ctx, to)
-		if err != nil {
-			return errors.Wrap(err, "failed to fetch oauth token")
-		}
-	} else {
-		// Do request anonymously
-		token, err = a.fetchToken(ctx, to)
-		if err != nil {
-			return errors.Wrap(err, "failed to fetch anonymous token")
-		}
-	}
-	a.setAuth(host, fmt.Sprintf("Bearer %s", token))
-
-	return nil
-}
-
-type tokenOptions struct {
-	realm    string
-	service  string
-	scopes   []string
-	username string
-	secret   string
-}
-
-type postTokenResponse struct {
-	AccessToken  string    `json:"access_token"`
-	RefreshToken string    `json:"refresh_token"`
-	ExpiresIn    int       `json:"expires_in"`
-	IssuedAt     time.Time `json:"issued_at"`
-	Scope        string    `json:"scope"`
-}
-
-func (a *dockerAuthorizer) fetchTokenWithOAuth(ctx context.Context, to tokenOptions) (string, error) {
-	form := url.Values{}
-	form.Set("scope", strings.Join(to.scopes, " "))
-	form.Set("service", to.service)
-	// TODO: Allow setting client_id
-	form.Set("client_id", "containerd-client")
-
-	if to.username == "" {
-		form.Set("grant_type", "refresh_token")
-		form.Set("refresh_token", to.secret)
-	} else {
-		form.Set("grant_type", "password")
-		form.Set("username", to.username)
-		form.Set("password", to.secret)
-	}
-
-	resp, err := ctxhttp.PostForm(ctx, a.client, to.realm, form)
+	// do request anonymously
+	resp, err := auth.FetchToken(ctx, ah.client, ah.header, to)
 	if err != nil {
-		return "", err
+		return "", errors.Wrap(err, "failed to fetch anonymous token")
 	}
-	defer resp.Body.Close()
-
-	// Registries without support for POST may return 404 for POST /v2/token.
-	// As of September 2017, GCR is known to return 404.
-	// As of February 2018, JFrog Artifactory is known to return 401.
-	if (resp.StatusCode == 405 && to.username != "") || resp.StatusCode == 404 || resp.StatusCode == 401 {
-		return a.fetchToken(ctx, to)
-	} else if resp.StatusCode < 200 || resp.StatusCode >= 400 {
-		b, _ := ioutil.ReadAll(io.LimitReader(resp.Body, 64000)) // 64KB
-		log.G(ctx).WithFields(logrus.Fields{
-			"status": resp.Status,
-			"body":   string(b),
-		}).Debugf("token request failed")
-		// TODO: handle error body and write debug output
-		return "", errors.Errorf("unexpected status: %s", resp.Status)
-	}
-
-	decoder := json.NewDecoder(resp.Body)
-
-	var tr postTokenResponse
-	if err = decoder.Decode(&tr); err != nil {
-		return "", fmt.Errorf("unable to decode token response: %s", err)
-	}
-
-	return tr.AccessToken, nil
+	return resp.Token, nil
 }
 
-type getTokenResponse struct {
-	Token        string    `json:"token"`
-	AccessToken  string    `json:"access_token"`
-	ExpiresIn    int       `json:"expires_in"`
-	IssuedAt     time.Time `json:"issued_at"`
-	RefreshToken string    `json:"refresh_token"`
-}
-
-// getToken fetches a token using a GET request
-func (a *dockerAuthorizer) fetchToken(ctx context.Context, to tokenOptions) (string, error) {
-	req, err := http.NewRequest("GET", to.realm, nil)
-	if err != nil {
-		return "", err
-	}
-
-	reqParams := req.URL.Query()
-
-	if to.service != "" {
-		reqParams.Add("service", to.service)
-	}
-
-	for _, scope := range to.scopes {
-		reqParams.Add("scope", scope)
-	}
-
-	if to.secret != "" {
-		req.SetBasicAuth(to.username, to.secret)
-	}
-
-	req.URL.RawQuery = reqParams.Encode()
-
-	resp, err := ctxhttp.Do(ctx, a.client, req)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 400 {
-		// TODO: handle error body and write debug output
-		return "", errors.Errorf("unexpected status: %s", resp.Status)
-	}
-
-	decoder := json.NewDecoder(resp.Body)
-
-	var tr getTokenResponse
-	if err = decoder.Decode(&tr); err != nil {
-		return "", fmt.Errorf("unable to decode token response: %s", err)
-	}
-
-	// `access_token` is equivalent to `token` and if both are specified
-	// the choice is undefined.  Canonicalize `access_token` by sticking
-	// things in `token`.
-	if tr.AccessToken != "" {
-		tr.Token = tr.AccessToken
-	}
-
-	if tr.Token == "" {
-		return "", ErrNoToken
-	}
-
-	return tr.Token, nil
-}
-
-func invalidAuthorization(c challenge, responses []*http.Response) error {
-	errStr := c.parameters["error"]
+func invalidAuthorization(c auth.Challenge, responses []*http.Response) error {
+	errStr := c.Parameters["error"]
 	if errStr == "" {
 		return nil
 	}
