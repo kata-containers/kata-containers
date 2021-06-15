@@ -641,7 +641,7 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
     let exec_file = Path::new(&args[0]);
     log_child!(cfd_log, "process command: {:?}", &args);
     if !exec_file.exists() {
-        find_file(exec_file).ok_or_else(|| anyhow!("the file {} is not exist", &args[0]))?;
+        find_file(exec_file).ok_or_else(|| anyhow!("the file {} was not found", &args[0]))?;
     }
 
     // notify parent that the child's ready to start
