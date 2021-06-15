@@ -18,7 +18,9 @@ package cgroups
 
 import (
 	"fmt"
+	"os"
 
+	v1 "github.com/containerd/cgroups/stats/v1"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 )
 
@@ -45,7 +47,6 @@ const (
 // available on most linux systems
 func Subsystems() []Name {
 	n := []Name{
-		Hugetlb,
 		Freezer,
 		Pids,
 		NetCLS,
@@ -58,8 +59,11 @@ func Subsystems() []Name {
 		Blkio,
 		Rdma,
 	}
-	if !isUserNS {
+	if !RunningInUserNS() {
 		n = append(n, Devices)
+	}
+	if _, err := os.Stat("/sys/kernel/mm/hugepages"); err == nil {
+		n = append(n, Hugetlb)
 	}
 	return n
 }
@@ -85,7 +89,7 @@ type deleter interface {
 
 type stater interface {
 	Subsystem
-	Stat(path string, stats *Metrics) error
+	Stat(path string, stats *v1.Metrics) error
 }
 
 type updater interface {

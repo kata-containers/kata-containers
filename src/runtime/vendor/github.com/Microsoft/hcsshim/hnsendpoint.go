@@ -39,11 +39,27 @@ func HNSListEndpointRequest() ([]HNSEndpoint, error) {
 
 // HotAttachEndpoint makes a HCS Call to attach the endpoint to the container
 func HotAttachEndpoint(containerID string, endpointID string) error {
+	endpoint, err := GetHNSEndpointByID(endpointID)
+	if err != nil {
+		return err
+	}
+	isAttached, err := endpoint.IsAttached(containerID)
+	if isAttached {
+		return err
+	}
 	return modifyNetworkEndpoint(containerID, endpointID, Add)
 }
 
 // HotDetachEndpoint makes a HCS Call to detach the endpoint from the container
 func HotDetachEndpoint(containerID string, endpointID string) error {
+	endpoint, err := GetHNSEndpointByID(endpointID)
+	if err != nil {
+		return err
+	}
+	isAttached, err := endpoint.IsAttached(containerID)
+	if !isAttached {
+		return err
+	}
 	return modifyNetworkEndpoint(containerID, endpointID, Remove)
 }
 

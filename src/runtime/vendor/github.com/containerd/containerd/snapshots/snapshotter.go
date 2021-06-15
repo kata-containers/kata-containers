@@ -25,6 +25,16 @@ import (
 	"github.com/containerd/containerd/mount"
 )
 
+const (
+	// UnpackKeyPrefix is the beginning of the key format used for snapshots that will have
+	// image content unpacked into them.
+	UnpackKeyPrefix = "extract"
+	// UnpackKeyFormat is the format for the snapshotter keys used for extraction
+	UnpackKeyFormat       = UnpackKeyPrefix + "-%s %s"
+	inheritedLabelsPrefix = "containerd.io/snapshot/"
+	labelSnapshotRef      = "containerd.io/snapshot.ref"
+)
+
 // Kind identifies the kind of snapshot.
 type Kind uint8
 
@@ -86,10 +96,15 @@ func (k *Kind) UnmarshalJSON(b []byte) error {
 // Info provides information about a particular snapshot.
 // JSON marshallability is supported for interactive with tools like ctr,
 type Info struct {
-	Kind    Kind              // active or committed snapshot
-	Name    string            // name or key of snapshot
-	Parent  string            `json:",omitempty"` // name of parent snapshot
-	Labels  map[string]string `json:",omitempty"` // Labels for snapshot
+	Kind   Kind   // active or committed snapshot
+	Name   string // name or key of snapshot
+	Parent string `json:",omitempty"` // name of parent snapshot
+
+	// Labels for a snapshot.
+	//
+	// Note: only labels prefixed with `containerd.io/snapshot/` will be inherited by the
+	// snapshotter's `Prepare`, `View`, or `Commit` calls.
+	Labels  map[string]string `json:",omitempty"`
 	Created time.Time         `json:",omitempty"` // Created time
 	Updated time.Time         `json:",omitempty"` // Last update time
 }
@@ -112,6 +127,9 @@ func (u *Usage) Add(other Usage) {
 	// snapshot are roughly unique to it. Don't trust this assumption.
 	u.Inodes += other.Inodes
 }
+
+// WalkFunc defines the callback for a snapshot walk.
+type WalkFunc func(context.Context, Info) error
 
 // Snapshotter defines the methods required to implement a snapshot snapshotter for
 // allocating, snapshotting and mounting filesystem changesets. The model works
@@ -160,9 +178,13 @@ func (u *Usage) Add(other Usage) {
 //	layerPath, tmpDir := getLayerPath(), mkTmpDir() // just a path to layer tar file.
 //
 // We start by using a Snapshotter to Prepare a new snapshot transaction, using a
-// key and descending from the empty parent "":
+// key and descending from the empty parent "". To prevent our layer from being
+// garbage collected during unpacking, we add the `containerd.io/gc.root` label:
 //
-//	mounts, err := snapshotter.Prepare(ctx, key, "")
+//	noGcOpt := snapshots.WithLabels(map[string]string{
+//		"containerd.io/gc.root": time.Now().UTC().Format(time.RFC3339),
+//	})
+//	mounts, err := snapshotter.Prepare(ctx, key, "", noGcOpt)
 // 	if err != nil { ... }
 //
 // We get back a list of mounts from Snapshotter.Prepare, with the key identifying
@@ -191,15 +213,13 @@ func (u *Usage) Add(other Usage) {
 //
 // Now that we've verified and unpacked our layer, we commit the active
 // snapshot to a name. For this example, we are just going to use the layer
-// digest, but in practice, this will probably be the ChainID:
+// digest, but in practice, this will probably be the ChainID. This also removes
+// the active snapshot:
 //
-//	if err := snapshotter.Commit(ctx, digest.String(), key); err != nil { ... }
+//	if err := snapshotter.Commit(ctx, digest.String(), key, noGcOpt); err != nil { ... }
 //
 // Now, we have a layer in the Snapshotter that can be accessed with the digest
-// provided during commit. Once you have committed the snapshot, the active
-// snapshot can be removed with the following:
-//
-// 	snapshotter.Remove(ctx, key)
+// provided during commit.
 //
 // Importing the Next Layer
 //
@@ -207,7 +227,7 @@ func (u *Usage) Add(other Usage) {
 // above except that the parent is provided as parent when calling
 // Manager.Prepare, assuming a clean, unique key identifier:
 //
-// 	mounts, err := snapshotter.Prepare(ctx, key, parentDigest)
+// 	mounts, err := snapshotter.Prepare(ctx, key, parentDigest, noGcOpt)
 //
 // We then mount, apply and commit, as we did above. The new snapshot will be
 // based on the content of the previous one.
@@ -307,9 +327,15 @@ type Snapshotter interface {
 	// removed before proceeding.
 	Remove(ctx context.Context, key string) error
 
-	// Walk all snapshots in the snapshotter. For each snapshot in the
-	// snapshotter, the function will be called.
-	Walk(ctx context.Context, fn func(context.Context, Info) error) error
+	// Walk will call the provided function for each snapshot in the
+	// snapshotter which match the provided filters. If no filters are
+	// given all items will be walked.
+	// Filters:
+	//  name
+	//  parent
+	//  kind (active,view,committed)
+	//  labels.(label)
+	Walk(ctx context.Context, fn WalkFunc, filters ...string) error
 
 	// Close releases the internal resources.
 	//
@@ -320,13 +346,48 @@ type Snapshotter interface {
 	Close() error
 }
 
+// Cleaner defines a type capable of performing asynchronous resource cleanup.
+// The Cleaner interface should be used by snapshotters which implement fast
+// removal and deferred resource cleanup. This prevents snapshots from needing
+// to perform lengthy resource cleanup before acknowledging a snapshot key
+// has been removed and available for re-use. This is also useful when
+// performing multi-key removal with the intent of cleaning up all the
+// resources after each snapshot key has been removed.
+type Cleaner interface {
+	Cleanup(ctx context.Context) error
+}
+
 // Opt allows setting mutable snapshot properties on creation
 type Opt func(info *Info) error
 
-// WithLabels adds labels to a created snapshot
+// WithLabels appends labels to a created snapshot
 func WithLabels(labels map[string]string) Opt {
 	return func(info *Info) error {
-		info.Labels = labels
+		if info.Labels == nil {
+			info.Labels = make(map[string]string)
+		}
+
+		for k, v := range labels {
+			info.Labels[k] = v
+		}
+
 		return nil
 	}
+}
+
+// FilterInheritedLabels filters the provided labels by removing any key which
+// isn't a snapshot label. Snapshot labels have a prefix of "containerd.io/snapshot/"
+// or are the "containerd.io/snapshot.ref" label.
+func FilterInheritedLabels(labels map[string]string) map[string]string {
+	if labels == nil {
+		return nil
+	}
+
+	filtered := make(map[string]string)
+	for k, v := range labels {
+		if k == labelSnapshotRef || strings.HasPrefix(k, inheritedLabelsPrefix) {
+			filtered[k] = v
+		}
+	}
+	return filtered
 }
