@@ -583,7 +583,9 @@ EOT
 
 		info "Build agent"
 		pushd "${agent_dir}"
-		[ -n "${AGENT_VERSION}" ] && git checkout "${AGENT_VERSION}" && OK "git checkout successful" || info "checkout failed!"
+		if [ -n "${AGENT_VERSION}" ]; then
+			git checkout "${AGENT_VERSION}" && OK "git checkout successful" || die "checkout agent ${AGENT_VERSION} failed!"
+		fi
 		make clean
 		make LIBC=${LIBC} INIT=${AGENT_INIT}
 		make install DESTDIR="${ROOTFS_DIR}" LIBC=${LIBC} INIT=${AGENT_INIT} SECCOMP=${SECCOMP}
