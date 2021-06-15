@@ -14,6 +14,7 @@ import (
 	"testing"
 
 	"github.com/containerd/cgroups"
+	cgroupsstatsv1 "github.com/containerd/cgroups/stats/v1"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/stretchr/testify/assert"
@@ -41,8 +42,8 @@ func (m *mockCgroup) MoveTo(cgroups.Cgroup) error {
 	return nil
 }
 
-func (m *mockCgroup) Stat(...cgroups.ErrorHandler) (*cgroups.Metrics, error) {
-	return &cgroups.Metrics{}, nil
+func (m *mockCgroup) Stat(...cgroups.ErrorHandler) (*cgroupsstatsv1.Metrics, error) {
+	return &cgroupsstatsv1.Metrics{}, nil
 }
 
 func (m *mockCgroup) Update(resources *specs.LinuxResources) error {
@@ -62,6 +63,10 @@ func (m *mockCgroup) Thaw() error {
 }
 
 func (m *mockCgroup) OOMEventFD() (uintptr, error) {
+	return 0, nil
+}
+
+func (m *mockCgroup) RegisterMemoryEvent(event cgroups.MemoryEvent) (uintptr, error) {
 	return 0, nil
 }
 

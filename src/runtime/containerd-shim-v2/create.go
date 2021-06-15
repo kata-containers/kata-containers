@@ -22,9 +22,9 @@ import (
 	otelTrace "go.opentelemetry.io/otel/trace"
 
 	// only register the proto type
+	crioption "github.com/containerd/containerd/pkg/runtimeoptions/v1"
 	_ "github.com/containerd/containerd/runtime/linux/runctypes"
 	_ "github.com/containerd/containerd/runtime/v2/runc/options"
-	crioption "github.com/containerd/cri-containerd/pkg/api/runtimeoptions/v1"
 
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils"
 	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
