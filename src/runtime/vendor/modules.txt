@@ -47,6 +47,9 @@ github.com/blang/semver
 github.com/blang/semver/v4
 # github.com/cespare/xxhash/v2 v2.1.1
 github.com/cespare/xxhash/v2
+# github.com/checkpoint-restore/go-criu/v4 v4.1.0
+github.com/checkpoint-restore/go-criu/v4
+github.com/checkpoint-restore/go-criu/v4/rpc
 # github.com/cilium/ebpf v0.4.0
 github.com/cilium/ebpf
 github.com/cilium/ebpf/asm
@@ -102,6 +105,7 @@ github.com/containerd/containerd/namespaces
 github.com/containerd/containerd/oci
 github.com/containerd/containerd/pkg/cap
 github.com/containerd/containerd/pkg/dialer
+github.com/containerd/containerd/pkg/runtimeoptions/v1
 github.com/containerd/containerd/pkg/ttrpcutil
 github.com/containerd/containerd/pkg/userns
 github.com/containerd/containerd/platforms
@@ -280,6 +284,8 @@ github.com/mitchellh/mapstructure
 github.com/moby/locker
 # github.com/moby/sys/mountinfo v0.4.1
 github.com/moby/sys/mountinfo
+# github.com/mrunalp/fileutils v0.5.0
+github.com/mrunalp/fileutils
 # github.com/opencontainers/go-digest v1.0.0
 github.com/opencontainers/go-digest
 # github.com/opencontainers/image-spec v1.0.1
@@ -289,6 +295,9 @@ github.com/opencontainers/image-spec/specs-go
 github.com/opencontainers/image-spec/specs-go/v1
 # github.com/opencontainers/runc v1.0.0-rc93
 ## explicit
+github.com/opencontainers/runc/libcontainer
+github.com/opencontainers/runc/libcontainer/apparmor
+github.com/opencontainers/runc/libcontainer/capabilities
 github.com/opencontainers/runc/libcontainer/cgroups
 github.com/opencontainers/runc/libcontainer/cgroups/devices
 github.com/opencontainers/runc/libcontainer/cgroups/ebpf
@@ -298,13 +307,19 @@ github.com/opencontainers/runc/libcontainer/cgroups/fs2
 github.com/opencontainers/runc/libcontainer/cgroups/fscommon
 github.com/opencontainers/runc/libcontainer/cgroups/systemd
 github.com/opencontainers/runc/libcontainer/configs
+github.com/opencontainers/runc/libcontainer/configs/validate
 github.com/opencontainers/runc/libcontainer/devices
+github.com/opencontainers/runc/libcontainer/intelrdt
+github.com/opencontainers/runc/libcontainer/keys
+github.com/opencontainers/runc/libcontainer/logs
 github.com/opencontainers/runc/libcontainer/seccomp
 github.com/opencontainers/runc/libcontainer/seccomp/patchbpf
 github.com/opencontainers/runc/libcontainer/specconv
+github.com/opencontainers/runc/libcontainer/stacktrace
 github.com/opencontainers/runc/libcontainer/system
 github.com/opencontainers/runc/libcontainer/user
 github.com/opencontainers/runc/libcontainer/utils
+github.com/opencontainers/runc/types
 # github.com/opencontainers/runtime-spec v1.0.3-0.20200929063507-e6143ca7d51d
 ## explicit
 github.com/opencontainers/runtime-spec/specs-go
@@ -356,6 +371,8 @@ github.com/sirupsen/logrus/hooks/syslog
 # github.com/stretchr/testify v1.6.1
 ## explicit
 github.com/stretchr/testify/assert
+# github.com/syndtr/gocapability v0.0.0-20200815063812-42c35b437635
+github.com/syndtr/gocapability/capability
 # github.com/urfave/cli v1.22.2
 ## explicit
 github.com/urfave/cli

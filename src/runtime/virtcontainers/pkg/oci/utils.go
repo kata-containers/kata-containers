@@ -1086,34 +1086,6 @@ func getShmSize(c vc.ContainerConfig) (uint64, error) {
 	return shmSize, nil
 }
 
-// StatusToOCIState translates a virtcontainers container status into an OCI state.
-func StatusToOCIState(status vc.ContainerStatus) specs.State {
-	return specs.State{
-		Version:     specs.Version,
-		ID:          status.ID,
-		Status:      StateToOCIState(status.State.State),
-		Pid:         status.PID,
-		Bundle:      status.Annotations[vcAnnotations.BundlePathKey],
-		Annotations: status.Annotations,
-	}
-}
-
-// StateToOCIState translates a virtcontainers container state into an OCI one.
-func StateToOCIState(state types.StateString) string {
-	switch state {
-	case types.StateReady:
-		return StateCreated
-	case types.StateRunning:
-		return StateRunning
-	case types.StateStopped:
-		return StateStopped
-	case types.StatePaused:
-		return StatePaused
-	default:
-		return ""
-	}
-}
-
 // EnvVars converts an OCI process environment variables slice
 // into a virtcontainers EnvVar slice.
 func EnvVars(envs []string) ([]types.EnvVar, error) {

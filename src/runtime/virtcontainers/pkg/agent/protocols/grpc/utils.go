@@ -239,15 +239,6 @@ func OCItoGRPC(ociSpec *specs.Spec) (*Spec, error) {
 	return s, err
 }
 
-// GRPCtoOCI converts a gRPC specification back into an OCI representation
-func GRPCtoOCI(grpcSpec *Spec) (*specs.Spec, error) {
-	s := &specs.Spec{}
-
-	err := copyStruct(s, grpcSpec)
-
-	return s, err
-}
-
 // ProcessOCItoGRPC converts an OCI process specification into its gRPC
 // representation
 func ProcessOCItoGRPC(ociProcess *specs.Process) (*Process, error) {

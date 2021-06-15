@@ -8,6 +8,7 @@ package cgroups
 import (
 	"bufio"
 	"context"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -17,9 +18,9 @@ import (
 	"sync"
 
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/rootless"
+	"github.com/opencontainers/runc/libcontainer"
 	libcontcgroups "github.com/opencontainers/runc/libcontainer/cgroups"
 	libcontcgroupsfs "github.com/opencontainers/runc/libcontainer/cgroups/fs"
-	libcontcgroupssystemd "github.com/opencontainers/runc/libcontainer/cgroups/systemd"
 	"github.com/opencontainers/runc/libcontainer/configs"
 	"github.com/opencontainers/runc/libcontainer/specconv"
 	"github.com/opencontainers/runtime-spec/specs-go"
@@ -131,7 +132,7 @@ func New(config *Config) (*Manager, error) {
 			UseSystemdCgroup: useSystemdCgroup,
 			Spec:             &newSpec,
 			RootlessCgroups:  rootless,
-		}); err != nil {
+		}, nil); err != nil {
 			return nil, fmt.Errorf("Could not create cgroup config: %v", err)
 		}
 	}
@@ -144,22 +145,28 @@ func New(config *Config) (*Manager, error) {
 	}
 
 	if useSystemdCgroup {
-		systemdCgroupFunc, err := libcontcgroupssystemd.NewSystemdCgroupsManager()
+		factory, err := libcontainer.New("")
+		if err != nil {
+			return nil, fmt.Errorf("Could not create linux factory for systemd cgroup manager: %v", err)
+		}
+		lfactory, ok := factory.(*libcontainer.LinuxFactory)
+		if !ok {
+			return nil, errors.New("expected linux factory returned on linux based systems")
+		}
+
+		err = libcontainer.SystemdCgroups(lfactory)
+
 		if err != nil {
 			return nil, fmt.Errorf("Could not create systemd cgroup manager: %v", err)
 		}
-		libcontcgroupssystemd.UseSystemd()
+
 		return &Manager{
-			mgr: systemdCgroupFunc(cgroups, cgroupPaths),
+			mgr: lfactory.NewCgroupsManager(cgroups, cgroupPaths),
 		}, nil
 	}
 
 	return &Manager{
-		mgr: &libcontcgroupsfs.Manager{
-			Cgroups:  cgroups,
-			Rootless: rootless,
-			Paths:    cgroupPaths,
-		},
+		mgr: libcontcgroupsfs.NewManager(cgroups, cgroupPaths, rootless),
 	}, nil
 }
 
@@ -299,7 +306,7 @@ func (m *Manager) AddDevice(ctx context.Context, device string) error {
 		return err
 	}
 
-	ld, err := DeviceToCgroupDevice(device)
+	ld, err := DeviceToCgroupDeviceRule(device)
 	if err != nil {
 		return err
 	}
@@ -318,9 +325,14 @@ func (m *Manager) RemoveDevice(device string) error {
 		return err
 	}
 
+	ld, err := DeviceToCgroupDeviceRule(device)
+	if err != nil {
+		return err
+	}
+
 	m.Lock()
 	for i, d := range cgroups.Devices {
-		if d.Path == device {
+		if d.Major == ld.Major && d.Minor == ld.Minor {
 			cgroups.Devices = append(cgroups.Devices[:i], cgroups.Devices[i+1:]...)
 			m.Unlock()
 			return m.Apply()
