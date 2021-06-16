@@ -91,6 +91,8 @@ func TestNewTtyIOFifoReopen(t *testing.T) {
 }
 
 func TestIoCopy(t *testing.T) {
+	t.Skip("TestIoCopy is failing randonly, see https://github.com/kata-containers/kata-containers/issues/2042")
+
 	assert := assert.New(t)
 	ctx := context.TODO()
 
