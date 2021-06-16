@@ -1,21 +1,21 @@
 # Kata 2.0 Metrics Design
 
-Kata implement CRI's API and support [`ContainerStats`](https://github.com/kubernetes/kubernetes/blob/release-1.18/staging/src/k8s.io/cri-api/pkg/apis/runtime/v1alpha2/api.proto#L101) and [`ListContainerStats`](https://github.com/kubernetes/kubernetes/blob/release-1.18/staging/src/k8s.io/cri-api/pkg/apis/runtime/v1alpha2/api.proto#L103) interfaces to expose containers metrics. User can use these interface to get basic metrics about container.
+Kata implements CRI's API and supports [`ContainerStats`](https://github.com/kubernetes/kubernetes/blob/release-1.18/staging/src/k8s.io/cri-api/pkg/apis/runtime/v1alpha2/api.proto#L101) and [`ListContainerStats`](https://github.com/kubernetes/kubernetes/blob/release-1.18/staging/src/k8s.io/cri-api/pkg/apis/runtime/v1alpha2/api.proto#L103) interfaces to expose containers metrics. User can use these interfaces to get basic metrics about containers.
 
-But unlike `runc`, Kata is a VM-based runtime and has a different architecture.
+Unlike `runc`, Kata is a VM-based runtime and has a different architecture.
 
-## Limitations of Kata 1.x and the target of Kata 2.0
+## Limitations of Kata 1.x and target of Kata 2.0
 
 Kata 1.x has a number of limitations related to observability that may be obstacles to running Kata Containers at scale.
 
-In Kata 2.0, the following components will be able to provide more details about the system.
+In Kata 2.0, the following components will be able to provide more details about the system:
 
 - containerd shim v2 (effectively `kata-runtime`)
 - Hypervisor statistics
 - Agent process
 - Guest OS statistics
 
-> **Note**: In Kata 1.x, the main user-facing component was the runtime (`kata-runtime`). From 1.5, Kata then introduced the Kata containerd shim v2 (`containerd-shim-kata-v2`) which is essentially a modified runtime that is loaded by containerd to simplify and improve the way VM-based containers are created and managed.
+> **Note**: In Kata 1.x, the main user-facing component was the runtime (`kata-runtime`). From 1.5, Kata introduced the Kata containerd shim v2 (`containerd-shim-kata-v2`) which is essentially a modified runtime that is loaded by containerd to simplify and improve the way VM-based containers are created and managed.
 >
 > For Kata 2.0, the main component is the Kata containerd shim v2, although the deprecated `kata-runtime` binary will be maintained for a period of time.
 >
@@ -25,14 +25,15 @@ In Kata 2.0, the following components will be able to provide more details about
 
 Kata 2.0 metrics strongly depend on [Prometheus](https://prometheus.io/), a graduated project from CNCF.
 
-Kata Containers 2.0 introduces a new Kata component called `kata-monitor` which is used to monitor the other Kata components on the host. It's the monitor interface with Kata runtime, and we can do something like these:
+Kata Containers 2.0 introduces a new Kata component called `kata-monitor` which is used to monitor the Kata components on the host. It's shipped with the Kata runtime to provide an interface to:
 
 - Get metrics
 - Get events
 
-In this document we will cover metrics only. And until now it only supports metrics function.
+At present, `kata-monitor` supports retrieval of metrics only: this is what will be covered in this document.
 
-This is the architecture overview metrics in Kata Containers 2.0.
+
+This is the architecture overview of metrics in Kata Containers 2.0:
 
 ![Kata Containers 2.0 metrics](arch-images/kata-2-metrics.png)
 
@@ -45,38 +46,38 @@ For a quick evaluation, you can check out [this how to](../how-to/how-to-set-pro
 
 ### Kata monitor
 
-`kata-monitor` is a management agent on one node, where many Kata containers are running. `kata-monitor`'s work include:
+The `kata-monitor` management agent should be started on each node where the Kata containers runtime is installed. `kata-monitor` will:
 
-> **Note**: node is a single host system or a node in K8s clusters.
+> **Note**: a *node* running Kata containers will be either a single host system or a worker node belonging to a K8s cluster capable of running Kata pods.
 
-- Aggregate sandbox metrics running on this node, and add `sandbox_id` label
-- As a Prometheus target, all metrics from Kata shim on this node will be collected by Prometheus indirectly. This can easy the targets count in Prometheus, and also need not to expose shim's metrics by `ip:port`
+- Aggregate sandbox metrics running on the node, adding the `sandbox_id` label to them.
+- Expose a new Prometheus target, allowing all node metrics coming from the Kata shim to be collected by Prometheus indirectly. This simplifies the targets count in Prometheus and avoids exposing shim's metrics by `ip:port`.
 
-Only one `kata-monitor` process are running on one node.
+Only one `kata-monitor` process runs in each node.
 
-`kata-monitor` is using a different communication channel other than that `conatinerd` communicating with Kata shim, and Kata shim listen on a new socket address for communicating with `kata-monitor`.
+`kata-monitor` uses a different communication channel than the one used by the container engine (`containerd`/`CRI-O`) to communicate with the Kata shim. The Kata shim exposes a dedicated socket address reserved to `kata-monitor`.
 
-The way `kata-monitor` get shim's metrics socket file(`monitor_address`) like that `containerd` get shim address. The socket is an abstract socket and saved as file `abstract` with the same directory of `address` for `containerd`.
+The shim's metrics socket file is created under the virtcontainers sandboxes directory, i.e. `vc/sbs/${PODID}/shim-monitor.sock`.
 
-> **Note**: If there is no Prometheus server is configured, i.e., there is no scrape operations, `kata-monitor` will do nothing initiative.
+> **Note**: If there is no Prometheus server configured, i.e., there are no scrape operations, `kata-monitor` will not collect any metrics.
 
 ### Kata runtime
 
-Runtime is responsible for:
+Kata runtime is responsible for:
 
 - Gather metrics about shim process
 - Gather metrics about hypervisor process
 - Gather metrics about running sandbox
-- Get metrics from Kata agent(through `ttrpc`)
+- Get metrics from Kata agent (through `ttrpc`)
 
 ### Kata agent
 
-Agent is responsible for:
+Kata agent is responsible for:
 
 - Gather agent process metrics
 - Gather guest OS metrics
 
-And in Kata 2.0, agent will add a new interface:
+In Kata 2.0, the agent adds a new interface:
 
 ```protobuf
 rpc GetMetrics(GetMetricsRequest) returns (Metrics);
@@ -93,33 +94,49 @@ The `metrics` field is Prometheus encoded content. This can avoid defining a fix
 
 ### Performance and overhead
 
-Metrics should not become the bottleneck of system, downgrade the performance, and run with minimal overhead.
+Metrics should not become a bottleneck for the system or downgrade the performance: they should run with minimal overhead.
 
 Requirements:
 
 * Metrics **MUST** be quick to collect
-* Metrics **MUST** be small.
+* Metrics **MUST** be small
 * Metrics **MUST** be generated only if there are subscribers to the Kata metrics service
 * Metrics **MUST** be stateless
 
-In Kata 2.0, metrics are collected mainly from `/proc` filesystem, and consumed by Prometheus, based on a pull mode, that is mean if there is no Prometheus collector is running, so there will be zero overhead if nobody cares the metrics.
+In Kata 2.0, metrics are collected only when needed (pull mode), mainly from the `/proc` filesystem, and consumed by Prometheus. This means that if the Prometheus collector is not running (so no one cares about the metrics) the overhead will be zero.
 
-Metrics service also doesn't hold any metrics in memory.
+The metrics service also doesn't hold any metrics in memory.
+
+#### Metrics size ####
 
 |\*|No Sandbox | 1 Sandbox | 2 Sandboxes |
 |---|---|---|---|
 |Metrics count| 39 | 106 | 173 |
-|Metrics size(bytes)| 9K | 144K | 283K |
-|Metrics size(`gzipped`, bytes)| 2K | 10K | 17K |
+|Metrics size (bytes)| 9K | 144K | 283K |
+|Metrics size (`gzipped`, bytes)| 2K | 10K | 17K |
 
-*Metrics size*: Response size of one Prometheus scrape request.
+*Metrics size*: response size of one Prometheus scrape request.
 
-It's easy to estimated that if there are 10 sandboxes running in the host, the size of one metrics fetch request issued by Prometheus will be about to 9 + (144 - 9) * 10 = 1.35M (not `gzipped`) or 2 + (10 - 2) * 10 = 82K (`gzipped`). Of course Prometheus support `gzip` compression, that can reduce the response size of every request.
+It's easy to estimate the size of one metrics fetch request issued by Prometheus.
+The formula to calculate the expected size when no gzip compression is in place is:  
+9 + (144 - 9) * `number of kata sandboxes`
+
+Prometheus supports `gzip compression`. When enabled, the response size of each request will be smaller:  
+2 + (10 - 2) * `number of kata sandboxes`
+
+**Example**  
+We have 10 sandboxes running on a node. The expected size of one metrics fetch request issued by Prometheus against the kata-monitor agent running on that node will be:  
+9 + (144 - 9) * 10 = **1.35M**
+
+If `gzip compression` is enabled:  
+2 + (10 - 2) * 10 = **82K**
+
+#### Metrics delay ####
 
 And here is some test data:
 
-- End-to-end (from Prometheus server to `kata-monitor` and `kata-monitor` write response back): 20ms(avg)
-- Agent(RPC all from shim to agent): 3ms(avg)
+- End-to-end (from Prometheus server to `kata-monitor` and `kata-monitor` write response back): **20ms**(avg)
+- Agent (RPC all from shim to agent): **3ms**(avg)
 
 Test infrastructure:
 
@@ -128,13 +145,13 @@ Test infrastructure:
 
 **Scrape interval**
 
-Prometheus default `scrape_interval` is 1 minute, and usually it is set to 15s. Small `scrape_interval` will cause more overhead, so user should set it on monitor demand.
+Prometheus default `scrape_interval` is 1 minute, but it is usually set to 15 seconds. A smaller `scrape_interval` causes more overhead, so users should set it depending on their monitoring needs.
 
 ## Metrics list
 
-Here listed is all supported metrics by Kata 2.0. Some metrics is dependent on guest kernels in the VM, so there may be some different by your environment.
+Here are listed all the metrics supported by Kata 2.0. Some metrics are dependent on the VM guest kernel, so the available ones may differ based on the environment.
 
-Metrics is categorized by component where metrics are collected from and for.
+Metrics are categorized by the component from/for which the metrics are collected.
 
 * [Metric types](#metric-types)
 * [Kata agent metrics](#kata-agent-metrics)
@@ -145,15 +162,15 @@ Metrics is categorized by component where metrics are collected from and for.
 * [Kata containerd shim v2 metrics](#kata-containerd-shim-v2-metrics)
 
 > **Note**:
->  * Labels here are not include `instance` and `job` labels that added by Prometheus.
+>  * Labels here do not include the `instance` and `job` labels added by Prometheus.
 >  * Notes about metrics unit
 >    * `Kibibytes`, abbreviated `KiB`. 1 `KiB` equals 1024 B.
->    * For some metrics (like network devices statistics from file `/proc/net/dev`), unit is depend on label( for example `recv_bytes` and `recv_packets` are having different units).
->    * Most of these metrics is collected from `/proc` filesystem, so the unit of metrics are keeping the same unit as `/proc`. See the `proc(5)` manual page for further details.
+>    * For some metrics (like network devices statistics from file `/proc/net/dev`), unit depends on label( for example `recv_bytes` and `recv_packets` have different units).
+>    * Most of these metrics are collected from the `/proc` filesystem, so the unit of each metric matches the unit of the relevant `/proc` entry. See the `proc(5)` manual page for further details.
 
 ### Metric types
 
-Prometheus offer four core metric types.
+Prometheus offers four core metric types.
 
 - Counter: A counter is a cumulative metric that represents a single monotonically increasing counter whose value can only increase.
 
