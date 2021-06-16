@@ -643,6 +643,7 @@ func (q *qemu) createSandbox(ctx context.Context, id string, networkNS NetworkNa
 		extraArgs:  q.config.VirtioFSExtraArgs,
 		debug:      q.config.Debug,
 		cache:      q.config.VirtioFSCache,
+		logPath:    filepath.Join(q.store.RunVMStoragePath(), id, "virtiofsd.log"),
 	}
 
 	return nil

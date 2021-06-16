@@ -9,6 +9,7 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"os/exec"
@@ -28,6 +29,7 @@ var (
 	errVirtiofsdDaemonPathEmpty    = errors.New("virtiofsd daemon path is empty")
 	errVirtiofsdSocketPathEmpty    = errors.New("virtiofsd socket path is empty")
 	errVirtiofsdSourcePathEmpty    = errors.New("virtiofsd source path is empty")
+	errVirtiofsdLogPathEmpty       = errors.New("virtiofsd log path is empty")
 	errVirtiofsdSourceNotAvailable = errors.New("virtiofsd source path not available")
 )
 
@@ -58,6 +60,8 @@ type virtiofsd struct {
 	PID int
 	// Neded by tracing
 	ctx context.Context
+	// path to the log file
+	logPath string
 }
 
 // Open socket on behalf of virtiofsd
@@ -100,6 +104,12 @@ func (v *virtiofsd) Start(ctx context.Context, onQuit onQuitFunc) (int, error) {
 	}
 	defer socketFD.Close()
 
+	logFile, err := os.Create(v.logPath)
+	if err != nil {
+		return 0, err
+	}
+	logWriter := bufio.NewWriter(logFile)
+
 	cmd.ExtraFiles = append(cmd.ExtraFiles, socketFD)
 
 	// Extra files start from 2 (0: stdin, 1: stdout, 2: stderr)
@@ -123,13 +133,13 @@ func (v *virtiofsd) Start(ctx context.Context, onQuit onQuitFunc) (int, error) {
 		return pid, err
 	}
 
-	// Monitor virtiofsd's stderr and stop sandbox if virtiofsd quits
+	// Copy virtiofsd's stderr to the log file, while also monitoring
+	// it to stop the sandbox if virtiofsd quits for some reason
 	go func() {
-		scanner := bufio.NewScanner(stderr)
-		for scanner.Scan() {
-			v.Logger().WithField("source", "virtiofsd").Info(scanner.Text())
-		}
+		io.Copy(logWriter, stderr)
+
 		v.Logger().Info("virtiofsd quits")
+
 		// Wait to release resources of virtiofsd process
 		cmd.Process.Wait()
 		if onQuit != nil {
@@ -155,8 +165,6 @@ func (v *virtiofsd) Stop(ctx context.Context) error {
 func (v *virtiofsd) args(FdSocketNumber uint) ([]string, error) {
 
 	args := []string{
-		// Send logs to syslog
-		"--syslog",
 		// cache mode for virtiofsd
 		"-o", "cache=" + v.cache,
 		// disable posix locking in daemon: bunch of basic posix locks properties are broken
@@ -194,6 +202,10 @@ func (v *virtiofsd) valid() error {
 
 	if v.sourcePath == "" {
 		return errVirtiofsdSourcePathEmpty
+	}
+
+	if v.logPath == "" {
+		return errVirtiofsdLogPathEmpty
 	}
 
 	if _, err := os.Stat(v.sourcePath); err != nil {

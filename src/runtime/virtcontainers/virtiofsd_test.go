@@ -26,6 +26,7 @@ func TestVirtiofsdStart(t *testing.T) {
 		debug      bool
 		PID        int
 		ctx        context.Context
+		logPath    string
 	}
 
 	sourcePath, err := ioutil.TempDir("", "")
@@ -36,12 +37,17 @@ func TestVirtiofsdStart(t *testing.T) {
 	assert.NoError(err)
 	defer os.RemoveAll(socketDir)
 
+	logPath, err := ioutil.TempFile("", "")
+	assert.NoError(err)
+	defer os.Remove(logPath.Name())
+
 	socketPath := socketDir + "socket.s"
 
 	validConfig := fields{
 		path:       "/usr/bin/virtiofsd-path",
 		socketPath: socketPath,
 		sourcePath: sourcePath,
+		logPath:    logPath.Name(),
 	}
 	NoDirectorySocket := validConfig
 	NoDirectorySocket.socketPath = "/tmp/path/to/virtiofsd/socket.sock"
@@ -66,6 +72,7 @@ func TestVirtiofsdStart(t *testing.T) {
 				debug:      tt.fields.debug,
 				PID:        tt.fields.PID,
 				ctx:        tt.fields.ctx,
+				logPath:    tt.fields.logPath,
 			}
 			var ctx context.Context
 			_, err := v.Start(ctx, nil)
@@ -86,13 +93,13 @@ func TestVirtiofsdArgs(t *testing.T) {
 		cache:      "none",
 	}
 
-	expected := "--syslog -o cache=none -o no_posix_lock -o source=/run/kata-shared/foo --fd=123 -f"
+	expected := "-o cache=none -o no_posix_lock -o source=/run/kata-shared/foo --fd=123 -f"
 	args, err := v.args(123)
 	assert.NoError(err)
 	assert.Equal(expected, strings.Join(args, " "))
 
 	v.debug = false
-	expected = "--syslog -o cache=none -o no_posix_lock -o source=/run/kata-shared/foo --fd=456 -f"
+	expected = "-o cache=none -o no_posix_lock -o source=/run/kata-shared/foo --fd=456 -f"
 	args, err = v.args(456)
 	assert.NoError(err)
 	assert.Equal(expected, strings.Join(args, " "))
@@ -109,6 +116,10 @@ func TestValid(t *testing.T) {
 	assert.NoError(err)
 	defer os.RemoveAll(socketDir)
 
+	logPath, err := ioutil.TempFile("", "")
+	assert.NoError(err)
+	defer os.Remove(logPath.Name())
+
 	socketPath := socketDir + "socket.s"
 
 	newVirtiofsdFunc := func() *virtiofsd {
@@ -116,6 +127,7 @@ func TestValid(t *testing.T) {
 			path:       "/usr/bin/virtiofsd",
 			sourcePath: sourcePath,
 			socketPath: socketPath,
+			logPath:    logPath.Name(),
 		}
 	}
 
@@ -138,6 +150,11 @@ func TestValid(t *testing.T) {
 	v.socketPath = ""
 	err = v.valid()
 	assert.Equal(errVirtiofsdSocketPathEmpty, err)
+
+	v = newVirtiofsdFunc()
+	v.logPath = ""
+	err = v.valid()
+	assert.Equal(errVirtiofsdLogPathEmpty, err)
 
 	v = newVirtiofsdFunc()
 	v.sourcePath = "/foo/bar"

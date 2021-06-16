@@ -211,6 +211,7 @@ func (clh *cloudHypervisor) createSandbox(ctx context.Context, id string, networ
 			sourcePath: filepath.Join(getSharePath(clh.id)),
 			debug:      clh.config.Debug,
 			socketPath: virtiofsdSocketPath,
+			logPath:    filepath.Join(clh.store.RunVMStoragePath(), id, "virtiofsd.log"),
 		}
 		return nil
 	}
@@ -317,6 +318,7 @@ func (clh *cloudHypervisor) createSandbox(ctx context.Context, id string, networ
 		extraArgs:  clh.config.VirtioFSExtraArgs,
 		debug:      clh.config.Debug,
 		cache:      clh.config.VirtioFSCache,
+		logPath:    filepath.Join(clh.store.RunVMStoragePath(), id, "virtiofsd.log"),
 	}
 
 	if clh.config.SGXEPCSize > 0 {
