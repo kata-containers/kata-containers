@@ -76,14 +76,15 @@ is not able to perform a proper setup of the rules.
 
 ### Service Mesh Istio
 
-As a reference, you can follow Istio [instructions](https://istio.io/docs/setup/kubernetes/quick-start/#download-and-prepare-for-the-installation).
-
 The following is a summary of what you need to install Istio on your system:
+
 ```
 $ curl -L https://git.io/getLatestIstio | sh -
 $ cd istio-*
 $ export PATH=$PWD/bin:$PATH
 ```
+
+See the [Istio documentation](https://istio.io/docs) for further details.
 
 Now deploy Istio in the control plane of your cluster with the following:
 ```

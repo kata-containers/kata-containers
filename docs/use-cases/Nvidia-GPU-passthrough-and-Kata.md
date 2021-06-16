@@ -303,4 +303,4 @@ Tue Mar  3 00:03:49 2020
 
 - [Configuring a VM for GPU Pass-Through by Using the QEMU Command Line](https://docs.nvidia.com/grid/latest/grid-vgpu-user-guide/index.html#using-gpu-pass-through-red-hat-el-qemu-cli)
 - https://gitlab.com/nvidia/container-images/driver/-/tree/master
-- https://github.com/NVIDIA/nvidia-docker/wiki/Driver-containers-(Beta)
+- https://github.com/NVIDIA/nvidia-docker/wiki/Driver-containers
