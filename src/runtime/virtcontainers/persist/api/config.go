@@ -33,7 +33,7 @@ type HypervisorConfig struct {
 	MemSlots uint32
 
 	// MemOffset specifies memory space for nvdimm device
-	MemOffset uint32
+	MemOffset uint64
 
 	// VirtioFSCacheSize is the DAX cache size in MiB
 	VirtioFSCacheSize uint32

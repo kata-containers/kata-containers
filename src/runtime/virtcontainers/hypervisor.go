@@ -222,6 +222,10 @@ type Param struct {
 
 // HypervisorConfig is the hypervisor configuration.
 type HypervisorConfig struct {
+	// PCIeRootPort is used to indicate the number of PCIe Root Port devices
+	// The PCIe Root Port device is used to hot-plug the PCIe device
+	PCIeRootPort uint32
+
 	// NumVCPUs specifies default number of vCPUs for the VM.
 	NumVCPUs uint32
 
@@ -240,9 +244,6 @@ type HypervisorConfig struct {
 
 	// MemSlots specifies default memory slots the VM.
 	MemSlots uint32
-
-	// MemOffset specifies memory space for nvdimm device
-	MemOffset uint32
 
 	// VirtioFSCacheSize is the DAX cache size in MiB
 	VirtioFSCacheSize uint32
@@ -310,9 +311,6 @@ type HypervisorConfig struct {
 	// entropy (/dev/random, /dev/urandom or real hardware RNG device)
 	EntropySource string
 
-	// EntropySourceList is the list of valid entropy sources
-	EntropySourceList []string
-
 	// Shared file system type:
 	//   - virtio-9p (default)
 	//   - virtio-fs
@@ -320,6 +318,12 @@ type HypervisorConfig struct {
 
 	// VirtioFSDaemon is the virtio-fs vhost-user daemon path
 	VirtioFSDaemon string
+
+	// File based memory backend root directory
+	FileBackedMemRootDir string
+
+	// EntropySourceList is the list of valid entropy sources
+	EntropySourceList []string
 
 	// VirtioFSDaemonList is the list of valid virtiofs names for annotations
 	VirtioFSDaemonList []string
@@ -330,14 +334,17 @@ type HypervisorConfig struct {
 	// VirtioFSExtraArgs passes options to virtiofsd daemon
 	VirtioFSExtraArgs []string
 
-	// File based memory backend root directory
-	FileBackedMemRootDir string
+	// Enable annotations by name
+	EnableAnnotations []string
 
 	// FileBackedMemRootList is the list of valid root directories values for annotations
 	FileBackedMemRootList []string
 
 	// PFlash image paths
 	PFlash []string
+
+	// VhostUserStorePathList is the list of valid values for vhost-user paths
+	VhostUserStorePathList []string
 
 	// customAssets is a map of assets.
 	// Each value in that map takes precedence over the configured assets.
@@ -401,9 +408,14 @@ type HypervisorConfig struct {
 	// root bus instead of a bridge.
 	HotplugVFIOOnRootBus bool
 
-	// PCIeRootPort is used to indicate the number of PCIe Root Port devices
-	// The PCIe Root Port device is used to hot-plug the PCIe device
-	PCIeRootPort uint32
+	// GuestMemoryDumpPaging is used to indicate if enable paging
+	// for QEMU dump-guest-memory command
+	GuestMemoryDumpPaging bool
+
+	// Enable confidential guest support.
+	// Enable or disable different hardware features, ranging
+	// from memory encryption to both memory and CPU-state encryption and integrity.
+	ConfidentialGuest bool
 
 	// BootToBeTemplate used to indicate if the VM is created to be a template VM
 	BootToBeTemplate bool
@@ -421,8 +433,8 @@ type HypervisorConfig struct {
 	// related folders, sockets and device nodes should be.
 	VhostUserStorePath string
 
-	// VhostUserStorePathList is the list of valid values for vhost-user paths
-	VhostUserStorePathList []string
+	// GuestCoredumpPath is the path in host for saving guest memory dump
+	GuestMemoryDumpPath string
 
 	// GuestHookPath is the path within the VM that will be used for 'drop-in' hooks
 	GuestHookPath string
@@ -434,30 +446,18 @@ type HypervisorConfig struct {
 	// SELinux label for the VM
 	SELinuxProcessLabel string
 
+	// SGXEPCSize specifies the size in bytes for the EPC Section.
+	// Enable SGX. Hardware-based isolation and memory encryption.
+	SGXEPCSize int64
+
 	// RxRateLimiterMaxRate is used to control network I/O inbound bandwidth on VM level.
 	RxRateLimiterMaxRate uint64
 
 	// TxRateLimiterMaxRate is used to control network I/O outbound bandwidth on VM level.
 	TxRateLimiterMaxRate uint64
 
-	// SGXEPCSize specifies the size in bytes for the EPC Section.
-	// Enable SGX. Hardware-based isolation and memory encryption.
-	SGXEPCSize int64
-
-	// Enable annotations by name
-	EnableAnnotations []string
-
-	// GuestCoredumpPath is the path in host for saving guest memory dump
-	GuestMemoryDumpPath string
-
-	// GuestMemoryDumpPaging is used to indicate if enable paging
-	// for QEMU dump-guest-memory command
-	GuestMemoryDumpPaging bool
-
-	// Enable confidential guest support.
-	// Enable or disable different hardware features, ranging
-	// from memory encryption to both memory and CPU-state encryption and integrity.
-	ConfidentialGuest bool
+	// MemOffset specifies memory space for nvdimm device
+	MemOffset uint64
 }
 
 // vcpu mapping from vcpu number to thread number

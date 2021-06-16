@@ -79,7 +79,7 @@ There are several kinds of Kata configurations and they are listed below.
 | `io.katacontainers.config.hypervisor.kernel` | string | the kernel used to boot the container VM |
 | `io.katacontainers.config.hypervisor.machine_accelerators` | string | machine specific accelerators for the hypervisor |
 | `io.katacontainers.config.hypervisor.machine_type` | string | the type of machine being emulated by the hypervisor |
-| `io.katacontainers.config.hypervisor.memory_offset` | uint32| the memory space used for `nvdimm` device by the hypervisor |
+| `io.katacontainers.config.hypervisor.memory_offset` | uint64| the memory space used for `nvdimm` device by the hypervisor |
 | `io.katacontainers.config.hypervisor.memory_slots` | uint32| the memory slots assigned to the VM by the hypervisor |
 | `io.katacontainers.config.hypervisor.msize_9p` | uint32 | the `msize` for 9p shares |
 | `io.katacontainers.config.hypervisor.path` | string | the hypervisor that will run the container VM |
