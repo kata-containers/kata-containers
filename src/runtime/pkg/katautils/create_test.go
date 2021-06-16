@@ -1,5 +1,6 @@
 // Copyright (c) 2018 Intel Corporation
 // Copyright (c) 2018 HyperHQ Inc.
+// Copyright (c) 2021 Adobe Inc.
 //
 // SPDX-License-Identifier: Apache-2.0
 //
@@ -145,7 +146,7 @@ func TestSetEphemeralStorageType(t *testing.T) {
 
 	ociMounts = append(ociMounts, mount)
 	ociSpec.Mounts = ociMounts
-	ociSpec = SetEphemeralStorageType(ociSpec)
+	ociSpec = SetEphemeralStorageType(ociSpec, false)
 
 	mountType := ociSpec.Mounts[0].Type
 	assert.Equal(mountType, "ephemeral",
@@ -367,7 +368,7 @@ func TestCreateContainerContainerConfigFail(t *testing.T) {
 	rootFs := vc.RootFs{Mounted: true}
 
 	for _, disableOutput := range []bool{true, false} {
-		_, err = CreateContainer(context.Background(), mockSandbox, spec, rootFs, testContainerID, bundlePath, testConsole, disableOutput)
+		_, err = CreateContainer(context.Background(), mockSandbox, spec, rootFs, testContainerID, bundlePath, testConsole, disableOutput, false)
 		assert.Error(err)
 		assert.False(vcmock.IsMockError(err))
 		assert.True(strings.Contains(err.Error(), containerType))
@@ -395,7 +396,7 @@ func TestCreateContainerFail(t *testing.T) {
 	rootFs := vc.RootFs{Mounted: true}
 
 	for _, disableOutput := range []bool{true, false} {
-		_, err = CreateContainer(context.Background(), mockSandbox, spec, rootFs, testContainerID, bundlePath, testConsole, disableOutput)
+		_, err = CreateContainer(context.Background(), mockSandbox, spec, rootFs, testContainerID, bundlePath, testConsole, disableOutput, false)
 		assert.Error(err)
 		assert.True(vcmock.IsMockError(err))
 	}
@@ -430,7 +431,7 @@ func TestCreateContainer(t *testing.T) {
 	rootFs := vc.RootFs{Mounted: true}
 
 	for _, disableOutput := range []bool{true, false} {
-		_, err = CreateContainer(context.Background(), mockSandbox, spec, rootFs, testContainerID, bundlePath, testConsole, disableOutput)
+		_, err = CreateContainer(context.Background(), mockSandbox, spec, rootFs, testContainerID, bundlePath, testConsole, disableOutput, false)
 		assert.NoError(err)
 	}
 }

@@ -1,5 +1,6 @@
 // Copyright (c) 2018 Intel Corporation
 // Copyright (c) 2018 HyperHQ Inc.
+// Copyright (c) 2021 Adobe Inc.
 //
 // SPDX-License-Identifier: Apache-2.0
 //
@@ -96,12 +97,12 @@ func HandleFactory(ctx context.Context, vci vc.VC, runtimeConfig *oci.RuntimeCon
 // For the given pod ephemeral volume is created only once
 // backed by tmpfs inside the VM. For successive containers
 // of the same pod the already existing volume is reused.
-func SetEphemeralStorageType(ociSpec specs.Spec) specs.Spec {
+func SetEphemeralStorageType(ociSpec specs.Spec, disableGuestEmptyDir bool) specs.Spec {
 	for idx, mnt := range ociSpec.Mounts {
 		if vc.IsEphemeralStorage(mnt.Source) {
 			ociSpec.Mounts[idx].Type = vc.KataEphemeralDevType
 		}
-		if vc.Isk8sHostEmptyDir(mnt.Source) {
+		if vc.Isk8sHostEmptyDir(mnt.Source) && !disableGuestEmptyDir {
 			ociSpec.Mounts[idx].Type = vc.KataLocalDevType
 		}
 	}
@@ -218,14 +219,14 @@ func checkForFIPS(sandboxConfig *vc.SandboxConfig) error {
 }
 
 // CreateContainer create a container
-func CreateContainer(ctx context.Context, sandbox vc.VCSandbox, ociSpec specs.Spec, rootFs vc.RootFs, containerID, bundlePath, console string, disableOutput bool) (vc.Process, error) {
+func CreateContainer(ctx context.Context, sandbox vc.VCSandbox, ociSpec specs.Spec, rootFs vc.RootFs, containerID, bundlePath, console string, disableOutput bool, disableGuestEmptyDir bool) (vc.Process, error) {
 	var c vc.VCContainer
 
 	span, ctx := katatrace.Trace(ctx, nil, "CreateContainer", createTracingTags)
 	katatrace.AddTags(span, "container_id", containerID)
 	defer span.End()
 
-	ociSpec = SetEphemeralStorageType(ociSpec)
+	ociSpec = SetEphemeralStorageType(ociSpec, disableGuestEmptyDir)
 
 	contConfig, err := oci.ContainerConfig(ociSpec, bundlePath, containerID, console, disableOutput)
 	if err != nil {
