@@ -34,6 +34,8 @@ $ ./update-repository-version.sh -h
 To update project version for Kata Containers, use the following:
 
 ```bash
+# Set to the required version
+$ new_version="a.b.c"
 $ make bump-kata-version NEW_VERSION="${new_version}"
 ```
 
