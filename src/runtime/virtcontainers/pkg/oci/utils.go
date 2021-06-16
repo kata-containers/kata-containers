@@ -576,13 +576,13 @@ func addHypervisorMemoryOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig
 	}
 
 	if value, ok := ocispec.Annotations[vcAnnotations.MemOffset]; ok {
-		moffset, err := strconv.ParseUint(value, 10, 32)
+		moffset, err := strconv.ParseUint(value, 10, 64)
 		if err != nil {
 			return fmt.Errorf("Error parsing annotation for memory_offset: %v, please specify positive numeric value", err)
 		}
 
 		if moffset > 0 {
-			sbConfig.HypervisorConfig.MemOffset = uint32(moffset)
+			sbConfig.HypervisorConfig.MemOffset = moffset
 		}
 	}
 

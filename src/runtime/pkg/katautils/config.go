@@ -114,7 +114,7 @@ type hypervisor struct {
 	DefaultMaxVCPUs         uint32   `toml:"default_maxvcpus"`
 	MemorySize              uint32   `toml:"default_memory"`
 	MemSlots                uint32   `toml:"memory_slots"`
-	MemOffset               uint32   `toml:"memory_offset"`
+	MemOffset               uint64   `toml:"memory_offset"`
 	DefaultBridges          uint32   `toml:"default_bridges"`
 	Msize9p                 uint32   `toml:"msize_9p"`
 	PCIeRootPort            uint32   `toml:"pcie_root_port"`
@@ -359,7 +359,7 @@ func (h hypervisor) defaultMemSlots() uint32 {
 	return slots
 }
 
-func (h hypervisor) defaultMemOffset() uint32 {
+func (h hypervisor) defaultMemOffset() uint64 {
 	offset := h.MemOffset
 	if offset == 0 {
 		offset = defaultMemOffset
