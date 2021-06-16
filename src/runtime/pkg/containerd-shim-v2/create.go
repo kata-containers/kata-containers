@@ -1,6 +1,7 @@
 // Copyright (c) 2014,2015,2016 Docker, Inc.
 // Copyright (c) 2017 Intel Corporation
 // Copyright (c) 2018 HyperHQ Inc.
+// Copyright (c) 2021 Adobe Inc.
 //
 // SPDX-License-Identifier: Apache-2.0
 //
@@ -57,10 +58,10 @@ func create(ctx context.Context, s *service, r *taskAPI.CreateTaskRequest) (*con
 
 	detach := !r.Terminal
 	ociSpec, bundlePath, err := loadSpec(r)
+
 	if err != nil {
 		return nil, err
 	}
-
 	containerType, err := oci.ContainerType(*ociSpec)
 	if err != nil {
 		return nil, err
@@ -69,16 +70,18 @@ func create(ctx context.Context, s *service, r *taskAPI.CreateTaskRequest) (*con
 	disableOutput := noNeedForOutput(detach, ociSpec.Process.Terminal)
 	rootfs := filepath.Join(r.Bundle, "rootfs")
 
+	runtimeConfig, err := loadRuntimeConfig(s, r, ociSpec.Annotations)
+	if err != nil {
+		return nil, err
+	}
+
 	switch containerType {
 	case vc.PodSandbox, vc.SingleContainer:
 		if s.sandbox != nil {
 			return nil, fmt.Errorf("cannot create another sandbox in sandbox: %s", s.sandbox.ID())
 		}
 
-		s.config, err = loadRuntimeConfig(s, r, ociSpec.Annotations)
-		if err != nil {
-			return nil, err
-		}
+		s.config = runtimeConfig
 
 		// create tracer
 		// This is the earliest location we can create the tracer because we must wait
@@ -176,7 +179,7 @@ func create(ctx context.Context, s *service, r *taskAPI.CreateTaskRequest) (*con
 			}
 		}()
 
-		_, err = katautils.CreateContainer(ctx, s.sandbox, *ociSpec, rootFs, r.ID, bundlePath, "", disableOutput)
+		_, err = katautils.CreateContainer(ctx, s.sandbox, *ociSpec, rootFs, r.ID, bundlePath, "", disableOutput, runtimeConfig.DisableGuestEmptyDir)
 		if err != nil {
 			return nil, err
 		}
