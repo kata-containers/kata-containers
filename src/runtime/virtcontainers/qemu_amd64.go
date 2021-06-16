@@ -216,6 +216,12 @@ func (q *qemuAmd64) enableProtection() error {
 	if err != nil {
 		return err
 	}
+	logger := virtLog.WithFields(logrus.Fields{
+		"subsystem":               "qemuAmd64",
+		"machine":                 q.qemuMachine,
+		"kernel-params-debug":     q.kernelParamsDebug,
+		"kernel-params-non-debug": q.kernelParamsNonDebug,
+		"kernel-params":           q.kernelParams})
 
 	switch q.protection {
 	case tdxProtection:
@@ -224,22 +230,14 @@ func (q *qemuAmd64) enableProtection() error {
 		}
 		q.qemuMachine.Options += "kvm-type=tdx,confidential-guest-support=tdx"
 		q.kernelParams = append(q.kernelParams, Param{"tdx_guest", ""})
-		virtLog.WithFields(logrus.Fields{
-			"subsystem":     "qemuAmd64",
-			"machine":       q.qemuMachine,
-			"kernel-params": q.kernelParameters}).
-			Info("Enabling TDX guest protection")
+		logger.Info("Enabling TDX guest protection")
 		return nil
 	case sevProtection:
 		if q.qemuMachine.Options != "" {
 			q.qemuMachine.Options += ","
 		}
 		q.qemuMachine.Options += "confidential-guest-support=sev"
-		virtLog.WithFields(logrus.Fields{
-			"subsystem":     "qemuAmd64",
-			"machine":       q.qemuMachine,
-			"kernel-params": q.kernelParameters}).
-			Info("Enabling SEV guest protection")
+		logger.Info("Enabling SEV guest protection")
 		return nil
 
 	// TODO: Add support for other x86_64 technologies
