@@ -372,9 +372,6 @@ func (c *APIClient) decode(v interface{}, b []byte, contentType string) (err err
 			return
 		}
 		_, err = (*f).Write(b)
-		if err != nil {
-			return
-		}
 		_, err = (*f).Seek(0, io.SeekStart)
 		return
 	}
