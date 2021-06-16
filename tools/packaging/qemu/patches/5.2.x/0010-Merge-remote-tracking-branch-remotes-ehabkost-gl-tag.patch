@@ -1,0 +1,417 @@
+From 269399b3d5b1bf0320942b0e5766e2d24b40c79f Mon Sep 17 00:00:00 2001
+From: Peter Maydell <peter.maydell@linaro.org>
+Date: Wed, 3 Feb 2021 09:54:21 +0000
+Subject: [PATCH 10/10] Merge remote-tracking branch
+ 'remotes/ehabkost-gl/tags/machine-next-pull-request' into staging
+
+Machine queue, 2021-02-02
+
+Feature:
+* nvdimm: read-only file support (Stefan Hajnoczi)
+
+* remotes/ehabkost-gl/tags/machine-next-pull-request:
+  nvdimm: check -object memory-backend-file, readonly=on option
+  hostmem-file: add readonly=on|off option
+  memory: add readonly support to memory_region_init_ram_from_file()
+
+Signed-off-by: Peter Maydell <peter.maydell@linaro.org>
+---
+Backport of commit 8360ebeb4f4a.
+Fixed conflict in softmmu/memory.c
+---
+ backends/hostmem-file.c   | 28 +++++++++++++++++++++++++++-
+ docs/nvdimm.txt           | 24 +++++++++++++++++-------
+ hw/mem/nvdimm.c           |  9 +++++++++
+ include/exec/memory.h     |  2 ++
+ include/exec/ram_addr.h   |  5 +++--
+ include/qemu/mmap-alloc.h |  2 ++
+ qemu-options.hx           |  5 ++++-
+ softmmu/memory.c          |  7 +++++--
+ softmmu/physmem.c         | 18 +++++++++++-------
+ util/mmap-alloc.c         | 10 ++++++----
+ util/oslib-posix.c        |  2 +-
+ 11 files changed, 87 insertions(+), 25 deletions(-)
+
+diff --git a/backends/hostmem-file.c b/backends/hostmem-file.c
+index 40e1e5b3e3..733408e076 100644
+--- a/backends/hostmem-file.c
++++ b/backends/hostmem-file.c
+@@ -29,6 +29,7 @@ struct HostMemoryBackendFile {
+     uint64_t align;
+     bool discard_data;
+     bool is_pmem;
++    bool readonly;
+ };
+ 
+ static void
+@@ -56,7 +57,7 @@ file_backend_memory_alloc(HostMemoryBackend *backend, Error **errp)
+                                      backend->size, fb->align,
+                                      (backend->share ? RAM_SHARED : 0) |
+                                      (fb->is_pmem ? RAM_PMEM : 0),
+-                                     fb->mem_path, errp);
++                                     fb->mem_path, fb->readonly, errp);
+     g_free(name);
+ #endif
+ }
+@@ -151,6 +152,28 @@ static void file_memory_backend_set_pmem(Object *o, bool value, Error **errp)
+     fb->is_pmem = value;
+ }
+ 
++static bool file_memory_backend_get_readonly(Object *obj, Error **errp)
++{
++    HostMemoryBackendFile *fb = MEMORY_BACKEND_FILE(obj);
++
++    return fb->readonly;
++}
++
++static void file_memory_backend_set_readonly(Object *obj, bool value,
++                                             Error **errp)
++{
++    HostMemoryBackend *backend = MEMORY_BACKEND(obj);
++    HostMemoryBackendFile *fb = MEMORY_BACKEND_FILE(obj);
++
++    if (host_memory_backend_mr_inited(backend)) {
++        error_setg(errp, "cannot change property 'readonly' of %s.",
++                   object_get_typename(obj));
++        return;
++    }
++
++    fb->readonly = value;
++}
++
+ static void file_backend_unparent(Object *obj)
+ {
+     HostMemoryBackend *backend = MEMORY_BACKEND(obj);
+@@ -182,6 +205,9 @@ file_backend_class_init(ObjectClass *oc, void *data)
+         NULL, NULL);
+     object_class_property_add_bool(oc, "pmem",
+         file_memory_backend_get_pmem, file_memory_backend_set_pmem);
++    object_class_property_add_bool(oc, "readonly",
++        file_memory_backend_get_readonly,
++        file_memory_backend_set_readonly);
+ }
+ 
+ static void file_backend_instance_finalize(Object *o)
+diff --git a/docs/nvdimm.txt b/docs/nvdimm.txt
+index c2c6e441b3..0aae682be3 100644
+--- a/docs/nvdimm.txt
++++ b/docs/nvdimm.txt
+@@ -17,8 +17,8 @@ following command line options:
+ 
+  -machine pc,nvdimm
+  -m $RAM_SIZE,slots=$N,maxmem=$MAX_SIZE
+- -object memory-backend-file,id=mem1,share=on,mem-path=$PATH,size=$NVDIMM_SIZE
+- -device nvdimm,id=nvdimm1,memdev=mem1
++ -object memory-backend-file,id=mem1,share=on,mem-path=$PATH,size=$NVDIMM_SIZE,readonly=off
++ -device nvdimm,id=nvdimm1,memdev=mem1,unarmed=off
+ 
+ Where,
+ 
+@@ -31,9 +31,10 @@ Where,
+    of normal RAM devices and vNVDIMM devices, e.g. $MAX_SIZE should be
+    >= $RAM_SIZE + $NVDIMM_SIZE here.
+ 
+- - "object memory-backend-file,id=mem1,share=on,mem-path=$PATH,size=$NVDIMM_SIZE"
+-   creates a backend storage of size $NVDIMM_SIZE on a file $PATH. All
+-   accesses to the virtual NVDIMM device go to the file $PATH.
++ - "object memory-backend-file,id=mem1,share=on,mem-path=$PATH,
++   size=$NVDIMM_SIZE,readonly=off" creates a backend storage of size
++   $NVDIMM_SIZE on a file $PATH. All accesses to the virtual NVDIMM device go
++   to the file $PATH.
+ 
+    "share=on/off" controls the visibility of guest writes. If
+    "share=on", then guest writes will be applied to the backend
+@@ -42,8 +43,17 @@ Where,
+    "share=off", then guest writes won't be applied to the backend
+    file and thus will be invisible to other guests.
+ 
+- - "device nvdimm,id=nvdimm1,memdev=mem1" creates a virtual NVDIMM
+-   device whose storage is provided by above memory backend device.
++   "readonly=on/off" controls whether the file $PATH is opened read-only or
++   read/write (default).
++
++ - "device nvdimm,id=nvdimm1,memdev=mem1,unarmed=off" creates a read/write
++   virtual NVDIMM device whose storage is provided by above memory backend
++   device.
++
++   "unarmed" controls the ACPI NFIT NVDIMM Region Mapping Structure "NVDIMM
++   State Flags" Bit 3 indicating that the device is "unarmed" and cannot accept
++   persistent writes. Linux guest drivers set the device to read-only when this
++   bit is present. Set unarmed to on when the memdev has readonly=on.
+ 
+ Multiple vNVDIMM devices can be created if multiple pairs of "-object"
+ and "-device" are provided.
+diff --git a/hw/mem/nvdimm.c b/hw/mem/nvdimm.c
+index 03c2201b56..e0a9d606e1 100644
+--- a/hw/mem/nvdimm.c
++++ b/hw/mem/nvdimm.c
+@@ -146,6 +146,15 @@ static void nvdimm_prepare_memory_region(NVDIMMDevice *nvdimm, Error **errp)
+         return;
+     }
+ 
++    if (!nvdimm->unarmed && memory_region_is_rom(mr)) {
++        HostMemoryBackend *hostmem = dimm->hostmem;
++
++        error_setg(errp, "'unarmed' property must be off since memdev %s "
++                   "is read-only",
++                   object_get_canonical_path_component(OBJECT(hostmem)));
++        return;
++    }
++
+     nvdimm->nvdimm_mr = g_new(MemoryRegion, 1);
+     memory_region_init_alias(nvdimm->nvdimm_mr, OBJECT(dimm),
+                              "nvdimm-memory", mr, 0, pmem_size);
+diff --git a/include/exec/memory.h b/include/exec/memory.h
+index 0f3e6bcd5e..08596cd51d 100644
+--- a/include/exec/memory.h
++++ b/include/exec/memory.h
+@@ -956,6 +956,7 @@ void memory_region_init_resizeable_ram(MemoryRegion *mr,
+  *             - RAM_PMEM: the memory is persistent memory
+  *             Other bits are ignored now.
+  * @path: the path in which to allocate the RAM.
++ * @readonly: true to open @path for reading, false for read/write.
+  * @errp: pointer to Error*, to store an error if it happens.
+  *
+  * Note that this function does not do anything to cause the data in the
+@@ -968,6 +969,7 @@ void memory_region_init_ram_from_file(MemoryRegion *mr,
+                                       uint64_t align,
+                                       uint32_t ram_flags,
+                                       const char *path,
++                                      bool readonly,
+                                       Error **errp);
+ 
+ /**
+diff --git a/include/exec/ram_addr.h b/include/exec/ram_addr.h
+index c6d2ef1d07..40b16609ab 100644
+--- a/include/exec/ram_addr.h
++++ b/include/exec/ram_addr.h
+@@ -110,6 +110,7 @@ long qemu_maxrampagesize(void);
+  *              - RAM_PMEM: the backend @mem_path or @fd is persistent memory
+  *              Other bits are ignored.
+  *  @mem_path or @fd: specify the backing file or device
++ *  @readonly: true to open @path for reading, false for read/write.
+  *  @errp: pointer to Error*, to store an error if it happens
+  *
+  * Return:
+@@ -118,9 +119,9 @@ long qemu_maxrampagesize(void);
+  */
+ RAMBlock *qemu_ram_alloc_from_file(ram_addr_t size, MemoryRegion *mr,
+                                    uint32_t ram_flags, const char *mem_path,
+-                                   Error **errp);
++                                   bool readonly, Error **errp);
+ RAMBlock *qemu_ram_alloc_from_fd(ram_addr_t size, MemoryRegion *mr,
+-                                 uint32_t ram_flags, int fd,
++                                 uint32_t ram_flags, int fd, bool readonly,
+                                  Error **errp);
+ 
+ RAMBlock *qemu_ram_alloc_from_ptr(ram_addr_t size, void *host,
+diff --git a/include/qemu/mmap-alloc.h b/include/qemu/mmap-alloc.h
+index e786266b92..8b7a5c70f3 100644
+--- a/include/qemu/mmap-alloc.h
++++ b/include/qemu/mmap-alloc.h
+@@ -14,6 +14,7 @@ size_t qemu_mempath_getpagesize(const char *mem_path);
+  *  @size: the number of bytes to be mmaped
+  *  @align: if not zero, specify the alignment of the starting mapping address;
+  *          otherwise, the alignment in use will be determined by QEMU.
++ *  @readonly: true for a read-only mapping, false for read/write.
+  *  @shared: map has RAM_SHARED flag.
+  *  @is_pmem: map has RAM_PMEM flag.
+  *
+@@ -24,6 +25,7 @@ size_t qemu_mempath_getpagesize(const char *mem_path);
+ void *qemu_ram_mmap(int fd,
+                     size_t size,
+                     size_t align,
++                    bool readonly,
+                     bool shared,
+                     bool is_pmem);
+ 
+diff --git a/qemu-options.hx b/qemu-options.hx
+index 104632ea34..cc14ba6204 100644
+--- a/qemu-options.hx
++++ b/qemu-options.hx
+@@ -4403,7 +4403,7 @@ SRST
+     they are specified. Note that the 'id' property must be set. These
+     objects are placed in the '/objects' path.
+ 
+-    ``-object memory-backend-file,id=id,size=size,mem-path=dir,share=on|off,discard-data=on|off,merge=on|off,dump=on|off,prealloc=on|off,host-nodes=host-nodes,policy=default|preferred|bind|interleave,align=align``
++    ``-object memory-backend-file,id=id,size=size,mem-path=dir,share=on|off,discard-data=on|off,merge=on|off,dump=on|off,prealloc=on|off,host-nodes=host-nodes,policy=default|preferred|bind|interleave,align=align,readonly=on|off``
+         Creates a memory file backend object, which can be used to back
+         the guest RAM with huge pages.
+ 
+@@ -4486,6 +4486,9 @@ SRST
+         4.15) and the filesystem of ``mem-path`` mounted with DAX
+         option.
+ 
++        The ``readonly`` option specifies whether the backing file is opened
++        read-only or read-write (default).
++
+     ``-object memory-backend-ram,id=id,merge=on|off,dump=on|off,share=on|off,prealloc=on|off,size=size,host-nodes=host-nodes,policy=default|preferred|bind|interleave``
+         Creates a memory backend object, which can be used to back the
+         guest RAM. Memory backend objects offer more control than the
+diff --git a/softmmu/memory.c b/softmmu/memory.c
+index 11ca94d037..e768a7e1a9 100644
+--- a/softmmu/memory.c
++++ b/softmmu/memory.c
+@@ -1589,15 +1589,18 @@ void memory_region_init_ram_from_file(MemoryRegion *mr,
+                                       uint64_t align,
+                                       uint32_t ram_flags,
+                                       const char *path,
++                                      bool readonly,
+                                       Error **errp)
+ {
+     Error *err = NULL;
+     memory_region_init(mr, owner, name, size);
+     mr->ram = true;
++    mr->readonly = readonly;
+     mr->terminates = true;
+     mr->destructor = memory_region_destructor_ram;
+     mr->align = align;
+-    mr->ram_block = qemu_ram_alloc_from_file(size, mr, ram_flags, path, &err);
++    mr->ram_block = qemu_ram_alloc_from_file(size, mr, ram_flags, path,
++                                             readonly, &err);
+     mr->dirty_log_mask = tcg_enabled() ? (1 << DIRTY_MEMORY_CODE) : 0;
+     if (err) {
+         mr->size = int128_zero();
+@@ -1621,7 +1624,7 @@ void memory_region_init_ram_from_fd(MemoryRegion *mr,
+     mr->destructor = memory_region_destructor_ram;
+     mr->ram_block = qemu_ram_alloc_from_fd(size, mr,
+                                            share ? RAM_SHARED : 0,
+-                                           fd, &err);
++                                           fd, false, &err);
+     mr->dirty_log_mask = tcg_enabled() ? (1 << DIRTY_MEMORY_CODE) : 0;
+     if (err) {
+         mr->size = int128_zero();
+diff --git a/softmmu/physmem.c b/softmmu/physmem.c
+index 3027747c03..7326db5f4e 100644
+--- a/softmmu/physmem.c
++++ b/softmmu/physmem.c
+@@ -1398,6 +1398,7 @@ static int64_t get_file_align(int fd)
+ 
+ static int file_ram_open(const char *path,
+                          const char *region_name,
++                         bool readonly,
+                          bool *created,
+                          Error **errp)
+ {
+@@ -1408,7 +1409,7 @@ static int file_ram_open(const char *path,
+ 
+     *created = false;
+     for (;;) {
+-        fd = open(path, O_RDWR);
++        fd = open(path, readonly ? O_RDONLY : O_RDWR);
+         if (fd >= 0) {
+             /* @path names an existing file, use it */
+             break;
+@@ -1460,6 +1461,7 @@ static int file_ram_open(const char *path,
+ static void *file_ram_alloc(RAMBlock *block,
+                             ram_addr_t memory,
+                             int fd,
++                            bool readonly,
+                             bool truncate,
+                             Error **errp)
+ {
+@@ -1510,7 +1512,7 @@ static void *file_ram_alloc(RAMBlock *block,
+         perror("ftruncate");
+     }
+ 
+-    area = qemu_ram_mmap(fd, memory, block->mr->align,
++    area = qemu_ram_mmap(fd, memory, block->mr->align, readonly,
+                          block->flags & RAM_SHARED, block->flags & RAM_PMEM);
+     if (area == MAP_FAILED) {
+         error_setg_errno(errp, errno,
+@@ -1942,7 +1944,7 @@ static void ram_block_add(RAMBlock *new_block, Error **errp, bool shared)
+ 
+ #ifdef CONFIG_POSIX
+ RAMBlock *qemu_ram_alloc_from_fd(ram_addr_t size, MemoryRegion *mr,
+-                                 uint32_t ram_flags, int fd,
++                                 uint32_t ram_flags, int fd, bool readonly,
+                                  Error **errp)
+ {
+     RAMBlock *new_block;
+@@ -1996,7 +1998,8 @@ RAMBlock *qemu_ram_alloc_from_fd(ram_addr_t size, MemoryRegion *mr,
+     new_block->used_length = size;
+     new_block->max_length = size;
+     new_block->flags = ram_flags;
+-    new_block->host = file_ram_alloc(new_block, size, fd, !file_size, errp);
++    new_block->host = file_ram_alloc(new_block, size, fd, readonly,
++                                     !file_size, errp);
+     if (!new_block->host) {
+         g_free(new_block);
+         return NULL;
+@@ -2015,18 +2018,19 @@ RAMBlock *qemu_ram_alloc_from_fd(ram_addr_t size, MemoryRegion *mr,
+ 
+ RAMBlock *qemu_ram_alloc_from_file(ram_addr_t size, MemoryRegion *mr,
+                                    uint32_t ram_flags, const char *mem_path,
+-                                   Error **errp)
++                                   bool readonly, Error **errp)
+ {
+     int fd;
+     bool created;
+     RAMBlock *block;
+ 
+-    fd = file_ram_open(mem_path, memory_region_name(mr), &created, errp);
++    fd = file_ram_open(mem_path, memory_region_name(mr), readonly, &created,
++                       errp);
+     if (fd < 0) {
+         return NULL;
+     }
+ 
+-    block = qemu_ram_alloc_from_fd(size, mr, ram_flags, fd, errp);
++    block = qemu_ram_alloc_from_fd(size, mr, ram_flags, fd, readonly, errp);
+     if (!block) {
+         if (created) {
+             unlink(mem_path);
+diff --git a/util/mmap-alloc.c b/util/mmap-alloc.c
+index 27dcccd8ec..890fda6a35 100644
+--- a/util/mmap-alloc.c
++++ b/util/mmap-alloc.c
+@@ -85,9 +85,11 @@ size_t qemu_mempath_getpagesize(const char *mem_path)
+ void *qemu_ram_mmap(int fd,
+                     size_t size,
+                     size_t align,
++                    bool readonly,
+                     bool shared,
+                     bool is_pmem)
+ {
++    int prot;
+     int flags;
+     int map_sync_flags = 0;
+     int guardfd;
+@@ -146,8 +148,9 @@ void *qemu_ram_mmap(int fd,
+ 
+     offset = QEMU_ALIGN_UP((uintptr_t)guardptr, align) - (uintptr_t)guardptr;
+ 
+-    ptr = mmap(guardptr + offset, size, PROT_READ | PROT_WRITE,
+-               flags | map_sync_flags, fd, 0);
++    prot = PROT_READ | (readonly ? 0 : PROT_WRITE);
++
++    ptr = mmap(guardptr + offset, size, prot, flags | map_sync_flags, fd, 0);
+ 
+     if (ptr == MAP_FAILED && map_sync_flags) {
+         if (errno == ENOTSUP) {
+@@ -171,8 +174,7 @@ void *qemu_ram_mmap(int fd,
+          * if map failed with MAP_SHARED_VALIDATE | MAP_SYNC,
+          * we will remove these flags to handle compatibility.
+          */
+-        ptr = mmap(guardptr + offset, size, PROT_READ | PROT_WRITE,
+-                   flags, fd, 0);
++        ptr = mmap(guardptr + offset, size, prot, flags, fd, 0);
+     }
+ 
+     if (ptr == MAP_FAILED) {
+diff --git a/util/oslib-posix.c b/util/oslib-posix.c
+index f15234b5c0..cfe86553da 100644
+--- a/util/oslib-posix.c
++++ b/util/oslib-posix.c
+@@ -227,7 +227,7 @@ void *qemu_memalign(size_t alignment, size_t size)
+ void *qemu_anon_ram_alloc(size_t size, uint64_t *alignment, bool shared)
+ {
+     size_t align = QEMU_VMALLOC_ALIGN;
+-    void *ptr = qemu_ram_mmap(-1, size, align, shared, false);
++    void *ptr = qemu_ram_mmap(-1, size, align, false, shared, false);
+ 
+     if (ptr == MAP_FAILED) {
+         return NULL;
+-- 
+2.26.2
+
