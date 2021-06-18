@@ -556,7 +556,6 @@ mod tests {
     }
 
     #[tokio::test]
-    #[allow(unused_assignments)]
     async fn unset_and_remove_sandbox_storage() {
         skip_if_not_root!();
 
@@ -590,7 +589,7 @@ mod tests {
         assert_eq!(s.set_sandbox_storage(&destdir_path), true);
         assert!(s.unset_and_remove_sandbox_storage(&destdir_path).is_ok());
 
-        let mut other_dir_str = String::new();
+        let other_dir_str;
         {
             // Create another folder in a separate scope to ensure that is
             // deleted
