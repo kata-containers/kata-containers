@@ -15,6 +15,8 @@ source "${script_dir}/../qemu.blacklist"
 
 packaging_dir="${script_dir}/../.."
 qemu_destdir="/tmp/qemu-static/"
+container_engine="${USE_PODMAN:+podman}"
+container_engine="${container_engine:-docker}"
 
 qemu_repo="${qemu_repo:-$1}"
 qemu_version="${qemu_version:-$2}"
@@ -32,7 +34,7 @@ prefix="${prefix:-"/opt/kata"}"
 
 CACHE_TIMEOUT=$(date +"%Y-%m-%d")
 
-sudo docker build \
+sudo "${container_engine}" build \
 	--build-arg CACHE_TIMEOUT="${CACHE_TIMEOUT}" \
 	--build-arg BUILD_SUFFIX="${build_suffix}" \
 	--build-arg http_proxy="${http_proxy}" \
@@ -46,7 +48,7 @@ sudo docker build \
 	-f "${script_dir}/Dockerfile" \
 	-t qemu-static
 
-sudo docker run \
+sudo "${container_engine}" run \
 	--rm \
 	-i \
 	-v "${PWD}":/share qemu-static \
