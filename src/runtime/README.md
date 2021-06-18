@@ -81,7 +81,7 @@ $ kata-runtime check
 
 [![Get it from the Snap Store](https://snapcraft.io/static/images/badges/en/snap-store-black.svg)](https://snapcraft.io/kata-containers)
 
-See the [installation guides](https://github.com/kata-containers/documentation/tree/master/install/README.md)
+See the [installation guides](https://github.com/kata-containers/kata-containers/blob/main/docs/install/README.md)
 available for various operating systems.
 
 ## Quick start for developers
