@@ -7,7 +7,6 @@
 #[cfg(test)]
 mod test_utils {
     #[macro_export]
-    #[allow(unused_macros)]
     macro_rules! skip_if_root {
         () => {
             if nix::unistd::Uid::effective().is_root() {
@@ -18,7 +17,6 @@ mod test_utils {
     }
 
     #[macro_export]
-    #[allow(unused_macros)]
     macro_rules! skip_if_not_root {
         () => {
             if !nix::unistd::Uid::effective().is_root() {
@@ -29,7 +27,6 @@ mod test_utils {
     }
 
     #[macro_export]
-    #[allow(unused_macros)]
     macro_rules! skip_loop_if_root {
         ($msg:expr) => {
             if nix::unistd::Uid::effective().is_root() {
@@ -44,7 +41,6 @@ mod test_utils {
     }
 
     #[macro_export]
-    #[allow(unused_macros)]
     macro_rules! skip_loop_if_not_root {
         ($msg:expr) => {
             if !nix::unistd::Uid::effective().is_root() {

@@ -139,19 +139,6 @@ async fn notify_on_oom(cid: &str, dir: String) -> Result<Receiver<String>> {
     register_memory_event(cid, dir, "memory.oom_control", "").await
 }
 
-// level is one of "low", "medium", or "critical"
-async fn notify_memory_pressure(cid: &str, dir: String, level: &str) -> Result<Receiver<String>> {
-    if dir.is_empty() {
-        return Err(anyhow!("memory controller missing"));
-    }
-
-    if level != "low" && level != "medium" && level != "critical" {
-        return Err(anyhow!("invalid pressure level {}", level));
-    }
-
-    register_memory_event(cid, dir, "memory.pressure_level", level).await
-}
-
 async fn register_memory_event(
     cid: &str,
     cg_dir: String,
