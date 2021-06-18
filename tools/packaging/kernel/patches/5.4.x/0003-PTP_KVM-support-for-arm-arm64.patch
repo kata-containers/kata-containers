@@ -1,0 +1,739 @@
+From 479a9245f25668395d2706bfc8c19378255812b9 Mon Sep 17 00:00:00 2001
+From: Damon Kwok <damon-kwok@outlook.com>
+Date: Fri, 18 Jun 2021 14:38:55 +0800
+Subject: [PATCH] PTP_KVM support for arm/arm64
+
+---
+ arch/x86/include/asm/pvclock-abi.h          |  2 +
+ arch/x86/include/asm/pvclock.h              |  1 +
+ drivers/clocksource/arm_arch_timer.c        | 24 ++++++
+ drivers/firmware/psci/psci.c                | 16 ++++
+ drivers/ptp/Kconfig                         |  2 +-
+ drivers/ptp/Makefile                        |  1 +
+ drivers/ptp/ptp_kvm.h                       | 11 +++
+ drivers/ptp/ptp_kvm_arm64.c                 | 51 ++++++++++++
+ drivers/ptp/{ptp_kvm.c => ptp_kvm_common.c} | 78 +++++-------------
+ drivers/ptp/ptp_kvm_x86.c                   | 87 +++++++++++++++++++++
+ include/linux/arm-smccc.h                   | 69 ++++++++++++++++
+ include/linux/clocksource.h                 |  6 ++
+ include/linux/clocksource_ids.h             | 13 +++
+ include/linux/timekeeping.h                 | 12 +--
+ include/uapi/linux/kvm.h                    |  1 +
+ kernel/time/clocksource.c                   |  3 +
+ kernel/time/timekeeping.c                   |  1 +
+ virt/kvm/arm/arm.c                          |  1 +
+ virt/kvm/arm/psci.c                         | 23 ++++++
+ 19 files changed, 337 insertions(+), 65 deletions(-)
+ create mode 100644 drivers/ptp/ptp_kvm.h
+ create mode 100644 drivers/ptp/ptp_kvm_arm64.c
+ rename drivers/ptp/{ptp_kvm.c => ptp_kvm_common.c} (63%)
+ create mode 100644 drivers/ptp/ptp_kvm_x86.c
+ create mode 100644 include/linux/clocksource_ids.h
+
+diff --git a/arch/x86/include/asm/pvclock-abi.h b/arch/x86/include/asm/pvclock-abi.h
+index 1436226ef..5f9626436 100644
+--- a/arch/x86/include/asm/pvclock-abi.h
++++ b/arch/x86/include/asm/pvclock-abi.h
+@@ -3,6 +3,8 @@
+ #define _ASM_X86_PVCLOCK_ABI_H
+ #ifndef __ASSEMBLY__
+ 
++#include <linux/types.h>
++
+ /*
+  * These structs MUST NOT be changed.
+  * They are the ABI between hypervisor and guest OS.
+diff --git a/arch/x86/include/asm/pvclock.h b/arch/x86/include/asm/pvclock.h
+index 19b695ff2..2e39a7869 100644
+--- a/arch/x86/include/asm/pvclock.h
++++ b/arch/x86/include/asm/pvclock.h
+@@ -2,6 +2,7 @@
+ #ifndef _ASM_X86_PVCLOCK_H
+ #define _ASM_X86_PVCLOCK_H
+ 
++#include <linux/time.h>
+ #include <asm/clocksource.h>
+ #include <asm/pvclock-abi.h>
+ 
+diff --git a/drivers/clocksource/arm_arch_timer.c b/drivers/clocksource/arm_arch_timer.c
+index 39cdda2c9..b9b94bc2b 100644
+--- a/drivers/clocksource/arm_arch_timer.c
++++ b/drivers/clocksource/arm_arch_timer.c
+@@ -16,6 +16,7 @@
+ #include <linux/cpu_pm.h>
+ #include <linux/clockchips.h>
+ #include <linux/clocksource.h>
++#include <linux/clocksource_ids.h>
+ #include <linux/interrupt.h>
+ #include <linux/of_irq.h>
+ #include <linux/of_address.h>
+@@ -187,6 +188,7 @@ static u64 arch_counter_read_cc(const struct cyclecounter *cc)
+ 
+ static struct clocksource clocksource_counter = {
+ 	.name	= "arch_sys_counter",
++	.id	= CSID_ARM_ARCH_COUNTER,
+ 	.rating	= 400,
+ 	.read	= arch_counter_read,
+ 	.mask	= CLOCKSOURCE_MASK(56),
+@@ -1643,3 +1645,25 @@ static int __init arch_timer_acpi_init(struct acpi_table_header *table)
+ }
+ TIMER_ACPI_DECLARE(arch_timer, ACPI_SIG_GTDT, arch_timer_acpi_init);
+ #endif
++
++#if IS_ENABLED(CONFIG_PTP_1588_CLOCK_KVM)
++#include <linux/arm-smccc.h>
++int kvm_arch_ptp_get_crosststamp(unsigned long *cycle, struct timespec64 *ts,
++			      struct clocksource **cs)
++{
++	struct arm_smccc_res hvc_res;
++	ktime_t ktime_overall;
++
++	arm_smccc_1_1_invoke(ARM_SMCCC_HYP_KVM_PTP_FUNC_ID, &hvc_res);
++	if ((long)(hvc_res.a0) < 0)
++		return -EOPNOTSUPP;
++
++	ktime_overall = hvc_res.a0 << 32 | hvc_res.a1;
++	*ts = ktime_to_timespec64(ktime_overall);
++	*cycle = hvc_res.a2 << 32 | hvc_res.a3;
++	*cs = &clocksource_counter;
++
++	return 0;
++}
++EXPORT_SYMBOL_GPL(kvm_arch_ptp_get_crosststamp);
++#endif
+diff --git a/drivers/firmware/psci/psci.c b/drivers/firmware/psci/psci.c
+index 84f4ff351..87a7dc18b 100644
+--- a/drivers/firmware/psci/psci.c
++++ b/drivers/firmware/psci/psci.c
+@@ -57,6 +57,22 @@ struct psci_operations psci_ops = {
+ 	.smccc_version = SMCCC_VERSION_1_0,
+ };
+ 
++enum arm_smccc_conduit arm_smccc_1_1_get_conduit(void)
++{
++	if (psci_ops.smccc_version < SMCCC_VERSION_1_1)
++		return SMCCC_CONDUIT_NONE;
++
++	switch (psci_ops.conduit) {
++	case PSCI_CONDUIT_SMC:
++		return SMCCC_CONDUIT_SMC;
++	case PSCI_CONDUIT_HVC:
++		return SMCCC_CONDUIT_HVC;
++	default:
++		return SMCCC_CONDUIT_NONE;
++	}
++}
++EXPORT_SYMBOL(arm_smccc_1_1_get_conduit);
++
+ typedef unsigned long (psci_fn)(unsigned long, unsigned long,
+ 				unsigned long, unsigned long);
+ static psci_fn *invoke_psci_fn;
+diff --git a/drivers/ptp/Kconfig b/drivers/ptp/Kconfig
+index 0517272a2..6f3688e7e 100644
+--- a/drivers/ptp/Kconfig
++++ b/drivers/ptp/Kconfig
+@@ -110,7 +110,7 @@ config PTP_1588_CLOCK_PCH
+ config PTP_1588_CLOCK_KVM
+ 	tristate "KVM virtual PTP clock"
+ 	depends on PTP_1588_CLOCK
+-	depends on KVM_GUEST && X86
++	depends on KVM_GUEST && X86 || ARM64 && ARM_ARCH_TIMER
+ 	default y
+ 	help
+ 	  This driver adds support for using kvm infrastructure as a PTP
+diff --git a/drivers/ptp/Makefile b/drivers/ptp/Makefile
+index 677d1d178..3b7554f56 100644
+--- a/drivers/ptp/Makefile
++++ b/drivers/ptp/Makefile
+@@ -4,6 +4,7 @@
+ #
+ 
+ ptp-y					:= ptp_clock.o ptp_chardev.o ptp_sysfs.o
++ptp_kvm-y				:= ptp_kvm_$(ARCH).o ptp_kvm_common.o
+ obj-$(CONFIG_PTP_1588_CLOCK)		+= ptp.o
+ obj-$(CONFIG_PTP_1588_CLOCK_DTE)	+= ptp_dte.o
+ obj-$(CONFIG_PTP_1588_CLOCK_IXP46X)	+= ptp_ixp46x.o
+diff --git a/drivers/ptp/ptp_kvm.h b/drivers/ptp/ptp_kvm.h
+new file mode 100644
+index 000000000..4bf1802bb
+--- /dev/null
++++ b/drivers/ptp/ptp_kvm.h
+@@ -0,0 +1,11 @@
++/* SPDX-License-Identifier: GPL-2.0-or-later */
++/*
++ * Virtual PTP 1588 clock for use with KVM guests
++ *
++ * Copyright (C) 2017 Red Hat Inc.
++ */
++
++int kvm_arch_ptp_init(void);
++int kvm_arch_ptp_get_clock(struct timespec64 *ts);
++int kvm_arch_ptp_get_crosststamp(unsigned long *cycle,
++		struct timespec64 *tspec, void *cs);
+diff --git a/drivers/ptp/ptp_kvm_arm64.c b/drivers/ptp/ptp_kvm_arm64.c
+new file mode 100644
+index 000000000..446f2444d
+--- /dev/null
++++ b/drivers/ptp/ptp_kvm_arm64.c
+@@ -0,0 +1,51 @@
++// SPDX-License-Identifier: GPL-2.0-only
++/*
++ *  Virtual PTP 1588 clock for use with KVM guests
++ *  Copyright (C) 2019 ARM Ltd.
++ *  All Rights Reserved
++ */
++
++#include <linux/kernel.h>
++#include <linux/err.h>
++#include <asm/hypervisor.h>
++#include <linux/module.h>
++#include <linux/psci.h>
++#include <linux/arm-smccc.h>
++#include <linux/timecounter.h>
++#include <linux/sched/clock.h>
++#include <asm/arch_timer.h>
++
++int kvm_arch_ptp_init(void)
++{
++	struct arm_smccc_res hvc_res;
++
++	arm_smccc_1_1_invoke(ARM_SMCCC_HYP_KVM_PTP_FUNC_ID, &hvc_res);
++	if ((long)(hvc_res.a0) < 0)
++		return -EOPNOTSUPP;
++
++	return 0;
++}
++
++int kvm_arch_ptp_get_clock_generic(struct timespec64 *ts,
++				   struct arm_smccc_res *hvc_res)
++{
++	ktime_t ktime_overall;
++
++	arm_smccc_1_1_invoke(ARM_SMCCC_HYP_KVM_PTP_FUNC_ID, hvc_res);
++	if ((long)(hvc_res->a0) < 0)
++		return -EOPNOTSUPP;
++
++	ktime_overall = hvc_res->a0 << 32 | hvc_res->a1;
++	*ts = ktime_to_timespec64(ktime_overall);
++
++	return 0;
++}
++
++int kvm_arch_ptp_get_clock(struct timespec64 *ts)
++{
++	struct arm_smccc_res hvc_res;
++
++	kvm_arch_ptp_get_clock_generic(ts, &hvc_res);
++
++	return 0;
++}
+diff --git a/drivers/ptp/ptp_kvm.c b/drivers/ptp/ptp_kvm_common.c
+similarity index 63%
+rename from drivers/ptp/ptp_kvm.c
+rename to drivers/ptp/ptp_kvm_common.c
+index fc7d0b77e..60442f70d 100644
+--- a/drivers/ptp/ptp_kvm.c
++++ b/drivers/ptp/ptp_kvm_common.c
+@@ -8,15 +8,16 @@
+ #include <linux/err.h>
+ #include <linux/init.h>
+ #include <linux/kernel.h>
++#include <linux/slab.h>
+ #include <linux/module.h>
+ #include <uapi/linux/kvm_para.h>
+ #include <asm/kvm_para.h>
+-#include <asm/pvclock.h>
+-#include <asm/kvmclock.h>
+ #include <uapi/asm/kvm_para.h>
+ 
+ #include <linux/ptp_clock_kernel.h>
+ 
++#include "ptp_kvm.h"
++
+ struct kvm_ptp_clock {
+ 	struct ptp_clock *ptp_clock;
+ 	struct ptp_clock_info caps;
+@@ -24,56 +25,29 @@ struct kvm_ptp_clock {
+ 
+ DEFINE_SPINLOCK(kvm_ptp_lock);
+ 
+-static struct pvclock_vsyscall_time_info *hv_clock;
+-
+-static struct kvm_clock_pairing clock_pair;
+-static phys_addr_t clock_pair_gpa;
+-
+ static int ptp_kvm_get_time_fn(ktime_t *device_time,
+ 			       struct system_counterval_t *system_counter,
+ 			       void *ctx)
+ {
+-	unsigned long ret;
++	unsigned long ret, cycle;
+ 	struct timespec64 tspec;
+-	unsigned version;
+-	int cpu;
+-	struct pvclock_vcpu_time_info *src;
++	struct clocksource *cs;
+ 
+ 	spin_lock(&kvm_ptp_lock);
+ 
+ 	preempt_disable_notrace();
+-	cpu = smp_processor_id();
+-	src = &hv_clock[cpu].pvti;
+-
+-	do {
+-		/*
+-		 * We are using a TSC value read in the hosts
+-		 * kvm_hc_clock_pairing handling.
+-		 * So any changes to tsc_to_system_mul
+-		 * and tsc_shift or any other pvclock
+-		 * data invalidate that measurement.
+-		 */
+-		version = pvclock_read_begin(src);
+-
+-		ret = kvm_hypercall2(KVM_HC_CLOCK_PAIRING,
+-				     clock_pair_gpa,
+-				     KVM_CLOCK_PAIRING_WALLCLOCK);
+-		if (ret != 0) {
+-			pr_err_ratelimited("clock pairing hypercall ret %lu\n", ret);
+-			spin_unlock(&kvm_ptp_lock);
+-			preempt_enable_notrace();
+-			return -EOPNOTSUPP;
+-		}
+-
+-		tspec.tv_sec = clock_pair.sec;
+-		tspec.tv_nsec = clock_pair.nsec;
+-		ret = __pvclock_read_cycles(src, clock_pair.tsc);
+-	} while (pvclock_read_retry(src, version));
++	ret = kvm_arch_ptp_get_crosststamp(&cycle, &tspec, &cs);
++	if (ret != 0) {
++		pr_err_ratelimited("clock pairing hypercall ret %lu\n", ret);
++		spin_unlock(&kvm_ptp_lock);
++		preempt_enable_notrace();
++		return -EOPNOTSUPP;
++	}
+ 
+ 	preempt_enable_notrace();
+ 
+-	system_counter->cycles = ret;
+-	system_counter->cs = &kvm_clock;
++	system_counter->cycles = cycle;
++	system_counter->cs = cs;
+ 
+ 	*device_time = timespec64_to_ktime(tspec);
+ 
+@@ -116,17 +90,13 @@ static int ptp_kvm_gettime(struct ptp_clock_info *ptp, struct timespec64 *ts)
+ 
+ 	spin_lock(&kvm_ptp_lock);
+ 
+-	ret = kvm_hypercall2(KVM_HC_CLOCK_PAIRING,
+-			     clock_pair_gpa,
+-			     KVM_CLOCK_PAIRING_WALLCLOCK);
++	ret = kvm_arch_ptp_get_clock(&tspec);
+ 	if (ret != 0) {
+ 		pr_err_ratelimited("clock offset hypercall ret %lu\n", ret);
+ 		spin_unlock(&kvm_ptp_lock);
+ 		return -EOPNOTSUPP;
+ 	}
+ 
+-	tspec.tv_sec = clock_pair.sec;
+-	tspec.tv_nsec = clock_pair.nsec;
+ 	spin_unlock(&kvm_ptp_lock);
+ 
+ 	memcpy(ts, &tspec, sizeof(struct timespec64));
+@@ -166,21 +136,11 @@ static void __exit ptp_kvm_exit(void)
+ 
+ static int __init ptp_kvm_init(void)
+ {
+-	long ret;
+-
+-	if (!kvm_para_available())
+-		return -ENODEV;
++	int ret;
+ 
+-	clock_pair_gpa = slow_virt_to_phys(&clock_pair);
+-	hv_clock = pvclock_get_pvti_cpu0_va();
+-
+-	if (!hv_clock)
+-		return -ENODEV;
+-
+-	ret = kvm_hypercall2(KVM_HC_CLOCK_PAIRING, clock_pair_gpa,
+-			KVM_CLOCK_PAIRING_WALLCLOCK);
+-	if (ret == -KVM_ENOSYS || ret == -KVM_EOPNOTSUPP)
+-		return -ENODEV;
++	ret = kvm_arch_ptp_init();
++	if (ret)
++		return -EOPNOTSUPP;
+ 
+ 	kvm_ptp_clock.caps = ptp_kvm_caps;
+ 
+diff --git a/drivers/ptp/ptp_kvm_x86.c b/drivers/ptp/ptp_kvm_x86.c
+new file mode 100644
+index 000000000..6c891d729
+--- /dev/null
++++ b/drivers/ptp/ptp_kvm_x86.c
+@@ -0,0 +1,87 @@
++// SPDX-License-Identifier: GPL-2.0-or-later
++/*
++ * Virtual PTP 1588 clock for use with KVM guests
++ *
++ * Copyright (C) 2017 Red Hat Inc.
++ */
++
++#include <asm/pvclock.h>
++#include <asm/kvmclock.h>
++#include <linux/module.h>
++#include <uapi/asm/kvm_para.h>
++#include <uapi/linux/kvm_para.h>
++#include <linux/ptp_clock_kernel.h>
++
++phys_addr_t clock_pair_gpa;
++struct kvm_clock_pairing clock_pair;
++struct pvclock_vsyscall_time_info *hv_clock;
++
++int kvm_arch_ptp_init(void)
++{
++	int ret;
++
++	if (!kvm_para_available())
++		return -ENODEV;
++
++	clock_pair_gpa = slow_virt_to_phys(&clock_pair);
++	hv_clock = pvclock_get_pvti_cpu0_va();
++	if (!hv_clock)
++		return -ENODEV;
++
++	ret = kvm_hypercall2(KVM_HC_CLOCK_PAIRING, clock_pair_gpa,
++			     KVM_CLOCK_PAIRING_WALLCLOCK);
++	if (ret == -KVM_ENOSYS || ret == -KVM_EOPNOTSUPP)
++		return -ENODEV;
++
++	return 0;
++}
++
++int kvm_arch_ptp_get_clock(struct timespec64 *ts)
++{
++	long ret;
++
++	ret = kvm_hypercall2(KVM_HC_CLOCK_PAIRING,
++			     clock_pair_gpa,
++			     KVM_CLOCK_PAIRING_WALLCLOCK);
++	if (ret != 0)
++		return -EOPNOTSUPP;
++
++	ts->tv_sec = clock_pair.sec;
++	ts->tv_nsec = clock_pair.nsec;
++
++	return 0;
++}
++
++int kvm_arch_ptp_get_crosststamp(unsigned long *cycle, struct timespec64 *tspec,
++			      struct clocksource **cs)
++{
++	unsigned long ret;
++	unsigned int version;
++	int cpu;
++	struct pvclock_vcpu_time_info *src;
++
++	cpu = smp_processor_id();
++	src = &hv_clock[cpu].pvti;
++
++	do {
++		/*
++		 * We are using a TSC value read in the hosts
++		 * kvm_hc_clock_pairing handling.
++		 * So any changes to tsc_to_system_mul
++		 * and tsc_shift or any other pvclock
++		 * data invalidate that measurement.
++		 */
++		version = pvclock_read_begin(src);
++
++		ret = kvm_hypercall2(KVM_HC_CLOCK_PAIRING,
++				     clock_pair_gpa,
++				     KVM_CLOCK_PAIRING_WALLCLOCK);
++		tspec->tv_sec = clock_pair.sec;
++		tspec->tv_nsec = clock_pair.nsec;
++		*cycle = __pvclock_read_cycles(src, clock_pair.tsc);
++	} while (pvclock_read_retry(src, version));
++
++	*cs = &kvm_clock;
++
++	return 0;
++}
+diff --git a/include/linux/arm-smccc.h b/include/linux/arm-smccc.h
+index 157e4a6a8..15f406a7f 100644
+--- a/include/linux/arm-smccc.h
++++ b/include/linux/arm-smccc.h
+@@ -45,6 +45,7 @@
+ #define ARM_SMCCC_OWNER_SIP		2
+ #define ARM_SMCCC_OWNER_OEM		3
+ #define ARM_SMCCC_OWNER_STANDARD	4
++#define ARM_SMCCC_OWNER_STANDARD_HYP	5
+ #define ARM_SMCCC_OWNER_TRUSTED_APP	48
+ #define ARM_SMCCC_OWNER_TRUSTED_APP_END	49
+ #define ARM_SMCCC_OWNER_TRUSTED_OS	50
+@@ -78,10 +79,33 @@
+ 
+ #define SMCCC_ARCH_WORKAROUND_RET_UNAFFECTED	1
+ 
++/* PTP KVM call requests clock time from guest OS to host */
++#define ARM_SMCCC_HYP_KVM_PTP_FUNC_ID					\
++	ARM_SMCCC_CALL_VAL(ARM_SMCCC_FAST_CALL,				\
++			   ARM_SMCCC_SMC_32,				\
++			   ARM_SMCCC_OWNER_STANDARD_HYP,		\
++			   0)
++
+ #ifndef __ASSEMBLY__
+ 
+ #include <linux/linkage.h>
+ #include <linux/types.h>
++
++enum arm_smccc_conduit {
++	SMCCC_CONDUIT_NONE,
++	SMCCC_CONDUIT_SMC,
++	SMCCC_CONDUIT_HVC,
++};
++
++/**
++ * arm_smccc_1_1_get_conduit()
++ *
++ * Returns the conduit to be used for SMCCCv1.1 or later.
++ *
++ * When SMCCCv1.1 is not present, returns SMCCC_CONDUIT_NONE.
++ */
++enum arm_smccc_conduit arm_smccc_1_1_get_conduit(void);
++
+ /**
+  * struct arm_smccc_res - Result from SMC/HVC call
+  * @a0-a3 result values from registers 0 to 3
+@@ -304,5 +328,50 @@ asmlinkage void __arm_smccc_hvc(unsigned long a0, unsigned long a1,
+ #define SMCCC_RET_NOT_SUPPORTED			-1
+ #define SMCCC_RET_NOT_REQUIRED			-2
+ 
++/*
++ * Like arm_smccc_1_1* but always returns SMCCC_RET_NOT_SUPPORTED.
++ * Used when the SMCCC conduit is not defined. The empty asm statement
++ * avoids compiler warnings about unused variables.
++ */
++#define __fail_smccc_1_1(...)                                          \
++	do {                                                            \
++		__declare_args(__count_args(__VA_ARGS__), __VA_ARGS__); \
++		asm ("" __constraints(__count_args(__VA_ARGS__)));      \
++		if (___res)                                             \
++			___res->a0 = SMCCC_RET_NOT_SUPPORTED;           \
++	} while (0)
++
++/*
++ * arm_smccc_1_1_invoke() - make an SMCCC v1.1 compliant call
++ *
++ * This is a variadic macro taking one to eight source arguments, and
++ * an optional return structure.
++ *
++ * @a0-a7: arguments passed in registers 0 to 7
++ * @res: result values from registers 0 to 3
++ *
++ * This macro will make either an HVC call or an SMC call depending on the
++ * current SMCCC conduit. If no valid conduit is available then -1
++ * (SMCCC_RET_NOT_SUPPORTED) is returned in @res.a0 (if supplied).
++ *
++ * The return value also provides the conduit that was used.
++ */
++#define arm_smccc_1_1_invoke(...) ({					\
++		int method = arm_smccc_1_1_get_conduit();		\
++		switch (method) {					\
++		case SMCCC_CONDUIT_HVC:					\
++			arm_smccc_1_1_hvc(__VA_ARGS__);			\
++			break;						\
++		case SMCCC_CONDUIT_SMC:					\
++			arm_smccc_1_1_smc(__VA_ARGS__);			\
++			break;						\
++		default:						\
++			__fail_smccc_1_1(__VA_ARGS__);			\
++			method = SMCCC_CONDUIT_NONE;			\
++			break;						\
++		}							\
++		method;							\
++	})
++
+ #endif /*__ASSEMBLY__*/
+ #endif /*__LINUX_ARM_SMCCC_H*/
+diff --git a/include/linux/clocksource.h b/include/linux/clocksource.h
+index b21db536f..96e85b6f9 100644
+--- a/include/linux/clocksource.h
++++ b/include/linux/clocksource.h
+@@ -17,6 +17,7 @@
+ #include <linux/timer.h>
+ #include <linux/init.h>
+ #include <linux/of.h>
++#include <linux/clocksource_ids.h>
+ #include <asm/div64.h>
+ #include <asm/io.h>
+ 
+@@ -49,6 +50,10 @@ struct module;
+  *			400-499: Perfect
+  *				The ideal clocksource. A must-use where
+  *				available.
++ * @id:			Defaults to CSID_GENERIC. The id value is captured
++ *			in certain snapshot functions to allow callers to
++ *			validate the clocksource from which the snapshot was
++ *			taken.
+  * @read:		returns a cycle value, passes clocksource as argument
+  * @enable:		optional function to enable the clocksource
+  * @disable:		optional function to disable the clocksource
+@@ -91,6 +96,7 @@ struct clocksource {
+ 	const char *name;
+ 	struct list_head list;
+ 	int rating;
++	enum clocksource_ids id;
+ 	int (*enable)(struct clocksource *cs);
+ 	void (*disable)(struct clocksource *cs);
+ 	unsigned long flags;
+diff --git a/include/linux/clocksource_ids.h b/include/linux/clocksource_ids.h
+new file mode 100644
+index 000000000..93bec8426
+--- /dev/null
++++ b/include/linux/clocksource_ids.h
+@@ -0,0 +1,13 @@
++/* SPDX-License-Identifier: GPL-2.0 */
++#ifndef _LINUX_CLOCKSOURCE_IDS_H
++#define _LINUX_CLOCKSOURCE_IDS_H
++
++/* Enum to give clocksources a unique identifier */
++enum clocksource_ids {
++	CSID_GENERIC		= 0,
++	CSID_ARM_ARCH_COUNTER,
++	CSID_MAX,
++};
++
++#endif
++
+diff --git a/include/linux/timekeeping.h b/include/linux/timekeeping.h
+index b27e2ffa9..4ecc32ad3 100644
+--- a/include/linux/timekeeping.h
++++ b/include/linux/timekeeping.h
+@@ -2,6 +2,7 @@
+ #ifndef _LINUX_TIMEKEEPING_H
+ #define _LINUX_TIMEKEEPING_H
+ 
++#include <linux/clocksource_ids.h>
+ #include <linux/errno.h>
+ 
+ /* Included from linux/ktime.h */
+@@ -232,11 +233,12 @@ extern void timekeeping_inject_sleeptime64(const struct timespec64 *delta);
+  * @cs_was_changed_seq:	The sequence number of clocksource change events
+  */
+ struct system_time_snapshot {
+-	u64		cycles;
+-	ktime_t		real;
+-	ktime_t		raw;
+-	unsigned int	clock_was_set_seq;
+-	u8		cs_was_changed_seq;
++	u64			cycles;
++	ktime_t			real;
++	ktime_t			raw;
++	enum clocksource_ids	cs_id;
++	unsigned int		clock_was_set_seq;
++	u8			cs_was_changed_seq;
+ };
+ 
+ /*
+diff --git a/include/uapi/linux/kvm.h b/include/uapi/linux/kvm.h
+index 1b6b8e058..8759a675b 100644
+--- a/include/uapi/linux/kvm.h
++++ b/include/uapi/linux/kvm.h
+@@ -1003,6 +1003,7 @@ struct kvm_ppc_resize_hpt {
+ #define KVM_CAP_PMU_EVENT_FILTER 173
+ #define KVM_CAP_ARM_IRQ_LINE_LAYOUT_2 174
+ #define KVM_CAP_HYPERV_DIRECT_TLBFLUSH 175
++#define KVM_CAP_ARM_KVM_PTP 176
+ 
+ #ifdef KVM_CAP_IRQ_ROUTING
+ 
+diff --git a/kernel/time/clocksource.c b/kernel/time/clocksource.c
+index 428beb694..ae683f701 100644
+--- a/kernel/time/clocksource.c
++++ b/kernel/time/clocksource.c
+@@ -928,6 +928,9 @@ int __clocksource_register_scale(struct clocksource *cs, u32 scale, u32 freq)
+ 
+ 	clocksource_arch_init(cs);
+ 
++	if (WARN_ON_ONCE((unsigned int)cs->id >= CSID_MAX))
++		cs->id = CSID_GENERIC;
++
+ 	/* Initialize mult/shift and max_idle_ns */
+ 	__clocksource_update_freq_scale(cs, scale, freq);
+ 
+diff --git a/kernel/time/timekeeping.c b/kernel/time/timekeeping.c
+index 4fc2af436..050bf6af5 100644
+--- a/kernel/time/timekeeping.c
++++ b/kernel/time/timekeeping.c
+@@ -979,6 +979,7 @@ void ktime_get_snapshot(struct system_time_snapshot *systime_snapshot)
+ 	do {
+ 		seq = read_seqcount_begin(&tk_core.seq);
+ 		now = tk_clock_read(&tk->tkr_mono);
++		systime_snapshot->cs_id = tk->tkr_mono.clock->id;
+ 		systime_snapshot->cs_was_changed_seq = tk->cs_was_changed_seq;
+ 		systime_snapshot->clock_was_set_seq = tk->clock_was_set_seq;
+ 		base_real = ktime_add(tk->tkr_mono.base,
+diff --git a/virt/kvm/arm/arm.c b/virt/kvm/arm/arm.c
+index 4af856057..0c8252e17 100644
+--- a/virt/kvm/arm/arm.c
++++ b/virt/kvm/arm/arm.c
+@@ -197,6 +197,7 @@ int kvm_vm_ioctl_check_extension(struct kvm *kvm, long ext)
+ 	case KVM_CAP_IMMEDIATE_EXIT:
+ 	case KVM_CAP_VCPU_EVENTS:
+ 	case KVM_CAP_ARM_IRQ_LINE_LAYOUT_2:
++	case KVM_CAP_ARM_KVM_PTP:
+ 		r = 1;
+ 		break;
+ 	case KVM_CAP_ARM_SET_DEVICE_ADDR:
+diff --git a/virt/kvm/arm/psci.c b/virt/kvm/arm/psci.c
+index 48fde38d6..568c5ecd5 100644
+--- a/virt/kvm/arm/psci.c
++++ b/virt/kvm/arm/psci.c
+@@ -9,6 +9,7 @@
+ #include <linux/kvm_host.h>
+ #include <linux/uaccess.h>
+ #include <linux/wait.h>
++#include <linux/clocksource_ids.h>
+ 
+ #include <asm/cputype.h>
+ #include <asm/kvm_emulate.h>
+@@ -389,6 +390,9 @@ static int kvm_psci_call(struct kvm_vcpu *vcpu)
+ 
+ int kvm_hvc_call_handler(struct kvm_vcpu *vcpu)
+ {
++	struct system_time_snapshot systime_snapshot;
++	long arg[4];
++	u64 cycles;
+ 	u32 func_id = smccc_get_function(vcpu);
+ 	u32 val = SMCCC_RET_NOT_SUPPORTED;
+ 	u32 feature;
+@@ -428,6 +432,25 @@ int kvm_hvc_call_handler(struct kvm_vcpu *vcpu)
+ 			break;
+ 		}
+ 		break;
++	/*
++	 * This will used for virtual ptp kvm clock. three values will be
++	 * passed back.
++	 * reg0 stores high 32-bit host ktime;
++	 * reg1 stores low 32-bit host ktime;
++	 * reg2 stores high 32-bit difference of host cycles and cntvoff;
++	 * reg3 stores low 32-bit difference of host cycles and cntvoff.
++	 */
++	case ARM_SMCCC_HYP_KVM_PTP_FUNC_ID:
++		ktime_get_snapshot(&systime_snapshot);
++		if (systime_snapshot.cs_id != CSID_ARM_ARCH_COUNTER)
++			break;
++		arg[0] = systime_snapshot.real >> 32;
++		arg[1] = systime_snapshot.real << 32 >> 32;
++		cycles = systime_snapshot.cycles - vcpu_vtimer(vcpu)->cntvoff;
++		arg[2] = cycles >> 32;
++		arg[3] = cycles << 32 >> 32;
++		smccc_set_retval(vcpu, arg[0], arg[1], arg[2], arg[3]);
++		return 1;
+ 	default:
+ 		return kvm_psci_call(vcpu);
+ 	}
+-- 
+2.32.0
+
