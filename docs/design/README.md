@@ -10,3 +10,7 @@ Kata Containers design documents:
 - [Host cgroups](host-cgroups.md)
 - [`Inotify` support](inotify.md)
 - [Metrics(Kata 2.0)](kata-2-0-metrics.md)
+
+---
+
+- [Design proposals](proposals)
