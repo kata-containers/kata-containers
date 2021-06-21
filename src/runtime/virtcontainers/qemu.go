@@ -708,7 +708,7 @@ func (q *qemu) getMemArgs() (bool, string, string, error) {
 	return share, target, memoryBack, nil
 }
 
-func (q *qemu) setupVirtioMem() error {
+func (q *qemu) setupVirtioMem(ctx context.Context) error {
 	maxMem, err := q.hostMemMB()
 	if err != nil {
 		return err
@@ -724,7 +724,19 @@ func (q *qemu) setupVirtioMem() error {
 	if err = q.qmpSetup(); err != nil {
 		return err
 	}
-	err = q.qmpMonitorCh.qmp.ExecMemdevAdd(q.qmpMonitorCh.ctx, memoryBack, "virtiomem", target, sizeMB, share, "virtio-mem-pci", "virtiomem0")
+
+	addr, bridge, err := q.arch.addDeviceToBridge(ctx, "virtiomem-dev", types.PCI)
+	if err != nil {
+		return err
+	}
+
+	defer func() {
+		if err != nil {
+			q.arch.removeDeviceFromBridge("virtiomem-dev")
+		}
+	}()
+
+	err = q.qmpMonitorCh.qmp.ExecMemdevAdd(q.qmpMonitorCh.ctx, memoryBack, "virtiomem", target, sizeMB, share, "virtio-mem-pci", "virtiomem0", addr, bridge.ID)
 	if err == nil {
 		q.config.VirtioMem = true
 		q.Logger().Infof("Setup %dMB virtio-mem-pci success", sizeMB)
@@ -832,7 +844,7 @@ func (q *qemu) startSandbox(ctx context.Context, timeout int) error {
 	}
 
 	if q.config.VirtioMem {
-		err = q.setupVirtioMem()
+		err = q.setupVirtioMem(ctx)
 	}
 
 	return err
