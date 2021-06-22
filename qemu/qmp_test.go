@@ -1342,7 +1342,7 @@ func TestExecMemdevAdd(t *testing.T) {
 	cfg := QMPConfig{Logger: qmpTestLogger{}}
 	q := startQMPLoop(buf, cfg, connectedCh, disconnectedCh)
 	checkVersion(t, connectedCh)
-	err := q.ExecMemdevAdd(context.Background(), "memory-backend-ram", "mem0", "", 128, true, "virtio-mem-pci", "virtiomem0")
+	err := q.ExecMemdevAdd(context.Background(), "memory-backend-ram", "mem0", "", 128, true, "virtio-mem-pci", "virtiomem0", "0x1", "pci-bridge-0")
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
 	}
