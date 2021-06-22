@@ -1715,6 +1715,11 @@ func (s *Sandbox) HotplugRemoveDevice(ctx context.Context, device api.Device, de
 		if !ok {
 			return fmt.Errorf("device type mismatch, expect device type to be %s", devType)
 		}
+		// PMEM devices cannot be hot removed
+		if blockDrive.Pmem {
+			s.Logger().WithField("path", blockDrive.File).Infof("Skip device: cannot hot remove PMEM devices")
+			return nil
+		}
 		_, err := s.hypervisor.hotplugRemoveDevice(ctx, blockDrive, blockDev)
 		return err
 	case config.VhostUserBlk:
