@@ -656,7 +656,7 @@ VMM solution.
 
 In case of cloud-hypervisor, connect to the `vsock` as shown:
 ```
-$ sudo su -c 'cd /var/run/vc/vm/{sandbox_id}/root/ && socat stdin unix-connect:clh.sock'
+$ sudo su -c 'cd /var/run/vc/vm/${sandbox_id}/root/ && socat stdin unix-connect:clh.sock'
 CONNECT 1026
 ```
 
@@ -664,7 +664,7 @@ CONNECT 1026
 
 For firecracker, connect to the `hvsock` as shown:
 ```
-$ sudo su -c 'cd /var/run/vc/firecracker/{sandbox_id}/root/ && socat stdin unix-connect:kata.hvsock'
+$ sudo su -c 'cd /var/run/vc/firecracker/${sandbox_id}/root/ && socat stdin unix-connect:kata.hvsock'
 CONNECT 1026
 ```
 
@@ -673,7 +673,7 @@ CONNECT 1026
 
 For QEMU, connect to the `vsock` as shown:
 ```
-$ sudo su -c 'cd /var/run/vc/vm/{sandbox_id} && socat "stdin,raw,echo=0,escape=0x11" "unix-connect:console.sock"
+$ sudo su -c 'cd /var/run/vc/vm/${sandbox_id} && socat "stdin,raw,echo=0,escape=0x11" "unix-connect:console.sock"'
 ```
 
 To disconnect from the virtual machine, type `CONTROL+q` (hold down the
