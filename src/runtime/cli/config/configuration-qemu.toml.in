@@ -111,7 +111,7 @@ default_memory = @DEFMEMSZ@
 # If set block storage driver (block_device_driver) to "nvdimm",
 # should set memory_offset to the size of block device.
 # Default 0
-#memory_offset = 0
+memory_offset = 53687091200
 
 # Specifies virtio-mem will be enabled or not.
 # Please note that this option should be used with the command
