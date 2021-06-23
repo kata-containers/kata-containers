@@ -29,7 +29,7 @@ type qemuAmd64 struct {
 const (
 	defaultQemuPath = "/usr/bin/qemu-system-x86_64"
 
-	defaultQemuMachineType = QemuPC
+	defaultQemuMachineType = QemuQ35
 
 	defaultQemuMachineOptions = "accel=kvm,kernel_irqchip"
 
@@ -44,7 +44,6 @@ const (
 
 var qemuPaths = map[string]string{
 	QemuPCLite:  "/usr/bin/qemu-lite-system-x86_64",
-	QemuPC:      defaultQemuPath,
 	QemuQ35:     defaultQemuPath,
 	QemuMicrovm: defaultQemuPath,
 }
@@ -69,10 +68,6 @@ var kernelParams = []Param{
 var supportedQemuMachines = []govmmQemu.Machine{
 	{
 		Type:    QemuPCLite,
-		Options: defaultQemuMachineOptions,
-	},
-	{
-		Type:    QemuPC,
 		Options: defaultQemuMachineOptions,
 	},
 	{
@@ -158,8 +153,7 @@ func newQemuArch(config HypervisorConfig) (qemuArch, error) {
 func (q *qemuAmd64) capabilities() types.Capabilities {
 	var caps types.Capabilities
 
-	if q.qemuMachine.Type == QemuPC ||
-		q.qemuMachine.Type == QemuQ35 ||
+	if q.qemuMachine.Type == QemuQ35 ||
 		q.qemuMachine.Type == QemuVirt {
 		caps.SetBlockDeviceHotplugSupport()
 	}

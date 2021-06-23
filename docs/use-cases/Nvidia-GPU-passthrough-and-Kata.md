@@ -75,13 +75,6 @@ To use non-large BARs devices (for example, Nvidia Tesla T4), you need Kata vers
 Follow the [Kata Containers setup instructions](../install/README.md)
 to install the latest version of Kata.
 
-The following configuration in the Kata `configuration.toml` file as shown below can work:
-```
-machine_type = "pc"
-
-hotplug_vfio_on_root_bus = true
-```
-
 To use large BARs devices (for example, Nvidia Tesla P100), you need Kata version 1.11.0 or above.
 
 The following configuration in the Kata `configuration.toml` file as shown below can work:
