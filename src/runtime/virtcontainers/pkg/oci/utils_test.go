@@ -1103,3 +1103,145 @@ func TestIsCRIOContainerManager(t *testing.T) {
 		assert.Equal(tc.result, result, "test case %d", (i + 1))
 	}
 }
+
+func TestParseAnnotationUintConfiguration(t *testing.T) {
+	assert := assert.New(t)
+
+	const key = "my_key"
+
+	validErr := fmt.Errorf("invalid value range: must between [10-1000]")
+	validFunc := func(v uint64) error {
+		if v < 10 || v > 1000 {
+			return validErr
+		}
+		return nil
+	}
+
+	testCases := []struct {
+		annotations map[string]string
+		expected    uint64
+		err         error
+		validFunc   func(uint64) error
+	}{
+		{
+			annotations: map[string]string{key: ""},
+			expected:    0,
+			err:         fmt.Errorf(errAnnotationPositiveNumericKey, key),
+			validFunc:   nil,
+		},
+		{
+			annotations: map[string]string{key: "a"},
+			expected:    0,
+			err:         fmt.Errorf(errAnnotationPositiveNumericKey, key),
+			validFunc:   nil,
+		},
+		{
+			annotations: map[string]string{key: "16"},
+			expected:    16,
+			err:         nil,
+			validFunc:   nil,
+		},
+		{
+			annotations: map[string]string{key: "16"},
+			expected:    16,
+			err:         nil,
+			validFunc:   validFunc,
+		},
+		{
+			annotations: map[string]string{key: "8"},
+			expected:    0,
+			err:         validErr,
+			validFunc:   validFunc,
+		},
+		{
+			annotations: map[string]string{key: "0"},
+			expected:    0,
+			err:         nil,
+			validFunc:   nil,
+		},
+		{
+			annotations: map[string]string{key: "-1"},
+			expected:    0,
+			err:         fmt.Errorf(errAnnotationPositiveNumericKey, key),
+			validFunc:   nil,
+		},
+	}
+
+	for i := range testCases {
+		tc := testCases[i]
+		ocispec := specs.Spec{
+			Annotations: tc.annotations,
+		}
+		var val uint64 = 0
+
+		err := newAnnotationConfiguration(ocispec, key).setUintWithCheck(func(v uint64) error {
+			if tc.validFunc != nil {
+				if err := tc.validFunc(v); err != nil {
+					return err
+				}
+			}
+			val = v
+			return nil
+		})
+
+		assert.Equal(tc.err, err, "test case %d check error", (i + 1))
+		if tc.err == nil {
+			assert.Equal(tc.expected, val, "test case %d check parsed result", (i + 1))
+		}
+	}
+}
+
+func TestParseAnnotationBoolConfiguration(t *testing.T) {
+	assert := assert.New(t)
+
+	const (
+		u32Key  = "u32_key"
+		u64Key  = "u64_key"
+		boolKey = "bool_key"
+	)
+
+	testCases := []struct {
+		annotationKey       string
+		annotationValueList []string
+		expected            bool
+		err                 error
+	}{
+		{
+			annotationKey:       boolKey,
+			annotationValueList: []string{"1", "t", "T", "true", "TRUE", "True"},
+			expected:            true,
+			err:                 nil,
+		},
+		{
+			annotationKey:       boolKey,
+			annotationValueList: []string{"0", "f", "F", "false", "FALSE", "False"},
+			expected:            false,
+			err:                 nil,
+		},
+		{
+			annotationKey:       boolKey,
+			annotationValueList: []string{"a", "FalSE", "Fal", "TRue", "TRU", "falsE"},
+			expected:            false,
+			err:                 fmt.Errorf(errAnnotationBoolKey, boolKey),
+		},
+	}
+
+	for i := range testCases {
+		tc := testCases[i]
+		for _, annotaionValue := range tc.annotationValueList {
+			ocispec := specs.Spec{
+				Annotations: map[string]string{tc.annotationKey: annotaionValue},
+			}
+			var val bool = false
+
+			err := newAnnotationConfiguration(ocispec, tc.annotationKey).setBool(func(v bool) {
+				val = v
+			})
+
+			assert.Equal(tc.err, err, "test case %d check error", (i + 1))
+			if tc.err == nil {
+				assert.Equal(tc.expected, val, "test case %d check parsed result", (i + 1))
+			}
+		}
+	}
+}
