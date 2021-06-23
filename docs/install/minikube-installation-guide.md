@@ -18,7 +18,7 @@
 cluster locally. It creates a single node Kubernetes stack in a local VM.
 
 [Kata Containers](https://github.com/kata-containers) can be installed into a Minikube cluster using
-[`kata-deploy`](https://github.com/kata-containers/packaging/tree/master/kata-deploy).
+[`kata-deploy`](https://github.com/kata-containers/kata-containers/tree/main/tools/packaging/kata-deploy).
 
 This document details the pre-requisites, installation steps, and how to check
 the installation has been successful.
@@ -135,7 +135,7 @@ $ kubectl apply -f kata-deploy/base/kata-deploy.yaml
 This installs the Kata Containers components into `/opt/kata` inside the Minikube node. It can take
 a few minutes for the operation to complete. You can check the installation has worked by checking
 the status of the `kata-deploy` pod, which will be executing
-[this script](https://github.com/kata-containers/packaging/blob/master/kata-deploy/scripts/kata-deploy.sh),
+[this script](https://github.com/kata-containers/kata-containers/tree/main/tools/packaging/kata-deploy/scripts/kata-deploy.sh),
 and will be executing a `sleep infinity` once it has successfully completed its work.
 You can accomplish this by running the following:
 
