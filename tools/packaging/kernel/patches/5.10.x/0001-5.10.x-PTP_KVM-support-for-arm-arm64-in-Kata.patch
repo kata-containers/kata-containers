@@ -1,7 +1,7 @@
-From c3e1dea64ef59a1270cbcb651817f7c6475e355e Mon Sep 17 00:00:00 2001
+From 772e627bb2aa29a6d006f08bdf7bc1492671d1fe Mon Sep 17 00:00:00 2001
 From: Damon Kwok <damon-kwok@outlook.com>
-Date: Fri, 18 Jun 2021 17:31:48 +0800
-Subject: [PATCH] arm64: Add host/guest KVM-PTP support in kata
+Date: Thu, 24 Jun 2021 15:04:19 +0800
+Subject: [PATCH] 5.10.x: PTP_KVM support for arm/arm64 in Kata
 
 ---
  Documentation/virt/kvm/api.rst              |  9 ++
@@ -12,22 +12,22 @@ Subject: [PATCH] arm64: Add host/guest KVM-PTP support in kata
  arch/arm64/kernel/setup.c                   |  1 +
  arch/arm64/kvm/hypercalls.c                 | 86 ++++++++++++++++--
  arch/arm64/kvm/reset.c                      |  1 +
- drivers/clocksource/arm_arch_timer.c        | 31 +++++++
+ drivers/clocksource/arm_arch_timer.c        | 33 +++++++
  drivers/firmware/smccc/smccc.c              | 37 ++++++++
  drivers/ptp/Kconfig                         |  2 +-
  drivers/ptp/Makefile                        |  2 +
- drivers/ptp/ptp_kvm_arm.c                   | 45 ++++++++++
- drivers/ptp/{ptp_kvm.c => ptp_kvm_common.c} | 84 +++++-------------
+ drivers/ptp/ptp_kvm_arm.c                   | 28 ++++++
+ drivers/ptp/{ptp_kvm.c => ptp_kvm_common.c} | 85 +++++-------------
  drivers/ptp/ptp_kvm_x86.c                   | 96 +++++++++++++++++++++
  include/linux/arm-smccc.h                   | 59 +++++++++++++
  include/linux/clocksource.h                 |  6 ++
  include/linux/clocksource_ids.h             | 12 +++
- include/linux/ptp_kvm.h                     | 16 ++++
+ include/linux/ptp_kvm.h                     | 19 ++++
  include/linux/timekeeping.h                 | 12 +--
  include/uapi/linux/kvm.h                    |  1 +
  kernel/time/clocksource.c                   |  2 +
  kernel/time/timekeeping.c                   |  1 +
- 23 files changed, 498 insertions(+), 77 deletions(-)
+ 23 files changed, 487 insertions(+), 77 deletions(-)
  create mode 100644 Documentation/virt/kvm/arm/ptp_kvm.rst
  create mode 100644 drivers/ptp/ptp_kvm_arm.c
  rename drivers/ptp/{ptp_kvm.c => ptp_kvm_common.c} (60%)
@@ -36,7 +36,7 @@ Subject: [PATCH] arm64: Add host/guest KVM-PTP support in kata
  create mode 100644 include/linux/ptp_kvm.h
 
 diff --git a/Documentation/virt/kvm/api.rst b/Documentation/virt/kvm/api.rst
-index cd8a58556..4b97c228b 100644
+index cd8a585..4b97c22 100644
 --- a/Documentation/virt/kvm/api.rst
 +++ b/Documentation/virt/kvm/api.rst
 @@ -6398,3 +6398,12 @@ When enabled, KVM will disable paravirtual features provided to the
@@ -53,7 +53,7 @@ index cd8a58556..4b97c228b 100644
 +It must company with the implementation of KVM virtual PTP service in host
 +so VMM can probe if there is the service in host by checking this capability.
 diff --git a/Documentation/virt/kvm/arm/index.rst b/Documentation/virt/kvm/arm/index.rst
-index 3e2b2aba9..78a9b670a 100644
+index 3e2b2ab..78a9b67 100644
 --- a/Documentation/virt/kvm/arm/index.rst
 +++ b/Documentation/virt/kvm/arm/index.rst
 @@ -10,3 +10,4 @@ ARM
@@ -63,7 +63,7 @@ index 3e2b2aba9..78a9b670a 100644
 +   ptp_kvm
 diff --git a/Documentation/virt/kvm/arm/ptp_kvm.rst b/Documentation/virt/kvm/arm/ptp_kvm.rst
 new file mode 100644
-index 000000000..d729c1388
+index 0000000..7be7e65
 --- /dev/null
 +++ b/Documentation/virt/kvm/arm/ptp_kvm.rst
 @@ -0,0 +1,31 @@
@@ -78,12 +78,12 @@ index 000000000..d729c1388
 +
 +This new SMCCC hypercall is defined as:
 +
-+* ARM_SMCCC_HYP_KVM_PTP_FUNC_ID: 0x86000001
++* ARM_SMCCC_VENDOR_HYP_KVM_PTP_FUNC_ID: 0x86000001
 +
 +As both 32 and 64-bits ptp_kvm client should be supported, we choose SMC32/HVC32
 +calling convention.
 +
-+ARM_SMCCC_HYP_KVM_PTP_FUNC_ID:
++ARM_SMCCC_VENDOR_HYP_KVM_PTP_FUNC_ID:
 +
 +    =============    ==========    ==========
 +    Function ID:     (uint32)      0x86000001
@@ -99,7 +99,7 @@ index 000000000..d729c1388
 +
 +More info see section 5 in Documentation/virt/kvm/timekeeping.rst.
 diff --git a/Documentation/virt/kvm/timekeeping.rst b/Documentation/virt/kvm/timekeeping.rst
-index 21ae7efa2..c81383e38 100644
+index 21ae7ef..c81383e 100644
 --- a/Documentation/virt/kvm/timekeeping.rst
 +++ b/Documentation/virt/kvm/timekeeping.rst
 @@ -13,6 +13,7 @@ Timekeeping Virtualization for X86-Based Architectures
@@ -149,7 +149,7 @@ index 21ae7efa2..c81383e38 100644
 +a guest driver making a hypercall whilst step 3 involves the hypervisor responding
 +with information.
 diff --git a/arch/arm/kernel/setup.c b/arch/arm/kernel/setup.c
-index f90479d8b..472daea17 100644
+index f90479d..472daea 100644
 --- a/arch/arm/kernel/setup.c
 +++ b/arch/arm/kernel/setup.c
 @@ -1154,6 +1154,11 @@ void __init setup_arch(char **cmdline_p)
@@ -165,7 +165,7 @@ index f90479d8b..472daea17 100644
  	if (is_smp()) {
  		if (!mdesc->smp_init || !mdesc->smp_init()) {
 diff --git a/arch/arm64/kernel/setup.c b/arch/arm64/kernel/setup.c
-index 133257ffd..d1dbe4162 100644
+index 133257f..d1dbe41 100644
 --- a/arch/arm64/kernel/setup.c
 +++ b/arch/arm64/kernel/setup.c
 @@ -353,6 +353,7 @@ void __init __no_sanitize_address setup_arch(char **cmdline_p)
@@ -177,7 +177,7 @@ index 133257ffd..d1dbe4162 100644
  	smp_init_cpus();
  	smp_build_mpidr_hash();
 diff --git a/arch/arm64/kvm/hypercalls.c b/arch/arm64/kvm/hypercalls.c
-index 25ea4ecb6..9a4834502 100644
+index 25ea4ec..9a48345 100644
 --- a/arch/arm64/kvm/hypercalls.c
 +++ b/arch/arm64/kvm/hypercalls.c
 @@ -9,16 +9,59 @@
@@ -314,7 +314,7 @@ index 25ea4ecb6..9a4834502 100644
  	return 1;
  }
 diff --git a/arch/arm64/kvm/reset.c b/arch/arm64/kvm/reset.c
-index b969c2157..77fae02b6 100644
+index b969c21..77fae02 100644
 --- a/arch/arm64/kvm/reset.c
 +++ b/arch/arm64/kvm/reset.c
 @@ -75,6 +75,7 @@ int kvm_arch_vm_ioctl_check_extension(struct kvm *kvm, long ext)
@@ -326,7 +326,7 @@ index b969c2157..77fae02b6 100644
  		break;
  	case KVM_CAP_ARM_VM_IPA_SIZE:
 diff --git a/drivers/clocksource/arm_arch_timer.c b/drivers/clocksource/arm_arch_timer.c
-index d0177824c..e3a5ebbfb 100644
+index d017782..7cbb9fa 100644
 --- a/drivers/clocksource/arm_arch_timer.c
 +++ b/drivers/clocksource/arm_arch_timer.c
 @@ -16,6 +16,7 @@
@@ -354,7 +354,7 @@ index d0177824c..e3a5ebbfb 100644
  	.rating	= 400,
  	.read	= arch_counter_read,
  	.mask	= CLOCKSOURCE_MASK(56),
-@@ -1657,3 +1661,30 @@ static int __init arch_timer_acpi_init(struct acpi_table_header *table)
+@@ -1657,3 +1661,32 @@ static int __init arch_timer_acpi_init(struct acpi_table_header *table)
  }
  TIMER_ACPI_DECLARE(arch_timer, ACPI_SIG_GTDT, arch_timer_acpi_init);
  #endif
@@ -379,14 +379,16 @@ index d0177824c..e3a5ebbfb 100644
 +
 +	ktime = (u64)hvc_res.a0 << 32 | hvc_res.a1;
 +	*ts = ktime_to_timespec64(ktime);
-+	*cycle = (u64)hvc_res.a2 << 32 | hvc_res.a3;
-+	*cs = &clocksource_counter;
++	if (cycle)
++		*cycle = (u64)hvc_res.a2 << 32 | hvc_res.a3;
++	if (cs)
++		*cs = &clocksource_counter;
 +
 +	return 0;
 +}
 +EXPORT_SYMBOL_GPL(kvm_arch_ptp_get_crosststamp);
 diff --git a/drivers/firmware/smccc/smccc.c b/drivers/firmware/smccc/smccc.c
-index 00c88b809..e153c71ec 100644
+index 00c88b8..e153c71 100644
 --- a/drivers/firmware/smccc/smccc.c
 +++ b/drivers/firmware/smccc/smccc.c
 @@ -7,10 +7,47 @@
@@ -438,7 +440,7 @@ index 00c88b809..e153c71ec 100644
  {
  	smccc_version = version;
 diff --git a/drivers/ptp/Kconfig b/drivers/ptp/Kconfig
-index deb429a3d..e89d0e015 100644
+index deb429a..5523f96 100644
 --- a/drivers/ptp/Kconfig
 +++ b/drivers/ptp/Kconfig
 @@ -108,7 +108,7 @@ config PTP_1588_CLOCK_PCH
@@ -446,12 +448,12 @@ index deb429a3d..e89d0e015 100644
  	tristate "KVM virtual PTP clock"
  	depends on PTP_1588_CLOCK
 -	depends on KVM_GUEST && X86
-+	depends on KVM_GUEST && X86 || (HAVE_ARM_SMCCC_DISCOVERY && ARM_ARCH_TIMER)
++	depends on X86 || (HAVE_ARM_SMCCC_DISCOVERY && ARM_ARCH_TIMER)
  	default y
  	help
  	  This driver adds support for using kvm infrastructure as a PTP
 diff --git a/drivers/ptp/Makefile b/drivers/ptp/Makefile
-index 7aff75f74..9fa5ede44 100644
+index 7aff75f..9fa5ede 100644
 --- a/drivers/ptp/Makefile
 +++ b/drivers/ptp/Makefile
 @@ -4,6 +4,8 @@
@@ -465,10 +467,10 @@ index 7aff75f74..9fa5ede44 100644
  obj-$(CONFIG_PTP_1588_CLOCK_INES)	+= ptp_ines.o
 diff --git a/drivers/ptp/ptp_kvm_arm.c b/drivers/ptp/ptp_kvm_arm.c
 new file mode 100644
-index 000000000..ecb5ef273
+index 0000000..b7d28c8
 --- /dev/null
 +++ b/drivers/ptp/ptp_kvm_arm.c
-@@ -0,0 +1,45 @@
+@@ -0,0 +1,28 @@
 +// SPDX-License-Identifier: GPL-2.0-only
 +/*
 + *  Virtual PTP 1588 clock for use with KVM guests
@@ -476,15 +478,9 @@ index 000000000..ecb5ef273
 + *  All Rights Reserved
 + */
 +
-+#include <linux/kernel.h>
-+#include <linux/err.h>
-+#include <asm/hypervisor.h>
-+#include <linux/module.h>
-+#include <linux/psci.h>
 +#include <linux/arm-smccc.h>
-+#include <linux/timecounter.h>
 +#include <linux/ptp_kvm.h>
-+#include <linux/sched/clock.h>
++
 +#include <asm/arch_timer.h>
 +#include <asm/hypervisor.h>
 +
@@ -501,24 +497,13 @@ index 000000000..ecb5ef273
 +
 +int kvm_arch_ptp_get_clock(struct timespec64 *ts)
 +{
-+	ktime_t ktime;
-+	struct arm_smccc_res hvc_res;
-+
-+	arm_smccc_1_1_invoke(ARM_SMCCC_VENDOR_HYP_KVM_PTP_FUNC_ID,
-+			     ARM_PTP_VIRT_COUNTER, &hvc_res);
-+	if ((int)(hvc_res.a0) < 0)
-+		return -EOPNOTSUPP;
-+
-+	ktime = (u64)hvc_res.a0 << 32 | hvc_res.a1;
-+	*ts = ktime_to_timespec64(ktime);
-+
-+	return 0;
++	return kvm_arch_ptp_get_crosststamp(NULL, ts, NULL);
 +}
 diff --git a/drivers/ptp/ptp_kvm.c b/drivers/ptp/ptp_kvm_common.c
 similarity index 60%
 rename from drivers/ptp/ptp_kvm.c
 rename to drivers/ptp/ptp_kvm_common.c
-index 658d33fc3..721ddcede 100644
+index 658d33f..5c36e2f 100644
 --- a/drivers/ptp/ptp_kvm.c
 +++ b/drivers/ptp/ptp_kvm_common.c
 @@ -8,11 +8,11 @@
@@ -588,7 +573,7 @@ index 658d33fc3..721ddcede 100644
 -		ret = __pvclock_read_cycles(src, clock_pair.tsc);
 -	} while (pvclock_read_retry(src, version));
 +	ret = kvm_arch_ptp_get_crosststamp(&cycle, &tspec, &cs);
-+	if (ret) {
++	if (ret!=0) {
 +		spin_unlock(&kvm_ptp_lock);
 +		preempt_enable_notrace();
 +		return ret;
@@ -630,7 +615,7 @@ index 658d33fc3..721ddcede 100644
  	spin_unlock(&kvm_ptp_lock);
  
  	memcpy(ts, &tspec, sizeof(struct timespec64));
-@@ -168,19 +136,11 @@ static int __init ptp_kvm_init(void)
+@@ -168,19 +136,12 @@ static int __init ptp_kvm_init(void)
  {
  	long ret;
  
@@ -649,7 +634,8 @@ index 658d33fc3..721ddcede 100644
 -		return -ENODEV;
 +	ret = kvm_arch_ptp_init();
 +	if (ret) {
-+		pr_err("fail to initialize ptp_kvm");
++		if (ret != -EOPNOTSUPP)
++			pr_err("fail to initialize ptp_kvm");
 +		return ret;
 +	}
  
@@ -657,7 +643,7 @@ index 658d33fc3..721ddcede 100644
  
 diff --git a/drivers/ptp/ptp_kvm_x86.c b/drivers/ptp/ptp_kvm_x86.c
 new file mode 100644
-index 000000000..e011d691e
+index 0000000..e011d69
 --- /dev/null
 +++ b/drivers/ptp/ptp_kvm_x86.c
 @@ -0,0 +1,96 @@
@@ -758,7 +744,7 @@ index 000000000..e011d691e
 +	return 0;
 +}
 diff --git a/include/linux/arm-smccc.h b/include/linux/arm-smccc.h
-index f860645f6..7924069f8 100644
+index f860645..92b46cb 100644
 --- a/include/linux/arm-smccc.h
 +++ b/include/linux/arm-smccc.h
 @@ -55,6 +55,8 @@
@@ -835,7 +821,7 @@ index f860645f6..7924069f8 100644
 +	extern DECLARE_BITMAP(__kvm_arm_hyp_services, ARM_SMCCC_KVM_NUM_FUNCS);
 +
 +	if (func_id >= ARM_SMCCC_KVM_NUM_FUNCS)
-+		return -EINVAL;
++		return false;
 +
 +	return test_bit(func_id, __kvm_arm_hyp_services);
 +}
@@ -843,7 +829,7 @@ index f860645f6..7924069f8 100644
  #endif /*__ASSEMBLY__*/
  #endif /*__LINUX_ARM_SMCCC_H*/
 diff --git a/include/linux/clocksource.h b/include/linux/clocksource.h
-index 86d143db6..1290d0dce 100644
+index 86d143d..1290d0d 100644
 --- a/include/linux/clocksource.h
 +++ b/include/linux/clocksource.h
 @@ -17,6 +17,7 @@
@@ -875,7 +861,7 @@ index 86d143db6..1290d0dce 100644
  
 diff --git a/include/linux/clocksource_ids.h b/include/linux/clocksource_ids.h
 new file mode 100644
-index 000000000..16775d7d8
+index 0000000..16775d7
 --- /dev/null
 +++ b/include/linux/clocksource_ids.h
 @@ -0,0 +1,12 @@
@@ -893,10 +879,10 @@ index 000000000..16775d7d8
 +#endif
 diff --git a/include/linux/ptp_kvm.h b/include/linux/ptp_kvm.h
 new file mode 100644
-index 000000000..6f104b196
+index 0000000..f960a71
 --- /dev/null
 +++ b/include/linux/ptp_kvm.h
-@@ -0,0 +1,16 @@
+@@ -0,0 +1,19 @@
 +/* SPDX-License-Identifier: GPL-2.0-or-later */
 +/*
 + * Virtual PTP 1588 clock for use with KVM guests
@@ -907,6 +893,9 @@ index 000000000..6f104b196
 +#ifndef _PTP_KVM_H_
 +#define _PTP_KVM_H_
 +
++struct timespec64;
++struct clocksource;
++
 +int kvm_arch_ptp_init(void);
 +int kvm_arch_ptp_get_clock(struct timespec64 *ts);
 +int kvm_arch_ptp_get_crosststamp(u64 *cycle,
@@ -914,7 +903,7 @@ index 000000000..6f104b196
 +
 +#endif /* _PTP_KVM_H_ */
 diff --git a/include/linux/timekeeping.h b/include/linux/timekeeping.h
-index 7f7e4a3f4..2ee053553 100644
+index 7f7e4a3..2ee0535 100644
 --- a/include/linux/timekeeping.h
 +++ b/include/linux/timekeeping.h
 @@ -3,6 +3,7 @@
@@ -944,7 +933,7 @@ index 7f7e4a3f4..2ee053553 100644
  
  /**
 diff --git a/include/uapi/linux/kvm.h b/include/uapi/linux/kvm.h
-index ca41220b4..797c40bbc 100644
+index ca41220..797c40b 100644
 --- a/include/uapi/linux/kvm.h
 +++ b/include/uapi/linux/kvm.h
 @@ -1053,6 +1053,7 @@ struct kvm_ppc_resize_hpt {
@@ -956,7 +945,7 @@ index ca41220b4..797c40bbc 100644
  #ifdef KVM_CAP_IRQ_ROUTING
  
 diff --git a/kernel/time/clocksource.c b/kernel/time/clocksource.c
-index 02441ead3..6b38d4993 100644
+index 02441ea..6b38d49 100644
 --- a/kernel/time/clocksource.c
 +++ b/kernel/time/clocksource.c
 @@ -928,6 +928,8 @@ int __clocksource_register_scale(struct clocksource *cs, u32 scale, u32 freq)
@@ -969,7 +958,7 @@ index 02441ead3..6b38d4993 100644
  	    cs->vdso_clock_mode >= VDSO_CLOCKMODE_MAX) {
  		pr_warn("clocksource %s registered with invalid VDSO mode %d. Disabling VDSO support.\n",
 diff --git a/kernel/time/timekeeping.c b/kernel/time/timekeeping.c
-index 6858a3136..eb04a2d74 100644
+index 6858a31..eb04a2d 100644
 --- a/kernel/time/timekeeping.c
 +++ b/kernel/time/timekeeping.c
 @@ -1053,6 +1053,7 @@ void ktime_get_snapshot(struct system_time_snapshot *systime_snapshot)
