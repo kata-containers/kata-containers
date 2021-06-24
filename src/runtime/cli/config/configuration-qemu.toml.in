@@ -277,7 +277,7 @@ pflashes = []
 # VFIO devices are hotplugged on a bridge by default.
 # Enable hotplugging on root bus. This may be required for devices with
 # a large PCI bar, as this is a current limitation with hotplugging on
-# a bridge. This value is valid for "pc" machine type.
+# a bridge.
 # Default false
 #hotplug_vfio_on_root_bus = true
 

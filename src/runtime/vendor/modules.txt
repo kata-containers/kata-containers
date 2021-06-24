@@ -143,8 +143,6 @@ github.com/coreos/go-systemd/dbus
 github.com/cri-o/cri-o/pkg/annotations
 # github.com/davecgh/go-spew v1.1.1
 github.com/davecgh/go-spew/spew
-# github.com/dlespiau/covertool v0.0.0-20180314162135-b0c4c6d0583a
-## explicit
 # github.com/docker/distribution v2.7.1+incompatible
 ## explicit
 github.com/docker/distribution/digestset
@@ -224,7 +222,7 @@ github.com/hashicorp/go-multierror
 # github.com/intel-go/cpuid v0.0.0-20210602155658-5747e5cec0d9
 ## explicit
 github.com/intel-go/cpuid
-# github.com/kata-containers/govmm v0.0.0-20210520142420-eb57f004d89f
+# github.com/kata-containers/govmm v0.0.0-20210622075516-263136e69ac8
 ## explicit
 github.com/kata-containers/govmm/qemu
 # github.com/konsorten/go-windows-terminal-sequences v1.0.1

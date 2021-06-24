@@ -42,12 +42,8 @@ func TestQemuAmd64BadMachineType(t *testing.T) {
 func TestQemuAmd64Capabilities(t *testing.T) {
 	assert := assert.New(t)
 
-	amd64 := newTestQemu(assert, QemuPC)
+	amd64 := newTestQemu(assert, QemuQ35)
 	caps := amd64.capabilities()
-	assert.True(caps.IsBlockDeviceHotplugSupported())
-
-	amd64 = newTestQemu(assert, QemuQ35)
-	caps = amd64.capabilities()
 	assert.True(caps.IsBlockDeviceHotplugSupported())
 
 	amd64 = newTestQemu(assert, QemuMicrovm)
@@ -57,23 +53,11 @@ func TestQemuAmd64Capabilities(t *testing.T) {
 
 func TestQemuAmd64Bridges(t *testing.T) {
 	assert := assert.New(t)
-	amd64 := newTestQemu(assert, QemuPC)
 	len := 5
 
+	amd64 := newTestQemu(assert, QemuMicrovm)
 	amd64.bridges(uint32(len))
 	bridges := amd64.getBridges()
-	assert.Len(bridges, len)
-
-	for i, b := range bridges {
-		id := fmt.Sprintf("%s-bridge-%d", types.PCI, i)
-		assert.Equal(types.PCI, b.Type)
-		assert.Equal(id, b.ID)
-		assert.NotNil(b.Devices)
-	}
-
-	amd64 = newTestQemu(assert, QemuMicrovm)
-	amd64.bridges(uint32(len))
-	bridges = amd64.getBridges()
 	assert.Nil(bridges)
 
 	amd64 = newTestQemu(assert, QemuQ35)
@@ -91,7 +75,7 @@ func TestQemuAmd64Bridges(t *testing.T) {
 
 func TestQemuAmd64CPUModel(t *testing.T) {
 	assert := assert.New(t)
-	amd64 := newTestQemu(assert, QemuPC)
+	amd64 := newTestQemu(assert, QemuQ35)
 
 	expectedOut := defaultCPUModel
 	model := amd64.cpuModel()
@@ -108,7 +92,7 @@ func TestQemuAmd64CPUModel(t *testing.T) {
 
 func TestQemuAmd64MemoryTopology(t *testing.T) {
 	assert := assert.New(t)
-	amd64 := newTestQemu(assert, QemuPC)
+	amd64 := newTestQemu(assert, QemuQ35)
 	memoryOffset := uint64(1024)
 
 	hostMem := uint64(100)
@@ -139,7 +123,7 @@ func TestQemuAmd64AppendImage(t *testing.T) {
 	machinesCopy := make([]govmmQemu.Machine, len(supportedQemuMachines))
 	assert.Equal(len(supportedQemuMachines), copy(machinesCopy, supportedQemuMachines))
 
-	cfg := qemuConfig(QemuPC)
+	cfg := qemuConfig(QemuQ35)
 	cfg.ImagePath = f.Name()
 	cfg.DisableImageNvdimm = false
 	amd64, err := newQemuArch(cfg)
@@ -189,41 +173,18 @@ func TestQemuAmd64AppendBridges(t *testing.T) {
 	var devices []govmmQemu.Device
 	assert := assert.New(t)
 
-	// check PC
-	amd64 := newTestQemu(assert, QemuPC)
+	// Check Q35
+	amd64 := newTestQemu(assert, QemuQ35)
 
 	amd64.bridges(1)
 	bridges := amd64.getBridges()
-	assert.Len(bridges, 1)
-
-	devices = amd64.appendBridges(devices)
-	assert.Len(devices, 1)
-
-	expectedOut := []govmmQemu.Device{
-		govmmQemu.BridgeDevice{
-			Type:    govmmQemu.PCIBridge,
-			Bus:     defaultPCBridgeBus,
-			ID:      bridges[0].ID,
-			Chassis: 1,
-			SHPC:    true,
-			Addr:    "2",
-		},
-	}
-
-	assert.Equal(expectedOut, devices)
-
-	// Check Q35
-	amd64 = newTestQemu(assert, QemuQ35)
-
-	amd64.bridges(1)
-	bridges = amd64.getBridges()
 	assert.Len(bridges, 1)
 
 	devices = []govmmQemu.Device{}
 	devices = amd64.appendBridges(devices)
 	assert.Len(devices, 1)
 
-	expectedOut = []govmmQemu.Device{
+	expectedOut := []govmmQemu.Device{
 		govmmQemu.BridgeDevice{
 			Type:    govmmQemu.PCIBridge,
 			Bus:     defaultBridgeBus,
@@ -240,7 +201,7 @@ func TestQemuAmd64AppendBridges(t *testing.T) {
 func TestQemuAmd64WithInitrd(t *testing.T) {
 	assert := assert.New(t)
 
-	cfg := qemuConfig(QemuPC)
+	cfg := qemuConfig(QemuQ35)
 	cfg.InitrdPath = "dummy-initrd"
 	amd64, err := newQemuArch(cfg)
 	assert.NoError(err)
@@ -282,7 +243,7 @@ func TestQemuAmd64AppendProtectionDevice(t *testing.T) {
 	var devices []govmmQemu.Device
 	assert := assert.New(t)
 
-	amd64 := newTestQemu(assert, QemuPC)
+	amd64 := newTestQemu(assert, QemuQ35)
 
 	id := amd64.(*qemuAmd64).devLoadersCount
 	firmware := "tdvf.fd"

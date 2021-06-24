@@ -28,7 +28,7 @@ const (
 )
 
 var qemuArchBaseMachine = govmmQemu.Machine{
-	Type: "pc",
+	Type: "q35",
 }
 
 var qemuArchBaseQemuPaths = map[string]string{
@@ -143,7 +143,7 @@ func TestQemuAddDeviceToBridge(t *testing.T) {
 
 	// addDeviceToBridge successfully
 	q := newQemuArchBase()
-	q.qemuMachine.Type = QemuPC
+	q.qemuMachine.Type = QemuQ35
 
 	q.bridges(1)
 	for i := uint32(1); i <= types.PCIBridgeMaxCapacity; i++ {
@@ -559,10 +559,6 @@ func TestQemuArchBaseAppendIOMMU(t *testing.T) {
 			CachingMode: true,
 		},
 	}
-	// Test IOMMU is not appended to PC machine type
-	qemuArchBase.qemuMachine.Type = QemuPC
-	devices, err = qemuArchBase.appendIOMMU(devices)
-	assert.Error(err)
 
 	qemuArchBase.qemuMachine.Type = QemuQ35
 	devices, err = qemuArchBase.appendIOMMU(devices)

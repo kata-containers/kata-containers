@@ -354,12 +354,13 @@ You MUST choose one of `alpine`, `centos`, `clearlinux`, `euleros`, and `fedora`
 >
 > - Check the [compatibility matrix](../tools/osbuilder/README.md#platform-distro-compatibility-matrix) before creating rootfs.
 
-Optionally, add your custom agent binary to the rootfs with the following, `LIBC` default is `musl`, if `ARCH` is `ppc64le`, should set the `LIBC=gnu` and `ARCH=powerpc64le`:
+Optionally, add your custom agent binary to the rootfs with the following commands. The default `$LIBC` used
+is `musl`, but on ppc64le and s390x, `gnu` should be used. Also, Rust refers to ppc64le as `powerpc64le`:
 ```
-$ export ARCH=$(shell uname -m)
-$ [ ${ARCH} == "ppc64le" ] && export LIBC=gnu || export LIBC=musl
+$ export ARCH=$(uname -m)
+$ [ ${ARCH} == "ppc64le" ] || [ ${ARCH} == "s390x" ] && export LIBC=gnu || export LIBC=musl
 $ [ ${ARCH} == "ppc64le" ] && export ARCH=powerpc64le
-$ sudo install -o root -g root -m 0550 -T ../../../src/agent/target/$(ARCH)-unknown-linux-$(LIBC)/release/kata-agent ${ROOTFS_DIR}/sbin/init
+$ sudo install -o root -g root -m 0550 -T ../../../src/agent/target/${ARCH}-unknown-linux-${LIBC}/release/kata-agent ${ROOTFS_DIR}/sbin/init
 ```
 
 ### Build an initrd image
@@ -656,7 +657,7 @@ VMM solution.
 
 In case of cloud-hypervisor, connect to the `vsock` as shown:
 ```
-$ sudo su -c 'cd /var/run/vc/vm/{sandbox_id}/root/ && socat stdin unix-connect:clh.sock'
+$ sudo su -c 'cd /var/run/vc/vm/${sandbox_id}/root/ && socat stdin unix-connect:clh.sock'
 CONNECT 1026
 ```
 
@@ -664,7 +665,7 @@ CONNECT 1026
 
 For firecracker, connect to the `hvsock` as shown:
 ```
-$ sudo su -c 'cd /var/run/vc/firecracker/{sandbox_id}/root/ && socat stdin unix-connect:kata.hvsock'
+$ sudo su -c 'cd /var/run/vc/firecracker/${sandbox_id}/root/ && socat stdin unix-connect:kata.hvsock'
 CONNECT 1026
 ```
 
@@ -673,7 +674,7 @@ CONNECT 1026
 
 For QEMU, connect to the `vsock` as shown:
 ```
-$ sudo su -c 'cd /var/run/vc/vm/{sandbox_id} && socat "stdin,raw,echo=0,escape=0x11" "unix-connect:console.sock"
+$ sudo su -c 'cd /var/run/vc/vm/${sandbox_id} && socat "stdin,raw,echo=0,escape=0x11" "unix-connect:console.sock"'
 ```
 
 To disconnect from the virtual machine, type `CONTROL+q` (hold down the
