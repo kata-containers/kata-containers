@@ -13,7 +13,13 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils"
 )
 
-func startContainer(ctx context.Context, s *service, c *container) error {
+func startContainer(ctx context.Context, s *service, c *container) (retErr error) {
+	defer func() {
+		if retErr != nil {
+			// notify the wait goroutine to continue
+			c.exitCh <- exitCode255
+		}
+	}()
 	// start a container
 	if c.cType == "" {
 		err := fmt.Errorf("Bug, the container %s type is empty", c.id)
@@ -87,7 +93,7 @@ func startContainer(ctx context.Context, s *service, c *container) error {
 	return nil
 }
 
-func startExec(ctx context.Context, s *service, containerID, execID string) (*exec, error) {
+func startExec(ctx context.Context, s *service, containerID, execID string) (e *exec, retErr error) {
 	// start an exec
 	c, err := s.getContainer(containerID)
 	if err != nil {
@@ -98,6 +104,13 @@ func startExec(ctx context.Context, s *service, containerID, execID string) (*ex
 	if err != nil {
 		return nil, err
 	}
+
+	defer func() {
+		if retErr != nil {
+			// notify the wait goroutine to continue
+			execs.exitCh <- exitCode255
+		}
+	}()
 
 	_, proc, err := s.sandbox.EnterContainer(ctx, containerID, *execs.cmds)
 	if err != nil {

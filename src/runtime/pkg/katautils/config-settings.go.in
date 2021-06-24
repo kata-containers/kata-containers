@@ -20,7 +20,7 @@ var defaultCPUFeatures = ""
 var systemdUnitName = "kata-containers.target"
 
 const defaultKernelParams = ""
-const defaultMachineType = "pc"
+const defaultMachineType = "q35"
 
 const defaultVCPUCount uint32 = 1
 const defaultMaxVCPUCount uint32 = 0

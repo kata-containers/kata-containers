@@ -362,7 +362,7 @@ func TestQemuQemuPath(t *testing.T) {
 	qemuConfig.HypervisorPath = expectedPath
 	qkvm := &qemuArchBase{
 		qemuMachine: govmmQemu.Machine{
-			Type:    "pc",
+			Type:    "q35",
 			Options: "",
 		},
 		qemuExePath: expectedPath,
