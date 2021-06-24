@@ -74,7 +74,7 @@ Make sure to check [`01.org`](https://01.org/intel-quickassist-technology) for
 the latest driver.
 
 ```bash
-$ export QAT_DRIVER_VER=qat1.7.l.4.12.0-00011.tar.gz
+$ export QAT_DRIVER_VER=qat1.7.l.4.14.0-00031.tar.gz
 $ export QAT_DRIVER_URL=https://downloadmirror.intel.com/30178/eng/${QAT_DRIVER_VER}
 $ export QAT_CONF_LOCATION=~/QAT_conf
 $ export QAT_DOCKERFILE=https://raw.githubusercontent.com/intel/intel-device-plugins-for-kubernetes/master/demo/openssl-qat-engine/Dockerfile
@@ -402,7 +402,7 @@ different hypervisor, different install method for Kata, or a different
 Intel® QAT chipset then the command will need to be modified. 
 
 > **Note: The following was tested with 
-[containerd v1.3.9](https://github.com/containerd/containerd/releases/tag/v1.3.9).**
+[containerd v1.4.6](https://github.com/containerd/containerd/releases/tag/v1.4.6).**
 
 ```bash
 $ config_file="/opt/kata/share/defaults/kata-containers/configuration-qemu.toml"

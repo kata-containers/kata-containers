@@ -120,6 +120,7 @@ copy_outputs()
         sudo cp -- "$f" "${OUTPUT_DIR}/configs/${output_conf_file}"
         sudo sed -i 's/\[SSL\]/\[SHIM\]/g' ${OUTPUT_DIR}/configs/${output_conf_file}
     done
+    /bin/echo -e "Check the ./output directory for the kernel and rootfs\n"
 }
 
 help() {
