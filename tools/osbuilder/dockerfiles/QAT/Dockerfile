@@ -9,9 +9,9 @@ FROM fedora:latest
 # images being pulled from the registry.
 # Set AGENT_VERSION as an env variable to specify a specific version of Kata Agent to install
 
-LABEL DOCKERFILE_VERSION="2.1"
+LABEL DOCKERFILE_VERSION="2.2"
 
-ENV QAT_DRIVER_VER "QAT1.7.L.4.13.0-00009.tar.gz"
+ENV QAT_DRIVER_VER "QAT1.7.L.4.14.0-00031.tar.gz"
 ENV QAT_DRIVER_URL "https://downloadmirror.intel.com/30178/eng/${QAT_DRIVER_VER}"
 ENV QAT_CONFIGURE_OPTIONS "--enable-icp-sriov=guest"
 ENV KATA_REPO_VERSION "main"
@@ -41,7 +41,8 @@ RUN dnf install -y \
     qemu-img \
     systemd-devel \
     sudo \
-    xz
+    xz \
+    yasm
 
 # Add in non-privileged user
 RUN useradd qatbuilder -p "" && \
