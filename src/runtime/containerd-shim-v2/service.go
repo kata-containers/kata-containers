@@ -624,6 +624,7 @@ func (s *service) State(ctx context.Context, r *taskAPI.StateRequest) (_ *taskAP
 			Stderr:     c.stderr,
 			Terminal:   c.terminal,
 			ExitStatus: c.exit,
+			ExitedAt:   c.exitTime,
 		}, nil
 	}
 
@@ -643,6 +644,7 @@ func (s *service) State(ctx context.Context, r *taskAPI.StateRequest) (_ *taskAP
 		Stderr:     execs.tty.stderr,
 		Terminal:   execs.tty.terminal,
 		ExitStatus: uint32(execs.exitCode),
+		ExitedAt:   execs.exitTime,
 	}, nil
 }
 
