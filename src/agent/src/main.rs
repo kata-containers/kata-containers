@@ -52,6 +52,7 @@ mod test_utils;
 mod uevent;
 mod util;
 mod version;
+mod watcher;
 
 use mount::{cgroups_mount, general_mount};
 use sandbox::Sandbox;

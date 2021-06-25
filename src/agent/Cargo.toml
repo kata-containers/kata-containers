@@ -20,11 +20,16 @@ scan_fmt = "0.2.3"
 scopeguard = "1.0.0"
 regex = "1"
 
+# Async helpers
 async-trait = "0.1.42"
-tokio = { version = "1.2.0", features = ["rt", "rt-multi-thread", "sync", "macros", "io-util", "time", "signal", "io-std", "process", "fs"] }
+async-recursion = "0.3.2"
 futures = "0.3.12"
-netlink-sys = { version = "0.6.0", features = ["tokio_socket",]}
+
+# Async runtime
+tokio = { version = "1.2.0", features = ["full"] }
 tokio-vsock = "0.3.1"
+
+netlink-sys = { version = "0.6.0", features = ["tokio_socket",]}
 # Because the author has no time to maintain the crate, we switch the dependency to github,
 # Once the new version released on crates.io, we switch it back.
 # https://github.com/little-dude/netlink/issues/161

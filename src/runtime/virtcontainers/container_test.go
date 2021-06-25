@@ -548,3 +548,91 @@ func TestProcessIOStream(t *testing.T) {
 	_, _, _, err = c.ioStream(processID)
 	assert.Error(err)
 }
+
+func TestMountSharedDirMounts(t *testing.T) {
+	if os.Getuid() != 0 {
+		t.Skip("Test disabled as requires root user")
+	}
+
+	assert := assert.New(t)
+
+	testMountPath, err := ioutil.TempDir("", "sandbox-test")
+	assert.NoError(err)
+	defer os.RemoveAll(testMountPath)
+
+	// create a new shared directory for our test:
+	kataHostSharedDirSaved := kataHostSharedDir
+	testHostDir, err := ioutil.TempDir("", "kata-cleanup")
+	assert.NoError(err)
+	kataHostSharedDir = func() string {
+		return testHostDir
+	}
+	defer func() {
+		kataHostSharedDir = kataHostSharedDirSaved
+	}()
+
+	// Create a kata agent
+	k := &kataAgent{ctx: context.Background()}
+
+	// Create sandbox
+	sandbox := &Sandbox{
+		ctx:        context.Background(),
+		id:         "foobar",
+		hypervisor: &mockHypervisor{},
+		config: &SandboxConfig{
+			HypervisorConfig: HypervisorConfig{
+				BlockDeviceDriver: config.VirtioBlock,
+			},
+		},
+	}
+	// setup the shared mounts:
+	k.setupSharedPath(k.ctx, sandbox)
+
+	//
+	// Create the mounts that we'll test with
+	//
+	secretpath := filepath.Join(testMountPath, K8sSecret)
+	err = os.MkdirAll(secretpath, 0777)
+	assert.NoError(err)
+	secret := filepath.Join(secretpath, "super-secret-thing")
+	_, err = os.Create(secret)
+	assert.NoError(err)
+
+	mountDestination := "/fluffhead/token"
+	//
+	// Create container to utilize this mount/secret
+	//
+	container := Container{
+		sandbox:   sandbox,
+		sandboxID: "foobar",
+		id:        "test-ctr",
+		mounts: []Mount{
+			{
+				Source:      secret,
+				Destination: mountDestination,
+				Type:        "bind",
+			},
+		},
+	}
+
+	updatedMounts := make(map[string]Mount)
+	ignoredMounts := make(map[string]Mount)
+	storage, err := container.mountSharedDirMounts(k.ctx, updatedMounts, ignoredMounts)
+	assert.NoError(err)
+
+	// Look at the resulting hostpath that was created. Since a unique ID is applied, we'll use this
+	// to verify the updated mounts and storage object
+	hostMountName := filepath.Base(container.mounts[0].HostPath)
+	expectedStorageSource := filepath.Join(defaultKataGuestSharedDir, hostMountName)
+	expectedStorageDest := filepath.Join(defaultKataGuestSharedDir, "watchable", hostMountName)
+
+	// We expect a single new storage object who's source is the original mount's base path and desitation is same with -watchable appended:
+	assert.Equal(len(storage), 1)
+	assert.Equal(expectedStorageSource, storage[0].Source)
+	assert.Equal(expectedStorageDest, storage[0].MountPoint)
+
+	// We expect a single updated mount, who's source is the watchable mount path, and destination remains unchanged:
+	assert.Equal(len(updatedMounts), 1)
+	assert.Equal(updatedMounts[mountDestination].Source, expectedStorageDest)
+	assert.Equal(updatedMounts[mountDestination].Destination, mountDestination)
+}
