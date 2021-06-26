@@ -581,6 +581,15 @@ EOT
 		# The kata agent enables seccomp feature.
 		# However, it is not enforced by default: you need to enable that in the main configuration file.
 		SECCOMP="yes"
+		if [ "${SECCOMP}" == "yes" ]; then
+			info "Set up libseccomp"
+			libseccomp_install_dir=$(mktemp -d -t libseccomp.XXXXXXXXXX)
+			gperf_install_dir=$(mktemp -d -t gperf.XXXXXXXXXX)
+			bash ${script_dir}/../../../ci/install_libseccomp.sh "${libseccomp_install_dir}" "${gperf_install_dir}"
+			echo "Set environment variables for the libseccomp crate to link the libseccomp library statically"
+			export LIBSECCOMP_LINK_TYPE=static
+			export LIBSECCOMP_LIB_PATH="${libseccomp_install_dir}/lib"
+		fi
 
 		info "Build agent"
 		pushd "${agent_dir}"
@@ -591,6 +600,9 @@ EOT
 		make LIBC=${LIBC} INIT=${AGENT_INIT} SECCOMP=${SECCOMP}
 		make install DESTDIR="${ROOTFS_DIR}" LIBC=${LIBC} INIT=${AGENT_INIT}
 		[ "$ARCH" == "aarch64" ] && export PATH=$OLD_PATH && rm -rf /usr/local/musl
+		if [ "${SECCOMP}" == "yes" ]; then
+			rm -rf "${libseccomp_install_dir}" "${gperf_install_dir}"
+		fi
 		popd
 	else
 		mkdir -p ${AGENT_DIR}
