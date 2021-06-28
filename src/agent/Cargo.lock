@@ -530,8 +530,8 @@ dependencies = [
  "libc",
  "log",
  "logging",
- "netlink-packet-utils 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "netlink-sys 0.6.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "netlink-packet-utils",
+ "netlink-sys",
  "nix 0.21.0",
  "oci",
  "opentelemetry",
@@ -689,7 +689,7 @@ dependencies = [
  "anyhow",
  "byteorder",
  "libc",
- "netlink-packet-utils 0.4.0 (git+https://github.com/little-dude/netlink?rev=a9367bc4700496ddebc088110c28f40962923326)",
+ "netlink-packet-utils",
 ]
 
 [[package]]
@@ -702,19 +702,7 @@ dependencies = [
  "byteorder",
  "libc",
  "netlink-packet-core",
- "netlink-packet-utils 0.4.0 (git+https://github.com/little-dude/netlink?rev=a9367bc4700496ddebc088110c28f40962923326)",
-]
-
-[[package]]
-name = "netlink-packet-utils"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6c2afb159d0e3ac700e85f0df25b8438b99d43ed0c0b685242fcdf1b5673e54d"
-dependencies = [
- "anyhow",
- "byteorder",
- "paste",
- "thiserror",
+ "netlink-packet-utils",
 ]
 
 [[package]]
@@ -737,21 +725,9 @@ dependencies = [
  "futures",
  "log",
  "netlink-packet-core",
- "netlink-sys 0.6.0 (git+https://github.com/little-dude/netlink?rev=a9367bc4700496ddebc088110c28f40962923326)",
+ "netlink-sys",
  "tokio",
  "tokio-util",
-]
-
-[[package]]
-name = "netlink-sys"
-version = "0.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d61c5374735aa0cd07cb7fd820b656062b187b5588d79517f72956b57c6de9ef"
-dependencies = [
- "futures",
- "libc",
- "log",
- "tokio",
 ]
 
 [[package]]
