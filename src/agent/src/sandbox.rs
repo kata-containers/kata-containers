@@ -388,16 +388,16 @@ fn online_resources(logger: &Logger, path: &str, pattern: &str, num: i32) -> Res
             }
             let c = c.unwrap();
 
-            if c.trim().contains('0') {
+            if c.trim().contains('0') { // otherwise, cpu is already online
                 let r = fs::write(file.as_str(), "1");
                 if r.is_err() {
                     continue;
                 }
-                count += 1;
+            }
+            count += 1;
 
-                if num > 0 && count == num {
-                    break;
-                }
+            if num > 0 && count == num {
+                break;
             }
         }
     }
