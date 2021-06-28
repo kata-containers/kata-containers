@@ -80,7 +80,7 @@ $ sudo docker export $(sudo docker create "$image") | tar -C "$rootfs_dir" -xvf 
    value:
 
    ```sh
-   $ guest_cid=$(ps -ef | grep qemu-system-x86_64 | egrep -o "guest-cid=[^,][^,]*" | cut -d= -f2)
+   $ guest_cid=$(ps -ef | grep qemu-system-x86_64 | egrep -o "guest-cid=[0-9]*" | cut -d= -f2)
    ```
 
 1. Run the tool to connect to the agent:
