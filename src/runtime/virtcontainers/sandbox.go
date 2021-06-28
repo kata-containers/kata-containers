@@ -1845,7 +1845,11 @@ func (s *Sandbox) updateResources(ctx context.Context) error {
 	s.Logger().WithField("memory-sandbox-size-byte", sandboxMemoryByte).Debugf("Request to hypervisor to update memory")
 	newMemory, updatedMemoryDevice, err := s.hypervisor.resizeMemory(ctx, uint32(sandboxMemoryByte>>utils.MibToBytesShift), s.state.GuestMemoryBlockSizeMB, s.state.GuestMemoryHotplugProbe)
 	if err != nil {
-		return err
+		if err == noGuestMemHotplugErr {
+			s.Logger().Warnf("%s, memory specifications cannot be guaranteed", err)
+		} else {
+			return err
+		}
 	}
 	s.Logger().Debugf("Sandbox memory size: %d MB", newMemory)
 	if s.state.GuestMemoryHotplugProbe && updatedMemoryDevice.addr != 0 {
