@@ -14,6 +14,7 @@ RUN dnf -y update && dnf install -y \
     chrony \
     coreutils \
     curl \
+    fedora-release-common \
     gcc \
     gcc-c++ \
     git \
@@ -30,7 +31,6 @@ RUN dnf -y update && dnf install -y \
     m4 \
     make \
     pkgconfig \
-    redhat-release \
     sed \
     systemd \
     tar \
