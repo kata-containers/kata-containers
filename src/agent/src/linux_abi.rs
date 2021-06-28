@@ -65,6 +65,10 @@ pub fn create_pci_root_bus_path() -> String {
     ret
 }
 
+#[cfg(target_arch = "s390x")]
+pub fn create_ccw_root_bus_path() -> String {
+    String::from("/devices/css0")
+}
 // From https://www.kernel.org/doc/Documentation/acpi/namespace.txt
 // The Linux kernel's core ACPI subsystem creates struct acpi_device
 // objects for ACPI namespace objects representing devices, power resources

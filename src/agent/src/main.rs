@@ -34,6 +34,8 @@ use std::process::exit;
 use std::sync::Arc;
 use tracing::{instrument, span};
 
+#[cfg(target_arch = "s390x")]
+mod ccw;
 mod config;
 mod console;
 mod device;
