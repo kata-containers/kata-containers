@@ -7,12 +7,13 @@
 # loaded just before call the function. For more information see the
 # rootfs-builder/README.md file.
 
-OS_VERSION=${OS_VERSION:-18.04}
-# this should be ubuntu's codename eg bionic for 18.04
-OS_NAME=${OS_NAME:-"bionic"}
+OS_VERSION=${OS_VERSION:-20.04}
+# This should be Ubuntu's code name, e.g. "focal" (Focal Fossa) for 20.04
+OS_NAME=${OS_NAME:-"focal"}
 
 # packages to be installed by default
-PACKAGES="systemd iptables init chrony kmod"
+PACKAGES="systemd iptables init kmod"
+EXTRA_PKGS+=" chrony"
 
 DEBOOTSTRAP=${PACKAGE_MANAGER:-"debootstrap"}
 
