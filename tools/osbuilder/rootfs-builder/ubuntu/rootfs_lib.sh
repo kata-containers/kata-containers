@@ -59,27 +59,16 @@ build_rootfs() {
 	fi
 	# trim whitespace
 	PACKAGES=$(echo $PACKAGES |xargs )
-	EXTRA_PKGS=$(echo $EXTRA_PKGS |xargs)
-	# add comma as debootstrap needs , separated package names.
-	# Don't change $PACKAGES in config.sh to include ','
-	# This is done to maintain consistency
-	PACKAGES=$(echo $PACKAGES | sed  -e 's/ /,/g' )
-	EXTRA_PKGS=$(echo $EXTRA_PKGS | sed  -e 's/ /,/g' )
 
-	# extra packages are added to packages and finally passed to debootstrap
-	if [ "${EXTRA_PKGS}" = ""  ]; then
-		echo "no extra packages"
-	else
-		PACKAGES="${PACKAGES},${EXTRA_PKGS}"
-	fi
+	# Avoid configuring tzdata
+	export DEBIAN_FRONTEND=noninteractive
 
 	${PKG_MANAGER} --variant=minbase \
 		--arch=${ARCHITECTURE}\
-		--include="$PACKAGES" \
 		${OS_NAME} \
 		${ROOTFS_DIR}
 
-	chroot $ROOTFS_DIR ln -s /lib/systemd/systemd /usr/lib/systemd/systemd
+	chroot $ROOTFS_DIR apt-get install -y ${PACKAGES} ${EXTRA_PKGS}
 
     # Reduce image size and memory footprint
     # removing not needed files and directories.
