@@ -24,6 +24,9 @@ KERNEL_MODULES_DIR=${KERNEL_MODULES_DIR:-""}
 OSBUILDER_VERSION="unknown"
 DOCKER_RUNTIME=${DOCKER_RUNTIME:-runc}
 GO_VERSION="null"
+# The kata agent enables seccomp feature.
+# However, it is not enforced by default: you need to enable that in the main configuration file.
+SECCOMP=${SECCOMP:-"yes"}
 export GOPATH=${GOPATH:-${HOME}/go}
 LIBC=${LIBC:-musl}
 
@@ -139,6 +142,9 @@ RUST_AGENT          When set to "no", build kata-agent from go agent instead of 
 
 RUST_AGENT_PKG      URL of the Git repository hosting the agent package.
                     Default value: ${RUST_AGENT_PKG}
+
+SECCOMP             When set to "no", the kata-agent is built without seccomp capability.
+                    Default value: "yes"
 
 USE_DOCKER          If set, build the rootfs inside a container (requires
                     Docker).
@@ -578,9 +584,7 @@ EOT
 
 		agent_pkg="${RUST_AGENT_PKG}"
 		agent_dir="${script_dir}/../../../src/agent/"
-		# The kata agent enables seccomp feature.
-		# However, it is not enforced by default: you need to enable that in the main configuration file.
-		SECCOMP="yes"
+
 		if [ "${SECCOMP}" == "yes" ]; then
 			info "Set up libseccomp"
 			libseccomp_install_dir=$(mktemp -d -t libseccomp.XXXXXXXXXX)
