@@ -62,10 +62,7 @@ use tokio::sync::Mutex;
 
 use crate::utils;
 
-const STATE_FILENAME: &str = "state.json";
 const EXEC_FIFO_FILENAME: &str = "exec.fifo";
-const VER_MARKER: &str = "1.2.5";
-const PID_NS_PATH: &str = "/proc/self/ns/pid";
 
 const INIT: &str = "INIT";
 const NO_PIVOT: &str = "NO_PIVOT";
@@ -92,10 +89,6 @@ impl ContainerStatus {
 
     fn status(&self) -> ContainerState {
         self.cur_status
-    }
-
-    fn pre_status(&self) -> ContainerState {
-        self.pre_status
     }
 
     fn transition(&mut self, to: ContainerState) {
@@ -1401,17 +1394,7 @@ impl LinuxContainer {
             logger: logger.new(o!("module" => "rustjail", "subsystem" => "container", "cid" => id)),
         })
     }
-
-    fn load<T: Into<String>>(_id: T, _base: T) -> Result<Self> {
-        Err(anyhow!("not supported"))
-    }
 }
-
-// Handle the differing rlimit types for different targets
-#[cfg(target_env = "musl")]
-type RlimitsType = libc::c_int;
-#[cfg(target_env = "gnu")]
-type RlimitsType = libc::__rlimit_resource_t;
 
 fn setgroups(grps: &[libc::gid_t]) -> Result<()> {
     let ret = unsafe { libc::setgroups(grps.len(), grps.as_ptr() as *const libc::gid_t) };
@@ -1626,7 +1609,7 @@ mod tests {
             let pre_status = status.status();
             status.transition(*s);
 
-            assert_eq!(pre_status, status.pre_status());
+            assert_eq!(pre_status, status.pre_status);
         }
     }
 

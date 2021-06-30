@@ -3,15 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-// #![allow(unused_attributes)]
-// #![allow(unused_imports)]
-// #![allow(unused_variables)]
-// #![allow(unused_mut)]
-#![allow(dead_code)]
-// #![allow(deprecated)]
-// #![allow(unused_must_use)]
 #![allow(non_upper_case_globals)]
-// #![allow(unused_comparisons)]
 #[macro_use]
 #[cfg(test)]
 extern crate serial_test;
@@ -464,10 +456,6 @@ fn linux_grpc_to_oci(l: &grpc::Linux) -> oci::Linux {
     }
 }
 
-fn linux_oci_to_grpc(_l: &oci::Linux) -> grpc::Linux {
-    grpc::Linux::default()
-}
-
 pub fn grpc_to_oci(grpc: &grpc::Spec) -> oci::Spec {
     // process
     let process = if grpc.Process.is_some() {
@@ -523,7 +511,6 @@ pub fn grpc_to_oci(grpc: &grpc::Spec) -> oci::Spec {
 
 #[cfg(test)]
 mod tests {
-    #[allow(unused_macros)]
     #[macro_export]
     macro_rules! skip_if_not_root {
         () => {

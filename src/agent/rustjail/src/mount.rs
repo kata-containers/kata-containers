@@ -112,7 +112,6 @@ lazy_static! {
 }
 
 #[inline(always)]
-#[allow(unused_variables)]
 pub fn mount<
     P1: ?Sized + NixPath,
     P2: ?Sized + NixPath,
@@ -132,7 +131,6 @@ pub fn mount<
 }
 
 #[inline(always)]
-#[allow(unused_variables)]
 pub fn umount2<P: ?Sized + NixPath>(
     target: &P,
     flags: MntFlags,
@@ -452,7 +450,6 @@ fn mount_cgroups(
     Ok(())
 }
 
-#[allow(unused_variables)]
 fn pivot_root<P1: ?Sized + NixPath, P2: ?Sized + NixPath>(
     new_root: &P1,
     put_old: &P2,
@@ -585,7 +582,6 @@ fn parse_mount_table() -> Result<Vec<Info>> {
 }
 
 #[inline(always)]
-#[allow(unused_variables)]
 fn chroot<P: ?Sized + NixPath>(path: &P) -> Result<(), nix::Error> {
     #[cfg(not(test))]
     return unistd::chroot(path);
