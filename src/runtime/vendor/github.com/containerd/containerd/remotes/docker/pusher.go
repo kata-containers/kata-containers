@@ -21,7 +21,7 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
-	"path"
+	"net/url"
 	"strings"
 	"time"
 
@@ -30,6 +30,7 @@ import (
 	"github.com/containerd/containerd/images"
 	"github.com/containerd/containerd/log"
 	"github.com/containerd/containerd/remotes"
+	remoteserrors "github.com/containerd/containerd/remotes/errors"
 	digest "github.com/opencontainers/go-digest"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
@@ -37,62 +38,93 @@ import (
 
 type dockerPusher struct {
 	*dockerBase
-	tag string
+	object string
 
 	// TODO: namespace tracker
 	tracker StatusTracker
 }
 
+// Writer implements Ingester API of content store. This allows the client
+// to receive ErrUnavailable when there is already an on-going upload.
+// Note that the tracker MUST implement StatusTrackLocker interface to avoid
+// race condition on StatusTracker.
+func (p dockerPusher) Writer(ctx context.Context, opts ...content.WriterOpt) (content.Writer, error) {
+	var wOpts content.WriterOpts
+	for _, opt := range opts {
+		if err := opt(&wOpts); err != nil {
+			return nil, err
+		}
+	}
+	if wOpts.Ref == "" {
+		return nil, errors.Wrap(errdefs.ErrInvalidArgument, "ref must not be empty")
+	}
+	return p.push(ctx, wOpts.Desc, wOpts.Ref, true)
+}
+
 func (p dockerPusher) Push(ctx context.Context, desc ocispec.Descriptor) (content.Writer, error) {
-	ctx, err := contextWithRepositoryScope(ctx, p.refspec, true)
+	return p.push(ctx, desc, remotes.MakeRefKey(ctx, desc), false)
+}
+
+func (p dockerPusher) push(ctx context.Context, desc ocispec.Descriptor, ref string, unavailableOnFail bool) (content.Writer, error) {
+	if l, ok := p.tracker.(StatusTrackLocker); ok {
+		l.Lock(ref)
+		defer l.Unlock(ref)
+	}
+	ctx, err := ContextWithRepositoryScope(ctx, p.refspec, true)
 	if err != nil {
 		return nil, err
 	}
-	ref := remotes.MakeRefKey(ctx, desc)
 	status, err := p.tracker.GetStatus(ref)
 	if err == nil {
-		if status.Offset == status.Total {
+		if status.Committed && status.Offset == status.Total {
 			return nil, errors.Wrapf(errdefs.ErrAlreadyExists, "ref %v", ref)
+		}
+		if unavailableOnFail {
+			// Another push of this ref is happening elsewhere. The rest of function
+			// will continue only when `errdefs.IsNotFound(err) == true` (i.e. there
+			// is no actively-tracked ref already).
+			return nil, errors.Wrap(errdefs.ErrUnavailable, "push is on-going")
 		}
 		// TODO: Handle incomplete status
 	} else if !errdefs.IsNotFound(err) {
 		return nil, errors.Wrap(err, "failed to get status")
 	}
 
+	hosts := p.filterHosts(HostCapabilityPush)
+	if len(hosts) == 0 {
+		return nil, errors.Wrap(errdefs.ErrNotFound, "no push hosts")
+	}
+
 	var (
 		isManifest bool
-		existCheck string
+		existCheck []string
+		host       = hosts[0]
 	)
 
 	switch desc.MediaType {
 	case images.MediaTypeDockerSchema2Manifest, images.MediaTypeDockerSchema2ManifestList,
 		ocispec.MediaTypeImageManifest, ocispec.MediaTypeImageIndex:
 		isManifest = true
-		if p.tag == "" {
-			existCheck = path.Join("manifests", desc.Digest.String())
-		} else {
-			existCheck = path.Join("manifests", p.tag)
-		}
+		existCheck = getManifestPath(p.object, desc.Digest)
 	default:
-		existCheck = path.Join("blobs", desc.Digest.String())
+		existCheck = []string{"blobs", desc.Digest.String()}
 	}
 
-	req, err := http.NewRequest(http.MethodHead, p.url(existCheck), nil)
-	if err != nil {
-		return nil, err
-	}
+	req := p.request(host, http.MethodHead, existCheck...)
+	req.header.Set("Accept", strings.Join([]string{desc.MediaType, `*/*`}, ", "))
 
-	req.Header.Set("Accept", strings.Join([]string{desc.MediaType, `*`}, ", "))
-	resp, err := p.doRequestWithRetries(ctx, req, nil)
+	log.G(ctx).WithField("url", req.String()).Debugf("checking and pushing to")
+
+	resp, err := req.doWithRetries(ctx, nil)
 	if err != nil {
-		if errors.Cause(err) != ErrInvalidAuthorization {
+		if !errors.Is(err, ErrInvalidAuthorization) {
 			return nil, err
 		}
 		log.G(ctx).WithError(err).Debugf("Unable to check existence, continuing with push")
 	} else {
 		if resp.StatusCode == http.StatusOK {
 			var exists bool
-			if isManifest && p.tag != "" {
+			if isManifest && existCheck[1] != desc.Digest.String() {
 				dgstHeader := digest.Digest(resp.Header.Get("Docker-Content-Digest"))
 				if dgstHeader == desc.Digest {
 					exists = true
@@ -103,80 +135,116 @@ func (p dockerPusher) Push(ctx context.Context, desc ocispec.Descriptor) (conten
 
 			if exists {
 				p.tracker.SetStatus(ref, Status{
+					Committed: true,
 					Status: content.Status{
-						Ref: ref,
+						Ref:    ref,
+						Total:  desc.Size,
+						Offset: desc.Size,
 						// TODO: Set updated time?
 					},
 				})
 				return nil, errors.Wrapf(errdefs.ErrAlreadyExists, "content %v on remote", desc.Digest)
 			}
 		} else if resp.StatusCode != http.StatusNotFound {
-			// TODO: log error
-			return nil, errors.Errorf("unexpected response: %s", resp.Status)
+			err := remoteserrors.NewUnexpectedStatusErr(resp)
+			log.G(ctx).WithField("resp", resp).WithField("body", string(err.(remoteserrors.ErrUnexpectedStatus).Body)).Debug("unexpected response")
+			return nil, err
 		}
 	}
 
-	// TODO: Lookup related objects for cross repository push
-
 	if isManifest {
-		var putPath string
-		if p.tag != "" {
-			putPath = path.Join("manifests", p.tag)
-		} else {
-			putPath = path.Join("manifests", desc.Digest.String())
-		}
-
-		req, err = http.NewRequest(http.MethodPut, p.url(putPath), nil)
-		if err != nil {
-			return nil, err
-		}
-		req.Header.Add("Content-Type", desc.MediaType)
+		putPath := getManifestPath(p.object, desc.Digest)
+		req = p.request(host, http.MethodPut, putPath...)
+		req.header.Add("Content-Type", desc.MediaType)
 	} else {
-		// TODO: Do monolithic upload if size is small
-
 		// Start upload request
-		req, err = http.NewRequest(http.MethodPost, p.url("blobs", "uploads")+"/", nil)
-		if err != nil {
-			return nil, err
+		req = p.request(host, http.MethodPost, "blobs", "uploads/")
+
+		var resp *http.Response
+		if fromRepo := selectRepositoryMountCandidate(p.refspec, desc.Annotations); fromRepo != "" {
+			preq := requestWithMountFrom(req, desc.Digest.String(), fromRepo)
+			pctx := ContextWithAppendPullRepositoryScope(ctx, fromRepo)
+
+			// NOTE: the fromRepo might be private repo and
+			// auth service still can grant token without error.
+			// but the post request will fail because of 401.
+			//
+			// for the private repo, we should remove mount-from
+			// query and send the request again.
+			resp, err = preq.doWithRetries(pctx, nil)
+			if err != nil {
+				return nil, err
+			}
+
+			if resp.StatusCode == http.StatusUnauthorized {
+				log.G(ctx).Debugf("failed to mount from repository %s", fromRepo)
+
+				resp.Body.Close()
+				resp = nil
+			}
 		}
 
-		resp, err := p.doRequestWithRetries(ctx, req, nil)
-		if err != nil {
-			return nil, err
+		if resp == nil {
+			resp, err = req.doWithRetries(ctx, nil)
+			if err != nil {
+				return nil, err
+			}
 		}
 
 		switch resp.StatusCode {
 		case http.StatusOK, http.StatusAccepted, http.StatusNoContent:
+		case http.StatusCreated:
+			p.tracker.SetStatus(ref, Status{
+				Committed: true,
+				Status: content.Status{
+					Ref:    ref,
+					Total:  desc.Size,
+					Offset: desc.Size,
+				},
+			})
+			return nil, errors.Wrapf(errdefs.ErrAlreadyExists, "content %v on remote", desc.Digest)
 		default:
-			// TODO: log error
-			return nil, errors.Errorf("unexpected response: %s", resp.Status)
-		}
-
-		location := resp.Header.Get("Location")
-		// Support paths without host in location
-		if strings.HasPrefix(location, "/") {
-			// Support location string containing path and query
-			qmIndex := strings.Index(location, "?")
-			if qmIndex > 0 {
-				u := p.base
-				u.Path = location[:qmIndex]
-				u.RawQuery = location[qmIndex+1:]
-				location = u.String()
-			} else {
-				u := p.base
-				u.Path = location
-				location = u.String()
-			}
-		}
-
-		req, err = http.NewRequest(http.MethodPut, location, nil)
-		if err != nil {
+			err := remoteserrors.NewUnexpectedStatusErr(resp)
+			log.G(ctx).WithField("resp", resp).WithField("body", string(err.(remoteserrors.ErrUnexpectedStatus).Body)).Debug("unexpected response")
 			return nil, err
 		}
-		q := req.URL.Query()
-		q.Add("digest", desc.Digest.String())
-		req.URL.RawQuery = q.Encode()
 
+		var (
+			location = resp.Header.Get("Location")
+			lurl     *url.URL
+			lhost    = host
+		)
+		// Support paths without host in location
+		if strings.HasPrefix(location, "/") {
+			lurl, err = url.Parse(lhost.Scheme + "://" + lhost.Host + location)
+			if err != nil {
+				return nil, errors.Wrapf(err, "unable to parse location %v", location)
+			}
+		} else {
+			if !strings.Contains(location, "://") {
+				location = lhost.Scheme + "://" + location
+			}
+			lurl, err = url.Parse(location)
+			if err != nil {
+				return nil, errors.Wrapf(err, "unable to parse location %v", location)
+			}
+
+			if lurl.Host != lhost.Host || lhost.Scheme != lurl.Scheme {
+
+				lhost.Scheme = lurl.Scheme
+				lhost.Host = lurl.Host
+				log.G(ctx).WithField("host", lhost.Host).WithField("scheme", lhost.Scheme).Debug("upload changed destination")
+
+				// Strip authorizer if change to host or scheme
+				lhost.Authorizer = nil
+			}
+		}
+		q := lurl.Query()
+		q.Add("digest", desc.Digest.String())
+
+		req = p.request(lhost, http.MethodPut)
+		req.header.Set("Content-Type", "application/octet-stream")
+		req.path = lurl.Path + "?" + q.Encode()
 	}
 	p.tracker.SetStatus(ref, Status{
 		Status: content.Status{
@@ -190,15 +258,25 @@ func (p dockerPusher) Push(ctx context.Context, desc ocispec.Descriptor) (conten
 	// TODO: Support chunked upload
 
 	pr, pw := io.Pipe()
-	respC := make(chan *http.Response, 1)
+	respC := make(chan response, 1)
+	body := ioutil.NopCloser(pr)
 
-	req.Body = ioutil.NopCloser(pr)
-	req.ContentLength = desc.Size
+	req.body = func() (io.ReadCloser, error) {
+		if body == nil {
+			return nil, errors.New("cannot reuse body, request must be retried")
+		}
+		// Only use the body once since pipe cannot be seeked
+		ob := body
+		body = nil
+		return ob, nil
+	}
+	req.size = desc.Size
 
 	go func() {
 		defer close(respC)
-		resp, err = p.doRequest(ctx, req)
+		resp, err := req.doWithRetries(ctx, nil)
 		if err != nil {
+			respC <- response{err: err}
 			pr.CloseWithError(err)
 			return
 		}
@@ -206,10 +284,11 @@ func (p dockerPusher) Push(ctx context.Context, desc ocispec.Descriptor) (conten
 		switch resp.StatusCode {
 		case http.StatusOK, http.StatusCreated, http.StatusNoContent:
 		default:
-			// TODO: log error
-			pr.CloseWithError(errors.Errorf("unexpected response: %s", resp.Status))
+			err := remoteserrors.NewUnexpectedStatusErr(resp)
+			log.G(ctx).WithField("resp", resp).WithField("body", string(err.(remoteserrors.ErrUnexpectedStatus).Body)).Debug("unexpected response")
+			pr.CloseWithError(err)
 		}
-		respC <- resp
+		respC <- response{Response: resp}
 	}()
 
 	return &pushWriter{
@@ -223,12 +302,36 @@ func (p dockerPusher) Push(ctx context.Context, desc ocispec.Descriptor) (conten
 	}, nil
 }
 
+func getManifestPath(object string, dgst digest.Digest) []string {
+	if i := strings.IndexByte(object, '@'); i >= 0 {
+		if object[i+1:] != dgst.String() {
+			// use digest, not tag
+			object = ""
+		} else {
+			// strip @<digest> for registry path to make tag
+			object = object[:i]
+		}
+
+	}
+
+	if object == "" {
+		return []string{"manifests", dgst.String()}
+	}
+
+	return []string{"manifests", object}
+}
+
+type response struct {
+	*http.Response
+	err error
+}
+
 type pushWriter struct {
 	base *dockerBase
 	ref  string
 
 	pipe       *io.PipeWriter
-	responseC  <-chan *http.Response
+	responseC  <-chan response
 	isManifest bool
 
 	expected digest.Digest
@@ -274,20 +377,18 @@ func (pw *pushWriter) Commit(ctx context.Context, size int64, expected digest.Di
 	if err := pw.pipe.Close(); err != nil {
 		return err
 	}
-	// TODO: Update status to determine committing
-
 	// TODO: timeout waiting for response
 	resp := <-pw.responseC
-	if resp == nil {
-		return errors.New("no response")
+	if resp.err != nil {
+		return resp.err
 	}
 
 	// 201 is specified return status, some registries return
-	// 200 or 204.
+	// 200, 202 or 204.
 	switch resp.StatusCode {
-	case http.StatusOK, http.StatusCreated, http.StatusNoContent:
+	case http.StatusOK, http.StatusCreated, http.StatusNoContent, http.StatusAccepted:
 	default:
-		return errors.Errorf("unexpected status: %s", resp.Status)
+		return remoteserrors.NewUnexpectedStatusErr(resp.Response)
 	}
 
 	status, err := pw.tracker.GetStatus(pw.ref)
@@ -296,7 +397,7 @@ func (pw *pushWriter) Commit(ctx context.Context, size int64, expected digest.Di
 	}
 
 	if size > 0 && size != status.Offset {
-		return errors.Errorf("unxpected size %d, expected %d", status.Offset, size)
+		return errors.Errorf("unexpected size %d, expected %d", status.Offset, size)
 	}
 
 	if expected == "" {
@@ -312,6 +413,10 @@ func (pw *pushWriter) Commit(ctx context.Context, size int64, expected digest.Di
 		return errors.Errorf("got digest %s, expected %s", actual, expected)
 	}
 
+	status.Committed = true
+	status.UpdatedAt = time.Now()
+	pw.tracker.SetStatus(pw.ref, status)
+
 	return nil
 }
 
@@ -319,4 +424,17 @@ func (pw *pushWriter) Truncate(size int64) error {
 	// TODO: if blob close request and start new request at offset
 	// TODO: always error on manifest
 	return errors.New("cannot truncate remote upload")
+}
+
+func requestWithMountFrom(req *request, mount, from string) *request {
+	creq := *req
+
+	sep := "?"
+	if strings.Contains(creq.path, sep) {
+		sep = "&"
+	}
+
+	creq.path = creq.path + sep + "mount=" + mount + "&from=" + from
+
+	return &creq
 }

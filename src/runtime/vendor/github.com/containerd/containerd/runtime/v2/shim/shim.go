@@ -20,6 +20,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"runtime"
 	"runtime/debug"
@@ -30,6 +31,7 @@ import (
 	"github.com/containerd/containerd/log"
 	"github.com/containerd/containerd/namespaces"
 	shimapi "github.com/containerd/containerd/runtime/v2/task"
+	"github.com/containerd/containerd/version"
 	"github.com/containerd/ttrpc"
 	"github.com/gogo/protobuf/proto"
 	"github.com/pkg/errors"
@@ -43,14 +45,28 @@ type Client struct {
 	signals chan os.Signal
 }
 
+// Publisher for events
+type Publisher interface {
+	events.Publisher
+	io.Closer
+}
+
+// StartOpts describes shim start configuration received from containerd
+type StartOpts struct {
+	ID               string
+	ContainerdBinary string
+	Address          string
+	TTRPCAddress     string
+}
+
 // Init func for the creation of a shim server
-type Init func(context.Context, string, events.Publisher) (Shim, error)
+type Init func(context.Context, string, Publisher, func()) (Shim, error)
 
 // Shim server interface
 type Shim interface {
 	shimapi.TaskService
 	Cleanup(ctx context.Context) (*shimapi.DeleteResponse, error)
-	StartShim(ctx context.Context, id, containerdBinary, containerdAddress string) (string, error)
+	StartShim(ctx context.Context, opts StartOpts) (string, error)
 }
 
 // OptsKey is the context key for the Opts value.
@@ -71,10 +87,13 @@ type Config struct {
 	NoSubreaper bool
 	// NoReaper disables the shim binary from reaping any child process implicitly
 	NoReaper bool
+	// NoSetupLogger disables automatic configuration of logrus to use the shim FIFO
+	NoSetupLogger bool
 }
 
 var (
 	debugFlag            bool
+	versionFlag          bool
 	idFlag               string
 	namespaceFlag        string
 	socketFlag           string
@@ -84,11 +103,16 @@ var (
 	action               string
 )
 
+const (
+	ttrpcAddressEnv = "TTRPC_ADDRESS"
+)
+
 func parseFlags() {
 	flag.BoolVar(&debugFlag, "debug", false, "enable debug output in logs")
+	flag.BoolVar(&versionFlag, "v", false, "show the shim version and exit")
 	flag.StringVar(&namespaceFlag, "namespace", "", "namespace that owns the shim")
 	flag.StringVar(&idFlag, "id", "", "id of the task")
-	flag.StringVar(&socketFlag, "socket", "", "abstract socket path to serve")
+	flag.StringVar(&socketFlag, "socket", "", "socket path to serve")
 	flag.StringVar(&bundlePath, "bundle", "", "path to the bundle if not workdir")
 
 	flag.StringVar(&addressFlag, "address", "", "grpc address back to main containerd")
@@ -142,40 +166,55 @@ func Run(id string, initFunc Init, opts ...BinaryOpts) {
 
 func run(id string, initFunc Init, config Config) error {
 	parseFlags()
+	if versionFlag {
+		fmt.Printf("%s:\n", os.Args[0])
+		fmt.Println("  Version: ", version.Version)
+		fmt.Println("  Revision:", version.Revision)
+		fmt.Println("  Go version:", version.GoVersion)
+		fmt.Println("")
+		return nil
+	}
+
+	if namespaceFlag == "" {
+		return fmt.Errorf("shim namespace cannot be empty")
+	}
+
 	setRuntime()
 
 	signals, err := setupSignals(config)
 	if err != nil {
 		return err
 	}
+
 	if !config.NoSubreaper {
 		if err := subreaper(); err != nil {
 			return err
 		}
 	}
-	publisher := &remoteEventsPublisher{
-		address:              addressFlag,
-		containerdBinaryPath: containerdBinaryFlag,
-		noReaper:             config.NoReaper,
-	}
-	if namespaceFlag == "" {
-		return fmt.Errorf("shim namespace cannot be empty")
-	}
-	ctx := namespaces.WithNamespace(context.Background(), namespaceFlag)
-	ctx = context.WithValue(ctx, OptsKey{}, Opts{BundlePath: bundlePath, Debug: debugFlag})
-	ctx = log.WithLogger(ctx, log.G(ctx).WithField("runtime", id))
 
-	service, err := initFunc(ctx, idFlag, publisher)
+	ttrpcAddress := os.Getenv(ttrpcAddressEnv)
+	publisher, err := NewPublisher(ttrpcAddress)
 	if err != nil {
 		return err
 	}
+	defer publisher.Close()
+
+	ctx := namespaces.WithNamespace(context.Background(), namespaceFlag)
+	ctx = context.WithValue(ctx, OptsKey{}, Opts{BundlePath: bundlePath, Debug: debugFlag})
+	ctx = log.WithLogger(ctx, log.G(ctx).WithField("runtime", id))
+	ctx, cancel := context.WithCancel(ctx)
+	service, err := initFunc(ctx, idFlag, publisher, cancel)
+	if err != nil {
+		return err
+	}
+
 	switch action {
 	case "delete":
 		logger := logrus.WithFields(logrus.Fields{
 			"pid":       os.Getpid(),
 			"namespace": namespaceFlag,
 		})
-		go handleSignals(logger, signals)
+		go handleSignals(ctx, logger, signals)
 		response, err := service.Cleanup(ctx)
 		if err != nil {
 			return err
@@ -189,7 +228,13 @@ func run(id string, initFunc Init, config Config) error {
 		}
 		return nil
 	case "start":
-		address, err := service.StartShim(ctx, idFlag, containerdBinaryFlag, addressFlag)
+		opts := StartOpts{
+			ID:               idFlag,
+			ContainerdBinary: containerdBinaryFlag,
+			Address:          addressFlag,
+			TTRPCAddress:     ttrpcAddress,
+		}
+		address, err := service.StartShim(ctx, opts)
 		if err != nil {
 			return err
 		}
@@ -198,11 +243,30 @@ func run(id string, initFunc Init, config Config) error {
 		}
 		return nil
 	default:
-		if err := setLogger(ctx, idFlag); err != nil {
-			return err
+		if !config.NoSetupLogger {
+			if err := setLogger(ctx, idFlag); err != nil {
+				return err
+			}
 		}
 		client := NewShimClient(ctx, service, signals)
-		return client.Serve()
+		if err := client.Serve(); err != nil {
+			if err != context.Canceled {
+				return err
+			}
+		}
+
+		// NOTE: If the shim server is down(like oom killer), the address
+		// socket might be leaking.
+		if address, err := ReadAddress("address"); err == nil {
+			_ = RemoveSocket(address)
+		}
+
+		select {
+		case <-publisher.Done():
+			return nil
+		case <-time.After(5 * time.Second):
+			return errors.New("publisher not closed")
+		}
 	}
 }
 
@@ -246,7 +310,7 @@ func (s *Client) Serve() error {
 			dumpStacks(logger)
 		}
 	}()
-	return handleSignals(logger, s.signals)
+	return handleSignals(s.context, logger, s.signals)
 }
 
 // serve serves the ttrpc API over a unix socket at the provided path
@@ -279,10 +343,4 @@ func dumpStacks(logger *logrus.Entry) {
 	}
 	buf = buf[:stackSize]
 	logger.Infof("=== BEGIN goroutine stack dump ===\n%s\n=== END goroutine stack dump ===", buf)
-}
-
-type remoteEventsPublisher struct {
-	address              string
-	containerdBinaryPath string
-	noReaper             bool
 }

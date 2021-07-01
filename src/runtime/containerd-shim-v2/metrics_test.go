@@ -10,7 +10,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/containerd/cgroups"
+	"github.com/containerd/cgroups/stats/v1"
 	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/vcmock"
 	"github.com/stretchr/testify/assert"
@@ -29,7 +29,7 @@ func TestStatNetworkMetric(t *testing.T) {
 		},
 	}
 
-	expectedNetwork := []*cgroups.NetworkStat{
+	expectedNetwork := []*v1.NetworkStat{
 		{
 			Name:    "test-network",
 			RxBytes: 10,

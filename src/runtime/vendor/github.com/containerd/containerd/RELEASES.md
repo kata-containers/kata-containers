@@ -77,26 +77,31 @@ Support horizons will be defined corresponding to a release branch, identified
 by `<major>.<minor>`. Releases branches will be in one of several states:
 
 - __*Next*__: The next planned release branch.
-- __*Active*__: The release is currently supported and accepting patches.
+- __*Active*__: The release branch is currently supported and accepting patches.
+- __*Extended*__: The release branch is only accepting security patches.
 - __*End of Life*__: The release branch is no longer supported and no new patches will be accepted.
 
 Releases will be supported up to one year after a _minor_ release. This means that
 we will accept bug reports and backports to release branches until the end of
 life date. If no new _minor_ release has been made, that release will be
-considered supported until the next _minor_ is released or one year, whichever
-is longer.
+considered supported until 6 months after the next _minor_ is released or one year,
+whichever is longer. Additionally, releases may have an extended security support
+period after the end of the active period to accept security backports. This
+timeframe will be decided by maintainers before the end of the active status.
 
 The current state is available in the following table:
 
 | Release | Status      | Start            | End of Life       |
 |---------|-------------|------------------|-------------------|
-| [0.0](https://github.com/containerd/containerd/releases/tag/0.0.5)  | End of Life | Dec 4, 2015  | - |
-| [0.1](https://github.com/containerd/containerd/releases/tag/v0.1.0) | End of Life | Mar 21, 2016 | - |
-| [0.2](https://github.com/containerd/containerd/tree/v0.2.x)         | End of Life | Apr 21, 2016      | December 5, 2017 |
-| [1.0](https://github.com/containerd/containerd/releases/tag/v1.0.0) | Active   | December 5, 2017  | December 5, 2018 |
-| [1.1](https://github.com/containerd/containerd/releases/tag/v1.1.0) | Active   | April 23, 2018  | max(April 23, 2019, release of 1.2.0, Kubernetes 1.10 EOL) |
-| [1.2](https://github.com/containerd/containerd/releases/tag/v1.2.0) | Active   | October 24, 2018 | max(October 24, 2019, release of 1.3.0) |
-| [1.3](https://github.com/containerd/containerd/milestone/20)        | Next   | TBD  | max(TBD+1 year, release of 1.4.0) |
+| [0.0](https://github.com/containerd/containerd/releases/tag/0.0.5)   | End of Life | Dec 4, 2015  | - |
+| [0.1](https://github.com/containerd/containerd/releases/tag/v0.1.0)  | End of Life | Mar 21, 2016 | - |
+| [0.2](https://github.com/containerd/containerd/tree/v0.2.x)          | End of Life | Apr 21, 2016      | December 5, 2017 |
+| [1.0](https://github.com/containerd/containerd/releases/tag/v1.0.3)  | End of Life | December 5, 2017  | December 5, 2018 |
+| [1.1](https://github.com/containerd/containerd/releases/tag/v1.1.8)  | End of Life | April 23, 2018  | October 23, 2019 |
+| [1.2](https://github.com/containerd/containerd/releases/tag/v1.2.13) | End of Life | October 24, 2018 | October 15, 2020 |
+| [1.3](https://github.com/containerd/containerd/releases/tag/v1.3.10) | End of Life | September 26, 2019  | March 4, 2021 |
+| [1.4](https://github.com/containerd/containerd/releases/tag/v1.4.4)  | Active   | August 17, 2020 | max(August 17, 2021, release of 1.5.0 + 6 months) |
+| [1.5](https://github.com/containerd/containerd/milestone/30)         | Next   | TBD  | max(TBD+1 year, release of 1.6.0 + 6 months) |
 
 Note that branches and release from before 1.0 may not follow these rules.
 
@@ -129,7 +134,7 @@ To cherry pick a straightforward commit from master, simply use the cherry pick
 process:
 
 1. Pick the branch to which you want backported, usually in the format
-   `release/<minor>.<major>`. The following will create a branch you can
+   `release/<major>.<minor>`. The following will create a branch you can
    use to open a PR:
 
 	```console
@@ -150,7 +155,12 @@ process:
 
    Make sure to replace `stevvooe` with whatever fork you are using to open
    the PR. When you open the PR, make sure to switch `master` with whatever
-   release branch you are targeting with the fix.
+   release branch you are targeting with the fix. Make sure the PR title has
+   `[<release branch>]` prefixed. e.g.:
+
+   ```
+   [release/1.4] Fix foo in bar
+   ```
 
 If there is no existing fix in master, you should first fix the bug in master,
 or ask us a maintainer or contributor to do it via an issue. Once that PR is
@@ -170,8 +180,9 @@ containerd versions:
 | GRPC API         | Stable   | 1.0                | [api/](api) |
 | Metrics API      | Stable   | 1.0                | - |
 | Runtime Shim API | Stable   | 1.2                | - |
+| Daemon Config    | Stable   | 1.0			       | - |
 | Go client API    | Unstable | _future_           | [godoc](https://godoc.org/github.com/containerd/containerd) |
-| CRI GRPC API     | Unstable | v1alpha2 _current_ | [api/](https://github.com/kubernetes/kubernetes/tree/master/pkg/kubelet/apis/cri/runtime/v1alpha2) |
+| CRI GRPC API     | Unstable | v1alpha2 _current_ | [cri-api](https://github.com/kubernetes/cri-api/tree/master/pkg/apis/runtime/v1alpha2) |
 | `ctr` tool       | Unstable | Out of scope       | - |
 
 From the version stated in the above table, that component must adhere to the
@@ -194,6 +205,10 @@ enumerating the support services and messages. See [api/](api) for details.
 
 Note that new services may be added in _minor_ releases. New service methods
 and new fields on messages may be added if they are optional.
+
+`*.pb.txt` files are generated at each API release. They prevent unintentional changes
+to the API by having a diff that the CI can run. These files are not intended to be
+consumed or used by clients.
 
 ### Metrics API
 
@@ -263,10 +278,24 @@ version of Kubernetes which supports that version of CRI.
 ### `ctr` tool
 
 The `ctr` tool provides the ability to introspect and understand the containerd
-API. At this time, it is not considered a primary offering of the project. It
-may be completely refactored or have breaking changes in _minor_ releases.
+API. It is not considered a primary offering of the project and is unsupported in
+that sense. While we understand it's value as a debug tool, it may be completely
+refactored or have breaking changes in _minor_ releases.
 
-We will try not break the tool in _patch_ releases.
+Targeting `ctr` for feature additions reflects a misunderstanding of the containerd
+architecture. Feature addition should focus on the client Go API and additions to
+`ctr` may or may not be accepted at the discretion of the maintainers.
+
+We will do our best to not break compatibility in the tool in _patch_ releases.
+
+### Daemon Configuration
+
+The daemon's configuration file, commonly located in `/etc/containerd/config.toml`
+is versioned and backwards compatible.  The `version` field in the config
+file specifies the config's version.  If no version number is specified inside
+the config file then it is assumed to be a version 1 config and parsed as such.
+Please use `version = 2` to enable version 2 config as version 1 has been
+deprecated.
 
 ### Not Covered
 
@@ -287,3 +316,14 @@ in that process. Container root file systems will be maintained on upgrade.
 We may make exceptions in the interest of __security patches__. If a break is
 required, it will be communicated clearly and the solution will be considered
 against total impact.
+
+## Deprecated features
+
+The deprecated features are shown in the following table:
+
+| Component                                                            | Deprecation release | Target release for removal | Recommendation                |
+|----------------------------------------------------------------------|---------------------|----------------------------|-------------------------------|
+| Runtime V1 API and implementation (`io.containerd.runtime.v1.linux`) | containerd v1.4     | containerd v2.0            | Use `io.containerd.runc.v2`   |
+| Runc V1 implementation of Runtime V2 (`io.containerd.runc.v1`)       | containerd v1.4     | containerd v2.0            | Use `io.containerd.runc.v2`   |
+| config.toml `version = 1`                                            | containerd v1.5     | containerd v2.0            | Use config.toml `version = 2` |
+| Built-in `aufs` snapshotter                                          | containerd v1.5     | containerd v2.0            | Use `overlayfs` snapshotter   |

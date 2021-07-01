@@ -1,3 +1,19 @@
+/*
+	Copyright The containerd Authors.
+
+	Licensed under the Apache License, Version 2.0 (the "License");
+	you may not use this file except in compliance with the License.
+	You may obtain a copy of the License at
+
+		http://www.apache.org/licenses/LICENSE-2.0
+
+	Unless required by applicable law or agreed to in writing, software
+	distributed under the License is distributed on an "AS IS" BASIS,
+	WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+	See the License for the specific language governing permissions and
+	limitations under the License.
+*/
+
 syntax = "proto3";
 
 package containerd.events;
@@ -29,6 +45,9 @@ message TaskDelete {
 	uint32 pid = 2;
 	uint32 exit_status = 3;
 	google.protobuf.Timestamp exited_at = 4 [(gogoproto.stdtime) = true, (gogoproto.nullable) = false];
+	// id is the specific exec. By default if omitted will be `""` thus matches
+	// the init exec of the task matching `container_id`.
+	string id = 5;
 }
 
 message TaskIO {

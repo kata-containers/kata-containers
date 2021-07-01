@@ -265,9 +265,9 @@ func getMemoryInfo() MemoryInfo {
 	}
 
 	return MemoryInfo{
-		Total:     mi.MemTotal,
-		Free:      mi.MemFree,
-		Available: mi.MemAvailable,
+		Total:     *mi.MemTotal,
+		Free:      *mi.MemFree,
+		Available: *mi.MemAvailable,
 	}
 }
 
