@@ -53,6 +53,15 @@ func copyValue(to, from reflect.Value) error {
 		return copySliceValue(to, from)
 	case reflect.Map:
 		return copyMapValue(to, from)
+	case reflect.Interface:
+		if to.Type().Name() == "isLinuxSyscall_ErrnoRet" {
+			dest := LinuxSyscall_Errnoret{Errnoret: uint32(from.Uint())}
+			var destintf isLinuxSyscall_ErrnoRet = &dest
+			toVal := reflect.ValueOf(destintf)
+			to.Set(toVal)
+			return nil
+		}
+		return grpcStatus.Errorf(codes.InvalidArgument, "Can not convert %v to %v, kind= %v", from.Type(), to.Type(), toKind)
 	default:
 		// We now are copying non pointers scalar.
 		// This is the leaf of the recursion.
@@ -62,7 +71,7 @@ func copyValue(to, from reflect.Value) error {
 				return nil
 			}
 
-			return grpcStatus.Errorf(codes.InvalidArgument, "Can not convert %v to %v", from.Type(), to.Type())
+			return grpcStatus.Errorf(codes.InvalidArgument, "Can not convert %v to %v, kind= %v", from.Type(), to.Type(), toKind)
 		}
 
 		to.Set(from)
@@ -235,15 +244,6 @@ func OCItoGRPC(ociSpec *specs.Spec) (*Spec, error) {
 	s := &Spec{}
 
 	err := copyStruct(s, ociSpec)
-
-	return s, err
-}
-
-// GRPCtoOCI converts a gRPC specification back into an OCI representation
-func GRPCtoOCI(grpcSpec *Spec) (*specs.Spec, error) {
-	s := &specs.Spec{}
-
-	err := copyStruct(s, grpcSpec)
 
 	return s, err
 }

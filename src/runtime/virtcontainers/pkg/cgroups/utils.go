@@ -7,11 +7,10 @@ package cgroups
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 
-	"github.com/opencontainers/runc/libcontainer/configs"
+	"github.com/opencontainers/runc/libcontainer/devices"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"golang.org/x/sys/unix"
 )
@@ -76,12 +75,11 @@ func IsSystemdCgroup(cgroupPath string) bool {
 	return false
 }
 
-func DeviceToCgroupDevice(device string) (*configs.Device, error) {
+func DeviceToCgroupDeviceRule(device string) (*devices.Rule, error) {
 	var st unix.Stat_t
-	linuxDevice := configs.Device{
+	deviceRule := devices.Rule{
 		Allow:       true,
 		Permissions: "rwm",
-		Path:        device,
 	}
 
 	if err := unix.Stat(device, &st); err != nil {
@@ -92,27 +90,23 @@ func DeviceToCgroupDevice(device string) (*configs.Device, error) {
 
 	switch devType {
 	case unix.S_IFCHR:
-		linuxDevice.Type = 'c'
+		deviceRule.Type = 'c'
 	case unix.S_IFBLK:
-		linuxDevice.Type = 'b'
+		deviceRule.Type = 'b'
 	default:
 		return nil, fmt.Errorf("unsupported device type: %v", devType)
 	}
 
 	major := int64(unix.Major(st.Rdev))
 	minor := int64(unix.Minor(st.Rdev))
-	linuxDevice.Major = major
-	linuxDevice.Minor = minor
+	deviceRule.Major = major
+	deviceRule.Minor = minor
 
-	linuxDevice.Gid = st.Gid
-	linuxDevice.Uid = st.Uid
-	linuxDevice.FileMode = os.FileMode(st.Mode)
-
-	return &linuxDevice, nil
+	return &deviceRule, nil
 }
 
 func DeviceToLinuxDevice(device string) (specs.LinuxDeviceCgroup, error) {
-	dev, err := DeviceToCgroupDevice(device)
+	dev, err := DeviceToCgroupDeviceRule(device)
 	if err != nil {
 		return specs.LinuxDeviceCgroup{}, err
 	}
@@ -122,6 +116,6 @@ func DeviceToLinuxDevice(device string) (specs.LinuxDeviceCgroup, error) {
 		Type:   string(dev.Type),
 		Major:  &dev.Major,
 		Minor:  &dev.Minor,
-		Access: dev.Permissions,
+		Access: string(dev.Permissions),
 	}, nil
 }

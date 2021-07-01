@@ -93,26 +93,6 @@ func TestOCItoGRPC(t *testing.T) {
 	assertIsEqual(t, &ociSpec, spec)
 }
 
-func TestGRPCtoOCI(t *testing.T) {
-	assert := assert.New(t)
-
-	var ociSpec specs.Spec
-
-	configJSONBytes, err := ioutil.ReadFile(ociConfigFile)
-	assert.NoError(err, "Could not open OCI config file")
-
-	err = json.Unmarshal(configJSONBytes, &ociSpec)
-	assert.NoError(err, "Could not unmarshall OCI config file")
-
-	grpcSpec, err := OCItoGRPC(&ociSpec)
-	assert.NoError(err, "Could not convert OCI config file")
-
-	newOciSpec, err := GRPCtoOCI(grpcSpec)
-	assert.NoError(err, "Could not convert gRPC structure")
-
-	assertIsEqual(t, newOciSpec, grpcSpec)
-}
-
 func TestProcessOCItoGRPC(t *testing.T) {
 	assert := assert.New(t)
 	var ociSpec specs.Spec

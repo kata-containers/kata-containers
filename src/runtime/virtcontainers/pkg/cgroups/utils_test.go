@@ -105,7 +105,7 @@ func TestValidCgroupPath(t *testing.T) {
 
 }
 
-func TestDeviceToCgroupDevice(t *testing.T) {
+func TestDeviceToCgroupDeviceRule(t *testing.T) {
 	assert := assert.New(t)
 
 	f, err := ioutil.TempFile("", "device")
@@ -113,13 +113,13 @@ func TestDeviceToCgroupDevice(t *testing.T) {
 	f.Close()
 
 	// fail: regular file to device
-	dev, err := DeviceToCgroupDevice(f.Name())
+	dev, err := DeviceToCgroupDeviceRule(f.Name())
 	assert.Error(err)
 	assert.Nil(dev)
 
 	// fail: no such file
 	os.Remove(f.Name())
-	dev, err = DeviceToCgroupDevice(f.Name())
+	dev, err = DeviceToCgroupDeviceRule(f.Name())
 	assert.Error(err)
 	assert.Nil(dev)
 
@@ -128,17 +128,13 @@ func TestDeviceToCgroupDevice(t *testing.T) {
 		t.Skipf("no such device: %v", devPath)
 		return
 	}
-	dev, err = DeviceToCgroupDevice(devPath)
+	dev, err = DeviceToCgroupDeviceRule(devPath)
 	assert.NoError(err)
 	assert.NotNil(dev)
-	assert.Equal(dev.Type, 'c')
-	assert.Equal(dev.Path, devPath)
+	assert.Equal(rune(dev.Type), 'c')
 	assert.NotZero(dev.Major)
 	assert.NotZero(dev.Minor)
 	assert.NotEmpty(dev.Permissions)
-	assert.NotZero(dev.FileMode)
-	assert.Zero(dev.Uid)
-	assert.Zero(dev.Gid)
 	assert.True(dev.Allow)
 }
 

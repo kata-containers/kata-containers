@@ -553,11 +553,11 @@ func TestConstraintGRPCSpec(t *testing.T) {
 			Seccomp: &pb.LinuxSeccomp{},
 			Namespaces: []pb.LinuxNamespace{
 				{
-					Type: specs.NetworkNamespace,
+					Type: string(specs.NetworkNamespace),
 					Path: "/abc/123",
 				},
 				{
-					Type: specs.MountNamespace,
+					Type: string(specs.MountNamespace),
 					Path: "/abc/123",
 				},
 			},
@@ -689,11 +689,11 @@ func TestHandlePidNamespace(t *testing.T) {
 		Linux: &pb.Linux{
 			Namespaces: []pb.LinuxNamespace{
 				{
-					Type: specs.NetworkNamespace,
+					Type: string(specs.NetworkNamespace),
 					Path: "/abc/123",
 				},
 				{
-					Type: specs.MountNamespace,
+					Type: string(specs.MountNamespace),
 					Path: "/abc/123",
 				},
 			},
@@ -714,7 +714,7 @@ func TestHandlePidNamespace(t *testing.T) {
 	}
 
 	utsNs := pb.LinuxNamespace{
-		Type: specs.UTSNamespace,
+		Type: string(specs.UTSNamespace),
 		Path: "",
 	}
 

@@ -16,13 +16,29 @@
 
 package archive
 
-import "archive/tar"
+import (
+	"archive/tar"
+	"context"
+	"io"
+)
+
+// ApplyOptions provides additional options for an Apply operation
+type ApplyOptions struct {
+	Filter          Filter          // Filter tar headers
+	ConvertWhiteout ConvertWhiteout // Convert whiteout files
+	Parents         []string        // Parent directories to handle inherited attributes without CoW
+
+	applyFunc func(context.Context, string, io.Reader, ApplyOptions) (int64, error)
+}
 
 // ApplyOpt allows setting mutable archive apply properties on creation
 type ApplyOpt func(options *ApplyOptions) error
 
 // Filter specific files from the archive
 type Filter func(*tar.Header) (bool, error)
+
+// ConvertWhiteout converts whiteout files from the archive
+type ConvertWhiteout func(*tar.Header, string) (bool, error)
 
 // all allows all files
 func all(_ *tar.Header) (bool, error) {
@@ -36,3 +52,34 @@ func WithFilter(f Filter) ApplyOpt {
 		return nil
 	}
 }
+
+// WithConvertWhiteout uses the convert function to convert the whiteout files.
+func WithConvertWhiteout(c ConvertWhiteout) ApplyOpt {
+	return func(options *ApplyOptions) error {
+		options.ConvertWhiteout = c
+		return nil
+	}
+}
+
+// WithParents provides parent directories for resolving inherited attributes
+// directory from the filesystem.
+// Inherited attributes are searched from first to last, making the first
+// element in the list the most immediate parent directory.
+// NOTE: When applying to a filesystem which supports CoW, file attributes
+// should be inherited by the filesystem.
+func WithParents(p []string) ApplyOpt {
+	return func(options *ApplyOptions) error {
+		options.Parents = p
+		return nil
+	}
+}
+
+// WriteDiffOptions provides additional options for a WriteDiff operation
+type WriteDiffOptions struct {
+	ParentLayers []string // Windows needs the full list of parent layers
+
+	writeDiffFunc func(context.Context, io.Writer, string, string, WriteDiffOptions) error
+}
+
+// WriteDiffOpt allows setting mutable archive write properties on creation
+type WriteDiffOpt func(options *WriteDiffOptions) error

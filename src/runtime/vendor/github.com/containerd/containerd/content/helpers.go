@@ -55,7 +55,14 @@ func ReadBlob(ctx context.Context, provider Provider, desc ocispec.Descriptor) (
 
 	p := make([]byte, ra.Size())
 
-	_, err = ra.ReadAt(p, 0)
+	n, err := ra.ReadAt(p, 0)
+	if err == io.EOF {
+		if int64(n) != ra.Size() {
+			err = io.ErrUnexpectedEOF
+		} else {
+			err = nil
+		}
+	}
 	return p, err
 }
 
@@ -162,6 +169,28 @@ func CopyReaderAt(cw Writer, ra ReaderAt, n int64) error {
 	return err
 }
 
+// CopyReader copies to a writer from a given reader, returning
+// the number of bytes copied.
+// Note: if the writer has a non-zero offset, the total number
+// of bytes read may be greater than those copied if the reader
+// is not an io.Seeker.
+// This copy does not commit the writer.
+func CopyReader(cw Writer, r io.Reader) (int64, error) {
+	ws, err := cw.Status()
+	if err != nil {
+		return 0, errors.Wrap(err, "failed to get status")
+	}
+
+	if ws.Offset > 0 {
+		r, err = seekReader(r, ws.Offset, 0)
+		if err != nil {
+			return 0, errors.Wrapf(err, "unable to resume write to %v", ws.Ref)
+		}
+	}
+
+	return copyWithBuffer(cw, r)
+}
+
 // seekReader attempts to seek the reader to the given offset, either by
 // resolving `io.Seeker`, by detecting `io.ReaderAt`, or discarding
 // up to the given offset.
@@ -200,9 +229,47 @@ func seekReader(r io.Reader, offset, size int64) (io.Reader, error) {
 	return r, nil
 }
 
+// copyWithBuffer is very similar to  io.CopyBuffer https://golang.org/pkg/io/#CopyBuffer
+// but instead of using Read to read from the src, we use ReadAtLeast to make sure we have
+// a full buffer before we do a write operation to dst to reduce overheads associated
+// with the write operations of small buffers.
 func copyWithBuffer(dst io.Writer, src io.Reader) (written int64, err error) {
-	buf := bufPool.Get().(*[]byte)
-	written, err = io.CopyBuffer(dst, src, *buf)
-	bufPool.Put(buf)
+	// If the reader has a WriteTo method, use it to do the copy.
+	// Avoids an allocation and a copy.
+	if wt, ok := src.(io.WriterTo); ok {
+		return wt.WriteTo(dst)
+	}
+	// Similarly, if the writer has a ReadFrom method, use it to do the copy.
+	if rt, ok := dst.(io.ReaderFrom); ok {
+		return rt.ReadFrom(src)
+	}
+	bufRef := bufPool.Get().(*[]byte)
+	defer bufPool.Put(bufRef)
+	buf := *bufRef
+	for {
+		nr, er := io.ReadAtLeast(src, buf, len(buf))
+		if nr > 0 {
+			nw, ew := dst.Write(buf[0:nr])
+			if nw > 0 {
+				written += int64(nw)
+			}
+			if ew != nil {
+				err = ew
+				break
+			}
+			if nr != nw {
+				err = io.ErrShortWrite
+				break
+			}
+		}
+		if er != nil {
+			// If an EOF happens after reading fewer than the requested bytes,
+			// ReadAtLeast returns ErrUnexpectedEOF.
+			if er != io.EOF && er != io.ErrUnexpectedEOF {
+				err = er
+			}
+			break
+		}
+	}
 	return
 }

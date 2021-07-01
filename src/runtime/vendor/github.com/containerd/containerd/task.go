@@ -35,13 +35,16 @@ import (
 	"github.com/containerd/containerd/errdefs"
 	"github.com/containerd/containerd/images"
 	"github.com/containerd/containerd/mount"
+	"github.com/containerd/containerd/oci"
 	"github.com/containerd/containerd/plugin"
 	"github.com/containerd/containerd/rootfs"
+	"github.com/containerd/containerd/runtime/linux/runctypes"
+	"github.com/containerd/containerd/runtime/v2/runc/options"
 	"github.com/containerd/typeurl"
 	google_protobuf "github.com/gogo/protobuf/types"
 	digest "github.com/opencontainers/go-digest"
 	is "github.com/opencontainers/image-spec/specs-go"
-	"github.com/opencontainers/image-spec/specs-go/v1"
+	v1 "github.com/opencontainers/image-spec/specs-go/v1"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/pkg/errors"
 )
@@ -115,6 +118,13 @@ type CheckpointTaskInfo struct {
 	ParentCheckpoint digest.Digest
 	// Options hold runtime specific settings for checkpointing a task
 	Options interface{}
+
+	runtime string
+}
+
+// Runtime name for the container
+func (i *CheckpointTaskInfo) Runtime() string {
+	return i.runtime
 }
 
 // CheckpointTaskOpts allows the caller to set checkpoint options
@@ -129,6 +139,12 @@ type TaskInfo struct {
 	RootFS []mount.Mount
 	// Options hold runtime specific settings for task creation
 	Options interface{}
+	runtime string
+}
+
+// Runtime name for the container
+func (i *TaskInfo) Runtime() string {
+	return i.runtime
 }
 
 // Task is the executable object within containerd
@@ -144,9 +160,11 @@ type Task interface {
 	// Pids returns a list of system specific process ids inside the task
 	Pids(context.Context) ([]ProcessInfo, error)
 	// Checkpoint serializes the runtime and memory information of a task into an
-	// OCI Index that can be push and pulled from a remote resource.
+	// OCI Index that can be pushed and pulled from a remote resource.
 	//
 	// Additional software like CRIU maybe required to checkpoint and restore tasks
+	// NOTE: Checkpoint supports to dump task information to a directory, in this way,
+	// an empty OCI Index will be returned.
 	Checkpoint(context.Context, ...CheckpointTaskOpts) (Image, error)
 	// Update modifies executing tasks with updated settings
 	Update(context.Context, ...UpdateTaskOpts) error
@@ -158,16 +176,24 @@ type Task interface {
 	// For the built in Linux runtime, github.com/containerd/cgroups.Metrics
 	// are returned in protobuf format
 	Metrics(context.Context) (*types.Metric, error)
+	// Spec returns the current OCI specification for the task
+	Spec(context.Context) (*oci.Spec, error)
 }
 
 var _ = (Task)(&task{})
 
 type task struct {
 	client *Client
+	c      Container
 
 	io  cio.IO
 	id  string
 	pid uint32
+}
+
+// Spec returns the current OCI specification for the task
+func (t *task) Spec(ctx context.Context) (*oci.Spec, error) {
+	return t.c.Spec(ctx)
 }
 
 // ID of the task
@@ -185,8 +211,10 @@ func (t *task) Start(ctx context.Context) error {
 		ContainerID: t.id,
 	})
 	if err != nil {
-		t.io.Cancel()
-		t.io.Close()
+		if t.io != nil {
+			t.io.Cancel()
+			t.io.Close()
+		}
 		return errdefs.FromGRPC(err)
 	}
 	t.pid = r.Pid
@@ -387,17 +415,25 @@ func (t *task) Resize(ctx context.Context, w, h uint32) error {
 	return errdefs.FromGRPC(err)
 }
 
+// NOTE: Checkpoint supports to dump task information to a directory, in this way, an empty
+// OCI Index will be returned.
 func (t *task) Checkpoint(ctx context.Context, opts ...CheckpointTaskOpts) (Image, error) {
 	ctx, done, err := t.client.WithLease(ctx)
 	if err != nil {
 		return nil, err
 	}
 	defer done(ctx)
+	cr, err := t.client.ContainerService().Get(ctx, t.id)
+	if err != nil {
+		return nil, err
+	}
 
 	request := &tasks.CheckpointTaskRequest{
 		ContainerID: t.id,
 	}
-	var i CheckpointTaskInfo
+	i := CheckpointTaskInfo{
+		runtime: cr.Runtime.Name,
+	}
 	for _, o := range opts {
 		if err := o(&i); err != nil {
 			return nil, err
@@ -415,15 +451,20 @@ func (t *task) Checkpoint(ctx context.Context, opts ...CheckpointTaskOpts) (Imag
 		}
 		request.Options = any
 	}
-	// make sure we pause it and resume after all other filesystem operations are completed
-	if err := t.Pause(ctx); err != nil {
-		return nil, err
-	}
-	defer t.Resume(ctx)
-	cr, err := t.client.ContainerService().Get(ctx, t.id)
+
+	status, err := t.Status(ctx)
 	if err != nil {
 		return nil, err
 	}
+
+	if status.Status != Paused {
+		// make sure we pause it and resume after all other filesystem operations are completed
+		if err := t.Pause(ctx); err != nil {
+			return nil, err
+		}
+		defer t.Resume(ctx)
+	}
+
 	index := v1.Index{
 		Versioned: is.Versioned{
 			SchemaVersion: 2,
@@ -433,6 +474,12 @@ func (t *task) Checkpoint(ctx context.Context, opts ...CheckpointTaskOpts) (Imag
 	if err := t.checkpointTask(ctx, &index, request); err != nil {
 		return nil, err
 	}
+	// if checkpoint image path passed, jump checkpoint image,
+	// return an empty image
+	if isCheckpointPathExist(cr.Runtime.Name, i.Options) {
+		return NewImage(t.client, images.Image{}), nil
+	}
+
 	if cr.Image != "" {
 		if err := t.checkpointImage(ctx, &index, cr.Image); err != nil {
 			return nil, err
@@ -465,6 +512,8 @@ func (t *task) Checkpoint(ctx context.Context, opts ...CheckpointTaskOpts) (Imag
 type UpdateTaskInfo struct {
 	// Resources updates a tasks resource constraints
 	Resources interface{}
+	// Annotations allows arbitrary and/or experimental resource constraints for task update
+	Annotations map[string]string
 }
 
 // UpdateTaskOpts allows a caller to update task settings
@@ -487,11 +536,17 @@ func (t *task) Update(ctx context.Context, opts ...UpdateTaskOpts) error {
 		}
 		request.Resources = any
 	}
+	if i.Annotations != nil {
+		request.Annotations = i.Annotations
+	}
 	_, err := t.client.TaskService().Update(ctx, request)
 	return errdefs.FromGRPC(err)
 }
 
 func (t *task) LoadProcess(ctx context.Context, id string, ioAttach cio.Attach) (Process, error) {
+	if id == t.id && ioAttach == nil {
+		return t, nil
+	}
 	response, err := t.client.TaskService().Get(ctx, &tasks.GetRequest{
 		ContainerID: t.id,
 		ExecID:      id,
@@ -542,6 +597,7 @@ func (t *task) checkpointTask(ctx context.Context, index *v1.Index, request *tas
 	if err != nil {
 		return errdefs.FromGRPC(err)
 	}
+	// NOTE: response.Descriptors can be an empty slice if checkpoint image is jumped
 	// add the checkpoint descriptors to the index
 	for _, d := range response.Descriptors {
 		index.Manifests = append(index.Manifests, v1.Descriptor{
@@ -552,6 +608,7 @@ func (t *task) checkpointTask(ctx context.Context, index *v1.Index, request *tas
 				OS:           goruntime.GOOS,
 				Architecture: goruntime.GOARCH,
 			},
+			Annotations: d.Annotations,
 		})
 	}
 	return nil
@@ -618,4 +675,25 @@ func writeContent(ctx context.Context, store content.Ingester, mediaType, ref st
 		Digest:    writer.Digest(),
 		Size:      size,
 	}, nil
+}
+
+// isCheckpointPathExist only suitable for runc runtime now
+func isCheckpointPathExist(runtime string, v interface{}) bool {
+	if v == nil {
+		return false
+	}
+
+	switch runtime {
+	case plugin.RuntimeRuncV1, plugin.RuntimeRuncV2:
+		if opts, ok := v.(*options.CheckpointOptions); ok && opts.ImagePath != "" {
+			return true
+		}
+
+	case plugin.RuntimeLinuxV1:
+		if opts, ok := v.(*runctypes.CheckpointOptions); ok && opts.ImagePath != "" {
+			return true
+		}
+	}
+
+	return false
 }

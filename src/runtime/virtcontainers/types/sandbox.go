@@ -28,6 +28,9 @@ const (
 
 	// StateStopped represents a sandbox/container that has been stopped.
 	StateStopped StateString = "stopped"
+
+	// StateCreating represents a sandbox/container that's in creating.
+	StateCreating StateString = "creating"
 )
 
 const (

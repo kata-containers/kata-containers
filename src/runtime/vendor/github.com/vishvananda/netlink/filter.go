@@ -2,6 +2,7 @@ package netlink
 
 import (
 	"fmt"
+	"net"
 )
 
 type Filter interface {
@@ -203,6 +204,62 @@ func NewMirredAction(redirIndex int) *MirredAction {
 	}
 }
 
+type TunnelKeyAct int8
+
+const (
+	TCA_TUNNEL_KEY_SET   TunnelKeyAct = 1 // set tunnel key
+	TCA_TUNNEL_KEY_UNSET TunnelKeyAct = 2 // unset tunnel key
+)
+
+type TunnelKeyAction struct {
+	ActionAttrs
+	Action   TunnelKeyAct
+	SrcAddr  net.IP
+	DstAddr  net.IP
+	KeyID    uint32
+	DestPort uint16
+}
+
+func (action *TunnelKeyAction) Type() string {
+	return "tunnel_key"
+}
+
+func (action *TunnelKeyAction) Attrs() *ActionAttrs {
+	return &action.ActionAttrs
+}
+
+func NewTunnelKeyAction() *TunnelKeyAction {
+	return &TunnelKeyAction{
+		ActionAttrs: ActionAttrs{
+			Action: TC_ACT_PIPE,
+		},
+	}
+}
+
+type SkbEditAction struct {
+	ActionAttrs
+	QueueMapping *uint16
+	PType        *uint16
+	Priority     *uint32
+	Mark         *uint32
+}
+
+func (action *SkbEditAction) Type() string {
+	return "skbedit"
+}
+
+func (action *SkbEditAction) Attrs() *ActionAttrs {
+	return &action.ActionAttrs
+}
+
+func NewSkbEditAction() *SkbEditAction {
+	return &SkbEditAction{
+		ActionAttrs: ActionAttrs{
+			Action: TC_ACT_PIPE,
+		},
+	}
+}
+
 // MatchAll filters match all packets
 type MatchAll struct {
 	FilterAttrs
@@ -240,6 +297,8 @@ type BpfFilter struct {
 	Fd           int
 	Name         string
 	DirectAction bool
+	Id           int
+	Tag          string
 }
 
 func (filter *BpfFilter) Type() string {
