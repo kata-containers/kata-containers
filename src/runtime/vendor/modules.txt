@@ -143,8 +143,6 @@ github.com/coreos/go-systemd/dbus
 github.com/cri-o/cri-o/pkg/annotations
 # github.com/davecgh/go-spew v1.1.1
 github.com/davecgh/go-spew/spew
-# github.com/dlespiau/covertool v0.0.0-20180314162135-b0c4c6d0583a
-## explicit
 # github.com/docker/distribution v2.7.1+incompatible
 ## explicit
 github.com/docker/distribution/digestset
@@ -202,7 +200,7 @@ github.com/godbus/dbus
 # github.com/gogo/googleapis v1.4.0
 ## explicit
 github.com/gogo/googleapis/google/rpc
-# github.com/gogo/protobuf v1.3.1
+# github.com/gogo/protobuf v1.3.2
 ## explicit
 github.com/gogo/protobuf/gogoproto
 github.com/gogo/protobuf/jsonpb
@@ -343,7 +341,7 @@ go.opentelemetry.io/otel/sdk/instrumentation
 go.opentelemetry.io/otel/sdk/internal
 go.opentelemetry.io/otel/sdk/resource
 go.opentelemetry.io/otel/sdk/trace
-# golang.org/x/net v0.0.0-20200822124328-c89045814202
+# golang.org/x/net v0.0.0-20201021035429-f5854403a974
 ## explicit
 golang.org/x/net/context
 golang.org/x/net/context/ctxhttp
@@ -357,10 +355,10 @@ golang.org/x/net/trace
 ## explicit
 golang.org/x/oauth2
 golang.org/x/oauth2/internal
-# golang.org/x/sync v0.0.0-20200625203802-6e8e738ad208
+# golang.org/x/sync v0.0.0-20201020160332-67f06af15bc9
 golang.org/x/sync/errgroup
 golang.org/x/sync/semaphore
-# golang.org/x/sys v0.0.0-20200905004654-be1d3432aa8f
+# golang.org/x/sys v0.0.0-20200930185726-fdedc70b468f
 ## explicit
 golang.org/x/sys/internal/unsafeheader
 golang.org/x/sys/unix

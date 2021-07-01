@@ -28,7 +28,7 @@ require (
 	github.com/go-openapi/swag v0.18.0
 	github.com/go-openapi/validate v0.18.0
 	github.com/gogo/googleapis v1.4.0 // indirect
-	github.com/gogo/protobuf v1.3.1
+	github.com/gogo/protobuf v1.3.2
 	github.com/hashicorp/go-multierror v1.0.0
 	github.com/kata-containers/govmm v0.0.0-20210428163604-f0e9a35308ee
 	github.com/mdlayher/vsock v0.0.0-20191108225356-d9c65923cb8f
@@ -53,9 +53,9 @@ require (
 	go.opentelemetry.io/otel v0.15.0
 	go.opentelemetry.io/otel/exporters/trace/jaeger v0.15.0
 	go.opentelemetry.io/otel/sdk v0.15.0
-	golang.org/x/net v0.0.0-20200822124328-c89045814202
+	golang.org/x/net v0.0.0-20201021035429-f5854403a974
 	golang.org/x/oauth2 v0.0.0-20200902213428-5d25da1a8d43
-	golang.org/x/sys v0.0.0-20200905004654-be1d3432aa8f
+	golang.org/x/sys v0.0.0-20200930185726-fdedc70b468f
 	google.golang.org/grpc v1.31.1
 	gotest.tools v2.2.0+incompatible // indirect
 	k8s.io/apimachinery v0.18.2
