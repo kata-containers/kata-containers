@@ -150,6 +150,8 @@ build_rootfs()
 	else
 		DNF="${DNF} --releasever=${OS_VERSION}"
 	fi
+
+	info "install packages for rootfs"
 	$DNF install ${EXTRA_PKGS} ${PACKAGES}
 }
 
@@ -190,14 +192,8 @@ create_summary_file()
 	local agent="${AGENT_DEST}"
 	[ "$AGENT_INIT" = yes ] && agent="${init}"
 
-	local agent_version
-	if [ "${RUST_AGENT}" == "no" ]; then
-		agent_version=$("$agent" --version|awk '{print $NF}')
-	else
-		local -r agentdir="${script_dir}/../../../"
-		agent_version=$(cat ${agentdir}/VERSION)
-	fi
-
+	local -r agentdir="${script_dir}/../../../"
+	local -r agent_version=$(cat ${agentdir}/VERSION)
 
 	cat >"$file"<<-EOT
 	---
@@ -241,36 +237,19 @@ generate_dockerfile()
 	local libc=musl
 	case "$(uname -m)" in
 		"ppc64le")
-			goarch=ppc64le
 			rustarch=powerpc64le
 			muslarch=powerpc64
 			libc=gnu
 			;;
-
-		"aarch64")
-			goarch=arm64
-			;;
 		"s390x")
-			goarch=s390x
 			libc=gnu
 			;;
 
 		*)
-			goarch=amd64
 			;;
 	esac
 
 	[ -n "${http_proxy:-}" ] && readonly set_proxy="RUN sed -i '$ a proxy="${http_proxy:-}"' /etc/dnf/dnf.conf /etc/yum.conf; true"
-
-	curlOptions=("-OL")
-	[ -n "${http_proxy:-}" ] && curlOptions+=("-x ${http_proxy:-}")
-
-	readonly install_go="
-RUN cd /tmp ; curl ${curlOptions[@]} https://storage.googleapis.com/golang/go${GO_VERSION}.linux-${goarch}.tar.gz
-RUN tar -C /usr/ -xzf /tmp/go${GO_VERSION}.linux-${goarch}.tar.gz
-ENV GOROOT=/usr/go
-ENV PATH=\$PATH:\$GOROOT/bin:\$GOPATH/bin
-"
 
 	# Rust agent
 	# rust installer should set path apropiately, just in case
@@ -327,8 +306,6 @@ RUN . /root/.cargo/env; \
 	rustup target install ${rustarch}-unknown-linux-${libc}
 RUN ln -sf /usr/bin/g++ /bin/musl-g++
 "
-	# rust agent still need go to build
-	# because grpc-sys need go to build
 	pushd "${dir}"
 	dockerfile_template="Dockerfile.in"
 	dockerfile_arch_template="Dockerfile-${architecture}.in"
@@ -344,10 +321,8 @@ RUN ln -sf /usr/bin/g++ /bin/musl-g++
 	# also long double representation problem when building musl-libc
 	if [ "${architecture}" == "ppc64le" ]; then
 		sed \
-			-e "s|@GO_VERSION@|${GO_VERSION}|g" \
 			-e "s|@OS_VERSION@|${OS_VERSION:-}|g" \
 			-e "s|@INSTALL_MUSL@||g" \
-			-e "s|@INSTALL_GO@|${install_go//$'\n'/\\n}|g" \
 			-e "s|@INSTALL_RUST@|${install_rust//$'\n'/\\n}|g" \
 			-e "s|@SET_PROXY@|${set_proxy:-}|g" \
 			"${dockerfile_template}" > Dockerfile
@@ -364,29 +339,13 @@ RUN ln -sf /usr/bin/g++ /bin/musl-g++
 			"${dockerfile_template}" > Dockerfile
 	else
 		sed \
-			-e "s|@GO_VERSION@|${GO_VERSION}|g" \
 			-e "s|@OS_VERSION@|${OS_VERSION:-}|g" \
 			-e "s|@INSTALL_MUSL@|${install_musl//$'\n'/\\n}|g" \
-			-e "s|@INSTALL_GO@|${install_go//$'\n'/\\n}|g" \
 			-e "s|@INSTALL_RUST@|${install_rust//$'\n'/\\n}|g" \
 			-e "s|@SET_PROXY@|${set_proxy:-}|g" \
 			"${dockerfile_template}" > Dockerfile
 	fi
 	popd
-}
-
-detect_go_version()
-{
-	info "Detecting go version"
-	typeset yq=$(command -v yq || command -v ${GOPATH}/bin/yq || echo "${GOPATH}/bin/yq")
-	if [ ! -f "$yq" ]; then
-		source "$yq_file"
-	fi
-
-	info "Get Go version from ${kata_versions_file}"
-	GO_VERSION="$(cat "${kata_versions_file}"  | $yq r -X - "languages.golang.meta.newest-version")"
-
-	[ "$?" == "0" ] && [ "$GO_VERSION" != "null" ]
 }
 
 detect_rust_version()
@@ -398,7 +357,7 @@ detect_rust_version()
 	fi
 
 	info "Get rust version from ${kata_versions_file}"
-	RUST_VERSION="$(cat "${kata_versions_file}"  | $yq r -X - "languages.rust.meta.newest-version")"
+	RUST_VERSION="$(cat "${kata_versions_file}" | $yq r -X - "languages.rust.meta.newest-version")"
 
 	[ "$?" == "0" ] && [ "$RUST_VERSION" != "null" ]
 }
