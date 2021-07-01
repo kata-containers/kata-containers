@@ -10,11 +10,6 @@ See the
 [hardware requirements](/src/runtime/README.md#hardware-requirements)
 to see if your system is capable of running Kata Containers.
 
-## Legacy installation
-
-If you wish to install a legacy 1.x version of Kata Containers, see
-[the Kata Containers 1.x installation documentation](https://github.com/kata-containers/documentation/tree/master/install/).
-
 ## Packaged installation methods
 
 > **Notes:**
