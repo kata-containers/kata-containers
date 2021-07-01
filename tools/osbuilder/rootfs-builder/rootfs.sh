@@ -13,9 +13,6 @@ set -o errtrace
 script_name="${0##*/}"
 script_dir="$(dirname $(readlink -f $0))"
 AGENT_VERSION=${AGENT_VERSION:-}
-GO_AGENT_PKG=${GO_AGENT_PKG:-github.com/kata-containers/agent}
-RUST_AGENT_PKG=${RUST_AGENT_PKG:-github.com/kata-containers/kata-containers}
-RUST_AGENT=${RUST_AGENT:-yes}
 RUST_VERSION="null"
 MUSL_VERSION=${MUSL_VERSION:-"null"}
 AGENT_BIN=${AGENT_BIN:-kata-agent}
@@ -23,7 +20,7 @@ AGENT_INIT=${AGENT_INIT:-no}
 KERNEL_MODULES_DIR=${KERNEL_MODULES_DIR:-""}
 OSBUILDER_VERSION="unknown"
 DOCKER_RUNTIME=${DOCKER_RUNTIME:-runc}
-GO_VERSION="null"
+# this GOPATH is for installing yq from install_yq.sh
 export GOPATH=${GOPATH:-${HOME}/go}
 LIBC=${LIBC:-musl}
 
@@ -113,9 +110,6 @@ DISTRO_REPO         Use host repositories to install guest packages.
 DOCKER_RUNTIME      Docker runtime to use when USE_DOCKER is set.
                     Default value: runc
 
-GO_AGENT_PKG        URL of the Git repository hosting the agent package.
-                    Default value: ${GO_AGENT_PKG}
-
 GRACEFUL_EXIT       If set, and if the DISTRO configuration specifies a
                     non-empty BUILD_CAN_FAIL variable, do not return with an
                     error code in case any of the build step fails.
@@ -133,12 +127,6 @@ KERNEL_MODULES_DIR  Path to a directory containing kernel modules to include in
 
 ROOTFS_DIR          Path to the directory that is populated with the rootfs.
                     Default value: <${script_name} path>/rootfs-<DISTRO-name>
-
-RUST_AGENT          When set to "no", build kata-agent from go agent instead of kata-rust-agent
-                    Default value: "yes"
-
-RUST_AGENT_PKG      URL of the Git repository hosting the agent package.
-                    Default value: ${RUST_AGENT_PKG}
 
 USE_DOCKER          If set, build the rootfs inside a container (requires
                     Docker).
@@ -291,16 +279,10 @@ compare_versions()
 
 check_env_variables()
 {
-	# Fetch the first element from GOPATH as working directory
-	# as go get only works against the first item in the GOPATH
-	[ -z "$GOPATH" ] && die "GOPATH not set"
+	# this will be mounted to container for using yq on the host side.
 	GOPATH_LOCAL="${GOPATH%%:*}"
 
 	[ "$AGENT_INIT" == "yes" -o "$AGENT_INIT" == "no" ] || die "AGENT_INIT($AGENT_INIT) is invalid (must be yes or no)"
-
-	if [ -z "${AGENT_SOURCE_BIN}" ]; then
-		[ "$RUST_AGENT" == "yes" -o "$RUST_AGENT" == "no" ] || die "RUST_AGENT($RUST_AGENT) is invalid (must be yes or no)"
-	fi
 
 	[ -n "${KERNEL_MODULES_DIR}" ] && [ ! -d "${KERNEL_MODULES_DIR}" ] && die "KERNEL_MODULES_DIR defined but is not an existing directory"
 
@@ -346,24 +328,18 @@ build_rootfs_distro()
 
 	mkdir -p ${ROOTFS_DIR}
 
-	detect_go_version ||
-		die "Could not detect the required Go version for AGENT_VERSION='${AGENT_VERSION:-master}'."
-
-	echo "Required Go version: $GO_VERSION"
-
 	# need to detect rustc's version too?
 	detect_rust_version ||
-		die "Could not detect the required rust version for AGENT_VERSION='${AGENT_VERSION:-master}'."
+		die "Could not detect the required rust version for AGENT_VERSION='${AGENT_VERSION:-main}'."
 
 	echo "Required rust version: $RUST_VERSION"
 
 	detect_musl_version ||
-		die "Could not detect the required musl version for AGENT_VERSION='${AGENT_VERSION:-master}'."
+		die "Could not detect the required musl version for AGENT_VERSION='${AGENT_VERSION:-main}'."
 
 	echo "Required musl version: $MUSL_VERSION"
 
 	if [ -z "${USE_DOCKER}" ] && [ -z "${USE_PODMAN}" ]; then
-		#Generate an error if the local Go version is too old
 		info "build directly"
 		build_rootfs ${ROOTFS_DIR}
 	else
@@ -380,7 +356,7 @@ build_rootfs_distro()
 			REGISTRY_ARG="--build-arg IMAGE_REGISTRY=${IMAGE_REGISTRY}"
 		fi
 
-		# setup to install go or rust here
+		# setup to install rust here
 		generate_dockerfile "${distro_config_dir}"
 		"$container_engine" build  \
 			${REGISTRY_ARG} \
@@ -396,12 +372,7 @@ build_rootfs_distro()
 		docker_run_args+=" --runtime ${DOCKER_RUNTIME}"
 
 		if [ -z "${AGENT_SOURCE_BIN}" ] ; then
-			if [ "$RUST_AGENT" == "no" ]; then
-				docker_run_args+=" --env GO_AGENT_PKG=${GO_AGENT_PKG}"
-			else
-				docker_run_args+=" --env RUST_AGENT_PKG=${RUST_AGENT_PKG}"
-			fi
-			docker_run_args+=" --env RUST_AGENT=${RUST_AGENT} -v ${GOPATH_LOCAL}:${GOPATH_LOCAL} --env GOPATH=${GOPATH_LOCAL}"
+			docker_run_args+=" -v ${GOPATH_LOCAL}:${GOPATH_LOCAL} --env GOPATH=${GOPATH_LOCAL}"
 		else
 			docker_run_args+=" --env AGENT_SOURCE_BIN=${AGENT_SOURCE_BIN}"
 			docker_run_args+=" -v ${AGENT_SOURCE_BIN}:${AGENT_SOURCE_BIN}"
@@ -576,7 +547,6 @@ EOT
 		test -r "${HOME}/.cargo/env" && source "${HOME}/.cargo/env"
 		[ "$ARCH" == "aarch64" ] && OLD_PATH=$PATH && export PATH=$PATH:/usr/local/musl/bin
 
-		agent_pkg="${RUST_AGENT_PKG}"
 		agent_dir="${script_dir}/../../../src/agent/"
 		# For now, rust-agent doesn't support seccomp yet.
 		SECCOMP="no"
