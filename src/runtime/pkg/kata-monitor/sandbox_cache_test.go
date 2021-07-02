@@ -21,7 +21,7 @@ func TestSandboxCache(t *testing.T) {
 
 	scMap := map[string]string{"111": "222"}
 
-	sc.init(scMap)
+	sc.set(scMap)
 
 	scMap = sc.getAllSandboxes()
 	assert.Equal(1, len(scMap))
