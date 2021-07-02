@@ -1554,6 +1554,7 @@ mod tests {
     use std::os::unix::fs::MetadataExt;
     use std::os::unix::io::AsRawFd;
     use tempfile::tempdir;
+    use tokio::process::Command;
 
     macro_rules! sl {
         () => {
@@ -1561,12 +1562,27 @@ mod tests {
         };
     }
 
+    async fn which(cmd: &str) -> String {
+        let output: std::process::Output = Command::new("which")
+            .arg(cmd)
+            .output()
+            .await
+            .expect("which command failed to run");
+
+        match String::from_utf8(output.stdout) {
+            Ok(v) => v.trim_end_matches('\n').to_string(),
+            Err(e) => panic!("Invalid UTF-8 sequence: {}", e),
+        }
+    }
+
     #[tokio::test]
     async fn test_execute_hook() {
+        let xargs = which("xargs").await;
+
         execute_hook(
             &slog_scope::logger(),
             &Hook {
-                path: "/usr/bin/xargs".to_string(),
+                path: xargs,
                 args: vec![],
                 env: vec![],
                 timeout: None,
@@ -1586,10 +1602,12 @@ mod tests {
 
     #[tokio::test]
     async fn test_execute_hook_with_timeout() {
+        let sleep = which("sleep").await;
+
         let res = execute_hook(
             &slog_scope::logger(),
             &Hook {
-                path: "/usr/bin/sleep".to_string(),
+                path: sleep,
                 args: vec!["2".to_string()],
                 env: vec![],
                 timeout: Some(1),
