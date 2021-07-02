@@ -6,20 +6,23 @@
 package katamonitor
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
-	"os"
+	"strings"
 	"sync"
+	"time"
 
-	"github.com/containerd/containerd/defaults"
-	srvconfig "github.com/containerd/containerd/services/server/config"
 	"github.com/sirupsen/logrus"
-
-	// register grpc event types
-	_ "github.com/containerd/containerd/api/events"
 )
 
 var monitorLog = logrus.WithField("source", "kata-monitor")
+
+const (
+	RuntimeContainerd          = "containerd"
+	RuntimeCRIO                = "cri-o"
+	podCacheRefreshTimeSeconds = 15
+)
 
 // SetLogger sets the logger for katamonitor package.
 func SetLogger(logger *logrus.Entry) {
@@ -29,55 +32,48 @@ func SetLogger(logger *logrus.Entry) {
 
 // KataMonitor is monitor agent
 type KataMonitor struct {
-	sandboxCache         *sandboxCache
-	containerdAddr       string
-	containerdConfigFile string
-	containerdStatePath  string
+	sandboxCache    *sandboxCache
+	runtimeEndpoint string
 }
 
 // NewKataMonitor create and return a new KataMonitor instance
-func NewKataMonitor(containerdAddr, containerdConfigFile string) (*KataMonitor, error) {
-	if containerdAddr == "" {
-		return nil, fmt.Errorf("containerd serve address missing")
+func NewKataMonitor(runtimeEndpoint string) (*KataMonitor, error) {
+	if runtimeEndpoint == "" {
+		return nil, errors.New("runtime endpoint missing")
 	}
 
-	containerdConf := &srvconfig.Config{
-		State: defaults.DefaultStateDir,
-	}
-
-	if err := srvconfig.LoadConfig(containerdConfigFile, containerdConf); err != nil && !os.IsNotExist(err) {
-		return nil, err
+	if !strings.HasPrefix(runtimeEndpoint, "unix") {
+		runtimeEndpoint = "unix://" + runtimeEndpoint
 	}
 
 	km := &KataMonitor{
-		containerdAddr:       containerdAddr,
-		containerdConfigFile: containerdConfigFile,
-		containerdStatePath:  containerdConf.State,
+		runtimeEndpoint: runtimeEndpoint,
 		sandboxCache: &sandboxCache{
 			Mutex:     &sync.Mutex{},
 			sandboxes: make(map[string]string),
 		},
 	}
 
-	if err := km.initSandboxCache(); err != nil {
-		return nil, err
-	}
-
 	// register metrics
 	registerMetrics()
 
-	go km.sandboxCache.startEventsListener(km.containerdAddr)
+	go km.startPodCacheUpdater()
 
 	return km, nil
 }
 
-func (km *KataMonitor) initSandboxCache() error {
-	sandboxes, err := km.getSandboxes()
-	if err != nil {
-		return err
+// startPodCacheUpdater will boot a thread to manage sandbox cache
+func (km *KataMonitor) startPodCacheUpdater() {
+	for {
+		time.Sleep(podCacheRefreshTimeSeconds * time.Second)
+		sandboxes, err := km.getSandboxes()
+		if err != nil {
+			monitorLog.WithError(err).Error("failed to get sandboxes")
+			continue
+		}
+		monitorLog.WithField("count", len(sandboxes)).Debug("update sandboxes list")
+		km.sandboxCache.set(sandboxes)
 	}
-	km.sandboxCache.init(sandboxes)
-	return nil
 }
 
 // GetAgentURL returns agent URL
@@ -117,6 +113,6 @@ func (km *KataMonitor) getSandboxList() []string {
 	return result
 }
 
-func (km *KataMonitor) getSandboxNamespace(sandbox string) (string, error) {
-	return km.sandboxCache.getSandboxNamespace(sandbox)
+func (km *KataMonitor) getSandboxRuntime(sandbox string) (string, error) {
+	return km.sandboxCache.getSandboxRuntime(sandbox)
 }

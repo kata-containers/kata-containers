@@ -9,7 +9,7 @@ import (
 	"flag"
 	"net/http"
 	"os"
-	"runtime"
+	goruntime "runtime"
 	"text/template"
 	"time"
 
@@ -18,8 +18,7 @@ import (
 )
 
 var monitorListenAddr = flag.String("listen-address", ":8090", "The address to listen on for HTTP requests.")
-var containerdAddr = flag.String("containerd-address", "/run/containerd/containerd.sock", "Containerd address to accept client requests.")
-var containerdConfig = flag.String("containerd-conf", "/etc/containerd/config.toml", "Containerd config file.")
+var runtimeEndpoint = flag.String("runtime-endpoint", "/run/containerd/containerd.sock", `Endpoint of CRI container runtime service. (default: "/run/containerd/containerd.sock")`)
 var logLevel = flag.String("log-level", "info", "Log level of logrus(trace/debug/info/warn/error/fatal/panic).")
 
 // These values are overridden via ldflags
@@ -59,9 +58,9 @@ func main() {
 	ver := versionInfo{
 		AppName:   appName,
 		Version:   version,
-		GoVersion: runtime.Version(),
-		Os:        runtime.GOOS,
-		Arch:      runtime.GOARCH,
+		GoVersion: goruntime.Version(),
+		Os:        goruntime.GOOS,
+		Arch:      goruntime.GOARCH,
 		GitCommit: GitCommit,
 	}
 
@@ -85,16 +84,15 @@ func main() {
 		"git-commit": ver.GitCommit,
 
 		// properties from command-line options
-		"listen-address":     *monitorListenAddr,
-		"containerd-address": *containerdAddr,
-		"containerd-conf":    *containerdConfig,
-		"log-level":          *logLevel,
+		"listen-address":   *monitorListenAddr,
+		"runtime-endpoint": *runtimeEndpoint,
+		"log-level":        *logLevel,
 	}
 
 	logrus.WithFields(announceFields).Info("announce")
 
 	// create new kataMonitor
-	km, err := kataMonitor.NewKataMonitor(*containerdAddr, *containerdConfig)
+	km, err := kataMonitor.NewKataMonitor(*runtimeEndpoint)
 	if err != nil {
 		panic(err)
 	}

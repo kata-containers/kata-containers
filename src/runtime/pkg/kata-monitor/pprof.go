@@ -27,12 +27,12 @@ func (km *KataMonitor) composeSocketAddress(r *http.Request) (string, error) {
 		return "", err
 	}
 
-	namespace, err := km.getSandboxNamespace(sandbox)
+	runtime, err := km.getSandboxRuntime(sandbox)
 	if err != nil {
 		return "", err
 	}
 
-	return km.getMonitorAddress(sandbox, namespace)
+	return km.getMonitorAddress(sandbox, runtime)
 }
 
 func (km *KataMonitor) proxyRequest(w http.ResponseWriter, r *http.Request) {
