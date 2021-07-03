@@ -51,6 +51,14 @@ use crate::sandbox::Sandbox;
 use crate::version::{AGENT_VERSION, API_VERSION};
 use crate::AGENT_CONFIG;
 
+use crate::trace_rpc_call;
+use crate::tracer::extract_carrier_from_ttrpc;
+use opentelemetry::global;
+use tracing::span;
+use tracing_opentelemetry::OpenTelemetrySpanExt;
+
+use tracing::instrument;
+
 use libc::{self, c_ushort, pid_t, winsize, TIOCSWINSZ};
 use std::convert::TryFrom;
 use std::fs;
@@ -74,7 +82,7 @@ macro_rules! sl {
     };
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct AgentService {
     sandbox: Arc<Mutex<Sandbox>>,
 }
@@ -97,6 +105,7 @@ fn verify_cid(id: &str) -> Result<()> {
 }
 
 impl AgentService {
+    #[instrument]
     async fn do_create_container(
         &self,
         req: protocols::agent::CreateContainerRequest,
@@ -196,6 +205,7 @@ impl AgentService {
         Ok(())
     }
 
+    #[instrument]
     async fn do_start_container(&self, req: protocols::agent::StartContainerRequest) -> Result<()> {
         let cid = req.container_id;
 
@@ -221,6 +231,7 @@ impl AgentService {
         Ok(())
     }
 
+    #[instrument]
     async fn do_remove_container(
         &self,
         req: protocols::agent::RemoveContainerRequest,
@@ -302,6 +313,7 @@ impl AgentService {
         Ok(())
     }
 
+    #[instrument]
     async fn do_exec_process(&self, req: protocols::agent::ExecProcessRequest) -> Result<()> {
         let cid = req.container_id.clone();
         let exec_id = req.exec_id.clone();
@@ -330,6 +342,7 @@ impl AgentService {
         Ok(())
     }
 
+    #[instrument]
     async fn do_signal_process(&self, req: protocols::agent::SignalProcessRequest) -> Result<()> {
         let cid = req.container_id.clone();
         let eid = req.exec_id.clone();
@@ -364,6 +377,7 @@ impl AgentService {
         Ok(())
     }
 
+    #[instrument]
     async fn do_wait_process(
         &self,
         req: protocols::agent::WaitProcessRequest,
@@ -513,9 +527,10 @@ impl AgentService {
 impl protocols::agent_ttrpc::AgentService for AgentService {
     async fn create_container(
         &self,
-        _ctx: &TtrpcContext,
+        ctx: &TtrpcContext,
         req: protocols::agent::CreateContainerRequest,
     ) -> ttrpc::Result<Empty> {
+        trace_rpc_call!(ctx, "create_container", req);
         match self.do_create_container(req).await {
             Err(e) => Err(ttrpc_error(ttrpc::Code::INTERNAL, e.to_string())),
             Ok(_) => Ok(Empty::new()),
@@ -524,9 +539,10 @@ impl protocols::agent_ttrpc::AgentService for AgentService {
 
     async fn start_container(
         &self,
-        _ctx: &TtrpcContext,
+        ctx: &TtrpcContext,
         req: protocols::agent::StartContainerRequest,
     ) -> ttrpc::Result<Empty> {
+        trace_rpc_call!(ctx, "start_container", req);
         match self.do_start_container(req).await {
             Err(e) => Err(ttrpc_error(ttrpc::Code::INTERNAL, e.to_string())),
             Ok(_) => Ok(Empty::new()),
@@ -535,9 +551,10 @@ impl protocols::agent_ttrpc::AgentService for AgentService {
 
     async fn remove_container(
         &self,
-        _ctx: &TtrpcContext,
+        ctx: &TtrpcContext,
         req: protocols::agent::RemoveContainerRequest,
     ) -> ttrpc::Result<Empty> {
+        trace_rpc_call!(ctx, "remove_container", req);
         match self.do_remove_container(req).await {
             Err(e) => Err(ttrpc_error(ttrpc::Code::INTERNAL, e.to_string())),
             Ok(_) => Ok(Empty::new()),
@@ -546,9 +563,10 @@ impl protocols::agent_ttrpc::AgentService for AgentService {
 
     async fn exec_process(
         &self,
-        _ctx: &TtrpcContext,
+        ctx: &TtrpcContext,
         req: protocols::agent::ExecProcessRequest,
     ) -> ttrpc::Result<Empty> {
+        trace_rpc_call!(ctx, "exec_process", req);
         match self.do_exec_process(req).await {
             Err(e) => Err(ttrpc_error(ttrpc::Code::INTERNAL, e.to_string())),
             Ok(_) => Ok(Empty::new()),
@@ -557,9 +575,10 @@ impl protocols::agent_ttrpc::AgentService for AgentService {
 
     async fn signal_process(
         &self,
-        _ctx: &TtrpcContext,
+        ctx: &TtrpcContext,
         req: protocols::agent::SignalProcessRequest,
     ) -> ttrpc::Result<Empty> {
+        trace_rpc_call!(ctx, "signal_process", req);
         match self.do_signal_process(req).await {
             Err(e) => Err(ttrpc_error(ttrpc::Code::INTERNAL, e.to_string())),
             Ok(_) => Ok(Empty::new()),
@@ -568,9 +587,10 @@ impl protocols::agent_ttrpc::AgentService for AgentService {
 
     async fn wait_process(
         &self,
-        _ctx: &TtrpcContext,
+        ctx: &TtrpcContext,
         req: protocols::agent::WaitProcessRequest,
     ) -> ttrpc::Result<WaitProcessResponse> {
+        trace_rpc_call!(ctx, "wait_process", req);
         self.do_wait_process(req)
             .await
             .map_err(|e| ttrpc_error(ttrpc::Code::INTERNAL, e.to_string()))
@@ -578,9 +598,10 @@ impl protocols::agent_ttrpc::AgentService for AgentService {
 
     async fn update_container(
         &self,
-        _ctx: &TtrpcContext,
+        ctx: &TtrpcContext,
         req: protocols::agent::UpdateContainerRequest,
     ) -> ttrpc::Result<Empty> {
+        trace_rpc_call!(ctx, "update_container", req);
         let cid = req.container_id.clone();
         let res = req.resources;
 
@@ -612,9 +633,10 @@ impl protocols::agent_ttrpc::AgentService for AgentService {
 
     async fn stats_container(
         &self,
-        _ctx: &TtrpcContext,
+        ctx: &TtrpcContext,
         req: protocols::agent::StatsContainerRequest,
     ) -> ttrpc::Result<StatsContainerResponse> {
+        trace_rpc_call!(ctx, "stats_container", req);
         let cid = req.container_id;
         let s = Arc::clone(&self.sandbox);
         let mut sandbox = s.lock().await;
@@ -632,9 +654,10 @@ impl protocols::agent_ttrpc::AgentService for AgentService {
 
     async fn pause_container(
         &self,
-        _ctx: &TtrpcContext,
+        ctx: &TtrpcContext,
         req: protocols::agent::PauseContainerRequest,
     ) -> ttrpc::Result<protocols::empty::Empty> {
+        trace_rpc_call!(ctx, "pause_container", req);
         let cid = req.get_container_id();
         let s = Arc::clone(&self.sandbox);
         let mut sandbox = s.lock().await;
@@ -654,9 +677,10 @@ impl protocols::agent_ttrpc::AgentService for AgentService {
 
     async fn resume_container(
         &self,
-        _ctx: &TtrpcContext,
+        ctx: &TtrpcContext,
         req: protocols::agent::ResumeContainerRequest,
     ) -> ttrpc::Result<protocols::empty::Empty> {
+        trace_rpc_call!(ctx, "resume_container", req);
         let cid = req.get_container_id();
         let s = Arc::clone(&self.sandbox);
         let mut sandbox = s.lock().await;
@@ -706,9 +730,11 @@ impl protocols::agent_ttrpc::AgentService for AgentService {
 
     async fn close_stdin(
         &self,
-        _ctx: &TtrpcContext,
+        ctx: &TtrpcContext,
         req: protocols::agent::CloseStdinRequest,
     ) -> ttrpc::Result<Empty> {
+        trace_rpc_call!(ctx, "close_stdin", req);
+
         let cid = req.container_id.clone();
         let eid = req.exec_id;
         let s = Arc::clone(&self.sandbox);
@@ -740,9 +766,11 @@ impl protocols::agent_ttrpc::AgentService for AgentService {
 
     async fn tty_win_resize(
         &self,
-        _ctx: &TtrpcContext,
+        ctx: &TtrpcContext,
         req: protocols::agent::TtyWinResizeRequest,
     ) -> ttrpc::Result<Empty> {
+        trace_rpc_call!(ctx, "tty_win_resize", req);
+
         let cid = req.container_id.clone();
         let eid = req.exec_id.clone();
         let s = Arc::clone(&self.sandbox);
@@ -778,9 +806,11 @@ impl protocols::agent_ttrpc::AgentService for AgentService {
 
     async fn update_interface(
         &self,
-        _ctx: &TtrpcContext,
+        ctx: &TtrpcContext,
         req: protocols::agent::UpdateInterfaceRequest,
     ) -> ttrpc::Result<Interface> {
+        trace_rpc_call!(ctx, "update_interface", req);
+
         let interface = req.interface.into_option().ok_or_else(|| {
             ttrpc_error(
                 ttrpc::Code::INVALID_ARGUMENT,
@@ -803,9 +833,11 @@ impl protocols::agent_ttrpc::AgentService for AgentService {
 
     async fn update_routes(
         &self,
-        _ctx: &TtrpcContext,
+        ctx: &TtrpcContext,
         req: protocols::agent::UpdateRoutesRequest,
     ) -> ttrpc::Result<Routes> {
+        trace_rpc_call!(ctx, "update_routes", req);
+
         let new_routes = req
             .routes
             .into_option()
@@ -841,9 +873,11 @@ impl protocols::agent_ttrpc::AgentService for AgentService {
 
     async fn list_interfaces(
         &self,
-        _ctx: &TtrpcContext,
-        _req: protocols::agent::ListInterfacesRequest,
+        ctx: &TtrpcContext,
+        req: protocols::agent::ListInterfacesRequest,
     ) -> ttrpc::Result<Interfaces> {
+        trace_rpc_call!(ctx, "list_interfaces", req);
+
         let list = self
             .sandbox
             .lock()
@@ -866,9 +900,11 @@ impl protocols::agent_ttrpc::AgentService for AgentService {
 
     async fn list_routes(
         &self,
-        _ctx: &TtrpcContext,
-        _req: protocols::agent::ListRoutesRequest,
+        ctx: &TtrpcContext,
+        req: protocols::agent::ListRoutesRequest,
     ) -> ttrpc::Result<Routes> {
+        trace_rpc_call!(ctx, "list_routes", req);
+
         let list = self
             .sandbox
             .lock()
@@ -903,9 +939,11 @@ impl protocols::agent_ttrpc::AgentService for AgentService {
 
     async fn create_sandbox(
         &self,
-        _ctx: &TtrpcContext,
+        ctx: &TtrpcContext,
         req: protocols::agent::CreateSandboxRequest,
     ) -> ttrpc::Result<Empty> {
+        trace_rpc_call!(ctx, "create_sandbox", req);
+
         {
             let sandbox = self.sandbox.clone();
             let mut s = sandbox.lock().await;
@@ -966,9 +1004,11 @@ impl protocols::agent_ttrpc::AgentService for AgentService {
 
     async fn destroy_sandbox(
         &self,
-        _ctx: &TtrpcContext,
-        _req: protocols::agent::DestroySandboxRequest,
+        ctx: &TtrpcContext,
+        req: protocols::agent::DestroySandboxRequest,
     ) -> ttrpc::Result<Empty> {
+        trace_rpc_call!(ctx, "destroy_sandbox", req);
+
         let s = Arc::clone(&self.sandbox);
         let mut sandbox = s.lock().await;
         // destroy all containers, clean up, notify agent to exit
@@ -985,9 +1025,11 @@ impl protocols::agent_ttrpc::AgentService for AgentService {
 
     async fn add_arp_neighbors(
         &self,
-        _ctx: &TtrpcContext,
+        ctx: &TtrpcContext,
         req: protocols::agent::AddARPNeighborsRequest,
     ) -> ttrpc::Result<Empty> {
+        trace_rpc_call!(ctx, "add_arp_neighbors", req);
+
         let neighs = req
             .neighbors
             .into_option()
@@ -1017,11 +1059,12 @@ impl protocols::agent_ttrpc::AgentService for AgentService {
 
     async fn online_cpu_mem(
         &self,
-        _ctx: &TtrpcContext,
+        ctx: &TtrpcContext,
         req: protocols::agent::OnlineCPUMemRequest,
     ) -> ttrpc::Result<Empty> {
         let s = Arc::clone(&self.sandbox);
         let sandbox = s.lock().await;
+        trace_rpc_call!(ctx, "online_cpu_mem", req);
 
         sandbox
             .online_cpu_memory(&req)
@@ -1032,9 +1075,11 @@ impl protocols::agent_ttrpc::AgentService for AgentService {
 
     async fn reseed_random_dev(
         &self,
-        _ctx: &TtrpcContext,
+        ctx: &TtrpcContext,
         req: protocols::agent::ReseedRandomDevRequest,
     ) -> ttrpc::Result<Empty> {
+        trace_rpc_call!(ctx, "reseed_random_dev", req);
+
         random::reseed_rng(req.data.as_slice())
             .map_err(|e| ttrpc_error(ttrpc::Code::INTERNAL, e.to_string()))?;
 
@@ -1043,9 +1088,11 @@ impl protocols::agent_ttrpc::AgentService for AgentService {
 
     async fn get_guest_details(
         &self,
-        _ctx: &TtrpcContext,
+        ctx: &TtrpcContext,
         req: protocols::agent::GuestDetailsRequest,
     ) -> ttrpc::Result<GuestDetailsResponse> {
+        trace_rpc_call!(ctx, "get_guest_details", req);
+
         info!(sl!(), "get guest details!");
         let mut resp = GuestDetailsResponse::new();
         // to get memory block size
@@ -1069,9 +1116,11 @@ impl protocols::agent_ttrpc::AgentService for AgentService {
 
     async fn mem_hotplug_by_probe(
         &self,
-        _ctx: &TtrpcContext,
+        ctx: &TtrpcContext,
         req: protocols::agent::MemHotplugByProbeRequest,
     ) -> ttrpc::Result<Empty> {
+        trace_rpc_call!(ctx, "mem_hotplug_by_probe", req);
+
         do_mem_hotplug_by_probe(&req.memHotplugProbeAddr)
             .map_err(|e| ttrpc_error(ttrpc::Code::INTERNAL, e.to_string()))?;
 
@@ -1080,9 +1129,11 @@ impl protocols::agent_ttrpc::AgentService for AgentService {
 
     async fn set_guest_date_time(
         &self,
-        _ctx: &TtrpcContext,
+        ctx: &TtrpcContext,
         req: protocols::agent::SetGuestDateTimeRequest,
     ) -> ttrpc::Result<Empty> {
+        trace_rpc_call!(ctx, "set_guest_date_time", req);
+
         do_set_guest_date_time(req.Sec, req.Usec)
             .map_err(|e| ttrpc_error(ttrpc::Code::INTERNAL, e.to_string()))?;
 
@@ -1091,9 +1142,11 @@ impl protocols::agent_ttrpc::AgentService for AgentService {
 
     async fn copy_file(
         &self,
-        _ctx: &TtrpcContext,
+        ctx: &TtrpcContext,
         req: protocols::agent::CopyFileRequest,
     ) -> ttrpc::Result<Empty> {
+        trace_rpc_call!(ctx, "copy_file", req);
+
         do_copy_file(&req).map_err(|e| ttrpc_error(ttrpc::Code::INTERNAL, e.to_string()))?;
 
         Ok(Empty::new())
@@ -1101,9 +1154,11 @@ impl protocols::agent_ttrpc::AgentService for AgentService {
 
     async fn get_metrics(
         &self,
-        _ctx: &TtrpcContext,
+        ctx: &TtrpcContext,
         req: protocols::agent::GetMetricsRequest,
     ) -> ttrpc::Result<Metrics> {
+        trace_rpc_call!(ctx, "get_metrics", req);
+
         match get_metrics(&req) {
             Err(e) => Err(ttrpc_error(ttrpc::Code::INTERNAL, e.to_string())),
             Ok(s) => {

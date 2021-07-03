@@ -191,7 +191,7 @@ func NewVMFromGrpc(ctx context.Context, v *pb.GrpcVM, config VMConfig) (*VM, err
 	// create agent instance
 	newAagentFunc := getNewAgentFunc(ctx)
 	agent := newAagentFunc()
-	agent.configureFromGrpc(hypervisor, v.Id, config.AgentConfig)
+	agent.configureFromGrpc(ctx, hypervisor, v.Id, config.AgentConfig)
 
 	return &VM{
 		id:         v.Id,
