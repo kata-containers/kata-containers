@@ -17,7 +17,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 	"sync"
 	"syscall"
 
@@ -66,6 +65,15 @@ const (
 
 	mkswapPath = "/sbin/mkswap"
 	rwm        = "rwm"
+
+	// When the Kata overhead threads (I/O, VMM, etc) are not
+	// placed in the sandbox cgroup, they are moved to a specific,
+	// unconstrained cgroup hierarchy.
+	// Assuming the cgroup mount point is at /sys/fs/cgroup/, on a
+	// cgroup v1 system, the Kata overhead memory cgroup will be at
+	// /sys/fs/cgroup/memory/kata_overhead/$CGPATH where $CGPATH is
+	// defined by the orchestrator.
+	cgroupKataOverheadPath = "/kata_overhead/"
 )
 
 var (
@@ -181,6 +189,7 @@ type Sandbox struct {
 	annotationsLock *sync.RWMutex
 	wg              *sync.WaitGroup
 	sandboxCgroup   *vccgroups.Manager
+	overheadCgroup  *vccgroups.Manager
 	cw              *consoleWatcher
 
 	containers map[string]*Container
@@ -637,8 +646,10 @@ func (s *Sandbox) createCgroups() error {
 		}
 	}
 
-	// Create the sandbox  cgroup, this way it can be used later
-	// to create or detroy cgroups
+	// Create the sandbox cgroup.
+	// Depending on the SandboxCgroupOnly value, this cgroup
+	// will either hold all the pod threads (SandboxCgroupOnly is true)
+	// or only the virtual CPU ones (SandboxCgroupOnly is false).
 	if s.sandboxCgroup, err = vccgroups.New(
 		&vccgroups.Config{
 			Cgroups:     s.config.Cgroups,
@@ -650,10 +661,29 @@ func (s *Sandbox) createCgroups() error {
 		return err
 	}
 
-	// Now that the cgroup manager is created, we can set the sandbox cgroup root path.
+	// Now that the sandbox cgroup is created, we can set the state cgroup root path.
 	s.state.CgroupPath, err = vccgroups.ValidCgroupPath(cgroupPath, s.config.SystemdCgroup)
 	if err != nil {
 		return fmt.Errorf("Invalid cgroup path: %v", err)
+	}
+
+	if s.config.SandboxCgroupOnly {
+		s.overheadCgroup = nil
+	} else {
+		// The shim configuration is requesting that we do not put all threads
+		// into the sandbox cgroup.
+		// We're creating an overhead cgroup, with no constraints. Everything but
+		// the vCPU threads will eventually make it there.
+		if s.overheadCgroup, err = vccgroups.New(
+			&vccgroups.Config{
+				Cgroups:     nil,
+				CgroupPaths: nil,
+				Resources:   specs.LinuxResources{},
+				CgroupPath:  cgroupKataOverheadPath,
+			},
+		); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -2099,54 +2129,28 @@ func (s *Sandbox) GetHypervisorType() string {
 	return string(s.config.HypervisorType)
 }
 
-// cgroupsUpdate will:
-//  1) get the v1constraints cgroup associated with the stored cgroup path
-//  2) (re-)add hypervisor vCPU threads to the appropriate cgroup
-//  3) If we are managing sandbox cgroup, update the v1constraints cgroup size
+// cgroupsUpdate updates the sandbox cpuset cgroup subsystem.
+// Also, if the sandbox has an overhead cgroup, it updates the hypervisor
+// constraints by moving the potentially new vCPU threads back to the sandbox
+// cgroup.
 func (s *Sandbox) cgroupsUpdate(ctx context.Context) error {
-
-	// If Kata is configured for SandboxCgroupOnly, the VMM and its processes are already
-	// in the Kata sandbox cgroup (inherited). Check to see if sandbox cpuset needs to be
-	// updated.
-	if s.config.SandboxCgroupOnly {
-		cpuset, memset, err := s.getSandboxCPUSet()
-		if err != nil {
-			return err
-		}
-
-		if err := s.sandboxCgroup.SetCPUSet(cpuset, memset); err != nil {
-			return err
-		}
-
-		return nil
-	}
-
-	if s.state.CgroupPath == "" {
-		s.Logger().Warn("sandbox's cgroup won't be updated: cgroup path is empty")
-		return nil
-	}
-
-	cgroup, err := cgroupsLoadFunc(V1Constraints, cgroups.StaticPath(s.state.CgroupPath))
-	if err != nil {
-		return fmt.Errorf("Could not load cgroup %v: %v", s.state.CgroupPath, err)
-	}
-
-	if err := s.constrainHypervisor(ctx, cgroup); err != nil {
-		return err
-	}
-
-	if len(s.containers) <= 1 {
-		// nothing to update
-		return nil
-	}
-
-	resources, err := s.resources()
+	cpuset, memset, err := s.getSandboxCPUSet()
 	if err != nil {
 		return err
 	}
 
-	if err := cgroup.Update(&resources); err != nil {
-		return fmt.Errorf("Could not update sandbox cgroup path='%v' error='%v'", s.state.CgroupPath, err)
+	// We update the sandbox cgroup with potentially new virtual CPUs.
+	if err := s.sandboxCgroup.SetCPUSet(cpuset, memset); err != nil {
+		return err
+	}
+
+	if s.overheadCgroup != nil {
+		// If we have an overhead cgroup, new vCPU threads would start there,
+		// as being children of the VMM PID.
+		// We need to constrain them by moving them into the sandbox cgroup.
+		if err := s.constrainHypervisor(ctx); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -2161,110 +2165,29 @@ func (s *Sandbox) cgroupsDelete() error {
 		return nil
 	}
 
-	var path string
-	var cgroupSubsystems cgroups.Hierarchy
+	if s.overheadCgroup != nil {
+		if err := s.overheadCgroup.Destroy(); err != nil {
+			return err
+		}
+	}
 
 	if err := s.sandboxCgroup.Destroy(); err != nil {
 		return err
 	}
 
-	cgroupSubsystems = V1NoConstraints
-	path = cgroupNoConstraintsPath(s.state.CgroupPath)
-	s.Logger().WithField("path", path).Debug("Deleting no constraints cgroup")
-
-	sandboxCgroups, err := cgroupsLoadFunc(cgroupSubsystems, cgroups.StaticPath(path))
-	if err == cgroups.ErrCgroupDeleted {
-		// cgroup already deleted
-		s.Logger().Warnf("cgroup already deleted: '%s'", err)
-		return nil
-	}
-
-	if err != nil {
-		return fmt.Errorf("Could not load cgroups %v: %v", path, err)
-	}
-
-	// move running process here, that way cgroup can be removed
-	parent, err := parentCgroup(cgroupSubsystems, path)
-	if err != nil {
-		// parent cgroup doesn't exist, that means there are no process running
-		// and the no constraints cgroup was removed.
-		s.Logger().WithError(err).Warn("Parent cgroup doesn't exist")
-		return nil
-	}
-
-	if err := sandboxCgroups.MoveTo(parent); err != nil {
-		// Don't fail, cgroup can be deleted
-		s.Logger().WithError(err).Warnf("Could not move process from %s to parent cgroup", path)
-	}
-
-	return sandboxCgroups.Delete()
+	return nil
 }
 
 // constrainHypervisor will place the VMM and vCPU threads into cgroups.
-func (s *Sandbox) constrainHypervisor(ctx context.Context, cgroup cgroups.Cgroup) error {
-	// VMM threads are only placed into the constrained cgroup if SandboxCgroupOnly is being set.
-	// This is the "correct" behavior, but if the parent cgroup isn't set up correctly to take
-	// Kata/VMM into account, Kata may fail to boot due to being overconstrained.
-	// If !SandboxCgroupOnly, place the VMM into an unconstrained cgroup, and the vCPU threads into constrained
-	// cgroup
-	if s.config.SandboxCgroupOnly {
-		// Kata components were moved into the sandbox-cgroup already, so VMM
-		// will already land there as well. No need to take action
-		return nil
-	}
-
-	pids := s.hypervisor.getPids()
-	if len(pids) == 0 || pids[0] == 0 {
-		return fmt.Errorf("Invalid hypervisor PID: %+v", pids)
-	}
-
-	// VMM threads are only placed into the constrained cgroup if SandboxCgroupOnly is being set.
-	// This is the "correct" behavior, but if the parent cgroup isn't set up correctly to take
-	// Kata/VMM into account, Kata may fail to boot due to being overconstrained.
-	// If !SandboxCgroupOnly, place the VMM into an unconstrained cgroup, and the vCPU threads into constrained
-	// cgroup
-	// Move the VMM into cgroups without constraints, those cgroups are not yet supported.
-	resources := &specs.LinuxResources{}
-	path := cgroupNoConstraintsPath(s.state.CgroupPath)
-	vmmCgroup, err := cgroupsNewFunc(V1NoConstraints, cgroups.StaticPath(path), resources)
-	if err != nil {
-		return fmt.Errorf("Could not create cgroup %v: %v", path, err)
-	}
-
-	for _, pid := range pids {
-		if pid <= 0 {
-			s.Logger().Warnf("Invalid hypervisor pid: %d", pid)
-			continue
-		}
-
-		if err := vmmCgroup.Add(cgroups.Process{Pid: pid}); err != nil {
-			return fmt.Errorf("Could not add hypervisor PID %d to cgroup: %v", pid, err)
-		}
-	}
-
-	// when new container joins, new CPU could be hotplugged, so we
-	// have to query fresh vcpu info from hypervisor every time.
+func (s *Sandbox) constrainHypervisor(ctx context.Context) error {
 	tids, err := s.hypervisor.getThreadIDs(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get thread ids from hypervisor: %v", err)
 	}
-	if len(tids.vcpus) == 0 {
-		// If there's no tid returned from the hypervisor, this is not
-		// a bug. It simply means there is nothing to constrain, hence
-		// let's return without any error from here.
-		return nil
-	}
 
-	// Move vcpus (threads) into cgroups with constraints.
-	// Move whole hypervisor process would be easier but the IO/network performance
-	// would be over-constrained.
+	// All vCPU threads move to the sandbox cgroup.
 	for _, i := range tids.vcpus {
-		// In contrast, AddTask will write thread id to `tasks`
-		// After this, vcpu threads are in "vcpu" sub-cgroup, other threads in
-		// qemu will be left in parent cgroup untouched.
-		if err := cgroup.AddTask(cgroups.Process{
-			Pid: i,
-		}); err != nil {
+		if err := s.sandboxCgroup.Add(i); err != nil {
 			return err
 		}
 	}
@@ -2272,97 +2195,43 @@ func (s *Sandbox) constrainHypervisor(ctx context.Context, cgroup cgroups.Cgroup
 	return nil
 }
 
-func (s *Sandbox) resources() (specs.LinuxResources, error) {
-	resources := specs.LinuxResources{
-		CPU: s.cpuResources(),
-	}
-
-	return resources, nil
-}
-
-func (s *Sandbox) cpuResources() *specs.LinuxCPU {
-	// Use default period and quota if they are not specified.
-	// Container will inherit the constraints from its parent.
-	quota := int64(0)
-	period := uint64(0)
-	shares := uint64(0)
-	realtimePeriod := uint64(0)
-	realtimeRuntime := int64(0)
-
-	cpu := &specs.LinuxCPU{
-		Quota:           &quota,
-		Period:          &period,
-		Shares:          &shares,
-		RealtimePeriod:  &realtimePeriod,
-		RealtimeRuntime: &realtimeRuntime,
-	}
-
-	for _, c := range s.containers {
-		ann := c.GetAnnotations()
-		if ann[annotations.ContainerTypeKey] == string(PodSandbox) {
-			// skip sandbox container
-			continue
-		}
-
-		if c.config.Resources.CPU == nil {
-			continue
-		}
-
-		if c.config.Resources.CPU.Shares != nil {
-			shares = uint64(math.Max(float64(*c.config.Resources.CPU.Shares), float64(shares)))
-		}
-
-		if c.config.Resources.CPU.Quota != nil {
-			quota += *c.config.Resources.CPU.Quota
-		}
-
-		if c.config.Resources.CPU.Period != nil {
-			period = uint64(math.Max(float64(*c.config.Resources.CPU.Period), float64(period)))
-		}
-
-		if c.config.Resources.CPU.Cpus != "" {
-			cpu.Cpus += c.config.Resources.CPU.Cpus + ","
-		}
-
-		if c.config.Resources.CPU.RealtimeRuntime != nil {
-			realtimeRuntime += *c.config.Resources.CPU.RealtimeRuntime
-		}
-
-		if c.config.Resources.CPU.RealtimePeriod != nil {
-			realtimePeriod += *c.config.Resources.CPU.RealtimePeriod
-		}
-
-		if c.config.Resources.CPU.Mems != "" {
-			cpu.Mems += c.config.Resources.CPU.Mems + ","
-		}
-	}
-
-	cpu.Cpus = strings.Trim(cpu.Cpus, " \n\t,")
-
-	return validCPUResources(cpu)
-}
-
-// setupSandboxCgroup creates and joins sandbox cgroups for the sandbox config
-func (s *Sandbox) setupSandboxCgroup() error {
+// setupCgroups adds the runtime process to either the sandbox cgroup or the  overhead one,
+// depending on the sandbox_cgroup_only configuration setting.
+func (s *Sandbox) setupCgroups() error {
 	var err error
 
+	vmmCgroup := s.sandboxCgroup
+	if s.overheadCgroup != nil {
+		vmmCgroup = s.overheadCgroup
+	}
+
+	// By adding the runtime process to either the sandbox or overhead cgroup, we are making
+	// sure that any child process of the runtime (i.e. *all* processes serving a Kata pod)
+	// will initially live in this cgroup. Depending on the sandbox_cgroup settings, we will
+	// then move the vCPU threads between cgroups.
 	runtimePid := os.Getpid()
-	// Add the runtime to the Kata sandbox cgroup
-	if err := s.sandboxCgroup.Add(runtimePid); err != nil {
+	// Add the runtime to the VMM sandbox cgroup
+	if err := vmmCgroup.Add(runtimePid); err != nil {
 		return fmt.Errorf("Could not add runtime PID %d to sandbox cgroup:  %v", runtimePid, err)
 	}
 
 	// `Apply` updates the sandbox cgroup Cgroups and CgroupPaths,
 	// they both need to be saved since they are used to create
 	// or restore the sandbox cgroup.
-	if s.config.Cgroups, err = s.sandboxCgroup.GetCgroups(); err != nil {
+	if s.config.Cgroups, err = vmmCgroup.GetCgroups(); err != nil {
 		return fmt.Errorf("Could not get cgroup configuration:  %v", err)
 	}
 
-	s.state.CgroupPaths = s.sandboxCgroup.GetPaths()
+	s.state.CgroupPaths = vmmCgroup.GetPaths()
 
 	if err := s.sandboxCgroup.Apply(); err != nil {
 		return fmt.Errorf("Could not constrain cgroup: %v", err)
+	}
+
+	if s.overheadCgroup != nil {
+		if err = s.overheadCgroup.Apply(); err != nil {
+			return fmt.Errorf("Could not constrain cgroup: %v", err)
+		}
 	}
 
 	return nil

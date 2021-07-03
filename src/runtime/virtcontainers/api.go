@@ -82,11 +82,9 @@ func createSandboxFromConfig(ctx context.Context, sandboxConfig SandboxConfig, f
 		}
 	}()
 
-	// Move runtime to sandbox cgroup so all process are created there.
-	if s.config.SandboxCgroupOnly {
-		if err := s.setupSandboxCgroup(); err != nil {
-			return nil, err
-		}
+	// Set the sandbox host cgroups.
+	if err := s.setupCgroups(); err != nil {
+		return nil, err
 	}
 
 	// Start the VM
