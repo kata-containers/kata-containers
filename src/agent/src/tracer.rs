@@ -5,14 +5,17 @@
 
 use crate::config::AgentConfig;
 use anyhow::Result;
+use opentelemetry::sdk::propagation::TraceContextPropagator;
 use opentelemetry::{global, sdk::trace::Config, trace::TracerProvider};
 use slog::{info, o, Logger};
+use std::collections::HashMap;
 use std::error::Error;
 use std::fmt;
 use std::str::FromStr;
 use tracing_opentelemetry::OpenTelemetryLayer;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::Registry;
+use ttrpc::r#async::TtrpcContext;
 
 #[derive(Debug, PartialEq)]
 pub enum TraceType {
@@ -81,6 +84,8 @@ pub fn setup_tracing(name: &'static str, logger: &Logger, _agent_cfg: &AgentConf
 
     tracing::subscriber::set_global_default(subscriber)?;
 
+    global::set_text_map_propagator(TraceContextPropagator::new());
+
     info!(logger, "tracing setup");
 
     Ok(())
@@ -88,4 +93,30 @@ pub fn setup_tracing(name: &'static str, logger: &Logger, _agent_cfg: &AgentConf
 
 pub fn end_tracing() {
     global::shutdown_tracer_provider();
+}
+
+pub fn extract_carrier_from_ttrpc(ttrpc_context: &TtrpcContext) -> HashMap<String, String> {
+    let mut carrier = HashMap::new();
+    for (k, v) in &ttrpc_context.metadata {
+        carrier.insert(k.clone(), v.join(","));
+    }
+
+    carrier
+}
+
+#[macro_export]
+macro_rules! trace_rpc_call {
+    ($ctx: ident, $name:literal, $req: ident) => {
+        // extract context from request context
+        let parent_context = global::get_text_map_propagator(|propagator| {
+            propagator.extract(&extract_carrier_from_ttrpc($ctx))
+        });
+
+        // generate tracing span
+        let rpc_span = span!(tracing::Level::INFO, $name, "mod"="rpc.rs", req=?$req);
+
+        // assign parent span from external context
+        rpc_span.set_parent(parent_context);
+        let _enter = rpc_span.enter();
+    };
 }
