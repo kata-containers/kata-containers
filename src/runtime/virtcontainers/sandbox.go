@@ -180,7 +180,7 @@ type Sandbox struct {
 	config          *SandboxConfig
 	annotationsLock *sync.RWMutex
 	wg              *sync.WaitGroup
-	cgroupMgr       *vccgroups.Manager
+	sandboxCgroup   *vccgroups.Manager
 	cw              *consoleWatcher
 
 	containers map[string]*Container
@@ -542,6 +542,11 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 		sandboxConfig.HypervisorConfig.EnableVhostUserStore,
 		sandboxConfig.HypervisorConfig.VhostUserStorePath, nil)
 
+	// Create the sandbox cgroups
+	if err := s.createCgroups(); err != nil {
+		return nil, err
+	}
+
 	// Ignore the error. Restore can fail for a new sandbox
 	if err := s.Restore(); err != nil {
 		s.Logger().WithError(err).Debug("restore sandbox failed")
@@ -559,7 +564,7 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 	return s, nil
 }
 
-func (s *Sandbox) createCgroupManager() error {
+func (s *Sandbox) createCgroups() error {
 	var err error
 	cgroupPath := ""
 
@@ -632,9 +637,9 @@ func (s *Sandbox) createCgroupManager() error {
 		}
 	}
 
-	// Create the cgroup manager, this way it can be used later
+	// Create the sandbox  cgroup, this way it can be used later
 	// to create or detroy cgroups
-	if s.cgroupMgr, err = vccgroups.New(
+	if s.sandboxCgroup, err = vccgroups.New(
 		&vccgroups.Config{
 			Cgroups:     s.config.Cgroups,
 			CgroupPaths: s.state.CgroupPaths,
@@ -643,6 +648,12 @@ func (s *Sandbox) createCgroupManager() error {
 		},
 	); err != nil {
 		return err
+	}
+
+	// Now that the cgroup manager is created, we can set the sandbox cgroup root path.
+	s.state.CgroupPath, err = vccgroups.ValidCgroupPath(cgroupPath, s.config.SystemdCgroup)
+	if err != nil {
+		return fmt.Errorf("Invalid cgroup path: %v", err)
 	}
 
 	return nil
@@ -1760,7 +1771,7 @@ func (s *Sandbox) HotplugAddDevice(ctx context.Context, device api.Device, devTy
 		// the device cgroup MUST be updated since the hypervisor
 		// will need access to such device
 		hdev := device.GetHostPath()
-		if err := s.cgroupMgr.AddDevice(ctx, hdev); err != nil {
+		if err := s.sandboxCgroup.AddDevice(ctx, hdev); err != nil {
 			s.Logger().WithError(err).WithField("device", hdev).
 				Warn("Could not add device to cgroup")
 		}
@@ -1815,7 +1826,7 @@ func (s *Sandbox) HotplugRemoveDevice(ctx context.Context, device api.Device, de
 			// Remove device from cgroup, the hypervisor
 			// should not have access to such device anymore.
 			hdev := device.GetHostPath()
-			if err := s.cgroupMgr.RemoveDevice(hdev); err != nil {
+			if err := s.sandboxCgroup.RemoveDevice(hdev); err != nil {
 				s.Logger().WithError(err).WithField("device", hdev).
 					Warn("Could not remove device from cgroup")
 			}
@@ -2103,7 +2114,7 @@ func (s *Sandbox) cgroupsUpdate(ctx context.Context) error {
 			return err
 		}
 
-		if err := s.cgroupMgr.SetCPUSet(cpuset, memset); err != nil {
+		if err := s.sandboxCgroup.SetCPUSet(cpuset, memset); err != nil {
 			return err
 		}
 
@@ -2153,8 +2164,8 @@ func (s *Sandbox) cgroupsDelete() error {
 	var path string
 	var cgroupSubsystems cgroups.Hierarchy
 
-	if s.config.SandboxCgroupOnly {
-		return s.cgroupMgr.Destroy()
+	if err := s.sandboxCgroup.Destroy(); err != nil {
+		return err
 	}
 
 	cgroupSubsystems = V1NoConstraints
@@ -2334,37 +2345,23 @@ func (s *Sandbox) cpuResources() *specs.LinuxCPU {
 // setupSandboxCgroup creates and joins sandbox cgroups for the sandbox config
 func (s *Sandbox) setupSandboxCgroup() error {
 	var err error
-	spec := s.GetPatchedOCISpec()
-	if spec == nil {
-		return errorMissingOCISpec
-	}
-
-	if spec.Linux == nil {
-		s.Logger().WithField("sandboxid", s.id).Warning("no cgroup path provided for pod sandbox, not creating sandbox cgroup")
-		return nil
-	}
-
-	s.state.CgroupPath, err = vccgroups.ValidCgroupPath(spec.Linux.CgroupsPath, s.config.SystemdCgroup)
-	if err != nil {
-		return fmt.Errorf("Invalid cgroup path: %v", err)
-	}
 
 	runtimePid := os.Getpid()
 	// Add the runtime to the Kata sandbox cgroup
-	if err = s.cgroupMgr.Add(runtimePid); err != nil {
+	if err := s.sandboxCgroup.Add(runtimePid); err != nil {
 		return fmt.Errorf("Could not add runtime PID %d to sandbox cgroup:  %v", runtimePid, err)
 	}
 
-	// `Apply` updates manager's Cgroups and CgroupPaths,
-	// they both need to be saved since are used to create
-	// or restore a cgroup managers.
-	if s.config.Cgroups, err = s.cgroupMgr.GetCgroups(); err != nil {
+	// `Apply` updates the sandbox cgroup Cgroups and CgroupPaths,
+	// they both need to be saved since they are used to create
+	// or restore the sandbox cgroup.
+	if s.config.Cgroups, err = s.sandboxCgroup.GetCgroups(); err != nil {
 		return fmt.Errorf("Could not get cgroup configuration:  %v", err)
 	}
 
-	s.state.CgroupPaths = s.cgroupMgr.GetPaths()
+	s.state.CgroupPaths = s.sandboxCgroup.GetPaths()
 
-	if err = s.cgroupMgr.Apply(); err != nil {
+	if err := s.sandboxCgroup.Apply(); err != nil {
 		return fmt.Errorf("Could not constrain cgroup: %v", err)
 	}
 
@@ -2455,12 +2452,6 @@ func fetchSandbox(ctx context.Context, sandboxID string) (sandbox *Sandbox, err 
 	sandbox, err = createSandbox(ctx, config, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create sandbox with config %+v: %v", config, err)
-	}
-
-	if sandbox.config.SandboxCgroupOnly {
-		if err := sandbox.createCgroupManager(); err != nil {
-			return nil, err
-		}
 	}
 
 	// This sandbox already exists, we don't need to recreate the containers in the guest.
