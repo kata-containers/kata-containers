@@ -18,6 +18,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils/katatrace"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/api"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
 	persistapi "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist/api"
@@ -30,10 +31,6 @@ import (
 	vcTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/types"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/uuid"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/label"
-	otelLabel "go.opentelemetry.io/otel/label"
-	otelTrace "go.opentelemetry.io/otel/trace"
 
 	"github.com/gogo/protobuf/proto"
 	"github.com/opencontainers/runtime-spec/specs-go"
@@ -43,6 +40,13 @@ import (
 	"google.golang.org/grpc/codes"
 	grpcStatus "google.golang.org/grpc/status"
 )
+
+// kataAgentTracingTags defines tags for the trace span
+var kataAgentTracingTags = map[string]string{
+	"source":    "runtime",
+	"package":   "virtcontainers",
+	"subsystem": "agent",
+}
 
 const (
 	// KataEphemeralDevType creates a tmpfs backed volume for sharing files between containers.
@@ -246,18 +250,6 @@ type kataAgent struct {
 	ctx      context.Context
 }
 
-func (k *kataAgent) trace(parent context.Context, name string) (otelTrace.Span, context.Context) {
-	if parent == nil {
-		k.Logger().WithField("type", "bug").Error("trace called before context set")
-		parent = context.Background()
-	}
-
-	tracer := otel.Tracer("kata")
-	ctx, span := tracer.Start(parent, name, otelTrace.WithAttributes(label.String("source", "runtime"), label.String("package", "virtcontainers"), label.String("subsystem", "agent")))
-
-	return span, ctx
-}
-
 func (k *kataAgent) Logger() *logrus.Entry {
 	return virtLog.WithField("subsystem", "kata_agent")
 }
@@ -341,7 +333,7 @@ func (k *kataAgent) init(ctx context.Context, sandbox *Sandbox, config KataAgent
 	// save
 	k.ctx = sandbox.ctx
 
-	span, _ := k.trace(ctx, "init")
+	span, _ := katatrace.Trace(ctx, k.Logger(), "init", kataAgentTracingTags)
 	defer span.End()
 
 	disableVMShutdown = k.handleTraceSettings(config)
@@ -375,7 +367,7 @@ func (k *kataAgent) capabilities() types.Capabilities {
 }
 
 func (k *kataAgent) internalConfigure(ctx context.Context, h hypervisor, id string, config KataAgentConfig) error {
-	span, _ := k.trace(ctx, "configure")
+	span, _ := katatrace.Trace(ctx, k.Logger(), "configure", kataAgentTracingTags)
 	defer span.End()
 
 	var err error
@@ -384,13 +376,13 @@ func (k *kataAgent) internalConfigure(ctx context.Context, h hypervisor, id stri
 	}
 	k.keepConn = config.LongLiveConn
 
-	span.SetAttributes(otelLabel.Any("socket", k.vmSocket))
+	katatrace.AddTag(span, "socket", k.vmSocket)
 
 	return nil
 }
 
 func (k *kataAgent) setupSandboxBindMounts(ctx context.Context, sandbox *Sandbox) (err error) {
-	span, ctx := k.trace(ctx, "setupSandboxBindMounts")
+	span, ctx := katatrace.Trace(ctx, k.Logger(), "setupSandboxBindMounts", kataAgentTracingTags)
 	defer span.End()
 
 	if len(sandbox.config.SandboxBindMounts) == 0 {
@@ -463,7 +455,7 @@ func (k *kataAgent) cleanupSandboxBindMounts(sandbox *Sandbox) error {
 }
 
 func (k *kataAgent) configure(ctx context.Context, h hypervisor, id, sharePath string, config KataAgentConfig) error {
-	span, ctx := k.trace(ctx, "configure")
+	span, ctx := katatrace.Trace(ctx, k.Logger(), "configure", kataAgentTracingTags)
 	defer span.End()
 
 	err := k.internalConfigure(ctx, h, id, config)
@@ -512,7 +504,7 @@ func (k *kataAgent) configureFromGrpc(ctx context.Context, h hypervisor, id stri
 }
 
 func (k *kataAgent) setupSharedPath(ctx context.Context, sandbox *Sandbox) (err error) {
-	span, ctx := k.trace(ctx, "setupSharedPath")
+	span, ctx := katatrace.Trace(ctx, k.Logger(), "setupSharedPath", kataAgentTracingTags)
 	defer span.End()
 
 	// create shared path structure
@@ -546,7 +538,7 @@ func (k *kataAgent) setupSharedPath(ctx context.Context, sandbox *Sandbox) (err 
 }
 
 func (k *kataAgent) createSandbox(ctx context.Context, sandbox *Sandbox) error {
-	span, ctx := k.trace(ctx, "createSandbox")
+	span, ctx := katatrace.Trace(ctx, k.Logger(), "createSandbox", kataAgentTracingTags)
 	defer span.End()
 
 	if err := k.setupSharedPath(ctx, sandbox); err != nil {
@@ -633,7 +625,7 @@ func cmdEnvsToStringSlice(ev []types.EnvVar) []string {
 }
 
 func (k *kataAgent) exec(ctx context.Context, sandbox *Sandbox, c Container, cmd types.Cmd) (*Process, error) {
-	span, ctx := k.trace(ctx, "exec")
+	span, ctx := katatrace.Trace(ctx, k.Logger(), "exec", kataAgentTracingTags)
 	defer span.End()
 
 	var kataProcess *grpc.Process
@@ -805,7 +797,7 @@ func (k *kataAgent) getDNS(sandbox *Sandbox) ([]string, error) {
 }
 
 func (k *kataAgent) startSandbox(ctx context.Context, sandbox *Sandbox) error {
-	span, ctx := k.trace(ctx, "startSandbox")
+	span, ctx := katatrace.Trace(ctx, k.Logger(), "startSandbox", kataAgentTracingTags)
 	defer span.End()
 
 	if err := k.setAgentURL(); err != nil {
@@ -958,7 +950,7 @@ func setupStorages(ctx context.Context, sandbox *Sandbox) []*grpc.Storage {
 }
 
 func (k *kataAgent) stopSandbox(ctx context.Context, sandbox *Sandbox) error {
-	span, ctx := k.trace(ctx, "stopSandbox")
+	span, ctx := katatrace.Trace(ctx, k.Logger(), "stopSandbox", kataAgentTracingTags)
 	defer span.End()
 
 	req := &grpc.DestroySandboxRequest{}
@@ -1315,7 +1307,7 @@ func (k *kataAgent) buildContainerRootfs(ctx context.Context, sandbox *Sandbox, 
 }
 
 func (k *kataAgent) createContainer(ctx context.Context, sandbox *Sandbox, c *Container) (p *Process, err error) {
-	span, ctx := k.trace(ctx, "createContainer")
+	span, ctx := katatrace.Trace(ctx, k.Logger(), "createContainer", kataAgentTracingTags)
 	defer span.End()
 
 	var ctrStorages []*grpc.Storage
@@ -1680,7 +1672,7 @@ func (k *kataAgent) handlePidNamespace(grpcSpec *grpc.Spec, sandbox *Sandbox) bo
 }
 
 func (k *kataAgent) startContainer(ctx context.Context, sandbox *Sandbox, c *Container) error {
-	span, ctx := k.trace(ctx, "startContainer")
+	span, ctx := katatrace.Trace(ctx, k.Logger(), "startContainer", kataAgentTracingTags)
 	defer span.End()
 
 	req := &grpc.StartContainerRequest{
@@ -1692,7 +1684,7 @@ func (k *kataAgent) startContainer(ctx context.Context, sandbox *Sandbox, c *Con
 }
 
 func (k *kataAgent) stopContainer(ctx context.Context, sandbox *Sandbox, c Container) error {
-	span, ctx := k.trace(ctx, "stopContainer")
+	span, ctx := katatrace.Trace(ctx, k.Logger(), "stopContainer", kataAgentTracingTags)
 	defer span.End()
 
 	_, err := k.sendReq(ctx, &grpc.RemoveContainerRequest{ContainerId: c.id})
@@ -1836,7 +1828,7 @@ func (k *kataAgent) connect(ctx context.Context) error {
 		return nil
 	}
 
-	span, _ := k.trace(ctx, "connect")
+	span, _ := katatrace.Trace(ctx, k.Logger(), "connect", kataAgentTracingTags)
 	defer span.End()
 
 	// This is for the first connection only, to prevent race
@@ -1860,7 +1852,7 @@ func (k *kataAgent) connect(ctx context.Context) error {
 }
 
 func (k *kataAgent) disconnect(ctx context.Context) error {
-	span, _ := k.trace(ctx, "disconnect")
+	span, _ := katatrace.Trace(ctx, k.Logger(), "disconnect", kataAgentTracingTags)
 	defer span.End()
 
 	k.Lock()
@@ -1890,7 +1882,7 @@ func (k *kataAgent) check(ctx context.Context) error {
 }
 
 func (k *kataAgent) waitProcess(ctx context.Context, c *Container, processID string) (int32, error) {
-	span, ctx := k.trace(ctx, "waitProcess")
+	span, ctx := katatrace.Trace(ctx, k.Logger(), "waitProcess", kataAgentTracingTags)
 	defer span.End()
 
 	resp, err := k.sendReq(ctx, &grpc.WaitProcessRequest{

@@ -16,6 +16,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils/katatrace"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/manager"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols/grpc"
@@ -24,9 +25,6 @@ import (
 	vcTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/types"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
-	"go.opentelemetry.io/otel"
-	otelLabel "go.opentelemetry.io/otel/label"
-	otelTrace "go.opentelemetry.io/otel/trace"
 
 	"github.com/containerd/cgroups"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
@@ -34,6 +32,16 @@ import (
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
 )
+
+// tracingTags defines tags for the trace span
+func (c *Container) tracingTags() map[string]string {
+	return map[string]string{
+		"source":       "runtime",
+		"package":      "virtcontainers",
+		"subsystem":    "container",
+		"container_id": c.id,
+	}
+}
 
 // https://github.com/torvalds/linux/blob/master/include/uapi/linux/major.h
 // This file has definitions for major device numbers.
@@ -354,18 +362,6 @@ func (c *Container) Logger() *logrus.Entry {
 	})
 }
 
-func (c *Container) trace(parent context.Context, name string) (otelTrace.Span, context.Context) {
-	if parent == nil {
-		c.Logger().WithField("type", "bug").Error("trace called before context set")
-		parent = context.Background()
-	}
-
-	tracer := otel.Tracer("kata")
-	ctx, span := tracer.Start(parent, name, otelTrace.WithAttributes(otelLabel.String("source", "runtime"), otelLabel.String("package", "virtcontainers"), otelLabel.String("subsystem", "container"), otelLabel.String("container_id", c.id)))
-
-	return span, ctx
-}
-
 // Sandbox returns the sandbox handler related to this container.
 func (c *Container) Sandbox() VCSandbox {
 	return c.sandbox
@@ -622,14 +618,13 @@ func (c *Container) mountSharedDirMounts(ctx context.Context, sharedDirMounts, i
 }
 
 func (c *Container) unmountHostMounts(ctx context.Context) error {
-	var span otelTrace.Span
-	span, ctx = c.trace(ctx, "unmountHostMounts")
+	span, ctx := katatrace.Trace(ctx, c.Logger(), "unmountHostMounts", c.tracingTags())
 	defer span.End()
 
 	for _, m := range c.mounts {
 		if m.HostPath != "" {
-			span, _ := c.trace(ctx, "unmount")
-			span.SetAttributes(otelLabel.Key("host-path").String(m.HostPath))
+			span, _ := katatrace.Trace(ctx, c.Logger(), "unmount", c.tracingTags())
+			katatrace.AddTag(span, "host-path", m.HostPath)
 
 			if err := syscall.Unmount(m.HostPath, syscall.MNT_DETACH|UmountNoFollow); err != nil {
 				c.Logger().WithFields(logrus.Fields{
@@ -751,7 +746,7 @@ func (c *Container) createBlockDevices(ctx context.Context) error {
 
 // newContainer creates a Container structure from a sandbox and a container configuration.
 func newContainer(ctx context.Context, sandbox *Sandbox, contConfig *ContainerConfig) (*Container, error) {
-	span, ctx := sandbox.trace(ctx, "newContainer")
+	span, ctx := katatrace.Trace(ctx, sandbox.Logger(), "newContainer", sandbox.tracingTags())
 	defer span.End()
 
 	if !contConfig.valid() {
@@ -1021,8 +1016,7 @@ func (c *Container) start(ctx context.Context) error {
 }
 
 func (c *Container) stop(ctx context.Context, force bool) error {
-	var span otelTrace.Span
-	span, ctx = c.trace(ctx, "stop")
+	span, ctx := katatrace.Trace(ctx, c.Logger(), "stop", c.tracingTags())
 	defer span.End()
 
 	// In case the container status has been updated implicitly because

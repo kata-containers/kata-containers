@@ -16,6 +16,7 @@ import (
 	"syscall"
 
 	merr "github.com/hashicorp/go-multierror"
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils/katatrace"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
 	"github.com/sirupsen/logrus"
 	otelLabel "go.opentelemetry.io/otel/label"
@@ -239,7 +240,7 @@ func evalMountPath(source, destination string) (string, string, error) {
 // * ensure the source exists
 // * recursively create the destination
 func moveMount(ctx context.Context, source, destination string) error {
-	span, _ := trace(ctx, "moveMount")
+	span, _ := katatrace.Trace(ctx, nil, "moveMount", apiTracingTags)
 	defer span.End()
 
 	source, destination, err := evalMountPath(source, destination)
@@ -257,7 +258,7 @@ func moveMount(ctx context.Context, source, destination string) error {
 // * recursively create the destination
 // pgtypes stands for propagation types, which are shared, private, slave, and ubind.
 func bindMount(ctx context.Context, source, destination string, readonly bool, pgtypes string) error {
-	span, _ := trace(ctx, "bindMount")
+	span, _ := katatrace.Trace(ctx, nil, "bindMount", apiTracingTags)
 	defer span.End()
 	span.SetAttributes(otelLabel.String("source", source), otelLabel.String("destination", destination))
 
@@ -294,7 +295,7 @@ func bindMount(ctx context.Context, source, destination string, readonly bool, p
 // The mountflags should match the values used in the original mount() call,
 // except for those parameters that you are trying to change.
 func remount(ctx context.Context, mountflags uintptr, src string) error {
-	span, _ := trace(ctx, "remount")
+	span, _ := katatrace.Trace(ctx, nil, "remount", apiTracingTags)
 	defer span.End()
 	span.SetAttributes(otelLabel.String("source", src))
 
@@ -319,7 +320,7 @@ func remountRo(ctx context.Context, src string) error {
 // bindMountContainerRootfs bind mounts a container rootfs into a 9pfs shared
 // directory between the guest and the host.
 func bindMountContainerRootfs(ctx context.Context, shareDir, cid, cRootFs string, readonly bool) error {
-	span, _ := trace(ctx, "bindMountContainerRootfs")
+	span, _ := katatrace.Trace(ctx, nil, "bindMountContainerRootfs", apiTracingTags)
 	defer span.End()
 
 	rootfsDest := filepath.Join(shareDir, cid, rootfsDir)
@@ -359,7 +360,7 @@ func isSymlink(path string) bool {
 }
 
 func bindUnmountContainerRootfs(ctx context.Context, sharedDir, cID string) error {
-	span, _ := trace(ctx, "bindUnmountContainerRootfs")
+	span, _ := katatrace.Trace(ctx, nil, "bindUnmountContainerRootfs", apiTracingTags)
 	defer span.End()
 	span.SetAttributes(otelLabel.String("shared_dir", sharedDir), otelLabel.String("container_id", cID))
 
@@ -382,7 +383,7 @@ func bindUnmountContainerRootfs(ctx context.Context, sharedDir, cID string) erro
 }
 
 func bindUnmountAllRootfs(ctx context.Context, sharedDir string, sandbox *Sandbox) error {
-	span, ctx := trace(ctx, "bindUnmountAllRootfs")
+	span, ctx := katatrace.Trace(ctx, nil, "bindUnmountAllRootfs", apiTracingTags)
 	defer span.End()
 	span.SetAttributes(otelLabel.String("shared_dir", sharedDir), otelLabel.String("sandbox_id", sandbox.id))
 

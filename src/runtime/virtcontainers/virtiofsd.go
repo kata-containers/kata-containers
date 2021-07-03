@@ -16,13 +16,18 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils/katatrace"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/label"
-	otelTrace "go.opentelemetry.io/otel/trace"
 )
+
+// virtiofsdTracingTags defines tags for the trace span
+var virtiofsdTracingTags = map[string]string{
+	"source":    "runtime",
+	"package":   "virtcontainers",
+	"subsystem": "virtiofsd",
+}
 
 var (
 	errVirtiofsdDaemonPathEmpty    = errors.New("virtiofsd daemon path is empty")
@@ -84,7 +89,7 @@ func (v *virtiofsd) getSocketFD() (*os.File, error) {
 
 // Start the virtiofsd daemon
 func (v *virtiofsd) Start(ctx context.Context, onQuit onQuitFunc) (int, error) {
-	span, _ := v.trace(ctx, "Start")
+	span, _ := katatrace.Trace(ctx, v.Logger(), "Start", virtiofsdTracingTags)
 	defer span.End()
 	pid := 0
 
@@ -206,19 +211,8 @@ func (v *virtiofsd) Logger() *log.Entry {
 	return virtLog.WithField("subsystem", "virtiofsd")
 }
 
-func (v *virtiofsd) trace(parent context.Context, name string) (otelTrace.Span, context.Context) {
-	if parent == nil {
-		parent = context.Background()
-	}
-
-	tracer := otel.Tracer("kata")
-	ctx, span := tracer.Start(parent, name, otelTrace.WithAttributes(label.String("source", "runtime"), label.String("package", "virtcontainers"), label.String("subsystem", "virtiofsd")))
-
-	return span, ctx
-}
-
 func (v *virtiofsd) kill(ctx context.Context) (err error) {
-	span, _ := v.trace(ctx, "kill")
+	span, _ := katatrace.Trace(ctx, v.Logger(), "kill", virtiofsdTracingTags)
 	defer span.End()
 
 	if v.PID == 0 {
