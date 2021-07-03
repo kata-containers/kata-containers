@@ -19,7 +19,6 @@ import (
 	"github.com/containerd/typeurl"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/pkg/errors"
-	otelTrace "go.opentelemetry.io/otel/trace"
 
 	// only register the proto type
 	crioption "github.com/containerd/containerd/pkg/runtimeoptions/v1"
@@ -27,6 +26,7 @@ import (
 	_ "github.com/containerd/containerd/runtime/v2/runc/options"
 
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils"
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils/katatrace"
 	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/compatoci"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/oci"
@@ -69,19 +69,24 @@ func create(ctx context.Context, s *service, r *taskAPI.CreateTaskRequest) (*con
 		// create tracer
 		// This is the earliest location we can create the tracer because we must wait
 		// until the runtime config is loaded
-		_, err = katautils.CreateTracer("kata", s.config)
+		jaegerConfig := &katatrace.JaegerConfig{
+			JaegerEndpoint: s.config.JaegerEndpoint,
+			JaegerUser:     s.config.JaegerUser,
+			JaegerPassword: s.config.JaegerPassword,
+		}
+		_, err = katatrace.CreateTracer("kata", jaegerConfig)
 		if err != nil {
 			return nil, err
 		}
 
 		// create root span
-		var rootSpan otelTrace.Span
-		rootSpan, s.rootCtx = trace(s.ctx, "root span")
+		rootSpan, newCtx := katatrace.Trace(s.ctx, shimLog, "root span", shimTracingTags)
+		s.rootCtx = newCtx
 		defer rootSpan.End()
 
 		// create span
-		var span otelTrace.Span
-		span, s.ctx = trace(s.rootCtx, "create")
+		span, newCtx := katatrace.Trace(s.rootCtx, shimLog, "create", shimTracingTags)
+		s.ctx = newCtx
 		defer span.End()
 
 		if rootFs.Mounted, err = checkAndMount(s, r); err != nil {
@@ -116,8 +121,7 @@ func create(ctx context.Context, s *service, r *taskAPI.CreateTaskRequest) (*con
 		go s.startManagementServer(ctx, ociSpec)
 
 	case vc.PodContainer:
-		var span otelTrace.Span
-		span, ctx = trace(s.ctx, "create")
+		span, ctx := katatrace.Trace(s.ctx, shimLog, "create", shimTracingTags)
 		defer span.End()
 
 		if s.sandbox == nil {
