@@ -12,6 +12,7 @@ import (
 	persistapi "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist/api"
 	pbTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols/grpc"
+	vcTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/types"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"golang.org/x/net/context"
@@ -188,6 +189,9 @@ type agent interface {
 
 	// copyFile copies file from host to container's rootfs
 	copyFile(ctx context.Context, src, dst string) error
+
+	// Tell the agent to setup the swapfile in the guest
+	addSwap(ctx context.Context, PCIPath vcTypes.PciPath) error
 
 	// markDead tell agent that the guest is dead
 	markDead(ctx context.Context)
