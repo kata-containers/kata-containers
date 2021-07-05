@@ -416,6 +416,10 @@ func clhPciInfoToPath(pciInfo chclient.PciDeviceInfo) (vcTypes.PciPath, error) {
 }
 
 func (clh *cloudHypervisor) hotplugAddBlockDevice(drive *config.BlockDrive) error {
+	if drive.Swap {
+		return fmt.Errorf("cloudHypervisor doesn't support swap")
+	}
+
 	if clh.config.BlockDeviceDriver != config.VirtioBlock {
 		return fmt.Errorf("incorrect hypervisor configuration on 'block_device_driver':"+
 			" using '%v' but only support '%v'", clh.config.BlockDeviceDriver, config.VirtioBlock)
