@@ -1232,7 +1232,9 @@ func (q *qemu) hotplugAddBlockDevice(ctx context.Context, drive *config.BlockDri
 		return nil
 	}
 
-	if q.config.BlockDeviceCacheSet {
+	if drive.Swap {
+		err = q.qmpMonitorCh.qmp.ExecuteBlockdevAddWithCache(q.qmpMonitorCh.ctx, drive.File, drive.ID, false, false, false)
+	} else if q.config.BlockDeviceCacheSet {
 		err = q.qmpMonitorCh.qmp.ExecuteBlockdevAddWithCache(q.qmpMonitorCh.ctx, drive.File, drive.ID, q.config.BlockDeviceCacheDirect, q.config.BlockDeviceCacheNoflush, drive.ReadOnly)
 	} else {
 		err = q.qmpMonitorCh.qmp.ExecuteBlockdevAdd(q.qmpMonitorCh.ctx, drive.File, drive.ID, drive.ReadOnly)
@@ -1248,25 +1250,8 @@ func (q *qemu) hotplugAddBlockDevice(ctx context.Context, drive *config.BlockDri
 	}()
 
 	switch {
-	case q.config.BlockDeviceDriver == config.VirtioBlockCCW:
-		driver := "virtio-blk-ccw"
-
-		addr, bridge, err := q.arch.addDeviceToBridge(ctx, drive.ID, types.CCW)
-		if err != nil {
-			return err
-		}
-		var devNoHotplug string
-		devNoHotplug, err = bridge.AddressFormatCCW(addr)
-		if err != nil {
-			return err
-		}
-		drive.DevNo, err = bridge.AddressFormatCCWForVirtServer(addr)
-		if err != nil {
-			return err
-		}
-		if err = q.qmpMonitorCh.qmp.ExecuteDeviceAdd(q.qmpMonitorCh.ctx, drive.ID, devID, driver, devNoHotplug, "", true, false); err != nil {
-			return err
-		}
+	case drive.Swap:
+		fallthrough
 	case q.config.BlockDeviceDriver == config.VirtioBlock:
 		driver := "virtio-blk-pci"
 		addr, bridge, err := q.arch.addDeviceToBridge(ctx, drive.ID, types.PCI)
@@ -1294,6 +1279,25 @@ func (q *qemu) hotplugAddBlockDevice(ctx context.Context, drive *config.BlockDri
 		}
 
 		if err = q.qmpMonitorCh.qmp.ExecutePCIDeviceAdd(q.qmpMonitorCh.ctx, drive.ID, devID, driver, addr, bridge.ID, romFile, 0, true, defaultDisableModern); err != nil {
+			return err
+		}
+	case q.config.BlockDeviceDriver == config.VirtioBlockCCW:
+		driver := "virtio-blk-ccw"
+
+		addr, bridge, err := q.arch.addDeviceToBridge(ctx, drive.ID, types.CCW)
+		if err != nil {
+			return err
+		}
+		var devNoHotplug string
+		devNoHotplug, err = bridge.AddressFormatCCW(addr)
+		if err != nil {
+			return err
+		}
+		drive.DevNo, err = bridge.AddressFormatCCWForVirtServer(addr)
+		if err != nil {
+			return err
+		}
+		if err = q.qmpMonitorCh.qmp.ExecuteDeviceAdd(q.qmpMonitorCh.ctx, drive.ID, devID, driver, devNoHotplug, "", true, false); err != nil {
 			return err
 		}
 	case q.config.BlockDeviceDriver == config.VirtioSCSI:
@@ -1369,7 +1373,7 @@ func (q *qemu) hotplugBlockDevice(ctx context.Context, drive *config.BlockDrive,
 	if op == addDevice {
 		return q.hotplugAddBlockDevice(ctx, drive, op, devID)
 	}
-	if q.config.BlockDeviceDriver == config.VirtioBlock {
+	if !drive.Swap && q.config.BlockDeviceDriver == config.VirtioBlock {
 		if err := q.arch.removeDeviceFromBridge(drive.ID); err != nil {
 			return err
 		}
