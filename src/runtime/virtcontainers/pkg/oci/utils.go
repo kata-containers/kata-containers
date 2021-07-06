@@ -463,30 +463,22 @@ func addHypervisorConfigOverrides(ocispec specs.Spec, config *vc.SandboxConfig, 
 		}
 	}
 
-	if value, ok := ocispec.Annotations[vcAnnotations.DisableImageNvdimm]; ok {
-		disableNvdimm, err := strconv.ParseBool(value)
-		if err != nil {
-			return fmt.Errorf("Error parsing annotation for use_nvdimm: Please specify boolean value 'true|false'")
-		}
-
+	if err := newAnnotationConfiguration(ocispec, vcAnnotations.DisableImageNvdimm).setBool(func(disableNvdimm bool) {
 		config.HypervisorConfig.DisableImageNvdimm = disableNvdimm
+	}); err != nil {
+		return err
 	}
 
-	if value, ok := ocispec.Annotations[vcAnnotations.HotplugVFIOOnRootBus]; ok {
-		hotplugVFIOOnRootBus, err := strconv.ParseBool(value)
-		if err != nil {
-			return fmt.Errorf("Error parsing annotation for hotplug_vfio_on_root_bus: Please specify boolean value 'true|false'")
-		}
-
+	if err := newAnnotationConfiguration(ocispec, vcAnnotations.HotplugVFIOOnRootBus).setBool(func(hotplugVFIOOnRootBus bool) {
 		config.HypervisorConfig.HotplugVFIOOnRootBus = hotplugVFIOOnRootBus
+	}); err != nil {
+		return err
 	}
 
-	if value, ok := ocispec.Annotations[vcAnnotations.PCIeRootPort]; ok {
-		pcieRootPort, err := strconv.ParseUint(value, 10, 32)
-		if err != nil {
-			return fmt.Errorf("Error parsing annotation for pcie_root_port: %v, Please specify an integer greater than or equal to 0", err)
-		}
+	if err := newAnnotationConfiguration(ocispec, vcAnnotations.PCIeRootPort).setUint(func(pcieRootPort uint64) {
 		config.HypervisorConfig.PCIeRootPort = uint32(pcieRootPort)
+	}); err != nil {
+		return err
 	}
 
 	if value, ok := ocispec.Annotations[vcAnnotations.EntropySource]; ok {
@@ -551,57 +543,43 @@ func addHypervisorPathOverrides(ocispec specs.Spec, config *vc.SandboxConfig, ru
 }
 
 func addHypervisorMemoryOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig, runtime RuntimeConfig) error {
-	if value, ok := ocispec.Annotations[vcAnnotations.DefaultMemory]; ok {
-		memorySz, err := strconv.ParseUint(value, 10, 32)
-		if err != nil {
-			return fmt.Errorf("Error encountered parsing annotation for default_memory: %v, please specify positive numeric value greater than 8", err)
-		}
 
+	if err := newAnnotationConfiguration(ocispec, vcAnnotations.DefaultMemory).setUintWithCheck(func(memorySz uint64) error {
 		if memorySz < vc.MinHypervisorMemory {
 			return fmt.Errorf("Memory specified in annotation %s is less than minimum required %d, please specify a larger value", vcAnnotations.DefaultMemory, vc.MinHypervisorMemory)
 		}
-
 		sbConfig.HypervisorConfig.MemorySize = uint32(memorySz)
+		return nil
+	}); err != nil {
+		return err
 	}
 
-	if value, ok := ocispec.Annotations[vcAnnotations.MemSlots]; ok {
-		mslots, err := strconv.ParseUint(value, 10, 32)
-		if err != nil {
-			return fmt.Errorf("Error parsing annotation for memory_slots: %v, please specify positive numeric value", err)
-		}
-
+	if err := newAnnotationConfiguration(ocispec, vcAnnotations.MemSlots).setUint(func(mslots uint64) {
 		if mslots > 0 {
 			sbConfig.HypervisorConfig.MemSlots = uint32(mslots)
 		}
+	}); err != nil {
+		return err
 	}
 
-	if value, ok := ocispec.Annotations[vcAnnotations.MemOffset]; ok {
-		moffset, err := strconv.ParseUint(value, 10, 64)
-		if err != nil {
-			return fmt.Errorf("Error parsing annotation for memory_offset: %v, please specify positive numeric value", err)
-		}
-
+	if err := newAnnotationConfiguration(ocispec, vcAnnotations.MemOffset).setUint(func(moffset uint64) {
 		if moffset > 0 {
 			sbConfig.HypervisorConfig.MemOffset = moffset
 		}
+	}); err != nil {
+		return err
 	}
 
-	if value, ok := ocispec.Annotations[vcAnnotations.VirtioMem]; ok {
-		virtioMem, err := strconv.ParseBool(value)
-		if err != nil {
-			return fmt.Errorf("Error parsing annotation for enable_virtio_mem: Please specify boolean value 'true|false'")
-		}
-
+	if err := newAnnotationConfiguration(ocispec, vcAnnotations.VirtioMem).setBool(func(virtioMem bool) {
 		sbConfig.HypervisorConfig.VirtioMem = virtioMem
+	}); err != nil {
+		return err
 	}
 
-	if value, ok := ocispec.Annotations[vcAnnotations.MemPrealloc]; ok {
-		memPrealloc, err := strconv.ParseBool(value)
-		if err != nil {
-			return fmt.Errorf("Error parsing annotation for enable_mem_prealloc: Please specify boolean value 'true|false'")
-		}
-
+	if err := newAnnotationConfiguration(ocispec, vcAnnotations.MemPrealloc).setBool(func(memPrealloc bool) {
 		sbConfig.HypervisorConfig.MemPrealloc = memPrealloc
+	}); err != nil {
+		return err
 	}
 
 	if value, ok := ocispec.Annotations[vcAnnotations.EnableSwap]; ok {
@@ -620,58 +598,41 @@ func addHypervisorMemoryOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig
 		sbConfig.HypervisorConfig.FileBackedMemRootDir = value
 	}
 
-	if value, ok := ocispec.Annotations[vcAnnotations.HugePages]; ok {
-		hugePages, err := strconv.ParseBool(value)
-		if err != nil {
-			return fmt.Errorf("Error parsing annotation for enable_hugepages: Please specify boolean value 'true|false'")
-		}
-
+	if err := newAnnotationConfiguration(ocispec, vcAnnotations.HugePages).setBool(func(hugePages bool) {
 		sbConfig.HypervisorConfig.HugePages = hugePages
+	}); err != nil {
+		return err
 	}
 
-	if value, ok := ocispec.Annotations[vcAnnotations.IOMMU]; ok {
-		iommu, err := strconv.ParseBool(value)
-		if err != nil {
-			return fmt.Errorf("Error parsing annotation for iommu: Please specify boolean value 'true|false'")
-		}
-
+	if err := newAnnotationConfiguration(ocispec, vcAnnotations.IOMMU).setBool(func(iommu bool) {
 		sbConfig.HypervisorConfig.IOMMU = iommu
+	}); err != nil {
+		return err
 	}
 
-	if value, ok := ocispec.Annotations[vcAnnotations.IOMMUPlatform]; ok {
-		deviceIOMMU, err := strconv.ParseBool(value)
-		if err != nil {
-			return fmt.Errorf("Error parsing annotation for enable_iommu_platform: Please specify boolean value 'true|false'")
-		}
-
+	if err := newAnnotationConfiguration(ocispec, vcAnnotations.IOMMUPlatform).setBool(func(deviceIOMMU bool) {
 		sbConfig.HypervisorConfig.IOMMUPlatform = deviceIOMMU
+	}); err != nil {
+		return err
 	}
+
 	return nil
 }
 
 func addHypervisorCPUOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig) error {
-	if value, ok := ocispec.Annotations[vcAnnotations.DefaultVCPUs]; ok {
-		vcpus, err := strconv.ParseUint(value, 10, 32)
-		if err != nil {
-			return fmt.Errorf("Error encountered parsing annotation default_vcpus: %v, please specify numeric value", err)
-		}
+	numCPUs := goruntime.NumCPU()
 
-		numCPUs := goruntime.NumCPU()
-
+	if err := newAnnotationConfiguration(ocispec, vcAnnotations.DefaultVCPUs).setUintWithCheck(func(vcpus uint64) error {
 		if uint32(vcpus) > uint32(numCPUs) {
 			return fmt.Errorf("Number of cpus %d specified in annotation default_vcpus is greater than the number of CPUs %d on the system", vcpus, numCPUs)
 		}
-
 		sbConfig.HypervisorConfig.NumVCPUs = uint32(vcpus)
+		return nil
+	}); err != nil {
+		return err
 	}
 
-	if value, ok := ocispec.Annotations[vcAnnotations.DefaultMaxVCPUs]; ok {
-		maxVCPUs, err := strconv.ParseUint(value, 10, 32)
-		if err != nil {
-			return fmt.Errorf("Error encountered parsing annotation for default_maxvcpus: %v, please specify positive numeric value", err)
-		}
-
-		numCPUs := goruntime.NumCPU()
+	return newAnnotationConfiguration(ocispec, vcAnnotations.DefaultMaxVCPUs).setUintWithCheck(func(maxVCPUs uint64) error {
 		max := uint32(maxVCPUs)
 
 		if max > uint32(numCPUs) {
@@ -681,11 +642,9 @@ func addHypervisorCPUOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig) e
 		if sbConfig.HypervisorType == vc.QemuHypervisor && max > vc.MaxQemuVCPUs() {
 			return fmt.Errorf("Number of cpus %d in annotation default_maxvcpus is greater than max no of CPUs %d supported for qemu", max, vc.MaxQemuVCPUs())
 		}
-
 		sbConfig.HypervisorConfig.DefaultMaxVCPUs = max
-	}
-
-	return nil
+		return nil
+	})
 }
 
 func addHypervisorBlockOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig) error {
@@ -705,52 +664,33 @@ func addHypervisorBlockOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig)
 		}
 	}
 
-	if value, ok := ocispec.Annotations[vcAnnotations.DisableBlockDeviceUse]; ok {
-		disableBlockDeviceUse, err := strconv.ParseBool(value)
-		if err != nil {
-			return fmt.Errorf("Error parsing annotation for disable_block_device_use: Please specify boolean value 'true|false'")
-		}
-
+	if err := newAnnotationConfiguration(ocispec, vcAnnotations.DisableBlockDeviceUse).setBool(func(disableBlockDeviceUse bool) {
 		sbConfig.HypervisorConfig.DisableBlockDeviceUse = disableBlockDeviceUse
+	}); err != nil {
+		return err
 	}
 
-	if value, ok := ocispec.Annotations[vcAnnotations.EnableIOThreads]; ok {
-		enableIOThreads, err := strconv.ParseBool(value)
-		if err != nil {
-			return fmt.Errorf("Error parsing annotation for enable_iothreads: Please specify boolean value 'true|false'")
-		}
-
+	if err := newAnnotationConfiguration(ocispec, vcAnnotations.EnableIOThreads).setBool(func(enableIOThreads bool) {
 		sbConfig.HypervisorConfig.EnableIOThreads = enableIOThreads
+	}); err != nil {
+		return err
 	}
 
-	if value, ok := ocispec.Annotations[vcAnnotations.BlockDeviceCacheSet]; ok {
-		blockDeviceCacheSet, err := strconv.ParseBool(value)
-		if err != nil {
-			return fmt.Errorf("Error parsing annotation for block_device_cache_set: Please specify boolean value 'true|false'")
-		}
-
+	if err := newAnnotationConfiguration(ocispec, vcAnnotations.BlockDeviceCacheSet).setBool(func(blockDeviceCacheSet bool) {
 		sbConfig.HypervisorConfig.BlockDeviceCacheSet = blockDeviceCacheSet
+	}); err != nil {
+		return err
 	}
 
-	if value, ok := ocispec.Annotations[vcAnnotations.BlockDeviceCacheDirect]; ok {
-		blockDeviceCacheDirect, err := strconv.ParseBool(value)
-		if err != nil {
-			return fmt.Errorf("Error parsing annotation for block_device_cache_direct: Please specify boolean value 'true|false'")
-		}
-
+	if err := newAnnotationConfiguration(ocispec, vcAnnotations.BlockDeviceCacheDirect).setBool(func(blockDeviceCacheDirect bool) {
 		sbConfig.HypervisorConfig.BlockDeviceCacheDirect = blockDeviceCacheDirect
+	}); err != nil {
+		return err
 	}
 
-	if value, ok := ocispec.Annotations[vcAnnotations.BlockDeviceCacheNoflush]; ok {
-		blockDeviceCacheNoflush, err := strconv.ParseBool(value)
-		if err != nil {
-			return fmt.Errorf("Error parsing annotation for block_device_cache_noflush: Please specify boolean value 'true|false'")
-		}
-
+	return newAnnotationConfiguration(ocispec, vcAnnotations.BlockDeviceCacheNoflush).setBool(func(blockDeviceCacheNoflush bool) {
 		sbConfig.HypervisorConfig.BlockDeviceCacheNoflush = blockDeviceCacheNoflush
-	}
-
-	return nil
+	})
 }
 
 func addHypervisorVirtioFsOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig, runtime RuntimeConfig) error {
@@ -793,25 +733,19 @@ func addHypervisorVirtioFsOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConf
 		sbConfig.HypervisorConfig.VirtioFSCache = value
 	}
 
-	if value, ok := ocispec.Annotations[vcAnnotations.VirtioFSCacheSize]; ok {
-		cacheSize, err := strconv.ParseUint(value, 10, 32)
-		if err != nil {
-			return fmt.Errorf("Error parsing annotation for virtio_fs_cache_size: %v, please specify positive numeric value", err)
-		}
-
+	if err := newAnnotationConfiguration(ocispec, vcAnnotations.VirtioFSCacheSize).setUint(func(cacheSize uint64) {
 		sbConfig.HypervisorConfig.VirtioFSCacheSize = uint32(cacheSize)
+	}); err != nil {
+		return err
 	}
 
-	if value, ok := ocispec.Annotations[vcAnnotations.Msize9p]; ok {
-		msize9p, err := strconv.ParseUint(value, 10, 32)
-		if err != nil || msize9p == 0 {
+	return newAnnotationConfiguration(ocispec, vcAnnotations.Msize9p).setUintWithCheck(func(msize9p uint64) error {
+		if msize9p == 0 {
 			return fmt.Errorf("Error parsing annotation for msize_9p, please specify positive numeric value")
 		}
-
 		sbConfig.HypervisorConfig.Msize9p = uint32(msize9p)
-	}
-
-	return nil
+		return nil
+	})
 }
 
 func addHypervisporNetworkOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig) error {
@@ -821,51 +755,35 @@ func addHypervisporNetworkOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConf
 		}
 	}
 
-	if value, ok := ocispec.Annotations[vcAnnotations.DisableVhostNet]; ok {
-		disableVhostNet, err := strconv.ParseBool(value)
-		if err != nil {
-			return fmt.Errorf("Error parsing annotation for disable_vhost_net: Please specify boolean value 'true|false'")
-		}
-
+	if err := newAnnotationConfiguration(ocispec, vcAnnotations.DisableVhostNet).setBool(func(disableVhostNet bool) {
 		sbConfig.HypervisorConfig.DisableVhostNet = disableVhostNet
+	}); err != nil {
+		return err
 	}
 
-	if value, ok := ocispec.Annotations[vcAnnotations.RxRateLimiterMaxRate]; ok {
-		rxRateLimiterMaxRate, err := strconv.ParseUint(value, 10, 64)
-		if err != nil {
-			return fmt.Errorf("Error parsing annotation for rx_rate_limiter_max_rate: %v, Please specify an integer greater than or equal to 0", err)
-		}
+	if err := newAnnotationConfiguration(ocispec, vcAnnotations.RxRateLimiterMaxRate).setUint(func(rxRateLimiterMaxRate uint64) {
 		sbConfig.HypervisorConfig.RxRateLimiterMaxRate = rxRateLimiterMaxRate
+	}); err != nil {
+		return err
 	}
 
-	if value, ok := ocispec.Annotations[vcAnnotations.TxRateLimiterMaxRate]; ok {
-		txRateLimiterMaxRate, err := strconv.ParseUint(value, 10, 64)
-		if err != nil {
-			return fmt.Errorf("Error parsing annotation for tx_rate_limiter_max_rate: %v, Please specify an integer greater than or equal to 0", err)
-		}
+	return newAnnotationConfiguration(ocispec, vcAnnotations.TxRateLimiterMaxRate).setUint(func(txRateLimiterMaxRate uint64) {
 		sbConfig.HypervisorConfig.TxRateLimiterMaxRate = txRateLimiterMaxRate
-	}
-
-	return nil
+	})
 }
 
 func addRuntimeConfigOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig, runtime RuntimeConfig) error {
-	if value, ok := ocispec.Annotations[vcAnnotations.DisableGuestSeccomp]; ok {
-		disableGuestSeccomp, err := strconv.ParseBool(value)
-		if err != nil {
-			return fmt.Errorf("Error parsing annotation for disable_guest_seccomp: Please specify boolean value 'true|false'")
-		}
 
+	if err := newAnnotationConfiguration(ocispec, vcAnnotations.DisableGuestSeccomp).setBool(func(disableGuestSeccomp bool) {
 		sbConfig.DisableGuestSeccomp = disableGuestSeccomp
+	}); err != nil {
+		return err
 	}
 
-	if value, ok := ocispec.Annotations[vcAnnotations.SandboxCgroupOnly]; ok {
-		sandboxCgroupOnly, err := strconv.ParseBool(value)
-		if err != nil {
-			return fmt.Errorf("Error parsing annotation for sandbox_cgroup_only: Please specify boolean value 'true|false'")
-		}
-
+	if err := newAnnotationConfiguration(ocispec, vcAnnotations.SandboxCgroupOnly).setBool(func(sandboxCgroupOnly bool) {
 		sbConfig.SandboxCgroupOnly = sandboxCgroupOnly
+	}); err != nil {
+		return err
 	}
 
 	if value, ok := ocispec.Annotations[vcAnnotations.Experimental]; ok {
@@ -881,12 +799,10 @@ func addRuntimeConfigOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig, r
 		}
 	}
 
-	if value, ok := ocispec.Annotations[vcAnnotations.DisableNewNetNs]; ok {
-		disableNewNetNs, err := strconv.ParseBool(value)
-		if err != nil {
-			return fmt.Errorf("Error parsing annotation for experimental: Please specify boolean value 'true|false'")
-		}
+	if err := newAnnotationConfiguration(ocispec, vcAnnotations.DisableNewNetNs).setBool(func(disableNewNetNs bool) {
 		sbConfig.NetworkConfig.DisableNewNetNs = disableNewNetNs
+	}); err != nil {
+		return err
 	}
 
 	if value, ok := ocispec.Annotations[vcAnnotations.InterNetworkModel]; ok {
@@ -910,12 +826,10 @@ func addAgentConfigOverrides(ocispec specs.Spec, config *vc.SandboxConfig) error
 		config.AgentConfig = c
 	}
 
-	if value, ok := ocispec.Annotations[vcAnnotations.AgentTrace]; ok {
-		trace, err := strconv.ParseBool(value)
-		if err != nil {
-			return fmt.Errorf("Error parsing annotation for agent.trace: Please specify boolean value 'true|false'")
-		}
+	if err := newAnnotationConfiguration(ocispec, vcAnnotations.AgentTrace).setBool(func(trace bool) {
 		c.Trace = trace
+	}); err != nil {
+		return err
 	}
 
 	if value, ok := ocispec.Annotations[vcAnnotations.AgentTraceMode]; ok {
@@ -926,12 +840,10 @@ func addAgentConfigOverrides(ocispec specs.Spec, config *vc.SandboxConfig) error
 		c.TraceType = value
 	}
 
-	if value, ok := ocispec.Annotations[vcAnnotations.AgentContainerPipeSize]; ok {
-		containerPipeSize, err := strconv.ParseUint(value, 10, 32)
-		if err != nil {
-			return fmt.Errorf("Error parsing annotation for %s: Please specify uint32 value", vcAnnotations.AgentContainerPipeSize)
-		}
+	if err := newAnnotationConfiguration(ocispec, vcAnnotations.AgentContainerPipeSize).setUint(func(containerPipeSize uint64) {
 		c.ContainerPipeSize = uint32(containerPipeSize)
+	}); err != nil {
+		return err
 	}
 
 	config.AgentConfig = c
@@ -1137,4 +1049,50 @@ func IsCRIOContainerManager(spec *specs.Spec) bool {
 		}
 	}
 	return false
+}
+
+const (
+	errAnnotationPositiveNumericKey = "Error parsing annotation for %s: Please specify positive numeric value"
+	errAnnotationBoolKey            = "Error parsing annotation for %s: Please specify boolean value 'true|false'"
+)
+
+type annotationConfiguration struct {
+	ocispec specs.Spec
+	key     string
+}
+
+func newAnnotationConfiguration(ocispec specs.Spec, key string) *annotationConfiguration {
+	return &annotationConfiguration{
+		ocispec: ocispec,
+		key:     key,
+	}
+}
+
+func (a *annotationConfiguration) setBool(f func(bool)) error {
+	if value, ok := a.ocispec.Annotations[a.key]; ok {
+		boolValue, err := strconv.ParseBool(value)
+		if err != nil {
+			return fmt.Errorf(errAnnotationBoolKey, a.key)
+		}
+		f(boolValue)
+	}
+	return nil
+}
+
+func (a *annotationConfiguration) setUint(f func(uint64)) error {
+	return a.setUintWithCheck(func(v uint64) error {
+		f(v)
+		return nil
+	})
+}
+
+func (a *annotationConfiguration) setUintWithCheck(f func(uint64) error) error {
+	if value, ok := a.ocispec.Annotations[a.key]; ok {
+		uintValue, err := strconv.ParseUint(value, 10, 64)
+		if err != nil {
+			return fmt.Errorf(errAnnotationPositiveNumericKey, a.key)
+		}
+		return f(uintValue)
+	}
+	return nil
 }
