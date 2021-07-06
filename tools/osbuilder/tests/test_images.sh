@@ -388,9 +388,7 @@ install_image_create_container()
 
 	showKataRunFailure=1
 	run_mgr reset-config
-	if [ "${RUST_AGENT:-}" = "yes" ]; then
-		run_mgr enable-vsock
-	fi
+	run_mgr enable-vsock
 	run_mgr configure-image "$file"
 	create_container
 	showKataRunFailure=
@@ -408,9 +406,7 @@ install_initrd_create_container()
 
 	showKataRunFailure=1
 	run_mgr reset-config
-	if [ "${RUST_AGENT:-}" = "yes" ]; then
-		run_mgr enable-vsock
-	fi
+	run_mgr enable-vsock
 	run_mgr configure-initrd "$file"
 	create_container
 	showKataRunFailure=
