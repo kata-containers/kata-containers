@@ -68,7 +68,7 @@ var shimLog = logrus.WithFields(logrus.Fields{
 })
 
 // New returns a new shim service that can be used via GRPC
-func New(ctx context.Context, id string, publisher cdshim.Publisher, shutdown func()) (cdshim.Shim, error) {
+func New(ctx context.Context, id string, publisher events.Publisher) (cdshim.Shim, error) {
 	shimLog = shimLog.WithFields(logrus.Fields{
 		"sandbox": id,
 		"pid":     os.Getpid(),
@@ -84,6 +84,8 @@ func New(ctx context.Context, id string, publisher cdshim.Publisher, shutdown fu
 	vci.SetLogger(ctx, shimLog)
 	katautils.SetLogger(ctx, shimLog, shimLog.Logger.Level)
 
+	ctx, cancel := context.WithCancel(ctx)
+
 	s := &service{
 		id:         id,
 		pid:        uint32(os.Getpid()),
@@ -91,7 +93,7 @@ func New(ctx context.Context, id string, publisher cdshim.Publisher, shutdown fu
 		containers: make(map[string]*container),
 		events:     make(chan interface{}, chSize),
 		ec:         make(chan exit, bufferSize),
-		cancel:     shutdown,
+		cancel:     cancel,
 	}
 
 	go s.processExits()
@@ -136,7 +138,7 @@ type service struct {
 	id string
 }
 
-func newCommand(ctx context.Context, id, containerdBinary, containerdAddress string) (*sysexec.Cmd, error) {
+func newCommand(ctx context.Context, containerdBinary, id, containerdAddress string) (*sysexec.Cmd, error) {
 	ns, err := namespaces.NamespaceRequired(ctx)
 	if err != nil {
 		return nil, err
@@ -174,13 +176,13 @@ func newCommand(ctx context.Context, id, containerdBinary, containerdAddress str
 
 // StartShim willl start a kata shimv2 daemon which will implemented the
 // ShimV2 APIs such as create/start/update etc containers.
-func (s *service) StartShim(ctx context.Context, opts cdshim.StartOpts) (_ string, retErr error) {
+func (s *service) StartShim(ctx context.Context, id, containerdBinary, containerdAddress string) (string, error) {
 	bundlePath, err := os.Getwd()
 	if err != nil {
 		return "", err
 	}
 
-	address, err := getAddress(ctx, bundlePath, opts.Address, opts.ID)
+	address, err := getAddress(ctx, bundlePath, id)
 	if err != nil {
 		return "", err
 	}
@@ -191,41 +193,26 @@ func (s *service) StartShim(ctx context.Context, opts cdshim.StartOpts) (_ strin
 		return address, nil
 	}
 
-	cmd, err := newCommand(ctx, opts.ID, opts.ContainerdBinary, opts.Address)
+	cmd, err := newCommand(ctx, containerdBinary, id, containerdAddress)
 	if err != nil {
 		return "", err
 	}
 
-	address, err = cdshim.SocketAddress(ctx, opts.Address, opts.ID)
+	address, err = cdshim.SocketAddress(ctx, id)
 	if err != nil {
 		return "", err
 	}
 
 	socket, err := cdshim.NewSocket(address)
-
 	if err != nil {
-		if !cdshim.SocketEaddrinuse(err) {
-			return "", err
-		}
-		if err := cdshim.RemoveSocket(address); err != nil {
-			return "", errors.Wrap(err, "remove already used socket")
-		}
-		if socket, err = cdshim.NewSocket(address); err != nil {
-			return "", err
-		}
+		return "", err
 	}
-
-	defer func() {
-		if retErr != nil {
-			socket.Close()
-			_ = cdshim.RemoveSocket(address)
-		}
-	}()
-
+	defer socket.Close()
 	f, err := socket.File()
 	if err != nil {
 		return "", err
 	}
+	defer f.Close()
 
 	cmd.ExtraFiles = append(cmd.ExtraFiles, f)
 
@@ -233,7 +220,7 @@ func (s *service) StartShim(ctx context.Context, opts cdshim.StartOpts) (_ strin
 		return "", err
 	}
 	defer func() {
-		if retErr != nil {
+		if err != nil {
 			cmd.Process.Kill()
 		}
 	}()
@@ -303,7 +290,7 @@ func getTopic(e interface{}) string {
 
 func trace(ctx context.Context, name string) (otelTrace.Span, context.Context) {
 	if ctx == nil {
-		logrus.WithFields(logrus.Fields{"type": "bug", "name": name}).Error("called before context set")
+		logrus.WithField("type", "bug").Error("trace called before context set")
 		ctx = context.Background()
 	}
 	tracer := otel.Tracer("kata")

@@ -88,13 +88,13 @@ func (endpoint *PhysicalEndpoint) Attach(ctx context.Context, s *Sandbox) error 
 		return err
 	}
 
-	c, err := cgroups.DeviceToCgroupDeviceRule(vfioPath)
+	c, err := cgroups.DeviceToCgroupDevice(vfioPath)
 	if err != nil {
 		return err
 	}
 
 	d := config.DeviceInfo{
-		ContainerPath: vfioPath,
+		ContainerPath: c.Path,
 		DevType:       string(c.Type),
 		Major:         c.Major,
 		Minor:         c.Minor,
