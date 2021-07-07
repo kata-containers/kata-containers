@@ -21,7 +21,7 @@ readonly versions_yaml="${repo_root_dir}/versions.yaml"
 
 readonly clh_builder="${repo_root_dir}/tools/packaging/static-build/cloud-hypervisor/build-static-clh.sh"
 readonly firecracker_builder="${repo_root_dir}/tools/packaging/static-build/firecracker/build-static-firecracker.sh"
-readonly kernel_builder="${repo_root_dir}/tools/packaging/kernel/build-kernel.sh"
+readonly kernel_builder="${repo_root_dir}/tools/packaging/static-build/kernel/build.sh"
 readonly qemu_builder="${repo_root_dir}/tools/packaging/static-build/qemu/build-static-qemu.sh"
 readonly rootfs_builder="${repo_root_dir}/tools/packaging/guest-image/build_image.sh"
 
@@ -87,12 +87,8 @@ install_initrd() {
 
 #Install kernel asset
 install_kernel() {
-	info "build kernel"
-	export kernel_version=="$(yq r $versions_yaml assets.version)"
-	"${kernel_builder}" setup
-	"${kernel_builder}" build
-	info "install kernel"
-	DESTDIR="${destdir}" PREFIX="${prefix}" "${kernel_builder}" install
+	export kernel_version="$(yq r $versions_yaml assets.kernel.version)"
+	DESTDIR="${destdir}" PREFIX="${prefix}" "${kernel_builder}" "${kernel_version}"
 }
 
 #Install experimental kernel asset
