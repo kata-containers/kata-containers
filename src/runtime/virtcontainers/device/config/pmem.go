@@ -91,7 +91,7 @@ func PmemDeviceInfo(source, destination string) (*DeviceInfo, error) {
 // required to use it as PMEM device and enable DAX.
 // See [1] to know more about the PFN signature.
 //
-// [1] - https://github.com/kata-containers/osbuilder/blob/master/image-builder/nsdax.gpl.c
+// [1] - https://github.com/kata-containers/kata-containers/blob/main/tools/osbuilder/image-builder/nsdax.gpl.c
 func hasPFNSignature(path string) bool {
 	f, err := os.Open(path)
 	if err != nil {
