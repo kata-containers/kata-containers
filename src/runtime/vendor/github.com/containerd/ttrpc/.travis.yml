@@ -1,16 +1,12 @@
-dist: bionic
 language: go
 
 go:
-  - "1.13.x"
-  - "1.15.x"
+  - "1.12.x"
 
 install:
-  # Don't change local go.{mod, sum} by go get tools.
-  #
-  # ref: https://github.com/golang/go/issues/27643
-  - pushd ..; go get -u github.com/vbatts/git-validation; popd
-  - pushd ..; go get -u github.com/kunalkushwaha/ltag; popd
+  - go get -u github.com/vbatts/git-validation
+  - go get -u github.com/kunalkushwaha/ltag
+  - go get -t ./...
 
 before_script:
   - pushd ..; git clone https://github.com/containerd/project; popd
@@ -18,7 +14,4 @@ before_script:
 script:
   - DCO_VERBOSITY=-q ../project/script/validate/dco
   - ../project/script/validate/fileheader ../project/
-  - go test -v -race -covermode=atomic -coverprofile=coverage.txt ./...
-
-after_success:
-  - bash <(curl -s https://codecov.io/bash)
+  - go test -race -v ./...

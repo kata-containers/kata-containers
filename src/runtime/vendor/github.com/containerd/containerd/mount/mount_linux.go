@@ -19,7 +19,6 @@ package mount
 import (
 	"fmt"
 	"os"
-	"os/exec"
 	"path"
 	"strings"
 	"time"
@@ -29,27 +28,14 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-var (
-	pagesize              = 4096
-	allowedHelperBinaries = []string{"mount.fuse", "mount.fuse3"}
-)
+var pagesize = 4096
 
 func init() {
 	pagesize = os.Getpagesize()
 }
 
-// Mount to the provided target path.
-//
-// If m.Type starts with "fuse." or "fuse3.", "mount.fuse" or "mount.fuse3"
-// helper binary is called.
-func (m *Mount) Mount(target string) (err error) {
-	for _, helperBinary := range allowedHelperBinaries {
-		// helperBinary = "mount.fuse", typePrefix = "fuse."
-		typePrefix := strings.TrimPrefix(helperBinary, "mount.") + "."
-		if strings.HasPrefix(m.Type, typePrefix) {
-			return m.mountWithHelper(helperBinary, typePrefix, target)
-		}
-	}
+// Mount to the provided target path
+func (m *Mount) Mount(target string) error {
 	var (
 		chdir   string
 		options = m.Options
@@ -62,7 +48,7 @@ func (m *Mount) Mount(target string) (err error) {
 		chdir, options = compactLowerdirOption(options)
 	}
 
-	flags, data, losetup := parseMountOptions(options)
+	flags, data := parseMountOptions(options)
 	if len(data) > pagesize {
 		return errors.Errorf("mount options is too long")
 	}
@@ -77,20 +63,7 @@ func (m *Mount) Mount(target string) (err error) {
 	if flags&unix.MS_REMOUNT == 0 || data != "" {
 		// Initial call applying all non-propagation flags for mount
 		// or remount with changed data
-		source := m.Source
-		if losetup {
-			loFile, err := setupLoop(m.Source, LoopParams{
-				Readonly:  oflags&unix.MS_RDONLY == unix.MS_RDONLY,
-				Autoclear: true})
-			if err != nil {
-				return err
-			}
-			defer loFile.Close()
-
-			// Mount the loop device instead
-			source = loFile.Name()
-		}
-		if err := mountAt(chdir, source, target, m.Type, uintptr(oflags), data); err != nil {
+		if err := mountAt(chdir, m.Source, target, m.Type, uintptr(oflags), data); err != nil {
 			return err
 		}
 	}
@@ -119,39 +92,7 @@ func Unmount(target string, flags int) error {
 	return nil
 }
 
-// fuseSuperMagic is defined in statfs(2)
-const fuseSuperMagic = 0x65735546
-
-func isFUSE(dir string) bool {
-	var st unix.Statfs_t
-	if err := unix.Statfs(dir, &st); err != nil {
-		return false
-	}
-	return st.Type == fuseSuperMagic
-}
-
-// unmountFUSE attempts to unmount using fusermount/fusermount3 helper binary.
-//
-// For FUSE mounts, using these helper binaries is preferred, see:
-// https://github.com/containerd/containerd/pull/3765#discussion_r342083514
-func unmountFUSE(target string) error {
-	var err error
-	for _, helperBinary := range []string{"fusermount3", "fusermount"} {
-		cmd := exec.Command(helperBinary, "-u", target)
-		err = cmd.Run()
-		if err == nil {
-			return nil
-		}
-	}
-	return err
-}
-
 func unmount(target string, flags int) error {
-	if isFUSE(target) {
-		if err := unmountFUSE(target); err == nil {
-			return nil
-		}
-	}
 	for i := 0; i < 50; i++ {
 		if err := unix.Unmount(target, flags); err != nil {
 			switch err {
@@ -170,18 +111,7 @@ func unmount(target string, flags int) error {
 // UnmountAll repeatedly unmounts the given mount point until there
 // are no mounts remaining (EINVAL is returned by mount), which is
 // useful for undoing a stack of mounts on the same mount point.
-// UnmountAll all is noop when the first argument is an empty string.
-// This is done when the containerd client did not specify any rootfs
-// mounts (e.g. because the rootfs is managed outside containerd)
-// UnmountAll is noop when the mount path does not exist.
 func UnmountAll(mount string, flags int) error {
-	if mount == "" {
-		return nil
-	}
-	if _, err := os.Stat(mount); os.IsNotExist(err) {
-		return nil
-	}
-
 	for {
 		if err := unmount(mount, flags); err != nil {
 			// EINVAL is returned if the target is not a
@@ -199,13 +129,11 @@ func UnmountAll(mount string, flags int) error {
 
 // parseMountOptions takes fstab style mount options and parses them for
 // use with a standard mount() syscall
-func parseMountOptions(options []string) (int, string, bool) {
+func parseMountOptions(options []string) (int, string) {
 	var (
-		flag    int
-		losetup bool
-		data    []string
+		flag int
+		data []string
 	)
-	loopOpt := "loop"
 	flags := map[string]struct {
 		clear bool
 		flag  int
@@ -246,13 +174,11 @@ func parseMountOptions(options []string) (int, string, bool) {
 			} else {
 				flag |= f.flag
 			}
-		} else if o == loopOpt {
-			losetup = true
 		} else {
 			data = append(data, o)
 		}
 	}
-	return flag, strings.Join(data, ","), losetup
+	return flag, strings.Join(data, ",")
 }
 
 // compactLowerdirOption updates overlay lowdir option and returns the common
@@ -379,46 +305,4 @@ func mountAt(chdir string, source, target, fstype string, flags uintptr, data st
 		return errors.Wrap(errors.Errorf("%s is not dir", chdir), "failed to mountat")
 	}
 	return errors.Wrap(sys.FMountat(f.Fd(), source, target, fstype, flags, data), "failed to mountat")
-}
-
-func (m *Mount) mountWithHelper(helperBinary, typePrefix, target string) error {
-	// helperBinary: "mount.fuse3"
-	// target: "/foo/merged"
-	// m.Type: "fuse3.fuse-overlayfs"
-	// command: "mount.fuse3 overlay /foo/merged -o lowerdir=/foo/lower2:/foo/lower1,upperdir=/foo/upper,workdir=/foo/work -t fuse-overlayfs"
-	args := []string{m.Source, target}
-	for _, o := range m.Options {
-		args = append(args, "-o", o)
-	}
-	args = append(args, "-t", strings.TrimPrefix(m.Type, typePrefix))
-
-	infoBeforeMount, err := Lookup(target)
-	if err != nil {
-		return err
-	}
-
-	// cmd.CombinedOutput() may intermittently return ECHILD because of our signal handling in shim.
-	// See #4387 and wait(2).
-	const retriesOnECHILD = 10
-	for i := 0; i < retriesOnECHILD; i++ {
-		cmd := exec.Command(helperBinary, args...)
-		out, err := cmd.CombinedOutput()
-		if err == nil {
-			return nil
-		}
-		if !errors.Is(err, unix.ECHILD) {
-			return errors.Wrapf(err, "mount helper [%s %v] failed: %q", helperBinary, args, string(out))
-		}
-		// We got ECHILD, we are not sure whether the mount was successful.
-		// If the mount ID has changed, we are sure we got some new mount, but still not sure it is fully completed.
-		// So we attempt to unmount the new mount before retrying.
-		infoAfterMount, err := Lookup(target)
-		if err != nil {
-			return err
-		}
-		if infoAfterMount.ID != infoBeforeMount.ID {
-			_ = unmount(target, 0)
-		}
-	}
-	return errors.Errorf("mount helper [%s %v] failed with ECHILD (retired %d times)", helperBinary, args, retriesOnECHILD)
 }

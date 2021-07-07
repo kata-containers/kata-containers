@@ -1,29 +1,34 @@
 package wclayer
 
 import (
-	"context"
-
-	"github.com/Microsoft/go-winio/pkg/guid"
+	"github.com/Microsoft/hcsshim/internal/guid"
 	"github.com/Microsoft/hcsshim/internal/hcserror"
-	"github.com/Microsoft/hcsshim/internal/oc"
-	"go.opencensus.io/trace"
+	"github.com/sirupsen/logrus"
 )
 
 // NameToGuid converts the given string into a GUID using the algorithm in the
 // Host Compute Service, ensuring GUIDs generated with the same string are common
 // across all clients.
-func NameToGuid(ctx context.Context, name string) (_ guid.GUID, err error) {
+func NameToGuid(name string) (id guid.GUID, err error) {
 	title := "hcsshim::NameToGuid"
-	ctx, span := trace.StartSpan(ctx, title) //nolint:ineffassign,staticcheck
-	defer span.End()
-	defer func() { oc.SetSpanStatus(span, err) }()
-	span.AddAttributes(trace.StringAttribute("name", name))
+	fields := logrus.Fields{
+		"name": name,
+	}
+	logrus.WithFields(fields).Debug(title)
+	defer func() {
+		if err != nil {
+			fields[logrus.ErrorKey] = err
+			logrus.WithFields(fields).Error(err)
+		} else {
+			logrus.WithFields(fields).Debug(title + " - succeeded")
+		}
+	}()
 
-	var id guid.GUID
 	err = nameToGuid(name, &id)
 	if err != nil {
-		return guid.GUID{}, hcserror.New(err, title+" - failed", "")
+		err = hcserror.New(err, title+" - failed", "")
+		return
 	}
-	span.AddAttributes(trace.StringAttribute("guid", id.String()))
-	return id, nil
+	fields["guid"] = id.String()
+	return
 }

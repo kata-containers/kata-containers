@@ -86,8 +86,6 @@ const (
 	XFRMA_MAX = iota - 1
 )
 
-const XFRMA_OUTPUT_MARK = XFRMA_SET_MARK
-
 const (
 	SizeofXfrmAddress     = 0x10
 	SizeofXfrmSelector    = 0x38

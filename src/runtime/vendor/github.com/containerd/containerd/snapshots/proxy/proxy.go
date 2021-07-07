@@ -153,10 +153,9 @@ func (p *proxySnapshotter) Remove(ctx context.Context, key string) error {
 	return errdefs.FromGRPC(err)
 }
 
-func (p *proxySnapshotter) Walk(ctx context.Context, fn snapshots.WalkFunc, fs ...string) error {
+func (p *proxySnapshotter) Walk(ctx context.Context, fn func(context.Context, snapshots.Info) error) error {
 	sc, err := p.client.List(ctx, &snapshotsapi.ListSnapshotsRequest{
 		Snapshotter: p.snapshotterName,
-		Filters:     fs,
 	})
 	if err != nil {
 		return errdefs.FromGRPC(err)
@@ -182,13 +181,6 @@ func (p *proxySnapshotter) Walk(ctx context.Context, fn snapshots.WalkFunc, fs .
 
 func (p *proxySnapshotter) Close() error {
 	return nil
-}
-
-func (p *proxySnapshotter) Cleanup(ctx context.Context) error {
-	_, err := p.client.Cleanup(ctx, &snapshotsapi.CleanupRequest{
-		Snapshotter: p.snapshotterName,
-	})
-	return errdefs.FromGRPC(err)
 }
 
 func toKind(kind snapshotsapi.Kind) snapshots.Kind {

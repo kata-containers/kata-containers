@@ -85,10 +85,6 @@ var splitRe = regexp.MustCompile(`[:@]`)
 
 // Parse parses the string into a structured ref.
 func Parse(s string) (Spec, error) {
-	if strings.Contains(s, "://") {
-		return Spec{}, ErrInvalid
-	}
-
 	u, err := url.Parse("dummy://" + s)
 	if err != nil {
 		return Spec{}, err
@@ -128,7 +124,7 @@ func (r Spec) Hostname() string {
 	i := strings.Index(r.Locator, "/")
 
 	if i < 0 {
-		return r.Locator
+		i = len(r.Locator) + 1
 	}
 	return r.Locator[:i]
 }

@@ -27,7 +27,6 @@ import (
 	"github.com/pkg/errors"
 )
 
-//nolint:golint
 const O_PATH = 010000000
 
 type handle struct {
@@ -57,10 +56,9 @@ func getHandle(fn string) (*handle, error) {
 	h := &handle{
 		f:    f,
 		name: fn,
-		//nolint:unconvert
-		dev: uint64(stat.Dev),
-		ino: stat.Ino,
-		fd:  fd,
+		dev:  uint64(stat.Dev),
+		ino:  stat.Ino,
+		fd:   fd,
 	}
 
 	// check /proc just in case
@@ -85,7 +83,6 @@ func (h *handle) Path() (string, error) {
 	if err := syscall.Stat(h.procPath(), &stat); err != nil {
 		return "", errors.Wrapf(err, "path %v could not be statted", h.procPath())
 	}
-	//nolint:unconvert
 	if uint64(stat.Dev) != h.dev || stat.Ino != h.ino {
 		return "", errors.Errorf("failed to verify handle %v/%v %v/%v", stat.Dev, h.dev, stat.Ino, h.ino)
 	}
