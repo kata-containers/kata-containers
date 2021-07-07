@@ -46,11 +46,9 @@ func deviceLogger() *logrus.Entry {
 	return api.DeviceLogger()
 }
 
-/*
-Identify PCIe device by /sys/bus/pci/slots/xx/max_bus_speed, sample content "8.0 GT/s PCIe"
-The /sys/bus/pci/slots/xx/address contains bdf, sample content "0000:04:00"
-bdf format: bus:slot.function
-*/
+// Identify PCIe device by /sys/bus/pci/slots/xx/max_bus_speed, sample content "8.0 GT/s PCIe"
+// The /sys/bus/pci/slots/xx/address contains bdf, sample content "0000:04:00"
+// bdf format: bus:slot.function
 func isPCIeDevice(bdf string) bool {
 	if len(strings.Split(bdf, ":")) == 2 {
 		bdf = PCIDomain + ":" + bdf
@@ -59,11 +57,11 @@ func isPCIeDevice(bdf string) bool {
 	configPath := filepath.Join(config.SysBusPciDevicesPath, bdf, "config")
 	fi, err := os.Stat(configPath)
 	if err != nil {
-		deviceLogger().WithField("dev-bdf", bdf).WithField("error", err).Warning("Couldn't stat() configuration space file")
+		deviceLogger().WithField("dev-bdf", bdf).WithError(err).Warning("Couldn't stat() configuration space file")
 		return false //Who knows?
 	}
 
-	// Plain PCI devices hav 256 bytes of configuration space,
+	// Plain PCI devices have 256 bytes of configuration space,
 	// PCI-Express devices have 4096 bytes
 	return fi.Size() > PCIConfigSpaceSize
 }

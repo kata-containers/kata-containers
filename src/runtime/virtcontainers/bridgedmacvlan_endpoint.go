@@ -63,7 +63,7 @@ func (endpoint *BridgedMacvlanEndpoint) HardwareAddr() string {
 	return endpoint.NetPair.TAPIface.HardAddr
 }
 
-// Type identifies the endpoint as a virtual endpoint.
+// Type identifies the endpoint as a bridged macvlan endpoint.
 func (endpoint *BridgedMacvlanEndpoint) Type() EndpointType {
 	return endpoint.EndpointType
 }
@@ -96,7 +96,7 @@ func (endpoint *BridgedMacvlanEndpoint) Attach(ctx context.Context, s *Sandbox) 
 
 	h := s.hypervisor
 	if err := xConnectVMNetwork(ctx, endpoint, h); err != nil {
-		networkLogger().WithError(err).Error("Error bridging virtual ep")
+		networkLogger().WithError(err).Error("Error bridging bridged macvlan ep")
 		return err
 	}
 
@@ -120,12 +120,12 @@ func (endpoint *BridgedMacvlanEndpoint) Detach(ctx context.Context, netNsCreated
 	})
 }
 
-// HotAttach for physical endpoint not supported yet
+// HotAttach for bridged macvlan endpoint not supported yet
 func (endpoint *BridgedMacvlanEndpoint) HotAttach(ctx context.Context, h hypervisor) error {
 	return fmt.Errorf("BridgedMacvlanEndpoint does not support Hot attach")
 }
 
-// HotDetach for physical endpoint not supported yet
+// HotDetach for bridged macvlan endpoint not supported yet
 func (endpoint *BridgedMacvlanEndpoint) HotDetach(ctx context.Context, h hypervisor, netNsCreated bool, netNsPath string) error {
 	return fmt.Errorf("BridgedMacvlanEndpoint does not support Hot detach")
 }

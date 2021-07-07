@@ -57,7 +57,7 @@ type deviceManager struct {
 }
 
 func deviceLogger() *logrus.Entry {
-	return api.DeviceLogger().WithField("subsystem", "device")
+	return api.DeviceLogger().WithField("subsystem", "deviceManager")
 }
 
 // NewDeviceManager creates a deviceManager object behaved as api.DeviceManager
@@ -252,7 +252,7 @@ func (dm *deviceManager) IsDeviceAttached(id string) bool {
 	return d.GetAttachCount() > 0
 }
 
-// NewDevice creates a device based on specified DeviceInfo
+// LoadDevices load devices from persist state
 func (dm *deviceManager) LoadDevices(devStates []persistapi.DeviceState) {
 	dm.Lock()
 	defer dm.Unlock()
