@@ -22,7 +22,7 @@ import (
 	"github.com/containerd/containerd/containers"
 	"github.com/containerd/containerd/errdefs"
 	"github.com/containerd/containerd/oci"
-	"github.com/containerd/containerd/snapshots"
+	"github.com/containerd/containerd/platforms"
 	"github.com/containerd/typeurl"
 	"github.com/gogo/protobuf/types"
 	"github.com/opencontainers/image-spec/identity"
@@ -37,15 +37,6 @@ type NewContainerOpts func(ctx context.Context, client *Client, c *containers.Co
 
 // UpdateContainerOpts allows the caller to set additional options when updating a container
 type UpdateContainerOpts func(ctx context.Context, client *Client, c *containers.Container) error
-
-// InfoOpts controls how container metadata is fetched and returned
-type InfoOpts func(*InfoConfig)
-
-// InfoConfig specifies how container metadata is fetched
-type InfoConfig struct {
-	// Refresh will to a fetch of the latest container metadata
-	Refresh bool
-}
 
 // WithRuntime allows a user to specify the runtime name and additional options that should
 // be used to create tasks for the container
@@ -77,35 +68,10 @@ func WithImage(i Image) NewContainerOpts {
 	}
 }
 
-// WithImageName allows setting the image name as the base for the container
-func WithImageName(n string) NewContainerOpts {
-	return func(ctx context.Context, _ *Client, c *containers.Container) error {
-		c.Image = n
-		return nil
-	}
-}
-
-// WithContainerLabels sets the provided labels to the container.
-// The existing labels are cleared.
-// Use WithAdditionalContainerLabels to preserve the existing labels.
+// WithContainerLabels adds the provided labels to the container
 func WithContainerLabels(labels map[string]string) NewContainerOpts {
 	return func(_ context.Context, _ *Client, c *containers.Container) error {
 		c.Labels = labels
-		return nil
-	}
-}
-
-// WithAdditionalContainerLabels adds the provided labels to the container
-// The existing labels are preserved as long as they do not conflict with the added labels.
-func WithAdditionalContainerLabels(labels map[string]string) NewContainerOpts {
-	return func(_ context.Context, _ *Client, c *containers.Container) error {
-		if c.Labels == nil {
-			c.Labels = labels
-			return nil
-		}
-		for k, v := range labels {
-			c.Labels[k] = v
-		}
 		return nil
 	}
 }
@@ -140,17 +106,9 @@ func WithSnapshotter(name string) NewContainerOpts {
 // WithSnapshot uses an existing root filesystem for the container
 func WithSnapshot(id string) NewContainerOpts {
 	return func(ctx context.Context, client *Client, c *containers.Container) error {
+		setSnapshotterIfEmpty(c)
 		// check that the snapshot exists, if not, fail on creation
-		var err error
-		c.Snapshotter, err = client.resolveSnapshotterName(ctx, c.Snapshotter)
-		if err != nil {
-			return err
-		}
-		s, err := client.getSnapshotter(ctx, c.Snapshotter)
-		if err != nil {
-			return err
-		}
-		if _, err := s.Mounts(ctx, id); err != nil {
+		if _, err := client.SnapshotService(c.Snapshotter).Mounts(ctx, id); err != nil {
 			return err
 		}
 		c.SnapshotKey = id
@@ -160,23 +118,15 @@ func WithSnapshot(id string) NewContainerOpts {
 
 // WithNewSnapshot allocates a new snapshot to be used by the container as the
 // root filesystem in read-write mode
-func WithNewSnapshot(id string, i Image, opts ...snapshots.Opt) NewContainerOpts {
+func WithNewSnapshot(id string, i Image) NewContainerOpts {
 	return func(ctx context.Context, client *Client, c *containers.Container) error {
-		diffIDs, err := i.RootFS(ctx)
+		diffIDs, err := i.(*image).i.RootFS(ctx, client.ContentStore(), platforms.Default())
 		if err != nil {
 			return err
 		}
-
+		setSnapshotterIfEmpty(c)
 		parent := identity.ChainID(diffIDs).String()
-		c.Snapshotter, err = client.resolveSnapshotterName(ctx, c.Snapshotter)
-		if err != nil {
-			return err
-		}
-		s, err := client.getSnapshotter(ctx, c.Snapshotter)
-		if err != nil {
-			return err
-		}
-		if _, err := s.Prepare(ctx, id, parent, opts...); err != nil {
+		if _, err := client.SnapshotService(c.Snapshotter).Prepare(ctx, id, parent); err != nil {
 			return err
 		}
 		c.SnapshotKey = id
@@ -191,41 +141,33 @@ func WithSnapshotCleanup(ctx context.Context, client *Client, c containers.Conta
 		if c.Snapshotter == "" {
 			return errors.Wrapf(errdefs.ErrInvalidArgument, "container.Snapshotter must be set to cleanup rootfs snapshot")
 		}
-		s, err := client.getSnapshotter(ctx, c.Snapshotter)
-		if err != nil {
-			return err
-		}
-		if err := s.Remove(ctx, c.SnapshotKey); err != nil && !errdefs.IsNotFound(err) {
-			return err
-		}
+		return client.SnapshotService(c.Snapshotter).Remove(ctx, c.SnapshotKey)
 	}
 	return nil
 }
 
 // WithNewSnapshotView allocates a new snapshot to be used by the container as the
 // root filesystem in read-only mode
-func WithNewSnapshotView(id string, i Image, opts ...snapshots.Opt) NewContainerOpts {
+func WithNewSnapshotView(id string, i Image) NewContainerOpts {
 	return func(ctx context.Context, client *Client, c *containers.Container) error {
-		diffIDs, err := i.(*image).i.RootFS(ctx, client.ContentStore(), client.platform)
+		diffIDs, err := i.(*image).i.RootFS(ctx, client.ContentStore(), platforms.Default())
 		if err != nil {
 			return err
 		}
-
+		setSnapshotterIfEmpty(c)
 		parent := identity.ChainID(diffIDs).String()
-		c.Snapshotter, err = client.resolveSnapshotterName(ctx, c.Snapshotter)
-		if err != nil {
-			return err
-		}
-		s, err := client.getSnapshotter(ctx, c.Snapshotter)
-		if err != nil {
-			return err
-		}
-		if _, err := s.View(ctx, id, parent, opts...); err != nil {
+		if _, err := client.SnapshotService(c.Snapshotter).View(ctx, id, parent); err != nil {
 			return err
 		}
 		c.SnapshotKey = id
 		c.Image = i.Name()
 		return nil
+	}
+}
+
+func setSnapshotterIfEmpty(c *containers.Container) {
+	if c.Snapshotter == "" {
+		c.Snapshotter = DefaultSnapshotter
 	}
 }
 
@@ -243,7 +185,7 @@ func WithContainerExtension(name string, extension interface{}) NewContainerOpts
 
 		any, err := typeurl.MarshalAny(extension)
 		if err != nil {
-			if errors.Is(err, typeurl.ErrNotFound) {
+			if errors.Cause(err) == typeurl.ErrNotFound {
 				return errors.Wrapf(err, "extension %q is not registered with the typeurl package, see `typeurl.Register`", name)
 			}
 			return errors.Wrap(err, "error marshalling extension")
@@ -280,9 +222,4 @@ func WithSpec(s *oci.Spec, opts ...oci.SpecOpts) NewContainerOpts {
 		c.Spec, err = typeurl.MarshalAny(s)
 		return err
 	}
-}
-
-// WithoutRefreshedMetadata will use the current metadata attached to the container object
-func WithoutRefreshedMetadata(i *InfoConfig) {
-	i.Refresh = false
 }

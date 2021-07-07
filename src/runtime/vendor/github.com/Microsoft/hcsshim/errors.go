@@ -83,6 +83,7 @@ type NetworkNotFoundError = hns.NetworkNotFoundError
 type ProcessError struct {
 	Process   *process
 	Operation string
+	ExtraInfo string
 	Err       error
 	Events    []hcs.ErrorEvent
 }
@@ -91,6 +92,7 @@ type ProcessError struct {
 type ContainerError struct {
 	Container *container
 	Operation string
+	ExtraInfo string
 	Err       error
 	Events    []hcs.ErrorEvent
 }
@@ -123,7 +125,20 @@ func (e *ContainerError) Error() string {
 		s += "\n" + ev.String()
 	}
 
+	if e.ExtraInfo != "" {
+		s += " extra info: " + e.ExtraInfo
+	}
+
 	return s
+}
+
+func makeContainerError(container *container, operation string, extraInfo string, err error) error {
+	// Don't double wrap errors
+	if _, ok := err.(*ContainerError); ok {
+		return err
+	}
+	containerError := &ContainerError{Container: container, Operation: operation, ExtraInfo: extraInfo, Err: err}
+	return containerError
 }
 
 func (e *ProcessError) Error() string {
@@ -154,6 +169,15 @@ func (e *ProcessError) Error() string {
 	}
 
 	return s
+}
+
+func makeProcessError(process *process, operation string, extraInfo string, err error) error {
+	// Don't double wrap errors
+	if _, ok := err.(*ProcessError); ok {
+		return err
+	}
+	processError := &ProcessError{Process: process, Operation: operation, ExtraInfo: extraInfo, Err: err}
+	return processError
 }
 
 // IsNotExist checks if an error is caused by the Container or Process not existing.
@@ -206,18 +230,6 @@ func IsNotSupported(err error) bool {
 	return hcs.IsNotSupported(getInnerError(err))
 }
 
-// IsOperationInvalidState returns true when err is caused by
-// `ErrVmcomputeOperationInvalidState`.
-func IsOperationInvalidState(err error) bool {
-	return hcs.IsOperationInvalidState(getInnerError(err))
-}
-
-// IsAccessIsDenied returns true when err is caused by
-// `ErrVmcomputeOperationAccessIsDenied`.
-func IsAccessIsDenied(err error) bool {
-	return hcs.IsAccessIsDenied(getInnerError(err))
-}
-
 func getInnerError(err error) error {
 	switch pe := err.(type) {
 	case nil:
@@ -232,7 +244,7 @@ func getInnerError(err error) error {
 
 func convertSystemError(err error, c *container) error {
 	if serr, ok := err.(*hcs.SystemError); ok {
-		return &ContainerError{Container: c, Operation: serr.Op, Err: serr.Err, Events: serr.Events}
+		return &ContainerError{Container: c, Operation: serr.Op, ExtraInfo: serr.Extra, Err: serr.Err, Events: serr.Events}
 	}
 	return err
 }

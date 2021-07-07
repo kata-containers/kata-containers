@@ -16,7 +16,7 @@ func LinkSetMTU(link Link, mtu int) error {
 	return ErrNotImplemented
 }
 
-func LinkSetMaster(link Link, master Link) error {
+func LinkSetMaster(link Link, master *Bridge) error {
 	return ErrNotImplemented
 }
 
@@ -48,15 +48,7 @@ func LinkSetVfVlan(link Link, vf, vlan int) error {
 	return ErrNotImplemented
 }
 
-func LinkSetVfVlanQos(link Link, vf, vlan, qos int) error {
-	return ErrNotImplemented
-}
-
 func LinkSetVfTxRate(link Link, vf, rate int) error {
-	return ErrNotImplemented
-}
-
-func LinkSetVfRate(link Link, vf, minRate, maxRate int) error {
 	return ErrNotImplemented
 }
 
@@ -69,10 +61,6 @@ func LinkSetMasterByIndex(link Link, masterIndex int) error {
 }
 
 func LinkSetXdpFd(link Link, fd int) error {
-	return ErrNotImplemented
-}
-
-func LinkSetXdpFdWithFlags(link Link, fd, flags int) error {
 	return ErrNotImplemented
 }
 
@@ -161,10 +149,6 @@ func LinkList() ([]Link, error) {
 }
 
 func AddrAdd(link Link, addr *Addr) error {
-	return ErrNotImplemented
-}
-
-func AddrReplace(link Link, addr *Addr) error {
 	return ErrNotImplemented
 }
 

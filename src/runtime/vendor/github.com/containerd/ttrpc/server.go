@@ -209,20 +209,6 @@ func (s *Server) addConnection(c *serverConn) {
 	s.connections[c] = struct{}{}
 }
 
-func (s *Server) delConnection(c *serverConn) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	delete(s.connections, c)
-}
-
-func (s *Server) countConnection() int {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	return len(s.connections)
-}
-
 func (s *Server) closeIdleConns() bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -327,7 +313,6 @@ func (c *serverConn) run(sctx context.Context) {
 	defer c.conn.Close()
 	defer cancel()
 	defer close(done)
-	defer c.server.delConnection(c)
 
 	go func(recvErr chan error) {
 		defer close(recvErr)

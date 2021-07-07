@@ -54,20 +54,28 @@ func v1MountPoint() (string, error) {
 	defer f.Close()
 	scanner := bufio.NewScanner(f)
 	for scanner.Scan() {
-		var (
-			text      = scanner.Text()
-			fields    = strings.Split(text, " ")
-			numFields = len(fields)
-		)
-		if numFields < 10 {
-			return "", fmt.Errorf("mountinfo: bad entry %q", text)
+		if err := scanner.Err(); err != nil {
+			return "", err
 		}
-		if fields[numFields-3] == "cgroup" {
+		var (
+			text   = scanner.Text()
+			fields = strings.Split(text, " ")
+			// safe as mountinfo encodes mountpoints with spaces as \040.
+			index               = strings.Index(text, " - ")
+			postSeparatorFields = strings.Fields(text[index+3:])
+			numPostFields       = len(postSeparatorFields)
+		)
+		// this is an error as we can't detect if the mount is for "cgroup"
+		if numPostFields == 0 {
+			return "", fmt.Errorf("Found no fields post '-' in %q", text)
+		}
+		if postSeparatorFields[0] == "cgroup" {
+			// check that the mount is properly formated.
+			if numPostFields < 3 {
+				return "", fmt.Errorf("Error found less than 3 fields post '-' in %q", text)
+			}
 			return filepath.Dir(fields[4]), nil
 		}
-	}
-	if err := scanner.Err(); err != nil {
-		return "", err
 	}
 	return "", ErrMountPointNotExist
 }

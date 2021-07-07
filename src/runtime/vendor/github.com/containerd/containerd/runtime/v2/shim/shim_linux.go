@@ -17,7 +17,7 @@
 package shim
 
 import (
-	"github.com/containerd/containerd/sys/reaper"
+	"github.com/containerd/containerd/sys"
 	"github.com/containerd/ttrpc"
 )
 
@@ -26,5 +26,5 @@ func newServer() (*ttrpc.Server, error) {
 }
 
 func subreaper() error {
-	return reaper.SetSubreaper(1)
+	return sys.SetSubreaper(1)
 }

@@ -4,21 +4,23 @@ import (
 	"bytes"
 	"encoding"
 	"encoding/binary"
-	"errors"
-	"fmt"
 	"reflect"
 	"runtime"
 	"unsafe"
 
 	"github.com/cilium/ebpf/internal"
+
+	"golang.org/x/xerrors"
 )
 
-// marshalPtr converts an arbitrary value into a pointer suitable
-// to be passed to the kernel.
-//
-// As an optimization, it returns the original value if it is an
-// unsafe.Pointer.
 func marshalPtr(data interface{}, length int) (internal.Pointer, error) {
+	if data == nil {
+		if length == 0 {
+			return internal.NewPointer(nil), nil
+		}
+		return internal.Pointer{}, xerrors.New("can't use nil as key of map")
+	}
+
 	if ptr, ok := data.(unsafe.Pointer); ok {
 		return internal.NewPointer(ptr), nil
 	}
@@ -31,13 +33,6 @@ func marshalPtr(data interface{}, length int) (internal.Pointer, error) {
 	return internal.NewSlicePointer(buf), nil
 }
 
-// marshalBytes converts an arbitrary value into a byte buffer.
-//
-// Prefer using Map.marshalKey and Map.marshalValue if possible, since
-// those have special cases that allow more types to be encoded.
-//
-// Returns an error if the given value isn't representable in exactly
-// length bytes.
 func marshalBytes(data interface{}, length int) (buf []byte, err error) {
 	switch value := data.(type) {
 	case encoding.BinaryMarshaler:
@@ -47,14 +42,12 @@ func marshalBytes(data interface{}, length int) (buf []byte, err error) {
 	case []byte:
 		buf = value
 	case unsafe.Pointer:
-		err = errors.New("can't marshal from unsafe.Pointer")
-	case Map, *Map, Program, *Program:
-		err = fmt.Errorf("can't marshal %T", value)
+		err = xerrors.New("can't marshal from unsafe.Pointer")
 	default:
 		var wr bytes.Buffer
 		err = binary.Write(&wr, internal.NativeEndian, value)
 		if err != nil {
-			err = fmt.Errorf("encoding %T: %v", value, err)
+			err = xerrors.Errorf("encoding %T: %v", value, err)
 		}
 		buf = wr.Bytes()
 	}
@@ -63,7 +56,7 @@ func marshalBytes(data interface{}, length int) (buf []byte, err error) {
 	}
 
 	if len(buf) != length {
-		return nil, fmt.Errorf("%T doesn't marshal to %d bytes", data, length)
+		return nil, xerrors.Errorf("%T doesn't marshal to %d bytes", data, length)
 	}
 	return buf, nil
 }
@@ -77,10 +70,6 @@ func makeBuffer(dst interface{}, length int) (internal.Pointer, []byte) {
 	return internal.NewSlicePointer(buf), buf
 }
 
-// unmarshalBytes converts a byte buffer into an arbitrary value.
-//
-// Prefer using Map.unmarshalKey and Map.unmarshalValue if possible, since
-// those have special cases that allow more types to be encoded.
 func unmarshalBytes(data interface{}, buf []byte) error {
 	switch value := data.(type) {
 	case unsafe.Pointer:
@@ -94,8 +83,6 @@ func unmarshalBytes(data interface{}, buf []byte) error {
 		copy(dst, buf)
 		runtime.KeepAlive(value)
 		return nil
-	case Map, *Map, Program, *Program:
-		return fmt.Errorf("can't unmarshal into %T", value)
 	case encoding.BinaryUnmarshaler:
 		return value.UnmarshalBinary(buf)
 	case *string:
@@ -105,13 +92,13 @@ func unmarshalBytes(data interface{}, buf []byte) error {
 		*value = buf
 		return nil
 	case string:
-		return errors.New("require pointer to string")
+		return xerrors.New("require pointer to string")
 	case []byte:
-		return errors.New("require pointer to []byte")
+		return xerrors.New("require pointer to []byte")
 	default:
 		rd := bytes.NewReader(buf)
 		if err := binary.Read(rd, internal.NativeEndian, value); err != nil {
-			return fmt.Errorf("decoding %T: %v", value, err)
+			return xerrors.Errorf("decoding %T: %v", value, err)
 		}
 		return nil
 	}
@@ -126,7 +113,7 @@ func unmarshalBytes(data interface{}, buf []byte) error {
 func marshalPerCPUValue(slice interface{}, elemLength int) (internal.Pointer, error) {
 	sliceType := reflect.TypeOf(slice)
 	if sliceType.Kind() != reflect.Slice {
-		return internal.Pointer{}, errors.New("per-CPU value requires slice")
+		return internal.Pointer{}, xerrors.New("per-CPU value requires slice")
 	}
 
 	possibleCPUs, err := internal.PossibleCPUs()
@@ -137,7 +124,7 @@ func marshalPerCPUValue(slice interface{}, elemLength int) (internal.Pointer, er
 	sliceValue := reflect.ValueOf(slice)
 	sliceLen := sliceValue.Len()
 	if sliceLen > possibleCPUs {
-		return internal.Pointer{}, fmt.Errorf("per-CPU value exceeds number of CPUs")
+		return internal.Pointer{}, xerrors.Errorf("per-CPU value exceeds number of CPUs")
 	}
 
 	alignedElemLength := align(elemLength, 8)
@@ -164,7 +151,7 @@ func marshalPerCPUValue(slice interface{}, elemLength int) (internal.Pointer, er
 func unmarshalPerCPUValue(slicePtr interface{}, elemLength int, buf []byte) error {
 	slicePtrType := reflect.TypeOf(slicePtr)
 	if slicePtrType.Kind() != reflect.Ptr || slicePtrType.Elem().Kind() != reflect.Slice {
-		return fmt.Errorf("per-cpu value requires pointer to slice")
+		return xerrors.Errorf("per-cpu value requires pointer to slice")
 	}
 
 	possibleCPUs, err := internal.PossibleCPUs()
@@ -183,7 +170,7 @@ func unmarshalPerCPUValue(slicePtr interface{}, elemLength int, buf []byte) erro
 
 	step := len(buf) / possibleCPUs
 	if step < elemLength {
-		return fmt.Errorf("per-cpu element length is larger than available data")
+		return xerrors.Errorf("per-cpu element length is larger than available data")
 	}
 	for i := 0; i < possibleCPUs; i++ {
 		var elem interface{}
@@ -201,7 +188,7 @@ func unmarshalPerCPUValue(slicePtr interface{}, elemLength int, buf []byte) erro
 
 		err := unmarshalBytes(elem, elemBytes)
 		if err != nil {
-			return fmt.Errorf("cpu %d: %w", i, err)
+			return xerrors.Errorf("cpu %d: %w", i, err)
 		}
 
 		buf = buf[step:]

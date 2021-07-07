@@ -21,13 +21,13 @@ import (
 	"context"
 	"os"
 	"path/filepath"
-	"runtime"
-	"strings"
 
+	introspectionapi "github.com/containerd/containerd/api/services/introspection/v1"
 	"github.com/containerd/containerd/archive"
 	"github.com/containerd/containerd/archive/compression"
 	"github.com/containerd/containerd/content"
 	"github.com/containerd/containerd/images"
+	"github.com/containerd/containerd/platforms"
 	"github.com/pkg/errors"
 )
 
@@ -43,20 +43,11 @@ func (c *Client) Install(ctx context.Context, image Image, opts ...InstallOpts) 
 	}
 	var (
 		cs       = image.ContentStore()
-		platform = c.platform
+		platform = platforms.Default()
 	)
 	manifest, err := images.Manifest(ctx, cs, image.Target(), platform)
 	if err != nil {
 		return err
-	}
-
-	var binDir, libDir string
-	if runtime.GOOS == "windows" {
-		binDir = "Files\\bin"
-		libDir = "Files\\lib"
-	} else {
-		binDir = "bin"
-		libDir = "lib"
 	}
 	for _, layer := range manifest.Layers {
 		ra, err := cs.ReaderAt(ctx, layer)
@@ -68,16 +59,12 @@ func (c *Client) Install(ctx context.Context, image Image, opts ...InstallOpts) 
 		if err != nil {
 			return err
 		}
+		defer r.Close()
 		if _, err := archive.Apply(ctx, path, r, archive.WithFilter(func(hdr *tar.Header) (bool, error) {
 			d := filepath.Dir(hdr.Name)
-			result := d == binDir
-
+			result := d == "bin"
 			if config.Libs {
-				result = result || d == libDir
-			}
-
-			if runtime.GOOS == "windows" {
-				hdr.Name = strings.Replace(hdr.Name, "Files", "", 1)
+				result = result || d == "lib"
 			}
 			if result && !config.Replace {
 				if _, err := os.Lstat(filepath.Join(path, hdr.Name)); err == nil {
@@ -86,10 +73,8 @@ func (c *Client) Install(ctx context.Context, image Image, opts ...InstallOpts) 
 			}
 			return result, nil
 		})); err != nil {
-			r.Close()
 			return err
 		}
-		r.Close()
 	}
 	return nil
 }
@@ -98,8 +83,11 @@ func (c *Client) getInstallPath(ctx context.Context, config InstallConfig) (stri
 	if config.Path != "" {
 		return config.Path, nil
 	}
-	filters := []string{"id==opt"}
-	resp, err := c.IntrospectionService().Plugins(ctx, filters)
+	resp, err := c.IntrospectionService().Plugins(ctx, &introspectionapi.PluginsRequest{
+		Filters: []string{
+			"id==opt",
+		},
+	})
 	if err != nil {
 		return "", err
 	}

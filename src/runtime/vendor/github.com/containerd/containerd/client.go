@@ -24,7 +24,6 @@ import (
 	"net/http"
 	"runtime"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -39,7 +38,6 @@ import (
 	snapshotsapi "github.com/containerd/containerd/api/services/snapshots/v1"
 	"github.com/containerd/containerd/api/services/tasks/v1"
 	versionservice "github.com/containerd/containerd/api/services/version/v1"
-	apitypes "github.com/containerd/containerd/api/types"
 	"github.com/containerd/containerd/containers"
 	"github.com/containerd/containerd/content"
 	contentproxy "github.com/containerd/containerd/content/proxy"
@@ -55,7 +53,7 @@ import (
 	"github.com/containerd/containerd/plugin"
 	"github.com/containerd/containerd/remotes"
 	"github.com/containerd/containerd/remotes/docker"
-	"github.com/containerd/containerd/services/introspection"
+	"github.com/containerd/containerd/remotes/docker/schema1"
 	"github.com/containerd/containerd/snapshots"
 	snproxy "github.com/containerd/containerd/snapshots/proxy"
 	"github.com/containerd/typeurl"
@@ -63,9 +61,7 @@ import (
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/pkg/errors"
-	"golang.org/x/sync/semaphore"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/backoff"
 	"google.golang.org/grpc/health/grpc_health_v1"
 )
 
@@ -91,38 +87,23 @@ func New(address string, opts ...ClientOpt) (*Client, error) {
 	if copts.timeout == 0 {
 		copts.timeout = 10 * time.Second
 	}
-
-	c := &Client{
-		defaultns: copts.defaultns,
-	}
-
+	rt := fmt.Sprintf("%s.%s", plugin.RuntimePlugin, runtime.GOOS)
 	if copts.defaultRuntime != "" {
-		c.runtime = copts.defaultRuntime
-	} else {
-		c.runtime = defaults.DefaultRuntime
+		rt = copts.defaultRuntime
 	}
-
-	if copts.defaultPlatform != nil {
-		c.platform = copts.defaultPlatform
-	} else {
-		c.platform = platforms.Default()
+	c := &Client{
+		runtime: rt,
 	}
-
 	if copts.services != nil {
 		c.services = *copts.services
 	}
 	if address != "" {
-		backoffConfig := backoff.DefaultConfig
-		backoffConfig.MaxDelay = 3 * time.Second
-		connParams := grpc.ConnectParams{
-			Backoff: backoffConfig,
-		}
 		gopts := []grpc.DialOption{
 			grpc.WithBlock(),
 			grpc.WithInsecure(),
 			grpc.FailOnNonTempDialError(true),
-			grpc.WithConnectParams(connParams),
-			grpc.WithContextDialer(dialer.ContextDialer),
+			grpc.WithBackoffMaxDelay(3 * time.Second),
+			grpc.WithDialer(dialer.Dialer),
 
 			// TODO(stevvooe): We may need to allow configuration of this on the client.
 			grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(defaults.DefaultMaxRecvMsgSize)),
@@ -154,18 +135,8 @@ func New(address string, opts ...ClientOpt) (*Client, error) {
 		c.conn, c.connector = conn, connector
 	}
 	if copts.services == nil && c.conn == nil {
-		return nil, errors.Wrap(errdefs.ErrUnavailable, "no grpc connection or services is available")
+		return nil, errors.New("no grpc connection or services is available")
 	}
-
-	// check namespace labels for default runtime
-	if copts.defaultRuntime == "" && c.defaultns != "" {
-		if label, err := c.GetLabel(context.Background(), defaults.DefaultRuntimeNSLabel); err != nil {
-			return nil, err
-		} else if label != "" {
-			c.runtime = label
-		}
-	}
-
 	return c, nil
 }
 
@@ -179,20 +150,9 @@ func NewWithConn(conn *grpc.ClientConn, opts ...ClientOpt) (*Client, error) {
 		}
 	}
 	c := &Client{
-		defaultns: copts.defaultns,
-		conn:      conn,
-		runtime:   fmt.Sprintf("%s.%s", plugin.RuntimePlugin, runtime.GOOS),
+		conn:    conn,
+		runtime: fmt.Sprintf("%s.%s", plugin.RuntimePlugin, runtime.GOOS),
 	}
-
-	// check namespace labels for default runtime
-	if copts.defaultRuntime == "" && c.defaultns != "" {
-		if label, err := c.GetLabel(context.Background(), defaults.DefaultRuntimeNSLabel); err != nil {
-			return nil, err
-		} else if label != "" {
-			c.runtime = label
-		}
-	}
-
 	if copts.services != nil {
 		c.services = *copts.services
 	}
@@ -206,15 +166,13 @@ type Client struct {
 	connMu    sync.Mutex
 	conn      *grpc.ClientConn
 	runtime   string
-	defaultns string
-	platform  platforms.MatchComparer
 	connector func() (*grpc.ClientConn, error)
 }
 
 // Reconnect re-establishes the GRPC connection to the containerd daemon
 func (c *Client) Reconnect() error {
 	if c.connector == nil {
-		return errors.Wrap(errdefs.ErrUnavailable, "unable to reconnect to containerd, no connector available")
+		return errors.New("unable to reconnect to containerd, no connector available")
 	}
 	c.connMu.Lock()
 	defer c.connMu.Unlock()
@@ -227,11 +185,6 @@ func (c *Client) Reconnect() error {
 	return nil
 }
 
-// Runtime returns the name of the runtime being used
-func (c *Client) Runtime() string {
-	return c.runtime
-}
-
 // IsServing returns true if the client can successfully connect to the
 // containerd daemon and the healthcheck service returns the SERVING
 // response.
@@ -242,10 +195,10 @@ func (c *Client) IsServing(ctx context.Context) (bool, error) {
 	c.connMu.Lock()
 	if c.conn == nil {
 		c.connMu.Unlock()
-		return false, errors.Wrap(errdefs.ErrUnavailable, "no grpc connection available")
+		return false, errors.New("no grpc connection available")
 	}
 	c.connMu.Unlock()
-	r, err := c.HealthService().Check(ctx, &grpc_health_v1.HealthCheckRequest{}, grpc.WaitForReady(true))
+	r, err := c.HealthService().Check(ctx, &grpc_health_v1.HealthCheckRequest{}, grpc.FailFast(false))
 	if err != nil {
 		return false, err
 	}
@@ -314,19 +267,12 @@ type RemoteContext struct {
 	PlatformMatcher platforms.MatchComparer
 
 	// Unpack is done after an image is pulled to extract into a snapshotter.
-	// It is done simultaneously for schema 2 images when they are pulled.
 	// If an image is not unpacked on pull, it can be unpacked any time
 	// afterwards. Unpacking is required to run an image.
 	Unpack bool
 
-	// UnpackOpts handles options to the unpack call.
-	UnpackOpts []UnpackOpt
-
 	// Snapshotter used for unpacking
 	Snapshotter string
-
-	// SnapshotterOpts are additional options to be passed to a snapshotter during pull
-	SnapshotterOpts []snapshots.Opt
 
 	// Labels to be applied to the created image
 	Labels map[string]string
@@ -335,12 +281,6 @@ type RemoteContext struct {
 	// These handlers always get called before any operation specific
 	// handlers.
 	BaseHandlers []images.Handler
-
-	// HandlerWrapper wraps the handler which gets sent to dispatch.
-	// Unlike BaseHandlers, this can run before and after the built
-	// in handlers, allowing operations to run on the descriptor
-	// after it has completed transferring.
-	HandlerWrapper func(images.Handler) images.Handler
 
 	// ConvertSchema1 is whether to convert Docker registry schema 1
 	// manifests. If this option is false then any image which resolves
@@ -352,19 +292,6 @@ type RemoteContext struct {
 	// platforms will be used to create a PlatformMatcher with no ordering
 	// preference.
 	Platforms []string
-
-	// MaxConcurrentDownloads is the max concurrent content downloads for each pull.
-	MaxConcurrentDownloads int
-
-	// MaxConcurrentUploadedLayers is the max concurrent uploaded layers for each push.
-	MaxConcurrentUploadedLayers int
-
-	// AllMetadata downloads all manifests and known-configuration files
-	AllMetadata bool
-
-	// ChildLabelMap sets the labels used to reference child objects in the content
-	// store. By default, all GC reference labels will be set for all fetched content.
-	ChildLabelMap func(ocispec.Descriptor) []string
 }
 
 func defaultRemoteContext() *RemoteContext {
@@ -372,6 +299,7 @@ func defaultRemoteContext() *RemoteContext {
 		Resolver: docker.NewResolver(docker.ResolverOptions{
 			Client: http.DefaultClient,
 		}),
+		Snapshotter: DefaultSnapshotter,
 	}
 }
 
@@ -386,7 +314,7 @@ func (c *Client) Fetch(ctx context.Context, ref string, opts ...RemoteOpt) (imag
 	}
 
 	if fetchCtx.Unpack {
-		return images.Image{}, errors.Wrap(errdefs.ErrNotImplemented, "unpack on fetch not supported, try pull")
+		return images.Image{}, errors.New("unpack on fetch not supported, try pull")
 	}
 
 	if fetchCtx.PlatformMatcher == nil {
@@ -412,11 +340,132 @@ func (c *Client) Fetch(ctx context.Context, ref string, opts ...RemoteOpt) (imag
 	}
 	defer done(ctx)
 
-	img, err := c.fetch(ctx, fetchCtx, ref, 0)
+	return c.fetch(ctx, fetchCtx, ref, 0)
+}
+
+// Pull downloads the provided content into containerd's content store
+// and returns a platform specific image object
+func (c *Client) Pull(ctx context.Context, ref string, opts ...RemoteOpt) (Image, error) {
+	pullCtx := defaultRemoteContext()
+	for _, o := range opts {
+		if err := o(c, pullCtx); err != nil {
+			return nil, err
+		}
+	}
+
+	if pullCtx.PlatformMatcher == nil {
+		if len(pullCtx.Platforms) > 1 {
+			return nil, errors.New("cannot pull multiplatform image locally, try Fetch")
+		} else if len(pullCtx.Platforms) == 0 {
+			pullCtx.PlatformMatcher = platforms.Default()
+		} else {
+			p, err := platforms.Parse(pullCtx.Platforms[0])
+			if err != nil {
+				return nil, errors.Wrapf(err, "invalid platform %s", pullCtx.Platforms[0])
+			}
+
+			pullCtx.PlatformMatcher = platforms.Only(p)
+		}
+	}
+
+	ctx, done, err := c.WithLease(ctx)
 	if err != nil {
+		return nil, err
+	}
+	defer done(ctx)
+
+	img, err := c.fetch(ctx, pullCtx, ref, 1)
+	if err != nil {
+		return nil, err
+	}
+
+	i := NewImageWithPlatform(c, img, pullCtx.PlatformMatcher)
+
+	if pullCtx.Unpack {
+		if err := i.Unpack(ctx, pullCtx.Snapshotter); err != nil {
+			return nil, errors.Wrapf(err, "failed to unpack image on snapshotter %s", pullCtx.Snapshotter)
+		}
+	}
+
+	return i, nil
+}
+
+func (c *Client) fetch(ctx context.Context, rCtx *RemoteContext, ref string, limit int) (images.Image, error) {
+	store := c.ContentStore()
+	name, desc, err := rCtx.Resolver.Resolve(ctx, ref)
+	if err != nil {
+		return images.Image{}, errors.Wrapf(err, "failed to resolve reference %q", ref)
+	}
+
+	fetcher, err := rCtx.Resolver.Fetcher(ctx, name)
+	if err != nil {
+		return images.Image{}, errors.Wrapf(err, "failed to get fetcher for %q", name)
+	}
+
+	var (
+		schema1Converter *schema1.Converter
+		handler          images.Handler
+	)
+	if desc.MediaType == images.MediaTypeDockerSchema1Manifest && rCtx.ConvertSchema1 {
+		schema1Converter = schema1.NewConverter(store, fetcher)
+		handler = images.Handlers(append(rCtx.BaseHandlers, schema1Converter)...)
+	} else {
+		// Get all the children for a descriptor
+		childrenHandler := images.ChildrenHandler(store)
+		// Set any children labels for that content
+		childrenHandler = images.SetChildrenLabels(store, childrenHandler)
+		// Filter children by platforms
+		childrenHandler = images.FilterPlatforms(childrenHandler, rCtx.PlatformMatcher)
+		// Sort and limit manifests if a finite number is needed
+		if limit > 0 {
+			childrenHandler = images.LimitManifests(childrenHandler, rCtx.PlatformMatcher, limit)
+		}
+
+		handler = images.Handlers(append(rCtx.BaseHandlers,
+			remotes.FetchHandler(store, fetcher),
+			childrenHandler,
+		)...)
+	}
+
+	if err := images.Dispatch(ctx, handler, desc); err != nil {
 		return images.Image{}, err
 	}
-	return c.createNewImage(ctx, img)
+	if schema1Converter != nil {
+		desc, err = schema1Converter.Convert(ctx)
+		if err != nil {
+			return images.Image{}, err
+		}
+	}
+
+	img := images.Image{
+		Name:   name,
+		Target: desc,
+		Labels: rCtx.Labels,
+	}
+
+	is := c.ImageService()
+	for {
+		if created, err := is.Create(ctx, img); err != nil {
+			if !errdefs.IsAlreadyExists(err) {
+				return images.Image{}, err
+			}
+
+			updated, err := is.Update(ctx, img)
+			if err != nil {
+				// if image was removed, try create again
+				if errdefs.IsNotFound(err) {
+					continue
+				}
+				return images.Image{}, err
+			}
+
+			img = updated
+		} else {
+			img = created
+		}
+
+		return img, nil
+	}
 }
 
 // Push uploads the provided content to a remote resource
@@ -443,36 +492,12 @@ func (c *Client) Push(ctx context.Context, ref string, desc ocispec.Descriptor, 
 		}
 	}
 
-	// Annotate ref with digest to push only push tag for single digest
-	if !strings.Contains(ref, "@") {
-		ref = ref + "@" + desc.Digest.String()
-	}
-
 	pusher, err := pushCtx.Resolver.Pusher(ctx, ref)
 	if err != nil {
 		return err
 	}
 
-	var wrapper func(images.Handler) images.Handler
-
-	if len(pushCtx.BaseHandlers) > 0 {
-		wrapper = func(h images.Handler) images.Handler {
-			h = images.Handlers(append(pushCtx.BaseHandlers, h)...)
-			if pushCtx.HandlerWrapper != nil {
-				h = pushCtx.HandlerWrapper(h)
-			}
-			return h
-		}
-	} else if pushCtx.HandlerWrapper != nil {
-		wrapper = pushCtx.HandlerWrapper
-	}
-
-	var limiter *semaphore.Weighted
-	if pushCtx.MaxConcurrentUploadedLayers > 0 {
-		limiter = semaphore.NewWeighted(int64(pushCtx.MaxConcurrentUploadedLayers))
-	}
-
-	return remotes.PushContent(ctx, pusher, desc, c.ContentStore(), limiter, pushCtx.PlatformMatcher, wrapper)
+	return remotes.PushContent(ctx, pusher, desc, c.ContentStore(), pushCtx.PlatformMatcher, pushCtx.BaseHandlers...)
 }
 
 // GetImage returns an existing image
@@ -536,27 +561,6 @@ func writeIndex(ctx context.Context, index *ocispec.Index, client *Client, ref s
 	return writeContent(ctx, client.ContentStore(), ocispec.MediaTypeImageIndex, ref, bytes.NewReader(data), content.WithLabels(labels))
 }
 
-// GetLabel gets a label value from namespace store
-// If there is no default label, an empty string returned with nil error
-func (c *Client) GetLabel(ctx context.Context, label string) (string, error) {
-	ns, err := namespaces.NamespaceRequired(ctx)
-	if err != nil {
-		if c.defaultns == "" {
-			return "", err
-		}
-		ns = c.defaultns
-	}
-
-	srv := c.NamespaceService()
-	labels, err := srv.Labels(ctx, ns)
-	if err != nil {
-		return "", err
-	}
-
-	value := labels[label]
-	return value, nil
-}
-
 // Subscribe to events that match one or more of the provided filters.
 //
 // Callers should listen on both the envelope and errs channels. If the errs
@@ -610,10 +614,6 @@ func (c *Client) ContentStore() content.Store {
 
 // SnapshotService returns the underlying snapshotter for the provided snapshotter name
 func (c *Client) SnapshotService(snapshotterName string) snapshots.Snapshotter {
-	snapshotterName, err := c.resolveSnapshotterName(context.Background(), snapshotterName)
-	if err != nil {
-		snapshotterName = DefaultSnapshotter
-	}
 	if c.snapshotters != nil {
 		return c.snapshotters[snapshotterName]
 	}
@@ -653,13 +653,10 @@ func (c *Client) DiffService() DiffService {
 }
 
 // IntrospectionService returns the underlying Introspection Client
-func (c *Client) IntrospectionService() introspection.Service {
-	if c.introspectionService != nil {
-		return c.introspectionService
-	}
+func (c *Client) IntrospectionService() introspectionapi.IntrospectionClient {
 	c.connMu.Lock()
 	defer c.connMu.Unlock()
-	return introspection.NewIntrospectionServiceFromClient(introspectionapi.NewIntrospectionClient(c.conn))
+	return introspectionapi.NewIntrospectionClient(c.conn)
 }
 
 // LeasesService returns the underlying Leases Client
@@ -696,13 +693,6 @@ func (c *Client) VersionService() versionservice.VersionClient {
 	return versionservice.NewVersionClient(c.conn)
 }
 
-// Conn returns the underlying GRPC connection object
-func (c *Client) Conn() *grpc.ClientConn {
-	c.connMu.Lock()
-	defer c.connMu.Unlock()
-	return c.conn
-}
-
 // Version of containerd
 type Version struct {
 	// Version number
@@ -716,7 +706,7 @@ func (c *Client) Version(ctx context.Context) (Version, error) {
 	c.connMu.Lock()
 	if c.conn == nil {
 		c.connMu.Unlock()
-		return Version{}, errors.Wrap(errdefs.ErrUnavailable, "no grpc connection available")
+		return Version{}, errors.New("no grpc connection available")
 	}
 	c.connMu.Unlock()
 	response, err := c.VersionService().Version(ctx, &ptypes.Empty{})
@@ -727,107 +717,4 @@ func (c *Client) Version(ctx context.Context) (Version, error) {
 		Version:  response.Version,
 		Revision: response.Revision,
 	}, nil
-}
-
-// ServerInfo represents the introspected server information
-type ServerInfo struct {
-	UUID string
-}
-
-// Server returns server information from the introspection service
-func (c *Client) Server(ctx context.Context) (ServerInfo, error) {
-	c.connMu.Lock()
-	if c.conn == nil {
-		c.connMu.Unlock()
-		return ServerInfo{}, errors.Wrap(errdefs.ErrUnavailable, "no grpc connection available")
-	}
-	c.connMu.Unlock()
-
-	response, err := c.IntrospectionService().Server(ctx, &ptypes.Empty{})
-	if err != nil {
-		return ServerInfo{}, err
-	}
-	return ServerInfo{
-		UUID: response.UUID,
-	}, nil
-}
-
-func (c *Client) resolveSnapshotterName(ctx context.Context, name string) (string, error) {
-	if name == "" {
-		label, err := c.GetLabel(ctx, defaults.DefaultSnapshotterNSLabel)
-		if err != nil {
-			return "", err
-		}
-
-		if label != "" {
-			name = label
-		} else {
-			name = DefaultSnapshotter
-		}
-	}
-
-	return name, nil
-}
-
-func (c *Client) getSnapshotter(ctx context.Context, name string) (snapshots.Snapshotter, error) {
-	name, err := c.resolveSnapshotterName(ctx, name)
-	if err != nil {
-		return nil, err
-	}
-
-	s := c.SnapshotService(name)
-	if s == nil {
-		return nil, errors.Wrapf(errdefs.ErrNotFound, "snapshotter %s was not found", name)
-	}
-
-	return s, nil
-}
-
-// CheckRuntime returns true if the current runtime matches the expected
-// runtime. Providing various parts of the runtime schema will match those
-// parts of the expected runtime
-func CheckRuntime(current, expected string) bool {
-	cp := strings.Split(current, ".")
-	l := len(cp)
-	for i, p := range strings.Split(expected, ".") {
-		if i > l {
-			return false
-		}
-		if p != cp[i] {
-			return false
-		}
-	}
-	return true
-}
-
-// GetSnapshotterSupportedPlatforms returns a platform matchers which represents the
-// supported platforms for the given snapshotters
-func (c *Client) GetSnapshotterSupportedPlatforms(ctx context.Context, snapshotterName string) (platforms.MatchComparer, error) {
-	filters := []string{fmt.Sprintf("type==%s, id==%s", plugin.SnapshotPlugin, snapshotterName)}
-	in := c.IntrospectionService()
-
-	resp, err := in.Plugins(ctx, filters)
-	if err != nil {
-		return nil, err
-	}
-
-	if len(resp.Plugins) <= 0 {
-		return nil, fmt.Errorf("inspection service could not find snapshotter %s plugin", snapshotterName)
-	}
-
-	sn := resp.Plugins[0]
-	snPlatforms := toPlatforms(sn.Platforms)
-	return platforms.Any(snPlatforms...), nil
-}
-
-func toPlatforms(pt []apitypes.Platform) []ocispec.Platform {
-	platforms := make([]ocispec.Platform, len(pt))
-	for i, p := range pt {
-		platforms[i] = ocispec.Platform{
-			Architecture: p.Architecture,
-			OS:           p.OS,
-			Variant:      p.Variant,
-		}
-	}
-	return platforms
 }

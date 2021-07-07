@@ -18,6 +18,7 @@ package cgroups
 
 import (
 	"fmt"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 
@@ -60,7 +61,7 @@ func (d *devicesController) Create(path string, resources *specs.LinuxResources)
 		if device.Type == "" {
 			device.Type = "a"
 		}
-		if err := retryingWriteFile(
+		if err := ioutil.WriteFile(
 			filepath.Join(d.Path(path), file),
 			[]byte(deviceString(device)),
 			defaultFilePerm,

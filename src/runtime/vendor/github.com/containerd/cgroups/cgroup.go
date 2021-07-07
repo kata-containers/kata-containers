@@ -18,13 +18,13 @@ package cgroups
 
 import (
 	"fmt"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
 
-	v1 "github.com/containerd/cgroups/stats/v1"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/pkg/errors"
 )
@@ -66,7 +66,6 @@ func New(hierarchy Hierarchy, path Path, resources *specs.LinuxResources, opts .
 }
 
 // Load will load an existing cgroup and allow it to be controlled
-// All static path should not include `/sys/fs/cgroup/` prefix, it should start with your own cgroups name
 func Load(hierarchy Hierarchy, path Path, opts ...InitOpts) (Cgroup, error) {
 	config := newInitConfig()
 	for _, o := range opts {
@@ -168,7 +167,7 @@ func (c *cgroup) add(process Process) error {
 		if err != nil {
 			return err
 		}
-		if err := retryingWriteFile(
+		if err := ioutil.WriteFile(
 			filepath.Join(s.Path(p), cgroupProcs),
 			[]byte(strconv.Itoa(process.Pid)),
 			defaultFilePerm,
@@ -198,7 +197,7 @@ func (c *cgroup) addTask(process Process) error {
 		if err != nil {
 			return err
 		}
-		if err := retryingWriteFile(
+		if err := ioutil.WriteFile(
 			filepath.Join(s.Path(p), cgroupTasks),
 			[]byte(strconv.Itoa(process.Pid)),
 			defaultFilePerm,
@@ -216,7 +215,7 @@ func (c *cgroup) Delete() error {
 	if c.err != nil {
 		return c.err
 	}
-	var errs []string
+	var errors []string
 	for _, s := range c.subsystems {
 		if d, ok := s.(deleter); ok {
 			sp, err := c.path(s.Name())
@@ -224,7 +223,7 @@ func (c *cgroup) Delete() error {
 				return err
 			}
 			if err := d.Delete(sp); err != nil {
-				errs = append(errs, string(s.Name()))
+				errors = append(errors, string(s.Name()))
 			}
 			continue
 		}
@@ -235,19 +234,19 @@ func (c *cgroup) Delete() error {
 			}
 			path := p.Path(sp)
 			if err := remove(path); err != nil {
-				errs = append(errs, path)
+				errors = append(errors, path)
 			}
 		}
 	}
-	if len(errs) > 0 {
-		return fmt.Errorf("cgroups: unable to remove paths %s", strings.Join(errs, ", "))
+	if len(errors) > 0 {
+		return fmt.Errorf("cgroups: unable to remove paths %s", strings.Join(errors, ", "))
 	}
 	c.err = ErrCgroupDeleted
 	return nil
 }
 
 // Stat returns the current metrics for the cgroup
-func (c *cgroup) Stat(handlers ...ErrorHandler) (*v1.Metrics, error) {
+func (c *cgroup) Stat(handlers ...ErrorHandler) (*Metrics, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.err != nil {
@@ -257,10 +256,10 @@ func (c *cgroup) Stat(handlers ...ErrorHandler) (*v1.Metrics, error) {
 		handlers = append(handlers, errPassthrough)
 	}
 	var (
-		stats = &v1.Metrics{
-			CPU: &v1.CPUStat{
-				Throttling: &v1.Throttle{},
-				Usage:      &v1.CPUUsage{},
+		stats = &Metrics{
+			CPU: &CPUStat{
+				Throttling: &Throttle{},
+				Usage:      &CPUUsage{},
 			},
 		}
 		wg   = &sync.WaitGroup{}
@@ -457,26 +456,7 @@ func (c *cgroup) OOMEventFD() (uintptr, error) {
 	if err != nil {
 		return 0, err
 	}
-	return s.(*memoryController).memoryEvent(sp, OOMEvent())
-}
-
-// RegisterMemoryEvent allows the ability to register for all v1 memory cgroups
-// notifications.
-func (c *cgroup) RegisterMemoryEvent(event MemoryEvent) (uintptr, error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if c.err != nil {
-		return 0, c.err
-	}
-	s := c.getSubsystem(Memory)
-	if s == nil {
-		return 0, ErrMemoryNotSupported
-	}
-	sp, err := c.path(Memory)
-	if err != nil {
-		return 0, err
-	}
-	return s.(*memoryController).memoryEvent(sp, event)
+	return s.(*memoryController).OOMEventFD(sp)
 }
 
 // State returns the state of the cgroup and its processes

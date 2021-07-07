@@ -16,7 +16,7 @@ import (
 	"strings"
 	"testing"
 
-	semver "github.com/blang/semver/v4"
+	"github.com/blang/semver"
 	"github.com/stretchr/testify/assert"
 )
 
