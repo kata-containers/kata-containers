@@ -80,6 +80,8 @@ parts:
       - uidmap
       - gnupg2
     override-build: |
+      [ "$(uname -m)" = "ppc64le" ] || [ "$(uname -m)" = "s390x" ] && sudo apt-get --no-install-recommends install -y protobuf-compiler
+
       yq=${SNAPCRAFT_STAGE}/yq
 
       # set GOPATH
@@ -117,8 +119,12 @@ parts:
       export USE_DOCKER=1
       export DEBUG=1
       case "$(uname -m)" in
-        aarch64|ppc64le|s390x)
+        aarch64)
           sudo -E PATH=$PATH make initrd DISTRO=alpine
+        ;;
+        ppc64le|s390x)
+          # Cannot use alpine on ppc64le/s390x because it would require a musl agent
+          sudo -E PATH=$PATH make image DISTRO=ubuntu
         ;;
         x86_64)
           # In some build systems it's impossible to build a rootfs image, try with the initrd image
@@ -180,6 +186,8 @@ parts:
       - bison
       - flex
     override-build: |
+      [ "$(uname -m)" = "s390x" ] && sudo apt-get --no-install-recommends install -y libssl-dev
+
       export GOPATH=${SNAPCRAFT_STAGE}/gopath
       kata_dir=${GOPATH}/src/github.com/${SNAPCRAFT_PROJECT_NAME}/${SNAPCRAFT_PROJECT_NAME}
 
@@ -202,8 +210,10 @@ parts:
       ln -sf ${vmlinuz_name} ${kata_kernel_dir}/vmlinuz.container
 
       # Install raw kernel
+      vmlinux_path=vmlinux
+      [ "$(uname -m)" = "s390x" ] && vmlinux_path=arch/s390/boot/compressed/vmlinux
       vmlinux_name=vmlinux-${kernel_suffix}
-      cp vmlinux ${kata_kernel_dir}/${vmlinux_name}
+      cp ${vmlinux_path} ${kata_kernel_dir}/${vmlinux_name}
       ln -sf ${vmlinux_name} ${kata_kernel_dir}/vmlinux.container
 
   qemu:
@@ -227,6 +237,7 @@ parts:
       - libblkid-dev
       - libffi-dev
       - libmount-dev
+      - libseccomp-dev
       - libselinux1-dev
       - ninja-build
     override-build: |
@@ -267,7 +278,7 @@ parts:
       ${kata_dir}/tools/packaging/scripts/apply_patches.sh "${patches_version_dir}"
 
       # Only x86_64 supports libpmem
-      [ "$(uname -m)" = "x86_64" ] && sudo apt-get --no-install-recommends install -y apt-utils ca-certificates libpmem-dev libseccomp-dev
+      [ "$(uname -m)" = "x86_64" ] && sudo apt-get --no-install-recommends install -y apt-utils ca-certificates libpmem-dev
 
       configure_hypervisor=${kata_dir}/tools/packaging/scripts/configure-hypervisor.sh
       chmod +x ${configure_hypervisor}
