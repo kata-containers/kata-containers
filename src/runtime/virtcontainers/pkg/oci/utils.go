@@ -950,16 +950,21 @@ func ContainerConfig(ocispec specs.Spec, bundlePath, cid, console string, detach
 		RootFs:         rootfs,
 		ReadonlyRootfs: ocispec.Root.Readonly,
 		Cmd:            cmd,
-		Annotations: map[string]string{
-			vcAnnotations.BundlePathKey: bundlePath,
-		},
-		Mounts:      containerMounts(ocispec),
-		DeviceInfos: deviceInfos,
-		Resources:   *ocispec.Linux.Resources,
+		Annotations:    ocispec.Annotations,
+		Mounts:         containerMounts(ocispec),
+		DeviceInfos:    deviceInfos,
+		Resources:      *ocispec.Linux.Resources,
 
 		// This is a custom OCI spec modified at SetEphemeralStorageType()
 		// to support ephemeral storage and k8s empty dir.
 		CustomSpec: &ocispec,
+	}
+	if containerConfig.Annotations == nil {
+		containerConfig.Annotations = map[string]string{
+			vcAnnotations.BundlePathKey: bundlePath,
+		}
+	} else {
+		containerConfig.Annotations[vcAnnotations.BundlePathKey] = bundlePath
 	}
 
 	cType, err := ContainerType(ocispec)
