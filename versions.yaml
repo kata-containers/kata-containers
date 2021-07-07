@@ -188,7 +188,7 @@ externals:
     tarball_url: "https://storage.googleapis.com/cri-containerd-release"
     # Next commit from 1.3 branch contains fix to be able to run
     # tests using go 1.13
-    version: "v1.3.7"
+    version: "v1.3.4"
 
   critools:
     description: "CLI tool for Container Runtime Interface (CRI)"
