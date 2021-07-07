@@ -24,6 +24,7 @@ readonly firecracker_builder="${repo_root_dir}/tools/packaging/static-build/fire
 readonly kernel_builder="${repo_root_dir}/tools/packaging/static-build/kernel/build.sh"
 readonly qemu_builder="${repo_root_dir}/tools/packaging/static-build/qemu/build-static-qemu.sh"
 readonly rootfs_builder="${repo_root_dir}/tools/packaging/guest-image/build_image.sh"
+readonly shimv2_builder="${repo_root_dir}/tools/packaging/static-build/shim-v2/build.sh"
 
 workdir="${WORKDIR:-$PWD}"
 
@@ -137,21 +138,9 @@ install_clh() {
 
 #Install all components that are not assets
 install_shimv2() {
-	pushd "${repo_root_dir}/src/runtime"
-	echo "Build"
-	make \
-		PREFIX="${prefix}" \
-		QEMUCMD="qemu-system-x86_64"
-	echo "Install"
-	make PREFIX="${prefix}" \
-		DESTDIR="${destdir}" \
-		install
-	popd
-	sed -i -e '/^initrd =/d' "${destdir}/${prefix}/share/defaults/${project}/configuration-qemu.toml"
-	sed -i -e '/^initrd =/d' "${destdir}/${prefix}/share/defaults/${project}/configuration-fc.toml"
-	pushd "${destdir}/${prefix}/share/defaults/${project}"
-	ln -sf "configuration-qemu.toml" configuration.toml
-	popd
+	GO_VERSION="$(yq r ${versions_yaml} languages.golang.meta.newest-version)"
+	export GO_VERSION
+	DESTDIR="${destdir}" PREFIX="${prefix}" "${shimv2_builder}"
 }
 
 get_kata_version() {

@@ -9,26 +9,14 @@ ENV INSTALL_IN_GOPATH=false
 ADD install_yq.sh /usr/bin/install_yq.sh
 
 
-RUN apt-get update
-RUN apt-get install -y curl
-RUN apt-get install -y sudo
+# yq installer deps
+RUN apt update && apt-get install -y curl sudo
 
 # Install yq
 RUN install_yq.sh
 
-# Install docker-cli
-RUN sudo apt-get -y install \
-    apt-transport-https \
-    ca-certificates \
-    curl \
-    gnupg \
-    lsb-release
-RUN curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
-RUN echo \
-  "deb [arch=amd64 signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu \
-  $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-RUN apt-get update
-RUN apt-get install docker-ce-cli -y
+RUN curl -fsSL https://get.docker.com -o get-docker.sh
+RUN sh get-docker.sh
 
 ARG IMG_USER=kata-builder
 ARG UID=1000
@@ -37,11 +25,13 @@ RUN if [ ${IMG_USER} != "root" ]; then groupadd --gid=${GID} ${IMG_USER};fi
 RUN if [ ${IMG_USER} != "root" ]; then adduser ${IMG_USER} --uid=${UID} --gid=${GID};fi
 RUN sh -c "echo '${IMG_USER} ALL=NOPASSWD: ALL' >> /etc/sudoers"
 
-RUN apt install -y git
-RUN apt install -y make
-
-# kata deps
-RUN apt install -y golang
+#FIXME: gcc is required as agent is build out of a container build.
+RUN apt-get update && \
+  apt install -y \
+  gcc \
+  git \
+  make \
+  xz-utils
 
 ENV USER ${IMG_USER}
 USER ${UID}:${GID}
