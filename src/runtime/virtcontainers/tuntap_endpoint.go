@@ -31,7 +31,7 @@ type TuntapEndpoint struct {
 	TxRateLimiter      bool
 }
 
-// Properties returns the properties of the tap interface.
+// Properties returns the properties of the tun/tap interface.
 func (endpoint *TuntapEndpoint) Properties() NetworkInfo {
 	return endpoint.EndpointProperties
 }
@@ -41,12 +41,12 @@ func (endpoint *TuntapEndpoint) Name() string {
 	return endpoint.TuntapInterface.Name
 }
 
-// HardwareAddr returns the mac address that is assigned to the tap interface
+// HardwareAddr returns the mac address that is assigned to the tun/tap interface
 func (endpoint *TuntapEndpoint) HardwareAddr() string {
 	return endpoint.TuntapInterface.TAPIface.HardAddr
 }
 
-// Type identifies the endpoint as a tap endpoint.
+// Type identifies the endpoint as a tun/tap endpoint.
 func (endpoint *TuntapEndpoint) Type() EndpointType {
 	return endpoint.EndpointType
 }
@@ -71,7 +71,7 @@ func (endpoint *TuntapEndpoint) SetProperties(properties NetworkInfo) {
 	endpoint.EndpointProperties = properties
 }
 
-// Attach for tap endpoint adds the tap interface to the hypervisor.
+// Attach for tun/tap endpoint adds the tap interface to the hypervisor.
 func (endpoint *TuntapEndpoint) Attach(ctx context.Context, s *Sandbox) error {
 	span, ctx := tuntapTrace(ctx, "Attach", endpoint)
 	defer span.End()
@@ -85,7 +85,7 @@ func (endpoint *TuntapEndpoint) Attach(ctx context.Context, s *Sandbox) error {
 	return h.addDevice(ctx, endpoint, netDev)
 }
 
-// Detach for the tap endpoint tears down the tap
+// Detach for the tun/tap endpoint tears down the tap
 func (endpoint *TuntapEndpoint) Detach(ctx context.Context, netNsCreated bool, netNsPath string) error {
 	if !netNsCreated && netNsPath != "" {
 		return nil
@@ -100,28 +100,28 @@ func (endpoint *TuntapEndpoint) Detach(ctx context.Context, netNsCreated bool, n
 	})
 }
 
-// HotAttach for the tap endpoint uses hot plug device
+// HotAttach for the tun/tap endpoint uses hot plug device
 func (endpoint *TuntapEndpoint) HotAttach(ctx context.Context, h hypervisor) error {
-	networkLogger().Info("Hot attaching tap endpoint")
+	networkLogger().Info("Hot attaching tun/tap endpoint")
 
 	span, ctx := tuntapTrace(ctx, "HotAttach", endpoint)
 	defer span.End()
 
 	if err := tuntapNetwork(endpoint, h.hypervisorConfig().NumVCPUs, h.hypervisorConfig().DisableVhostNet); err != nil {
-		networkLogger().WithError(err).Error("Error bridging tap ep")
+		networkLogger().WithError(err).Error("Error bridging tun/tap ep")
 		return err
 	}
 
 	if _, err := h.hotplugAddDevice(ctx, endpoint, netDev); err != nil {
-		networkLogger().WithError(err).Error("Error attach tap ep")
+		networkLogger().WithError(err).Error("Error attach tun/tap ep")
 		return err
 	}
 	return nil
 }
 
-// HotDetach for the tap endpoint uses hot pull device
+// HotDetach for the tun/tap endpoint uses hot pull device
 func (endpoint *TuntapEndpoint) HotDetach(ctx context.Context, h hypervisor, netNsCreated bool, netNsPath string) error {
-	networkLogger().Info("Hot detaching tap endpoint")
+	networkLogger().Info("Hot detaching tun/tap endpoint")
 
 	span, ctx := tuntapTrace(ctx, "HotDetach", endpoint)
 	defer span.End()
@@ -129,11 +129,11 @@ func (endpoint *TuntapEndpoint) HotDetach(ctx context.Context, h hypervisor, net
 	if err := doNetNS(netNsPath, func(_ ns.NetNS) error {
 		return unTuntapNetwork(endpoint.TuntapInterface.TAPIface.Name)
 	}); err != nil {
-		networkLogger().WithError(err).Warn("Error un-bridging tap ep")
+		networkLogger().WithError(err).Warn("Error un-bridging tun/tap ep")
 	}
 
 	if _, err := h.hotplugRemoveDevice(ctx, endpoint, netDev); err != nil {
-		networkLogger().WithError(err).Error("Error detach tap ep")
+		networkLogger().WithError(err).Error("Error detach tun/tap ep")
 		return err
 	}
 	return nil

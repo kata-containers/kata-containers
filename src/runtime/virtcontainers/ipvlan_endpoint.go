@@ -66,7 +66,7 @@ func (endpoint *IPVlanEndpoint) HardwareAddr() string {
 	return endpoint.NetPair.TAPIface.HardAddr
 }
 
-// Type identifies the endpoint as a virtual endpoint.
+// Type identifies the endpoint as a ipvlan endpoint.
 func (endpoint *IPVlanEndpoint) Type() EndpointType {
 	return endpoint.EndpointType
 }
@@ -91,7 +91,7 @@ func (endpoint *IPVlanEndpoint) NetworkPair() *NetworkInterfacePair {
 	return &endpoint.NetPair
 }
 
-// Attach for virtual endpoint bridges the network pair and adds the
+// Attach for ipvlan endpoint bridges the network pair and adds the
 // tap interface of the network pair to the hypervisor.
 func (endpoint *IPVlanEndpoint) Attach(ctx context.Context, s *Sandbox) error {
 	span, ctx := ipvlanTrace(ctx, "Attach", endpoint)
@@ -99,14 +99,14 @@ func (endpoint *IPVlanEndpoint) Attach(ctx context.Context, s *Sandbox) error {
 
 	h := s.hypervisor
 	if err := xConnectVMNetwork(ctx, endpoint, h); err != nil {
-		networkLogger().WithError(err).Error("Error bridging virtual ep")
+		networkLogger().WithError(err).Error("Error bridging ipvlan ep")
 		return err
 	}
 
 	return h.addDevice(ctx, endpoint, netDev)
 }
 
-// Detach for the virtual endpoint tears down the tap and bridge
+// Detach for the ipvlan endpoint tears down the tap and bridge
 // created for the veth interface.
 func (endpoint *IPVlanEndpoint) Detach(ctx context.Context, netNsCreated bool, netNsPath string) error {
 	// The network namespace would have been deleted at this point
@@ -123,12 +123,12 @@ func (endpoint *IPVlanEndpoint) Detach(ctx context.Context, netNsCreated bool, n
 	})
 }
 
-// HotAttach for physical endpoint not supported yet
+// HotAttach for ipvlan endpoint not supported yet
 func (endpoint *IPVlanEndpoint) HotAttach(ctx context.Context, h hypervisor) error {
 	return fmt.Errorf("IPVlanEndpoint does not support Hot attach")
 }
 
-// HotDetach for physical endpoint not supported yet
+// HotDetach for ipvlan endpoint not supported yet
 func (endpoint *IPVlanEndpoint) HotDetach(ctx context.Context, h hypervisor, netNsCreated bool, netNsPath string) error {
 	return fmt.Errorf("IPVlanEndpoint does not support Hot detach")
 }
