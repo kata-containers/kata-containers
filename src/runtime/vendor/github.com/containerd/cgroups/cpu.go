@@ -18,11 +18,12 @@ package cgroups
 
 import (
 	"bufio"
+	"fmt"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strconv"
 
-	v1 "github.com/containerd/cgroups/stats/v1"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 )
 
@@ -82,8 +83,8 @@ func (c *cpuController) Create(path string, resources *specs.LinuxResources) err
 				value = []byte(strconv.FormatInt(*t.ivalue, 10))
 			}
 			if value != nil {
-				if err := retryingWriteFile(
-					filepath.Join(c.Path(path), "cpu."+t.name),
+				if err := ioutil.WriteFile(
+					filepath.Join(c.Path(path), fmt.Sprintf("cpu.%s", t.name)),
 					value,
 					defaultFilePerm,
 				); err != nil {
@@ -99,7 +100,7 @@ func (c *cpuController) Update(path string, resources *specs.LinuxResources) err
 	return c.Create(path, resources)
 }
 
-func (c *cpuController) Stat(path string, stats *v1.Metrics) error {
+func (c *cpuController) Stat(path string, stats *Metrics) error {
 	f, err := os.Open(filepath.Join(c.Path(path), "cpu.stat"))
 	if err != nil {
 		return err
@@ -108,6 +109,9 @@ func (c *cpuController) Stat(path string, stats *v1.Metrics) error {
 	// get or create the cpu field because cpuacct can also set values on this struct
 	sc := bufio.NewScanner(f)
 	for sc.Scan() {
+		if err := sc.Err(); err != nil {
+			return err
+		}
 		key, v, err := parseKV(sc.Text())
 		if err != nil {
 			return err
@@ -121,5 +125,5 @@ func (c *cpuController) Stat(path string, stats *v1.Metrics) error {
 			stats.CPU.Throttling.ThrottledTime = v
 		}
 	}
-	return sc.Err()
+	return nil
 }

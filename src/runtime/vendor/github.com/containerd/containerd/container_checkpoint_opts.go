@@ -70,11 +70,10 @@ func WithCheckpointTask(ctx context.Context, client *Client, c *containers.Conta
 	for _, d := range task.Descriptors {
 		platformSpec := platforms.DefaultSpec()
 		index.Manifests = append(index.Manifests, imagespec.Descriptor{
-			MediaType:   d.MediaType,
-			Size:        d.Size_,
-			Digest:      d.Digest,
-			Platform:    &platformSpec,
-			Annotations: d.Annotations,
+			MediaType: d.MediaType,
+			Size:      d.Size_,
+			Digest:    d.Digest,
+			Platform:  &platformSpec,
 		})
 	}
 	// save copts

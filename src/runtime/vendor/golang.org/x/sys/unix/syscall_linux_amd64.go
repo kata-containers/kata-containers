@@ -2,7 +2,6 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-//go:build amd64 && linux
 // +build amd64,linux
 
 package unix
@@ -139,7 +138,7 @@ func Pipe(p []int) (err error) {
 	return
 }
 
-//sysnb	pipe2(p *[2]_C_int, flags int) (err error)
+//sysnb pipe2(p *[2]_C_int, flags int) (err error)
 
 func Pipe2(p []int, flags int) (err error) {
 	if len(p) != 2 {

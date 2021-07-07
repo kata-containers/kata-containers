@@ -22,6 +22,7 @@ import (
 	"github.com/containerd/containerd/containers"
 	"github.com/containerd/containerd/content"
 	"github.com/containerd/containerd/images"
+	"github.com/containerd/containerd/platforms"
 	"github.com/gogo/protobuf/proto"
 	ptypes "github.com/gogo/protobuf/types"
 	"github.com/opencontainers/image-spec/identity"
@@ -57,7 +58,7 @@ func WithRestoreImage(ctx context.Context, id string, client *Client, checkpoint
 			return err
 		}
 
-		diffIDs, err := i.(*image).i.RootFS(ctx, client.ContentStore(), client.platform)
+		diffIDs, err := i.(*image).i.RootFS(ctx, client.ContentStore(), platforms.Default())
 		if err != nil {
 			return err
 		}
@@ -87,21 +88,21 @@ func WithRestoreRuntime(ctx context.Context, id string, client *Client, checkpoi
 				return err
 			}
 		}
-		var options ptypes.Any
+		var options *ptypes.Any
 		if m != nil {
 			store := client.ContentStore()
 			data, err := content.ReadBlob(ctx, store, *m)
 			if err != nil {
 				return errors.Wrap(err, "unable to read checkpoint runtime")
 			}
-			if err := proto.Unmarshal(data, &options); err != nil {
+			if err := proto.Unmarshal(data, options); err != nil {
 				return err
 			}
 		}
 
 		c.Runtime = containers.RuntimeInfo{
 			Name:    name,
-			Options: &options,
+			Options: options,
 		}
 		return nil
 	}

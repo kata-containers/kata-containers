@@ -22,8 +22,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-
-	v1 "github.com/containerd/cgroups/stats/v1"
 )
 
 const nanosecondsInSecond = 1000000000
@@ -48,7 +46,7 @@ func (c *cpuacctController) Path(path string) string {
 	return filepath.Join(c.root, path)
 }
 
-func (c *cpuacctController) Stat(path string, stats *v1.Metrics) error {
+func (c *cpuacctController) Stat(path string, stats *Metrics) error {
 	user, kernel, err := c.getUsage(path)
 	if err != nil {
 		return err

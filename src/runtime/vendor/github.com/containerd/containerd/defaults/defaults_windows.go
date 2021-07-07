@@ -26,13 +26,10 @@ import (
 var (
 	// DefaultRootDir is the default location used by containerd to store
 	// persistent data
-	DefaultRootDir = filepath.Join(os.Getenv("ProgramData"), "containerd", "root")
+	DefaultRootDir = filepath.Join(os.Getenv("programfiles"), "containerd", "root")
 	// DefaultStateDir is the default location used by containerd to store
 	// transient data
-	DefaultStateDir = filepath.Join(os.Getenv("ProgramData"), "containerd", "state")
-
-	// DefaultConfigDir is the default location for config files.
-	DefaultConfigDir = filepath.Join(os.Getenv("programfiles"), "containerd")
+	DefaultStateDir = filepath.Join(os.Getenv("programfiles"), "containerd", "state")
 )
 
 const (
@@ -43,6 +40,4 @@ const (
 	// DefaultFIFODir is the default location used by client-side cio library
 	// to store FIFOs. Unused on Windows.
 	DefaultFIFODir = ""
-	// DefaultRuntime is the default windows runtime
-	DefaultRuntime = "io.containerd.runhcs.v1"
 )

@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/containerd/containerd/content"
@@ -118,7 +119,7 @@ func (image *Image) Size(ctx context.Context, provider content.Provider, platfor
 		}
 		size += desc.Size
 		return nil, nil
-	}), LimitManifests(FilterPlatforms(ChildrenHandler(provider), platform), platform, 1)), image.Target)
+	}), FilterPlatforms(ChildrenHandler(provider), platform)), image.Target)
 }
 
 type platformManifest struct {
@@ -141,7 +142,6 @@ type platformManifest struct {
 // this direction because this abstraction is not needed.`
 func Manifest(ctx context.Context, provider content.Provider, image ocispec.Descriptor, platform platforms.MatchComparer) (ocispec.Manifest, error) {
 	var (
-		limit    = 1
 		m        []platformManifest
 		wasIndex bool
 	)
@@ -210,22 +210,10 @@ func Manifest(ctx context.Context, provider content.Provider, image ocispec.Desc
 				}
 			}
 
-			sort.SliceStable(descs, func(i, j int) bool {
-				if descs[i].Platform == nil {
-					return false
-				}
-				if descs[j].Platform == nil {
-					return true
-				}
-				return platform.Less(*descs[i].Platform, *descs[j].Platform)
-			})
-
 			wasIndex = true
 
-			if len(descs) > limit {
-				return descs[:limit], nil
-			}
 			return descs, nil
+
 		}
 		return nil, errors.Wrapf(errdefs.ErrNotFound, "unexpected media type %v for %v", desc.MediaType, desc.Digest)
 	}), image); err != nil {
@@ -239,6 +227,17 @@ func Manifest(ctx context.Context, provider content.Provider, image ocispec.Desc
 		}
 		return ocispec.Manifest{}, err
 	}
+
+	sort.SliceStable(m, func(i, j int) bool {
+		if m[i].p == nil {
+			return false
+		}
+		if m[j].p == nil {
+			return true
+		}
+		return platform.Less(*m[i].p, *m[j].p)
+	})
+
 	return *m[0].m, nil
 }
 
@@ -289,7 +288,7 @@ func Platforms(ctx context.Context, provider content.Provider, image ocispec.Des
 // If available is true, the caller can assume that required represents the
 // complete set of content required for the image.
 //
-// missing will have the components that are part of required but not available
+// missing will have the components that are part of required but not avaiiable
 // in the provider.
 //
 // If there is a problem resolving content, an error will be returned.
@@ -357,12 +356,16 @@ func Children(ctx context.Context, provider content.Provider, desc ocispec.Descr
 		}
 
 		descs = append(descs, index.Manifests...)
+	case MediaTypeDockerSchema2Layer, MediaTypeDockerSchema2LayerGzip,
+		MediaTypeDockerSchema2LayerForeign, MediaTypeDockerSchema2LayerForeignGzip,
+		MediaTypeDockerSchema2Config, ocispec.MediaTypeImageConfig,
+		ocispec.MediaTypeImageLayer, ocispec.MediaTypeImageLayerGzip,
+		ocispec.MediaTypeImageLayerNonDistributable, ocispec.MediaTypeImageLayerNonDistributableGzip,
+		MediaTypeContainerd1Checkpoint, MediaTypeContainerd1CheckpointConfig:
+		// childless data types.
+		return nil, nil
 	default:
-		if IsLayerType(desc.MediaType) || IsKnownConfig(desc.MediaType) {
-			// childless data types.
-			return nil, nil
-		}
-		log.G(ctx).Debugf("encountered unknown type %v; children may not be fetched", desc.MediaType)
+		log.G(ctx).Warnf("encountered unknown type %v; children may not be fetched", desc.MediaType)
 	}
 
 	return descs, nil
@@ -383,4 +386,23 @@ func RootFS(ctx context.Context, provider content.Provider, configDesc ocispec.D
 		return nil, err
 	}
 	return config.RootFS.DiffIDs, nil
+}
+
+// IsCompressedDiff returns true if mediaType is a known compressed diff media type.
+// It returns false if the media type is a diff, but not compressed. If the media type
+// is not a known diff type, it returns errdefs.ErrNotImplemented
+func IsCompressedDiff(ctx context.Context, mediaType string) (bool, error) {
+	switch mediaType {
+	case ocispec.MediaTypeImageLayer, MediaTypeDockerSchema2Layer:
+	case ocispec.MediaTypeImageLayerGzip, MediaTypeDockerSchema2LayerGzip:
+		return true, nil
+	default:
+		// Still apply all generic media types *.tar[.+]gzip and *.tar
+		if strings.HasSuffix(mediaType, ".tar.gzip") || strings.HasSuffix(mediaType, ".tar+gzip") {
+			return true, nil
+		} else if !strings.HasSuffix(mediaType, ".tar") {
+			return false, errdefs.ErrNotImplemented
+		}
+	}
+	return false, nil
 }

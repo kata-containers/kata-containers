@@ -12,13 +12,16 @@
 #   See the License for the specific language governing permissions and
 #   limitations under the License.
 
-.PHONY: check test deps
+.PHONY: fmt vet test deps
 
 test: deps
-	go test -v -race ./...
+	go test -v -race -covermode=atomic -coverprofile=coverage.txt ./...
 
 deps:
-	go mod vendor
+	go get -d -t ./...
 
-check:
-	GOGC=75 golangci-lint run
+fmt:
+	gofmt -s -l .
+
+vet:
+	go vet ./...

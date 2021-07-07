@@ -17,6 +17,7 @@
 package cgroups
 
 import (
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -47,15 +48,11 @@ func (n *netclsController) Create(path string, resources *specs.LinuxResources) 
 		return err
 	}
 	if resources.Network != nil && resources.Network.ClassID != nil && *resources.Network.ClassID > 0 {
-		return retryingWriteFile(
+		return ioutil.WriteFile(
 			filepath.Join(n.Path(path), "net_cls.classid"),
 			[]byte(strconv.FormatUint(uint64(*resources.Network.ClassID), 10)),
 			defaultFilePerm,
 		)
 	}
 	return nil
-}
-
-func (n *netclsController) Update(path string, resources *specs.LinuxResources) error {
-	return n.Create(path, resources)
 }

@@ -17,7 +17,6 @@
 package dialer
 
 import (
-	"context"
 	"net"
 	"time"
 
@@ -29,19 +28,8 @@ type dialResult struct {
 	err error
 }
 
-// ContextDialer returns a GRPC net.Conn connected to the provided address
-func ContextDialer(ctx context.Context, address string) (net.Conn, error) {
-	if deadline, ok := ctx.Deadline(); ok {
-		return timeoutDialer(address, time.Until(deadline))
-	}
-	return timeoutDialer(address, 0)
-}
-
 // Dialer returns a GRPC net.Conn connected to the provided address
-// Deprecated: use ContextDialer and grpc.WithContextDialer.
-var Dialer = timeoutDialer
-
-func timeoutDialer(address string, timeout time.Duration) (net.Conn, error) {
+func Dialer(address string, timeout time.Duration) (net.Conn, error) {
 	var (
 		stopC = make(chan struct{})
 		synC  = make(chan *dialResult)

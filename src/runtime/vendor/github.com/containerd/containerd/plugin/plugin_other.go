@@ -1,4 +1,4 @@
-// +build !go1.8 windows !amd64 static_build gccgo
+// +build !go1.8 windows !amd64 static_build
 
 /*
    Copyright The containerd Authors.

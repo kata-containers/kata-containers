@@ -22,19 +22,15 @@ import (
 	"github.com/containerd/containerd/images"
 	"github.com/containerd/containerd/platforms"
 	"github.com/containerd/containerd/remotes"
-	"github.com/containerd/containerd/snapshots"
-	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
-
 	"google.golang.org/grpc"
 )
 
 type clientOpts struct {
-	defaultns       string
-	defaultRuntime  string
-	defaultPlatform platforms.MatchComparer
-	services        *services
-	dialOptions     []grpc.DialOption
-	timeout         time.Duration
+	defaultns      string
+	defaultRuntime string
+	services       *services
+	dialOptions    []grpc.DialOption
+	timeout        time.Duration
 }
 
 // ClientOpt allows callers to set options on the containerd client
@@ -55,14 +51,6 @@ func WithDefaultNamespace(ns string) ClientOpt {
 func WithDefaultRuntime(rt string) ClientOpt {
 	return func(c *clientOpts) error {
 		c.defaultRuntime = rt
-		return nil
-	}
-}
-
-// WithDefaultPlatform sets the default platform matcher on the client
-func WithDefaultPlatform(platform platforms.MatchComparer) ClientOpt {
-	return func(c *clientOpts) error {
-		c.defaultPlatform = platform
 		return nil
 	}
 }
@@ -133,19 +121,10 @@ func WithPullUnpack(_ *Client, c *RemoteContext) error {
 	return nil
 }
 
-// WithUnpackOpts is used to add unpack options to the unpacker.
-func WithUnpackOpts(opts []UnpackOpt) RemoteOpt {
-	return func(_ *Client, c *RemoteContext) error {
-		c.UnpackOpts = append(c.UnpackOpts, opts...)
-		return nil
-	}
-}
-
-// WithPullSnapshotter specifies snapshotter name used for unpacking.
-func WithPullSnapshotter(snapshotterName string, opts ...snapshots.Opt) RemoteOpt {
+// WithPullSnapshotter specifies snapshotter name used for unpacking
+func WithPullSnapshotter(snapshotterName string) RemoteOpt {
 	return func(_ *Client, c *RemoteContext) error {
 		c.Snapshotter = snapshotterName
-		c.SnapshotterOpts = opts
 		return nil
 	}
 }
@@ -176,18 +155,6 @@ func WithPullLabels(labels map[string]string) RemoteOpt {
 	}
 }
 
-// WithChildLabelMap sets the map function used to define the labels set
-// on referenced child content in the content store. This can be used
-// to overwrite the default GC labels or filter which labels get set
-// for content.
-// The default is `images.ChildGCLabels`.
-func WithChildLabelMap(fn func(ocispec.Descriptor) []string) RemoteOpt {
-	return func(_ *Client, c *RemoteContext) error {
-		c.ChildLabelMap = fn
-		return nil
-	}
-}
-
 // WithSchema1Conversion is used to convert Docker registry schema 1
 // manifests to oci manifests on pull. Without this option schema 1
 // manifests will return a not supported error.
@@ -208,38 +175,6 @@ func WithResolver(resolver remotes.Resolver) RemoteOpt {
 func WithImageHandler(h images.Handler) RemoteOpt {
 	return func(client *Client, c *RemoteContext) error {
 		c.BaseHandlers = append(c.BaseHandlers, h)
-		return nil
-	}
-}
-
-// WithImageHandlerWrapper wraps the handlers to be called on dispatch.
-func WithImageHandlerWrapper(w func(images.Handler) images.Handler) RemoteOpt {
-	return func(client *Client, c *RemoteContext) error {
-		c.HandlerWrapper = w
-		return nil
-	}
-}
-
-// WithMaxConcurrentDownloads sets max concurrent download limit.
-func WithMaxConcurrentDownloads(max int) RemoteOpt {
-	return func(client *Client, c *RemoteContext) error {
-		c.MaxConcurrentDownloads = max
-		return nil
-	}
-}
-
-// WithMaxConcurrentUploadedLayers sets max concurrent uploaded layer limit.
-func WithMaxConcurrentUploadedLayers(max int) RemoteOpt {
-	return func(client *Client, c *RemoteContext) error {
-		c.MaxConcurrentUploadedLayers = max
-		return nil
-	}
-}
-
-// WithAllMetadata downloads all manifests and known-configuration files
-func WithAllMetadata() RemoteOpt {
-	return func(_ *Client, c *RemoteContext) error {
-		c.AllMetadata = true
 		return nil
 	}
 }

@@ -3,19 +3,24 @@
 
 package events
 
-import (
-	fmt "fmt"
-	types "github.com/containerd/containerd/api/types"
-	proto "github.com/gogo/protobuf/proto"
-	_ "github.com/gogo/protobuf/types"
-	github_com_gogo_protobuf_types "github.com/gogo/protobuf/types"
-	io "io"
-	math "math"
-	math_bits "math/bits"
-	reflect "reflect"
-	strings "strings"
-	time "time"
-)
+import proto "github.com/gogo/protobuf/proto"
+import fmt "fmt"
+import math "math"
+
+// skipping weak import gogoproto "github.com/gogo/protobuf/gogoproto"
+import _ "github.com/gogo/protobuf/types"
+import containerd_types "github.com/containerd/containerd/api/types"
+
+// skipping weak import containerd_plugin "github.com/containerd/containerd/protobuf/plugin"
+
+import time "time"
+
+import types "github.com/gogo/protobuf/types"
+
+import strings "strings"
+import reflect "reflect"
+
+import io "io"
 
 // Reference imports to suppress errors if they are not otherwise used.
 var _ = proto.Marshal
@@ -23,463 +28,113 @@ var _ = fmt.Errorf
 var _ = math.Inf
 var _ = time.Kitchen
 
-// This is a compile-time assertion to ensure that this generated file
-// is compatible with the proto package it is being compiled against.
-// A compilation error at this line likely means your copy of the
-// proto package needs to be updated.
-const _ = proto.GoGoProtoPackageIsVersion3 // please upgrade the proto package
-
 type TaskCreate struct {
-	ContainerID          string         `protobuf:"bytes,1,opt,name=container_id,json=containerId,proto3" json:"container_id,omitempty"`
-	Bundle               string         `protobuf:"bytes,2,opt,name=bundle,proto3" json:"bundle,omitempty"`
-	Rootfs               []*types.Mount `protobuf:"bytes,3,rep,name=rootfs,proto3" json:"rootfs,omitempty"`
-	IO                   *TaskIO        `protobuf:"bytes,4,opt,name=io,proto3" json:"io,omitempty"`
-	Checkpoint           string         `protobuf:"bytes,5,opt,name=checkpoint,proto3" json:"checkpoint,omitempty"`
-	Pid                  uint32         `protobuf:"varint,6,opt,name=pid,proto3" json:"pid,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}       `json:"-"`
-	XXX_unrecognized     []byte         `json:"-"`
-	XXX_sizecache        int32          `json:"-"`
+	ContainerID string                    `protobuf:"bytes,1,opt,name=container_id,json=containerId,proto3" json:"container_id,omitempty"`
+	Bundle      string                    `protobuf:"bytes,2,opt,name=bundle,proto3" json:"bundle,omitempty"`
+	Rootfs      []*containerd_types.Mount `protobuf:"bytes,3,rep,name=rootfs" json:"rootfs,omitempty"`
+	IO          *TaskIO                   `protobuf:"bytes,4,opt,name=io" json:"io,omitempty"`
+	Checkpoint  string                    `protobuf:"bytes,5,opt,name=checkpoint,proto3" json:"checkpoint,omitempty"`
+	Pid         uint32                    `protobuf:"varint,6,opt,name=pid,proto3" json:"pid,omitempty"`
 }
 
-func (m *TaskCreate) Reset()      { *m = TaskCreate{} }
-func (*TaskCreate) ProtoMessage() {}
-func (*TaskCreate) Descriptor() ([]byte, []int) {
-	return fileDescriptor_8db0813f7adfb63c, []int{0}
-}
-func (m *TaskCreate) XXX_Unmarshal(b []byte) error {
-	return m.Unmarshal(b)
-}
-func (m *TaskCreate) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
-	if deterministic {
-		return xxx_messageInfo_TaskCreate.Marshal(b, m, deterministic)
-	} else {
-		b = b[:cap(b)]
-		n, err := m.MarshalToSizedBuffer(b)
-		if err != nil {
-			return nil, err
-		}
-		return b[:n], nil
-	}
-}
-func (m *TaskCreate) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_TaskCreate.Merge(m, src)
-}
-func (m *TaskCreate) XXX_Size() int {
-	return m.Size()
-}
-func (m *TaskCreate) XXX_DiscardUnknown() {
-	xxx_messageInfo_TaskCreate.DiscardUnknown(m)
-}
-
-var xxx_messageInfo_TaskCreate proto.InternalMessageInfo
+func (m *TaskCreate) Reset()                    { *m = TaskCreate{} }
+func (*TaskCreate) ProtoMessage()               {}
+func (*TaskCreate) Descriptor() ([]byte, []int) { return fileDescriptorTask, []int{0} }
 
 type TaskStart struct {
-	ContainerID          string   `protobuf:"bytes,1,opt,name=container_id,json=containerId,proto3" json:"container_id,omitempty"`
-	Pid                  uint32   `protobuf:"varint,2,opt,name=pid,proto3" json:"pid,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	ContainerID string `protobuf:"bytes,1,opt,name=container_id,json=containerId,proto3" json:"container_id,omitempty"`
+	Pid         uint32 `protobuf:"varint,2,opt,name=pid,proto3" json:"pid,omitempty"`
 }
 
-func (m *TaskStart) Reset()      { *m = TaskStart{} }
-func (*TaskStart) ProtoMessage() {}
-func (*TaskStart) Descriptor() ([]byte, []int) {
-	return fileDescriptor_8db0813f7adfb63c, []int{1}
-}
-func (m *TaskStart) XXX_Unmarshal(b []byte) error {
-	return m.Unmarshal(b)
-}
-func (m *TaskStart) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
-	if deterministic {
-		return xxx_messageInfo_TaskStart.Marshal(b, m, deterministic)
-	} else {
-		b = b[:cap(b)]
-		n, err := m.MarshalToSizedBuffer(b)
-		if err != nil {
-			return nil, err
-		}
-		return b[:n], nil
-	}
-}
-func (m *TaskStart) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_TaskStart.Merge(m, src)
-}
-func (m *TaskStart) XXX_Size() int {
-	return m.Size()
-}
-func (m *TaskStart) XXX_DiscardUnknown() {
-	xxx_messageInfo_TaskStart.DiscardUnknown(m)
-}
-
-var xxx_messageInfo_TaskStart proto.InternalMessageInfo
+func (m *TaskStart) Reset()                    { *m = TaskStart{} }
+func (*TaskStart) ProtoMessage()               {}
+func (*TaskStart) Descriptor() ([]byte, []int) { return fileDescriptorTask, []int{1} }
 
 type TaskDelete struct {
 	ContainerID string    `protobuf:"bytes,1,opt,name=container_id,json=containerId,proto3" json:"container_id,omitempty"`
 	Pid         uint32    `protobuf:"varint,2,opt,name=pid,proto3" json:"pid,omitempty"`
 	ExitStatus  uint32    `protobuf:"varint,3,opt,name=exit_status,json=exitStatus,proto3" json:"exit_status,omitempty"`
-	ExitedAt    time.Time `protobuf:"bytes,4,opt,name=exited_at,json=exitedAt,proto3,stdtime" json:"exited_at"`
-	// id is the specific exec. By default if omitted will be `""` thus matches
-	// the init exec of the task matching `container_id`.
-	ID                   string   `protobuf:"bytes,5,opt,name=id,proto3" json:"id,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	ExitedAt    time.Time `protobuf:"bytes,4,opt,name=exited_at,json=exitedAt,stdtime" json:"exited_at"`
 }
 
-func (m *TaskDelete) Reset()      { *m = TaskDelete{} }
-func (*TaskDelete) ProtoMessage() {}
-func (*TaskDelete) Descriptor() ([]byte, []int) {
-	return fileDescriptor_8db0813f7adfb63c, []int{2}
-}
-func (m *TaskDelete) XXX_Unmarshal(b []byte) error {
-	return m.Unmarshal(b)
-}
-func (m *TaskDelete) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
-	if deterministic {
-		return xxx_messageInfo_TaskDelete.Marshal(b, m, deterministic)
-	} else {
-		b = b[:cap(b)]
-		n, err := m.MarshalToSizedBuffer(b)
-		if err != nil {
-			return nil, err
-		}
-		return b[:n], nil
-	}
-}
-func (m *TaskDelete) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_TaskDelete.Merge(m, src)
-}
-func (m *TaskDelete) XXX_Size() int {
-	return m.Size()
-}
-func (m *TaskDelete) XXX_DiscardUnknown() {
-	xxx_messageInfo_TaskDelete.DiscardUnknown(m)
-}
-
-var xxx_messageInfo_TaskDelete proto.InternalMessageInfo
+func (m *TaskDelete) Reset()                    { *m = TaskDelete{} }
+func (*TaskDelete) ProtoMessage()               {}
+func (*TaskDelete) Descriptor() ([]byte, []int) { return fileDescriptorTask, []int{2} }
 
 type TaskIO struct {
-	Stdin                string   `protobuf:"bytes,1,opt,name=stdin,proto3" json:"stdin,omitempty"`
-	Stdout               string   `protobuf:"bytes,2,opt,name=stdout,proto3" json:"stdout,omitempty"`
-	Stderr               string   `protobuf:"bytes,3,opt,name=stderr,proto3" json:"stderr,omitempty"`
-	Terminal             bool     `protobuf:"varint,4,opt,name=terminal,proto3" json:"terminal,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	Stdin    string `protobuf:"bytes,1,opt,name=stdin,proto3" json:"stdin,omitempty"`
+	Stdout   string `protobuf:"bytes,2,opt,name=stdout,proto3" json:"stdout,omitempty"`
+	Stderr   string `protobuf:"bytes,3,opt,name=stderr,proto3" json:"stderr,omitempty"`
+	Terminal bool   `protobuf:"varint,4,opt,name=terminal,proto3" json:"terminal,omitempty"`
 }
 
-func (m *TaskIO) Reset()      { *m = TaskIO{} }
-func (*TaskIO) ProtoMessage() {}
-func (*TaskIO) Descriptor() ([]byte, []int) {
-	return fileDescriptor_8db0813f7adfb63c, []int{3}
-}
-func (m *TaskIO) XXX_Unmarshal(b []byte) error {
-	return m.Unmarshal(b)
-}
-func (m *TaskIO) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
-	if deterministic {
-		return xxx_messageInfo_TaskIO.Marshal(b, m, deterministic)
-	} else {
-		b = b[:cap(b)]
-		n, err := m.MarshalToSizedBuffer(b)
-		if err != nil {
-			return nil, err
-		}
-		return b[:n], nil
-	}
-}
-func (m *TaskIO) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_TaskIO.Merge(m, src)
-}
-func (m *TaskIO) XXX_Size() int {
-	return m.Size()
-}
-func (m *TaskIO) XXX_DiscardUnknown() {
-	xxx_messageInfo_TaskIO.DiscardUnknown(m)
-}
-
-var xxx_messageInfo_TaskIO proto.InternalMessageInfo
+func (m *TaskIO) Reset()                    { *m = TaskIO{} }
+func (*TaskIO) ProtoMessage()               {}
+func (*TaskIO) Descriptor() ([]byte, []int) { return fileDescriptorTask, []int{3} }
 
 type TaskExit struct {
-	ContainerID          string    `protobuf:"bytes,1,opt,name=container_id,json=containerId,proto3" json:"container_id,omitempty"`
-	ID                   string    `protobuf:"bytes,2,opt,name=id,proto3" json:"id,omitempty"`
-	Pid                  uint32    `protobuf:"varint,3,opt,name=pid,proto3" json:"pid,omitempty"`
-	ExitStatus           uint32    `protobuf:"varint,4,opt,name=exit_status,json=exitStatus,proto3" json:"exit_status,omitempty"`
-	ExitedAt             time.Time `protobuf:"bytes,5,opt,name=exited_at,json=exitedAt,proto3,stdtime" json:"exited_at"`
-	XXX_NoUnkeyedLiteral struct{}  `json:"-"`
-	XXX_unrecognized     []byte    `json:"-"`
-	XXX_sizecache        int32     `json:"-"`
+	ContainerID string    `protobuf:"bytes,1,opt,name=container_id,json=containerId,proto3" json:"container_id,omitempty"`
+	ID          string    `protobuf:"bytes,2,opt,name=id,proto3" json:"id,omitempty"`
+	Pid         uint32    `protobuf:"varint,3,opt,name=pid,proto3" json:"pid,omitempty"`
+	ExitStatus  uint32    `protobuf:"varint,4,opt,name=exit_status,json=exitStatus,proto3" json:"exit_status,omitempty"`
+	ExitedAt    time.Time `protobuf:"bytes,5,opt,name=exited_at,json=exitedAt,stdtime" json:"exited_at"`
 }
 
-func (m *TaskExit) Reset()      { *m = TaskExit{} }
-func (*TaskExit) ProtoMessage() {}
-func (*TaskExit) Descriptor() ([]byte, []int) {
-	return fileDescriptor_8db0813f7adfb63c, []int{4}
-}
-func (m *TaskExit) XXX_Unmarshal(b []byte) error {
-	return m.Unmarshal(b)
-}
-func (m *TaskExit) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
-	if deterministic {
-		return xxx_messageInfo_TaskExit.Marshal(b, m, deterministic)
-	} else {
-		b = b[:cap(b)]
-		n, err := m.MarshalToSizedBuffer(b)
-		if err != nil {
-			return nil, err
-		}
-		return b[:n], nil
-	}
-}
-func (m *TaskExit) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_TaskExit.Merge(m, src)
-}
-func (m *TaskExit) XXX_Size() int {
-	return m.Size()
-}
-func (m *TaskExit) XXX_DiscardUnknown() {
-	xxx_messageInfo_TaskExit.DiscardUnknown(m)
-}
-
-var xxx_messageInfo_TaskExit proto.InternalMessageInfo
+func (m *TaskExit) Reset()                    { *m = TaskExit{} }
+func (*TaskExit) ProtoMessage()               {}
+func (*TaskExit) Descriptor() ([]byte, []int) { return fileDescriptorTask, []int{4} }
 
 type TaskOOM struct {
-	ContainerID          string   `protobuf:"bytes,1,opt,name=container_id,json=containerId,proto3" json:"container_id,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	ContainerID string `protobuf:"bytes,1,opt,name=container_id,json=containerId,proto3" json:"container_id,omitempty"`
 }
 
-func (m *TaskOOM) Reset()      { *m = TaskOOM{} }
-func (*TaskOOM) ProtoMessage() {}
-func (*TaskOOM) Descriptor() ([]byte, []int) {
-	return fileDescriptor_8db0813f7adfb63c, []int{5}
-}
-func (m *TaskOOM) XXX_Unmarshal(b []byte) error {
-	return m.Unmarshal(b)
-}
-func (m *TaskOOM) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
-	if deterministic {
-		return xxx_messageInfo_TaskOOM.Marshal(b, m, deterministic)
-	} else {
-		b = b[:cap(b)]
-		n, err := m.MarshalToSizedBuffer(b)
-		if err != nil {
-			return nil, err
-		}
-		return b[:n], nil
-	}
-}
-func (m *TaskOOM) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_TaskOOM.Merge(m, src)
-}
-func (m *TaskOOM) XXX_Size() int {
-	return m.Size()
-}
-func (m *TaskOOM) XXX_DiscardUnknown() {
-	xxx_messageInfo_TaskOOM.DiscardUnknown(m)
-}
-
-var xxx_messageInfo_TaskOOM proto.InternalMessageInfo
+func (m *TaskOOM) Reset()                    { *m = TaskOOM{} }
+func (*TaskOOM) ProtoMessage()               {}
+func (*TaskOOM) Descriptor() ([]byte, []int) { return fileDescriptorTask, []int{5} }
 
 type TaskExecAdded struct {
-	ContainerID          string   `protobuf:"bytes,1,opt,name=container_id,json=containerId,proto3" json:"container_id,omitempty"`
-	ExecID               string   `protobuf:"bytes,2,opt,name=exec_id,json=execId,proto3" json:"exec_id,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	ContainerID string `protobuf:"bytes,1,opt,name=container_id,json=containerId,proto3" json:"container_id,omitempty"`
+	ExecID      string `protobuf:"bytes,2,opt,name=exec_id,json=execId,proto3" json:"exec_id,omitempty"`
 }
 
-func (m *TaskExecAdded) Reset()      { *m = TaskExecAdded{} }
-func (*TaskExecAdded) ProtoMessage() {}
-func (*TaskExecAdded) Descriptor() ([]byte, []int) {
-	return fileDescriptor_8db0813f7adfb63c, []int{6}
-}
-func (m *TaskExecAdded) XXX_Unmarshal(b []byte) error {
-	return m.Unmarshal(b)
-}
-func (m *TaskExecAdded) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
-	if deterministic {
-		return xxx_messageInfo_TaskExecAdded.Marshal(b, m, deterministic)
-	} else {
-		b = b[:cap(b)]
-		n, err := m.MarshalToSizedBuffer(b)
-		if err != nil {
-			return nil, err
-		}
-		return b[:n], nil
-	}
-}
-func (m *TaskExecAdded) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_TaskExecAdded.Merge(m, src)
-}
-func (m *TaskExecAdded) XXX_Size() int {
-	return m.Size()
-}
-func (m *TaskExecAdded) XXX_DiscardUnknown() {
-	xxx_messageInfo_TaskExecAdded.DiscardUnknown(m)
-}
-
-var xxx_messageInfo_TaskExecAdded proto.InternalMessageInfo
+func (m *TaskExecAdded) Reset()                    { *m = TaskExecAdded{} }
+func (*TaskExecAdded) ProtoMessage()               {}
+func (*TaskExecAdded) Descriptor() ([]byte, []int) { return fileDescriptorTask, []int{6} }
 
 type TaskExecStarted struct {
-	ContainerID          string   `protobuf:"bytes,1,opt,name=container_id,json=containerId,proto3" json:"container_id,omitempty"`
-	ExecID               string   `protobuf:"bytes,2,opt,name=exec_id,json=execId,proto3" json:"exec_id,omitempty"`
-	Pid                  uint32   `protobuf:"varint,3,opt,name=pid,proto3" json:"pid,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	ContainerID string `protobuf:"bytes,1,opt,name=container_id,json=containerId,proto3" json:"container_id,omitempty"`
+	ExecID      string `protobuf:"bytes,2,opt,name=exec_id,json=execId,proto3" json:"exec_id,omitempty"`
+	Pid         uint32 `protobuf:"varint,3,opt,name=pid,proto3" json:"pid,omitempty"`
 }
 
-func (m *TaskExecStarted) Reset()      { *m = TaskExecStarted{} }
-func (*TaskExecStarted) ProtoMessage() {}
-func (*TaskExecStarted) Descriptor() ([]byte, []int) {
-	return fileDescriptor_8db0813f7adfb63c, []int{7}
-}
-func (m *TaskExecStarted) XXX_Unmarshal(b []byte) error {
-	return m.Unmarshal(b)
-}
-func (m *TaskExecStarted) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
-	if deterministic {
-		return xxx_messageInfo_TaskExecStarted.Marshal(b, m, deterministic)
-	} else {
-		b = b[:cap(b)]
-		n, err := m.MarshalToSizedBuffer(b)
-		if err != nil {
-			return nil, err
-		}
-		return b[:n], nil
-	}
-}
-func (m *TaskExecStarted) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_TaskExecStarted.Merge(m, src)
-}
-func (m *TaskExecStarted) XXX_Size() int {
-	return m.Size()
-}
-func (m *TaskExecStarted) XXX_DiscardUnknown() {
-	xxx_messageInfo_TaskExecStarted.DiscardUnknown(m)
-}
-
-var xxx_messageInfo_TaskExecStarted proto.InternalMessageInfo
+func (m *TaskExecStarted) Reset()                    { *m = TaskExecStarted{} }
+func (*TaskExecStarted) ProtoMessage()               {}
+func (*TaskExecStarted) Descriptor() ([]byte, []int) { return fileDescriptorTask, []int{7} }
 
 type TaskPaused struct {
-	ContainerID          string   `protobuf:"bytes,1,opt,name=container_id,json=containerId,proto3" json:"container_id,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	ContainerID string `protobuf:"bytes,1,opt,name=container_id,json=containerId,proto3" json:"container_id,omitempty"`
 }
 
-func (m *TaskPaused) Reset()      { *m = TaskPaused{} }
-func (*TaskPaused) ProtoMessage() {}
-func (*TaskPaused) Descriptor() ([]byte, []int) {
-	return fileDescriptor_8db0813f7adfb63c, []int{8}
-}
-func (m *TaskPaused) XXX_Unmarshal(b []byte) error {
-	return m.Unmarshal(b)
-}
-func (m *TaskPaused) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
-	if deterministic {
-		return xxx_messageInfo_TaskPaused.Marshal(b, m, deterministic)
-	} else {
-		b = b[:cap(b)]
-		n, err := m.MarshalToSizedBuffer(b)
-		if err != nil {
-			return nil, err
-		}
-		return b[:n], nil
-	}
-}
-func (m *TaskPaused) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_TaskPaused.Merge(m, src)
-}
-func (m *TaskPaused) XXX_Size() int {
-	return m.Size()
-}
-func (m *TaskPaused) XXX_DiscardUnknown() {
-	xxx_messageInfo_TaskPaused.DiscardUnknown(m)
-}
-
-var xxx_messageInfo_TaskPaused proto.InternalMessageInfo
+func (m *TaskPaused) Reset()                    { *m = TaskPaused{} }
+func (*TaskPaused) ProtoMessage()               {}
+func (*TaskPaused) Descriptor() ([]byte, []int) { return fileDescriptorTask, []int{8} }
 
 type TaskResumed struct {
-	ContainerID          string   `protobuf:"bytes,1,opt,name=container_id,json=containerId,proto3" json:"container_id,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	ContainerID string `protobuf:"bytes,1,opt,name=container_id,json=containerId,proto3" json:"container_id,omitempty"`
 }
 
-func (m *TaskResumed) Reset()      { *m = TaskResumed{} }
-func (*TaskResumed) ProtoMessage() {}
-func (*TaskResumed) Descriptor() ([]byte, []int) {
-	return fileDescriptor_8db0813f7adfb63c, []int{9}
-}
-func (m *TaskResumed) XXX_Unmarshal(b []byte) error {
-	return m.Unmarshal(b)
-}
-func (m *TaskResumed) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
-	if deterministic {
-		return xxx_messageInfo_TaskResumed.Marshal(b, m, deterministic)
-	} else {
-		b = b[:cap(b)]
-		n, err := m.MarshalToSizedBuffer(b)
-		if err != nil {
-			return nil, err
-		}
-		return b[:n], nil
-	}
-}
-func (m *TaskResumed) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_TaskResumed.Merge(m, src)
-}
-func (m *TaskResumed) XXX_Size() int {
-	return m.Size()
-}
-func (m *TaskResumed) XXX_DiscardUnknown() {
-	xxx_messageInfo_TaskResumed.DiscardUnknown(m)
-}
-
-var xxx_messageInfo_TaskResumed proto.InternalMessageInfo
+func (m *TaskResumed) Reset()                    { *m = TaskResumed{} }
+func (*TaskResumed) ProtoMessage()               {}
+func (*TaskResumed) Descriptor() ([]byte, []int) { return fileDescriptorTask, []int{9} }
 
 type TaskCheckpointed struct {
-	ContainerID          string   `protobuf:"bytes,1,opt,name=container_id,json=containerId,proto3" json:"container_id,omitempty"`
-	Checkpoint           string   `protobuf:"bytes,2,opt,name=checkpoint,proto3" json:"checkpoint,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	ContainerID string `protobuf:"bytes,1,opt,name=container_id,json=containerId,proto3" json:"container_id,omitempty"`
+	Checkpoint  string `protobuf:"bytes,2,opt,name=checkpoint,proto3" json:"checkpoint,omitempty"`
 }
 
-func (m *TaskCheckpointed) Reset()      { *m = TaskCheckpointed{} }
-func (*TaskCheckpointed) ProtoMessage() {}
-func (*TaskCheckpointed) Descriptor() ([]byte, []int) {
-	return fileDescriptor_8db0813f7adfb63c, []int{10}
-}
-func (m *TaskCheckpointed) XXX_Unmarshal(b []byte) error {
-	return m.Unmarshal(b)
-}
-func (m *TaskCheckpointed) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
-	if deterministic {
-		return xxx_messageInfo_TaskCheckpointed.Marshal(b, m, deterministic)
-	} else {
-		b = b[:cap(b)]
-		n, err := m.MarshalToSizedBuffer(b)
-		if err != nil {
-			return nil, err
-		}
-		return b[:n], nil
-	}
-}
-func (m *TaskCheckpointed) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_TaskCheckpointed.Merge(m, src)
-}
-func (m *TaskCheckpointed) XXX_Size() int {
-	return m.Size()
-}
-func (m *TaskCheckpointed) XXX_DiscardUnknown() {
-	xxx_messageInfo_TaskCheckpointed.DiscardUnknown(m)
-}
-
-var xxx_messageInfo_TaskCheckpointed proto.InternalMessageInfo
+func (m *TaskCheckpointed) Reset()                    { *m = TaskCheckpointed{} }
+func (*TaskCheckpointed) ProtoMessage()               {}
+func (*TaskCheckpointed) Descriptor() ([]byte, []int) { return fileDescriptorTask, []int{10} }
 
 func init() {
 	proto.RegisterType((*TaskCreate)(nil), "containerd.events.TaskCreate")
@@ -493,55 +148,6 @@ func init() {
 	proto.RegisterType((*TaskPaused)(nil), "containerd.events.TaskPaused")
 	proto.RegisterType((*TaskResumed)(nil), "containerd.events.TaskResumed")
 	proto.RegisterType((*TaskCheckpointed)(nil), "containerd.events.TaskCheckpointed")
-}
-
-func init() {
-	proto.RegisterFile("github.com/containerd/containerd/api/events/task.proto", fileDescriptor_8db0813f7adfb63c)
-}
-
-var fileDescriptor_8db0813f7adfb63c = []byte{
-	// 644 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xb4, 0x95, 0xcd, 0x6e, 0xd3, 0x40,
-	0x10, 0xc7, 0x63, 0xa7, 0x75, 0xd3, 0x09, 0x55, 0x8b, 0x55, 0x95, 0x90, 0x83, 0x1d, 0x99, 0x4b,
-	0x4e, 0xb6, 0x08, 0x12, 0x17, 0x84, 0xd4, 0xa4, 0xe1, 0x90, 0x43, 0x95, 0xe2, 0xf6, 0x50, 0x71,
-	0x89, 0x36, 0xd9, 0x4d, 0xb2, 0x34, 0xf1, 0x5a, 0xf6, 0x18, 0x15, 0x89, 0x03, 0x8f, 0xc0, 0x23,
-	0xf0, 0x38, 0x3d, 0x20, 0xc4, 0x91, 0x53, 0xa0, 0x7e, 0x00, 0x4e, 0x3c, 0x00, 0x5a, 0xaf, 0x93,
-	0xb6, 0x54, 0x7c, 0x59, 0xe2, 0x94, 0x9d, 0xd9, 0xd9, 0xff, 0xec, 0xfc, 0x76, 0x3c, 0x81, 0xc7,
-	0x13, 0x8e, 0xd3, 0x64, 0xe8, 0x8e, 0xc4, 0xdc, 0x1b, 0x89, 0x00, 0x09, 0x0f, 0x58, 0x44, 0xaf,
-	0x2f, 0x49, 0xc8, 0x3d, 0xf6, 0x8a, 0x05, 0x18, 0x7b, 0x48, 0xe2, 0x33, 0x37, 0x8c, 0x04, 0x0a,
-	0xf3, 0xee, 0x55, 0x84, 0xab, 0x76, 0xeb, 0xbb, 0x13, 0x31, 0x11, 0xd9, 0xae, 0x27, 0x57, 0x2a,
-	0xb0, 0x6e, 0x4f, 0x84, 0x98, 0xcc, 0x98, 0x97, 0x59, 0xc3, 0x64, 0xec, 0x21, 0x9f, 0xb3, 0x18,
-	0xc9, 0x3c, 0xcc, 0x03, 0xfe, 0xee, 0x06, 0xf8, 0x3a, 0x64, 0xb1, 0x37, 0x17, 0x49, 0x80, 0xf9,
-	0xb9, 0xfd, 0x3f, 0x9e, 0x5b, 0xa5, 0x0c, 0x67, 0xc9, 0x84, 0x07, 0xde, 0x98, 0xb3, 0x19, 0x0d,
-	0x09, 0x4e, 0x95, 0x82, 0xf3, 0x4d, 0x03, 0x38, 0x21, 0xf1, 0xd9, 0x41, 0xc4, 0x08, 0x32, 0xb3,
-	0x05, 0x77, 0x56, 0x87, 0x07, 0x9c, 0xd6, 0xb4, 0x86, 0xd6, 0xdc, 0xec, 0x6c, 0xa7, 0x0b, 0xbb,
-	0x7a, 0xb0, 0xf4, 0xf7, 0xba, 0x7e, 0x75, 0x15, 0xd4, 0xa3, 0xe6, 0x1e, 0x18, 0xc3, 0x24, 0xa0,
-	0x33, 0x56, 0xd3, 0x65, 0xb4, 0x9f, 0x5b, 0xa6, 0x07, 0x46, 0x24, 0x04, 0x8e, 0xe3, 0x5a, 0xb9,
-	0x51, 0x6e, 0x56, 0x5b, 0xf7, 0xdc, 0x6b, 0xbc, 0xb2, 0x5a, 0xdc, 0x43, 0x59, 0x8b, 0x9f, 0x87,
-	0x99, 0x0f, 0x41, 0xe7, 0xa2, 0xb6, 0xd6, 0xd0, 0x9a, 0xd5, 0xd6, 0x7d, 0xf7, 0x16, 0x5c, 0x57,
-	0xde, 0xb3, 0xd7, 0xef, 0x18, 0xe9, 0xc2, 0xd6, 0x7b, 0x7d, 0x5f, 0xe7, 0xc2, 0xb4, 0x00, 0x46,
-	0x53, 0x36, 0x3a, 0x0b, 0x05, 0x0f, 0xb0, 0xb6, 0x9e, 0xe5, 0xbf, 0xe6, 0x31, 0x77, 0xa0, 0x1c,
-	0x72, 0x5a, 0x33, 0x1a, 0x5a, 0x73, 0xcb, 0x97, 0x4b, 0xe7, 0x39, 0x6c, 0x4a, 0x9d, 0x63, 0x24,
-	0x11, 0x16, 0x2a, 0x37, 0x97, 0xd4, 0xaf, 0x24, 0x3f, 0xe6, 0x0c, 0xbb, 0x6c, 0xc6, 0x0a, 0x32,
-	0xbc, 0x25, 0x6a, 0xda, 0x50, 0x65, 0xe7, 0x1c, 0x07, 0x31, 0x12, 0x4c, 0x24, 0x42, 0xb9, 0x03,
-	0xd2, 0x75, 0x9c, 0x79, 0xcc, 0x36, 0x6c, 0x4a, 0x8b, 0xd1, 0x01, 0xc1, 0x1c, 0x5a, 0xdd, 0x55,
-	0x8d, 0xe6, 0x2e, 0x5f, 0xdd, 0x3d, 0x59, 0x36, 0x5a, 0xa7, 0x72, 0xb1, 0xb0, 0x4b, 0xef, 0xbe,
-	0xd8, 0x9a, 0x5f, 0x51, 0xc7, 0xda, 0x68, 0xee, 0x81, 0xce, 0xa9, 0xa2, 0x96, 0x53, 0xed, 0xfa,
-	0x3a, 0xa7, 0xce, 0x4b, 0x30, 0x14, 0x6b, 0x73, 0x17, 0xd6, 0x63, 0xa4, 0x3c, 0x50, 0x45, 0xf8,
-	0xca, 0x90, 0x2f, 0x1e, 0x23, 0x15, 0x09, 0x2e, 0x5f, 0x5c, 0x59, 0xb9, 0x9f, 0x45, 0x51, 0x76,
-	0x5d, 0xe5, 0x67, 0x51, 0x64, 0xd6, 0xa1, 0x82, 0x2c, 0x9a, 0xf3, 0x80, 0xcc, 0xb2, 0x9b, 0x56,
-	0xfc, 0x95, 0xed, 0x7c, 0xd0, 0xa0, 0x22, 0x93, 0x3d, 0x3b, 0xe7, 0x58, 0xb0, 0xfd, 0xf4, 0x9c,
-	0xdc, 0x8d, 0x22, 0x96, 0x48, 0xcb, 0xbf, 0x44, 0xba, 0xf6, 0x7b, 0xa4, 0xeb, 0x45, 0x90, 0x3a,
-	0x4f, 0x61, 0x43, 0x56, 0xd3, 0xef, 0x1f, 0x16, 0x29, 0xc6, 0x99, 0xc2, 0x96, 0x82, 0xc1, 0x46,
-	0x6d, 0x4a, 0x19, 0x2d, 0x44, 0xe4, 0x01, 0x6c, 0xb0, 0x73, 0x36, 0x1a, 0xac, 0xb0, 0x40, 0xba,
-	0xb0, 0x0d, 0xa9, 0xd9, 0xeb, 0xfa, 0x86, 0xdc, 0xea, 0x51, 0xe7, 0x0d, 0x6c, 0x2f, 0x33, 0x65,
-	0xdf, 0xc2, 0x7f, 0xcc, 0x75, 0xfb, 0x29, 0x9c, 0x7d, 0xf5, 0xc5, 0x1c, 0x91, 0x24, 0x2e, 0x96,
-	0xd8, 0x69, 0x43, 0x55, 0x2a, 0xf8, 0x2c, 0x4e, 0xe6, 0x05, 0x25, 0xc6, 0xb0, 0x93, 0x8d, 0xbe,
-	0xd5, 0xb8, 0x28, 0xc8, 0xe0, 0xe6, 0x10, 0xd2, 0x7f, 0x1e, 0x42, 0x9d, 0xa3, 0x8b, 0x4b, 0xab,
-	0xf4, 0xf9, 0xd2, 0x2a, 0xbd, 0x4d, 0x2d, 0xed, 0x22, 0xb5, 0xb4, 0x4f, 0xa9, 0xa5, 0x7d, 0x4d,
-	0x2d, 0xed, 0xfd, 0x77, 0x4b, 0x7b, 0xd1, 0xfa, 0x87, 0x7f, 0x9f, 0x27, 0xea, 0xe7, 0xb4, 0x74,
-	0x5a, 0x1e, 0x1a, 0x59, 0x47, 0x3e, 0xfa, 0x11, 0x00, 0x00, 0xff, 0xff, 0xc5, 0x58, 0x0f, 0xec,
-	0xbe, 0x06, 0x00, 0x00,
 }
 
 // Field returns the value for the given fieldpath as a string, if defined.
@@ -604,8 +210,6 @@ func (m *TaskDelete) Field(fieldpath []string) (string, bool) {
 	// unhandled: exited_at
 	case "container_id":
 		return string(m.ContainerID), len(m.ContainerID) > 0
-	case "id":
-		return string(m.ID), len(m.ID) > 0
 	}
 	return "", false
 }
@@ -742,7 +346,7 @@ func (m *TaskCheckpointed) Field(fieldpath []string) (string, bool) {
 func (m *TaskCreate) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	n, err := m.MarshalTo(dAtA)
 	if err != nil {
 		return nil, err
 	}
@@ -750,78 +354,62 @@ func (m *TaskCreate) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *TaskCreate) MarshalTo(dAtA []byte) (int, error) {
-	size := m.Size()
-	return m.MarshalToSizedBuffer(dAtA[:size])
-}
-
-func (m *TaskCreate) MarshalToSizedBuffer(dAtA []byte) (int, error) {
-	i := len(dAtA)
+	var i int
 	_ = i
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		i -= len(m.XXX_unrecognized)
-		copy(dAtA[i:], m.XXX_unrecognized)
+	if len(m.ContainerID) > 0 {
+		dAtA[i] = 0xa
+		i++
+		i = encodeVarintTask(dAtA, i, uint64(len(m.ContainerID)))
+		i += copy(dAtA[i:], m.ContainerID)
 	}
-	if m.Pid != 0 {
-		i = encodeVarintTask(dAtA, i, uint64(m.Pid))
-		i--
-		dAtA[i] = 0x30
+	if len(m.Bundle) > 0 {
+		dAtA[i] = 0x12
+		i++
+		i = encodeVarintTask(dAtA, i, uint64(len(m.Bundle)))
+		i += copy(dAtA[i:], m.Bundle)
 	}
-	if len(m.Checkpoint) > 0 {
-		i -= len(m.Checkpoint)
-		copy(dAtA[i:], m.Checkpoint)
-		i = encodeVarintTask(dAtA, i, uint64(len(m.Checkpoint)))
-		i--
-		dAtA[i] = 0x2a
-	}
-	if m.IO != nil {
-		{
-			size, err := m.IO.MarshalToSizedBuffer(dAtA[:i])
+	if len(m.Rootfs) > 0 {
+		for _, msg := range m.Rootfs {
+			dAtA[i] = 0x1a
+			i++
+			i = encodeVarintTask(dAtA, i, uint64(msg.Size()))
+			n, err := msg.MarshalTo(dAtA[i:])
 			if err != nil {
 				return 0, err
 			}
-			i -= size
-			i = encodeVarintTask(dAtA, i, uint64(size))
+			i += n
 		}
-		i--
+	}
+	if m.IO != nil {
 		dAtA[i] = 0x22
-	}
-	if len(m.Rootfs) > 0 {
-		for iNdEx := len(m.Rootfs) - 1; iNdEx >= 0; iNdEx-- {
-			{
-				size, err := m.Rootfs[iNdEx].MarshalToSizedBuffer(dAtA[:i])
-				if err != nil {
-					return 0, err
-				}
-				i -= size
-				i = encodeVarintTask(dAtA, i, uint64(size))
-			}
-			i--
-			dAtA[i] = 0x1a
+		i++
+		i = encodeVarintTask(dAtA, i, uint64(m.IO.Size()))
+		n1, err := m.IO.MarshalTo(dAtA[i:])
+		if err != nil {
+			return 0, err
 		}
+		i += n1
 	}
-	if len(m.Bundle) > 0 {
-		i -= len(m.Bundle)
-		copy(dAtA[i:], m.Bundle)
-		i = encodeVarintTask(dAtA, i, uint64(len(m.Bundle)))
-		i--
-		dAtA[i] = 0x12
+	if len(m.Checkpoint) > 0 {
+		dAtA[i] = 0x2a
+		i++
+		i = encodeVarintTask(dAtA, i, uint64(len(m.Checkpoint)))
+		i += copy(dAtA[i:], m.Checkpoint)
 	}
-	if len(m.ContainerID) > 0 {
-		i -= len(m.ContainerID)
-		copy(dAtA[i:], m.ContainerID)
-		i = encodeVarintTask(dAtA, i, uint64(len(m.ContainerID)))
-		i--
-		dAtA[i] = 0xa
+	if m.Pid != 0 {
+		dAtA[i] = 0x30
+		i++
+		i = encodeVarintTask(dAtA, i, uint64(m.Pid))
 	}
-	return len(dAtA) - i, nil
+	return i, nil
 }
 
 func (m *TaskStart) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	n, err := m.MarshalTo(dAtA)
 	if err != nil {
 		return nil, err
 	}
@@ -829,38 +417,28 @@ func (m *TaskStart) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *TaskStart) MarshalTo(dAtA []byte) (int, error) {
-	size := m.Size()
-	return m.MarshalToSizedBuffer(dAtA[:size])
-}
-
-func (m *TaskStart) MarshalToSizedBuffer(dAtA []byte) (int, error) {
-	i := len(dAtA)
+	var i int
 	_ = i
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		i -= len(m.XXX_unrecognized)
-		copy(dAtA[i:], m.XXX_unrecognized)
+	if len(m.ContainerID) > 0 {
+		dAtA[i] = 0xa
+		i++
+		i = encodeVarintTask(dAtA, i, uint64(len(m.ContainerID)))
+		i += copy(dAtA[i:], m.ContainerID)
 	}
 	if m.Pid != 0 {
-		i = encodeVarintTask(dAtA, i, uint64(m.Pid))
-		i--
 		dAtA[i] = 0x10
+		i++
+		i = encodeVarintTask(dAtA, i, uint64(m.Pid))
 	}
-	if len(m.ContainerID) > 0 {
-		i -= len(m.ContainerID)
-		copy(dAtA[i:], m.ContainerID)
-		i = encodeVarintTask(dAtA, i, uint64(len(m.ContainerID)))
-		i--
-		dAtA[i] = 0xa
-	}
-	return len(dAtA) - i, nil
+	return i, nil
 }
 
 func (m *TaskDelete) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	n, err := m.MarshalTo(dAtA)
 	if err != nil {
 		return nil, err
 	}
@@ -868,58 +446,41 @@ func (m *TaskDelete) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *TaskDelete) MarshalTo(dAtA []byte) (int, error) {
-	size := m.Size()
-	return m.MarshalToSizedBuffer(dAtA[:size])
-}
-
-func (m *TaskDelete) MarshalToSizedBuffer(dAtA []byte) (int, error) {
-	i := len(dAtA)
+	var i int
 	_ = i
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		i -= len(m.XXX_unrecognized)
-		copy(dAtA[i:], m.XXX_unrecognized)
-	}
-	if len(m.ID) > 0 {
-		i -= len(m.ID)
-		copy(dAtA[i:], m.ID)
-		i = encodeVarintTask(dAtA, i, uint64(len(m.ID)))
-		i--
-		dAtA[i] = 0x2a
-	}
-	n2, err2 := github_com_gogo_protobuf_types.StdTimeMarshalTo(m.ExitedAt, dAtA[i-github_com_gogo_protobuf_types.SizeOfStdTime(m.ExitedAt):])
-	if err2 != nil {
-		return 0, err2
-	}
-	i -= n2
-	i = encodeVarintTask(dAtA, i, uint64(n2))
-	i--
-	dAtA[i] = 0x22
-	if m.ExitStatus != 0 {
-		i = encodeVarintTask(dAtA, i, uint64(m.ExitStatus))
-		i--
-		dAtA[i] = 0x18
+	if len(m.ContainerID) > 0 {
+		dAtA[i] = 0xa
+		i++
+		i = encodeVarintTask(dAtA, i, uint64(len(m.ContainerID)))
+		i += copy(dAtA[i:], m.ContainerID)
 	}
 	if m.Pid != 0 {
-		i = encodeVarintTask(dAtA, i, uint64(m.Pid))
-		i--
 		dAtA[i] = 0x10
+		i++
+		i = encodeVarintTask(dAtA, i, uint64(m.Pid))
 	}
-	if len(m.ContainerID) > 0 {
-		i -= len(m.ContainerID)
-		copy(dAtA[i:], m.ContainerID)
-		i = encodeVarintTask(dAtA, i, uint64(len(m.ContainerID)))
-		i--
-		dAtA[i] = 0xa
+	if m.ExitStatus != 0 {
+		dAtA[i] = 0x18
+		i++
+		i = encodeVarintTask(dAtA, i, uint64(m.ExitStatus))
 	}
-	return len(dAtA) - i, nil
+	dAtA[i] = 0x22
+	i++
+	i = encodeVarintTask(dAtA, i, uint64(types.SizeOfStdTime(m.ExitedAt)))
+	n2, err := types.StdTimeMarshalTo(m.ExitedAt, dAtA[i:])
+	if err != nil {
+		return 0, err
+	}
+	i += n2
+	return i, nil
 }
 
 func (m *TaskIO) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	n, err := m.MarshalTo(dAtA)
 	if err != nil {
 		return nil, err
 	}
@@ -927,57 +488,45 @@ func (m *TaskIO) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *TaskIO) MarshalTo(dAtA []byte) (int, error) {
-	size := m.Size()
-	return m.MarshalToSizedBuffer(dAtA[:size])
-}
-
-func (m *TaskIO) MarshalToSizedBuffer(dAtA []byte) (int, error) {
-	i := len(dAtA)
+	var i int
 	_ = i
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		i -= len(m.XXX_unrecognized)
-		copy(dAtA[i:], m.XXX_unrecognized)
+	if len(m.Stdin) > 0 {
+		dAtA[i] = 0xa
+		i++
+		i = encodeVarintTask(dAtA, i, uint64(len(m.Stdin)))
+		i += copy(dAtA[i:], m.Stdin)
+	}
+	if len(m.Stdout) > 0 {
+		dAtA[i] = 0x12
+		i++
+		i = encodeVarintTask(dAtA, i, uint64(len(m.Stdout)))
+		i += copy(dAtA[i:], m.Stdout)
+	}
+	if len(m.Stderr) > 0 {
+		dAtA[i] = 0x1a
+		i++
+		i = encodeVarintTask(dAtA, i, uint64(len(m.Stderr)))
+		i += copy(dAtA[i:], m.Stderr)
 	}
 	if m.Terminal {
-		i--
+		dAtA[i] = 0x20
+		i++
 		if m.Terminal {
 			dAtA[i] = 1
 		} else {
 			dAtA[i] = 0
 		}
-		i--
-		dAtA[i] = 0x20
+		i++
 	}
-	if len(m.Stderr) > 0 {
-		i -= len(m.Stderr)
-		copy(dAtA[i:], m.Stderr)
-		i = encodeVarintTask(dAtA, i, uint64(len(m.Stderr)))
-		i--
-		dAtA[i] = 0x1a
-	}
-	if len(m.Stdout) > 0 {
-		i -= len(m.Stdout)
-		copy(dAtA[i:], m.Stdout)
-		i = encodeVarintTask(dAtA, i, uint64(len(m.Stdout)))
-		i--
-		dAtA[i] = 0x12
-	}
-	if len(m.Stdin) > 0 {
-		i -= len(m.Stdin)
-		copy(dAtA[i:], m.Stdin)
-		i = encodeVarintTask(dAtA, i, uint64(len(m.Stdin)))
-		i--
-		dAtA[i] = 0xa
-	}
-	return len(dAtA) - i, nil
+	return i, nil
 }
 
 func (m *TaskExit) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	n, err := m.MarshalTo(dAtA)
 	if err != nil {
 		return nil, err
 	}
@@ -985,58 +534,47 @@ func (m *TaskExit) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *TaskExit) MarshalTo(dAtA []byte) (int, error) {
-	size := m.Size()
-	return m.MarshalToSizedBuffer(dAtA[:size])
-}
-
-func (m *TaskExit) MarshalToSizedBuffer(dAtA []byte) (int, error) {
-	i := len(dAtA)
+	var i int
 	_ = i
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		i -= len(m.XXX_unrecognized)
-		copy(dAtA[i:], m.XXX_unrecognized)
-	}
-	n3, err3 := github_com_gogo_protobuf_types.StdTimeMarshalTo(m.ExitedAt, dAtA[i-github_com_gogo_protobuf_types.SizeOfStdTime(m.ExitedAt):])
-	if err3 != nil {
-		return 0, err3
-	}
-	i -= n3
-	i = encodeVarintTask(dAtA, i, uint64(n3))
-	i--
-	dAtA[i] = 0x2a
-	if m.ExitStatus != 0 {
-		i = encodeVarintTask(dAtA, i, uint64(m.ExitStatus))
-		i--
-		dAtA[i] = 0x20
-	}
-	if m.Pid != 0 {
-		i = encodeVarintTask(dAtA, i, uint64(m.Pid))
-		i--
-		dAtA[i] = 0x18
+	if len(m.ContainerID) > 0 {
+		dAtA[i] = 0xa
+		i++
+		i = encodeVarintTask(dAtA, i, uint64(len(m.ContainerID)))
+		i += copy(dAtA[i:], m.ContainerID)
 	}
 	if len(m.ID) > 0 {
-		i -= len(m.ID)
-		copy(dAtA[i:], m.ID)
-		i = encodeVarintTask(dAtA, i, uint64(len(m.ID)))
-		i--
 		dAtA[i] = 0x12
+		i++
+		i = encodeVarintTask(dAtA, i, uint64(len(m.ID)))
+		i += copy(dAtA[i:], m.ID)
 	}
-	if len(m.ContainerID) > 0 {
-		i -= len(m.ContainerID)
-		copy(dAtA[i:], m.ContainerID)
-		i = encodeVarintTask(dAtA, i, uint64(len(m.ContainerID)))
-		i--
-		dAtA[i] = 0xa
+	if m.Pid != 0 {
+		dAtA[i] = 0x18
+		i++
+		i = encodeVarintTask(dAtA, i, uint64(m.Pid))
 	}
-	return len(dAtA) - i, nil
+	if m.ExitStatus != 0 {
+		dAtA[i] = 0x20
+		i++
+		i = encodeVarintTask(dAtA, i, uint64(m.ExitStatus))
+	}
+	dAtA[i] = 0x2a
+	i++
+	i = encodeVarintTask(dAtA, i, uint64(types.SizeOfStdTime(m.ExitedAt)))
+	n3, err := types.StdTimeMarshalTo(m.ExitedAt, dAtA[i:])
+	if err != nil {
+		return 0, err
+	}
+	i += n3
+	return i, nil
 }
 
 func (m *TaskOOM) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	n, err := m.MarshalTo(dAtA)
 	if err != nil {
 		return nil, err
 	}
@@ -1044,33 +582,23 @@ func (m *TaskOOM) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *TaskOOM) MarshalTo(dAtA []byte) (int, error) {
-	size := m.Size()
-	return m.MarshalToSizedBuffer(dAtA[:size])
-}
-
-func (m *TaskOOM) MarshalToSizedBuffer(dAtA []byte) (int, error) {
-	i := len(dAtA)
+	var i int
 	_ = i
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		i -= len(m.XXX_unrecognized)
-		copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	if len(m.ContainerID) > 0 {
-		i -= len(m.ContainerID)
-		copy(dAtA[i:], m.ContainerID)
-		i = encodeVarintTask(dAtA, i, uint64(len(m.ContainerID)))
-		i--
 		dAtA[i] = 0xa
+		i++
+		i = encodeVarintTask(dAtA, i, uint64(len(m.ContainerID)))
+		i += copy(dAtA[i:], m.ContainerID)
 	}
-	return len(dAtA) - i, nil
+	return i, nil
 }
 
 func (m *TaskExecAdded) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	n, err := m.MarshalTo(dAtA)
 	if err != nil {
 		return nil, err
 	}
@@ -1078,40 +606,29 @@ func (m *TaskExecAdded) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *TaskExecAdded) MarshalTo(dAtA []byte) (int, error) {
-	size := m.Size()
-	return m.MarshalToSizedBuffer(dAtA[:size])
-}
-
-func (m *TaskExecAdded) MarshalToSizedBuffer(dAtA []byte) (int, error) {
-	i := len(dAtA)
+	var i int
 	_ = i
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		i -= len(m.XXX_unrecognized)
-		copy(dAtA[i:], m.XXX_unrecognized)
+	if len(m.ContainerID) > 0 {
+		dAtA[i] = 0xa
+		i++
+		i = encodeVarintTask(dAtA, i, uint64(len(m.ContainerID)))
+		i += copy(dAtA[i:], m.ContainerID)
 	}
 	if len(m.ExecID) > 0 {
-		i -= len(m.ExecID)
-		copy(dAtA[i:], m.ExecID)
-		i = encodeVarintTask(dAtA, i, uint64(len(m.ExecID)))
-		i--
 		dAtA[i] = 0x12
+		i++
+		i = encodeVarintTask(dAtA, i, uint64(len(m.ExecID)))
+		i += copy(dAtA[i:], m.ExecID)
 	}
-	if len(m.ContainerID) > 0 {
-		i -= len(m.ContainerID)
-		copy(dAtA[i:], m.ContainerID)
-		i = encodeVarintTask(dAtA, i, uint64(len(m.ContainerID)))
-		i--
-		dAtA[i] = 0xa
-	}
-	return len(dAtA) - i, nil
+	return i, nil
 }
 
 func (m *TaskExecStarted) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	n, err := m.MarshalTo(dAtA)
 	if err != nil {
 		return nil, err
 	}
@@ -1119,45 +636,34 @@ func (m *TaskExecStarted) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *TaskExecStarted) MarshalTo(dAtA []byte) (int, error) {
-	size := m.Size()
-	return m.MarshalToSizedBuffer(dAtA[:size])
-}
-
-func (m *TaskExecStarted) MarshalToSizedBuffer(dAtA []byte) (int, error) {
-	i := len(dAtA)
+	var i int
 	_ = i
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		i -= len(m.XXX_unrecognized)
-		copy(dAtA[i:], m.XXX_unrecognized)
-	}
-	if m.Pid != 0 {
-		i = encodeVarintTask(dAtA, i, uint64(m.Pid))
-		i--
-		dAtA[i] = 0x18
+	if len(m.ContainerID) > 0 {
+		dAtA[i] = 0xa
+		i++
+		i = encodeVarintTask(dAtA, i, uint64(len(m.ContainerID)))
+		i += copy(dAtA[i:], m.ContainerID)
 	}
 	if len(m.ExecID) > 0 {
-		i -= len(m.ExecID)
-		copy(dAtA[i:], m.ExecID)
-		i = encodeVarintTask(dAtA, i, uint64(len(m.ExecID)))
-		i--
 		dAtA[i] = 0x12
+		i++
+		i = encodeVarintTask(dAtA, i, uint64(len(m.ExecID)))
+		i += copy(dAtA[i:], m.ExecID)
 	}
-	if len(m.ContainerID) > 0 {
-		i -= len(m.ContainerID)
-		copy(dAtA[i:], m.ContainerID)
-		i = encodeVarintTask(dAtA, i, uint64(len(m.ContainerID)))
-		i--
-		dAtA[i] = 0xa
+	if m.Pid != 0 {
+		dAtA[i] = 0x18
+		i++
+		i = encodeVarintTask(dAtA, i, uint64(m.Pid))
 	}
-	return len(dAtA) - i, nil
+	return i, nil
 }
 
 func (m *TaskPaused) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	n, err := m.MarshalTo(dAtA)
 	if err != nil {
 		return nil, err
 	}
@@ -1165,33 +671,23 @@ func (m *TaskPaused) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *TaskPaused) MarshalTo(dAtA []byte) (int, error) {
-	size := m.Size()
-	return m.MarshalToSizedBuffer(dAtA[:size])
-}
-
-func (m *TaskPaused) MarshalToSizedBuffer(dAtA []byte) (int, error) {
-	i := len(dAtA)
+	var i int
 	_ = i
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		i -= len(m.XXX_unrecognized)
-		copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	if len(m.ContainerID) > 0 {
-		i -= len(m.ContainerID)
-		copy(dAtA[i:], m.ContainerID)
-		i = encodeVarintTask(dAtA, i, uint64(len(m.ContainerID)))
-		i--
 		dAtA[i] = 0xa
+		i++
+		i = encodeVarintTask(dAtA, i, uint64(len(m.ContainerID)))
+		i += copy(dAtA[i:], m.ContainerID)
 	}
-	return len(dAtA) - i, nil
+	return i, nil
 }
 
 func (m *TaskResumed) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	n, err := m.MarshalTo(dAtA)
 	if err != nil {
 		return nil, err
 	}
@@ -1199,33 +695,23 @@ func (m *TaskResumed) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *TaskResumed) MarshalTo(dAtA []byte) (int, error) {
-	size := m.Size()
-	return m.MarshalToSizedBuffer(dAtA[:size])
-}
-
-func (m *TaskResumed) MarshalToSizedBuffer(dAtA []byte) (int, error) {
-	i := len(dAtA)
+	var i int
 	_ = i
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		i -= len(m.XXX_unrecognized)
-		copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	if len(m.ContainerID) > 0 {
-		i -= len(m.ContainerID)
-		copy(dAtA[i:], m.ContainerID)
-		i = encodeVarintTask(dAtA, i, uint64(len(m.ContainerID)))
-		i--
 		dAtA[i] = 0xa
+		i++
+		i = encodeVarintTask(dAtA, i, uint64(len(m.ContainerID)))
+		i += copy(dAtA[i:], m.ContainerID)
 	}
-	return len(dAtA) - i, nil
+	return i, nil
 }
 
 func (m *TaskCheckpointed) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	n, err := m.MarshalTo(dAtA)
 	if err != nil {
 		return nil, err
 	}
@@ -1233,51 +719,35 @@ func (m *TaskCheckpointed) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *TaskCheckpointed) MarshalTo(dAtA []byte) (int, error) {
-	size := m.Size()
-	return m.MarshalToSizedBuffer(dAtA[:size])
-}
-
-func (m *TaskCheckpointed) MarshalToSizedBuffer(dAtA []byte) (int, error) {
-	i := len(dAtA)
+	var i int
 	_ = i
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		i -= len(m.XXX_unrecognized)
-		copy(dAtA[i:], m.XXX_unrecognized)
+	if len(m.ContainerID) > 0 {
+		dAtA[i] = 0xa
+		i++
+		i = encodeVarintTask(dAtA, i, uint64(len(m.ContainerID)))
+		i += copy(dAtA[i:], m.ContainerID)
 	}
 	if len(m.Checkpoint) > 0 {
-		i -= len(m.Checkpoint)
-		copy(dAtA[i:], m.Checkpoint)
-		i = encodeVarintTask(dAtA, i, uint64(len(m.Checkpoint)))
-		i--
 		dAtA[i] = 0x12
+		i++
+		i = encodeVarintTask(dAtA, i, uint64(len(m.Checkpoint)))
+		i += copy(dAtA[i:], m.Checkpoint)
 	}
-	if len(m.ContainerID) > 0 {
-		i -= len(m.ContainerID)
-		copy(dAtA[i:], m.ContainerID)
-		i = encodeVarintTask(dAtA, i, uint64(len(m.ContainerID)))
-		i--
-		dAtA[i] = 0xa
-	}
-	return len(dAtA) - i, nil
+	return i, nil
 }
 
 func encodeVarintTask(dAtA []byte, offset int, v uint64) int {
-	offset -= sovTask(v)
-	base := offset
 	for v >= 1<<7 {
 		dAtA[offset] = uint8(v&0x7f | 0x80)
 		v >>= 7
 		offset++
 	}
 	dAtA[offset] = uint8(v)
-	return base
+	return offset + 1
 }
 func (m *TaskCreate) Size() (n int) {
-	if m == nil {
-		return 0
-	}
 	var l int
 	_ = l
 	l = len(m.ContainerID)
@@ -1305,16 +775,10 @@ func (m *TaskCreate) Size() (n int) {
 	if m.Pid != 0 {
 		n += 1 + sovTask(uint64(m.Pid))
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
 func (m *TaskStart) Size() (n int) {
-	if m == nil {
-		return 0
-	}
 	var l int
 	_ = l
 	l = len(m.ContainerID)
@@ -1324,16 +788,10 @@ func (m *TaskStart) Size() (n int) {
 	if m.Pid != 0 {
 		n += 1 + sovTask(uint64(m.Pid))
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
 func (m *TaskDelete) Size() (n int) {
-	if m == nil {
-		return 0
-	}
 	var l int
 	_ = l
 	l = len(m.ContainerID)
@@ -1346,22 +804,12 @@ func (m *TaskDelete) Size() (n int) {
 	if m.ExitStatus != 0 {
 		n += 1 + sovTask(uint64(m.ExitStatus))
 	}
-	l = github_com_gogo_protobuf_types.SizeOfStdTime(m.ExitedAt)
+	l = types.SizeOfStdTime(m.ExitedAt)
 	n += 1 + l + sovTask(uint64(l))
-	l = len(m.ID)
-	if l > 0 {
-		n += 1 + l + sovTask(uint64(l))
-	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
 func (m *TaskIO) Size() (n int) {
-	if m == nil {
-		return 0
-	}
 	var l int
 	_ = l
 	l = len(m.Stdin)
@@ -1379,16 +827,10 @@ func (m *TaskIO) Size() (n int) {
 	if m.Terminal {
 		n += 2
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
 func (m *TaskExit) Size() (n int) {
-	if m == nil {
-		return 0
-	}
 	var l int
 	_ = l
 	l = len(m.ContainerID)
@@ -1405,34 +847,22 @@ func (m *TaskExit) Size() (n int) {
 	if m.ExitStatus != 0 {
 		n += 1 + sovTask(uint64(m.ExitStatus))
 	}
-	l = github_com_gogo_protobuf_types.SizeOfStdTime(m.ExitedAt)
+	l = types.SizeOfStdTime(m.ExitedAt)
 	n += 1 + l + sovTask(uint64(l))
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
 func (m *TaskOOM) Size() (n int) {
-	if m == nil {
-		return 0
-	}
 	var l int
 	_ = l
 	l = len(m.ContainerID)
 	if l > 0 {
 		n += 1 + l + sovTask(uint64(l))
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
 func (m *TaskExecAdded) Size() (n int) {
-	if m == nil {
-		return 0
-	}
 	var l int
 	_ = l
 	l = len(m.ContainerID)
@@ -1443,16 +873,10 @@ func (m *TaskExecAdded) Size() (n int) {
 	if l > 0 {
 		n += 1 + l + sovTask(uint64(l))
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
 func (m *TaskExecStarted) Size() (n int) {
-	if m == nil {
-		return 0
-	}
 	var l int
 	_ = l
 	l = len(m.ContainerID)
@@ -1466,48 +890,30 @@ func (m *TaskExecStarted) Size() (n int) {
 	if m.Pid != 0 {
 		n += 1 + sovTask(uint64(m.Pid))
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
 func (m *TaskPaused) Size() (n int) {
-	if m == nil {
-		return 0
-	}
 	var l int
 	_ = l
 	l = len(m.ContainerID)
 	if l > 0 {
 		n += 1 + l + sovTask(uint64(l))
-	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
 	}
 	return n
 }
 
 func (m *TaskResumed) Size() (n int) {
-	if m == nil {
-		return 0
-	}
 	var l int
 	_ = l
 	l = len(m.ContainerID)
 	if l > 0 {
 		n += 1 + l + sovTask(uint64(l))
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
 func (m *TaskCheckpointed) Size() (n int) {
-	if m == nil {
-		return 0
-	}
 	var l int
 	_ = l
 	l = len(m.ContainerID)
@@ -1518,14 +924,18 @@ func (m *TaskCheckpointed) Size() (n int) {
 	if l > 0 {
 		n += 1 + l + sovTask(uint64(l))
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
 func sovTask(x uint64) (n int) {
-	return (math_bits.Len64(x|1) + 6) / 7
+	for {
+		n++
+		x >>= 7
+		if x == 0 {
+			break
+		}
+	}
+	return n
 }
 func sozTask(x uint64) (n int) {
 	return sovTask(uint64((x << 1) ^ uint64((int64(x) >> 63))))
@@ -1534,19 +944,13 @@ func (this *TaskCreate) String() string {
 	if this == nil {
 		return "nil"
 	}
-	repeatedStringForRootfs := "[]*Mount{"
-	for _, f := range this.Rootfs {
-		repeatedStringForRootfs += strings.Replace(fmt.Sprintf("%v", f), "Mount", "types.Mount", 1) + ","
-	}
-	repeatedStringForRootfs += "}"
 	s := strings.Join([]string{`&TaskCreate{`,
 		`ContainerID:` + fmt.Sprintf("%v", this.ContainerID) + `,`,
 		`Bundle:` + fmt.Sprintf("%v", this.Bundle) + `,`,
-		`Rootfs:` + repeatedStringForRootfs + `,`,
-		`IO:` + strings.Replace(this.IO.String(), "TaskIO", "TaskIO", 1) + `,`,
+		`Rootfs:` + strings.Replace(fmt.Sprintf("%v", this.Rootfs), "Mount", "containerd_types.Mount", 1) + `,`,
+		`IO:` + strings.Replace(fmt.Sprintf("%v", this.IO), "TaskIO", "TaskIO", 1) + `,`,
 		`Checkpoint:` + fmt.Sprintf("%v", this.Checkpoint) + `,`,
 		`Pid:` + fmt.Sprintf("%v", this.Pid) + `,`,
-		`XXX_unrecognized:` + fmt.Sprintf("%v", this.XXX_unrecognized) + `,`,
 		`}`,
 	}, "")
 	return s
@@ -1558,7 +962,6 @@ func (this *TaskStart) String() string {
 	s := strings.Join([]string{`&TaskStart{`,
 		`ContainerID:` + fmt.Sprintf("%v", this.ContainerID) + `,`,
 		`Pid:` + fmt.Sprintf("%v", this.Pid) + `,`,
-		`XXX_unrecognized:` + fmt.Sprintf("%v", this.XXX_unrecognized) + `,`,
 		`}`,
 	}, "")
 	return s
@@ -1571,9 +974,7 @@ func (this *TaskDelete) String() string {
 		`ContainerID:` + fmt.Sprintf("%v", this.ContainerID) + `,`,
 		`Pid:` + fmt.Sprintf("%v", this.Pid) + `,`,
 		`ExitStatus:` + fmt.Sprintf("%v", this.ExitStatus) + `,`,
-		`ExitedAt:` + strings.Replace(strings.Replace(fmt.Sprintf("%v", this.ExitedAt), "Timestamp", "types1.Timestamp", 1), `&`, ``, 1) + `,`,
-		`ID:` + fmt.Sprintf("%v", this.ID) + `,`,
-		`XXX_unrecognized:` + fmt.Sprintf("%v", this.XXX_unrecognized) + `,`,
+		`ExitedAt:` + strings.Replace(strings.Replace(this.ExitedAt.String(), "Timestamp", "google_protobuf2.Timestamp", 1), `&`, ``, 1) + `,`,
 		`}`,
 	}, "")
 	return s
@@ -1587,7 +988,6 @@ func (this *TaskIO) String() string {
 		`Stdout:` + fmt.Sprintf("%v", this.Stdout) + `,`,
 		`Stderr:` + fmt.Sprintf("%v", this.Stderr) + `,`,
 		`Terminal:` + fmt.Sprintf("%v", this.Terminal) + `,`,
-		`XXX_unrecognized:` + fmt.Sprintf("%v", this.XXX_unrecognized) + `,`,
 		`}`,
 	}, "")
 	return s
@@ -1601,8 +1001,7 @@ func (this *TaskExit) String() string {
 		`ID:` + fmt.Sprintf("%v", this.ID) + `,`,
 		`Pid:` + fmt.Sprintf("%v", this.Pid) + `,`,
 		`ExitStatus:` + fmt.Sprintf("%v", this.ExitStatus) + `,`,
-		`ExitedAt:` + strings.Replace(strings.Replace(fmt.Sprintf("%v", this.ExitedAt), "Timestamp", "types1.Timestamp", 1), `&`, ``, 1) + `,`,
-		`XXX_unrecognized:` + fmt.Sprintf("%v", this.XXX_unrecognized) + `,`,
+		`ExitedAt:` + strings.Replace(strings.Replace(this.ExitedAt.String(), "Timestamp", "google_protobuf2.Timestamp", 1), `&`, ``, 1) + `,`,
 		`}`,
 	}, "")
 	return s
@@ -1613,7 +1012,6 @@ func (this *TaskOOM) String() string {
 	}
 	s := strings.Join([]string{`&TaskOOM{`,
 		`ContainerID:` + fmt.Sprintf("%v", this.ContainerID) + `,`,
-		`XXX_unrecognized:` + fmt.Sprintf("%v", this.XXX_unrecognized) + `,`,
 		`}`,
 	}, "")
 	return s
@@ -1625,7 +1023,6 @@ func (this *TaskExecAdded) String() string {
 	s := strings.Join([]string{`&TaskExecAdded{`,
 		`ContainerID:` + fmt.Sprintf("%v", this.ContainerID) + `,`,
 		`ExecID:` + fmt.Sprintf("%v", this.ExecID) + `,`,
-		`XXX_unrecognized:` + fmt.Sprintf("%v", this.XXX_unrecognized) + `,`,
 		`}`,
 	}, "")
 	return s
@@ -1638,7 +1035,6 @@ func (this *TaskExecStarted) String() string {
 		`ContainerID:` + fmt.Sprintf("%v", this.ContainerID) + `,`,
 		`ExecID:` + fmt.Sprintf("%v", this.ExecID) + `,`,
 		`Pid:` + fmt.Sprintf("%v", this.Pid) + `,`,
-		`XXX_unrecognized:` + fmt.Sprintf("%v", this.XXX_unrecognized) + `,`,
 		`}`,
 	}, "")
 	return s
@@ -1649,7 +1045,6 @@ func (this *TaskPaused) String() string {
 	}
 	s := strings.Join([]string{`&TaskPaused{`,
 		`ContainerID:` + fmt.Sprintf("%v", this.ContainerID) + `,`,
-		`XXX_unrecognized:` + fmt.Sprintf("%v", this.XXX_unrecognized) + `,`,
 		`}`,
 	}, "")
 	return s
@@ -1660,7 +1055,6 @@ func (this *TaskResumed) String() string {
 	}
 	s := strings.Join([]string{`&TaskResumed{`,
 		`ContainerID:` + fmt.Sprintf("%v", this.ContainerID) + `,`,
-		`XXX_unrecognized:` + fmt.Sprintf("%v", this.XXX_unrecognized) + `,`,
 		`}`,
 	}, "")
 	return s
@@ -1672,7 +1066,6 @@ func (this *TaskCheckpointed) String() string {
 	s := strings.Join([]string{`&TaskCheckpointed{`,
 		`ContainerID:` + fmt.Sprintf("%v", this.ContainerID) + `,`,
 		`Checkpoint:` + fmt.Sprintf("%v", this.Checkpoint) + `,`,
-		`XXX_unrecognized:` + fmt.Sprintf("%v", this.XXX_unrecognized) + `,`,
 		`}`,
 	}, "")
 	return s
@@ -1700,7 +1093,7 @@ func (m *TaskCreate) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= uint64(b&0x7F) << shift
+			wire |= (uint64(b) & 0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -1728,7 +1121,7 @@ func (m *TaskCreate) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= uint64(b&0x7F) << shift
+				stringLen |= (uint64(b) & 0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -1738,9 +1131,6 @@ func (m *TaskCreate) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthTask
 			}
 			postIndex := iNdEx + intStringLen
-			if postIndex < 0 {
-				return ErrInvalidLengthTask
-			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -1760,7 +1150,7 @@ func (m *TaskCreate) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= uint64(b&0x7F) << shift
+				stringLen |= (uint64(b) & 0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -1770,9 +1160,6 @@ func (m *TaskCreate) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthTask
 			}
 			postIndex := iNdEx + intStringLen
-			if postIndex < 0 {
-				return ErrInvalidLengthTask
-			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -1792,7 +1179,7 @@ func (m *TaskCreate) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				msglen |= int(b&0x7F) << shift
+				msglen |= (int(b) & 0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -1801,13 +1188,10 @@ func (m *TaskCreate) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthTask
 			}
 			postIndex := iNdEx + msglen
-			if postIndex < 0 {
-				return ErrInvalidLengthTask
-			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.Rootfs = append(m.Rootfs, &types.Mount{})
+			m.Rootfs = append(m.Rootfs, &containerd_types.Mount{})
 			if err := m.Rootfs[len(m.Rootfs)-1].Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
@@ -1826,7 +1210,7 @@ func (m *TaskCreate) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				msglen |= int(b&0x7F) << shift
+				msglen |= (int(b) & 0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -1835,9 +1219,6 @@ func (m *TaskCreate) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthTask
 			}
 			postIndex := iNdEx + msglen
-			if postIndex < 0 {
-				return ErrInvalidLengthTask
-			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -1862,7 +1243,7 @@ func (m *TaskCreate) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= uint64(b&0x7F) << shift
+				stringLen |= (uint64(b) & 0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -1872,9 +1253,6 @@ func (m *TaskCreate) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthTask
 			}
 			postIndex := iNdEx + intStringLen
-			if postIndex < 0 {
-				return ErrInvalidLengthTask
-			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -1894,7 +1272,7 @@ func (m *TaskCreate) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.Pid |= uint32(b&0x7F) << shift
+				m.Pid |= (uint32(b) & 0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -1905,13 +1283,12 @@ func (m *TaskCreate) Unmarshal(dAtA []byte) error {
 			if err != nil {
 				return err
 			}
-			if (skippy < 0) || (iNdEx+skippy) < 0 {
+			if skippy < 0 {
 				return ErrInvalidLengthTask
 			}
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -1936,7 +1313,7 @@ func (m *TaskStart) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= uint64(b&0x7F) << shift
+			wire |= (uint64(b) & 0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -1964,7 +1341,7 @@ func (m *TaskStart) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= uint64(b&0x7F) << shift
+				stringLen |= (uint64(b) & 0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -1974,9 +1351,6 @@ func (m *TaskStart) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthTask
 			}
 			postIndex := iNdEx + intStringLen
-			if postIndex < 0 {
-				return ErrInvalidLengthTask
-			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -1996,7 +1370,7 @@ func (m *TaskStart) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.Pid |= uint32(b&0x7F) << shift
+				m.Pid |= (uint32(b) & 0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -2007,13 +1381,12 @@ func (m *TaskStart) Unmarshal(dAtA []byte) error {
 			if err != nil {
 				return err
 			}
-			if (skippy < 0) || (iNdEx+skippy) < 0 {
+			if skippy < 0 {
 				return ErrInvalidLengthTask
 			}
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -2038,7 +1411,7 @@ func (m *TaskDelete) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= uint64(b&0x7F) << shift
+			wire |= (uint64(b) & 0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -2066,7 +1439,7 @@ func (m *TaskDelete) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= uint64(b&0x7F) << shift
+				stringLen |= (uint64(b) & 0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -2076,9 +1449,6 @@ func (m *TaskDelete) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthTask
 			}
 			postIndex := iNdEx + intStringLen
-			if postIndex < 0 {
-				return ErrInvalidLengthTask
-			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -2098,7 +1468,7 @@ func (m *TaskDelete) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.Pid |= uint32(b&0x7F) << shift
+				m.Pid |= (uint32(b) & 0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -2117,7 +1487,7 @@ func (m *TaskDelete) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.ExitStatus |= uint32(b&0x7F) << shift
+				m.ExitStatus |= (uint32(b) & 0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -2136,7 +1506,7 @@ func (m *TaskDelete) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				msglen |= int(b&0x7F) << shift
+				msglen |= (int(b) & 0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -2145,47 +1515,12 @@ func (m *TaskDelete) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthTask
 			}
 			postIndex := iNdEx + msglen
-			if postIndex < 0 {
-				return ErrInvalidLengthTask
-			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			if err := github_com_gogo_protobuf_types.StdTimeUnmarshal(&m.ExitedAt, dAtA[iNdEx:postIndex]); err != nil {
+			if err := types.StdTimeUnmarshal(&m.ExitedAt, dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
-			iNdEx = postIndex
-		case 5:
-			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field ID", wireType)
-			}
-			var stringLen uint64
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflowTask
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				stringLen |= uint64(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			intStringLen := int(stringLen)
-			if intStringLen < 0 {
-				return ErrInvalidLengthTask
-			}
-			postIndex := iNdEx + intStringLen
-			if postIndex < 0 {
-				return ErrInvalidLengthTask
-			}
-			if postIndex > l {
-				return io.ErrUnexpectedEOF
-			}
-			m.ID = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
@@ -2193,13 +1528,12 @@ func (m *TaskDelete) Unmarshal(dAtA []byte) error {
 			if err != nil {
 				return err
 			}
-			if (skippy < 0) || (iNdEx+skippy) < 0 {
+			if skippy < 0 {
 				return ErrInvalidLengthTask
 			}
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -2224,7 +1558,7 @@ func (m *TaskIO) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= uint64(b&0x7F) << shift
+			wire |= (uint64(b) & 0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -2252,7 +1586,7 @@ func (m *TaskIO) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= uint64(b&0x7F) << shift
+				stringLen |= (uint64(b) & 0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -2262,9 +1596,6 @@ func (m *TaskIO) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthTask
 			}
 			postIndex := iNdEx + intStringLen
-			if postIndex < 0 {
-				return ErrInvalidLengthTask
-			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -2284,7 +1615,7 @@ func (m *TaskIO) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= uint64(b&0x7F) << shift
+				stringLen |= (uint64(b) & 0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -2294,9 +1625,6 @@ func (m *TaskIO) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthTask
 			}
 			postIndex := iNdEx + intStringLen
-			if postIndex < 0 {
-				return ErrInvalidLengthTask
-			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -2316,7 +1644,7 @@ func (m *TaskIO) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= uint64(b&0x7F) << shift
+				stringLen |= (uint64(b) & 0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -2326,9 +1654,6 @@ func (m *TaskIO) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthTask
 			}
 			postIndex := iNdEx + intStringLen
-			if postIndex < 0 {
-				return ErrInvalidLengthTask
-			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -2348,7 +1673,7 @@ func (m *TaskIO) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				v |= int(b&0x7F) << shift
+				v |= (int(b) & 0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -2360,13 +1685,12 @@ func (m *TaskIO) Unmarshal(dAtA []byte) error {
 			if err != nil {
 				return err
 			}
-			if (skippy < 0) || (iNdEx+skippy) < 0 {
+			if skippy < 0 {
 				return ErrInvalidLengthTask
 			}
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -2391,7 +1715,7 @@ func (m *TaskExit) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= uint64(b&0x7F) << shift
+			wire |= (uint64(b) & 0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -2419,7 +1743,7 @@ func (m *TaskExit) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= uint64(b&0x7F) << shift
+				stringLen |= (uint64(b) & 0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -2429,9 +1753,6 @@ func (m *TaskExit) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthTask
 			}
 			postIndex := iNdEx + intStringLen
-			if postIndex < 0 {
-				return ErrInvalidLengthTask
-			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -2451,7 +1772,7 @@ func (m *TaskExit) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= uint64(b&0x7F) << shift
+				stringLen |= (uint64(b) & 0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -2461,9 +1782,6 @@ func (m *TaskExit) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthTask
 			}
 			postIndex := iNdEx + intStringLen
-			if postIndex < 0 {
-				return ErrInvalidLengthTask
-			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -2483,7 +1801,7 @@ func (m *TaskExit) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.Pid |= uint32(b&0x7F) << shift
+				m.Pid |= (uint32(b) & 0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -2502,7 +1820,7 @@ func (m *TaskExit) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.ExitStatus |= uint32(b&0x7F) << shift
+				m.ExitStatus |= (uint32(b) & 0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -2521,7 +1839,7 @@ func (m *TaskExit) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				msglen |= int(b&0x7F) << shift
+				msglen |= (int(b) & 0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -2530,13 +1848,10 @@ func (m *TaskExit) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthTask
 			}
 			postIndex := iNdEx + msglen
-			if postIndex < 0 {
-				return ErrInvalidLengthTask
-			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			if err := github_com_gogo_protobuf_types.StdTimeUnmarshal(&m.ExitedAt, dAtA[iNdEx:postIndex]); err != nil {
+			if err := types.StdTimeUnmarshal(&m.ExitedAt, dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
 			iNdEx = postIndex
@@ -2546,13 +1861,12 @@ func (m *TaskExit) Unmarshal(dAtA []byte) error {
 			if err != nil {
 				return err
 			}
-			if (skippy < 0) || (iNdEx+skippy) < 0 {
+			if skippy < 0 {
 				return ErrInvalidLengthTask
 			}
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -2577,7 +1891,7 @@ func (m *TaskOOM) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= uint64(b&0x7F) << shift
+			wire |= (uint64(b) & 0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -2605,7 +1919,7 @@ func (m *TaskOOM) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= uint64(b&0x7F) << shift
+				stringLen |= (uint64(b) & 0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -2615,9 +1929,6 @@ func (m *TaskOOM) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthTask
 			}
 			postIndex := iNdEx + intStringLen
-			if postIndex < 0 {
-				return ErrInvalidLengthTask
-			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -2629,13 +1940,12 @@ func (m *TaskOOM) Unmarshal(dAtA []byte) error {
 			if err != nil {
 				return err
 			}
-			if (skippy < 0) || (iNdEx+skippy) < 0 {
+			if skippy < 0 {
 				return ErrInvalidLengthTask
 			}
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -2660,7 +1970,7 @@ func (m *TaskExecAdded) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= uint64(b&0x7F) << shift
+			wire |= (uint64(b) & 0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -2688,7 +1998,7 @@ func (m *TaskExecAdded) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= uint64(b&0x7F) << shift
+				stringLen |= (uint64(b) & 0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -2698,9 +2008,6 @@ func (m *TaskExecAdded) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthTask
 			}
 			postIndex := iNdEx + intStringLen
-			if postIndex < 0 {
-				return ErrInvalidLengthTask
-			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -2720,7 +2027,7 @@ func (m *TaskExecAdded) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= uint64(b&0x7F) << shift
+				stringLen |= (uint64(b) & 0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -2730,9 +2037,6 @@ func (m *TaskExecAdded) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthTask
 			}
 			postIndex := iNdEx + intStringLen
-			if postIndex < 0 {
-				return ErrInvalidLengthTask
-			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -2744,13 +2048,12 @@ func (m *TaskExecAdded) Unmarshal(dAtA []byte) error {
 			if err != nil {
 				return err
 			}
-			if (skippy < 0) || (iNdEx+skippy) < 0 {
+			if skippy < 0 {
 				return ErrInvalidLengthTask
 			}
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -2775,7 +2078,7 @@ func (m *TaskExecStarted) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= uint64(b&0x7F) << shift
+			wire |= (uint64(b) & 0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -2803,7 +2106,7 @@ func (m *TaskExecStarted) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= uint64(b&0x7F) << shift
+				stringLen |= (uint64(b) & 0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -2813,9 +2116,6 @@ func (m *TaskExecStarted) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthTask
 			}
 			postIndex := iNdEx + intStringLen
-			if postIndex < 0 {
-				return ErrInvalidLengthTask
-			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -2835,7 +2135,7 @@ func (m *TaskExecStarted) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= uint64(b&0x7F) << shift
+				stringLen |= (uint64(b) & 0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -2845,9 +2145,6 @@ func (m *TaskExecStarted) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthTask
 			}
 			postIndex := iNdEx + intStringLen
-			if postIndex < 0 {
-				return ErrInvalidLengthTask
-			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -2867,7 +2164,7 @@ func (m *TaskExecStarted) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.Pid |= uint32(b&0x7F) << shift
+				m.Pid |= (uint32(b) & 0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -2878,13 +2175,12 @@ func (m *TaskExecStarted) Unmarshal(dAtA []byte) error {
 			if err != nil {
 				return err
 			}
-			if (skippy < 0) || (iNdEx+skippy) < 0 {
+			if skippy < 0 {
 				return ErrInvalidLengthTask
 			}
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -2909,7 +2205,7 @@ func (m *TaskPaused) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= uint64(b&0x7F) << shift
+			wire |= (uint64(b) & 0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -2937,7 +2233,7 @@ func (m *TaskPaused) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= uint64(b&0x7F) << shift
+				stringLen |= (uint64(b) & 0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -2947,9 +2243,6 @@ func (m *TaskPaused) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthTask
 			}
 			postIndex := iNdEx + intStringLen
-			if postIndex < 0 {
-				return ErrInvalidLengthTask
-			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -2961,13 +2254,12 @@ func (m *TaskPaused) Unmarshal(dAtA []byte) error {
 			if err != nil {
 				return err
 			}
-			if (skippy < 0) || (iNdEx+skippy) < 0 {
+			if skippy < 0 {
 				return ErrInvalidLengthTask
 			}
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -2992,7 +2284,7 @@ func (m *TaskResumed) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= uint64(b&0x7F) << shift
+			wire |= (uint64(b) & 0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -3020,7 +2312,7 @@ func (m *TaskResumed) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= uint64(b&0x7F) << shift
+				stringLen |= (uint64(b) & 0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -3030,9 +2322,6 @@ func (m *TaskResumed) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthTask
 			}
 			postIndex := iNdEx + intStringLen
-			if postIndex < 0 {
-				return ErrInvalidLengthTask
-			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -3044,13 +2333,12 @@ func (m *TaskResumed) Unmarshal(dAtA []byte) error {
 			if err != nil {
 				return err
 			}
-			if (skippy < 0) || (iNdEx+skippy) < 0 {
+			if skippy < 0 {
 				return ErrInvalidLengthTask
 			}
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -3075,7 +2363,7 @@ func (m *TaskCheckpointed) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= uint64(b&0x7F) << shift
+			wire |= (uint64(b) & 0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -3103,7 +2391,7 @@ func (m *TaskCheckpointed) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= uint64(b&0x7F) << shift
+				stringLen |= (uint64(b) & 0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -3113,9 +2401,6 @@ func (m *TaskCheckpointed) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthTask
 			}
 			postIndex := iNdEx + intStringLen
-			if postIndex < 0 {
-				return ErrInvalidLengthTask
-			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -3135,7 +2420,7 @@ func (m *TaskCheckpointed) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= uint64(b&0x7F) << shift
+				stringLen |= (uint64(b) & 0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -3145,9 +2430,6 @@ func (m *TaskCheckpointed) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthTask
 			}
 			postIndex := iNdEx + intStringLen
-			if postIndex < 0 {
-				return ErrInvalidLengthTask
-			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -3159,13 +2441,12 @@ func (m *TaskCheckpointed) Unmarshal(dAtA []byte) error {
 			if err != nil {
 				return err
 			}
-			if (skippy < 0) || (iNdEx+skippy) < 0 {
+			if skippy < 0 {
 				return ErrInvalidLengthTask
 			}
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -3178,7 +2459,6 @@ func (m *TaskCheckpointed) Unmarshal(dAtA []byte) error {
 func skipTask(dAtA []byte) (n int, err error) {
 	l := len(dAtA)
 	iNdEx := 0
-	depth := 0
 	for iNdEx < l {
 		var wire uint64
 		for shift := uint(0); ; shift += 7 {
@@ -3210,8 +2490,10 @@ func skipTask(dAtA []byte) (n int, err error) {
 					break
 				}
 			}
+			return iNdEx, nil
 		case 1:
 			iNdEx += 8
+			return iNdEx, nil
 		case 2:
 			var length int
 			for shift := uint(0); ; shift += 7 {
@@ -3228,34 +2510,101 @@ func skipTask(dAtA []byte) (n int, err error) {
 					break
 				}
 			}
+			iNdEx += length
 			if length < 0 {
 				return 0, ErrInvalidLengthTask
 			}
-			iNdEx += length
+			return iNdEx, nil
 		case 3:
-			depth++
-		case 4:
-			if depth == 0 {
-				return 0, ErrUnexpectedEndOfGroupTask
+			for {
+				var innerWire uint64
+				var start int = iNdEx
+				for shift := uint(0); ; shift += 7 {
+					if shift >= 64 {
+						return 0, ErrIntOverflowTask
+					}
+					if iNdEx >= l {
+						return 0, io.ErrUnexpectedEOF
+					}
+					b := dAtA[iNdEx]
+					iNdEx++
+					innerWire |= (uint64(b) & 0x7F) << shift
+					if b < 0x80 {
+						break
+					}
+				}
+				innerWireType := int(innerWire & 0x7)
+				if innerWireType == 4 {
+					break
+				}
+				next, err := skipTask(dAtA[start:])
+				if err != nil {
+					return 0, err
+				}
+				iNdEx = start + next
 			}
-			depth--
+			return iNdEx, nil
+		case 4:
+			return iNdEx, nil
 		case 5:
 			iNdEx += 4
+			return iNdEx, nil
 		default:
 			return 0, fmt.Errorf("proto: illegal wireType %d", wireType)
 		}
-		if iNdEx < 0 {
-			return 0, ErrInvalidLengthTask
-		}
-		if depth == 0 {
-			return iNdEx, nil
-		}
 	}
-	return 0, io.ErrUnexpectedEOF
+	panic("unreachable")
 }
 
 var (
-	ErrInvalidLengthTask        = fmt.Errorf("proto: negative length found during unmarshaling")
-	ErrIntOverflowTask          = fmt.Errorf("proto: integer overflow")
-	ErrUnexpectedEndOfGroupTask = fmt.Errorf("proto: unexpected end of group")
+	ErrInvalidLengthTask = fmt.Errorf("proto: negative length found during unmarshaling")
+	ErrIntOverflowTask   = fmt.Errorf("proto: integer overflow")
 )
+
+func init() {
+	proto.RegisterFile("github.com/containerd/containerd/api/events/task.proto", fileDescriptorTask)
+}
+
+var fileDescriptorTask = []byte{
+	// 637 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xb4, 0x95, 0xcd, 0x6e, 0xd3, 0x40,
+	0x10, 0xc7, 0x63, 0xa7, 0x75, 0x93, 0x09, 0x55, 0x8b, 0x55, 0x41, 0xc8, 0xc1, 0x8e, 0xcc, 0x25,
+	0x27, 0x5b, 0x04, 0x89, 0x0b, 0x42, 0x6a, 0xd2, 0x70, 0xc8, 0xa1, 0x4a, 0x71, 0x7b, 0xa8, 0xb8,
+	0x44, 0x4e, 0x76, 0x93, 0x2c, 0x8d, 0xbd, 0x96, 0x3d, 0x46, 0x45, 0xe2, 0xc0, 0x23, 0xf0, 0x08,
+	0x3c, 0x05, 0xcf, 0xd0, 0x03, 0x07, 0x8e, 0x9c, 0x02, 0xf5, 0x03, 0x70, 0xe2, 0x01, 0xd0, 0x7a,
+	0x1d, 0xb7, 0x50, 0xf1, 0x65, 0x89, 0x53, 0x76, 0x66, 0x67, 0xff, 0x33, 0xf3, 0xdb, 0xc9, 0x1a,
+	0x1e, 0xcd, 0x19, 0x2e, 0x92, 0x89, 0x3d, 0xe5, 0xbe, 0x33, 0xe5, 0x01, 0x7a, 0x2c, 0xa0, 0x11,
+	0xb9, 0xbe, 0xf4, 0x42, 0xe6, 0xd0, 0x97, 0x34, 0xc0, 0xd8, 0x41, 0x2f, 0x3e, 0xb3, 0xc3, 0x88,
+	0x23, 0xd7, 0x6f, 0x5f, 0x45, 0xd8, 0x72, 0xb7, 0xb5, 0x37, 0xe7, 0x73, 0x9e, 0xed, 0x3a, 0x62,
+	0x25, 0x03, 0x5b, 0xe6, 0x9c, 0xf3, 0xf9, 0x92, 0x3a, 0x99, 0x35, 0x49, 0x66, 0x0e, 0x32, 0x9f,
+	0xc6, 0xe8, 0xf9, 0x61, 0x1e, 0xf0, 0x77, 0x15, 0xe0, 0xab, 0x90, 0xc6, 0x8e, 0xcf, 0x93, 0x00,
+	0xf3, 0x73, 0xfb, 0x7f, 0x3c, 0x57, 0xa4, 0x0c, 0x97, 0xc9, 0x9c, 0x05, 0xce, 0x8c, 0xd1, 0x25,
+	0x09, 0x3d, 0x5c, 0x48, 0x05, 0xeb, 0xab, 0x02, 0x70, 0xe2, 0xc5, 0x67, 0x07, 0x11, 0xf5, 0x90,
+	0xea, 0x5d, 0xb8, 0x55, 0x1c, 0x1e, 0x33, 0xd2, 0x54, 0xda, 0x4a, 0xa7, 0xde, 0xdf, 0x49, 0x57,
+	0x66, 0xe3, 0x60, 0xed, 0x1f, 0x0e, 0xdc, 0x46, 0x11, 0x34, 0x24, 0xfa, 0x1d, 0xd0, 0x26, 0x49,
+	0x40, 0x96, 0xb4, 0xa9, 0x8a, 0x68, 0x37, 0xb7, 0x74, 0x07, 0xb4, 0x88, 0x73, 0x9c, 0xc5, 0xcd,
+	0x6a, 0xbb, 0xda, 0x69, 0x74, 0xef, 0xda, 0xd7, 0x78, 0x65, 0xbd, 0xd8, 0x87, 0xa2, 0x17, 0x37,
+	0x0f, 0xd3, 0x1f, 0x80, 0xca, 0x78, 0x73, 0xa3, 0xad, 0x74, 0x1a, 0xdd, 0x7b, 0xf6, 0x0d, 0xb8,
+	0xb6, 0xa8, 0x73, 0x38, 0xea, 0x6b, 0xe9, 0xca, 0x54, 0x87, 0x23, 0x57, 0x65, 0x5c, 0x37, 0x00,
+	0xa6, 0x0b, 0x3a, 0x3d, 0x0b, 0x39, 0x0b, 0xb0, 0xb9, 0x99, 0xe5, 0xbf, 0xe6, 0xd1, 0x77, 0xa1,
+	0x1a, 0x32, 0xd2, 0xd4, 0xda, 0x4a, 0x67, 0xdb, 0x15, 0x4b, 0xeb, 0x19, 0xd4, 0x85, 0xce, 0x31,
+	0x7a, 0x11, 0x96, 0x6a, 0x37, 0x97, 0x54, 0xaf, 0x24, 0xdf, 0xe7, 0x0c, 0x07, 0x74, 0x49, 0x4b,
+	0x32, 0xbc, 0x21, 0xaa, 0x9b, 0xd0, 0xa0, 0xe7, 0x0c, 0xc7, 0x31, 0x7a, 0x98, 0x08, 0x84, 0x62,
+	0x07, 0x84, 0xeb, 0x38, 0xf3, 0xe8, 0x3d, 0xa8, 0x0b, 0x8b, 0x92, 0xb1, 0x87, 0x39, 0xb4, 0x96,
+	0x2d, 0x07, 0xcd, 0x5e, 0xdf, 0xba, 0x7d, 0xb2, 0x1e, 0xb4, 0x7e, 0xed, 0x62, 0x65, 0x56, 0xde,
+	0x7e, 0x36, 0x15, 0xb7, 0x26, 0x8f, 0xf5, 0xd0, 0x7a, 0x01, 0x9a, 0x64, 0xaa, 0xef, 0xc1, 0x66,
+	0x8c, 0x84, 0x05, 0xb2, 0x58, 0x57, 0x1a, 0xe2, 0x66, 0x63, 0x24, 0x3c, 0xc1, 0xf5, 0xcd, 0x4a,
+	0x2b, 0xf7, 0xd3, 0x28, 0xca, 0xca, 0x92, 0x7e, 0x1a, 0x45, 0x7a, 0x0b, 0x6a, 0x48, 0x23, 0x9f,
+	0x05, 0xde, 0x32, 0xab, 0xa8, 0xe6, 0x16, 0xb6, 0xf5, 0x41, 0x81, 0x9a, 0x48, 0xf6, 0xf4, 0x9c,
+	0x61, 0xc9, 0x31, 0x53, 0x73, 0x42, 0xf5, 0x7c, 0x04, 0x06, 0xae, 0xca, 0x0a, 0x74, 0xd5, 0x5f,
+	0xa2, 0xdb, 0xf8, 0x3d, 0xba, 0xcd, 0x52, 0xe8, 0x9e, 0xc0, 0x96, 0xe8, 0x66, 0x34, 0x3a, 0x2c,
+	0xd3, 0x8c, 0xb5, 0x80, 0x6d, 0x09, 0x83, 0x4e, 0x7b, 0x84, 0x50, 0x52, 0x8a, 0xc8, 0x7d, 0xd8,
+	0xa2, 0xe7, 0x74, 0x3a, 0x2e, 0xb0, 0x40, 0xba, 0x32, 0x35, 0xa1, 0x39, 0x1c, 0xb8, 0x9a, 0xd8,
+	0x1a, 0x12, 0xeb, 0x35, 0xec, 0xac, 0x33, 0x65, 0x33, 0xff, 0x1f, 0x73, 0xdd, 0xbc, 0x0a, 0x6b,
+	0x5f, 0xfe, 0x33, 0x8e, 0xbc, 0x24, 0x2e, 0x97, 0xd8, 0xea, 0x41, 0x43, 0x28, 0xb8, 0x34, 0x4e,
+	0xfc, 0x92, 0x12, 0x33, 0xd8, 0xcd, 0x9e, 0xb8, 0xe2, 0x59, 0x28, 0xc9, 0xe0, 0xc7, 0xc7, 0x46,
+	0xfd, 0xf9, 0xb1, 0xe9, 0x1f, 0x5d, 0x5c, 0x1a, 0x95, 0x4f, 0x97, 0x46, 0xe5, 0x4d, 0x6a, 0x28,
+	0x17, 0xa9, 0xa1, 0x7c, 0x4c, 0x0d, 0xe5, 0x4b, 0x6a, 0x28, 0xef, 0xbe, 0x19, 0xca, 0xf3, 0xee,
+	0x3f, 0x7c, 0x65, 0x1e, 0xcb, 0x9f, 0xd3, 0xca, 0x69, 0x75, 0xa2, 0x65, 0x13, 0xf9, 0xf0, 0x7b,
+	0x00, 0x00, 0x00, 0xff, 0xff, 0x07, 0x69, 0x62, 0x9d, 0xa6, 0x06, 0x00, 0x00,
+}

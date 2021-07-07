@@ -4,8 +4,7 @@ import (
 	"encoding/json"
 	"time"
 
-	"github.com/Microsoft/go-winio/pkg/guid"
-	hcsschema "github.com/Microsoft/hcsshim/internal/schema2"
+	"github.com/Microsoft/hcsshim/internal/schema2"
 )
 
 // ProcessConfig is used as both the input of Container.CreateProcess
@@ -63,7 +62,7 @@ type MappedVirtualDisk struct {
 	CreateInUtilityVM bool   `json:",omitempty"`
 	ReadOnly          bool   `json:",omitempty"`
 	Cache             string `json:",omitempty"` // "" (Unspecified); "Disabled"; "Enabled"; "Private"; "PrivateAllowSharing"
-	AttachOnly        bool   `json:",omitempty"`
+	AttachOnly        bool   `json:",omitempty:`
 }
 
 // AssignedDevice represents a device that has been directly assigned to a container
@@ -119,9 +118,9 @@ type PropertyType string
 
 const (
 	PropertyTypeStatistics        PropertyType = "Statistics"        // V1 and V2
-	PropertyTypeProcessList       PropertyType = "ProcessList"       // V1 and V2
-	PropertyTypeMappedVirtualDisk PropertyType = "MappedVirtualDisk" // Not supported in V2 schema call
-	PropertyTypeGuestConnection   PropertyType = "GuestConnection"   // V1 and V2. Nil return from HCS before RS5
+	PropertyTypeProcessList                    = "ProcessList"       // V1 and V2
+	PropertyTypeMappedVirtualDisk              = "MappedVirtualDisk" // Not supported in V2 schema call
+	PropertyTypeGuestConnection                = "GuestConnection"   // V1 and V2. Nil return from HCS before RS5
 )
 
 type PropertyQuery struct {
@@ -134,10 +133,9 @@ type ContainerProperties struct {
 	State                        string
 	Name                         string
 	SystemType                   string
-	RuntimeOSType                string `json:"RuntimeOsType,omitempty"`
 	Owner                        string
 	SiloGUID                     string                              `json:"SiloGuid,omitempty"`
-	RuntimeID                    guid.GUID                           `json:"RuntimeId,omitempty"`
+	RuntimeID                    string                              `json:"RuntimeId,omitempty"`
 	IsRuntimeTemplate            bool                                `json:",omitempty"`
 	RuntimeImagePath             string                              `json:",omitempty"`
 	Stopped                      bool                                `json:",omitempty"`
@@ -214,11 +212,8 @@ type MappedVirtualDiskController struct {
 
 // GuestDefinedCapabilities is part of the GuestConnectionInfo returned by a GuestConnection call on a utility VM
 type GuestDefinedCapabilities struct {
-	NamespaceAddRequestSupported  bool `json:",omitempty"`
-	SignalProcessSupported        bool `json:",omitempty"`
-	DumpStacksSupported           bool `json:",omitempty"`
-	DeleteContainerStateSupported bool `json:",omitempty"`
-	UpdateContainerSupported      bool `json:",omitempty"`
+	NamespaceAddRequestSupported bool `json:",omitempty"`
+	SignalProcessSupported       bool `json:",omitempty"`
 }
 
 // GuestConnectionInfo is the structure of an iterm return by a GuestConnection call on a utility VM

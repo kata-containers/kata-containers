@@ -22,8 +22,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-
-	"github.com/moby/sys/mountinfo"
+	"strings"
 )
 
 // SetTempMountLocation sets the temporary mount location
@@ -41,20 +40,23 @@ func SetTempMountLocation(root string) error {
 
 // CleanupTempMounts all temp mounts and remove the directories
 func CleanupTempMounts(flags int) (warnings []error, err error) {
-	mounts, err := mountinfo.GetMounts(mountinfo.PrefixFilter(tempMountLocation))
+	mounts, err := Self()
 	if err != nil {
 		return nil, err
 	}
-	// Make the deepest mount be first
-	sort.Slice(mounts, func(i, j int) bool {
-		return len(mounts[i].Mountpoint) > len(mounts[j].Mountpoint)
-	})
-	for _, mount := range mounts {
-		if err := UnmountAll(mount.Mountpoint, flags); err != nil {
+	var toUnmount []string
+	for _, m := range mounts {
+		if strings.HasPrefix(m.Mountpoint, tempMountLocation) {
+			toUnmount = append(toUnmount, m.Mountpoint)
+		}
+	}
+	sort.Sort(sort.Reverse(sort.StringSlice(toUnmount)))
+	for _, path := range toUnmount {
+		if err := UnmountAll(path, flags); err != nil {
 			warnings = append(warnings, err)
 			continue
 		}
-		if err := os.Remove(mount.Mountpoint); err != nil {
+		if err := os.Remove(path); err != nil {
 			warnings = append(warnings, err)
 		}
 	}

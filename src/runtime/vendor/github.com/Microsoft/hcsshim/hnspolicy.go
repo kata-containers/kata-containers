@@ -21,10 +21,7 @@ const (
 	OutboundNat          = hns.OutboundNat
 	ExternalLoadBalancer = hns.ExternalLoadBalancer
 	Route                = hns.Route
-	Proxy                = hns.Proxy
 )
-
-type ProxyPolicy = hns.ProxyPolicy
 
 type NatPolicy = hns.NatPolicy
 
