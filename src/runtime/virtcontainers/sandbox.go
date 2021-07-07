@@ -57,6 +57,10 @@ const (
 	DirMode = os.FileMode(0750) | os.ModeDir
 )
 
+var (
+	errSandboxNotRunning = errors.New("Sandbox not running")
+)
+
 // SandboxStatus describes a sandbox status.
 type SandboxStatus struct {
 	ID               string
@@ -323,7 +327,7 @@ func (s *Sandbox) Status() SandboxStatus {
 // Monitor returns a error channel for watcher to watch at
 func (s *Sandbox) Monitor(ctx context.Context) (chan error, error) {
 	if s.state.State != types.StateRunning {
-		return nil, fmt.Errorf("Sandbox is not running")
+		return nil, errSandboxNotRunning
 	}
 
 	s.Lock()
@@ -338,7 +342,7 @@ func (s *Sandbox) Monitor(ctx context.Context) (chan error, error) {
 // WaitProcess waits on a container process and return its exit code
 func (s *Sandbox) WaitProcess(ctx context.Context, containerID, processID string) (int32, error) {
 	if s.state.State != types.StateRunning {
-		return 0, fmt.Errorf("Sandbox not running")
+		return 0, errSandboxNotRunning
 	}
 
 	c, err := s.findContainer(containerID)
@@ -353,7 +357,7 @@ func (s *Sandbox) WaitProcess(ctx context.Context, containerID, processID string
 // When all is true, it sends the signal to all processes of a container.
 func (s *Sandbox) SignalProcess(ctx context.Context, containerID, processID string, signal syscall.Signal, all bool) error {
 	if s.state.State != types.StateRunning {
-		return fmt.Errorf("Sandbox not running")
+		return errSandboxNotRunning
 	}
 
 	c, err := s.findContainer(containerID)
@@ -367,7 +371,7 @@ func (s *Sandbox) SignalProcess(ctx context.Context, containerID, processID stri
 // WinsizeProcess resizes the tty window of a process
 func (s *Sandbox) WinsizeProcess(ctx context.Context, containerID, processID string, height, width uint32) error {
 	if s.state.State != types.StateRunning {
-		return fmt.Errorf("Sandbox not running")
+		return errSandboxNotRunning
 	}
 
 	c, err := s.findContainer(containerID)
@@ -381,7 +385,7 @@ func (s *Sandbox) WinsizeProcess(ctx context.Context, containerID, processID str
 // IOStream returns stdin writer, stdout reader and stderr reader of a process
 func (s *Sandbox) IOStream(containerID, processID string) (io.WriteCloser, io.Reader, io.Reader, error) {
 	if s.state.State != types.StateRunning {
-		return nil, nil, nil, fmt.Errorf("Sandbox not running")
+		return nil, nil, nil, errSandboxNotRunning
 	}
 
 	c, err := s.findContainer(containerID)
@@ -1125,8 +1129,7 @@ func (s *Sandbox) CreateContainer(ctx context.Context, contConfig ContainerConfi
 	}
 
 	// create and start the container
-	err = c.create(ctx)
-	if err != nil {
+	if err = c.create(ctx); err != nil {
 		return nil, err
 	}
 
@@ -1141,8 +1144,8 @@ func (s *Sandbox) CreateContainer(ctx context.Context, contConfig ContainerConfi
 			logger := s.Logger().WithFields(logrus.Fields{"container-id": c.id, "sandox-id": s.id, "rollback": true})
 			logger.WithError(err).Error("Cleaning up partially created container")
 
-			if err2 := c.stop(ctx, true); err2 != nil {
-				logger.WithError(err2).Error("Could not delete container")
+			if errStop := c.stop(ctx, true); errStop != nil {
+				logger.WithError(errStop).Error("Could not stop container")
 			}
 
 			logger.Debug("Removing stopped container from sandbox store")
@@ -1153,8 +1156,7 @@ func (s *Sandbox) CreateContainer(ctx context.Context, contConfig ContainerConfi
 	// Sandbox is responsible to update VM resources needed by Containers
 	// Update resources after having added containers to the sandbox, since
 	// container status is requiered to know if more resources should be added.
-	err = s.updateResources(ctx)
-	if err != nil {
+	if err = s.updateResources(ctx); err != nil {
 		return nil, err
 	}
 
@@ -1178,8 +1180,7 @@ func (s *Sandbox) StartContainer(ctx context.Context, containerID string) (VCCon
 	}
 
 	// Start it.
-	err = c.start(ctx)
-	if err != nil {
+	if err = c.start(ctx); err != nil {
 		return nil, err
 	}
 
@@ -1191,8 +1192,7 @@ func (s *Sandbox) StartContainer(ctx context.Context, containerID string) (VCCon
 
 	// Update sandbox resources in case a stopped container
 	// is started
-	err = s.updateResources(ctx)
-	if err != nil {
+	if err = s.updateResources(ctx); err != nil {
 		return nil, err
 	}
 
@@ -1251,8 +1251,7 @@ func (s *Sandbox) DeleteContainer(ctx context.Context, containerID string) (VCCo
 	}
 
 	// Delete it.
-	err = c.delete(ctx)
-	if err != nil {
+	if err = c.delete(ctx); err != nil {
 		return nil, err
 	}
 
@@ -1326,8 +1325,7 @@ func (s *Sandbox) UpdateContainer(ctx context.Context, containerID string, resou
 		return err
 	}
 
-	err = c.update(ctx, resources)
-	if err != nil {
+	if err = c.update(ctx, resources); err != nil {
 		return err
 	}
 
