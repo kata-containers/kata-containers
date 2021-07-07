@@ -524,8 +524,7 @@
 						"write",
 						"writev"
 					],
-					"action": "SCMP_ACT_ALLOW",
-					"errnoRet": 1008
+					"action": "SCMP_ACT_ALLOW"
 				},
 				{
 					"names": [
