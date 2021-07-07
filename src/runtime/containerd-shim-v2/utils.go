@@ -78,7 +78,7 @@ func validBundle(containerID, bundlePath string) (string, error) {
 	return resolved, nil
 }
 
-func getAddress(ctx context.Context, bundlePath, address, id string) (string, error) {
+func getAddress(ctx context.Context, bundlePath, id string) (string, error) {
 	var err error
 
 	// Checks the MUST and MUST NOT from OCI runtime specification
@@ -101,7 +101,7 @@ func getAddress(ctx context.Context, bundlePath, address, id string) (string, er
 		if err != nil {
 			return "", err
 		}
-		address, err := cdshim.SocketAddress(ctx, address, sandboxID)
+		address, err := cdshim.SocketAddress(ctx, sandboxID)
 		if err != nil {
 			return "", err
 		}

@@ -38,7 +38,7 @@ func V1Constraints() ([]cgroups.Subsystem, error) {
 		return nil, err
 	}
 	subsystems := []cgroups.Subsystem{
-		cgroups.NewCpuset(root),
+		cgroups.NewCputset(root),
 		cgroups.NewCpu(root),
 		cgroups.NewCpuacct(root),
 	}
