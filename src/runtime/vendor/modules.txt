@@ -152,6 +152,7 @@ github.com/containerd/ttrpc
 ## explicit
 github.com/containerd/typeurl
 # github.com/containernetworking/cni v0.8.1
+## explicit
 github.com/containernetworking/cni/pkg/skel
 github.com/containernetworking/cni/pkg/types
 github.com/containernetworking/cni/pkg/types/020
