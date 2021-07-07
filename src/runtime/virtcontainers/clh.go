@@ -63,8 +63,6 @@ const (
 	clhSocket             = "clh.sock"
 	clhAPISocket          = "clh-api.sock"
 	virtioFsSocket        = "virtiofsd.sock"
-	supportedMajorVersion = 0
-	supportedMinorVersion = 5
 	defaultClhPath        = "/usr/local/bin/cloud-hypervisor"
 	virtioFsCacheAlways   = "always"
 )
@@ -95,12 +93,6 @@ type clhClient interface {
 	VmRemoveDevicePut(ctx context.Context, vmRemoveDevice chclient.VmRemoveDevice) (*http.Response, error)
 }
 
-type CloudHypervisorVersion struct {
-	Major    int
-	Minor    int
-	Revision int
-}
-
 //
 // Cloud hypervisor state
 //
@@ -123,7 +115,6 @@ type cloudHypervisor struct {
 	config    HypervisorConfig
 	ctx       context.Context
 	APIClient clhClient
-	version   CloudHypervisorVersion
 	vmconfig  chclient.VmConfig
 	virtiofsd Virtiofsd
 	store     persistapi.PersistDriver
@@ -150,18 +141,6 @@ var clhDebugKernelParams = []Param{
 //
 //###########################################################
 
-func (clh *cloudHypervisor) checkVersion() error {
-	if clh.version.Major < supportedMajorVersion || (clh.version.Major == supportedMajorVersion && clh.version.Minor < supportedMinorVersion) {
-		errorMessage := fmt.Sprintf("Unsupported version: cloud-hypervisor %d.%d not supported by this driver version (%d.%d)",
-			clh.version.Major,
-			clh.version.Minor,
-			supportedMajorVersion,
-			supportedMinorVersion)
-		return errors.New(errorMessage)
-	}
-	return nil
-}
-
 // For cloudHypervisor this call only sets the internal structure up.
 // The VM will be created and started through startSandbox().
 func (clh *cloudHypervisor) createSandbox(ctx context.Context, id string, networkNS NetworkNamespace, hypervisorConfig *HypervisorConfig) error {
@@ -179,23 +158,6 @@ func (clh *cloudHypervisor) createSandbox(ctx context.Context, id string, networ
 	clh.id = id
 	clh.config = *hypervisorConfig
 	clh.state.state = clhNotReady
-
-	// version check only applicable to 'cloud-hypervisor' executable
-	clhPath, perr := clh.clhPath()
-	if perr != nil {
-		return perr
-
-	}
-	if strings.HasSuffix(clhPath, "cloud-hypervisor") {
-		err = clh.getAvailableVersion()
-		if err != nil {
-			return err
-		}
-
-		if err := clh.checkVersion(); err != nil {
-			return err
-		}
-	}
 
 	clh.Logger().WithField("function", "createSandbox").Info("creating Sandbox")
 
@@ -873,59 +835,6 @@ func (clh *cloudHypervisor) clhPath() (string, error) {
 	}
 
 	return p, nil
-}
-
-func (clh *cloudHypervisor) getAvailableVersion() error {
-
-	clhPath, err := clh.clhPath()
-	if err != nil {
-		return err
-	}
-
-	cmd := exec.Command(clhPath, "--version")
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		return err
-	}
-
-	words := strings.Fields(string(out))
-	if len(words) != 2 {
-		return errors.New("Failed to parse cloud-hypervisor version response. Illegal length")
-	}
-	versionSplit := strings.SplitN(words[1], ".", -1)
-	if len(versionSplit) != 3 {
-		return errors.New("Failed to parse cloud-hypervisor version field. Illegal length")
-
-	}
-
-	// Remove 'v' prefix if has one
-	versionSplit[0] = strings.TrimLeft(versionSplit[0], "v")
-	major, err := strconv.ParseUint(versionSplit[0], 10, 64)
-	if err != nil {
-		return err
-	}
-	minor, err := strconv.ParseUint(versionSplit[1], 10, 64)
-	if err != nil {
-		return err
-	}
-
-	// revision could have aditional commit information separated by '-'
-	revisionSplit := strings.SplitN(versionSplit[2], "-", -1)
-	if len(revisionSplit) < 1 {
-		return errors.Errorf("Failed parse cloud-hypervisor revision %s", versionSplit[2])
-	}
-	revision, err := strconv.ParseUint(revisionSplit[0], 10, 64)
-	if err != nil {
-		return err
-	}
-
-	clh.version = CloudHypervisorVersion{
-		Major:    int(major),
-		Minor:    int(minor),
-		Revision: int(revision),
-	}
-	return nil
-
 }
 
 func (clh *cloudHypervisor) launchClh() (int, error) {
