@@ -36,12 +36,13 @@ mod handler;
 mod server;
 mod tracer;
 
-fn announce(logger: &Logger, version: &str) {
+fn announce(logger: &Logger, version: &str, dump_only: bool) {
     let commit = env::var("VERSION_COMMIT").map_or(String::new(), |s| s);
 
     info!(logger, "announce";
     "commit-version" => commit.as_str(),
-    "version" =>  version);
+    "version" =>  version,
+    "dump-only" => dump_only);
 }
 
 fn make_examples_text(program_name: &str) -> String {
@@ -69,6 +70,11 @@ fn real_main() -> Result<()> {
         .about(ABOUT_TEXT)
         .long_about(DESCRIPTION_TEXT)
         .after_help(&*make_examples_text(name))
+        .arg(
+            Arg::with_name("dump-only")
+                .long("dump-only")
+                .help("Disable forwarding of spans and write to stdout (for testing)"),
+        )
         .arg(
             Arg::with_name("trace-name")
                 .long("trace-name")
@@ -182,7 +188,9 @@ fn real_main() -> Result<()> {
     let writer = io::stdout();
     let (logger, _logger_guard) = logging::create_logger(name, name, log_level, writer);
 
-    announce(&logger, version);
+    let dump_only = args.is_present("dump-only");
+
+    announce(&logger, version, dump_only);
 
     let trace_name: &str = args
         .value_of("trace-name")
@@ -205,6 +213,7 @@ fn real_main() -> Result<()> {
         jaeger_host,
         jaeger_port,
         trace_name,
+        dump_only,
     );
 
     let result = server.start();
