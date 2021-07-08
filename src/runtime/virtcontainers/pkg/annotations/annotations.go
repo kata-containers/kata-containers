@@ -220,6 +220,9 @@ const (
 
 	// TxRateLimiter is a sandbox annotation that specifies max rate on network I/O outbound bandwidth
 	TxRateLimiterMaxRate = kataAnnotHypervisorPrefix + "tx_rate_limiter_max_rate"
+
+	// EnableGuestSwap is a sandbox annotation to enable swap in the guest.
+	EnableGuestSwap = kataAnnotHypervisorPrefix + "enable_guest_swap"
 )
 
 // Runtime related annotations

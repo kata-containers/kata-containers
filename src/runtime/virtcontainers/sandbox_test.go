@@ -168,8 +168,10 @@ func TestCalculateSandboxMem(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			sandbox.config.Containers = tt.containers
-			got := sandbox.calculateSandboxMemory()
-			assert.Equal(t, got, tt.want)
+			mem, needSwap, swap := sandbox.calculateSandboxMemory()
+			assert.Equal(t, mem, tt.want)
+			assert.Equal(t, needSwap, false)
+			assert.Equal(t, swap, int64(0))
 		})
 	}
 }

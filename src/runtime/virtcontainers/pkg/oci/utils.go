@@ -539,6 +539,7 @@ func addHypervisorPathOverrides(ocispec specs.Spec, config *vc.SandboxConfig, ru
 			}
 		}
 	}
+
 	return nil
 }
 
@@ -612,6 +613,12 @@ func addHypervisorMemoryOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig
 
 	if err := newAnnotationConfiguration(ocispec, vcAnnotations.IOMMUPlatform).setBool(func(deviceIOMMU bool) {
 		sbConfig.HypervisorConfig.IOMMUPlatform = deviceIOMMU
+	}); err != nil {
+		return err
+	}
+
+	if err := newAnnotationConfiguration(ocispec, vcAnnotations.EnableGuestSwap).setBool(func(enableGuestSwap bool) {
+		sbConfig.HypervisorConfig.GuestSwap = enableGuestSwap
 	}); err != nil {
 		return err
 	}
