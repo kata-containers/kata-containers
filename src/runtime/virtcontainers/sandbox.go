@@ -8,6 +8,7 @@ package virtcontainers
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -65,6 +66,8 @@ const (
 
 	// DirMode is the permission bits used for creating a directory
 	DirMode = os.FileMode(0750) | os.ModeDir
+
+	mkswapPath = "/sbin/mkswap"
 )
 
 var (
@@ -200,6 +203,10 @@ type Sandbox struct {
 	ctx context.Context
 
 	cw *consoleWatcher
+
+	swapDeviceNum uint
+	swapSizeBytes int64
+	swapDevices   []*config.BlockDrive
 }
 
 // ID returns the sandbox identifier string.
@@ -519,6 +526,9 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 		sharePidNs:      sandboxConfig.SharePidNs,
 		networkNS:       NetworkNamespace{NetNsPath: sandboxConfig.NetworkConfig.NetNSPath},
 		ctx:             ctx,
+		swapDeviceNum:   0,
+		swapSizeBytes:   0,
+		swapDevices:     []*config.BlockDrive{},
 	}
 
 	hypervisor.setSandbox(s)
@@ -1028,9 +1038,13 @@ func (s *Sandbox) addSwap(ctx context.Context, swapID string, size int64) (*conf
 		return nil, err
 	}
 
-	err = exec.CommandContext(ctx, "/sbin/mkswap", swapFile).Run()
+	var outbuf, errbuf bytes.Buffer
+	cmd := exec.CommandContext(ctx, mkswapPath, swapFile)
+	cmd.Stdout = &outbuf
+	cmd.Stderr = &errbuf
+	err = cmd.Run()
 	if err != nil {
-		err = fmt.Errorf("mkswap swapfile %s fail %s", swapFile, err.Error())
+		err = fmt.Errorf("mkswap swapfile %s fail %s stdout %s stderr %s", swapFile, err.Error(), outbuf.String(), errbuf.String())
 		s.Logger().WithError(err).Error("addSwap")
 		return nil, err
 	}
@@ -1077,6 +1091,30 @@ func (s *Sandbox) removeSwap(ctx context.Context, blockDevice *config.BlockDrive
 		s.Logger().Infof("remove swapfile %s success", blockDevice.File)
 	}
 	return err
+}
+
+func (s *Sandbox) setupSwap(ctx context.Context, sizeBytes int64) error {
+	if sizeBytes > s.swapSizeBytes {
+		dev, err := s.addSwap(ctx, fmt.Sprintf("swap%d", s.swapDeviceNum), sizeBytes-s.swapSizeBytes)
+		if err != nil {
+			return err
+		}
+
+		s.swapDeviceNum += 1
+		s.swapSizeBytes = sizeBytes
+		s.swapDevices = append(s.swapDevices, dev)
+	}
+
+	return nil
+}
+
+func (s *Sandbox) cleanSwap(ctx context.Context) {
+	for _, dev := range s.swapDevices {
+		err := s.removeSwap(ctx, dev)
+		if err != nil {
+			s.Logger().Warnf("remove swap device %+v got error %s", dev, err)
+		}
+	}
 }
 
 // startVM starts the VM.
@@ -1641,6 +1679,8 @@ func (s *Sandbox) Stop(ctx context.Context, force bool) error {
 		return err
 	}
 
+	s.cleanSwap(ctx)
+
 	return nil
 }
 
@@ -1894,9 +1934,21 @@ func (s *Sandbox) updateResources(ctx context.Context) error {
 	// Add default vcpus for sandbox
 	sandboxVCPUs += s.hypervisor.hypervisorConfig().NumVCPUs
 
-	sandboxMemoryByte := s.calculateSandboxMemory()
+	sandboxMemoryByte, sandboxneedPodSwap, sandboxSwapByte := s.calculateSandboxMemory()
 	// Add default / rsvd memory for sandbox.
-	sandboxMemoryByte += int64(s.hypervisor.hypervisorConfig().MemorySize) << utils.MibToBytesShift
+	hypervisorMemoryByte := int64(s.hypervisor.hypervisorConfig().MemorySize) << utils.MibToBytesShift
+	sandboxMemoryByte += hypervisorMemoryByte
+	if sandboxneedPodSwap {
+		sandboxSwapByte += hypervisorMemoryByte
+	}
+
+	// Setup the SWAP in the guest
+	if sandboxSwapByte > 0 {
+		err = s.setupSwap(ctx, sandboxSwapByte)
+		if err != nil {
+			return err
+		}
+	}
 
 	// Update VCPUs
 	s.Logger().WithField("cpus-sandbox", sandboxVCPUs).Debugf("Request to hypervisor to update vCPUs")
@@ -1941,8 +1993,10 @@ func (s *Sandbox) updateResources(ctx context.Context) error {
 	return nil
 }
 
-func (s *Sandbox) calculateSandboxMemory() int64 {
+func (s *Sandbox) calculateSandboxMemory() (int64, bool, int64) {
 	memorySandbox := int64(0)
+	needPodSwap := false
+	swapSandbox := int64(0)
 	for _, c := range s.config.Containers {
 		// Do not hot add again non-running containers resources
 		if cont, ok := s.containers[c.ID]; ok && cont.state.State == types.StateStopped {
@@ -1950,11 +2004,30 @@ func (s *Sandbox) calculateSandboxMemory() int64 {
 			continue
 		}
 
-		if m := c.Resources.Memory; m != nil && m.Limit != nil {
-			memorySandbox += *m.Limit
+		if m := c.Resources.Memory; m != nil {
+			currentLimit := int64(0)
+			if m.Limit != nil {
+				currentLimit = *m.Limit
+				memorySandbox += currentLimit
+			}
+			if s.config.HypervisorConfig.GuestSwap && m.Swappiness != nil && *m.Swappiness > 0 {
+				currentSwap := int64(0)
+				if m.Swap != nil {
+					currentSwap = *m.Swap
+				}
+				if currentSwap == 0 {
+					if currentLimit == 0 {
+						needPodSwap = true
+					} else {
+						swapSandbox += currentLimit
+					}
+				} else if currentSwap > currentLimit {
+					swapSandbox = currentSwap - currentLimit
+				}
+			}
 		}
 	}
-	return memorySandbox
+	return memorySandbox, needPodSwap, swapSandbox
 }
 
 func (s *Sandbox) calculateSandboxCPUs() (uint32, error) {
