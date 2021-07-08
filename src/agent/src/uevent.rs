@@ -114,7 +114,7 @@ pub async fn wait_for_uevent(
     let mut sb = sandbox.lock().await;
     for uev in sb.uevent_map.values() {
         if matcher.is_match(uev) {
-            info!(sl!(), "Device {:?} found in pci device map", uev);
+            info!(sl!(), "Device {:?} found in device map", uev);
             return Ok(uev.clone());
         }
     }
