@@ -31,6 +31,8 @@ use crate::linux_abi::*;
 use crate::pci;
 use crate::protocols::agent::Storage;
 use crate::Sandbox;
+#[cfg(target_arch = "s390x")]
+use crate::{ccw, device::get_virtio_blk_ccw_device_name};
 use anyhow::{anyhow, Context, Result};
 use slog::Logger;
 use tracing::instrument;
@@ -38,6 +40,7 @@ use tracing::instrument;
 pub const DRIVER_9P_TYPE: &str = "9p";
 pub const DRIVER_VIRTIOFS_TYPE: &str = "virtio-fs";
 pub const DRIVER_BLK_TYPE: &str = "blk";
+pub const DRIVER_BLK_CCW_TYPE: &str = "blk-ccw";
 pub const DRIVER_MMIO_BLK_TYPE: &str = "mmioblk";
 pub const DRIVER_SCSI_TYPE: &str = "scsi";
 pub const DRIVER_NVDIMM_TYPE: &str = "nvdimm";
@@ -389,6 +392,31 @@ async fn virtio_blk_storage_handler(
     common_storage_handler(logger, &storage)
 }
 
+// virtio_blk_ccw_storage_handler handles storage for the blk-ccw driver (s390x)
+#[cfg(target_arch = "s390x")]
+#[instrument]
+async fn virtio_blk_ccw_storage_handler(
+    logger: &Logger,
+    storage: &Storage,
+    sandbox: Arc<Mutex<Sandbox>>,
+) -> Result<String> {
+    let mut storage = storage.clone();
+    let ccw_device = ccw::Device::from_str(&storage.source)?;
+    let dev_path = get_virtio_blk_ccw_device_name(&sandbox, &ccw_device).await?;
+    storage.source = dev_path;
+    common_storage_handler(logger, &storage)
+}
+
+#[cfg(not(target_arch = "s390x"))]
+#[instrument]
+async fn virtio_blk_ccw_storage_handler(
+    _: &Logger,
+    _: &Storage,
+    _: Arc<Mutex<Sandbox>>,
+) -> Result<String> {
+    Err(anyhow!("CCW is only supported on s390x"))
+}
+
 // virtio_scsi_storage_handler handles the  storage for scsi driver.
 #[instrument]
 async fn virtio_scsi_storage_handler(
@@ -557,6 +585,9 @@ pub async fn add_storages(
 
         let res = match handler_name.as_str() {
             DRIVER_BLK_TYPE => virtio_blk_storage_handler(&logger, &storage, sandbox.clone()).await,
+            DRIVER_BLK_CCW_TYPE => {
+                virtio_blk_ccw_storage_handler(&logger, &storage, sandbox.clone()).await
+            }
             DRIVER_9P_TYPE => virtio9p_storage_handler(&logger, &storage, sandbox.clone()).await,
             DRIVER_VIRTIOFS_TYPE => {
                 virtiofs_storage_handler(&logger, &storage, sandbox.clone()).await

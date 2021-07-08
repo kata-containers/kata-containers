@@ -14,8 +14,13 @@ use std::str::FromStr;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
+#[cfg(target_arch = "s390x")]
+use crate::ccw;
 use crate::linux_abi::*;
-use crate::mount::{DRIVER_BLK_TYPE, DRIVER_MMIO_BLK_TYPE, DRIVER_NVDIMM_TYPE, DRIVER_SCSI_TYPE};
+use crate::mount::{
+    DRIVER_BLK_CCW_TYPE, DRIVER_BLK_TYPE, DRIVER_MMIO_BLK_TYPE, DRIVER_NVDIMM_TYPE,
+    DRIVER_SCSI_TYPE,
+};
 use crate::pci;
 use crate::sandbox::Sandbox;
 use crate::uevent::{wait_for_uevent, Uevent, UeventMatcher};
@@ -161,6 +166,47 @@ pub async fn get_virtio_blk_pci_device_name(
 
     let uev = wait_for_uevent(sandbox, matcher).await?;
     Ok(format!("{}/{}", SYSTEM_DEV_PATH, &uev.devname))
+}
+
+#[cfg(target_arch = "s390x")]
+#[derive(Debug)]
+struct VirtioBlkCCWMatcher {
+    rex: Regex,
+}
+
+#[cfg(target_arch = "s390x")]
+impl VirtioBlkCCWMatcher {
+    fn new(root_bus_path: &str, device: &ccw::Device) -> Self {
+        let re = format!(
+            r"^{}/0\.[0-3]\.[0-9a-f]{{1,4}}/{}/virtio[0-9]+/block/",
+            root_bus_path, device
+        );
+        VirtioBlkCCWMatcher {
+            rex: Regex::new(&re).unwrap(),
+        }
+    }
+}
+
+#[cfg(target_arch = "s390x")]
+impl UeventMatcher for VirtioBlkCCWMatcher {
+    fn is_match(&self, uev: &Uevent) -> bool {
+        uev.action == "add" && self.rex.is_match(&uev.devpath) && !uev.devname.is_empty()
+    }
+}
+
+#[cfg(target_arch = "s390x")]
+#[instrument]
+pub async fn get_virtio_blk_ccw_device_name(
+    sandbox: &Arc<Mutex<Sandbox>>,
+    device: &ccw::Device,
+) -> Result<String> {
+    let matcher = VirtioBlkCCWMatcher::new(&create_ccw_root_bus_path(), device);
+    let uev = wait_for_uevent(sandbox, matcher).await?;
+    let devname = uev.devname;
+    return match Path::new(SYSTEM_DEV_PATH).join(&devname).to_str() {
+        Some(path) => Ok(String::from(path)),
+        None => Err(anyhow!("CCW device name {} is not valid UTF-8", &devname)),
+    };
 }
 
 #[derive(Debug)]
@@ -352,6 +398,32 @@ async fn virtio_blk_device_handler(
     update_spec_device_list(&dev, spec, devidx)
 }
 
+// device.id should be a CCW path string
+#[cfg(target_arch = "s390x")]
+#[instrument]
+async fn virtio_blk_ccw_device_handler(
+    device: &Device,
+    spec: &mut Spec,
+    sandbox: &Arc<Mutex<Sandbox>>,
+    devidx: &DevIndex,
+) -> Result<()> {
+    let mut dev = device.clone();
+    let ccw_device = ccw::Device::from_str(&device.id)?;
+    dev.vm_path = get_virtio_blk_ccw_device_name(sandbox, &ccw_device).await?;
+    update_spec_device_list(&dev, spec, devidx)
+}
+
+#[cfg(not(target_arch = "s390x"))]
+#[instrument]
+async fn virtio_blk_ccw_device_handler(
+    _: &Device,
+    _: &mut Spec,
+    _: &Arc<Mutex<Sandbox>>,
+    _: &DevIndex,
+) -> Result<()> {
+    Err(anyhow!("CCW is only supported on s390x"))
+}
+
 // device.Id should be the SCSI address of the disk in the format "scsiID:lunID"
 #[instrument]
 async fn virtio_scsi_device_handler(
@@ -444,6 +516,7 @@ async fn add_device(
 
     match device.field_type.as_str() {
         DRIVER_BLK_TYPE => virtio_blk_device_handler(device, spec, sandbox, devidx).await,
+        DRIVER_BLK_CCW_TYPE => virtio_blk_ccw_device_handler(device, spec, sandbox, devidx).await,
         DRIVER_MMIO_BLK_TYPE => virtiommio_blk_device_handler(device, spec, sandbox, devidx).await,
         DRIVER_NVDIMM_TYPE => virtio_nvdimm_device_handler(device, spec, sandbox, devidx).await,
         DRIVER_SCSI_TYPE => virtio_scsi_device_handler(device, spec, sandbox, devidx).await,
@@ -904,6 +977,66 @@ mod tests {
         assert!(matcher_b.is_match(&uev_b));
         assert!(!matcher_b.is_match(&uev_a));
         assert!(!matcher_a.is_match(&uev_b));
+    }
+
+    #[cfg(target_arch = "s390x")]
+    #[tokio::test]
+    async fn test_virtio_blk_ccw_matcher() {
+        let root_bus = create_ccw_root_bus_path();
+        let subsystem = "block";
+        let devname = "vda";
+        let relpath = "0.0.0002";
+
+        let mut uev = crate::uevent::Uevent::default();
+        uev.action = crate::linux_abi::U_EVENT_ACTION_ADD.to_string();
+        uev.subsystem = subsystem.to_string();
+        uev.devname = devname.to_string();
+        uev.devpath = format!(
+            "{}/0.0.0001/{}/virtio1/{}/{}",
+            root_bus, relpath, subsystem, devname
+        );
+
+        // Valid path
+        let device = ccw::Device::from_str(relpath).unwrap();
+        let matcher = VirtioBlkCCWMatcher::new(&root_bus, &device);
+        assert!(matcher.is_match(&uev));
+
+        // Invalid paths
+        uev.devpath = format!(
+            "{}/0.0.0001/0.0.0003/virtio1/{}/{}",
+            root_bus, subsystem, devname
+        );
+        assert!(!matcher.is_match(&uev));
+
+        uev.devpath = format!("0.0.0001/{}/virtio1/{}/{}", relpath, subsystem, devname);
+        assert!(!matcher.is_match(&uev));
+
+        uev.devpath = format!(
+            "{}/0.0.0001/{}/virtio/{}/{}",
+            root_bus, relpath, subsystem, devname
+        );
+        assert!(!matcher.is_match(&uev));
+
+        uev.devpath = format!("{}/0.0.0001/{}/virtio1", root_bus, relpath);
+        assert!(!matcher.is_match(&uev));
+
+        uev.devpath = format!(
+            "{}/1.0.0001/{}/virtio1/{}/{}",
+            root_bus, relpath, subsystem, devname
+        );
+        assert!(!matcher.is_match(&uev));
+
+        uev.devpath = format!(
+            "{}/0.4.0001/{}/virtio1/{}/{}",
+            root_bus, relpath, subsystem, devname
+        );
+        assert!(!matcher.is_match(&uev));
+
+        uev.devpath = format!(
+            "{}/0.0.10000/{}/virtio1/{}/{}",
+            root_bus, relpath, subsystem, devname
+        );
+        assert!(!matcher.is_match(&uev));
     }
 
     #[tokio::test]
