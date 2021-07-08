@@ -130,8 +130,11 @@ func newTestSandboxConfigKataAgent() SandboxConfig {
 }
 
 func TestCreateSandboxNoopAgentSuccessful(t *testing.T) {
-	defer cleanUp()
 	assert := assert.New(t)
+	if tc.NotValid(ktu.NeedRoot()) {
+		t.Skip(testDisabledAsNonRoot)
+	}
+	defer cleanUp()
 
 	config := newTestSandboxConfigNoop()
 
@@ -181,6 +184,9 @@ func TestCreateSandboxKataAgentSuccessful(t *testing.T) {
 }
 
 func TestCreateSandboxFailing(t *testing.T) {
+	if tc.NotValid(ktu.NeedRoot()) {
+		t.Skip(testDisabledAsNonRoot)
+	}
 	defer cleanUp()
 	assert := assert.New(t)
 
@@ -240,6 +246,9 @@ func createAndStartSandbox(ctx context.Context, config SandboxConfig) (sandbox V
 }
 
 func TestReleaseSandbox(t *testing.T) {
+	if tc.NotValid(ktu.NeedRoot()) {
+		t.Skip(testDisabledAsNonRoot)
+	}
 	defer cleanUp()
 
 	config := newTestSandboxConfigNoop()
@@ -254,6 +263,10 @@ func TestReleaseSandbox(t *testing.T) {
 }
 
 func TestCleanupContainer(t *testing.T) {
+	if tc.NotValid(ktu.NeedRoot()) {
+		t.Skip(testDisabledAsNonRoot)
+	}
+
 	config := newTestSandboxConfigNoop()
 	assert := assert.New(t)
 

@@ -20,9 +20,7 @@ import (
 	"sync"
 	"syscall"
 
-	"github.com/containerd/cgroups"
 	"github.com/containernetworking/plugins/pkg/ns"
-	"github.com/opencontainers/runc/libcontainer/configs"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -39,7 +37,7 @@ import (
 	pbTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols/grpc"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/annotations"
-	vccgroups "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/cgroups"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/cgroups"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/compatoci"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/cpuset"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/rootless"
@@ -118,10 +116,6 @@ type SandboxConfig struct {
 	// Experimental features enabled
 	Experimental []exp.Feature
 
-	// Cgroups specifies specific cgroup settings for the various subsystems that the container is
-	// placed into to limit the resources the container has available
-	Cgroups *configs.Cgroup
-
 	// Annotations keys must be unique strings and must be name-spaced
 	// with e.g. reverse domain notation (org.clearlinux.key).
 	Annotations map[string]string
@@ -188,8 +182,8 @@ type Sandbox struct {
 	config          *SandboxConfig
 	annotationsLock *sync.RWMutex
 	wg              *sync.WaitGroup
-	sandboxCgroup   *vccgroups.Manager
-	overheadCgroup  *vccgroups.Manager
+	sandboxCgroup   *cgroups.Cgroup
+	overheadCgroup  *cgroups.Cgroup
 	cw              *consoleWatcher
 
 	containers map[string]*Container
@@ -592,6 +586,13 @@ func (s *Sandbox) createCgroups() error {
 		// Kata relies on the cgroup parent created and configured by the container
 		// engine by default. The exception is for devices whitelist as well as sandbox-level
 		// CPUSet.
+		// For the sandbox cgroups we create and manage, rename the base of the cgroup path to
+		// include "kata_"
+		cgroupPath, err = cgroups.RenameCgroupPath(cgroupPath)
+		if err != nil {
+			return err
+		}
+
 		if spec.Linux.Resources != nil {
 			resources.Devices = spec.Linux.Resources.Devices
 
@@ -637,7 +638,7 @@ func (s *Sandbox) createCgroups() error {
 
 	if s.devManager != nil {
 		for _, d := range s.devManager.GetAllDevices() {
-			dev, err := vccgroups.DeviceToLinuxDevice(d.GetHostPath())
+			dev, err := cgroups.DeviceToLinuxDevice(d.GetHostPath())
 			if err != nil {
 				s.Logger().WithError(err).WithField("device", d.GetHostPath()).Warn("Could not add device to sandbox resources")
 				continue
@@ -650,22 +651,14 @@ func (s *Sandbox) createCgroups() error {
 	// Depending on the SandboxCgroupOnly value, this cgroup
 	// will either hold all the pod threads (SandboxCgroupOnly is true)
 	// or only the virtual CPU ones (SandboxCgroupOnly is false).
-	if s.sandboxCgroup, err = vccgroups.New(
-		&vccgroups.Config{
-			Cgroups:     s.config.Cgroups,
-			CgroupPaths: s.state.CgroupPaths,
-			Resources:   resources,
-			CgroupPath:  cgroupPath,
-		},
-	); err != nil {
-		return err
+	s.sandboxCgroup, err = cgroups.NewSandboxCgroup(cgroupPath, &resources)
+	if err != nil {
+		return fmt.Errorf("Could not create the sandbox cgroup %v", err)
 	}
 
-	// Now that the sandbox cgroup is created, we can set the state cgroup root path.
-	s.state.CgroupPath, err = vccgroups.ValidCgroupPath(cgroupPath, s.config.SystemdCgroup)
-	if err != nil {
-		return fmt.Errorf("Invalid cgroup path: %v", err)
-	}
+	// Now that the sandbox cgroup is created, we can set the state cgroup root paths.
+	s.state.SandboxCgroupPath = s.sandboxCgroup.Path()
+	s.state.OverheadCgroupPath = ""
 
 	if s.config.SandboxCgroupOnly {
 		s.overheadCgroup = nil
@@ -674,16 +667,12 @@ func (s *Sandbox) createCgroups() error {
 		// into the sandbox cgroup.
 		// We're creating an overhead cgroup, with no constraints. Everything but
 		// the vCPU threads will eventually make it there.
-		if s.overheadCgroup, err = vccgroups.New(
-			&vccgroups.Config{
-				Cgroups:     nil,
-				CgroupPaths: nil,
-				Resources:   specs.LinuxResources{},
-				CgroupPath:  cgroupKataOverheadPath,
-			},
-		); err != nil {
+		overheadCgroup, err := cgroups.NewCgroup(fmt.Sprintf("/%s/%s", cgroupKataOverheadPath, s.id), &specs.LinuxResources{})
+		if err != nil {
 			return err
 		}
+		s.overheadCgroup = overheadCgroup
+		s.state.OverheadCgroupPath = s.overheadCgroup.Path()
 	}
 
 	return nil
@@ -1540,33 +1529,15 @@ func (s *Sandbox) StatsContainer(ctx context.Context, containerID string) (Conta
 
 // Stats returns the stats of a running sandbox
 func (s *Sandbox) Stats(ctx context.Context) (SandboxStats, error) {
-	if s.state.CgroupPath == "" {
-		return SandboxStats{}, fmt.Errorf("sandbox cgroup path is empty")
-	}
 
-	var path string
-	var cgroupSubsystems cgroups.Hierarchy
-
-	if s.config.SandboxCgroupOnly {
-		cgroupSubsystems = cgroups.V1
-		path = s.state.CgroupPath
-	} else {
-		cgroupSubsystems = V1NoConstraints
-		path = cgroupNoConstraintsPath(s.state.CgroupPath)
-	}
-
-	cgroup, err := cgroupsLoadFunc(cgroupSubsystems, cgroups.StaticPath(path))
-	if err != nil {
-		return SandboxStats{}, fmt.Errorf("Could not load sandbox cgroup in %v: %v", s.state.CgroupPath, err)
-	}
-
-	metrics, err := cgroup.Stat(cgroups.ErrorHandler(cgroups.IgnoreNotExist))
+	metrics, err := s.sandboxCgroup.Stat()
 	if err != nil {
 		return SandboxStats{}, err
 	}
 
 	stats := SandboxStats{}
 
+	// TODO Do we want to aggregate the overhead cgroup stats to the sandbox ones?
 	stats.CgroupStats.CPUStats.CPUUsage.TotalUsage = metrics.CPU.Usage.Total
 	stats.CgroupStats.MemoryStats.Usage.Usage = metrics.Memory.Usage.Usage
 	tids, err := s.hypervisor.getThreadIDs(ctx)
@@ -1796,15 +1767,9 @@ func (s *Sandbox) HotplugAddDevice(ctx context.Context, device api.Device, devTy
 	span, ctx := katatrace.Trace(ctx, s.Logger(), "HotplugAddDevice", sandboxTracingTags, map[string]string{"sandbox_id": s.id})
 	defer span.End()
 
-	if s.config.SandboxCgroupOnly {
-		// We are about to add a device to the hypervisor,
-		// the device cgroup MUST be updated since the hypervisor
-		// will need access to such device
-		hdev := device.GetHostPath()
-		if err := s.sandboxCgroup.AddDevice(ctx, hdev); err != nil {
-			s.Logger().WithError(err).WithField("device", hdev).
-				Warn("Could not add device to cgroup")
-		}
+	if err := s.sandboxCgroup.AddDevice(device.GetHostPath()); err != nil {
+		s.Logger().WithError(err).WithField("device", device).
+			Warn("Could not add device to cgroup")
 	}
 
 	switch devType {
@@ -1852,14 +1817,9 @@ func (s *Sandbox) HotplugAddDevice(ctx context.Context, device api.Device, devTy
 // Sandbox implement DeviceReceiver interface from device/api/interface.go
 func (s *Sandbox) HotplugRemoveDevice(ctx context.Context, device api.Device, devType config.DeviceType) error {
 	defer func() {
-		if s.config.SandboxCgroupOnly {
-			// Remove device from cgroup, the hypervisor
-			// should not have access to such device anymore.
-			hdev := device.GetHostPath()
-			if err := s.sandboxCgroup.RemoveDevice(hdev); err != nil {
-				s.Logger().WithError(err).WithField("device", hdev).
-					Warn("Could not remove device from cgroup")
-			}
+		if err := s.sandboxCgroup.RemoveDevice(device.GetHostPath()); err != nil {
+			s.Logger().WithError(err).WithField("device", device).
+				Warn("Could not add device to cgroup")
 		}
 	}()
 
@@ -2140,7 +2100,7 @@ func (s *Sandbox) cgroupsUpdate(ctx context.Context) error {
 	}
 
 	// We update the sandbox cgroup with potentially new virtual CPUs.
-	if err := s.sandboxCgroup.SetCPUSet(cpuset, memset); err != nil {
+	if err := s.sandboxCgroup.UpdateCpuSet(cpuset, memset); err != nil {
 		return err
 	}
 
@@ -2160,19 +2120,37 @@ func (s *Sandbox) cgroupsUpdate(ctx context.Context) error {
 // to the parent and then delete the sandbox cgroup
 func (s *Sandbox) cgroupsDelete() error {
 	s.Logger().Debug("Deleting sandbox cgroup")
-	if s.state.CgroupPath == "" {
-		s.Logger().Warnf("sandbox cgroups path is empty")
+	if s.state.SandboxCgroupPath == "" {
+		s.Logger().Warnf("sandbox cgroup path is empty")
 		return nil
 	}
 
-	if s.overheadCgroup != nil {
-		if err := s.overheadCgroup.Destroy(); err != nil {
-			return err
-		}
+	sandboxCgroup, err := cgroups.Load(s.state.SandboxCgroupPath)
+	if err != nil {
+		return err
 	}
 
-	if err := s.sandboxCgroup.Destroy(); err != nil {
+	if err := sandboxCgroup.MoveToParent(); err != nil {
 		return err
+	}
+
+	if err := sandboxCgroup.Delete(); err != nil {
+		return err
+	}
+
+	if s.state.OverheadCgroupPath != "" {
+		overheadCgroup, err := cgroups.Load(s.state.OverheadCgroupPath)
+		if err != nil {
+			return err
+		}
+
+		if err := s.overheadCgroup.MoveToParent(); err != nil {
+			return err
+		}
+
+		if err := overheadCgroup.Delete(); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -2187,7 +2165,7 @@ func (s *Sandbox) constrainHypervisor(ctx context.Context) error {
 
 	// All vCPU threads move to the sandbox cgroup.
 	for _, i := range tids.vcpus {
-		if err := s.sandboxCgroup.Add(i); err != nil {
+		if err := s.sandboxCgroup.AddTask(i); err != nil {
 			return err
 		}
 	}
@@ -2198,8 +2176,6 @@ func (s *Sandbox) constrainHypervisor(ctx context.Context) error {
 // setupCgroups adds the runtime process to either the sandbox cgroup or the  overhead one,
 // depending on the sandbox_cgroup_only configuration setting.
 func (s *Sandbox) setupCgroups() error {
-	var err error
-
 	vmmCgroup := s.sandboxCgroup
 	if s.overheadCgroup != nil {
 		vmmCgroup = s.overheadCgroup
@@ -2211,27 +2187,8 @@ func (s *Sandbox) setupCgroups() error {
 	// then move the vCPU threads between cgroups.
 	runtimePid := os.Getpid()
 	// Add the runtime to the VMM sandbox cgroup
-	if err := vmmCgroup.Add(runtimePid); err != nil {
-		return fmt.Errorf("Could not add runtime PID %d to sandbox cgroup:  %v", runtimePid, err)
-	}
-
-	// `Apply` updates the sandbox cgroup Cgroups and CgroupPaths,
-	// they both need to be saved since they are used to create
-	// or restore the sandbox cgroup.
-	if s.config.Cgroups, err = vmmCgroup.GetCgroups(); err != nil {
-		return fmt.Errorf("Could not get cgroup configuration:  %v", err)
-	}
-
-	s.state.CgroupPaths = vmmCgroup.GetPaths()
-
-	if err := s.sandboxCgroup.Apply(); err != nil {
-		return fmt.Errorf("Could not constrain cgroup: %v", err)
-	}
-
-	if s.overheadCgroup != nil {
-		if err = s.overheadCgroup.Apply(); err != nil {
-			return fmt.Errorf("Could not constrain cgroup: %v", err)
-		}
+	if err := vmmCgroup.AddProcess(runtimePid); err != nil {
+		return fmt.Errorf("Could not add runtime PID %d to sandbox cgroup: %v", runtimePid, err)
 	}
 
 	return nil

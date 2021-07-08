@@ -52,6 +52,10 @@ func testCreateSandbox(t *testing.T, id string,
 	nconfig NetworkConfig, containers []ContainerConfig,
 	volumes []types.Volume) (*Sandbox, error) {
 
+	if tc.NotValid(ktu.NeedRoot()) {
+		t.Skip(testDisabledAsNonRoot)
+	}
+
 	sconfig := SandboxConfig{
 		ID:               id,
 		HypervisorType:   htype,
@@ -963,22 +967,6 @@ func TestEnterContainer(t *testing.T) {
 	assert.Nil(t, err, "Enter container failed: %v", err)
 }
 
-func TestDeleteStoreWhenCreateContainerFail(t *testing.T) {
-	hypervisorConfig := newHypervisorConfig(nil, nil)
-	s, err := testCreateSandbox(t, testSandboxID, MockHypervisor, hypervisorConfig, NetworkConfig{}, nil, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer cleanUp()
-
-	contID := "999"
-	contConfig := newTestContainerConfigNoop(contID)
-	contConfig.RootFs = RootFs{Target: "", Mounted: true}
-	s.state.CgroupPath = filepath.Join(testDir, "bad-cgroup")
-	_, err = s.CreateContainer(context.Background(), contConfig)
-	assert.NotNil(t, err, "Should fail to create container due to wrong cgroup")
-}
-
 func TestDeleteStoreWhenNewContainerFail(t *testing.T) {
 	hConfig := newHypervisorConfig(nil, nil)
 	p, err := testCreateSandbox(t, testSandboxID, MockHypervisor, hConfig, NetworkConfig{}, nil, nil)
@@ -1451,7 +1439,7 @@ func TestSandboxExperimentalFeature(t *testing.T) {
 	assert.True(t, sconfig.valid())
 }
 
-func TestSandbox_SetupSandboxCgroup(t *testing.T) {
+func TestSandbox_Cgroups(t *testing.T) {
 	sandboxContainer := ContainerConfig{}
 	sandboxContainer.Annotations = make(map[string]string)
 	sandboxContainer.Annotations[annotations.ContainerTypeKey] = string(PodSandbox)
@@ -1486,8 +1474,8 @@ func TestSandbox_SetupSandboxCgroup(t *testing.T) {
 		{
 			"New sandbox, new config",
 			&Sandbox{config: &SandboxConfig{}},
-			true,
 			false,
+			true,
 		},
 		{
 			"sandbox, container no sandbox type",
@@ -1495,8 +1483,8 @@ func TestSandbox_SetupSandboxCgroup(t *testing.T) {
 				config: &SandboxConfig{Containers: []ContainerConfig{
 					{},
 				}}},
-			true,
 			false,
+			true,
 		},
 		{
 			"sandbox, container sandbox type",
@@ -1504,8 +1492,8 @@ func TestSandbox_SetupSandboxCgroup(t *testing.T) {
 				config: &SandboxConfig{Containers: []ContainerConfig{
 					sandboxContainer,
 				}}},
-			true,
 			false,
+			true,
 		},
 		{
 			"sandbox, empty linux json",
@@ -1532,9 +1520,16 @@ func TestSandbox_SetupSandboxCgroup(t *testing.T) {
 		}
 
 		t.Run(tt.name, func(t *testing.T) {
-			tt.s.createCgroupManager()
-			if err := tt.s.setupSandboxCgroup(); (err != nil) != tt.wantErr {
-				t.Errorf("Sandbox.SetupSandboxCgroupOnly() error = %v, wantErr %v", err, tt.wantErr)
+			err := tt.s.createCgroups()
+			t.Logf("create groups error %v", err)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Sandbox.CreateCgroups() error = %v, wantErr %v", err, tt.wantErr)
+			}
+
+			if err == nil {
+				if err := tt.s.setupCgroups(); (err != nil) != tt.wantErr {
+					t.Errorf("Sandbox.SetupCgroups() error = %v, wantErr %v", err, tt.wantErr)
+				}
 			}
 		})
 	}

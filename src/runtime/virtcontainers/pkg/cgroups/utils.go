@@ -49,13 +49,13 @@ func ValidCgroupPath(path string, systemdCgroup bool) (string, error) {
 	// In the case of an absolute path (starting with /), the runtime MUST
 	// take the path to be relative to the cgroups mount point.
 	if filepath.IsAbs(path) {
-		return RenameCgroupPath(filepath.Clean(path))
+		return filepath.Clean(path), nil
 	}
 
 	// In the case of a relative path (not starting with /), the runtime MAY
 	// interpret the path relative to a runtime-determined location in the cgroups hierarchy.
 	// clean up path and return a new path relative to DefaultCgroupPath
-	return RenameCgroupPath(filepath.Join(DefaultCgroupPath, filepath.Clean("/"+path)))
+	return filepath.Join(DefaultCgroupPath, filepath.Clean("/"+path)), nil
 }
 
 func IsSystemdCgroup(cgroupPath string) bool {
