@@ -917,6 +917,11 @@ func (s *service) Shutdown(ctx context.Context, r *taskAPI.ShutdownRequest) (_ *
 
 	s.cancel()
 
+	// Since we only send an shutdown qmp command to qemu when do stopSandbox, and
+	// didn't wait until qemu process's exit, thus we'd better to make sure it had
+	// exited when shimv2 terminated. Thus here to do the last cleanup of the hypervisor.
+	syscall.Kill(int(s.hpid), syscall.SIGKILL)
+
 	os.Exit(0)
 
 	// This will never be called, but this is only there to make sure the
