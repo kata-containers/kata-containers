@@ -458,6 +458,9 @@ type HypervisorConfig struct {
 
 	// MemOffset specifies memory space for nvdimm device
 	MemOffset uint64
+
+	// GuestSwap Used to enable/disable swap in the guest
+	GuestSwap bool
 }
 
 // vcpu mapping from vcpu number to thread number
