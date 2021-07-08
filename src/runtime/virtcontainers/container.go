@@ -13,6 +13,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -20,6 +21,7 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/manager"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols/grpc"
+	vcAnnotations "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/annotations"
 	vccgroups "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/cgroups"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/rootless"
 	vcTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/types"
@@ -765,6 +767,26 @@ func newContainer(ctx context.Context, sandbox *Sandbox, contConfig *ContainerCo
 		process:       Process{},
 		mounts:        contConfig.Mounts,
 		ctx:           sandbox.ctx,
+	}
+
+	// Set the Annotations of SWAP to Resources
+	if resourceSwappinessStr, ok := c.config.Annotations[vcAnnotations.ContainerResourcesSwappiness]; ok {
+		resourceSwappiness, err := strconv.ParseUint(resourceSwappinessStr, 0, 64)
+		if err == nil && resourceSwappiness > 200 {
+			err = fmt.Errorf("swapiness should not bigger than 200")
+		}
+		if err != nil {
+			return &Container{}, fmt.Errorf("Invalid container configuration Annotations %s %v", vcAnnotations.ContainerResourcesSwappiness, err)
+		}
+		c.config.Resources.Memory.Swappiness = &resourceSwappiness
+	}
+	if resourceSwapInBytesStr, ok := c.config.Annotations[vcAnnotations.ContainerResourcesSwapInBytes]; ok {
+		resourceSwapInBytesInUint, err := strconv.ParseUint(resourceSwapInBytesStr, 0, 64)
+		if err != nil {
+			return &Container{}, fmt.Errorf("Invalid container configuration Annotations %s %v", vcAnnotations.ContainerResourcesSwapInBytes, err)
+		}
+		resourceSwapInBytes := int64(resourceSwapInBytesInUint)
+		c.config.Resources.Memory.Swap = &resourceSwapInBytes
 	}
 
 	// experimental runtime use "persist.json" instead of legacy "state.json" as storage

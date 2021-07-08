@@ -9,6 +9,7 @@ const (
 	kataAnnotationsPrefix     = "io.katacontainers."
 	kataConfAnnotationsPrefix = kataAnnotationsPrefix + "config."
 	kataAnnotHypervisorPrefix = kataConfAnnotationsPrefix + "hypervisor."
+	kataAnnotContainerPrefix  = kataAnnotationsPrefix + "container."
 
 	//
 	// OCI
@@ -275,6 +276,17 @@ const (
 	AgentContainerPipeSize       = kataAnnotAgentPrefix + ContainerPipeSizeOption
 	ContainerPipeSizeOption      = "container_pipe_size"
 	ContainerPipeSizeKernelParam = "agent." + ContainerPipeSizeOption
+)
+
+// Container resource related annotations
+const (
+	kataAnnotContainerResourcePrefix = kataAnnotContainerPrefix + "resource."
+
+	// ContainerResourcesSwappiness is a container annotation to specify the Resources.Memory.Swappiness
+	ContainerResourcesSwappiness = kataAnnotContainerResourcePrefix + "swappiness"
+
+	// ContainerResourcesSwapInBytes is a container annotation to specify the Resources.Memory.Swap
+	ContainerResourcesSwapInBytes = kataAnnotContainerResourcePrefix + "swap_in_bytes"
 )
 
 const (
