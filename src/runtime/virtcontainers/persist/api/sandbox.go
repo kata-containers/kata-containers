@@ -30,9 +30,12 @@ type SandboxState struct {
 	// SandboxContainer specifies which container is used to start the sandbox/vm
 	SandboxContainer string
 
-	// CgroupPath is the cgroup hierarchy where sandbox's processes
-	// including the hypervisor are placed.
-	CgroupPath string
+	// SandboxCgroupPath is the sandbox cgroup path
+	SandboxCgroupPath string
+
+	// OverheadCgroupPath is the sandbox overhead cgroup path.
+	// It can be an empty string if sandbox_cgroup_only is set.
+	OverheadCgroupPath string
 
 	// HypervisorState saves hypervisor specific data
 	HypervisorState HypervisorState

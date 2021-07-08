@@ -26,6 +26,17 @@ type Cgroup struct {
 	sync.Mutex
 }
 
+var (
+	cgroupsLogger = logrus.WithField("source", "virtcontainers/pkg/cgroups")
+)
+
+// SetLogger sets up a logger for this pkg
+func SetLogger(logger *logrus.Entry) {
+	fields := cgroupsLogger.Data
+
+	cgroupsLogger = logger.WithFields(fields)
+}
+
 func deviceToDeviceCgroup(device string) (*specs.LinuxDeviceCgroup, error) {
 	var st unix.Stat_t
 
