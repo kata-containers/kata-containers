@@ -21,6 +21,7 @@ pub struct VsockTraceServer {
     pub jaeger_service_name: String,
 
     pub logger: Logger,
+    pub dump_only: bool,
 }
 
 impl VsockTraceServer {
@@ -31,16 +32,18 @@ impl VsockTraceServer {
         jaeger_host: &str,
         jaeger_port: u32,
         jaeger_service_name: &str,
+        dump_only: bool,
     ) -> Self {
         let logger = logger.new(o!("subsystem" => "server"));
 
         VsockTraceServer {
-            vsock_port: vsock_port,
-            vsock_cid: vsock_cid,
+            vsock_port,
+            vsock_cid,
             jaeger_host: jaeger_host.to_string(),
-            jaeger_port: jaeger_port,
+            jaeger_port,
             jaeger_service_name: jaeger_service_name.to_string(),
-            logger: logger,
+            logger,
+            dump_only,
         }
     }
 
@@ -71,7 +74,7 @@ impl VsockTraceServer {
 
                     let logger = self.logger.new(o!());
 
-                    let f = handler::handle_connection(logger, conn, &mut exporter);
+                    let f = handler::handle_connection(logger, conn, &mut exporter, self.dump_only);
 
                     block_on(f)?;
                 }

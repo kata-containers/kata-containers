@@ -32,13 +32,14 @@ pub async fn handle_connection<'a>(
     logger: Logger,
     mut conn: VsockStream,
     exporter: &'a mut dyn SpanExporter,
+    dump_only: bool,
 ) -> Result<()> {
     let logger = logger.new(o!("subsystem" => "handler",
             "connection" => format!("{:?}", conn)));
 
     debug!(logger, "handling connection");
 
-    handle_trace_data(logger.clone(), &mut conn, exporter)
+    handle_trace_data(logger.clone(), &mut conn, exporter, dump_only)
         .await
         .map_err(|e| mk_io_err(&format!("failed to handle data: {:}", e)))?;
 
@@ -56,6 +57,7 @@ async fn handle_trace_data<'a>(
     logger: Logger,
     reader: &'a mut dyn Read,
     exporter: &'a mut dyn SpanExporter,
+    dump_only: bool,
 ) -> Result<()> {
     loop {
         let mut header: [u8; HEADER_SIZE_BYTES as usize] = [0; HEADER_SIZE_BYTES as usize];
@@ -90,18 +92,22 @@ async fn handle_trace_data<'a>(
 
         debug!(logger, "deserialised payload");
 
-        let mut batch = Vec::<SpanData>::new();
+        if dump_only {
+            debug!(logger, "dump-only: {:?}", span_data);
+        } else {
+            let mut batch = Vec::<SpanData>::new();
 
-        batch.push(span_data);
+            batch.push(span_data);
 
-        // Call low-level Jaeger exporter to send the trace span immediately.
-        let result = exporter.export(batch).await;
+            // Call low-level Jaeger exporter to send the trace span immediately.
+            let result = exporter.export(batch).await;
 
-        if result.is_err() {
-            return Err(anyhow!("failed to export trace spans: {:?}", result));
+            if result.is_err() {
+                return Err(anyhow!("failed to export trace spans: {:?}", result));
+            }
+
+            debug!(logger, "exported trace spans");
         }
-
-        debug!(logger, "exported trace spans");
     }
 
     Ok(())
