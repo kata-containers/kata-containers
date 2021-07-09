@@ -24,19 +24,21 @@ type exec struct {
 	cmds      *types.Cmd
 	tty       *tty
 	ttyio     *ttyIO
-	id        string
+
+	stdinPipe io.WriteCloser
+
+	exitTime time.Time
+
+	exitIOch    chan struct{}
+	stdinCloser chan struct{}
+
+	exitCh chan uint32
+
+	id string
 
 	exitCode int32
 
 	status task.Status
-
-	exitIOch chan struct{}
-	exitCh   chan uint32
-
-	stdinCloser chan struct{}
-	stdinPipe   io.WriteCloser
-
-	exitTime time.Time
 }
 
 type tty struct {
