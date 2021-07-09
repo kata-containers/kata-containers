@@ -40,7 +40,7 @@ use nix::sys::stat;
 use nix::unistd::{self, Pid};
 use rustjail::process::ProcessOperations;
 
-use crate::device::{add_devices, rescan_pci_bus, update_device_cgroup};
+use crate::device::{add_devices, rescan_pci_shpc, update_device_cgroup};
 use crate::linux_abi::*;
 use crate::metrics::get_metrics;
 use crate::mount::{add_storages, remove_mounts, BareMount, STORAGE_HANDLER_LIST};
@@ -130,9 +130,8 @@ impl AgentService {
 
         info!(sl!(), "receive createcontainer, spec: {:?}", &oci);
 
-        // re-scan PCI bus
-        // looking for hidden devices
-        rescan_pci_bus().context("Could not rescan PCI bus")?;
+        // re-scan PCI bus if we have SHPC hotplug in use
+        rescan_pci_shpc().context("Could not rescan PCI bus")?;
 
         // Some devices need some extra processing (the ones invoked with
         // --device for instance), and that's what this call is doing. It

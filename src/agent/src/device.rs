@@ -56,9 +56,50 @@ struct DevIndexEntry {
 #[derive(Debug)]
 struct DevIndex(HashMap<String, DevIndexEntry>);
 
+fn filename_is_pci_addr(f: &std::ffi::OsStr) -> bool {
+    lazy_static! {
+        static ref PCIADDR: Regex =
+            Regex::new(r"^[0-9a-f]{4}:[0-9a-f]{2}:[0-9a-f][.][0-7]$").unwrap();
+    }
+
+    let s = match f.to_str() {
+        Some(n) => n,
+        None => return false,
+    };
+    PCIADDR.is_match(s)
+}
+
 #[instrument]
-pub fn rescan_pci_bus() -> Result<()> {
-    online_device(SYSFS_PCI_BUS_RESCAN_FILE)
+pub fn rescan_pci_shpc() -> Result<()> {
+    // With certain guest types, SHPC is the only available PCI
+    // hotplug option.  Unfortunately, SHPC has a mandated 5s delay
+    // (designed for an actual person physically plugging a card).
+
+    // To work around that, we force a PCI rescan when SHPC is in use,
+    // which will detect the device earlier.  This rescan can cause a
+    // number of other problems, so we want to avoid it if we're not
+    // using SHPC
+
+    let dir = match fs::read_dir(SYSFS_PCI_SHPCHP_DRIVER) {
+        Ok(x) => x,
+        Err(e) => {
+            if e.kind() == std::io::ErrorKind::NotFound {
+                // No shpchp driver at all, that's just fine
+                return Ok(());
+            } else {
+                return Err(e.into());
+            }
+        }
+    };
+    for f in dir {
+        let f = f?;
+        if f.file_type()?.is_symlink() && filename_is_pci_addr(&f.file_name()) {
+            // SHPC driver is bound to something, we need the rescan
+            warn!(sl!(), "Forcing PCI rescan PCI to avoid waiting for SHPC");
+            return online_device(SYSFS_PCI_BUS_RESCAN_FILE);
+        }
+    }
+    Ok(())
 }
 
 #[instrument]

@@ -9,6 +9,7 @@
 use std::fs;
 
 pub const SYSFS_DIR: &str = "/sys";
+pub const SYSFS_PCI_SHPCHP_DRIVER: &str = "/sys/bus/pci/drivers/shpchp";
 pub const SYSFS_PCI_BUS_RESCAN_FILE: &str = "/sys/bus/pci/rescan";
 #[cfg(any(
     target_arch = "powerpc64",
