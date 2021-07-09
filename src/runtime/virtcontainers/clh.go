@@ -561,7 +561,7 @@ func (clh *cloudHypervisor) resizeMemory(ctx context.Context, reqMemMB uint32, m
 	resize := chclient.VmResize{DesiredRam: int64(newMem.ToBytes())}
 	clh.Logger().WithFields(log.Fields{"current-memory": currentMem, "new-memory": newMem}).Debug("updating VM memory")
 	if _, err = cl.VmResizePut(ctx, resize); err != nil {
-		clh.Logger().WithFields(log.Fields{"current-memory": currentMem, "new-memory": newMem}).Warnf("failed to update memory %s", openAPIClientError(err))
+		clh.Logger().WithError(err).WithFields(log.Fields{"current-memory": currentMem, "new-memory": newMem}).Warnf("failed to update memory %s", openAPIClientError(err))
 		err = fmt.Errorf("Failed to resize memory from %d to %d: %s", currentMem, newMem, openAPIClientError(err))
 		return uint32(currentMem.ToMiB()), memoryDevice{}, openAPIClientError(err)
 	}
@@ -777,7 +777,7 @@ func (clh *cloudHypervisor) terminate(ctx context.Context, waitOnly bool) (err e
 
 	clh.Logger().Debug("stop virtiofsd")
 	if err = clh.virtiofsd.Stop(ctx); err != nil {
-		clh.Logger().Error("failed to stop virtiofsd")
+		clh.Logger().WithError(err).Error("failed to stop virtiofsd")
 	}
 
 	return
@@ -839,7 +839,7 @@ func (clh *cloudHypervisor) clhPath() (string, error) {
 		return "", fmt.Errorf("Cloud-Hypervisor path (%s) does not exist", p)
 	}
 
-	return p, nil
+	return p, err
 }
 
 func (clh *cloudHypervisor) launchClh() (int, error) {
@@ -893,7 +893,7 @@ func (clh *cloudHypervisor) launchClh() (int, error) {
 	}
 
 	if err := clh.waitVMM(clhTimeout); err != nil {
-		clh.Logger().WithField("error", err).Warn("cloud-hypervisor init failed")
+		clh.Logger().WithError(err).Warn("cloud-hypervisor init failed")
 		return -1, err
 	}
 
@@ -1134,7 +1134,7 @@ func (clh *cloudHypervisor) cleanupVM(force bool) error {
 	path, err := clh.vsockSocketPath(clh.id)
 	if err == nil {
 		if err := os.Remove(path); err != nil {
-			clh.Logger().WithField("path", path).Warn("removing vm socket failed")
+			clh.Logger().WithError(err).WithField("path", path).Warn("removing vm socket failed")
 		}
 	}
 
