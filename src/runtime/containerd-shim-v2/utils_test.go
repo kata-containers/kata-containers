@@ -73,7 +73,7 @@ func init() {
 	var err error
 
 	fmt.Printf("INFO: creating test directory\n")
-	testDir, err = ioutil.TempDir("", fmt.Sprintf("shimV2-"))
+	testDir, err = ioutil.TempDir("", "shimV2-")
 	if err != nil {
 		panic(fmt.Sprintf("ERROR: failed to create test directory: %v", err))
 	}
