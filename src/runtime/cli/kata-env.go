@@ -72,29 +72,29 @@ type RuntimeConfigInfo struct {
 
 // RuntimeInfo stores runtime details.
 type RuntimeInfo struct {
-	Version             RuntimeVersionInfo
 	Config              RuntimeConfigInfo
+	Path                string
+	Experimental        []exp.Feature
+	Version             RuntimeVersionInfo
 	Debug               bool
 	Trace               bool
 	DisableGuestSeccomp bool
 	DisableNewNetNs     bool
 	SandboxCgroupOnly   bool
-	Experimental        []exp.Feature
-	Path                string
 }
 
 type VersionInfo struct {
 	Semver string
+	Commit string
 	Major  uint64
 	Minor  uint64
 	Patch  uint64
-	Commit string
 }
 
 // RuntimeVersionInfo stores details of the runtime version
 type RuntimeVersionInfo struct {
-	Version VersionInfo
 	OCI     string
+	Version VersionInfo
 }
 
 // HypervisorInfo stores hypervisor details
@@ -115,10 +115,10 @@ type HypervisorInfo struct {
 
 // AgentInfo stores agent details
 type AgentInfo struct {
-	Debug     bool
-	Trace     bool
 	TraceMode string
 	TraceType string
+	Debug     bool
+	Trace     bool
 }
 
 // DistroInfo stores host operating system distribution details.
@@ -140,8 +140,8 @@ type HostInfo struct {
 
 // NetmonInfo stores netmon details
 type NetmonInfo struct {
-	Version VersionInfo
 	Path    string
+	Version VersionInfo
 	Debug   bool
 	Enable  bool
 }
@@ -151,15 +151,15 @@ type NetmonInfo struct {
 //
 // XXX: Any changes must be coupled with a change to formatVersion.
 type EnvInfo struct {
-	Meta       MetaInfo
-	Runtime    RuntimeInfo
-	Hypervisor HypervisorInfo
-	Image      ImageInfo
 	Kernel     KernelInfo
+	Meta       MetaInfo
+	Image      ImageInfo
 	Initrd     InitrdInfo
 	Agent      AgentInfo
-	Host       HostInfo
+	Hypervisor HypervisorInfo
 	Netmon     NetmonInfo
+	Runtime    RuntimeInfo
+	Host       HostInfo
 }
 
 func getMetaInfo() MetaInfo {
