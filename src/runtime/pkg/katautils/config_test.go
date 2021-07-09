@@ -39,6 +39,7 @@ var (
 	jaegerPassword  = "jaeger_password1"
 )
 
+// nolint: govet
 type testRuntimeConfig struct {
 	RuntimeConfig     oci.RuntimeConfig
 	RuntimeConfigFile string
@@ -1574,6 +1575,7 @@ func TestCheckNetNsConfig(t *testing.T) {
 func TestCheckFactoryConfig(t *testing.T) {
 	assert := assert.New(t)
 
+	// nolint: govet
 	type testData struct {
 		factoryEnabled bool
 		expectError    bool

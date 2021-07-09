@@ -55,21 +55,21 @@ type tomlConfig struct {
 	Hypervisor map[string]hypervisor
 	Agent      map[string]agent
 	Runtime    runtime
-	Factory    factory
-	Netmon     netmon
 	Image      image
+	Netmon     netmon
+	Factory    factory
 }
 
 type image struct {
-	ServiceOffload bool   `toml:"service_offload"`
 	Provision      string `toml:"provision"`
+	ServiceOffload bool   `toml:"service_offload"`
 }
 
 type factory struct {
-	Template        bool   `toml:"enable_template"`
 	TemplatePath    string `toml:"template_path"`
-	VMCacheNumber   uint   `toml:"vm_cache_number"`
 	VMCacheEndpoint string `toml:"vm_cache_endpoint"`
+	VMCacheNumber   uint   `toml:"vm_cache_number"`
+	Template        bool   `toml:"enable_template"`
 }
 
 type hypervisor struct {
