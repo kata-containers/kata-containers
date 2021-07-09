@@ -44,6 +44,7 @@ func TestComposeSocketAddress(t *testing.T) {
 		},
 	}
 
+	// nolint: govet
 	testCases := []struct {
 		url  string
 		err  bool
