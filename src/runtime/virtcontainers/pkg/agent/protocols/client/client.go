@@ -428,9 +428,7 @@ func HybridVSockDialer(sock string, timeout time.Duration) (net.Conn, error) {
 
 // just for tests use.
 func MockHybridVSockDialer(sock string, timeout time.Duration) (net.Conn, error) {
-	if strings.HasPrefix(sock, "mock:") {
-		sock = strings.TrimPrefix(sock, "mock:")
-	}
+	sock = strings.TrimPrefix(sock, "mock:")
 
 	dialFunc := func() (net.Conn, error) {
 		return net.DialTimeout("unix", sock, timeout)
