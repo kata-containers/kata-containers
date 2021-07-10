@@ -923,12 +923,12 @@ pub fn get_mounts() -> Result<HashMap<String, String>> {
     let paths = get_paths()?;
 
     for l in fs::read_to_string(MOUNTS)?.lines() {
-        let p: Vec<&str> = l.split(" - ").collect();
+        let p: Vec<&str> = l.splitn(2, " - ").collect();
         let pre: Vec<&str> = p[0].split(' ').collect();
         let post: Vec<&str> = p[1].split(' ').collect();
 
         if post.len() != 3 {
-            warn!(sl!(), "mountinfo corrupted!");
+            warn!(sl!(), "can't parse {} line {:?}", MOUNTS, l);
             continue;
         }
 
