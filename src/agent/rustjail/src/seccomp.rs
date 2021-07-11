@@ -5,16 +5,38 @@
 
 use anyhow::{anyhow, Result};
 use libseccomp::*;
-use oci::LinuxSeccomp;
+use oci::{LinuxSeccomp, LinuxSeccompArg};
 use std::str::FromStr;
 
-pub fn get_filter_attr_from_flag(flag: &str) -> Result<ScmpFilterAttr> {
+fn get_filter_attr_from_flag(flag: &str) -> Result<ScmpFilterAttr> {
     match flag {
         "SECCOMP_FILTER_FLAG_TSYNC" => Ok(ScmpFilterAttr::CtlTsync),
         "SECCOMP_FILTER_FLAG_LOG" => Ok(ScmpFilterAttr::CtlLog),
         "SECCOMP_FILTER_FLAG_SPEC_ALLOW" => Ok(ScmpFilterAttr::CtlSsb),
         _ => Err(anyhow!("Invalid seccomp flag")),
     }
+}
+
+// get_rule_conditions gets rule conditions for a system call from the args.
+fn get_rule_conditions(args: &[LinuxSeccompArg]) -> Result<Vec<ScmpArgCompare>> {
+    let mut conditions: Vec<ScmpArgCompare> = Vec::new();
+
+    for arg in args {
+        if arg.op.is_empty() {
+            return Err(anyhow!("seccomp opreator is required"));
+        }
+
+        let cond = ScmpArgCompare::new(
+            arg.index,
+            ScmpCompareOp::from_str(&arg.op)?,
+            arg.value,
+            Some(arg.value_two),
+        );
+
+        conditions.push(cond);
+    }
+
+    Ok(conditions)
 }
 
 // init_seccomp creates a seccomp filter and loads it for the current process
@@ -51,29 +73,13 @@ pub fn init_seccomp(scmp: &LinuxSeccomp) -> Result<()> {
             if syscall.args.is_empty() {
                 filter.add_rule(action, syscall_num, None)?;
             } else {
-                let mut cmps: Vec<ScmpArgCompare> = Vec::new();
-
-                for arg in &syscall.args {
-                    if arg.op.is_empty() {
-                        return Err(anyhow!("seccomp opreator is required"));
-                    }
-
-                    let arg_cmp = ScmpArgCompare::new(
-                        arg.index,
-                        ScmpCompareOp::from_str(&arg.op)?,
-                        arg.value,
-                        Some(arg.value_two),
-                    );
-
-                    cmps.push(arg_cmp);
-                }
-
-                filter.add_rule(action, syscall_num, Some(&cmps))?;
+                let conditions = get_rule_conditions(&syscall.args)?;
+                filter.add_rule(action, syscall_num, Some(&conditions))?;
             }
         }
     }
 
-    // Set filtter attributes for each seccomp flag
+    // Set filter attributes for each seccomp flag
     for flag in &scmp.flags {
         let scmp_attr = get_filter_attr_from_flag(flag)?;
         filter.set_filter_attr(scmp_attr, 1)?;
