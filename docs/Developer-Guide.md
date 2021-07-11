@@ -283,7 +283,7 @@ The agent is built with seccomp capability by default.
 If you want to build the agent without the seccomp capability, you need to run `make` with `SECCOMP=no` as follows.
 
 ```
-$ cd $GOPATH/src/github.com/kata-containers/kata-containers/src/agent && make SECCOMP=no
+$ make -C $GOPATH/src/github.com/kata-containers/kata-containers/src/agent SECCOMP=no
 ```
 
 > **Note:**
@@ -312,7 +312,12 @@ $ cd $GOPATH/src/github.com/kata-containers/kata-containers/tools/osbuilder/root
 $ script -fec 'sudo -E GOPATH=$GOPATH USE_DOCKER=true ./rootfs.sh ${distro}'
 ```
 
-You MUST choose one of `alpine`, `centos`, `clearlinux`, `debian`, `euleros`, `fedora`, `suse`, and `ubuntu` for `${distro}`.
+You MUST choose a distribution (e.g., `ubuntu`) for `${distro}`.
+You can get a supported distributions list in the Kata Containers by running the following.
+
+```
+$ ./rootfs.sh -l
+```
 
 If you want to build the agent without seccomp capability, you need to run the `rootfs.sh` script with `SECCOMP=no` as follows.
 
@@ -377,7 +382,12 @@ $ script -fec 'sudo -E GOPATH=$GOPATH AGENT_INIT=yes USE_DOCKER=true ./rootfs.sh
 `AGENT_INIT` controls if the guest image uses the Kata agent as the guest `init` process. When you create an initrd image,
 always set `AGENT_INIT` to `yes`.
 
-You MUST choose one of `alpine`, `centos`, `clearlinux`, `euleros`, and `fedora` for `${distro}`.
+You MUST choose a distribution (e.g., `ubuntu`) for `${distro}`.
+You can get a supported distributions list in the Kata Containers by running the following.
+
+```
+$ ./rootfs.sh -l
+```
 
 If you want to build the agent without seccomp capability, you need to run the `rootfs.sh` script with `SECCOMP=no` as follows.
 
