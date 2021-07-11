@@ -314,6 +314,8 @@ build_rootfs_distro()
 	[ -n "${distro}" ] || usage 1
 	distro_config_dir="${script_dir}/${distro}"
 
+	[ -d "${distro_config_dir}" ] || die "Not found configuration directory ${distro_config_dir}"
+
 	# Source config.sh from distro
 	rootfs_config="${distro_config_dir}/${CONFIG_SH}"
 	source "${rootfs_config}"
@@ -323,8 +325,6 @@ build_rootfs_distro()
 	if [ -f "${rootfs_arch_config}" ]; then
 		source "${rootfs_arch_config}"
 	fi
-
-	[ -d "${distro_config_dir}" ] || die "Not found configuration directory ${distro_config_dir}"
 
 	if [ -z "$ROOTFS_DIR" ]; then
 		 ROOTFS_DIR="${script_dir}/rootfs-${OS_NAME}"
