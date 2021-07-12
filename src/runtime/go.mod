@@ -14,6 +14,7 @@ require (
 	github.com/containerd/fifo v1.0.0
 	github.com/containerd/ttrpc v1.0.2
 	github.com/containerd/typeurl v1.0.2
+	github.com/containernetworking/cni v0.8.1 // indirect
 	github.com/containernetworking/plugins v0.9.1
 	github.com/cri-o/cri-o v1.0.0-rc2.0.20170928185954-3394b3b2d6af
 	github.com/docker/distribution v2.7.1+incompatible // indirect
