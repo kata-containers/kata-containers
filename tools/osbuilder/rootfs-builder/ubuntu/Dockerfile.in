@@ -40,6 +40,6 @@ RUN apt-get update && apt-get --no-install-recommends install -y \
     tar \
     vim \
     wget
-# This will install the proper golang to build Kata components
-@INSTALL_GO@
+
+# This will install the proper packages to build Kata components
 @INSTALL_RUST@

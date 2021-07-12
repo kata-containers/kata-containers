@@ -34,7 +34,6 @@ RUN yum -y update && yum install -y \
     vim \
     which
 
+# This will install the proper packages to build Kata components
 @INSTALL_MUSL@
-# This will install the proper golang to build Kata components
-@INSTALL_GO@
 @INSTALL_RUST@
