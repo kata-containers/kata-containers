@@ -1,7 +1,9 @@
 # Documentation
 
 * [Getting Started](#getting-started)
+* [Tracing](#tracing)
 * [More User Guides](#more-user-guides)
+    * [Howto guides](#howto-guides)
 * [Kata Use-Cases](#kata-use-cases)
 * [Developer Guide](#developer-guide)
     * [Design and Implementations](#design-and-implementations)
@@ -21,6 +23,11 @@ For details of the other Kata Containers repositories, see the
 ## Getting Started
 
 * [Installation guides](./install/README.md): Install and run Kata Containers with Docker or Kubernetes
+
+
+## Tracing
+
+See the [tracing documentation](tracing.md).
 
 ## More User Guides
 
