@@ -42,28 +42,32 @@ PROJECT_BUG_URL = $(PROJECT_URL)/kata-containers/issues/new
 # list of scripts to install
 SCRIPTS :=
 
-# list of binaries to install
-BINLIST :=
-BINLIBEXECLIST :=
-
 BIN_PREFIX = $(PROJECT_TYPE)
 PROJECT_DIR = $(PROJECT_TAG)
 IMAGENAME = $(PROJECT_TAG).img
 
-TARGET = $(BIN_PREFIX)-runtime
-TARGET_OUTPUT = $(CURDIR)/$(TARGET)
-BINLIST += $(TARGET)
+RUNTIME_TARGET = $(BIN_PREFIX)-runtime
+RUNTIME_OUTPUT = $(CURDIR)/$(RUNTIME_TARGET)
 
 NETMON_DIR = netmon
 NETMON_TARGET = $(PROJECT_TYPE)-netmon
-NETMON_TARGET_OUTPUT = $(CURDIR)/$(NETMON_TARGET)
-BINLIBEXECLIST += $(NETMON_TARGET)
+NETMON_OUTPUT = $(CURDIR)/$(NETMON_TARGET)
+
+CLI_DIR = cli
+
+SHIMV2_TARGET = containerd-shim-kata-v2
+SHIMV2_OUTPUT = $(CURDIR)/$(SHIMV2_TARGET)
+SHIMV2_DIR = $(CLI_DIR)/$(SHIMV2_TARGET)
+
+MONITOR_TARGET = kata-monitor
+MONITOR_OUTPUT = $(CURDIR)/$(MONITOR_TARGET)
+MONITOR_DIR = $(CLI_DIR)/kata-monitor
 
 DESTDIR ?= /
 
 ifeq ($(PREFIX),)
-PREFIX        := /usr
-EXEC_PREFIX   := $(PREFIX)/local
+PREFIX        := /usr/local
+EXEC_PREFIX   := $(PREFIX)
 else
 EXEC_PREFIX   := $(PREFIX)
 endif
@@ -84,7 +88,7 @@ DEFAULTSDIR := $(SHAREDIR)/defaults
 COLLECT_SCRIPT = data/kata-collect-data.sh
 
 # @RUNTIME_NAME@ should be replaced with the target in generated files
-RUNTIME_NAME = $(TARGET)
+RUNTIME_NAME = $(RUNTIME_TARGET)
 
 GENERATED_FILES += $(COLLECT_SCRIPT)
 GENERATED_VARS = \
@@ -199,16 +203,6 @@ DEFBINDMOUNTS := []
 FEATURE_SELINUX ?= check
 
 SED = sed
-
-CLI_DIR = cli
-SHIMV2 = containerd-shim-kata-v2
-SHIMV2_OUTPUT = $(CURDIR)/$(SHIMV2)
-SHIMV2_DIR = $(CLI_DIR)/$(SHIMV2)
-
-MONITOR = kata-monitor
-MONITOR_OUTPUT = $(CURDIR)/$(MONITOR)
-MONITOR_DIR = $(CLI_DIR)/kata-monitor
-
 
 SOURCES := $(shell find . 2>&1 | grep -E '.*\.(c|h|go)$$')
 VERSION := ${shell cat ./VERSION}
@@ -506,7 +500,11 @@ define SHOW_ARCH
   $(shell printf "\\t%s%s\\\n" "$(1)" $(if $(filter $(ARCH),$(1))," (default)",""))
 endef
 
-all: runtime containerd-shim-v2 netmon monitor
+build: $(RUNTIME_TARGET) $(SHIMV2_TARGET) $(NETMON_TARGET) $(MONITOR_TARGET)
+
+.DEFAULT: build
+
+default: build
 
 # Targets that depend on .git-commit can use $(shell cat .git-commit) to get a
 # git revision string.  They will only be rebuilt if the revision string
@@ -518,19 +516,13 @@ all: runtime containerd-shim-v2 netmon monitor
 	@echo -n "$$(git rev-parse HEAD 2>/dev/null)" >$@
 	@test -n "$$(git status --porcelain --untracked-files=no)" && echo -n "-dirty" >>$@ || true
 
-containerd-shim-v2: $(SHIMV2_OUTPUT)
+runtime: $(RUNTIME_TARGET) $(CONFIGS)
 
-monitor: $(MONITOR_OUTPUT)
+containerd-shim-v2: $(SHIMV2_TARGET)
 
-netmon: $(NETMON_TARGET_OUTPUT)
+monitor: $(MONITOR_TARGET)
 
-$(NETMON_TARGET_OUTPUT): $(SOURCES) VERSION
-	$(QUIET_BUILD)(cd $(NETMON_DIR) && go build $(BUILDFLAGS) -o $@ -ldflags "-X main.version=$(VERSION)" $(KATA_LDFLAGS))
-
-runtime: $(TARGET_OUTPUT) $(CONFIGS)
-.DEFAULT: default
-
-build: default
+netmon: $(NETMON_TARGET)
 
 #Install an executable file
 # params:
@@ -563,28 +555,30 @@ GENERATED_CONFIG = $(abspath $(CLI_DIR)/config-generated.go)
 GENERATED_FILES += $(GENERATED_CONFIG)
 GENERATED_FILES += pkg/katautils/config-settings.go
 
-$(TARGET_OUTPUT): $(SOURCES) $(GENERATED_FILES) $(MAKEFILE_LIST) | show-summary
-	$(QUIET_BUILD)(cd $(CLI_DIR) && go build $(KATA_LDFLAGS) $(BUILDFLAGS) -o $@ .)
+$(RUNTIME_TARGET): $(SOURCES) $(GENERATED_FILES) $(MAKEFILE_LIST) | show-summary
+	$(QUIET_BUILD)(cd $(CLI_DIR) && go build $(KATA_LDFLAGS) $(BUILDFLAGS) -o $(RUNTIME_OUTPUT) .)
 
-$(SHIMV2_OUTPUT): $(SOURCES) $(GENERATED_FILES) $(MAKEFILE_LIST)
+$(SHIMV2_TARGET): $(SOURCES) $(GENERATED_FILES) $(MAKEFILE_LIST)
 	$(QUIET_BUILD)(cd $(SHIMV2_DIR)/ && ln -fs $(GENERATED_CONFIG))
-	$(QUIET_BUILD)(cd $(SHIMV2_DIR)/ && go build $(KATA_LDFLAGS) $(BUILDFLAGS) -o $@ .)
+	$(QUIET_BUILD)(cd $(SHIMV2_DIR)/ && go build $(KATA_LDFLAGS) $(BUILDFLAGS) -o $(SHIMV2_OUTPUT) .)
 
-$(MONITOR_OUTPUT): $(SOURCES) $(GENERATED_FILES) $(MAKEFILE_LIST) .git-commit
+$(MONITOR_TARGET): $(SOURCES) $(GENERATED_FILES) $(MAKEFILE_LIST) .git-commit
 	$(QUIET_BUILD)(cd $(MONITOR_DIR)/ && CGO_ENABLED=0 go build \
-		--ldflags "-X main.GitCommit=$(shell cat .git-commit)" $(BUILDFLAGS) -buildmode=exe -o $@ .)
+		--ldflags "-X main.GitCommit=$(shell cat .git-commit)" $(BUILDFLAGS) -buildmode=exe -o $(MONITOR_OUTPUT) .)
+
+$(NETMON_TARGET): $(SOURCES) VERSION
+	$(QUIET_BUILD)(cd $(NETMON_DIR) && go build $(BUILDFLAGS) -o $(NETMON_OUTPUT) -ldflags "-X main.version=$(VERSION)" $(KATA_LDFLAGS))
 
 .PHONY: \
 	check \
 	check-go-static \
 	coverage \
-	default \
 	install \
 	show-header \
 	show-summary \
 	show-variables
 
-$(TARGET).coverage: $(SOURCES) $(GENERATED_FILES) $(MAKEFILE_LIST)
+$(RUNTIME_TARGET).coverage: $(SOURCES) $(GENERATED_FILES) $(MAKEFILE_LIST)
 	$(QUIET_TEST)go test -o $@ -covermode count
 
 GENERATED_FILES += $(CONFIGS)
@@ -619,23 +613,20 @@ coverage:
 	go test -v -mod=vendor -covermode=atomic -coverprofile=coverage.txt ./...
 	go tool cover -html=coverage.txt -o coverage.html
 
-install: default install-runtime install-containerd-shim-v2 install-monitor install-netmon
+install: install-runtime install-containerd-shim-v2 install-monitor install-netmon \
+	install-scripts install-completions install-configs
 
-install-bin: $(BINLIST)
-	$(QUIET_INST)$(foreach f,$(BINLIST),$(call INSTALL_EXEC,$f,$(BINDIR)))
+install-runtime: $(RUNTIME_TARGET)
+	$(QUIET_INST)$(call INSTALL_EXEC,$(RUNTIME_OUTPUT),$(BINDIR))
 
-install-runtime: runtime install-scripts install-completions install-configs install-bin
+install-netmon: $(NETMON_TARGET)
+	$(QUIET_INST)$(call INSTALL_EXEC,$(NETMON_OUTPUT),$(PKGLIBEXECDIR))
 
-install-netmon: install-bin-libexec
+install-containerd-shim-v2: $(SHIMV2_TARGET)
+	$(QUIET_INST)$(call INSTALL_EXEC,$(SHIMV2_OUTPUT),$(BINDIR))
 
-install-containerd-shim-v2: $(SHIMV2)
-	$(QUIET_INST)$(call INSTALL_EXEC,$<,$(BINDIR))
-
-install-monitor: $(MONITOR)
-	$(QUIET_INST)$(call INSTALL_EXEC,$<,$(BINDIR))
-
-install-bin-libexec: $(BINLIBEXECLIST)
-	$(QUIET_INST)$(foreach f,$(BINLIBEXECLIST),$(call INSTALL_EXEC,$f,$(PKGLIBEXECDIR)))
+install-monitor: $(MONITOR_TARGET)
+	$(QUIET_INST)$(call INSTALL_EXEC,$(MONITOR_OUTPUT),$(BINDIR))
 
 install-configs: $(CONFIGS)
 	$(QUIET_INST)$(foreach f,$(CONFIGS),$(call INSTALL_CONFIG,$f,$(dir $(CONFIG_PATH))))
@@ -651,17 +642,17 @@ clean:
 	$(QUIET_CLEAN)rm -f \
 		$(CONFIGS) \
 		$(GENERATED_FILES) \
-		$(NETMON_TARGET) \
-		$(MONITOR) \
-		$(SHIMV2) \
+		$(NETMON_OUTPUT) \
+		$(MONITOR_OUTPUT) \
+		$(SHIMV2_OUTPUT) \
 		$(SHIMV2_DIR)/$(notdir $(GENERATED_CONFIG)) \
-		$(TARGET) \
+		$(RUNTIME_OUTPUT) \
 		.git-commit .git-commit.tmp
 
 show-usage: show-header
 	@printf "• Overview:\n"
 	@printf "\n"
-	@printf "\tTo build $(TARGET), just run, \"make\".\n"
+	@printf "\tTo build $(RUNTIME_TARGET), just run, \"make\".\n"
 	@printf "\n"
 	@printf "\tFor a verbose build, run \"make V=1\".\n"
 	@printf "\n"
@@ -671,16 +662,18 @@ show-usage: show-header
 	@printf "\ttest                       : run tests.\n"
 	@printf "\tcheck                      : run code checks.\n"
 	@printf "\tclean                      : remove built files.\n"
-	@printf "\tcontainerd-shim-v2         : only build containerd shim v2.\n"
 	@printf "\tcoverage                   : run coverage tests.\n"
 	@printf "\tdefault                    : same as 'make build' (or just 'make').\n"
 	@printf "\tgenerate-config            : create configuration file.\n"
 	@printf "\tinstall                    : install everything.\n"
-	@printf "\tinstall-containerd-shim-v2 : only install containerd shim v2 files.\n"
-	@printf "\tinstall-netmon             : only install netmon files.\n"
 	@printf "\tinstall-runtime            : only install runtime files.\n"
-	@printf "\tnetmon                     : only build netmon.\n"
+	@printf "\tinstall-containerd-shim-v2 : only install containerd shim v2 files.\n"
+	@printf "\tinstall-monitor            : only install monitor files.\n"
+	@printf "\tinstall-netmon             : only install netmon files.\n"
 	@printf "\truntime                    : only build runtime.\n"
+	@printf "\tcontainerd-shim-v2         : only build containerd shim v2.\n"
+	@printf "\tmonitor                    : only build monitor.\n"
+	@printf "\tnetmon                     : only build netmon.\n"
 	@printf "\tshow-arches                : show supported architectures (ARCH variable values).\n"
 	@printf "\tshow-summary               : show install locations.\n"
 	@printf "\n"
@@ -697,7 +690,7 @@ show-variables:
 	@printf "\n"
 
 show-header: .git-commit
-	@printf "%s - version %s (commit %s)\n\n" $(TARGET) $(VERSION) $(shell cat .git-commit)
+	@printf "%s - version %s (commit %s)\n\n" $(RUNTIME_TARGET) $(VERSION) $(shell cat .git-commit)
 
 show-arches: show-header
 	@printf "Supported architectures (possible values for ARCH variable):\n\n"
@@ -738,13 +731,13 @@ endif
 	@printf "\tbinary installation path (BINDIR) : %s\n" $(abspath $(BINDIR))
 	@printf "\tbinaries to install :\n"
 	@printf \
-          "$(foreach b,$(sort $(BINLIST)),$(shell printf "\\t - $(shell readlink -m $(DESTDIR)/$(BINDIR)/$(b))\\\n"))"
+          "$(shell printf "\\t - $(shell readlink -m $(DESTDIR)/$(BINDIR)/$(notdir $(RUNTIME_OUTPUT)))\\\n")"
 	@printf \
-          "$(foreach b,$(sort $(SHIMV2)),$(shell printf "\\t - $(shell readlink -m $(DESTDIR)/$(BINDIR)/$(b))\\\n"))"
+          "$(shell printf "\\t - $(shell readlink -m $(DESTDIR)/$(BINDIR)/$(notdir $(SHIMV2_OUTPUT)))\\\n")"
 	@printf \
-          "$(foreach b,$(sort $(MONITOR)),$(shell printf "\\t - $(shell readlink -m $(DESTDIR)/$(BINDIR)/$(b))\\\n"))"
+          "$(shell printf "\\t - $(shell readlink -m $(DESTDIR)/$(PKGLIBEXECDIR)/$(notdir $(MONITOR_OUTPUT)))\\\n")"
 	@printf \
-          "$(foreach b,$(sort $(BINLIBEXECLIST)),$(shell printf "\\t - $(shell readlink -m $(DESTDIR)/$(PKGLIBEXECDIR)/$(b))\\\n"))"
+          "$(shell printf "\\t - $(shell readlink -m $(DESTDIR)/$(PKGLIBEXECDIR)/$(notdir $(NETMON_OUTPUT)))\\\n")"
 	@printf \
           "$(foreach s,$(sort $(SCRIPTS)),$(shell printf "\\t - $(shell readlink -m $(DESTDIR)/$(BINDIR)/$(s))\\\n"))"
 	@printf "\tconfigs to install (CONFIGS) :\n"
@@ -775,5 +768,5 @@ ifneq (,$(findstring $(HYPERVISOR_ACRN),$(KNOWN_HYPERVISORS)))
 	@printf "\t$(HYPERVISOR_ACRN) hypervisor path (ACRNPATH) : %s\n" $(abspath $(ACRNPATH))
 endif
 	@printf "\tassets path (PKGDATADIR) : %s\n" $(abspath $(PKGDATADIR))
-	@printf "\tshim path (PKGLIBEXECDIR) : %s\n" $(abspath $(PKGLIBEXECDIR))
+	@printf "\tshim path (BINDIR) : %s\n" $(abspath $(BINDIR))
 	@printf "\n"
