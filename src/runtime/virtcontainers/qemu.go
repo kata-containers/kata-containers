@@ -665,7 +665,8 @@ func (q *qemu) setupVirtiofsd(ctx context.Context) (err error) {
 
 func (q *qemu) stopVirtiofsd(ctx context.Context) (err error) {
 	if q.state.VirtiofsdPid == 0 {
-		return errors.New("invalid virtiofsd PID(0)")
+		q.Logger().Warn("The virtiofsd had stopped")
+		return nil
 	}
 
 	err = q.virtiofsd.Stop(ctx)
@@ -970,6 +971,10 @@ func (q *qemu) stopSandbox(ctx context.Context, waitOnly bool) error {
 			q.Logger().WithError(err).Error("Fail to execute qmp QUIT")
 			return err
 		}
+	}
+
+	if err := q.stopVirtiofsd(ctx); err != nil {
+		return err
 	}
 
 	return nil
