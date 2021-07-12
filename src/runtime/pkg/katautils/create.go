@@ -13,12 +13,19 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils/katatrace"
 	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
 	vf "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/factory"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/oci"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
-	"go.opentelemetry.io/otel/label"
 )
+
+// createTracingTags defines tags for the trace span
+var createTracingTags = map[string]string{
+	"source":    "runtime",
+	"package":   "katautils",
+	"subsystem": "sandbox",
+}
 
 // GetKernelParamsFunc use a variable to allow tests to modify its value
 var GetKernelParamsFunc = getKernelParams
@@ -104,7 +111,8 @@ func SetEphemeralStorageType(ociSpec specs.Spec) specs.Spec {
 // CreateSandbox create a sandbox container
 func CreateSandbox(ctx context.Context, vci vc.VC, ociSpec specs.Spec, runtimeConfig oci.RuntimeConfig, rootFs vc.RootFs,
 	containerID, bundlePath, console string, disableOutput, systemdCgroup bool) (_ vc.VCSandbox, _ vc.Process, err error) {
-	span, ctx := Trace(ctx, "CreateSandbox", []label.KeyValue{label.Key("source").String("runtime"), label.Key("package").String("katautils"), label.Key("subsystem").String("sandbox"), label.Key("container_id").String(containerID)}...)
+	span, ctx := katatrace.Trace(ctx, nil, "CreateSandbox", createTracingTags)
+	katatrace.AddTag(span, "container_id", containerID)
 	defer span.End()
 
 	sandboxConfig, err := oci.SandboxConfig(ociSpec, runtimeConfig, bundlePath, containerID, console, disableOutput, systemdCgroup)
@@ -159,7 +167,7 @@ func CreateSandbox(ctx context.Context, vci vc.VC, ociSpec specs.Spec, runtimeCo
 
 	sid := sandbox.ID()
 	kataUtilsLogger = kataUtilsLogger.WithField("sandbox", sid)
-	span.SetAttributes(label.Key("sandbox_id").String(sid))
+	katatrace.AddTag(span, "sandbox_id", sid)
 
 	containers := sandbox.GetAllContainers()
 	if len(containers) != 1 {
@@ -202,7 +210,8 @@ func checkForFIPS(sandboxConfig *vc.SandboxConfig) error {
 func CreateContainer(ctx context.Context, sandbox vc.VCSandbox, ociSpec specs.Spec, rootFs vc.RootFs, containerID, bundlePath, console string, disableOutput bool) (vc.Process, error) {
 	var c vc.VCContainer
 
-	span, ctx := Trace(ctx, "CreateContainer", []label.KeyValue{label.Key("source").String("runtime"), label.Key("package").String("katautils"), label.Key("subsystem").String("sandbox"), label.Key("container_id").String(containerID)}...)
+	span, ctx := katatrace.Trace(ctx, nil, "CreateContainer", createTracingTags)
+	katatrace.AddTag(span, "container_id", containerID)
 	defer span.End()
 
 	ociSpec = SetEphemeralStorageType(ociSpec)
@@ -228,7 +237,7 @@ func CreateContainer(ctx context.Context, sandbox vc.VCSandbox, ociSpec specs.Sp
 		return vc.Process{}, err
 	}
 
-	span.SetAttributes(label.Key("sandbox_id").String(sandboxID))
+	katatrace.AddTag(span, "sandbox_id", sandboxID)
 
 	c, err = sandbox.CreateContainer(ctx, contConfig)
 	if err != nil {

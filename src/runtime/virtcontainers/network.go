@@ -22,16 +22,22 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 	"github.com/vishvananda/netns"
-	"go.opentelemetry.io/otel"
-	otelLabel "go.opentelemetry.io/otel/label"
 	otelTrace "go.opentelemetry.io/otel/trace"
 	"golang.org/x/sys/unix"
 
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils/katatrace"
 	pbTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/rootless"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/uuid"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
 )
+
+// networkTracingTags defines tags for the trace span
+var networkTracingTags = map[string]string{
+	"source":    "runtime",
+	"package":   "virtcontainers",
+	"subsystem": "network",
+}
 
 // NetInterworkingModel defines the network model connecting
 // the network interface to the virtual machine.
@@ -1295,13 +1301,12 @@ func (n *Network) trace(ctx context.Context, name string) (otelTrace.Span, conte
 
 func getNetworkTrace(networkType EndpointType) func(ctx context.Context, name string, endpoint interface{}) (otelTrace.Span, context.Context) {
 	return func(ctx context.Context, name string, endpoint interface{}) (otelTrace.Span, context.Context) {
-		tracer := otel.Tracer("kata")
-		ctx, span := tracer.Start(ctx, name, otelTrace.WithAttributes(otelLabel.String("source", "runtime"), otelLabel.String("package", "virtcontainers"), otelLabel.String("subsystem", "network")))
+		span, ctx := katatrace.Trace(ctx, networkLogger(), name, networkTracingTags)
 		if networkType != "" {
-			span.SetAttributes(otelLabel.Any("type", string(networkType)))
+			katatrace.AddTag(span, "type", string(networkType))
 		}
 		if endpoint != nil {
-			span.SetAttributes(otelLabel.Any("endpoint", endpoint))
+			katatrace.AddTag(span, "endpoint", endpoint)
 		}
 		return span, ctx
 	}
@@ -1309,7 +1314,7 @@ func getNetworkTrace(networkType EndpointType) func(ctx context.Context, name st
 
 func closeSpan(span otelTrace.Span, err error) {
 	if err != nil {
-		span.SetAttributes(otelLabel.Any("error", err))
+		katatrace.AddTag(span, "error", err)
 	}
 	span.End()
 }
@@ -1327,15 +1332,15 @@ func (n *Network) Run(ctx context.Context, networkNSPath string, cb func() error
 // Add adds all needed interfaces inside the network namespace.
 func (n *Network) Add(ctx context.Context, config *NetworkConfig, s *Sandbox, hotplug bool) ([]Endpoint, error) {
 	span, ctx := n.trace(ctx, "Add")
-	span.SetAttributes(otelLabel.String("type", config.InterworkingModel.GetModel()))
+	katatrace.AddTag(span, "type", config.InterworkingModel.GetModel())
 	defer span.End()
 
 	endpoints, err := createEndpointsFromScan(config.NetNSPath, config)
 	if err != nil {
 		return endpoints, err
 	}
-	span.SetAttributes(otelLabel.Any("endpoints", endpoints))
-	span.SetAttributes(otelLabel.Bool("hotplug", hotplug))
+	katatrace.AddTag(span, "endpoints", endpoints)
+	katatrace.AddTag(span, "hotplug", hotplug)
 
 	err = doNetNS(config.NetNSPath, func(_ ns.NetNS) error {
 		for _, endpoint := range endpoints {
