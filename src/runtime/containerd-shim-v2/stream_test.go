@@ -91,8 +91,6 @@ func TestNewTtyIOFifoReopen(t *testing.T) {
 }
 
 func TestIoCopy(t *testing.T) {
-	t.Skip("TestIoCopy is failing randonly, see https://github.com/kata-containers/kata-containers/issues/2042")
-
 	assert := assert.New(t)
 	ctx := context.TODO()
 
@@ -227,6 +225,18 @@ func TestIoCopy(t *testing.T) {
 				}
 				return
 			}
+		}
+
+		// check everything works without closed pipes
+		checkFifoWrite(firstW, testBytes1, first)
+		checkFifoRead(firstR, testBytes1, first)
+
+		checkFifoWrite(secondW, testBytes2, second)
+		checkFifoRead(secondR, testBytes2, second)
+
+		if thirdW != nil {
+			checkFifoWrite(thirdW, testBytes3, third)
+			checkFifoRead(thirdR, testBytes3, third)
 		}
 
 		// write to each pipe, and close them immediately
