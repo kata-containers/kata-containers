@@ -6,7 +6,7 @@
 default: build
 
 build:
-	RUSTFLAGS="--deny warnings" cargo build -v
+	RUSTFLAGS="--deny warnings" cargo build
 
 clean:
 	cargo clean
