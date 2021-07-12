@@ -24,6 +24,9 @@ KERNEL_MODULES_DIR=${KERNEL_MODULES_DIR:-""}
 OSBUILDER_VERSION="unknown"
 DOCKER_RUNTIME=${DOCKER_RUNTIME:-runc}
 GO_VERSION="null"
+# The kata agent enables seccomp feature.
+# However, it is not enforced by default: you need to enable that in the main configuration file.
+SECCOMP=${SECCOMP:-"yes"}
 export GOPATH=${GOPATH:-${HOME}/go}
 LIBC=${LIBC:-musl}
 
@@ -139,6 +142,9 @@ RUST_AGENT          When set to "no", build kata-agent from go agent instead of 
 
 RUST_AGENT_PKG      URL of the Git repository hosting the agent package.
                     Default value: ${RUST_AGENT_PKG}
+
+SECCOMP             When set to "no", the kata-agent is built without seccomp capability.
+                    Default value: "yes"
 
 USE_DOCKER          If set, build the rootfs inside a container (requires
                     Docker).
@@ -578,8 +584,16 @@ EOT
 
 		agent_pkg="${RUST_AGENT_PKG}"
 		agent_dir="${script_dir}/../../../src/agent/"
-		# For now, rust-agent doesn't support seccomp yet.
-		SECCOMP="no"
+
+		if [ "${SECCOMP}" == "yes" ]; then
+			info "Set up libseccomp"
+			libseccomp_install_dir=$(mktemp -d -t libseccomp.XXXXXXXXXX)
+			gperf_install_dir=$(mktemp -d -t gperf.XXXXXXXXXX)
+			bash ${script_dir}/../../../ci/install_libseccomp.sh "${libseccomp_install_dir}" "${gperf_install_dir}"
+			echo "Set environment variables for the libseccomp crate to link the libseccomp library statically"
+			export LIBSECCOMP_LINK_TYPE=static
+			export LIBSECCOMP_LIB_PATH="${libseccomp_install_dir}/lib"
+		fi
 
 		info "Build agent"
 		pushd "${agent_dir}"
@@ -587,9 +601,12 @@ EOT
 			git checkout "${AGENT_VERSION}" && OK "git checkout successful" || die "checkout agent ${AGENT_VERSION} failed!"
 		fi
 		make clean
-		make LIBC=${LIBC} INIT=${AGENT_INIT}
-		make install DESTDIR="${ROOTFS_DIR}" LIBC=${LIBC} INIT=${AGENT_INIT} SECCOMP=${SECCOMP}
+		make LIBC=${LIBC} INIT=${AGENT_INIT} SECCOMP=${SECCOMP}
+		make install DESTDIR="${ROOTFS_DIR}" LIBC=${LIBC} INIT=${AGENT_INIT}
 		[ "$ARCH" == "aarch64" ] && export PATH=$OLD_PATH && rm -rf /usr/local/musl
+		if [ "${SECCOMP}" == "yes" ]; then
+			rm -rf "${libseccomp_install_dir}" "${gperf_install_dir}"
+		fi
 		popd
 	else
 		mkdir -p ${AGENT_DIR}

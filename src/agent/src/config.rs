@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 //
+use crate::rpc;
 use crate::tracer;
 use anyhow::{bail, ensure, Context, Result};
 use std::env;
@@ -59,6 +60,7 @@ pub struct AgentConfig {
     pub server_addr: String,
     pub unified_cgroup_hierarchy: bool,
     pub tracing: tracer::TraceType,
+    pub supports_seccomp: bool,
 }
 
 // parse_cmdline_param parse commandline parameters.
@@ -104,6 +106,7 @@ impl AgentConfig {
             server_addr: format!("{}:{}", VSOCK_ADDR, VSOCK_PORT),
             unified_cgroup_hierarchy: false,
             tracing: tracer::TraceType::Disabled,
+            supports_seccomp: rpc::have_seccomp(),
         }
     }
 
