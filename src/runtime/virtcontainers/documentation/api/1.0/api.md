@@ -3,10 +3,6 @@
 The virtcontainers 1.0 API operates on two high level objects:
 [Sandboxes](#sandbox-api) and [containers](#container-api):
 
-* [Sandbox API](#sandbox-api)
-* [Container API](#container-api)
-* [Examples](#examples)
-
 ## Sandbox API
 
 The virtcontainers 1.0 sandbox API manages hardware virtualized

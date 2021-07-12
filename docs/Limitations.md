@@ -1,35 +1,3 @@
-* [Overview](#overview)
-* [Definition of a limitation](#definition-of-a-limitation)
-* [Scope](#scope)
-* [Contributing](#contributing)
-* [Pending items](#pending-items)
-    * [Runtime commands](#runtime-commands)
-        * [checkpoint and restore](#checkpoint-and-restore)
-        * [events command](#events-command)
-        * [update command](#update-command)
-    * [Networking](#networking)
-        * [Docker swarm and compose support](#docker-swarm-and-compose-support)
-    * [Resource management](#resource-management)
-        * [docker run and shared memory](#docker-run-and-shared-memory)
-        * [docker run and sysctl](#docker-run-and-sysctl)
-    * [Docker daemon features](#docker-daemon-features)
-        * [SELinux support](#selinux-support)
-* [Architectural limitations](#architectural-limitations)
-    * [Networking limitations](#networking-limitations)
-        * [Support for joining an existing VM network](#support-for-joining-an-existing-vm-network)
-        * [docker --net=host](#docker---nethost)
-        * [docker run --link](#docker-run---link)
-    * [Storage limitations](#storage-limitations)
-        * [Kubernetes `volumeMounts.subPaths`](#kubernetes-volumemountssubpaths)
-    * [Host resource sharing](#host-resource-sharing)
-        * [docker run --privileged](#docker-run---privileged)
-* [Miscellaneous](#miscellaneous)
-    * [Docker --security-opt option partially supported](#docker---security-opt-option-partially-supported)
-* [Appendices](#appendices)
-    * [The constraints challenge](#the-constraints-challenge)
-
-***
-
 # Overview
 
 A [Kata Container](https://github.com/kata-containers) utilizes a Virtual Machine (VM) to enhance security and

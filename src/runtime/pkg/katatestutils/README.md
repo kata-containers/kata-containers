@@ -1,15 +1,5 @@
 # Kata test utilities
 
-* [Test Constraints](#test-constraints)
-    * [Usage](#usage)
-        * [Displaying the `TestConstraint`](#displaying-the-testconstraint)
-        * [Associating an issue with a constraint](#associating-an-issue-with-a-constraint)
-    * [Examples](#examples)
-        * [Skip tests based on user](#skip-tests-based-on-user)
-        * [Skip tests based on distro](#skip-tests-based-on-distro)
-        * [Skip tests based on kernel version](#skip-tests-based-on-kernel-version)
-    * [Full details](#full-details)
-
 This package provides a small set of test utilities. See the
 [GoDoc](https://godoc.org/github.com/kata-containers/runtime/pkg/katatestutils)
 for full details.

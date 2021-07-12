@@ -1,17 +1,5 @@
 # Installing Kata Containers in Minikube
 
-* [Installing Kata Containers in Minikube](#installing-kata-containers-in-minikube)
-    * [Introduction](#introduction)
-    * [Prerequisites](#prerequisites)
-    * [Setting up Minikube](#setting-up-minikube)
-    * [Checking for nested virtualization](#checking-for-nested-virtualization)
-    * [Check Minikube is running](#check-minikube-is-running)
-    * [Installing Kata Containers](#installing-kata-containers)
-    * [Enabling Kata Containers](#enabling-kata-containers)
-        * [Register the runtime](#register-the-runtime)
-    * [Testing Kata Containers](#testing-kata-containers)
-    * [Wrapping up](#wrapping-up)
-
 ## Introduction
 
 [Minikube](https://kubernetes.io/docs/setup/minikube/) is an easy way to try out a Kubernetes (k8s)

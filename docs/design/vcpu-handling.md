@@ -1,11 +1,3 @@
-- [Virtual machine vCPU sizing in Kata Containers](#virtual-machine-vcpu-sizing-in-kata-containers)
-  * [Default number of virtual CPUs](#default-number-of-virtual-cpus)
-  * [Virtual CPUs and Kubernetes pods](#virtual-cpus-and-kubernetes-pods)
-  * [Container lifecycle](#container-lifecycle)
-  * [Container without CPU constraint](#container-without-cpu-constraint)
-  * [Container with CPU constraint](#container-with-cpu-constraint)
-  * [Do not waste resources](#do-not-waste-resources)
-
 # Virtual machine vCPU sizing in Kata Containers
 
 ## Default number of virtual CPUs

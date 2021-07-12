@@ -1,8 +1,3 @@
-* [Kata Containers kernel config files](#kata-containers-kernel-config-files)
-   * [Types of config files](#types-of-config-files)
-   * [How to use config files](#how-to-use-config-files)
-   * [How to modify config files](#how-to-modify-config-files)
-
 # Kata Containers kernel config files
 
 This directory contains Linux Kernel config files used to configure Kata

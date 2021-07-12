@@ -1,14 +1,5 @@
 # Build Kata Containers Kernel
 
-* [Requirements](#requirements)
-* [Usage](#usage)
-* [Setup kernel source code](#setup-kernel-source-code)
-* [Build the kernel](#build-the-kernel)
-* [Install the Kernel in the default path for Kata](#install-the-kernel-in-the-default-path-for-kata)
-* [Submit Kernel Changes](#submit-kernel-changes)
-* [How is it tested](#how-is-it-tested)
-* [Contribute](#contribute)
-
 This document explains the steps to build a kernel recommended for use with
 Kata Containers. To do this use `build-kernel.sh`, this script
 automates the process to build a kernel for Kata Containers.

@@ -1,15 +1,5 @@
 # `kata-deploy`
 
-* [Kubernetes quick start](#kubernetes-quick-start)
-    * [Install Kata on a running Kubernetes cluster](#install-kata-on-a-running-kubernetes-cluster)
-    * [Run a sample workload](#run-a-sample-workload)
-    * [Remove Kata from the Kubernetes cluster](#remove-kata-from-the-kubernetes-cluster)
-* [`kata-deploy` details](#kata-deploy-details)
-    * [Dockerfile](#dockerfile)
-    * [DaemonSets and RBAC](#daemonsets-and-rbac)
-        * [Kata deploy](#kata-deploy)
-        * [Kata cleanup](#kata-cleanup)
-
 [`kata-deploy`](.) provides a Dockerfile, which contains all of the binaries
 and artifacts required to run Kata Containers, as well as reference DaemonSets, which can
 be utilized to install Kata Containers on a running Kubernetes cluster.

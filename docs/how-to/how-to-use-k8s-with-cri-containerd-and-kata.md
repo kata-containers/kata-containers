@@ -1,18 +1,5 @@
 # How to use Kata Containers and CRI (containerd plugin) with Kubernetes
 
-* [Requirements](#requirements)
-* [Install and configure containerd](#install-and-configure-containerd)
-* [Install and configure Kubernetes](#install-and-configure-kubernetes)
-    * [Install Kubernetes](#install-kubernetes)
-    * [Configure Kubelet to use containerd](#configure-kubelet-to-use-containerd)
-    * [Configure HTTP proxy - OPTIONAL](#configure-http-proxy---optional)
-* [Start Kubernetes](#start-kubernetes)
-* [Configure Pod Network](#configure-pod-network)
-* [Allow pods to run in the master node](#allow-pods-to-run-in-the-master-node)
-* [Create runtime class for Kata Containers](#create-runtime-class-for-kata-containers)
-* [Run pod in Kata Containers](#run-pod-in-kata-containers)
-* [Delete created pod](#delete-created-pod)
-
 This document describes how to set up a single-machine Kubernetes (k8s) cluster.
 
 The Kubernetes cluster will use the

@@ -8,26 +8,6 @@ This repository contains the runtime for the
 For details of the other Kata Containers repositories, see the
 [repository summary](https://github.com/kata-containers/kata-containers).
 
-* [Introduction](#introduction)
-* [License](#license)
-* [Platform support](#platform-support)
-    * [Hardware requirements](#hardware-requirements)
-* [Download and install](#download-and-install)
-* [Quick start for developers](#quick-start-for-developers)
-* [Architecture overview](#architecture-overview)
-* [Configuration](#configuration)
-    * [Hypervisor specific configuration](#hypervisor-specific-configuration)
-    * [Stateless systems](#stateless-systems)
-* [Logging](#logging)
-    * [Kata OCI](#kata-oci)
-    * [Kata containerd shimv2](#kata-containerd-shimv2)
-* [Debugging](#debugging)
-* [Limitations](#limitations)
-* [Community](#community)
-    * [Contact](#contact)
-* [Further information](#further-information)
-* [Additional packages](#additional-packages)
-
 ## Introduction
 
 `kata-runtime`, referred to as "the runtime", is the Command-Line Interface
@@ -150,7 +130,7 @@ $ kata-runtime env
 
 For detailed information and analysis on obtaining logs for other system
 components, see the documentation for the
-[`kata-log-parser`](https://github.com/kata-containers/tests/tree/master/cmd/log-parser)
+[`kata-log-parser`](https://github.com/kata-containers/tests/tree/main/cmd/log-parser)
 tool.
 
 For runtime logs, see the following sections for the CRI-O and containerd shimv2 based runtimes.

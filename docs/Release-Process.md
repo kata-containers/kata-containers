@@ -1,19 +1,5 @@
-
 # How to do a Kata Containers Release
   This document lists the tasks required to create a Kata Release.
-
-<!-- TOC START min:1 max:3 link:true asterisk:false update:true -->
-- [How to do a Kata Containers Release](#how-to-do-a-kata-containers-release)
-  - [Requirements](#requirements)
-  - [Release Process](#release-process)
-    - [Bump all Kata repositories](#bump-all-kata-repositories)
-    - [Merge all bump version Pull requests](#merge-all-bump-version-pull-requests)
-    - [Tag all Kata repositories](#tag-all-kata-repositories)
-    - [Check Git-hub Actions](#check-git-hub-actions)
-    - [Create release notes](#create-release-notes)
-    - [Announce the release](#announce-the-release)
-<!-- TOC END -->
-
 
 ## Requirements
 

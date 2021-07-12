@@ -1,13 +1,5 @@
 # Setup to use SR-IOV with Kata Containers and Docker*
 
-- [Install the SR-IOV Docker\* plugin](#install-the-sr-iov-docker-plugin)
-- [Host setup for SR-IOV](#host-setup-for-sr-iov)
-	- [Checking your NIC for SR-IOV](#checking-your-nic-for-sr-iov)
-	- [IOMMU Groups and PCIe Access Control Services](#iommu-groups-and-pcie-access-control-services)
-	- [Update the host kernel](#update-the-host-kernel)
-- [Set up the SR-IOV Device](#set-up-the-sr-iov-device)
-- [Example: Launch a Kata Containers container using SR-IOV](#example-launch-a-kata-containers-container-using-sr-iov)
-
 Single Root I/O Virtualization (SR-IOV) enables splitting a physical device into
 virtual functions (VFs). Virtual functions enable direct passthrough to virtual
 machines or containers. For Kata Containers, we enabled a Container Network

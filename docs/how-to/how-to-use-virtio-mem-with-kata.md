@@ -1,9 +1,5 @@
 # Kata Containers with `virtio-mem`
 
-- [Introduction](#introduction)
-- [Requisites](#requisites)
-- [Run a Kata Container utilizing `virtio-mem`](#run-a-kata-container-utilizing-virtio-mem)
-
 ## Introduction
 
 The basic idea of `virtio-mem` is to provide a flexible, cross-architecture memory hot plug and hot unplug solution that avoids many limitations imposed by existing technologies, architectures, and interfaces.

@@ -1,8 +1,3 @@
-
-  * [Introduction](#introduction)
-  * [Building](#building)
-  * [Options](#options)
-
 ## Introduction
 
 The files in this directory can be used to build a modified Kata Containers rootfs

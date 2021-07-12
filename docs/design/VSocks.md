@@ -1,12 +1,5 @@
 # Kata Containers and VSOCKs
 
-- [Introduction](#introduction)
-    - [VSOCK communication diagram](#vsock-communication-diagram)
-- [System requirements](#system-requirements)
-- [Advantages of using VSOCKs](#advantages-of-using-vsocks)
-    - [High density](#high-density)
-    - [Reliability](#reliability)
-
 ## Introduction
 
 There are two different ways processes in the virtual machine can communicate

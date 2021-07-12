@@ -1,18 +1,5 @@
 # Run Kata Containers with Kubernetes
 
-* [Run Kata Containers with Kubernetes](#run-kata-containers-with-kubernetes)
-  * [Prerequisites](#prerequisites)
-  * [Install a CRI implementation](#install-a-cri-implementation)
-     * [CRI-O](#cri-o)
-        * [Kubernetes Runtime Class (CRI-O v1.12 )](#kubernetes-runtime-class-cri-o-v112)
-        * [Untrusted annotation (until CRI-O v1.12)](#untrusted-annotation-until-cri-o-v112)
-        * [Network namespace management](#network-namespace-management)
-     * [containerd with CRI plugin](#containerd-with-cri-plugin)
-  * [Install Kubernetes](#install-kubernetes)
-     * [Configure for CRI-O](#configure-for-cri-o)
-     * [Configure for containerd](#configure-for-containerd)
-  * [Run a Kubernetes pod with Kata Containers](#run-a-kubernetes-pod-with-kata-containers)
-
 ## Prerequisites
 This guide requires Kata Containers available on your system, install-able by following [this guide](../install/README.md).
 

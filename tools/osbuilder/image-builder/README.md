@@ -1,6 +1,3 @@
-* [Creating a guest OS image](#creating-a-guest-os-image)
-* [Further information](#further-information)
-
 # Kata Containers image generation
 
 A Kata Containers disk image is generated using the `image_builder.sh` script.

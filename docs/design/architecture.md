@@ -1,26 +1,5 @@
 # Kata Containers Architecture
 
-
-- [Kata Containers Architecture](#kata-containers-architecture)
-  - [Overview](#overview)
-  - [Virtualization](#virtualization)
-  - [Guest assets](#guest-assets)
-    - [Guest kernel](#guest-kernel)
-    - [Guest image](#guest-image)
-      - [Root filesystem image](#root-filesystem-image)
-      - [Initrd image](#initrd-image)
-  - [Agent](#agent)
-  - [Runtime](#runtime)
-    - [Configuration](#configuration)
-  - [Networking](#networking)
-    - [Network Hotplug](#network-hotplug)
-  - [Storage](#storage)
-  - [Kubernetes support](#kubernetes-support)
-      - [OCI annotations](#oci-annotations)
-      - [Mixing VM based and namespace based runtimes](#mixing-vm-based-and-namespace-based-runtimes)
-- [Appendices](#appendices)
-  - [DAX](#dax)
-
 ## Overview
 
 This is an architectural overview of Kata Containers, based on the 2.0 release.

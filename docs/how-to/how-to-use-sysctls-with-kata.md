@@ -1,6 +1,7 @@
 # Setting Sysctls with Kata
 
 ## Sysctls
+
 In Linux, the sysctl interface allows an administrator to modify kernel 
 parameters at runtime. Parameters are available via the `/proc/sys/` virtual 
 process file system. 

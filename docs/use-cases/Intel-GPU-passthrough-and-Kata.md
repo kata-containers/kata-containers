@@ -1,13 +1,5 @@
 # Using Intel GPU device with Kata Containers
 
-- [Using Intel GPU device with Kata Containers](#using-intel-gpu-device-with-kata-containers)   
-   - [Hardware Requirements](#hardware-requirements)   
-   - [Host Kernel Requirements](#host-kernel-requirements)   
-   - [Install and configure Kata Containers](#install-and-configure-kata-containers)   
-   - [Build Kata Containers kernel with GPU support](#build-kata-containers-kernel-with-gpu-support)   
-   - [GVT-d with Kata Containers](#gvt-d-with-kata-containers)   
-   - [GVT-g with Kata Containers](#gvt-g-with-kata-containers)   
-
 An Intel Graphics device can be passed to a Kata Containers container using GPU
 passthrough (Intel GVT-d) as well as GPU mediated passthrough (Intel GVT-g).
 

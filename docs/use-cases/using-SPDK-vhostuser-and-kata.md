@@ -1,13 +1,6 @@
 # Setup to run SPDK vhost-user devices with Kata Containers and Docker*
 
-- [SPDK vhost-user target overview](#spdk-vhost-user-target-overview)
-- [Install and setup SPDK vhost-user target](#install-and-setup-spdk-vhost-user-target)
-  - [Get source code and build SPDK](#get-source-code-and-build-spdk)
-  - [Run SPDK vhost-user target](#run-spdk-vhost-user-target)
-- [Host setup for vhost-user devices](#host-setup-for-vhost-user-devices)
-- [Launch a Kata container with SPDK vhost-user block device](#launch-a-kata-container-with-spdk-vhost-user-block-device)
-
-> **NOTE:** This guide only applies to QEMU, since the vhost-user storage
+> **Note:** This guide only applies to QEMU, since the vhost-user storage
 > device is only available for QEMU now. The enablement work on other
 > hypervisors is still ongoing.
 

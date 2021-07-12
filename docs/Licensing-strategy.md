@@ -1,9 +1,5 @@
 # Licensing strategy
 
-* [Project License](#project-license)
-* [License file](#license-file)
-* [License for individual files](#license-for-individual-files)      
-
 ## Project License
 
 The license for the [Kata Containers](https://github.com/kata-containers)

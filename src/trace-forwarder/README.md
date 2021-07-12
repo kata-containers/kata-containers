@@ -1,8 +1,5 @@
 # Trace Forwarder
 
-* [Overview](#overview)
-* [Full details](#full-details)
-
 ## Overview
 
 The Kata Containers trace forwarder, `kata-trace-forwarder`, is a component

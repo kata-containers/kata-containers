@@ -1,18 +1,3 @@
-- [Host cgroup management](#host-cgroup-management)
-  - [Introduction](#introduction)
-  - [`SandboxCgroupOnly` enabled](#sandboxcgrouponly-enabled)
-    - [What does Kata do in this configuration?](#what-does-kata-do-in-this-configuration)
-    - [Why create a Kata-cgroup under the parent cgroup?](#why-create-a-kata-cgroup-under-the-parent-cgroup)
-    - [Improvements](#improvements)
-  - [`SandboxCgroupOnly` disabled (default, legacy)](#sandboxcgrouponly-disabled-default-legacy)
-    - [What does this method do?](#what-does-this-method-do)
-      - [Impact](#impact)
-- [Supported cgroups](#supported-cgroups)
-  - [Cgroups V1](#cgroups-v1)
-  - [Cgroups V2](#cgroups-v2)
-    - [Distro Support](#distro-support)
-- [Summary](#summary)
-
 # Host cgroup management
 
 ## Introduction

@@ -1,16 +1,5 @@
 # Working with `crictl`
 
-* [What's `cri-tools`](#whats-cri-tools)
-* [Use `crictl` run Pods in Kata containers](#use-crictl-run-pods-in-kata-containers)
-  * [Run `busybox` Pod](#run-busybox-pod)
-    * [Run pod sandbox with config file](#run-pod-sandbox-with-config-file)
-    * [Create container in the pod sandbox with config file](#create-container-in-the-pod-sandbox-with-config-file)
-    * [Start container](#start-container)
-  * [Run `redis` Pod](#run-redis-pod)
-    * [Create `redis-server` Pod](#create-redis-server-pod)
-    * [Create `redis-client` Pod](#create-redis-client-pod)
-    * [Check `redis` server is working](#check-redis-server-is-working)
-
 ## What's `cri-tools`
 
 [`cri-tools`](https://github.com/kubernetes-sigs/cri-tools) provides debugging and validation tools for Kubelet Container Runtime Interface (CRI).

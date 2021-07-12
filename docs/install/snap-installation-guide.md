@@ -1,11 +1,5 @@
 # Kata Containers snap package
 
-* [Install Kata Containers](#install-kata-containers)
-* [Configure Kata Containers](#configure-kata-containers)
-* [Integration with shim v2 Container Engines](#integration-with-shim-v2-container-engines)
-* [Remove Kata Containers snap package](#remove-kata-containers-snap-package)
-
-
 ## Install Kata Containers
 
 Kata Containers can be installed in any Linux distribution that supports

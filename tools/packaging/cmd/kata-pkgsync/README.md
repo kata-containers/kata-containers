@@ -1,9 +1,5 @@
 # Kata OBS to Packagecloud sync tool
 
-* [How it works](#how-it-works)
-* [Detailed behaviour](#detailed-behaviour)
-* [Install and Usage](#install-and-usage)
-
 `kata-pkgsync` is a tool to synchronize Kata package from OBS to Packagecloud.
 
 ## How it works

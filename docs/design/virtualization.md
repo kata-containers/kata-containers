@@ -1,16 +1,5 @@
 # Virtualization in Kata Containers
 
-- [Virtualization in Kata Containers](#virtualization-in-kata-containers)
-  - [Mapping container concepts to virtual machine technologies](#mapping-container-concepts-to-virtual-machine-technologies)
-  - [Kata Containers Hypervisor and VMM support](#kata-containers-hypervisor-and-vmm-support)
-    - [QEMU/KVM](#qemukvm)
-      - [Machine accelerators](#machine-accelerators)
-      - [Hotplug devices](#hotplug-devices)
-    - [Firecracker/KVM](#firecrackerkvm)
-    - [Cloud Hypervisor/KVM](#cloud-hypervisorkvm)
-    - [Summary](#summary)
-
-
 Kata Containers, a second layer of isolation is created on top of those provided by traditional namespace-containers. The
 hardware virtualization interface is the basis of this additional layer. Kata will launch a lightweight virtual machine,
 and use the guest’s Linux kernel to create a container workload, or workloads in the case of multi-container pods. In Kubernetes

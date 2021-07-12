@@ -1,6 +1,3 @@
-* [Creating a guest OS initrd image](#creating-a-guest-os-initrd-image)
-* [Further information](#further-information)
-
 # Kata Containers initrd image generation
 
 A Kata Containers initrd image is generated using the `initrd_builder.sh` script.
