@@ -98,12 +98,12 @@
 
     ```toml
     [plugins]
-        [plugins.cri]
-            [plugins.cri.containerd]
-            default_runtime_name = "kata"
-
-            [plugins.cri.containerd.runtimes.kata]
-            runtime_type = "io.containerd.kata.v2"
+      [plugins."io.containerd.grpc.v1.cri"]
+        [plugins."io.containerd.grpc.v1.cri".containerd]
+          default_runtime_name = "kata"
+          [plugins."io.containerd.grpc.v1.cri".containerd.runtimes]
+            [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.kata]
+              runtime_type = "io.containerd.kata.v2"
     ```
 
     > **Note:**
