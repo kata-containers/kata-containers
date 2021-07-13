@@ -124,7 +124,7 @@ parts:
         ;;
         ppc64le|s390x)
           # Cannot use alpine on ppc64le/s390x because it would require a musl agent
-          sudo -E PATH=$PATH make image DISTRO=ubuntu
+          sudo -E PATH=$PATH make initrd DISTRO=ubuntu
         ;;
         x86_64)
           # In some build systems it's impossible to build a rootfs image, try with the initrd image
