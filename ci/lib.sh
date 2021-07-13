@@ -5,7 +5,7 @@
 
 export tests_repo="${tests_repo:-github.com/kata-containers/tests}"
 export tests_repo_dir="$GOPATH/src/$tests_repo"
-export branch="${branch:-main}"
+export branch="${target_branch:-main}"
 
 # Clones the tests repository and checkout to the branch pointed out by
 # the global $branch variable.

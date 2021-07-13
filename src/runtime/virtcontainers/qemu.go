@@ -126,6 +126,8 @@ const (
 	qemuStopSandboxTimeoutSecs = 15
 )
 
+var noGuestMemHotplugErr error = errors.New("guest memory hotplug not supported")
+
 // agnostic list of kernel parameters
 var defaultKernelParameters = []Param{
 	{"panic", "1"},
@@ -714,7 +716,8 @@ func (q *qemu) stopVirtiofsd(ctx context.Context) (err error) {
 
 	// kill virtiofsd
 	if q.state.VirtiofsdPid == 0 {
-		return errors.New("invalid virtiofsd PID(0)")
+		q.Logger().Warn("The virtiofsd had stopped")
+		return nil
 	}
 
 	err = syscall.Kill(q.state.VirtiofsdPid, syscall.SIGKILL)
@@ -1014,6 +1017,10 @@ func (q *qemu) stopSandbox(ctx context.Context, waitOnly bool) error {
 			q.Logger().WithError(err).Error("Fail to execute qmp QUIT")
 			return err
 		}
+	}
+
+	if err := q.stopVirtiofsd(ctx); err != nil {
+		return err
 	}
 
 	return nil
@@ -1785,7 +1792,7 @@ func (q *qemu) hotplugRemoveCPUs(amount uint32) (uint32, error) {
 func (q *qemu) hotplugMemory(memDev *memoryDevice, op operation) (int, error) {
 
 	if !q.arch.supportGuestMemoryHotplug() {
-		return 0, fmt.Errorf("guest memory hotplug not supported")
+		return 0, noGuestMemHotplugErr
 	}
 	if memDev.sizeMB < 0 {
 		return 0, fmt.Errorf("cannot hotplug negative size (%d) memory", memDev.sizeMB)

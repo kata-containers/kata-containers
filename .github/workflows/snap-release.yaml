@@ -9,6 +9,8 @@ jobs:
     steps:
       - name: Check out Git repository
         uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
 
       - name: Install Snapcraft
         uses: samuelmeuli/action-snapcraft@v1
