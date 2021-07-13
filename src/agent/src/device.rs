@@ -17,10 +17,6 @@ use tokio::sync::Mutex;
 #[cfg(target_arch = "s390x")]
 use crate::ccw;
 use crate::linux_abi::*;
-use crate::mount::{
-    DRIVER_BLK_CCW_TYPE, DRIVER_BLK_TYPE, DRIVER_MMIO_BLK_TYPE, DRIVER_NVDIMM_TYPE,
-    DRIVER_SCSI_TYPE,
-};
 use crate::pci;
 use crate::sandbox::Sandbox;
 use crate::uevent::{wait_for_uevent, Uevent, UeventMatcher};
@@ -38,6 +34,19 @@ macro_rules! sl {
 
 const VM_ROOTFS: &str = "/";
 
+pub const DRIVER_9P_TYPE: &str = "9p";
+pub const DRIVER_VIRTIOFS_TYPE: &str = "virtio-fs";
+pub const DRIVER_BLK_TYPE: &str = "blk";
+pub const DRIVER_BLK_CCW_TYPE: &str = "blk-ccw";
+pub const DRIVER_MMIO_BLK_TYPE: &str = "mmioblk";
+pub const DRIVER_SCSI_TYPE: &str = "scsi";
+pub const DRIVER_NVDIMM_TYPE: &str = "nvdimm";
+pub const DRIVER_EPHEMERAL_TYPE: &str = "ephemeral";
+pub const DRIVER_LOCAL_TYPE: &str = "local";
+pub const DRIVER_WATCHABLE_BIND_TYPE: &str = "watchable-bind";
+// VFIO device to be bound to a guest kernel driver
+pub const DRIVER_VFIO_GK_TYPE: &str = "vfio-gk";
+
 #[derive(Debug)]
 struct DevIndexEntry {
     idx: usize,
@@ -47,9 +56,50 @@ struct DevIndexEntry {
 #[derive(Debug)]
 struct DevIndex(HashMap<String, DevIndexEntry>);
 
+fn filename_is_pci_addr(f: &std::ffi::OsStr) -> bool {
+    lazy_static! {
+        static ref PCIADDR: Regex =
+            Regex::new(r"^[0-9a-f]{4}:[0-9a-f]{2}:[0-9a-f][.][0-7]$").unwrap();
+    }
+
+    let s = match f.to_str() {
+        Some(n) => n,
+        None => return false,
+    };
+    PCIADDR.is_match(s)
+}
+
 #[instrument]
-pub fn rescan_pci_bus() -> Result<()> {
-    online_device(SYSFS_PCI_BUS_RESCAN_FILE)
+pub fn rescan_pci_shpc() -> Result<()> {
+    // With certain guest types, SHPC is the only available PCI
+    // hotplug option.  Unfortunately, SHPC has a mandated 5s delay
+    // (designed for an actual person physically plugging a card).
+
+    // To work around that, we force a PCI rescan when SHPC is in use,
+    // which will detect the device earlier.  This rescan can cause a
+    // number of other problems, so we want to avoid it if we're not
+    // using SHPC
+
+    let dir = match fs::read_dir(SYSFS_PCI_SHPCHP_DRIVER) {
+        Ok(x) => x,
+        Err(e) => {
+            if e.kind() == std::io::ErrorKind::NotFound {
+                // No shpchp driver at all, that's just fine
+                return Ok(());
+            } else {
+                return Err(e.into());
+            }
+        }
+    };
+    for f in dir {
+        let f = f?;
+        if f.file_type()?.is_symlink() && filename_is_pci_addr(&f.file_name()) {
+            // SHPC driver is bound to something, we need the rescan
+            warn!(sl!(), "Forcing PCI rescan PCI to avoid waiting for SHPC");
+            return online_device(SYSFS_PCI_BUS_RESCAN_FILE);
+        }
+    }
+    Ok(())
 }
 
 #[instrument]
@@ -162,8 +212,6 @@ pub async fn get_virtio_blk_pci_device_name(
     let sysfs_rel_path = pcipath_to_sysfs(&root_bus_sysfs, pcipath)?;
     let matcher = VirtioBlkPciMatcher::new(&sysfs_rel_path);
 
-    rescan_pci_bus()?;
-
     let uev = wait_for_uevent(sandbox, matcher).await?;
     Ok(format!("{}/{}", SYSTEM_DEV_PATH, &uev.devname))
 }
@@ -252,6 +300,35 @@ pub async fn wait_for_pmem_device(sandbox: &Arc<Mutex<Sandbox>>, devpath: &str) 
             devname
         ));
     }
+    Ok(())
+}
+
+#[derive(Debug)]
+struct PciMatcher {
+    devpath: String,
+}
+
+impl PciMatcher {
+    fn new(relpath: &str) -> Result<PciMatcher> {
+        let root_bus = create_pci_root_bus_path();
+        Ok(PciMatcher {
+            devpath: format!("{}{}", root_bus, relpath),
+        })
+    }
+}
+
+impl UeventMatcher for PciMatcher {
+    fn is_match(&self, uev: &Uevent) -> bool {
+        uev.devpath == self.devpath
+    }
+}
+
+pub async fn wait_for_pci_device(sandbox: &Arc<Mutex<Sandbox>>, pcipath: &pci::Path) -> Result<()> {
+    let root_bus_sysfs = format!("{}{}", SYSFS_DIR, create_pci_root_bus_path());
+    let sysfs_rel_path = pcipath_to_sysfs(&root_bus_sysfs, pcipath)?;
+    let matcher = PciMatcher::new(&sysfs_rel_path)?;
+
+    let _ = wait_for_uevent(sandbox, matcher).await?;
     Ok(())
 }
 
@@ -451,6 +528,37 @@ async fn virtio_nvdimm_device_handler(
     update_spec_device_list(device, spec, devidx)
 }
 
+fn split_vfio_option(opt: &str) -> Option<(&str, &str)> {
+    let mut tokens = opt.split('=');
+    let hostbdf = tokens.next()?;
+    let path = tokens.next()?;
+    if tokens.next().is_some() {
+        None
+    } else {
+        Some((hostbdf, path))
+    }
+}
+
+// device.options should have one entry for each PCI device in the VFIO group
+// Each option should have the form "DDDD:BB:DD.F=<pcipath>"
+//     DDDD:BB:DD.F is the device's PCI address in the host
+//     <pcipath> is a PCI path to the device in the guest (see pci.rs)
+async fn vfio_gk_device_handler(
+    device: &Device,
+    _: &mut Spec,
+    sandbox: &Arc<Mutex<Sandbox>>,
+    _: &DevIndex,
+) -> Result<()> {
+    for opt in device.options.iter() {
+        let (_, pcipath) =
+            split_vfio_option(opt).ok_or_else(|| anyhow!("Malformed VFIO option {:?}", opt))?;
+        let pcipath = pci::Path::from_str(pcipath)?;
+
+        wait_for_pci_device(sandbox, &pcipath).await?;
+    }
+    Ok(())
+}
+
 impl DevIndex {
     fn new(spec: &Spec) -> DevIndex {
         let mut map = HashMap::new();
@@ -520,6 +628,7 @@ async fn add_device(
         DRIVER_MMIO_BLK_TYPE => virtiommio_blk_device_handler(device, spec, sandbox, devidx).await,
         DRIVER_NVDIMM_TYPE => virtio_nvdimm_device_handler(device, spec, sandbox, devidx).await,
         DRIVER_SCSI_TYPE => virtio_scsi_device_handler(device, spec, sandbox, devidx).await,
+        DRIVER_VFIO_GK_TYPE => vfio_gk_device_handler(device, spec, sandbox, devidx).await,
         _ => Err(anyhow!("Unknown device type {}", device.field_type)),
     }
 }

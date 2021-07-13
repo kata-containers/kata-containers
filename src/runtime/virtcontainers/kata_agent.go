@@ -71,24 +71,26 @@ const (
 )
 
 var (
-	checkRequestTimeout         = 30 * time.Second
-	defaultRequestTimeout       = 60 * time.Second
-	errorMissingOCISpec         = errors.New("Missing OCI specification")
-	defaultKataHostSharedDir    = "/run/kata-containers/shared/sandboxes/"
-	defaultKataGuestSharedDir   = "/run/kata-containers/shared/containers/"
-	mountGuestTag               = "kataShared"
-	defaultKataGuestSandboxDir  = "/run/kata-containers/sandbox/"
-	type9pFs                    = "9p"
-	typeVirtioFS                = "virtiofs"
-	typeVirtioFSNoCache         = "none"
-	kata9pDevType               = "9p"
-	kataMmioBlkDevType          = "mmioblk"
-	kataBlkDevType              = "blk"
-	kataBlkCCWDevType           = "blk-ccw"
-	kataSCSIDevType             = "scsi"
-	kataNvdimmDevType           = "nvdimm"
-	kataVirtioFSDevType         = "virtio-fs"
-	kataWatchableBindDevType    = "watchable-bind"
+	checkRequestTimeout        = 30 * time.Second
+	defaultRequestTimeout      = 60 * time.Second
+	errorMissingOCISpec        = errors.New("Missing OCI specification")
+	defaultKataHostSharedDir   = "/run/kata-containers/shared/sandboxes/"
+	defaultKataGuestSharedDir  = "/run/kata-containers/shared/containers/"
+	mountGuestTag              = "kataShared"
+	defaultKataGuestSandboxDir = "/run/kata-containers/sandbox/"
+	type9pFs                   = "9p"
+	typeVirtioFS               = "virtiofs"
+	typeVirtioFSNoCache        = "none"
+	kata9pDevType              = "9p"
+	kataMmioBlkDevType         = "mmioblk"
+	kataBlkDevType             = "blk"
+	kataBlkCCWDevType          = "blk-ccw"
+	kataSCSIDevType            = "scsi"
+	kataNvdimmDevType          = "nvdimm"
+	kataVirtioFSDevType        = "virtio-fs"
+	kataWatchableBindDevType   = "watchable-bind"
+	// VFIO device for consumption by the guest kernel
+	kataVfioGuestKernelDevType  = "vfio-gk"
 	sharedDir9pOptions          = []string{"trans=virtio,version=9p2000.L,cache=mmap", "nodev"}
 	sharedDirVirtioFSOptions    = []string{}
 	sharedDirVirtioFSDaxOptions = "dax"
@@ -1135,9 +1137,7 @@ func (k *kataAgent) handleShm(mounts []specs.Mount, sandbox *Sandbox) {
 	}
 }
 
-func (k *kataAgent) appendBlockDevice(dev ContainerDevice, c *Container) *grpc.Device {
-	device := c.sandbox.devManager.GetDeviceByID(dev.ID)
-
+func (k *kataAgent) appendBlockDevice(dev ContainerDevice, device api.Device, c *Container) *grpc.Device {
 	d, ok := device.GetDeviceInfo().(*config.BlockDrive)
 	if !ok || d == nil {
 		k.Logger().WithField("device", device).Error("malformed block drive")
@@ -1178,9 +1178,7 @@ func (k *kataAgent) appendBlockDevice(dev ContainerDevice, c *Container) *grpc.D
 	return kataDevice
 }
 
-func (k *kataAgent) appendVhostUserBlkDevice(dev ContainerDevice, c *Container) *grpc.Device {
-	device := c.sandbox.devManager.GetDeviceByID(dev.ID)
-
+func (k *kataAgent) appendVhostUserBlkDevice(dev ContainerDevice, device api.Device, c *Container) *grpc.Device {
 	d, ok := device.GetDeviceInfo().(*config.VhostUserDeviceAttrs)
 	if !ok || d == nil {
 		k.Logger().WithField("device", device).Error("malformed vhost-user-blk drive")
@@ -1191,6 +1189,38 @@ func (k *kataAgent) appendVhostUserBlkDevice(dev ContainerDevice, c *Container) 
 		ContainerPath: dev.ContainerPath,
 		Type:          kataBlkDevType,
 		Id:            d.PCIPath.String(),
+	}
+
+	return kataDevice
+}
+
+func (k *kataAgent) appendVfioDevice(dev ContainerDevice, device api.Device, c *Container) *grpc.Device {
+	devList, ok := device.GetDeviceInfo().([]*config.VFIODev)
+	if !ok || devList == nil {
+		k.Logger().WithField("device", device).Error("malformed vfio device")
+		return nil
+	}
+
+	groupNum := filepath.Base(dev.ContainerPath)
+
+	// Each /dev/vfio/NN device represents a VFIO group, which
+	// could include several PCI devices.  So we give group
+	// information in the main structure, then list each
+	// individual PCI device in the Options array.
+	//
+	// Each option is formatted as "DDDD:BB:DD.F=<pcipath>"
+	// DDDD:BB:DD.F is the device's PCI address on the
+	// *host*. <pcipath> is the device's PCI path in the guest
+	// (see qomGetPciPath() for details).
+	kataDevice := &grpc.Device{
+		ContainerPath: dev.ContainerPath,
+		Type:          kataVfioGuestKernelDevType,
+		Id:            groupNum,
+		Options:       make([]string, len(devList)),
+	}
+
+	for i, pciDev := range devList {
+		kataDevice.Options[i] = fmt.Sprintf("0000:%s=%s", pciDev.BDF, pciDev.GuestPciPath)
 	}
 
 	return kataDevice
@@ -1208,9 +1238,11 @@ func (k *kataAgent) appendDevices(deviceList []*grpc.Device, c *Container) []*gr
 
 		switch device.DeviceType() {
 		case config.DeviceBlock:
-			kataDevice = k.appendBlockDevice(dev, c)
+			kataDevice = k.appendBlockDevice(dev, device, c)
 		case config.VhostUserBlk:
-			kataDevice = k.appendVhostUserBlkDevice(dev, c)
+			kataDevice = k.appendVhostUserBlkDevice(dev, device, c)
+		case config.DeviceVFIO:
+			kataDevice = k.appendVfioDevice(dev, device, c)
 		}
 
 		if kataDevice == nil {
