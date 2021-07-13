@@ -7,7 +7,6 @@ package virtcontainers
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -321,50 +320,6 @@ func TestCloudHypervisorResizeMemory(t *testing.T) {
 				t.Errorf("cloudHypervisor.resizeMemory() got = %+v, want %+v", memDev, tt.expectedMemDev)
 			}
 		})
-	}
-}
-
-func TestCheckVersion(t *testing.T) {
-	clh := &cloudHypervisor{}
-	assert := assert.New(t)
-	testcases := []struct {
-		name  string
-		major int
-		minor int
-		pass  bool
-	}{
-		{
-			name:  "minor lower than supported version",
-			major: supportedMajorVersion,
-			minor: 2,
-			pass:  false,
-		},
-		{
-			name:  "minor equal to supported version",
-			major: supportedMajorVersion,
-			minor: supportedMinorVersion,
-			pass:  true,
-		},
-		{
-			name:  "major exceeding supported version",
-			major: 1,
-			minor: supportedMinorVersion,
-			pass:  true,
-		},
-	}
-	for _, tc := range testcases {
-		clh.version = CloudHypervisorVersion{
-			Major:    tc.major,
-			Minor:    tc.minor,
-			Revision: 0,
-		}
-		err := clh.checkVersion()
-		msg := fmt.Sprintf("test: %+v, clh.version: %v, result: %v", tc, clh.version, err)
-		if tc.pass {
-			assert.NoError(err, msg)
-		} else {
-			assert.Error(err, msg)
-		}
 	}
 }
 
