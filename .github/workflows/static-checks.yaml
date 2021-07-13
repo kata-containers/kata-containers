@@ -59,6 +59,10 @@ jobs:
         PATH=$PATH:"$HOME/.cargo/bin"
         rustup target add x86_64-unknown-linux-musl
         rustup component add rustfmt clippy
+    # Check whether the vendored code is up-to-date & working as the first thing
+    - name: Check vendored code
+      run: |
+        cd ${GOPATH}/src/github.com/${{ github.repository }} && make vendor
     # Must build before static checks as we depend on some generated code in runtime and agent
     - name: Build
       run: |
