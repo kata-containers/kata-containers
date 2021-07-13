@@ -154,6 +154,10 @@ clean:
 	@rm -f $(GENERATED_FILES)
 	@rm -f tarpaulin-report.html
 
+vendor:
+	@cargo vendor
+
+
 #TARGET test: run cargo tests
 test:
 	@cargo test --all --target $(TRIPLE)
@@ -223,7 +227,8 @@ codecov-html: check_tarpaulin
 	help \
 	show-header \
 	show-summary \
-	optimize
+	optimize \
+	vendor
 
 ##TARGET generate-protocols: generate/update grpc agent protocols
 generate-protocols:
