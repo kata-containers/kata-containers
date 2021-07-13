@@ -653,6 +653,9 @@ handle_vendor:
 	go mod vendor
 	go mod verify
 
+vendor: handle_vendor
+	./hack/tree_status.sh
+
 clean:
 	$(QUIET_CLEAN)rm -f \
 		$(CONFIGS) \
