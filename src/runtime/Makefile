@@ -611,6 +611,9 @@ endif
 go-test: $(GENERATED_FILES)
 	go test -v -mod=vendor ./...
 
+fast-test: $(GENERATED_FILES)
+	for s in $$(go list ./...); do if ! go test -failfast -v -mod=vendor -p 1 $$s; then break; fi; done
+
 check-go-static:
 	$(QUIET_CHECK)../../ci/go-no-os-exit.sh ./cli
 	$(QUIET_CHECK)../../ci/go-no-os-exit.sh ./virtcontainers
@@ -669,6 +672,7 @@ show-usage: show-header
 	@printf "\n"
 	@printf "\tbuild                      : standard build (build everything).\n"
 	@printf "\ttest                       : run tests.\n"
+	@printf "\tfast-test                  : run tests with failfast option.\n"
 	@printf "\tcheck                      : run code checks.\n"
 	@printf "\tclean                      : remove built files.\n"
 	@printf "\tcontainerd-shim-v2         : only build containerd shim v2.\n"
