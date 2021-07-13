@@ -1,12 +1,13 @@
-From 7c14a24ad467b9404b95345c64e8c5ef5e6d209c Mon Sep 17 00:00:00 2001
+From c505241c648499f4b59d31741e8277220a89aec6 Mon Sep 17 00:00:00 2001
 From: "Dr. David Alan Gilbert" <dgilbert@redhat.com>
-Date: Fri, 30 Nov 2018 11:47:36 +0000
-Subject: [PATCH 14/29] DAX: virtiofsd: route se down to destroy method
+Date: Wed, 14 Apr 2021 16:51:27 +0100
+Subject: [PATCH 15/25] DAX: virtiofsd: route se down to destroy method
 
 We're going to need to pass the session down to destroy so that it can
 pass it back to do the remove mapping.
 
 Signed-off-by: Dr. David Alan Gilbert <dgilbert@redhat.com>
+Reviewed-by: Stefan Hajnoczi <stefanha@redhat.com>
 ---
  tools/virtiofsd/fuse_lowlevel.c  | 6 +++---
  tools/virtiofsd/fuse_lowlevel.h  | 2 +-
@@ -14,10 +15,10 @@ Signed-off-by: Dr. David Alan Gilbert <dgilbert@redhat.com>
  3 files changed, 5 insertions(+), 5 deletions(-)
 
 diff --git a/tools/virtiofsd/fuse_lowlevel.c b/tools/virtiofsd/fuse_lowlevel.c
-index 4cfd4c3547..a2480d4aa1 100644
+index 81c4c2b..e82edce 100644
 --- a/tools/virtiofsd/fuse_lowlevel.c
 +++ b/tools/virtiofsd/fuse_lowlevel.c
-@@ -2211,7 +2211,7 @@ static void do_destroy(fuse_req_t req, fuse_ino_t nodeid,
+@@ -2222,7 +2222,7 @@ static void do_destroy(fuse_req_t req, fuse_ino_t nodeid,
      se->got_destroy = 1;
      se->got_init = 0;
      if (se->op.destroy) {
@@ -26,7 +27,7 @@ index 4cfd4c3547..a2480d4aa1 100644
      }
  
      send_reply_ok(req, NULL, 0);
-@@ -2438,7 +2438,7 @@ void fuse_session_process_buf_int(struct fuse_session *se,
+@@ -2449,7 +2449,7 @@ void fuse_session_process_buf_int(struct fuse_session *se,
              se->got_destroy = 1;
              se->got_init = 0;
              if (se->op.destroy) {
@@ -35,7 +36,7 @@ index 4cfd4c3547..a2480d4aa1 100644
              }
          } else {
              goto reply_err;
-@@ -2526,7 +2526,7 @@ void fuse_session_destroy(struct fuse_session *se)
+@@ -2538,7 +2538,7 @@ void fuse_session_destroy(struct fuse_session *se)
  {
      if (se->got_init && !se->got_destroy) {
          if (se->op.destroy) {
@@ -45,10 +46,10 @@ index 4cfd4c3547..a2480d4aa1 100644
      }
      pthread_rwlock_destroy(&se->init_rwlock);
 diff --git a/tools/virtiofsd/fuse_lowlevel.h b/tools/virtiofsd/fuse_lowlevel.h
-index 2851840cc2..2259623776 100644
+index 0bf2062..27b07bf 100644
 --- a/tools/virtiofsd/fuse_lowlevel.h
 +++ b/tools/virtiofsd/fuse_lowlevel.h
-@@ -208,7 +208,7 @@ struct fuse_lowlevel_ops {
+@@ -209,7 +209,7 @@ struct fuse_lowlevel_ops {
       *
       * @param userdata the user data passed to fuse_session_new()
       */
@@ -58,10 +59,10 @@ index 2851840cc2..2259623776 100644
      /**
       * Look up a directory entry by name and get its attributes.
 diff --git a/tools/virtiofsd/passthrough_ll.c b/tools/virtiofsd/passthrough_ll.c
-index ebd5a9b215..0d3cda8d2f 100644
+index a9f0505..910c483 100644
 --- a/tools/virtiofsd/passthrough_ll.c
 +++ b/tools/virtiofsd/passthrough_ll.c
-@@ -2871,7 +2871,7 @@ static void lo_lseek(fuse_req_t req, fuse_ino_t ino, off_t off, int whence,
+@@ -3124,7 +3124,7 @@ static void lo_lseek(fuse_req_t req, fuse_ino_t ino, off_t off, int whence,
      }
  }
  
