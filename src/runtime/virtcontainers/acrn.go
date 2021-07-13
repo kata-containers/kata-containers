@@ -517,6 +517,10 @@ func (a *Acrn) stopSandbox(ctx context.Context, waitOnly bool) (err error) {
 }
 
 func (a *Acrn) updateBlockDevice(drive *config.BlockDrive) error {
+	if drive.Swap {
+		return fmt.Errorf("Acrn doesn't support swap")
+	}
+
 	var err error
 	if drive.File == "" || drive.Index >= AcrnBlkDevPoolSz {
 		return fmt.Errorf("Empty filepath or invalid drive index, Dive ID:%s, Drive Index:%d",

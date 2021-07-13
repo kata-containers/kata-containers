@@ -14,6 +14,8 @@ import (
 	"math"
 	"net"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"sync"
 	"syscall"
@@ -194,6 +196,10 @@ type Sandbox struct {
 	ctx context.Context
 
 	cw *consoleWatcher
+
+	swapDeviceNum uint
+	swapSizeBytes int64
+	swapDevices   []*config.BlockDrive
 }
 
 // ID returns the sandbox identifier string.
@@ -513,6 +519,9 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 		sharePidNs:      sandboxConfig.SharePidNs,
 		networkNS:       NetworkNamespace{NetNsPath: sandboxConfig.NetworkConfig.NetNSPath},
 		ctx:             ctx,
+		swapDeviceNum:   0,
+		swapSizeBytes:   0,
+		swapDevices:     []*config.BlockDrive{},
 	}
 
 	hypervisor.setSandbox(s)
@@ -992,6 +1001,104 @@ func (cw *consoleWatcher) stop() {
 	}
 }
 
+func (s *Sandbox) addSwap(ctx context.Context, swapID string, size int64) (*config.BlockDrive, error) {
+	swapFile := filepath.Join(getSandboxPath(s.id), swapID)
+
+	swapFD, err := os.OpenFile(swapFile, os.O_CREATE, 0600)
+	if err != nil {
+		err = fmt.Errorf("creat swapfile %s fail %s", swapFile, err.Error())
+		s.Logger().Error(err)
+		return nil, err
+	}
+	swapFD.Close()
+	defer func() {
+		if err != nil {
+			os.Remove(swapFile)
+		}
+	}()
+
+	err = os.Truncate(swapFile, size)
+	if err != nil {
+		err = fmt.Errorf("truncate swapfile %s fail %s", swapFile, err.Error())
+		s.Logger().Error(err)
+		return nil, err
+	}
+
+	err = exec.CommandContext(ctx, "mkswap", swapFile).Run()
+	if err != nil {
+		err = fmt.Errorf("mkswap swapfile %s fail %s", swapFile, err.Error())
+		s.Logger().Error(err)
+		return nil, err
+	}
+
+	blockDevice := &config.BlockDrive{
+		File:   swapFile,
+		Format: "raw",
+		ID:     swapID,
+		Swap:   true,
+	}
+	_, err = s.hypervisor.hotplugAddDevice(ctx, blockDevice, blockDev)
+	if err != nil {
+		err = fmt.Errorf("add swapfile %s device to VM fail %s", swapFile, err.Error())
+		s.Logger().Error(err)
+		return nil, err
+	}
+	defer func() {
+		if err != nil {
+			_, e := s.hypervisor.hotplugRemoveDevice(ctx, blockDevice, blockDev)
+			if e != nil {
+				s.Logger().Errorf("remove swapfile %s to VM fail %s", swapFile, e.Error())
+			}
+		}
+	}()
+
+	err = s.agent.addSwap(ctx, blockDevice.PCIPath)
+	if err != nil {
+		err = fmt.Errorf("agent add swapfile %s PCIPath %+v to VM fail %s", swapFile, blockDevice.PCIPath, err.Error())
+		s.Logger().Error(err)
+		return nil, err
+	}
+
+	s.Logger().Infof("add swapfile %s size %d PCIPath %+v to VM success", swapFile, size, blockDevice.PCIPath)
+
+	return blockDevice, nil
+}
+
+func (s *Sandbox) removeSwap(ctx context.Context, blockDevice *config.BlockDrive) error {
+	err := os.Remove(blockDevice.File)
+	if err != nil {
+		err = fmt.Errorf("remove swapfile %s fail %s", blockDevice.File, err.Error())
+		s.Logger().Error(err)
+	} else {
+		s.Logger().Infof("remove swapfile %s success", blockDevice.File)
+	}
+	return err
+}
+
+func (s *Sandbox) setupSwap(ctx context.Context, sizeBytes int64) error {
+	if sizeBytes > s.swapSizeBytes {
+		dev, err := s.addSwap(ctx, fmt.Sprintf("swap%d", s.swapDeviceNum), sizeBytes-s.swapSizeBytes)
+		if err != nil {
+			return err
+		}
+
+		s.swapDeviceNum += 1
+		s.swapSizeBytes = sizeBytes
+		s.swapDevices = append(s.swapDevices, dev)
+	}
+
+	return nil
+}
+
+func (s *Sandbox) cleanSwap(ctx context.Context) {
+	for _, dev := range s.swapDevices {
+		err := s.removeSwap(ctx, dev)
+		if err != nil {
+			s.Logger().Warnf("remove swap device %+v got error %s", dev, err)
+		}
+	}
+}
+
 // startVM starts the VM.
 func (s *Sandbox) startVM(ctx context.Context) (err error) {
 	span, ctx := katatrace.Trace(ctx, s.Logger(), "startVM", s.tracingTags())
@@ -1069,6 +1176,14 @@ func (s *Sandbox) startVM(ctx context.Context) (err error) {
 	}
 
 	s.Logger().Info("Agent started in the sandbox")
+
+	defer func() {
+		if err != nil {
+			if e := s.agent.stopSandbox(ctx, s); e != nil {
+				s.Logger().WithError(e).WithField("sandboxid", s.id).Warning("Agent did not stop sandbox")
+			}
+		}
+	}()
 
 	return nil
 }
@@ -1552,6 +1667,8 @@ func (s *Sandbox) Stop(ctx context.Context, force bool) error {
 		return err
 	}
 
+	s.cleanSwap(ctx)
+
 	return nil
 }
 
@@ -1816,9 +1933,21 @@ func (s *Sandbox) updateResources(ctx context.Context) error {
 	// Add default vcpus for sandbox
 	sandboxVCPUs += s.hypervisor.hypervisorConfig().NumVCPUs
 
-	sandboxMemoryByte := s.calculateSandboxMemory()
+	sandboxMemoryByte, sandboxneedPodSwap, sandboxSwapByte := s.calculateSandboxMemory()
 	// Add default / rsvd memory for sandbox.
-	sandboxMemoryByte += int64(s.hypervisor.hypervisorConfig().MemorySize) << utils.MibToBytesShift
+	hypervisorMemoryByte := int64(s.hypervisor.hypervisorConfig().MemorySize) << utils.MibToBytesShift
+	sandboxMemoryByte += hypervisorMemoryByte
+	if sandboxneedPodSwap {
+		sandboxSwapByte += hypervisorMemoryByte
+	}
+
+	// Setup the SWAP in the guest
+	if sandboxSwapByte > 0 {
+		err = s.setupSwap(ctx, sandboxSwapByte)
+		if err != nil {
+			return err
+		}
+	}
 
 	// Update VCPUs
 	s.Logger().WithField("cpus-sandbox", sandboxVCPUs).Debugf("Request to hypervisor to update vCPUs")
@@ -1859,11 +1988,14 @@ func (s *Sandbox) updateResources(ctx context.Context) error {
 	if err := s.agent.onlineCPUMem(ctx, 0, false); err != nil {
 		return err
 	}
+
 	return nil
 }
 
-func (s *Sandbox) calculateSandboxMemory() int64 {
+func (s *Sandbox) calculateSandboxMemory() (int64, bool, int64) {
 	memorySandbox := int64(0)
+	needPodSwap := false
+	swapSandbox := int64(0)
 	for _, c := range s.config.Containers {
 		// Do not hot add again non-running containers resources
 		if cont, ok := s.containers[c.ID]; ok && cont.state.State == types.StateStopped {
@@ -1871,11 +2003,30 @@ func (s *Sandbox) calculateSandboxMemory() int64 {
 			continue
 		}
 
-		if m := c.Resources.Memory; m != nil && m.Limit != nil {
-			memorySandbox += *m.Limit
+		if m := c.Resources.Memory; m != nil {
+			currentLimit := int64(0)
+			if m.Limit != nil {
+				currentLimit = *m.Limit
+				memorySandbox += currentLimit
+			}
+			if s.config.HypervisorConfig.GuestSwap && m.Swappiness != nil && *m.Swappiness > 0 {
+				currentSwap := int64(0)
+				if m.Swap != nil {
+					currentSwap = *m.Swap
+				}
+				if currentSwap == 0 {
+					if currentLimit == 0 {
+						needPodSwap = true
+					} else {
+						swapSandbox += currentLimit
+					}
+				} else if currentSwap > currentLimit {
+					swapSandbox = currentSwap - currentLimit
+				}
+			}
 		}
 	}
-	return memorySandbox
+	return memorySandbox, needPodSwap, swapSandbox
 }
 
 func (s *Sandbox) calculateSandboxCPUs() (uint32, error) {

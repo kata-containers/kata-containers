@@ -222,3 +222,7 @@ func (p *HybridVSockTTRPCMockImp) GetOOMEvent(ctx context.Context, req *pb.GetOO
 func (p *HybridVSockTTRPCMockImp) GetMetrics(ctx context.Context, req *pb.GetMetricsRequest) (*pb.Metrics, error) {
 	return &pb.Metrics{}, nil
 }
+
+func (p *HybridVSockTTRPCMockImp) AddSwap(ctx context.Context, req *pb.AddSwapRequest) (*gpb.Empty, error) {
+	return &gpb.Empty{}, nil
+}

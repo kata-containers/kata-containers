@@ -143,6 +143,7 @@ const (
 	grpcStopTracingRequest       = "grpc.StopTracingRequest"
 	grpcGetOOMEventRequest       = "grpc.GetOOMEventRequest"
 	grpcGetMetricsRequest        = "grpc.GetMetricsRequest"
+	grpcAddSwapRequest           = "grpc.AddSwapRequest"
 )
 
 // newKataAgent returns an agent from an agent type.
@@ -2024,6 +2025,9 @@ func (k *kataAgent) installReqFunc(c *kataclient.AgentClient) {
 	k.reqHandlers[grpcGetMetricsRequest] = func(ctx context.Context, req interface{}) (interface{}, error) {
 		return k.client.AgentServiceClient.GetMetrics(ctx, req.(*grpc.GetMetricsRequest))
 	}
+	k.reqHandlers[grpcAddSwapRequest] = func(ctx context.Context, req interface{}) (interface{}, error) {
+		return k.client.AgentServiceClient.AddSwap(ctx, req.(*grpc.AddSwapRequest))
+	}
 }
 
 func (k *kataAgent) getReqContext(ctx context.Context, reqName string) (newCtx context.Context, cancel context.CancelFunc) {
@@ -2182,6 +2186,14 @@ func (k *kataAgent) copyFile(ctx context.Context, src, dst string) error {
 	}
 
 	return nil
+}
+
+func (k *kataAgent) addSwap(ctx context.Context, PCIPath vcTypes.PciPath) error {
+	span, ctx := katatrace.Trace(ctx, k.Logger(), "addSwap", kataAgentTracingTags)
+	defer span.End()
+
+	_, err := k.sendReq(ctx, &grpc.AddSwapRequest{PCIPath: PCIPath.ToArray()})
+	return err
 }
 
 func (k *kataAgent) markDead(ctx context.Context) {

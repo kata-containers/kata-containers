@@ -539,6 +539,7 @@ func addHypervisorPathOverrides(ocispec specs.Spec, config *vc.SandboxConfig, ru
 			}
 		}
 	}
+
 	return nil
 }
 
@@ -612,6 +613,12 @@ func addHypervisorMemoryOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig
 
 	if err := newAnnotationConfiguration(ocispec, vcAnnotations.IOMMUPlatform).setBool(func(deviceIOMMU bool) {
 		sbConfig.HypervisorConfig.IOMMUPlatform = deviceIOMMU
+	}); err != nil {
+		return err
+	}
+
+	if err := newAnnotationConfiguration(ocispec, vcAnnotations.EnableGuestSwap).setBool(func(enableGuestSwap bool) {
+		sbConfig.HypervisorConfig.GuestSwap = enableGuestSwap
 	}); err != nil {
 		return err
 	}
@@ -950,16 +957,21 @@ func ContainerConfig(ocispec specs.Spec, bundlePath, cid, console string, detach
 		RootFs:         rootfs,
 		ReadonlyRootfs: ocispec.Root.Readonly,
 		Cmd:            cmd,
-		Annotations: map[string]string{
-			vcAnnotations.BundlePathKey: bundlePath,
-		},
-		Mounts:      containerMounts(ocispec),
-		DeviceInfos: deviceInfos,
-		Resources:   *ocispec.Linux.Resources,
+		Annotations:    ocispec.Annotations,
+		Mounts:         containerMounts(ocispec),
+		DeviceInfos:    deviceInfos,
+		Resources:      *ocispec.Linux.Resources,
 
 		// This is a custom OCI spec modified at SetEphemeralStorageType()
 		// to support ephemeral storage and k8s empty dir.
 		CustomSpec: &ocispec,
+	}
+	if containerConfig.Annotations == nil {
+		containerConfig.Annotations = map[string]string{
+			vcAnnotations.BundlePathKey: bundlePath,
+		}
+	} else {
+		containerConfig.Annotations[vcAnnotations.BundlePathKey] = bundlePath
 	}
 
 	cType, err := ContainerType(ocispec)

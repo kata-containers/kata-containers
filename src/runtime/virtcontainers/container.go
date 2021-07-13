@@ -13,6 +13,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -42,6 +43,11 @@ func (c *Container) tracingTags() map[string]string {
 		"container_id": c.id,
 	}
 }
+
+const (
+	resourceSwappinessLabel  = "io.katacontainers.resource.swappiness"
+	resourceSwapInBytesLabel = "io.katacontainers.resource.swap_in_bytes"
+)
 
 // https://github.com/torvalds/linux/blob/master/include/uapi/linux/major.h
 // This file has definitions for major device numbers.
@@ -765,6 +771,25 @@ func newContainer(ctx context.Context, sandbox *Sandbox, contConfig *ContainerCo
 		process:       Process{},
 		mounts:        contConfig.Mounts,
 		ctx:           sandbox.ctx,
+	}
+
+	// Set the Annotations of SWAP to Resources
+	if resourceSwappinessStr, ok := c.config.Annotations[resourceSwappinessLabel]; ok {
+		resourceSwappiness, err := strconv.ParseUint(resourceSwappinessStr, 0, 64)
+		if err == nil && resourceSwappiness > 200 {
+			err = fmt.Errorf("swapiness should not bigger than 200")
+		}
+		if err != nil {
+			return &Container{}, fmt.Errorf("Invalid container configuration Annotations %s %v", resourceSwappinessLabel, err)
+		}
+		c.config.Resources.Memory.Swappiness = &resourceSwappiness
+	}
+	if resourceSwapInBytesStr, ok := c.config.Annotations[resourceSwapInBytesLabel]; ok {
+		resourceSwapInBytes, err := strconv.ParseInt(resourceSwapInBytesStr, 0, 64)
+		if err != nil {
+			return &Container{}, fmt.Errorf("Invalid container configuration Annotations %s %v", resourceSwapInBytesLabel, err)
+		}
+		c.config.Resources.Memory.Swap = &resourceSwapInBytes
 	}
 
 	// experimental runtime use "persist.json" instead of legacy "state.json" as storage

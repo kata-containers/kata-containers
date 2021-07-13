@@ -66,6 +66,7 @@ service AgentService {
 	rpc SetGuestDateTime(SetGuestDateTimeRequest) returns (google.protobuf.Empty);
 	rpc CopyFile(CopyFileRequest) returns (google.protobuf.Empty);
 	rpc GetOOMEvent(GetOOMEventRequest) returns (OOMEvent);
+	rpc AddSwap(AddSwapRequest) returns (google.protobuf.Empty);
 }
 
 message CreateContainerRequest {
@@ -501,6 +502,10 @@ message GetOOMEventRequest {}
 
 message OOMEvent {
 	string container_id = 1;
+}
+
+message AddSwapRequest {
+	repeated uint32 PCIPath = 1;
 }
 
 message GetMetricsRequest {}
