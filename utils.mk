@@ -105,3 +105,39 @@ $(foreach a,$(3),$(eval $(call make_all_rules,$(a))))
 $(3) : % : %-all
 
 endef
+
+
+##VAR BUILD_TYPE=release|debug type of rust build
+BUILD_TYPE = release
+
+##VAR ARCH=arch target to build (format: uname -m)
+ARCH = $(shell uname -m)
+##VAR LIBC=musl|gnu
+LIBC ?= musl
+ifneq ($(LIBC),musl)
+    ifeq ($(LIBC),gnu)
+        override LIBC = gnu
+    else
+        $(error "ERROR: A non supported LIBC value was passed. Supported values are musl and gnu")
+    endif
+endif
+
+ifeq ($(ARCH), ppc64le)
+    override ARCH = powerpc64le
+    override LIBC = gnu
+    $(warning "WARNING: powerpc64le-unknown-linux-musl target is unavailable")
+endif
+
+ifeq ($(ARCH), s390x)
+    override LIBC = gnu
+    $(warning "WARNING: s390x-unknown-linux-musl target is unavailable")
+endif
+
+
+EXTRA_RUSTFLAGS :=
+ifeq ($(ARCH), aarch64)
+    override EXTRA_RUSTFLAGS = -C link-arg=-lgcc
+    $(warning "WARNING: aarch64-musl needs extra symbols from libgcc")
+endif
+
+TRIPLE = $(ARCH)-unknown-linux-$(LIBC)
