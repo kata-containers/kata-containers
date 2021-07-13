@@ -11,6 +11,9 @@ build:
 clean:
 	cargo clean
 
+vendor:
+	cargo vendor
+
 test:
 
 install:
@@ -22,4 +25,5 @@ check:
 	test \
 	check \
 	install \
-	clean
+	clean \
+	vendor
