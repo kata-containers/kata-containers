@@ -15,7 +15,7 @@ TOOLS =
 
 TOOLS += agent-ctl
 
-STANDARD_TARGETS = build check clean install test
+STANDARD_TARGETS = build check clean install test vendor
 
 include utils.mk
 

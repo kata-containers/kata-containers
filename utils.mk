@@ -13,9 +13,9 @@
 # $1 - Directory component lives in.
 # $2 - Name of component.
 #
-# Note: The "clean" rule is the "odd one out" - it only depends on the
-# Makefile. This ensure that running clean won't first try to build the
-# project.
+# Note: The "clean" and "vendor" rules are the "odd one out" - they only
+# depend on the Makefile. This ensure that running them won't first try
+# to build the project.
 
 define make_rules
 $(2) : $(1)/$(2)/Makefile
@@ -24,6 +24,9 @@ build-$(2) : $(2)
 
 check-$(2) : $(2)
 	make -C $(1)/$(2) check
+
+vendor-$(2) : $(1)/$(2)/Makefile
+	make -C $(1)/$(2) vendor
 
 clean-$(2) : $(1)/$(2)/Makefile
 	make -C $(1)/$(2) clean
@@ -39,6 +42,7 @@ test-$(2) : $(2)
     build-$(2) \
     clean-$(2) \
     check-$(2) \
+    vendor-$(2) \
     test-$(2) \
     install-$(2)
 endef
