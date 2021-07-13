@@ -1,0 +1,58 @@
+name: kata-deploy-build
+
+on: push
+
+jobs:
+  build-asset:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        asset:
+          - kernel
+          - shim-v2
+          - qemu
+          - cloud-hypervisor
+          - firecracker
+          - rootfs-image
+          - rootfs-initrd
+    steps:
+      - uses: actions/checkout@v2
+      - name: Install docker
+        run: |
+          curl -fsSL https://test.docker.com -o test-docker.sh
+          sh test-docker.sh
+
+      - name: Build ${{ matrix.asset }}
+        run: |
+          ./tools/packaging/kata-deploy/local-build/kata-deploy-binaries-in-docker.sh --build="${KATA_ASSET}"
+          build_dir=$(readlink -f build)
+          # store-artifact does not work with symlink
+          sudo cp -r --preserve=all "${build_dir}" "kata-build"
+        env:
+          KATA_ASSET: ${{ matrix.asset }}
+
+      - name: store-artifact ${{ matrix.asset }}
+        uses: actions/upload-artifact@v2
+        with:
+          name: kata-artifacts
+          path: kata-build/kata-static-${{ matrix.asset }}.tar.xz
+          if-no-files-found: error
+
+  create-kata-tarball:
+    runs-on: ubuntu-latest
+    needs: build-asset
+    steps:
+      - uses: actions/checkout@v2
+      - name: get-artifacts
+        uses: actions/download-artifact@v2
+        with:
+          name: kata-artifacts
+          path: kata-artifacts
+      - name: merge-artifacts
+        run: |
+          ./tools/packaging/kata-deploy/local-build/kata-deploy-merge-builds.sh kata-artifacts
+      - name: store-artifacts
+        uses: actions/upload-artifact@v2
+        with:
+          name: kata-static-tarball
+          path: kata-static.tar.xz

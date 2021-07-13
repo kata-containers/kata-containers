@@ -29,4 +29,10 @@ $(eval $(call create_all_rules,$(COMPONENTS),$(TOOLS),$(STANDARD_TARGETS)))
 generate-protocols:
 	make -C src/agent generate-protocols
 
+binary-tarball:
+	make -f ./tools/packaging/kata-deploy/local-build/Makefile
+
+install-binary-tarball:
+	make -f ./tools/packaging/kata-deploy/local-build/Makefile install
+
 .PHONY: all default

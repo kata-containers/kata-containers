@@ -8,5 +8,6 @@ FROM ${IMAGE_REGISTRY}/alpine:3.13.5
 
 RUN apk update && apk add \
 		  bash \
+		  curl \
 		  coreutils \
 		  binutils

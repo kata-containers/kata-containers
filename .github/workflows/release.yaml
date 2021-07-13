@@ -5,213 +5,42 @@ on:
      - '2.*'
 
 jobs:
-  get-artifact-list:
+  build-asset:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        asset:
+          - cloud-hypervisor
+          - firecracker
+          - kernel
+          - qemu
+          - rootfs-image
+          - rootfs-initrd
+          - shim-v2
     steps:
       - uses: actions/checkout@v2
-      - name: get the list
-        run: |
-         pushd $GITHUB_WORKSPACE
-         tag=$(echo $GITHUB_REF | cut -d/ -f3-)
-         git checkout $tag
-         popd
-         $GITHUB_WORKSPACE/tools/packaging/artifact-list.sh > artifact-list.txt
-      - name: save-artifact-list
-        uses: actions/upload-artifact@v2
-        with:
-          name: artifact-list
-          path: artifact-list.txt
+      - uses: docker-practice/actions-setup-docker@master
 
-  build-kernel:
-    runs-on: ubuntu-16.04
-    needs: get-artifact-list
-    env:
-      buildstr: "install_kernel"
-    steps:
-      - uses: actions/checkout@v2
-      - name: get-artifact-list
-        uses: actions/download-artifact@v2
-        with:
-          name: artifact-list
-      - run: |
-         sudo apt-get update && sudo apt install -y flex bison libelf-dev bc iptables
-      - name: build-kernel
+      - name: Build ${{ matrix.asset }}
         run: |
-         if grep -q $buildstr artifact-list.txt; then
-           $GITHUB_WORKSPACE/.github/workflows/generate-local-artifact-tarball.sh $buildstr
-           echo "artifact-built=true" >> $GITHUB_ENV
-         else
-           echo "artifact-built=false" >> $GITHUB_ENV
-         fi
-      - name: store-artifacts
-        if: ${{ env.artifact-built }} == 'true'
+          ./tools/packaging/kata-deploy/local-build/kata-deploy-binaries-in-docker.sh --build="${KATA_ASSET}"
+          build_dir=$(readlink -f build)
+          # store-artifact does not work with symlink
+          sudo cp -r "${build_dir}" "kata-build"
+        env:
+          KATA_ASSET: ${{ matrix.asset }}
+          TAR_OUTPUT: ${{ matrix.asset }}.tar.gz
+
+      - name: store-artifact ${{ matrix.asset }}
         uses: actions/upload-artifact@v2
         with:
           name: kata-artifacts
-          path: kata-static-kernel.tar.gz
+          path: kata-build/kata-static-${{ matrix.asset }}.tar.xz
+          if-no-files-found: error
 
-  build-experimental-kernel:
-    runs-on: ubuntu-16.04
-    needs: get-artifact-list
-    env:
-      buildstr: "install_experimental_kernel"
-    steps:
-      - uses: actions/checkout@v2
-      - name: get-artifact-list
-        uses: actions/download-artifact@v2
-        with:
-          name: artifact-list
-      - run: |
-         sudo apt-get update && sudo apt install -y flex bison libelf-dev bc iptables
-      - name: build-experimental-kernel
-        run: |
-         if grep -q $buildstr artifact-list.txt; then
-           $GITHUB_WORKSPACE/.github/workflows/generate-local-artifact-tarball.sh $buildstr
-           echo "artifact-built=true" >> $GITHUB_ENV
-         else
-           echo "artifact-built=false" >> $GITHUB_ENV
-         fi
-      - name: store-artifacts
-        if: ${{ env.artifact-built }} == 'true'
-        uses: actions/upload-artifact@v2
-        with:
-          name: kata-artifacts
-          path: kata-static-experimental-kernel.tar.gz
-
-  build-qemu:
-    runs-on: ubuntu-16.04
-    needs: get-artifact-list
-    env:
-      buildstr: "install_qemu"
-    steps:
-      - uses: actions/checkout@v2
-      - name: get-artifact-list
-        uses: actions/download-artifact@v2
-        with:
-          name: artifact-list
-      - name: build-qemu
-        run: |
-         if grep -q $buildstr artifact-list.txt; then
-           $GITHUB_WORKSPACE/.github/workflows/generate-local-artifact-tarball.sh $buildstr
-           echo "artifact-built=true" >> $GITHUB_ENV
-         else
-           echo "artifact-built=false" >> $GITHUB_ENV
-         fi
-      - name: store-artifacts
-        if: ${{ env.artifact-built }} == 'true'
-        uses: actions/upload-artifact@v2
-        with:
-          name: kata-artifacts
-          path: kata-static-qemu.tar.gz
-
-  build-image:
-    runs-on: ubuntu-16.04
-    needs: get-artifact-list
-    env:
-      buildstr: "install_image"
-    steps:
-      - uses: actions/checkout@v2
-      - name: get-artifact-list
-        uses: actions/download-artifact@v2
-        with:
-          name: artifact-list
-      - name: build-image
-        run: |
-         if grep -q $buildstr artifact-list.txt; then
-           $GITHUB_WORKSPACE/.github/workflows/generate-local-artifact-tarball.sh $buildstr
-           echo "artifact-built=true" >> $GITHUB_ENV
-         else
-           echo "artifact-built=false" >> $GITHUB_ENV
-         fi
-      - name: store-artifacts
-        if: ${{ env.artifact-built }} == 'true'
-        uses: actions/upload-artifact@v2
-        with:
-          name: kata-artifacts
-          path: kata-static-image.tar.gz
-
-  build-firecracker:
-    runs-on: ubuntu-16.04
-    needs: get-artifact-list
-    env:
-      buildstr: "install_firecracker"
-    steps:
-      - uses: actions/checkout@v2
-      - name: get-artifact-list
-        uses: actions/download-artifact@v2
-        with:
-          name: artifact-list
-      - name: build-firecracker
-        run: |
-         if grep -q $buildstr artifact-list.txt; then
-           $GITHUB_WORKSPACE/.github/workflows/generate-local-artifact-tarball.sh $buildstr
-           echo "artifact-built=true" >> $GITHUB_ENV
-         else
-           echo "artifact-built=false" >> $GITHUB_ENV
-         fi
-      - name: store-artifacts
-        if: ${{ env.artifact-built }} == 'true'
-        uses: actions/upload-artifact@v2
-        with:
-          name: kata-artifacts
-          path: kata-static-firecracker.tar.gz
-
-
-  build-clh:
-    runs-on: ubuntu-16.04
-    needs: get-artifact-list
-    env:
-      buildstr: "install_clh"
-    steps:
-      - uses: actions/checkout@v2
-      - name: get-artifact-list
-        uses: actions/download-artifact@v2
-        with:
-          name: artifact-list
-      - name: build-clh
-        run: |
-         if grep -q $buildstr artifact-list.txt; then
-           $GITHUB_WORKSPACE/.github/workflows/generate-local-artifact-tarball.sh $buildstr
-           echo "artifact-built=true" >> $GITHUB_ENV
-         else
-           echo "artifact-built=false" >> $GITHUB_ENV
-         fi
-      - name: store-artifacts
-        if: ${{ env.artifact-built }} == 'true'
-        uses: actions/upload-artifact@v2
-        with:
-          name: kata-artifacts
-          path: kata-static-clh.tar.gz
-
-  build-kata-components:
-    runs-on: ubuntu-16.04
-    needs: get-artifact-list
-    env:
-      buildstr: "install_kata_components"
-    steps:
-      - uses: actions/checkout@v2
-      - name: get-artifact-list
-        uses: actions/download-artifact@v2
-        with:
-          name: artifact-list
-      - name: build-kata-components
-        run: |
-         if grep -q $buildstr artifact-list.txt; then
-           $GITHUB_WORKSPACE/.github/workflows/generate-local-artifact-tarball.sh $buildstr
-           echo "artifact-built=true" >> $GITHUB_ENV
-         else
-           echo "artifact-built=false" >> $GITHUB_ENV
-         fi
-      - name: store-artifacts
-        if: ${{ env.artifact-built }} == 'true'
-        uses: actions/upload-artifact@v2
-        with:
-          name: kata-artifacts
-          path: kata-static-kata-components.tar.gz
-
-  gather-artifacts:
-    runs-on: ubuntu-16.04
-    needs: [build-experimental-kernel, build-kernel, build-qemu, build-image, build-firecracker, build-kata-components, build-clh]
+  create-kata-tarball:
+    runs-on: ubuntu-latest
+    needs: build-asset
     steps:
       - uses: actions/checkout@v2
       - name: get-artifacts
@@ -219,24 +48,24 @@ jobs:
         with:
           name: kata-artifacts
           path: kata-artifacts
-      - name: colate-artifacts
+      - name: merge-artifacts
         run: |
-          $GITHUB_WORKSPACE/.github/workflows/gather-artifacts.sh
+          ./tools/packaging/kata-deploy/local-build/kata-deploy-merge-builds.sh kata-artifacts
       - name: store-artifacts
         uses: actions/upload-artifact@v2
         with:
-          name: release-candidate
+          name: kata-static-tarball
           path: kata-static.tar.xz
 
   kata-deploy:
-    needs: gather-artifacts
+    needs: create-kata-tarball
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
-      - name: get-artifacts
+      - name: get-kata-tarball
         uses: actions/download-artifact@v2
         with:
-          name: release-candidate
+          name: kata-static-tarball
       - name: build-and-push-kata-deploy-ci
         id: build-and-push-kata-deploy-ci
         run: |

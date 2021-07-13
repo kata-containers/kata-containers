@@ -37,10 +37,7 @@ get_from_kata_deps() {
 	GOPATH=${GOPATH:-${HOME}/go}
 	versions_file="${this_script_dir}/../../../versions.yaml"
 
-	#make sure yq is installed
-	install_yq >&2
-
-	result=$("${GOPATH}/bin/yq" read -X "$versions_file" "$dependency")
+	result=$("yq" read -X "$versions_file" "$dependency")
 	[ "$result" = "null" ] && result=""
 	echo "$result"
 }
