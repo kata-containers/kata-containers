@@ -1,5 +1,6 @@
 // Copyright (c) 2018-2021 Intel Corporation
 // Copyright (c) 2018 HyperHQ Inc.
+// Copyright (c) 2021 Adobe Inc.
 //
 // SPDX-License-Identifier: Apache-2.0
 //
@@ -136,18 +137,19 @@ type hypervisor struct {
 }
 
 type runtime struct {
-	InterNetworkModel   string   `toml:"internetworking_model"`
-	JaegerEndpoint      string   `toml:"jaeger_endpoint"`
-	JaegerUser          string   `toml:"jaeger_user"`
-	JaegerPassword      string   `toml:"jaeger_password"`
-	SandboxBindMounts   []string `toml:"sandbox_bind_mounts"`
-	Experimental        []string `toml:"experimental"`
-	Debug               bool     `toml:"enable_debug"`
-	Tracing             bool     `toml:"enable_tracing"`
-	DisableNewNetNs     bool     `toml:"disable_new_netns"`
-	DisableGuestSeccomp bool     `toml:"disable_guest_seccomp"`
-	SandboxCgroupOnly   bool     `toml:"sandbox_cgroup_only"`
-	EnablePprof         bool     `toml:"enable_pprof"`
+	InterNetworkModel    string   `toml:"internetworking_model"`
+	JaegerEndpoint       string   `toml:"jaeger_endpoint"`
+	JaegerUser           string   `toml:"jaeger_user"`
+	JaegerPassword       string   `toml:"jaeger_password"`
+	SandboxBindMounts    []string `toml:"sandbox_bind_mounts"`
+	Experimental         []string `toml:"experimental"`
+	Debug                bool     `toml:"enable_debug"`
+	Tracing              bool     `toml:"enable_tracing"`
+	DisableNewNetNs      bool     `toml:"disable_new_netns"`
+	DisableGuestSeccomp  bool     `toml:"disable_guest_seccomp"`
+	SandboxCgroupOnly    bool     `toml:"sandbox_cgroup_only"`
+	EnablePprof          bool     `toml:"enable_pprof"`
+	DisableGuestEmptyDir bool     `toml:"disable_guest_empty_dir"`
 }
 
 type agent struct {
@@ -1158,6 +1160,8 @@ func LoadConfiguration(configPath string, ignoreLogging bool) (resolvedConfigPat
 		return "", config, err
 	}
 	config.SandboxBindMounts = tomlConf.Runtime.SandboxBindMounts
+
+	config.DisableGuestEmptyDir = tomlConf.Runtime.DisableGuestEmptyDir
 
 	if err := checkConfig(config); err != nil {
 		return "", config, err

@@ -1,4 +1,5 @@
 # Copyright (c) 2017-2019 Intel Corporation
+# Copyright (c) 2021 Adobe Inc.
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -239,6 +240,10 @@ disable_guest_seccomp=@DEFDISABLEGUESTSECCOMP@
 # The sandbox cgroup is constrained if there is no container type annotation.
 # See: https://godoc.org/github.com/kata-containers/runtime/virtcontainers#ContainerType
 sandbox_cgroup_only=@DEFSANDBOXCGROUPONLY@
+
+# If enabled, the runtime will not create Kubernetes emptyDir mounts on the guest filesystem. Instead, emptyDir mounts will
+# be created on the host and shared via virtio-fs. This is potentially slower, but allows sharing of files from host to guest.
+disable_guest_empty_dir=@DEFDISABLEGUESTEMPTYDIR@
 
 # Enabled experimental feature list, format: ["a", "b"].
 # Experimental features are features not stable enough for production,

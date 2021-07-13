@@ -1,4 +1,5 @@
 # Copyright (c) 2017-2019 Intel Corporation
+# Copyright (c) 2021 Adobe Inc.
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -533,6 +534,10 @@ sandbox_cgroup_only=@DEFSANDBOXCGROUPONLY@
 # If defaults are utilized, these mounts should be available in the guest at `/run/kata-containers/shared/containers/sandbox-mounts`
 # These will not be exposed to the container workloads, and are only provided for potential guest services.
 sandbox_bind_mounts=@DEFBINDMOUNTS@
+
+# If enabled, the runtime will not create Kubernetes emptyDir mounts on the guest filesystem. Instead, emptyDir mounts will
+# be created on the host and shared via virtio-fs. This is potentially slower, but allows sharing of files from host to guest.
+disable_guest_empty_dir=@DEFDISABLEGUESTEMPTYDIR@
 
 # Enabled experimental feature list, format: ["a", "b"].
 # Experimental features are features not stable enough for production,
