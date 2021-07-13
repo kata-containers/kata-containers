@@ -134,8 +134,6 @@ github.com/containerd/containerd/version
 # github.com/containerd/continuity v0.1.0
 github.com/containerd/continuity/fs
 github.com/containerd/continuity/sysx
-# github.com/containerd/cri v1.11.1
-## explicit
 # github.com/containerd/cri-containerd v1.11.1-0.20190125013620-4dd6735020f5
 ## explicit
 github.com/containerd/cri-containerd/pkg/annotations
@@ -173,12 +171,7 @@ github.com/cri-o/cri-o/pkg/annotations
 github.com/cyphar/filepath-securejoin
 # github.com/davecgh/go-spew v1.1.1
 github.com/davecgh/go-spew/spew
-# github.com/docker/distribution v2.7.1+incompatible
-## explicit
-# github.com/docker/docker v1.13.1
-## explicit
 # github.com/docker/go-events v0.0.0-20190806004212-e31b211e4f1c
-## explicit
 github.com/docker/go-events
 # github.com/docker/go-units v0.4.0
 github.com/docker/go-units
@@ -224,7 +217,6 @@ github.com/go-openapi/validate
 # github.com/godbus/dbus/v5 v5.0.3
 github.com/godbus/dbus/v5
 # github.com/gogo/googleapis v1.4.0
-## explicit
 github.com/gogo/googleapis/google/rpc
 # github.com/gogo/protobuf v1.3.2
 ## explicit
@@ -254,12 +246,6 @@ github.com/imdario/mergo
 # github.com/intel-go/cpuid v0.0.0-20210602155658-5747e5cec0d9
 ## explicit
 github.com/intel-go/cpuid
-# github.com/juju/errors v0.0.0-20180806074554-22422dad46e1
-## explicit
-# github.com/juju/loggo v0.0.0-20190526231331-6e530bcce5d8
-## explicit
-# github.com/juju/testing v0.0.0-20190613124551-e81189438503
-## explicit
 # github.com/kata-containers/govmm v0.0.0-20210622075516-263136e69ac8
 ## explicit
 github.com/kata-containers/govmm/qemu
@@ -289,7 +275,6 @@ github.com/mrunalp/fileutils
 # github.com/opencontainers/go-digest v1.0.0
 github.com/opencontainers/go-digest
 # github.com/opencontainers/image-spec v1.0.1
-## explicit
 github.com/opencontainers/image-spec/identity
 github.com/opencontainers/image-spec/specs-go
 github.com/opencontainers/image-spec/specs-go/v1
@@ -358,7 +343,6 @@ github.com/russross/blackfriday/v2
 ## explicit
 github.com/safchain/ethtool
 # github.com/seccomp/libseccomp-golang v0.9.1
-## explicit
 github.com/seccomp/libseccomp-golang
 # github.com/shurcooL/sanitized_anchor_name v1.0.0
 github.com/shurcooL/sanitized_anchor_name
@@ -535,20 +519,12 @@ google.golang.org/protobuf/types/known/durationpb
 google.golang.org/protobuf/types/known/timestamppb
 # gopkg.in/inf.v0 v0.9.1
 gopkg.in/inf.v0
-# gopkg.in/mgo.v2 v2.0.0-20180705113604-9856a29383ce
-## explicit
 # gopkg.in/yaml.v2 v2.4.0
 gopkg.in/yaml.v2
 # gopkg.in/yaml.v3 v3.0.0-20200313102051-9f266ea9e77c
 gopkg.in/yaml.v3
-# gotest.tools v2.2.0+incompatible
-## explicit
 # k8s.io/apimachinery v0.20.6
 ## explicit
 k8s.io/apimachinery/pkg/api/resource
-# k8s.io/klog v1.0.0
-## explicit
-# sigs.k8s.io/structured-merge-diff/v3 v3.0.0
-## explicit
 # github.com/uber-go/atomic => go.uber.org/atomic v1.5.1
 # google.golang.org/genproto => google.golang.org/genproto v0.0.0-20180817151627-c66870c02cf8
