@@ -582,7 +582,8 @@ $(MONITOR_OUTPUT): $(SOURCES) $(GENERATED_FILES) $(MAKEFILE_LIST) .git-commit
 	install \
 	show-header \
 	show-summary \
-	show-variables
+	show-variables \
+	vendor
 
 $(TARGET).coverage: $(SOURCES) $(GENERATED_FILES) $(MAKEFILE_LIST)
 	$(QUIET_TEST)go test -o $@ -covermode count
@@ -646,6 +647,14 @@ install-scripts: $(SCRIPTS)
 
 install-completions:
 	$(QUIET_INST)install --mode 0644 -D  $(BASH_COMPLETIONS) $(DESTDIR)/$(BASH_COMPLETIONSDIR)/$(notdir $(BASH_COMPLETIONS));
+
+handle_vendor:
+	go mod tidy
+	go mod vendor
+	go mod verify
+
+vendor: handle_vendor
+	./hack/tree_status.sh
 
 clean:
 	$(QUIET_CLEAN)rm -f \
