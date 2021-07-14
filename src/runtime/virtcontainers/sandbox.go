@@ -1555,18 +1555,7 @@ func (s *Sandbox) Stop(ctx context.Context, force bool) error {
 	return nil
 }
 
-// list lists all sandbox running on the host.
-func (s *Sandbox) list() ([]Sandbox, error) {
-	return nil, nil
-}
-
-// enter runs an executable within a sandbox.
-func (s *Sandbox) enter(args []string) error {
-	return nil
-}
-
-// setSandboxState sets both the in-memory and on-disk state of the
-// sandbox.
+// setSandboxState sets the in-memory state of the sandbox.
 func (s *Sandbox) setSandboxState(state types.StateString) error {
 	if state == "" {
 		return vcTypes.ErrNeedState
