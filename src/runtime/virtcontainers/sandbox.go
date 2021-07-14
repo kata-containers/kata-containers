@@ -1012,6 +1012,12 @@ func (s *Sandbox) startVM(ctx context.Context) (err error) {
 		s.cw = consoleWatcher
 	}
 
+	defer func() {
+		if err != nil {
+			s.hypervisor.stopSandbox(ctx, false)
+		}
+	}()
+
 	if err := s.network.Run(ctx, s.networkNS.NetNsPath, func() error {
 		if s.factory != nil {
 			vm, err := s.factory.GetVM(ctx, VMConfig{
@@ -1030,12 +1036,6 @@ func (s *Sandbox) startVM(ctx context.Context) (err error) {
 	}); err != nil {
 		return err
 	}
-
-	defer func() {
-		if err != nil {
-			s.hypervisor.stopSandbox(ctx, false)
-		}
-	}()
 
 	// In case of vm factory, network interfaces are hotplugged
 	// after vm is started.
@@ -1553,18 +1553,7 @@ func (s *Sandbox) Stop(ctx context.Context, force bool) error {
 	return nil
 }
 
-// list lists all sandbox running on the host.
-func (s *Sandbox) list() ([]Sandbox, error) {
-	return nil, nil
-}
-
-// enter runs an executable within a sandbox.
-func (s *Sandbox) enter(args []string) error {
-	return nil
-}
-
-// setSandboxState sets both the in-memory and on-disk state of the
-// sandbox.
+// setSandboxState sets the in-memory state of the sandbox.
 func (s *Sandbox) setSandboxState(state types.StateString) error {
 	if state == "" {
 		return vcTypes.ErrNeedState
