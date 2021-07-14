@@ -872,6 +872,8 @@ dependencies = [
  "rand",
  "serde",
  "thiserror",
+ "tokio",
+ "tokio-stream",
 ]
 
 [[package]]
@@ -1575,6 +1577,17 @@ dependencies = [
  "proc-macro2 1.0.26",
  "quote 1.0.9",
  "syn 1.0.72",
+]
+
+[[package]]
+name = "tokio-stream"
+version = "0.1.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f8864d706fdb3cc0843a49647ac892720dac98a6eeb818b77190592cf4994066"
+dependencies = [
+ "futures-core",
+ "pin-project-lite",
+ "tokio",
 ]
 
 [[package]]
