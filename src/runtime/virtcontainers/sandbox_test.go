@@ -181,21 +181,6 @@ func TestCreateSandboxEmptyID(t *testing.T) {
 	defer cleanUp()
 }
 
-func TestSandboxListSuccessful(t *testing.T) {
-	sandbox := &Sandbox{}
-
-	sandboxList, err := sandbox.list()
-	assert.NoError(t, err)
-	assert.Nil(t, sandboxList)
-}
-
-func TestSandboxEnterSuccessful(t *testing.T) {
-	sandbox := &Sandbox{}
-
-	err := sandbox.enter([]string{})
-	assert.NoError(t, err)
-}
-
 func testCheckInitSandboxAndContainerStates(p *Sandbox, initialSandboxState types.SandboxState, c *Container, initialContainerState types.ContainerState) error {
 	if p.state.State != initialSandboxState.State {
 		return fmt.Errorf("Expected sandbox state %v, got %v", initialSandboxState.State, p.state.State)
