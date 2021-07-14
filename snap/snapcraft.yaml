@@ -90,6 +90,7 @@ parts:
 
       export GOROOT=${SNAPCRAFT_STAGE}
       export PATH="${GOROOT}/bin:${PATH}"
+      export GO111MODULE="auto"
 
       http_proxy=${http_proxy:-""}
       https_proxy=${https_proxy:-""}
@@ -147,6 +148,7 @@ parts:
       export GOPATH=${SNAPCRAFT_STAGE}/gopath
       export GOROOT=${SNAPCRAFT_STAGE}
       export PATH="${GOROOT}/bin:${PATH}"
+      export GO111MODULE="auto"
       kata_dir=${GOPATH}/src/github.com/${SNAPCRAFT_PROJECT_NAME}/${SNAPCRAFT_PROJECT_NAME}
 
       cd ${kata_dir}/src/runtime
@@ -189,6 +191,7 @@ parts:
       [ "$(uname -m)" = "s390x" ] && sudo apt-get --no-install-recommends install -y libssl-dev
 
       export GOPATH=${SNAPCRAFT_STAGE}/gopath
+      export GO111MODULE="auto"
       kata_dir=${GOPATH}/src/github.com/${SNAPCRAFT_PROJECT_NAME}/${SNAPCRAFT_PROJECT_NAME}
 
       cd ${kata_dir}/tools/packaging/kernel
@@ -243,6 +246,7 @@ parts:
     override-build: |
       yq=${SNAPCRAFT_STAGE}/yq
       export GOPATH=${SNAPCRAFT_STAGE}/gopath
+      export GO111MODULE="auto"
       kata_dir=${GOPATH}/src/github.com/${SNAPCRAFT_PROJECT_NAME}/${SNAPCRAFT_PROJECT_NAME}
 
       versions_file="${kata_dir}/versions.yaml"
