@@ -1008,6 +1008,12 @@ func (s *Sandbox) startVM(ctx context.Context) (err error) {
 		s.cw = consoleWatcher
 	}
 
+	defer func() {
+		if err != nil {
+			s.hypervisor.stopSandbox(ctx, false)
+		}
+	}()
+
 	if err := s.network.Run(ctx, s.networkNS.NetNsPath, func() error {
 		if s.factory != nil {
 			vm, err := s.factory.GetVM(ctx, VMConfig{
@@ -1026,12 +1032,6 @@ func (s *Sandbox) startVM(ctx context.Context) (err error) {
 	}); err != nil {
 		return err
 	}
-
-	defer func() {
-		if err != nil {
-			s.hypervisor.stopSandbox(ctx, false)
-		}
-	}()
 
 	// In case of vm factory, network interfaces are hotplugged
 	// after vm is started.
