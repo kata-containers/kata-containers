@@ -63,13 +63,9 @@ jobs:
     - name: Check vendored code
       run: |
         cd ${GOPATH}/src/github.com/${{ github.repository }} && make vendor
-    # Must build before static checks as we depend on some generated code in runtime and agent
-    - name: Build
-      run: |
-        cd ${GOPATH}/src/github.com/${{ github.repository }} && make
     - name: Static Checks
       run: |
-        cd ${GOPATH}/src/github.com/${{ github.repository }} && ./ci/static-checks.sh
+        cd ${GOPATH}/src/github.com/${{ github.repository }} && make static-checks
     - name: Run Compiler Checks
       run: |
         cd ${GOPATH}/src/github.com/${{ github.repository }} && make check
