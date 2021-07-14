@@ -1798,7 +1798,8 @@ dependencies = [
  "serde",
  "slog",
  "thiserror",
- "vsock",
+ "tokio",
+ "tokio-vsock",
 ]
 
 [[package]]
