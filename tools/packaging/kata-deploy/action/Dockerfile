@@ -1,7 +1,7 @@
 # Copyright (c) 2019 Intel Corporation
 #
 # SPDX-License-Identifier: Apache-2.0
-FROM microsoft/azure-cli:latest
+FROM mcr.microsoft.com/azure-cli:latest
 
 LABEL com.github.actions.name="Test kata-deploy in an AKS cluster"
 LABEL com.github.actions.description="Test kata-deploy in an AKS cluster"
