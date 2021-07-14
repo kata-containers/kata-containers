@@ -142,6 +142,8 @@ func (v *virtiofsd) Start(ctx context.Context, onQuit onQuitFunc) (int, error) {
 		}
 	}()
 
+	v.PID = cmd.Process.Pid
+
 	return cmd.Process.Pid, nil
 }
 
@@ -216,7 +218,8 @@ func (v *virtiofsd) kill(ctx context.Context) (err error) {
 	defer span.End()
 
 	if v.PID == 0 {
-		return errors.New("invalid virtiofsd PID(0)")
+		v.Logger().WithField("invalid-virtiofsd-pid", v.PID).Warn("cannot kill virtiofsd")
+		return nil
 	}
 
 	err = syscall.Kill(v.PID, syscall.SIGKILL)
