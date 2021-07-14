@@ -288,7 +288,7 @@ func BindDevicetoVFIO(bdf, hostDriver, vendorDeviceID string) (string, error) {
 	return fmt.Sprintf(vfioDevPath, filepath.Base(groupPath)), nil
 }
 
-// BindDevicetoHost binds the device to the host driver driver after unbinding from vfio-pci.
+// BindDevicetoHost binds the device to the host driver after unbinding from vfio-pci.
 func BindDevicetoHost(bdf, hostDriver, vendorDeviceID string) error {
 	// Unbind from vfio-pci driver
 	unbindDriverPath := fmt.Sprintf(pciDriverUnbindPath, bdf)
