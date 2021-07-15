@@ -270,6 +270,7 @@ parts:
 
       # download source
       qemu_dir=${SNAPCRAFT_STAGE}/qemu
+      rm -rf "${qemu_dir}"
       git clone --branch ${branch} --single-branch ${url} "${qemu_dir}"
       cd ${qemu_dir}
       [ -z "${commit}" ] || git checkout ${commit}
