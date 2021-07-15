@@ -822,19 +822,21 @@ pub fn remove_mounts(mounts: &[String]) -> Result<()> {
 #[instrument]
 fn ensure_destination_exists(destination: &str, fs_type: &str) -> Result<()> {
     let d = Path::new(destination);
-    if !d.exists() {
-        let dir = d
-            .parent()
-            .ok_or_else(|| anyhow!("mount destination {} doesn't exist", destination))?;
-        if !dir.exists() {
-            fs::create_dir_all(dir).context(format!("create dir all failed on {:?}", dir))?;
-        }
+    if d.exists() {
+        return Ok(());
+    }
+    let dir = d
+        .parent()
+        .ok_or_else(|| anyhow!("mount destination {} doesn't exist", destination))?;
+
+    if !dir.exists() {
+        fs::create_dir_all(dir).context(format!("create dir all {:?}", dir))?;
     }
 
     if fs_type != "bind" || d.is_dir() {
-        fs::create_dir_all(d).context(format!("create dir all failed on {:?}", d))?;
+        fs::create_dir_all(d).context(format!("create dir all {:?}", d))?;
     } else {
-        fs::OpenOptions::new().create(true).open(d)?;
+        fs::File::create(d).context(format!("create file {:?}", d))?;
     }
 
     Ok(())
@@ -860,6 +862,7 @@ mod tests {
     use super::*;
     use crate::{skip_if_not_root, skip_loop_if_not_root, skip_loop_if_root};
     use libc::umount;
+    use std::fs::metadata;
     use std::fs::File;
     use std::fs::OpenOptions;
     use std::io::Write;
@@ -1434,5 +1437,40 @@ mod tests {
             // Devices cgroup
             assert!(mounts[1].eq(&cg_devices_mount), "{}", msg);
         }
+    }
+
+    #[test]
+    fn test_ensure_destination_exists() {
+        let dir = tempdir().expect("failed to create tmpdir");
+
+        let mut testfile = dir.into_path();
+        testfile.push("testfile");
+
+        let result = ensure_destination_exists(testfile.to_str().unwrap(), "bind");
+
+        assert!(result.is_ok());
+        assert!(testfile.exists());
+
+        let result = ensure_destination_exists(testfile.to_str().unwrap(), "bind");
+        assert!(result.is_ok());
+
+        let meta = metadata(testfile).unwrap();
+
+        assert!(meta.is_file());
+
+        let dir = tempdir().expect("failed to create tmpdir");
+        let mut testdir = dir.into_path();
+        testdir.push("testdir");
+
+        let result = ensure_destination_exists(testdir.to_str().unwrap(), "ext4");
+        assert!(result.is_ok());
+        assert!(testdir.exists());
+
+        let result = ensure_destination_exists(testdir.to_str().unwrap(), "ext4");
+        assert!(result.is_ok());
+
+        //let meta = metadata(testdir.to_str().unwrap()).unwrap();
+        let meta = metadata(testdir).unwrap();
+        assert!(meta.is_dir());
     }
 }
