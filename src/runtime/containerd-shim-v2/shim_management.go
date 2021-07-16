@@ -186,5 +186,5 @@ func (s *service) mountPprofHandle(m *http.ServeMux, ociSpec *specs.Spec) {
 // SocketAddress returns the address of the abstract domain socket for communicating with the
 // shim management endpoint
 func SocketAddress(id string) string {
-	return filepath.Join(string(filepath.Separator), "run", "vc", id, "shim-monitor")
+	return fmt.Sprintf("unix://%s", filepath.Join(string(filepath.Separator), "run", "vc", id, "shim-monitor"))
 }
