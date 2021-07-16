@@ -19,6 +19,7 @@ After that, we drafted the initial code here, and any contributions are welcome.
 | I/O stream              | :white_check_mark: |
 | Cgroups                 | :white_check_mark: |
 | Capabilities, `rlimit`, readonly path, masked path, users | :white_check_mark: |
+| Seccomp                 | :white_check_mark: |
 | container stats (`stats_container`)                     | :white_check_mark: |
 | Hooks                   | :white_check_mark: |
 | **Agent Features & APIs** |

@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 //
+use crate::rpc;
 use anyhow::{bail, ensure, Context, Result};
 use serde::Deserialize;
 use std::collections::HashSet;
@@ -74,6 +75,7 @@ pub struct AgentConfig {
     pub unified_cgroup_hierarchy: bool,
     pub tracing: bool,
     pub endpoints: AgentEndpoints,
+    pub supports_seccomp: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -149,6 +151,7 @@ impl Default for AgentConfig {
             unified_cgroup_hierarchy: false,
             tracing: false,
             endpoints: Default::default(),
+            supports_seccomp: rpc::have_seccomp(),
         }
     }
 }
