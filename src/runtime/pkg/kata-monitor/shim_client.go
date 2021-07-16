@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"time"
 
+	cdshim "github.com/containerd/containerd/runtime/v2/shim"
 	shim "github.com/kata-containers/kata-containers/src/runtime/containerd-shim-v2"
 )
 
@@ -45,7 +46,7 @@ func buildUnixSocketClient(socketAddr string, timeout time.Duration) (*http.Clie
 	transport := &http.Transport{
 		DisableKeepAlives: true,
 		Dial: func(proto, addr string) (conn net.Conn, err error) {
-			return net.Dial("unix", "\x00"+socketAddr)
+			return cdshim.AnonDialer(socketAddr, timeout)
 		},
 	}
 
