@@ -25,10 +25,10 @@ type NetmonConfig struct {
 // for the execution of the network monitor binary.
 type netmonParams struct {
 	netmonPath string
-	debug      bool
 	logLevel   string
 	runtime    string
 	sandboxID  string
+	debug      bool
 }
 
 func netmonLogger() *logrus.Entry {

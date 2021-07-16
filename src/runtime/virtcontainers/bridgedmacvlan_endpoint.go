@@ -18,10 +18,10 @@ var macvlanTrace = getNetworkTrace(BridgedMacvlanEndpointType)
 
 // BridgedMacvlanEndpoint represents a macvlan endpoint that is bridged to the VM
 type BridgedMacvlanEndpoint struct {
-	NetPair            NetworkInterfacePair
-	EndpointProperties NetworkInfo
 	EndpointType       EndpointType
 	PCIPath            vcTypes.PciPath
+	EndpointProperties NetworkInfo
+	NetPair            NetworkInterfacePair
 	RxRateLimiter      bool
 	TxRateLimiter      bool
 }

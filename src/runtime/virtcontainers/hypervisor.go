@@ -222,37 +222,11 @@ type Param struct {
 
 // HypervisorConfig is the hypervisor configuration.
 type HypervisorConfig struct {
-	// PCIeRootPort is used to indicate the number of PCIe Root Port devices
-	// The PCIe Root Port device is used to hot-plug the PCIe device
-	PCIeRootPort uint32
-
-	// NumVCPUs specifies default number of vCPUs for the VM.
-	NumVCPUs uint32
-
-	//DefaultMaxVCPUs specifies the maximum number of vCPUs for the VM.
-	DefaultMaxVCPUs uint32
-
-	// DefaultMem specifies default memory size in MiB for the VM.
-	MemorySize uint32
-
-	// DefaultBridges specifies default number of bridges for the VM.
-	// Bridges can be used to hot plug devices
-	DefaultBridges uint32
-
-	// Msize9p is used as the msize for 9p shares
-	Msize9p uint32
-
-	// MemSlots specifies default memory slots the VM.
-	MemSlots uint32
-
-	// VirtioFSCacheSize is the DAX cache size in MiB
-	VirtioFSCacheSize uint32
-
-	// KernelParams are additional guest kernel parameters.
-	KernelParams []Param
-
-	// HypervisorParams are additional hypervisor parameters.
-	HypervisorParams []Param
+	// customAssets is a map of assets.
+	// Each value in that map takes precedence over the configured assets.
+	// For example, if there is a value for the "kernel" key in this map,
+	// it will be used for the sandbox's kernel path instead of KernelPath.
+	customAssets map[types.AssetType]*types.Asset
 
 	// KernelPath is the guest kernel host path.
 	KernelPath string
@@ -276,20 +250,11 @@ type HypervisorConfig struct {
 	// HypervisorPath is the hypervisor executable host path.
 	HypervisorPath string
 
-	// HypervisorPathList is the list of hypervisor paths names allowed in annotations
-	HypervisorPathList []string
-
-	// HypervisorCtlPathList is the list of hypervisor control paths names allowed in annotations
-	HypervisorCtlPathList []string
-
 	// HypervisorCtlPath is the hypervisor ctl executable host path.
 	HypervisorCtlPath string
 
 	// JailerPath is the jailer executable host path.
 	JailerPath string
-
-	// JailerPathList is the list of jailer paths names allowed in annotations
-	JailerPathList []string
 
 	// BlockDeviceDriver specifies the driver to be used for block device
 	// either VirtioSCSI or VirtioBlock with the default driver being defaultBlockDriver
@@ -322,14 +287,40 @@ type HypervisorConfig struct {
 	// File based memory backend root directory
 	FileBackedMemRootDir string
 
+	// VhostUserStorePath is the directory path where vhost-user devices
+	// related folders, sockets and device nodes should be.
+	VhostUserStorePath string
+
+	// GuestCoredumpPath is the path in host for saving guest memory dump
+	GuestMemoryDumpPath string
+
+	// GuestHookPath is the path within the VM that will be used for 'drop-in' hooks
+	GuestHookPath string
+
+	// VMid is the id of the VM that create the hypervisor if the VM is created by the factory.
+	// VMid is "" if the hypervisor is not created by the factory.
+	VMid string
+
+	// SELinux label for the VM
+	SELinuxProcessLabel string
+
+	// VirtioFSCache cache mode for fs version cache or "none"
+	VirtioFSCache string
+
+	// HypervisorPathList is the list of hypervisor paths names allowed in annotations
+	HypervisorPathList []string
+
+	// HypervisorCtlPathList is the list of hypervisor control paths names allowed in annotations
+	HypervisorCtlPathList []string
+
+	// JailerPathList is the list of jailer paths names allowed in annotations
+	JailerPathList []string
+
 	// EntropySourceList is the list of valid entropy sources
 	EntropySourceList []string
 
 	// VirtioFSDaemonList is the list of valid virtiofs names for annotations
 	VirtioFSDaemonList []string
-
-	// VirtioFSCache cache mode for fs version cache or "none"
-	VirtioFSCache string
 
 	// VirtioFSExtraArgs passes options to virtiofsd daemon
 	VirtioFSExtraArgs []string
@@ -346,11 +337,50 @@ type HypervisorConfig struct {
 	// VhostUserStorePathList is the list of valid values for vhost-user paths
 	VhostUserStorePathList []string
 
-	// customAssets is a map of assets.
-	// Each value in that map takes precedence over the configured assets.
-	// For example, if there is a value for the "kernel" key in this map,
-	// it will be used for the sandbox's kernel path instead of KernelPath.
-	customAssets map[types.AssetType]*types.Asset
+	// KernelParams are additional guest kernel parameters.
+	KernelParams []Param
+
+	// HypervisorParams are additional hypervisor parameters.
+	HypervisorParams []Param
+
+	// SGXEPCSize specifies the size in bytes for the EPC Section.
+	// Enable SGX. Hardware-based isolation and memory encryption.
+	SGXEPCSize int64
+
+	// RxRateLimiterMaxRate is used to control network I/O inbound bandwidth on VM level.
+	RxRateLimiterMaxRate uint64
+
+	// TxRateLimiterMaxRate is used to control network I/O outbound bandwidth on VM level.
+	TxRateLimiterMaxRate uint64
+
+	// MemOffset specifies memory space for nvdimm device
+	MemOffset uint64
+
+	// PCIeRootPort is used to indicate the number of PCIe Root Port devices
+	// The PCIe Root Port device is used to hot-plug the PCIe device
+	PCIeRootPort uint32
+
+	// NumVCPUs specifies default number of vCPUs for the VM.
+	NumVCPUs uint32
+
+	//DefaultMaxVCPUs specifies the maximum number of vCPUs for the VM.
+	DefaultMaxVCPUs uint32
+
+	// DefaultMem specifies default memory size in MiB for the VM.
+	MemorySize uint32
+
+	// DefaultBridges specifies default number of bridges for the VM.
+	// Bridges can be used to hot plug devices
+	DefaultBridges uint32
+
+	// Msize9p is used as the msize for 9p shares
+	Msize9p uint32
+
+	// MemSlots specifies default memory slots the VM.
+	MemSlots uint32
+
+	// VirtioFSCacheSize is the DAX cache size in MiB
+	VirtioFSCacheSize uint32
 
 	// BlockDeviceCacheSet specifies cache-related options will be set to block devices or not.
 	BlockDeviceCacheSet bool
@@ -428,36 +458,6 @@ type HypervisorConfig struct {
 
 	// EnableVhostUserStore is used to indicate if host supports vhost-user-blk/scsi
 	EnableVhostUserStore bool
-
-	// VhostUserStorePath is the directory path where vhost-user devices
-	// related folders, sockets and device nodes should be.
-	VhostUserStorePath string
-
-	// GuestCoredumpPath is the path in host for saving guest memory dump
-	GuestMemoryDumpPath string
-
-	// GuestHookPath is the path within the VM that will be used for 'drop-in' hooks
-	GuestHookPath string
-
-	// VMid is the id of the VM that create the hypervisor if the VM is created by the factory.
-	// VMid is "" if the hypervisor is not created by the factory.
-	VMid string
-
-	// SELinux label for the VM
-	SELinuxProcessLabel string
-
-	// SGXEPCSize specifies the size in bytes for the EPC Section.
-	// Enable SGX. Hardware-based isolation and memory encryption.
-	SGXEPCSize int64
-
-	// RxRateLimiterMaxRate is used to control network I/O inbound bandwidth on VM level.
-	RxRateLimiterMaxRate uint64
-
-	// TxRateLimiterMaxRate is used to control network I/O outbound bandwidth on VM level.
-	TxRateLimiterMaxRate uint64
-
-	// MemOffset specifies memory space for nvdimm device
-	MemOffset uint64
 
 	// GuestSwap Used to enable/disable swap in the guest
 	GuestSwap bool

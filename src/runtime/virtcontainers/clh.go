@@ -106,10 +106,10 @@ type clhClient interface {
 // Cloud hypervisor state
 //
 type CloudHypervisorState struct {
-	state        clhState
+	apiSocket    string
 	PID          int
 	VirtiofsdPID int
-	apiSocket    string
+	state        clhState
 }
 
 func (s *CloudHypervisorState) reset() {
@@ -119,15 +119,15 @@ func (s *CloudHypervisorState) reset() {
 }
 
 type cloudHypervisor struct {
-	id        string
-	state     CloudHypervisorState
-	config    HypervisorConfig
-	ctx       context.Context
-	APIClient clhClient
-	vmconfig  chclient.VmConfig
-	virtiofsd Virtiofsd
 	store     persistapi.PersistDriver
 	console   console.Console
+	virtiofsd Virtiofsd
+	APIClient clhClient
+	ctx       context.Context
+	id        string
+	vmconfig  chclient.VmConfig
+	state     CloudHypervisorState
+	config    HypervisorConfig
 }
 
 var clhKernelParams = []Param{

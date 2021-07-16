@@ -91,9 +91,9 @@ func minor(dev uint64) int {
 }
 
 type device struct {
+	mountPoint string
 	major      int
 	minor      int
-	mountPoint string
 }
 
 var errMountPointNotFound = errors.New("Mount point not found")
@@ -336,19 +336,19 @@ type Mount struct {
 	// Type specifies the type of filesystem to mount.
 	Type string
 
-	// Options list all the mount options of the filesystem.
-	Options []string
-
 	// HostPath used to store host side bind mount path
 	HostPath string
-
-	// ReadOnly specifies if the mount should be read only or not
-	ReadOnly bool
 
 	// BlockDeviceID represents block device that is attached to the
 	// VM in case this mount is a block device file or a directory
 	// backed by a block device.
 	BlockDeviceID string
+
+	// Options list all the mount options of the filesystem.
+	Options []string
+
+	// ReadOnly specifies if the mount should be read only or not
+	ReadOnly bool
 }
 
 func isSymlink(path string) bool {

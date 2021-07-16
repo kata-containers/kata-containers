@@ -674,6 +674,7 @@ var assetContentWrongHash = "92549f8d2018a95a294d28a65e795ed7d1a9d150009a28cea10
 func TestSandboxCreateAssets(t *testing.T) {
 	assert := assert.New(t)
 
+	// nolint: govet
 	type testData struct {
 		assetType   types.AssetType
 		annotations map[string]string
@@ -1469,6 +1470,7 @@ func TestSandbox_SetupSandboxCgroup(t *testing.T) {
 	successfulContainer.Annotations = make(map[string]string)
 	successfulContainer.Annotations[annotations.ContainerTypeKey] = string(PodSandbox)
 
+	// nolint: govet
 	tests := []struct {
 		name     string
 		s        *Sandbox

@@ -217,15 +217,15 @@ func ephemeralPath() string {
 // KataAgentConfig is a structure storing information needed
 // to reach the Kata Containers agent.
 type KataAgentConfig struct {
+	TraceMode          string
+	TraceType          string
+	KernelModules      []string
+	ContainerPipeSize  uint32
+	DialTimeout        uint32
 	LongLiveConn       bool
 	Debug              bool
 	Trace              bool
 	EnableDebugConsole bool
-	ContainerPipeSize  uint32
-	TraceMode          string
-	TraceType          string
-	DialTimeout        uint32
-	KernelModules      []string
 }
 
 // KataAgentState is the structure describing the data stored from this
@@ -234,21 +234,26 @@ type KataAgentState struct {
 	URL string
 }
 
+// nolint: govet
 type kataAgent struct {
-	// lock protects the client pointer
-	sync.Mutex
+	ctx      context.Context
+	vmSocket interface{}
+
 	client *kataclient.AgentClient
 
-	reqHandlers    map[string]reqFunc
-	state          KataAgentState
+	// lock protects the client pointer
+	sync.Mutex
+
+	state KataAgentState
+
+	reqHandlers map[string]reqFunc
+	kmodules    []string
+
+	dialTimout uint32
+
 	keepConn       bool
 	dynamicTracing bool
 	dead           bool
-	dialTimout     uint32
-	kmodules       []string
-
-	vmSocket interface{}
-	ctx      context.Context
 }
 
 func (k *kataAgent) Logger() *logrus.Entry {

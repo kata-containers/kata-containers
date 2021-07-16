@@ -163,6 +163,7 @@ func TestCloudHypervisorAddNetCheckEnpointTypes(t *testing.T) {
 	type args struct {
 		e Endpoint
 	}
+	// nolint: govet
 	tests := []struct {
 		name    string
 		args    args

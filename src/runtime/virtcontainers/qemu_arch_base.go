@@ -175,20 +175,20 @@ const (
 )
 
 type qemuArchBase struct {
-	memoryOffset         uint64
-	networkIndex         int
-	nestedRun            bool
-	vhost                bool
-	disableNvdimm        bool
-	dax                  bool
-	protection           guestProtection
-	qemuMachine          govmmQemu.Machine
 	qemuExePath          string
+	qemuMachine          govmmQemu.Machine
 	PFlash               []string
 	kernelParamsNonDebug []Param
 	kernelParamsDebug    []Param
 	kernelParams         []Param
 	Bridges              []types.Bridge
+	memoryOffset         uint64
+	networkIndex         int
+	protection           guestProtection
+	nestedRun            bool
+	vhost                bool
+	disableNvdimm        bool
+	dax                  bool
 }
 
 const (
