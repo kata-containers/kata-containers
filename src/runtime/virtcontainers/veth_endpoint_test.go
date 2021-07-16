@@ -81,6 +81,7 @@ func TestCreateVethNetworkEndpointChooseIfaceName(t *testing.T) {
 }
 
 func TestCreateVethNetworkEndpointInvalidArgs(t *testing.T) {
+	// nolint: govet
 	type endpointValues struct {
 		idx    int
 		ifName string

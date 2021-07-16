@@ -21,25 +21,23 @@ import (
 
 // VM is abstraction of a virtual machine.
 type VM struct {
-	id string
-
 	hypervisor hypervisor
 	agent      agent
+	store      persistapi.PersistDriver
+
+	id string
 
 	cpu    uint32
 	memory uint32
 
 	cpuDelta uint32
-
-	store persistapi.PersistDriver
 }
 
 // VMConfig is a collection of all info that a new blackbox VM needs.
 type VMConfig struct {
 	HypervisorType   HypervisorType
+	AgentConfig      KataAgentConfig
 	HypervisorConfig HypervisorConfig
-
-	AgentConfig KataAgentConfig
 }
 
 // Valid check VMConfig validity.

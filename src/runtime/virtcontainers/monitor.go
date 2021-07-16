@@ -18,15 +18,18 @@ const (
 	watcherChannelSize   = 128
 )
 
+// nolint: govet
 type monitor struct {
+	watchers []chan error
+	sandbox  *Sandbox
+
+	wg sync.WaitGroup
 	sync.Mutex
 
-	sandbox       *Sandbox
-	checkInterval time.Duration
-	watchers      []chan error
-	wg            sync.WaitGroup
-	running       bool
 	stopCh        chan bool
+	checkInterval time.Duration
+
+	running bool
 }
 
 func newMonitor(s *Sandbox) *monitor {

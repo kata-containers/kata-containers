@@ -76,16 +76,17 @@ var (
 
 // SandboxStatus describes a sandbox status.
 type SandboxStatus struct {
-	ID               string
-	State            types.SandboxState
-	Hypervisor       HypervisorType
-	HypervisorConfig HypervisorConfig
 	ContainersStatus []ContainerStatus
 
 	// Annotations allow clients to store arbitrary values,
 	// for example to add additional status values required
 	// to support particular specifications.
 	Annotations map[string]string
+
+	ID               string
+	Hypervisor       HypervisorType
+	State            types.SandboxState
+	HypervisorConfig HypervisorConfig
 }
 
 // SandboxStats describes a sandbox's stats
@@ -96,17 +97,6 @@ type SandboxStats struct {
 
 // SandboxConfig is a Sandbox configuration.
 type SandboxConfig struct {
-	ID string
-
-	Hostname string
-
-	HypervisorType   HypervisorType
-	HypervisorConfig HypervisorConfig
-
-	AgentConfig KataAgentConfig
-
-	NetworkConfig NetworkConfig
-
 	// Volumes is a list of shared volumes between the host and the Sandbox.
 	Volumes []types.Volume
 
@@ -116,9 +106,31 @@ type SandboxConfig struct {
 	//TODO: this should be a map to avoid duplicated containers
 	Containers []ContainerConfig
 
+	// SandboxBindMounts - list of paths to mount into guest
+	SandboxBindMounts []string
+
+	// Experimental features enabled
+	Experimental []exp.Feature
+
+	// Cgroups specifies specific cgroup settings for the various subsystems that the container is
+	// placed into to limit the resources the container has available
+	Cgroups *configs.Cgroup
+
 	// Annotations keys must be unique strings and must be name-spaced
 	// with e.g. reverse domain notation (org.clearlinux.key).
 	Annotations map[string]string
+
+	ID string
+
+	Hostname string
+
+	HypervisorType HypervisorType
+
+	AgentConfig KataAgentConfig
+
+	NetworkConfig NetworkConfig
+
+	HypervisorConfig HypervisorConfig
 
 	ShmSize uint64
 
@@ -132,16 +144,6 @@ type SandboxConfig struct {
 	SandboxCgroupOnly bool
 
 	DisableGuestSeccomp bool
-
-	// SandboxBindMounts - list of paths to mount into guest
-	SandboxBindMounts []string
-
-	// Experimental features enabled
-	Experimental []exp.Feature
-
-	// Cgroups specifies specific cgroup settings for the various subsystems that the container is
-	// placed into to limit the resources the container has available
-	Cgroups *configs.Cgroup
 }
 
 // valid checks that the sandbox configuration is valid.
@@ -166,47 +168,42 @@ func (sandboxConfig *SandboxConfig) valid() bool {
 // Sandbox is composed of a set of containers and a runtime environment.
 // A Sandbox can be created, deleted, started, paused, stopped, listed, entered, and restored.
 type Sandbox struct {
-	id string
-
-	sync.Mutex
+	ctx        context.Context
+	devManager api.DeviceManager
 	factory    Factory
 	hypervisor hypervisor
 	agent      agent
 	store      persistapi.PersistDriver
 
-	network Network
-	monitor *monitor
+	swapDevices []*config.BlockDrive
+	volumes     []types.Volume
 
-	config *SandboxConfig
-
-	devManager api.DeviceManager
-
-	volumes []types.Volume
+	monitor         *monitor
+	config          *SandboxConfig
+	annotationsLock *sync.RWMutex
+	wg              *sync.WaitGroup
+	cgroupMgr       *vccgroups.Manager
+	cw              *consoleWatcher
 
 	containers map[string]*Container
+
+	id string
+
+	network Network
 
 	state types.SandboxState
 
 	networkNS NetworkNamespace
 
-	annotationsLock *sync.RWMutex
+	sync.Mutex
 
-	wg *sync.WaitGroup
+	swapSizeBytes int64
+	shmSize       uint64
+	swapDeviceNum uint
 
-	shmSize           uint64
 	sharePidNs        bool
 	seccompSupported  bool
 	disableVMShutdown bool
-
-	cgroupMgr *vccgroups.Manager
-
-	ctx context.Context
-
-	cw *consoleWatcher
-
-	swapDeviceNum uint
-	swapSizeBytes int64
-	swapDevices   []*config.BlockDrive
 }
 
 // ID returns the sandbox identifier string.
@@ -921,10 +918,10 @@ const (
 
 // console watcher is designed to monitor guest console output.
 type consoleWatcher struct {
-	proto      string
-	consoleURL string
 	conn       net.Conn
 	ptyConsole *os.File
+	proto      string
+	consoleURL string
 }
 
 func newConsoleWatcher(ctx context.Context, s *Sandbox) (*consoleWatcher, error) {

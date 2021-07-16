@@ -18,10 +18,10 @@ var ipvlanTrace = getNetworkTrace(IPVlanEndpointType)
 
 // IPVlanEndpoint represents a ipvlan endpoint that is bridged to the VM
 type IPVlanEndpoint struct {
-	NetPair            NetworkInterfacePair
-	EndpointProperties NetworkInfo
 	EndpointType       EndpointType
 	PCIPath            vcTypes.PciPath
+	EndpointProperties NetworkInfo
+	NetPair            NetworkInterfacePair
 	RxRateLimiter      bool
 	TxRateLimiter      bool
 }

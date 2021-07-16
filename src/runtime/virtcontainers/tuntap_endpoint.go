@@ -22,11 +22,11 @@ var tuntapTrace = getNetworkTrace(TuntapEndpointType)
 
 // TuntapEndpoint represents just a tap endpoint
 type TuntapEndpoint struct {
-	NetPair            NetworkInterfacePair
-	TuntapInterface    TuntapInterface
-	EndpointProperties NetworkInfo
 	EndpointType       EndpointType
 	PCIPath            vcTypes.PciPath
+	TuntapInterface    TuntapInterface
+	EndpointProperties NetworkInfo
+	NetPair            NetworkInterfacePair
 	RxRateLimiter      bool
 	TxRateLimiter      bool
 }
