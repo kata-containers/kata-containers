@@ -23,6 +23,9 @@ DOCKER_RUNTIME=${DOCKER_RUNTIME:-runc}
 # this GOPATH is for installing yq from install_yq.sh
 export GOPATH=${GOPATH:-${HOME}/go}
 LIBC=${LIBC:-musl}
+# The kata agent enables seccomp feature.
+# However, it is not enforced by default: you need to enable that in the main configuration file.
+SECCOMP=${SECCOMP:-"yes"}
 
 lib_file="${script_dir}/../scripts/lib.sh"
 source "$lib_file"
@@ -127,6 +130,9 @@ KERNEL_MODULES_DIR  Path to a directory containing kernel modules to include in
 
 ROOTFS_DIR          Path to the directory that is populated with the rootfs.
                     Default value: <${script_name} path>/rootfs-<DISTRO-name>
+
+SECCOMP             When set to "no", the kata-agent is built without seccomp capability.
+                    Default value: "yes"
 
 USE_DOCKER          If set, build the rootfs inside a container (requires
                     Docker).
@@ -563,8 +569,16 @@ EOT
 		[ "$ARCH" == "aarch64" ] && OLD_PATH=$PATH && export PATH=$PATH:/usr/local/musl/bin
 
 		agent_dir="${script_dir}/../../../src/agent/"
-		# For now, rust-agent doesn't support seccomp yet.
-		SECCOMP="no"
+
+		if [ "${SECCOMP}" == "yes" ]; then
+			info "Set up libseccomp"
+			libseccomp_install_dir=$(mktemp -d -t libseccomp.XXXXXXXXXX)
+			gperf_install_dir=$(mktemp -d -t gperf.XXXXXXXXXX)
+			bash ${script_dir}/../../../ci/install_libseccomp.sh "${libseccomp_install_dir}" "${gperf_install_dir}"
+			echo "Set environment variables for the libseccomp crate to link the libseccomp library statically"
+			export LIBSECCOMP_LINK_TYPE=static
+			export LIBSECCOMP_LIB_PATH="${libseccomp_install_dir}/lib"
+		fi
 
 		info "Build agent"
 		pushd "${agent_dir}"
@@ -572,9 +586,12 @@ EOT
 			git checkout "${AGENT_VERSION}" && OK "git checkout successful" || die "checkout agent ${AGENT_VERSION} failed!"
 		fi
 		make clean
-		make LIBC=${LIBC} INIT=${AGENT_INIT}
-		make install DESTDIR="${ROOTFS_DIR}" LIBC=${LIBC} INIT=${AGENT_INIT} SECCOMP=${SECCOMP}
+		make LIBC=${LIBC} INIT=${AGENT_INIT} SECCOMP=${SECCOMP}
+		make install DESTDIR="${ROOTFS_DIR}" LIBC=${LIBC} INIT=${AGENT_INIT}
 		[ "$ARCH" == "aarch64" ] && export PATH=$OLD_PATH && rm -rf /usr/local/musl
+		if [ "${SECCOMP}" == "yes" ]; then
+			rm -rf "${libseccomp_install_dir}" "${gperf_install_dir}"
+		fi
 		popd
 	else
 		mkdir -p ${AGENT_DIR}
