@@ -67,6 +67,14 @@ jobs:
         PATH=$PATH:"$HOME/.cargo/bin"
         rustup target add x86_64-unknown-linux-musl
         rustup component add rustfmt clippy
+    - name: Setup seccomp
+      run: |
+        libseccomp_install_dir=$(mktemp -d -t libseccomp.XXXXXXXXXX)
+        gperf_install_dir=$(mktemp -d -t gperf.XXXXXXXXXX)
+        cd ${GOPATH}/src/github.com/${{ github.repository }} && ./ci/install_libseccomp.sh "${libseccomp_install_dir}" "${gperf_install_dir}"
+        echo "Set environment variables for the libseccomp crate to link the libseccomp library statically"
+        echo "LIBSECCOMP_LINK_TYPE=static" >> $GITHUB_ENV
+        echo "LIBSECCOMP_LIB_PATH=${libseccomp_install_dir}/lib" >> $GITHUB_ENV
     # Check whether the vendored code is up-to-date & working as the first thing
     - name: Check vendored code
       if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
