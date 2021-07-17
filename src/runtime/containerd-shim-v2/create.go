@@ -21,7 +21,7 @@ import (
 	"github.com/pkg/errors"
 
 	// only register the proto type
-	crioption "github.com/containerd/containerd/pkg/runtimeoptions/v1"
+	crioption "github.com/containerd/cri-containerd/pkg/api/runtimeoptions/v1"
 	_ "github.com/containerd/containerd/runtime/linux/runctypes"
 	_ "github.com/containerd/containerd/runtime/v2/runc/options"
 
