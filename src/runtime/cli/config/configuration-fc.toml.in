@@ -204,10 +204,10 @@ valid_entropy_sources = @DEFVALIDENTROPYSOURCES@
 # the OCI spec passed to the runtime.
 #
 # You can create a rootfs with hooks by customizing the osbuilder scripts:
-# https://github.com/kata-containers/osbuilder
+# https://github.com/kata-containers/kata-containers/tree/main/tools/osbuilder
 #
 # Hooks must be stored in a subdirectory of guest_hook_path according to their
-# hook type, i.e. "guest_hook_path/{prestart,postart,poststop}".
+# hook type, i.e. "guest_hook_path/{prestart,poststart,poststop}".
 # The agent will scan these directories for executable files and add them, in
 # lexicographical order, to the lifecycle of the guest container.
 # Hooks are executed in the runtime namespace of the guest. See the official documentation:
