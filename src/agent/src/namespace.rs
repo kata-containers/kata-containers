@@ -121,8 +121,12 @@ impl Namespace {
                 let mut flags = MsFlags::empty();
 
                 if let Some(x) = FLAGS.get("rbind") {
-                    let (_, f) = *x;
-                    flags |= f;
+                    let (clear, f) = *x;
+                    if clear {
+                        flags &= !f;
+                    } else {
+                        flags |= f;
+                    }
                 };
 
                 let bare_mount = BareMount::new(source, destination, "none", flags, "", &logger);

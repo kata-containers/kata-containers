@@ -549,8 +549,12 @@ fn parse_mount_flags_and_options(options_vec: Vec<&str>) -> (MsFlags, String) {
         if !opt.is_empty() {
             match FLAGS.get(opt) {
                 Some(x) => {
-                    let (_, f) = *x;
-                    flags |= f;
+                    let (clear, f) = *x;
+                    if clear {
+                        flags &= !f;
+                    } else {
+                        flags |= f;
+                    }
                 }
                 None => {
                     if !options.is_empty() {
