@@ -29,4 +29,8 @@ $(eval $(call create_all_rules,$(COMPONENTS),$(TOOLS),$(STANDARD_TARGETS)))
 generate-protocols:
 	make -C src/agent generate-protocols
 
-.PHONY: all default
+# Some static checks rely on generated source files of components.
+static-checks: build
+	bash ci/static-checks.sh
+
+.PHONY: all default static-checks
