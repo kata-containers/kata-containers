@@ -7,6 +7,7 @@ package katamonitor
 
 import (
 	"fmt"
+	cdshim "github.com/containerd/containerd/runtime/v2/shim"
 	"io"
 	"net"
 	"net/http"
@@ -37,7 +38,7 @@ func (km *KataMonitor) composeSocketAddress(r *http.Request) (string, error) {
 func (km *KataMonitor) proxyRequest(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 
-	socket, err := km.composeSocketAddress(r)
+	socketAddress, err := km.composeSocketAddress(r)
 	if err != nil {
 		monitorLog.WithError(err).Error("failed to get shim monitor address")
 		serveError(w, http.StatusBadRequest, "sandbox may be stopped or deleted")
@@ -47,7 +48,7 @@ func (km *KataMonitor) proxyRequest(w http.ResponseWriter, r *http.Request) {
 	transport := &http.Transport{
 		DisableKeepAlives: true,
 		Dial: func(proto, addr string) (conn net.Conn, err error) {
-			return net.Dial("unix", "\x00"+socket)
+			return cdshim.AnonDialer(socketAddress, defaultTimeout)
 		},
 	}
 
