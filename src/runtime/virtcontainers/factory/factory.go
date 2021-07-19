@@ -32,13 +32,15 @@ var factoryLogger = logrus.FieldLogger(logrus.New())
 
 // Config is a collection of VM factory configurations.
 type Config struct {
-	Template        bool
-	VMCache         bool
-	Cache           uint
 	TemplatePath    string
 	VMCacheEndpoint string
 
 	VMConfig vc.VMConfig
+
+	Cache uint
+
+	Template bool
+	VMCache  bool
 }
 
 type factory struct {
