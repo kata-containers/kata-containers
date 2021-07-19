@@ -346,6 +346,9 @@ type HypervisorConfig struct {
 	// VhostUserStorePathList is the list of valid values for vhost-user paths
 	VhostUserStorePathList []string
 
+	// SandboxOn is the qemu function which enables the seccomp feature
+	SandboxOn    string
+
 	// customAssets is a map of assets.
 	// Each value in that map takes precedence over the configured assets.
 	// For example, if there is a value for the "kernel" key in this map,

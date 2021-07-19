@@ -591,6 +591,7 @@ func (q *qemu) createSandbox(ctx context.Context, id string, networkNS NetworkNa
 		Memory:      memory,
 		Devices:     devices,
 		CPUModel:    cpuModel,
+		SandboxOn:   q.config.SandboxOn,
 		Kernel:      kernel,
 		RTC:         rtc,
 		QMPSockets:  qmpSockets,

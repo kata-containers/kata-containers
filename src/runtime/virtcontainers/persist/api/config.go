@@ -195,6 +195,9 @@ type HypervisorConfig struct {
 	// VhostUserStorePathList is the list of valid values for vhost-user paths
 	VhostUserStorePathList []string
 
+        // SandboxOn is the qemu function which enables the seccomp feature
+	SandboxOn    string
+
 	// GuestHookPath is the path within the VM that will be used for 'drop-in' hooks
 	GuestHookPath string
 

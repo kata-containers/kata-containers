@@ -164,6 +164,9 @@ DEFDISABLEGUESTSECCOMP := true
 #Default experimental features enabled
 DEFAULTEXPFEATURES := []
 
+#Default sandbox param
+DEFSANDBOXPARAM := on,obsolete=deny,elevateprivileges=deny,spawn=deny,resourcecontrol=deny
+
 #Default entropy source
 DEFENTROPYSOURCE := /dev/urandom
 DEFVALIDENTROPYSOURCES := [\"/dev/urandom\",\"/dev/random\",\"\"]
@@ -435,6 +438,7 @@ USER_VARS += DEFNETWORKMODEL_CLH
 USER_VARS += DEFNETWORKMODEL_FC
 USER_VARS += DEFNETWORKMODEL_QEMU
 USER_VARS += DEFDISABLEGUESTSECCOMP
+USER_VARS += DEFSANDBOXPARAM
 USER_VARS += DEFAULTEXPFEATURES
 USER_VARS += DEFDISABLEBLOCK
 USER_VARS += DEFBLOCKSTORAGEDRIVER_ACRN
