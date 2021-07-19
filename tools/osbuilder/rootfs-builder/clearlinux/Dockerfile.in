@@ -37,7 +37,6 @@ RUN dnf -y update && dnf install -y \
     vim \
     which
 
-# This will install the proper golang to build Kata components
+# This will install the proper packages to build Kata components
 @INSTALL_MUSL@
-@INSTALL_GO@
 @INSTALL_RUST@
