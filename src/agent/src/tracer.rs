@@ -66,7 +66,7 @@ pub fn setup_tracing(name: &'static str, logger: &Logger, _agent_cfg: &AgentConf
     let config = Config::default();
 
     let builder = opentelemetry::sdk::trace::TracerProvider::builder()
-        .with_simple_exporter(exporter)
+        .with_batch_exporter(exporter, opentelemetry::runtime::TokioCurrentThread)
         .with_config(config);
 
     let provider = builder.build();
