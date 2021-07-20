@@ -166,8 +166,8 @@ $ kubectl apply -f https://raw.githubusercontent.com/kubernetes/node-api/master/
 Now register the `kata qemu` runtime with that class. This should result in no errors:
 
 ```sh
-$ cd kata-containers/tools/packaging/kata-deploy/k8s-1.14
-$ kubectl apply -f kata-qemu-runtimeClass.yaml
+$ cd kata-containers/tools/packaging/kata-deploy/runtimeclasses
+$ kubectl apply -f kata-runtimeClasses.yaml
 ```
 
 The Kata Containers installation process should be complete and enabled in the Minikube cluster.
