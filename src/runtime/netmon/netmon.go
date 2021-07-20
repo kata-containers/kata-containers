@@ -62,16 +62,11 @@ var (
 type netmonParams struct {
 	sandboxID   string
 	runtimePath string
-	debug       bool
 	logLevel    string
+	debug       bool
 }
 
 type netmon struct {
-	netmonParams
-
-	storagePath string
-	sharedFile  string
-
 	netIfaces map[int]pbTypes.Interface
 
 	linkUpdateCh chan netlink.LinkUpdate
@@ -81,6 +76,11 @@ type netmon struct {
 	rtDoneCh   chan struct{}
 
 	netHandler *netlink.Handle
+
+	storagePath string
+	sharedFile  string
+
+	netmonParams
 }
 
 var netmonLog = logrus.New()

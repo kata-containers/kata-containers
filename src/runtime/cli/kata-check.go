@@ -34,11 +34,11 @@ import (
 )
 
 type kernelModule struct {
-	// description
-	desc string
-
 	// maps parameter names to values
 	parameters map[string]string
+
+	// description
+	desc string
 
 	// if it is definitely required
 	required bool
@@ -54,10 +54,10 @@ type kvmExtension struct {
 }
 
 type vmContainerCapableDetails struct {
-	cpuInfoFile           string
 	requiredCPUFlags      map[string]string
 	requiredCPUAttribs    map[string]string
 	requiredKernelModules map[string]kernelModule
+	cpuInfoFile           string
 }
 
 const (

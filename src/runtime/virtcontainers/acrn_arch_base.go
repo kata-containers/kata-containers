@@ -190,14 +190,14 @@ type ConsoleDevice struct {
 	// Name of the socket
 	Name string
 
+	//Path to virtio-console backend (can be omitted for pty, tty, stdio)
+	Path string
+
 	//Backend device used for virtio-console
 	Backend ConsoleDeviceBackend
 
 	// PortType marks the port as serial or console port (@)
 	PortType BEPortType
-
-	//Path to virtio-console backend (can be omitted for pty, tty, stdio)
-	Path string
 }
 
 // NetDeviceType is a acrn networking device type.
@@ -235,26 +235,24 @@ type BlockDevice struct {
 
 // BridgeDevice represents a acrn bridge device like pci-bridge, pxb, etc.
 type BridgeDevice struct {
-
-	// Function is PCI function. Func can be from 0 to 7
-	Function int
-
 	// Emul is a string describing the type of PCI device e.g. virtio-net
 	Emul string
 
 	// Config is an optional string, depending on the device, that can be
 	// used for configuration
 	Config string
+
+	// Function is PCI function. Func can be from 0 to 7
+	Function int
 }
 
 // LPCDevice represents a acrn LPC device
 type LPCDevice struct {
+	// Emul is a string describing the type of PCI device e.g. virtio-net
+	Emul string
 
 	// Function is PCI function. Func can be from 0 to 7
 	Function int
-
-	// Emul is a string describing the type of PCI device e.g. virtio-net
-	Emul string
 }
 
 // Memory is the guest memory configuration structure.
@@ -280,6 +278,8 @@ type Kernel struct {
 // Config is the acrn configuration structure.
 // It allows for passing custom settings and parameters to the acrn-dm API.
 type Config struct {
+	// Devices is a list of devices for acrn to create and drive.
+	Devices []Device
 
 	// Path is the acrn binary path.
 	Path string
@@ -292,9 +292,6 @@ type Config struct {
 
 	// UUID is the acrn process UUID.
 	UUID string
-
-	// Devices is a list of devices for acrn to create and drive.
-	Devices []Device
 
 	// Kernel is the guest kernel configuration.
 	Kernel Kernel

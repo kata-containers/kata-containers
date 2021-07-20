@@ -29,10 +29,10 @@ func SetLogger(logger *logrus.Entry) {
 
 // KataMonitor is monitor agent
 type KataMonitor struct {
+	sandboxCache         *sandboxCache
 	containerdAddr       string
 	containerdConfigFile string
 	containerdStatePath  string
-	sandboxCache         *sandboxCache
 }
 
 // NewKataMonitor create and return a new KataMonitor instance

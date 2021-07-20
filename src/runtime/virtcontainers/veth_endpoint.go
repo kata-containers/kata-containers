@@ -18,10 +18,10 @@ var vethTrace = getNetworkTrace(VethEndpointType)
 
 // VethEndpoint gathers a network pair and its properties.
 type VethEndpoint struct {
-	NetPair            NetworkInterfacePair
-	EndpointProperties NetworkInfo
 	EndpointType       EndpointType
 	PCIPath            vcTypes.PciPath
+	EndpointProperties NetworkInfo
+	NetPair            NetworkInterfacePair
 	RxRateLimiter      bool
 	TxRateLimiter      bool
 }

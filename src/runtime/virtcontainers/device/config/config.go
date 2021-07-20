@@ -94,6 +94,10 @@ var getSysDevPath = getSysDevPathImpl
 
 // DeviceInfo is an embedded type that contains device data common to all types of devices.
 type DeviceInfo struct {
+	// DriverOptions is specific options for each device driver
+	// for example, for BlockDevice, we can set DriverOptions["blockDriver"]="virtio-blk"
+	DriverOptions map[string]string
+
 	// Hostpath is device path on host
 	HostPath string
 
@@ -107,9 +111,21 @@ type DeviceInfo struct {
 	// More info in mknod(1).
 	DevType string
 
+	// ID for the device that is passed to the hypervisor.
+	ID string
+
 	// Major, minor numbers for device.
 	Major int64
 	Minor int64
+
+	// FileMode permission bits for the device.
+	FileMode os.FileMode
+
+	// id of the device owner.
+	UID uint32
+
+	// id of the device group.
+	GID uint32
 
 	// Pmem enabled persistent memory. Use HostPath as backing file
 	// for a nvdimm device in the guest.
@@ -121,22 +137,6 @@ type DeviceInfo struct {
 	// ColdPlug specifies whether the device must be cold plugged (true)
 	// or hot plugged (false).
 	ColdPlug bool
-
-	// FileMode permission bits for the device.
-	FileMode os.FileMode
-
-	// id of the device owner.
-	UID uint32
-
-	// id of the device group.
-	GID uint32
-
-	// ID for the device that is passed to the hypervisor.
-	ID string
-
-	// DriverOptions is specific options for each device driver
-	// for example, for BlockDevice, we can set DriverOptions["blockDriver"]="virtio-blk"
-	DriverOptions map[string]string
 }
 
 // BlockDrive represents a block storage drive which may be used in case the storage
@@ -151,14 +151,8 @@ type BlockDrive struct {
 	// ID is used to identify this drive in the hypervisor options.
 	ID string
 
-	// Index assigned to the drive. In case of virtio-scsi, this is used as SCSI LUN index
-	Index int
-
 	// MmioAddr is used to identify the slot at which the drive is attached (order?).
 	MmioAddr string
-
-	// PCIPath is the PCI path used to identify the slot at which the drive is attached.
-	PCIPath vcTypes.PciPath
 
 	// SCSI Address of the block device, in case the device is attached using SCSI driver
 	// SCSI address is in the format SCSI-Id:LUN
@@ -172,6 +166,12 @@ type BlockDrive struct {
 
 	// DevNo identifies the css bus id for virtio-blk-ccw
 	DevNo string
+
+	// PCIPath is the PCI path used to identify the slot at which the drive is attached.
+	PCIPath vcTypes.PciPath
+
+	// Index assigned to the drive. In case of virtio-scsi, this is used as SCSI LUN index
+	Index int
 
 	// ShareRW enables multiple qemu instances to share the File
 	ShareRW bool
@@ -203,12 +203,6 @@ const (
 
 // VFIODev represents a VFIO drive used for hotplugging
 type VFIODev struct {
-	// IsPCIe specifies device is PCIe or PCI
-	IsPCIe bool
-
-	// Type of VFIO device
-	Type VFIODeviceType
-
 	// ID is used to identify this drive in the hypervisor options.
 	ID string
 
@@ -229,6 +223,12 @@ type VFIODev struct {
 
 	// Bus of VFIO PCIe device
 	Bus string
+
+	// Type of VFIO device
+	Type VFIODeviceType
+
+	// IsPCIe specifies device is PCIe or PCI
+	IsPCIe bool
 }
 
 // RNGDev represents a random number generator device
@@ -243,15 +243,15 @@ type RNGDev struct {
 type VhostUserDeviceAttrs struct {
 	DevID      string
 	SocketPath string
-	Type       DeviceType
-
 	// MacAddress is only meaningful for vhost user net device
 	MacAddress string
 
 	// These are only meaningful for vhost user fs devices
-	Tag       string
-	CacheSize uint32
-	Cache     string
+	Tag string
+
+	Cache string
+
+	Type DeviceType
 
 	// PCIPath is the PCI path used to identify the slot at which
 	// the drive is attached.  It is only meaningful for vhost
@@ -260,6 +260,8 @@ type VhostUserDeviceAttrs struct {
 
 	// Block index of the device if assigned
 	Index int
+
+	CacheSize uint32
 }
 
 // GetHostPathFunc is function pointer used to mock GetHostPath in tests.

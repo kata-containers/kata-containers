@@ -79,43 +79,42 @@ const KernelModulesSeparator = ";"
 
 // FactoryConfig is a structure to set the VM factory configuration.
 type FactoryConfig struct {
-	// Template enables VM templating support in VM factory.
-	Template bool
-
 	// TemplatePath specifies the path of template.
 	TemplatePath string
+
+	// VMCacheEndpoint specifies the endpoint of transport VM from the VM cache server to runtime.
+	VMCacheEndpoint string
 
 	// VMCacheNumber specifies the the number of caches of VMCache.
 	VMCacheNumber uint
 
-	// VMCacheEndpoint specifies the endpoint of transport VM from the VM cache server to runtime.
-	VMCacheEndpoint string
+	// Template enables VM templating support in VM factory.
+	Template bool
 }
 
 // RuntimeConfig aggregates all runtime specific settings
+// nolint: govet
 type RuntimeConfig struct {
-	HypervisorType   vc.HypervisorType
-	HypervisorConfig vc.HypervisorConfig
-
-	NetmonConfig vc.NetmonConfig
-
-	AgentConfig vc.KataAgentConfig
-
-	//Determines how the VM should be connected to the
-	//the container network interface
-	InterNetworkModel vc.NetInterworkingModel
-	FactoryConfig     FactoryConfig
-
-	Console        string
-	JaegerEndpoint string
-	JaegerUser     string
-	JaegerPassword string
-
 	//Paths to be bindmounted RO into the guest.
 	SandboxBindMounts []string
 
 	//Experimental features enabled
 	Experimental []exp.Feature
+
+	Console        string
+	JaegerEndpoint string
+	JaegerUser     string
+	JaegerPassword string
+	HypervisorType vc.HypervisorType
+
+	FactoryConfig    FactoryConfig
+	HypervisorConfig vc.HypervisorConfig
+	NetmonConfig     vc.NetmonConfig
+	AgentConfig      vc.KataAgentConfig
+
+	//Determines how the VM should be connected to the
+	//the container network interface
+	InterNetworkModel vc.NetInterworkingModel
 
 	Debug bool
 	Trace bool

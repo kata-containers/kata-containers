@@ -122,8 +122,8 @@ func (s vmmState) String() string {
 // FirecrackerInfo contains information related to the hypervisor that we
 // want to store on disk
 type FirecrackerInfo struct {
-	PID     int
 	Version string
+	PID     int
 }
 
 type firecrackerState struct {
@@ -140,6 +140,15 @@ func (s *firecrackerState) set(state vmmState) {
 
 // firecracker is an Hypervisor interface implementation for the firecracker VMM.
 type firecracker struct {
+	console console.Console
+	ctx     context.Context
+
+	pendingDevices []firecrackerDevice // Devices to be added before the FC VM ready
+
+	firecrackerd *exec.Cmd           //Tracks the firecracker process itself
+	fcConfig     *types.FcConfig     // Parameters configured before VM starts
+	connection   *client.Firecracker //Tracks the current active connection
+
 	id            string //Unique ID per pod. Normally maps to the sandbox id
 	vmPath        string //All jailed VM assets need to be under this
 	chrootBaseDir string //chroot base for the jailer
@@ -148,23 +157,13 @@ type firecracker struct {
 	netNSPath     string
 	uid           string //UID and GID to be used for the VMM
 	gid           string
+	fcConfigPath  string
 
-	info FirecrackerInfo
-
-	firecrackerd *exec.Cmd           //Tracks the firecracker process itself
-	connection   *client.Firecracker //Tracks the current active connection
-
-	ctx            context.Context
-	config         HypervisorConfig
-	pendingDevices []firecrackerDevice // Devices to be added before the FC VM ready
-
+	info   FirecrackerInfo
+	config HypervisorConfig
 	state  firecrackerState
+
 	jailed bool //Set to true if jailer is enabled
-
-	fcConfigPath string
-	fcConfig     *types.FcConfig // Parameters configured before VM starts
-
-	console console.Console
 }
 
 type firecrackerDevice struct {

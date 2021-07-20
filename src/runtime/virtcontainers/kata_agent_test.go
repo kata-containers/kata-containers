@@ -229,6 +229,7 @@ func TestHandleLocalStorage(t *testing.T) {
 func TestHandleDeviceBlockVolume(t *testing.T) {
 	k := kataAgent{}
 
+	// nolint: govet
 	tests := []struct {
 		BlockDeviceDriver string
 		inputMount        Mount
@@ -991,6 +992,7 @@ func TestKataCleanupSandbox(t *testing.T) {
 func TestKataAgentKernelParams(t *testing.T) {
 	assert := assert.New(t)
 
+	// nolint: govet
 	type testData struct {
 		debug             bool
 		trace             bool

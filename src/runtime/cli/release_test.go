@@ -55,16 +55,16 @@ func TestGetReleaseURL(t *testing.T) {
 
 	type testData struct {
 		currentVersion string
-		expectError    bool
 		expectedURL    string
+		expectError    bool
 	}
 
 	data := []testData{
-		{"0.0.0", true, ""},
-		{"1.0.0", false, kata1xURL},
-		{"1.9999.9999", false, kata1xURL},
-		{"2.0.0-alpha3", false, kata2xURL},
-		{"2.9999.9999", false, kata2xURL},
+		{"0.0.0", "", true},
+		{"1.0.0", kata1xURL, false},
+		{"1.9999.9999", kata1xURL, false},
+		{"2.0.0-alpha3", kata2xURL, false},
+		{"2.9999.9999", kata2xURL, false},
 	}
 
 	for i, d := range data {
@@ -99,17 +99,17 @@ func TestGetReleaseURLEnvVar(t *testing.T) {
 
 	type testData struct {
 		envVarValue string
-		expectError bool
 		expectedURL string
+		expectError bool
 	}
 
 	data := []testData{
-		{"", false, expectedReleasesURL},
-		{"http://google.com", true, ""},
-		{"https://katacontainers.io", true, ""},
-		{"https://github.com/kata-containers/runtime/releases/latest", true, ""},
-		{"https://github.com/kata-containers/kata-containers/releases/latest", true, ""},
-		{expectedReleasesURL, false, expectedReleasesURL},
+		{"", expectedReleasesURL, false},
+		{"http://google.com", "", true},
+		{"https://katacontainers.io", "", true},
+		{"https://github.com/kata-containers/runtime/releases/latest", "", true},
+		{"https://github.com/kata-containers/kata-containers/releases/latest", "", true},
+		{expectedReleasesURL, expectedReleasesURL, false},
 	}
 
 	assert.Equal(os.Getenv("KATA_RELEASE_URL"), "")
@@ -138,9 +138,9 @@ func TestMakeRelease(t *testing.T) {
 
 	type testData struct {
 		release         map[string]interface{}
-		expectError     bool
 		expectedVersion string
 		expectedDetails releaseDetails
+		expectError     bool
 	}
 
 	invalidRel1 := map[string]interface{}{"foo": 1}
@@ -228,17 +228,17 @@ func TestMakeRelease(t *testing.T) {
 	}
 
 	data := []testData{
-		{invalidRel1, true, "", releaseDetails{}},
-		{invalidRel2, true, "", releaseDetails{}},
-		{invalidRel3, true, "", releaseDetails{}},
-		{invalidRelMissingVersion, true, "", releaseDetails{}},
-		{invalidRelInvalidVersion, true, "", releaseDetails{}},
-		{invalidRelMissingAssets, true, "", releaseDetails{}},
-		{invalidRelAssetsMissingURL, true, "", releaseDetails{}},
-		{invalidRelAssetsMissingFile, true, "", releaseDetails{}},
-		{invalidRelAssetsMissingDate, true, "", releaseDetails{}},
+		{invalidRel1, "", releaseDetails{}, true},
+		{invalidRel2, "", releaseDetails{}, true},
+		{invalidRel3, "", releaseDetails{}, true},
+		{invalidRelMissingVersion, "", releaseDetails{}, true},
+		{invalidRelInvalidVersion, "", releaseDetails{}, true},
+		{invalidRelMissingAssets, "", releaseDetails{}, true},
+		{invalidRelAssetsMissingURL, "", releaseDetails{}, true},
+		{invalidRelAssetsMissingFile, "", releaseDetails{}, true},
+		{invalidRelAssetsMissingDate, "", releaseDetails{}, true},
 
-		{validRel, false, testRelVersion, validReleaseDetails},
+		{validRel, testRelVersion, validReleaseDetails, false},
 	}
 
 	for i, d := range data {
@@ -453,47 +453,47 @@ func TestGetNewReleaseType(t *testing.T) {
 	type testData struct {
 		currentVer  string
 		latestVer   string
-		expectError bool
 		result      string
+		expectError bool
 	}
 
 	data := []testData{
 		// Check build metadata (ignored for version comparisons)
-		{"2.0.0+build", "2.0.0", true, ""},
-		{"2.0.0+build-1", "2.0.0+build-2", true, ""},
-		{"1.12.0+build", "1.12.0", true, ""},
+		{"2.0.0+build", "2.0.0", "", true},
+		{"2.0.0+build-1", "2.0.0+build-2", "", true},
+		{"1.12.0+build", "1.12.0", "", true},
 
-		{"2.0.0-rc3+foo", "2.0.0", false, "major"},
-		{"2.0.0-rc3+foo", "2.0.0-rc4", false, "pre-release"},
-		{"1.12.0+foo", "1.13.0", false, "minor"},
+		{"2.0.0-rc3+foo", "2.0.0", "major", false},
+		{"2.0.0-rc3+foo", "2.0.0-rc4", "pre-release", false},
+		{"1.12.0+foo", "1.13.0", "minor", false},
 
-		{"1.12.0+build", "2.0.0", false, "major"},
-		{"1.12.0+build", "1.13.0", false, "minor"},
-		{"1.12.0-rc2+build", "1.12.1", false, "patch"},
-		{"1.12.0-rc2+build", "1.12.1-foo", false, "patch pre-release"},
-		{"1.12.0-rc4+wibble", "1.12.0", false, "major"},
+		{"1.12.0+build", "2.0.0", "major", false},
+		{"1.12.0+build", "1.13.0", "minor", false},
+		{"1.12.0-rc2+build", "1.12.1", "patch", false},
+		{"1.12.0-rc2+build", "1.12.1-foo", "patch pre-release", false},
+		{"1.12.0-rc4+wibble", "1.12.0", "major", false},
 
-		{"2.0.0-alpha3", "1.0.0", true, ""},
-		{"1.0.0", "1.0.0", true, ""},
-		{"2.0.0", "1.0.0", true, ""},
+		{"2.0.0-alpha3", "1.0.0", "", true},
+		{"1.0.0", "1.0.0", "", true},
+		{"2.0.0", "1.0.0", "", true},
 
-		{"1.0.0", "2.0.0", false, "major"},
-		{"2.0.0-alpha3", "2.0.0-alpha4", false, "pre-release"},
-		{"1.0.0", "2.0.0-alpha3", false, "major pre-release"},
+		{"1.0.0", "2.0.0", "major", false},
+		{"2.0.0-alpha3", "2.0.0-alpha4", "pre-release", false},
+		{"1.0.0", "2.0.0-alpha3", "major pre-release", false},
 
-		{"1.0.0", "1.1.2", false, "minor"},
-		{"1.0.0", "1.1.2-pre2", false, "minor pre-release"},
-		{"1.0.0", "1.1.2-foo", false, "minor pre-release"},
+		{"1.0.0", "1.1.2", "minor", false},
+		{"1.0.0", "1.1.2-pre2", "minor pre-release", false},
+		{"1.0.0", "1.1.2-foo", "minor pre-release", false},
 
-		{"1.0.0", "1.0.3", false, "patch"},
-		{"1.0.0-beta29", "1.0.0-beta30", false, "pre-release"},
-		{"1.0.0", "1.0.3-alpha99.1b", false, "patch pre-release"},
+		{"1.0.0", "1.0.3", "patch", false},
+		{"1.0.0-beta29", "1.0.0-beta30", "pre-release", false},
+		{"1.0.0", "1.0.3-alpha99.1b", "patch pre-release", false},
 
-		{"2.0.0-rc0", "2.0.0", false, "major"},
-		{"2.0.0-rc1", "2.0.0", false, "major"},
+		{"2.0.0-rc0", "2.0.0", "major", false},
+		{"2.0.0-rc1", "2.0.0", "major", false},
 
-		{"1.12.0-rc0", "1.12.0", false, "major"},
-		{"1.12.0-rc5", "1.12.0", false, "major"},
+		{"1.12.0-rc0", "1.12.0", "major", false},
+		{"1.12.0-rc5", "1.12.0", "major", false},
 	}
 
 	for i, d := range data {

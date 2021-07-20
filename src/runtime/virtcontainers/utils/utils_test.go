@@ -194,6 +194,7 @@ func TestGetVirtDriveNameInvalidIndex(t *testing.T) {
 
 func TestGetVirtDriveName(t *testing.T) {
 	assert := assert.New(t)
+	// nolint: govet
 	tests := []struct {
 		index         int
 		expectedDrive string
@@ -248,6 +249,7 @@ func TestGetSCSIIdLun(t *testing.T) {
 
 func TestGetSCSIAddress(t *testing.T) {
 	assert := assert.New(t)
+	// nolint: govet
 	tests := []struct {
 		index               int
 		expectedSCSIAddress string
@@ -281,6 +283,7 @@ func TestMakeNameID(t *testing.T) {
 func TestBuildSocketPath(t *testing.T) {
 	assert := assert.New(t)
 
+	// nolint: govet
 	type testData struct {
 		elems    []string
 		valid    bool

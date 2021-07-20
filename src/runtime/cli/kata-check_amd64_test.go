@@ -109,12 +109,12 @@ func TestCheckCheckKernelModulesNoNesting(t *testing.T) {
 	}
 
 	actualModuleData := []testModuleData{
-		{filepath.Join(sysModuleDir, "kvm"), true, ""},
-		{filepath.Join(sysModuleDir, "kvm_intel"), true, ""},
-		{filepath.Join(sysModuleDir, "kvm_intel/parameters/unrestricted_guest"), false, "Y"},
+		{filepath.Join(sysModuleDir, "kvm"), "", true},
+		{filepath.Join(sysModuleDir, "kvm_intel"), "", true},
+		{filepath.Join(sysModuleDir, "kvm_intel/parameters/unrestricted_guest"), "Y", false},
 
 		// XXX: force a warning
-		{filepath.Join(sysModuleDir, "kvm_intel/parameters/nested"), false, "N"},
+		{filepath.Join(sysModuleDir, "kvm_intel/parameters/nested"), "N", false},
 	}
 
 	vendor := archGenuineIntel
@@ -194,12 +194,12 @@ func TestCheckCheckKernelModulesNoUnrestrictedGuest(t *testing.T) {
 	}
 
 	actualModuleData := []testModuleData{
-		{filepath.Join(sysModuleDir, "kvm"), true, ""},
-		{filepath.Join(sysModuleDir, "kvm_intel"), true, ""},
-		{filepath.Join(sysModuleDir, "kvm_intel/parameters/nested"), false, "Y"},
+		{filepath.Join(sysModuleDir, "kvm"), "", true},
+		{filepath.Join(sysModuleDir, "kvm_intel"), "", true},
+		{filepath.Join(sysModuleDir, "kvm_intel/parameters/nested"), "Y", false},
 
 		// XXX: force a failure on non-VMM systems
-		{filepath.Join(sysModuleDir, "kvm_intel/parameters/unrestricted_guest"), false, "N"},
+		{filepath.Join(sysModuleDir, "kvm_intel/parameters/unrestricted_guest"), "N", false},
 	}
 
 	vendor := archGenuineIntel
@@ -295,10 +295,10 @@ func TestCheckHostIsVMContainerCapable(t *testing.T) {
 		}
 
 		moduleData = []testModuleData{
-			{filepath.Join(sysModuleDir, "kvm"), true, ""},
-			{filepath.Join(sysModuleDir, "kvm_intel"), true, ""},
-			{filepath.Join(sysModuleDir, "kvm_intel/parameters/nested"), false, "Y"},
-			{filepath.Join(sysModuleDir, "kvm_intel/parameters/unrestricted_guest"), false, "Y"},
+			{filepath.Join(sysModuleDir, "kvm"), "", true},
+			{filepath.Join(sysModuleDir, "kvm_intel"), "", true},
+			{filepath.Join(sysModuleDir, "kvm_intel/parameters/nested"), "Y", false},
+			{filepath.Join(sysModuleDir, "kvm_intel/parameters/unrestricted_guest"), "Y", false},
 		}
 	} else if cpuType == cpuTypeAMD {
 		cpuData = []testCPUData{
@@ -311,9 +311,9 @@ func TestCheckHostIsVMContainerCapable(t *testing.T) {
 		}
 
 		moduleData = []testModuleData{
-			{filepath.Join(sysModuleDir, "kvm"), true, ""},
-			{filepath.Join(sysModuleDir, "kvm_amd"), true, ""},
-			{filepath.Join(sysModuleDir, "kvm_amd/parameters/nested"), false, "1"},
+			{filepath.Join(sysModuleDir, "kvm"), "", true},
+			{filepath.Join(sysModuleDir, "kvm_amd"), "", true},
+			{filepath.Join(sysModuleDir, "kvm_amd/parameters/nested"), "1", false},
 		}
 	}
 
@@ -338,51 +338,51 @@ func TestArchKernelParamHandler(t *testing.T) {
 	assert := assert.New(t)
 
 	type testData struct {
-		onVMM        bool
-		expectIgnore bool
 		fields       logrus.Fields
 		msg          string
+		onVMM        bool
+		expectIgnore bool
 	}
 
 	data := []testData{
-		{true, false, logrus.Fields{}, ""},
-		{false, false, logrus.Fields{}, ""},
+		{logrus.Fields{}, "", true, false},
+		{logrus.Fields{}, "", false, false},
 
 		{
-			false,
-			false,
 			logrus.Fields{
 				// wrong type
 				"parameter": 123,
 			},
 			"foo",
+			false,
+			false,
 		},
 
 		{
-			false,
-			false,
 			logrus.Fields{
 				"parameter": "unrestricted_guest",
 			},
 			"",
+			false,
+			false,
 		},
 
 		{
-			true,
-			true,
 			logrus.Fields{
 				"parameter": "unrestricted_guest",
 			},
 			"",
+			true,
+			true,
 		},
 
 		{
-			false,
-			true,
 			logrus.Fields{
 				"parameter": "nested",
 			},
 			"",
+			false,
+			true,
 		},
 	}
 

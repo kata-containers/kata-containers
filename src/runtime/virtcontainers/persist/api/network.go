@@ -81,8 +81,6 @@ type VhostUserEndpoint struct {
 
 // NetworkEndpoint contains network interface information
 type NetworkEndpoint struct {
-	Type string
-
 	// One and only one of these below are not nil according to Type.
 	Physical       *PhysicalEndpoint       `json:",omitempty"`
 	Veth           *VethEndpoint           `json:",omitempty"`
@@ -92,12 +90,14 @@ type NetworkEndpoint struct {
 	Tap            *TapEndpoint            `json:",omitempty"`
 	IPVlan         *IPVlanEndpoint         `json:",omitempty"`
 	Tuntap         *TuntapEndpoint         `json:",omitempty"`
+
+	Type string
 }
 
 // NetworkInfo contains network information of sandbox
 type NetworkInfo struct {
 	NetNsPath    string
+	Endpoints    []NetworkEndpoint
 	NetmonPID    int
 	NetNsCreated bool
-	Endpoints    []NetworkEndpoint
 }

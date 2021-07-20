@@ -57,6 +57,7 @@ func TestEnsureDir(t *testing.T) {
 	assert.NoError(err)
 	defer os.RemoveAll(tmpdir)
 
+	// nolint: govet
 	testCases := []struct {
 		before func()
 		path   string

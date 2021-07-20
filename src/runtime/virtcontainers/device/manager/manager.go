@@ -48,12 +48,14 @@ var (
 )
 
 type deviceManager struct {
-	blockDriver           string
-	vhostUserStoreEnabled bool
-	vhostUserStorePath    string
-
 	devices map[string]api.Device
+
+	blockDriver        string
+	vhostUserStorePath string
+
 	sync.RWMutex
+
+	vhostUserStoreEnabled bool
 }
 
 func deviceLogger() *logrus.Entry {

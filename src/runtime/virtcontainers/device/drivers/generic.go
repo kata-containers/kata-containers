@@ -17,8 +17,9 @@ import (
 
 // GenericDevice refers to a device that is neither a VFIO device, block device or VhostUserDevice.
 type GenericDevice struct {
-	ID         string
 	DeviceInfo *config.DeviceInfo
+
+	ID string
 
 	RefCount    uint
 	AttachCount uint

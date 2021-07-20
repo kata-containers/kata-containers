@@ -27,12 +27,14 @@ const (
 	skipUnknownDistroName = "skipping test as cannot determine distro name"
 )
 
+// nolint: govet
 type testDataUID struct {
 	uid int
 	op  Operator
 	c   Constraints
 }
 
+// nolint: govet
 type testDataDistro struct {
 	distro string
 	op     Operator
@@ -341,6 +343,7 @@ func testGetKernelVersion() (version string, err error) {
 func TestOperatorString(t *testing.T) {
 	assert := assert.New(t)
 
+	// nolint: govet
 	type testData struct {
 		op    Operator
 		value string
@@ -473,6 +476,7 @@ func TestGetKernelVersion(t *testing.T) {
 func TestConstraintHandleDistroName(t *testing.T) {
 	assert := assert.New(t)
 
+	// nolint: govet
 	type testData struct {
 		distro      string
 		op          Operator
@@ -568,6 +572,7 @@ func TestConstraintHandleDistroVersion(t *testing.T) {
 	assert.NoError(err)
 	assert.NotEqual(distroVersion, higherVersion)
 
+	// nolint: govet
 	type testData struct {
 		version     string
 		op          Operator
@@ -623,6 +628,7 @@ func TestConstraintHandleDistroVersion(t *testing.T) {
 func TestConstraintHandleVersionType(t *testing.T) {
 	assert := assert.New(t)
 
+	// nolint: govet
 	type testData struct {
 		versionName    string
 		currentVersion string
@@ -791,6 +797,7 @@ func TestConstraintHandleKernelVersion(t *testing.T) {
 	newerPatch, err := semverBumpVersion(ver, false, false, true)
 	assert.NoError(err)
 
+	// nolint: govet
 	type testData struct {
 		version     string
 		op          Operator
@@ -852,6 +859,7 @@ func TestConstraintHandleKernelVersion(t *testing.T) {
 func TestConstraintHandleUID(t *testing.T) {
 	assert := assert.New(t)
 
+	// nolint: govet
 	type testData struct {
 		uid         int
 		op          Operator
@@ -897,6 +905,7 @@ func TestConstraintHandleUID(t *testing.T) {
 func TestConstraintHandleResults(t *testing.T) {
 	assert := assert.New(t)
 
+	// nolint: govet
 	type testData struct {
 		result Result
 		err    error
@@ -1330,6 +1339,7 @@ func TestConstraintNotValidDistroVersion(t *testing.T) {
 func TestConstraintConstraintValid(t *testing.T) {
 	assert := assert.New(t)
 
+	// nolint: govet
 	type testData struct {
 		fn       Constraint
 		valid    bool
@@ -1522,6 +1532,7 @@ func TestConstraintConstraintValid(t *testing.T) {
 func TestEvalIntVersion(t *testing.T) {
 	assert := assert.New(t)
 
+	// nolint: govet
 	type testData struct {
 		currentVer    string
 		op            Operator
@@ -1627,6 +1638,7 @@ func TestEvalIntVersion(t *testing.T) {
 func TestEvalFloatVersion(t *testing.T) {
 	assert := assert.New(t)
 
+	// nolint: govet
 	type testData struct {
 		currentVer    string
 		op            Operator
@@ -1742,6 +1754,7 @@ func TestEvalFloatVersion(t *testing.T) {
 func TestEvalSemverVersion(t *testing.T) {
 	assert := assert.New(t)
 
+	// nolint: govet
 	type testData struct {
 		currentVer    string
 		op            Operator

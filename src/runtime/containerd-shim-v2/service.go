@@ -106,15 +106,33 @@ func New(ctx context.Context, id string, publisher cdshim.Publisher, shutdown fu
 }
 
 type exit struct {
+	timestamp time.Time
 	id        string
 	execid    string
 	pid       uint32
 	status    int
-	timestamp time.Time
 }
 
 // service is the shim implementation of a remote shim over GRPC
 type service struct {
+	sandbox vc.VCSandbox
+
+	ctx     context.Context
+	rootCtx context.Context // root context for tracing
+
+	containers map[string]*container
+
+	config *oci.RuntimeConfig
+
+	monitor chan error
+	ec      chan exit
+
+	events chan interface{}
+
+	cancel func()
+
+	id string
+
 	mu          sync.Mutex
 	eventSendMu sync.Mutex
 
@@ -125,19 +143,6 @@ type service struct {
 
 	// shim's pid
 	pid uint32
-
-	ctx        context.Context
-	rootCtx    context.Context // root context for tracing
-	sandbox    vc.VCSandbox
-	containers map[string]*container
-	config     *oci.RuntimeConfig
-	events     chan interface{}
-	monitor    chan error
-
-	cancel func()
-
-	ec chan exit
-	id string
 }
 
 func newCommand(ctx context.Context, id, containerdBinary, containerdAddress string) (*sysexec.Cmd, error) {
