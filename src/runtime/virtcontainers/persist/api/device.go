@@ -22,14 +22,8 @@ type BlockDrive struct {
 	// ID is used to identify this drive in the hypervisor options.
 	ID string
 
-	// Index assigned to the drive. In case of virtio-scsi, this is used as SCSI LUN index
-	Index int
-
 	// MmioAddr is used to identify the slot at which the drive is attached (order?).
 	MmioAddr string
-
-	// PCIPath is the PCI path used to identify the slot at which the drive is attached.
-	PCIPath vcTypes.PciPath
 
 	// SCSI Address of the block device, in case the device is attached using SCSI driver
 	// SCSI address is in the format SCSI-Id:LUN
@@ -44,6 +38,12 @@ type BlockDrive struct {
 	// DevNo
 	DevNo string
 
+	// PCIPath is the PCI path used to identify the slot at which the drive is attached.
+	PCIPath vcTypes.PciPath
+
+	// Index assigned to the drive. In case of virtio-scsi, this is used as SCSI LUN index
+	Index int
+
 	// Pmem enabled persistent memory. Use File as backing file
 	// for a nvdimm device in the guest.
 	Pmem bool
@@ -54,14 +54,14 @@ type VFIODev struct {
 	// ID is used to identify this drive in the hypervisor options.
 	ID string
 
-	// Type of VFIO device
-	Type uint32
-
 	// BDF (Bus:Device.Function) of the PCI address
 	BDF string
 
 	// Sysfsdev of VFIO mediated device
 	SysfsDev string
+
+	// Type of VFIO device
+	Type uint32
 }
 
 // VhostUserDeviceAttrs represents data shared by most vhost-user devices
@@ -85,14 +85,21 @@ type VhostUserDeviceAttrs struct {
 // plugged to hypervisor, one Device can be shared among containers in POD
 // Refs: virtcontainers/device/drivers/generic.go:GenericDevice
 type DeviceState struct {
+	// DriverOptions is specific options for each device driver
+	// for example, for BlockDevice, we can set DriverOptions["blockDriver"]="virtio-blk"
+	DriverOptions map[string]string
+
+	// VhostUserDeviceAttrs is specific for vhost-user device driver
+	VhostUserDev *VhostUserDeviceAttrs `json:",omitempty"`
+
+	// BlockDrive is specific for block device driver
+	BlockDrive *BlockDrive `json:",omitempty"`
+
 	ID string
 
 	// Type is used to specify driver type
 	// Refs: virtcontainers/device/config/config.go:DeviceType
 	Type string
-
-	RefCount    uint
-	AttachCount uint
 
 	// Type of device: c, b, u or p
 	// c , u - character(unbuffered)
@@ -101,6 +108,12 @@ type DeviceState struct {
 	// More info in mknod(1).
 	DevType string
 
+	// VFIODev is specific VFIO device driver
+	VFIODevs []*VFIODev `json:",omitempty"`
+
+	RefCount    uint
+	AttachCount uint
+
 	// Major, minor numbers for device.
 	Major int64
 	Minor int64
@@ -108,19 +121,4 @@ type DeviceState struct {
 	// ColdPlug specifies whether the device must be cold plugged (true)
 	// or hot plugged (false).
 	ColdPlug bool
-
-	// DriverOptions is specific options for each device driver
-	// for example, for BlockDevice, we can set DriverOptions["blockDriver"]="virtio-blk"
-	DriverOptions map[string]string
-
-	// ============ device driver specific data ===========
-	// BlockDrive is specific for block device driver
-	BlockDrive *BlockDrive `json:",omitempty"`
-
-	// VFIODev is specific VFIO device driver
-	VFIODevs []*VFIODev `json:",omitempty"`
-
-	// VhostUserDeviceAttrs is specific for vhost-user device driver
-	VhostUserDev *VhostUserDeviceAttrs `json:",omitempty"`
-	// ============ end device driver specific data ===========
 }
