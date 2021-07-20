@@ -24,10 +24,10 @@ type CfgPackagecloud struct {
 }
 
 type config struct {
-	OBSProjects  map[string]CfgOBSProject `yaml:"obsprojects"`
-	Packagecloud CfgPackagecloud
 	// Mapping from OBS "Repositories" to Packagecloud "Distros"
-	DistroMapping map[string]string `yaml:"distro-mapping"`
+	DistroMapping map[string]string        `yaml:"distro-mapping"`
+	OBSProjects   map[string]CfgOBSProject `yaml:"obsprojects"`
+	Packagecloud  CfgPackagecloud
 }
 
 func getConfig(configFile string) (config, error) {
