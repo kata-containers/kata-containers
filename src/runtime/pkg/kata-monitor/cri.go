@@ -26,8 +26,6 @@ import (
 const (
 	// unixProtocol is the network protocol of unix socket.
 	unixProtocol = "unix"
-
-	k8sContainerdNamespace = "k8s.io"
 )
 
 // getAddressAndDialer returns the address parsed from the given endpoint and a context dialer.
