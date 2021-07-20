@@ -28,8 +28,8 @@ var ociLog = logrus.WithFields(logrus.Fields{
 // about the type of the Capabilities field.
 // Refer to: https://github.com/opencontainers/runtime-spec/commit/37391fb
 type compatOCIProcess struct {
-	specs.Process
 	Capabilities interface{} `json:"capabilities,omitempty" platform:"linux"` //nolint:govet
+	specs.Process
 }
 
 // compatOCISpec is a structure inheriting from specs.Spec defined

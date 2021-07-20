@@ -45,8 +45,8 @@ type Config struct {
 }
 
 type Manager struct {
-	sync.Mutex
 	mgr libcontcgroups.Manager
+	sync.Mutex
 }
 
 const (
