@@ -26,6 +26,6 @@ const (
 
 type Namespace struct {
 	Path string
-	PID  int
 	Type NSType
+	PID  int
 }
