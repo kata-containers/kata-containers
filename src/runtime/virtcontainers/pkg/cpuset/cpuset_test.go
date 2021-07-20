@@ -325,6 +325,7 @@ func TestCPUSetString(t *testing.T) {
 }
 
 func TestParse(t *testing.T) {
+	//nolint: govet
 	testCases := []struct {
 		cpusetString string
 		expected     CPUSet

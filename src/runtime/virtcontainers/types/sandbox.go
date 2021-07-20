@@ -41,29 +41,29 @@ const (
 
 // SandboxState is a sandbox state structure
 type SandboxState struct {
-	State StateString `json:"state"`
-
 	// Index map of the block device passed to hypervisor.
 	BlockIndexMap map[int]struct{} `json:"blockIndexMap"`
+
+	// Path to all the cgroups setup for a container. Key is cgroup subsystem name
+	// with the value as the path.
+	CgroupPaths map[string]string `json:"cgroupPaths"`
+
+	State StateString `json:"state"`
+
+	// CgroupPath is the cgroup hierarchy where sandbox's processes
+	// including the hypervisor are placed.
+	CgroupPath string `json:"cgroupPath,omitempty"`
+
+	// PersistVersion indicates current storage api version.
+	// It's also known as ABI version of kata-runtime.
+	// Note: it won't be written to disk
+	PersistVersion uint `json:"-"`
 
 	// GuestMemoryBlockSizeMB is the size of memory block of guestos
 	GuestMemoryBlockSizeMB uint32 `json:"guestMemoryBlockSize"`
 
 	// GuestMemoryHotplugProbe determines whether guest kernel supports memory hotplug probe interface
 	GuestMemoryHotplugProbe bool `json:"guestMemoryHotplugProbe"`
-
-	// CgroupPath is the cgroup hierarchy where sandbox's processes
-	// including the hypervisor are placed.
-	CgroupPath string `json:"cgroupPath,omitempty"`
-
-	// Path to all the cgroups setup for a container. Key is cgroup subsystem name
-	// with the value as the path.
-	CgroupPaths map[string]string `json:"cgroupPaths"`
-
-	// PersistVersion indicates current storage api version.
-	// It's also known as ABI version of kata-runtime.
-	// Note: it won't be written to disk
-	PersistVersion uint `json:"-"`
 }
 
 // Valid checks that the sandbox state is valid.
@@ -179,9 +179,9 @@ func (v *Volumes) String() string {
 // the host and any process inside the VM.
 // This kind of socket is not supported in all hypervisors.
 type VSock struct {
+	VhostFd   *os.File
 	ContextID uint64
 	Port      uint32
-	VhostFd   *os.File
 }
 
 func (s *VSock) String() string {
@@ -281,9 +281,7 @@ type EnvVar struct {
 
 // Cmd represents a command to execute in a running container.
 type Cmd struct {
-	Args                []string
-	Envs                []EnvVar
-	SupplementaryGroups []string
+	Capabilities *specs.LinuxCapabilities
 
 	// Note that these fields *MUST* remain as strings.
 	//
@@ -311,7 +309,10 @@ type Cmd struct {
 	PrimaryGroup string
 	WorkDir      string
 	Console      string
-	Capabilities *specs.LinuxCapabilities
+
+	Args                []string
+	Envs                []EnvVar
+	SupplementaryGroups []string
 
 	Interactive     bool
 	Detach          bool

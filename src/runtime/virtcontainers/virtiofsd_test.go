@@ -17,6 +17,7 @@ import (
 
 func TestVirtiofsdStart(t *testing.T) {
 	assert := assert.New(t)
+	// nolint: govet
 	type fields struct {
 		path       string
 		socketPath string
@@ -46,6 +47,7 @@ func TestVirtiofsdStart(t *testing.T) {
 	NoDirectorySocket := validConfig
 	NoDirectorySocket.socketPath = "/tmp/path/to/virtiofsd/socket.sock"
 
+	// nolint: govet
 	tests := []struct {
 		name    string
 		fields  fields

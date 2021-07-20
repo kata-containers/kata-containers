@@ -860,6 +860,7 @@ func TestAddRuntimeAnnotations(t *testing.T) {
 func TestRegexpContains(t *testing.T) {
 	assert := assert.New(t)
 
+	//nolint: govet
 	type testData struct {
 		regexps  []string
 		toMatch  string
@@ -888,6 +889,7 @@ func TestRegexpContains(t *testing.T) {
 func TestCheckPathIsInGlobs(t *testing.T) {
 	assert := assert.New(t)
 
+	//nolint: govet
 	type testData struct {
 		globs    []string
 		toMatch  string
@@ -960,6 +962,7 @@ func TestParseAnnotationUintConfiguration(t *testing.T) {
 		return nil
 	}
 
+	// nolint: govet
 	testCases := []struct {
 		annotations map[string]string
 		expected    uint64
@@ -1043,6 +1046,7 @@ func TestParseAnnotationBoolConfiguration(t *testing.T) {
 		boolKey = "bool_key"
 	)
 
+	// nolint: govet
 	testCases := []struct {
 		annotationKey       string
 		annotationValueList []string

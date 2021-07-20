@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+// nolint: govet
 type ExampleStruct struct {
 	X int
 	Y string

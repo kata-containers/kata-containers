@@ -60,11 +60,11 @@ const romFile = ""
 const defaultDisableModern = false
 
 type qmpChannel struct {
-	sync.Mutex
-	ctx     context.Context
-	path    string
 	qmp     *govmmQemu.QMP
+	ctx     context.Context
 	disconn chan struct{}
+	path    string
+	sync.Mutex
 }
 
 // CPUDevice represents a CPU device which was hot-added in a running VM
@@ -75,46 +75,46 @@ type CPUDevice struct {
 
 // QemuState keeps Qemu's state
 type QemuState struct {
+	UUID    string
 	Bridges []types.Bridge
 	// HotpluggedCPUs is the list of CPUs that were hot-added
 	HotpluggedVCPUs      []CPUDevice
 	HotpluggedMemory     int
-	UUID                 string
-	HotplugVFIOOnRootBus bool
 	VirtiofsdPid         int
 	PCIeRootPort         int
+	HotplugVFIOOnRootBus bool
 }
 
 // qemu is an Hypervisor interface implementation for the Linux qemu hypervisor.
 type qemu struct {
-	id string
-
-	config HypervisorConfig
-
-	qmpMonitorCh qmpChannel
-
-	qemuConfig govmmQemu.Config
-
-	state QemuState
-
 	arch qemuArch
+
+	virtiofsd Virtiofsd
+
+	store persistapi.PersistDriver
+
+	ctx context.Context
 
 	// fds is a list of file descriptors inherited by QEMU process
 	// they'll be closed once QEMU process is running
 	fds []*os.File
 
-	ctx context.Context
+	id string
 
-	nvdimmCount int
+	state QemuState
 
-	stopped bool
+	qmpMonitorCh qmpChannel
 
-	store persistapi.PersistDriver
+	qemuConfig govmmQemu.Config
+
+	config HypervisorConfig
 
 	// if in memory dump progress
 	memoryDumpFlag sync.Mutex
 
-	virtiofsd Virtiofsd
+	nvdimmCount int
+
+	stopped bool
 }
 
 const (

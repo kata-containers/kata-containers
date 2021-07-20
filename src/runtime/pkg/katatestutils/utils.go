@@ -11,10 +11,6 @@ import "strconv"
 type RuntimeConfigOptions struct {
 	Hypervisor           string
 	HypervisorPath       string
-	DefaultVCPUCount     uint32
-	DefaultMaxVCPUCount  uint32
-	DefaultMemSize       uint32
-	DefaultMsize9p       uint32
 	DefaultGuestHookPath string
 	KernelPath           string
 	ImagePath            string
@@ -28,8 +24,15 @@ type RuntimeConfigOptions struct {
 	AgentTraceType       string
 	SharedFS             string
 	VirtioFSDaemon       string
+	JaegerEndpoint       string
+	JaegerUser           string
+	JaegerPassword       string
 	PFlash               []string
 	PCIeRootPort         uint32
+	DefaultVCPUCount     uint32
+	DefaultMaxVCPUCount  uint32
+	DefaultMemSize       uint32
+	DefaultMsize9p       uint32
 	DisableBlock         bool
 	EnableIOThreads      bool
 	HotplugVFIOOnRootBus bool
@@ -42,9 +45,6 @@ type RuntimeConfigOptions struct {
 	AgentDebug           bool
 	AgentTrace           bool
 	EnablePprof          bool
-	JaegerEndpoint       string
-	JaegerUser           string
-	JaegerPassword       string
 }
 
 // ContainerIDTestDataType is a type used to test Container and Sandbox ID's.

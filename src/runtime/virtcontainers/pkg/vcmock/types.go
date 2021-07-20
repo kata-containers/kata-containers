@@ -20,6 +20,7 @@ import (
 )
 
 // Sandbox is a fake Sandbox type used for testing
+// nolint: govet
 type Sandbox struct {
 	MockID          string
 	MockURL         string
@@ -70,6 +71,7 @@ type Sandbox struct {
 }
 
 // Container is a fake Container type used for testing
+// nolint: govet
 type Container struct {
 	MockID          string
 	MockURL         string

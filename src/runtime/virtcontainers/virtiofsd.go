@@ -47,22 +47,22 @@ type Virtiofsd interface {
 type onQuitFunc func()
 
 type virtiofsd struct {
+	// Neded by tracing
+	ctx context.Context
 	// path to virtiofsd daemon
 	path string
 	// socketPath where daemon will serve
 	socketPath string
 	// cache size for virtiofsd
 	cache string
-	// extraArgs list of extra args to append to virtiofsd command
-	extraArgs []string
 	// sourcePath path that daemon will help to share
 	sourcePath string
+	// extraArgs list of extra args to append to virtiofsd command
+	extraArgs []string
 	// debug flag
 	debug bool
 	// PID process ID of virtiosd process
 	PID int
-	// Neded by tracing
-	ctx context.Context
 }
 
 // Open socket on behalf of virtiofsd

@@ -141,9 +141,9 @@ type NetlinkIface struct {
 // It can be used to store the description of the underlying network.
 type NetworkInfo struct {
 	Iface     NetlinkIface
+	DNS       DNSInfo
 	Addrs     []netlink.Addr
 	Routes    []netlink.Route
-	DNS       DNSInfo
 	Neighbors []netlink.Neigh
 }
 
@@ -179,10 +179,10 @@ type NetworkInterfacePair struct {
 // NetworkConfig is the network configuration related to a network.
 type NetworkConfig struct {
 	NetNSPath         string
-	NetNsCreated      bool
-	DisableNewNetNs   bool
 	NetmonConfig      NetmonConfig
 	InterworkingModel NetInterworkingModel
+	NetNsCreated      bool
+	DisableNewNetNs   bool
 }
 
 func networkLogger() *logrus.Entry {
@@ -192,8 +192,8 @@ func networkLogger() *logrus.Entry {
 // NetworkNamespace contains all data related to its network namespace.
 type NetworkNamespace struct {
 	NetNsPath    string
-	NetNsCreated bool
 	Endpoints    []Endpoint
+	NetNsCreated bool
 	NetmonPID    int
 }
 
@@ -211,8 +211,8 @@ func (n NetworkNamespace) MarshalJSON() ([]byte, error) {
 	// entering a recursive loop when only calling json.Marshal().
 	type shadow struct {
 		NetNsPath    string
-		NetNsCreated bool
 		Endpoints    []TypedJSONEndpoint
+		NetNsCreated bool
 	}
 
 	s := &shadow{
@@ -299,8 +299,8 @@ func generateEndpoints(typedEndpoints []TypedJSONEndpoint) ([]Endpoint, error) {
 func (n *NetworkNamespace) UnmarshalJSON(b []byte) error {
 	var s struct {
 		NetNsPath    string
-		NetNsCreated bool
 		Endpoints    json.RawMessage
+		NetNsCreated bool
 	}
 
 	if err := json.Unmarshal(b, &s); err != nil {

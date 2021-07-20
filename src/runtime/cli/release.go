@@ -21,10 +21,10 @@ import (
 type ReleaseCmd int
 
 type releaseDetails struct {
-	version  semver.Version
 	date     string
 	url      string
 	filename string
+	version  semver.Version
 }
 
 const (

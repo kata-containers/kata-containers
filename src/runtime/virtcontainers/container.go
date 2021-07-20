@@ -70,6 +70,8 @@ const floppyMajor = int64(2)
 
 // Process gathers data related to a container process.
 type Process struct {
+	StartTime time.Time
+
 	// Token is the process execution context ID. It must be
 	// unique per sandbox.
 	// Token is used to manipulate processes for containers
@@ -81,23 +83,23 @@ type Process struct {
 	// stack, e.g. CRI-O, containerd. This is typically the
 	// shim PID.
 	Pid int
-
-	StartTime time.Time
 }
 
 // ContainerStatus describes a container status.
 type ContainerStatus struct {
-	ID        string
-	State     types.ContainerState
-	PID       int
-	StartTime time.Time
-	RootFs    string
-	Spec      *specs.Spec
+	Spec *specs.Spec
 
 	// Annotations allow clients to store arbitrary values,
 	// for example to add additional status values required
 	// to support particular specifications.
 	Annotations map[string]string
+
+	ID        string
+	RootFs    string
+	StartTime time.Time
+	State     types.ContainerState
+
+	PID int
 }
 
 // ThrottlingData gather the date related to container cpu throttling.
@@ -113,12 +115,12 @@ type ThrottlingData struct {
 // CPUUsage denotes the usage of a CPU.
 // All CPU stats are aggregate since container inception.
 type CPUUsage struct {
-	// Total CPU time consumed.
-	// Units: nanoseconds.
-	TotalUsage uint64 `json:"total_usage,omitempty"`
 	// Total CPU time consumed per core.
 	// Units: nanoseconds.
 	PercpuUsage []uint64 `json:"percpu_usage,omitempty"`
+	// Total CPU time consumed.
+	// Units: nanoseconds.
+	TotalUsage uint64 `json:"total_usage,omitempty"`
 	// Time spent by tasks of the cgroup in kernel mode.
 	// Units: nanoseconds.
 	UsageInKernelmode uint64 `json:"usage_in_kernelmode"`
@@ -143,8 +145,7 @@ type MemoryData struct {
 
 // MemoryStats describes the memory stats
 type MemoryStats struct {
-	// memory used for cache
-	Cache uint64 `json:"cache,omitempty"`
+	Stats map[string]uint64 `json:"stats,omitempty"`
 	// usage of memory
 	Usage MemoryData `json:"usage,omitempty"`
 	// usage of memory  swap
@@ -153,10 +154,10 @@ type MemoryStats struct {
 	KernelUsage MemoryData `json:"kernel_usage,omitempty"`
 	// usage of kernel TCP memory
 	KernelTCPUsage MemoryData `json:"kernel_tcp_usage,omitempty"`
+	// memory used for cache
+	Cache uint64 `json:"cache,omitempty"`
 	// if true, memory usage is accounted for throughout a hierarchy of cgroups.
 	UseHierarchy bool `json:"use_hierarchy"`
-
-	Stats map[string]uint64 `json:"stats,omitempty"`
 }
 
 // PidsStats describes the pids stats
@@ -169,9 +170,9 @@ type PidsStats struct {
 
 // BlkioStatEntry gather date related to a block device
 type BlkioStatEntry struct {
+	Op    string `json:"op,omitempty"`
 	Major uint64 `json:"major,omitempty"`
 	Minor uint64 `json:"minor,omitempty"`
-	Op    string `json:"op,omitempty"`
 	Value uint64 `json:"value,omitempty"`
 }
 
@@ -200,12 +201,12 @@ type HugetlbStats struct {
 
 // CgroupStats describes all cgroup subsystem stats
 type CgroupStats struct {
-	CPUStats    CPUStats    `json:"cpu_stats,omitempty"`
-	MemoryStats MemoryStats `json:"memory_stats,omitempty"`
-	PidsStats   PidsStats   `json:"pids_stats,omitempty"`
-	BlkioStats  BlkioStats  `json:"blkio_stats,omitempty"`
 	// the map is in the format "size of hugepage: stats of the hugepage"
 	HugetlbStats map[string]HugetlbStats `json:"hugetlb_stats,omitempty"`
+	BlkioStats   BlkioStats              `json:"blkio_stats,omitempty"`
+	CPUStats     CPUStats                `json:"cpu_stats,omitempty"`
+	MemoryStats  MemoryStats             `json:"memory_stats,omitempty"`
+	PidsStats    PidsStats               `json:"pids_stats,omitempty"`
 }
 
 // NetworkStats describe all network stats.
@@ -240,32 +241,32 @@ type ContainerResources struct {
 
 // ContainerConfig describes one container runtime configuration.
 type ContainerConfig struct {
-	ID string
+	// Device configuration for devices that must be available within the container.
+	DeviceInfos []config.DeviceInfo
 
-	// RootFs is the container workload image on the host.
-	RootFs RootFs
+	Mounts []Mount
 
-	// ReadOnlyRootfs indicates if the rootfs should be mounted readonly
-	ReadonlyRootfs bool
-
-	// Cmd specifies the command to run on a container
-	Cmd types.Cmd
+	// Raw OCI specification, it won't be saved to disk.
+	CustomSpec *specs.Spec `json:"-"`
 
 	// Annotations allow clients to store arbitrary values,
 	// for example to add additional status values required
 	// to support particular specifications.
 	Annotations map[string]string
 
-	Mounts []Mount
-
-	// Device configuration for devices that must be available within the container.
-	DeviceInfos []config.DeviceInfo
+	ID string
 
 	// Resources container resources
 	Resources specs.LinuxResources
 
-	// Raw OCI specification, it won't be saved to disk.
-	CustomSpec *specs.Spec `json:"-"`
+	// Cmd specifies the command to run on a container
+	Cmd types.Cmd
+
+	// RootFs is the container workload image on the host.
+	RootFs RootFs
+
+	// ReadOnlyRootfs indicates if the rootfs should be mounted readonly
+	ReadonlyRootfs bool
 }
 
 // valid checks that the container configuration is valid.
@@ -326,29 +327,27 @@ type RootFs struct {
 // Container is composed of a set of containers and a runtime environment.
 // A Container can be created, deleted, started, stopped, listed, entered, paused and restored.
 type Container struct {
-	id        string
-	sandboxID string
+	ctx context.Context
 
-	rootFs RootFs
-
-	config *ContainerConfig
-
+	config  *ContainerConfig
 	sandbox *Sandbox
 
+	id            string
+	sandboxID     string
 	containerPath string
 	rootfsSuffix  string
-
-	state types.ContainerState
-
-	process Process
 
 	mounts []Mount
 
 	devices []ContainerDevice
 
-	systemMountsInfo SystemMountsInfo
+	state types.ContainerState
 
-	ctx context.Context
+	process Process
+
+	rootFs RootFs
+
+	systemMountsInfo SystemMountsInfo
 }
 
 // ID returns the container identifier string.

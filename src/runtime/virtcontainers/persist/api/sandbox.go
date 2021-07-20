@@ -17,17 +17,15 @@ type AgentState struct {
 // SandboxState contains state information of sandbox
 // nolint: maligned
 type SandboxState struct {
-	// PersistVersion of persist data format, can be used for keeping compatibility later
-	PersistVersion uint
+	// CgroupPath is the cgroup hierarchy where sandbox's processes
+	// including the hypervisor are placed.
+	CgroupPaths map[string]string
+
+	// Devices plugged to sandbox(hypervisor)
+	Devices []DeviceState
 
 	// State is sandbox running status
 	State string
-
-	// GuestMemoryBlockSizeMB is the size of memory block of guestos
-	GuestMemoryBlockSizeMB uint32
-
-	// GuestMemoryHotplugProbe determines whether guest kernel supports memory hotplug probe interface
-	GuestMemoryHotplugProbe bool
 
 	// SandboxContainer specifies which container is used to start the sandbox/vm
 	SandboxContainer string
@@ -35,13 +33,6 @@ type SandboxState struct {
 	// CgroupPath is the cgroup hierarchy where sandbox's processes
 	// including the hypervisor are placed.
 	CgroupPath string
-
-	// CgroupPath is the cgroup hierarchy where sandbox's processes
-	// including the hypervisor are placed.
-	CgroupPaths map[string]string
-
-	// Devices plugged to sandbox(hypervisor)
-	Devices []DeviceState
 
 	// HypervisorState saves hypervisor specific data
 	HypervisorState HypervisorState
@@ -54,4 +45,13 @@ type SandboxState struct {
 
 	// Config saves config information of sandbox
 	Config SandboxConfig
+
+	// PersistVersion of persist data format, can be used for keeping compatibility later
+	PersistVersion uint
+
+	// GuestMemoryBlockSizeMB is the size of memory block of guestos
+	GuestMemoryBlockSizeMB uint32
+
+	// GuestMemoryHotplugProbe determines whether guest kernel supports memory hotplug probe interface
+	GuestMemoryHotplugProbe bool
 }

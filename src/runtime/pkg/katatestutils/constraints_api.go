@@ -28,12 +28,6 @@ const (
 type Constraints struct {
 	Issue string
 
-	UID int
-
-	// Not ideal: set when UID needs to be checked. This allows
-	// a test for UID 0 to be detected.
-	UIDSet bool
-
 	// DistroName is the name of a distro in all lower-case letters.
 	DistroName string
 
@@ -44,8 +38,14 @@ type Constraints struct {
 	// KernelVersion is the version of a particular kernel.
 	KernelVersion string
 
+	UID int
+
 	// Operator is the operator to apply to one of the constraints.
 	Operator Operator
+
+	// Not ideal: set when UID needs to be checked. This allows
+	// a test for UID 0 to be detected.
+	UIDSet bool
 }
 
 // Constraint is a function that operates on a Constraints object to set
@@ -54,23 +54,23 @@ type Constraint func(c *Constraints)
 
 // TestConstraint records details about test constraints.
 type TestConstraint struct {
-	Debug bool
-
-	// Effective user ID of running test
-	ActualEUID int
-
 	DistroName    string
 	DistroVersion string
 	KernelVersion string
+
+	// Optionally used to record an issue number that relates to the
+	// constraint.
+	Issue string
 
 	// Used to record all passed and failed constraints in
 	// human-readable form.
 	Passed []Result
 	Failed []Result
 
-	// Optionally used to record an issue number that relates to the
-	// constraint.
-	Issue string
+	Debug bool
+
+	// Effective user ID of running test
+	ActualEUID int
 }
 
 // NewKataTest creates a new TestConstraint object and is the main interface

@@ -36,11 +36,11 @@ type Bridge struct {
 	// ID is used to identify the bridge in the hypervisor
 	ID string
 
-	// Addr is the slot of the bridge
-	Addr int
-
 	// Type is the type of the bridge (pci, pcie, etc)
 	Type Type
+
+	// Addr is the slot of the bridge
+	Addr int
 
 	// MaxCapacity is the max capacity of the bridge
 	MaxCapacity uint32

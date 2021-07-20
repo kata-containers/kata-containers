@@ -26,8 +26,8 @@ import (
 
 type testModuleData struct {
 	path     string
-	isDir    bool
 	contents string
+	isDir    bool
 }
 
 // nolint: structcheck, unused, deadcode
@@ -400,46 +400,46 @@ func TestCheckCheckCPUFlags(t *testing.T) {
 	assert := assert.New(t)
 
 	type testData struct {
-		cpuflags    string
 		required    map[string]string
+		cpuflags    string
 		expectCount uint32
 	}
 
 	data := []testData{
 		{
-			"",
 			map[string]string{},
+			"",
 			0,
 		},
 		{
-			"",
 			map[string]string{
 				"a": "A flag",
 			},
+			"",
 			0,
 		},
 		{
-			"",
 			map[string]string{
 				"a": "A flag",
 				"b": "B flag",
 			},
+			"",
 			0,
 		},
 		{
-			"a b c",
 			map[string]string{
 				"b": "B flag",
 			},
+			"a b c",
 			0,
 		},
 		{
-			"a b c",
 			map[string]string{
 				"x": "X flag",
 				"y": "Y flag",
 				"z": "Z flag",
 			},
+			"a b c",
 			3,
 		},
 	}
@@ -454,54 +454,54 @@ func TestCheckCheckCPUAttribs(t *testing.T) {
 	assert := assert.New(t)
 
 	type testData struct {
-		cpuinfo     string
 		required    map[string]string
+		cpuinfo     string
 		expectCount uint32
 	}
 
 	data := []testData{
 		{
-			"",
 			map[string]string{},
+			"",
 			0,
 		},
 		{
-			"",
 			map[string]string{
 				"a": "",
 			},
+			"",
 			0,
 		},
 		{
+			map[string]string{
+				"b": "B attribute",
+			},
 			"a: b",
-			map[string]string{
-				"b": "B attribute",
-			},
 			0,
 		},
 		{
+			map[string]string{
+				"b": "B attribute",
+			},
 			"a: b\nc: d\ne: f",
-			map[string]string{
-				"b": "B attribute",
-			},
 			0,
 		},
 		{
-			"a: b\n",
 			map[string]string{
 				"b": "B attribute",
 				"c": "C attribute",
 				"d": "D attribute",
 			},
+			"a: b\n",
 			2,
 		},
 		{
-			"a: b\nc: d\ne: f",
 			map[string]string{
 				"b": "B attribute",
 				"d": "D attribute",
 				"f": "F attribute",
 			},
+			"a: b\nc: d\ne: f",
 			0,
 		},
 	}
