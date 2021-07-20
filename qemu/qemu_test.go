@@ -1072,6 +1072,25 @@ func TestValidPFlash(t *testing.T) {
 	}
 }
 
+func TestBadSeccompSandbox(t *testing.T) {
+	c := &Config{}
+	c.appendSeccompSandbox()
+	if len(c.qemuParams) != 0 {
+		t.Errorf("Expected empty qemuParams, found %s", c.qemuParams)
+	}
+}
+
+func TestValidSeccompSandbox(t *testing.T) {
+	c := &Config{}
+	c.SeccompSandbox = string("on,obsolete=deny")
+	c.appendSeccompSandbox()
+	expected := []string{"-sandbox", "on,obsolete=deny"}
+	ok := reflect.DeepEqual(expected, c.qemuParams)
+	if !ok {
+		t.Errorf("Expected %v, found %v", expected, c.qemuParams)
+	}
+}
+
 func TestBadVGA(t *testing.T) {
 	c := &Config{}
 	c.appendVGA()
