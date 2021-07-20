@@ -241,7 +241,8 @@ parts:
           branch="$(${yq} r ${versions_file} assets.hypervisor.qemu.architecture.aarch64.branch)"
           url="$(${yq} r ${versions_file} assets.hypervisor.qemu.url)"
           commit="$(${yq} r ${versions_file} assets.hypervisor.qemu.architecture.aarch64.commit)"
-          patches_dir="${kata_dir}/tools/packaging/obs-packaging/qemu-aarch64/patches/"
+          patches_dir="${kata_dir}/tools/packaging/qemu/patches/$(echo ${branch} | sed -e 's/.[[:digit:]]*$//' -e 's/^v//').x"
+          patches_version_dir="${kata_dir}/tools/packaging/qemu/patches/tag_patches/${branch}"
         ;;
 
         *)
