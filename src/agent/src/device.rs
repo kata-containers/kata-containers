@@ -62,7 +62,7 @@ pub fn online_device(path: &str) -> Result<()> {
 // the sysfs path for the PCI host bridge, based on the PCI path
 // provided.
 #[instrument]
-fn pcipath_to_sysfs(root_bus_sysfs: &str, pcipath: &pci::Path) -> Result<String> {
+pub fn pcipath_to_sysfs(root_bus_sysfs: &str, pcipath: &pci::Path) -> Result<String> {
     let mut bus = "0000:00".to_string();
     let mut relpath = String::new();
 

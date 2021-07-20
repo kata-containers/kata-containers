@@ -55,6 +55,7 @@ const defaultVhostUserStorePath string = "/var/run/kata-containers/vhost-user/"
 const defaultRxRateLimiterMaxRate = uint64(0)
 const defaultTxRateLimiterMaxRate = uint64(0)
 const defaultConfidentialGuest = false
+const defaultGuestSwap = false
 
 var defaultSGXEPCSize = int64(0)
 

@@ -182,6 +182,9 @@ type BlockDrive struct {
 	// Pmem enables persistent memory. Use File as backing file
 	// for a nvdimm device in the guest
 	Pmem bool
+
+	// This block device is for swap
+	Swap bool
 }
 
 // VFIODeviceType indicates VFIO device type
