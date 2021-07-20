@@ -27,22 +27,24 @@ type CPUDevice struct {
 }
 
 type HypervisorState struct {
-	Pid int
-	// Type of hypervisor, E.g. qemu/firecracker/acrn.
-	Type          string
 	BlockIndexMap map[int]struct{}
-	UUID          string
+
+	// Type of hypervisor, E.g. qemu/firecracker/acrn.
+	Type string
+	UUID string
+	// clh sepcific: refer to 'virtcontainers/clh.go:CloudHypervisorState'
+	APISocket string
 
 	// Belows are qemu specific
 	// Refs: virtcontainers/qemu.go:QemuState
 	Bridges []Bridge
 	// HotpluggedCPUs is the list of CPUs that were hot-added
-	HotpluggedVCPUs      []CPUDevice
-	HotpluggedMemory     int
-	VirtiofsdPid         int
-	HotplugVFIOOnRootBus bool
-	PCIeRootPort         int
+	HotpluggedVCPUs []CPUDevice
 
-	// clh sepcific: refer to 'virtcontainers/clh.go:CloudHypervisorState'
-	APISocket string
+	HotpluggedMemory int
+	VirtiofsdPid     int
+	Pid              int
+	PCIeRootPort     int
+
+	HotplugVFIOOnRootBus bool
 }

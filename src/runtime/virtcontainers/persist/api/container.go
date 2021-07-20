@@ -41,19 +41,19 @@ type Mount struct {
 	// Type specifies the type of filesystem to mount.
 	Type string
 
-	// Options list all the mount options of the filesystem.
-	Options []string
-
 	// HostPath used to store host side bind mount path
 	HostPath string
-
-	// ReadOnly specifies if the mount should be read only or not
-	ReadOnly bool
 
 	// BlockDeviceID represents block device that is attached to the
 	// VM in case this mount is a block device file or a directory
 	// backed by a block device.
 	BlockDeviceID string
+
+	// Options list all the mount options of the filesystem.
+	Options []string
+
+	// ReadOnly specifies if the mount should be read only or not
+	ReadOnly bool
 }
 
 // RootfsState saves state of container rootfs
@@ -69,6 +69,8 @@ type RootfsState struct {
 // Process gathers data related to a container process.
 // Refs: virtcontainers/container.go:Process
 type Process struct {
+	StartTime time.Time
+
 	// Token is the process execution context ID. It must be
 	// unique per sandbox.
 	// Token is used to manipulate processes for containers
@@ -80,8 +82,6 @@ type Process struct {
 	// stack, e.g. CRI-O, containerd. This is typically the
 	// shim PID.
 	Pid int
-
-	StartTime time.Time
 }
 
 // ContainerState represents container state
@@ -89,23 +89,23 @@ type ContainerState struct {
 	// State is container running status
 	State string
 
-	// Rootfs contains information of container rootfs
-	Rootfs RootfsState
-
 	// CgroupPath is the cgroup hierarchy where sandbox's processes
 	// including the hypervisor are placed.
 	CgroupPath string
+
+	// BundlePath saves container OCI config.json, which can be unmarshaled
+	// and translated to "CompatOCISpec"
+	BundlePath string
+
+	// Rootfs contains information of container rootfs
+	Rootfs RootfsState
+
+	// Process on host representing container process
+	Process Process
 
 	// DeviceMaps is mapping between sandbox device to dest in container
 	DeviceMaps []DeviceMap
 
 	// Mounts is mount info from OCI spec
 	Mounts []Mount
-
-	// Process on host representing container process
-	Process Process
-
-	// BundlePath saves container OCI config.json, which can be unmarshaled
-	// and translated to "CompatOCISpec"
-	BundlePath string
 }
