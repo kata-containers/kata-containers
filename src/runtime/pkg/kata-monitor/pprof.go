@@ -11,6 +11,8 @@ import (
 	"io"
 	"net"
 	"net/http"
+
+	shim "github.com/kata-containers/kata-containers/src/runtime/containerd-shim-v2"
 )
 
 func serveError(w http.ResponseWriter, status int, txt string) {
@@ -27,12 +29,7 @@ func (km *KataMonitor) composeSocketAddress(r *http.Request) (string, error) {
 		return "", err
 	}
 
-	runtime, err := km.getSandboxRuntime(sandbox)
-	if err != nil {
-		return "", err
-	}
-
-	return km.getMonitorAddress(sandbox, runtime)
+	return shim.SocketAddress(sandbox), nil
 }
 
 func (km *KataMonitor) proxyRequest(w http.ResponseWriter, r *http.Request) {

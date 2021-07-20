@@ -9,15 +9,12 @@ import (
 	"bytes"
 	"compress/gzip"
 	"io"
-	"io/ioutil"
 	"net/http"
-	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/kata-containers/kata-containers/src/runtime/pkg/types"
 	mutils "github.com/kata-containers/kata-containers/src/runtime/pkg/utils"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -70,23 +67,6 @@ func registerMetrics() {
 	prometheus.MustRegister(scrapeCount)
 	prometheus.MustRegister(scrapeFailedCount)
 	prometheus.MustRegister(scrapeDurationsHistogram)
-}
-
-// getMonitorAddress get metrics address for a sandbox, the abstract unix socket address is saved
-// in `metrics_address` with the same place of `address`.
-func (km *KataMonitor) getMonitorAddress(sandboxID, runtime string) (string, error) {
-	path := filepath.Join("/run/containerd", types.ContainerdRuntimeTaskPath, k8sContainerdNamespace, sandboxID, "monitor_address")
-	if runtime == RuntimeCRIO {
-		path = filepath.Join("/run/containers/storage/overlay-containers", sandboxID, "userdata", "monitor_address")
-	}
-
-	monitorLog.WithField("path", path).Debug("get monitor address")
-
-	data, err := ioutil.ReadFile(path)
-	if err != nil {
-		return "", err
-	}
-	return string(data), nil
 }
 
 // ProcessMetricsRequest get metrics from shim/hypervisor/vm/agent and return metrics to client.
