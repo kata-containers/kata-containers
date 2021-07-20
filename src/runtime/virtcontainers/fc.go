@@ -1036,6 +1036,10 @@ func (fc *firecracker) addDevice(ctx context.Context, devInfo interface{}, devTy
 // hotplugBlockDevice supported in Firecracker VMM
 // hot add or remove a block device.
 func (fc *firecracker) hotplugBlockDevice(ctx context.Context, drive config.BlockDrive, op operation) (interface{}, error) {
+	if drive.Swap {
+		return nil, fmt.Errorf("firecracker doesn't support swap")
+	}
+
 	var path string
 	var err error
 	driveID := fcDriveIndexToID(drive.Index)

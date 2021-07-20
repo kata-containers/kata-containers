@@ -9,6 +9,7 @@ const (
 	kataAnnotationsPrefix     = "io.katacontainers."
 	kataConfAnnotationsPrefix = kataAnnotationsPrefix + "config."
 	kataAnnotHypervisorPrefix = kataConfAnnotationsPrefix + "hypervisor."
+	kataAnnotContainerPrefix  = kataAnnotationsPrefix + "container."
 
 	//
 	// OCI
@@ -219,6 +220,9 @@ const (
 
 	// TxRateLimiter is a sandbox annotation that specifies max rate on network I/O outbound bandwidth
 	TxRateLimiterMaxRate = kataAnnotHypervisorPrefix + "tx_rate_limiter_max_rate"
+
+	// EnableGuestSwap is a sandbox annotation to enable swap in the guest.
+	EnableGuestSwap = kataAnnotHypervisorPrefix + "enable_guest_swap"
 )
 
 // Runtime related annotations
@@ -275,6 +279,17 @@ const (
 	AgentContainerPipeSize       = kataAnnotAgentPrefix + ContainerPipeSizeOption
 	ContainerPipeSizeOption      = "container_pipe_size"
 	ContainerPipeSizeKernelParam = "agent." + ContainerPipeSizeOption
+)
+
+// Container resource related annotations
+const (
+	kataAnnotContainerResourcePrefix = kataAnnotContainerPrefix + "resource."
+
+	// ContainerResourcesSwappiness is a container annotation to specify the Resources.Memory.Swappiness
+	ContainerResourcesSwappiness = kataAnnotContainerResourcePrefix + "swappiness"
+
+	// ContainerResourcesSwapInBytes is a container annotation to specify the Resources.Memory.Swap
+	ContainerResourcesSwapInBytes = kataAnnotContainerResourcePrefix + "swap_in_bytes"
 )
 
 const (
