@@ -14,13 +14,13 @@ type FcConfig struct {
 
 	MachineConfig *models.MachineConfiguration `json:"machine-config"`
 
-	Drives []*models.Drive `json:"drives,omitempty"`
-
 	Vsock *models.Vsock `json:"vsock,omitempty"`
-
-	NetworkInterfaces []*models.NetworkInterface `json:"network-interfaces,omitempty"`
 
 	Logger *models.Logger `json:"logger,omitempty"`
 
 	Metrics *models.Metrics `json:"metrics,omitempty"`
+
+	Drives []*models.Drive `json:"drives,omitempty"`
+
+	NetworkInterfaces []*models.NetworkInterface `json:"network-interfaces,omitempty"`
 }
