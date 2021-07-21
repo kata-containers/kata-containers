@@ -1153,7 +1153,7 @@ func (blkdev BlockDevice) QemuParams(config *Config) []string {
 	}
 
 	if blkdev.ShareRW {
-		deviceParams = append(deviceParams, fmt.Sprintf("share-rw=on"))
+		deviceParams = append(deviceParams, "share-rw=on")
 	}
 
 	deviceParams = append(deviceParams, fmt.Sprintf("serial=%s", blkdev.ID))
@@ -1905,7 +1905,7 @@ func (vsock VSOCKDevice) QemuParams(config *Config) []string {
 	var qemuParams []string
 
 	driver := vsock.deviceName(config)
-	deviceParams = append(deviceParams, string(driver))
+	deviceParams = append(deviceParams, driver)
 	if s := vsock.Transport.disableModern(config, vsock.DisableModern); s != "" {
 		deviceParams = append(deviceParams, s)
 	}
@@ -2080,7 +2080,7 @@ func (b BalloonDevice) QemuParams(config *Config) []string {
 		deviceParams = append(deviceParams, "deflate-on-oom=off")
 	}
 	if s := b.Transport.disableModern(config, b.DisableModern); s != "" {
-		deviceParams = append(deviceParams, string(s))
+		deviceParams = append(deviceParams, s)
 	}
 	qemuParams = append(qemuParams, "-device")
 	qemuParams = append(qemuParams, strings.Join(deviceParams, ","))
