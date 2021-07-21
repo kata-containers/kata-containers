@@ -132,9 +132,9 @@ func parseEndpoint(endpoint string) (string, string, error) {
 
 // getSandboxes get kata sandbox from the container engine.
 // this will be called only after monitor start.
-func (km *KataMonitor) getSandboxes() (map[string]string, error) {
+func (km *KataMonitor) getSandboxes() (map[string]struct{}, error) {
 
-	sandboxMap := map[string]string{}
+	sandboxMap := make(map[string]struct{})
 	runtimeClient, runtimeConn, err := getRuntimeClient(km.runtimeEndpoint)
 	if err != nil {
 		return sandboxMap, err
@@ -169,25 +169,12 @@ func (km *KataMonitor) getSandboxes() (map[string]string, error) {
 		}
 
 		lowRuntime := ""
-		highRuntime := ""
 		var res map[string]interface{}
 		if err := json.Unmarshal([]byte(r.Info["info"]), &res); err != nil {
 			monitorLog.WithError(err).WithField("pod", r).Error("failed to Unmarshal pod info")
 			continue
 		} else {
 			monitorLog.WithField("pod info", res).Debug("")
-			// get high level container runtime
-			pointer, _ := gojsonpointer.NewJsonPointer("/runtimeSpec/annotations/io.container.manager")
-			rt, _, _ := pointer.Get(res)
-			if rt != nil {
-				if str, ok := rt.(string); ok {
-					if str == "cri-o" {
-						highRuntime = RuntimeCRIO
-					} else {
-						highRuntime = RuntimeContainerd
-					}
-				}
-			}
 
 			// get low level container runtime
 			// containerd stores the pod runtime in "/runtimeType" while CRI-O stores it the
@@ -207,11 +194,10 @@ func (km *KataMonitor) getSandboxes() (map[string]string, error) {
 
 		// Filter by pod name/namespace regular expressions.
 		monitorLog.WithFields(logrus.Fields{
-			"low runtime":  lowRuntime,
-			"high runtime": highRuntime,
+			"low runtime": lowRuntime,
 		}).Debug("")
 		if matchesRegex(types.KataRuntimeNameRegexp, lowRuntime) || matchesRegex("kata*", lowRuntime) {
-			sandboxMap[pod.Id] = highRuntime
+			sandboxMap[pod.Id] = struct{}{}
 		}
 	}
 
