@@ -277,6 +277,9 @@ type Object struct {
 	// ReducedPhysBits is the reduction in the guest physical address space
 	// This is only relevant for sev-guest objects
 	ReducedPhysBits uint32
+
+	// ReadOnly specifies whether `MemPath` is opened read-only or read/write (default)
+	ReadOnly bool
 }
 
 // Valid returns true if the Object structure is valid and complete.
@@ -315,6 +318,11 @@ func (object Object) QemuParams(config *Config) []string {
 		deviceParams = append(deviceParams, string(object.Driver))
 		deviceParams = append(deviceParams, fmt.Sprintf("id=%s", object.DeviceID))
 		deviceParams = append(deviceParams, fmt.Sprintf("memdev=%s", object.ID))
+
+		if object.ReadOnly {
+			objectParams = append(objectParams, "readonly=on")
+			deviceParams = append(deviceParams, "unarmed=on")
+		}
 	case TDXGuest:
 		objectParams = append(objectParams, string(object.Type))
 		objectParams = append(objectParams, fmt.Sprintf("id=%s", object.ID))

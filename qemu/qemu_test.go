@@ -128,7 +128,7 @@ func TestAppendEmptyMachine(t *testing.T) {
 	testAppend(machine, "", t)
 }
 
-var deviceNVDIMMString = "-device nvdimm,id=nv0,memdev=mem0 -object memory-backend-file,id=mem0,mem-path=/root,size=65536"
+var deviceNVDIMMString = "-device nvdimm,id=nv0,memdev=mem0,unarmed=on -object memory-backend-file,id=mem0,mem-path=/root,size=65536,readonly=on"
 
 func TestAppendDeviceNVDIMM(t *testing.T) {
 	object := Object{
@@ -138,6 +138,7 @@ func TestAppendDeviceNVDIMM(t *testing.T) {
 		ID:       "mem0",
 		MemPath:  "/root",
 		Size:     1 << 16,
+		ReadOnly: true,
 	}
 
 	testAppend(object, deviceNVDIMMString, t)
