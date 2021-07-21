@@ -391,7 +391,7 @@ func TestAppendVirtioRng(t *testing.T) {
 		ROMFile: romfile,
 	}
 
-	deviceString += "-" + string(rngDevice.Transport.getName(nil)) + ",rng=rng0"
+	deviceString += "-" + rngDevice.Transport.getName(nil) + ",rng=rng0"
 	if romfile != "" {
 		deviceString = deviceString + ",romfile=efi-virtio.rom"
 	}
