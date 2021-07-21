@@ -159,9 +159,9 @@ func (km *KataMonitor) aggregateSandboxMetrics(encoder expfmt.Encoder) error {
 	monitorLog.WithField("sandbox_count", len(sandboxes)).Debugf("sandboxes count")
 
 	// get metrics from sandbox's shim
-	for sandboxID, runtime := range sandboxes {
+	for sandboxID := range sandboxes {
 		wg.Add(1)
-		go func(sandboxID, runtime string, results chan<- []*dto.MetricFamily) {
+		go func(sandboxID string, results chan<- []*dto.MetricFamily) {
 			sandboxMetrics, err := getParsedMetrics(sandboxID)
 			if err != nil {
 				monitorLog.WithError(err).WithField("sandbox_id", sandboxID).Errorf("failed to get metrics for sandbox")
@@ -170,7 +170,7 @@ func (km *KataMonitor) aggregateSandboxMetrics(encoder expfmt.Encoder) error {
 			results <- sandboxMetrics
 			wg.Done()
 			monitorLog.WithField("sandbox_id", sandboxID).Debug("job finished")
-		}(sandboxID, runtime, results)
+		}(sandboxID, results)
 
 		monitorLog.WithField("sandbox_id", sandboxID).Debug("job started")
 	}

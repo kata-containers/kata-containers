@@ -50,7 +50,7 @@ func NewKataMonitor(runtimeEndpoint string) (*KataMonitor, error) {
 		runtimeEndpoint: runtimeEndpoint,
 		sandboxCache: &sandboxCache{
 			Mutex:     &sync.Mutex{},
-			sandboxes: make(map[string]string),
+			sandboxes: make(map[string]struct{}),
 		},
 	}
 
@@ -111,8 +111,4 @@ func (km *KataMonitor) getSandboxList() []string {
 		i++
 	}
 	return result
-}
-
-func (km *KataMonitor) getSandboxRuntime(sandbox string) (string, error) {
-	return km.sandboxCache.getSandboxRuntime(sandbox)
 }
