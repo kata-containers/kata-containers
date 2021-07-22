@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"io/ioutil"
 	"os"
+	"path/filepath"
 
 	directvolume "github.com/kata-containers/directvolume"
 )
@@ -34,4 +35,38 @@ func getDirectAssignedDiskMountInfo(file string) (directvolume.DiskMountInfo, er
 	}
 
 	return mountInfo, nil
+}
+
+// isFileOnSameDeviceAsParent checks if the file resides on the same device as its parent directory.
+// This is by getting the device info for the file directory and the parent
+// directory of the file directory and comparing their mount point.
+// The file would be on the same device as the parent directory if the file device major/minor
+// is not the same as the parent directory device major/minor.
+func isFileOnSameDeviceAsParent(file string) (bool, error) {
+	fileDir := filepath.Dir(file)
+	parentDir := filepath.Dir(fileDir)
+
+	fileDeviceMajor := 0
+	fileDeviceMinor := 0
+	if fileDevice, err := getDeviceForPath(fileDir); err == nil {
+		fileDeviceMajor = fileDevice.major
+		fileDeviceMinor = fileDevice.minor
+	} else {
+		if err != errMountPointNotFound {
+			return false, err
+		}
+	}
+
+	parentDeviceMajor := 0
+	parentDeviceMinor := 0
+	if parentDevice, err := getDeviceForPath(parentDir); err == nil {
+		parentDeviceMajor = parentDevice.major
+		parentDeviceMinor = parentDevice.minor
+	} else {
+		if err != errMountPointNotFound {
+			return false, err
+		}
+	}
+
+	return fileDeviceMajor != parentDeviceMajor || fileDeviceMinor != parentDeviceMinor, nil
 }

@@ -226,3 +226,7 @@ func (p *HybridVSockTTRPCMockImp) GetMetrics(ctx context.Context, req *pb.GetMet
 func (p *HybridVSockTTRPCMockImp) AddSwap(ctx context.Context, req *pb.AddSwapRequest) (*gpb.Empty, error) {
 	return &gpb.Empty{}, nil
 }
+
+func (p *HybridVSockTTRPCMockImp) GetFsMountMetrics(ctx context.Context, req *pb.GetFsMountMetricsRequest) (*pb.FsMountMetrics, error) {
+	return &pb.FsMountMetrics{}, nil
+}

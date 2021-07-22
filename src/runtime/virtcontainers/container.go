@@ -710,23 +710,38 @@ func (c *Container) createBlockDevices(ctx context.Context) error {
 		// scenario, a special file will be present within the mount's source which provides details on where the
 		// backing block device comes from. We then ignore the mount on the host, and instead pass
 		// the block device to the VM, and mount it in the guest to provide to the container workload.
-		if _, err := os.Stat(filepath.Join(m.Source, directvolume.DirectAssignedVolumeJson)); err == nil {
+		directAssignedVolumeFile := filepath.Join(m.Source, directvolume.DirectAssignedVolumeJson)
+		if _, err := os.Stat(directAssignedVolumeFile); err == nil {
 			c.Logger().Debugf("found direct assigned volume: %s", m.Source)
 
-			directInfo, err := getDirectAssignedDiskMountInfo(filepath.Join(m.Source, directvolume.DirectAssignedVolumeJson))
+			// Check if the direct assigned volume file resides on a different device than the host device.
+			// For a direct assigned volume, the volume mount is performed inside the guest and thus the mount source
+			// should NOT be on a different device than the host. If there is such case, skip updating the mount
+			// information.
+			fileOnMountedDevice, err := isFileOnSameDeviceAsParent(directAssignedVolumeFile)
 			if err != nil {
-				c.Logger().WithError(err).Error("direct assigned volume found, but error reading file")
+				c.Logger().WithError(err).Error("error checking device mount info for direct assigned volume")
 				return err
 			}
+			if fileOnMountedDevice {
+				c.Logger().WithField("mount-source", m.Source).
+					Infof("direct assigned volume file located on a device that's different from its parent path")
+			} else {
+				directInfo, err := getDirectAssignedDiskMountInfo(directAssignedVolumeFile)
+				if err != nil {
+					c.Logger().WithError(err).Error("direct assigned volume found, but error reading file")
+					return err
+				}
 
-			// Update the volume information based on what we received from CSI:
-			c.mounts[i].Source = directInfo.Device
-			c.mounts[i].Type = directInfo.FsType
-			m.Source = directInfo.Device
-			m.Type = directInfo.FsType
+				// Update the volume information based on what we received from CSI:
+				c.mounts[i].Source = directInfo.Device
+				c.mounts[i].Type = directInfo.FsType
+				m.Source = directInfo.Device
+				m.Type = directInfo.FsType
 
-			c.mounts[i].Options = strings.Split(directInfo.Options, ",")
-			m.Options = c.mounts[i].Options
+				c.mounts[i].Options = strings.Split(directInfo.Options, ",")
+				m.Options = c.mounts[i].Options
+			}
 		}
 		var stat unix.Stat_t
 		if err := unix.Stat(m.Source, &stat); err != nil {

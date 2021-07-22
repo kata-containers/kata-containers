@@ -160,7 +160,7 @@ func getDeviceForPath(path string) (device, error) {
 		}, nil
 	}
 
-	// We get the mount point by recursively peforming stat on the path
+	// We get the mount point by recursively performing stat on the path
 	// The point where the device changes indicates the mountpoint
 	for {
 		if mountPoint == "/" {
