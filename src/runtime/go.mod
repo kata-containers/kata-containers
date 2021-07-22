@@ -30,7 +30,7 @@ require (
 	github.com/gogo/googleapis v1.4.0 // indirect
 	github.com/gogo/protobuf v1.3.1
 	github.com/hashicorp/go-multierror v1.0.0
-	github.com/kata-containers/govmm v0.0.0-20210428163604-f0e9a35308ee
+	github.com/kata-containers/govmm v0.0.0-20210722115311-0173713ea912
 	github.com/mdlayher/vsock v0.0.0-20191108225356-d9c65923cb8f
 	github.com/opencontainers/image-spec v1.0.1 // indirect
 	github.com/opencontainers/runc v1.0.0-rc9.0.20200102164712-2b52db75279c
