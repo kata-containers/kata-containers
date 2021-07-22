@@ -348,32 +348,52 @@ RUN ln -sf /usr/bin/g++ /bin/musl-g++
 	popd
 }
 
-detect_rust_version()
+get_package_version_from_kata_yaml()
 {
-	info "Detecting agent rust version"
+    local yq_path="$1"
+    local yq_version
+    local yq_args
+
 	typeset -r yq=$(command -v yq || command -v "${GOPATH}/bin/yq" || echo "${GOPATH}/bin/yq")
 	if [ ! -f "$yq" ]; then
 		source "$yq_file"
 	fi
 
-	info "Get rust version from ${kata_versions_file}"
-	RUST_VERSION="$(cat "${kata_versions_file}" | $yq r -X - "languages.rust.meta.newest-version")"
+    yq_version=$($yq -V)
+    case $yq_version in
+    *"version "[1-3]*)
+        yq_args="r -X - ${yq_path}"
+        ;;
+    *)
+        yq_args="e .${yq_path} -"
+        ;;
+    esac
 
-	[ "$?" == "0" ] && [ "$RUST_VERSION" != "null" ]
+	PKG_VERSION="$(cat "${kata_versions_file}" | $yq ${yq_args})"
+
+	[ "$?" == "0" ] && [ "$PKG_VERSION" != "null" ] && echo "$PKG_VERSION" || echo ""
+}
+
+detect_rust_version()
+{
+	info "Detecting agent rust version"
+    local yq_path="languages.rust.meta.newest-version"
+
+	info "Get rust version from ${kata_versions_file}"
+	RUST_VERSION="$(get_package_version_from_kata_yaml "$yq_path")"
+
+	[ -n "$RUST_VERSION" ]
 }
 
 detect_musl_version()
 {
 	info "Detecting musl version"
-	typeset -r yq=$(command -v yq || command -v "${GOPATH}/bin/yq" || echo "${GOPATH}/bin/yq")
-	if [ ! -f "$yq" ]; then
-		source "$yq_file"
-	fi
+    local yq_path="externals.musl.version"
 
 	info "Get musl version from ${kata_versions_file}"
-	MUSL_VERSION="$(cat "${kata_versions_file}"  | $yq r -X - "externals.musl.version")"
+	MUSL_VERSION="$(get_package_version_from_kata_yaml "$yq_path")"
 
-	[ "$?" == "0" ] && [ "$MUSL_VERSION" != "null" ]
+	[ -n "$MUSL_VERSION" ]
 }
 
 before_starting_container() {
