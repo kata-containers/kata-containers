@@ -14,6 +14,12 @@ import (
 	directvolume "github.com/kata-containers/directvolume"
 )
 
+const SandboxInfoJSON = "sandboxInfo.json"
+
+type SandboxInfo struct {
+	SandboxID string `json:"id,omitempty"`
+}
+
 // getDirectAssignedDiskInfo reads the `file` and unmarshalls it to DiskMountInfo
 func getDirectAssignedDiskMountInfo(file string) (directvolume.DiskMountInfo, error) {
 
@@ -69,4 +75,21 @@ func isFileOnSameDeviceAsParent(file string) (bool, error) {
 	}
 
 	return fileDeviceMajor != parentDeviceMajor || fileDeviceMinor != parentDeviceMinor, nil
+}
+
+// writeSandboxInfo writes out the SandboxInfoJSON file at the given path.
+// The file for now just contains the sandbox ID.
+func writeSandboxInfo(path, id string) error {
+	sandboxInfoPath := filepath.Join(path, SandboxInfoJSON)
+	sandboxInfo := SandboxInfo{
+		SandboxID: id,
+	}
+	byteValue, err := json.Marshal(sandboxInfo)
+	if err != nil {
+		return err
+	}
+	if err = ioutil.WriteFile(sandboxInfoPath, byteValue, 0644); err != nil {
+		return err
+	}
+	return nil
 }

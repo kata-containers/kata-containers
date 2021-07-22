@@ -733,6 +733,11 @@ func (c *Container) createBlockDevices(ctx context.Context) error {
 					return err
 				}
 
+				// Write out sandbox info file on the mount source to allow CSI to communicate with the runtime
+				if err = writeSandboxInfo(m.Source, c.sandboxID); err != nil {
+					c.Logger().WithError(err).Error("error writing sandbox info")
+				}
+
 				// Update the volume information based on what we received from CSI:
 				c.mounts[i].Source = directInfo.Device
 				c.mounts[i].Type = directInfo.FsType

@@ -226,3 +226,12 @@ func TestIsFileOnSameDeviceAsParentDifferentRootDisk(t *testing.T) {
 	assert.NoError(t, err)
 	assert.False(t, fileOnMountedDevice)
 }
+
+func TestWriteSandboxInfo(t *testing.T) {
+	tmpdir, err := os.MkdirTemp("", "TestWriteSandboxInfo")
+	assert.NoError(t, err)
+	defer os.RemoveAll(tmpdir)
+
+	err = writeSandboxInfo(tmpdir, "test-sandbox-id")
+	assert.NoError(t, err)
+}
