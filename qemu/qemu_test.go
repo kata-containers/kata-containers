@@ -524,7 +524,7 @@ func TestAppendEmptyDevice(t *testing.T) {
 }
 
 func TestAppendKnobsAllTrue(t *testing.T) {
-	var knobsString = "-no-user-config -nodefaults -nographic --no-reboot -daemonize -realtime mlock=on -S"
+	var knobsString = "-no-user-config -nodefaults -nographic --no-reboot -daemonize -overcommit mem-lock=on -S"
 	knobs := Knobs{
 		NoUserConfig:  true,
 		NoDefaults:    true,
@@ -534,7 +534,6 @@ func TestAppendKnobsAllTrue(t *testing.T) {
 		MemPrealloc:   true,
 		FileBackedMem: true,
 		MemShared:     true,
-		Realtime:      true,
 		Mlock:         true,
 		Stopped:       true,
 	}
@@ -543,7 +542,7 @@ func TestAppendKnobsAllTrue(t *testing.T) {
 }
 
 func TestAppendKnobsAllFalse(t *testing.T) {
-	var knobsString = "-realtime mlock=off"
+	var knobsString = ""
 	knobs := Knobs{
 		NoUserConfig:  false,
 		NoDefaults:    false,
@@ -552,7 +551,6 @@ func TestAppendKnobsAllFalse(t *testing.T) {
 		MemPrealloc:   false,
 		FileBackedMem: false,
 		MemShared:     false,
-		Realtime:      false,
 		Mlock:         false,
 		Stopped:       false,
 	}
@@ -581,7 +579,6 @@ func TestAppendMemoryHugePages(t *testing.T) {
 	objMemString := "-object memory-backend-file,id=dimm1,size=1G,mem-path=/dev/hugepages,share=on,prealloc=on"
 	numaMemString := "-numa node,memdev=dimm1"
 	memBackendString := "-machine memory-backend=dimm1"
-	mlockFalseString := "-realtime mlock=off"
 
 	knobsString := objMemString + " "
 	if isDimmSupported(nil) {
@@ -590,7 +587,7 @@ func TestAppendMemoryHugePages(t *testing.T) {
 		knobsString += memBackendString
 	}
 
-	testConfigAppend(conf, knobs, memString+" "+knobsString+" "+mlockFalseString, t)
+	testConfigAppend(conf, knobs, memString+" "+knobsString, t)
 }
 
 func TestAppendMemoryMemPrealloc(t *testing.T) {
@@ -612,7 +609,6 @@ func TestAppendMemoryMemPrealloc(t *testing.T) {
 	objMemString := "-object memory-backend-ram,id=dimm1,size=1G,share=on,prealloc=on"
 	numaMemString := "-numa node,memdev=dimm1"
 	memBackendString := "-machine memory-backend=dimm1"
-	mlockFalseString := "-realtime mlock=off"
 
 	knobsString := objMemString + " "
 	if isDimmSupported(nil) {
@@ -621,7 +617,7 @@ func TestAppendMemoryMemPrealloc(t *testing.T) {
 		knobsString += memBackendString
 	}
 
-	testConfigAppend(conf, knobs, memString+" "+knobsString+" "+mlockFalseString, t)
+	testConfigAppend(conf, knobs, memString+" "+knobsString, t)
 }
 
 func TestAppendMemoryMemShared(t *testing.T) {
@@ -643,7 +639,6 @@ func TestAppendMemoryMemShared(t *testing.T) {
 	objMemString := "-object memory-backend-file,id=dimm1,size=1G,mem-path=foobar,share=on"
 	numaMemString := "-numa node,memdev=dimm1"
 	memBackendString := "-machine memory-backend=dimm1"
-	mlockFalseString := "-realtime mlock=off"
 
 	knobsString := objMemString + " "
 	if isDimmSupported(nil) {
@@ -652,7 +647,7 @@ func TestAppendMemoryMemShared(t *testing.T) {
 		knobsString += memBackendString
 	}
 
-	testConfigAppend(conf, knobs, memString+" "+knobsString+" "+mlockFalseString, t)
+	testConfigAppend(conf, knobs, memString+" "+knobsString, t)
 }
 
 func TestAppendMemoryFileBackedMem(t *testing.T) {
@@ -674,7 +669,6 @@ func TestAppendMemoryFileBackedMem(t *testing.T) {
 	objMemString := "-object memory-backend-file,id=dimm1,size=1G,mem-path=foobar"
 	numaMemString := "-numa node,memdev=dimm1"
 	memBackendString := "-machine memory-backend=dimm1"
-	mlockFalseString := "-realtime mlock=off"
 
 	knobsString := objMemString + " "
 	if isDimmSupported(nil) {
@@ -683,7 +677,7 @@ func TestAppendMemoryFileBackedMem(t *testing.T) {
 		knobsString += memBackendString
 	}
 
-	testConfigAppend(conf, knobs, memString+" "+knobsString+" "+mlockFalseString, t)
+	testConfigAppend(conf, knobs, memString+" "+knobsString, t)
 }
 
 func TestAppendMemoryFileBackedMemPrealloc(t *testing.T) {
@@ -706,7 +700,6 @@ func TestAppendMemoryFileBackedMemPrealloc(t *testing.T) {
 	objMemString := "-object memory-backend-file,id=dimm1,size=1G,mem-path=foobar,share=on,prealloc=on"
 	numaMemString := "-numa node,memdev=dimm1"
 	memBackendString := "-machine memory-backend=dimm1"
-	mlockFalseString := "-realtime mlock=off"
 
 	knobsString := objMemString + " "
 	if isDimmSupported(nil) {
@@ -715,7 +708,7 @@ func TestAppendMemoryFileBackedMemPrealloc(t *testing.T) {
 		knobsString += memBackendString
 	}
 
-	testConfigAppend(conf, knobs, memString+" "+knobsString+" "+mlockFalseString, t)
+	testConfigAppend(conf, knobs, memString+" "+knobsString, t)
 }
 
 func TestNoRebootKnob(t *testing.T) {
@@ -725,9 +718,8 @@ func TestNoRebootKnob(t *testing.T) {
 		NoReboot: true,
 	}
 	knobsString := "--no-reboot"
-	mlockFalseString := "-realtime mlock=off"
 
-	testConfigAppend(conf, knobs, knobsString+" "+mlockFalseString, t)
+	testConfigAppend(conf, knobs, knobsString, t)
 }
 
 var kernelString = "-kernel /opt/vmlinux.container -initrd /opt/initrd.container -append root=/dev/pmem0p1 rootflags=dax,data=ordered,errors=remount-ro rw rootfstype=ext4 tsc=reliable"
@@ -1158,18 +1150,6 @@ func TestBadMemoryKnobs(t *testing.T) {
 		},
 	}
 	c.appendMemoryKnobs()
-	if len(c.qemuParams) != 0 {
-		t.Errorf("Expected empty qemuParams, found %s", c.qemuParams)
-	}
-}
-
-func TestBadKnobs(t *testing.T) {
-	c := &Config{
-		Knobs: Knobs{
-			Mlock: true,
-		},
-	}
-	c.appendKnobs()
 	if len(c.qemuParams) != 0 {
 		t.Errorf("Expected empty qemuParams, found %s", c.qemuParams)
 	}
