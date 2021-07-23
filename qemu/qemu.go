@@ -2411,14 +2411,10 @@ type Knobs struct {
 	MemShared bool
 
 	// Mlock will control locking of memory
-	// Only active when Realtime is set to true
 	Mlock bool
 
 	// Stopped will not start guest CPU at startup
 	Stopped bool
-
-	// Realtime will enable realtime QEMU
-	Realtime bool
 
 	// Exit instead of rebooting
 	// Prevents QEMU from rebooting in the event of a Triple Fault.
@@ -2809,24 +2805,9 @@ func (config *Config) appendKnobs() {
 
 	config.appendMemoryKnobs()
 
-	if config.Knobs.Realtime {
-		config.qemuParams = append(config.qemuParams, "-realtime")
-		// This path is redundant as the default behaviour is locked memory
-		// Realtime today does not control any other feature even though
-		// other features may be added in the future
-		// https://lists.gnu.org/archive/html/qemu-devel/2012-12/msg03330.html
-		if config.Knobs.Mlock {
-			config.qemuParams = append(config.qemuParams, "mlock=on")
-		} else {
-			config.qemuParams = append(config.qemuParams, "mlock=off")
-		}
-	} else {
-		// In order to turn mlock off we need the -realtime option as well
-		if !config.Knobs.Mlock {
-			//Enable realtime anyway just to get the right swapping behaviour
-			config.qemuParams = append(config.qemuParams, "-realtime")
-			config.qemuParams = append(config.qemuParams, "mlock=off")
-		}
+	if config.Knobs.Mlock {
+		config.qemuParams = append(config.qemuParams, "-overcommit")
+		config.qemuParams = append(config.qemuParams, "mem-lock=on")
 	}
 
 	if config.Knobs.Stopped {
