@@ -406,6 +406,7 @@ func (q *qemuArchBase) appendNvdimmImage(devices []govmmQemu.Device, path string
 		ID:       "mem0",
 		MemPath:  path,
 		Size:     (uint64)(imageStat.Size()),
+		ReadOnly: true,
 	}
 
 	devices = append(devices, object)
