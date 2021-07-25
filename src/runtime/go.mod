@@ -26,8 +26,8 @@ require (
 	github.com/intel-go/cpuid v0.0.0-20210602155658-5747e5cec0d9
 	github.com/kata-containers/govmm v0.0.0-20210722115311-0173713ea912
 	github.com/mdlayher/vsock v0.0.0-20191108225356-d9c65923cb8f
-	github.com/opencontainers/runc v1.0.0-rc93
-	github.com/opencontainers/runtime-spec v1.0.3-0.20200929063507-e6143ca7d51d
+	github.com/opencontainers/runc v1.0.0-rc95
+	github.com/opencontainers/runtime-spec v1.0.3-0.20210326190908-1c3f411f0417
 	github.com/opencontainers/selinux v1.8.0
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.7.1
@@ -46,7 +46,7 @@ require (
 	go.opentelemetry.io/otel/sdk v0.15.0
 	golang.org/x/net v0.0.0-20210226172049-e18ecbb05110
 	golang.org/x/oauth2 v0.0.0-20200902213428-5d25da1a8d43
-	golang.org/x/sys v0.0.0-20210324051608-47abb6519492
+	golang.org/x/sys v0.0.0-20210426230700-d19ff857e887
 	google.golang.org/grpc v1.33.2
 	k8s.io/apimachinery v0.20.6
 )
