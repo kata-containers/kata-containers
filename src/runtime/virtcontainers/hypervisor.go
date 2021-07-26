@@ -337,6 +337,9 @@ type HypervisorConfig struct {
 	// VhostUserStorePathList is the list of valid values for vhost-user paths
 	VhostUserStorePathList []string
 
+	// SeccompSandbox is the qemu function which enables the seccomp feature
+	SeccompSandbox string
+
 	// KernelParams are additional guest kernel parameters.
 	KernelParams []Param
 

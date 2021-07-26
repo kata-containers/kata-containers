@@ -250,6 +250,7 @@ func (s *Sandbox) dumpConfig(ss *persistapi.SandboxState) {
 		BootFromTemplate:        sconfig.HypervisorConfig.BootFromTemplate,
 		DisableVhostNet:         sconfig.HypervisorConfig.DisableVhostNet,
 		EnableVhostUserStore:    sconfig.HypervisorConfig.EnableVhostUserStore,
+		SeccompSandbox:          sconfig.HypervisorConfig.SeccompSandbox,
 		VhostUserStorePath:      sconfig.HypervisorConfig.VhostUserStorePath,
 		VhostUserStorePathList:  sconfig.HypervisorConfig.VhostUserStorePathList,
 		GuestHookPath:           sconfig.HypervisorConfig.GuestHookPath,

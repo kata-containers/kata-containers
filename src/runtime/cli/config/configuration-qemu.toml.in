@@ -56,6 +56,13 @@ firmware = "@FIRMWAREPATH@"
 # For example, `machine_accelerators = "nosmm,nosmbus,nosata,nopit,static-prt,nofw"`
 machine_accelerators="@MACHINEACCELERATORS@"
 
+# Qemu seccomp sandbox feature
+# comma-separated list of seccomp sandbox features to control the syscall access.
+# For example, `seccompsandbox= "on,obsolete=deny,elevateprivileges=deny,spawn=deny,resourcecontrol=deny"`
+# Please note, enable this feature may lead some performance cost, you may enable
+# /proc/sys/net/core/bpf_jit_enable to reduce the impact.
+#seccompsandbox="@DEFSECCOMPSANDBOXPARAM@"
+
 # CPU features
 # comma-separated list of cpu features to pass to the cpu
 # For example, `cpu_features = "pmu=off,vmx=off"

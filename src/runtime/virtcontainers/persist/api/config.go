@@ -80,6 +80,9 @@ type HypervisorConfig struct {
 	// related folders, sockets and device nodes should be.
 	VhostUserStorePath string
 
+	// SeccompSandbox is the qemu function which enables the seccomp feature
+	SeccompSandbox string
+
 	// GuestHookPath is the path within the VM that will be used for 'drop-in' hooks
 	GuestHookPath string
 

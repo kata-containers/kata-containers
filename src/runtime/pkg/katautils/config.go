@@ -93,6 +93,7 @@ type hypervisor struct {
 	FileBackedMemRootDir    string   `toml:"file_mem_backend"`
 	GuestHookPath           string   `toml:"guest_hook_path"`
 	GuestMemoryDumpPath     string   `toml:"guest_memory_dump_path"`
+	SeccompSandbox          string   `toml:"seccompsandbox"`
 	HypervisorPathList      []string `toml:"valid_hypervisor_paths"`
 	JailerPathList          []string `toml:"valid_jailer_paths"`
 	CtlPathList             []string `toml:"valid_ctlpaths"`
@@ -705,6 +706,7 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		EnableVhostUserStore:    h.EnableVhostUserStore,
 		VhostUserStorePath:      h.vhostUserStorePath(),
 		VhostUserStorePathList:  h.VhostUserStorePathList,
+		SeccompSandbox:          h.SeccompSandbox,
 		GuestHookPath:           h.guestHookPath(),
 		RxRateLimiterMaxRate:    rxRateLimiterMaxRate,
 		TxRateLimiterMaxRate:    txRateLimiterMaxRate,
