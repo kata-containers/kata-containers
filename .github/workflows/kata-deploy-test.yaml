@@ -43,7 +43,7 @@ jobs:
         id: build-container-image
         run: |
             PR_SHA=$(git log --format=format:%H -n1)
-            VERSION="2.0.0"
+            VERSION="2.2.0-alpha1"
             ARTIFACT_URL="https://github.com/kata-containers/kata-containers/releases/download/${VERSION}/kata-static-${VERSION}-x86_64.tar.xz"
             wget "${ARTIFACT_URL}" -O tools/packaging/kata-deploy/kata-static.tar.xz
             docker build --build-arg KATA_ARTIFACTS=kata-static.tar.xz -t katadocker/kata-deploy-ci:${PR_SHA} ./tools/packaging/kata-deploy
