@@ -13,12 +13,12 @@ const (
 	Thawed    FreezerState = "THAWED"
 )
 
+// Cgroup holds properties of a cgroup on Linux.
 type Cgroup struct {
-	// Deprecated, use Path instead
+	// Name specifies the name of the cgroup
 	Name string `json:"name,omitempty"`
 
-	// name of parent of cgroup or slice
-	// Deprecated, use Path instead
+	// Parent specifies the name of parent of cgroup or slice
 	Parent string `json:"parent,omitempty"`
 
 	// Path specifies the path to cgroups that are created and/or joined by the container.
@@ -53,12 +53,6 @@ type Resources struct {
 
 	// Total memory usage (memory + swap); set `-1` to enable unlimited swap
 	MemorySwap int64 `json:"memory_swap"`
-
-	// Kernel memory limit (in bytes)
-	KernelMemory int64 `json:"kernel_memory"`
-
-	// Kernel memory limit for TCP use (in bytes)
-	KernelMemoryTCP int64 `json:"kernel_memory_tcp"`
 
 	// CPU shares (relative weight vs. other containers)
 	CpuShares uint64 `json:"cpu_shares"`
@@ -133,8 +127,8 @@ type Resources struct {
 
 	// SkipDevices allows to skip configuring device permissions.
 	// Used by e.g. kubelet while creating a parent cgroup (kubepods)
-	// common for many containers.
+	// common for many containers, and by runc update.
 	//
 	// NOTE it is impossible to start a container which has this flag set.
-	SkipDevices bool `json:"skip_devices"`
+	SkipDevices bool `json:"-"`
 }
