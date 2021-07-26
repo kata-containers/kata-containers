@@ -15,6 +15,7 @@ package qemu
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"log"
 	"os"
@@ -23,8 +24,6 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
-
-	"context"
 )
 
 // Machine describes the machine type qemu will emulate.
