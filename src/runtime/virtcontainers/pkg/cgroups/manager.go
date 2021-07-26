@@ -268,9 +268,7 @@ func (m *Manager) Apply() error {
 
 	m.Lock()
 	defer m.Unlock()
-	return m.mgr.Set(&configs.Config{
-		Cgroups: cgroups,
-	})
+	return m.mgr.Set(cgroups.Resources)
 }
 
 func (m *Manager) GetCgroups() (*configs.Cgroup, error) {
