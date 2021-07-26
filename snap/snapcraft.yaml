@@ -112,7 +112,6 @@ parts:
       cd ${kata_dir}/tools/osbuilder
 
       # build image
-      export AGENT_VERSION=$(cat ${kata_dir}/VERSION)
       export AGENT_INIT=yes
       export USE_DOCKER=1
       export DEBUG=1
