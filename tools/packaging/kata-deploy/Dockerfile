@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-FROM centos/systemd
+FROM alpine
 ARG KUBE_ARCH=amd64
 ARG KATA_ARTIFACTS=./kata-static.tar.xz
 ARG DESTINATION=/opt/kata-artifacts
@@ -10,8 +10,7 @@ ARG DESTINATION=/opt/kata-artifacts
 COPY ${KATA_ARTIFACTS} .
 
 RUN \
-yum install -y epel-release && \
-yum install -y bzip2 jq && \
+apk add bzip2 curl jq && \
 mkdir -p ${DESTINATION} && \
 tar xvf ${KATA_ARTIFACTS} -C ${DESTINATION}/ && \
 chown -R root:root ${DESTINATION}/
