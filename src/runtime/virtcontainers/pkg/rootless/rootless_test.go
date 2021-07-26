@@ -9,7 +9,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/opencontainers/runc/libcontainer/system"
+	"github.com/opencontainers/runc/libcontainer/userns"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -21,7 +21,7 @@ func TestIsRootless(t *testing.T) {
 	if os.Getuid() != 0 {
 		rootless = true
 	} else {
-		rootless = system.RunningInUserNS()
+		rootless = userns.RunningInUserNS()
 	}
 
 	assert.Equal(rootless, isRootlessFunc())
