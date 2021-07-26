@@ -7,7 +7,7 @@
 
 ## What are "experimental" features?
 
-"Experimental" features are features living in master branch, 
+"Experimental" features are features living in main branch, 
 but Kata community thinks they're not ready for production use.
 They are **always disabled** by default in Kata components releases,
 and can only be enabled by users when they want to have a try.
@@ -25,7 +25,7 @@ unless they are so important and there's no way to avoid the breakage.
 If we decide to involve such changes, maintainers will help to make the decision that which Kata release
 it should land.
 
-Before it's landed as a formal feature, we allow the codes to be merged first into our master with the tag "experimental",
+Before it's landed as a formal feature, we allow the codes to be merged first into our main with the tag "experimental",
 so it can improve in next few releases to be stable enough.
 
 * the feature is not stable enough currently
@@ -44,7 +44,7 @@ e.g. `new_hypervisor_2`, the name **MUST** be unique and will never be re-used i
 ## What's the difference between "WIP" and "experimental"?
 
 "WIP"(work in progress) are usually used to mark the PR as incomplete before the PR can be reviewed and merged,
-after the PR finishes its designed purpose(fix bugs, add new features etc) and all CI jobs pass, the codes can be merged into master branch.
+after the PR finishes its designed purpose(fix bugs, add new features etc) and all CI jobs pass, the codes can be merged into main branch.
 After merging, we can still mark this part as "experimental", and leave some space for its evolution in future releases.
 
 In one word, "experimental" can be unstable currently but it **MUST** be complete and functional, thus different from "WIP".
@@ -66,6 +66,6 @@ so that maintainers can consider to make it formal in right release.
 
 No.
 
-"Experimental" features are part of Kata master codes, it should pass all CI jobs or we can't merge them,
+"Experimental" features are part of Kata main codes, it should pass all CI jobs or we can't merge them,
 that's different from "WIP", a "WIP" PR can fail the CI temporarily before it can be reviewed and merged.
 
