@@ -30,7 +30,7 @@ import (
 	"sync"
 
 	"github.com/containernetworking/plugins/pkg/ns"
-	"github.com/opencontainers/runc/libcontainer/system"
+	"github.com/opencontainers/runc/libcontainer/userns"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
 )
@@ -78,7 +78,7 @@ func isRootlessFunc() bool {
 		if os.Geteuid() != 0 {
 			return true
 		}
-		if system.RunningInUserNS() {
+		if userns.RunningInUserNS() {
 			return true
 		}
 		SetRootless(false)
