@@ -745,6 +745,10 @@ components:
         size:
           type: integer
           format: int64
+        deflate_on_oom:
+          type: boolean
+          default: false
+          description: Whether the balloon should deflate when the guest is under memory pressure.
 
     FsConfig:
       required:
@@ -847,9 +851,12 @@ components:
 
     SgxEpcConfig:
       required:
+      - id
       - size
       type: object
       properties:
+        id:
+          type: string
         size:
           type: integer
           format: int64
@@ -888,6 +895,10 @@ components:
           items:
             $ref: '#/components/schemas/NumaDistance'
         memory_zones:
+          type: array
+          items:
+            type: string
+        sgx_epc_sections:
           type: array
           items:
             type: string
