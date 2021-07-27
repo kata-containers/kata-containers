@@ -353,6 +353,7 @@ components:
             iommu: false
           balloon:
             size: 9
+            deflate_on_oom: false
           memory:
             hugepages: false
             shared: false
@@ -449,6 +450,9 @@ components:
             cpus:
             - 5
             - 5
+            sgx_epc_sections:
+            - sgx_epc_sections
+            - sgx_epc_sections
             memory_zones:
             - memory_zones
             - memory_zones
@@ -461,6 +465,9 @@ components:
             cpus:
             - 5
             - 5
+            sgx_epc_sections:
+            - sgx_epc_sections
+            - sgx_epc_sections
             memory_zones:
             - memory_zones
             - memory_zones
@@ -471,8 +478,10 @@ components:
           sgx_epc:
           - prefault: false
             size: 6
+            id: id
           - prefault: false
             size: 6
+            id: id
           fs:
           - num_queues: 6
             queue_size: 3
@@ -649,6 +658,7 @@ components:
           iommu: false
         balloon:
           size: 9
+          deflate_on_oom: false
         memory:
           hugepages: false
           shared: false
@@ -745,6 +755,9 @@ components:
           cpus:
           - 5
           - 5
+          sgx_epc_sections:
+          - sgx_epc_sections
+          - sgx_epc_sections
           memory_zones:
           - memory_zones
           - memory_zones
@@ -757,6 +770,9 @@ components:
           cpus:
           - 5
           - 5
+          sgx_epc_sections:
+          - sgx_epc_sections
+          - sgx_epc_sections
           memory_zones:
           - memory_zones
           - memory_zones
@@ -767,8 +783,10 @@ components:
         sgx_epc:
         - prefault: false
           size: 6
+          id: id
         - prefault: false
           size: 6
+          id: id
         fs:
         - num_queues: 6
           queue_size: 3
@@ -1283,10 +1301,16 @@ components:
     BalloonConfig:
       example:
         size: 9
+        deflate_on_oom: false
       properties:
         size:
           format: int64
           type: integer
+        deflate_on_oom:
+          default: false
+          description: Whether the balloon should deflate when the guest is under
+            memory pressure.
+          type: boolean
       required:
       - size
       type: object
@@ -1420,7 +1444,10 @@ components:
       example:
         prefault: false
         size: 6
+        id: id
       properties:
+        id:
+          type: string
         size:
           format: int64
           type: integer
@@ -1428,6 +1455,7 @@ components:
           default: false
           type: boolean
       required:
+      - id
       - size
       type: object
     NumaDistance:
@@ -1455,6 +1483,9 @@ components:
         cpus:
         - 5
         - 5
+        sgx_epc_sections:
+        - sgx_epc_sections
+        - sgx_epc_sections
         memory_zones:
         - memory_zones
         - memory_zones
@@ -1473,6 +1504,10 @@ components:
             $ref: '#/components/schemas/NumaDistance'
           type: array
         memory_zones:
+          items:
+            type: string
+          type: array
+        sgx_epc_sections:
           items:
             type: string
           type: array

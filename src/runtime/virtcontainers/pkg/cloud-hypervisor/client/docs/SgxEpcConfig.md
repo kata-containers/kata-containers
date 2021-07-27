@@ -4,6 +4,7 @@
 
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
+**Id** | **string** |  | 
 **Size** | **int64** |  | 
 **Prefault** | **bool** |  | [optional] [default to false]
 
