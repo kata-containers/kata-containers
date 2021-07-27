@@ -305,7 +305,7 @@ parts:
         ;;
 
       *)
-        cp -a ${kata_dir}/tools/packaging/qemu/default-configs/* default-configs/devices/
+        cp -a ${kata_dir}/tools/packaging/qemu/default-configs/* configs/devices/
         ;;
       esac
 
