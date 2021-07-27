@@ -470,7 +470,7 @@ script and paste its output directly into a
 > [runtime](../src/runtime) repository.
 
 To perform analysis on Kata logs, use the
-[`kata-log-parser`](https://github.com/kata-containers/tests/tree/master/cmd/log-parser)
+[`kata-log-parser`](https://github.com/kata-containers/tests/tree/main/cmd/log-parser)
 tool, which can convert the logs into formats (e.g. JSON, TOML, XML, and YAML).
 
 See [Set up a debug console](#set-up-a-debug-console).
