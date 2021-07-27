@@ -12,4 +12,6 @@ package openapi
 // BalloonConfig struct for BalloonConfig
 type BalloonConfig struct {
 	Size int64 `json:"size"`
+	// Whether the balloon should deflate when the guest is under memory pressure.
+	DeflateOnOom bool `json:"deflate_on_oom,omitempty"`
 }
