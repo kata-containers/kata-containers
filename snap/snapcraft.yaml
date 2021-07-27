@@ -169,12 +169,9 @@ parts:
         SKIP_GO_VERSION_CHECK=1 \
         QEMUCMD=qemu-system-$arch
 
-      if [ -e ${SNAPCRAFT_PART_INSTALL}/../../image/install/usr/share/kata-containers/kata-containers.img ]; then
-        # Use rootfs image by default
-        sed -i -e '/^initrd =/d' ${SNAPCRAFT_PART_INSTALL}/usr/share/defaults/${SNAPCRAFT_PROJECT_NAME}/configuration.toml
-      else
-        # Use initrd by default
-        sed -i -e '/^image =/d' ${SNAPCRAFT_PART_INSTALL}/usr/share/defaults/${SNAPCRAFT_PROJECT_NAME}/configuration.toml
+      if [ ! -f ${SNAPCRAFT_PART_INSTALL}/../../image/install/usr/share/kata-containers/kata-containers.img ]; then
+        sed -i -e "s|^image =.*|initrd = \"/snap/${SNAPCRAFT_PROJECT_NAME}/current/usr/share/kata-containers/kata-containers-initrd.img\"|" \
+          ${SNAPCRAFT_PART_INSTALL}/usr/share/defaults/${SNAPCRAFT_PROJECT_NAME}/configuration.toml
       fi
 
   kernel:
