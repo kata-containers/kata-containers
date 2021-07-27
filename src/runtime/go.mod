@@ -8,7 +8,7 @@ require (
 	github.com/blang/semver/v4 v4.0.0
 	github.com/containerd/cgroups v1.0.1
 	github.com/containerd/console v1.0.2
-	github.com/containerd/containerd v1.5.2
+	github.com/containerd/containerd v1.5.4
 	github.com/containerd/cri-containerd v1.11.1-0.20190125013620-4dd6735020f5
 	github.com/containerd/fifo v1.0.0
 	github.com/containerd/ttrpc v1.0.2
