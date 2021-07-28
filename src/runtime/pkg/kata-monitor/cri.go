@@ -12,9 +12,8 @@ import (
 	"fmt"
 	"net"
 	"net/url"
-	"regexp"
+	"strings"
 
-	"github.com/kata-containers/kata-containers/src/runtime/pkg/types"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"github.com/xeipuuv/gojsonpointer"
@@ -57,18 +56,6 @@ func getConnection(endPoint string) (*grpc.ClientConn, error) {
 	}
 	monitorLog.Debugf("connected successfully using endpoint: %s", endPoint)
 	return conn, nil
-}
-
-func matchesRegex(pattern, target string) bool {
-	if pattern == "" {
-		return true
-	}
-	matched, err := regexp.MatchString(pattern, target)
-	if err != nil {
-		// Assume it's not a match if an error occurs.
-		return false
-	}
-	return matched
 }
 
 func closeConnection(conn *grpc.ClientConn) error {
@@ -192,11 +179,19 @@ func (km *KataMonitor) getSandboxes() (map[string]struct{}, error) {
 			}
 		}
 
-		// Filter by pod name/namespace regular expressions.
+		// If lowRuntime is empty something changed in containerd/CRI-O or we are dealing with an unknown container engine.
+		// Safest options is to add the POD in the list: we will be able to connect to the shim to retrieve the actual info
+		// only for kata PODs.
+		if lowRuntime == "" {
+			monitorLog.WithField("pod", r).Info("unable to retrieve the runtime type")
+			sandboxMap[pod.Id] = struct{}{}
+			continue
+		}
+
 		monitorLog.WithFields(logrus.Fields{
 			"low runtime": lowRuntime,
 		}).Debug("")
-		if matchesRegex(types.KataRuntimeNameRegexp, lowRuntime) || matchesRegex("kata*", lowRuntime) {
+		if strings.Contains(lowRuntime, "kata") {
 			sandboxMap[pod.Id] = struct{}{}
 		}
 	}
