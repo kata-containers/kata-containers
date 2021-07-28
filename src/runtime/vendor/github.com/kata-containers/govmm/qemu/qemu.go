@@ -2448,6 +2448,9 @@ type Config struct {
 	// CPUModel is the CPU model to be used by qemu.
 	CPUModel string
 
+	// SeccompSandbox is the qemu function which enables the seccomp feature
+	SeccompSandbox string
+
 	// Machine
 	Machine Machine
 
@@ -2522,6 +2525,13 @@ func (config *Config) appendFDs(fds []*os.File) []int {
 	}
 
 	return fdInts
+}
+
+func (config *Config) appendSeccompSandbox() {
+	if config.SeccompSandbox != "" {
+		config.qemuParams = append(config.qemuParams, "-sandbox")
+		config.qemuParams = append(config.qemuParams, config.SeccompSandbox)
+	}
 }
 
 func (config *Config) appendName() {
@@ -2877,6 +2887,7 @@ func LaunchQemu(config Config, logger QMPLog) (string, error) {
 	config.appendPidFile()
 	config.appendLogFile()
 	config.appendFwCfg(logger)
+	config.appendSeccompSandbox()
 
 	if err := config.appendCPUs(); err != nil {
 		return "", err
