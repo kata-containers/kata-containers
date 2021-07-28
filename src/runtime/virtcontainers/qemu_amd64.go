@@ -31,7 +31,7 @@ const (
 
 	defaultQemuMachineType = QemuQ35
 
-	defaultQemuMachineOptions = "accel=kvm,kernel_irqchip"
+	defaultQemuMachineOptions = "accel=kvm,kernel_irqchip=on"
 
 	qmpMigrationWaitTimeout = 5 * time.Second
 
