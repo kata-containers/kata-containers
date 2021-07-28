@@ -178,7 +178,7 @@ sub-filter on, for instance, the `SYSLOG_IDENTIFIER` to differentiate the Kata c
 on the `PRIORITY` to filter out critical issues etc.
 
 Kata generates a significant amount of Kata specific information, which can be seen as
-[`logfmt`](https://github.com/kata-containers/tests/tree/master/cmd/log-parser#logfile-requirements).
+[`logfmt`](https://github.com/kata-containers/tests/tree/main/cmd/log-parser#logfile-requirements).
 data contained in the `MESSAGE` field. Imported as-is, there is no easy way to filter on that data
 in Kibana:
 
