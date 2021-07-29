@@ -775,7 +775,7 @@ func (q *QMP) blockdevAddBaseArgs(device, blockdevID string, ro bool) (map[strin
 		"driver":    "raw",
 		"read-only": ro,
 		"file": map[string]interface{}{
-			"driver":   "file",
+			"driver":   "host_device",
 			"filename": device,
 		},
 	}
