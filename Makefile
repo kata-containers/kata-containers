@@ -33,4 +33,10 @@ generate-protocols:
 static-checks: build
 	bash ci/static-checks.sh
 
-.PHONY: all default static-checks
+binary-tarball:
+	make -f ./tools/packaging/kata-deploy/local-build/Makefile
+
+install-binary-tarball:
+	make -f ./tools/packaging/kata-deploy/local-build/Makefile install
+
+.PHONY: all default static-checks binary-tarball install-binary-tarball

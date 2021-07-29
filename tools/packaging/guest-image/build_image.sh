@@ -16,53 +16,45 @@ readonly script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly packaging_root_dir="$(cd "${script_dir}/../" && pwd)"
 readonly repo_root_dir="$(cd "${script_dir}/../../../" && pwd)"
 readonly osbuilder_dir="$(cd "${repo_root_dir}/tools/osbuilder" && pwd)"
-readonly tmp_dir=$(mktemp -d -t build-image-tmp.XXXXXXXXXX)
-export   GOPATH="${tmp_dir}/go"
 
 export GOPATH=${GOPATH:-${HOME}/go}
 source "${packaging_root_dir}/scripts/lib.sh"
 
-exit_handler() {
-	[ -d "${tmp_dir}" ] && sudo rm -rf "$tmp_dir"
-}
-trap exit_handler EXIT
-
 arch_target="$(uname -m)"
 
-source "${packaging_root_dir}/versions.txt"
-
-readonly destdir="${PWD}"
-
 build_initrd() {
+	info "Build initrd"
+	info "initrd os: $initrd_distro"
+	info "initrd os version: $initrd_os_version"
 	sudo -E PATH="$PATH" make initrd \
 		DISTRO="$initrd_distro" \
 		DEBUG="${DEBUG:-}" \
 		OS_VERSION="${initrd_os_version}" \
-		ROOTFS_BUILD_DEST="${tmp_dir}/initrd-image" \
+		ROOTFS_BUILD_DEST="${builddir}/initrd-image" \
 		USE_DOCKER=1 \
 		AGENT_INIT="yes"
+	mv "kata-containers-initrd.img" "${install_dir}/${initrd_name}"
+	(
+		cd "${install_dir}"
+		ln -sf "${builddir}" kata-containers-initrd.img
+	)
 }
 
 build_image() {
+	info "Build image"
+	info "image os: $img_distro"
+	info "image os version: $img_os_version"
 	sudo -E PATH="${PATH}" make image \
 		DISTRO="${img_distro}" \
 		DEBUG="${DEBUG:-}" \
 		USE_DOCKER="1" \
 		IMG_OS_VERSION="${img_os_version}" \
-		ROOTFS_BUILD_DEST="${tmp_dir}/rootfs-image"
-}
-
-create_tarball() {
-	agent_sha=$(get_repo_hash "${script_dir}")
-	#reduce sha size for short names
-	agent_sha=${agent_sha:0:${short_commit_length}}
-	tarball_name="kata-containers-${kata_version}-${agent_sha}-${arch_target}.tar.gz"
-	image_name="kata-containers-image_${img_distro}_${kata_version}_agent_${agent_sha}.img"
-	initrd_name="kata-containers-initrd_${initrd_distro}_${kata_version}_agent_${agent_sha}.initrd"
-
-	mv "${osbuilder_dir}/kata-containers.img" "${image_name}"
-	mv "${osbuilder_dir}/kata-containers-initrd.img" "${initrd_name}"
-	sudo tar cfzv "${tarball_name}" "${initrd_name}" "${image_name}"
+		ROOTFS_BUILD_DEST="${builddir}/rootfs-image"
+	mv -f "kata-containers.img" "${install_dir}/${image_name}"
+	(
+		cd "${install_dir}"
+		ln -sf "${image_name}" kata-containers.img
+	)
 }
 
 usage() {
@@ -75,46 +67,77 @@ Usage:
 ${script_name} [options]
 
 Options:
- -v <version> : Kata version to build images. Use kata release for
-                 for agent and osbuilder.
-
+ --imagetype=${image_type}
+ --prefix=${prefix}
+ --destdir=${destdir}
 EOT
 
 	exit "${return_code}"
 }
 
 main() {
-	while getopts "v:h" opt; do
+	image_type=image
+	destdir="$PWD"
+	prefix="/opt/kata"
+	builddir="${PWD}"
+	while getopts "h-:" opt; do
 		case "$opt" in
+		-)
+			case "${OPTARG}" in
+			imagetype=image)
+				image_type=image
+				#image information
+				img_distro=$(get_from_kata_deps "assets.image.architecture.${arch_target}.name")
+				img_os_version=$(get_from_kata_deps "assets.image.architecture.${arch_target}.version")
+				image_name="kata-${img_distro}-${img_os_version}.${image_type}"
+				;;
+			imagetype=initrd)
+				image_type=initrd
+				#initrd information
+				initrd_distro=$(get_from_kata_deps "assets.initrd.architecture.${arch_target}.name")
+				initrd_os_version=$(get_from_kata_deps "assets.initrd.architecture.${arch_target}.version")
+				initrd_name="kata-${initrd_distro}-${initrd_os_version}.${image_type}"
+				;;
+			prefix=*)
+				prefix=${OPTARG#*=}
+				;;
+			destdir=*)
+				destdir=${OPTARG#*=}
+				;;
+			builddir=*)
+				builddir=${OPTARG#*=}
+				;;
+			*)
+				echo >&2 "ERROR: Invalid option -$opt${OPTARG}"
+				usage 1
+				;;
+			esac
+			;;
 		h) usage 0 ;;
-		v) kata_version="${OPTARG}" ;;
 		*)
 			echo "Invalid option $opt"
 			usage 1
 			;;
 		esac
 	done
+	readonly destdir
+	readonly builddir
 
-	install_yq
+	echo "build ${image_type}"
 
-	#image information
-	img_distro=$(get_from_kata_deps "assets.image.architecture.${arch_target}.name" "${kata_version}")
-	#In old branches this is not defined, use a default
-	img_distro=${img_distro:-clearlinux}
-	img_os_version=$(get_from_kata_deps "assets.image.architecture.${arch_target}.version" "${kata_version}")
 
-	#initrd information
-	initrd_distro=$(get_from_kata_deps "assets.initrd.architecture.${arch_target}.name" "${kata_version}")
-	#In old branches this is not defined, use a default
-	initrd_distro=${initrd_distro:-alpine}
-	initrd_os_version=$(get_from_kata_deps "assets.image.architecture.${arch_target}.version" "${kata_version}")
 
-	shift "$((OPTIND - 1))"
+	install_dir="${destdir}/${prefix}/share/kata-containers/"
+	readonly install_dir
+
+	mkdir -p "${install_dir}"
+
 	pushd "${osbuilder_dir}"
-	build_initrd
-	build_image
-	create_tarball
-	cp "${tarball_name}" "${destdir}"
+	case "${image_type}" in
+	initrd) build_initrd ;;
+	image) build_image ;;
+	esac
+
 	popd
 }
 

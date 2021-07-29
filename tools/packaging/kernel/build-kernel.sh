@@ -14,7 +14,6 @@ set -o pipefail
 
 readonly script_name="$(basename "${BASH_SOURCE[0]}")"
 readonly script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-kata_version="${kata_version:-}"
 
 #project_name
 readonly project_name="kata-containers"
@@ -29,7 +28,6 @@ download_kernel=false
 # The repository where kernel configuration lives
 readonly kernel_config_repo="github.com/${project_name}/kata-containers/tools/packaging"
 readonly patches_repo="github.com/${project_name}/kata-containers/tools/packaging"
-readonly patches_repo_dir="${GOPATH}/src/${patches_repo}"
 # Default path to search patches to apply to kernel
 readonly default_patches_dir="${script_dir}/patches"
 # Default path to search config for kata
@@ -493,15 +491,13 @@ main() {
 	# If not kernel version take it from versions.yaml
 	if [ -z "$kernel_version" ]; then
 		if [[ ${experimental_kernel} == "true" ]]; then
-			kernel_version=$(get_from_kata_deps "assets.kernel-experimental.tag" "${kata_version}")
-			#Remove extra 'v'
-			kernel_version="${kernel_version#v}"
+			kernel_version=$(get_from_kata_deps "assets.kernel-experimental.tag")
 		else
-			kernel_version=$(get_from_kata_deps "assets.kernel.version" "${kata_version}")
-			#Remove extra 'v'
-			kernel_version="${kernel_version#v}"
+			kernel_version=$(get_from_kata_deps "assets.kernel.version")
 		fi
 	fi
+	#Remove extra 'v'
+	kernel_version="${kernel_version#v}"
 
 	if [ -z "${kernel_path}" ]; then
 		config_version=$(get_config_version)
