@@ -844,14 +844,6 @@ func addAgentConfigOverrides(ocispec specs.Spec, config *vc.SandboxConfig) error
 		return err
 	}
 
-	if value, ok := ocispec.Annotations[vcAnnotations.AgentTraceMode]; ok {
-		c.TraceMode = value
-	}
-
-	if value, ok := ocispec.Annotations[vcAnnotations.AgentTraceType]; ok {
-		c.TraceType = value
-	}
-
 	if err := newAnnotationConfiguration(ocispec, vcAnnotations.AgentContainerPipeSize).setUint(func(containerPipeSize uint64) {
 		c.ContainerPipeSize = uint32(containerPipeSize)
 	}); err != nil {

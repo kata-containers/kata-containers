@@ -196,8 +196,8 @@ async fn real_main() -> std::result::Result<(), Box<dyn std::error::Error>> {
         ttrpc_log_guard = Ok(slog_stdlog::init().map_err(|e| e)?);
     }
 
-    if config.tracing != tracer::TraceType::Disabled {
-        let _ = tracer::setup_tracing(NAME, &logger, &config)?;
+    if config.tracing {
+        tracer::setup_tracing(NAME, &logger)?;
     }
 
     let root_span = span!(tracing::Level::TRACE, "root-span");
@@ -239,7 +239,7 @@ async fn real_main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     drop(span_guard);
     drop(root_span);
 
-    if config.tracing != tracer::TraceType::Disabled {
+    if config.tracing {
         tracer::end_tracing();
     }
 
