@@ -41,7 +41,7 @@ $ echo 1 | sudo tee /proc/sys/vm/overcommit_memory
 Use following command to start a Kata Container.
 ```
 $ pod_yaml=pod.yaml
-$ container_yaml=${REPORT_DIR}/container.yaml
+$ container_yaml=container.yaml
 $ image="quay.io/prometheus/busybox:latest"
 $ cat << EOF > "${pod_yaml}"
 metadata:
