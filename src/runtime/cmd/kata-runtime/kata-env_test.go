@@ -184,10 +184,6 @@ func getExpectedAgentDetails(config oci.RuntimeConfig) (AgentInfo, error) {
 	return AgentInfo{
 		Debug: agentConfig.Debug,
 		Trace: agentConfig.Trace,
-
-		// No trace mode/type set by default
-		TraceMode: "",
-		TraceType: "",
 	}, nil
 }
 
@@ -677,14 +673,10 @@ func TestEnvGetAgentInfo(t *testing.T) {
 	assert.True(t, agent.Debug)
 
 	agentConfig.Trace = true
-	agentConfig.TraceMode = "traceMode"
-	agentConfig.TraceType = "traceType"
 	config.AgentConfig = agentConfig
 	agent, err = getAgentInfo(config)
 	assert.NoError(t, err)
 	assert.True(t, agent.Trace)
-	assert.Equal(t, agent.TraceMode, "traceMode")
-	assert.Equal(t, agent.TraceType, "traceType")
 }
 
 func testEnvShowTOMLSettings(t *testing.T, tmpdir string, tmpfile *os.File) error {

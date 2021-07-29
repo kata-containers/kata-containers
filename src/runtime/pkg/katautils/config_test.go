@@ -1152,9 +1152,6 @@ func TestAgentDefaults(t *testing.T) {
 
 	a.Tracing = true
 	assert.Equal(a.trace(), a.Tracing)
-
-	assert.Equal(a.traceMode(), a.TraceMode)
-	assert.Equal(a.traceType(), a.TraceType)
 }
 
 func TestGetDefaultConfigFilePaths(t *testing.T) {

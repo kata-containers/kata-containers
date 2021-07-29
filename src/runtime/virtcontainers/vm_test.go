@@ -122,8 +122,6 @@ func TestVMConfigGrpc(t *testing.T) {
 			Trace:              false,
 			EnableDebugConsole: false,
 			ContainerPipeSize:  0,
-			TraceMode:          "",
-			TraceType:          "",
 			KernelModules:      []string{}},
 	}
 

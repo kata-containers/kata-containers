@@ -23,8 +23,6 @@ type RuntimeConfigOptions struct {
 	NetmonPath           string
 	LogPath              string
 	BlockDeviceDriver    string
-	AgentTraceMode       string
-	AgentTraceType       string
 	SharedFS             string
 	VirtioFSDaemon       string
 	JaegerEndpoint       string
@@ -137,8 +135,6 @@ func MakeRuntimeConfigFileData(config RuntimeConfigOptions) string {
 	[agent.kata]
 	enable_debug = ` + strconv.FormatBool(config.AgentDebug) + `
 	enable_tracing = ` + strconv.FormatBool(config.AgentTrace) + `
-	trace_mode = "` + config.AgentTraceMode + `"` + `
-	trace_type = "` + config.AgentTraceType + `"` + `
 
 	[netmon]
 	path = "` + config.NetmonPath + `"
