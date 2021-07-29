@@ -184,6 +184,14 @@ parts:
       - bison
       - flex
     override-build: |
+      yq=${SNAPCRAFT_STAGE}/yq
+      export GOPATH=${SNAPCRAFT_STAGE}/gopath
+      kata_dir=${GOPATH}/src/github.com/${SNAPCRAFT_PROJECT_NAME}/${SNAPCRAFT_PROJECT_NAME}
+      versions_file="${kata_dir}/versions.yaml"
+      kernel_version="$(${yq} r $versions_file assets.kernel.version)"
+      #Remove extra 'v'
+      kernel_version=${kernel_version#v}
+
       [ "$(uname -m)" = "s390x" ] && sudo apt-get --no-install-recommends install -y libssl-dev
 
       export GOPATH=${SNAPCRAFT_STAGE}/gopath
@@ -193,13 +201,12 @@ parts:
       cd ${kata_dir}/tools/packaging/kernel
 
       # Setup and build kernel
-      ./build-kernel.sh -d setup
+      ./build-kernel.sh -v ${kernel_version} -d setup
       kernel_dir_prefix="kata-linux-"
       cd ${kernel_dir_prefix}*
-      version=$(basename ${PWD} | sed 's|'"${kernel_dir_prefix}"'||' | cut -d- -f1)
       make -j $(($(nproc)-1)) EXTRAVERSION=".container"
 
-      kernel_suffix=${version}.container
+      kernel_suffix=${kernel_version}.container
       kata_kernel_dir=${SNAPCRAFT_PART_INSTALL}/usr/share/kata-containers
       mkdir -p ${kata_kernel_dir}
 

@@ -15,12 +15,18 @@ die() {
 # Install the yq yaml query package from the mikefarah github repo
 # Install via binary download, as we may not have golang installed at this point
 function install_yq() {
-	GOPATH=${GOPATH:-${HOME}/go}
-	local yq_path="${GOPATH}/bin/yq"
 	local yq_pkg="github.com/mikefarah/yq"
 	local yq_version=3.4.1
+	INSTALL_IN_GOPATH=${INSTALL_IN_GOPATH:-true}
 
-	[ -x  "${GOPATH}/bin/yq" ] && [ "`${GOPATH}/bin/yq --version`"X == "yq version ${yq_version}"X ] && return
+	if [ "${INSTALL_IN_GOPATH}"  == "true" ];then
+		GOPATH=${GOPATH:-${HOME}/go}
+		mkdir -p "${GOPATH}/bin"
+		local yq_path="${GOPATH}/bin/yq"
+	else
+		yq_path="/usr/local/bin/yq"
+	fi
+	[ -x  "${yq_path}" ] && [ "`${yq_path} --version`"X == "yq version ${yq_version}"X ] && return
 
 	read -r -a sysInfo <<< "$(uname -sm)"
 
@@ -51,7 +57,6 @@ function install_yq() {
 		;;
 	esac
 
-	mkdir -p "${GOPATH}/bin"
 
 	# Check curl
 	if ! command -v "curl" >/dev/null; then
