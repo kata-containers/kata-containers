@@ -112,7 +112,7 @@ $ kubectl delete -f runtimeclasses/kata-runtimeClasses.yaml
 
 The [Dockerfile](Dockerfile)  used to create the container image deployed in the DaemonSet is provided here.
 This image contains all the necessary artifacts for running Kata Containers, all of which are pulled
-from the [Kata Containers release page](https://github.com/kata-containers/runtime/releases).
+from the [Kata Containers release page](https://github.com/kata-containers/kata-containers/releases).
 
 Host artifacts:
 * `cloud-hypervisor`, `firecracker`, `qemu-system-x86_64`, and supporting binaries
