@@ -1,20 +1,3 @@
-* [Building a Guest OS rootfs for Kata Containers](#building-a-guest-os-rootfs-for-kata-containers)
-  * [Supported base OSs](#supported-base-oss)
-     * [Extra features](#extra-features)
-        * [Supported distributions list](#supported-distributions-list)
-        * [Generate Kata specific files](#generate-kata-specific-files)
-  * [Rootfs requirements](#rootfs-requirements)
-  * [Creating a rootfs](#creating-a-rootfs)
-  * [Creating a rootfs with kernel modules](#creating-a-rootfs-with-kernel-modules)
-  * [Build a rootfs using Docker](#build-a-rootfs-using-docker)
-  * [Adding support for a new guest OS](#adding-support-for-a-new-guest-os)
-     * [Create template files](#create-template-files)
-     * [Modify template files](#modify-template-files)
-     * [Expected rootfs directory content](#expected-rootfs-directory-content)
-     * [Optional - Customize the rootfs](#optional---customize-the-rootfs)
-        * [Adding extra packages](#adding-extra-packages)
-        * [Arbitrary rootfs changes](#arbitrary-rootfs-changes)
-
 # Building a Guest OS rootfs for Kata Containers
 
 The Kata Containers rootfs is created using the `rootfs.sh` script.

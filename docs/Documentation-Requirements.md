@@ -1,16 +1,3 @@
-* [Introduction](#introduction)
-* [General requirements](#general-requirements)
-* [Linking advice](#linking-advice)
-* [Notes](#notes)
-* [Warnings and other admonitions](#warnings-and-other-admonitions)
-* [Files and command names](#files-and-command-names)
-* [Code blocks](#code-blocks)
-* [Images](#images)
-* [Spelling](#spelling)
-* [Names](#names)
-* [Version numbers](#version-numbers)
-* [The apostrophe](#the-apostrophe)
-
 # Introduction
 
 This document outlines the requirements for all documentation in the [Kata
@@ -23,10 +10,6 @@ All documents must:
 - Be written in simple English.
 - Be written in [GitHub Flavored Markdown](https://github.github.com/gfm) format.
 - Have a `.md` file extension.
-- Include a TOC (table of contents) at the top of the document with links to
-  all heading sections. We recommend using the
-  [`kata-check-markdown`](https://github.com/kata-containers/tests/tree/main/cmd/check-markdown)
-  tool to generate the TOC.
 - Be linked to from another document in the same repository.
 
   Although GitHub allows navigation of the entire repository, it should be
@@ -42,6 +25,10 @@ All documents must:
   non-interactively. If this is possible, the document can be tested by the CI
   which can then execute the commands specified to ensure the instructions are
   correct. This avoids documents becoming out of date over time.
+
+> **Note:**
+>
+> Do not add a table of contents (TOC) since GitHub will auto-generate one.
 
 # Linking advice
 

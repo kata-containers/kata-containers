@@ -1,16 +1,3 @@
-* [Introduction](#introduction)
-* [Maintenance warning](#maintenance-warning)
-* [Determine current version](#determine-current-version)
-* [Determine latest version](#determine-latest-version)
-* [Configuration changes](#configuration-changes)
-* [Upgrade Kata Containers](#upgrade-kata-containers)
-    * [Upgrade native distribution packaged version](#upgrade-native-distribution-packaged-version)
-    * [Static installation](#static-installation)
-        * [Determine if you are using a static installation](#determine-if-you-are-using-a-static-installation)
-        * [Remove a static installation](#remove-a-static-installation)
-        * [Upgrade a static installation](#upgrade-a-static-installation)
-* [Custom assets](#custom-assets)
-
 # Introduction
 
 This document outlines the options for upgrading from a

@@ -1,8 +1,5 @@
 # Kata Containers with virtio-fs
 
-- [Kata Containers with virtio-fs](#kata-containers-with-virtio-fs)
-  - [Introduction](#introduction)
-
 ## Introduction
 
 Container deployments utilize explicit or implicit file sharing between host filesystem and containers. From a trust perspective, avoiding a shared file-system between the trusted host and untrusted container is recommended. This is not always feasible. In Kata Containers, block-based volumes are preferred as they allow usage of either device pass through or `virtio-blk` for access within the virtual machine.

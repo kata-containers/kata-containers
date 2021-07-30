@@ -3,11 +3,6 @@
 Kata Containers supports creation of containers that are "privileged" (i.e. have additional capabilities and access
 that is not normally granted).
 
-* [Warnings](#warnings)
-    * [Host Devices](#host-devices)
-        * [Containerd and CRI](#containerd-and-cri)
-        * [CRI-O](#cri-o)
-
 ## Warnings
 
 **Warning:** Whilst this functionality is supported, it can decrease the security of Kata Containers if not configured 

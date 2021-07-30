@@ -1,11 +1,5 @@
 # Hypervisors
 
-* [Hypervisors](#hypervisors)
-    * [Introduction](#introduction)
-    * [Types](#types)
-    * [Determine currently configured hypervisor](#determine-currently-configured-hypervisor)
-    * [Choose a Hypervisor](#choose-a-hypervisor)
-
 ## Introduction
 
 Kata Containers supports multiple hypervisors. This document provides a very
