@@ -10,15 +10,7 @@ on:
 
 name: Static checks
 jobs:
-  skip-test:
-    if: ${{ contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
-    runs-on: ubuntu-20.04
-    steps:
-    - name: Skip CI
-      run: |
-        echo "Skipping CI"
   test:
-    if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
     strategy:
       matrix:
         go-version: [1.15.x, 1.16.x]
@@ -33,36 +25,44 @@ jobs:
       target_branch: ${{ github.base_ref }}
     steps:
     - name: Install Go
+      if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
       uses: actions/setup-go@v2
       with:
         go-version: ${{ matrix.go-version }}
       env:
         GOPATH: ${{ runner.workspace }}/kata-containers
     - name: Setup GOPATH
+      if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
       run: |
         echo "TRAVIS_BRANCH: ${TRAVIS_BRANCH}"
         echo "TRAVIS_PULL_REQUEST_BRANCH: ${TRAVIS_PULL_REQUEST_BRANCH}"
         echo "TRAVIS_PULL_REQUEST_SHA: ${TRAVIS_PULL_REQUEST_SHA}"
         echo "TRAVIS: ${TRAVIS}"
     - name: Set env
+      if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
       run: |
         echo "GOPATH=${{ github.workspace }}" >> $GITHUB_ENV
         echo "${{ github.workspace }}/bin" >> $GITHUB_PATH
     - name: Checkout code
+      if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
+      run: |
       uses: actions/checkout@v2
       with:
         fetch-depth: 0
         path: ./src/github.com/${{ github.repository }}
     - name: Setup travis references
+      if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
       run: |
         echo "TRAVIS_BRANCH=${TRAVIS_BRANCH:-$(echo $GITHUB_REF | awk 'BEGIN { FS = \"/\" } ; { print $3 }')}"
         target_branch=${TRAVIS_BRANCH}
     - name: Setup
+      if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
       run: |
         cd ${GOPATH}/src/github.com/${{ github.repository }} && ./ci/setup.sh
       env:
         GOPATH: ${{ runner.workspace }}/kata-containers
     - name: Building rust
+      if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
       run: |
         cd ${GOPATH}/src/github.com/${{ github.repository }} && ./ci/install_rust.sh
         PATH=$PATH:"$HOME/.cargo/bin"
@@ -70,14 +70,18 @@ jobs:
         rustup component add rustfmt clippy
     # Check whether the vendored code is up-to-date & working as the first thing
     - name: Check vendored code
+      if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
       run: |
         cd ${GOPATH}/src/github.com/${{ github.repository }} && make vendor
     - name: Static Checks
+      if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
       run: |
         cd ${GOPATH}/src/github.com/${{ github.repository }} && make static-checks
     - name: Run Compiler Checks
+      if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
       run: |
         cd ${GOPATH}/src/github.com/${{ github.repository }} && make check
     - name: Run Unit Tests
+      if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
       run: |
         cd ${GOPATH}/src/github.com/${{ github.repository }} && make test
