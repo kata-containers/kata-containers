@@ -281,6 +281,22 @@ func (clh *cloudHypervisor) createSandbox(ctx context.Context, id string, networ
 	}
 	clh.state.apiSocket = apiSocketPath
 
+	cfg := chclient.NewConfiguration()
+	cfg.HTTPClient = &http.Client{
+		Transport: &http.Transport{
+			DialContext: func(ctx context.Context, network, path string) (net.Conn, error) {
+				addr, err := net.ResolveUnixAddr("unix", clh.state.apiSocket)
+				if err != nil {
+					return nil, err
+				}
+
+				return net.DialUnix("unix", nil, addr)
+			},
+		},
+	}
+
+	clh.APIClient = chclient.NewAPIClient(cfg).DefaultApi
+
 	clh.virtiofsd = &virtiofsd{
 		path:       clh.config.VirtioFSDaemon,
 		sourcePath: filepath.Join(getSharePath(clh.id)),
@@ -968,32 +984,7 @@ func (clh *cloudHypervisor) isClhRunning(timeout uint) (bool, error) {
 }
 
 func (clh *cloudHypervisor) client() clhClient {
-	if clh.APIClient == nil {
-		clh.APIClient = clh.newAPIClient()
-	}
-
 	return clh.APIClient
-}
-
-func (clh *cloudHypervisor) newAPIClient() *chclient.DefaultApiService {
-
-	cfg := chclient.NewConfiguration()
-
-	socketTransport := &http.Transport{
-		DialContext: func(ctx context.Context, network, path string) (net.Conn, error) {
-			addr, err := net.ResolveUnixAddr("unix", clh.state.apiSocket)
-			if err != nil {
-				return nil, err
-			}
-
-			return net.DialUnix("unix", nil, addr)
-		},
-	}
-
-	cfg.HTTPClient = http.DefaultClient
-	cfg.HTTPClient.Transport = socketTransport
-
-	return chclient.NewAPIClient(cfg).DefaultApi
 }
 
 func openAPIClientError(err error) error {
