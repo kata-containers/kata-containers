@@ -73,11 +73,11 @@ spec:
       runtimeClassName: kata-qemu
 ```
 
-To run an example with `kata-qemu`:
+To run an example with `kata-clh`:
 
 ```sh
 $ cd $GOPATH/src/github.com/kata-containers/kata-containers/tools/packaging/kata-deploy/examples
-$ kubectl apply -f test-deploy-kata-qemu.yaml
+$ kubectl apply -f test-deploy-kata-clh.yaml
 ```
 
 To run an example with `kata-fc`:
@@ -87,12 +87,20 @@ $ cd $GOPATH/src/github.com/kata-containers/kata-containers/tools/packaging/kata
 $ kubectl apply -f test-deploy-kata-fc.yaml
 ```
 
+To run an example with `kata-qemu`:
+
+```sh
+$ cd $GOPATH/src/github.com/kata-containers/kata-containers/tools/packaging/kata-deploy/examples
+$ kubectl apply -f test-deploy-kata-qemu.yaml
+```
+
 The following removes the test pods:
 
 ```sh
 $ cd $GOPATH/src/github.com/kata-containers/kata-containers/tools/packaging/kata-deploy/examples
-$ kubectl delete -f test-deploy-kata-qemu.yaml
+$ kubectl delete -f test-deploy-kata-clh.yaml
 $ kubectl delete -f test-deploy-kata-fc.yaml
+$ kubectl delete -f test-deploy-kata-qemu.yaml
 ```
 
 ### Remove Kata from the Kubernetes cluster
