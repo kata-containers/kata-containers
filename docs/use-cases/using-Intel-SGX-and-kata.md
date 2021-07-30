@@ -1,10 +1,5 @@
 # Kata Containers with SGX
 
-- [Check if SGX is enabled](#check-if-sgx-is-enabled)
-- [Install Host kernel with SGX support](#install-host-kernel-with-sgx-support)
-- [Install Guest kernel with SGX support](#install-guest-kernel-with-sgx-support)
-- [Run Kata Containers with SGX enabled](#run-kata-containers-with-sgx-enabled)
-
 Intel® Software Guard Extensions (SGX) is a set of instructions that increases the security
 of applications code and data, giving them more protections from disclosure or modification.
 

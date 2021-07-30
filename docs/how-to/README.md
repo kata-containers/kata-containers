@@ -1,11 +1,7 @@
 # Howto Guides
 
-* [Howto Guides](#howto-guides)
-  * [Kubernetes Integration](#kubernetes-integration)
-  * [Hypervisors Integration](#hypervisors-integration)
-  * [Advanced Topics](#advanced-topics)
-
 ## Kubernetes Integration
+
 - [Run Kata containers with `crictl`](run-kata-with-crictl.md)
 - [Run Kata Containers with Kubernetes](run-kata-with-k8s.md)
 - [How to use Kata Containers and Containerd](containerd-kata.md)
@@ -28,6 +24,7 @@
 - [Kata Containers with ACRN Hypervisor](how-to-use-kata-containers-with-acrn.md)
 
 ## Advanced Topics
+
 - [How to use Kata Containers with virtio-fs](how-to-use-virtio-fs-with-kata.md)
 - [Setting Sysctls with Kata](how-to-use-sysctls-with-kata.md)
 - [What Is VMCache and How To Enable It](what-is-vm-cache-and-how-do-I-use-it.md)

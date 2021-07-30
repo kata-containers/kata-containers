@@ -1,17 +1,5 @@
 # Using Nvidia GPU device with Kata Containers
 
-- [Using Nvidia GPU device with Kata Containers](#using-nvidia-gpu-device-with-kata-containers)
-	- [Hardware Requirements](#hardware-requirements)
-	- [Host BIOS Requirements](#host-bios-requirements)
-	- [Host Kernel Requirements](#host-kernel-requirements)
-	- [Install and configure Kata Containers](#install-and-configure-kata-containers)
-	- [Build Kata Containers kernel with GPU support](#build-kata-containers-kernel-with-gpu-support)
-	- [Nvidia GPU pass-through mode with Kata Containers](#nvidia-gpu-pass-through-mode-with-kata-containers)
-	- [Nvidia vGPU mode with Kata Containers](#nvidia-vgpu-mode-with-kata-containers)
-	- [Install Nvidia Driver in Kata Containers](#install-nvidia-driver-in-kata-containers)
-	- [References](#references)
-
-
 An Nvidia GPU device can be passed to a Kata Containers container using GPU passthrough
 (Nvidia GPU pass-through mode) as well as GPU mediated passthrough (Nvidia vGPU mode). 
 
@@ -303,4 +291,4 @@ Tue Mar  3 00:03:49 2020
 
 - [Configuring a VM for GPU Pass-Through by Using the QEMU Command Line](https://docs.nvidia.com/grid/latest/grid-vgpu-user-guide/index.html#using-gpu-pass-through-red-hat-el-qemu-cli)
 - https://gitlab.com/nvidia/container-images/driver/-/tree/master
-- https://github.com/NVIDIA/nvidia-docker/wiki/Driver-containers-(Beta)
+- https://github.com/NVIDIA/nvidia-docker/wiki/Driver-containers

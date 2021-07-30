@@ -1,12 +1,3 @@
-
-Table of Contents
-=================
-
-   * [Prerequisites](#prerequisites)
-   * [Building](#building)
-   * [Testing](#testing)
-   * [Submitting changes](#submitting-changes)
-
 # Prerequisites
 
 `virtcontainers` has a few prerequisites for development:

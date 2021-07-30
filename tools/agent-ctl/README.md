@@ -1,14 +1,5 @@
 # Agent Control tool
 
-* [Overview](#overview)
-* [Audience and environment](#audience-and-environment)
-* [Full details](#full-details)
-* [Code summary](#code-summary)
-* [Running the tool](#running-the-tool)
-    * [Prerequisites](#prerequisites)
-    * [Connect to a real Kata Container](#connect-to-a-real-kata-container)
-    * [Run the tool and the agent in the same environment](#run-the-tool-and-the-agent-in-the-same-environment)
-
 ## Overview
 
 The Kata Containers agent control tool (`kata-agent-ctl`) is a low-level test
