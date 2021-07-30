@@ -10,6 +10,13 @@ on:
 
 name: Static checks
 jobs:
+  skip-test:
+    if: ${{ contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
+    runs-on: ubuntu-20.04
+    steps:
+    - name: Skip CI
+      run: |
+        echo "Skipping CI"
   test:
     if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
     strategy:
