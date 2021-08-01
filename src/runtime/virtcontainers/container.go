@@ -777,12 +777,18 @@ func newContainer(ctx context.Context, sandbox *Sandbox, contConfig *ContainerCo
 		if err != nil {
 			return &Container{}, fmt.Errorf("Invalid container configuration Annotations %s %v", vcAnnotations.ContainerResourcesSwappiness, err)
 		}
+		if c.config.Resources.Memory == nil {
+			c.config.Resources.Memory = &specs.LinuxMemory{}
+		}
 		c.config.Resources.Memory.Swappiness = &resourceSwappiness
 	}
 	if resourceSwapInBytesStr, ok := c.config.Annotations[vcAnnotations.ContainerResourcesSwapInBytes]; ok {
 		resourceSwapInBytesInUint, err := strconv.ParseUint(resourceSwapInBytesStr, 0, 64)
 		if err != nil {
 			return &Container{}, fmt.Errorf("Invalid container configuration Annotations %s %v", vcAnnotations.ContainerResourcesSwapInBytes, err)
+		}
+		if c.config.Resources.Memory == nil {
+			c.config.Resources.Memory = &specs.LinuxMemory{}
 		}
 		resourceSwapInBytes := int64(resourceSwapInBytesInUint)
 		c.config.Resources.Memory.Swap = &resourceSwapInBytes
