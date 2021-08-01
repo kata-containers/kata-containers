@@ -13,7 +13,7 @@ use nix::mount::{MntFlags, MsFlags};
 use nix::sys::stat::{self, Mode, SFlag};
 use nix::unistd::{self, Gid, Uid};
 use nix::NixPath;
-use oci::{LinuxDevice, Mount, Spec};
+use oci::{LinuxDevice, Mount, Process, Spec};
 use std::collections::{HashMap, HashSet};
 use std::fs::{self, OpenOptions};
 use std::mem::MaybeUninit;
@@ -902,10 +902,21 @@ fn bind_dev(dev: &LinuxDevice) -> Result<()> {
     Ok(())
 }
 
-pub fn finish_rootfs(cfd_log: RawFd, spec: &Spec) -> Result<()> {
+pub fn finish_rootfs(cfd_log: RawFd, spec: &Spec, process: &Process) -> Result<()> {
     let olddir = unistd::getcwd()?;
     log_child!(cfd_log, "old cwd: {}", olddir.to_str().unwrap());
     unistd::chdir("/")?;
+
+    if !process.cwd.is_empty() {
+        // Although the process.cwd string can be unclean/malicious (../../dev, etc),
+        // we are running on our own mount namespace and we just chrooted into the
+        // container's root. It's safe to create CWD from there.
+        log_child!(cfd_log, "Creating CWD {}", process.cwd.as_str());
+        // Unconditionally try to create CWD, create_dir_all will not fail if
+        // it already exists.
+        fs::create_dir_all(process.cwd.as_str())?;
+    }
+
     if spec.linux.is_some() {
         let linux = spec.linux.as_ref().unwrap();
 
@@ -1211,7 +1222,7 @@ mod tests {
             options: vec!["ro".to_string(), "shared".to_string()],
         }];
 
-        let ret = finish_rootfs(stdout_fd, &spec);
+        let ret = finish_rootfs(stdout_fd, &spec, &oci::Process::default());
         assert!(ret.is_ok(), "Should pass. Got: {:?}", ret);
     }
 
