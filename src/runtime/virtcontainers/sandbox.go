@@ -1938,6 +1938,7 @@ func (s *Sandbox) updateResources(ctx context.Context) error {
 	if sandboxneedPodSwap {
 		sandboxSwapByte += hypervisorMemoryByte
 	}
+	s.Logger().WithField("sandboxMemoryByte", sandboxMemoryByte).WithField("sandboxneedPodSwap", sandboxneedPodSwap).WithField("sandboxSwapByte", sandboxSwapByte).Debugf("updateResources: after calculateSandboxMemory")
 
 	// Setup the SWAP in the guest
 	if sandboxSwapByte > 0 {
