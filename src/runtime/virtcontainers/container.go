@@ -745,6 +745,12 @@ func (c *Container) createBlockDevices(ctx context.Context) error {
 	return nil
 }
 
+func (c *Container) initConfigResourcesMemory() {
+	ociSpec := c.GetPatchedOCISpec()
+	c.config.Resources.Memory = &specs.LinuxMemory{}
+	ociSpec.Linux.Resources.Memory = c.config.Resources.Memory
+}
+
 // newContainer creates a Container structure from a sandbox and a container configuration.
 func newContainer(ctx context.Context, sandbox *Sandbox, contConfig *ContainerConfig) (*Container, error) {
 	span, ctx := katatrace.Trace(ctx, sandbox.Logger(), "newContainer", sandbox.tracingTags())
@@ -778,7 +784,7 @@ func newContainer(ctx context.Context, sandbox *Sandbox, contConfig *ContainerCo
 			return &Container{}, fmt.Errorf("Invalid container configuration Annotations %s %v", vcAnnotations.ContainerResourcesSwappiness, err)
 		}
 		if c.config.Resources.Memory == nil {
-			c.config.Resources.Memory = &specs.LinuxMemory{}
+			c.initConfigResourcesMemory()
 		}
 		c.config.Resources.Memory.Swappiness = &resourceSwappiness
 	}
@@ -788,7 +794,7 @@ func newContainer(ctx context.Context, sandbox *Sandbox, contConfig *ContainerCo
 			return &Container{}, fmt.Errorf("Invalid container configuration Annotations %s %v", vcAnnotations.ContainerResourcesSwapInBytes, err)
 		}
 		if c.config.Resources.Memory == nil {
-			c.config.Resources.Memory = &specs.LinuxMemory{}
+			c.initConfigResourcesMemory()
 		}
 		resourceSwapInBytes := int64(resourceSwapInBytesInUint)
 		c.config.Resources.Memory.Swap = &resourceSwapInBytes
