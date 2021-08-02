@@ -126,6 +126,7 @@ type qmpCommand struct {
 	filter         *qmpEventFilter
 	resultReceived bool
 	oob            []byte
+	dbg_cmd        string
 }
 
 // QMP is a structure that contains the internal state used by startQMPLoop and
@@ -342,7 +343,7 @@ func (q *QMP) finaliseCommandWithResponse(cmdEl *list.Element, cmdQueue *list.Li
 		if succeeded {
 			cmd.res <- qmpResult{response: response}
 		} else {
-			cmd.res <- qmpResult{err: fmt.Errorf("QMP command failed: %v", response)}
+			cmd.res <- qmpResult{err: fmt.Errorf("QMP command %v failed: %v", cmd.dbg_cmd, response)}
 		}
 	}
 	if cmdQueue.Len() > 0 {
@@ -439,6 +440,7 @@ func (q *QMP) writeNextQMPCommand(cmdQueue *list.List) {
 		cmdQueue.Remove(cmdEl)
 	}
 	encodedCmd = append(encodedCmd, '\n')
+	cmd.dbg_cmd = string(encodedCmd)
 	if unixConn, ok := q.conn.(*net.UnixConn); ok && len(cmd.oob) > 0 {
 		_, _, err = unixConn.WriteMsgUnix(encodedCmd, cmd.oob, nil)
 	} else {
