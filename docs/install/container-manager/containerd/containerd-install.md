@@ -5,7 +5,19 @@
 > - If Kata Containers and / or containerd are packaged by your distribution,
 >   we recommend you install these versions to ensure they are updated when
 >   new releases are available.
-
+> 
+> - Quick installation using this documentation by generating an script from here.
+> ```
+> $ curl -fsSL -O https://raw.githubusercontent.com/kata-containers/kata-containers/blob/main/docs/install/container-manager/containerd/containerd-install.md
+> $ bash -c "$(curl -fsSL https://raw.githubusercontent.com/kata-containers/tests/main/.ci/kata-doc-to-script.sh) containerd-install.md installer.sh"
+> # Review the generated script
+> $ bash installer.sh
+> ```
+> Or
+> ```
+> $ bash -c "$(curl -fsSL https://raw.githubusercontent.com/kata-containers/kata-containers/blob/main/ci/installer/containerd.sh)"
+> ```
+>
 > **Warning:**
 >
 > - These instructions install the **newest** versions of Kata Containers and
@@ -39,16 +51,37 @@
   - https://github.com/kata-containers/kata-containers/releases
 
   Note that Kata Containers uses [semantic versioning](https://semver.org) so
-  you should install a version that does *not* include a dash ("-"), since this
+  you *should* install a version that does *not* include a dash ("-"), since this
   indicates a pre-release version.
+  ```bash
+  # Export the version you want to install
+  # e.g.
+  # export KATA_VERSION=2.2.1
+  latest_kata=$(curl -L https://raw.githubusercontent.com/kata-containers/kata-containers/main/VERSION)
+  KATA_VERSION="${KATA_VERSION:-$latest_kata}"
+  echo "INFO: Installing kata version $KATA_VERSION"
+  KATA_TARBALL_URL="https://github.com/kata-containers/kata-containers/releases/download/${KATA_VERSION}/kata-static-${KATA_VERSION}-$(uname -m).tar.xz"
+  [ -f "kata-tarball.tar.xz" ] || curl -o kata-tarball.tar.xz -L "${KATA_TARBALL_URL}"
+  ```
 
 - Unpack the downloaded archive.
 
+    ```bash
+    sudo tar xvf  kata-tarball.tar.xz -C /
+    ```
+
    Kata Containers packages use a `/opt/kata/` prefix so either add that to
-   your `PATH`, or create symbolic links for the following commands. The
-   advantage of using symbolic links is that the `systemd(1)` configuration file
-   for containerd will not need to be modified to allow the daemon to find this
-   binary (see the [section on installing containerd](#install-containerd) below).
+   your `PATH`, or create symbolic links for the following commands.
+   ```bash
+   echo "INFO: add kata to PATH using symbolic liks from /opt to /usr/local/bin"
+   sudo ln -sf /opt/kata/bin/containerd-shim-kata-v2 /usr/local/bin/containerd-shim-kata-v2
+   sudo ln -sf /opt/kata/bin/kata-collect-data.sh /usr/local/bin/kata-collect-data.sh
+   sudo ln -sf /opt/kata/bin/kata-runtime /usr/local/bin/kata-runtime
+   ```
+   The advantage of using symbolic links is that the `systemd(1)` configuration
+   file for containerd will not need to be modified to allow the daemon to find
+   this binary (see the [section on installing containerd](#install-containerd)
+   below).
 
    | Command | Description |
    |-|-|
@@ -59,7 +92,10 @@
 - Check installation by showing version details:
 
    ```bash
-   $ kata-runtime --version
+   echo "INFO: Installed Kata version:"
+   kata-runtime --version
+   echo "INFO: Check kata can run in this host"
+   sudo kata-runtime kata-check
    ```
 
 ## Install containerd
@@ -73,8 +109,27 @@
 - Download a release from:
 
   - https://github.com/containerd/containerd/releases
+  - Unpack the downloaded archive.
 
-- Unpack the downloaded archive.
+      ```bash
+      if command -v containerd; then
+        echo "INFO: Containerd alraedy installed"
+      else
+        containerd_version=$(yq read versions.yaml "externals.cri-containerd.version")
+        echo "INFO: Install Containerd $containerd_version"
+        case "$(uname -m)" in
+          aarch64) goarch="arm64" ;;
+          ppc64le) goarch="ppc64le" ;;
+          x86_64) goarch="amd64" ;;
+          s390x) goarch="s390x" ;;
+        *) echo "Unknown architecture for goarch format: $(uname -m)" ;exit 1;;
+        esac
+        curl -o containerd.tar.gz -L https://github.com/containerd/containerd/releases/download/${containerd_version}/cri-containerd-cni-${containerd_version#v}-linux-${goarch}.tar.gz
+
+        sudo tar -xvf ./containerd.tar.gz -C /
+      fi
+      ```
+
 
 - Configure containerd
 
@@ -105,6 +160,22 @@
             [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.kata]
               runtime_type = "io.containerd.kata.v2"
     ```
+    ```bash
+    echo "INFO: Remove previous kata containerd config"
+    [ -d /etc/containerd ] || sudo mkdir -p /etc/containerd/
+    [ -f /etc/containerd/config.toml ] || sudo touch /etc/containerd/config.toml
+    sudo sed -i '/#KATA_INSTALLER_CONFIG/{:a;N;/#END_KATA_INSTALLER_CONFIG/!ba};/#KATA_INSTALLER_CONFIG/d' /etc/containerd/config.toml
+    ```
+
+    ```bash
+    echo "INFO: modifying containerd config"
+    sudo tee -a /etc/containerd/config.toml <<EOF
+    #KATA_INSTALLER_CONFIG
+    [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.kata]
+      runtime_type = "io.containerd.kata.v2"
+    #END_KATA_INSTALLER_CONFIG
+    EOF
+    ```
 
     > **Note:**
     >    
@@ -112,6 +183,11 @@
     > `containerd-shim-kata-v2` binary to allow Kata Containers to be created.
 
   - Start the containerd service.
+      ```bash
+      echo "INFO: Restart containerd service"
+      sudo systemctl daemon-reload
+      sudo systemctl restart containerd
+      ```
 
 ## Test the installation
 
@@ -119,9 +195,10 @@ You are now ready to run Kata Containers. You can perform a simple test by
 running the following commands:
 
 ```bash
+$ echo "Test containerd with kata"
 $ image="docker.io/library/busybox:latest"
 $ sudo ctr image pull "$image"
-$ sudo ctr run --runtime "io.containerd.kata.v2" --rm -t "$image" test-kata uname -r
+$ sudo ctr run --runtime "io.containerd.kata.v2" --rm -t "$image" test-kata sh -c 'echo "Hello from kata with kernel $(uname -r)"'
 ```
 
 The last command above shows details of the kernel version running inside the
