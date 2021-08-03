@@ -719,6 +719,10 @@ func QMPStart(ctx context.Context, socket string, cfg QMPConfig, disconnectedCh 
 		}
 	}
 
+	if q.version.Major < 5 {
+		return nil, nil, fmt.Errorf("govmm requires qemu version 5.0 or later, this is qemu (%d.%d)", q.version.Major, q.version.Minor)
+	}
+
 	return q, q.version, nil
 }
 
@@ -780,15 +784,8 @@ func (q *QMP) blockdevAddBaseArgs(device, blockdevID string, ro bool) (map[strin
 		},
 	}
 
-	if q.version.Major > 2 || (q.version.Major == 2 && q.version.Minor >= 8) {
-		blockdevArgs["node-name"] = blockdevID
-		args = blockdevArgs
-	} else {
-		blockdevArgs["id"] = blockdevID
-		args = map[string]interface{}{
-			"options": blockdevArgs,
-		}
-	}
+	blockdevArgs["node-name"] = blockdevID
+	args = blockdevArgs
 
 	return args, blockdevArgs
 }
@@ -812,11 +809,6 @@ func (q *QMP) ExecuteBlockdevAdd(ctx context.Context, device, blockdevID string,
 // ignored.
 func (q *QMP) ExecuteBlockdevAddWithCache(ctx context.Context, device, blockdevID string, direct, noFlush, ro bool) error {
 	args, blockdevArgs := q.blockdevAddBaseArgs(device, blockdevID, ro)
-
-	if q.version.Major < 2 || (q.version.Major == 2 && q.version.Minor < 9) {
-		return fmt.Errorf("versions of qemu (%d.%d) older than 2.9 do not support set cache-related options for block devices",
-			q.version.Major, q.version.Minor)
-	}
 
 	blockdevArgs["cache"] = map[string]interface{}{
 		"direct":   direct,
@@ -850,7 +842,7 @@ func (q *QMP) ExecuteDeviceAdd(ctx context.Context, blockdevID, devID, driver, b
 		args["bus"] = bus
 	}
 
-	if shared && (q.version.Major > 2 || (q.version.Major == 2 && q.version.Minor >= 10)) {
+	if shared {
 		args["share-rw"] = "on"
 	}
 	if transport.isVirtioPCI(nil) {
@@ -904,32 +896,22 @@ func (q *QMP) ExecuteSCSIDeviceAdd(ctx context.Context, blockdevID, devID, drive
 	if lun >= 0 {
 		args["lun"] = lun
 	}
-	if shared && (q.version.Major > 2 || (q.version.Major == 2 && q.version.Minor >= 10)) {
+	if shared {
 		args["share-rw"] = "on"
 	}
 
 	return q.executeCommand(ctx, "device_add", args, nil)
 }
 
-// ExecuteBlockdevDel deletes a block device by sending a x-blockdev-del command
-// for qemu versions < 2.9. It sends the updated blockdev-del command for qemu>=2.9.
-// blockdevID is the id of the block device to be deleted.  Typically, this will
-// match the id passed to ExecuteBlockdevAdd.  It must be a valid QMP id.
+// ExecuteBlockdevDel deletes a block device by sending blockdev-del
+// command.  blockdevID is the id of the block device to be deleted.
+// Typically, this will match the id passed to ExecuteBlockdevAdd.  It
+// must be a valid QMP id.
 func (q *QMP) ExecuteBlockdevDel(ctx context.Context, blockdevID string) error {
 	args := map[string]interface{}{}
 
-	if q.version.Major > 2 || (q.version.Major == 2 && q.version.Minor >= 9) {
-		args["node-name"] = blockdevID
-		return q.executeCommand(ctx, "blockdev-del", args, nil)
-	}
-
-	if q.version.Major == 2 && q.version.Minor == 8 {
-		args["node-name"] = blockdevID
-	} else {
-		args["id"] = blockdevID
-	}
-
-	return q.executeCommand(ctx, "x-blockdev-del", args, nil)
+	args["node-name"] = blockdevID
+	return q.executeCommand(ctx, "blockdev-del", args, nil)
 }
 
 // ExecuteChardevDel deletes a char device by sending a chardev-remove command.
@@ -1104,7 +1086,7 @@ func (q *QMP) ExecutePCIDeviceAdd(ctx context.Context, blockdevID, devID, driver
 	if bus != "" {
 		args["bus"] = bus
 	}
-	if shared && (q.version.Major > 2 || (q.version.Major == 2 && q.version.Minor >= 10)) {
+	if shared {
 		args["share-rw"] = "on"
 	}
 	if queues > 0 {
@@ -1240,10 +1222,7 @@ func isThreadIDSupported(driver string) bool {
 
 // isDieIDSupported returns if the cpu driver and the qemu version support the die id option
 func (q *QMP) isDieIDSupported(driver string) bool {
-	if (q.version.Major > 4 || (q.version.Major == 4 && q.version.Minor >= 1)) && driver == "host-x86_64-cpu" {
-		return true
-	}
-	return false
+	return driver == "host-x86_64-cpu"
 }
 
 // ExecuteCPUDeviceAdd adds a CPU to a QEMU instance using the device_add command.
@@ -1454,11 +1433,9 @@ func (q *QMP) ExecuteNVDIMMDeviceAdd(ctx context.Context, id, mempath string, si
 		},
 	}
 
-	if q.version.Major > 4 || (q.version.Major == 4 && q.version.Minor >= 1) {
-		if pmem != nil {
-			props := args["props"].(map[string]interface{})
-			props["pmem"] = *pmem
-		}
+	if pmem != nil {
+		props := args["props"].(map[string]interface{})
+		props["pmem"] = *pmem
 	}
 
 	err := q.executeCommand(ctx, "object-add", args, nil)
