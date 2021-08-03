@@ -22,7 +22,7 @@ use crate::mount::BareMount;
 use crate::protocols::agent as protos;
 
 /// The maximum number of file system entries agent will watch for each mount.
-const MAX_ENTRIES_PER_STORAGE: usize = 8;
+const MAX_ENTRIES_PER_STORAGE: usize = 16;
 
 /// The maximum size of a watchable mount in bytes.
 const MAX_SIZE_PER_WATCHABLE_MOUNT: u64 = 1024 * 1024;
@@ -44,7 +44,7 @@ struct Storage {
     target_mount_point: PathBuf,
 
     /// Flag to indicate that the Storage should be watched. Storage will be watched until
-    /// the source becomes too large, either in number of files (>8) or total size (>1MB).
+    /// the source becomes too large, either in number of files (>16) or total size (>1MB).
     watch: bool,
 
     /// The list of files to watch from the source mount point and updated in the target one.
@@ -573,7 +573,7 @@ mod tests {
         fs::remove_file(source_dir.path().join("big.txt")).unwrap();
         fs::remove_file(source_dir.path().join("too-big.txt")).unwrap();
 
-        // Up to eight files should be okay:
+        // Up to 16 files should be okay:
         fs::write(source_dir.path().join("1.txt"), "updated").unwrap();
         fs::write(source_dir.path().join("2.txt"), "updated").unwrap();
         fs::write(source_dir.path().join("3.txt"), "updated").unwrap();
@@ -582,10 +582,18 @@ mod tests {
         fs::write(source_dir.path().join("6.txt"), "updated").unwrap();
         fs::write(source_dir.path().join("7.txt"), "updated").unwrap();
         fs::write(source_dir.path().join("8.txt"), "updated").unwrap();
+        fs::write(source_dir.path().join("9.txt"), "updated").unwrap();
+        fs::write(source_dir.path().join("10.txt"), "updated").unwrap();
+        fs::write(source_dir.path().join("11.txt"), "updated").unwrap();
+        fs::write(source_dir.path().join("12.txt"), "updated").unwrap();
+        fs::write(source_dir.path().join("13.txt"), "updated").unwrap();
+        fs::write(source_dir.path().join("14.txt"), "updated").unwrap();
+        fs::write(source_dir.path().join("15.txt"), "updated").unwrap();
+        fs::write(source_dir.path().join("16.txt"), "updated").unwrap();
         assert_eq!(entry.scan(&logger).await.unwrap(), 8);
 
-        // Nine files is too many:
-        fs::write(source_dir.path().join("9.txt"), "updated").unwrap();
+        // 17 files is too many:
+        fs::write(source_dir.path().join("16.txt"), "updated").unwrap();
         thread::sleep(Duration::from_secs(1));
         assert!(entry.scan(&logger).await.is_err());
     }
