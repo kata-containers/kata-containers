@@ -222,8 +222,10 @@ generate_qemu_options() {
 
 	# Disabled options
 
-	# Disable sheepdog block driver support
-	qemu_options+=(size:--disable-sheepdog)
+	# Disable sheepdog block driver support (deprecated in 5.2.0)
+	if ! gt_eq ${qemu_version} 5.2.0 ; then
+		qemu_options+=(size:--disable-sheepdog)
+	fi
 
 	# Disable block migration in the main migration stream
 	qemu_options+=(size:--disable-live-block-migration)
