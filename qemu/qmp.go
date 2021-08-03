@@ -1366,17 +1366,16 @@ func (q *QMP) ExecQueryCpusFast(ctx context.Context) ([]CPUInfoFast, error) {
 
 // ExecMemdevAdd adds size of MiB memory device to the guest
 func (q *QMP) ExecMemdevAdd(ctx context.Context, qomtype, id, mempath string, size int, share bool, driver, driverID, addr, bus string) error {
-	props := map[string]interface{}{"size": uint64(size) << 20}
 	args := map[string]interface{}{
 		"qom-type": qomtype,
 		"id":       id,
-		"props":    props,
+		"size":     uint64(size) << 20,
 	}
 	if mempath != "" {
-		props["mem-path"] = mempath
+		args["mem-path"] = mempath
 	}
 	if share {
-		props["share"] = true
+		args["share"] = true
 	}
 	err := q.executeCommand(ctx, "object-add", args, nil)
 	if err != nil {
@@ -1426,16 +1425,13 @@ func (q *QMP) ExecuteNVDIMMDeviceAdd(ctx context.Context, id, mempath string, si
 	args := map[string]interface{}{
 		"qom-type": "memory-backend-file",
 		"id":       "nvdimmbackmem" + id,
-		"props": map[string]interface{}{
-			"mem-path": mempath,
-			"size":     size,
-			"share":    true,
-		},
+		"mem-path": mempath,
+		"size":     size,
+		"share":    true,
 	}
 
 	if pmem != nil {
-		props := args["props"].(map[string]interface{})
-		props["pmem"] = *pmem
+		args["pmem"] = *pmem
 	}
 
 	err := q.executeCommand(ctx, "object-add", args, nil)
