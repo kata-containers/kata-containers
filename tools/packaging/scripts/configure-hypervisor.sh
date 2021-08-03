@@ -222,17 +222,11 @@ generate_qemu_options() {
 
 	# Disabled options
 
-	if gt_eq "${qemu_version}" "5.0.0" ; then
-		# Disable sheepdog block driver support
-		qemu_options+=(size:--disable-sheepdog)
+	# Disable sheepdog block driver support
+	qemu_options+=(size:--disable-sheepdog)
 
-		# Disable block migration in the main migration stream
-		qemu_options+=(size:--disable-live-block-migration)
-	else
-		# Starting from QEMU 5.0, the bluetooth code has been removed without replacement.
-		# bluetooth support not required
-		qemu_options+=(size:--disable-bluez)
-	fi
+	# Disable block migration in the main migration stream
+	qemu_options+=(size:--disable-live-block-migration)
 
 	# braille support not required
 	qemu_options+=(size:--disable-brlapi)
@@ -256,7 +250,7 @@ generate_qemu_options() {
 
 	# Disable PAM authentication: it's a feature used together with VNC access
 	# that's not used. See QEMU commit 8953caf for more details
-	gt_eq "${qemu_version}" "4.0.0" && qemu_options+=(size:--disable-auth-pam)
+	qemu_options+=(size:--disable-auth-pam)
 
 	# Disable unused filesystem support
 	[ "$arch" == x86_64 ] && qemu_options+=(size:--disable-fdt)
@@ -265,11 +259,7 @@ generate_qemu_options() {
 	qemu_options+=(size:--disable-libnfs)
 
 	# Starting from QEMU 4.1, libssh replaces to libssh2
-	if gt_eq "${qemu_version}" "4.1.0" ; then
-		qemu_options+=(size:--disable-libssh)
-	else
-		qemu_options+=(size:--disable-libssh2)
-	fi
+	qemu_options+=(size:--disable-libssh)
 
 	# Disable unused compression support
 	qemu_options+=(size:--disable-bzip2)
@@ -293,12 +283,6 @@ generate_qemu_options() {
 	ppc64le) ;;
 	s390x) qemu_options+=(size:--disable-tcg) ;;
 	esac
-
-	# SECURITY: Don't build a static binary (lowers security)
-	# needed if qemu version is less than 2.7
-	if ! gt_eq "${qemu_version}" "2.7.0" ; then
-		qemu_options+=(security:--disable-static)
-	fi
 
 	if [ "${static}" == "true" ]; then
 		qemu_options+=(misc:--static)
@@ -370,38 +354,33 @@ generate_qemu_options() {
 	# Disable Capstone
 	qemu_options+=(size:--disable-capstone)
 
-	if gt_eq "${qemu_version}" "3.0.0" ; then
-		# Disable graphics
-		qemu_options+=(size:--disable-virglrenderer)
+	# Disable graphics
+	qemu_options+=(size:--disable-virglrenderer)
 
-		# Due to qemu commit 3ebb9c4f52, we can't disable replication in v3.0
-		if gt_eq "${qemu_version}" "3.1.0" ; then
-			# Disable block replication
-			qemu_options+=(size:--disable-replication)
-		fi
+	# Disable block replication
+	qemu_options+=(size:--disable-replication)
 
-		# Disable USB smart card reader
-		qemu_options+=(size:--disable-smartcard)
+	# Disable USB smart card reader
+	qemu_options+=(size:--disable-smartcard)
 
-		# Disable guest agent
-		qemu_options+=(size:--disable-guest-agent)
-		qemu_options+=(size:--disable-guest-agent-msi)
+	# Disable guest agent
+	qemu_options+=(size:--disable-guest-agent)
+	qemu_options+=(size:--disable-guest-agent-msi)
 
-		# unused image formats
-		qemu_options+=(size:--disable-vvfat)
-		qemu_options+=(size:--disable-vdi)
-		qemu_options+=(size:--disable-qed)
-		qemu_options+=(size:--disable-qcow1)
-		qemu_options+=(size:--disable-bochs)
-		qemu_options+=(size:--disable-cloop)
-		qemu_options+=(size:--disable-dmg)
-		qemu_options+=(size:--disable-parallels)
+	# unused image formats
+	qemu_options+=(size:--disable-vvfat)
+	qemu_options+=(size:--disable-vdi)
+	qemu_options+=(size:--disable-qed)
+	qemu_options+=(size:--disable-qcow1)
+	qemu_options+=(size:--disable-bochs)
+	qemu_options+=(size:--disable-cloop)
+	qemu_options+=(size:--disable-dmg)
+	qemu_options+=(size:--disable-parallels)
 
-		# vxhs was deprecated on QEMU 5.1 so it doesn't need to be
-		# explicitly disabled.
-		if ! gt_eq "${qemu_version}" "5.1.0" ; then
-			qemu_options+=(size:--disable-vxhs)
-		fi
+	# vxhs was deprecated on QEMU 5.1 so it doesn't need to be
+	# explicitly disabled.
+	if ! gt_eq "${qemu_version}" "5.1.0" ; then
+	    qemu_options+=(size:--disable-vxhs)
 	fi
 
 	#---------------------------------------------------------------------
@@ -413,12 +392,6 @@ generate_qemu_options() {
 
 	# Required for fast network access
 	qemu_options+=(speed:--enable-vhost-net)
-
-	# Always strip binaries
-	# needed if qemu version is less than 2.7
-	if ! gt_eq "${qemu_version}" "2.7.0" ; then
-		qemu_options+=(size:--enable-strip)
-	fi
 
 	# Support Ceph RADOS Block Device (RBD)
 	[ -z "${static}" ] && qemu_options+=(functionality:--enable-rbd)
@@ -433,25 +406,21 @@ generate_qemu_options() {
 	qemu_options+=(functionality:--enable-cap-ng)
 	qemu_options+=(functionality:--enable-seccomp)
 
-	if gt_eq "${qemu_version}" "3.1.0" ; then
-		# AVX2 is enabled by default by x86_64, make sure it's enabled only
-		# for that architecture
-		if [ "$arch" == x86_64 ]; then
-			qemu_options+=(speed:--enable-avx2)
-			if gt_eq "${qemu_version}" "5.0.0" ; then
-				qemu_options+=(speed:--enable-avx512f)
-			fi
-			# According to QEMU's nvdimm documentation: When 'pmem' is 'on' and QEMU is
-			# built with libpmem support, QEMU will take necessary operations to guarantee
-			# the persistence of its own writes to the vNVDIMM backend.
-			qemu_options+=(functionality:--enable-libpmem)
-		else
-			qemu_options+=(speed:--disable-avx2)
-			qemu_options+=(functionality:--disable-libpmem)
-		fi
-		# Enable libc malloc_trim() for memory optimization.
-		qemu_options+=(speed:--enable-malloc-trim)
+	# AVX2 is enabled by default by x86_64, make sure it's enabled only
+	# for that architecture
+	if [ "$arch" == x86_64 ]; then
+	    qemu_options+=(speed:--enable-avx2)
+	    qemu_options+=(speed:--enable-avx512f)
+	    # According to QEMU's nvdimm documentation: When 'pmem' is 'on' and QEMU is
+	    # built with libpmem support, QEMU will take necessary operations to guarantee
+	    # the persistence of its own writes to the vNVDIMM backend.
+	    qemu_options+=(functionality:--enable-libpmem)
+	else
+	    qemu_options+=(speed:--disable-avx2)
+	    qemu_options+=(functionality:--disable-libpmem)
 	fi
+	# Enable libc malloc_trim() for memory optimization.
+	qemu_options+=(speed:--enable-malloc-trim)
 
 	#---------------------------------------------------------------------
 	# Other options
@@ -586,6 +555,10 @@ main() {
 
 	[ -n "${qemu_version}" ] ||
 		die "cannot determine qemu version from file $qemu_version_file"
+
+	if ! gt_eq "${qemu_version}" "5.0.0" ; then
+	    die "Kata requires QEMU >= 5.0.0"
+	fi
 
 	local gcc_version_major=$(gcc -dumpversion | cut -f1 -d.)
 	[ -n "${gcc_version_major}" ] ||
