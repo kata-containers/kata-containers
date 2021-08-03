@@ -16,15 +16,17 @@ readonly script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 readonly prefix="/opt/kata"
 readonly repo_root_dir="$(cd "${script_dir}/../../../.." && pwd)"
+readonly static_build_dir="${repo_root_dir}/tools/packaging/static-build"
 readonly version_file="${repo_root_dir}/VERSION"
 readonly versions_yaml="${repo_root_dir}/versions.yaml"
 
-readonly clh_builder="${repo_root_dir}/tools/packaging/static-build/cloud-hypervisor/build-static-clh.sh"
-readonly firecracker_builder="${repo_root_dir}/tools/packaging/static-build/firecracker/build-static-firecracker.sh"
-readonly kernel_builder="${repo_root_dir}/tools/packaging/static-build/kernel/build.sh"
-readonly qemu_builder="${repo_root_dir}/tools/packaging/static-build/qemu/build-static-qemu.sh"
+readonly clh_builder="${static_build_dir}/cloud-hypervisor/build-static-clh.sh"
+readonly firecracker_builder="${static_build_dir}/firecracker/build-static-firecracker.sh"
+readonly kernel_builder="${static_build_dir}/kernel/build.sh"
+readonly qemu_builder="${static_build_dir}/qemu/build-static-qemu.sh"
+readonly shimv2_builder="${static_build_dir}/shim-v2/build.sh"
+
 readonly rootfs_builder="${repo_root_dir}/tools/packaging/guest-image/build_image.sh"
-readonly shimv2_builder="${repo_root_dir}/tools/packaging/static-build/shim-v2/build.sh"
 
 workdir="${WORKDIR:-$PWD}"
 
