@@ -410,6 +410,7 @@ build_rootfs_distro()
 			--env KERNEL_MODULES_DIR="${KERNEL_MODULES_DIR}" \
 			--env EXTRA_PKGS="${EXTRA_PKGS}" \
 			--env OSBUILDER_VERSION="${OSBUILDER_VERSION}" \
+			--env OS_VERSION="${OS_VERSION}" \
 			--env INSIDE_CONTAINER=1 \
 			--env SECCOMP="${SECCOMP}" \
 			--env DEBUG="${DEBUG}" \
