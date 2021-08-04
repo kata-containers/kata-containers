@@ -7,8 +7,9 @@
 
 Virtual Machine Manager for Go (govmm) is a suite of packages that
 provide Go APIs for creating and managing virtual machines.  There's
-currently support for only one hypervisor, qemu/kvm, support for which
-is provided by the github.com/kata-containers/govmm/qemu package.
+currently support for only one hypervisor, qemu/kvm (version 5.0 and
+later), support for which is provided by the
+github.com/kata-containers/govmm/qemu package.
 
 The qemu package provides APIs for launching qemu instances and for
 managing those instances via QMP, once launched.  VM instances can

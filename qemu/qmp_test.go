@@ -1125,10 +1125,6 @@ func TestQMPCPUDeviceAdd(t *testing.T) {
 	dieID := "0"
 	coreID := "1"
 	threadID := "0"
-	version := &QMPVersion{
-		Major: 4,
-		Minor: 1,
-	}
 	for _, d := range drivers {
 		connectedCh := make(chan *QMPVersion)
 		disconnectedCh := make(chan struct{})
@@ -1137,7 +1133,6 @@ func TestQMPCPUDeviceAdd(t *testing.T) {
 		cfg := QMPConfig{Logger: qmpTestLogger{}}
 		q := startQMPLoop(buf, cfg, connectedCh, disconnectedCh)
 		checkVersion(t, connectedCh)
-		q.version = version
 		err := q.ExecuteCPUDeviceAdd(context.Background(), d, cpuID, socketID, dieID, coreID, threadID, "")
 		if err != nil {
 			t.Fatalf("Unexpected error %v", err)
@@ -1634,10 +1629,6 @@ func TestExecuteNVDIMMDeviceAdd(t *testing.T) {
 	cfg := QMPConfig{Logger: qmpTestLogger{}}
 	q := startQMPLoop(buf, cfg, connectedCh, disconnectedCh)
 	checkVersion(t, connectedCh)
-	q.version = &QMPVersion{
-		Major: 4,
-		Minor: 1,
-	}
 	pmem := true
 	err := q.ExecuteNVDIMMDeviceAdd(context.Background(), "nvdimm0", "/dev/rbd0", 1024, &pmem)
 	if err != nil {
