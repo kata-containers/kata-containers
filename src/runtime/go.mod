@@ -41,6 +41,7 @@ require (
 	github.com/urfave/cli v1.22.2
 	github.com/vishvananda/netlink v1.1.1-0.20201029203352-d40f9887b852
 	github.com/vishvananda/netns v0.0.0-20200728191858-db3c7e526aae
+	github.com/xeipuuv/gojsonpointer v0.0.0-20190905194746-02993c407bfb
 	go.opentelemetry.io/otel v0.15.0
 	go.opentelemetry.io/otel/exporters/trace/jaeger v0.15.0
 	go.opentelemetry.io/otel/sdk v0.15.0
@@ -49,6 +50,7 @@ require (
 	golang.org/x/sys v0.0.0-20210426230700-d19ff857e887
 	google.golang.org/grpc v1.33.2
 	k8s.io/apimachinery v0.20.6
+	k8s.io/cri-api v0.20.6
 )
 
 replace (
