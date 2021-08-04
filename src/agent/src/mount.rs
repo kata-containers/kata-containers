@@ -821,7 +821,7 @@ pub fn remove_mounts(mounts: &[String]) -> Result<()> {
     Ok(())
 }
 
-// ensure_destination_exists will recursively create a given mountpoint. If directories
+// ensure_destination_exists will create a given mountpoint. If directories
 // are created, their permissions are initialized to mountPerm(0755)
 #[instrument]
 fn ensure_destination_exists(destination: &str, fs_type: &str) -> Result<()> {
@@ -1476,5 +1476,35 @@ mod tests {
         //let meta = metadata(testdir.to_str().unwrap()).unwrap();
         let meta = metadata(testdir).unwrap();
         assert!(meta.is_dir());
+
+        // Verify appropriate behavior for destinations that are bind mount directories
+        let dir = tempdir().expect("failed to create tempdir");
+        let test_dir_path = dir.path().join("dir");
+        let test_dir_filename = test_dir_path
+            .to_str()
+            .expect("failed to create mount dir filename");
+
+        let new_dir_path = dir.path().join("new_dir");
+        let new_dir_filename = new_dir_path
+            .to_str()
+            .expect("failed to create mount dir filename");
+
+        std::fs::create_dir_all(test_dir_filename).expect("failed to create dir");
+
+        ensure_destination_exists(test_dir_filename, "bind")
+            .expect("Should be okay if the dir already existed");
+
+        assert!(
+            !Path::new(new_dir_filename).exists(),
+            "File {} should not exist",
+            new_dir_filename
+        );
+        ensure_destination_exists(new_dir_filename, "bind")
+            .expect("Should be okay if the dir did not exist");
+        assert!(
+            Path::new(new_dir_filename).exists(),
+            "File {} should exist",
+            new_dir_filename
+        );
     }
 }
