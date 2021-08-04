@@ -52,6 +52,12 @@ ifeq (dracut,$(BUILD_METHOD))
     DRACUT_OPTIONS += --no-kernel
   endif
 
+  ifeq (no,$(AGENT_INIT))
+    AGENT_PATH := $(DRACUT_OVERLAY_DIR)/usr/bin/kata-agent
+  else
+    AGENT_PATH := $(DRACUT_OVERLAY_DIR)/sbin/init
+  endif
+
   ifeq (,$(DRACUT_OVERLAY_DIR))
     $(error DRACUT_OVERLAY_DIR cannot be empty)
   endif
@@ -133,6 +139,7 @@ $(TARGET_INITRD): $(TARGET_ROOTFS_MARKER)
 else
 $(TARGET_INITRD): $(DRACUT_OVERLAY_DIR)
 	@echo Creating initrd image based on the host OS using dracut
+	$(DRACUT_DIR)/add_libs.sh $(AGENT_PATH) > $(DRACUT_CONF_DIR)/15-extra-libs.conf
 	dracut $(DRACUT_OPTIONS) --include $< / $@ $(DRACUT_KVERSION)
 endif
 
