@@ -71,12 +71,12 @@ $ for service in ${services}; do
     service_dir="/etc/systemd/system/${service}.service.d/"
     sudo mkdir -p ${service_dir}
 
-    cat << EOT | sudo tee "${service_dir}/proxy.conf"
+    cat << EOF | sudo tee "${service_dir}/proxy.conf"
 [Service]
 Environment="HTTP_PROXY=${http_proxy}"
 Environment="HTTPS_PROXY=${https_proxy}"
 Environment="NO_PROXY=${no_proxy}"
-EOT
+EOF
 done
 
 $ sudo systemctl daemon-reload
@@ -172,7 +172,7 @@ If a pod has the `runtimeClassName` set to `kata`, the CRI plugin runs the pod w
 - Create an pod configuration that using Kata Containers runtime
 
   ```bash
-  $ cat << EOT | tee nginx-kata.yaml
+  $ cat << EOF | tee nginx-kata.yaml
   apiVersion: v1
   kind: Pod
   metadata:
@@ -183,7 +183,7 @@ If a pod has the `runtimeClassName` set to `kata`, the CRI plugin runs the pod w
     - name: nginx
       image: nginx
       
-  EOT
+  EOF
   ```
 
 - Create the pod
