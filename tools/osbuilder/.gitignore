@@ -1,5 +1,6 @@
 image-builder/nsdax
 dracut/Dockerfile
+dracut/dracut.conf.d/15-extra-libs.conf
 /.*.done
 /*_rootfs
 /kata-Centos-dnf.conf
