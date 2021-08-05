@@ -10,6 +10,7 @@ ARG DESTINATION=/opt/kata-artifacts
 COPY ${KATA_ARTIFACTS} .
 
 RUN \
+yum -y update && \
 yum install -y epel-release && \
 yum install -y bzip2 jq && \
 mkdir -p ${DESTINATION} && \
