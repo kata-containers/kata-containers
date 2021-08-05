@@ -2126,8 +2126,23 @@ func genericAppendBridges(devices []govmmQemu.Device, bridges []types.Bridge, ma
 				ID:   b.ID,
 				// Each bridge is required to be assigned a unique chassis id > 0
 				Chassis: idx + 1,
-				SHPC:    true,
+				SHPC:    false,
 				Addr:    strconv.FormatInt(int64(bridges[idx].Addr), 10),
+				// Certain guest BIOS versions think
+				// !SHPC means no hotplug, and won't
+				// reserve the IO and memory windows
+				// that will be needed for devices
+				// added underneath this bridge.  This
+				// will only break for certain
+				// combinations of exact qemu, BIOS
+				// and guest kernel versions, but for
+				// consistency, just hint the usual
+				// default windows for a bridge (as
+				// the BIOS would use with SHPC) so
+				// that we can do ACPI hotplug.
+				IOReserve:     "4k",
+				MemReserve:    "1m",
+				Pref64Reserve: "1m",
 			},
 		)
 	}
