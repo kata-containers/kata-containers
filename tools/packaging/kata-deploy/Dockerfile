@@ -13,6 +13,7 @@ RUN \
 yum -y update && \
 yum install -y epel-release && \
 yum install -y bzip2 jq && \
+yum clean all && \
 mkdir -p ${DESTINATION} && \
 tar xvf ${KATA_ARTIFACTS} -C ${DESTINATION}/ && \
 chown -R root:root ${DESTINATION}/
