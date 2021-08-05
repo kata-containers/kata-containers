@@ -67,7 +67,7 @@ To use large BARs devices (for example, Nvidia Tesla P100), you need Kata versio
 
 The following configuration in the Kata `configuration.toml` file as shown below can work:
 
-Hotplug for PCI devices by `shpchp` (Linux's SHPC PCI Hotplug driver):
+Hotplug for PCI devices by `acpi_pcihp` (Linux's ACPI PCI Hotplug driver):
 ```
 machine_type = "q35"
 
@@ -91,7 +91,6 @@ The following kernel config options need to be enabled:
 ```
 # Support PCI/PCIe device hotplug (Required for large BARs device)
 CONFIG_HOTPLUG_PCI_PCIE=y
-CONFIG_HOTPLUG_PCI_SHPC=y
 
 # Support for loading modules (Required for load Nvidia drivers)
 CONFIG_MODULES=y
