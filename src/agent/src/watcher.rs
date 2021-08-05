@@ -3,20 +3,22 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
+#![allow(clippy::unknown_clippy_lints)]
+
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::SystemTime;
 
-use tokio::fs;
-use tokio::sync::Mutex;
-use tokio::task;
-use tokio::time::{self, Duration};
-use thiserror::Error;
 use anyhow::{ensure, Context, Result};
 use async_recursion::async_recursion;
 use nix::mount::{umount, MsFlags};
 use slog::{debug, error, info, warn, Logger};
+use thiserror::Error;
+use tokio::fs;
+use tokio::sync::Mutex;
+use tokio::task;
+use tokio::time::{self, Duration};
 
 use crate::mount::BareMount;
 use crate::protocols::agent as protos;
