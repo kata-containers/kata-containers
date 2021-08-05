@@ -127,16 +127,11 @@ mod tests {
         // call do_setup_guest_dns
         let result = do_setup_guest_dns(logger, dns.clone(), src_filename, dst_filename);
 
-        assert_eq!(
-            true,
-            result.is_ok(),
-            "result should be ok, but {:?}",
-            result
-        );
+        assert!(result.is_ok(), "result should be ok, but {:?}", result);
 
         // get content of /etc/resolv.conf
         let content = fs::read_to_string(dst_filename);
-        assert_eq!(true, content.is_ok());
+        assert!(content.is_ok());
         let content = content.unwrap();
 
         let expected_dns: Vec<&str> = content.split('\n').collect();

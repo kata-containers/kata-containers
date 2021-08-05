@@ -87,14 +87,14 @@ impl Uevent {
         sb.uevent_map.insert(self.devpath.clone(), self.clone());
 
         // Notify watchers that are interested in the udev event.
-        for watch in &mut sb.uevent_watchers {
+        sb.uevent_watchers.iter_mut().for_each(move |watch| {
             if let Some((matcher, _)) = watch {
-                if matcher.is_match(&self) {
+                if matcher.is_match(self) {
                     let (_, sender) = watch.take().unwrap();
                     let _ = sender.send(self.clone());
                 }
             }
-        }
+        })
     }
 
     #[instrument]
@@ -221,15 +221,17 @@ pub(crate) fn spawn_test_watcher(sandbox: Arc<Mutex<Sandbox>>, uev: Uevent) {
     tokio::spawn(async move {
         loop {
             let mut sb = sandbox.lock().await;
-            for w in &mut sb.uevent_watchers {
-                if let Some((matcher, _)) = w {
+            let uev = uev.clone();
+            sb.uevent_watchers.iter_mut().for_each(move |watch| {
+                if let Some((matcher, _)) = watch {
                     if matcher.is_match(&uev) {
-                        let (_, sender) = w.take().unwrap();
-                        let _ = sender.send(uev);
+                        let (_, sender) = watch.take().unwrap();
+                        let _ = sender.send(uev.clone());
                         return;
                     }
                 }
-            }
+            });
+
             drop(sb); // unlock
         }
     });

@@ -390,7 +390,7 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
     let linux = spec.linux.as_ref().unwrap();
 
     // get namespace vector to join/new
-    let nses = get_namespaces(&linux);
+    let nses = get_namespaces(linux);
 
     let mut userns = false;
     let mut to_new = CloneFlags::empty();
@@ -939,7 +939,7 @@ impl BaseContainer for LinuxContainer {
 
         join_namespaces(
             &logger,
-            &spec,
+            spec,
             &p,
             self.cgroup_manager.as_ref().unwrap(),
             &st,
@@ -1031,7 +1031,7 @@ impl BaseContainer for LinuxContainer {
         let fifo = format!("{}/{}", &self.root, EXEC_FIFO_FILENAME);
         let fd = fcntl::open(fifo.as_str(), OFlag::O_WRONLY, Mode::from_bits_truncate(0))?;
         let data: &[u8] = &[0];
-        unistd::write(fd, &data)?;
+        unistd::write(fd, data)?;
         info!(self.logger, "container started");
         self.init_process_start_time = SystemTime::now()
             .duration_since(SystemTime::UNIX_EPOCH)
