@@ -13,7 +13,7 @@ import (
 	"testing"
 
 	"github.com/intel-go/cpuid"
-	govmmQemu "github.com/kata-containers/govmm/qemu"
+	govmmQemu "github.com/kata-containers/kata-containers/src/runtime/pkg/qemu"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	"github.com/stretchr/testify/assert"
 )

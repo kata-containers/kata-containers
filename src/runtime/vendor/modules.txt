@@ -249,9 +249,6 @@ github.com/imdario/mergo
 # github.com/intel-go/cpuid v0.0.0-20210602155658-5747e5cec0d9
 ## explicit
 github.com/intel-go/cpuid
-# github.com/kata-containers/govmm v0.0.0-20210804035756-3c64244cbb48
-## explicit
-github.com/kata-containers/govmm/qemu
 # github.com/klauspost/compress v1.11.13
 github.com/klauspost/compress/fse
 github.com/klauspost/compress/huff0

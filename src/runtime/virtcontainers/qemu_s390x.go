@@ -10,7 +10,7 @@ import (
 	"fmt"
 	"time"
 
-	govmmQemu "github.com/kata-containers/govmm/qemu"
+	govmmQemu "github.com/kata-containers/kata-containers/src/runtime/pkg/qemu"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"

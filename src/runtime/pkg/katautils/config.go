@@ -15,8 +15,8 @@ import (
 	"strings"
 
 	"github.com/BurntSushi/toml"
-	govmmQemu "github.com/kata-containers/govmm/qemu"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils/katatrace"
+	govmmQemu "github.com/kata-containers/kata-containers/src/runtime/pkg/qemu"
 	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
 	exp "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/experimental"

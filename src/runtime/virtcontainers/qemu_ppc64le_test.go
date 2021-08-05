@@ -9,7 +9,7 @@ import (
 	"fmt"
 	"testing"
 
-	govmmQemu "github.com/kata-containers/govmm/qemu"
+	govmmQemu "github.com/kata-containers/kata-containers/src/runtime/pkg/qemu"
 	"github.com/stretchr/testify/assert"
 )
 

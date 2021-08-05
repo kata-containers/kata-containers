@@ -14,7 +14,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/intel-go/cpuid"
-	govmmQemu "github.com/kata-containers/govmm/qemu"
+	govmmQemu "github.com/kata-containers/kata-containers/src/runtime/pkg/qemu"
 )
 
 type qemuAmd64 struct {

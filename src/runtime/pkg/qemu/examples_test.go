@@ -10,7 +10,7 @@ import (
 
 	"context"
 
-	"github.com/kata-containers/govmm/qemu"
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/qemu"
 )
 
 func Example() {
