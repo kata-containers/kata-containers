@@ -232,19 +232,19 @@ fn set_devices_resources(
     let mut devices = vec![];
 
     for d in device_resources.iter() {
-        if let Some(dev) = linux_device_group_to_cgroup_device(&d) {
+        if let Some(dev) = linux_device_group_to_cgroup_device(d) {
             devices.push(dev);
         }
     }
 
     for d in DEFAULT_DEVICES.iter() {
-        if let Some(dev) = linux_device_to_cgroup_device(&d) {
+        if let Some(dev) = linux_device_to_cgroup_device(d) {
             devices.push(dev);
         }
     }
 
     for d in DEFAULT_ALLOWED_DEVICES.iter() {
-        if let Some(dev) = linux_device_group_to_cgroup_device(&d) {
+        if let Some(dev) = linux_device_group_to_cgroup_device(d) {
             devices.push(dev);
         }
     }
@@ -828,7 +828,7 @@ fn get_blkio_stats_v2(cg: &cgroups::Cgroup) -> SingularPtrField<BlkioStats> {
 
 fn get_blkio_stats(cg: &cgroups::Cgroup) -> SingularPtrField<BlkioStats> {
     if cg.v2() {
-        return get_blkio_stats_v2(&cg);
+        return get_blkio_stats_v2(cg);
     }
 
     let blkio_controller: &BlkIoController = get_controller_or_return_singular_none!(cg);
@@ -1022,7 +1022,7 @@ impl Manager {
                 .unwrap()
                 .trim_start_matches(root_path.to_str().unwrap());
             info!(sl!(), "updating cpuset for parent path {:?}", &r_path);
-            let cg = new_cgroup(cgroups::hierarchies::auto(), &r_path);
+            let cg = new_cgroup(cgroups::hierarchies::auto(), r_path);
             let cpuset_controller: &CpuSetController = cg.controller_of().unwrap();
             cpuset_controller.set_cpus(guest_cpuset)?;
         }

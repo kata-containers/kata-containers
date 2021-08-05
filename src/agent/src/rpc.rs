@@ -190,7 +190,7 @@ impl AgentService {
         let p = if oci.process.is_some() {
             Process::new(
                 &sl!(),
-                &oci.process.as_ref().unwrap(),
+                oci.process.as_ref().unwrap(),
                 cid.as_str(),
                 true,
                 pipe_size,
@@ -247,7 +247,7 @@ impl AgentService {
             // Find the sandbox storage used by this container
             let mounts = sandbox.container_mounts.get(&cid);
             if let Some(mounts) = mounts {
-                remove_mounts(&mounts)?;
+                remove_mounts(mounts)?;
 
                 for m in mounts.iter() {
                     if sandbox.storages.get(m).is_some() {
@@ -666,7 +666,7 @@ impl protocols::agent_ttrpc::AgentService for AgentService {
         let s = Arc::clone(&self.sandbox);
         let mut sandbox = s.lock().await;
 
-        let ctr = sandbox.get_container(&cid).ok_or_else(|| {
+        let ctr = sandbox.get_container(cid).ok_or_else(|| {
             ttrpc_error(
                 ttrpc::Code::INVALID_ARGUMENT,
                 "invalid container id".to_string(),
@@ -689,7 +689,7 @@ impl protocols::agent_ttrpc::AgentService for AgentService {
         let s = Arc::clone(&self.sandbox);
         let mut sandbox = s.lock().await;
 
-        let ctr = sandbox.get_container(&cid).ok_or_else(|| {
+        let ctr = sandbox.get_container(cid).ok_or_else(|| {
             ttrpc_error(
                 ttrpc::Code::INVALID_ARGUMENT,
                 "invalid container id".to_string(),

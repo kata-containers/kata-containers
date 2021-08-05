@@ -966,12 +966,12 @@ mod tests {
         uev_a.subsystem = "block".to_string();
         uev_a.devname = devname.to_string();
         uev_a.devpath = format!("{}{}/virtio4/block/{}", root_bus, relpath_a, devname);
-        let matcher_a = VirtioBlkPciMatcher::new(&relpath_a);
+        let matcher_a = VirtioBlkPciMatcher::new(relpath_a);
 
         let mut uev_b = uev_a.clone();
         let relpath_b = "/0000:00:0a.0/0000:00:0b.0";
         uev_b.devpath = format!("{}{}/virtio0/block/{}", root_bus, relpath_b, devname);
-        let matcher_b = VirtioBlkPciMatcher::new(&relpath_b);
+        let matcher_b = VirtioBlkPciMatcher::new(relpath_b);
 
         assert!(matcher_a.is_match(&uev_a));
         assert!(matcher_b.is_match(&uev_b));
@@ -1053,7 +1053,7 @@ mod tests {
             "{}/0000:00:00.0/virtio0/host0/target0:0:0/0:0:{}/block/sda",
             root_bus, addr_a
         );
-        let matcher_a = ScsiBlockMatcher::new(&addr_a);
+        let matcher_a = ScsiBlockMatcher::new(addr_a);
 
         let mut uev_b = uev_a.clone();
         let addr_b = "2:0";
@@ -1061,7 +1061,7 @@ mod tests {
             "{}/0000:00:00.0/virtio0/host0/target0:0:2/0:0:{}/block/sdb",
             root_bus, addr_b
         );
-        let matcher_b = ScsiBlockMatcher::new(&addr_b);
+        let matcher_b = ScsiBlockMatcher::new(addr_b);
 
         assert!(matcher_a.is_match(&uev_a));
         assert!(matcher_b.is_match(&uev_b));

@@ -266,7 +266,7 @@ pub fn validate(conf: &Config) -> Result<()> {
     security(oci).context("security")?;
     usernamespace(oci).context("usernamespace")?;
     cgroupnamespace(oci).context("cgroupnamespace")?;
-    sysctl(&oci).context("sysctl")?;
+    sysctl(oci).context("sysctl")?;
 
     if conf.rootless_euid {
         rootless_euid(oci).context("rootless euid")?;
