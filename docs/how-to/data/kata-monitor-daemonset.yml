@@ -26,7 +26,7 @@ spec:
       hostNetwork: true
       containers:
       - name: kata-monitor
-        image: docker.io/katadocker/kata-monitor:2.0.0
+        image: quay.io/kata-containers/kata-monitor:2.0.0
         args: 
           - -log-level=debug
         ports:
