@@ -250,7 +250,7 @@ jobs:
           docker build --build-arg KATA_ARTIFACTS=kata-static.tar.xz -t katadocker/kata-deploy-ci:$pkg_sha -t quay.io/kata-containers/kata-deploy-ci:$pkg_sha ./packaging/kata-deploy
           docker login -u ${{ secrets.DOCKER_USERNAME }} -p ${{ secrets.DOCKER_PASSWORD }}
           docker push katadocker/kata-deploy-ci:$pkg_sha
-          docker login -u ${{ secrets.QUAY_DEPLOYER_USERNAME }} -p ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
+          docker login -u ${{ secrets.QUAY_DEPLOYER_USERNAME }} -p ${{ secrets.QUAY_DEPLOYER_PASSWORD }} quay.io
           docker push quay.io/kata-containers/kata-deploy-ci:$pkg_sha
           echo "::set-output name=PKG_SHA::${pkg_sha}"
       - name: test-kata-deploy-ci-in-aks

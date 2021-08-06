@@ -81,7 +81,7 @@ jobs:
           docker build --build-arg KATA_ARTIFACTS=kata-static.tar.xz -t katadocker/kata-deploy-ci:$pkg_sha -t quay.io/kata-containers/kata-deploy-ci:$pkg_sha $GITHUB_WORKSPACE/tools/packaging/kata-deploy
           docker login -u ${{ secrets.DOCKER_USERNAME }} -p ${{ secrets.DOCKER_PASSWORD }}
           docker push katadocker/kata-deploy-ci:$pkg_sha
-          docker login -u ${{ secrets.QUAY_DEPLOYER_USERNAME }} -p ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
+          docker login -u ${{ secrets.QUAY_DEPLOYER_USERNAME }} -p ${{ secrets.QUAY_DEPLOYER_PASSWORD }} quay.io
           docker push quay.io/kata-containers/kata-deploy-ci:$pkg_sha
           mkdir -p packaging/kata-deploy
           ln -s $GITHUB_WORKSPACE/tools/packaging/kata-deploy/action packaging/kata-deploy/action
