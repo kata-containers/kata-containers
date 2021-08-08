@@ -134,6 +134,9 @@ const (
 
 	// Loader is the Loader device driver.
 	Loader DeviceDriver = "loader"
+
+	// SpaprTPMProxy is used for enabling guest to run in secure mode on ppc64le.
+	SpaprTPMProxy DeviceDriver = "spapr-tpm-proxy"
 )
 
 func isDimmSupported(config *Config) bool {
@@ -230,6 +233,14 @@ const (
 
 	// TDXGuest represents a TDX object
 	TDXGuest ObjectType = "tdx-guest"
+
+	// SEVGuest represents an SEV guest object
+	SEVGuest ObjectType = "sev-guest"
+
+	// SecExecGuest represents an s390x Secure Execution (Protected Virtualization in QEMU) object
+	SecExecGuest ObjectType = "s390-pv-guest"
+	// PEFGuest represent ppc64le PEF(Protected Execution Facility) object.
+	PEFGuest ObjectType = "pef-guest"
 )
 
 // Object is a qemu object representation.
@@ -259,6 +270,14 @@ type Object struct {
 	// File is the device file
 	File string
 
+	// CBitPos is the location of the C-bit in a guest page table entry
+	// This is only relevant for sev-guest objects
+	CBitPos uint32
+
+	// ReducedPhysBits is the reduction in the guest physical address space
+	// This is only relevant for sev-guest objects
+	ReducedPhysBits uint32
+
 	// ReadOnly specifies whether `MemPath` is opened read-only or read/write (default)
 	ReadOnly bool
 }
@@ -267,30 +286,27 @@ type Object struct {
 func (object Object) Valid() bool {
 	switch object.Type {
 	case MemoryBackendFile:
-		if object.ID == "" || object.MemPath == "" || object.Size == 0 {
-			return false
-		}
-
+		return object.ID != "" && object.MemPath != "" && object.Size != 0
 	case TDXGuest:
-		if object.ID == "" || object.File == "" || object.DeviceID == "" {
-			return false
-		}
+		return object.ID != "" && object.File != "" && object.DeviceID != ""
+	case SEVGuest:
+		return object.ID != "" && object.File != "" && object.CBitPos != 0 && object.ReducedPhysBits != 0
+	case SecExecGuest:
+		return object.ID != ""
+	case PEFGuest:
+		return object.ID != "" && object.File != ""
 
 	default:
 		return false
 	}
-
-	return true
 }
 
 // QemuParams returns the qemu parameters built out of this Object device.
 func (object Object) QemuParams(config *Config) []string {
 	var objectParams []string
 	var deviceParams []string
+	var driveParams []string
 	var qemuParams []string
-
-	deviceParams = append(deviceParams, string(object.Driver))
-	deviceParams = append(deviceParams, fmt.Sprintf("id=%s", object.DeviceID))
 
 	switch object.Type {
 	case MemoryBackendFile:
@@ -299,7 +315,10 @@ func (object Object) QemuParams(config *Config) []string {
 		objectParams = append(objectParams, fmt.Sprintf("mem-path=%s", object.MemPath))
 		objectParams = append(objectParams, fmt.Sprintf("size=%d", object.Size))
 
+		deviceParams = append(deviceParams, string(object.Driver))
+		deviceParams = append(deviceParams, fmt.Sprintf("id=%s", object.DeviceID))
 		deviceParams = append(deviceParams, fmt.Sprintf("memdev=%s", object.ID))
+
 		if object.ReadOnly {
 			objectParams = append(objectParams, "readonly=on")
 			deviceParams = append(deviceParams, "unarmed=on")
@@ -310,7 +329,27 @@ func (object Object) QemuParams(config *Config) []string {
 		if object.Debug {
 			objectParams = append(objectParams, "debug=on")
 		}
+		deviceParams = append(deviceParams, string(object.Driver))
+		deviceParams = append(deviceParams, fmt.Sprintf("id=%s", object.DeviceID))
 		deviceParams = append(deviceParams, fmt.Sprintf("file=%s", object.File))
+	case SEVGuest:
+		objectParams = append(objectParams, string(object.Type))
+		objectParams = append(objectParams, fmt.Sprintf("id=%s", object.ID))
+		objectParams = append(objectParams, fmt.Sprintf("cbitpos=%d", object.CBitPos))
+		objectParams = append(objectParams, fmt.Sprintf("reduced-phys-bits=%d", object.ReducedPhysBits))
+
+		driveParams = append(driveParams, "if=pflash,format=raw,readonly=on")
+		driveParams = append(driveParams, fmt.Sprintf("file=%s", object.File))
+	case SecExecGuest:
+		objectParams = append(objectParams, string(object.Type))
+		objectParams = append(objectParams, fmt.Sprintf("id=%s", object.ID))
+	case PEFGuest:
+		objectParams = append(objectParams, string(object.Type))
+		objectParams = append(objectParams, fmt.Sprintf("id=%s", object.ID))
+
+		deviceParams = append(deviceParams, string(object.Driver))
+		deviceParams = append(deviceParams, fmt.Sprintf("id=%s", object.DeviceID))
+		deviceParams = append(deviceParams, fmt.Sprintf("host-path=%s", object.File))
 
 	}
 
@@ -322,6 +361,11 @@ func (object Object) QemuParams(config *Config) []string {
 	if len(objectParams) > 0 {
 		qemuParams = append(qemuParams, "-object")
 		qemuParams = append(qemuParams, strings.Join(objectParams, ","))
+	}
+
+	if len(driveParams) > 0 {
+		qemuParams = append(qemuParams, "-drive")
+		qemuParams = append(qemuParams, strings.Join(driveParams, ","))
 	}
 
 	return qemuParams
