@@ -56,3 +56,14 @@ jobs:
         with:
           name: kata-static-tarball
           path: kata-static.tar.xz
+
+  make-kata-tarball:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: make kata-tarball
+        run: |
+          # This will take a while
+          # Test as this is the usual a way will use it for first time.
+          make kata-tarball
+          sudo make install-tarball
