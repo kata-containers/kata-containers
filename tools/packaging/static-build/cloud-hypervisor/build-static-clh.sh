@@ -8,6 +8,11 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
+ARCH=$(uname -m)
+
+# Currently, Cloud Hypervisor only support arm64 and x86_64
+[ "${ARCH}" != "aarch64" ] && [ "${ARCH}" != "x86_64" ] && exit
+
 script_dir=$(dirname $(readlink -f "$0"))
 kata_version="${kata_version:-}"
 
@@ -50,7 +55,7 @@ build_clh_from_source() {
     popd
 }
 
-if ! pull_clh_released_binary; then
-    info "failed to pull cloud-hypervisor released binary, trying to build from source"
+if [ ${ARCH} == "aarch64" ] || ! pull_clh_released_binary; then
+    info "arch is aarch64 or failed to pull cloud-hypervisor released binary on x86_64, trying to build from source"
     build_clh_from_source
 fi
