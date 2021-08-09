@@ -1,6 +1,6 @@
-name: kata-deploy-build
+name: kata deploy build
 
-on: push
+on: [push, pull_request]
 
 jobs:
   build-asset:
@@ -24,7 +24,7 @@ jobs:
 
       - name: Build ${{ matrix.asset }}
         run: |
-          ./tools/packaging/kata-deploy/local-build/kata-deploy-binaries-in-docker.sh --build="${KATA_ASSET}"
+          make "${KATA_ASSET}-tarball"
           build_dir=$(readlink -f build)
           # store-artifact does not work with symlink
           sudo cp -r --preserve=all "${build_dir}" "kata-build"
@@ -47,10 +47,10 @@ jobs:
         uses: actions/download-artifact@v2
         with:
           name: kata-artifacts
-          path: kata-artifacts
+          path: build
       - name: merge-artifacts
         run: |
-          ./tools/packaging/kata-deploy/local-build/kata-deploy-merge-builds.sh kata-artifacts
+          make merge-builds
       - name: store-artifacts
         uses: actions/upload-artifact@v2
         with:
