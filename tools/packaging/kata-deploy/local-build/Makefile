@@ -7,21 +7,16 @@ MK_PATH := $(abspath $(lastword $(MAKEFILE_LIST)))
 MK_DIR := $(dir $(MK_PATH))
 
 # Verbose build
-V ?=
-ifneq ($(V),)
-SILENT_BUILD_FLAG =
-else
-SILENT_BUILD_FLAG = -s
-endif
+V := 1
 
 define BUILD
-	$(MK_DIR)/kata-deploy-binaries-in-docker.sh $(SILENT_BUILD_FLAG) --build=$1
+	$(MK_DIR)/kata-deploy-binaries-in-docker.sh $(if $(V),,-s) --build=$1
 endef
 
 kata-tarball: | all-parallel merge-builds
 
 all-parallel:
-	${MAKE} -f $(MK_PATH) all -j$$(( $$(nproc) - 1  )) NO_TTY="true"
+	${MAKE} -f $(MK_PATH) all -j$$(( $$(nproc) - 1  )) NO_TTY="true" V=
 
 all: cloud-hypervisor-tarball \
 	firecracker-tarball \
