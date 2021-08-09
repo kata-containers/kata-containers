@@ -609,7 +609,7 @@ pub async fn add_storages(
             DRIVER_NVDIMM_TYPE => nvdimm_storage_handler(&logger, &storage, sandbox.clone()).await,
             DRIVER_WATCHABLE_BIND_TYPE => {
                 bind_watcher_storage_handler(&logger, &storage, sandbox.clone()).await?;
-                // Don't register watch mounts, they're hanlded separately by the watcher.
+                // Don't register watch mounts, they're handled separately by the watcher.
                 Ok(String::new())
             }
             _ => {
