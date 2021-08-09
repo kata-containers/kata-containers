@@ -571,3 +571,15 @@ experimental=@DEFAULTEXPFEATURES@
 # Keys can be remotely provisioned. The Kata agent fetches them from e.g.
 # a HTTPS URL:
 #provision=https://my-key-broker.foo/tenant/<tenant-id>
+
+# SEV prelaunch attestation for confidential guests.
+# Applies only if confidential_guest is true.  Architectures SEV and
+# SEV-ES support a guest attestation measurement taken during the
+# initial launch of the VM. The VM is stalled prior to booting the guest
+# image while the measurement is passed to a remote Guest Owner Proxy
+# (GOP) for validation. A successful validation confirms that the
+# configuration of the guest matches the expectation of the guest owner.
+
+# Enable SEV prelaunch attestation
+# (default: false)
+#sev_prelaunch_attestation = true
