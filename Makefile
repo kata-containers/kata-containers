@@ -18,6 +18,7 @@ TOOLS += agent-ctl
 STANDARD_TARGETS = build check clean install test vendor
 
 include utils.mk
+include ./tools/packaging/kata-deploy/local-build/Makefile
 
 all: build
 
@@ -32,11 +33,5 @@ generate-protocols:
 # Some static checks rely on generated source files of components.
 static-checks: build
 	bash ci/static-checks.sh
-
-binary-tarball:
-	make -f ./tools/packaging/kata-deploy/local-build/Makefile
-
-install-binary-tarball:
-	make -f ./tools/packaging/kata-deploy/local-build/Makefile install
 
 .PHONY: all default static-checks binary-tarball install-binary-tarball
