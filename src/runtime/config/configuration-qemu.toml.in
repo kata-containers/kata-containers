@@ -24,6 +24,11 @@ machine_type = "@MACHINETYPE@"
 # Default false
 # confidential_guest = true
 
+# Enable running QEMU VMM as a non-root user.
+# By default QEMU VMM run as root. When this is set to true, QEMU VMM process runs as
+# a non-root random user. See documentation for the limitations of this mode.
+# rootless = true
+
 # List of valid annotation names for the hypervisor
 # Each member of the list is a regular expression, which is the base name
 # of the annotation, e.g. "path" for io.katacontainers.config.hypervisor.path"

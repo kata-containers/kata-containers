@@ -9,6 +9,7 @@ import (
 	"context"
 	"io/ioutil"
 	"os"
+	"path"
 	"strings"
 	"testing"
 
@@ -37,7 +38,7 @@ func TestVirtiofsdStart(t *testing.T) {
 	assert.NoError(err)
 	defer os.RemoveAll(socketDir)
 
-	socketPath := socketDir + "socket.s"
+	socketPath := path.Join(socketDir, "socket.s")
 
 	validConfig := fields{
 		path:       "/usr/bin/virtiofsd-path",

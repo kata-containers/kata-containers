@@ -11,9 +11,11 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/rootless"
 	"io/ioutil"
 	"math"
 	"os"
+	"os/user"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -83,6 +85,7 @@ type QemuState struct {
 }
 
 // qemu is an Hypervisor interface implementation for the Linux qemu hypervisor.
+// nolint: govet
 type qemu struct {
 	arch qemuArch
 
@@ -271,7 +274,7 @@ func (q *qemu) setup(ctx context.Context, id string, hypervisorConfig *Hyperviso
 
 		// The path might already exist, but in case of VM templating,
 		// we have to create it since the sandbox has not created it yet.
-		if err = os.MkdirAll(filepath.Join(q.store.RunStoragePath(), id), DirMode); err != nil {
+		if err = utils.MkdirAllWithInheritedOwner(filepath.Join(q.store.RunStoragePath(), id), DirMode); err != nil {
 			return err
 		}
 	}
@@ -583,6 +586,9 @@ func (q *qemu) createSandbox(ctx context.Context, id string, networkNS NetworkNa
 		UUID:        q.state.UUID,
 		Path:        qemuPath,
 		Ctx:         q.qmpMonitorCh.ctx,
+		Uid:         q.config.Uid,
+		Gid:         q.config.Gid,
+		Groups:      q.config.Groups,
 		Machine:     machine,
 		SMP:         smp,
 		Memory:      memory,
@@ -775,10 +781,11 @@ func (q *qemu) startSandbox(ctx context.Context, timeout int) error {
 	}()
 
 	vmPath := filepath.Join(q.store.RunVMStoragePath(), q.id)
-	err := os.MkdirAll(vmPath, DirMode)
+	err := utils.MkdirAllWithInheritedOwner(vmPath, DirMode)
 	if err != nil {
 		return err
 	}
+	q.Logger().WithField("vm path", vmPath).Info("created vm path")
 	// append logfile only on debug
 	if q.config.Debug {
 		q.qemuConfig.LogFile = filepath.Join(vmPath, "qemu.log")
@@ -1004,6 +1011,27 @@ func (q *qemu) cleanupVM() error {
 		dir = filepath.Join(q.store.RunStoragePath(), q.config.VMid)
 		if err := os.RemoveAll(dir); err != nil {
 			q.Logger().WithError(err).WithField("path", dir).Warnf("failed to remove vm path")
+		}
+	}
+
+	if rootless.IsRootless() {
+		rootlessDir := os.Getenv("XDG_RUNTIME_DIR")
+		if err := os.RemoveAll(rootlessDir); err != nil {
+			q.Logger().WithError(err).WithField("root-path", rootlessDir).
+				Warnf("failed to remove vm run-as-user root path")
+		}
+
+		u, err := user.LookupId(strconv.Itoa(int(q.config.Uid)))
+		if err != nil {
+			q.Logger().WithError(err).WithField("uid", q.config.Uid).Warn("failed to find the user")
+		}
+		userdelPath, err := pkgUtils.FirstValidExecutable([]string{"/usr/sbin/userdel", "/sbin/userdel", "/bin/userdel"})
+		if err != nil {
+			q.Logger().WithError(err).WithField("user", u.Username).Warn("failed to delete the user")
+		}
+		_, err = pkgUtils.RunCommand([]string{userdelPath, "-f", u.Username})
+		if err != nil {
+			q.Logger().WithError(err).WithField("user", u.Username).Warn("failed to delete the user")
 		}
 	}
 

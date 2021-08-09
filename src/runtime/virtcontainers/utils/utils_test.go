@@ -10,6 +10,7 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -467,5 +468,126 @@ func TestWaitLocalProcessInvalidPid(t *testing.T) {
 
 		err := WaitLocalProcess(pid, waitLocalProcessTimeoutSecs, syscall.Signal(0), logger)
 		assert.Error(err, msg)
+	}
+}
+
+func TestMkdirAllWithInheritedOwnerSuccessful(t *testing.T) {
+	if os.Getuid() != 0 {
+		t.Skip("Test disabled as requires root user")
+	}
+	assert := assert.New(t)
+	tmpDir1, err := ioutil.TempDir("", "test")
+	assert.NoError(err)
+	defer os.RemoveAll(tmpDir1)
+	tmpDir2, err := ioutil.TempDir("", "test")
+	assert.NoError(err)
+	defer os.RemoveAll(tmpDir2)
+
+	testCases := []struct {
+		before    func(rootDir string, uid, gid int)
+		rootDir   string
+		targetDir string
+		uid       int
+		gid       int
+	}{
+		{
+			before: func(rootDir string, uid, gid int) {
+				err = syscall.Chown(rootDir, uid, gid)
+				assert.NoError(err)
+			},
+			rootDir:   tmpDir1,
+			targetDir: path.Join(tmpDir1, "foo", "bar"),
+			uid:       1234,
+			gid:       5678,
+		},
+		{
+			before: func(rootDir string, uid, gid int) {
+				// remove the tmpDir2 so the MkdirAllWithInheritedOwner() call creates them from /tmp
+				err = os.RemoveAll(tmpDir2)
+				assert.NoError(err)
+			},
+			rootDir:   tmpDir2,
+			targetDir: path.Join(tmpDir2, "foo", "bar"),
+			uid:       0,
+			gid:       0,
+		},
+	}
+
+	for _, tc := range testCases {
+		if tc.before != nil {
+			tc.before(tc.rootDir, tc.uid, tc.gid)
+		}
+
+		err := MkdirAllWithInheritedOwner(tc.targetDir, 0700)
+		assert.NoError(err)
+		// remove the first parent "/tmp" from the assertion as it's owned by root
+		for _, p := range getAllParentPaths(tc.targetDir)[1:] {
+			info, err := os.Stat(p)
+			assert.NoError(err)
+			assert.True(info.IsDir())
+			stat, ok := info.Sys().(*syscall.Stat_t)
+			assert.True(ok)
+			assert.Equal(tc.uid, int(stat.Uid))
+			assert.Equal(tc.gid, int(stat.Gid))
+		}
+	}
+}
+
+func TestChownToParent(t *testing.T) {
+	if os.Getuid() != 0 {
+		t.Skip("Test disabled as requires root user")
+	}
+	assert := assert.New(t)
+	rootDir, err := ioutil.TempDir("", "root")
+	assert.NoError(err)
+	defer os.RemoveAll(rootDir)
+	uid := 1234
+	gid := 5678
+	err = syscall.Chown(rootDir, uid, gid)
+	assert.NoError(err)
+
+	targetDir := path.Join(rootDir, "foo")
+
+	err = os.MkdirAll(targetDir, 0700)
+	assert.NoError(err)
+
+	err = ChownToParent(targetDir)
+	assert.NoError(err)
+
+	info, err := os.Stat(targetDir)
+	assert.NoError(err)
+	stat, ok := info.Sys().(*syscall.Stat_t)
+	assert.True(ok)
+	assert.Equal(uid, int(stat.Uid))
+	assert.Equal(gid, int(stat.Gid))
+}
+
+func TestGetAllParentPaths(t *testing.T) {
+	assert := assert.New(t)
+
+	testCases := []struct {
+		targetPath string
+		parents    []string
+	}{
+		{
+			targetPath: "/",
+			parents:    []string{},
+		},
+		{
+			targetPath: ".",
+			parents:    []string{},
+		},
+		{
+			targetPath: "foo",
+			parents:    []string{"foo"},
+		},
+		{
+			targetPath: "/tmp/bar",
+			parents:    []string{"/tmp", "/tmp/bar"},
+		},
+	}
+
+	for _, tc := range testCases {
+		assert.Equal(tc.parents, getAllParentPaths(tc.targetPath))
 	}
 }

@@ -390,3 +390,85 @@ outer:
 
 	return nil
 }
+
+// MkdirAllWithInheritedOwner creates a directory named path, along with any necessary parents.
+// It creates the missing directories with the ownership of the last existing parent.
+// The path needs to be absolute and the method doesn't handle symlink.
+func MkdirAllWithInheritedOwner(path string, perm os.FileMode) error {
+	if len(path) == 0 {
+		return fmt.Errorf("the path is empty")
+	}
+
+	// By default, use the uid and gid of the calling process.
+	var uid = os.Getuid()
+	var gid = os.Getgid()
+
+	paths := getAllParentPaths(path)
+	for _, curPath := range paths {
+		info, err := os.Stat(curPath)
+
+		if err != nil {
+			if err = os.Mkdir(curPath, perm); err != nil {
+				return fmt.Errorf("mkdir call failed: %v", err.Error())
+			}
+			if err = syscall.Chown(curPath, uid, gid); err != nil {
+				return fmt.Errorf("chown syscall failed: %v", err.Error())
+			}
+			continue
+		}
+
+		if !info.IsDir() {
+			return &os.PathError{Op: "mkdir", Path: curPath, Err: syscall.ENOTDIR}
+		}
+		if stat, ok := info.Sys().(*syscall.Stat_t); ok {
+			uid = int(stat.Uid)
+			gid = int(stat.Gid)
+		} else {
+			return fmt.Errorf("fail to retrieve the uid and gid of path %s", curPath)
+		}
+	}
+	return nil
+}
+
+// ChownToParent changes the owners of the path to the same of parent directory.
+// The path needs to be absolute and the method doesn't handle symlink.
+func ChownToParent(path string) error {
+	if len(path) == 0 {
+		return fmt.Errorf("the path is empty")
+	}
+
+	if !filepath.IsAbs(path) {
+		return fmt.Errorf("the path is not absolute")
+	}
+
+	info, err := os.Stat(filepath.Dir(path))
+	if err != nil {
+		return fmt.Errorf("os.Stat() error on %s: %s", filepath.Dir(path), err.Error())
+	}
+	if stat, ok := info.Sys().(*syscall.Stat_t); ok {
+		if err = syscall.Chown(path, int(stat.Uid), int(stat.Gid)); err != nil {
+			return err
+		}
+		return nil
+	}
+	return fmt.Errorf("fail to retrieve the uid and gid of path %s", path)
+}
+
+// getAllParentPaths returns all the parent directories of a path, including itself but excluding root directory "/".
+// For example, "/foo/bar/biz" returns {"/foo", "/foo/bar", "/foo/bar/biz"}
+func getAllParentPaths(path string) []string {
+	if path == "/" || path == "." {
+		return []string{}
+	}
+
+	paths := []string{filepath.Clean(path)}
+	cur := path
+	var parent string
+	for cur != "/" && cur != "." {
+		parent = filepath.Dir(cur)
+		paths = append([]string{parent}, paths...)
+		cur = parent
+	}
+	// remove the "/" or "." from the return result
+	return paths[1:]
+}

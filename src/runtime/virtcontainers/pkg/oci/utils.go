@@ -622,6 +622,12 @@ func addHypervisorMemoryOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig
 		return err
 	}
 
+	if err := newAnnotationConfiguration(ocispec, vcAnnotations.EnableRootlessHypervisor).setBool(func(enableRootlessHypervisor bool) {
+		sbConfig.HypervisorConfig.Rootless = enableRootlessHypervisor
+	}); err != nil {
+		return err
+	}
+
 	return nil
 }
 
