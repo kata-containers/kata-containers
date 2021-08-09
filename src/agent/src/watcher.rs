@@ -70,6 +70,11 @@ pub enum WatcherError {
 
 impl Drop for Storage {
     fn drop(&mut self) {
+        if !&self.watch {
+            // If we weren't watching this storage entry, it means that a bind mount
+            // was created.
+            let _ = umount(&self.target_mount_point);
+        }
         let _ = std::fs::remove_dir_all(&self.target_mount_point);
     }
 }
@@ -926,5 +931,68 @@ mod tests {
 
         let out = fs::read_to_string(dest_dir.path().join("1.txt")).unwrap();
         assert_eq!(out, "one");
+    }
+
+    #[tokio::test]
+    async fn verify_container_cleanup_watching() {
+        skip_if_not_root!();
+
+        let source_dir = tempfile::tempdir().unwrap();
+        fs::write(source_dir.path().join("1.txt"), "one").unwrap();
+
+        let dest_dir = tempfile::tempdir().unwrap();
+
+        let storage = protos::Storage {
+            source: source_dir.path().display().to_string(),
+            mount_point: dest_dir.path().display().to_string(),
+            ..Default::default()
+        };
+
+        let logger = slog::Logger::root(slog::Discard, o!());
+        let mut watcher = BindWatcher::default();
+
+        watcher
+            .add_container("test".into(), std::iter::once(storage), &logger)
+            .await
+            .unwrap();
+
+        thread::sleep(Duration::from_secs(WATCH_INTERVAL_SECS));
+
+        let out = fs::read_to_string(dest_dir.path().join("1.txt")).unwrap();
+        assert!(dest_dir.path().exists());
+        assert_eq!(out, "one");
+
+        watcher.remove_container("test").await;
+
+        thread::sleep(Duration::from_secs(WATCH_INTERVAL_SECS));
+        assert!(!dest_dir.path().exists());
+
+        for i in 1..21 {
+            fs::write(source_dir.path().join(format!("{}.txt", i)), "fluff").unwrap();
+        }
+
+        // verify non-watched storage is cleaned up correctly
+        let storage1 = protos::Storage {
+            source: source_dir.path().display().to_string(),
+            mount_point: dest_dir.path().display().to_string(),
+            ..Default::default()
+        };
+
+        watcher
+            .add_container("test".into(), std::iter::once(storage1), &logger)
+            .await
+            .unwrap();
+
+        thread::sleep(Duration::from_secs(WATCH_INTERVAL_SECS));
+
+        assert!(dest_dir.path().exists());
+        assert!(is_mounted(dest_dir.path().to_str().unwrap()).unwrap());
+
+        watcher.remove_container("test").await;
+
+        thread::sleep(Duration::from_secs(WATCH_INTERVAL_SECS));
+
+        assert!(!dest_dir.path().exists());
+        assert!(!is_mounted(dest_dir.path().to_str().unwrap()).unwrap());
     }
 }
