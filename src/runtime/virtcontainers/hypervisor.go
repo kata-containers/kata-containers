@@ -417,8 +417,14 @@ type HypervisorConfig struct {
 	// from memory encryption to both memory and CPU-state encryption and integrity.
 	ConfidentialGuest bool
 
-	// Enable SEV prelaunch attestation.
-	SEVPrelaunchAttestation bool
+	// Enable prelaunch attestation for confidential guest.
+	GuestAttestation bool
+
+	// Location of the Guest Owner Proxy for attestation
+	GuestAttestationProxy string
+
+	// Keyset ID for post-attestation secret injection
+	GuestAttestationKeyset string
 
 	// BootToBeTemplate used to indicate if the VM is created to be a template VM
 	BootToBeTemplate bool

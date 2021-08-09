@@ -8,6 +8,9 @@ package virtcontainers
 import (
 	"context"
 	"fmt"
+	"os/exec"
+	"reflect"
+	"strings"
 	"time"
 
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
@@ -40,6 +43,8 @@ const (
 	tdxCPUFlag = "tdx"
 
 	sevKvmParameterPath = "/sys/module/kvm_amd/parameters/sev"
+
+	sevGuestOwnerProxyClient = "/opt/sev/guest-owner-proxy/gop-client.py"
 )
 
 var qemuPaths = map[string]string{
@@ -271,5 +276,131 @@ func (q *qemuAmd64) appendProtectionDevice(devices []govmmQemu.Device, firmware 
 
 	default:
 		return devices, "", fmt.Errorf("Unsupported guest protection technology: %v", q.protection)
+	}
+}
+
+// setup prelaunch attestation
+func (q *qemuArchBase) setupGuestAttestation(ctx context.Context, config govmmQemu.Config, path string, proxy string) (govmmQemu.Config, error) {
+	logger := virtLog.WithFields(logrus.Fields{
+		"subsystem":               "qemuAmd64",
+		"machine":                 q.qemuMachine,
+		"kernel-params-debug":     q.kernelParamsDebug,
+		"kernel-params-non-debug": q.kernelParamsNonDebug,
+		"kernel-params":           q.kernelParams})
+	switch q.protection {
+	case sevProtection:
+		logger.Info("SEV attestation: Pulling launch argument...")
+		logger.Info("SEV attestation: Server %s", proxy)
+		logger.Info("SEV attestation: Path %s", path)
+
+		// start VM in stalled state
+		config.Knobs.Stopped = true
+
+		// Pull the launch blob and godh from GOP
+		// Use an external script until GOP client logic is built into the kata-runtime
+		cmd := exec.Command(sevGuestOwnerProxyClient, "GetBundle", proxy, path)
+		logger.Info("SEV attestation: GetBundle Command: ", cmd.String())
+		out, err := cmd.CombinedOutput()
+		cmd.Wait()
+		if err != nil {
+			logger.Info("SEV attestation: GetBundle FAILED: %s", err)
+			return config, err
+		}
+		// TODO: error check
+		out_string := strings.TrimSuffix(string(out), "\n")
+		logger.Info("SEV attestation: Received GOP results: %s", out_string)
+		gop_result := strings.Split(string(out_string), ",")
+		fmt.Println(gop_result)
+		logger.Info("SEV attestation: godh %s", gop_result[0])
+		logger.Info("SEV attestation: launch measure %s", gop_result[1])
+		logger.Info("SEV attestation: connection id %s", gop_result[2])
+
+		// Place launch args into qemuConfig.Devices struct
+		for i := range config.Devices {
+			if reflect.TypeOf(config.Devices[i]).String() == "qemu.Object" {
+				if config.Devices[i].(govmmQemu.Object).Type == govmmQemu.SEVGuest {
+					logger.Info("SEV attestation: UPDATING DEVICE")
+					dev := config.Devices[i].(govmmQemu.Object)
+					dev.CertFilePath = gop_result[0]
+					dev.SessionFilePath = gop_result[1]
+					dev.DeviceID = gop_result[2]
+					dev.SevPolicy = 0
+					config.Devices[i] = dev
+					break
+				}
+			} else {
+				logger.Info("SEV attestation: ELSE %s", reflect.TypeOf(config.Devices[i]).String())
+			}
+		}
+		return config, nil
+	default:
+		return config, nil
+	}
+}
+
+// wait for prelaunch attestation to complete
+func (q *qemuArchBase) prelaunchAttestation(ctx context.Context, qmp *govmmQemu.QMP, config govmmQemu.Config, path string, proxy string, keyset string) error {
+	logger := virtLog.WithFields(logrus.Fields{
+		"subsystem":               "qemuAmd64",
+		"machine":                 q.qemuMachine,
+		"kernel-params-debug":     q.kernelParamsDebug,
+		"kernel-params-non-debug": q.kernelParamsNonDebug,
+		"kernel-params":           q.kernelParams})
+	switch q.protection {
+	case sevProtection:
+		// This will block and wait for the Guest Owner Proxy to validate the
+		// prelaunch attestation measurement.
+		logger.Info("SEV attestation: Processing prelaunch attestation")
+		logger.Info("SEV attestation: Server %s", proxy)
+		logger.Info("SEV attestation: Path %s", path)
+		logger.Info("SEV attestation: Keyset %s", keyset)
+		connection_id := ""
+		var sev_policy uint32 = 0
+		for i := range config.Devices {
+			if reflect.TypeOf(config.Devices[i]).String() == "qemu.Object" {
+				if config.Devices[i].(govmmQemu.Object).Type == govmmQemu.SEVGuest {
+					dev := config.Devices[i].(govmmQemu.Object)
+					connection_id = dev.DeviceID
+					sev_policy = dev.SevPolicy
+					break
+				}
+			}
+		}
+		// Pull the launch measurement from VM
+		launch_measure, err := qmp.ExecuteQuerySEVLaunchMeasure(ctx)
+		if err != nil {
+			return err
+		}
+		logger.Info("SEV attestation: Connection ID: ", connection_id)
+		logger.Info("SEV attestation: Policy: ", sev_policy)
+		logger.Info("SEV attestation: Launch Measure: ", launch_measure.Measurement)
+
+		// Pass launch measurement to GOP, get secret in return
+		// Use an external script until GOP client logic is built into the kata-runtime
+		// nsenter is used to move child process back to the host default netns
+		cmd := exec.Command("nsenter", "-t", "1", "-n", "--", sevGuestOwnerProxyClient, "GetSecret", "-c", connection_id, "-i", keyset, "-m", string(launch_measure.Measurement), proxy, path)
+		logger.Info("SEV attestation: GetSecret Command: ", cmd.String())
+		out, err := cmd.CombinedOutput()
+		cmd.Wait()
+		if err != nil {
+			logger.Info("SEV attestation: GetSecret FAILED: ", err, string(out))
+			return err
+		}
+		out_string := strings.TrimSuffix(string(out), "\n")
+		gop_result := strings.Split(out_string, ",")
+		logger.Info("SEV attestation: Received GOP secrets: ", out_string)
+		logger.Info("SEV attestation: secret header: ", gop_result[0])
+		logger.Info("SEV attestation: secret: ", gop_result[1])
+		secret_header := gop_result[0]
+		secret := gop_result[1]
+
+		// Inject secret into VM
+		if err := qmp.ExecuteSEVInjectLaunchSecret(ctx, secret_header, secret); err != nil {
+			return err
+		}
+		// Continue the VM
+		return qmp.ExecuteCont(ctx)
+	default:
+		return nil
 	}
 }
