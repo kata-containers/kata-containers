@@ -1,0 +1,13 @@
+apiVersion: pie.apple.com/v1alpha1
+kind: AppleNetworkPolicy
+metadata:
+  name: inotify-testing
+  namespace: default
+spec:
+  apps_incoming:
+  - app: kube-dns-apc.apc-foo.kube
+  apps_outgoing:
+  - app: __kubernetes__
+  - app: kube-dns-apc.apc-foo.kube
+  selector:
+    sdr.appname: inotify-testing

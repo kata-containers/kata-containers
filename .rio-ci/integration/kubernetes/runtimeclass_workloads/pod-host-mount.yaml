@@ -1,0 +1,49 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  labels:
+    app: host-mount-test
+  name: host-mount-test
+spec:
+  template:
+    metadata:
+      annotations:
+        runtime.aci.apple.com/use-host-mount: "true"
+      labels:
+        app: host-mount-test
+        sdr.appname: host-mount-test
+    spec:
+      runtimeClassName: microvm
+      containers:
+      - name: host-mount-test
+        command: ["sh"]
+        args: ["-c", "while true; do /bin/echo 'hi' && date && sleep 1 ; done"]
+        resources:
+          requests:
+            cpu: 100m
+            memory: 50Mi
+          limits:
+            cpu: 100m
+            memory: 50Mi
+        image: docker-upstream.apple.com/busybox:latest
+        imagePullPolicy: Always
+        volumeMounts:
+        - mountPath: /data
+          name: testing-pvc
+  replicas: 1
+  selector:
+    matchLabels:
+      app: host-mount-test
+  serviceName: host-mount-test
+  volumeClaimTemplates:
+  - apiVersion: v1
+    kind: PersistentVolumeClaim
+    metadata:
+      name: testing-pvc
+    spec:
+      storageClassName: local-storage
+      resources:
+        requests:
+          storage: 1Gi
+      accessModes:
+      - ReadWriteOnce

@@ -1,0 +1,94 @@
+/// To learn more about this file or look up specific details, visit:
+/// https://pages.github.pie.apple.com/pcl/pcl-hub/com.apple.rio.Rio/index.html
+/// Expand the box at the top of that page for useful tips and tricks.
+@ModuleInfo { minPclVersion = "0.15.0" }
+amends "applehub:com.apple.rio.Rio:b5ee279c"
+
+schemaVersion = "2.0"
+
+pipelines {
+  new {
+    machine {
+      baseImage = "docker.apple.com/simcloud/go:stable"
+    }
+    branchName = "apple-main"
+    name = "prb-test"
+    timeout = 70
+    build {
+      template = "freestyle:v4:prb"
+      steps {
+        "make -f .rio-ci/Makefile sc-unit-test"
+      }
+    }
+    reports {
+      logs {
+        paths {
+          "logs.tar.gz"
+        }
+      }
+    }
+    jenkins {
+      concurrentBuild = true
+      maxConcurrentTotal = 5
+    }
+    secrets {
+      names {
+        "token"
+      }
+    }
+  }
+  new {
+    machine {
+      baseImage = "docker.apple.com/simcloud/go:stable"
+    }
+    branchName = "apple-main"
+    name = "prb-check"
+    timeout = 70
+    build {
+      template = "freestyle:v4:prb"
+      steps {
+        "make -f .rio-ci/Makefile sc-check"
+      }
+    }
+    reports {
+      logs {
+        paths {
+          "logs.tar.gz"
+        }
+      }
+    }
+    jenkins {
+      concurrentBuild = true
+      maxConcurrentTotal = 5
+    }
+    secrets {
+      names {
+        "token"
+      }
+    }
+  }
+  new {
+    machine {
+      baseImage = "docker.apple.com/aci-compute-containers/ksmith-kata:latest"
+    }
+    branchName = "apple-main"
+    name = "prb-k8s-integration-test"
+    timeout = 60
+    build {
+      template = "freestyle:v4:prb"
+      steps {
+        "cp \"${BUILD_SECRETS_PATH}/us-west-2d-sa-config\" /kubeconfig"
+        "PRIORITY_CLASS=p3 make -f .rio-ci/Makefile kubernetes-integration-test"
+      }
+    }
+    jenkins {
+      concurrentBuild = false
+      maxConcurrentTotal = 1
+    }
+    secrets {
+      names {
+        "us-west-2d-sa-config"
+      }
+    }
+  }
+}

@@ -1,0 +1,55 @@
+@ModuleInfo { minPclVersion = "0.15.0" }
+module deploymentPodQuota
+
+amends "applehub:com.apple.k8s.AppEnvCluster:92ec8dc7"
+
+import "applehub:io.k8s.K8sObject:92ec8dc7"
+
+local appName = (read?("env:APPNAME") ?? "quota-demo")
+local imageUrl = "docker-upstream.apple.com/busybox:latest"
+
+deployments {
+  [appName] {
+    metadata {
+      name = appName
+    }
+    spec {
+      selector {
+        matchLabels {
+          ["app"] = appName
+        }
+      }
+      replicas = 2
+      template {
+        metadata {
+          labels {
+            ["app"] = appName
+          }
+        }
+        spec {
+          terminationGracePeriodSeconds = 0
+          runtimeClassName = "microvm"
+          containers {
+            new {
+              name = appName
+              image = imageUrl
+              command {
+                "tail"
+                "-f"
+                "/dev/null"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+output {
+  renderer = YamlRenderer {
+    isStream = true
+    converters = (K8sObject.output.renderer as YamlRenderer).converters
+  }
+  value = module.toMap().values.flatMap((it) -> it.toMap().values)
+}

@@ -1,0 +1,57 @@
+@ModuleInfo { minPclVersion = "0.15.0" }
+module podSecurityContext
+
+amends "applehub:com.apple.k8s.AppEnvCluster:92ec8dc7"
+
+import "applehub:io.k8s.K8sObject:92ec8dc7"
+
+local appName = "security-context-test"
+local imageUrl = "docker.apple.com/busybox:latest"
+
+pods {
+  [appName] {
+    metadata {
+      name = appName
+    }
+    spec {
+      terminationGracePeriodSeconds = 0
+      runtimeClassName = "microvm"
+      securityContext {
+        runAsUser = 1000
+      }
+      containers {
+        new {
+          name = appName
+          image = imageUrl
+          command {
+            "tail"
+            "-f"
+            "/dev/null"
+          }
+        }
+      }
+      initContainers {
+        new {
+          name = "init-sys"
+          image = imageUrl
+          securityContext {
+            runAsUser = 1000
+          }
+          command {
+            "sh"
+            "-c"
+            "echo \"init container\""
+          }
+        }
+      }
+    }
+  }
+}
+
+output {
+  renderer = YamlRenderer {
+    isStream = true
+    converters = (K8sObject.output.renderer as YamlRenderer).converters
+  }
+  value = module.toMap().values.flatMap((it) -> it.toMap().values)
+}

@@ -1,0 +1,48 @@
+@ModuleInfo { minPclVersion = "0.15.0" }
+module podCPU
+
+amends "applehub:com.apple.k8s.AppEnvCluster:92ec8dc7"
+
+import "applehub:io.k8s.K8sObject:92ec8dc7"
+
+local appName = "constraints-cpu-test"
+local containerName = "first-cpu-container"
+local imageUrl = "docker.apple.com/busybox:latest"
+
+pods {
+  [appName] {
+    metadata {
+      name = appName
+    }
+    spec {
+      terminationGracePeriodSeconds = 0
+      runtimeClassName = "microvm"
+      containers {
+        new {
+          name = containerName
+          image = imageUrl
+          command {
+            "sleep"
+            "30"
+          }
+          resources {
+            limits {
+              ["cpu"] = 1
+            }
+            requests {
+              ["cpu"] = "500m"
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+output {
+  renderer = YamlRenderer {
+    isStream = true
+    converters = (K8sObject.output.renderer as YamlRenderer).converters
+  }
+  value = module.toMap().values.flatMap((it) -> it.toMap().values)
+}

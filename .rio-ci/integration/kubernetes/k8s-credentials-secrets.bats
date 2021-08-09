@@ -1,0 +1,63 @@
+#!/usr/bin/env bats
+#
+# Copyright (c) 2018 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+
+load "${BATS_TEST_DIRNAME}/tests_common.sh"
+fc_limitations="https://github.com/kata-containers/documentation/issues/351"
+
+setup() {
+	[ "${KATA_HYPERVISOR}" == "firecracker" ] && skip "test not working see: ${fc_limitations}"
+
+	export KUBECONFIG="${KUBECONFIG:-$HOME/.kube/config}"
+	get_pod_config_dir
+}
+
+@test "Credentials using secrets" {
+	[ "${KATA_HYPERVISOR}" == "firecracker" ] && skip "test not working see: ${fc_limitations}"
+
+	secret_name="test-secret"
+	pod_name="pod-secret"
+	second_pod_name="pod-secret-env"
+
+	# Create the secret
+	pcl "${pod_config_dir}/inject-secret.pcl" | kubectl create -f -
+
+	# View information about the secret
+	kubectl get secret "${secret_name}" -o yaml | grep "type: Opaque"
+
+	# Create a pod that has access to the secret through a volume
+	pcl "${pod_config_dir}/pod-secret.pcl" | kubectl create -f -
+
+	# Check pod creation
+	kubectl wait --for=condition=Ready --timeout=$timeout pod "$pod_name"
+
+	# List the files
+	cmd="ls /tmp/secret-volume"
+	kubectl exec $pod_name -- sh -c "$cmd" | grep -w "password"
+	kubectl exec $pod_name -- sh -c "$cmd" | grep -w "username"
+
+	# Create a pod that has access to the secret data through environment variables
+	pcl "${pod_config_dir}/pod-secret-env.pcl" | kubectl create -f -
+
+	# Check pod creation
+	kubectl wait --for=condition=Ready --timeout=$timeout pod "$second_pod_name"
+
+	# Display environment variables
+	second_cmd="printenv"
+	kubectl exec $second_pod_name -- sh -c "$second_cmd" | grep -w "SECRET_USERNAME"
+	kubectl exec $second_pod_name -- sh -c "$second_cmd" | grep -w "SECRET_PASSWORD"
+}
+
+teardown() {
+	[ "${KATA_HYPERVISOR}" == "firecracker" ] && skip "test not working see: ${fc_limitations}"
+
+	# Debugging information
+	kubectl describe "pod/$pod_name"
+	kubectl describe "pod/$second_pod_name"
+
+	kubectl delete pod "$pod_name" "$second_pod_name"
+	kubectl delete secret "$secret_name"
+}

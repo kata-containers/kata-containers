@@ -1,0 +1,31 @@
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  annotations:
+    aci.cloud.apple.com/ip-class: ipv6
+  name: inotify-configmap-testing
+spec:
+  containers:
+  - name: c1
+    image: docker.apple.com/eric_g_ernst/fsnotify:latest
+    command: ["bash"]
+    args: ["-c", "inotifywait --timeout 120 -r /config/ && [[ -L /config/config.toml ]] && [[ -L /config/..data ]] && sleep 1 && cat /config/config.toml" ]
+    #args: ["-c", "while true; do /bin/echo 'hi' && date && sleep 1 ; done"]
+    resources:
+      requests:
+        cpu: 1
+        memory: 50Mi
+      limits:
+        cpu: 1
+        memory: 1024Mi
+    volumeMounts:
+      - name: config
+        mountPath: /config
+  priorityClassName: p4
+  runtimeClassName: microvm
+  restartPolicy: Never
+  volumes:
+    - name: config
+      configMap:
+        name: cm

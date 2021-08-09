@@ -1,0 +1,33 @@
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  annotations:
+    aci.cloud.apple.com/ip-class: ipv6
+  name: inotify-testing
+  labels:
+    sdr.appname: inotify-testing  
+spec:
+  containers:
+  - name: c1
+    image: docker.apple.com/eric_g_ernst/inotify:latest
+    command: ["sh"]
+    args: ["-c", "inotifywait --timeout 10 -r /certs"]
+   # args: ["-c", "while true; do /bin/echo 'hi' && date && sleep 1 ; done"]
+    resources:
+      requests:
+        cpu: 1
+        memory: 50Mi
+      limits:
+        cpu: 1
+        memory: 1024Mi
+    volumeMounts:
+      - name: identity-certs
+        mountPath: /certs
+        readOnly: true
+  priorityClassName: p4
+  runtimeClassName: microvm
+  restartPolicy: Never
+  volumes:
+    - name: identity-certs
+      emptyDir: {}

@@ -1,0 +1,8 @@
+---
+apiVersion: v1
+data:
+  config.toml: |-
+    foo original...
+kind: ConfigMap
+metadata:
+  name: cm

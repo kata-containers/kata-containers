@@ -1,0 +1,14 @@
+@ModuleInfo { minPclVersion = "0.15.0" }
+module AppEnvClusterExt
+
+extends "applehub:com.apple.k8s.AppEnvCluster:92ec8dc7"
+
+import "applehub:io.k8s.api.batch.v1.Job:92ec8dc7"
+import "applehub:io.k8s.api.core.v1.LimitRange:92ec8dc7"
+import "applehub:io.k8s.api.core.v1.ResourceQuota:92ec8dc7"
+
+jobs: Mapping<String, Job> = resourceMapping(Job)
+
+limitRanges: Mapping<String, LimitRange> = resourceMapping(LimitRange)
+
+resourceQuotas: Mapping<String, ResourceQuota> = resourceMapping(ResourceQuota)

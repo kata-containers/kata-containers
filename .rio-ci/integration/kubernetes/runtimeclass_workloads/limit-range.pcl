@@ -1,0 +1,37 @@
+@ModuleInfo { minPclVersion = "0.15.0" }
+module limitRange
+
+amends "resources/AppEnvClusterExt.pcl"
+
+import "applehub:io.k8s.K8sObject:92ec8dc7"
+
+local limitRangeName = "cpu-limit-range"
+
+limitRanges {
+  [limitRangeName] {
+    metadata {
+      name = limitRangeName
+    }
+    spec {
+      limits {
+        new {
+          default {
+            ["cpu"] = 1
+          }
+          defaultRequest {
+            ["cpu"] = 0.5
+          }
+          type = "Container"
+        }
+      }
+    }
+  }
+}
+
+output {
+  renderer = YamlRenderer {
+    isStream = true
+    converters = (K8sObject.output.renderer as YamlRenderer).converters
+  }
+  value = module.toMap().values.flatMap((it) -> it.toMap().values)
+}

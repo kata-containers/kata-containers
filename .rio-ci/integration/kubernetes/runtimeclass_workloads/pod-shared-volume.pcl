@@ -1,0 +1,69 @@
+@ModuleInfo { minPclVersion = "0.15.0" }
+module podSharedVolume
+
+amends "applehub:com.apple.k8s.AppEnvCluster:92ec8dc7"
+
+import "applehub:io.k8s.K8sObject:92ec8dc7"
+
+local appName = "test-shared-volume"
+local imageUrl = "docker.apple.com/busybox:latest"
+
+pods {
+  [appName] {
+    metadata {
+      name = appName
+    }
+    spec {
+      terminationGracePeriodSeconds = 0
+      runtimeClassName = "microvm"
+      volumes {
+        new {
+          name = "shared-data"
+          emptyDir {}
+        }
+      }
+      containers {
+        new {
+          name = "busybox-first-container"
+          image = imageUrl
+          command {
+            "tail"
+            "-f"
+            "/dev/null"
+          }
+          volumeMounts {
+            new {
+              name = "shared-data"
+              mountPath = "/tmp"
+            }
+          }
+        }
+        new {
+          name = "busybox-second-container"
+          image = imageUrl
+          command {
+            "/bin/sh"
+          }
+          args {
+            "-c"
+            "echo Hello from the busybox-second-container > /tmp/pod-data && tail -f /dev/null"
+          }
+          volumeMounts {
+            new {
+              name = "shared-data"
+              mountPath = "/tmp"
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+output {
+  renderer = YamlRenderer {
+    isStream = true
+    converters = (K8sObject.output.renderer as YamlRenderer).converters
+  }
+  value = module.toMap().values.flatMap((it) -> it.toMap().values)
+}

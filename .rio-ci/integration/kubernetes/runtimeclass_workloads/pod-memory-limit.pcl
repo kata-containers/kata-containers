@@ -1,0 +1,56 @@
+@ModuleInfo { minPclVersion = "0.15.0" }
+module podMemoryLimit
+
+amends "applehub:com.apple.k8s.AppEnvCluster:92ec8dc7"
+
+import "applehub:io.k8s.K8sObject:92ec8dc7"
+
+local appName = "memory-test"
+local imageUrl = "docker.apple.com/aci-compute-containers/stress:latest"
+local memoryAllocated = (read?("env:MEMORY_ALLOCATED") ?? "250M")
+local memorySize = (read?("env:MEMORY_SIZE") ?? "50M")
+
+pods {
+  [appName] {
+    metadata {
+      name = appName
+    }
+    spec {
+      terminationGracePeriodSeconds = 0
+      runtimeClassName = "microvm"
+      containers {
+        new {
+          name = appName
+          image = imageUrl
+          resources {
+            limits {
+              ["memory"] = memorySize
+            }
+            requests {
+              ["memory"] = 500.mib
+            }
+          }
+          command {
+            "stress"
+          }
+          args {
+            "--vm"
+            "1"
+            "--vm-bytes"
+            "\(memoryAllocated)"
+            "--vm-hang"
+            "1"
+          }
+        }
+      }
+    }
+  }
+}
+
+output {
+  renderer = YamlRenderer {
+    isStream = true
+    converters = (K8sObject.output.renderer as YamlRenderer).converters
+  }
+  value = module.toMap().values.flatMap((it) -> it.toMap().values)
+}

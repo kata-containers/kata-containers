@@ -1,0 +1,63 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  labels:
+    app: direct-mount-test
+  name: direct-mount-test
+spec:
+  template:
+    metadata:
+      labels:
+        app: direct-mount-test
+        sdr.appname: direct-mount-test
+    spec:
+      runtimeClassName: microvm
+      containers:
+      - name: direct-mount-test
+        command: ["sh"]
+        args: ["-c", "while true; do /bin/echo 'hi' && date && sleep 1 ; done"]
+        resources:
+          requests:
+            cpu: 100m
+            memory: 50Mi
+          limits:
+            cpu: 100m
+            memory: 50Mi
+        image: docker-upstream.apple.com/busybox:latest
+        imagePullPolicy: Always
+        volumeMounts:
+        - mountPath: /data
+          name: testing-pvc
+      - name: test-ro
+        command: ["sh"]
+        args: ["-c", "while true; do /bin/echo 'hi' && date && sleep 1 ; done"]
+        resources:
+          requests:
+            cpu: 100m
+            memory: 50Mi
+          limits:
+            cpu: 100m
+            memory: 50Mi
+        image: docker-upstream.apple.com/busybox:latest
+        imagePullPolicy: Always
+        volumeMounts:
+        - mountPath: /ro-vol
+          readOnly: true
+          name: testing-pvc
+  replicas: 1
+  selector:
+    matchLabels:
+      app: direct-mount-test
+  serviceName: direct-mount-test
+  volumeClaimTemplates:
+  - apiVersion: v1
+    kind: PersistentVolumeClaim
+    metadata:
+      name: testing-pvc
+    spec:
+      storageClassName: local-storage
+      resources:
+        requests:
+          storage: 1Gi
+      accessModes:
+      - ReadWriteOnce

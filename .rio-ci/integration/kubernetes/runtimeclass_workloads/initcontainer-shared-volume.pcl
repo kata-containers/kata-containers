@@ -1,0 +1,69 @@
+@ModuleInfo { minPclVersion = "0.15.0" }
+module initContainerSharedVolume
+
+amends "applehub:com.apple.k8s.AppEnvCluster:92ec8dc7"
+
+import "applehub:io.k8s.K8sObject:92ec8dc7"
+
+local appName = "initcontainer-shared-volume"
+local imageUrl = "docker.apple.com/busybox:latest"
+
+pods {
+  [appName] {
+    metadata {
+      name = appName
+    }
+    spec {
+      terminationGracePeriodSeconds = 0
+      runtimeClassName = "microvm"
+      volumes {
+        new {
+          name = "volume"
+          emptyDir {}
+        }
+      }
+      initContainers {
+        new {
+          name = "first"
+          image = imageUrl
+          command {
+            "sh"
+            "-c"
+            "echo ${EPOCHREALTIME//.} > /volume/initContainer"
+          }
+          volumeMounts {
+            new {
+              name = "volume"
+              mountPath = "/volume"
+            }
+          }
+        }
+      }
+      containers {
+        new {
+          name = "last"
+          image = imageUrl
+          command {
+            "sh"
+            "-c"
+            "echo ${EPOCHREALTIME//.} > /volume/container; tail -f /dev/null"
+          }
+          volumeMounts {
+            new {
+              name = "volume"
+              mountPath = "/volume"
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+output {
+  renderer = YamlRenderer {
+    isStream = true
+    converters = (K8sObject.output.renderer as YamlRenderer).converters
+  }
+  value = module.toMap().values.flatMap((it) -> it.toMap().values)
+}

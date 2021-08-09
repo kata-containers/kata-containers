@@ -1,0 +1,46 @@
+@ModuleInfo { minPclVersion = "0.15.0" }
+module podHTTPLiveness
+
+amends "applehub:com.apple.k8s.AppEnvCluster:92ec8dc7"
+
+import "applehub:io.k8s.K8sObject:92ec8dc7"
+
+local appName = "liveness-http"
+local imageUrl = "docker-upstream.apple.com/k8s-artifacts-prod/e2e-test-images/agnhost:2.21"
+
+pods {
+  [appName] {
+    metadata {
+      name = appName
+    }
+    spec {
+      terminationGracePeriodSeconds = 0
+      runtimeClassName = "microvm"
+      containers {
+        new {
+          name = appName
+          image = imageUrl
+          args {
+            "liveness"
+          }
+          livenessProbe {
+            httpGet {
+              path = "/healthz"
+              port = 8080
+            }
+            initialDelaySeconds = 3
+            periodSeconds = 3
+          }
+        }
+      }
+    }
+  }
+}
+
+output {
+  renderer = YamlRenderer {
+    isStream = true
+    converters = (K8sObject.output.renderer as YamlRenderer).converters
+  }
+  value = module.toMap().values.flatMap((it) -> it.toMap().values)
+}

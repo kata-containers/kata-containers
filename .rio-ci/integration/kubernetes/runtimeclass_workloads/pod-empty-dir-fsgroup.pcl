@@ -1,0 +1,82 @@
+@ModuleInfo { minPclVersion = "0.15.0" }
+module podEmptyDirFSGroup
+
+amends "applehub:com.apple.k8s.AppEnvCluster:92ec8dc7"
+
+import "applehub:io.k8s.K8sObject:92ec8dc7"
+
+local appName = "sharevol-kata"
+local imageUrl = "docker-upstream.apple.com/k8s-artifacts-prod/e2e-test-images/agnhost:2.21"
+
+pods {
+  [appName] {
+    metadata {
+      name = appName
+    }
+    spec {
+      terminationGracePeriodSeconds = 0
+      runtimeClassName = "microvm"
+      restartPolicy = "Never"
+      securityContext {
+        runAsUser = 1001
+        fsGroup = 123
+      }
+      containers {
+        new {
+          name = "mounttest-container"
+          image = imageUrl
+          args {
+            "mounttest"
+            "--fs_type=/test-volume"
+            "--new_file_0660=/test-volume/test-file"
+            "--file_perm=/test-volume/test-file"
+            "--file_owner=/test-volume/test-file"
+          }
+          volumeMounts {
+            new {
+              name = "emptydir-volume"
+              mountPath = "/test-volume"
+            }
+          }
+        }
+        new {
+          name = "mounttest-container-2"
+          image = imageUrl
+          args {
+            "mounttest"
+            "--fs_type=/test-volume-2"
+            "--new_file_0660=/test-volume-2/test-file"
+            "--file_perm=/test-volume-2/test-file"
+            "--file_owner=/test-volume-2/test-file"
+          }
+          volumeMounts {
+            new {
+              name = "mem-emptydir-volume"
+              mountPath = "/test-volume-2"
+            }
+          }
+        }
+      }
+      volumes {
+        new {
+          name = "emptydir-volume"
+          emptyDir {}
+        }
+        new {
+          name = "mem-emptydir-volume"
+          emptyDir {
+            medium = "Memory"
+          }
+        }
+      }
+    }
+  }
+}
+
+output {
+  renderer = YamlRenderer {
+    isStream = true
+    converters = (K8sObject.output.renderer as YamlRenderer).converters
+  }
+  value = module.toMap().values.flatMap((it) -> it.toMap().values)
+}

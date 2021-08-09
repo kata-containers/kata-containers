@@ -130,8 +130,6 @@ clean:
 
 vendor:
 	@cargo vendor
-
-
 #TARGET test: run cargo tests
 test:
 	@cargo test --all --target $(TRIPLE) $(EXTRA_RUSTFEATURES) -- --nocapture
