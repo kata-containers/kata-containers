@@ -10,8 +10,15 @@ package containerdshim
 import (
 	"context"
 	"fmt"
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/utils"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/rootless"
+	"math/rand"
 	"os"
+	"os/user"
+	"path"
 	"path/filepath"
+	"strconv"
+	"syscall"
 
 	containerd_types "github.com/containerd/containerd/api/types"
 	"github.com/containerd/containerd/mount"
@@ -103,6 +110,12 @@ func create(ctx context.Context, s *service, r *taskAPI.CreateTaskRequest) (*con
 		}()
 
 		katautils.HandleFactory(ctx, vci, s.config)
+		rootless.SetRootless(s.config.HypervisorConfig.Rootless)
+		if rootless.IsRootless() {
+			if err := configureNonRootHypervisor(s.config); err != nil {
+				return nil, err
+			}
+		}
 
 		// Pass service's context instead of local ctx to CreateSandbox(), since local
 		// ctx will be canceled after this rpc service call, but the sandbox will live
@@ -258,4 +271,113 @@ func doMount(mounts []*containerd_types.Mount, rootfs string) error {
 		}
 	}
 	return nil
+}
+
+func configureNonRootHypervisor(runtimeConfig *oci.RuntimeConfig) error {
+	userName, err := createVmmUser()
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err != nil {
+			removeVmmUser(userName)
+		}
+	}()
+
+	u, err := user.Lookup(userName)
+	if err != nil {
+		return err
+	}
+
+	uid, err := strconv.Atoi(u.Uid)
+	if err != nil {
+		return err
+	}
+	gid, err := strconv.Atoi(u.Gid)
+	if err != nil {
+		return err
+	}
+	runtimeConfig.HypervisorConfig.Uid = uint32(uid)
+	runtimeConfig.HypervisorConfig.Gid = uint32(gid)
+
+	userTmpDir := path.Join("/run/user/", fmt.Sprint(uid))
+	dir, err := os.Stat(userTmpDir)
+	if os.IsNotExist(err) {
+		if err = os.Mkdir(userTmpDir, vc.DirMode); err != nil {
+			return err
+		}
+		defer func() {
+			if err != nil {
+				if err = os.RemoveAll(userTmpDir); err != nil {
+					shimLog.WithField("userTmpDir", userTmpDir).WithError(err).Warn("failed to remove userTmpDir")
+				}
+			}
+		}()
+		if err = syscall.Chown(userTmpDir, uid, gid); err != nil {
+			return err
+		}
+	}
+	if dir != nil && !dir.IsDir() {
+		return fmt.Errorf("%s is expected to be a directory", userTmpDir)
+	}
+
+	if err := os.Setenv("XDG_RUNTIME_DIR", userTmpDir); err != nil {
+		return err
+	}
+
+	info, err := os.Stat("/dev/kvm")
+	if err != nil {
+		return err
+	}
+	if stat, ok := info.Sys().(*syscall.Stat_t); ok {
+		// Add the kvm group to the hypervisor supplemental group so that the hypervisor process can access /dev/kvm
+		runtimeConfig.HypervisorConfig.Groups = append(runtimeConfig.HypervisorConfig.Groups, stat.Gid)
+		return nil
+	}
+	return fmt.Errorf("failed to get the gid of /dev/kvm")
+}
+
+func createVmmUser() (string, error) {
+	var (
+		err      error
+		userName string
+	)
+
+	useraddPath, err := utils.FirstValidExecutable([]string{"/usr/sbin/useradd", "/sbin/useradd", "/bin/useradd"})
+	if err != nil {
+		return "", err
+	}
+	nologinPath, err := utils.FirstValidExecutable([]string{"/usr/sbin/nologin", "/sbin/nologin", "/bin/nologin"})
+	if err != nil {
+		return "", err
+	}
+
+	// Add retries to mitigate temporary errors and race conditions. For example, the user already exists
+	// or another instance of the runtime is also creating a user.
+	maxAttempt := 5
+	for i := 0; i < maxAttempt; i++ {
+		userName = fmt.Sprintf("kata-%v", rand.Intn(100000))
+		_, err = utils.RunCommand([]string{useraddPath, "-M", "-s", nologinPath, userName, "-c", "\"Kata Containers temporary hypervisor user\""})
+		if err == nil {
+			return userName, nil
+		}
+		shimLog.WithField("attempt", i+1).WithField("username", userName).
+			WithError(err).Warn("failed to add user, will try again")
+	}
+	return "", fmt.Errorf("could not create VMM user: %v", err)
+}
+
+func removeVmmUser(user string) {
+	userdelPath, err := utils.FirstValidExecutable([]string{"/usr/sbin/userdel", "/sbin/userdel", "/bin/userdel"})
+	if err != nil {
+		shimLog.WithField("username", user).WithError(err).Warn("failed to remove user")
+	}
+	// Add retries to mitigate temporary errors and race conditions.
+	for i := 0; i < 5; i++ {
+		_, err := utils.RunCommand([]string{userdelPath, "-f", user})
+		if err == nil {
+			return
+		}
+		shimLog.WithField("username", user).WithField("attempt", i+1).WithError(err).Warn("failed to remove user")
+	}
 }
