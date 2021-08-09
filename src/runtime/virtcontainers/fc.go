@@ -1055,7 +1055,12 @@ func (fc *firecracker) hotplugBlockDevice(ctx context.Context, drive config.Bloc
 		fc.umountResource(driveID)
 		// use previous raw file created at createDiskPool, that way
 		// the resource is released by firecracker and it can be destroyed in the host
-		path = filepath.Join(fc.jailerRoot, driveID)
+		if fc.jailed {
+			// use path relative to the jail
+			path = filepath.Join("/", driveID)
+		} else {
+			path = filepath.Join(fc.jailerRoot, driveID)
+		}
 	}
 
 	return nil, fc.fcUpdateBlockDrive(ctx, path, driveID)
