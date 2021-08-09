@@ -8,6 +8,9 @@ package virtcontainers
 import (
 	"context"
 	"fmt"
+	"os/exec"
+	"reflect"
+	"strings"
 	"time"
 
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
@@ -40,6 +43,17 @@ const (
 	tdxCPUFlag = "tdx"
 
 	sevKvmParameterPath = "/sys/module/kvm_amd/parameters/sev"
+
+	// Guest Owner Proxy Client
+	// gop-client is a *temporary* component of the confidential containers CCv0 demo.
+	//
+	// The guest owner proxy (gop-client.py) acts as the local client for
+	// a remote Guest Owner server.  The local client fowards encrypted
+	// messages between the SEV hardware and the external guest owner.
+	//
+	// Source: https://github.com/confidential-containers-demo/scripts/tree/main/guest-owner-proxy
+	//
+	sevGuestOwnerProxyClient = "/opt/sev/guest-owner-proxy/gop-client.py"
 )
 
 var qemuPaths = map[string]string{
@@ -261,5 +275,94 @@ func (q *qemuAmd64) appendProtectionDevice(devices []govmmQemu.Device, firmware 
 
 	default:
 		return devices, "", fmt.Errorf("Unsupported guest protection technology: %v", q.protection)
+	}
+}
+
+// setup prelaunch attestation
+func (q *qemuArchBase) setupGuestAttestation(ctx context.Context, config govmmQemu.Config, path string, proxy string) (govmmQemu.Config, error) {
+	switch q.protection {
+	case sevProtection:
+		logger := virtLog.WithField("subsystem", "SEV attestation")
+		logger.Info("Set up prelaunch attestation")
+
+		// start VM in stalled state
+		config.Knobs.Stopped = true
+		// Pull the launch bundle and guest DH key from GOP client
+		// nsenter moves child process back to the host network namespace
+		cmd := exec.Command(sevGuestOwnerProxyClient, "GetBundle", proxy, path)
+		out, err := cmd.CombinedOutput()
+		cmd.Wait()
+		if err != nil {
+			logger.Error("GetBundle Failed: %s", err)
+			return config, err
+		}
+		// TODO: error check
+		out_string := strings.TrimSuffix(string(out), "\n")
+		gop_result := strings.Split(string(out_string), ",")
+
+		// Place launch args into qemuConfig.Devices struct
+		for i := range config.Devices {
+			if reflect.TypeOf(config.Devices[i]).String() == "qemu.Object" {
+				if config.Devices[i].(govmmQemu.Object).Type == govmmQemu.SEVGuest {
+					dev := config.Devices[i].(govmmQemu.Object)
+					dev.CertFilePath = gop_result[0]
+					dev.SessionFilePath = gop_result[1]
+					dev.DeviceID = gop_result[2]
+					dev.KernelHashes = true
+					config.Devices[i] = dev
+					break
+				}
+			}
+		}
+		return config, nil
+	default:
+		return config, nil
+	}
+}
+
+// wait for prelaunch attestation to complete
+func (q *qemuArchBase) prelaunchAttestation(ctx context.Context, qmp *govmmQemu.QMP, config govmmQemu.Config, path string, proxy string, keyset string) error {
+	switch q.protection {
+	case sevProtection:
+		logger := virtLog.WithField("subsystem", "SEV attestation")
+		logger.Info("Processing prelaunch attestation")
+		connection_id := ""
+		for i := range config.Devices {
+			if reflect.TypeOf(config.Devices[i]).String() == "qemu.Object" {
+				if config.Devices[i].(govmmQemu.Object).Type == govmmQemu.SEVGuest {
+					dev := config.Devices[i].(govmmQemu.Object)
+					connection_id = dev.DeviceID
+					break
+				}
+			}
+		}
+		// Pull the launch measurement from VM
+		launch_measure, err := qmp.ExecuteQuerySEVLaunchMeasure(ctx)
+		if err != nil {
+			return err
+		}
+		// Pass launch measurement to GOP client, get secret bundle in return
+		// nsenter moves child process back to the host network namespace
+		cmd := exec.Command("nsenter", "-t", "1", "-n", "--", sevGuestOwnerProxyClient, "GetSecret", "-c", connection_id, "-i", keyset, "-m", string(launch_measure.Measurement), proxy, path)
+		out, err := cmd.CombinedOutput()
+		cmd.Wait()
+		if err != nil {
+			logger.Error("GetSecret FAILED: ", err, string(out))
+			return err
+		}
+		out_string := strings.TrimSuffix(string(out), "\n")
+		gop_result := strings.Split(out_string, ",")
+		logger.Info("Received secret bundle from guest owner")
+		secret_header := gop_result[0]
+		secret := gop_result[1]
+
+		// Inject secret into VM
+		if err := qmp.ExecuteSEVInjectLaunchSecret(ctx, secret_header, secret); err != nil {
+			return err
+		}
+		// Continue the VM
+		return qmp.ExecuteCont(ctx)
+	default:
+		return nil
 	}
 }

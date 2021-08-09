@@ -24,6 +24,17 @@ machine_type = "@MACHINETYPE@"
 # Default false
 # confidential_guest = true
 
+# Enable attestation for confidential guests.
+# Applies only if confidential_guest is true.  
+# (default: false)
+#guest_attestation = true
+#
+# Guest owner proxy that handles remote attestation
+#guest_attestation_proxy="localhost:50051"
+#
+# Keyset ID for injected secrets 
+#guest_attestation_keyset="KEYSET-1"
+
 # Enable running QEMU VMM as a non-root user.
 # By default QEMU VMM run as root. When this is set to true, QEMU VMM process runs as
 # a non-root random user. See documentation for the limitations of this mode.

@@ -89,6 +89,9 @@ const defaultGuestSwap = false
 const defaultRootlessHypervisor = false
 const defaultDisableSeccomp = false
 const defaultVfioMode = "guest-kernel"
+const defaultGuestAttestation = false
+const defaultGuestAttestationProxy string = ""
+const defaultGuestAttestationKeyset string = "" 
 
 var defaultSGXEPCSize = int64(0)
 

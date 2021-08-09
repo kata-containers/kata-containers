@@ -135,6 +135,9 @@ type hypervisor struct {
 	GuestSwap               bool     `toml:"enable_guest_swap"`
 	Rootless                bool     `toml:"rootless"`
 	DisableSeccomp          bool     `toml:"disable_seccomp"`
+	GuestAttestation        bool     `toml:"guest_attestation"`
+	GuestAttestationProxy   string   `toml:"guest_attestation_proxy"`
+	GuestAttestationKeyset  string   `toml:"guest_attestation_keyset"`
 }
 
 type runtime struct {
@@ -697,6 +700,9 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		ConfidentialGuest:       h.ConfidentialGuest,
 		GuestSwap:               h.GuestSwap,
 		Rootless:                h.Rootless,
+		GuestAttestation:        h.GuestAttestation,
+		GuestAttestationProxy:   h.GuestAttestationProxy,
+		GuestAttestationKeyset:  h.GuestAttestationKeyset,
 	}, nil
 }
 
@@ -1044,6 +1050,9 @@ func GetDefaultHypervisorConfig() vc.HypervisorConfig {
 		GuestSwap:               defaultGuestSwap,
 		Rootless:                defaultRootlessHypervisor,
 		DisableSeccomp:          defaultDisableSeccomp,
+		GuestAttestation:        defaultGuestAttestation,
+		GuestAttestationProxy:   defaultGuestAttestationProxy,
+		GuestAttestationKeyset:  defaultGuestAttestationKeyset,
 	}
 }
 

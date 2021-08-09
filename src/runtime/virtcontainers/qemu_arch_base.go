@@ -148,6 +148,12 @@ type qemuArch interface {
 	// a firmware, returns a string containing the path to the firmware that should
 	// be used with the -bios option, ommit -bios option if the path is empty.
 	appendProtectionDevice(devices []govmmQemu.Device, firmware string) ([]govmmQemu.Device, string, error)
+
+	// setup guest attestation
+	setupGuestAttestation(ctx context.Context, config govmmQemu.Config, path string, proxy string) (govmmQemu.Config, error)
+
+	// wait for prelaunch attestation to complete
+	prelaunchAttestation(ctx context.Context, qmp *govmmQemu.QMP, config govmmQemu.Config, path string, proxy string, keyset string) error
 }
 
 // Kind of guest protection

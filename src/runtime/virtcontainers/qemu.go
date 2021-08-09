@@ -618,6 +618,16 @@ func (q *qemu) CreateVM(ctx context.Context, id string, networkNS NetworkNamespa
 		return err
 	}
 
+	if q.config.GuestAttestation {
+		guest_filepath := filepath.Join(q.config.VMStorePath, q.id)
+		qemuConfig, err = q.arch.setupGuestAttestation(ctx, qemuConfig, guest_filepath, q.config.GuestAttestationProxy)
+		if err != nil {
+			return err
+		}
+	} else {
+		q.Logger().Infof("SEV attestation skipped: %d", q.config.GuestAttestation)
+	}
+
 	if ioThread != nil {
 		qemuConfig.IOThreads = []govmmQemu.IOThread{*ioThread}
 	}
@@ -846,6 +856,16 @@ func (q *qemu) StartVM(ctx context.Context, timeout int) error {
 	err = q.waitVM(ctx, timeout)
 	if err != nil {
 		return err
+	}
+
+	if q.config.ConfidentialGuest && q.config.GuestAttestation {
+		if err = q.qmpSetup(); err != nil {
+			return err
+		}
+		guest_filepath := filepath.Join(q.config.VMStorePath, q.id)
+		if err := q.arch.prelaunchAttestation(q.qmpMonitorCh.ctx, q.qmpMonitorCh.qmp, q.qemuConfig, guest_filepath, q.config.GuestAttestationProxy, q.config.GuestAttestationKeyset); err != nil {
+			return err
+		}
 	}
 
 	if q.config.BootFromTemplate {
