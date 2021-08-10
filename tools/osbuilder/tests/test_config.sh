@@ -43,23 +43,21 @@ if [ -n "${CI:-}" ]; then
 		skipWhenTestingAll+=("${distro}")
 	done
 
-	if [ "${RUST_AGENT:-}" == "yes" ]; then
-		# add skipForRustDistros to skipWhenTestingAll if it is not
-		for td in "${skipForRustDistros[@]}"; do
-			if distro_in_set "${td}" "${skipWhenTestingAll[@]}"; then
+	# add skipForRustDistros to skipWhenTestingAll if it is not
+	for td in "${skipForRustDistros[@]}"; do
+		if distro_in_set "${td}" "${skipWhenTestingAll[@]}"; then
+			continue
+		fi
+		# not found in skipWhenTestingAll, add to it
+		skipWhenTestingAll+=("${td}")
+	done
+
+	if distro_in_set "${arch}" "${skipForRustArch[@]}"; then
+		for distro in "${test_distros[@]}"; do
+			if distro_in_set "${distro}" "${skipWhenTestingAll[@]}"; then
 				continue
 			fi
-			# not found in skipWhenTestingAll, add to it
-			skipWhenTestingAll+=("${td}")
+			skipWhenTestingAll+=("${distro}")
 		done
-
-		if distro_in_set "${arch}" "${skipForRustArch[@]}"; then
-			for distro in "${test_distros[@]}"; do
-				if distro_in_set "${distro}" "${skipWhenTestingAll[@]}"; then
-					continue
-				fi
-				skipWhenTestingAll+=("${distro}")
-			done
-		fi
 	fi
 fi
