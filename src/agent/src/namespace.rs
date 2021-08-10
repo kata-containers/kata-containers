@@ -102,7 +102,7 @@ impl Namespace {
 
         let new_thread = tokio::spawn(async move {
             if let Err(err) = || -> Result<()> {
-                let origin_ns_path = get_current_thread_ns_path(&ns_type.get());
+                let origin_ns_path = get_current_thread_ns_path(ns_type.get());
 
                 File::open(Path::new(&origin_ns_path))?;
 

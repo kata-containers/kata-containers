@@ -82,8 +82,8 @@ impl Handle {
 
         // Add new ip addresses from request
         for ip_address in &iface.IPAddresses {
-            let ip = IpAddr::from_str(&ip_address.get_address())?;
-            let mask = u8::from_str_radix(ip_address.get_mask(), 10)?;
+            let ip = IpAddr::from_str(ip_address.get_address())?;
+            let mask = ip_address.get_mask().parse::<u8>()?;
 
             self.add_addresses(link.index(), std::iter::once(IpNetwork::new(ip, mask)?))
                 .await?;
@@ -512,7 +512,7 @@ impl Handle {
             .and_then(|addr| if addr.is_empty() { None } else { Some(addr) }) // Make sure it's not empty
             .ok_or(nix::Error::Sys(nix::errno::Errno::EINVAL))?;
 
-        let ip = IpAddr::from_str(&ip_address)
+        let ip = IpAddr::from_str(ip_address)
             .map_err(|e| anyhow!("Failed to parse IP {}: {:?}", ip_address, e))?;
 
         // Import rtnetlink objects that make sense only for this function
