@@ -8,6 +8,14 @@ automates the process to build a kernel for Kata Containers.
 
 The `build-kernel.sh` script requires an installed Golang version matching the
 [component build requirements](../../../docs/Developer-Guide.md#requirements-to-build-individual-components).
+It also requires [yq](https://github.com/mikefarah/yq) version 3.4.1
+> **Hint**: `snap install yq --channel=v3/stable`
+
+
+The Linux kernel scripts further require a few packages (flex, bison, and libelf-dev)
+See the CI scripts for your distro for more information...
+Look for the setup*.sh files [here](https://github.com/kata-containers/tests/tree/main/.ci)
+
 
 ## Usage
 
@@ -16,9 +24,6 @@ $ ./build-kernel.sh -h
 Overview:
 
 	Build a kernel for Kata Containers
-
-Description: This script is the *ONLY* to build a kernel for development.
-
 
 Usage:
 
@@ -49,13 +54,15 @@ Options:
 
 Example:
 ```
-$ ./build-kernel.sh -v 4.19.86 -g nvidia -f -d setup
+$ ./build-kernel.sh -v 5.10.25 -g nvidia -f -d setup
 ```
 > **Note**
-> - `-v 4.19.86`: Specify the guest kernel version.
+> - `-v 5.10.25`: Specify the guest kernel version. 
 > - `-g nvidia`: To build a guest kernel supporting Nvidia GPU.
 > - `-f`: The `.config` file is forced to be generated even if the kernel directory already exists.
 > - `-d`: Enable bash debug mode.
+
+> **Hint**: When in doubt look at [versions.yaml](../../../versions.yaml) to see what kernel version CI is using.
 
 
 ## Setup kernel source code
@@ -90,7 +97,7 @@ on this path, the following command will install it to the default Kata
 containers path (`/usr/share/kata-containers/`).
 
 ```bash
-$ ./build-kernel.sh install
+$ sudo ./build-kernel.sh install
 ```
 
 ## Submit Kernel Changes

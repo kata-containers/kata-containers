@@ -4,10 +4,6 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-description="
-Description: This script is the *ONLY* to build a kernel for development.
-"
-
 set -o errexit
 set -o nounset
 set -o pipefail
@@ -71,7 +67,6 @@ usage() {
 Overview:
 
 	Build a kernel for Kata Containers
-	${description}
 
 Usage:
 
