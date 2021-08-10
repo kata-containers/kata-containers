@@ -850,7 +850,8 @@ func TestAddRuntimeAnnotations(t *testing.T) {
 	ocispec.Annotations[vcAnnotations.DisableNewNetNs] = "true"
 	ocispec.Annotations[vcAnnotations.InterNetworkModel] = "macvtap"
 
-	addAnnotations(ocispec, &config, runtimeConfig)
+	err := addAnnotations(ocispec, &config, runtimeConfig)
+	assert.NoError(err)
 	assert.Equal(config.DisableGuestSeccomp, true)
 	assert.Equal(config.SandboxCgroupOnly, true)
 	assert.Equal(config.NetworkConfig.DisableNewNetNs, true)

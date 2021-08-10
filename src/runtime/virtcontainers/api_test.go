@@ -73,10 +73,10 @@ func newBasicTestCmd() types.Cmd {
 	return cmd
 }
 
-func newTestSandboxConfigNoop() SandboxConfig {
+func newTestSandboxConfig() SandboxConfig {
 	bundlePath := filepath.Join(testDir, testBundle)
 	containerAnnotations[annotations.BundlePathKey] = bundlePath
-	// containerAnnotations["com.github.containers.virtcontainers.pkg.oci.container_type"] = "pod_sandbox"
+	containerAnnotations[annotations.ContainerTypeKey] = string(PodSandbox)
 
 	emptySpec := newEmptySpec()
 
@@ -122,18 +122,11 @@ func newTestSandboxConfigNoop() SandboxConfig {
 	return sandboxConfig
 }
 
-func newTestSandboxConfigKataAgent() SandboxConfig {
-	sandboxConfig := newTestSandboxConfigNoop()
-	sandboxConfig.Containers = nil
-
-	return sandboxConfig
-}
-
 func TestCreateSandboxNoopAgentSuccessful(t *testing.T) {
 	defer cleanUp()
 	assert := assert.New(t)
 
-	config := newTestSandboxConfigNoop()
+	config := newTestSandboxConfig()
 
 	ctx := WithNewAgentFunc(context.Background(), newMockAgent)
 	p, err := CreateSandbox(ctx, config, nil)
@@ -157,7 +150,7 @@ func TestCreateSandboxKataAgentSuccessful(t *testing.T) {
 
 	defer cleanUp()
 
-	config := newTestSandboxConfigKataAgent()
+	config := newTestSandboxConfig()
 
 	url, err := mock.GenerateKataMockHybridVSock()
 	assert.NoError(err)
@@ -242,7 +235,7 @@ func createAndStartSandbox(ctx context.Context, config SandboxConfig) (sandbox V
 func TestReleaseSandbox(t *testing.T) {
 	defer cleanUp()
 
-	config := newTestSandboxConfigNoop()
+	config := newTestSandboxConfig()
 
 	ctx := WithNewAgentFunc(context.Background(), newMockAgent)
 	s, err := CreateSandbox(ctx, config, nil)
@@ -254,7 +247,7 @@ func TestReleaseSandbox(t *testing.T) {
 }
 
 func TestCleanupContainer(t *testing.T) {
-	config := newTestSandboxConfigNoop()
+	config := newTestSandboxConfig()
 	assert := assert.New(t)
 
 	ctx := WithNewAgentFunc(context.Background(), newMockAgent)

@@ -1207,6 +1207,7 @@ mod tests {
     fn test_finish_rootfs() {
         let stdout_fd = std::io::stdout().as_raw_fd();
         let mut spec = oci::Spec::default();
+        let process = oci::Process::default();
 
         spec.linux = Some(oci::Linux::default());
         spec.linux.as_mut().unwrap().masked_paths = vec!["/tmp".to_string()];
@@ -1222,7 +1223,7 @@ mod tests {
             options: vec!["ro".to_string(), "shared".to_string()],
         }];
 
-        let ret = finish_rootfs(stdout_fd, &spec, &oci::Process::default());
+        let ret = finish_rootfs(stdout_fd, &spec, &process);
         assert!(ret.is_ok(), "Should pass. Got: {:?}", ret);
     }
 

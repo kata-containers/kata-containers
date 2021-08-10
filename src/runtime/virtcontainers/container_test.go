@@ -603,6 +603,7 @@ func TestMountSharedDirMounts(t *testing.T) {
 	// Create container to utilize this mount/secret
 	//
 	container := Container{
+		ctx:       context.Background(),
 		sandbox:   sandbox,
 		sandboxID: "foobar",
 		id:        "test-ctr",
