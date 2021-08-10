@@ -12,7 +12,7 @@ For more information about VPP visit their [wiki](https://wiki.fd.io/view/VPP).
 
 ## Install and configure Kata Containers
 
-Follow  the [Kata Containers setup instructions](https://github.com/kata-containers/documentation/wiki/Developer-Guide).
+Follow  the [Kata Containers setup instructions](../Developer-Guide.md).
 
 In order to make use of VHOST-USER based interfaces, the container needs to be backed
 by huge pages. `HugePages` support is required for the large memory pool allocation used for
