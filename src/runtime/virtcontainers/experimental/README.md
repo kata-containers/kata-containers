@@ -56,7 +56,7 @@ That depends.
 For the feature that breaks backward compatibility, we usually land it as formal feature in a major version bump(x in x.y.z, e.g. 2.0.0).
 But for a new feature who becomes stable and ready, we can release it formally in any minor version bump.
 
-Check Kata Container [versioning rules](https://github.com/kata-containers/documentation/blob/c556f1853f2e3df69d336de01ad4bb38e64ecc1b/Releases.md#versioning).
+Check Kata Container [versioning rules](../../../../docs/Stable-Branch-Strategy.md#Versioning).
 
 The experimental feature should state clearly in documentation the rationale for it to be experimental, 
 and when it is expected to be non-experimental,
