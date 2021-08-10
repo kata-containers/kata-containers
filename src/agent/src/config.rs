@@ -372,8 +372,8 @@ mod tests {
     #[test]
     fn test_new() {
         let config = AgentConfig::new();
-        assert_eq!(config.debug_console, false);
-        assert_eq!(config.dev_mode, false);
+        assert!(!config.debug_console);
+        assert!(!config.dev_mode);
         assert_eq!(config.log_level, DEFAULT_LOG_LEVEL);
         assert_eq!(config.hotplug_timeout, DEFAULT_HOTPLUG_TIMEOUT);
     }
@@ -754,9 +754,9 @@ mod tests {
             }
 
             let mut config = AgentConfig::new();
-            assert_eq!(config.debug_console, false, "{}", msg);
-            assert_eq!(config.dev_mode, false, "{}", msg);
-            assert_eq!(config.unified_cgroup_hierarchy, false, "{}", msg);
+            assert!(!config.debug_console, "{}", msg);
+            assert!(!config.dev_mode, "{}", msg);
+            assert!(!config.unified_cgroup_hierarchy, "{}", msg);
             assert_eq!(
                 config.hotplug_timeout,
                 time::Duration::from_secs(3),

@@ -189,7 +189,7 @@ pub fn init_rootfs(
 
     let mut bind_mount_dev = false;
     for m in &spec.mounts {
-        let (mut flags, pgflags, data) = parse_mount(&m);
+        let (mut flags, pgflags, data) = parse_mount(m);
         if !m.destination.starts_with('/') || m.destination.contains("..") {
             return Err(anyhow!(
                 "the mount destination {} is invalid",
@@ -198,7 +198,7 @@ pub fn init_rootfs(
         }
 
         if m.r#type == "cgroup" {
-            mount_cgroups(cfd_log, &m, rootfs, flags, &data, cpath, mounts)?;
+            mount_cgroups(cfd_log, m, rootfs, flags, &data, cpath, mounts)?;
         } else {
             if m.destination == "/dev" {
                 if m.r#type == "bind" {
@@ -226,7 +226,7 @@ pub fn init_rootfs(
                 }
             }
 
-            mount_from(cfd_log, &m, &rootfs, flags, &data, "")?;
+            mount_from(cfd_log, m, rootfs, flags, &data, "")?;
             // bind mount won't change mount options, we need remount to make mount options
             // effective.
             // first check that we have non-default options required before attempting a
@@ -356,7 +356,7 @@ fn mount_cgroups(
     mounts: &HashMap<String, String>,
 ) -> Result<()> {
     if cgroups::hierarchies::is_cgroup2_unified_mode() {
-        return mount_cgroups_v2(cfd_log, &m, rootfs, flags);
+        return mount_cgroups_v2(cfd_log, m, rootfs, flags);
     }
     // mount tmpfs
     let ctm = Mount {

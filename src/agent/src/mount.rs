@@ -282,7 +282,7 @@ async fn ephemeral_storage_handler(
             fs::set_permissions(&storage.mount_point, permission)?;
         }
     } else {
-        common_storage_handler(logger, &storage)?;
+        common_storage_handler(logger, storage)?;
     }
 
     Ok("".to_string())
@@ -1104,8 +1104,8 @@ mod tests {
 
         // Create an actual mount
         let bare_mount = BareMount::new(
-            &mnt_src_filename,
-            &mnt_dest_filename,
+            mnt_src_filename,
+            mnt_dest_filename,
             "bind",
             MsFlags::MS_BIND,
             "",
@@ -1274,7 +1274,7 @@ mod tests {
         let logger = slog::Logger::root(drain, o!());
         let result = get_cgroup_mounts(&logger, "", true);
 
-        assert_eq!(true, result.is_ok());
+        assert!(result.is_ok());
         let result = result.unwrap();
         assert_eq!(1, result.len());
         assert_eq!(result[0].fstype, "cgroup2");

@@ -272,7 +272,7 @@ impl Sandbox {
             ctr.cgroup_manager
                 .as_ref()
                 .unwrap()
-                .update_cpuset_path(guest_cpuset.as_str(), &container_cpust)?;
+                .update_cpuset_path(guest_cpuset.as_str(), container_cpust)?;
         }
 
         Ok(())
@@ -461,7 +461,7 @@ mod tests {
     use tempfile::Builder;
 
     fn bind_mount(src: &str, dst: &str, logger: &Logger) -> Result<(), Error> {
-        let baremount = BareMount::new(src, dst, "bind", MsFlags::MS_BIND, "", &logger);
+        let baremount = BareMount::new(src, dst, "bind", MsFlags::MS_BIND, "", logger);
         baremount.mount()
     }
 
@@ -474,7 +474,7 @@ mod tests {
         let tmpdir_path = tmpdir.path().to_str().unwrap();
 
         // Add a new sandbox storage
-        let new_storage = s.set_sandbox_storage(&tmpdir_path);
+        let new_storage = s.set_sandbox_storage(tmpdir_path);
 
         // Check the reference counter
         let ref_count = s.storages[tmpdir_path];
@@ -483,11 +483,11 @@ mod tests {
             "Invalid refcount, got {} expected 1.",
             ref_count
         );
-        assert_eq!(new_storage, true);
+        assert!(new_storage);
 
         // Use the existing sandbox storage
-        let new_storage = s.set_sandbox_storage(&tmpdir_path);
-        assert_eq!(new_storage, false, "Should be false as already exists.");
+        let new_storage = s.set_sandbox_storage(tmpdir_path);
+        assert!(!new_storage, "Should be false as already exists.");
 
         // Since we are using existing storage, the reference counter
         // should be 2 by now.
@@ -527,7 +527,7 @@ mod tests {
             .unwrap();
 
         assert!(
-            s.remove_sandbox_storage(&srcdir_path).is_err(),
+            s.remove_sandbox_storage(srcdir_path).is_err(),
             "Expect Err as the directory i not a mountpoint"
         );
 
@@ -586,8 +586,8 @@ mod tests {
 
         assert!(bind_mount(srcdir_path, destdir_path, &logger).is_ok());
 
-        assert_eq!(s.set_sandbox_storage(&destdir_path), true);
-        assert!(s.unset_and_remove_sandbox_storage(&destdir_path).is_ok());
+        assert!(s.set_sandbox_storage(destdir_path));
+        assert!(s.unset_and_remove_sandbox_storage(destdir_path).is_ok());
 
         let other_dir_str;
         {
@@ -600,7 +600,7 @@ mod tests {
             let other_dir_path = other_dir.path().to_str().unwrap();
             other_dir_str = other_dir_path.to_string();
 
-            assert_eq!(s.set_sandbox_storage(&other_dir_path), true);
+            assert!(s.set_sandbox_storage(other_dir_path));
         }
 
         assert!(s.unset_and_remove_sandbox_storage(&other_dir_str).is_err());
@@ -614,17 +614,15 @@ mod tests {
         let storage_path = "/tmp/testEphe";
 
         // Add a new sandbox storage
-        assert_eq!(s.set_sandbox_storage(&storage_path), true);
+        assert!(s.set_sandbox_storage(storage_path));
         // Use the existing sandbox storage
-        assert_eq!(
-            s.set_sandbox_storage(&storage_path),
-            false,
+        assert!(
+            !s.set_sandbox_storage(storage_path),
             "Expects false as the storage is not new."
         );
 
-        assert_eq!(
-            s.unset_sandbox_storage(&storage_path).unwrap(),
-            false,
+        assert!(
+            !s.unset_sandbox_storage(storage_path).unwrap(),
             "Expects false as there is still a storage."
         );
 
@@ -636,9 +634,8 @@ mod tests {
             ref_count
         );
 
-        assert_eq!(
-            s.unset_sandbox_storage(&storage_path).unwrap(),
-            true,
+        assert!(
+            s.unset_sandbox_storage(storage_path).unwrap(),
             "Expects true as there is still a storage."
         );
 
@@ -654,7 +651,7 @@ mod tests {
         // If no container is using the sandbox storage, the reference
         // counter for it should not exist.
         assert!(
-            s.unset_sandbox_storage(&storage_path).is_err(),
+            s.unset_sandbox_storage(storage_path).is_err(),
             "Expects false as the reference counter should no exist."
         );
     }
