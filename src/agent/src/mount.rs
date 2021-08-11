@@ -787,21 +787,6 @@ fn ensure_destination_file_exists(path: &Path) -> Result<()> {
     Ok(())
 }
 
-// ensure_destination_exists will recursively create a given mountpoint. If directories
-// are created, their permissions are initialized to mountPerm(0755)
-#[instrument]
-fn ensure_destination_exists(destination: &str, fs_type: &str) -> Result<()> {
-    let d = Path::new(destination);
-
-    if fs_type != "bind" || d.is_dir() {
-        fs::create_dir_all(d).context(format!("create dir all {:?}", d))?;
-    } else {
-        ensure_destination_file_exists(d)?;
-    }
-
-    Ok(())
-}
-
 #[instrument]
 fn parse_options(option_list: Vec<String>) -> HashMap<String, String> {
     let mut options = HashMap::new();
@@ -821,7 +806,6 @@ fn parse_options(option_list: Vec<String>) -> HashMap<String, String> {
 mod tests {
     use super::*;
     use crate::{skip_if_not_root, skip_loop_if_not_root, skip_loop_if_root};
-    use std::fs::metadata;
     use std::fs::File;
     use std::fs::OpenOptions;
     use std::io::Write;
@@ -1400,39 +1384,5 @@ mod tests {
         assert!(result.is_ok());
 
         assert!(testfile.is_file());
-    }
-    #[test]
-    fn test_ensure_destination_exists() {
-        let dir = tempdir().expect("failed to create tmpdir");
-
-        let mut testfile = dir.into_path();
-        testfile.push("testfile");
-
-        let result = ensure_destination_exists(testfile.to_str().unwrap(), "bind");
-
-        assert!(result.is_ok());
-        assert!(testfile.exists());
-
-        let result = ensure_destination_exists(testfile.to_str().unwrap(), "bind");
-        assert!(result.is_ok());
-
-        let meta = metadata(testfile).unwrap();
-
-        assert!(meta.is_file());
-
-        let dir = tempdir().expect("failed to create tmpdir");
-        let mut testdir = dir.into_path();
-        testdir.push("testdir");
-
-        let result = ensure_destination_exists(testdir.to_str().unwrap(), "ext4");
-        assert!(result.is_ok());
-        assert!(testdir.exists());
-
-        let result = ensure_destination_exists(testdir.to_str().unwrap(), "ext4");
-        assert!(result.is_ok());
-
-        //let meta = metadata(testdir.to_str().unwrap()).unwrap();
-        let meta = metadata(testdir).unwrap();
-        assert!(meta.is_dir());
     }
 }
