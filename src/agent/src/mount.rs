@@ -439,17 +439,14 @@ fn mount_storage(logger: &Logger, storage: &Storage) -> Result<()> {
         return Ok(());
     }
 
-    match storage.fstype.as_str() {
-        DRIVER_9P_TYPE | DRIVER_VIRTIOFS_TYPE => {
-            let dest_path = Path::new(storage.mount_point.as_str());
-            if !dest_path.exists() {
-                fs::create_dir_all(dest_path).context("Create mount destination failed")?;
-            }
-        }
-        _ => {
-            ensure_destination_exists(storage.mount_point.as_str(), storage.fstype.as_str())?;
-        }
+    let mount_path = Path::new(&storage.mount_point);
+    let src_path = Path::new(&storage.source);
+    if storage.fstype == "bind" && !src_path.is_dir() {
+        ensure_destination_file_exists(mount_path)
+    } else {
+        fs::create_dir_all(mount_path).map_err(anyhow::Error::from)
     }
+    .context("Could not create mountpoint")?;
 
     let options_vec = storage.options.to_vec();
     let options_vec = options_vec.iter().map(String::as_str).collect();
