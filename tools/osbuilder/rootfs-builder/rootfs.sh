@@ -13,6 +13,7 @@ set -o errtrace
 script_name="${0##*/}"
 script_dir="$(dirname $(readlink -f $0))"
 AGENT_VERSION=${AGENT_VERSION:-}
+SETUP_ROOTFS_ONLY="false"
 RUST_VERSION="null"
 MUSL_VERSION=${MUSL_VERSION:-"null"}
 AGENT_BIN=${AGENT_BIN:-kata-agent}
@@ -87,6 +88,7 @@ Options:
                     environment variable.
   -t DISTRO         Print the test configuration for DISTRO and exit
                     immediately.
+  -u                Update already created agente and config files for rootfs
 
 Environment Variables:
 AGENT_BIN           Name of the agent binary (used when running sanity checks on
@@ -371,11 +373,17 @@ build_rootfs_distro()
 		docker_run_args+=" --rm"
 		docker_run_args+=" --runtime ${DOCKER_RUNTIME}"
 
-		if [ -z "${AGENT_SOURCE_BIN}" ] ; then
-			docker_run_args+=" -v ${GOPATH_LOCAL}:${GOPATH_LOCAL} --env GOPATH=${GOPATH_LOCAL}"
-		else
+		set -x
+		if [ "${AGENT_SOURCE_BIN}" != "" ] ; then
 			docker_run_args+=" --env AGENT_SOURCE_BIN=${AGENT_SOURCE_BIN}"
 			docker_run_args+=" -v ${AGENT_SOURCE_BIN}:${AGENT_SOURCE_BIN}"
+			docker_run_args+=" -v ${AGENT_SOURCE_BIN}:${AGENT_SOURCE_BIN}"
+			docker_run_args+=" -v ${GOPATH_LOCAL}:${GOPATH_LOCAL} --env GOPATH=${GOPATH_LOCAL}"
+		elif [ "${AGENT_TAR_BIN}" != "" ] ; then
+			docker_run_args+=" --env AGENT_TAR_BIN=${AGENT_TAR_BIN}"
+			docker_run_args+=" -v ${AGENT_TAR_BIN}:${AGENT_TAR_BIN}"
+			docker_run_args+=" -v ${AGENT_TAR_BIN}:${AGENT_TAR_BIN}"
+		else
 			docker_run_args+=" -v ${GOPATH_LOCAL}:${GOPATH_LOCAL} --env GOPATH=${GOPATH_LOCAL}"
 		fi
 
@@ -534,42 +542,7 @@ EOT
 		       -e '/^\[Unit\]/a ConditionPathExists=\/dev\/ptp0' ${chrony_systemd_service}
 	fi
 
-	AGENT_DIR="${ROOTFS_DIR}/usr/bin"
-	AGENT_DEST="${AGENT_DIR}/${AGENT_BIN}"
-
-	if [ -z "${AGENT_SOURCE_BIN}" ] ; then
-		if [ "$ARCH" == "ppc64le" ] || [ "$ARCH" == "s390x" ]; then
-			LIBC=gnu
-			echo "WARNING: Forcing LIBC=gnu because $ARCH has no musl Rust target"
-		fi
-		[ "$LIBC" == "musl" ] && bash ${script_dir}/../../../ci/install_musl.sh
-		# rust agent needs ${arch}-unknown-linux-${LIBC}
-		rustup show | grep linux-${LIBC} > /dev/null || bash ${script_dir}/../../../ci/install_rust.sh
-		test -r "${HOME}/.cargo/env" && source "${HOME}/.cargo/env"
-		[ "$ARCH" == "aarch64" ] && OLD_PATH=$PATH && export PATH=$PATH:/usr/local/musl/bin
-
-		agent_dir="${script_dir}/../../../src/agent/"
-		# For now, rust-agent doesn't support seccomp yet.
-		SECCOMP="no"
-
-		info "Build agent"
-		pushd "${agent_dir}"
-		if [ -n "${AGENT_VERSION}" ]; then
-			git checkout "${AGENT_VERSION}" && OK "git checkout successful" || die "checkout agent ${AGENT_VERSION} failed!"
-		fi
-		make clean
-		make LIBC=${LIBC} INIT=${AGENT_INIT}
-		make install DESTDIR="${ROOTFS_DIR}" LIBC=${LIBC} INIT=${AGENT_INIT} SECCOMP=${SECCOMP}
-		[ "$ARCH" == "aarch64" ] && export PATH=$OLD_PATH && rm -rf /usr/local/musl
-		popd
-	else
-		mkdir -p ${AGENT_DIR}
-		cp ${AGENT_SOURCE_BIN} ${AGENT_DEST}
-		OK "cp ${AGENT_SOURCE_BIN} ${AGENT_DEST}"
-	fi
-
-	[ -x "${AGENT_DEST}" ] || die "${AGENT_DEST} is not installed in ${ROOTFS_DIR}"
-	OK "Agent installed"
+	install_agent
 
 	[ "${AGENT_INIT}" == "yes" ] && setup_agent_init "${AGENT_DEST}" "${init}"
 
@@ -590,9 +563,51 @@ EOT
 	create_summary_file "${ROOTFS_DIR}"
 }
 
+install_agent(){
+	AGENT_DIR="${ROOTFS_DIR}/usr/bin"
+	AGENT_DEST="${AGENT_DIR}/${AGENT_BIN}"
+	if [ "${AGENT_TAR_BIN}" != "" ] ; then
+		tar xvf "${AGENT_TAR_BIN}" -C "${ROOTFS_DIR}"
+		OK "Untar ${AGENT_TAR_BIN} into ${ROOTFS_DIR}"
+		return
+	fi
+	if [ "${AGENT_SOURCE_BIN}" != "" ] ; then
+		mkdir -p ${AGENT_DIR}
+		cp ${AGENT_SOURCE_BIN} ${AGENT_DEST}
+		OK "cp ${AGENT_SOURCE_BIN} ${AGENT_DEST}"
+		return
+	fi
+
+	if [ "$ARCH" == "ppc64le" ] || [ "$ARCH" == "s390x" ]; then
+		LIBC=gnu
+		echo "WARNING: Forcing LIBC=gnu because $ARCH has no musl Rust target"
+	fi
+	[ "$LIBC" == "musl" ] && bash ${script_dir}/../../../ci/install_musl.sh
+	# rust agent needs ${arch}-unknown-linux-${LIBC}
+	rustup show | grep linux-${LIBC} > /dev/null || bash ${script_dir}/../../../ci/install_rust.sh
+	test -r "${HOME}/.cargo/env" && source "${HOME}/.cargo/env"
+	[ "$ARCH" == "aarch64" ] && OLD_PATH=$PATH && export PATH=$PATH:/usr/local/musl/bin
+
+	agent_dir="${script_dir}/../../../src/agent/"
+
+	info "Build agent"
+	pushd "${agent_dir}"
+	if [ -n "${AGENT_VERSION}" ]; then
+		git checkout "${AGENT_VERSION}" && OK "git checkout successful" || die "checkout agent ${AGENT_VERSION} failed!"
+	fi
+	make clean
+	make INIT=${AGENT_INIT}
+	make install DESTDIR="${ROOTFS_DIR}" INIT=${AGENT_INIT}
+	[ "$ARCH" == "aarch64" ] && export PATH=$OLD_PATH && rm -rf /usr/local/musl
+	popd
+
+	[ -x "${AGENT_DEST}" ] || die "${AGENT_DEST} is not installed in ${ROOTFS_DIR}"
+	OK "Agent installed"
+}
+
 parse_arguments()
 {
-	while getopts a:hlo:r:t: opt
+	while getopts a:hlo:r:t:u opt
 	do
 		case $opt in
 			a)	AGENT_VERSION="${OPTARG}" ;;
@@ -601,6 +616,7 @@ parse_arguments()
 			o)	OSBUILDER_VERSION="${OPTARG}" ;;
 			r)	ROOTFS_DIR="${OPTARG}" ;;
 			t)	get_test_config "${OPTARG}" && exit 0;;
+			u)      SETUP_ROOTFS_ONLY=true;;
 			*)  die "Found an invalid option";;
 		esac
 	done
@@ -631,6 +647,13 @@ main()
 {
 	parse_arguments $*
 	check_env_variables
+
+	if [ "$SETUP_ROOTFS_ONLY" != "false" ];then
+		info "Update rootfs setup"
+		init="${ROOTFS_DIR}/sbin/init"
+		setup_rootfs
+		exit 0
+	fi
 
 	if [ -n "$distro" ]; then
 		build_rootfs_distro

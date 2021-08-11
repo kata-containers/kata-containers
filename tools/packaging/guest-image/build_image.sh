@@ -32,6 +32,7 @@ build_initrd() {
 		OS_VERSION="${initrd_os_version}" \
 		ROOTFS_BUILD_DEST="${builddir}/initrd-image" \
 		USE_DOCKER=1 \
+		AGENT_TAR_BIN="${agent_tarball}" \
 		AGENT_INIT="yes"
 	mv "kata-containers-initrd.img" "${install_dir}/${initrd_name}"
 	(
@@ -49,6 +50,7 @@ build_image() {
 		DEBUG="${DEBUG:-}" \
 		USE_DOCKER="1" \
 		IMG_OS_VERSION="${img_os_version}" \
+		AGENT_TAR_BIN="${agent_tarball}" \
 		ROOTFS_BUILD_DEST="${builddir}/rootfs-image"
 	mv -f "kata-containers.img" "${install_dir}/${image_name}"
 	(
@@ -76,6 +78,7 @@ EOT
 }
 
 main() {
+	agent_tarball=""
 	image_type=image
 	destdir="$PWD"
 	prefix="/opt/kata"
@@ -84,6 +87,9 @@ main() {
 		case "$opt" in
 		-)
 			case "${OPTARG}" in
+			agent-tarball=*)
+				agent_tarball=${OPTARG#*=}
+					;;
 			imagetype=image)
 				image_type=image
 				#image information
@@ -123,7 +129,7 @@ main() {
 	readonly destdir
 	readonly builddir
 
-	echo "build ${image_type}"
+	info "image type: ${image_type}"
 
 
 

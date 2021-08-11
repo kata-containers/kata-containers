@@ -86,6 +86,7 @@ endef
 
 ##TARGET default: build code
 default: $(TARGET) show-header
+	@echo "$(TARGET) build"
 
 $(TARGET): $(GENERATED_CODE) $(TARGET_PATH)
 

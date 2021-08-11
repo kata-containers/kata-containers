@@ -25,6 +25,7 @@ readonly firecracker_builder="${static_build_dir}/firecracker/build-static-firec
 readonly kernel_builder="${static_build_dir}/kernel/build.sh"
 readonly qemu_builder="${static_build_dir}/qemu/build-static-qemu.sh"
 readonly shimv2_builder="${static_build_dir}/shim-v2/build.sh"
+readonly agent_builder="${static_build_dir}/agent/build.sh"
 
 readonly rootfs_builder="${repo_root_dir}/tools/packaging/guest-image/build_image.sh"
 
@@ -76,16 +77,35 @@ EOT
 	exit "${return_code}"
 }
 
+build_agent_before_rootfs() {
+	local old_destdir
+	local old_builddir
+	old_destdir="${workdir}/${t}/destdir"
+	old_builddir="${workdir}/${t}/builddir"
+	
+	destdir="${workdir}/agent/destdir"
+	builddir="${workdir}/agent/builddir"
+	export kernel_version="$(yq r $versions_yaml assets.kernel.version)"
+	AGENT_DESTDIR="${destdir}"
+	handle_build "agent"
+	destdir="${old_destdir}"
+	builddir="${old_builddir}"
+}
 #Install guest image
 install_image() {
 	info "Create image"
-	"${rootfs_builder}" --imagetype=image --prefix="${prefix}" --destdir="${destdir}"
+	AGENT_INIT="no"
+	build_agent_before_rootfs
+
+	"${rootfs_builder}" --imagetype=image --prefix="${prefix}" --destdir="${destdir}" --agent-tarball="${workdir}/kata-static-agent.tar.xz"
 }
 
 #Install guest initrd
 install_initrd() {
 	info "Create initrd"
-	"${rootfs_builder}" --imagetype=initrd --prefix="${prefix}" --destdir="${destdir}"
+	AGENT_INIT="yes"
+	build_agent_before_rootfs
+	"${rootfs_builder}" --imagetype=initrd --prefix="${prefix}" --destdir="${destdir}" --agent-tarball="${workdir}/kata-static-agent.tar.xz"
 }
 
 #Install kernel asset
@@ -145,6 +165,14 @@ install_shimv2() {
 	DESTDIR="${destdir}" PREFIX="${prefix}" "${shimv2_builder}"
 }
 
+install_agent() {
+	RUST_VERSION="$(yq r ${versions_yaml} languages.rust.meta.newest-version)"
+	export RUST_VERSION
+	DESTDIR="${destdir}"
+	export DESTDIR
+	"${agent_builder}" --init="${AGENT_INIT}"
+}
+
 get_kata_version() {
 	local v
 	v=$(cat "${version_file}")
@@ -166,6 +194,8 @@ handle_build() {
 		install_qemu
 		install_shimv2
 		;;
+
+	agent) install_agent ;;
 
 	cloud-hypervisor) install_clh ;;
 

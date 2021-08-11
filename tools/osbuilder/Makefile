@@ -122,12 +122,17 @@ all: image initrd
 
 .PHONY: rootfs
 rootfs: $(TARGET_ROOTFS_MARKER)
+	@echo "INFO: Rootfs ready in $(TARGET_ROOTFS_MARKER)"
+
+update-agent:
+	$(call silent_run,Update agent in rootfs $(ROOTFS_BUILD_DEST)/$(DISTRO)_rootfs ,$(ROOTFS_BUILDER) -u -o $(VERSION_COMMIT) -r  $(ROOTFS_BUILD_DEST)/$(DISTRO)_rootfs $(DISTRO))
 
 .PHONY: image
 image: $(TARGET_IMAGE)
+	@echo "INFO: Image ready in $(TARGET_IMAGE)"
 
-$(TARGET_IMAGE): $(TARGET_ROOTFS_MARKER)
-	$(call silent_run,Creating image based on "$(TARGET_ROOTFS)",$(IMAGE_BUILDER) -o $@ "$(TARGET_ROOTFS)")
+$(TARGET_IMAGE): | rootfs update-agent
+	$(call silent_run,INFO: Creating image based on "$(TARGET_ROOTFS)",$(IMAGE_BUILDER) -o $@ "$(TARGET_ROOTFS)")
 
 
 .PHONY: initrd
@@ -135,7 +140,7 @@ initrd: $(TARGET_INITRD)
 
 ifeq (distro,$(BUILD_METHOD))
 $(TARGET_INITRD): $(TARGET_ROOTFS_MARKER)
-	$(call silent_run,Creating initrd image based on "$(TARGET_ROOTFS)",$(INITRD_BUILDER) "$(TARGET_ROOTFS)")
+	$(call silent_run,INFO: Creating initrd image based on "$(TARGET_ROOTFS)",$(INITRD_BUILDER) "$(TARGET_ROOTFS)")
 else
 $(TARGET_INITRD): $(DRACUT_OVERLAY_DIR)
 	@echo Creating initrd image based on the host OS using dracut
