@@ -61,11 +61,13 @@ func (l qmpTestLogger) Errorf(format string, v ...interface{}) {
 	l.Infof(format, v...)
 }
 
+// nolint:govet
 type qmpTestCommand struct {
 	name string
 	args map[string]interface{}
 }
 
+// nolint:govet
 type qmpTestEvent struct {
 	name      string
 	data      map[string]interface{}
@@ -73,11 +75,13 @@ type qmpTestEvent struct {
 	after     time.Duration
 }
 
+// nolint:govet
 type qmpTestResult struct {
 	result string
 	data   interface{}
 }
 
+// nolint:govet
 type qmpTestCommandBuffer struct {
 	newDataCh  chan []byte
 	t          *testing.T
