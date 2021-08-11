@@ -256,7 +256,7 @@ parts:
       # arch-specific definition
       case "$(uname -m)" in
         "aarch64")
-          branch="$(${yq} r ${versions_file} assets.hypervisor.qemu.architecture.aarch64.branch)"
+          branch="$(${yq} r ${versions_file} assets.hypervisor.qemu.architecture.aarch64.version)"
           url="$(${yq} r ${versions_file} assets.hypervisor.qemu.url)"
           commit="$(${yq} r ${versions_file} assets.hypervisor.qemu.architecture.aarch64.commit)"
           patches_dir="${kata_dir}/tools/packaging/qemu/patches/$(echo ${branch} | sed -e 's/.[[:digit:]]*$//' -e 's/^v//').x"
@@ -283,6 +283,7 @@ parts:
       [ -n "$(ls -A capstone)" ] || git clone https://github.com/qemu/capstone capstone
 
       # Apply branch patches
+      [ -d "${patches_version_dir}" ] || mkdir "${patches_version_dir}"
       ${kata_dir}/tools/packaging/scripts/apply_patches.sh "${patches_dir}"
       ${kata_dir}/tools/packaging/scripts/apply_patches.sh "${patches_version_dir}"
 
@@ -298,7 +299,15 @@ parts:
         | xargs ./configure
 
       # Copy QEMU configurations (Kconfigs)
-      cp -a ${kata_dir}/tools/packaging/qemu/default-configs/* default-configs/devices/
+      case "$(branch)" in
+      "v5.1.0")
+        cp -a ${kata_dir}/tools/packaging/qemu/default-configs/* default-configs
+        ;;
+
+      *)
+        cp -a ${kata_dir}/tools/packaging/qemu/default-configs/* default-configs/devices/
+        ;;
+      esac
 
       # build and install
       make -j $(($(nproc)-1))
