@@ -12,6 +12,8 @@
 // payload, which allows the forwarder to know how many bytes it must read to
 // consume the trace span. The payload is a serialised version of the trace span.
 
+#![allow(clippy::unknown_clippy_lints)]
+
 use async_trait::async_trait;
 use byteorder::{ByteOrder, NetworkEndian};
 use opentelemetry::sdk::export::trace::{ExportResult, SpanData, SpanExporter};
@@ -19,6 +21,7 @@ use opentelemetry::sdk::export::ExportError;
 use slog::{error, info, o, Logger};
 use std::io::ErrorKind;
 use std::sync::Arc;
+use thiserror::Error;
 use tokio::io::AsyncWriteExt;
 use tokio::sync::Mutex;
 use tokio_vsock::VsockStream;
@@ -50,7 +53,7 @@ impl Exporter {
     }
 }
 
-#[derive(thiserror::Error, Debug)]
+#[derive(Error, Debug)]
 pub enum Error {
     #[error("connection error: {0}")]
     ConnectionError(String),
