@@ -95,7 +95,7 @@ func runHook(ctx context.Context, hook specs.Hook, cid, bundlePath string) error
 }
 
 func runHooks(ctx context.Context, hooks []specs.Hook, cid, bundlePath, hookType string) error {
-	span, _ := katatrace.Trace(ctx, hookLogger(), "runHooks", hookTracingTags)
+	span, ctx := katatrace.Trace(ctx, hookLogger(), "runHooks", hookTracingTags)
 	katatrace.AddTag(span, "type", hookType)
 	defer span.End()
 
