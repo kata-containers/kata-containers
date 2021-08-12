@@ -11,6 +11,9 @@ FROM ${IMAGE_REGISTRY}/ubuntu:@OS_VERSION@
 # This dockerfile needs to provide all the componets need to build a rootfs
 # Install any package need to create a rootfs (package manager, extra tools)
 
+# Avoid tzdata setup
+ENV DEBIAN_FRONTEND noninteractive
+
 # RUN commands
 RUN apt-get update && apt-get install -y \
     autoconf \
