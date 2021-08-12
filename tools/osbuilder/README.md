@@ -213,5 +213,5 @@ any Linux distribution and architecture where dracut is available.
 |--         |--                |--                |--                |--                |--                |--                |
 |**ARM64**  |:heavy_check_mark:|:heavy_check_mark:|                  |                  |:heavy_check_mark:|:heavy_check_mark:|
 |**PPC64le**|:heavy_check_mark:|:heavy_check_mark:|                  |:heavy_check_mark:|:heavy_check_mark:|:heavy_check_mark:|
-|**s390x**  |:heavy_check_mark:|                  |                  |:heavy_check_mark:|:heavy_check_mark:|                  |
+|**s390x**  |                  |                  |                  |:heavy_check_mark:|:heavy_check_mark:|                  |
 |**x86_64** |:heavy_check_mark:|:heavy_check_mark:|:heavy_check_mark:|:heavy_check_mark:|:heavy_check_mark:|:heavy_check_mark:|
