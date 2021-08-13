@@ -34,16 +34,16 @@ func TestFindContextID(t *testing.T) {
 	assert.Error(err)
 }
 
-func TestGetDevicePathAndFsTypeEmptyMount(t *testing.T) {
+func TestGetMountInfoEmptyMount(t *testing.T) {
 	assert := assert.New(t)
-	_, _, err := GetDevicePathAndFsType("")
+	_, _, _, err := GetMountInfo("")
 	assert.Error(err)
 }
 
-func TestGetDevicePathAndFsTypeSuccessful(t *testing.T) {
+func TestGetMountInfoSuccessful(t *testing.T) {
 	assert := assert.New(t)
 
-	path, fstype, err := GetDevicePathAndFsType("/proc")
+	path, fstype, _, err := GetMountInfo("/proc")
 	assert.NoError(err)
 
 	assert.Equal(path, "proc")

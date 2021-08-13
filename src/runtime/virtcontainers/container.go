@@ -1327,7 +1327,7 @@ func (c *Container) hotplugDrive(ctx context.Context) error {
 			c.rootfsSuffix = ""
 		}
 		// If device mapper device, then fetch the full path of the device
-		devicePath, fsType, err = utils.GetDevicePathAndFsType(dev.mountPoint)
+		devicePath, fsType, _, err = utils.GetMountInfo(dev.mountPoint)
 		if err != nil {
 			return err
 		}

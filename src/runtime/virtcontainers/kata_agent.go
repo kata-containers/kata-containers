@@ -31,6 +31,7 @@ import (
 	vcTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/types"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/uuid"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
 
 	"github.com/gogo/protobuf/proto"
 	"github.com/opencontainers/runtime-spec/specs-go"
@@ -1471,6 +1472,17 @@ func (k *kataAgent) handleEphemeralStorage(mounts []specs.Mount) ([]*grpc.Storag
 				dir_options = append(dir_options, fmt.Sprintf("%s=%d", fsGid, stat.Gid))
 			}
 
+			// parse size option
+			sizeOption, err := parseEmptyDirSize(origin_src)
+			if err != nil {
+				k.Logger().WithError(err).Errorf("failed to parse empty dir size for %s", origin_src)
+				return nil, err
+			}
+			if sizeOption != "" {
+				// FIXME: How about a large volume size larger than guest's memory size?
+				dir_options = append(dir_options, sizeOption)
+			}
+
 			// Set the mount source path to a path that resides inside the VM
 			mounts[idx].Source = filepath.Join(ephemeralPath(), filepath.Base(mnt.Source))
 			// Set the mount type to "bind"
@@ -1489,6 +1501,21 @@ func (k *kataAgent) handleEphemeralStorage(mounts []specs.Mount) ([]*grpc.Storag
 		}
 	}
 	return epheStorages, nil
+}
+
+func parseEmptyDirSize(mountPoint string) (string, error) {
+	_, _, options, err := utils.GetMountInfo(mountPoint)
+	if err != nil {
+		return "", err
+	}
+
+	for i := range options {
+		if strings.HasPrefix(options[i], "size=") {
+			return options[i], nil
+		}
+	}
+	// don't return error even size option not found.
+	return "", nil
 }
 
 // handleLocalStorage handles local storage within the VM

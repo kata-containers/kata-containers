@@ -100,11 +100,12 @@ const (
 	procDeviceIndex = iota
 	procPathIndex
 	procTypeIndex
+	procOptionsIndex
 )
 
-// GetDevicePathAndFsType gets the device for the mount point and the file system type
+// GetMountInfo gets the device for the mount point and the file system type
 // of the mount.
-func GetDevicePathAndFsType(mountPoint string) (devicePath, fsType string, err error) {
+func GetMountInfo(mountPoint string) (devicePath, fsType string, options []string, err error) {
 	if mountPoint == "" {
 		err = fmt.Errorf("Mount point cannot be empty")
 		return
@@ -138,6 +139,7 @@ func GetDevicePathAndFsType(mountPoint string) (devicePath, fsType string, err e
 		if mountPoint == fields[procPathIndex] {
 			devicePath = fields[procDeviceIndex]
 			fsType = fields[procTypeIndex]
+			options = strings.Split(fields[procOptionsIndex], ",")
 			return
 		}
 	}

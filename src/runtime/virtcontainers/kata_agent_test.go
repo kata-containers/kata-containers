@@ -181,10 +181,19 @@ func TestKataAgentSendReq(t *testing.T) {
 }
 
 func TestHandleEphemeralStorage(t *testing.T) {
+	if os.Getuid() != 0 {
+		t.Skip("Test disabled as requires root user")
+	}
+
 	k := kataAgent{}
 	var ociMounts []specs.Mount
 	mountSource := "/tmp/mountPoint"
 	os.Mkdir(mountSource, 0755)
+	err := syscall.Mount("tmpfs", mountSource, "tmpfs", syscall.MS_NOATIME|syscall.MS_SILENT|syscall.MS_NODEV|syscall.MS_NOEXEC|syscall.MS_NOSUID, "size=100k")
+	if err == nil {
+		defer syscall.Unmount(mountSource, 0)
+	}
+	assert.Nil(t, err)
 
 	mount := specs.Mount{
 		Type:   KataEphemeralDevType,
@@ -653,6 +662,12 @@ func TestHandleShm(t *testing.T) {
 
 	// In case the type of mount is ephemeral, the container mount is not
 	// shared with the sandbox shm.
+
+	if os.Getuid() != 0 {
+		t.Logf("Test disabled as requires root user")
+		return
+	}
+
 	ociMounts[0].Type = KataEphemeralDevType
 	mountSource := "/tmp/mountPoint"
 	os.Mkdir(mountSource, 0755)
@@ -662,6 +677,11 @@ func TestHandleShm(t *testing.T) {
 	assert.Len(ociMounts, 1)
 	assert.Equal(ociMounts[0].Type, KataEphemeralDevType)
 	assert.NotEmpty(ociMounts[0].Source, mountSource)
+
+	err := syscall.Mount("tmpfs", mountSource, "tmpfs", syscall.MS_NOATIME|syscall.MS_SILENT|syscall.MS_NODEV|syscall.MS_NOEXEC|syscall.MS_NOSUID, "size=100k")
+	if err == nil {
+		defer syscall.Unmount(mountSource, 0)
+	}
 
 	epheStorages, err := k.handleEphemeralStorage(ociMounts)
 	assert.Nil(err)
