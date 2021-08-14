@@ -49,6 +49,16 @@ build_clh_from_source() {
     pushd "${repo_dir}"
     git fetch || true
     git checkout "${cloud_hypervisor_version}"
+    info "###########################################"
+    sudo chmod 666 /var/run/docker.sock
+    env
+    id
+    whoami
+    ls -l /var/run/docker.sock
+    cat /etc/group
+    info "run docker hello world"
+    strace docker run hello-world
+    info "###########################################"
     ./scripts/dev_cli.sh build --release --libc musl
     rm -f cloud-hypervisor
     cp build/cargo_target/$(uname -m)-unknown-linux-musl/release/cloud-hypervisor .
@@ -57,5 +67,9 @@ build_clh_from_source() {
 
 if [ ${ARCH} == "aarch64" ] || ! pull_clh_released_binary; then
     info "arch is aarch64 or failed to pull cloud-hypervisor released binary on x86_64, trying to build from source"
+
+    info "############# before build_clh_from_source #################"
+    docker run hello-world
+    info "############# **************************** #################"
     build_clh_from_source
 fi
