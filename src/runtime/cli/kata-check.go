@@ -229,7 +229,7 @@ func checkKernelModules(modules map[string]kernelModule, handler kernelParamHand
 		}
 
 		if !haveKernelModule(module) {
-			kataLog.WithFields(fields).Error("kernel property not found")
+			kataLog.WithFields(fields).Errorf("kernel property %s not found", module)
 			if details.required {
 				count++
 			}
@@ -292,11 +292,9 @@ func genericHostIsVMContainerCapable(details vmContainerCapableDetails) error {
 	errorCount := uint32(0)
 
 	count := checkCPUAttribs(cpuinfo, details.requiredCPUAttribs)
-
 	errorCount += count
 
 	count = checkCPUFlags(cpuFlags, details.requiredCPUFlags)
-
 	errorCount += count
 
 	count, err = checkKernelModules(details.requiredKernelModules, archKernelParamHandler)

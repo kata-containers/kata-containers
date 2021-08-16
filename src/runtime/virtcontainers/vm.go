@@ -19,6 +19,8 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+var urandomDev = "/dev/urandom"
+
 // VM is abstraction of a virtual machine.
 type VM struct {
 	hypervisor hypervisor
@@ -298,7 +300,6 @@ func (v *VM) OnlineCPUMemory(ctx context.Context) error {
 // and reseeds it.
 func (v *VM) ReseedRNG(ctx context.Context) error {
 	v.logger().Infof("reseed guest random number generator")
-	urandomDev := "/dev/urandom"
 	data := make([]byte, 512)
 	f, err := os.OpenFile(urandomDev, os.O_RDONLY, 0)
 	if err != nil {
