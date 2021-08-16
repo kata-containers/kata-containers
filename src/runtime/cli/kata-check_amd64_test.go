@@ -317,11 +317,12 @@ func TestCheckHostIsVMContainerCapable(t *testing.T) {
 		}
 	}
 
-	setupCheckHostIsVMContainerCapable(assert, cpuInfoFile, cpuData, moduleData)
-
-	// remove the modules to force a failure
-	err = os.RemoveAll(sysModuleDir)
+	// to check if host is capable for Kata Containers, must setup CPU info first.
+	_, config, err := makeRuntimeConfig(dir)
 	assert.NoError(err)
+	setCPUtype(config.HypervisorType)
+
+	setupCheckHostIsVMContainerCapable(assert, cpuInfoFile, cpuData, moduleData)
 
 	details := vmContainerCapableDetails{
 		cpuInfoFile:           cpuInfoFile,
@@ -332,6 +333,12 @@ func TestCheckHostIsVMContainerCapable(t *testing.T) {
 
 	err = hostIsVMContainerCapable(details)
 	assert.Nil(err)
+
+	// remove the modules to force a failure
+	err = os.RemoveAll(sysModuleDir)
+	assert.NoError(err)
+	err = hostIsVMContainerCapable(details)
+	assert.Error(err)
 }
 
 func TestArchKernelParamHandler(t *testing.T) {

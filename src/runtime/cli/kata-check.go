@@ -221,15 +221,20 @@ func checkKernelModules(modules map[string]kernelModule, handler kernelParamHand
 		return 0, err
 	}
 
+	fmt.Printf("AAAAAA onVMM %+v\n", onVMM)
+	fmt.Printf("BBBBB onVMM %+v\n", modules)
+
 	for module, details := range modules {
 		fields := logrus.Fields{
 			"type":        "module",
 			"name":        module,
 			"description": details.desc,
 		}
+		fmt.Printf("BBBBB module %+v\n", module)
+		fmt.Printf("BBBBB details %+v\n", details)
 
 		if !haveKernelModule(module) {
-			kataLog.WithFields(fields).Error("kernel property not found")
+			kataLog.WithFields(fields).Errorf("kernel property %s not found", module)
 			if details.required {
 				count++
 			}
@@ -252,11 +257,13 @@ func checkKernelModules(modules map[string]kernelModule, handler kernelParamHand
 
 			if value != expected {
 				fields["expected"] = expected
+				kataLog.WithFields(fields).Infof("value != expected ")
 
 				msg := "kernel module parameter has unexpected value"
 
 				if handler != nil {
 					ignoreError := handler(onVMM, fields, msg)
+					kataLog.WithFields(fields).Infof("value != expected ignoreError: %+v", ignoreError)
 					if ignoreError {
 						continue
 					}
@@ -292,10 +299,11 @@ func genericHostIsVMContainerCapable(details vmContainerCapableDetails) error {
 	errorCount := uint32(0)
 
 	count := checkCPUAttribs(cpuinfo, details.requiredCPUAttribs)
-
+	fmt.Printf("checkCPUAttribs %d\n", count)
 	errorCount += count
 
 	count = checkCPUFlags(cpuFlags, details.requiredCPUFlags)
+	fmt.Printf("checkCPUFlags %d\n", count)
 
 	errorCount += count
 
@@ -303,6 +311,7 @@ func genericHostIsVMContainerCapable(details vmContainerCapableDetails) error {
 	if err != nil {
 		return err
 	}
+	fmt.Printf("checkKernelModules %d\n", count)
 
 	errorCount += count
 
@@ -310,7 +319,7 @@ func genericHostIsVMContainerCapable(details vmContainerCapableDetails) error {
 		return nil
 	}
 
-	return fmt.Errorf("ERROR: %s", failMessage)
+	return fmt.Errorf("ERROR: %s: %d", failMessage, count)
 }
 
 var kataCheckCLICommand = cli.Command{

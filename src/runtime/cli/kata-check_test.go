@@ -214,9 +214,14 @@ func genericCheckCLIFunction(t *testing.T, cpuData []testCPUData, moduleData []t
 	sysModuleDir = filepath.Join(dir, "sys/module")
 	procCPUInfo = cpuInfoFile
 
+	// setCPUtype(config.HypervisorType)
+	savedArchRequiredKernelModules := archRequiredKernelModules
+	archRequiredKernelModules = map[string]kernelModule{}
+
 	defer func() {
 		sysModuleDir = savedSysModuleDir
 		procCPUInfo = savedProcCPUInfo
+		archRequiredKernelModules = savedArchRequiredKernelModules
 	}()
 
 	// Replace sysModuleDir in moduleData with the test temp path
@@ -263,6 +268,7 @@ func genericCheckCLIFunction(t *testing.T, cpuData []testCPUData, moduleData []t
 
 	output := buf.String()
 
+	fmt.Printf("SSSS %+v\n", output)
 	for _, c := range cpuData {
 		if c == fakeCPUData {
 			continue
@@ -274,6 +280,7 @@ func genericCheckCLIFunction(t *testing.T, cpuData []testCPUData, moduleData []t
 		}
 	}
 
+	fmt.Printf("sssss %+v\n", moduleData)
 	for _, m := range moduleData {
 		name := path.Base(m.path)
 		assert.True(findAnchoredString(output, name))

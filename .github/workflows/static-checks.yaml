@@ -84,3 +84,7 @@ jobs:
       if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
       run: |
         cd ${GOPATH}/src/github.com/${{ github.repository }} && make test
+    - name: Run Unit Tests As Root User
+      if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
+      run: |
+        cd ${GOPATH}/src/github.com/${{ github.repository }} && sudo -E PATH="$PATH" make test
