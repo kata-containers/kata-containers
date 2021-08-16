@@ -611,6 +611,7 @@ endif
 
 go-test: $(GENERATED_FILES)
 	$(QUIET_BUILD)(cd $(SHIMV2_DIR)/ && ln -fs $(GENERATED_CONFIG))
+	go clean -testcache
 	go test -v -mod=vendor ./...
 
 check-go-static:
