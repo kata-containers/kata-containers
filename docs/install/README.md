@@ -2,6 +2,23 @@
 
 The following is an overview of the different installation methods available. 
 
+# Table of Contents
+
+- [Prerequisites](#prerequisites)
+- [Packaged installation methods](#packaged-installation-methods)
+- [Official packages](#official-packages)
+- [Kata Deploy](#kata-deploy)
+- [Snap Installation](#snap-installation)
+- [Automatic Installation](#automatic-installation)
+- [Build from source Installation](#build-from-source-installation)
+- [Installing on a Cloud Service Platform](#installing-on-a-cloud-service-platform)
+  - [Amazon Web Services (AWS)](aws-installation-guide.md)
+  - [Google Compute Engine (GCE)](gce-installation-guide.md)
+  - [Microsoft Azure](azure-installation-guide.md)
+  - [Minikube](minikube-installation-guide.md)
+  - [VEXXHOST OpenStack Cloud](vexxhost-installation-guide.md) 
+- [Further information](#further-information)
+
 ## Prerequisites
 
 Kata Containers requires nested virtualization or bare metal. Check 
@@ -32,11 +49,15 @@ Kata packages are provided by official distribution repositories for:
 | [CentOS](centos-installation-guide.md)                   | 8                                                                              |
 | [Fedora](fedora-installation-guide.md)                   | 34                                                                             |
 
+### Kata Deploy
+
+Kata Deploy is the preferred way for using kata-containers when your distro does not provide it. You can find more
+details following our [Kata Deploy install documentation](kata-deploy-installation.md).
+
 ### Snap Installation
 
-The snap installation is available for all distributions which support `snapd`.
-
-[Use snap](snap-installation-guide.md) to install Kata Containers from https://snapcraft.io.
+The snap installation is available for all distributions which support `snapd`. [Use snap](snap-installation-guide.md) 
+to install Kata Containers from https://snapcraft.io.
 
 ### Automatic Installation
 
@@ -46,7 +67,7 @@ The snap installation is available for all distributions which support `snapd`.
 
 Follow the [containerd installation guide](container-manager/containerd/containerd-install.md).
 
-## Build from source installation
+## Build from source Installation
 
 *Note:* Power users who decide to build from sources should be aware of the
 implications of using an unpackaged system which will not be automatically
@@ -55,14 +76,6 @@ updated as new [releases](../Stable-Branch-Strategy.md) are made available.
 [Building from sources](../Developer-Guide.md#initial-setup)  allows power users
 who are comfortable building software from source to use the latest component
 versions. This is not recommended for normal users.
-
-## Installing on a Cloud Service Platform
-
-* [Amazon Web Services (AWS)](aws-installation-guide.md)
-* [Google Compute Engine (GCE)](gce-installation-guide.md)
-* [Microsoft Azure](azure-installation-guide.md)
-* [Minikube](minikube-installation-guide.md)
-* [VEXXHOST OpenStack Cloud](vexxhost-installation-guide.md)
 
 ## Further information
 
