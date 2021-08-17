@@ -269,7 +269,9 @@ jobs:
           # tag the container image we created and push to DockerHub
           tag=$(echo $GITHUB_REF | cut -d/ -f3-)
           docker tag katadocker/kata-deploy-ci:${{steps.build-and-push-kata-deploy-ci.outputs.PKG_SHA}} katadocker/kata-deploy:${tag}
+          docker tag quay.io/kata-containers/kata-deploy-ci:${{steps.build-and-push-kata-deploy-ci.outputs.PKG_SHA}} quay.io/kata-containers/kata-deploy:${tag}
           docker push katadocker/kata-deploy:${tag}
+          docker push quay.io/kata-containers/kata-deploy:${tag}
 
   upload-static-tarball:
     needs: kata-deploy
