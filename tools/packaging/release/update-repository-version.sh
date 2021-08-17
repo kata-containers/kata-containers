@@ -110,16 +110,6 @@ bump_repo() {
 		fi
 	fi
 
-	if [ "${repo}" == "kata-containers" ]; then
-		info "Updating kata-deploy / kata-cleanup image tags"
-		sed -i "s#quay.io/kata-containers/kata-deploy:${current_version}#quay.io/kata-containers/kata-deploy:${new_version}#g" tools/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml
-		sed -i "s#quay.io/kata-containers/kata-deploy:${current_version}#quay.io/kata-containers/kata-deploy:${new_version}#g" tools/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml
-		git diff
-
-		git add tools/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml
-		git add tools/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml
-	fi
-
 	info "Creating PR message"
 	notes_file=notes.md
 	cat <<EOT >"${notes_file}"
