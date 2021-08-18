@@ -1,22 +1,19 @@
-# Kata Containers installation user guides
+# Kata Containers installation guides
 
-The following is an overview of the different installation methods available. All of these methods equally result
-in a system configured to run Kata Containers.
+The following is an overview of the different installation methods available. 
 
 ## Prerequisites
 
-Kata Containers requires nested virtualization or bare metal.
-See the
-[hardware requirements](/src/runtime/README.md#hardware-requirements)
-to see if your system is capable of running Kata Containers.
+Kata Containers requires nested virtualization or bare metal. Check 
+[hardware requirements](/src/runtime/README.md#hardware-requirements) to see if your system is capable of running Kata 
+Containers.
 
 ## Packaged installation methods
 
-> **Notes:**
->
-> - Packaged installation methods uses your distribution's native package format (such as RPM or DEB).
-> - You are strongly encouraged to choose an installation method that provides
->   automatic updates, to ensure you benefit from security updates and bug fixes.
+Packaged installation methods uses your distribution's native package format (such as RPM or DEB).
+
+*Note:* We encourage installation methods that provides automatic updates, it ensures security updates and bug fixes are
+easily applied.
 
 | Installation method                                  | Description                                                         | Automatic updates | Use case                                                 |
 |------------------------------------------------------|---------------------------------------------------------------------|-------------------|----------------------------------------------------------|
@@ -35,16 +32,9 @@ Kata packages are provided by official distribution repositories for:
 | [CentOS](centos-installation-guide.md)                   | 8                                                                              |
 | [Fedora](fedora-installation-guide.md)                   | 34                                                                             |
 
-> **Note:**
->
-> All users are encouraged to uses the official distribution versions of Kata
-> Containers unless they understand the implications of alternative methods.
-
 ### Snap Installation
 
-> **Note:** The snap installation is available for all distributions which support `snapd`.
-
-[![Get it from the Snap Store](https://snapcraft.io/static/images/badges/en/snap-store-black.svg)](https://snapcraft.io/kata-containers)
+The snap installation is available for all distributions which support `snapd`.
 
 [Use snap](snap-installation-guide.md) to install Kata Containers from https://snapcraft.io.
 
@@ -58,11 +48,9 @@ Follow the [containerd installation guide](container-manager/containerd/containe
 
 ## Build from source installation
 
-> **Note:**
->
-> Power users who decide to build from sources should be aware of the
-> implications of using an unpackaged system which will not be automatically
-> updated as new [releases](../Stable-Branch-Strategy.md) are made available.
+*Note:* Power users who decide to build from sources should be aware of the
+implications of using an unpackaged system which will not be automatically
+updated as new [releases](../Stable-Branch-Strategy.md) are made available.
 
 [Building from sources](../Developer-Guide.md#initial-setup)  allows power users
 who are comfortable building software from source to use the latest component
@@ -78,6 +66,6 @@ versions. This is not recommended for normal users.
 
 ## Further information
 
-* The [upgrading document](../Upgrading.md).
-* The [developer guide](../Developer-Guide.md).
-* The [runtime documentation](../../src/runtime/README.md).
+* [upgrading document](../Upgrading.md)
+* [developer guide](../Developer-Guide.md)
+* [runtime documentation](../../src/runtime/README.md)
