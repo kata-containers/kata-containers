@@ -90,7 +90,7 @@ func availableGuestProtection() (guestProtection, error) {
 		return noneProtection, err
 	}
 	if !seCmdlinePresent {
-		return noneProtection, fmt.Errorf("Protected Virtualization is not enabled on kernel command line! " +
+		return noneProtection, fmt.Errorf("Protected Virtualization is not enabled on kernel command line! "+
 			"Need %s=%s (or %s) to enable Secure Execution",
 			seCmdlineParam, seCmdlineValues[0], strings.Join(seCmdlineValues[1:], ", "))
 	}
