@@ -36,10 +36,6 @@ See [the ccloudvm documentation](ccloudvm).
 
 See [the release documentation](release).
 
-## Jenkins files
-
-See [the Jenkins documentation](Jenkinsfiles).
-
 ## Packaging scripts
 
 See the [scripts documentation](scripts).
