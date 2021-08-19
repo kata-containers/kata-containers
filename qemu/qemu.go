@@ -1435,6 +1435,9 @@ func (vhostuserDev VhostUserDevice) QemuFSParams(config *Config) []string {
 		deviceParams = append(deviceParams, "versiontable=/dev/shm/fuse_shared_versions")
 	}
 	if vhostuserDev.Transport.isVirtioCCW(config) {
+		if config.Knobs.IOMMUPlatform {
+			deviceParams = append(deviceParams, "iommu_platform=on")
+		}
 		deviceParams = append(deviceParams, fmt.Sprintf("devno=%s", vhostuserDev.DevNo))
 	}
 	if vhostuserDev.Transport.isVirtioPCI(config) && vhostuserDev.ROMFile != "" {
