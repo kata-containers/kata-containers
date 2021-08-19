@@ -11,17 +11,16 @@ a node only if it uses either containerd or CRI-O CRI-shims.
 
 ### Install Kata on a running Kubernetes cluster
 
+
 ```sh
-$ cd $GOPATH/src/github.com/kata-containers/kata-containers/tools/packaging/kata-deploy
-$ kubectl apply -f kata-rbac/base/kata-rbac.yaml
-$ kubectl apply -f kata-deploy/base/kata-deploy.yaml
+$ kubectl apply -f https://github.com/kata-containers/kata-containers/blob/main/tools/packaging/kata-deploy/kata-rbac/base/kata-rbac.yaml
+$ kubectl apply -f https://github.com/kata-containers/kata-containers/blob/main/tools/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml
 ```
 
 or on a [k3s](https://k3s.io/) cluster:
 
 ```sh
-$ cd $GOPATH/src/github.com/kata-containers/kata-containers/tools/packaging/kata-deploy
-$ kubectl apply -k kata-deploy/overlays/k3s
+$ kubectl apply -k https://github.com/kata-containers/kata-containers/blob/main/tools/packaging/kata-deploy/kata-deploy/overlays/k3s
 ```
 
 ### Run a sample workload
@@ -32,8 +31,7 @@ which will ensure the workload is only scheduled on a node that has Kata Contain
 
 `runtimeClass` is a built-in type in Kubernetes. To apply each Kata Containers `runtimeClass`:
 ```sh
-  $ cd $GOPATH/src/github.com/kata-containers/kata-containers/tools/packaging/kata-deploy/runtimeclasses
-  $ kubectl apply -f kata-runtimeClasses.yaml
+  $ kubectl apply -f https://github.com/kata-containers/kata-containers/blob/main/tools/packaging/kata-deploy/runtimeclasses/kata-runtimeClasses.yaml
 ```
 
 The following YAML snippet shows how to specify a workload should use Kata with Cloud Hypervisor:
@@ -66,42 +64,37 @@ spec:
 To run an example with `kata-clh`:
 
 ```sh
-$ cd $GOPATH/src/github.com/kata-containers/kata-containers/tools/packaging/kata-deploy/examples
-$ kubectl apply -f test-deploy-kata-clh.yaml
+$ kubectl apply -f https://github.com/kata-containers/kata-containers/blob/main/tools/packaging/kata-deploy/examples/test-deploy-kata-clh.yaml
 ```
 
 To run an example with `kata-fc`:
 
 ```sh
-$ cd $GOPATH/src/github.com/kata-containers/kata-containers/tools/packaging/kata-deploy/examples
-$ kubectl apply -f test-deploy-kata-fc.yaml
+$ kubectl apply -f https://github.com/kata-containers/kata-containers/blob/main/tools/packaging/kata-deploy/examples/test-deploy-kata-fc.yaml
 ```
 
 To run an example with `kata-qemu`:
 
 ```sh
-$ cd $GOPATH/src/github.com/kata-containers/kata-containers/tools/packaging/kata-deploy/examples
-$ kubectl apply -f test-deploy-kata-qemu.yaml
+$ kubectl apply -f https://github.com/kata-containers/kata-containers/blob/main/tools/packaging/kata-deploy/examples/test-deploy-kata-qemu.yaml
 ```
 
 The following removes the test pods:
 
 ```sh
-$ cd $GOPATH/src/github.com/kata-containers/kata-containers/tools/packaging/kata-deploy/examples
-$ kubectl delete -f test-deploy-kata-clh.yaml
-$ kubectl delete -f test-deploy-kata-fc.yaml
-$ kubectl delete -f test-deploy-kata-qemu.yaml
+$ kubectl delete -f https://github.com/kata-containers/kata-containers/blob/main/tools/packaging/kata-deploy/examples/test-deploy-kata-clh.yaml
+$ kubectl delete -f https://github.com/kata-containers/kata-containers/blob/main/tools/packaging/kata-deploy/examples/test-deploy-kata-fc.yaml
+$ kubectl delete -f https://github.com/kata-containers/kata-containers/blob/main/tools/packaging/kata-deploy/examples/test-deploy-kata-qemu.yaml
 ```
 
 ### Remove Kata from the Kubernetes cluster
 
 ```sh
-$ cd $GOPATH/src/github.com/kata-containers/kata-containers/tools/packaging/kata-deploy
-$ kubectl delete -f kata-deploy/base/kata-deploy.yaml
-$ kubectl apply -f kata-cleanup/base/kata-cleanup.yaml
-$ kubectl delete -f kata-cleanup/base/kata-cleanup.yaml
-$ kubectl delete -f kata-rbac/base/kata-rbac.yaml
-$ kubectl delete -f runtimeclasses/kata-runtimeClasses.yaml
+$ kubectl delete -f https://github.com/kata-containers/kata-containers/blob/main/tools/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml
+$ kubectl apply -f https://github.com/kata-containers/kata-containers/blob/main/tools/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml
+$ kubectl delete -f https://github.com/kata-containers/kata-containers/blob/main/tools/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml
+$ kubectl delete -f https://github.com/kata-containers/kata-containers/blob/main/tools/packaging/kata-deploy/kata-rbac/base/kata-rbac.yaml
+$ kubectl delete -f https://github.com/kata-containers/kata-containers/blob/main/tools/packaging/kata-deploy/runtimeclasses/kata-runtimeClasses.yaml
 ```
 
 ## `kata-deploy` details
