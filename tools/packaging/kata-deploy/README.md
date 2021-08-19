@@ -11,13 +11,25 @@ a node only if it uses either containerd or CRI-O CRI-shims.
 
 ### Install Kata on a running Kubernetes cluster
 
+#### Installing the latest image
+
+The latest image refers to pre-release and release candidate content.  For stable releases, please, use the "stable" instructions.
 
 ```sh
 $ kubectl apply -f https://github.com/kata-containers/kata-containers/blob/main/tools/packaging/kata-deploy/kata-rbac/base/kata-rbac.yaml
 $ kubectl apply -f https://github.com/kata-containers/kata-containers/blob/main/tools/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml
 ```
 
-or on a [k3s](https://k3s.io/) cluster:
+#### Installing the stable image
+
+The stable image refers to the last stable releases content.
+
+```sh
+$ kubectl apply -f https://github.com/kata-containers/kata-containers/blob/main/tools/packaging/kata-deploy/kata-rbac/base/kata-rbac.yaml
+$ kubectl apply -f https://github.com/kata-containers/kata-containers/blob/main/tools/packaging/kata-deploy/kata-deploy/base/kata-deploy-stable.yaml
+```
+
+#### [k3s](https://k3s.io/)
 
 ```sh
 $ kubectl apply -k https://github.com/kata-containers/kata-containers/blob/main/tools/packaging/kata-deploy/kata-deploy/overlays/k3s
@@ -89,10 +101,22 @@ $ kubectl delete -f https://github.com/kata-containers/kata-containers/blob/main
 
 ### Remove Kata from the Kubernetes cluster
 
+#### Removing the latest image
+
 ```sh
 $ kubectl delete -f https://github.com/kata-containers/kata-containers/blob/main/tools/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml
 $ kubectl apply -f https://github.com/kata-containers/kata-containers/blob/main/tools/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml
 $ kubectl delete -f https://github.com/kata-containers/kata-containers/blob/main/tools/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml
+$ kubectl delete -f https://github.com/kata-containers/kata-containers/blob/main/tools/packaging/kata-deploy/kata-rbac/base/kata-rbac.yaml
+$ kubectl delete -f https://github.com/kata-containers/kata-containers/blob/main/tools/packaging/kata-deploy/runtimeclasses/kata-runtimeClasses.yaml
+```
+
+#### Removing the stable image
+
+```sh
+$ kubectl delete -f https://github.com/kata-containers/kata-containers/blob/main/tools/packaging/kata-deploy/kata-deploy/base/kata-deploy-stable.yaml
+$ kubectl apply -f https://github.com/kata-containers/kata-containers/blob/main/tools/packaging/kata-deploy/kata-cleanup/base/kata-cleanup-stabe.yaml
+$ kubectl delete -f https://github.com/kata-containers/kata-containers/blob/main/tools/packaging/kata-deploy/kata-cleanup/base/kata-cleanup-stable.yaml
 $ kubectl delete -f https://github.com/kata-containers/kata-containers/blob/main/tools/packaging/kata-deploy/kata-rbac/base/kata-rbac.yaml
 $ kubectl delete -f https://github.com/kata-containers/kata-containers/blob/main/tools/packaging/kata-deploy/runtimeclasses/kata-runtimeClasses.yaml
 ```
