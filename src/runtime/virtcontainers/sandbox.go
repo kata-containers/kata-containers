@@ -1286,7 +1286,6 @@ func (s *Sandbox) CreateContainer(ctx context.Context, contConfig ContainerConfi
 	if err != nil {
 		return nil, err
 	}
-
 	// create and start the container
 	if err = c.create(ctx); err != nil {
 		return nil, err

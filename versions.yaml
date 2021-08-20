@@ -233,6 +233,11 @@ externals:
         'newest-version' is the latest version known to work.
       newest-version: "1.1.23"
 
+  nydus:
+    description: "Nydus image acceleration service"
+    url: "https://github.com/dragonflyoss/image-service"
+    version: "v1.1.2"
+
 languages:
   description: |
     Details of programming languages required to build system
