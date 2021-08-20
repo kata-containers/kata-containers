@@ -7,7 +7,6 @@ package virtcontainers
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -17,6 +16,7 @@ import (
 	merr "github.com/hashicorp/go-multierror"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils/katatrace"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
+	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	otelLabel "go.opentelemetry.io/otel/attribute"
 )
@@ -28,7 +28,13 @@ const DefaultShmSize = 65536 * 1024
 // Sadly golang/sys doesn't have UmountNoFollow although it's there since Linux 2.6.34
 const UmountNoFollow = 0x8
 
-var rootfsDir = "rootfs"
+const (
+	rootfsDir   = "rootfs"
+	lowerDir    = "lowerdir"
+	upperDir    = "upperdir"
+	workDir     = "workdir"
+	snapshotDir = "snapshotdir"
+)
 
 var systemMountPrefixes = []string{"/proc", "/sys"}
 
@@ -349,33 +355,64 @@ func isSymlink(path string) bool {
 	return stat.Mode()&os.ModeSymlink != 0
 }
 
-func bindUnmountContainerRootfs(ctx context.Context, sharedDir, cID string) error {
-	span, _ := katatrace.Trace(ctx, nil, "bindUnmountContainerRootfs", mountTracingTags)
-	defer span.End()
-	span.SetAttributes(otelLabel.String("shared_dir", sharedDir), otelLabel.String("container_id", cID))
-
-	rootfsDest := filepath.Join(sharedDir, cID, rootfsDir)
-	if isSymlink(filepath.Join(sharedDir, cID)) || isSymlink(rootfsDest) {
+func bindUnmountContainerShareDir(ctx context.Context, sharedDir, cID, target string) error {
+	destDir := filepath.Join(sharedDir, cID, target)
+	if isSymlink(filepath.Join(sharedDir, cID)) || isSymlink(destDir) {
 		mountLogger().WithField("container", cID).Warnf("container dir is a symlink, malicious guest?")
 		return nil
 	}
 
-	err := syscall.Unmount(rootfsDest, syscall.MNT_DETACH|UmountNoFollow)
+	err := syscall.Unmount(destDir, syscall.MNT_DETACH|UmountNoFollow)
 	if err == syscall.ENOENT {
-		mountLogger().WithError(err).WithField("rootfs-dir", rootfsDest).Warn()
+		mountLogger().WithError(err).WithField("share-dir", destDir).Warn()
 		return nil
 	}
-	if err := syscall.Rmdir(rootfsDest); err != nil {
-		mountLogger().WithError(err).WithField("rootfs-dir", rootfsDest).Warn("Could not remove container rootfs dir")
+	if err := syscall.Rmdir(destDir); err != nil {
+		mountLogger().WithError(err).WithField("share-dir", destDir).Warn("Could not remove container share dir")
 	}
 
 	return err
 }
 
+func bindUnmountContainerRootfs(ctx context.Context, sharedDir, cID string) error {
+	span, _ := katatrace.Trace(ctx, nil, "bindUnmountContainerRootfs", mountTracingTags)
+	defer span.End()
+	span.SetAttributes(otelLabel.String("shared-dir", sharedDir), otelLabel.String("container-id", cID))
+	return bindUnmountContainerShareDir(ctx, sharedDir, cID, rootfsDir)
+}
+
+func bindUnmountContainerSnapshotDir(ctx context.Context, sharedDir, cID string) error {
+	span, _ := katatrace.Trace(ctx, nil, "bindUnmountContainerSnapshotDir", mountTracingTags)
+	defer span.End()
+	span.SetAttributes(otelLabel.String("shared-dir", sharedDir), otelLabel.String("container-id", cID))
+	return bindUnmountContainerShareDir(ctx, sharedDir, cID, snapshotDir)
+}
+
+func nydusContainerCleanup(ctx context.Context, sharedDir string, c *Container) error {
+	sandbox := c.sandbox
+	if sandbox.GetHypervisorType() != string(QemuHypervisor) {
+		// qemu is supported first, other hypervisors will next
+		// https://github.com/kata-containers/kata-containers/issues/2724
+		return errNydusdNotSupport
+	}
+	q, _ := sandbox.hypervisor.(*qemu)
+	if err := q.virtiofsDaemon.Umount(rafsMountPath(c.id)); err != nil {
+		return errors.Wrap(err, "umount rafs failed")
+	}
+	if err := bindUnmountContainerSnapshotDir(ctx, sharedDir, c.id); err != nil {
+		return errors.Wrap(err, "umount snapshotdir err")
+	}
+	destDir := filepath.Join(sharedDir, c.id, c.rootfsSuffix)
+	if err := syscall.Rmdir(destDir); err != nil {
+		return errors.Wrap(err, "remove container rootfs err")
+	}
+	return nil
+}
+
 func bindUnmountAllRootfs(ctx context.Context, sharedDir string, sandbox *Sandbox) error {
 	span, ctx := katatrace.Trace(ctx, nil, "bindUnmountAllRootfs", mountTracingTags)
 	defer span.End()
-	span.SetAttributes(otelLabel.String("shared_dir", sharedDir), otelLabel.String("sandbox_id", sandbox.id))
+	span.SetAttributes(otelLabel.String("shared-dir", sharedDir), otelLabel.String("sandbox-id", sandbox.id))
 
 	var errors *merr.Error
 	for _, c := range sandbox.containers {
@@ -387,7 +424,11 @@ func bindUnmountAllRootfs(ctx context.Context, sharedDir string, sandbox *Sandbo
 		if c.state.Fstype == "" {
 			// even if error found, don't break out of loop until all mounts attempted
 			// to be unmounted, and collect all errors
-			errors = merr.Append(errors, bindUnmountContainerRootfs(ctx, sharedDir, c.id))
+			if c.rootFs.Type == NydusRootFSType {
+				errors = merr.Append(errors, nydusContainerCleanup(ctx, sharedDir, c))
+			} else {
+				errors = merr.Append(errors, bindUnmountContainerRootfs(ctx, sharedDir, c.id))
+			}
 		}
 	}
 	return errors.ErrorOrNil()
