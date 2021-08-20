@@ -9,15 +9,12 @@ import (
 	"bytes"
 	"compress/gzip"
 	"io"
-	"io/ioutil"
 	"net/http"
-	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/kata-containers/kata-containers/src/runtime/pkg/types"
 	mutils "github.com/kata-containers/kata-containers/src/runtime/pkg/utils"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -70,17 +67,6 @@ func registerMetrics() {
 	prometheus.MustRegister(scrapeCount)
 	prometheus.MustRegister(scrapeFailedCount)
 	prometheus.MustRegister(scrapeDurationsHistogram)
-}
-
-// getMonitorAddress get metrics address for a sandbox, the abstract unix socket address is saved
-// in `metrics_address` with the same place of `address`.
-func (km *KataMonitor) getMonitorAddress(sandboxID, namespace string) (string, error) {
-	path := filepath.Join(km.containerdStatePath, types.ContainerdRuntimeTaskPath, namespace, sandboxID, "monitor_address")
-	data, err := ioutil.ReadFile(path)
-	if err != nil {
-		return "", err
-	}
-	return string(data), nil
 }
 
 // ProcessMetricsRequest get metrics from shim/hypervisor/vm/agent and return metrics to client.
@@ -173,9 +159,9 @@ func (km *KataMonitor) aggregateSandboxMetrics(encoder expfmt.Encoder) error {
 	monitorLog.WithField("sandbox_count", len(sandboxes)).Debugf("sandboxes count")
 
 	// get metrics from sandbox's shim
-	for sandboxID, namespace := range sandboxes {
+	for sandboxID := range sandboxes {
 		wg.Add(1)
-		go func(sandboxID, namespace string, results chan<- []*dto.MetricFamily) {
+		go func(sandboxID string, results chan<- []*dto.MetricFamily) {
 			sandboxMetrics, err := getParsedMetrics(sandboxID)
 			if err != nil {
 				monitorLog.WithError(err).WithField("sandbox_id", sandboxID).Errorf("failed to get metrics for sandbox")
@@ -184,7 +170,7 @@ func (km *KataMonitor) aggregateSandboxMetrics(encoder expfmt.Encoder) error {
 			results <- sandboxMetrics
 			wg.Done()
 			monitorLog.WithField("sandbox_id", sandboxID).Debug("job finished")
-		}(sandboxID, namespace, results)
+		}(sandboxID, results)
 
 		monitorLog.WithField("sandbox_id", sandboxID).Debug("job started")
 	}
@@ -278,7 +264,7 @@ func parsePrometheusMetrics(sandboxID string, body []byte) ([]*dto.MetricFamily,
 			})
 		}
 
-		// Kata shim are using prometheus go client, add an prefix for metric name to avoid confusing
+		// Kata shim are using prometheus go client, add a prefix for metric name to avoid confusing
 		if mf.Name != nil && (strings.HasPrefix(*mf.Name, "go_") || strings.HasPrefix(*mf.Name, "process_")) {
 			mf.Name = mutils.String2Pointer("kata_shim_" + *mf.Name)
 		}
