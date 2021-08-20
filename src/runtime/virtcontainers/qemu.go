@@ -118,6 +118,7 @@ const (
 	consoleSocket = "console.sock"
 	qmpSocket     = "qmp.sock"
 	vhostFSSocket = "vhost-fs.sock"
+	nydusdAPISock = "api.sock"
 
 	// memory dump format will be set to elf
 	memoryDumpFormat = "elf"
@@ -460,6 +461,42 @@ func (q *qemu) setupFileBackedMem(knobs *govmmQemu.Knobs, memory *govmmQemu.Memo
 	memory.Path = target
 }
 
+func (q *qemu) createVirtiofsd() (Virtiofsd, error) {
+	virtiofsdSocketPath, err := q.vhostFSSocketPath(q.id)
+	if err != nil {
+		return nil, err
+	}
+
+	if q.config.SharedFS == config.VirtioNydus {
+		apiSockPath, err := q.nydusdAPISocketPath(q.id)
+		if err != nil {
+			return nil, err
+		}
+		logfile, err := q.nydusdLogFilePath(q.id)
+		if err != nil {
+			return nil, err
+		}
+		return &nydusd{
+			path:        q.config.VirtioFSNydusd,
+			sockPath:    virtiofsdSocketPath,
+			apiSockPath: apiSockPath,
+			sourcePath:  filepath.Join(getSharePath(q.id)),
+			logFile:     logfile,
+			extraArgs:   q.config.VirtioFSNydusdExtraArgs,
+		}, nil
+	}
+
+	// default use virtiofsd
+	return &virtiofsd{
+		path:       q.config.VirtioFSDaemon,
+		sourcePath: filepath.Join(getSharePath(q.id)),
+		socketPath: virtiofsdSocketPath,
+		extraArgs:  q.config.VirtioFSExtraArgs,
+		debug:      q.config.Debug,
+		cache:      q.config.VirtioFSCache,
+	}, nil
+}
+
 // createSandbox is the Hypervisor sandbox creation implementation for govmmQemu.
 func (q *qemu) createSandbox(ctx context.Context, id string, networkNS NetworkNamespace, hypervisorConfig *HypervisorConfig) error {
 	// Save the tracing context
@@ -520,7 +557,8 @@ func (q *qemu) createSandbox(ctx context.Context, id string, networkNS NetworkNa
 	// builds the first VM with file-backed memory and shared=on and the
 	// subsequent ones with shared=off. virtio-fs always requires shared=on for
 	// memory.
-	if q.config.SharedFS == config.VirtioFS || q.config.FileBackedMemRootDir != "" {
+	if q.config.SharedFS == config.VirtioFS || q.config.SharedFS == config.VirtioNydus ||
+		q.config.FileBackedMemRootDir != "" {
 		if !(q.config.BootToBeTemplate || q.config.BootFromTemplate) {
 			q.setupFileBackedMem(&knobs, &memory)
 		} else {
@@ -627,25 +665,20 @@ func (q *qemu) createSandbox(ctx context.Context, id string, networkNS NetworkNa
 
 	q.qemuConfig = qemuConfig
 
-	virtiofsdSocketPath, err := q.vhostFSSocketPath(q.id)
-	if err != nil {
-		return err
-	}
-
-	q.virtiofsd = &virtiofsd{
-		path:       q.config.VirtioFSDaemon,
-		sourcePath: filepath.Join(getSharePath(q.id)),
-		socketPath: virtiofsdSocketPath,
-		extraArgs:  q.config.VirtioFSExtraArgs,
-		debug:      q.config.Debug,
-		cache:      q.config.VirtioFSCache,
-	}
-
-	return nil
+	q.virtiofsd, err = q.createVirtiofsd()
+	return err
 }
 
 func (q *qemu) vhostFSSocketPath(id string) (string, error) {
 	return utils.BuildSocketPath(q.store.RunVMStoragePath(), id, vhostFSSocket)
+}
+
+func (q *qemu) nydusdAPISocketPath(id string) (string, error) {
+	return utils.BuildSocketPath(q.store.RunVMStoragePath(), id, nydusdAPISock)
+}
+
+func (q *qemu) nydusdLogFilePath(id string) (string, error) {
+	return utils.BuildSocketPath(q.store.RunVMStoragePath(), id, "nydusd.log")
 }
 
 func (q *qemu) setupVirtiofsd(ctx context.Context) (err error) {
@@ -692,7 +725,8 @@ func (q *qemu) getMemArgs() (bool, string, string, error) {
 			return share, target, "", fmt.Errorf("Vhost-user-blk/scsi requires hugepage memory")
 		}
 
-		if q.config.SharedFS == config.VirtioFS || q.config.FileBackedMemRootDir != "" {
+		if q.config.SharedFS == config.VirtioFS || q.config.SharedFS == config.VirtioNydus ||
+			q.config.FileBackedMemRootDir != "" {
 			target = q.qemuConfig.Memory.Path
 			memoryBack = "memory-backend-file"
 		}
@@ -801,7 +835,7 @@ func (q *qemu) startSandbox(ctx context.Context, timeout int) error {
 	}
 	defer label.SetProcessLabel("")
 
-	if q.config.SharedFS == config.VirtioFS {
+	if q.config.SharedFS == config.VirtioFS || q.config.SharedFS == config.VirtioNydus {
 		err = q.setupVirtiofsd(ctx)
 		if err != nil {
 			return err
@@ -1864,7 +1898,7 @@ func (q *qemu) addDevice(ctx context.Context, devInfo interface{}, devType devic
 
 	switch v := devInfo.(type) {
 	case types.Volume:
-		if q.config.SharedFS == config.VirtioFS {
+		if q.config.SharedFS == config.VirtioFS || q.config.SharedFS == config.VirtioNydus {
 			q.Logger().WithField("volume-type", "virtio-fs").Info("adding volume")
 
 			var randBytes []byte

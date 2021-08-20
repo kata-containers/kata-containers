@@ -1428,6 +1428,8 @@ func (vhostuserDev VhostUserDevice) QemuFSParams(config *Config) []string {
 	deviceParams = append(deviceParams, driver)
 	deviceParams = append(deviceParams, fmt.Sprintf("chardev=%s", vhostuserDev.CharDevID))
 	deviceParams = append(deviceParams, fmt.Sprintf("tag=%s", vhostuserDev.Tag))
+	deviceParams = append(deviceParams, "indirect_desc=false,event_idx=false")
+
 	if vhostuserDev.CacheSize != 0 {
 		deviceParams = append(deviceParams, fmt.Sprintf("cache-size=%dM", vhostuserDev.CacheSize))
 	}

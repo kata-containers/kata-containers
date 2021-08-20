@@ -74,7 +74,6 @@ retries=5
 EOF
 	if [ "$BASE_URL" != "" ]; then
 		cat >> "${DNF_CONF}" << EOF
-
 [base]
 name=${OS_NAME}-${OS_VERSION} ${REPO_NAME}
 failovermethod=priority
@@ -83,7 +82,6 @@ enabled=1
 EOF
 	elif [ "$MIRROR_LIST" != "" ]; then
 		cat >> "${DNF_CONF}" << EOF
-
 [base]
 name=${OS_NAME}-${OS_VERSION} ${REPO_NAME}
 mirrorlist=${MIRROR_LIST}

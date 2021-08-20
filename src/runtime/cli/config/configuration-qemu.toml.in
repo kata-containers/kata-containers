@@ -130,7 +130,11 @@ disable_block_device_use = @DEFDISABLEBLOCK@
 # Shared file system type:
 #   - virtio-fs (default)
 #   - virtio-9p
+#   - virtio-nydus
 shared_fs = "@DEFSHAREDFS_QEMU_VIRTIOFS@"
+
+# Path to nydusd daemon
+virtio_fs_nydusd="/usr/libexec/kata-qemu/nydusd"
 
 # Path to vhost-user-fs daemon.
 virtio_fs_daemon = "@DEFVIRTIOFSDAEMON@"

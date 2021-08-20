@@ -34,6 +34,8 @@ var (
 	errVirtiofsdSocketPathEmpty    = errors.New("virtiofsd socket path is empty")
 	errVirtiofsdSourcePathEmpty    = errors.New("virtiofsd source path is empty")
 	errVirtiofsdSourceNotAvailable = errors.New("virtiofsd source path not available")
+
+	errUnimplemented = errors.New("unimplemented")
 )
 
 type Virtiofsd interface {
@@ -41,6 +43,8 @@ type Virtiofsd interface {
 	Start(context.Context, onQuitFunc) (pid int, err error)
 	// Stop virtiofsd process
 	Stop(context.Context) error
+	// for NydusdVirtiofs to mount rafs
+	MountRAFS(opt MountOption) error
 }
 
 // Helper function to execute when virtiofsd quit
@@ -159,6 +163,10 @@ func (v *virtiofsd) Stop(ctx context.Context) error {
 	return nil
 }
 
+func (v *virtiofsd) MountRAFS(opt MountOption) error {
+	return errUnimplemented
+}
+
 func (v *virtiofsd) args(FdSocketNumber uint) ([]string, error) {
 
 	args := []string{
@@ -237,6 +245,10 @@ type virtiofsdMock struct {
 // Start the virtiofsd daemon
 func (v *virtiofsdMock) Start(ctx context.Context, onQuit onQuitFunc) (int, error) {
 	return 9999999, nil
+}
+
+func (v *virtiofsdMock) MountRAFS(opt MountOption) error {
+	return errUnimplemented
 }
 
 func (v *virtiofsdMock) Stop(ctx context.Context) error {

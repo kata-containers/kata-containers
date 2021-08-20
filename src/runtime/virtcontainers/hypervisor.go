@@ -325,6 +325,12 @@ type HypervisorConfig struct {
 	// VirtioFSExtraArgs passes options to virtiofsd daemon
 	VirtioFSExtraArgs []string
 
+	// VirtioFSNydus is the virtiofs nydusd daemon path
+	VirtioFSNydusd string
+
+	// VirtioFSNydusExtraArgs passes options to virtiofs nydusd daemon
+	VirtioFSNydusdExtraArgs []string
+
 	// Enable annotations by name
 	EnableAnnotations []string
 

@@ -31,6 +31,10 @@ const UmountNoFollow = 0x8
 
 var rootfsDir = "rootfs"
 
+var lowerDir = "lowerdir"
+
+var snapshotDir = "snapshotdir"
+
 var systemMountPrefixes = []string{"/proc", "/sys"}
 
 // mountTracingTags defines tags for the trace span

@@ -228,6 +228,10 @@ func checkAndMount(s *service, r *taskAPI.CreateTaskRequest) (bool, error) {
 		if katautils.IsBlockDevice(m.Source) && !s.config.HypervisorConfig.DisableBlockDeviceUse {
 			return false, nil
 		}
+		if m.Type == "nydus" {
+			// if kata + nydus, do not mount
+			return false, nil
+		}
 	}
 	rootfs := filepath.Join(r.Bundle, "rootfs")
 	if err := doMount(r.Rootfs, rootfs); err != nil {
