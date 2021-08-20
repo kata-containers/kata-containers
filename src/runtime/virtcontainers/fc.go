@@ -280,10 +280,18 @@ func (fc *firecracker) getVersionNumber() (string, error) {
 		return "", fmt.Errorf("Running checking FC version command failed: %v", err)
 	}
 
+	return fc.parseVersion(string(data))
+}
+
+func (fc *firecracker) parseVersion(data string) (string, error) {
+	// Firecracker versions 0.25 and over contains multiline output on "version" command.
+	// So we have to check it and use first line of output to parse version.
+	lines := strings.Split(data, "\n")
+
 	var version string
-	fields := strings.Split(string(data), " ")
+	fields := strings.Split(lines[0], " ")
 	if len(fields) > 1 {
-		// The output format of `Firecracker --verion` is as follows
+		// The output format of `Firecracker --version` is as follows
 		// Firecracker v0.23.1
 		version = strings.TrimPrefix(strings.TrimSpace(fields[1]), "v")
 		return version, nil
