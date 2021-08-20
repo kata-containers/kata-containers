@@ -1,6 +1,6 @@
 # Kata Agent in Rust
 
-This is a rust version of the [`kata-agent`](https://github.com/kata-containers/agent).
+This is a rust version of the [`kata-agent`](.).
 
 In Denver PTG, [we discussed about re-writing agent in rust](https://etherpad.openstack.org/p/katacontainers-2019-ptg-denver-agenda):
 
