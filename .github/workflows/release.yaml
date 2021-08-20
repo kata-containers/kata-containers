@@ -113,7 +113,7 @@ jobs:
       - name: download-artifacts
         uses: actions/download-artifact@v2
         with:
-          name: release-candidate
+          name: kata-static-tarball
       - name: install hub
         run: |
           HUB_VER=$(curl -s "https://api.github.com/repos/github/hub/releases/latest" | jq -r .tag_name | sed 's/^v//')
