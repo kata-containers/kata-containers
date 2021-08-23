@@ -181,8 +181,8 @@ func newCommand(ctx context.Context, id, containerdBinary, containerdAddress str
 	return cmd, nil
 }
 
-// StartShim willl start a kata shimv2 daemon which will implemented the
-// ShimV2 APIs such as create/start/update etc containers.
+// StartShim is a binary call that starts a kata shimv2 service which will
+// implement the ShimV2 APIs such as create/start/update etc containers.
 func (s *service) StartShim(ctx context.Context, opts cdshim.StartOpts) (_ string, retErr error) {
 	bundlePath, err := os.Getwd()
 	if err != nil {
@@ -310,6 +310,7 @@ func getTopic(e interface{}) string {
 	return cdruntime.TaskUnknownTopic
 }
 
+// Cleanup is a binary call that cleans up resources used by the shim
 func (s *service) Cleanup(ctx context.Context) (_ *taskAPI.DeleteResponse, err error) {
 	span, spanCtx := katatrace.Trace(s.rootCtx, shimLog, "Cleanup", shimTracingTags)
 	defer span.End()
