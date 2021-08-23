@@ -602,14 +602,12 @@ test: install-hook go-test
 
 install-hook:
 	make -C virtcontainers hook
-ifeq ($(shell id -u), 0)
 	echo "installing mock hook"
-	make -C virtcontainers install
-endif
+	sudo -E make -C virtcontainers install
 
 go-test: $(GENERATED_FILES)
 	go clean -testcache
-	go test -v -mod=vendor ./...
+	$(QUIET_TEST)../../ci/go-test.sh
 
 fast-test: $(GENERATED_FILES)
 	go clean -testcache
