@@ -610,6 +610,7 @@ ifeq ($(shell id -u), 0)
 endif
 
 go-test: $(GENERATED_FILES)
+	$(QUIET_BUILD)(cd $(SHIMV2_DIR)/ && ln -fs $(GENERATED_CONFIG))
 	go test -v -mod=vendor ./...
 
 check-go-static:
@@ -617,6 +618,7 @@ check-go-static:
 	$(QUIET_CHECK)../../ci/go-no-os-exit.sh ./virtcontainers
 
 coverage:
+	$(QUIET_BUILD)(cd $(SHIMV2_DIR)/ && ln -fs $(GENERATED_CONFIG))
 	go test -v -mod=vendor -covermode=atomic -coverprofile=coverage.txt ./...
 	go tool cover -html=coverage.txt -o coverage.html
 
