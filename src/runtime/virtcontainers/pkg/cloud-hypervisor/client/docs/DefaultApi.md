@@ -32,13 +32,42 @@ Method | HTTP request | Description
 
 ## BootVM
 
-> BootVM(ctx, )
+> BootVM(ctx).Execute()
 
 Boot the previously created VM instance.
 
-### Required Parameters
+### Example
+
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+    "os"
+    openapiclient "./openapi"
+)
+
+func main() {
+
+    configuration := openapiclient.NewConfiguration()
+    api_client := openapiclient.NewAPIClient(configuration)
+    resp, r, err := api_client.DefaultApi.BootVM(context.Background()).Execute()
+    if err != nil {
+        fmt.Fprintf(os.Stderr, "Error when calling `DefaultApi.BootVM``: %v\n", err)
+        fmt.Fprintf(os.Stderr, "Full HTTP response: %v\n", r)
+    }
+}
+```
+
+### Path Parameters
 
 This endpoint does not need any parameter.
+
+### Other Parameters
+
+Other parameters are passed through a pointer to a apiBootVMRequest struct via the builder pattern
+
 
 ### Return type
 
@@ -60,17 +89,47 @@ No authorization required
 
 ## CreateVM
 
-> CreateVM(ctx, vmConfig)
+> CreateVM(ctx).VmConfig(vmConfig).Execute()
 
 Create the cloud-hypervisor Virtual Machine (VM) instance. The instance is not booted, only created.
 
-### Required Parameters
+### Example
+
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+    "os"
+    openapiclient "./openapi"
+)
+
+func main() {
+    vmConfig := *openapiclient.NewVmConfig(*openapiclient.NewKernelConfig("Path_example")) // VmConfig | The VM configuration
+
+    configuration := openapiclient.NewConfiguration()
+    api_client := openapiclient.NewAPIClient(configuration)
+    resp, r, err := api_client.DefaultApi.CreateVM(context.Background()).VmConfig(vmConfig).Execute()
+    if err != nil {
+        fmt.Fprintf(os.Stderr, "Error when calling `DefaultApi.CreateVM``: %v\n", err)
+        fmt.Fprintf(os.Stderr, "Full HTTP response: %v\n", r)
+    }
+}
+```
+
+### Path Parameters
+
+
+
+### Other Parameters
+
+Other parameters are passed through a pointer to a apiCreateVMRequest struct via the builder pattern
 
 
 Name | Type | Description  | Notes
 ------------- | ------------- | ------------- | -------------
-**ctx** | **context.Context** | context for authentication, logging, cancellation, deadlines, tracing, etc.
-**vmConfig** | [**VmConfig**](VmConfig.md)| The VM configuration | 
+ **vmConfig** | [**VmConfig**](VmConfig.md) | The VM configuration | 
 
 ### Return type
 
@@ -92,13 +151,42 @@ No authorization required
 
 ## DeleteVM
 
-> DeleteVM(ctx, )
+> DeleteVM(ctx).Execute()
 
 Delete the cloud-hypervisor Virtual Machine (VM) instance.
 
-### Required Parameters
+### Example
+
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+    "os"
+    openapiclient "./openapi"
+)
+
+func main() {
+
+    configuration := openapiclient.NewConfiguration()
+    api_client := openapiclient.NewAPIClient(configuration)
+    resp, r, err := api_client.DefaultApi.DeleteVM(context.Background()).Execute()
+    if err != nil {
+        fmt.Fprintf(os.Stderr, "Error when calling `DefaultApi.DeleteVM``: %v\n", err)
+        fmt.Fprintf(os.Stderr, "Full HTTP response: %v\n", r)
+    }
+}
+```
+
+### Path Parameters
 
 This endpoint does not need any parameter.
+
+### Other Parameters
+
+Other parameters are passed through a pointer to a apiDeleteVMRequest struct via the builder pattern
+
 
 ### Return type
 
@@ -120,13 +208,42 @@ No authorization required
 
 ## PauseVM
 
-> PauseVM(ctx, )
+> PauseVM(ctx).Execute()
 
 Pause a previously booted VM instance.
 
-### Required Parameters
+### Example
+
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+    "os"
+    openapiclient "./openapi"
+)
+
+func main() {
+
+    configuration := openapiclient.NewConfiguration()
+    api_client := openapiclient.NewAPIClient(configuration)
+    resp, r, err := api_client.DefaultApi.PauseVM(context.Background()).Execute()
+    if err != nil {
+        fmt.Fprintf(os.Stderr, "Error when calling `DefaultApi.PauseVM``: %v\n", err)
+        fmt.Fprintf(os.Stderr, "Full HTTP response: %v\n", r)
+    }
+}
+```
+
+### Path Parameters
 
 This endpoint does not need any parameter.
+
+### Other Parameters
+
+Other parameters are passed through a pointer to a apiPauseVMRequest struct via the builder pattern
+
 
 ### Return type
 
@@ -148,13 +265,42 @@ No authorization required
 
 ## PowerButtonVM
 
-> PowerButtonVM(ctx, )
+> PowerButtonVM(ctx).Execute()
 
 Trigger a power button in the VM
 
-### Required Parameters
+### Example
+
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+    "os"
+    openapiclient "./openapi"
+)
+
+func main() {
+
+    configuration := openapiclient.NewConfiguration()
+    api_client := openapiclient.NewAPIClient(configuration)
+    resp, r, err := api_client.DefaultApi.PowerButtonVM(context.Background()).Execute()
+    if err != nil {
+        fmt.Fprintf(os.Stderr, "Error when calling `DefaultApi.PowerButtonVM``: %v\n", err)
+        fmt.Fprintf(os.Stderr, "Full HTTP response: %v\n", r)
+    }
+}
+```
+
+### Path Parameters
 
 This endpoint does not need any parameter.
+
+### Other Parameters
+
+Other parameters are passed through a pointer to a apiPowerButtonVMRequest struct via the builder pattern
+
 
 ### Return type
 
@@ -176,13 +322,42 @@ No authorization required
 
 ## RebootVM
 
-> RebootVM(ctx, )
+> RebootVM(ctx).Execute()
 
 Reboot the VM instance.
 
-### Required Parameters
+### Example
+
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+    "os"
+    openapiclient "./openapi"
+)
+
+func main() {
+
+    configuration := openapiclient.NewConfiguration()
+    api_client := openapiclient.NewAPIClient(configuration)
+    resp, r, err := api_client.DefaultApi.RebootVM(context.Background()).Execute()
+    if err != nil {
+        fmt.Fprintf(os.Stderr, "Error when calling `DefaultApi.RebootVM``: %v\n", err)
+        fmt.Fprintf(os.Stderr, "Full HTTP response: %v\n", r)
+    }
+}
+```
+
+### Path Parameters
 
 This endpoint does not need any parameter.
+
+### Other Parameters
+
+Other parameters are passed through a pointer to a apiRebootVMRequest struct via the builder pattern
+
 
 ### Return type
 
@@ -204,13 +379,42 @@ No authorization required
 
 ## ResumeVM
 
-> ResumeVM(ctx, )
+> ResumeVM(ctx).Execute()
 
 Resume a previously paused VM instance.
 
-### Required Parameters
+### Example
+
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+    "os"
+    openapiclient "./openapi"
+)
+
+func main() {
+
+    configuration := openapiclient.NewConfiguration()
+    api_client := openapiclient.NewAPIClient(configuration)
+    resp, r, err := api_client.DefaultApi.ResumeVM(context.Background()).Execute()
+    if err != nil {
+        fmt.Fprintf(os.Stderr, "Error when calling `DefaultApi.ResumeVM``: %v\n", err)
+        fmt.Fprintf(os.Stderr, "Full HTTP response: %v\n", r)
+    }
+}
+```
+
+### Path Parameters
 
 This endpoint does not need any parameter.
+
+### Other Parameters
+
+Other parameters are passed through a pointer to a apiResumeVMRequest struct via the builder pattern
+
 
 ### Return type
 
@@ -232,13 +436,42 @@ No authorization required
 
 ## ShutdownVM
 
-> ShutdownVM(ctx, )
+> ShutdownVM(ctx).Execute()
 
 Shut the VM instance down.
 
-### Required Parameters
+### Example
+
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+    "os"
+    openapiclient "./openapi"
+)
+
+func main() {
+
+    configuration := openapiclient.NewConfiguration()
+    api_client := openapiclient.NewAPIClient(configuration)
+    resp, r, err := api_client.DefaultApi.ShutdownVM(context.Background()).Execute()
+    if err != nil {
+        fmt.Fprintf(os.Stderr, "Error when calling `DefaultApi.ShutdownVM``: %v\n", err)
+        fmt.Fprintf(os.Stderr, "Full HTTP response: %v\n", r)
+    }
+}
+```
+
+### Path Parameters
 
 This endpoint does not need any parameter.
+
+### Other Parameters
+
+Other parameters are passed through a pointer to a apiShutdownVMRequest struct via the builder pattern
+
 
 ### Return type
 
@@ -260,13 +493,42 @@ No authorization required
 
 ## ShutdownVMM
 
-> ShutdownVMM(ctx, )
+> ShutdownVMM(ctx).Execute()
 
 Shuts the cloud-hypervisor VMM.
 
-### Required Parameters
+### Example
+
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+    "os"
+    openapiclient "./openapi"
+)
+
+func main() {
+
+    configuration := openapiclient.NewConfiguration()
+    api_client := openapiclient.NewAPIClient(configuration)
+    resp, r, err := api_client.DefaultApi.ShutdownVMM(context.Background()).Execute()
+    if err != nil {
+        fmt.Fprintf(os.Stderr, "Error when calling `DefaultApi.ShutdownVMM``: %v\n", err)
+        fmt.Fprintf(os.Stderr, "Full HTTP response: %v\n", r)
+    }
+}
+```
+
+### Path Parameters
 
 This endpoint does not need any parameter.
+
+### Other Parameters
+
+Other parameters are passed through a pointer to a apiShutdownVMMRequest struct via the builder pattern
+
 
 ### Return type
 
@@ -288,17 +550,49 @@ No authorization required
 
 ## VmAddDevicePut
 
-> PciDeviceInfo VmAddDevicePut(ctx, vmAddDevice)
+> PciDeviceInfo VmAddDevicePut(ctx).VmAddDevice(vmAddDevice).Execute()
 
 Add a new device to the VM
 
-### Required Parameters
+### Example
+
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+    "os"
+    openapiclient "./openapi"
+)
+
+func main() {
+    vmAddDevice := *openapiclient.NewVmAddDevice() // VmAddDevice | The path of the new device
+
+    configuration := openapiclient.NewConfiguration()
+    api_client := openapiclient.NewAPIClient(configuration)
+    resp, r, err := api_client.DefaultApi.VmAddDevicePut(context.Background()).VmAddDevice(vmAddDevice).Execute()
+    if err != nil {
+        fmt.Fprintf(os.Stderr, "Error when calling `DefaultApi.VmAddDevicePut``: %v\n", err)
+        fmt.Fprintf(os.Stderr, "Full HTTP response: %v\n", r)
+    }
+    // response from `VmAddDevicePut`: PciDeviceInfo
+    fmt.Fprintf(os.Stdout, "Response from `DefaultApi.VmAddDevicePut`: %v\n", resp)
+}
+```
+
+### Path Parameters
+
+
+
+### Other Parameters
+
+Other parameters are passed through a pointer to a apiVmAddDevicePutRequest struct via the builder pattern
 
 
 Name | Type | Description  | Notes
 ------------- | ------------- | ------------- | -------------
-**ctx** | **context.Context** | context for authentication, logging, cancellation, deadlines, tracing, etc.
-**vmAddDevice** | [**VmAddDevice**](VmAddDevice.md)| The path of the new device | 
+ **vmAddDevice** | [**VmAddDevice**](VmAddDevice.md) | The path of the new device | 
 
 ### Return type
 
@@ -320,17 +614,49 @@ No authorization required
 
 ## VmAddDiskPut
 
-> PciDeviceInfo VmAddDiskPut(ctx, diskConfig)
+> PciDeviceInfo VmAddDiskPut(ctx).DiskConfig(diskConfig).Execute()
 
 Add a new disk to the VM
 
-### Required Parameters
+### Example
+
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+    "os"
+    openapiclient "./openapi"
+)
+
+func main() {
+    diskConfig := *openapiclient.NewDiskConfig("Path_example") // DiskConfig | The details of the new disk
+
+    configuration := openapiclient.NewConfiguration()
+    api_client := openapiclient.NewAPIClient(configuration)
+    resp, r, err := api_client.DefaultApi.VmAddDiskPut(context.Background()).DiskConfig(diskConfig).Execute()
+    if err != nil {
+        fmt.Fprintf(os.Stderr, "Error when calling `DefaultApi.VmAddDiskPut``: %v\n", err)
+        fmt.Fprintf(os.Stderr, "Full HTTP response: %v\n", r)
+    }
+    // response from `VmAddDiskPut`: PciDeviceInfo
+    fmt.Fprintf(os.Stdout, "Response from `DefaultApi.VmAddDiskPut`: %v\n", resp)
+}
+```
+
+### Path Parameters
+
+
+
+### Other Parameters
+
+Other parameters are passed through a pointer to a apiVmAddDiskPutRequest struct via the builder pattern
 
 
 Name | Type | Description  | Notes
 ------------- | ------------- | ------------- | -------------
-**ctx** | **context.Context** | context for authentication, logging, cancellation, deadlines, tracing, etc.
-**diskConfig** | [**DiskConfig**](DiskConfig.md)| The details of the new disk | 
+ **diskConfig** | [**DiskConfig**](DiskConfig.md) | The details of the new disk | 
 
 ### Return type
 
@@ -352,17 +678,49 @@ No authorization required
 
 ## VmAddFsPut
 
-> PciDeviceInfo VmAddFsPut(ctx, fsConfig)
+> PciDeviceInfo VmAddFsPut(ctx).FsConfig(fsConfig).Execute()
 
 Add a new virtio-fs device to the VM
 
-### Required Parameters
+### Example
+
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+    "os"
+    openapiclient "./openapi"
+)
+
+func main() {
+    fsConfig := *openapiclient.NewFsConfig("Tag_example", "Socket_example", int32(123), int32(123), false, int64(123)) // FsConfig | The details of the new virtio-fs
+
+    configuration := openapiclient.NewConfiguration()
+    api_client := openapiclient.NewAPIClient(configuration)
+    resp, r, err := api_client.DefaultApi.VmAddFsPut(context.Background()).FsConfig(fsConfig).Execute()
+    if err != nil {
+        fmt.Fprintf(os.Stderr, "Error when calling `DefaultApi.VmAddFsPut``: %v\n", err)
+        fmt.Fprintf(os.Stderr, "Full HTTP response: %v\n", r)
+    }
+    // response from `VmAddFsPut`: PciDeviceInfo
+    fmt.Fprintf(os.Stdout, "Response from `DefaultApi.VmAddFsPut`: %v\n", resp)
+}
+```
+
+### Path Parameters
+
+
+
+### Other Parameters
+
+Other parameters are passed through a pointer to a apiVmAddFsPutRequest struct via the builder pattern
 
 
 Name | Type | Description  | Notes
 ------------- | ------------- | ------------- | -------------
-**ctx** | **context.Context** | context for authentication, logging, cancellation, deadlines, tracing, etc.
-**fsConfig** | [**FsConfig**](FsConfig.md)| The details of the new virtio-fs | 
+ **fsConfig** | [**FsConfig**](FsConfig.md) | The details of the new virtio-fs | 
 
 ### Return type
 
@@ -384,17 +742,49 @@ No authorization required
 
 ## VmAddNetPut
 
-> PciDeviceInfo VmAddNetPut(ctx, netConfig)
+> PciDeviceInfo VmAddNetPut(ctx).NetConfig(netConfig).Execute()
 
 Add a new network device to the VM
 
-### Required Parameters
+### Example
+
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+    "os"
+    openapiclient "./openapi"
+)
+
+func main() {
+    netConfig := *openapiclient.NewNetConfig() // NetConfig | The details of the new network device
+
+    configuration := openapiclient.NewConfiguration()
+    api_client := openapiclient.NewAPIClient(configuration)
+    resp, r, err := api_client.DefaultApi.VmAddNetPut(context.Background()).NetConfig(netConfig).Execute()
+    if err != nil {
+        fmt.Fprintf(os.Stderr, "Error when calling `DefaultApi.VmAddNetPut``: %v\n", err)
+        fmt.Fprintf(os.Stderr, "Full HTTP response: %v\n", r)
+    }
+    // response from `VmAddNetPut`: PciDeviceInfo
+    fmt.Fprintf(os.Stdout, "Response from `DefaultApi.VmAddNetPut`: %v\n", resp)
+}
+```
+
+### Path Parameters
+
+
+
+### Other Parameters
+
+Other parameters are passed through a pointer to a apiVmAddNetPutRequest struct via the builder pattern
 
 
 Name | Type | Description  | Notes
 ------------- | ------------- | ------------- | -------------
-**ctx** | **context.Context** | context for authentication, logging, cancellation, deadlines, tracing, etc.
-**netConfig** | [**NetConfig**](NetConfig.md)| The details of the new network device | 
+ **netConfig** | [**NetConfig**](NetConfig.md) | The details of the new network device | 
 
 ### Return type
 
@@ -416,17 +806,49 @@ No authorization required
 
 ## VmAddPmemPut
 
-> PciDeviceInfo VmAddPmemPut(ctx, pmemConfig)
+> PciDeviceInfo VmAddPmemPut(ctx).PmemConfig(pmemConfig).Execute()
 
 Add a new pmem device to the VM
 
-### Required Parameters
+### Example
+
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+    "os"
+    openapiclient "./openapi"
+)
+
+func main() {
+    pmemConfig := *openapiclient.NewPmemConfig("File_example") // PmemConfig | The details of the new pmem device
+
+    configuration := openapiclient.NewConfiguration()
+    api_client := openapiclient.NewAPIClient(configuration)
+    resp, r, err := api_client.DefaultApi.VmAddPmemPut(context.Background()).PmemConfig(pmemConfig).Execute()
+    if err != nil {
+        fmt.Fprintf(os.Stderr, "Error when calling `DefaultApi.VmAddPmemPut``: %v\n", err)
+        fmt.Fprintf(os.Stderr, "Full HTTP response: %v\n", r)
+    }
+    // response from `VmAddPmemPut`: PciDeviceInfo
+    fmt.Fprintf(os.Stdout, "Response from `DefaultApi.VmAddPmemPut`: %v\n", resp)
+}
+```
+
+### Path Parameters
+
+
+
+### Other Parameters
+
+Other parameters are passed through a pointer to a apiVmAddPmemPutRequest struct via the builder pattern
 
 
 Name | Type | Description  | Notes
 ------------- | ------------- | ------------- | -------------
-**ctx** | **context.Context** | context for authentication, logging, cancellation, deadlines, tracing, etc.
-**pmemConfig** | [**PmemConfig**](PmemConfig.md)| The details of the new pmem device | 
+ **pmemConfig** | [**PmemConfig**](PmemConfig.md) | The details of the new pmem device | 
 
 ### Return type
 
@@ -448,17 +870,49 @@ No authorization required
 
 ## VmAddVsockPut
 
-> PciDeviceInfo VmAddVsockPut(ctx, vsockConfig)
+> PciDeviceInfo VmAddVsockPut(ctx).VsockConfig(vsockConfig).Execute()
 
 Add a new vsock device to the VM
 
-### Required Parameters
+### Example
+
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+    "os"
+    openapiclient "./openapi"
+)
+
+func main() {
+    vsockConfig := *openapiclient.NewVsockConfig(int64(123), "Socket_example") // VsockConfig | The details of the new vsock device
+
+    configuration := openapiclient.NewConfiguration()
+    api_client := openapiclient.NewAPIClient(configuration)
+    resp, r, err := api_client.DefaultApi.VmAddVsockPut(context.Background()).VsockConfig(vsockConfig).Execute()
+    if err != nil {
+        fmt.Fprintf(os.Stderr, "Error when calling `DefaultApi.VmAddVsockPut``: %v\n", err)
+        fmt.Fprintf(os.Stderr, "Full HTTP response: %v\n", r)
+    }
+    // response from `VmAddVsockPut`: PciDeviceInfo
+    fmt.Fprintf(os.Stdout, "Response from `DefaultApi.VmAddVsockPut`: %v\n", resp)
+}
+```
+
+### Path Parameters
+
+
+
+### Other Parameters
+
+Other parameters are passed through a pointer to a apiVmAddVsockPutRequest struct via the builder pattern
 
 
 Name | Type | Description  | Notes
 ------------- | ------------- | ------------- | -------------
-**ctx** | **context.Context** | context for authentication, logging, cancellation, deadlines, tracing, etc.
-**vsockConfig** | [**VsockConfig**](VsockConfig.md)| The details of the new vsock device | 
+ **vsockConfig** | [**VsockConfig**](VsockConfig.md) | The details of the new vsock device | 
 
 ### Return type
 
@@ -480,13 +934,44 @@ No authorization required
 
 ## VmCountersGet
 
-> map[string]map[string]int64 VmCountersGet(ctx, )
+> map[string]map[string]int64 VmCountersGet(ctx).Execute()
 
 Get counters from the VM
 
-### Required Parameters
+### Example
+
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+    "os"
+    openapiclient "./openapi"
+)
+
+func main() {
+
+    configuration := openapiclient.NewConfiguration()
+    api_client := openapiclient.NewAPIClient(configuration)
+    resp, r, err := api_client.DefaultApi.VmCountersGet(context.Background()).Execute()
+    if err != nil {
+        fmt.Fprintf(os.Stderr, "Error when calling `DefaultApi.VmCountersGet``: %v\n", err)
+        fmt.Fprintf(os.Stderr, "Full HTTP response: %v\n", r)
+    }
+    // response from `VmCountersGet`: map[string]map[string]int64
+    fmt.Fprintf(os.Stdout, "Response from `DefaultApi.VmCountersGet`: %v\n", resp)
+}
+```
+
+### Path Parameters
 
 This endpoint does not need any parameter.
+
+### Other Parameters
+
+Other parameters are passed through a pointer to a apiVmCountersGetRequest struct via the builder pattern
+
 
 ### Return type
 
@@ -508,13 +993,44 @@ No authorization required
 
 ## VmInfoGet
 
-> VmInfo VmInfoGet(ctx, )
+> VmInfo VmInfoGet(ctx).Execute()
 
 Returns general information about the cloud-hypervisor Virtual Machine (VM) instance.
 
-### Required Parameters
+### Example
+
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+    "os"
+    openapiclient "./openapi"
+)
+
+func main() {
+
+    configuration := openapiclient.NewConfiguration()
+    api_client := openapiclient.NewAPIClient(configuration)
+    resp, r, err := api_client.DefaultApi.VmInfoGet(context.Background()).Execute()
+    if err != nil {
+        fmt.Fprintf(os.Stderr, "Error when calling `DefaultApi.VmInfoGet``: %v\n", err)
+        fmt.Fprintf(os.Stderr, "Full HTTP response: %v\n", r)
+    }
+    // response from `VmInfoGet`: VmInfo
+    fmt.Fprintf(os.Stdout, "Response from `DefaultApi.VmInfoGet`: %v\n", resp)
+}
+```
+
+### Path Parameters
 
 This endpoint does not need any parameter.
+
+### Other Parameters
+
+Other parameters are passed through a pointer to a apiVmInfoGetRequest struct via the builder pattern
+
 
 ### Return type
 
@@ -536,17 +1052,47 @@ No authorization required
 
 ## VmRemoveDevicePut
 
-> VmRemoveDevicePut(ctx, vmRemoveDevice)
+> VmRemoveDevicePut(ctx).VmRemoveDevice(vmRemoveDevice).Execute()
 
 Remove a device from the VM
 
-### Required Parameters
+### Example
+
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+    "os"
+    openapiclient "./openapi"
+)
+
+func main() {
+    vmRemoveDevice := *openapiclient.NewVmRemoveDevice() // VmRemoveDevice | The identifier of the device
+
+    configuration := openapiclient.NewConfiguration()
+    api_client := openapiclient.NewAPIClient(configuration)
+    resp, r, err := api_client.DefaultApi.VmRemoveDevicePut(context.Background()).VmRemoveDevice(vmRemoveDevice).Execute()
+    if err != nil {
+        fmt.Fprintf(os.Stderr, "Error when calling `DefaultApi.VmRemoveDevicePut``: %v\n", err)
+        fmt.Fprintf(os.Stderr, "Full HTTP response: %v\n", r)
+    }
+}
+```
+
+### Path Parameters
+
+
+
+### Other Parameters
+
+Other parameters are passed through a pointer to a apiVmRemoveDevicePutRequest struct via the builder pattern
 
 
 Name | Type | Description  | Notes
 ------------- | ------------- | ------------- | -------------
-**ctx** | **context.Context** | context for authentication, logging, cancellation, deadlines, tracing, etc.
-**vmRemoveDevice** | [**VmRemoveDevice**](VmRemoveDevice.md)| The identifier of the device | 
+ **vmRemoveDevice** | [**VmRemoveDevice**](VmRemoveDevice.md) | The identifier of the device | 
 
 ### Return type
 
@@ -568,17 +1114,47 @@ No authorization required
 
 ## VmResizePut
 
-> VmResizePut(ctx, vmResize)
+> VmResizePut(ctx).VmResize(vmResize).Execute()
 
 Resize the VM
 
-### Required Parameters
+### Example
+
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+    "os"
+    openapiclient "./openapi"
+)
+
+func main() {
+    vmResize := *openapiclient.NewVmResize() // VmResize | The target size for the VM
+
+    configuration := openapiclient.NewConfiguration()
+    api_client := openapiclient.NewAPIClient(configuration)
+    resp, r, err := api_client.DefaultApi.VmResizePut(context.Background()).VmResize(vmResize).Execute()
+    if err != nil {
+        fmt.Fprintf(os.Stderr, "Error when calling `DefaultApi.VmResizePut``: %v\n", err)
+        fmt.Fprintf(os.Stderr, "Full HTTP response: %v\n", r)
+    }
+}
+```
+
+### Path Parameters
+
+
+
+### Other Parameters
+
+Other parameters are passed through a pointer to a apiVmResizePutRequest struct via the builder pattern
 
 
 Name | Type | Description  | Notes
 ------------- | ------------- | ------------- | -------------
-**ctx** | **context.Context** | context for authentication, logging, cancellation, deadlines, tracing, etc.
-**vmResize** | [**VmResize**](VmResize.md)| The target size for the VM | 
+ **vmResize** | [**VmResize**](VmResize.md) | The target size for the VM | 
 
 ### Return type
 
@@ -600,17 +1176,47 @@ No authorization required
 
 ## VmResizeZonePut
 
-> VmResizeZonePut(ctx, vmResizeZone)
+> VmResizeZonePut(ctx).VmResizeZone(vmResizeZone).Execute()
 
 Resize a memory zone
 
-### Required Parameters
+### Example
+
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+    "os"
+    openapiclient "./openapi"
+)
+
+func main() {
+    vmResizeZone := *openapiclient.NewVmResizeZone() // VmResizeZone | The target size for the memory zone
+
+    configuration := openapiclient.NewConfiguration()
+    api_client := openapiclient.NewAPIClient(configuration)
+    resp, r, err := api_client.DefaultApi.VmResizeZonePut(context.Background()).VmResizeZone(vmResizeZone).Execute()
+    if err != nil {
+        fmt.Fprintf(os.Stderr, "Error when calling `DefaultApi.VmResizeZonePut``: %v\n", err)
+        fmt.Fprintf(os.Stderr, "Full HTTP response: %v\n", r)
+    }
+}
+```
+
+### Path Parameters
+
+
+
+### Other Parameters
+
+Other parameters are passed through a pointer to a apiVmResizeZonePutRequest struct via the builder pattern
 
 
 Name | Type | Description  | Notes
 ------------- | ------------- | ------------- | -------------
-**ctx** | **context.Context** | context for authentication, logging, cancellation, deadlines, tracing, etc.
-**vmResizeZone** | [**VmResizeZone**](VmResizeZone.md)| The target size for the memory zone | 
+ **vmResizeZone** | [**VmResizeZone**](VmResizeZone.md) | The target size for the memory zone | 
 
 ### Return type
 
@@ -632,17 +1238,47 @@ No authorization required
 
 ## VmRestorePut
 
-> VmRestorePut(ctx, restoreConfig)
+> VmRestorePut(ctx).RestoreConfig(restoreConfig).Execute()
 
 Restore a VM from a snapshot.
 
-### Required Parameters
+### Example
+
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+    "os"
+    openapiclient "./openapi"
+)
+
+func main() {
+    restoreConfig := *openapiclient.NewRestoreConfig("SourceUrl_example") // RestoreConfig | The restore configuration
+
+    configuration := openapiclient.NewConfiguration()
+    api_client := openapiclient.NewAPIClient(configuration)
+    resp, r, err := api_client.DefaultApi.VmRestorePut(context.Background()).RestoreConfig(restoreConfig).Execute()
+    if err != nil {
+        fmt.Fprintf(os.Stderr, "Error when calling `DefaultApi.VmRestorePut``: %v\n", err)
+        fmt.Fprintf(os.Stderr, "Full HTTP response: %v\n", r)
+    }
+}
+```
+
+### Path Parameters
+
+
+
+### Other Parameters
+
+Other parameters are passed through a pointer to a apiVmRestorePutRequest struct via the builder pattern
 
 
 Name | Type | Description  | Notes
 ------------- | ------------- | ------------- | -------------
-**ctx** | **context.Context** | context for authentication, logging, cancellation, deadlines, tracing, etc.
-**restoreConfig** | [**RestoreConfig**](RestoreConfig.md)| The restore configuration | 
+ **restoreConfig** | [**RestoreConfig**](RestoreConfig.md) | The restore configuration | 
 
 ### Return type
 
@@ -664,17 +1300,47 @@ No authorization required
 
 ## VmSnapshotPut
 
-> VmSnapshotPut(ctx, vmSnapshotConfig)
+> VmSnapshotPut(ctx).VmSnapshotConfig(vmSnapshotConfig).Execute()
 
 Returns a VM snapshot.
 
-### Required Parameters
+### Example
+
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+    "os"
+    openapiclient "./openapi"
+)
+
+func main() {
+    vmSnapshotConfig := *openapiclient.NewVmSnapshotConfig() // VmSnapshotConfig | The snapshot configuration
+
+    configuration := openapiclient.NewConfiguration()
+    api_client := openapiclient.NewAPIClient(configuration)
+    resp, r, err := api_client.DefaultApi.VmSnapshotPut(context.Background()).VmSnapshotConfig(vmSnapshotConfig).Execute()
+    if err != nil {
+        fmt.Fprintf(os.Stderr, "Error when calling `DefaultApi.VmSnapshotPut``: %v\n", err)
+        fmt.Fprintf(os.Stderr, "Full HTTP response: %v\n", r)
+    }
+}
+```
+
+### Path Parameters
+
+
+
+### Other Parameters
+
+Other parameters are passed through a pointer to a apiVmSnapshotPutRequest struct via the builder pattern
 
 
 Name | Type | Description  | Notes
 ------------- | ------------- | ------------- | -------------
-**ctx** | **context.Context** | context for authentication, logging, cancellation, deadlines, tracing, etc.
-**vmSnapshotConfig** | [**VmSnapshotConfig**](VmSnapshotConfig.md)| The snapshot configuration | 
+ **vmSnapshotConfig** | [**VmSnapshotConfig**](VmSnapshotConfig.md) | The snapshot configuration | 
 
 ### Return type
 
@@ -696,13 +1362,44 @@ No authorization required
 
 ## VmmPingGet
 
-> VmmPingResponse VmmPingGet(ctx, )
+> VmmPingResponse VmmPingGet(ctx).Execute()
 
 Ping the VMM to check for API server availability
 
-### Required Parameters
+### Example
+
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+    "os"
+    openapiclient "./openapi"
+)
+
+func main() {
+
+    configuration := openapiclient.NewConfiguration()
+    api_client := openapiclient.NewAPIClient(configuration)
+    resp, r, err := api_client.DefaultApi.VmmPingGet(context.Background()).Execute()
+    if err != nil {
+        fmt.Fprintf(os.Stderr, "Error when calling `DefaultApi.VmmPingGet``: %v\n", err)
+        fmt.Fprintf(os.Stderr, "Full HTTP response: %v\n", r)
+    }
+    // response from `VmmPingGet`: VmmPingResponse
+    fmt.Fprintf(os.Stdout, "Response from `DefaultApi.VmmPingGet`: %v\n", resp)
+}
+```
+
+### Path Parameters
 
 This endpoint does not need any parameter.
+
+### Other Parameters
+
+Other parameters are passed through a pointer to a apiVmmPingGetRequest struct via the builder pattern
+
 
 ### Return type
 
