@@ -449,7 +449,7 @@ fn online_memory(logger: &Logger) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::Sandbox;
-    use crate::{mount::BareMount, skip_if_not_root};
+    use crate::{mount::baremount, skip_if_not_root};
     use anyhow::Error;
     use nix::mount::MsFlags;
     use oci::{Linux, Root, Spec};
@@ -461,8 +461,7 @@ mod tests {
     use tempfile::Builder;
 
     fn bind_mount(src: &str, dst: &str, logger: &Logger) -> Result<(), Error> {
-        let baremount = BareMount::new(src, dst, "bind", MsFlags::MS_BIND, "", logger);
-        baremount.mount()
+        baremount(src, dst, "bind", MsFlags::MS_BIND, "", logger)
     }
 
     #[tokio::test]

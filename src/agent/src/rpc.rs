@@ -47,7 +47,7 @@ use rustjail::process::ProcessOperations;
 use crate::device::{add_devices, pcipath_to_sysfs, rescan_pci_bus, update_device_cgroup};
 use crate::linux_abi::*;
 use crate::metrics::get_metrics;
-use crate::mount::{add_storages, remove_mounts, BareMount, STORAGE_HANDLER_LIST};
+use crate::mount::{add_storages, baremount, remove_mounts, STORAGE_HANDLER_LIST};
 use crate::namespace::{NSTYPEIPC, NSTYPEPID, NSTYPEUTS};
 use crate::network::setup_guest_dns;
 use crate::random;
@@ -1624,15 +1624,14 @@ fn setup_bundle(cid: &str, spec: &mut Spec) -> Result<PathBuf> {
     let rootfs_path = bundle_path.join("rootfs");
 
     fs::create_dir_all(&rootfs_path)?;
-    BareMount::new(
+    baremount(
         &spec_root.path,
         rootfs_path.to_str().unwrap(),
         "bind",
         MsFlags::MS_BIND,
         "",
         &sl!(),
-    )
-    .mount()?;
+    )?;
     spec.root = Some(Root {
         path: rootfs_path.to_str().unwrap().to_owned(),
         readonly: spec_root.readonly,

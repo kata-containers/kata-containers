@@ -145,78 +145,53 @@ pub const STORAGE_HANDLER_LIST: &[&str] = &[
     DRIVER_WATCHABLE_BIND_TYPE,
 ];
 
-#[derive(Debug, Clone)]
-pub struct BareMount<'a> {
-    source: &'a str,
-    destination: &'a str,
-    fs_type: &'a str,
+#[instrument]
+pub fn baremount(
+    source: &str,
+    destination: &str,
+    fs_type: &str,
     flags: MsFlags,
-    options: &'a str,
-    logger: Logger,
-}
+    options: &str,
+    logger: &Logger,
+) -> Result<()> {
+    let logger = logger.new(o!("subsystem" => "baremount"));
 
-// mount mounts a source in to a destination. This will do some bookkeeping:
-// * evaluate all symlinks
-// * ensure the source exists
-impl<'a> BareMount<'a> {
-    #[instrument]
-    pub fn new(
-        s: &'a str,
-        d: &'a str,
-        fs_type: &'a str,
-        flags: MsFlags,
-        options: &'a str,
-        logger: &Logger,
-    ) -> Self {
-        BareMount {
-            source: s,
-            destination: d,
-            fs_type,
-            flags,
-            options,
-            logger: logger.new(o!("subsystem" => "baremount")),
-        }
+    if source.is_empty() {
+        return Err(anyhow!("need mount source"));
     }
 
-    #[instrument]
-    pub fn mount(&self) -> Result<()> {
-        if self.source.is_empty() {
-            return Err(anyhow!("need mount source"));
-        }
+    if destination.is_empty() {
+        return Err(anyhow!("need mount destination"));
+    }
 
-        if self.destination.is_empty() {
-            return Err(anyhow!("need mount destination"));
-        }
+    if fs_type.is_empty() {
+        return Err(anyhow!("need mount FS type"));
+    }
 
-        if self.fs_type.is_empty() {
-            return Err(anyhow!("need mount FS type"));
-        }
+    info!(
+        logger,
+        "mount source={:?}, dest={:?}, fs_type={:?}, options={:?}",
+        source,
+        destination,
+        fs_type,
+        options
+    );
 
-        info!(
-            self.logger,
-            "mount source={:?}, dest={:?}, fs_type={:?}, options={:?}",
-            self.source,
-            self.destination,
-            self.fs_type,
-            self.options
-        );
-
-        nix::mount::mount(
-            Some(self.source),
-            self.destination,
-            Some(self.fs_type),
-            self.flags,
-            Some(self.options),
+    nix::mount::mount(
+        Some(source),
+        destination,
+        Some(fs_type),
+        flags,
+        Some(options),
+    )
+    .map_err(|e| {
+        anyhow!(
+            "failed to mount {:?} to {:?}, with error: {}",
+            source,
+            destination,
+            e
         )
-        .map_err(|e| {
-            anyhow!(
-                "failed to mount {:?} to {:?}, with error: {}",
-                self.source,
-                self.destination,
-                e
-            )
-        })
-    }
+    })
 }
 
 #[instrument]
@@ -487,16 +462,14 @@ fn mount_storage(logger: &Logger, storage: &Storage) -> Result<()> {
     "mount-options" => options.as_str(),
     );
 
-    let bare_mount = BareMount::new(
+    baremount(
         storage.source.as_str(),
         storage.mount_point.as_str(),
         storage.fstype.as_str(),
         flags,
         options.as_str(),
         &logger,
-    );
-
-    bare_mount.mount()
+    )
 }
 
 /// Looks for `mount_point` entry in the /proc/mounts.
@@ -615,11 +588,9 @@ fn mount_to_rootfs(logger: &Logger, m: &InitMount) -> Result<()> {
 
     let (flags, options) = parse_mount_flags_and_options(options_vec);
 
-    let bare_mount = BareMount::new(m.src, m.dest, m.fstype, flags, options.as_str(), logger);
-
     fs::create_dir_all(Path::new(m.dest)).context("could not create directory")?;
 
-    bare_mount.mount().or_else(|e| {
+    baremount(m.src, m.dest, m.fstype, flags, &options, logger).or_else(|e| {
         if m.src != "dev" {
             return Err(e);
         }
@@ -983,7 +954,7 @@ mod tests {
                 std::fs::create_dir_all(d).expect("failed to created directory");
             }
 
-            let bare_mount = BareMount::new(
+            let result = baremount(
                 &src_filename,
                 &dest_filename,
                 d.fs_type,
@@ -991,8 +962,6 @@ mod tests {
                 d.options,
                 &logger,
             );
-
-            let result = bare_mount.mount();
 
             let msg = format!("{}: result: {:?}", msg, result);
 
@@ -1070,7 +1039,7 @@ mod tests {
         }
 
         // Create an actual mount
-        let bare_mount = BareMount::new(
+        let result = baremount(
             mnt_src_filename,
             mnt_dest_filename,
             "bind",
@@ -1078,8 +1047,6 @@ mod tests {
             "",
             &logger,
         );
-
-        let result = bare_mount.mount();
         assert!(result.is_ok(), "mount for test setup failed");
 
         let tests = &[
