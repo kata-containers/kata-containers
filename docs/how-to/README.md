@@ -17,10 +17,9 @@
 - `firecracker`
 - `ACRN`
 
-  While `qemu` and `cloud-hypervisor` work out of the box with installation of Kata,
-  some additional configuration is needed in case of `firecracker` and `ACRN`.
+  While `qemu` , `cloud-hypervisor` and `firecracker` work out of the box with installation of Kata,
+  some additional configuration is needed in case of `ACRN`.
   Refer to the following guides for additional configuration steps:
-- [Kata Containers with Firecracker](https://github.com/kata-containers/documentation/wiki/Initial-release-of-Kata-Containers-with-Firecracker-support)
 - [Kata Containers with ACRN Hypervisor](how-to-use-kata-containers-with-acrn.md)
 
 ## Advanced Topics
