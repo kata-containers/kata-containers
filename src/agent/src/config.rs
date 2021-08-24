@@ -47,6 +47,11 @@ const ERR_INVALID_CONTAINER_PIPE_SIZE_PARAM: &str = "unable to parse container p
 const ERR_INVALID_CONTAINER_PIPE_SIZE_KEY: &str = "invalid container pipe size key name";
 const ERR_INVALID_CONTAINER_PIPE_NEGATIVE: &str = "container pipe size should not be negative";
 
+#[derive(Debug, Default)]
+pub struct EndpointsConfig {
+    pub blocked: Vec<String>,
+}
+
 #[derive(Debug)]
 pub struct AgentConfig {
     pub debug_console: bool,
@@ -59,6 +64,7 @@ pub struct AgentConfig {
     pub server_addr: String,
     pub unified_cgroup_hierarchy: bool,
     pub tracing: tracer::TraceType,
+    pub endpoints: EndpointsConfig,
 }
 
 // parse_cmdline_param parse commandline parameters.
@@ -104,6 +110,7 @@ impl Default for AgentConfig {
             server_addr: format!("{}:{}", VSOCK_ADDR, VSOCK_PORT),
             unified_cgroup_hierarchy: false,
             tracing: tracer::TraceType::Disabled,
+            endpoints: Default::default(),
         }
     }
 }
