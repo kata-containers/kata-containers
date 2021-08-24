@@ -20,7 +20,7 @@ use tokio::sync::Mutex;
 use tokio::task;
 use tokio::time::{self, Duration};
 
-use crate::mount::BareMount;
+use crate::mount::baremount;
 use crate::protocols::agent as protos;
 
 /// The maximum number of file system entries agent will watch for each mount.
@@ -314,16 +314,14 @@ impl SandboxStorages {
                             }
                         }
 
-                        match BareMount::new(
+                        match baremount(
                             entry.source_mount_point.to_str().unwrap(),
                             entry.target_mount_point.to_str().unwrap(),
                             "bind",
                             MsFlags::MS_BIND,
                             "bind",
                             logger,
-                        )
-                        .mount()
-                        {
+                        ) {
                             Ok(_) => {
                                 entry.watch = false;
                                 info!(logger, "watchable mount replaced with bind mount")
@@ -427,15 +425,14 @@ impl BindWatcher {
     async fn mount(&self, logger: &Logger) -> Result<()> {
         fs::create_dir_all(WATCH_MOUNT_POINT_PATH).await?;
 
-        BareMount::new(
+        baremount(
             "tmpfs",
             WATCH_MOUNT_POINT_PATH,
             "tmpfs",
             MsFlags::empty(),
             "",
             logger,
-        )
-        .mount()?;
+        )?;
 
         Ok(())
     }
