@@ -91,8 +91,8 @@ macro_rules! parse_cmdline_param {
     };
 }
 
-impl AgentConfig {
-    pub fn new() -> AgentConfig {
+impl Default for AgentConfig {
+    fn default() -> Self {
         AgentConfig {
             debug_console: false,
             dev_mode: false,
@@ -106,7 +106,9 @@ impl AgentConfig {
             tracing: tracer::TraceType::Disabled,
         }
     }
+}
 
+impl AgentConfig {
     #[instrument]
     pub fn parse_cmdline(&mut self, file: &str) -> Result<()> {
         let cmdline = fs::read_to_string(file)?;
@@ -371,7 +373,7 @@ mod tests {
 
     #[test]
     fn test_new() {
-        let config = AgentConfig::new();
+        let config: AgentConfig = Default::default();
         assert!(!config.debug_console);
         assert!(!config.dev_mode);
         assert_eq!(config.log_level, DEFAULT_LOG_LEVEL);
@@ -721,7 +723,7 @@ mod tests {
 
         let filename = file_path.to_str().expect("failed to create filename");
 
-        let mut config = AgentConfig::new();
+        let mut config: AgentConfig = Default::default();
         let result = config.parse_cmdline(&filename.to_owned());
         assert!(result.is_err());
 
