@@ -80,8 +80,7 @@ const NAME: &str = "kata-agent";
 const KERNEL_CMDLINE_FILE: &str = "/proc/cmdline";
 
 lazy_static! {
-    static ref AGENT_CONFIG: Arc<RwLock<AgentConfig>> =
-        Arc::new(RwLock::new(config::AgentConfig::new()));
+    static ref AGENT_CONFIG: Arc<RwLock<AgentConfig>> = Arc::new(RwLock::new(Default::default()));
 }
 
 #[instrument]
