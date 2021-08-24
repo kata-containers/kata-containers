@@ -4,22 +4,18 @@
 //
 
 use std::collections::HashMap;
-use std::ffi::CString;
 use std::fs;
 use std::fs::File;
-use std::io;
 use std::io::{BufRead, BufReader};
 use std::iter;
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::path::Path;
-use std::ptr::null;
 use std::str::FromStr;
 use std::sync::Arc;
 
 use tokio::sync::Mutex;
 
-use libc::{c_void, mount};
-use nix::mount::{self, MsFlags};
+use nix::mount::MsFlags;
 use nix::unistd::Gid;
 
 use regex::Regex;
@@ -184,15 +180,6 @@ impl<'a> BareMount<'a> {
 
     #[instrument]
     pub fn mount(&self) -> Result<()> {
-        let source;
-        let dest;
-        let fs_type;
-        let mut options = null();
-        let cstr_options: CString;
-        let cstr_source: CString;
-        let cstr_dest: CString;
-        let cstr_fs_type: CString;
-
         if self.source.is_empty() {
             return Err(anyhow!("need mount source"));
         }
@@ -201,22 +188,8 @@ impl<'a> BareMount<'a> {
             return Err(anyhow!("need mount destination"));
         }
 
-        cstr_source = CString::new(self.source)?;
-        source = cstr_source.as_ptr();
-
-        cstr_dest = CString::new(self.destination)?;
-        dest = cstr_dest.as_ptr();
-
         if self.fs_type.is_empty() {
             return Err(anyhow!("need mount FS type"));
-        }
-
-        cstr_fs_type = CString::new(self.fs_type)?;
-        fs_type = cstr_fs_type.as_ptr();
-
-        if !self.options.is_empty() {
-            cstr_options = CString::new(self.options)?;
-            options = cstr_options.as_ptr() as *const c_void;
         }
 
         info!(
@@ -227,17 +200,22 @@ impl<'a> BareMount<'a> {
             self.fs_type,
             self.options
         );
-        let rc = unsafe { mount(source, dest, fs_type, self.flags.bits(), options) };
 
-        if rc < 0 {
-            return Err(anyhow!(
+        nix::mount::mount(
+            Some(self.source),
+            self.destination,
+            Some(self.fs_type),
+            self.flags,
+            Some(self.options),
+        )
+        .map_err(|e| {
+            anyhow!(
                 "failed to mount {:?} to {:?}, with error: {}",
                 self.source,
                 self.destination,
-                io::Error::last_os_error()
-            ));
-        }
-        Ok(())
+                e
+            )
+        })
     }
 }
 
@@ -816,7 +794,7 @@ pub fn cgroups_mount(logger: &Logger, unified_cgroup_hierarchy: bool) -> Result<
 #[instrument]
 pub fn remove_mounts(mounts: &[String]) -> Result<()> {
     for m in mounts.iter() {
-        mount::umount(m.as_str()).context(format!("failed to umount {:?}", m))?;
+        nix::mount::umount(m.as_str()).context(format!("failed to umount {:?}", m))?;
     }
     Ok(())
 }
@@ -865,7 +843,6 @@ fn parse_options(option_list: Vec<String>) -> HashMap<String, String> {
 mod tests {
     use super::*;
     use crate::{skip_if_not_root, skip_loop_if_not_root, skip_loop_if_root};
-    use libc::umount;
     use std::fs::metadata;
     use std::fs::File;
     use std::fs::OpenOptions;
@@ -1023,17 +1000,7 @@ mod tests {
                 assert!(result.is_ok(), "{}", msg);
 
                 // Cleanup
-                unsafe {
-                    let cstr_dest =
-                        CString::new(dest_filename).expect("failed to convert dest to cstring");
-                    let umount_dest = cstr_dest.as_ptr();
-
-                    let ret = umount(umount_dest);
-
-                    let msg = format!("{}: umount result: {:?}", msg, result);
-
-                    assert!(ret == 0, "{}", msg);
-                };
+                nix::mount::umount(dest_filename.as_str()).unwrap();
 
                 continue;
             }
