@@ -77,10 +77,11 @@ mod rpc;
 mod tracer;
 
 const NAME: &str = "kata-agent";
-const KERNEL_CMDLINE_FILE: &str = "/proc/cmdline";
 
 lazy_static! {
-    static ref AGENT_CONFIG: Arc<RwLock<AgentConfig>> = Arc::new(RwLock::new(Default::default()));
+    static ref AGENT_CONFIG: Arc<RwLock<AgentConfig>> = Arc::new(RwLock::new(
+        AgentConfig::from_cmdline("/proc/cmdline").unwrap()
+    ));
 }
 
 #[instrument]
@@ -133,14 +134,10 @@ async fn real_main() -> std::result::Result<(), Box<dyn std::error::Error>> {
 
     console::initialize();
 
-    lazy_static::initialize(&AGENT_CONFIG);
-
     // support vsock log
     let (rfd, wfd) = unistd::pipe2(OFlag::O_CLOEXEC)?;
 
     let (shutdown_tx, shutdown_rx) = channel(true);
-
-    let agent_config = AGENT_CONFIG.clone();
 
     let init_mode = unistd::getpid() == Pid::from_raw(1);
     if init_mode {
@@ -162,20 +159,15 @@ async fn real_main() -> std::result::Result<(), Box<dyn std::error::Error>> {
             e
         })?;
 
-        let mut config = agent_config.write().await;
-        config.parse_cmdline(KERNEL_CMDLINE_FILE)?;
+        lazy_static::initialize(&AGENT_CONFIG);
 
-        init_agent_as_init(&logger, config.unified_cgroup_hierarchy)?;
+        init_agent_as_init(&logger, AGENT_CONFIG.read().await.unified_cgroup_hierarchy)?;
         drop(logger_async_guard);
     } else {
-        // once parsed cmdline and set the config, release the write lock
-        // as soon as possible in case other thread would get read lock on
-        // it.
-        let mut config = agent_config.write().await;
-        config.parse_cmdline(KERNEL_CMDLINE_FILE)?;
+        lazy_static::initialize(&AGENT_CONFIG);
     }
-    let config = agent_config.read().await;
 
+    let config = AGENT_CONFIG.read().await;
     let log_vport = config.log_vport as u32;
 
     let log_handle = tokio::spawn(create_logger_task(rfd, log_vport, shutdown_rx.clone()));
