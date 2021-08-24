@@ -110,29 +110,30 @@ impl Default for AgentConfig {
 
 impl AgentConfig {
     #[instrument]
-    pub fn parse_cmdline(&mut self, file: &str) -> Result<()> {
+    pub fn from_cmdline(file: &str) -> Result<AgentConfig> {
+        let mut config: AgentConfig = Default::default();
         let cmdline = fs::read_to_string(file)?;
         let params: Vec<&str> = cmdline.split_ascii_whitespace().collect();
         for param in params.iter() {
             // parse cmdline flags
-            parse_cmdline_param!(param, DEBUG_CONSOLE_FLAG, self.debug_console);
-            parse_cmdline_param!(param, DEV_MODE_FLAG, self.dev_mode);
+            parse_cmdline_param!(param, DEBUG_CONSOLE_FLAG, config.debug_console);
+            parse_cmdline_param!(param, DEV_MODE_FLAG, config.dev_mode);
 
             // Support "bare" tracing option for backwards compatibility with
             // Kata 1.x.
             if param == &TRACE_MODE_OPTION {
-                self.tracing = tracer::TraceType::Isolated;
+                config.tracing = tracer::TraceType::Isolated;
                 continue;
             }
 
-            parse_cmdline_param!(param, TRACE_MODE_OPTION, self.tracing, get_trace_type);
+            parse_cmdline_param!(param, TRACE_MODE_OPTION, config.tracing, get_trace_type);
 
             // parse cmdline options
-            parse_cmdline_param!(param, LOG_LEVEL_OPTION, self.log_level, get_log_level);
+            parse_cmdline_param!(param, LOG_LEVEL_OPTION, config.log_level, get_log_level);
             parse_cmdline_param!(
                 param,
                 SERVER_ADDR_OPTION,
-                self.server_addr,
+                config.server_addr,
                 get_string_value
             );
 
@@ -140,7 +141,7 @@ impl AgentConfig {
             parse_cmdline_param!(
                 param,
                 HOTPLUG_TIMOUT_OPTION,
-                self.hotplug_timeout,
+                config.hotplug_timeout,
                 get_hotplug_timeout,
                 |hotplug_timeout: time::Duration| hotplug_timeout.as_secs() > 0
             );
@@ -149,14 +150,14 @@ impl AgentConfig {
             parse_cmdline_param!(
                 param,
                 DEBUG_CONSOLE_VPORT_OPTION,
-                self.debug_console_vport,
+                config.debug_console_vport,
                 get_vsock_port,
                 |port| port > 0
             );
             parse_cmdline_param!(
                 param,
                 LOG_VPORT_OPTION,
-                self.log_vport,
+                config.log_vport,
                 get_vsock_port,
                 |port| port > 0
             );
@@ -164,34 +165,34 @@ impl AgentConfig {
             parse_cmdline_param!(
                 param,
                 CONTAINER_PIPE_SIZE_OPTION,
-                self.container_pipe_size,
+                config.container_pipe_size,
                 get_container_pipe_size
             );
             parse_cmdline_param!(
                 param,
                 UNIFIED_CGROUP_HIERARCHY_OPTION,
-                self.unified_cgroup_hierarchy,
+                config.unified_cgroup_hierarchy,
                 get_bool_value
             );
         }
 
         if let Ok(addr) = env::var(SERVER_ADDR_ENV_VAR) {
-            self.server_addr = addr;
+            config.server_addr = addr;
         }
 
         if let Ok(addr) = env::var(LOG_LEVEL_ENV_VAR) {
             if let Ok(level) = logrus_to_slog_level(&addr) {
-                self.log_level = level;
+                config.log_level = level;
             }
         }
 
         if let Ok(value) = env::var(TRACE_TYPE_ENV_VAR) {
             if let Ok(result) = value.parse::<tracer::TraceType>() {
-                self.tracing = result;
+                config.tracing = result;
             }
         }
 
-        Ok(())
+        Ok(config)
     }
 }
 
@@ -381,7 +382,7 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_cmdline() {
+    fn test_from_cmdline() {
         const TEST_SERVER_ADDR: &str = "vsock://-1:1024";
 
         #[derive(Debug)]
@@ -718,15 +719,6 @@ mod tests {
 
         let dir = tempdir().expect("failed to create tmpdir");
 
-        // First, check a missing file is handled
-        let file_path = dir.path().join("enoent");
-
-        let filename = file_path.to_str().expect("failed to create filename");
-
-        let mut config: AgentConfig = Default::default();
-        let result = config.parse_cmdline(&filename.to_owned());
-        assert!(result.is_err());
-
         // Now, test various combinations of file contents and environment
         // variables.
         for (i, d) in tests.iter().enumerate() {
@@ -755,22 +747,7 @@ mod tests {
                 vars_to_unset.push(name);
             }
 
-            let mut config = AgentConfig::new();
-            assert!(!config.debug_console, "{}", msg);
-            assert!(!config.dev_mode, "{}", msg);
-            assert!(!config.unified_cgroup_hierarchy, "{}", msg);
-            assert_eq!(
-                config.hotplug_timeout,
-                time::Duration::from_secs(3),
-                "{}",
-                msg
-            );
-            assert_eq!(config.container_pipe_size, 0, "{}", msg);
-            assert_eq!(config.server_addr, TEST_SERVER_ADDR, "{}", msg);
-            assert_eq!(config.tracing, tracer::TraceType::Disabled, "{}", msg);
-
-            let result = config.parse_cmdline(filename);
-            assert!(result.is_ok(), "{}", msg);
+            let config = AgentConfig::from_cmdline(filename).expect("Failed to parse command line");
 
             assert_eq!(d.debug_console, config.debug_console, "{}", msg);
             assert_eq!(d.dev_mode, config.dev_mode, "{}", msg);
