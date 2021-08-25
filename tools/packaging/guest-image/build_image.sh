@@ -36,7 +36,7 @@ build_initrd() {
 	mv "kata-containers-initrd.img" "${install_dir}/${initrd_name}"
 	(
 		cd "${install_dir}"
-		ln -sf "${builddir}" kata-containers-initrd.img
+		ln -sf "${initrd_name}" kata-containers-initrd.img
 	)
 }
 
