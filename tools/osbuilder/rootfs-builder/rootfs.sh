@@ -326,7 +326,11 @@ build_rootfs_distro()
 		trap error_handler ERR
 	fi
 
-	mkdir -p ${ROOTFS_DIR}
+	if [ -d "${ROOTFS_DIR}" ] && [ "${ROOTFS_DIR}" != "/" ]; then
+		rm -rf "${ROOTFS_DIR}"/*
+	else
+		mkdir -p ${ROOTFS_DIR}
+	fi
 
 	# need to detect rustc's version too?
 	detect_rust_version ||
