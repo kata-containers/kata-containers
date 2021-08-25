@@ -9,6 +9,7 @@ import (
 	"context"
 	"fmt"
 	"time"
+	"os"
 
 	govmmQemu "github.com/kata-containers/govmm/qemu"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
@@ -98,6 +99,35 @@ func (q *qemuArm64) appendImage(ctx context.Context, devices []govmmQemu.Device,
 		return q.appendNvdimmImage(devices, path)
 	}
 	return q.appendBlockImage(ctx, devices, path)
+}
+
+// There is no nvdimm/readonly feature in qemu 5.1 which is used by arm64 for now,
+// so we temporarily add this specific implementation for arm64 here until
+// the qemu used by arm64 is capable for that feature
+func (q *qemuArm64) appendNvdimmImage(devices []govmmQemu.Device, path string) ([]govmmQemu.Device, error) {
+        imageFile, err := os.Open(path)
+        if err != nil {
+                return nil, err
+        }
+        defer imageFile.Close()
+
+        imageStat, err := imageFile.Stat()
+        if err != nil {
+                return nil, err
+        }
+
+	object := govmmQemu.Object{
+                Driver:   govmmQemu.NVDIMM,
+                Type:     govmmQemu.MemoryBackendFile,
+                DeviceID: "nv0",
+                ID:       "mem0",
+                MemPath:  path,
+                Size:     (uint64)(imageStat.Size()),
+        }
+
+        devices = append(devices, object)
+
+        return devices, nil
 }
 
 func (q *qemuArm64) setIgnoreSharedMemoryMigrationCaps(_ context.Context, _ *govmmQemu.QMP) error {
