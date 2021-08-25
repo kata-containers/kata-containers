@@ -29,15 +29,12 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
 )
 
-// tracingTags defines tags for the trace span
-func (a *Acrn) tracingTags() map[string]string {
-	return map[string]string{
-		"source":     "runtime",
-		"package":    "virtcontainers",
-		"subsystem":  "hypervisor",
-		"type":       "acrn",
-		"sandbox_id": a.id,
-	}
+// acrnTracingTags defines tags for the trace span
+var acrnTracingTags = map[string]string{
+	"source":    "runtime",
+	"package":   "virtcontainers",
+	"subsystem": "hypervisor",
+	"type":      "acrn",
 }
 
 // Since ACRN is using the store in a quite abnormal way, let's first draw it back from store to here
@@ -159,7 +156,8 @@ func (a *Acrn) kernelParameters() string {
 
 // Adds all capabilities supported by Acrn implementation of hypervisor interface
 func (a *Acrn) capabilities(ctx context.Context) types.Capabilities {
-	span, _ := katatrace.Trace(ctx, a.Logger(), "capabilities", a.tracingTags())
+	span, _ := katatrace.Trace(ctx, a.Logger(), "capabilities", acrnTracingTags)
+	katatrace.AddTag(span, "sandbox_id", a.id)
 	defer span.End()
 
 	return a.arch.capabilities()
@@ -284,7 +282,8 @@ func (a *Acrn) buildDevices(ctx context.Context, imagePath string) ([]Device, er
 
 // setup sets the Acrn structure up.
 func (a *Acrn) setup(ctx context.Context, id string, hypervisorConfig *HypervisorConfig) error {
-	span, _ := katatrace.Trace(ctx, a.Logger(), "setup", a.tracingTags())
+	span, _ := katatrace.Trace(ctx, a.Logger(), "setup", acrnTracingTags)
+	katatrace.AddTag(span, "sandbox_id", a.id)
 	defer span.End()
 
 	err := hypervisorConfig.valid()
@@ -327,7 +326,8 @@ func (a *Acrn) setup(ctx context.Context, id string, hypervisorConfig *Hyperviso
 }
 
 func (a *Acrn) createDummyVirtioBlkDev(ctx context.Context, devices []Device) ([]Device, error) {
-	span, _ := katatrace.Trace(ctx, a.Logger(), "createDummyVirtioBlkDev", a.tracingTags())
+	span, _ := katatrace.Trace(ctx, a.Logger(), "createDummyVirtioBlkDev", acrnTracingTags)
+	katatrace.AddTag(span, "sandbox_id", a.id)
 	defer span.End()
 
 	// Since acrn doesn't support hot-plug, dummy virtio-blk
@@ -350,7 +350,8 @@ func (a *Acrn) createSandbox(ctx context.Context, id string, networkNS NetworkNa
 	// Save the tracing context
 	a.ctx = ctx
 
-	span, ctx := katatrace.Trace(ctx, a.Logger(), "createSandbox", a.tracingTags())
+	span, ctx := katatrace.Trace(ctx, a.Logger(), "createSandbox", acrnTracingTags)
+	katatrace.AddTag(span, "sandbox_id", a.id)
 	defer span.End()
 
 	if err := a.setup(ctx, id, hypervisorConfig); err != nil {
@@ -415,7 +416,8 @@ func (a *Acrn) createSandbox(ctx context.Context, id string, networkNS NetworkNa
 
 // startSandbox will start the Sandbox's VM.
 func (a *Acrn) startSandbox(ctx context.Context, timeoutSecs int) error {
-	span, ctx := katatrace.Trace(ctx, a.Logger(), "startSandbox", a.tracingTags())
+	span, ctx := katatrace.Trace(ctx, a.Logger(), "startSandbox", acrnTracingTags)
+	katatrace.AddTag(span, "sandbox_id", a.id)
 	defer span.End()
 
 	if a.config.Debug {
@@ -461,7 +463,8 @@ func (a *Acrn) startSandbox(ctx context.Context, timeoutSecs int) error {
 
 // waitSandbox will wait for the Sandbox's VM to be up and running.
 func (a *Acrn) waitSandbox(ctx context.Context, timeoutSecs int) error {
-	span, _ := katatrace.Trace(ctx, a.Logger(), "waitSandbox", a.tracingTags())
+	span, _ := katatrace.Trace(ctx, a.Logger(), "waitSandbox", acrnTracingTags)
+	katatrace.AddTag(span, "sandbox_id", a.id)
 	defer span.End()
 
 	if timeoutSecs < 0 {
@@ -475,7 +478,8 @@ func (a *Acrn) waitSandbox(ctx context.Context, timeoutSecs int) error {
 
 // stopSandbox will stop the Sandbox's VM.
 func (a *Acrn) stopSandbox(ctx context.Context, waitOnly bool) (err error) {
-	span, _ := katatrace.Trace(ctx, a.Logger(), "stopSandbox", a.tracingTags())
+	span, _ := katatrace.Trace(ctx, a.Logger(), "stopSandbox", acrnTracingTags)
+	katatrace.AddTag(span, "sandbox_id", a.id)
 	defer span.End()
 
 	a.Logger().Info("Stopping acrn VM")
@@ -547,7 +551,8 @@ func (a *Acrn) updateBlockDevice(drive *config.BlockDrive) error {
 }
 
 func (a *Acrn) hotplugAddDevice(ctx context.Context, devInfo interface{}, devType deviceType) (interface{}, error) {
-	span, _ := katatrace.Trace(ctx, a.Logger(), "hotplugAddDevice", a.tracingTags())
+	span, _ := katatrace.Trace(ctx, a.Logger(), "hotplugAddDevice", acrnTracingTags)
+	katatrace.AddTag(span, "sandbox_id", a.id)
 	defer span.End()
 
 	switch devType {
@@ -561,7 +566,8 @@ func (a *Acrn) hotplugAddDevice(ctx context.Context, devInfo interface{}, devTyp
 }
 
 func (a *Acrn) hotplugRemoveDevice(ctx context.Context, devInfo interface{}, devType deviceType) (interface{}, error) {
-	span, _ := katatrace.Trace(ctx, a.Logger(), "hotplugRemoveDevice", a.tracingTags())
+	span, _ := katatrace.Trace(ctx, a.Logger(), "hotplugRemoveDevice", acrnTracingTags)
+	katatrace.AddTag(span, "sandbox_id", a.id)
 	defer span.End()
 
 	// Not supported. return success
@@ -570,7 +576,8 @@ func (a *Acrn) hotplugRemoveDevice(ctx context.Context, devInfo interface{}, dev
 }
 
 func (a *Acrn) pauseSandbox(ctx context.Context) error {
-	span, _ := katatrace.Trace(ctx, a.Logger(), "pauseSandbox", a.tracingTags())
+	span, _ := katatrace.Trace(ctx, a.Logger(), "pauseSandbox", acrnTracingTags)
+	katatrace.AddTag(span, "sandbox_id", a.id)
 	defer span.End()
 
 	// Not supported. return success
@@ -579,7 +586,8 @@ func (a *Acrn) pauseSandbox(ctx context.Context) error {
 }
 
 func (a *Acrn) resumeSandbox(ctx context.Context) error {
-	span, _ := katatrace.Trace(ctx, a.Logger(), "resumeSandbox", a.tracingTags())
+	span, _ := katatrace.Trace(ctx, a.Logger(), "resumeSandbox", acrnTracingTags)
+	katatrace.AddTag(span, "sandbox_id", a.id)
 	defer span.End()
 
 	// Not supported. return success
@@ -590,7 +598,8 @@ func (a *Acrn) resumeSandbox(ctx context.Context) error {
 // addDevice will add extra devices to acrn command line.
 func (a *Acrn) addDevice(ctx context.Context, devInfo interface{}, devType deviceType) error {
 	var err error
-	span, _ := katatrace.Trace(ctx, a.Logger(), "addDevice", a.tracingTags())
+	span, _ := katatrace.Trace(ctx, a.Logger(), "addDevice", acrnTracingTags)
+	katatrace.AddTag(span, "sandbox_id", a.id)
 	defer span.End()
 
 	switch v := devInfo.(type) {
@@ -623,7 +632,8 @@ func (a *Acrn) addDevice(ctx context.Context, devInfo interface{}, devType devic
 // getSandboxConsole builds the path of the console where we can read
 // logs coming from the sandbox.
 func (a *Acrn) getSandboxConsole(ctx context.Context, id string) (string, string, error) {
-	span, _ := katatrace.Trace(ctx, a.Logger(), "getSandboxConsole", a.tracingTags())
+	span, _ := katatrace.Trace(ctx, a.Logger(), "getSandboxConsole", acrnTracingTags)
+	katatrace.AddTag(span, "sandbox_id", a.id)
 	defer span.End()
 
 	consoleURL, err := utils.BuildSocketPath(a.store.RunVMStoragePath(), id, acrnConsoleSocket)
@@ -643,14 +653,16 @@ func (a *Acrn) saveSandbox() error {
 }
 
 func (a *Acrn) disconnect(ctx context.Context) {
-	span, _ := katatrace.Trace(ctx, a.Logger(), "disconnect", a.tracingTags())
+	span, _ := katatrace.Trace(ctx, a.Logger(), "disconnect", acrnTracingTags)
+	katatrace.AddTag(span, "sandbox_id", a.id)
 	defer span.End()
 
 	// Not supported.
 }
 
 func (a *Acrn) getThreadIDs(ctx context.Context) (vcpuThreadIDs, error) {
-	span, _ := katatrace.Trace(ctx, a.Logger(), "getThreadIDs", a.tracingTags())
+	span, _ := katatrace.Trace(ctx, a.Logger(), "getThreadIDs", acrnTracingTags)
+	katatrace.AddTag(span, "sandbox_id", a.id)
 	defer span.End()
 
 	// Not supported. return success
@@ -668,7 +680,8 @@ func (a *Acrn) resizeVCPUs(ctx context.Context, reqVCPUs uint32) (currentVCPUs u
 }
 
 func (a *Acrn) cleanup(ctx context.Context) error {
-	span, _ := katatrace.Trace(ctx, a.Logger(), "cleanup", a.tracingTags())
+	span, _ := katatrace.Trace(ctx, a.Logger(), "cleanup", acrnTracingTags)
+	katatrace.AddTag(span, "sandbox_id", a.id)
 	defer span.End()
 
 	return nil
