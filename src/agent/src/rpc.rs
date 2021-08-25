@@ -11,6 +11,7 @@ use tokio::sync::Mutex;
 use std::ffi::CString;
 use std::io;
 use std::path::Path;
+use std::process::ExitStatus;
 use std::sync::Arc;
 use ttrpc::{
     self,
@@ -78,6 +79,8 @@ use std::path::PathBuf;
 
 const CONTAINER_BASE: &str = "/run/kata-containers";
 const MODPROBE_PATH: &str = "/sbin/modprobe";
+const SKOPEO_PATH: &str = "/usr/bin/skopeo";
+const UMOCI_PATH: &str = "/usr/local/bin/umoci";
 
 // Convenience macro to obtain the scope logger
 macro_rules! sl {
@@ -673,6 +676,21 @@ impl protocols::agent_ttrpc::AgentService for AgentService {
 
         ctr.stats()
             .map_err(|e| ttrpc_error(ttrpc::Code::INTERNAL, e.to_string()))
+    }
+
+    async fn pull_image(
+        &self,
+        _ctx: &TtrpcContext,
+        req: protocols::agent::PullImageRequest,
+    ) -> ttrpc::Result<protocols::empty::Empty> {
+        let image = req.get_image();
+        let cid = req.get_container_id();
+
+        pull_image_from_registry(image, cid)
+            .map_err(|e| ttrpc_error(ttrpc::Code::INTERNAL, e.to_string()))?;
+        unpack_image(cid).map_err(|e| ttrpc_error(ttrpc::Code::INTERNAL, e.to_string()))?;
+
+        Ok(Empty::new())
     }
 
     async fn pause_container(
@@ -1735,6 +1753,76 @@ fn load_kernel_module(module: &protocols::agent::KernelModule) -> Result<()> {
         }
         None => Err(anyhow!("Process terminated by signal")),
     }
+}
+
+fn pull_image_from_registry(image: &str, cid: &str) -> Result<()> {
+    let source_image = format!("{}{}", "docker://", image);
+
+    let manifest_path = format!("/tmp/{}/image_manifest", cid);
+    let target_path_manifest = format!("dir://{}", manifest_path);
+
+    // Define the target transport and path for the OCI image, without signature
+    let oci_path = format!("/tmp/{}/image_oci:latest", cid);
+    let target_path_oci = format!("oci://{}", oci_path);
+
+    fs::create_dir_all(&manifest_path)?;
+    fs::create_dir_all(&oci_path)?;
+
+    let status: ExitStatus = Command::new(SKOPEO_PATH)
+        .arg("copy")
+        .arg(source_image)
+        .arg(&target_path_manifest)
+        .status()?;
+
+    if !status.success() {
+        return Err(anyhow!(format!("failed to pull image: {:?}", status)));
+    }
+
+    // Copy image from one local file-system to another
+    // Resulting image is still stored in manifest format, but no longer includes the signature
+    // The image with a signature can then be unpacked into a bundle
+    let status: ExitStatus = Command::new(SKOPEO_PATH)
+        .arg("copy")
+        .arg(&target_path_manifest)
+        .arg(&target_path_oci)
+        .arg("--remove-signatures")
+        .status()?;
+
+    if !status.success() {
+        return Err(anyhow!(format!("failed to copy image: {:?}", status)));
+    }
+
+    // To save space delete the manifest.
+    // TODO LATER - when verify image is added, this will need moving the end of that, if required
+    fs::remove_dir_all(&manifest_path)?;
+    Ok(())
+}
+
+fn unpack_image(cid: &str) -> Result<()> {
+    let source_path_oci = format!("/tmp/{}/image_oci:latest", cid);
+    let target_path_bundle = format!("{}{}{}", CONTAINER_BASE, "/", cid);
+
+    info!(sl!(), "cid is {:?}", cid);
+    info!(sl!(), "target_path_bundle is {:?}", target_path_bundle);
+
+    // Unpack image
+
+    let status: ExitStatus = Command::new(UMOCI_PATH)
+        .arg("--verbose")
+        .arg("unpack")
+        .arg("--image")
+        .arg(&source_path_oci)
+        .arg(&target_path_bundle)
+        .status()?;
+
+    if !status.success() {
+        return Err(anyhow!(format!("failed to unpack image: {:?}", status)));
+    }
+
+    // To save space delete the oci image after unpack
+    fs::remove_dir_all(&source_path_oci)?;
+
+    Ok(())
 }
 
 #[cfg(test)]

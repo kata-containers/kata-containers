@@ -5,7 +5,7 @@
 
 OS_NAME="Fedora"
 
-OS_VERSION=${OS_VERSION:-30}
+OS_VERSION=${OS_VERSION:-34}
 
 MIRROR_LIST="https://mirrors.fedoraproject.org/metalink?repo=fedora-${OS_VERSION}&arch=\$basearch"
 
