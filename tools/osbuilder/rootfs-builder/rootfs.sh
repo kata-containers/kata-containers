@@ -373,6 +373,8 @@ build_rootfs_distro()
 
 		docker_run_args=""
 		docker_run_args+=" --rm"
+		# apt sync scans all possible fds in order to close them, incredibly slow on VMs
+		docker_run_args+=" --ulimit nofile=262144:262144"
 		docker_run_args+=" --runtime ${DOCKER_RUNTIME}"
 
 		if [ -z "${AGENT_SOURCE_BIN}" ] ; then
