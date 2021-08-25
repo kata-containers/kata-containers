@@ -252,6 +252,11 @@ static AGENT_CMDS: &'static [AgentCmd] = &[
         st: ServiceType::Agent,
         fp: agent_cmd_container_write_stdin,
     },
+    AgentCmd {
+        name: "PullImage",
+        st: ServiceType::Agent,
+        fp: agent_cmd_pull_image,
+    },
 ];
 
 static BUILTIN_CMDS: &'static [BuiltinCmd] = &[
@@ -1846,6 +1851,35 @@ fn agent_cmd_sandbox_mem_hotplug_by_probe(
 
     let reply = client
         .mem_hotplug_by_probe(ctx, &req)
+        .map_err(|e| anyhow!("{:?}", e).context(ERR_API_FAILED))?;
+
+    info!(sl!(), "response received";
+        "response" => format!("{:?}", reply));
+
+    Ok(())
+}
+
+fn agent_cmd_pull_image(
+    ctx: &Context,
+    client: &AgentServiceClient,
+    _health: &HealthClient,
+    options: &mut Options,
+    args: &str,
+) -> Result<()> {
+    let mut req = PullImageRequest::default();
+
+    let ctx = clone_context(ctx);
+
+    let image = utils::get_option("image", options, args);
+    let cid = utils::get_option("cid", options, args);
+
+    req.set_image(image);
+    req.set_container_id(cid);
+
+    debug!(sl!(), "sending request"; "request" => format!("{:?}", req));
+
+    let reply = client
+        .pull_image(ctx, &req)
         .map_err(|e| anyhow!("{:?}", e).context(ERR_API_FAILED))?;
 
     info!(sl!(), "response received";
