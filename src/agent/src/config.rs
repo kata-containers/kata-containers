@@ -5,6 +5,7 @@
 use crate::tracer;
 use anyhow::{bail, ensure, Context, Result};
 use serde::Deserialize;
+use std::collections::HashSet;
 use std::env;
 use std::fs;
 use std::str::FromStr;
@@ -55,6 +56,12 @@ pub struct EndpointsConfig {
     pub allowed: Vec<String>,
 }
 
+#[derive(Debug, Default)]
+pub struct AgentEndpoints {
+    pub allowed: HashSet<String>,
+    pub all_allowed: bool,
+}
+
 #[derive(Debug)]
 pub struct AgentConfig {
     pub debug_console: bool,
@@ -67,7 +74,7 @@ pub struct AgentConfig {
     pub server_addr: String,
     pub unified_cgroup_hierarchy: bool,
     pub tracing: tracer::TraceType,
-    pub endpoints: EndpointsConfig,
+    pub endpoints: AgentEndpoints,
 }
 
 #[derive(Debug, Deserialize)]
@@ -171,7 +178,13 @@ impl FromStr for AgentConfig {
         config_override!(agent_config_builder, agent_config, server_addr);
         config_override!(agent_config_builder, agent_config, unified_cgroup_hierarchy);
         config_override!(agent_config_builder, agent_config, tracing);
-        config_override!(agent_config_builder, agent_config, endpoints);
+
+        // Populate the allowed endpoints hash set, if we got any from the config file.
+        if let Some(endpoints) = agent_config_builder.endpoints {
+            for ep in endpoints.allowed {
+                agent_config.endpoints.allowed.insert(ep);
+            }
+        }
 
         Ok(agent_config)
     }
@@ -270,6 +283,9 @@ impl AgentConfig {
             }
         }
 
+        // We did not get a configuration file: allow all endpoints.
+        config.endpoints.all_allowed = true;
+
         Ok(config)
     }
 
@@ -277,6 +293,10 @@ impl AgentConfig {
     pub fn from_config_file(file: &str) -> Result<AgentConfig> {
         let config = fs::read_to_string(file)?;
         AgentConfig::from_str(&config)
+    }
+
+    pub fn is_allowed_endpoint(&self, ep: &str) -> bool {
+        self.endpoints.all_allowed || self.endpoints.allowed.contains(ep)
     }
 }
 
@@ -1353,12 +1373,18 @@ Caused by:
         )
         .unwrap();
 
+        // Verify that the all_allowed flag is false
+        assert!(!config.endpoints.all_allowed);
+
         // Verify that the override worked
         assert!(config.dev_mode);
         assert_eq!(config.server_addr, "vsock://8:2048");
         assert_eq!(
             config.endpoints.allowed,
             vec!["CreateContainer".to_string(), "StartContainer".to_string()]
+                .iter()
+                .cloned()
+                .collect()
         );
 
         // Verify that the default values are valid
