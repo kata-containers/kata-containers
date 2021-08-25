@@ -67,6 +67,7 @@ service AgentService {
 	rpc CopyFile(CopyFileRequest) returns (google.protobuf.Empty);
 	rpc GetOOMEvent(GetOOMEventRequest) returns (OOMEvent);
 	rpc AddSwap(AddSwapRequest) returns (google.protobuf.Empty);
+	rpc PullImage(PullImageRequest) returns (google.protobuf.Empty);
 }
 
 message CreateContainerRequest {
@@ -512,4 +513,9 @@ message GetMetricsRequest {}
 
 message Metrics {
 	string metrics = 1;
+}
+
+message PullImageRequest {
+	string image = 1;
+	string container_id = 2;
 }

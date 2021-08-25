@@ -30,7 +30,7 @@ RUN dnf -y update && dnf install -y \
     m4 \
     make \
     pkgconfig \
-    redhat-release \
+    fedora-release-common \
     sed \
     systemd \
     tar \
