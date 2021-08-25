@@ -5,6 +5,7 @@
 use crate::tracer;
 use anyhow::{bail, ensure, Context, Result};
 use serde::Deserialize;
+use std::collections::HashSet;
 use std::env;
 use std::fs;
 use std::time;
@@ -66,7 +67,7 @@ pub struct AgentConfig {
     pub server_addr: String,
     pub unified_cgroup_hierarchy: bool,
     pub tracing: tracer::TraceType,
-    pub endpoints: EndpointsConfig,
+    pub blocked_endpoints: HashSet<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -120,7 +121,13 @@ impl AgentConfigBuilder {
         config_override!(agent_config_builder, agent_config, server_addr);
         config_override!(agent_config_builder, agent_config, unified_cgroup_hierarchy);
         config_override!(agent_config_builder, agent_config, tracing);
-        config_override!(agent_config_builder, agent_config, endpoints);
+
+        // Populate the blocked endpoints hash set, if we got any from the config file.
+        if let Some(endpoints) = agent_config_builder.endpoints {
+            for ep in endpoints.blocked {
+                agent_config.blocked_endpoints.insert(ep);
+            }
+        }
 
         Ok(agent_config)
     }
@@ -175,7 +182,7 @@ impl Default for AgentConfig {
             server_addr: format!("{}:{}", VSOCK_ADDR, VSOCK_PORT),
             unified_cgroup_hierarchy: false,
             tracing: tracer::TraceType::Disabled,
-            endpoints: Default::default(),
+            blocked_endpoints: Default::default(),
         }
     }
 }
@@ -274,6 +281,10 @@ impl AgentConfig {
         }
 
         Ok(config)
+    }
+
+    pub fn is_blocked_endpoint(&self, ep: &str) -> bool {
+        self.blocked_endpoints.contains(ep)
     }
 }
 
@@ -1354,8 +1365,11 @@ Caused by:
         assert!(config.dev_mode);
         assert_eq!(config.server_addr, "vsock://8:2048");
         assert_eq!(
-            config.endpoints.blocked,
-            vec!["ExecProcess".to_string(), "ReseedRandomDev".to_string()]
+            config.blocked_endpoints,
+            ["ExecProcess".to_string(), "ReseedRandomDev".to_string()]
+                .iter()
+                .cloned()
+                .collect()
         );
 
         // Verify that the default values are valid
