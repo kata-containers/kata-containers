@@ -7,6 +7,7 @@ use crate::config::AgentConfig;
 use anyhow::Result;
 use opentelemetry::sdk::propagation::TraceContextPropagator;
 use opentelemetry::{global, sdk::trace::Config, trace::TracerProvider};
+use serde::Deserialize;
 use slog::{info, o, Logger};
 use std::collections::HashMap;
 use std::error::Error;
@@ -17,7 +18,7 @@ use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::Registry;
 use ttrpc::r#async::TtrpcContext;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub enum TraceType {
     Disabled,
     Isolated,
