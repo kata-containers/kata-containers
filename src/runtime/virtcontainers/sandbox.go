@@ -396,8 +396,7 @@ func (s *Sandbox) IOStream(containerID, processID string) (io.WriteCloser, io.Re
 }
 
 func createAssets(ctx context.Context, sandboxConfig *SandboxConfig) error {
-	span, _ := katatrace.Trace(ctx, nil, "createAssets", sandboxTracingTags)
-	katatrace.AddTag(span, "sandbox_id", sandboxConfig.ID)
+	span, _ := katatrace.Trace(ctx, nil, "createAssets", sandboxTracingTags, map[string]string{"sandbox_id": sandboxConfig.ID})
 	defer span.End()
 
 	for _, name := range types.AssetTypes() {
@@ -447,8 +446,7 @@ func (s *Sandbox) getAndStoreGuestDetails(ctx context.Context) error {
 // to physically create that sandbox i.e. starts a VM for that sandbox to eventually
 // be started.
 func createSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factory) (*Sandbox, error) {
-	span, ctx := katatrace.Trace(ctx, nil, "createSandbox", sandboxTracingTags)
-	katatrace.AddTag(span, "sandbox_id", sandboxConfig.ID)
+	span, ctx := katatrace.Trace(ctx, nil, "createSandbox", sandboxTracingTags, map[string]string{"sandbox_id": sandboxConfig.ID})
 	defer span.End()
 
 	if err := createAssets(ctx, &sandboxConfig); err != nil {
@@ -486,8 +484,7 @@ func createSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Fac
 }
 
 func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factory) (sb *Sandbox, retErr error) {
-	span, ctx := katatrace.Trace(ctx, nil, "newSandbox", sandboxTracingTags)
-	katatrace.AddTag(span, "sandbox_id", sandboxConfig.ID)
+	span, ctx := katatrace.Trace(ctx, nil, "newSandbox", sandboxTracingTags, map[string]string{"sandbox_id": sandboxConfig.ID})
 	defer span.End()
 
 	if !sandboxConfig.valid() {
@@ -624,8 +621,7 @@ func (s *Sandbox) createCgroupManager() error {
 
 // storeSandbox stores a sandbox config.
 func (s *Sandbox) storeSandbox(ctx context.Context) error {
-	span, _ := katatrace.Trace(ctx, s.Logger(), "storeSandbox", sandboxTracingTags)
-	katatrace.AddTag(span, "sandbox_id", s.id)
+	span, _ := katatrace.Trace(ctx, s.Logger(), "storeSandbox", sandboxTracingTags, map[string]string{"sandbox_id": s.id})
 	defer span.End()
 
 	// flush data to storage
@@ -719,8 +715,7 @@ func (s *Sandbox) Delete(ctx context.Context) error {
 }
 
 func (s *Sandbox) startNetworkMonitor(ctx context.Context) error {
-	span, ctx := katatrace.Trace(ctx, s.Logger(), "startNetworkMonitor", sandboxTracingTags)
-	katatrace.AddTag(span, "sandbox_id", s.id)
+	span, ctx := katatrace.Trace(ctx, s.Logger(), "startNetworkMonitor", sandboxTracingTags, map[string]string{"sandbox_id": s.id})
 	defer span.End()
 
 	binPath, err := os.Executable()
@@ -759,8 +754,7 @@ func (s *Sandbox) createNetwork(ctx context.Context) error {
 		return nil
 	}
 
-	span, ctx := katatrace.Trace(ctx, s.Logger(), "createNetwork", sandboxTracingTags)
-	katatrace.AddTag(span, "sandbox_id", s.id)
+	span, ctx := katatrace.Trace(ctx, s.Logger(), "createNetwork", sandboxTracingTags, map[string]string{"sandbox_id": s.id})
 	defer span.End()
 
 	s.networkNS = NetworkNamespace{
@@ -797,8 +791,7 @@ func (s *Sandbox) postCreatedNetwork(ctx context.Context) error {
 }
 
 func (s *Sandbox) removeNetwork(ctx context.Context) error {
-	span, ctx := katatrace.Trace(ctx, s.Logger(), "removeNetwork", sandboxTracingTags)
-	katatrace.AddTag(span, "sandbox_id", s.id)
+	span, ctx := katatrace.Trace(ctx, s.Logger(), "removeNetwork", sandboxTracingTags, map[string]string{"sandbox_id": s.id})
 	defer span.End()
 
 	if s.config.NetworkConfig.NetmonConfig.Enable {
@@ -1114,8 +1107,7 @@ func (s *Sandbox) cleanSwap(ctx context.Context) {
 
 // startVM starts the VM.
 func (s *Sandbox) startVM(ctx context.Context) (err error) {
-	span, ctx := katatrace.Trace(ctx, s.Logger(), "startVM", sandboxTracingTags)
-	katatrace.AddTag(span, "sandbox_id", s.id)
+	span, ctx := katatrace.Trace(ctx, s.Logger(), "startVM", sandboxTracingTags, map[string]string{"sandbox_id": s.id})
 	defer span.End()
 
 	s.Logger().Info("Starting VM")
@@ -1204,8 +1196,7 @@ func (s *Sandbox) startVM(ctx context.Context) (err error) {
 
 // stopVM: stop the sandbox's VM
 func (s *Sandbox) stopVM(ctx context.Context) error {
-	span, ctx := katatrace.Trace(ctx, s.Logger(), "stopVM", sandboxTracingTags)
-	katatrace.AddTag(span, "sandbox_id", s.id)
+	span, ctx := katatrace.Trace(ctx, s.Logger(), "stopVM", sandboxTracingTags, map[string]string{"sandbox_id": s.id})
 	defer span.End()
 
 	s.Logger().Info("Stopping sandbox in the VM")
@@ -1558,8 +1549,7 @@ func (s *Sandbox) ResumeContainer(ctx context.Context, containerID string) error
 // createContainers registers all containers, create the
 // containers in the guest and starts one shim per container.
 func (s *Sandbox) createContainers(ctx context.Context) error {
-	span, ctx := katatrace.Trace(ctx, s.Logger(), "createContainers", sandboxTracingTags)
-	katatrace.AddTag(span, "sandbox_id", s.id)
+	span, ctx := katatrace.Trace(ctx, s.Logger(), "createContainers", sandboxTracingTags, map[string]string{"sandbox_id": s.id})
 	defer span.End()
 
 	for i := range s.config.Containers {
@@ -1631,8 +1621,7 @@ func (s *Sandbox) Start(ctx context.Context) error {
 // will be destroyed.
 // When force is true, ignore guest related stop failures.
 func (s *Sandbox) Stop(ctx context.Context, force bool) error {
-	span, ctx := katatrace.Trace(ctx, s.Logger(), "Stop", sandboxTracingTags)
-	katatrace.AddTag(span, "sandbox_id", s.id)
+	span, ctx := katatrace.Trace(ctx, s.Logger(), "Stop", sandboxTracingTags, map[string]string{"sandbox_id": s.id})
 	defer span.End()
 
 	if s.state.State == types.StateStopped {
@@ -1734,8 +1723,7 @@ func (s *Sandbox) unsetSandboxBlockIndex(index int) error {
 // HotplugAddDevice is used for add a device to sandbox
 // Sandbox implement DeviceReceiver interface from device/api/interface.go
 func (s *Sandbox) HotplugAddDevice(ctx context.Context, device api.Device, devType config.DeviceType) error {
-	span, ctx := katatrace.Trace(ctx, s.Logger(), "HotplugAddDevice", sandboxTracingTags)
-	katatrace.AddTag(span, "sandbox_id", s.id)
+	span, ctx := katatrace.Trace(ctx, s.Logger(), "HotplugAddDevice", sandboxTracingTags, map[string]string{"sandbox_id": s.id})
 	defer span.End()
 
 	if s.config.SandboxCgroupOnly {
