@@ -152,8 +152,7 @@ var clhDebugKernelParams = []Param{
 func (clh *cloudHypervisor) createSandbox(ctx context.Context, id string, networkNS NetworkNamespace, hypervisorConfig *HypervisorConfig) error {
 	clh.ctx = ctx
 
-	span, newCtx := katatrace.Trace(clh.ctx, clh.Logger(), "createSandbox", clhTracingTags)
-	katatrace.AddTag(span, "sandbox_id", clh.id)
+	span, newCtx := katatrace.Trace(clh.ctx, clh.Logger(), "createSandbox", clhTracingTags, map[string]string{"sandbox_id": clh.id})
 	clh.ctx = newCtx
 	defer span.End()
 
@@ -318,8 +317,7 @@ func (clh *cloudHypervisor) createSandbox(ctx context.Context, id string, networ
 
 // startSandbox will start the VMM and boot the virtual machine for the given sandbox.
 func (clh *cloudHypervisor) startSandbox(ctx context.Context, timeout int) error {
-	span, _ := katatrace.Trace(ctx, clh.Logger(), "startSandbox", clhTracingTags)
-	katatrace.AddTag(span, "sandbox_id", clh.id)
+	span, _ := katatrace.Trace(ctx, clh.Logger(), "startSandbox", clhTracingTags, map[string]string{"sandbox_id": clh.id})
 	defer span.End()
 
 	ctx, cancel := context.WithTimeout(context.Background(), clhAPITimeout*time.Second)
@@ -482,7 +480,7 @@ func (clh *cloudHypervisor) hotPlugVFIODevice(device config.VFIODev) error {
 }
 
 func (clh *cloudHypervisor) hotplugAddDevice(ctx context.Context, devInfo interface{}, devType deviceType) (interface{}, error) {
-	span, _ := katatrace.Trace(ctx, clh.Logger(), "hotplugAddDevice", clhTracingTags)
+	span, _ := katatrace.Trace(ctx, clh.Logger(), "hotplugAddDevice", clhTracingTags, map[string]string{"sandbox_id": clh.id})
 	defer span.End()
 
 	switch devType {
@@ -499,8 +497,7 @@ func (clh *cloudHypervisor) hotplugAddDevice(ctx context.Context, devInfo interf
 }
 
 func (clh *cloudHypervisor) hotplugRemoveDevice(ctx context.Context, devInfo interface{}, devType deviceType) (interface{}, error) {
-	span, _ := katatrace.Trace(ctx, clh.Logger(), "hotplugRemoveDevice", clhTracingTags)
-	katatrace.AddTag(span, "sandbox_id", clh.id)
+	span, _ := katatrace.Trace(ctx, clh.Logger(), "hotplugRemoveDevice", clhTracingTags, map[string]string{"sandbox_id": clh.id})
 	defer span.End()
 
 	var deviceID string
@@ -660,8 +657,7 @@ func (clh *cloudHypervisor) resumeSandbox(ctx context.Context) error {
 
 // stopSandbox will stop the Sandbox's VM.
 func (clh *cloudHypervisor) stopSandbox(ctx context.Context, waitOnly bool) (err error) {
-	span, _ := katatrace.Trace(ctx, clh.Logger(), "stopSandbox", clhTracingTags)
-	katatrace.AddTag(span, "sandbox_id", clh.id)
+	span, _ := katatrace.Trace(ctx, clh.Logger(), "stopSandbox", clhTracingTags, map[string]string{"sandbox_id": clh.id})
 	defer span.End()
 	clh.Logger().WithField("function", "stopSandbox").Info("Stop Sandbox")
 	return clh.terminate(ctx, waitOnly)
@@ -711,8 +707,7 @@ func (clh *cloudHypervisor) getVirtioFsPid() *int {
 }
 
 func (clh *cloudHypervisor) addDevice(ctx context.Context, devInfo interface{}, devType deviceType) error {
-	span, _ := katatrace.Trace(ctx, clh.Logger(), "addDevice", clhTracingTags)
-	katatrace.AddTag(span, "sandbox_id", clh.id)
+	span, _ := katatrace.Trace(ctx, clh.Logger(), "addDevice", clhTracingTags, map[string]string{"sandbox_id": clh.id})
 	defer span.End()
 
 	var err error
@@ -746,8 +741,7 @@ func (clh *cloudHypervisor) Logger() *log.Entry {
 
 // Adds all capabilities supported by cloudHypervisor implementation of hypervisor interface
 func (clh *cloudHypervisor) capabilities(ctx context.Context) types.Capabilities {
-	span, _ := katatrace.Trace(ctx, clh.Logger(), "capabilities", clhTracingTags)
-	katatrace.AddTag(span, "sandbox_id", clh.id)
+	span, _ := katatrace.Trace(ctx, clh.Logger(), "capabilities", clhTracingTags, map[string]string{"sandbox_id": clh.id})
 	defer span.End()
 
 	clh.Logger().WithField("function", "capabilities").Info("get Capabilities")
@@ -758,8 +752,7 @@ func (clh *cloudHypervisor) capabilities(ctx context.Context) types.Capabilities
 }
 
 func (clh *cloudHypervisor) terminate(ctx context.Context, waitOnly bool) (err error) {
-	span, _ := katatrace.Trace(ctx, clh.Logger(), "terminate", clhTracingTags)
-	katatrace.AddTag(span, "sandbox_id", clh.id)
+	span, _ := katatrace.Trace(ctx, clh.Logger(), "terminate", clhTracingTags, map[string]string{"sandbox_id": clh.id})
 	defer span.End()
 
 	pid := clh.state.PID
