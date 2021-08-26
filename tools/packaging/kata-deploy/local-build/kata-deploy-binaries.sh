@@ -101,7 +101,7 @@ install_experimental_kernel() {
 	info "build experimental kernel"
 	export kernel_version="$(yq r $versions_yaml assets.kernel-experimental.tag)"
 	info "Kernel version ${kernel_version}"
-	DESTDIR="${destdir}" PREFIX="${prefix}" "${kernel_builder}" -e -v ${kernel_version}
+	DESTDIR="${destdir}" PREFIX="${prefix}" "${kernel_builder}" -f -b experimental -v ${kernel_version}
 }
 
 # Install static qemu asset
