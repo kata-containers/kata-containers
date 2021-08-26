@@ -231,33 +231,26 @@ func (clh *cloudHypervisor) createSandbox(ctx context.Context, id string, networ
 	// to fetch if this is the first time the hypervisor is created.
 	clh.Logger().WithField("function", "createSandbox").Info("Sandbox not found creating")
 
-	// Set initial memomory size of the virtual machine
-	// Convert to int64 openApiClient only support int64
-	clh.vmconfig.Memory.Size = int64((utils.MemUnit(clh.config.MemorySize) * utils.MiB).ToBytes())
+	// Make sure the kernel path is valid
+	kernelPath, err := clh.config.KernelAssetPath()
+	if err != nil {
+		return err
+	}
+	// Create the VM config via the constructor to ensure default values are properly assigned
+	clh.vmconfig = *chclient.NewVmConfig(*chclient.NewKernelConfig(kernelPath))
+
+	// Create the VM memory config via the constructor to ensure default values are properly assigned
+	clh.vmconfig.Memory = chclient.NewMemoryConfig(int64((utils.MemUnit(clh.config.MemorySize) * utils.MiB).ToBytes()))
 	// shared memory should be enabled if using vhost-user(kata uses virtiofsd)
 	clh.vmconfig.Memory.Shared = func(b bool) *bool { return &b }(true)
 	hostMemKb, err := getHostMemorySizeKb(procMemInfo)
 	if err != nil {
 		return nil
 	}
-
 	// OpenAPI only supports int64 values
 	clh.vmconfig.Memory.HotplugSize = func(i int64) *int64 { return &i }(int64((utils.MemUnit(hostMemKb) * utils.KiB).ToBytes()))
 	// Set initial amount of cpu's for the virtual machine
-	clh.vmconfig.Cpus = &chclient.CpusConfig{
-		// cast to int32, as openAPI has a limitation that it does not support unsigned values
-		BootVcpus: int32(clh.config.NumVCPUs),
-		MaxVcpus:  int32(clh.config.DefaultMaxVCPUs),
-	}
-
-	// Add the kernel path
-	kernelPath, err := clh.config.KernelAssetPath()
-	if err != nil {
-		return err
-	}
-	clh.vmconfig.Kernel = chclient.KernelConfig{
-		Path: kernelPath,
-	}
+	clh.vmconfig.Cpus = chclient.NewCpusConfig(int32(clh.config.NumVCPUs), int32(clh.config.DefaultMaxVCPUs))
 
 	// First take the default parameters defined by this driver
 	params := clhKernelParams
@@ -270,12 +263,10 @@ func (clh *cloudHypervisor) createSandbox(ctx context.Context, id string, networ
 	// Followed by extra kernel parameters defined in the configuration file
 	params = append(params, clh.config.KernelParams...)
 
-	clh.vmconfig.Cmdline.Args = kernelParamsToString(params)
+	clh.vmconfig.Cmdline = chclient.NewCmdLineConfig(kernelParamsToString(params))
 
 	// set random device generator to hypervisor
-	clh.vmconfig.Rng = &chclient.RngConfig{
-		Src: clh.config.EntropySource,
-	}
+	clh.vmconfig.Rng = chclient.NewRngConfig(clh.config.EntropySource)
 
 	// set the initial root/boot disk of hypervisor
 	imagePath, err := clh.config.ImageAssetPath()
@@ -297,18 +288,12 @@ func (clh *cloudHypervisor) createSandbox(ctx context.Context, id string, networ
 
 	// set the serial console to the cloud hypervisor
 	if clh.config.Debug {
-		clh.vmconfig.Serial = &chclient.ConsoleConfig{
-			Mode: cctTTY,
-		}
+		clh.vmconfig.Serial = chclient.NewConsoleConfig(cctTTY)
 	} else {
-		clh.vmconfig.Serial = &chclient.ConsoleConfig{
-			Mode: cctNULL,
-		}
+		clh.vmconfig.Serial = chclient.NewConsoleConfig(cctNULL)
 	}
 
-	clh.vmconfig.Console = &chclient.ConsoleConfig{
-		Mode: cctOFF,
-	}
+	clh.vmconfig.Console = chclient.NewConsoleConfig(cctOFF)
 
 	cpu_topology := chclient.NewCpuTopology()
 	cpu_topology.ThreadsPerCore = func(i int32) *int32 { return &i }(1)
@@ -353,15 +338,13 @@ func (clh *cloudHypervisor) createSandbox(ctx context.Context, id string, networ
 	}
 
 	if clh.config.SGXEPCSize > 0 {
-		epcSection := chclient.SgxEpcConfig{
-			Size:     clh.config.SGXEPCSize,
-			Prefault: func(b bool) *bool { return &b }(true),
-		}
+		epcSection := chclient.NewSgxEpcConfig("kata-epc", clh.config.SGXEPCSize)
+		epcSection.Prefault = func(b bool) *bool { return &b }(true)
 
 		if clh.vmconfig.SgxEpc != nil {
-			*clh.vmconfig.SgxEpc = append(*clh.vmconfig.SgxEpc, epcSection)
+			*clh.vmconfig.SgxEpc = append(*clh.vmconfig.SgxEpc, *epcSection)
 		} else {
-			clh.vmconfig.SgxEpc = &[]chclient.SgxEpcConfig{epcSection}
+			clh.vmconfig.SgxEpc = &[]chclient.SgxEpcConfig{*epcSection}
 		}
 
 	}
@@ -504,13 +487,13 @@ func (clh *cloudHypervisor) hotplugAddBlockDevice(drive *config.BlockDrive) erro
 		return fmt.Errorf("pmem device hotplug not supported")
 	}
 
-	blkDevice := chclient.DiskConfig{
-		Path:      drive.File,
-		Readonly:  &drive.ReadOnly,
-		VhostUser: func(b bool) *bool { return &b }(false),
-		Id:        &driveID,
-	}
-	pciInfo, _, err := cl.VmAddDiskPut(ctx, blkDevice)
+	// Create the clh disk config via the constructor to ensure default values are properly assigned
+	clhDisk := *chclient.NewDiskConfig(drive.File)
+	clhDisk.Readonly = &drive.ReadOnly
+	clhDisk.VhostUser = func(b bool) *bool { return &b }(false)
+	clhDisk.Id = &driveID
+
+	pciInfo, _, err := cl.VmAddDiskPut(ctx, clhDisk)
 
 	if err != nil {
 		return fmt.Errorf("failed to hotplug block device %+v %s", drive, openAPIClientError(err))
@@ -526,7 +509,11 @@ func (clh *cloudHypervisor) hotPlugVFIODevice(device config.VFIODev) error {
 	ctx, cancel := context.WithTimeout(context.Background(), clhHotPlugAPITimeout*time.Second)
 	defer cancel()
 
-	_, _, err := cl.VmAddDevicePut(ctx, chclient.VmAddDevice{Path: &device.SysfsDev, Id: &device.ID})
+	// Create the clh device config via the constructor to ensure default values are properly assigned
+	clhDevice := *chclient.NewVmAddDevice()
+	clhDevice.Path = &device.SysfsDev
+	clhDevice.Id = &device.ID
+	_, _, err := cl.VmAddDevicePut(ctx, clhDevice)
 	if err != nil {
 		err = fmt.Errorf("Failed to hotplug device %+v %s", device, openAPIClientError(err))
 	}
@@ -572,7 +559,9 @@ func (clh *cloudHypervisor) hotplugRemoveDevice(ctx context.Context, devInfo int
 	ctx, cancel := context.WithTimeout(context.Background(), clhHotPlugAPITimeout*time.Second)
 	defer cancel()
 
-	_, err := cl.VmRemoveDevicePut(ctx, chclient.VmRemoveDevice{Id: &deviceID})
+	remove := *chclient.NewVmRemoveDevice()
+	remove.Id = &deviceID
+	_, err := cl.VmRemoveDevicePut(ctx, remove)
 	if err != nil {
 		err = fmt.Errorf("failed to hotplug remove (unplug) device %+v: %s", devInfo, openAPIClientError(err))
 	}
@@ -637,8 +626,9 @@ func (clh *cloudHypervisor) resizeMemory(ctx context.Context, reqMemMB uint32, m
 	ctx, cancelResize := context.WithTimeout(ctx, clhAPITimeout*time.Second)
 	defer cancelResize()
 
+	resize := *chclient.NewVmResize()
 	// OpenApi does not support uint64, convert to int64
-	resize := chclient.VmResize{DesiredRam: func(i int64) *int64 { return &i }(int64(newMem.ToBytes()))}
+	resize.DesiredRam = func(i int64) *int64 { return &i }(int64(newMem.ToBytes()))
 	clh.Logger().WithFields(log.Fields{"current-memory": currentMem, "new-memory": newMem}).Debug("updating VM memory")
 	if _, err = cl.VmResizePut(ctx, resize); err != nil {
 		clh.Logger().WithError(err).WithFields(log.Fields{"current-memory": currentMem, "new-memory": newMem}).Warnf("failed to update memory %s", openAPIClientError(err))
@@ -680,7 +670,9 @@ func (clh *cloudHypervisor) resizeVCPUs(ctx context.Context, reqVCPUs uint32) (c
 	// Resize (hot-plug) vCPUs via HTTP API
 	ctx, cancel := context.WithTimeout(ctx, clhAPITimeout*time.Second)
 	defer cancel()
-	if _, err = cl.VmResizePut(ctx, chclient.VmResize{DesiredVcpus: func(i int32) *int32 { return &i }(int32(reqVCPUs))}); err != nil {
+	resize := *chclient.NewVmResize()
+	resize.DesiredVcpus = func(i int32) *int32 { return &i }(int32(reqVCPUs))
+	if _, err = cl.VmResizePut(ctx, resize); err != nil {
 		return currentVCPUs, newVCPUs, errors.Wrap(err, "[clh] VmResizePut failed")
 	}
 
@@ -1105,7 +1097,7 @@ func (clh *cloudHypervisor) addVSock(cid int64, path string) {
 		"cid":  cid,
 	}).Info("Adding HybridVSock")
 
-	clh.vmconfig.Vsock = &chclient.VsockConfig{Cid: cid, Socket: path}
+	clh.vmconfig.Vsock = chclient.NewVsockConfig(cid, path)
 }
 
 func (clh *cloudHypervisor) addNet(e Endpoint) error {
@@ -1127,11 +1119,13 @@ func (clh *cloudHypervisor) addNet(e Endpoint) error {
 		"tap": tapPath,
 	}).Info("Adding Net")
 
-	net := chclient.NetConfig{Mac: &mac, Tap: &tapPath}
+	net := chclient.NewNetConfig()
+	net.Mac = &mac
+	net.Tap = &tapPath
 	if clh.vmconfig.Net != nil {
-		*clh.vmconfig.Net = append(*clh.vmconfig.Net, net)
+		*clh.vmconfig.Net = append(*clh.vmconfig.Net, *net)
 	} else {
-		clh.vmconfig.Net = &[]chclient.NetConfig{net}
+		clh.vmconfig.Net = &[]chclient.NetConfig{*net}
 	}
 
 	return nil
@@ -1156,16 +1150,8 @@ func (clh *cloudHypervisor) addVolume(volume types.Volume) error {
 	numQueues := int32(1)
 	queueSize := int32(1024)
 
-	clh.vmconfig.Fs = &[]chclient.FsConfig{
-		{
-			Tag:       volume.MountTag,
-			Socket:    vfsdSockPath,
-			Dax:       dax,
-			CacheSize: int64(clh.config.VirtioFSCacheSize << 20),
-			NumQueues: numQueues,
-			QueueSize: queueSize,
-		},
-	}
+	fs := chclient.NewFsConfig(volume.MountTag, vfsdSockPath, numQueues, queueSize, dax, int64(clh.config.VirtioFSCacheSize<<20))
+	clh.vmconfig.Fs = &[]chclient.FsConfig{*fs}
 
 	clh.Logger().Debug("Adding share volume to hypervisor: ", volume.MountTag)
 	return nil
