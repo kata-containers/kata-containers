@@ -134,19 +134,19 @@ func TestCloudHypervisorAddNetCheckNetConfigListValues(t *testing.T) {
 	err := clh.addNet(e)
 	assert.Nil(err)
 
-	assert.Equal(len(clh.vmconfig.Net), 1)
+	assert.Equal(len(*clh.vmconfig.Net), 1)
 	if err == nil {
-		assert.Equal(clh.vmconfig.Net[0].Mac, macTest)
-		assert.Equal(clh.vmconfig.Net[0].Tap, tapPath)
+		assert.Equal(*(*clh.vmconfig.Net)[0].Mac, macTest)
+		assert.Equal(*(*clh.vmconfig.Net)[0].Tap, tapPath)
 	}
 
 	err = clh.addNet(e)
 	assert.Nil(err)
 
-	assert.Equal(len(clh.vmconfig.Net), 2)
+	assert.Equal(len(*clh.vmconfig.Net), 2)
 	if err == nil {
-		assert.Equal(clh.vmconfig.Net[1].Mac, macTest)
-		assert.Equal(clh.vmconfig.Net[1].Tap, tapPath)
+		assert.Equal(*(*clh.vmconfig.Net)[1].Mac, macTest)
+		assert.Equal(*(*clh.vmconfig.Net)[1].Tap, tapPath)
 	}
 }
 
@@ -180,7 +180,7 @@ func TestCloudHypervisorAddNetCheckEnpointTypes(t *testing.T) {
 				t.Errorf("cloudHypervisor.addNet() error = %v, wantErr %v", err, tt.wantErr)
 
 			} else if err == nil {
-				assert.Equal(clh.vmconfig.Net[0].Tap, tapPath)
+				assert.Equal(*(*clh.vmconfig.Net)[0].Tap, tapPath)
 			}
 		})
 	}
@@ -294,8 +294,9 @@ func TestCloudHypervisorResizeMemory(t *testing.T) {
 			clh := cloudHypervisor{}
 
 			mockClient := &clhClientMock{}
-			mockClient.vmInfo.Config.Memory.Size = int64(utils.MemUnit(clhConfig.MemorySize) * utils.MiB)
-			mockClient.vmInfo.Config.Memory.HotplugSize = int64(40 * utils.GiB.ToBytes())
+			mockClient.vmInfo.Config = *chclient.NewVmConfig(*chclient.NewKernelConfig(""))
+			mockClient.vmInfo.Config.Memory = chclient.NewMemoryConfig(int64(utils.MemUnit(clhConfig.MemorySize) * utils.MiB))
+			mockClient.vmInfo.Config.Memory.HotplugSize = func(i int64) *int64 { return &i }(int64(40 * utils.GiB.ToBytes()))
 
 			clh.APIClient = mockClient
 			clh.config = clhConfig
