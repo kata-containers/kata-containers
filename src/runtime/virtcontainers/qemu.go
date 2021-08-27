@@ -2280,8 +2280,7 @@ func (q *qemu) getPids() []int {
 		return []int{0}
 	}
 
-	var pids []int
-	pids = append(pids, pid)
+	pids := []int{pid}
 	if q.state.VirtiofsdPid != 0 {
 		pids = append(pids, q.state.VirtiofsdPid)
 	}

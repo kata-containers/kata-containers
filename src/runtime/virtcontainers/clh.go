@@ -742,11 +742,7 @@ func (clh *cloudHypervisor) check() error {
 }
 
 func (clh *cloudHypervisor) getPids() []int {
-
-	var pids []int
-	pids = append(pids, clh.state.PID)
-
-	return pids
+	return []int{clh.state.PID}
 }
 
 func (clh *cloudHypervisor) getVirtioFsPid() *int {
