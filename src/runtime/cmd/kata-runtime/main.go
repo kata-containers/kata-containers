@@ -33,6 +33,8 @@ import (
 // arch is the architecture for the running program
 const arch = goruntime.GOARCH
 
+var exitFunc = os.Exit
+
 var usage = fmt.Sprintf(`%s runtime
 
 %s is a command line program for running applications packaged
@@ -328,7 +330,7 @@ func handleShowConfig(context *cli.Context) {
 			fmt.Fprintf(defaultOutputFile, "%s\n", file)
 		}
 
-		exit(0)
+		exitFunc(0)
 	}
 }
 
@@ -448,7 +450,7 @@ func userWantsUsage(context *cli.Context) bool {
 func fatal(err error) {
 	kataLog.Error(err)
 	fmt.Fprintln(defaultErrorFile, err)
-	exit(1)
+	exitFunc(1)
 }
 
 type fatalWriter struct {

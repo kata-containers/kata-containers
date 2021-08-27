@@ -93,7 +93,7 @@ func TestMain(m *testing.M) {
 	if path.Base(os.Args[0]) == katautils.NAME+".coverage" ||
 		path.Base(os.Args[0]) == katautils.NAME {
 		main()
-		exit(0)
+		exitFunc(0)
 	}
 
 	runUnitTests(m)
