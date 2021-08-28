@@ -38,27 +38,6 @@ func WithNewAgentFunc(ctx context.Context, f newAgentFuncType) context.Context {
 	return context.WithValue(ctx, newAgentFuncKey{}, f)
 }
 
-// ProcessListOptions contains the options used to list running
-// processes inside the container
-type ProcessListOptions struct {
-	// Format describes the output format to list the running processes.
-	// Formats are unrelated to ps(1) formats, only two formats can be specified:
-	// "json" and "table"
-	Format string
-
-	// Args contains the list of arguments to run ps(1) command.
-	// If Args is empty the agent will use "-ef" as options to ps(1).
-	Args []string
-}
-
-// ProcessList represents the list of running processes inside the container
-type ProcessList []byte
-
-const (
-	// SocketTypeVSOCK is a VSOCK socket type for talking to an agent.
-	SocketTypeVSOCK = "vsock"
-)
-
 // agent is the virtcontainers agent interface.
 // Agents are running in the guest VM and handling
 // communications between the host and guest.
