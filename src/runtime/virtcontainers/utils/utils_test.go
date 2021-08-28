@@ -384,6 +384,51 @@ func TestToBytes(t *testing.T) {
 	assert.Equal(expected, result)
 }
 
+func TestWaitLocalProcess(t *testing.T) {
+	cfg := []struct {
+		command string
+		args    []string
+		timeout uint
+		signal  syscall.Signal
+	}{
+		{
+			"true",
+			[]string{},
+			waitLocalProcessTimeoutSecs,
+			syscall.SIGKILL,
+		},
+		{
+			"sleep",
+			[]string{"999"},
+			waitLocalProcessTimeoutSecs,
+			syscall.SIGKILL,
+		},
+		{
+			"sleep",
+			[]string{"999"},
+			1,
+			syscall.SIGKILL,
+		},
+	}
+
+	logger := logrus.WithField("foo", "bar")
+
+	for _, opts := range cfg {
+		assert := assert.New(t)
+
+		cmd := exec.Command(opts.command, opts.args...)
+		err := cmd.Start()
+		assert.NoError(err)
+
+		pid := cmd.Process.Pid
+
+		err = WaitLocalProcess(pid, opts.timeout, opts.signal, logger)
+		assert.NoError(err)
+
+		_ = cmd.Wait()
+	}
+}
+
 func TestWaitLocalProcessInvalidSignal(t *testing.T) {
 	assert := assert.New(t)
 
@@ -423,59 +468,4 @@ func TestWaitLocalProcessInvalidPid(t *testing.T) {
 		err := WaitLocalProcess(pid, waitLocalProcessTimeoutSecs, syscall.Signal(0), logger)
 		assert.Error(err, msg)
 	}
-}
-
-func TestWaitLocalProcessBrief(t *testing.T) {
-	assert := assert.New(t)
-
-	cmd := exec.Command("true")
-	err := cmd.Start()
-	assert.NoError(err)
-
-	pid := cmd.Process.Pid
-
-	logger := logrus.WithField("foo", "bar")
-
-	err = WaitLocalProcess(pid, waitLocalProcessTimeoutSecs, syscall.SIGKILL, logger)
-	assert.NoError(err)
-
-	_ = cmd.Wait()
-}
-
-func TestWaitLocalProcessLongRunningPreKill(t *testing.T) {
-	assert := assert.New(t)
-
-	cmd := exec.Command("sleep", "999")
-	err := cmd.Start()
-	assert.NoError(err)
-
-	pid := cmd.Process.Pid
-
-	logger := logrus.WithField("foo", "bar")
-
-	err = WaitLocalProcess(pid, waitLocalProcessTimeoutSecs, syscall.SIGKILL, logger)
-	assert.NoError(err)
-
-	_ = cmd.Wait()
-}
-
-func TestWaitLocalProcessLongRunning(t *testing.T) {
-	assert := assert.New(t)
-
-	cmd := exec.Command("sleep", "999")
-	err := cmd.Start()
-	assert.NoError(err)
-
-	pid := cmd.Process.Pid
-
-	logger := logrus.WithField("foo", "bar")
-
-	// Don't wait for long as the process isn't actually trying to stop,
-	// so it will have to timeout and then be killed.
-	const timeoutSecs = 1
-
-	err = WaitLocalProcess(pid, timeoutSecs, syscall.Signal(0), logger)
-	assert.NoError(err)
-
-	_ = cmd.Wait()
 }
