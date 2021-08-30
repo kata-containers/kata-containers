@@ -117,8 +117,7 @@ func parseEndpoint(endpoint string) (string, string, error) {
 	}
 }
 
-// getSandboxes get kata sandbox from the container engine.
-// this will be called only after monitor start.
+// getSandboxes gets kata sandboxes from the container engine.
 func (km *KataMonitor) getSandboxes() (map[string]struct{}, error) {
 
 	sandboxMap := make(map[string]struct{})
@@ -166,7 +165,11 @@ func (km *KataMonitor) getSandboxes() (map[string]struct{}, error) {
 			// get low level container runtime
 			// containerd stores the pod runtime in "/runtimeType" while CRI-O stores it the
 			// io.kubernetes.cri-o.RuntimeHandler annotation: check for both.
-			keys := []string{"/runtimeType", "/runtimeSpec/annotations/io.kubernetes.cri-o.RuntimeHandler"}
+			const (
+				containerdRuntimeMarker = "/runtimeType"
+				crioRuntimeMarker       = "/runtimeSpec/annotations/io.kubernetes.cri-o.RuntimeHandler"
+			)
+			keys := []string{containerdRuntimeMarker, crioRuntimeMarker}
 			for _, key := range keys {
 				pointer, _ := gojsonpointer.NewJsonPointer(key)
 				rt, _, _ := pointer.Get(res)
