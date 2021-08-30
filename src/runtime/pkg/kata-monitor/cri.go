@@ -186,7 +186,7 @@ func (km *KataMonitor) getSandboxes() (map[string]struct{}, error) {
 		// Safest options is to add the POD in the list: we will be able to connect to the shim to retrieve the actual info
 		// only for kata PODs.
 		if lowRuntime == "" {
-			monitorLog.WithField("pod", r).Info("unable to retrieve the runtime type")
+			monitorLog.WithField("pod", r).Warning("unable to retrieve the runtime type")
 			sandboxMap[pod.Id] = struct{}{}
 			continue
 		}
