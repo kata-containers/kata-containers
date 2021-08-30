@@ -10,7 +10,172 @@ Name | Type | Description | Notes
 **QueueSize** | **int32** |  | [default to 1024]
 **Dax** | **bool** |  | [default to true]
 **CacheSize** | **int64** |  | 
-**Id** | **string** |  | [optional] 
+**Id** | Pointer to **string** |  | [optional] 
+
+## Methods
+
+### NewFsConfig
+
+`func NewFsConfig(tag string, socket string, numQueues int32, queueSize int32, dax bool, cacheSize int64, ) *FsConfig`
+
+NewFsConfig instantiates a new FsConfig object
+This constructor will assign default values to properties that have it defined,
+and makes sure properties required by API are set, but the set of arguments
+will change when the set of required properties is changed
+
+### NewFsConfigWithDefaults
+
+`func NewFsConfigWithDefaults() *FsConfig`
+
+NewFsConfigWithDefaults instantiates a new FsConfig object
+This constructor will only assign default values to properties that have it defined,
+but it doesn't guarantee that properties required by API are set
+
+### GetTag
+
+`func (o *FsConfig) GetTag() string`
+
+GetTag returns the Tag field if non-nil, zero value otherwise.
+
+### GetTagOk
+
+`func (o *FsConfig) GetTagOk() (*string, bool)`
+
+GetTagOk returns a tuple with the Tag field if it's non-nil, zero value otherwise
+and a boolean to check if the value has been set.
+
+### SetTag
+
+`func (o *FsConfig) SetTag(v string)`
+
+SetTag sets Tag field to given value.
+
+
+### GetSocket
+
+`func (o *FsConfig) GetSocket() string`
+
+GetSocket returns the Socket field if non-nil, zero value otherwise.
+
+### GetSocketOk
+
+`func (o *FsConfig) GetSocketOk() (*string, bool)`
+
+GetSocketOk returns a tuple with the Socket field if it's non-nil, zero value otherwise
+and a boolean to check if the value has been set.
+
+### SetSocket
+
+`func (o *FsConfig) SetSocket(v string)`
+
+SetSocket sets Socket field to given value.
+
+
+### GetNumQueues
+
+`func (o *FsConfig) GetNumQueues() int32`
+
+GetNumQueues returns the NumQueues field if non-nil, zero value otherwise.
+
+### GetNumQueuesOk
+
+`func (o *FsConfig) GetNumQueuesOk() (*int32, bool)`
+
+GetNumQueuesOk returns a tuple with the NumQueues field if it's non-nil, zero value otherwise
+and a boolean to check if the value has been set.
+
+### SetNumQueues
+
+`func (o *FsConfig) SetNumQueues(v int32)`
+
+SetNumQueues sets NumQueues field to given value.
+
+
+### GetQueueSize
+
+`func (o *FsConfig) GetQueueSize() int32`
+
+GetQueueSize returns the QueueSize field if non-nil, zero value otherwise.
+
+### GetQueueSizeOk
+
+`func (o *FsConfig) GetQueueSizeOk() (*int32, bool)`
+
+GetQueueSizeOk returns a tuple with the QueueSize field if it's non-nil, zero value otherwise
+and a boolean to check if the value has been set.
+
+### SetQueueSize
+
+`func (o *FsConfig) SetQueueSize(v int32)`
+
+SetQueueSize sets QueueSize field to given value.
+
+
+### GetDax
+
+`func (o *FsConfig) GetDax() bool`
+
+GetDax returns the Dax field if non-nil, zero value otherwise.
+
+### GetDaxOk
+
+`func (o *FsConfig) GetDaxOk() (*bool, bool)`
+
+GetDaxOk returns a tuple with the Dax field if it's non-nil, zero value otherwise
+and a boolean to check if the value has been set.
+
+### SetDax
+
+`func (o *FsConfig) SetDax(v bool)`
+
+SetDax sets Dax field to given value.
+
+
+### GetCacheSize
+
+`func (o *FsConfig) GetCacheSize() int64`
+
+GetCacheSize returns the CacheSize field if non-nil, zero value otherwise.
+
+### GetCacheSizeOk
+
+`func (o *FsConfig) GetCacheSizeOk() (*int64, bool)`
+
+GetCacheSizeOk returns a tuple with the CacheSize field if it's non-nil, zero value otherwise
+and a boolean to check if the value has been set.
+
+### SetCacheSize
+
+`func (o *FsConfig) SetCacheSize(v int64)`
+
+SetCacheSize sets CacheSize field to given value.
+
+
+### GetId
+
+`func (o *FsConfig) GetId() string`
+
+GetId returns the Id field if non-nil, zero value otherwise.
+
+### GetIdOk
+
+`func (o *FsConfig) GetIdOk() (*string, bool)`
+
+GetIdOk returns a tuple with the Id field if it's non-nil, zero value otherwise
+and a boolean to check if the value has been set.
+
+### SetId
+
+`func (o *FsConfig) SetId(v string)`
+
+SetId sets Id field to given value.
+
+### HasId
+
+`func (o *FsConfig) HasId() bool`
+
+HasId returns a boolean if a field has been set.
+
 
 [[Back to Model list]](../README.md#documentation-for-models) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to README]](../README.md)
 
