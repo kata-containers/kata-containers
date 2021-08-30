@@ -209,9 +209,6 @@ const (
 const bridgePCIStartAddr = 2
 
 const (
-	// QemuPCLite is the QEMU pc-lite machine type for amd64
-	QemuPCLite = "pc-lite"
-
 	// QemuQ35 is the QEMU Q35 machine type for amd64
 	QemuQ35 = "q35"
 

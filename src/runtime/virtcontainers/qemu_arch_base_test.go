@@ -158,7 +158,7 @@ func TestQemuAddDeviceToBridge(t *testing.T) {
 
 	// addDeviceToBridge fails cause q.Bridges == 0
 	q = newQemuArchBase()
-	q.qemuMachine.Type = QemuPCLite
+	q.qemuMachine.Type = QemuQ35
 	q.bridges(0)
 	_, _, err = q.addDeviceToBridge(context.Background(), "qemu-bridge", types.PCI)
 	if assert.Error(err) {
