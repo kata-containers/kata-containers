@@ -700,7 +700,7 @@ func (s *Sandbox) Delete(ctx context.Context) error {
 
 	for _, c := range s.containers {
 		if err := c.delete(ctx); err != nil {
-			s.Logger().WithError(err).WithField("cid", c.id).Debug("failed to delete container")
+			s.Logger().WithError(err).WithField("container`", c.id).Debug("failed to delete container")
 		}
 	}
 
@@ -1264,7 +1264,7 @@ func (s *Sandbox) CreateContainer(ctx context.Context, contConfig ContainerConfi
 	defer func() {
 		// Rollback if error happens.
 		if err != nil {
-			logger := s.Logger().WithFields(logrus.Fields{"container-id": c.id, "sandox-id": s.id, "rollback": true})
+			logger := s.Logger().WithFields(logrus.Fields{"container": c.id, "sandbox": s.id, "rollback": true})
 			logger.WithError(err).Error("Cleaning up partially created container")
 
 			if errStop := c.stop(ctx, true); errStop != nil {
@@ -1311,7 +1311,7 @@ func (s *Sandbox) StartContainer(ctx context.Context, containerID string) (VCCon
 		return nil, err
 	}
 
-	s.Logger().Info("Container is started")
+	s.Logger().WithField("container", containerID).Info("Container is started")
 
 	// Update sandbox resources in case a stopped container
 	// is started
@@ -1998,7 +1998,7 @@ func (s *Sandbox) calculateSandboxMemory() (int64, bool, int64) {
 	for _, c := range s.config.Containers {
 		// Do not hot add again non-running containers resources
 		if cont, ok := s.containers[c.ID]; ok && cont.state.State == types.StateStopped {
-			s.Logger().WithField("container-id", c.ID).Debug("Do not taking into account memory resources of not running containers")
+			s.Logger().WithField("container", c.ID).Debug("Do not taking into account memory resources of not running containers")
 			continue
 		}
 
@@ -2035,7 +2035,7 @@ func (s *Sandbox) calculateSandboxCPUs() (uint32, error) {
 	for _, c := range s.config.Containers {
 		// Do not hot add again non-running containers resources
 		if cont, ok := s.containers[c.ID]; ok && cont.state.State == types.StateStopped {
-			s.Logger().WithField("container-id", c.ID).Debug("Do not taking into account CPU resources of not running containers")
+			s.Logger().WithField("container", c.ID).Debug("Do not taking into account CPU resources of not running containers")
 			continue
 		}
 
