@@ -26,8 +26,7 @@ to work seamlessly with both Docker and Kubernetes respectively.
 ## License
 
 The code is licensed under an Apache 2.0 license.
-
-See [the license file](../../LICENSE) for further details.
+See [the license file](https://github.com/kata-containers/kata-containers/blob/main/LICENSE) for further details.
 
 ## Platform support
 
