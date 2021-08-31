@@ -43,7 +43,6 @@ const (
 )
 
 var qemuPaths = map[string]string{
-	QemuPCLite:  "/usr/bin/qemu-lite-system-x86_64",
 	QemuQ35:     defaultQemuPath,
 	QemuMicrovm: defaultQemuPath,
 }
@@ -66,10 +65,6 @@ var kernelParams = []Param{
 }
 
 var supportedQemuMachines = []govmmQemu.Machine{
-	{
-		Type:    QemuPCLite,
-		Options: defaultQemuMachineOptions,
-	},
 	{
 		Type:    QemuQ35,
 		Options: defaultQemuMachineOptions,

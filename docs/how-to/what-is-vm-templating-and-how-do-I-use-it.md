@@ -47,7 +47,7 @@ and can be classified as potentially misunderstood behaviors rather than vulnera
 VM templating can be enabled by changing your Kata Containers config file (`/usr/share/defaults/kata-containers/configuration.toml`,
 overridden by `/etc/kata-containers/configuration.toml` if provided) such that:
 
-  - `qemu-lite` is specified in `hypervisor.qemu`->`path` section
+  - `qemu` version `v4.1.0` or above is specified in `hypervisor.qemu`->`path` section
   - `enable_template = true`
   - `initrd =` is set
   - `image =` option is commented out or removed

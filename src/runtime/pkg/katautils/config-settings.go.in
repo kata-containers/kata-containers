@@ -8,7 +8,7 @@
 
 package katautils
 
-var defaultHypervisorPath = "/usr/bin/qemu-lite-system-x86_64"
+var defaultHypervisorPath = "/usr/bin/qemu-system-x86_64"
 var defaultHypervisorCtlPath = "/usr/bin/acrnctl"
 var defaultJailerPath = "/usr/bin/jailer"
 var defaultImagePath = "/usr/share/kata-containers/kata-containers.img"
