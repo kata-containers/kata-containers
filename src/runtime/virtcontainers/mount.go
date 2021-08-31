@@ -33,6 +33,13 @@ var rootfsDir = "rootfs"
 
 var systemMountPrefixes = []string{"/proc", "/sys"}
 
+// mountTracingTags defines tags for the trace span
+var mountTracingTags = map[string]string{
+	"source":    "runtime",
+	"package":   "virtcontainers",
+	"subsystem": "mount",
+}
+
 func mountLogger() *logrus.Entry {
 	return virtLog.WithField("subsystem", "mount")
 }
@@ -240,7 +247,7 @@ func evalMountPath(source, destination string) (string, string, error) {
 // * ensure the source exists
 // * recursively create the destination
 func moveMount(ctx context.Context, source, destination string) error {
-	span, _ := katatrace.Trace(ctx, nil, "moveMount", apiTracingTags)
+	span, _ := katatrace.Trace(ctx, nil, "moveMount", mountTracingTags)
 	defer span.End()
 
 	source, destination, err := evalMountPath(source, destination)
@@ -258,7 +265,7 @@ func moveMount(ctx context.Context, source, destination string) error {
 // * recursively create the destination
 // pgtypes stands for propagation types, which are shared, private, slave, and ubind.
 func bindMount(ctx context.Context, source, destination string, readonly bool, pgtypes string) error {
-	span, _ := katatrace.Trace(ctx, nil, "bindMount", apiTracingTags)
+	span, _ := katatrace.Trace(ctx, nil, "bindMount", mountTracingTags)
 	defer span.End()
 	span.SetAttributes(otelLabel.String("source", source), otelLabel.String("destination", destination))
 
@@ -295,7 +302,7 @@ func bindMount(ctx context.Context, source, destination string, readonly bool, p
 // The mountflags should match the values used in the original mount() call,
 // except for those parameters that you are trying to change.
 func remount(ctx context.Context, mountflags uintptr, src string) error {
-	span, _ := katatrace.Trace(ctx, nil, "remount", apiTracingTags)
+	span, _ := katatrace.Trace(ctx, nil, "remount", mountTracingTags)
 	defer span.End()
 	span.SetAttributes(otelLabel.String("source", src))
 
@@ -320,7 +327,7 @@ func remountRo(ctx context.Context, src string) error {
 // bindMountContainerRootfs bind mounts a container rootfs into a 9pfs shared
 // directory between the guest and the host.
 func bindMountContainerRootfs(ctx context.Context, shareDir, cid, cRootFs string, readonly bool) error {
-	span, _ := katatrace.Trace(ctx, nil, "bindMountContainerRootfs", apiTracingTags)
+	span, _ := katatrace.Trace(ctx, nil, "bindMountContainerRootfs", mountTracingTags)
 	defer span.End()
 
 	rootfsDest := filepath.Join(shareDir, cid, rootfsDir)
@@ -360,7 +367,7 @@ func isSymlink(path string) bool {
 }
 
 func bindUnmountContainerRootfs(ctx context.Context, sharedDir, cID string) error {
-	span, _ := katatrace.Trace(ctx, nil, "bindUnmountContainerRootfs", apiTracingTags)
+	span, _ := katatrace.Trace(ctx, nil, "bindUnmountContainerRootfs", mountTracingTags)
 	defer span.End()
 	span.SetAttributes(otelLabel.String("shared_dir", sharedDir), otelLabel.String("container_id", cID))
 
@@ -383,7 +390,7 @@ func bindUnmountContainerRootfs(ctx context.Context, sharedDir, cID string) erro
 }
 
 func bindUnmountAllRootfs(ctx context.Context, sharedDir string, sandbox *Sandbox) error {
-	span, ctx := katatrace.Trace(ctx, nil, "bindUnmountAllRootfs", apiTracingTags)
+	span, ctx := katatrace.Trace(ctx, nil, "bindUnmountAllRootfs", mountTracingTags)
 	defer span.End()
 	span.SetAttributes(otelLabel.String("shared_dir", sharedDir), otelLabel.String("sandbox_id", sandbox.id))
 

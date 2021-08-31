@@ -36,13 +36,10 @@ import (
 )
 
 // tracingTags defines tags for the trace span
-func (c *Container) tracingTags() map[string]string {
-	return map[string]string{
-		"source":       "runtime",
-		"package":      "virtcontainers",
-		"subsystem":    "container",
-		"container_id": c.id,
-	}
+var containerTracingTags = map[string]string{
+	"source":    "runtime",
+	"package":   "virtcontainers",
+	"subsystem": "container",
 }
 
 // https://github.com/torvalds/linux/blob/master/include/uapi/linux/major.h
@@ -619,13 +616,12 @@ func (c *Container) mountSharedDirMounts(ctx context.Context, sharedDirMounts, i
 }
 
 func (c *Container) unmountHostMounts(ctx context.Context) error {
-	span, ctx := katatrace.Trace(ctx, c.Logger(), "unmountHostMounts", c.tracingTags())
+	span, ctx := katatrace.Trace(ctx, c.Logger(), "unmountHostMounts", containerTracingTags, map[string]string{"container_id": c.id})
 	defer span.End()
 
 	for _, m := range c.mounts {
 		if m.HostPath != "" {
-			span, _ := katatrace.Trace(ctx, c.Logger(), "unmount", c.tracingTags())
-			katatrace.AddTag(span, "host-path", m.HostPath)
+			span, _ := katatrace.Trace(ctx, c.Logger(), "unmount", containerTracingTags, map[string]string{"container_id": c.id, "host-path": m.HostPath})
 
 			if err := syscall.Unmount(m.HostPath, syscall.MNT_DETACH|UmountNoFollow); err != nil {
 				c.Logger().WithFields(logrus.Fields{
@@ -753,7 +749,7 @@ func (c *Container) initConfigResourcesMemory() {
 
 // newContainer creates a Container structure from a sandbox and a container configuration.
 func newContainer(ctx context.Context, sandbox *Sandbox, contConfig *ContainerConfig) (*Container, error) {
-	span, ctx := katatrace.Trace(ctx, sandbox.Logger(), "newContainer", sandbox.tracingTags())
+	span, ctx := katatrace.Trace(ctx, sandbox.Logger(), "newContainer", containerTracingTags, map[string]string{"container_id": contConfig.ID, "sandbox_id": sandbox.id})
 	defer span.End()
 
 	if !contConfig.valid() {
@@ -1049,7 +1045,7 @@ func (c *Container) start(ctx context.Context) error {
 }
 
 func (c *Container) stop(ctx context.Context, force bool) error {
-	span, ctx := katatrace.Trace(ctx, c.Logger(), "stop", c.tracingTags())
+	span, ctx := katatrace.Trace(ctx, c.Logger(), "stop", containerTracingTags, map[string]string{"container_id": c.id})
 	defer span.End()
 
 	// In case the container status has been updated implicitly because

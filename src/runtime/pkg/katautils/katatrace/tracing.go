@@ -129,7 +129,7 @@ func StopTracing(ctx context.Context) {
 // Trace creates a new tracing span based on the specified name and parent context.
 // It also accepts a logger to record nil context errors and a map of tracing tags.
 // Tracing tag keys and values are strings.
-func Trace(parent context.Context, logger *logrus.Entry, name string, tags map[string]string) (otelTrace.Span, context.Context) {
+func Trace(parent context.Context, logger *logrus.Entry, name string, tags ...map[string]string) (otelTrace.Span, context.Context) {
 	if parent == nil {
 		if logger == nil {
 			logger = kataTraceLogger
@@ -139,8 +139,13 @@ func Trace(parent context.Context, logger *logrus.Entry, name string, tags map[s
 	}
 
 	var otelTags []label.KeyValue
-	for k, v := range tags {
-		otelTags = append(otelTags, label.Key(k).String(v))
+	// do not append tags if tracing is disabled
+	if tracing {
+		for _, tagSet := range tags {
+			for k, v := range tagSet {
+				otelTags = append(otelTags, label.Key(k).String(v))
+			}
+		}
 	}
 
 	tracer := otel.Tracer("kata")
