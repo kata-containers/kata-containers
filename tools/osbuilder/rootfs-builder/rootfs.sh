@@ -221,7 +221,7 @@ setup_agent_init()
 	[ -z "$init_bin" ] && die "need init bin path"
 
 	info "Install $agent_bin as init process"
-	mv -f "${agent_bin}" ${init_bin}
+	cp -f "${agent_bin}" ${init_bin}
 	OK "Agent is installed as init process"
 }
 
@@ -403,6 +403,10 @@ build_rootfs_distro()
 		before_starting_container
 		trap after_stopping_container EXIT
 
+		[ -z "${AGENT_SOURCE_BIN}" ] && die "need agent binary"
+
+		GUEST_AGENT_DEST="/kata-containers/${AGENT_BIN}"
+
 		#Make sure we use a compatible runtime to build rootfs
 		# In case Clear Containers Runtime is installed we dont want to hit issue:
 		#https://github.com/clearcontainers/runtime/issues/828
@@ -421,11 +425,13 @@ build_rootfs_distro()
 			--env SECCOMP="${SECCOMP}" \
 			--env DEBUG="${DEBUG}" \
 			--env STAGE_PREPARE_ROOTFS=1 \
+			--env AGENT_DEST="${GUEST_AGENT_DEST}" \
 			--env HOME="/root" \
 			-v "${repo_dir}":"/kata-containers" \
 			-v "${ROOTFS_DIR}":"/rootfs" \
 			-v "${script_dir}/../scripts":"/scripts" \
 			-v "${kernel_mod_dir}":"${kernel_mod_dir}" \
+			-v "${AGENT_SOURCE_BIN}":"${GUEST_AGENT_DEST}" \
 			$docker_run_args \
 			${image_name} \
 			bash /kata-containers/tools/osbuilder/rootfs-builder/rootfs.sh "${distro}"
@@ -540,7 +546,25 @@ EOT
 		       -e '/^\[Unit\]/a ConditionPathExists=\/dev\/ptp0' ${chrony_systemd_service}
 	fi
 
-	AGENT_DIR="${ROOTFS_DIR}/usr/bin"
+	# Create an empty /etc/resolv.conf, to allow agent to bind mount container resolv.conf to Kata VM
+	dns_file="${ROOTFS_DIR}/etc/resolv.conf"
+	if [ -L "$dns_file" ]; then
+		# if /etc/resolv.conf is a link, it cannot be used for bind mount
+		rm -f "$dns_file"
+	fi
+	info "Create /etc/resolv.conf file in rootfs if not exist"
+	touch "$dns_file"
+
+	install_agent
+
+	info "Creating summary file"
+	create_summary_file "${ROOTFS_DIR}"
+}
+
+build_agent()
+{
+	readonly tmp_dir=$(mktemp -p ${TMPDIR:-/tmp} -d osbuilder-agent-dir.XXXX)
+	AGENT_DIR="${tmp_dir}/usr/bin"
 	AGENT_DEST="${AGENT_DIR}/${AGENT_BIN}"
 
 	if [ -z "${AGENT_SOURCE_BIN}" ] ; then
@@ -565,15 +589,17 @@ EOT
 		fi
 		make clean
 		make LIBC=${LIBC} INIT=${AGENT_INIT}
-		make install DESTDIR="${ROOTFS_DIR}" LIBC=${LIBC} INIT=${AGENT_INIT} SECCOMP=${SECCOMP}
+		make install DESTDIR="${tmp_dir}" LIBC=${LIBC} INIT=${AGENT_INIT} SECCOMP=${SECCOMP}
 		[ "$ARCH" == "aarch64" ] && export PATH=$OLD_PATH && rm -rf /usr/local/musl
 		popd
-	else
-		mkdir -p ${AGENT_DIR}
-		cp ${AGENT_SOURCE_BIN} ${AGENT_DEST}
-		OK "cp ${AGENT_SOURCE_BIN} ${AGENT_DEST}"
+		AGENT_SOURCE_BIN=${AGENT_DEST}
 	fi
 
+	OK "agent built at ${AGENT_SOURCE_BIN}"
+}
+
+install_agent()
+{
 	[ -x "${AGENT_DEST}" ] || die "${AGENT_DEST} is not installed in ${ROOTFS_DIR}"
 	OK "Agent installed"
 
@@ -582,18 +608,6 @@ EOT
 	info "Check init is installed"
 	[ -x "${init}" ] || [ -L "${init}" ] || die "/sbin/init is not installed in ${ROOTFS_DIR}"
 	OK "init is installed"
-
-	# Create an empty /etc/resolv.conf, to allow agent to bind mount container resolv.conf to Kata VM
-	dns_file="${ROOTFS_DIR}/etc/resolv.conf"
-	if [ -L "$dns_file" ]; then
-		# if /etc/resolv.conf is a link, it cannot be used for bind mount
-		rm -f "$dns_file"
-	fi
-	info "Create /etc/resolv.conf file in rootfs if not exist"
-	touch "$dns_file"
-
-	info "Creating summary file"
-	create_summary_file "${ROOTFS_DIR}"
 }
 
 parse_arguments()
@@ -638,6 +652,10 @@ main()
 	parse_arguments $*
 	check_env_variables
 
+	if [ "$STAGE_PREPARE_ROOTFS" == "" ]; then
+		build_agent
+	fi
+
 	if [ -n "$distro" ]; then
 		build_rootfs_distro
 	else
@@ -649,7 +667,7 @@ main()
 		prepare_overlay
 	fi
 
-	if [ "$STAGE_PREPARE_ROOTFS" == "" ]; then
+	if [ "$STAGE_PREPARE_ROOTFS" == "1" ]; then
 		init="${ROOTFS_DIR}/sbin/init"
 		setup_rootfs
 	fi
