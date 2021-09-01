@@ -1435,6 +1435,9 @@ func (vhostuserDev VhostUserDevice) QemuFSParams(config *Config) []string {
 		deviceParams = append(deviceParams, "versiontable=/dev/shm/fuse_shared_versions")
 	}
 	if vhostuserDev.Transport.isVirtioCCW(config) {
+		if config.Knobs.IOMMUPlatform {
+			deviceParams = append(deviceParams, "iommu_platform=on")
+		}
 		deviceParams = append(deviceParams, fmt.Sprintf("devno=%s", vhostuserDev.DevNo))
 	}
 	if vhostuserDev.Transport.isVirtioPCI(config) && vhostuserDev.ROMFile != "" {
@@ -2439,6 +2442,13 @@ type Config struct {
 	// Ctx is the context used when launching qemu.
 	Ctx context.Context
 
+	// User ID.
+	Uid uint32
+	// Group ID.
+	Gid uint32
+	// Supplementary group IDs.
+	Groups []uint32
+
 	// Name is the qemu guest name
 	Name string
 
@@ -2898,8 +2908,15 @@ func LaunchQemu(config Config, logger QMPLog) (string, error) {
 		ctx = context.Background()
 	}
 
+	attr := syscall.SysProcAttr{}
+	attr.Credential = &syscall.Credential{
+		Uid:    config.Uid,
+		Gid:    config.Gid,
+		Groups: config.Groups,
+	}
+
 	return LaunchCustomQemu(ctx, config.Path, config.qemuParams,
-		config.fds, nil, logger)
+		config.fds, &attr, logger)
 }
 
 // LaunchCustomQemu can be used to launch a new qemu instance.
