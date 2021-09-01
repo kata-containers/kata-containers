@@ -117,13 +117,12 @@ func parseEndpoint(endpoint string) (string, string, error) {
 	}
 }
 
-// getSandboxes gets kata sandboxes from the container engine.
-func (km *KataMonitor) getSandboxes() (map[string]struct{}, error) {
-
-	sandboxMap := make(map[string]struct{})
+// getSandboxes gets ready sandboxes from the container engine and returns an updated sandboxMap
+func (km *KataMonitor) getSandboxes(sandboxMap map[string]bool) (map[string]bool, error) {
+	newMap := make(map[string]bool)
 	runtimeClient, runtimeConn, err := getRuntimeClient(km.runtimeEndpoint)
 	if err != nil {
-		return sandboxMap, err
+		return newMap, err
 	}
 	defer closeConnection(runtimeConn)
 
@@ -139,11 +138,17 @@ func (km *KataMonitor) getSandboxes() (map[string]struct{}, error) {
 	monitorLog.Debugf("ListPodSandboxRequest: %v", request)
 	r, err := runtimeClient.ListPodSandbox(context.Background(), request)
 	if err != nil {
-		return sandboxMap, err
+		return newMap, err
 	}
 	monitorLog.Debugf("ListPodSandboxResponse: %v", r)
 
 	for _, pod := range r.Items {
+		// Use the cached data if available
+		if isKata, ok := sandboxMap[pod.Id]; ok {
+			newMap[pod.Id] = isKata
+			continue
+		}
+
 		request := &pb.PodSandboxStatusRequest{
 			PodSandboxId: pod.Id,
 			Verbose:      true,
@@ -151,7 +156,7 @@ func (km *KataMonitor) getSandboxes() (map[string]struct{}, error) {
 
 		r, err := runtimeClient.PodSandboxStatus(context.Background(), request)
 		if err != nil {
-			return sandboxMap, err
+			return newMap, err
 		}
 
 		lowRuntime := ""
@@ -187,7 +192,7 @@ func (km *KataMonitor) getSandboxes() (map[string]struct{}, error) {
 		// only for kata PODs.
 		if lowRuntime == "" {
 			monitorLog.WithField("pod", r).Warning("unable to retrieve the runtime type")
-			sandboxMap[pod.Id] = struct{}{}
+			newMap[pod.Id] = true
 			continue
 		}
 
@@ -195,9 +200,11 @@ func (km *KataMonitor) getSandboxes() (map[string]struct{}, error) {
 			"low runtime": lowRuntime,
 		}).Debug("")
 		if strings.Contains(lowRuntime, "kata") {
-			sandboxMap[pod.Id] = struct{}{}
+			newMap[pod.Id] = true
+		} else {
+			newMap[pod.Id] = false
 		}
 	}
 
-	return sandboxMap, nil
+	return newMap, nil
 }

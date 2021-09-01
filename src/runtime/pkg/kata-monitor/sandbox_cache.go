@@ -11,13 +11,26 @@ import (
 
 type sandboxCache struct {
 	*sync.Mutex
-	sandboxes map[string]struct{}
+	// the bool value tracks if the pod is a kata one (true) or not (false)
+	sandboxes map[string]bool
 }
 
-func (sc *sandboxCache) getAllSandboxes() map[string]struct{} {
+func (sc *sandboxCache) getAllSandboxes() map[string]bool {
 	sc.Lock()
 	defer sc.Unlock()
 	return sc.sandboxes
+}
+
+func (sc *sandboxCache) getKataSandboxes() []string {
+	sc.Lock()
+	defer sc.Unlock()
+	var katasandboxes []string
+	for id, isKata := range sc.sandboxes {
+		if isKata {
+			katasandboxes = append(katasandboxes, id)
+		}
+	}
+	return katasandboxes
 }
 
 func (sc *sandboxCache) deleteIfExists(id string) bool {
@@ -33,12 +46,12 @@ func (sc *sandboxCache) deleteIfExists(id string) bool {
 	return false
 }
 
-func (sc *sandboxCache) putIfNotExists(id string) bool {
+func (sc *sandboxCache) putIfNotExists(id string, value bool) bool {
 	sc.Lock()
 	defer sc.Unlock()
 
 	if _, found := sc.sandboxes[id]; !found {
-		sc.sandboxes[id] = struct{}{}
+		sc.sandboxes[id] = value
 		return true
 	}
 
@@ -46,7 +59,7 @@ func (sc *sandboxCache) putIfNotExists(id string) bool {
 	return false
 }
 
-func (sc *sandboxCache) set(sandboxes map[string]struct{}) {
+func (sc *sandboxCache) set(sandboxes map[string]bool) {
 	sc.Lock()
 	defer sc.Unlock()
 	sc.sandboxes = sandboxes
