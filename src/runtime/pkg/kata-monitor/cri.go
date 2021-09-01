@@ -8,15 +8,12 @@ package katamonitor
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net"
 	"net/url"
-	"strings"
 
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
-	"github.com/xeipuuv/gojsonpointer"
 	"google.golang.org/grpc"
 
 	pb "k8s.io/cri-api/pkg/apis/runtime/v1alpha2"
@@ -149,61 +146,14 @@ func (km *KataMonitor) getSandboxes(sandboxMap map[string]bool) (map[string]bool
 			continue
 		}
 
-		request := &pb.PodSandboxStatusRequest{
-			PodSandboxId: pod.Id,
-			Verbose:      true,
-		}
-
-		r, err := runtimeClient.PodSandboxStatus(context.Background(), request)
-		if err != nil {
-			return newMap, err
-		}
-
-		lowRuntime := ""
-		var res map[string]interface{}
-		if err := json.Unmarshal([]byte(r.Info["info"]), &res); err != nil {
-			monitorLog.WithError(err).WithField("pod", r).Error("failed to Unmarshal pod info")
-			continue
-		} else {
-			monitorLog.WithField("pod info", res).Debug("")
-
-			// get low level container runtime
-			// containerd stores the pod runtime in "/runtimeType" while CRI-O stores it the
-			// io.kubernetes.cri-o.RuntimeHandler annotation: check for both.
-			const (
-				containerdRuntimeMarker = "/runtimeType"
-				crioRuntimeMarker       = "/runtimeSpec/annotations/io.kubernetes.cri-o.RuntimeHandler"
-			)
-			keys := []string{containerdRuntimeMarker, crioRuntimeMarker}
-			for _, key := range keys {
-				pointer, _ := gojsonpointer.NewJsonPointer(key)
-				rt, _, _ := pointer.Get(res)
-				if rt != nil {
-					if str, ok := rt.(string); ok {
-						lowRuntime = str
-						break
-					}
-				}
-			}
-		}
-
-		// If lowRuntime is empty something changed in containerd/CRI-O or we are dealing with an unknown container engine.
-		// Safest options is to add the POD in the list: we will be able to connect to the shim to retrieve the actual info
-		// only for kata PODs.
-		if lowRuntime == "" {
-			monitorLog.WithField("pod", r).Warning("unable to retrieve the runtime type")
-			newMap[pod.Id] = true
-			continue
-		}
-
+		// Check if a directory associated with the POD ID exist on the kata fs:
+		// if so we know that the POD is a kata one.
+		newMap[pod.Id] = checkSandboxFSExists(pod.Id)
 		monitorLog.WithFields(logrus.Fields{
-			"low runtime": lowRuntime,
+			"id":      pod.Id,
+			"is kata": newMap[pod.Id],
+			"pod":     pod,
 		}).Debug("")
-		if strings.Contains(lowRuntime, "kata") {
-			newMap[pod.Id] = true
-		} else {
-			newMap[pod.Id] = false
-		}
 	}
 
 	return newMap, nil
