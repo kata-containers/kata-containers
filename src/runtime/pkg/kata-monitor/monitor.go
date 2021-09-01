@@ -50,7 +50,7 @@ func NewKataMonitor(runtimeEndpoint string) (*KataMonitor, error) {
 		runtimeEndpoint: runtimeEndpoint,
 		sandboxCache: &sandboxCache{
 			Mutex:     &sync.Mutex{},
-			sandboxes: make(map[string]struct{}),
+			sandboxes: make(map[string]bool),
 		},
 	}
 
@@ -66,7 +66,7 @@ func NewKataMonitor(runtimeEndpoint string) (*KataMonitor, error) {
 func (km *KataMonitor) startPodCacheUpdater() {
 	for {
 		time.Sleep(podCacheRefreshTimeSeconds * time.Second)
-		sandboxes, err := km.getSandboxes()
+		sandboxes, err := km.getSandboxes(km.sandboxCache.getAllSandboxes())
 		if err != nil {
 			monitorLog.WithError(err).Error("failed to get sandboxes")
 			continue
@@ -95,20 +95,8 @@ func (km *KataMonitor) GetAgentURL(w http.ResponseWriter, r *http.Request) {
 
 // ListSandboxes list all sandboxes running in Kata
 func (km *KataMonitor) ListSandboxes(w http.ResponseWriter, r *http.Request) {
-	sandboxes := km.getSandboxList()
+	sandboxes := km.sandboxCache.getKataSandboxes()
 	for _, s := range sandboxes {
 		w.Write([]byte(fmt.Sprintf("%s\n", s)))
 	}
-}
-
-func (km *KataMonitor) getSandboxList() []string {
-	sn := km.sandboxCache.getAllSandboxes()
-	result := make([]string, len(sn))
-
-	i := 0
-	for k := range sn {
-		result[i] = k
-		i++
-	}
-	return result
 }
