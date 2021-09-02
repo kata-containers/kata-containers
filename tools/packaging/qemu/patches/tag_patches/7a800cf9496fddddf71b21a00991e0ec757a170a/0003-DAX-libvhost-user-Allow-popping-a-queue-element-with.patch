@@ -1,7 +1,7 @@
-From d14a6cb000d0a5f9e382e5e5de0021756034d0cb Mon Sep 17 00:00:00 2001
+From 712b35aa6f1c4954ea5b90735a2f0ef65fc105a7 Mon Sep 17 00:00:00 2001
 From: "Dr. David Alan Gilbert" <dgilbert@redhat.com>
 Date: Thu, 2 May 2019 18:04:04 +0100
-Subject: [PATCH 01/29] DAX: libvhost-user: Allow popping a queue element with
+Subject: [PATCH 03/25] DAX: libvhost-user: Allow popping a queue element with
  bad pointers
 
 Allow a daemon implemented with libvhost-user to accept an
@@ -12,7 +12,9 @@ cases of this.
 The default behaviour doesn't change.
 
 Signed-off-by: Dr. David Alan Gilbert <dgilbert@redhat.com>
+Reviewed-by: Stefan Hajnoczi <stefanha@redhat.com>
 ---
+ block/export/vhost-user-blk-server.c      |  2 +-
  contrib/vhost-user-blk/vhost-user-blk.c   |  3 +-
  contrib/vhost-user-gpu/vhost-user-gpu.c   |  5 ++-
  contrib/vhost-user-input/main.c           |  4 +-
@@ -21,8 +23,21 @@ Signed-off-by: Dr. David Alan Gilbert <dgilbert@redhat.com>
  subprojects/libvhost-user/libvhost-user.h |  8 +++-
  tests/vhost-user-bridge.c                 |  4 +-
  tools/virtiofsd/fuse_virtio.c             |  3 +-
- 8 files changed, 59 insertions(+), 21 deletions(-)
+ 9 files changed, 60 insertions(+), 22 deletions(-)
 
+diff --git a/block/export/vhost-user-blk-server.c b/block/export/vhost-user-blk-server.c
+index 1862563336..76d9619501 100644
+--- a/block/export/vhost-user-blk-server.c
++++ b/block/export/vhost-user-blk-server.c
+@@ -300,7 +300,7 @@ static void vu_blk_process_vq(VuDev *vu_dev, int idx)
+     while (1) {
+         VuBlkReq *req;
+ 
+-        req = vu_queue_pop(vu_dev, vq, sizeof(VuBlkReq));
++        req = vu_queue_pop(vu_dev, vq, sizeof(VuBlkReq), NULL, NULL);
+         if (!req) {
+             break;
+         }
 diff --git a/contrib/vhost-user-blk/vhost-user-blk.c b/contrib/vhost-user-blk/vhost-user-blk.c
 index d14b2896bf..01193552e9 100644
 --- a/contrib/vhost-user-blk/vhost-user-blk.c
@@ -38,10 +53,10 @@ index d14b2896bf..01193552e9 100644
          return -1;
      }
 diff --git a/contrib/vhost-user-gpu/vhost-user-gpu.c b/contrib/vhost-user-gpu/vhost-user-gpu.c
-index f445ef28ec..58161a4378 100644
+index 611360e6b4..9feba0660e 100644
 --- a/contrib/vhost-user-gpu/vhost-user-gpu.c
 +++ b/contrib/vhost-user-gpu/vhost-user-gpu.c
-@@ -819,7 +819,8 @@ vg_handle_ctrl(VuDev *dev, int qidx)
+@@ -863,7 +863,8 @@ vg_handle_ctrl(VuDev *dev, int qidx)
              return;
          }
  
@@ -51,7 +66,7 @@ index f445ef28ec..58161a4378 100644
          if (!cmd) {
              break;
          }
-@@ -922,7 +923,7 @@ vg_handle_cursor(VuDev *dev, int qidx)
+@@ -972,7 +973,7 @@ vg_handle_cursor(VuDev *dev, int qidx)
      struct virtio_gpu_update_cursor cursor;
  
      for (;;) {
@@ -61,10 +76,10 @@ index f445ef28ec..58161a4378 100644
              break;
          }
 diff --git a/contrib/vhost-user-input/main.c b/contrib/vhost-user-input/main.c
-index c15d18c33f..d5c435605c 100644
+index 081230da54..1d868409d0 100644
 --- a/contrib/vhost-user-input/main.c
 +++ b/contrib/vhost-user-input/main.c
-@@ -57,7 +57,7 @@ static void vi_input_send(VuInput *vi, struct virtio_input_event *event)
+@@ -58,7 +58,7 @@ static void vi_input_send(VuInput *vi, struct virtio_input_event *event)
  
      /* ... then check available space ... */
      for (i = 0; i < vi->qindex; i++) {
@@ -73,7 +88,7 @@ index c15d18c33f..d5c435605c 100644
          if (!elem) {
              while (--i >= 0) {
                  vu_queue_unpop(dev, vq, vi->queue[i].elem, 0);
-@@ -141,7 +141,7 @@ static void vi_handle_sts(VuDev *dev, int qidx)
+@@ -145,7 +145,7 @@ static void vi_handle_sts(VuDev *dev, int qidx)
      g_debug("%s", G_STRFUNC);
  
      for (;;) {
@@ -96,10 +111,10 @@ index 4f6e3e2a24..7564d6ab2d 100644
              g_debug("No more elements pending on vq[%d]@%p", idx, vq);
              break;
 diff --git a/subprojects/libvhost-user/libvhost-user.c b/subprojects/libvhost-user/libvhost-user.c
-index fab7ca17ee..3b1b5c385f 100644
+index 354a34ff15..cedcc05414 100644
 --- a/subprojects/libvhost-user/libvhost-user.c
 +++ b/subprojects/libvhost-user/libvhost-user.c
-@@ -2461,7 +2461,8 @@ vu_queue_set_notification(VuDev *dev, VuVirtq *vq, int enable)
+@@ -2469,7 +2469,8 @@ vu_queue_set_notification(VuDev *dev, VuVirtq *vq, int enable)
  
  static bool
  virtqueue_map_desc(VuDev *dev,
@@ -109,7 +124,7 @@ index fab7ca17ee..3b1b5c385f 100644
                     unsigned int max_num_sg, bool is_write,
                     uint64_t pa, size_t sz)
  {
-@@ -2482,10 +2483,35 @@ virtqueue_map_desc(VuDev *dev,
+@@ -2490,10 +2491,35 @@ virtqueue_map_desc(VuDev *dev,
              return false;
          }
  
@@ -149,7 +164,7 @@ index fab7ca17ee..3b1b5c385f 100644
          }
          iov[num_sg].iov_len = len;
          num_sg++;
-@@ -2516,7 +2542,8 @@ virtqueue_alloc_element(size_t sz,
+@@ -2524,7 +2550,8 @@ virtqueue_alloc_element(size_t sz,
  }
  
  static void *
@@ -159,7 +174,7 @@ index fab7ca17ee..3b1b5c385f 100644
  {
      struct vring_desc *desc = vq->vring.desc;
      uint64_t desc_addr, read_len;
-@@ -2560,7 +2587,7 @@ vu_queue_map_desc(VuDev *dev, VuVirtq *vq, unsigned int idx, size_t sz)
+@@ -2568,7 +2595,7 @@ vu_queue_map_desc(VuDev *dev, VuVirtq *vq, unsigned int idx, size_t sz)
      /* Collect all the descriptors */
      do {
          if (le16toh(desc[i].flags) & VRING_DESC_F_WRITE) {
@@ -168,7 +183,7 @@ index fab7ca17ee..3b1b5c385f 100644
                                 VIRTQUEUE_MAX_SIZE - out_num, true,
                                 le64toh(desc[i].addr),
                                 le32toh(desc[i].len))) {
-@@ -2571,7 +2598,7 @@ vu_queue_map_desc(VuDev *dev, VuVirtq *vq, unsigned int idx, size_t sz)
+@@ -2579,7 +2606,7 @@ vu_queue_map_desc(VuDev *dev, VuVirtq *vq, unsigned int idx, size_t sz)
                  vu_panic(dev, "Incorrect order for descriptors");
                  return NULL;
              }
@@ -177,7 +192,7 @@ index fab7ca17ee..3b1b5c385f 100644
                                 VIRTQUEUE_MAX_SIZE, false,
                                 le64toh(desc[i].addr),
                                 le32toh(desc[i].len))) {
-@@ -2661,7 +2688,8 @@ vu_queue_inflight_post_put(VuDev *dev, VuVirtq *vq, int desc_idx)
+@@ -2669,7 +2696,8 @@ vu_queue_inflight_post_put(VuDev *dev, VuVirtq *vq, int desc_idx)
  }
  
  void *
@@ -187,7 +202,7 @@ index fab7ca17ee..3b1b5c385f 100644
  {
      int i;
      unsigned int head;
-@@ -2674,7 +2702,8 @@ vu_queue_pop(VuDev *dev, VuVirtq *vq, size_t sz)
+@@ -2682,7 +2710,8 @@ vu_queue_pop(VuDev *dev, VuVirtq *vq, size_t sz)
  
      if (unlikely(vq->resubmit_list && vq->resubmit_num > 0)) {
          i = (--vq->resubmit_num);
@@ -197,7 +212,7 @@ index fab7ca17ee..3b1b5c385f 100644
  
          if (!vq->resubmit_num) {
              free(vq->resubmit_list);
-@@ -2706,7 +2735,7 @@ vu_queue_pop(VuDev *dev, VuVirtq *vq, size_t sz)
+@@ -2714,7 +2743,7 @@ vu_queue_pop(VuDev *dev, VuVirtq *vq, size_t sz)
          vring_set_avail_event(vq, vq->last_avail_idx);
      }
  
@@ -207,7 +222,7 @@ index fab7ca17ee..3b1b5c385f 100644
      if (!elem) {
          return NULL;
 diff --git a/subprojects/libvhost-user/libvhost-user.h b/subprojects/libvhost-user/libvhost-user.h
-index 7d47f1364a..f0aca2b216 100644
+index 3d13dfadde..330b61c005 100644
 --- a/subprojects/libvhost-user/libvhost-user.h
 +++ b/subprojects/libvhost-user/libvhost-user.h
 @@ -589,11 +589,17 @@ void vu_queue_notify_sync(VuDev *dev, VuVirtq *vq);
@@ -252,10 +267,10 @@ index 24815920b2..4f6829e6c3 100644
              break;
          }
 diff --git a/tools/virtiofsd/fuse_virtio.c b/tools/virtiofsd/fuse_virtio.c
-index ddcefee427..bd19358437 100644
+index fc2564a603..3d54f01955 100644
 --- a/tools/virtiofsd/fuse_virtio.c
 +++ b/tools/virtiofsd/fuse_virtio.c
-@@ -657,7 +657,8 @@ static void *fv_queue_thread(void *opaque)
+@@ -697,7 +697,8 @@ static void *fv_queue_thread(void *opaque)
                   __func__, qi->qidx, (size_t)evalue, in_bytes, out_bytes);
  
          while (1) {
@@ -266,5 +281,5 @@ index ddcefee427..bd19358437 100644
                  break;
              }
 -- 
-2.25.1
+2.31.1
 
