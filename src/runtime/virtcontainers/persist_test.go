@@ -13,7 +13,6 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/manager"
-	exp "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/experimental"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 )
@@ -22,8 +21,7 @@ func TestSandboxRestore(t *testing.T) {
 	var err error
 	assert := assert.New(t)
 	sconfig := SandboxConfig{
-		ID:           "test-exp",
-		Experimental: []exp.Feature{persist.NewStoreFeature},
+		ID: "test-exp",
 	}
 	container := make(map[string]*Container)
 	container["test-exp"] = &Container{}
