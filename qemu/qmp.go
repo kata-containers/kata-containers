@@ -761,7 +761,7 @@ func (q *QMP) ExecuteCont(ctx context.Context) error {
 // This function will block until the SHUTDOWN event is received.
 func (q *QMP) ExecuteSystemPowerdown(ctx context.Context) error {
 	filter := &qmpEventFilter{
-		eventName: "SHUTDOWN",
+		eventName: "POWERDOWN",
 	}
 	return q.executeCommand(ctx, "system_powerdown", nil, filter)
 }
