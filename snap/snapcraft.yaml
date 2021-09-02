@@ -299,7 +299,7 @@ parts:
         | xargs ./configure
 
       # Copy QEMU configurations (Kconfigs)
-      case "$(branch)" in
+      case "${branch}" in
       "v5.1.0")
         cp -a ${kata_dir}/tools/packaging/qemu/default-configs/* default-configs
         ;;
