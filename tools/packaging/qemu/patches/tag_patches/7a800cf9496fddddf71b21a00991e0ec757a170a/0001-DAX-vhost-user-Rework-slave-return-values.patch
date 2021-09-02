@@ -1,0 +1,188 @@
+From 922567a721f34a6e138d2b0e31d98da24211fce9 Mon Sep 17 00:00:00 2001
+From: "Dr. David Alan Gilbert" <dgilbert@redhat.com>
+Date: Mon, 20 May 2019 18:08:41 +0100
+Subject: [PATCH 01/25] DAX: vhost-user: Rework slave return values
+
+All the current slave handlers on the qemu side generate an 'int'
+return value that's squashed down to a bool (!!ret) and stuffed into
+a uint64_t (field of a union) to be returned.
+
+Move the uint64_t type back up through the individual handlers so
+that we can make one actually return a full uint64_t.
+
+Note that the definition in the interop spec says most of these
+cases are defined as returning 0 on success and non-0 for failure,
+so it's OK to change from a bool to another non-0.
+
+Vivek:
+This is needed because upcoming patches in series will add new functions
+which want to return full error code. Existing functions continue to
+return true/false so, it should not lead to change of behavior for
+existing users.
+
+Signed-off-by: Dr. David Alan Gilbert <dgilbert@redhat.com>
+Reviewed-by: Greg Kurz <groug@kaod.org>
+---
+ hw/virtio/vhost-backend.c         | 16 ++++++++--------
+ hw/virtio/vhost-user.c            | 29 +++++++++++++++--------------
+ include/hw/virtio/vhost-backend.h |  2 +-
+ 3 files changed, 24 insertions(+), 23 deletions(-)
+
+diff --git a/hw/virtio/vhost-backend.c b/hw/virtio/vhost-backend.c
+index 594d770b75..7568eccc7c 100644
+--- a/hw/virtio/vhost-backend.c
++++ b/hw/virtio/vhost-backend.c
+@@ -403,31 +403,31 @@ int vhost_backend_invalidate_device_iotlb(struct vhost_dev *dev,
+     return -ENODEV;
+ }
+ 
+-int vhost_backend_handle_iotlb_msg(struct vhost_dev *dev,
+-                                          struct vhost_iotlb_msg *imsg)
++uint64_t vhost_backend_handle_iotlb_msg(struct vhost_dev *dev,
++                                        struct vhost_iotlb_msg *imsg)
+ {
+-    int ret = 0;
++    uint64_t ret = 0;
+ 
+     if (unlikely(!dev->vdev)) {
+         error_report("Unexpected IOTLB message when virtio device is stopped");
+-        return -EINVAL;
++        return EINVAL;
+     }
+ 
+     switch (imsg->type) {
+     case VHOST_IOTLB_MISS:
+-        ret = vhost_device_iotlb_miss(dev, imsg->iova,
+-                                      imsg->perm != VHOST_ACCESS_RO);
++        ret = -vhost_device_iotlb_miss(dev, imsg->iova,
++                                       imsg->perm != VHOST_ACCESS_RO);
+         break;
+     case VHOST_IOTLB_ACCESS_FAIL:
+         /* FIXME: report device iotlb error */
+         error_report("Access failure IOTLB message type not supported");
+-        ret = -ENOTSUP;
++        ret = ENOTSUP;
+         break;
+     case VHOST_IOTLB_UPDATE:
+     case VHOST_IOTLB_INVALIDATE:
+     default:
+         error_report("Unexpected IOTLB message type");
+-        ret = -EINVAL;
++        ret = EINVAL;
+         break;
+     }
+ 
+diff --git a/hw/virtio/vhost-user.c b/hw/virtio/vhost-user.c
+index aec6cc1990..cdbdb5b469 100644
+--- a/hw/virtio/vhost-user.c
++++ b/hw/virtio/vhost-user.c
+@@ -1409,24 +1409,25 @@ static int vhost_user_reset_device(struct vhost_dev *dev)
+     return 0;
+ }
+ 
+-static int vhost_user_slave_handle_config_change(struct vhost_dev *dev)
++static uint64_t vhost_user_slave_handle_config_change(struct vhost_dev *dev)
+ {
+-    int ret = -1;
++    uint64_t ret = 1;
+ 
+     if (!dev->config_ops) {
+-        return -1;
++        return 1;
+     }
+ 
+     if (dev->config_ops->vhost_dev_config_notifier) {
+-        ret = dev->config_ops->vhost_dev_config_notifier(dev);
++        ret = -dev->config_ops->vhost_dev_config_notifier(dev);
+     }
+ 
+     return ret;
+ }
+ 
+-static int vhost_user_slave_handle_vring_host_notifier(struct vhost_dev *dev,
+-                                                       VhostUserVringArea *area,
+-                                                       int fd)
++static uint64_t vhost_user_slave_handle_vring_host_notifier(
++                    struct vhost_dev *dev,
++                    VhostUserVringArea *area,
++                    int fd)
+ {
+     int queue_idx = area->u64 & VHOST_USER_VRING_IDX_MASK;
+     size_t page_size = qemu_real_host_page_size;
+@@ -1440,7 +1441,7 @@ static int vhost_user_slave_handle_vring_host_notifier(struct vhost_dev *dev,
+     if (!virtio_has_feature(dev->protocol_features,
+                             VHOST_USER_PROTOCOL_F_HOST_NOTIFIER) ||
+         vdev == NULL || queue_idx >= virtio_get_num_queues(vdev)) {
+-        return -1;
++        return 1;
+     }
+ 
+     n = &user->notifier[queue_idx];
+@@ -1458,13 +1459,13 @@ static int vhost_user_slave_handle_vring_host_notifier(struct vhost_dev *dev,
+ 
+     /* Sanity check. */
+     if (area->size != page_size) {
+-        return -1;
++        return 1;
+     }
+ 
+     addr = mmap(NULL, page_size, PROT_READ | PROT_WRITE, MAP_SHARED,
+                 fd, area->offset);
+     if (addr == MAP_FAILED) {
+-        return -1;
++        return 1;
+     }
+ 
+     name = g_strdup_printf("vhost-user/host-notifier@%p mmaps[%d]",
+@@ -1475,7 +1476,7 @@ static int vhost_user_slave_handle_vring_host_notifier(struct vhost_dev *dev,
+ 
+     if (virtio_queue_set_host_notifier_mr(vdev, queue_idx, &n->mr, true)) {
+         munmap(addr, page_size);
+-        return -1;
++        return 1;
+     }
+ 
+     n->addr = addr;
+@@ -1502,7 +1503,7 @@ static gboolean slave_read(QIOChannel *ioc, GIOCondition condition,
+     VhostUserPayload payload = { 0, };
+     Error *local_err = NULL;
+     gboolean rc = G_SOURCE_CONTINUE;
+-    int ret = 0;
++    uint64_t ret = 0;
+     struct iovec iov;
+     g_autofree int *fd = NULL;
+     size_t fdsize = 0;
+@@ -1543,7 +1544,7 @@ static gboolean slave_read(QIOChannel *ioc, GIOCondition condition,
+         break;
+     default:
+         error_report("Received unexpected msg type: %d.", hdr.request);
+-        ret = -EINVAL;
++        ret = EINVAL;
+     }
+ 
+     /*
+@@ -1557,7 +1558,7 @@ static gboolean slave_read(QIOChannel *ioc, GIOCondition condition,
+         hdr.flags &= ~VHOST_USER_NEED_REPLY_MASK;
+         hdr.flags |= VHOST_USER_REPLY_MASK;
+ 
+-        payload.u64 = !!ret;
++        payload.u64 = ret;
+         hdr.size = sizeof(payload.u64);
+ 
+         iovec[0].iov_base = &hdr;
+diff --git a/include/hw/virtio/vhost-backend.h b/include/hw/virtio/vhost-backend.h
+index 8475c5a29d..9ee6e87e7d 100644
+--- a/include/hw/virtio/vhost-backend.h
++++ b/include/hw/virtio/vhost-backend.h
+@@ -187,7 +187,7 @@ int vhost_backend_update_device_iotlb(struct vhost_dev *dev,
+ int vhost_backend_invalidate_device_iotlb(struct vhost_dev *dev,
+                                                  uint64_t iova, uint64_t len);
+ 
+-int vhost_backend_handle_iotlb_msg(struct vhost_dev *dev,
++uint64_t vhost_backend_handle_iotlb_msg(struct vhost_dev *dev,
+                                           struct vhost_iotlb_msg *imsg);
+ 
+ int vhost_user_gpu_set_socket(struct vhost_dev *dev, int fd);
+-- 
+2.31.1
+

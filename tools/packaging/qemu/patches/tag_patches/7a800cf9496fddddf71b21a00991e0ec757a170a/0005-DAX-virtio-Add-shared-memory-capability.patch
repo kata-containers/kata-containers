@@ -1,7 +1,7 @@
-From 71c89288b97c92ecb3a67ca8aa73619719dcfe9e Mon Sep 17 00:00:00 2001
+From b60b45a716a3dafa66e8c7a0bf9a9dec027bab1a Mon Sep 17 00:00:00 2001
 From: "Dr. David Alan Gilbert" <dgilbert@redhat.com>
 Date: Fri, 27 Jul 2018 12:38:03 +0100
-Subject: [PATCH 04/29] DAX: virtio: Add shared memory capability
+Subject: [PATCH 05/25] DAX: virtio: Add shared memory capability
 
 Define a new capability type 'VIRTIO_PCI_CAP_SHARED_MEMORY_CFG'
 and the data structure 'virtio_pci_cap64' to go with it.
@@ -11,16 +11,17 @@ Multiple instances of the capability are allowed and distinguished
 by the 'id' field in the base capability.
 
 Signed-off-by: Dr. David Alan Gilbert <dgilbert@redhat.com>
+Reviewed-by: Stefan Hajnoczi <stefanha@redhat.com>
 ---
  hw/virtio/virtio-pci.c | 20 ++++++++++++++++++++
  hw/virtio/virtio-pci.h |  4 ++++
  2 files changed, 24 insertions(+)
 
 diff --git a/hw/virtio/virtio-pci.c b/hw/virtio/virtio-pci.c
-index f863f69ede..f17ea5a6e8 100644
+index 433060ac02..566f4bc13d 100644
 --- a/hw/virtio/virtio-pci.c
 +++ b/hw/virtio/virtio-pci.c
-@@ -1136,6 +1136,26 @@ static int virtio_pci_add_mem_cap(VirtIOPCIProxy *proxy,
+@@ -1149,6 +1149,26 @@ static int virtio_pci_add_mem_cap(VirtIOPCIProxy *proxy,
      return offset;
  }
  
@@ -48,10 +49,10 @@ index f863f69ede..f17ea5a6e8 100644
                                         unsigned size)
  {
 diff --git a/hw/virtio/virtio-pci.h b/hw/virtio/virtio-pci.h
-index d7d5d403a9..31ca339099 100644
+index 2446dcd9ae..5e5c4a4c6d 100644
 --- a/hw/virtio/virtio-pci.h
 +++ b/hw/virtio/virtio-pci.h
-@@ -247,4 +247,8 @@ void virtio_pci_types_register(const VirtioPCIDeviceTypeInfo *t);
+@@ -252,4 +252,8 @@ void virtio_pci_types_register(const VirtioPCIDeviceTypeInfo *t);
   */
  unsigned virtio_pci_optimal_num_queues(unsigned fixed_queues);
  
@@ -61,5 +62,5 @@ index d7d5d403a9..31ca339099 100644
 +
  #endif
 -- 
-2.25.1
+2.31.1
 

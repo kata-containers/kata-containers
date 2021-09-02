@@ -1,0 +1,41 @@
+From b017dcb2b5531281d23831332298f3b6fbe61ddc Mon Sep 17 00:00:00 2001
+From: "Dr. David Alan Gilbert" <dgilbert@redhat.com>
+Date: Fri, 30 Nov 2018 11:50:25 +0000
+Subject: [PATCH 15/25] DAX: virtiofsd: Perform an unmap on destroy
+
+Force unmap all remaining dax cache entries on a destroy.
+
+Signed-off-by: Dr. David Alan Gilbert <dgilbert@redhat.com>
+Reviewed-by: Stefan Hajnoczi <stefanha@redhat.com>
+---
+ tools/virtiofsd/passthrough_ll.c | 14 ++++++++++++++
+ 1 file changed, 14 insertions(+)
+
+diff --git a/tools/virtiofsd/passthrough_ll.c b/tools/virtiofsd/passthrough_ll.c
+index e17733b1ef..20c5ea897b 100644
+--- a/tools/virtiofsd/passthrough_ll.c
++++ b/tools/virtiofsd/passthrough_ll.c
+@@ -3325,6 +3325,20 @@ static void lo_destroy(void *userdata, struct fuse_session *se)
+ {
+     struct lo_data *lo = (struct lo_data *)userdata;
+ 
++    if (fuse_lowlevel_is_virtio(se)) {
++        VhostUserFSSlaveMsg *msg = g_malloc0(sizeof(VhostUserFSSlaveMsg) +
++                                             sizeof(VhostUserFSSlaveMsgEntry));
++
++        msg->hdr.count = 0;
++        msg->entries[0].len = ~(uint64_t)0; /* Special: means 'all' */
++        msg->entries[0].c_offset = 0;
++        if (fuse_virtio_unmap(se, msg)) {
++            fuse_log(FUSE_LOG_ERR, "%s: unmap during destroy failed\n",
++                     __func__);
++        }
++        g_free(msg);
++    }
++
+     pthread_mutex_lock(&lo->mutex);
+     while (true) {
+         GHashTableIter iter;
+-- 
+2.31.1
+

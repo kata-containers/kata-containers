@@ -1,7 +1,7 @@
-From e2a3c273639368221dae39a7f230a46d0a580e4d Mon Sep 17 00:00:00 2001
+From 49a2448ac10e3c827d5f6d75394de7e9c8d07477 Mon Sep 17 00:00:00 2001
 From: "Dr. David Alan Gilbert" <dgilbert@redhat.com>
 Date: Tue, 21 Jan 2020 10:20:14 +0000
-Subject: [PATCH 29/29] virtiofsd: Add printf checking to fuse_log
+Subject: [PATCH 25/25] virtiofsd: Add printf checking to fuse_log
 
 Use qemu's GCC_FMT_ATTR to add printf style checking to fuse_log.
 
@@ -31,5 +31,5 @@ index 8d7091bd4d..5c2df71603 100644
  
  #endif /* FUSE_LOG_H_ */
 -- 
-2.25.1
+2.31.1
 

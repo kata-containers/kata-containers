@@ -108,7 +108,7 @@ assets:
     qemu-experimental:
       description: "QEMU with virtiofs support"
       url: "https://github.com/qemu/qemu"
-      version: "470dd6bd360782f5137f7e3376af6a44658eb1d3"
+      version: "7a800cf9496fddddf71b21a00991e0ec757a170a"
 
   image:
     description: |

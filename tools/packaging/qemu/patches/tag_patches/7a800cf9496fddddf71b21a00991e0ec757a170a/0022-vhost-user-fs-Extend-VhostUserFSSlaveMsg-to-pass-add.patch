@@ -1,0 +1,108 @@
+From 9e86ae7b22b299753785a2fc476c9ba8cf5f51ec Mon Sep 17 00:00:00 2001
+From: Vivek Goyal <vgoyal@redhat.com>
+Date: Wed, 3 Feb 2021 11:56:55 -0500
+Subject: [PATCH 22/25] vhost-user-fs: Extend VhostUserFSSlaveMsg to pass
+ additional info
+
+Extend VhostUserFSSlaveMsg so that slave can ask it to drop CAP_FSETID
+before doing I/O on fd.
+
+In some cases, virtiofsd takes the onus of clearing setuid bit on a file
+when WRITE happens. Generally virtiofsd does the WRITE to fd (from guest
+memory which is mapped in virtiofsd as well), but if this memory is
+unmappable in virtiofsd (like cache window), then virtiofsd asks qemu
+to do the I/O instead.
+
+To retain the capability to drop suid bit on write, qemu needs to
+drop the CAP_FSETID as well before write to fd. Extend VhostUserFSSlaveMsg
+so that virtiofsd can specify in message if CAP_FSETID needs to be
+dropped.
+
+Signed-off-by: Vivek Goyal <vgoyal@redhat.com>
+---
+ hw/virtio/vhost-user-fs.c                 |  5 +++++
+ include/hw/virtio/vhost-user-fs.h         | 10 +++++++---
+ subprojects/libvhost-user/libvhost-user.h | 10 +++++++---
+ 3 files changed, 19 insertions(+), 6 deletions(-)
+
+diff --git a/hw/virtio/vhost-user-fs.c b/hw/virtio/vhost-user-fs.c
+index 2b022fc676..ca4e6f8017 100644
+--- a/hw/virtio/vhost-user-fs.c
++++ b/hw/virtio/vhost-user-fs.c
+@@ -244,6 +244,11 @@ uint64_t vhost_user_fs_slave_io(struct vhost_dev *dev, size_t message_size,
+         return (uint64_t)-1;
+     }
+ 
++    if (sm->hdr.flags & VHOST_USER_FS_GENFLAG_DROP_FSETID) {
++        error_report("Dropping CAP_FSETID is not supported");
++        return (uint64_t)-ENOTSUP;
++    }
++
+     for (i = 0; i < sm->hdr.count && !res; i++) {
+         VhostUserFSSlaveMsgEntry *e = &sm->entries[i];
+         if (e->len == 0) {
+diff --git a/include/hw/virtio/vhost-user-fs.h b/include/hw/virtio/vhost-user-fs.h
+index ac15accfd9..cd4531d30c 100644
+--- a/include/hw/virtio/vhost-user-fs.h
++++ b/include/hw/virtio/vhost-user-fs.h
+@@ -30,6 +30,10 @@ OBJECT_DECLARE_SIMPLE_TYPE(VHostUserFS, VHOST_USER_FS)
+ #define VHOST_USER_FS_FLAG_MAP_R (1u << 0)
+ #define VHOST_USER_FS_FLAG_MAP_W (1u << 1)
+ 
++/* Generic flags for the overall message and not individual ranges */
++/* Drop capability CAP_FSETID during the operation */
++#define VHOST_USER_FS_GENFLAG_DROP_FSETID (1u << 0)
++
+ typedef struct {
+     /* Offsets within the file being mapped */
+     uint64_t fd_offset;
+@@ -42,12 +46,12 @@ typedef struct {
+ } VhostUserFSSlaveMsgEntry;
+ 
+ typedef struct {
+-    /* Spare */
+-    uint32_t align32;
++    /* Generic flags for the overall message */
++    uint32_t flags;
+     /* Number of entries */
+     uint16_t count;
+     /* Spare */
+-    uint16_t align16;
++    uint16_t align;
+ } VhostUserFSSlaveMsgHdr;
+ 
+ /*
+diff --git a/subprojects/libvhost-user/libvhost-user.h b/subprojects/libvhost-user/libvhost-user.h
+index 7e372cf874..eee611a2f6 100644
+--- a/subprojects/libvhost-user/libvhost-user.h
++++ b/subprojects/libvhost-user/libvhost-user.h
+@@ -132,6 +132,10 @@ typedef enum VhostUserSlaveRequest {
+ #define VHOST_USER_FS_FLAG_MAP_R (1u << 0)
+ #define VHOST_USER_FS_FLAG_MAP_W (1u << 1)
+ 
++/* Generic flags for the overall message and not individual ranges */
++/* Drop capability CAP_FSETID during the operation */
++#define VHOST_USER_FS_GENFLAG_DROP_FSETID (1u << 0)
++
+ typedef struct {
+     /* Offsets within the file being mapped */
+     uint64_t fd_offset;
+@@ -144,12 +148,12 @@ typedef struct {
+ } VhostUserFSSlaveMsgEntry;
+ 
+ typedef struct {
+-    /* Spare */
+-    uint32_t align32;
++    /* Generic flags for the overall message */
++    uint32_t flags;
+     /* Number of entries */
+     uint16_t count;
+     /* Spare */
+-    uint16_t align16;
++    uint16_t align;
+ } VhostUserFSSlaveMsgHdr;
+ 
+ /*
+-- 
+2.31.1
+
