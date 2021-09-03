@@ -19,6 +19,7 @@ import (
 
 	ktu "github.com/kata-containers/kata-containers/src/runtime/pkg/katatestutils"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils"
+	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/urfave/cli"
@@ -214,14 +215,9 @@ func genericCheckCLIFunction(t *testing.T, cpuData []testCPUData, moduleData []t
 	sysModuleDir = filepath.Join(dir, "sys/module")
 	procCPUInfo = cpuInfoFile
 
-	// setCPUtype(config.HypervisorType)
-	savedArchRequiredKernelModules := archRequiredKernelModules
-	archRequiredKernelModules = map[string]kernelModule{}
-
 	defer func() {
 		sysModuleDir = savedSysModuleDir
 		procCPUInfo = savedProcCPUInfo
-		archRequiredKernelModules = savedArchRequiredKernelModules
 	}()
 
 	// Replace sysModuleDir in moduleData with the test temp path
@@ -252,6 +248,14 @@ func genericCheckCLIFunction(t *testing.T, cpuData []testCPUData, moduleData []t
 	flagSet := &flag.FlagSet{}
 	ctx := createCLIContext(flagSet)
 	ctx.App.Name = "foo"
+
+	if os.Getenv("GITHUB_ACTIONS") == "true" {
+		// https://docs.github.com/en/actions/reference/environment-variables#default-environment-variables
+		// only set to mock if on GitHub
+		t.Logf("running tests under GitHub actions")
+		config.HypervisorType = vc.MockHypervisor
+	}
+
 	ctx.App.Metadata["runtimeConfig"] = config
 
 	// create buffer to save logger output
@@ -268,7 +272,6 @@ func genericCheckCLIFunction(t *testing.T, cpuData []testCPUData, moduleData []t
 
 	output := buf.String()
 
-	fmt.Printf("SSSS %+v\n", output)
 	for _, c := range cpuData {
 		if c == fakeCPUData {
 			continue
@@ -280,7 +283,6 @@ func genericCheckCLIFunction(t *testing.T, cpuData []testCPUData, moduleData []t
 		}
 	}
 
-	fmt.Printf("sssss %+v\n", moduleData)
 	for _, m := range moduleData {
 		name := path.Base(m.path)
 		assert.True(findAnchoredString(output, name))
