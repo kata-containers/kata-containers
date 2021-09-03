@@ -9,6 +9,7 @@ import (
 	"context"
 	"io/ioutil"
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
@@ -59,6 +60,21 @@ func TestNewVM(t *testing.T) {
 	assert.Nil(err)
 	err = vm.OnlineCPUMemory(context.Background())
 	assert.Nil(err)
+
+	if os.Getenv("GITHUB_ACTIONS") == "true" {
+		savedUrandomDev := urandomDev
+		tmpdir, err := ioutil.TempDir("", "")
+		assert.NoError(err)
+		defer os.RemoveAll(tmpdir)
+		urandomDev = filepath.Join(tmpdir, "urandom")
+		data := make([]byte, 512)
+		err = ioutil.WriteFile(urandomDev, data, os.FileMode(0640))
+		assert.NoError(err)
+		defer func() {
+			urandomDev = savedUrandomDev
+		}()
+	}
+
 	err = vm.ReseedRNG(context.Background())
 	assert.Nil(err)
 

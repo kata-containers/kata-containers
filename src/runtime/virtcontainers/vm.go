@@ -8,6 +8,7 @@ package virtcontainers
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"time"
@@ -18,6 +19,8 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/uuid"
 	"github.com/sirupsen/logrus"
 )
+
+var urandomDev = "/dev/urandom"
 
 // VM is abstraction of a virtual machine.
 type VM struct {
@@ -298,12 +301,11 @@ func (v *VM) OnlineCPUMemory(ctx context.Context) error {
 // and reseeds it.
 func (v *VM) ReseedRNG(ctx context.Context) error {
 	v.logger().Infof("reseed guest random number generator")
-	urandomDev := "/dev/urandom"
 	data := make([]byte, 512)
 	f, err := os.OpenFile(urandomDev, os.O_RDONLY, 0)
 	if err != nil {
 		v.logger().WithError(err).Warnf("fail to open %s", urandomDev)
-		return err
+		return fmt.Errorf("fail to open %s: %+v", urandomDev, err)
 	}
 	defer f.Close()
 	if _, err = f.Read(data); err != nil {
