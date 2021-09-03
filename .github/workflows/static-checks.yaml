@@ -68,7 +68,23 @@ jobs:
         rustup target add x86_64-unknown-linux-musl
         rustup component add rustfmt clippy
     # Check whether the vendored code is up-to-date & working as the first thing
+    - name: Check vendored code
+      if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
+      run: |
+        cd ${GOPATH}/src/github.com/${{ github.repository }} && make vendor
+    - name: Static Checks
+      if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
+      run: |
+        cd ${GOPATH}/src/github.com/${{ github.repository }} && make static-checks
+    - name: Run Compiler Checks
+      if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
+      run: |
+        cd ${GOPATH}/src/github.com/${{ github.repository }} && make check
+    - name: Run Unit Tests
+      if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
+      run: |
+        cd ${GOPATH}/src/github.com/${{ github.repository }} && make test
     - name: Run Unit Tests As Root User
       if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
       run: |
-        cd ${GOPATH}/src/github.com/${{ github.repository }}/src/runtime && sudo -E PATH="$PATH" make test
+        cd ${GOPATH}/src/github.com/${{ github.repository }}/src/runtime && make && sudo -E PATH="$PATH" make test
