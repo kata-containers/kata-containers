@@ -30,9 +30,7 @@ valid_hypervisor_paths = @FCVALIDHYPERVISORPATHS@
 # If the jailer path is not set kata will launch firecracker
 # without a jail. If the jailer is set firecracker will be
 # launched in a jailed enviornment created by the jailer
-# This is disabled by default as additional setup is required
-# for this feature today.
-#jailer_path = "@FCJAILERPATH@"
+jailer_path = "@FCJAILERPATH@"
 
 # List of valid jailer path values for the hypervisor
 # Each member of the list can be a regular expression

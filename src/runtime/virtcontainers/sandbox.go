@@ -49,14 +49,11 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
 )
 
-// tracingTags defines tags for the trace span
-func (s *Sandbox) tracingTags() map[string]string {
-	return map[string]string{
-		"source":     "runtime",
-		"package":    "virtcontainers",
-		"subsystem":  "sandbox",
-		"sandbox_id": s.id,
-	}
+// sandboxTracingTags defines tags for the trace span
+var sandboxTracingTags = map[string]string{
+	"source":    "runtime",
+	"package":   "virtcontainers",
+	"subsystem": "sandbox",
 }
 
 const (
@@ -399,9 +396,7 @@ func (s *Sandbox) IOStream(containerID, processID string) (io.WriteCloser, io.Re
 }
 
 func createAssets(ctx context.Context, sandboxConfig *SandboxConfig) error {
-	span, _ := katatrace.Trace(ctx, nil, "createAssets", nil)
-	katatrace.AddTag(span, "sandbox_id", sandboxConfig.ID)
-	katatrace.AddTag(span, "subsystem", "sandbox")
+	span, _ := katatrace.Trace(ctx, nil, "createAssets", sandboxTracingTags, map[string]string{"sandbox_id": sandboxConfig.ID})
 	defer span.End()
 
 	for _, name := range types.AssetTypes() {
@@ -451,9 +446,7 @@ func (s *Sandbox) getAndStoreGuestDetails(ctx context.Context) error {
 // to physically create that sandbox i.e. starts a VM for that sandbox to eventually
 // be started.
 func createSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factory) (*Sandbox, error) {
-	span, ctx := katatrace.Trace(ctx, nil, "createSandbox", nil)
-	katatrace.AddTag(span, "sandbox_id", sandboxConfig.ID)
-	katatrace.AddTag(span, "subsystem", "sandbox")
+	span, ctx := katatrace.Trace(ctx, nil, "createSandbox", sandboxTracingTags, map[string]string{"sandbox_id": sandboxConfig.ID})
 	defer span.End()
 
 	if err := createAssets(ctx, &sandboxConfig); err != nil {
@@ -491,9 +484,7 @@ func createSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Fac
 }
 
 func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factory) (sb *Sandbox, retErr error) {
-	span, ctx := katatrace.Trace(ctx, nil, "newSandbox", nil)
-	katatrace.AddTag(span, "sandbox_id", sandboxConfig.ID)
-	katatrace.AddTag(span, "subsystem", "sandbox")
+	span, ctx := katatrace.Trace(ctx, nil, "newSandbox", sandboxTracingTags, map[string]string{"sandbox_id": sandboxConfig.ID})
 	defer span.End()
 
 	if !sandboxConfig.valid() {
@@ -630,7 +621,7 @@ func (s *Sandbox) createCgroupManager() error {
 
 // storeSandbox stores a sandbox config.
 func (s *Sandbox) storeSandbox(ctx context.Context) error {
-	span, _ := katatrace.Trace(ctx, s.Logger(), "storeSandbox", s.tracingTags())
+	span, _ := katatrace.Trace(ctx, s.Logger(), "storeSandbox", sandboxTracingTags, map[string]string{"sandbox_id": s.id})
 	defer span.End()
 
 	// flush data to storage
@@ -700,7 +691,7 @@ func (s *Sandbox) Delete(ctx context.Context) error {
 
 	for _, c := range s.containers {
 		if err := c.delete(ctx); err != nil {
-			s.Logger().WithError(err).WithField("cid", c.id).Debug("failed to delete container")
+			s.Logger().WithError(err).WithField("container`", c.id).Debug("failed to delete container")
 		}
 	}
 
@@ -724,7 +715,7 @@ func (s *Sandbox) Delete(ctx context.Context) error {
 }
 
 func (s *Sandbox) startNetworkMonitor(ctx context.Context) error {
-	span, ctx := katatrace.Trace(ctx, s.Logger(), "startNetworkMonitor", s.tracingTags())
+	span, ctx := katatrace.Trace(ctx, s.Logger(), "startNetworkMonitor", sandboxTracingTags, map[string]string{"sandbox_id": s.id})
 	defer span.End()
 
 	binPath, err := os.Executable()
@@ -763,7 +754,7 @@ func (s *Sandbox) createNetwork(ctx context.Context) error {
 		return nil
 	}
 
-	span, ctx := katatrace.Trace(ctx, s.Logger(), "createNetwork", s.tracingTags())
+	span, ctx := katatrace.Trace(ctx, s.Logger(), "createNetwork", sandboxTracingTags, map[string]string{"sandbox_id": s.id})
 	defer span.End()
 
 	s.networkNS = NetworkNamespace{
@@ -800,7 +791,7 @@ func (s *Sandbox) postCreatedNetwork(ctx context.Context) error {
 }
 
 func (s *Sandbox) removeNetwork(ctx context.Context) error {
-	span, ctx := katatrace.Trace(ctx, s.Logger(), "removeNetwork", s.tracingTags())
+	span, ctx := katatrace.Trace(ctx, s.Logger(), "removeNetwork", sandboxTracingTags, map[string]string{"sandbox_id": s.id})
 	defer span.End()
 
 	if s.config.NetworkConfig.NetmonConfig.Enable {
@@ -1116,7 +1107,7 @@ func (s *Sandbox) cleanSwap(ctx context.Context) {
 
 // startVM starts the VM.
 func (s *Sandbox) startVM(ctx context.Context) (err error) {
-	span, ctx := katatrace.Trace(ctx, s.Logger(), "startVM", s.tracingTags())
+	span, ctx := katatrace.Trace(ctx, s.Logger(), "startVM", sandboxTracingTags, map[string]string{"sandbox_id": s.id})
 	defer span.End()
 
 	s.Logger().Info("Starting VM")
@@ -1205,7 +1196,7 @@ func (s *Sandbox) startVM(ctx context.Context) (err error) {
 
 // stopVM: stop the sandbox's VM
 func (s *Sandbox) stopVM(ctx context.Context) error {
-	span, ctx := katatrace.Trace(ctx, s.Logger(), "stopVM", s.tracingTags())
+	span, ctx := katatrace.Trace(ctx, s.Logger(), "stopVM", sandboxTracingTags, map[string]string{"sandbox_id": s.id})
 	defer span.End()
 
 	s.Logger().Info("Stopping sandbox in the VM")
@@ -1264,7 +1255,7 @@ func (s *Sandbox) CreateContainer(ctx context.Context, contConfig ContainerConfi
 	defer func() {
 		// Rollback if error happens.
 		if err != nil {
-			logger := s.Logger().WithFields(logrus.Fields{"container-id": c.id, "sandox-id": s.id, "rollback": true})
+			logger := s.Logger().WithFields(logrus.Fields{"container": c.id, "sandbox": s.id, "rollback": true})
 			logger.WithError(err).Error("Cleaning up partially created container")
 
 			if errStop := c.stop(ctx, true); errStop != nil {
@@ -1311,7 +1302,7 @@ func (s *Sandbox) StartContainer(ctx context.Context, containerID string) (VCCon
 		return nil, err
 	}
 
-	s.Logger().Info("Container is started")
+	s.Logger().WithField("container", containerID).Info("Container is started")
 
 	// Update sandbox resources in case a stopped container
 	// is started
@@ -1558,7 +1549,7 @@ func (s *Sandbox) ResumeContainer(ctx context.Context, containerID string) error
 // createContainers registers all containers, create the
 // containers in the guest and starts one shim per container.
 func (s *Sandbox) createContainers(ctx context.Context) error {
-	span, ctx := katatrace.Trace(ctx, s.Logger(), "createContainers", s.tracingTags())
+	span, ctx := katatrace.Trace(ctx, s.Logger(), "createContainers", sandboxTracingTags, map[string]string{"sandbox_id": s.id})
 	defer span.End()
 
 	for i := range s.config.Containers {
@@ -1630,7 +1621,7 @@ func (s *Sandbox) Start(ctx context.Context) error {
 // will be destroyed.
 // When force is true, ignore guest related stop failures.
 func (s *Sandbox) Stop(ctx context.Context, force bool) error {
-	span, ctx := katatrace.Trace(ctx, s.Logger(), "Stop", s.tracingTags())
+	span, ctx := katatrace.Trace(ctx, s.Logger(), "Stop", sandboxTracingTags, map[string]string{"sandbox_id": s.id})
 	defer span.End()
 
 	if s.state.State == types.StateStopped {
@@ -1732,7 +1723,7 @@ func (s *Sandbox) unsetSandboxBlockIndex(index int) error {
 // HotplugAddDevice is used for add a device to sandbox
 // Sandbox implement DeviceReceiver interface from device/api/interface.go
 func (s *Sandbox) HotplugAddDevice(ctx context.Context, device api.Device, devType config.DeviceType) error {
-	span, ctx := katatrace.Trace(ctx, s.Logger(), "HotplugAddDevice", s.tracingTags())
+	span, ctx := katatrace.Trace(ctx, s.Logger(), "HotplugAddDevice", sandboxTracingTags, map[string]string{"sandbox_id": s.id})
 	defer span.End()
 
 	if s.config.SandboxCgroupOnly {
@@ -1998,7 +1989,7 @@ func (s *Sandbox) calculateSandboxMemory() (int64, bool, int64) {
 	for _, c := range s.config.Containers {
 		// Do not hot add again non-running containers resources
 		if cont, ok := s.containers[c.ID]; ok && cont.state.State == types.StateStopped {
-			s.Logger().WithField("container-id", c.ID).Debug("Do not taking into account memory resources of not running containers")
+			s.Logger().WithField("container", c.ID).Debug("Do not taking into account memory resources of not running containers")
 			continue
 		}
 
@@ -2035,7 +2026,7 @@ func (s *Sandbox) calculateSandboxCPUs() (uint32, error) {
 	for _, c := range s.config.Containers {
 		// Do not hot add again non-running containers resources
 		if cont, ok := s.containers[c.ID]; ok && cont.state.State == types.StateStopped {
-			s.Logger().WithField("container-id", c.ID).Debug("Do not taking into account CPU resources of not running containers")
+			s.Logger().WithField("container", c.ID).Debug("Do not taking into account CPU resources of not running containers")
 			continue
 		}
 

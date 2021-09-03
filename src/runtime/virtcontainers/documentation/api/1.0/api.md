@@ -680,7 +680,6 @@ to manage the container lifecycle through the rest of the
   * [Container `DeviceInfo`](#container-deviceinfo)
 * [`Process`](#process)
 * [`ContainerStatus`](#containerstatus)
-* [`ProcessListOptions`](#processlistoptions)
 * [`VCContainer`](#vccontainer)
 
 
@@ -870,22 +869,6 @@ type ContainerStatus struct {
 	// for example to add additional status values required
 	// to support particular specifications.
 	Annotations map[string]string
-}
-```
-
-#### `ProcessListOptions`
-```Go
-// ProcessListOptions contains the options used to list running
-// processes inside the container
-type ProcessListOptions struct {
-	// Format describes the output format to list the running processes.
-	// Formats are unrelated to ps(1) formats, only two formats can be specified:
-	// "json" and "table"
-	Format string
-
-	// Args contains the list of arguments to run ps(1) command.
-	// If Args is empty the agent will use "-ef" as options to ps(1).
-	Args []string
 }
 ```
 

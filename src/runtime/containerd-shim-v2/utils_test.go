@@ -192,7 +192,7 @@ func newTestHypervisorConfig(dir string, create bool) (vc.HypervisorConfig, erro
 		KernelPath:            kernelPath,
 		ImagePath:             imagePath,
 		HypervisorPath:        hypervisorPath,
-		HypervisorMachineType: "pc-lite",
+		HypervisorMachineType: "q35",
 	}, nil
 }
 
