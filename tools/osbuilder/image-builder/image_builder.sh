@@ -242,7 +242,7 @@ calculate_required_disk_size() {
 	local fs_type="$2"
 	local block_size="$3"
 
-	readonly rootfs_size_mb=$(du -B 1MB -s "${rootfs}" | awk '{print $1}')
+	readonly rootfs_size_mb=$(du -B 1M -s "${rootfs}" | awk '{print $1}')
 	readonly image="$(mktemp)"
 	readonly mount_dir="$(mktemp -d)"
 	readonly max_tries=20
