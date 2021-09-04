@@ -295,31 +295,34 @@ async fn ephemeral_storage_handler(
 
 #[instrument]
 async fn nydus_storage_handler(
-    _logger: &Logger,
+    logger: &Logger,
     storage: &Storage,
     sandbox: Arc<Mutex<Sandbox>>,
 ) -> Result<String> {
-    let logger = _logger.new(o!("subsystem" => "mount", "driver"=> "nydus"));
+    let logger = logger.new(o!("subsystem" => "mount", "driver"=> "nydus"));
     let opts_vec: Vec<String> = storage.driver_options.to_vec();
     let opts = parse_options(opts_vec);
 
-    let snapshot_dir=  opts.get(SNAPSHOTDIR).ok_or_else(||
-        anyhow!("failed to get snapshot_dir"))?;
-    let lower_dir = opts.get(LOWERDIR).ok_or_else(||
-        anyhow!("failed to get lower_dir"))?;
+    let snapshot_dir = opts
+        .get(SNAPSHOTDIR)
+        .ok_or_else(|| anyhow!("failed to get snapshot_dir"))?;
+    let lower_dir = opts
+        .get(LOWERDIR)
+        .ok_or_else(|| anyhow!("failed to get lower_dir"))?;
 
+    let snapshot_dir_child = |target| -> Result<String> {
+        let mut sd = PathBuf::from(snapshot_dir);
+        sd.push(target);
+        match sd.to_str() {
+            Some(st) => Ok(st.to_string()),
+            None => Err(anyhow!("failed to get {}", target)),
+        }
+    };
 
-    let mut upper_path = PathBuf::from(snapshot_dir);
-    upper_path.push("fs");
-    let upper_dir = upper_path.to_str().ok_or_else(||
-        anyhow!("failed to get upper_dir"))?;
-    fs::create_dir_all(upper_dir)?;
-
-    let mut work_path = PathBuf::from(snapshot_dir);
-    work_path.push("work");
-    let work_dir = work_path.to_str().ok_or_else(||
-        anyhow!("failed to get work_dir"))?;
-    fs::create_dir_all(work_dir)?;
+    let upper_dir = snapshot_dir_child("fs")?;
+    fs::create_dir_all(upper_dir.as_str())?;
+    let work_dir = snapshot_dir_child("work")?;
+    fs::create_dir_all(work_dir.as_str())?;
 
     let mut options: String = "".to_string();
     options.push_str(format!("workdir={}", work_dir).as_str());
@@ -328,10 +331,21 @@ async fn nydus_storage_handler(
     options.push_str(",index=off");
 
     let dest = storage.mount_point.as_str();
-    let bare_mount = BareMount::new("overlay",dest,
-      "overlay", MsFlags::empty(), options.as_str(), &logger);
+    let bare_mount = BareMount::new(
+        "overlay",
+        dest,
+        "overlay",
+        MsFlags::empty(),
+        options.as_str(),
+        &logger,
+    );
 
-    info!(logger, "mounting storage dest: {}, options: {}", dest, options.as_str());
+    info!(
+        logger,
+        "mounting storage dest: {}, options: {}",
+        dest,
+        options.as_str()
+    );
 
     bare_mount.mount().or_else(|e| {
         return Err(e);
@@ -650,9 +664,7 @@ pub async fn add_storages(
             DRIVER_EPHEMERAL_TYPE => {
                 ephemeral_storage_handler(&logger, &storage, sandbox.clone()).await
             }
-            DRIVER_NYDUS_TYPE => {
-                nydus_storage_handler(&logger, &storage, sandbox.clone()).await
-            }
+            DRIVER_NYDUS_TYPE => nydus_storage_handler(&logger, &storage, sandbox.clone()).await,
             DRIVER_MMIO_BLK_TYPE => {
                 virtiommio_blk_storage_handler(&logger, &storage, sandbox.clone()).await
             }

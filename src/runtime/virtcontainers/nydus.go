@@ -78,14 +78,14 @@ func (nd *nydusd) Start(ctx context.Context, onQuit onQuitFunc) (int, error) {
 	if err := cmd.Start(); err != nil {
 		return pid, err
 	}
-	// Monitor virtiofsd's stderr and stop sandbox if virtiofsd quits
+	// Monitor nydusd's stderr and stop sandbox if nydusd quits
 	go func() {
 		scanner := bufio.NewScanner(stderr)
 		for scanner.Scan() {
 			nd.Logger().WithField("source", "nydusd").Info(scanner.Text())
 		}
 		nd.Logger().Info("nydusd quits")
-		// Wait to release resources of virtiofsd process
+		// Wait to release resources of nydusd process
 		cmd.Process.Wait()
 		if onQuit != nil {
 			onQuit()
@@ -127,6 +127,7 @@ func (nd *nydusd) MountRAFS(opt MountOption) error {
 
 func (nd *nydusd) Stop(ctx context.Context) error {
 	if err := nd.kill(ctx); err != nil {
+		nd.Logger().WithError(err).WithField("pid", nd.pid).Warn("kill nydusd failed")
 		return nil
 	}
 
@@ -142,18 +143,16 @@ func (nd *nydusd) Logger() *log.Entry {
 }
 
 func (nd *nydusd) kill(ctx context.Context) (err error) {
-	span, _ := katatrace.Trace(ctx, nd.Logger(), "kill", virtiofsdTracingTags)
+	span, _ := katatrace.Trace(ctx, nd.Logger(), "kill", nydusdTracingTags)
 	defer span.End()
 
 	if nd.pid == 0 {
-		return errors.New("invalid virtiofsd PID(0)")
+		return errors.New("invalid nydusd PID(0)")
 	}
-
-	err = syscall.Kill(nd.pid, syscall.SIGKILL)
+	err = syscall.Kill(nd.pid, syscall.SIGTERM)
 	if err != nil {
 		nd.pid = 0
 	}
-
 	return err
 }
 

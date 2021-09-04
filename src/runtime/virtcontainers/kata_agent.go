@@ -64,6 +64,7 @@ const (
 
 	sandboxMountsDir = "sandbox-mounts"
 
+	nydusRootFSType = "nydus"
 	// enable debug console
 	kernelParamDebugConsole           = "agent.debug_console"
 	kernelParamDebugConsoleVPort      = "agent.debug_console_vport"
@@ -1270,6 +1271,11 @@ func (k *kataAgent) rollbackFailingContainerCreation(ctx context.Context, c *Con
 		if err2 := bindUnmountContainerRootfs(ctx, getMountPath(c.sandbox.id), c.id); err2 != nil {
 			k.Logger().WithError(err2).Error("rollback failed bindUnmountContainerRootfs()")
 		}
+		if c.rootFs.Type == nydusRootFSType {
+			if err2 := bindUnmountContainerSnapshotDir(ctx, getMountPath(c.sandbox.id), c.id); err2 != nil {
+				k.Logger().WithError(err2).Error("rollback failed bindUnmountContainerSnapshotDir()")
+			}
+		}
 	}
 }
 
@@ -1315,7 +1321,7 @@ func (k *kataAgent) buildContainerRootfsWithNydus(sandbox *Sandbox, c *Container
 }
 
 func (k *kataAgent) buildContainerRootfs(ctx context.Context, sandbox *Sandbox, c *Container, rootPathParent string) (*grpc.Storage, error) {
-	if c.rootFs.Type == "nydus" {
+	if c.rootFs.Type == nydusRootFSType {
 		return k.buildContainerRootfsWithNydus(sandbox, c, rootPathParent)
 	}
 	if c.state.Fstype != "" && c.state.BlockDeviceID != "" {

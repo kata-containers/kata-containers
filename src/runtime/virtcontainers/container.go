@@ -865,6 +865,11 @@ func (c *Container) rollbackFailingContainerCreation(ctx context.Context) {
 	if err := bindUnmountContainerRootfs(ctx, getMountPath(c.sandbox.id), c.id); err != nil {
 		c.Logger().WithError(err).Error("rollback failed bindUnmountContainerRootfs()")
 	}
+	if c.rootFs.Type == nydusRootFSType {
+		if err := bindUnmountContainerSnapshotDir(ctx, getMountPath(c.sandbox.id), c.id); err != nil {
+			c.Logger().WithError(err).Error("rollback failed bindUnmountContainerSnapshotDir()")
+		}
+	}
 }
 
 func (c *Container) checkBlockDeviceSupport(ctx context.Context) bool {
@@ -1091,8 +1096,14 @@ func (c *Container) stop(ctx context.Context, force bool) error {
 		return err
 	}
 
+	// TODO: here will return 'invalid argument' in nydus case, it should be fix
 	if err := bindUnmountContainerRootfs(ctx, getMountPath(c.sandbox.id), c.id); err != nil && !force {
 		return err
+	}
+	if c.rootFs.Type == nydusRootFSType {
+		if err := bindUnmountContainerSnapshotDir(ctx, getMountPath(c.sandbox.id), c.id); err != nil && !force {
+			return err
+		}
 	}
 
 	if err := c.detachDevices(ctx); err != nil && !force {

@@ -370,27 +370,37 @@ func isSymlink(path string) bool {
 	return stat.Mode()&os.ModeSymlink != 0
 }
 
-func bindUnmountContainerRootfs(ctx context.Context, sharedDir, cID string) error {
-	span, _ := katatrace.Trace(ctx, nil, "bindUnmountContainerRootfs", mountTracingTags)
-	defer span.End()
-	span.SetAttributes(otelLabel.String("shared_dir", sharedDir), otelLabel.String("container_id", cID))
-
-	rootfsDest := filepath.Join(sharedDir, cID, rootfsDir)
-	if isSymlink(filepath.Join(sharedDir, cID)) || isSymlink(rootfsDest) {
+func bindUnmountContainerShareDir(ctx context.Context, sharedDir, cID, target string) error {
+	destDir := filepath.Join(sharedDir, cID, target)
+	if isSymlink(filepath.Join(sharedDir, cID)) || isSymlink(destDir) {
 		mountLogger().WithField("container", cID).Warnf("container dir is a symlink, malicious guest?")
 		return nil
 	}
 
-	err := syscall.Unmount(rootfsDest, syscall.MNT_DETACH|UmountNoFollow)
+	err := syscall.Unmount(destDir, syscall.MNT_DETACH|UmountNoFollow)
 	if err == syscall.ENOENT {
-		mountLogger().WithError(err).WithField("rootfs-dir", rootfsDest).Warn()
+		mountLogger().WithError(err).WithField("share-dir", destDir).Warn()
 		return nil
 	}
-	if err := syscall.Rmdir(rootfsDest); err != nil {
-		mountLogger().WithError(err).WithField("rootfs-dir", rootfsDest).Warn("Could not remove container rootfs dir")
+	if err := syscall.Rmdir(destDir); err != nil {
+		mountLogger().WithError(err).WithField("share-dir", destDir).Warn("Could not remove container share dir")
 	}
 
 	return err
+}
+
+func bindUnmountContainerRootfs(ctx context.Context, sharedDir, cID string) error {
+	span, _ := katatrace.Trace(ctx, nil, "bindUnmountContainerRootfs", mountTracingTags)
+	defer span.End()
+	span.SetAttributes(otelLabel.String("shared_dir", sharedDir), otelLabel.String("container_id", cID))
+	return bindUnmountContainerShareDir(ctx, sharedDir, cID, rootfsDir)
+}
+
+func bindUnmountContainerSnapshotDir(ctx context.Context, sharedDir, cID string) error {
+	span, _ := katatrace.Trace(ctx, nil, "bindUnmountContainerSnapshotDir", mountTracingTags)
+	defer span.End()
+	span.SetAttributes(otelLabel.String("shared_dir", sharedDir), otelLabel.String("container_id", cID))
+	return bindUnmountContainerShareDir(ctx, sharedDir, cID, snapshotDir)
 }
 
 func bindUnmountAllRootfs(ctx context.Context, sharedDir string, sandbox *Sandbox) error {
@@ -409,6 +419,9 @@ func bindUnmountAllRootfs(ctx context.Context, sharedDir string, sandbox *Sandbo
 			// even if error found, don't break out of loop until all mounts attempted
 			// to be unmounted, and collect all errors
 			errors = merr.Append(errors, bindUnmountContainerRootfs(ctx, sharedDir, c.id))
+			if c.rootFs.Type == nydusRootFSType {
+				errors = merr.Append(errors, bindUnmountContainerSnapshotDir(ctx, sharedDir, c.id))
+			}
 		}
 	}
 	return errors.ErrorOrNil()

@@ -153,6 +153,7 @@ func (v *virtiofsd) Start(ctx context.Context, onQuit onQuitFunc) (int, error) {
 
 func (v *virtiofsd) Stop(ctx context.Context) error {
 	if err := v.kill(ctx); err != nil {
+		v.Logger().WithError(err).WithField("pid", v.PID).Warn("kill virtiofsd failed")
 		return nil
 	}
 
@@ -234,7 +235,6 @@ func (v *virtiofsd) kill(ctx context.Context) (err error) {
 	if err != nil {
 		v.PID = 0
 	}
-
 	return err
 }
 
