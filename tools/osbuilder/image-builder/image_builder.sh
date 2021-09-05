@@ -372,6 +372,55 @@ create_disk() {
 	OK "Partitions created"
 }
 
+create_erofs_rootfs_image() {
+	local rootfs="$1"
+	local image="$2"
+	local fs_type="$3"
+	local block_size="$4"
+
+	if [ $block_size -ne 4096 ]; then
+		die "Invalid block size for erofs"
+	fi
+
+	readonly mount_dir=$(mktemp -p ${TMPDIR:-/tmp} -d osbuilder-mount-dir.XXXX)
+
+	info "Copying content from rootfs to root partition"
+	cp -a "${rootfs}"/* "${mount_dir}"
+
+	info "Removing unneeded systemd services and sockets"
+	for u in "${systemd_units[@]}"; do
+		find "${mount_dir}" -type f \( \
+			 -name "${u}.service" -o \
+			 -name "${u}.socket" \) \
+			 -exec rm -f {} \;
+	done
+
+	info "Removing unneeded systemd files"
+	for u in "${systemd_files[@]}"; do
+		find "${mount_dir}" -type f -name "${u}" -exec rm -f {} \;
+	done
+
+	info "Creating empty machine-id to allow systemd to bind-mount it"
+	touch "${mount_dir}/etc/machine-id"
+
+	readonly fsimage="$(mktemp)"
+	mkfs.erofs "${fsimage}" "${mount_dir}"
+	rm -rf "${mount_dir}"
+
+	local img_size="$(stat -c"%s" ${fsimage})"
+	local img_size_mb="$((((${img_size} + 1048576) / 1048576) + 1 + ${rootfs_start}))"
+	create_disk "${image}" "${img_size_mb}" "ext4" "${rootfs_start}"
+
+	if ! device="$(setup_loop_device "${image}")"; then
+		die "Could not setup loop device"
+	fi
+
+	dd if="${fsimage}" of="${device}p1"
+
+	losetup -d "${device}"
+	return ${img_size_mb}
+}
+
 create_rootfs_image() {
 	local rootfs="$1"
 	local image="$2"
@@ -516,14 +565,21 @@ main() {
 		die "Invalid rootfs"
 	fi
 
-	img_size=$(calculate_img_size "${rootfs}" "${root_free_space}" "${fs_type}" "${block_size}")
+	if [ "${fs_type}" == 'erofs' ]; then
+		create_erofs_rootfs_image "${rootfs}" "${image}" \
+			"${fs_type}" "${block_size}"
+		rootfs_img_size="$?"
+		img_size=$((rootfs_img_size + dax_header_sz))
+	else
+		img_size=$(calculate_img_size "${rootfs}" "${root_free_space}" \
+			"${fs_type}" "${block_size}")
 
-	# the first 2M are for the first MBR + NVDIMM metadata and were already
-	# consider in calculate_img_size
-	rootfs_img_size=$((img_size - dax_header_sz))
-	create_rootfs_image "${rootfs}" "${image}" "${rootfs_img_size}" \
+		# the first 2M are for the first MBR + NVDIMM metadata and were already
+		# consider in calculate_img_size
+		rootfs_img_size=$((img_size - dax_header_sz))
+		create_rootfs_image "${rootfs}" "${image}" "${rootfs_img_size}" \
 						"${fs_type}" "${block_size}"
-
+	fi
 	# insert at the beginning of the image the MBR + DAX header
 	set_dax_header "${image}" "${img_size}" "${fs_type}" "${nsdax_bin}"
 }

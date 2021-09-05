@@ -80,22 +80,22 @@ var defaultMaxQemuVCPUs = MaxQemuVCPUs()
 // agnostic list of kernel root parameters for NVDIMM
 var commonNvdimmKernelRootParams = []Param{ //nolint: unused, deadcode, varcheck
 	{"root", "/dev/pmem0p1"},
-	{"rootflags", "dax,data=ordered,errors=remount-ro ro"},
-	{"rootfstype", "ext4"},
+	{"rootflags", "ro"},
+	{"rootfstype", "erofs"},
 }
 
 // agnostic list of kernel root parameters for NVDIMM
 var commonNvdimmNoDAXKernelRootParams = []Param{ //nolint: unused, deadcode, varcheck
 	{"root", "/dev/pmem0p1"},
-	{"rootflags", "data=ordered,errors=remount-ro ro"},
-	{"rootfstype", "ext4"},
+	{"rootflags", "ro"},
+	{"rootfstype", "erofs"},
 }
 
 // agnostic list of kernel root parameters for virtio-blk
 var commonVirtioblkKernelRootParams = []Param{ //nolint: unused, deadcode, varcheck
 	{"root", "/dev/vda1"},
-	{"rootflags", "data=ordered,errors=remount-ro ro"},
-	{"rootfstype", "ext4"},
+	{"rootflags", "ro"},
+	{"rootfstype", "erofs"},
 }
 
 // deviceType describes a virtualized device type.
