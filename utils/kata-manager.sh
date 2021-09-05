@@ -418,12 +418,13 @@ configure_containerd()
 
 	sudo grep -q "$kata_runtime_type" "$cfg" || {
 		cat <<-EOT | sudo tee -a "$cfg"
-		[plugins]
-		    [plugins.cri]
-		        [plugins.cri.containerd]
-		        default_runtime_name = "${kata_runtime_name}"
-		    [plugins.cri.containerd.runtimes.${kata_runtime_name}]
-		        runtime_type = "${kata_runtime_type}"
+[plugins]
+  [plugins."io.containerd.grpc.v1.cri"]
+    [plugins."io.containerd.grpc.v1.cri".containerd]
+      default_runtime_name = "${kata_runtime_name}"
+      [plugins."io.containerd.grpc.v1.cri".containerd.runtimes]
+        [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.${kata_runtime_name}]
+          runtime_type = "${kata_runtime_type}"
 EOT
 
 		info "Modified $cfg"
