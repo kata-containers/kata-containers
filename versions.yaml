@@ -188,6 +188,8 @@ externals:
     # instead of abstract socket, thus kata wouldn's support the containerd's
     # version older than them.
     version: "v1.5.2"
+    # CCv0 is using a containerd PR build as our changes are still PoC
+    pr_id: "5911"
 
   critools:
     description: "CLI tool for Container Runtime Interface (CRI)"
