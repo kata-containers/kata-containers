@@ -35,3 +35,6 @@
 - [How to monitor Kata Containers in K8s](how-to-set-prometheus-in-k8s.md)
 - [How to use hotplug memory on arm64 in Kata Containers](how-to-hotplug-memory-arm64.md)
 - [How to setup swap devices in guest kernel](how-to-setup-swap-devices-in-guest-kernel.md)
+
+## Confidential Containers
+- [How to use build and test the Confidential Containers `CCv0` proof of concept](how-to-build-and-test-ccv0.md)
