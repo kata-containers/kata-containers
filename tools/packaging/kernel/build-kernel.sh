@@ -47,6 +47,8 @@ gpu_vendor=""
 conf_guest=""
 #
 patches_path=""
+#Enable Intel QuickAssist Technology (QAT)
+qat=0
 #
 hypervisor_target=""
 #
@@ -91,6 +93,7 @@ Options:
 	-h          	: Display this help.
 	-k <path>   	: Path to kernel to build.
 	-p <path>   	: Path to a directory with patches to apply to kernel.
+	-q          	: Enable Intel QuickAssist Technology.
 	-t <hypervisor>	: Hypervisor_target.
 	-v <version>	: Kernel version to use if kernel path not provided.
 	-x <type>	: Confidential guest protection type, such as sev
@@ -168,6 +171,7 @@ get_kernel_frag_path() {
 	local arch_path="$1"
 	local common_path="${arch_path}/../common"
 	local gpu_path="${arch_path}/../gpu"
+	local qat_path="${arch_path}/qat"
 
 	local kernel_path="$2"
 	local arch="$3"
@@ -203,6 +207,11 @@ get_kernel_frag_path() {
 		info "Add kernel config for GPU due to '-g ${gpu_vendor}'"
 		local gpu_configs="$(ls ${gpu_path}/${gpu_vendor}.conf)"
 		all_configs="${all_configs} ${gpu_configs}"
+	fi
+
+	if [ ${qat} == 1 ]; then
+		info "Add kernel config for QAT due to '-q'"
+		all_configs="${all_configs} ${qat_path}/qat.conf"
 	fi
 
 	if [[ "${conf_guest}" != "" ]];then
@@ -303,6 +312,43 @@ get_config_version() {
 	fi
 }
 
+setup_qat_driver() {
+	local kernel_path="$1"
+	local qat_version=$(get_from_kata_deps "externals.qat.version")
+	local qat_driver_url=https://downloadmirror.intel.com/30178/eng/${qat_version}.tar.gz
+	local qat_path=${kernel_path}/QAT
+
+	mkdir -p ${qat_path}/source
+	pushd ${qat_path}/source >>/dev/null
+	curl -L ${qat_driver_url} | tar zx
+
+	# change the SSL section to SHIM to support the OpenSSL engine.
+	sed 's/\[SSL\]/\[SHIM\]/g' \
+		quickassist/utilities/adf_ctl/conf_files/c6xxvf_dev0.conf.vm \
+		> ${qat_path}/c6xxvf_dev0.conf
+
+	popd>>/dev/null
+}
+
+build_qat_driver() {
+	local kernel_path=${1:-}
+	local qat_path=${kernel_path}/QAT
+
+	local kernel_major_version=$(awk '/^VERSION = /{print $NF}' ${kernel_path}/Makefile)
+	local kernel_pathlevel=$(awk '/^PATCHLEVEL = /{print $NF}' ${kernel_path}/Makefile)
+	local kernel_sublevel=$(awk '/^SUBLEVEL = /{print $NF}' ${kernel_path}/Makefile)
+	local kernel_extraversion=$(awk '/^EXTRAVERSION = /{print $NF}' ${kernel_path}/Makefile)
+	local kernel_rootfs_dir=${kernel_major_version}.${kernel_pathlevel}.${kernel_sublevel}${kernel_extraversion}
+
+	pushd ${qat_path}/source >>/dev/null
+	KERNEL_SOURCE_ROOT=${kernel_path} ./configure --enable-icp-sriov=guest
+	make all -j$(nproc)
+	make INSTALL_MOD_PATH=${qat_path} qat-driver-install -j$(nproc)
+	cp build/usdm_drv.ko ${qat_path}/lib/modules/${kernel_rootfs_dir}/updates/drivers
+	depmod -a -b ${qat_path} ${kernel_rootfs_dir} || true
+	popd>>/dev/null
+}
+
 setup_kernel() {
 	local kernel_path=${1:-}
 	[ -n "${kernel_path}" ] || die "kernel_path not provided"
@@ -356,6 +402,8 @@ setup_kernel() {
 	cp "${kernel_config_path}" ./.config
 	make oldconfig
 	)
+
+	[ ${qat} == 0 ] || setup_qat_driver "${kernel_path}"
 }
 
 build_kernel() {
@@ -370,6 +418,8 @@ build_kernel() {
 	[ -e "vmlinux" ]
 	([ "${hypervisor_target}" == "firecracker" ] || [ "${hypervisor_target}" == "cloud-hypervisor" ]) && [ "${arch_target}" == "arm64" ] && [ -e "arch/${arch_target}/boot/Image" ]
 	popd >>/dev/null
+
+	[ ${qat} == 0 ] || build_qat_driver "${kernel_path}"
 }
 
 install_kata() {
@@ -426,11 +476,17 @@ install_kata() {
 	ln -sf "${vmlinux}" "${install_path}/vmlinux${suffix}.container"
 	ls -la "${install_path}/vmlinux${suffix}.container"
 	ls -la "${install_path}/vmlinuz${suffix}.container"
+
+	if [ ${qat} == 1 ]; then
+		find QAT/*.conf -type f -exec install -Dm 0644 "{}" "${install_path}/{}" \;
+		find QAT/lib -type f -exec install -Dm 0644 "{}" "${install_path}/{}" \;
+	fi
+
 	popd >>/dev/null
 }
 
 main() {
-	while getopts "a:c:defg:hk:p:t:v:x:" opt; do
+	while getopts "a:c:defg:hk:p:qt:v:x:" opt; do
 		case "$opt" in
 			a)
 				arch_target="${OPTARG}"
@@ -460,6 +516,9 @@ main() {
 				;;
 			p)
 				patches_path="${OPTARG}"
+				;;
+			q)
+				qat=1
 				;;
 			t)
 				hypervisor_target="${OPTARG}"
