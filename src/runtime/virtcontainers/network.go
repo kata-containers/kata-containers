@@ -1192,6 +1192,7 @@ func createEndpointsFromScan(networkNSPath string, config *NetworkConfig) ([]End
 		// like gre0, gretap0, sit0, ipip0, tunl0 or incorrectly
 		// setup interfaces.
 		if len(netInfo.Addrs) == 0 {
+			networkLogger().Warnf("netInfo found but have no Addrs: %+v", netInfo)
 			continue
 		}
 
