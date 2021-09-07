@@ -16,7 +16,7 @@ package jaeger // import "go.opentelemetry.io/otel/exporters/trace/jaeger"
 
 import (
 	"bytes"
-	"errors"
+	"context"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -24,33 +24,36 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/apache/thrift/lib/go/thrift"
+	"go.opentelemetry.io/otel/exporters/trace/jaeger/internal/third_party/thrift/lib/go/thrift"
 
 	gen "go.opentelemetry.io/otel/exporters/trace/jaeger/internal/gen-go/jaeger"
 )
 
 // batchUploader send a batch of spans to Jaeger
 type batchUploader interface {
-	upload(batch *gen.Batch) error
+	upload(context.Context, *gen.Batch) error
+	shutdown(context.Context) error
 }
 
 type EndpointOption func() (batchUploader, error)
 
-// WithAgentEndpoint instructs exporter to send spans to jaeger-agent at this address.
-// For example, localhost:6831.
-func WithAgentEndpoint(agentEndpoint string, options ...AgentEndpointOption) EndpointOption {
+// WithAgentEndpoint configures the Jaeger exporter to send spans to a jaeger-agent. This will
+// use the following environment variables for configuration if no explicit option is provided:
+//
+// - OTEL_EXPORTER_JAEGER_AGENT_HOST is used for the agent address host
+// - OTEL_EXPORTER_JAEGER_AGENT_PORT is used for the agent address port
+//
+// The passed options will take precedence over any environment variables and default values
+// will be used if neither are provided.
+func WithAgentEndpoint(options ...AgentEndpointOption) EndpointOption {
 	return func() (batchUploader, error) {
-		if agentEndpoint == "" {
-			return nil, errors.New("agentEndpoint must not be empty")
-		}
-
 		o := &AgentEndpointOptions{
 			agentClientUDPParams{
-				HostPort:            agentEndpoint,
 				AttemptReconnecting: true,
+				Host:                envOr(envAgentHost, "localhost"),
+				Port:                envOr(envAgentPort, "6832"),
 			},
 		}
-
 		for _, opt := range options {
 			opt(o)
 		}
@@ -68,6 +71,26 @@ type AgentEndpointOption func(o *AgentEndpointOptions)
 
 type AgentEndpointOptions struct {
 	agentClientUDPParams
+}
+
+// WithAgentHost sets a host to be used in the agent client endpoint.
+// This option overrides any value set for the
+// OTEL_EXPORTER_JAEGER_AGENT_HOST environment variable.
+// If this option is not passed and the env var is not set, "localhost" will be used by default.
+func WithAgentHost(host string) AgentEndpointOption {
+	return func(o *AgentEndpointOptions) {
+		o.Host = host
+	}
+}
+
+// WithAgentPort sets a port to be used in the agent client endpoint.
+// This option overrides any value set for the
+// OTEL_EXPORTER_JAEGER_AGENT_PORT environment variable.
+// If this option is not passed and the env var is not set, "6832" will be used by default.
+func WithAgentPort(port string) AgentEndpointOption {
+	return func(o *AgentEndpointOptions) {
+		o.Port = port
+	}
 }
 
 // WithLogger sets a logger to be used by agent client.
@@ -91,30 +114,31 @@ func WithAttemptReconnectingInterval(interval time.Duration) AgentEndpointOption
 	}
 }
 
-// WithCollectorEndpoint defines the full url to the Jaeger HTTP Thrift collector.
-// For example, http://localhost:14268/api/traces
-func WithCollectorEndpoint(collectorEndpoint string, options ...CollectorEndpointOption) EndpointOption {
+// WithCollectorEndpoint defines the full url to the Jaeger HTTP Thrift collector. This will
+// use the following environment variables for configuration if no explicit option is provided:
+//
+// - OTEL_EXPORTER_JAEGER_ENDPOINT is the HTTP endpoint for sending spans directly to a collector.
+// - OTEL_EXPORTER_JAEGER_USER is the username to be sent as authentication to the collector endpoint.
+// - OTEL_EXPORTER_JAEGER_PASSWORD is the password to be sent as authentication to the collector endpoint.
+//
+// The passed options will take precedence over any environment variables.
+// If neither values are provided for the endpoint, the default value of "http://localhost:14250" will be used.
+// If neither values are provided for the username or the password, they will not be set since there is no default.
+func WithCollectorEndpoint(options ...CollectorEndpointOption) EndpointOption {
 	return func() (batchUploader, error) {
-		// Overwrite collector endpoint if environment variables are available.
-		if e := CollectorEndpointFromEnv(); e != "" {
-			collectorEndpoint = e
-		}
-
-		if collectorEndpoint == "" {
-			return nil, errors.New("collectorEndpoint must not be empty")
-		}
-
 		o := &CollectorEndpointOptions{
+			endpoint:   envOr(envEndpoint, "http://localhost:14250"),
+			username:   envOr(envUser, ""),
+			password:   envOr(envPassword, ""),
 			httpClient: http.DefaultClient,
 		}
 
-		options = append(options, WithCollectorEndpointOptionFromEnv())
 		for _, opt := range options {
 			opt(o)
 		}
 
 		return &collectorUploader{
-			endpoint:   collectorEndpoint,
+			endpoint:   o.endpoint,
 			username:   o.username,
 			password:   o.password,
 			httpClient: o.httpClient,
@@ -125,24 +149,44 @@ func WithCollectorEndpoint(collectorEndpoint string, options ...CollectorEndpoin
 type CollectorEndpointOption func(o *CollectorEndpointOptions)
 
 type CollectorEndpointOptions struct {
-	// username to be used if basic auth is required.
+	// endpoint for sending spans directly to a collector.
+	endpoint string
+
+	// username to be used for authentication with the collector endpoint.
 	username string
 
-	// password to be used if basic auth is required.
+	// password to be used for authentication with the collector endpoint.
 	password string
 
 	// httpClient to be used to make requests to the collector endpoint.
 	httpClient *http.Client
 }
 
-// WithUsername sets the username to be used if basic auth is required.
+// WithEndpoint is the URL for the Jaeger collector that spans are sent to.
+// This option overrides any value set for the
+// OTEL_EXPORTER_JAEGER_ENDPOINT environment variable.
+// If this option is not passed and the environment variable is not set,
+// "http://localhost:14250" will be used by default.
+func WithEndpoint(endpoint string) CollectorEndpointOption {
+	return func(o *CollectorEndpointOptions) {
+		o.endpoint = endpoint
+	}
+}
+
+// WithUsername sets the username to be used in the authorization header sent for all requests to the collector.
+// This option overrides any value set for the
+// OTEL_EXPORTER_JAEGER_USER environment variable.
+// If this option is not passed and the environment variable is not set, no username will be set.
 func WithUsername(username string) CollectorEndpointOption {
 	return func(o *CollectorEndpointOptions) {
 		o.username = username
 	}
 }
 
-// WithPassword sets the password to be used if basic auth is required.
+// WithPassword sets the password to be used in the authorization header sent for all requests to the collector.
+// This option overrides any value set for the
+// OTEL_EXPORTER_JAEGER_PASSWORD environment variable.
+// If this option is not passed and the environment variable is not set, no password will be set.
 func WithPassword(password string) CollectorEndpointOption {
 	return func(o *CollectorEndpointOptions) {
 		o.password = password
@@ -164,8 +208,24 @@ type agentUploader struct {
 
 var _ batchUploader = (*agentUploader)(nil)
 
-func (a *agentUploader) upload(batch *gen.Batch) error {
-	return a.client.EmitBatch(batch)
+func (a *agentUploader) shutdown(ctx context.Context) error {
+	done := make(chan error, 1)
+	go func() {
+		done <- a.client.Close()
+	}()
+
+	select {
+	case <-ctx.Done():
+		// Prioritize not blocking the calling thread and just leak the
+		// spawned goroutine to close the client.
+		return ctx.Err()
+	case err := <-done:
+		return err
+	}
+}
+
+func (a *agentUploader) upload(ctx context.Context, batch *gen.Batch) error {
+	return a.client.EmitBatch(ctx, batch)
 }
 
 // collectorUploader implements batchUploader interface sending batches to
@@ -179,12 +239,18 @@ type collectorUploader struct {
 
 var _ batchUploader = (*collectorUploader)(nil)
 
-func (c *collectorUploader) upload(batch *gen.Batch) error {
+func (c *collectorUploader) shutdown(ctx context.Context) error {
+	// The Exporter will cancel any active exports and will prevent all
+	// subsequent exports, so nothing to do here.
+	return nil
+}
+
+func (c *collectorUploader) upload(ctx context.Context, batch *gen.Batch) error {
 	body, err := serialize(batch)
 	if err != nil {
 		return err
 	}
-	req, err := http.NewRequest("POST", c.endpoint, body)
+	req, err := http.NewRequestWithContext(ctx, "POST", c.endpoint, body)
 	if err != nil {
 		return err
 	}
@@ -209,7 +275,7 @@ func (c *collectorUploader) upload(batch *gen.Batch) error {
 
 func serialize(obj thrift.TStruct) (*bytes.Buffer, error) {
 	buf := thrift.NewTMemoryBuffer()
-	if err := obj.Write(thrift.NewTBinaryProtocolTransport(buf)); err != nil {
+	if err := obj.Write(context.Background(), thrift.NewTBinaryProtocolConf(buf, &thrift.TConfiguration{})); err != nil {
 		return nil, err
 	}
 	return buf.Buffer, nil

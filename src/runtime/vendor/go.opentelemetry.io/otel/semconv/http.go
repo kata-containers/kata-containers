@@ -21,16 +21,16 @@ import (
 	"strconv"
 	"strings"
 
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
-	"go.opentelemetry.io/otel/label"
 )
 
 // NetAttributesFromHTTPRequest generates attributes of the net
 // namespace as specified by the OpenTelemetry specification for a
 // span.  The network parameter is a string that net.Dial function
 // from standard library can understand.
-func NetAttributesFromHTTPRequest(network string, request *http.Request) []label.KeyValue {
-	attrs := []label.KeyValue{}
+func NetAttributesFromHTTPRequest(network string, request *http.Request) []attribute.KeyValue {
+	attrs := []attribute.KeyValue{}
 
 	switch network {
 	case "tcp", "tcp4", "tcp6":
@@ -121,9 +121,9 @@ func NetAttributesFromHTTPRequest(network string, request *http.Request) []label
 // EndUserAttributesFromHTTPRequest generates attributes of the
 // enduser namespace as specified by the OpenTelemetry specification
 // for a span.
-func EndUserAttributesFromHTTPRequest(request *http.Request) []label.KeyValue {
+func EndUserAttributesFromHTTPRequest(request *http.Request) []attribute.KeyValue {
 	if username, _, ok := request.BasicAuth(); ok {
-		return []label.KeyValue{EnduserIDKey.String(username)}
+		return []attribute.KeyValue{EnduserIDKey.String(username)}
 	}
 	return nil
 }
@@ -131,8 +131,8 @@ func EndUserAttributesFromHTTPRequest(request *http.Request) []label.KeyValue {
 // HTTPClientAttributesFromHTTPRequest generates attributes of the
 // http namespace as specified by the OpenTelemetry specification for
 // a span on the client side.
-func HTTPClientAttributesFromHTTPRequest(request *http.Request) []label.KeyValue {
-	attrs := []label.KeyValue{}
+func HTTPClientAttributesFromHTTPRequest(request *http.Request) []attribute.KeyValue {
+	attrs := []attribute.KeyValue{}
 
 	if request.Method != "" {
 		attrs = append(attrs, HTTPMethodKey.String(request.Method))
@@ -145,8 +145,8 @@ func HTTPClientAttributesFromHTTPRequest(request *http.Request) []label.KeyValue
 	return append(attrs, httpCommonAttributesFromHTTPRequest(request)...)
 }
 
-func httpCommonAttributesFromHTTPRequest(request *http.Request) []label.KeyValue {
-	attrs := []label.KeyValue{}
+func httpCommonAttributesFromHTTPRequest(request *http.Request) []attribute.KeyValue {
+	attrs := []attribute.KeyValue{}
 	if ua := request.UserAgent(); ua != "" {
 		attrs = append(attrs, HTTPUserAgentKey.String(ua))
 	}
@@ -157,9 +157,9 @@ func httpCommonAttributesFromHTTPRequest(request *http.Request) []label.KeyValue
 	return append(attrs, httpBasicAttributesFromHTTPRequest(request)...)
 }
 
-func httpBasicAttributesFromHTTPRequest(request *http.Request) []label.KeyValue {
+func httpBasicAttributesFromHTTPRequest(request *http.Request) []attribute.KeyValue {
 	// as these attributes are used by HTTPServerMetricAttributesFromHTTPRequest, they should be low-cardinality
-	attrs := []label.KeyValue{}
+	attrs := []attribute.KeyValue{}
 
 	if request.TLS != nil {
 		attrs = append(attrs, HTTPSchemeHTTPS)
@@ -186,8 +186,8 @@ func httpBasicAttributesFromHTTPRequest(request *http.Request) []label.KeyValue 
 
 // HTTPServerMetricAttributesFromHTTPRequest generates low-cardinality attributes
 // to be used with server-side HTTP metrics.
-func HTTPServerMetricAttributesFromHTTPRequest(serverName string, request *http.Request) []label.KeyValue {
-	attrs := []label.KeyValue{}
+func HTTPServerMetricAttributesFromHTTPRequest(serverName string, request *http.Request) []attribute.KeyValue {
+	attrs := []attribute.KeyValue{}
 	if serverName != "" {
 		attrs = append(attrs, HTTPServerNameKey.String(serverName))
 	}
@@ -198,8 +198,8 @@ func HTTPServerMetricAttributesFromHTTPRequest(serverName string, request *http.
 // http namespace as specified by the OpenTelemetry specification for
 // a span on the server side. Currently, only basic authentication is
 // supported.
-func HTTPServerAttributesFromHTTPRequest(serverName, route string, request *http.Request) []label.KeyValue {
-	attrs := []label.KeyValue{
+func HTTPServerAttributesFromHTTPRequest(serverName, route string, request *http.Request) []attribute.KeyValue {
+	attrs := []attribute.KeyValue{
 		HTTPMethodKey.String(request.Method),
 		HTTPTargetKey.String(request.RequestURI),
 	}
@@ -220,8 +220,8 @@ func HTTPServerAttributesFromHTTPRequest(serverName, route string, request *http
 // HTTPAttributesFromHTTPStatusCode generates attributes of the http
 // namespace as specified by the OpenTelemetry specification for a
 // span.
-func HTTPAttributesFromHTTPStatusCode(code int) []label.KeyValue {
-	attrs := []label.KeyValue{
+func HTTPAttributesFromHTTPStatusCode(code int) []attribute.KeyValue {
+	attrs := []attribute.KeyValue{
 		HTTPStatusCodeKey.Int(code),
 	}
 	return attrs
@@ -264,29 +264,34 @@ var validRangesPerCategory = map[int][]codeRange{
 // SpanStatusFromHTTPStatusCode generates a status code and a message
 // as specified by the OpenTelemetry specification for a span.
 func SpanStatusFromHTTPStatusCode(code int) (codes.Code, string) {
-	spanCode, valid := func() (codes.Code, bool) {
-		category := code / 100
-		ranges, ok := validRangesPerCategory[category]
-		if !ok {
-			return codes.Error, false
-		}
-		ok = false
-		for _, crange := range ranges {
-			ok = crange.contains(code)
-			if ok {
-				break
-			}
-		}
-		if !ok {
-			return codes.Error, false
-		}
-		if category > 0 && category < 4 {
-			return codes.Unset, true
-		}
-		return codes.Error, true
-	}()
+	spanCode, valid := validateHTTPStatusCode(code)
 	if !valid {
 		return spanCode, fmt.Sprintf("Invalid HTTP status code %d", code)
 	}
-	return spanCode, fmt.Sprintf("HTTP status code: %d", code)
+	return spanCode, ""
+}
+
+// Validates the HTTP status code and returns corresponding span status code.
+// If the `code` is not a valid HTTP status code, returns span status Error
+// and false.
+func validateHTTPStatusCode(code int) (codes.Code, bool) {
+	category := code / 100
+	ranges, ok := validRangesPerCategory[category]
+	if !ok {
+		return codes.Error, false
+	}
+	ok = false
+	for _, crange := range ranges {
+		ok = crange.contains(code)
+		if ok {
+			break
+		}
+	}
+	if !ok {
+		return codes.Error, false
+	}
+	if category > 0 && category < 4 {
+		return codes.Unset, true
+	}
+	return codes.Error, true
 }

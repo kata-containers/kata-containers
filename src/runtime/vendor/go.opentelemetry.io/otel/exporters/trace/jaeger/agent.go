@@ -15,14 +15,16 @@
 package jaeger // import "go.opentelemetry.io/otel/exporters/trace/jaeger"
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"log"
 	"net"
 	"time"
 
-	"github.com/apache/thrift/lib/go/thrift"
+	"go.opentelemetry.io/otel/exporters/trace/jaeger/internal/third_party/thrift/lib/go/thrift"
 
+	genAgent "go.opentelemetry.io/otel/exporters/trace/jaeger/internal/gen-go/agent"
 	gen "go.opentelemetry.io/otel/exporters/trace/jaeger/internal/gen-go/jaeger"
 )
 
@@ -31,11 +33,11 @@ const udpPacketMaxLength = 65000
 
 // agentClientUDP is a UDP client to Jaeger agent that implements gen.Agent interface.
 type agentClientUDP struct {
-	gen.Agent
+	genAgent.Agent
 	io.Closer
 
 	connUDP       udpConn
-	client        *gen.AgentClient
+	client        *genAgent.AgentClient
 	maxPacketSize int                   // max size of datagram in bytes
 	thriftBuffer  *thrift.TMemoryBuffer // buffer used to calculate byte size of a span
 }
@@ -47,7 +49,8 @@ type udpConn interface {
 }
 
 type agentClientUDPParams struct {
-	HostPort                 string
+	Host                     string
+	Port                     string
 	MaxPacketSize            int
 	Logger                   *log.Logger
 	AttemptReconnecting      bool
@@ -56,8 +59,9 @@ type agentClientUDPParams struct {
 
 // newAgentClientUDP creates a client that sends spans to Jaeger Agent over UDP.
 func newAgentClientUDP(params agentClientUDPParams) (*agentClientUDP, error) {
+	hostPort := net.JoinHostPort(params.Host, params.Port)
 	// validate hostport
-	if _, _, err := net.SplitHostPort(params.HostPort); err != nil {
+	if _, _, err := net.SplitHostPort(hostPort); err != nil {
 		return nil, err
 	}
 
@@ -70,20 +74,20 @@ func newAgentClientUDP(params agentClientUDPParams) (*agentClientUDP, error) {
 	}
 
 	thriftBuffer := thrift.NewTMemoryBufferLen(params.MaxPacketSize)
-	protocolFactory := thrift.NewTCompactProtocolFactory()
-	client := gen.NewAgentClientFactory(thriftBuffer, protocolFactory)
+	protocolFactory := thrift.NewTCompactProtocolFactoryConf(&thrift.TConfiguration{})
+	client := genAgent.NewAgentClientFactory(thriftBuffer, protocolFactory)
 
 	var connUDP udpConn
 	var err error
 
 	if params.AttemptReconnecting {
 		// host is hostname, setup resolver loop in case host record changes during operation
-		connUDP, err = newReconnectingUDPConn(params.HostPort, params.MaxPacketSize, params.AttemptReconnectInterval, net.ResolveUDPAddr, net.DialUDP, params.Logger)
+		connUDP, err = newReconnectingUDPConn(hostPort, params.MaxPacketSize, params.AttemptReconnectInterval, net.ResolveUDPAddr, net.DialUDP, params.Logger)
 		if err != nil {
 			return nil, err
 		}
 	} else {
-		destAddr, err := net.ResolveUDPAddr("udp", params.HostPort)
+		destAddr, err := net.ResolveUDPAddr("udp", hostPort)
 		if err != nil {
 			return nil, err
 		}
@@ -107,10 +111,9 @@ func newAgentClientUDP(params agentClientUDPParams) (*agentClientUDP, error) {
 }
 
 // EmitBatch implements EmitBatch() of Agent interface
-func (a *agentClientUDP) EmitBatch(batch *gen.Batch) error {
+func (a *agentClientUDP) EmitBatch(ctx context.Context, batch *gen.Batch) error {
 	a.thriftBuffer.Reset()
-	a.client.SeqId = 0 // we have no need for distinct SeqIds for our one-way UDP messages
-	if err := a.client.EmitBatch(batch); err != nil {
+	if err := a.client.EmitBatch(ctx, batch); err != nil {
 		return err
 	}
 	if a.thriftBuffer.Len() > a.maxPacketSize {

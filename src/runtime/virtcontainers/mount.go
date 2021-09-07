@@ -19,7 +19,7 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils/katatrace"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
 	"github.com/sirupsen/logrus"
-	otelLabel "go.opentelemetry.io/otel/label"
+	otelLabel "go.opentelemetry.io/otel/attribute"
 )
 
 // DefaultShmSize is the default shm size to be used in case host

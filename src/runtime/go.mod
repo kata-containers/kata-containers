@@ -37,17 +37,22 @@ require (
 	github.com/safchain/ethtool v0.0.0-20190326074333-42ed695e3de8
 	github.com/sirupsen/logrus v1.8.1
 	github.com/smartystreets/goconvey v1.6.4 // indirect
-	github.com/stretchr/testify v1.6.1
+	github.com/stretchr/testify v1.7.0
 	github.com/urfave/cli v1.22.2
 	github.com/vishvananda/netlink v1.1.1-0.20210924202909-187053b97868
 	github.com/vishvananda/netns v0.0.0-20200728191858-db3c7e526aae
-	go.opentelemetry.io/otel v0.15.0
-	go.opentelemetry.io/otel/exporters/trace/jaeger v0.15.0
-	go.opentelemetry.io/otel/sdk v0.15.0
+	go.opencensus.io v0.23.0 // indirect
+	go.opentelemetry.io/otel v0.20.0
+	go.opentelemetry.io/otel/exporters/trace/jaeger v0.20.0
+	go.opentelemetry.io/otel/sdk v0.20.0
+	go.opentelemetry.io/otel/trace v0.20.0
 	golang.org/x/net v0.0.0-20210226172049-e18ecbb05110
-	golang.org/x/oauth2 v0.0.0-20200902213428-5d25da1a8d43
+	golang.org/x/oauth2 v0.0.0-20210220000619-9bb904979d93
 	golang.org/x/sys v0.0.0-20210426230700-d19ff857e887
-	google.golang.org/grpc v1.33.2
+	golang.org/x/text v0.3.5 // indirect
+	google.golang.org/appengine v1.6.7 // indirect
+	google.golang.org/genproto v0.0.0-20210303154014-9728d6b83eeb // indirect
+	google.golang.org/grpc v1.36.0
 	k8s.io/apimachinery v0.20.6
 	k8s.io/cri-api v0.20.6
 )

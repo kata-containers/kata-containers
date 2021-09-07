@@ -12,12 +12,13 @@ import (
 	"github.com/sirupsen/logrus"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/trace/jaeger"
-	"go.opentelemetry.io/otel/label"
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/propagation"
-	export "go.opentelemetry.io/otel/sdk/export/trace"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/trace"
 	otelTrace "go.opentelemetry.io/otel/trace"
+	"go.opentelemetry.io/otel/sdk/resource"
+	"go.opentelemetry.io/otel/semconv"
 )
 
 // kataSpanExporter is used to ensure that Jaeger logs each span.
@@ -26,10 +27,10 @@ import (
 // https: //github.com/kata-containers/tests/blob/master/tracing/tracing-test.sh
 type kataSpanExporter struct{}
 
-var _ export.SpanExporter = (*kataSpanExporter)(nil)
+var _ sdktrace.SpanExporter = (*kataSpanExporter)(nil)
 
 // ExportSpans exports SpanData to Jaeger.
-func (e *kataSpanExporter) ExportSpans(ctx context.Context, spans []*export.SpanData) error {
+func (e *kataSpanExporter) ExportSpans(ctx context.Context, spans []*sdktrace.SpanSnapshot) error {
 	for _, span := range spans {
 		kataTraceLogger.Tracef("Reporting span %+v", span)
 	}
@@ -40,9 +41,9 @@ func (e *kataSpanExporter) Shutdown(ctx context.Context) error {
 	return nil
 }
 
-// tracerCloser contains a copy of the closer returned by createTracer() which
-// is used by stopTracing().
-var tracerCloser func()
+// tp is the trace provider created in CreateTracer() and used in StopTracing()
+// to flush and shutdown all spans.
+var tp *sdktrace.TracerProvider
 
 var kataTraceLogger = logrus.NewEntry(logrus.New())
 
@@ -62,10 +63,10 @@ type JaegerConfig struct {
 }
 
 // CreateTracer create a tracer
-func CreateTracer(name string, config *JaegerConfig) (func(), error) {
+func CreateTracer(name string, config *JaegerConfig) (*sdktrace.TracerProvider, error) {
 	if !tracing {
 		otel.SetTracerProvider(trace.NewNoopTracerProvider())
-		return func() {}, nil
+		return nil, nil
 	}
 
 	// build kata exporter to log reporting span records
@@ -78,36 +79,31 @@ func CreateTracer(name string, config *JaegerConfig) (func(), error) {
 	}
 
 	jaegerExporter, err := jaeger.NewRawExporter(
-		jaeger.WithCollectorEndpoint(collectorEndpoint,
+		jaeger.WithCollectorEndpoint(jaeger.WithEndpoint(collectorEndpoint),
 			jaeger.WithUsername(config.JaegerUser),
 			jaeger.WithPassword(config.JaegerPassword),
-		), jaeger.WithProcess(jaeger.Process{
-			ServiceName: name,
-			Tags: []label.KeyValue{
-				label.String("exporter", "jaeger"),
-				label.String("lib", "opentelemetry"),
-			},
-		}))
+		),
+	)
+
 	if err != nil {
 		return nil, err
 	}
 
 	// build tracer provider, that combining both jaeger exporter and kata exporter.
 	tp := sdktrace.NewTracerProvider(
-		sdktrace.WithConfig(
-			sdktrace.Config{
-				DefaultSampler: sdktrace.AlwaysSample(),
-			},
-		),
+		sdktrace.WithSampler(sdktrace.AlwaysSample()),
 		sdktrace.WithSyncer(kataExporter),
 		sdktrace.WithSyncer(jaegerExporter),
+		sdktrace.WithResource(resource.NewWithAttributes(
+                                semconv.ServiceNameKey.String(name),
+                                attribute.String("exporter", "jaeger"),
+                                attribute.String("lib", "opentelemetry"),
+                        )),
 	)
-
-	tracerCloser = jaegerExporter.Flush
 
 	otel.SetTracerProvider(tp)
 	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}))
-	return tracerCloser, nil
+	return tp, nil
 }
 
 // StopTracing ends all tracing, reporting the spans to the collector.
@@ -122,9 +118,8 @@ func StopTracing(ctx context.Context) {
 	}
 
 	// report all possible spans to the collector
-	if tracerCloser != nil {
-		tracerCloser()
-	}
+	tp.ForceFlush(ctx)
+	tp.Shutdown(ctx)
 }
 
 // Trace creates a new tracing span based on the specified name and parent context.
@@ -139,12 +134,12 @@ func Trace(parent context.Context, logger *logrus.Entry, name string, tags ...ma
 		parent = context.Background()
 	}
 
-	var otelTags []label.KeyValue
+	var otelTags []attribute.KeyValue
 	// do not append tags if tracing is disabled
 	if tracing {
 		for _, tagSet := range tags {
 			for k, v := range tagSet {
-				otelTags = append(otelTags, label.Key(k).String(v))
+				otelTags = append(otelTags, attribute.Key(k).String(v))
 			}
 		}
 	}
@@ -170,45 +165,31 @@ func addTag(span otelTrace.Span, key string, value interface{}) {
 		return
 	}
 	if value == nil {
-		span.SetAttributes(label.String(key, "nil"))
+		span.SetAttributes(attribute.String(key, "nil"))
 		return
 	}
 
 	switch value := value.(type) {
 	case string:
-		span.SetAttributes(label.String(key, value))
+		span.SetAttributes(attribute.String(key, value))
 	case bool:
-		span.SetAttributes(label.Bool(key, value))
+		span.SetAttributes(attribute.Bool(key, value))
 	case int:
-		span.SetAttributes(label.Int(key, value))
+		span.SetAttributes(attribute.Int(key, value))
 	case int8:
-		span.SetAttributes(label.Int(key, int(value)))
+		span.SetAttributes(attribute.Int(key, int(value)))
 	case int16:
-		span.SetAttributes(label.Int(key, int(value)))
-	case int32:
-		span.SetAttributes(label.Int32(key, value))
+		span.SetAttributes(attribute.Int(key, int(value)))
 	case int64:
-		span.SetAttributes(label.Int64(key, value))
-	case uint:
-		span.SetAttributes(label.Uint(key, value))
-	case uint8:
-		span.SetAttributes(label.Uint(key, uint(value)))
-	case uint16:
-		span.SetAttributes(label.Uint(key, uint(value)))
-	case uint32:
-		span.SetAttributes(label.Uint32(key, value))
-	case uint64:
-		span.SetAttributes(label.Uint64(key, value))
-	case float32:
-		span.SetAttributes(label.Float32(key, value))
+		span.SetAttributes(attribute.Int64(key, value))
 	case float64:
-		span.SetAttributes(label.Float64(key, value))
+		span.SetAttributes(attribute.Float64(key, value))
 	default:
 		content, err := json.Marshal(value)
 		if content == nil && err == nil {
-			span.SetAttributes(label.String(key, "nil"))
+			span.SetAttributes(attribute.String(key, "nil"))
 		} else if content != nil && err == nil {
-			span.SetAttributes(label.String(key, string(content)))
+			span.SetAttributes(attribute.String(key, string(content)))
 		} else {
 			kataTraceLogger.WithField("type", "bug").Error("span attribute value error")
 		}
