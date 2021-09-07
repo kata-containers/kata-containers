@@ -19,21 +19,18 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
+	"regexp"
+	"strings"
+	"time"
 
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
-	"go.opentelemetry.io/otel/label"
 )
 
 const (
 	// FlagsSampled is a bitmask with the sampled bit set. A SpanContext
 	// with the sampling bit set means the span is sampled.
-	FlagsSampled = byte(0x01)
-	// FlagsDeferred is a bitmask with the deferred bit set. A SpanContext
-	// with the deferred bit set means the sampling decision has been
-	// defered to the receiver.
-	FlagsDeferred = byte(0x02)
-	// FlagsDebug is a bitmask with the debug bit set.
-	FlagsDebug = byte(0x04)
+	FlagsSampled = TraceFlags(0x01)
 
 	errInvalidHexID errorConst = "trace-id and span-id can only contain [0-9a-f] characters, all lowercase"
 
@@ -42,6 +39,18 @@ const (
 
 	errInvalidSpanIDLength errorConst = "hex encoded span-id must have length equals to 16"
 	errNilSpanID           errorConst = "span-id can't be all zero"
+
+	// based on the W3C Trace Context specification, see https://www.w3.org/TR/trace-context-1/#tracestate-header
+	traceStateKeyFormat                      = `[a-z][_0-9a-z\-\*\/]{0,255}`
+	traceStateKeyFormatWithMultiTenantVendor = `[a-z0-9][_0-9a-z\-\*\/]{0,240}@[a-z][_0-9a-z\-\*\/]{0,13}`
+	traceStateValueFormat                    = `[\x20-\x2b\x2d-\x3c\x3e-\x7e]{0,255}[\x21-\x2b\x2d-\x3c\x3e-\x7e]`
+
+	traceStateMaxListMembers = 32
+
+	errInvalidTraceStateKeyValue errorConst = "provided key or value is not valid according to the" +
+		" W3C Trace Context specification"
+	errInvalidTraceStateMembersNumber errorConst = "trace state would exceed the maximum limit of members (32)"
+	errInvalidTraceStateDuplicate     errorConst = "trace state key/value pairs with duplicate keys provided"
 )
 
 type errorConst string
@@ -157,11 +166,210 @@ func decodeHex(h string, b []byte) error {
 	return nil
 }
 
-// SpanContext contains identifying trace information about a Span.
-type SpanContext struct {
+// TraceState provides additional vendor-specific trace identification information
+// across different distributed tracing systems. It represents an immutable list consisting
+// of key/value pairs. There can be a maximum of 32 entries in the list.
+//
+// Key and value of each list member must be valid according to the W3C Trace Context specification
+// (see https://www.w3.org/TR/trace-context-1/#key and https://www.w3.org/TR/trace-context-1/#value
+// respectively).
+//
+// Trace state must be valid according to the W3C Trace Context specification at all times. All
+// mutating operations validate their input and, in case of valid parameters, return a new TraceState.
+type TraceState struct { //nolint:golint
+	// TODO @matej-g: Consider implementing this as attribute.Set, see
+	// comment https://github.com/open-telemetry/opentelemetry-go/pull/1340#discussion_r540599226
+	kvs []attribute.KeyValue
+}
+
+var _ json.Marshaler = TraceState{}
+var _ json.Marshaler = SpanContext{}
+
+var keyFormatRegExp = regexp.MustCompile(
+	`^((` + traceStateKeyFormat + `)|(` + traceStateKeyFormatWithMultiTenantVendor + `))$`,
+)
+var valueFormatRegExp = regexp.MustCompile(`^(` + traceStateValueFormat + `)$`)
+
+// MarshalJSON implements a custom marshal function to encode trace state.
+func (ts TraceState) MarshalJSON() ([]byte, error) {
+	return json.Marshal(ts.kvs)
+}
+
+// String returns trace state as a string valid according to the
+// W3C Trace Context specification.
+func (ts TraceState) String() string {
+	var sb strings.Builder
+
+	for i, kv := range ts.kvs {
+		sb.WriteString((string)(kv.Key))
+		sb.WriteByte('=')
+		sb.WriteString(kv.Value.Emit())
+
+		if i != len(ts.kvs)-1 {
+			sb.WriteByte(',')
+		}
+	}
+
+	return sb.String()
+}
+
+// Get returns a value for given key from the trace state.
+// If no key is found or provided key is invalid, returns an empty value.
+func (ts TraceState) Get(key attribute.Key) attribute.Value {
+	if !isTraceStateKeyValid(key) {
+		return attribute.Value{}
+	}
+
+	for _, kv := range ts.kvs {
+		if kv.Key == key {
+			return kv.Value
+		}
+	}
+
+	return attribute.Value{}
+}
+
+// Insert adds a new key/value, if one doesn't exists; otherwise updates the existing entry.
+// The new or updated entry is always inserted at the beginning of the TraceState, i.e.
+// on the left side, as per the W3C Trace Context specification requirement.
+func (ts TraceState) Insert(entry attribute.KeyValue) (TraceState, error) {
+	if !isTraceStateKeyValueValid(entry) {
+		return ts, errInvalidTraceStateKeyValue
+	}
+
+	ckvs := ts.copyKVsAndDeleteEntry(entry.Key)
+	if len(ckvs)+1 > traceStateMaxListMembers {
+		return ts, errInvalidTraceStateMembersNumber
+	}
+
+	ckvs = append(ckvs, attribute.KeyValue{})
+	copy(ckvs[1:], ckvs)
+	ckvs[0] = entry
+
+	return TraceState{ckvs}, nil
+}
+
+// Delete removes specified entry from the trace state.
+func (ts TraceState) Delete(key attribute.Key) (TraceState, error) {
+	if !isTraceStateKeyValid(key) {
+		return ts, errInvalidTraceStateKeyValue
+	}
+
+	return TraceState{ts.copyKVsAndDeleteEntry(key)}, nil
+}
+
+// IsEmpty returns true if the TraceState does not contain any entries
+func (ts TraceState) IsEmpty() bool {
+	return len(ts.kvs) == 0
+}
+
+func (ts TraceState) copyKVsAndDeleteEntry(key attribute.Key) []attribute.KeyValue {
+	ckvs := make([]attribute.KeyValue, len(ts.kvs))
+	copy(ckvs, ts.kvs)
+	for i, kv := range ts.kvs {
+		if kv.Key == key {
+			ckvs = append(ckvs[:i], ckvs[i+1:]...)
+			break
+		}
+	}
+
+	return ckvs
+}
+
+// TraceStateFromKeyValues is a convenience method to create a new TraceState from
+// provided key/value pairs.
+func TraceStateFromKeyValues(kvs ...attribute.KeyValue) (TraceState, error) { //nolint:golint
+	if len(kvs) == 0 {
+		return TraceState{}, nil
+	}
+
+	if len(kvs) > traceStateMaxListMembers {
+		return TraceState{}, errInvalidTraceStateMembersNumber
+	}
+
+	km := make(map[attribute.Key]bool)
+	for _, kv := range kvs {
+		if !isTraceStateKeyValueValid(kv) {
+			return TraceState{}, errInvalidTraceStateKeyValue
+		}
+		_, ok := km[kv.Key]
+		if ok {
+			return TraceState{}, errInvalidTraceStateDuplicate
+		}
+		km[kv.Key] = true
+	}
+
+	ckvs := make([]attribute.KeyValue, len(kvs))
+	copy(ckvs, kvs)
+	return TraceState{ckvs}, nil
+}
+
+func isTraceStateKeyValid(key attribute.Key) bool {
+	return keyFormatRegExp.MatchString(string(key))
+}
+
+func isTraceStateKeyValueValid(kv attribute.KeyValue) bool {
+	return isTraceStateKeyValid(kv.Key) &&
+		valueFormatRegExp.MatchString(kv.Value.Emit())
+}
+
+// TraceFlags contains flags that can be set on a SpanContext
+type TraceFlags byte //nolint:golint
+
+// IsSampled returns if the sampling bit is set in the TraceFlags.
+func (tf TraceFlags) IsSampled() bool {
+	return tf&FlagsSampled == FlagsSampled
+}
+
+// WithSampled sets the sampling bit in a new copy of the TraceFlags.
+func (tf TraceFlags) WithSampled(sampled bool) TraceFlags {
+	if sampled {
+		return tf | FlagsSampled
+	}
+
+	return tf &^ FlagsSampled
+}
+
+// MarshalJSON implements a custom marshal function to encode TraceFlags
+// as a hex string.
+func (tf TraceFlags) MarshalJSON() ([]byte, error) {
+	return json.Marshal(tf.String())
+}
+
+// String returns the hex string representation form of TraceFlags
+func (tf TraceFlags) String() string {
+	return hex.EncodeToString([]byte{byte(tf)}[:])
+}
+
+// SpanContextConfig contains mutable fields usable for constructing
+// an immutable SpanContext.
+type SpanContextConfig struct {
 	TraceID    TraceID
 	SpanID     SpanID
-	TraceFlags byte
+	TraceFlags TraceFlags
+	TraceState TraceState
+	Remote     bool
+}
+
+// NewSpanContext constructs a SpanContext using values from the provided
+// SpanContextConfig.
+func NewSpanContext(config SpanContextConfig) SpanContext {
+	return SpanContext{
+		traceID:    config.TraceID,
+		spanID:     config.SpanID,
+		traceFlags: config.TraceFlags,
+		traceState: config.TraceState,
+		remote:     config.Remote,
+	}
+}
+
+// SpanContext contains identifying trace information about a Span.
+type SpanContext struct {
+	traceID    TraceID
+	spanID     SpanID
+	traceFlags TraceFlags
+	traceState TraceState
+	remote     bool
 }
 
 // IsValid returns if the SpanContext is valid. A valid span context has a
@@ -170,71 +378,119 @@ func (sc SpanContext) IsValid() bool {
 	return sc.HasTraceID() && sc.HasSpanID()
 }
 
+// IsRemote indicates whether the SpanContext represents a remotely-created Span.
+func (sc SpanContext) IsRemote() bool {
+	return sc.remote
+}
+
+// WithRemote returns a copy of sc with the Remote property set to remote.
+func (sc SpanContext) WithRemote(remote bool) SpanContext {
+	return SpanContext{
+		traceID:    sc.traceID,
+		spanID:     sc.spanID,
+		traceFlags: sc.traceFlags,
+		traceState: sc.traceState,
+		remote:     remote,
+	}
+}
+
+// TraceID returns the TraceID from the SpanContext.
+func (sc SpanContext) TraceID() TraceID {
+	return sc.traceID
+}
+
 // HasTraceID checks if the SpanContext has a valid TraceID.
 func (sc SpanContext) HasTraceID() bool {
-	return sc.TraceID.IsValid()
+	return sc.traceID.IsValid()
+}
+
+// WithTraceID returns a new SpanContext with the TraceID replaced.
+func (sc SpanContext) WithTraceID(traceID TraceID) SpanContext {
+	return SpanContext{
+		traceID:    traceID,
+		spanID:     sc.spanID,
+		traceFlags: sc.traceFlags,
+		traceState: sc.traceState,
+		remote:     sc.remote,
+	}
+}
+
+// SpanID returns the SpanID from the SpanContext.
+func (sc SpanContext) SpanID() SpanID {
+	return sc.spanID
 }
 
 // HasSpanID checks if the SpanContext has a valid SpanID.
 func (sc SpanContext) HasSpanID() bool {
-	return sc.SpanID.IsValid()
+	return sc.spanID.IsValid()
 }
 
-// IsDeferred returns if the deferred bit is set in the trace flags.
-func (sc SpanContext) IsDeferred() bool {
-	return sc.TraceFlags&FlagsDeferred == FlagsDeferred
+// WithSpanID returns a new SpanContext with the SpanID replaced.
+func (sc SpanContext) WithSpanID(spanID SpanID) SpanContext {
+	return SpanContext{
+		traceID:    sc.traceID,
+		spanID:     spanID,
+		traceFlags: sc.traceFlags,
+		traceState: sc.traceState,
+		remote:     sc.remote,
+	}
 }
 
-// IsDebug returns if the debug bit is set in the trace flags.
-func (sc SpanContext) IsDebug() bool {
-	return sc.TraceFlags&FlagsDebug == FlagsDebug
+// TraceFlags returns the flags from the SpanContext.
+func (sc SpanContext) TraceFlags() TraceFlags {
+	return sc.traceFlags
 }
 
-// IsSampled returns if the sampling bit is set in the trace flags.
+// IsSampled returns if the sampling bit is set in the SpanContext's TraceFlags.
 func (sc SpanContext) IsSampled() bool {
-	return sc.TraceFlags&FlagsSampled == FlagsSampled
+	return sc.traceFlags.IsSampled()
 }
 
-type traceContextKeyType int
-
-const (
-	currentSpanKey traceContextKeyType = iota
-	remoteContextKey
-)
-
-// ContextWithSpan returns a copy of parent with span set to current.
-func ContextWithSpan(parent context.Context, span Span) context.Context {
-	return context.WithValue(parent, currentSpanKey, span)
-}
-
-// SpanFromContext returns the current span from ctx, or noop span if none set.
-func SpanFromContext(ctx context.Context) Span {
-	if span, ok := ctx.Value(currentSpanKey).(Span); ok {
-		return span
+// WithTraceFlags returns a new SpanContext with the TraceFlags replaced.
+func (sc SpanContext) WithTraceFlags(flags TraceFlags) SpanContext {
+	return SpanContext{
+		traceID:    sc.traceID,
+		spanID:     sc.spanID,
+		traceFlags: flags,
+		traceState: sc.traceState,
+		remote:     sc.remote,
 	}
-	return noopSpan{}
 }
 
-// SpanContextFromContext returns the current SpanContext from ctx, or an empty SpanContext if none set.
-func SpanContextFromContext(ctx context.Context) SpanContext {
-	if span := SpanFromContext(ctx); span != nil {
-		return span.SpanContext()
+// TraceState returns the TraceState from the SpanContext.
+func (sc SpanContext) TraceState() TraceState {
+	return sc.traceState
+}
+
+// WithTraceState returns a new SpanContext with the TraceState replaced.
+func (sc SpanContext) WithTraceState(state TraceState) SpanContext {
+	return SpanContext{
+		traceID:    sc.traceID,
+		spanID:     sc.spanID,
+		traceFlags: sc.traceFlags,
+		traceState: state,
+		remote:     sc.remote,
 	}
-	return SpanContext{}
 }
 
-// ContextWithRemoteSpanContext returns a copy of parent with a remote set as
-// the remote span context.
-func ContextWithRemoteSpanContext(parent context.Context, remote SpanContext) context.Context {
-	return context.WithValue(parent, remoteContextKey, remote)
+// Equal is a predicate that determines whether two SpanContext values are equal.
+func (sc SpanContext) Equal(other SpanContext) bool {
+	return sc.traceID == other.traceID &&
+		sc.spanID == other.spanID &&
+		sc.traceFlags == other.traceFlags &&
+		sc.traceState.String() == other.traceState.String() &&
+		sc.remote == other.remote
 }
 
-// RemoteSpanContextFromContext returns the remote span context from ctx.
-func RemoteSpanContextFromContext(ctx context.Context) SpanContext {
-	if sc, ok := ctx.Value(remoteContextKey).(SpanContext); ok {
-		return sc
-	}
-	return SpanContext{}
+// MarshalJSON implements a custom marshal function to encode a SpanContext.
+func (sc SpanContext) MarshalJSON() ([]byte, error) {
+	return json.Marshal(SpanContextConfig{
+		TraceID:    sc.traceID,
+		SpanID:     sc.spanID,
+		TraceFlags: sc.traceFlags,
+		TraceState: sc.traceState,
+		Remote:     sc.remote,
+	})
 }
 
 // Span is the individual component of a trace. It represents a single named
@@ -259,7 +515,10 @@ type Span interface {
 	// true if the Span is active and events can be recorded.
 	IsRecording() bool
 
-	// RecordError records an error as a Span event.
+	// RecordError will record err as an exception span event for this span. An
+	// additional call toSetStatus is required if the Status of the Span should
+	// be set to Error, this method does not change the Span status. If this
+	// span is not being recorded or err is nil than this method does nothing.
 	RecordError(err error, options ...EventOption)
 
 	// SpanContext returns the SpanContext of the Span. The returned
@@ -277,7 +536,23 @@ type Span interface {
 	// SetAttributes sets kv as attributes of the Span. If a key from kv
 	// already exists for an attribute of the Span it will be overwritten with
 	// the value contained in kv.
-	SetAttributes(kv ...label.KeyValue)
+	SetAttributes(kv ...attribute.KeyValue)
+}
+
+// Event is a thing that happened during a Span's lifetime.
+type Event struct {
+	// Name is the name of this event
+	Name string
+
+	// Attributes describe the aspects of the event.
+	Attributes []attribute.KeyValue
+
+	// DroppedAttributeCount is the number of attributes that were not
+	// recorded due to configured limits being reached.
+	DroppedAttributeCount int
+
+	// Time at which this event was recorded.
+	Time time.Time
 }
 
 // Link is the relationship between two Spans. The relationship can be within
@@ -296,8 +571,15 @@ type Span interface {
 //      form. A Link is used to keep reference to the original SpanContext and
 //      track the relationship.
 type Link struct {
+	// SpanContext of the linked Span.
 	SpanContext
-	Attributes []label.KeyValue
+
+	// Attributes describe the aspects of the link.
+	Attributes []attribute.KeyValue
+
+	// DroppedAttributeCount is the number of attributes that were not
+	// recorded due to configured limits being reached.
+	DroppedAttributeCount int
 }
 
 // SpanKind is the role a Span plays in a Trace.
@@ -385,5 +667,7 @@ type TracerProvider interface {
 	// only if that code provides built-in instrumentation. If the
 	// instrumentationName is empty, then a implementation defined default
 	// name will be used instead.
+	//
+	// This method must be concurrency safe.
 	Tracer(instrumentationName string, opts ...TracerOption) Tracer
 }

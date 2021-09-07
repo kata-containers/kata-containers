@@ -17,7 +17,7 @@ package resource // import "go.opentelemetry.io/otel/sdk/resource"
 import (
 	"context"
 
-	"go.opentelemetry.io/otel/label"
+	"go.opentelemetry.io/otel/attribute"
 )
 
 // config contains configuration for Resource creation.
@@ -42,15 +42,24 @@ type config struct {
 type Option interface {
 	// Apply sets the Option value of a config.
 	Apply(*config)
+
+	// A private method to prevent users implementing the
+	// interface and so future additions to it will not
+	// violate compatibility.
+	private()
 }
 
+type option struct{}
+
+func (option) private() {}
+
 // WithAttributes adds attributes to the configured Resource.
-func WithAttributes(attributes ...label.KeyValue) Option {
+func WithAttributes(attributes ...attribute.KeyValue) Option {
 	return WithDetectors(detectAttributes{attributes})
 }
 
 type detectAttributes struct {
-	attributes []label.KeyValue
+	attributes []attribute.KeyValue
 }
 
 func (d detectAttributes) Detect(context.Context) (*Resource, error) {
@@ -59,10 +68,11 @@ func (d detectAttributes) Detect(context.Context) (*Resource, error) {
 
 // WithDetectors adds detectors to be evaluated for the configured resource.
 func WithDetectors(detectors ...Detector) Option {
-	return detectorsOption{detectors}
+	return detectorsOption{detectors: detectors}
 }
 
 type detectorsOption struct {
+	option
 	detectors []Detector
 }
 
@@ -74,10 +84,11 @@ func (o detectorsOption) Apply(cfg *config) {
 // WithTelemetrySDK overrides the builtin `telemetry.sdk.*`
 // attributes.  Use nil to disable these attributes entirely.
 func WithTelemetrySDK(d Detector) Option {
-	return telemetrySDKOption{d}
+	return telemetrySDKOption{Detector: d}
 }
 
 type telemetrySDKOption struct {
+	option
 	Detector
 }
 
@@ -89,10 +100,11 @@ func (o telemetrySDKOption) Apply(cfg *config) {
 // WithHost overrides the builtin `host.*` attributes.  Use nil to
 // disable these attributes entirely.
 func WithHost(d Detector) Option {
-	return hostOption{d}
+	return hostOption{Detector: d}
 }
 
 type hostOption struct {
+	option
 	Detector
 }
 
@@ -104,10 +116,11 @@ func (o hostOption) Apply(cfg *config) {
 // WithFromEnv overrides the builtin detector for
 // OTEL_RESOURCE_ATTRIBUTES.  Use nil to disable environment checking.
 func WithFromEnv(d Detector) Option {
-	return fromEnvOption{d}
+	return fromEnvOption{Detector: d}
 }
 
 type fromEnvOption struct {
+	option
 	Detector
 }
 
@@ -122,7 +135,9 @@ func WithoutBuiltin() Option {
 	return noBuiltinOption{}
 }
 
-type noBuiltinOption struct{}
+type noBuiltinOption struct {
+	option
+}
 
 // Apply implements Option.
 func (o noBuiltinOption) Apply(cfg *config) {
