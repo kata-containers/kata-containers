@@ -172,6 +172,10 @@ func New(config *Config) (*Manager, error) {
 
 // read all the pids in cgroupPath
 func readPids(cgroupPath string) ([]int, error) {
+	if rootless.IsRootless() {
+		return nil, errors.New("unable to read pids from cgroup.procs: running rootless")
+	}
+
 	pids := []int{}
 	f, err := os.Open(filepath.Join(cgroupPath, cgroupProcs))
 	if err != nil {
