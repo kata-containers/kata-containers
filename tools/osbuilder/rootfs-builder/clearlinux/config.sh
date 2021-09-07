@@ -20,7 +20,7 @@ PACKAGES="libudev0-shim kmod-bin"
 #Optional packages:
 # systemd: An init system that will start kata-agent if kata-agent
 #          itself is not configured as init process.
-[ "$AGENT_INIT" == "no" ] && PACKAGES+=" systemd chrony iptables-bin util-linux-bin" || true
+[ "$AGENT_INIT" = "no" ] && PACKAGES+=" systemd chrony iptables-bin util-linux-bin" || true
 
 # Init process must be one of {systemd,kata-agent}
 INIT_PROCESS=systemd

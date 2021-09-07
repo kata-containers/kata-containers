@@ -27,7 +27,7 @@ PACKAGES="iptables chrony"
 #Optional packages:
 # systemd: An init system that will start kata-agent if kata-agent
 #          itself is not configured as init process.
-[ "$AGENT_INIT" == "no" ] && PACKAGES+=" systemd" || true
+[ "$AGENT_INIT" = "no" ] && PACKAGES+=" systemd" || true
 
 # Init process must be one of {systemd,kata-agent}
 INIT_PROCESS=systemd
