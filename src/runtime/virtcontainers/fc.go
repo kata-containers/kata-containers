@@ -1170,7 +1170,11 @@ func (fc *firecracker) getThreadIDs(ctx context.Context) (vcpuThreadIDs, error) 
 		if len(cpus) != 2 {
 			return vcpuInfo, errors.Errorf("Invalid fc thread info: %v", comm)
 		}
-		cpuID, err := strconv.ParseInt(cpus[1], 10, 32)
+
+		//Remove the leading whitespace
+		cpuIdStr := strings.TrimSpace(cpus[1])
+
+		cpuID, err := strconv.ParseInt(cpuIdStr, 10, 32)
 		if err != nil {
 			return vcpuInfo, errors.Wrapf(err, "Invalid fc thread info: %v", comm)
 		}
