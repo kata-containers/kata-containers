@@ -123,11 +123,6 @@ func (q *qemuPPC64le) memoryTopology(memoryMb, hostMemoryMb uint64, slots uint8)
 	return genericMemoryTopology(memoryMb, hostMemoryMb, slots, q.memoryOffset)
 }
 
-// appendBridges appends to devices the given bridges
-func (q *qemuPPC64le) appendBridges(devices []govmmQemu.Device) []govmmQemu.Device {
-	return genericAppendBridges(devices, q.Bridges, q.qemuMachine.Type)
-}
-
 func (q *qemuPPC64le) appendIOMMU(devices []govmmQemu.Device) ([]govmmQemu.Device, error) {
 	return devices, fmt.Errorf("PPC64le does not support appending a vIOMMU")
 }

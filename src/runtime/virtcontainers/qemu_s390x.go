@@ -256,11 +256,6 @@ func (q *qemuS390x) append9PVolume(ctx context.Context, devices []govmmQemu.Devi
 	return devices, nil
 }
 
-// appendBridges appends to devices the given bridges
-func (q *qemuS390x) appendBridges(devices []govmmQemu.Device) []govmmQemu.Device {
-	return genericAppendBridges(devices, q.Bridges, q.qemuMachine.Type)
-}
-
 func (q *qemuS390x) appendSCSIController(ctx context.Context, devices []govmmQemu.Device, enableIOThreads bool) ([]govmmQemu.Device, *govmmQemu.IOThread, error) {
 	d, t := genericSCSIController(enableIOThreads, q.nestedRun)
 	addr, b, err := q.addDeviceToBridge(ctx, d.ID, types.CCW)
