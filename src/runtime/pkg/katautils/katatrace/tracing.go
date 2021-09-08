@@ -11,14 +11,14 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/exporters/trace/jaeger"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/exporters/jaeger"
 	"go.opentelemetry.io/otel/propagation"
+	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
 	"go.opentelemetry.io/otel/trace"
 	otelTrace "go.opentelemetry.io/otel/trace"
-	"go.opentelemetry.io/otel/sdk/resource"
-	"go.opentelemetry.io/otel/semconv"
 )
 
 // kataSpanExporter is used to ensure that Jaeger logs each span.
@@ -30,7 +30,7 @@ type kataSpanExporter struct{}
 var _ sdktrace.SpanExporter = (*kataSpanExporter)(nil)
 
 // ExportSpans exports SpanData to Jaeger.
-func (e *kataSpanExporter) ExportSpans(ctx context.Context, spans []*sdktrace.SpanSnapshot) error {
+func (e *kataSpanExporter) ExportSpans(ctx context.Context, spans []sdktrace.ReadOnlySpan) error {
 	for _, span := range spans {
 		kataTraceLogger.Tracef("Reporting span %+v", span)
 	}
@@ -78,7 +78,7 @@ func CreateTracer(name string, config *JaegerConfig) (*sdktrace.TracerProvider, 
 		collectorEndpoint = "http://localhost:14268/api/traces"
 	}
 
-	jaegerExporter, err := jaeger.NewRawExporter(
+	jaegerExporter, err := jaeger.New(
 		jaeger.WithCollectorEndpoint(jaeger.WithEndpoint(collectorEndpoint),
 			jaeger.WithUsername(config.JaegerUser),
 			jaeger.WithPassword(config.JaegerPassword),
@@ -94,11 +94,11 @@ func CreateTracer(name string, config *JaegerConfig) (*sdktrace.TracerProvider, 
 		sdktrace.WithSampler(sdktrace.AlwaysSample()),
 		sdktrace.WithSyncer(kataExporter),
 		sdktrace.WithSyncer(jaegerExporter),
-		sdktrace.WithResource(resource.NewWithAttributes(
-                                semconv.ServiceNameKey.String(name),
-                                attribute.String("exporter", "jaeger"),
-                                attribute.String("lib", "opentelemetry"),
-                        )),
+		sdktrace.WithResource(resource.NewSchemaless(
+			semconv.ServiceNameKey.String(name),
+			attribute.String("exporter", "jaeger"),
+			attribute.String("lib", "opentelemetry"),
+		)),
 	)
 
 	otel.SetTracerProvider(tp)
