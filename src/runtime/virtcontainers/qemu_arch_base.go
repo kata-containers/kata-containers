@@ -12,7 +12,6 @@ import (
 	"fmt"
 	"os"
 	"runtime"
-	"strconv"
 	"strings"
 
 	govmmQemu "github.com/kata-containers/govmm/qemu"
@@ -456,31 +455,7 @@ func (q *qemuArchBase) appendSCSIController(_ context.Context, devices []govmmQe
 
 // appendBridges appends to devices the given bridges
 func (q *qemuArchBase) appendBridges(devices []govmmQemu.Device) []govmmQemu.Device {
-	for idx, b := range q.Bridges {
-		if b.Type == types.CCW {
-			continue
-		}
-		t := govmmQemu.PCIBridge
-		if b.Type == types.PCIE {
-			t = govmmQemu.PCIEBridge
-		}
-
-		q.Bridges[idx].Addr = bridgePCIStartAddr + idx
-
-		devices = append(devices,
-			govmmQemu.BridgeDevice{
-				Type: t,
-				Bus:  defaultBridgeBus,
-				ID:   b.ID,
-				// Each bridge is required to be assigned a unique chassis id > 0
-				Chassis: idx + 1,
-				SHPC:    true,
-				Addr:    strconv.FormatInt(int64(q.Bridges[idx].Addr), 10),
-			},
-		)
-	}
-
-	return devices
+	return genericAppendBridges(devices, q.Bridges, q.qemuMachine.Type)
 }
 
 func generic9PVolume(volume types.Volume, nestedRun bool) govmmQemu.FSDevice {

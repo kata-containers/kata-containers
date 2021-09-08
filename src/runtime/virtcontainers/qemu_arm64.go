@@ -89,11 +89,6 @@ func (q *qemuArm64) bridges(number uint32) {
 	q.Bridges = genericBridges(number, q.qemuMachine.Type)
 }
 
-// appendBridges appends to devices the given bridges
-func (q *qemuArm64) appendBridges(devices []govmmQemu.Device) []govmmQemu.Device {
-	return genericAppendBridges(devices, q.Bridges, q.qemuMachine.Type)
-}
-
 func (q *qemuArm64) appendImage(ctx context.Context, devices []govmmQemu.Device, path string) ([]govmmQemu.Device, error) {
 	if !q.disableNvdimm {
 		return q.appendNvdimmImage(devices, path)
