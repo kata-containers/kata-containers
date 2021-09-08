@@ -486,6 +486,24 @@ func TestAppendPCIBridgeDevice(t *testing.T) {
 	testAppend(bridge, devicePCIBridgeString, t)
 }
 
+func TestAppendPCIBridgeDeviceWithReservations(t *testing.T) {
+
+	bridge := BridgeDevice{
+		Type:          PCIBridge,
+		ID:            "mybridge",
+		Bus:           "/pci-bus/pcie.0",
+		Addr:          "255",
+		Chassis:       5,
+		SHPC:          false,
+		ROMFile:       romfile,
+		IOReserve:     "4k",
+		MemReserve:    "1m",
+		Pref64Reserve: "1m",
+	}
+
+	testAppend(bridge, devicePCIBridgeStringReserved, t)
+}
+
 func TestAppendPCIEBridgeDevice(t *testing.T) {
 
 	bridge := BridgeDevice{
