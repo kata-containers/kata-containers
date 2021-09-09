@@ -567,7 +567,7 @@ components:
           default: false
         hotplug_method:
           type: string
-          default: "acpi"
+          default: "Acpi"
         shared:
           type: boolean
           default: false
@@ -714,7 +714,7 @@ components:
           type: string
         vhost_mode:
           type: string
-          default: "client"
+          default: "Client"
         id:
           type: string
         fd:

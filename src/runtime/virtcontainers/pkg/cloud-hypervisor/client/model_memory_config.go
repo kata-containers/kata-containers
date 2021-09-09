@@ -36,7 +36,7 @@ func NewMemoryConfig(size int64) *MemoryConfig {
 	this.Size = size
 	var mergeable bool = false
 	this.Mergeable = &mergeable
-	var hotplugMethod string = "acpi"
+	var hotplugMethod string = "Acpi"
 	this.HotplugMethod = &hotplugMethod
 	var shared bool = false
 	this.Shared = &shared
@@ -52,7 +52,7 @@ func NewMemoryConfigWithDefaults() *MemoryConfig {
 	this := MemoryConfig{}
 	var mergeable bool = false
 	this.Mergeable = &mergeable
-	var hotplugMethod string = "acpi"
+	var hotplugMethod string = "Acpi"
 	this.HotplugMethod = &hotplugMethod
 	var shared bool = false
 	this.Shared = &shared

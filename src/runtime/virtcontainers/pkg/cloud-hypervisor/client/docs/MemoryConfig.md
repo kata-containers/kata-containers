@@ -8,7 +8,7 @@ Name | Type | Description | Notes
 **HotplugSize** | Pointer to **int64** |  | [optional] 
 **HotpluggedSize** | Pointer to **int64** |  | [optional] 
 **Mergeable** | Pointer to **bool** |  | [optional] [default to false]
-**HotplugMethod** | Pointer to **string** |  | [optional] [default to "acpi"]
+**HotplugMethod** | Pointer to **string** |  | [optional] [default to "Acpi"]
 **Shared** | Pointer to **bool** |  | [optional] [default to false]
 **Hugepages** | Pointer to **bool** |  | [optional] [default to false]
 **HugepageSize** | Pointer to **int64** |  | [optional] 
