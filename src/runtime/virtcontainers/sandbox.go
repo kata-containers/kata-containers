@@ -65,6 +65,7 @@ const (
 	DirMode = os.FileMode(0750) | os.ModeDir
 
 	mkswapPath = "/sbin/mkswap"
+	rwm        = "rwm"
 )
 
 var (
@@ -579,6 +580,34 @@ func (s *Sandbox) createCgroupManager() error {
 		// CPUSet.
 		if spec.Linux.Resources != nil {
 			resources.Devices = spec.Linux.Resources.Devices
+
+			// spec.Linux.Resources.Devices default only contain {"devices":[{"allow":false,"access":"rwm"}]}
+			if len(resources.Devices) == 1 {
+				intptr := func(i int64) *int64 {
+					return &i
+				}
+
+				// adds the default devices for unix such as /dev/null, /dev/urandom to
+				// the container's resource cgroup spec
+				resources.Devices = append(resources.Devices, []specs.LinuxDeviceCgroup{
+					{
+						// "/dev/null",
+						Type:   "c",
+						Major:  intptr(1),
+						Minor:  intptr(3),
+						Access: rwm,
+						Allow:  true,
+					},
+					{
+						// "/dev/urandom",
+						Type:   "c",
+						Major:  intptr(1),
+						Minor:  intptr(9),
+						Access: rwm,
+						Allow:  true,
+					},
+				}...)
+			}
 
 			if spec.Linux.Resources.CPU != nil {
 				resources.CPU = &specs.LinuxCPU{
