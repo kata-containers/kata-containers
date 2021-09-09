@@ -636,3 +636,71 @@ func TestMountSharedDirMounts(t *testing.T) {
 	assert.Equal(updatedMounts[mountDestination].Source, expectedStorageDest)
 	assert.Equal(updatedMounts[mountDestination].Destination, mountDestination)
 }
+
+func TestGetContainerId(t *testing.T) {
+	containerIDs := []string{"abc", "foobar", "123"}
+	containers := [3]*Container{}
+
+	for i, id := range containerIDs {
+		c := &Container{id: id}
+		containers[i] = c
+	}
+
+	for id, container := range containers {
+		assert.Equal(t, containerIDs[id], container.ID())
+	}
+}
+
+func TestContainerProcess(t *testing.T) {
+	assert := assert.New(t)
+
+	expectedProcess := Process{
+		Token: "foobar",
+		Pid:   123,
+	}
+	container := &Container{
+		process: expectedProcess,
+	}
+
+	process := container.Process()
+	assert.Exactly(process, expectedProcess)
+
+	token := container.GetToken()
+	assert.Exactly(token, "foobar")
+
+	pid := container.GetPid()
+	assert.Exactly(pid, 123)
+}
+
+func TestConfigValid(t *testing.T) {
+	assert := assert.New(t)
+
+	//no config
+	config := ContainerConfig{}
+	result := config.valid()
+	assert.False(result)
+
+	//no container ID
+	config = newTestContainerConfigNoop("")
+	result = config.valid()
+	assert.False(result)
+
+	config = newTestContainerConfigNoop("foobar")
+	result = config.valid()
+	assert.True(result)
+}
+
+func TestStoreContainer(t *testing.T) {
+	hConfig := newHypervisorConfig(nil, nil)
+	sandbox, err := testCreateSandbox(t, testSandboxID, MockHypervisor, hConfig, NetworkConfig{}, nil, nil)
+	assert.NoError(t, err)
+	defer cleanUp()
+
+	container := &Container{
+		sandbox: sandbox,
+	}
+
+	err = container.storeContainer()
+	assert.Nil(t, err, "store container should succeed")
+
+}
