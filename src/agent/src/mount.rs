@@ -770,26 +770,36 @@ pub fn remove_mounts(mounts: &[String]) -> Result<()> {
     Ok(())
 }
 
+#[instrument]
+fn ensure_destination_file_exists(path: &Path) -> Result<()> {
+    if path.is_file() {
+        return Ok(());
+    } else if path.exists() {
+        return Err(anyhow!("{:?} exists but is not a regular file", path));
+    }
+
+    // The only way parent() can return None is if the path is /,
+    // which always exists, so the test above will already have caught
+    // it, thus the unwrap() is safe
+    let dir = path.parent().unwrap();
+
+    fs::create_dir_all(dir).context(format!("create_dir_all {:?}", dir))?;
+
+    fs::File::create(path).context(format!("create empty file {:?}", path))?;
+
+    Ok(())
+}
+
 // ensure_destination_exists will recursively create a given mountpoint. If directories
 // are created, their permissions are initialized to mountPerm(0755)
 #[instrument]
 fn ensure_destination_exists(destination: &str, fs_type: &str) -> Result<()> {
     let d = Path::new(destination);
-    if d.exists() {
-        return Ok(());
-    }
-    let dir = d
-        .parent()
-        .ok_or_else(|| anyhow!("mount destination {} doesn't exist", destination))?;
-
-    if !dir.exists() {
-        fs::create_dir_all(dir).context(format!("create dir all {:?}", dir))?;
-    }
 
     if fs_type != "bind" || d.is_dir() {
         fs::create_dir_all(d).context(format!("create dir all {:?}", d))?;
     } else {
-        fs::File::create(d).context(format!("create file {:?}", d))?;
+        ensure_destination_file_exists(d)?;
     }
 
     Ok(())
@@ -1377,6 +1387,23 @@ mod tests {
         }
     }
 
+    #[test]
+    fn test_ensure_destination_file_exists() {
+        let dir = tempdir().expect("failed to create tmpdir");
+
+        let mut testfile = dir.into_path();
+        testfile.push("testfile");
+
+        let result = ensure_destination_file_exists(&testfile);
+
+        assert!(result.is_ok());
+        assert!(testfile.exists());
+
+        let result = ensure_destination_file_exists(&testfile);
+        assert!(result.is_ok());
+
+        assert!(testfile.is_file());
+    }
     #[test]
     fn test_ensure_destination_exists() {
         let dir = tempdir().expect("failed to create tmpdir");
