@@ -51,7 +51,7 @@ func NewNetConfig() *NetConfig {
 	this.QueueSize = &queueSize
 	var vhostUser bool = false
 	this.VhostUser = &vhostUser
-	var vhostMode string = "client"
+	var vhostMode string = "Client"
 	this.VhostMode = &vhostMode
 	return &this
 }
@@ -75,7 +75,7 @@ func NewNetConfigWithDefaults() *NetConfig {
 	this.QueueSize = &queueSize
 	var vhostUser bool = false
 	this.VhostUser = &vhostUser
-	var vhostMode string = "client"
+	var vhostMode string = "Client"
 	this.VhostMode = &vhostMode
 	return &this
 }
