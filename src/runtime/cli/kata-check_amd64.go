@@ -161,6 +161,16 @@ func setCPUtype(hypervisorType vc.HypervisorType) error {
 					required: false,
 				},
 			}
+		case "mock":
+			archRequiredCPUFlags = map[string]string{
+				cpuFlagVMX:    "Virtualization support",
+				cpuFlagLM:     "64Bit CPU",
+				cpuFlagSSE4_1: "SSE4.1",
+			}
+			archRequiredCPUAttribs = map[string]string{
+				archGenuineIntel: "Intel Architecture CPU",
+			}
+
 		default:
 			return fmt.Errorf("setCPUtype: Unknown hypervisor type %s", hypervisorType)
 		}
@@ -292,6 +302,8 @@ func archHostCanCreateVMContainer(hypervisorType vc.HypervisorType) error {
 		return kvmIsUsable()
 	case "acrn":
 		return acrnIsUsable()
+	case "mock":
+		return nil
 	default:
 		return fmt.Errorf("archHostCanCreateVMContainer: Unknown hypervisor type %s", hypervisorType)
 	}

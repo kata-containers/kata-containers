@@ -127,7 +127,7 @@ vendor:
 
 #TARGET test: run cargo tests
 test:
-	@cargo test --all --target $(TRIPLE)
+	@cargo test --all --target $(TRIPLE) -- --nocapture
 
 ##TARGET check: run test
 check: clippy format

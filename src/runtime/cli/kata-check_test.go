@@ -17,8 +17,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/katatestutils"
 	ktu "github.com/kata-containers/kata-containers/src/runtime/pkg/katatestutils"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils"
+	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/urfave/cli"
@@ -247,6 +249,13 @@ func genericCheckCLIFunction(t *testing.T, cpuData []testCPUData, moduleData []t
 	flagSet := &flag.FlagSet{}
 	ctx := createCLIContext(flagSet)
 	ctx.App.Name = "foo"
+
+	if katatestutils.IsInGitHubActions() {
+		// only set to mock if on GitHub
+		t.Logf("running tests under GitHub actions")
+		config.HypervisorType = vc.MockHypervisor
+	}
+
 	ctx.App.Metadata["runtimeConfig"] = config
 
 	// create buffer to save logger output
