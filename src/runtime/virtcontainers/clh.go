@@ -240,7 +240,6 @@ func (clh *cloudHypervisor) createSandbox(ctx context.Context, id string, networ
 	clh.vmconfig.Memory = chclient.NewMemoryConfig(int64((utils.MemUnit(clh.config.MemorySize) * utils.MiB).ToBytes()))
 	// shared memory should be enabled if using vhost-user(kata uses virtiofsd)
 	clh.vmconfig.Memory.Shared = func(b bool) *bool { return &b }(true)
-	clh.vmconfig.Memory.HotplugMethod = func(s string) *string { return &s }("Acpi")
 	hostMemKb, err := getHostMemorySizeKb(procMemInfo)
 	if err != nil {
 		return nil
@@ -1116,7 +1115,6 @@ func (clh *cloudHypervisor) addNet(e Endpoint) error {
 	net := chclient.NewNetConfig()
 	net.Mac = &mac
 	net.Tap = &tapPath
-	net.VhostMode = func(s string) *string { return &s }("Client")
 	if clh.vmconfig.Net != nil {
 		*clh.vmconfig.Net = append(*clh.vmconfig.Net, *net)
 	} else {
