@@ -6,7 +6,10 @@
 
 package katatestutils
 
-import "strconv"
+import (
+	"os"
+	"strconv"
+)
 
 type RuntimeConfigOptions struct {
 	Hypervisor           string
@@ -149,4 +152,9 @@ func MakeRuntimeConfigFileData(config RuntimeConfigOptions) string {
 	jaeger_endpoint= "` + config.JaegerEndpoint + `"
 	jaeger_user= "` + config.JaegerUser + `"
 	jaeger_password= "` + config.JaegerPassword + `"`
+}
+
+func IsInGitHubActions() bool {
+	// https://docs.github.com/en/actions/reference/environment-variables#default-environment-variables
+	return os.Getenv("GITHUB_ACTIONS") == "true"
 }

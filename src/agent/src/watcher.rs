@@ -193,14 +193,6 @@ impl Storage {
 
             size += metadata.len();
 
-            ensure!(
-                self.watched_files.len() <= MAX_ENTRIES_PER_STORAGE,
-                WatcherError::MountTooManyFiles {
-                    count: self.watched_files.len(),
-                    mnt: self.source_mount_point.display().to_string()
-                }
-            );
-
             // Insert will return old entry if any
             if let Some(old_st) = self.watched_files.insert(path.to_path_buf(), modified) {
                 if modified > old_st {
@@ -211,6 +203,14 @@ impl Storage {
                 debug!(logger, "New entry: {}", path.display());
                 update_list.push(PathBuf::from(&path))
             }
+
+            ensure!(
+                self.watched_files.len() <= MAX_ENTRIES_PER_STORAGE,
+                WatcherError::MountTooManyFiles {
+                    count: self.watched_files.len(),
+                    mnt: self.source_mount_point.display().to_string()
+                }
+            );
         } else {
             // Scan dir recursively
             let mut entries = fs::read_dir(path)
