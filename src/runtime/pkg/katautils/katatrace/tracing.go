@@ -7,6 +7,7 @@ package katatrace
 
 import (
 	"context"
+	"encoding/json"
 
 	"github.com/sirupsen/logrus"
 	"go.opentelemetry.io/otel"
@@ -163,8 +164,77 @@ func Trace(parent context.Context, logger *logrus.Entry, name string, tags ...ma
 	return span, ctx
 }
 
-// AddTag adds an additional key-value pair to a tracing span. This can be used to
-// provide dynamic tags that are determined at runtime.
-func AddTag(span otelTrace.Span, key string, value interface{}) {
-	span.SetAttributes(label.Any(key, value))
+func addTag(span otelTrace.Span, key string, value interface{}) {
+	// do not append tags if tracing is disabled
+	if !tracing {
+		return
+	}
+	if value == nil {
+		span.SetAttributes(label.String(key, "nil"))
+		return
+	}
+
+	switch value := value.(type) {
+	case string:
+		span.SetAttributes(label.String(key, value))
+	case bool:
+		span.SetAttributes(label.Bool(key, value))
+	case int:
+		span.SetAttributes(label.Int(key, value))
+	case int8:
+		span.SetAttributes(label.Int(key, int(value)))
+	case int16:
+		span.SetAttributes(label.Int(key, int(value)))
+	case int32:
+		span.SetAttributes(label.Int32(key, value))
+	case int64:
+		span.SetAttributes(label.Int64(key, value))
+	case uint:
+		span.SetAttributes(label.Uint(key, value))
+	case uint8:
+		span.SetAttributes(label.Uint(key, uint(value)))
+	case uint16:
+		span.SetAttributes(label.Uint(key, uint(value)))
+	case uint32:
+		span.SetAttributes(label.Uint32(key, value))
+	case uint64:
+		span.SetAttributes(label.Uint64(key, value))
+	case float32:
+		span.SetAttributes(label.Float32(key, value))
+	case float64:
+		span.SetAttributes(label.Float64(key, value))
+	default:
+		content, err := json.Marshal(value)
+		if content == nil && err == nil {
+			span.SetAttributes(label.String(key, "nil"))
+		} else if content != nil && err == nil {
+			span.SetAttributes(label.String(key, string(content)))
+		} else {
+			kataTraceLogger.WithField("type", "bug").Error("span attribute value error")
+		}
+	}
+}
+
+// AddTag adds additional key-value pairs to a tracing span. This can be used to provide
+// dynamic tags that are determined at runtime and tags with a non-string value.
+// Must have an even number of keyValues with keys being strings.
+func AddTags(span otelTrace.Span, keyValues ...interface{}) {
+	if !tracing {
+		return
+	}
+	if len(keyValues) < 2 {
+		kataTraceLogger.WithField("type", "bug").Error("not enough inputs for attributes")
+		return
+	} else if len(keyValues)%2 != 0 {
+		kataTraceLogger.WithField("type", "bug").Error("number of attribute keyValues is not even")
+		return
+	}
+	for i := 0; i < len(keyValues); i++ {
+		if key, ok := keyValues[i].(string); ok {
+			addTag(span, key, keyValues[i+1])
+		} else {
+			kataTraceLogger.WithField("type", "bug").Error("key in attributes is not a string")
+		}
+		i++
+	}
 }
