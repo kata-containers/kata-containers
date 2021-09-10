@@ -1726,8 +1726,8 @@ func (q *qemu) hotplugDevice(ctx context.Context, devInfo interface{}, devType D
 }
 
 func (q *qemu) HotplugAddDevice(ctx context.Context, devInfo interface{}, devType DeviceType) (interface{}, error) {
-	span, ctx := katatrace.Trace(ctx, q.Logger(), "HotplugAddDevice", qemuTracingTags, map[string]string{"sandbox_id": q.id})
-	katatrace.AddTag(span, "device", devInfo)
+	span, ctx := katatrace.Trace(ctx, q.Logger(), "HotplugAddDevice", qemuTracingTags)
+	katatrace.AddTags(span, "sandbox_id", q.id, "device", devInfo)
 	defer span.End()
 
 	data, err := q.hotplugDevice(ctx, devInfo, devType, AddDevice)
@@ -1739,8 +1739,8 @@ func (q *qemu) HotplugAddDevice(ctx context.Context, devInfo interface{}, devTyp
 }
 
 func (q *qemu) HotplugRemoveDevice(ctx context.Context, devInfo interface{}, devType DeviceType) (interface{}, error) {
-	span, ctx := katatrace.Trace(ctx, q.Logger(), "HotplugRemoveDevice", qemuTracingTags, map[string]string{"sandbox_id": q.id})
-	katatrace.AddTag(span, "device", devInfo)
+	span, ctx := katatrace.Trace(ctx, q.Logger(), "HotplugRemoveDevice", qemuTracingTags)
+	katatrace.AddTags(span, "sandbox_id", q.id, "device", devInfo)
 	defer span.End()
 
 	data, err := q.hotplugDevice(ctx, devInfo, devType, RemoveDevice)
@@ -1968,8 +1968,8 @@ func (q *qemu) ResumeVM(ctx context.Context) error {
 // addDevice will add extra devices to Qemu command line.
 func (q *qemu) AddDevice(ctx context.Context, devInfo interface{}, devType DeviceType) error {
 	var err error
-	span, _ := katatrace.Trace(ctx, q.Logger(), "AddDevice", qemuTracingTags, map[string]string{"sandbox_id": q.id})
-	katatrace.AddTag(span, "device", devInfo)
+	span, _ := katatrace.Trace(ctx, q.Logger(), "AddDevice", qemuTracingTags)
+	katatrace.AddTags(span, "sandbox_id", q.id, "device", devInfo)
 	defer span.End()
 
 	switch v := devInfo.(type) {
