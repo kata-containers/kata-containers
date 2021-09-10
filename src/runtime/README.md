@@ -27,7 +27,7 @@ to work seamlessly with both Docker and Kubernetes respectively.
 
 The code is licensed under an Apache 2.0 license.
 
-See [the license file](LICENSE) for further details.
+See [the license file](../../LICENSE) for further details.
 
 ## Platform support
 
