@@ -581,31 +581,30 @@ func (s *Sandbox) createCgroupManager() error {
 		if spec.Linux.Resources != nil {
 			resources.Devices = spec.Linux.Resources.Devices
 
-			// spec.Linux.Resources.Devices default only contain {"devices":[{"allow":false,"access":"rwm"}]}
-			if len(resources.Devices) == 1 {
-				intptr := func(i int64) *int64 {
-					return &i
+			intptr := func(i int64) *int64 { return &i }
+			// Determine if device /dev/null and /dev/urandom exist, and add if they don't
+			nullDeviceExist := false
+			urandomDeviceExist := false
+			for _, device := range resources.Devices {
+				if device.Type == "c" && device.Major == intptr(1) && device.Minor == intptr(3) {
+					nullDeviceExist = true
 				}
 
-				// adds the default devices for unix such as /dev/null, /dev/urandom to
-				// the container's resource cgroup spec
+				if device.Type == "c" && device.Major == intptr(1) && device.Minor == intptr(9) {
+					urandomDeviceExist = true
+				}
+			}
+
+			if !nullDeviceExist {
+				// "/dev/null"
 				resources.Devices = append(resources.Devices, []specs.LinuxDeviceCgroup{
-					{
-						// "/dev/null",
-						Type:   "c",
-						Major:  intptr(1),
-						Minor:  intptr(3),
-						Access: rwm,
-						Allow:  true,
-					},
-					{
-						// "/dev/urandom",
-						Type:   "c",
-						Major:  intptr(1),
-						Minor:  intptr(9),
-						Access: rwm,
-						Allow:  true,
-					},
+					{Type: "c", Major: intptr(1), Minor: intptr(3), Access: rwm, Allow: true},
+				}...)
+			}
+			if !urandomDeviceExist {
+				// "/dev/urandom"
+				resources.Devices = append(resources.Devices, []specs.LinuxDeviceCgroup{
+					{Type: "c", Major: intptr(1), Minor: intptr(9), Access: rwm, Allow: true},
 				}...)
 			}
 
