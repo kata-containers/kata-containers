@@ -383,7 +383,7 @@ components:
               id: id
               hotplug_size: 1
             hotplug_size: 3
-            hotplug_method: acpi
+            hotplug_method: Acpi
           disks:
           - path: path
             num_queues: 7
@@ -540,7 +540,7 @@ components:
                 one_time_burst: 0
                 refill_time: 0
             mac: mac
-            vhost_mode: client
+            vhost_mode: Client
             iommu: false
             vhost_socket: vhost_socket
             vhost_user: false
@@ -563,7 +563,7 @@ components:
                 one_time_burst: 0
                 refill_time: 0
             mac: mac
-            vhost_mode: client
+            vhost_mode: Client
             iommu: false
             vhost_socket: vhost_socket
             vhost_user: false
@@ -688,7 +688,7 @@ components:
             id: id
             hotplug_size: 1
           hotplug_size: 3
-          hotplug_method: acpi
+          hotplug_method: Acpi
         disks:
         - path: path
           num_queues: 7
@@ -845,7 +845,7 @@ components:
               one_time_burst: 0
               refill_time: 0
           mac: mac
-          vhost_mode: client
+          vhost_mode: Client
           iommu: false
           vhost_socket: vhost_socket
           vhost_user: false
@@ -868,7 +868,7 @@ components:
               one_time_burst: 0
               refill_time: 0
           mac: mac
-          vhost_mode: client
+          vhost_mode: Client
           iommu: false
           vhost_socket: vhost_socket
           vhost_user: false
@@ -1053,7 +1053,7 @@ components:
           id: id
           hotplug_size: 1
         hotplug_size: 3
-        hotplug_method: acpi
+        hotplug_method: Acpi
       properties:
         size:
           format: int64
@@ -1068,7 +1068,7 @@ components:
           default: false
           type: boolean
         hotplug_method:
-          default: acpi
+          default: Acpi
           type: string
         shared:
           default: false
@@ -1236,7 +1236,7 @@ components:
             one_time_burst: 0
             refill_time: 0
         mac: mac
-        vhost_mode: client
+        vhost_mode: Client
         iommu: false
         vhost_socket: vhost_socket
         vhost_user: false
@@ -1272,7 +1272,7 @@ components:
         vhost_socket:
           type: string
         vhost_mode:
-          default: client
+          default: Client
           type: string
         id:
           type: string

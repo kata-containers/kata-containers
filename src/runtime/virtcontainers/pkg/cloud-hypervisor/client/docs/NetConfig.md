@@ -13,7 +13,7 @@ Name | Type | Description | Notes
 **QueueSize** | Pointer to **int32** |  | [optional] [default to 256]
 **VhostUser** | Pointer to **bool** |  | [optional] [default to false]
 **VhostSocket** | Pointer to **string** |  | [optional] 
-**VhostMode** | Pointer to **string** |  | [optional] [default to "client"]
+**VhostMode** | Pointer to **string** |  | [optional] [default to "Client"]
 **Id** | Pointer to **string** |  | [optional] 
 **Fd** | Pointer to **[]int32** |  | [optional] 
 **RateLimiterConfig** | Pointer to [**RateLimiterConfig**](RateLimiterConfig.md) |  | [optional] 
