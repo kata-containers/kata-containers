@@ -183,8 +183,13 @@ func (s *service) mountPprofHandle(m *http.ServeMux, ociSpec *specs.Spec) {
 	m.Handle("/debug/pprof/trace", http.HandlerFunc(pprof.Trace))
 }
 
-// SocketAddress returns the address of the abstract domain socket for communicating with the
+// GetSandboxesStoragePath returns the storage path where sandboxes info are stored
+func GetSanboxesStoragePath() string {
+	return filepath.Join(string(filepath.Separator), "run", "vc", "sbs")
+}
+
+// SocketAddress returns the address of the unix domain socket for communicating with the
 // shim management endpoint
 func SocketAddress(id string) string {
-	return fmt.Sprintf("unix://%s", filepath.Join(string(filepath.Separator), "run", "vc", "sbs", id, "shim-monitor.sock"))
+	return fmt.Sprintf("unix://%s", filepath.Join(string(filepath.Separator), GetSanboxesStoragePath(), id, "shim-monitor.sock"))
 }
