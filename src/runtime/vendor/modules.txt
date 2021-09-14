@@ -115,6 +115,9 @@ github.com/cri-o/cri-o/pkg/annotations
 github.com/davecgh/go-spew/spew
 # github.com/docker/go-units v0.4.0
 github.com/docker/go-units
+# github.com/fsnotify/fsnotify v1.4.9
+## explicit
+github.com/fsnotify/fsnotify
 # github.com/globalsign/mgo v0.0.0-20181015135952-eeefdecb41b8
 github.com/globalsign/mgo/bson
 github.com/globalsign/mgo/internal/json
