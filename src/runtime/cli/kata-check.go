@@ -25,7 +25,6 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/containerd/cgroups"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils"
 	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/oci"
@@ -413,11 +412,6 @@ EXAMPLES:
 		runtimeConfig, ok := context.App.Metadata["runtimeConfig"].(oci.RuntimeConfig)
 		if !ok {
 			return errors.New("check: cannot determine runtime config")
-		}
-
-		// check if cgroup can work use the same logic for creating containers
-		if _, err := vc.V1Constraints(); err != nil && err == cgroups.ErrMountPointNotExist && !runtimeConfig.SandboxCgroupOnly {
-			return fmt.Errorf("Cgroup v2 requires the following configuration: `sandbox_cgroup_only=true`.")
 		}
 
 		err := setCPUtype(runtimeConfig.HypervisorType)

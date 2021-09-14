@@ -47,16 +47,6 @@ github.com/blang/semver
 github.com/blang/semver/v4
 # github.com/cespare/xxhash/v2 v2.1.1
 github.com/cespare/xxhash/v2
-# github.com/checkpoint-restore/go-criu/v5 v5.0.0
-github.com/checkpoint-restore/go-criu/v5
-github.com/checkpoint-restore/go-criu/v5/rpc
-# github.com/cilium/ebpf v0.6.2
-github.com/cilium/ebpf
-github.com/cilium/ebpf/asm
-github.com/cilium/ebpf/internal
-github.com/cilium/ebpf/internal/btf
-github.com/cilium/ebpf/internal/unix
-github.com/cilium/ebpf/link
 # github.com/containerd/cgroups v1.0.1
 ## explicit
 github.com/containerd/cgroups
@@ -121,8 +111,6 @@ github.com/cpuguy83/go-md2man/v2/md2man
 # github.com/cri-o/cri-o v1.0.0-rc2.0.20170928185954-3394b3b2d6af
 ## explicit
 github.com/cri-o/cri-o/pkg/annotations
-# github.com/cyphar/filepath-securejoin v0.2.2
-github.com/cyphar/filepath-securejoin
 # github.com/davecgh/go-spew v1.1.1
 github.com/davecgh/go-spew/spew
 # github.com/docker/go-units v0.4.0
@@ -208,38 +196,14 @@ github.com/mdlayher/vsock
 github.com/mitchellh/mapstructure
 # github.com/moby/sys/mountinfo v0.4.1
 github.com/moby/sys/mountinfo
-# github.com/mrunalp/fileutils v0.5.0
-github.com/mrunalp/fileutils
 # github.com/opencontainers/go-digest v1.0.0
 github.com/opencontainers/go-digest
 # github.com/opencontainers/runc v1.0.1 => github.com/opencontainers/runc v1.0.1
 ## explicit
-github.com/opencontainers/runc/libcontainer
-github.com/opencontainers/runc/libcontainer/apparmor
-github.com/opencontainers/runc/libcontainer/capabilities
-github.com/opencontainers/runc/libcontainer/cgroups
-github.com/opencontainers/runc/libcontainer/cgroups/devices
-github.com/opencontainers/runc/libcontainer/cgroups/ebpf
-github.com/opencontainers/runc/libcontainer/cgroups/ebpf/devicefilter
-github.com/opencontainers/runc/libcontainer/cgroups/fs
-github.com/opencontainers/runc/libcontainer/cgroups/fs2
-github.com/opencontainers/runc/libcontainer/cgroups/fscommon
-github.com/opencontainers/runc/libcontainer/cgroups/systemd
 github.com/opencontainers/runc/libcontainer/configs
-github.com/opencontainers/runc/libcontainer/configs/validate
 github.com/opencontainers/runc/libcontainer/devices
-github.com/opencontainers/runc/libcontainer/intelrdt
-github.com/opencontainers/runc/libcontainer/keys
-github.com/opencontainers/runc/libcontainer/logs
-github.com/opencontainers/runc/libcontainer/seccomp
-github.com/opencontainers/runc/libcontainer/seccomp/patchbpf
-github.com/opencontainers/runc/libcontainer/specconv
-github.com/opencontainers/runc/libcontainer/stacktrace
-github.com/opencontainers/runc/libcontainer/system
 github.com/opencontainers/runc/libcontainer/user
 github.com/opencontainers/runc/libcontainer/userns
-github.com/opencontainers/runc/libcontainer/utils
-github.com/opencontainers/runc/types
 # github.com/opencontainers/runtime-spec v1.0.3-0.20210326190908-1c3f411f0417
 ## explicit
 github.com/opencontainers/runtime-spec/specs-go
@@ -275,8 +239,6 @@ github.com/russross/blackfriday/v2
 # github.com/safchain/ethtool v0.0.0-20190326074333-42ed695e3de8
 ## explicit
 github.com/safchain/ethtool
-# github.com/seccomp/libseccomp-golang v0.9.1
-github.com/seccomp/libseccomp-golang
 # github.com/shurcooL/sanitized_anchor_name v1.0.0
 github.com/shurcooL/sanitized_anchor_name
 # github.com/sirupsen/logrus v1.8.1
@@ -288,8 +250,6 @@ github.com/sirupsen/logrus/hooks/syslog
 # github.com/stretchr/testify v1.6.1
 ## explicit
 github.com/stretchr/testify/assert
-# github.com/syndtr/gocapability v0.0.0-20200815063812-42c35b437635
-github.com/syndtr/gocapability/capability
 # github.com/urfave/cli v1.22.2
 ## explicit
 github.com/urfave/cli
@@ -339,7 +299,6 @@ go.opentelemetry.io/otel/sdk/resource
 go.opentelemetry.io/otel/sdk/trace
 # golang.org/x/net v0.0.0-20210226172049-e18ecbb05110
 ## explicit
-golang.org/x/net/bpf
 golang.org/x/net/context
 golang.org/x/net/context/ctxhttp
 golang.org/x/net/http/httpguts
