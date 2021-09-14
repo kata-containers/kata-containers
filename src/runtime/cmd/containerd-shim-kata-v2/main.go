@@ -9,12 +9,13 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/containerd/containerd/runtime/v2/shim"
-	containerdshim "github.com/kata-containers/kata-containers/src/runtime/containerd-shim-v2"
+	shimapi "github.com/containerd/containerd/runtime/v2/shim"
+
+	shim "github.com/kata-containers/kata-containers/src/runtime/pkg/containerd-shim-v2"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/types"
 )
 
-func shimConfig(config *shim.Config) {
+func shimConfig(config *shimapi.Config) {
 	config.NoReaper = true
 	config.NoSubreaper = true
 }
@@ -26,5 +27,5 @@ func main() {
 		os.Exit(0)
 	}
 
-	shim.Run(types.DefaultKataRuntimeName, containerdshim.New, shimConfig)
+	shimapi.Run(types.DefaultKataRuntimeName, shim.New, shimConfig)
 }

@@ -7,12 +7,13 @@ package katamonitor
 
 import (
 	"fmt"
-	cdshim "github.com/containerd/containerd/runtime/v2/shim"
 	"io"
 	"net"
 	"net/http"
 
-	shim "github.com/kata-containers/kata-containers/src/runtime/containerd-shim-v2"
+	cdshim "github.com/containerd/containerd/runtime/v2/shim"
+
+	shim "github.com/kata-containers/kata-containers/src/runtime/pkg/containerd-shim-v2"
 )
 
 func serveError(w http.ResponseWriter, status int, txt string) {
