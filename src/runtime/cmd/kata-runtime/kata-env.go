@@ -13,14 +13,16 @@ import (
 	"strings"
 
 	"github.com/BurntSushi/toml"
+	specs "github.com/opencontainers/runtime-spec/specs-go"
+	"github.com/prometheus/procfs"
+	"github.com/urfave/cli"
+
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/utils"
 	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
 	exp "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/experimental"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/oci"
 	vcUtils "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
-	specs "github.com/opencontainers/runtime-spec/specs-go"
-	"github.com/prometheus/procfs"
-	"github.com/urfave/cli"
 )
 
 // Semantic version for the output of the command.
@@ -169,8 +171,8 @@ func getMetaInfo() MetaInfo {
 }
 
 func getRuntimeInfo(configFile string, config oci.RuntimeConfig) RuntimeInfo {
-	runtimeVersionInfo := constructVersionInfo(version)
-	runtimeVersionInfo.Commit = commit
+	runtimeVersionInfo := constructVersionInfo(katautils.VERSION)
+	runtimeVersionInfo.Commit = katautils.COMMIT
 
 	runtimeVersion := RuntimeVersionInfo{
 		Version: runtimeVersionInfo,

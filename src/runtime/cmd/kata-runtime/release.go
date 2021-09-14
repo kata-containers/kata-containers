@@ -16,6 +16,8 @@ import (
 	"strings"
 
 	"github.com/blang/semver"
+
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils"
 )
 
 type ReleaseCmd int
@@ -29,7 +31,7 @@ type releaseDetails struct {
 
 const (
 	// A release URL is expected to be prefixed with this value
-	projectAPIURL = "https://api.github.com/repos/" + projectORG
+	projectAPIURL = "https://api.github.com/repos/" + katautils.PROJECTORG
 
 	releasesSuffix  = "/releases"
 	downloadsSuffix = releasesSuffix + "/download"
@@ -37,12 +39,12 @@ const (
 	// Kata 1.x
 	kata1xRepo            = "runtime"
 	kataLegacyReleaseURL  = projectAPIURL + "/" + kata1xRepo + releasesSuffix
-	kataLegacyDownloadURL = projectURL + "/" + kata1xRepo + downloadsSuffix
+	kataLegacyDownloadURL = katautils.PROJECTURL + "/" + kata1xRepo + downloadsSuffix
 
 	// Kata 2.x or newer
 	kata2xRepo      = "kata-containers"
 	kataReleaseURL  = projectAPIURL + "/" + kata2xRepo + releasesSuffix
-	kataDownloadURL = projectURL + "/" + kata2xRepo + downloadsSuffix
+	kataDownloadURL = katautils.PROJECTURL + "/" + kata2xRepo + downloadsSuffix
 
 	// Environment variable that can be used to override a release URL
 	ReleaseURLEnvVar = "KATA_RELEASE_URL"
@@ -377,7 +379,7 @@ func HandleReleaseVersions(cmd ReleaseCmd, currentVersion string, includeAll boo
 
 	currentSemver, err := semver.Make(currentVersion)
 	if err != nil {
-		return fmt.Errorf("BUG: Current version of %s (%s) has invalid SemVer version: %v", name, currentVersion, err)
+		return fmt.Errorf("BUG: Current version of %s (%s) has invalid SemVer version: %v", katautils.NAME, currentVersion, err)
 	}
 
 	releaseURL, err := getReleaseURL(currentSemver)
