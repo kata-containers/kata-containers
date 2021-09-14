@@ -14,7 +14,7 @@ through the [CRI-O\*](https://github.com/kubernetes-incubator/cri-o) and
 
 Kata Containers creates a QEMU\*/KVM virtual machine for pod that `kubelet` (Kubernetes) creates respectively.
 
-The [`containerd-shim-kata-v2` (shown as `shimv2` from this point onwards)](../../src/runtime/containerd-shim-v2) 
+The [`containerd-shim-kata-v2` (shown as `shimv2` from this point onwards)](../../src/runtime/cmd/containerd-shim-kata-v2/)
 is the Kata Containers entrypoint, which
 implements the [Containerd Runtime V2 (Shim API)](https://github.com/containerd/containerd/tree/master/runtime/v2) for Kata.
 
