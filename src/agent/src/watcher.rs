@@ -203,14 +203,6 @@ impl Storage {
                 debug!(logger, "New entry: {}", path.display());
                 update_list.push(PathBuf::from(&path))
             }
-
-            ensure!(
-                self.watched_files.len() <= MAX_ENTRIES_PER_STORAGE,
-                WatcherError::MountTooManyFiles {
-                    count: self.watched_files.len(),
-                    mnt: self.source_mount_point.display().to_string()
-                }
-            );
         } else {
             // Scan dir recursively
             let mut entries = fs::read_dir(path)
@@ -226,6 +218,14 @@ impl Storage {
                 size += res_size;
             }
         }
+
+        ensure!(
+            self.watched_files.len() <= MAX_ENTRIES_PER_STORAGE,
+            WatcherError::MountTooManyFiles {
+                count: self.watched_files.len(),
+                mnt: self.source_mount_point.display().to_string()
+            }
+        );
 
         ensure!(
             size <= MAX_SIZE_PER_WATCHABLE_MOUNT,
