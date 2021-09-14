@@ -46,6 +46,7 @@ type SandboxConfig struct {
 	Hostname string
 
 	HypervisorType   HypervisorType
+
 	HypervisorConfig HypervisorConfig
 
 	AgentConfig KataAgentConfig
@@ -59,6 +60,16 @@ type SandboxConfig struct {
 	// This list can be empty and populated by adding containers
 	// to the Sandbox a posteriori.
 	Containers []ContainerConfig
+
+	// SandboxBindMounts - list of paths to mount into guest
+	SandboxBindMounts []string
+
+	// Experimental features enabled
+	Experimental []exp.Feature
+
+	// Cgroups specifies specific cgroup settings for the various subsystems that the container is
+	// placed into to limit the resources the container has available
+	Cgroups *configs.Cgroup
 
 	// Annotations keys must be unique strings and must be name-spaced
 	// with e.g. reverse domain notation (org.clearlinux.key).
@@ -76,13 +87,6 @@ type SandboxConfig struct {
 	SandboxCgroupOnly bool
 
 	DisableGuestSeccomp bool
-
-	// Experimental features enabled
-	Experimental []exp.Feature
-
-	// Cgroups specifies specific cgroup settings for the various subsystems that the container is
-	// placed into to limit the resources the container has available
-	Cgroups *configs.Cgroup
 }
 ```
 
