@@ -250,7 +250,7 @@ func testLoadConfiguration(t *testing.T, dir string,
 
 			// override
 			defaultRuntimeConfiguration = testConfig.ConfigPath
-			defaultSysConfRuntimeConfiguration = ""
+			DEFAULTSYSCONFRUNTIMECONFIGURATION = ""
 
 			for _, file := range configFiles {
 				var err error
@@ -1193,24 +1193,24 @@ func TestGetDefaultConfigFile(t *testing.T) {
 	assert.NoError(err)
 
 	savedConf := defaultRuntimeConfiguration
-	savedSysConf := defaultSysConfRuntimeConfiguration
+	savedSysConf := DEFAULTSYSCONFRUNTIMECONFIGURATION
 
 	defaultRuntimeConfiguration = confDirConfig.ConfigPath
-	defaultSysConfRuntimeConfiguration = sysConfDirConfig.ConfigPath
+	DEFAULTSYSCONFRUNTIMECONFIGURATION = sysConfDirConfig.ConfigPath
 
 	defer func() {
 		defaultRuntimeConfiguration = savedConf
-		defaultSysConfRuntimeConfiguration = savedSysConf
+		DEFAULTSYSCONFRUNTIMECONFIGURATION = savedSysConf
 
 	}()
 
 	got, err := getDefaultConfigFile()
 	assert.NoError(err)
-	// defaultSysConfRuntimeConfiguration has priority over defaultRuntimeConfiguration
-	assert.Equal(got, defaultSysConfRuntimeConfiguration)
+	// DEFAULTSYSCONFRUNTIMECONFIGURATION has priority over defaultRuntimeConfiguration
+	assert.Equal(got, DEFAULTSYSCONFRUNTIMECONFIGURATION)
 
 	// force defaultRuntimeConfiguration to be returned
-	os.Remove(defaultSysConfRuntimeConfiguration)
+	os.Remove(DEFAULTSYSCONFRUNTIMECONFIGURATION)
 
 	got, err = getDefaultConfigFile()
 	assert.NoError(err)

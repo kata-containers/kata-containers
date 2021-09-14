@@ -61,9 +61,9 @@ type vmContainerCapableDetails struct {
 
 const (
 	moduleParamDir        = "parameters"
-	successMessageCapable = "System is capable of running " + project
-	successMessageCreate  = "System can currently create " + project
-	failMessage           = "System is not capable of running " + project
+	successMessageCapable = "System is capable of running " + katautils.PROJECT
+	successMessageCreate  = "System can currently create " + katautils.PROJECT
+	failMessage           = "System is not capable of running " + katautils.PROJECT
 	kernelPropertyCorrect = "Kernel property value correct"
 
 	// these refer to fields in the procCPUINFO file
@@ -313,7 +313,7 @@ func genericHostIsVMContainerCapable(details vmContainerCapableDetails) error {
 var kataCheckCLICommand = cli.Command{
 	Name:    "check",
 	Aliases: []string{"kata-check"},
-	Usage:   "tests if system can run " + project,
+	Usage:   "tests if system can run " + katautils.PROJECT,
 	Flags: []cli.Flag{
 		cli.BoolFlag{
 			Name:  "check-version-only",
@@ -372,14 +372,14 @@ EXAMPLES:
 
   $ %s check --only-list-releases --include-all-releases
 `,
-		project,
+		katautils.PROJECT,
 		noNetworkEnvVar,
-		name,
-		name,
-		name,
-		name,
-		name,
-		name,
+		katautils.NAME,
+		katautils.NAME,
+		katautils.NAME,
+		katautils.NAME,
+		katautils.NAME,
+		katautils.NAME,
 	),
 
 	Action: func(context *cli.Context) error {
@@ -398,7 +398,7 @@ EXAMPLES:
 			if os.Geteuid() == 0 {
 				kataLog.Warn("Not running network checks as super user")
 			} else {
-				err := HandleReleaseVersions(cmd, version, context.Bool("include-all-releases"))
+				err := HandleReleaseVersions(cmd, katautils.VERSION, context.Bool("include-all-releases"))
 				if err != nil {
 					return err
 				}

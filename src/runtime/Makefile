@@ -559,17 +559,12 @@ define MAKE_KERNEL_VIRTIOFS_NAME
 $(if $(findstring uncompressed,$1),vmlinux-virtiofs.container,vmlinuz-virtiofs.container)
 endef
 
-GENERATED_CONFIG = $(abspath $(CLI_DIR)/config-generated.go)
-
-GENERATED_FILES += $(GENERATED_CONFIG)
 GENERATED_FILES += pkg/katautils/config-settings.go
 
 $(RUNTIME_OUTPUT): $(SOURCES) $(GENERATED_FILES) $(MAKEFILE_LIST) | show-summary
-	$(QUIET_BUILD)(cd $(RUNTIME_DIR)/ && ln -fs $(GENERATED_CONFIG))
 	$(QUIET_BUILD)(cd $(RUNTIME_DIR) && go build $(KATA_LDFLAGS) $(BUILDFLAGS) -o $@ .)
 
 $(SHIMV2_OUTPUT): $(SOURCES) $(GENERATED_FILES) $(MAKEFILE_LIST)
-	$(QUIET_BUILD)(cd $(SHIMV2_DIR)/ && ln -fs $(GENERATED_CONFIG))
 	$(QUIET_BUILD)(cd $(SHIMV2_DIR)/ && go build $(KATA_LDFLAGS) $(BUILDFLAGS) -o $@ .)
 
 $(MONITOR_OUTPUT): $(SOURCES) $(GENERATED_FILES) $(MAKEFILE_LIST) .git-commit
@@ -612,7 +607,6 @@ ifeq ($(shell id -u), 0)
 endif
 
 go-test: $(GENERATED_FILES)
-	$(QUIET_BUILD)(cd $(SHIMV2_DIR)/ && ln -fs $(GENERATED_CONFIG))
 	go clean -testcache
 	go test -v -mod=vendor ./...
 
@@ -621,7 +615,6 @@ check-go-static:
 	$(QUIET_CHECK)../../ci/go-no-os-exit.sh ./virtcontainers
 
 coverage:
-	$(QUIET_BUILD)(cd $(SHIMV2_DIR)/ && ln -fs $(GENERATED_CONFIG))
 	go test -v -mod=vendor -covermode=atomic -coverprofile=coverage.txt ./...
 	go tool cover -html=coverage.txt -o coverage.html
 
@@ -668,7 +661,6 @@ clean:
 		$(NETMON_TARGET) \
 		$(MONITOR) \
 		$(SHIMV2) \
-		$(SHIMV2_DIR)/$(notdir $(GENERATED_CONFIG)) \
 		$(TARGET) \
 		.git-commit .git-commit.tmp
 
