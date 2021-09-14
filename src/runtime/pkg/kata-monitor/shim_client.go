@@ -36,6 +36,10 @@ func getSandboxIDFromReq(r *http.Request) (string, error) {
 	return "", fmt.Errorf("sandbox not found in %+v", r.URL.Query())
 }
 
+func getSandboxFS() string {
+	return shim.GetSanboxesStoragePath()
+}
+
 // BuildShimClient builds and returns an http client for communicating with the provided sandbox
 func BuildShimClient(sandboxID string, timeout time.Duration) (*http.Client, error) {
 	return buildUnixSocketClient(shim.SocketAddress(sandboxID), timeout)
