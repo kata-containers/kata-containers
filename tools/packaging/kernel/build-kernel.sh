@@ -188,8 +188,8 @@ get_kernel_frag_path() {
 	# when it reports an error or warning condition. We search for them in the
 	# output to try and fail when we think something has been misconfigured.
 	local not_in_string="not in final"
-	local redefined_string="not in final"
-	local redundant_string="not in final"
+	local redefined_string="redefined"
+	local redundant_string="redundant"
 
 	# Later, if we need to add kernel version specific subdirs in order to
 	# handle specific cases, then add the path definition and search/list/cat
@@ -247,7 +247,7 @@ get_kernel_frag_path() {
 	# might be convenient to allow it, but for now, let's pick up on them.
 	local redundant=$(echo ${results} | grep -v -q "${redundant_string}"; echo $?)
 	if [ ${redundant} -ne 0 ]; then
-		info "Some CONFIG elements failed to make the final .config"
+		info "Some CONFIG elements are redundant in fragments:"
 		info "${results}"
 		info "Generated config file can be found in ${config_path}"
 		die "Failed to construct requested .config file"
