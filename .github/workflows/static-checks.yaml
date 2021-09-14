@@ -60,7 +60,7 @@ jobs:
         cd ${GOPATH}/src/github.com/${{ github.repository }} && ./ci/setup.sh
       env:
         GOPATH: ${{ runner.workspace }}/kata-containers
-    - name: Building rust
+    - name: Installing rust
       if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
       run: |
         cd ${GOPATH}/src/github.com/${{ github.repository }} && ./ci/install_rust.sh
