@@ -201,6 +201,9 @@ type HypervisorConfig struct {
 	// entropy (/dev/random, /dev/urandom or real hardware RNG device)
 	EntropySource string
 
+	// EntropySourceList is the list of valid entropy sources
+	EntropySourceList []string
+
 	// Shared file system type:
 	//   - virtio-9p (default)
 	//   - virtio-fs
@@ -305,6 +308,9 @@ type HypervisorConfig struct {
 	// EnableVhostUserStore is used to indicate if host supports vhost-user-blk/scsi
 	EnableVhostUserStore bool
 
+	// GuestSwap Used to enable/disable swap in the guest
+	GuestSwap bool
+
 	// VhostUserStorePath is the directory path where vhost-user devices
 	// related folders, sockets and device nodes should be.
 	VhostUserStorePath string
@@ -341,6 +347,11 @@ type HypervisorConfig struct {
 	// GuestMemoryDumpPaging is used to indicate if enable paging
 	// for QEMU dump-guest-memory command
 	GuestMemoryDumpPaging bool
+
+	// Enable confidential guest support.
+	// Enable or disable different hardware features, ranging
+	// from memory encryption to both memory and CPU-state encryption and integrity.
+	ConfidentialGuest bool
 }
 ```
 
