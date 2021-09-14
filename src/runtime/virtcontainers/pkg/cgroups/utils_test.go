@@ -62,6 +62,8 @@ func TestValidCgroupPath(t *testing.T) {
 		{"/../hi", false, false},
 		{"/../hi/foo", false, false},
 		{"o / m /../ g", false, false},
+		{"/overhead/foobar", false, false},
+		{"/sys/fs/cgroup/cpu/sandbox/kata_foobar", false, false},
 
 		// invalid systemd paths
 		{"o / m /../ g", true, true},
@@ -93,13 +95,13 @@ func TestValidCgroupPath(t *testing.T) {
 		if filepath.IsAbs(t.path) {
 			cleanPath := filepath.Dir(filepath.Clean(t.path))
 			assert.True(strings.HasPrefix(path, cleanPath),
-				"%v should have prefix %v", cleanPath)
+				"%v should have prefix %v", path, cleanPath)
 		} else if t.systemdCgroup {
 			assert.Equal(t.path, path)
 		} else {
-			assert.True(strings.HasPrefix(path, "/"+CgroupKataPrefix) ||
+			assert.True(
 				strings.HasPrefix(path, DefaultCgroupPath),
-				"%v should have prefix /%v or %v", path, CgroupKataPrefix, DefaultCgroupPath)
+				"%v should have prefix /%v", path, DefaultCgroupPath)
 		}
 	}
 

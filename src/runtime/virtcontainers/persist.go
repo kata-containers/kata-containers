@@ -33,8 +33,8 @@ func (s *Sandbox) dumpState(ss *persistapi.SandboxState, cs map[string]persistap
 	ss.GuestMemoryBlockSizeMB = s.state.GuestMemoryBlockSizeMB
 	ss.GuestMemoryHotplugProbe = s.state.GuestMemoryHotplugProbe
 	ss.State = string(s.state.State)
-	ss.CgroupPath = s.state.CgroupPath
-	ss.CgroupPaths = s.state.CgroupPaths
+	ss.SandboxCgroupPath = s.state.SandboxCgroupPath
+	ss.OverheadCgroupPath = s.state.OverheadCgroupPath
 
 	for id, cont := range s.containers {
 		state := persistapi.ContainerState{}
@@ -188,7 +188,6 @@ func (s *Sandbox) dumpConfig(ss *persistapi.SandboxState) {
 		SystemdCgroup:       sconfig.SystemdCgroup,
 		SandboxCgroupOnly:   sconfig.SandboxCgroupOnly,
 		DisableGuestSeccomp: sconfig.DisableGuestSeccomp,
-		Cgroups:             sconfig.Cgroups,
 	}
 
 	ss.Config.SandboxBindMounts = append(ss.Config.SandboxBindMounts, sconfig.SandboxBindMounts...)
@@ -302,8 +301,8 @@ func (s *Sandbox) loadState(ss persistapi.SandboxState) {
 	s.state.GuestMemoryBlockSizeMB = ss.GuestMemoryBlockSizeMB
 	s.state.BlockIndexMap = ss.HypervisorState.BlockIndexMap
 	s.state.State = types.StateString(ss.State)
-	s.state.CgroupPath = ss.CgroupPath
-	s.state.CgroupPaths = ss.CgroupPaths
+	s.state.SandboxCgroupPath = ss.SandboxCgroupPath
+	s.state.OverheadCgroupPath = ss.OverheadCgroupPath
 	s.state.GuestMemoryHotplugProbe = ss.GuestMemoryHotplugProbe
 }
 
@@ -459,7 +458,6 @@ func loadSandboxConfig(id string) (*SandboxConfig, error) {
 		SystemdCgroup:       savedConf.SystemdCgroup,
 		SandboxCgroupOnly:   savedConf.SandboxCgroupOnly,
 		DisableGuestSeccomp: savedConf.DisableGuestSeccomp,
-		Cgroups:             savedConf.Cgroups,
 	}
 	sconfig.SandboxBindMounts = append(sconfig.SandboxBindMounts, savedConf.SandboxBindMounts...)
 
