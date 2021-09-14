@@ -22,7 +22,7 @@ This document requires the presence of the ACRN hypervisor and Kata Containers o
 
 - ACRN supported [Hardware](https://projectacrn.github.io/latest/hardware.html#supported-hardware).
   > **Note:** Please make sure to have a minimum of 4 logical processors (HT) or cores.
-- ACRN [software](https://projectacrn.github.io/latest/tutorials/kbl-nuc-sdc.html#use-the-script-to-set-up-acrn-automatically) setup.
+- ACRN [software](https://projectacrn.github.io/latest/tutorials/run_kata_containers.html) setup.
 - For networking, ACRN supports either MACVTAP or TAP. If MACVTAP is not enabled in the Service OS, please follow the below steps to update the kernel:
 
   ```sh
