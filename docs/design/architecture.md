@@ -259,7 +259,7 @@ With `RuntimeClass`, users can define Kata Containers as a `RuntimeClass` and th
 
 ## DAX
 
-Kata Containers utilizes the Linux kernel DAX [(Direct Access filesystem)](https://git.kernel.org/cgit/linux/kernel/git/torvalds/linux.git/tree/Documentation/filesystems/dax.txt)
+Kata Containers utilizes the Linux kernel DAX [(Direct Access filesystem)](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/Documentation/filesystems/dax.rst?h=v5.14)
 feature to efficiently map some host-side files into the guest VM space.
 In particular, Kata Containers uses the QEMU NVDIMM feature to provide a
 memory-mapped virtual device that can be used to DAX map the virtual machine's
