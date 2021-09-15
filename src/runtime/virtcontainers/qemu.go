@@ -2194,7 +2194,7 @@ func (q *qemu) getThreadIDs(ctx context.Context) (vcpuThreadIDs, error) {
 		return tid, err
 	}
 
-	cpuInfos, err := q.qmpMonitorCh.qmp.ExecQueryCpus(q.qmpMonitorCh.ctx)
+	cpuInfos, err := q.qmpMonitorCh.qmp.ExecQueryCpusFast(q.qmpMonitorCh.ctx)
 	if err != nil {
 		q.Logger().WithError(err).Error("failed to query cpu infos")
 		return tid, err
@@ -2203,7 +2203,7 @@ func (q *qemu) getThreadIDs(ctx context.Context) (vcpuThreadIDs, error) {
 	tid.vcpus = make(map[int]int, len(cpuInfos))
 	for _, i := range cpuInfos {
 		if i.ThreadID > 0 {
-			tid.vcpus[i.CPU] = i.ThreadID
+			tid.vcpus[i.CPUIndex] = i.ThreadID
 		}
 	}
 	return tid, nil
