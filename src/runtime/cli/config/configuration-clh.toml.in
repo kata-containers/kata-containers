@@ -109,6 +109,11 @@ virtio_fs_cache = "@DEFVIRTIOFSCACHE@"
 # or nvdimm.
 block_device_driver = "virtio-blk"
 
+# Enable huge pages for VM RAM, default false
+# Enabling this will result in the VM memory
+# being allocated using huge pages.
+#enable_hugepages = true
+
 # This option changes the default hypervisor and kernel parameters
 # to enable debug output where available.
 #
