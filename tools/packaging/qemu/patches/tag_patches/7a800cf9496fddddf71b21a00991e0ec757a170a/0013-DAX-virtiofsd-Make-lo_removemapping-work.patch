@@ -1,0 +1,64 @@
+From c181c2895e52afacb1b13a9c9868b6a161de7cf3 Mon Sep 17 00:00:00 2001
+From: Vivek Goyal <vgoyal@redhat.com>
+Date: Mon, 13 Aug 2018 11:52:43 -0400
+Subject: [PATCH 13/25] DAX: virtiofsd: Make lo_removemapping() work
+
+Let guest pass in the offset in dax window a mapping is currently
+mapped at and needs to be removed.
+
+Vivek added the initial support to remove single mapping and later Peng
+added patch to support removing multiple mappings in single command.
+
+Signed-off-by: Vivek Goyal <vgoyal@redhat.com>
+Signed-off-by: Peng Tao <tao.peng@linux.alibaba.com>
+Reviewed-by: Stefan Hajnoczi <stefanha@redhat.com>
+---
+ tools/virtiofsd/passthrough_ll.c | 32 ++++++++++++++++++++++++++++++--
+ 1 file changed, 30 insertions(+), 2 deletions(-)
+
+diff --git a/tools/virtiofsd/passthrough_ll.c b/tools/virtiofsd/passthrough_ll.c
+index 6eedf98c81..c0cb0e6286 100644
+--- a/tools/virtiofsd/passthrough_ll.c
++++ b/tools/virtiofsd/passthrough_ll.c
+@@ -3406,8 +3406,36 @@ static void lo_removemapping(fuse_req_t req, struct fuse_session *se,
+                              fuse_ino_t ino, unsigned num,
+                              struct fuse_removemapping_one *argp)
+ {
+-    /* TODO */
+-    fuse_reply_err(req, ENOSYS);
++    VhostUserFSSlaveMsg *msg;
++    size_t alloc_count = (num > VHOST_USER_FS_SLAVE_MAX_ENTRIES) ?
++                              VHOST_USER_FS_SLAVE_MAX_ENTRIES : num;
++    int ret = 0;
++    msg = g_malloc0(sizeof(VhostUserFSSlaveMsg) +
++                    alloc_count * sizeof(VhostUserFSSlaveMsgEntry));
++
++    for (int i = 0, o = 0; num > 0; i++, argp++) {
++        VhostUserFSSlaveMsgEntry *e = &msg->entries[o];
++
++        e->len = argp->len;
++        e->c_offset = argp->moffset;
++
++        o++;
++        if (--num == 0 || o == VHOST_USER_FS_SLAVE_MAX_ENTRIES) {
++            msg->hdr.count = o;
++            ret = fuse_virtio_unmap(se, msg);
++            if (ret < 0) {
++                fuse_log(FUSE_LOG_ERR,
++                         "%s: unmap over virtio failed "
++                         "(offset=0x%" PRIx64 ", len=0x%" PRIx64 "). err=%d\n",
++                         __func__, argp->moffset, argp->len, ret);
++                break;
++            }
++            o = 0;
++        }
++    }
++
++    fuse_reply_err(req, -ret);
++    g_free(msg);
+ }
+ 
+ static struct fuse_lowlevel_ops lo_oper = {
+-- 
+2.31.1
+
