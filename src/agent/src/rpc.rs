@@ -1655,21 +1655,23 @@ fn setup_bundle(cid: &str, spec: &mut Spec) -> Result<PathBuf> {
     let config_path = bundle_path.join("config.json");
     let rootfs_path = bundle_path.join("rootfs");
 
-    fs::create_dir_all(&rootfs_path)?;
-    baremount(
-        spec_root_path,
-        &rootfs_path,
-        "bind",
-        MsFlags::MS_BIND,
-        "",
-        &sl!(),
-    )?;
+    let rootfs_exists = Path::new(&rootfs_path).exists();
+    info!(
+        sl!(),
+        "The rootfs_path is {:?} and exists: {}", rootfs_path, rootfs_exists
+    );
 
-    let rootfs_path_name = rootfs_path
-        .to_str()
-        .ok_or_else(|| anyhow!("failed to convert rootfs to unicode"))?
-        .to_string();
-
+    if !rootfs_exists {
+        fs::create_dir_all(&rootfs_path)?;
+        baremount(
+            &spec_root.path,
+            rootfs_path.to_str().unwrap(),
+            "bind",
+            MsFlags::MS_BIND,
+            "",
+            &sl!(),
+        )?;
+    }
     spec.root = Some(Root {
         path: rootfs_path_name,
         readonly: spec_root.readonly,
