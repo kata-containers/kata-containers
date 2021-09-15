@@ -1,0 +1,182 @@
+From e123501b6f69ef6dc7648dac06bd9001553e1f1f Mon Sep 17 00:00:00 2001
+From: Vivek Goyal <vgoyal@redhat.com>
+Date: Wed, 3 Feb 2021 11:56:55 -0500
+Subject: [PATCH 23/25] vhost-user-fs: Implement drop CAP_FSETID functionality
+
+As part of slave_io message, slave can ask to do I/O on an fd. Additionally
+slave can ask for dropping CAP_FSETID (if master has it) before doing I/O.
+Implement functionality to drop CAP_FSETID and gain it back after the
+operation.
+
+This also creates a dependency on libcap-ng.
+
+Signed-off-by: Vivek Goyal <vgoyal@redhat.com>
+---
+ hw/virtio/meson.build     |  1 +
+ hw/virtio/vhost-user-fs.c | 92 ++++++++++++++++++++++++++++++++++++++-
+ meson.build               |  6 +++
+ 3 files changed, 97 insertions(+), 2 deletions(-)
+
+diff --git a/hw/virtio/meson.build b/hw/virtio/meson.build
+index bc352a6009..33c4714a22 100644
+--- a/hw/virtio/meson.build
++++ b/hw/virtio/meson.build
+@@ -18,6 +18,7 @@ virtio_ss.add(when: 'CONFIG_VIRTIO_BALLOON', if_true: files('virtio-balloon.c'))
+ virtio_ss.add(when: 'CONFIG_VIRTIO_CRYPTO', if_true: files('virtio-crypto.c'))
+ virtio_ss.add(when: ['CONFIG_VIRTIO_CRYPTO', 'CONFIG_VIRTIO_PCI'], if_true: files('virtio-crypto-pci.c'))
+ virtio_ss.add(when: 'CONFIG_VHOST_USER_FS', if_true: files('vhost-user-fs.c'))
++virtio_ss.add(when: 'CONFIG_VHOST_USER_FS', if_true: libcap_ng)
+ virtio_ss.add(when: ['CONFIG_VHOST_USER_FS', 'CONFIG_VIRTIO_PCI'], if_true: files('vhost-user-fs-pci.c'))
+ virtio_ss.add(when: 'CONFIG_VIRTIO_PMEM', if_true: files('virtio-pmem.c'))
+ virtio_ss.add(when: 'CONFIG_VHOST_VSOCK', if_true: files('vhost-vsock.c', 'vhost-vsock-common.c'))
+diff --git a/hw/virtio/vhost-user-fs.c b/hw/virtio/vhost-user-fs.c
+index ca4e6f8017..f472d97f2c 100644
+--- a/hw/virtio/vhost-user-fs.c
++++ b/hw/virtio/vhost-user-fs.c
+@@ -13,6 +13,8 @@
+ 
+ #include "qemu/osdep.h"
+ #include <sys/ioctl.h>
++#include <cap-ng.h>
++#include <sys/syscall.h>
+ #include "standard-headers/linux/virtio_fs.h"
+ #include "qapi/error.h"
+ #include "hw/qdev-properties.h"
+@@ -91,6 +93,84 @@ static bool check_slave_message_entries(const VhostUserFSSlaveMsg *sm,
+     return true;
+ }
+ 
++/*
++ * Helpers for dropping and regaining effective capabilities. Returns 0
++ * on success, error otherwise
++ */
++static int drop_effective_cap(const char *cap_name, bool *cap_dropped)
++{
++    int cap, ret;
++
++    cap = capng_name_to_capability(cap_name);
++    if (cap < 0) {
++        ret = -errno;
++        error_report("capng_name_to_capability(%s) failed:%s", cap_name,
++                     strerror(errno));
++        goto out;
++    }
++
++    if (capng_get_caps_process()) {
++        ret = -errno;
++        error_report("capng_get_caps_process() failed:%s", strerror(errno));
++        goto out;
++    }
++
++    /* We dont have this capability in effective set already. */
++    if (!capng_have_capability(CAPNG_EFFECTIVE, cap)) {
++        ret = 0;
++        goto out;
++    }
++
++    if (capng_update(CAPNG_DROP, CAPNG_EFFECTIVE, cap)) {
++        ret = -errno;
++        error_report("capng_update(DROP,) failed");
++        goto out;
++    }
++    if (capng_apply(CAPNG_SELECT_CAPS)) {
++        ret = -errno;
++        error_report("drop:capng_apply() failed");
++        goto out;
++    }
++
++    ret = 0;
++    if (cap_dropped) {
++        *cap_dropped = true;
++    }
++
++out:
++    return ret;
++}
++
++static int gain_effective_cap(const char *cap_name)
++{
++    int cap;
++    int ret = 0;
++
++    cap = capng_name_to_capability(cap_name);
++    if (cap < 0) {
++        ret = -errno;
++        error_report("capng_name_to_capability(%s) failed:%s", cap_name,
++                     strerror(errno));
++        goto out;
++    }
++
++    if (capng_update(CAPNG_ADD, CAPNG_EFFECTIVE, cap)) {
++        ret = -errno;
++        error_report("capng_update(ADD,) failed");
++        goto out;
++    }
++
++    if (capng_apply(CAPNG_SELECT_CAPS)) {
++        ret = -errno;
++        error_report("gain:capng_apply() failed");
++        goto out;
++    }
++    ret = 0;
++
++out:
++    return ret;
++}
++
+ uint64_t vhost_user_fs_slave_map(struct vhost_dev *dev, size_t message_size,
+                                  VhostUserFSSlaveMsg *sm, int fd)
+ {
+@@ -238,6 +318,7 @@ uint64_t vhost_user_fs_slave_io(struct vhost_dev *dev, size_t message_size,
+     unsigned int i;
+     int res = 0;
+     size_t done = 0;
++    bool cap_fsetid_dropped = false;
+ 
+     if (fd < 0) {
+         error_report("Bad fd for io");
+@@ -245,8 +326,10 @@ uint64_t vhost_user_fs_slave_io(struct vhost_dev *dev, size_t message_size,
+     }
+ 
+     if (sm->hdr.flags & VHOST_USER_FS_GENFLAG_DROP_FSETID) {
+-        error_report("Dropping CAP_FSETID is not supported");
+-        return (uint64_t)-ENOTSUP;
++        res = drop_effective_cap("FSETID", &cap_fsetid_dropped);
++        if (res != 0) {
++            return (uint64_t)res;
++        }
+     }
+ 
+     for (i = 0; i < sm->hdr.count && !res; i++) {
+@@ -322,6 +405,11 @@ uint64_t vhost_user_fs_slave_io(struct vhost_dev *dev, size_t message_size,
+         }
+     }
+ 
++    if (cap_fsetid_dropped) {
++        if (gain_effective_cap("FSETID")) {
++            error_report("Failed to gain CAP_FSETID");
++        }
++    }
+     trace_vhost_user_fs_slave_io_exit(res, done);
+     if (res < 0) {
+         return (uint64_t)res;
+diff --git a/meson.build b/meson.build
+index b3e7ec0e92..725094fecc 100644
+--- a/meson.build
++++ b/meson.build
+@@ -1222,6 +1222,12 @@ elif get_option('virtfs').disabled()
+   have_virtfs = false
+ endif
+ 
++if config_host.has_key('CONFIG_VHOST_USER_FS')
++  if not libcap_ng.found()
++    error('vhost-user-fs requires libcap-ng-devel')
++  endif
++endif
++
+ config_host_data.set_quoted('CONFIG_BINDIR', get_option('prefix') / get_option('bindir'))
+ config_host_data.set_quoted('CONFIG_PREFIX', get_option('prefix'))
+ config_host_data.set_quoted('CONFIG_QEMU_CONFDIR', get_option('prefix') / qemu_confdir)
+-- 
+2.31.1
+

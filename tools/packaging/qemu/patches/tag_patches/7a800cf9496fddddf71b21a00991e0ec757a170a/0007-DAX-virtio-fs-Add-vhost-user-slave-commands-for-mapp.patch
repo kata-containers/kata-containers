@@ -1,0 +1,257 @@
+From 80b95774eb85996ffe389d286f944267df2d5780 Mon Sep 17 00:00:00 2001
+From: "Dr. David Alan Gilbert" <dgilbert@redhat.com>
+Date: Wed, 4 Jul 2018 18:51:42 +0100
+Subject: [PATCH 07/25] DAX: virtio-fs: Add vhost-user slave commands for
+ mapping
+
+The daemon may request that fd's be mapped into the virtio-fs cache
+visible to the guest.
+These mappings are triggered by commands sent over the slave fd
+from the daemon.
+
+Signed-off-by: Dr. David Alan Gilbert <dgilbert@redhat.com>
+---
+ docs/interop/vhost-user.rst               | 21 ++++++++
+ hw/virtio/vhost-user-fs.c                 | 66 +++++++++++++++++++++++
+ hw/virtio/vhost-user.c                    | 15 ++++++
+ include/hw/virtio/vhost-user-fs.h         | 49 +++++++++++++++++
+ subprojects/libvhost-user/libvhost-user.h |  2 +
+ 5 files changed, 153 insertions(+)
+
+diff --git a/docs/interop/vhost-user.rst b/docs/interop/vhost-user.rst
+index edc3ad84a3..3e0dfe50d0 100644
+--- a/docs/interop/vhost-user.rst
++++ b/docs/interop/vhost-user.rst
+@@ -1436,6 +1436,27 @@ Slave message types
+ 
+   The state.num field is currently reserved and must be set to 0.
+ 
++``VHOST_USER_SLAVE_FS_MAP``
++  :id: 6
++  :equivalent ioctl: N/A
++  :slave payload: ``struct VhostUserFSSlaveMsg``
++  :master payload: N/A
++
++  Requests that an fd, provided in the ancillary data, be mmapped
++  into the virtio-fs cache; multiple chunks can be mapped in one
++  command.
++  A reply is generated indicating whether mapping succeeded.
++
++``VHOST_USER_SLAVE_FS_UNMAP``
++  :id: 7
++  :equivalent ioctl: N/A
++  :slave payload: ``struct VhostUserFSSlaveMsg``
++  :master payload: N/A
++
++  Requests that the range in the virtio-fs cache is unmapped;
++  multiple chunks can be unmapped in one command.
++  A reply is generated indicating whether unmapping succeeded.
++
+ .. _reply_ack:
+ 
+ VHOST_USER_PROTOCOL_F_REPLY_ACK
+diff --git a/hw/virtio/vhost-user-fs.c b/hw/virtio/vhost-user-fs.c
+index 249a5032ef..f724ea3561 100644
+--- a/hw/virtio/vhost-user-fs.c
++++ b/hw/virtio/vhost-user-fs.c
+@@ -45,6 +45,72 @@ static const int user_feature_bits[] = {
+ #define DAX_WINDOW_PROT PROT_NONE
+ #endif
+ 
++/*
++ * The message apparently had 'received_size' bytes, check this
++ * matches the count in the message.
++ *
++ * Returns true if the size matches.
++ */
++static bool check_slave_message_entries(const VhostUserFSSlaveMsg *sm,
++                                        size_t received_size)
++{
++    size_t tmp;
++
++    /*
++     * VhostUserFSSlaveMsg consists of a body followed by 'n' entries,
++     * (each VhostUserFSSlaveMsgEntry).  There's a maximum of
++     * VHOST_USER_FS_SLAVE_MAX_ENTRIES of these.
++     */
++    if (received_size <= sizeof(VhostUserFSSlaveMsg)) {
++        error_report("%s: Short VhostUserFSSlaveMsg size, %zd", __func__,
++                     received_size);
++        return false;
++    }
++
++    tmp = received_size - sizeof(VhostUserFSSlaveMsg);
++    if (tmp % sizeof(VhostUserFSSlaveMsgEntry)) {
++        error_report("%s: Non-multiple VhostUserFSSlaveMsg size, %zd", __func__,
++                     received_size);
++        return false;
++    }
++
++    tmp /= sizeof(VhostUserFSSlaveMsgEntry);
++    if (tmp != sm->hdr.count) {
++        error_report("%s: VhostUserFSSlaveMsg count mismatch, %zd count: %d",
++                     __func__, tmp, sm->hdr.count);
++        return false;
++    }
++
++    if (sm->hdr.count > VHOST_USER_FS_SLAVE_MAX_ENTRIES) {
++        error_report("%s: VhostUserFSSlaveMsg too many entries: %d",
++                     __func__, sm->hdr.count);
++        return false;
++    }
++    return true;
++}
++
++uint64_t vhost_user_fs_slave_map(struct vhost_dev *dev, size_t message_size,
++                                 VhostUserFSSlaveMsg *sm, int fd)
++{
++    if (!check_slave_message_entries(sm, message_size)) {
++        return (uint64_t)-1;
++    }
++
++    /* TODO */
++    return (uint64_t)-1;
++}
++
++uint64_t vhost_user_fs_slave_unmap(struct vhost_dev *dev, size_t message_size,
++                                   VhostUserFSSlaveMsg *sm)
++{
++    if (!check_slave_message_entries(sm, message_size)) {
++        return (uint64_t)-1;
++    }
++
++    /* TODO */
++    return (uint64_t)-1;
++}
++
+ static void vuf_get_config(VirtIODevice *vdev, uint8_t *config)
+ {
+     VHostUserFS *fs = VHOST_USER_FS(vdev);
+diff --git a/hw/virtio/vhost-user.c b/hw/virtio/vhost-user.c
+index cdbdb5b469..60f769b1b7 100644
+--- a/hw/virtio/vhost-user.c
++++ b/hw/virtio/vhost-user.c
+@@ -12,6 +12,7 @@
+ #include "qapi/error.h"
+ #include "hw/virtio/vhost.h"
+ #include "hw/virtio/vhost-user.h"
++#include "hw/virtio/vhost-user-fs.h"
+ #include "hw/virtio/vhost-backend.h"
+ #include "hw/virtio/virtio.h"
+ #include "hw/virtio/virtio-net.h"
+@@ -133,6 +134,10 @@ typedef enum VhostUserSlaveRequest {
+     VHOST_USER_SLAVE_IOTLB_MSG = 1,
+     VHOST_USER_SLAVE_CONFIG_CHANGE_MSG = 2,
+     VHOST_USER_SLAVE_VRING_HOST_NOTIFIER_MSG = 3,
++    VHOST_USER_SLAVE_VRING_CALL = 4,
++    VHOST_USER_SLAVE_VRING_ERR = 5,
++    VHOST_USER_SLAVE_FS_MAP = 6,
++    VHOST_USER_SLAVE_FS_UNMAP = 7,
+     VHOST_USER_SLAVE_MAX
+ }  VhostUserSlaveRequest;
+ 
+@@ -219,6 +224,7 @@ typedef union {
+         VhostUserCryptoSession session;
+         VhostUserVringArea area;
+         VhostUserInflight inflight;
++        VhostUserFSSlaveMsgMax fs_max;
+ } VhostUserPayload;
+ 
+ typedef struct VhostUserMsg {
+@@ -1542,6 +1548,15 @@ static gboolean slave_read(QIOChannel *ioc, GIOCondition condition,
+         ret = vhost_user_slave_handle_vring_host_notifier(dev, &payload.area,
+                                                           fd ? fd[0] : -1);
+         break;
++#ifdef CONFIG_VHOST_USER_FS
++    case VHOST_USER_SLAVE_FS_MAP:
++        ret = vhost_user_fs_slave_map(dev, hdr.size, &payload.fs,
++                                      fd ? fd[0] : -1);
++        break;
++    case VHOST_USER_SLAVE_FS_UNMAP:
++        ret = vhost_user_fs_slave_unmap(dev, hdr.size, &payload.fs);
++        break;
++#endif
+     default:
+         error_report("Received unexpected msg type: %d.", hdr.request);
+         ret = EINVAL;
+diff --git a/include/hw/virtio/vhost-user-fs.h b/include/hw/virtio/vhost-user-fs.h
+index 04596799e3..1edb328c40 100644
+--- a/include/hw/virtio/vhost-user-fs.h
++++ b/include/hw/virtio/vhost-user-fs.h
+@@ -23,6 +23,49 @@
+ #define TYPE_VHOST_USER_FS "vhost-user-fs-device"
+ OBJECT_DECLARE_SIMPLE_TYPE(VHostUserFS, VHOST_USER_FS)
+ 
++/* Structures carried over the slave channel back to QEMU */
++#define VHOST_USER_FS_SLAVE_MAX_ENTRIES 32
++
++/* For the flags field of VhostUserFSSlaveMsg */
++#define VHOST_USER_FS_FLAG_MAP_R (1u << 0)
++#define VHOST_USER_FS_FLAG_MAP_W (1u << 1)
++
++typedef struct {
++    /* Offsets within the file being mapped */
++    uint64_t fd_offset;
++    /* Offsets within the cache */
++    uint64_t c_offset;
++    /* Lengths of sections */
++    uint64_t len;
++    /* Flags, from VHOST_USER_FS_FLAG_* */
++    uint64_t flags;
++} VhostUserFSSlaveMsgEntry;
++
++typedef struct {
++    /* Spare */
++    uint32_t align32;
++    /* Number of entries */
++    uint16_t count;
++    /* Spare */
++    uint16_t align16;
++} VhostUserFSSlaveMsgHdr;
++
++/*
++ * This is really a structure with a variable number of entries,
++ * but we want to avoid a variable length array in the union,
++ * so have one version with the variable length array
++ * for places where we have the partial allocation.
++ */
++typedef struct {
++    VhostUserFSSlaveMsgHdr hdr;
++    VhostUserFSSlaveMsgEntry entries[];
++} VhostUserFSSlaveMsg;
++
++typedef struct {
++    VhostUserFSSlaveMsgHdr hdr;
++    VhostUserFSSlaveMsgEntry entries[VHOST_USER_FS_SLAVE_MAX_ENTRIES];
++} VhostUserFSSlaveMsgMax;
++
+ typedef struct {
+     CharBackend chardev;
+     char *tag;
+@@ -46,4 +89,10 @@ struct VHostUserFS {
+     MemoryRegion cache;
+ };
+ 
++/* Callbacks from the vhost-user code for slave commands */
++uint64_t vhost_user_fs_slave_map(struct vhost_dev *dev, size_t message_size,
++                                 VhostUserFSSlaveMsg *sm, int fd);
++uint64_t vhost_user_fs_slave_unmap(struct vhost_dev *dev, size_t message_size,
++                                   VhostUserFSSlaveMsg *sm);
++
+ #endif /* _QEMU_VHOST_USER_FS_H */
+diff --git a/subprojects/libvhost-user/libvhost-user.h b/subprojects/libvhost-user/libvhost-user.h
+index d7511b80a3..8b50918041 100644
+--- a/subprojects/libvhost-user/libvhost-user.h
++++ b/subprojects/libvhost-user/libvhost-user.h
+@@ -119,6 +119,8 @@ typedef enum VhostUserSlaveRequest {
+     VHOST_USER_SLAVE_VRING_HOST_NOTIFIER_MSG = 3,
+     VHOST_USER_SLAVE_VRING_CALL = 4,
+     VHOST_USER_SLAVE_VRING_ERR = 5,
++    VHOST_USER_SLAVE_FS_MAP = 6,
++    VHOST_USER_SLAVE_FS_UNMAP = 7,
+     VHOST_USER_SLAVE_MAX
+ }  VhostUserSlaveRequest;
+ 
+-- 
+2.31.1
+

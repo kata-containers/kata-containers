@@ -1,0 +1,81 @@
+From e671b4ae1189baef10898d76f975c8c3a9e36b6c Mon Sep 17 00:00:00 2001
+From: "Dr. David Alan Gilbert" <dgilbert@redhat.com>
+Date: Thu, 5 Jul 2018 18:20:34 +0100
+Subject: [PATCH 09/25] DAX: virtiofsd Add cache accessor functions
+
+Add low level functions that the clients can use to map/unmap cache
+areas.
+
+Signed-off-by: Dr. David Alan Gilbert <dgilbert@redhat.com>
+Reviewed-by: Stefan Hajnoczi <stefanha@redhat.com>
+---
+ tools/virtiofsd/fuse_lowlevel.h | 21 +++++++++++++++++++++
+ tools/virtiofsd/fuse_virtio.c   | 18 ++++++++++++++++++
+ 2 files changed, 39 insertions(+)
+
+diff --git a/tools/virtiofsd/fuse_lowlevel.h b/tools/virtiofsd/fuse_lowlevel.h
+index 4b4e8c9724..29e26c556d 100644
+--- a/tools/virtiofsd/fuse_lowlevel.h
++++ b/tools/virtiofsd/fuse_lowlevel.h
+@@ -29,6 +29,8 @@
+ #include <sys/uio.h>
+ #include <utime.h>
+ 
++#include "subprojects/libvhost-user/libvhost-user.h"
++
+ /*
+  * Miscellaneous definitions
+  */
+@@ -1972,4 +1974,23 @@ void fuse_session_process_buf(struct fuse_session *se,
+  */
+ int fuse_session_receive_buf(struct fuse_session *se, struct fuse_buf *buf);
+ 
++/**
++ * For use with virtio-fs; request an fd be mapped into the cache
++ *
++ * @param req The request that triggered this action
++ * @param msg A set of mapping requests
++ * @param fd The fd to map
++ * @return Zero on success
++ */
++int64_t fuse_virtio_map(fuse_req_t req, VhostUserFSSlaveMsg *msg, int fd);
++
++/**
++ * For use with virtio-fs; request unmapping of part of the cache
++ *
++ * @param se The session this request is on
++ * @param msg A set of unmapping requests
++ * @return Zero on success
++ */
++int64_t fuse_virtio_unmap(struct fuse_session *se, VhostUserFSSlaveMsg *msg);
++
+ #endif /* FUSE_LOWLEVEL_H_ */
+diff --git a/tools/virtiofsd/fuse_virtio.c b/tools/virtiofsd/fuse_virtio.c
+index 3d54f01955..89e923dd26 100644
+--- a/tools/virtiofsd/fuse_virtio.c
++++ b/tools/virtiofsd/fuse_virtio.c
+@@ -1081,3 +1081,21 @@ void virtio_session_close(struct fuse_session *se)
+     g_free(se->virtio_dev);
+     se->virtio_dev = NULL;
+ }
++
++int64_t fuse_virtio_map(fuse_req_t req, VhostUserFSSlaveMsg *msg, int fd)
++{
++    if (!req->se->virtio_dev) {
++        return -ENODEV;
++    }
++    return vu_fs_cache_request(&req->se->virtio_dev->dev,
++                               VHOST_USER_SLAVE_FS_MAP, fd, msg);
++}
++
++int64_t fuse_virtio_unmap(struct fuse_session *se, VhostUserFSSlaveMsg *msg)
++{
++    if (!se->virtio_dev) {
++        return -ENODEV;
++    }
++    return vu_fs_cache_request(&se->virtio_dev->dev, VHOST_USER_SLAVE_FS_UNMAP,
++                               -1, msg);
++}
+-- 
+2.31.1
+
