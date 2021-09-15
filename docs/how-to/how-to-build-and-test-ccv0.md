@@ -70,32 +70,25 @@ $ ~/ccv0.sh -d open_kata_console
 ```
 $ ~/ccv0.sh -d agent_pull_image
     Finished release [optimized] target(s) in 0.21s
-{"msg":"announce","level":"INFO","ts":"2021-09-06T02:48:26.612401254-07:00","source":"kata-agent-ctl","name":"kata-agent-ctl","subsystem":"rpc","pid":"129599","version":"0.1.0","config":"Config { server_address: \"vsock://1321076924:1024\", bundle_dir: \"/tmp/bundle\", timeout_nano: 0, interactive: false, ignore_errors: false }"}
-{"msg":"client setup complete","level":"INFO","ts":"2021-09-06T02:48:26.618215437-07:00","source":"kata-agent-ctl","subsystem":"rpc","pid":"129599","name":"kata-agent-ctl","version":"0.1.0","server-address":"vsock://1321076924:1024"}
-{"msg":"Run command Check (1 of 1)","level":"INFO","ts":"2021-09-06T02:48:26.618286397-07:00","name":"kata-agent-ctl","version":"0.1.0","subsystem":"rpc","source":"kata-agent-ctl","pid":"129599"}
-{"msg":"response received","level":"INFO","ts":"2021-09-06T02:48:26.619212840-07:00","version":"0.1.0","subsystem":"rpc","pid":"129599","source":"kata-agent-ctl","name":"kata-agent-ctl","response":"status: SERVING"}
-{"msg":"Command Check (1 of 1) returned (Ok(()), false)","level":"INFO","ts":"2021-09-06T02:48:26.619281890-07:00","subsystem":"rpc","name":"kata-agent-ctl","pid":"129599","source":"kata-agent-ctl","version":"0.1.0"}
-{"msg":"Run command GetGuestDetails (1 of 1)","level":"INFO","ts":"2021-09-06T02:48:26.619328342-07:00","pid":"129599","version":"0.1.0","subsystem":"rpc","source":"kata-agent-ctl","name":"kata-agent-ctl"}
-{"msg":"response received","level":"INFO","ts":"2021-09-06T02:48:26.622968404-07:00","pid":"129599","version":"0.1.0","subsystem":"rpc","name":"kata-agent-ctl","source":"kata-agent-ctl","response":"mem_block_size_bytes: 134217728 agent_details {version: \"2.3.0-alpha0\" storage_handlers: \"blk\" storage_handlers: \"9p\" storage_handlers: \"virtio-fs\" storage_handlers: \"ephemeral\" storage_handlers: \"mmioblk\" storage_handlers: \"local\" storage_handlers: \"scsi\" storage_handlers: \"nvdimm\" storage_handlers: \"watchable-bind\"}"}
-{"msg":"Command GetGuestDetails (1 of 1) returned (Ok(()), false)","level":"INFO","ts":"2021-09-06T02:48:26.623049042-07:00","name":"kata-agent-ctl","pid":"129599","source":"kata-agent-ctl","subsystem":"rpc","version":"0.1.0"}
-{"msg":"Run command PullImage (1 of 1)","level":"INFO","ts":"2021-09-06T02:48:26.623081584-07:00","subsystem":"rpc","pid":"129599","name":"kata-agent-ctl","source":"kata-agent-ctl","version":"0.1.0"}
-{"msg":"response received","level":"INFO","ts":"2021-09-06T02:48:54.270118679-07:00","subsystem":"rpc","version":"0.1.0","source":"kata-agent-ctl","name":"kata-agent-ctl","pid":"129599","response":""}
-{"msg":"Command PullImage (1 of 1) returned (Ok(()), false)","level":"INFO","ts":"2021-09-06T02:48:54.270228983-07:00","pid":"129599","source":"kata-agent-ctl","name":"kata-agent-ctl","subsystem":"rpc","version":"0.1.0"}
+{"msg":"announce","level":"INFO","ts":"2021-09-15T08:40:14.189360410-07:00","subsystem":"rpc","name":"kata-agent-ctl","pid":"830920","version":"0.1.0","source":"kata-agent-ctl","config":"Config { server_address: \"vsock://1970354082:1024\", bundle_dir: \"/tmp/bundle\", timeout_nano: 0, interactive: false, ignore_errors: false }"}
+{"msg":"client setup complete","level":"INFO","ts":"2021-09-15T08:40:14.193639057-07:00","pid":"830920","source":"kata-agent-ctl","name":"kata-agent-ctl","subsystem":"rpc","version":"0.1.0","server-address":"vsock://1970354082:1024"}
+{"msg":"Run command PullImage (1 of 1)","level":"INFO","ts":"2021-09-15T08:40:14.196643765-07:00","pid":"830920","source":"kata-agent-ctl","subsystem":"rpc","name":"kata-agent-ctl","version":"0.1.0"}
+{"msg":"response received","level":"INFO","ts":"2021-09-15T08:40:43.828200633-07:00","source":"kata-agent-ctl","name":"kata-agent-ctl","subsystem":"rpc","version":"0.1.0","pid":"830920","response":""}
+{"msg":"Command PullImage (1 of 1) returned (Ok(()), false)","level":"INFO","ts":"2021-09-15T08:40:43.828261708-07:00","subsystem":"rpc","pid":"830920","source":"kata-agent-ctl","version":"0.1.0","name":"kata-agent-ctl"}
 ```
 - In the kata shell terminal you can see the container bundle has been created:
 ```
-$ ls -al /run/kata-containers/01234567889
+$ ls -al /run/kata-containers/0123456789
 total 1216
-drwx------  3 root root     120 Sep  6 09:48 .
-drwxr-xr-x  7 root root     140 Sep  6 09:48 ..
--rw-r--r--  1 root root    3088 Sep  6 09:48 config.json
+drwx------  3 root root     120 Sep 15 15:40 .
+drwxr-xr-x  7 root root     140 Sep 15 15:40 ..
+-rw-r--r--  1 root root    3088 Sep 15 15:40 config.json
 dr-xr-xr-x 18 root root     440 Aug  9 05:48 rootfs
--rw-r--r--  1 root root 1235681 Sep  6 09:48 sha256_6db7cf62a51ac7d5b573f7a61a855093ff82d7c1caaf1413e7b4730a20a172d0.mtree
--rw-r--r--  1 root root     372 Sep  6 09:48 umoci.json
+-rw-r--r--  1 root root 1235681 Sep 15 15:40 sha256_6db7cf62a51ac7d5b573f7a61a855093ff82d7c1caaf1413e7b4730a20a172d0.mtree
+-rw-r--r--  1 root root     372 Sep 15 15:40 umoci.json
 ```
 - The console shell shows what has happened:
 ```
-{"msg":"get guest details!","level":"INFO","ts":"2021-09-06T09:48:26.561831537+00:00","subsystem":"rpc","pid":"56","name":"kata-agent","source":"agent","version":"0.1.0"}
 Getting image source signatures
 …
 …
@@ -106,15 +99,86 @@ Storing signatures
 Writing manifest to image destination
 Storing signatures
    • unpacking bundle ...
-   • unpack rootfs: /run/kata-containers/01234567889/rootfs
+   • unpack rootfs: /run/kata-containers/0123456789/rootfs
    • unpack layer: sha256:ecfb9899f4ce3412a027b88f47dfea56664b5d4bc35eaa0f12c94c671f8ba503
    • ... done
    • computing filesystem manifest ...
    • ... done
-   • unpacked image bundle: /run/kata-containers/01234567889
-{"msg":"cid is \"01234567889\"","level":"INFO","ts":"2021-09-06T09:48:42.738268945+00:00","source":"agent","name":"kata-agent","subsystem":"rpc","pid":"56","version":"0.1.0"}
-{"msg":"target_path_bundle is \"/run/kata-containers/01234567889\"","level":"INFO","ts":"2021-09-06T09:48:42.738355998+00:00","name":"kata-agent","source":"agent","pid":"56","subsystem":"rpc","version":"0.1.0"}
-{"msg":"handling signal","level":"INFO","ts":"2021-09-06T09:48:54.212793601+00:00","name":"kata-agent","version":"0.1.0","pid":"56","subsystem":"signals","source":"agent","signal":"SIGCHLD"}
+   • unpacked image bundle: /run/kata-containers/0123456789
+{"msg":"cid is \"0123456789\"","level":"INFO","ts":"2021-09-15T15:40:30.097333785+00:00","subsystem":"rpc","pid":"56","version":"0.1.0","name":"kata-agent","source":"agent"}
+{"msg":"target_path_bundle is \"/run/kata-containers/0123456789\"","level":"INFO","ts":"2021-09-15T15:40:30.099306235+00:00","version":"0.1.0","source":"agent","subsystem":"rpc","pid":"56","name":"kata-agent"}
+{"msg":"handling signal","level":"INFO","ts":"2021-09-15T15:40:43.786343725+00:00","source":"agent","pid":"56","version":"0.1.0","subsystem":"signals","name":"kata-agent","signal":"SIGCHLD"}
+```
+- After the image has been pulling you can create a container using the bundle that was created in the pod sandbox:
+```
+$ ~/ccv0.sh -d agent_create_container
+    Finished release [optimized] target(s) in 0.25s
+{"msg":"announce","level":"INFO","ts":"2021-09-15T08:41:48.099561118-07:00","version":"0.1.0","name":"kata-agent-ctl","subsystem":"rpc","source":"kata-agent-ctl","pid":"831696","config":"Config { server_address: \"vsock://1970354082:1024\", bundle_dir: \"/tmp/bundle\", timeout_nano: 0, interactive: false, ignore_errors: false }"}
+{"msg":"client setup complete","level":"INFO","ts":"2021-09-15T08:41:48.105513768-07:00","version":"0.1.0","subsystem":"rpc","source":"kata-agent-ctl","pid":"831696","name":"kata-agent-ctl","server-address":"vsock://1970354082:1024"}
+{"msg":"Run command CreateContainer (1 of 1)","level":"INFO","ts":"2021-09-15T08:41:48.105700254-07:00","subsystem":"rpc","pid":"831696","version":"0.1.0","name":"kata-agent-ctl","source":"kata-agent-ctl"}
+{"msg":"response received","level":"INFO","ts":"2021-09-15T08:41:48.153446454-07:00","subsystem":"rpc","pid":"831696","name":"kata-agent-ctl","source":"kata-agent-ctl","version":"0.1.0","response":""}
+{"msg":"Command CreateContainer (1 of 1) returned (Ok(()), false)","level":"INFO","ts":"2021-09-15T08:41:48.153715145-07:00","name":"kata-agent-ctl","source":"kata-agent-ctl","subsystem":"rpc","pid":"831696","version":"0.1.0"}
+```
+- In the kata shell terminal you can check that a new process has been created with a timestamp matching the create request:
+```
+$ ps -ef --sort=start_time | tail -5
+101           89      64  0 15:38 ?        00:00:00 nginx: worker process
+root          90      56  0 15:39 pts/0    00:00:00 [bash]
+root         112      56  0 15:41 pts/1    00:00:00 /usr/bin/kata-agent init
+root         115      90  0 15:42 pts/0    00:00:00 ps -ef --sort=start_time
+root         116      90  0 15:42 pts/0    00:00:00 tail -5
+```
+- The console shell shows what has happened:
+```
+{"msg":"receive createcontainer, spec: Spec { version: \"1.0.2-dev\", process: Some(Process { terminal: true, console_size: None, user: User { uid: 0, gid: 0, additional_gids: [], username: \"\" }, args: [\"/bin/sh\"], env: [], cwd: \"/\", capabilities: Some(LinuxCapabilities { bounding: [], effective: [], inheritable: [], permitted: [], ambient: [] }), rlimits: [], no_new_privileges: true, apparmor_profile: \"\", oom_score_adj: Some(0), selinux_label: \"\" }), root: Some(Root { path: \"/tmp/bundle/rootfs\", readonly: true }), hostname: \"\", mounts: [], hooks: None, annotations: {}, linux: Some(Linux { uid_mappings: [], gid_mappings: [], sysctl: {}, resources: None, cgroups_path: \"\", namespaces: [], devices: [], seccomp: None, rootfs_propagation: \"\", masked_paths: [], readonly_paths: [], mount_label: \"\", intel_rdt: None }), solaris: None, windows: None, vm: None }","level":"INFO","ts":"2021-09-15T15:41:48.065347407+00:00","version":"0.1.0","source":"agent","pid":"56","subsystem":"rpc","name":"kata-agent"}
+{"msg":"Does the bundle exist true","level":"INFO","ts":"2021-09-15T15:41:48.086566070+00:00","source":"agent","subsystem":"rpc","version":"0.1.0","name":"kata-agent","pid":"56"}
+{"msg":"The config_path is \"/run/kata-containers/0123456789/config.json\"","level":"INFO","ts":"2021-09-15T15:41:48.090261259+00:00","version":"0.1.0","source":"agent","pid":"56","subsystem":"rpc","name":"kata-agent"}
+{"msg":"None","level":"INFO","ts":"2021-09-15T15:41:48.090339688+00:00","source":"agent","subsystem":"rpc","pid":"56","version":"0.1.0","name":"kata-agent"}
+{"msg":"new cgroup_manager Manager { paths: {}, mounts: {}, cpath: \"/0123456789\", cgroup: Cgroup { subsystems: [CpuSet(CpuSetController { base: \"/sys/fs/cgroup\", path: \"/sys/fs/cgroup/0123456789\", v2: true }), Cpu(CpuController { base: \"/sys/fs/cgroup\", path: \"/sys/fs/cgroup/0123456789\", v2: true }), BlkIo(BlkIoController { base: \"/sys/fs/cgroup\", path: \"/sys/fs/cgroup/0123456789\", v2: true }), Mem(MemController { base: \"/sys/fs/cgroup\", path: \"/sys/fs/cgroup/0123456789\", v2: true }), Pid(PidController { base: \"/sys/fs/cgroup\", path: \"/sys/fs/cgroup/0123456789\", v2: true })], hier: V2 { root: \"/sys/fs/cgroup\" }, path: \"0123456789\" } }","level":"INFO","ts":"2021-09-15T15:41:48.090560333+00:00","pid":"56","name":"kata-agent","subsystem":"rpc","version":"0.1.0","source":"agent"}
+{"msg":"before create console socket!","level":"INFO","ts":"2021-09-15T15:41:48.092456050+00:00","subsystem":"process","version":"0.1.0","pid":"56","name":"kata-agent","source":"agent"}
+{"msg":"enter container.start!","level":"INFO","ts":"2021-09-15T15:41:48.092678830+00:00","cid":"0123456789","module":"rustjail","name":"kata-agent","version":"0.1.0","source":"agent","pid":"56","subsystem":"container","eid":"0123456789"}
+{"msg":"exec fifo opened!","level":"INFO","ts":"2021-09-15T15:41:48.092780015+00:00","pid":"56","module":"rustjail","subsystem":"container","version":"0.1.0","name":"kata-agent","eid":"0123456789","cid":"0123456789","source":"agent"}
+{"msg":"Continuing execution in temporary process, new child has pid: Pid(112)","level":"INFO","ts":"2021-09-15T15:41:48.095759313+00:00","pid":"56","cid":"0123456789","name":"kata-agent","version":"0.1.0","module":"rustjail","eid":"0123456789","action":"child process log","source":"agent","subsystem":"container"}
+{"msg":"child pid: 112","level":"INFO","ts":"2021-09-15T15:41:48.098663894+00:00","version":"0.1.0","cid":"0123456789","subsystem":"container","pid":"56","eid":"0123456789","module":"rustjail","name":"kata-agent","source":"agent"}
+{"msg":"try to send spec from parent to child","level":"INFO","ts":"2021-09-15T15:41:48.098765550+00:00","name":"kata-agent","pid":"56","subsystem":"container","source":"agent","version":"0.1.0","action":"join-namespaces","cid":"0123456789","module":"rustjail","eid":"0123456789"}
+{"msg":"wait child received oci spec","level":"INFO","ts":"2021-09-15T15:41:48.098869579+00:00","eid":"0123456789","version":"0.1.0","source":"agent","name":"kata-agent","cid":"0123456789","subsystem":"container","module":"rustjail","action":"join-namespaces","pid":"56"}
+{"msg":"temporary parent process exit successfully","level":"INFO","ts":"2021-09-15T15:41:48.099052287+00:00","cid":"0123456789","source":"agent","subsystem":"container","module":"rustjail","pid":"56","version":"0.1.0","name":"kata-agent","action":"child process log","eid":"0123456789"}
+{"msg":"handling signal","level":"INFO","ts":"2021-09-15T15:41:48.099408118+00:00","pid":"56","source":"agent","version":"0.1.0","name":"kata-agent","subsystem":"signals","signal":"SIGCHLD"}
+{"msg":"wait_status","level":"INFO","ts":"2021-09-15T15:41:48.099492163+00:00","subsystem":"signals","name":"kata-agent","source":"agent","pid":"56","version":"0.1.0","wait_status result":"Exited(Pid(110), 0)"}
+{"msg":"child process start run","level":"INFO","ts":"2021-09-15T15:41:48.102315100+00:00","eid":"0123456789","pid":"56","name":"kata-agent","action":"child process log","subsystem":"container","source":"agent","module":"rustjail","cid":"0123456789","version":"0.1.0"}
+{"msg":"notify parent to send oci process","level":"INFO","ts":"2021-09-15T15:41:48.102754152+00:00","source":"agent","version":"0.1.0","action":"child process log","module":"rustjail","cid":"0123456789","pid":"56","name":"kata-agent","eid":"0123456789","subsystem":"container"}
+{"msg":"send oci process from parent to child","level":"INFO","ts":"2021-09-15T15:41:48.105592707+00:00","name":"kata-agent","source":"agent","cid":"0123456789","module":"rustjail","pid":"56","action":"join-namespaces","version":"0.1.0","eid":"0123456789","subsystem":"container"}
+{"msg":"wait child received oci process","level":"INFO","ts":"2021-09-15T15:41:48.105709729+00:00","eid":"0123456789","source":"agent","name":"kata-agent","pid":"56","module":"rustjail","action":"join-namespaces","cid":"0123456789","subsystem":"container","version":"0.1.0"}
+{"msg":"notify parent to send cgroup manager","level":"INFO","ts":"2021-09-15T15:41:48.105866282+00:00","cid":"0123456789","module":"rustjail","action":"child process log","eid":"0123456789","source":"agent","subsystem":"container","name":"kata-agent","version":"0.1.0","pid":"56"}
+{"msg":"wait child setup user namespace","level":"INFO","ts":"2021-09-15T15:41:48.106040278+00:00","action":"join-namespaces","cid":"0123456789","source":"agent","subsystem":"container","module":"rustjail","pid":"56","version":"0.1.0","eid":"0123456789","name":"kata-agent"}
+{"msg":"write oom score 0","level":"INFO","ts":"2021-09-15T15:41:48.106577659+00:00","pid":"56","version":"0.1.0","name":"kata-agent","cid":"0123456789","eid":"0123456789","action":"child process log","subsystem":"container","source":"agent","module":"rustjail"}
+{"msg":"notify parent unshare user ns completed","level":"INFO","ts":"2021-09-15T15:41:48.106773826+00:00","version":"0.1.0","pid":"56","eid":"0123456789","module":"rustjail","source":"agent","action":"child process log","subsystem":"container","name":"kata-agent","cid":"0123456789"}
+{"msg":"apply cgroups!","level":"INFO","ts":"2021-09-15T15:41:48.107248976+00:00","version":"0.1.0","source":"agent","eid":"0123456789","cid":"0123456789","action":"join-namespaces","name":"kata-agent","subsystem":"container","module":"rustjail","pid":"56"}
+{"msg":"cgroup manager set resources for container. Resources input LinuxResources { devices: [LinuxDeviceCgroup { allow: false, type: \"b\", major: Some(259), minor: Some(1), access: \"rw\" }], memory: None, cpu: None, pids: None, block_io: None, hugepage_limits: [], network: None, rdma: {} }","level":"INFO","ts":"2021-09-15T15:41:48.107358603+00:00","source":"agent","version":"0.1.0","subsystem":"cgroups","name":"kata-agent","pid":"56"}
+{"msg":"cgroup manager set devices","level":"INFO","ts":"2021-09-15T15:41:48.107545565+00:00","name":"kata-agent","subsystem":"cgroups","pid":"56","version":"0.1.0","source":"agent"}
+{"msg":"resources after processed Resources { memory: MemoryResources { kernel_memory_limit: None, memory_hard_limit: None, memory_soft_limit: None, kernel_tcp_memory_limit: None, memory_swap_limit: None, swappiness: None, attrs: {} }, pid: PidResources { maximum_number_of_processes: None }, cpu: CpuResources { cpus: None, mems: None, shares: None, quota: None, period: None, realtime_runtime: None, realtime_period: None, attrs: {} }, devices: DeviceResources { devices: [DeviceResource { allow: false, devtype: Block, major: 259, minor: 1, access: [Read, Write] }, DeviceResource { allow: true, devtype: Char, major: 1, minor: 3, access: [Read, Write, MkNod] }, DeviceResource { allow: true, devtype: Char, major: 1, minor: 5, access: [Read, Write, MkNod] }, DeviceResource { allow: true, devtype: Char, major: 1, minor: 7, access: [Read, Write, MkNod] }, DeviceResource { allow: true, devtype: Char, major: 5, minor: 0, access: [Read, Write, MkNod] }, DeviceResource { allow: true, devtype: Char, major: 1, minor: 9, access: [Read, Write, MkNod] }, DeviceResource { allow: true, devtype: Char, major: 1, minor: 8, access: [Read, Write, MkNod] }, DeviceResource { allow: true, devtype: Char, major: -1, minor: -1, access: [MkNod] }, DeviceResource { allow: true, devtype: Block, major: -1, minor: -1, access: [MkNod] }, DeviceResource { allow: true, devtype: Char, major: 5, minor: 1, access: [Read, Write, MkNod] }, DeviceResource { allow: true, devtype: Char, major: 136, minor: -1, access: [Read, Write, MkNod] }, DeviceResource { allow: true, devtype: Char, major: 5, minor: 2, access: [Read, Write, MkNod] }, DeviceResource { allow: true, devtype: Char, major: 10, minor: 200, access: [Read, Write, MkNod] }] }, network: NetworkResources { class_id: None, priorities: [] }, hugepages: HugePageResources { limits: [] }, blkio: BlkIoResources { weight: None, leaf_weight: None, weight_device: [], throttle_read_bps_device: [], throttle_read_iops_device: [], throttle_write_bps_device: [], throttle_write_iops_device: [] } }","level":"INFO","ts":"2021-09-15T15:41:48.107708982+00:00","version":"0.1.0","subsystem":"cgroups","name":"kata-agent","pid":"56","source":"agent"}
+{"msg":"notify child to continue","level":"INFO","ts":"2021-09-15T15:41:48.108346455+00:00","action":"join-namespaces","cid":"0123456789","version":"0.1.0","subsystem":"container","eid":"0123456789","name":"kata-agent","module":"rustjail","source":"agent","pid":"56"}
+{"msg":"notify child parent ready to run prestart hook!","level":"INFO","ts":"2021-09-15T15:41:48.108819006+00:00","source":"agent","pid":"56","version":"0.1.0","eid":"0123456789","module":"rustjail","action":"join-namespaces","name":"kata-agent","subsystem":"container","cid":"0123456789"}
+{"msg":"get ready to run prestart hook!","level":"INFO","ts":"2021-09-15T15:41:48.108935516+00:00","subsystem":"container","eid":"0123456789","cid":"0123456789","action":"join-namespaces","module":"rustjail","version":"0.1.0","pid":"56","name":"kata-agent","source":"agent"}
+{"msg":"notify child run prestart hook completed!","level":"INFO","ts":"2021-09-15T15:41:48.109044163+00:00","eid":"0123456789","source":"agent","pid":"56","name":"kata-agent","action":"join-namespaces","cid":"0123456789","module":"rustjail","version":"0.1.0","subsystem":"container"}
+{"msg":"notify child parent ready to run poststart hook!","level":"INFO","ts":"2021-09-15T15:41:48.109152261+00:00","eid":"0123456789","action":"join-namespaces","subsystem":"container","name":"kata-agent","version":"0.1.0","pid":"56","cid":"0123456789","source":"agent","module":"rustjail"}
+{"msg":"get ready to run poststart hook!","level":"INFO","ts":"2021-09-15T15:41:48.109260409+00:00","cid":"0123456789","eid":"0123456789","subsystem":"container","name":"kata-agent","action":"join-namespaces","pid":"56","source":"agent","module":"rustjail","version":"0.1.0"}
+{"msg":"wait for child process ready to run exec","level":"INFO","ts":"2021-09-15T15:41:48.109368+00:00","version":"0.1.0","name":"kata-agent","cid":"0123456789","subsystem":"container","action":"join-namespaces","source":"agent","eid":"0123456789","module":"rustjail","pid":"56"}
+{"msg":"entered namespaces!","level":"INFO","ts":"2021-09-15T15:41:48.109476291+00:00","version":"0.1.0","eid":"0123456789","module":"rustjail","name":"kata-agent","source":"agent","cid":"0123456789","subsystem":"container","pid":"56"}
+{"msg":"updating namespaces","level":"INFO","ts":"2021-09-15T15:41:48.109569518+00:00","name":"kata-agent","pid":"56","subsystem":"container","module":"rustjail","source":"agent","version":"0.1.0","cid":"0123456789"}
+{"msg":"wait on child log handler","level":"INFO","ts":"2021-09-15T15:41:48.109778744+00:00","name":"kata-agent","pid":"56","cid":"0123456789","version":"0.1.0","subsystem":"container","eid":"0123456789","module":"rustjail","source":"agent"}
+{"msg":"wait parent to setup user id mapping","level":"INFO","ts":"2021-09-15T15:41:48.110246955+00:00","eid":"0123456789","source":"agent","version":"0.1.0","pid":"56","action":"child process log","cid":"0123456789","subsystem":"container","module":"rustjail","name":"kata-agent"}
+{"msg":"setup rootfs /run/kata-containers/0123456789/rootfs","level":"INFO","ts":"2021-09-15T15:41:48.110375822+00:00","cid":"0123456789","source":"agent","name":"kata-agent","eid":"0123456789","version":"0.1.0","action":"child process log","subsystem":"container","module":"rustjail","pid":"56"}
+{"msg":"process command: [\"/bin/sh\"]","level":"INFO","ts":"2021-09-15T15:41:48.110472642+00:00","subsystem":"container","eid":"0123456789","cid":"0123456789","action":"child process log","name":"kata-agent","pid":"56","source":"agent","version":"0.1.0","module":"rustjail"}
+{"msg":"ready to run exec","level":"INFO","ts":"2021-09-15T15:41:48.110565466+00:00","eid":"0123456789","pid":"56","version":"0.1.0","subsystem":"container","cid":"0123456789","name":"kata-agent","source":"agent","module":"rustjail","action":"child process log"}
+{"msg":"read child process log end","level":"INFO","ts":"2021-09-15T15:41:48.110795068+00:00","source":"agent","pid":"56","module":"rustjail","eid":"0123456789","action":"child process log","cid":"0123456789","subsystem":"container","name":"kata-agent","version":"0.1.0"}
+{"msg":"create process completed","level":"INFO","ts":"2021-09-15T15:41:48.111369509+00:00","name":"kata-agent","subsystem":"container","eid":"0123456789","module":"rustjail","source":"agent","pid":"56","cid":"0123456789","version":"0.1.0"}
+{"msg":"created container!","level":"INFO","ts":"2021-09-15T15:41:48.111684371+00:00","version":"0.1.0","source":"agent","pid":"56","subsystem":"rpc","name":"kata-agent"}
+```
+- Once complete you can clean up the kata pod by running:
+```
+$ ~/ccv0.sh -d delete_kata_pod
+pod "nginx-kata" deleted
 ```
 
 ## Additional script usage
@@ -147,6 +211,7 @@ Commands:
 - open_kata_console:            Stream the kata runtime's console
 - open_kata_shell:              Open a shell into the kata runtime
 - agent_pull_image:             Run PullImage command against the agent with agent-ctl
+- agent_create_container:       Run CreateContainer command against the agent with agent-ctl
 - agent_list_commands:          List agent commands on agent-ctl
 - test:                         Test using kata with containerd
 - test_capture_logs:            Test using kata with containerd and capture the logs in the user's home directory

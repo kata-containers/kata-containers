@@ -39,6 +39,8 @@ fi
 export tests_repo_dir="${GOPATH}/src/${tests_repo}"
 export katacontainers_repo_dir="${GOPATH}/src/${katacontainers_repo}"
 export ROOTFS_DIR="${katacontainers_repo_dir}/tools/osbuilder/rootfs-builder/rootfs"
+export PULL_IMAGE="${PULL_IMAGE:-registry.fedoraproject.org/fedora:latest}" # Doesn't need authentication
+export CONTAINER_ID="${CONTAINER_ID:-0123456789}"
 
 debug_output() {
     if [ -n "${DEBUG}" ]
@@ -82,10 +84,11 @@ Commands:
 - init_kubernetes:              initialize a Kubernetes cluster on this system
 - create_kata_pod:              Create a kata runtime nginx pod in Kubernetes
 - delete_kata_pod:              Delete a kata runtime nginx pod in Kubernetes
+- restart_kata_pod:             Delete the kata nginx pod, then re-create it
 - open_kata_console:            Stream the kata runtime's console
 - open_kata_shell:              Open a shell into the kata runtime
 - agent_pull_image:             Run PullImage command against the agent with agent-ctl
-- agent_list_commands:          List agent commands on agent-ctl
+- agent_create_container:       Run CreateContainer command against the agent with agent-ctl
 - test:                         Test using kata with containerd
 - test_capture_logs:            Test using kata with containerd and capture the logs in the user's home directory
 
@@ -286,6 +289,16 @@ check_kata_runtime() {
 }
 
 init_kubernetes() {
+    # If kubernetes init has previous run we need to clean it by removing the image and resetting k8s
+        cid=$(docker ps -a -q -f name=^/kata-registry$)
+    if [ -n "${cid}" ]; then
+        docker rm ${cid}
+    fi
+    k8s_nodes=$(kubectl get nodes -o name)
+    if [ -n "${k8s_nodes}" ]; then
+        kubeadm reset -f
+    fi
+
     export CI="true" && ${tests_repo_dir}/integration/kubernetes/init.sh
     cat << EOT | tee ~/nginx-kata.yaml
 apiVersion: v1
@@ -307,6 +320,11 @@ create_kata_pod() {
 
 delete_kata_pod() {
     kubectl delete -f ~/nginx-kata.yaml
+}
+
+restart_kata_pod() {
+    delete_kata_pod
+    create_kata_pod
 }
 
 test_kata_runtime() {
@@ -351,50 +369,35 @@ build_bundle_dir_if_necessary() {
         mkdir -p "$rootfs_dir" && (cd "$bundle_dir" && runc spec)
         sudo docker export $(sudo docker create "$image") | tar -C "$rootfs_dir" -xvf -
     fi
-    # TODO - modify cat /tmp/bundle/config.json
-            # "args": [
-            # 	"sh" -> "/bin/sh"
+    # There were errors in create container agent-ctl command due to /bin/ seemingly not being on the path, so hardcode it
+    sudo sed -i -e 's%^\(\t*\)"sh"$%\1"/bin/sh"%g' "${bundle_dir}/config.json"
 }
 
 build_agent_ctl() {
     cd ${GOPATH}/src/${katacontainers_repo}/tools/agent-ctl/
     sudo chown -R ${USER}:${USER} "${HOME}/.cargo/registry"
     make
-}
-
-agent_pull_image() {
-    get_ids
-    build_bundle_dir_if_necessary
-    build_agent_ctl
-    ./target/x86_64-unknown-linux-musl/release/kata-agent-ctl -l debug connect --bundle-dir "${bundle_dir}" --server-address "vsock://${guest_cid}:1024" -c Check -c GetGuestDetails -c 'PullImage image=registry.fedoraproject.org/fedora:latest cid=01234567889'
-    #./target/x86_64-unknown-linux-musl/release/kata-agent-ctl -l debug connect --bundle-dir "${bundle_dir}" --server-address "vsock://${guest_cid}:1024" -c Check -c GetGuestDetails -c 'PullImage image=docker.io/library/busybox:latest src_creds=<>'
-}
-
-create_container_command() {
-    get_ids
-    build_bundle_dir_if_necessary
-        # If kata-agent-ctl pre-built in this directory, use it directly
-    if [ -x kata-agent-ctl ]; then
-        ./kata-agent-ctl -l debug connect --bundle-dir "${bundle_dir}" --server-address "vsock://${guest_cid}:1024" -c Check -c GetGuestDetails -c 'CreateContainer cid=0123456789'
-    else
-        build_agent_ctl
-        ./target/debug/kata-agent-ctl -l debug connect --bundle-dir "${bundle_dir}" --server-address "vsock://${guest_cid}:1024" -c Check -c GetGuestDetails -c 'CreateContainer cid=0123456789'
-    fi        
+    cd "./target/x86_64-unknown-linux-musl/release"
 }
 
 run_agent_ctl_command() {
+    get_ids
+    build_bundle_dir_if_necessary
     command=$1
-    # If kata-agent-ctl pre-built in this directory, use it directly
-    if [ -x kata-agent-ctl ]; then
-        ./kata-agent-ctl ${command}
-    else
+    # If kata-agent-ctl pre-built in this directory, use it directly, otherwise build it first and switch to release
+    if [ ! -x kata-agent-ctl ]; then
         build_agent_ctl
-        ./target/x86_64-unknown-linux-musl/release/kata-agent-ctl ${command}
-    fi
+    fi 
+     ./kata-agent-ctl -l debug connect --bundle-dir "${bundle_dir}" --server-address "vsock://${guest_cid}:1024" -c "${command}"
 }
 
-agent_list_commands() {
-     run_agent_ctl_command "-l debug connect --bundle-dir \"\" --server-address \"\" -c list"
+agent_pull_image() {
+    run_agent_ctl_command "PullImage image=${PULL_IMAGE} cid=${CONTAINER_ID}"
+}
+
+
+agent_create_container() {
+    run_agent_ctl_command "CreateContainer cid=${CONTAINER_ID}"
 }
 
 main() {
@@ -463,6 +466,9 @@ main() {
         delete_kata_pod)
             delete_kata_pod
             ;;
+        restart_kata_pod)
+            restart_kata_pod
+            ;;
         test)
             test_kata_runtime
             ;;
@@ -478,8 +484,8 @@ main() {
         agent_pull_image)
             agent_pull_image
             ;;
-        agent_list_commands)
-            agent_list_commands
+        agent_create_container)
+            agent_create_container
             ;;
         *)
             usage 1
