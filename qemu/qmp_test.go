@@ -802,7 +802,7 @@ func TestQMPSystemPowerdown(t *testing.T) {
 	disconnectedCh := make(chan struct{})
 	buf := newQMPTestCommandBuffer(t)
 	buf.AddCommand("system_powerdown", nil, "return", nil)
-	buf.AddEvent("SHUTDOWN", time.Millisecond*100,
+	buf.AddEvent("POWERDOWN", time.Millisecond*100,
 		nil,
 		map[string]interface{}{
 			"seconds":      seconds,
