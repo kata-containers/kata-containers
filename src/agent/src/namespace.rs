@@ -13,7 +13,7 @@ use std::fs::File;
 use std::path::{Path, PathBuf};
 use tracing::instrument;
 
-use crate::mount::{BareMount, FLAGS};
+use crate::mount::{baremount, FLAGS};
 use slog::Logger;
 
 const PERSISTENT_NS_DIR: &str = "/var/run/sandbox-ns";
@@ -129,8 +129,7 @@ impl Namespace {
                     }
                 };
 
-                let bare_mount = BareMount::new(source, destination, "none", flags, "", &logger);
-                bare_mount.mount().map_err(|e| {
+                baremount(source, destination, "none", flags, "", &logger).map_err(|e| {
                     anyhow!(
                         "Failed to mount {} to {} with err:{:?}",
                         source,
