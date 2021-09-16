@@ -392,7 +392,7 @@ run_agent_ctl_command() {
 }
 
 agent_pull_image() {
-    run_agent_ctl_command "PullImage image=${PULL_IMAGE} cid=${CONTAINER_ID}"
+    run_agent_ctl_command "PullImage image=${PULL_IMAGE} cid=${CONTAINER_ID} source_creds=${SOURCE_CREDS}"
 }
 
 
