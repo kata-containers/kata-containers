@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-#![allow(clippy::unknown_clippy_lints)]
+#![allow(unknown_lints)]
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};

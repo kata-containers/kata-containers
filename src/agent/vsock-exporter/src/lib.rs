@@ -12,7 +12,7 @@
 // payload, which allows the forwarder to know how many bytes it must read to
 // consume the trace span. The payload is a serialised version of the trace span.
 
-#![allow(clippy::unknown_clippy_lints)]
+#![allow(unknown_lints)]
 
 use async_trait::async_trait;
 use byteorder::{ByteOrder, NetworkEndian};
