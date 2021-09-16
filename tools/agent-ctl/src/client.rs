@@ -1872,9 +1872,11 @@ fn agent_cmd_pull_image(
 
     let image = utils::get_option("image", options, args);
     let cid = utils::get_option("cid", options, args);
+    let source_creds = utils::get_option("source_creds", options, args);
 
     req.set_image(image);
     req.set_container_id(cid);
+    req.set_source_creds(source_creds);
 
     debug!(sl!(), "sending request"; "request" => format!("{:?}", req));
 
