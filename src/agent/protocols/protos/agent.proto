@@ -518,4 +518,5 @@ message Metrics {
 message PullImageRequest {
 	string image = 1;
 	string container_id = 2;
+	string source_creds = 3;
 }
