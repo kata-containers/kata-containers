@@ -65,7 +65,12 @@ drwxr-xr-x 3 root root  60 Sep  6 09:44 shared
 ```
 $ ~/ccv0.sh -d open_kata_console
 ```
-- In the first console list run the pull image agent endpoint using `~/ccv0.sh -d agent_pull_image`: 
+- In the first terminal run the pull image agent endpoint:
+  - Optionally set up some environment variables to set the image and credentials used:
+    - By default the agent pull test in `ccv0.sh` will use the image `registry.fedoraproject.org/fedora:latest` which requires no authentication. If you want to use a different image, first set the `PULL_IMAGE` environment variable e.g. `export PULL_IMAGE="docker.io/library/busybox:latest"`.
+    - If the container registry for the image requires authentication then this can be set with an environment variable `SOURCE_CREDS`. For example to use `docker.io` as an authenticated user first run `export SOURCE_CREDS="<dockerhub username>:<dockerhub api key>"`
+    - *Note: the credentials support on the agent request is a tactical solution for the short-term proof of concept to allow more images to be pulled and tested. Once we have support for getting keys into the kata guest using the attestation-agent and/or KBS I'd expect container registry credentials to be looked up using that mechanism.*
+  - Run the pull image agent endpoint with `~/ccv0.sh -d agent_pull_image`: 
     - *For unknown reasons sometimes the unpack fails the first time and the sandbox crashes, but seems to work the second time and the pod will restart automatically, so just re-open the shell and console and re-run the agent_pull_image.*
 ```
 $ ~/ccv0.sh -d agent_pull_image
