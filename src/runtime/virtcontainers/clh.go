@@ -240,6 +240,8 @@ func (clh *cloudHypervisor) createSandbox(ctx context.Context, id string, networ
 	clh.vmconfig.Memory = chclient.NewMemoryConfig(int64((utils.MemUnit(clh.config.MemorySize) * utils.MiB).ToBytes()))
 	// shared memory should be enabled if using vhost-user(kata uses virtiofsd)
 	clh.vmconfig.Memory.Shared = func(b bool) *bool { return &b }(true)
+	// Enable hugepages if needed
+	clh.vmconfig.Memory.Hugepages = func(b bool) *bool { return &b }(clh.config.HugePages)
 	hostMemKb, err := getHostMemorySizeKb(procMemInfo)
 	if err != nil {
 		return nil
