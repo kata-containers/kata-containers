@@ -685,8 +685,9 @@ impl protocols::agent_ttrpc::AgentService for AgentService {
     ) -> ttrpc::Result<protocols::empty::Empty> {
         let image = req.get_image();
         let cid = req.get_container_id();
+        let source_creds = (!req.get_source_creds().is_empty()).then(|| req.get_source_creds());
 
-        pull_image_from_registry(image, cid)
+        pull_image_from_registry(image, cid, &source_creds)
             .map_err(|e| ttrpc_error(ttrpc::Code::INTERNAL, e.to_string()))?;
         unpack_image(cid).map_err(|e| ttrpc_error(ttrpc::Code::INTERNAL, e.to_string()))?;
 
@@ -1762,7 +1763,7 @@ fn load_kernel_module(module: &protocols::agent::KernelModule) -> Result<()> {
     }
 }
 
-fn pull_image_from_registry(image: &str, cid: &str) -> Result<()> {
+fn pull_image_from_registry(image: &str, cid: &str, source_creds: &Option<&str>) -> Result<()> {
     let source_image = format!("{}{}", "docker://", image);
 
     let manifest_path = format!("/tmp/{}/image_manifest", cid);
@@ -1775,11 +1776,19 @@ fn pull_image_from_registry(image: &str, cid: &str) -> Result<()> {
     fs::create_dir_all(&manifest_path)?;
     fs::create_dir_all(&oci_path)?;
 
-    let status: ExitStatus = Command::new(SKOPEO_PATH)
+    info!(sl!(), "Attempting to pull image {}...", &source_image);
+
+    let mut pull_command = Command::new(SKOPEO_PATH);
+    pull_command
         .arg("copy")
         .arg(source_image)
-        .arg(&target_path_manifest)
-        .status()?;
+        .arg(&target_path_manifest);
+
+    if let Some(source_creds) = source_creds {
+        pull_command.arg("--src-creds").arg(source_creds);
+    }
+
+    let status: ExitStatus = pull_command.status()?;
 
     if !status.success() {
         return Err(anyhow!(format!("failed to pull image: {:?}", status)));
