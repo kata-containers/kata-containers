@@ -911,7 +911,7 @@ func (s *service) Shutdown(ctx context.Context, r *taskAPI.ShutdownRequest) (_ *
 	s.mu.Unlock()
 
 	span.End()
-	katatrace.StopTracing(s.ctx)
+	katatrace.StopTracing(s.rootCtx)
 
 	s.cancel()
 
