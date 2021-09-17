@@ -45,6 +45,7 @@ use nix::unistd::{self, Pid};
 use rustjail::process::ProcessOperations;
 
 use crate::device::{add_devices, pcipath_to_sysfs, rescan_pci_bus, update_device_cgroup};
+use crate::image_rpc;
 use crate::linux_abi::*;
 use crate::metrics::get_metrics;
 use crate::mount::{add_storages, remove_mounts, BareMount, STORAGE_HANDLER_LIST};
@@ -78,6 +79,7 @@ use std::path::PathBuf;
 
 const CONTAINER_BASE: &str = "/run/kata-containers";
 const MODPROBE_PATH: &str = "/sbin/modprobe";
+const ANNO_K8S_IMAGE_NAME: &str = "io.kubernetes.cri.image-name";
 
 // Convenience macro to obtain the scope logger
 macro_rules! sl {
@@ -108,6 +110,34 @@ fn verify_cid(id: &str) -> Result<()> {
     }
 }
 
+fn merge_process(ori: &mut oci::Process, image: &oci::Process) {
+    if ori.args.len() == 0 {
+        if image.args.len() != 0 {
+            ori.args.append(&mut image.args.clone());
+        }
+    }
+    if ori.cwd.len() == 0 {
+        ori.cwd = image.cwd.clone();
+    }
+    ori.env.append(&mut image.env.clone());
+}
+
+fn merge_oci(image_bundle: &str, ori: &mut oci::Spec, image: &oci::Spec) {
+    if let Some(root) = ori.root.as_mut() {
+        if let Some(ir) = image.root.as_ref() {
+            let mut rp = PathBuf::from("/run/images");
+            rp.push(image_bundle);
+            rp.push(ir.path.clone());
+            root.path = String::from(rp.to_str().unwrap());
+        }
+    }
+    if let Some(proc) = ori.process.as_mut() {
+        if let Some(image_proc) = image.process.as_ref() {
+            merge_process(proc, image_proc);
+        }
+    }
+}
+
 impl AgentService {
     #[instrument]
     async fn do_create_container(
@@ -133,6 +163,15 @@ impl AgentService {
         };
 
         info!(sl!(), "receive createcontainer, spec: {:?}", &oci);
+
+        if let Some(image_name) = oci.annotations.get(&ANNO_K8S_IMAGE_NAME.to_string()) {
+            if let Some(image_bundle) = self.sandbox.clone().lock().await.images.get(image_name) {
+                let spec_path = image_bundle.clone() + "/config.json";
+                info!(sl!(), "image bundle path: {}", spec_path);
+                let image_oci = oci::Spec::load(&spec_path).context("load image bundle")?;
+                merge_oci(&image_bundle, &mut oci, &image_oci);
+            }
+        }
 
         // re-scan PCI bus
         // looking for hidden devices
@@ -1342,7 +1381,7 @@ fn find_process<'a>(
 }
 
 pub fn start(s: Arc<Mutex<Sandbox>>, server_address: &str) -> TtrpcServer {
-    let agent_service = Box::new(AgentService { sandbox: s })
+    let agent_service = Box::new(AgentService { sandbox: s.clone() })
         as Box<dyn protocols::agent_ttrpc::AgentService + Send + Sync>;
 
     let agent_worker = Arc::new(agent_service);
@@ -1351,15 +1390,21 @@ pub fn start(s: Arc<Mutex<Sandbox>>, server_address: &str) -> TtrpcServer {
         Box::new(HealthService {}) as Box<dyn protocols::health_ttrpc::Health + Send + Sync>;
     let health_worker = Arc::new(health_service);
 
+    let image_service = Box::new(image_rpc::ImageService::new(s))
+        as Box<dyn protocols::image_ttrpc::ImageService + Send + Sync>;
+
     let aservice = protocols::agent_ttrpc::create_agent_service(agent_worker);
 
     let hservice = protocols::health_ttrpc::create_health(health_worker);
+
+    let iservice = protocols::image_ttrpc::create_image_service(Arc::new(image_service));
 
     let server = TtrpcServer::new()
         .bind(server_address)
         .unwrap()
         .register_service(aservice)
-        .register_service(hservice);
+        .register_service(hservice)
+        .register_service(iservice);
 
     info!(sl!(), "ttRPC server started"; "address" => server_address);
 

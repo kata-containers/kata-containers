@@ -56,6 +56,7 @@ pub struct Sandbox {
     pub event_rx: Arc<Mutex<Receiver<String>>>,
     pub event_tx: Option<Sender<String>>,
     pub bind_watcher: BindWatcher,
+    pub images: HashMap<String, String>,
 }
 
 impl Sandbox {
@@ -88,6 +89,7 @@ impl Sandbox {
             event_rx,
             event_tx: Some(tx),
             bind_watcher: BindWatcher::new(),
+            images: HashMap::new(),
         })
     }
 
