@@ -1,0 +1,74 @@
+/*
+Copyright 2020 The Kubernetes Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+// To regenerate api.pb.go run hack/update-generated-runtime.sh
+syntax = "proto3";
+
+package containerd.task.v2;
+
+//import "github.com/gogo/protobuf/gogoproto/gogo.proto";
+
+option go_package = "github.com/containerd/containerd/runtime/v2/task;task";
+
+//option (gogoproto.goproto_stringer_all) = false;
+//option (gogoproto.stringer_all) =  true;
+//option (gogoproto.goproto_getters_all) = true;
+//option (gogoproto.marshaler_all) = true;
+//option (gogoproto.sizer_all) = true;
+//option (gogoproto.unmarshaler_all) = true;
+//option (gogoproto.goproto_unrecognized_all) = false;
+
+// Image defines the public APIs for managing images.
+service Image {
+    // PullImage pulls an image with authentication config.
+    rpc PullImage(PullImageRequest) returns (PullImageResponse) {}
+}
+
+// ImageSpec is an internal representation of an image.
+message ImageSpec {
+    // Container's Image field (e.g. imageID or imageDigest).
+    string image = 1;
+    // Unstructured key-value map holding arbitrary metadata.
+    // ImageSpec Annotations can be used to help the runtime target specific
+    // images in multi-arch images.
+    map<string, string> annotations = 2;
+}
+
+// AuthConfig contains authorization information for connecting to a registry.
+message AuthConfig {
+    string username = 1;
+    string password = 2;
+    string auth = 3;
+    string server_address = 4;
+    // IdentityToken is used to authenticate the user and get
+    // an access token for the registry.
+    string identity_token = 5;
+    // RegistryToken is a bearer token to be sent to a registry
+    string registry_token = 6;
+}
+
+message PullImageRequest {
+    // Spec of the image.
+    ImageSpec image = 1;
+    // Authentication configuration for pulling the image.
+    AuthConfig auth = 2;
+}
+
+message PullImageResponse {
+    // Reference to the image in use. For most runtimes, this should be an
+    // image ID or digest.
+    string image_ref = 1;
+}

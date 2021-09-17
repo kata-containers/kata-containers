@@ -12,3 +12,5 @@ pub mod health;
 pub mod health_ttrpc;
 pub mod oci;
 pub mod types;
+pub mod image;
+pub mod image_ttrpc;
