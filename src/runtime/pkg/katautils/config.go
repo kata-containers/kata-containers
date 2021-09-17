@@ -1343,7 +1343,7 @@ func checkHypervisorConfig(config vc.HypervisorConfig) error {
 func GetDefaultConfigFilePaths() []string {
 	return []string{
 		// normally below "/etc"
-		defaultSysConfRuntimeConfiguration,
+		DEFAULTSYSCONFRUNTIMECONFIGURATION,
 
 		// normally below "/usr/share"
 		defaultRuntimeConfiguration,
@@ -1371,7 +1371,7 @@ func getDefaultConfigFile() (string, error) {
 // SetConfigOptions will override some of the defaults settings.
 func SetConfigOptions(n, runtimeConfig, sysRuntimeConfig string) {
 	if n != "" {
-		name = n
+		NAME = n
 	}
 
 	if runtimeConfig != "" {
@@ -1379,6 +1379,6 @@ func SetConfigOptions(n, runtimeConfig, sysRuntimeConfig string) {
 	}
 
 	if sysRuntimeConfig != "" {
-		defaultSysConfRuntimeConfiguration = sysRuntimeConfig
+		DEFAULTSYSCONFRUNTIMECONFIGURATION = sysRuntimeConfig
 	}
 }

@@ -14,7 +14,7 @@ through the [CRI-O\*](https://github.com/kubernetes-incubator/cri-o) and
 
 Kata Containers creates a QEMU\*/KVM virtual machine for pod that `kubelet` (Kubernetes) creates respectively.
 
-The [`containerd-shim-kata-v2` (shown as `shimv2` from this point onwards)](../../src/runtime/containerd-shim-v2) 
+The [`containerd-shim-kata-v2` (shown as `shimv2` from this point onwards)](../../src/runtime/cmd/containerd-shim-kata-v2/)
 is the Kata Containers entrypoint, which
 implements the [Containerd Runtime V2 (Shim API)](https://github.com/containerd/containerd/tree/master/runtime/v2) for Kata.
 
@@ -259,7 +259,7 @@ With `RuntimeClass`, users can define Kata Containers as a `RuntimeClass` and th
 
 ## DAX
 
-Kata Containers utilizes the Linux kernel DAX [(Direct Access filesystem)](https://git.kernel.org/cgit/linux/kernel/git/torvalds/linux.git/tree/Documentation/filesystems/dax.txt)
+Kata Containers utilizes the Linux kernel DAX [(Direct Access filesystem)](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/Documentation/filesystems/dax.rst?h=v5.14)
 feature to efficiently map some host-side files into the guest VM space.
 In particular, Kata Containers uses the QEMU NVDIMM feature to provide a
 memory-mapped virtual device that can be used to DAX map the virtual machine's

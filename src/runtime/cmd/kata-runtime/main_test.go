@@ -57,19 +57,19 @@ var (
 var testingImpl = &vcmock.VCMock{}
 
 func init() {
-	if version == "" {
+	if katautils.VERSION == "" {
 		panic("ERROR: invalid build: version not set")
 	}
 
-	if commit == "" {
+	if katautils.COMMIT == "" {
 		panic("ERROR: invalid build: commit not set")
 	}
 
-	if defaultSysConfRuntimeConfiguration == "" {
+	if katautils.DEFAULTSYSCONFRUNTIMECONFIGURATION == "" {
 		panic("ERROR: invalid build: defaultSysConfRuntimeConfiguration not set")
 	}
 
-	if defaultRuntimeConfiguration == "" {
+	if katautils.DEFAULTRUNTIMECONFIGURATION == "" {
 		panic("ERROR: invalid build: defaultRuntimeConfiguration not set")
 	}
 
@@ -82,7 +82,7 @@ func init() {
 	var err error
 
 	fmt.Printf("INFO: creating test directory\n")
-	testDir, err = ioutil.TempDir("", fmt.Sprintf("%s-", name))
+	testDir, err = ioutil.TempDir("", fmt.Sprintf("%s-", katautils.NAME))
 	if err != nil {
 		panic(fmt.Sprintf("ERROR: failed to create test directory: %v", err))
 	}
@@ -153,8 +153,8 @@ func runUnitTests(m *testing.M) {
 func TestMain(m *testing.M) {
 	// If the test binary name is kata-runtime.coverage, we've are being asked to
 	// run the coverage-instrumented kata-runtime.
-	if path.Base(os.Args[0]) == name+".coverage" ||
-		path.Base(os.Args[0]) == name {
+	if path.Base(os.Args[0]) == katautils.NAME+".coverage" ||
+		path.Base(os.Args[0]) == katautils.NAME {
 		main()
 		exit(0)
 	}
@@ -666,9 +666,9 @@ func TestMainBeforeSubCommandsShowCCConfigPaths(t *testing.T) {
 	for i, line := range lines {
 		switch i {
 		case 0:
-			assert.Equal(line, defaultSysConfRuntimeConfiguration)
+			assert.Equal(line, katautils.DEFAULTSYSCONFRUNTIMECONFIGURATION)
 		case 1:
-			assert.Equal(line, defaultRuntimeConfiguration)
+			assert.Equal(line, katautils.DEFAULTRUNTIMECONFIGURATION)
 		}
 	}
 }
@@ -715,7 +715,7 @@ func testVersionString(assert *assert.Assertions, versionString, expectedVersion
 	foundCommit := false
 	foundOCIVersion := false
 
-	versionRE := regexp.MustCompile(fmt.Sprintf(`%s\s*:\s*%v`, name, expectedVersion))
+	versionRE := regexp.MustCompile(fmt.Sprintf(`%s\s*:\s*%v`, katautils.NAME, expectedVersion))
 	commitRE := regexp.MustCompile(fmt.Sprintf(`%s\s*:\s*%v`, "commit", expectedCommit))
 
 	ociRE := regexp.MustCompile(fmt.Sprintf(`%s\s*:\s*%v`, "OCI specs", expectedOCIVersion))
@@ -753,37 +753,37 @@ func TestMainMakeVersionString(t *testing.T) {
 
 	v := makeVersionString()
 
-	testVersionString(assert, v, version, commit, specs.Version)
+	testVersionString(assert, v, katautils.VERSION, katautils.COMMIT, specs.Version)
 }
 
 func TestMainMakeVersionStringNoVersion(t *testing.T) {
 	assert := assert.New(t)
 
-	savedVersion := version
-	version = ""
+	savedVersion := katautils.VERSION
+	katautils.VERSION = ""
 
 	defer func() {
-		version = savedVersion
+		katautils.VERSION = savedVersion
 	}()
 
 	v := makeVersionString()
 
-	testVersionString(assert, v, unknown, commit, specs.Version)
+	testVersionString(assert, v, unknown, katautils.COMMIT, specs.Version)
 }
 
 func TestMainMakeVersionStringNoCommit(t *testing.T) {
 	assert := assert.New(t)
 
-	savedCommit := commit
-	commit = ""
+	savedCommit := katautils.COMMIT
+	katautils.COMMIT = ""
 
 	defer func() {
-		commit = savedCommit
+		katautils.COMMIT = savedCommit
 	}()
 
 	v := makeVersionString()
 
-	testVersionString(assert, v, version, unknown, specs.Version)
+	testVersionString(assert, v, katautils.VERSION, unknown, specs.Version)
 }
 
 func TestMainMakeVersionStringNoOCIVersion(t *testing.T) {
@@ -798,7 +798,7 @@ func TestMainMakeVersionStringNoOCIVersion(t *testing.T) {
 
 	v := makeVersionString()
 
-	testVersionString(assert, v, version, commit, unknown)
+	testVersionString(assert, v, katautils.VERSION, katautils.COMMIT, unknown)
 }
 
 func TestMainCreateRuntimeApp(t *testing.T) {
@@ -824,7 +824,7 @@ func TestMainCreateRuntimeApp(t *testing.T) {
 		defaultOutputFile = savedOutputFile
 	}()
 
-	args := []string{name}
+	args := []string{katautils.NAME}
 
 	err = createRuntimeApp(context.Background(), args)
 	assert.NoError(err, "%v", args)
@@ -849,7 +849,7 @@ func TestMainCreateRuntimeAppInvalidSubCommand(t *testing.T) {
 	}()
 
 	// calls fatal() so no return
-	_ = createRuntimeApp(context.Background(), []string{name, "i-am-an-invalid-sub-command"})
+	_ = createRuntimeApp(context.Background(), []string{katautils.NAME, "i-am-an-invalid-sub-command"})
 
 	assert.NotEqual(exitStatus, 0)
 }
@@ -869,7 +869,7 @@ func TestMainCreateRuntime(t *testing.T) {
 	savedBefore := runtimeBeforeSubcommands
 	savedCommands := runtimeCommands
 
-	os.Args = []string{name, cmd}
+	os.Args = []string{katautils.NAME, cmd}
 	exitFunc = func(status int) { exitStatus = status }
 
 	// disable
@@ -920,10 +920,10 @@ func TestMainVersionPrinter(t *testing.T) {
 
 	setCLIGlobals()
 
-	err = createRuntimeApp(context.Background(), []string{name, "--version"})
+	err = createRuntimeApp(context.Background(), []string{katautils.NAME, "--version"})
 	assert.NoError(err)
 
-	err = grep(fmt.Sprintf(`%s\s*:\s*%s`, name, version), output)
+	err = grep(fmt.Sprintf(`%s\s*:\s*%s`, katautils.NAME, katautils.VERSION), output)
 	assert.NoError(err)
 }
 
@@ -968,7 +968,7 @@ func TestMainFatalWriter(t *testing.T) {
 
 	setCLIGlobals()
 
-	err := createRuntimeApp(context.Background(), []string{name, cmd})
+	err := createRuntimeApp(context.Background(), []string{katautils.NAME, cmd})
 	assert.Error(err)
 
 	re := regexp.MustCompile(

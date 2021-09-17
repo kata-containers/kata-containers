@@ -314,8 +314,8 @@ func getExpectedKernel(config oci.RuntimeConfig) KernelInfo {
 func getExpectedRuntimeDetails(config oci.RuntimeConfig, configFile string) RuntimeInfo {
 	runtimePath, _ := os.Executable()
 
-	runtimeVersionInfo := constructVersionInfo(version)
-	runtimeVersionInfo.Commit = commit
+	runtimeVersionInfo := constructVersionInfo(katautils.VERSION)
+	runtimeVersionInfo.Commit = katautils.COMMIT
 	return RuntimeInfo{
 		Version: RuntimeVersionInfo{
 			Version: runtimeVersionInfo,

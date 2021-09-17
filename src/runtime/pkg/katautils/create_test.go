@@ -161,7 +161,7 @@ func findLastParam(key string, params []vc.Param) (string, error) {
 		}
 	}
 
-	return "", fmt.Errorf("no param called %q found", name)
+	return "", fmt.Errorf("no param called %q found", NAME)
 }
 
 func TestSetEphemeralStorageType(t *testing.T) {

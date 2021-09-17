@@ -13,7 +13,8 @@ import (
 	"time"
 
 	cdshim "github.com/containerd/containerd/runtime/v2/shim"
-	shim "github.com/kata-containers/kata-containers/src/runtime/containerd-shim-v2"
+
+	shim "github.com/kata-containers/kata-containers/src/runtime/pkg/containerd-shim-v2"
 )
 
 const (
