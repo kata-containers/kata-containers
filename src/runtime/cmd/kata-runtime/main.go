@@ -39,18 +39,18 @@ const arch = goruntime.GOARCH
 var usage = fmt.Sprintf(`%s runtime
 
 %s is a command line program for running applications packaged
-according to the Open Container Initiative (OCI).`, name, name)
+according to the Open Container Initiative (OCI).`, katautils.NAME, katautils.NAME)
 
 var notes = fmt.Sprintf(`
 NOTES:
 
-- Commands starting "%s-" and options starting "--%s-" are `+project+` extensions.
+- Commands starting "%s-" and options starting "--%s-" are `+katautils.PROJECT+` extensions.
 
 URL:
 
   The canonical URL for this project is: %s
 
-`, projectPrefix, projectPrefix, projectURL)
+`, katautils.PROJECTPREFIX, katautils.PROJECTPREFIX, katautils.PROJECTURL)
 
 // kataLog is the logger used to record all messages
 var kataLog *logrus.Entry
@@ -82,7 +82,7 @@ var defaultErrorFile = os.Stderr
 var runtimeFlags = []cli.Flag{
 	cli.StringFlag{
 		Name:  "config, kata-config",
-		Usage: project + " config file path",
+		Usage: katautils.PROJECT + " config file path",
 	},
 	cli.StringFlag{
 		Name:  "log",
@@ -96,7 +96,7 @@ var runtimeFlags = []cli.Flag{
 	},
 	cli.StringFlag{
 		Name:  "root",
-		Value: defaultRootDirectory,
+		Value: katautils.DEFAULTROOTDIRECTORY,
 		Usage: "root directory for storage of container state (this should be located in tmpfs)",
 	},
 	cli.StringFlag{
@@ -145,7 +145,7 @@ var savedCLIErrWriter = cli.ErrWriter
 
 func init() {
 	kataLog = logrus.WithFields(logrus.Fields{
-		"name":   name,
+		"name":   katautils.NAME,
 		"source": "runtime",
 		"arch":   arch,
 		"pid":    os.Getpid(),
@@ -222,7 +222,7 @@ func beforeSubcommands(c *cli.Context) error {
 	var runtimeConfig oci.RuntimeConfig
 	var err error
 
-	katautils.SetConfigOptions(name, defaultRuntimeConfiguration, defaultSysConfRuntimeConfiguration)
+	katautils.SetConfigOptions(katautils.NAME, katautils.DEFAULTRUNTIMECONFIGURATION, katautils.DEFAULTSYSCONFRUNTIMECONFIGURATION)
 
 	handleShowConfig(c)
 
@@ -302,8 +302,8 @@ func beforeSubcommands(c *cli.Context) error {
 	args := strings.Join(c.Args(), " ")
 
 	fields := logrus.Fields{
-		"version":   version,
-		"commit":    commit,
+		"version":   katautils.VERSION,
+		"commit":    katautils.COMMIT,
 		"arguments": `"` + args + `"`,
 	}
 
@@ -365,14 +365,14 @@ func commandNotFound(c *cli.Context, command string) {
 func makeVersionString() string {
 	v := make([]string, 0, 3)
 
-	versionStr := version
+	versionStr := katautils.VERSION
 	if versionStr == "" {
 		versionStr = unknown
 	}
 
-	v = append(v, name+"  : "+versionStr)
+	v = append(v, katautils.NAME+"  : "+versionStr)
 
-	commitStr := commit
+	commitStr := katautils.COMMIT
 	if commitStr == "" {
 		commitStr = unknown
 	}
@@ -411,7 +411,7 @@ func setCLIGlobals() {
 func createRuntimeApp(ctx context.Context, args []string) error {
 	app := cli.NewApp()
 
-	app.Name = name
+	app.Name = katautils.NAME
 	app.Writer = defaultOutputFile
 	app.Usage = usage
 	app.CommandNotFound = runtimeCommandNotFound

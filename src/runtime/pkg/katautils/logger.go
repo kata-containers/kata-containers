@@ -61,7 +61,7 @@ func (h *sysLogHook) Fire(e *logrus.Entry) (err error) {
 }
 
 func newSystemLogHook(network, raddr string) (*sysLogHook, error) {
-	hook, err := lSyslog.NewSyslogHook(network, raddr, syslog.LOG_INFO, name)
+	hook, err := lSyslog.NewSyslogHook(network, raddr, syslog.LOG_INFO, NAME)
 	if err != nil {
 		return nil, err
 	}

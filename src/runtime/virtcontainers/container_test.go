@@ -689,18 +689,3 @@ func TestConfigValid(t *testing.T) {
 	result = config.valid()
 	assert.True(result)
 }
-
-func TestStoreContainer(t *testing.T) {
-	hConfig := newHypervisorConfig(nil, nil)
-	sandbox, err := testCreateSandbox(t, testSandboxID, MockHypervisor, hConfig, NetworkConfig{}, nil, nil)
-	assert.NoError(t, err)
-	defer cleanUp()
-
-	container := &Container{
-		sandbox: sandbox,
-	}
-
-	err = container.storeContainer()
-	assert.Nil(t, err, "store container should succeed")
-
-}

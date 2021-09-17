@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/blang/semver"
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -20,7 +21,7 @@ var expectedReleasesURL string
 
 func init() {
 	var err error
-	currentSemver, err = semver.Make(version)
+	currentSemver, err = semver.Make(katautils.VERSION)
 
 	if err != nil {
 		panic(fmt.Sprintf("failed to create semver for testing: %v", err))
@@ -307,7 +308,7 @@ func TestDownloadURLIsValid(t *testing.T) {
 		{"foo", true},
 		{"foo bar", true},
 		{"https://google.com", true},
-		{projectURL, true},
+		{katautils.PROJECTURL, true},
 		{validKata1xDownload, false},
 		{validKata2xDownload, false},
 	}
