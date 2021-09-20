@@ -280,13 +280,13 @@ func TestCloudHypervisorResizeMemory(t *testing.T) {
 	tests := []struct {
 		name           string
 		args           args
-		expectedMemDev memoryDevice
+		expectedMemDev MemoryDevice
 		wantErr        bool
 	}{
-		{"Resize to zero", args{0, 128}, memoryDevice{probe: false, sizeMB: 0}, FAIL},
-		{"Resize to aligned size", args{clhConfig.MemorySize + 128, 128}, memoryDevice{probe: false, sizeMB: 128}, PASS},
-		{"Resize to aligned size", args{clhConfig.MemorySize + 129, 128}, memoryDevice{probe: false, sizeMB: 256}, PASS},
-		{"Resize to NOT aligned size", args{clhConfig.MemorySize + 125, 128}, memoryDevice{probe: false, sizeMB: 128}, PASS},
+		{"Resize to zero", args{0, 128}, MemoryDevice{Probe: false, SizeMB: 0}, FAIL},
+		{"Resize to aligned size", args{clhConfig.MemorySize + 128, 128}, MemoryDevice{Probe: false, SizeMB: 128}, PASS},
+		{"Resize to aligned size", args{clhConfig.MemorySize + 129, 128}, MemoryDevice{Probe: false, SizeMB: 256}, PASS},
+		{"Resize to NOT aligned size", args{clhConfig.MemorySize + 125, 128}, MemoryDevice{Probe: false, SizeMB: 128}, PASS},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -312,7 +312,7 @@ func TestCloudHypervisorResizeMemory(t *testing.T) {
 				return
 			}
 
-			expectedMem := clhConfig.MemorySize + uint32(tt.expectedMemDev.sizeMB)
+			expectedMem := clhConfig.MemorySize + uint32(tt.expectedMemDev.SizeMB)
 
 			if newMem != expectedMem {
 				t.Errorf("cloudHypervisor.resizeMemory() got = %+v, want %+v", newMem, expectedMem)
@@ -357,12 +357,12 @@ func TestCloudHypervisorHotplugRemoveDevice(t *testing.T) {
 	clh.config = clhConfig
 	clh.APIClient = &clhClientMock{}
 
-	_, err = clh.hotplugRemoveDevice(context.Background(), &config.BlockDrive{}, blockDev)
+	_, err = clh.hotplugRemoveDevice(context.Background(), &config.BlockDrive{}, BlockDev)
 	assert.NoError(err, "Hotplug remove block device expected no error")
 
-	_, err = clh.hotplugRemoveDevice(context.Background(), &config.VFIODev{}, vfioDev)
+	_, err = clh.hotplugRemoveDevice(context.Background(), &config.VFIODev{}, VfioDev)
 	assert.NoError(err, "Hotplug remove vfio block device expected no error")
 
-	_, err = clh.hotplugRemoveDevice(context.Background(), nil, netDev)
+	_, err = clh.hotplugRemoveDevice(context.Background(), nil, NetDev)
 	assert.Error(err, "Hotplug remove pmem block device expected error")
 }

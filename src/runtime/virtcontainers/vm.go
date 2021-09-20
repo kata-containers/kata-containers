@@ -44,7 +44,7 @@ type VMConfig struct {
 
 // Valid check VMConfig validity.
 func (c *VMConfig) Valid() error {
-	return c.HypervisorConfig.valid()
+	return c.HypervisorConfig.Valid()
 }
 
 // ToGrpc convert VMConfig struct to grpc format pb.GrpcVMConfig.
@@ -85,7 +85,7 @@ func GrpcToVMConfig(j *pb.GrpcVMConfig) (*VMConfig, error) {
 // NewVM creates a new VM based on provided VMConfig.
 func NewVM(ctx context.Context, config VMConfig) (*VM, error) {
 	// 1. setup hypervisor
-	hypervisor, err := newHypervisor(config.HypervisorType)
+	hypervisor, err := NewHypervisor(config.HypervisorType)
 	if err != nil {
 		return nil, err
 	}
@@ -165,7 +165,7 @@ func NewVM(ctx context.Context, config VMConfig) (*VM, error) {
 func NewVMFromGrpc(ctx context.Context, v *pb.GrpcVM, config VMConfig) (*VM, error) {
 	virtLog.WithField("GrpcVM", v).WithField("config", config).Info("create new vm from Grpc")
 
-	hypervisor, err := newHypervisor(config.HypervisorType)
+	hypervisor, err := NewHypervisor(config.HypervisorType)
 	if err != nil {
 		return nil, err
 	}
@@ -262,7 +262,7 @@ func (v *VM) Stop(ctx context.Context) error {
 func (v *VM) AddCPUs(ctx context.Context, num uint32) error {
 	if num > 0 {
 		v.logger().Infof("hot adding %d vCPUs", num)
-		if _, err := v.hypervisor.hotplugAddDevice(ctx, num, cpuDev); err != nil {
+		if _, err := v.hypervisor.hotplugAddDevice(ctx, num, CpuDev); err != nil {
 			return err
 		}
 		v.cpuDelta += num
@@ -276,8 +276,8 @@ func (v *VM) AddCPUs(ctx context.Context, num uint32) error {
 func (v *VM) AddMemory(ctx context.Context, numMB uint32) error {
 	if numMB > 0 {
 		v.logger().Infof("hot adding %d MB memory", numMB)
-		dev := &memoryDevice{1, int(numMB), 0, false}
-		if _, err := v.hypervisor.hotplugAddDevice(ctx, dev, memoryDev); err != nil {
+		dev := &MemoryDevice{1, int(numMB), 0, false}
+		if _, err := v.hypervisor.hotplugAddDevice(ctx, dev, MemoryDev); err != nil {
 			return err
 		}
 	}
@@ -381,7 +381,7 @@ func (v *VM) ToGrpc(ctx context.Context, config VMConfig) (*pb.GrpcVM, error) {
 
 func (v *VM) GetVMStatus() *pb.GrpcVMStatus {
 	return &pb.GrpcVMStatus{
-		Pid:    int64(getHypervisorPid(v.hypervisor)),
+		Pid:    int64(GetHypervisorPid(v.hypervisor)),
 		Cpu:    v.cpu,
 		Memory: v.memory,
 	}

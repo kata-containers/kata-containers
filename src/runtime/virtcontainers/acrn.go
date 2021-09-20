@@ -284,7 +284,7 @@ func (a *Acrn) setup(ctx context.Context, id string, hypervisorConfig *Hyperviso
 	span, _ := katatrace.Trace(ctx, a.Logger(), "setup", acrnTracingTags, map[string]string{"sandbox_id": a.id})
 	defer span.End()
 
-	err := hypervisorConfig.valid()
+	err := hypervisorConfig.Valid()
 	if err != nil {
 		return err
 	}
@@ -543,12 +543,12 @@ func (a *Acrn) updateBlockDevice(drive *config.BlockDrive) error {
 	return err
 }
 
-func (a *Acrn) hotplugAddDevice(ctx context.Context, devInfo interface{}, devType deviceType) (interface{}, error) {
+func (a *Acrn) hotplugAddDevice(ctx context.Context, devInfo interface{}, devType DeviceType) (interface{}, error) {
 	span, _ := katatrace.Trace(ctx, a.Logger(), "hotplugAddDevice", acrnTracingTags, map[string]string{"sandbox_id": a.id})
 	defer span.End()
 
 	switch devType {
-	case blockDev:
+	case BlockDev:
 		//The drive placeholder has to exist prior to Update
 		return nil, a.updateBlockDevice(devInfo.(*config.BlockDrive))
 	default:
@@ -557,7 +557,7 @@ func (a *Acrn) hotplugAddDevice(ctx context.Context, devInfo interface{}, devTyp
 	}
 }
 
-func (a *Acrn) hotplugRemoveDevice(ctx context.Context, devInfo interface{}, devType deviceType) (interface{}, error) {
+func (a *Acrn) hotplugRemoveDevice(ctx context.Context, devInfo interface{}, devType DeviceType) (interface{}, error) {
 	span, _ := katatrace.Trace(ctx, a.Logger(), "hotplugRemoveDevice", acrnTracingTags, map[string]string{"sandbox_id": a.id})
 	defer span.End()
 
@@ -585,7 +585,7 @@ func (a *Acrn) resumeSandbox(ctx context.Context) error {
 }
 
 // addDevice will add extra devices to acrn command line.
-func (a *Acrn) addDevice(ctx context.Context, devInfo interface{}, devType deviceType) error {
+func (a *Acrn) addDevice(ctx context.Context, devInfo interface{}, devType DeviceType) error {
 	var err error
 	span, _ := katatrace.Trace(ctx, a.Logger(), "addDevice", acrnTracingTags, map[string]string{"sandbox_id": a.id})
 	defer span.End()
@@ -646,18 +646,18 @@ func (a *Acrn) disconnect(ctx context.Context) {
 	// Not supported.
 }
 
-func (a *Acrn) getThreadIDs(ctx context.Context) (vcpuThreadIDs, error) {
+func (a *Acrn) getThreadIDs(ctx context.Context) (VcpuThreadIDs, error) {
 	span, _ := katatrace.Trace(ctx, a.Logger(), "getThreadIDs", acrnTracingTags, map[string]string{"sandbox_id": a.id})
 	defer span.End()
 
 	// Not supported. return success
 	//Just allocating an empty map
 
-	return vcpuThreadIDs{}, nil
+	return VcpuThreadIDs{}, nil
 }
 
-func (a *Acrn) resizeMemory(ctx context.Context, reqMemMB uint32, memoryBlockSizeMB uint32, probe bool) (uint32, memoryDevice, error) {
-	return 0, memoryDevice{}, nil
+func (a *Acrn) resizeMemory(ctx context.Context, reqMemMB uint32, memoryBlockSizeMB uint32, probe bool) (uint32, MemoryDevice, error) {
+	return 0, MemoryDevice{}, nil
 }
 
 func (a *Acrn) resizeVCPUs(ctx context.Context, reqVCPUs uint32) (currentVCPUs uint32, newVCPUs uint32, err error) {

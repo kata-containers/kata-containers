@@ -82,7 +82,7 @@ func (endpoint *TuntapEndpoint) Attach(ctx context.Context, s *Sandbox) error {
 		return err
 	}
 
-	return h.addDevice(ctx, endpoint, netDev)
+	return h.addDevice(ctx, endpoint, NetDev)
 }
 
 // Detach for the tun/tap endpoint tears down the tap
@@ -112,7 +112,7 @@ func (endpoint *TuntapEndpoint) HotAttach(ctx context.Context, h hypervisor) err
 		return err
 	}
 
-	if _, err := h.hotplugAddDevice(ctx, endpoint, netDev); err != nil {
+	if _, err := h.hotplugAddDevice(ctx, endpoint, NetDev); err != nil {
 		networkLogger().WithError(err).Error("Error attach tun/tap ep")
 		return err
 	}
@@ -132,7 +132,7 @@ func (endpoint *TuntapEndpoint) HotDetach(ctx context.Context, h hypervisor, net
 		networkLogger().WithError(err).Warn("Error un-bridging tun/tap ep")
 	}
 
-	if _, err := h.hotplugRemoveDevice(ctx, endpoint, netDev); err != nil {
+	if _, err := h.hotplugRemoveDevice(ctx, endpoint, NetDev); err != nil {
 		networkLogger().WithError(err).Error("Error detach tun/tap ep")
 		return err
 	}

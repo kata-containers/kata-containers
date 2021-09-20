@@ -67,7 +67,7 @@ func TestStringFromUnknownHypervisorType(t *testing.T) {
 
 func testNewHypervisorFromHypervisorType(t *testing.T, hypervisorType HypervisorType, expected hypervisor) {
 	assert := assert.New(t)
-	hy, err := newHypervisor(hypervisorType)
+	hy, err := NewHypervisor(hypervisorType)
 	assert.NoError(err)
 	assert.Exactly(hy, expected)
 }
@@ -82,13 +82,13 @@ func TestNewHypervisorFromUnknownHypervisorType(t *testing.T) {
 	var hypervisorType HypervisorType
 	assert := assert.New(t)
 
-	hy, err := newHypervisor(hypervisorType)
+	hy, err := NewHypervisor(hypervisorType)
 	assert.Error(err)
 	assert.Nil(hy)
 }
 
 func testHypervisorConfigValid(t *testing.T, hypervisorConfig *HypervisorConfig, success bool) {
-	err := hypervisorConfig.valid()
+	err := hypervisorConfig.Valid()
 	assert := assert.New(t)
 	assert.False(success && err != nil)
 	assert.False(!success && err == nil)
@@ -385,7 +385,7 @@ func TestGetHostMemorySizeKb(t *testing.T) {
 	defer os.RemoveAll(dir)
 
 	file := filepath.Join(dir, "meminfo")
-	_, err = getHostMemorySizeKb(file)
+	_, err = GetHostMemorySizeKb(file)
 	assert.Error(err)
 
 	for _, d := range data {
@@ -393,7 +393,7 @@ func TestGetHostMemorySizeKb(t *testing.T) {
 		assert.NoError(err)
 		defer os.Remove(file)
 
-		hostMemKb, err := getHostMemorySizeKb(file)
+		hostMemKb, err := GetHostMemorySizeKb(file)
 
 		assert.False((d.expectError && err == nil))
 		assert.False((!d.expectError && err != nil))

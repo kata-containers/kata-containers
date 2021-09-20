@@ -471,11 +471,11 @@ func (k *kataAgent) configure(ctx context.Context, h hypervisor, id, sharePath s
 
 	switch s := k.vmSocket.(type) {
 	case types.VSock:
-		if err = h.addDevice(ctx, s, vSockPCIDev); err != nil {
+		if err = h.addDevice(ctx, s, VSockPCIDev); err != nil {
 			return err
 		}
 	case types.HybridVSock:
-		err = h.addDevice(ctx, s, hybridVirtioVsockDev)
+		err = h.addDevice(ctx, s, HybridVirtioVsockDev)
 		if err != nil {
 			return err
 		}
@@ -502,7 +502,7 @@ func (k *kataAgent) configure(ctx context.Context, h hypervisor, id, sharePath s
 		return err
 	}
 
-	return h.addDevice(ctx, sharedVolume, fsDev)
+	return h.addDevice(ctx, sharedVolume, FsDev)
 }
 
 func (k *kataAgent) configureFromGrpc(ctx context.Context, h hypervisor, id string, config KataAgentConfig) error {

@@ -101,7 +101,7 @@ func (endpoint *TapEndpoint) HotAttach(ctx context.Context, h hypervisor) error 
 		return err
 	}
 
-	if _, err := h.hotplugAddDevice(ctx, endpoint, netDev); err != nil {
+	if _, err := h.hotplugAddDevice(ctx, endpoint, NetDev); err != nil {
 		networkLogger().WithError(err).Error("Error attach tap ep")
 		return err
 	}
@@ -121,7 +121,7 @@ func (endpoint *TapEndpoint) HotDetach(ctx context.Context, h hypervisor, netNsC
 		networkLogger().WithError(err).Warn("Error un-bridging tap ep")
 	}
 
-	if _, err := h.hotplugRemoveDevice(ctx, endpoint, netDev); err != nil {
+	if _, err := h.hotplugRemoveDevice(ctx, endpoint, NetDev); err != nil {
 		networkLogger().WithError(err).Error("Error detach tap ep")
 		return err
 	}

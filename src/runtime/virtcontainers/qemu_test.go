@@ -171,7 +171,7 @@ func TestQemuMemoryTopology(t *testing.T) {
 		},
 	}
 
-	hostMemKb, err := getHostMemorySizeKb(procMemInfo)
+	hostMemKb, err := GetHostMemorySizeKb(procMemInfo)
 	assert.NoError(err)
 	memMax := fmt.Sprintf("%dM", int(float64(hostMemKb)/1024))
 
@@ -204,7 +204,7 @@ func TestQemuKnobs(t *testing.T) {
 	assert.Equal(q.qemuConfig.Knobs.NoReboot, true)
 }
 
-func testQemuAddDevice(t *testing.T, devInfo interface{}, devType deviceType, expected []govmmQemu.Device) {
+func testQemuAddDevice(t *testing.T, devInfo interface{}, devType DeviceType, expected []govmmQemu.Device) {
 	assert := assert.New(t)
 	q := &qemu{
 		ctx:  context.Background(),
@@ -237,7 +237,7 @@ func TestQemuAddDeviceFsDev(t *testing.T) {
 		HostPath: hostPath,
 	}
 
-	testQemuAddDevice(t, volume, fsDev, expectedOut)
+	testQemuAddDevice(t, volume, FsDev, expectedOut)
 }
 
 func TestQemuAddDeviceVhostUserBlk(t *testing.T) {
@@ -258,7 +258,7 @@ func TestQemuAddDeviceVhostUserBlk(t *testing.T) {
 		Type:       config.VhostUserBlk,
 	}
 
-	testQemuAddDevice(t, vDevice, vhostuserDev, expectedOut)
+	testQemuAddDevice(t, vDevice, VhostuserDev, expectedOut)
 }
 
 func TestQemuAddDeviceSerialPortDev(t *testing.T) {
@@ -285,7 +285,7 @@ func TestQemuAddDeviceSerialPortDev(t *testing.T) {
 		Name:     name,
 	}
 
-	testQemuAddDevice(t, socket, serialPortDev, expectedOut)
+	testQemuAddDevice(t, socket, SerialPortDev, expectedOut)
 }
 
 func TestQemuAddDeviceKataVSOCK(t *testing.T) {
@@ -318,7 +318,7 @@ func TestQemuAddDeviceKataVSOCK(t *testing.T) {
 		VhostFd:   vsockFile,
 	}
 
-	testQemuAddDevice(t, vsock, vSockPCIDev, expectedOut)
+	testQemuAddDevice(t, vsock, VSockPCIDev, expectedOut)
 }
 
 func TestQemuGetSandboxConsole(t *testing.T) {
@@ -401,9 +401,9 @@ func TestHotplugUnsupportedDeviceType(t *testing.T) {
 		config: qemuConfig,
 	}
 
-	_, err := q.hotplugAddDevice(context.Background(), &memoryDevice{0, 128, uint64(0), false}, fsDev)
+	_, err := q.hotplugAddDevice(context.Background(), &MemoryDevice{0, 128, uint64(0), false}, FsDev)
 	assert.Error(err)
-	_, err = q.hotplugRemoveDevice(context.Background(), &memoryDevice{0, 128, uint64(0), false}, fsDev)
+	_, err = q.hotplugRemoveDevice(context.Background(), &MemoryDevice{0, 128, uint64(0), false}, FsDev)
 	assert.Error(err)
 }
 

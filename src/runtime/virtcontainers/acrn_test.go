@@ -82,7 +82,7 @@ func TestAcrnCapabilities(t *testing.T) {
 	assert.True(caps.IsBlockDeviceHotplugSupported())
 }
 
-func testAcrnAddDevice(t *testing.T, devInfo interface{}, devType deviceType, expected []Device) {
+func testAcrnAddDevice(t *testing.T, devInfo interface{}, devType DeviceType, expected []Device) {
 	assert := assert.New(t)
 	a := &Acrn{
 		ctx:  context.Background(),
@@ -112,7 +112,7 @@ func TestAcrnAddDeviceSerialPortDev(t *testing.T) {
 		Name:     name,
 	}
 
-	testAcrnAddDevice(t, socket, serialPortDev, expectedOut)
+	testAcrnAddDevice(t, socket, SerialPortDev, expectedOut)
 }
 
 func TestAcrnAddDeviceBlockDev(t *testing.T) {
@@ -131,7 +131,7 @@ func TestAcrnAddDeviceBlockDev(t *testing.T) {
 		Index: index,
 	}
 
-	testAcrnAddDevice(t, drive, blockDev, expectedOut)
+	testAcrnAddDevice(t, drive, BlockDev, expectedOut)
 }
 
 func TestAcrnHotplugUnsupportedDeviceType(t *testing.T) {
@@ -144,7 +144,7 @@ func TestAcrnHotplugUnsupportedDeviceType(t *testing.T) {
 		config: acrnConfig,
 	}
 
-	_, err := a.hotplugAddDevice(a.ctx, &memoryDevice{0, 128, uint64(0), false}, fsDev)
+	_, err := a.hotplugAddDevice(a.ctx, &MemoryDevice{0, 128, uint64(0), false}, FsDev)
 	assert.Error(err)
 }
 

@@ -31,7 +31,7 @@ func (m *mockHypervisor) hypervisorConfig() HypervisorConfig {
 }
 
 func (m *mockHypervisor) createSandbox(ctx context.Context, id string, networkNS NetworkNamespace, hypervisorConfig *HypervisorConfig) error {
-	err := hypervisorConfig.valid()
+	err := hypervisorConfig.Valid()
 	if err != nil {
 		return err
 	}
@@ -59,26 +59,26 @@ func (m *mockHypervisor) saveSandbox() error {
 	return nil
 }
 
-func (m *mockHypervisor) addDevice(ctx context.Context, devInfo interface{}, devType deviceType) error {
+func (m *mockHypervisor) addDevice(ctx context.Context, devInfo interface{}, devType DeviceType) error {
 	return nil
 }
 
-func (m *mockHypervisor) hotplugAddDevice(ctx context.Context, devInfo interface{}, devType deviceType) (interface{}, error) {
+func (m *mockHypervisor) hotplugAddDevice(ctx context.Context, devInfo interface{}, devType DeviceType) (interface{}, error) {
 	switch devType {
-	case cpuDev:
+	case CpuDev:
 		return devInfo.(uint32), nil
-	case memoryDev:
-		memdev := devInfo.(*memoryDevice)
-		return memdev.sizeMB, nil
+	case MemoryDev:
+		memdev := devInfo.(*MemoryDevice)
+		return memdev.SizeMB, nil
 	}
 	return nil, nil
 }
 
-func (m *mockHypervisor) hotplugRemoveDevice(ctx context.Context, devInfo interface{}, devType deviceType) (interface{}, error) {
+func (m *mockHypervisor) hotplugRemoveDevice(ctx context.Context, devInfo interface{}, devType DeviceType) (interface{}, error) {
 	switch devType {
-	case cpuDev:
+	case CpuDev:
 		return devInfo.(uint32), nil
-	case memoryDev:
+	case MemoryDev:
 		return 0, nil
 	}
 	return nil, nil
@@ -88,8 +88,8 @@ func (m *mockHypervisor) getSandboxConsole(ctx context.Context, sandboxID string
 	return "", "", nil
 }
 
-func (m *mockHypervisor) resizeMemory(ctx context.Context, memMB uint32, memorySectionSizeMB uint32, probe bool) (uint32, memoryDevice, error) {
-	return 0, memoryDevice{}, nil
+func (m *mockHypervisor) resizeMemory(ctx context.Context, memMB uint32, memorySectionSizeMB uint32, probe bool) (uint32, MemoryDevice, error) {
+	return 0, MemoryDevice{}, nil
 }
 func (m *mockHypervisor) resizeVCPUs(ctx context.Context, cpus uint32) (uint32, uint32, error) {
 	return 0, 0, nil
@@ -98,9 +98,9 @@ func (m *mockHypervisor) resizeVCPUs(ctx context.Context, cpus uint32) (uint32, 
 func (m *mockHypervisor) disconnect(ctx context.Context) {
 }
 
-func (m *mockHypervisor) getThreadIDs(ctx context.Context) (vcpuThreadIDs, error) {
+func (m *mockHypervisor) getThreadIDs(ctx context.Context) (VcpuThreadIDs, error) {
 	vcpus := map[int]int{0: os.Getpid()}
-	return vcpuThreadIDs{vcpus}, nil
+	return VcpuThreadIDs{vcpus}, nil
 }
 
 func (m *mockHypervisor) cleanup(ctx context.Context) error {
