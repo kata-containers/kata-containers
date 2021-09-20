@@ -103,7 +103,7 @@ func (endpoint *VethEndpoint) Attach(ctx context.Context, s *Sandbox) error {
 		return err
 	}
 
-	return h.addDevice(ctx, endpoint, netDev)
+	return h.addDevice(ctx, endpoint, NetDev)
 }
 
 // Detach for the veth endpoint tears down the tap and bridge
@@ -133,7 +133,7 @@ func (endpoint *VethEndpoint) HotAttach(ctx context.Context, h hypervisor) error
 		return err
 	}
 
-	if _, err := h.hotplugAddDevice(ctx, endpoint, netDev); err != nil {
+	if _, err := h.hotplugAddDevice(ctx, endpoint, NetDev); err != nil {
 		networkLogger().WithError(err).Error("Error attach virtual ep")
 		return err
 	}
@@ -155,7 +155,7 @@ func (endpoint *VethEndpoint) HotDetach(ctx context.Context, h hypervisor, netNs
 		networkLogger().WithError(err).Warn("Error un-bridging virtual ep")
 	}
 
-	if _, err := h.hotplugRemoveDevice(ctx, endpoint, netDev); err != nil {
+	if _, err := h.hotplugRemoveDevice(ctx, endpoint, NetDev); err != nil {
 		networkLogger().WithError(err).Error("Error detach virtual ep")
 		return err
 	}

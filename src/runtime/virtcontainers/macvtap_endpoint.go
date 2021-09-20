@@ -82,7 +82,7 @@ func (endpoint *MacvtapEndpoint) Attach(ctx context.Context, s *Sandbox) error {
 		endpoint.VhostFds = vhostFds
 	}
 
-	return h.addDevice(ctx, endpoint, netDev)
+	return h.addDevice(ctx, endpoint, NetDev)
 }
 
 // Detach for macvtap endpoint does nothing.
