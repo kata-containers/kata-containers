@@ -863,7 +863,7 @@ type hypervisor interface {
 	// If wait is set, don't actively stop the sandbox:
 	// just perform cleanup.
 	stopSandbox(ctx context.Context, waitOnly bool) error
-	pauseSandbox(ctx context.Context) error
+	PauseVM(ctx context.Context) error
 	saveSandbox() error
 	resumeSandbox(ctx context.Context) error
 	AddDevice(ctx context.Context, devInfo interface{}, devType DeviceType) error

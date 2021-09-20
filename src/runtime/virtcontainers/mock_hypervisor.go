@@ -47,7 +47,7 @@ func (m *mockHypervisor) stopSandbox(ctx context.Context, waitOnly bool) error {
 	return nil
 }
 
-func (m *mockHypervisor) pauseSandbox(ctx context.Context) error {
+func (m *mockHypervisor) PauseVM(ctx context.Context) error {
 	return nil
 }
 

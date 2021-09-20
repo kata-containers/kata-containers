@@ -1872,8 +1872,8 @@ func (q *qemu) hotplugAddMemory(memDev *MemoryDevice) (int, error) {
 	return memDev.SizeMB, nil
 }
 
-func (q *qemu) pauseSandbox(ctx context.Context) error {
-	span, ctx := katatrace.Trace(ctx, q.Logger(), "pauseSandbox", qemuTracingTags, map[string]string{"sandbox_id": q.id})
+func (q *qemu) PauseVM(ctx context.Context) error {
+	span, ctx := katatrace.Trace(ctx, q.Logger(), "PauseVM", qemuTracingTags, map[string]string{"sandbox_id": q.id})
 	defer span.End()
 
 	return q.togglePauseSandbox(ctx, true)

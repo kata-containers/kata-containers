@@ -685,8 +685,8 @@ func (clh *cloudHypervisor) Cleanup(ctx context.Context) error {
 	return nil
 }
 
-func (clh *cloudHypervisor) pauseSandbox(ctx context.Context) error {
-	clh.Logger().WithField("function", "pauseSandbox").Info("Pause Sandbox")
+func (clh *cloudHypervisor) PauseVM(ctx context.Context) error {
+	clh.Logger().WithField("function", "PauseVM").Info("Pause Sandbox")
 	return nil
 }
 
