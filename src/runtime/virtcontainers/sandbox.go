@@ -979,7 +979,7 @@ func newConsoleWatcher(ctx context.Context, s *Sandbox) (*consoleWatcher, error)
 		cw  consoleWatcher
 	)
 
-	cw.proto, cw.consoleURL, err = s.hypervisor.GetSandboxConsole(ctx, s.id)
+	cw.proto, cw.consoleURL, err = s.hypervisor.GetVMConsole(ctx, s.id)
 	if err != nil {
 		return nil, err
 	}

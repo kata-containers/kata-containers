@@ -871,7 +871,7 @@ type hypervisor interface {
 	HotplugRemoveDevice(ctx context.Context, devInfo interface{}, devType DeviceType) (interface{}, error)
 	ResizeMemory(ctx context.Context, memMB uint32, memoryBlockSizeMB uint32, probe bool) (uint32, MemoryDevice, error)
 	ResizeVCPUs(ctx context.Context, vcpus uint32) (uint32, uint32, error)
-	GetSandboxConsole(ctx context.Context, sandboxID string) (string, string, error)
+	GetVMConsole(ctx context.Context, sandboxID string) (string, string, error)
 	Disconnect(ctx context.Context)
 	Capabilities(ctx context.Context) types.Capabilities
 	HypervisorConfig() HypervisorConfig

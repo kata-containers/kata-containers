@@ -84,7 +84,7 @@ func (m *mockHypervisor) HotplugRemoveDevice(ctx context.Context, devInfo interf
 	return nil, nil
 }
 
-func (m *mockHypervisor) GetSandboxConsole(ctx context.Context, sandboxID string) (string, string, error) {
+func (m *mockHypervisor) GetVMConsole(ctx context.Context, sandboxID string) (string, string, error) {
 	return "", "", nil
 }
 

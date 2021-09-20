@@ -412,8 +412,8 @@ func (clh *cloudHypervisor) startSandbox(ctx context.Context, timeout int) error
 
 // getSandboxConsole builds the path of the console where we can read
 // logs coming from the sandbox.
-func (clh *cloudHypervisor) GetSandboxConsole(ctx context.Context, id string) (string, string, error) {
-	clh.Logger().WithField("function", "GetSandboxConsole").WithField("id", id).Info("Get Sandbox Console")
+func (clh *cloudHypervisor) GetVMConsole(ctx context.Context, id string) (string, string, error) {
+	clh.Logger().WithField("function", "GetVMConsole").WithField("id", id).Info("Get Sandbox Console")
 	master, slave, err := console.NewPty()
 	if err != nil {
 		clh.Logger().WithError(err).Error("Error create pseudo tty")

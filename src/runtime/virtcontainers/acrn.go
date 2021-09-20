@@ -248,7 +248,7 @@ func (a *Acrn) buildDevices(ctx context.Context, imagePath string) ([]Device, er
 		return nil, fmt.Errorf("Image Path should not be empty: %s", imagePath)
 	}
 
-	_, console, err := a.GetSandboxConsole(ctx, a.id)
+	_, console, err := a.GetVMConsole(ctx, a.id)
 	if err != nil {
 		return nil, err
 	}
@@ -619,8 +619,8 @@ func (a *Acrn) AddDevice(ctx context.Context, devInfo interface{}, devType Devic
 
 // getSandboxConsole builds the path of the console where we can read
 // logs coming from the sandbox.
-func (a *Acrn) GetSandboxConsole(ctx context.Context, id string) (string, string, error) {
-	span, _ := katatrace.Trace(ctx, a.Logger(), "GetSandboxConsole", acrnTracingTags, map[string]string{"sandbox_id": a.id})
+func (a *Acrn) GetVMConsole(ctx context.Context, id string) (string, string, error) {
+	span, _ := katatrace.Trace(ctx, a.Logger(), "GetVMConsole", acrnTracingTags, map[string]string{"sandbox_id": a.id})
 	defer span.End()
 
 	consoleURL, err := utils.BuildSocketPath(a.store.RunVMStoragePath(), id, acrnConsoleSocket)

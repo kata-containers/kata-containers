@@ -205,7 +205,7 @@ func TestAcrnGetSandboxConsole(t *testing.T) {
 	sandboxID := "testSandboxID"
 	expected := filepath.Join(a.store.RunVMStoragePath(), sandboxID, consoleSocket)
 
-	proto, result, err := a.GetSandboxConsole(a.ctx, sandboxID)
+	proto, result, err := a.GetVMConsole(a.ctx, sandboxID)
 	assert.NoError(err)
 	assert.Equal(result, expected)
 	assert.Equal(proto, consoleProtoUnix)

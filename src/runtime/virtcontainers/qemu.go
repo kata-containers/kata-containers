@@ -228,6 +228,7 @@ func (q *qemu) setup(ctx context.Context, id string, hypervisorConfig *Hyperviso
 	span, _ := katatrace.Trace(ctx, q.Logger(), "setup", qemuTracingTags, map[string]string{"sandbox_id": q.id})
 	defer span.End()
 
+	//MRC: Has Kata specific logic
 	err := hypervisorConfig.Valid()
 	if err != nil {
 		return err
@@ -386,7 +387,7 @@ func (q *qemu) createQmpSocket() ([]govmmQemu.QMPSocket, error) {
 func (q *qemu) buildDevices(ctx context.Context, initrdPath string) ([]govmmQemu.Device, *govmmQemu.IOThread, error) {
 	var devices []govmmQemu.Device
 
-	_, console, err := q.GetSandboxConsole(ctx, q.id)
+	_, console, err := q.GetVMConsole(ctx, q.id)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -471,6 +472,7 @@ func (q *qemu) createSandbox(ctx context.Context, id string, networkNS NetworkNa
 	span, ctx := katatrace.Trace(ctx, q.Logger(), "createSandbox", qemuTracingTags, map[string]string{"sandbox_id": q.id})
 	defer span.End()
 
+	// Has Kata Specific logic: See within
 	if err := q.setup(ctx, id, hypervisorConfig); err != nil {
 		return err
 	}
@@ -500,6 +502,7 @@ func (q *qemu) createSandbox(ctx context.Context, id string, networkNS NetworkNa
 		IOMMUPlatform: q.config.IOMMUPlatform,
 	}
 
+	// MRC: Kata specific
 	kernelPath, err := q.config.KernelAssetPath()
 	if err != nil {
 		return err
@@ -1944,8 +1947,8 @@ func (q *qemu) AddDevice(ctx context.Context, devInfo interface{}, devType Devic
 
 // getSandboxConsole builds the path of the console where we can read
 // logs coming from the sandbox.
-func (q *qemu) GetSandboxConsole(ctx context.Context, id string) (string, string, error) {
-	span, _ := katatrace.Trace(ctx, q.Logger(), "GetSandboxConsole", qemuTracingTags, map[string]string{"sandbox_id": q.id})
+func (q *qemu) GetVMConsole(ctx context.Context, id string) (string, string, error) {
+	span, _ := katatrace.Trace(ctx, q.Logger(), "GetVMConsole", qemuTracingTags, map[string]string{"sandbox_id": q.id})
 	defer span.End()
 
 	consoleURL, err := utils.BuildSocketPath(q.store.RunVMStoragePath(), id, consoleSocket)
