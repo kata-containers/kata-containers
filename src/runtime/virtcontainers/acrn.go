@@ -577,8 +577,8 @@ func (a *Acrn) HotplugRemoveDevice(ctx context.Context, devInfo interface{}, dev
 	return nil, nil
 }
 
-func (a *Acrn) pauseSandbox(ctx context.Context) error {
-	span, _ := katatrace.Trace(ctx, a.Logger(), "pauseSandbox", acrnTracingTags, map[string]string{"sandbox_id": a.id})
+func (a *Acrn) PauseVM(ctx context.Context) error {
+	span, _ := katatrace.Trace(ctx, a.Logger(), "PauseVM", acrnTracingTags, map[string]string{"sandbox_id": a.id})
 	defer span.End()
 
 	// Not supported. return success
