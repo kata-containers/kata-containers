@@ -591,7 +591,7 @@ func TestConstraintGRPCSpec(t *testing.T) {
 	k := kataAgent{}
 	k.constraintGRPCSpec(g, true)
 
-	// check nil fields
+	// Check nil fields
 	assert.Nil(g.Hooks)
 	assert.NotNil(g.Linux.Seccomp)
 	assert.Nil(g.Linux.Resources.Devices)
@@ -603,17 +603,17 @@ func TestConstraintGRPCSpec(t *testing.T) {
 	assert.NotNil(g.Linux.Resources.CPU)
 	assert.Equal(g.Process.SelinuxLabel, "")
 
-	// check namespaces
+	// Check namespaces
 	assert.Len(g.Linux.Namespaces, 1)
 	assert.Empty(g.Linux.Namespaces[0].Path)
 
-	// check mounts
+	// Check mounts
 	assert.Len(g.Mounts, 1)
 
-	// check cgroup path
+	// Check cgroup path
 	assert.Equal(expectedCgroupPath, g.Linux.CgroupsPath)
 
-	// check Linux devices
+	// Check Linux devices
 	assert.Empty(g.Linux.Devices)
 }
 
@@ -966,7 +966,7 @@ func TestKataCleanupSandbox(t *testing.T) {
 
 	kataHostSharedDirSaved := kataHostSharedDir
 	kataHostSharedDir = func() string {
-		td, _ := ioutil.TempDir("", "kata-cleanup")
+		td, _ := ioutil.TempDir("", "kata-Cleanup")
 		return td
 	}
 	defer func() {
@@ -1123,7 +1123,7 @@ func TestSandboxBindMount(t *testing.T) {
 
 	// create a new shared directory for our test:
 	kataHostSharedDirSaved := kataHostSharedDir
-	testHostDir, err := ioutil.TempDir("", "kata-cleanup")
+	testHostDir, err := ioutil.TempDir("", "kata-Cleanup")
 	assert.NoError(err)
 	kataHostSharedDir = func() string {
 		return testHostDir
@@ -1175,11 +1175,11 @@ func TestSandboxBindMount(t *testing.T) {
 	err = k.setupSandboxBindMounts(context.Background(), sandbox)
 	assert.NoError(err)
 
-	// Test the cleanup function. We expect it to succeed for the mount to be removed.
+	// Test the Cleanup function. We expect it to succeed for the mount to be removed.
 	err = k.cleanupSandboxBindMounts(sandbox)
 	assert.NoError(err)
 
-	// After successful cleanup, verify there are not any mounts left behind.
+	// After successful Cleanup, verify there are not any mounts left behind.
 	stat := syscall.Stat_t{}
 	mount1CheckPath := filepath.Join(getMountPath(sandbox.id), sandboxMountsDir, filepath.Base(m1Path))
 	err = syscall.Stat(mount1CheckPath, &stat)
@@ -1191,16 +1191,16 @@ func TestSandboxBindMount(t *testing.T) {
 	assert.Error(err)
 	assert.True(os.IsNotExist(err))
 
-	// Now, let's setup the cleanup to fail. Setup the sandbox bind mount twice, which will result in
+	// Now, let's setup the Cleanup to fail. Setup the sandbox bind mount twice, which will result in
 	// extra mounts being present that the sandbox description doesn't account for (ie, duplicate mounts).
-	// We expect cleanup to fail on the first time, since it cannot remove the sandbox-bindmount directory because
+	// We expect Cleanup to fail on the first time, since it cannot remove the sandbox-bindmount directory because
 	// there are leftover mounts.   If we run it a second time, however, it should succeed since it'll remove the
 	// second set of mounts:
 	err = k.setupSandboxBindMounts(context.Background(), sandbox)
 	assert.NoError(err)
 	err = k.setupSandboxBindMounts(context.Background(), sandbox)
 	assert.NoError(err)
-	// Test the cleanup function. We expect it to succeed for the mount to be removed.
+	// Test the Cleanup function. We expect it to succeed for the mount to be removed.
 	err = k.cleanupSandboxBindMounts(sandbox)
 	assert.Error(err)
 	err = k.cleanupSandboxBindMounts(sandbox)

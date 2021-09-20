@@ -103,7 +103,7 @@ func (endpoint *IPVlanEndpoint) Attach(ctx context.Context, s *Sandbox) error {
 		return err
 	}
 
-	return h.addDevice(ctx, endpoint, NetDev)
+	return h.AddDevice(ctx, endpoint, NetDev)
 }
 
 // Detach for the ipvlan endpoint tears down the tap and bridge

@@ -20,13 +20,13 @@ type mockHypervisor struct {
 	mockPid int
 }
 
-func (m *mockHypervisor) capabilities(ctx context.Context) types.Capabilities {
+func (m *mockHypervisor) Capabilities(ctx context.Context) types.Capabilities {
 	caps := types.Capabilities{}
 	caps.SetFsSharingSupport()
 	return caps
 }
 
-func (m *mockHypervisor) hypervisorConfig() HypervisorConfig {
+func (m *mockHypervisor) HypervisorConfig() HypervisorConfig {
 	return HypervisorConfig{}
 }
 
@@ -66,11 +66,11 @@ func (m *mockHypervisor) saveSandbox() error {
 	return nil
 }
 
-func (m *mockHypervisor) addDevice(ctx context.Context, devInfo interface{}, devType DeviceType) error {
+func (m *mockHypervisor) AddDevice(ctx context.Context, devInfo interface{}, devType DeviceType) error {
 	return nil
 }
 
-func (m *mockHypervisor) hotplugAddDevice(ctx context.Context, devInfo interface{}, devType DeviceType) (interface{}, error) {
+func (m *mockHypervisor) HotplugAddDevice(ctx context.Context, devInfo interface{}, devType DeviceType) (interface{}, error) {
 	switch devType {
 	case CpuDev:
 		return devInfo.(uint32), nil
@@ -81,7 +81,7 @@ func (m *mockHypervisor) hotplugAddDevice(ctx context.Context, devInfo interface
 	return nil, nil
 }
 
-func (m *mockHypervisor) hotplugRemoveDevice(ctx context.Context, devInfo interface{}, devType DeviceType) (interface{}, error) {
+func (m *mockHypervisor) HotplugRemoveDevice(ctx context.Context, devInfo interface{}, devType DeviceType) (interface{}, error) {
 	switch devType {
 	case CpuDev:
 		return devInfo.(uint32), nil
@@ -91,34 +91,34 @@ func (m *mockHypervisor) hotplugRemoveDevice(ctx context.Context, devInfo interf
 	return nil, nil
 }
 
-func (m *mockHypervisor) getSandboxConsole(ctx context.Context, sandboxID string) (string, string, error) {
+func (m *mockHypervisor) GetSandboxConsole(ctx context.Context, sandboxID string) (string, string, error) {
 	return "", "", nil
 }
 
-func (m *mockHypervisor) resizeMemory(ctx context.Context, memMB uint32, memorySectionSizeMB uint32, probe bool) (uint32, MemoryDevice, error) {
+func (m *mockHypervisor) ResizeMemory(ctx context.Context, memMB uint32, memorySectionSizeMB uint32, probe bool) (uint32, MemoryDevice, error) {
 	return 0, MemoryDevice{}, nil
 }
-func (m *mockHypervisor) resizeVCPUs(ctx context.Context, cpus uint32) (uint32, uint32, error) {
+func (m *mockHypervisor) ResizeVCPUs(ctx context.Context, cpus uint32) (uint32, uint32, error) {
 	return 0, 0, nil
 }
 
-func (m *mockHypervisor) disconnect(ctx context.Context) {
+func (m *mockHypervisor) Disconnect(ctx context.Context) {
 }
 
-func (m *mockHypervisor) getThreadIDs(ctx context.Context) (VcpuThreadIDs, error) {
+func (m *mockHypervisor) GetThreadIDs(ctx context.Context) (VcpuThreadIDs, error) {
 	vcpus := map[int]int{0: os.Getpid()}
 	return VcpuThreadIDs{vcpus}, nil
 }
 
-func (m *mockHypervisor) cleanup(ctx context.Context) error {
+func (m *mockHypervisor) Cleanup(ctx context.Context) error {
 	return nil
 }
 
-func (m *mockHypervisor) getPids() []int {
+func (m *mockHypervisor) GetPids() []int {
 	return []int{m.mockPid}
 }
 
-func (m *mockHypervisor) getVirtioFsPid() *int {
+func (m *mockHypervisor) GetVirtioFsPid() *int {
 	return nil
 }
 
@@ -130,23 +130,23 @@ func (m *mockHypervisor) toGrpc(ctx context.Context) ([]byte, error) {
 	return nil, errors.New("mockHypervisor is not supported by VM cache")
 }
 
-func (m *mockHypervisor) save() (s persistapi.HypervisorState) {
+func (m *mockHypervisor) Save() (s persistapi.HypervisorState) {
 	return
 }
 
-func (m *mockHypervisor) load(s persistapi.HypervisorState) {}
+func (m *mockHypervisor) Load(s persistapi.HypervisorState) {}
 
-func (m *mockHypervisor) check() error {
+func (m *mockHypervisor) Check() error {
 	return nil
 }
 
-func (m *mockHypervisor) generateSocket(id string) (interface{}, error) {
+func (m *mockHypervisor) GenerateSocket(id string) (interface{}, error) {
 	return types.MockHybridVSock{
 		UdsPath: MockHybridVSockPath,
 	}, nil
 }
 
-func (m *mockHypervisor) isRateLimiterBuiltin() bool {
+func (m *mockHypervisor) IsRateLimiterBuiltin() bool {
 	return false
 }
 

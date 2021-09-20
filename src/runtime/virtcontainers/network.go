@@ -59,7 +59,7 @@ const (
 	// NetXConnectNoneModel can be used when the VM is in the host network namespace
 	NetXConnectNoneModel
 
-	// NetXConnectInvalidModel is the last item to check valid values by IsValid()
+	// NetXConnectInvalidModel is the last item to Check valid values by IsValid()
 	NetXConnectInvalidModel
 )
 
@@ -435,16 +435,16 @@ func xConnectVMNetwork(ctx context.Context, endpoint Endpoint, h hypervisor) err
 	netPair := endpoint.NetworkPair()
 
 	queues := 0
-	caps := h.capabilities(ctx)
+	caps := h.Capabilities(ctx)
 	if caps.IsMultiQueueSupported() {
-		queues = int(h.hypervisorConfig().NumVCPUs)
+		queues = int(h.HypervisorConfig().NumVCPUs)
 	}
 
 	var disableVhostNet bool
 	if rootless.IsRootless() {
 		disableVhostNet = true
 	} else {
-		disableVhostNet = h.hypervisorConfig().DisableVhostNet
+		disableVhostNet = h.HypervisorConfig().DisableVhostNet
 	}
 
 	if netPair.NetInterworkingModel == NetXConnectDefaultModel {
@@ -518,7 +518,7 @@ func createFds(device string, numFds int) ([]*os.File, error) {
 //
 // Till that bug is fixed we need to pick a random non conflicting index and try to
 // create a link. If that fails, we need to try with another.
-// All the kernel does not check if the link id conflicts with a link id on the host
+// All the kernel does not Check if the link id conflicts with a link id on the host
 // hence we need to offset the link id to prevent any overlaps with the host index
 //
 // Here the kernel will ensure that there is no race condition
@@ -1356,15 +1356,15 @@ func (n *Network) Add(ctx context.Context, config *NetworkConfig, s *Sandbox, ho
 				}
 			}
 
-			if !s.hypervisor.isRateLimiterBuiltin() {
-				rxRateLimiterMaxRate := s.hypervisor.hypervisorConfig().RxRateLimiterMaxRate
+			if !s.hypervisor.IsRateLimiterBuiltin() {
+				rxRateLimiterMaxRate := s.hypervisor.HypervisorConfig().RxRateLimiterMaxRate
 				if rxRateLimiterMaxRate > 0 {
 					networkLogger().Info("Add Rx Rate Limiter")
 					if err := addRxRateLimiter(endpoint, rxRateLimiterMaxRate); err != nil {
 						return err
 					}
 				}
-				txRateLimiterMaxRate := s.hypervisor.hypervisorConfig().TxRateLimiterMaxRate
+				txRateLimiterMaxRate := s.hypervisor.HypervisorConfig().TxRateLimiterMaxRate
 				if txRateLimiterMaxRate > 0 {
 					networkLogger().Info("Add Tx Rate Limiter")
 					if err := addTxRateLimiter(endpoint, txRateLimiterMaxRate); err != nil {
@@ -1560,7 +1560,7 @@ func addHTBQdisc(linkIndex int, maxRate uint64) error {
 // By redirecting interface ingress traffic to ifb and treat it as egress traffic there,
 // we could do network shaping to interface inbound traffic.
 func addIFBDevice() (int, error) {
-	// check whether host supports ifb
+	// Check whether host supports ifb
 	if ok, err := utils.SupportsIfb(); !ok {
 		return -1, err
 	}

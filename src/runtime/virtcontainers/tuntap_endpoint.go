@@ -82,7 +82,7 @@ func (endpoint *TuntapEndpoint) Attach(ctx context.Context, s *Sandbox) error {
 		return err
 	}
 
-	return h.addDevice(ctx, endpoint, NetDev)
+	return h.AddDevice(ctx, endpoint, NetDev)
 }
 
 // Detach for the tun/tap endpoint tears down the tap
@@ -107,12 +107,12 @@ func (endpoint *TuntapEndpoint) HotAttach(ctx context.Context, h hypervisor) err
 	span, ctx := tuntapTrace(ctx, "HotAttach", endpoint)
 	defer span.End()
 
-	if err := tuntapNetwork(endpoint, h.hypervisorConfig().NumVCPUs, h.hypervisorConfig().DisableVhostNet); err != nil {
+	if err := tuntapNetwork(endpoint, h.HypervisorConfig().NumVCPUs, h.HypervisorConfig().DisableVhostNet); err != nil {
 		networkLogger().WithError(err).Error("Error bridging tun/tap ep")
 		return err
 	}
 
-	if _, err := h.hotplugAddDevice(ctx, endpoint, NetDev); err != nil {
+	if _, err := h.HotplugAddDevice(ctx, endpoint, NetDev); err != nil {
 		networkLogger().WithError(err).Error("Error attach tun/tap ep")
 		return err
 	}
@@ -132,7 +132,7 @@ func (endpoint *TuntapEndpoint) HotDetach(ctx context.Context, h hypervisor, net
 		networkLogger().WithError(err).Warn("Error un-bridging tun/tap ep")
 	}
 
-	if _, err := h.hotplugRemoveDevice(ctx, endpoint, NetDev); err != nil {
+	if _, err := h.HotplugRemoveDevice(ctx, endpoint, NetDev); err != nil {
 		networkLogger().WithError(err).Error("Error detach tun/tap ep")
 		return err
 	}

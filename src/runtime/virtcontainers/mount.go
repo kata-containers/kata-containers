@@ -495,7 +495,7 @@ func isSecret(path string) bool {
 // files observed is greater than limit, break and return -1
 func countFiles(path string, limit int) (numFiles int, err error) {
 
-	// First, check to see if the path exists
+	// First, Check to see if the path exists
 	file, err := os.Stat(path)
 	if os.IsNotExist(err) {
 		return 0, err
@@ -531,7 +531,7 @@ func countFiles(path string, limit int) (numFiles int, err error) {
 func isWatchableMount(path string) bool {
 	if isSecret(path) || isConfigMap(path) {
 		// we have a cap on number of FDs which can be present in mount
-		// to determine if watchable. A similar check exists within the agent,
+		// to determine if watchable. A similar Check exists within the agent,
 		// which may or may not help handle case where extra files are added to
 		// a mount after the fact
 		count, _ := countFiles(path, 8)

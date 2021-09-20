@@ -59,7 +59,7 @@ func (s *Sandbox) dumpState(ss *persistapi.SandboxState, cs map[string]persistap
 }
 
 func (s *Sandbox) dumpHypervisor(ss *persistapi.SandboxState) {
-	ss.HypervisorState = s.hypervisor.save()
+	ss.HypervisorState = s.hypervisor.Save()
 	// BlockIndexMap will be moved from sandbox state to hypervisor state later
 	ss.HypervisorState.BlockIndexMap = s.state.BlockIndexMap
 }
@@ -316,7 +316,7 @@ func (c *Container) loadContState(cs persistapi.ContainerState) {
 }
 
 func (s *Sandbox) loadHypervisor(hs persistapi.HypervisorState) {
-	s.hypervisor.load(hs)
+	s.hypervisor.Load(hs)
 }
 
 func (s *Sandbox) loadAgent(as persistapi.AgentState) {
