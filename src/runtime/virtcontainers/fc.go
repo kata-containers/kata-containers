@@ -872,7 +872,7 @@ func (fc *firecracker) SaveVM() error {
 	return nil
 }
 
-func (fc *firecracker) resumeSandbox(ctx context.Context) error {
+func (fc *firecracker) ResumeVM(ctx context.Context) error {
 	return nil
 }
 

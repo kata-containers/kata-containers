@@ -1879,8 +1879,8 @@ func (q *qemu) PauseVM(ctx context.Context) error {
 	return q.togglePauseSandbox(ctx, true)
 }
 
-func (q *qemu) resumeSandbox(ctx context.Context) error {
-	span, ctx := katatrace.Trace(ctx, q.Logger(), "resumeSandbox", qemuTracingTags, map[string]string{"sandbox_id": q.id})
+func (q *qemu) ResumeVM(ctx context.Context) error {
+	span, ctx := katatrace.Trace(ctx, q.Logger(), "ResumeVM", qemuTracingTags, map[string]string{"sandbox_id": q.id})
 	defer span.End()
 
 	return q.togglePauseSandbox(ctx, false)
