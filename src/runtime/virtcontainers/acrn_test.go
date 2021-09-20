@@ -77,7 +77,7 @@ func TestAcrnCapabilities(t *testing.T) {
 		arch: &acrnArchBase{},
 	}
 
-	caps := a.capabilities(a.ctx)
+	caps := a.Capabilities(a.ctx)
 	assert.True(caps.IsBlockDeviceSupported())
 	assert.True(caps.IsBlockDeviceHotplugSupported())
 }
@@ -89,7 +89,7 @@ func testAcrnAddDevice(t *testing.T, devInfo interface{}, devType DeviceType, ex
 		arch: &acrnArchBase{},
 	}
 
-	err := a.addDevice(context.Background(), devInfo, devType)
+	err := a.AddDevice(context.Background(), devInfo, devType)
 	assert.NoError(err)
 	assert.Exactly(a.acrnConfig.Devices, expected)
 }
@@ -144,7 +144,7 @@ func TestAcrnHotplugUnsupportedDeviceType(t *testing.T) {
 		config: acrnConfig,
 	}
 
-	_, err := a.hotplugAddDevice(a.ctx, &MemoryDevice{0, 128, uint64(0), false}, FsDev)
+	_, err := a.HotplugAddDevice(a.ctx, &MemoryDevice{0, 128, uint64(0), false}, FsDev)
 	assert.Error(err)
 }
 
@@ -205,7 +205,7 @@ func TestAcrnGetSandboxConsole(t *testing.T) {
 	sandboxID := "testSandboxID"
 	expected := filepath.Join(a.store.RunVMStoragePath(), sandboxID, consoleSocket)
 
-	proto, result, err := a.getSandboxConsole(a.ctx, sandboxID)
+	proto, result, err := a.GetSandboxConsole(a.ctx, sandboxID)
 	assert.NoError(err)
 	assert.Equal(result, expected)
 	assert.Equal(proto, consoleProtoUnix)

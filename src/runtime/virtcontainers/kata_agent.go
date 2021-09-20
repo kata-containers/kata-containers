@@ -297,7 +297,7 @@ func (k *kataAgent) handleTraceSettings(config KataAgentConfig) bool {
 }
 
 func (k *kataAgent) init(ctx context.Context, sandbox *Sandbox, config KataAgentConfig) (disableVMShutdown bool, err error) {
-	// save
+	// Save
 	k.ctx = sandbox.ctx
 
 	span, _ := katatrace.Trace(ctx, k.Logger(), "init", kataAgentTracingTags)
@@ -327,7 +327,7 @@ func (k *kataAgent) agentURL() (string, error) {
 func (k *kataAgent) capabilities() types.Capabilities {
 	var caps types.Capabilities
 
-	// add all capabilities supported by agent
+	// add all Capabilities supported by agent
 	caps.SetBlockDeviceSupport()
 
 	return caps
@@ -338,7 +338,7 @@ func (k *kataAgent) internalConfigure(ctx context.Context, h hypervisor, id stri
 	defer span.End()
 
 	var err error
-	if k.vmSocket, err = h.generateSocket(id); err != nil {
+	if k.vmSocket, err = h.GenerateSocket(id); err != nil {
 		return err
 	}
 	k.keepConn = config.LongLiveConn
@@ -367,11 +367,11 @@ func (k *kataAgent) setupSandboxBindMounts(ctx context.Context, sandbox *Sandbox
 		if err != nil {
 			for _, mnt := range mountedList {
 				if derr := syscall.Unmount(mnt, syscall.MNT_DETACH|UmountNoFollow); derr != nil {
-					k.Logger().WithError(derr).Errorf("cleanup: couldn't unmount %s", mnt)
+					k.Logger().WithError(derr).Errorf("Cleanup: couldn't unmount %s", mnt)
 				}
 			}
 			if derr := os.RemoveAll(sandboxMountDir); derr != nil {
-				k.Logger().WithError(derr).Errorf("cleanup: failed to remove %s", sandboxMountDir)
+				k.Logger().WithError(derr).Errorf("Cleanup: failed to remove %s", sandboxMountDir)
 			}
 
 		}
@@ -432,11 +432,11 @@ func (k *kataAgent) configure(ctx context.Context, h hypervisor, id, sharePath s
 
 	switch s := k.vmSocket.(type) {
 	case types.VSock:
-		if err = h.addDevice(ctx, s, VSockPCIDev); err != nil {
+		if err = h.AddDevice(ctx, s, VSockPCIDev); err != nil {
 			return err
 		}
 	case types.HybridVSock:
-		err = h.addDevice(ctx, s, HybridVirtioVsockDev)
+		err = h.AddDevice(ctx, s, HybridVirtioVsockDev)
 		if err != nil {
 			return err
 		}
@@ -447,7 +447,7 @@ func (k *kataAgent) configure(ctx context.Context, h hypervisor, id, sharePath s
 
 	// Neither create shared directory nor add 9p device if hypervisor
 	// doesn't support filesystem sharing.
-	caps := h.capabilities(ctx)
+	caps := h.Capabilities(ctx)
 	if !caps.IsFsSharingSupported() {
 		return nil
 	}
@@ -463,7 +463,7 @@ func (k *kataAgent) configure(ctx context.Context, h hypervisor, id, sharePath s
 		return err
 	}
 
-	return h.addDevice(ctx, sharedVolume, FsDev)
+	return h.AddDevice(ctx, sharedVolume, FsDev)
 }
 
 func (k *kataAgent) configureFromGrpc(ctx context.Context, h hypervisor, id string, config KataAgentConfig) error {
@@ -781,7 +781,7 @@ func (k *kataAgent) startSandbox(ctx context.Context, sandbox *Sandbox) error {
 		return err
 	}
 
-	// check grpc server is serving
+	// Check grpc server is serving
 	if err = k.check(ctx); err != nil {
 		return err
 	}
@@ -853,7 +853,7 @@ func setupKernelModules(kmodules []string) []*grpc.KernelModule {
 
 func setupStorages(ctx context.Context, sandbox *Sandbox) []*grpc.Storage {
 	storages := []*grpc.Storage{}
-	caps := sandbox.hypervisor.capabilities(ctx)
+	caps := sandbox.hypervisor.Capabilities(ctx)
 
 	// append 9p shared volume to storages only if filesystem sharing is supported
 	if caps.IsFsSharingSupported() {
@@ -1849,7 +1849,7 @@ func (k *kataAgent) connect(ctx context.Context) error {
 }
 
 func (k *kataAgent) disconnect(ctx context.Context) error {
-	span, _ := katatrace.Trace(ctx, k.Logger(), "disconnect", kataAgentTracingTags)
+	span, _ := katatrace.Trace(ctx, k.Logger(), "Disconnect", kataAgentTracingTags)
 	defer span.End()
 
 	k.Lock()
@@ -1873,7 +1873,7 @@ func (k *kataAgent) disconnect(ctx context.Context) error {
 func (k *kataAgent) check(ctx context.Context) error {
 	_, err := k.sendReq(ctx, &grpc.CheckRequest{})
 	if err != nil {
-		err = fmt.Errorf("Failed to check if grpc server is working: %s", err)
+		err = fmt.Errorf("Failed to Check if grpc server is working: %s", err)
 	}
 	return err
 }
@@ -2200,12 +2200,12 @@ func (k *kataAgent) markDead(ctx context.Context) {
 
 func (k *kataAgent) cleanup(ctx context.Context, s *Sandbox) {
 	if err := k.cleanupSandboxBindMounts(s); err != nil {
-		k.Logger().WithError(err).Errorf("failed to cleanup sandbox bindmounts")
+		k.Logger().WithError(err).Errorf("failed to Cleanup sandbox bindmounts")
 	}
 
 	// Unmount shared path
 	path := getSharePath(s.id)
-	k.Logger().WithField("path", path).Infof("cleanup agent")
+	k.Logger().WithField("path", path).Infof("Cleanup agent")
 	if err := syscall.Unmount(path, syscall.MNT_DETACH|UmountNoFollow); err != nil {
 		k.Logger().WithError(err).Errorf("failed to unmount vm share path %s", path)
 	}
@@ -2216,7 +2216,7 @@ func (k *kataAgent) cleanup(ctx context.Context, s *Sandbox) {
 		k.Logger().WithError(err).Errorf("failed to unmount vm mount path %s", path)
 	}
 	if err := os.RemoveAll(getSandboxPath(s.id)); err != nil {
-		k.Logger().WithError(err).Errorf("failed to cleanup vm path %s", getSandboxPath(s.id))
+		k.Logger().WithError(err).Errorf("failed to Cleanup vm path %s", getSandboxPath(s.id))
 	}
 }
 

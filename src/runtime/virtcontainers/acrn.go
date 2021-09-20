@@ -155,14 +155,14 @@ func (a *Acrn) kernelParameters() string {
 }
 
 // Adds all capabilities supported by Acrn implementation of hypervisor interface
-func (a *Acrn) capabilities(ctx context.Context) types.Capabilities {
-	span, _ := katatrace.Trace(ctx, a.Logger(), "capabilities", acrnTracingTags, map[string]string{"sandbox_id": a.id})
+func (a *Acrn) Capabilities(ctx context.Context) types.Capabilities {
+	span, _ := katatrace.Trace(ctx, a.Logger(), "Capabilities", acrnTracingTags, map[string]string{"sandbox_id": a.id})
 	defer span.End()
 
 	return a.arch.capabilities()
 }
 
-func (a *Acrn) hypervisorConfig() HypervisorConfig {
+func (a *Acrn) HypervisorConfig() HypervisorConfig {
 	return a.config
 }
 
@@ -248,7 +248,7 @@ func (a *Acrn) buildDevices(ctx context.Context, imagePath string) ([]Device, er
 		return nil, fmt.Errorf("Image Path should not be empty: %s", imagePath)
 	}
 
-	_, console, err := a.getSandboxConsole(ctx, a.id)
+	_, console, err := a.GetSandboxConsole(ctx, a.id)
 	if err != nil {
 		return nil, err
 	}
@@ -501,7 +501,7 @@ func (a *Acrn) stopSandbox(ctx context.Context, waitOnly bool) (err error) {
 	Idx := acrnUUIDsToIdx[uuid]
 
 	if err = a.loadInfo(); err != nil {
-		a.Logger().Info("Failed to load UUID availabiity info")
+		a.Logger().Info("Failed to Load UUID availabiity info")
 		return err
 	}
 
@@ -554,8 +554,8 @@ func (a *Acrn) updateBlockDevice(drive *config.BlockDrive) error {
 	return err
 }
 
-func (a *Acrn) hotplugAddDevice(ctx context.Context, devInfo interface{}, devType DeviceType) (interface{}, error) {
-	span, _ := katatrace.Trace(ctx, a.Logger(), "hotplugAddDevice", acrnTracingTags, map[string]string{"sandbox_id": a.id})
+func (a *Acrn) HotplugAddDevice(ctx context.Context, devInfo interface{}, devType DeviceType) (interface{}, error) {
+	span, _ := katatrace.Trace(ctx, a.Logger(), "HotplugAddDevice", acrnTracingTags, map[string]string{"sandbox_id": a.id})
 	defer span.End()
 
 	switch devType {
@@ -563,13 +563,13 @@ func (a *Acrn) hotplugAddDevice(ctx context.Context, devInfo interface{}, devTyp
 		//The drive placeholder has to exist prior to Update
 		return nil, a.updateBlockDevice(devInfo.(*config.BlockDrive))
 	default:
-		return nil, fmt.Errorf("hotplugAddDevice: unsupported device: devInfo:%v, deviceType%v",
+		return nil, fmt.Errorf("HotplugAddDevice: unsupported device: devInfo:%v, deviceType%v",
 			devInfo, devType)
 	}
 }
 
-func (a *Acrn) hotplugRemoveDevice(ctx context.Context, devInfo interface{}, devType DeviceType) (interface{}, error) {
-	span, _ := katatrace.Trace(ctx, a.Logger(), "hotplugRemoveDevice", acrnTracingTags, map[string]string{"sandbox_id": a.id})
+func (a *Acrn) HotplugRemoveDevice(ctx context.Context, devInfo interface{}, devType DeviceType) (interface{}, error) {
+	span, _ := katatrace.Trace(ctx, a.Logger(), "HotplugRemoveDevice", acrnTracingTags, map[string]string{"sandbox_id": a.id})
 	defer span.End()
 
 	// Not supported. return success
@@ -596,9 +596,9 @@ func (a *Acrn) resumeSandbox(ctx context.Context) error {
 }
 
 // addDevice will add extra devices to acrn command line.
-func (a *Acrn) addDevice(ctx context.Context, devInfo interface{}, devType DeviceType) error {
+func (a *Acrn) AddDevice(ctx context.Context, devInfo interface{}, devType DeviceType) error {
 	var err error
-	span, _ := katatrace.Trace(ctx, a.Logger(), "addDevice", acrnTracingTags, map[string]string{"sandbox_id": a.id})
+	span, _ := katatrace.Trace(ctx, a.Logger(), "AddDevice", acrnTracingTags, map[string]string{"sandbox_id": a.id})
 	defer span.End()
 
 	switch v := devInfo.(type) {
@@ -630,8 +630,8 @@ func (a *Acrn) addDevice(ctx context.Context, devInfo interface{}, devType Devic
 
 // getSandboxConsole builds the path of the console where we can read
 // logs coming from the sandbox.
-func (a *Acrn) getSandboxConsole(ctx context.Context, id string) (string, string, error) {
-	span, _ := katatrace.Trace(ctx, a.Logger(), "getSandboxConsole", acrnTracingTags, map[string]string{"sandbox_id": a.id})
+func (a *Acrn) GetSandboxConsole(ctx context.Context, id string) (string, string, error) {
+	span, _ := katatrace.Trace(ctx, a.Logger(), "GetSandboxConsole", acrnTracingTags, map[string]string{"sandbox_id": a.id})
 	defer span.End()
 
 	consoleURL, err := utils.BuildSocketPath(a.store.RunVMStoragePath(), id, acrnConsoleSocket)
@@ -643,22 +643,22 @@ func (a *Acrn) getSandboxConsole(ctx context.Context, id string) (string, string
 }
 
 func (a *Acrn) saveSandbox() error {
-	a.Logger().Info("save sandbox")
+	a.Logger().Info("Save sandbox")
 
 	// Not supported. return success
 
 	return nil
 }
 
-func (a *Acrn) disconnect(ctx context.Context) {
-	span, _ := katatrace.Trace(ctx, a.Logger(), "disconnect", acrnTracingTags, map[string]string{"sandbox_id": a.id})
+func (a *Acrn) Disconnect(ctx context.Context) {
+	span, _ := katatrace.Trace(ctx, a.Logger(), "Disconnect", acrnTracingTags, map[string]string{"sandbox_id": a.id})
 	defer span.End()
 
 	// Not supported.
 }
 
-func (a *Acrn) getThreadIDs(ctx context.Context) (VcpuThreadIDs, error) {
-	span, _ := katatrace.Trace(ctx, a.Logger(), "getThreadIDs", acrnTracingTags, map[string]string{"sandbox_id": a.id})
+func (a *Acrn) GetThreadIDs(ctx context.Context) (VcpuThreadIDs, error) {
+	span, _ := katatrace.Trace(ctx, a.Logger(), "GetThreadIDs", acrnTracingTags, map[string]string{"sandbox_id": a.id})
 	defer span.End()
 
 	// Not supported. return success
@@ -667,26 +667,26 @@ func (a *Acrn) getThreadIDs(ctx context.Context) (VcpuThreadIDs, error) {
 	return VcpuThreadIDs{}, nil
 }
 
-func (a *Acrn) resizeMemory(ctx context.Context, reqMemMB uint32, memoryBlockSizeMB uint32, probe bool) (uint32, MemoryDevice, error) {
+func (a *Acrn) ResizeMemory(ctx context.Context, reqMemMB uint32, memoryBlockSizeMB uint32, probe bool) (uint32, MemoryDevice, error) {
 	return 0, MemoryDevice{}, nil
 }
 
-func (a *Acrn) resizeVCPUs(ctx context.Context, reqVCPUs uint32) (currentVCPUs uint32, newVCPUs uint32, err error) {
+func (a *Acrn) ResizeVCPUs(ctx context.Context, reqVCPUs uint32) (currentVCPUs uint32, newVCPUs uint32, err error) {
 	return 0, 0, nil
 }
 
-func (a *Acrn) cleanup(ctx context.Context) error {
-	span, _ := katatrace.Trace(ctx, a.Logger(), "cleanup", acrnTracingTags, map[string]string{"sandbox_id": a.id})
+func (a *Acrn) Cleanup(ctx context.Context) error {
+	span, _ := katatrace.Trace(ctx, a.Logger(), "Cleanup", acrnTracingTags, map[string]string{"sandbox_id": a.id})
 	defer span.End()
 
 	return nil
 }
 
-func (a *Acrn) getPids() []int {
+func (a *Acrn) GetPids() []int {
 	return []int{a.state.PID}
 }
 
-func (a *Acrn) getVirtioFsPid() *int {
+func (a *Acrn) GetVirtioFsPid() *int {
 	return nil
 }
 
@@ -698,19 +698,19 @@ func (a *Acrn) toGrpc(ctx context.Context) ([]byte, error) {
 	return nil, errors.New("acrn is not supported by VM cache")
 }
 
-func (a *Acrn) save() (s persistapi.HypervisorState) {
+func (a *Acrn) Save() (s persistapi.HypervisorState) {
 	s.Pid = a.state.PID
 	s.Type = string(AcrnHypervisor)
 	s.UUID = a.state.UUID
 	return
 }
 
-func (a *Acrn) load(s persistapi.HypervisorState) {
+func (a *Acrn) Load(s persistapi.HypervisorState) {
 	a.state.PID = s.Pid
 	a.state.UUID = s.UUID
 }
 
-func (a *Acrn) check() error {
+func (a *Acrn) Check() error {
 	if err := syscall.Kill(a.state.PID, syscall.Signal(0)); err != nil {
 		return errors.Wrapf(err, "failed to ping acrn process")
 	}
@@ -718,7 +718,7 @@ func (a *Acrn) check() error {
 	return nil
 }
 
-func (a *Acrn) generateSocket(id string) (interface{}, error) {
+func (a *Acrn) GenerateSocket(id string) (interface{}, error) {
 	return generateVMSocket(id, a.store.RunVMStoragePath())
 }
 
@@ -810,7 +810,7 @@ func (a *Acrn) loadInfo() error {
 	return nil
 }
 
-func (a *Acrn) isRateLimiterBuiltin() bool {
+func (a *Acrn) IsRateLimiterBuiltin() bool {
 	return false
 }
 

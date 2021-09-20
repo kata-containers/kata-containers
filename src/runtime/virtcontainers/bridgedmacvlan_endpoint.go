@@ -100,7 +100,7 @@ func (endpoint *BridgedMacvlanEndpoint) Attach(ctx context.Context, s *Sandbox) 
 		return err
 	}
 
-	return h.addDevice(ctx, endpoint, NetDev)
+	return h.AddDevice(ctx, endpoint, NetDev)
 }
 
 // Detach for the virtual endpoint tears down the tap and bridge

@@ -63,7 +63,7 @@ func createSandboxFromConfig(ctx context.Context, sandboxConfig SandboxConfig, f
 		return nil, err
 	}
 
-	// cleanup sandbox resources in case of any failure
+	// Cleanup sandbox resources in case of any failure
 	defer func() {
 		if err != nil {
 			s.Delete(ctx)

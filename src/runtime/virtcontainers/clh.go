@@ -171,7 +171,7 @@ type cloudHypervisor struct {
 var clhKernelParams = []Param{
 	{"root", "/dev/pmem0p1"},
 	{"panic", "1"},         // upon kernel panic wait 1 second before reboot
-	{"no_timer_check", ""}, // do not check broken timer IRQ resources
+	{"no_timer_check", ""}, // do not Check broken timer IRQ resources
 	{"noreplace-smp", ""},  // do not replace SMP instructions
 	{"rootflags", "dax,data=ordered,errors=remount-ro ro"}, // mount the root filesystem as readonly
 	{"rootfstype", "ext4"},
@@ -425,8 +425,8 @@ func (clh *cloudHypervisor) startSandbox(ctx context.Context, timeout int) error
 
 // getSandboxConsole builds the path of the console where we can read
 // logs coming from the sandbox.
-func (clh *cloudHypervisor) getSandboxConsole(ctx context.Context, id string) (string, string, error) {
-	clh.Logger().WithField("function", "getSandboxConsole").WithField("id", id).Info("Get Sandbox Console")
+func (clh *cloudHypervisor) GetSandboxConsole(ctx context.Context, id string) (string, string, error) {
+	clh.Logger().WithField("function", "GetSandboxConsole").WithField("id", id).Info("Get Sandbox Console")
 	master, slave, err := console.NewPty()
 	if err != nil {
 		clh.Logger().WithError(err).Error("Error create pseudo tty")
@@ -437,13 +437,13 @@ func (clh *cloudHypervisor) getSandboxConsole(ctx context.Context, id string) (s
 	return consoleProtoPty, slave, nil
 }
 
-func (clh *cloudHypervisor) disconnect(ctx context.Context) {
-	clh.Logger().WithField("function", "disconnect").Info("Disconnecting Sandbox Console")
+func (clh *cloudHypervisor) Disconnect(ctx context.Context) {
+	clh.Logger().WithField("function", "Disconnect").Info("Disconnecting Sandbox Console")
 }
 
-func (clh *cloudHypervisor) getThreadIDs(ctx context.Context) (VcpuThreadIDs, error) {
+func (clh *cloudHypervisor) GetThreadIDs(ctx context.Context) (VcpuThreadIDs, error) {
 
-	clh.Logger().WithField("function", "getThreadIDs").Info("get thread ID's")
+	clh.Logger().WithField("function", "GetThreadIDs").Info("get thread ID's")
 
 	var vcpuInfo VcpuThreadIDs
 
@@ -550,8 +550,8 @@ func (clh *cloudHypervisor) hotPlugVFIODevice(device *config.VFIODev) error {
 	return err
 }
 
-func (clh *cloudHypervisor) hotplugAddDevice(ctx context.Context, devInfo interface{}, devType DeviceType) (interface{}, error) {
-	span, _ := katatrace.Trace(ctx, clh.Logger(), "hotplugAddDevice", clhTracingTags, map[string]string{"sandbox_id": clh.id})
+func (clh *cloudHypervisor) HotplugAddDevice(ctx context.Context, devInfo interface{}, devType DeviceType) (interface{}, error) {
+	span, _ := katatrace.Trace(ctx, clh.Logger(), "HotplugAddDevice", clhTracingTags, map[string]string{"sandbox_id": clh.id})
 	defer span.End()
 
 	switch devType {
@@ -567,8 +567,8 @@ func (clh *cloudHypervisor) hotplugAddDevice(ctx context.Context, devInfo interf
 
 }
 
-func (clh *cloudHypervisor) hotplugRemoveDevice(ctx context.Context, devInfo interface{}, devType DeviceType) (interface{}, error) {
-	span, _ := katatrace.Trace(ctx, clh.Logger(), "hotplugRemoveDevice", clhTracingTags, map[string]string{"sandbox_id": clh.id})
+func (clh *cloudHypervisor) HotplugRemoveDevice(ctx context.Context, devInfo interface{}, devType DeviceType) (interface{}, error) {
+	span, _ := katatrace.Trace(ctx, clh.Logger(), "HotplugRemoveDevice", clhTracingTags, map[string]string{"sandbox_id": clh.id})
 	defer span.End()
 
 	var deviceID string
@@ -580,7 +580,7 @@ func (clh *cloudHypervisor) hotplugRemoveDevice(ctx context.Context, devInfo int
 		deviceID = devInfo.(*config.VFIODev).ID
 	default:
 		clh.Logger().WithFields(log.Fields{"devInfo": devInfo,
-			"deviceType": devType}).Error("hotplugRemoveDevice: unsupported device")
+			"deviceType": devType}).Error("HotplugRemoveDevice: unsupported device")
 		return nil, fmt.Errorf("Could not hot remove device: unsupported device: %v, type: %v",
 			devInfo, devType)
 	}
@@ -599,11 +599,11 @@ func (clh *cloudHypervisor) hotplugRemoveDevice(ctx context.Context, devInfo int
 	return nil, err
 }
 
-func (clh *cloudHypervisor) hypervisorConfig() HypervisorConfig {
+func (clh *cloudHypervisor) HypervisorConfig() HypervisorConfig {
 	return clh.config
 }
 
-func (clh *cloudHypervisor) resizeMemory(ctx context.Context, reqMemMB uint32, memoryBlockSizeMB uint32, probe bool) (uint32, MemoryDevice, error) {
+func (clh *cloudHypervisor) ResizeMemory(ctx context.Context, reqMemMB uint32, memoryBlockSizeMB uint32, probe bool) (uint32, MemoryDevice, error) {
 
 	// TODO: Add support for virtio-mem
 
@@ -624,7 +624,7 @@ func (clh *cloudHypervisor) resizeMemory(ctx context.Context, reqMemMB uint32, m
 	currentMem := utils.MemUnit(info.Config.Memory.Size) * utils.Byte
 	newMem := utils.MemUnit(reqMemMB) * utils.MiB
 
-	// Early check to verify if boot memory is the same as requested
+	// Early Check to verify if boot memory is the same as requested
 	if currentMem == newMem {
 		clh.Logger().WithField("memory", reqMemMB).Debugf("VM already has requested memory")
 		return uint32(currentMem.ToMiB()), MemoryDevice{}, nil
@@ -645,7 +645,7 @@ func (clh *cloudHypervisor) resizeMemory(ctx context.Context, reqMemMB uint32, m
 		newMem = alignedRequest
 	}
 
-	// Check if memory is the same as requested, a second check is done
+	// Check if memory is the same as requested, a second Check is done
 	// to consider the memory request now that is updated to be memory aligned
 	if currentMem == newMem {
 		clh.Logger().WithFields(log.Fields{"current-memory": currentMem, "new-memory": newMem}).Debug("VM already has requested memory(after alignment)")
@@ -669,27 +669,27 @@ func (clh *cloudHypervisor) resizeMemory(ctx context.Context, reqMemMB uint32, m
 	return uint32(newMem.ToMiB()), MemoryDevice{SizeMB: int(hotplugSize.ToMiB())}, nil
 }
 
-func (clh *cloudHypervisor) resizeVCPUs(ctx context.Context, reqVCPUs uint32) (currentVCPUs uint32, newVCPUs uint32, err error) {
+func (clh *cloudHypervisor) ResizeVCPUs(ctx context.Context, reqVCPUs uint32) (currentVCPUs uint32, newVCPUs uint32, err error) {
 	cl := clh.client()
 
 	// Retrieve the number of current vCPUs via HTTP API
 	info, err := clh.vmInfo()
 	if err != nil {
-		clh.Logger().WithField("function", "resizeVCPUs").WithError(err).Info("[clh] vmInfo failed")
+		clh.Logger().WithField("function", "ResizeVCPUs").WithError(err).Info("[clh] vmInfo failed")
 		return 0, 0, openAPIClientError(err)
 	}
 
 	currentVCPUs = uint32(info.Config.Cpus.BootVcpus)
 	newVCPUs = currentVCPUs
 
-	// Sanity check
+	// Sanity Check
 	if reqVCPUs == 0 {
-		clh.Logger().WithField("function", "resizeVCPUs").Debugf("Cannot resize vCPU to 0")
+		clh.Logger().WithField("function", "ResizeVCPUs").Debugf("Cannot resize vCPU to 0")
 		return currentVCPUs, newVCPUs, fmt.Errorf("Cannot resize vCPU to 0")
 	}
 	if reqVCPUs > uint32(info.Config.Cpus.MaxVcpus) {
 		clh.Logger().WithFields(log.Fields{
-			"function":    "resizeVCPUs",
+			"function":    "ResizeVCPUs",
 			"reqVCPUs":    reqVCPUs,
 			"clhMaxVCPUs": info.Config.Cpus.MaxVcpus,
 		}).Warn("exceeding the 'clhMaxVCPUs' (resizing to 'clhMaxVCPUs')")
@@ -711,8 +711,8 @@ func (clh *cloudHypervisor) resizeVCPUs(ctx context.Context, reqVCPUs uint32) (c
 	return currentVCPUs, newVCPUs, nil
 }
 
-func (clh *cloudHypervisor) cleanup(ctx context.Context) error {
-	clh.Logger().WithField("function", "cleanup").Info("cleanup")
+func (clh *cloudHypervisor) Cleanup(ctx context.Context) error {
+	clh.Logger().WithField("function", "Cleanup").Info("Cleanup")
 	return nil
 }
 
@@ -747,7 +747,7 @@ func (clh *cloudHypervisor) toGrpc(ctx context.Context) ([]byte, error) {
 	return nil, errors.New("cloudHypervisor is not supported by VM cache")
 }
 
-func (clh *cloudHypervisor) save() (s persistapi.HypervisorState) {
+func (clh *cloudHypervisor) Save() (s persistapi.HypervisorState) {
 	s.Pid = clh.state.PID
 	s.Type = string(ClhHypervisor)
 	s.VirtiofsdPid = clh.state.VirtiofsdPID
@@ -755,13 +755,13 @@ func (clh *cloudHypervisor) save() (s persistapi.HypervisorState) {
 	return
 }
 
-func (clh *cloudHypervisor) load(s persistapi.HypervisorState) {
+func (clh *cloudHypervisor) Load(s persistapi.HypervisorState) {
 	clh.state.PID = s.Pid
 	clh.state.VirtiofsdPID = s.VirtiofsdPid
 	clh.state.apiSocket = s.APISocket
 }
 
-func (clh *cloudHypervisor) check() error {
+func (clh *cloudHypervisor) Check() error {
 	cl := clh.client()
 	ctx, cancel := context.WithTimeout(context.Background(), clhAPITimeout*time.Second)
 	defer cancel()
@@ -770,16 +770,16 @@ func (clh *cloudHypervisor) check() error {
 	return err
 }
 
-func (clh *cloudHypervisor) getPids() []int {
+func (clh *cloudHypervisor) GetPids() []int {
 	return []int{clh.state.PID}
 }
 
-func (clh *cloudHypervisor) getVirtioFsPid() *int {
+func (clh *cloudHypervisor) GetVirtioFsPid() *int {
 	return &clh.state.VirtiofsdPID
 }
 
-func (clh *cloudHypervisor) addDevice(ctx context.Context, devInfo interface{}, devType DeviceType) error {
-	span, _ := katatrace.Trace(ctx, clh.Logger(), "addDevice", clhTracingTags, map[string]string{"sandbox_id": clh.id})
+func (clh *cloudHypervisor) AddDevice(ctx context.Context, devInfo interface{}, devType DeviceType) error {
+	span, _ := katatrace.Trace(ctx, clh.Logger(), "AddDevice", clhTracingTags, map[string]string{"sandbox_id": clh.id})
 	defer span.End()
 
 	var err error
@@ -794,7 +794,7 @@ func (clh *cloudHypervisor) addDevice(ctx context.Context, devInfo interface{}, 
 	case types.Volume:
 		err = clh.addVolume(v)
 	default:
-		clh.Logger().WithField("function", "addDevice").Warnf("Add device of type %v is not supported.", v)
+		clh.Logger().WithField("function", "AddDevice").Warnf("Add device of type %v is not supported.", v)
 		return fmt.Errorf("Not implemented support for %s", v)
 	}
 
@@ -812,11 +812,11 @@ func (clh *cloudHypervisor) Logger() *log.Entry {
 }
 
 // Adds all capabilities supported by cloudHypervisor implementation of hypervisor interface
-func (clh *cloudHypervisor) capabilities(ctx context.Context) types.Capabilities {
-	span, _ := katatrace.Trace(ctx, clh.Logger(), "capabilities", clhTracingTags, map[string]string{"sandbox_id": clh.id})
+func (clh *cloudHypervisor) Capabilities(ctx context.Context) types.Capabilities {
+	span, _ := katatrace.Trace(ctx, clh.Logger(), "Capabilities", clhTracingTags, map[string]string{"sandbox_id": clh.id})
 	defer span.End()
 
-	clh.Logger().WithField("function", "capabilities").Info("get Capabilities")
+	clh.Logger().WithField("function", "Capabilities").Info("get Capabilities")
 	var caps types.Capabilities
 	caps.SetFsSharingSupport()
 	caps.SetBlockDeviceHotplugSupport()
@@ -834,7 +834,7 @@ func (clh *cloudHypervisor) terminate(ctx context.Context, waitOnly bool) (err e
 	}
 
 	defer func() {
-		clh.Logger().Debug("cleanup VM")
+		clh.Logger().Debug("Cleanup VM")
 		if err1 := clh.cleanupVM(true); err1 != nil {
 			clh.Logger().WithError(err1).Error("failed to cleanupVM")
 		}
@@ -873,7 +873,7 @@ func (clh *cloudHypervisor) reset() {
 	clh.state.reset()
 }
 
-func (clh *cloudHypervisor) generateSocket(id string) (interface{}, error) {
+func (clh *cloudHypervisor) GenerateSocket(id string) (interface{}, error) {
 	udsPath, err := clh.vsockSocketPath(id)
 	if err != nil {
 		clh.Logger().Info("Can't generate socket path for cloud-hypervisor")
@@ -1206,7 +1206,7 @@ func (clh *cloudHypervisor) cleanupVM(force bool) error {
 		}
 	}
 
-	// cleanup vm path
+	// Cleanup vm path
 	dir := filepath.Join(clh.store.RunVMStoragePath(), clh.id)
 
 	// If it's a symlink, remove both dir and the target.
@@ -1218,7 +1218,7 @@ func (clh *cloudHypervisor) cleanupVM(force bool) error {
 	clh.Logger().WithFields(log.Fields{
 		"link": link,
 		"dir":  dir,
-	}).Infof("cleanup vm path")
+	}).Infof("Cleanup vm path")
 
 	if err := os.RemoveAll(dir); err != nil {
 		if !force {
@@ -1263,7 +1263,7 @@ func (clh *cloudHypervisor) vmInfo() (chclient.VmInfo, error) {
 	return info, openAPIClientError(err)
 }
 
-func (clh *cloudHypervisor) isRateLimiterBuiltin() bool {
+func (clh *cloudHypervisor) IsRateLimiterBuiltin() bool {
 	return false
 }
 
