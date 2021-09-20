@@ -586,8 +586,8 @@ func (a *Acrn) PauseVM(ctx context.Context) error {
 	return nil
 }
 
-func (a *Acrn) resumeSandbox(ctx context.Context) error {
-	span, _ := katatrace.Trace(ctx, a.Logger(), "resumeSandbox", acrnTracingTags, map[string]string{"sandbox_id": a.id})
+func (a *Acrn) ResumeVM(ctx context.Context) error {
+	span, _ := katatrace.Trace(ctx, a.Logger(), "ResumeVM", acrnTracingTags, map[string]string{"sandbox_id": a.id})
 	defer span.End()
 
 	// Not supported. return success

@@ -227,7 +227,7 @@ func (v *VM) Save() error {
 // Resume resumes a paused VM.
 func (v *VM) Resume(ctx context.Context) error {
 	v.logger().Info("resume vm")
-	return v.hypervisor.resumeSandbox(ctx)
+	return v.hypervisor.ResumeVM(ctx)
 }
 
 // Start kicks off a configured VM.
