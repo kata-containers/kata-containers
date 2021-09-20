@@ -96,7 +96,7 @@ func (endpoint *VhostUserEndpoint) Attach(ctx context.Context, s *Sandbox) error
 		Type:       config.VhostUserNet,
 	}
 
-	return s.hypervisor.addDevice(ctx, d, vhostuserDev)
+	return s.hypervisor.addDevice(ctx, d, VhostuserDev)
 }
 
 // Detach for vhostuser endpoint

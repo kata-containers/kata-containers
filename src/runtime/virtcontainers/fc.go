@@ -166,7 +166,7 @@ type firecracker struct {
 
 type firecrackerDevice struct {
 	dev     interface{}
-	devType deviceType
+	devType DeviceType
 }
 
 // Logger returns a logrus logger appropriate for logging firecracker  messages
@@ -188,7 +188,7 @@ func (fc *firecracker) truncateID(id string) string {
 }
 
 func (fc *firecracker) setConfig(config *HypervisorConfig) error {
-	err := config.valid()
+	err := config.Valid()
 	if err != nil {
 		return err
 	}
@@ -1023,7 +1023,7 @@ func (fc *firecracker) fcUpdateBlockDrive(ctx context.Context, path, id string) 
 
 // addDevice will add extra devices to firecracker.  Limited to configure before the
 // virtual machine starts.  Devices include drivers and network interfaces only.
-func (fc *firecracker) addDevice(ctx context.Context, devInfo interface{}, devType deviceType) error {
+func (fc *firecracker) addDevice(ctx context.Context, devInfo interface{}, devType DeviceType) error {
 	span, _ := katatrace.Trace(ctx, fc.Logger(), "addDevice", fcTracingTags, map[string]string{"sandbox_id": fc.id})
 	defer span.End()
 
@@ -1060,7 +1060,7 @@ func (fc *firecracker) addDevice(ctx context.Context, devInfo interface{}, devTy
 
 // hotplugBlockDevice supported in Firecracker VMM
 // hot add or remove a block device.
-func (fc *firecracker) hotplugBlockDevice(ctx context.Context, drive config.BlockDrive, op operation) (interface{}, error) {
+func (fc *firecracker) hotplugBlockDevice(ctx context.Context, drive config.BlockDrive, op Operation) (interface{}, error) {
 	if drive.Swap {
 		return nil, fmt.Errorf("firecracker doesn't support swap")
 	}
@@ -1069,7 +1069,7 @@ func (fc *firecracker) hotplugBlockDevice(ctx context.Context, drive config.Bloc
 	var err error
 	driveID := fcDriveIndexToID(drive.Index)
 
-	if op == addDevice {
+	if op == AddDevice {
 		//The drive placeholder has to exist prior to Update
 		path, err = fc.fcJailResource(drive.File, driveID)
 		if err != nil {
@@ -1093,13 +1093,13 @@ func (fc *firecracker) hotplugBlockDevice(ctx context.Context, drive config.Bloc
 }
 
 // hotplugAddDevice supported in Firecracker VMM
-func (fc *firecracker) hotplugAddDevice(ctx context.Context, devInfo interface{}, devType deviceType) (interface{}, error) {
+func (fc *firecracker) hotplugAddDevice(ctx context.Context, devInfo interface{}, devType DeviceType) (interface{}, error) {
 	span, _ := katatrace.Trace(ctx, fc.Logger(), "hotplugAddDevice", fcTracingTags, map[string]string{"sandbox_id": fc.id})
 	defer span.End()
 
 	switch devType {
-	case blockDev:
-		return fc.hotplugBlockDevice(ctx, *devInfo.(*config.BlockDrive), addDevice)
+	case BlockDev:
+		return fc.hotplugBlockDevice(ctx, *devInfo.(*config.BlockDrive), AddDevice)
 	default:
 		fc.Logger().WithFields(logrus.Fields{"devInfo": devInfo,
 			"deviceType": devType}).Warn("hotplugAddDevice: unsupported device")
@@ -1109,13 +1109,13 @@ func (fc *firecracker) hotplugAddDevice(ctx context.Context, devInfo interface{}
 }
 
 // hotplugRemoveDevice supported in Firecracker VMM
-func (fc *firecracker) hotplugRemoveDevice(ctx context.Context, devInfo interface{}, devType deviceType) (interface{}, error) {
+func (fc *firecracker) hotplugRemoveDevice(ctx context.Context, devInfo interface{}, devType DeviceType) (interface{}, error) {
 	span, _ := katatrace.Trace(ctx, fc.Logger(), "hotplugRemoveDevice", fcTracingTags, map[string]string{"sandbox_id": fc.id})
 	defer span.End()
 
 	switch devType {
-	case blockDev:
-		return fc.hotplugBlockDevice(ctx, *devInfo.(*config.BlockDrive), removeDevice)
+	case BlockDev:
+		return fc.hotplugBlockDevice(ctx, *devInfo.(*config.BlockDrive), RemoveDevice)
 	default:
 		fc.Logger().WithFields(logrus.Fields{"devInfo": devInfo,
 			"deviceType": devType}).Error("hotplugRemoveDevice: unsupported device")
@@ -1155,8 +1155,8 @@ func (fc *firecracker) hypervisorConfig() HypervisorConfig {
 	return fc.config
 }
 
-func (fc *firecracker) resizeMemory(ctx context.Context, reqMemMB uint32, memoryBlockSizeMB uint32, probe bool) (uint32, memoryDevice, error) {
-	return 0, memoryDevice{}, nil
+func (fc *firecracker) resizeMemory(ctx context.Context, reqMemMB uint32, memoryBlockSizeMB uint32, probe bool) (uint32, MemoryDevice, error) {
+	return 0, MemoryDevice{}, nil
 }
 
 func (fc *firecracker) resizeVCPUs(ctx context.Context, reqVCPUs uint32) (currentVCPUs uint32, newVCPUs uint32, err error) {
@@ -1167,8 +1167,8 @@ func (fc *firecracker) resizeVCPUs(ctx context.Context, reqVCPUs uint32) (curren
 //
 // As suggested by https://github.com/firecracker-microvm/firecracker/issues/718,
 // let's use `ps -T -p <pid>` to get fc vcpu info.
-func (fc *firecracker) getThreadIDs(ctx context.Context) (vcpuThreadIDs, error) {
-	var vcpuInfo vcpuThreadIDs
+func (fc *firecracker) getThreadIDs(ctx context.Context) (VcpuThreadIDs, error) {
+	var vcpuInfo VcpuThreadIDs
 
 	vcpuInfo.vcpus = make(map[int]int)
 	parent, err := utils.NewProc(fc.info.PID)

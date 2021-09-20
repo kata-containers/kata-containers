@@ -409,7 +409,7 @@ func createAssets(ctx context.Context, sandboxConfig *SandboxConfig) error {
 			return err
 		}
 
-		if err := sandboxConfig.HypervisorConfig.addCustomAsset(a); err != nil {
+		if err := sandboxConfig.HypervisorConfig.AddCustomAsset(a); err != nil {
 			return err
 		}
 	}
@@ -1101,7 +1101,7 @@ func (s *Sandbox) addSwap(ctx context.Context, swapID string, size int64) (*conf
 		ID:     swapID,
 		Swap:   true,
 	}
-	_, err = s.hypervisor.hotplugAddDevice(ctx, blockDevice, blockDev)
+	_, err = s.hypervisor.hotplugAddDevice(ctx, blockDevice, BlockDev)
 	if err != nil {
 		err = fmt.Errorf("add swapfile %s device to VM fail %s", swapFile, err.Error())
 		s.Logger().WithError(err).Error("addSwap")
@@ -1109,7 +1109,7 @@ func (s *Sandbox) addSwap(ctx context.Context, swapID string, size int64) (*conf
 	}
 	defer func() {
 		if err != nil {
-			_, e := s.hypervisor.hotplugRemoveDevice(ctx, blockDevice, blockDev)
+			_, e := s.hypervisor.hotplugRemoveDevice(ctx, blockDevice, BlockDev)
 			if e != nil {
 				s.Logger().Errorf("remove swapfile %s to VM fail %s", swapFile, e.Error())
 			}
@@ -1780,7 +1780,7 @@ func (s *Sandbox) HotplugAddDevice(ctx context.Context, device api.Device, devTy
 
 		// adding a group of VFIO devices
 		for _, dev := range vfioDevices {
-			if _, err := s.hypervisor.hotplugAddDevice(ctx, dev, vfioDev); err != nil {
+			if _, err := s.hypervisor.hotplugAddDevice(ctx, dev, VfioDev); err != nil {
 				s.Logger().
 					WithFields(logrus.Fields{
 						"sandbox":         s.id,
@@ -1796,14 +1796,14 @@ func (s *Sandbox) HotplugAddDevice(ctx context.Context, device api.Device, devTy
 		if !ok {
 			return fmt.Errorf("device type mismatch, expect device type to be %s", devType)
 		}
-		_, err := s.hypervisor.hotplugAddDevice(ctx, blockDevice.BlockDrive, blockDev)
+		_, err := s.hypervisor.hotplugAddDevice(ctx, blockDevice.BlockDrive, BlockDev)
 		return err
 	case config.VhostUserBlk:
 		vhostUserBlkDevice, ok := device.(*drivers.VhostUserBlkDevice)
 		if !ok {
 			return fmt.Errorf("device type mismatch, expect device type to be %s", devType)
 		}
-		_, err := s.hypervisor.hotplugAddDevice(ctx, vhostUserBlkDevice.VhostUserDeviceAttrs, vhostuserDev)
+		_, err := s.hypervisor.hotplugAddDevice(ctx, vhostUserBlkDevice.VhostUserDeviceAttrs, VhostuserDev)
 		return err
 	case config.DeviceGeneric:
 		// TODO: what?
@@ -1831,7 +1831,7 @@ func (s *Sandbox) HotplugRemoveDevice(ctx context.Context, device api.Device, de
 
 		// remove a group of VFIO devices
 		for _, dev := range vfioDevices {
-			if _, err := s.hypervisor.hotplugRemoveDevice(ctx, dev, vfioDev); err != nil {
+			if _, err := s.hypervisor.hotplugRemoveDevice(ctx, dev, VfioDev); err != nil {
 				s.Logger().WithError(err).
 					WithFields(logrus.Fields{
 						"sandbox":         s.id,
@@ -1852,14 +1852,14 @@ func (s *Sandbox) HotplugRemoveDevice(ctx context.Context, device api.Device, de
 			s.Logger().WithField("path", blockDrive.File).Infof("Skip device: cannot hot remove PMEM devices")
 			return nil
 		}
-		_, err := s.hypervisor.hotplugRemoveDevice(ctx, blockDrive, blockDev)
+		_, err := s.hypervisor.hotplugRemoveDevice(ctx, blockDrive, BlockDev)
 		return err
 	case config.VhostUserBlk:
 		vhostUserDeviceAttrs, ok := device.GetDeviceInfo().(*config.VhostUserDeviceAttrs)
 		if !ok {
 			return fmt.Errorf("device type mismatch, expect device type to be %s", devType)
 		}
-		_, err := s.hypervisor.hotplugRemoveDevice(ctx, vhostUserDeviceAttrs, vhostuserDev)
+		_, err := s.hypervisor.hotplugRemoveDevice(ctx, vhostUserDeviceAttrs, VhostuserDev)
 		return err
 	case config.DeviceGeneric:
 		// TODO: what?
@@ -1886,11 +1886,11 @@ func (s *Sandbox) UnsetSandboxBlockIndex(index int) error {
 func (s *Sandbox) AppendDevice(ctx context.Context, device api.Device) error {
 	switch device.DeviceType() {
 	case config.VhostUserSCSI, config.VhostUserNet, config.VhostUserBlk, config.VhostUserFS:
-		return s.hypervisor.addDevice(ctx, device.GetDeviceInfo().(*config.VhostUserDeviceAttrs), vhostuserDev)
+		return s.hypervisor.addDevice(ctx, device.GetDeviceInfo().(*config.VhostUserDeviceAttrs), VhostuserDev)
 	case config.DeviceVFIO:
 		vfioDevs := device.GetDeviceInfo().([]*config.VFIODev)
 		for _, d := range vfioDevs {
-			return s.hypervisor.addDevice(ctx, *d, vfioDev)
+			return s.hypervisor.addDevice(ctx, *d, VfioDev)
 		}
 	default:
 		s.Logger().WithField("device-type", device.DeviceType()).
@@ -1997,10 +1997,10 @@ func (s *Sandbox) updateResources(ctx context.Context) error {
 		}
 	}
 	s.Logger().Debugf("Sandbox memory size: %d MB", newMemory)
-	if s.state.GuestMemoryHotplugProbe && updatedMemoryDevice.addr != 0 {
+	if s.state.GuestMemoryHotplugProbe && updatedMemoryDevice.Addr != 0 {
 		// notify the guest kernel about memory hot-add event, before onlining them
-		s.Logger().Debugf("notify guest kernel memory hot-add event via probe interface, memory device located at 0x%x", updatedMemoryDevice.addr)
-		if err := s.agent.memHotplugByProbe(ctx, updatedMemoryDevice.addr, uint32(updatedMemoryDevice.sizeMB), s.state.GuestMemoryBlockSizeMB); err != nil {
+		s.Logger().Debugf("notify guest kernel memory hot-add event via probe interface, memory device located at 0x%x", updatedMemoryDevice.Addr)
+		if err := s.agent.memHotplugByProbe(ctx, updatedMemoryDevice.Addr, uint32(updatedMemoryDevice.SizeMB), s.state.GuestMemoryBlockSizeMB); err != nil {
 			return err
 		}
 	}
