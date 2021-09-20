@@ -105,7 +105,7 @@ func TestQemuArm64AppendImage(t *testing.T) {
 	imageStat, err := f.Stat()
 	assert.NoError(err)
 
-	// save default supportedQemuMachines options
+	// Save default supportedQemuMachines options
 	machinesCopy := make([]govmmQemu.Machine, len(supportedQemuMachines))
 	assert.Equal(len(supportedQemuMachines), copy(machinesCopy, supportedQemuMachines))
 

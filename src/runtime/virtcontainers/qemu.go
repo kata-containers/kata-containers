@@ -125,7 +125,7 @@ const (
 	// memory dump format will be set to elf
 	memoryDumpFormat = "elf"
 
-	qmpCapErrMsg  = "Failed to negotiate QMP capabilities"
+	qmpCapErrMsg  = "Failed to negotiate QMP Capabilities"
 	qmpExecCatCmd = "exec:cat"
 
 	scsiControllerID         = "scsi0"
@@ -194,14 +194,14 @@ func (q *qemu) kernelParameters() string {
 }
 
 // Adds all capabilities supported by qemu implementation of hypervisor interface
-func (q *qemu) capabilities(ctx context.Context) types.Capabilities {
-	span, _ := katatrace.Trace(ctx, q.Logger(), "capabilities", qemuTracingTags, map[string]string{"sandbox_id": q.id})
+func (q *qemu) Capabilities(ctx context.Context) types.Capabilities {
+	span, _ := katatrace.Trace(ctx, q.Logger(), "Capabilities", qemuTracingTags, map[string]string{"sandbox_id": q.id})
 	defer span.End()
 
 	return q.arch.capabilities()
 }
 
-func (q *qemu) hypervisorConfig() HypervisorConfig {
+func (q *qemu) HypervisorConfig() HypervisorConfig {
 	return q.config
 }
 
@@ -386,7 +386,7 @@ func (q *qemu) createQmpSocket() ([]govmmQemu.QMPSocket, error) {
 func (q *qemu) buildDevices(ctx context.Context, initrdPath string) ([]govmmQemu.Device, *govmmQemu.IOThread, error) {
 	var devices []govmmQemu.Device
 
-	_, console, err := q.getSandboxConsole(ctx, q.id)
+	_, console, err := q.GetSandboxConsole(ctx, q.id)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -913,7 +913,7 @@ func (q *qemu) waitSandbox(ctx context.Context, timeout int) error {
 		"qmp-major-version": ver.Major,
 		"qmp-minor-version": ver.Minor,
 		"qmp-micro-version": ver.Micro,
-		"qmp-capabilities":  strings.Join(ver.Capabilities, ","),
+		"qmp-Capabilities":  strings.Join(ver.Capabilities, ","),
 	}).Infof("QMP details")
 
 	if err = q.qmpMonitorCh.qmp.ExecuteQMPCapabilities(q.qmpMonitorCh.ctx); err != nil {
@@ -958,7 +958,7 @@ func (q *qemu) stopSandbox(ctx context.Context, waitOnly bool) error {
 	}
 
 	if waitOnly {
-		pids := q.getPids()
+		pids := q.GetPids()
 		if len(pids) == 0 {
 			return errors.New("cannot determine QEMU PID")
 		}
@@ -986,17 +986,17 @@ func (q *qemu) stopSandbox(ctx context.Context, waitOnly bool) error {
 
 func (q *qemu) cleanupVM() error {
 
-	// cleanup vm path
+	// Cleanup vm path
 	dir := filepath.Join(q.store.RunVMStoragePath(), q.id)
 
 	// If it's a symlink, remove both dir and the target.
 	// This can happen when vm template links a sandbox to a vm.
 	link, err := filepath.EvalSymlinks(dir)
 	if err != nil {
-		// Well, it's just cleanup failure. Let's ignore it.
+		// Well, it's just Cleanup failure. Let's ignore it.
 		q.Logger().WithError(err).WithField("dir", dir).Warn("failed to resolve vm path")
 	}
-	q.Logger().WithField("link", link).WithField("dir", dir).Infof("cleanup vm path")
+	q.Logger().WithField("link", link).WithField("dir", dir).Infof("Cleanup vm path")
 
 	if err := os.RemoveAll(dir); err != nil {
 		q.Logger().WithError(err).Warnf("failed to remove vm path %s", dir)
@@ -1145,18 +1145,18 @@ func (q *qemu) dumpSandboxMetaInfo(dumpSavePath string) {
 	// copy state from /run/vc/sbs to memory dump directory
 	statePath := filepath.Join(q.store.RunStoragePath(), q.id)
 	command := []string{"/bin/cp", "-ar", statePath, dumpStatePath}
-	q.Logger().WithField("command", command).Info("try to save sandbox state")
+	q.Logger().WithField("command", command).Info("try to Save sandbox state")
 	if output, err := pkgUtils.RunCommandFull(command, true); err != nil {
-		q.Logger().WithError(err).WithField("output", output).Error("failed to save state")
+		q.Logger().WithError(err).WithField("output", output).Error("failed to Save state")
 	}
-	// save hypervisor meta information
+	// Save hypervisor meta information
 	fileName := filepath.Join(dumpSavePath, "hypervisor.conf")
 	data, _ := json.MarshalIndent(q.config, "", " ")
 	if err := ioutil.WriteFile(fileName, data, defaultFilePerms); err != nil {
 		q.Logger().WithError(err).WithField("hypervisor.conf", data).Error("write to hypervisor.conf file failed")
 	}
 
-	// save hypervisor version
+	// Save hypervisor version
 	hyperVisorVersion, err := pkgUtils.RunCommand([]string{q.config.HypervisorPath, "--version"})
 	if err != nil {
 		q.Logger().WithError(err).WithField("HypervisorPath", data).Error("failed to get hypervisor version")
@@ -1184,11 +1184,11 @@ func (q *qemu) dumpGuestMemory(dumpSavePath string) error {
 		return err
 	}
 
-	// save meta information for sandbox
+	// Save meta information for sandbox
 	q.dumpSandboxMetaInfo(dumpSavePath)
 	q.Logger().Info("dump sandbox meta information completed")
 
-	// check device free space and estimated dump size
+	// Check device free space and estimated dump size
 	if err := q.canDumpGuestMemory(dumpSavePath); err != nil {
 		q.Logger().Warnf("can't dump guest memory: %s", err.Error())
 		return err
@@ -1444,7 +1444,7 @@ func (q *qemu) hotplugVFIODevice(ctx context.Context, device *config.VFIODev, op
 	}
 
 	devID := device.ID
-	machineType := q.hypervisorConfig().HypervisorMachineType
+	machineType := q.HypervisorConfig().HypervisorMachineType
 
 	if op == AddDevice {
 
@@ -1643,8 +1643,8 @@ func (q *qemu) hotplugDevice(ctx context.Context, devInfo interface{}, devType D
 	}
 }
 
-func (q *qemu) hotplugAddDevice(ctx context.Context, devInfo interface{}, devType DeviceType) (interface{}, error) {
-	span, ctx := katatrace.Trace(ctx, q.Logger(), "hotplugAddDevice", qemuTracingTags, map[string]string{"sandbox_id": q.id})
+func (q *qemu) HotplugAddDevice(ctx context.Context, devInfo interface{}, devType DeviceType) (interface{}, error) {
+	span, ctx := katatrace.Trace(ctx, q.Logger(), "HotplugAddDevice", qemuTracingTags, map[string]string{"sandbox_id": q.id})
 	katatrace.AddTag(span, "device", devInfo)
 	defer span.End()
 
@@ -1656,8 +1656,8 @@ func (q *qemu) hotplugAddDevice(ctx context.Context, devInfo interface{}, devTyp
 	return data, nil
 }
 
-func (q *qemu) hotplugRemoveDevice(ctx context.Context, devInfo interface{}, devType DeviceType) (interface{}, error) {
-	span, ctx := katatrace.Trace(ctx, q.Logger(), "hotplugRemoveDevice", qemuTracingTags, map[string]string{"sandbox_id": q.id})
+func (q *qemu) HotplugRemoveDevice(ctx context.Context, devInfo interface{}, devType DeviceType) (interface{}, error) {
+	span, ctx := katatrace.Trace(ctx, q.Logger(), "HotplugRemoveDevice", qemuTracingTags, map[string]string{"sandbox_id": q.id})
 	katatrace.AddTag(span, "device", devInfo)
 	defer span.End()
 
@@ -1739,7 +1739,7 @@ func (q *qemu) hotplugAddCPUs(amount uint32) (uint32, error) {
 			continue
 		}
 
-		// a new vCPU was added, update list of hotplugged vCPUs and check if all vCPUs were added
+		// a new vCPU was added, update list of hotplugged vCPUs and Check if all vCPUs were added
 		q.state.HotpluggedVCPUs = append(q.state.HotpluggedVCPUs, CPUDevice{cpuID})
 		hotpluggedVCPUs++
 		if hotpluggedVCPUs == amount {
@@ -1884,9 +1884,9 @@ func (q *qemu) resumeSandbox(ctx context.Context) error {
 }
 
 // addDevice will add extra devices to Qemu command line.
-func (q *qemu) addDevice(ctx context.Context, devInfo interface{}, devType DeviceType) error {
+func (q *qemu) AddDevice(ctx context.Context, devInfo interface{}, devType DeviceType) error {
 	var err error
-	span, _ := katatrace.Trace(ctx, q.Logger(), "addDevice", qemuTracingTags, map[string]string{"sandbox_id": q.id})
+	span, _ := katatrace.Trace(ctx, q.Logger(), "AddDevice", qemuTracingTags, map[string]string{"sandbox_id": q.id})
 	katatrace.AddTag(span, "device", devInfo)
 	defer span.End()
 
@@ -1944,8 +1944,8 @@ func (q *qemu) addDevice(ctx context.Context, devInfo interface{}, devType Devic
 
 // getSandboxConsole builds the path of the console where we can read
 // logs coming from the sandbox.
-func (q *qemu) getSandboxConsole(ctx context.Context, id string) (string, string, error) {
-	span, _ := katatrace.Trace(ctx, q.Logger(), "getSandboxConsole", qemuTracingTags, map[string]string{"sandbox_id": q.id})
+func (q *qemu) GetSandboxConsole(ctx context.Context, id string) (string, string, error) {
+	span, _ := katatrace.Trace(ctx, q.Logger(), "GetSandboxConsole", qemuTracingTags, map[string]string{"sandbox_id": q.id})
 	defer span.End()
 
 	consoleURL, err := utils.BuildSocketPath(q.store.RunVMStoragePath(), id, consoleSocket)
@@ -1957,7 +1957,7 @@ func (q *qemu) getSandboxConsole(ctx context.Context, id string) (string, string
 }
 
 func (q *qemu) saveSandbox() error {
-	q.Logger().Info("save sandbox")
+	q.Logger().Info("Save sandbox")
 
 	if err := q.qmpSetup(); err != nil {
 		return err
@@ -2009,8 +2009,8 @@ func (q *qemu) waitMigration() error {
 	return nil
 }
 
-func (q *qemu) disconnect(ctx context.Context) {
-	span, _ := katatrace.Trace(ctx, q.Logger(), "disconnect", qemuTracingTags, map[string]string{"sandbox_id": q.id})
+func (q *qemu) Disconnect(ctx context.Context) {
+	span, _ := katatrace.Trace(ctx, q.Logger(), "Disconnect", qemuTracingTags, map[string]string{"sandbox_id": q.id})
 	defer span.End()
 
 	q.qmpShutdown()
@@ -2027,7 +2027,7 @@ func (q *qemu) disconnect(ctx context.Context) {
 // the memory to remove has to be at least the size of one slot.
 // To return memory back we are resizing the VM memory balloon.
 // A longer term solution is evaluate solutions like virtio-mem
-func (q *qemu) resizeMemory(ctx context.Context, reqMemMB uint32, memoryBlockSizeMB uint32, probe bool) (uint32, MemoryDevice, error) {
+func (q *qemu) ResizeMemory(ctx context.Context, reqMemMB uint32, memoryBlockSizeMB uint32, probe bool) (uint32, MemoryDevice, error) {
 
 	currentMemory := q.config.MemorySize + uint32(q.state.HotpluggedMemory)
 	if err := q.qmpSetup(); err != nil {
@@ -2058,7 +2058,7 @@ func (q *qemu) resizeMemory(ctx context.Context, reqMemMB uint32, memoryBlockSiz
 		addMemDevice.SizeMB = int(memHotplugMB)
 		addMemDevice.Probe = probe
 
-		data, err := q.hotplugAddDevice(ctx, &addMemDevice, MemoryDev)
+		data, err := q.HotplugAddDevice(ctx, &addMemDevice, MemoryDev)
 		if err != nil {
 			return currentMemory, addMemDevice, err
 		}
@@ -2078,7 +2078,7 @@ func (q *qemu) resizeMemory(ctx context.Context, reqMemMB uint32, memoryBlockSiz
 		addMemDevice.SizeMB = int(memHotunplugMB)
 		addMemDevice.Probe = probe
 
-		data, err := q.hotplugRemoveDevice(ctx, &addMemDevice, MemoryDev)
+		data, err := q.HotplugRemoveDevice(ctx, &addMemDevice, MemoryDev)
 		if err != nil {
 			return currentMemory, addMemDevice, err
 		}
@@ -2086,7 +2086,7 @@ func (q *qemu) resizeMemory(ctx context.Context, reqMemMB uint32, memoryBlockSiz
 		if !ok {
 			return currentMemory, addMemDevice, fmt.Errorf("Could not get the memory removed, got %+v", data)
 		}
-		//FIXME: This is to check memory hotplugRemoveDevice reported 0, as this is not supported.
+		//FIXME: This is to Check memory HotplugRemoveDevice reported 0, as this is not supported.
 		// In the future if this is implemented this validation should be removed.
 		if memoryRemoved != 0 {
 			return currentMemory, addMemDevice, fmt.Errorf("memory hot unplug is not supported, something went wrong")
@@ -2228,8 +2228,8 @@ func genericAppendPCIeRootPort(devices []govmmQemu.Device, number uint32, machin
 	return devices
 }
 
-func (q *qemu) getThreadIDs(ctx context.Context) (VcpuThreadIDs, error) {
-	span, _ := katatrace.Trace(ctx, q.Logger(), "getThreadIDs", qemuTracingTags, map[string]string{"sandbox_id": q.id})
+func (q *qemu) GetThreadIDs(ctx context.Context) (VcpuThreadIDs, error) {
+	span, _ := katatrace.Trace(ctx, q.Logger(), "GetThreadIDs", qemuTracingTags, map[string]string{"sandbox_id": q.id})
 	defer span.End()
 
 	tid := VcpuThreadIDs{}
@@ -2260,7 +2260,7 @@ func calcHotplugMemMiBSize(mem uint32, memorySectionSizeMB uint32) (uint32, erro
 	return uint32(math.Ceil(float64(mem)/float64(memorySectionSizeMB))) * memorySectionSizeMB, nil
 }
 
-func (q *qemu) resizeVCPUs(ctx context.Context, reqVCPUs uint32) (currentVCPUs uint32, newVCPUs uint32, err error) {
+func (q *qemu) ResizeVCPUs(ctx context.Context, reqVCPUs uint32) (currentVCPUs uint32, newVCPUs uint32, err error) {
 
 	currentVCPUs = q.config.NumVCPUs + uint32(len(q.state.HotpluggedVCPUs))
 	newVCPUs = currentVCPUs
@@ -2268,7 +2268,7 @@ func (q *qemu) resizeVCPUs(ctx context.Context, reqVCPUs uint32) (currentVCPUs u
 	case currentVCPUs < reqVCPUs:
 		//hotplug
 		addCPUs := reqVCPUs - currentVCPUs
-		data, err := q.hotplugAddDevice(ctx, addCPUs, CpuDev)
+		data, err := q.HotplugAddDevice(ctx, addCPUs, CpuDev)
 		if err != nil {
 			return currentVCPUs, newVCPUs, err
 		}
@@ -2280,7 +2280,7 @@ func (q *qemu) resizeVCPUs(ctx context.Context, reqVCPUs uint32) (currentVCPUs u
 	case currentVCPUs > reqVCPUs:
 		//hotunplug
 		removeCPUs := currentVCPUs - reqVCPUs
-		data, err := q.hotplugRemoveDevice(ctx, removeCPUs, CpuDev)
+		data, err := q.HotplugRemoveDevice(ctx, removeCPUs, CpuDev)
 		if err != nil {
 			return currentVCPUs, newVCPUs, err
 		}
@@ -2293,8 +2293,8 @@ func (q *qemu) resizeVCPUs(ctx context.Context, reqVCPUs uint32) (currentVCPUs u
 	return currentVCPUs, newVCPUs, nil
 }
 
-func (q *qemu) cleanup(ctx context.Context) error {
-	span, _ := katatrace.Trace(ctx, q.Logger(), "cleanup", qemuTracingTags, map[string]string{"sandbox_id": q.id})
+func (q *qemu) Cleanup(ctx context.Context) error {
+	span, _ := katatrace.Trace(ctx, q.Logger(), "Cleanup", qemuTracingTags, map[string]string{"sandbox_id": q.id})
 	defer span.End()
 
 	for _, fd := range q.fds {
@@ -2307,7 +2307,7 @@ func (q *qemu) cleanup(ctx context.Context) error {
 	return nil
 }
 
-func (q *qemu) getPids() []int {
+func (q *qemu) GetPids() []int {
 	data, err := ioutil.ReadFile(q.qemuConfig.PidFile)
 	if err != nil {
 		q.Logger().WithError(err).Error("Could not read qemu pid file")
@@ -2328,7 +2328,7 @@ func (q *qemu) getPids() []int {
 	return pids
 }
 
-func (q *qemu) getVirtioFsPid() *int {
+func (q *qemu) GetVirtioFsPid() *int {
 	return &q.state.VirtiofsdPid
 }
 
@@ -2374,7 +2374,7 @@ func (q *qemu) fromGrpc(ctx context.Context, hypervisorConfig *HypervisorConfig,
 func (q *qemu) toGrpc(ctx context.Context) ([]byte, error) {
 	q.qmpShutdown()
 
-	q.cleanup(ctx)
+	q.Cleanup(ctx)
 	qp := qemuGrpc{
 		ID:             q.id,
 		QmpChannelpath: q.qmpMonitorCh.path,
@@ -2387,14 +2387,14 @@ func (q *qemu) toGrpc(ctx context.Context) ([]byte, error) {
 	return json.Marshal(&qp)
 }
 
-func (q *qemu) save() (s persistapi.HypervisorState) {
+func (q *qemu) Save() (s persistapi.HypervisorState) {
 
-	// If QEMU isn't even running, there isn't any state to save
+	// If QEMU isn't even running, there isn't any state to Save
 	if q.stopped {
 		return
 	}
 
-	pids := q.getPids()
+	pids := q.GetPids()
 	if len(pids) != 0 {
 		s.Pid = pids[0]
 	}
@@ -2422,7 +2422,7 @@ func (q *qemu) save() (s persistapi.HypervisorState) {
 	return
 }
 
-func (q *qemu) load(s persistapi.HypervisorState) {
+func (q *qemu) Load(s persistapi.HypervisorState) {
 	q.state.UUID = s.UUID
 	q.state.HotpluggedMemory = s.HotpluggedMemory
 	q.state.HotplugVFIOOnRootBus = s.HotplugVFIOOnRootBus
@@ -2440,7 +2440,7 @@ func (q *qemu) load(s persistapi.HypervisorState) {
 	}
 }
 
-func (q *qemu) check() error {
+func (q *qemu) Check() error {
 	q.memoryDumpFlag.Lock()
 	defer q.memoryDumpFlag.Unlock()
 
@@ -2460,11 +2460,11 @@ func (q *qemu) check() error {
 	return nil
 }
 
-func (q *qemu) generateSocket(id string) (interface{}, error) {
+func (q *qemu) GenerateSocket(id string) (interface{}, error) {
 	return generateVMSocket(id, q.store.RunVMStoragePath())
 }
 
-func (q *qemu) isRateLimiterBuiltin() bool {
+func (q *qemu) IsRateLimiterBuiltin() bool {
 	return false
 }
 

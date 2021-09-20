@@ -211,7 +211,7 @@ func testQemuAddDevice(t *testing.T, devInfo interface{}, devType DeviceType, ex
 		arch: &qemuArchBase{},
 	}
 
-	err := q.addDevice(context.Background(), devInfo, devType)
+	err := q.AddDevice(context.Background(), devInfo, devType)
 	assert.NoError(err)
 	assert.Exactly(q.qemuConfig.Devices, expected)
 }
@@ -332,7 +332,7 @@ func TestQemuGetSandboxConsole(t *testing.T) {
 	sandboxID := "testSandboxID"
 	expected := filepath.Join(q.store.RunVMStoragePath(), sandboxID, consoleSocket)
 
-	proto, result, err := q.getSandboxConsole(q.ctx, sandboxID)
+	proto, result, err := q.GetSandboxConsole(q.ctx, sandboxID)
 	assert.NoError(err)
 	assert.Equal(result, expected)
 	assert.Equal(proto, consoleProtoUnix)
@@ -345,7 +345,7 @@ func TestQemuCapabilities(t *testing.T) {
 		arch: &qemuArchBase{},
 	}
 
-	caps := q.capabilities(q.ctx)
+	caps := q.Capabilities(q.ctx)
 	assert.True(caps.IsBlockDeviceHotplugSupported())
 }
 
@@ -401,9 +401,9 @@ func TestHotplugUnsupportedDeviceType(t *testing.T) {
 		config: qemuConfig,
 	}
 
-	_, err := q.hotplugAddDevice(context.Background(), &MemoryDevice{0, 128, uint64(0), false}, FsDev)
+	_, err := q.HotplugAddDevice(context.Background(), &MemoryDevice{0, 128, uint64(0), false}, FsDev)
 	assert.Error(err)
-	_, err = q.hotplugRemoveDevice(context.Background(), &MemoryDevice{0, 128, uint64(0), false}, FsDev)
+	_, err = q.HotplugRemoveDevice(context.Background(), &MemoryDevice{0, 128, uint64(0), false}, FsDev)
 	assert.Error(err)
 }
 
@@ -430,7 +430,7 @@ func TestQemuCleanup(t *testing.T) {
 		config: newQemuConfig(),
 	}
 
-	err := q.cleanup(q.ctx)
+	err := q.Cleanup(q.ctx)
 	assert.Nil(err)
 }
 
@@ -554,7 +554,7 @@ func TestQemuGetpids(t *testing.T) {
 
 	qemuConfig := newQemuConfig()
 	q := &qemu{}
-	pids := q.getPids()
+	pids := q.GetPids()
 	assert.NotNil(pids)
 	assert.True(len(pids) == 1)
 	assert.True(pids[0] == 0)
@@ -569,18 +569,18 @@ func TestQemuGetpids(t *testing.T) {
 	defer os.Remove(tmpfile)
 
 	q.qemuConfig.PidFile = tmpfile
-	pids = q.getPids()
+	pids = q.GetPids()
 	assert.True(len(pids) == 1)
 	assert.True(pids[0] == 0)
 
 	err = ioutil.WriteFile(tmpfile, []byte("100"), 0)
 	assert.Nil(err)
-	pids = q.getPids()
+	pids = q.GetPids()
 	assert.True(len(pids) == 1)
 	assert.True(pids[0] == 100)
 
 	q.state.VirtiofsdPid = 200
-	pids = q.getPids()
+	pids = q.GetPids()
 	assert.True(len(pids) == 2)
 	assert.True(pids[0] == 100)
 	assert.True(pids[1] == 200)

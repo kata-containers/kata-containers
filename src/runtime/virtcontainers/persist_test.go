@@ -55,7 +55,7 @@ func TestSandboxRestore(t *testing.T) {
 	assert.Equal(sandbox.state.GuestMemoryBlockSizeMB, uint32(0))
 	assert.Equal(len(sandbox.state.BlockIndexMap), 0)
 
-	// set state data and save again
+	// set state data and Save again
 	sandbox.state.State = types.StateString("running")
 	sandbox.state.GuestMemoryBlockSizeMB = uint32(1024)
 	sandbox.state.BlockIndexMap[2] = struct{}{}

@@ -87,7 +87,7 @@ func TestIncorrectEndpointTypeString(t *testing.T) {
 func TestSaveLoadIfPair(t *testing.T) {
 	macAddr := net.HardwareAddr{0x02, 0x00, 0xCA, 0xFE, 0x00, 0x04}
 
-	tmpfile, err := ioutil.TempFile("", "vc-save-load-net-")
+	tmpfile, err := ioutil.TempFile("", "vc-Save-Load-net-")
 	assert.Nil(t, err)
 	defer os.Remove(tmpfile.Name())
 
@@ -109,7 +109,7 @@ func TestSaveLoadIfPair(t *testing.T) {
 		NetInterworkingModel: DefaultNetInterworkingModel,
 	}
 
-	// Save to disk then load it back.
+	// Save to disk then Load it back.
 	savedIfPair := saveNetIfPair(netPair)
 	loadedIfPair := loadNetIfPair(savedIfPair)
 

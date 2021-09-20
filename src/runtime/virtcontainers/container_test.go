@@ -99,7 +99,7 @@ func TestContainerRemoveDrive(t *testing.T) {
 	container.state.Fstype = ""
 	err := container.removeDrive(sandbox.ctx)
 
-	// hotplugRemoveDevice for hypervisor should not be called.
+	// HotplugRemoveDevice for hypervisor should not be called.
 	// test should pass without a hypervisor created for the container's sandbox.
 	assert.Nil(t, err, "remove drive should succeed")
 
@@ -329,7 +329,7 @@ func TestContainerAddDriveDir(t *testing.T) {
 		rootFs:  RootFs{Target: fakeRootfs, Mounted: true},
 	}
 
-	// Make the checkStorageDriver func variable point to a fake check function
+	// Make the checkStorageDriver func variable point to a fake Check function
 	savedFunc := checkStorageDriver
 	checkStorageDriver = func(major, minor int) (bool, error) {
 		return true, nil
@@ -562,7 +562,7 @@ func TestMountSharedDirMounts(t *testing.T) {
 
 	// create a new shared directory for our test:
 	kataHostSharedDirSaved := kataHostSharedDir
-	testHostDir, err := ioutil.TempDir("", "kata-cleanup")
+	testHostDir, err := ioutil.TempDir("", "kata-Cleanup")
 	assert.NoError(err)
 	kataHostSharedDir = func() string {
 		return testHostDir

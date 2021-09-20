@@ -259,7 +259,7 @@ func (s *Sandbox) GetNetNs() string {
 
 // GetHypervisorPid returns the hypervisor's pid.
 func (s *Sandbox) GetHypervisorPid() (int, error) {
-	pids := s.hypervisor.getPids()
+	pids := s.hypervisor.GetPids()
 	if len(pids) == 0 || pids[0] == 0 {
 		return -1, fmt.Errorf("Invalid hypervisor PID: %+v", pids)
 	}
@@ -294,7 +294,7 @@ func (s *Sandbox) Release(ctx context.Context) error {
 	if s.monitor != nil {
 		s.monitor.stop()
 	}
-	s.hypervisor.disconnect(ctx)
+	s.hypervisor.Disconnect(ctx)
 	return s.agent.disconnect(ctx)
 }
 
@@ -474,7 +474,7 @@ func createSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Fac
 		return s, nil
 	}
 
-	// Below code path is called only during create, because of earlier check.
+	// Below code path is called only during create, because of earlier Check.
 	if err := s.agent.createSandbox(ctx, s); err != nil {
 		return nil, err
 	}
@@ -755,7 +755,7 @@ func (s *Sandbox) Delete(ctx context.Context) error {
 
 	if !rootless.IsRootless() {
 		if err := s.cgroupsDelete(); err != nil {
-			s.Logger().WithError(err).Error("failed to cleanup cgroups")
+			s.Logger().WithError(err).Error("failed to Cleanup cgroups")
 		}
 	}
 
@@ -763,8 +763,8 @@ func (s *Sandbox) Delete(ctx context.Context) error {
 		s.monitor.stop()
 	}
 
-	if err := s.hypervisor.cleanup(ctx); err != nil {
-		s.Logger().WithError(err).Error("failed to cleanup hypervisor")
+	if err := s.hypervisor.Cleanup(ctx); err != nil {
+		s.Logger().WithError(err).Error("failed to Cleanup hypervisor")
 	}
 
 	s.agent.cleanup(ctx, s)
@@ -979,7 +979,7 @@ func newConsoleWatcher(ctx context.Context, s *Sandbox) (*consoleWatcher, error)
 		cw  consoleWatcher
 	)
 
-	cw.proto, cw.consoleURL, err = s.hypervisor.getSandboxConsole(ctx, s.id)
+	cw.proto, cw.consoleURL, err = s.hypervisor.GetSandboxConsole(ctx, s.id)
 	if err != nil {
 		return nil, err
 	}
@@ -1036,7 +1036,7 @@ func (cw *consoleWatcher) start(s *Sandbox) (err error) {
 	return nil
 }
 
-// check if the console watcher has already watched the vm console.
+// Check if the console watcher has already watched the vm console.
 func (cw *consoleWatcher) consoleWatched() bool {
 	return cw.conn != nil || cw.ptyConsole != nil
 }
@@ -1101,7 +1101,7 @@ func (s *Sandbox) addSwap(ctx context.Context, swapID string, size int64) (*conf
 		ID:     swapID,
 		Swap:   true,
 	}
-	_, err = s.hypervisor.hotplugAddDevice(ctx, blockDevice, BlockDev)
+	_, err = s.hypervisor.HotplugAddDevice(ctx, blockDevice, BlockDev)
 	if err != nil {
 		err = fmt.Errorf("add swapfile %s device to VM fail %s", swapFile, err.Error())
 		s.Logger().WithError(err).Error("addSwap")
@@ -1109,7 +1109,7 @@ func (s *Sandbox) addSwap(ctx context.Context, swapID string, size int64) (*conf
 	}
 	defer func() {
 		if err != nil {
-			_, e := s.hypervisor.hotplugRemoveDevice(ctx, blockDevice, BlockDev)
+			_, e := s.hypervisor.HotplugRemoveDevice(ctx, blockDevice, BlockDev)
 			if e != nil {
 				s.Logger().Errorf("remove swapfile %s to VM fail %s", swapFile, e.Error())
 			}
@@ -1539,7 +1539,7 @@ func (s *Sandbox) Stats(ctx context.Context) (SandboxStats, error) {
 	// TODO Do we want to aggregate the overhead cgroup stats to the sandbox ones?
 	stats.CgroupStats.CPUStats.CPUUsage.TotalUsage = metrics.CPU.Usage.Total
 	stats.CgroupStats.MemoryStats.Usage.Usage = metrics.Memory.Usage.Usage
-	tids, err := s.hypervisor.getThreadIDs(ctx)
+	tids, err := s.hypervisor.GetThreadIDs(ctx)
 	if err != nil {
 		return stats, err
 	}
@@ -1780,7 +1780,7 @@ func (s *Sandbox) HotplugAddDevice(ctx context.Context, device api.Device, devTy
 
 		// adding a group of VFIO devices
 		for _, dev := range vfioDevices {
-			if _, err := s.hypervisor.hotplugAddDevice(ctx, dev, VfioDev); err != nil {
+			if _, err := s.hypervisor.HotplugAddDevice(ctx, dev, VfioDev); err != nil {
 				s.Logger().
 					WithFields(logrus.Fields{
 						"sandbox":         s.id,
@@ -1796,14 +1796,14 @@ func (s *Sandbox) HotplugAddDevice(ctx context.Context, device api.Device, devTy
 		if !ok {
 			return fmt.Errorf("device type mismatch, expect device type to be %s", devType)
 		}
-		_, err := s.hypervisor.hotplugAddDevice(ctx, blockDevice.BlockDrive, BlockDev)
+		_, err := s.hypervisor.HotplugAddDevice(ctx, blockDevice.BlockDrive, BlockDev)
 		return err
 	case config.VhostUserBlk:
 		vhostUserBlkDevice, ok := device.(*drivers.VhostUserBlkDevice)
 		if !ok {
 			return fmt.Errorf("device type mismatch, expect device type to be %s", devType)
 		}
-		_, err := s.hypervisor.hotplugAddDevice(ctx, vhostUserBlkDevice.VhostUserDeviceAttrs, VhostuserDev)
+		_, err := s.hypervisor.HotplugAddDevice(ctx, vhostUserBlkDevice.VhostUserDeviceAttrs, VhostuserDev)
 		return err
 	case config.DeviceGeneric:
 		// TODO: what?
@@ -1831,7 +1831,7 @@ func (s *Sandbox) HotplugRemoveDevice(ctx context.Context, device api.Device, de
 
 		// remove a group of VFIO devices
 		for _, dev := range vfioDevices {
-			if _, err := s.hypervisor.hotplugRemoveDevice(ctx, dev, VfioDev); err != nil {
+			if _, err := s.hypervisor.HotplugRemoveDevice(ctx, dev, VfioDev); err != nil {
 				s.Logger().WithError(err).
 					WithFields(logrus.Fields{
 						"sandbox":         s.id,
@@ -1852,14 +1852,14 @@ func (s *Sandbox) HotplugRemoveDevice(ctx context.Context, device api.Device, de
 			s.Logger().WithField("path", blockDrive.File).Infof("Skip device: cannot hot remove PMEM devices")
 			return nil
 		}
-		_, err := s.hypervisor.hotplugRemoveDevice(ctx, blockDrive, BlockDev)
+		_, err := s.hypervisor.HotplugRemoveDevice(ctx, blockDrive, BlockDev)
 		return err
 	case config.VhostUserBlk:
 		vhostUserDeviceAttrs, ok := device.GetDeviceInfo().(*config.VhostUserDeviceAttrs)
 		if !ok {
 			return fmt.Errorf("device type mismatch, expect device type to be %s", devType)
 		}
-		_, err := s.hypervisor.hotplugRemoveDevice(ctx, vhostUserDeviceAttrs, VhostuserDev)
+		_, err := s.hypervisor.HotplugRemoveDevice(ctx, vhostUserDeviceAttrs, VhostuserDev)
 		return err
 	case config.DeviceGeneric:
 		// TODO: what?
@@ -1886,11 +1886,11 @@ func (s *Sandbox) UnsetSandboxBlockIndex(index int) error {
 func (s *Sandbox) AppendDevice(ctx context.Context, device api.Device) error {
 	switch device.DeviceType() {
 	case config.VhostUserSCSI, config.VhostUserNet, config.VhostUserBlk, config.VhostUserFS:
-		return s.hypervisor.addDevice(ctx, device.GetDeviceInfo().(*config.VhostUserDeviceAttrs), VhostuserDev)
+		return s.hypervisor.AddDevice(ctx, device.GetDeviceInfo().(*config.VhostUserDeviceAttrs), VhostuserDev)
 	case config.DeviceVFIO:
 		vfioDevs := device.GetDeviceInfo().([]*config.VFIODev)
 		for _, d := range vfioDevs {
-			return s.hypervisor.addDevice(ctx, *d, VfioDev)
+			return s.hypervisor.AddDevice(ctx, *d, VfioDev)
 		}
 	default:
 		s.Logger().WithField("device-type", device.DeviceType()).
@@ -1949,11 +1949,11 @@ func (s *Sandbox) updateResources(ctx context.Context) error {
 		return err
 	}
 	// Add default vcpus for sandbox
-	sandboxVCPUs += s.hypervisor.hypervisorConfig().NumVCPUs
+	sandboxVCPUs += s.hypervisor.HypervisorConfig().NumVCPUs
 
 	sandboxMemoryByte, sandboxneedPodSwap, sandboxSwapByte := s.calculateSandboxMemory()
 	// Add default / rsvd memory for sandbox.
-	hypervisorMemoryByte := int64(s.hypervisor.hypervisorConfig().MemorySize) << utils.MibToBytesShift
+	hypervisorMemoryByte := int64(s.hypervisor.HypervisorConfig().MemorySize) << utils.MibToBytesShift
 	sandboxMemoryByte += hypervisorMemoryByte
 	if sandboxneedPodSwap {
 		sandboxSwapByte += hypervisorMemoryByte
@@ -1970,7 +1970,7 @@ func (s *Sandbox) updateResources(ctx context.Context) error {
 
 	// Update VCPUs
 	s.Logger().WithField("cpus-sandbox", sandboxVCPUs).Debugf("Request to hypervisor to update vCPUs")
-	oldCPUs, newCPUs, err := s.hypervisor.resizeVCPUs(ctx, sandboxVCPUs)
+	oldCPUs, newCPUs, err := s.hypervisor.ResizeVCPUs(ctx, sandboxVCPUs)
 	if err != nil {
 		return err
 	}
@@ -1988,7 +1988,7 @@ func (s *Sandbox) updateResources(ctx context.Context) error {
 
 	// Update Memory
 	s.Logger().WithField("memory-sandbox-size-byte", sandboxMemoryByte).Debugf("Request to hypervisor to update memory")
-	newMemory, updatedMemoryDevice, err := s.hypervisor.resizeMemory(ctx, uint32(sandboxMemoryByte>>utils.MibToBytesShift), s.state.GuestMemoryBlockSizeMB, s.state.GuestMemoryHotplugProbe)
+	newMemory, updatedMemoryDevice, err := s.hypervisor.ResizeMemory(ctx, uint32(sandboxMemoryByte>>utils.MibToBytesShift), s.state.GuestMemoryBlockSizeMB, s.state.GuestMemoryHotplugProbe)
 	if err != nil {
 		if err == noGuestMemHotplugErr {
 			s.Logger().Warnf("%s, memory specifications cannot be guaranteed", err)
@@ -2157,7 +2157,7 @@ func (s *Sandbox) cgroupsDelete() error {
 
 // constrainHypervisor will place the VMM and vCPU threads into cgroups.
 func (s *Sandbox) constrainHypervisor(ctx context.Context) error {
-	tids, err := s.hypervisor.getThreadIDs(ctx)
+	tids, err := s.hypervisor.GetThreadIDs(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get thread ids from hypervisor: %v", err)
 	}
@@ -2197,7 +2197,7 @@ func (s *Sandbox) setupCgroups() error {
 // This OCI specification was patched when the sandbox was created
 // by containerCapabilities(), SetEphemeralStorageType() and others
 // in order to support:
-// * capabilities
+// * Capabilities
 // * Ephemeral storage
 // * k8s empty dir
 // If you need the original (vanilla) OCI spec,
@@ -2264,7 +2264,7 @@ func fetchSandbox(ctx context.Context, sandboxID string) (sandbox *Sandbox, err 
 
 	var config SandboxConfig
 
-	// load sandbox config fromld store.
+	// Load sandbox config fromld store.
 	c, err := loadSandboxConfig(sandboxID)
 	if err != nil {
 		virtLog.WithError(err).Warning("failed to get sandbox config from store")

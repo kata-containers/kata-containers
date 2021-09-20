@@ -472,7 +472,7 @@ func TestBindUnmountContainerRootfsENOENTNotError(t *testing.T) {
 	cID := "contIDTest"
 	assert := assert.New(t)
 
-	// check to make sure the file doesn't exist
+	// Check to make sure the file doesn't exist
 	testPath := filepath.Join(testMnt, sID, cID, rootfsDir)
 	if _, err := os.Stat(testPath); !os.IsNotExist(err) {
 		assert.NoError(os.Remove(testPath))

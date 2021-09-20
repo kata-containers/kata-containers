@@ -472,7 +472,7 @@ type PerformanceMetrics struct {
 	FullCreateSnapshot uint64 `json:"full_create_snapshot"`
 	// Measures the snapshot diff create time, at the API (user) level, in microseconds.
 	DiffCreateSnapshot uint64 `json:"diff_create_snapshot"`
-	// Measures the snapshot load time, at the API (user) level, in microseconds.
+	// Measures the snapshot Load time, at the API (user) level, in microseconds.
 	LoadSnapshot uint64 `json:"load_snapshot"`
 	// Measures the microVM pausing duration, at the API (user) level, in microseconds.
 	PauseVM uint64 `json:"pause_vm"`
@@ -482,7 +482,7 @@ type PerformanceMetrics struct {
 	VmmFullCreateSnapshot uint64 `json:"vmm_full_create_snapshot"`
 	// Measures the snapshot diff create time, at the VMM level, in microseconds.
 	VmmDiffCreateSnapshot uint64 `json:"vmm_diff_create_snapshot"`
-	// Measures the snapshot load time, at the VMM level, in microseconds.
+	// Measures the snapshot Load time, at the VMM level, in microseconds.
 	VmmLoadSnapshot uint64 `json:"vmm_load_snapshot"`
 	// Measures the microVM pausing duration, at the VMM level, in microseconds.
 	VmmPauseVM uint64 `json:"vmm_pause_vm"`

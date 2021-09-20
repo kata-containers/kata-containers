@@ -491,7 +491,7 @@ func (conf *HypervisorConfig) CheckTemplateConfig() error {
 		}
 
 		if conf.BootFromTemplate && conf.DevicesStatePath == "" {
-			return fmt.Errorf("Missing DevicesStatePath to load from vm template")
+			return fmt.Errorf("Missing DevicesStatePath to Load from vm template")
 		}
 	}
 
@@ -742,7 +742,7 @@ func GetHostMemorySizeKb(memInfoPath string) (uint64, error) {
 // CheckCmdline checks whether an option or parameter is present in the kernel command line.
 // Search is case-insensitive.
 // Takes path to file that contains the kernel command line, desired option, and permitted values
-// (empty values to check for options).
+// (empty values to Check for options).
 func CheckCmdline(kernelCmdlinePath, searchParam string, searchValues []string) (bool, error) {
 	f, err := os.Open(kernelCmdlinePath)
 	if err != nil {
@@ -750,8 +750,8 @@ func CheckCmdline(kernelCmdlinePath, searchParam string, searchValues []string) 
 	}
 	defer f.Close()
 
-	// Create check function -- either check for verbatim option
-	// or check for parameter and permitted values
+	// Create Check function -- either Check for verbatim option
+	// or Check for parameter and permitted values
 	var check func(string, string, []string) bool
 	if len(searchValues) == 0 {
 		check = func(option, searchParam string, _ []string) bool {
@@ -835,7 +835,7 @@ func RunningOnVMM(cpuInfoPath string) (bool, error) {
 }
 
 func GetHypervisorPid(h hypervisor) int {
-	pids := h.getPids()
+	pids := h.GetPids()
 	if len(pids) == 0 {
 		return 0
 	}
@@ -866,33 +866,33 @@ type hypervisor interface {
 	pauseSandbox(ctx context.Context) error
 	saveSandbox() error
 	resumeSandbox(ctx context.Context) error
-	addDevice(ctx context.Context, devInfo interface{}, devType DeviceType) error
-	hotplugAddDevice(ctx context.Context, devInfo interface{}, devType DeviceType) (interface{}, error)
-	hotplugRemoveDevice(ctx context.Context, devInfo interface{}, devType DeviceType) (interface{}, error)
-	resizeMemory(ctx context.Context, memMB uint32, memoryBlockSizeMB uint32, probe bool) (uint32, MemoryDevice, error)
-	resizeVCPUs(ctx context.Context, vcpus uint32) (uint32, uint32, error)
-	getSandboxConsole(ctx context.Context, sandboxID string) (string, string, error)
-	disconnect(ctx context.Context)
-	capabilities(ctx context.Context) types.Capabilities
-	hypervisorConfig() HypervisorConfig
-	getThreadIDs(ctx context.Context) (VcpuThreadIDs, error)
-	cleanup(ctx context.Context) error
+	AddDevice(ctx context.Context, devInfo interface{}, devType DeviceType) error
+	HotplugAddDevice(ctx context.Context, devInfo interface{}, devType DeviceType) (interface{}, error)
+	HotplugRemoveDevice(ctx context.Context, devInfo interface{}, devType DeviceType) (interface{}, error)
+	ResizeMemory(ctx context.Context, memMB uint32, memoryBlockSizeMB uint32, probe bool) (uint32, MemoryDevice, error)
+	ResizeVCPUs(ctx context.Context, vcpus uint32) (uint32, uint32, error)
+	GetSandboxConsole(ctx context.Context, sandboxID string) (string, string, error)
+	Disconnect(ctx context.Context)
+	Capabilities(ctx context.Context) types.Capabilities
+	HypervisorConfig() HypervisorConfig
+	GetThreadIDs(ctx context.Context) (VcpuThreadIDs, error)
+	Cleanup(ctx context.Context) error
 	// getPids returns a slice of hypervisor related process ids.
 	// The hypervisor pid must be put at index 0.
-	getPids() []int
-	getVirtioFsPid() *int
+	GetPids() []int
+	GetVirtioFsPid() *int
 	fromGrpc(ctx context.Context, hypervisorConfig *HypervisorConfig, j []byte) error
 	toGrpc(ctx context.Context) ([]byte, error)
-	check() error
+	Check() error
 
-	save() persistapi.HypervisorState
-	load(persistapi.HypervisorState)
+	Save() persistapi.HypervisorState
+	Load(persistapi.HypervisorState)
 
 	// generate the socket to communicate the host and guest
-	generateSocket(id string) (interface{}, error)
+	GenerateSocket(id string) (interface{}, error)
 
 	// check if hypervisor supports built-in rate limiter.
-	isRateLimiterBuiltin() bool
+	IsRateLimiterBuiltin() bool
 
 	setSandbox(sandbox *Sandbox)
 }

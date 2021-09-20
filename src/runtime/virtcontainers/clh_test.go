@@ -301,10 +301,10 @@ func TestCloudHypervisorResizeMemory(t *testing.T) {
 			clh.APIClient = mockClient
 			clh.config = clhConfig
 
-			newMem, memDev, err := clh.resizeMemory(context.Background(), tt.args.reqMemMB, tt.args.memoryBlockSizeMB, false)
+			newMem, memDev, err := clh.ResizeMemory(context.Background(), tt.args.reqMemMB, tt.args.memoryBlockSizeMB, false)
 
 			if (err != nil) != tt.wantErr {
-				t.Errorf("cloudHypervisor.resizeMemory() error = %v, expected to fail = %v", err, tt.wantErr)
+				t.Errorf("cloudHypervisor.ResizeMemory() error = %v, expected to fail = %v", err, tt.wantErr)
 				return
 			}
 
@@ -315,11 +315,11 @@ func TestCloudHypervisorResizeMemory(t *testing.T) {
 			expectedMem := clhConfig.MemorySize + uint32(tt.expectedMemDev.SizeMB)
 
 			if newMem != expectedMem {
-				t.Errorf("cloudHypervisor.resizeMemory() got = %+v, want %+v", newMem, expectedMem)
+				t.Errorf("cloudHypervisor.ResizeMemory() got = %+v, want %+v", newMem, expectedMem)
 			}
 
 			if !reflect.DeepEqual(memDev, tt.expectedMemDev) {
-				t.Errorf("cloudHypervisor.resizeMemory() got = %+v, want %+v", memDev, tt.expectedMemDev)
+				t.Errorf("cloudHypervisor.ResizeMemory() got = %+v, want %+v", memDev, tt.expectedMemDev)
 			}
 		})
 	}
@@ -357,12 +357,12 @@ func TestCloudHypervisorHotplugRemoveDevice(t *testing.T) {
 	clh.config = clhConfig
 	clh.APIClient = &clhClientMock{}
 
-	_, err = clh.hotplugRemoveDevice(context.Background(), &config.BlockDrive{}, BlockDev)
+	_, err = clh.HotplugRemoveDevice(context.Background(), &config.BlockDrive{}, BlockDev)
 	assert.NoError(err, "Hotplug remove block device expected no error")
 
-	_, err = clh.hotplugRemoveDevice(context.Background(), &config.VFIODev{}, VfioDev)
+	_, err = clh.HotplugRemoveDevice(context.Background(), &config.VFIODev{}, VfioDev)
 	assert.NoError(err, "Hotplug remove vfio block device expected no error")
 
-	_, err = clh.hotplugRemoveDevice(context.Background(), nil, NetDev)
+	_, err = clh.HotplugRemoveDevice(context.Background(), nil, NetDev)
 	assert.Error(err, "Hotplug remove pmem block device expected error")
 }

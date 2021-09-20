@@ -62,7 +62,7 @@ const (
 	fcTimeout = 10
 	fcSocket  = "firecracker.socket"
 	//Name of the files within jailer root
-	//Having predefined names helps with cleanup
+	//Having predefined names helps with Cleanup
 	fcKernel             = "vmlinux"
 	fcRootfs             = "rootfs"
 	fcStopSandboxTimeout = 15
@@ -194,7 +194,7 @@ func (fc *firecracker) createSandbox(ctx context.Context, id string, networkNS N
 	span, _ := katatrace.Trace(ctx, fc.Logger(), "createSandbox", fcTracingTags, map[string]string{"sandbox_id": fc.id})
 	defer span.End()
 
-	//TODO: check validity of the hypervisor config provided
+	//TODO: Check validity of the hypervisor config provided
 	//https://github.com/kata-containers/runtime/issues/1065
 	fc.id = fc.truncateID(id)
 	fc.state.set(notReady)
@@ -282,7 +282,7 @@ func (fc *firecracker) getVersionNumber() (string, error) {
 
 func (fc *firecracker) parseVersion(data string) (string, error) {
 	// Firecracker versions 0.25 and over contains multiline output on "version" command.
-	// So we have to check it and use first line of output to parse version.
+	// So we have to Check it and use first line of output to parse version.
 	lines := strings.Split(data, "\n")
 
 	var version string
@@ -338,7 +338,7 @@ func (fc *firecracker) fcInit(ctx context.Context, timeout int) error {
 	defer span.End()
 
 	var err error
-	//FC version set and check
+	//FC version set and Check
 	if fc.info.Version, err = fc.getVersionNumber(); err != nil {
 		return err
 	}
@@ -730,7 +730,7 @@ func (fc *firecracker) fcInitConfiguration(ctx context.Context) error {
 
 	fc.state.set(cfReady)
 	for _, d := range fc.pendingDevices {
-		if err := fc.addDevice(ctx, d.dev, d.devType); err != nil {
+		if err := fc.AddDevice(ctx, d.dev, d.devType); err != nil {
 			return err
 		}
 	}
@@ -1002,8 +1002,8 @@ func (fc *firecracker) fcUpdateBlockDrive(ctx context.Context, path, id string) 
 
 // addDevice will add extra devices to firecracker.  Limited to configure before the
 // virtual machine starts.  Devices include drivers and network interfaces only.
-func (fc *firecracker) addDevice(ctx context.Context, devInfo interface{}, devType DeviceType) error {
-	span, _ := katatrace.Trace(ctx, fc.Logger(), "addDevice", fcTracingTags, map[string]string{"sandbox_id": fc.id})
+func (fc *firecracker) AddDevice(ctx context.Context, devInfo interface{}, devType DeviceType) error {
+	span, _ := katatrace.Trace(ctx, fc.Logger(), "AddDevice", fcTracingTags, map[string]string{"sandbox_id": fc.id})
 	defer span.End()
 
 	fc.state.RLock()
@@ -1072,8 +1072,8 @@ func (fc *firecracker) hotplugBlockDevice(ctx context.Context, drive config.Bloc
 }
 
 // hotplugAddDevice supported in Firecracker VMM
-func (fc *firecracker) hotplugAddDevice(ctx context.Context, devInfo interface{}, devType DeviceType) (interface{}, error) {
-	span, _ := katatrace.Trace(ctx, fc.Logger(), "hotplugAddDevice", fcTracingTags, map[string]string{"sandbox_id": fc.id})
+func (fc *firecracker) HotplugAddDevice(ctx context.Context, devInfo interface{}, devType DeviceType) (interface{}, error) {
+	span, _ := katatrace.Trace(ctx, fc.Logger(), "HotplugAddDevice", fcTracingTags, map[string]string{"sandbox_id": fc.id})
 	defer span.End()
 
 	switch devType {
@@ -1081,15 +1081,15 @@ func (fc *firecracker) hotplugAddDevice(ctx context.Context, devInfo interface{}
 		return fc.hotplugBlockDevice(ctx, *devInfo.(*config.BlockDrive), AddDevice)
 	default:
 		fc.Logger().WithFields(logrus.Fields{"devInfo": devInfo,
-			"deviceType": devType}).Warn("hotplugAddDevice: unsupported device")
+			"deviceType": devType}).Warn("HotplugAddDevice: unsupported device")
 		return nil, fmt.Errorf("Could not hot add device: unsupported device: %v, type: %v",
 			devInfo, devType)
 	}
 }
 
 // hotplugRemoveDevice supported in Firecracker VMM
-func (fc *firecracker) hotplugRemoveDevice(ctx context.Context, devInfo interface{}, devType DeviceType) (interface{}, error) {
-	span, _ := katatrace.Trace(ctx, fc.Logger(), "hotplugRemoveDevice", fcTracingTags, map[string]string{"sandbox_id": fc.id})
+func (fc *firecracker) HotplugRemoveDevice(ctx context.Context, devInfo interface{}, devType DeviceType) (interface{}, error) {
+	span, _ := katatrace.Trace(ctx, fc.Logger(), "HotplugRemoveDevice", fcTracingTags, map[string]string{"sandbox_id": fc.id})
 	defer span.End()
 
 	switch devType {
@@ -1097,7 +1097,7 @@ func (fc *firecracker) hotplugRemoveDevice(ctx context.Context, devInfo interfac
 		return fc.hotplugBlockDevice(ctx, *devInfo.(*config.BlockDrive), RemoveDevice)
 	default:
 		fc.Logger().WithFields(logrus.Fields{"devInfo": devInfo,
-			"deviceType": devType}).Error("hotplugRemoveDevice: unsupported device")
+			"deviceType": devType}).Error("HotplugRemoveDevice: unsupported device")
 		return nil, fmt.Errorf("Could not hot remove device: unsupported device: %v, type: %v",
 			devInfo, devType)
 	}
@@ -1105,7 +1105,7 @@ func (fc *firecracker) hotplugRemoveDevice(ctx context.Context, devInfo interfac
 
 // getSandboxConsole builds the path of the console where we can read
 // logs coming from the sandbox.
-func (fc *firecracker) getSandboxConsole(ctx context.Context, id string) (string, string, error) {
+func (fc *firecracker) GetSandboxConsole(ctx context.Context, id string) (string, string, error) {
 	master, slave, err := console.NewPty()
 	if err != nil {
 		fc.Logger().Debugf("Error create pseudo tty: %v", err)
@@ -1116,13 +1116,13 @@ func (fc *firecracker) getSandboxConsole(ctx context.Context, id string) (string
 	return consoleProtoPty, slave, nil
 }
 
-func (fc *firecracker) disconnect(ctx context.Context) {
+func (fc *firecracker) Disconnect(ctx context.Context) {
 	fc.state.set(notReady)
 }
 
 // Adds all capabilities supported by firecracker implementation of hypervisor interface
-func (fc *firecracker) capabilities(ctx context.Context) types.Capabilities {
-	span, _ := katatrace.Trace(ctx, fc.Logger(), "capabilities", fcTracingTags, map[string]string{"sandbox_id": fc.id})
+func (fc *firecracker) Capabilities(ctx context.Context) types.Capabilities {
+	span, _ := katatrace.Trace(ctx, fc.Logger(), "Capabilities", fcTracingTags, map[string]string{"sandbox_id": fc.id})
 	defer span.End()
 	var caps types.Capabilities
 	caps.SetBlockDeviceHotplugSupport()
@@ -1130,15 +1130,15 @@ func (fc *firecracker) capabilities(ctx context.Context) types.Capabilities {
 	return caps
 }
 
-func (fc *firecracker) hypervisorConfig() HypervisorConfig {
+func (fc *firecracker) HypervisorConfig() HypervisorConfig {
 	return fc.config
 }
 
-func (fc *firecracker) resizeMemory(ctx context.Context, reqMemMB uint32, memoryBlockSizeMB uint32, probe bool) (uint32, MemoryDevice, error) {
+func (fc *firecracker) ResizeMemory(ctx context.Context, reqMemMB uint32, memoryBlockSizeMB uint32, probe bool) (uint32, MemoryDevice, error) {
 	return 0, MemoryDevice{}, nil
 }
 
-func (fc *firecracker) resizeVCPUs(ctx context.Context, reqVCPUs uint32) (currentVCPUs uint32, newVCPUs uint32, err error) {
+func (fc *firecracker) ResizeVCPUs(ctx context.Context, reqVCPUs uint32) (currentVCPUs uint32, newVCPUs uint32, err error) {
 	return 0, 0, nil
 }
 
@@ -1146,7 +1146,7 @@ func (fc *firecracker) resizeVCPUs(ctx context.Context, reqVCPUs uint32) (curren
 //
 // As suggested by https://github.com/firecracker-microvm/firecracker/issues/718,
 // let's use `ps -T -p <pid>` to get fc vcpu info.
-func (fc *firecracker) getThreadIDs(ctx context.Context) (VcpuThreadIDs, error) {
+func (fc *firecracker) GetThreadIDs(ctx context.Context) (VcpuThreadIDs, error) {
 	var vcpuInfo VcpuThreadIDs
 
 	vcpuInfo.vcpus = make(map[int]int)
@@ -1184,16 +1184,16 @@ func (fc *firecracker) getThreadIDs(ctx context.Context) (VcpuThreadIDs, error) 
 	return vcpuInfo, nil
 }
 
-func (fc *firecracker) cleanup(ctx context.Context) error {
+func (fc *firecracker) Cleanup(ctx context.Context) error {
 	fc.cleanupJail(ctx)
 	return nil
 }
 
-func (fc *firecracker) getPids() []int {
+func (fc *firecracker) GetPids() []int {
 	return []int{fc.info.PID}
 }
 
-func (fc *firecracker) getVirtioFsPid() *int {
+func (fc *firecracker) GetVirtioFsPid() *int {
 	return nil
 }
 
@@ -1205,17 +1205,17 @@ func (fc *firecracker) toGrpc(ctx context.Context) ([]byte, error) {
 	return nil, errors.New("firecracker is not supported by VM cache")
 }
 
-func (fc *firecracker) save() (s persistapi.HypervisorState) {
+func (fc *firecracker) Save() (s persistapi.HypervisorState) {
 	s.Pid = fc.info.PID
 	s.Type = string(FirecrackerHypervisor)
 	return
 }
 
-func (fc *firecracker) load(s persistapi.HypervisorState) {
+func (fc *firecracker) Load(s persistapi.HypervisorState) {
 	fc.info.PID = s.Pid
 }
 
-func (fc *firecracker) check() error {
+func (fc *firecracker) Check() error {
 	if err := syscall.Kill(fc.info.PID, syscall.Signal(0)); err != nil {
 		return errors.Wrapf(err, "failed to ping fc process")
 	}
@@ -1223,7 +1223,7 @@ func (fc *firecracker) check() error {
 	return nil
 }
 
-func (fc *firecracker) generateSocket(id string) (interface{}, error) {
+func (fc *firecracker) GenerateSocket(id string) (interface{}, error) {
 	fc.Logger().Debug("Using hybrid-vsock endpoint")
 	udsPath := filepath.Join(fc.jailerRoot, defaultHybridVSocketName)
 
@@ -1233,7 +1233,7 @@ func (fc *firecracker) generateSocket(id string) (interface{}, error) {
 	}, nil
 }
 
-func (fc *firecracker) isRateLimiterBuiltin() bool {
+func (fc *firecracker) IsRateLimiterBuiltin() bool {
 	return true
 }
 
