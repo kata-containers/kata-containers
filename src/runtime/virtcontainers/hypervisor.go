@@ -864,7 +864,7 @@ type hypervisor interface {
 	// just perform cleanup.
 	stopSandbox(ctx context.Context, waitOnly bool) error
 	PauseVM(ctx context.Context) error
-	saveSandbox() error
+	SaveVM() error
 	resumeSandbox(ctx context.Context) error
 	AddDevice(ctx context.Context, devInfo interface{}, devType DeviceType) error
 	HotplugAddDevice(ctx context.Context, devInfo interface{}, devType DeviceType) (interface{}, error)

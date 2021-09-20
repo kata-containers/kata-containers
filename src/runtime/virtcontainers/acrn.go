@@ -631,7 +631,7 @@ func (a *Acrn) GetVMConsole(ctx context.Context, id string) (string, string, err
 	return consoleProtoUnix, consoleURL, nil
 }
 
-func (a *Acrn) saveSandbox() error {
+func (a *Acrn) SaveVM() error {
 	a.Logger().Info("Save sandbox")
 
 	// Not supported. return success

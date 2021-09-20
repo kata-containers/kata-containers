@@ -55,7 +55,7 @@ func (m *mockHypervisor) resumeSandbox(ctx context.Context) error {
 	return nil
 }
 
-func (m *mockHypervisor) saveSandbox() error {
+func (m *mockHypervisor) SaveVM() error {
 	return nil
 }
 
