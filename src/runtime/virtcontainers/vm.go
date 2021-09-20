@@ -221,7 +221,7 @@ func (v *VM) Pause(ctx context.Context) error {
 // Save saves a VM to persistent disk.
 func (v *VM) Save() error {
 	v.logger().Info("Save vm")
-	return v.hypervisor.saveSandbox()
+	return v.hypervisor.SaveVM()
 }
 
 // Resume resumes a paused VM.

@@ -2038,7 +2038,7 @@ func (q *qemu) GetVMConsole(ctx context.Context, id string) (string, string, err
 	return consoleProtoUnix, consoleURL, nil
 }
 
-func (q *qemu) saveSandbox() error {
+func (q *qemu) SaveVM() error {
 	q.Logger().Info("Save sandbox")
 
 	if err := q.qmpSetup(); err != nil {
