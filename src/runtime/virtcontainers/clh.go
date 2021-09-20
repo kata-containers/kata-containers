@@ -721,7 +721,7 @@ func (clh *cloudHypervisor) PauseVM(ctx context.Context) error {
 	return nil
 }
 
-func (clh *cloudHypervisor) saveSandbox() error {
+func (clh *cloudHypervisor) SaveVM() error {
 	clh.Logger().WithField("function", "saveSandboxC").Info("Save Sandbox")
 	return nil
 }
