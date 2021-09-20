@@ -1126,7 +1126,7 @@ func (fc *firecracker) HotplugRemoveDevice(ctx context.Context, devInfo interfac
 
 // getSandboxConsole builds the path of the console where we can read
 // logs coming from the sandbox.
-func (fc *firecracker) GetSandboxConsole(ctx context.Context, id string) (string, string, error) {
+func (fc *firecracker) GetVMConsole(ctx context.Context, id string) (string, string, error) {
 	master, slave, err := console.NewPty()
 	if err != nil {
 		fc.Logger().Debugf("Error create pseudo tty: %v", err)
