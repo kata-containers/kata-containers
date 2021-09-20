@@ -26,7 +26,7 @@ const DefaultCgroupPath = "/vc"
 
 func RenameCgroupPath(path string) (string, error) {
 	if path == "" {
-		return "", fmt.Errorf("Cgroup path is empty")
+		path = DefaultCgroupPath
 	}
 
 	cgroupPathDir := filepath.Dir(path)
