@@ -904,7 +904,7 @@ type hypervisor interface {
 	stopSandbox(ctx context.Context, waitOnly bool) error
 	PauseVM(ctx context.Context) error
 	SaveVM() error
-	resumeSandbox(ctx context.Context) error
+	ResumeVM(ctx context.Context) error
 	AddDevice(ctx context.Context, devInfo interface{}, devType DeviceType) error
 	HotplugAddDevice(ctx context.Context, devInfo interface{}, devType DeviceType) (interface{}, error)
 	HotplugRemoveDevice(ctx context.Context, devInfo interface{}, devType DeviceType) (interface{}, error)
