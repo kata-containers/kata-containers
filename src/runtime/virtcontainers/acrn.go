@@ -482,15 +482,15 @@ func (a *Acrn) waitSandbox(ctx context.Context, timeoutSecs int) error {
 }
 
 // stopSandbox will stop the Sandbox's VM.
-func (a *Acrn) stopSandbox(ctx context.Context, waitOnly bool) (err error) {
-	span, _ := katatrace.Trace(ctx, a.Logger(), "stopSandbox", acrnTracingTags, map[string]string{"sandbox_id": a.id})
+func (a *Acrn) StopVM(ctx context.Context, waitOnly bool) (err error) {
+	span, _ := katatrace.Trace(ctx, a.Logger(), "StopVM", acrnTracingTags, map[string]string{"sandbox_id": a.id})
 	defer span.End()
 
 	a.Logger().Info("Stopping acrn VM")
 
 	defer func() {
 		if err != nil {
-			a.Logger().Info("stopSandbox failed")
+			a.Logger().Info("StopVM failed")
 		} else {
 			a.Logger().Info("acrn VM stopped")
 		}

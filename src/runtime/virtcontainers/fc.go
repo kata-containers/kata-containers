@@ -878,8 +878,8 @@ func (fc *firecracker) cleanupJail(ctx context.Context) {
 }
 
 // stopSandbox will stop the Sandbox's VM.
-func (fc *firecracker) stopSandbox(ctx context.Context, waitOnly bool) (err error) {
-	span, _ := katatrace.Trace(ctx, fc.Logger(), "stopSandbox", fcTracingTags, map[string]string{"sandbox_id": fc.id})
+func (fc *firecracker) StopVM(ctx context.Context, waitOnly bool) (err error) {
+	span, _ := katatrace.Trace(ctx, fc.Logger(), "StopVM", fcTracingTags, map[string]string{"sandbox_id": fc.id})
 	defer span.End()
 
 	return fc.fcEnd(ctx, waitOnly)

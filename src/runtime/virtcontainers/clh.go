@@ -396,7 +396,7 @@ func (clh *cloudHypervisor) startSandbox(ctx context.Context, timeout int) error
 	if clh.config.SharedFS == config.VirtioFS {
 		clh.Logger().WithField("function", "startSandbox").Info("Starting virtiofsd")
 		pid, err := clh.virtiofsd.Start(ctx, func() {
-			clh.stopSandbox(ctx, false)
+			clh.StopVM(ctx, false)
 		})
 		if err != nil {
 			return err
@@ -732,10 +732,10 @@ func (clh *cloudHypervisor) ResumeVM(ctx context.Context) error {
 }
 
 // stopSandbox will stop the Sandbox's VM.
-func (clh *cloudHypervisor) stopSandbox(ctx context.Context, waitOnly bool) (err error) {
-	span, _ := katatrace.Trace(ctx, clh.Logger(), "stopSandbox", clhTracingTags, map[string]string{"sandbox_id": clh.id})
+func (clh *cloudHypervisor) StopVM(ctx context.Context, waitOnly bool) (err error) {
+	span, _ := katatrace.Trace(ctx, clh.Logger(), "StopVM", clhTracingTags, map[string]string{"sandbox_id": clh.id})
 	defer span.End()
-	clh.Logger().WithField("function", "stopSandbox").Info("Stop Sandbox")
+	clh.Logger().WithField("function", "StopVM").Info("Stop Sandbox")
 	return clh.terminate(ctx, waitOnly)
 }
 
