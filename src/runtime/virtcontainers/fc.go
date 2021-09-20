@@ -885,7 +885,7 @@ func (fc *firecracker) stopSandbox(ctx context.Context, waitOnly bool) (err erro
 	return fc.fcEnd(ctx, waitOnly)
 }
 
-func (fc *firecracker) pauseSandbox(ctx context.Context) error {
+func (fc *firecracker) PauseVM(ctx context.Context) error {
 	return nil
 }
 

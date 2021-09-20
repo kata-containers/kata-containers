@@ -215,7 +215,7 @@ func (v *VM) logger() logrus.FieldLogger {
 // Pause pauses a VM.
 func (v *VM) Pause(ctx context.Context) error {
 	v.logger().Info("pause vm")
-	return v.hypervisor.pauseSandbox(ctx)
+	return v.hypervisor.PauseVM(ctx)
 }
 
 // Save saves a VM to persistent disk.
