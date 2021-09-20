@@ -901,7 +901,7 @@ type hypervisor interface {
 	startSandbox(ctx context.Context, timeout int) error
 	// If wait is set, don't actively stop the sandbox:
 	// just perform cleanup.
-	stopSandbox(ctx context.Context, waitOnly bool) error
+	StopVM(ctx context.Context, waitOnly bool) error
 	PauseVM(ctx context.Context) error
 	SaveVM() error
 	ResumeVM(ctx context.Context) error

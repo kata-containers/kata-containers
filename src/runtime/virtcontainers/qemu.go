@@ -671,7 +671,7 @@ func (q *qemu) vhostFSSocketPath(id string) (string, error) {
 
 func (q *qemu) setupVirtiofsd(ctx context.Context) (err error) {
 	pid, err := q.virtiofsd.Start(ctx, func() {
-		q.stopSandbox(ctx, false)
+		q.StopVM(ctx, false)
 	})
 	if err != nil {
 		return err
@@ -940,8 +940,8 @@ func (q *qemu) waitSandbox(ctx context.Context, timeout int) error {
 }
 
 // stopSandbox will stop the Sandbox's VM.
-func (q *qemu) stopSandbox(ctx context.Context, waitOnly bool) error {
-	span, _ := katatrace.Trace(ctx, q.Logger(), "stopSandbox", qemuTracingTags, map[string]string{"sandbox_id": q.id})
+func (q *qemu) StopVM(ctx context.Context, waitOnly bool) error {
+	span, _ := katatrace.Trace(ctx, q.Logger(), "StopVM", qemuTracingTags, map[string]string{"sandbox_id": q.id})
 	defer span.End()
 
 	q.Logger().Info("Stopping Sandbox")

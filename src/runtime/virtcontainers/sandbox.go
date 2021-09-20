@@ -1181,7 +1181,7 @@ func (s *Sandbox) startVM(ctx context.Context) (err error) {
 
 	defer func() {
 		if err != nil {
-			s.hypervisor.stopSandbox(ctx, false)
+			s.hypervisor.StopVM(ctx, false)
 		}
 	}()
 
@@ -1264,7 +1264,7 @@ func (s *Sandbox) stopVM(ctx context.Context) error {
 
 	s.Logger().Info("Stopping VM")
 
-	return s.hypervisor.stopSandbox(ctx, s.disableVMShutdown)
+	return s.hypervisor.StopVM(ctx, s.disableVMShutdown)
 }
 
 func (s *Sandbox) addContainer(c *Container) error {
