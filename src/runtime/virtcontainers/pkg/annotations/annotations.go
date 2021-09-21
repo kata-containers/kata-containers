@@ -223,6 +223,9 @@ const (
 
 	// EnableGuestSwap is a sandbox annotation to enable swap in the guest.
 	EnableGuestSwap = kataAnnotHypervisorPrefix + "enable_guest_swap"
+
+	// EnableRootlessHypervisor is a sandbox annotation to enable rootless hypervisor (only supported in QEMU currently).
+	EnableRootlessHypervisor = kataAnnotHypervisorPrefix + "rootless"
 )
 
 // Runtime related annotations

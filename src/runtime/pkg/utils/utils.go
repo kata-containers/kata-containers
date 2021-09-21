@@ -80,3 +80,22 @@ func EnsureDir(path string, mode os.FileMode) error {
 
 	return nil
 }
+
+func FirstValidExecutable(paths []string) (string, error) {
+	for _, p := range paths {
+		info, err := os.Stat(p)
+		if err != nil {
+			if os.IsNotExist(err) {
+				continue
+			}
+			return "", err
+		}
+		mode := info.Mode()
+		// check whether the file is an executable
+		if mode&0111 == 0 {
+			continue
+		}
+		return p, nil
+	}
+	return "", fmt.Errorf("all the executables are invalid")
+}

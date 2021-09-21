@@ -9,6 +9,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -135,6 +136,11 @@ func TestCreateSandboxNoopAgentSuccessful(t *testing.T) {
 		t.Skip(testDisabledAsNonRoot)
 	}
 	defer cleanUp()
+
+	// Pre-create the directory path to avoid panic error. Without this change, ff the test is run as a non-root user,
+	// this test will fail because of permission denied error in chown syscall in the utils.MkdirAllWithInheritedOwner() method
+	err := os.MkdirAll(fs.MockRunStoragePath(), DirMode)
+	assert.NoError(err)
 
 	config := newTestSandboxConfigNoop()
 
