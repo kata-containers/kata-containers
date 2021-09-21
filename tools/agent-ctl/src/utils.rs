@@ -5,10 +5,11 @@
 
 use crate::types::{Config, Options};
 use anyhow::{anyhow, Result};
-use oci::{Process as ociProcess, Root as ociRoot, Spec as ociSpec};
+use oci::{Process as ociProcess, Root as ociRoot, Spec as ociSpec, Mount as ociMount};
 use protocols::oci::{
     Box as grpcBox, Linux as grpcLinux, LinuxCapabilities as grpcLinuxCapabilities,
     Process as grpcProcess, Root as grpcRoot, Spec as grpcSpec, User as grpcUser,
+    Mount as grpcMount,
 };
 use rand::Rng;
 use slog::{debug, warn};
@@ -304,11 +305,25 @@ fn process_oci_to_grpc(p: &ociProcess) -> grpcProcess {
     //let rlimits = vec![grpcPOSIXRlimit::new()];
     let rlimits = protobuf::RepeatedField::new();
 
-    // FIXME: Implement Capabilities OCI spec handling (copy from p.capabilities)
-    let capabilities = grpcLinuxCapabilities::new();
+    let capabilities = match &p.capabilities {
+        Some(c) => {
+            let mut gc = grpcLinuxCapabilities::new();
 
-    // FIXME: Implement Env OCI spec handling (copy from p.env)
-    let env = protobuf::RepeatedField::new();
+            gc.set_Bounding(protobuf::RepeatedField::from_slice(&c.bounding));
+            gc.set_Effective(protobuf::RepeatedField::from_slice(&c.effective));
+            gc.set_Inheritable(protobuf::RepeatedField::from_slice(&c.inheritable));
+            gc.set_Permitted(protobuf::RepeatedField::from_slice(&c.permitted));
+            gc.set_Ambient(protobuf::RepeatedField::from_slice(&c.ambient));
+
+            protobuf::SingularPtrField::some(gc)
+        }
+        None => protobuf::SingularPtrField::none(),
+    };
+
+    let mut env = protobuf::RepeatedField::new();
+    for pair in &p.env {
+        env.push(pair.to_string());
+    }
 
     grpcProcess {
         Terminal: p.terminal,
@@ -317,12 +332,28 @@ fn process_oci_to_grpc(p: &ociProcess) -> grpcProcess {
         Args: protobuf::RepeatedField::from_vec(p.args.clone()),
         Env: env,
         Cwd: p.cwd.clone(),
-        Capabilities: protobuf::SingularPtrField::some(capabilities),
+        Capabilities: capabilities,
         Rlimits: rlimits,
         NoNewPrivileges: p.no_new_privileges,
         ApparmorProfile: p.apparmor_profile.clone(),
         OOMScoreAdj: oom_score_adj,
         SelinuxLabel: p.selinux_label.clone(),
+        unknown_fields: protobuf::UnknownFields::new(),
+        cached_size: protobuf::CachedSize::default(),
+    }
+}
+
+fn mount_oci_to_grpc(m: &ociMount) -> grpcMount {
+    let mut grpc_options = protobuf::RepeatedField::new();
+    for op in &m.options {
+        grpc_options.push(op.to_string());
+    }
+
+    grpcMount {
+        destination: m.destination.clone(),
+        source: m.source.clone(),
+        field_type: m.r#type.clone(),
+        options: grpc_options,
         unknown_fields: protobuf::UnknownFields::new(),
         cached_size: protobuf::CachedSize::default(),
     }
@@ -343,6 +374,11 @@ fn oci_to_grpc(bundle_dir: &str, cid: &str, oci: &ociSpec) -> Result<grpcSpec> {
         None => protobuf::SingularPtrField::none(),
     };
 
+    let mut mounts = protobuf::RepeatedField::new();
+    for m in &oci.mounts {
+        mounts.push(mount_oci_to_grpc(&m));
+    }
+
     // FIXME: Implement Linux OCI spec handling
     let linux = grpcLinux::new();
 
@@ -359,7 +395,7 @@ fn oci_to_grpc(bundle_dir: &str, cid: &str, oci: &ociSpec) -> Result<grpcSpec> {
         Process: process,
         Root: root,
         Hostname: hostname,
-        Mounts: protobuf::RepeatedField::new(),
+        Mounts: mounts,
         Hooks: protobuf::SingularPtrField::none(),
         Annotations: HashMap::new(),
         Linux: protobuf::SingularPtrField::some(linux),
