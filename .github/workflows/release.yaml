@@ -127,3 +127,21 @@ jobs:
           pushd $GITHUB_WORKSPACE
           echo "uploading asset '${tarball}' for tag: ${tag}"
           GITHUB_TOKEN=${{ secrets.GIT_UPLOAD_TOKEN }} hub release edit -m "" -a "${tarball}" "${tag}"
+          popd
+
+  upload-cargo-vendored-tarball:
+    needs: upload-static-tarball
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: generate-and-upload-tarball
+        run: |
+          pushd $GITHUB_WORKSPACE/src/agent
+          cargo vendor >> .cargo/vendor
+          popd
+          tag=$(echo $GITHUB_REF | cut -d/ -f3-)
+          tarball="kata-containers-$tag-vendor.tar.gz"
+          pushd $GITHUB_WORKSPACE
+          tar -cvzf "${tarball}" src/agent/.cargo/vendor src/agent/vendor
+          GITHUB_TOKEN=${{ secrets.GIT_UPLOAD_TOKEN }} hub release edit -m "" -a "${tarball}" "${tag}" 
+          popd
