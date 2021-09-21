@@ -134,7 +134,7 @@ func TestMain(m *testing.M) {
 	}
 
 	utils.StartCmd = func(c *exec.Cmd) error {
-		//startSandbox will Check if the hypervisor is alive and
+		//StartVM will Check if the hypervisor is alive and
 		// checks for the PID is running, lets fake it using our
 		// own PID
 		c.Process = &os.Process{Pid: os.Getpid()}

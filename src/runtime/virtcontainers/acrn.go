@@ -422,8 +422,8 @@ func (a *Acrn) createSandbox(ctx context.Context, id string, networkNS NetworkNa
 }
 
 // startSandbox will start the Sandbox's VM.
-func (a *Acrn) startSandbox(ctx context.Context, timeoutSecs int) error {
-	span, ctx := katatrace.Trace(ctx, a.Logger(), "startSandbox", acrnTracingTags, map[string]string{"sandbox_id": a.id})
+func (a *Acrn) StartVM(ctx context.Context, timeoutSecs int) error {
+	span, ctx := katatrace.Trace(ctx, a.Logger(), "StartVM", acrnTracingTags, map[string]string{"sandbox_id": a.id})
 	defer span.End()
 
 	if a.config.Debug {

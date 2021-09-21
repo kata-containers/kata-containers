@@ -765,8 +765,8 @@ func (fc *firecracker) fcInitConfiguration(ctx context.Context) error {
 // startSandbox will start the hypervisor for the given sandbox.
 // In the context of firecracker, this will start the hypervisor,
 // for configuration, but not yet start the actual virtual machine
-func (fc *firecracker) startSandbox(ctx context.Context, timeout int) error {
-	span, _ := katatrace.Trace(ctx, fc.Logger(), "startSandbox", fcTracingTags, map[string]string{"sandbox_id": fc.id})
+func (fc *firecracker) StartVM(ctx context.Context, timeout int) error {
+	span, _ := katatrace.Trace(ctx, fc.Logger(), "StartVM", fcTracingTags, map[string]string{"sandbox_id": fc.id})
 	defer span.End()
 
 	if err := fc.fcInitConfiguration(ctx); err != nil {

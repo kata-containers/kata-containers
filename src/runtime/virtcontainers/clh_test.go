@@ -268,7 +268,7 @@ func TestClooudHypervisorStartSandbox(t *testing.T) {
 		store:     store,
 	}
 
-	err = clh.startSandbox(context.Background(), 10)
+	err = clh.StartVM(context.Background(), 10)
 	assert.NoError(err)
 }
 
