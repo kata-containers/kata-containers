@@ -839,7 +839,7 @@ func (q *qemu) startSandbox(ctx context.Context, timeout int) error {
 		return fmt.Errorf("failed to launch qemu: %s, error messages from qemu log: %s", err, strErr)
 	}
 
-	err = q.waitSandbox(ctx, timeout)
+	err = q.waitVM(ctx, timeout)
 	if err != nil {
 		return err
 	}
@@ -876,9 +876,9 @@ func (q *qemu) bootFromTemplate() error {
 	return q.waitMigration()
 }
 
-// waitSandbox will wait for the Sandbox's VM to be up and running.
-func (q *qemu) waitSandbox(ctx context.Context, timeout int) error {
-	span, _ := katatrace.Trace(ctx, q.Logger(), "waitSandbox", qemuTracingTags, map[string]string{"sandbox_id": q.id})
+// waitVM will wait for the Sandbox's VM to be up and running.
+func (q *qemu) waitVM(ctx context.Context, timeout int) error {
+	span, _ := katatrace.Trace(ctx, q.Logger(), "waitVM", qemuTracingTags, map[string]string{"sandbox_id": q.id})
 	defer span.End()
 
 	if timeout < 0 {

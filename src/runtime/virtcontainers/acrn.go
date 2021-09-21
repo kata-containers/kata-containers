@@ -448,7 +448,7 @@ func (a *Acrn) startSandbox(ctx context.Context, timeoutSecs int) error {
 	}
 	a.state.PID = PID
 
-	if err = a.waitSandbox(ctx, timeoutSecs); err != nil {
+	if err = a.waitVM(ctx, timeoutSecs); err != nil {
 		a.Logger().WithField("acrn wait failed:", err).Debug()
 		return err
 	}
@@ -456,9 +456,9 @@ func (a *Acrn) startSandbox(ctx context.Context, timeoutSecs int) error {
 	return nil
 }
 
-// waitSandbox will wait for the Sandbox's VM to be up and running.
-func (a *Acrn) waitSandbox(ctx context.Context, timeoutSecs int) error {
-	span, _ := katatrace.Trace(ctx, a.Logger(), "waitSandbox", acrnTracingTags, map[string]string{"sandbox_id": a.id})
+// waitVM will wait for the Sandbox's VM to be up and running.
+func (a *Acrn) waitVM(ctx context.Context, timeoutSecs int) error {
+	span, _ := katatrace.Trace(ctx, a.Logger(), "waitVM", acrnTracingTags, map[string]string{"sandbox_id": a.id})
 	defer span.End()
 
 	if timeoutSecs < 0 {
