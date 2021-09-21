@@ -37,6 +37,11 @@ $ cd $GOPATH/src/github.com/kata-containers/kata-containers/tools/packaging/kata
 $ kubectl apply -k kata-deploy/overlays/k3s
 ```
 
+#### Ensure kata-deploy is ready
+```sh
+kubectl -n kube-system wait --timeout=10m --for=condition=Ready -l name=kata-deploy pod
+```
+
 ### Run a sample workload
 
 Workloads specify the runtime they'd like to utilize by setting the appropriate `runtimeClass` object within
@@ -107,7 +112,20 @@ $ kubectl delete -f https://raw.githubusercontent.com/kata-containers/kata-conta
 
 ```sh
 $ kubectl delete -f https://raw.githubusercontent.com/kata-containers/kata-containers/main/tools/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml
+$ kubectl -n kube-system wait --timeout=10m --for=delete -l name=kata-deploy pod
+```
+
+After ensuring kata-deploy has been deleted, cleanup the cluster:
+```sh
 $ kubectl apply -f https://raw.githubusercontent.com/kata-containers/kata-containers/main/tools/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml
+```
+
+The cleanup daemon-set will run a single time, cleaning up the node-label, which makes it difficult to check in an automated fashion.
+This process should take, at most, 5 minutes.
+
+After that, let's delete the cleanup daemon-set, the added RBAC and runtime classes:
+
+```sh
 $ kubectl delete -f https://raw.githubusercontent.com/kata-containers/kata-containers/main/tools/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml
 $ kubectl delete -f https://raw.githubusercontent.com/kata-containers/kata-containers/main/tools/packaging/kata-deploy/kata-rbac/base/kata-rbac.yaml
 $ kubectl delete -f https://raw.githubusercontent.com/kata-containers/kata-containers/main/tools/packaging/kata-deploy/runtimeclasses/kata-runtimeClasses.yaml
@@ -117,7 +135,19 @@ $ kubectl delete -f https://raw.githubusercontent.com/kata-containers/kata-conta
 
 ```sh
 $ kubectl delete -f https://raw.githubusercontent.com/kata-containers/kata-containers/main/tools/packaging/kata-deploy/kata-deploy/base/kata-deploy-stable.yaml
+$ kubectl -n kube-system wait --timeout=10m --for=delete -l name=kata-deploy pod
+```
+
+After ensuring kata-deploy has been deleted, cleanup the cluster:
+```sh
 $ kubectl apply -f https://raw.githubusercontent.com/kata-containers/kata-containers/main/tools/packaging/kata-deploy/kata-cleanup/base/kata-cleanup-stabe.yaml
+```
+
+The cleanup daemon-set will run a single time, cleaning up the node-label, which makes it difficult to check in an automated fashion.
+This process should take, at most, 5 minutes.
+
+After that, let's delete the cleanup daemon-set, the added RBAC and runtime classes:
+```sh
 $ kubectl delete -f https://raw.githubusercontent.com/kata-containers/kata-containers/main/tools/packaging/kata-deploy/kata-cleanup/base/kata-cleanup-stable.yaml
 $ kubectl delete -f https://raw.githubusercontent.com/kata-containers/kata-containers/main/tools/packaging/kata-deploy/kata-rbac/base/kata-rbac.yaml
 $ kubectl delete -f https://raw.githubusercontent.com/kata-containers/kata-containers/main/tools/packaging/kata-deploy/runtimeclasses/kata-runtimeClasses.yaml
