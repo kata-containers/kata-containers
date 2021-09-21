@@ -200,11 +200,11 @@ func (clh *cloudHypervisor) setConfig(config *HypervisorConfig) error {
 }
 
 // For cloudHypervisor this call only sets the internal structure up.
-// The VM will be created and started through startSandbox().
-func (clh *cloudHypervisor) createSandbox(ctx context.Context, id string, networkNS NetworkNamespace, hypervisorConfig *HypervisorConfig) error {
+// The VM will be created and started through StartVM().
+func (clh *cloudHypervisor) CreateVM(ctx context.Context, id string, networkNS NetworkNamespace, hypervisorConfig *HypervisorConfig) error {
 	clh.ctx = ctx
 
-	span, newCtx := katatrace.Trace(clh.ctx, clh.Logger(), "createSandbox", clhTracingTags, map[string]string{"sandbox_id": clh.id})
+	span, newCtx := katatrace.Trace(clh.ctx, clh.Logger(), "CreateVM", clhTracingTags, map[string]string{"sandbox_id": clh.id})
 	clh.ctx = newCtx
 	defer span.End()
 
@@ -215,7 +215,7 @@ func (clh *cloudHypervisor) createSandbox(ctx context.Context, id string, networ
 	clh.id = id
 	clh.state.state = clhNotReady
 
-	clh.Logger().WithField("function", "createSandbox").Info("creating Sandbox")
+	clh.Logger().WithField("function", "CreateVM").Info("creating Sandbox")
 
 	virtiofsdSocketPath, err := clh.virtioFsSocketPath(clh.id)
 	if err != nil {
@@ -223,7 +223,7 @@ func (clh *cloudHypervisor) createSandbox(ctx context.Context, id string, networ
 	}
 
 	if clh.state.PID > 0 {
-		clh.Logger().WithField("function", "createSandbox").Info("Sandbox already exist, loading from state")
+		clh.Logger().WithField("function", "CreateVM").Info("Sandbox already exist, loading from state")
 		clh.virtiofsd = &virtiofsd{
 			PID:        clh.state.VirtiofsdPID,
 			sourcePath: filepath.Join(getSharePath(clh.id)),
@@ -235,7 +235,7 @@ func (clh *cloudHypervisor) createSandbox(ctx context.Context, id string, networ
 
 	// No need to return an error from there since there might be nothing
 	// to fetch if this is the first time the hypervisor is created.
-	clh.Logger().WithField("function", "createSandbox").Info("Sandbox not found creating")
+	clh.Logger().WithField("function", "CreateVM").Info("Sandbox not found creating")
 
 	// Make sure the kernel path is valid
 	kernelPath, err := clh.config.KernelAssetPath()

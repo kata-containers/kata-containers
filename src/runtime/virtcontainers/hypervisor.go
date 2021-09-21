@@ -537,6 +537,8 @@ func (conf *HypervisorConfig) CheckTemplateConfig() error {
 }
 
 func (conf *HypervisorConfig) Valid() error {
+
+	// Kata specific checks. Should be done outside the hypervisor
 	if conf.KernelPath == "" {
 		return fmt.Errorf("Missing kernel path")
 	}
@@ -897,7 +899,7 @@ func generateVMSocket(id string, vmStogarePath string) (interface{}, error) {
 // The default hypervisor implementation is Qemu.
 type hypervisor interface {
 	setConfig(config *HypervisorConfig) error
-	createSandbox(ctx context.Context, id string, networkNS NetworkNamespace, hypervisorConfig *HypervisorConfig) error
+	CreateVM(ctx context.Context, id string, networkNS NetworkNamespace, hypervisorConfig *HypervisorConfig) error
 	StartVM(ctx context.Context, timeout int) error
 
 	// If wait is set, don't actively stop the sandbox:
