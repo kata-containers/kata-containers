@@ -352,14 +352,14 @@ func (clh *cloudHypervisor) createSandbox(ctx context.Context, id string, networ
 }
 
 // startSandbox will start the VMM and boot the virtual machine for the given sandbox.
-func (clh *cloudHypervisor) startSandbox(ctx context.Context, timeout int) error {
-	span, _ := katatrace.Trace(ctx, clh.Logger(), "startSandbox", clhTracingTags, map[string]string{"sandbox_id": clh.id})
+func (clh *cloudHypervisor) StartVM(ctx context.Context, timeout int) error {
+	span, _ := katatrace.Trace(ctx, clh.Logger(), "StartVM", clhTracingTags, map[string]string{"sandbox_id": clh.id})
 	defer span.End()
 
 	ctx, cancel := context.WithTimeout(context.Background(), clhAPITimeout*time.Second)
 	defer cancel()
 
-	clh.Logger().WithField("function", "startSandbox").Info("starting Sandbox")
+	clh.Logger().WithField("function", "StartVM").Info("starting Sandbox")
 
 	vmPath := filepath.Join(clh.store.RunVMStoragePath(), clh.id)
 	err := os.MkdirAll(vmPath, DirMode)
@@ -381,7 +381,7 @@ func (clh *cloudHypervisor) startSandbox(ctx context.Context, timeout int) error
 	defer label.SetProcessLabel("")
 
 	if clh.config.SharedFS == config.VirtioFS {
-		clh.Logger().WithField("function", "startSandbox").Info("Starting virtiofsd")
+		clh.Logger().WithField("function", "StartVM").Info("Starting virtiofsd")
 		pid, err := clh.virtiofsd.Start(ctx, func() {
 			clh.StopVM(ctx, false)
 		})

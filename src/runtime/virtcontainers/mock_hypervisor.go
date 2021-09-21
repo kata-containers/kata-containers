@@ -39,7 +39,7 @@ func (m *mockHypervisor) createSandbox(ctx context.Context, id string, networkNS
 	return nil
 }
 
-func (m *mockHypervisor) startSandbox(ctx context.Context, timeout int) error {
+func (m *mockHypervisor) StartVM(ctx context.Context, timeout int) error {
 	return nil
 }
 

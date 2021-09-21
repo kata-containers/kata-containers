@@ -220,7 +220,7 @@ func (fc *firecracker) createSandbox(ctx context.Context, id string, networkNS N
 	// with the name of "firecracker.socket"
 	fc.socketPath = filepath.Join(fc.jailerRoot, "run", fcSocket)
 
-	// So we need to repopulate this at startSandbox where it is valid
+	// So we need to repopulate this at StartVM where it is valid
 	fc.netNSPath = networkNS.NetNsPath
 
 	// Till we create lower privileged kata user run as root
@@ -744,8 +744,8 @@ func (fc *firecracker) fcInitConfiguration(ctx context.Context) error {
 // startSandbox will start the hypervisor for the given sandbox.
 // In the context of firecracker, this will start the hypervisor,
 // for configuration, but not yet start the actual virtual machine
-func (fc *firecracker) startSandbox(ctx context.Context, timeout int) error {
-	span, _ := katatrace.Trace(ctx, fc.Logger(), "startSandbox", fcTracingTags, map[string]string{"sandbox_id": fc.id})
+func (fc *firecracker) StartVM(ctx context.Context, timeout int) error {
+	span, _ := katatrace.Trace(ctx, fc.Logger(), "StartVM", fcTracingTags, map[string]string{"sandbox_id": fc.id})
 	defer span.End()
 
 	if err := fc.fcInitConfiguration(ctx); err != nil {
