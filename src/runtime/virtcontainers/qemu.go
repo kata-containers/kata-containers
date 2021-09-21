@@ -476,15 +476,15 @@ func (q *qemu) setConfig(config *HypervisorConfig) error {
 	return nil
 }
 
-// createSandbox is the Hypervisor sandbox creation implementation for govmmQemu.
-func (q *qemu) createSandbox(ctx context.Context, id string, networkNS NetworkNamespace, hypervisorConfig *HypervisorConfig) error {
+// CreateVM is the Hypervisor VM creation implementation for govmmQemu.
+func (q *qemu) CreateVM(ctx context.Context, id string, networkNS NetworkNamespace, hypervisorConfig *HypervisorConfig) error {
 	// Save the tracing context
 	q.ctx = ctx
 
-	span, ctx := katatrace.Trace(ctx, q.Logger(), "createSandbox", qemuTracingTags, map[string]string{"sandbox_id": q.id})
+	span, ctx := katatrace.Trace(ctx, q.Logger(), "CreateVM", qemuTracingTags, map[string]string{"VM_ID": q.id})
 	defer span.End()
 
-	// Has Kata Specific logic: See within
+	// Breaks hypervisor abstraction Has Kata Specific logic: See within
 	if err := q.setup(ctx, id, hypervisorConfig); err != nil {
 		return err
 	}
@@ -514,7 +514,6 @@ func (q *qemu) createSandbox(ctx context.Context, id string, networkNS NetworkNa
 		IOMMUPlatform: q.config.IOMMUPlatform,
 	}
 
-	// MRC: Kata specific
 	kernelPath, err := q.config.KernelAssetPath()
 	if err != nil {
 		return err
@@ -525,6 +524,7 @@ func (q *qemu) createSandbox(ctx context.Context, id string, networkNS NetworkNa
 		return err
 	}
 
+	// Breaks hypervisor abstration Has Kata Specific logic
 	kernel := govmmQemu.Kernel{
 		Path:       kernelPath,
 		InitrdPath: initrdPath,

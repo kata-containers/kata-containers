@@ -353,12 +353,12 @@ func (a *Acrn) setConfig(config *HypervisorConfig) error {
 	return nil
 }
 
-// createSandbox is the Hypervisor sandbox creation.
-func (a *Acrn) createSandbox(ctx context.Context, id string, networkNS NetworkNamespace, hypervisorConfig *HypervisorConfig) error {
+// CreateVM is the VM creation
+func (a *Acrn) CreateVM(ctx context.Context, id string, networkNS NetworkNamespace, hypervisorConfig *HypervisorConfig) error {
 	// Save the tracing context
 	a.ctx = ctx
 
-	span, ctx := katatrace.Trace(ctx, a.Logger(), "createSandbox", acrnTracingTags, map[string]string{"sandbox_id": a.id})
+	span, ctx := katatrace.Trace(ctx, a.Logger(), "CreateVM", acrnTracingTags, map[string]string{"sandbox_id": a.id})
 	defer span.End()
 
 	if err := a.setup(ctx, id, hypervisorConfig); err != nil {

@@ -556,7 +556,7 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 	}
 
 	// store doesn't require hypervisor to be stored immediately
-	if err = s.hypervisor.createSandbox(ctx, s.id, s.networkNS, &sandboxConfig.HypervisorConfig); err != nil {
+	if err = s.hypervisor.CreateVM(ctx, s.id, s.networkNS, &sandboxConfig.HypervisorConfig); err != nil {
 		return nil, err
 	}
 
