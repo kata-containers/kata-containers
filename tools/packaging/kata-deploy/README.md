@@ -24,6 +24,9 @@ $ kubectl apply -f https://raw.githubusercontent.com/kata-containers/kata-contai
 
 The stable image refers to the last stable releases content.
 
+Note that if you use a tagged version of the repo, the stable image does match that version.
+For instance, if you use the 2.2.1 tagged version of the kata-deploy.yaml file, then the version 2.2.1 of the kata runtime will be deployed.
+
 ```sh
 $ kubectl apply -f https://raw.githubusercontent.com/kata-containers/kata-containers/main/tools/packaging/kata-deploy/kata-rbac/base/kata-rbac.yaml
 $ kubectl apply -f https://raw.githubusercontent.com/kata-containers/kata-containers/main/tools/packaging/kata-deploy/kata-deploy/base/kata-deploy-stable.yaml
