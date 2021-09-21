@@ -188,9 +188,14 @@ var clhDebugKernelParams = []Param{
 //
 //###########################################################
 
+func (clh *cloudHypervisor) createSandbox(ctx context.Context, id string, networkNS NetworkNamespace, hypervisorConfig *HypervisorConfig) error {
+	hypervisorConfig.IsSandbox = true
+	return clh.CreateVM(ctx, id, networkNS, hypervisorConfig)
+}
+
 // For cloudHypervisor this call only sets the internal structure up.
 // The VM will be created and started through startSandbox().
-func (clh *cloudHypervisor) createSandbox(ctx context.Context, id string, networkNS NetworkNamespace, hypervisorConfig *HypervisorConfig) error {
+func (clh *cloudHypervisor) CreateVM(ctx context.Context, id string, networkNS NetworkNamespace, hypervisorConfig *HypervisorConfig) error {
 	clh.ctx = ctx
 
 	span, newCtx := katatrace.Trace(clh.ctx, clh.Logger(), "createSandbox", clhTracingTags, map[string]string{"sandbox_id": clh.id})

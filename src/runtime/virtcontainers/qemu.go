@@ -228,7 +228,6 @@ func (q *qemu) setup(ctx context.Context, id string, hypervisorConfig *Hyperviso
 	span, _ := katatrace.Trace(ctx, q.Logger(), "setup", qemuTracingTags, map[string]string{"sandbox_id": q.id})
 	defer span.End()
 
-	//MRC: Has Kata specific logic
 	err := hypervisorConfig.Valid()
 	if err != nil {
 		return err
@@ -464,12 +463,11 @@ func (q *qemu) setupFileBackedMem(knobs *govmmQemu.Knobs, memory *govmmQemu.Memo
 	memory.Path = target
 }
 
-// createSandbox is the Hypervisor sandbox creation implementation for govmmQemu.
-func (q *qemu) createSandbox(ctx context.Context, id string, networkNS NetworkNamespace, hypervisorConfig *HypervisorConfig) error {
+func (q *qemu) CreateVM(ctx context.Context, id string, networkNS NetworkNamespace, hypervisorConfig *HypervisorConfig) error {
 	// Save the tracing context
 	q.ctx = ctx
 
-	span, ctx := katatrace.Trace(ctx, q.Logger(), "createSandbox", qemuTracingTags, map[string]string{"sandbox_id": q.id})
+	span, ctx := katatrace.Trace(ctx, q.Logger(), "CreateVM", qemuTracingTags, map[string]string{"VM_ID": q.id})
 	defer span.End()
 
 	// Has Kata Specific logic: See within
@@ -502,7 +500,6 @@ func (q *qemu) createSandbox(ctx context.Context, id string, networkNS NetworkNa
 		IOMMUPlatform: q.config.IOMMUPlatform,
 	}
 
-	// MRC: Kata specific
 	kernelPath, err := q.config.KernelAssetPath()
 	if err != nil {
 		return err
@@ -513,6 +510,7 @@ func (q *qemu) createSandbox(ctx context.Context, id string, networkNS NetworkNa
 		return err
 	}
 
+	// MRC: Do not assume this
 	kernel := govmmQemu.Kernel{
 		Path:       kernelPath,
 		InitrdPath: initrdPath,
@@ -651,6 +649,14 @@ func (q *qemu) createSandbox(ctx context.Context, id string, networkNS NetworkNa
 	}
 
 	return nil
+}
+
+// createSandbox is the Hypervisor sandbox creation implementation for govmmQemu.
+func (q *qemu) createSandbox(ctx context.Context, id string, networkNS NetworkNamespace, hypervisorConfig *HypervisorConfig) error {
+	// Kata specific logic enabled when this is set. This is crude flag for now
+	hypervisorConfig.IsSandbox = true
+
+	return q.CreateVM(ctx, id, networkNS, hypervisorConfig)
 }
 
 func (q *qemu) vhostFSSocketPath(id string) (string, error) {

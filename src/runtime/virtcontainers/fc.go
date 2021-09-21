@@ -186,9 +186,14 @@ func (fc *firecracker) truncateID(id string) string {
 	return id
 }
 
+func (fc *firecracker) createSandbox(ctx context.Context, id string, networkNS NetworkNamespace, hypervisorConfig *HypervisorConfig) error {
+	hypervisorConfig.IsSandbox = true
+	return fc.CreateVM(ctx, id, networkNS, hypervisorConfig)
+}
+
 // For firecracker this call only sets the internal structure up.
 // The sandbox will be created and started through startSandbox().
-func (fc *firecracker) createSandbox(ctx context.Context, id string, networkNS NetworkNamespace, hypervisorConfig *HypervisorConfig) error {
+func (fc *firecracker) CreateVM(ctx context.Context, id string, networkNS NetworkNamespace, hypervisorConfig *HypervisorConfig) error {
 	fc.ctx = ctx
 
 	span, _ := katatrace.Trace(ctx, fc.Logger(), "createSandbox", fcTracingTags, map[string]string{"sandbox_id": fc.id})

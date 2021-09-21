@@ -231,6 +231,10 @@ type HypervisorConfig struct {
 	// Supplementary group IDs.
 	Groups []uint32
 
+	// IsSandbox is a temporary configuration to distinguish
+	// between a sandbox and a regular VM
+	IsSandbox bool
+
 	// KernelPath is the guest kernel host path.
 	KernelPath string
 
@@ -499,12 +503,15 @@ func (conf *HypervisorConfig) CheckTemplateConfig() error {
 }
 
 func (conf *HypervisorConfig) Valid() error {
-	if conf.KernelPath == "" {
-		return fmt.Errorf("Missing kernel path")
-	}
 
-	if conf.ImagePath == "" && conf.InitrdPath == "" {
-		return fmt.Errorf("Missing image and initrd path")
+	if conf.IsSandbox {
+		if conf.KernelPath == "" {
+			return fmt.Errorf("Missing kernel path")
+		}
+
+		if conf.ImagePath == "" && conf.InitrdPath == "" {
+			return fmt.Errorf("Missing image and initrd path")
+		}
 	}
 
 	if err := conf.CheckTemplateConfig(); err != nil {
@@ -859,6 +866,8 @@ func generateVMSocket(id string, vmStogarePath string) (interface{}, error) {
 // The default hypervisor implementation is Qemu.
 type hypervisor interface {
 	createSandbox(ctx context.Context, id string, networkNS NetworkNamespace, hypervisorConfig *HypervisorConfig) error
+
+	CreateVM(ctx context.Context, id string, networkNS NetworkNamespace, hypervisorConfig *HypervisorConfig) error
 	StartVM(ctx context.Context, timeout int) error
 
 	// If wait is set, don't actively stop the sandbox:
