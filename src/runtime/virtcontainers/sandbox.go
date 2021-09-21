@@ -1199,7 +1199,7 @@ func (s *Sandbox) startVM(ctx context.Context) (err error) {
 			return vm.assignSandbox(s)
 		}
 
-		return s.hypervisor.startSandbox(ctx, vmStartTimeout)
+		return s.hypervisor.StartVM(ctx, vmStartTimeout)
 	}); err != nil {
 		return err
 	}
