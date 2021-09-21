@@ -86,6 +86,7 @@ const defaultRxRateLimiterMaxRate = uint64(0)
 const defaultTxRateLimiterMaxRate = uint64(0)
 const defaultConfidentialGuest = false
 const defaultGuestSwap = false
+const defaultRootlessHypervisor = false
 
 var defaultSGXEPCSize = int64(0)
 

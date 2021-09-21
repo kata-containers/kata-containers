@@ -228,6 +228,9 @@ type HypervisorConfig struct {
 	// it will be used for the sandbox's kernel path instead of KernelPath.
 	customAssets map[types.AssetType]*types.Asset
 
+	// Supplementary group IDs.
+	Groups []uint32
+
 	// KernelPath is the guest kernel host path.
 	KernelPath string
 
@@ -382,6 +385,12 @@ type HypervisorConfig struct {
 	// VirtioFSCacheSize is the DAX cache size in MiB
 	VirtioFSCacheSize uint32
 
+	// User ID.
+	Uid uint32
+
+	// Group ID.
+	Gid uint32
+
 	// BlockDeviceCacheSet specifies cache-related options will be set to block devices or not.
 	BlockDeviceCacheSet bool
 
@@ -461,6 +470,9 @@ type HypervisorConfig struct {
 
 	// GuestSwap Used to enable/disable swap in the guest
 	GuestSwap bool
+
+	// Rootless is used to enable rootless VMM process
+	Rootless bool
 }
 
 // vcpu mapping from vcpu number to thread number

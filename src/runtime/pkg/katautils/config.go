@@ -105,15 +105,15 @@ type hypervisor struct {
 	EnableAnnotations       []string `toml:"enable_annotations"`
 	RxRateLimiterMaxRate    uint64   `toml:"rx_rate_limiter_max_rate"`
 	TxRateLimiterMaxRate    uint64   `toml:"tx_rate_limiter_max_rate"`
+	MemOffset               uint64   `toml:"memory_offset"`
 	VirtioFSCacheSize       uint32   `toml:"virtio_fs_cache_size"`
-	NumVCPUs                int32    `toml:"default_vcpus"`
 	DefaultMaxVCPUs         uint32   `toml:"default_maxvcpus"`
 	MemorySize              uint32   `toml:"default_memory"`
 	MemSlots                uint32   `toml:"memory_slots"`
-	MemOffset               uint64   `toml:"memory_offset"`
 	DefaultBridges          uint32   `toml:"default_bridges"`
 	Msize9p                 uint32   `toml:"msize_9p"`
 	PCIeRootPort            uint32   `toml:"pcie_root_port"`
+	NumVCPUs                int32    `toml:"default_vcpus"`
 	BlockDeviceCacheSet     bool     `toml:"block_device_cache_set"`
 	BlockDeviceCacheDirect  bool     `toml:"block_device_cache_direct"`
 	BlockDeviceCacheNoflush bool     `toml:"block_device_cache_noflush"`
@@ -134,6 +134,7 @@ type hypervisor struct {
 	GuestMemoryDumpPaging   bool     `toml:"guest_memory_dump_paging"`
 	ConfidentialGuest       bool     `toml:"confidential_guest"`
 	GuestSwap               bool     `toml:"enable_guest_swap"`
+	Rootless                bool     `toml:"rootless"`
 }
 
 type runtime struct {
@@ -713,6 +714,7 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		GuestMemoryDumpPaging:   h.GuestMemoryDumpPaging,
 		ConfidentialGuest:       h.ConfidentialGuest,
 		GuestSwap:               h.GuestSwap,
+		Rootless:                h.Rootless,
 	}, nil
 }
 
@@ -1069,6 +1071,7 @@ func GetDefaultHypervisorConfig() vc.HypervisorConfig {
 		SGXEPCSize:              defaultSGXEPCSize,
 		ConfidentialGuest:       defaultConfidentialGuest,
 		GuestSwap:               defaultGuestSwap,
+		Rootless:                defaultRootlessHypervisor,
 	}
 }
 

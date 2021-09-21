@@ -79,6 +79,12 @@ func (v *virtiofsd) getSocketFD() (*os.File, error) {
 		return nil, err
 	}
 
+	// Need to change the filesystem ownership of the socket because virtiofsd runs as root while qemu can run as non-root.
+	// This can be removed once virtiofsd can also run as non-root (https://github.com/kata-containers/kata-containers/issues/2542)
+	if err := utils.ChownToParent(v.socketPath); err != nil {
+		return nil, err
+	}
+
 	// no longer needed since fd is a dup
 	defer listener.Close()
 
