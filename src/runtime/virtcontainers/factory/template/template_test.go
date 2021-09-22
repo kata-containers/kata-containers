@@ -129,5 +129,5 @@ func TestTemplateFactory(t *testing.T) {
 
 	// expect tt.statePath not exist, if exist, it means this case failed.
 	_, err = os.Stat(tt.statePath)
-	assert.Nil(err)
+	assert.Error(err)
 }
