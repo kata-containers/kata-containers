@@ -65,7 +65,7 @@ func TestStringFromUnknownHypervisorType(t *testing.T) {
 	testStringFromHypervisorType(t, hypervisorType, "")
 }
 
-func testNewHypervisorFromHypervisorType(t *testing.T, hypervisorType HypervisorType, expected hypervisor) {
+func testNewHypervisorFromHypervisorType(t *testing.T, hypervisorType HypervisorType, expected Hypervisor) {
 	assert := assert.New(t)
 	hy, err := NewHypervisor(hypervisorType)
 	assert.NoError(err)
@@ -470,16 +470,16 @@ func TestAssetPath(t *testing.T) {
 	// The values are "paths" (start with a slash), but end with the
 	// annotation name.
 	cfg := HypervisorConfig{
-		HypervisorPath:    "/" + "io.katacontainers.config.hypervisor.path",
-		HypervisorCtlPath: "/" + "io.katacontainers.config.hypervisor.ctlpath",
+		HypervisorPath:    "/" + "io.katacontainers.config.Hypervisor.path",
+		HypervisorCtlPath: "/" + "io.katacontainers.config.Hypervisor.ctlpath",
 
-		KernelPath: "/" + "io.katacontainers.config.hypervisor.kernel",
+		KernelPath: "/" + "io.katacontainers.config.Hypervisor.kernel",
 
-		ImagePath:  "/" + "io.katacontainers.config.hypervisor.image",
-		InitrdPath: "/" + "io.katacontainers.config.hypervisor.initrd",
+		ImagePath:  "/" + "io.katacontainers.config.Hypervisor.image",
+		InitrdPath: "/" + "io.katacontainers.config.Hypervisor.initrd",
 
-		FirmwarePath: "/" + "io.katacontainers.config.hypervisor.firmware",
-		JailerPath:   "/" + "io.katacontainers.config.hypervisor.jailer_path",
+		FirmwarePath: "/" + "io.katacontainers.config.Hypervisor.firmware",
+		JailerPath:   "/" + "io.katacontainers.config.Hypervisor.jailer_path",
 	}
 
 	for _, asset := range types.AssetTypes() {

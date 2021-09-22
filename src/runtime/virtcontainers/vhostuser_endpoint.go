@@ -82,7 +82,7 @@ func (endpoint *VhostUserEndpoint) Attach(ctx context.Context, s *Sandbox) error
 	span, ctx := vhostuserTrace(ctx, "Attach", endpoint)
 	defer span.End()
 
-	// Generate a unique ID to be used for hypervisor commandline fields
+	// Generate a unique ID to be used for Hypervisor commandline fields
 	randBytes, err := utils.GenerateRandomBytes(8)
 	if err != nil {
 		return err
@@ -105,12 +105,12 @@ func (endpoint *VhostUserEndpoint) Detach(ctx context.Context, netNsCreated bool
 }
 
 // HotAttach for vhostuser endpoint not supported yet
-func (endpoint *VhostUserEndpoint) HotAttach(ctx context.Context, h hypervisor) error {
+func (endpoint *VhostUserEndpoint) HotAttach(ctx context.Context, h Hypervisor) error {
 	return fmt.Errorf("VhostUserEndpoint does not support Hot attach")
 }
 
 // HotDetach for vhostuser endpoint not supported yet
-func (endpoint *VhostUserEndpoint) HotDetach(ctx context.Context, h hypervisor, netNsCreated bool, netNsPath string) error {
+func (endpoint *VhostUserEndpoint) HotDetach(ctx context.Context, h Hypervisor, netNsCreated bool, netNsPath string) error {
 	return fmt.Errorf("VhostUserEndpoint does not support Hot detach")
 }
 

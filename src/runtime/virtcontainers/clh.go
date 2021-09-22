@@ -37,12 +37,12 @@ import (
 var clhTracingTags = map[string]string{
 	"source":    "runtime",
 	"package":   "virtcontainers",
-	"subsystem": "hypervisor",
+	"subsystem": "Hypervisor",
 	"type":      "clh",
 }
 
 //
-// Constants and type definitions related to cloud hypervisor
+// Constants and type definitions related to cloud Hypervisor
 //
 
 type clhState uint8
@@ -69,7 +69,7 @@ const (
 	clhSocket             = "clh.sock"
 	clhAPISocket          = "clh-api.sock"
 	virtioFsSocket        = "virtiofsd.sock"
-	defaultClhPath        = "/usr/local/bin/cloud-hypervisor"
+	defaultClhPath        = "/usr/local/bin/cloud-Hypervisor"
 	virtioFsCacheAlways   = "always"
 )
 
@@ -141,7 +141,7 @@ func (c *clhClientApi) VmRemoveDevicePut(ctx context.Context, vmRemoveDevice chc
 }
 
 //
-// Cloud hypervisor state
+// Cloud Hypervisor state
 //
 type CloudHypervisorState struct {
 	apiSocket    string
@@ -184,7 +184,7 @@ var clhDebugKernelParams = []Param{
 
 //###########################################################
 //
-// hypervisor interface implementation for cloud-hypervisor
+// Hypervisor interface implementation for cloud-Hypervisor
 //
 //###########################################################
 
@@ -230,7 +230,7 @@ func (clh *cloudHypervisor) CreateVM(ctx context.Context, id string, networkNS N
 	}
 
 	// No need to return an error from there since there might be nothing
-	// to fetch if this is the first time the hypervisor is created.
+	// to fetch if this is the first time the Hypervisor is created.
 	clh.Logger().WithField("function", "createSandbox").Info("Sandbox not found creating")
 
 	// Make sure the kernel path is valid
@@ -269,10 +269,10 @@ func (clh *cloudHypervisor) CreateVM(ctx context.Context, id string, networkNS N
 
 	clh.vmconfig.Cmdline = chclient.NewCmdLineConfig(kernelParamsToString(params))
 
-	// set random device generator to hypervisor
+	// set random device generator to Hypervisor
 	clh.vmconfig.Rng = chclient.NewRngConfig(clh.config.EntropySource)
 
-	// set the initial root/boot disk of hypervisor
+	// set the initial root/boot disk of Hypervisor
 	imagePath, err := clh.config.ImageAssetPath()
 	if err != nil {
 		return err
@@ -290,7 +290,7 @@ func (clh *cloudHypervisor) CreateVM(ctx context.Context, id string, networkNS N
 		clh.vmconfig.Pmem = &[]chclient.PmemConfig{*pmem}
 	}
 
-	// set the serial console to the cloud hypervisor
+	// set the serial console to the cloud Hypervisor
 	if clh.config.Debug {
 		clh.vmconfig.Serial = chclient.NewConsoleConfig(cctTTY)
 	} else {
@@ -306,10 +306,10 @@ func (clh *cloudHypervisor) CreateVM(ctx context.Context, id string, networkNS N
 	cpu_topology.Packages = func(i int32) *int32 { return &i }(1)
 	clh.vmconfig.Cpus.Topology = cpu_topology
 
-	// Overwrite the default value of HTTP API socket path for cloud hypervisor
+	// Overwrite the default value of HTTP API socket path for cloud Hypervisor
 	apiSocketPath, err := clh.apiSocketPath(id)
 	if err != nil {
-		clh.Logger().WithError(err).Info("Invalid api socket path for cloud-hypervisor")
+		clh.Logger().WithError(err).Info("Invalid api socket path for cloud-Hypervisor")
 		return err
 	}
 	clh.state.apiSocket = apiSocketPath
@@ -395,7 +395,7 @@ func (clh *cloudHypervisor) StartVM(ctx context.Context, timeout int) error {
 		}
 		clh.state.VirtiofsdPID = pid
 	} else {
-		return errors.New("cloud-hypervisor only supports virtio based file sharing")
+		return errors.New("cloud-Hypervisor only supports virtio based file sharing")
 	}
 
 	pid, err := clh.launchClh()
@@ -403,7 +403,7 @@ func (clh *cloudHypervisor) StartVM(ctx context.Context, timeout int) error {
 		if shutdownErr := clh.virtiofsd.Stop(ctx); shutdownErr != nil {
 			clh.Logger().WithError(shutdownErr).Warn("error shutting down Virtiofsd")
 		}
-		return fmt.Errorf("failed to launch cloud-hypervisor: %q", err)
+		return fmt.Errorf("failed to launch cloud-Hypervisor: %q", err)
 	}
 	clh.state.PID = pid
 
@@ -448,7 +448,7 @@ func clhDriveIndexToID(i int) string {
 	return "clh_drive_" + strconv.Itoa(i)
 }
 
-// Various cloud-hypervisor APIs report a PCI address in "BB:DD.F"
+// Various cloud-Hypervisor APIs report a PCI address in "BB:DD.F"
 // form within the PciDeviceInfo struct.  This is a broken API,
 // because there's no way clh can reliably know the guest side bdf for
 // a device, since the bus number depends on how the guest firmware
@@ -475,7 +475,7 @@ func (clh *cloudHypervisor) hotplugAddBlockDevice(drive *config.BlockDrive) erro
 	}
 
 	if clh.config.BlockDeviceDriver != config.VirtioBlock {
-		return fmt.Errorf("incorrect hypervisor configuration on 'block_device_driver':"+
+		return fmt.Errorf("incorrect Hypervisor configuration on 'block_device_driver':"+
 			" using '%v' but only support '%v'", clh.config.BlockDeviceDriver, config.VirtioBlock)
 	}
 
@@ -582,7 +582,7 @@ func (clh *cloudHypervisor) ResizeMemory(ctx context.Context, reqMemMB uint32, m
 	// TODO: Add support for virtio-mem
 
 	if probe {
-		return 0, MemoryDevice{}, errors.New("probe memory is not supported for cloud-hypervisor")
+		return 0, MemoryDevice{}, errors.New("probe memory is not supported for cloud-Hypervisor")
 	}
 
 	if reqMemMB == 0 {
@@ -777,7 +777,7 @@ func (clh *cloudHypervisor) AddDevice(ctx context.Context, devInfo interface{}, 
 
 //###########################################################################
 //
-// Local helper methods related to the hypervisor interface implementation
+// Local helper methods related to the Hypervisor interface implementation
 //
 //###########################################################################
 
@@ -785,7 +785,7 @@ func (clh *cloudHypervisor) Logger() *log.Entry {
 	return virtLog.WithField("subsystem", "cloudHypervisor")
 }
 
-// Adds all capabilities supported by cloudHypervisor implementation of hypervisor interface
+// Adds all capabilities supported by cloudHypervisor implementation of Hypervisor interface
 func (clh *cloudHypervisor) Capabilities(ctx context.Context) types.Capabilities {
 	span, _ := katatrace.Trace(ctx, clh.Logger(), "Capabilities", clhTracingTags, map[string]string{"sandbox_id": clh.id})
 	defer span.End()
@@ -850,7 +850,7 @@ func (clh *cloudHypervisor) reset() {
 func (clh *cloudHypervisor) GenerateSocket(id string) (interface{}, error) {
 	udsPath, err := clh.vsockSocketPath(id)
 	if err != nil {
-		clh.Logger().Info("Can't generate socket path for cloud-hypervisor")
+		clh.Logger().Info("Can't generate socket path for cloud-Hypervisor")
 		return types.HybridVSock{}, err
 	}
 
@@ -911,7 +911,7 @@ func (clh *cloudHypervisor) launchClh() (int, error) {
 
 	args := []string{cscAPIsocket, clh.state.apiSocket}
 	if clh.config.Debug {
-		// Cloud hypervisor log levels
+		// Cloud Hypervisor log levels
 		// 'v' occurrences increase the level
 		//0 =>  Error
 		//1 =>  Warn
@@ -953,7 +953,7 @@ func (clh *cloudHypervisor) launchClh() (int, error) {
 	}
 
 	if err := clh.waitVMM(clhTimeout); err != nil {
-		clh.Logger().WithError(err).Warn("cloud-hypervisor init failed")
+		clh.Logger().WithError(err).Warn("cloud-Hypervisor init failed")
 		return -1, err
 	}
 
@@ -962,7 +962,7 @@ func (clh *cloudHypervisor) launchClh() (int, error) {
 
 //###########################################################################
 //
-// Cloud-hypervisor CLI builder
+// Cloud-Hypervisor CLI builder
 //
 //###########################################################################
 
@@ -1146,14 +1146,14 @@ func (clh *cloudHypervisor) addVolume(volume types.Volume) error {
 	dax := clh.config.VirtioFSCacheSize != 0
 
 	// numQueues and queueSize are required, let's use the
-	// default values defined by cloud-hypervisor
+	// default values defined by cloud-Hypervisor
 	numQueues := int32(1)
 	queueSize := int32(1024)
 
 	fs := chclient.NewFsConfig(volume.MountTag, vfsdSockPath, numQueues, queueSize, dax, int64(clh.config.VirtioFSCacheSize<<20))
 	clh.vmconfig.Fs = &[]chclient.FsConfig{*fs}
 
-	clh.Logger().Debug("Adding share volume to hypervisor: ", volume.MountTag)
+	clh.Logger().Debug("Adding share volume to Hypervisor: ", volume.MountTag)
 	return nil
 }
 
@@ -1217,7 +1217,7 @@ func (clh *cloudHypervisor) cleanupVM(force bool) error {
 	return nil
 }
 
-// vmInfo ask to hypervisor for current VM status
+// vmInfo ask to Hypervisor for current VM status
 func (clh *cloudHypervisor) vmInfo() (chclient.VmInfo, error) {
 	cl := clh.client()
 	ctx, cancelInfo := context.WithTimeout(context.Background(), clhAPITimeout*time.Second)

@@ -90,7 +90,7 @@ func newTestSandboxConfigNoop() SandboxConfig {
 		CustomSpec:  emptySpec,
 	}
 
-	// Sets the hypervisor configuration.
+	// Sets the Hypervisor configuration.
 	hypervisorConfig := HypervisorConfig{
 		KernelPath:     filepath.Join(testDir, testKernel),
 		ImagePath:      filepath.Join(testDir, testImage),

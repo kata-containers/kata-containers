@@ -89,7 +89,7 @@ func (endpoint *BridgedMacvlanEndpoint) NetworkPair() *NetworkInterfacePair {
 }
 
 // Attach for virtual endpoint bridges the network pair and adds the
-// tap interface of the network pair to the hypervisor.
+// tap interface of the network pair to the Hypervisor.
 func (endpoint *BridgedMacvlanEndpoint) Attach(ctx context.Context, s *Sandbox) error {
 	span, ctx := macvlanTrace(ctx, "Attach", endpoint)
 	defer span.End()
@@ -121,12 +121,12 @@ func (endpoint *BridgedMacvlanEndpoint) Detach(ctx context.Context, netNsCreated
 }
 
 // HotAttach for bridged macvlan endpoint not supported yet
-func (endpoint *BridgedMacvlanEndpoint) HotAttach(ctx context.Context, h hypervisor) error {
+func (endpoint *BridgedMacvlanEndpoint) HotAttach(ctx context.Context, h Hypervisor) error {
 	return fmt.Errorf("BridgedMacvlanEndpoint does not support Hot attach")
 }
 
 // HotDetach for bridged macvlan endpoint not supported yet
-func (endpoint *BridgedMacvlanEndpoint) HotDetach(ctx context.Context, h hypervisor, netNsCreated bool, netNsPath string) error {
+func (endpoint *BridgedMacvlanEndpoint) HotDetach(ctx context.Context, h Hypervisor, netNsCreated bool, netNsPath string) error {
 	return fmt.Errorf("BridgedMacvlanEndpoint does not support Hot detach")
 }
 

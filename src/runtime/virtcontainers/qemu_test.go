@@ -89,12 +89,12 @@ func TestQemuCreateSandbox(t *testing.T) {
 		},
 	}
 
-	// Create the hypervisor fake binary
+	// Create the Hypervisor fake binary
 	testQemuPath := filepath.Join(testDir, testHypervisor)
 	_, err = os.Create(testQemuPath)
 	assert.NoError(err)
 
-	// Create parent dir path for hypervisor.json
+	// Create parent dir path for Hypervisor.json
 	parentDir := filepath.Join(q.store.RunStoragePath(), sandbox.id)
 	assert.NoError(os.MkdirAll(parentDir, DirMode))
 
@@ -121,12 +121,12 @@ func TestQemuCreateSandboxMissingParentDirFail(t *testing.T) {
 		},
 	}
 
-	// Create the hypervisor fake binary
+	// Create the Hypervisor fake binary
 	testQemuPath := filepath.Join(testDir, testHypervisor)
 	_, err = os.Create(testQemuPath)
 	assert.NoError(err)
 
-	// Ensure parent dir path for hypervisor.json does not exist.
+	// Ensure parent dir path for Hypervisor.json does not exist.
 	parentDir := filepath.Join(q.store.RunStoragePath(), sandbox.id)
 	assert.NoError(os.RemoveAll(parentDir))
 
@@ -373,18 +373,18 @@ func TestQemuQemuPath(t *testing.T) {
 		arch:   qkvm,
 	}
 
-	// get config hypervisor path
+	// get config Hypervisor path
 	path, err := q.qemuPath()
 	assert.NoError(err)
 	assert.Equal(path, expectedPath)
 
-	// config hypervisor path does not exist
+	// config Hypervisor path does not exist
 	q.config.HypervisorPath = "/abc/rgb/123"
 	path, err = q.qemuPath()
 	assert.Error(err)
 	assert.Equal(path, "")
 
-	// get arch hypervisor path
+	// get arch Hypervisor path
 	q.config.HypervisorPath = ""
 	path, err = q.qemuPath()
 	assert.NoError(err)

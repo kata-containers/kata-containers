@@ -71,7 +71,7 @@ func (endpoint *TuntapEndpoint) SetProperties(properties NetworkInfo) {
 	endpoint.EndpointProperties = properties
 }
 
-// Attach for tun/tap endpoint adds the tap interface to the hypervisor.
+// Attach for tun/tap endpoint adds the tap interface to the Hypervisor.
 func (endpoint *TuntapEndpoint) Attach(ctx context.Context, s *Sandbox) error {
 	span, ctx := tuntapTrace(ctx, "Attach", endpoint)
 	defer span.End()
@@ -101,7 +101,7 @@ func (endpoint *TuntapEndpoint) Detach(ctx context.Context, netNsCreated bool, n
 }
 
 // HotAttach for the tun/tap endpoint uses hot plug device
-func (endpoint *TuntapEndpoint) HotAttach(ctx context.Context, h hypervisor) error {
+func (endpoint *TuntapEndpoint) HotAttach(ctx context.Context, h Hypervisor) error {
 	networkLogger().Info("Hot attaching tun/tap endpoint")
 
 	span, ctx := tuntapTrace(ctx, "HotAttach", endpoint)
@@ -120,7 +120,7 @@ func (endpoint *TuntapEndpoint) HotAttach(ctx context.Context, h hypervisor) err
 }
 
 // HotDetach for the tun/tap endpoint uses hot pull device
-func (endpoint *TuntapEndpoint) HotDetach(ctx context.Context, h hypervisor, netNsCreated bool, netNsPath string) error {
+func (endpoint *TuntapEndpoint) HotDetach(ctx context.Context, h Hypervisor, netNsCreated bool, netNsPath string) error {
 	networkLogger().Info("Hot detaching tun/tap endpoint")
 
 	span, ctx := tuntapTrace(ctx, "HotDetach", endpoint)

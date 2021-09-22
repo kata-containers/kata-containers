@@ -76,7 +76,7 @@ func (endpoint *PhysicalEndpoint) NetworkPair() *NetworkInterfacePair {
 }
 
 // Attach for physical endpoint binds the physical network interface to
-// vfio-pci and adds device to the hypervisor with vfio-passthrough.
+// vfio-pci and adds device to the Hypervisor with vfio-passthrough.
 func (endpoint *PhysicalEndpoint) Attach(ctx context.Context, s *Sandbox) error {
 	span, ctx := physicalTrace(ctx, "Attach", endpoint)
 	defer span.End()
@@ -121,12 +121,12 @@ func (endpoint *PhysicalEndpoint) Detach(ctx context.Context, netNsCreated bool,
 }
 
 // HotAttach for physical endpoint not supported yet
-func (endpoint *PhysicalEndpoint) HotAttach(ctx context.Context, h hypervisor) error {
+func (endpoint *PhysicalEndpoint) HotAttach(ctx context.Context, h Hypervisor) error {
 	return fmt.Errorf("PhysicalEndpoint does not support Hot attach")
 }
 
 // HotDetach for physical endpoint not supported yet
-func (endpoint *PhysicalEndpoint) HotDetach(ctx context.Context, h hypervisor, netNsCreated bool, netNsPath string) error {
+func (endpoint *PhysicalEndpoint) HotDetach(ctx context.Context, h Hypervisor, netNsCreated bool, netNsPath string) error {
 	return fmt.Errorf("PhysicalEndpoint does not support Hot detach")
 }
 

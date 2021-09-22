@@ -1370,7 +1370,7 @@ func TestSandboxCreationFromConfigRollbackFromCreateSandbox(t *testing.T) {
 		Containers:       nil,
 	}
 
-	// Ensure hypervisor doesn't exist
+	// Ensure Hypervisor doesn't exist
 	assert.NoError(os.Remove(hConf.HypervisorPath))
 
 	_, err := createSandboxFromConfig(ctx, sConf, nil)

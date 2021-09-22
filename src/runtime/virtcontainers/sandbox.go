@@ -54,9 +54,9 @@ var sandboxTracingTags = map[string]string{
 }
 
 const (
-	// vmStartTimeout represents the time in seconds a sandbox can wait before
+	// VmStartTimeout represents the time in seconds a sandbox can wait before
 	// to consider the VM starting operation failed.
-	vmStartTimeout = 10
+	VmStartTimeout = 10
 
 	// DirMode is the permission bits used for creating a directory
 	DirMode = os.FileMode(0750) | os.ModeDir
@@ -171,7 +171,7 @@ type Sandbox struct {
 	ctx        context.Context
 	devManager api.DeviceManager
 	factory    Factory
-	hypervisor hypervisor
+	hypervisor Hypervisor
 	agent      agent
 	store      persistapi.PersistDriver
 
@@ -257,11 +257,11 @@ func (s *Sandbox) GetNetNs() string {
 	return s.networkNS.NetNsPath
 }
 
-// GetHypervisorPid returns the hypervisor's pid.
+// GetHypervisorPid returns the Hypervisor's pid.
 func (s *Sandbox) GetHypervisorPid() (int, error) {
 	pids := s.hypervisor.GetPids()
 	if len(pids) == 0 || pids[0] == 0 {
-		return -1, fmt.Errorf("Invalid hypervisor PID: %+v", pids)
+		return -1, fmt.Errorf("Invalid Hypervisor PID: %+v", pids)
 	}
 
 	return pids[0], nil
@@ -444,9 +444,9 @@ func (s *Sandbox) getAndStoreGuestDetails(ctx context.Context) error {
 	return nil
 }
 
-// createSandbox creates a sandbox from a sandbox description, the containers list, the hypervisor
+// createSandbox creates a sandbox from a sandbox description, the containers list, the Hypervisor
 // and the agent passed through the Config structure.
-// It will create and store the sandbox structure, and then ask the hypervisor
+// It will create and store the sandbox structure, and then ask the Hypervisor
 // to physically create that sandbox i.e. starts a VM for that sandbox to eventually
 // be started.
 func createSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factory) (*Sandbox, error) {
@@ -555,7 +555,7 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 		s.Logger().WithError(err).Debug("restore sandbox failed")
 	}
 
-	// store doesn't require hypervisor to be stored immediately
+	// store doesn't require Hypervisor to be stored immediately
 	if err = s.hypervisor.createSandbox(ctx, s.id, s.networkNS, &sandboxConfig.HypervisorConfig); err != nil {
 		return nil, err
 	}
@@ -764,7 +764,7 @@ func (s *Sandbox) Delete(ctx context.Context) error {
 	}
 
 	if err := s.hypervisor.Cleanup(ctx); err != nil {
-		s.Logger().WithError(err).Error("failed to Cleanup hypervisor")
+		s.Logger().WithError(err).Error("failed to Cleanup Hypervisor")
 	}
 
 	s.agent.cleanup(ctx, s)
@@ -1199,7 +1199,7 @@ func (s *Sandbox) startVM(ctx context.Context) (err error) {
 			return vm.assignSandbox(s)
 		}
 
-		return s.hypervisor.StartVM(ctx, vmStartTimeout)
+		return s.hypervisor.StartVM(ctx, VmStartTimeout)
 	}); err != nil {
 		return err
 	}
@@ -1231,7 +1231,7 @@ func (s *Sandbox) startVM(ctx context.Context) (err error) {
 		}
 	}
 
-	// Once the hypervisor is done starting the sandbox,
+	// Once the Hypervisor is done starting the sandbox,
 	// we want to guarantee that it is manageable.
 	// For that we need to ask the agent to start the
 	// sandbox inside the VM.
@@ -1969,13 +1969,13 @@ func (s *Sandbox) updateResources(ctx context.Context) error {
 	}
 
 	// Update VCPUs
-	s.Logger().WithField("cpus-sandbox", sandboxVCPUs).Debugf("Request to hypervisor to update vCPUs")
+	s.Logger().WithField("cpus-sandbox", sandboxVCPUs).Debugf("Request to Hypervisor to update vCPUs")
 	oldCPUs, newCPUs, err := s.hypervisor.ResizeVCPUs(ctx, sandboxVCPUs)
 	if err != nil {
 		return err
 	}
 
-	s.Logger().Debugf("Request to hypervisor to update oldCPUs/newCPUs: %d/%d", oldCPUs, newCPUs)
+	s.Logger().Debugf("Request to Hypervisor to update oldCPUs/newCPUs: %d/%d", oldCPUs, newCPUs)
 	// If the CPUs were increased, ask agent to online them
 	if oldCPUs < newCPUs {
 		vcpusAdded := newCPUs - oldCPUs
@@ -1987,7 +1987,7 @@ func (s *Sandbox) updateResources(ctx context.Context) error {
 	s.Logger().Debugf("Sandbox CPUs: %d", newCPUs)
 
 	// Update Memory
-	s.Logger().WithField("memory-sandbox-size-byte", sandboxMemoryByte).Debugf("Request to hypervisor to update memory")
+	s.Logger().WithField("memory-sandbox-size-byte", sandboxMemoryByte).Debugf("Request to Hypervisor to update memory")
 	newMemory, updatedMemoryDevice, err := s.hypervisor.ResizeMemory(ctx, uint32(sandboxMemoryByte>>utils.MibToBytesShift), s.state.GuestMemoryBlockSizeMB, s.state.GuestMemoryHotplugProbe)
 	if err != nil {
 		if err == noGuestMemHotplugErr {
@@ -2089,7 +2089,7 @@ func (s *Sandbox) GetHypervisorType() string {
 }
 
 // cgroupsUpdate updates the sandbox cpuset cgroup subsystem.
-// Also, if the sandbox has an overhead cgroup, it updates the hypervisor
+// Also, if the sandbox has an overhead cgroup, it updates the Hypervisor
 // constraints by moving the potentially new vCPU threads back to the sandbox
 // cgroup.
 func (s *Sandbox) cgroupsUpdate(ctx context.Context) error {
@@ -2159,7 +2159,7 @@ func (s *Sandbox) cgroupsDelete() error {
 func (s *Sandbox) constrainHypervisor(ctx context.Context) error {
 	tids, err := s.hypervisor.GetThreadIDs(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to get thread ids from hypervisor: %v", err)
+		return fmt.Errorf("failed to get thread ids from Hypervisor: %v", err)
 	}
 
 	// All vCPU threads move to the sandbox cgroup.

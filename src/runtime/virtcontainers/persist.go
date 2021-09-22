@@ -60,7 +60,7 @@ func (s *Sandbox) dumpState(ss *persistapi.SandboxState, cs map[string]persistap
 
 func (s *Sandbox) dumpHypervisor(ss *persistapi.SandboxState) {
 	ss.HypervisorState = s.hypervisor.Save()
-	// BlockIndexMap will be moved from sandbox state to hypervisor state later
+	// BlockIndexMap will be moved from sandbox state to Hypervisor state later
 	ss.HypervisorState.BlockIndexMap = s.state.BlockIndexMap
 }
 

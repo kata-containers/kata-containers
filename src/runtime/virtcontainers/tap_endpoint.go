@@ -69,7 +69,7 @@ func (endpoint *TapEndpoint) SetProperties(properties NetworkInfo) {
 	endpoint.EndpointProperties = properties
 }
 
-// Attach for tap endpoint adds the tap interface to the hypervisor.
+// Attach for tap endpoint adds the tap interface to the Hypervisor.
 func (endpoint *TapEndpoint) Attach(ctx context.Context, s *Sandbox) error {
 	return fmt.Errorf("TapEndpoint does not support Attach, if you're using docker please use --net none")
 }
@@ -90,7 +90,7 @@ func (endpoint *TapEndpoint) Detach(ctx context.Context, netNsCreated bool, netN
 }
 
 // HotAttach for the tap endpoint uses hot plug device
-func (endpoint *TapEndpoint) HotAttach(ctx context.Context, h hypervisor) error {
+func (endpoint *TapEndpoint) HotAttach(ctx context.Context, h Hypervisor) error {
 	networkLogger().Info("Hot attaching tap endpoint")
 
 	span, ctx := tapTrace(ctx, "HotAttach", endpoint)
@@ -109,7 +109,7 @@ func (endpoint *TapEndpoint) HotAttach(ctx context.Context, h hypervisor) error 
 }
 
 // HotDetach for the tap endpoint uses hot pull device
-func (endpoint *TapEndpoint) HotDetach(ctx context.Context, h hypervisor, netNsCreated bool, netNsPath string) error {
+func (endpoint *TapEndpoint) HotDetach(ctx context.Context, h Hypervisor, netNsCreated bool, netNsPath string) error {
 	networkLogger().Info("Hot detaching tap endpoint")
 
 	span, ctx := tapTrace(ctx, "HotDetach", endpoint)

@@ -26,8 +26,8 @@ type Endpoint interface {
 	SetPciPath(vcTypes.PciPath)
 	Attach(context.Context, *Sandbox) error
 	Detach(ctx context.Context, netNsCreated bool, netNsPath string) error
-	HotAttach(ctx context.Context, h hypervisor) error
-	HotDetach(ctx context.Context, h hypervisor, netNsCreated bool, netNsPath string) error
+	HotAttach(ctx context.Context, h Hypervisor) error
+	HotDetach(ctx context.Context, h Hypervisor, netNsCreated bool, netNsPath string) error
 
 	save() persistapi.NetworkEndpoint
 	load(persistapi.NetworkEndpoint)

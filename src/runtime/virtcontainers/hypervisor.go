@@ -21,7 +21,7 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
 )
 
-// HypervisorType describes an hypervisor type.
+// HypervisorType describes an Hypervisor type.
 type HypervisorType string
 
 type Operation int
@@ -32,19 +32,19 @@ const (
 )
 
 const (
-	// FirecrackerHypervisor is the FC hypervisor.
+	// FirecrackerHypervisor is the FC Hypervisor.
 	FirecrackerHypervisor HypervisorType = "firecracker"
 
-	// QemuHypervisor is the QEMU hypervisor.
+	// QemuHypervisor is the QEMU Hypervisor.
 	QemuHypervisor HypervisorType = "qemu"
 
-	// AcrnHypervisor is the ACRN hypervisor.
+	// AcrnHypervisor is the ACRN Hypervisor.
 	AcrnHypervisor HypervisorType = "acrn"
 
-	// ClhHypervisor is the ICH hypervisor.
+	// ClhHypervisor is the ICH Hypervisor.
 	ClhHypervisor HypervisorType = "clh"
 
-	// MockHypervisor is a mock hypervisor for testing purposes
+	// MockHypervisor is a mock Hypervisor for testing purposes
 	MockHypervisor HypervisorType = "mock"
 )
 
@@ -67,7 +67,7 @@ const (
 	vSockPort = 1024
 
 	// Port where the agent will send the logs. Logs are sent through the vsock in cases
-	// where the hypervisor has no console.sock, i.e firecracker
+	// where the Hypervisor has no console.sock, i.e firecracker
 	vSockLogsPort = 1025
 
 	// MinHypervisorMemory is the minimum memory required for a VM.
@@ -144,7 +144,7 @@ type MemoryDevice struct {
 	Probe  bool
 }
 
-// Set sets an hypervisor type based on the input string.
+// Set sets an Hypervisor type based on the input string.
 func (hType *HypervisorType) Set(value string) error {
 	switch value {
 	case "qemu":
@@ -163,11 +163,11 @@ func (hType *HypervisorType) Set(value string) error {
 		*hType = MockHypervisor
 		return nil
 	default:
-		return fmt.Errorf("Unknown hypervisor type %s", value)
+		return fmt.Errorf("Unknown Hypervisor type %s", value)
 	}
 }
 
-// String converts an hypervisor type to a string.
+// String converts an Hypervisor type to a string.
 func (hType *HypervisorType) String() string {
 	switch *hType {
 	case QemuHypervisor:
@@ -185,8 +185,8 @@ func (hType *HypervisorType) String() string {
 	}
 }
 
-// NewHypervisor returns an hypervisor from and hypervisor type.
-func NewHypervisor(hType HypervisorType) (hypervisor, error) {
+// NewHypervisor returns an Hypervisor from and Hypervisor type.
+func NewHypervisor(hType HypervisorType) (Hypervisor, error) {
 	store, err := persist.GetDriver()
 	if err != nil {
 		return nil, err
@@ -210,17 +210,17 @@ func NewHypervisor(hType HypervisorType) (hypervisor, error) {
 	case MockHypervisor:
 		return &mockHypervisor{}, nil
 	default:
-		return nil, fmt.Errorf("Unknown hypervisor type %s", hType)
+		return nil, fmt.Errorf("Unknown Hypervisor type %s", hType)
 	}
 }
 
-// Param is a key/value representation for hypervisor and kernel parameters.
+// Param is a key/value representation for Hypervisor and kernel parameters.
 type Param struct {
 	Key   string
 	Value string
 }
 
-// HypervisorConfig is the hypervisor configuration.
+// HypervisorConfig is the Hypervisor configuration.
 type HypervisorConfig struct {
 	// customAssets is a map of assets.
 	// Each value in that map takes precedence over the configured assets.
@@ -254,10 +254,10 @@ type HypervisorConfig struct {
 	// CPUFeatures are cpu specific features
 	CPUFeatures string
 
-	// HypervisorPath is the hypervisor executable host path.
+	// HypervisorPath is the Hypervisor executable host path.
 	HypervisorPath string
 
-	// HypervisorCtlPath is the hypervisor ctl executable host path.
+	// HypervisorCtlPath is the Hypervisor ctl executable host path.
 	HypervisorCtlPath string
 
 	// JailerPath is the jailer executable host path.
@@ -304,8 +304,8 @@ type HypervisorConfig struct {
 	// GuestHookPath is the path within the VM that will be used for 'drop-in' hooks
 	GuestHookPath string
 
-	// VMid is the id of the VM that create the hypervisor if the VM is created by the factory.
-	// VMid is "" if the hypervisor is not created by the factory.
+	// VMid is the id of the VM that create the Hypervisor if the VM is created by the factory.
+	// VMid is "" if the Hypervisor is not created by the factory.
 	VMid string
 
 	// SELinux label for the VM
@@ -314,10 +314,10 @@ type HypervisorConfig struct {
 	// VirtioFSCache cache mode for fs version cache or "none"
 	VirtioFSCache string
 
-	// HypervisorPathList is the list of hypervisor paths names allowed in annotations
+	// HypervisorPathList is the list of Hypervisor paths names allowed in annotations
 	HypervisorPathList []string
 
-	// HypervisorCtlPathList is the list of hypervisor control paths names allowed in annotations
+	// HypervisorCtlPathList is the list of Hypervisor control paths names allowed in annotations
 	HypervisorCtlPathList []string
 
 	// JailerPathList is the list of jailer paths names allowed in annotations
@@ -347,7 +347,7 @@ type HypervisorConfig struct {
 	// KernelParams are additional guest kernel parameters.
 	KernelParams []Param
 
-	// HypervisorParams are additional hypervisor parameters.
+	// HypervisorParams are additional Hypervisor parameters.
 	HypervisorParams []Param
 
 	// SGXEPCSize specifies the size in bytes for the EPC Section.
@@ -413,7 +413,7 @@ type HypervisorConfig struct {
 	// Supported currently for virtio-scsi driver.
 	EnableIOThreads bool
 
-	// Debug changes the default hypervisor and kernel parameters to
+	// Debug changes the default Hypervisor and kernel parameters to
 	// enable debug output where available.
 	Debug bool
 
@@ -548,7 +548,7 @@ func (conf *HypervisorConfig) Valid() error {
 }
 
 // AddKernelParam allows the addition of new kernel parameters to an existing
-// hypervisor configuration.
+// Hypervisor configuration.
 func (conf *HypervisorConfig) AddKernelParam(p Param) error {
 	if p.Key == "" {
 		return fmt.Errorf("Empty kernel parameter")
@@ -644,7 +644,7 @@ func (conf *HypervisorConfig) CustomInitrdAsset() bool {
 	return conf.isCustomAsset(types.InitrdAsset)
 }
 
-// HypervisorAssetPath returns the VM hypervisor path
+// HypervisorAssetPath returns the VM Hypervisor path
 func (conf *HypervisorConfig) HypervisorAssetPath() (string, error) {
 	return conf.assetPath(types.HypervisorAsset)
 }
@@ -653,12 +653,12 @@ func (conf *HypervisorConfig) IfPVPanicEnabled() bool {
 	return conf.GuestMemoryDumpPath != ""
 }
 
-// HypervisorCtlAssetPath returns the VM hypervisor ctl path
+// HypervisorCtlAssetPath returns the VM Hypervisor ctl path
 func (conf *HypervisorConfig) HypervisorCtlAssetPath() (string, error) {
 	return conf.assetPath(types.HypervisorCtlAsset)
 }
 
-// CustomHypervisorAsset returns true if the hypervisor asset is a custom one, false otherwise.
+// CustomHypervisorAsset returns true if the Hypervisor asset is a custom one, false otherwise.
 func (conf *HypervisorConfig) CustomHypervisorAsset() bool {
 	return conf.isCustomAsset(types.HypervisorAsset)
 }
@@ -834,14 +834,14 @@ func RunningOnVMM(cpuInfoPath string) (bool, error) {
 		if err != nil {
 			return false, err
 		}
-		return flags["hypervisor"], nil
+		return flags["Hypervisor"], nil
 	}
 
 	virtLog.WithField("arch", runtime.GOARCH).Info("Unable to know if the system is running inside a VM")
 	return false, nil
 }
 
-func GetHypervisorPid(h hypervisor) int {
+func GetHypervisorPid(h Hypervisor) int {
 	pids := h.GetPids()
 	if len(pids) == 0 {
 		return 0
@@ -862,9 +862,9 @@ func generateVMSocket(id string, vmStogarePath string) (interface{}, error) {
 	}, nil
 }
 
-// hypervisor is the virtcontainers hypervisor interface.
-// The default hypervisor implementation is Qemu.
-type hypervisor interface {
+// Hypervisor is the virtcontainers Hypervisor interface.
+// The default Hypervisor implementation is Qemu.
+type Hypervisor interface {
 	createSandbox(ctx context.Context, id string, networkNS NetworkNamespace, hypervisorConfig *HypervisorConfig) error
 
 	CreateVM(ctx context.Context, id string, networkNS NetworkNamespace, hypervisorConfig *HypervisorConfig) error
@@ -887,8 +887,8 @@ type hypervisor interface {
 	HypervisorConfig() HypervisorConfig
 	GetThreadIDs(ctx context.Context) (VcpuThreadIDs, error)
 	Cleanup(ctx context.Context) error
-	// getPids returns a slice of hypervisor related process ids.
-	// The hypervisor pid must be put at index 0.
+	// getPids returns a slice of Hypervisor related process ids.
+	// The Hypervisor pid must be put at index 0.
 	GetPids() []int
 	GetVirtioFsPid() *int
 	fromGrpc(ctx context.Context, hypervisorConfig *HypervisorConfig, j []byte) error
@@ -901,7 +901,7 @@ type hypervisor interface {
 	// generate the socket to communicate the host and guest
 	GenerateSocket(id string) (interface{}, error)
 
-	// check if hypervisor supports built-in rate limiter.
+	// check if Hypervisor supports built-in rate limiter.
 	IsRateLimiterBuiltin() bool
 
 	setSandbox(sandbox *Sandbox)

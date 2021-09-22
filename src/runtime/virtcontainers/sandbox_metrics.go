@@ -19,7 +19,7 @@ const namespaceKatashim = "kata_shim"
 const namespaceVirtiofsd = "kata_virtiofsd"
 
 var (
-	// hypervisor
+	// Hypervisor
 	hypervisorThreads = prometheus.NewGauge(prometheus.GaugeOpts{
 		Namespace: namespaceHypervisor,
 		Name:      "threads",
@@ -61,7 +61,7 @@ var (
 	hypervisorOpenFDs = prometheus.NewGauge(prometheus.GaugeOpts{
 		Namespace: namespaceHypervisor,
 		Name:      "fds",
-		Help:      "Open FDs for hypervisor.",
+		Help:      "Open FDs for Hypervisor.",
 	})
 
 	// agent
@@ -113,7 +113,7 @@ var (
 )
 
 func RegisterMetrics() {
-	// hypervisor
+	// Hypervisor
 	prometheus.MustRegister(hypervisorThreads)
 	prometheus.MustRegister(hypervisorProcStatus)
 	prometheus.MustRegister(hypervisorProcStat)
@@ -130,7 +130,7 @@ func RegisterMetrics() {
 	prometheus.MustRegister(virtiofsdOpenFDs)
 }
 
-// UpdateRuntimeMetrics update shim/hypervisor's metrics
+// UpdateRuntimeMetrics update shim/Hypervisor's metrics
 func (s *Sandbox) UpdateRuntimeMetrics() error {
 	pids := s.hypervisor.GetPids()
 	if len(pids) == 0 {

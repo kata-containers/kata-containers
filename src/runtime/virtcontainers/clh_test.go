@@ -31,7 +31,7 @@ func newClhConfig() (HypervisorConfig, error) {
 	setupClh()
 
 	if testClhPath == "" {
-		return HypervisorConfig{}, errors.New("hypervisor fake path is empty")
+		return HypervisorConfig{}, errors.New("Hypervisor fake path is empty")
 	}
 
 	if testVirtiofsdPath == "" {

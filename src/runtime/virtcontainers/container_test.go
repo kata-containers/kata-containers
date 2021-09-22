@@ -99,8 +99,8 @@ func TestContainerRemoveDrive(t *testing.T) {
 	container.state.Fstype = ""
 	err := container.removeDrive(sandbox.ctx)
 
-	// HotplugRemoveDevice for hypervisor should not be called.
-	// test should pass without a hypervisor created for the container's sandbox.
+	// HotplugRemoveDevice for Hypervisor should not be called.
+	// test should pass without a Hypervisor created for the container's sandbox.
 	assert.Nil(t, err, "remove drive should succeed")
 
 	sandbox.hypervisor = &mockHypervisor{}

@@ -11,7 +11,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/rootless"
 	"io/ioutil"
 	"math"
 	"os"
@@ -23,6 +22,8 @@ import (
 	"syscall"
 	"time"
 	"unsafe"
+
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/rootless"
 
 	govmmQemu "github.com/kata-containers/govmm/qemu"
 	"github.com/opencontainers/selinux/go-selinux/label"
@@ -44,7 +45,7 @@ import (
 var qemuTracingTags = map[string]string{
 	"source":    "runtime",
 	"package":   "virtcontainers",
-	"subsystem": "hypervisor",
+	"subsystem": "Hypervisor",
 	"type":      "qemu",
 }
 
@@ -68,7 +69,7 @@ type qmpChannel struct {
 
 // CPUDevice represents a CPU device which was hot-added in a running VM
 type CPUDevice struct {
-	// ID is used to identify this CPU in the hypervisor options.
+	// ID is used to identify this CPU in the Hypervisor options.
 	ID string
 }
 
@@ -193,7 +194,7 @@ func (q *qemu) kernelParameters() string {
 	return strings.Join(paramsStr, " ")
 }
 
-// Adds all capabilities supported by qemu implementation of hypervisor interface
+// Adds all capabilities supported by qemu implementation of Hypervisor interface
 func (q *qemu) Capabilities(ctx context.Context) types.Capabilities {
 	span, _ := katatrace.Trace(ctx, q.Logger(), "Capabilities", qemuTracingTags, map[string]string{"sandbox_id": q.id})
 	defer span.End()
@@ -615,7 +616,7 @@ func (q *qemu) CreateVM(ctx context.Context, id string, networkNS NetworkNamespa
 	if ioThread != nil {
 		qemuConfig.IOThreads = []govmmQemu.IOThread{*ioThread}
 	}
-	// Add RNG device to hypervisor
+	// Add RNG device to Hypervisor
 	rngDev := config.RNGDev{
 		ID:       rngID,
 		Filename: q.config.EntropySource,
@@ -625,7 +626,7 @@ func (q *qemu) CreateVM(ctx context.Context, id string, networkNS NetworkNamespa
 		return err
 	}
 
-	// Add PCIe Root Port devices to hypervisor
+	// Add PCIe Root Port devices to Hypervisor
 	// The pcie.0 bus do not support hot-plug, but PCIe device can be hot-plugged into PCIe Root Port.
 	// For more details, please see https://github.com/qemu/qemu/blob/master/docs/pcie.txt
 	if hypervisorConfig.PCIeRootPort > 0 {
@@ -1147,7 +1148,7 @@ func (q *qemu) canDumpGuestMemory(dumpSavePath string) error {
 }
 
 // dumpSandboxMetaInfo save meta information for debug purpose, includes:
-// hypervisor version, sandbox/container state, hypervisor config
+// Hypervisor version, sandbox/container state, Hypervisor config
 func (q *qemu) dumpSandboxMetaInfo(dumpSavePath string) {
 	dumpStatePath := filepath.Join(dumpSavePath, "state")
 
@@ -1158,22 +1159,22 @@ func (q *qemu) dumpSandboxMetaInfo(dumpSavePath string) {
 	if output, err := pkgUtils.RunCommandFull(command, true); err != nil {
 		q.Logger().WithError(err).WithField("output", output).Error("failed to Save state")
 	}
-	// Save hypervisor meta information
-	fileName := filepath.Join(dumpSavePath, "hypervisor.conf")
+	// Save Hypervisor meta information
+	fileName := filepath.Join(dumpSavePath, "Hypervisor.conf")
 	data, _ := json.MarshalIndent(q.config, "", " ")
 	if err := ioutil.WriteFile(fileName, data, defaultFilePerms); err != nil {
-		q.Logger().WithError(err).WithField("hypervisor.conf", data).Error("write to hypervisor.conf file failed")
+		q.Logger().WithError(err).WithField("Hypervisor.conf", data).Error("write to Hypervisor.conf file failed")
 	}
 
-	// Save hypervisor version
+	// Save Hypervisor version
 	hyperVisorVersion, err := pkgUtils.RunCommand([]string{q.config.HypervisorPath, "--version"})
 	if err != nil {
-		q.Logger().WithError(err).WithField("HypervisorPath", data).Error("failed to get hypervisor version")
+		q.Logger().WithError(err).WithField("HypervisorPath", data).Error("failed to get Hypervisor version")
 	}
 
-	fileName = filepath.Join(dumpSavePath, "hypervisor.version")
+	fileName = filepath.Join(dumpSavePath, "Hypervisor.version")
 	if err := ioutil.WriteFile(fileName, []byte(hyperVisorVersion), defaultFilePerms); err != nil {
-		q.Logger().WithError(err).WithField("hypervisor.version", data).Error("write to hypervisor.version file failed")
+		q.Logger().WithError(err).WithField("Hypervisor.version", data).Error("write to Hypervisor.version file failed")
 	}
 }
 

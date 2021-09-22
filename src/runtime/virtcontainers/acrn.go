@@ -33,7 +33,7 @@ import (
 var acrnTracingTags = map[string]string{
 	"source":    "runtime",
 	"package":   "virtcontainers",
-	"subsystem": "hypervisor",
+	"subsystem": "Hypervisor",
 	"type":      "acrn",
 }
 
@@ -87,7 +87,7 @@ type AcrnState struct {
 	PID  int
 }
 
-// Acrn is an Hypervisor interface implementation for the Linux acrn hypervisor.
+// Acrn is an Hypervisor interface implementation for the Linux acrn Hypervisor.
 type Acrn struct {
 	sandbox    *Sandbox
 	ctx        context.Context
@@ -154,7 +154,7 @@ func (a *Acrn) kernelParameters() string {
 	return strings.Join(paramsStr, " ")
 }
 
-// Adds all capabilities supported by Acrn implementation of hypervisor interface
+// Adds all capabilities supported by Acrn implementation of Hypervisor interface
 func (a *Acrn) Capabilities(ctx context.Context) types.Capabilities {
 	span, _ := katatrace.Trace(ctx, a.Logger(), "Capabilities", acrnTracingTags, map[string]string{"sandbox_id": a.id})
 	defer span.End()

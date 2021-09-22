@@ -27,7 +27,7 @@ const testContainerID = "containerID"
 const testKernel = "kernel"
 const testInitrd = "initrd"
 const testImage = "image"
-const testHypervisor = "hypervisor"
+const testHypervisor = "Hypervisor"
 const testJailer = "jailer"
 const testFirmware = "firmware"
 const testVirtiofsd = "virtiofsd"
@@ -134,7 +134,7 @@ func TestMain(m *testing.M) {
 	}
 
 	utils.StartCmd = func(c *exec.Cmd) error {
-		//StartVM will Check if the hypervisor is alive and
+		//StartVM will Check if the Hypervisor is alive and
 		// checks for the PID is running, lets fake it using our
 		// own PID
 		c.Process = &os.Process{Pid: os.Getpid()}

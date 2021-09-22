@@ -372,7 +372,7 @@ func (k *kataAgent) capabilities() types.Capabilities {
 	return caps
 }
 
-func (k *kataAgent) internalConfigure(ctx context.Context, h hypervisor, id string, config KataAgentConfig) error {
+func (k *kataAgent) internalConfigure(ctx context.Context, h Hypervisor, id string, config KataAgentConfig) error {
 	span, _ := katatrace.Trace(ctx, k.Logger(), "configure", kataAgentTracingTags)
 	defer span.End()
 
@@ -460,7 +460,7 @@ func (k *kataAgent) cleanupSandboxBindMounts(sandbox *Sandbox) error {
 	return retErr
 }
 
-func (k *kataAgent) configure(ctx context.Context, h hypervisor, id, sharePath string, config KataAgentConfig) error {
+func (k *kataAgent) configure(ctx context.Context, h Hypervisor, id, sharePath string, config KataAgentConfig) error {
 	span, ctx := katatrace.Trace(ctx, k.Logger(), "configure", kataAgentTracingTags)
 	defer span.End()
 
@@ -484,7 +484,7 @@ func (k *kataAgent) configure(ctx context.Context, h hypervisor, id, sharePath s
 		return vcTypes.ErrInvalidConfigType
 	}
 
-	// Neither create shared directory nor add 9p device if hypervisor
+	// Neither create shared directory nor add 9p device if Hypervisor
 	// doesn't support filesystem sharing.
 	caps := h.Capabilities(ctx)
 	if !caps.IsFsSharingSupported() {
@@ -505,7 +505,7 @@ func (k *kataAgent) configure(ctx context.Context, h hypervisor, id, sharePath s
 	return h.AddDevice(ctx, sharedVolume, FsDev)
 }
 
-func (k *kataAgent) configureFromGrpc(ctx context.Context, h hypervisor, id string, config KataAgentConfig) error {
+func (k *kataAgent) configureFromGrpc(ctx context.Context, h Hypervisor, id string, config KataAgentConfig) error {
 	return k.internalConfigure(ctx, h, id, config)
 }
 
@@ -1049,7 +1049,7 @@ func (k *kataAgent) constraintGRPCSpec(grpcSpec *grpc.Spec, passSeccomp bool) {
 	// Disable SELinux inside of the virtual machine, the label will apply
 	// to the KVM process
 	if grpcSpec.Process.SelinuxLabel != "" {
-		k.Logger().Info("SELinux label from config will be applied to the hypervisor process, not the VM workload")
+		k.Logger().Info("SELinux label from config will be applied to the Hypervisor process, not the VM workload")
 		grpcSpec.Process.SelinuxLabel = ""
 	}
 

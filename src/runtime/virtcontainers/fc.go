@@ -45,7 +45,7 @@ import (
 var fcTracingTags = map[string]string{
 	"source":    "runtime",
 	"package":   "virtcontainers",
-	"subsystem": "hypervisor",
+	"subsystem": "Hypervisor",
 	"type":      "firecracker",
 }
 
@@ -116,7 +116,7 @@ func (s vmmState) String() string {
 	return ""
 }
 
-// FirecrackerInfo contains information related to the hypervisor that we
+// FirecrackerInfo contains information related to the Hypervisor that we
 // want to store on disk
 type FirecrackerInfo struct {
 	Version string
@@ -199,7 +199,7 @@ func (fc *firecracker) CreateVM(ctx context.Context, id string, networkNS Networ
 	span, _ := katatrace.Trace(ctx, fc.Logger(), "createSandbox", fcTracingTags, map[string]string{"sandbox_id": fc.id})
 	defer span.End()
 
-	//TODO: Check validity of the hypervisor config provided
+	//TODO: Check validity of the Hypervisor config provided
 	//https://github.com/kata-containers/runtime/issues/1065
 	fc.id = fc.truncateID(id)
 	fc.state.set(notReady)
@@ -393,8 +393,8 @@ func (fc *firecracker) fcInit(ctx context.Context, timeout int) error {
 		cmd.Stdout = fc.console
 	}
 
-	fc.Logger().WithField("hypervisor args", args).Debug()
-	fc.Logger().WithField("hypervisor cmd", cmd).Debug()
+	fc.Logger().WithField("Hypervisor args", args).Debug()
+	fc.Logger().WithField("Hypervisor cmd", cmd).Debug()
 
 	fc.Logger().Info("Starting VM")
 	if err := cmd.Start(); err != nil {
@@ -746,8 +746,8 @@ func (fc *firecracker) fcInitConfiguration(ctx context.Context) error {
 	return nil
 }
 
-// startSandbox will start the hypervisor for the given sandbox.
-// In the context of firecracker, this will start the hypervisor,
+// startSandbox will start the Hypervisor for the given sandbox.
+// In the context of firecracker, this will start the Hypervisor,
 // for configuration, but not yet start the actual virtual machine
 func (fc *firecracker) StartVM(ctx context.Context, timeout int) error {
 	span, _ := katatrace.Trace(ctx, fc.Logger(), "StartVM", fcTracingTags, map[string]string{"sandbox_id": fc.id})
@@ -1125,7 +1125,7 @@ func (fc *firecracker) Disconnect(ctx context.Context) {
 	fc.state.set(notReady)
 }
 
-// Adds all capabilities supported by firecracker implementation of hypervisor interface
+// Adds all capabilities supported by firecracker implementation of Hypervisor interface
 func (fc *firecracker) Capabilities(ctx context.Context) types.Capabilities {
 	span, _ := katatrace.Trace(ctx, fc.Logger(), "Capabilities", fcTracingTags, map[string]string{"sandbox_id": fc.id})
 	defer span.End()

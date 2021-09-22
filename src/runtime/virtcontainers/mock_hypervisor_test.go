@@ -47,7 +47,7 @@ func TestMockHypervisorCreateSandbox(t *testing.T) {
 func TestMockHypervisorStartSandbox(t *testing.T) {
 	var m *mockHypervisor
 
-	assert.NoError(t, m.StartVM(context.Background(), vmStartTimeout))
+	assert.NoError(t, m.StartVM(context.Background(), VmStartTimeout))
 }
 
 func TestMockHypervisorStopSandbox(t *testing.T) {

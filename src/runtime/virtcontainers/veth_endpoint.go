@@ -39,7 +39,7 @@ func createVethNetworkEndpoint(idx int, ifName string, interworkingModel NetInte
 	endpoint := &VethEndpoint{
 		// TODO This is too specific. We may need to create multiple
 		// end point types here and then decide how to connect them
-		// at the time of hypervisor attach and not here
+		// at the time of Hypervisor attach and not here
 		NetPair:      netPair,
 		EndpointType: VethEndpointType,
 	}
@@ -92,7 +92,7 @@ func (endpoint *VethEndpoint) SetProperties(properties NetworkInfo) {
 }
 
 // Attach for veth endpoint bridges the network pair and adds the
-// tap interface of the network pair to the hypervisor.
+// tap interface of the network pair to the Hypervisor.
 func (endpoint *VethEndpoint) Attach(ctx context.Context, s *Sandbox) error {
 	span, ctx := vethTrace(ctx, "Attach", endpoint)
 	defer span.End()
@@ -124,7 +124,7 @@ func (endpoint *VethEndpoint) Detach(ctx context.Context, netNsCreated bool, net
 }
 
 // HotAttach for the veth endpoint uses hot plug device
-func (endpoint *VethEndpoint) HotAttach(ctx context.Context, h hypervisor) error {
+func (endpoint *VethEndpoint) HotAttach(ctx context.Context, h Hypervisor) error {
 	span, ctx := vethTrace(ctx, "HotAttach", endpoint)
 	defer span.End()
 
@@ -141,7 +141,7 @@ func (endpoint *VethEndpoint) HotAttach(ctx context.Context, h hypervisor) error
 }
 
 // HotDetach for the veth endpoint uses hot pull device
-func (endpoint *VethEndpoint) HotDetach(ctx context.Context, h hypervisor, netNsCreated bool, netNsPath string) error {
+func (endpoint *VethEndpoint) HotDetach(ctx context.Context, h Hypervisor, netNsCreated bool, netNsPath string) error {
 	if !netNsCreated {
 		return nil
 	}

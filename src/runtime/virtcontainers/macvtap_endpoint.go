@@ -61,7 +61,7 @@ func (endpoint *MacvtapEndpoint) SetProperties(properties NetworkInfo) {
 	endpoint.EndpointProperties = properties
 }
 
-// Attach for macvtap endpoint passes macvtap device to the hypervisor.
+// Attach for macvtap endpoint passes macvtap device to the Hypervisor.
 func (endpoint *MacvtapEndpoint) Attach(ctx context.Context, s *Sandbox) error {
 	var err error
 	span, ctx := macvtapTrace(ctx, "Attach", endpoint)
@@ -91,12 +91,12 @@ func (endpoint *MacvtapEndpoint) Detach(ctx context.Context, netNsCreated bool, 
 }
 
 // HotAttach for macvtap endpoint not supported yet
-func (endpoint *MacvtapEndpoint) HotAttach(ctx context.Context, h hypervisor) error {
+func (endpoint *MacvtapEndpoint) HotAttach(ctx context.Context, h Hypervisor) error {
 	return fmt.Errorf("MacvtapEndpoint does not support Hot attach")
 }
 
 // HotDetach for macvtap endpoint not supported yet
-func (endpoint *MacvtapEndpoint) HotDetach(ctx context.Context, h hypervisor, netNsCreated bool, netNsPath string) error {
+func (endpoint *MacvtapEndpoint) HotDetach(ctx context.Context, h Hypervisor, netNsCreated bool, netNsPath string) error {
 	return fmt.Errorf("MacvtapEndpoint does not support Hot detach")
 }
 

@@ -426,7 +426,7 @@ func getLinkByName(netHandle *netlink.Handle, name string, expectedLink netlink.
 }
 
 // The endpoint type should dictate how the connection needs to happen.
-func xConnectVMNetwork(ctx context.Context, endpoint Endpoint, h hypervisor) error {
+func xConnectVMNetwork(ctx context.Context, endpoint Endpoint, h Hypervisor) error {
 	var err error
 
 	span, ctx := networkTrace(ctx, "xConnectVMNetwork", endpoint)
@@ -603,7 +603,7 @@ func tapNetworkPair(ctx context.Context, endpoint Endpoint, queues int, disableV
 	}
 
 	// Save the veth MAC address to the TAP so that it can later be used
-	// to build the hypervisor command line. This MAC address has to be
+	// to build the Hypervisor command line. This MAC address has to be
 	// the one inside the VM in order to avoid any firewall issues. The
 	// bridge created by the network plugin on the host actually expects
 	// to see traffic from this MAC address and not another one.
@@ -701,7 +701,7 @@ func setupTCFiltering(ctx context.Context, endpoint Endpoint, queues int, disabl
 	attrs = link.Attrs()
 
 	// Save the veth MAC address to the TAP so that it can later be used
-	// to build the hypervisor command line. This MAC address has to be
+	// to build the Hypervisor command line. This MAC address has to be
 	// the one inside the VM in order to avoid any firewall issues. The
 	// bridge created by the network plugin on the host actually expects
 	// to see traffic from this MAC address and not another one.
@@ -1412,7 +1412,7 @@ func (n *Network) PostAdd(ctx context.Context, ns *NetworkNamespace, hotplug boo
 
 // Remove network endpoints in the network namespace. It also deletes the network
 // namespace in case the namespace has been created by us.
-func (n *Network) Remove(ctx context.Context, ns *NetworkNamespace, hypervisor hypervisor) error {
+func (n *Network) Remove(ctx context.Context, ns *NetworkNamespace, hypervisor Hypervisor) error {
 	span, ctx := n.trace(ctx, "Remove")
 	defer span.End()
 

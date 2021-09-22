@@ -28,7 +28,7 @@ type qemuArch interface {
 	// disableNestingChecks nesting checks will be ignored
 	disableNestingChecks()
 
-	// runNested indicates if the hypervisor runs in a nested environment
+	// runNested indicates if the Hypervisor runs in a nested environment
 	runNested() bool
 
 	// enableVhostNet vhost will be enabled

@@ -23,7 +23,7 @@ var urandomDev = "/dev/urandom"
 
 // VM is abstraction of a virtual machine.
 type VM struct {
-	hypervisor hypervisor
+	hypervisor Hypervisor
 	agent      agent
 	store      persistapi.PersistDriver
 
@@ -84,7 +84,7 @@ func GrpcToVMConfig(j *pb.GrpcVMConfig) (*VMConfig, error) {
 
 // NewVM creates a new VM based on provided VMConfig.
 func NewVM(ctx context.Context, config VMConfig) (*VM, error) {
-	// 1. setup hypervisor
+	// 1. setup Hypervisor
 	hypervisor, err := NewHypervisor(config.HypervisorType)
 	if err != nil {
 		return nil, err
@@ -130,7 +130,7 @@ func NewVM(ctx context.Context, config VMConfig) (*VM, error) {
 	}
 
 	// 3. boot up guest vm
-	if err = hypervisor.StartVM(ctx, vmStartTimeout); err != nil {
+	if err = hypervisor.StartVM(ctx, VmStartTimeout); err != nil {
 		return nil, err
 	}
 
@@ -233,7 +233,7 @@ func (v *VM) Resume(ctx context.Context) error {
 // Start kicks off a configured VM.
 func (v *VM) Start(ctx context.Context) error {
 	v.logger().Info("start vm")
-	return v.hypervisor.StartVM(ctx, vmStartTimeout)
+	return v.hypervisor.StartVM(ctx, VmStartTimeout)
 }
 
 // Disconnect agent connections to a VM

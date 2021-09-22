@@ -17,7 +17,7 @@ import (
 var containerRootfs = vc.RootFs{Target: "/var/lib/container/bundle/", Mounted: true}
 
 // This example creates and starts a single container sandbox,
-// using qemu as the hypervisor and kata as the VM agent.
+// using qemu as the Hypervisor and kata as the VM agent.
 func Example_createAndStartSandbox() {
 	envs := []types.EnvVar{
 		{
@@ -39,7 +39,7 @@ func Example_createAndStartSandbox() {
 		Cmd:    cmd,
 	}
 
-	// Sets the hypervisor configuration.
+	// Sets the Hypervisor configuration.
 	hypervisorConfig := vc.HypervisorConfig{
 		KernelPath:     "/usr/share/kata-containers/vmlinux.container",
 		ImagePath:      "/usr/share/kata-containers/kata-containers.img",
