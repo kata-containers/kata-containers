@@ -1,4 +1,4 @@
-From 9911ca0d1bca846f159ebdb48b9d8a784c959589 Mon Sep 17 00:00:00 2001
+From d3fbd8e0ad594ecf77d193fd8a9cf4b236990d12 Mon Sep 17 00:00:00 2001
 From: Stefan Hajnoczi <stefanha@redhat.com>
 Date: Mon, 11 Jan 2021 11:50:13 +0000
 Subject: [PATCH] gitmodules: use GitLab repos instead of qemu.org
@@ -17,14 +17,14 @@ Reviewed-by: Philippe Mathieu-Daudé <philmd@redhat.com>
 Message-id: 20210111115017.156802-3-stefanha@redhat.com
 Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
 ---
- .gitmodules | 44 ++++++++++++++++++++++----------------------
- 1 file changed, 22 insertions(+), 22 deletions(-)
+ .gitmodules | 40 ++++++++++++++++++++--------------------
+ 1 file changed, 20 insertions(+), 20 deletions(-)
 
 diff --git a/.gitmodules b/.gitmodules
-index 2bdeeacef8..08b1b48a09 100644
+index 9c0501a4d4..fec515cec5 100644
 --- a/.gitmodules
 +++ b/.gitmodules
-@@ -1,66 +1,66 @@
+@@ -1,60 +1,60 @@
  [submodule "roms/seabios"]
  	path = roms/seabios
 -	url = https://git.qemu.org/git/seabios.git/
@@ -103,16 +103,8 @@ index 2bdeeacef8..08b1b48a09 100644
 +	url = 	https://gitlab.com/qemu-project/opensbi.git
  [submodule "roms/qboot"]
  	path = roms/qboot
--	url = https://git.qemu.org/git/qboot.git
+-	url = https://github.com/bonzini/qboot
 +	url = https://gitlab.com/qemu-project/qboot.git
- [submodule "meson"]
- 	path = meson
--	url = https://git.qemu.org/git/meson.git
-+	url = https://gitlab.com/qemu-project/meson.git
- [submodule "roms/vbootrom"]
- 	path = roms/vbootrom
--	url = https://git.qemu.org/git/vbootrom.git
-+	url = https://gitlab.com/qemu-project/vbootrom.git
 -- 
-2.27.0
+2.31.1
 
