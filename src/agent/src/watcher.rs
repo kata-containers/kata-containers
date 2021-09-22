@@ -269,6 +269,19 @@ impl SandboxStorages {
             let entry = Storage::new(storage)
                 .await
                 .with_context(|| "Failed to add storage")?;
+
+            // If the storage source is a directory, let's create the target mount point:
+            if entry.source_mount_point.as_path().is_dir() {
+                fs::create_dir_all(&entry.target_mount_point)
+                    .await
+                    .with_context(|| {
+                        format!(
+                            "Unable to mkdir all for {}",
+                            entry.target_mount_point.display()
+                        )
+                    })?;
+            }
+
             self.0.push(entry);
         }
 
@@ -473,6 +486,85 @@ mod tests {
         };
 
         Ok((storage, src_path))
+    }
+
+    #[tokio::test]
+    async fn test_empty_sourcedir_check() {
+        //skip_if_not_root!();
+        let dir = tempfile::tempdir().expect("failed to create tempdir");
+
+        let logger = slog::Logger::root(slog::Discard, o!());
+
+        let src_path = dir.path().join("src");
+        let dest_path = dir.path().join("dest");
+        let src_filename = src_path.to_str().expect("failed to create src filename");
+        let dest_filename = dest_path.to_str().expect("failed to create dest filename");
+
+        std::fs::create_dir_all(src_filename).expect("failed to create path");
+
+        let storage = protos::Storage {
+            source: src_filename.to_string(),
+            mount_point: dest_filename.to_string(),
+            ..Default::default()
+        };
+
+        let mut entries = SandboxStorages {
+            ..Default::default()
+        };
+
+        entries
+            .add(std::iter::once(storage), &logger)
+            .await
+            .unwrap();
+
+        assert!(entries.check(&logger).await.is_ok());
+        assert_eq!(entries.0.len(), 1);
+
+        assert_eq!(std::fs::read_dir(src_path).unwrap().count(), 0);
+        assert_eq!(std::fs::read_dir(dest_path).unwrap().count(), 0);
+        assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 2);
+    }
+
+    #[tokio::test]
+    async fn test_single_file_check() {
+        //skip_if_not_root!();
+        let dir = tempfile::tempdir().expect("failed to create tempdir");
+
+        let logger = slog::Logger::root(slog::Discard, o!());
+
+        let src_file_path = dir.path().join("src.txt");
+        let dest_file_path = dir.path().join("dest.txt");
+
+        let src_filename = src_file_path
+            .to_str()
+            .expect("failed to create src filename");
+        let dest_filename = dest_file_path
+            .to_str()
+            .expect("failed to create dest filename");
+
+        let storage = protos::Storage {
+            source: src_filename.to_string(),
+            mount_point: dest_filename.to_string(),
+            ..Default::default()
+        };
+
+        //create file
+        fs::write(src_file_path, "original").unwrap();
+
+        let mut entries = SandboxStorages::default();
+
+        entries
+            .add(std::iter::once(storage), &logger)
+            .await
+            .unwrap();
+
+        assert!(entries.check(&logger).await.is_ok());
+        assert_eq!(entries.0.len(), 1);
+
+        // there should only be 2 files
+        assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 2);
+
+        assert_eq!(fs::read_to_string(dest_file_path).unwrap(), "original");
     }
 
     #[tokio::test]
