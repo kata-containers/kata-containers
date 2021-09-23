@@ -77,7 +77,7 @@ type QemuState struct {
 	// HotpluggedCPUs is the list of CPUs that were hot-added
 	HotpluggedVCPUs      []CPUDevice
 	HotpluggedMemory     int
-	VirtiofsdPid         int
+	VirtiofsDaemonPid    int
 	PCIeRootPort         int
 	HotplugVFIOOnRootBus bool
 }
@@ -86,7 +86,7 @@ type QemuState struct {
 type qemu struct {
 	arch qemuArch
 
-	virtiofsd Virtiofsd
+	virtiofsDaemon VirtiofsDaemon
 
 	store persistapi.PersistDriver
 
@@ -461,7 +461,7 @@ func (q *qemu) setupFileBackedMem(knobs *govmmQemu.Knobs, memory *govmmQemu.Memo
 	memory.Path = target
 }
 
-func (q *qemu) createVirtiofsd() (Virtiofsd, error) {
+func (q *qemu) createVirtiofsDaemon() (VirtiofsDaemon, error) {
 	virtiofsdSocketPath, err := q.vhostFSSocketPath(q.id)
 	if err != nil {
 		return nil, err
@@ -665,7 +665,7 @@ func (q *qemu) createSandbox(ctx context.Context, id string, networkNS NetworkNa
 
 	q.qemuConfig = qemuConfig
 
-	q.virtiofsd, err = q.createVirtiofsd()
+	q.virtiofsDaemon, err = q.createVirtiofsDaemon()
 	return err
 }
 
@@ -681,29 +681,29 @@ func (q *qemu) nydusdLogFilePath(id string) (string, error) {
 	return utils.BuildSocketPath(q.store.RunVMStoragePath(), id, "nydusd.log")
 }
 
-func (q *qemu) setupVirtiofsd(ctx context.Context) (err error) {
-	pid, err := q.virtiofsd.Start(ctx, func() {
+func (q *qemu) setupVirtiofsDaemon(ctx context.Context) (err error) {
+	pid, err := q.virtiofsDaemon.Start(ctx, func() {
 		q.stopSandbox(ctx, false)
 	})
 	if err != nil {
 		return err
 	}
-	q.state.VirtiofsdPid = pid
+	q.state.VirtiofsDaemonPid = pid
 
 	return nil
 }
 
-func (q *qemu) stopVirtiofsd(ctx context.Context) (err error) {
-	if q.state.VirtiofsdPid == 0 {
+func (q *qemu) stopVirtiofsDaemon(ctx context.Context) (err error) {
+	if q.state.VirtiofsDaemonPid == 0 {
 		q.Logger().Warn("The virtiofsd had stopped")
 		return nil
 	}
 
-	err = q.virtiofsd.Stop(ctx)
+	err = q.virtiofsDaemon.Stop(ctx)
 	if err != nil {
 		return err
 	}
-	q.state.VirtiofsdPid = 0
+	q.state.VirtiofsDaemonPid = 0
 	return nil
 }
 
@@ -836,14 +836,14 @@ func (q *qemu) startSandbox(ctx context.Context, timeout int) error {
 	defer label.SetProcessLabel("")
 
 	if q.config.SharedFS == config.VirtioFS || q.config.SharedFS == config.VirtioNydus {
-		err = q.setupVirtiofsd(ctx)
+		err = q.setupVirtiofsDaemon(ctx)
 		if err != nil {
 			return err
 		}
 		defer func() {
 			if err != nil {
-				if shutdownErr := q.stopVirtiofsd(ctx); shutdownErr != nil {
-					q.Logger().WithError(shutdownErr).Warn("failed to stop virtiofsd")
+				if shutdownErr := q.stopVirtiofsDaemon(ctx); shutdownErr != nil {
+					q.Logger().WithError(shutdownErr).Warn("failed to stop virtiofsDaemon")
 				}
 			}
 		}()
@@ -1004,7 +1004,7 @@ func (q *qemu) stopSandbox(ctx context.Context, waitOnly bool) error {
 		}
 	}
 
-	if err := q.stopVirtiofsd(ctx); err != nil {
+	if err := q.stopVirtiofsDaemon(ctx); err != nil {
 		return err
 	}
 
@@ -2312,15 +2312,15 @@ func (q *qemu) getPids() []int {
 	}
 
 	pids := []int{pid}
-	if q.state.VirtiofsdPid != 0 {
-		pids = append(pids, q.state.VirtiofsdPid)
+	if q.state.VirtiofsDaemonPid != 0 {
+		pids = append(pids, q.state.VirtiofsDaemonPid)
 	}
 
 	return pids
 }
 
 func (q *qemu) getVirtioFsPid() *int {
-	return &q.state.VirtiofsdPid
+	return &q.state.VirtiofsDaemonPid
 }
 
 type qemuGrpc struct {
@@ -2389,7 +2389,7 @@ func (q *qemu) save() (s persistapi.HypervisorState) {
 	if len(pids) != 0 {
 		s.Pid = pids[0]
 	}
-	s.VirtiofsdPid = q.state.VirtiofsdPid
+	s.VirtiofsDaemonPid = q.state.VirtiofsDaemonPid
 	s.Type = string(QemuHypervisor)
 	s.UUID = q.state.UUID
 	s.HotpluggedMemory = q.state.HotpluggedMemory
@@ -2417,7 +2417,7 @@ func (q *qemu) load(s persistapi.HypervisorState) {
 	q.state.UUID = s.UUID
 	q.state.HotpluggedMemory = s.HotpluggedMemory
 	q.state.HotplugVFIOOnRootBus = s.HotplugVFIOOnRootBus
-	q.state.VirtiofsdPid = s.VirtiofsdPid
+	q.state.VirtiofsDaemonPid = s.VirtiofsDaemonPid
 	q.state.PCIeRootPort = s.PCIeRootPort
 
 	for _, bridge := range s.Bridges {

@@ -125,6 +125,15 @@ func (nd *nydusd) MountRAFS(opt MountOption) error {
 	return nc.Mount(opt.mountpoint, mr)
 }
 
+func (nd *nydusd) UmountRAFS(mountpoint string) error {
+	nc, err := NewNydusClient(nd.apiSockPath)
+	if err != nil {
+		return err
+	}
+	nd.Logger().WithField("mountpoint", mountpoint).Info("umount rafs")
+	return nc.Umount(mountpoint)
+}
+
 func (nd *nydusd) Stop(ctx context.Context) error {
 	if err := nd.kill(ctx); err != nil {
 		nd.Logger().WithError(err).WithField("pid", nd.pid).Warn("kill nydusd failed")

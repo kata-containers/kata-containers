@@ -155,6 +155,10 @@ func newKataAgent() agent {
 	return &kataAgent{}
 }
 
+var rafsMountPath = func(cid string) string {
+	return filepath.Join("/images", cid, lowerDir)
+}
+
 // The function is declared this way for mocking in unit tests
 var kataHostSharedDir = func() string {
 	if rootless.IsRootless() {
@@ -1268,12 +1272,13 @@ func (k *kataAgent) rollbackFailingContainerCreation(ctx context.Context, c *Con
 			k.Logger().WithError(err2).Error("rollback failed unmountHostMounts()")
 		}
 
-		if err2 := bindUnmountContainerRootfs(ctx, getMountPath(c.sandbox.id), c.id); err2 != nil {
-			k.Logger().WithError(err2).Error("rollback failed bindUnmountContainerRootfs()")
-		}
 		if c.rootFs.Type == nydusRootFSType {
-			if err2 := bindUnmountContainerSnapshotDir(ctx, getMountPath(c.sandbox.id), c.id); err2 != nil {
-				k.Logger().WithError(err2).Error("rollback failed bindUnmountContainerSnapshotDir()")
+			if err2 := nydusContainerCleanup(ctx, getMountPath(c.sandbox.id), c); err2 != nil {
+				k.Logger().WithError(err2).Error("rollback failed nydusContainerCleanup")
+			}
+		} else {
+			if err2 := bindUnmountContainerRootfs(ctx, getMountPath(c.sandbox.id), c.id); err2 != nil {
+				k.Logger().WithError(err2).Error("rollback failed bindUnmountContainerRootfs()")
 			}
 		}
 	}
@@ -1284,18 +1289,17 @@ func (k *kataAgent) buildContainerRootfsWithNydus(sandbox *Sandbox, c *Container
 		return nil, errors.New("nydus only support qemu currently")
 	}
 	q, _ := sandbox.hypervisor.(*qemu)
-	mountPoint := filepath.Join("/images", c.id, lowerDir)
 	daemonConfig, snapshotDirPath, err := parseConfigs(c.rootFs.Options)
 	if err != nil {
 		return nil, err
 	}
 	mountOpt := &MountOption{
-		mountpoint:   mountPoint,
+		mountpoint:   rafsMountPath(c.id),
 		bootstrap:    c.rootFs.Source,
 		daemonConfig: daemonConfig,
 	}
 	// mount lowerdir to guest /run/kata-containers/shared/images/<cid>/lowerdir
-	if err := q.virtiofsd.MountRAFS(*mountOpt); err != nil {
+	if err := q.virtiofsDaemon.MountRAFS(*mountOpt); err != nil {
 		return nil, err
 	}
 	rootfs := &grpc.Storage{}

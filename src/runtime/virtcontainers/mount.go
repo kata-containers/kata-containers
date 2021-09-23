@@ -403,6 +403,25 @@ func bindUnmountContainerSnapshotDir(ctx context.Context, sharedDir, cID string)
 	return bindUnmountContainerShareDir(ctx, sharedDir, cID, snapshotDir)
 }
 
+func nydusContainerCleanup(ctx context.Context, sharedDir string, c *Container) error {
+	sandbox := c.sandbox
+	if sandbox.GetHypervisorType() != string(QemuHypervisor) {
+		return errors.New("nydus only support qemu currently")
+	}
+	q, _ := sandbox.hypervisor.(*qemu)
+	if err := q.virtiofsDaemon.UmountRAFS(rafsMountPath(c.id)); err != nil {
+		return fmt.Errorf("umount rafs err, %v", err)
+	}
+	if err := bindUnmountContainerSnapshotDir(ctx, sharedDir, c.id); err != nil {
+		return fmt.Errorf("umount snapshotdir err, %v", err)
+	}
+	destDir := filepath.Join(sharedDir, c.id, rootfsDir)
+	if err := syscall.Rmdir(destDir); err != nil {
+		return fmt.Errorf("remove container rootfs err, %v", err)
+	}
+	return nil
+}
+
 func bindUnmountAllRootfs(ctx context.Context, sharedDir string, sandbox *Sandbox) error {
 	span, ctx := katatrace.Trace(ctx, nil, "bindUnmountAllRootfs", mountTracingTags)
 	defer span.End()
@@ -418,9 +437,10 @@ func bindUnmountAllRootfs(ctx context.Context, sharedDir string, sandbox *Sandbo
 		if c.state.Fstype == "" {
 			// even if error found, don't break out of loop until all mounts attempted
 			// to be unmounted, and collect all errors
-			errors = merr.Append(errors, bindUnmountContainerRootfs(ctx, sharedDir, c.id))
 			if c.rootFs.Type == nydusRootFSType {
-				errors = merr.Append(errors, bindUnmountContainerSnapshotDir(ctx, sharedDir, c.id))
+				errors = merr.Append(errors, nydusContainerCleanup(ctx, sharedDir, c))
+			} else {
+				errors = merr.Append(errors, bindUnmountContainerRootfs(ctx, sharedDir, c.id))
 			}
 		}
 	}

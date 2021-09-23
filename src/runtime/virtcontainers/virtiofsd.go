@@ -38,13 +38,15 @@ var (
 	errUnimplemented = errors.New("unimplemented")
 )
 
-type Virtiofsd interface {
+type VirtiofsDaemon interface {
 	// Start virtiofsd, return pid of virtiofsd process
 	Start(context.Context, onQuitFunc) (pid int, err error)
 	// Stop virtiofsd process
 	Stop(context.Context) error
 	// for NydusdVirtiofs to mount rafs
 	MountRAFS(opt MountOption) error
+	// for NydusdVirtiofs to umount rafs
+	UmountRAFS(mountpoint string) error
 }
 
 // Helper function to execute when virtiofsd quit
@@ -168,6 +170,10 @@ func (v *virtiofsd) MountRAFS(opt MountOption) error {
 	return errUnimplemented
 }
 
+func (v *virtiofsd) UmountRAFS(mountpoint string) error {
+	return errUnimplemented
+}
+
 func (v *virtiofsd) args(FdSocketNumber uint) ([]string, error) {
 
 	args := []string{
@@ -248,6 +254,10 @@ func (v *virtiofsdMock) Start(ctx context.Context, onQuit onQuitFunc) (int, erro
 }
 
 func (v *virtiofsdMock) MountRAFS(opt MountOption) error {
+	return errUnimplemented
+}
+
+func (v *virtiofsdMock) UmountRAFS(mountpoint string) error {
 	return errUnimplemented
 }
 
