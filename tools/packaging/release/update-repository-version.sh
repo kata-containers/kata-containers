@@ -111,13 +111,68 @@ bump_repo() {
 	fi
 
 	if [ "${repo}" == "kata-containers" ]; then
-		info "Updating kata-deploy / kata-cleanup image tags"
-		sed -i "s#quay.io/kata-containers/kata-deploy:${current_version}#quay.io/kata-containers/kata-deploy:${new_version}#g" tools/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml
-		sed -i "s#quay.io/kata-containers/kata-deploy:${current_version}#quay.io/kata-containers/kata-deploy:${new_version}#g" tools/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml
-		git diff
+		# Here there are 3 scenarios of what we can do, based on
+	        # which branch we're targetting:
+		#
+		# 1) [main] ------> [main]        NO-OP
+		#   "alpha0"       "alpha1"
+		#
+		#                   +----------------+----------------+
+		#                   |      from      |       to       |
+		#  -----------------+----------------+----------------+
+		#  kata-deploy      | "latest"       | "latest"       |
+		#  -----------------+----------------+----------------+
+		#  kata-deploy-base | "stable        | "stable"       |
+		#  -----------------+----------------+----------------+
+		#
+		#
+		# 2) [main] ------> [stable]  Update kata-deploy and
+		#   "alpha2"         "rc0"    get rid of kata-deploy-base
+		#
+		#                   +----------------+----------------+
+		#                   |      from      |       to       |
+		#  -----------------+----------------+----------------+
+		#  kata-deploy      | "latest"       | "rc0"          |
+		#  -----------------+----------------+----------------+
+		#  kata-deploy-base | "stable"       | REMOVED        |
+		#  -----------------+----------------+----------------+
+		#
+		#
+		# 3) [stable] ------> [stable]    Update kata-deploy
+		#    "x.y.z"         "x.y.(z+1)"
+		#
+		#                   +----------------+----------------+
+		#                   |      from      |       to       |
+		#  -----------------+----------------+----------------+
+		#  kata-deploy      | "x.y.z"        | "x.y.(z+1)"    |
+		#  -----------------+----------------+----------------+
+		#  kata-deploy-base | NON-EXISTENT   | NON-EXISTENT   |
+		#  -----------------+----------------+----------------+
 
-		git add tools/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml
-		git add tools/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml
+		info "Updating kata-deploy / kata-cleanup image tags"
+		if [ "${target_branch}" == "main" ] && [[ "${new_version}" =~ "rc" ]]; then
+			# case 2)
+			## change the "latest" tag to the "#{new_version}" one
+			sed -i "s#quay.io/kata-containers/kata-deploy:latest#quay.io/kata-containers/kata-deploy:${new_version}#g" tools/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml
+			sed -i "s#quay.io/kata-containers/kata-deploy:latest#quay.io/kata-containers/kata-deploy:${new_version}#g" tools/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml
+
+			git diff
+
+			git add tools/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml
+			git add tools/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml
+
+			## and remove the kata-deploy & kata-cleanup stable yaml files
+			git rm tools/packaging/kata-deploy/kata-deploy/base/kata-deploy-stable.yaml
+			git rm tools/packaging/kata-deploy/kata-cleanup/base/kata-cleanup-stable.yaml
+		elif [[ "${target_branch}" =~ "stable" ]]; then
+			# case 3)
+			sed -i "s#quay.io/kata-containers/kata-deploy:${current_version}#quay.io/kata-containers/kata-deploy:${new_version}#g" tools/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml
+			sed -i "s#quay.io/kata-containers/kata-deploy:${current_version}#quay.io/kata-containers/kata-deploy:${new_version}#g" tools/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml
+			git diff
+
+			git add tools/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml
+			git add tools/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml
+		fi
 	fi
 
 	info "Creating PR message"

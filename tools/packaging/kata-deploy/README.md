@@ -11,17 +11,38 @@ a node only if it uses either containerd or CRI-O CRI-shims.
 
 ### Install Kata on a running Kubernetes cluster
 
+#### Installing the latest image
+
+The latest image refers to pre-release and release candidate content.  For stable releases, please, use the "stable" instructions.
+
 ```sh
-$ cd $GOPATH/src/github.com/kata-containers/kata-containers/tools/packaging/kata-deploy
-$ kubectl apply -f kata-rbac/base/kata-rbac.yaml
-$ kubectl apply -f kata-deploy/base/kata-deploy.yaml
+$ kubectl apply -f https://raw.githubusercontent.com/kata-containers/kata-containers/main/tools/packaging/kata-deploy/kata-rbac/base/kata-rbac.yaml
+$ kubectl apply -f https://raw.githubusercontent.com/kata-containers/kata-containers/main/tools/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml
 ```
 
-or on a [k3s](https://k3s.io/) cluster:
+#### Installing the stable image
+
+The stable image refers to the last stable releases content.
+
+Note that if you use a tagged version of the repo, the stable image does match that version.
+For instance, if you use the 2.2.1 tagged version of the kata-deploy.yaml file, then the version 2.2.1 of the kata runtime will be deployed.
 
 ```sh
+$ kubectl apply -f https://raw.githubusercontent.com/kata-containers/kata-containers/main/tools/packaging/kata-deploy/kata-rbac/base/kata-rbac.yaml
+$ kubectl apply -f https://raw.githubusercontent.com/kata-containers/kata-containers/main/tools/packaging/kata-deploy/kata-deploy/base/kata-deploy-stable.yaml
+```
+
+#### For your [k3s](https://k3s.io/) cluster, do:
+
+```sh
+$ GO111MODULE=auto go get github.com/kata-containers/kata-containers
 $ cd $GOPATH/src/github.com/kata-containers/kata-containers/tools/packaging/kata-deploy
 $ kubectl apply -k kata-deploy/overlays/k3s
+```
+
+#### Ensure kata-deploy is ready
+```sh
+kubectl -n kube-system wait --timeout=10m --for=condition=Ready -l name=kata-deploy pod
 ```
 
 ### Run a sample workload
@@ -32,8 +53,7 @@ which will ensure the workload is only scheduled on a node that has Kata Contain
 
 `runtimeClass` is a built-in type in Kubernetes. To apply each Kata Containers `runtimeClass`:
 ```sh
-  $ cd $GOPATH/src/github.com/kata-containers/kata-containers/tools/packaging/kata-deploy/runtimeclasses
-  $ kubectl apply -f kata-runtimeClasses.yaml
+  $ kubectl apply -f https://raw.githubusercontent.com/kata-containers/kata-containers/main/tools/packaging/kata-deploy/runtimeclasses/kata-runtimeClasses.yaml
 ```
 
 The following YAML snippet shows how to specify a workload should use Kata with Cloud Hypervisor:
@@ -66,42 +86,74 @@ spec:
 To run an example with `kata-clh`:
 
 ```sh
-$ cd $GOPATH/src/github.com/kata-containers/kata-containers/tools/packaging/kata-deploy/examples
-$ kubectl apply -f test-deploy-kata-clh.yaml
+$ kubectl apply -f https://raw.githubusercontent.com/kata-containers/kata-containers/main/tools/packaging/kata-deploy/examples/test-deploy-kata-clh.yaml
 ```
 
 To run an example with `kata-fc`:
 
 ```sh
-$ cd $GOPATH/src/github.com/kata-containers/kata-containers/tools/packaging/kata-deploy/examples
-$ kubectl apply -f test-deploy-kata-fc.yaml
+$ kubectl apply -f https://raw.githubusercontent.com/kata-containers/kata-containers/main/tools/packaging/kata-deploy/examples/test-deploy-kata-fc.yaml
 ```
 
 To run an example with `kata-qemu`:
 
 ```sh
-$ cd $GOPATH/src/github.com/kata-containers/kata-containers/tools/packaging/kata-deploy/examples
-$ kubectl apply -f test-deploy-kata-qemu.yaml
+$ kubectl apply -f https://raw.githubusercontent.com/kata-containers/kata-containers/main/tools/packaging/kata-deploy/examples/test-deploy-kata-qemu.yaml
 ```
 
 The following removes the test pods:
 
 ```sh
-$ cd $GOPATH/src/github.com/kata-containers/kata-containers/tools/packaging/kata-deploy/examples
-$ kubectl delete -f test-deploy-kata-clh.yaml
-$ kubectl delete -f test-deploy-kata-fc.yaml
-$ kubectl delete -f test-deploy-kata-qemu.yaml
+$ kubectl delete -f https://raw.githubusercontent.com/kata-containers/kata-containers/main/tools/packaging/kata-deploy/examples/test-deploy-kata-clh.yaml
+$ kubectl delete -f https://raw.githubusercontent.com/kata-containers/kata-containers/main/tools/packaging/kata-deploy/examples/test-deploy-kata-fc.yaml
+$ kubectl delete -f https://raw.githubusercontent.com/kata-containers/kata-containers/main/tools/packaging/kata-deploy/examples/test-deploy-kata-qemu.yaml
 ```
 
 ### Remove Kata from the Kubernetes cluster
 
+#### Removing the latest image
+
 ```sh
-$ cd $GOPATH/src/github.com/kata-containers/kata-containers/tools/packaging/kata-deploy
-$ kubectl delete -f kata-deploy/base/kata-deploy.yaml
-$ kubectl apply -f kata-cleanup/base/kata-cleanup.yaml
-$ kubectl delete -f kata-cleanup/base/kata-cleanup.yaml
-$ kubectl delete -f kata-rbac/base/kata-rbac.yaml
-$ kubectl delete -f runtimeclasses/kata-runtimeClasses.yaml
+$ kubectl delete -f https://raw.githubusercontent.com/kata-containers/kata-containers/main/tools/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml
+$ kubectl -n kube-system wait --timeout=10m --for=delete -l name=kata-deploy pod
+```
+
+After ensuring kata-deploy has been deleted, cleanup the cluster:
+```sh
+$ kubectl apply -f https://raw.githubusercontent.com/kata-containers/kata-containers/main/tools/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml
+```
+
+The cleanup daemon-set will run a single time, cleaning up the node-label, which makes it difficult to check in an automated fashion.
+This process should take, at most, 5 minutes.
+
+After that, let's delete the cleanup daemon-set, the added RBAC and runtime classes:
+
+```sh
+$ kubectl delete -f https://raw.githubusercontent.com/kata-containers/kata-containers/main/tools/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml
+$ kubectl delete -f https://raw.githubusercontent.com/kata-containers/kata-containers/main/tools/packaging/kata-deploy/kata-rbac/base/kata-rbac.yaml
+$ kubectl delete -f https://raw.githubusercontent.com/kata-containers/kata-containers/main/tools/packaging/kata-deploy/runtimeclasses/kata-runtimeClasses.yaml
+```
+
+#### Removing the stable image
+
+```sh
+$ kubectl delete -f https://raw.githubusercontent.com/kata-containers/kata-containers/main/tools/packaging/kata-deploy/kata-deploy/base/kata-deploy-stable.yaml
+$ kubectl -n kube-system wait --timeout=10m --for=delete -l name=kata-deploy pod
+```
+
+After ensuring kata-deploy has been deleted, cleanup the cluster:
+```sh
+$ kubectl apply -f https://raw.githubusercontent.com/kata-containers/kata-containers/main/tools/packaging/kata-deploy/kata-cleanup/base/kata-cleanup-stabe.yaml
+```
+
+The cleanup daemon-set will run a single time, cleaning up the node-label, which makes it difficult to check in an automated fashion.
+This process should take, at most, 5 minutes.
+
+After that, let's delete the cleanup daemon-set, the added RBAC and runtime classes:
+```sh
+$ kubectl delete -f https://raw.githubusercontent.com/kata-containers/kata-containers/main/tools/packaging/kata-deploy/kata-cleanup/base/kata-cleanup-stable.yaml
+$ kubectl delete -f https://raw.githubusercontent.com/kata-containers/kata-containers/main/tools/packaging/kata-deploy/kata-rbac/base/kata-rbac.yaml
+$ kubectl delete -f https://raw.githubusercontent.com/kata-containers/kata-containers/main/tools/packaging/kata-deploy/runtimeclasses/kata-runtimeClasses.yaml
 ```
 
 ## `kata-deploy` details
