@@ -193,11 +193,6 @@ func (q *qemuAmd64) appendImage(ctx context.Context, devices []govmmQemu.Device,
 	return q.appendBlockImage(ctx, devices, path)
 }
 
-// appendBridges appends to devices the given bridges
-func (q *qemuAmd64) appendBridges(devices []govmmQemu.Device) []govmmQemu.Device {
-	return genericAppendBridges(devices, q.Bridges, q.qemuMachine.Type)
-}
-
 // enable protection
 func (q *qemuAmd64) enableProtection() error {
 	var err error
