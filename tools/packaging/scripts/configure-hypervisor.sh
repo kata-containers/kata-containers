@@ -282,7 +282,7 @@ generate_qemu_options() {
 	case "$arch" in
 	aarch64) ;;
 	x86_64) qemu_options+=(size:--disable-tcg) ;;
-	ppc64le) ;;
+	ppc64le) qemu_options+=(size:--disable-tcg) ;;
 	s390x) qemu_options+=(size:--disable-tcg) ;;
 	esac
 
