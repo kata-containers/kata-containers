@@ -1802,6 +1802,15 @@ type BridgeDevice struct {
 
 	// ROMFile specifies the ROM file being used for this device.
 	ROMFile string
+
+	// Address range reservations for devices behind the bridge
+	// NB: strings seem an odd choice, but if they were integers,
+	// they'd default to 0 by Go's rules in all the existing users
+	// who don't set them.  0 is a valid value for certain cases,
+	// but not you want by default.
+	IOReserve     string
+	MemReserve    string
+	Pref64Reserve string
 }
 
 // Valid returns true if the BridgeDevice structure is valid and complete.
@@ -1850,6 +1859,16 @@ func (bridgeDev BridgeDevice) QemuParams(config *Config) []string {
 	var transport VirtioTransport
 	if transport.isVirtioPCI(config) && bridgeDev.ROMFile != "" {
 		deviceParams = append(deviceParams, fmt.Sprintf("romfile=%s", bridgeDev.ROMFile))
+	}
+
+	if bridgeDev.IOReserve != "" {
+		deviceParams = append(deviceParams, fmt.Sprintf("io-reserve=%s", bridgeDev.IOReserve))
+	}
+	if bridgeDev.MemReserve != "" {
+		deviceParams = append(deviceParams, fmt.Sprintf("mem-reserve=%s", bridgeDev.MemReserve))
+	}
+	if bridgeDev.Pref64Reserve != "" {
+		deviceParams = append(deviceParams, fmt.Sprintf("pref64-reserve=%s", bridgeDev.Pref64Reserve))
 	}
 
 	qemuParams = append(qemuParams, "-device")

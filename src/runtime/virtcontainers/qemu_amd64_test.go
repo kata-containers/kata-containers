@@ -187,12 +187,15 @@ func TestQemuAmd64AppendBridges(t *testing.T) {
 
 	expectedOut := []govmmQemu.Device{
 		govmmQemu.BridgeDevice{
-			Type:    govmmQemu.PCIBridge,
-			Bus:     defaultBridgeBus,
-			ID:      bridges[0].ID,
-			Chassis: 1,
-			SHPC:    true,
-			Addr:    "2",
+			Type:          govmmQemu.PCIBridge,
+			Bus:           defaultBridgeBus,
+			ID:            bridges[0].ID,
+			Chassis:       1,
+			SHPC:          false,
+			Addr:          "2",
+			IOReserve:     "4k",
+			MemReserve:    "1m",
+			Pref64Reserve: "1m",
 		},
 	}
 
