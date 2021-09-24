@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use crate::pci;
 use async_trait::async_trait;
 use rustjail::{pipestream::PipeStream, process::StreamType};
 use tokio::io::{AsyncReadExt, AsyncWriteExt, ReadHalf};
@@ -44,12 +43,15 @@ use nix::sys::stat;
 use nix::unistd::{self, Pid};
 use rustjail::process::ProcessOperations;
 
-use crate::device::{add_devices, pcipath_to_sysfs, rescan_pci_bus, update_device_cgroup};
+use crate::device::{
+    add_devices, get_virtio_blk_pci_device_name, rescan_pci_bus, update_device_cgroup,
+};
 use crate::linux_abi::*;
 use crate::metrics::get_metrics;
 use crate::mount::{add_storages, baremount, remove_mounts, STORAGE_HANDLER_LIST};
 use crate::namespace::{NSTYPEIPC, NSTYPEPID, NSTYPEUTS};
 use crate::network::setup_guest_dns;
+use crate::pci;
 use crate::random;
 use crate::sandbox::Sandbox;
 use crate::version::{AGENT_VERSION, API_VERSION};
@@ -1204,7 +1206,9 @@ impl protocols::agent_ttrpc::AgentService for AgentService {
     ) -> ttrpc::Result<Empty> {
         trace_rpc_call!(ctx, "add_swap", req);
 
-        do_add_swap(&req).map_err(|e| ttrpc_error(ttrpc::Code::INTERNAL, e.to_string()))?;
+        do_add_swap(&self.sandbox, &req)
+            .await
+            .map_err(|e| ttrpc_error(ttrpc::Code::INTERNAL, e.to_string()))?;
 
         Ok(Empty::new())
     }
@@ -1557,43 +1561,13 @@ fn do_copy_file(req: &CopyFileRequest) -> Result<()> {
     Ok(())
 }
 
-pub fn path_name_lookup<P: std::clone::Clone + AsRef<Path> + std::fmt::Debug>(
-    path: P,
-    lookup: &str,
-) -> Result<(PathBuf, String)> {
-    for entry in fs::read_dir(path.clone())? {
-        let entry = entry?;
-        if let Some(name) = entry.path().file_name() {
-            if let Some(name) = name.to_str() {
-                if Some(0) == name.find(lookup) {
-                    return Ok((entry.path(), name.to_string()));
-                }
-            }
-        }
-    }
-    Err(anyhow!("cannot get {} dir in {:?}", lookup, path))
-}
-
-fn do_add_swap(req: &AddSwapRequest) -> Result<()> {
-    // re-scan PCI bus
-    // looking for hidden devices
-    rescan_pci_bus().context("Could not rescan PCI bus")?;
-
+async fn do_add_swap(sandbox: &Arc<Mutex<Sandbox>>, req: &AddSwapRequest) -> Result<()> {
     let mut slots = Vec::new();
     for slot in &req.PCIPath {
-        slots.push(pci::Slot::new(*slot as u8)?);
+        slots.push(pci::Slot::new(*slot)?);
     }
     let pcipath = pci::Path::new(slots)?;
-    let root_bus_sysfs = format!("{}{}", SYSFS_DIR, create_pci_root_bus_path());
-    let sysfs_rel_path = format!(
-        "{}{}",
-        root_bus_sysfs,
-        pcipath_to_sysfs(&root_bus_sysfs, &pcipath)?
-    );
-    let (mut virtio_path, _) = path_name_lookup(sysfs_rel_path, "virtio")?;
-    virtio_path.push("block");
-    let (_, dev_name) = path_name_lookup(virtio_path, "vd")?;
-    let dev_name = format!("/dev/{}", dev_name);
+    let dev_name = get_virtio_blk_pci_device_name(sandbox, &pcipath).await?;
 
     let c_str = CString::new(dev_name)?;
     let ret = unsafe { libc::swapon(c_str.as_ptr() as *const c_char, 0) };
