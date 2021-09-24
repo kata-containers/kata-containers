@@ -159,3 +159,17 @@ func TestDeviceToLinuxDevice(t *testing.T) {
 	assert.NotEmpty(dev.Access)
 	assert.True(dev.Allow)
 }
+
+func TestRenameCgroupPath(t *testing.T) {
+	assert := assert.New(t)
+
+	path := ""
+	filePath, err := RenameCgroupPath(path)
+	assert.NoError(err)
+	assert.Equal("/kata_vc", filePath)
+
+	path = "/test"
+	filePath, err = RenameCgroupPath(path)
+	assert.NoError(err)
+	assert.NotNil(filePath)
+}
