@@ -66,6 +66,7 @@ const (
 	// Use longer time timeout for it.
 	clhHotPlugAPITimeout  = 5
 	clhStopSandboxTimeout = 3
+	clhDebugSerial        = "serial.log"
 	clhSocket             = "clh.sock"
 	clhAPISocket          = "clh-api.sock"
 	virtioFsSocket        = "virtiofsd.sock"
@@ -213,20 +214,24 @@ func (clh *cloudHypervisor) CreateVM(ctx context.Context, id string, networkNS N
 
 	clh.Logger().WithField("function", "createSandbox").Info("creating Sandbox")
 
-	virtiofsdSocketPath, err := clh.virtioFsSocketPath(clh.id)
-	if err != nil {
-		return nil
-	}
-
-	if clh.state.PID > 0 {
-		clh.Logger().WithField("function", "createSandbox").Info("Sandbox already exist, loading from state")
-		clh.virtiofsd = &virtiofsd{
-			PID:        clh.state.VirtiofsdPID,
-			sourcePath: filepath.Join(getSharePath(clh.id)),
-			debug:      clh.config.Debug,
-			socketPath: virtiofsdSocketPath,
+	var virtiofsdSocketPath string
+	if clh.config.IsSandbox {
+		// This should be made an input option via config
+		virtiofsdSocketPath, err = clh.virtioFsSocketPath(clh.id)
+		if err != nil {
+			return nil
 		}
-		return nil
+
+		if clh.state.PID > 0 {
+			clh.Logger().WithField("function", "createSandbox").Info("Sandbox already exist, loading from state")
+			clh.virtiofsd = &virtiofsd{
+				PID:        clh.state.VirtiofsdPID,
+				sourcePath: filepath.Join(getSharePath(clh.id)),
+				debug:      clh.config.Debug,
+				socketPath: virtiofsdSocketPath,
+			}
+			return nil
+		}
 	}
 
 	// No need to return an error from there since there might be nothing
@@ -238,8 +243,10 @@ func (clh *cloudHypervisor) CreateVM(ctx context.Context, id string, networkNS N
 	if err != nil {
 		return err
 	}
-	// Create the VM config via the constructor to ensure default values are properly assigned
-	clh.vmconfig = *chclient.NewVmConfig(*chclient.NewKernelConfig(kernelPath))
+	if kernelPath != "" {
+		// Create the VM config via the constructor to ensure default values are properly assigned
+		clh.vmconfig = *chclient.NewVmConfig(*chclient.NewKernelConfig(kernelPath))
+	}
 
 	// Create the VM memory config via the constructor to ensure default values are properly assigned
 	clh.vmconfig.Memory = chclient.NewMemoryConfig(int64((utils.MemUnit(clh.config.MemorySize) * utils.MiB).ToBytes()))
@@ -256,18 +263,21 @@ func (clh *cloudHypervisor) CreateVM(ctx context.Context, id string, networkNS N
 	// Set initial amount of cpu's for the virtual machine
 	clh.vmconfig.Cpus = chclient.NewCpusConfig(int32(clh.config.NumVCPUs), int32(clh.config.DefaultMaxVCPUs))
 
-	// First take the default parameters defined by this driver
-	params := clhKernelParams
+	// The kernel can be firmware. TODO: Distinguish kernel from firmware
+	if kernelPath != "" && clh.config.IsSandbox {
+		// First take the default parameters defined by this driver
+		params := clhKernelParams
 
-	// Followed by extra debug parameters if debug enabled in configuration file
-	if clh.config.Debug {
-		params = append(params, clhDebugKernelParams...)
+		// Followed by extra debug parameters if debug enabled in configuration file
+		if clh.config.Debug {
+			params = append(params, clhDebugKernelParams...)
+		}
+
+		// Followed by extra kernel parameters defined in the configuration file
+		params = append(params, clh.config.KernelParams...)
+
+		clh.vmconfig.Cmdline = chclient.NewCmdLineConfig(kernelParamsToString(params))
 	}
-
-	// Followed by extra kernel parameters defined in the configuration file
-	params = append(params, clh.config.KernelParams...)
-
-	clh.vmconfig.Cmdline = chclient.NewCmdLineConfig(kernelParamsToString(params))
 
 	// set random device generator to Hypervisor
 	clh.vmconfig.Rng = chclient.NewRngConfig(clh.config.EntropySource)
@@ -278,21 +288,28 @@ func (clh *cloudHypervisor) CreateVM(ctx context.Context, id string, networkNS N
 		return err
 	}
 
-	if imagePath == "" {
+	if clh.config.IsSandbox && imagePath == "" {
 		return errors.New("image path is empty")
 	}
 
-	pmem := chclient.NewPmemConfig(imagePath)
-	*pmem.DiscardWrites = true
-	if clh.vmconfig.Pmem != nil {
-		*clh.vmconfig.Pmem = append(*clh.vmconfig.Pmem, *pmem)
-	} else {
-		clh.vmconfig.Pmem = &[]chclient.PmemConfig{*pmem}
+	if imagePath != "" {
+		pmem := chclient.NewPmemConfig(imagePath)
+		*pmem.DiscardWrites = true
+		if clh.vmconfig.Pmem != nil {
+			*clh.vmconfig.Pmem = append(*clh.vmconfig.Pmem, *pmem)
+		} else {
+			clh.vmconfig.Pmem = &[]chclient.PmemConfig{*pmem}
+		}
 	}
 
 	// set the serial console to the cloud Hypervisor
 	if clh.config.Debug {
-		clh.vmconfig.Serial = chclient.NewConsoleConfig(cctTTY)
+		clh.vmconfig.Serial = chclient.NewConsoleConfig(cctFile)
+		file, err := clh.debugSerialPath(id)
+		if err != nil {
+			return err
+		}
+		clh.vmconfig.Serial.File = &file
 	} else {
 		clh.vmconfig.Serial = chclient.NewConsoleConfig(cctNULL)
 	}
@@ -332,13 +349,15 @@ func (clh *cloudHypervisor) CreateVM(ctx context.Context, id string, networkNS N
 		ApiInternal: chclient.NewAPIClient(cfg).DefaultApi,
 	}
 
-	clh.virtiofsd = &virtiofsd{
-		path:       clh.config.VirtioFSDaemon,
-		sourcePath: filepath.Join(getSharePath(clh.id)),
-		socketPath: virtiofsdSocketPath,
-		extraArgs:  clh.config.VirtioFSExtraArgs,
-		debug:      clh.config.Debug,
-		cache:      clh.config.VirtioFSCache,
+	if virtiofsdSocketPath != "" {
+		clh.virtiofsd = &virtiofsd{
+			path:       clh.config.VirtioFSDaemon,
+			sourcePath: filepath.Join(getSharePath(clh.id)),
+			socketPath: virtiofsdSocketPath,
+			extraArgs:  clh.config.VirtioFSExtraArgs,
+			debug:      clh.config.Debug,
+			cache:      clh.config.VirtioFSCache,
+		}
 	}
 
 	if clh.config.SGXEPCSize > 0 {
@@ -350,7 +369,6 @@ func (clh *cloudHypervisor) CreateVM(ctx context.Context, id string, networkNS N
 		} else {
 			clh.vmconfig.SgxEpc = &[]chclient.SgxEpcConfig{*epcSection}
 		}
-
 	}
 
 	return nil
@@ -372,7 +390,7 @@ func (clh *cloudHypervisor) StartVM(ctx context.Context, timeout int) error {
 		return err
 	}
 
-	if clh.virtiofsd == nil {
+	if clh.config.IsSandbox && clh.virtiofsd == nil {
 		return errors.New("Missing virtiofsd configuration")
 	}
 
@@ -385,23 +403,27 @@ func (clh *cloudHypervisor) StartVM(ctx context.Context, timeout int) error {
 	}
 	defer label.SetProcessLabel("")
 
-	if clh.config.SharedFS == config.VirtioFS {
-		clh.Logger().WithField("function", "StartVM").Info("Starting virtiofsd")
-		pid, err := clh.virtiofsd.Start(ctx, func() {
-			clh.StopVM(ctx, false)
-		})
-		if err != nil {
-			return err
+	if clh.config.IsSandbox {
+		if clh.config.SharedFS == config.VirtioFS {
+			clh.Logger().WithField("function", "StartVM").Info("Starting virtiofsd")
+			pid, err := clh.virtiofsd.Start(ctx, func() {
+				clh.StopVM(ctx, false)
+			})
+			if err != nil {
+				return err
+			}
+			clh.state.VirtiofsdPID = pid
+		} else {
+			return errors.New("cloud-Hypervisor only supports virtio based file sharing")
 		}
-		clh.state.VirtiofsdPID = pid
-	} else {
-		return errors.New("cloud-Hypervisor only supports virtio based file sharing")
 	}
 
 	pid, err := clh.launchClh()
 	if err != nil {
-		if shutdownErr := clh.virtiofsd.Stop(ctx); shutdownErr != nil {
-			clh.Logger().WithError(shutdownErr).Warn("error shutting down Virtiofsd")
+		if clh.virtiofsd != nil {
+			if shutdownErr := clh.virtiofsd.Stop(ctx); shutdownErr != nil {
+				clh.Logger().WithError(shutdownErr).Warn("error shutting down Virtiofsd")
+			}
 		}
 		return fmt.Errorf("failed to launch cloud-Hypervisor: %q", err)
 	}
@@ -759,6 +781,10 @@ func (clh *cloudHypervisor) AddDevice(ctx context.Context, devInfo interface{}, 
 	var err error
 
 	switch v := devInfo.(type) {
+	case config.BlockDrive:
+		if err := clh.addBlock(v); err != nil {
+			return err
+		}
 	case Endpoint:
 		if err := clh.addNet(v); err != nil {
 			return err
@@ -872,6 +898,10 @@ func (clh *cloudHypervisor) apiSocketPath(id string) (string, error) {
 	return utils.BuildSocketPath(clh.store.RunVMStoragePath(), id, clhAPISocket)
 }
 
+func (clh *cloudHypervisor) debugSerialPath(id string) (string, error) {
+	return utils.BuildSocketPath(clh.store.RunVMStoragePath(), id, clhDebugSerial)
+}
+
 func (clh *cloudHypervisor) waitVMM(timeout uint) error {
 	clhRunning, err := clh.isClhRunning(timeout)
 	if err != nil {
@@ -908,6 +938,9 @@ func (clh *cloudHypervisor) launchClh() (int, error) {
 	if err != nil {
 		return -1, err
 	}
+
+	fmt.Printf("CLH VM Config: %v", clh.vmconfig)
+	fmt.Printf("CLH VM Config: %v", clh.config)
 
 	args := []string{cscAPIsocket, clh.state.apiSocket}
 	if clh.config.Debug {
@@ -970,6 +1003,7 @@ const (
 	cctOFF  string = "Off"
 	cctNULL string = "Null"
 	cctTTY  string = "Tty"
+	cctFile string = "File"
 )
 
 const (
@@ -1126,6 +1160,41 @@ func (clh *cloudHypervisor) addNet(e Endpoint) error {
 		*clh.vmconfig.Net = append(*clh.vmconfig.Net, *net)
 	} else {
 		clh.vmconfig.Net = &[]chclient.NetConfig{*net}
+	}
+
+	return nil
+}
+
+func (clh *cloudHypervisor) addBlock(drive config.BlockDrive) error {
+	clh.Logger().WithField("block-device", drive).Debugf("Adding block device %v", drive)
+
+	clh.Logger().WithFields(log.Fields{
+		"path":   drive.File,
+		"format": drive.Format,
+		"ID":     drive.ID,
+	}).Info("Adding Block device")
+
+	if drive.Swap {
+		return fmt.Errorf("cloudHypervisor doesn't support swap")
+	}
+
+	if clh.config.BlockDeviceDriver != config.VirtioBlock {
+		return fmt.Errorf("incorrect Hypervisor configuration on 'block_device_driver':"+
+			" using '%v' but only support '%v'", clh.config.BlockDeviceDriver, config.VirtioBlock)
+	}
+
+	driveID := clhDriveIndexToID(drive.Index)
+
+	// Create the clh disk config via the constructor to ensure default values are properly assigned
+	clhDisk := *chclient.NewDiskConfig(drive.File)
+	clhDisk.Readonly = &drive.ReadOnly
+	clhDisk.VhostUser = func(b bool) *bool { return &b }(false)
+	clhDisk.Id = &driveID
+
+	if clh.vmconfig.Disks != nil {
+		*clh.vmconfig.Disks = append(*clh.vmconfig.Disks, clhDisk)
+	} else {
+		clh.vmconfig.Disks = &[]chclient.DiskConfig{clhDisk}
 	}
 
 	return nil
