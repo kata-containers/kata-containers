@@ -32,6 +32,8 @@ const UmountNoFollow = 0x8
 var rootfsDir = "rootfs"
 
 var lowerDir = "lowerdir"
+var upperDir = "upperdir"
+var workDir = "workdir"
 
 var snapshotDir = "snapshotdir"
 
@@ -415,7 +417,7 @@ func nydusContainerCleanup(ctx context.Context, sharedDir string, c *Container) 
 	if err := bindUnmountContainerSnapshotDir(ctx, sharedDir, c.id); err != nil {
 		return fmt.Errorf("umount snapshotdir err, %v", err)
 	}
-	destDir := filepath.Join(sharedDir, c.id, rootfsDir)
+	destDir := filepath.Join(sharedDir, c.id, c.rootfsSuffix)
 	if err := syscall.Rmdir(destDir); err != nil {
 		return fmt.Errorf("remove container rootfs err, %v", err)
 	}

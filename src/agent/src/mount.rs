@@ -12,7 +12,6 @@ use std::io::{BufRead, BufReader};
 use std::iter;
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::path::Path;
-use std::path::PathBuf;
 use std::ptr::null;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -46,16 +45,13 @@ pub const DRIVER_MMIO_BLK_TYPE: &str = "mmioblk";
 pub const DRIVER_SCSI_TYPE: &str = "scsi";
 pub const DRIVER_NVDIMM_TYPE: &str = "nvdimm";
 pub const DRIVER_EPHEMERAL_TYPE: &str = "ephemeral";
-pub const DRIVER_NYDUS_TYPE: &str = "nydus-overlay";
+pub const DRIVER_OVERLAYFS_TYPE: &str = "overlayfs";
 pub const DRIVER_LOCAL_TYPE: &str = "local";
 pub const DRIVER_WATCHABLE_BIND_TYPE: &str = "watchable-bind";
 
 pub const TYPE_ROOTFS: &str = "rootfs";
 
 pub const MOUNT_GUEST_TAG: &str = "kataShared";
-
-pub const SNAPSHOTDIR: &str = "snapshotdir";
-pub const LOWERDIR: &str = "lowerdir";
 // Allocating an FSGroup that owns the pod's volumes
 const FS_GID: &str = "fsgid";
 
@@ -146,7 +142,7 @@ pub const STORAGE_HANDLER_LIST: &[&str] = &[
     DRIVER_9P_TYPE,
     DRIVER_VIRTIOFS_TYPE,
     DRIVER_EPHEMERAL_TYPE,
-    DRIVER_NYDUS_TYPE,
+    DRIVER_OVERLAYFS_TYPE,
     DRIVER_MMIO_BLK_TYPE,
     DRIVER_LOCAL_TYPE,
     DRIVER_SCSI_TYPE,
@@ -294,63 +290,12 @@ async fn ephemeral_storage_handler(
 }
 
 #[instrument]
-async fn nydus_storage_handler(
+async fn overlayfs_storage_handler(
     logger: &Logger,
     storage: &Storage,
     sandbox: Arc<Mutex<Sandbox>>,
 ) -> Result<String> {
-    let logger = logger.new(o!("subsystem" => "mount", "driver"=> "nydus"));
-    let opts_vec: Vec<String> = storage.driver_options.to_vec();
-    let opts = parse_options(opts_vec);
-
-    let snapshot_dir = opts
-        .get(SNAPSHOTDIR)
-        .ok_or_else(|| anyhow!("failed to get snapshot_dir"))?;
-    let lower_dir = opts
-        .get(LOWERDIR)
-        .ok_or_else(|| anyhow!("failed to get lower_dir"))?;
-
-    let snapshot_dir_child = |target| -> Result<String> {
-        let mut sd = PathBuf::from(snapshot_dir);
-        sd.push(target);
-        match sd.to_str() {
-            Some(st) => Ok(st.to_string()),
-            None => Err(anyhow!("failed to get {}", target)),
-        }
-    };
-
-    let upper_dir = snapshot_dir_child("fs")?;
-    fs::create_dir_all(upper_dir.as_str())?;
-    let work_dir = snapshot_dir_child("work")?;
-    fs::create_dir_all(work_dir.as_str())?;
-
-    let mut options: String = "".to_string();
-    options.push_str(format!("workdir={}", work_dir).as_str());
-    options.push_str(format!(",upperdir={}", upper_dir).as_str());
-    options.push_str(format!(",lowerdir={}", lower_dir).as_str());
-    options.push_str(",index=off");
-
-    let dest = storage.mount_point.as_str();
-    let bare_mount = BareMount::new(
-        "overlay",
-        dest,
-        "overlay",
-        MsFlags::empty(),
-        options.as_str(),
-        &logger,
-    );
-
-    info!(
-        logger,
-        "mounting storage dest: {}, options: {}",
-        dest,
-        options.as_str()
-    );
-
-    bare_mount.mount().or_else(|e| {
-        return Err(e);
-    })?;
-    Ok("".to_string())
+    common_storage_handler(logger, storage)
 }
 
 #[instrument]
@@ -664,7 +609,9 @@ pub async fn add_storages(
             DRIVER_EPHEMERAL_TYPE => {
                 ephemeral_storage_handler(&logger, &storage, sandbox.clone()).await
             }
-            DRIVER_NYDUS_TYPE => nydus_storage_handler(&logger, &storage, sandbox.clone()).await,
+            DRIVER_OVERLAYFS_TYPE => {
+                overlayfs_storage_handler(&logger, &storage, sandbox.clone()).await
+            }
             DRIVER_MMIO_BLK_TYPE => {
                 virtiommio_blk_storage_handler(&logger, &storage, sandbox.clone()).await
             }

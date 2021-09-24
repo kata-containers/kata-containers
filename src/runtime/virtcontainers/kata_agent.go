@@ -82,7 +82,7 @@ var (
 	defaultKataGuestSandboxDir   = "/run/kata-containers/sandbox/"
 	type9pFs                     = "9p"
 	typeVirtioFS                 = "virtiofs"
-	typeNydusFS                  = "nydus"
+	typeOverlayFS                = "overlay"
 	typeVirtioFSNoCache          = "none"
 	kata9pDevType                = "9p"
 	kataMmioBlkDevType           = "mmioblk"
@@ -91,7 +91,7 @@ var (
 	kataSCSIDevType              = "scsi"
 	kataNvdimmDevType            = "nvdimm"
 	kataVirtioFSDevType          = "virtio-fs"
-	kataNydusOverlayDevType      = "nydus-overlay"
+	kataOverlayDevType           = "overlayfs"
 	kataWatchableBindDevType     = "watchable-bind"
 	sharedDir9pOptions           = []string{"trans=virtio,version=9p2000.L,cache=mmap", "nodev"}
 	sharedDirVirtioFSOptions     = []string{}
@@ -1306,21 +1306,25 @@ func (k *kataAgent) buildContainerRootfsWithNydus(sandbox *Sandbox, c *Container
 	containerShareDir := filepath.Join(getMountPath(c.sandbox.id), c.id)
 
 	// mkdir rootfs, guest at /run/kata-containers/shared/containers/<cid>/rootfs
-	if err := os.MkdirAll(filepath.Join(containerShareDir, "rootfs"), DirMode); err != nil {
+	if err := os.MkdirAll(filepath.Join(containerShareDir, c.rootfsSuffix), DirMode); err != nil {
 		return nil, err
 	}
 	// bindmount snapshot dir which snapshotter allocated
 	// to guest /run/kata-containers/shared/containers/<cid>/snapshotdir
-	if err := bindMount(k.ctx, snapshotDirPath, filepath.Join(containerShareDir, snapshotDir), true, "slave"); err != nil {
+	snapshotShareDir := filepath.Join(containerShareDir, snapshotDir)
+	if err := bindMount(k.ctx, snapshotDirPath, snapshotShareDir, true, "slave"); err != nil {
 		return nil, err
 	}
 
 	// so rootfs = overlay(upperdir, workerdir, lowerdir)
 	rootfs.MountPoint = rootPathParent
-	rootfs.Fstype = typeNydusFS
-	rootfs.Driver = kataNydusOverlayDevType
-	rootfs.DriverOptions = append(rootfs.DriverOptions, fmt.Sprintf("%s=%s", snapshotDir, filepath.Join(kataGuestSharedDir(), c.id, snapshotDir)))
-	rootfs.DriverOptions = append(rootfs.DriverOptions, fmt.Sprintf("%s=%s", lowerDir, filepath.Join(kataGuestNydusImageDir(), c.id, lowerDir)))
+	rootfs.Source = typeOverlayFS
+	rootfs.Fstype = typeOverlayFS
+	rootfs.Driver = kataOverlayDevType
+	rootfs.Options = append(rootfs.Options, fmt.Sprintf("%s=%s", upperDir, filepath.Join(kataGuestSharedDir(), c.id, snapshotDir, "fs")))
+	rootfs.Options = append(rootfs.Options, fmt.Sprintf("%s=%s", workDir, filepath.Join(kataGuestSharedDir(), c.id, snapshotDir, "work")))
+	rootfs.Options = append(rootfs.Options, fmt.Sprintf("%s=%s", lowerDir, filepath.Join(kataGuestNydusImageDir(), c.id, lowerDir)))
+	rootfs.Options = append(rootfs.Options, "index=off")
 	return rootfs, nil
 }
 

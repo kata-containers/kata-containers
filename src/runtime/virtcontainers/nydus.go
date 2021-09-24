@@ -50,7 +50,7 @@ type nydusd struct {
 	sockPath    string
 	apiSockPath string
 	sourcePath  string
-	logFile     string
+	logLevel    string
 	extraArgs   []string
 }
 
@@ -60,8 +60,7 @@ func (nd *nydusd) Start(ctx context.Context, onQuit onQuitFunc) (int, error) {
 	pid := 0
 
 	args := []string{
-		"--log-level", "debug",
-		"--log-file", nd.logFile,
+		"--log-level", "info",
 		"--apisock", nd.apiSockPath,
 		"--sock", nd.sockPath,
 	}

@@ -472,16 +472,16 @@ func (q *qemu) createVirtiofsDaemon() (VirtiofsDaemon, error) {
 		if err != nil {
 			return nil, err
 		}
-		logfile, err := q.nydusdLogFilePath(q.id)
-		if err != nil {
-			return nil, err
+		logLevel := "info"
+		if q.config.Debug {
+			logLevel = "debug"
 		}
 		return &nydusd{
 			path:        q.config.VirtioFSNydusd,
 			sockPath:    virtiofsdSocketPath,
 			apiSockPath: apiSockPath,
 			sourcePath:  filepath.Join(getSharePath(q.id)),
-			logFile:     logfile,
+			logLevel:    logLevel,
 			extraArgs:   q.config.VirtioFSNydusdExtraArgs,
 		}, nil
 	}
@@ -675,10 +675,6 @@ func (q *qemu) vhostFSSocketPath(id string) (string, error) {
 
 func (q *qemu) nydusdAPISocketPath(id string) (string, error) {
 	return utils.BuildSocketPath(q.store.RunVMStoragePath(), id, nydusdAPISock)
-}
-
-func (q *qemu) nydusdLogFilePath(id string) (string, error) {
-	return utils.BuildSocketPath(q.store.RunVMStoragePath(), id, "nydusd.log")
 }
 
 func (q *qemu) setupVirtiofsDaemon(ctx context.Context) (err error) {
