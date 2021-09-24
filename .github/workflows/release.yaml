@@ -141,11 +141,11 @@ jobs:
       - name: generate-and-upload-tarball
         run: |
           pushd $GITHUB_WORKSPACE/src/agent
-          cargo vendor >> .cargo/vendor
+          cargo vendor >> .cargo/config
           popd
           tag=$(echo $GITHUB_REF | cut -d/ -f3-)
           tarball="kata-containers-$tag-vendor.tar.gz"
           pushd $GITHUB_WORKSPACE
-          tar -cvzf "${tarball}" src/agent/.cargo/vendor src/agent/vendor
+          tar -cvzf "${tarball}" src/agent/.cargo/config src/agent/vendor
           GITHUB_TOKEN=${{ secrets.GIT_UPLOAD_TOKEN }} hub release edit -m "" -a "${tarball}" "${tag}" 
           popd
