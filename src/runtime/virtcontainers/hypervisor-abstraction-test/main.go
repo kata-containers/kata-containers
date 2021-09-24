@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"os"
 	"os/signal"
@@ -94,22 +95,57 @@ func (v *VM) Stop(ctx context.Context) error {
 }
 
 func main() {
+	var useQemu bool
+	flag.BoolVar(&useQemu, "qemu", false, "use qemu. default cloud hypervisor")
+	flag.Parse()
+
 	vmCfg := VMConfig{}
-	vmCfg.HypervisorType = vc.QemuHypervisor
-	vmCfg.HypervisorConfig = vc.HypervisorConfig{
-		IsSandbox:             false,
-		HypervisorMachineType: "q35",
-		NumVCPUs:              2,
-		DefaultMaxVCPUs:       2,
-		MemorySize:            2048,
-		DefaultBridges:        1,
-		MemSlots:              1,
-		Debug:                 true,
-		MemPrealloc:           false,
-		HugePages:             false,
-		IOMMU:                 false,
-		Realtime:              false,
-		Mlock:                 false,
+	var bootDisk device.BlockDrive
+
+	if useQemu {
+		vmCfg.HypervisorType = vc.QemuHypervisor
+		vmCfg.HypervisorConfig = vc.HypervisorConfig{
+			IsSandbox:             false,
+			HypervisorMachineType: "q35",
+			NumVCPUs:              2,
+			DefaultMaxVCPUs:       2,
+			MemorySize:            2048,
+			DefaultBridges:        1,
+			MemSlots:              1,
+			Debug:                 true,
+			MemPrealloc:           false,
+			HugePages:             false,
+			IOMMU:                 false,
+			Realtime:              false,
+			Mlock:                 false,
+		}
+		bootDisk = device.BlockDrive{
+			File:   "focal-server-cloudimg-amd64.img",
+			Format: "qcow2",
+			ID:     "bootdisk",
+			Index:  1,
+		}
+	} else {
+		vmCfg.HypervisorType = vc.ClhHypervisor
+		vmCfg.HypervisorConfig = vc.HypervisorConfig{
+			IsSandbox:         false,
+			KernelPath:        "hypervisor-fw",
+			HypervisorPath:    "cloud-hypervisor-static",
+			EntropySource:     "/dev/urandom",
+			NumVCPUs:          2,
+			DefaultMaxVCPUs:   2,
+			MemorySize:        2048,
+			DefaultBridges:    1,
+			MemSlots:          1,
+			Debug:             true,
+			BlockDeviceDriver: device.VirtioBlock, // For CLH
+		}
+		bootDisk = device.BlockDrive{
+			File:   "focal-server-cloudimg-amd64.raw",
+			Format: "raw",
+			ID:     "bootdisk",
+			Index:  1,
+		}
 	}
 
 	ctx := context.Background()
@@ -121,28 +157,31 @@ func main() {
 	}
 	fmt.Println("VM Created:", vm.id)
 
-	bootDisk := device.BlockDrive{
-		File:   "rootfs.img",
-		Format: "qcow2",
-		ID:     "bootdisk",
-	}
-
 	if err := vm.hypervisor.AddDevice(ctx, bootDisk, vc.BlockDev); err != nil {
 		fmt.Printf("Failed to attach boot drive: %s\n", err)
 		os.Exit(1)
 	}
 
+	macAddr := "0e:49:61:0f:c3:11"
 	primaryNet := &vc.TuntapEndpoint{
 		EndpointType: "tap",
+		TuntapInterface: vc.TuntapInterface{
+			Name: "clhtap",
+			TAPIface: vc.NetworkInterface{
+				Name:     "clhtap",
+				HardAddr: macAddr,
+			},
+		},
 		NetPair: vc.NetworkInterfacePair{
 			TapInterface: vc.TapInterface{
 				TAPIface: vc.NetworkInterface{
 					Name:     "clhtap",
-					HardAddr: "0e:49:61:0f:c3:11",
+					HardAddr: macAddr,
 				},
 			},
 		},
 	}
+	primaryNet.TuntapInterface.TAPIface.HardAddr = macAddr
 
 	if err := vm.hypervisor.AddDevice(ctx, primaryNet, vc.NetDev); err != nil {
 		fmt.Printf("Failed to attach network device: %s\n", err)
