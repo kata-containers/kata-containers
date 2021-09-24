@@ -68,6 +68,9 @@ const (
 	kernelParamDebugConsole           = "agent.debug_console"
 	kernelParamDebugConsoleVPort      = "agent.debug_console_vport"
 	kernelParamDebugConsoleVPortValue = "1026"
+
+	// Restricted permission for shared directory managed by virtiofs
+	sharedDirMode = os.FileMode(0700) | os.ModeDir
 )
 
 var (
@@ -516,7 +519,7 @@ func (k *kataAgent) setupSharedPath(ctx context.Context, sandbox *Sandbox) (err 
 	// create shared path structure
 	sharePath := getSharePath(sandbox.id)
 	mountPath := getMountPath(sandbox.id)
-	if err := os.MkdirAll(sharePath, DirMode); err != nil {
+	if err := os.MkdirAll(sharePath, sharedDirMode); err != nil {
 		return err
 	}
 	if err := os.MkdirAll(mountPath, DirMode); err != nil {
