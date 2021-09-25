@@ -70,7 +70,7 @@ func TestVirtiofsdStart(t *testing.T) {
 				PID:        tt.fields.PID,
 				ctx:        tt.fields.ctx,
 			}
-			var ctx context.Context
+			ctx := context.Background()
 			_, err := v.Start(ctx, nil)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("virtiofsd.Start() error = %v, wantErr %v", err, tt.wantErr)
