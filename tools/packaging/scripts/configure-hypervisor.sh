@@ -437,6 +437,8 @@ generate_qemu_options() {
 	# aarch64 need to explictly set --enable-pie
 	if [ -z "${static}" ] && [ "${arch}" = "aarch64" ]; then
 		qemu_options+=(arch:"--enable-pie")
+		# pie is conflict with plugins build for qemu 6.1.0
+		[ "${qemu_version}" == "6.1.0" ] && qemu_options+=(arch:"--disable-plugins")
 	fi
 
 	_qemu_cflags=""
