@@ -28,9 +28,9 @@ func setupCheckHostIsVMContainerCapable(assert *assert.Assertions, cpuInfoFile s
 func TestCCCheckCLIFunction(t *testing.T) {
 	var cpuData []testCPUData
 	moduleData := []testModuleData{
-		{filepath.Join(sysModuleDir, "kvm"), true, ""},
-		{filepath.Join(sysModuleDir, "vhost"), true, ""},
-		{filepath.Join(sysModuleDir, "vhost_net"), true, ""},
+		{filepath.Join(sysModuleDir, "kvm"), "", true},
+		{filepath.Join(sysModuleDir, "vhost"), "", true},
+		{filepath.Join(sysModuleDir, "vhost_net"), "", true},
 	}
 
 	genericCheckCLIFunction(t, cpuData, moduleData)
