@@ -8,15 +8,12 @@ package katamonitor
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net"
 	"net/url"
-	"strings"
 
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
-	"github.com/xeipuuv/gojsonpointer"
 	"google.golang.org/grpc"
 
 	pb "k8s.io/cri-api/pkg/apis/runtime/v1alpha2"
@@ -117,14 +114,12 @@ func parseEndpoint(endpoint string) (string, string, error) {
 	}
 }
 
-// getSandboxes get kata sandbox from the container engine.
-// this will be called only after monitor start.
-func (km *KataMonitor) getSandboxes() (map[string]struct{}, error) {
-
-	sandboxMap := make(map[string]struct{})
+// getSandboxes gets ready sandboxes from the container engine and returns an updated sandboxMap
+func (km *KataMonitor) getSandboxes(sandboxMap map[string]bool) (map[string]bool, error) {
+	newMap := make(map[string]bool)
 	runtimeClient, runtimeConn, err := getRuntimeClient(km.runtimeEndpoint)
 	if err != nil {
-		return sandboxMap, err
+		return newMap, err
 	}
 	defer closeConnection(runtimeConn)
 
@@ -140,61 +135,26 @@ func (km *KataMonitor) getSandboxes() (map[string]struct{}, error) {
 	monitorLog.Debugf("ListPodSandboxRequest: %v", request)
 	r, err := runtimeClient.ListPodSandbox(context.Background(), request)
 	if err != nil {
-		return sandboxMap, err
+		return newMap, err
 	}
 	monitorLog.Debugf("ListPodSandboxResponse: %v", r)
 
 	for _, pod := range r.Items {
-		request := &pb.PodSandboxStatusRequest{
-			PodSandboxId: pod.Id,
-			Verbose:      true,
-		}
-
-		r, err := runtimeClient.PodSandboxStatus(context.Background(), request)
-		if err != nil {
-			return sandboxMap, err
-		}
-
-		lowRuntime := ""
-		var res map[string]interface{}
-		if err := json.Unmarshal([]byte(r.Info["info"]), &res); err != nil {
-			monitorLog.WithError(err).WithField("pod", r).Error("failed to Unmarshal pod info")
-			continue
-		} else {
-			monitorLog.WithField("pod info", res).Debug("")
-
-			// get low level container runtime
-			// containerd stores the pod runtime in "/runtimeType" while CRI-O stores it the
-			// io.kubernetes.cri-o.RuntimeHandler annotation: check for both.
-			keys := []string{"/runtimeType", "/runtimeSpec/annotations/io.kubernetes.cri-o.RuntimeHandler"}
-			for _, key := range keys {
-				pointer, _ := gojsonpointer.NewJsonPointer(key)
-				rt, _, _ := pointer.Get(res)
-				if rt != nil {
-					if str, ok := rt.(string); ok {
-						lowRuntime = str
-						break
-					}
-				}
-			}
-		}
-
-		// If lowRuntime is empty something changed in containerd/CRI-O or we are dealing with an unknown container engine.
-		// Safest options is to add the POD in the list: we will be able to connect to the shim to retrieve the actual info
-		// only for kata PODs.
-		if lowRuntime == "" {
-			monitorLog.WithField("pod", r).Info("unable to retrieve the runtime type")
-			sandboxMap[pod.Id] = struct{}{}
+		// Use the cached data if available
+		if isKata, ok := sandboxMap[pod.Id]; ok {
+			newMap[pod.Id] = isKata
 			continue
 		}
 
+		// Check if a directory associated with the POD ID exist on the kata fs:
+		// if so we know that the POD is a kata one.
+		newMap[pod.Id] = checkSandboxFSExists(pod.Id)
 		monitorLog.WithFields(logrus.Fields{
-			"low runtime": lowRuntime,
+			"id":      pod.Id,
+			"is kata": newMap[pod.Id],
+			"pod":     pod,
 		}).Debug("")
-		if strings.Contains(lowRuntime, "kata") {
-			sandboxMap[pod.Id] = struct{}{}
-		}
 	}
 
-	return sandboxMap, nil
+	return newMap, nil
 }
