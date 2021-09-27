@@ -39,7 +39,7 @@ func getSandboxIDFromReq(r *http.Request) (string, error) {
 }
 
 func getSandboxFS() string {
-	return shim.GetSanboxesStoragePath()
+	return shim.GetSandboxesStoragePath()
 }
 
 func checkSandboxFSExists(sandboxID string) bool {
