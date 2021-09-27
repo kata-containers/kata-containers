@@ -185,7 +185,7 @@ func (s *service) mountPprofHandle(m *http.ServeMux, ociSpec *specs.Spec) {
 
 // GetSandboxesStoragePath returns the storage path where sandboxes info are stored
 func GetSandboxesStoragePath() string {
-	return filepath.Join(string(filepath.Separator), "run", "vc", "sbs")
+	return "/run/vc/sbs"
 }
 
 // SocketAddress returns the address of the unix domain socket for communicating with the
