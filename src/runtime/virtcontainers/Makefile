@@ -42,10 +42,10 @@ binaries: hook
 check: check-go-static check-go-test
 
 check-go-static:
-	bash $(MK_DIR)/../.ci/static-checks.sh
+	bash $(MK_DIR)/../../../ci/static-checks.sh
 
 check-go-test:
-	bash $(MK_DIR)/../.ci/go-test.sh \
+	bash $(MK_DIR)/../../../ci/go-test.sh \
 		$(TEST_BIN_DIR)/$(HOOK_BIN)
 
 #
