@@ -13,8 +13,6 @@ import (
 	v1 "github.com/containerd/cgroups/stats/v1"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/sirupsen/logrus"
-
-	"golang.org/x/sys/unix"
 )
 
 type Cgroup struct {
@@ -35,33 +33,6 @@ func SetLogger(logger *logrus.Entry) {
 	fields := cgroupsLogger.Data
 
 	cgroupsLogger = logger.WithFields(fields)
-}
-
-func deviceToDeviceCgroup(device string) (*specs.LinuxDeviceCgroup, error) {
-	var st unix.Stat_t
-
-	if err := unix.Stat(device, &st); err != nil {
-		return nil, err
-	}
-
-	devType := ""
-	switch st.Mode & unix.S_IFMT {
-	case unix.S_IFCHR:
-		devType = "c"
-	case unix.S_IFBLK:
-		devType = "b"
-	}
-
-	major := int64(unix.Major(st.Rdev))
-	minor := int64(unix.Minor(st.Rdev))
-
-	return &specs.LinuxDeviceCgroup{
-		Allow:  true,
-		Type:   devType,
-		Major:  &major,
-		Minor:  &minor,
-		Access: "rwm",
-	}, nil
 }
 
 func sandboxDevices() []specs.LinuxDeviceCgroup {
@@ -90,12 +61,12 @@ func sandboxDevices() []specs.LinuxDeviceCgroup {
 	defaultDevices = append(defaultDevices, hypervisorDevices...)
 
 	for _, device := range defaultDevices {
-		ldevice, err := deviceToDeviceCgroup(device)
+		ldevice, err := DeviceToLinuxDevice(device)
 		if err != nil {
 			cgroupsLogger.WithField("source", "cgroups").Warnf("Could not add %s to the devices cgroup", device)
 			continue
 		}
-		devices = append(devices, *ldevice)
+		devices = append(devices, ldevice)
 	}
 
 	wildcardMajor := int64(-1)
