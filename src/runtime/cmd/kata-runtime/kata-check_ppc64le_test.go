@@ -47,8 +47,8 @@ func TestCCCheckCLIFunction(t *testing.T) {
 	}
 
 	moduleData := []testModuleData{
-		{filepath.Join(sysModuleDir, "kvm"), false, "Y"},
-		{filepath.Join(sysModuleDir, "kvm_hv"), false, "Y"},
+		{filepath.Join(sysModuleDir, "kvm"), "", true},
+		{filepath.Join(sysModuleDir, "kvm_hv"), "", true},
 	}
 
 	genericCheckCLIFunction(t, cpuData, moduleData)
