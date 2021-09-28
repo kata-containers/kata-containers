@@ -16,6 +16,9 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
 
 	"github.com/opencontainers/runtime-spec/specs-go"
 
@@ -325,4 +328,40 @@ func writeOCIConfigFile(spec specs.Spec, configPath string) error {
 	}
 
 	return ioutil.WriteFile(configPath, bytes, testFileMode)
+}
+
+func TestNoNeedForOutput(t *testing.T) {
+	assert := assert.New(t)
+
+	testCases := []struct {
+		detach bool
+		tty    bool
+		result bool
+	}{
+		{
+			detach: true,
+			tty:    true,
+			result: true,
+		},
+		{
+			detach: false,
+			tty:    true,
+			result: false,
+		},
+		{
+			detach: true,
+			tty:    false,
+			result: false,
+		},
+		{
+			detach: false,
+			tty:    false,
+			result: false,
+		},
+	}
+
+	for i := range testCases {
+		result := noNeedForOutput(testCases[i].detach, testCases[i].tty)
+		assert.Equal(testCases[i].result, result)
+	}
 }
