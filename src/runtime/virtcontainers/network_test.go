@@ -188,7 +188,8 @@ func TestCreateGetTunTapLink(t *testing.T) {
 	assert := assert.New(t)
 
 	netHandle, err := netlink.NewHandle()
-	defer netHandle.Delete()
+	assert.NoError(err)
+	defer netHandle.Close()
 
 	assert.NoError(err)
 
@@ -213,7 +214,8 @@ func TestCreateMacVtap(t *testing.T) {
 	assert := assert.New(t)
 
 	netHandle, err := netlink.NewHandle()
-	defer netHandle.Delete()
+	assert.NoError(err)
+	defer netHandle.Close()
 
 	assert.NoError(err)
 
@@ -258,7 +260,7 @@ func TestTcRedirectNetwork(t *testing.T) {
 
 	netHandle, err := netlink.NewHandle()
 	assert.NoError(err)
-	defer netHandle.Delete()
+	defer netHandle.Close()
 
 	// Create a test veth interface.
 	vethName := "foo"
@@ -296,7 +298,7 @@ func TestRxRateLimiter(t *testing.T) {
 
 	netHandle, err := netlink.NewHandle()
 	assert.NoError(err)
-	defer netHandle.Delete()
+	defer netHandle.Close()
 
 	// Create a test veth interface.
 	vethName := "foo"
@@ -345,7 +347,7 @@ func TestTxRateLimiter(t *testing.T) {
 
 	netHandle, err := netlink.NewHandle()
 	assert.NoError(err)
-	defer netHandle.Delete()
+	defer netHandle.Close()
 
 	// Create a test veth interface.
 	vethName := "foo"

@@ -256,7 +256,7 @@ github.com/stretchr/testify/assert
 # github.com/urfave/cli v1.22.2
 ## explicit
 github.com/urfave/cli
-# github.com/vishvananda/netlink v1.1.1-0.20201029203352-d40f9887b852
+# github.com/vishvananda/netlink v1.1.1-0.20210924202909-187053b97868
 ## explicit
 github.com/vishvananda/netlink
 github.com/vishvananda/netlink/nl
