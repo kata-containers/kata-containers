@@ -1024,10 +1024,12 @@ func (q *qemu) cleanupVM() error {
 		u, err := user.LookupId(strconv.Itoa(int(q.config.Uid)))
 		if err != nil {
 			q.Logger().WithError(err).WithField("uid", q.config.Uid).Warn("failed to find the user")
+			return nil
 		}
 		userdelPath, err := pkgUtils.FirstValidExecutable([]string{"/usr/sbin/userdel", "/sbin/userdel", "/bin/userdel"})
 		if err != nil {
 			q.Logger().WithError(err).WithField("user", u.Username).Warn("failed to delete the user")
+			return nil
 		}
 		_, err = pkgUtils.RunCommand([]string{userdelPath, "-f", u.Username})
 		if err != nil {
