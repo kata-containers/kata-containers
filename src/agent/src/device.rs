@@ -71,7 +71,7 @@ pub fn pcipath_to_sysfs(root_bus_sysfs: &str, pcipath: &pci::Path) -> Result<Str
     let mut relpath = String::new();
 
     for i in 0..pcipath.len() {
-        let bdf = format!("{}:{}.0", bus, pcipath[i]);
+        let bdf = format!("{}:{}", bus, pcipath[i]);
 
         relpath = format!("{}/{}", relpath, bdf);
 

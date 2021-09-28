@@ -1606,7 +1606,7 @@ fn do_copy_file(req: &CopyFileRequest) -> Result<()> {
 async fn do_add_swap(sandbox: &Arc<Mutex<Sandbox>>, req: &AddSwapRequest) -> Result<()> {
     let mut slots = Vec::new();
     for slot in &req.PCIPath {
-        slots.push(pci::Slot::new(*slot)?);
+        slots.push(pci::SlotFn::new(*slot, 0)?);
     }
     let pcipath = pci::Path::new(slots)?;
     let dev_name = get_virtio_blk_pci_device_name(sandbox, &pcipath).await?;
