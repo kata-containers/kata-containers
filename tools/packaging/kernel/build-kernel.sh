@@ -128,7 +128,7 @@ get_kernel() {
 
                 if [ ! -f sha256sums.asc ] || ! grep -q "${kernel_tarball}" sha256sums.asc; then
                         info "Download kernel checksum file: sha256sums.asc"
-                        curl --fail -OL "https://cdn.kernel.org/pub/linux/kernel/v${major_version}.x/sha256sums.asc"
+                        curl --fail -OL "https://kernel.org/pub/linux/kernel/v${major_version}.x/sha256sums.asc"
                 fi
                 grep "${kernel_tarball}" sha256sums.asc >"${kernel_tarball}.sha256"
 
