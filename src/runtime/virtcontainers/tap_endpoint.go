@@ -156,7 +156,7 @@ func tapNetwork(endpoint *TapEndpoint, numCPUs uint32, disableVhostNet bool) err
 	if err != nil {
 		return err
 	}
-	defer netHandle.Delete()
+	defer netHandle.Close()
 
 	tapLink, fds, err := createLink(netHandle, endpoint.TapInterface.TAPIface.Name, &netlink.Tuntap{}, int(numCPUs))
 	if err != nil {
@@ -192,7 +192,7 @@ func unTapNetwork(name string) error {
 	if err != nil {
 		return err
 	}
-	defer netHandle.Delete()
+	defer netHandle.Close()
 	tapLink, err := getLinkByName(netHandle, name, &netlink.Tuntap{})
 	if err != nil {
 		return fmt.Errorf("Could not get TAP interface: %s", err)

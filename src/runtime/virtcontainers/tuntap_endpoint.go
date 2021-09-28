@@ -173,7 +173,7 @@ func tuntapNetwork(endpoint *TuntapEndpoint, numCPUs uint32, disableVhostNet boo
 	if err != nil {
 		return err
 	}
-	defer netHandle.Delete()
+	defer netHandle.Close()
 
 	tapLink, _, err := createLink(netHandle, endpoint.TuntapInterface.TAPIface.Name, &netlink.Tuntap{}, int(numCPUs))
 	if err != nil {
@@ -201,7 +201,7 @@ func unTuntapNetwork(name string) error {
 	if err != nil {
 		return err
 	}
-	defer netHandle.Delete()
+	defer netHandle.Close()
 	tapLink, err := getLinkByName(netHandle, name, &netlink.Tuntap{})
 	if err != nil {
 		return fmt.Errorf("Could not get TAP interface: %s", err)
