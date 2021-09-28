@@ -18,7 +18,7 @@ import (
 )
 
 func TestFileExists(t *testing.T) {
-	dir, err := ioutil.TempDir(testDir, "")
+	dir, err := ioutil.TempDir("", "katatest")
 	if err != nil {
 		t.Fatal(err)
 	}

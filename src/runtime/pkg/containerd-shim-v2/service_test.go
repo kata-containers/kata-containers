@@ -8,9 +8,7 @@ package containerdshim
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -43,12 +41,8 @@ func TestServiceCreate(t *testing.T) {
 
 	assert := assert.New(t)
 
-	tmpdir, _ := ioutil.TempDir("", "")
+	tmpdir, bundleDir, _ := ktu.SetupOCIConfigFile(t)
 	defer os.RemoveAll(tmpdir)
-
-	bundleDir := filepath.Join(tmpdir, "bundle")
-	err := makeOCIBundle(bundleDir)
-	assert.NoError(err)
 
 	ctx := context.Background()
 
