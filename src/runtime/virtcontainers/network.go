@@ -575,7 +575,7 @@ func tapNetworkPair(ctx context.Context, endpoint Endpoint, queues int, disableV
 	if err != nil {
 		return err
 	}
-	defer netHandle.Delete()
+	defer netHandle.Close()
 
 	netPair := endpoint.NetworkPair()
 
@@ -672,7 +672,7 @@ func setupTCFiltering(ctx context.Context, endpoint Endpoint, queues int, disabl
 	if err != nil {
 		return err
 	}
-	defer netHandle.Delete()
+	defer netHandle.Close()
 
 	netPair := endpoint.NetworkPair()
 
@@ -847,7 +847,7 @@ func untapNetworkPair(ctx context.Context, endpoint Endpoint) error {
 	if err != nil {
 		return err
 	}
-	defer netHandle.Delete()
+	defer netHandle.Close()
 
 	netPair := endpoint.NetworkPair()
 
@@ -891,7 +891,7 @@ func removeTCFiltering(ctx context.Context, endpoint Endpoint) error {
 	if err != nil {
 		return err
 	}
-	defer netHandle.Delete()
+	defer netHandle.Close()
 
 	netPair := endpoint.NetworkPair()
 
@@ -1168,7 +1168,7 @@ func createEndpointsFromScan(networkNSPath string, config *NetworkConfig) ([]End
 	if err != nil {
 		return []Endpoint{}, err
 	}
-	defer netlinkHandle.Delete()
+	defer netlinkHandle.Close()
 
 	linkList, err := netlinkHandle.LinkList()
 	if err != nil {
@@ -1568,7 +1568,7 @@ func addIFBDevice() (int, error) {
 	if err != nil {
 		return -1, err
 	}
-	defer netHandle.Delete()
+	defer netHandle.Close()
 
 	// There exists error when using netlink library to create ifb interface
 	cmd := exec.Command("ip", "link", "add", "dev", "ifb0", "type", "ifb")
@@ -1744,7 +1744,7 @@ func removeTxRateLimiter(endpoint Endpoint, networkNSPath string) error {
 		if err != nil {
 			return err
 		}
-		defer netHandle.Delete()
+		defer netHandle.Close()
 
 		// remove ifb interface
 		ifbLink, err := netlink.LinkByName("ifb0")
