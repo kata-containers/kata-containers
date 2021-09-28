@@ -21,7 +21,6 @@ import (
 )
 
 const (
-	testFileMode    = os.FileMode(0640)
 	invalidOperator = 1234
 
 	skipUnknownDistroName = "skipping test as cannot determine distro name"

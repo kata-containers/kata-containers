@@ -9,6 +9,7 @@ import (
 	"context"
 	"io"
 	"io/ioutil"
+	"os"
 	"path/filepath"
 	"syscall"
 	"testing"
@@ -24,6 +25,11 @@ func TestNewTtyIOFifoReopen(t *testing.T) {
 	var tty *ttyIO
 	assert := assert.New(t)
 	ctx := context.TODO()
+
+	testDir, err := ioutil.TempDir("", "kata-")
+	assert.NoError(err)
+	defer os.RemoveAll(testDir)
+
 	fifoPath, err := ioutil.TempDir(testDir, "fifo-path-")
 	assert.NoError(err)
 	stdout := filepath.Join(fifoPath, "stdout")
@@ -99,6 +105,10 @@ func TestIoCopy(t *testing.T) {
 	testBytes1 := []byte("Test1")
 	testBytes2 := []byte("Test2")
 	testBytes3 := []byte("Test3")
+
+	testDir, err := ioutil.TempDir("", "kata-")
+	assert.NoError(err)
+	defer os.RemoveAll(testDir)
 
 	fifoPath, err := ioutil.TempDir(testDir, "fifo-path-")
 	assert.NoError(err)
