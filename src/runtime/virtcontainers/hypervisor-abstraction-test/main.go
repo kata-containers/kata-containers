@@ -147,6 +147,12 @@ func main() {
 			Index:  1,
 		}
 	}
+	cfgDrive := device.BlockDrive{
+		File:   "config-drive.img",
+		Format: "raw",
+		ID:     "configdrive",
+		Index:  2,
+	}
 
 	ctx := context.Background()
 
@@ -159,6 +165,12 @@ func main() {
 
 	if err := vm.hypervisor.AddDevice(ctx, bootDisk, vc.BlockDev); err != nil {
 		fmt.Printf("Failed to attach boot drive: %s\n", err)
+		os.Exit(1)
+	}
+
+	// Cloud init
+	if err := vm.hypervisor.AddDevice(ctx, cfgDrive, vc.BlockDev); err != nil {
+		fmt.Printf("Failed to attach config drive: %s\n", err)
 		os.Exit(1)
 	}
 
