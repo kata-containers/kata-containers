@@ -1,0 +1,94 @@
+From 5745513881520f48401ac40306ac8cd6ef35beaf Mon Sep 17 00:00:00 2001
+From: Sudarshan Rajagopalan <sudaraja@codeaurora.org>
+Date: Sun, 26 Sep 2021 13:10:41 +0800
+Subject: [PATCH] arm64/sparsemem: reduce SECTION_SIZE_BITS
+
+memory_block_size_bytes() determines the memory hotplug granularity i.e the
+amount of memory which can be hot added or hot removed from the kernel. The
+generic value here being MIN_MEMORY_BLOCK_SIZE (1UL << SECTION_SIZE_BITS)
+for memory_block_size_bytes() on platforms like arm64 that does not override.
+
+Current SECTION_SIZE_BITS is 30 i.e 1GB which is large and a reduction here
+increases memory hotplug granularity, thus improving its agility. A reduced
+section size also reduces memory wastage in vmemmmap mapping for sections
+with large memory holes. So we try to set the least section size as possible.
+
+A section size bits selection must follow:
+(MAX_ORDER - 1 + PAGE_SHIFT) <= SECTION_SIZE_BITS
+
+CONFIG_FORCE_MAX_ZONEORDER is always defined on arm64 and so just following it
+would help achieve the smallest section size.
+
+SECTION_SIZE_BITS = (CONFIG_FORCE_MAX_ZONEORDER - 1 + PAGE_SHIFT)
+
+SECTION_SIZE_BITS = 22 (11 - 1 + 12) i.e 4MB   for 4K pages
+SECTION_SIZE_BITS = 24 (11 - 1 + 14) i.e 16MB  for 16K pages without THP
+SECTION_SIZE_BITS = 25 (12 - 1 + 14) i.e 32MB  for 16K pages with THP
+SECTION_SIZE_BITS = 26 (11 - 1 + 16) i.e 64MB  for 64K pages without THP
+SECTION_SIZE_BITS = 29 (14 - 1 + 16) i.e 512MB for 64K pages with THP
+
+But there are other problems in reducing SECTION_SIZE_BIT. Reducing it by too
+much would over populate /sys/devices/system/memory/ and also consume too many
+page->flags bits in the !vmemmap case. Also section size needs to be multiple
+of 128MB to have PMD based vmemmap mapping with CONFIG_ARM64_4K_PAGES.
+
+Given these constraints, lets just reduce the section size to 128MB for 4K
+
+Signed-off-by: Sudarshan Rajagopalan <sudaraja@codeaurora.org>
+Suggested-by: Anshuman Khandual <anshuman.khandual@arm.com>
+Suggested-by: David Hildenbrand <david@redhat.com>
+Cc: Catalin Marinas <catalin.marinas@arm.com>
+Cc: Will Deacon <will@kernel.org>
+Cc: Anshuman Khandual <anshuman.khandual@arm.com>
+Cc: David Hildenbrand <david@redhat.com>
+Cc: Mike Rapoport <rppt@linux.ibm.com>
+Cc: Mark Rutland <mark.rutland@arm.com>
+Cc: Logan Gunthorpe <logang@deltatee.com>
+Cc: Andrew Morton <akpm@linux-foundation.org>
+Cc: Steven Price <steven.price@arm.com>
+Cc: Suren Baghdasaryan <surenb@google.com>
+Reviewed-by: David Hildenbrand <david@redhat.com>
+Acked-by: Mike Rapoport <rppt@linux.ibm.com>
+Reviewed-by: Catalin Marinas <catalin.marinas@arm.com>
+Link: https://lore.kernel.org/r/43843c5e092bfe3ec4c41e3c8c78a7ee35b69bb0.1611206601.git.sudaraja@codeaurora.org
+Signed-off-by: Will Deacon <will@kernel.org>
+---
+ arch/arm64/include/asm/sparsemem.h | 23 +++++++++++++++++++++--
+ 1 file changed, 21 insertions(+), 2 deletions(-)
+
+diff --git a/arch/arm64/include/asm/sparsemem.h b/arch/arm64/include/asm/sparsemem.h
+index 1f43fcc79738..eb4a75d720ed 100644
+--- a/arch/arm64/include/asm/sparsemem.h
++++ b/arch/arm64/include/asm/sparsemem.h
+@@ -7,7 +7,26 @@
+ 
+ #ifdef CONFIG_SPARSEMEM
+ #define MAX_PHYSMEM_BITS	CONFIG_ARM64_PA_BITS
+-#define SECTION_SIZE_BITS	30
+-#endif
++
++/*
++ * Section size must be at least 512MB for 64K base
++ * page size config. Otherwise it will be less than
++ * (MAX_ORDER - 1) and the build process will fail.
++ */
++#ifdef CONFIG_ARM64_64K_PAGES
++#define SECTION_SIZE_BITS 29
++
++#else
++
++/*
++ * Section size must be at least 128MB for 4K base
++ * page size config. Otherwise PMD based huge page
++ * entries could not be created for vmemmap mappings.
++ * 16K follows 4K for simplicity.
++ */
++#define SECTION_SIZE_BITS 27
++#endif /* CONFIG_ARM64_64K_PAGES */
++
++#endif /* CONFIG_SPARSEMEM*/
+ 
+ #endif
+-- 
+2.17.1
+
