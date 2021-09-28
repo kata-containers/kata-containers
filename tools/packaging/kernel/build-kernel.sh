@@ -38,7 +38,7 @@ readonly GV_NVIDIA="nvidia"
 #Path to kernel directory
 kernel_path=""
 #Experimental kernel support. Pull from virtio-fs GitLab instead of kernel.org
-experimental_kernel="false"
+build_type=""
 #Force generate config when setup
 force_setup_generate_config="false"
 #GPU kernel support
@@ -83,6 +83,7 @@ Commands:
 Options:
 
 	-a <arch>   	: Arch target to build the kernel, such as aarch64/ppc64le/s390x/x86_64.
+	-b <type>    	: Enable optional config type.
 	-c <path>   	: Path to config file to build the kernel.
 	-d          	: Enable bash debug.
 	-e          	: Enable experimental kernel.
@@ -127,8 +128,9 @@ get_kernel() {
 		kernel_tarball="linux-${version}.tar.xz"
 
                 if [ ! -f sha256sums.asc ] || ! grep -q "${kernel_tarball}" sha256sums.asc; then
-                        info "Download kernel checksum file: sha256sums.asc"
-                        curl --fail -OL "https://cdn.kernel.org/pub/linux/kernel/v${major_version}.x/sha256sums.asc"
+                        shasum_url="https://cdn.kernel.org/pub/linux/kernel/v${major_version}.x/sha256sums.asc"
+                        info "Download kernel checksum file: sha256sums.asc from ${shasum_url}"
+                        curl --fail -OL "${shasum_url}"
                 fi
                 grep "${kernel_tarball}" sha256sums.asc >"${kernel_tarball}.sha256"
 
@@ -178,10 +180,16 @@ get_kernel_frag_path() {
 	# Exclude configs if they have !$arch tag in the header
 	local common_configs="$(grep "\!${arch}" ${common_path}/*.conf -L)"
 
-	local experimental_configs=""
-	local experimental_dir="${common_path}/experimental"
-	if [ -d "$experimental_dir" ]; then
-		experimental_configs=$(find "$experimental_dir" -name '*.conf')
+	local extra_configs=""
+	if [ "${build_type}" != "" ];then
+		local build_type_dir=$(readlink -m "${arch_path}/../build-type/${build_type}")
+		if [ ! -d "$build_type_dir" ]; then
+			die "No config fragments dir for ${build_type}: ${build_type_dir}"
+		fi
+		extra_configs=$(find "$build_type_dir" -name '*.conf')
+		if [ "${extra_configs}" == "" ];then
+			die "No extra configs found in ${build_type_dir}"
+		fi
 	fi
 
 	# These are the strings that the kernel merge_config.sh script kicks out
@@ -195,8 +203,8 @@ get_kernel_frag_path() {
 	# handle specific cases, then add the path definition and search/list/cat
 	# here.
 	local all_configs="${common_configs} ${arch_configs}"
-	if [[ ${experimental_kernel} == "true" ]]; then
-		all_configs="${all_configs} ${experimental_configs}"
+	if [[ ${build_type} != "" ]]; then
+		all_configs="${all_configs} ${extra_configs}"
 	fi
 
 	if [[ "${gpu_vendor}" != "" ]];then
@@ -333,7 +341,7 @@ setup_kernel() {
 	local major_kernel
 	major_kernel=$(get_major_kernel_version "${kernel_version}")
 	local patches_dir_for_version="${patches_path}/${major_kernel}.x"
-	local experimental_patches_dir="${patches_path}/${major_kernel}.x/experimental"
+	local build_type_patches_dir="${patches_path}/${major_kernel}.x/${build_type}"
 
 	[ -n "${arch_target}" ] || arch_target="$(uname -m)"
 	arch_target=$(arch_to_kernel "${arch_target}")
@@ -343,10 +351,10 @@ setup_kernel() {
 	# Apply version specific patches
 	${packaging_scripts_dir}/apply_patches.sh "${patches_dir_for_version}"
 
-	# Apply version specific patches for experimental build
-	if [ "${experimental_kernel}" == "true" ] ;then
-		info "Apply experimental patches"
-		${packaging_scripts_dir}/apply_patches.sh "${experimental_patches_dir}"
+	# Apply version specific patches for build_type build
+	if [ "${build_type}" == "true" ] ;then
+		info "Apply build_type patches from ${build_type_patches_dir}"
+		${packaging_scripts_dir}/apply_patches.sh "${build_type_patches_dir}"
 	fi
 
 	[ -n "${hypervisor_target}" ] || hypervisor_target="kvm"
@@ -382,8 +390,8 @@ install_kata() {
 	install_path=$(readlink -m "${DESTDIR}/${PREFIX}/share/${project_name}")
 
 	suffix=""
-	if [[ ${experimental_kernel} == "true" ]]; then
-		suffix="-experimental"
+	if [[ ${build_type} != "" ]]; then
+		suffix="-${build_type}"
 	fi
 	if [[ ${gpu_vendor} != "" ]];then
 		suffix="-${gpu_vendor}-gpu${suffix}"
@@ -430,10 +438,13 @@ install_kata() {
 }
 
 main() {
-	while getopts "a:c:defg:hk:p:t:v:x:" opt; do
+	while getopts "a:b:c:defg:hk:p:t:v:x:" opt; do
 		case "$opt" in
 			a)
 				arch_target="${OPTARG}"
+				;;
+			b)
+				build_type="${OPTARG}"
 				;;
 			c)
 				kernel_config_path="${OPTARG}"
@@ -443,7 +454,7 @@ main() {
 				set -x
 				;;
 			e)
-				experimental_kernel="true"
+				build_type="experimental"
 				;;
 			f)
 				force_setup_generate_config="true"
@@ -485,7 +496,7 @@ main() {
 
 	# If not kernel version take it from versions.yaml
 	if [ -z "$kernel_version" ]; then
-		if [[ ${experimental_kernel} == "true" ]]; then
+		if [[ ${build_type} == "experimental" ]]; then
 			kernel_version=$(get_from_kata_deps "assets.kernel-experimental.tag")
 		else
 			kernel_version=$(get_from_kata_deps "assets.kernel.version")
@@ -496,8 +507,8 @@ main() {
 
 	if [ -z "${kernel_path}" ]; then
 		config_version=$(get_config_version)
-		if [[ ${experimental_kernel} == "true" ]]; then
-			kernel_path="${PWD}/kata-linux-experimental-${kernel_version}-${config_version}"
+		if [[ ${build_type} != "" ]]; then
+			kernel_path="${PWD}/kata-linux-${build_type}-${kernel_version}-${config_version}"
 		else
 			kernel_path="${PWD}/kata-linux-${kernel_version}-${config_version}"
 		fi

@@ -67,6 +67,7 @@ options:
 	cloud-hypervisor
 	firecracker
 	kernel
+	kernel-experimental
 	qemu
 	rootfs-image
 	rootfs-initrd
@@ -91,17 +92,16 @@ install_initrd() {
 #Install kernel asset
 install_kernel() {
 	export kernel_version="$(yq r $versions_yaml assets.kernel.version)"
-	DESTDIR="${destdir}" PREFIX="${prefix}" "${kernel_builder}" "${kernel_version}"
+	DESTDIR="${destdir}" PREFIX="${prefix}" "${kernel_builder}" -f -v "${kernel_version}"
 }
+
 
 #Install experimental kernel asset
 install_experimental_kernel() {
 	info "build experimental kernel"
-	export kernel_version="$(yq r $versions_yaml assets.kernel-experimental.version)"
-	"${kernel_builder}" -e setup
-	"${kernel_builder}" -e build
-	info "install experimental kernel"
-	DESTDIR="${destdir}" PREFIX="${prefix}" "${kernel_builder}" -e install
+	export kernel_version="$(yq r $versions_yaml assets.kernel-experimental.tag)"
+	info "Kernel version ${kernel_version}"
+	DESTDIR="${destdir}" PREFIX="${prefix}" "${kernel_builder}" -f -b experimental -v ${kernel_version}
 }
 
 # Install static qemu asset
@@ -158,7 +158,6 @@ handle_build() {
 	case "${build_target}" in
 	all)
 		install_clh
-		install_experimental_kernel
 		install_firecracker
 		install_image
 		install_initrd
@@ -172,6 +171,8 @@ handle_build() {
 	firecracker) install_firecracker ;;
 
 	kernel) install_kernel ;;
+
+	kernel-experimental) install_experimental_kernel;;
 
 	qemu) install_qemu ;;
 
@@ -201,6 +202,7 @@ main() {
 		cloud-hypervisor
 		firecracker
 		kernel
+		kernel-experimental
 		qemu
 		rootfs-image
 		rootfs-initrd

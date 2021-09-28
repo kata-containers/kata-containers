@@ -153,14 +153,12 @@ assets:
   kernel:
     description: "Linux kernel optimised for virtual machines"
     url: "https://cdn.kernel.org/pub/linux/kernel/v5.x/"
-    uscan-url: >-
-      https://mirrors.edge.kernel.org/pub/linux/kernel/v5.x/linux-(5\.4\..+)\.tar\.gz
     version: "v5.10.25"
 
   kernel-experimental:
     description: "Linux kernel with virtio-fs support"
     url: "https://cdn.kernel.org/pub/linux/kernel/v5.x/"
-    tag: "v5.10.25"
+    tag: "v5.13.10"
 
 externals:
   description: "Third-party projects used by the system"
