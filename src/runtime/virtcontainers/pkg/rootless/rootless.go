@@ -23,12 +23,13 @@ import (
 	"context"
 	"crypto/rand"
 	"fmt"
-	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"sync"
+
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
 
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/opencontainers/runc/libcontainer/userns"
