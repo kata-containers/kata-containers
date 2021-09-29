@@ -111,10 +111,13 @@ pub async fn wait_for_uevent(
     sandbox: &Arc<Mutex<Sandbox>>,
     matcher: impl UeventMatcher,
 ) -> Result<Uevent> {
+    let logprefix = format!("Waiting for {:?}", &matcher);
+
+    info!(sl!(), "{}", logprefix);
     let mut sb = sandbox.lock().await;
     for uev in sb.uevent_map.values() {
         if matcher.is_match(uev) {
-            info!(sl!(), "Device {:?} found in device map", uev);
+            info!(sl!(), "{}: found {:?} in uevent map", logprefix, &uev);
             return Ok(uev.clone());
         }
     }
@@ -129,7 +132,8 @@ pub async fn wait_for_uevent(
     sb.uevent_watchers.push(Some((Box::new(matcher), tx)));
     drop(sb); // unlock
 
-    info!(sl!(), "Waiting on channel for uevent notification\n");
+    info!(sl!(), "{}: waiting on channel", logprefix);
+
     let hotplug_timeout = AGENT_CONFIG.read().await.hotplug_timeout;
 
     let uev = match tokio::time::timeout(hotplug_timeout, rx).await {
@@ -146,6 +150,7 @@ pub async fn wait_for_uevent(
         }
     };
 
+    info!(sl!(), "{}: found {:?} on channel", logprefix, &uev);
     Ok(uev)
 }
 
