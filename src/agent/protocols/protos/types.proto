@@ -46,6 +46,7 @@ message Route {
 	string device = 3;
 	string source = 4;
 	uint32 scope = 5;
+	IPFamily family = 6;
 }
 
 message ARPNeighbor {
