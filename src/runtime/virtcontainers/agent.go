@@ -139,6 +139,9 @@ type agent interface {
 	// resumeContainer will resume a paused container
 	resumeContainer(ctx context.Context, sandbox *Sandbox, c Container) error
 
+	// pullImage will resume a paused container
+	pullImage(ctx context.Context, sandbox *Sandbox, c Container, image string) error
+
 	// configure will update agent settings based on provided arguments
 	configure(ctx context.Context, h hypervisor, id, sharePath string, config KataAgentConfig) error
 

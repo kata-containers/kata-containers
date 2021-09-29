@@ -485,6 +485,45 @@ func (m *ResumeContainerRequest) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_ResumeContainerRequest proto.InternalMessageInfo
 
+type PullImageRequest struct {
+	ContainerId          string   `protobuf:"bytes,1,opt,name=container_id,json=containerId,proto3" json:"container_id,omitempty"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *PullImageRequest) Reset()      { *m = PullImageRequest{} }
+func (*PullImageRequest) ProtoMessage() {}
+func (*PullImageRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_c1460208c38ccf5e, []int{10}
+}
+func (m *PullImageRequest) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *PullImageRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_PullImageRequest.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *PullImageRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_PullImageRequest.Merge(m, src)
+}
+func (m *PullImageRequest) XXX_Size() int {
+	return m.Size()
+}
+func (m *PullImageRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_PullImageRequest.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_PullImageRequest proto.InternalMessageInfo
+
 type CpuUsage struct {
 	TotalUsage           uint64   `protobuf:"varint,1,opt,name=total_usage,json=totalUsage,proto3" json:"total_usage,omitempty"`
 	PercpuUsage          []uint64 `protobuf:"varint,2,rep,packed,name=percpu_usage,json=percpuUsage,proto3" json:"percpu_usage,omitempty"`
@@ -2503,6 +2542,7 @@ func init() {
 	proto.RegisterType((*StatsContainerRequest)(nil), "grpc.StatsContainerRequest")
 	proto.RegisterType((*PauseContainerRequest)(nil), "grpc.PauseContainerRequest")
 	proto.RegisterType((*ResumeContainerRequest)(nil), "grpc.ResumeContainerRequest")
+	proto.RegisterType((*PullImageRequest)(nil), "grpc.PullImageRequest")
 	proto.RegisterType((*CpuUsage)(nil), "grpc.CpuUsage")
 	proto.RegisterType((*ThrottlingData)(nil), "grpc.ThrottlingData")
 	proto.RegisterType((*CpuStats)(nil), "grpc.CpuStats")
@@ -3241,6 +3281,40 @@ func (m *ResumeContainerRequest) MarshalTo(dAtA []byte) (int, error) {
 }
 
 func (m *ResumeContainerRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.XXX_unrecognized != nil {
+		i -= len(m.XXX_unrecognized)
+		copy(dAtA[i:], m.XXX_unrecognized)
+	}
+	if len(m.ContainerId) > 0 {
+		i -= len(m.ContainerId)
+		copy(dAtA[i:], m.ContainerId)
+		i = encodeVarintAgent(dAtA, i, uint64(len(m.ContainerId)))
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *PullImageRequest) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *PullImageRequest) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *PullImageRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	i := len(dAtA)
 	_ = i
 	var l int
@@ -5823,6 +5897,22 @@ func (m *ResumeContainerRequest) Size() (n int) {
 	return n
 }
 
+func (m *PullImageRequest) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.ContainerId)
+	if l > 0 {
+		n += 1 + l + sovAgent(uint64(l))
+	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
 func (m *CpuUsage) Size() (n int) {
 	if m == nil {
 		return 0
@@ -7046,6 +7136,17 @@ func (this *ResumeContainerRequest) String() string {
 	}, "")
 	return s
 }
+func (this *PullImageRequest) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&PullImageRequest{`,
+		`ContainerId:` + fmt.Sprintf("%v", this.ContainerId) + `,`,
+		`XXX_unrecognized:` + fmt.Sprintf("%v", this.XXX_unrecognized) + `,`,
+		`}`,
+	}, "")
+	return s
+}
 func (this *CpuUsage) String() string {
 	if this == nil {
 		return "nil"
@@ -7749,6 +7850,7 @@ type AgentServiceService interface {
 	StatsContainer(ctx context.Context, req *StatsContainerRequest) (*StatsContainerResponse, error)
 	PauseContainer(ctx context.Context, req *PauseContainerRequest) (*types.Empty, error)
 	ResumeContainer(ctx context.Context, req *ResumeContainerRequest) (*types.Empty, error)
+	PullImage(ctx context.Context, req *PullImageRequest) (*types.Empty, error)
 	WriteStdin(ctx context.Context, req *WriteStreamRequest) (*WriteStreamResponse, error)
 	ReadStdout(ctx context.Context, req *ReadStreamRequest) (*ReadStreamResponse, error)
 	ReadStderr(ctx context.Context, req *ReadStreamRequest) (*ReadStreamResponse, error)
@@ -7845,6 +7947,13 @@ func RegisterAgentServiceService(srv *github_com_containerd_ttrpc.Server, svc Ag
 				return nil, err
 			}
 			return svc.ResumeContainer(ctx, &req)
+		},
+		"PullImage": func(ctx context.Context, unmarshal func(interface{}) error) (interface{}, error) {
+			var req PullImageRequest
+			if err := unmarshal(&req); err != nil {
+				return nil, err
+			}
+			return svc.PullImage(ctx, &req)
 		},
 		"WriteStdin": func(ctx context.Context, unmarshal func(interface{}) error) (interface{}, error) {
 			var req WriteStreamRequest
@@ -8095,6 +8204,14 @@ func (c *agentServiceClient) PauseContainer(ctx context.Context, req *PauseConta
 func (c *agentServiceClient) ResumeContainer(ctx context.Context, req *ResumeContainerRequest) (*types.Empty, error) {
 	var resp types.Empty
 	if err := c.client.Call(ctx, "grpc.AgentService", "ResumeContainer", req, &resp); err != nil {
+		return nil, err
+	}
+	return &resp, nil
+}
+
+func (c *agentServiceClient) PullImage(ctx context.Context, req *PullImageRequest) (*types.Empty, error) {
+	var resp types.Empty
+	if err := c.client.Call(ctx, "grpc.AgentService", "PullImage", req, &resp); err != nil {
 		return nil, err
 	}
 	return &resp, nil
@@ -9602,6 +9719,92 @@ func (m *ResumeContainerRequest) Unmarshal(dAtA []byte) error {
 				return err
 			}
 			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return ErrInvalidLengthAgent
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *PullImageRequest) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowAgent
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: PullImageRequest: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: PullImageRequest: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ContainerId", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowAgent
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthAgent
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthAgent
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.ContainerId = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipAgent(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthAgent
+			}
+			if (iNdEx + skippy) < 0 {
 				return ErrInvalidLengthAgent
 			}
 			if (iNdEx + skippy) > l {

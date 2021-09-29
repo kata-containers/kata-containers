@@ -39,6 +39,7 @@ service Task {
 	rpc Pids(PidsRequest) returns (PidsResponse);
 	rpc Pause(PauseRequest) returns (google.protobuf.Empty);
 	rpc Resume(ResumeRequest) returns (google.protobuf.Empty);
+	rpc PullImage(PullImageRequest) returns (google.protobuf.Empty);
 	rpc Checkpoint(CheckpointTaskRequest) returns (google.protobuf.Empty);
 	rpc Kill(KillRequest) returns (google.protobuf.Empty);
 	rpc Exec(ExecProcessRequest) returns (google.protobuf.Empty);
@@ -199,4 +200,9 @@ message PauseRequest {
 
 message ResumeRequest {
 	string id = 1;
+}
+
+message PullImageRequest {
+	string id = 1;
+	string image = 2;
 }
