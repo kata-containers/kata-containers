@@ -28,9 +28,6 @@ var maxUInt uint64 = 1<<32 - 1
 
 func Ioctl(fd uintptr, request, data uintptr) error {
 	if _, _, errno := unix.Syscall(unix.SYS_IOCTL, fd, request, data); errno != 0 {
-		//uintptr(request)
-		//uintptr(unsafe.Pointer(&arg1)),
-		//); errno != 0 {
 		return os.NewSyscallError("ioctl", fmt.Errorf("%d", int(errno)))
 	}
 
@@ -77,7 +74,6 @@ func FindContextID() (*os.File, uint64, error) {
 		}
 	}
 
-	ioctlVhostVsockSetGuestCid := getIoctlVhostVsockGuestCid()
 	// Last chance to get a free context ID.
 	for cid := contextID - 1; cid >= firstContextID; cid-- {
 		if err = ioctlFunc(vsockFd.Fd(), ioctlVhostVsockSetGuestCid, uintptr(unsafe.Pointer(&cid))); err == nil {
