@@ -8,7 +8,7 @@ coverage.html
 /config/*.toml
 config-generated.go
 /containerd-shim-kata-v2
-/cmd/containerd-shim-v2/monitor_address
+/pkg/containerd-shim-v2/monitor_address
 /data/kata-collect-data.sh
 /kata-monitor
 /kata-netmon
