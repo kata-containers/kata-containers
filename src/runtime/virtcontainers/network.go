@@ -1048,6 +1048,7 @@ func generateVCNetworkStructures(ctx context.Context, networkNS NetworkNamespace
 
 			r.Device = endpoint.Name()
 			r.Scope = uint32(route.Scope)
+			r.Family = utils.ConvertNetlinkFamily((int32)(route.Family))
 			routes = append(routes, &r)
 		}
 
