@@ -1440,6 +1440,69 @@ func (q *qemu) hotplugVhostUserDevice(ctx context.Context, vAttr *config.VhostUs
 	}
 }
 
+// Query QMP to find the PCI slot of a device, given its QOM path or ID
+func (q *qemu) qomGetSlot(qomPath string) (vcTypes.PciSlot, error) {
+	addr, err := q.qmpMonitorCh.qmp.ExecQomGet(q.qmpMonitorCh.ctx, qomPath, "addr")
+	if err != nil {
+		return vcTypes.PciSlot{}, err
+	}
+	addrf, ok := addr.(float64)
+	// XXX going via float makes no real sense, but that's how
+	// JSON works, and we'll get away with it for the small values
+	// we have here
+	if !ok {
+		return vcTypes.PciSlot{}, fmt.Errorf("addr QOM property of %q is %T not a number", qomPath, addr)
+	}
+	addri := int(addrf)
+
+	slotNum, funcNum := addri>>3, addri&0x7
+	if funcNum != 0 {
+		return vcTypes.PciSlot{}, fmt.Errorf("Unexpected non-zero PCI function (%02x.%1x) on %q",
+			slotNum, funcNum, qomPath)
+	}
+
+	return vcTypes.PciSlotFromInt(slotNum)
+}
+
+// Query QMP to find a device's PCI path given its QOM path or ID
+func (q *qemu) qomGetPciPath(qemuID string) (vcTypes.PciPath, error) {
+	// XXX: For now we assume there's exactly one bridge, since
+	// that's always how we configure qemu from Kata for now.  It
+	// would be good to generalize this to different PCI
+	// topologies
+	devSlot, err := q.qomGetSlot(qemuID)
+	if err != nil {
+		return vcTypes.PciPath{}, err
+	}
+
+	busq, err := q.qmpMonitorCh.qmp.ExecQomGet(q.qmpMonitorCh.ctx, qemuID, "parent_bus")
+	if err != nil {
+		return vcTypes.PciPath{}, err
+	}
+
+	bus, ok := busq.(string)
+	if !ok {
+		return vcTypes.PciPath{}, fmt.Errorf("parent_bus QOM property of %s is %t not a string", qemuID, busq)
+	}
+
+	// `bus` is the QOM path of the QOM bus object, but we need
+	// the PCI bridge which manages that bus.  There doesn't seem
+	// to be a way to get that other than to simply drop the last
+	// path component.
+	idx := strings.LastIndex(bus, "/")
+	if idx == -1 {
+		return vcTypes.PciPath{}, fmt.Errorf("Bus has unexpected QOM path %s", bus)
+	}
+	bridge := bus[:idx]
+
+	bridgeSlot, err := q.qomGetSlot(bridge)
+	if err != nil {
+		return vcTypes.PciPath{}, err
+	}
+
+	return vcTypes.PciPathFromSlots(bridgeSlot, devSlot)
+}
+
 func (q *qemu) hotplugVFIODevice(ctx context.Context, device *config.VFIODev, op operation) (err error) {
 	if err = q.qmpSetup(); err != nil {
 		return err
@@ -1476,39 +1539,52 @@ func (q *qemu) hotplugVFIODevice(ctx context.Context, device *config.VFIODev, op
 
 			switch device.Type {
 			case config.VFIODeviceNormalType:
-				return q.qmpMonitorCh.qmp.ExecuteVFIODeviceAdd(q.qmpMonitorCh.ctx, devID, device.BDF, device.Bus, romFile)
+				err = q.qmpMonitorCh.qmp.ExecuteVFIODeviceAdd(q.qmpMonitorCh.ctx, devID, device.BDF, device.Bus, romFile)
 			case config.VFIODeviceMediatedType:
 				if utils.IsAPVFIOMediatedDevice(device.SysfsDev) {
-					return q.qmpMonitorCh.qmp.ExecuteAPVFIOMediatedDeviceAdd(q.qmpMonitorCh.ctx, device.SysfsDev)
+					err = q.qmpMonitorCh.qmp.ExecuteAPVFIOMediatedDeviceAdd(q.qmpMonitorCh.ctx, device.SysfsDev)
+				} else {
+					err = q.qmpMonitorCh.qmp.ExecutePCIVFIOMediatedDeviceAdd(q.qmpMonitorCh.ctx, devID, device.SysfsDev, "", device.Bus, romFile)
 				}
-				return q.qmpMonitorCh.qmp.ExecutePCIVFIOMediatedDeviceAdd(q.qmpMonitorCh.ctx, devID, device.SysfsDev, "", device.Bus, romFile)
+			default:
+				return fmt.Errorf("Incorrect VFIO device type found")
+			}
+		} else {
+			addr, bridge, err := q.arch.addDeviceToBridge(ctx, devID, types.PCI)
+			if err != nil {
+				return err
+			}
+
+			defer func() {
+				if err != nil {
+					q.arch.removeDeviceFromBridge(devID)
+				}
+			}()
+
+			switch device.Type {
+			case config.VFIODeviceNormalType:
+				err = q.qmpMonitorCh.qmp.ExecutePCIVFIODeviceAdd(q.qmpMonitorCh.ctx, devID, device.BDF, addr, bridge.ID, romFile)
+			case config.VFIODeviceMediatedType:
+				if utils.IsAPVFIOMediatedDevice(device.SysfsDev) {
+					err = q.qmpMonitorCh.qmp.ExecuteAPVFIOMediatedDeviceAdd(q.qmpMonitorCh.ctx, device.SysfsDev)
+				} else {
+					err = q.qmpMonitorCh.qmp.ExecutePCIVFIOMediatedDeviceAdd(q.qmpMonitorCh.ctx, devID, device.SysfsDev, addr, bridge.ID, romFile)
+				}
 			default:
 				return fmt.Errorf("Incorrect VFIO device type found")
 			}
 		}
-
-		addr, bridge, err := q.arch.addDeviceToBridge(ctx, devID, types.PCI)
 		if err != nil {
 			return err
 		}
-
-		defer func() {
-			if err != nil {
-				q.arch.removeDeviceFromBridge(devID)
-			}
-		}()
-
-		switch device.Type {
-		case config.VFIODeviceNormalType:
-			return q.qmpMonitorCh.qmp.ExecutePCIVFIODeviceAdd(q.qmpMonitorCh.ctx, devID, device.BDF, addr, bridge.ID, romFile)
-		case config.VFIODeviceMediatedType:
-			if utils.IsAPVFIOMediatedDevice(device.SysfsDev) {
-				return q.qmpMonitorCh.qmp.ExecuteAPVFIOMediatedDeviceAdd(q.qmpMonitorCh.ctx, device.SysfsDev)
-			}
-			return q.qmpMonitorCh.qmp.ExecutePCIVFIOMediatedDeviceAdd(q.qmpMonitorCh.ctx, devID, device.SysfsDev, addr, bridge.ID, romFile)
-		default:
-			return fmt.Errorf("Incorrect VFIO device type found")
-		}
+		// XXX: Depending on whether we're doing root port or
+		// bridge hotplug, and how the bridge is set up in
+		// other parts of the code, we may or may not already
+		// have information about the slot number of the
+		// bridge and or the device.  For simplicity, just
+		// query both of them back from qemu
+		device.GuestPciPath, err = q.qomGetPciPath(devID)
+		return err
 	} else {
 		q.Logger().WithField("dev-id", devID).Info("Start hot-unplug VFIO device")
 

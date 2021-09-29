@@ -503,7 +503,7 @@ func (clh *cloudHypervisor) hotplugAddBlockDevice(drive *config.BlockDrive) erro
 	return err
 }
 
-func (clh *cloudHypervisor) hotPlugVFIODevice(device config.VFIODev) error {
+func (clh *cloudHypervisor) hotPlugVFIODevice(device *config.VFIODev) error {
 	cl := clh.client()
 	ctx, cancel := context.WithTimeout(context.Background(), clhHotPlugAPITimeout*time.Second)
 	defer cancel()
@@ -512,10 +512,28 @@ func (clh *cloudHypervisor) hotPlugVFIODevice(device config.VFIODev) error {
 	clhDevice := *chclient.NewVmAddDevice()
 	clhDevice.Path = &device.SysfsDev
 	clhDevice.Id = &device.ID
-	_, _, err := cl.VmAddDevicePut(ctx, clhDevice)
+	pciInfo, _, err := cl.VmAddDevicePut(ctx, clhDevice)
 	if err != nil {
-		err = fmt.Errorf("Failed to hotplug device %+v %s", device, openAPIClientError(err))
+		return fmt.Errorf("Failed to hotplug device %+v %s", device, openAPIClientError(err))
 	}
+
+	// clh doesn't use bridges, so the PCI path is simply the slot
+	// number of the device.  This will break if clh starts using
+	// bridges (including PCI-E root ports), but so will the clh
+	// API, since there's no way it can reliably predict a guest
+	// Bdf when bridges are present.
+	tokens := strings.Split(pciInfo.Bdf, ":")
+	if len(tokens) != 3 || tokens[0] != "0000" || tokens[1] != "00" {
+		return fmt.Errorf("Unexpected PCI address %q from clh hotplug", pciInfo.Bdf)
+	}
+
+	tokens = strings.Split(tokens[2], ".")
+	if len(tokens) != 2 || tokens[1] != "0" || len(tokens[0]) != 2 {
+		return fmt.Errorf("Unexpected PCI address %q from clh hotplug", pciInfo.Bdf)
+	}
+
+	device.GuestPciPath, err = vcTypes.PciPathFromString(tokens[0])
+
 	return err
 }
 
@@ -529,7 +547,7 @@ func (clh *cloudHypervisor) hotplugAddDevice(ctx context.Context, devInfo interf
 		return nil, clh.hotplugAddBlockDevice(drive)
 	case vfioDev:
 		device := devInfo.(*config.VFIODev)
-		return nil, clh.hotPlugVFIODevice(*device)
+		return nil, clh.hotPlugVFIODevice(device)
 	default:
 		return nil, fmt.Errorf("cannot hotplug device: unsupported device type '%v'", devType)
 	}
