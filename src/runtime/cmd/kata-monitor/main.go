@@ -7,6 +7,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"net/http"
 	"os"
 	goruntime "runtime"
@@ -54,6 +55,15 @@ func printVersion(ver versionInfo) {
 	}
 }
 
+type endpoint struct {
+	handler http.HandlerFunc
+	path    string
+	desc    string
+}
+
+// global variable endpoints contains all available endpoints
+var endpoints []endpoint
+
 func main() {
 	ver := versionInfo{
 		AppName:   appName,
@@ -97,19 +107,62 @@ func main() {
 		panic(err)
 	}
 
-	// setup handlers, now only metrics is supported
+	// setup handlers, currently only metrics are supported
 	m := http.NewServeMux()
-	m.Handle("/metrics", http.HandlerFunc(km.ProcessMetricsRequest))
-	m.Handle("/sandboxes", http.HandlerFunc(km.ListSandboxes))
-	m.Handle("/agent-url", http.HandlerFunc(km.GetAgentURL))
+	endpoints = []endpoint{
+		{
+			path:    "/metrics",
+			desc:    "Get metrics from sandboxes.",
+			handler: km.ProcessMetricsRequest,
+		},
+		{
+			path:    "/sandboxes",
+			desc:    "List all Kata Containers sandboxes.",
+			handler: km.ListSandboxes,
+		},
+		{
+			path:    "/agent-url",
+			desc:    "Get sandbox agent URL.",
+			handler: km.GetAgentURL,
+		},
+		{
+			path:    "/debug/vars",
+			desc:    "Golang pprof `/debug/vars` endpoint for kata runtime shim process.",
+			handler: km.ExpvarHandler,
+		},
+		{
+			path:    "/debug/pprof/",
+			desc:    "Golang pprof `/debug/pprof/` endpoint for kata runtime shim process.",
+			handler: km.PprofIndex,
+		},
+		{
+			path:    "/debug/pprof/cmdline",
+			desc:    "Golang pprof `/debug/pprof/cmdline` endpoint for kata runtime shim process.",
+			handler: km.PprofCmdline,
+		},
+		{
+			path:    "/debug/pprof/profile",
+			desc:    "Golang pprof `/debug/pprof/profile` endpoint for kata runtime shim process.",
+			handler: km.PprofProfile,
+		},
+		{
+			path:    "/debug/pprof/symbol",
+			desc:    "Golang pprof `/debug/pprof/symbol` endpoint for kata runtime shim process.",
+			handler: km.PprofSymbol,
+		},
+		{
+			path:    "/debug/pprof/trace",
+			desc:    "Golang pprof `/debug/pprof/trace` endpoint for kata runtime shim process.",
+			handler: km.PprofTrace,
+		},
+	}
 
-	// for debug shim process
-	m.Handle("/debug/vars", http.HandlerFunc(km.ExpvarHandler))
-	m.Handle("/debug/pprof/", http.HandlerFunc(km.PprofIndex))
-	m.Handle("/debug/pprof/cmdline", http.HandlerFunc(km.PprofCmdline))
-	m.Handle("/debug/pprof/profile", http.HandlerFunc(km.PprofProfile))
-	m.Handle("/debug/pprof/symbol", http.HandlerFunc(km.PprofSymbol))
-	m.Handle("/debug/pprof/trace", http.HandlerFunc(km.PprofTrace))
+	for _, endpoint := range endpoints {
+		m.Handle(endpoint.path, endpoint.handler)
+	}
+
+	// root index page to show all endpoints in kata-monitor
+	m.Handle("/", http.HandlerFunc(indexPage))
 
 	// listening on the server
 	svr := &http.Server{
@@ -117,6 +170,23 @@ func main() {
 		Addr:    *monitorListenAddr,
 	}
 	logrus.Fatal(svr.ListenAndServe())
+}
+
+func indexPage(w http.ResponseWriter, r *http.Request) {
+	w.Write([]byte("Available HTTP endpoints:\n"))
+
+	spacing := 0
+	for _, endpoint := range endpoints {
+		if len(endpoint.path) > spacing {
+			spacing = len(endpoint.path)
+		}
+	}
+	spacing = spacing + 3
+
+	formattedString := fmt.Sprintf("%%-%ds: %%s\n", spacing)
+	for _, endpoint := range endpoints {
+		w.Write([]byte(fmt.Sprintf(formattedString, endpoint.path, endpoint.desc)))
+	}
 }
 
 // initLog setup logger
