@@ -936,7 +936,15 @@ func (clh *cloudHypervisor) launchClh() (int, error) {
 		// and in a nested environment this could increase
 		// the chances to fail because agent is not
 		// ready on time.
-		args = append(args, "-vv")
+		//
+		// Note that for debugging CLH boot failures, the Info level
+		// should be sufficient: Debug level generates so many
+		// messages it floods the output stream to the extent that it
+		// is almost impossible to view the guest kernel and userland
+		// output. For further details, see the discussion on:
+		//
+		//   https://github.com/kata-containers/kata-containers/pull/2751
+		args = append(args, "-v")
 	}
 
 	// Disable the 'seccomp' option in clh for now.
