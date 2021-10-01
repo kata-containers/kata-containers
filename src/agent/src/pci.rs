@@ -94,6 +94,53 @@ impl fmt::Display for SlotFn {
     }
 }
 
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub struct Address {
+    domain: u16,
+    bus: u8,
+    slotfn: SlotFn,
+}
+
+impl Address {
+    pub fn new(domain: u16, bus: u8, slotfn: SlotFn) -> Self {
+        Address {
+            domain,
+            bus,
+            slotfn,
+        }
+    }
+}
+
+impl FromStr for Address {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> anyhow::Result<Self> {
+        let mut tokens = s.split(':').fuse();
+        let domain = tokens.next();
+        let bus = tokens.next();
+        let slotfn = tokens.next();
+
+        if domain.is_none() || bus.is_none() || slotfn.is_none() || tokens.next().is_some() {
+            return Err(anyhow!(
+                "PCI address {} should have the format DDDD:BB:SS.F",
+                s
+            ));
+        }
+
+        let domain = u16::from_str_radix(domain.unwrap(), 16)?;
+        let bus = u8::from_str_radix(bus.unwrap(), 16)?;
+        let slotfn = SlotFn::from_str(slotfn.unwrap())?;
+
+        Ok(Address::new(domain, bus, slotfn))
+    }
+}
+
+impl fmt::Display for Address {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        write!(f, "{:04x}:{:02x}:{}", self.domain, self.bus, self.slotfn)
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Path(Vec<SlotFn>);
 
@@ -200,6 +247,45 @@ mod tests {
 
         let sf = SlotFn::from_str("00/");
         assert!(sf.is_err());
+    }
+
+    #[test]
+    fn test_address() {
+        // Valid addresses
+        let sf0_0 = SlotFn::new(0, 0).unwrap();
+        let sf1f_7 = SlotFn::new(0x1f, 7).unwrap();
+
+        let addr = Address::new(0, 0, sf0_0);
+        assert_eq!(format!("{}", addr), "0000:00:00.0");
+        let addr2 = Address::from_str("0000:00:00.0").unwrap();
+        assert_eq!(addr, addr2);
+
+        let addr = Address::new(0xffff, 0xff, sf1f_7);
+        assert_eq!(format!("{}", addr), "ffff:ff:1f.7");
+        let addr2 = Address::from_str("ffff:ff:1f.7").unwrap();
+        assert_eq!(addr, addr2);
+
+        // Bad addresses
+        let addr = Address::from_str("10000:00:00.0");
+        assert!(addr.is_err());
+
+        let addr = Address::from_str("0000:100:00.0");
+        assert!(addr.is_err());
+
+        let addr = Address::from_str("0000:00:20.0");
+        assert!(addr.is_err());
+
+        let addr = Address::from_str("0000:00:00.8");
+        assert!(addr.is_err());
+
+        let addr = Address::from_str("xyz");
+        assert!(addr.is_err());
+
+        let addr = Address::from_str("xyxy:xy:xy.z");
+        assert!(addr.is_err());
+
+        let addr = Address::from_str("0000:00:00.0:00");
+        assert!(addr.is_err());
     }
 
     #[test]
