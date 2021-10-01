@@ -31,6 +31,7 @@ func TestQemuPPC64leCPUModel(t *testing.T) {
 	assert.Equal(expectedOut, model)
 }
 
+//Testing guest protection
 func TestQemuPPC64leMemoryTopology(t *testing.T) {
 	assert := assert.New(t)
 	ppc64le := newTestQemu(assert, QemuPseries)
