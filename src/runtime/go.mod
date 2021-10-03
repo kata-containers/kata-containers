@@ -15,6 +15,7 @@ require (
 	github.com/containerd/typeurl v1.0.2
 	github.com/containernetworking/plugins v0.9.1
 	github.com/cri-o/cri-o v1.0.0-rc2.0.20170928185954-3394b3b2d6af
+	github.com/fsnotify/fsnotify v1.4.9
 	github.com/go-ini/ini v1.28.2
 	github.com/go-openapi/errors v0.18.0
 	github.com/go-openapi/runtime v0.18.0
@@ -41,7 +42,6 @@ require (
 	github.com/urfave/cli v1.22.2
 	github.com/vishvananda/netlink v1.1.1-0.20201029203352-d40f9887b852
 	github.com/vishvananda/netns v0.0.0-20200728191858-db3c7e526aae
-	github.com/xeipuuv/gojsonpointer v0.0.0-20190905194746-02993c407bfb
 	go.opentelemetry.io/otel v0.15.0
 	go.opentelemetry.io/otel/exporters/trace/jaeger v0.15.0
 	go.opentelemetry.io/otel/sdk v0.15.0
