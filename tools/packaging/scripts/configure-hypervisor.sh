@@ -434,12 +434,10 @@ generate_qemu_options() {
 		qemu_options+=(arch:"--target-list=${arch}-softmmu")
 	fi
 
-	# aarch64 need to explictly set --enable-pie
-	if [ -z "${static}" ] && [ "${arch}" = "aarch64" ]; then
-		qemu_options+=(arch:"--enable-pie")
-		# pie is conflict with plugins build for qemu 6.1.0
-		[ "${qemu_version}" == "6.1.0" ] && qemu_options+=(arch:"--disable-plugins")
-	fi
+	# SECURITY: Create binary as a Position Independant Executable,
+	# and take advantage of ASLR, making ROP attacks much harder to perform.
+	# (https://wiki.debian.org/Hardening)
+	[ -z "${static}" ] && qemu_options+=(arch:"--enable-pie")
 
 	_qemu_cflags=""
 
@@ -465,32 +463,12 @@ generate_qemu_options() {
 	# (such as argument and buffer overflows checks).
 	_qemu_cflags+=" -D_FORTIFY_SOURCE=2"
 
-	# SECURITY: Create binary as a Position Independant Executable,
-	# and take advantage of ASLR, making ROP attacks much harder to perform.
-	# (https://wiki.debian.org/Hardening)
-	case "$arch" in
-	aarch64) _qemu_cflags+=" -fPIE" ;;
-	x86_64) _qemu_cflags+=" -fPIE" ;;
-	ppc64le) _qemu_cflags+=" -fPIE" ;;
-	s390x) _qemu_cflags+=" -fPIE" ;;
-	esac
-
 	# Set compile options
 	qemu_options+=(functionality,security,speed,size:"--extra-cflags=\"${_qemu_cflags}\"")
 
 	unset _qemu_cflags
 
 	_qemu_ldflags=""
-
-	# SECURITY: Link binary as a Position Independant Executable,
-	# and take advantage of ASLR, making ROP attacks much harder to perform.
-	# (https://wiki.debian.org/Hardening)
-	case "$arch" in
-	aarch64) [ -z "${static}" ] && _qemu_ldflags+=" -pie" ;;
-	x86_64) [ -z "${static}" ] && _qemu_ldflags+=" -pie" ;;
-	ppc64le) [ -z "${static}" ] && _qemu_ldflags+=" -pie" ;;
-	s390x) [ -z "${static}" ] && _qemu_ldflags+=" -pie" ;;
-	esac
 
 	# SECURITY: Disallow executing code on the stack.
 	_qemu_ldflags+=" -z noexecstack"
