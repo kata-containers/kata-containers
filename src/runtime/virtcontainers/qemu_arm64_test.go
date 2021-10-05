@@ -105,14 +105,11 @@ func TestQemuArm64AppendImage(t *testing.T) {
 	imageStat, err := f.Stat()
 	assert.NoError(err)
 
-	// save default supportedQemuMachines options
-	machinesCopy := make([]govmmQemu.Machine, len(supportedQemuMachines))
-	assert.Equal(len(supportedQemuMachines), copy(machinesCopy, supportedQemuMachines))
-
 	cfg := qemuConfig(QemuVirt)
 	cfg.ImagePath = f.Name()
-	arm64 := newQemuArch(cfg)
-	assert.Contains(m.machine().Options, qemuNvdimmOption)
+	arm64, err := newQemuArch(cfg)
+	assert.NoError(err)
+	assert.Contains(arm64.machine().Options, qemuNvdimmOption)
 
 	expectedOut := []govmmQemu.Device{
 		govmmQemu.Object{
@@ -128,9 +125,6 @@ func TestQemuArm64AppendImage(t *testing.T) {
 	devices, err = arm64.appendImage(context.Background(), devices, f.Name())
 	assert.NoError(err)
 	assert.Equal(expectedOut, devices)
-
-	//restore default supportedQemuMachines options
-	assert.Equal(len(supportedQemuMachines), copy(supportedQemuMachines, machinesCopy))
 }
 
 func TestQemuArm64AppendNvdimmImage(t *testing.T) {
@@ -171,7 +165,8 @@ func TestQemuArm64WithInitrd(t *testing.T) {
 
 	cfg := qemuConfig(QemuVirt)
 	cfg.InitrdPath = "dummy-initrd"
-	arm64 := newQemuArch(cfg)
+	arm64, err := newQemuArch(cfg)
+	assert.NoError(err)
 
-	assert.NotContains(m.machine().Options, qemuNvdimmOption)
+	assert.NotContains(arm64.machine().Options, qemuNvdimmOption)
 }
