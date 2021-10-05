@@ -26,3 +26,10 @@ func TestRunningOnVMM(t *testing.T) {
 	assert.NoError(err)
 	assert.Equal(expectedOutput, running)
 }
+
+func TestAvailableGuestProtection(t *testing.T) {
+	assert := assert.New(t)
+
+	out, _ := availableGuestProtection()
+	assert.Equal(out, noneProtection)
+}
