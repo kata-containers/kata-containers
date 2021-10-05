@@ -183,11 +183,12 @@ type qemuArchBase struct {
 	Bridges              []types.Bridge
 	memoryOffset         uint64
 	networkIndex         int
-	protection           guestProtection
-	nestedRun            bool
-	vhost                bool
-	disableNvdimm        bool
-	dax                  bool
+	// Exclude from lint checking for it is ultimately only used in architecture-specific code
+	protection    guestProtection //nolint:structcheck
+	nestedRun     bool
+	vhost         bool
+	disableNvdimm bool
+	dax           bool
 }
 
 const (
