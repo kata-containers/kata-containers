@@ -39,7 +39,8 @@ func testSetCPUTypeGeneric(t *testing.T) {
 	_, config, err := makeRuntimeConfig(tmpdir)
 	assert.NoError(err)
 
-	setCPUtype(config.HypervisorType)
+	err = setCPUtype(config.HypervisorType)
+	assert.NoError(err)
 
 	assert.Equal(archRequiredCPUFlags, savedArchRequiredCPUFlags)
 	assert.Equal(archRequiredCPUAttribs, savedArchRequiredCPUAttribs)
