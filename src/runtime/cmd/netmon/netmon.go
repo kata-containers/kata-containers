@@ -170,7 +170,7 @@ func newNetmon(params netmonParams) (*netmon, error) {
 
 func (n *netmon) cleanup() {
 	os.RemoveAll(n.storagePath)
-	n.netHandler.Delete()
+	n.netHandler.Close()
 	close(n.linkDoneCh)
 	close(n.rtDoneCh)
 }
