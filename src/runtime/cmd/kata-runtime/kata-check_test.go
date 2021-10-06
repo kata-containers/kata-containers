@@ -918,3 +918,160 @@ func TestArchRequiredKernelModules(t *testing.T) {
 
 	assert.EqualValues(count, expectedCount)
 }
+
+func TestCheckCRIVersion(t *testing.T) {
+	assert := assert.New(t)
+
+	installedLsVersion := "8.30"
+	parseLsVerNormal := func(out string) (string, error) {
+		return installedLsVersion, nil
+	}
+
+	parseLsVerWithOutVersionLine := func(out string) (string, error) {
+		return "", fmt.Errorf("version line not found")
+	}
+
+	testCases := []struct {
+		criCmd           string
+		minVersion       string
+		verParseFunc     func(out string) (string, error)
+		err              bool
+		installedVersion string
+	}{
+		{
+			criCmd:           "not-found-cmd",
+			minVersion:       "1.0.0",
+			verParseFunc:     parseLsVerNormal,
+			err:              false,
+			installedVersion: "",
+		},
+		{
+			criCmd:           "ls",
+			minVersion:       "1.0.0",
+			verParseFunc:     parseLsVerNormal,
+			err:              false,
+			installedVersion: installedLsVersion,
+		},
+		{
+			criCmd:           "ls",
+			minVersion:       "10000.1.10",
+			verParseFunc:     parseLsVerNormal,
+			err:              true,
+			installedVersion: installedLsVersion,
+		},
+		{
+			criCmd:           "ls",
+			minVersion:       "10000.1.10",
+			verParseFunc:     parseLsVerWithOutVersionLine,
+			err:              true,
+			installedVersion: "",
+		},
+	}
+
+	for i := range testCases {
+		tc := testCases[i]
+		installedVersion, err := checkCRIVersion(tc.criCmd, tc.minVersion, tc.verParseFunc)
+		if tc.err {
+			assert.Error(err)
+		} else {
+			assert.NoError(err)
+		}
+
+		assert.Equal(tc.installedVersion, installedVersion)
+	}
+}
+
+func TestParseCRIOVersions(t *testing.T) {
+	assert := assert.New(t)
+
+	testCases := []struct {
+		out     string
+		err     bool
+		version string
+	}{
+		{
+			out:     "aaa",
+			err:     true,
+			version: "",
+		},
+		{
+			out: `crio version 1.22.0
+Version:          1.22.0
+GitCommit:        6b40049581e996884b71cf3e3d91df6a66348d07
+GitTreeState:     clean`,
+			err:     false,
+			version: "1.22.0",
+		},
+	}
+
+	for i := range testCases {
+		tc := testCases[i]
+		version, err := parseCRIOVersions(tc.out)
+		if tc.err {
+			assert.Error(err)
+		} else {
+			assert.NoError(err)
+		}
+
+		assert.Equal(tc.version, version)
+	}
+}
+
+func TestParseCRIVersions(t *testing.T) {
+	assert := assert.New(t)
+
+	testCases := []struct {
+		out     string
+		err     bool
+		target  func(out string) (string, error)
+		version string
+	}{
+		{
+			out:     "aaa",
+			target:  parseCRIOVersions,
+			err:     true,
+			version: "",
+		},
+		{
+			out: `crio version 1.22.0
+Version:          1.22.0
+GitCommit:        6b40049581e996884b71cf3e3d91df6a66348d07
+GitTreeState:     clean`,
+			target:  parseCRIOVersions,
+			err:     false,
+			version: "1.22.0",
+		},
+		{
+			out:     "bbb",
+			target:  parseContainerdVersions,
+			err:     true,
+			version: "",
+		},
+		{
+			out:     `github.com/containerd/containerd v1.4.0 8efb17cc99c777064a386a931f9736264e1ac9af`,
+			target:  parseContainerdVersions,
+			err:     true,
+			version: "",
+		},
+		{
+			out:     `containerd github.com/containerd/containerd v1.4.0 8efb17cc99c777064a386a931f9736264e1ac9af`,
+			target:  parseContainerdVersions,
+			err:     false,
+			version: "v1.4.0",
+		},
+	}
+
+	for i := range testCases {
+		tc := testCases[i]
+		version, err := tc.target(tc.out)
+		if tc.err {
+			assert.Error(err)
+		} else {
+			assert.NoError(err)
+		}
+
+		assert.Equal(tc.version, version)
+	}
+}
+
+//

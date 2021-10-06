@@ -97,3 +97,6 @@ const defaultVMCacheEndpoint string = "/var/run/kata-containers/cache.sock"
 var defaultRuntimeConfiguration = "@CONFIG_PATH@"
 
 var defaultNetmonPath = "/usr/libexec/kata-containers/kata-netmon"
+
+const MinimumContainerdVersion = "@MINIMUM_CONTAINERD_VERSION@"
+const MinimumCRIOVersion = "@MINIMUM_CRIO_VERSION@"

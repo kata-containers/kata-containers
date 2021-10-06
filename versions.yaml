@@ -178,6 +178,8 @@ externals:
       OCI-based Kubernetes Container Runtime Interface implementation
     url: "https://github.com/cri-o/cri-o"
     branch: "release-1.21"
+    meta:
+      minimum_version: "1.21"
 
   cri-containerd:
     description: |
@@ -188,6 +190,20 @@ externals:
     # instead of abstract socket, thus kata wouldn's support the containerd's
     # version older than them.
     version: "v1.5.2"
+    meta:
+      minimum_version: "1.5.2"
+
+  containerd:
+    description: |
+      Containerd for Kubernetes Container Runtime Interface.
+    url: "github.com/containerd/containerd"
+    tarball_url: "https://github.com/containerd/containerd/releases/download"
+    # containerd from v1.5.0 used the path unix socket
+    # instead of abstract socket, thus kata wouldn's support the containerd's
+    # version older than them.
+    version: "v1.5.2"
+    meta:
+      minimum_version: "1.5.2"
 
   critools:
     description: "CLI tool for Container Runtime Interface (CRI)"

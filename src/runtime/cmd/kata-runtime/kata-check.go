@@ -25,7 +25,10 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/hashicorp/go-version"
+	goversion "github.com/hashicorp/go-version"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils"
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/utils"
 	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/oci"
 	"github.com/sirupsen/logrus"
@@ -441,7 +444,7 @@ EXAMPLES:
 			fmt.Println(successMessageCreate)
 		}
 
-		return nil
+		return checkCRIVersions()
 	},
 }
 
@@ -537,4 +540,106 @@ func genericCheckKVMExtensions(extensions map[string]kvmExtension) (map[string]i
 	}
 
 	return results, nil
+}
+
+func checkVersion(cri, min, installed string) error {
+	minVersion, err := goversion.NewVersion(min)
+	if err != nil {
+		return err
+	}
+
+	installedVersion, err := version.NewVersion(installed)
+	if err != nil {
+		return err
+	}
+
+	if installedVersion.Compare(minVersion) < 0 {
+		return fmt.Errorf("required %s mismatch: requrie %s, but you have %s installed", cri, minVersion, installedVersion)
+	}
+	return nil
+}
+
+// checkCRIVersion get CRI runtime version and compare with the specified version
+func checkCRIVersion(criCmd, minVersion string, verParseFunc func(out string) (string, error)) (string, error) {
+	fieldLogger := kataLog.WithField("cri", criCmd)
+
+	path, err := exec.LookPath(criCmd)
+	if err != nil {
+		fieldLogger.WithError(err).Infof("failed to lookup path")
+		return "", nil
+	}
+
+	out, err := utils.RunCommand([]string{path, "--version"})
+	if err != nil {
+		fieldLogger.WithError(err).Infof("failed to get version")
+		return "", err
+	}
+
+	installedVersion, err := verParseFunc(out)
+	if err != nil {
+		fieldLogger.WithError(err).Infof("failed to get version")
+		return installedVersion, err
+	}
+
+	// return error when version has been parsed and comparation failed.
+	if err = checkVersion(criCmd, minVersion, installedVersion); err != nil {
+		fieldLogger.WithError(err).Infof("failed to check version")
+		return installedVersion, err
+	}
+	return installedVersion, nil
+}
+
+func parseCRIOVersions(out string) (string, error) {
+	lines := strings.Split(out, "\n")
+	for i := range lines {
+		parts := strings.Split(lines[i], ":")
+		if len(parts) == 2 && strings.TrimSpace(parts[0]) == "Version" {
+			return strings.TrimSpace(parts[1]), nil
+		}
+	}
+	return "", fmt.Errorf("version not found: %s", out)
+}
+
+func parseContainerdVersions(out string) (string, error) {
+	parts := strings.Split(out, " ")
+	if len(parts) == 4 {
+		return strings.TrimSpace(parts[2]), nil
+	}
+	return "", fmt.Errorf("version not found: %s", out)
+}
+
+func checkCRIVersions() error {
+	criRuntimes := []struct {
+		criCmd       string
+		minVersion   string
+		verParseFunc func(out string) (string, error)
+	}{
+		{
+			criCmd:       "crio",
+			minVersion:   katautils.MinimumCRIOVersion,
+			verParseFunc: parseCRIOVersions,
+		},
+		{
+			criCmd:       "containerd",
+			minVersion:   katautils.MinimumContainerdVersion,
+			verParseFunc: parseContainerdVersions,
+		},
+	}
+
+	for i := range criRuntimes {
+		cri := criRuntimes[i]
+		criCmd := cri.criCmd
+		installedVersion, err := checkCRIVersion(criCmd, cri.minVersion, cri.verParseFunc)
+		if err != nil {
+			return err
+		}
+
+		// installedVersion means cri runtime may not be installed yet.
+		if installedVersion == "" {
+			fmt.Printf("CRI runtime: %s not installed\n", criCmd)
+		}
+		fmt.Printf("CRI runtime: %s, requried %s and installed %s\n", criCmd, cri.minVersion, installedVersion)
+	}
+
+	return nil
 }

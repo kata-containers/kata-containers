@@ -199,6 +199,9 @@ DEFBINDMOUNTS := []
 # Features
 FEATURE_SELINUX ?= check
 
+MINIMUM_CONTAINERD_VERSION=$(shell $(GOPATH)/bin/yq r ../../versions.yaml externals.containerd.meta.minimum_version)
+MINIMUM_CRIO_VERSION=$(shell $(GOPATH)/bin/yq r ../../versions.yaml externals.crio.meta.minimum_version)
+
 SED = sed
 
 CLI_DIR = cmd
@@ -461,7 +464,8 @@ USER_VARS += DEFSANDBOXCGROUPONLY
 USER_VARS += DEFBINDMOUNTS
 USER_VARS += FEATURE_SELINUX
 USER_VARS += BUILDFLAGS
-
+USER_VARS += MINIMUM_CONTAINERD_VERSION
+USER_VARS += MINIMUM_CRIO_VERSION
 
 V              = @
 Q              = $(V:1=)
