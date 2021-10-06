@@ -47,20 +47,20 @@ repos=(
 
 get_release_info() {
 
-	docker_version=$(get_from_kata_deps "externals.docker.version" "${new_release}")
+	docker_version=$(get_from_kata_deps "externals.docker.version")
 	crio_version=$(get_from_kata_deps "externals.crio.version")
-	cri_containerd_version=$(get_from_kata_deps "externals.cri-containerd.version" "${new_release}")
-	kubernetes_version=$(get_from_kata_deps "externals.kubernetes.version" "${new_release}")
-	oci_spec_version=$(get_from_kata_deps "specs.oci.version" "${new_release}")
+	containerd_version=$(get_from_kata_deps "externals.containerd.version")
+	kubernetes_version=$(get_from_kata_deps "externals.kubernetes.version")
+	oci_spec_version=$(get_from_kata_deps "specs.oci.version")
 
 	#Image information
-	image_info=$(get_from_kata_deps "assets.image" "${new_release}")
+	image_info=$(get_from_kata_deps "assets.image")
 
 	# Initrd information
-	initrd_info=$(get_from_kata_deps "assets.initrd" "${new_release}")
+	initrd_info=$(get_from_kata_deps "assets.initrd")
 
-	kernel_version=$(get_from_kata_deps "assets.kernel.version" "${new_release}")
-	kernel_url=$(get_from_kata_deps "assets.kernel.url" "${new_release}")
+	kernel_version=$(get_from_kata_deps "assets.kernel.version")
+	kernel_url=$(get_from_kata_deps "assets.kernel.url")
 
 	kata_kernel_config_version="${new_release}-kernel-config"
 	kata_kernel_config_version="${new_release}-kernel-config"
@@ -101,8 +101,8 @@ EOT
 ## Compatibility with CRI-O
 Kata Containers ${runtime_version} is compatible with CRI-O ${crio_version}
 
-## Compatibility with cri-containerd
-Kata Containers ${runtime_version} is compatible with cri-contaienrd ${cri_containerd_version}
+## Compatibility with containerd
+Kata Containers ${runtime_version} is compatible with contaienrd ${containerd_version}
 
 ## OCI Runtime Specification
 Kata Containers ${runtime_version} support the OCI Runtime Specification [${oci_spec_version}][ocispec]
