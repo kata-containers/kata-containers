@@ -52,3 +52,15 @@ func TestRevertBytes(t *testing.T) {
 	num := revertBytes(testNum)
 	assert.Equal(expectedNum, num)
 }
+
+func TestFCParseVersion(t *testing.T) {
+	assert := assert.New(t)
+
+	fc := firecracker{}
+
+	for rawVersion, v := range map[string]string{"Firecracker v0.23.1": "0.23.1", "Firecracker v0.25.0\nSupported snapshot data format versions: 0.23.0": "0.25.0"} {
+		parsedVersion, err := fc.parseVersion(rawVersion)
+		assert.NoError(err)
+		assert.Equal(parsedVersion, v)
+	}
+}
