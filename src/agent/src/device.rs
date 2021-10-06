@@ -48,6 +48,9 @@ pub const DRIVER_LOCAL_TYPE: &str = "local";
 pub const DRIVER_WATCHABLE_BIND_TYPE: &str = "watchable-bind";
 // VFIO device to be bound to a guest kernel driver
 pub const DRIVER_VFIO_GK_TYPE: &str = "vfio-gk";
+// VFIO device to be bound to vfio-pci and made available inside the
+// container as a VFIO device node
+pub const DRIVER_VFIO_TYPE: &str = "vfio";
 
 #[derive(Debug)]
 struct DevIndexEntry {
@@ -543,18 +546,23 @@ fn split_vfio_option(opt: &str) -> Option<(&str, &str)> {
 // Each option should have the form "DDDD:BB:DD.F=<pcipath>"
 //     DDDD:BB:DD.F is the device's PCI address in the host
 //     <pcipath> is a PCI path to the device in the guest (see pci.rs)
-async fn vfio_gk_device_handler(
+async fn vfio_device_handler(
     device: &Device,
     _: &mut Spec,
     sandbox: &Arc<Mutex<Sandbox>>,
     _: &DevIndex,
 ) -> Result<()> {
+    let vfio_in_guest = device.field_type != DRIVER_VFIO_GK_TYPE;
+
     for opt in device.options.iter() {
         let (_, pcipath) =
             split_vfio_option(opt).ok_or_else(|| anyhow!("Malformed VFIO option {:?}", opt))?;
         let pcipath = pci::Path::from_str(pcipath)?;
 
-        wait_for_pci_device(sandbox, &pcipath).await?;
+        let guestdev = wait_for_pci_device(sandbox, &pcipath).await?;
+        if vfio_in_guest {
+            pci_driver_override(SYSFS_BUS_PCI_PATH, guestdev, "vfio-pci")?;
+        }
     }
     Ok(())
 }
@@ -628,7 +636,9 @@ async fn add_device(
         DRIVER_MMIO_BLK_TYPE => virtiommio_blk_device_handler(device, spec, sandbox, devidx).await,
         DRIVER_NVDIMM_TYPE => virtio_nvdimm_device_handler(device, spec, sandbox, devidx).await,
         DRIVER_SCSI_TYPE => virtio_scsi_device_handler(device, spec, sandbox, devidx).await,
-        DRIVER_VFIO_GK_TYPE => vfio_gk_device_handler(device, spec, sandbox, devidx).await,
+        DRIVER_VFIO_GK_TYPE | DRIVER_VFIO_TYPE => {
+            vfio_device_handler(device, spec, sandbox, devidx).await
+        }
         _ => Err(anyhow!("Unknown device type {}", device.field_type)),
     }
 }
