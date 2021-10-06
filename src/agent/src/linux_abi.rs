@@ -83,6 +83,8 @@ pub const SYSFS_MEMORY_ONLINE_PATH: &str = "/sys/devices/system/memory";
 
 pub const SYSFS_SCSI_HOST_PATH: &str = "/sys/class/scsi_host";
 
+pub const SYSFS_BUS_PCI_PATH: &str = "/sys/bus/pci";
+
 pub const SYSFS_CGROUPPATH: &str = "/sys/fs/cgroup";
 pub const SYSFS_ONLINE_FILE: &str = "online";
 
