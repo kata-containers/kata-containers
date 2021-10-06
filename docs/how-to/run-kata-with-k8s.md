@@ -9,7 +9,7 @@ Kubernetes CRI (Container Runtime Interface) implementations allow using any
 OCI-compatible runtime with Kubernetes, such as the Kata Containers runtime.
 
 Kata Containers support both the [CRI-O](https://github.com/kubernetes-incubator/cri-o) and
-[CRI-containerd](https://github.com/containerd/cri) CRI implementations.
+[containerd](https://github.com/containerd/containerd) CRI implementations.
 
 After choosing one CRI implementation, you must make the appropriate configuration
 to ensure it integrates with Kata Containers.
@@ -111,11 +111,7 @@ manage_ns_lifecycle = true
 ```
 
 
-### containerd with CRI plugin
-
-If you select containerd with `cri` plugin, follow the "Getting Started for Developers"
-instructions [here](https://github.com/containerd/cri#getting-started-for-developers)
-to properly install it.
+### containerd
 
 To customize containerd to select Kata Containers runtime, follow our
 "Configure containerd to use Kata Containers" internal documentation
@@ -160,7 +156,7 @@ $ sudo systemctl restart kubelet
 # If using CRI-O
 $ sudo kubeadm init --ignore-preflight-errors=all --cri-socket /var/run/crio/crio.sock --pod-network-cidr=10.244.0.0/16
 
-# If using CRI-containerd
+# If using containerd
 $ sudo kubeadm init --ignore-preflight-errors=all --cri-socket /run/containerd/containerd.sock --pod-network-cidr=10.244.0.0/16
 
 $ export KUBECONFIG=/etc/kubernetes/admin.conf
