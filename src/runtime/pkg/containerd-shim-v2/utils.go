@@ -112,13 +112,5 @@ func getAddress(ctx context.Context, bundlePath, address, id string) (string, er
 }
 
 func noNeedForOutput(detach bool, tty bool) bool {
-	if !detach {
-		return false
-	}
-
-	if !tty {
-		return false
-	}
-
-	return true
+	return detach && tty
 }
