@@ -158,19 +158,23 @@ const (
 
 	//Intel Trust Domain Extensions
 	//https://software.intel.com/content/www/us/en/develop/articles/intel-trust-domain-extensions.html
-	tdxProtection
+	// Exclude from lint checking for it won't be used on arm64 code
+	tdxProtection //nolint
 
 	// AMD Secure Encrypted Virtualization
 	// https://developer.amd.com/sev/
-	sevProtection
+	// Exclude from lint checking for it won't be used on arm64 code
+	sevProtection //nolint
 
 	// IBM POWER 9 Protected Execution Facility
 	// https://www.kernel.org/doc/html/latest/powerpc/ultravisor.html
-	pefProtection
+	// Exclude from lint checking for it won't be used on arm64 code
+	pefProtection //nolint
 
 	// IBM Secure Execution (IBM Z & LinuxONE)
 	// https://www.kernel.org/doc/html/latest/virt/kvm/s390-pv.html
-	seProtection
+	// Exclude from lint checking for it won't be used on arm64 code
+	seProtection //nolint
 )
 
 type qemuArchBase struct {
@@ -183,11 +187,12 @@ type qemuArchBase struct {
 	Bridges              []types.Bridge
 	memoryOffset         uint64
 	networkIndex         int
-	protection           guestProtection
-	nestedRun            bool
-	vhost                bool
-	disableNvdimm        bool
-	dax                  bool
+	// Exclude from lint checking for it is ultimately only used in architecture-specific code
+	protection    guestProtection //nolint:structcheck
+	nestedRun     bool
+	vhost         bool
+	disableNvdimm bool
+	dax           bool
 }
 
 const (

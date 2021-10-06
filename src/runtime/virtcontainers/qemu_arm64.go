@@ -9,6 +9,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"runtime"
 	"time"
 
 	govmmQemu "github.com/kata-containers/govmm/qemu"
@@ -77,6 +78,7 @@ func newQemuArch(config HypervisorConfig) (qemuArch, error) {
 			kernelParams:         kernelParams,
 			disableNvdimm:        config.DisableImageNvdimm,
 			dax:                  true,
+			protection:           noneProtection,
 		},
 	}
 
@@ -156,4 +158,19 @@ func (q *qemuArm64) getPFlash() ([]string, error) {
 	} else {
 		return nil, fmt.Errorf("too many pflash images for arm64")
 	}
+}
+
+func (q *qemuArm64) enableProtection() error {
+	q.protection, _ = availableGuestProtection()
+	if q.protection != noneProtection {
+		return fmt.Errorf("Protection %v is not supported on arm64", q.protection)
+	}
+
+	return nil
+}
+
+func (q *qemuArm64) appendProtectionDevice(devices []govmmQemu.Device, firmware string) ([]govmmQemu.Device, string, error) {
+	err := q.enableProtection()
+	virtLog.WithField("arch", runtime.GOARCH).Warnf("%v", err)
+	return devices, firmware, err
 }
