@@ -54,7 +54,7 @@ github.com/containerd/cgroups/stats/v1
 # github.com/containerd/console v1.0.2
 ## explicit
 github.com/containerd/console
-# github.com/containerd/containerd v1.5.7 => github.com/containerd/containerd v1.5.7
+# github.com/containerd/containerd v1.5.7
 ## explicit
 github.com/containerd/containerd/api/events
 github.com/containerd/containerd/api/services/ttrpc/events/v1
@@ -201,7 +201,7 @@ github.com/mitchellh/mapstructure
 github.com/moby/sys/mountinfo
 # github.com/opencontainers/go-digest v1.0.0
 github.com/opencontainers/go-digest
-# github.com/opencontainers/runc v1.0.2 => github.com/opencontainers/runc v1.0.1
+# github.com/opencontainers/runc v1.0.2
 ## explicit
 github.com/opencontainers/runc/libcontainer/configs
 github.com/opencontainers/runc/libcontainer/devices
@@ -334,7 +334,7 @@ google.golang.org/appengine/internal/log
 google.golang.org/appengine/internal/remote_api
 google.golang.org/appengine/internal/urlfetch
 google.golang.org/appengine/urlfetch
-# google.golang.org/genproto v0.0.0-20201110150050-8816d57aaa9a => google.golang.org/genproto v0.0.0-20180817151627-c66870c02cf8
+# google.golang.org/genproto v0.0.0-20201110150050-8816d57aaa9a
 google.golang.org/genproto/googleapis/rpc/status
 # google.golang.org/grpc v1.33.2
 ## explicit
@@ -421,7 +421,3 @@ k8s.io/apimachinery/pkg/api/resource
 # k8s.io/cri-api v0.20.6
 ## explicit
 k8s.io/cri-api/pkg/apis/runtime/v1alpha2
-# github.com/containerd/containerd => github.com/containerd/containerd v1.5.7
-# github.com/opencontainers/runc => github.com/opencontainers/runc v1.0.1
-# github.com/uber-go/atomic => go.uber.org/atomic v1.5.1
-# google.golang.org/genproto => google.golang.org/genproto v0.0.0-20180817151627-c66870c02cf8
