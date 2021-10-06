@@ -597,6 +597,7 @@ async fn vfio_device_handler(
     _: &DevIndex,
 ) -> Result<()> {
     let vfio_in_guest = device.field_type != DRIVER_VFIO_GK_TYPE;
+    let mut group = None;
 
     for opt in device.options.iter() {
         let (_, pcipath) =
@@ -606,6 +607,26 @@ async fn vfio_device_handler(
         let guestdev = wait_for_pci_device(sandbox, &pcipath).await?;
         if vfio_in_guest {
             pci_driver_override(SYSFS_BUS_PCI_PATH, guestdev, "vfio-pci")?;
+
+            let devgroup = pci_iommu_group(SYSFS_BUS_PCI_PATH, guestdev)?;
+            if devgroup.is_none() {
+                // Devices must have an IOMMU group to be usable via VFIO
+                return Err(anyhow!("{} has no IOMMU group", guestdev));
+            }
+
+            if group.is_some() && group != devgroup {
+                // If PCI devices associated with the same VFIO device
+                // (and therefore group) in the host don't end up in
+                // the same group in the guest, something has gone
+                // horribly wrong
+                return Err(anyhow!(
+                    "{} is not in guest IOMMU group {}",
+                    guestdev,
+                    group.unwrap()
+                ));
+            }
+
+            group = devgroup;
         }
     }
     Ok(())
