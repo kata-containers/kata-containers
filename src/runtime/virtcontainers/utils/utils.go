@@ -112,7 +112,7 @@ func WriteToFile(path string, data []byte) error {
 	return nil
 }
 
-//CalculateMilliCPUs converts CPU quota and period to milli-CPUs
+// CalculateMilliCPUs converts CPU quota and period to milli-CPUs
 func CalculateMilliCPUs(quota int64, period uint64) uint32 {
 
 	// If quota is -1, it means the CPU resource request is
@@ -125,25 +125,10 @@ func CalculateMilliCPUs(quota int64, period uint64) uint32 {
 	return 0
 }
 
-//CalculateVCpusFromMilliCpus converts from mCPU to CPU, taking the ceiling
+// CalculateVCpusFromMilliCpus converts from mCPU to CPU, taking the ceiling
 // value when necessary
 func CalculateVCpusFromMilliCpus(mCPU uint32) uint32 {
 	return (mCPU + 999) / 1000
-}
-
-// ConstraintsToVCPUs converts CPU quota and period to vCPUs
-func ConstraintsToVCPUs(quota int64, period uint64) uint {
-	if quota != 0 && period != 0 {
-		// Use some math magic to round up to the nearest whole vCPU
-		// (that is, a partial part of a quota request ends up assigning
-		// a whole vCPU, for instance, a request of 1.5 'cpu quotas'
-		// will give 2 vCPUs).
-		// This also has the side effect that we will always allocate
-		// at least 1 vCPU.
-		return uint((uint64(quota) + (period - 1)) / period)
-	}
-
-	return 0
 }
 
 // GetVirtDriveName returns the disk name format for virtio-blk
