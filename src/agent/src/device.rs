@@ -104,7 +104,7 @@ where
 
 // Represents an IOMMU group
 #[derive(Clone, Debug, PartialEq, Eq)]
-struct IommuGroup(u32);
+pub struct IommuGroup(u32);
 
 impl fmt::Display for IommuGroup {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
@@ -379,6 +379,33 @@ pub async fn wait_for_pci_device(
     Ok(addr)
 }
 
+#[derive(Debug)]
+struct VfioMatcher {
+    syspath: String,
+}
+
+impl VfioMatcher {
+    fn new(grp: IommuGroup) -> VfioMatcher {
+        VfioMatcher {
+            syspath: format!("/devices/virtual/vfio/{}", grp),
+        }
+    }
+}
+
+impl UeventMatcher for VfioMatcher {
+    fn is_match(&self, uev: &Uevent) -> bool {
+        uev.devpath == self.syspath
+    }
+}
+
+#[instrument]
+async fn get_vfio_device_name(sandbox: &Arc<Mutex<Sandbox>>, grp: IommuGroup) -> Result<String> {
+    let matcher = VfioMatcher::new(grp);
+
+    let uev = wait_for_uevent(sandbox, matcher).await?;
+    Ok(format!("{}/{}", SYSTEM_DEV_PATH, &uev.devname))
+}
+
 /// Scan SCSI bus for the given SCSI address(SCSI-Id and LUN)
 #[instrument]
 fn scan_scsi_bus(scsi_addr: &str) -> Result<()> {
@@ -628,9 +655,9 @@ fn split_vfio_option(opt: &str) -> Option<(&str, &str)> {
 //     <pcipath> is a PCI path to the device in the guest (see pci.rs)
 async fn vfio_device_handler(
     device: &Device,
-    _: &mut Spec,
+    spec: &mut Spec,
     sandbox: &Arc<Mutex<Sandbox>>,
-    _: &DevIndex,
+    devidx: &DevIndex,
 ) -> Result<()> {
     let vfio_in_guest = device.field_type != DRIVER_VFIO_GK_TYPE;
     let mut group = None;
@@ -665,6 +692,15 @@ async fn vfio_device_handler(
             group = devgroup;
         }
     }
+
+    if vfio_in_guest {
+        // If there are any devices at all, logic above ensures that group is not None
+        let group = group.unwrap();
+        let vmpath = get_vfio_device_name(sandbox, group).await?;
+
+        update_spec_device(spec, devidx, &device.container_path, &vmpath, &vmpath)?;
+    }
+
     Ok(())
 }
 
@@ -1328,6 +1364,27 @@ mod tests {
             root_bus, addr_b
         );
         let matcher_b = ScsiBlockMatcher::new(addr_b);
+
+        assert!(matcher_a.is_match(&uev_a));
+        assert!(matcher_b.is_match(&uev_b));
+        assert!(!matcher_b.is_match(&uev_a));
+        assert!(!matcher_a.is_match(&uev_b));
+    }
+
+    #[tokio::test]
+    async fn test_vfio_matcher() {
+        let grpa = IommuGroup(1);
+        let grpb = IommuGroup(22);
+
+        let mut uev_a = crate::uevent::Uevent::default();
+        uev_a.action = crate::linux_abi::U_EVENT_ACTION_ADD.to_string();
+        uev_a.devname = format!("vfio/{}", grpa);
+        uev_a.devpath = format!("/devices/virtual/vfio/{}", grpa);
+        let matcher_a = VfioMatcher::new(grpa);
+
+        let mut uev_b = uev_a.clone();
+        uev_b.devpath = format!("/devices/virtual/vfio/{}", grpb);
+        let matcher_b = VfioMatcher::new(grpb);
 
         assert!(matcher_a.is_match(&uev_a));
         assert!(matcher_b.is_match(&uev_b));
