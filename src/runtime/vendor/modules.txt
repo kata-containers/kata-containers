@@ -6,7 +6,7 @@ github.com/Microsoft/go-winio
 github.com/Microsoft/go-winio/pkg/guid
 github.com/Microsoft/go-winio/pkg/security
 github.com/Microsoft/go-winio/vhd
-# github.com/Microsoft/hcsshim v0.8.18
+# github.com/Microsoft/hcsshim v0.8.21
 github.com/Microsoft/hcsshim
 github.com/Microsoft/hcsshim/computestorage
 github.com/Microsoft/hcsshim/internal/cow
@@ -64,7 +64,7 @@ github.com/containerd/cgroups/stats/v1
 # github.com/containerd/console v1.0.2
 ## explicit
 github.com/containerd/console
-# github.com/containerd/containerd v1.5.4 => github.com/containerd/containerd v1.5.4
+# github.com/containerd/containerd v1.5.7 => github.com/containerd/containerd v1.5.7
 ## explicit
 github.com/containerd/containerd/api/events
 github.com/containerd/containerd/api/services/ttrpc/events/v1
@@ -215,7 +215,7 @@ github.com/moby/sys/mountinfo
 github.com/mrunalp/fileutils
 # github.com/opencontainers/go-digest v1.0.0
 github.com/opencontainers/go-digest
-# github.com/opencontainers/runc v1.0.1 => github.com/opencontainers/runc v1.0.1
+# github.com/opencontainers/runc v1.0.2 => github.com/opencontainers/runc v1.0.1
 ## explicit
 github.com/opencontainers/runc/libcontainer
 github.com/opencontainers/runc/libcontainer/apparmor
@@ -462,7 +462,7 @@ k8s.io/apimachinery/pkg/api/resource
 # k8s.io/cri-api v0.20.6
 ## explicit
 k8s.io/cri-api/pkg/apis/runtime/v1alpha2
-# github.com/containerd/containerd => github.com/containerd/containerd v1.5.4
+# github.com/containerd/containerd => github.com/containerd/containerd v1.5.7
 # github.com/opencontainers/runc => github.com/opencontainers/runc v1.0.1
 # github.com/uber-go/atomic => go.uber.org/atomic v1.5.1
 # google.golang.org/genproto => google.golang.org/genproto v0.0.0-20180817151627-c66870c02cf8
