@@ -1,0 +1,21 @@
+# This is an agent configuration file example.
+dev_mode = true
+server_addr = 'vsock://8:2048'
+
+[endpoints]
+# All endpoints are allowed
+allowed = [ "CreateContainer", "StartContainer", "RemoveContainer",
+            "ExecProcess",  "SignalProcess", "WaitProcess",
+            "UpdateContainer", "StatsContainer", "PauseContainer", "ResumeContainer",
+            "WriteStdin", "ReadStdout", "ReadStderr", "CloseStdin", "TtyWinResize",
+            "UpdateInterface", "UpdateRoutes", "ListInterfaces", "ListRoutes", "AddARPNeighbors",
+            "StartTracing", "StopTracing", "GetMetrics",
+            "CreateSandbox", "DestroySandbox",
+            "OnlineCPUMem",
+            "ReseedRandomDev",
+            "GetGuestDetails",
+            "MemHotplugByProbe",
+            "SetGuestDateTime",
+            "CopyFile",
+            "GetOOMEvent",
+            "AddSwap"]

@@ -4,8 +4,11 @@
 //
 use crate::tracer;
 use anyhow::{bail, ensure, Context, Result};
+use serde::Deserialize;
+use std::collections::HashSet;
 use std::env;
 use std::fs;
+use std::str::FromStr;
 use std::time;
 use tracing::instrument;
 
@@ -19,6 +22,7 @@ const DEBUG_CONSOLE_VPORT_OPTION: &str = "agent.debug_console_vport";
 const LOG_VPORT_OPTION: &str = "agent.log_vport";
 const CONTAINER_PIPE_SIZE_OPTION: &str = "agent.container_pipe_size";
 const UNIFIED_CGROUP_HIERARCHY_OPTION: &str = "agent.unified_cgroup_hierarchy";
+const CONFIG_FILE: &str = "agent.config_file";
 
 const DEFAULT_LOG_LEVEL: slog::Level = slog::Level::Info;
 const DEFAULT_HOTPLUG_TIMEOUT: time::Duration = time::Duration::from_secs(3);
@@ -47,6 +51,17 @@ const ERR_INVALID_CONTAINER_PIPE_SIZE_PARAM: &str = "unable to parse container p
 const ERR_INVALID_CONTAINER_PIPE_SIZE_KEY: &str = "invalid container pipe size key name";
 const ERR_INVALID_CONTAINER_PIPE_NEGATIVE: &str = "container pipe size should not be negative";
 
+#[derive(Debug, Default, Deserialize)]
+pub struct EndpointsConfig {
+    pub allowed: Vec<String>,
+}
+
+#[derive(Debug, Default)]
+pub struct AgentEndpoints {
+    pub allowed: HashSet<String>,
+    pub all_allowed: bool,
+}
+
 #[derive(Debug)]
 pub struct AgentConfig {
     pub debug_console: bool,
@@ -59,6 +74,36 @@ pub struct AgentConfig {
     pub server_addr: String,
     pub unified_cgroup_hierarchy: bool,
     pub tracing: tracer::TraceType,
+    pub endpoints: AgentEndpoints,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct AgentConfigBuilder {
+    pub debug_console: Option<bool>,
+    pub dev_mode: Option<bool>,
+    pub log_level: Option<String>,
+    pub hotplug_timeout: Option<time::Duration>,
+    pub debug_console_vport: Option<i32>,
+    pub log_vport: Option<i32>,
+    pub container_pipe_size: Option<i32>,
+    pub server_addr: Option<String>,
+    pub unified_cgroup_hierarchy: Option<bool>,
+    pub tracing: Option<tracer::TraceType>,
+    pub endpoints: Option<EndpointsConfig>,
+}
+
+macro_rules! config_override {
+    ($builder:ident, $config:ident, $field:ident) => {
+        if let Some(v) = $builder.$field {
+            $config.$field = v;
+        }
+    };
+
+    ($builder:ident, $config:ident, $field:ident, $func: ident) => {
+        if let Some(v) = $builder.$field {
+            $config.$field = $func(&v)?;
+        }
+    };
 }
 
 // parse_cmdline_param parse commandline parameters.
@@ -91,8 +136,8 @@ macro_rules! parse_cmdline_param {
     };
 }
 
-impl AgentConfig {
-    pub fn new() -> AgentConfig {
+impl Default for AgentConfig {
+    fn default() -> Self {
         AgentConfig {
             debug_console: false,
             dev_mode: false,
@@ -104,33 +149,82 @@ impl AgentConfig {
             server_addr: format!("{}:{}", VSOCK_ADDR, VSOCK_PORT),
             unified_cgroup_hierarchy: false,
             tracing: tracer::TraceType::Disabled,
+            endpoints: Default::default(),
         }
     }
+}
 
+impl FromStr for AgentConfig {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let agent_config_builder: AgentConfigBuilder =
+            toml::from_str(s).map_err(anyhow::Error::new)?;
+        let mut agent_config: AgentConfig = Default::default();
+
+        // Overwrite default values with the configuration files ones.
+        config_override!(agent_config_builder, agent_config, debug_console);
+        config_override!(agent_config_builder, agent_config, dev_mode);
+        config_override!(
+            agent_config_builder,
+            agent_config,
+            log_level,
+            logrus_to_slog_level
+        );
+        config_override!(agent_config_builder, agent_config, hotplug_timeout);
+        config_override!(agent_config_builder, agent_config, debug_console_vport);
+        config_override!(agent_config_builder, agent_config, log_vport);
+        config_override!(agent_config_builder, agent_config, container_pipe_size);
+        config_override!(agent_config_builder, agent_config, server_addr);
+        config_override!(agent_config_builder, agent_config, unified_cgroup_hierarchy);
+        config_override!(agent_config_builder, agent_config, tracing);
+
+        // Populate the allowed endpoints hash set, if we got any from the config file.
+        if let Some(endpoints) = agent_config_builder.endpoints {
+            for ep in endpoints.allowed {
+                agent_config.endpoints.allowed.insert(ep);
+            }
+        }
+
+        Ok(agent_config)
+    }
+}
+
+impl AgentConfig {
     #[instrument]
-    pub fn parse_cmdline(&mut self, file: &str) -> Result<()> {
+    pub fn from_cmdline(file: &str) -> Result<AgentConfig> {
+        let mut config: AgentConfig = Default::default();
         let cmdline = fs::read_to_string(file)?;
         let params: Vec<&str> = cmdline.split_ascii_whitespace().collect();
         for param in params.iter() {
+            // If we get a configuration file path from the command line, we
+            // generate our config from it.
+            // The agent will fail to start if the configuration file is not present,
+            // or if it can't be parsed properly.
+            if param.starts_with(format!("{}=", CONFIG_FILE).as_str()) {
+                let config_file = get_string_value(param)?;
+                return AgentConfig::from_config_file(&config_file);
+            }
+
             // parse cmdline flags
-            parse_cmdline_param!(param, DEBUG_CONSOLE_FLAG, self.debug_console);
-            parse_cmdline_param!(param, DEV_MODE_FLAG, self.dev_mode);
+            parse_cmdline_param!(param, DEBUG_CONSOLE_FLAG, config.debug_console);
+            parse_cmdline_param!(param, DEV_MODE_FLAG, config.dev_mode);
 
             // Support "bare" tracing option for backwards compatibility with
             // Kata 1.x.
             if param == &TRACE_MODE_OPTION {
-                self.tracing = tracer::TraceType::Isolated;
+                config.tracing = tracer::TraceType::Isolated;
                 continue;
             }
 
-            parse_cmdline_param!(param, TRACE_MODE_OPTION, self.tracing, get_trace_type);
+            parse_cmdline_param!(param, TRACE_MODE_OPTION, config.tracing, get_trace_type);
 
             // parse cmdline options
-            parse_cmdline_param!(param, LOG_LEVEL_OPTION, self.log_level, get_log_level);
+            parse_cmdline_param!(param, LOG_LEVEL_OPTION, config.log_level, get_log_level);
             parse_cmdline_param!(
                 param,
                 SERVER_ADDR_OPTION,
-                self.server_addr,
+                config.server_addr,
                 get_string_value
             );
 
@@ -138,7 +232,7 @@ impl AgentConfig {
             parse_cmdline_param!(
                 param,
                 HOTPLUG_TIMOUT_OPTION,
-                self.hotplug_timeout,
+                config.hotplug_timeout,
                 get_hotplug_timeout,
                 |hotplug_timeout: time::Duration| hotplug_timeout.as_secs() > 0
             );
@@ -147,14 +241,14 @@ impl AgentConfig {
             parse_cmdline_param!(
                 param,
                 DEBUG_CONSOLE_VPORT_OPTION,
-                self.debug_console_vport,
+                config.debug_console_vport,
                 get_vsock_port,
                 |port| port > 0
             );
             parse_cmdline_param!(
                 param,
                 LOG_VPORT_OPTION,
-                self.log_vport,
+                config.log_vport,
                 get_vsock_port,
                 |port| port > 0
             );
@@ -162,34 +256,47 @@ impl AgentConfig {
             parse_cmdline_param!(
                 param,
                 CONTAINER_PIPE_SIZE_OPTION,
-                self.container_pipe_size,
+                config.container_pipe_size,
                 get_container_pipe_size
             );
             parse_cmdline_param!(
                 param,
                 UNIFIED_CGROUP_HIERARCHY_OPTION,
-                self.unified_cgroup_hierarchy,
+                config.unified_cgroup_hierarchy,
                 get_bool_value
             );
         }
 
         if let Ok(addr) = env::var(SERVER_ADDR_ENV_VAR) {
-            self.server_addr = addr;
+            config.server_addr = addr;
         }
 
         if let Ok(addr) = env::var(LOG_LEVEL_ENV_VAR) {
             if let Ok(level) = logrus_to_slog_level(&addr) {
-                self.log_level = level;
+                config.log_level = level;
             }
         }
 
         if let Ok(value) = env::var(TRACE_TYPE_ENV_VAR) {
             if let Ok(result) = value.parse::<tracer::TraceType>() {
-                self.tracing = result;
+                config.tracing = result;
             }
         }
 
-        Ok(())
+        // We did not get a configuration file: allow all endpoints.
+        config.endpoints.all_allowed = true;
+
+        Ok(config)
+    }
+
+    #[instrument]
+    pub fn from_config_file(file: &str) -> Result<AgentConfig> {
+        let config = fs::read_to_string(file)?;
+        AgentConfig::from_str(&config)
+    }
+
+    pub fn is_allowed_endpoint(&self, ep: &str) -> bool {
+        self.endpoints.all_allowed || self.endpoints.allowed.contains(ep)
     }
 }
 
@@ -371,7 +478,7 @@ mod tests {
 
     #[test]
     fn test_new() {
-        let config = AgentConfig::new();
+        let config: AgentConfig = Default::default();
         assert!(!config.debug_console);
         assert!(!config.dev_mode);
         assert_eq!(config.log_level, DEFAULT_LOG_LEVEL);
@@ -379,7 +486,7 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_cmdline() {
+    fn test_from_cmdline() {
         const TEST_SERVER_ADDR: &str = "vsock://-1:1024";
 
         #[derive(Debug)]
@@ -716,15 +823,6 @@ mod tests {
 
         let dir = tempdir().expect("failed to create tmpdir");
 
-        // First, check a missing file is handled
-        let file_path = dir.path().join("enoent");
-
-        let filename = file_path.to_str().expect("failed to create filename");
-
-        let mut config = AgentConfig::new();
-        let result = config.parse_cmdline(&filename.to_owned());
-        assert!(result.is_err());
-
         // Now, test various combinations of file contents and environment
         // variables.
         for (i, d) in tests.iter().enumerate() {
@@ -753,22 +851,7 @@ mod tests {
                 vars_to_unset.push(name);
             }
 
-            let mut config = AgentConfig::new();
-            assert!(!config.debug_console, "{}", msg);
-            assert!(!config.dev_mode, "{}", msg);
-            assert!(!config.unified_cgroup_hierarchy, "{}", msg);
-            assert_eq!(
-                config.hotplug_timeout,
-                time::Duration::from_secs(3),
-                "{}",
-                msg
-            );
-            assert_eq!(config.container_pipe_size, 0, "{}", msg);
-            assert_eq!(config.server_addr, TEST_SERVER_ADDR, "{}", msg);
-            assert_eq!(config.tracing, tracer::TraceType::Disabled, "{}", msg);
-
-            let result = config.parse_cmdline(filename);
-            assert!(result.is_ok(), "{}", msg);
+            let config = AgentConfig::from_cmdline(filename).expect("Failed to parse command line");
 
             assert_eq!(d.debug_console, config.debug_console, "{}", msg);
             assert_eq!(d.dev_mode, config.dev_mode, "{}", msg);
@@ -1275,5 +1358,36 @@ Caused by:
 
             assert_result!(d.result, result, msg);
         }
+    }
+
+    #[test]
+    fn test_config_builder_from_string() {
+        let config = AgentConfig::from_str(
+            r#"
+               dev_mode = true
+               server_addr = 'vsock://8:2048'
+
+               [endpoints]
+               allowed = ["CreateContainer", "StartContainer"]
+              "#,
+        )
+        .unwrap();
+
+        // Verify that the all_allowed flag is false
+        assert!(!config.endpoints.all_allowed);
+
+        // Verify that the override worked
+        assert!(config.dev_mode);
+        assert_eq!(config.server_addr, "vsock://8:2048");
+        assert_eq!(
+            config.endpoints.allowed,
+            vec!["CreateContainer".to_string(), "StartContainer".to_string()]
+                .iter()
+                .cloned()
+                .collect()
+        );
+
+        // Verify that the default values are valid
+        assert_eq!(config.hotplug_timeout, DEFAULT_HOTPLUG_TIMEOUT);
     }
 }
