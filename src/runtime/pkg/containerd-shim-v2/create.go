@@ -39,6 +39,13 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/oci"
 )
 
+type startManagementServerFunc func(s *service, ctx context.Context, ociSpec *specs.Spec)
+
+var defaultStartManagementServerFunc startManagementServerFunc = func(s *service, ctx context.Context, ociSpec *specs.Spec) {
+	go s.startManagementServer(ctx, ociSpec)
+	shimLog.Info("management server started")
+}
+
 func create(ctx context.Context, s *service, r *taskAPI.CreateTaskRequest) (*container, error) {
 	rootFs := vc.RootFs{}
 	if len(r.Rootfs) == 1 {
@@ -131,7 +138,9 @@ func create(ctx context.Context, s *service, r *taskAPI.CreateTaskRequest) (*con
 		}
 		s.hpid = uint32(pid)
 
-		go s.startManagementServer(ctx, ociSpec)
+		if defaultStartManagementServerFunc != nil {
+			defaultStartManagementServerFunc(s, ctx, ociSpec)
+		}
 
 	case vc.PodContainer:
 		span, ctx := katatrace.Trace(s.ctx, shimLog, "create", shimTracingTags)
