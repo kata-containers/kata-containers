@@ -947,6 +947,11 @@ func (clh *cloudHypervisor) launchClh() (int, error) {
 		args = append(args, "-v")
 	}
 
+	// Enable the `seccomp` feature from Cloud Hypervisor by default
+	// Disable it only when requested by users for debugging purposes
+	if clh.config.DisableSeccomp {
+		args = append(args, "--seccomp", "false")
+	}
 
 	clh.Logger().WithField("path", clhPath).Info()
 	clh.Logger().WithField("args", strings.Join(args, " ")).Info()
