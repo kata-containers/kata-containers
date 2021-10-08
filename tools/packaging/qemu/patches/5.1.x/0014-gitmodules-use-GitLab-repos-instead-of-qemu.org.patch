@@ -1,0 +1,111 @@
+From 104e56711f131d80de82caed8759947509576e3b Mon Sep 17 00:00:00 2001
+From: Stefan Hajnoczi <stefanha@redhat.com>
+Date: Mon, 11 Jan 2021 11:50:13 +0000
+Subject: [PATCH] gitmodules: use GitLab repos instead of qemu.org
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+qemu.org is running out of bandwidth and the QEMU project is moving
+towards a gating CI on GitLab. Use the GitLab repos instead of qemu.org
+(they will become mirrors).
+
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+Reviewed-by: Wainer dos Santos Moschetta <wainersm@redhat.com>
+Reviewed-by: Thomas Huth <thuth@redhat.com>
+Reviewed-by: Philippe Mathieu-Daudé <philmd@redhat.com>
+Message-id: 20210111115017.156802-3-stefanha@redhat.com
+Signed-off-by: Stefan Hajnoczi <stefanha@redhat.com>
+Backported-by: Jakob Naucke <jakob.naucke@ibm.com>
+---
+ .gitmodules | 40 ++++++++++++++++++++--------------------
+ 1 file changed, 20 insertions(+), 20 deletions(-)
+
+diff --git a/.gitmodules b/.gitmodules
+index 9c0501a4d4..fec515cec5 100644
+--- a/.gitmodules
++++ b/.gitmodules
+@@ -1,60 +1,60 @@
+ [submodule "roms/seabios"]
+ 	path = roms/seabios
+-	url = https://git.qemu.org/git/seabios.git/
++	url = https://gitlab.com/qemu-project/seabios.git/
+ [submodule "roms/SLOF"]
+ 	path = roms/SLOF
+-	url = https://git.qemu.org/git/SLOF.git
++	url = https://gitlab.com/qemu-project/SLOF.git
+ [submodule "roms/ipxe"]
+ 	path = roms/ipxe
+-	url = https://git.qemu.org/git/ipxe.git
++	url = https://gitlab.com/qemu-project/ipxe.git
+ [submodule "roms/openbios"]
+ 	path = roms/openbios
+-	url = https://git.qemu.org/git/openbios.git
++	url = https://gitlab.com/qemu-project/openbios.git
+ [submodule "roms/qemu-palcode"]
+ 	path = roms/qemu-palcode
+-	url = https://git.qemu.org/git/qemu-palcode.git
++	url = https://gitlab.com/qemu-project/qemu-palcode.git
+ [submodule "roms/sgabios"]
+ 	path = roms/sgabios
+-	url = https://git.qemu.org/git/sgabios.git
++	url = https://gitlab.com/qemu-project/sgabios.git
+ [submodule "dtc"]
+ 	path = dtc
+-	url = https://git.qemu.org/git/dtc.git
++	url = https://gitlab.com/qemu-project/dtc.git
+ [submodule "roms/u-boot"]
+ 	path = roms/u-boot
+-	url = https://git.qemu.org/git/u-boot.git
++	url = https://gitlab.com/qemu-project/u-boot.git
+ [submodule "roms/skiboot"]
+ 	path = roms/skiboot
+-	url = https://git.qemu.org/git/skiboot.git
++	url = https://gitlab.com/qemu-project/skiboot.git
+ [submodule "roms/QemuMacDrivers"]
+ 	path = roms/QemuMacDrivers
+-	url = https://git.qemu.org/git/QemuMacDrivers.git
++	url = https://gitlab.com/qemu-project/QemuMacDrivers.git
+ [submodule "ui/keycodemapdb"]
+ 	path = ui/keycodemapdb
+-	url = https://git.qemu.org/git/keycodemapdb.git
++	url = https://gitlab.com/qemu-project/keycodemapdb.git
+ [submodule "capstone"]
+ 	path = capstone
+-	url = https://git.qemu.org/git/capstone.git
++	url = https://gitlab.com/qemu-project/capstone.git
+ [submodule "roms/seabios-hppa"]
+ 	path = roms/seabios-hppa
+-	url = https://git.qemu.org/git/seabios-hppa.git
++	url = https://gitlab.com/qemu-project/seabios-hppa.git
+ [submodule "roms/u-boot-sam460ex"]
+ 	path = roms/u-boot-sam460ex
+-	url = https://git.qemu.org/git/u-boot-sam460ex.git
++	url = https://gitlab.com/qemu-project/u-boot-sam460ex.git
+ [submodule "tests/fp/berkeley-testfloat-3"]
+ 	path = tests/fp/berkeley-testfloat-3
+-	url = https://git.qemu.org/git/berkeley-testfloat-3.git
++	url = https://gitlab.com/qemu-project/berkeley-testfloat-3.git
+ [submodule "tests/fp/berkeley-softfloat-3"]
+ 	path = tests/fp/berkeley-softfloat-3
+-	url = https://git.qemu.org/git/berkeley-softfloat-3.git
++	url = https://gitlab.com/qemu-project/berkeley-softfloat-3.git
+ [submodule "roms/edk2"]
+ 	path = roms/edk2
+-	url = https://git.qemu.org/git/edk2.git
++	url = https://gitlab.com/qemu-project/edk2.git
+ [submodule "slirp"]
+ 	path = slirp
+-	url = https://git.qemu.org/git/libslirp.git
++	url = https://gitlab.com/qemu-project/libslirp.git
+ [submodule "roms/opensbi"]
+ 	path = roms/opensbi
+-	url = 	https://git.qemu.org/git/opensbi.git
++	url = 	https://gitlab.com/qemu-project/opensbi.git
+ [submodule "roms/qboot"]
+ 	path = roms/qboot
+-	url = https://github.com/bonzini/qboot
++	url = https://gitlab.com/qemu-project/qboot.git
+-- 
+2.31.1
+
