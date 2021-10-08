@@ -66,6 +66,9 @@ type Device interface {
 type DeviceDriver string
 
 const (
+	// LegacySerial is the legacy serial device driver
+	LegacySerial DeviceDriver = "serial"
+
 	// NVDIMM is the Non Volatile DIMM device driver.
 	NVDIMM DeviceDriver = "nvdimm"
 
@@ -549,6 +552,9 @@ const (
 
 	// PTY creates a new pseudo-terminal on the host and connect to it.
 	PTY CharDeviceBackend = "pty"
+
+	// File sends traffic from the guest to a file on the host.
+	File CharDeviceBackend = "file"
 )
 
 // CharDevice represents a qemu character device.
@@ -637,8 +643,11 @@ func (cdev CharDevice) QemuParams(config *Config) []string {
 		cdevParams = append(cdevParams, fmt.Sprintf("path=%s", cdev.Path))
 	}
 
-	qemuParams = append(qemuParams, "-device")
-	qemuParams = append(qemuParams, strings.Join(deviceParams, ","))
+	// Legacy serial is special. It does not follow the device + driver model
+	if cdev.Driver != LegacySerial {
+		qemuParams = append(qemuParams, "-device")
+		qemuParams = append(qemuParams, strings.Join(deviceParams, ","))
+	}
 
 	qemuParams = append(qemuParams, "-chardev")
 	qemuParams = append(qemuParams, strings.Join(cdevParams, ","))
@@ -977,6 +986,43 @@ func (netdev NetDevice) QemuParams(config *Config) []string {
 
 	return qemuParams
 }
+
+// LegacySerialDevice represents a qemu legacy serial device.
+type LegacySerialDevice struct {
+	// ID is the serial device identifier.
+	// This maps to the char dev associated with the device
+	// as serial does not have a notion of id
+	// e.g:
+	// -chardev stdio,id=char0,mux=on,logfile=serial.log,signal=off -serial chardev:char0
+	// -chardev file,id=char0,path=serial.log -serial chardev:char0
+	Chardev string
+}
+
+// Valid returns true if the LegacySerialDevice structure is valid and complete.
+func (dev LegacySerialDevice) Valid() bool {
+	return dev.Chardev != ""
+}
+
+// QemuParams returns the qemu parameters built out of this serial device.
+func (dev LegacySerialDevice) QemuParams(config *Config) []string {
+	var deviceParam string
+	var qemuParams []string
+
+	deviceParam = fmt.Sprintf("chardev:%s", dev.Chardev)
+
+	qemuParams = append(qemuParams, "-serial")
+	qemuParams = append(qemuParams, deviceParam)
+
+	return qemuParams
+}
+
+/* Not used currently
+// deviceName returns the QEMU device name for the current combination of
+// driver and transport.
+func (dev LegacySerialDevice) deviceName(config *Config) string {
+	return dev.Chardev
+}
+*/
 
 // SerialDevice represents a qemu serial device.
 type SerialDevice struct {
