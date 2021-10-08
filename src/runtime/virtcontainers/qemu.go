@@ -11,7 +11,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/rootless"
 	"io/ioutil"
 	"math"
 	"os"
@@ -23,6 +22,8 @@ import (
 	"syscall"
 	"time"
 	"unsafe"
+
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/rootless"
 
 	govmmQemu "github.com/kata-containers/govmm/qemu"
 	"github.com/opencontainers/selinux/go-selinux/label"
@@ -1026,13 +1027,8 @@ func (q *qemu) cleanupVM() error {
 			q.Logger().WithError(err).WithField("uid", q.config.Uid).Warn("failed to find the user")
 			return nil
 		}
-		userdelPath, err := pkgUtils.FirstValidExecutable([]string{"/usr/sbin/userdel", "/sbin/userdel", "/bin/userdel"})
-		if err != nil {
-			q.Logger().WithError(err).WithField("user", u.Username).Warn("failed to delete the user")
-			return nil
-		}
-		_, err = pkgUtils.RunCommand([]string{userdelPath, "-f", u.Username})
-		if err != nil {
+
+		if err := pkgUtils.RemoveVmmUser(u.Username); err != nil {
 			q.Logger().WithError(err).WithField("user", u.Username).Warn("failed to delete the user")
 		}
 	}

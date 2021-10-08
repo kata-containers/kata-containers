@@ -10,9 +10,6 @@ package containerdshim
 import (
 	"context"
 	"fmt"
-	"github.com/kata-containers/kata-containers/src/runtime/pkg/utils"
-	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/rootless"
-	"math/rand"
 	"os"
 	"os/user"
 	"path"
@@ -24,6 +21,8 @@ import (
 	"github.com/containerd/containerd/mount"
 	taskAPI "github.com/containerd/containerd/runtime/v2/task"
 	"github.com/containerd/typeurl"
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/utils"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/rootless"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/pkg/errors"
 
@@ -274,13 +273,15 @@ func doMount(mounts []*containerd_types.Mount, rootfs string) error {
 }
 
 func configureNonRootHypervisor(runtimeConfig *oci.RuntimeConfig) error {
-	userName, err := createVmmUser()
+	userName, err := utils.CreateVmmUser()
 	if err != nil {
 		return err
 	}
 	defer func() {
 		if err != nil {
-			removeVmmUser(userName)
+			if err2 := utils.RemoveVmmUser(userName); err2 != nil {
+				shimLog.WithField("userName", userName).WithError(err).Warn("failed to remove user")
+			}
 		}
 	}()
 
@@ -335,49 +336,4 @@ func configureNonRootHypervisor(runtimeConfig *oci.RuntimeConfig) error {
 		return nil
 	}
 	return fmt.Errorf("failed to get the gid of /dev/kvm")
-}
-
-func createVmmUser() (string, error) {
-	var (
-		err      error
-		userName string
-	)
-
-	useraddPath, err := utils.FirstValidExecutable([]string{"/usr/sbin/useradd", "/sbin/useradd", "/bin/useradd"})
-	if err != nil {
-		return "", err
-	}
-	nologinPath, err := utils.FirstValidExecutable([]string{"/usr/sbin/nologin", "/sbin/nologin", "/bin/nologin"})
-	if err != nil {
-		return "", err
-	}
-
-	// Add retries to mitigate temporary errors and race conditions. For example, the user already exists
-	// or another instance of the runtime is also creating a user.
-	maxAttempt := 5
-	for i := 0; i < maxAttempt; i++ {
-		userName = fmt.Sprintf("kata-%v", rand.Intn(100000))
-		_, err = utils.RunCommand([]string{useraddPath, "-M", "-s", nologinPath, userName, "-c", "\"Kata Containers temporary hypervisor user\""})
-		if err == nil {
-			return userName, nil
-		}
-		shimLog.WithField("attempt", i+1).WithField("username", userName).
-			WithError(err).Warn("failed to add user, will try again")
-	}
-	return "", fmt.Errorf("could not create VMM user: %v", err)
-}
-
-func removeVmmUser(user string) {
-	userdelPath, err := utils.FirstValidExecutable([]string{"/usr/sbin/userdel", "/sbin/userdel", "/bin/userdel"})
-	if err != nil {
-		shimLog.WithField("username", user).WithError(err).Warn("failed to remove user")
-	}
-	// Add retries to mitigate temporary errors and race conditions.
-	for i := 0; i < 5; i++ {
-		_, err := utils.RunCommand([]string{userdelPath, "-f", user})
-		if err == nil {
-			return
-		}
-		shimLog.WithField("username", user).WithField("attempt", i+1).WithError(err).Warn("failed to remove user")
-	}
 }
