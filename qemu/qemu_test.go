@@ -274,6 +274,28 @@ func TestAppendDeviceNetworkPCIMq(t *testing.T) {
 	testAppend(netdev, deviceNetworkPCIStringMq, t)
 }
 
+var deviceLegacySerialString = "-serial chardev:tlserial0"
+
+func TestAppendLegacySerial(t *testing.T) {
+	sdev := LegacySerialDevice{
+		Chardev: "tlserial0",
+	}
+
+	testAppend(sdev, deviceLegacySerialString, t)
+}
+
+var deviceLegacySerialPortString = "-chardev file,id=char0,path=/tmp/serial.log"
+
+func TestAppendDeviceLegacySerialPort(t *testing.T) {
+	chardev := CharDevice{
+		Driver:  LegacySerial,
+		Backend: File,
+		ID:      "char0",
+		Path:    "/tmp/serial.log",
+	}
+	testAppend(chardev, deviceLegacySerialPortString, t)
+}
+
 func TestAppendDeviceSerial(t *testing.T) {
 	sdev := SerialDevice{
 		Driver:        VirtioSerial,
