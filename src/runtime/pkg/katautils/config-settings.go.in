@@ -88,6 +88,7 @@ const defaultConfidentialGuest = false
 const defaultGuestSwap = false
 const defaultRootlessHypervisor = false
 const defaultDisableSeccomp = false
+const defaultVfioMode = "guest-kernel"
 
 var defaultSGXEPCSize = int64(0)
 

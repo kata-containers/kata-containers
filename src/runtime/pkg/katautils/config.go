@@ -143,6 +143,7 @@ type runtime struct {
 	JaegerEndpoint      string   `toml:"jaeger_endpoint"`
 	JaegerUser          string   `toml:"jaeger_user"`
 	JaegerPassword      string   `toml:"jaeger_password"`
+	VfioMode            string   `toml:"vfio_mode"`
 	SandboxBindMounts   []string `toml:"sandbox_bind_mounts"`
 	Experimental        []string `toml:"experimental"`
 	Debug               bool     `toml:"enable_debug"`
@@ -1068,6 +1069,11 @@ func initConfig() (config oci.RuntimeConfig, err error) {
 		return oci.RuntimeConfig{}, err
 	}
 
+	err = config.VfioMode.VFIOSetMode(defaultVfioMode)
+	if err != nil {
+		return oci.RuntimeConfig{}, err
+	}
+
 	config = oci.RuntimeConfig{
 		HypervisorType:   defaultHypervisor,
 		HypervisorConfig: GetDefaultHypervisorConfig(),
@@ -1109,6 +1115,14 @@ func LoadConfiguration(configPath string, ignoreLogging bool) (resolvedConfigPat
 
 	if tomlConf.Runtime.InterNetworkModel != "" {
 		err = config.InterNetworkModel.SetModel(tomlConf.Runtime.InterNetworkModel)
+		if err != nil {
+			return "", config, err
+		}
+	}
+
+	if tomlConf.Runtime.VfioMode != "" {
+		err = config.VfioMode.VFIOSetMode(tomlConf.Runtime.VfioMode)
+
 		if err != nil {
 			return "", config, err
 		}

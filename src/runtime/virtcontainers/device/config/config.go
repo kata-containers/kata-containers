@@ -187,6 +187,31 @@ type BlockDrive struct {
 	Swap bool
 }
 
+// VFIOMode indicates e behaviour mode for handling devices in the VM
+type VFIOModeType uint32
+
+const (
+	// VFIOModeGuestKernel specifies Kata-specific behaviour
+	// useful in certain cases: VFIO devices specified to Kata are
+	// bound to whatever driver in the VM will take them.  This
+	// requires specialized containers expecting this behaviour to
+	// locate and use the devices
+	VFIOModeGuestKernel = iota
+)
+
+const (
+	vfioModeGuestKernelStr = "guest-kernel"
+)
+
+func (m *VFIOModeType) VFIOSetMode(modeName string) error {
+	switch modeName {
+	case vfioModeGuestKernelStr:
+		*m = VFIOModeGuestKernel
+		return nil
+	}
+	return fmt.Errorf("Unknown VFIO mode %s", modeName)
+}
+
 // VFIODeviceType indicates VFIO device type
 type VFIODeviceType uint32
 
