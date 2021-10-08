@@ -995,7 +995,7 @@ func (k *kataAgent) replaceOCIMountsForStorages(spec *specs.Spec, volumeStorages
 	return nil
 }
 
-func (k *kataAgent) constrainGRPCSpec(grpcSpec *grpc.Spec, passSeccomp bool) {
+func (k *kataAgent) constrainGRPCSpec(grpcSpec *grpc.Spec, passSeccomp bool, stripVfio bool) {
 	// Disable Hooks since they have been handled on the host and there is
 	// no reason to send them to the agent. It would make no sense to try
 	// to apply them on the guest.
@@ -1058,17 +1058,21 @@ func (k *kataAgent) constrainGRPCSpec(grpcSpec *grpc.Spec, passSeccomp bool) {
 	}
 	grpcSpec.Linux.Namespaces = tmpNamespaces
 
-	// VFIO char device shouldn't not appear in the guest,
-	// the device driver should handle it and determinate its group.
-	var linuxDevices []grpc.LinuxDevice
-	for _, dev := range grpcSpec.Linux.Devices {
-		if dev.Type == "c" && strings.HasPrefix(dev.Path, vfioPath) {
-			k.Logger().WithField("vfio-dev", dev.Path).Debug("removing vfio device from grpcSpec")
-			continue
+	if stripVfio {
+		// VFIO char device shouldn't appear in the guest
+		// (because the VM device driver will do something
+		// with it rather than just presenting it to the
+		// container unmodified)
+		var linuxDevices []grpc.LinuxDevice
+		for _, dev := range grpcSpec.Linux.Devices {
+			if dev.Type == "c" && strings.HasPrefix(dev.Path, vfioPath) {
+				k.Logger().WithField("vfio-dev", dev.Path).Debug("removing vfio device from grpcSpec")
+				continue
+			}
+			linuxDevices = append(linuxDevices, dev)
 		}
-		linuxDevices = append(linuxDevices, dev)
+		grpcSpec.Linux.Devices = linuxDevices
 	}
-	grpcSpec.Linux.Devices = linuxDevices
 }
 
 func (k *kataAgent) handleShm(mounts []specs.Mount, sandbox *Sandbox) {
@@ -1413,7 +1417,7 @@ func (k *kataAgent) createContainer(ctx context.Context, sandbox *Sandbox, c *Co
 
 	// We need to constrain the spec to make sure we're not
 	// passing irrelevant information to the agent.
-	k.constrainGRPCSpec(grpcSpec, passSeccomp)
+	k.constrainGRPCSpec(grpcSpec, passSeccomp, true)
 
 	req := &grpc.CreateContainerRequest{
 		ContainerId:  c.id,
