@@ -92,6 +92,7 @@ var (
 	kataNvdimmDevType           = "nvdimm"
 	kataVirtioFSDevType         = "virtio-fs"
 	kataWatchableBindDevType    = "watchable-bind"
+	kataVfioDevType             = "vfio"    // VFIO device to used as VFIO in the container
 	kataVfioGuestKernelDevType  = "vfio-gk" // VFIO device for consumption by the guest kernel
 	sharedDir9pOptions          = []string{"trans=virtio,version=9p2000.L,cache=mmap", "nodev"}
 	sharedDirVirtioFSOptions    = []string{}
@@ -1183,9 +1184,17 @@ func (k *kataAgent) appendVfioDevice(dev ContainerDevice, device api.Device, c *
 	// (see qomGetPciPath() for details).
 	kataDevice := &grpc.Device{
 		ContainerPath: dev.ContainerPath,
-		Type:          kataVfioGuestKernelDevType,
+		Type:          kataVfioDevType,
 		Id:            groupNum,
 		Options:       make([]string, len(devList)),
+	}
+
+	// We always pass the device information to the agent, since
+	// it needs that to wait for them to be ready.  But depending
+	// on the vfio_mode, we need to use a different device type so
+	// the agent can handle it properly
+	if c.sandbox.config.VfioMode == config.VFIOModeGuestKernel {
+		kataDevice.Type = kataVfioGuestKernelDevType
 	}
 
 	for i, pciDev := range devList {
@@ -1417,7 +1426,7 @@ func (k *kataAgent) createContainer(ctx context.Context, sandbox *Sandbox, c *Co
 
 	// We need to constrain the spec to make sure we're not
 	// passing irrelevant information to the agent.
-	k.constrainGRPCSpec(grpcSpec, passSeccomp, true)
+	k.constrainGRPCSpec(grpcSpec, passSeccomp, sandbox.config.VfioMode == config.VFIOModeGuestKernel)
 
 	req := &grpc.CreateContainerRequest{
 		ContainerId:  c.id,
