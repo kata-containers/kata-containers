@@ -125,6 +125,10 @@ func init() {
 	}
 
 	tc = ktu.NewTestConstraint(false)
+
+	// disable shim management server.
+	// all tests are not using this, so just set it to nil
+	defaultStartManagementServerFunc = nil
 }
 
 // createOCIConfig creates an OCI configuration (spec) file in
