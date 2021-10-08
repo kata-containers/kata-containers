@@ -1,107 +1,113 @@
 # Kata Containers with SGX
 
-Intel® Software Guard Extensions (SGX) is a set of instructions that increases the security
+Intel Software Guard Extensions (SGX) is a set of instructions that increases the security
 of applications code and data, giving them more protections from disclosure or modification.
 
-> **Note:** At the time of writing this document, SGX patches have not landed on the Linux kernel
-> project, so specific versions for guest and host kernels must be installed to enable SGX.
+This document guides you to run containers with SGX enclaves with Kata Containers in Kubernetes.
 
-## Check if SGX is enabled
+## Preconditions
 
-Run the following command to check if your host supports SGX.
-
-```sh
-$ grep -o sgx /proc/cpuinfo
-```
-
-Continue to the following section if the output of the above command is empty,
-otherwise continue to section [Install Guest kernel with SGX support](#install-guest-kernel-with-sgx-support)
-
-## Install Host kernel with SGX support
-
-The following commands were tested on Fedora 32, they might work on other distros too.
+* Intel SGX capable bare metal nodes
+* Host kernel Linux 5.13 or later with SGX and SGX KVM enabled:
 
 ```sh
-$ git clone --depth=1 https://github.com/intel/kvm-sgx
-$ pushd kvm-sgx
-$ cp /boot/config-$(uname -r) .config
-$ yes "" | make oldconfig
-$ # In the following step, enable: INTEL_SGX and INTEL_SGX_VIRTUALIZATION
-$ make menuconfig
-$ make -j$(($(nproc)-1)) bzImage
-$ make -j$(($(nproc)-1)) modules
-$ sudo make modules_install
-$ sudo make install
-$ popd
-$ sudo reboot
+$ grep SGX /boot/config-`uname -r`
+CONFIG_X86_SGX=y
+CONFIG_X86_SGX_KVM=y
 ```
 
-> **Notes:**
-> * Run: `mokutil --sb-state` to check whether secure boot is enabled, if so, you will need to sign the kernel.
-> * You'll lose SGX support when a new distro kernel is installed and the system rebooted.
+* Kubernetes cluster configured with:
+   * [`kata-deploy`](https://github.com/kata-containers/kata-containers/tree/main/tools/packaging/kata-deploy) based Kata Containers installation
+   * [Intel SGX Kubernetes device plugin](https://github.com/intel/intel-device-plugins-for-kubernetes/tree/main/cmd/sgx_plugin#deploying-with-pre-built-images)
 
-Once you have restarted your system with the new brand Linux Kernel with SGX support, run
-the following command to make sure it's enabled. If the output is empty, go to the BIOS
-setup and enable SGX manually.
+> Note: Kata Containers supports creating VM sandboxes with Intel® SGX enabled
+> using [cloud-hypervisor](https://github.com/cloud-hypervisor/cloud-hypervisor/) VMM only. QEMU support is waiting to get the
+> Intel SGX enabled QEMU upstream release.
+
+## Installation
+
+### Kata Containers Guest Kernel
+
+Follow the instructions to [setup](../../tools/packaging/kernel/README.md#setup-kernel-source-code) and [build](../../tools/packaging/kernel/README.md#build-the-kernel) the experimental guest kernel. Then, install as:
 
 ```sh
-$ grep -o sgx /proc/cpuinfo
+$ sudo cp kata-linux-experimental-*/vmlinux /opt/kata/share/kata-containers/vmlinux.sgx
+$ sudo sed -i 's|vmlinux.container|vmlinux.sgx|g' \
+  /opt/kata/share/defaults/kata-containers/configuration-clh.toml
 ```
 
-## Install Guest kernel with SGX support
-
-Install the guest kernel in the Kata Containers directory, this way it can be used to run
-Kata Containers.
-
-```sh
-$ curl -LOk https://github.com/devimc/kvm-sgx/releases/download/v0.0.1/kata-virtiofs-sgx.tar.gz
-$ sudo tar -xf kata-virtiofs-sgx.tar.gz -C /usr/share/kata-containers/
-$ sudo sed -i 's|kernel =|kernel = "/usr/share/kata-containers/vmlinux-virtiofs-sgx.container"|g' \
-  /usr/share/defaults/kata-containers/configuration.toml
-```
-
-## Run Kata Containers with SGX enabled
+### Kata Containers Configuration
 
 Before running a Kata Container make sure that your version of `crio` or `containerd`
 supports annotations.
+
 For `containerd` check in `/etc/containerd/config.toml` that the list of `pod_annotations` passed
 to the `sandbox` are: `["io.katacontainers.*", "sgx.intel.com/epc"]`.
 
-> `sgx.yaml`
+## Usage
+
+With the following sample job deployed using `kubectl apply -f`:
+
 ```yaml
-apiVersion: v1
-kind: Pod
+apiVersion: batch/v1
+kind: Job
 metadata:
-  name: sgx
-  annotations:
-    sgx.intel.com/epc: "32Mi"
+  name: oesgx-demo-job
+  labels:
+    jobgroup: oesgx-demo
 spec:
-  terminationGracePeriodSeconds: 0
-  runtimeClassName: kata
-  containers:
-  - name: c1
-    image: busybox
-    command:
-        - sh
-    stdin: true
-    tty: true
-    volumeMounts:
-    - mountPath: /dev/sgx/
-      name: test-volume
-  volumes:
-  - name: test-volume
-    hostPath:
-      path: /dev/sgx/
-      type: Directory
+  template:
+    metadata:
+      labels:
+        jobgroup: oesgx-demo
+    spec:
+      runtimeClassName: kata-clh
+      initContainers:
+        - name: init-sgx
+          image: busybox
+          command: ['sh', '-c', 'mkdir /dev/sgx; ln -s /dev/sgx_enclave /dev/sgx/enclave; ln -s /dev/sgx_provision /dev/sgx/provision']
+          volumeMounts:
+          - mountPath: /dev
+            name: dev-mount
+      restartPolicy: Never
+      containers:
+        -
+          name: eosgx-demo-job-1
+          image: oeciteam/oe-helloworld:latest
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            readOnlyRootFilesystem: true
+            capabilities:
+              add: ["IPC_LOCK"]
+          resources:
+            limits:
+              sgx.intel.com/epc: "512Ki"
+      volumes:
+        - name: dev-mount
+          hostPath:
+            path: /dev
 ```
+
+You'll see the enclave output:
 
 ```sh
-$ kubectl apply -f sgx.yaml
-$ kubectl exec -ti sgx ls /dev/sgx/
-enclave    provision
+$ kubectl logs oesgx-demo-job-wh42g
+Hello world from the enclave
+Enclave called into host to print: Hello World!
 ```
 
-The output of the latest command shouldn't be empty, otherwise check
-your system environment to make sure SGX is fully supported.
+### Notes
 
-[1]: github.com/cloud-hypervisor/cloud-hypervisor/
+* The Kata VM's SGX Encrypted Page Cache (EPC) memory size is based on the sum of `sgx.intel.com/epc`
+resource requests within the pod.
+* `init-sgx` can be removed from the YAML configuration file if the Kata rootfs is modified with the
+necessary udev rules.
+   See the [note on SGX backwards compatibility](https://github.com/intel/intel-device-plugins-for-kubernetes/tree/main/cmd/sgx_plugin#backwards-compatibility-note).
+* Intel SGX DCAP attestation is known to work from Kata sandboxes but it comes with one limitation: If
+the Intel SGX `aesm` daemon runs on the bare metal node and DCAP `out-of-proc` attestation is used,
+containers within the Kata sandbox cannot get the access to the host's `/var/run/aesmd/aesm.sock`
+because socket passthrough is not supported. An alternative is to deploy the `aesm` daemon as a side-car
+container.
+* Projects like [Gramine Shielded Containers (GSC)](https://gramine-gsc.readthedocs.io/en/latest/) are
+also known to work. For GSC specifically, the Kata guest kernel needs to have the `CONFIG_NUMA=y`
+enabled and at least one CPU online when running the GSC container.
