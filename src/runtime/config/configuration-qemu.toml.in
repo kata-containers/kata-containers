@@ -547,6 +547,13 @@ sandbox_bind_mounts=@DEFBINDMOUNTS@
 # Determines how VFIO devices should be be presented to the container.
 # Options:
 #
+#  - vfio
+#    Matches behaviour of OCI runtimes (e.g. runc) as much as
+#    possible.  VFIO devices will appear in the container as VFIO
+#    character devices under /dev/vfio.  The exact names may differ
+#    from the host (they need to match the VM's IOMMU group numbers
+#    rather than the host's)
+#
 #  - guest-kernel
 #    This is a Kata-specific behaviour that's useful in certain cases.
 #    The VFIO device is managed by whatever driver in the VM kernel

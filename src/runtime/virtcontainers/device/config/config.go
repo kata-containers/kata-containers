@@ -191,20 +191,29 @@ type BlockDrive struct {
 type VFIOModeType uint32
 
 const (
+	// VFIOModeVFIO specifies OCI compliant behaviour: VFIO
+	// devices specified to Kata appear as VFIO devices within the
+	// container
+	VFIOModeVFIO VFIOModeType = iota
+
 	// VFIOModeGuestKernel specifies Kata-specific behaviour
 	// useful in certain cases: VFIO devices specified to Kata are
 	// bound to whatever driver in the VM will take them.  This
 	// requires specialized containers expecting this behaviour to
 	// locate and use the devices
-	VFIOModeGuestKernel = iota
+	VFIOModeGuestKernel
 )
 
 const (
+	vfioModeVfioStr        = "vfio"
 	vfioModeGuestKernelStr = "guest-kernel"
 )
 
 func (m *VFIOModeType) VFIOSetMode(modeName string) error {
 	switch modeName {
+	case vfioModeVfioStr:
+		*m = VFIOModeVFIO
+		return nil
 	case vfioModeGuestKernelStr:
 		*m = VFIOModeGuestKernel
 		return nil
