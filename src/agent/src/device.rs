@@ -71,7 +71,7 @@ pub fn pcipath_to_sysfs(root_bus_sysfs: &str, pcipath: &pci::Path) -> Result<Str
     let mut relpath = String::new();
 
     for i in 0..pcipath.len() {
-        let bdf = format!("{}:{}.0", bus, pcipath[i]);
+        let bdf = format!("{}:{}", bus, pcipath[i]);
 
         relpath = format!("{}/{}", relpath, bdf);
 
@@ -277,13 +277,23 @@ impl UeventMatcher for PciMatcher {
     }
 }
 
-pub async fn wait_for_pci_device(sandbox: &Arc<Mutex<Sandbox>>, pcipath: &pci::Path) -> Result<()> {
+pub async fn wait_for_pci_device(
+    sandbox: &Arc<Mutex<Sandbox>>,
+    pcipath: &pci::Path,
+) -> Result<pci::Address> {
     let root_bus_sysfs = format!("{}{}", SYSFS_DIR, create_pci_root_bus_path());
     let sysfs_rel_path = pcipath_to_sysfs(&root_bus_sysfs, pcipath)?;
     let matcher = PciMatcher::new(&sysfs_rel_path)?;
 
-    let _ = wait_for_uevent(sandbox, matcher).await?;
-    Ok(())
+    let uev = wait_for_uevent(sandbox, matcher).await?;
+
+    let addr = uev
+        .devpath
+        .rsplit('/')
+        .next()
+        .ok_or_else(|| anyhow!("Bad device path {:?} in uevent", &uev.devpath))?;
+    let addr = pci::Address::from_str(addr)?;
+    Ok(addr)
 }
 
 /// Scan SCSI bus for the given SCSI address(SCSI-Id and LUN)
