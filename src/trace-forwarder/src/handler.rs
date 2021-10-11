@@ -1,15 +1,16 @@
-// Copyright (c) 2020 Intel Corporation
+// Copyright (c) 2020-2021 Intel Corporation
 //
 // SPDX-License-Identifier: Apache-2.0
 //
 
 use anyhow::{anyhow, Context, Result};
 use byteorder::{ByteOrder, NetworkEndian};
+use futures::executor::block_on;
 use opentelemetry::sdk::export::trace::{SpanData, SpanExporter};
 use slog::{debug, info, o, Logger};
+use std::fs::File;
 use std::io::{ErrorKind, Read};
-use std::net::Shutdown;
-use vsock::VsockStream;
+use std::os::unix::io::{FromRawFd, RawFd};
 
 // The VSOCK "packet" protocol used comprises two elements:
 //
@@ -28,14 +29,13 @@ fn mk_io_err(msg: &str) -> std::io::Error {
     std::io::Error::new(std::io::ErrorKind::Other, msg.to_string())
 }
 
-pub async fn handle_connection<'a>(
+async fn handle_async_connection<'a>(
     logger: Logger,
-    mut conn: VsockStream,
+    mut conn: &'a mut dyn Read,
     exporter: &'a mut dyn SpanExporter,
     dump_only: bool,
 ) -> Result<()> {
-    let logger = logger.new(o!("subsystem" => "handler",
-            "connection" => format!("{:?}", conn)));
+    let logger = logger.new(o!("subsystem" => "handler"));
 
     debug!(logger, "handling connection");
 
@@ -43,12 +43,7 @@ pub async fn handle_connection<'a>(
         .await
         .map_err(|e| mk_io_err(&format!("failed to handle data: {:}", e)))?;
 
-    debug!(&logger, "handled data");
-
-    conn.shutdown(Shutdown::Read)
-        .map_err(|e| mk_io_err(&format!("shutdown failed: {:}", e)))?;
-
-    debug!(&logger, "shutdown connection");
+    debug!(&logger, "handled connection");
 
     Ok(())
 }
@@ -83,7 +78,7 @@ async fn handle_trace_data<'a>(
 
         reader
             .read_exact(&mut encoded_payload)
-            .with_context(|| format!("failed to read payload"))?;
+            .with_context(|| "failed to read payload")?;
 
         debug!(logger, "read payload");
 
@@ -95,9 +90,7 @@ async fn handle_trace_data<'a>(
         if dump_only {
             debug!(logger, "dump-only: {:?}", span_data);
         } else {
-            let mut batch = Vec::<SpanData>::new();
-
-            batch.push(span_data);
+            let batch = vec![span_data];
 
             // Call low-level Jaeger exporter to send the trace span immediately.
             let result = exporter.export(batch).await;
@@ -109,6 +102,21 @@ async fn handle_trace_data<'a>(
             debug!(logger, "exported trace spans");
         }
     }
+
+    Ok(())
+}
+
+pub fn handle_connection(
+    logger: Logger,
+    fd: RawFd,
+    exporter: &mut dyn SpanExporter,
+    dump_only: bool,
+) -> Result<()> {
+    let mut file = unsafe { File::from_raw_fd(fd) };
+
+    let conn = handle_async_connection(logger, &mut file, exporter, dump_only);
+
+    block_on(conn)?;
 
     Ok(())
 }
