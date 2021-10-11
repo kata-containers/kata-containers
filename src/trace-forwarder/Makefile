@@ -1,4 +1,4 @@
-# Copyright (c) 2020 Intel Corporation
+# Copyright (c) 2020-2021 Intel Corporation
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -17,6 +17,7 @@ vendor:
 	cargo vendor
 
 test:
+	@cargo test --all -- --nocapture
 
 install:
 
