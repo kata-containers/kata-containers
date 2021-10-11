@@ -284,13 +284,11 @@ func (a *Acrn) setup(ctx context.Context, id string, hypervisorConfig *Hyperviso
 	span, _ := katatrace.Trace(ctx, a.Logger(), "setup", acrnTracingTags, map[string]string{"sandbox_id": a.id})
 	defer span.End()
 
-	err := hypervisorConfig.valid()
-	if err != nil {
+	if err := a.setConfig(hypervisorConfig); err != nil {
 		return err
 	}
 
 	a.id = id
-	a.config = *hypervisorConfig
 	a.arch = newAcrnArch(a.config)
 
 	var create bool
@@ -302,6 +300,9 @@ func (a *Acrn) setup(ctx context.Context, id string, hypervisorConfig *Hyperviso
 
 	if create {
 		a.Logger().Debug("Setting UUID")
+
+		var err error
+
 		if uuid, err = a.GetNextAvailableUUID(); err != nil {
 			return err
 		}
@@ -340,6 +341,16 @@ func (a *Acrn) createDummyVirtioBlkDev(ctx context.Context, devices []Device) ([
 	}
 
 	return devices, nil
+}
+
+func (a *Acrn) setConfig(config *HypervisorConfig) error {
+	if err := config.valid(); err != nil {
+		return err
+	}
+
+	a.config = *config
+
+	return nil
 }
 
 // createSandbox is the Hypervisor sandbox creation.

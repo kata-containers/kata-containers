@@ -85,7 +85,7 @@ func GrpcToVMConfig(j *pb.GrpcVMConfig) (*VMConfig, error) {
 // NewVM creates a new VM based on provided VMConfig.
 func NewVM(ctx context.Context, config VMConfig) (*VM, error) {
 	// 1. setup hypervisor
-	hypervisor, err := newHypervisor(config.HypervisorType)
+	hypervisor, err := NewHypervisor(config.HypervisorType)
 	if err != nil {
 		return nil, err
 	}
@@ -165,7 +165,7 @@ func NewVM(ctx context.Context, config VMConfig) (*VM, error) {
 func NewVMFromGrpc(ctx context.Context, v *pb.GrpcVM, config VMConfig) (*VM, error) {
 	virtLog.WithField("GrpcVM", v).WithField("config", config).Info("create new vm from Grpc")
 
-	hypervisor, err := newHypervisor(config.HypervisorType)
+	hypervisor, err := NewHypervisor(config.HypervisorType)
 	if err != nil {
 		return nil, err
 	}
