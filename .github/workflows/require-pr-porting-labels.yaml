@@ -12,8 +12,7 @@ on:
       - reopened
       - labeled
       - unlabeled
-   pull_request:
-     branches:
+    branches:
       - main
 
 jobs:
@@ -32,8 +31,6 @@ jobs:
 
       - name: Checkout code to allow hub to communicate with the project
         uses: actions/checkout@v2
-        with:
-          token: ${{ secrets.KATA_GITHUB_ACTIONS_TOKEN }}
 
       - name: Install porting checker script
         run: |
