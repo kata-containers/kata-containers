@@ -277,7 +277,7 @@ VERSION_ID="%s"
 }
 
 func getExpectedHypervisor(config oci.RuntimeConfig) HypervisorInfo {
-	return HypervisorInfo{
+	info := HypervisorInfo{
 		Version:           testHypervisorVersion,
 		Path:              config.HypervisorConfig.HypervisorPath,
 		MachineType:       config.HypervisorConfig.HypervisorMachineType,
@@ -292,6 +292,16 @@ func getExpectedHypervisor(config oci.RuntimeConfig) HypervisorInfo {
 		HotplugVFIOOnRootBus: config.HypervisorConfig.HotplugVFIOOnRootBus,
 		PCIeRootPort:         config.HypervisorConfig.PCIeRootPort,
 	}
+
+	if os.Geteuid() == 0 {
+		// This assumes the test hypervisor is a non-hybrid-vsock
+		// one (such as QEMU).
+		info.SocketPath = ""
+	} else {
+		info.SocketPath = unknown
+	}
+
+	return info
 }
 
 func getExpectedImage(config oci.RuntimeConfig) ImageInfo {
@@ -1007,12 +1017,58 @@ func TestGetHypervisorInfo(t *testing.T) {
 	_, config, err := makeRuntimeConfig(tmpdir)
 	assert.NoError(err)
 
-	info := getHypervisorInfo(config)
+	info, err := getHypervisorInfo(config)
+	assert.NoError(err)
 	assert.Equal(info.Version, testHypervisorVersion)
 
 	err = os.Remove(config.HypervisorConfig.HypervisorPath)
 	assert.NoError(err)
 
-	info = getHypervisorInfo(config)
+	info, err = getHypervisorInfo(config)
+	assert.NoError(err)
 	assert.Equal(info.Version, unknown)
+}
+
+func TestGetHypervisorInfoSocket(t *testing.T) {
+	assert := assert.New(t)
+
+	tmpdir, err := ioutil.TempDir("", "")
+	assert.NoError(err)
+	defer os.RemoveAll(tmpdir)
+
+	_, config, err := makeRuntimeConfig(tmpdir)
+	assert.NoError(err)
+
+	type TestHypervisorDetails struct {
+		hType       vc.HypervisorType
+		hybridVsock bool
+	}
+
+	hypervisors := []TestHypervisorDetails{
+		{vc.AcrnHypervisor, false},
+		{vc.ClhHypervisor, true},
+		{vc.FirecrackerHypervisor, true},
+		{vc.MockHypervisor, false},
+		{vc.QemuHypervisor, false},
+	}
+
+	for i, details := range hypervisors {
+		msg := fmt.Sprintf("hypervisor[%d]: %+v", i, details)
+
+		config.HypervisorType = details.hType
+
+		info, err := getHypervisorInfo(config)
+		assert.NoError(err, msg)
+
+		if os.Geteuid() == 0 {
+			if !details.hybridVsock {
+				assert.Equal(info.SocketPath, "", msg)
+			} else {
+				assert.NotEmpty(info.SocketPath, msg)
+				assert.True(strings.HasPrefix(info.SocketPath, "/"), msg)
+			}
+		} else {
+			assert.Equal(info.SocketPath, unknown, msg)
+		}
+	}
 }

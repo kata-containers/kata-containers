@@ -229,13 +229,14 @@ func (q *qemu) setup(ctx context.Context, id string, hypervisorConfig *Hyperviso
 	span, _ := katatrace.Trace(ctx, q.Logger(), "setup", qemuTracingTags, map[string]string{"sandbox_id": q.id})
 	defer span.End()
 
-	err := hypervisorConfig.valid()
-	if err != nil {
+	if err := q.setConfig(hypervisorConfig); err != nil {
 		return err
 	}
 
 	q.id = id
-	q.config = *hypervisorConfig
+
+	var err error
+
 	q.arch, err = newQemuArch(q.config)
 	if err != nil {
 		return err
@@ -462,6 +463,17 @@ func (q *qemu) setupFileBackedMem(knobs *govmmQemu.Knobs, memory *govmmQemu.Memo
 	knobs.FileBackedMem = true
 	knobs.MemShared = true
 	memory.Path = target
+}
+
+func (q *qemu) setConfig(config *HypervisorConfig) error {
+	err := config.valid()
+	if err != nil {
+		return err
+	}
+
+	q.config = *config
+
+	return nil
 }
 
 // createSandbox is the Hypervisor sandbox creation implementation for govmmQemu.

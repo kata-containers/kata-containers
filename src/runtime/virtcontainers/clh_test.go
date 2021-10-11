@@ -11,11 +11,13 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist"
 	chclient "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/cloud-hypervisor/client"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
@@ -365,4 +367,46 @@ func TestCloudHypervisorHotplugRemoveDevice(t *testing.T) {
 
 	_, err = clh.hotplugRemoveDevice(context.Background(), nil, netDev)
 	assert.Error(err, "Hotplug remove pmem block device expected error")
+}
+
+func TestClhGenerateSocket(t *testing.T) {
+	assert := assert.New(t)
+
+	// Ensure the type is fully constructed
+	hypervisor, err := NewHypervisor("clh")
+	assert.NoError(err)
+
+	clh, ok := hypervisor.(*cloudHypervisor)
+	assert.True(ok)
+
+	clh.addVSock(1, "path")
+
+	s, err := clh.generateSocket("c")
+
+	assert.NoError(err)
+	assert.NotNil(s)
+
+	hvsock, ok := s.(types.HybridVSock)
+	assert.True(ok)
+	assert.NotEmpty(hvsock.UdsPath)
+
+	// Path must be absolute
+	assert.True(strings.HasPrefix(hvsock.UdsPath, "/"))
+
+	assert.NotZero(hvsock.Port)
+}
+
+func TestClhSetConfig(t *testing.T) {
+	assert := assert.New(t)
+
+	config, err := newClhConfig()
+	assert.NoError(err)
+
+	clh := &cloudHypervisor{}
+	assert.Equal(clh.config, HypervisorConfig{})
+
+	err = clh.setConfig(&config)
+	assert.NoError(err)
+
+	assert.Equal(clh.config, config)
 }

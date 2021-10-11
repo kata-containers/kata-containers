@@ -6,6 +6,7 @@
 package virtcontainers
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
@@ -23,6 +24,10 @@ func TestFCGenerateSocket(t *testing.T) {
 	hvsock, ok := i.(types.HybridVSock)
 	assert.True(ok)
 	assert.NotEmpty(hvsock.UdsPath)
+
+	// Path must be absolute
+	assert.True(strings.HasPrefix(hvsock.UdsPath, "/"))
+
 	assert.NotZero(hvsock.Port)
 }
 
@@ -63,4 +68,25 @@ func TestFCParseVersion(t *testing.T) {
 		assert.NoError(err)
 		assert.Equal(parsedVersion, v)
 	}
+}
+
+func TestFcSetConfig(t *testing.T) {
+	assert := assert.New(t)
+
+	config := HypervisorConfig{
+		HypervisorPath: "/some/where/firecracker",
+		KernelPath:     "/some/where/kernel",
+		ImagePath:      "/some/where/image",
+		JailerPath:     "/some/where/jailer",
+		Debug:          true,
+	}
+
+	fc := firecracker{}
+
+	assert.Equal(fc.config, HypervisorConfig{})
+
+	err := fc.setConfig(&config)
+	assert.NoError(err)
+
+	assert.Equal(fc.config, config)
 }

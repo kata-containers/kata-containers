@@ -29,7 +29,7 @@ import (
 //
 // XXX: Increment for every change to the output format
 // (meaning any change to the EnvInfo type).
-const formatVersion = "1.0.25"
+const formatVersion = "1.0.26"
 
 // MetaInfo stores information on the format of the output itself
 type MetaInfo struct {
@@ -108,6 +108,7 @@ type HypervisorInfo struct {
 	EntropySource        string
 	SharedFS             string
 	VirtioFSDaemon       string
+	SocketPath           string
 	Msize9p              uint32
 	MemorySlots          uint32
 	PCIeRootPort         uint32
@@ -305,12 +306,25 @@ func getAgentInfo(config oci.RuntimeConfig) (AgentInfo, error) {
 	return agent, nil
 }
 
-func getHypervisorInfo(config oci.RuntimeConfig) HypervisorInfo {
+func getHypervisorInfo(config oci.RuntimeConfig) (HypervisorInfo, error) {
 	hypervisorPath := config.HypervisorConfig.HypervisorPath
 
 	version, err := getCommandVersion(hypervisorPath)
 	if err != nil {
 		version = unknown
+	}
+
+	hypervisorType := config.HypervisorType
+
+	socketPath := unknown
+
+	// It is only reliable to make this call as root since a
+	// non-privileged user may not have access to /dev/vhost-vsock.
+	if os.Geteuid() == 0 {
+		socketPath, err = vc.GetHypervisorSocketTemplate(hypervisorType, &config.HypervisorConfig)
+		if err != nil {
+			return HypervisorInfo{}, err
+		}
 	}
 
 	return HypervisorInfo{
@@ -327,7 +341,8 @@ func getHypervisorInfo(config oci.RuntimeConfig) HypervisorInfo {
 
 		HotplugVFIOOnRootBus: config.HypervisorConfig.HotplugVFIOOnRootBus,
 		PCIeRootPort:         config.HypervisorConfig.PCIeRootPort,
-	}
+		SocketPath:           socketPath,
+	}, nil
 }
 
 func getEnvInfo(configFile string, config oci.RuntimeConfig) (env EnvInfo, err error) {
@@ -352,7 +367,10 @@ func getEnvInfo(configFile string, config oci.RuntimeConfig) (env EnvInfo, err e
 		return EnvInfo{}, err
 	}
 
-	hypervisor := getHypervisorInfo(config)
+	hypervisor, err := getHypervisorInfo(config)
+	if err != nil {
+		return EnvInfo{}, err
+	}
 
 	image := ImageInfo{
 		Path: config.HypervisorConfig.ImagePath,
