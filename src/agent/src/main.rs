@@ -200,12 +200,12 @@ async fn real_main() -> std::result::Result<(), Box<dyn std::error::Error>> {
         let _ = tracer::setup_tracing(NAME, &logger, &config)?;
     }
 
-    let root = span!(tracing::Level::TRACE, "root-span", work_units = 2);
+    let root_span = span!(tracing::Level::TRACE, "root-span");
 
     // XXX: Start the root trace transaction.
     //
     // XXX: Note that *ALL* spans needs to start after this point!!
-    let _enter = root.enter();
+    let span_guard = root_span.enter();
 
     // Start the sandbox and wait for its ttRPC server to end
     start_sandbox(&logger, &config, init_mode, &mut tasks, shutdown_rx.clone()).await?;
@@ -234,6 +234,10 @@ async fn real_main() -> std::result::Result<(), Box<dyn std::error::Error>> {
             return Err(anyhow!(e).into());
         }
     }
+
+    // force flushing spans
+    drop(span_guard);
+    drop(root_span);
 
     if config.tracing != tracer::TraceType::Disabled {
         tracer::end_tracing();
