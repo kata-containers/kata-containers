@@ -64,7 +64,7 @@ const (
 
 	sandboxMountsDir = "sandbox-mounts"
 
-	nydusRootFSType = "nydus"
+	NydusRootFSType = "fuse.nydus-overlayfs"
 	// enable debug console
 	kernelParamDebugConsole           = "agent.debug_console"
 	kernelParamDebugConsoleVPort      = "agent.debug_console_vport"
@@ -1272,7 +1272,7 @@ func (k *kataAgent) rollbackFailingContainerCreation(ctx context.Context, c *Con
 			k.Logger().WithError(err2).Error("rollback failed unmountHostMounts()")
 		}
 
-		if c.rootFs.Type == nydusRootFSType {
+		if c.rootFs.Type == NydusRootFSType {
 			if err2 := nydusContainerCleanup(ctx, getMountPath(c.sandbox.id), c); err2 != nil {
 				k.Logger().WithError(err2).Error("rollback failed nydusContainerCleanup")
 			}
@@ -1289,15 +1289,16 @@ func (k *kataAgent) buildContainerRootfsWithNydus(sandbox *Sandbox, c *Container
 		return nil, errors.New("nydus only support qemu currently")
 	}
 	q, _ := sandbox.hypervisor.(*qemu)
-	daemonConfig, snapshotDirPath, err := parseConfigs(c.rootFs.Options)
+	nydusOption, err := parseNydusOption(c.rootFs.Options)
 	if err != nil {
 		return nil, err
 	}
 	mountOpt := &MountOption{
 		mountpoint:   rafsMountPath(c.id),
-		bootstrap:    c.rootFs.Source,
-		daemonConfig: daemonConfig,
+		bootstrap:    nydusOption.Source,
+		daemonConfig: nydusOption.Config,
 	}
+	k.Logger().Infof("nydus option: %v", nydusOption)
 	// mount lowerdir to guest /run/kata-containers/shared/images/<cid>/lowerdir
 	if err := q.virtiofsDaemon.MountRAFS(*mountOpt); err != nil {
 		return nil, err
@@ -1306,18 +1307,19 @@ func (k *kataAgent) buildContainerRootfsWithNydus(sandbox *Sandbox, c *Container
 	containerShareDir := filepath.Join(getMountPath(c.sandbox.id), c.id)
 
 	// mkdir rootfs, guest at /run/kata-containers/shared/containers/<cid>/rootfs
-	if err := os.MkdirAll(filepath.Join(containerShareDir, c.rootfsSuffix), DirMode); err != nil {
+	rootfsDir := filepath.Join(containerShareDir, c.rootfsSuffix)
+	if err := os.MkdirAll(rootfsDir, DirMode); err != nil {
 		return nil, err
 	}
 	// bindmount snapshot dir which snapshotter allocated
 	// to guest /run/kata-containers/shared/containers/<cid>/snapshotdir
 	snapshotShareDir := filepath.Join(containerShareDir, snapshotDir)
-	if err := bindMount(k.ctx, snapshotDirPath, snapshotShareDir, true, "slave"); err != nil {
+	if err := bindMount(k.ctx, nydusOption.Snapshotdir, snapshotShareDir, true, "slave"); err != nil {
 		return nil, err
 	}
 
 	// so rootfs = overlay(upperdir, workerdir, lowerdir)
-	rootfs.MountPoint = rootPathParent
+	rootfs.MountPoint = filepath.Join(rootPathParent, c.rootfsSuffix)
 	rootfs.Source = typeOverlayFS
 	rootfs.Fstype = typeOverlayFS
 	rootfs.Driver = kataOverlayDevType
@@ -1325,11 +1327,12 @@ func (k *kataAgent) buildContainerRootfsWithNydus(sandbox *Sandbox, c *Container
 	rootfs.Options = append(rootfs.Options, fmt.Sprintf("%s=%s", workDir, filepath.Join(kataGuestSharedDir(), c.id, snapshotDir, "work")))
 	rootfs.Options = append(rootfs.Options, fmt.Sprintf("%s=%s", lowerDir, filepath.Join(kataGuestNydusImageDir(), c.id, lowerDir)))
 	rootfs.Options = append(rootfs.Options, "index=off")
+	k.Logger().Infof("rootfs info: %#v\n", rootfs)
 	return rootfs, nil
 }
 
 func (k *kataAgent) buildContainerRootfs(ctx context.Context, sandbox *Sandbox, c *Container, rootPathParent string) (*grpc.Storage, error) {
-	if c.rootFs.Type == nydusRootFSType {
+	if c.rootFs.Type == NydusRootFSType {
 		return k.buildContainerRootfsWithNydus(sandbox, c, rootPathParent)
 	}
 	if c.state.Fstype != "" && c.state.BlockDeviceID != "" {
@@ -1401,7 +1404,6 @@ func (k *kataAgent) buildContainerRootfs(ctx context.Context, sandbox *Sandbox, 
 func (k *kataAgent) createContainer(ctx context.Context, sandbox *Sandbox, c *Container) (p *Process, err error) {
 	span, ctx := katatrace.Trace(ctx, k.Logger(), "createContainer", kataAgentTracingTags)
 	defer span.End()
-
 	var ctrStorages []*grpc.Storage
 	var ctrDevices []*grpc.Device
 	var rootfs *grpc.Storage

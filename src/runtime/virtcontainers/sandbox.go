@@ -1127,25 +1127,38 @@ func (s *Sandbox) startVM(ctx context.Context) (err error) {
 		}
 	}()
 
-	if err := s.network.Run(ctx, s.networkNS.NetNsPath, func() error {
-		if s.factory != nil {
-			vm, err := s.factory.GetVM(ctx, VMConfig{
-				HypervisorType:   s.config.HypervisorType,
-				HypervisorConfig: s.config.HypervisorConfig,
-				AgentConfig:      s.config.AgentConfig,
-			})
-			if err != nil {
-				return err
-			}
+	// don't isolate net namespace from host for temporarily run
 
-			return vm.assignSandbox(s)
+	// if err := s.network.Run(ctx, s.networkNS.NetNsPath, func() error {
+	// 	if s.factory != nil {
+	// 		vm, err := s.factory.GetVM(ctx, VMConfig{
+	// 			HypervisorType:   s.config.HypervisorType,
+	// 			HypervisorConfig: s.config.HypervisorConfig,
+	// 			AgentConfig:      s.config.AgentConfig,
+	// 		})
+	// 		if err != nil {
+	// 			return err
+	// 		}
+
+	// 		return vm.assignSandbox(s)
+	// 	}
+
+	// 	return s.hypervisor.startSandbox(ctx, vmStartTimeout)
+	// }); err != nil {
+	// 	return err
+	// }
+	switch s.GetHypervisorType() {
+	case string(QemuHypervisor):
+		if err := s.startHypervisor(ctx); err != nil {
+			return err
 		}
-
-		return s.hypervisor.startSandbox(ctx, vmStartTimeout)
-	}); err != nil {
-		return err
+	default:
+		if err := s.network.Run(ctx, s.networkNS.NetNsPath, func() error {
+			return s.startHypervisor(ctx)
+		}); err != nil {
+			return err
+		}
 	}
-
 	// In case of vm factory, network interfaces are hotplugged
 	// after vm is started.
 	if s.factory != nil {
@@ -1192,6 +1205,23 @@ func (s *Sandbox) startVM(ctx context.Context) (err error) {
 	}()
 
 	return nil
+}
+
+func (s *Sandbox) startHypervisor(ctx context.Context) error {
+	if s.factory != nil {
+		vm, err := s.factory.GetVM(ctx, VMConfig{
+			HypervisorType:   s.config.HypervisorType,
+			HypervisorConfig: s.config.HypervisorConfig,
+			AgentConfig:      s.config.AgentConfig,
+		})
+		if err != nil {
+			return err
+		}
+
+		return vm.assignSandbox(s)
+	}
+
+	return s.hypervisor.startSandbox(ctx, vmStartTimeout)
 }
 
 // stopVM: stop the sandbox's VM
@@ -1241,7 +1271,6 @@ func (s *Sandbox) CreateContainer(ctx context.Context, contConfig ContainerConfi
 	if err != nil {
 		return nil, err
 	}
-
 	// create and start the container
 	if err = c.create(ctx); err != nil {
 		return nil, err

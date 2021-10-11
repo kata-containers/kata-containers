@@ -863,7 +863,7 @@ func (c *Container) rollbackFailingContainerCreation(ctx context.Context) {
 		c.Logger().WithError(err).Error("rollback failed unmountHostMounts()")
 	}
 
-	if c.rootFs.Type == nydusRootFSType {
+	if c.rootFs.Type == NydusRootFSType {
 		if err := nydusContainerCleanup(ctx, getMountPath(c.sandbox.id), c); err != nil {
 			c.Logger().WithError(err).Error("rollback failed nydusContainerCleanup")
 		}
@@ -899,7 +899,7 @@ func (c *Container) create(ctx context.Context) (err error) {
 		}
 	}()
 
-	if c.checkBlockDeviceSupport(ctx) {
+	if c.checkBlockDeviceSupport(ctx) && c.rootFs.Type != NydusRootFSType {
 		// If the rootfs is backed by a block device, go ahead and hotplug it to the guest
 		if err = c.hotplugDrive(ctx); err != nil {
 			return
@@ -1098,7 +1098,7 @@ func (c *Container) stop(ctx context.Context, force bool) error {
 		return err
 	}
 
-	if c.rootFs.Type == nydusRootFSType {
+	if c.rootFs.Type == NydusRootFSType {
 		if err := nydusContainerCleanup(ctx, getMountPath(c.sandbox.id), c); err != nil && !force {
 			return err
 		}

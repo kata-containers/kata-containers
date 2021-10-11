@@ -32,9 +32,6 @@ const (
 	nydusRafsType          = "rafs"
 	nydusPassthroughfsType = "passthrough_fs"
 
-	configPrefix   = "config="
-	snapshotPrefix = "snapshotdir="
-
 	sharedPathInGuest = "/containers"
 )
 
@@ -328,30 +325,39 @@ func handleMountError(r io.Reader) error {
 	return errors.New(errMessage.Message)
 }
 
-func parseConfigs(configs []string) (string, string, error) {
-	handleErr := func(msg string) (string, string, error) {
-		return "", "", errors.New(msg)
-	}
-	if len(configs) != 2 {
-		msg := fmt.Sprintf("config should has two items, %v", configs)
-		return handleErr(msg)
-	}
+/*
+   rootfs mount format: Type: fuse.nydus-overlayfs, Source: overlay
+   Options：[lowerdir=/foo/lower2:/foo/lower1,upperdir=/foo/upper,workdir=/foo/work,nydusoption={source: xxx, config: xxx, snapshotdir: xxx}]
+*/
 
-	var (
-		daemonConfig string
-		snapshotDir  string
-	)
-	for _, str := range configs {
-		if strings.HasPrefix(str, configPrefix) {
-			daemonConfig = strings.TrimPrefix(str, configPrefix)
-		} else if strings.HasPrefix(str, snapshotPrefix) {
-			snapshotDir = strings.TrimPrefix(str, snapshotPrefix)
-		} else {
+type NydusOption struct {
+	Source      string `json:"source"`
+	Config      string `json:"config"`
+	Snapshotdir string `json:"snapshotdir"`
+}
+
+const nydusOptionKey = "nydusoption"
+
+func parseNydusOption(options []string) (*NydusOption, error) {
+	nydusOpt := ""
+	for _, opt := range options {
+		parts := strings.Split(opt, "=")
+		if len(parts) != 2 {
+			continue
+		}
+		if parts[0] == nydusOptionKey {
+			nydusOpt = parts[1]
 		}
 	}
-	if len(daemonConfig) == 0 || len(snapshotDir) == 0 {
-		msg := fmt.Sprintf("daemonConfig or snapshotDir has wrong format, %v", configs)
-		return handleErr(msg)
+	if len(nydusOpt) == 0 {
+		return nil, errors.New("no nydus option found in rootfs mount options")
 	}
-	return daemonConfig, snapshotDir, nil
+	no := &NydusOption{}
+	if err := json.Unmarshal([]byte(nydusOpt), no); err != nil {
+		return nil, errors.Wrapf(err, "json unmarshal err")
+	}
+	if len(no.Config) == 0 || len(no.Snapshotdir) == 0 || len(no.Source) == 0 {
+		return nil, fmt.Errorf("nydus option is not correct, %v", no)
+	}
+	return no, nil
 }
