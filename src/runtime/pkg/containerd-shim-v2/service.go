@@ -751,6 +751,11 @@ func (s *service) Resume(ctx context.Context, r *taskAPI.ResumeRequest) (_ *ptyp
 	return empty, err
 }
 
+// Pause the container
+func (s *service) PullImage(ctx context.Context, r *taskAPI.PullImageRequest) (_ *ptypes.Empty, err error) {
+	return empty, nil
+}
+
 // Kill a process with the provided signal
 func (s *service) Kill(ctx context.Context, r *taskAPI.KillRequest) (_ *ptypes.Empty, err error) {
 	shimLog.WithField("container", r.ID).Debug("Kill() start")
