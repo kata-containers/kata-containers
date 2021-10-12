@@ -1247,6 +1247,23 @@ func (c *Container) resume(ctx context.Context) error {
 	return c.setContainerState(types.StateRunning)
 }
 
+
+func (c *Container) pullImage(ctx context.Context, image string) error {
+	if err := c.checkSandboxRunning("pause"); err != nil {
+		return err
+	}
+
+	if c.state.State != types.StateRunning {
+		return fmt.Errorf("Container not running, impossible to pull image")
+	}
+
+	if err := c.sandbox.agent.pullImage(ctx, c.sandbox, *c, image); err != nil {
+		return err
+	}
+
+	return c.setContainerState(types.StateRunning)
+}
+
 // hotplugDrive will attempt to hotplug the container rootfs if it is backed by a
 // block device
 func (c *Container) hotplugDrive(ctx context.Context) error {

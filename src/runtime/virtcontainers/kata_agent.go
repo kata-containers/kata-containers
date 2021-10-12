@@ -138,6 +138,7 @@ const (
 	grpcStatsContainerRequest    = "grpc.StatsContainerRequest"
 	grpcPauseContainerRequest    = "grpc.PauseContainerRequest"
 	grpcResumeContainerRequest   = "grpc.ResumeContainerRequest"
+	grpcPullImageRequest         = "grpc.PullImageRequest"
 	grpcReseedRandomDevRequest   = "grpc.ReseedRandomDevRequest"
 	grpcGuestDetailsRequest      = "grpc.GuestDetailsRequest"
 	grpcMemHotplugByProbeRequest = "grpc.MemHotplugByProbeRequest"
@@ -1792,6 +1793,16 @@ func (k *kataAgent) resumeContainer(ctx context.Context, sandbox *Sandbox, c Con
 	return err
 }
 
+
+func (k *kataAgent) pullImage(ctx context.Context, sandbox *Sandbox, c Container, image string) error {
+	req := &grpc.PullImageRequest{
+		ContainerId: image,
+	}
+	c.Logger().Debugf("ASHLEY making pull image call to agent")
+	_, err := k.sendReq(ctx, req)
+	return err
+}
+
 func (k *kataAgent) memHotplugByProbe(ctx context.Context, addr uint64, sizeMB uint32, memorySectionSizeMB uint32) error {
 	if memorySectionSizeMB == uint32(0) {
 		return fmt.Errorf("memorySectionSizeMB couldn't be zero")
@@ -2036,6 +2047,9 @@ func (k *kataAgent) installReqFunc(c *kataclient.AgentClient) {
 	}
 	k.reqHandlers[grpcResumeContainerRequest] = func(ctx context.Context, req interface{}) (interface{}, error) {
 		return k.client.AgentServiceClient.ResumeContainer(ctx, req.(*grpc.ResumeContainerRequest))
+	}
+	k.reqHandlers[grpcPullImageRequest] = func(ctx context.Context, req interface{}) (interface{}, error) {
+		return k.client.AgentServiceClient.PullImage(ctx, req.(*grpc.PullImageRequest))
 	}
 	k.reqHandlers[grpcReseedRandomDevRequest] = func(ctx context.Context, req interface{}) (interface{}, error) {
 		return k.client.AgentServiceClient.ReseedRandomDev(ctx, req.(*grpc.ReseedRandomDevRequest))
