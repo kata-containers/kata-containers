@@ -254,3 +254,7 @@ func (s *Sandbox) GetAgentURL() (string, error) {
 func (s *Sandbox) GetHypervisorPid() (int, error) {
 	return 0, nil
 }
+
+func (s *Sandbox) PullImage(ctx context.Context, image string, newContainerID string) error {
+	return nil
+}

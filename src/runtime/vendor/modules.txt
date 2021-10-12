@@ -59,7 +59,7 @@ github.com/containerd/cgroups/stats/v1
 # github.com/containerd/console v1.0.3
 ## explicit
 github.com/containerd/console
-# github.com/containerd/containerd v1.6.0-beta.4
+# github.com/containerd/containerd v1.5.7 => github.com/confidential-containers/containerd v1.5.8-0.20211026205748-ba7b469fa4d7
 ## explicit
 github.com/containerd/containerd/defaults
 github.com/containerd/containerd/errdefs
@@ -458,7 +458,7 @@ k8s.io/apimachinery/pkg/api/resource
 # k8s.io/cri-api v0.23.0-alpha.4
 ## explicit
 k8s.io/cri-api/pkg/apis/runtime/v1alpha2
-# github.com/opencontainers/image-spec => github.com/opencontainers/image-spec v1.0.2
-# github.com/opencontainers/runc => github.com/opencontainers/runc v1.0.3
+# github.com/containerd/containerd => github.com/confidential-containers/containerd v1.5.8-0.20211026205748-ba7b469fa4d7
+# github.com/opencontainers/runc => github.com/opencontainers/runc v1.0.1
 # github.com/uber-go/atomic => go.uber.org/atomic v1.5.1
 # google.golang.org/genproto => google.golang.org/genproto v0.0.0-20180817151627-c66870c02cf8
