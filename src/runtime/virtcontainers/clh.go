@@ -258,6 +258,9 @@ func (clh *cloudHypervisor) createSandbox(ctx context.Context, id string, networ
 	// Followed by extra debug parameters if debug enabled in configuration file
 	if clh.config.Debug {
 		params = append(params, clhDebugKernelParams...)
+	} else {
+		// start the guest kernel with 'quiet' in non-debug mode
+		params = append(params, Param{"quiet", ""})
 	}
 
 	// Followed by extra kernel parameters defined in the configuration file
