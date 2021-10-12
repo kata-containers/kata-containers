@@ -172,6 +172,11 @@ func (n *mockAgent) resumeContainer(ctx context.Context, sandbox *Sandbox, c Con
 	return nil
 }
 
+// pullImage is the Noop agent pull image implementation. It does nothing.
+func (n *mockAgent) pullImage(ctx context.Context, sandbox *Sandbox, image string, containerID string) error {
+	return nil
+}
+
 // configure is the Noop agent configuration implementation. It does nothing.
 func (n *mockAgent) configure(ctx context.Context, h hypervisor, id, sharePath string, config KataAgentConfig) error {
 	return nil
