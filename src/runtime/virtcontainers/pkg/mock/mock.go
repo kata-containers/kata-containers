@@ -187,6 +187,10 @@ func (p *HybridVSockTTRPCMockImp) ResumeContainer(ctx context.Context, req *pb.R
 	return emptyResp, nil
 }
 
+func (p *HybridVSockTTRPCMockImp) PullImage(ctx context.Context, req *pb.PullImageRequest) (*gpb.Empty, error) {
+	return emptyResp, nil
+}
+
 func (p *HybridVSockTTRPCMockImp) ReseedRandomDev(ctx context.Context, req *pb.ReseedRandomDevRequest) (*gpb.Empty, error) {
 	return emptyResp, nil
 }
