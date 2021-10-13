@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
+//nolint:deadcode,unused
 package utils
 
 // from <linux/vhost.h>
