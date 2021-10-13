@@ -832,14 +832,14 @@ fn create_devices(devices: &[LinuxDevice], bind: bool) -> Result<()> {
     let op: fn(&LinuxDevice) -> Result<()> = if bind { bind_dev } else { mknod_dev };
     let old = stat::umask(Mode::from_bits_truncate(0o000));
     for dev in DEFAULT_DEVICES.iter() {
-        op(dev)?;
+        op(dev).context(format!("Creating container device {:?}", dev))?;
     }
     for dev in devices {
         if !dev.path.starts_with("/dev") || dev.path.contains("..") {
             let msg = format!("{} is not a valid device path", dev.path);
             bail!(anyhow!(msg));
         }
-        op(dev)?;
+        op(dev).context(format!("Creating container device {:?}", dev))?;
     }
     stat::umask(old);
     Ok(())
