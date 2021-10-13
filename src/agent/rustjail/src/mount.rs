@@ -829,17 +829,19 @@ fn default_symlinks() -> Result<()> {
     Ok(())
 }
 fn create_devices(devices: &[LinuxDevice], bind: bool) -> Result<()> {
-    let op: fn(&LinuxDevice) -> Result<()> = if bind { bind_dev } else { mknod_dev };
+    let op: fn(&LinuxDevice, &Path) -> Result<()> = if bind { bind_dev } else { mknod_dev };
     let old = stat::umask(Mode::from_bits_truncate(0o000));
     for dev in DEFAULT_DEVICES.iter() {
-        op(dev).context(format!("Creating container device {:?}", dev))?;
+        let path = Path::new(&dev.path[1..]);
+        op(dev, path).context(format!("Creating container device {:?}", dev))?;
     }
     for dev in devices {
         if !dev.path.starts_with("/dev") || dev.path.contains("..") {
             let msg = format!("{} is not a valid device path", dev.path);
             bail!(anyhow!(msg));
         }
-        op(dev).context(format!("Creating container device {:?}", dev))?;
+        let path = Path::new(&dev.path[1..]);
+        op(dev, path).context(format!("Creating container device {:?}", dev))?;
     }
     stat::umask(old);
     Ok(())
@@ -861,21 +863,21 @@ lazy_static! {
     };
 }
 
-fn mknod_dev(dev: &LinuxDevice) -> Result<()> {
+fn mknod_dev(dev: &LinuxDevice, relpath: &Path) -> Result<()> {
     let f = match LINUXDEVICETYPE.get(dev.r#type.as_str()) {
         Some(v) => v,
         None => return Err(anyhow!("invalid spec".to_string())),
     };
 
     stat::mknod(
-        &dev.path[1..],
+        relpath,
         *f,
         Mode::from_bits_truncate(dev.file_mode.unwrap_or(0)),
         nix::sys::stat::makedev(dev.major as u64, dev.minor as u64),
     )?;
 
     unistd::chown(
-        &dev.path[1..],
+        relpath,
         Some(Uid::from_raw(dev.uid.unwrap_or(0) as uid_t)),
         Some(Gid::from_raw(dev.gid.unwrap_or(0) as uid_t)),
     )?;
@@ -883,9 +885,9 @@ fn mknod_dev(dev: &LinuxDevice) -> Result<()> {
     Ok(())
 }
 
-fn bind_dev(dev: &LinuxDevice) -> Result<()> {
+fn bind_dev(dev: &LinuxDevice, relpath: &Path) -> Result<()> {
     let fd = fcntl::open(
-        &dev.path[1..],
+        relpath,
         OFlag::O_RDWR | OFlag::O_CREAT,
         Mode::from_bits_truncate(0o644),
     )?;
@@ -894,7 +896,7 @@ fn bind_dev(dev: &LinuxDevice) -> Result<()> {
 
     mount(
         Some(&*dev.path),
-        &dev.path[1..],
+        relpath,
         None::<&str>,
         MsFlags::MS_BIND,
         None::<&str>,
@@ -1258,11 +1260,12 @@ mod tests {
             uid: Some(unistd::getuid().as_raw()),
             gid: Some(unistd::getgid().as_raw()),
         };
+        let path = Path::new("fifo");
 
-        let ret = mknod_dev(&dev);
+        let ret = mknod_dev(&dev, path);
         assert!(ret.is_ok(), "Should pass. Got: {:?}", ret);
 
-        let ret = stat::stat("fifo");
+        let ret = stat::stat(path);
         assert!(ret.is_ok(), "Should pass. Got: {:?}", ret);
     }
     #[test]
