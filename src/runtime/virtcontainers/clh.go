@@ -257,6 +257,9 @@ func (clh *cloudHypervisor) createSandbox(ctx context.Context, id string, networ
 	// Followed by extra debug parameters if debug enabled in configuration file
 	if clh.config.Debug {
 		params = append(params, clhDebugKernelParams...)
+	} else {
+		// start the guest kernel with 'quiet' in non-debug mode
+		params = append(params, Param{"quiet", ""})
 	}
 
 	// Followed by extra kernel parameters defined in the configuration file
@@ -285,11 +288,12 @@ func (clh *cloudHypervisor) createSandbox(ctx context.Context, id string, networ
 		clh.vmconfig.Pmem = &[]chclient.PmemConfig{*pmem}
 	}
 
-	// set the serial console to the cloud hypervisor
+	// Use serial port as the guest console only in debug mode,
+	// so that we can gather early OS booting log
 	if clh.config.Debug {
 		clh.vmconfig.Serial = chclient.NewConsoleConfig(cctTTY)
 	} else {
-		clh.vmconfig.Serial = chclient.NewConsoleConfig(cctNULL)
+		clh.vmconfig.Serial = chclient.NewConsoleConfig(cctOFF)
 	}
 
 	clh.vmconfig.Console = chclient.NewConsoleConfig(cctOFF)
@@ -988,9 +992,8 @@ func (clh *cloudHypervisor) launchClh() (int, error) {
 //###########################################################################
 
 const (
-	cctOFF  string = "Off"
-	cctNULL string = "Null"
-	cctTTY  string = "Tty"
+	cctOFF string = "Off"
+	cctTTY string = "Tty"
 )
 
 const (
