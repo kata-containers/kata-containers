@@ -833,6 +833,20 @@ impl BaseContainer for LinuxContainer {
         }
         let linux = spec.linux.as_ref().unwrap();
 
+        if p.oci.capabilities.is_none() {
+            // No capabilities, inherit from container process
+            let process = spec
+                .process
+                .as_ref()
+                .ok_or_else(|| anyhow!("no process config"))?;
+            p.oci.capabilities = Some(
+                process
+                    .capabilities
+                    .clone()
+                    .ok_or_else(|| anyhow!("missing process capabilities"))?,
+            );
+        }
+
         let (pfd_log, cfd_log) = unistd::pipe().context("failed to create pipe")?;
 
         let _ = fcntl::fcntl(pfd_log, FcntlArg::F_SETFD(FdFlag::FD_CLOEXEC))
