@@ -853,6 +853,9 @@ fn create_devices(devices: &[LinuxDevice], bind: bool) -> Result<()> {
             let msg = format!("{} is not a valid device path", dev.path);
             anyhow!(msg)
         })?;
+        if let Some(dir) = path.parent() {
+            fs::create_dir_all(dir).context(format!("Creating container device {:?}", dev))?;
+        }
         op(dev, path).context(format!("Creating container device {:?}", dev))?;
     }
     stat::umask(old);
