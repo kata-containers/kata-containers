@@ -104,7 +104,7 @@ devices:
 
 - `vhost-user-blk`
 - `vhost-user-scsi`
-- `vhost-user-nvme`
+- `vhost-user-nvme` (deprecated from SPDK 21.07 release)
 
 For more information, visit [SPDK](https://spdk.io) and [SPDK vhost-user target](https://spdk.io/doc/vhost.html).
 
