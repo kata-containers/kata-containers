@@ -312,7 +312,6 @@ impl Handle {
 
         for route in list {
             let link = self.find_link(LinkFilter::Name(&route.device)).await?;
-            let is_v6 = is_ipv6(route.get_gateway()) || is_ipv6(route.get_dest());
 
             const MAIN_TABLE: u8 = packet::constants::RT_TABLE_MAIN;
             const UNICAST: u8 = packet::constants::RTN_UNICAST;
@@ -334,7 +333,7 @@ impl Handle {
 
             // `rtnetlink` offers a separate request builders for different IP versions (IP v4 and v6).
             // This if branch is a bit clumsy because it does almost the same.
-            if is_v6 {
+            if route.get_family() == IPFamily::v6 {
                 let dest_addr = if !route.dest.is_empty() {
                     Ipv6Network::from_str(&route.dest)?
                 } else {
@@ -592,10 +591,6 @@ fn format_address(data: &[u8]) -> Result<String> {
         }
         _ => Err(anyhow!("Unsupported address length: {}", data.len())),
     }
-}
-
-fn is_ipv6(str: &str) -> bool {
-    Ipv6Addr::from_str(str).is_ok()
 }
 
 fn parse_mac_address(addr: &str) -> Result<[u8; 6]> {
@@ -930,16 +925,6 @@ mod tests {
     fn parse_mac() {
         let bytes = parse_mac_address("AB:0C:DE:12:34:56").expect("Failed to parse mac address");
         assert_eq!(bytes, [0xAB, 0x0C, 0xDE, 0x12, 0x34, 0x56]);
-    }
-
-    #[test]
-    fn check_ipv6() {
-        assert!(is_ipv6("::1"));
-        assert!(is_ipv6("2001:0:3238:DFE1:63::FEFB"));
-
-        assert!(!is_ipv6(""));
-        assert!(!is_ipv6("127.0.0.1"));
-        assert!(!is_ipv6("10.10.10.10"));
     }
 
     fn clean_env_for_test_add_one_arp_neighbor(dummy_name: &str, ip: &str) {

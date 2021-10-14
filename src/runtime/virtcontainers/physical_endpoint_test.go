@@ -77,7 +77,7 @@ func TestIsPhysicalIface(t *testing.T) {
 
 	netlinkHandle, err := netlink.NewHandleAt(netnsHandle)
 	assert.NoError(err)
-	defer netlinkHandle.Delete()
+	defer netlinkHandle.Close()
 
 	err = netlinkHandle.LinkAdd(link)
 	assert.NoError(err)

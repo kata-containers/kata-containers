@@ -348,7 +348,7 @@ func TestScanNetwork(t *testing.T) {
 	handler, err := netlink.NewHandle(netlinkFamily)
 	assert.Nil(t, err)
 	assert.NotNil(t, handler)
-	defer handler.Delete()
+	defer handler.Close()
 
 	idx, expected := testCreateDummyNetwork(t, handler)
 
@@ -480,7 +480,7 @@ func TestActionsCLI(t *testing.T) {
 	handler, err := netlink.NewHandle(netlinkFamily)
 	assert.Nil(t, err)
 	assert.NotNil(t, handler)
-	defer handler.Delete()
+	defer handler.Close()
 
 	n.netHandler = handler
 
@@ -569,7 +569,7 @@ func TestHandleRTMNewLink(t *testing.T) {
 	handler, err := netlink.NewHandle(netlinkFamily)
 	assert.Nil(t, err)
 	assert.NotNil(t, handler)
-	defer handler.Delete()
+	defer handler.Close()
 	n.netHandler = handler
 	err = n.handleRTMNewLink(ev)
 	assert.NotNil(t, err)
@@ -690,7 +690,7 @@ func TestHandleRouteEvent(t *testing.T) {
 	handler, err := netlink.NewHandle(netlinkFamily)
 	assert.Nil(t, err)
 	assert.NotNil(t, handler)
-	defer handler.Delete()
+	defer handler.Close()
 
 	n.netHandler = handler
 
