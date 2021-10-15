@@ -117,10 +117,8 @@ type HypervisorInfo struct {
 
 // AgentInfo stores agent details
 type AgentInfo struct {
-	TraceMode string
-	TraceType string
-	Debug     bool
-	Trace     bool
+	Debug bool
+	Trace bool
 }
 
 // DistroInfo stores host operating system distribution details.
@@ -157,11 +155,11 @@ type EnvInfo struct {
 	Meta       MetaInfo
 	Image      ImageInfo
 	Initrd     InitrdInfo
-	Agent      AgentInfo
 	Hypervisor HypervisorInfo
-	Netmon     NetmonInfo
 	Runtime    RuntimeInfo
+	Netmon     NetmonInfo
 	Host       HostInfo
+	Agent      AgentInfo
 }
 
 func getMetaInfo() MetaInfo {
@@ -303,8 +301,6 @@ func getAgentInfo(config oci.RuntimeConfig) (AgentInfo, error) {
 	agentConfig := config.AgentConfig
 	agent.Debug = agentConfig.Debug
 	agent.Trace = agentConfig.Trace
-	agent.TraceMode = agentConfig.TraceMode
-	agent.TraceType = agentConfig.TraceType
 
 	return agent, nil
 }

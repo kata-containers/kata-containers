@@ -997,75 +997,43 @@ func TestKataAgentKernelParams(t *testing.T) {
 		debug             bool
 		trace             bool
 		containerPipeSize uint32
-		traceMode         string
-		traceType         string
 		expectedParams    []Param
 	}
 
 	debugParam := Param{Key: "agent.log", Value: "debug"}
-
-	traceIsolatedParam := Param{Key: "agent.trace", Value: "isolated"}
-	traceCollatedParam := Param{Key: "agent.trace", Value: "collated"}
-
-	traceFooParam := Param{Key: "agent.trace", Value: "foo"}
+	traceParam := Param{Key: "agent.trace", Value: "true"}
 
 	containerPipeSizeParam := Param{Key: vcAnnotations.ContainerPipeSizeKernelParam, Value: "2097152"}
 
 	data := []testData{
-		{false, false, 0, "", "", []Param{}},
-		{true, false, 0, "", "", []Param{debugParam}},
+		{false, false, 0, []Param{}},
 
-		{false, false, 0, "foo", "", []Param{}},
-		{false, false, 0, "foo", "", []Param{}},
-		{false, false, 0, "", "foo", []Param{}},
-		{false, false, 0, "", "foo", []Param{}},
-		{false, false, 0, "foo", "foo", []Param{}},
-		{false, true, 0, "foo", "foo", []Param{}},
+		// Debug
+		{true, false, 0, []Param{debugParam}},
 
-		{false, false, 0, agentTraceModeDynamic, "", []Param{}},
-		{false, false, 0, agentTraceModeStatic, "", []Param{}},
-		{false, false, 0, "", agentTraceTypeIsolated, []Param{}},
-		{false, false, 0, "", agentTraceTypeCollated, []Param{}},
-		{false, false, 0, "foo", agentTraceTypeIsolated, []Param{}},
-		{false, false, 0, "foo", agentTraceTypeCollated, []Param{}},
+		// Tracing
+		{false, true, 0, []Param{traceParam}},
 
-		{false, false, 0, agentTraceModeDynamic, agentTraceTypeIsolated, []Param{}},
-		{false, false, 0, agentTraceModeDynamic, agentTraceTypeCollated, []Param{}},
+		// Debug + Tracing
+		{true, true, 0, []Param{debugParam, traceParam}},
 
-		{false, false, 0, agentTraceModeStatic, agentTraceTypeCollated, []Param{}},
-		{false, false, 0, agentTraceModeStatic, agentTraceTypeCollated, []Param{}},
+		// pipesize
+		{false, false, 2097152, []Param{containerPipeSizeParam}},
 
-		{false, true, 0, agentTraceModeDynamic, agentTraceTypeIsolated, []Param{}},
-		{false, true, 0, agentTraceModeDynamic, agentTraceTypeCollated, []Param{}},
-		{true, true, 0, agentTraceModeDynamic, agentTraceTypeCollated, []Param{debugParam}},
+		// Debug + pipesize
+		{true, false, 2097152, []Param{debugParam, containerPipeSizeParam}},
 
-		{false, true, 0, "", agentTraceTypeIsolated, []Param{}},
-		{false, true, 0, "", agentTraceTypeCollated, []Param{}},
-		{true, true, 0, "", agentTraceTypeIsolated, []Param{debugParam}},
-		{true, true, 0, "", agentTraceTypeCollated, []Param{debugParam}},
-		{false, true, 0, "foo", agentTraceTypeIsolated, []Param{}},
-		{false, true, 0, "foo", agentTraceTypeCollated, []Param{}},
-		{true, true, 0, "foo", agentTraceTypeIsolated, []Param{debugParam}},
-		{true, true, 0, "foo", agentTraceTypeCollated, []Param{debugParam}},
+		// Tracing + pipesize
+		{false, true, 2097152, []Param{traceParam, containerPipeSizeParam}},
 
-		{false, true, 0, agentTraceModeStatic, agentTraceTypeIsolated, []Param{traceIsolatedParam}},
-		{false, true, 0, agentTraceModeStatic, agentTraceTypeCollated, []Param{traceCollatedParam}},
-		{true, true, 0, agentTraceModeStatic, agentTraceTypeIsolated, []Param{traceIsolatedParam, debugParam}},
-		{true, true, 0, agentTraceModeStatic, agentTraceTypeCollated, []Param{traceCollatedParam, debugParam}},
-
-		{false, true, 0, agentTraceModeStatic, "foo", []Param{traceFooParam}},
-		{true, true, 0, agentTraceModeStatic, "foo", []Param{debugParam, traceFooParam}},
-
-		{false, false, 0, "", "", []Param{}},
-		{false, false, 2097152, "", "", []Param{containerPipeSizeParam}},
+		// Debug + Tracing + pipesize
+		{true, true, 2097152, []Param{debugParam, traceParam, containerPipeSizeParam}},
 	}
 
 	for i, d := range data {
 		config := KataAgentConfig{
 			Debug:             d.debug,
 			Trace:             d.trace,
-			TraceMode:         d.traceMode,
-			TraceType:         d.traceType,
 			ContainerPipeSize: d.containerPipeSize,
 		}
 
@@ -1090,25 +1058,20 @@ func TestKataAgentHandleTraceSettings(t *testing.T) {
 	assert := assert.New(t)
 
 	type testData struct {
-		traceMode               string
 		trace                   bool
 		expectDisableVMShutdown bool
-		expectDynamicTracing    bool
 	}
 
 	data := []testData{
-		{"", false, false, false},
-		{"", true, false, false},
-		{agentTraceModeStatic, true, true, false},
-		{agentTraceModeDynamic, true, false, true},
+		{false, false},
+		{true, true},
 	}
 
 	for i, d := range data {
 		k := &kataAgent{}
 
 		config := KataAgentConfig{
-			Trace:     d.trace,
-			TraceMode: d.traceMode,
+			Trace: d.trace,
 		}
 
 		disableVMShutdown := k.handleTraceSettings(config)
@@ -1117,78 +1080,6 @@ func TestKataAgentHandleTraceSettings(t *testing.T) {
 			assert.Truef(disableVMShutdown, "test %d (%+v)", i, d)
 		} else {
 			assert.Falsef(disableVMShutdown, "test %d (%+v)", i, d)
-		}
-
-		if d.expectDynamicTracing {
-			assert.Truef(k.dynamicTracing, "test %d (%+v)", i, d)
-		} else {
-			assert.Falsef(k.dynamicTracing, "test %d (%+v)", i, d)
-		}
-	}
-}
-
-func TestKataAgentSetDefaultTraceConfigOptions(t *testing.T) {
-	assert := assert.New(t)
-
-	type testData struct {
-		traceMode              string
-		traceType              string
-		trace                  bool
-		expectDefaultTraceMode bool
-		expectDefaultTraceType bool
-		expectError            bool
-	}
-
-	data := []testData{
-		{"", "", false, false, false, false},
-		{agentTraceModeDynamic, agentTraceTypeCollated, false, false, false, false},
-		{agentTraceModeDynamic, agentTraceTypeIsolated, false, false, false, false},
-		{agentTraceModeStatic, agentTraceTypeCollated, false, false, false, false},
-		{agentTraceModeStatic, agentTraceTypeIsolated, false, false, false, false},
-
-		{agentTraceModeDynamic, agentTraceTypeCollated, true, false, false, false},
-		{agentTraceModeDynamic, agentTraceTypeIsolated, true, false, false, false},
-
-		{agentTraceModeStatic, agentTraceTypeCollated, true, false, false, false},
-		{agentTraceModeStatic, agentTraceTypeIsolated, true, false, false, false},
-
-		{agentTraceModeDynamic, "", true, false, true, false},
-		{agentTraceModeDynamic, "invalid", true, false, false, true},
-
-		{agentTraceModeStatic, "", true, false, true, false},
-		{agentTraceModeStatic, "invalid", true, false, false, true},
-
-		{"", agentTraceTypeIsolated, true, true, false, false},
-		{"invalid", agentTraceTypeIsolated, true, false, false, true},
-
-		{"", agentTraceTypeCollated, true, true, false, false},
-		{"invalid", agentTraceTypeCollated, true, false, false, true},
-
-		{"", "", true, true, true, false},
-		{"invalid", "invalid", true, false, false, true},
-	}
-
-	for i, d := range data {
-		config := &KataAgentConfig{
-			Trace:     d.trace,
-			TraceMode: d.traceMode,
-			TraceType: d.traceType,
-		}
-
-		err := KataAgentSetDefaultTraceConfigOptions(config)
-		if d.expectError {
-			assert.Error(err, "test %d (%+v)", i, d)
-			continue
-		} else {
-			assert.NoError(err, "test %d (%+v)", i, d)
-		}
-
-		if d.expectDefaultTraceMode {
-			assert.Equalf(config.TraceMode, defaultAgentTraceMode, "test %d (%+v)", i, d)
-		}
-
-		if d.expectDefaultTraceType {
-			assert.Equalf(config.TraceType, defaultAgentTraceType, "test %d (%+v)", i, d)
 		}
 	}
 }

@@ -2,7 +2,6 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 //
-use crate::tracer;
 use anyhow::{bail, ensure, Context, Result};
 use serde::Deserialize;
 use std::collections::HashSet;
@@ -33,7 +32,7 @@ const VSOCK_PORT: u16 = 1024;
 // Environment variables used for development and testing
 const SERVER_ADDR_ENV_VAR: &str = "KATA_AGENT_SERVER_ADDR";
 const LOG_LEVEL_ENV_VAR: &str = "KATA_AGENT_LOG_LEVEL";
-const TRACE_TYPE_ENV_VAR: &str = "KATA_AGENT_TRACE_TYPE";
+const TRACING_ENV_VAR: &str = "KATA_AGENT_TRACING";
 
 const ERR_INVALID_LOG_LEVEL: &str = "invalid log level";
 const ERR_INVALID_LOG_LEVEL_PARAM: &str = "invalid log level parameter";
@@ -73,7 +72,7 @@ pub struct AgentConfig {
     pub container_pipe_size: i32,
     pub server_addr: String,
     pub unified_cgroup_hierarchy: bool,
-    pub tracing: tracer::TraceType,
+    pub tracing: bool,
     pub endpoints: AgentEndpoints,
 }
 
@@ -88,7 +87,7 @@ pub struct AgentConfigBuilder {
     pub container_pipe_size: Option<i32>,
     pub server_addr: Option<String>,
     pub unified_cgroup_hierarchy: Option<bool>,
-    pub tracing: Option<tracer::TraceType>,
+    pub tracing: Option<bool>,
     pub endpoints: Option<EndpointsConfig>,
 }
 
@@ -148,7 +147,7 @@ impl Default for AgentConfig {
             container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
             server_addr: format!("{}:{}", VSOCK_ADDR, VSOCK_PORT),
             unified_cgroup_hierarchy: false,
-            tracing: tracer::TraceType::Disabled,
+            tracing: false,
             endpoints: Default::default(),
         }
     }
@@ -213,11 +212,11 @@ impl AgentConfig {
             // Support "bare" tracing option for backwards compatibility with
             // Kata 1.x.
             if param == &TRACE_MODE_OPTION {
-                config.tracing = tracer::TraceType::Isolated;
+                config.tracing = true;
                 continue;
             }
 
-            parse_cmdline_param!(param, TRACE_MODE_OPTION, config.tracing, get_trace_type);
+            parse_cmdline_param!(param, TRACE_MODE_OPTION, config.tracing, get_bool_value);
 
             // parse cmdline options
             parse_cmdline_param!(param, LOG_LEVEL_OPTION, config.log_level, get_log_level);
@@ -277,10 +276,10 @@ impl AgentConfig {
             }
         }
 
-        if let Ok(value) = env::var(TRACE_TYPE_ENV_VAR) {
-            if let Ok(result) = value.parse::<tracer::TraceType>() {
-                config.tracing = result;
-            }
+        if let Ok(value) = env::var(TRACING_ENV_VAR) {
+            let name_value = format!("{}={}", TRACING_ENV_VAR, value);
+
+            config.tracing = get_bool_value(&name_value)?;
         }
 
         // We did not get a configuration file: allow all endpoints.
@@ -341,25 +340,6 @@ fn get_log_level(param: &str) -> Result<slog::Level> {
     ensure!(fields[0] == LOG_LEVEL_OPTION, ERR_INVALID_LOG_LEVEL_KEY);
 
     logrus_to_slog_level(fields[1])
-}
-
-#[instrument]
-fn get_trace_type(param: &str) -> Result<tracer::TraceType> {
-    ensure!(!param.is_empty(), "invalid trace type parameter");
-
-    let fields: Vec<&str> = param.split('=').collect();
-    ensure!(
-        fields[0] == TRACE_MODE_OPTION,
-        "invalid trace type key name"
-    );
-
-    if fields.len() == 1 {
-        return Ok(tracer::TraceType::Isolated);
-    }
-
-    let result = fields[1].parse::<tracer::TraceType>()?;
-
-    Ok(result)
 }
 
 #[instrument]
@@ -446,10 +426,6 @@ mod tests {
     use std::time;
     use tempfile::tempdir;
 
-    const ERR_INVALID_TRACE_TYPE_PARAM: &str = "invalid trace type parameter";
-    const ERR_INVALID_TRACE_TYPE: &str = "invalid trace type";
-    const ERR_INVALID_TRACE_TYPE_KEY: &str = "invalid trace type key name";
-
     // Parameters:
     //
     // 1: expected Result
@@ -500,7 +476,7 @@ mod tests {
             container_pipe_size: i32,
             server_addr: &'a str,
             unified_cgroup_hierarchy: bool,
-            tracing: tracer::TraceType,
+            tracing: bool,
         }
 
         impl Default for TestData<'_> {
@@ -515,7 +491,7 @@ mod tests {
                     container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
                     server_addr: TEST_SERVER_ADDR,
                     unified_cgroup_hierarchy: false,
-                    tracing: tracer::TraceType::Disabled,
+                    tracing: false,
                 }
             }
         }
@@ -774,49 +750,115 @@ mod tests {
             },
             TestData {
                 contents: "trace",
-                tracing: tracer::TraceType::Disabled,
+                tracing: false,
                 ..Default::default()
             },
             TestData {
                 contents: ".trace",
-                tracing: tracer::TraceType::Disabled,
+                tracing: false,
                 ..Default::default()
             },
             TestData {
                 contents: "agent.tracer",
-                tracing: tracer::TraceType::Disabled,
+                tracing: false,
                 ..Default::default()
             },
             TestData {
                 contents: "agent.trac",
-                tracing: tracer::TraceType::Disabled,
+                tracing: false,
                 ..Default::default()
             },
             TestData {
                 contents: "agent.trace",
-                tracing: tracer::TraceType::Isolated,
+                tracing: true,
                 ..Default::default()
             },
             TestData {
-                contents: "agent.trace=isolated",
-                tracing: tracer::TraceType::Isolated,
+                contents: "agent.trace=true",
+                tracing: true,
                 ..Default::default()
             },
             TestData {
-                contents: "agent.trace=disabled",
-                tracing: tracer::TraceType::Disabled,
+                contents: "agent.trace=false",
+                tracing: false,
+                ..Default::default()
+            },
+            TestData {
+                contents: "agent.trace=0",
+                tracing: false,
+                ..Default::default()
+            },
+            TestData {
+                contents: "agent.trace=1",
+                tracing: true,
+                ..Default::default()
+            },
+            TestData {
+                contents: "agent.trace=a",
+                tracing: false,
+                ..Default::default()
+            },
+            TestData {
+                contents: "agent.trace=foo",
+                tracing: false,
+                ..Default::default()
+            },
+            TestData {
+                contents: "agent.trace=.",
+                tracing: false,
+                ..Default::default()
+            },
+            TestData {
+                contents: "agent.trace=,",
+                tracing: false,
                 ..Default::default()
             },
             TestData {
                 contents: "",
-                env_vars: vec!["KATA_AGENT_TRACE_TYPE=isolated"],
-                tracing: tracer::TraceType::Isolated,
+                env_vars: vec!["KATA_AGENT_TRACING="],
+                tracing: false,
                 ..Default::default()
             },
             TestData {
                 contents: "",
-                env_vars: vec!["KATA_AGENT_TRACE_TYPE=disabled"],
-                tracing: tracer::TraceType::Disabled,
+                env_vars: vec!["KATA_AGENT_TRACING=''"],
+                tracing: false,
+                ..Default::default()
+            },
+            TestData {
+                contents: "",
+                env_vars: vec!["KATA_AGENT_TRACING=0"],
+                tracing: false,
+                ..Default::default()
+            },
+            TestData {
+                contents: "",
+                env_vars: vec!["KATA_AGENT_TRACING=."],
+                tracing: false,
+                ..Default::default()
+            },
+            TestData {
+                contents: "",
+                env_vars: vec!["KATA_AGENT_TRACING=,"],
+                tracing: false,
+                ..Default::default()
+            },
+            TestData {
+                contents: "",
+                env_vars: vec!["KATA_AGENT_TRACING=foo"],
+                tracing: false,
+                ..Default::default()
+            },
+            TestData {
+                contents: "",
+                env_vars: vec!["KATA_AGENT_TRACING=1"],
+                tracing: true,
+                ..Default::default()
+            },
+            TestData {
+                contents: "",
+                env_vars: vec!["KATA_AGENT_TRACING=true"],
+                tracing: true,
                 ..Default::default()
             },
         ];
@@ -1295,64 +1337,6 @@ Caused by:
             let msg = format!("test[{}]: {:?}", i, d);
 
             let result = get_string_value(d.param);
-
-            let msg = format!("{}: result: {:?}", msg, result);
-
-            assert_result!(d.result, result, msg);
-        }
-    }
-
-    #[test]
-    fn test_get_trace_type() {
-        #[derive(Debug)]
-        struct TestData<'a> {
-            param: &'a str,
-            result: Result<tracer::TraceType>,
-        }
-
-        let tests = &[
-            TestData {
-                param: "",
-                result: Err(anyhow!(ERR_INVALID_TRACE_TYPE_PARAM)),
-            },
-            TestData {
-                param: "agent.tracer",
-                result: Err(anyhow!(ERR_INVALID_TRACE_TYPE_KEY)),
-            },
-            TestData {
-                param: "agent.trac",
-                result: Err(anyhow!(ERR_INVALID_TRACE_TYPE_KEY)),
-            },
-            TestData {
-                param: "agent.trace=",
-                result: Err(anyhow!(ERR_INVALID_TRACE_TYPE)),
-            },
-            TestData {
-                param: "agent.trace==",
-                result: Err(anyhow!(ERR_INVALID_TRACE_TYPE)),
-            },
-            TestData {
-                param: "agent.trace=foo",
-                result: Err(anyhow!(ERR_INVALID_TRACE_TYPE)),
-            },
-            TestData {
-                param: "agent.trace",
-                result: Ok(tracer::TraceType::Isolated),
-            },
-            TestData {
-                param: "agent.trace=isolated",
-                result: Ok(tracer::TraceType::Isolated),
-            },
-            TestData {
-                param: "agent.trace=disabled",
-                result: Ok(tracer::TraceType::Disabled),
-            },
-        ];
-
-        for (i, d) in tests.iter().enumerate() {
-            let msg = format!("test[{}]: {:?}", i, d);
-
-            let result = get_trace_type(d.param);
 
             let msg = format!("{}: result: {:?}", msg, result);
 

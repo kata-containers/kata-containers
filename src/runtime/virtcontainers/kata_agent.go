@@ -106,16 +106,6 @@ var (
 )
 
 const (
-	agentTraceModeDynamic  = "dynamic"
-	agentTraceModeStatic   = "static"
-	agentTraceTypeIsolated = "isolated"
-	agentTraceTypeCollated = "collated"
-
-	defaultAgentTraceMode = agentTraceModeDynamic
-	defaultAgentTraceType = agentTraceTypeIsolated
-)
-
-const (
 	grpcCheckRequest             = "grpc.CheckRequest"
 	grpcExecProcessRequest       = "grpc.ExecProcessRequest"
 	grpcCreateSandboxRequest     = "grpc.CreateSandboxRequest"
@@ -221,8 +211,6 @@ func ephemeralPath() string {
 // KataAgentConfig is a structure storing information needed
 // to reach the Kata Containers agent.
 type KataAgentConfig struct {
-	TraceMode          string
-	TraceType          string
 	KernelModules      []string
 	ContainerPipeSize  uint32
 	DialTimeout        uint32
@@ -268,34 +256,6 @@ func (k *kataAgent) longLiveConn() bool {
 	return k.keepConn
 }
 
-// KataAgentSetDefaultTraceConfigOptions validates agent trace options and
-// sets defaults.
-func KataAgentSetDefaultTraceConfigOptions(config *KataAgentConfig) error {
-	if !config.Trace {
-		return nil
-	}
-
-	switch config.TraceMode {
-	case agentTraceModeDynamic:
-	case agentTraceModeStatic:
-	case "":
-		config.TraceMode = defaultAgentTraceMode
-	default:
-		return fmt.Errorf("invalid kata agent trace mode: %q (need %q or %q)", config.TraceMode, agentTraceModeDynamic, agentTraceModeStatic)
-	}
-
-	switch config.TraceType {
-	case agentTraceTypeIsolated:
-	case agentTraceTypeCollated:
-	case "":
-		config.TraceType = defaultAgentTraceType
-	default:
-		return fmt.Errorf("invalid kata agent trace type: %q (need %q or %q)", config.TraceType, agentTraceTypeIsolated, agentTraceTypeCollated)
-	}
-
-	return nil
-}
-
 // KataAgentKernelParams returns a list of Kata Agent specific kernel
 // parameters.
 func KataAgentKernelParams(config KataAgentConfig) []Param {
@@ -305,8 +265,8 @@ func KataAgentKernelParams(config KataAgentConfig) []Param {
 		params = append(params, Param{Key: "agent.log", Value: "debug"})
 	}
 
-	if config.Trace && config.TraceMode == agentTraceModeStatic {
-		params = append(params, Param{Key: "agent.trace", Value: config.TraceType})
+	if config.Trace {
+		params = append(params, Param{Key: "agent.trace", Value: "true"})
 	}
 
 	if config.ContainerPipeSize > 0 {
@@ -323,17 +283,14 @@ func KataAgentKernelParams(config KataAgentConfig) []Param {
 }
 
 func (k *kataAgent) handleTraceSettings(config KataAgentConfig) bool {
-	if !config.Trace {
-		return false
-	}
-
 	disableVMShutdown := false
 
-	switch config.TraceMode {
-	case agentTraceModeStatic:
+	if config.Trace {
+		// Agent tracing requires that the agent be able to shutdown
+		// cleanly. This is the only scenario where the agent is
+		// responsible for stopping the VM: normally this is handled
+		// by the runtime.
 		disableVMShutdown = true
-	case agentTraceModeDynamic:
-		k.dynamicTracing = true
 	}
 
 	return disableVMShutdown

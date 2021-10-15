@@ -124,24 +124,17 @@ block_device_driver = "@DEFBLOCKSTORAGEDRIVER_ACRN@"
 
 # Enable agent tracing.
 #
-# If enabled, the default trace mode is "dynamic" and the
-# default trace type is "isolated". The trace mode and type are set
-# explicity with the `trace_type=` and `trace_mode=` options.
+# If enabled, the agent will generate OpenTelemetry trace spans.
 #
 # Notes:
 #
-# - Tracing is ONLY enabled when `enable_tracing` is set: explicitly
-#   setting `trace_mode=` and/or `trace_type=` without setting `enable_tracing`
-#   will NOT activate agent tracing.
-#
-# - See https://github.com/kata-containers/agent/blob/master/TRACING.md for
-#   full details.
+# - If the runtime also has tracing enabled, the agent spans will be
+#   associated with the appropriate runtime parent span.
+# - If enabled, the runtime will wait for the container to shutdown,
+#   increasing the container shutdown time slightly.
 #
 # (default: disabled)
 #enable_tracing = true
-#
-#trace_mode = "dynamic"
-#trace_type = "isolated"
 
 # Enable debug console.
 

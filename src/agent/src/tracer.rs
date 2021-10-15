@@ -3,61 +3,17 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use crate::config::AgentConfig;
 use anyhow::Result;
 use opentelemetry::sdk::propagation::TraceContextPropagator;
 use opentelemetry::{global, sdk::trace::Config, trace::TracerProvider};
-use serde::Deserialize;
 use slog::{info, o, Logger};
 use std::collections::HashMap;
-use std::error::Error;
-use std::fmt;
-use std::str::FromStr;
 use tracing_opentelemetry::OpenTelemetryLayer;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::Registry;
 use ttrpc::r#async::TtrpcContext;
 
-#[derive(Debug, Deserialize, PartialEq)]
-pub enum TraceType {
-    Disabled,
-    Isolated,
-}
-
-#[derive(Debug)]
-pub struct TraceTypeError {
-    details: String,
-}
-
-impl TraceTypeError {
-    fn new(msg: &str) -> TraceTypeError {
-        TraceTypeError {
-            details: msg.into(),
-        }
-    }
-}
-
-impl Error for TraceTypeError {}
-
-impl fmt::Display for TraceTypeError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.details)
-    }
-}
-
-impl FromStr for TraceType {
-    type Err = TraceTypeError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "isolated" => Ok(TraceType::Isolated),
-            "disabled" => Ok(TraceType::Disabled),
-            _ => Err(TraceTypeError::new("invalid trace type")),
-        }
-    }
-}
-
-pub fn setup_tracing(name: &'static str, logger: &Logger, _agent_cfg: &AgentConfig) -> Result<()> {
+pub fn setup_tracing(name: &'static str, logger: &Logger) -> Result<()> {
     let logger = logger.new(o!("subsystem" => "vsock-tracer"));
 
     let exporter = vsock_exporter::Exporter::builder()
