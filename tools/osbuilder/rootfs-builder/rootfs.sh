@@ -552,7 +552,7 @@ EOT
 		fi
 		[ "$LIBC" == "musl" ] && bash ${script_dir}/../../../ci/install_musl.sh
 		# rust agent needs ${arch}-unknown-linux-${LIBC}
-		rustup show | grep linux-${LIBC} > /dev/null || bash ${script_dir}/../../../ci/install_rust.sh
+		rustup show | grep linux-${LIBC} > /dev/null || bash ${script_dir}/../../../ci/install_rust.sh ${RUST_VERSION}
 		test -r "${HOME}/.cargo/env" && source "${HOME}/.cargo/env"
 		[ "$ARCH" == "aarch64" ] && OLD_PATH=$PATH && export PATH=$PATH:/usr/local/musl/bin
 
