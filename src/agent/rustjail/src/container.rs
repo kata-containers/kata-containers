@@ -366,12 +366,25 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
     let spec_str = std::str::from_utf8(&buf)?;
     let spec: oci::Spec = serde_json::from_str(spec_str)?;
 
-    log_child!(cfd_log, "notify parent to send oci process");
-    write_sync(cwfd, SYNC_SUCCESS, "")?;
+    let p = if spec.process.is_some() {
+        spec.process
+            .as_ref()
+            .ok_or_else(|| anyhow!(nix::Error::EINVAL))?
+    } else {
+        return Err(anyhow!("didn't find process in Spec"));
+    };
 
-    let buf = read_sync(crfd)?;
-    let process_str = std::str::from_utf8(&buf)?;
-    let oci_process: oci::Process = serde_json::from_str(process_str)?;
+    let oci_process = if init {
+        p.clone()
+    } else {
+        log_child!(cfd_log, "notify parent to send oci process");
+        write_sync(cwfd, SYNC_SUCCESS, "")?;
+
+        let buf = read_sync(crfd)?;
+        let process_str = std::str::from_utf8(&buf)?;
+        serde_json::from_str(process_str)?
+    };
+
     log_child!(cfd_log, "notify parent to send cgroup manager");
     write_sync(cwfd, SYNC_SUCCESS, "")?;
 
@@ -379,12 +392,6 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
     let cm_str = std::str::from_utf8(&buf)?;
 
     let cm: FsManager = serde_json::from_str(cm_str)?;
-
-    let p = if spec.process.is_some() {
-        spec.process.as_ref().unwrap()
-    } else {
-        return Err(anyhow!("didn't find process in Spec"));
-    };
 
     if spec.linux.is_none() {
         return Err(anyhow!("no linux config"));
@@ -863,7 +870,7 @@ impl BaseContainer for LinuxContainer {
         }
         let linux = spec.linux.as_ref().unwrap();
 
-        if p.oci.capabilities.is_none() {
+        if p.oci.capabilities.is_none() && !p.init {
             // No capabilities, inherit from container process
             let process = spec
                 .process
@@ -1240,13 +1247,14 @@ async fn join_namespaces(
     info!(logger, "wait child received oci spec");
 
     read_async(pipe_r).await?;
+    if !p.init {
+        info!(logger, "send oci process from parent to child");
+        let process_str = serde_json::to_string(&p.oci)?;
+        write_async(pipe_w, SYNC_DATA, process_str.as_str()).await?;
 
-    info!(logger, "send oci process from parent to child");
-    let process_str = serde_json::to_string(&p.oci)?;
-    write_async(pipe_w, SYNC_DATA, process_str.as_str()).await?;
-
-    info!(logger, "wait child received oci process");
-    read_async(pipe_r).await?;
+        info!(logger, "wait child received oci process");
+        read_async(pipe_r).await?;
+    }
 
     let cm_str = serde_json::to_string(cm)?;
     write_async(pipe_w, SYNC_DATA, cm_str.as_str()).await?;
