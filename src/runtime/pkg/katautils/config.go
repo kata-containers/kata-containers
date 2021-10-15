@@ -307,11 +307,24 @@ func (h hypervisor) GetEntropySource() string {
 	return h.EntropySource
 }
 
+// Current cpu number should not larger than defaultMaxVCPUs()
+func getCurrentCpuNum() uint32 {
+	var cpu uint32
+	h := hypervisor{}
+
+	cpu = uint32(goruntime.NumCPU())
+	if cpu > h.defaultMaxVCPUs() {
+		cpu = h.defaultMaxVCPUs()
+	}
+
+	return cpu
+}
+
 func (h hypervisor) defaultVCPUs() uint32 {
-	numCPUs := goruntime.NumCPU()
+	numCPUs := getCurrentCpuNum()
 
 	if h.NumVCPUs < 0 || h.NumVCPUs > int32(numCPUs) {
-		return uint32(numCPUs)
+		return numCPUs
 	}
 	if h.NumVCPUs == 0 { // or unspecified
 		return defaultVCPUCount

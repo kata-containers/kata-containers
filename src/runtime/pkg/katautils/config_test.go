@@ -14,7 +14,6 @@ import (
 	"path"
 	"path/filepath"
 	"reflect"
-	goruntime "runtime"
 	"strings"
 	"syscall"
 	"testing"
@@ -156,7 +155,7 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (config testRuntimeConf
 		KernelParams:          vc.DeserializeParams(strings.Fields(kernelParams)),
 		HypervisorMachineType: machineType,
 		NumVCPUs:              defaultVCPUCount,
-		DefaultMaxVCPUs:       uint32(goruntime.NumCPU()),
+		DefaultMaxVCPUs:       getCurrentCpuNum(),
 		MemorySize:            defaultMemSize,
 		DisableBlockDeviceUse: disableBlockDevice,
 		BlockDeviceDriver:     defaultBlockDeviceDriver,
@@ -919,13 +918,13 @@ func TestNewClhHypervisorConfig(t *testing.T) {
 func TestHypervisorDefaults(t *testing.T) {
 	assert := assert.New(t)
 
-	numCPUs := goruntime.NumCPU()
+	numCPUs := getCurrentCpuNum()
 
 	h := hypervisor{}
 
 	assert.Equal(h.machineType(), defaultMachineType, "default hypervisor machine type wrong")
 	assert.Equal(h.defaultVCPUs(), defaultVCPUCount, "default vCPU number is wrong")
-	assert.Equal(h.defaultMaxVCPUs(), uint32(numCPUs), "default max vCPU number is wrong")
+	assert.Equal(h.defaultMaxVCPUs(), numCPUs, "default max vCPU number is wrong")
 	assert.Equal(h.defaultMemSz(), defaultMemSize, "default memory size is wrong")
 
 	machineType := "foo"
@@ -934,23 +933,23 @@ func TestHypervisorDefaults(t *testing.T) {
 
 	// auto inferring
 	h.NumVCPUs = -1
-	assert.Equal(h.defaultVCPUs(), uint32(numCPUs), "default vCPU number is wrong")
+	assert.Equal(h.defaultVCPUs(), numCPUs, "default vCPU number is wrong")
 
 	h.NumVCPUs = 2
 	assert.Equal(h.defaultVCPUs(), uint32(2), "default vCPU number is wrong")
 
 	h.NumVCPUs = int32(numCPUs) + 1
-	assert.Equal(h.defaultVCPUs(), uint32(numCPUs), "default vCPU number is wrong")
+	assert.Equal(h.defaultVCPUs(), numCPUs, "default vCPU number is wrong")
 
 	h.DefaultMaxVCPUs = 2
 	assert.Equal(h.defaultMaxVCPUs(), uint32(2), "default max vCPU number is wrong")
 
-	h.DefaultMaxVCPUs = uint32(numCPUs) + 1
-	assert.Equal(h.defaultMaxVCPUs(), uint32(numCPUs), "default max vCPU number is wrong")
+	h.DefaultMaxVCPUs = numCPUs + 1
+	assert.Equal(h.defaultMaxVCPUs(), numCPUs, "default max vCPU number is wrong")
 
 	maxvcpus := vc.MaxQemuVCPUs()
 	h.DefaultMaxVCPUs = maxvcpus + 1
-	assert.Equal(h.defaultMaxVCPUs(), uint32(numCPUs), "default max vCPU number is wrong")
+	assert.Equal(h.defaultMaxVCPUs(), numCPUs, "default max vCPU number is wrong")
 
 	h.MemorySize = 1024
 	assert.Equal(h.defaultMemSz(), uint32(1024), "default memory size is wrong")
