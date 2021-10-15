@@ -21,7 +21,7 @@ import (
 // apiTracingTags defines tags for the trace span
 var apiTracingTags = map[string]string{
 	"source":    "runtime",
-	"packages":  "virtcontainers",
+	"package":   "virtcontainers",
 	"subsystem": "api",
 }
 
