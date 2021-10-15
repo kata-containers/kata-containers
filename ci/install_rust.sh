@@ -12,5 +12,5 @@ source "${cidir}/lib.sh"
 clone_tests_repo
 
 pushd ${tests_repo_dir}
-.ci/install_rust.sh
+.ci/install_rust.sh ${1:-}
 popd
