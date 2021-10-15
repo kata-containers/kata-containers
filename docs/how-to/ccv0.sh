@@ -227,15 +227,19 @@ build_a_custom_kata_agent() {
 create_a_local_rootfs() {
     sudo rm -rf "${ROOTFS_DIR}"
     cd ${katacontainers_repo_dir}/tools/osbuilder/rootfs-builder
-    runc_output=$(sudo docker info 2>/dev/null | grep -i "default runtime" | cut -d: -f2- | grep -q runc  && echo "SUCCESS" || echo "ERROR: Incorrect default Docker runtime")
-    echo "Checking that runc is the default docker runtime: ${runc_output}"
-    export distro=fedora # I picked fedora as it supports s390x and x86_64 and uses the fedora registry, so we don't get DockerHub toomanyrequests issues
-    script -fec 'sudo -E GOPATH=$GOPATH EXTRA_PKGS="vim iputils net-tools iproute skopeo gnupg gpgme-devel" USE_DOCKER=true SECCOMP=yes ./rootfs.sh -r ${ROOTFS_DIR} ${distro}'
-    
-    # Add umoci binary - TODO LATER replace with rpm when available in fedora
-    arch=amd64
+    export distro="ubuntu"
+    [[ -z "${USE_PODMAN:-}" ]] && use_docker="${use_docker:-1}"
+    sudo -E OS_VERSION="${OS_VERSION:-}" GOPATH=$GOPATH EXTRA_PKGS="ca-certificates vim iputils-ping net-tools gnupg libgpgme-dev" DEBUG="${DEBUG}" USE_DOCKER="${use_docker:-}" SECCOMP=yes ./rootfs.sh -r ${ROOTFS_DIR} ${distro}
+
+    # Build and add skopeo binary - TODO LATER replace with install from Ubuntu when the base is 20.10+, or 
+    git clone --branch release-1.4 https://github.com/containers/skopeo ${GOPATH}/src/github.com/containers/skopeo
+    cd ${GOPATH}/src/github.com/containers/skopeo && make bin/skopeo
+    cp "${GOPATH}/src/github.com/containers/skopeo/bin/skopeo" "${ROOTFS_DIR}/usr/bin/skopeo"
+
+    # Add umoci binary - TODO LATER replace with install from Ubuntu when the base is 20.10+
+    go_arch=$("${tests_repo_dir}"/.ci/kata-arch.sh -g)
     mkdir -p ${ROOTFS_DIR}/usr/local/bin/
-    sudo curl -Lo ${ROOTFS_DIR}/usr/local/bin/umoci https://github.com/opencontainers/umoci/releases/download/v0.4.7/umoci.${arch}
+    sudo curl -Lo ${ROOTFS_DIR}/usr/local/bin/umoci https://github.com/opencontainers/umoci/releases/download/v0.4.7/umoci.${go_arch}
     sudo chmod u+x ${ROOTFS_DIR}/usr/local/bin/umoci
 
     # During the ./rootfs.sh call the kata agent is built as root, so we need to update the permissions, so we can rebuild it
@@ -290,9 +294,9 @@ check_kata_runtime() {
 
 init_kubernetes() {
     # If kubernetes init has previous run we need to clean it by removing the image and resetting k8s
-        cid=$(docker ps -a -q -f name=^/kata-registry$)
+    cid=$(docker ps -a -q -f name=^/kata-registry$)
     if [ -n "${cid}" ]; then
-        docker rm ${cid}
+        docker stop ${cid} && docker rm ${cid}
     fi
     k8s_nodes=$(kubectl get nodes -o name)
     if [ -n "${k8s_nodes}" ]; then
