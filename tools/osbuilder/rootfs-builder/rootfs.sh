@@ -413,6 +413,7 @@ build_rootfs_distro()
 			--env ROOTFS_DIR="/rootfs" \
 			--env AGENT_BIN="${AGENT_BIN}" \
 			--env AGENT_INIT="${AGENT_INIT}" \
+			--env CI="${CI}" \
 			--env KERNEL_MODULES_DIR="${KERNEL_MODULES_DIR}" \
 			--env EXTRA_PKGS="${EXTRA_PKGS}" \
 			--env OSBUILDER_VERSION="${OSBUILDER_VERSION}" \
