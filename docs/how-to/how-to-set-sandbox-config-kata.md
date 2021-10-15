@@ -34,8 +34,6 @@ There are several kinds of Kata configurations and they are listed below.
 | `io.katacontainers.config.agent.enable_tracing` | `boolean` | enable tracing for the agent |
 | `io.katacontainers.config.agent.container_pipe_size` | uint32 | specify the size of the std(in/out) pipes created for containers |
 | `io.katacontainers.config.agent.kernel_modules` | string | the list of kernel modules and their parameters that will be loaded in the guest kernel. Semicolon separated list of kernel modules and their parameters. These modules will be loaded in the guest kernel using `modprobe`(8). E.g., `e1000e InterruptThrottleRate=3000,3000,3000 EEE=1; i915 enable_ppgtt=0` |
-| `io.katacontainers.config.agent.trace_mode` | string | the trace mode for the agent |
-| `io.katacontainers.config.agent.trace_type` | string | the trace type for the agent |
 
 ## Hypervisor Options
 | Key | Value Type | Comments |

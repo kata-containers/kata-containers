@@ -153,8 +153,6 @@ type runtime struct {
 }
 
 type agent struct {
-	TraceMode           string   `toml:"trace_mode"`
-	TraceType           string   `toml:"trace_type"`
 	KernelModules       []string `toml:"kernel_modules"`
 	Debug               bool     `toml:"enable_debug"`
 	Tracing             bool     `toml:"enable_tracing"`
@@ -487,14 +485,6 @@ func (a agent) debug() bool {
 
 func (a agent) trace() bool {
 	return a.Tracing
-}
-
-func (a agent) traceMode() string {
-	return a.TraceMode
-}
-
-func (a agent) traceType() string {
-	return a.TraceType
 }
 
 func (a agent) kernelModules() []string {
@@ -929,8 +919,6 @@ func updateRuntimeConfigAgent(configPath string, tomlConf tomlConfig, config *oc
 			LongLiveConn:       true,
 			Debug:              agent.debug(),
 			Trace:              agent.trace(),
-			TraceMode:          agent.traceMode(),
-			TraceType:          agent.traceType(),
 			KernelModules:      agent.kernelModules(),
 			EnableDebugConsole: agent.debugConsoleEnabled(),
 			DialTimeout:        agent.dialTimout(),
@@ -976,10 +964,6 @@ func SetKernelParams(runtimeConfig *oci.RuntimeConfig) error {
 	}
 
 	// next, check for agent specific kernel params
-	err := vc.KataAgentSetDefaultTraceConfigOptions(&runtimeConfig.AgentConfig)
-	if err != nil {
-		return err
-	}
 
 	params := vc.KataAgentKernelParams(runtimeConfig.AgentConfig)
 
