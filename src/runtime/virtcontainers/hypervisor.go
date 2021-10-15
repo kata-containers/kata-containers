@@ -567,7 +567,7 @@ func (conf *HypervisorConfig) valid() error {
 		conf.BlockDeviceDriver = config.VirtioBlockCCW
 	}
 
-	if conf.DefaultMaxVCPUs == 0 {
+	if conf.DefaultMaxVCPUs == 0 || conf.DefaultMaxVCPUs > defaultMaxQemuVCPUs {
 		conf.DefaultMaxVCPUs = defaultMaxQemuVCPUs
 	}
 
