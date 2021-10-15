@@ -20,6 +20,9 @@ import (
 var originalLoggerLevel = logrus.WarnLevel
 var kataUtilsLogger = logrus.NewEntry(logrus.New())
 
+// SYSLOGTAG is for a consistently named syslog identifier
+const SYSLOGTAG = "kata"
+
 // SetLogger sets the logger for the factory.
 func SetLogger(ctx context.Context, logger *logrus.Entry, level logrus.Level) {
 	fields := logrus.Fields{
@@ -61,7 +64,7 @@ func (h *sysLogHook) Fire(e *logrus.Entry) (err error) {
 }
 
 func newSystemLogHook(network, raddr string) (*sysLogHook, error) {
-	hook, err := lSyslog.NewSyslogHook(network, raddr, syslog.LOG_INFO, NAME)
+	hook, err := lSyslog.NewSyslogHook(network, raddr, syslog.LOG_INFO, SYSLOGTAG)
 	if err != nil {
 		return nil, err
 	}
