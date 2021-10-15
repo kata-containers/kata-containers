@@ -7,7 +7,23 @@ ARG IMAGE_REGISTRY=docker.io
 FROM ${IMAGE_REGISTRY}/alpine:3.13.5
 
 RUN apk update && apk add \
-		  bash \
-		  curl \
-		  coreutils \
-		  binutils
+    apk-tools-static \
+    autoconf \
+    automake \
+    bash \
+    binutils \
+    cmake \
+    coreutils \
+    curl \
+    g++ \
+    gcc \
+    git \
+    libc-dev \
+    libseccomp \
+    libseccomp-dev \
+    linux-headers \
+    m4 \
+    make \
+    musl \
+    musl-dev \
+    tar
