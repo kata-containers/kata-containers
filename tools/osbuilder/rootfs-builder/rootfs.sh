@@ -420,7 +420,6 @@ build_rootfs_distro()
 			--env INSIDE_CONTAINER=1 \
 			--env SECCOMP="${SECCOMP}" \
 			--env DEBUG="${DEBUG}" \
-			--env STAGE_PREPARE_ROOTFS=1 \
 			--env HOME="/root" \
 			-v "${repo_dir}":"/kata-containers" \
 			-v "${ROOTFS_DIR}":"/rootfs" \
@@ -429,6 +428,8 @@ build_rootfs_distro()
 			$docker_run_args \
 			${image_name} \
 			bash /kata-containers/tools/osbuilder/rootfs-builder/rootfs.sh "${distro}"
+
+		exit $?
 	fi
 }
 
@@ -649,10 +650,8 @@ main()
 		prepare_overlay
 	fi
 
-	if [ "$STAGE_PREPARE_ROOTFS" == "" ]; then
-		init="${ROOTFS_DIR}/sbin/init"
-		setup_rootfs
-	fi
+	init="${ROOTFS_DIR}/sbin/init"
+	setup_rootfs
 }
 
 main $*
