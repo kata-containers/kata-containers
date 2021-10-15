@@ -1788,6 +1788,7 @@ fn pull_image_from_registry(image: &str, cid: &str, source_creds: &Option<&str>)
 
     let mut pull_command = Command::new(SKOPEO_PATH);
     pull_command
+        .arg("--insecure-policy")
         .arg("copy")
         .arg(source_image)
         .arg(&target_path_manifest);
@@ -1806,6 +1807,7 @@ fn pull_image_from_registry(image: &str, cid: &str, source_creds: &Option<&str>)
     // Resulting image is still stored in manifest format, but no longer includes the signature
     // The image with a signature can then be unpacked into a bundle
     let status: ExitStatus = Command::new(SKOPEO_PATH)
+        .arg("--insecure-policy")
         .arg("copy")
         .arg(&target_path_manifest)
         .arg(&target_path_oci)
