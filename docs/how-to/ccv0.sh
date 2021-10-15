@@ -88,6 +88,7 @@ Commands:
 - open_kata_console:            Stream the kata runtime's console
 - open_kata_shell:              Open a shell into the kata runtime
 - agent_pull_image:             Run PullImage command against the agent with agent-ctl
+- shim_pull_image:              Run PullImage command against the shim with ctr
 - agent_create_container:       Run CreateContainer command against the agent with agent-ctl
 - test:                         Test using kata with containerd
 - test_capture_logs:            Test using kata with containerd and capture the logs in the user's home directory
@@ -399,9 +400,15 @@ agent_pull_image() {
     run_agent_ctl_command "PullImage image=${PULL_IMAGE} cid=${CONTAINER_ID} source_creds=${SOURCE_CREDS}"
 }
 
-
 agent_create_container() {
     run_agent_ctl_command "CreateContainer cid=${CONTAINER_ID}"
+}
+
+shim_pull_image() {
+    get_ids
+    ctr_shim_command="ctr --namespace k8s.io shim --id ${sandbox_id} pull-image ${PULL_IMAGE} ${CONTAINER_ID}"
+    echo "Issuing command '${ctr_shim_command}'"
+    ${ctr_shim_command}
 }
 
 main() {
@@ -490,6 +497,9 @@ main() {
             ;;
         agent_create_container)
             agent_create_container
+            ;;
+	shim_pull_image)
+            shim_pull_image
             ;;
         *)
             usage 1
