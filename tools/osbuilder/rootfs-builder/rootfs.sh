@@ -552,7 +552,13 @@ EOT
 		fi
 		[ "$LIBC" == "musl" ] && bash ${script_dir}/../../../ci/install_musl.sh
 		# rust agent needs ${arch}-unknown-linux-${LIBC}
-		rustup show | grep linux-${LIBC} > /dev/null || bash ${script_dir}/../../../ci/install_rust.sh ${RUST_VERSION}
+		if ! (rustup show | grep -v linux-${LIBC} > /dev/null); then
+			if [ "$RUST_VERSION" == "null" ]; then
+				detect_rust_version || \
+					die "Could not detect the required rust version for AGENT_VERSION='${AGENT_VERSION:-main}'."
+			fi
+			bash ${script_dir}/../../../ci/install_rust.sh ${RUST_VERSION}
+		fi
 		test -r "${HOME}/.cargo/env" && source "${HOME}/.cargo/env"
 		[ "$ARCH" == "aarch64" ] && OLD_PATH=$PATH && export PATH=$PATH:/usr/local/musl/bin
 
