@@ -194,6 +194,11 @@ externals:
     url: "https://github.com/kubernetes-sigs/cri-tools"
     version: "1.21.0"
 
+  gperf:
+    description: "GNU gperf is a perfect hash function generator"
+    url: "https://ftp.gnu.org/gnu/gperf"
+    version: "3.1"
+
   kubernetes:
     description: "Kubernetes project container manager"
     url: "https://github.com/kubernetes/kubernetes"
@@ -203,6 +208,11 @@ externals:
       https://github.com/kubernetes/kubernetes/tags
       .*/v?([\d\.]+)\.tar\.gz
     version: "1.21.1-00"
+
+  libseccomp:
+    description: "High level interface to Linux seccomp filter"
+    url: "https://github.com/seccomp/libseccomp"
+    version: "2.5.1"
 
   runc:
     description: "OCI CLI reference runtime implementation"
