@@ -272,6 +272,7 @@ $ script -fec 'sudo -E USE_DOCKER=true ./image_builder.sh ${ROOTFS_DIR}'
 > - If you do *not* wish to build under Docker, remove the `USE_DOCKER`
 >   variable in the previous command and ensure the `qemu-img` command is
 >   available on your system.
+>   - If `qemu-img` is not installed, you will likely see errors such as `ERROR: File /dev/loop19p1 is not a block device` and `losetup: /tmp/tmp.bHz11oY851: Warning: file is smaller than 512 bytes; the loop device may be useless or invisible for system tools`. These can be mitigated by installing the `qemu-img` command (available in the `qemu-img` package on Fedora or the `qemu-utils` package on Debian).
 
 
 ### Install the rootfs image
