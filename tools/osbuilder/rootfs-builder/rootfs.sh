@@ -413,6 +413,7 @@ build_rootfs_distro()
 			--env ROOTFS_DIR="/rootfs" \
 			--env AGENT_BIN="${AGENT_BIN}" \
 			--env AGENT_INIT="${AGENT_INIT}" \
+			--env CI="${CI}" \
 			--env KERNEL_MODULES_DIR="${KERNEL_MODULES_DIR}" \
 			--env EXTRA_PKGS="${EXTRA_PKGS}" \
 			--env OSBUILDER_VERSION="${OSBUILDER_VERSION}" \
@@ -420,7 +421,6 @@ build_rootfs_distro()
 			--env INSIDE_CONTAINER=1 \
 			--env SECCOMP="${SECCOMP}" \
 			--env DEBUG="${DEBUG}" \
-			--env STAGE_PREPARE_ROOTFS=1 \
 			--env HOME="/root" \
 			-v "${repo_dir}":"/kata-containers" \
 			-v "${ROOTFS_DIR}":"/rootfs" \
@@ -429,6 +429,8 @@ build_rootfs_distro()
 			$docker_run_args \
 			${image_name} \
 			bash /kata-containers/tools/osbuilder/rootfs-builder/rootfs.sh "${distro}"
+
+		exit $?
 	fi
 }
 
@@ -550,7 +552,7 @@ EOT
 		fi
 		[ "$LIBC" == "musl" ] && bash ${script_dir}/../../../ci/install_musl.sh
 		# rust agent needs ${arch}-unknown-linux-${LIBC}
-		rustup show | grep linux-${LIBC} > /dev/null || bash ${script_dir}/../../../ci/install_rust.sh
+		rustup show | grep linux-${LIBC} > /dev/null || bash ${script_dir}/../../../ci/install_rust.sh ${RUST_VERSION}
 		test -r "${HOME}/.cargo/env" && source "${HOME}/.cargo/env"
 		[ "$ARCH" == "aarch64" ] && OLD_PATH=$PATH && export PATH=$PATH:/usr/local/musl/bin
 
@@ -649,10 +651,8 @@ main()
 		prepare_overlay
 	fi
 
-	if [ "$STAGE_PREPARE_ROOTFS" == "" ]; then
-		init="${ROOTFS_DIR}/sbin/init"
-		setup_rootfs
-	fi
+	init="${ROOTFS_DIR}/sbin/init"
+	setup_rootfs
 }
 
 main $*
