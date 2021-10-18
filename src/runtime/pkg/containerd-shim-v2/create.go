@@ -311,24 +311,26 @@ func configureNonRootHypervisor(runtimeConfig *oci.RuntimeConfig) error {
 	runtimeConfig.HypervisorConfig.Gid = uint32(gid)
 
 	userTmpDir := path.Join("/run/user/", fmt.Sprint(uid))
-	dir, err := os.Stat(userTmpDir)
-	if os.IsNotExist(err) {
-		if err = os.Mkdir(userTmpDir, vc.DirMode); err != nil {
-			return err
-		}
-		defer func() {
-			if err != nil {
-				if err = os.RemoveAll(userTmpDir); err != nil {
-					shimLog.WithField("userTmpDir", userTmpDir).WithError(err).Warn("failed to remove userTmpDir")
-				}
-			}
-		}()
-		if err = syscall.Chown(userTmpDir, uid, gid); err != nil {
+	_, err = os.Stat(userTmpDir)
+	// Clean up the directory created by the previous run
+	if !os.IsNotExist(err) {
+		if err = os.RemoveAll(userTmpDir); err != nil {
 			return err
 		}
 	}
-	if dir != nil && !dir.IsDir() {
-		return fmt.Errorf("%s is expected to be a directory", userTmpDir)
+
+	if err = os.Mkdir(userTmpDir, vc.DirMode); err != nil {
+		return err
+	}
+	defer func() {
+		if err != nil {
+			if err = os.RemoveAll(userTmpDir); err != nil {
+				shimLog.WithField("userTmpDir", userTmpDir).WithError(err).Warn("failed to remove userTmpDir")
+			}
+		}
+	}()
+	if err = syscall.Chown(userTmpDir, uid, gid); err != nil {
+		return err
 	}
 
 	if err := os.Setenv("XDG_RUNTIME_DIR", userTmpDir); err != nil {
