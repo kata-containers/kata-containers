@@ -225,3 +225,109 @@ Options:
     -d: Enable debug
     -h: Display this help
 ```
+
+## Additional - testing via `ctr` command-line tool
+
+Once the Kubernetes (K8s) and Kata Runtime environment has been deployed, there may be a requirement to test the Kata Agent via the shim ( `containerd-shim-kata-v2` ), as well as via `agent-ctl` using `ccv0.sh -d agent_pull_image`.
+
+This can be achieved using the [containerd](https://github.com/containerd/containerd) CLI tool, `ctr`, which can be used to interact with the shim directly.
+
+The `ctr` tool is typically located alongside `containerd` and `containerd-shim-kata-v2`, and, by default, should be found in the `/usr/local/bin/` directory.
+
+The precise location can be determined as follows: -
+
+```bash
+ls -al `which ctr`
+```
+
+```text
+-rwxr-xr-x 1 root root 27416320 Oct 13 07:18 /usr/local/bin/ctr
+```
+
+and it's version should be consistent with `containerd` itself, as per this example: -
+
+`containerd --version`
+
+```text
+containerd github.com/containerd/containerd v1.5.7-3-gebadf6cd8 ebadf6cd8e659feebcf8d837165182d4e4522860
+```
+
+`ctr version`
+
+```text
+Client:
+  Version:  v1.5.7-3-gebadf6cd8
+  Revision: ebadf6cd8e659feebcf8d837165182d4e4522860
+  Go version: go1.16.5
+
+Server:
+  Version:  v1.5.7-3-gebadf6cd8
+  Revision: ebadf6cd8e659feebcf8d837165182d4e4522860
+  UUID: 489c476b-65e5-445c-a39e-f4abf0fed890
+```
+
+To start, `ctr` can be used to query the containers that are currently running; given that we've deployed Kata Containers with K8s, it should be noted that any containers that have been deployed as K8s pods e.g. via `./ccv0.sh create_kata_pod` etc. exist in a namespace called `k8s.io`.
+
+- Note: This namespace differs from the more familiar K8s namespace convention e.g. `default`, `kube-system` etc. and defaults to `default`. This is documented in more detail in [containerd Namespaces and Multi-Tenancy](https://github.com/containerd/containerd/blob/main/docs/namespaces.md).
+
+To start with, we can query all containers deployed in the `k8s.io` namespace that are using the `kata` runtime: -
+
+`ctr --namespace k8s.io  containers list | grep kata`
+
+```text
+f3d39340d873815772339c77255a1aa4a0ef45d265e64e1747bcc118af599a46    k8s.gcr.io/pause:3.5                          io.containerd.kata.v2    
+f4f5e360e84f6044764fdabf1dab5bf6785372cac6734fc1d1d058211a7a7ad4    docker.io/library/nginx:latest                io.containerd.kata.v2
+```
+
+With this list, we can choose the ID of a container, and then interact with it via the shim, namely `containerd-shim-kata-v2`, using `ctr`.
+
+- Note: in order to interact via the shim, we need to select the ID of the container that is running natively on the K8s Compute Node, namely that using the `k8s.gcr.io/pause:3.5` image - this could be considered to be the **outer** container, as opposed to the container that is running within the Guest VM ( aka Pod Sandbox ), which could be considered to be the **inner** container. From the above example, the container ID of interest is `f3d39340d873815772339c77255a1aa4a0ef45d265e64e1747bcc118af599a46`
+
+With this container ID, we can use the `ctr shim` subcommand to get the state of the container, as per the following example: -
+
+`ctr --namespace k8s.io shim --id f3d39340d873815772339c77255a1aa4a0ef45d265e64e1747bcc118af599a46 state`
+
+```json
+{
+    "id": "f3d39340d873815772339c77255a1aa4a0ef45d265e64e1747bcc118af599a46",
+    "bundle": "/run/containerd/io.containerd.runtime.v2.task/k8s.io/f3d39340d873815772339c77255a1aa4a0ef45d265e64e1747bcc118af599a46",
+    "pid": 213393,
+    "status": 2,
+    "exited_at": "0001-01-01T00:00:00Z"
+}
+```
+
+We can then follow a similar path to invoke the `pullimage` command; this command has been added to the `shim`, and interacts with the corresponding `PullImage` command that has been added to the Kata Agent: -
+
+`ctr --namespace k8s.io shim --id f3d39340d873815772339c77255a1aa4a0ef45d265e64e1747bcc118af599a46 pullimage docker.io/busybox:latest`
+
+The progress of the `pullimage` command can be observed, using `~/ccv0.sh -d open_kata_console` from a separate shell: -
+
+`~/ccv0.sh -d open_kata_console`
+
+as per this example: -
+
+```text
+Getting image source signatures
+…  
+…  
+Writing manifest to image destination
+Storing signatures
+…  
+…  
+Writing manifest to image destination
+Storing signatures
+   • unpacking bundle ...     
+   • unpack rootfs: /run/kata-containers/rootfs
+   • unpack layer: sha256:24fb2886d6f6c5d16481dd7608b47e78a8e92a13d6e64d87d57cb16d5f766d63
+   • ... done                 
+   • computing filesystem manifest ...
+   • ... done                 
+   • unpacked image bundle: /run/kata-containers/
+{"msg":"Attempting to pull image docker://docker.io/busybox:latest...","level":"INFO","ts":"2021-10-13T18:16:25.986932222+00:00","name":"kata-agent","pid":"56","source":"agent","subsystem":"rpc","version":"0.1.0"}
+{"msg":"cid is \"\"","level":"INFO","ts":"2021-10-13T18:16:30.821717045+00:00","pid":"56","subsystem":"rpc","version":"0.1.0","name":"kata-agent","source":"agent"}
+{"msg":"target_path_bundle is \"/run/kata-containers/\"","level":"INFO","ts":"2021-10-13T18:16:30.821808236+00:00","source":"agent","subsystem":"rpc","pid":"56","version":"0.1.0","name":"kata-agent"}
+{"msg":"handling signal","level":"INFO","ts":"2021-10-13T18:16:33.193806505+00:00","subsystem":"signals","pid":"56","version":"0.1.0","source":"agent","name":"kata-agent","signal":"SIGCHLD"}
+```
+
+The `ctr` CLI tool has a number of other commands and subcommands, which can be explored via `ctr --help` and `ctr shim --help` etc.
