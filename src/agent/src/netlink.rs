@@ -6,6 +6,7 @@
 use anyhow::{anyhow, Context, Result};
 use futures::{future, StreamExt, TryStreamExt};
 use ipnetwork::{IpNetwork, Ipv4Network, Ipv6Network};
+use nix::errno::Errno;
 use protobuf::RepeatedField;
 use protocols::types::{ARPNeighbor, IPAddress, IPFamily, Interface, Route};
 use rtnetlink::{new_connection, packet, IpVersion};
@@ -363,14 +364,17 @@ impl Handle {
                     request = request.gateway(ip);
                 }
 
-                request.execute().await.with_context(|| {
-                    format!(
-                        "Failed to add IP v6 route (src: {}, dst: {}, gtw: {})",
-                        route.get_source(),
-                        route.get_dest(),
-                        route.get_gateway()
-                    )
-                })?;
+                if let Err(rtnetlink::Error::NetlinkError(message)) = request.execute().await {
+                    if Errno::from_i32(message.code.abs()) != Errno::EEXIST {
+                        return Err(anyhow!(
+                            "Failed to add IP v6 route (src: {}, dst: {}, gtw: {},Err: {})",
+                            route.get_source(),
+                            route.get_dest(),
+                            route.get_gateway(),
+                            message
+                        ));
+                    }
+                }
             } else {
                 let dest_addr = if !route.dest.is_empty() {
                     Ipv4Network::from_str(&route.dest)?
@@ -401,7 +405,17 @@ impl Handle {
                     request = request.gateway(ip);
                 }
 
-                request.execute().await?;
+                if let Err(rtnetlink::Error::NetlinkError(message)) = request.execute().await {
+                    if Errno::from_i32(message.code.abs()) != Errno::EEXIST {
+                        return Err(anyhow!(
+                            "Failed to add IP v4 route (src: {}, dst: {}, gtw: {},Err: {})",
+                            route.get_source(),
+                            route.get_dest(),
+                            route.get_gateway(),
+                            message
+                        ));
+                    }
+                }
             }
         }
 
