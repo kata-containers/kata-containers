@@ -59,7 +59,7 @@ parts:
 
       yq_version=3.4.1
       yq_url="https://${yq_pkg}/releases/download/${yq_version}/yq_${goos}_${goarch}"
-      curl -o "${yq_path}" -LSsf "${yq_url}"
+      curl -o "${yq_path}" -L "${yq_url}"
       chmod +x "${yq_path}"
 
       kata_dir=gopath/src/github.com/${SNAPCRAFT_PROJECT_NAME}/${SNAPCRAFT_PROJECT_NAME}
@@ -139,7 +139,7 @@ parts:
       cp kata-containers*.img ${kata_image_dir}
 
   runtime:
-    after: [godeps, image]
+    after: [godeps, image, cloud-hypervisor]
     plugin: nil
     build-attributes: [no-patchelf]
     override-build: |
@@ -185,6 +185,7 @@ parts:
       - flex
     override-build: |
       yq=${SNAPCRAFT_STAGE}/yq
+      export PATH="${PATH}:${SNAPCRAFT_STAGE}"
       export GOPATH=${SNAPCRAFT_STAGE}/gopath
       kata_dir=${GOPATH}/src/github.com/${SNAPCRAFT_PROJECT_NAME}/${SNAPCRAFT_PROJECT_NAME}
       versions_file="${kata_dir}/versions.yaml"
@@ -199,10 +200,17 @@ parts:
       kata_dir=${GOPATH}/src/github.com/${SNAPCRAFT_PROJECT_NAME}/${SNAPCRAFT_PROJECT_NAME}
 
       cd ${kata_dir}/tools/packaging/kernel
+      kernel_dir_prefix="kata-linux-"
 
       # Setup and build kernel
-      ./build-kernel.sh -v ${kernel_version} -d setup
-      kernel_dir_prefix="kata-linux-"
+      if [ "$(uname -m)" = "x86_64" ]; then
+        kernel_version="$(${yq} r $versions_file assets.kernel-experimental.tag)"
+        kernel_version=${kernel_version#v}
+        kernel_dir_prefix="kata-linux-experimental-"
+        ./build-kernel.sh -e -v ${kernel_version} -d setup
+      else
+        ./build-kernel.sh -v ${kernel_version} -d setup
+      fi
       cd ${kernel_dir_prefix}*
       make -j $(($(nproc)-1)) EXTRAVERSION=".container"
 
@@ -326,6 +334,22 @@ parts:
     organize:
       # Hack: move qemu to /
       "snap/kata-containers/current/": "./"
+
+  cloud-hypervisor:
+    plugin: nil
+    after: [godeps]
+    override-build: |
+      export GOPATH=${SNAPCRAFT_STAGE}/gopath
+      yq=${SNAPCRAFT_STAGE}/yq
+      kata_dir=${GOPATH}/src/github.com/${SNAPCRAFT_PROJECT_NAME}/${SNAPCRAFT_PROJECT_NAME}
+      versions_file="${kata_dir}/versions.yaml"
+      version="$(${yq} r ${versions_file} assets.hypervisor.cloud_hypervisor.version)"
+      url="https://github.com/cloud-hypervisor/cloud-hypervisor/releases/download/${version}"
+      curl -L ${url}/cloud-hypervisor-static -o cloud-hypervisor
+      curl -LO ${url}/clh-remote
+
+      install -D cloud-hypervisor ${SNAPCRAFT_PART_INSTALL}/usr/bin/cloud-hypervisor
+      install -D clh-remote ${SNAPCRAFT_PART_INSTALL}/usr/bin/clh-remote
 
 apps:
   runtime:
