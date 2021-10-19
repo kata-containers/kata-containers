@@ -146,15 +146,16 @@ type firecracker struct {
 	fcConfig     *types.FcConfig     // Parameters configured before VM starts
 	connection   *client.Firecracker //Tracks the current active connection
 
-	id            string //Unique ID per pod. Normally maps to the sandbox id
-	vmPath        string //All jailed VM assets need to be under this
-	chrootBaseDir string //chroot base for the jailer
-	jailerRoot    string
-	socketPath    string
-	netNSPath     string
-	uid           string //UID and GID to be used for the VMM
-	gid           string
-	fcConfigPath  string
+	id               string //Unique ID per pod. Normally maps to the sandbox id
+	vmPath           string //All jailed VM assets need to be under this
+	chrootBaseDir    string //chroot base for the jailer
+	jailerRoot       string
+	socketPath       string
+	hybridSocketPath string
+	netNSPath        string
+	uid              string //UID and GID to be used for the VMM
+	gid              string
+	fcConfigPath     string
 
 	info   FirecrackerInfo
 	config HypervisorConfig
@@ -186,6 +187,17 @@ func (fc *firecracker) truncateID(id string) string {
 	return id
 }
 
+func (fc *firecracker) setConfig(config *HypervisorConfig) error {
+	err := config.valid()
+	if err != nil {
+		return err
+	}
+
+	fc.config = *config
+
+	return nil
+}
+
 // For firecracker this call only sets the internal structure up.
 // The sandbox will be created and started through startSandbox().
 func (fc *firecracker) createSandbox(ctx context.Context, id string, networkNS NetworkNamespace, hypervisorConfig *HypervisorConfig) error {
@@ -198,8 +210,27 @@ func (fc *firecracker) createSandbox(ctx context.Context, id string, networkNS N
 	//https://github.com/kata-containers/runtime/issues/1065
 	fc.id = fc.truncateID(id)
 	fc.state.set(notReady)
-	fc.config = *hypervisorConfig
 
+	if err := fc.setConfig(hypervisorConfig); err != nil {
+		return err
+	}
+
+	fc.setPaths(&fc.config)
+
+	// So we need to repopulate this at startSandbox where it is valid
+	fc.netNSPath = networkNS.NetNsPath
+
+	// Till we create lower privileged kata user run as root
+	// https://github.com/kata-containers/runtime/issues/1869
+	fc.uid = "0"
+	fc.gid = "0"
+
+	fc.fcConfig = &types.FcConfig{}
+	fc.fcConfigPath = filepath.Join(fc.vmPath, defaultFcConfig)
+	return nil
+}
+
+func (fc *firecracker) setPaths(hypervisorConfig *HypervisorConfig) {
 	// When running with jailer all resources need to be under
 	// a specific location and that location needs to have
 	// exec permission (i.e. should not be mounted noexec, e.g. /run, /var/run)
@@ -220,17 +251,7 @@ func (fc *firecracker) createSandbox(ctx context.Context, id string, networkNS N
 	// with the name of "firecracker.socket"
 	fc.socketPath = filepath.Join(fc.jailerRoot, "run", fcSocket)
 
-	// So we need to repopulate this at startSandbox where it is valid
-	fc.netNSPath = networkNS.NetNsPath
-
-	// Till we create lower privileged kata user run as root
-	// https://github.com/kata-containers/runtime/issues/1869
-	fc.uid = "0"
-	fc.gid = "0"
-
-	fc.fcConfig = &types.FcConfig{}
-	fc.fcConfigPath = filepath.Join(fc.vmPath, defaultFcConfig)
-	return nil
+	fc.hybridSocketPath = filepath.Join(fc.jailerRoot, defaultHybridVSocketName)
 }
 
 func (fc *firecracker) newFireClient(ctx context.Context) *client.Firecracker {
@@ -783,7 +804,7 @@ func (fc *firecracker) startSandbox(ctx context.Context, timeout int) error {
 	}
 
 	// make sure 'others' don't have access to this socket
-	err = os.Chmod(filepath.Join(fc.jailerRoot, defaultHybridVSocketName), 0640)
+	err = os.Chmod(fc.hybridSocketPath, 0640)
 	if err != nil {
 		return fmt.Errorf("Could not change socket permissions: %v", err)
 	}
@@ -1225,10 +1246,15 @@ func (fc *firecracker) check() error {
 
 func (fc *firecracker) generateSocket(id string) (interface{}, error) {
 	fc.Logger().Debug("Using hybrid-vsock endpoint")
-	udsPath := filepath.Join(fc.jailerRoot, defaultHybridVSocketName)
+
+	// Method is being run outside of the normal container workflow
+	if fc.jailerRoot == "" {
+		fc.id = id
+		fc.setPaths(&fc.config)
+	}
 
 	return types.HybridVSock{
-		UdsPath: udsPath,
+		UdsPath: fc.hybridSocketPath,
 		Port:    uint32(vSockPort),
 	}, nil
 }

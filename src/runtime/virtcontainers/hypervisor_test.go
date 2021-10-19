@@ -67,7 +67,7 @@ func TestStringFromUnknownHypervisorType(t *testing.T) {
 
 func testNewHypervisorFromHypervisorType(t *testing.T, hypervisorType HypervisorType, expected hypervisor) {
 	assert := assert.New(t)
-	hy, err := newHypervisor(hypervisorType)
+	hy, err := NewHypervisor(hypervisorType)
 	assert.NoError(err)
 	assert.Exactly(hy, expected)
 }
@@ -82,7 +82,7 @@ func TestNewHypervisorFromUnknownHypervisorType(t *testing.T) {
 	var hypervisorType HypervisorType
 	assert := assert.New(t)
 
-	hy, err := newHypervisor(hypervisorType)
+	hy, err := NewHypervisor(hypervisorType)
 	assert.Error(err)
 	assert.Nil(hy)
 }

@@ -152,7 +152,7 @@ func (sandboxConfig *SandboxConfig) valid() bool {
 		return false
 	}
 
-	if _, err := newHypervisor(sandboxConfig.HypervisorType); err != nil {
+	if _, err := NewHypervisor(sandboxConfig.HypervisorType); err != nil {
 		sandboxConfig.HypervisorType = QemuHypervisor
 	}
 
@@ -498,7 +498,7 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 	// create agent instance
 	agent := getNewAgentFunc(ctx)()
 
-	hypervisor, err := newHypervisor(sandboxConfig.HypervisorType)
+	hypervisor, err := NewHypervisor(sandboxConfig.HypervisorType)
 	if err != nil {
 		return nil, err
 	}
