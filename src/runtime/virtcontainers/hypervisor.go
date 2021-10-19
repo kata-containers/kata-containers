@@ -185,8 +185,8 @@ func (hType *HypervisorType) String() string {
 	}
 }
 
-// newHypervisor returns an hypervisor from and hypervisor type.
-func newHypervisor(hType HypervisorType) (hypervisor, error) {
+// NewHypervisor returns an hypervisor from and hypervisor type.
+func NewHypervisor(hType HypervisorType) (hypervisor, error) {
 	store, err := persist.GetDriver()
 	if err != nil {
 		return nil, err
@@ -212,6 +212,41 @@ func newHypervisor(hType HypervisorType) (hypervisor, error) {
 	default:
 		return nil, fmt.Errorf("Unknown hypervisor type %s", hType)
 	}
+}
+
+// GetHypervisorSocketTemplate returns the full "template" path to the
+// hypervisor socket. If the specified hypervisor doesn't use a socket,
+// an empty string is returned.
+//
+// The returned value is not the actual socket path since this function
+// does not create a sandbox. Instead a path is returned with a special
+// template value "{ID}" which would be replaced with the real sandbox
+// name sandbox creation time.
+func GetHypervisorSocketTemplate(hType HypervisorType, config *HypervisorConfig) (string, error) {
+	hypervisor, err := NewHypervisor(hType)
+	if err != nil {
+		return "", err
+	}
+
+	if err := hypervisor.setConfig(config); err != nil {
+		return "", err
+	}
+
+	// Tag that is used to represent the name of a sandbox
+	const sandboxID = "{ID}"
+
+	socket, err := hypervisor.generateSocket(sandboxID)
+	if err != nil {
+		return "", err
+	}
+
+	var socketPath string
+
+	if hybridVsock, ok := socket.(types.HybridVSock); ok {
+		socketPath = hybridVsock.UdsPath
+	}
+
+	return socketPath, nil
 }
 
 // Param is a key/value representation for hypervisor and kernel parameters.
@@ -858,6 +893,7 @@ func generateVMSocket(id string, vmStogarePath string) (interface{}, error) {
 // hypervisor is the virtcontainers hypervisor interface.
 // The default hypervisor implementation is Qemu.
 type hypervisor interface {
+	setConfig(config *HypervisorConfig) error
 	createSandbox(ctx context.Context, id string, networkNS NetworkNamespace, hypervisorConfig *HypervisorConfig) error
 	startSandbox(ctx context.Context, timeout int) error
 	// If wait is set, don't actively stop the sandbox:

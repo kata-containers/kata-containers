@@ -30,9 +30,16 @@ func (m *mockHypervisor) hypervisorConfig() HypervisorConfig {
 	return HypervisorConfig{}
 }
 
+func (m *mockHypervisor) setConfig(config *HypervisorConfig) error {
+	if err := config.valid(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func (m *mockHypervisor) createSandbox(ctx context.Context, id string, networkNS NetworkNamespace, hypervisorConfig *HypervisorConfig) error {
-	err := hypervisorConfig.valid()
-	if err != nil {
+	if err := m.setConfig(hypervisorConfig); err != nil {
 		return err
 	}
 

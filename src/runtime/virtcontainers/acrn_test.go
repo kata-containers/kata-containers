@@ -259,3 +259,18 @@ func TestAcrnMemoryTopology(t *testing.T) {
 	assert.NoError(err)
 	assert.Exactly(memory, expectedOut)
 }
+
+func TestAcrnSetConfig(t *testing.T) {
+	assert := assert.New(t)
+
+	config := newAcrnConfig()
+
+	a := &Acrn{}
+
+	assert.Equal(a.config, HypervisorConfig{})
+
+	err := a.setConfig(&config)
+	assert.NoError(err)
+
+	assert.Equal(a.config, config)
+}

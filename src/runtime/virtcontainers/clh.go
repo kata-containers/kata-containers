@@ -188,6 +188,17 @@ var clhDebugKernelParams = []Param{
 //
 //###########################################################
 
+func (clh *cloudHypervisor) setConfig(config *HypervisorConfig) error {
+	err := config.valid()
+	if err != nil {
+		return err
+	}
+
+	clh.config = *config
+
+	return nil
+}
+
 // For cloudHypervisor this call only sets the internal structure up.
 // The VM will be created and started through startSandbox().
 func (clh *cloudHypervisor) createSandbox(ctx context.Context, id string, networkNS NetworkNamespace, hypervisorConfig *HypervisorConfig) error {
@@ -197,13 +208,11 @@ func (clh *cloudHypervisor) createSandbox(ctx context.Context, id string, networ
 	clh.ctx = newCtx
 	defer span.End()
 
-	err := hypervisorConfig.valid()
-	if err != nil {
+	if err := clh.setConfig(hypervisorConfig); err != nil {
 		return err
 	}
 
 	clh.id = id
-	clh.config = *hypervisorConfig
 	clh.state.state = clhNotReady
 
 	clh.Logger().WithField("function", "createSandbox").Info("creating Sandbox")

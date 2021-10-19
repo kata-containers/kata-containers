@@ -585,3 +585,17 @@ func TestQemuGetpids(t *testing.T) {
 	assert.True(pids[0] == 100)
 	assert.True(pids[1] == 200)
 }
+
+func TestQemuSetConfig(t *testing.T) {
+	assert := assert.New(t)
+
+	config := newQemuConfig()
+
+	q := &qemu{}
+
+	assert.Equal(q.config, HypervisorConfig{})
+	err := q.setConfig(&config)
+	assert.NoError(err)
+
+	assert.Equal(q.config, config)
+}
