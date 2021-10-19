@@ -16,8 +16,8 @@ import (
 	"testing"
 
 	"github.com/containerd/containerd/namespaces"
+	crioption "github.com/containerd/containerd/pkg/runtimeoptions/v1"
 	taskAPI "github.com/containerd/containerd/runtime/v2/task"
-	crioption "github.com/containerd/cri-containerd/pkg/api/runtimeoptions/v1"
 	"github.com/containerd/typeurl"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/stretchr/testify/assert"

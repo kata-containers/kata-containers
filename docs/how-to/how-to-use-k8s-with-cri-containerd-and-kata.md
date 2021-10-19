@@ -3,7 +3,7 @@
 This document describes how to set up a single-machine Kubernetes (k8s) cluster.
 
 The Kubernetes cluster will use the
-[CRI containerd plugin](https://github.com/containerd/containerd/tree/main/pkg/cri) and
+[CRI containerd](https://github.com/containerd/containerd/) and
 [Kata Containers](https://katacontainers.io) to launch untrusted workloads.
 
 ## Requirements
