@@ -1,0 +1,61 @@
+# This configure jobs to build osbuilder in various ways to ensure changes
+# doesn't break the build scripts.
+#
+name: osbuilder checks
+
+on:
+  pull_request:
+    types: [opened, edited, reopened]
+    # Only run when osbuilder files changed.
+    paths:
+      - 'tools/osbuilder/**'
+
+jobs:
+  # Jobs for dracut based build.
+  dracut-build-on-fedora:
+    runs-on: ubuntu-latest
+    container:
+      image: fedora:34
+      options: --privileged
+    strategy:
+      matrix:
+        builder:
+          # Note: 'image' builder doesn't work on a container environment like
+          # the one provided by Github, so it was not added to the matrix.
+          - initrd
+    steps:
+      - uses: actions/checkout@v2
+      - name: Install tools
+        run: |
+          dnf update -y
+          # The parted and qemu-img packages provide tools required for the
+          # image builder.
+          dnf install -y "@Development Tools" dracut parted qemu-img
+      - name: Build
+        run: |
+          cd tools/osbuilder
+          make BUILD_METHOD=dracut ${{ matrix.builder }}
+        env:
+          GOPATH: ${{ runner.workspace }}/kata-containers
+  # Jobs for distro based build.
+  distro-build-with-docker:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        builder:
+          - initrd
+        distro:
+          - ubuntu
+          - fedora
+        include:
+          # Building the image from only one distro should be enough to test
+          # that builder, so avoid running a complex matrix.
+          - builder: image
+            distro: ubuntu
+    steps:
+      - uses: actions/checkout@v2
+      - name: Build
+        run: |
+          cd tools/osbuilder
+          sudo -E make USE_DOCKER=true DISTRO=${{ matrix.distro }} ${{ matrix.builder }}
+
