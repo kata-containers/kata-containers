@@ -34,7 +34,7 @@ as the proxy starts.
 
 Follow the [instructions](../install/README.md)
 to get Kata Containers properly installed and configured with Kubernetes.
-You can choose between CRI-O and CRI-containerd, both are supported
+You can choose between CRI-O and containerd, both are supported
 through this document.
 
 For both cases, select the workloads as _trusted_ by default. This way,
@@ -159,7 +159,7 @@ containers with `privileged: true` to `privileged: false`.
 There is no difference between Istio and Linkerd in this section. It is
 about which CRI implementation you use.
 
-For both CRI-O and CRI-containerd, you have to add an annotation indicating
+For both CRI-O and containerd, you have to add an annotation indicating
 the workload for this deployment is not _trusted_, which will trigger
 `kata-runtime` to be called instead of `runc`.
 
@@ -193,9 +193,9 @@ spec:
 ...
 ```
 
-__CRI-containerd:__
+__containerd:__
 
-Add the following annotation for CRI-containerd
+Add the following annotation for containerd
 ```yaml
 io.kubernetes.cri.untrusted-workload: "true"
 ```

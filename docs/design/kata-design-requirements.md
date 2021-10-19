@@ -30,7 +30,7 @@ The Kata Containers runtime **MUST** implement the following command line option
 The Kata Containers project **MUST** provide two interfaces for CRI shims to manage hardware
 virtualization based Kubernetes pods and containers:
 -  An OCI and `runc` compatible command line interface, as described in the previous section.
-This interface is used by implementations such as [`CRI-O`](http://cri-o.io) and [`cri-containerd`](https://github.com/containerd/cri-containerd), for example.
+This interface is used by implementations such as [`CRI-O`](http://cri-o.io) and [`containerd`](https://github.com/containerd/containerd), for example.
 - A hardware virtualization runtime library API for CRI shims to consume and provide a more
 CRI native implementation. The [`frakti`](https://github.com/kubernetes/frakti) CRI shim is an example of such a consumer.
 

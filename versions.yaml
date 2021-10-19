@@ -189,6 +189,16 @@ externals:
     # version older than them.
     version: "v1.5.2"
 
+  containerd:
+    description: |
+      Containerd for Kubernetes Container Runtime Interface.
+    url: "github.com/containerd/containerd"
+    tarball_url: "https://github.com/containerd/containerd/releases/download"
+    # containerd from v1.5.0 used the path unix socket
+    # instead of abstract socket, thus kata wouldn's support the containerd's
+    # version older than them.
+    version: "v1.5.2"
+
   critools:
     description: "CLI tool for Container Runtime Interface (CRI)"
     url: "https://github.com/kubernetes-sigs/cri-tools"
