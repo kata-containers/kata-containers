@@ -8,7 +8,6 @@ package katautils
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -20,7 +19,6 @@ import (
 	"testing"
 
 	ktu "github.com/kata-containers/kata-containers/src/runtime/pkg/katatestutils"
-	"github.com/kata-containers/kata-containers/src/runtime/pkg/utils"
 	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/compatoci"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/oci"
@@ -37,8 +35,6 @@ const (
 )
 
 var (
-	testBundleDir = ""
-
 	// testingImpl is a concrete mock RVC implementation used for testing
 	testingImpl = &vcmock.VCMock{}
 	// mock sandbox
@@ -51,49 +47,6 @@ var (
 
 func init() {
 	tc = ktu.NewTestConstraint(false)
-}
-
-func writeOCIConfigFile(spec specs.Spec, configPath string) error {
-	if configPath == "" {
-		return errors.New("BUG: need config file path")
-	}
-
-	bytes, err := json.MarshalIndent(spec, "", "\t")
-	if err != nil {
-		return err
-	}
-
-	return ioutil.WriteFile(configPath, bytes, testFileMode)
-}
-
-// Create an OCI bundle in the specified directory.
-//
-// Note that the directory will be created, but it's parent is expected to exist.
-//
-// This function works by copying the already-created test bundle. Ideally,
-// the bundle would be recreated for each test, but createRootfs() uses
-// docker which on some systems is too slow, resulting in the tests timing
-// out.
-func makeOCIBundle(bundleDir string) error {
-	from := testBundleDir
-	to := bundleDir
-
-	// only the basename of bundleDir needs to exist as bundleDir
-	// will get created by cp(1).
-	base := filepath.Dir(bundleDir)
-
-	for _, dir := range []string{from, base} {
-		if !FileExists(dir) {
-			return fmt.Errorf("BUG: directory %v should exist", dir)
-		}
-	}
-
-	output, err := utils.RunCommandFull([]string{"cp", "-a", from, to}, true)
-	if err != nil {
-		return fmt.Errorf("failed to copy test OCI bundle from %v to %v: %v (output: %v)", from, to, err, output)
-	}
-
-	return nil
 }
 
 // newTestRuntimeConfig creates a new RuntimeConfig
@@ -262,20 +215,11 @@ func TestSetKernelParamsUserOptionTakesPriority(t *testing.T) {
 func TestCreateSandboxConfigFail(t *testing.T) {
 	assert := assert.New(t)
 
-	tmpdir, err := ioutil.TempDir("", "")
-	assert.NoError(err)
+	tmpdir, bundlePath, _ := ktu.SetupOCIConfigFile(t)
 	defer os.RemoveAll(tmpdir)
 
 	runtimeConfig, err := newTestRuntimeConfig(tmpdir, testConsole, true)
 	assert.NoError(err)
-
-	bundlePath := filepath.Join(tmpdir, "bundle")
-
-	err = makeOCIBundle(bundlePath)
-	assert.NoError(err)
-
-	ociConfigFile := filepath.Join(bundlePath, "config.json")
-	assert.True(FileExists(ociConfigFile))
 
 	spec, err := compatoci.ParseConfigJSON(bundlePath)
 	assert.NoError(err)
@@ -305,20 +249,11 @@ func TestCreateSandboxFail(t *testing.T) {
 
 	assert := assert.New(t)
 
-	tmpdir, err := ioutil.TempDir("", "")
-	assert.NoError(err)
+	tmpdir, bundlePath, _ := ktu.SetupOCIConfigFile(t)
 	defer os.RemoveAll(tmpdir)
 
 	runtimeConfig, err := newTestRuntimeConfig(tmpdir, testConsole, true)
 	assert.NoError(err)
-
-	bundlePath := filepath.Join(tmpdir, "bundle")
-
-	err = makeOCIBundle(bundlePath)
-	assert.NoError(err)
-
-	ociConfigFile := filepath.Join(bundlePath, "config.json")
-	assert.True(FileExists(ociConfigFile))
 
 	spec, err := compatoci.ParseConfigJSON(bundlePath)
 	assert.NoError(err)
@@ -375,17 +310,8 @@ func TestCheckForFips(t *testing.T) {
 func TestCreateContainerContainerConfigFail(t *testing.T) {
 	assert := assert.New(t)
 
-	tmpdir, err := ioutil.TempDir("", "")
-	assert.NoError(err)
+	tmpdir, bundlePath, ociConfigFile := ktu.SetupOCIConfigFile(t)
 	defer os.RemoveAll(tmpdir)
-
-	bundlePath := filepath.Join(tmpdir, "bundle")
-
-	err = makeOCIBundle(bundlePath)
-	assert.NoError(err)
-
-	ociConfigFile := filepath.Join(bundlePath, "config.json")
-	assert.True(FileExists(ociConfigFile))
 
 	spec, err := compatoci.ParseConfigJSON(bundlePath)
 	assert.NoError(err)
@@ -396,7 +322,7 @@ func TestCreateContainerContainerConfigFail(t *testing.T) {
 	spec.Annotations[testContainerTypeAnnotation] = containerType
 
 	// rewrite file
-	err = writeOCIConfigFile(spec, ociConfigFile)
+	err = ktu.WriteOCIConfigFile(spec, ociConfigFile)
 	assert.NoError(err)
 
 	rootFs := vc.RootFs{Mounted: true}
@@ -412,17 +338,8 @@ func TestCreateContainerContainerConfigFail(t *testing.T) {
 func TestCreateContainerFail(t *testing.T) {
 	assert := assert.New(t)
 
-	tmpdir, err := ioutil.TempDir("", "")
-	assert.NoError(err)
+	tmpdir, bundlePath, ociConfigFile := ktu.SetupOCIConfigFile(t)
 	defer os.RemoveAll(tmpdir)
-
-	bundlePath := filepath.Join(tmpdir, "bundle")
-
-	err = makeOCIBundle(bundlePath)
-	assert.NoError(err)
-
-	ociConfigFile := filepath.Join(bundlePath, "config.json")
-	assert.True(FileExists(ociConfigFile))
 
 	spec, err := compatoci.ParseConfigJSON(bundlePath)
 	assert.NoError(err)
@@ -433,7 +350,7 @@ func TestCreateContainerFail(t *testing.T) {
 	spec.Annotations[testSandboxIDAnnotation] = testSandboxID
 
 	// rewrite file
-	err = writeOCIConfigFile(spec, ociConfigFile)
+	err = ktu.WriteOCIConfigFile(spec, ociConfigFile)
 	assert.NoError(err)
 
 	rootFs := vc.RootFs{Mounted: true}
@@ -456,17 +373,8 @@ func TestCreateContainer(t *testing.T) {
 		mockSandbox.CreateContainerFunc = nil
 	}()
 
-	tmpdir, err := ioutil.TempDir("", "")
-	assert.NoError(err)
+	tmpdir, bundlePath, ociConfigFile := ktu.SetupOCIConfigFile(t)
 	defer os.RemoveAll(tmpdir)
-
-	bundlePath := filepath.Join(tmpdir, "bundle")
-
-	err = makeOCIBundle(bundlePath)
-	assert.NoError(err)
-
-	ociConfigFile := filepath.Join(bundlePath, "config.json")
-	assert.True(FileExists(ociConfigFile))
 
 	spec, err := compatoci.ParseConfigJSON(bundlePath)
 	assert.NoError(err)
@@ -477,7 +385,7 @@ func TestCreateContainer(t *testing.T) {
 	spec.Annotations[testSandboxIDAnnotation] = testSandboxID
 
 	// rewrite file
-	err = writeOCIConfigFile(spec, ociConfigFile)
+	err = ktu.WriteOCIConfigFile(spec, ociConfigFile)
 	assert.NoError(err)
 
 	rootFs := vc.RootFs{Mounted: true}

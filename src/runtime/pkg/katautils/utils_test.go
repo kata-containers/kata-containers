@@ -7,20 +7,15 @@
 package katautils
 
 import (
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
-	"os/exec"
 	"path"
 	"path/filepath"
-	"strings"
 	"syscall"
 	"testing"
 
 	ktu "github.com/kata-containers/kata-containers/src/runtime/pkg/katatestutils"
-	"github.com/kata-containers/kata-containers/src/runtime/pkg/utils"
-	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/compatoci"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -28,172 +23,13 @@ const (
 	testDirMode  = os.FileMode(0750)
 	testFileMode = os.FileMode(0640)
 
-	// small docker image used to create root filesystems from
-	testDockerImage = "busybox"
-
 	testSandboxID   = "99999999-9999-9999-99999999999999999"
 	testContainerID = "1"
-	testBundle      = "bundle"
-	specConfig      = "config.json"
 )
 
 var (
 	testDir = ""
 )
-
-func init() {
-	var err error
-
-	fmt.Printf("INFO: creating test directory\n")
-	testDir, err = ioutil.TempDir("", fmt.Sprintf("%s-", NAME))
-	if err != nil {
-		panic(fmt.Sprintf("ERROR: failed to create test directory: %v", err))
-	}
-
-	fmt.Printf("INFO: test directory is %v\n", testDir)
-
-	testBundleDir = filepath.Join(testDir, testBundle)
-	err = os.MkdirAll(testBundleDir, testDirMode)
-	if err != nil {
-		panic(fmt.Sprintf("ERROR: failed to create bundle directory %v: %v", testBundleDir, err))
-	}
-
-	fmt.Printf("INFO: creating OCI bundle in %v for tests to use\n", testBundleDir)
-	err = realMakeOCIBundle(testBundleDir)
-	if err != nil {
-		panic(fmt.Sprintf("ERROR: failed to create OCI bundle: %v", err))
-	}
-}
-
-// createOCIConfig creates an OCI configuration (spec) file in
-// the bundle directory specified (which must exist).
-func createOCIConfig(bundleDir string) error {
-	if bundleDir == "" {
-		return errors.New("BUG: Need bundle directory")
-	}
-
-	if !FileExists(bundleDir) {
-		return fmt.Errorf("BUG: Bundle directory %s does not exist", bundleDir)
-	}
-
-	var configCmd string
-
-	// Search for a suitable version of runc to use to generate
-	// the OCI config file.
-	for _, cmd := range []string{"docker-runc", "runc"} {
-		fullPath, err := exec.LookPath(cmd)
-		if err == nil {
-			configCmd = fullPath
-			break
-		}
-	}
-
-	if configCmd == "" {
-		return errors.New("Cannot find command to generate OCI config file")
-	}
-
-	_, err := utils.RunCommand([]string{configCmd, "spec", "--bundle", bundleDir})
-	if err != nil {
-		return err
-	}
-
-	specFile := filepath.Join(bundleDir, specConfig)
-	if !FileExists(specFile) {
-		return fmt.Errorf("generated OCI config file does not exist: %v", specFile)
-	}
-
-	return nil
-}
-
-// realMakeOCIBundle will create an OCI bundle (including the "config.json"
-// config file) in the directory specified (which must already exist).
-//
-// XXX: Note that tests should *NOT* call this function - they should
-// XXX: instead call makeOCIBundle().
-func realMakeOCIBundle(bundleDir string) error {
-	if bundleDir == "" {
-		return errors.New("BUG: Need bundle directory")
-	}
-
-	if !FileExists(bundleDir) {
-		return fmt.Errorf("BUG: Bundle directory %v does not exist", bundleDir)
-	}
-
-	err := createOCIConfig(bundleDir)
-	if err != nil {
-		return err
-	}
-
-	// Note the unusual parameter (a directory, not the config
-	// file to parse!)
-	spec, err := compatoci.ParseConfigJSON(bundleDir)
-	if err != nil {
-		return err
-	}
-
-	// Determine the rootfs directory name the OCI config refers to
-	ociRootPath := spec.Root.Path
-
-	rootfsDir := filepath.Join(bundleDir, ociRootPath)
-
-	if strings.HasPrefix(ociRootPath, "/") {
-		return fmt.Errorf("Cannot handle absolute rootfs as bundle must be unique to each test")
-	}
-
-	err = createRootfs(rootfsDir)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-// createRootfs creates a minimal root filesystem below the specified
-// directory.
-func createRootfs(dir string) error {
-	var (
-		output string
-		err    error
-	)
-
-	ctrEngine := CtrEngine{}
-	for _, name := range DockerLikeCtrEngines {
-		fmt.Printf("INFO: checking for container engine: %s\n", name)
-
-		output, err = ctrEngine.Init(name)
-		if err == nil {
-			break
-		}
-	}
-
-	if ctrEngine.Name == "" {
-		panic(fmt.Sprintf("ERROR: Docker-like container engine not accessible to current user: %v (error %v)",
-			output, err))
-	}
-
-	err = os.MkdirAll(dir, testDirMode)
-	if err != nil {
-		return err
-	}
-
-	container, err := ctrEngine.Create(testDockerImage)
-	if err != nil {
-		return err
-	}
-
-	err = ctrEngine.GetRootfs(container, dir)
-	if err != nil {
-		return err
-	}
-
-	// Clean up
-	_, err = ctrEngine.Rm(container)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
 
 func createFile(file, contents string) error {
 	return ioutil.WriteFile(file, []byte(contents), testFileMode)
