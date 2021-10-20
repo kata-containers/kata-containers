@@ -358,6 +358,7 @@ components:
             hugepages: false
             shared: false
             hugepage_size: 4
+            prefault: false
             mergeable: false
             size: 9
             hotplugged_size: 2
@@ -365,6 +366,7 @@ components:
             - hugepages: false
               shared: false
               hugepage_size: 1
+              prefault: false
               mergeable: false
               file: file
               size: 7
@@ -375,6 +377,7 @@ components:
             - hugepages: false
               shared: false
               hugepage_size: 1
+              prefault: false
               mergeable: false
               file: file
               size: 7
@@ -663,6 +666,7 @@ components:
           hugepages: false
           shared: false
           hugepage_size: 4
+          prefault: false
           mergeable: false
           size: 9
           hotplugged_size: 2
@@ -670,6 +674,7 @@ components:
           - hugepages: false
             shared: false
             hugepage_size: 1
+            prefault: false
             mergeable: false
             file: file
             size: 7
@@ -680,6 +685,7 @@ components:
           - hugepages: false
             shared: false
             hugepage_size: 1
+            prefault: false
             mergeable: false
             file: file
             size: 7
@@ -983,6 +989,7 @@ components:
         hugepages: false
         shared: false
         hugepage_size: 1
+        prefault: false
         mergeable: false
         file: file
         size: 7
@@ -1019,6 +1026,9 @@ components:
         hotplugged_size:
           format: int64
           type: integer
+        prefault:
+          default: false
+          type: boolean
       required:
       - id
       - size
@@ -1028,6 +1038,7 @@ components:
         hugepages: false
         shared: false
         hugepage_size: 4
+        prefault: false
         mergeable: false
         size: 9
         hotplugged_size: 2
@@ -1035,6 +1046,7 @@ components:
         - hugepages: false
           shared: false
           hugepage_size: 1
+          prefault: false
           mergeable: false
           file: file
           size: 7
@@ -1045,6 +1057,7 @@ components:
         - hugepages: false
           shared: false
           hugepage_size: 1
+          prefault: false
           mergeable: false
           file: file
           size: 7
@@ -1079,6 +1092,9 @@ components:
         hugepage_size:
           format: int64
           type: integer
+        prefault:
+          default: false
+          type: boolean
         zones:
           items:
             $ref: '#/components/schemas/MemoryZoneConfig'
