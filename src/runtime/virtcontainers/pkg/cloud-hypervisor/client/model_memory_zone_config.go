@@ -26,6 +26,7 @@ type MemoryZoneConfig struct {
 	HostNumaNode   *int32  `json:"host_numa_node,omitempty"`
 	HotplugSize    *int64  `json:"hotplug_size,omitempty"`
 	HotpluggedSize *int64  `json:"hotplugged_size,omitempty"`
+	Prefault       *bool   `json:"prefault,omitempty"`
 }
 
 // NewMemoryZoneConfig instantiates a new MemoryZoneConfig object
@@ -42,6 +43,8 @@ func NewMemoryZoneConfig(id string, size int64) *MemoryZoneConfig {
 	this.Shared = &shared
 	var hugepages bool = false
 	this.Hugepages = &hugepages
+	var prefault bool = false
+	this.Prefault = &prefault
 	return &this
 }
 
@@ -56,6 +59,8 @@ func NewMemoryZoneConfigWithDefaults() *MemoryZoneConfig {
 	this.Shared = &shared
 	var hugepages bool = false
 	this.Hugepages = &hugepages
+	var prefault bool = false
+	this.Prefault = &prefault
 	return &this
 }
 
@@ -363,6 +368,38 @@ func (o *MemoryZoneConfig) SetHotpluggedSize(v int64) {
 	o.HotpluggedSize = &v
 }
 
+// GetPrefault returns the Prefault field value if set, zero value otherwise.
+func (o *MemoryZoneConfig) GetPrefault() bool {
+	if o == nil || o.Prefault == nil {
+		var ret bool
+		return ret
+	}
+	return *o.Prefault
+}
+
+// GetPrefaultOk returns a tuple with the Prefault field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *MemoryZoneConfig) GetPrefaultOk() (*bool, bool) {
+	if o == nil || o.Prefault == nil {
+		return nil, false
+	}
+	return o.Prefault, true
+}
+
+// HasPrefault returns a boolean if a field has been set.
+func (o *MemoryZoneConfig) HasPrefault() bool {
+	if o != nil && o.Prefault != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetPrefault gets a reference to the given bool and assigns it to the Prefault field.
+func (o *MemoryZoneConfig) SetPrefault(v bool) {
+	o.Prefault = &v
+}
+
 func (o MemoryZoneConfig) MarshalJSON() ([]byte, error) {
 	toSerialize := map[string]interface{}{}
 	if true {
@@ -394,6 +431,9 @@ func (o MemoryZoneConfig) MarshalJSON() ([]byte, error) {
 	}
 	if o.HotpluggedSize != nil {
 		toSerialize["hotplugged_size"] = o.HotpluggedSize
+	}
+	if o.Prefault != nil {
+		toSerialize["prefault"] = o.Prefault
 	}
 	return json.Marshal(toSerialize)
 }
