@@ -3,13 +3,24 @@
 ## Overview
 
 The Kata Containers trace forwarder, `kata-trace-forwarder`, is a component
-running on the host system which is used to support tracing the agent process
-which runs inside the virtual machine.
+running on the host system which is used to support
+[tracing the agent process][agent-tracing], which runs inside the Kata
+Containers virtual machine (VM).
 
-The trace forwarder, which must be started before the agent, listens over
-VSOCK for trace data sent by the agent running inside the virtual machine. The
-trace spans are exported to an OpenTelemetry collector (such as Jaeger)
-running by default on the host.
+The trace forwarder, which must be started before the container, listens over
+[`VSOCK`][vsock] for trace data sent by the agent running inside the VM. The
+trace spans are exported to an [OpenTelemetry][opentelemetry] collector (such
+as [Jaeger][jaeger-tracing]) running by default on the host.
+
+> **Notes:**
+>
+> - If agent tracing is enabled but the forwarder is not running,
+>   the agent will log an error (signalling that it cannot generate trace
+>   spans), but continue to work as normal.
+>
+> - The trace forwarder requires a trace collector (such as Jaeger) to be
+>   running before it is started. If a collector is not running, the trace
+>   forwarder will exit with an error.
 
 ## Quick start
 
@@ -133,8 +144,13 @@ You can now proceed as normal to create the "foo" Kata container.
 
 ## Full details
 
-Run:
+For further information on how to run the trace forwarder, run:
 
 ```bash
 $ cargo run -- --help
 ```
+
+[agent-tracing]: ../../docs/tracing.md
+[jaeger-tracing]: https://www.jaegertracing.io
+[opentelemetry]: https://opentelemetry.io
+[vsock]: https://wiki.qemu.org/Features/VirtioVsock
