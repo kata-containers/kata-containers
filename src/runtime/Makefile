@@ -573,7 +573,6 @@ $(MONITOR_OUTPUT): $(SOURCES) $(GENERATED_FILES) $(MAKEFILE_LIST) .git-commit
 
 .PHONY: \
 	check \
-	check-go-static \
 	coverage \
 	default \
 	install \
@@ -595,7 +594,7 @@ $(GENERATED_FILES): %: %.in $(MAKEFILE_LIST) VERSION .git-commit
 
 generate-config: $(CONFIGS)
 
-check: check-go-static
+check:
 
 test: install-hook go-test
 
@@ -609,10 +608,6 @@ endif
 go-test: $(GENERATED_FILES)
 	go clean -testcache
 	go test -v -mod=vendor ./...
-
-check-go-static:
-	$(QUIET_CHECK)../../ci/go-no-os-exit.sh ./cmd/kata-runtime
-	$(QUIET_CHECK)../../ci/go-no-os-exit.sh ./virtcontainers
 
 coverage:
 	go test -v -mod=vendor -covermode=atomic -coverprofile=coverage.txt ./...
