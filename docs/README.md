@@ -11,6 +11,10 @@ For details of the other Kata Containers repositories, see the
 
 * [Installation guides](./install/README.md): Install and run Kata Containers with Docker or Kubernetes
 
+## Tracing
+
+See the [tracing documentation](tracing.md).
+
 ## More User Guides
 
 * [Upgrading](Upgrading.md): how to upgrade from [Clear Containers](https://github.com/clearcontainers) and [runV](https://github.com/hyperhq/runv) to [Kata Containers](https://github.com/kata-containers) and how to upgrade an existing Kata Containers system to the latest version.
