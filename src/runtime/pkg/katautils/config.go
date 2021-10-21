@@ -135,6 +135,7 @@ type hypervisor struct {
 	ConfidentialGuest       bool     `toml:"confidential_guest"`
 	GuestSwap               bool     `toml:"enable_guest_swap"`
 	Rootless                bool     `toml:"rootless"`
+	DisableSeccomp          bool     `toml:"disable_seccomp"`
 }
 
 type runtime struct {
@@ -865,6 +866,7 @@ func newClhHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		VirtioFSExtraArgs:       h.VirtioFSExtraArgs,
 		SGXEPCSize:              defaultSGXEPCSize,
 		EnableAnnotations:       h.EnableAnnotations,
+		DisableSeccomp:          h.DisableSeccomp,
 	}, nil
 }
 
@@ -1056,6 +1058,7 @@ func GetDefaultHypervisorConfig() vc.HypervisorConfig {
 		ConfidentialGuest:       defaultConfidentialGuest,
 		GuestSwap:               defaultGuestSwap,
 		Rootless:                defaultRootlessHypervisor,
+		DisableSeccomp:          defaultDisableSeccomp,
 	}
 }
 
