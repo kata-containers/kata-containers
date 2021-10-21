@@ -508,6 +508,9 @@ type HypervisorConfig struct {
 
 	// Rootless is used to enable rootless VMM process
 	Rootless bool
+
+	// Disable seccomp from the hypervisor process
+	DisableSeccomp bool
 }
 
 // vcpu mapping from vcpu number to thread number
