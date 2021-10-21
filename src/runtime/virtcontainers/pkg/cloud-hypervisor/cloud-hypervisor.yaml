@@ -546,6 +546,9 @@ components:
         hotplugged_size:
           type: integer
           format: int64
+        prefault:
+          type: boolean
+          default: false
 
     MemoryConfig:
       required:
@@ -577,6 +580,9 @@ components:
         hugepage_size:
           type: integer
           format: int64
+        prefault:
+          type: boolean
+          default: false
         zones:
           type: array
           items:
