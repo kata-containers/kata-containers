@@ -110,6 +110,31 @@ EOF
 EOF
 	fi
 
+    if [ "$OS_NAME" == "Centos" ] && [ "$OS_VERSION" == "8" ]; then
+        cat >> "${DNF_CONF}" << EOF
+[appstream]
+name=CentOS Linux ${OS_VERSION} - AppStream
+mirrorlist=${CENTOS_UPDATES_MIRROR_LIST}
+gpgcheck=1
+enabled=1
+gpgkey=file://${CONFIG_DIR}/${GPG_KEY_FILE}
+
+[extras]
+name=CentOS Linux ${OS_VERSION} - Extras
+mirrorlist=${CENTOS_EXTRAS_MIRROR_LIST}
+gpgcheck=1
+enabled=1
+gpgkey=file://${CONFIG_DIR}/${GPG_KEY_FILE}
+
+[powertools]
+name=CentOS Linux ${OS_VERSION} - PowerTools
+mirrorlist=${CENTOS_PLUS_MIRROR_LIST}
+gpgcheck=1
+enabled=1
+gpgkey=file://${CONFIG_DIR}/${GPG_KEY_FILE}
+EOF
+    fi
+
 }
 
 build_rootfs()

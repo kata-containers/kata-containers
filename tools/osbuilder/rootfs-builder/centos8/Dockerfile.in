@@ -1,0 +1,42 @@
+#
+# Copyright (c) 2021 Alibaba Cloud
+#
+# SPDX-License-Identifier: Apache-2.0
+
+FROM quay.io/centos/centos:stream8
+
+@SET_PROXY@
+
+RUN yum -y update \
+    && yum install -y 'dnf-command(config-manager)' \
+    && yum config-manager --set-enabled powertools \
+    && yum install -y \
+    autoconf \
+    automake \
+    binutils \
+    chrony \
+    coreutils-single \
+    curl \
+    gcc \
+    gcc-c++ \
+    git \
+    glibc-common \
+    glibc-devel \
+    glibc-headers \
+    glibc-static \
+    glibc-utils \
+    libseccomp \
+    libseccomp-devel \
+    libstdc++-devel \
+    libstdc++-static \
+    m4 \
+    make \
+    sed \
+    tar \
+    vim \
+    which \
+    && yum clean all && rm -rf /var/cache/yum
+
+# This will install the proper packages to build Kata components
+@INSTALL_MUSL@
+@INSTALL_RUST@
