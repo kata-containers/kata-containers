@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestMockHypervisorCreateSandbox(t *testing.T) {
+func TestMockHypervisorCreateVM(t *testing.T) {
 	var m *mockHypervisor
 	assert := assert.New(t)
 
@@ -31,7 +31,7 @@ func TestMockHypervisorCreateSandbox(t *testing.T) {
 	ctx := context.Background()
 
 	// wrong config
-	err := m.createSandbox(ctx, sandbox.config.ID, NetworkNamespace{}, &sandbox.config.HypervisorConfig)
+	err := m.CreateVM(ctx, sandbox.config.ID, NetworkNamespace{}, &sandbox.config.HypervisorConfig)
 	assert.Error(err)
 
 	sandbox.config.HypervisorConfig = HypervisorConfig{
@@ -40,7 +40,7 @@ func TestMockHypervisorCreateSandbox(t *testing.T) {
 		HypervisorPath: fmt.Sprintf("%s/%s", testDir, testHypervisor),
 	}
 
-	err = m.createSandbox(ctx, sandbox.config.ID, NetworkNamespace{}, &sandbox.config.HypervisorConfig)
+	err = m.CreateVM(ctx, sandbox.config.ID, NetworkNamespace{}, &sandbox.config.HypervisorConfig)
 	assert.NoError(err)
 }
 
