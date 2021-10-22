@@ -546,6 +546,7 @@ dependencies = [
  "scopeguard",
  "serde",
  "serde_json",
+ "serial_test",
  "slog",
  "slog-scope",
  "slog-stdlog",
