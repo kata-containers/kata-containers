@@ -333,7 +333,7 @@ func (k *kataAgent) capabilities() types.Capabilities {
 	return caps
 }
 
-func (k *kataAgent) internalConfigure(ctx context.Context, h hypervisor, id string, config KataAgentConfig) error {
+func (k *kataAgent) internalConfigure(ctx context.Context, h Hypervisor, id string, config KataAgentConfig) error {
 	span, _ := katatrace.Trace(ctx, k.Logger(), "configure", kataAgentTracingTags)
 	defer span.End()
 
@@ -421,7 +421,7 @@ func (k *kataAgent) cleanupSandboxBindMounts(sandbox *Sandbox) error {
 	return retErr
 }
 
-func (k *kataAgent) configure(ctx context.Context, h hypervisor, id, sharePath string, config KataAgentConfig) error {
+func (k *kataAgent) configure(ctx context.Context, h Hypervisor, id, sharePath string, config KataAgentConfig) error {
 	span, ctx := katatrace.Trace(ctx, k.Logger(), "configure", kataAgentTracingTags)
 	defer span.End()
 
@@ -466,7 +466,7 @@ func (k *kataAgent) configure(ctx context.Context, h hypervisor, id, sharePath s
 	return h.AddDevice(ctx, sharedVolume, FsDev)
 }
 
-func (k *kataAgent) configureFromGrpc(ctx context.Context, h hypervisor, id string, config KataAgentConfig) error {
+func (k *kataAgent) configureFromGrpc(ctx context.Context, h Hypervisor, id string, config KataAgentConfig) error {
 	return k.internalConfigure(ctx, h, id, config)
 }
 

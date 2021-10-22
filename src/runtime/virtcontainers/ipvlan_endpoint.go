@@ -93,6 +93,7 @@ func (endpoint *IPVlanEndpoint) NetworkPair() *NetworkInterfacePair {
 
 // Attach for ipvlan endpoint bridges the network pair and adds the
 // tap interface of the network pair to the hypervisor.
+// tap interface of the network pair to the Hypervisor.
 func (endpoint *IPVlanEndpoint) Attach(ctx context.Context, s *Sandbox) error {
 	span, ctx := ipvlanTrace(ctx, "Attach", endpoint)
 	defer span.End()
@@ -124,12 +125,12 @@ func (endpoint *IPVlanEndpoint) Detach(ctx context.Context, netNsCreated bool, n
 }
 
 // HotAttach for ipvlan endpoint not supported yet
-func (endpoint *IPVlanEndpoint) HotAttach(ctx context.Context, h hypervisor) error {
+func (endpoint *IPVlanEndpoint) HotAttach(ctx context.Context, h Hypervisor) error {
 	return fmt.Errorf("IPVlanEndpoint does not support Hot attach")
 }
 
 // HotDetach for ipvlan endpoint not supported yet
-func (endpoint *IPVlanEndpoint) HotDetach(ctx context.Context, h hypervisor, netNsCreated bool, netNsPath string) error {
+func (endpoint *IPVlanEndpoint) HotDetach(ctx context.Context, h Hypervisor, netNsCreated bool, netNsPath string) error {
 	return fmt.Errorf("IPVlanEndpoint does not support Hot detach")
 }
 

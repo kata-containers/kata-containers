@@ -65,7 +65,7 @@ func TestStringFromUnknownHypervisorType(t *testing.T) {
 	testStringFromHypervisorType(t, hypervisorType, "")
 }
 
-func testNewHypervisorFromHypervisorType(t *testing.T, hypervisorType HypervisorType, expected hypervisor) {
+func testNewHypervisorFromHypervisorType(t *testing.T, hypervisorType HypervisorType, expected Hypervisor) {
 	assert := assert.New(t)
 	hy, err := NewHypervisor(hypervisorType)
 	assert.NoError(err)

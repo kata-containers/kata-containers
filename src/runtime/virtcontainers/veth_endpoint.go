@@ -124,7 +124,7 @@ func (endpoint *VethEndpoint) Detach(ctx context.Context, netNsCreated bool, net
 }
 
 // HotAttach for the veth endpoint uses hot plug device
-func (endpoint *VethEndpoint) HotAttach(ctx context.Context, h hypervisor) error {
+func (endpoint *VethEndpoint) HotAttach(ctx context.Context, h Hypervisor) error {
 	span, ctx := vethTrace(ctx, "HotAttach", endpoint)
 	defer span.End()
 
@@ -141,7 +141,7 @@ func (endpoint *VethEndpoint) HotAttach(ctx context.Context, h hypervisor) error
 }
 
 // HotDetach for the veth endpoint uses hot pull device
-func (endpoint *VethEndpoint) HotDetach(ctx context.Context, h hypervisor, netNsCreated bool, netNsPath string) error {
+func (endpoint *VethEndpoint) HotDetach(ctx context.Context, h Hypervisor, netNsCreated bool, netNsPath string) error {
 	if !netNsCreated {
 		return nil
 	}

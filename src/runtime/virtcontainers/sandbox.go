@@ -54,9 +54,9 @@ var sandboxTracingTags = map[string]string{
 }
 
 const (
-	// vmStartTimeout represents the time in seconds a sandbox can wait before
+	// VmStartTimeout represents the time in seconds a sandbox can wait before
 	// to consider the VM starting operation failed.
-	vmStartTimeout = 10
+	VmStartTimeout = 10
 
 	// DirMode is the permission bits used for creating a directory
 	DirMode = os.FileMode(0750) | os.ModeDir
@@ -171,7 +171,7 @@ type Sandbox struct {
 	ctx        context.Context
 	devManager api.DeviceManager
 	factory    Factory
-	hypervisor hypervisor
+	hypervisor Hypervisor
 	agent      agent
 	store      persistapi.PersistDriver
 
@@ -1199,7 +1199,7 @@ func (s *Sandbox) startVM(ctx context.Context) (err error) {
 			return vm.assignSandbox(s)
 		}
 
-		return s.hypervisor.StartVM(ctx, vmStartTimeout)
+		return s.hypervisor.StartVM(ctx, VmStartTimeout)
 	}); err != nil {
 		return err
 	}
