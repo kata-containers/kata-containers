@@ -545,6 +545,7 @@ dependencies = [
  "scan_fmt",
  "scopeguard",
  "serde_json",
+ "serial_test",
  "slog",
  "slog-scope",
  "slog-stdlog",
