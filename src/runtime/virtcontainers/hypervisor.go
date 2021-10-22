@@ -186,7 +186,7 @@ func (hType *HypervisorType) String() string {
 }
 
 // NewHypervisor returns an hypervisor from and hypervisor type.
-func NewHypervisor(hType HypervisorType) (hypervisor, error) {
+func NewHypervisor(hType HypervisorType) (Hypervisor, error) {
 	store, err := persist.GetDriver()
 	if err != nil {
 		return nil, err
@@ -874,7 +874,7 @@ func RunningOnVMM(cpuInfoPath string) (bool, error) {
 	return false, nil
 }
 
-func GetHypervisorPid(h hypervisor) int {
+func GetHypervisorPid(h Hypervisor) int {
 	pids := h.GetPids()
 	if len(pids) == 0 {
 		return 0
@@ -897,8 +897,7 @@ func generateVMSocket(id string, vmStogarePath string) (interface{}, error) {
 
 // hypervisor is the virtcontainers hypervisor interface.
 // The default hypervisor implementation is Qemu.
-type hypervisor interface {
-	setConfig(config *HypervisorConfig) error
+type Hypervisor interface {
 	CreateVM(ctx context.Context, id string, networkNS NetworkNamespace, hypervisorConfig *HypervisorConfig) error
 	StartVM(ctx context.Context, timeout int) error
 
@@ -921,6 +920,7 @@ type hypervisor interface {
 	Cleanup(ctx context.Context) error
 	// getPids returns a slice of hypervisor related process ids.
 	// The hypervisor pid must be put at index 0.
+	setConfig(config *HypervisorConfig) error
 	GetPids() []int
 	GetVirtioFsPid() *int
 	fromGrpc(ctx context.Context, hypervisorConfig *HypervisorConfig, j []byte) error
