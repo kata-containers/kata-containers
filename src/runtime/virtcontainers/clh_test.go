@@ -226,7 +226,7 @@ func TestCloudHypervisorCleanupVM(t *testing.T) {
 	assert.True(os.IsNotExist(err), "persist.GetDriver() unexpected error")
 }
 
-func TestClhCreateSandbox(t *testing.T) {
+func TestClhCreateVM(t *testing.T) {
 	assert := assert.New(t)
 
 	clhConfig, err := newClhConfig()
@@ -248,7 +248,7 @@ func TestClhCreateSandbox(t *testing.T) {
 		},
 	}
 
-	err = clh.createSandbox(context.Background(), sandbox.id, NetworkNamespace{}, &sandbox.config.HypervisorConfig)
+	err = clh.CreateVM(context.Background(), sandbox.id, NetworkNamespace{}, &sandbox.config.HypervisorConfig)
 	assert.NoError(err)
 	assert.Exactly(clhConfig, clh.config)
 }

@@ -72,7 +72,7 @@ func TestQemuKernelParameters(t *testing.T) {
 	testQemuKernelParameters(t, params, expectedOut, false)
 }
 
-func TestQemuCreateSandbox(t *testing.T) {
+func TestQemuCreateVM(t *testing.T) {
 	qemuConfig := newQemuConfig()
 	assert := assert.New(t)
 
@@ -98,13 +98,13 @@ func TestQemuCreateSandbox(t *testing.T) {
 	parentDir := filepath.Join(q.store.RunStoragePath(), sandbox.id)
 	assert.NoError(os.MkdirAll(parentDir, DirMode))
 
-	err = q.createSandbox(context.Background(), sandbox.id, NetworkNamespace{}, &sandbox.config.HypervisorConfig)
+	err = q.CreateVM(context.Background(), sandbox.id, NetworkNamespace{}, &sandbox.config.HypervisorConfig)
 	assert.NoError(err)
 	assert.NoError(os.RemoveAll(parentDir))
 	assert.Exactly(qemuConfig, q.config)
 }
 
-func TestQemuCreateSandboxMissingParentDirFail(t *testing.T) {
+func TestQemuCreateVMMissingParentDirFail(t *testing.T) {
 	qemuConfig := newQemuConfig()
 	assert := assert.New(t)
 
@@ -130,7 +130,7 @@ func TestQemuCreateSandboxMissingParentDirFail(t *testing.T) {
 	parentDir := filepath.Join(q.store.RunStoragePath(), sandbox.id)
 	assert.NoError(os.RemoveAll(parentDir))
 
-	err = q.createSandbox(context.Background(), sandbox.id, NetworkNamespace{}, &sandbox.config.HypervisorConfig)
+	err = q.CreateVM(context.Background(), sandbox.id, NetworkNamespace{}, &sandbox.config.HypervisorConfig)
 	assert.NoError(err)
 }
 
@@ -195,7 +195,7 @@ func TestQemuKnobs(t *testing.T) {
 	q := &qemu{
 		store: sandbox.store,
 	}
-	err = q.createSandbox(context.Background(), sandbox.id, NetworkNamespace{}, &sandbox.config.HypervisorConfig)
+	err = q.CreateVM(context.Background(), sandbox.id, NetworkNamespace{}, &sandbox.config.HypervisorConfig)
 	assert.NoError(err)
 
 	assert.Equal(q.qemuConfig.Knobs.NoUserConfig, true)
@@ -464,7 +464,7 @@ func TestQemuFileBackedMem(t *testing.T) {
 		store: sandbox.store,
 	}
 	sandbox.config.HypervisorConfig.SharedFS = config.VirtioFS
-	err = q.createSandbox(context.Background(), sandbox.id, NetworkNamespace{}, &sandbox.config.HypervisorConfig)
+	err = q.CreateVM(context.Background(), sandbox.id, NetworkNamespace{}, &sandbox.config.HypervisorConfig)
 	assert.NoError(err)
 
 	assert.Equal(q.qemuConfig.Knobs.FileBackedMem, true)
@@ -482,7 +482,7 @@ func TestQemuFileBackedMem(t *testing.T) {
 	sandbox.config.HypervisorConfig.SharedFS = config.VirtioFS
 	sandbox.config.HypervisorConfig.MemoryPath = fallbackFileBackedMemDir
 
-	err = q.createSandbox(context.Background(), sandbox.id, NetworkNamespace{}, &sandbox.config.HypervisorConfig)
+	err = q.CreateVM(context.Background(), sandbox.id, NetworkNamespace{}, &sandbox.config.HypervisorConfig)
 
 	expectErr := errors.New("VM templating has been enabled with either virtio-fs or file backed memory and this configuration will not work")
 	assert.Equal(expectErr.Error(), err.Error())
@@ -495,7 +495,7 @@ func TestQemuFileBackedMem(t *testing.T) {
 		store: sandbox.store,
 	}
 	sandbox.config.HypervisorConfig.FileBackedMemRootDir = "/tmp/xyzabc"
-	err = q.createSandbox(context.Background(), sandbox.id, NetworkNamespace{}, &sandbox.config.HypervisorConfig)
+	err = q.CreateVM(context.Background(), sandbox.id, NetworkNamespace{}, &sandbox.config.HypervisorConfig)
 	assert.NoError(err)
 	assert.Equal(q.qemuConfig.Knobs.FileBackedMem, false)
 	assert.Equal(q.qemuConfig.Knobs.MemShared, false)
@@ -510,7 +510,7 @@ func TestQemuFileBackedMem(t *testing.T) {
 	}
 	sandbox.config.HypervisorConfig.EnableVhostUserStore = true
 	sandbox.config.HypervisorConfig.HugePages = true
-	err = q.createSandbox(context.Background(), sandbox.id, NetworkNamespace{}, &sandbox.config.HypervisorConfig)
+	err = q.CreateVM(context.Background(), sandbox.id, NetworkNamespace{}, &sandbox.config.HypervisorConfig)
 	assert.NoError(err)
 	assert.Equal(q.qemuConfig.Knobs.MemShared, true)
 
@@ -523,7 +523,7 @@ func TestQemuFileBackedMem(t *testing.T) {
 	}
 	sandbox.config.HypervisorConfig.EnableVhostUserStore = true
 	sandbox.config.HypervisorConfig.HugePages = false
-	err = q.createSandbox(context.Background(), sandbox.id, NetworkNamespace{}, &sandbox.config.HypervisorConfig)
+	err = q.CreateVM(context.Background(), sandbox.id, NetworkNamespace{}, &sandbox.config.HypervisorConfig)
 
 	expectErr = errors.New("Vhost-user-blk/scsi is enabled without HugePages. This configuration will not work")
 	assert.Equal(expectErr.Error(), err.Error())
