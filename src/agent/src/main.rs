@@ -73,6 +73,7 @@ use tokio::{
     task::JoinHandle,
 };
 
+mod image_rpc;
 mod rpc;
 mod tracer;
 
