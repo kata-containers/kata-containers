@@ -11,7 +11,6 @@ use tokio::sync::Mutex;
 use std::ffi::CString;
 use std::io;
 use std::path::Path;
-use std::process::ExitStatus;
 use std::sync::Arc;
 use ttrpc::{
     self,
@@ -45,6 +44,7 @@ use nix::unistd::{self, Pid};
 use rustjail::process::ProcessOperations;
 
 use crate::device::{add_devices, get_virtio_blk_pci_device_name, update_device_cgroup};
+use crate::image_rpc;
 use crate::linux_abi::*;
 use crate::metrics::get_metrics;
 use crate::mount::{add_storages, baremount, remove_mounts, STORAGE_HANDLER_LIST};
@@ -77,10 +77,8 @@ use std::io::{BufRead, BufReader};
 use std::os::unix::fs::FileExt;
 use std::path::PathBuf;
 
-const CONTAINER_BASE: &str = "/run/kata-containers";
+pub const CONTAINER_BASE: &str = "/run/kata-containers";
 const MODPROBE_PATH: &str = "/sbin/modprobe";
-const SKOPEO_PATH: &str = "/usr/bin/skopeo";
-const UMOCI_PATH: &str = "/usr/local/bin/umoci";
 
 // Convenience macro to obtain the scope logger
 macro_rules! sl {
@@ -113,7 +111,7 @@ pub struct AgentService {
 //
 //     ^[a-zA-Z0-9][a-zA-Z0-9_.-]+$
 //
-fn verify_cid(id: &str) -> Result<()> {
+pub fn verify_cid(id: &str) -> Result<()> {
     let valid = id.len() > 1
         && id.chars().next().unwrap().is_alphanumeric()
         && id
@@ -676,22 +674,6 @@ impl protocols::agent_ttrpc::AgentService for AgentService {
 
         ctr.stats()
             .map_err(|e| ttrpc_error(ttrpc::Code::INTERNAL, e.to_string()))
-    }
-
-    async fn pull_image(
-        &self,
-        _ctx: &TtrpcContext,
-        req: protocols::agent::PullImageRequest,
-    ) -> ttrpc::Result<protocols::empty::Empty> {
-        let image = req.get_image();
-        let cid = req.get_container_id();
-        let source_creds = (!req.get_source_creds().is_empty()).then(|| req.get_source_creds());
-
-        pull_image_from_registry(image, cid, &source_creds)
-            .map_err(|e| ttrpc_error(ttrpc::Code::INTERNAL, e.to_string()))?;
-        unpack_image(cid).map_err(|e| ttrpc_error(ttrpc::Code::INTERNAL, e.to_string()))?;
-
-        Ok(Empty::new())
     }
 
     async fn pause_container(
@@ -1403,7 +1385,7 @@ fn find_process<'a>(
 }
 
 pub fn start(s: Arc<Mutex<Sandbox>>, server_address: &str) -> TtrpcServer {
-    let agent_service = Box::new(AgentService { sandbox: s })
+    let agent_service = Box::new(AgentService { sandbox: s.clone() })
         as Box<dyn protocols::agent_ttrpc::AgentService + Send + Sync>;
 
     let agent_worker = Arc::new(agent_service);
@@ -1412,15 +1394,21 @@ pub fn start(s: Arc<Mutex<Sandbox>>, server_address: &str) -> TtrpcServer {
         Box::new(HealthService {}) as Box<dyn protocols::health_ttrpc::Health + Send + Sync>;
     let health_worker = Arc::new(health_service);
 
-    let aservice = protocols::agent_ttrpc::create_agent_service(agent_worker);
+    let image_service = Box::new(image_rpc::ImageService::new(s))
+        as Box<dyn protocols::image_ttrpc::Image + Send + Sync>;
 
-    let hservice = protocols::health_ttrpc::create_health(health_worker);
+    let agent_service = protocols::agent_ttrpc::create_agent_service(agent_worker);
+
+    let health_service = protocols::health_ttrpc::create_health(health_worker);
+
+    let image_service = protocols::image_ttrpc::create_image(Arc::new(image_service));
 
     let server = TtrpcServer::new()
         .bind(server_address)
         .unwrap()
-        .register_service(aservice)
-        .register_service(hservice);
+        .register_service(agent_service)
+        .register_service(health_service)
+        .register_service(image_service);
 
     info!(sl!(), "ttRPC server started"; "address" => server_address);
 
@@ -1721,86 +1709,6 @@ fn load_kernel_module(module: &protocols::agent::KernelModule) -> Result<()> {
         }
         None => Err(anyhow!("Process terminated by signal")),
     }
-}
-
-fn pull_image_from_registry(image: &str, cid: &str, source_creds: &Option<&str>) -> Result<()> {
-    let source_image = format!("{}{}", "docker://", image);
-
-    let manifest_path = format!("/tmp/{}/image_manifest", cid);
-    let target_path_manifest = format!("dir://{}", manifest_path);
-
-    // Define the target transport and path for the OCI image, without signature
-    let oci_path = format!("/tmp/{}/image_oci:latest", cid);
-    let target_path_oci = format!("oci://{}", oci_path);
-
-    fs::create_dir_all(&manifest_path)?;
-    fs::create_dir_all(&oci_path)?;
-
-    info!(sl!(), "Attempting to pull image {}...", &source_image);
-
-    let mut pull_command = Command::new(SKOPEO_PATH);
-    pull_command
-        .arg("--insecure-policy")
-        .arg("copy")
-        .arg(source_image)
-        .arg(&target_path_manifest);
-
-    if let Some(source_creds) = source_creds {
-        pull_command.arg("--src-creds").arg(source_creds);
-    }
-
-    let status: ExitStatus = pull_command.status()?;
-
-    if !status.success() {
-        return Err(anyhow!(format!("failed to pull image: {:?}", status)));
-    }
-
-    // Copy image from one local file-system to another
-    // Resulting image is still stored in manifest format, but no longer includes the signature
-    // The image with a signature can then be unpacked into a bundle
-    let status: ExitStatus = Command::new(SKOPEO_PATH)
-        .arg("--insecure-policy")
-        .arg("copy")
-        .arg(&target_path_manifest)
-        .arg(&target_path_oci)
-        .arg("--remove-signatures")
-        .status()?;
-
-    if !status.success() {
-        return Err(anyhow!(format!("failed to copy image: {:?}", status)));
-    }
-
-    // To save space delete the manifest.
-    // TODO LATER - when verify image is added, this will need moving the end of that, if required
-    fs::remove_dir_all(&manifest_path)?;
-    Ok(())
-}
-
-fn unpack_image(cid: &str) -> Result<()> {
-    let source_path_oci = format!("/tmp/{}/image_oci:latest", cid);
-    let target_path_bundle = format!("{}{}{}", CONTAINER_BASE, "/", cid);
-
-    info!(sl!(), "cid is {:?}", cid);
-    info!(sl!(), "target_path_bundle is {:?}", target_path_bundle);
-
-    // Unpack image
-
-    let status: ExitStatus = Command::new(UMOCI_PATH)
-        .arg("--verbose")
-        .arg("unpack")
-        .arg("--image")
-        .arg(&source_path_oci)
-        .arg(&target_path_bundle)
-        .status()?;
-
-    if !status.success() {
-        return Err(anyhow!(format!("failed to unpack image: {:?}", status)));
-    }
-
-    // To save space delete the oci image after unpack
-    fs::remove_dir_all(&source_path_oci)?;
-
-    Ok(())
 }
 
 #[cfg(test)]
