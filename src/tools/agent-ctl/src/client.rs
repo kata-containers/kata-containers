@@ -14,6 +14,8 @@ use protocols::agent::*;
 use protocols::agent_ttrpc::*;
 use protocols::health::*;
 use protocols::health_ttrpc::*;
+use protocols::image::*;
+use protocols::image_ttrpc::*;
 use slog::{debug, info};
 use std::io;
 use std::io::Write; // XXX: for flush()
@@ -62,6 +64,7 @@ type AgentCmdFp = fn(
     ctx: &Context,
     client: &AgentServiceClient,
     health: &HealthClient,
+    image: &ImageClient,
     options: &mut Options,
     args: &str,
 ) -> Result<()>;
@@ -72,6 +75,7 @@ type BuiltinCmdFp = fn(args: &str) -> (Result<()>, bool);
 enum ServiceType {
     Agent,
     Health,
+    Image,
 }
 
 // XXX: Agent command names *MUST* start with an upper-case letter.
@@ -274,7 +278,7 @@ static AGENT_CMDS: &'static [AgentCmd] = &[
     },
     AgentCmd {
         name: "PullImage",
-        st: ServiceType::Agent,
+        st: ServiceType::Image,
         fp: agent_cmd_pull_image,
     },
 ];
@@ -330,6 +334,7 @@ fn get_agent_cmd_details() -> Vec<String> {
         let service = match cmd.st {
             ServiceType::Agent => "agent",
             ServiceType::Health => "health",
+            ServiceType::Image => "image",
         };
 
         cmds.push(format!("{} ({} service)", cmd.name, service));
@@ -577,6 +582,16 @@ fn kata_service_health(
     Ok(HealthClient::new(ttrpc_client))
 }
 
+fn kata_service_image(
+    server_address: String,
+    hybrid_vsock_port: u64,
+    hybrid_vsock: bool,
+) -> Result<ImageClient> {
+    let ttrpc_client = create_ttrpc_client(server_address, hybrid_vsock_port, hybrid_vsock)?;
+
+    Ok(ImageClient::new(ttrpc_client))
+}
+
 fn announce(cfg: &Config) {
     info!(sl!(), "announce"; "config" => format!("{:?}", cfg));
 }
@@ -617,6 +632,11 @@ pub fn client(cfg: &Config, commands: Vec<&str>) -> Result<()> {
         cfg.hybrid_vsock_port,
         cfg.hybrid_vsock,
     )?;
+    let image = kata_service_image(
+        cfg.server_address.clone(),
+        cfg.hybrid_vsock_port,
+        cfg.hybrid_vsock,
+    )?;
 
     let mut options = Options::new();
 
@@ -643,7 +663,7 @@ pub fn client(cfg: &Config, commands: Vec<&str>) -> Result<()> {
         "server-address" => cfg.server_address.to_string());
 
     if cfg.interactive {
-        return interactive_client_loop(&cfg, &mut options, &client, &health, &ttrpc_ctx);
+        return interactive_client_loop(&cfg, &mut options, &client, &health, &image, &ttrpc_ctx);
     }
 
     let mut repeat_count = 1;
@@ -658,6 +678,7 @@ pub fn client(cfg: &Config, commands: Vec<&str>) -> Result<()> {
             &cfg,
             &client,
             &health,
+            &image,
             &ttrpc_ctx,
             repeat_count,
             &mut options,
@@ -683,6 +704,7 @@ fn handle_cmd(
     cfg: &Config,
     client: &AgentServiceClient,
     health: &HealthClient,
+    image: &ImageClient,
     ctx: &Context,
     repeat_count: i64,
     options: &mut Options,
@@ -729,7 +751,7 @@ fn handle_cmd(
         if first.is_lowercase() {
             result = handle_builtin_cmd(cmd, &args);
         } else {
-            result = handle_agent_cmd(ctx, client, health, options, cmd, &args);
+            result = handle_agent_cmd(ctx, client, health, image, options, cmd, &args);
         }
 
         if result.0.is_err() {
@@ -778,6 +800,7 @@ fn handle_agent_cmd(
     ctx: &Context,
     client: &AgentServiceClient,
     health: &HealthClient,
+    image: &ImageClient,
     options: &mut Options,
     cmd: &str,
     args: &str,
@@ -787,7 +810,7 @@ fn handle_agent_cmd(
         Err(e) => return (Err(e), false),
     };
 
-    let result = f(ctx, client, health, options, &args);
+    let result = f(ctx, client, health, image, options, &args);
     if result.is_err() {
         return (result, false);
     }
@@ -802,6 +825,7 @@ fn interactive_client_loop(
     options: &mut Options,
     client: &AgentServiceClient,
     health: &HealthClient,
+    image: &ImageClient,
     ctx: &Context,
 ) -> Result<()> {
     let result = builtin_cmd_list("");
@@ -824,8 +848,16 @@ fn interactive_client_loop(
             continue;
         }
 
-        let (result, shutdown) =
-            handle_cmd(cfg, client, health, ctx, repeat_count, options, &cmdline);
+        let (result, shutdown) = handle_cmd(
+            cfg,
+            client,
+            health,
+            image,
+            ctx,
+            repeat_count,
+            options,
+            &cmdline,
+        );
         if result.is_err() {
             return result;
         }
@@ -862,6 +894,7 @@ fn agent_cmd_health_check(
     ctx: &Context,
     _client: &AgentServiceClient,
     health: &HealthClient,
+    _image: &ImageClient,
     _options: &mut Options,
     args: &str,
 ) -> Result<()> {
@@ -885,6 +918,7 @@ fn agent_cmd_health_version(
     ctx: &Context,
     _client: &AgentServiceClient,
     health: &HealthClient,
+    _image: &ImageClient,
     _options: &mut Options,
     args: &str,
 ) -> Result<()> {
@@ -909,6 +943,7 @@ fn agent_cmd_sandbox_create(
     ctx: &Context,
     client: &AgentServiceClient,
     _health: &HealthClient,
+    _image: &ImageClient,
     options: &mut Options,
     args: &str,
 ) -> Result<()> {
@@ -939,6 +974,7 @@ fn agent_cmd_sandbox_destroy(
     ctx: &Context,
     client: &AgentServiceClient,
     _health: &HealthClient,
+    _image: &ImageClient,
     _options: &mut Options,
     args: &str,
 ) -> Result<()> {
@@ -962,6 +998,7 @@ fn agent_cmd_container_create(
     ctx: &Context,
     client: &AgentServiceClient,
     _health: &HealthClient,
+    _image: &ImageClient,
     options: &mut Options,
     args: &str,
 ) -> Result<()> {
@@ -999,6 +1036,7 @@ fn agent_cmd_container_remove(
     ctx: &Context,
     client: &AgentServiceClient,
     _health: &HealthClient,
+    _image: &ImageClient,
     options: &mut Options,
     args: &str,
 ) -> Result<()> {
@@ -1028,6 +1066,7 @@ fn agent_cmd_container_exec(
     ctx: &Context,
     client: &AgentServiceClient,
     _health: &HealthClient,
+    _image: &ImageClient,
     options: &mut Options,
     args: &str,
 ) -> Result<()> {
@@ -1078,6 +1117,7 @@ fn agent_cmd_container_stats(
     ctx: &Context,
     client: &AgentServiceClient,
     _health: &HealthClient,
+    _image: &ImageClient,
     options: &mut Options,
     args: &str,
 ) -> Result<()> {
@@ -1108,6 +1148,7 @@ fn agent_cmd_container_pause(
     ctx: &Context,
     client: &AgentServiceClient,
     _health: &HealthClient,
+    _image: &ImageClient,
     options: &mut Options,
     args: &str,
 ) -> Result<()> {
@@ -1138,6 +1179,7 @@ fn agent_cmd_container_resume(
     ctx: &Context,
     client: &AgentServiceClient,
     _health: &HealthClient,
+    _image: &ImageClient,
     options: &mut Options,
     args: &str,
 ) -> Result<()> {
@@ -1168,6 +1210,7 @@ fn agent_cmd_container_start(
     ctx: &Context,
     client: &AgentServiceClient,
     _health: &HealthClient,
+    _image: &ImageClient,
     options: &mut Options,
     args: &str,
 ) -> Result<()> {
@@ -1198,6 +1241,7 @@ fn agent_cmd_sandbox_get_guest_details(
     ctx: &Context,
     client: &AgentServiceClient,
     _health: &HealthClient,
+    _image: &ImageClient,
     _options: &mut Options,
     args: &str,
 ) -> Result<()> {
@@ -1228,6 +1272,7 @@ fn agent_cmd_container_wait_process(
     ctx: &Context,
     client: &AgentServiceClient,
     _health: &HealthClient,
+    _image: &ImageClient,
     options: &mut Options,
     args: &str,
 ) -> Result<()> {
@@ -1261,6 +1306,7 @@ fn agent_cmd_container_signal_process(
     ctx: &Context,
     client: &AgentServiceClient,
     _health: &HealthClient,
+    _image: &ImageClient,
     options: &mut Options,
     args: &str,
 ) -> Result<()> {
@@ -1304,6 +1350,7 @@ fn agent_cmd_sandbox_update_interface(
     ctx: &Context,
     client: &AgentServiceClient,
     _health: &HealthClient,
+    _image: &ImageClient,
     _options: &mut Options,
     args: &str,
 ) -> Result<()> {
@@ -1329,6 +1376,7 @@ fn agent_cmd_sandbox_update_routes(
     ctx: &Context,
     client: &AgentServiceClient,
     _health: &HealthClient,
+    _image: &ImageClient,
     _options: &mut Options,
     args: &str,
 ) -> Result<()> {
@@ -1355,6 +1403,7 @@ fn agent_cmd_sandbox_list_interfaces(
     ctx: &Context,
     client: &AgentServiceClient,
     _health: &HealthClient,
+    _image: &ImageClient,
     _options: &mut Options,
     args: &str,
 ) -> Result<()> {
@@ -1378,6 +1427,7 @@ fn agent_cmd_sandbox_list_routes(
     ctx: &Context,
     client: &AgentServiceClient,
     _health: &HealthClient,
+    _image: &ImageClient,
     _options: &mut Options,
     args: &str,
 ) -> Result<()> {
@@ -1401,6 +1451,7 @@ fn agent_cmd_container_tty_win_resize(
     ctx: &Context,
     client: &AgentServiceClient,
     _health: &HealthClient,
+    _image: &ImageClient,
     options: &mut Options,
     args: &str,
 ) -> Result<()> {
@@ -1453,6 +1504,7 @@ fn agent_cmd_container_close_stdin(
     ctx: &Context,
     client: &AgentServiceClient,
     _health: &HealthClient,
+    _image: &ImageClient,
     options: &mut Options,
     args: &str,
 ) -> Result<()> {
@@ -1486,6 +1538,7 @@ fn agent_cmd_container_read_stdout(
     ctx: &Context,
     client: &AgentServiceClient,
     _health: &HealthClient,
+    _image: &ImageClient,
     options: &mut Options,
     args: &str,
 ) -> Result<()> {
@@ -1528,6 +1581,7 @@ fn agent_cmd_container_read_stderr(
     ctx: &Context,
     client: &AgentServiceClient,
     _health: &HealthClient,
+    _image: &ImageClient,
     options: &mut Options,
     args: &str,
 ) -> Result<()> {
@@ -1570,6 +1624,7 @@ fn agent_cmd_container_write_stdin(
     ctx: &Context,
     client: &AgentServiceClient,
     _health: &HealthClient,
+    _image: &ImageClient,
     options: &mut Options,
     args: &str,
 ) -> Result<()> {
@@ -1607,6 +1662,7 @@ fn agent_cmd_sandbox_get_metrics(
     ctx: &Context,
     client: &AgentServiceClient,
     _health: &HealthClient,
+    _image: &ImageClient,
     _options: &mut Options,
     args: &str,
 ) -> Result<()> {
@@ -1630,6 +1686,7 @@ fn agent_cmd_sandbox_get_oom_event(
     ctx: &Context,
     client: &AgentServiceClient,
     _health: &HealthClient,
+    _image: &ImageClient,
     _options: &mut Options,
     args: &str,
 ) -> Result<()> {
@@ -1653,6 +1710,7 @@ fn agent_cmd_sandbox_copy_file(
     ctx: &Context,
     client: &AgentServiceClient,
     _health: &HealthClient,
+    _image: &ImageClient,
     options: &mut Options,
     args: &str,
 ) -> Result<()> {
@@ -1749,6 +1807,7 @@ fn agent_cmd_sandbox_reseed_random_dev(
     ctx: &Context,
     client: &AgentServiceClient,
     _health: &HealthClient,
+    _image: &ImageClient,
     options: &mut Options,
     args: &str,
 ) -> Result<()> {
@@ -1781,6 +1840,7 @@ fn agent_cmd_sandbox_online_cpu_mem(
     ctx: &Context,
     client: &AgentServiceClient,
     _health: &HealthClient,
+    _image: &ImageClient,
     options: &mut Options,
     args: &str,
 ) -> Result<()> {
@@ -1838,6 +1898,7 @@ fn agent_cmd_sandbox_set_guest_date_time(
     ctx: &Context,
     client: &AgentServiceClient,
     _health: &HealthClient,
+    _image: &ImageClient,
     options: &mut Options,
     args: &str,
 ) -> Result<()> {
@@ -1885,6 +1946,7 @@ fn agent_cmd_sandbox_add_arp_neighbors(
     ctx: &Context,
     client: &AgentServiceClient,
     _health: &HealthClient,
+    _image: &ImageClient,
     _options: &mut Options,
     args: &str,
 ) -> Result<()> {
@@ -1911,6 +1973,7 @@ fn agent_cmd_sandbox_update_container(
     ctx: &Context,
     client: &AgentServiceClient,
     _health: &HealthClient,
+    _image: &ImageClient,
     options: &mut Options,
     args: &str,
 ) -> Result<()> {
@@ -1945,6 +2008,7 @@ fn agent_cmd_sandbox_mem_hotplug_by_probe(
     ctx: &Context,
     client: &AgentServiceClient,
     _health: &HealthClient,
+    _image: &ImageClient,
     options: &mut Options,
     args: &str,
 ) -> Result<()> {
@@ -1993,8 +2057,9 @@ fn agent_cmd_sandbox_mem_hotplug_by_probe(
 
 fn agent_cmd_pull_image(
     ctx: &Context,
-    client: &AgentServiceClient,
+    _client: &AgentServiceClient,
     _health: &HealthClient,
+    image_client: &ImageClient,
     options: &mut Options,
     args: &str,
 ) -> Result<()> {
@@ -2012,7 +2077,7 @@ fn agent_cmd_pull_image(
 
     debug!(sl!(), "sending request"; "request" => format!("{:?}", req));
 
-    let reply = client
+    let reply = image_client
         .pull_image(ctx, &req)
         .map_err(|e| anyhow!("{:?}", e).context(ERR_API_FAILED))?;
 
@@ -2091,6 +2156,7 @@ fn agent_cmd_sandbox_add_swap(
     ctx: &Context,
     client: &AgentServiceClient,
     _health: &HealthClient,
+    _image: &ImageClient,
     _options: &mut Options,
     _args: &str,
 ) -> Result<()> {

@@ -58,6 +58,7 @@ pub struct Sandbox {
     pub event_tx: Option<Sender<String>>,
     pub bind_watcher: BindWatcher,
     pub pcimap: HashMap<pci::Address, pci::Address>,
+    pub images: HashMap<String, String>,
 }
 
 impl Sandbox {
@@ -91,6 +92,7 @@ impl Sandbox {
             event_tx: Some(tx),
             bind_watcher: BindWatcher::new(),
             pcimap: HashMap::new(),
+            images: HashMap::new(),
         })
     }
 
