@@ -98,9 +98,17 @@ impl Uevent {
     }
 
     #[instrument]
+    async fn process_remove(&self, logger: &Logger, sandbox: &Arc<Mutex<Sandbox>>) {
+        let mut sb = sandbox.lock().await;
+        sb.uevent_map.remove(&self.devpath);
+    }
+
+    #[instrument]
     async fn process(&self, logger: &Logger, sandbox: &Arc<Mutex<Sandbox>>) {
         if self.action == U_EVENT_ACTION_ADD {
             return self.process_add(logger, sandbox).await;
+        } else if self.action == U_EVENT_ACTION_REMOVE {
+            return self.process_remove(logger, sandbox).await;
         }
         debug!(*logger, "ignoring event"; "uevent" => format!("{:?}", self));
     }
