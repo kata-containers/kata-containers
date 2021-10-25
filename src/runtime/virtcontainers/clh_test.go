@@ -226,7 +226,7 @@ func TestCloudHypervisorCleanupVM(t *testing.T) {
 	assert.True(os.IsNotExist(err), "persist.GetDriver() unexpected error")
 }
 
-func TestClhCreateSandbox(t *testing.T) {
+func TestClhCreateVM(t *testing.T) {
 	assert := assert.New(t)
 
 	clhConfig, err := newClhConfig()
@@ -248,7 +248,7 @@ func TestClhCreateSandbox(t *testing.T) {
 		},
 	}
 
-	err = clh.createSandbox(context.Background(), sandbox.id, NetworkNamespace{}, &sandbox.config.HypervisorConfig)
+	err = clh.CreateVM(context.Background(), sandbox.id, NetworkNamespace{}, &sandbox.config.HypervisorConfig)
 	assert.NoError(err)
 	assert.Exactly(clhConfig, clh.config)
 }
@@ -268,7 +268,7 @@ func TestClooudHypervisorStartSandbox(t *testing.T) {
 		store:     store,
 	}
 
-	err = clh.startSandbox(context.Background(), 10)
+	err = clh.StartVM(context.Background(), 10)
 	assert.NoError(err)
 }
 
@@ -282,13 +282,13 @@ func TestCloudHypervisorResizeMemory(t *testing.T) {
 	tests := []struct {
 		name           string
 		args           args
-		expectedMemDev memoryDevice
+		expectedMemDev MemoryDevice
 		wantErr        bool
 	}{
-		{"Resize to zero", args{0, 128}, memoryDevice{probe: false, sizeMB: 0}, FAIL},
-		{"Resize to aligned size", args{clhConfig.MemorySize + 128, 128}, memoryDevice{probe: false, sizeMB: 128}, PASS},
-		{"Resize to aligned size", args{clhConfig.MemorySize + 129, 128}, memoryDevice{probe: false, sizeMB: 256}, PASS},
-		{"Resize to NOT aligned size", args{clhConfig.MemorySize + 125, 128}, memoryDevice{probe: false, sizeMB: 128}, PASS},
+		{"Resize to zero", args{0, 128}, MemoryDevice{Probe: false, SizeMB: 0}, FAIL},
+		{"Resize to aligned size", args{clhConfig.MemorySize + 128, 128}, MemoryDevice{Probe: false, SizeMB: 128}, PASS},
+		{"Resize to aligned size", args{clhConfig.MemorySize + 129, 128}, MemoryDevice{Probe: false, SizeMB: 256}, PASS},
+		{"Resize to NOT aligned size", args{clhConfig.MemorySize + 125, 128}, MemoryDevice{Probe: false, SizeMB: 128}, PASS},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -303,10 +303,10 @@ func TestCloudHypervisorResizeMemory(t *testing.T) {
 			clh.APIClient = mockClient
 			clh.config = clhConfig
 
-			newMem, memDev, err := clh.resizeMemory(context.Background(), tt.args.reqMemMB, tt.args.memoryBlockSizeMB, false)
+			newMem, memDev, err := clh.ResizeMemory(context.Background(), tt.args.reqMemMB, tt.args.memoryBlockSizeMB, false)
 
 			if (err != nil) != tt.wantErr {
-				t.Errorf("cloudHypervisor.resizeMemory() error = %v, expected to fail = %v", err, tt.wantErr)
+				t.Errorf("cloudHypervisor.ResizeMemory() error = %v, expected to fail = %v", err, tt.wantErr)
 				return
 			}
 
@@ -314,14 +314,14 @@ func TestCloudHypervisorResizeMemory(t *testing.T) {
 				return
 			}
 
-			expectedMem := clhConfig.MemorySize + uint32(tt.expectedMemDev.sizeMB)
+			expectedMem := clhConfig.MemorySize + uint32(tt.expectedMemDev.SizeMB)
 
 			if newMem != expectedMem {
-				t.Errorf("cloudHypervisor.resizeMemory() got = %+v, want %+v", newMem, expectedMem)
+				t.Errorf("cloudHypervisor.ResizeMemory() got = %+v, want %+v", newMem, expectedMem)
 			}
 
 			if !reflect.DeepEqual(memDev, tt.expectedMemDev) {
-				t.Errorf("cloudHypervisor.resizeMemory() got = %+v, want %+v", memDev, tt.expectedMemDev)
+				t.Errorf("cloudHypervisor.ResizeMemory() got = %+v, want %+v", memDev, tt.expectedMemDev)
 			}
 		})
 	}
@@ -359,13 +359,13 @@ func TestCloudHypervisorHotplugRemoveDevice(t *testing.T) {
 	clh.config = clhConfig
 	clh.APIClient = &clhClientMock{}
 
-	_, err = clh.hotplugRemoveDevice(context.Background(), &config.BlockDrive{}, blockDev)
+	_, err = clh.HotplugRemoveDevice(context.Background(), &config.BlockDrive{}, BlockDev)
 	assert.NoError(err, "Hotplug remove block device expected no error")
 
-	_, err = clh.hotplugRemoveDevice(context.Background(), &config.VFIODev{}, vfioDev)
+	_, err = clh.HotplugRemoveDevice(context.Background(), &config.VFIODev{}, VfioDev)
 	assert.NoError(err, "Hotplug remove vfio block device expected no error")
 
-	_, err = clh.hotplugRemoveDevice(context.Background(), nil, netDev)
+	_, err = clh.HotplugRemoveDevice(context.Background(), nil, NetDev)
 	assert.Error(err, "Hotplug remove pmem block device expected error")
 }
 
@@ -381,7 +381,7 @@ func TestClhGenerateSocket(t *testing.T) {
 
 	clh.addVSock(1, "path")
 
-	s, err := clh.generateSocket("c")
+	s, err := clh.GenerateSocket("c")
 
 	assert.NoError(err)
 	assert.NotNil(s)

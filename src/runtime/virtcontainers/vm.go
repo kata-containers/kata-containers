@@ -23,7 +23,7 @@ var urandomDev = "/dev/urandom"
 
 // VM is abstraction of a virtual machine.
 type VM struct {
-	hypervisor hypervisor
+	hypervisor Hypervisor
 	agent      agent
 	store      persistapi.PersistDriver
 
@@ -42,9 +42,9 @@ type VMConfig struct {
 	HypervisorConfig HypervisorConfig
 }
 
-// Valid check VMConfig validity.
+// Valid Check VMConfig validity.
 func (c *VMConfig) Valid() error {
-	return c.HypervisorConfig.valid()
+	return c.HypervisorConfig.Valid()
 }
 
 // ToGrpc convert VMConfig struct to grpc format pb.GrpcVMConfig.
@@ -111,7 +111,7 @@ func NewVM(ctx context.Context, config VMConfig) (*VM, error) {
 		}
 	}()
 
-	if err = hypervisor.createSandbox(ctx, id, NetworkNamespace{}, &config.HypervisorConfig); err != nil {
+	if err = hypervisor.CreateVM(ctx, id, NetworkNamespace{}, &config.HypervisorConfig); err != nil {
 		return nil, err
 	}
 
@@ -130,21 +130,21 @@ func NewVM(ctx context.Context, config VMConfig) (*VM, error) {
 	}
 
 	// 3. boot up guest vm
-	if err = hypervisor.startSandbox(ctx, vmStartTimeout); err != nil {
+	if err = hypervisor.StartVM(ctx, VmStartTimeout); err != nil {
 		return nil, err
 	}
 
 	defer func() {
 		if err != nil {
 			virtLog.WithField("vm", id).WithError(err).Info("clean up vm")
-			hypervisor.stopSandbox(ctx, false)
+			hypervisor.StopVM(ctx, false)
 		}
 	}()
 
-	// 4. check agent aliveness
-	// VMs booted from template are paused, do not check
+	// 4. Check agent aliveness
+	// VMs booted from template are paused, do not Check
 	if !config.HypervisorConfig.BootFromTemplate {
-		virtLog.WithField("vm", id).Info("check agent status")
+		virtLog.WithField("vm", id).Info("Check agent status")
 		err = agent.check(ctx)
 		if err != nil {
 			return nil, err
@@ -215,25 +215,25 @@ func (v *VM) logger() logrus.FieldLogger {
 // Pause pauses a VM.
 func (v *VM) Pause(ctx context.Context) error {
 	v.logger().Info("pause vm")
-	return v.hypervisor.pauseSandbox(ctx)
+	return v.hypervisor.PauseVM(ctx)
 }
 
 // Save saves a VM to persistent disk.
 func (v *VM) Save() error {
-	v.logger().Info("save vm")
-	return v.hypervisor.saveSandbox()
+	v.logger().Info("Save vm")
+	return v.hypervisor.SaveVM()
 }
 
 // Resume resumes a paused VM.
 func (v *VM) Resume(ctx context.Context) error {
 	v.logger().Info("resume vm")
-	return v.hypervisor.resumeSandbox(ctx)
+	return v.hypervisor.ResumeVM(ctx)
 }
 
 // Start kicks off a configured VM.
 func (v *VM) Start(ctx context.Context) error {
 	v.logger().Info("start vm")
-	return v.hypervisor.startSandbox(ctx, vmStartTimeout)
+	return v.hypervisor.StartVM(ctx, VmStartTimeout)
 }
 
 // Disconnect agent connections to a VM
@@ -241,7 +241,7 @@ func (v *VM) Disconnect(ctx context.Context) error {
 	v.logger().Info("kill vm")
 
 	if err := v.agent.disconnect(ctx); err != nil {
-		v.logger().WithError(err).Error("failed to disconnect agent")
+		v.logger().WithError(err).Error("failed to Disconnect agent")
 	}
 
 	return nil
@@ -251,7 +251,7 @@ func (v *VM) Disconnect(ctx context.Context) error {
 func (v *VM) Stop(ctx context.Context) error {
 	v.logger().Info("stop vm")
 
-	if err := v.hypervisor.stopSandbox(ctx, false); err != nil {
+	if err := v.hypervisor.StopVM(ctx, false); err != nil {
 		return err
 	}
 
@@ -262,7 +262,7 @@ func (v *VM) Stop(ctx context.Context) error {
 func (v *VM) AddCPUs(ctx context.Context, num uint32) error {
 	if num > 0 {
 		v.logger().Infof("hot adding %d vCPUs", num)
-		if _, err := v.hypervisor.hotplugAddDevice(ctx, num, cpuDev); err != nil {
+		if _, err := v.hypervisor.HotplugAddDevice(ctx, num, CpuDev); err != nil {
 			return err
 		}
 		v.cpuDelta += num
@@ -276,8 +276,8 @@ func (v *VM) AddCPUs(ctx context.Context, num uint32) error {
 func (v *VM) AddMemory(ctx context.Context, numMB uint32) error {
 	if numMB > 0 {
 		v.logger().Infof("hot adding %d MB memory", numMB)
-		dev := &memoryDevice{1, int(numMB), 0, false}
-		if _, err := v.hypervisor.hotplugAddDevice(ctx, dev, memoryDev); err != nil {
+		dev := &MemoryDevice{1, int(numMB), 0, false}
+		if _, err := v.hypervisor.HotplugAddDevice(ctx, dev, MemoryDev); err != nil {
 			return err
 		}
 	}
@@ -381,7 +381,7 @@ func (v *VM) ToGrpc(ctx context.Context, config VMConfig) (*pb.GrpcVM, error) {
 
 func (v *VM) GetVMStatus() *pb.GrpcVMStatus {
 	return &pb.GrpcVMStatus{
-		Pid:    int64(getHypervisorPid(v.hypervisor)),
+		Pid:    int64(GetHypervisorPid(v.hypervisor)),
 		Cpu:    v.cpu,
 		Memory: v.memory,
 	}
