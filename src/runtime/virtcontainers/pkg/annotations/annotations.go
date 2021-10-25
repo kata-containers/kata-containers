@@ -250,6 +250,10 @@ const (
 
 	// DisableNewNetNs is a sandbox annotation that determines if create a netns for hypervisor process.
 	DisableNewNetNs = kataAnnotRuntimePrefix + "disable_new_netns"
+
+	// VfioMode is a sandbox annotation to specify how attached VFIO devices should be treated
+	// Overrides the runtime.vfio_mode parameter in the global configuration.toml
+	VfioMode = kataAnnotRuntimePrefix + "vfio_mode"
 )
 
 // Agent related annotations

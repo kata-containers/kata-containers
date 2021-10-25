@@ -7,7 +7,10 @@ use libc::{c_uint, major, minor};
 use nix::sys::stat;
 use regex::Regex;
 use std::collections::HashMap;
+use std::ffi::OsStr;
+use std::fmt;
 use std::fs;
+use std::os::unix::ffi::OsStrExt;
 use std::os::unix::fs::MetadataExt;
 use std::path::Path;
 use std::str::FromStr;
@@ -46,6 +49,9 @@ pub const DRIVER_LOCAL_TYPE: &str = "local";
 pub const DRIVER_WATCHABLE_BIND_TYPE: &str = "watchable-bind";
 // VFIO device to be bound to a guest kernel driver
 pub const DRIVER_VFIO_GK_TYPE: &str = "vfio-gk";
+// VFIO device to be bound to vfio-pci and made available inside the
+// container as a VFIO device node
+pub const DRIVER_VFIO_TYPE: &str = "vfio";
 
 #[derive(Debug)]
 struct DevIndexEntry {
@@ -60,6 +66,83 @@ struct DevIndex(HashMap<String, DevIndexEntry>);
 pub fn online_device(path: &str) -> Result<()> {
     fs::write(path, "1")?;
     Ok(())
+}
+
+// Force a given PCI device to bind to the given driver, does
+// basically the same thing as
+//    driverctl set-override <PCI address> <driver>
+#[instrument]
+pub fn pci_driver_override<T, U>(syspci: T, dev: pci::Address, drv: U) -> Result<()>
+where
+    T: AsRef<OsStr> + std::fmt::Debug,
+    U: AsRef<OsStr> + std::fmt::Debug,
+{
+    let syspci = Path::new(&syspci);
+    let drv = drv.as_ref();
+    info!(sl!(), "rebind_pci_driver: {} => {:?}", dev, drv);
+
+    let devpath = syspci.join("devices").join(dev.to_string());
+    let overridepath = &devpath.join("driver_override");
+
+    fs::write(overridepath, drv.as_bytes())?;
+
+    let drvpath = &devpath.join("driver");
+    let need_unbind = match fs::read_link(drvpath) {
+        Ok(d) if d.file_name() == Some(drv) => return Ok(()), // Nothing to do
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => false, // No current driver
+        Err(e) => return Err(anyhow!("Error checking driver on {}: {}", dev, e)),
+        Ok(_) => true, // Current driver needs unbinding
+    };
+    if need_unbind {
+        let unbindpath = &drvpath.join("unbind");
+        fs::write(unbindpath, dev.to_string())?;
+    }
+    let probepath = syspci.join("drivers_probe");
+    fs::write(probepath, dev.to_string())?;
+    Ok(())
+}
+
+// Represents an IOMMU group
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct IommuGroup(u32);
+
+impl fmt::Display for IommuGroup {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        write!(f, "{}", self.0)
+    }
+}
+
+// Determine the IOMMU group of a PCI device
+#[instrument]
+fn pci_iommu_group<T>(syspci: T, dev: pci::Address) -> Result<Option<IommuGroup>>
+where
+    T: AsRef<OsStr> + std::fmt::Debug,
+{
+    let syspci = Path::new(&syspci);
+    let grouppath = syspci
+        .join("devices")
+        .join(dev.to_string())
+        .join("iommu_group");
+
+    match fs::read_link(&grouppath) {
+        // Device has no group
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(e) => Err(anyhow!("Error reading link {:?}: {}", &grouppath, e)),
+        Ok(group) => {
+            if let Some(group) = group.file_name() {
+                if let Some(group) = group.to_str() {
+                    if let Ok(group) = group.parse::<u32>() {
+                        return Ok(Some(IommuGroup(group)));
+                    }
+                }
+            }
+            Err(anyhow!(
+                "Unexpected IOMMU group link {:?} => {:?}",
+                grouppath,
+                group
+            ))
+        }
+    }
 }
 
 // pcipath_to_sysfs fetches the sysfs path for a PCI path, relative to
@@ -296,6 +379,33 @@ pub async fn wait_for_pci_device(
     Ok(addr)
 }
 
+#[derive(Debug)]
+struct VfioMatcher {
+    syspath: String,
+}
+
+impl VfioMatcher {
+    fn new(grp: IommuGroup) -> VfioMatcher {
+        VfioMatcher {
+            syspath: format!("/devices/virtual/vfio/{}", grp),
+        }
+    }
+}
+
+impl UeventMatcher for VfioMatcher {
+    fn is_match(&self, uev: &Uevent) -> bool {
+        uev.devpath == self.syspath
+    }
+}
+
+#[instrument]
+async fn get_vfio_device_name(sandbox: &Arc<Mutex<Sandbox>>, grp: IommuGroup) -> Result<String> {
+    let matcher = VfioMatcher::new(grp);
+
+    let uev = wait_for_uevent(sandbox, matcher).await?;
+    Ok(format!("{}/{}", SYSTEM_DEV_PATH, &uev.devname))
+}
+
 /// Scan SCSI bus for the given SCSI address(SCSI-Id and LUN)
 #[instrument]
 fn scan_scsi_bus(scsi_addr: &str) -> Result<()> {
@@ -326,24 +436,27 @@ fn scan_scsi_bus(scsi_addr: &str) -> Result<()> {
     Ok(())
 }
 
-// update_spec_device_list takes a device description provided by the caller,
-// trying to find it on the guest. Once this device has been identified, the
-// "real" information that can be read from inside the VM is used to update
-// the same device in the list of devices provided through the OCI spec.
-// This is needed to update information about minor/major numbers that cannot
-// be predicted from the caller.
+// update_spec_device updates the device list in the OCI spec to make
+// it include details appropriate for the VM, instead of the host.  It
+// is given the host path to the device (to locate the device in the
+// original OCI spec) and the VM path which it uses to determine the
+// VM major/minor numbers, and the final path with which to present
+// the device in the (inner) container
 #[instrument]
-fn update_spec_device_list(device: &Device, spec: &mut Spec, devidx: &DevIndex) -> Result<()> {
+fn update_spec_device(
+    spec: &mut Spec,
+    devidx: &DevIndex,
+    host_path: &str,
+    vm_path: &str,
+    final_path: &str,
+) -> Result<()> {
     let major_id: c_uint;
     let minor_id: c_uint;
 
     // If no container_path is provided, we won't be able to match and
     // update the device in the OCI spec device list. This is an error.
-    if device.container_path.is_empty() {
-        return Err(anyhow!(
-            "container_path cannot empty for device {:?}",
-            device
-        ));
+    if host_path.is_empty() {
+        return Err(anyhow!("Host path cannot empty for device"));
     }
 
     let linux = spec
@@ -351,11 +464,11 @@ fn update_spec_device_list(device: &Device, spec: &mut Spec, devidx: &DevIndex) 
         .as_mut()
         .ok_or_else(|| anyhow!("Spec didn't container linux field"))?;
 
-    if !Path::new(&device.vm_path).exists() {
-        return Err(anyhow!("vm_path:{} doesn't exist", device.vm_path));
+    if !Path::new(vm_path).exists() {
+        return Err(anyhow!("vm_path:{} doesn't exist", vm_path));
     }
 
-    let meta = fs::metadata(&device.vm_path)?;
+    let meta = fs::metadata(vm_path)?;
     let dev_id = meta.rdev();
     unsafe {
         major_id = major(dev_id);
@@ -364,24 +477,27 @@ fn update_spec_device_list(device: &Device, spec: &mut Spec, devidx: &DevIndex) 
 
     info!(
         sl!(),
-        "got the device: dev_path: {}, major: {}, minor: {}\n", &device.vm_path, major_id, minor_id
+        "update_spec_device(): vm_path={}, major: {}, minor: {}\n", vm_path, major_id, minor_id
     );
 
-    if let Some(idxdata) = devidx.0.get(device.container_path.as_str()) {
+    if let Some(idxdata) = devidx.0.get(host_path) {
         let dev = &mut linux.devices[idxdata.idx];
         let host_major = dev.major;
         let host_minor = dev.minor;
 
         dev.major = major_id as i64;
         dev.minor = minor_id as i64;
+        dev.path = final_path.to_string();
 
         info!(
             sl!(),
-            "change the device from major: {} minor: {} to vm device major: {} minor: {}",
+            "change the device from path: {} major: {} minor: {} to vm device path: {} major: {} minor: {}",
+            host_path,
             host_major,
             host_minor,
-            major_id,
-            minor_id
+            dev.path,
+            dev.major,
+            dev.minor,
         );
 
         // Resources must be updated since they are used to identify
@@ -402,7 +518,7 @@ fn update_spec_device_list(device: &Device, spec: &mut Spec, devidx: &DevIndex) 
     } else {
         Err(anyhow!(
             "Should have found a matching device {} in the spec",
-            device.vm_path
+            vm_path
         ))
     }
 }
@@ -420,7 +536,13 @@ async fn virtiommio_blk_device_handler(
         return Err(anyhow!("Invalid path for virtio mmio blk device"));
     }
 
-    update_spec_device_list(device, spec, devidx)
+    update_spec_device(
+        spec,
+        devidx,
+        &device.container_path,
+        &device.vm_path,
+        &device.container_path,
+    )
 }
 
 // device.Id should be a PCI path string
@@ -436,7 +558,13 @@ async fn virtio_blk_device_handler(
 
     dev.vm_path = get_virtio_blk_pci_device_name(sandbox, &pcipath).await?;
 
-    update_spec_device_list(&dev, spec, devidx)
+    update_spec_device(
+        spec,
+        devidx,
+        &dev.container_path,
+        &dev.vm_path,
+        &dev.container_path,
+    )
 }
 
 // device.id should be a CCW path string
@@ -451,7 +579,13 @@ async fn virtio_blk_ccw_device_handler(
     let mut dev = device.clone();
     let ccw_device = ccw::Device::from_str(&device.id)?;
     dev.vm_path = get_virtio_blk_ccw_device_name(sandbox, &ccw_device).await?;
-    update_spec_device_list(&dev, spec, devidx)
+    update_spec_device(
+        spec,
+        devidx,
+        &dev.container_path,
+        &dev.vm_path,
+        &dev.container_path,
+    )
 }
 
 #[cfg(not(target_arch = "s390x"))]
@@ -475,7 +609,13 @@ async fn virtio_scsi_device_handler(
 ) -> Result<()> {
     let mut dev = device.clone();
     dev.vm_path = get_scsi_device_name(sandbox, &device.id).await?;
-    update_spec_device_list(&dev, spec, devidx)
+    update_spec_device(
+        spec,
+        devidx,
+        &dev.container_path,
+        &dev.vm_path,
+        &dev.container_path,
+    )
 }
 
 #[instrument]
@@ -489,7 +629,13 @@ async fn virtio_nvdimm_device_handler(
         return Err(anyhow!("Invalid path for nvdimm device"));
     }
 
-    update_spec_device_list(device, spec, devidx)
+    update_spec_device(
+        spec,
+        devidx,
+        &device.container_path,
+        &device.vm_path,
+        &device.container_path,
+    )
 }
 
 fn split_vfio_option(opt: &str) -> Option<(&str, &str)> {
@@ -507,19 +653,54 @@ fn split_vfio_option(opt: &str) -> Option<(&str, &str)> {
 // Each option should have the form "DDDD:BB:DD.F=<pcipath>"
 //     DDDD:BB:DD.F is the device's PCI address in the host
 //     <pcipath> is a PCI path to the device in the guest (see pci.rs)
-async fn vfio_gk_device_handler(
+async fn vfio_device_handler(
     device: &Device,
-    _: &mut Spec,
+    spec: &mut Spec,
     sandbox: &Arc<Mutex<Sandbox>>,
-    _: &DevIndex,
+    devidx: &DevIndex,
 ) -> Result<()> {
+    let vfio_in_guest = device.field_type != DRIVER_VFIO_GK_TYPE;
+    let mut group = None;
+
     for opt in device.options.iter() {
         let (_, pcipath) =
             split_vfio_option(opt).ok_or_else(|| anyhow!("Malformed VFIO option {:?}", opt))?;
         let pcipath = pci::Path::from_str(pcipath)?;
 
-        wait_for_pci_device(sandbox, &pcipath).await?;
+        let guestdev = wait_for_pci_device(sandbox, &pcipath).await?;
+        if vfio_in_guest {
+            pci_driver_override(SYSFS_BUS_PCI_PATH, guestdev, "vfio-pci")?;
+
+            let devgroup = pci_iommu_group(SYSFS_BUS_PCI_PATH, guestdev)?;
+            if devgroup.is_none() {
+                // Devices must have an IOMMU group to be usable via VFIO
+                return Err(anyhow!("{} has no IOMMU group", guestdev));
+            }
+
+            if group.is_some() && group != devgroup {
+                // If PCI devices associated with the same VFIO device
+                // (and therefore group) in the host don't end up in
+                // the same group in the guest, something has gone
+                // horribly wrong
+                return Err(anyhow!(
+                    "{} is not in guest IOMMU group {}",
+                    guestdev,
+                    group.unwrap()
+                ));
+            }
+
+            group = devgroup;
+        }
     }
+
+    if vfio_in_guest {
+        // If there are any devices at all, logic above ensures that group is not None
+        let group = group.unwrap();
+        let vmpath = get_vfio_device_name(sandbox, group).await?;
+
+        update_spec_device(spec, devidx, &device.container_path, &vmpath, &vmpath)?;
+    }
+
     Ok(())
 }
 
@@ -592,7 +773,9 @@ async fn add_device(
         DRIVER_MMIO_BLK_TYPE => virtiommio_blk_device_handler(device, spec, sandbox, devidx).await,
         DRIVER_NVDIMM_TYPE => virtio_nvdimm_device_handler(device, spec, sandbox, devidx).await,
         DRIVER_SCSI_TYPE => virtio_scsi_device_handler(device, spec, sandbox, devidx).await,
-        DRIVER_VFIO_GK_TYPE => vfio_gk_device_handler(device, spec, sandbox, devidx).await,
+        DRIVER_VFIO_GK_TYPE | DRIVER_VFIO_TYPE => {
+            vfio_device_handler(device, spec, sandbox, devidx).await
+        }
         _ => Err(anyhow!("Unknown device type {}", device.field_type)),
     }
 }
@@ -657,28 +840,28 @@ mod tests {
     }
 
     #[test]
-    fn test_update_spec_device_list() {
+    fn test_update_spec_device() {
         let (major, minor) = (7, 2);
-        let mut device = Device::default();
         let mut spec = Spec::default();
 
         // container_path empty
+        let container_path = "";
+        let vm_path = "";
         let devidx = DevIndex::new(&spec);
-        let res = update_spec_device_list(&device, &mut spec, &devidx);
+        let res = update_spec_device(&mut spec, &devidx, container_path, vm_path, container_path);
         assert!(res.is_err());
 
-        device.container_path = "/dev/null".to_string();
-
         // linux is empty
+        let container_path = "/dev/null";
         let devidx = DevIndex::new(&spec);
-        let res = update_spec_device_list(&device, &mut spec, &devidx);
+        let res = update_spec_device(&mut spec, &devidx, container_path, vm_path, container_path);
         assert!(res.is_err());
 
         spec.linux = Some(Linux::default());
 
         // linux.devices is empty
         let devidx = DevIndex::new(&spec);
-        let res = update_spec_device_list(&device, &mut spec, &devidx);
+        let res = update_spec_device(&mut spec, &devidx, container_path, vm_path, container_path);
         assert!(res.is_err());
 
         spec.linux.as_mut().unwrap().devices = vec![oci::LinuxDevice {
@@ -690,26 +873,32 @@ mod tests {
 
         // vm_path empty
         let devidx = DevIndex::new(&spec);
-        let res = update_spec_device_list(&device, &mut spec, &devidx);
+        let res = update_spec_device(&mut spec, &devidx, container_path, vm_path, container_path);
         assert!(res.is_err());
 
-        device.vm_path = "/dev/null".to_string();
+        let vm_path = "/dev/null";
 
         // guest and host path are not the same
         let devidx = DevIndex::new(&spec);
-        let res = update_spec_device_list(&device, &mut spec, &devidx);
-        assert!(res.is_err(), "device={:?} spec={:?}", device, spec);
+        let res = update_spec_device(&mut spec, &devidx, container_path, vm_path, container_path);
+        assert!(
+            res.is_err(),
+            "container_path={:?} vm_path={:?} spec={:?}",
+            container_path,
+            vm_path,
+            spec
+        );
 
-        spec.linux.as_mut().unwrap().devices[0].path = device.container_path.clone();
+        spec.linux.as_mut().unwrap().devices[0].path = container_path.to_string();
 
         // spec.linux.resources is empty
         let devidx = DevIndex::new(&spec);
-        let res = update_spec_device_list(&device, &mut spec, &devidx);
+        let res = update_spec_device(&mut spec, &devidx, container_path, vm_path, container_path);
         assert!(res.is_ok());
 
         // update both devices and cgroup lists
         spec.linux.as_mut().unwrap().devices = vec![oci::LinuxDevice {
-            path: device.container_path.clone(),
+            path: container_path.to_string(),
             major,
             minor,
             ..oci::LinuxDevice::default()
@@ -725,12 +914,12 @@ mod tests {
         });
 
         let devidx = DevIndex::new(&spec);
-        let res = update_spec_device_list(&device, &mut spec, &devidx);
+        let res = update_spec_device(&mut spec, &devidx, container_path, vm_path, container_path);
         assert!(res.is_ok());
     }
 
     #[test]
-    fn test_update_spec_device_list_guest_host_conflict() {
+    fn test_update_spec_device_guest_host_conflict() {
         let null_rdev = fs::metadata("/dev/null").unwrap().rdev();
         let zero_rdev = fs::metadata("/dev/zero").unwrap().rdev();
         let full_rdev = fs::metadata("/dev/full").unwrap().rdev();
@@ -781,20 +970,14 @@ mod tests {
         };
         let devidx = DevIndex::new(&spec);
 
-        let dev_a = Device {
-            container_path: "/dev/a".to_string(),
-            vm_path: "/dev/zero".to_string(),
-            ..Device::default()
-        };
+        let container_path_a = "/dev/a";
+        let vm_path_a = "/dev/zero";
 
         let guest_major_a = stat::major(zero_rdev) as i64;
         let guest_minor_a = stat::minor(zero_rdev) as i64;
 
-        let dev_b = Device {
-            container_path: "/dev/b".to_string(),
-            vm_path: "/dev/full".to_string(),
-            ..Device::default()
-        };
+        let container_path_b = "/dev/b";
+        let vm_path_b = "/dev/full";
 
         let guest_major_b = stat::major(full_rdev) as i64;
         let guest_minor_b = stat::minor(full_rdev) as i64;
@@ -811,7 +994,13 @@ mod tests {
         assert_eq!(Some(host_major_b), specresources.devices[1].major);
         assert_eq!(Some(host_minor_b), specresources.devices[1].minor);
 
-        let res = update_spec_device_list(&dev_a, &mut spec, &devidx);
+        let res = update_spec_device(
+            &mut spec,
+            &devidx,
+            container_path_a,
+            vm_path_a,
+            container_path_a,
+        );
         assert!(res.is_ok());
 
         let specdevices = &spec.linux.as_ref().unwrap().devices;
@@ -826,7 +1015,13 @@ mod tests {
         assert_eq!(Some(host_major_b), specresources.devices[1].major);
         assert_eq!(Some(host_minor_b), specresources.devices[1].minor);
 
-        let res = update_spec_device_list(&dev_b, &mut spec, &devidx);
+        let res = update_spec_device(
+            &mut spec,
+            &devidx,
+            container_path_b,
+            vm_path_b,
+            container_path_b,
+        );
         assert!(res.is_ok());
 
         let specdevices = &spec.linux.as_ref().unwrap().devices;
@@ -843,7 +1038,7 @@ mod tests {
     }
 
     #[test]
-    fn test_update_spec_device_list_char_block_conflict() {
+    fn test_update_spec_device_char_block_conflict() {
         let null_rdev = fs::metadata("/dev/null").unwrap().rdev();
 
         let guest_major = stat::major(null_rdev) as i64;
@@ -892,11 +1087,8 @@ mod tests {
         };
         let devidx = DevIndex::new(&spec);
 
-        let dev = Device {
-            container_path: "/dev/char".to_string(),
-            vm_path: "/dev/null".to_string(),
-            ..Device::default()
-        };
+        let container_path = "/dev/char";
+        let vm_path = "/dev/null";
 
         let specresources = spec.linux.as_ref().unwrap().resources.as_ref().unwrap();
         assert_eq!(Some(host_major), specresources.devices[0].major);
@@ -904,7 +1096,7 @@ mod tests {
         assert_eq!(Some(host_major), specresources.devices[1].major);
         assert_eq!(Some(host_minor), specresources.devices[1].minor);
 
-        let res = update_spec_device_list(&dev, &mut spec, &devidx);
+        let res = update_spec_device(&mut spec, &devidx, container_path, vm_path, container_path);
         assert!(res.is_ok());
 
         // Only the char device, not the block device should be updated
@@ -913,6 +1105,43 @@ mod tests {
         assert_eq!(Some(guest_minor), specresources.devices[0].minor);
         assert_eq!(Some(host_major), specresources.devices[1].major);
         assert_eq!(Some(host_minor), specresources.devices[1].minor);
+    }
+
+    #[test]
+    fn test_update_spec_device_final_path() {
+        let null_rdev = fs::metadata("/dev/null").unwrap().rdev();
+        let guest_major = stat::major(null_rdev) as i64;
+        let guest_minor = stat::minor(null_rdev) as i64;
+
+        let host_path = "/dev/host";
+        let host_major: i64 = 99;
+        let host_minor: i64 = 99;
+
+        let mut spec = Spec {
+            linux: Some(Linux {
+                devices: vec![oci::LinuxDevice {
+                    path: host_path.to_string(),
+                    r#type: "c".to_string(),
+                    major: host_major,
+                    minor: host_minor,
+                    ..oci::LinuxDevice::default()
+                }],
+                ..Linux::default()
+            }),
+            ..Spec::default()
+        };
+        let devidx = DevIndex::new(&spec);
+
+        let vm_path = "/dev/null";
+        let final_path = "/dev/final";
+
+        let res = update_spec_device(&mut spec, &devidx, host_path, vm_path, final_path);
+        assert!(res.is_ok());
+
+        let specdevices = &spec.linux.as_ref().unwrap().devices;
+        assert_eq!(guest_major, specdevices[0].major);
+        assert_eq!(guest_minor, specdevices[0].minor);
+        assert_eq!(final_path, specdevices[0].path);
     }
 
     #[test]
@@ -1142,6 +1371,27 @@ mod tests {
         assert!(!matcher_a.is_match(&uev_b));
     }
 
+    #[tokio::test]
+    async fn test_vfio_matcher() {
+        let grpa = IommuGroup(1);
+        let grpb = IommuGroup(22);
+
+        let mut uev_a = crate::uevent::Uevent::default();
+        uev_a.action = crate::linux_abi::U_EVENT_ACTION_ADD.to_string();
+        uev_a.devname = format!("vfio/{}", grpa);
+        uev_a.devpath = format!("/devices/virtual/vfio/{}", grpa);
+        let matcher_a = VfioMatcher::new(grpa);
+
+        let mut uev_b = uev_a.clone();
+        uev_b.devpath = format!("/devices/virtual/vfio/{}", grpb);
+        let matcher_b = VfioMatcher::new(grpb);
+
+        assert!(matcher_a.is_match(&uev_a));
+        assert!(matcher_b.is_match(&uev_b));
+        assert!(!matcher_b.is_match(&uev_a));
+        assert!(!matcher_a.is_match(&uev_b));
+    }
+
     #[test]
     fn test_split_vfio_option() {
         assert_eq!(
@@ -1150,5 +1400,82 @@ mod tests {
         );
         assert_eq!(split_vfio_option("0000:01:00.0=02/01=rubbish"), None);
         assert_eq!(split_vfio_option("0000:01:00.0"), None);
+    }
+
+    #[test]
+    fn test_pci_driver_override() {
+        let testdir = tempdir().expect("failed to create tmpdir");
+        let syspci = testdir.path(); // Path to mock /sys/bus/pci
+
+        let dev0 = pci::Address::new(0, 0, pci::SlotFn::new(0, 0).unwrap());
+        let dev0path = syspci.join("devices").join(dev0.to_string());
+        let dev0drv = dev0path.join("driver");
+        let dev0override = dev0path.join("driver_override");
+
+        let drvapath = syspci.join("drivers").join("drv_a");
+        let drvaunbind = drvapath.join("unbind");
+
+        let probepath = syspci.join("drivers_probe");
+
+        // Start mocking dev0 as being unbound
+        fs::create_dir_all(&dev0path).unwrap();
+
+        pci_driver_override(syspci, dev0, "drv_a").unwrap();
+        assert_eq!(fs::read_to_string(&dev0override).unwrap(), "drv_a");
+        assert_eq!(fs::read_to_string(&probepath).unwrap(), dev0.to_string());
+
+        // Now mock dev0 already being attached to drv_a
+        fs::create_dir_all(&drvapath).unwrap();
+        std::os::unix::fs::symlink(&drvapath, dev0drv).unwrap();
+        std::fs::remove_file(&probepath).unwrap();
+
+        pci_driver_override(syspci, dev0, "drv_a").unwrap(); // no-op
+        assert_eq!(fs::read_to_string(&dev0override).unwrap(), "drv_a");
+        assert!(!probepath.exists());
+
+        // Now try binding to a different driver
+        pci_driver_override(syspci, dev0, "drv_b").unwrap();
+        assert_eq!(fs::read_to_string(&dev0override).unwrap(), "drv_b");
+        assert_eq!(fs::read_to_string(&probepath).unwrap(), dev0.to_string());
+        assert_eq!(fs::read_to_string(&drvaunbind).unwrap(), dev0.to_string());
+    }
+
+    #[test]
+    fn test_pci_iommu_group() {
+        let testdir = tempdir().expect("failed to create tmpdir"); // mock /sys
+        let syspci = testdir.path().join("bus").join("pci");
+
+        // Mock dev0, which has no group
+        let dev0 = pci::Address::new(0, 0, pci::SlotFn::new(0, 0).unwrap());
+        let dev0path = syspci.join("devices").join(dev0.to_string());
+
+        fs::create_dir_all(&dev0path).unwrap();
+
+        // Test dev0
+        assert!(pci_iommu_group(&syspci, dev0).unwrap().is_none());
+
+        // Mock dev1, which is in group 12
+        let dev1 = pci::Address::new(0, 1, pci::SlotFn::new(0, 0).unwrap());
+        let dev1path = syspci.join("devices").join(dev1.to_string());
+        let dev1group = dev1path.join("iommu_group");
+
+        fs::create_dir_all(&dev1path).unwrap();
+        std::os::unix::fs::symlink("../../../kernel/iommu_groups/12", &dev1group).unwrap();
+
+        // Test dev1
+        assert_eq!(
+            pci_iommu_group(&syspci, dev1).unwrap(),
+            Some(IommuGroup(12))
+        );
+
+        // Mock dev2, which has a bogus group (dir instead of symlink)
+        let dev2 = pci::Address::new(0, 2, pci::SlotFn::new(0, 0).unwrap());
+        let dev2path = syspci.join("devices").join(dev2.to_string());
+        let dev2group = dev2path.join("iommu_group");
+
+        fs::create_dir_all(&dev2group).unwrap();
+
+        // Test dev2
+        assert!(pci_iommu_group(&syspci, dev2).is_err());
     }
 }

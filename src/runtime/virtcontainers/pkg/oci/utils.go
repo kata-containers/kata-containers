@@ -116,6 +116,10 @@ type RuntimeConfig struct {
 	//the container network interface
 	InterNetworkModel vc.NetInterworkingModel
 
+	//Determines how VFIO devices should be presented to the
+	//container
+	VfioMode config.VFIOModeType
+
 	Debug bool
 	Trace bool
 
@@ -826,6 +830,13 @@ func addRuntimeConfigOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig, r
 		sbConfig.NetworkConfig.InterworkingModel = runtimeConfig.InterNetworkModel
 	}
 
+	if value, ok := ocispec.Annotations[vcAnnotations.VfioMode]; ok {
+		if err := sbConfig.VfioMode.VFIOSetMode(value); err != nil {
+			return fmt.Errorf("Unknown VFIO mode \"%s\" in annotation %s",
+				value, vcAnnotations.VfioMode)
+		}
+	}
+
 	return nil
 }
 
@@ -892,6 +903,8 @@ func SandboxConfig(ocispec specs.Spec, runtime RuntimeConfig, bundlePath, cid, c
 		},
 
 		ShmSize: shmSize,
+
+		VfioMode: runtime.VfioMode,
 
 		SystemdCgroup: systemdCgroup,
 

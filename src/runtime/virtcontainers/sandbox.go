@@ -134,6 +134,8 @@ type SandboxConfig struct {
 
 	ShmSize uint64
 
+	VfioMode config.VFIOModeType
+
 	// SharePidNs sets all containers to share the same sandbox level pid namespace.
 	SharePidNs bool
 

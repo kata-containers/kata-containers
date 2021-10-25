@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::{anyhow, Context, Result};
 use libc::uid_t;
 use nix::errno::Errno;
 use nix::fcntl::{self, OFlag};
@@ -19,7 +19,7 @@ use std::fs::{self, OpenOptions};
 use std::mem::MaybeUninit;
 use std::os::unix;
 use std::os::unix::io::RawFd;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 
 use path_absolutize::*;
 use std::fs::File;
@@ -828,18 +828,35 @@ fn default_symlinks() -> Result<()> {
     }
     Ok(())
 }
+
+fn dev_rel_path(path: &str) -> Option<&Path> {
+    let path = Path::new(path);
+
+    if !path.starts_with("/dev")
+        || path == Path::new("/dev")
+        || path.components().any(|c| c == Component::ParentDir)
+    {
+        return None;
+    }
+    path.strip_prefix("/").ok()
+}
+
 fn create_devices(devices: &[LinuxDevice], bind: bool) -> Result<()> {
-    let op: fn(&LinuxDevice) -> Result<()> = if bind { bind_dev } else { mknod_dev };
+    let op: fn(&LinuxDevice, &Path) -> Result<()> = if bind { bind_dev } else { mknod_dev };
     let old = stat::umask(Mode::from_bits_truncate(0o000));
     for dev in DEFAULT_DEVICES.iter() {
-        op(dev)?;
+        let path = Path::new(&dev.path[1..]);
+        op(dev, path).context(format!("Creating container device {:?}", dev))?;
     }
     for dev in devices {
-        if !dev.path.starts_with("/dev") || dev.path.contains("..") {
+        let path = dev_rel_path(&dev.path).ok_or_else(|| {
             let msg = format!("{} is not a valid device path", dev.path);
-            bail!(anyhow!(msg));
+            anyhow!(msg)
+        })?;
+        if let Some(dir) = path.parent() {
+            fs::create_dir_all(dir).context(format!("Creating container device {:?}", dev))?;
         }
-        op(dev)?;
+        op(dev, path).context(format!("Creating container device {:?}", dev))?;
     }
     stat::umask(old);
     Ok(())
@@ -861,21 +878,21 @@ lazy_static! {
     };
 }
 
-fn mknod_dev(dev: &LinuxDevice) -> Result<()> {
+fn mknod_dev(dev: &LinuxDevice, relpath: &Path) -> Result<()> {
     let f = match LINUXDEVICETYPE.get(dev.r#type.as_str()) {
         Some(v) => v,
         None => return Err(anyhow!("invalid spec".to_string())),
     };
 
     stat::mknod(
-        &dev.path[1..],
+        relpath,
         *f,
         Mode::from_bits_truncate(dev.file_mode.unwrap_or(0)),
         nix::sys::stat::makedev(dev.major as u64, dev.minor as u64),
     )?;
 
     unistd::chown(
-        &dev.path[1..],
+        relpath,
         Some(Uid::from_raw(dev.uid.unwrap_or(0) as uid_t)),
         Some(Gid::from_raw(dev.gid.unwrap_or(0) as uid_t)),
     )?;
@@ -883,9 +900,9 @@ fn mknod_dev(dev: &LinuxDevice) -> Result<()> {
     Ok(())
 }
 
-fn bind_dev(dev: &LinuxDevice) -> Result<()> {
+fn bind_dev(dev: &LinuxDevice, relpath: &Path) -> Result<()> {
     let fd = fcntl::open(
-        &dev.path[1..],
+        relpath,
         OFlag::O_RDWR | OFlag::O_CREAT,
         Mode::from_bits_truncate(0o644),
     )?;
@@ -894,7 +911,7 @@ fn bind_dev(dev: &LinuxDevice) -> Result<()> {
 
     mount(
         Some(&*dev.path),
-        &dev.path[1..],
+        relpath,
         None::<&str>,
         MsFlags::MS_BIND,
         None::<&str>,
@@ -1258,11 +1275,12 @@ mod tests {
             uid: Some(unistd::getuid().as_raw()),
             gid: Some(unistd::getgid().as_raw()),
         };
+        let path = Path::new("fifo");
 
-        let ret = mknod_dev(&dev);
+        let ret = mknod_dev(&dev, path);
         assert!(ret.is_ok(), "Should pass. Got: {:?}", ret);
 
-        let ret = stat::stat("fifo");
+        let ret = stat::stat(path);
         assert!(ret.is_ok(), "Should pass. Got: {:?}", ret);
     }
     #[test]
@@ -1378,5 +1396,27 @@ mod tests {
             // Perform the checks
             assert!(result == t.result, "{}", msg);
         }
+    }
+
+    #[test]
+    fn test_dev_rel_path() {
+        // Valid device paths
+        assert_eq!(dev_rel_path("/dev/sda").unwrap(), Path::new("dev/sda"));
+        assert_eq!(dev_rel_path("//dev/sda").unwrap(), Path::new("dev/sda"));
+        assert_eq!(
+            dev_rel_path("/dev/vfio/99").unwrap(),
+            Path::new("dev/vfio/99")
+        );
+        assert_eq!(dev_rel_path("/dev/...").unwrap(), Path::new("dev/..."));
+        assert_eq!(dev_rel_path("/dev/a..b").unwrap(), Path::new("dev/a..b"));
+        assert_eq!(dev_rel_path("/dev//foo").unwrap(), Path::new("dev/foo"));
+
+        // Bad device paths
+        assert!(dev_rel_path("/devfoo").is_none());
+        assert!(dev_rel_path("/etc/passwd").is_none());
+        assert!(dev_rel_path("/dev/../etc/passwd").is_none());
+        assert!(dev_rel_path("dev/foo").is_none());
+        assert!(dev_rel_path("").is_none());
+        assert!(dev_rel_path("/dev").is_none());
     }
 }

@@ -541,7 +541,7 @@ func TestAppendVhostUserBlkDevices(t *testing.T) {
 		updatedDevList, expected)
 }
 
-func TestConstraintGRPCSpec(t *testing.T) {
+func TestConstrainGRPCSpec(t *testing.T) {
 	assert := assert.New(t)
 	expectedCgroupPath := "/foo/bar"
 
@@ -589,7 +589,7 @@ func TestConstraintGRPCSpec(t *testing.T) {
 	}
 
 	k := kataAgent{}
-	k.constraintGRPCSpec(g, true)
+	k.constrainGRPCSpec(g, true, true)
 
 	// Check nil fields
 	assert.Nil(g.Hooks)
