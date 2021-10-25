@@ -179,10 +179,10 @@ const (
 
 var guestProtectionStr = [...]string{
 	noneProtection: "none",
-	tdxProtection:  "tdx",
-	sevProtection:  "sev",
 	pefProtection:  "pef",
 	seProtection:   "se",
+	sevProtection:  "sev",
+	tdxProtection:  "tdx",
 }
 
 func (gp guestProtection) String() string {
