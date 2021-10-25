@@ -20,6 +20,7 @@ scan_fmt = "0.2.3"
 scopeguard = "1.0.0"
 thiserror = "1.0.26"
 regex = "1"
+serial_test = "0.5.1"
 
 # Async helpers
 async-trait = "0.1.42"
