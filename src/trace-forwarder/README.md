@@ -71,16 +71,16 @@ represents the real sandbox ID or name.
 #### Configured hypervisor is Cloud Hypervisor
 
 ```bash
-$ socket_path=$(sudo kata-runtime env --json | jq '.Hypervisor.SocketPath')
-$ echo "$socket_path"
+$ socket_path_template=$(sudo kata-runtime env --json | jq '.Hypervisor.SocketPath')
+$ echo "$socket_path_template"
 "/run/vc/vm/{ID}/clh.sock"
 ```
 
 #### Configured hypervisor is Firecracker
 
 ```bash
-$ socket_path=$(sudo kata-runtime env --json | jq '.Hypervisor.SocketPath')
-$ echo "$socket_path"
+$ socket_path_template=$(sudo kata-runtime env --json | jq '.Hypervisor.SocketPath')
+$ echo "$socket_path_template"
 "/run/vc/firecracker/{ID}/root/kata.hvsock"
 ```
 
@@ -118,13 +118,14 @@ You will need to change the `sandbox_id` variable below to match the name of
 the container (sandbox) you plan to create _after_ starting the trace
 forwarder.
 
-The `socket_path` variable was set in the
-[Cloud Hypervisor and Firecracker](#cloud-hypervisor-and-firecracker) section.
-
 ```bash
 $ sandbox_id="foo"
+$ socket_path=$(echo "$socket_path_template" | sed "s/{ID}/${sandbox_id}/g")
 $ sudo mkdir -p $(dirname "$socket_path")
 ```
+
+> **Note:** The `socket_path_template` variable was set in the
+> [Cloud Hypervisor and Firecracker](#cloud-hypervisor-and-firecracker) section.
 
 #### Run the forwarder specifying socket path
 
