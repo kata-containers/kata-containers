@@ -151,7 +151,7 @@ lazy_static! {
             },
             LinuxDevice {
                 path: "/dev/full".to_string(),
-                r#type: String::from("c"),
+                r#type: "c".to_string(),
                 major: 1,
                 minor: 7,
                 file_mode: Some(0o666),
