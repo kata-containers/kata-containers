@@ -85,11 +85,16 @@ fn start_hybrid_vsock(
     socket_path: &str,
     dump_only: bool,
 ) -> Result<()> {
+    let effective = nix::unistd::Uid::effective();
+
+    if !effective.is_root() {
+        return Err(anyhow!("You need to be root"));
+    }
+
     // Remove the socket if it already exists
     let _ = std::fs::remove_file(socket_path);
 
-    let listener =
-        UnixListener::bind(socket_path).map_err(|e| anyhow!("You need to be root: {:?}", e))?;
+    let listener = UnixListener::bind(socket_path)?;
 
     debug!(logger, "Waiting for connections";
         "vsock-type" => "hybrid",
