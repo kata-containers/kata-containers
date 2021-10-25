@@ -16,8 +16,38 @@ const DEFAULT_TRACE_NAME: &str = "kata-agent";
 
 const ABOUT_TEXT: &str = "Kata Containers Trace Forwarder";
 
-const DESCRIPTION_TEXT: &str = r#"
-DESCRIPTION:
+const DEFAULT_LOG_LEVEL: slog::Level = slog::Level::Info;
+
+// VSOCK port this program listens to for trace data, sent by the agent.
+//
+// Must match the number used by the agent
+const DEFAULT_KATA_VSOCK_TRACING_PORT: &str = "10240";
+
+const DEFAULT_JAEGER_HOST: &str = "127.0.0.1";
+const DEFAULT_JAEGER_PORT: &str = "6831";
+
+mod handler;
+mod server;
+mod tracer;
+mod utils;
+
+use crate::utils::{
+    make_hybrid_socket_path, str_to_vsock_cid, str_to_vsock_port, VSOCK_CID_ANY_STR,
+};
+use server::VsockType;
+
+fn announce(logger: &Logger, version: &str, dump_only: bool) {
+    let commit = env::var("VERSION_COMMIT").map_or(String::new(), |s| s);
+
+    info!(logger, "announce";
+    "commit-version" => commit.as_str(),
+    "version" =>  version,
+    "dump-only" => dump_only);
+}
+
+fn make_description_text() -> String {
+    format!(
+        r#" DESCRIPTION:
     Kata Containers component that runs on the host and forwards
     trace data from the container to a trace collector on the host.
 
@@ -46,42 +76,17 @@ DESCRIPTION:
     The way this tool is run depends on the configured hypervisor.
     See EXAMPLES for further information.
 
-    Note that Hybrid VSOCK requries root privileges. Due to the way the
+    Note that Hybrid VSOCK requries root privileges initially. Due to the way the
     hybrid protocol works, the specified "master socket" itself is not used: to
     communicate with the agent, this tool must generate a socket path using
     the specified socket path as a prefix. Since the master socket will be
     created in a root-owned directory when the Kata Containers VM (sandbox) is
     created, this tool must be run as root to allow it to create the second
-    agent-specific socket.
-    "#;
-
-const DEFAULT_LOG_LEVEL: slog::Level = slog::Level::Info;
-
-// VSOCK port this program listens to for trace data, sent by the agent.
-//
-// Must match the number used by the agent
-const DEFAULT_KATA_VSOCK_TRACING_PORT: &str = "10240";
-
-const DEFAULT_JAEGER_HOST: &str = "127.0.0.1";
-const DEFAULT_JAEGER_PORT: &str = "6831";
-
-mod handler;
-mod server;
-mod tracer;
-mod utils;
-
-use crate::utils::{
-    make_hybrid_socket_path, str_to_vsock_cid, str_to_vsock_port, VSOCK_CID_ANY_STR,
-};
-use server::VsockType;
-
-fn announce(logger: &Logger, version: &str, dump_only: bool) {
-    let commit = env::var("VERSION_COMMIT").map_or(String::new(), |s| s);
-
-    info!(logger, "announce";
-    "commit-version" => commit.as_str(),
-    "version" =>  version,
-    "dump-only" => dump_only);
+    agent-specific socket. However, once the forwarder has started running, it
+    drops privileges and will continue running as user {user:?}.
+    "#,
+        user = server::NON_PRIV_USER
+    )
 }
 
 fn make_examples_text(program_name: &str) -> String {
@@ -135,7 +140,7 @@ fn real_main() -> Result<()> {
         .version(version)
         .version_short("v")
         .about(ABOUT_TEXT)
-        .long_about(DESCRIPTION_TEXT)
+        .long_about(&*make_description_text())
         .after_help(&*make_examples_text(name))
         .arg(
             Arg::with_name("dump-only")
