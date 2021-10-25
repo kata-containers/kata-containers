@@ -147,8 +147,15 @@ func getDistroDetails() (name, version string, err error) {
 //   centos: 3.10.0-957.12.1.el7.x86_64
 //   fedora: 5.0.9-200.fc29.x86_64
 //
+// For some self compiled kernel, the kernel version will be with "+" as its suffix
+// For example:
+//   5.12.0-rc4+
+// These kernel version can't be parsed by the current lib and lead to panic
+// therefore the '+' should be removed.
+//
 func fixKernelVersion(version string) string {
-	return strings.Replace(version, "_", "-", -1)
+	version = strings.Replace(version, "_", "-", -1)
+	return strings.Replace(version, "+", "", -1)
 }
 
 // handleDistroName checks that the current distro is compatible with
