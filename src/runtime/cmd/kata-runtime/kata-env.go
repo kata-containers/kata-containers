@@ -130,13 +130,14 @@ type DistroInfo struct {
 
 // HostInfo stores host details
 type HostInfo struct {
-	Kernel             string
-	Architecture       string
-	Distro             DistroInfo
-	CPU                CPUInfo
-	Memory             MemoryInfo
-	VMContainerCapable bool
-	SupportVSocks      bool
+	AvailableGuestProtections []string
+	Kernel                    string
+	Architecture              string
+	Distro                    DistroInfo
+	CPU                       CPUInfo
+	Memory                    MemoryInfo
+	VMContainerCapable        bool
+	SupportVSocks             bool
 }
 
 // NetmonInfo stores netmon details
@@ -241,14 +242,17 @@ func getHostInfo() (HostInfo, error) {
 
 	memoryInfo := getMemoryInfo()
 
+	availableGuestProtection := vc.AvailableGuestProtections()
+
 	host := HostInfo{
-		Kernel:             hostKernelVersion,
-		Architecture:       arch,
-		Distro:             hostDistro,
-		CPU:                hostCPU,
-		Memory:             memoryInfo,
-		VMContainerCapable: hostVMContainerCapable,
-		SupportVSocks:      supportVSocks,
+		Kernel:                    hostKernelVersion,
+		Architecture:              arch,
+		Distro:                    hostDistro,
+		CPU:                       hostCPU,
+		Memory:                    memoryInfo,
+		AvailableGuestProtections: availableGuestProtection,
+		VMContainerCapable:        hostVMContainerCapable,
+		SupportVSocks:             supportVSocks,
 	}
 
 	return host, nil
