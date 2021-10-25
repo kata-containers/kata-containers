@@ -36,7 +36,6 @@ RUN apt-get --no-install-recommends install -y \
 	    libltdl-dev \
 	    libmount-dev \
 	    libpixman-1-dev \
-	    libpmem-dev \
 	    libselinux1-dev \
 	    libtool \
 	    make \
@@ -48,6 +47,8 @@ RUN apt-get --no-install-recommends install -y \
 	    python-dev \
 	    rsync \
 	    zlib1g-dev
+
+RUN [ "$(uname -m)" != "s390x" ] && apt-get install -y libpmem-dev || true
 
 ARG QEMU_REPO
 

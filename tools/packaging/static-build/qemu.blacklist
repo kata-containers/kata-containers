@@ -16,7 +16,6 @@ qemu_black_list=(
 */share/*/efi-rtl8139.rom
 */share/*/efi-vmxnet3.rom
 */share/*/icons
-*/share/*/*.img
 */share/*/keymaps
 */share/*/multiboot.bin
 */share/*/npcm7xx_bootrom.bin
