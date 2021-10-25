@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 #
 # Copyright (c) 2018 Intel Corporation
 #
@@ -53,39 +53,6 @@ _kata_subcmd_seen()
     echo ""
 }
 
-# Return 0 if the specified sub-command requires the name of an
-# *existing* container, else 1.
-_kata_subcmd_needs_existing_container()
-{
-    local subcmd="$1"
-    local cmd
-
-    for cmd in \
-	    'kata-check' \
-	    'kata-env' \
-	    'check' \
-	    'env' \
-	    'create' \
-	    'help' \
-	    'list' \
-	    'version'; do
-        [ "$cmd" = "$subcmd" ] && return 1
-    done
-
-    return 0
-}
-
-# Returns a list of container names
-_kata_get_containers()
-{
-    # Commands that manipulate containers need root privileges.
-    # If the user isn't running as root, don't attempt to obtain a list
-    # as it will result in an error.
-    [ $(id -u) -eq 0 ] || return
-
-    "$_kataruntime" list --quiet
-}
-
 _kata_bash_autocomplete() {
     COMPREPLY=()
 
@@ -104,32 +71,22 @@ _kata_bash_autocomplete() {
     local subcmd_seen=$(_kata_subcmd_seen)
 
     if [ -n "$subcmd_seen" ]; then
-	    _kata_subcmd_needs_existing_container "$subcmd_seen"
-	    local container_cmd=$?
-
-            if [ -n "$cur" ]; then
-                    # Complete with local options and maybe container names
-                    opts=$(_kata_get_subcmd_options "$subcmd_seen")
-                    [ $container_cmd -eq 0 ] && opts="$opts $(_kata_get_containers)"
-            elif [[ "${cur}" == -* ]]; then
-                    # Complete with local options
-                    opts=$(_kata_get_subcmd_options "$subcmd_seen")
-            else
-                    # Potentially complete with container names
-                    [ $container_cmd -eq 0 ] && opts="$(_kata_get_containers)"
-            fi
+        if [ -n "$cur" ]; then
+                # Complete with local options
+                opts=$(_kata_get_subcmd_options "$subcmd_seen")
+        fi
     else
-            if [ -n "$cur" ]; then
-                    # Complete with global options and subcmds
-                    opts="$opts $(_kata_get_global_options)"
-                    opts="$opts $(_kata_get_subcmds)"
-            elif [[ "${cur}" == -* ]]; then
-                    # Complete with global options
-                    opts=$(_kata_get_global_options)
-            else
-                    # Complete with subcmds
-                    opts=$(_kata_get_subcmds)
-            fi
+        if [ -n "$cur" ]; then
+                # Complete with global options and subcmds
+                opts="$opts $(_kata_get_global_options)"
+                opts="$opts $(_kata_get_subcmds)"
+        elif [[ "${cur}" == -* ]]; then
+                # Complete with global options
+                opts=$(_kata_get_global_options)
+        else
+                # Complete with subcmds
+                opts=$(_kata_get_subcmds)
+        fi
     fi
 
     [ -n "$opts" ] && COMPREPLY=( $(compgen -W "${opts}" -- ${cur}) )
