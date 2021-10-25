@@ -77,19 +77,19 @@ func TestAcrnCapabilities(t *testing.T) {
 		arch: &acrnArchBase{},
 	}
 
-	caps := a.capabilities(a.ctx)
+	caps := a.Capabilities(a.ctx)
 	assert.True(caps.IsBlockDeviceSupported())
 	assert.True(caps.IsBlockDeviceHotplugSupported())
 }
 
-func testAcrnAddDevice(t *testing.T, devInfo interface{}, devType deviceType, expected []Device) {
+func testAcrnAddDevice(t *testing.T, devInfo interface{}, devType DeviceType, expected []Device) {
 	assert := assert.New(t)
 	a := &Acrn{
 		ctx:  context.Background(),
 		arch: &acrnArchBase{},
 	}
 
-	err := a.addDevice(context.Background(), devInfo, devType)
+	err := a.AddDevice(context.Background(), devInfo, devType)
 	assert.NoError(err)
 	assert.Exactly(a.acrnConfig.Devices, expected)
 }
@@ -112,7 +112,7 @@ func TestAcrnAddDeviceSerialPortDev(t *testing.T) {
 		Name:     name,
 	}
 
-	testAcrnAddDevice(t, socket, serialPortDev, expectedOut)
+	testAcrnAddDevice(t, socket, SerialPortDev, expectedOut)
 }
 
 func TestAcrnAddDeviceBlockDev(t *testing.T) {
@@ -131,7 +131,7 @@ func TestAcrnAddDeviceBlockDev(t *testing.T) {
 		Index: index,
 	}
 
-	testAcrnAddDevice(t, drive, blockDev, expectedOut)
+	testAcrnAddDevice(t, drive, BlockDev, expectedOut)
 }
 
 func TestAcrnHotplugUnsupportedDeviceType(t *testing.T) {
@@ -144,7 +144,7 @@ func TestAcrnHotplugUnsupportedDeviceType(t *testing.T) {
 		config: acrnConfig,
 	}
 
-	_, err := a.hotplugAddDevice(a.ctx, &memoryDevice{0, 128, uint64(0), false}, fsDev)
+	_, err := a.HotplugAddDevice(a.ctx, &MemoryDevice{0, 128, uint64(0), false}, FsDev)
 	assert.Error(err)
 }
 
@@ -205,13 +205,13 @@ func TestAcrnGetSandboxConsole(t *testing.T) {
 	sandboxID := "testSandboxID"
 	expected := filepath.Join(a.store.RunVMStoragePath(), sandboxID, consoleSocket)
 
-	proto, result, err := a.getSandboxConsole(a.ctx, sandboxID)
+	proto, result, err := a.GetVMConsole(a.ctx, sandboxID)
 	assert.NoError(err)
 	assert.Equal(result, expected)
 	assert.Equal(proto, consoleProtoUnix)
 }
 
-func TestAcrnCreateSandbox(t *testing.T) {
+func TestAcrnCreateVM(t *testing.T) {
 	assert := assert.New(t)
 	acrnConfig := newAcrnConfig()
 	store, err := persist.GetDriver()
@@ -235,7 +235,7 @@ func TestAcrnCreateSandbox(t *testing.T) {
 	//set PID to 1 to ignore hypercall to get UUID and set a random UUID
 	a.state.PID = 1
 	a.state.UUID = "f81d4fae-7dec-11d0-a765-00a0c91e6bf6"
-	err = a.createSandbox(context.Background(), sandbox.id, NetworkNamespace{}, &sandbox.config.HypervisorConfig)
+	err = a.CreateVM(context.Background(), sandbox.id, NetworkNamespace{}, &sandbox.config.HypervisorConfig)
 	assert.NoError(err)
 	assert.Exactly(acrnConfig, a.config)
 }

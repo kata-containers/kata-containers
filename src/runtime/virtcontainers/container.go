@@ -392,7 +392,7 @@ func (c *Container) GetAnnotations() map[string]string {
 // This OCI specification was patched when the sandbox was created
 // by containerCapabilities(), SetEphemeralStorageType() and others
 // in order to support:
-// * capabilities
+// * Capabilities
 // * Ephemeral storage
 // * k8s empty dir
 // If you need the original (vanilla) OCI spec,
@@ -431,7 +431,7 @@ func (c *Container) shareFiles(ctx context.Context, m Mount, idx int) (string, b
 
 	// copy file to contaier's rootfs if filesystem sharing is not supported, otherwise
 	// bind mount it in the shared directory.
-	caps := c.sandbox.hypervisor.capabilities(ctx)
+	caps := c.sandbox.hypervisor.Capabilities(ctx)
 	if !caps.IsFsSharingSupported() {
 		c.Logger().Debug("filesystem sharing is not supported, files will be copied")
 
@@ -573,7 +573,7 @@ func (c *Container) mountSharedDirMounts(ctx context.Context, sharedDirMounts, i
 		// manually update the path that is mounted into the container).
 		// Based on this, let's make sure we update the sharedDirMount structure with the new watchable-mount as
 		// the source (this is what is utilized to update the OCI spec).
-		caps := c.sandbox.hypervisor.capabilities(ctx)
+		caps := c.sandbox.hypervisor.Capabilities(ctx)
 		if isWatchableMount(m.Source) && caps.IsFsSharingSupported() {
 
 			// Create path in shared directory for creating watchable mount:
@@ -663,7 +663,7 @@ func filterDevices(c *Container, devices []ContainerDevice) (ret []ContainerDevi
 	return
 }
 
-// Add any mount based block devices to the device manager and save the
+// Add any mount based block devices to the device manager and Save the
 // device ID for the particular mount. This'll occur when the mountpoint source
 // is a block device.
 func (c *Container) createBlockDevices(ctx context.Context) error {
@@ -705,7 +705,7 @@ func (c *Container) createBlockDevices(ctx context.Context) error {
 				Minor:         int64(unix.Minor(stat.Rdev)),
 				ReadOnly:      m.ReadOnly,
 			}
-			// check whether source can be used as a pmem device
+			// Check whether source can be used as a pmem device
 		} else if di, err = config.PmemDeviceInfo(m.Source, m.Destination); err != nil {
 			c.Logger().WithError(err).
 				WithField("mount-source", m.Source).
@@ -859,7 +859,7 @@ func (c *Container) rollbackFailingContainerCreation(ctx context.Context) {
 func (c *Container) checkBlockDeviceSupport(ctx context.Context) bool {
 	if !c.sandbox.config.HypervisorConfig.DisableBlockDeviceUse {
 		agentCaps := c.sandbox.agent.capabilities()
-		hypervisorCaps := c.sandbox.hypervisor.capabilities(ctx)
+		hypervisorCaps := c.sandbox.hypervisor.Capabilities(ctx)
 
 		if agentCaps.IsBlockDeviceSupported() && hypervisorCaps.IsBlockDeviceHotplugSupported() {
 			return true
@@ -982,7 +982,7 @@ func (c *Container) checkSandboxRunning(cmd string) error {
 }
 
 func (c *Container) getSystemMountInfo() {
-	// check if /dev needs to be bind mounted from host /dev
+	// Check if /dev needs to be bind mounted from host /dev
 	c.systemMountsInfo.BindMountDev = false
 
 	for _, m := range c.mounts {
@@ -1055,7 +1055,7 @@ func (c *Container) stop(ctx context.Context, force bool) error {
 		// Save device and drive data.
 		// TODO: can we merge this saving with setContainerState()?
 		if err := c.sandbox.Save(); err != nil {
-			c.Logger().WithError(err).Info("save container state failed")
+			c.Logger().WithError(err).Info("Save container state failed")
 		}
 	}()
 

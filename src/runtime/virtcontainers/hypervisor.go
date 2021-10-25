@@ -24,11 +24,11 @@ import (
 // HypervisorType describes an hypervisor type.
 type HypervisorType string
 
-type operation int
+type Operation int
 
 const (
-	addDevice operation = iota
-	removeDevice
+	AddDevice Operation = iota
+	RemoveDevice
 )
 
 const (
@@ -98,50 +98,50 @@ var commonVirtioblkKernelRootParams = []Param{ //nolint: unused, deadcode, varch
 	{"rootfstype", "ext4"},
 }
 
-// deviceType describes a virtualized device type.
-type deviceType int
+// DeviceType describes a virtualized device type.
+type DeviceType int
 
 const (
 	// ImgDev is the image device type.
-	imgDev deviceType = iota
+	ImgDev DeviceType = iota
 
 	// FsDev is the filesystem device type.
-	fsDev
+	FsDev
 
 	// NetDev is the network device type.
-	netDev
+	NetDev
 
 	// BlockDev is the block device type.
-	blockDev
+	BlockDev
 
 	// SerialPortDev is the serial port device type.
-	serialPortDev
+	SerialPortDev
 
-	// vSockPCIDev is the vhost vsock PCI device type.
-	vSockPCIDev
+	// VSockPCIDev is the vhost vsock PCI device type.
+	VSockPCIDev
 
 	// VFIODevice is VFIO device type
-	vfioDev
+	VfioDev
 
-	// vhostuserDev is a Vhost-user device type
-	vhostuserDev
+	// VhostuserDev is a Vhost-user device type
+	VhostuserDev
 
 	// CPUDevice is CPU device type
-	cpuDev
+	CpuDev
 
-	// memoryDevice is memory device type
-	memoryDev
+	// MemoryDev is memory device type
+	MemoryDev
 
-	// hybridVirtioVsockDev is a hybrid virtio-vsock device supported
+	// HybridVirtioVsockDev is a hybrid virtio-vsock device supported
 	// only on certain hypervisors, like firecracker.
-	hybridVirtioVsockDev
+	HybridVirtioVsockDev
 )
 
-type memoryDevice struct {
-	slot   int
-	sizeMB int
-	addr   uint64
-	probe  bool
+type MemoryDevice struct {
+	Slot   int
+	SizeMB int
+	Addr   uint64
+	Probe  bool
 }
 
 // Set sets an hypervisor type based on the input string.
@@ -186,7 +186,7 @@ func (hType *HypervisorType) String() string {
 }
 
 // NewHypervisor returns an hypervisor from and hypervisor type.
-func NewHypervisor(hType HypervisorType) (hypervisor, error) {
+func NewHypervisor(hType HypervisorType) (Hypervisor, error) {
 	store, err := persist.GetDriver()
 	if err != nil {
 		return nil, err
@@ -235,7 +235,7 @@ func GetHypervisorSocketTemplate(hType HypervisorType, config *HypervisorConfig)
 	// Tag that is used to represent the name of a sandbox
 	const sandboxID = "{ID}"
 
-	socket, err := hypervisor.generateSocket(sandboxID)
+	socket, err := hypervisor.GenerateSocket(sandboxID)
 	if err != nil {
 		return "", err
 	}
@@ -514,11 +514,11 @@ type HypervisorConfig struct {
 }
 
 // vcpu mapping from vcpu number to thread number
-type vcpuThreadIDs struct {
+type VcpuThreadIDs struct {
 	vcpus map[int]int
 }
 
-func (conf *HypervisorConfig) checkTemplateConfig() error {
+func (conf *HypervisorConfig) CheckTemplateConfig() error {
 	if conf.BootToBeTemplate && conf.BootFromTemplate {
 		return fmt.Errorf("Cannot set both 'to be' and 'from' vm tempate")
 	}
@@ -529,14 +529,16 @@ func (conf *HypervisorConfig) checkTemplateConfig() error {
 		}
 
 		if conf.BootFromTemplate && conf.DevicesStatePath == "" {
-			return fmt.Errorf("Missing DevicesStatePath to load from vm template")
+			return fmt.Errorf("Missing DevicesStatePath to Load from vm template")
 		}
 	}
 
 	return nil
 }
 
-func (conf *HypervisorConfig) valid() error {
+func (conf *HypervisorConfig) Valid() error {
+
+	// Kata specific checks. Should be done outside the hypervisor
 	if conf.KernelPath == "" {
 		return fmt.Errorf("Missing kernel path")
 	}
@@ -545,7 +547,7 @@ func (conf *HypervisorConfig) valid() error {
 		return fmt.Errorf("Missing image and initrd path")
 	}
 
-	if err := conf.checkTemplateConfig(); err != nil {
+	if err := conf.CheckTemplateConfig(); err != nil {
 		return err
 	}
 
@@ -590,7 +592,7 @@ func (conf *HypervisorConfig) AddKernelParam(p Param) error {
 	return nil
 }
 
-func (conf *HypervisorConfig) addCustomAsset(a *types.Asset) error {
+func (conf *HypervisorConfig) AddCustomAsset(a *types.Asset) error {
 	if a == nil || a.Path() == "" {
 		// We did not get a custom asset, we will use the default one.
 		return nil
@@ -744,7 +746,7 @@ func DeserializeParams(parameters []string) []Param {
 	return params
 }
 
-func getHostMemorySizeKb(memInfoPath string) (uint64, error) {
+func GetHostMemorySizeKb(memInfoPath string) (uint64, error) {
 	f, err := os.Open(memInfoPath)
 	if err != nil {
 		return 0, err
@@ -780,7 +782,7 @@ func getHostMemorySizeKb(memInfoPath string) (uint64, error) {
 // CheckCmdline checks whether an option or parameter is present in the kernel command line.
 // Search is case-insensitive.
 // Takes path to file that contains the kernel command line, desired option, and permitted values
-// (empty values to check for options).
+// (empty values to Check for options).
 func CheckCmdline(kernelCmdlinePath, searchParam string, searchValues []string) (bool, error) {
 	f, err := os.Open(kernelCmdlinePath)
 	if err != nil {
@@ -788,8 +790,8 @@ func CheckCmdline(kernelCmdlinePath, searchParam string, searchValues []string) 
 	}
 	defer f.Close()
 
-	// Create check function -- either check for verbatim option
-	// or check for parameter and permitted values
+	// Create Check function -- either Check for verbatim option
+	// or Check for parameter and permitted values
 	var check func(string, string, []string) bool
 	if len(searchValues) == 0 {
 		check = func(option, searchParam string, _ []string) bool {
@@ -872,8 +874,8 @@ func RunningOnVMM(cpuInfoPath string) (bool, error) {
 	return false, nil
 }
 
-func getHypervisorPid(h hypervisor) int {
-	pids := h.getPids()
+func GetHypervisorPid(h Hypervisor) int {
+	pids := h.GetPids()
 	if len(pids) == 0 {
 		return 0
 	}
@@ -895,43 +897,44 @@ func generateVMSocket(id string, vmStogarePath string) (interface{}, error) {
 
 // hypervisor is the virtcontainers hypervisor interface.
 // The default hypervisor implementation is Qemu.
-type hypervisor interface {
-	setConfig(config *HypervisorConfig) error
-	createSandbox(ctx context.Context, id string, networkNS NetworkNamespace, hypervisorConfig *HypervisorConfig) error
-	startSandbox(ctx context.Context, timeout int) error
+type Hypervisor interface {
+	CreateVM(ctx context.Context, id string, networkNS NetworkNamespace, hypervisorConfig *HypervisorConfig) error
+	StartVM(ctx context.Context, timeout int) error
+
 	// If wait is set, don't actively stop the sandbox:
 	// just perform cleanup.
-	stopSandbox(ctx context.Context, waitOnly bool) error
-	pauseSandbox(ctx context.Context) error
-	saveSandbox() error
-	resumeSandbox(ctx context.Context) error
-	addDevice(ctx context.Context, devInfo interface{}, devType deviceType) error
-	hotplugAddDevice(ctx context.Context, devInfo interface{}, devType deviceType) (interface{}, error)
-	hotplugRemoveDevice(ctx context.Context, devInfo interface{}, devType deviceType) (interface{}, error)
-	resizeMemory(ctx context.Context, memMB uint32, memoryBlockSizeMB uint32, probe bool) (uint32, memoryDevice, error)
-	resizeVCPUs(ctx context.Context, vcpus uint32) (uint32, uint32, error)
-	getSandboxConsole(ctx context.Context, sandboxID string) (string, string, error)
-	disconnect(ctx context.Context)
-	capabilities(ctx context.Context) types.Capabilities
-	hypervisorConfig() HypervisorConfig
-	getThreadIDs(ctx context.Context) (vcpuThreadIDs, error)
-	cleanup(ctx context.Context) error
+	StopVM(ctx context.Context, waitOnly bool) error
+	PauseVM(ctx context.Context) error
+	SaveVM() error
+	ResumeVM(ctx context.Context) error
+	AddDevice(ctx context.Context, devInfo interface{}, devType DeviceType) error
+	HotplugAddDevice(ctx context.Context, devInfo interface{}, devType DeviceType) (interface{}, error)
+	HotplugRemoveDevice(ctx context.Context, devInfo interface{}, devType DeviceType) (interface{}, error)
+	ResizeMemory(ctx context.Context, memMB uint32, memoryBlockSizeMB uint32, probe bool) (uint32, MemoryDevice, error)
+	ResizeVCPUs(ctx context.Context, vcpus uint32) (uint32, uint32, error)
+	GetVMConsole(ctx context.Context, sandboxID string) (string, string, error)
+	Disconnect(ctx context.Context)
+	Capabilities(ctx context.Context) types.Capabilities
+	HypervisorConfig() HypervisorConfig
+	GetThreadIDs(ctx context.Context) (VcpuThreadIDs, error)
+	Cleanup(ctx context.Context) error
 	// getPids returns a slice of hypervisor related process ids.
 	// The hypervisor pid must be put at index 0.
-	getPids() []int
-	getVirtioFsPid() *int
+	setConfig(config *HypervisorConfig) error
+	GetPids() []int
+	GetVirtioFsPid() *int
 	fromGrpc(ctx context.Context, hypervisorConfig *HypervisorConfig, j []byte) error
 	toGrpc(ctx context.Context) ([]byte, error)
-	check() error
+	Check() error
 
-	save() persistapi.HypervisorState
-	load(persistapi.HypervisorState)
+	Save() persistapi.HypervisorState
+	Load(persistapi.HypervisorState)
 
 	// generate the socket to communicate the host and guest
-	generateSocket(id string) (interface{}, error)
+	GenerateSocket(id string) (interface{}, error)
 
 	// check if hypervisor supports built-in rate limiter.
-	isRateLimiterBuiltin() bool
+	IsRateLimiterBuiltin() bool
 
 	setSandbox(sandbox *Sandbox)
 }

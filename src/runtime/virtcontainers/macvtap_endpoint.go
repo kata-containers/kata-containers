@@ -69,20 +69,20 @@ func (endpoint *MacvtapEndpoint) Attach(ctx context.Context, s *Sandbox) error {
 
 	h := s.hypervisor
 
-	endpoint.VMFds, err = createMacvtapFds(endpoint.EndpointProperties.Iface.Index, int(h.hypervisorConfig().NumVCPUs))
+	endpoint.VMFds, err = createMacvtapFds(endpoint.EndpointProperties.Iface.Index, int(h.HypervisorConfig().NumVCPUs))
 	if err != nil {
 		return fmt.Errorf("Could not setup macvtap fds %s: %s", endpoint.EndpointProperties.Iface.Name, err)
 	}
 
-	if !h.hypervisorConfig().DisableVhostNet {
-		vhostFds, err := createVhostFds(int(h.hypervisorConfig().NumVCPUs))
+	if !h.HypervisorConfig().DisableVhostNet {
+		vhostFds, err := createVhostFds(int(h.HypervisorConfig().NumVCPUs))
 		if err != nil {
 			return fmt.Errorf("Could not setup vhost fds %s : %s", endpoint.EndpointProperties.Iface.Name, err)
 		}
 		endpoint.VhostFds = vhostFds
 	}
 
-	return h.addDevice(ctx, endpoint, netDev)
+	return h.AddDevice(ctx, endpoint, NetDev)
 }
 
 // Detach for macvtap endpoint does nothing.
@@ -91,12 +91,12 @@ func (endpoint *MacvtapEndpoint) Detach(ctx context.Context, netNsCreated bool, 
 }
 
 // HotAttach for macvtap endpoint not supported yet
-func (endpoint *MacvtapEndpoint) HotAttach(ctx context.Context, h hypervisor) error {
+func (endpoint *MacvtapEndpoint) HotAttach(ctx context.Context, h Hypervisor) error {
 	return fmt.Errorf("MacvtapEndpoint does not support Hot attach")
 }
 
 // HotDetach for macvtap endpoint not supported yet
-func (endpoint *MacvtapEndpoint) HotDetach(ctx context.Context, h hypervisor, netNsCreated bool, netNsPath string) error {
+func (endpoint *MacvtapEndpoint) HotDetach(ctx context.Context, h Hypervisor, netNsCreated bool, netNsPath string) error {
 	return fmt.Errorf("MacvtapEndpoint does not support Hot detach")
 }
 

@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestMockHypervisorCreateSandbox(t *testing.T) {
+func TestMockHypervisorCreateVM(t *testing.T) {
 	var m *mockHypervisor
 	assert := assert.New(t)
 
@@ -31,7 +31,7 @@ func TestMockHypervisorCreateSandbox(t *testing.T) {
 	ctx := context.Background()
 
 	// wrong config
-	err := m.createSandbox(ctx, sandbox.config.ID, NetworkNamespace{}, &sandbox.config.HypervisorConfig)
+	err := m.CreateVM(ctx, sandbox.config.ID, NetworkNamespace{}, &sandbox.config.HypervisorConfig)
 	assert.Error(err)
 
 	sandbox.config.HypervisorConfig = HypervisorConfig{
@@ -40,26 +40,26 @@ func TestMockHypervisorCreateSandbox(t *testing.T) {
 		HypervisorPath: fmt.Sprintf("%s/%s", testDir, testHypervisor),
 	}
 
-	err = m.createSandbox(ctx, sandbox.config.ID, NetworkNamespace{}, &sandbox.config.HypervisorConfig)
+	err = m.CreateVM(ctx, sandbox.config.ID, NetworkNamespace{}, &sandbox.config.HypervisorConfig)
 	assert.NoError(err)
 }
 
 func TestMockHypervisorStartSandbox(t *testing.T) {
 	var m *mockHypervisor
 
-	assert.NoError(t, m.startSandbox(context.Background(), vmStartTimeout))
+	assert.NoError(t, m.StartVM(context.Background(), VmStartTimeout))
 }
 
 func TestMockHypervisorStopSandbox(t *testing.T) {
 	var m *mockHypervisor
 
-	assert.NoError(t, m.stopSandbox(context.Background(), false))
+	assert.NoError(t, m.StopVM(context.Background(), false))
 }
 
 func TestMockHypervisorAddDevice(t *testing.T) {
 	var m *mockHypervisor
 
-	assert.NoError(t, m.addDevice(context.Background(), nil, imgDev))
+	assert.NoError(t, m.AddDevice(context.Background(), nil, ImgDev))
 }
 
 func TestMockHypervisorGetSandboxConsole(t *testing.T) {
@@ -67,7 +67,7 @@ func TestMockHypervisorGetSandboxConsole(t *testing.T) {
 
 	expected := ""
 	expectedProto := ""
-	proto, result, err := m.getSandboxConsole(context.Background(), "testSandboxID")
+	proto, result, err := m.GetVMConsole(context.Background(), "testSandboxID")
 	assert.NoError(t, err)
 	assert.Equal(t, result, expected)
 	assert.Equal(t, proto, expectedProto)
@@ -76,25 +76,25 @@ func TestMockHypervisorGetSandboxConsole(t *testing.T) {
 func TestMockHypervisorSaveSandbox(t *testing.T) {
 	var m *mockHypervisor
 
-	assert.NoError(t, m.saveSandbox())
+	assert.NoError(t, m.SaveVM())
 }
 
 func TestMockHypervisorDisconnect(t *testing.T) {
 	var m *mockHypervisor
 
-	m.disconnect(context.Background())
+	m.Disconnect(context.Background())
 }
 
 func TestMockHypervisorCheck(t *testing.T) {
 	var m *mockHypervisor
 
-	assert.NoError(t, m.check())
+	assert.NoError(t, m.Check())
 }
 
 func TestMockGenerateSocket(t *testing.T) {
 	var m *mockHypervisor
 
-	i, err := m.generateSocket("a")
+	i, err := m.GenerateSocket("a")
 	assert.NoError(t, err)
 	assert.NotNil(t, i)
 }

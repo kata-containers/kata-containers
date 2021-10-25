@@ -82,7 +82,7 @@ func (endpoint *TuntapEndpoint) Attach(ctx context.Context, s *Sandbox) error {
 		return err
 	}
 
-	return h.addDevice(ctx, endpoint, netDev)
+	return h.AddDevice(ctx, endpoint, NetDev)
 }
 
 // Detach for the tun/tap endpoint tears down the tap
@@ -101,18 +101,18 @@ func (endpoint *TuntapEndpoint) Detach(ctx context.Context, netNsCreated bool, n
 }
 
 // HotAttach for the tun/tap endpoint uses hot plug device
-func (endpoint *TuntapEndpoint) HotAttach(ctx context.Context, h hypervisor) error {
+func (endpoint *TuntapEndpoint) HotAttach(ctx context.Context, h Hypervisor) error {
 	networkLogger().Info("Hot attaching tun/tap endpoint")
 
 	span, ctx := tuntapTrace(ctx, "HotAttach", endpoint)
 	defer span.End()
 
-	if err := tuntapNetwork(endpoint, h.hypervisorConfig().NumVCPUs, h.hypervisorConfig().DisableVhostNet); err != nil {
+	if err := tuntapNetwork(endpoint, h.HypervisorConfig().NumVCPUs, h.HypervisorConfig().DisableVhostNet); err != nil {
 		networkLogger().WithError(err).Error("Error bridging tun/tap ep")
 		return err
 	}
 
-	if _, err := h.hotplugAddDevice(ctx, endpoint, netDev); err != nil {
+	if _, err := h.HotplugAddDevice(ctx, endpoint, NetDev); err != nil {
 		networkLogger().WithError(err).Error("Error attach tun/tap ep")
 		return err
 	}
@@ -120,7 +120,7 @@ func (endpoint *TuntapEndpoint) HotAttach(ctx context.Context, h hypervisor) err
 }
 
 // HotDetach for the tun/tap endpoint uses hot pull device
-func (endpoint *TuntapEndpoint) HotDetach(ctx context.Context, h hypervisor, netNsCreated bool, netNsPath string) error {
+func (endpoint *TuntapEndpoint) HotDetach(ctx context.Context, h Hypervisor, netNsCreated bool, netNsPath string) error {
 	networkLogger().Info("Hot detaching tun/tap endpoint")
 
 	span, ctx := tuntapTrace(ctx, "HotDetach", endpoint)
@@ -132,7 +132,7 @@ func (endpoint *TuntapEndpoint) HotDetach(ctx context.Context, h hypervisor, net
 		networkLogger().WithError(err).Warn("Error un-bridging tun/tap ep")
 	}
 
-	if _, err := h.hotplugRemoveDevice(ctx, endpoint, netDev); err != nil {
+	if _, err := h.HotplugRemoveDevice(ctx, endpoint, NetDev); err != nil {
 		networkLogger().WithError(err).Error("Error detach tun/tap ep")
 		return err
 	}

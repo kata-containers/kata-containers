@@ -203,7 +203,7 @@ func testForceSandboxStateChangeAndCheck(t *testing.T, p *Sandbox, newSandboxSta
 	// force sandbox state change
 	err := p.setSandboxState(newSandboxState.State)
 	assert.NoError(t, err)
-	// check the in-memory state is correct
+	// Check the in-memory state is correct
 	if p.state.State != newSandboxState.State {
 		return fmt.Errorf("Expected state %v, got %v", newSandboxState.State, p.state.State)
 	}
@@ -216,7 +216,7 @@ func testForceContainerStateChangeAndCheck(t *testing.T, p *Sandbox, c *Containe
 	err := c.setContainerState(newContainerState.State)
 	assert.NoError(t, err)
 
-	// check the in-memory state is correct
+	// Check the in-memory state is correct
 	if c.state.State != newContainerState.State {
 		return fmt.Errorf("Expected state %v, got %v", newContainerState.State, c.state.State)
 	}
@@ -225,7 +225,7 @@ func testForceContainerStateChangeAndCheck(t *testing.T, p *Sandbox, c *Containe
 }
 
 func testCheckSandboxOnDiskState(p *Sandbox, sandboxState types.SandboxState) error {
-	// check on-disk state is correct
+	// Check on-disk state is correct
 	if p.state.State != sandboxState.State {
 		return fmt.Errorf("Expected state %v, got %v", sandboxState.State, p.state.State)
 	}
@@ -234,7 +234,7 @@ func testCheckSandboxOnDiskState(p *Sandbox, sandboxState types.SandboxState) er
 }
 
 func testCheckContainerOnDiskState(c *Container, containerState types.ContainerState) error {
-	// check on-disk state is correct
+	// Check on-disk state is correct
 	if c.state.State != containerState.State {
 		return fmt.Errorf("Expected state %v, got %v", containerState.State, c.state.State)
 	}
@@ -251,7 +251,7 @@ func writeContainerConfig() (string, error) {
 {
 	"ociVersion": "1.0.0-rc2-dev",
 	"process": {
-		"capabilities": [
+		"Capabilities": [
 		]
 	}
 }`
@@ -311,7 +311,7 @@ func TestSandboxSetSandboxAndContainerState(t *testing.T) {
 	c, err := p.findContainer(contID)
 	assert.NoError(err)
 
-	// check initial sandbox and container states
+	// Check initial sandbox and container states
 	if err := testCheckInitSandboxAndContainerStates(p, initialSandboxState, c, initialContainerState); err != nil {
 		t.Error(err)
 	}
@@ -1377,7 +1377,7 @@ func TestSandboxCreationFromConfigRollbackFromCreateSandbox(t *testing.T) {
 	// Fail at createSandbox: QEMU path does not exist, it is expected. Then rollback is called
 	assert.Error(err)
 
-	// check dirs
+	// Check dirs
 	err = checkSandboxRemains()
 	assert.NoError(err)
 }
