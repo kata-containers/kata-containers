@@ -141,7 +141,8 @@ You can now proceed as normal to create the "foo" Kata container.
 > directory, and since that directory is owned by the `root` user, the trace
 > forwarder must also be run as `root`. This requirement is unique to
 > hypervisors that use hybrid VSOCK: QEMU does not require special privileges
-> to run the trace forwarder.
+> to run the trace forwarder. To reduce the impact of this, once the forwarder
+> is running it drops privileges to run as user `nobody`.
 
 ## Full details
 
