@@ -142,6 +142,19 @@ USE_PODMAN          If set and USE_DOCKER not set, then build the rootfs inside
                     a podman container (requires podman).
                     Default value: <not set>
 
+SKOPEO_UMOCI        If set to "yes", build Skopeo and umoci for confidential
+                    containers guest image pull. Currently, this is only
+                    supported for Ubuntu guests; see
+                    https://github.com/kata-containers/kata-containers/pull/2908
+                    for discussion.
+                    Default value: <not set>
+
+AA_KBC              Key broker client module for attestation-agent. This is
+                    required for confidential containers. Requires SKOPEO_UMOCI
+                    to be set. See https://github.com/containers/attestation-agent
+                    for more information on available modules.
+                    Default value: <not set>
+
 Refer to the Platform-OS Compatibility Matrix for more details on the supported
 architectures:
 https://github.com/kata-containers/kata-containers/tree/main/tools/osbuilder#platform-distro-compatibility-matrix
@@ -425,6 +438,9 @@ build_rootfs_distro()
 			--env OSBUILDER_VERSION="${OSBUILDER_VERSION}" \
 			--env OS_VERSION="${OS_VERSION}" \
 			--env INSIDE_CONTAINER=1 \
+			--env LIBC="${LIBC}" \
+			--env SKOPEO_UMOCI="${SKOPEO_UMOCI}" \
+			--env AA_KBC="${AA_KBC}" \
 			--env SECCOMP="${SECCOMP}" \
 			--env DEBUG="${DEBUG}" \
 			--env HOME="/root" \
@@ -551,11 +567,12 @@ EOT
 	AGENT_DIR="${ROOTFS_DIR}/usr/bin"
 	AGENT_DEST="${AGENT_DIR}/${AGENT_BIN}"
 
+	if [ "$ARCH" == "ppc64le" ] || [ "$ARCH" == "s390x" ]; then
+		LIBC=gnu
+		warning "Forcing LIBC=gnu because $ARCH has no musl Rust target"
+	fi
+
 	if [ -z "${AGENT_SOURCE_BIN}" ] ; then
-		if [ "$ARCH" == "ppc64le" ] || [ "$ARCH" == "s390x" ]; then
-			LIBC=gnu
-			echo "WARNING: Forcing LIBC=gnu because $ARCH has no musl Rust target"
-		fi
 		[ "$LIBC" == "musl" ] && bash ${script_dir}/../../../ci/install_musl.sh
 		# rust agent needs ${arch}-unknown-linux-${LIBC}
 		if ! (rustup show | grep -v linux-${LIBC} > /dev/null); then
@@ -616,6 +633,41 @@ EOT
 	fi
 	info "Create /etc/resolv.conf file in rootfs if not exist"
 	touch "$dns_file"
+
+	if [ "${SKOPEO_UMOCI}" = "yes" ]; then
+		skopeo_url="$(get_package_version_from_kata_yaml externals.skopeo.url)"
+		skopeo_branch="$(get_package_version_from_kata_yaml externals.skopeo.branch)"
+		info "Install skopeo"
+		git clone "${skopeo_url}" --branch "${skopeo_branch}"
+		pushd skopeo
+		make bin/skopeo
+		install -o root -g root -m 0755 bin/skopeo "${ROOTFS_DIR}/usr/bin/"
+		popd
+
+		umoci_url="$(get_package_version_from_kata_yaml externals.umoci.url)"
+		umoci_tag="$(get_package_version_from_kata_yaml externals.umoci.tag)"
+		info "Install umoci"
+		git clone "${umoci_url}" --branch "${umoci_tag}"
+		pushd umoci
+		make
+		install -o root -g root -m 0755 umoci "${ROOTFS_DIR}/usr/local/bin/"
+		popd
+	fi
+
+	if [ -n "${AA_KBC}" ]; then
+		[ -z "${SKOPEO_UMOCI}" ] && die "SKOPEO_UMOCI must be set to install attestation-agent"
+
+		attestation_agent_url="$(get_package_version_from_kata_yaml externals.attestation-agent.url)"
+		attestation_agent_branch="$(get_package_version_from_kata_yaml externals.attestation-agent.branch)"
+		info "Install attestation-agent with KBC ${AA_KBC}"
+		git clone "${attestation_agent_url}" --branch "${attestation_agent_branch}"
+		pushd attestation-agent
+		source "${HOME}/.cargo/env"
+		target="${ARCH}-unknown-linux-${LIBC}"
+		cargo build --release --target "${target}" --no-default-features --features "${AA_KBC}"
+		install -o root -g root -m 0755 "target/${target}/release/attestation-agent" "${ROOTFS_DIR}/usr/local/bin/"
+		popd
+	fi
 
 	info "Creating summary file"
 	create_summary_file "${ROOTFS_DIR}"
