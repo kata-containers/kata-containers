@@ -6,12 +6,19 @@
 use crate::handler;
 use anyhow::{anyhow, Result};
 use opentelemetry::sdk::export::trace::SpanExporter;
+use privdrop::PrivDrop;
 use slog::{debug, o, Logger};
 use std::os::unix::io::AsRawFd;
 use std::os::unix::net::UnixListener;
 use vsock::{SockAddr, VsockListener};
 
 use crate::tracer;
+
+// Username that is assumed to exist, used when dropping root privileges
+// when running with Hybrid VSOCK.
+pub const NON_PRIV_USER: &str = "nobody";
+
+const ROOT_DIR: &str = "/";
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum VsockType {
@@ -79,21 +86,44 @@ impl VsockTraceServer {
     }
 }
 
+fn drop_privs(logger: &Logger) -> Result<()> {
+    debug!(logger, "Dropping privileges"; "new-user" => NON_PRIV_USER);
+
+    nix::unistd::chdir(ROOT_DIR)
+        .map_err(|e| anyhow!("Unable to chdir to {:?}: {:?}", ROOT_DIR, e))?;
+
+    PrivDrop::default()
+        .user(NON_PRIV_USER)
+        .apply()
+        .map_err(|e| anyhow!("Failed to drop privileges to user {}: {}", NON_PRIV_USER, e))?;
+
+    Ok(())
+}
+
 fn start_hybrid_vsock(
     logger: Logger,
     exporter: &mut dyn SpanExporter,
     socket_path: &str,
     dump_only: bool,
 ) -> Result<()> {
+    let logger =
+        logger.new(o!("vsock-type" => "hybrid", "vsock-socket-path" => socket_path.to_string()));
+
+    let effective = nix::unistd::Uid::effective();
+
+    if !effective.is_root() {
+        return Err(anyhow!("You need to be root"));
+    }
+
     // Remove the socket if it already exists
     let _ = std::fs::remove_file(socket_path);
 
-    let listener =
-        UnixListener::bind(socket_path).map_err(|e| anyhow!("You need to be root: {:?}", e))?;
+    let listener = UnixListener::bind(socket_path)?;
 
-    debug!(logger, "Waiting for connections";
-        "vsock-type" => "hybrid",
-        "vsock-socket-path" => socket_path);
+    // Having bound to the socket, drop privileges
+    drop_privs(&logger)?;
+
+    debug!(logger, "Waiting for connections");
 
     for conn in listener.incoming() {
         let conn = conn?;

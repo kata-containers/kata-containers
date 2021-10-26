@@ -28,7 +28,12 @@ tracing = "0.1.26"
 tracing-subscriber = "0.2.18"
 
 logging = { path = "../../pkg/logging" }
-slog = "2.5.2"
+
+# Note: The 'max_*' features allow changing the log level at runtime
+# (by stopping the compiler from removing log calls).
+slog = { version = "2.5.2", features = ["dynamic-keys", "max_level_trace", "release_max_level_trace"] }
+
+privdrop = "0.5.1"
 
 [dev-dependencies]
 tempfile = "3.1.0"
