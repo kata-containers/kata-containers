@@ -15,4 +15,6 @@ RUN apt install -y \
 	    flex \
 	    git \
 	    iptables \
-	    libelf-dev \
+	    libelf-dev
+
+RUN [ "$(uname -m)" = "s390x" ] && apt-get install -y libssl-dev || true
