@@ -229,12 +229,6 @@ async fn real_main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     // Wait for all threads to finish
     let results = join_all(tasks).await;
 
-    for result in results {
-        if let Err(e) = result {
-            return Err(anyhow!(e).into());
-        }
-    }
-
     // force flushing spans
     drop(span_guard);
     drop(root_span);
@@ -245,7 +239,19 @@ async fn real_main() -> std::result::Result<(), Box<dyn std::error::Error>> {
 
     eprintln!("{} shutdown complete", NAME);
 
-    Ok(())
+    let mut wait_errors: Vec<tokio::task::JoinError> = vec![];
+    for result in results {
+        if let Err(e) = result {
+            eprintln!("wait task error: {:#?}", e);
+            wait_errors.push(e);
+        }
+    }
+
+    if wait_errors.is_empty() {
+        Ok(())
+    } else {
+        Err(anyhow!("wait all tasks failed: {:#?}", wait_errors).into())
+    }
 }
 
 fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
