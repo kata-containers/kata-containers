@@ -18,4 +18,5 @@ pub struct Config {
     pub interactive: bool,
     pub hybrid_vsock: bool,
     pub ignore_errors: bool,
+    pub no_auto_values: bool,
 }
