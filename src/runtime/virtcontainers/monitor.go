@@ -142,7 +142,6 @@ func (m *monitor) watchAgent(ctx context.Context) {
 func (m *monitor) watchHypervisor(ctx context.Context) error {
 	if err := m.sandbox.hypervisor.Check(); err != nil {
 		m.notify(ctx, errors.Wrapf(err, "failed to ping hypervisor process"))
-		m.notify(ctx, errors.Wrapf(err, "failed to ping Hypervisor process"))
 		return err
 	}
 	return nil
