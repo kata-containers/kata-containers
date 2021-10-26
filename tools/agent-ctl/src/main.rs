@@ -96,6 +96,15 @@ fn make_examples_text(program_name: &str) -> String {
 
   $ {program} connect --server-address "{vsock_server_address}" --repeat -1 --cmd GetGuestDetails
 
+- Query guest details, asking for full details by specifying the API request object in JSON format:
+
+  $ {program} connect --server-address "{vsock_server_address}" -c 'GetGuestDetails json://{{"mem_block_size": true, "mem_hotplug_probe": true}}'
+
+- Query guest details, asking for extra detail by partially specifying the API request object in JSON format from a file:
+
+  $ echo '{{"mem_block_size": true}}' > /tmp/api.json
+  $ {program} connect --server-address "{vsock_server_address}" -c 'GetGuestDetails file:///tmp/api.json'
+
 - Send a 'SIGUSR1' signal to a container process:
 
   $ {program} connect --server-address "{vsock_server_address}" --cmd 'SignalProcess signal=usr1 sid={sandbox_id} cid={container_id}'
@@ -169,6 +178,7 @@ fn connect(name: &str, global_args: clap::ArgMatches) -> Result<()> {
     let bundle_dir = args.value_of("bundle-dir").unwrap_or("").to_string();
 
     let hybrid_vsock = args.is_present("hybrid-vsock");
+    let no_auto_values = args.is_present("no-auto-values");
 
     let cfg = Config {
         server_address,
@@ -178,6 +188,7 @@ fn connect(name: &str, global_args: clap::ArgMatches) -> Result<()> {
         timeout_nano,
         hybrid_vsock_port,
         hybrid_vsock,
+        no_auto_values,
     };
 
     let result = rpc::run(&logger, &cfg, commands);
@@ -254,6 +265,12 @@ fn real_main() -> Result<()> {
                     .short("i")
                     .long("interactive")
                     .help("Allow interactive client"),
+                    )
+                .arg(
+                    Arg::with_name("no-auto-values")
+                    .short("n")
+                    .long("no-auto-values")
+                    .help("Disable automatic generation of values for sandbox ID, container ID, etc"),
                     )
                 .arg(
                     Arg::with_name("server-address")
