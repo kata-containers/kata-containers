@@ -15,7 +15,7 @@ Name | Type | Description | Notes
 **VhostSocket** | Pointer to **string** |  | [optional] 
 **VhostMode** | Pointer to **string** |  | [optional] [default to "Client"]
 **Id** | Pointer to **string** |  | [optional] 
-**Fd** | Pointer to **[]int32** |  | [optional] 
+**Fds** | Pointer to **[]int32** |  | [optional] 
 **RateLimiterConfig** | Pointer to [**RateLimiterConfig**](RateLimiterConfig.md) |  | [optional] 
 
 ## Methods
@@ -312,30 +312,30 @@ SetId sets Id field to given value.
 
 HasId returns a boolean if a field has been set.
 
-### GetFd
+### GetFds
 
-`func (o *NetConfig) GetFd() []int32`
+`func (o *NetConfig) GetFds() []int32`
 
-GetFd returns the Fd field if non-nil, zero value otherwise.
+GetFds returns the Fds field if non-nil, zero value otherwise.
 
-### GetFdOk
+### GetFdsOk
 
-`func (o *NetConfig) GetFdOk() (*[]int32, bool)`
+`func (o *NetConfig) GetFdsOk() (*[]int32, bool)`
 
-GetFdOk returns a tuple with the Fd field if it's non-nil, zero value otherwise
+GetFdsOk returns a tuple with the Fds field if it's non-nil, zero value otherwise
 and a boolean to check if the value has been set.
 
-### SetFd
+### SetFds
 
-`func (o *NetConfig) SetFd(v []int32)`
+`func (o *NetConfig) SetFds(v []int32)`
 
-SetFd sets Fd field to given value.
+SetFds sets Fds field to given value.
 
-### HasFd
+### HasFds
 
-`func (o *NetConfig) HasFd() bool`
+`func (o *NetConfig) HasFds() bool`
 
-HasFd returns a boolean if a field has been set.
+HasFds returns a boolean if a field has been set.
 
 ### GetRateLimiterConfig
 

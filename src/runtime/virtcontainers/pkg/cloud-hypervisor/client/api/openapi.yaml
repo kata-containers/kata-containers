@@ -545,12 +545,12 @@ components:
             mac: mac
             vhost_mode: Client
             iommu: false
+            fds:
+            - 8
+            - 8
             vhost_socket: vhost_socket
             vhost_user: false
             id: id
-            fd:
-            - 8
-            - 8
             mask: 255.255.255.0
           - tap: tap
             num_queues: 9
@@ -568,12 +568,12 @@ components:
             mac: mac
             vhost_mode: Client
             iommu: false
+            fds:
+            - 8
+            - 8
             vhost_socket: vhost_socket
             vhost_user: false
             id: id
-            fd:
-            - 8
-            - 8
             mask: 255.255.255.0
         device_tree:
           key:
@@ -853,12 +853,12 @@ components:
           mac: mac
           vhost_mode: Client
           iommu: false
+          fds:
+          - 8
+          - 8
           vhost_socket: vhost_socket
           vhost_user: false
           id: id
-          fd:
-          - 8
-          - 8
           mask: 255.255.255.0
         - tap: tap
           num_queues: 9
@@ -876,12 +876,12 @@ components:
           mac: mac
           vhost_mode: Client
           iommu: false
+          fds:
+          - 8
+          - 8
           vhost_socket: vhost_socket
           vhost_user: false
           id: id
-          fd:
-          - 8
-          - 8
           mask: 255.255.255.0
       properties:
         cpus:
@@ -1254,12 +1254,12 @@ components:
         mac: mac
         vhost_mode: Client
         iommu: false
+        fds:
+        - 8
+        - 8
         vhost_socket: vhost_socket
         vhost_user: false
         id: id
-        fd:
-        - 8
-        - 8
         mask: 255.255.255.0
       properties:
         tap:
@@ -1292,7 +1292,7 @@ components:
           type: string
         id:
           type: string
-        fd:
+        fds:
           items:
             format: int32
             type: integer

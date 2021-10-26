@@ -723,7 +723,7 @@ components:
           default: "Client"
         id:
           type: string
-        fd:
+        fds:
           type: array
           items:
             type: integer
