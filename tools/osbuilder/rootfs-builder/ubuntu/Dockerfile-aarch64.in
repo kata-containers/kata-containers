@@ -28,10 +28,15 @@ RUN apt-get update && apt-get install -y \
     g++ \
     gcc \
     git \
+    golang-go \
+    libdevmapper-dev \
     libc6-dev \
+    libgpgme-dev \
+    libssl-dev \
     libstdc++-8-dev \
     m4 \
     make \
+    pkg-config \
     sed \
     systemd \
     tar \

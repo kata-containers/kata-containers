@@ -163,6 +163,11 @@ assets:
 externals:
   description: "Third-party projects used by the system"
 
+  attestation-agent:
+    description: "Provide attested key unwrapping for image decryption"
+    url: "https://github.com/confidential-containers/attestation-agent"
+    branch: "main"
+
   cni-plugins:
     description: "CNI network plugins"
     url: "https://github.com/containernetworking/plugins"
@@ -226,6 +231,16 @@ externals:
       https://github.com/opencontainers/runc/tags
       .*/v?(\d\S+)\.tar\.gz
     version: "v1.0.1"
+
+  skopeo:
+    description: "Utility for container images and image repositories"
+    url: "https://github.com/containers/skopeo"
+    branch: "release-1.4"
+
+  umoci:
+    description: "Utility for creating and manipulating container images"
+    url: "https://github.com/opencontainers/umoci"
+    tag: "v0.4.7"
 
   musl:
     description: |

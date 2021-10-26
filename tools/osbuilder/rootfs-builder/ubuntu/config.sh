@@ -32,3 +32,4 @@ INIT_PROCESS=systemd
 ARCH_EXCLUDE_LIST=()
 
 [ "$SECCOMP" = "yes" ] && PACKAGES+=" libseccomp2" || true
+[ -n "$SKOPEO_UMOCI" ] && PACKAGES+=" ca-certificates libgpgme11" || true
