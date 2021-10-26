@@ -17,6 +17,7 @@ use protocols::health_ttrpc::*;
 use slog::{debug, info};
 use std::io;
 use std::io::Write; // XXX: for flush()
+use std::io::{BufRead, BufReader};
 use std::os::unix::io::{IntoRawFd, RawFd};
 use std::os::unix::net::UnixStream;
 use std::thread::sleep;
@@ -86,11 +87,6 @@ static AGENT_CMDS: &'static [AgentCmd] = &[
         name: "AddARPNeighbors",
         st: ServiceType::Agent,
         fp: agent_cmd_sandbox_add_arp_neighbors,
-    },
-    AgentCmd {
-        name: "AddSwap",
-        st: ServiceType::Agent,
-        fp: agent_cmd_sandbox_add_swap,
     },
     AgentCmd {
         name: "Check",
@@ -372,7 +368,59 @@ fn client_create_vsock_fd(cid: libc::c_uint, port: u32) -> Result<RawFd> {
     Ok(fd)
 }
 
-fn create_ttrpc_client(server_address: String) -> Result<ttrpc::Client> {
+// Setup the existing stream by making a Hybrid VSOCK host-initiated
+// connection request to the Hybrid VSOCK-capable hypervisor (CLH or FC),
+// asking it to route the connection to the Kata Agent running inside the VM.
+fn setup_hybrid_vsock(mut stream: &UnixStream, hybrid_vsock_port: u64) -> Result<()> {
+    // Challenge message sent to the Hybrid VSOCK capable hypervisor asking
+    // for a connection to a real VSOCK server running in the VM on the
+    // port specified as part of this message.
+    const CONNECT_CMD: &str = "CONNECT";
+
+    // Expected response message returned by the Hybrid VSOCK capable
+    // hypervisor informing the client that the CONNECT_CMD was successful.
+    const OK_CMD: &str = "OK";
+
+    // Contact the agent by dialing it's port number and
+    // waiting for the hybrid vsock hypervisor to route the call for us ;)
+    //
+    // See: https://github.com/firecracker-microvm/firecracker/blob/main/docs/vsock.md#host-initiated-connections
+    let msg = format!("{} {}\n", CONNECT_CMD, hybrid_vsock_port);
+
+    stream.write_all(msg.as_bytes())?;
+
+    // Now, see if we get the expected response
+    let stream_reader = stream.try_clone()?;
+    let mut reader = BufReader::new(&stream_reader);
+
+    let mut msg = String::new();
+    reader.read_line(&mut msg)?;
+
+    if msg.starts_with(OK_CMD) {
+        let response = msg
+            .strip_prefix(OK_CMD)
+            .ok_or(format!("invalid response: {:?}", msg))
+            .map_err(|e| anyhow!(e))?
+            .trim();
+
+        debug!(sl!(), "Hybrid VSOCK host-side port: {:?}", response);
+    } else {
+        return Err(anyhow!(
+            "failed to setup Hybrid VSOCK connection: response was: {:?}",
+            msg
+        ));
+    }
+
+    // The Unix stream is now connected directly to the VSOCK socket
+    // the Kata agent is listening to in the VM.
+    Ok(())
+}
+
+fn create_ttrpc_client(
+    server_address: String,
+    hybrid_vsock_port: u64,
+    hybrid_vsock: bool,
+) -> Result<ttrpc::Client> {
     if server_address == "" {
         return Err(anyhow!("server address cannot be blank"));
     }
@@ -388,7 +436,7 @@ fn create_ttrpc_client(server_address: String) -> Result<ttrpc::Client> {
     let fd: RawFd = match scheme.as_str() {
         // Formats:
         //
-        // - "unix://absolute-path" (domain socket)
+        // - "unix://absolute-path" (domain socket, or hybrid vsock!)
         //   (example: "unix:///tmp/domain.socket")
         //
         // - "unix://@absolute-path" (abstract socket)
@@ -445,6 +493,10 @@ fn create_ttrpc_client(server_address: String) -> Result<ttrpc::Client> {
                     }
                 };
 
+                if hybrid_vsock {
+                    setup_hybrid_vsock(&stream, hybrid_vsock_port)?
+                }
+
                 stream.into_raw_fd()
             }
         }
@@ -481,14 +533,22 @@ fn create_ttrpc_client(server_address: String) -> Result<ttrpc::Client> {
     Ok(ttrpc::client::Client::new(fd))
 }
 
-fn kata_service_agent(server_address: String) -> Result<AgentServiceClient> {
-    let ttrpc_client = create_ttrpc_client(server_address)?;
+fn kata_service_agent(
+    server_address: String,
+    hybrid_vsock_port: u64,
+    hybrid_vsock: bool,
+) -> Result<AgentServiceClient> {
+    let ttrpc_client = create_ttrpc_client(server_address, hybrid_vsock_port, hybrid_vsock)?;
 
     Ok(AgentServiceClient::new(ttrpc_client))
 }
 
-fn kata_service_health(server_address: String) -> Result<HealthClient> {
-    let ttrpc_client = create_ttrpc_client(server_address)?;
+fn kata_service_health(
+    server_address: String,
+    hybrid_vsock_port: u64,
+    hybrid_vsock: bool,
+) -> Result<HealthClient> {
+    let ttrpc_client = create_ttrpc_client(server_address, hybrid_vsock_port, hybrid_vsock)?;
 
     Ok(HealthClient::new(ttrpc_client))
 }
@@ -522,8 +582,17 @@ pub fn client(cfg: &Config, commands: Vec<&str>) -> Result<()> {
 
     // Create separate connections for each of the services provided
     // by the agent.
-    let client = kata_service_agent(cfg.server_address.clone())?;
-    let health = kata_service_health(cfg.server_address.clone())?;
+    let client = kata_service_agent(
+        cfg.server_address.clone(),
+        cfg.hybrid_vsock_port,
+        cfg.hybrid_vsock,
+    )?;
+
+    let health = kata_service_health(
+        cfg.server_address.clone(),
+        cfg.hybrid_vsock_port,
+        cfg.hybrid_vsock,
+    )?;
 
     let mut options = Options::new();
 
@@ -1922,30 +1991,4 @@ fn get_repeat_count(cmdline: &str) -> i64 {
         Ok(n) => return n,
         Err(_) => return default_repeat_count,
     }
-}
-
-fn agent_cmd_sandbox_add_swap(
-    ctx: &Context,
-    client: &AgentServiceClient,
-    _health: &HealthClient,
-    _options: &mut Options,
-    _args: &str,
-) -> Result<()> {
-    let req = AddSwapRequest::default();
-
-    let ctx = clone_context(ctx);
-
-    debug!(sl!(), "sending request"; "request" => format!("{:?}", req));
-
-    let reply = client
-        .add_swap(ctx, &req)
-        .map_err(|e| anyhow!("{:?}", e).context(ERR_API_FAILED))?;
-
-    // FIXME: Implement 'AddSwap' fully.
-    eprintln!("FIXME: 'AddSwap' not fully implemented");
-
-    info!(sl!(), "response received";
-        "response" => format!("{:?}", reply));
-
-    Ok(())
 }
