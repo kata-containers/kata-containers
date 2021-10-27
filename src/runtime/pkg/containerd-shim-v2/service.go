@@ -345,7 +345,7 @@ func (s *service) Cleanup(ctx context.Context) (_ *taskAPI.DeleteResponse, err e
 	}
 
 	switch containerType {
-	case vc.PodSandbox:
+	case vc.PodSandbox, vc.SingleContainer:
 		err = cleanupContainer(spanCtx, s.id, s.id, path)
 		if err != nil {
 			return nil, err

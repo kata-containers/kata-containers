@@ -17,7 +17,7 @@ import (
 	"strings"
 	"syscall"
 
-	criContainerdAnnotations "github.com/containerd/cri-containerd/pkg/annotations"
+	ctrAnnotations "github.com/containerd/containerd/pkg/cri/annotations"
 	crioAnnotations "github.com/cri-o/cri-o/pkg/annotations"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/sirupsen/logrus"
@@ -42,19 +42,19 @@ var (
 
 	// CRIContainerTypeKeyList lists all the CRI keys that could define
 	// the container type from annotations in the config.json.
-	CRIContainerTypeKeyList = []string{criContainerdAnnotations.ContainerType, crioAnnotations.ContainerType, dockershimAnnotations.ContainerTypeLabelKey}
+	CRIContainerTypeKeyList = []string{ctrAnnotations.ContainerType, crioAnnotations.ContainerType, dockershimAnnotations.ContainerTypeLabelKey}
 
 	// CRISandboxNameKeyList lists all the CRI keys that could define
 	// the sandbox ID (sandbox ID) from annotations in the config.json.
-	CRISandboxNameKeyList = []string{criContainerdAnnotations.SandboxID, crioAnnotations.SandboxID, dockershimAnnotations.SandboxIDLabelKey}
+	CRISandboxNameKeyList = []string{ctrAnnotations.SandboxID, crioAnnotations.SandboxID, dockershimAnnotations.SandboxIDLabelKey}
 
 	// CRIContainerTypeList lists all the maps from CRI ContainerTypes annotations
 	// to a virtcontainers ContainerType.
 	CRIContainerTypeList = []annotationContainerType{
 		{crioAnnotations.ContainerTypeSandbox, vc.PodSandbox},
 		{crioAnnotations.ContainerTypeContainer, vc.PodContainer},
-		{criContainerdAnnotations.ContainerTypeSandbox, vc.PodSandbox},
-		{criContainerdAnnotations.ContainerTypeContainer, vc.PodContainer},
+		{ctrAnnotations.ContainerTypeSandbox, vc.PodSandbox},
+		{ctrAnnotations.ContainerTypeContainer, vc.PodContainer},
 		{dockershimAnnotations.ContainerTypeLabelSandbox, vc.PodSandbox},
 		{dockershimAnnotations.ContainerTypeLabelContainer, vc.PodContainer},
 	}
@@ -317,7 +317,7 @@ func networkConfig(ocispec specs.Spec, config RuntimeConfig) (vc.NetworkConfig, 
 }
 
 // ContainerType returns the type of container and if the container type was
-// found from CRI servers annotations.
+// found from CRI server's annotations in the container spec.
 func ContainerType(spec specs.Spec) (vc.ContainerType, error) {
 	for _, key := range CRIContainerTypeKeyList {
 		containerTypeVal, ok := spec.Annotations[key]
@@ -331,11 +331,10 @@ func ContainerType(spec specs.Spec) (vc.ContainerType, error) {
 			}
 
 		}
-
 		return vc.UnknownContainerType, fmt.Errorf("Unknown container type %s", containerTypeVal)
 	}
 
-	return vc.PodSandbox, nil
+	return vc.SingleContainer, nil
 }
 
 func GetSandboxConfigPath(annotations map[string]string) string {

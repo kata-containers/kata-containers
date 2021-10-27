@@ -16,7 +16,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/cri-o/cri-o/pkg/annotations"
+	ctrAnnotations "github.com/containerd/containerd/pkg/cri/annotations"
 	crioAnnotations "github.com/cri-o/cri-o/pkg/annotations"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/stretchr/testify/assert"
@@ -25,6 +25,7 @@ import (
 	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
 	vcAnnotations "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/annotations"
+	dockerAnnotations "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/annotations/dockershim"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/compatoci"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 )
@@ -152,7 +153,7 @@ func TestMinimalSandboxConfig(t *testing.T) {
 		Cmd:            expectedCmd,
 		Annotations: map[string]string{
 			vcAnnotations.BundlePathKey:    tempBundlePath,
-			vcAnnotations.ContainerTypeKey: string(vc.PodSandbox),
+			vcAnnotations.ContainerTypeKey: string(vc.SingleContainer),
 		},
 		Mounts:      expectedMounts,
 		DeviceInfos: expectedDeviceInfo,
@@ -188,51 +189,100 @@ func TestMinimalSandboxConfig(t *testing.T) {
 	assert.NoError(os.Remove(configPath))
 }
 
-func testContainerTypeSuccessful(t *testing.T, ociSpec specs.Spec, expected vc.ContainerType) {
-	containerType, err := ContainerType(ociSpec)
+func TestContainerType(t *testing.T) {
 	assert := assert.New(t)
-
-	assert.NoError(err)
-	assert.Equal(containerType, expected)
-}
-
-func TestContainerTypePodSandbox(t *testing.T) {
-	var ociSpec specs.Spec
-
-	ociSpec.Annotations = map[string]string{
-		annotations.ContainerType: annotations.ContainerTypeSandbox,
+	tests := []struct {
+		description     string
+		annotationKey   string
+		annotationValue string
+		expectedType    vc.ContainerType
+		expectedErr     bool
+	}{
+		{
+			description:     "no annotation, expect single container",
+			annotationKey:   "",
+			annotationValue: "",
+			expectedType:    vc.SingleContainer,
+			expectedErr:     false,
+		},
+		{
+			description:     "unexpected annotation, expect error",
+			annotationKey:   ctrAnnotations.ContainerType,
+			annotationValue: "foo",
+			expectedType:    vc.UnknownContainerType,
+			expectedErr:     true,
+		},
+		{
+			description:     "containerd sandbox",
+			annotationKey:   ctrAnnotations.ContainerType,
+			annotationValue: string(ctrAnnotations.ContainerTypeSandbox),
+			expectedType:    vc.PodSandbox,
+			expectedErr:     false,
+		},
+		{
+			description:     "containerd container",
+			annotationKey:   ctrAnnotations.ContainerType,
+			annotationValue: string(ctrAnnotations.ContainerTypeContainer),
+			expectedType:    vc.PodContainer,
+			expectedErr:     false,
+		},
+		{
+			description:     "crio unexpected annotation, expect error",
+			annotationKey:   crioAnnotations.ContainerType,
+			annotationValue: "foo",
+			expectedType:    vc.UnknownContainerType,
+			expectedErr:     true,
+		},
+		{
+			description:     "crio sandbox",
+			annotationKey:   crioAnnotations.ContainerType,
+			annotationValue: string(crioAnnotations.ContainerTypeSandbox),
+			expectedType:    vc.PodSandbox,
+			expectedErr:     false,
+		},
+		{
+			description:     "crio container",
+			annotationKey:   crioAnnotations.ContainerType,
+			annotationValue: string(crioAnnotations.ContainerTypeContainer),
+			expectedType:    vc.PodContainer,
+			expectedErr:     false,
+		},
+		{
+			description:     "dockershim unexpected annotation, expect error",
+			annotationKey:   dockerAnnotations.ContainerTypeLabelKey,
+			annotationValue: "foo",
+			expectedType:    vc.UnknownContainerType,
+			expectedErr:     true,
+		},
+		{
+			description:     "dockershim sandbox",
+			annotationKey:   dockerAnnotations.ContainerTypeLabelKey,
+			annotationValue: string(dockerAnnotations.ContainerTypeLabelSandbox),
+			expectedType:    vc.PodSandbox,
+			expectedErr:     false,
+		},
+		{
+			description:     "dockershim container",
+			annotationKey:   dockerAnnotations.ContainerTypeLabelKey,
+			annotationValue: string(dockerAnnotations.ContainerTypeLabelContainer),
+			expectedType:    vc.PodContainer,
+			expectedErr:     false,
+		},
 	}
-
-	testContainerTypeSuccessful(t, ociSpec, vc.PodSandbox)
-}
-
-func TestContainerTypePodContainer(t *testing.T) {
-	var ociSpec specs.Spec
-
-	ociSpec.Annotations = map[string]string{
-		annotations.ContainerType: annotations.ContainerTypeContainer,
+	for _, tt := range tests {
+		ociSpec := specs.Spec{
+			Annotations: map[string]string{
+				tt.annotationKey: tt.annotationValue,
+			},
+		}
+		containerType, err := ContainerType(ociSpec)
+		if tt.expectedErr {
+			assert.Error(err)
+		} else {
+			assert.NoError(err)
+		}
+		assert.Equal(tt.expectedType, containerType, "test fail: %v", tt.description)
 	}
-
-	testContainerTypeSuccessful(t, ociSpec, vc.PodContainer)
-}
-
-func TestContainerTypePodSandboxEmptyAnnotation(t *testing.T) {
-	testContainerTypeSuccessful(t, specs.Spec{}, vc.PodSandbox)
-}
-
-func TestContainerTypeFailure(t *testing.T) {
-	var ociSpec specs.Spec
-	expected := vc.UnknownContainerType
-	unknownType := "unknown_type"
-	assert := assert.New(t)
-
-	ociSpec.Annotations = map[string]string{
-		annotations.ContainerType: unknownType,
-	}
-
-	containerType, err := ContainerType(ociSpec)
-	assert.Error(err)
-	assert.Equal(containerType, expected)
 }
 
 func TestSandboxIDSuccessful(t *testing.T) {
@@ -241,7 +291,7 @@ func TestSandboxIDSuccessful(t *testing.T) {
 	assert := assert.New(t)
 
 	ociSpec.Annotations = map[string]string{
-		annotations.SandboxID: testSandboxID,
+		crioAnnotations.SandboxID: testSandboxID,
 	}
 
 	sandboxID, err := SandboxID(ociSpec)
