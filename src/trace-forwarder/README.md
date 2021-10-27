@@ -120,7 +120,7 @@ forwarder.
 
 ```bash
 $ sandbox_id="foo"
-$ socket_path=$(echo "$socket_path_template" | sed "s/{ID}/${sandbox_id}/g")
+$ socket_path=$(echo "$socket_path_template" | sed "s/{ID}/${sandbox_id}/g" | tr -d '"')
 $ sudo mkdir -p $(dirname "$socket_path")
 ```
 
