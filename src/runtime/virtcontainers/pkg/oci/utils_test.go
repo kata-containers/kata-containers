@@ -188,38 +188,6 @@ func TestMinimalSandboxConfig(t *testing.T) {
 	assert.NoError(os.Remove(configPath))
 }
 
-func testGetContainerTypeSuccessful(t *testing.T, annotations map[string]string, expected vc.ContainerType) {
-	assert := assert.New(t)
-	containerType, err := GetContainerType(annotations)
-	assert.NoError(err)
-	assert.Equal(containerType, expected)
-}
-
-func TestGetContainerTypePodSandbox(t *testing.T) {
-	annotations := map[string]string{
-		vcAnnotations.ContainerTypeKey: string(vc.PodSandbox),
-	}
-
-	testGetContainerTypeSuccessful(t, annotations, vc.PodSandbox)
-}
-
-func TestGetContainerTypePodContainer(t *testing.T) {
-	annotations := map[string]string{
-		vcAnnotations.ContainerTypeKey: string(vc.PodContainer),
-	}
-
-	testGetContainerTypeSuccessful(t, annotations, vc.PodContainer)
-}
-
-func TestGetContainerTypeFailure(t *testing.T) {
-	expected := vc.UnknownContainerType
-	assert := assert.New(t)
-
-	containerType, err := GetContainerType(map[string]string{})
-	assert.Error(err)
-	assert.Equal(containerType, expected)
-}
-
 func testContainerTypeSuccessful(t *testing.T, ociSpec specs.Spec, expected vc.ContainerType) {
 	containerType, err := ContainerType(ociSpec)
 	assert := assert.New(t)

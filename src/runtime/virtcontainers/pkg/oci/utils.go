@@ -323,18 +323,6 @@ func networkConfig(ocispec specs.Spec, config RuntimeConfig) (vc.NetworkConfig, 
 	return netConf, nil
 }
 
-// GetContainerType determines which type of container matches the annotations
-// table provided.
-func GetContainerType(annotations map[string]string) (vc.ContainerType, error) {
-	if containerType, ok := annotations[vcAnnotations.ContainerTypeKey]; ok {
-		return vc.ContainerType(containerType), nil
-	}
-
-	ociLog.Errorf("Annotations[%s] not found, cannot determine the container type",
-		vcAnnotations.ContainerTypeKey)
-	return vc.UnknownContainerType, fmt.Errorf("Could not find container type")
-}
-
 // ContainerType returns the type of container and if the container type was
 // found from CRI servers annotations.
 func ContainerType(spec specs.Spec) (vc.ContainerType, error) {
