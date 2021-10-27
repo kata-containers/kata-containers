@@ -4,8 +4,10 @@
 //
 
 use std::fs;
+use std::io::Write;
 use std::path::Path;
 use std::process::{Command, ExitStatus};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use anyhow::{anyhow, ensure, Result};
@@ -21,6 +23,9 @@ use crate::AGENT_CONFIG;
 const SKOPEO_PATH: &str = "/usr/bin/skopeo";
 const UMOCI_PATH: &str = "/usr/local/bin/umoci";
 const IMAGE_OCI: &str = "image_oci:latest";
+const AA_PATH: &str = "/usr/local/bin/attestation-agent";
+const AA_PORT: &str = "127.0.0.1:50000";
+const OCICRYPT_CONFIG_PATH: &str = "/tmp/ocicrypt_config.json";
 
 // Convenience macro to obtain the scope logger
 macro_rules! sl {
@@ -31,11 +36,15 @@ macro_rules! sl {
 
 pub struct ImageService {
     sandbox: Arc<Mutex<Sandbox>>,
+    attestation_agent_started: AtomicBool,
 }
 
 impl ImageService {
     pub fn new(sandbox: Arc<Mutex<Sandbox>>) -> Self {
-        Self { sandbox }
+        Self {
+            sandbox,
+            attestation_agent_started: AtomicBool::new(false),
+        }
     }
 
     fn pull_image_from_registry(
@@ -43,6 +52,7 @@ impl ImageService {
         cid: &str,
         source_creds: &Option<&str>,
         policy_path: &Option<&String>,
+        aa_kbc_params: &str,
     ) -> Result<()> {
         let source_image = format!("{}{}", "docker://", image);
 
@@ -78,6 +88,15 @@ impl ImageService {
         }
 
         debug!(sl!(), "skopeo command: {:?}", &pull_command);
+        if !aa_kbc_params.is_empty() {
+            // Skopeo will copy an unencrypted image even if the decryption key argument is provided.
+            // Thus, this does not guarantee that the image was encrypted.
+            pull_command
+                .arg("--decryption-key")
+                .arg(format!("provider:attestation-agent:{}", aa_kbc_params))
+                .env("OCICRYPT_KEYPROVIDER_CONFIG", OCICRYPT_CONFIG_PATH);
+        }
+
         let status: ExitStatus = pull_command.status()?;
 
         if !status.success() {
@@ -118,9 +137,39 @@ impl ImageService {
         Ok(())
     }
 
+    // If we fail to start the AA, Skopeo/ocicrypt won't be able to unwrap keys
+    // and container decryption will fail.
+    fn init_attestation_agent() {
+        let config_path = OCICRYPT_CONFIG_PATH;
+
+        // The image will need to be encrypted using a keyprovider
+        // that has the same name (at least according to the config).
+        let ocicrypt_config = serde_json::json!({
+            "key-providers": {
+                "attestation-agent":{
+                    "grpc":AA_PORT
+                }
+            }
+        });
+
+        let mut config_file = fs::File::create(config_path).unwrap();
+        config_file
+            .write_all(ocicrypt_config.to_string().as_bytes())
+            .unwrap();
+
+        // The Attestation Agent will run for the duration of the guest.
+        Command::new(AA_PATH)
+            .arg("--grpc_sock")
+            .arg(AA_PORT)
+            .spawn()
+            .unwrap();
+    }
+
     async fn pull_image(&self, req: &image::PullImageRequest) -> Result<String> {
         let image = req.get_image();
         let mut cid = req.get_container_id();
+
+        let aa_kbc_params = &AGENT_CONFIG.read().await.aa_kbc_params;
 
         if cid.is_empty() {
             let v: Vec<&str> = image.rsplit('/').collect();
@@ -133,6 +182,18 @@ impl ImageService {
             verify_cid(cid)?;
         }
 
+        if !aa_kbc_params.is_empty() {
+            match self.attestation_agent_started.compare_exchange_weak(
+                false,
+                true,
+                Ordering::SeqCst,
+                Ordering::SeqCst,
+            ) {
+                Ok(_) => Self::init_attestation_agent(),
+                Err(_) => info!(sl!(), "Attestation Agent already running"),
+            }
+        }
+
         let source_creds = (!req.get_source_creds().is_empty()).then(|| req.get_source_creds());
 
         // Read the policy path from the agent config
@@ -140,7 +201,7 @@ impl ImageService {
         let policy_path = (!config_policy_path.is_empty()).then(|| config_policy_path);
         info!(sl!(), "Using container policy_path: {:?}...", &policy_path);
 
-        Self::pull_image_from_registry(image, cid, &source_creds, &policy_path)?;
+        Self::pull_image_from_registry(image, cid, &source_creds, &policy_path, aa_kbc_params)?;
         Self::unpack_image(cid)?;
 
         let mut sandbox = self.sandbox.lock().await;
