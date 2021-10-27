@@ -9,10 +9,10 @@ FROM fedora:latest
 # images being pulled from the registry.
 # Set AGENT_VERSION as an env variable to specify a specific version of Kata Agent to install
 
-LABEL DOCKERFILE_VERSION="2.2"
+LABEL DOCKERFILE_VERSION="2.3"
 
-ENV QAT_DRIVER_VER "QAT1.7.L.4.14.0-00031.tar.gz"
-ENV QAT_DRIVER_URL "https://downloadmirror.intel.com/30178/eng/${QAT_DRIVER_VER}"
+ENV QAT_DRIVER_VER "QAT.L.4.15.0-00011.tar.gz"
+ENV QAT_DRIVER_URL "https://downloadmirror.intel.com/649693/${QAT_DRIVER_VER}"
 ENV QAT_CONFIGURE_OPTIONS "--enable-icp-sriov=guest"
 ENV KATA_REPO_VERSION "main"
 ENV AGENT_VERSION ""
