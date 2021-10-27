@@ -34,7 +34,7 @@ pub mod container;
 pub mod mount;
 pub mod pipestream;
 pub mod process;
-#[cfg(feature = "seccomp")]
+#[cfg(all(not(target_arch = "aarch64"), feature = "seccomp"))]
 pub mod seccomp;
 pub mod specconv;
 pub mod sync;
