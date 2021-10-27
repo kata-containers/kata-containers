@@ -1334,11 +1334,19 @@ fn get_memory_info(block_size: bool, hotplug: bool) -> Result<(u64, bool)> {
     Ok((size, plug))
 }
 
+pub fn have_seccomp() -> bool {
+    if cfg!(feature = "seccomp") {
+        return true;
+    }
+
+    false
+}
+
 fn get_agent_details() -> AgentDetails {
     let mut detail = AgentDetails::new();
 
     detail.set_version(AGENT_VERSION.to_string());
-    detail.set_supports_seccomp(false);
+    detail.set_supports_seccomp(have_seccomp());
     detail.init_daemon = unistd::getpid() == Pid::from_raw(1);
 
     detail.device_handlers = RepeatedField::new();

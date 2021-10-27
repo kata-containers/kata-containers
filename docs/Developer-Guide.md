@@ -86,6 +86,16 @@ One of the `initrd` and `image` options in Kata runtime config file **MUST** be 
 The main difference between the options is that the size of `initrd`(10MB+) is significantly smaller than
 rootfs `image`(100MB+).
 
+## Enable seccomp
+
+Enable seccomp as follows:
+
+```
+$ sudo sed -i '/^disable_guest_seccomp/ s/true/false/' /etc/kata-containers/configuration.toml
+```
+
+This will pass container seccomp profiles to the kata agent.
+
 ## Enable full debug
 
 Enable full debug as follows:
@@ -216,6 +226,18 @@ $ go get -d -u github.com/kata-containers/kata-containers
 $ cd $GOPATH/src/github.com/kata-containers/kata-containers/src/agent && make
 ```
 
+The agent is built with seccomp capability by default.
+If you want to build the agent without the seccomp capability, you need to run `make` with `SECCOMP=no` as follows.
+
+```
+$ make -C $GOPATH/src/github.com/kata-containers/kata-containers/src/agent SECCOMP=no
+```
+
+> **Note:**
+>
+> - If you enable seccomp in the main configuration file but build the agent without seccomp capability,
+>   the runtime exits conservatively with an error message.
+
 ## Get the osbuilder
 
 ```
@@ -234,9 +256,21 @@ the following example.
 $ export ROOTFS_DIR=${GOPATH}/src/github.com/kata-containers/kata-containers/tools/osbuilder/rootfs-builder/rootfs
 $ sudo rm -rf ${ROOTFS_DIR}
 $ cd $GOPATH/src/github.com/kata-containers/kata-containers/tools/osbuilder/rootfs-builder
-$ script -fec 'sudo -E GOPATH=$GOPATH USE_DOCKER=true SECCOMP=no ./rootfs.sh ${distro}'
+$ script -fec 'sudo -E GOPATH=$GOPATH USE_DOCKER=true ./rootfs.sh ${distro}'
 ```
-You MUST choose one of `alpine`, `centos`, `clearlinux`, `debian`, `euleros`, `fedora`, `suse`, and `ubuntu` for `${distro}`. By default `seccomp` packages are not included in the rootfs image. Set `SECCOMP` to `yes` to include them.
+
+You MUST choose a distribution (e.g., `ubuntu`) for `${distro}`.
+You can get a supported distributions list in the Kata Containers by running the following.
+
+```
+$ ./rootfs.sh -l
+```
+
+If you want to build the agent without seccomp capability, you need to run the `rootfs.sh` script with `SECCOMP=no` as follows.
+
+```
+$ script -fec 'sudo -E GOPATH=$GOPATH AGENT_INIT=yes USE_DOCKER=true SECCOMP=no ./rootfs.sh ${distro}'
+```
 
 > **Note:**
 >
@@ -291,12 +325,23 @@ $ (cd /usr/share/kata-containers && sudo ln -sf "$image" kata-containers.img)
 $ export ROOTFS_DIR="${GOPATH}/src/github.com/kata-containers/kata-containers/tools/osbuilder/rootfs-builder/rootfs"
 $ sudo rm -rf ${ROOTFS_DIR}
 $ cd $GOPATH/src/github.com/kata-containers/kata-containers/tools/osbuilder/rootfs-builder
-$ script -fec 'sudo -E GOPATH=$GOPATH AGENT_INIT=yes USE_DOCKER=true SECCOMP=no ./rootfs.sh ${distro}'
+$ script -fec 'sudo -E GOPATH=$GOPATH AGENT_INIT=yes USE_DOCKER=true ./rootfs.sh ${distro}'
 ```
 `AGENT_INIT` controls if the guest image uses the Kata agent as the guest `init` process. When you create an initrd image,
-always set `AGENT_INIT` to `yes`. By default `seccomp` packages are not included in the initrd image. Set `SECCOMP` to `yes` to include them.
+always set `AGENT_INIT` to `yes`.
 
-You MUST choose one of `alpine`, `centos`, `clearlinux`, `euleros`, and `fedora` for `${distro}`.
+You MUST choose a distribution (e.g., `ubuntu`) for `${distro}`.
+You can get a supported distributions list in the Kata Containers by running the following.
+
+```
+$ ./rootfs.sh -l
+```
+
+If you want to build the agent without seccomp capability, you need to run the `rootfs.sh` script with `SECCOMP=no` as follows.
+
+```
+$ script -fec 'sudo -E GOPATH=$GOPATH AGENT_INIT=yes USE_DOCKER=true SECCOMP=no ./rootfs.sh ${distro}'
+```
 
 > **Note:**
 >
