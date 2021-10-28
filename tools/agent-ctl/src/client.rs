@@ -89,6 +89,11 @@ static AGENT_CMDS: &'static [AgentCmd] = &[
         fp: agent_cmd_sandbox_add_arp_neighbors,
     },
     AgentCmd {
+        name: "AddSwap",
+        st: ServiceType::Agent,
+        fp: agent_cmd_sandbox_add_swap,
+    },
+    AgentCmd {
         name: "Check",
         st: ServiceType::Health,
         fp: agent_cmd_health_check,
@@ -1991,4 +1996,30 @@ fn get_repeat_count(cmdline: &str) -> i64 {
         Ok(n) => return n,
         Err(_) => return default_repeat_count,
     }
+}
+
+fn agent_cmd_sandbox_add_swap(
+    ctx: &Context,
+    client: &AgentServiceClient,
+    _health: &HealthClient,
+    _options: &mut Options,
+    _args: &str,
+) -> Result<()> {
+    let req = AddSwapRequest::default();
+
+    let ctx = clone_context(ctx);
+
+    debug!(sl!(), "sending request"; "request" => format!("{:?}", req));
+
+    let reply = client
+        .add_swap(ctx, &req)
+        .map_err(|e| anyhow!("{:?}", e).context(ERR_API_FAILED))?;
+
+    // FIXME: Implement 'AddSwap' fully.
+    eprintln!("FIXME: 'AddSwap' not fully implemented");
+
+    info!(sl!(), "response received";
+        "response" => format!("{:?}", reply));
+
+    Ok(())
 }
