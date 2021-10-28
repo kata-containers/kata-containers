@@ -463,25 +463,21 @@ func (c *Container) shareFiles(ctx context.Context, m Mount, idx int) (string, b
 			// For RO mounts, bindmount remount event is not propagated to mount subtrees,
 			// and it doesn't present in the virtiofsd standalone mount namespace either.
 			// So we end up a bit tricky:
-			// 1. make a private bind mount to the mount source
-			// 2. make another ro bind mount on the private mount
-			// 3. move the ro bind mount to mountDest
-			// 4. umount the private bind mount created in step 1
+			// 1. make a private ro bind mount to the mount source
+			// 2. duplicate the ro mount we create in step 1 to mountDest, by making a bind mount. No need to remount with MS_RDONLY here.
+			// 3. umount the private bind mount created in step 1
 			privateDest := filepath.Join(getPrivatePath(c.sandboxID), filename)
-			if err := bindMount(c.ctx, m.Source, privateDest, false, "private"); err != nil {
+
+			if err := bindMount(c.ctx, m.Source, privateDest, true, "private"); err != nil {
 				return "", false, err
 			}
 			defer func() {
 				syscall.Unmount(privateDest, syscall.MNT_DETACH|UmountNoFollow)
 			}()
-			if err := bindMount(c.ctx, privateDest, privateDest, true, "private"); err != nil {
-				return "", false, err
-			}
-			if err := moveMount(c.ctx, privateDest, mountDest); err != nil {
-				return "", false, err
-			}
 
-			syscall.Unmount(privateDest, syscall.MNT_DETACH|UmountNoFollow)
+			if err := bindMount(c.ctx, privateDest, mountDest, false, "private"); err != nil {
+				return "", false, err
+			}
 		}
 		// Save HostPath mount value into the mount list of the container.
 		c.mounts[idx].HostPath = mountDest
