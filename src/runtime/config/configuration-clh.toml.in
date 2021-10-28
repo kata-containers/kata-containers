@@ -105,8 +105,7 @@ virtio_fs_extra_args = @DEFVIRTIOFSEXTRAARGS@
 virtio_fs_cache = "@DEFVIRTIOFSCACHE@"
 
 # Block storage driver to be used for the hypervisor in case the container
-# rootfs is backed by a block device. This is virtio-scsi, virtio-blk
-# or nvdimm.
+# rootfs is backed by a block device. This is virtio-blk.
 block_device_driver = "virtio-blk"
 
 # Enable huge pages for VM RAM, default false
