@@ -129,7 +129,16 @@ func TestTemplateFactory(t *testing.T) {
 	// CloseFactory, there is no need to call tt.CloseFactory(ctx)
 	f.CloseFactory(ctx)
 
-	// expect tt.statePath not exist, if exist, it means this case failed.
-	_, err = os.Stat(tt.statePath)
-	assert.Nil(err)
+	//umount may take more time. Check periodically if the mount exists
+	waitTime, delay := 20, 1*time.Second
+	for check := waitTime; check > 0; {
+		// expect tt.statePath not exist, if exist, it means this case failed.
+		_, err = os.Stat(tt.statePath)
+		if err != nil {
+			break
+		}
+		check -= 1
+		time.Sleep(delay)
+	}
+	assert.True(os.IsNotExist(err), fmt.Sprintf("mount still present after waiting %d seconds", waitTime))
 }
