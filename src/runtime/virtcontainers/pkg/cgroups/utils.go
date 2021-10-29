@@ -25,6 +25,10 @@ const CgroupKataPrefix = "kata"
 const DefaultCgroupPath = "/vc"
 
 func RenameCgroupPath(path string) (string, error) {
+	if IsSystemdCgroup(path) {
+		return path, nil
+	}
+
 	if path == "" {
 		path = DefaultCgroupPath
 	}

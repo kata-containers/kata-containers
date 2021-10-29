@@ -589,7 +589,8 @@ func (s *Sandbox) createCgroups() error {
 		// engine by default. The exception is for devices whitelist as well as sandbox-level
 		// CPUSet.
 		// For the sandbox cgroups we create and manage, rename the base of the cgroup path to
-		// include "kata_"
+		// include "kata_". This doesn't apply when cgroups are handled by systemd, in which
+		// case RenameCgroupPath() is the identity function.
 		cgroupPath, err = cgroups.RenameCgroupPath(cgroupPath)
 		if err != nil {
 			return err
