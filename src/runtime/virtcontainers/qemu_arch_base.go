@@ -177,6 +177,30 @@ const (
 	seProtection //nolint
 )
 
+var guestProtectionStr = [...]string{
+	noneProtection: "none",
+	pefProtection:  "pef",
+	seProtection:   "se",
+	sevProtection:  "sev",
+	tdxProtection:  "tdx",
+}
+
+func (gp guestProtection) String() string {
+	return guestProtectionStr[gp]
+}
+
+func genericAvailableGuestProtections() (protections []string) {
+	return
+}
+
+func AvailableGuestProtections() (protections []string) {
+	gp, err := availableGuestProtection()
+	if err != nil || gp == noneProtection {
+		return genericAvailableGuestProtections()
+	}
+	return []string{gp.String()}
+}
+
 type qemuArchBase struct {
 	qemuExePath          string
 	qemuMachine          govmmQemu.Machine
