@@ -935,6 +935,10 @@ func (s *service) Shutdown(ctx context.Context, r *taskAPI.ShutdownRequest) (_ *
 	s.mu.Lock()
 	if len(s.containers) != 0 {
 		s.mu.Unlock()
+
+		span.End()
+		katatrace.StopTracing(s.rootCtx)
+
 		return empty, nil
 	}
 	s.mu.Unlock()
