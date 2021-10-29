@@ -134,6 +134,17 @@ func TestHypervisorConfigIsValid(t *testing.T) {
 	testHypervisorConfigValid(t, hypervisorConfig, true)
 }
 
+func TestHypervisorConfigBothInitrdAndImage(t *testing.T) {
+	hypervisorConfig := &HypervisorConfig{
+		KernelPath:     fmt.Sprintf("%s/%s", testDir, testKernel),
+		ImagePath:      fmt.Sprintf("%s/%s", testDir, testImage),
+		InitrdPath:     fmt.Sprintf("%s/%s", testDir, testInitrd),
+		HypervisorPath: "",
+	}
+
+	testHypervisorConfigValid(t, hypervisorConfig, false)
+}
+
 func TestHypervisorConfigValidTemplateConfig(t *testing.T) {
 	hypervisorConfig := &HypervisorConfig{
 		KernelPath:       fmt.Sprintf("%s/%s", testDir, testKernel),
