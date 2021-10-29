@@ -14,6 +14,11 @@ clone_tests_repo
 
 source "${tests_repo_dir}/.ci/lib.sh"
 
+# The following variables if set on the environment will change the behavior
+# of gperf and libseccomp configure scripts, that may lead this script to
+# fail. So let's ensure they are unset here.
+unset PREFIX DESTDIR
+
 arch=$(uname -m)
 
 # Variables for libseccomp
