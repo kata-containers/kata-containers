@@ -177,7 +177,7 @@ externals:
     description: |
       OCI-based Kubernetes Container Runtime Interface implementation
     url: "https://github.com/cri-o/cri-o"
-    branch: "release-1.21"
+    branch: "release-1.22"
 
   containerd:
     description: |
@@ -192,7 +192,7 @@ externals:
   critools:
     description: "CLI tool for Container Runtime Interface (CRI)"
     url: "https://github.com/kubernetes-sigs/cri-tools"
-    version: "1.21.0"
+    version: "1.22.0"
 
   gperf:
     description: "GNU gperf is a perfect hash function generator"
@@ -207,7 +207,7 @@ externals:
     uscan-url: >-
       https://github.com/kubernetes/kubernetes/tags
       .*/v?([\d\.]+)\.tar\.gz
-    version: "1.21.1-00"
+    version: "1.22.0-00"
 
   libseccomp:
     description: "High level interface to Linux seccomp filter"
