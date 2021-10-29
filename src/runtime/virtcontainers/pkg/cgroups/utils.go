@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/opencontainers/runc/libcontainer/cgroups/systemd"
 	"github.com/opencontainers/runc/libcontainer/devices"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"golang.org/x/sys/unix"
@@ -77,6 +78,26 @@ func IsSystemdCgroup(cgroupPath string) bool {
 	}
 
 	return false
+}
+
+func getSliceName(cgroupPath string) string {
+	parts := strings.Split(cgroupPath, ":")
+	if len(parts) == 3 && strings.HasSuffix(parts[0], ".slice") {
+		sliceName, _ := systemd.ExpandSlice(parts[0])
+		return sliceName
+	}
+
+	return ""
+}
+
+func getUnitName(cgroupPath string) string {
+	parts := strings.Split(cgroupPath, ":")
+	if len(parts) == 3 && strings.HasSuffix(parts[0], ".slice") {
+		unitName := fmt.Sprintf("%s-%s.scope", parts[1], parts[2])
+		return unitName
+	}
+
+	return ""
 }
 
 func DeviceToCgroupDeviceRule(device string) (*devices.Rule, error) {

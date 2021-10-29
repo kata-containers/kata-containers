@@ -116,13 +116,18 @@ func sandboxDevices() []specs.LinuxDeviceCgroup {
 
 func NewCgroup(path string, resources *specs.LinuxResources) (*Cgroup, error) {
 	var err error
+	var cgroup cgroups.Cgroup
 
 	cgroupPath, err := ValidCgroupPath(path, IsSystemdCgroup(path))
 	if err != nil {
 		return nil, err
 	}
 
-	cgroup, err := cgroups.New(cgroups.V1, cgroups.StaticPath(cgroupPath), resources)
+	if !IsSystemdCgroup(path) {
+		cgroup, err = cgroups.New(cgroups.V1, cgroups.StaticPath(cgroupPath), resources)
+	} else {
+		cgroup, err = cgroups.New(cgroups.Systemd, cgroups.Slice(getSliceName(cgroupPath), getUnitName(cgroupPath)), resources)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -143,7 +148,14 @@ func NewSandboxCgroup(path string, resources *specs.LinuxResources) (*Cgroup, er
 }
 
 func Load(path string) (*Cgroup, error) {
-	cgroup, err := cgroups.Load(cgroups.V1, cgroups.StaticPath(path))
+	var err error
+	var cgroup cgroups.Cgroup
+
+	if !IsSystemdCgroup(path) {
+		cgroup, err = cgroups.Load(cgroups.V1, cgroups.StaticPath(path))
+	} else {
+		cgroup, err = cgroups.Load(cgroups.Systemd, cgroups.Slice(getSliceName(path), getUnitName(path)))
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -179,7 +191,14 @@ func (c *Cgroup) Update(resources *specs.LinuxResources) error {
 }
 
 func (c *Cgroup) MoveTo(path string) error {
-	newCgroup, err := cgroups.Load(cgroups.V1, cgroups.StaticPath(path))
+	var err error
+	var newCgroup cgroups.Cgroup
+
+	if !IsSystemdCgroup(path) {
+		newCgroup, err = cgroups.Load(cgroups.V1, cgroups.StaticPath(path))
+	} else {
+		newCgroup, err = cgroups.Load(cgroups.Systemd, cgroups.Slice(getSliceName(path), getUnitName(path)))
+	}
 	if err != nil {
 		return err
 	}
