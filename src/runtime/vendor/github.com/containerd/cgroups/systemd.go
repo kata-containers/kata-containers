@@ -85,6 +85,10 @@ func (s *SystemdController) Create(path string, _ *specs.LinuxResources) error {
 	}
 	defer conn.Close()
 	slice, name := splitName(path)
+	// The path of a subslice is typically in the form "/foo.slice/foo-bar.slice" but
+	// systemd only wants the basename "foo-bar.slice"
+	slice = filepath.Base(slice)
+
 	// We need to see if systemd can handle the delegate property
 	// Systemd will return an error if it cannot handle delegate regardless
 	// of its bool setting.
