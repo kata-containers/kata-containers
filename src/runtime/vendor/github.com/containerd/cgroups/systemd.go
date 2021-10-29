@@ -24,6 +24,7 @@ import (
 	systemdDbus "github.com/coreos/go-systemd/v22/dbus"
 	"github.com/godbus/dbus/v5"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
+	"os"
 )
 
 const (
@@ -105,13 +106,22 @@ func (s *SystemdController) Create(path string, _ *specs.LinuxResources) error {
 	once.Do(checkDelegate)
 	properties := []systemdDbus.Property{
 		systemdDbus.PropDescription("cgroup " + name),
-		systemdDbus.PropWants(slice),
 		newProperty("DefaultDependencies", false),
 		newProperty("MemoryAccounting", true),
 		newProperty("CPUAccounting", true),
 		newProperty("BlockIOAccounting", true),
 	}
 
+	if strings.HasSuffix(name, ".slice") {
+		properties = append(properties,
+			systemdDbus.PropWants(slice),
+		)
+	} else if strings.HasSuffix(name, ".scope") {
+		properties = append(properties,
+			systemdDbus.PropSlice(slice),
+			systemdDbus.PropPids(uint32(os.Getpid())),
+		)
+	}
 	// If we can delegate, we add the property back in
 	if canDelegate {
 		properties = append(properties, newProperty("Delegate", true))
