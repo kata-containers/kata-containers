@@ -437,22 +437,25 @@ fn scan_scsi_bus(scsi_addr: &str) -> Result<()> {
 
 // update_spec_device updates the device list in the OCI spec to make
 // it include details appropriate for the VM, instead of the host.  It
-// is given the host path to the device (to locate the device in the
-// original OCI spec) and the VM path which it uses to determine the
-// VM major/minor numbers, and the final path with which to present
-// the device in the (inner) container
+// is given:
+//     container_path: the path to the device in the original OCI spec
+//     vm_path: the path to the equivalent device in the VM (used to
+//              determine the correct major/minor numbers)
+//     final_path: a new path to update the device to in the "inner"
+//                 container specification (usually the same as
+//                 container_path)
 #[instrument]
 fn update_spec_device(
     spec: &mut Spec,
     devidx: &DevIndex,
-    host_path: &str,
+    container_path: &str,
     vm_path: &str,
     final_path: &str,
 ) -> Result<()> {
     // If no container_path is provided, we won't be able to match and
     // update the device in the OCI spec device list. This is an error.
-    if host_path.is_empty() {
-        return Err(anyhow!("Host path cannot empty for device"));
+    if container_path.is_empty() {
+        return Err(anyhow!("Container path cannot be empty for device"));
     }
 
     let linux = spec
@@ -474,7 +477,7 @@ fn update_spec_device(
         "update_spec_device(): vm_path={}, major: {}, minor: {}\n", vm_path, major_id, minor_id
     );
 
-    if let Some(idxdata) = devidx.0.get(host_path) {
+    if let Some(idxdata) = devidx.0.get(container_path) {
         let dev = &mut linux.devices[idxdata.idx];
         let host_major = dev.major;
         let host_minor = dev.minor;
@@ -486,7 +489,7 @@ fn update_spec_device(
         info!(
             sl!(),
             "change the device from path: {} major: {} minor: {} to vm device path: {} major: {} minor: {}",
-            host_path,
+            container_path,
             host_major,
             host_minor,
             dev.path,
@@ -512,7 +515,7 @@ fn update_spec_device(
     } else {
         Err(anyhow!(
             "Should have found a device {} in the spec",
-            host_path
+            container_path
         ))
     }
 }
@@ -1107,14 +1110,14 @@ mod tests {
         let guest_major = stat::major(null_rdev) as i64;
         let guest_minor = stat::minor(null_rdev) as i64;
 
-        let host_path = "/dev/host";
+        let container_path = "/dev/original";
         let host_major: i64 = 99;
         let host_minor: i64 = 99;
 
         let mut spec = Spec {
             linux: Some(Linux {
                 devices: vec![oci::LinuxDevice {
-                    path: host_path.to_string(),
+                    path: container_path.to_string(),
                     r#type: "c".to_string(),
                     major: host_major,
                     minor: host_minor,
@@ -1129,7 +1132,7 @@ mod tests {
         let vm_path = "/dev/null";
         let final_path = "/dev/final";
 
-        let res = update_spec_device(&mut spec, &devidx, host_path, vm_path, final_path);
+        let res = update_spec_device(&mut spec, &devidx, container_path, vm_path, final_path);
         assert!(res.is_ok());
 
         let specdevices = &spec.linux.as_ref().unwrap().devices;
