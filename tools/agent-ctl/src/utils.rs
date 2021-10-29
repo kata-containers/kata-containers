@@ -5,11 +5,22 @@
 
 use crate::types::{Config, Options};
 use anyhow::{anyhow, Result};
-use oci::{Process as ociProcess, Root as ociRoot, Spec as ociSpec, Mount as ociMount};
+use oci::{
+    Linux as ociLinux, Mount as ociMount, Process as ociProcess, Root as ociRoot, Spec as ociSpec,
+};
 use protocols::oci::{
-    Box as grpcBox, Linux as grpcLinux, LinuxCapabilities as grpcLinuxCapabilities,
-    Process as grpcProcess, Root as grpcRoot, Spec as grpcSpec, User as grpcUser,
-    Mount as grpcMount,
+    Box as ttrpcBox, Linux as ttrpcLinux, LinuxBlockIO as ttrpcLinuxBlockIO,
+    LinuxCPU as ttrpcLinuxCPU, LinuxCapabilities as ttrpcLinuxCapabilities,
+    LinuxDevice as ttrpcLinuxDevice, LinuxDeviceCgroup as ttrpcLinuxDeviceCgroup,
+    LinuxHugepageLimit as ttrpcLinuxHugepageLimit, LinuxIDMapping as ttrpcLinuxIDMapping,
+    LinuxIntelRdt as ttrpcLinuxIntelRdt, LinuxInterfacePriority as ttrpcLinuxInterfacePriority,
+    LinuxMemory as ttrpcLinuxMemory, LinuxNamespace as ttrpcLinuxNamespace,
+    LinuxNetwork as ttrpcLinuxNetwork, LinuxPids as ttrpcLinuxPids,
+    LinuxResources as ttrpcLinuxResources, LinuxSeccomp as ttrpcLinuxSeccomp,
+    LinuxSeccompArg as ttrpcLinuxSeccompArg, LinuxSyscall as ttrpcLinuxSyscall,
+    LinuxThrottleDevice as ttrpcLinuxThrottleDevice, LinuxWeightDevice as ttrpcLinuxWeightDevice,
+    Mount as ttrpcMount, Process as ttrpcProcess, Root as ttrpcRoot, Spec as ttrpcSpec,
+    User as ttrpcUser,
 };
 use rand::Rng;
 use slog::{debug, warn};
@@ -253,7 +264,7 @@ fn config_file_from_bundle_dir(bundle_dir: &str) -> Result<String> {
         .map_err(|e| anyhow!("{:?}", e).context("failed to construct config file path"))
 }
 
-fn root_oci_to_grpc(bundle_dir: &str, root: &ociRoot) -> Result<grpcRoot> {
+fn root_oci_to_ttrpc(bundle_dir: &str, root: &ociRoot) -> Result<ttrpcRoot> {
     let root_dir = root.path.clone();
 
     let path = if root_dir.starts_with("/") {
@@ -268,24 +279,22 @@ fn root_oci_to_grpc(bundle_dir: &str, root: &ociRoot) -> Result<grpcRoot> {
             .map_err(|e| anyhow!("{:?}", e).context("failed to construct bundle path"))?
     };
 
-    let grpc_root = grpcRoot {
+    let ttrpc_root = ttrpcRoot {
         Path: path,
         Readonly: root.readonly,
         unknown_fields: protobuf::UnknownFields::new(),
         cached_size: protobuf::CachedSize::default(),
     };
 
-    Ok(grpc_root)
+    Ok(ttrpc_root)
 }
 
-fn process_oci_to_grpc(p: &ociProcess) -> grpcProcess {
+fn process_oci_to_ttrpc(p: &ociProcess) -> ttrpcProcess {
     let console_size = match &p.console_size {
         Some(s) => {
-            let mut b = grpcBox::new();
-
+            let mut b = ttrpcBox::new();
             b.set_Width(s.width);
             b.set_Height(s.height);
-
             protobuf::SingularPtrField::some(b)
         }
         None => protobuf::SingularPtrField::none(),
@@ -296,19 +305,18 @@ fn process_oci_to_grpc(p: &ociProcess) -> grpcProcess {
         None => 0,
     };
 
-    let mut user = grpcUser::new();
+    let mut user = ttrpcUser::new();
     user.set_UID(p.user.uid);
     user.set_GID(p.user.gid);
     user.set_AdditionalGids(p.user.additional_gids.clone());
 
     // FIXME: Implement RLimits OCI spec handling (copy from p.rlimits)
-    //let rlimits = vec![grpcPOSIXRlimit::new()];
+    //let rlimits = vec![ttrpcPOSIXRlimit::new()];
     let rlimits = protobuf::RepeatedField::new();
 
     let capabilities = match &p.capabilities {
         Some(c) => {
-            let mut gc = grpcLinuxCapabilities::new();
-
+            let mut gc = ttrpcLinuxCapabilities::new();
             gc.set_Bounding(protobuf::RepeatedField::from_slice(&c.bounding));
             gc.set_Effective(protobuf::RepeatedField::from_slice(&c.effective));
             gc.set_Inheritable(protobuf::RepeatedField::from_slice(&c.inheritable));
@@ -325,7 +333,7 @@ fn process_oci_to_grpc(p: &ociProcess) -> grpcProcess {
         env.push(pair.to_string());
     }
 
-    grpcProcess {
+    ttrpcProcess {
         Terminal: p.terminal,
         ConsoleSize: console_size,
         User: protobuf::SingularPtrField::some(user),
@@ -343,44 +351,367 @@ fn process_oci_to_grpc(p: &ociProcess) -> grpcProcess {
     }
 }
 
-fn mount_oci_to_grpc(m: &ociMount) -> grpcMount {
-    let mut grpc_options = protobuf::RepeatedField::new();
+fn mount_oci_to_ttrpc(m: &ociMount) -> ttrpcMount {
+    let mut ttrpc_options = protobuf::RepeatedField::new();
     for op in &m.options {
-        grpc_options.push(op.to_string());
+        ttrpc_options.push(op.to_string());
     }
 
-    grpcMount {
+    ttrpcMount {
         destination: m.destination.clone(),
         source: m.source.clone(),
         field_type: m.r#type.clone(),
-        options: grpc_options,
+        options: ttrpc_options,
         unknown_fields: protobuf::UnknownFields::new(),
         cached_size: protobuf::CachedSize::default(),
     }
 }
 
-fn oci_to_grpc(bundle_dir: &str, cid: &str, oci: &ociSpec) -> Result<grpcSpec> {
+fn idmaps_oci_to_ttrpc(
+    res: &[oci::LinuxIdMapping],
+) -> protobuf::RepeatedField<ttrpcLinuxIDMapping> {
+    let mut ttrpc_idmaps = protobuf::RepeatedField::new();
+    for m in res.iter() {
+        let mut idmapping = ttrpcLinuxIDMapping::default();
+        idmapping.set_HostID(m.host_id);
+        idmapping.set_ContainerID(m.container_id);
+        idmapping.set_Size(m.size);
+        ttrpc_idmaps.push(idmapping);
+    }
+    ttrpc_idmaps
+}
+
+fn devices_oci_to_ttrpc(
+    res: &[oci::LinuxDeviceCgroup],
+) -> protobuf::RepeatedField<ttrpcLinuxDeviceCgroup> {
+    let mut ttrpc_devices = protobuf::RepeatedField::new();
+    for d in res.iter() {
+        let mut device = ttrpcLinuxDeviceCgroup::default();
+        device.set_Major(d.major.unwrap_or(0));
+        device.set_Minor(d.minor.unwrap_or(0));
+        device.set_Access(d.access.clone());
+        device.set_Type(d.r#type.clone());
+        device.set_Allow(d.allow);
+        ttrpc_devices.push(device);
+    }
+    ttrpc_devices
+}
+
+fn memory_oci_to_ttrpc(
+    res: &Option<oci::LinuxMemory>,
+) -> protobuf::SingularPtrField<ttrpcLinuxMemory> {
+    let memory = if res.is_some() {
+        let mem = res.as_ref().unwrap();
+        protobuf::SingularPtrField::some(ttrpcLinuxMemory {
+            Limit: mem.limit.unwrap_or(0),
+            Reservation: mem.reservation.unwrap_or(0),
+            Swap: mem.swap.unwrap_or(0),
+            Kernel: mem.kernel.unwrap_or(0),
+            KernelTCP: mem.kernel_tcp.unwrap_or(0),
+            Swappiness: mem.swappiness.unwrap_or(0) as u64,
+            DisableOOMKiller: mem.disable_oom_killer.unwrap_or(false),
+            unknown_fields: protobuf::UnknownFields::new(),
+            cached_size: protobuf::CachedSize::default(),
+        })
+    } else {
+        protobuf::SingularPtrField::none()
+    };
+    memory
+}
+
+fn cpu_oci_to_ttrpc(res: &Option<oci::LinuxCpu>) -> protobuf::SingularPtrField<ttrpcLinuxCPU> {
+    match &res {
+        Some(s) => {
+            let mut cpu = ttrpcLinuxCPU::default();
+            cpu.set_Shares(s.shares.unwrap_or(0));
+            cpu.set_Quota(s.quota.unwrap_or(0));
+            cpu.set_Period(s.period.unwrap_or(0));
+            cpu.set_RealtimeRuntime(s.realtime_runtime.unwrap_or(0));
+            cpu.set_RealtimePeriod(s.realtime_period.unwrap_or(0));
+            protobuf::SingularPtrField::some(cpu)
+        }
+        None => protobuf::SingularPtrField::none(),
+    }
+}
+
+fn pids_oci_to_ttrpc(res: &Option<oci::LinuxPids>) -> protobuf::SingularPtrField<ttrpcLinuxPids> {
+    match &res {
+        Some(s) => {
+            let mut b = ttrpcLinuxPids::new();
+            b.set_Limit(s.limit);
+            protobuf::SingularPtrField::some(b)
+        }
+        None => protobuf::SingularPtrField::none(),
+    }
+}
+
+fn hugepage_limits_oci_to_ttrpc(
+    res: &[oci::LinuxHugepageLimit],
+) -> protobuf::RepeatedField<ttrpcLinuxHugepageLimit> {
+    let mut ttrpc_hugepage_limits = protobuf::RepeatedField::new();
+    for h in res.iter() {
+        let mut hugepage_limit = ttrpcLinuxHugepageLimit::default();
+        hugepage_limit.set_Limit(h.limit);
+        hugepage_limit.set_Pagesize(h.page_size.clone());
+        ttrpc_hugepage_limits.push(hugepage_limit);
+    }
+    ttrpc_hugepage_limits
+}
+
+fn network_oci_to_ttrpc(
+    res: &Option<oci::LinuxNetwork>,
+) -> protobuf::SingularPtrField<ttrpcLinuxNetwork> {
+    match &res {
+        Some(s) => {
+            let mut b = ttrpcLinuxNetwork::new();
+            b.set_ClassID(s.class_id.unwrap_or(0));
+            let mut priorities = protobuf::RepeatedField::new();
+            for pr in s.priorities.iter() {
+                let mut lip = ttrpcLinuxInterfacePriority::new();
+                lip.set_Name(pr.name.clone());
+                lip.set_Priority(pr.priority);
+                priorities.push(lip);
+            }
+            protobuf::SingularPtrField::some(b)
+        }
+        None => protobuf::SingularPtrField::none(),
+    }
+}
+
+fn weight_devices_oci_to_ttrpc(
+    res: &[oci::LinuxWeightDevice],
+) -> protobuf::RepeatedField<ttrpcLinuxWeightDevice> {
+    let mut ttrpc_weight_devices = protobuf::RepeatedField::new();
+    for dev in res.iter() {
+        let mut device = ttrpcLinuxWeightDevice::default();
+        device.set_Major(dev.blk.major);
+        device.set_Minor(dev.blk.minor);
+        let weight: u32 = match dev.weight {
+            Some(s) => s.into(),
+            None => 0,
+        };
+        device.set_Weight(weight);
+        let leaf_weight: u32 = match dev.leaf_weight {
+            Some(s) => s.into(),
+            None => 0,
+        };
+        device.set_LeafWeight(leaf_weight);
+        ttrpc_weight_devices.push(device);
+    }
+    ttrpc_weight_devices
+}
+
+fn throttle_devices_oci_to_ttrpc(
+    res: &[oci::LinuxThrottleDevice],
+) -> protobuf::RepeatedField<ttrpcLinuxThrottleDevice> {
+    let mut ttrpc_throttle_devices = protobuf::RepeatedField::new();
+    for dev in res.iter() {
+        let mut device = ttrpcLinuxThrottleDevice::default();
+        device.set_Major(dev.blk.major);
+        device.set_Minor(dev.blk.minor);
+        device.set_Rate(dev.rate);
+        ttrpc_throttle_devices.push(device);
+    }
+    ttrpc_throttle_devices
+}
+
+fn block_io_oci_to_ttrpc(
+    res: &Option<oci::LinuxBlockIo>,
+) -> protobuf::SingularPtrField<ttrpcLinuxBlockIO> {
+    match &res {
+        Some(s) => {
+            let mut b = ttrpcLinuxBlockIO::new();
+            let weight: u32 = match s.weight {
+                Some(s) => s.into(),
+                None => 0,
+            };
+            let leaf_weight: u32 = match s.leaf_weight {
+                Some(s) => s.into(),
+                None => 0,
+            };
+
+            b.set_Weight(weight);
+            b.set_LeafWeight(leaf_weight);
+            b.set_WeightDevice(weight_devices_oci_to_ttrpc(&s.weight_device));
+            b.set_ThrottleReadBpsDevice(throttle_devices_oci_to_ttrpc(&s.throttle_read_bps_device));
+            b.set_ThrottleReadIOPSDevice(throttle_devices_oci_to_ttrpc(
+                &s.throttle_read_iops_device,
+            ));
+            b.set_ThrottleWriteBpsDevice(throttle_devices_oci_to_ttrpc(
+                &s.throttle_write_bps_device,
+            ));
+            b.set_ThrottleWriteIOPSDevice(throttle_devices_oci_to_ttrpc(
+                &s.throttle_write_iops_device,
+            ));
+            protobuf::SingularPtrField::some(b)
+        }
+        None => protobuf::SingularPtrField::none(),
+    }
+}
+
+fn resources_oci_to_ttrpc(res: &oci::LinuxResources) -> ttrpcLinuxResources {
+    let devices = devices_oci_to_ttrpc(&res.devices);
+    let memory = memory_oci_to_ttrpc(&res.memory);
+    let cpu = cpu_oci_to_ttrpc(&res.cpu);
+    let pids = pids_oci_to_ttrpc(&res.pids);
+    let hugepage_limits = hugepage_limits_oci_to_ttrpc(&res.hugepage_limits);
+    let block_io = block_io_oci_to_ttrpc(&res.block_io);
+
+    let network = network_oci_to_ttrpc(&res.network);
+    ttrpcLinuxResources {
+        Devices: devices,
+        Memory: memory,
+        CPU: cpu,
+        Pids: pids,
+        BlockIO: block_io,
+        HugepageLimits: hugepage_limits,
+        Network: network,
+        unknown_fields: protobuf::UnknownFields::new(),
+        cached_size: protobuf::CachedSize::default(),
+    }
+}
+
+fn namespace_oci_to_ttrpc(
+    res: &[oci::LinuxNamespace],
+) -> protobuf::RepeatedField<ttrpcLinuxNamespace> {
+    let mut ttrpc_namespace = protobuf::RepeatedField::new();
+    for n in res.iter() {
+        let mut ns = ttrpcLinuxNamespace::default();
+        ns.set_Path(n.path.clone());
+        ns.set_Type(n.r#type.clone());
+        ttrpc_namespace.push(ns);
+    }
+    ttrpc_namespace
+}
+
+fn linux_devices_oci_to_ttrpc(
+    res: &[oci::LinuxDevice],
+) -> protobuf::RepeatedField<ttrpcLinuxDevice> {
+    let mut ttrpc_linux_devices = protobuf::RepeatedField::new();
+    for n in res.iter() {
+        let mut ld = ttrpcLinuxDevice::default();
+        ld.set_FileMode(n.file_mode.unwrap_or(0));
+        ld.set_GID(n.gid.unwrap_or(0));
+        ld.set_UID(n.uid.unwrap_or(0));
+        ld.set_Major(n.major);
+        ld.set_Minor(n.minor);
+        ld.set_Path(n.path.clone());
+        ld.set_Type(n.r#type.clone());
+        ttrpc_linux_devices.push(ld);
+    }
+    ttrpc_linux_devices
+}
+
+fn seccomp_oci_to_ttrpc(sec: &oci::LinuxSeccomp) -> ttrpcLinuxSeccomp {
+    let mut ttrpc_seccomp = ttrpcLinuxSeccomp::default();
+    let mut ttrpc_arch = protobuf::RepeatedField::new();
+    for a in &sec.architectures {
+        ttrpc_arch.push(std::string::String::from(a));
+    }
+    ttrpc_seccomp.set_Architectures(ttrpc_arch);
+    ttrpc_seccomp.set_DefaultAction(sec.default_action.clone());
+    let mut ttrpc_flags = protobuf::RepeatedField::new();
+    for f in &sec.flags {
+        ttrpc_flags.push(std::string::String::from(f));
+    }
+    ttrpc_seccomp.set_Flags(ttrpc_flags);
+    let mut ttrpc_syscalls = protobuf::RepeatedField::new();
+    for sys in &sec.syscalls {
+        let mut ttrpc_sys = ttrpcLinuxSyscall::default();
+        ttrpc_sys.set_Action(sys.action.clone());
+        let mut ttrpc_args = protobuf::RepeatedField::new();
+        for arg in &sys.args {
+            let mut a = ttrpcLinuxSeccompArg::default();
+            a.set_Index(arg.index as u64);
+            a.set_Op(arg.op.clone());
+            a.set_Value(arg.value);
+            a.set_ValueTwo(arg.value_two);
+            ttrpc_args.push(a);
+        }
+        ttrpc_sys.set_Args(ttrpc_args);
+        ttrpc_syscalls.push(ttrpc_sys);
+    }
+    ttrpc_seccomp.set_Syscalls(ttrpc_syscalls);
+    ttrpc_seccomp
+}
+fn intel_rdt_oci_to_ttrpc(ir: &oci::LinuxIntelRdt) -> ttrpcLinuxIntelRdt {
+    let mut ttrpc_intel_rdt = ttrpcLinuxIntelRdt::default();
+    ttrpc_intel_rdt.set_L3CacheSchema(ir.l3_cache_schema.clone());
+    ttrpc_intel_rdt
+}
+fn linux_oci_to_ttrpc(l: &ociLinux) -> ttrpcLinux {
+    let uid_mappings = idmaps_oci_to_ttrpc(&l.uid_mappings);
+    let gid_mappings = idmaps_oci_to_ttrpc(&l.gid_mappings);
+
+    let ttrpc_linux_resources = match &l.resources {
+        Some(s) => {
+            let b = resources_oci_to_ttrpc(s);
+            protobuf::SingularPtrField::some(b)
+        }
+        None => protobuf::SingularPtrField::none(),
+    };
+
+    let ttrpc_namespaces = namespace_oci_to_ttrpc(&l.namespaces);
+    let ttrpc_linux_devices = linux_devices_oci_to_ttrpc(&l.devices);
+    let ttrpc_seccomp = match &l.seccomp {
+        Some(s) => {
+            let b = seccomp_oci_to_ttrpc(s);
+            protobuf::SingularPtrField::some(b)
+        }
+        None => protobuf::SingularPtrField::none(),
+    };
+
+    let ttrpc_intel_rdt = match &l.intel_rdt {
+        Some(s) => {
+            let b = intel_rdt_oci_to_ttrpc(s);
+            protobuf::SingularPtrField::some(b)
+        }
+        None => protobuf::SingularPtrField::none(),
+    };
+
+    ttrpcLinux {
+        UIDMappings: uid_mappings,
+        GIDMappings: gid_mappings,
+        Sysctl: l.sysctl.clone(),
+        Resources: ttrpc_linux_resources,
+        CgroupsPath: l.cgroups_path.clone(),
+        Namespaces: ttrpc_namespaces,
+        Devices: ttrpc_linux_devices,
+        Seccomp: ttrpc_seccomp,
+        RootfsPropagation: l.rootfs_propagation.clone(),
+        MaskedPaths: protobuf::RepeatedField::from_slice(&l.masked_paths),
+        ReadonlyPaths: protobuf::RepeatedField::from_slice(&l.readonly_paths),
+        MountLabel: l.mount_label.clone(),
+        IntelRdt: ttrpc_intel_rdt,
+        unknown_fields: protobuf::UnknownFields::new(),
+        cached_size: protobuf::CachedSize::default(),
+    }
+}
+
+fn oci_to_ttrpc(bundle_dir: &str, cid: &str, oci: &ociSpec) -> Result<ttrpcSpec> {
     let process = match &oci.process {
-        Some(p) => protobuf::SingularPtrField::some(process_oci_to_grpc(&p)),
+        Some(p) => protobuf::SingularPtrField::some(process_oci_to_ttrpc(&p)),
         None => protobuf::SingularPtrField::none(),
     };
 
     let root = match &oci.root {
         Some(r) => {
-            let grpc_root = root_oci_to_grpc(bundle_dir, &r).map_err(|e| e)?;
+            let ttrpc_root = root_oci_to_ttrpc(bundle_dir, &r).map_err(|e| e)?;
 
-            protobuf::SingularPtrField::some(grpc_root)
+            protobuf::SingularPtrField::some(ttrpc_root)
         }
         None => protobuf::SingularPtrField::none(),
     };
 
     let mut mounts = protobuf::RepeatedField::new();
     for m in &oci.mounts {
-        mounts.push(mount_oci_to_grpc(&m));
+        mounts.push(mount_oci_to_ttrpc(&m));
     }
 
-    // FIXME: Implement Linux OCI spec handling
-    let linux = grpcLinux::new();
+    let linux = match &oci.linux {
+        Some(l) => protobuf::SingularPtrField::some(linux_oci_to_ttrpc(l)),
+        None => protobuf::SingularPtrField::none(),
+    };
 
     if cid.len() < MIN_HOSTNAME_LEN as usize {
         return Err(anyhow!("container ID too short for hostname"));
@@ -390,7 +721,7 @@ fn oci_to_grpc(bundle_dir: &str, cid: &str, oci: &ociSpec) -> Result<grpcSpec> {
     //let hostname = cid[0..MIN_HOSTNAME_LEN as usize].to_string();
     let hostname = "".to_string();
 
-    let grpc_spec = grpcSpec {
+    let ttrpc_spec = ttrpcSpec {
         Version: oci.version.clone(),
         Process: process,
         Root: root,
@@ -398,14 +729,14 @@ fn oci_to_grpc(bundle_dir: &str, cid: &str, oci: &ociSpec) -> Result<grpcSpec> {
         Mounts: mounts,
         Hooks: protobuf::SingularPtrField::none(),
         Annotations: HashMap::new(),
-        Linux: protobuf::SingularPtrField::some(linux),
+        Linux: linux,
         Solaris: protobuf::SingularPtrField::none(),
         Windows: protobuf::SingularPtrField::none(),
         unknown_fields: protobuf::UnknownFields::new(),
         cached_size: protobuf::CachedSize::default(),
     };
 
-    Ok(grpc_spec)
+    Ok(ttrpc_spec)
 }
 
 fn uri_to_filename(uri: &str) -> Result<String> {
@@ -434,7 +765,7 @@ pub fn get_oci_spec_json(cfg: &Config) -> Result<String> {
     spec_file_to_string(spec_file)
 }
 
-pub fn get_grpc_spec(options: &mut Options, cid: &str) -> Result<grpcSpec> {
+pub fn get_ttrpc_spec(options: &mut Options, cid: &str) -> Result<ttrpcSpec> {
     let bundle_dir = get_option("bundle-dir", options, "");
 
     let json_spec = get_option("spec", options, "");
@@ -442,7 +773,7 @@ pub fn get_grpc_spec(options: &mut Options, cid: &str) -> Result<grpcSpec> {
 
     let oci_spec: ociSpec = serde_json::from_str(&json_spec).map_err(|e| anyhow!(e))?;
 
-    Ok(oci_to_grpc(&bundle_dir, cid, &oci_spec)?)
+    Ok(oci_to_ttrpc(&bundle_dir, cid, &oci_spec)?)
 }
 
 pub fn str_to_bytes(s: &str) -> Result<Vec<u8>> {

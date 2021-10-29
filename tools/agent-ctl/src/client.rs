@@ -869,11 +869,11 @@ fn agent_cmd_container_create(
 
     // FIXME: container create: add back "spec=file:///" support
 
-    let grpc_spec = utils::get_grpc_spec(options, &cid).map_err(|e| anyhow!(e))?;
+    let ttrpc_spec = utils::get_ttrpc_spec(options, &cid).map_err(|e| anyhow!(e))?;
 
     req.set_container_id(cid);
     req.set_exec_id(exec_id);
-    req.set_OCI(grpc_spec);
+    req.set_OCI(ttrpc_spec);
 
     debug!(sl!(), "sending request"; "request" => format!("{:?}", req));
 
@@ -928,14 +928,14 @@ fn agent_cmd_container_exec(
     let cid = utils::get_option("cid", options, args);
     let exec_id = utils::get_option("exec_id", options, args);
 
-    let grpc_spec = utils::get_grpc_spec(options, &cid).map_err(|e| anyhow!(e))?;
+    let ttrpc_spec = utils::get_ttrpc_spec(options, &cid).map_err(|e| anyhow!(e))?;
 
     let bundle_dir = options
         .get("bundle-dir")
         .ok_or("BUG: bundle-dir missing")
         .map_err(|e| anyhow!(e))?;
 
-    let process = grpc_spec
+    let process = ttrpc_spec
         .Process
         .into_option()
         .ok_or(format!(
