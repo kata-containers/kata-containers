@@ -149,3 +149,30 @@ jobs:
           tar -cvzf "${tarball}" src/agent/.cargo/config src/agent/vendor
           GITHUB_TOKEN=${{ secrets.GIT_UPLOAD_TOKEN }} hub release edit -m "" -a "${tarball}" "${tag}" 
           popd
+
+  upload-libseccomp-tarball:
+    needs: upload-cargo-vendored-tarball
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: download-and-upload-tarball
+        env:
+          GITHUB_TOKEN: ${{ secrets.GIT_UPLOAD_TOKEN }}
+        run: |
+          pushd $GITHUB_WORKSPACE
+          ./ci/install_yq.sh
+          tag=$(echo $GITHUB_REF | cut -d/ -f3-)
+          versions_yaml="versions.yaml"
+          version=$(yq read ${versions_yaml} "externals.libseccomp.version")
+          repo_url=$(yq read ${versions_yaml} "externals.libseccomp.url")
+          download_url="${repo_url}/releases/download/v${version}"
+          tarball="libseccomp-${version}.tar.gz"
+          asc="${tarball}.asc"
+          curl -sSLO "${download_url}/${tarball}"
+          curl -sSLO "${download_url}/${asc}"
+          # "-m" option should be empty to re-use the existing release title
+          # without opening a text editor.
+          # For the details, check https://hub.github.com/hub-release.1.html.
+          hub release edit -m "" -a "${tarball}" "${tag}"
+          hub release edit -m "" -a "${asc}" "${tag}"
+          popd
