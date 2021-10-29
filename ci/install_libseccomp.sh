@@ -20,6 +20,7 @@ source "${tests_repo_dir}/.ci/lib.sh"
 unset PREFIX DESTDIR
 
 arch=$(uname -m)
+workdir="$(mktemp -d --tmpdir build-libseccomp.XXXXX)"
 
 # Variables for libseccomp
 # Currently, specify the libseccomp version directly without using `versions.yaml`
@@ -58,7 +59,7 @@ die() {
 }
 
 finish() {
-    rm -rf "${libseccomp_tarball}" "libseccomp-${libseccomp_version}" "${gperf_tarball}" "gperf-${gperf_version}"
+    rm -rf "${workdir}"
 }
 
 trap finish EXIT
@@ -98,9 +99,11 @@ main() {
         die "Usage: ${0} <libseccomp-install-dir> <gperf-install-dir>"
     fi
 
+    pushd "$workdir"
     # gperf is required for building the libseccomp.
     build_and_install_gperf
     build_and_install_libseccomp
+    popd
 }
 
 main "$@"
