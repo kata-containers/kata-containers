@@ -53,6 +53,9 @@ get_release_info() {
 	kubernetes_version=$(get_from_kata_deps "externals.kubernetes.version")
 	oci_spec_version=$(get_from_kata_deps "specs.oci.version")
 
+	libseccomp_version=$(get_from_kata_deps "externals.libseccomp.version")
+	libseccomp_url=$(get_from_kata_deps "externals.libseccomp.url")
+
 	#Image information
 	image_info=$(get_from_kata_deps "assets.image")
 
@@ -110,6 +113,19 @@ Kata Containers ${runtime_version} support the OCI Runtime Specification [${oci_
 ## Compatibility with Kubernetes
 Kata Containers ${runtime_version} is compatible with Kubernetes ${kubernetes_version}
 
+## Libseccomp Notices
+The `kata-agent` binaries inside the Kata Containers images provided with this release are
+statically linked with the following [GNU LGPL-2.1][lgpl-2.1] licensed libseccomp library.
+
+* [`libseccomp`][libseccomp]
+
+The `kata-agent` uses the libseccomp v${libseccomp_version} which is not modified from the upstream version.
+However, in order to comply with the LGPL-2.1 (§6(a)), we attach the complete source code for the library.
+
+If you want to use the `kata-agent` which is not statically linked with the library, you can build
+a custom `kata-agent` that does not use the library from sources.
+For the details, please check the [developer guide][custom-agent-doc].
+
 ## Kata Linux Containers image
 Agent version: ${new_release}
 
@@ -136,6 +152,9 @@ More information [Limitations][limitations]
 [kernel-patches]: https://github.com/kata-containers/kata-containers/tree/${new_release}/tools/packaging/kernel/patches
 [kernel-config]: https://github.com/kata-containers/kata-containers/tree/${new_release}/tools/packaging/kernel/configs
 [ocispec]: https://github.com/opencontainers/runtime-spec/releases/tag/${oci_spec_version}
+[libseccomp]: ${libseccomp_url}
+[lgpl-2.1]: https://www.gnu.org/licenses/old-licenses/lgpl-2.1.html
+[custom-agent-doc]: https://github.com/kata-containers/kata-containers/blob/main/docs/Developer-Guide.md#build-a-custom-kata-agent---optional
 [limitations]: https://github.com/kata-containers/kata-containers/blob/${new_release}/docs/Limitations.md
 [installation]: https://github.com/kata-containers/kata-containers/blob/${new_release}/docs/install
 EOT
