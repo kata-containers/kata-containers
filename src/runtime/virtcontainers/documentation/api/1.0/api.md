@@ -626,7 +626,7 @@ type VCSandbox interface {
 ```Go
 // CreateSandbox is the virtcontainers sandbox creation entry point.
 // CreateSandbox creates a sandbox and its containers. It does not start them.
-func CreateSandbox(ctx context.Context, sandboxConfig SandboxConfig) (VCSandbox, error)
+func (impl *VCImpl) CreateSandbox(ctx context.Context, sandboxConfig SandboxConfig) (VCSandbox, error)
 ```
 
 #### `CleanupContainer`
@@ -634,19 +634,19 @@ func CreateSandbox(ctx context.Context, sandboxConfig SandboxConfig) (VCSandbox,
 // CleanupContainer is used by shimv2 to stop and delete a container exclusively, once there is no container
 // in the sandbox left, do stop the sandbox and delete it. Those serial operations will be done exclusively by
 // locking the sandbox.
-func CleanupContainer(ctx context.Context, sandboxID, containerID string, force bool) error
+func (impl *VCImpl) CleanupContainer(ctx context.Context, sandboxID, containerID string, force bool) error
 ```
 
 #### `SetFactory`
 ```Go
 // SetFactory implements the VC function of the same name.
-func SetFactory(ctx context.Context, factory Factory)
+func (impl *VCImpl) SetFactory(ctx context.Context, factory Factory)
 ```
 
 #### `SetLogger`
 ```Go
 // SetLogger implements the VC function of the same name.
-func SetLogger(ctx context.Context, logger *logrus.Entry)
+func (impl *VCImpl) SetLogger(ctx context.Context, logger *logrus.Entry)
 ```
 
 ## Container API
@@ -923,7 +923,7 @@ type VCContainer interface {
 ```Go
 // CreateContainer is the virtcontainers container creation entry point.
 // CreateContainer creates a container on a given sandbox.
-func CreateContainer(ctx context.Context, contConfig ContainerConfig) (VCContainer, error)
+func (s *Sandbox) CreateContainer(ctx context.Context, contConfig ContainerConfig) (VCContainer, error)
 ```
 
 #### `DeleteContainer`
@@ -931,35 +931,35 @@ func CreateContainer(ctx context.Context, contConfig ContainerConfig) (VCContain
 // DeleteContainer is the virtcontainers container deletion entry point.
 // DeleteContainer deletes a Container from a Sandbox. If the container is running,
 // it needs to be stopped first.
-func DeleteContainer(ctx context.Context, containerID string) (VCContainer, error)
+func (s *Sandbox) DeleteContainer(ctx context.Context, containerID string) (VCContainer, error)
 ```
 
 #### `StartContainer`
 ```Go
 // StartContainer is the virtcontainers container starting entry point.
 // StartContainer starts an already created container.
-func StartContainer(ctx context.Context, containerID string) (VCContainer, error)
+func (s *Sandbox) StartContainer(ctx context.Context, containerID string) (VCContainer, error)
 ```
 
 #### `StopContainer`
 ```Go
 // StopContainer is the virtcontainers container stopping entry point.
 // StopContainer stops an already running container.
-func StopContainer(ctx context.Context, containerID string, force bool) (VCContainer, error)
+func (s *Sandbox) StopContainer(ctx context.Context, containerID string, force bool) (VCContainer, error)
 ```
 
 #### `EnterContainer`
 ```Go
 // EnterContainer is the virtcontainers container command execution entry point.
 // EnterContainer enters an already running container and runs a given command.
-func EnterContainer(ctx context.Context, containerID string, cmd types.Cmd) (VCContainer, *Process, error)
+func (s *Sandbox) EnterContainer(ctx context.Context, containerID string, cmd types.Cmd) (VCContainer, *Process, error)
 ```
 
 #### `StatusContainer`
 ```Go
 // StatusContainer is the virtcontainers container status entry point.
 // StatusContainer returns a detailed container status.
-func StatusContainer(containerID string) (ContainerStatus, error)
+func (s *Sandbox) StatusContainer(containerID string) (ContainerStatus, error)
 ```
 
 #### `KillContainer`
@@ -967,56 +967,56 @@ func StatusContainer(containerID string) (ContainerStatus, error)
 // KillContainer is the virtcontainers entry point to send a signal
 // to a container running inside a sandbox. If all is true, all processes in
 // the container will be sent the signal.
-func KillContainer(ctx context.Context, containerID string, signal syscall.Signal, all bool) error
+func (s *Sandbox) KillContainer(ctx context.Context, containerID string, signal syscall.Signal, all bool) error
 ```
 
 #### `StatsContainer`
 ```Go
 // StatsContainer return the stats of a running container
-func StatsContainer(ctx context.Context, containerID string) (ContainerStats, error)
+func (s *Sandbox) StatsContainer(ctx context.Context, containerID string) (ContainerStats, error)
 ```
 
 #### `PauseContainer`
 ```Go
 // PauseContainer pauses a running container.
-func PauseContainer(ctx context.Context, containerID string) error
+func (s *Sandbox) PauseContainer(ctx context.Context, containerID string) error
 ```
 
 #### `ResumeContainer`
 ```Go
 // ResumeContainer resumes a paused container.
-func ResumeContainer(ctx context.Context, containerID string) error
+func (s *Sandbox) ResumeContainer(ctx context.Context, containerID string) error
 ```
 
 #### `UpdateContainer`
 ```Go
 // UpdateContainer update a running container.
-func UpdateContainer(ctx context.Context, containerID string, resources specs.LinuxResources) error
+func (s *Sandbox) UpdateContainer(ctx context.Context, containerID string, resources specs.LinuxResources) error
 ```
 
 #### `WaitProcess`
 ```Go
 // WaitProcess waits on a container process and return its exit code
-func WaitProcess(ctx context.Context, containerID, processID string) (int32, error)
+func (s *Sandbox) WaitProcess(ctx context.Context, containerID, processID string) (int32, error)
 ```
 
 #### `SignalProcess`
 ```Go
 // SignalProcess sends a signal to a process of a container when all is false.
 // When all is true, it sends the signal to all processes of a container.
-func SignalProcess(ctx context.Context, containerID, processID string, signal syscall.Signal, all bool) error
+func (s *Sandbox) SignalProcess(ctx context.Context, containerID, processID string, signal syscall.Signal, all bool) error
 ```
 
 #### `WinsizeProcess`
 ```Go
 // WinsizeProcess resizes the tty window of a process
-func WinsizeProcess(ctx context.Context, containerID, processID string, height, width uint32) error
+func (s *Sandbox) WinsizeProcess(ctx context.Context, containerID, processID string, height, width uint32) error
 ```
 
 #### `IOStream`
 ```Go
 // IOStream returns stdin writer, stdout reader and stderr reader of a process
-func IOStream(containerID, processID string) (io.WriteCloser, io.Reader, io.Reader, error)
+func (s *Sandbox) IOStream(containerID, processID string) (io.WriteCloser, io.Reader, io.Reader, error)
 ```
 
 ## Examples
