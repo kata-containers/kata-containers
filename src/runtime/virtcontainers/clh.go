@@ -269,6 +269,9 @@ func (clh *cloudHypervisor) CreateVM(ctx context.Context, id string, networkNS N
 	} else {
 		// start the guest kernel with 'quiet' in non-debug mode
 		params = append(params, Param{"quiet", ""})
+		// Explicitly set console to 'hvc0' in non-debug mode
+		// It ensures the Linux kernel not pick its own default console, likely 'ttyS0'
+		params = append(params, Param{"console", "hvc0"})
 	}
 
 	// Followed by extra kernel parameters defined in the configuration file
@@ -303,9 +306,11 @@ func (clh *cloudHypervisor) CreateVM(ctx context.Context, id string, networkNS N
 		clh.vmconfig.Serial = chclient.NewConsoleConfig(cctTTY)
 	} else {
 		clh.vmconfig.Serial = chclient.NewConsoleConfig(cctOFF)
+		// Set to the "Null" mode so that the virtio-console device
+		//  is emulated and used by the guest with kernel parameter
+		// "console=hvc0", while redirecting all outpu to "/dev/null".
+		clh.vmconfig.Console = chclient.NewConsoleConfig(cctNULL)
 	}
-
-	clh.vmconfig.Console = chclient.NewConsoleConfig(cctOFF)
 
 	cpu_topology := chclient.NewCpuTopology()
 	cpu_topology.ThreadsPerCore = func(i int32) *int32 { return &i }(1)
@@ -1001,8 +1006,9 @@ func (clh *cloudHypervisor) launchClh() (int, error) {
 //###########################################################################
 
 const (
-	cctOFF string = "Off"
-	cctTTY string = "Tty"
+	cctNULL string = "Null"
+	cctOFF  string = "Off"
+	cctTTY  string = "Tty"
 )
 
 const (
