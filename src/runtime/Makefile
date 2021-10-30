@@ -611,6 +611,9 @@ go-test: $(GENERATED_FILES)
 	go clean -testcache
 	go test -v -mod=vendor ./...
 
+fast-test: $(GENERATED_FILES)
+	for s in $$(go list ./...); do if ! go test -failfast -v -mod=vendor -p 1 $$s; then break; fi; done
+
 coverage:
 	go test -v -mod=vendor -covermode=atomic -coverprofile=coverage.txt ./...
 	go tool cover -html=coverage.txt -o coverage.html
@@ -672,6 +675,7 @@ show-usage: show-header
 	@printf "\n"
 	@printf "\tbuild                      : standard build (build everything).\n"
 	@printf "\ttest                       : run tests.\n"
+	@printf "\tfast-test                  : run tests with failfast option.\n"
 	@printf "\tcheck                      : run code checks.\n"
 	@printf "\tclean                      : remove built files.\n"
 	@printf "\tcontainerd-shim-v2         : only build containerd shim v2.\n"
