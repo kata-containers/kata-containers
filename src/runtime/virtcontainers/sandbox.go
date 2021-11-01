@@ -590,9 +590,11 @@ func (s *Sandbox) createCgroups() error {
 		// CPUSet.
 		// For the sandbox cgroups we create and manage, rename the base of the cgroup path to
 		// include "kata_"
-		cgroupPath, err = cgroups.RenameCgroupPath(cgroupPath)
-		if err != nil {
-			return err
+		if !cgroups.IsSystemdCgroup(cgroupPath) { // don't add prefix when cgroups are managed by systemd
+			cgroupPath, err = cgroups.RenameCgroupPath(cgroupPath)
+			if err != nil {
+				return err
+			}
 		}
 
 		if spec.Linux.Resources != nil {
