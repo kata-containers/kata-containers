@@ -242,22 +242,6 @@ func evalMountPath(source, destination string) (string, string, error) {
 	return absSource, destination, nil
 }
 
-// moveMount moves a mountpoint to another path with some bookkeeping:
-// * evaluate all symlinks
-// * ensure the source exists
-// * recursively create the destination
-func moveMount(ctx context.Context, source, destination string) error {
-	span, _ := katatrace.Trace(ctx, nil, "moveMount", mountTracingTags)
-	defer span.End()
-
-	source, destination, err := evalMountPath(source, destination)
-	if err != nil {
-		return err
-	}
-
-	return syscall.Mount(source, destination, "move", syscall.MS_MOVE, "")
-}
-
 // bindMount bind mounts a source in to a destination. This will
 // do some bookkeeping:
 // * evaluate all symlinks
