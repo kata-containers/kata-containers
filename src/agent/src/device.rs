@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use libc::{c_uint, major, minor};
 use nix::sys::stat;
 use regex::Regex;
 use std::collections::HashMap;
@@ -450,9 +449,6 @@ fn update_spec_device(
     vm_path: &str,
     final_path: &str,
 ) -> Result<()> {
-    let major_id: c_uint;
-    let minor_id: c_uint;
-
     // If no container_path is provided, we won't be able to match and
     // update the device in the OCI spec device list. This is an error.
     if host_path.is_empty() {
@@ -470,10 +466,8 @@ fn update_spec_device(
 
     let meta = fs::metadata(vm_path)?;
     let dev_id = meta.rdev();
-    unsafe {
-        major_id = major(dev_id);
-        minor_id = minor(dev_id);
-    }
+    let major_id = stat::major(dev_id);
+    let minor_id = stat::minor(dev_id);
 
     info!(
         sl!(),
