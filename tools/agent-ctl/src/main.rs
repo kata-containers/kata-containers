@@ -6,6 +6,7 @@
 #[macro_use]
 extern crate lazy_static;
 
+use crate::types::Config;
 use anyhow::{anyhow, Result};
 use clap::{crate_name, crate_version, App, Arg, SubCommand};
 use std::io;
@@ -39,6 +40,9 @@ const WARNING_TEXT: &str = r#"WARNING:
     irrevocably other parts of the system or even kill a running container or
     sandbox."#;
 
+// The VSOCK port number the Kata agent uses to listen to API requests on.
+const DEFAULT_KATA_AGENT_API_VSOCK_PORT: &str = "1024";
+
 fn make_examples_text(program_name: &str) -> String {
     let abstract_server_address = "unix://@/foo/bar/abstract.socket";
     let bundle = "$bundle_dir";
@@ -47,6 +51,7 @@ fn make_examples_text(program_name: &str) -> String {
     let local_server_address = "unix:///tmp/local.socket";
     let sandbox_id = "$sandbox_id";
     let vsock_server_address = "vsock://3:1024";
+    let hybrid_vsock_server_address = "unix:///run/vc/vm/foo/clh.sock";
 
     format!(
         r#"EXAMPLES:
@@ -54,6 +59,10 @@ fn make_examples_text(program_name: &str) -> String {
 - Check if the agent is running:
 
   $ {program} connect --server-address "{vsock_server_address}" --cmd Check
+
+- Connect to the agent using a Hybrid VSOCK hypervisor (here Cloud Hypervisor):
+
+  $ {program} connect --server-address "{hybrid_vsock_server_address}" --hybrid-vsock --cmd Check
 
 - Connect to the agent using local sockets (when running in same environment as the agent):
 
@@ -109,6 +118,7 @@ fn make_examples_text(program_name: &str) -> String {
         program = program_name,
         sandbox_id = sandbox_id,
         vsock_server_address = vsock_server_address,
+        hybrid_vsock_server_address = hybrid_vsock_server_address,
     )
 }
 
@@ -124,7 +134,8 @@ fn connect(name: &str, global_args: clap::ArgMatches) -> Result<()> {
     let server_address = args
         .value_of("server-address")
         .ok_or("need server adddress".to_string())
-        .map_err(|e| anyhow!(e))?;
+        .map_err(|e| anyhow!(e))?
+        .to_string();
 
     let mut commands: Vec<&str> = Vec::new();
 
@@ -149,17 +160,28 @@ fn connect(name: &str, global_args: clap::ArgMatches) -> Result<()> {
         None => 0,
     };
 
-    let bundle_dir = args.value_of("bundle-dir").unwrap_or("");
+    let hybrid_vsock_port: u64 = args
+        .value_of("hybrid-vsock-port")
+        .ok_or("Need Hybrid VSOCK port number")
+        .map(|p| p.parse::<u64>().unwrap())
+        .map_err(|e| anyhow!("VSOCK port number must be an integer: {:?}", e))?;
 
-    let result = rpc::run(
-        &logger,
+    let bundle_dir = args.value_of("bundle-dir").unwrap_or("").to_string();
+
+    let hybrid_vsock = args.is_present("hybrid-vsock");
+
+    let cfg = Config {
         server_address,
         bundle_dir,
         interactive,
         ignore_errors,
         timeout_nano,
-        commands,
-    );
+        hybrid_vsock_port,
+        hybrid_vsock,
+    };
+
+    let result = rpc::run(&logger, &cfg, commands);
+
     if result.is_err() {
         return result;
     }
@@ -169,6 +191,11 @@ fn connect(name: &str, global_args: clap::ArgMatches) -> Result<()> {
 
 fn real_main() -> Result<()> {
     let name = crate_name!();
+
+    let hybrid_vsock_port_help = format!(
+        "Kata agent VSOCK port number (only useful with --hybrid-vsock) [default: {}]",
+        DEFAULT_KATA_AGENT_API_VSOCK_PORT
+    );
 
     let app = App::new(name)
         .version(crate_version!())
@@ -208,6 +235,19 @@ fn real_main() -> Result<()> {
                     Arg::with_name("ignore-errors")
                     .long("ignore-errors")
                     .help("Don't exit on first error"),
+                    )
+                .arg(
+                    Arg::with_name("hybrid-vsock")
+                    .long("hybrid-vsock")
+                    .help("Treat a unix:// server address as a Hybrid VSOCK one"),
+                    )
+                .arg(
+                    Arg::with_name("hybrid-vsock-port")
+                    .long("hybrid-vsock-port")
+                    .help(&hybrid_vsock_port_help)
+                    .default_value(DEFAULT_KATA_AGENT_API_VSOCK_PORT)
+                    .takes_value(true)
+                    .value_name("PORT")
                     )
                 .arg(
                     Arg::with_name("interactive")

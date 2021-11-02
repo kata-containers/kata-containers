@@ -45,7 +45,7 @@ the agent protocol and the client and server implementations.
 | Agent Control (client) API calls | [`src/client.rs`](src/client.rs) | `agent_cmd_container_create()` | Agent Control tool function that calls the `CreateContainer` API. |
 | Agent (server) API implementations | [`rpc.rs`](../../src/agent/src/rpc.rs) | `create_container()` | Server function that implements the `CreateContainers` API. |
 
-## Running the tool
+## Run the tool
 
 ### Prerequisites
 
@@ -62,22 +62,31 @@ $ sudo docker export $(sudo docker create "$image") | tar -C "$rootfs_dir" -xvf 
 
 ### Connect to a real Kata Container
 
+The method used to connect to Kata Containers agent depends on the configured
+hypervisor. Although by default the Kata Containers agent listens for API calls on a
+VSOCK socket, the way that socket is exposed to the host depends on the
+hypervisor.
+
+#### QEMU
+
+Since QEMU supports VSOCK sockets in the standard way, it is only necessary to
+establish the VSOCK guest CID value to connect to the agent.
+
 1. Start a Kata Container
 
 1. Establish the VSOCK guest CID number for the virtual machine:
 
-   Assuming you are running a single QEMU based Kata Container, you can look
-   at the program arguments to find the (randomly-generated) `guest-cid=` option
-   value:
-
    ```sh
-   $ guest_cid=$(ps -ef | grep qemu-system-x86_64 | egrep -o "guest-cid=[0-9]*" | cut -d= -f2)
+   $ guest_cid=$(sudo ss -H --vsock | awk '{print $6}' | cut -d: -f1)
    ```
 
 1. Run the tool to connect to the agent:
 
    ```sh
-   $ cargo run -- -l debug connect --bundle-dir "${bundle_dir}" --server-address "vsock://${guest_cid}:1024" -c Check -c GetGuestDetails
+   # Default VSOCK port the agent listens on
+   $ agent_vsock_port=1024
+
+   $ cargo run -- -l debug connect --bundle-dir "${bundle_dir}" --server-address "vsock://${guest_cid}:${agent_vsock_port}" -c Check -c GetGuestDetails
    ```
 
    This examples makes two API calls:
@@ -85,6 +94,75 @@ $ sudo docker export $(sudo docker create "$image") | tar -C "$rootfs_dir" -xvf 
    - It runs `Check` to see if the agent's RPC server is serving.
    - It then runs `GetGuestDetails` to establish some details of the
      environment the agent is running in.
+
+#### Cloud Hypervisor and Firecracker
+
+Cloud Hypervisor and Firecracker both use "hybrid VSOCK" which uses a local
+UNIX socket rather than the host kernel to handle communication with the
+guest. As such, you need to specify the path to the UNIX socket.
+
+Since the UNIX socket path is sandbox-specific, you need to run the
+`kata-runtime env` command to determine the socket's "template path". This
+path includes a `{ID}` tag that represents the real sandbox ID or name.
+
+Further, since the socket path is below the sandbox directory and since that
+directory is `root` owned, it is necessary to run the tool as `root` when
+using a Hybrid VSOCKS hypervisor.
+
+##### Determine socket path template value
+
+###### Configured hypervisor is Cloud Hypervisor
+
+```bash
+$ socket_path_template=$(sudo kata-runtime env --json | jq '.Hypervisor.SocketPath')
+$ echo "$socket_path_template"
+"/run/vc/vm/{ID}/clh.sock"
+```
+
+###### Configured hypervisor is Firecracker
+
+```bash
+$ socket_path_template=$(sudo kata-runtime env --json | jq '.Hypervisor.SocketPath')
+$ echo "$socket_path_template"
+"/run/vc/firecracker/{ID}/root/kata.hvsock"
+```
+
+> **Note:**
+>
+> Do not rely on the paths shown above: you should run the command yourself
+> as these paths _may_ change.
+
+Once you have determined the template path, build and install the tool to make
+it easier to run as the `root` user.
+
+##### Build and install
+
+```bash
+# Install for user
+$ make install
+
+# Install centrally
+$ sudo install -o root -g root -m 0755 ~/.cargo/bin/kata-agent-ctl /usr/local/bin
+```
+
+1. Start a Kata Container
+
+   Create a container called `foo`.
+
+1. Run the tool
+
+   ```bash
+   # Name of container
+   $ sandbox_id="foo"
+
+   # Create actual socket path
+   $ socket_path=$(echo "$socket_path_template" | sed "s/{ID}/${sandbox_id}/g" | tr -d '"')
+
+   $ sudo kata-agent-ctl -l debug connect --bundle-dir "${bundle_dir}" --server-address "unix://${socket_path}" --hybrid-vsock -c Check -c GetGuestDetails
+   ```
+
+   > **Note:** The `socket_path_template` variable was set in the
+   > [Determine socket path template value](#determine-socket-path-template-value) section.
 
 ### Run the tool and the agent in the same environment
 
@@ -99,6 +177,8 @@ $ sudo docker export $(sudo docker create "$image") | tar -C "$rootfs_dir" -xvf 
    ```sh
    $ sudo KATA_AGENT_SERVER_ADDR=unix:///tmp/foo.socket target/x86_64-unknown-linux-musl/release/kata-agent
    ```
+
+   > **Note:** This example assumes an Intel x86-64 system.
 
 1. Run the tool in the same environment:
 

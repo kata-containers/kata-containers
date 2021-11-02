@@ -14,6 +14,8 @@ pub struct Config {
     pub server_address: String,
     pub bundle_dir: String,
     pub timeout_nano: i64,
+    pub hybrid_vsock_port: u64,
     pub interactive: bool,
+    pub hybrid_vsock: bool,
     pub ignore_errors: bool,
 }

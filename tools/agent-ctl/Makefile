@@ -19,6 +19,7 @@ vendor:
 test:
 
 install:
+	@RUSTFLAGS="$(EXTRA_RUSTFLAGS) --deny warnings" cargo install --target $(TRIPLE) --path .
 
 check:
 
