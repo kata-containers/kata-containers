@@ -24,6 +24,16 @@ use tokio::io::{split, ReadHalf, WriteHalf};
 use tokio::sync::Mutex;
 use tokio::sync::Notify;
 
+macro_rules! close_process_stream {
+    ($self: ident, $stream:ident, $stream_type: ident) => {
+        if $self.$stream.is_some() {
+            $self.close_stream(StreamType::$stream_type);
+            let _ = unistd::close($self.$stream.unwrap());
+            $self.$stream = None;
+        }
+    };
+}
+
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub enum StreamType {
     Stdin,
@@ -145,6 +155,22 @@ impl Process {
     pub fn notify_term_close(&mut self) {
         let notify = self.term_exit_notifier.clone();
         notify.notify_one();
+    }
+
+    pub fn close_stdin(&mut self) {
+        close_process_stream!(self, term_master, TermMaster);
+        close_process_stream!(self, parent_stdin, ParentStdin);
+
+        self.notify_term_close();
+    }
+
+    pub fn cleanup_process_stream(&mut self) {
+        close_process_stream!(self, parent_stdin, ParentStdin);
+        close_process_stream!(self, parent_stdout, ParentStdout);
+        close_process_stream!(self, parent_stderr, ParentStderr);
+        close_process_stream!(self, term_master, TermMaster);
+
+        self.notify_term_close();
     }
 
     fn get_fd(&self, stream_type: &StreamType) -> Option<RawFd> {
