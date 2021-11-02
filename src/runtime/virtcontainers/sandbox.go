@@ -654,7 +654,7 @@ func (s *Sandbox) createCgroups() error {
 	// Depending on the SandboxCgroupOnly value, this cgroup
 	// will either hold all the pod threads (SandboxCgroupOnly is true)
 	// or only the virtual CPU ones (SandboxCgroupOnly is false).
-	s.sandboxCgroup, err = cgroups.NewSandboxCgroup(cgroupPath, &resources)
+	s.sandboxCgroup, err = cgroups.NewSandboxCgroup(cgroupPath, &resources, s.config.SandboxCgroupOnly)
 	if err != nil {
 		return fmt.Errorf("Could not create the sandbox cgroup %v", err)
 	}
@@ -671,6 +671,8 @@ func (s *Sandbox) createCgroups() error {
 		// We're creating an overhead cgroup, with no constraints. Everything but
 		// the vCPU threads will eventually make it there.
 		overheadCgroup, err := cgroups.NewCgroup(fmt.Sprintf("/%s/%s", cgroupKataOverheadPath, s.id), &specs.LinuxResources{})
+		// TODO: support systemd cgroups overhead cgroup
+		// https://github.com/kata-containers/kata-containers/issues/2963
 		if err != nil {
 			return err
 		}
