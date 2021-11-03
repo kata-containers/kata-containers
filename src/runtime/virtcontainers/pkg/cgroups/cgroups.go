@@ -53,9 +53,10 @@ func sandboxDevices() []specs.LinuxDeviceCgroup {
 	// In order to run Virtual Machines and create virtqueues, hypervisors
 	// need access to certain character devices in the host, like kvm and vhost-net.
 	hypervisorDevices := []string{
-		"/dev/kvm",       // To run virtual machines
-		"/dev/vhost-net", // To create virtqueues
-		"/dev/vfio/vfio", // To access VFIO devices
+		"/dev/kvm",         // To run virtual machines
+		"/dev/vhost-net",   // To create virtqueues
+		"/dev/vfio/vfio",   // To access VFIO devices
+		"/dev/vhost-vsock", // To interact with vsock if
 	}
 
 	defaultDevices = append(defaultDevices, hypervisorDevices...)
