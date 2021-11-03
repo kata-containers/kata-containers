@@ -6,6 +6,9 @@ metadata:
 spec:
   template:
     spec:
+      containers:
+      - name: kube-kata
+        command: [ "bash", "-c", "/opt/kata-artifacts/scripts/kata-deploy.sh install; cp /etc/containerd/config.toml /etc/containerd/config.toml.tmpl" ]
       volumes:
         - name: containerd-conf
           hostPath:
