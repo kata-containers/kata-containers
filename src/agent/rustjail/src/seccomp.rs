@@ -68,7 +68,14 @@ pub fn init_seccomp(scmp: &LinuxSeccomp) -> Result<()> {
         }
 
         for name in &syscall.names {
-            let syscall_num = get_syscall_from_name(name, None)?;
+            let syscall_num = match get_syscall_from_name(name, None) {
+                Ok(num) => num,
+                Err(_) => {
+                    // If we cannot resolve the given system call, we assume it is not supported
+                    // by the kernel. Hence, we skip it without generating an error.
+                    continue;
+                }
+            };
 
             if syscall.args.is_empty() {
                 filter.add_rule(action, syscall_num, None)?;
