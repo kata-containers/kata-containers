@@ -433,7 +433,7 @@ impl AgentService {
             .get_container(&cid)
             .ok_or_else(|| anyhow!("Invalid container id"))?;
 
-        let mut p = match ctr.processes.get_mut(&pid) {
+        let p = match ctr.processes.get_mut(&pid) {
             Some(p) => p,
             None => {
                 // Lost race, pick up exit code from channel
@@ -444,7 +444,7 @@ impl AgentService {
 
         // need to close all fd
         // ignore errors for some fd might be closed by stream
-        let _ = cleanup_process(&mut p);
+        p.cleanup_process_stream();
 
         resp.status = p.exit_code;
         // broadcast exit code to all parallel watchers
@@ -776,19 +776,7 @@ impl protocols::agent_ttrpc::AgentService for AgentService {
             )
         })?;
 
-        if p.term_master.is_some() {
-            p.close_stream(StreamType::TermMaster);
-            let _ = unistd::close(p.term_master.unwrap());
-            p.term_master = None;
-        }
-
-        if p.parent_stdin.is_some() {
-            p.close_stream(StreamType::ParentStdin);
-            let _ = unistd::close(p.parent_stdin.unwrap());
-            p.parent_stdin = None;
-        }
-
-        p.notify_term_close();
+        p.close_stdin();
 
         Ok(Empty::new())
     }
@@ -1661,48 +1649,12 @@ fn setup_bundle(cid: &str, spec: &mut Spec) -> Result<PathBuf> {
         readonly: spec_root.readonly,
     });
 
-    info!(
-        sl!(),
-        "{:?}",
-        spec.process.as_ref().unwrap().console_size.as_ref()
-    );
     let _ = spec.save(config_path.to_str().unwrap());
 
     let olddir = unistd::getcwd().context("cannot getcwd")?;
     unistd::chdir(bundle_path.to_str().unwrap())?;
 
     Ok(olddir)
-}
-
-fn cleanup_process(p: &mut Process) -> Result<()> {
-    if p.parent_stdin.is_some() {
-        p.close_stream(StreamType::ParentStdin);
-        unistd::close(p.parent_stdin.unwrap())?;
-    }
-
-    if p.parent_stdout.is_some() {
-        p.close_stream(StreamType::ParentStdout);
-        unistd::close(p.parent_stdout.unwrap())?;
-    }
-
-    if p.parent_stderr.is_some() {
-        p.close_stream(StreamType::ParentStderr);
-        unistd::close(p.parent_stderr.unwrap())?;
-    }
-
-    if p.term_master.is_some() {
-        p.close_stream(StreamType::TermMaster);
-        unistd::close(p.term_master.unwrap())?;
-    }
-
-    p.notify_term_close();
-
-    p.parent_stdin = None;
-    p.parent_stdout = None;
-    p.parent_stderr = None;
-    p.term_master = None;
-
-    Ok(())
 }
 
 fn load_kernel_module(module: &protocols::agent::KernelModule) -> Result<()> {
