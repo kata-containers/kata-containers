@@ -143,3 +143,5 @@ ifeq ($(ARCH), aarch64)
 endif
 
 TRIPLE = $(ARCH)-unknown-linux-$(LIBC)
+
+CWD := $(shell dirname $(realpath $(firstword $(MAKEFILE_LIST))))
