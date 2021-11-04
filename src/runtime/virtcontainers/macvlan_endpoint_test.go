@@ -12,10 +12,10 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestCreateBridgedMacvlanEndpoint(t *testing.T) {
+func TestCreateMacvlanEndpoint(t *testing.T) {
 	macAddr := net.HardwareAddr{0x02, 0x00, 0xCA, 0xFE, 0x00, 0x04}
 
-	expected := &BridgedMacvlanEndpoint{
+	expected := &MacvlanEndpoint{
 		NetPair: NetworkInterfacePair{
 			TapInterface: TapInterface{
 				ID:   "uniqueTestID-4",
@@ -30,10 +30,10 @@ func TestCreateBridgedMacvlanEndpoint(t *testing.T) {
 			},
 			NetInterworkingModel: DefaultNetInterworkingModel,
 		},
-		EndpointType: BridgedMacvlanEndpointType,
+		EndpointType: MacvlanEndpointType,
 	}
 
-	result, err := createBridgedMacvlanNetworkEndpoint(4, "", DefaultNetInterworkingModel)
+	result, err := createMacvlanNetworkEndpoint(4, "", DefaultNetInterworkingModel)
 	assert.NoError(t, err)
 
 	// the resulting ID  will be random - so let's overwrite to test the rest of the flow

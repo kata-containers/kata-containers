@@ -571,7 +571,7 @@ func networkModelToQemuType(model NetInterworkingModel) govmmQemu.NetDeviceType 
 func genericNetwork(endpoint Endpoint, vhost, nestedRun bool, index int) (govmmQemu.NetDevice, error) {
 	var d govmmQemu.NetDevice
 	switch ep := endpoint.(type) {
-	case *VethEndpoint, *BridgedMacvlanEndpoint, *IPVlanEndpoint:
+	case *VethEndpoint, *MacvlanEndpoint, *IPVlanEndpoint:
 		netPair := ep.NetworkPair()
 		d = govmmQemu.NetDevice{
 			Type:          networkModelToQemuType(netPair.NetInterworkingModel),
