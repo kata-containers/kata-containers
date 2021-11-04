@@ -511,8 +511,8 @@ fn update_spec_device(
         Ok(())
     } else {
         Err(anyhow!(
-            "Should have found a matching device {} in the spec",
-            vm_path
+            "Should have found a device {} in the spec",
+            host_path
         ))
     }
 }
