@@ -52,15 +52,6 @@ pub const DRIVER_VFIO_GK_TYPE: &str = "vfio-gk";
 // container as a VFIO device node
 pub const DRIVER_VFIO_TYPE: &str = "vfio";
 
-#[derive(Debug)]
-struct DevIndexEntry {
-    idx: usize,
-    residx: Vec<usize>,
-}
-
-#[derive(Debug)]
-struct DevIndex(HashMap<String, DevIndexEntry>);
-
 #[instrument]
 pub fn online_device(path: &str) -> Result<()> {
     fs::write(path, "1")?;
@@ -509,22 +500,33 @@ impl<T: Into<DevUpdate>> From<T> for SpecUpdate {
 //     container_path: the path to the device in the original OCI spec
 //     update: information on changes to make to the device
 #[instrument]
-fn update_spec_devices(
-    spec: &mut Spec,
-    devidx: &DevIndex,
-    updates: HashMap<&str, DevUpdate>,
-) -> Result<()> {
+fn update_spec_devices(spec: &mut Spec, updates: HashMap<&str, DevUpdate>) -> Result<()> {
+    let linux = spec
+        .linux
+        .as_mut()
+        .ok_or_else(|| anyhow!("Spec didn't contain linux field"))?;
+
+    let mut devidx = HashMap::<String, (usize, Vec<usize>)>::new();
+
+    for (i, d) in linux.devices.iter().enumerate() {
+        let mut residx = Vec::new();
+
+        if let Some(linuxres) = linux.resources.as_ref() {
+            for (j, r) in linuxres.devices.iter().enumerate() {
+                if r.r#type == d.r#type && r.major == Some(d.major) && r.minor == Some(d.minor) {
+                    residx.push(j);
+                }
+            }
+        }
+        devidx.insert(d.path.clone(), (i, residx));
+    }
+
     for (container_path, update) in updates {
         // If no container_path is provided, we won't be able to match and
         // update the device in the OCI spec device list. This is an error.
         if container_path.is_empty() {
             return Err(anyhow!("Container path cannot be empty for device"));
         }
-
-        let linux = spec
-            .linux
-            .as_mut()
-            .ok_or_else(|| anyhow!("Spec didn't container linux field"))?;
 
         info!(
             sl!(),
@@ -534,8 +536,8 @@ fn update_spec_devices(
             "guest_minor" => update.num.guest_minor,
         );
 
-        if let Some(idxdata) = devidx.0.get(container_path) {
-            let dev = &mut linux.devices[idxdata.idx];
+        if let Some(idxdata) = devidx.get(container_path) {
+            let dev = &mut linux.devices[idxdata.0];
             let host_major = dev.major;
             let host_minor = dev.minor;
 
@@ -558,7 +560,7 @@ fn update_spec_devices(
 
             // Resources must be updated since they are used to identify
             // the device in the devices cgroup.
-            for ridx in &idxdata.residx {
+            for ridx in &idxdata.1 {
                 // unwrap is safe, because residx would be empty if there
                 // were no resources
                 let res = &mut linux.resources.as_mut().unwrap().devices[*ridx];
@@ -711,31 +713,6 @@ async fn vfio_device_handler(device: &Device, sandbox: &Arc<Mutex<Sandbox>>) -> 
     })
 }
 
-impl DevIndex {
-    fn new(spec: &Spec) -> DevIndex {
-        let mut map = HashMap::new();
-
-        if let Some(linux) = spec.linux.as_ref() {
-            for (i, d) in linux.devices.iter().enumerate() {
-                let mut residx = Vec::new();
-
-                if let Some(linuxres) = linux.resources.as_ref() {
-                    for (j, r) in linuxres.devices.iter().enumerate() {
-                        if r.r#type == d.r#type
-                            && r.major == Some(d.major)
-                            && r.minor == Some(d.minor)
-                        {
-                            residx.push(j);
-                        }
-                    }
-                }
-                map.insert(d.path.clone(), DevIndexEntry { idx: i, residx });
-            }
-        }
-        DevIndex(map)
-    }
-}
-
 #[instrument]
 pub async fn add_devices(
     devices: &[Device],
@@ -759,8 +736,7 @@ pub async fn add_devices(
         }
     }
 
-    let devidx = DevIndex::new(spec);
-    update_spec_devices(spec, &devidx, dev_updates)
+    update_spec_devices(spec, dev_updates)
 }
 
 #[instrument]
@@ -864,10 +840,8 @@ mod tests {
         // container_path empty
         let container_path = "";
         let vm_path = "/dev/null";
-        let devidx = DevIndex::new(&spec);
         let res = update_spec_devices(
             &mut spec,
-            &devidx,
             HashMap::from_iter(vec![(
                 container_path,
                 DevNumUpdate::from_vm_path(vm_path).unwrap().into(),
@@ -877,10 +851,8 @@ mod tests {
 
         // linux is empty
         let container_path = "/dev/null";
-        let devidx = DevIndex::new(&spec);
         let res = update_spec_devices(
             &mut spec,
-            &devidx,
             HashMap::from_iter(vec![(
                 container_path,
                 DevNumUpdate::from_vm_path(vm_path).unwrap().into(),
@@ -891,10 +863,8 @@ mod tests {
         spec.linux = Some(Linux::default());
 
         // linux.devices is empty
-        let devidx = DevIndex::new(&spec);
         let res = update_spec_devices(
             &mut spec,
-            &devidx,
             HashMap::from_iter(vec![(
                 container_path,
                 DevNumUpdate::from_vm_path(vm_path).unwrap().into(),
@@ -910,10 +880,8 @@ mod tests {
         }];
 
         // guest and host path are not the same
-        let devidx = DevIndex::new(&spec);
         let res = update_spec_devices(
             &mut spec,
-            &devidx,
             HashMap::from_iter(vec![(
                 container_path,
                 DevNumUpdate::from_vm_path(vm_path).unwrap().into(),
@@ -930,10 +898,8 @@ mod tests {
         spec.linux.as_mut().unwrap().devices[0].path = container_path.to_string();
 
         // spec.linux.resources is empty
-        let devidx = DevIndex::new(&spec);
         let res = update_spec_devices(
             &mut spec,
-            &devidx,
             HashMap::from_iter(vec![(
                 container_path,
                 DevNumUpdate::from_vm_path(vm_path).unwrap().into(),
@@ -958,10 +924,8 @@ mod tests {
             ..oci::LinuxResources::default()
         });
 
-        let devidx = DevIndex::new(&spec);
         let res = update_spec_devices(
             &mut spec,
-            &devidx,
             HashMap::from_iter(vec![(
                 container_path,
                 DevNumUpdate::from_vm_path(vm_path).unwrap().into(),
@@ -1020,7 +984,6 @@ mod tests {
             }),
             ..Spec::default()
         };
-        let devidx = DevIndex::new(&spec);
 
         let container_path_a = "/dev/a";
         let vm_path_a = "/dev/zero";
@@ -1056,7 +1019,7 @@ mod tests {
                 DevNumUpdate::from_vm_path(vm_path_b).unwrap().into(),
             ),
         ]);
-        let res = update_spec_devices(&mut spec, &devidx, updates);
+        let res = update_spec_devices(&mut spec, updates);
         assert!(res.is_ok());
 
         let specdevices = &spec.linux.as_ref().unwrap().devices;
@@ -1120,7 +1083,6 @@ mod tests {
             }),
             ..Spec::default()
         };
-        let devidx = DevIndex::new(&spec);
 
         let container_path = "/dev/char";
         let vm_path = "/dev/null";
@@ -1133,7 +1095,6 @@ mod tests {
 
         let res = update_spec_devices(
             &mut spec,
-            &devidx,
             HashMap::from_iter(vec![(
                 container_path,
                 DevNumUpdate::from_vm_path(vm_path).unwrap().into(),
@@ -1172,14 +1133,12 @@ mod tests {
             }),
             ..Spec::default()
         };
-        let devidx = DevIndex::new(&spec);
 
         let vm_path = "/dev/null";
         let final_path = "/dev/new";
 
         let res = update_spec_devices(
             &mut spec,
-            &devidx,
             HashMap::from_iter(vec![(
                 container_path,
                 DevUpdate::from_vm_path(vm_path, final_path.to_string()).unwrap(),
