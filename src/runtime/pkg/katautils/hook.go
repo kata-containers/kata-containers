@@ -35,8 +35,7 @@ func hookLogger() *logrus.Entry {
 func runHook(ctx context.Context, hook specs.Hook, cid, bundlePath string) error {
 	span, _ := katatrace.Trace(ctx, hookLogger(), "runHook", hookTracingTags)
 	defer span.End()
-	katatrace.AddTag(span, "path", hook.Path)
-	katatrace.AddTag(span, "args", hook.Args)
+	katatrace.AddTags(span, "path", hook.Path, "args", hook.Args)
 
 	state := specs.State{
 		Pid:    syscall.Gettid(),
@@ -93,7 +92,7 @@ func runHook(ctx context.Context, hook specs.Hook, cid, bundlePath string) error
 
 func runHooks(ctx context.Context, hooks []specs.Hook, cid, bundlePath, hookType string) error {
 	span, ctx := katatrace.Trace(ctx, hookLogger(), "runHooks", hookTracingTags)
-	katatrace.AddTag(span, "type", hookType)
+	katatrace.AddTags(span, "type", hookType)
 	defer span.End()
 
 	for _, hook := range hooks {
