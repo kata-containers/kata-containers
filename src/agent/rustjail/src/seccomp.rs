@@ -95,7 +95,7 @@ pub fn init_seccomp(scmp: &LinuxSeccomp) -> Result<()> {
 mod tests {
     use super::*;
     use crate::skip_if_not_root;
-    use libc::{dup2, process_vm_readv, EPERM};
+    use libc::{dup3, process_vm_readv, EPERM, O_CLOEXEC};
     use std::io::Error;
     use std::ptr::null;
 
@@ -135,7 +135,7 @@ mod tests {
             "syscalls": [
                 {
                    "names": [
-                        "dup2"
+                        "dup3"
                     ],
                     "action": "SCMP_ACT_ERRNO"
                 },
@@ -212,7 +212,7 @@ mod tests {
         init_seccomp(&scmp).unwrap();
 
         // Basic syscall with simple rule
-        syscall_assert!(unsafe { dup2(0, 1) }, -EPERM);
+        syscall_assert!(unsafe { dup3(0, 1, O_CLOEXEC) }, -EPERM);
 
         // Syscall with permitted arguments
         syscall_assert!(unsafe { process_vm_readv(1, null(), 0, null(), 0, 0) }, 0);
