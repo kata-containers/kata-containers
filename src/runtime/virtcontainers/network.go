@@ -186,6 +186,189 @@ func networkLogger() *logrus.Entry {
 	return virtLog.WithField("subsystem", "network")
 }
 
+// Network represents a sandbox networking setup.
+type Network struct {
+	NetNSPath         string
+	InterworkingModel NetInterworkingModel
+	NetNSCreated      bool
+
+	Endpoints []Endpoint
+	NetmonPID int
+}
+
+func NewNetwork(config *NetworkConfig) (*Network, error) {
+	if config == nil {
+		return nil, fmt.Errorf("Missing network configuration")
+	}
+
+	return &Network{
+		config.NetNSPath,
+		config.InterworkingModel,
+		config.NetNsCreated,
+		[]Endpoint{},
+		0,
+	}, nil
+}
+
+var networkTrace = getNetworkTrace("")
+
+func (n *Network) trace(ctx context.Context, name string) (otelTrace.Span, context.Context) {
+	return networkTrace(ctx, name, nil)
+}
+
+func getNetworkTrace(networkType EndpointType) func(ctx context.Context, name string, endpoint interface{}) (otelTrace.Span, context.Context) {
+	return func(ctx context.Context, name string, endpoint interface{}) (otelTrace.Span, context.Context) {
+		span, ctx := katatrace.Trace(ctx, networkLogger(), name, networkTracingTags)
+		if networkType != "" {
+			katatrace.AddTags(span, "type", string(networkType))
+		}
+		if endpoint != nil {
+			katatrace.AddTags(span, "endpoint", endpoint)
+		}
+		return span, ctx
+	}
+}
+
+func closeSpan(span otelTrace.Span, err error) {
+	if err != nil {
+		katatrace.AddTags(span, "error", err.Error())
+	}
+	span.End()
+}
+
+// Run runs a callback in the specified network namespace.
+func (n *Network) Run(ctx context.Context, _ string, cb func() error) error {
+	span, _ := n.trace(ctx, "Run")
+	defer span.End()
+
+	return doNetNS(n.NetNSPath, func(_ ns.NetNS) error {
+		return cb()
+	})
+}
+
+// Add adds all needed interfaces inside the network namespace.
+func (n *Network) Add(ctx context.Context, config *NetworkConfig, s *Sandbox, hotplug bool) ([]Endpoint, error) {
+	span, ctx := n.trace(ctx, "Add")
+	katatrace.AddTags(span, "type", n.InterworkingModel.GetModel())
+	defer span.End()
+
+	endpoints, err := createEndpointsFromScan(n.NetNSPath, config)
+	if err != nil {
+		return endpoints, err
+	}
+	katatrace.AddTags(span, "endpoints", endpoints, "hotplug", hotplug)
+
+	err = doNetNS(n.NetNSPath, func(_ ns.NetNS) error {
+		for _, endpoint := range endpoints {
+			networkLogger().WithField("endpoint-type", endpoint.Type()).WithField("hotplug", hotplug).Info("Attaching endpoint")
+			if hotplug {
+				if err := endpoint.HotAttach(ctx, s.hypervisor); err != nil {
+					return err
+				}
+			} else {
+				if err := endpoint.Attach(ctx, s); err != nil {
+					return err
+				}
+			}
+
+			if !s.hypervisor.IsRateLimiterBuiltin() {
+				rxRateLimiterMaxRate := s.hypervisor.HypervisorConfig().RxRateLimiterMaxRate
+				if rxRateLimiterMaxRate > 0 {
+					networkLogger().Info("Add Rx Rate Limiter")
+					if err := addRxRateLimiter(endpoint, rxRateLimiterMaxRate); err != nil {
+						return err
+					}
+				}
+				txRateLimiterMaxRate := s.hypervisor.HypervisorConfig().TxRateLimiterMaxRate
+				if txRateLimiterMaxRate > 0 {
+					networkLogger().Info("Add Tx Rate Limiter")
+					if err := addTxRateLimiter(endpoint, txRateLimiterMaxRate); err != nil {
+						return err
+					}
+				}
+			}
+		}
+
+		return nil
+	})
+	if err != nil {
+		return []Endpoint{}, err
+	}
+
+	n.Endpoints = append(n.Endpoints, endpoints...)
+
+	networkLogger().Debug("Network added")
+
+	return endpoints, nil
+}
+
+func (n *Network) PostAdd(ctx context.Context, _ *NetworkNamespace, hotplug bool) error {
+	if hotplug {
+		return nil
+	}
+
+	if n.Endpoints == nil {
+		return nil
+	}
+
+	endpoints := n.Endpoints
+
+	for _, endpoint := range endpoints {
+		netPair := endpoint.NetworkPair()
+		if netPair == nil {
+			continue
+		}
+		if netPair.VhostFds != nil {
+			for _, VhostFd := range netPair.VhostFds {
+				VhostFd.Close()
+			}
+		}
+	}
+
+	return nil
+}
+
+// Remove network endpoints in the network namespace. It also deletes the network
+// namespace in case the namespace has been created by us.
+func (n *Network) Remove(ctx context.Context, _ *NetworkNamespace, hypervisor Hypervisor) error {
+	span, ctx := n.trace(ctx, "Remove")
+	defer span.End()
+
+	for _, endpoint := range n.Endpoints {
+		if endpoint.GetRxRateLimiter() {
+			networkLogger().WithField("endpoint-type", endpoint.Type()).Info("Deleting rx rate limiter")
+			// Deleting rx rate limiter should enter the network namespace.
+			if err := removeRxRateLimiter(endpoint, n.NetNSPath); err != nil {
+				return err
+			}
+		}
+
+		if endpoint.GetTxRateLimiter() {
+			networkLogger().WithField("endpoint-type", endpoint.Type()).Info("Deleting tx rate limiter")
+			// Deleting tx rate limiter should enter the network namespace.
+			if err := removeTxRateLimiter(endpoint, n.NetNSPath); err != nil {
+				return err
+			}
+		}
+
+		// Detach for an endpoint should enter the network namespace
+		// if required.
+		networkLogger().WithField("endpoint-type", endpoint.Type()).Info("Detaching endpoint")
+		if err := endpoint.Detach(ctx, n.NetNSCreated, n.NetNSPath); err != nil {
+			return err
+		}
+	}
+
+	networkLogger().Debug("Network removed")
+
+	if n.NetNSCreated {
+		networkLogger().Infof("Network namespace %q deleted", n.NetNSPath)
+		return deleteNetNS(n.NetNSPath)
+	}
+
+	return nil
+}
+
 // NetworkNamespace contains all data related to its network namespace.
 type NetworkNamespace struct {
 	NetNsPath    string
@@ -1153,167 +1336,6 @@ func createEndpoint(netInfo NetworkInfo, idx int, model NetInterworkingModel, li
 	}
 
 	return endpoint, err
-}
-
-// Network is the virtcontainer network structure
-type Network struct {
-}
-
-var networkTrace = getNetworkTrace("")
-
-func (n *Network) trace(ctx context.Context, name string) (otelTrace.Span, context.Context) {
-	return networkTrace(ctx, name, nil)
-}
-
-func getNetworkTrace(networkType EndpointType) func(ctx context.Context, name string, endpoint interface{}) (otelTrace.Span, context.Context) {
-	return func(ctx context.Context, name string, endpoint interface{}) (otelTrace.Span, context.Context) {
-		span, ctx := katatrace.Trace(ctx, networkLogger(), name, networkTracingTags)
-		if networkType != "" {
-			katatrace.AddTags(span, "type", string(networkType))
-		}
-		if endpoint != nil {
-			katatrace.AddTags(span, "endpoint", endpoint)
-		}
-		return span, ctx
-	}
-}
-
-func closeSpan(span otelTrace.Span, err error) {
-	if err != nil {
-		katatrace.AddTags(span, "error", err.Error())
-	}
-	span.End()
-}
-
-// Run runs a callback in the specified network namespace.
-func (n *Network) Run(ctx context.Context, networkNSPath string, cb func() error) error {
-	span, _ := n.trace(ctx, "Run")
-	defer span.End()
-
-	return doNetNS(networkNSPath, func(_ ns.NetNS) error {
-		return cb()
-	})
-}
-
-// Add adds all needed interfaces inside the network namespace.
-func (n *Network) Add(ctx context.Context, config *NetworkConfig, s *Sandbox, hotplug bool) ([]Endpoint, error) {
-	span, ctx := n.trace(ctx, "Add")
-	katatrace.AddTags(span, "type", config.InterworkingModel.GetModel())
-	defer span.End()
-
-	endpoints, err := createEndpointsFromScan(config.NetNSPath, config)
-	if err != nil {
-		return endpoints, err
-	}
-	katatrace.AddTags(span, "endpoints", endpoints, "hotplug", hotplug)
-
-	err = doNetNS(config.NetNSPath, func(_ ns.NetNS) error {
-		for _, endpoint := range endpoints {
-			networkLogger().WithField("endpoint-type", endpoint.Type()).WithField("hotplug", hotplug).Info("Attaching endpoint")
-			if hotplug {
-				if err := endpoint.HotAttach(ctx, s.hypervisor); err != nil {
-					return err
-				}
-			} else {
-				if err := endpoint.Attach(ctx, s); err != nil {
-					return err
-				}
-			}
-
-			if !s.hypervisor.IsRateLimiterBuiltin() {
-				rxRateLimiterMaxRate := s.hypervisor.HypervisorConfig().RxRateLimiterMaxRate
-				if rxRateLimiterMaxRate > 0 {
-					networkLogger().Info("Add Rx Rate Limiter")
-					if err := addRxRateLimiter(endpoint, rxRateLimiterMaxRate); err != nil {
-						return err
-					}
-				}
-				txRateLimiterMaxRate := s.hypervisor.HypervisorConfig().TxRateLimiterMaxRate
-				if txRateLimiterMaxRate > 0 {
-					networkLogger().Info("Add Tx Rate Limiter")
-					if err := addTxRateLimiter(endpoint, txRateLimiterMaxRate); err != nil {
-						return err
-					}
-				}
-			}
-		}
-
-		return nil
-	})
-	if err != nil {
-		return []Endpoint{}, err
-	}
-
-	networkLogger().Debug("Network added")
-
-	return endpoints, nil
-}
-
-func (n *Network) PostAdd(ctx context.Context, ns *NetworkNamespace, hotplug bool) error {
-	if hotplug {
-		return nil
-	}
-
-	if ns.Endpoints == nil {
-		return nil
-	}
-
-	endpoints := ns.Endpoints
-
-	for _, endpoint := range endpoints {
-		netPair := endpoint.NetworkPair()
-		if netPair == nil {
-			continue
-		}
-		if netPair.VhostFds != nil {
-			for _, VhostFd := range netPair.VhostFds {
-				VhostFd.Close()
-			}
-		}
-	}
-
-	return nil
-}
-
-// Remove network endpoints in the network namespace. It also deletes the network
-// namespace in case the namespace has been created by us.
-func (n *Network) Remove(ctx context.Context, ns *NetworkNamespace, hypervisor Hypervisor) error {
-	span, ctx := n.trace(ctx, "Remove")
-	defer span.End()
-
-	for _, endpoint := range ns.Endpoints {
-		if endpoint.GetRxRateLimiter() {
-			networkLogger().WithField("endpoint-type", endpoint.Type()).Info("Deleting rx rate limiter")
-			// Deleting rx rate limiter should enter the network namespace.
-			if err := removeRxRateLimiter(endpoint, ns.NetNsPath); err != nil {
-				return err
-			}
-		}
-
-		if endpoint.GetTxRateLimiter() {
-			networkLogger().WithField("endpoint-type", endpoint.Type()).Info("Deleting tx rate limiter")
-			// Deleting tx rate limiter should enter the network namespace.
-			if err := removeTxRateLimiter(endpoint, ns.NetNsPath); err != nil {
-				return err
-			}
-		}
-
-		// Detach for an endpoint should enter the network namespace
-		// if required.
-		networkLogger().WithField("endpoint-type", endpoint.Type()).Info("Detaching endpoint")
-		if err := endpoint.Detach(ctx, ns.NetNsCreated, ns.NetNsPath); err != nil {
-			return err
-		}
-	}
-
-	networkLogger().Debug("Network removed")
-
-	if ns.NetNsCreated {
-		networkLogger().Infof("Network namespace %q deleted", ns.NetNsPath)
-		return deleteNetNS(ns.NetNsPath)
-	}
-
-	return nil
 }
 
 // func addRxRateLmiter implements tc-based rx rate limiter to control network I/O inbound traffic

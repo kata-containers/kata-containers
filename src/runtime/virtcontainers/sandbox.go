@@ -208,7 +208,7 @@ type Sandbox struct {
 
 	id string
 
-	network Network
+	network *Network
 
 	state types.SandboxState
 
@@ -521,6 +521,11 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 		return nil, err
 	}
 
+	network, err := NewNetwork(&sandboxConfig.NetworkConfig)
+	if err != nil {
+		return nil, err
+	}
+
 	s := &Sandbox{
 		id:              sandboxConfig.ID,
 		factory:         factory,
@@ -534,6 +539,7 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 		wg:              &sync.WaitGroup{},
 		shmSize:         sandboxConfig.ShmSize,
 		sharePidNs:      sandboxConfig.SharePidNs,
+		network:         network,
 		networkNS:       NetworkNamespace{NetNsPath: sandboxConfig.NetworkConfig.NetNSPath},
 		ctx:             ctx,
 		swapDeviceNum:   0,
@@ -803,6 +809,12 @@ func (s *Sandbox) createNetwork(ctx context.Context) error {
 	span, ctx := katatrace.Trace(ctx, s.Logger(), "createNetwork", sandboxTracingTags, map[string]string{"sandbox_id": s.id})
 	defer span.End()
 
+	network, err := NewNetwork(&s.config.NetworkConfig)
+	if err != nil {
+		return err
+	}
+
+	s.network = network
 	s.networkNS = NetworkNamespace{
 		NetNsPath:    s.config.NetworkConfig.NetNSPath,
 		NetNsCreated: s.config.NetworkConfig.NetNsCreated,
