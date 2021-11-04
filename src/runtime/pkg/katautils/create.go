@@ -112,7 +112,7 @@ func SetEphemeralStorageType(ociSpec specs.Spec) specs.Spec {
 func CreateSandbox(ctx context.Context, vci vc.VC, ociSpec specs.Spec, runtimeConfig oci.RuntimeConfig, rootFs vc.RootFs,
 	containerID, bundlePath, console string, disableOutput, systemdCgroup bool) (_ vc.VCSandbox, _ vc.Process, err error) {
 	span, ctx := katatrace.Trace(ctx, nil, "CreateSandbox", createTracingTags)
-	katatrace.AddTag(span, "container_id", containerID)
+	katatrace.AddTags(span, "container_id", containerID)
 	defer span.End()
 
 	sandboxConfig, err := oci.SandboxConfig(ociSpec, runtimeConfig, bundlePath, containerID, console, disableOutput, systemdCgroup)
@@ -167,7 +167,7 @@ func CreateSandbox(ctx context.Context, vci vc.VC, ociSpec specs.Spec, runtimeCo
 
 	sid := sandbox.ID()
 	kataUtilsLogger = kataUtilsLogger.WithField("sandbox", sid)
-	katatrace.AddTag(span, "sandbox_id", sid)
+	katatrace.AddTags(span, "sandbox_id", sid)
 
 	containers := sandbox.GetAllContainers()
 	if len(containers) != 1 {
@@ -211,7 +211,7 @@ func CreateContainer(ctx context.Context, sandbox vc.VCSandbox, ociSpec specs.Sp
 	var c vc.VCContainer
 
 	span, ctx := katatrace.Trace(ctx, nil, "CreateContainer", createTracingTags)
-	katatrace.AddTag(span, "container_id", containerID)
+	katatrace.AddTags(span, "container_id", containerID)
 	defer span.End()
 
 	ociSpec = SetEphemeralStorageType(ociSpec)
@@ -237,7 +237,7 @@ func CreateContainer(ctx context.Context, sandbox vc.VCSandbox, ociSpec specs.Sp
 		return vc.Process{}, err
 	}
 
-	katatrace.AddTag(span, "sandbox_id", sandboxID)
+	katatrace.AddTags(span, "sandbox_id", sandboxID)
 
 	c, err = sandbox.CreateContainer(ctx, contConfig)
 	if err != nil {

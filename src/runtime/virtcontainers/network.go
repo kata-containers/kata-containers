@@ -1304,10 +1304,10 @@ func getNetworkTrace(networkType EndpointType) func(ctx context.Context, name st
 	return func(ctx context.Context, name string, endpoint interface{}) (otelTrace.Span, context.Context) {
 		span, ctx := katatrace.Trace(ctx, networkLogger(), name, networkTracingTags)
 		if networkType != "" {
-			katatrace.AddTag(span, "type", string(networkType))
+			katatrace.AddTags(span, "type", string(networkType))
 		}
 		if endpoint != nil {
-			katatrace.AddTag(span, "endpoint", endpoint)
+			katatrace.AddTags(span, "endpoint", endpoint)
 		}
 		return span, ctx
 	}
@@ -1315,7 +1315,7 @@ func getNetworkTrace(networkType EndpointType) func(ctx context.Context, name st
 
 func closeSpan(span otelTrace.Span, err error) {
 	if err != nil {
-		katatrace.AddTag(span, "error", err)
+		katatrace.AddTags(span, "error", err.Error())
 	}
 	span.End()
 }
@@ -1333,15 +1333,14 @@ func (n *Network) Run(ctx context.Context, networkNSPath string, cb func() error
 // Add adds all needed interfaces inside the network namespace.
 func (n *Network) Add(ctx context.Context, config *NetworkConfig, s *Sandbox, hotplug bool) ([]Endpoint, error) {
 	span, ctx := n.trace(ctx, "Add")
-	katatrace.AddTag(span, "type", config.InterworkingModel.GetModel())
+	katatrace.AddTags(span, "type", config.InterworkingModel.GetModel())
 	defer span.End()
 
 	endpoints, err := createEndpointsFromScan(config.NetNSPath, config)
 	if err != nil {
 		return endpoints, err
 	}
-	katatrace.AddTag(span, "endpoints", endpoints)
-	katatrace.AddTag(span, "hotplug", hotplug)
+	katatrace.AddTags(span, "endpoints", endpoints, "hotplug", hotplug)
 
 	err = doNetNS(config.NetNSPath, func(_ ns.NetNS) error {
 		for _, endpoint := range endpoints {

@@ -344,7 +344,7 @@ func (k *kataAgent) internalConfigure(ctx context.Context, h Hypervisor, id stri
 	}
 	k.keepConn = config.LongLiveConn
 
-	katatrace.AddTag(span, "socket", k.vmSocket)
+	katatrace.AddTags(span, "socket", k.vmSocket)
 
 	return nil
 }

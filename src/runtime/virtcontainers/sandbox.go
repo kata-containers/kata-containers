@@ -822,8 +822,7 @@ func (s *Sandbox) createNetwork(ctx context.Context) error {
 		NetNsCreated: s.config.NetworkConfig.NetNsCreated,
 	}
 
-	katatrace.AddTag(span, "networkNS", s.networkNS)
-	katatrace.AddTag(span, "NetworkConfig", s.config.NetworkConfig)
+	katatrace.AddTags(span, "networkNS", s.networkNS, "NetworkConfig", s.config.NetworkConfig)
 
 	// In case there is a factory, network interfaces are hotplugged
 	// after vm is started.
