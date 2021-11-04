@@ -11,7 +11,7 @@ use std::fmt;
 use std::fs;
 use std::os::unix::ffi::OsStrExt;
 use std::os::unix::fs::MetadataExt;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::str::FromStr;
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -437,15 +437,26 @@ fn scan_scsi_bus(scsi_addr: &str) -> Result<()> {
 
 #[derive(Debug, Clone)]
 struct DevNumUpdate {
-    // the path to the equivalent device in the VM (used to determine
-    // the correct major/minor numbers)
-    vm_path: PathBuf,
+    // the major and minor numbers for the device within the guest
+    guest_major: i64,
+    guest_minor: i64,
 }
 
 impl DevNumUpdate {
     fn from_vm_path<T: AsRef<Path>>(vm_path: T) -> Result<Self> {
+        let vm_path = vm_path.as_ref();
+
+        if !vm_path.exists() {
+            return Err(anyhow!("VM device path {:?} doesn't exist", vm_path));
+        }
+
+        let devid = fs::metadata(vm_path)?.rdev();
+        let guest_major = stat::major(devid) as i64;
+        let guest_minor = stat::minor(devid) as i64;
+
         Ok(DevNumUpdate {
-            vm_path: vm_path.as_ref().to_owned(),
+            guest_major,
+            guest_minor,
         })
     }
 }
@@ -515,24 +526,12 @@ fn update_spec_device(
         .as_mut()
         .ok_or_else(|| anyhow!("Spec didn't container linux field"))?;
 
-    if !update.num.vm_path.exists() {
-        return Err(anyhow!(
-            "vm_path:{} doesn't exist",
-            update.num.vm_path.display()
-        ));
-    }
-
-    let meta = fs::metadata(&update.num.vm_path)?;
-    let dev_id = meta.rdev();
-    let major_id = stat::major(dev_id);
-    let minor_id = stat::minor(dev_id);
-
     info!(
         sl!(),
-        "update_spec_device(): vm_path={}, major: {}, minor: {}\n",
-        update.num.vm_path.display(),
-        major_id,
-        minor_id
+        "update_spec_device() considering device";
+        "container_path" => container_path,
+        "guest_major" => update.num.guest_major,
+        "guest_minor" => update.num.guest_minor,
     );
 
     if let Some(idxdata) = devidx.0.get(container_path) {
@@ -540,21 +539,21 @@ fn update_spec_device(
         let host_major = dev.major;
         let host_minor = dev.minor;
 
-        dev.major = major_id as i64;
-        dev.minor = minor_id as i64;
+        dev.major = update.num.guest_major;
+        dev.minor = update.num.guest_minor;
         if let Some(final_path) = update.final_path {
             dev.path = final_path;
         }
 
         info!(
             sl!(),
-            "change the device from path: {} major: {} minor: {} to vm device path: {} major: {} minor: {}",
-            container_path,
-            host_major,
-            host_minor,
-            dev.path,
-            dev.major,
-            dev.minor,
+            "update_spec_device(): updating device";
+            "container_path" => container_path,
+            "host_major" => host_major,
+            "host_minor" => host_minor,
+            "updated_path" => &dev.path,
+            "guest_major" => dev.major,
+            "guest_minor" => dev.minor,
         );
 
         // Resources must be updated since they are used to identify
@@ -563,12 +562,14 @@ fn update_spec_device(
             // unwrap is safe, because residx would be empty if there
             // were no resources
             let res = &mut linux.resources.as_mut().unwrap().devices[*ridx];
-            res.major = Some(major_id as i64);
-            res.minor = Some(minor_id as i64);
+            res.major = Some(update.num.guest_major);
+            res.minor = Some(update.num.guest_minor);
 
             info!(
                 sl!(),
-                "set resources for device major: {} minor: {}\n", major_id, minor_id
+                "set resources for resource";
+                "guest_major" => update.num.guest_major,
+                "guest_minor" => update.num.guest_minor,
             );
         }
         Ok(())
@@ -858,9 +859,13 @@ mod tests {
         let (major, minor) = (7, 2);
         let mut spec = Spec::default();
 
+        // vm_path empty
+        let update = DevNumUpdate::from_vm_path("");
+        assert!(update.is_err());
+
         // container_path empty
         let container_path = "";
-        let vm_path = "";
+        let vm_path = "/dev/null";
         let devidx = DevIndex::new(&spec);
         let res = update_spec_device(
             &mut spec,
@@ -899,18 +904,6 @@ mod tests {
             minor,
             ..oci::LinuxDevice::default()
         }];
-
-        // vm_path empty
-        let devidx = DevIndex::new(&spec);
-        let res = update_spec_device(
-            &mut spec,
-            &devidx,
-            container_path,
-            DevNumUpdate::from_vm_path(vm_path).unwrap().into(),
-        );
-        assert!(res.is_err());
-
-        let vm_path = "/dev/null";
 
         // guest and host path are not the same
         let devidx = DevIndex::new(&spec);
