@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
+//go:build arm64 || ppc64le
 // +build arm64 ppc64le
 
 package main
