@@ -17,10 +17,12 @@ TOOLS += agent-ctl
 
 STANDARD_TARGETS = build check clean install test vendor
 
-include utils.mk
-include ./tools/packaging/kata-deploy/local-build/Makefile
+default: all
 
 all: build
+
+include utils.mk
+include ./tools/packaging/kata-deploy/local-build/Makefile
 
 # Create the rules
 $(eval $(call create_all_rules,$(COMPONENTS),$(TOOLS),$(STANDARD_TARGETS)))
