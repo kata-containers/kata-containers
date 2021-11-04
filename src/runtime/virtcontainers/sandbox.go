@@ -20,7 +20,6 @@ import (
 	"sync"
 	"syscall"
 
-	"github.com/containernetworking/plugins/pkg/ns"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -884,22 +883,14 @@ func (s *Sandbox) AddInterface(ctx context.Context, inf *pbTypes.Interface) (*pb
 		return nil, err
 	}
 
-	endpoint, err := createEndpoint(netInfo, len(s.networkNS.Endpoints), s.config.NetworkConfig.InterworkingModel, nil)
+	endpoint, err := s.network.attachEndpoint(ctx, s, netInfo, nil, true)
 	if err != nil {
-		return nil, err
-	}
-
-	endpoint.SetProperties(netInfo)
-	if err := doNetNS(s.networkNS.NetNsPath, func(_ ns.NetNS) error {
-		s.Logger().WithField("endpoint-type", endpoint.Type()).Info("Hot attaching endpoint")
-		return endpoint.HotAttach(ctx, s.hypervisor)
-	}); err != nil {
 		return nil, err
 	}
 
 	defer func() {
 		if err != nil {
-			if errDetach := endpoint.HotDetach(ctx, s.hypervisor, s.networkNS.NetNsCreated, s.networkNS.NetNsPath); errDetach != nil {
+			if errDetach := s.network.detachEndpoint(ctx, s, len(s.network.Endpoints)-1, true); err != nil {
 				s.Logger().WithField("endpoint-type", endpoint.Type()).WithError(errDetach).Error("rollback hot attaching endpoint failed")
 			}
 		}
@@ -913,7 +904,6 @@ func (s *Sandbox) AddInterface(ctx context.Context, inf *pbTypes.Interface) (*pb
 	}
 
 	// Update the sandbox storage
-	s.networkNS.Endpoints = append(s.networkNS.Endpoints, endpoint)
 	if err = s.Save(); err != nil {
 		return nil, err
 	}
@@ -926,10 +916,9 @@ func (s *Sandbox) RemoveInterface(ctx context.Context, inf *pbTypes.Interface) (
 	for i, endpoint := range s.networkNS.Endpoints {
 		if endpoint.HardwareAddr() == inf.HwAddr {
 			s.Logger().WithField("endpoint-type", endpoint.Type()).Info("Hot detaching endpoint")
-			if err := endpoint.HotDetach(ctx, s.hypervisor, s.networkNS.NetNsCreated, s.networkNS.NetNsPath); err != nil {
+			if err := s.network.detachEndpoint(ctx, s, i, true); err != nil {
 				return inf, err
 			}
-			s.networkNS.Endpoints = append(s.networkNS.Endpoints[:i], s.networkNS.Endpoints[i+1:]...)
 
 			if err := s.Save(); err != nil {
 				return inf, err
