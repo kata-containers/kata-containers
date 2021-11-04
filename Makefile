@@ -19,7 +19,10 @@ STANDARD_TARGETS = build check clean install test vendor
 
 default: all
 
-all: build
+all: logging-crate-tests build
+
+logging-crate-tests:
+	make -C pkg/logging
 
 include utils.mk
 include ./tools/packaging/kata-deploy/local-build/Makefile
@@ -36,4 +39,10 @@ generate-protocols:
 static-checks: build
 	bash ci/static-checks.sh
 
-.PHONY: all default static-checks binary-tarball install-binary-tarball
+.PHONY: \
+	all \
+	binary-tarball \
+	default \
+	install-binary-tarball \
+	logging-crate-tests \
+	static-checks
