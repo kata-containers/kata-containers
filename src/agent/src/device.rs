@@ -503,82 +503,83 @@ impl<T: Into<DevUpdate>> From<T> for SpecUpdate {
     }
 }
 
-// update_spec_device updates the device list in the OCI spec to make
+// update_spec_devices updates the device list in the OCI spec to make
 // it include details appropriate for the VM, instead of the host.  It
-// is given:
+// is given a map of (container_path => update) where:
 //     container_path: the path to the device in the original OCI spec
 //     update: information on changes to make to the device
 #[instrument]
-fn update_spec_device(
+fn update_spec_devices(
     spec: &mut Spec,
     devidx: &DevIndex,
-    container_path: &str,
-    update: DevUpdate,
+    updates: HashMap<&str, DevUpdate>,
 ) -> Result<()> {
-    // If no container_path is provided, we won't be able to match and
-    // update the device in the OCI spec device list. This is an error.
-    if container_path.is_empty() {
-        return Err(anyhow!("Container path cannot be empty for device"));
-    }
-
-    let linux = spec
-        .linux
-        .as_mut()
-        .ok_or_else(|| anyhow!("Spec didn't container linux field"))?;
-
-    info!(
-        sl!(),
-        "update_spec_device() considering device";
-        "container_path" => container_path,
-        "guest_major" => update.num.guest_major,
-        "guest_minor" => update.num.guest_minor,
-    );
-
-    if let Some(idxdata) = devidx.0.get(container_path) {
-        let dev = &mut linux.devices[idxdata.idx];
-        let host_major = dev.major;
-        let host_minor = dev.minor;
-
-        dev.major = update.num.guest_major;
-        dev.minor = update.num.guest_minor;
-        if let Some(final_path) = update.final_path {
-            dev.path = final_path;
+    for (container_path, update) in updates {
+        // If no container_path is provided, we won't be able to match and
+        // update the device in the OCI spec device list. This is an error.
+        if container_path.is_empty() {
+            return Err(anyhow!("Container path cannot be empty for device"));
         }
+
+        let linux = spec
+            .linux
+            .as_mut()
+            .ok_or_else(|| anyhow!("Spec didn't container linux field"))?;
 
         info!(
             sl!(),
-            "update_spec_device(): updating device";
+            "update_spec_devices() considering device";
             "container_path" => container_path,
-            "host_major" => host_major,
-            "host_minor" => host_minor,
-            "updated_path" => &dev.path,
-            "guest_major" => dev.major,
-            "guest_minor" => dev.minor,
+            "guest_major" => update.num.guest_major,
+            "guest_minor" => update.num.guest_minor,
         );
 
-        // Resources must be updated since they are used to identify
-        // the device in the devices cgroup.
-        for ridx in &idxdata.residx {
-            // unwrap is safe, because residx would be empty if there
-            // were no resources
-            let res = &mut linux.resources.as_mut().unwrap().devices[*ridx];
-            res.major = Some(update.num.guest_major);
-            res.minor = Some(update.num.guest_minor);
+        if let Some(idxdata) = devidx.0.get(container_path) {
+            let dev = &mut linux.devices[idxdata.idx];
+            let host_major = dev.major;
+            let host_minor = dev.minor;
+
+            dev.major = update.num.guest_major;
+            dev.minor = update.num.guest_minor;
+            if let Some(final_path) = update.final_path {
+                dev.path = final_path;
+            }
 
             info!(
                 sl!(),
-                "set resources for resource";
-                "guest_major" => update.num.guest_major,
-                "guest_minor" => update.num.guest_minor,
+                "update_spec_devices(): updating device";
+                "container_path" => container_path,
+                "host_major" => host_major,
+                "host_minor" => host_minor,
+                "updated_path" => &dev.path,
+                "guest_major" => dev.major,
+                "guest_minor" => dev.minor,
             );
+
+            // Resources must be updated since they are used to identify
+            // the device in the devices cgroup.
+            for ridx in &idxdata.residx {
+                // unwrap is safe, because residx would be empty if there
+                // were no resources
+                let res = &mut linux.resources.as_mut().unwrap().devices[*ridx];
+                res.major = Some(update.num.guest_major);
+                res.minor = Some(update.num.guest_minor);
+
+                info!(
+                    sl!(),
+                    "set resources for resource";
+                    "guest_major" => update.num.guest_major,
+                    "guest_minor" => update.num.guest_minor,
+                );
+            }
+        } else {
+            return Err(anyhow!(
+                "Should have found a device {} in the spec",
+                container_path
+            ));
         }
-        Ok(())
-    } else {
-        Err(anyhow!(
-            "Should have found a device {} in the spec",
-            container_path
-        ))
     }
+    Ok(())
 }
 
 // device.Id should be the predicted device name (vda, vdb, ...)
@@ -759,11 +760,7 @@ pub async fn add_devices(
     }
 
     let devidx = DevIndex::new(spec);
-    for (container_path, update) in dev_updates.drain() {
-        update_spec_device(spec, &devidx, container_path, update)?;
-    }
-
-    Ok(())
+    update_spec_devices(spec, &devidx, dev_updates)
 }
 
 #[instrument]
@@ -831,6 +828,7 @@ mod tests {
     use super::*;
     use crate::uevent::spawn_test_watcher;
     use oci::Linux;
+    use std::iter::FromIterator;
     use tempfile::tempdir;
 
     #[test]
@@ -855,7 +853,7 @@ mod tests {
     }
 
     #[test]
-    fn test_update_spec_device() {
+    fn test_update_spec_devices() {
         let (major, minor) = (7, 2);
         let mut spec = Spec::default();
 
@@ -867,22 +865,26 @@ mod tests {
         let container_path = "";
         let vm_path = "/dev/null";
         let devidx = DevIndex::new(&spec);
-        let res = update_spec_device(
+        let res = update_spec_devices(
             &mut spec,
             &devidx,
-            container_path,
-            DevNumUpdate::from_vm_path(vm_path).unwrap().into(),
+            HashMap::from_iter(vec![(
+                container_path,
+                DevNumUpdate::from_vm_path(vm_path).unwrap().into(),
+            )]),
         );
         assert!(res.is_err());
 
         // linux is empty
         let container_path = "/dev/null";
         let devidx = DevIndex::new(&spec);
-        let res = update_spec_device(
+        let res = update_spec_devices(
             &mut spec,
             &devidx,
-            container_path,
-            DevNumUpdate::from_vm_path(vm_path).unwrap().into(),
+            HashMap::from_iter(vec![(
+                container_path,
+                DevNumUpdate::from_vm_path(vm_path).unwrap().into(),
+            )]),
         );
         assert!(res.is_err());
 
@@ -890,11 +892,13 @@ mod tests {
 
         // linux.devices is empty
         let devidx = DevIndex::new(&spec);
-        let res = update_spec_device(
+        let res = update_spec_devices(
             &mut spec,
             &devidx,
-            container_path,
-            DevNumUpdate::from_vm_path(vm_path).unwrap().into(),
+            HashMap::from_iter(vec![(
+                container_path,
+                DevNumUpdate::from_vm_path(vm_path).unwrap().into(),
+            )]),
         );
         assert!(res.is_err());
 
@@ -907,11 +911,13 @@ mod tests {
 
         // guest and host path are not the same
         let devidx = DevIndex::new(&spec);
-        let res = update_spec_device(
+        let res = update_spec_devices(
             &mut spec,
             &devidx,
-            container_path,
-            DevNumUpdate::from_vm_path(vm_path).unwrap().into(),
+            HashMap::from_iter(vec![(
+                container_path,
+                DevNumUpdate::from_vm_path(vm_path).unwrap().into(),
+            )]),
         );
         assert!(
             res.is_err(),
@@ -925,11 +931,13 @@ mod tests {
 
         // spec.linux.resources is empty
         let devidx = DevIndex::new(&spec);
-        let res = update_spec_device(
+        let res = update_spec_devices(
             &mut spec,
             &devidx,
-            container_path,
-            DevNumUpdate::from_vm_path(vm_path).unwrap().into(),
+            HashMap::from_iter(vec![(
+                container_path,
+                DevNumUpdate::from_vm_path(vm_path).unwrap().into(),
+            )]),
         );
         assert!(res.is_ok());
 
@@ -951,17 +959,19 @@ mod tests {
         });
 
         let devidx = DevIndex::new(&spec);
-        let res = update_spec_device(
+        let res = update_spec_devices(
             &mut spec,
             &devidx,
-            container_path,
-            DevNumUpdate::from_vm_path(vm_path).unwrap().into(),
+            HashMap::from_iter(vec![(
+                container_path,
+                DevNumUpdate::from_vm_path(vm_path).unwrap().into(),
+            )]),
         );
         assert!(res.is_ok());
     }
 
     #[test]
-    fn test_update_spec_device_guest_host_conflict() {
+    fn test_update_spec_devices_guest_host_conflict() {
         let null_rdev = fs::metadata("/dev/null").unwrap().rdev();
         let zero_rdev = fs::metadata("/dev/zero").unwrap().rdev();
         let full_rdev = fs::metadata("/dev/full").unwrap().rdev();
@@ -1036,24 +1046,17 @@ mod tests {
         assert_eq!(Some(host_major_b), specresources.devices[1].major);
         assert_eq!(Some(host_minor_b), specresources.devices[1].minor);
 
-        let update_a = DevNumUpdate::from_vm_path(vm_path_a).unwrap().into();
-        let res = update_spec_device(&mut spec, &devidx, container_path_a, update_a);
-        assert!(res.is_ok());
-
-        let specdevices = &spec.linux.as_ref().unwrap().devices;
-        assert_eq!(guest_major_a, specdevices[0].major);
-        assert_eq!(guest_minor_a, specdevices[0].minor);
-        assert_eq!(host_major_b, specdevices[1].major);
-        assert_eq!(host_minor_b, specdevices[1].minor);
-
-        let specresources = spec.linux.as_ref().unwrap().resources.as_ref().unwrap();
-        assert_eq!(Some(guest_major_a), specresources.devices[0].major);
-        assert_eq!(Some(guest_minor_a), specresources.devices[0].minor);
-        assert_eq!(Some(host_major_b), specresources.devices[1].major);
-        assert_eq!(Some(host_minor_b), specresources.devices[1].minor);
-
-        let update_b = DevNumUpdate::from_vm_path(vm_path_b).unwrap().into();
-        let res = update_spec_device(&mut spec, &devidx, container_path_b, update_b);
+        let updates = HashMap::from_iter(vec![
+            (
+                container_path_a,
+                DevNumUpdate::from_vm_path(vm_path_a).unwrap().into(),
+            ),
+            (
+                container_path_b,
+                DevNumUpdate::from_vm_path(vm_path_b).unwrap().into(),
+            ),
+        ]);
+        let res = update_spec_devices(&mut spec, &devidx, updates);
         assert!(res.is_ok());
 
         let specdevices = &spec.linux.as_ref().unwrap().devices;
@@ -1070,7 +1073,7 @@ mod tests {
     }
 
     #[test]
-    fn test_update_spec_device_char_block_conflict() {
+    fn test_update_spec_devices_char_block_conflict() {
         let null_rdev = fs::metadata("/dev/null").unwrap().rdev();
 
         let guest_major = stat::major(null_rdev) as i64;
@@ -1128,11 +1131,13 @@ mod tests {
         assert_eq!(Some(host_major), specresources.devices[1].major);
         assert_eq!(Some(host_minor), specresources.devices[1].minor);
 
-        let res = update_spec_device(
+        let res = update_spec_devices(
             &mut spec,
             &devidx,
-            container_path,
-            DevNumUpdate::from_vm_path(vm_path).unwrap().into(),
+            HashMap::from_iter(vec![(
+                container_path,
+                DevNumUpdate::from_vm_path(vm_path).unwrap().into(),
+            )]),
         );
         assert!(res.is_ok());
 
@@ -1145,7 +1150,7 @@ mod tests {
     }
 
     #[test]
-    fn test_update_spec_device_final_path() {
+    fn test_update_spec_devices_final_path() {
         let null_rdev = fs::metadata("/dev/null").unwrap().rdev();
         let guest_major = stat::major(null_rdev) as i64;
         let guest_minor = stat::minor(null_rdev) as i64;
@@ -1172,11 +1177,13 @@ mod tests {
         let vm_path = "/dev/null";
         let final_path = "/dev/new";
 
-        let res = update_spec_device(
+        let res = update_spec_devices(
             &mut spec,
             &devidx,
-            container_path,
-            DevUpdate::from_vm_path(vm_path, final_path.to_string()).unwrap(),
+            HashMap::from_iter(vec![(
+                container_path,
+                DevUpdate::from_vm_path(vm_path, final_path.to_string()).unwrap(),
+            )]),
         );
         assert!(res.is_ok());
 
