@@ -533,7 +533,7 @@ $(NETMON_RUNTIME_OUTPUT): $(SOURCES) VERSION
 runtime: $(RUNTIME_OUTPUT) $(CONFIGS)
 .DEFAULT: default
 
-build: default
+build: all
 
 #Install an executable file
 # params:
@@ -578,6 +578,8 @@ $(MONITOR_OUTPUT): $(SOURCES) $(GENERATED_FILES) $(MAKEFILE_LIST) .git-commit
 	coverage \
 	default \
 	install \
+	lint \
+	pre-commit \
 	show-header \
 	show-summary \
 	show-variables \
@@ -596,8 +598,6 @@ $(GENERATED_FILES): %: %.in $(MAKEFILE_LIST) VERSION .git-commit
 
 generate-config: $(CONFIGS)
 
-check:
-
 test: install-hook go-test
 
 install-hook:
@@ -612,13 +612,33 @@ go-test: $(GENERATED_FILES)
 	go test -v -mod=vendor ./...
 
 fast-test: $(GENERATED_FILES)
+	go clean -testcache
 	for s in $$(go list ./...); do if ! go test -failfast -v -mod=vendor -p 1 $$s; then break; fi; done
+
+GOLANGCI_LINT_FILE := ../../../tests/.ci/.golangci.yml
+GOLANGCI_LINT_NAME = golangci-lint
+GOLANGCI_LINT_CMD := $(shell command -v $(GOLANGCI_LINT_NAME) 2>/dev/null)
+lint: all
+	if [ -z $(GOLANGCI_LINT_CMD) ] ; \
+	then \
+		echo "ERROR: command $(GOLANGCI_LINT_NAME) not found. Please install it first." >&2; exit 1; \
+	fi
+
+	if [ -f $(GOLANGCI_LINT_FILE) ] ; \
+	then \
+		echo "running $(GOLANGCI_LINT_NAME)..."; \
+		$(GOLANGCI_LINT_NAME) run -c $(GOLANGCI_LINT_FILE) ; \
+	else \
+		echo "ERROR: file $(GOLANGCI_LINT_FILE) not found. You should clone https://github.com/kata-containers/tests to run $(GOLANGCI_LINT_NAME) locally." >&2; exit 1; \
+	fi;
+
+pre-commit: lint fast-test
 
 coverage:
 	go test -v -mod=vendor -covermode=atomic -coverprofile=coverage.txt ./...
 	go tool cover -html=coverage.txt -o coverage.html
 
-install: default install-runtime install-containerd-shim-v2 install-monitor install-netmon
+install: all install-runtime install-containerd-shim-v2 install-monitor install-netmon
 
 install-bin: $(BINLIST)
 	$(QUIET_INST)$(foreach f,$(BINLIST),$(call INSTALL_EXEC,$f,$(BINDIR)))
@@ -675,6 +695,8 @@ show-usage: show-header
 	@printf "\n"
 	@printf "\tbuild                      : standard build (build everything).\n"
 	@printf "\ttest                       : run tests.\n"
+	@printf "\tpre-commit                 : run $(GOLANGCI_LINT_NAME) and tests locally.\n"
+	@printf "\tlint                       : run $(GOLANGCI_LINT_NAME).\n"
 	@printf "\tfast-test                  : run tests with failfast option.\n"
 	@printf "\tcheck                      : run code checks.\n"
 	@printf "\tclean                      : remove built files.\n"
