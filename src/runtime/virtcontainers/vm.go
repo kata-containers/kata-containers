@@ -44,7 +44,11 @@ type VMConfig struct {
 
 // Valid Check VMConfig validity.
 func (c *VMConfig) Valid() error {
-	return c.HypervisorConfig.Valid()
+	if err := c.HypervisorConfig.Valid(); err != nil {
+		return err
+	}
+
+	return validateHypervisorConfig(&c.HypervisorConfig)
 }
 
 // ToGrpc convert VMConfig struct to grpc format pb.GrpcVMConfig.
@@ -110,6 +114,11 @@ func NewVM(ctx context.Context, config VMConfig) (*VM, error) {
 			store.Destroy(id)
 		}
 	}()
+
+	// validate the hypervisor config before creating the VM
+	if err := validateHypervisorConfig(&config.HypervisorConfig); err != nil {
+		return nil, err
+	}
 
 	if err = hypervisor.CreateVM(ctx, id, NetworkNamespace{}, &config.HypervisorConfig); err != nil {
 		return nil, err

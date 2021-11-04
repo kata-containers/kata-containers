@@ -94,26 +94,6 @@ func testHypervisorConfigValid(t *testing.T, hypervisorConfig *HypervisorConfig,
 	assert.False(!success && err == nil)
 }
 
-func TestHypervisorConfigNoKernelPath(t *testing.T) {
-	hypervisorConfig := &HypervisorConfig{
-		KernelPath:     "",
-		ImagePath:      fmt.Sprintf("%s/%s", testDir, testImage),
-		HypervisorPath: fmt.Sprintf("%s/%s", testDir, testHypervisor),
-	}
-
-	testHypervisorConfigValid(t, hypervisorConfig, false)
-}
-
-func TestHypervisorConfigNoImagePath(t *testing.T) {
-	hypervisorConfig := &HypervisorConfig{
-		KernelPath:     fmt.Sprintf("%s/%s", testDir, testKernel),
-		ImagePath:      "",
-		HypervisorPath: fmt.Sprintf("%s/%s", testDir, testHypervisor),
-	}
-
-	testHypervisorConfigValid(t, hypervisorConfig, false)
-}
-
 func TestHypervisorConfigNoHypervisorPath(t *testing.T) {
 	hypervisorConfig := &HypervisorConfig{
 		KernelPath:     fmt.Sprintf("%s/%s", testDir, testKernel),
@@ -122,27 +102,6 @@ func TestHypervisorConfigNoHypervisorPath(t *testing.T) {
 	}
 
 	testHypervisorConfigValid(t, hypervisorConfig, true)
-}
-
-func TestHypervisorConfigIsValid(t *testing.T) {
-	hypervisorConfig := &HypervisorConfig{
-		KernelPath:     fmt.Sprintf("%s/%s", testDir, testKernel),
-		ImagePath:      fmt.Sprintf("%s/%s", testDir, testImage),
-		HypervisorPath: fmt.Sprintf("%s/%s", testDir, testHypervisor),
-	}
-
-	testHypervisorConfigValid(t, hypervisorConfig, true)
-}
-
-func TestHypervisorConfigBothInitrdAndImage(t *testing.T) {
-	hypervisorConfig := &HypervisorConfig{
-		KernelPath:     fmt.Sprintf("%s/%s", testDir, testKernel),
-		ImagePath:      fmt.Sprintf("%s/%s", testDir, testImage),
-		InitrdPath:     fmt.Sprintf("%s/%s", testDir, testInitrd),
-		HypervisorPath: "",
-	}
-
-	testHypervisorConfigValid(t, hypervisorConfig, false)
 }
 
 func TestHypervisorConfigValidTemplateConfig(t *testing.T) {

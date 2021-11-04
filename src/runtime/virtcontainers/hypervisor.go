@@ -536,21 +536,9 @@ func (conf *HypervisorConfig) CheckTemplateConfig() error {
 	return nil
 }
 
+// Valid will ensure valid defaults are applied within the HypervisorConfig, and return
+// an error if the config is not valid.
 func (conf *HypervisorConfig) Valid() error {
-
-	// Kata specific checks. Should be done outside the hypervisor
-	if conf.KernelPath == "" {
-		return fmt.Errorf("Missing kernel path")
-	}
-
-	if conf.ImagePath == "" && conf.InitrdPath == "" {
-		return fmt.Errorf("Missing image and initrd path")
-	}
-
-	if conf.ImagePath != "" && conf.InitrdPath != "" {
-		return fmt.Errorf("Image and initrd path cannot be both set")
-	}
-
 	if err := conf.CheckTemplateConfig(); err != nil {
 		return err
 	}

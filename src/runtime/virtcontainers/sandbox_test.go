@@ -42,8 +42,7 @@ func newHypervisorConfig(kernelParams []Param, hParams []Param) HypervisorConfig
 		ImagePath:        filepath.Join(testDir, testImage),
 		HypervisorPath:   filepath.Join(testDir, testHypervisor),
 		KernelParams:     kernelParams,
-		HypervisorParams: hParams,
-	}
+		HypervisorParams: hParams}
 
 }
 
@@ -1656,5 +1655,70 @@ func TestGetSandboxCpuSet(t *testing.T) {
 				t.Errorf("getSandboxCPUSet() result = %s, wanted result %s", res, tt.cpuResult)
 			}
 		})
+	}
+}
+
+func TestValidateHypervisorConfig(t *testing.T) {
+	assert := assert.New(t)
+	tests := []struct {
+		name    string
+		config  *HypervisorConfig
+		success bool
+	}{
+		{
+			name: "no kernel",
+			config: &HypervisorConfig{
+				ImagePath: "/foo/bar/image",
+			},
+			success: false,
+		},
+		{
+			name: "no kernel, initrd",
+			config: &HypervisorConfig{
+				InitrdPath: "/foo/bar/initrd",
+			},
+			success: false,
+		},
+		{
+			name: "no image or initrd",
+			config: &HypervisorConfig{
+				KernelPath: "/foo/bar/kernel",
+			},
+			success: false,
+		},
+		{
+			name: "both image and initrd",
+			config: &HypervisorConfig{
+				KernelPath: "/foo/bar/kernel",
+				ImagePath:  "/foo/bar/image",
+				InitrdPath: "/foo/bar/initrd",
+			},
+			success: false,
+		},
+		{
+			name: "okay with kernel and image",
+			config: &HypervisorConfig{
+				KernelPath: "/foo/bar/kernel",
+				ImagePath:  "/foo/bar/image",
+			},
+			success: true,
+		},
+		{
+			name: "okay with kernel and initrd",
+			config: &HypervisorConfig{
+				KernelPath: "/foo/bar/kernel",
+				InitrdPath: "/foo/bar/initrd",
+			},
+			success: true,
+		},
+	}
+
+	for _, tt := range tests {
+		err := validateHypervisorConfig(tt.config)
+		if tt.success {
+			assert.NoError(err, "%v: no error expected", tt.name)
+		} else {
+			assert.Error(err, "%v: error expected", tt.name)
+		}
 	}
 }

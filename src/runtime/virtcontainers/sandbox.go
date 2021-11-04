@@ -489,6 +489,24 @@ func createSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Fac
 	return s, nil
 }
 
+// For our sandboxes, we only boot a VM via a kernel and image/initrd. Ensure that our hypervisorconfig
+// meets this requirement.
+func validateHypervisorConfig(conf *HypervisorConfig) error {
+	if conf.KernelPath == "" {
+		return fmt.Errorf("Missing kernel path")
+	}
+
+	if conf.ImagePath == "" && conf.InitrdPath == "" {
+		return fmt.Errorf("Missing image and initrd path")
+	}
+
+	if conf.ImagePath != "" && conf.InitrdPath != "" {
+		return fmt.Errorf("Image and initrd path cannot be both set")
+	}
+
+	return nil
+}
+
 func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factory) (sb *Sandbox, retErr error) {
 	span, ctx := katatrace.Trace(ctx, nil, "newSandbox", sandboxTracingTags, map[string]string{"sandbox_id": sandboxConfig.ID})
 	defer span.End()
@@ -555,6 +573,11 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 	// Ignore the error. Restore can fail for a new sandbox
 	if err := s.Restore(); err != nil {
 		s.Logger().WithError(err).Debug("restore sandbox failed")
+	}
+
+	// validate the hypervisor config before creating the VM
+	if err := validateHypervisorConfig(&sandboxConfig.HypervisorConfig); err != nil {
+		return nil, err
 	}
 
 	// store doesn't require hypervisor to be stored immediately
