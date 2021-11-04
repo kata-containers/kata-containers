@@ -546,12 +546,10 @@ async fn virtio_blk_device_handler(
     sandbox: &Arc<Mutex<Sandbox>>,
     devidx: &DevIndex,
 ) -> Result<()> {
-    let mut dev = device.clone();
     let pcipath = pci::Path::from_str(&device.id)?;
+    let vm_path = get_virtio_blk_pci_device_name(sandbox, &pcipath).await?;
 
-    dev.vm_path = get_virtio_blk_pci_device_name(sandbox, &pcipath).await?;
-
-    update_spec_device(spec, devidx, &dev.container_path, &dev.vm_path, None)
+    update_spec_device(spec, devidx, &device.container_path, &vm_path, None)
 }
 
 // device.id should be a CCW path string
@@ -563,15 +561,14 @@ async fn virtio_blk_ccw_device_handler(
     sandbox: &Arc<Mutex<Sandbox>>,
     devidx: &DevIndex,
 ) -> Result<()> {
-    let mut dev = device.clone();
     let ccw_device = ccw::Device::from_str(&device.id)?;
-    dev.vm_path = get_virtio_blk_ccw_device_name(sandbox, &ccw_device).await?;
+    let vm_path = get_virtio_blk_ccw_device_name(sandbox, &ccw_device).await?;
     update_spec_device(
         spec,
         devidx,
-        &dev.container_path,
-        &dev.vm_path,
-        &dev.container_path,
+        &device.container_path,
+        &vm_path,
+        &device.container_path,
     )
 }
 
@@ -594,9 +591,8 @@ async fn virtio_scsi_device_handler(
     sandbox: &Arc<Mutex<Sandbox>>,
     devidx: &DevIndex,
 ) -> Result<()> {
-    let mut dev = device.clone();
-    dev.vm_path = get_scsi_device_name(sandbox, &device.id).await?;
-    update_spec_device(spec, devidx, &dev.container_path, &dev.vm_path, None)
+    let vm_path = get_scsi_device_name(sandbox, &device.id).await?;
+    update_spec_device(spec, devidx, &device.container_path, &vm_path, None)
 }
 
 #[instrument]
