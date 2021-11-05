@@ -845,7 +845,7 @@ mod tests {
 
         spec.linux = Some(Linux::default());
 
-        // linux.devices is empty
+        // linux.devices doesn't contain the updated device
         let res = update_spec_devices(
             &mut spec,
             HashMap::from_iter(vec![(
