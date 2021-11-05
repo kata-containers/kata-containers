@@ -17,31 +17,47 @@ package trace // import "go.opentelemetry.io/otel/sdk/trace"
 import (
 	"context"
 	"sync"
-
-	export "go.opentelemetry.io/otel/sdk/export/trace"
 )
 
-// SpanProcessor is interface to add hooks to start and end method invocations.
+// SpanProcessor is a processing pipeline for spans in the trace signal.
+// SpanProcessors registered with a TracerProvider and are called at the start
+// and end of a Span's lifecycle, and are called in the order they are
+// registered.
 type SpanProcessor interface {
+	// DO NOT CHANGE: any modification will not be backwards compatible and
+	// must never be done outside of a new major release.
 
-	// OnStart method is invoked when span is started. It is a synchronous call
-	// and hence should not block.
-	OnStart(parent context.Context, sd *export.SpanData)
+	// OnStart is called when a span is started. It is called synchronously
+	// and should not block.
+	OnStart(parent context.Context, s ReadWriteSpan)
+	// DO NOT CHANGE: any modification will not be backwards compatible and
+	// must never be done outside of a new major release.
 
-	// OnEnd method is invoked when span is finished. It is a synchronous call
-	// and hence should not block.
-	OnEnd(sd *export.SpanData)
+	// OnEnd is called when span is finished. It is called synchronously and
+	// hence not block.
+	OnEnd(s ReadOnlySpan)
+	// DO NOT CHANGE: any modification will not be backwards compatible and
+	// must never be done outside of a new major release.
 
-	// Shutdown is invoked when SDK shuts down. Use this call to cleanup any processor
-	// data. No calls to OnStart and OnEnd method is invoked after Shutdown call is
-	// made. It should not be blocked indefinitely.
+	// Shutdown is called when the SDK shuts down. Any cleanup or release of
+	// resources held by the processor should be done in this call.
+	//
+	// Calls to OnStart, OnEnd, or ForceFlush after this has been called
+	// should be ignored.
+	//
+	// All timeouts and cancellations contained in ctx must be honored, this
+	// should not block indefinitely.
 	Shutdown(ctx context.Context) error
+	// DO NOT CHANGE: any modification will not be backwards compatible and
+	// must never be done outside of a new major release.
 
 	// ForceFlush exports all ended spans to the configured Exporter that have not yet
 	// been exported.  It should only be called when absolutely necessary, such as when
 	// using a FaaS provider that may suspend the process after an invocation, but before
 	// the Processor can export the completed spans.
-	ForceFlush()
+	ForceFlush(ctx context.Context) error
+	// DO NOT CHANGE: any modification will not be backwards compatible and
+	// must never be done outside of a new major release.
 }
 
 type spanProcessorState struct {

@@ -14,38 +14,55 @@
 
 package trace // import "go.opentelemetry.io/otel/sdk/trace"
 
-import (
-	"go.opentelemetry.io/otel/sdk/resource"
-)
+// SpanLimits represents the limits of a span.
+type SpanLimits struct {
+	// AttributeCountLimit is the maximum allowed span attribute count.
+	AttributeCountLimit int
 
-// Config represents the global tracing configuration.
-type Config struct {
-	// DefaultSampler is the default sampler used when creating new spans.
-	DefaultSampler Sampler
+	// EventCountLimit is the maximum allowed span event count.
+	EventCountLimit int
 
-	// IDGenerator is for internal use only.
-	IDGenerator IDGenerator
+	// LinkCountLimit is the maximum allowed span link count.
+	LinkCountLimit int
 
-	// MaxEventsPerSpan is max number of message events per span
-	MaxEventsPerSpan int
+	// AttributePerEventCountLimit is the maximum allowed attribute per span event count.
+	AttributePerEventCountLimit int
 
-	// MaxAnnotationEventsPerSpan is max number of attributes per span
-	MaxAttributesPerSpan int
+	// AttributePerLinkCountLimit is the maximum allowed attribute per span link count.
+	AttributePerLinkCountLimit int
+}
 
-	// MaxLinksPerSpan is max number of links per span
-	MaxLinksPerSpan int
-
-	// Resource contains attributes representing an entity that produces telemetry.
-	Resource *resource.Resource
+func (sl *SpanLimits) ensureDefault() {
+	if sl.EventCountLimit <= 0 {
+		sl.EventCountLimit = DefaultEventCountLimit
+	}
+	if sl.AttributeCountLimit <= 0 {
+		sl.AttributeCountLimit = DefaultAttributeCountLimit
+	}
+	if sl.LinkCountLimit <= 0 {
+		sl.LinkCountLimit = DefaultLinkCountLimit
+	}
+	if sl.AttributePerEventCountLimit <= 0 {
+		sl.AttributePerEventCountLimit = DefaultAttributePerEventCountLimit
+	}
+	if sl.AttributePerLinkCountLimit <= 0 {
+		sl.AttributePerLinkCountLimit = DefaultAttributePerLinkCountLimit
+	}
 }
 
 const (
-	// DefaultMaxEventsPerSpan is default max number of message events per span
-	DefaultMaxEventsPerSpan = 1000
+	// DefaultAttributeCountLimit is the default maximum allowed span attribute count.
+	DefaultAttributeCountLimit = 128
 
-	// DefaultMaxAttributesPerSpan is default max number of attributes per span
-	DefaultMaxAttributesPerSpan = 1000
+	// DefaultEventCountLimit is the default maximum allowed span event count.
+	DefaultEventCountLimit = 128
 
-	// DefaultMaxLinksPerSpan is default max number of links per span
-	DefaultMaxLinksPerSpan = 1000
+	// DefaultLinkCountLimit is the default maximum allowed span link count.
+	DefaultLinkCountLimit = 128
+
+	// DefaultAttributePerEventCountLimit is the default maximum allowed attribute per span event count.
+	DefaultAttributePerEventCountLimit = 128
+
+	// DefaultAttributePerLinkCountLimit is the default maximum allowed attribute per span link count.
+	DefaultAttributePerLinkCountLimit = 128
 )
