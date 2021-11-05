@@ -745,7 +745,15 @@ pub async fn add_devices(
     for device in devices.iter() {
         let update = add_device(device, sandbox).await?;
         if let Some(dev_update) = update.dev {
-            dev_updates.insert(&device.container_path, dev_update);
+            if dev_updates
+                .insert(&device.container_path, dev_update)
+                .is_some()
+            {
+                return Err(anyhow!(
+                    "Conflicting device updates for {}",
+                    &device.container_path
+                ));
+            }
         }
     }
 
