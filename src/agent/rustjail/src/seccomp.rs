@@ -39,6 +39,24 @@ fn get_rule_conditions(args: &[LinuxSeccompArg]) -> Result<Vec<ScmpArgCompare>> 
     Ok(conditions)
 }
 
+pub fn get_unknown_syscalls(scmp: &LinuxSeccomp) -> Option<Vec<String>> {
+    let mut unknown_syscalls: Vec<String> = Vec::new();
+
+    for syscall in &scmp.syscalls {
+        for name in &syscall.names {
+            if get_syscall_from_name(name, None).is_err() {
+                unknown_syscalls.push(name.to_string());
+            }
+        }
+    }
+
+    if unknown_syscalls.is_empty() {
+        None
+    } else {
+        Some(unknown_syscalls)
+    }
+}
+
 // init_seccomp creates a seccomp filter and loads it for the current process
 // including all the child processes.
 pub fn init_seccomp(scmp: &LinuxSeccomp) -> Result<()> {
@@ -116,6 +134,72 @@ mod tests {
         };
     }
 
+    const TEST_DATA: &str = r#"{
+          "defaultAction": "SCMP_ACT_ALLOW",
+          "architectures": [
+          ],
+          "flags": [
+              "SECCOMP_FILTER_FLAG_LOG"
+          ],
+          "syscalls": [
+              {
+                 "names": [
+                      "dup3",
+                      "invalid_syscall1",
+                      "invalid_syscall2"
+                  ],
+                  "action": "SCMP_ACT_ERRNO"
+              },
+              {
+                 "names": [
+                      "process_vm_readv"
+                  ],
+                  "action": "SCMP_ACT_ERRNO",
+                  "errnoRet": 111,
+                  "args": [
+                      {
+                          "index": 0,
+                          "value": 10,
+                          "op": "SCMP_CMP_EQ"
+                      }
+                  ]
+              },
+              {
+                 "names": [
+                      "process_vm_readv"
+                  ],
+                  "action": "SCMP_ACT_ERRNO",
+                  "errnoRet": 111,
+                  "args": [
+                      {
+                          "index": 0,
+                          "value": 20,
+                          "op": "SCMP_CMP_EQ"
+                      }
+                  ]
+              },
+              {
+                 "names": [
+                      "process_vm_readv"
+                  ],
+                  "action": "SCMP_ACT_ERRNO",
+                  "errnoRet": 222,
+                  "args": [
+                      {
+                          "index": 0,
+                          "value": 30,
+                          "op": "SCMP_CMP_EQ"
+                      },
+                      {
+                          "index": 2,
+                          "value": 40,
+                          "op": "SCMP_CMP_EQ"
+                      }
+                  ]
+              }
+          ]
+      }"#;
+
     #[test]
     fn test_get_filter_attr_from_flag() {
         skip_if_not_root!();
@@ -129,74 +213,18 @@ mod tests {
     }
 
     #[test]
+    fn test_get_unknown_syscalls() {
+        let scmp: oci::LinuxSeccomp = serde_json::from_str(TEST_DATA).unwrap();
+        let syscalls = get_unknown_syscalls(&scmp).unwrap();
+
+        assert_eq!(syscalls, vec!["invalid_syscall1", "invalid_syscall2"]);
+    }
+
+    #[test]
     fn test_init_seccomp() {
         skip_if_not_root!();
 
-        let data = r#"{
-            "defaultAction": "SCMP_ACT_ALLOW",
-            "architectures": [
-            ],
-            "flags": [
-                "SECCOMP_FILTER_FLAG_LOG"
-            ],
-            "syscalls": [
-                {
-                   "names": [
-                        "dup3"
-                    ],
-                    "action": "SCMP_ACT_ERRNO"
-                },
-                {
-                   "names": [
-                        "process_vm_readv"
-                    ],
-                    "action": "SCMP_ACT_ERRNO",
-                    "errnoRet": 111,
-                    "args": [
-                        {
-                            "index": 0,
-                            "value": 10,
-                            "op": "SCMP_CMP_EQ"
-                        }
-                    ]
-                },
-                {
-                   "names": [
-                        "process_vm_readv"
-                    ],
-                    "action": "SCMP_ACT_ERRNO",
-                    "errnoRet": 111,
-                    "args": [
-                        {
-                            "index": 0,
-                            "value": 20,
-                            "op": "SCMP_CMP_EQ"
-                        }
-                    ]
-                },
-                {
-                   "names": [
-                        "process_vm_readv"
-                    ],
-                    "action": "SCMP_ACT_ERRNO",
-                    "errnoRet": 222,
-                    "args": [
-                        {
-                            "index": 0,
-                            "value": 30,
-                            "op": "SCMP_CMP_EQ"
-                        },
-                        {
-                            "index": 2,
-                            "value": 40,
-                            "op": "SCMP_CMP_EQ"
-                        }
-                    ]
-                }
-            ]
-        }"#;
-
-        let mut scmp: oci::LinuxSeccomp = serde_json::from_str(data).unwrap();
+        let mut scmp: oci::LinuxSeccomp = serde_json::from_str(TEST_DATA).unwrap();
         let mut arch: Vec<oci::Arch>;
 
         if cfg!(target_endian = "little") {
