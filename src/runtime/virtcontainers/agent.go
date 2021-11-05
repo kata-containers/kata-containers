@@ -9,6 +9,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/image"
 	persistapi "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist/api"
 	pbTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols/grpc"
@@ -139,9 +140,6 @@ type agent interface {
 	// resumeContainer will resume a paused container
 	resumeContainer(ctx context.Context, sandbox *Sandbox, c Container) error
 
-	// pullImage will tell the agent to pull an image inside the Pod Sandbox
-	pullImage(ctx context.Context, sandbox *Sandbox, image string, containerID string) error
-
 	// configure will update agent settings based on provided arguments
 	configure(ctx context.Context, h Hypervisor, id, sharePath string, config KataAgentConfig) error
 
@@ -193,4 +191,7 @@ type agent interface {
 
 	// getAgentMetrics get metrics of agent and guest through agent
 	getAgentMetrics(context.Context, *grpc.GetMetricsRequest) (*grpc.Metrics, error)
+
+	// pullImage will tell the agent to pull an image inside the Pod Sandbox
+	image.ImageService
 }

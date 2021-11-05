@@ -32,6 +32,7 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/drivers"
 	deviceManager "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/manager"
 	exp "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/experimental"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/image"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist"
 	persistapi "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist/api"
 	pbTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols"
@@ -1588,8 +1589,11 @@ func (s *Sandbox) ResumeContainer(ctx context.Context, containerID string) error
 }
 
 // PullImage pulls an image on a sandbox.
-func (s *Sandbox) PullImage(ctx context.Context, image string, containerID string) error {
-	if err := s.agent.pullImage(ctx, s, image, containerID); err != nil {
+func (s *Sandbox) PullImage(ctx context.Context, imageName string, containerID string) error {
+	req := &image.PullImageReq{
+		Image: imageName,
+	}
+	if _, err := s.agent.PullImage(ctx, req); err != nil {
 		return err
 	}
 	return nil
