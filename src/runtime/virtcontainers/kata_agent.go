@@ -21,6 +21,7 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils/katatrace"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/api"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/image"
 	persistapi "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist/api"
 	pbTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols"
 	kataclient "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols/client"
@@ -1767,15 +1768,6 @@ func (k *kataAgent) resumeContainer(ctx context.Context, sandbox *Sandbox, c Con
 	return err
 }
 
-func (k *kataAgent) pullImage(ctx context.Context, sandbox *Sandbox, image string, containerID string) error {
-	req := &grpc.PullImageRequest{
-		Image:       image,
-		ContainerId: containerID,
-	}
-	_, err := k.sendReq(ctx, req)
-	return err
-}
-
 func (k *kataAgent) memHotplugByProbe(ctx context.Context, addr uint64, sizeMB uint32, memorySectionSizeMB uint32) error {
 	if memorySectionSizeMB == uint32(0) {
 		return fmt.Errorf("memorySectionSizeMB couldn't be zero")
@@ -2022,7 +2014,7 @@ func (k *kataAgent) installReqFunc(c *kataclient.AgentClient) {
 		return k.client.AgentServiceClient.ResumeContainer(ctx, req.(*grpc.ResumeContainerRequest))
 	}
 	k.reqHandlers[grpcPullImageRequest] = func(ctx context.Context, req interface{}) (interface{}, error) {
-		return k.client.AgentServiceClient.PullImage(ctx, req.(*grpc.PullImageRequest))
+		return k.client.ImageServiceClient.PullImage(ctx, req.(*grpc.PullImageRequest))
 	}
 	k.reqHandlers[grpcReseedRandomDevRequest] = func(ctx context.Context, req interface{}) (interface{}, error) {
 		return k.client.AgentServiceClient.ReseedRandomDev(ctx, req.(*grpc.ReseedRandomDevRequest))
@@ -2279,4 +2271,19 @@ func (k *kataAgent) getAgentMetrics(ctx context.Context, req *grpc.GetMetricsReq
 	}
 
 	return resp.(*grpc.Metrics), nil
+}
+
+func (k *kataAgent) PullImage(ctx context.Context, req *image.PullImageReq) (*image.PullImageResp, error) {
+	r := &grpc.PullImageRequest{
+		Image: req.Image,
+	}
+	resp, err := k.sendReq(ctx, r)
+	if err != nil {
+		k.Logger().Errorf("agent pull image err. %v", err)
+		return nil, err
+	}
+	response := resp.(*grpc.PullImageResponse)
+	return &image.PullImageResp{
+		ImageRef: response.ImageRef,
+	}, nil
 }
