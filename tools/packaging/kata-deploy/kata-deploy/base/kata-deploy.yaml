@@ -16,7 +16,7 @@ spec:
       serviceAccountName: kata-label-node
       containers:
       - name: kube-kata
-        image: quay.io/kata-containers/kata-deploy:2.2.2
+        image: quay.io/kata-containers/kata-deploy:2.2.3
         imagePullPolicy: Always
         lifecycle:
           preStop:
