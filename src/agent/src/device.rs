@@ -500,81 +500,86 @@ impl<T: Into<DevUpdate>> From<T> for SpecUpdate {
 //     container_path: the path to the device in the original OCI spec
 //     update: information on changes to make to the device
 #[instrument]
-fn update_spec_devices(spec: &mut Spec, updates: HashMap<&str, DevUpdate>) -> Result<()> {
+fn update_spec_devices(spec: &mut Spec, mut updates: HashMap<&str, DevUpdate>) -> Result<()> {
     let linux = spec
         .linux
         .as_mut()
         .ok_or_else(|| anyhow!("Spec didn't contain linux field"))?;
+    let mut res_updates = HashMap::<(&str, i64, i64), DevNumUpdate>::with_capacity(updates.len());
 
-    let mut devidx = HashMap::<String, (usize, Vec<usize>)>::new();
-
-    for (i, d) in linux.devices.iter().enumerate() {
-        let mut residx = Vec::new();
-
-        if let Some(linuxres) = linux.resources.as_ref() {
-            for (j, r) in linuxres.devices.iter().enumerate() {
-                if r.r#type == d.r#type && r.major == Some(d.major) && r.minor == Some(d.minor) {
-                    residx.push(j);
-                }
-            }
-        }
-        devidx.insert(d.path.clone(), (i, residx));
-    }
-
-    for (container_path, update) in updates {
-        info!(
-            sl!(),
-            "update_spec_devices() considering device";
-            "container_path" => container_path,
-            "guest_major" => update.num.guest_major,
-            "guest_minor" => update.num.guest_minor,
-        );
-
-        if let Some(idxdata) = devidx.get(container_path) {
-            let dev = &mut linux.devices[idxdata.0];
-            let host_major = dev.major;
-            let host_minor = dev.minor;
-
-            dev.major = update.num.guest_major;
-            dev.minor = update.num.guest_minor;
-            if let Some(final_path) = update.final_path {
-                dev.path = final_path;
-            }
+    for specdev in &mut linux.devices {
+        if let Some(update) = updates.remove(specdev.path.as_str()) {
+            let host_major = specdev.major;
+            let host_minor = specdev.minor;
 
             info!(
                 sl!(),
-                "update_spec_devices(): updating device";
-                "container_path" => container_path,
+                "update_spec_devices() updating device";
+                "container_path" => &specdev.path,
+                "type" => &specdev.r#type,
                 "host_major" => host_major,
                 "host_minor" => host_minor,
-                "updated_path" => &dev.path,
-                "guest_major" => dev.major,
-                "guest_minor" => dev.minor,
+                "guest_major" => update.num.guest_major,
+                "guest_minor" => update.num.guest_minor,
+                "final_path" => update.final_path.as_ref(),
             );
 
-            // Resources must be updated since they are used to identify
-            // the device in the devices cgroup.
-            for ridx in &idxdata.1 {
-                // unwrap is safe, because residx would be empty if there
-                // were no resources
-                let res = &mut linux.resources.as_mut().unwrap().devices[*ridx];
-                res.major = Some(update.num.guest_major);
-                res.minor = Some(update.num.guest_minor);
-
-                info!(
-                    sl!(),
-                    "set resources for resource";
-                    "guest_major" => update.num.guest_major,
-                    "guest_minor" => update.num.guest_minor,
-                );
+            specdev.major = update.num.guest_major;
+            specdev.minor = update.num.guest_minor;
+            if let Some(final_path) = update.final_path {
+                specdev.path = final_path;
             }
-        } else {
-            return Err(anyhow!(
-                "Should have found a device {} in the spec",
-                container_path
-            ));
+
+            if res_updates
+                .insert(
+                    (specdev.r#type.as_str(), host_major, host_minor),
+                    update.num,
+                )
+                .is_some()
+            {
+                return Err(anyhow!(
+                    "Conflicting resource updates for host_major={} host_minor={}",
+                    host_major,
+                    host_minor
+                ));
+            }
         }
     }
+
+    // Make sure we applied all of our updates
+    if !updates.is_empty() {
+        return Err(anyhow!(
+            "Missing devices in OCI spec: {:?}",
+            updates
+                .keys()
+                .map(|d| format!("{:?}", d))
+                .collect::<Vec<_>>()
+                .join(" ")
+        ));
+    }
+
+    if let Some(resources) = linux.resources.as_mut() {
+        for r in &mut resources.devices {
+            if let (Some(host_major), Some(host_minor)) = (r.major, r.minor) {
+                if let Some(update) = res_updates.get(&(r.r#type.as_str(), host_major, host_minor))
+                {
+                    info!(
+                        sl!(),
+                        "update_spec_devices() updating resource";
+                        "type" => &r.r#type,
+                        "host_major" => host_major,
+                        "host_minor" => host_minor,
+                        "guest_major" => update.guest_major,
+                        "guest_minor" => update.guest_minor,
+                    );
+
+                    r.major = Some(update.guest_major);
+                    r.minor = Some(update.guest_minor);
+                }
+            }
+        }
+    }
+
     Ok(())
 }
 
