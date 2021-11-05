@@ -522,12 +522,6 @@ fn update_spec_devices(spec: &mut Spec, updates: HashMap<&str, DevUpdate>) -> Re
     }
 
     for (container_path, update) in updates {
-        // If no container_path is provided, we won't be able to match and
-        // update the device in the OCI spec device list. This is an error.
-        if container_path.is_empty() {
-            return Err(anyhow!("Container path cannot be empty for device"));
-        }
-
         info!(
             sl!(),
             "update_spec_devices() considering device";
@@ -837,20 +831,9 @@ mod tests {
         let update = DevNumUpdate::from_vm_path("");
         assert!(update.is_err());
 
-        // container_path empty
-        let container_path = "";
-        let vm_path = "/dev/null";
-        let res = update_spec_devices(
-            &mut spec,
-            HashMap::from_iter(vec![(
-                container_path,
-                DevNumUpdate::from_vm_path(vm_path).unwrap().into(),
-            )]),
-        );
-        assert!(res.is_err());
-
         // linux is empty
         let container_path = "/dev/null";
+        let vm_path = "/dev/null";
         let res = update_spec_devices(
             &mut spec,
             HashMap::from_iter(vec![(
