@@ -9,6 +9,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/image"
 	persistapi "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist/api"
 	pbTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols/grpc"
@@ -172,11 +173,6 @@ func (n *mockAgent) resumeContainer(ctx context.Context, sandbox *Sandbox, c Con
 	return nil
 }
 
-// pullImage is the Noop agent pull image implementation. It does nothing.
-func (n *mockAgent) pullImage(ctx context.Context, sandbox *Sandbox, image string, containerID string) error {
-	return nil
-}
-
 // configure is the Noop agent configuration implementation. It does nothing.
 func (n *mockAgent) configure(ctx context.Context, h Hypervisor, id, sharePath string, config KataAgentConfig) error {
 	return nil
@@ -245,5 +241,9 @@ func (n *mockAgent) getOOMEvent(ctx context.Context) (string, error) {
 }
 
 func (n *mockAgent) getAgentMetrics(ctx context.Context, req *grpc.GetMetricsRequest) (*grpc.Metrics, error) {
+	return nil, nil
+}
+
+func (k *mockAgent) PullImage(ctx context.Context, req *image.PullImageReq) (*image.PullImageResp, error) {
 	return nil, nil
 }
