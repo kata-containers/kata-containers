@@ -982,7 +982,10 @@ mod tests {
         );
     }
 
+    use serial_test::serial;
+
     #[tokio::test]
+    #[serial]
     async fn create_tmpfs() {
         skip_if_not_root!();
 
@@ -997,6 +1000,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn spawn_thread() {
         skip_if_not_root!();
 
@@ -1026,6 +1030,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn verify_container_cleanup_watching() {
         skip_if_not_root!();
 

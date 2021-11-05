@@ -465,7 +465,10 @@ mod tests {
         baremount.mount()
     }
 
+    use serial_test::serial;
+
     #[tokio::test]
+    #[serial]
     async fn set_sandbox_storage() {
         let logger = slog::Logger::root(slog::Discard, o!());
         let mut s = Sandbox::new(&logger).unwrap();
@@ -500,6 +503,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn remove_sandbox_storage() {
         skip_if_not_root!();
 
@@ -556,6 +560,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn unset_and_remove_sandbox_storage() {
         skip_if_not_root!();
 
@@ -607,6 +612,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn unset_sandbox_storage() {
         let logger = slog::Logger::root(slog::Discard, o!());
         let mut s = Sandbox::new(&logger).unwrap();
@@ -690,6 +696,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn get_container_entry_exist() {
         skip_if_not_root!();
         let logger = slog::Logger::root(slog::Discard, o!());
@@ -703,6 +710,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn get_container_no_entry() {
         let logger = slog::Logger::root(slog::Discard, o!());
         let mut s = Sandbox::new(&logger).unwrap();
@@ -712,6 +720,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn add_and_get_container() {
         skip_if_not_root!();
         let logger = slog::Logger::root(slog::Discard, o!());
@@ -723,6 +732,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn update_shared_pidns() {
         skip_if_not_root!();
         let logger = slog::Logger::root(slog::Discard, o!());
@@ -741,6 +751,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn add_guest_hooks() {
         let logger = slog::Logger::root(slog::Discard, o!());
         let mut s = Sandbox::new(&logger).unwrap();
@@ -764,6 +775,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn test_sandbox_set_destroy() {
         let logger = slog::Logger::root(slog::Discard, o!());
         let mut s = Sandbox::new(&logger).unwrap();
