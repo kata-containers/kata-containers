@@ -26,6 +26,7 @@ import (
 
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils/katatrace"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/uuid"
+	persistapi "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist/api"
 	pbTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
 )
@@ -218,6 +219,40 @@ func NewNetwork(configs ...*NetworkConfig) (*Network, error) {
 		[]Endpoint{},
 		0,
 	}, nil
+}
+
+func LoadNetwork(netInfo persistapi.NetworkInfo) *Network {
+	network := &Network{
+		NetNSPath:    netInfo.NetNsPath,
+		NetNSCreated: netInfo.NetNsCreated,
+	}
+
+	for _, e := range netInfo.Endpoints {
+		var ep Endpoint
+		switch EndpointType(e.Type) {
+		case PhysicalEndpointType:
+			ep = &PhysicalEndpoint{}
+		case VethEndpointType:
+			ep = &VethEndpoint{}
+		case VhostUserEndpointType:
+			ep = &VhostUserEndpoint{}
+		case MacvlanEndpointType:
+			ep = &MacvlanEndpoint{}
+		case MacvtapEndpointType:
+			ep = &MacvtapEndpoint{}
+		case TapEndpointType:
+			ep = &TapEndpoint{}
+		case IPVlanEndpointType:
+			ep = &IPVlanEndpoint{}
+		default:
+			networkLogger().WithField("endpoint-type", e.Type).Error("unknown endpoint type")
+			continue
+		}
+		ep.load(e)
+		network.Endpoints = append(network.Endpoints, ep)
+	}
+
+	return network
 }
 
 var networkTrace = getNetworkTrace("")
@@ -459,19 +494,19 @@ func (n *Network) Run(ctx context.Context, cb func() error) error {
 }
 
 // Add adds all needed interfaces inside the network namespace.
-func (n *Network) Add(ctx context.Context, s *Sandbox, hotplug bool) ([]Endpoint, error) {
+func (n *Network) Add(ctx context.Context, s *Sandbox, hotplug bool) error {
 	span, ctx := n.trace(ctx, "Add")
 	katatrace.AddTags(span, "type", n.InterworkingModel.GetModel())
 	defer span.End()
 
 	if err := n.attachEndpoints(ctx, s, hotplug); err != nil {
-		return n.Endpoints, err
+		return err
 	}
 
 	katatrace.AddTags(span, "endpoints", n.Endpoints, "hotplug", hotplug)
 	networkLogger().Debug("Network added")
 
-	return n.Endpoints, nil
+	return nil
 }
 
 func (n *Network) PostAdd(ctx context.Context, hotplug bool) error {
@@ -520,13 +555,6 @@ func (n *Network) Remove(ctx context.Context) error {
 	}
 
 	return nil
-}
-
-// NetworkNamespace contains all data related to its network namespace.
-type NetworkNamespace struct {
-	NetNsPath    string
-	Endpoints    []Endpoint
-	NetNsCreated bool
 }
 
 func createLink(netHandle *netlink.Handle, name string, expectedLink netlink.Link, queues int) (netlink.Link, []*os.File, error) {
@@ -1183,8 +1211,8 @@ func deleteNetNS(netNSPath string) error {
 	return nil
 }
 
-func generateVCNetworkStructures(ctx context.Context, networkNS NetworkNamespace) ([]*pbTypes.Interface, []*pbTypes.Route, []*pbTypes.ARPNeighbor, error) {
-	if networkNS.NetNsPath == "" {
+func generateVCNetworkStructures(ctx context.Context, network *Network) ([]*pbTypes.Interface, []*pbTypes.Route, []*pbTypes.ARPNeighbor, error) {
+	if network.NetNSPath == "" {
 		return nil, nil, nil, nil
 	}
 	span, _ := networkTrace(ctx, "generateVCNetworkStructures", nil)
@@ -1194,7 +1222,7 @@ func generateVCNetworkStructures(ctx context.Context, networkNS NetworkNamespace
 	var ifaces []*pbTypes.Interface
 	var neighs []*pbTypes.ARPNeighbor
 
-	for _, endpoint := range networkNS.Endpoints {
+	for _, endpoint := range network.Endpoints {
 		var ipAddresses []*pbTypes.IPAddress
 		for _, addr := range endpoint.Properties().Addrs {
 			// Skip localhost interface
