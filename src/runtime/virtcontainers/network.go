@@ -196,7 +196,17 @@ type Network struct {
 	NetmonPID int
 }
 
-func NewNetwork(config *NetworkConfig) (*Network, error) {
+func NewNetwork(configs ...*NetworkConfig) (*Network, error) {
+	if len(configs) > 1 {
+		return nil, fmt.Errorf("Too many network configurations")
+	}
+
+	// Empty constructor
+	if len(configs) == 0 {
+		return &Network{}, nil
+	}
+
+	config := configs[0]
 	if config == nil {
 		return nil, fmt.Errorf("Missing network configuration")
 	}
