@@ -211,8 +211,6 @@ type Sandbox struct {
 
 	state types.SandboxState
 
-	networkNS NetworkNamespace
-
 	sync.Mutex
 
 	swapSizeBytes int64
@@ -271,7 +269,7 @@ func (s *Sandbox) GetAnnotations() map[string]string {
 
 // GetNetNs returns the network namespace of the current sandbox.
 func (s *Sandbox) GetNetNs() string {
-	return s.networkNS.NetNsPath
+	return s.network.NetNSPath
 }
 
 // GetHypervisorPid returns the hypervisor's pid.
@@ -539,7 +537,6 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 		shmSize:         sandboxConfig.ShmSize,
 		sharePidNs:      sandboxConfig.SharePidNs,
 		network:         network,
-		networkNS:       NetworkNamespace{NetNsPath: sandboxConfig.NetworkConfig.NetNSPath},
 		ctx:             ctx,
 		swapDeviceNum:   0,
 		swapSizeBytes:   0,
@@ -814,23 +811,16 @@ func (s *Sandbox) createNetwork(ctx context.Context) error {
 	}
 
 	s.network = network
-	s.networkNS = NetworkNamespace{
-		NetNsPath:    s.config.NetworkConfig.NetNSPath,
-		NetNsCreated: s.config.NetworkConfig.NetNsCreated,
-	}
 
-	katatrace.AddTags(span, "networkNS", s.networkNS, "NetworkConfig", s.config.NetworkConfig)
+	katatrace.AddTags(span, "network", s.network, "NetworkConfig", s.config.NetworkConfig)
 
 	// In case there is a factory, network interfaces are hotplugged
 	// after vm is started.
 	if s.factory == nil {
 		// Add the network
-		endpoints, err := s.network.Add(ctx, s, false)
-		if err != nil {
+		if err := s.network.Add(ctx, s, false); err != nil {
 			return err
 		}
-
-		s.networkNS.Endpoints = endpoints
 	}
 	return nil
 }
@@ -913,7 +903,7 @@ func (s *Sandbox) AddInterface(ctx context.Context, inf *pbTypes.Interface) (*pb
 
 // RemoveInterface removes a nic of the sandbox.
 func (s *Sandbox) RemoveInterface(ctx context.Context, inf *pbTypes.Interface) (*pbTypes.Interface, error) {
-	for i, endpoint := range s.networkNS.Endpoints {
+	for i, endpoint := range s.network.Endpoints {
 		if endpoint.HardwareAddr() == inf.HwAddr {
 			s.Logger().WithField("endpoint-type", endpoint.Type()).Info("Hot detaching endpoint")
 			if err := s.network.detachEndpoint(ctx, s, i, true); err != nil {
@@ -1195,12 +1185,9 @@ func (s *Sandbox) startVM(ctx context.Context) (err error) {
 	// In case of vm factory, network interfaces are hotplugged
 	// after vm is started.
 	if s.factory != nil {
-		endpoints, err := s.network.Add(ctx, s, true)
-		if err != nil {
+		if err := s.network.Add(ctx, s, true); err != nil {
 			return err
 		}
-
-		s.networkNS.Endpoints = endpoints
 	}
 
 	s.Logger().Info("VM started")

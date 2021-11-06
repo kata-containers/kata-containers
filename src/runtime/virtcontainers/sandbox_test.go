@@ -1299,16 +1299,12 @@ func TestPreAddDevice(t *testing.T) {
 func TestGetNetNs(t *testing.T) {
 	s := Sandbox{}
 
-	expected := ""
+	expected := "/foo/bar/ns/net"
+	network, err := NewNetwork(&NetworkConfig{NetNSPath: expected})
+	assert.Nil(t, err)
+
+	s.network = network
 	netNs := s.GetNetNs()
-	assert.Equal(t, netNs, expected)
-
-	expected = "/foo/bar/ns/net"
-	s.networkNS = NetworkNamespace{
-		NetNsPath: expected,
-	}
-
-	netNs = s.GetNetNs()
 	assert.Equal(t, netNs, expected)
 }
 

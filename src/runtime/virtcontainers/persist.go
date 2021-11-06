@@ -164,10 +164,10 @@ func (s *Sandbox) dumpAgent(ss *persistapi.SandboxState) {
 
 func (s *Sandbox) dumpNetwork(ss *persistapi.SandboxState) {
 	ss.Network = persistapi.NetworkInfo{
-		NetNsPath:    s.networkNS.NetNsPath,
-		NetNsCreated: s.networkNS.NetNsCreated,
+		NetNsPath:    s.network.NetNSPath,
+		NetNsCreated: s.network.NetNSCreated,
 	}
-	for _, e := range s.networkNS.Endpoints {
+	for _, e := range s.network.Endpoints {
 		ss.Network.Endpoints = append(ss.Network.Endpoints, e.save())
 	}
 }
@@ -363,35 +363,7 @@ func (c *Container) loadContProcess(cs persistapi.ContainerState) {
 }
 
 func (s *Sandbox) loadNetwork(netInfo persistapi.NetworkInfo) {
-	s.networkNS = NetworkNamespace{
-		NetNsPath:    netInfo.NetNsPath,
-		NetNsCreated: netInfo.NetNsCreated,
-	}
-
-	for _, e := range netInfo.Endpoints {
-		var ep Endpoint
-		switch EndpointType(e.Type) {
-		case PhysicalEndpointType:
-			ep = &PhysicalEndpoint{}
-		case VethEndpointType:
-			ep = &VethEndpoint{}
-		case VhostUserEndpointType:
-			ep = &VhostUserEndpoint{}
-		case MacvlanEndpointType:
-			ep = &MacvlanEndpoint{}
-		case MacvtapEndpointType:
-			ep = &MacvtapEndpoint{}
-		case TapEndpointType:
-			ep = &TapEndpoint{}
-		case IPVlanEndpointType:
-			ep = &IPVlanEndpoint{}
-		default:
-			s.Logger().WithField("endpoint-type", e.Type).Error("unknown endpoint type")
-			continue
-		}
-		ep.load(e)
-		s.networkNS.Endpoints = append(s.networkNS.Endpoints, ep)
-	}
+	s.network = LoadNetwork(netInfo)
 }
 
 // Restore will restore sandbox data from persist file on disk
