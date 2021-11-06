@@ -217,7 +217,7 @@ func (fc *firecracker) CreateVM(ctx context.Context, id string, network *Network
 	fc.setPaths(&fc.config)
 
 	// So we need to repopulate this at StartVM where it is valid
-	fc.netNSPath = network.NetNSPath
+	fc.netNSPath = network.NetNS()
 
 	// Till we create lower privileged kata user run as root
 	// https://github.com/kata-containers/runtime/issues/1869

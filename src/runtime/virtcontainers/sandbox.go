@@ -269,7 +269,7 @@ func (s *Sandbox) GetAnnotations() map[string]string {
 
 // GetNetNs returns the network namespace of the current sandbox.
 func (s *Sandbox) GetNetNs() string {
-	return s.network.NetNSPath
+	return s.network.NetNS()
 }
 
 // GetHypervisorPid returns the hypervisor's pid.
@@ -880,7 +880,7 @@ func (s *Sandbox) AddInterface(ctx context.Context, inf *pbTypes.Interface) (*pb
 
 	defer func() {
 		if err != nil {
-			if errDetach := s.network.detachEndpoint(ctx, s, len(s.network.Endpoints)-1, true); err != nil {
+			if errDetach := s.network.detachEndpoint(ctx, s, len(s.network.Endpoints())-1, true); err != nil {
 				s.Logger().WithField("endpoint-type", endpoint.Type()).WithError(errDetach).Error("rollback hot attaching endpoint failed")
 			}
 		}
@@ -903,7 +903,7 @@ func (s *Sandbox) AddInterface(ctx context.Context, inf *pbTypes.Interface) (*pb
 
 // RemoveInterface removes a nic of the sandbox.
 func (s *Sandbox) RemoveInterface(ctx context.Context, inf *pbTypes.Interface) (*pbTypes.Interface, error) {
-	for i, endpoint := range s.network.Endpoints {
+	for i, endpoint := range s.network.Endpoints() {
 		if endpoint.HardwareAddr() == inf.HwAddr {
 			s.Logger().WithField("endpoint-type", endpoint.Type()).Info("Hot detaching endpoint")
 			if err := s.network.detachEndpoint(ctx, s, i, true); err != nil {
