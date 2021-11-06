@@ -269,7 +269,7 @@ func (s *Sandbox) GetAnnotations() map[string]string {
 
 // GetNetNs returns the network namespace of the current sandbox.
 func (s *Sandbox) GetNetNs() string {
-	return s.network.NetNS()
+	return s.network.NetworkID()
 }
 
 // GetHypervisorPid returns the hypervisor's pid.
@@ -797,8 +797,8 @@ func (s *Sandbox) Delete(ctx context.Context) error {
 }
 
 func (s *Sandbox) createNetwork(ctx context.Context) error {
-	if s.config.NetworkConfig.DisableNewNetNs ||
-		s.config.NetworkConfig.NetNSPath == "" {
+	if s.config.NetworkConfig.DisableNewNetwork ||
+		s.config.NetworkConfig.NetworkID == "" {
 		return nil
 	}
 

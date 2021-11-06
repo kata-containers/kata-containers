@@ -73,7 +73,7 @@ func TestGenerateInterfacesAndRoutes(t *testing.T) {
 
 	endpoints := []Endpoint{ep0}
 
-	nns, err := NewNetwork(&NetworkConfig{NetNSPath: "foobar", NetNsCreated: true})
+	nns, err := NewNetwork(&NetworkConfig{NetworkID: "foobar", NetworkCreated: true})
 	assert.Nil(t, err)
 	nns.eps = endpoints
 
