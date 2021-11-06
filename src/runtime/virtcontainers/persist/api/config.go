@@ -223,9 +223,9 @@ type ShimConfig struct {
 
 // NetworkConfig is the network configuration related to a network.
 type NetworkConfig struct {
-	NetNSPath         string
-	NetNsCreated      bool
-	DisableNewNetNs   bool
+	NetworkID         string
+	NetworkCreated    bool
+	DisableNewNetwork bool
 	InterworkingModel int
 }
 

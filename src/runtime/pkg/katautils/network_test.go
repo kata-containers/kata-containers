@@ -114,14 +114,14 @@ func TestSetupNetworkNamespace(t *testing.T) {
 
 	// Network namespace same as the host
 	config := &vc.NetworkConfig{
-		NetNSPath: "/proc/self/ns/net",
+		NetworkID: "/proc/self/ns/net",
 	}
 	err := SetupNetworkNamespace(config)
 	assert.Error(err)
 
 	// Non-existent netns path
 	config = &vc.NetworkConfig{
-		NetNSPath: "/proc/123456789/ns/net",
+		NetworkID: "/proc/123456789/ns/net",
 	}
 	err = SetupNetworkNamespace(config)
 	assert.Error(err)
@@ -130,7 +130,7 @@ func TestSetupNetworkNamespace(t *testing.T) {
 	n, err := testutils.NewNS()
 	assert.NoError(err)
 	config = &vc.NetworkConfig{
-		NetNSPath: n.Path(),
+		NetworkID: n.Path(),
 	}
 	err = SetupNetworkNamespace(config)
 	assert.NoError(err)
@@ -140,16 +140,16 @@ func TestSetupNetworkNamespace(t *testing.T) {
 	config = &vc.NetworkConfig{}
 	err = SetupNetworkNamespace(config)
 	assert.NoError(err)
-	n, err = ns.GetNS(config.NetNSPath)
+	n, err = ns.GetNS(config.NetworkID)
 	assert.NoError(err)
 	assert.NotNil(n)
-	assert.True(config.NetNsCreated)
+	assert.True(config.NetworkCreated)
 	n.Close()
-	unix.Unmount(config.NetNSPath, unix.MNT_DETACH)
-	os.RemoveAll(config.NetNSPath)
+	unix.Unmount(config.NetworkID, unix.MNT_DETACH)
+	os.RemoveAll(config.NetworkID)
 
 	// Config with DisableNewNetNs
-	config = &vc.NetworkConfig{DisableNewNetNs: true}
+	config = &vc.NetworkConfig{DisableNewNetwork: true}
 	err = SetupNetworkNamespace(config)
 	assert.NoError(err)
 }

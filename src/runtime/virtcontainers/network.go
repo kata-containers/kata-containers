@@ -177,10 +177,10 @@ type NetworkInterfacePair struct {
 
 // NetworkConfig is the network configuration related to a network.
 type NetworkConfig struct {
-	NetNSPath         string
+	NetworkID         string
 	InterworkingModel NetInterworkingModel
-	NetNsCreated      bool
-	DisableNewNetNs   bool
+	NetworkCreated    bool
+	DisableNewNetwork bool
 }
 
 func networkLogger() *logrus.Entry {
@@ -213,9 +213,9 @@ func NewNetwork(configs ...*NetworkConfig) (*Network, error) {
 	}
 
 	return &Network{
-		config.NetNSPath,
+		config.NetworkID,
 		config.InterworkingModel,
-		config.NetNsCreated,
+		config.NetworkCreated,
 		[]Endpoint{},
 		0,
 	}, nil
@@ -223,8 +223,8 @@ func NewNetwork(configs ...*NetworkConfig) (*Network, error) {
 
 func LoadNetwork(netInfo persistapi.NetworkInfo) *Network {
 	network := &Network{
-		netNSPath:    netInfo.NetNsPath,
-		netNSCreated: netInfo.NetNsCreated,
+		netNSPath:    netInfo.NetworkID,
+		netNSCreated: netInfo.NetworkCreated,
 	}
 
 	for _, e := range netInfo.Endpoints {
@@ -558,11 +558,11 @@ func (n *Network) Remove(ctx context.Context) error {
 }
 
 // Network getters
-func (n *Network) NetNS() string {
+func (n *Network) NetworkID() string {
 	return n.netNSPath
 }
 
-func (n *Network) NetNSCreated() bool {
+func (n *Network) NetworkCreated() bool {
 	return n.netNSCreated
 }
 

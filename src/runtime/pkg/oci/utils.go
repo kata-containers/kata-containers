@@ -318,11 +318,11 @@ func networkConfig(ocispec specs.Spec, config RuntimeConfig) (vc.NetworkConfig, 
 		}
 
 		if n.Path != "" {
-			netConf.NetNSPath = n.Path
+			netConf.NetworkID = n.Path
 		}
 	}
 	netConf.InterworkingModel = config.InterNetworkModel
-	netConf.DisableNewNetNs = config.DisableNewNetNs
+	netConf.DisableNewNetwork = config.DisableNewNetNs
 
 	return netConf, nil
 }
@@ -798,7 +798,7 @@ func addRuntimeConfigOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig, r
 	}
 
 	if err := newAnnotationConfiguration(ocispec, vcAnnotations.DisableNewNetNs).setBool(func(disableNewNetNs bool) {
-		sbConfig.NetworkConfig.DisableNewNetNs = disableNewNetNs
+		sbConfig.NetworkConfig.DisableNewNetwork = disableNewNetNs
 	}); err != nil {
 		return err
 	}

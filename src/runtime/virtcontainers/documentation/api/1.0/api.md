@@ -355,10 +355,10 @@ type HypervisorConfig struct {
 ```Go
 // NetworkConfig is the network configuration related to a network.
 type NetworkConfig struct {
-	NetNSPath         string
-	NetNsCreated      bool
-	DisableNewNetNs   bool
+	NetworkID         string
 	InterworkingModel NetInterworkingModel
+	NetworkCreated    bool
+	DisableNewNetwork bool
 }
 ```
 ###### `NetInterworkingModel`
