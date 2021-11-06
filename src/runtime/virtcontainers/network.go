@@ -439,7 +439,7 @@ func (n *Network) attachEndpoints(ctx context.Context, s *Sandbox, hotplug bool)
 }
 
 // Run runs a callback in the specified network namespace.
-func (n *Network) Run(ctx context.Context, _ string, cb func() error) error {
+func (n *Network) Run(ctx context.Context, cb func() error) error {
 	span, _ := n.trace(ctx, "Run")
 	defer span.End()
 
@@ -449,7 +449,7 @@ func (n *Network) Run(ctx context.Context, _ string, cb func() error) error {
 }
 
 // Add adds all needed interfaces inside the network namespace.
-func (n *Network) Add(ctx context.Context, config *NetworkConfig, s *Sandbox, hotplug bool) ([]Endpoint, error) {
+func (n *Network) Add(ctx context.Context, s *Sandbox, hotplug bool) ([]Endpoint, error) {
 	span, ctx := n.trace(ctx, "Add")
 	katatrace.AddTags(span, "type", n.InterworkingModel.GetModel())
 	defer span.End()
@@ -464,7 +464,7 @@ func (n *Network) Add(ctx context.Context, config *NetworkConfig, s *Sandbox, ho
 	return n.Endpoints, nil
 }
 
-func (n *Network) PostAdd(ctx context.Context, _ *NetworkNamespace, hotplug bool) error {
+func (n *Network) PostAdd(ctx context.Context, hotplug bool) error {
 	if hotplug {
 		return nil
 	}
@@ -492,7 +492,7 @@ func (n *Network) PostAdd(ctx context.Context, _ *NetworkNamespace, hotplug bool
 
 // Remove network endpoints in the network namespace. It also deletes the network
 // namespace in case the namespace has been created by us.
-func (n *Network) Remove(ctx context.Context, _ *NetworkNamespace, hypervisor Hypervisor) error {
+func (n *Network) Remove(ctx context.Context) error {
 	span, ctx := n.trace(ctx, "Remove")
 	defer span.End()
 
