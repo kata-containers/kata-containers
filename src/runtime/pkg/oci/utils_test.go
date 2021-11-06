@@ -822,7 +822,7 @@ func TestAddRuntimeAnnotations(t *testing.T) {
 	addAnnotations(ocispec, &config, runtimeConfig)
 	assert.Equal(config.DisableGuestSeccomp, true)
 	assert.Equal(config.SandboxCgroupOnly, true)
-	assert.Equal(config.NetworkConfig.DisableNewNetNs, true)
+	assert.Equal(config.NetworkConfig.DisableNewNetwork, true)
 	assert.Equal(config.NetworkConfig.InterworkingModel, vc.NetXConnectMacVtapModel)
 }
 

@@ -1300,7 +1300,7 @@ func TestGetNetNs(t *testing.T) {
 	s := Sandbox{}
 
 	expected := "/foo/bar/ns/net"
-	network, err := NewNetwork(&NetworkConfig{NetNSPath: expected})
+	network, err := NewNetwork(&NetworkConfig{NetworkID: expected})
 	assert.Nil(t, err)
 
 	s.network = network

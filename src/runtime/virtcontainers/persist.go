@@ -164,8 +164,8 @@ func (s *Sandbox) dumpAgent(ss *persistapi.SandboxState) {
 
 func (s *Sandbox) dumpNetwork(ss *persistapi.SandboxState) {
 	ss.Network = persistapi.NetworkInfo{
-		NetNsPath:    s.network.NetNS(),
-		NetNsCreated: s.network.NetNSCreated(),
+		NetworkID:      s.network.NetworkID(),
+		NetworkCreated: s.network.NetworkCreated(),
 	}
 	for _, e := range s.network.Endpoints() {
 		ss.Network.Endpoints = append(ss.Network.Endpoints, e.save())
@@ -177,9 +177,9 @@ func (s *Sandbox) dumpConfig(ss *persistapi.SandboxState) {
 	ss.Config = persistapi.SandboxConfig{
 		HypervisorType: string(sconfig.HypervisorType),
 		NetworkConfig: persistapi.NetworkConfig{
-			NetNSPath:         sconfig.NetworkConfig.NetNSPath,
-			NetNsCreated:      sconfig.NetworkConfig.NetNsCreated,
-			DisableNewNetNs:   sconfig.NetworkConfig.DisableNewNetNs,
+			NetworkID:         sconfig.NetworkConfig.NetworkID,
+			NetworkCreated:    sconfig.NetworkConfig.NetworkCreated,
+			DisableNewNetwork: sconfig.NetworkConfig.DisableNewNetwork,
 			InterworkingModel: int(sconfig.NetworkConfig.InterworkingModel),
 		},
 
@@ -416,9 +416,9 @@ func loadSandboxConfig(id string) (*SandboxConfig, error) {
 		ID:             id,
 		HypervisorType: HypervisorType(savedConf.HypervisorType),
 		NetworkConfig: NetworkConfig{
-			NetNSPath:         savedConf.NetworkConfig.NetNSPath,
-			NetNsCreated:      savedConf.NetworkConfig.NetNsCreated,
-			DisableNewNetNs:   savedConf.NetworkConfig.DisableNewNetNs,
+			NetworkID:         savedConf.NetworkConfig.NetworkID,
+			NetworkCreated:    savedConf.NetworkConfig.NetworkCreated,
+			DisableNewNetwork: savedConf.NetworkConfig.DisableNewNetwork,
 			InterworkingModel: NetInterworkingModel(savedConf.NetworkConfig.InterworkingModel),
 		},
 
