@@ -164,10 +164,10 @@ func (s *Sandbox) dumpAgent(ss *persistapi.SandboxState) {
 
 func (s *Sandbox) dumpNetwork(ss *persistapi.SandboxState) {
 	ss.Network = persistapi.NetworkInfo{
-		NetNsPath:    s.network.NetNSPath,
-		NetNsCreated: s.network.NetNSCreated,
+		NetNsPath:    s.network.NetNS(),
+		NetNsCreated: s.network.NetNSCreated(),
 	}
-	for _, e := range s.network.Endpoints {
+	for _, e := range s.network.Endpoints() {
 		ss.Network.Endpoints = append(ss.Network.Endpoints, e.save())
 	}
 }

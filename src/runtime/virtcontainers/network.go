@@ -189,12 +189,12 @@ func networkLogger() *logrus.Entry {
 
 // Network represents a sandbox networking setup.
 type Network struct {
-	NetNSPath         string
-	InterworkingModel NetInterworkingModel
-	NetNSCreated      bool
+	netNSPath         string
+	interworkingModel NetInterworkingModel
+	netNSCreated      bool
 
-	Endpoints []Endpoint
-	NetmonPID int
+	eps       []Endpoint
+	netmonPID int
 }
 
 func NewNetwork(configs ...*NetworkConfig) (*Network, error) {
@@ -223,8 +223,8 @@ func NewNetwork(configs ...*NetworkConfig) (*Network, error) {
 
 func LoadNetwork(netInfo persistapi.NetworkInfo) *Network {
 	network := &Network{
-		NetNSPath:    netInfo.NetNsPath,
-		NetNSCreated: netInfo.NetNsCreated,
+		netNSPath:    netInfo.NetNsPath,
+		netNSCreated: netInfo.NetNsCreated,
 	}
 
 	for _, e := range netInfo.Endpoints {
@@ -249,7 +249,7 @@ func LoadNetwork(netInfo persistapi.NetworkInfo) *Network {
 			continue
 		}
 		ep.load(e)
-		network.Endpoints = append(network.Endpoints, ep)
+		network.eps = append(network.eps, ep)
 	}
 
 	return network
@@ -300,7 +300,7 @@ func (n *Network) attachEndpoint(ctx context.Context, s *Sandbox, netInfo Networ
 		endpoint, err = createPhysicalEndpoint(netInfo)
 	} else {
 		var socketPath string
-		idx := len(n.Endpoints)
+		idx := len(n.eps)
 
 		// Check if this is a dummy interface which has a vhost-user socket associated with it
 		socketPath, err = vhostUserSocketPath(netInfo)
@@ -313,7 +313,7 @@ func (n *Network) attachEndpoint(ctx context.Context, s *Sandbox, netInfo Networ
 			endpoint, err = createVhostUserEndpoint(netInfo, socketPath)
 		} else if netInfo.Iface.Type == "macvlan" {
 			networkLogger().Infof("macvlan interface found")
-			endpoint, err = createMacvlanNetworkEndpoint(idx, netInfo.Iface.Name, n.InterworkingModel)
+			endpoint, err = createMacvlanNetworkEndpoint(idx, netInfo.Iface.Name, n.interworkingModel)
 		} else if netInfo.Iface.Type == "macvtap" {
 			networkLogger().Infof("macvtap interface found")
 			endpoint, err = createMacvtapNetworkEndpoint(netInfo)
@@ -330,14 +330,14 @@ func (n *Network) attachEndpoint(ctx context.Context, s *Sandbox, netInfo Networ
 					return nil, fmt.Errorf("tun networking device not yet supported")
 				case 2:
 					networkLogger().Info("tuntap tap interface found")
-					endpoint, err = createTuntapNetworkEndpoint(idx, netInfo.Iface.Name, netInfo.Iface.HardwareAddr, n.InterworkingModel)
+					endpoint, err = createTuntapNetworkEndpoint(idx, netInfo.Iface.Name, netInfo.Iface.HardwareAddr, n.interworkingModel)
 				default:
 					return nil, fmt.Errorf("tuntap network %v mode unsupported", link.(*netlink.Tuntap).Mode)
 				}
 			}
 		} else if netInfo.Iface.Type == "veth" {
 			networkLogger().Info("veth interface found")
-			endpoint, err = createVethNetworkEndpoint(idx, netInfo.Iface.Name, n.InterworkingModel)
+			endpoint, err = createVethNetworkEndpoint(idx, netInfo.Iface.Name, n.interworkingModel)
 		} else if netInfo.Iface.Type == "ipvlan" {
 			networkLogger().Info("ipvlan interface found")
 			endpoint, err = createIPVlanNetworkEndpoint(idx, netInfo.Iface.Name)
@@ -348,7 +348,7 @@ func (n *Network) attachEndpoint(ctx context.Context, s *Sandbox, netInfo Networ
 
 	endpoint.SetProperties(netInfo)
 
-	if err := doNetNS(n.NetNSPath, func(_ ns.NetNS) error {
+	if err := doNetNS(n.netNSPath, func(_ ns.NetNS) error {
 		networkLogger().WithField("endpoint-type", endpoint.Type()).WithField("hotplug", hotplug).Info("Attaching endpoint")
 		if hotplug {
 			if err := endpoint.HotAttach(ctx, s.hypervisor); err != nil {
@@ -382,22 +382,22 @@ func (n *Network) attachEndpoint(ctx context.Context, s *Sandbox, netInfo Networ
 		return nil, err
 	}
 
-	n.Endpoints = append(n.Endpoints, endpoint)
+	n.eps = append(n.eps, endpoint)
 
 	return endpoint, nil
 }
 
 func (n *Network) detachEndpoint(ctx context.Context, s *Sandbox, idx int, hotplug bool) error {
-	if idx > len(n.Endpoints)-1 {
+	if idx > len(n.eps)-1 {
 		return fmt.Errorf("Enpoint index overflow")
 	}
 
-	endpoint := n.Endpoints[idx]
+	endpoint := n.eps[idx]
 
 	if endpoint.GetRxRateLimiter() {
 		networkLogger().WithField("endpoint-type", endpoint.Type()).Info("Deleting rx rate limiter")
 		// Deleting rx rate limiter should enter the network namespace.
-		if err := removeRxRateLimiter(endpoint, n.NetNSPath); err != nil {
+		if err := removeRxRateLimiter(endpoint, n.netNSPath); err != nil {
 			return err
 		}
 	}
@@ -405,7 +405,7 @@ func (n *Network) detachEndpoint(ctx context.Context, s *Sandbox, idx int, hotpl
 	if endpoint.GetTxRateLimiter() {
 		networkLogger().WithField("endpoint-type", endpoint.Type()).Info("Deleting tx rate limiter")
 		// Deleting tx rate limiter should enter the network namespace.
-		if err := removeTxRateLimiter(endpoint, n.NetNSPath); err != nil {
+		if err := removeTxRateLimiter(endpoint, n.netNSPath); err != nil {
 			return err
 		}
 	}
@@ -414,16 +414,16 @@ func (n *Network) detachEndpoint(ctx context.Context, s *Sandbox, idx int, hotpl
 	// if required.
 	networkLogger().WithField("endpoint-type", endpoint.Type()).Info("Detaching endpoint")
 	if hotplug && s != nil {
-		if err := endpoint.HotDetach(ctx, s.hypervisor, n.NetNSCreated, n.NetNSPath); err != nil {
+		if err := endpoint.HotDetach(ctx, s.hypervisor, n.netNSCreated, n.netNSPath); err != nil {
 			return err
 		}
 	} else {
-		if err := endpoint.Detach(ctx, n.NetNSCreated, n.NetNSPath); err != nil {
+		if err := endpoint.Detach(ctx, n.netNSCreated, n.netNSPath); err != nil {
 			return err
 		}
 	}
 
-	n.Endpoints = append(n.Endpoints[:idx], n.Endpoints[idx+1:]...)
+	n.eps = append(n.eps[:idx], n.eps[idx+1:]...)
 
 	return nil
 }
@@ -432,7 +432,7 @@ func (n *Network) detachEndpoint(ctx context.Context, s *Sandbox, idx int, hotpl
 // 1. Create the endpoints for the relevant interfaces found there.
 // 2. Attach them to the VM.
 func (n *Network) attachEndpoints(ctx context.Context, s *Sandbox, hotplug bool) error {
-	netnsHandle, err := netns.GetFromPath(n.NetNSPath)
+	netnsHandle, err := netns.GetFromPath(n.netNSPath)
 	if err != nil {
 		return err
 	}
@@ -474,11 +474,11 @@ func (n *Network) attachEndpoints(ctx context.Context, s *Sandbox, hotplug bool)
 		}
 	}
 
-	sort.Slice(n.Endpoints, func(i, j int) bool {
-		return n.Endpoints[i].Name() < n.Endpoints[j].Name()
+	sort.Slice(n.eps, func(i, j int) bool {
+		return n.eps[i].Name() < n.eps[j].Name()
 	})
 
-	networkLogger().WithField("endpoints", n.Endpoints).Info("Endpoints found after scan")
+	networkLogger().WithField("endpoints", n.eps).Info("endpoints found after scan")
 
 	return nil
 }
@@ -488,7 +488,7 @@ func (n *Network) Run(ctx context.Context, cb func() error) error {
 	span, _ := n.trace(ctx, "Run")
 	defer span.End()
 
-	return doNetNS(n.NetNSPath, func(_ ns.NetNS) error {
+	return doNetNS(n.netNSPath, func(_ ns.NetNS) error {
 		return cb()
 	})
 }
@@ -496,14 +496,14 @@ func (n *Network) Run(ctx context.Context, cb func() error) error {
 // Add adds all needed interfaces inside the network namespace.
 func (n *Network) Add(ctx context.Context, s *Sandbox, hotplug bool) error {
 	span, ctx := n.trace(ctx, "Add")
-	katatrace.AddTags(span, "type", n.InterworkingModel.GetModel())
+	katatrace.AddTags(span, "type", n.interworkingModel.GetModel())
 	defer span.End()
 
 	if err := n.attachEndpoints(ctx, s, hotplug); err != nil {
 		return err
 	}
 
-	katatrace.AddTags(span, "endpoints", n.Endpoints, "hotplug", hotplug)
+	katatrace.AddTags(span, "endpoints", n.eps, "hotplug", hotplug)
 	networkLogger().Debug("Network added")
 
 	return nil
@@ -514,11 +514,11 @@ func (n *Network) PostAdd(ctx context.Context, hotplug bool) error {
 		return nil
 	}
 
-	if n.Endpoints == nil {
+	if n.eps == nil {
 		return nil
 	}
 
-	endpoints := n.Endpoints
+	endpoints := n.eps
 
 	for _, endpoint := range endpoints {
 		netPair := endpoint.NetworkPair()
@@ -541,7 +541,7 @@ func (n *Network) Remove(ctx context.Context) error {
 	span, ctx := n.trace(ctx, "Remove")
 	defer span.End()
 
-	for i, _ := range n.Endpoints {
+	for i, _ := range n.eps {
 		if err := n.detachEndpoint(ctx, nil, i, false); err != nil {
 			return err
 		}
@@ -549,12 +549,25 @@ func (n *Network) Remove(ctx context.Context) error {
 
 	networkLogger().Debug("Network removed")
 
-	if n.NetNSCreated {
-		networkLogger().Infof("Network namespace %q deleted", n.NetNSPath)
-		return deleteNetNS(n.NetNSPath)
+	if n.netNSCreated {
+		networkLogger().Infof("Network namespace %q deleted", n.netNSPath)
+		return deleteNetNS(n.netNSPath)
 	}
 
 	return nil
+}
+
+// Network getters
+func (n *Network) NetNS() string {
+	return n.netNSPath
+}
+
+func (n *Network) NetNSCreated() bool {
+	return n.netNSCreated
+}
+
+func (n *Network) Endpoints() []Endpoint {
+	return n.eps
 }
 
 func createLink(netHandle *netlink.Handle, name string, expectedLink netlink.Link, queues int) (netlink.Link, []*os.File, error) {
@@ -1212,7 +1225,7 @@ func deleteNetNS(netNSPath string) error {
 }
 
 func generateVCNetworkStructures(ctx context.Context, network *Network) ([]*pbTypes.Interface, []*pbTypes.Route, []*pbTypes.ARPNeighbor, error) {
-	if network.NetNSPath == "" {
+	if network.netNSPath == "" {
 		return nil, nil, nil, nil
 	}
 	span, _ := networkTrace(ctx, "generateVCNetworkStructures", nil)
@@ -1222,7 +1235,7 @@ func generateVCNetworkStructures(ctx context.Context, network *Network) ([]*pbTy
 	var ifaces []*pbTypes.Interface
 	var neighs []*pbTypes.ARPNeighbor
 
-	for _, endpoint := range network.Endpoints {
+	for _, endpoint := range network.eps {
 		var ipAddresses []*pbTypes.IPAddress
 		for _, addr := range endpoint.Properties().Addrs {
 			// Skip localhost interface
