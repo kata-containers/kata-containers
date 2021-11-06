@@ -199,7 +199,7 @@ func (fc *firecracker) setConfig(config *HypervisorConfig) error {
 
 // CreateVM For firecracker this call only sets the internal structure up.
 // The sandbox will be created and started through startSandbox().
-func (fc *firecracker) CreateVM(ctx context.Context, id string, networkNS NetworkNamespace, hypervisorConfig *HypervisorConfig) error {
+func (fc *firecracker) CreateVM(ctx context.Context, id string, network *Network, hypervisorConfig *HypervisorConfig) error {
 	fc.ctx = ctx
 
 	span, _ := katatrace.Trace(ctx, fc.Logger(), "CreateVM", fcTracingTags, map[string]string{"sandbox_id": fc.id})
@@ -217,7 +217,7 @@ func (fc *firecracker) CreateVM(ctx context.Context, id string, networkNS Networ
 	fc.setPaths(&fc.config)
 
 	// So we need to repopulate this at StartVM where it is valid
-	fc.netNSPath = networkNS.NetNsPath
+	fc.netNSPath = network.NetNSPath
 
 	// Till we create lower privileged kata user run as root
 	// https://github.com/kata-containers/runtime/issues/1869

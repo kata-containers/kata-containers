@@ -243,6 +243,9 @@ func TestClhCreateVMWithInitrd(t *testing.T) {
 	clhConfig.VMStorePath = store.RunVMStoragePath()
 	clhConfig.RunStorePath = store.RunStoragePath()
 
+	network, err := NewNetwork()
+	assert.NoError(err)
+
 	clh := &cloudHypervisor{
 		config: clhConfig,
 	}
@@ -255,7 +258,7 @@ func TestClhCreateVMWithInitrd(t *testing.T) {
 		},
 	}
 
-	err = clh.CreateVM(context.Background(), sandbox.id, NetworkNamespace{}, &sandbox.config.HypervisorConfig)
+	err = clh.CreateVM(context.Background(), sandbox.id, network, &sandbox.config.HypervisorConfig)
 	assert.NoError(err)
 	assert.Exactly(clhConfig, clh.config)
 }
@@ -273,6 +276,9 @@ func TestClhCreateVM(t *testing.T) {
 	clhConfig.VMStorePath = store.RunVMStoragePath()
 	clhConfig.RunStorePath = store.RunStoragePath()
 
+	network, err := NewNetwork()
+	assert.NoError(err)
+
 	clh := &cloudHypervisor{
 		config: clhConfig,
 	}
@@ -285,7 +291,7 @@ func TestClhCreateVM(t *testing.T) {
 		},
 	}
 
-	err = clh.CreateVM(context.Background(), sandbox.id, NetworkNamespace{}, &sandbox.config.HypervisorConfig)
+	err = clh.CreateVM(context.Background(), sandbox.id, network, &sandbox.config.HypervisorConfig)
 	assert.NoError(err)
 	assert.Exactly(clhConfig, clh.config)
 }
