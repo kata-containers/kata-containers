@@ -825,7 +825,7 @@ func (s *Sandbox) createNetwork(ctx context.Context) error {
 	// after vm is started.
 	if s.factory == nil {
 		// Add the network
-		endpoints, err := s.network.Add(ctx, &s.config.NetworkConfig, s, false)
+		endpoints, err := s.network.Add(ctx, s, false)
 		if err != nil {
 			return err
 		}
@@ -836,14 +836,14 @@ func (s *Sandbox) createNetwork(ctx context.Context) error {
 }
 
 func (s *Sandbox) postCreatedNetwork(ctx context.Context) error {
-	return s.network.PostAdd(ctx, &s.networkNS, s.factory != nil)
+	return s.network.PostAdd(ctx, s.factory != nil)
 }
 
 func (s *Sandbox) removeNetwork(ctx context.Context) error {
 	span, ctx := katatrace.Trace(ctx, s.Logger(), "removeNetwork", sandboxTracingTags, map[string]string{"sandbox_id": s.id})
 	defer span.End()
 
-	return s.network.Remove(ctx, &s.networkNS, s.hypervisor)
+	return s.network.Remove(ctx)
 }
 
 func (s *Sandbox) generateNetInfo(inf *pbTypes.Interface) (NetworkInfo, error) {
@@ -1173,7 +1173,7 @@ func (s *Sandbox) startVM(ctx context.Context) (err error) {
 		}
 	}()
 
-	if err := s.network.Run(ctx, s.networkNS.NetNsPath, func() error {
+	if err := s.network.Run(ctx, func() error {
 		if s.factory != nil {
 			vm, err := s.factory.GetVM(ctx, VMConfig{
 				HypervisorType:   s.config.HypervisorType,
@@ -1195,7 +1195,7 @@ func (s *Sandbox) startVM(ctx context.Context) (err error) {
 	// In case of vm factory, network interfaces are hotplugged
 	// after vm is started.
 	if s.factory != nil {
-		endpoints, err := s.network.Add(ctx, &s.config.NetworkConfig, s, true)
+		endpoints, err := s.network.Add(ctx, s, true)
 		if err != nil {
 			return err
 		}
