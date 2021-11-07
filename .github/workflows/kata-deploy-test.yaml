@@ -25,26 +25,12 @@ jobs:
         with:
            ref: ${{ steps.get-PR-ref.outputs.pr-ref }}
 
-      - name: build-container-image
-        id: build-container-image
-        run: |
-            PR_SHA=$(git log --format=format:%H -n1)
-            VERSION="2.0.0"
-            ARTIFACT_URL="https://github.com/kata-containers/kata-containers/releases/download/${VERSION}/kata-static-${VERSION}-x86_64.tar.xz"
-            wget "${ARTIFACT_URL}" -O tools/packaging/kata-deploy/kata-static.tar.xz
-            docker build --build-arg KATA_ARTIFACTS=kata-static.tar.xz -t katadocker/kata-deploy-ci:${PR_SHA} -t quay.io/kata-containers/kata-deploy-ci:${PR_SHA} ./tools/packaging/kata-deploy
-            docker login -u ${{ secrets.DOCKER_USERNAME }} -p ${{ secrets.DOCKER_PASSWORD }}
-            docker push katadocker/kata-deploy-ci:$PR_SHA
-            docker login -u ${{ secrets.QUAY_DEPLOYER_USERNAME }} -p ${{ secrets.QUAY_DEPLOYER_PASSWORD }} quay.io
-            docker push quay.io/kata-containers/kata-deploy-ci:$PR_SHA
-            echo "##[set-output name=pr-sha;]${PR_SHA}"
-
       - name: test-kata-deploy-ci-in-aks
         uses: ./tools/packaging/kata-deploy/action
         with:
-          packaging-sha: ${{ steps.build-container-image.outputs.pr-sha }}
+          packaging-sha: c9e6efb1e101716615873ea2a5641ca56397e0ca
         env:
-          PKG_SHA: ${{ steps.build-container-image.outputs.pr-sha }}
+          PKG_SHA: c9e6efb1e101716615873ea2a5641ca56397e0ca
           AZ_APPID: ${{ secrets.AZ_APPID }}
           AZ_PASSWORD: ${{ secrets.AZ_PASSWORD }}
           AZ_SUBSCRIPTION_ID: ${{ secrets.AZ_SUBSCRIPTION_ID }}
