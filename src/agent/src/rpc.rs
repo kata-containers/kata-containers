@@ -258,8 +258,6 @@ impl AgentService {
             // Find the sandbox storage used by this container
             let mounts = sandbox.container_mounts.get(&cid);
             if let Some(mounts) = mounts {
-                remove_mounts(mounts)?;
-
                 for m in mounts.iter() {
                     if sandbox.storages.get(m).is_some() {
                         cmounts.push(m.to_string());
