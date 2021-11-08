@@ -52,8 +52,6 @@ service AgentService {
 	rpc AddARPNeighbors(AddARPNeighborsRequest) returns (google.protobuf.Empty);
 
 	// observability
-	rpc StartTracing(StartTracingRequest) returns (google.protobuf.Empty);
-	rpc StopTracing(StopTracingRequest) returns (google.protobuf.Empty);
 	rpc GetMetrics(GetMetricsRequest) returns (Metrics);
 
 	// misc (TODO: some rpcs can be replaced by hyperstart-exec)
@@ -490,12 +488,6 @@ message CopyFileRequest {
 	int64 offset = 7;
 	// Data to write in the destination file.
 	bytes data = 8;
-}
-
-message StartTracingRequest {
-}
-
-message StopTracingRequest {
 }
 
 message GetOOMEventRequest {}

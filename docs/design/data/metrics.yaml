@@ -1825,11 +1825,7 @@ components:
                   desc: ""
                 - value: grpc.StartContainerRequest
                   desc: ""
-                - value: grpc.StartTracingRequest
-                  desc: ""
                 - value: grpc.StatsContainerRequest
-                  desc: ""
-                - value: grpc.StopTracingRequest
                   desc: ""
                 - value: grpc.TtyWinResizeRequest
                   desc: ""
