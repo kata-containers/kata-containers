@@ -670,7 +670,7 @@ func TestQMPChardevDel(t *testing.T) {
 // exit gracefully.  We should also receive two events on the eventCh.
 func TestQMPDeviceDel(t *testing.T) {
 	const (
-		seconds         = 1352167040730
+		seconds         = int64(1352167040730)
 		microsecondsEv1 = 123456
 		microsecondsEv2 = 123556
 		device          = "device_" + volumeUUID
@@ -793,7 +793,7 @@ func TestQMPCancel(t *testing.T) {
 // as we've provisioned a SHUTDOWN event.  The QMP loop should exit gracefully.
 func TestQMPSystemPowerdown(t *testing.T) {
 	const (
-		seconds         = 1352167040730
+		seconds         = int64(1352167040730)
 		microsecondsEv1 = 123456
 	)
 
@@ -926,7 +926,7 @@ func TestQMPEventedCommandCancelConcurrent(t *testing.T) {
 // shut down gracefully.
 func TestQMPEvents(t *testing.T) {
 	const (
-		seconds         = 1352167040730
+		seconds         = int64(1352167040730)
 		microsecondsEv1 = 123456
 		microsecondsEv2 = 123556
 		device          = "device_" + volumeUUID
@@ -1640,7 +1640,7 @@ func TestExecuteNVDIMMDeviceAdd(t *testing.T) {
 
 func TestMainLoopEventBeforeGreeting(t *testing.T) {
 	const (
-		seconds      = 1352167040730
+		seconds      = int64(1352167040730)
 		microseconds = 123456
 	)
 
