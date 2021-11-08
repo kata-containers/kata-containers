@@ -214,19 +214,9 @@ static AGENT_CMDS: &'static [AgentCmd] = &[
         fp: agent_cmd_container_start,
     },
     AgentCmd {
-        name: "StartTracing",
-        st: ServiceType::Agent,
-        fp: agent_cmd_sandbox_tracing_start,
-    },
-    AgentCmd {
         name: "StatsContainer",
         st: ServiceType::Agent,
         fp: agent_cmd_container_stats,
-    },
-    AgentCmd {
-        name: "StopTracing",
-        st: ServiceType::Agent,
-        fp: agent_cmd_sandbox_tracing_stop,
     },
     AgentCmd {
         name: "TtyWinResize",
@@ -1232,52 +1222,6 @@ fn agent_cmd_container_signal_process(
 
     let reply = client
         .signal_process(ctx, &req)
-        .map_err(|e| anyhow!("{:?}", e).context(ERR_API_FAILED))?;
-
-    info!(sl!(), "response received";
-        "response" => format!("{:?}", reply));
-
-    Ok(())
-}
-
-fn agent_cmd_sandbox_tracing_start(
-    ctx: &Context,
-    client: &AgentServiceClient,
-    _health: &HealthClient,
-    _options: &mut Options,
-    _args: &str,
-) -> Result<()> {
-    let req = StartTracingRequest::default();
-
-    let ctx = clone_context(ctx);
-
-    debug!(sl!(), "sending request"; "request" => format!("{:?}", req));
-
-    let reply = client
-        .start_tracing(ctx, &req)
-        .map_err(|e| anyhow!("{:?}", e).context(ERR_API_FAILED))?;
-
-    info!(sl!(), "response received";
-        "response" => format!("{:?}", reply));
-
-    Ok(())
-}
-
-fn agent_cmd_sandbox_tracing_stop(
-    ctx: &Context,
-    client: &AgentServiceClient,
-    _health: &HealthClient,
-    _options: &mut Options,
-    _args: &str,
-) -> Result<()> {
-    let req = StopTracingRequest::default();
-
-    let ctx = clone_context(ctx);
-
-    debug!(sl!(), "sending request"; "request" => format!("{:?}", req));
-
-    let reply = client
-        .stop_tracing(ctx, &req)
         .map_err(|e| anyhow!("{:?}", e).context(ERR_API_FAILED))?;
 
     info!(sl!(), "response received";
