@@ -91,8 +91,6 @@ endef
 # $3 - List of standard targets.
 define create_all_rules
 
-default: all
-
 all: $(1) $(2)
 
 # Create rules for all components.
@@ -145,3 +143,5 @@ ifeq ($(ARCH), aarch64)
 endif
 
 TRIPLE = $(ARCH)-unknown-linux-$(LIBC)
+
+CWD := $(shell dirname $(realpath $(firstword $(MAKEFILE_LIST))))
