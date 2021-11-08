@@ -38,7 +38,7 @@ func (m *mockHypervisor) setConfig(config *HypervisorConfig) error {
 	return nil
 }
 
-func (m *mockHypervisor) CreateVM(ctx context.Context, id string, network *Network, hypervisorConfig *HypervisorConfig) error {
+func (m *mockHypervisor) CreateVM(ctx context.Context, id string, network Network, hypervisorConfig *HypervisorConfig) error {
 	if err := m.setConfig(hypervisorConfig); err != nil {
 		return err
 	}
