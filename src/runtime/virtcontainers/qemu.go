@@ -468,7 +468,7 @@ func (q *qemu) setConfig(config *HypervisorConfig) error {
 }
 
 // CreateVM is the Hypervisor VM creation implementation for govmmQemu.
-func (q *qemu) CreateVM(ctx context.Context, id string, network *Network, hypervisorConfig *HypervisorConfig) error {
+func (q *qemu) CreateVM(ctx context.Context, id string, network Network, hypervisorConfig *HypervisorConfig) error {
 	// Save the tracing context
 	q.ctx = ctx
 

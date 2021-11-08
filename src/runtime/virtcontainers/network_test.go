@@ -75,7 +75,7 @@ func TestGenerateInterfacesAndRoutes(t *testing.T) {
 
 	nns, err := NewNetwork(&NetworkConfig{NetworkID: "foobar", NetworkCreated: true})
 	assert.Nil(t, err)
-	nns.eps = endpoints
+	nns.SetEndpoints(endpoints)
 
 	resInterfaces, resRoutes, resNeighs, err := generateVCNetworkStructures(context.Background(), nns)
 
