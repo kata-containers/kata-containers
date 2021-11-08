@@ -207,7 +207,7 @@ type Sandbox struct {
 
 	id string
 
-	network *Network
+	network Network
 
 	state types.SandboxState
 
@@ -873,14 +873,14 @@ func (s *Sandbox) AddInterface(ctx context.Context, inf *pbTypes.Interface) (*pb
 		return nil, err
 	}
 
-	endpoint, err := s.network.attachEndpoint(ctx, s, netInfo, nil, true)
+	endpoint, err := s.network.AddEndpoint(ctx, s, netInfo, nil, true)
 	if err != nil {
 		return nil, err
 	}
 
 	defer func() {
 		if err != nil {
-			if errDetach := s.network.detachEndpoint(ctx, s, len(s.network.Endpoints())-1, true); err != nil {
+			if errDetach := s.network.RemoveEndpoint(ctx, s, len(s.network.Endpoints())-1, true); err != nil {
 				s.Logger().WithField("endpoint-type", endpoint.Type()).WithError(errDetach).Error("rollback hot attaching endpoint failed")
 			}
 		}
@@ -906,7 +906,7 @@ func (s *Sandbox) RemoveInterface(ctx context.Context, inf *pbTypes.Interface) (
 	for i, endpoint := range s.network.Endpoints() {
 		if endpoint.HardwareAddr() == inf.HwAddr {
 			s.Logger().WithField("endpoint-type", endpoint.Type()).Info("Hot detaching endpoint")
-			if err := s.network.detachEndpoint(ctx, s, i, true); err != nil {
+			if err := s.network.RemoveEndpoint(ctx, s, i, true); err != nil {
 				return inf, err
 			}
 
