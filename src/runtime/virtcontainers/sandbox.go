@@ -826,7 +826,27 @@ func (s *Sandbox) createNetwork(ctx context.Context) error {
 }
 
 func (s *Sandbox) postCreatedNetwork(ctx context.Context) error {
-	return s.network.PostAdd(ctx, s.factory != nil)
+	if s.factory != nil {
+		return nil
+	}
+
+	if s.network.Endpoints() == nil {
+		return nil
+	}
+
+	for _, endpoint := range s.network.Endpoints() {
+		netPair := endpoint.NetworkPair()
+		if netPair == nil {
+			continue
+		}
+		if netPair.VhostFds != nil {
+			for _, VhostFd := range netPair.VhostFds {
+				VhostFd.Close()
+			}
+		}
+	}
+
+	return nil
 }
 
 func (s *Sandbox) removeNetwork(ctx context.Context) error {
