@@ -995,8 +995,6 @@ impl BaseContainer for LinuxContainer {
 
         info!(logger, "entered namespaces!");
 
-        self.created = SystemTime::now();
-
         if p.init {
             let spec = self.config.spec.as_mut().unwrap();
             update_namespaces(&self.logger, spec, p.pid)?;
