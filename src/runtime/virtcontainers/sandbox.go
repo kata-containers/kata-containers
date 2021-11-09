@@ -818,7 +818,7 @@ func (s *Sandbox) createNetwork(ctx context.Context) error {
 	// after vm is started.
 	if s.factory == nil {
 		// Add the network
-		if err := s.network.Add(ctx, s, false); err != nil {
+		if _, err := s.network.AddEndpoints(ctx, s, nil, false); err != nil {
 			return err
 		}
 	}
@@ -853,7 +853,7 @@ func (s *Sandbox) removeNetwork(ctx context.Context) error {
 	span, ctx := katatrace.Trace(ctx, s.Logger(), "removeNetwork", sandboxTracingTags, map[string]string{"sandbox_id": s.id})
 	defer span.End()
 
-	return s.network.Remove(ctx)
+	return s.network.RemoveEndpoints(ctx, s, nil, false)
 }
 
 func (s *Sandbox) generateNetInfo(inf *pbTypes.Interface) (NetworkInfo, error) {
@@ -893,21 +893,24 @@ func (s *Sandbox) AddInterface(ctx context.Context, inf *pbTypes.Interface) (*pb
 		return nil, err
 	}
 
-	endpoint, err := s.network.AddEndpoint(ctx, s, netInfo, nil, true)
+	endpoints, err := s.network.AddEndpoints(ctx, s, []NetworkInfo{netInfo}, true)
 	if err != nil {
 		return nil, err
 	}
 
 	defer func() {
 		if err != nil {
-			if errDetach := s.network.RemoveEndpoint(ctx, s, len(s.network.Endpoints())-1, true); err != nil {
-				s.Logger().WithField("endpoint-type", endpoint.Type()).WithError(errDetach).Error("rollback hot attaching endpoint failed")
+			eps := s.network.Endpoints()
+			// The newly added endpoint is last.
+			added_ep := eps[len(eps)-1]
+			if errDetach := s.network.RemoveEndpoints(ctx, s, []Endpoint{added_ep}, true); err != nil {
+				s.Logger().WithField("endpoint-type", added_ep.Type()).WithError(errDetach).Error("rollback hot attaching endpoint failed")
 			}
 		}
 	}()
 
 	// Add network for vm
-	inf.PciPath = endpoint.PciPath().String()
+	inf.PciPath = endpoints[0].PciPath().String()
 	result, err := s.agent.updateInterface(ctx, inf)
 	if err != nil {
 		return nil, err
@@ -923,10 +926,10 @@ func (s *Sandbox) AddInterface(ctx context.Context, inf *pbTypes.Interface) (*pb
 
 // RemoveInterface removes a nic of the sandbox.
 func (s *Sandbox) RemoveInterface(ctx context.Context, inf *pbTypes.Interface) (*pbTypes.Interface, error) {
-	for i, endpoint := range s.network.Endpoints() {
+	for _, endpoint := range s.network.Endpoints() {
 		if endpoint.HardwareAddr() == inf.HwAddr {
 			s.Logger().WithField("endpoint-type", endpoint.Type()).Info("Hot detaching endpoint")
-			if err := s.network.RemoveEndpoint(ctx, s, i, true); err != nil {
+			if err := s.network.RemoveEndpoints(ctx, s, []Endpoint{endpoint}, true); err != nil {
 				return inf, err
 			}
 
@@ -1205,7 +1208,7 @@ func (s *Sandbox) startVM(ctx context.Context) (err error) {
 	// In case of vm factory, network interfaces are hotplugged
 	// after vm is started.
 	if s.factory != nil {
-		if err := s.network.Add(ctx, s, true); err != nil {
+		if _, err := s.network.AddEndpoints(ctx, s, nil, true); err != nil {
 			return err
 		}
 	}

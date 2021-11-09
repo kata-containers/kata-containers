@@ -97,6 +97,7 @@ type NetlinkIface struct {
 type NetworkInfo struct {
 	Iface     NetlinkIface
 	DNS       DNSInfo
+	Link      netlink.Link
 	Addrs     []netlink.Addr
 	Routes    []netlink.Route
 	Neighbors []netlink.Neigh
@@ -197,19 +198,16 @@ type NetworkConfig struct {
 }
 
 type Network interface {
-	// Add adds all needed networking endpoints to a sandbox's network
-	Add(context.Context, *Sandbox, bool) error
+	// AddEndpoint adds endpoints to a sandbox's network.
+	// If the NetworkInfo slice is empty, implementations are expected to scan
+	// the sandbox's network for all existing endpoints.
+	AddEndpoints(context.Context, *Sandbox, []NetworkInfo, bool) ([]Endpoint, error)
 
-	// AddEndpoint adds one single endpoint to a sandbox's network.
-	AddEndpoint(context.Context, *Sandbox, NetworkInfo, netlink.Link, bool) (Endpoint, error)
-
-	// Remove removes all the networking endpoints from a sandbox's network.
+	// RemoveEndpoints removes endpoints from the sandbox's network.
+	// If the the endpoint slice is empty, all endpoints will be removed.
 	// If the network has been created by virtcontainers, Remove also deletes
 	// the network.
-	Remove(context.Context) error
-
-	// RemoveEndpoint removes one single endpoint from the sandbox's network.
-	RemoveEndpoint(context.Context, *Sandbox, int, bool) error
+	RemoveEndpoints(context.Context, *Sandbox, []Endpoint, bool) error
 
 	// Run runs a callback in a sandbox's network.
 	Run(context.Context, func() error) error

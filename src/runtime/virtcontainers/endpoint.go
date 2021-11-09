@@ -228,3 +228,13 @@ func loadTuntapIf(tuntapif *persistapi.TuntapInterface) *TuntapInterface {
 		},
 	}
 }
+
+func findEndpoint(e Endpoint, endpoints []Endpoint) (Endpoint, int) {
+	for idx, ep := range endpoints {
+		if ep.HardwareAddr() == e.HardwareAddr() {
+			return ep, idx
+		}
+	}
+
+	return nil, 0
+}

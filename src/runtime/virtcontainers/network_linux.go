@@ -107,7 +107,7 @@ func (n *LinuxNetwork) trace(ctx context.Context, name string) (otelTrace.Span, 
 	return networkTrace(ctx, name, nil)
 }
 
-func (n *LinuxNetwork) AddEndpoint(ctx context.Context, s *Sandbox, netInfo NetworkInfo, link netlink.Link, hotplug bool) (Endpoint, error) {
+func (n *LinuxNetwork) addSingleEndpoint(ctx context.Context, s *Sandbox, netInfo NetworkInfo, hotplug bool) (Endpoint, error) {
 	var endpoint Endpoint
 	// TODO: This is the incoming interface
 	// based on the incoming interface we should create
@@ -147,8 +147,8 @@ func (n *LinuxNetwork) AddEndpoint(ctx context.Context, s *Sandbox, netInfo Netw
 			networkLogger().Info("tap interface found")
 			endpoint, err = createTapNetworkEndpoint(idx, netInfo.Iface.Name)
 		} else if netInfo.Iface.Type == "tuntap" {
-			if link != nil {
-				switch link.(*netlink.Tuntap).Mode {
+			if netInfo.Link != nil {
+				switch netInfo.Link.(*netlink.Tuntap).Mode {
 				case 0:
 					// mount /sys/class/net to get links
 					return nil, fmt.Errorf("Network device mode not determined correctly. Mount sysfs in caller")
@@ -158,7 +158,7 @@ func (n *LinuxNetwork) AddEndpoint(ctx context.Context, s *Sandbox, netInfo Netw
 					networkLogger().Info("tuntap tap interface found")
 					endpoint, err = createTuntapNetworkEndpoint(idx, netInfo.Iface.Name, netInfo.Iface.HardwareAddr, n.interworkingModel)
 				default:
-					return nil, fmt.Errorf("tuntap network %v mode unsupported", link.(*netlink.Tuntap).Mode)
+					return nil, fmt.Errorf("tuntap network %v mode unsupported", netInfo.Link.(*netlink.Tuntap).Mode)
 				}
 			}
 		} else if netInfo.Iface.Type == "veth" {
@@ -217,7 +217,7 @@ func (n *LinuxNetwork) AddEndpoint(ctx context.Context, s *Sandbox, netInfo Netw
 	return endpoint, nil
 }
 
-func (n *LinuxNetwork) RemoveEndpoint(ctx context.Context, s *Sandbox, idx int, hotplug bool) error {
+func (n *LinuxNetwork) removeSingleEndpoint(ctx context.Context, s *Sandbox, idx int, hotplug bool) error {
 	if idx > len(n.eps)-1 {
 		return fmt.Errorf("Endpoint index overflow")
 	}
@@ -261,7 +261,7 @@ func (n *LinuxNetwork) RemoveEndpoint(ctx context.Context, s *Sandbox, idx int, 
 // Scan the networking namespace through netlink and then:
 // 1. Create the endpoints for the relevant interfaces found there.
 // 2. Attach them to the VM.
-func (n *LinuxNetwork) attachEndpoints(ctx context.Context, s *Sandbox, hotplug bool) error {
+func (n *LinuxNetwork) addAllEndpoints(ctx context.Context, s *Sandbox, hotplug bool) error {
 	netnsHandle, err := netns.GetFromPath(n.netNSPath)
 	if err != nil {
 		return err
@@ -298,7 +298,7 @@ func (n *LinuxNetwork) attachEndpoints(ctx context.Context, s *Sandbox, hotplug 
 			continue
 		}
 
-		_, err = n.AddEndpoint(ctx, s, netInfo, link, hotplug)
+		_, err = n.addSingleEndpoint(ctx, s, netInfo, hotplug)
 		if err != nil {
 			return err
 		}
@@ -324,36 +324,57 @@ func (n *LinuxNetwork) Run(ctx context.Context, cb func() error) error {
 }
 
 // Add adds all needed interfaces inside the network namespace.
-func (n *LinuxNetwork) Add(ctx context.Context, s *Sandbox, hotplug bool) error {
-	span, ctx := n.trace(ctx, "Add")
+func (n *LinuxNetwork) AddEndpoints(ctx context.Context, s *Sandbox, endpointsInfo []NetworkInfo, hotplug bool) ([]Endpoint, error) {
+	span, ctx := n.trace(ctx, "AddEndpoints")
 	katatrace.AddTags(span, "type", n.interworkingModel.GetModel())
 	defer span.End()
 
-	if err := n.attachEndpoints(ctx, s, hotplug); err != nil {
-		return err
+	if endpointsInfo == nil {
+		if err := n.addAllEndpoints(ctx, s, hotplug); err != nil {
+			return nil, err
+		}
+	} else {
+		for _, ep := range endpointsInfo {
+			if _, err := n.addSingleEndpoint(ctx, s, ep, hotplug); err != nil {
+				n.eps = nil
+				return nil, err
+			}
+		}
 	}
 
 	katatrace.AddTags(span, "endpoints", n.eps, "hotplug", hotplug)
-	networkLogger().Debug("Network added")
+	networkLogger().Debug("Endpoints added")
 
-	return nil
+	return n.eps, nil
 }
 
 // Remove network endpoints in the network namespace. It also deletes the network
 // namespace in case the namespace has been created by us.
-func (n *LinuxNetwork) Remove(ctx context.Context) error {
-	span, ctx := n.trace(ctx, "Remove")
+func (n *LinuxNetwork) RemoveEndpoints(ctx context.Context, s *Sandbox, endpoints []Endpoint, hotplug bool) error {
+	span, ctx := n.trace(ctx, "RemoveEndpoints")
 	defer span.End()
 
-	for i := range n.eps {
-		if err := n.RemoveEndpoint(ctx, nil, i, false); err != nil {
+	eps := n.eps
+	if endpoints != nil {
+		eps = endpoints
+	}
+
+	for idx, ep := range eps {
+		if endpoints != nil {
+			new_ep, _ := findEndpoint(ep, n.eps)
+			if new_ep == nil {
+				continue
+			}
+		}
+
+		if err := n.removeSingleEndpoint(ctx, s, idx, hotplug); err != nil {
 			return err
 		}
 	}
 
-	networkLogger().Debug("Network removed")
+	networkLogger().Debug("Endpoints removed")
 
-	if n.netNSCreated {
+	if n.netNSCreated && endpoints == nil {
 		networkLogger().Infof("Network namespace %q deleted", n.netNSPath)
 		return deleteNetNS(n.netNSPath)
 	}
@@ -1056,6 +1077,7 @@ func networkInfoFromLink(handle *netlink.Handle, link netlink.Link) (NetworkInfo
 		Addrs:     addrs,
 		Routes:    routes,
 		Neighbors: neighbors,
+		Link:      link,
 	}, nil
 }
 
