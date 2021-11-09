@@ -162,7 +162,7 @@ var kataHostSharedDir = func() string {
 // 2. /run/kata-containers/shared/sandboxes/$sbx_id/mounts/ is bind mounted readonly to /run/kata-containers/shared/sandboxes/$sbx_id/shared/, so guest cannot modify it
 //
 // 3. host-guest shared files/directories are mounted one-level under /run/kata-containers/shared/sandboxes/$sbx_id/mounts/ and thus present to guest at one level under /run/kata-containers/shared/sandboxes/$sbx_id/shared/
-func getSharePath(id string) string {
+func GetSharePath(id string) string {
 	return filepath.Join(kataHostSharedDir(), id, "shared")
 }
 

@@ -315,12 +315,18 @@ type HypervisorConfig struct {
 	EntropySource string
 
 	// Shared file system type:
-	//   - virtio-9p (default)
-	//   - virtio-fs
+	//   - virtio-9p
+	//   - virtio-fs (default)
 	SharedFS string
+
+	// Path for filesystem sharing
+	SharedPath string
 
 	// VirtioFSDaemon is the virtio-fs vhost-user daemon path
 	VirtioFSDaemon string
+
+	// VirtioFSCache cache mode for fs version cache or "none"
+	VirtioFSCache string
 
 	// File based memory backend root directory
 	FileBackedMemRootDir string
@@ -341,9 +347,6 @@ type HypervisorConfig struct {
 
 	// SELinux label for the VM
 	SELinuxProcessLabel string
-
-	// VirtioFSCache cache mode for fs version cache or "none"
-	VirtioFSCache string
 
 	// HypervisorPathList is the list of hypervisor paths names allowed in annotations
 	HypervisorPathList []string

@@ -655,7 +655,7 @@ func (q *qemu) CreateVM(ctx context.Context, id string, networkNS NetworkNamespa
 
 	q.virtiofsd = &virtiofsd{
 		path:       q.config.VirtioFSDaemon,
-		sourcePath: filepath.Join(getSharePath(q.id)),
+		sourcePath: hypervisorConfig.SharedPath,
 		socketPath: virtiofsdSocketPath,
 		extraArgs:  q.config.VirtioFSExtraArgs,
 		debug:      q.config.Debug,

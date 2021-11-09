@@ -226,7 +226,7 @@ func (clh *cloudHypervisor) CreateVM(ctx context.Context, id string, networkNS N
 		clh.Logger().WithField("function", "CreateVM").Info("Sandbox already exist, loading from state")
 		clh.virtiofsd = &virtiofsd{
 			PID:        clh.state.VirtiofsdPID,
-			sourcePath: filepath.Join(getSharePath(clh.id)),
+			sourcePath: hypervisorConfig.SharedPath,
 			debug:      clh.config.Debug,
 			socketPath: virtiofsdSocketPath,
 		}
