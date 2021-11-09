@@ -79,6 +79,16 @@ impl Drop for Storage {
     }
 }
 
+async fn copy(from: impl AsRef<Path>, to: impl AsRef<Path>) -> Result<()> {
+    // if source is a symlink, just create new symlink with same link source
+    if fs::symlink_metadata(&from).await?.file_type().is_symlink() {
+        fs::symlink(fs::read_link(&from).await?, to).await?;
+    } else {
+        fs::copy(from, to).await?;
+    }
+    Ok(())
+}
+
 impl Storage {
     async fn new(storage: protos::Storage) -> Result<Storage> {
         let entry = Storage {
@@ -110,19 +120,13 @@ impl Storage {
             dest_file_path
         };
 
-        debug!(
-            logger,
-            "Copy from {} to {}",
-            source_file_path.display(),
-            dest_file_path.display()
-        );
-        fs::copy(&source_file_path, &dest_file_path)
+        copy(&source_file_path, &dest_file_path)
             .await
             .with_context(|| {
                 format!(
                     "Copy from {} to {} failed",
                     source_file_path.display(),
-                    dest_file_path.display()
+                    dest_file_path.display(),
                 )
             })?;
 
@@ -841,6 +845,95 @@ mod tests {
                 _ => panic!("unexpected error"),
             },
         }
+    }
+
+    #[tokio::test]
+    async fn test_copy() {
+        // prepare tmp src/destination
+        let source_dir = tempfile::tempdir().unwrap();
+        let dest_dir = tempfile::tempdir().unwrap();
+
+        // verify copy of a regular file
+        let src_file = source_dir.path().join("file.txt");
+        let dst_file = dest_dir.path().join("file.txt");
+        fs::write(&src_file, "foo").unwrap();
+        copy(&src_file, &dst_file).await.unwrap();
+        // verify destination:
+        assert!(!fs::symlink_metadata(dst_file)
+            .unwrap()
+            .file_type()
+            .is_symlink());
+
+        // verify copy of a symlink
+        let src_symlink_file = source_dir.path().join("symlink_file.txt");
+        let dst_symlink_file = dest_dir.path().join("symlink_file.txt");
+        tokio::fs::symlink(&src_file, &src_symlink_file)
+            .await
+            .unwrap();
+        copy(src_symlink_file, &dst_symlink_file).await.unwrap();
+        // verify destination:
+        assert!(fs::symlink_metadata(&dst_symlink_file)
+            .unwrap()
+            .file_type()
+            .is_symlink());
+        assert_eq!(fs::read_link(&dst_symlink_file).unwrap(), src_file);
+        assert_eq!(fs::read_to_string(&dst_symlink_file).unwrap(), "foo")
+    }
+
+    #[tokio::test]
+    async fn watch_directory_with_symlinks() {
+        // Prepare source directory:
+        // ./tmp/.data/file.txt
+        // ./tmp/1.txt -> ./tmp/.data/file.txt
+        let source_dir = tempfile::tempdir().unwrap();
+        fs::create_dir_all(source_dir.path().join(".data")).unwrap();
+        fs::write(source_dir.path().join(".data/file.txt"), "two").unwrap();
+        tokio::fs::symlink(
+            source_dir.path().join(".data/file.txt"),
+            source_dir.path().join("1.txt"),
+        )
+        .await
+        .unwrap();
+
+        let dest_dir = tempfile::tempdir().unwrap();
+
+        let mut entry = Storage::new(protos::Storage {
+            source: source_dir.path().display().to_string(),
+            mount_point: dest_dir.path().display().to_string(),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+
+        let logger = slog::Logger::root(slog::Discard, o!());
+
+        assert_eq!(entry.scan(&logger).await.unwrap(), 2);
+
+        // Should copy no files since nothing is changed since last check
+        assert_eq!(entry.scan(&logger).await.unwrap(), 0);
+
+        // Should copy 1 file
+        thread::sleep(Duration::from_secs(1));
+        fs::write(source_dir.path().join(".data/file.txt"), "updated").unwrap();
+        assert_eq!(entry.scan(&logger).await.unwrap(), 2);
+        assert_eq!(
+            fs::read_to_string(dest_dir.path().join(".data/file.txt")).unwrap(),
+            "updated"
+        );
+        assert_eq!(
+            fs::read_to_string(dest_dir.path().join("1.txt")).unwrap(),
+            "updated"
+        );
+
+        // Verify that resulting 1.txt is a symlink:
+        assert!(tokio::fs::symlink_metadata(dest_dir.path().join("1.txt"))
+            .await
+            .unwrap()
+            .file_type()
+            .is_symlink());
+
+        // Should copy no new files after copy happened
+        assert_eq!(entry.scan(&logger).await.unwrap(), 0);
     }
 
     #[tokio::test]
