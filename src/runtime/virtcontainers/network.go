@@ -211,9 +211,6 @@ type Network interface {
 	// RemoveEndpoint removes one single endpoint from the sandbox's network.
 	RemoveEndpoint(context.Context, *Sandbox, int, bool) error
 
-	// PostAdd is a post networking endpoint addition hook.
-	PostAdd(context.Context, bool) error
-
 	// Run runs a callback in a sandbox's network.
 	Run(context.Context, func() error) error
 

@@ -339,32 +339,6 @@ func (n *LinuxNetwork) Add(ctx context.Context, s *Sandbox, hotplug bool) error 
 	return nil
 }
 
-func (n *LinuxNetwork) PostAdd(ctx context.Context, hotplug bool) error {
-	if hotplug {
-		return nil
-	}
-
-	if n.eps == nil {
-		return nil
-	}
-
-	endpoints := n.eps
-
-	for _, endpoint := range endpoints {
-		netPair := endpoint.NetworkPair()
-		if netPair == nil {
-			continue
-		}
-		if netPair.VhostFds != nil {
-			for _, VhostFd := range netPair.VhostFds {
-				VhostFd.Close()
-			}
-		}
-	}
-
-	return nil
-}
-
 // Remove network endpoints in the network namespace. It also deletes the network
 // namespace in case the namespace has been created by us.
 func (n *LinuxNetwork) Remove(ctx context.Context) error {
