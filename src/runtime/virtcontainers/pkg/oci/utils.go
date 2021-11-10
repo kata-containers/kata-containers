@@ -17,7 +17,7 @@ import (
 	"strings"
 	"syscall"
 
-	criContainerdAnnotations "github.com/containerd/containerd/pkg/cri/annotations"
+	criContainerdAnnotations "github.com/containerd/cri-containerd/pkg/annotations"
 	crioAnnotations "github.com/cri-o/cri-o/pkg/annotations"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/sirupsen/logrus"
