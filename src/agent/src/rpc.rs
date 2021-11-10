@@ -79,6 +79,8 @@ use std::path::PathBuf;
 
 pub const CONTAINER_BASE: &str = "/run/kata-containers";
 const MODPROBE_PATH: &str = "/sbin/modprobe";
+const ANNO_K8S_IMAGE_NAME: &str = "io.kubernetes.cri.image-name";
+const CONFIG_JSON: &str = "config.json";
 
 // Convenience macro to obtain the scope logger
 macro_rules! sl {
@@ -124,6 +126,19 @@ pub fn verify_cid(id: &str) -> Result<()> {
     }
 }
 
+// Partially merge an OCI process specification into another one.
+fn merge_oci_process(target: &mut oci::Process, source: &oci::Process) {
+    if target.args.is_empty() && !source.args.is_empty() {
+        target.args.append(&mut source.args.clone());
+    }
+
+    if target.cwd.is_empty() && !source.cwd.is_empty() {
+        target.cwd = String::from(&source.cwd);
+    }
+
+    target.env.append(&mut source.env.clone());
+}
+
 impl AgentService {
     #[instrument]
     async fn do_create_container(
@@ -149,6 +164,9 @@ impl AgentService {
         };
 
         info!(sl!(), "receive createcontainer, spec: {:?}", &oci);
+
+        // Merge the image bundle OCI spec into the container creation request OCI spec.
+        self.merge_bundle_oci(&mut oci).await?;
 
         // Some devices need some extra processing (the ones invoked with
         // --device for instance), and that's what this call is doing. It
@@ -536,6 +554,54 @@ impl AgentService {
                 Ok(resp)
             }
         }
+    }
+
+    // When being passed an image name through a container annotation, merge its
+    // corresponding bundle OCI specification into the passed container creation one.
+    async fn merge_bundle_oci(&self, container_oci: &mut oci::Spec) -> Result<()> {
+        if let Some(image_name) = container_oci
+            .annotations
+            .get(&ANNO_K8S_IMAGE_NAME.to_string())
+        {
+            if let Some(container_id) = self.sandbox.clone().lock().await.images.get(image_name) {
+                let image_oci_config_path = Path::new(CONTAINER_BASE)
+                    .join(container_id)
+                    .join(CONFIG_JSON);
+                debug!(
+                    sl!(),
+                    "Image bundle config path: {:?}", image_oci_config_path
+                );
+
+                let image_oci =
+                    oci::Spec::load(image_oci_config_path.to_str().ok_or_else(|| {
+                        anyhow!(
+                            "Invalid container image OCI config path {:?}",
+                            image_oci_config_path
+                        )
+                    })?)
+                    .context("load image bundle")?;
+
+                if let Some(container_root) = container_oci.root.as_mut() {
+                    if let Some(image_root) = image_oci.root.as_ref() {
+                        let root_path = Path::new(CONTAINER_BASE)
+                            .join(container_id)
+                            .join(image_root.path.clone());
+                        container_root.path =
+                            String::from(root_path.to_str().ok_or_else(|| {
+                                anyhow!("Invalid container image root path {:?}", root_path)
+                            })?);
+                    }
+                }
+
+                if let Some(container_process) = container_oci.process.as_mut() {
+                    if let Some(image_process) = image_oci.process.as_ref() {
+                        merge_oci_process(container_process, image_process);
+                    }
+                }
+            }
+        }
+
+        Ok(())
     }
 }
 
@@ -1620,7 +1686,7 @@ fn setup_bundle(cid: &str, spec: &mut Spec) -> Result<PathBuf> {
     let spec_root = spec.root.as_ref().unwrap();
 
     let bundle_path = Path::new(CONTAINER_BASE).join(cid);
-    let config_path = bundle_path.join("config.json");
+    let config_path = bundle_path.join(CONFIG_JSON);
     let rootfs_path = bundle_path.join("rootfs");
 
     let rootfs_exists = Path::new(&rootfs_path).exists();
