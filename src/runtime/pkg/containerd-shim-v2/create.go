@@ -242,6 +242,11 @@ func loadRuntimeConfig(s *service, r *taskAPI.CreateTaskRequest, anno map[string
 }
 
 func checkAndMount(s *service, r *taskAPI.CreateTaskRequest) (bool, error) {
+	// In the confidential computing, there is no Image information on the host,
+	// so there is no Rootfs.
+	if s.config.ServiceOffload && len(r.Rootfs) == 0 {
+		return false, nil
+	}
 	if len(r.Rootfs) == 1 {
 		m := r.Rootfs[0]
 

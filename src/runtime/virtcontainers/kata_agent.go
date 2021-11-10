@@ -1235,6 +1235,11 @@ func (k *kataAgent) rollbackFailingContainerCreation(ctx context.Context, c *Con
 }
 
 func (k *kataAgent) buildContainerRootfs(ctx context.Context, sandbox *Sandbox, c *Container, rootPathParent string) (*grpc.Storage, error) {
+	// In the confidential computing, there is no Image information on the host,
+	// so there is no Rootfs.Target.
+	if sandbox.config.ServiceOffload && c.rootFs.Target == "" {
+		return nil, nil
+	}
 	if c.state.Fstype != "" && c.state.BlockDeviceID != "" {
 		// The rootfs storage volume represents the container rootfs
 		// mount point inside the guest.

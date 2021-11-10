@@ -147,6 +147,9 @@ type SandboxConfig struct {
 	SandboxCgroupOnly bool
 
 	DisableGuestSeccomp bool
+
+	// Offload the CRI image management service to the Kata agent.
+	ServiceOffload bool
 }
 
 // valid checks that the sandbox configuration is valid.

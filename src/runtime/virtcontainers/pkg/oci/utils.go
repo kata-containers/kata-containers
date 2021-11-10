@@ -134,6 +134,9 @@ type RuntimeConfig struct {
 
 	// Determines if enable pprof
 	EnablePprof bool
+
+	// Offload the CRI image management service to the Kata agent.
+	ServiceOffload bool
 }
 
 // AddKernelParam allows the addition of new kernel parameters to an existing
@@ -917,6 +920,8 @@ func SandboxConfig(ocispec specs.Spec, runtime RuntimeConfig, bundlePath, cid, c
 		// Spec: &ocispec,
 
 		Experimental: runtime.Experimental,
+
+		ServiceOffload: runtime.ServiceOffload,
 	}
 
 	if err := addAnnotations(ocispec, &sandboxConfig, runtime); err != nil {

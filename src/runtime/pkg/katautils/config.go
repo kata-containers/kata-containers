@@ -1166,6 +1166,7 @@ func LoadConfiguration(configPath string, ignoreLogging bool) (resolvedConfigPat
 	config.JaegerEndpoint = tomlConf.Runtime.JaegerEndpoint
 	config.JaegerUser = tomlConf.Runtime.JaegerUser
 	config.JaegerPassword = tomlConf.Runtime.JaegerPassword
+	config.ServiceOffload = tomlConf.Image.ServiceOffload
 	for _, f := range tomlConf.Runtime.Experimental {
 		feature := exp.Get(f)
 		if feature == nil {

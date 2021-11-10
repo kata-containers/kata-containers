@@ -1252,6 +1252,11 @@ func (c *Container) hotplugDrive(ctx context.Context) error {
 	// Check to see if the rootfs is an umounted block device (source) or if the
 	// mount (target) is backed by a block device:
 	if !c.rootFs.Mounted {
+		// In the confidential computing, there is no Image information on the host,
+		// so there is no Rootfs.Source.
+		if c.sandbox.config.ServiceOffload && c.rootFs.Source == "" {
+			return nil
+		}
 		dev, err = getDeviceForPath(c.rootFs.Source)
 		// there is no "rootfs" dir on block device backed rootfs
 		c.rootfsSuffix = ""
