@@ -636,11 +636,10 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
 
     // setup the envs
     for e in env.iter() {
-        let v: Vec<&str> = e.splitn(2, '=').collect();
-        if v.len() != 2 {
-            continue;
+        match valid_env(e) {
+            Some((key, value)) => env::set_var(key, value),
+            None => log_child!(cfd_log, "invalid env key-value: {:?}", e),
         }
-        env::set_var(v[0], v[1]);
     }
 
     // set the "HOME" env getting from "/etc/passwd", if
@@ -1565,6 +1564,30 @@ async fn execute_hook(logger: &Logger, h: &Hook, st: &OCIState) -> Result<()> {
     }
 }
 
+// valid environment variables according to https://doc.rust-lang.org/std/env/fn.set_var.html#panics
+fn valid_env(e: &str) -> Option<(&str, &str)> {
+    // wherther key or value will contain NULL char.
+    if e.as_bytes().contains(&b'\0') {
+        return None;
+    }
+
+    let v: Vec<&str> = e.splitn(2, '=').collect();
+
+    // key can't hold an `equal` sign, but value can
+    if v.len() != 2 {
+        return None;
+    }
+
+    let (key, value) = (v[0].trim(), v[1].trim());
+
+    // key can't be empty
+    if key.is_empty() {
+        return None;
+    }
+
+    Some((key, value))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1987,5 +2010,50 @@ mod tests {
     fn test_linuxcontainer_do_init_child() {
         let ret = do_init_child(std::io::stdin().as_raw_fd());
         assert!(ret.is_err(), "Expecting Err, Got {:?}", ret);
+    }
+
+    #[test]
+    fn test_valid_env() {
+        let env = valid_env("a=b=c");
+        assert_eq!(Some(("a", "b=c")), env);
+
+        let env = valid_env("a=b");
+        assert_eq!(Some(("a", "b")), env);
+        let env = valid_env("a =b");
+        assert_eq!(Some(("a", "b")), env);
+
+        let env = valid_env(" a =b");
+        assert_eq!(Some(("a", "b")), env);
+
+        let env = valid_env("a= b");
+        assert_eq!(Some(("a", "b")), env);
+
+        let env = valid_env("a=b ");
+        assert_eq!(Some(("a", "b")), env);
+        let env = valid_env("a=b c ");
+        assert_eq!(Some(("a", "b c")), env);
+
+        let env = valid_env("=b");
+        assert_eq!(None, env);
+
+        let env = valid_env("a=");
+        assert_eq!(Some(("a", "")), env);
+
+        let env = valid_env("a==");
+        assert_eq!(Some(("a", "=")), env);
+
+        let env = valid_env("a");
+        assert_eq!(None, env);
+
+        let invalid_str = vec![97, b'\0', 98];
+        let invalid_string = std::str::from_utf8(&invalid_str).unwrap();
+
+        let invalid_env = format!("{}=value", invalid_string);
+        let env = valid_env(&invalid_env);
+        assert_eq!(None, env);
+
+        let invalid_env = format!("key={}", invalid_string);
+        let env = valid_env(&invalid_env);
+        assert_eq!(None, env);
     }
 }
