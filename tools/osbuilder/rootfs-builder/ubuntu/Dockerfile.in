@@ -27,13 +27,18 @@ RUN apt-get update && apt-get --no-install-recommends install -y \
     g++ \
     gcc \
     git \
+    golang-go \
+    libdevmapper-dev \
     libc6-dev \
+    libgpgme-dev \
+    libssl-dev \
     libstdc++-8-dev \
     m4 \
     make \
     musl \
     musl-dev \
     musl-tools \
+    pkg-config \
     protobuf-compiler \
     sed \
     systemd \

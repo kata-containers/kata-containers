@@ -230,18 +230,7 @@ create_a_local_rootfs() {
     cd ${katacontainers_repo_dir}/tools/osbuilder/rootfs-builder
     export distro="ubuntu"
     [[ -z "${USE_PODMAN:-}" ]] && use_docker="${use_docker:-1}"
-    sudo -E OS_VERSION="${OS_VERSION:-}" GOPATH=$GOPATH EXTRA_PKGS="ca-certificates vim iputils-ping net-tools gnupg libgpgme-dev" DEBUG="${DEBUG}" USE_DOCKER="${use_docker:-}" SECCOMP=yes ./rootfs.sh -r ${ROOTFS_DIR} ${distro}
-
-    # Build and add skopeo binary - TODO LATER replace with install from Ubuntu when the base is 20.10+, or 
-    git clone --branch release-1.4 https://github.com/containers/skopeo ${GOPATH}/src/github.com/containers/skopeo
-    cd ${GOPATH}/src/github.com/containers/skopeo && make bin/skopeo
-    cp "${GOPATH}/src/github.com/containers/skopeo/bin/skopeo" "${ROOTFS_DIR}/usr/bin/skopeo"
-
-    # Add umoci binary - TODO LATER replace with install from Ubuntu when the base is 20.10+
-    go_arch=$("${tests_repo_dir}"/.ci/kata-arch.sh -g)
-    mkdir -p ${ROOTFS_DIR}/usr/local/bin/
-    sudo curl -Lo ${ROOTFS_DIR}/usr/local/bin/umoci https://github.com/opencontainers/umoci/releases/download/v0.4.7/umoci.${go_arch}
-    sudo chmod u+x ${ROOTFS_DIR}/usr/local/bin/umoci
+    sudo -E OS_VERSION="${OS_VERSION:-}" GOPATH=$GOPATH DEBUG="${DEBUG}" USE_DOCKER="${use_docker:-}" SKOPEO_UMOCI=yes SECCOMP=yes ./rootfs.sh -r ${ROOTFS_DIR} ${distro}
 
     # During the ./rootfs.sh call the kata agent is built as root, so we need to update the permissions, so we can rebuild it
     sudo chown -R ${USER}:${USER} "${katacontainers_repo_dir}/src/agent/"

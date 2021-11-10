@@ -219,6 +219,25 @@ ${extra}
 	  agent-is-init-daemon: "${AGENT_INIT}"
 EOT
 
+	if [ "${SKOPEO_UMOCI}" = "yes" ]; then
+		cat >> "${file}" <<-EOF
+	skopeo:
+	  url: "${skopeo_url}"
+	  version: "${skopeo_branch}"
+	umoci:
+	  url: "${umoci_url}"
+	  version: "${umoci_tag}"
+EOF
+	fi
+
+	if [ -n "${AA_KBC}" ]; then
+		cat >> "${file}" <<-EOF
+	attestation-agent:
+	  url: "${attestation_agent_url}"
+	  kbc: "${AA_KBC}"
+EOF
+	fi
+
 	local rootfs_file="${file_dir}/$(basename "${file}")"
 	info "Created summary file '${rootfs_file}' inside rootfs"
 }
