@@ -1324,6 +1324,11 @@ func (k *kataAgent) buildContainerRootfsWithNydus(sandbox *Sandbox, c *Container
 }
 
 func (k *kataAgent) buildContainerRootfs(ctx context.Context, sandbox *Sandbox, c *Container, rootPathParent string) (*grpc.Storage, error) {
+	// In the confidential computing, there is no Image information on the host,
+	// so there is no Rootfs.Target.
+	if sandbox.config.ServiceOffload && c.rootFs.Target == "" {
+		return nil, nil
+	}
 	if c.rootFs.Type == NydusRootFSType {
 		return k.buildContainerRootfsWithNydus(sandbox, c, rootPathParent)
 	}
