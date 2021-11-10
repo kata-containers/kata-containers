@@ -203,14 +203,6 @@ func (p *HybridVSockTTRPCMockImp) CopyFile(ctx context.Context, req *pb.CopyFile
 	return &gpb.Empty{}, nil
 }
 
-func (p *HybridVSockTTRPCMockImp) StartTracing(ctx context.Context, req *pb.StartTracingRequest) (*gpb.Empty, error) {
-	return &gpb.Empty{}, nil
-}
-
-func (p *HybridVSockTTRPCMockImp) StopTracing(ctx context.Context, req *pb.StopTracingRequest) (*gpb.Empty, error) {
-	return &gpb.Empty{}, nil
-}
-
 func (p *HybridVSockTTRPCMockImp) MemHotplugByProbe(ctx context.Context, req *pb.MemHotplugByProbeRequest) (*gpb.Empty, error) {
 	return &gpb.Empty{}, nil
 }

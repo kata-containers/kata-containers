@@ -134,8 +134,6 @@ const (
 	grpcMemHotplugByProbeRequest = "grpc.MemHotplugByProbeRequest"
 	grpcCopyFileRequest          = "grpc.CopyFileRequest"
 	grpcSetGuestDateTimeRequest  = "grpc.SetGuestDateTimeRequest"
-	grpcStartTracingRequest      = "grpc.StartTracingRequest"
-	grpcStopTracingRequest       = "grpc.StopTracingRequest"
 	grpcGetOOMEventRequest       = "grpc.GetOOMEventRequest"
 	grpcGetMetricsRequest        = "grpc.GetMetricsRequest"
 	grpcAddSwapRequest           = "grpc.AddSwapRequest"
@@ -244,9 +242,8 @@ type kataAgent struct {
 
 	dialTimout uint32
 
-	keepConn       bool
-	dynamicTracing bool
-	dead           bool
+	keepConn bool
+	dead     bool
 }
 
 func (k *kataAgent) Logger() *logrus.Entry {
@@ -821,13 +818,6 @@ func (k *kataAgent) startSandbox(ctx context.Context, sandbox *Sandbox) error {
 		return err
 	}
 
-	if k.dynamicTracing {
-		_, err = k.sendReq(ctx, &grpc.StartTracingRequest{})
-		if err != nil {
-			return err
-		}
-	}
-
 	return nil
 }
 
@@ -925,13 +915,6 @@ func (k *kataAgent) stopSandbox(ctx context.Context, sandbox *Sandbox) error {
 
 	if _, err := k.sendReq(ctx, req); err != nil {
 		return err
-	}
-
-	if k.dynamicTracing {
-		_, err := k.sendReq(ctx, &grpc.StopTracingRequest{})
-		if err != nil {
-			return err
-		}
 	}
 
 	return nil
@@ -2025,12 +2008,6 @@ func (k *kataAgent) installReqFunc(c *kataclient.AgentClient) {
 	}
 	k.reqHandlers[grpcSetGuestDateTimeRequest] = func(ctx context.Context, req interface{}) (interface{}, error) {
 		return k.client.AgentServiceClient.SetGuestDateTime(ctx, req.(*grpc.SetGuestDateTimeRequest))
-	}
-	k.reqHandlers[grpcStartTracingRequest] = func(ctx context.Context, req interface{}) (interface{}, error) {
-		return k.client.AgentServiceClient.StartTracing(ctx, req.(*grpc.StartTracingRequest))
-	}
-	k.reqHandlers[grpcStopTracingRequest] = func(ctx context.Context, req interface{}) (interface{}, error) {
-		return k.client.AgentServiceClient.StopTracing(ctx, req.(*grpc.StopTracingRequest))
 	}
 	k.reqHandlers[grpcGetOOMEventRequest] = func(ctx context.Context, req interface{}) (interface{}, error) {
 		return k.client.AgentServiceClient.GetOOMEvent(ctx, req.(*grpc.GetOOMEventRequest))
