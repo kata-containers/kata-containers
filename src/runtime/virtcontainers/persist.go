@@ -8,6 +8,7 @@ package virtcontainers
 import (
 	"errors"
 
+	hv "github.com/kata-containers/kata-containers/src/runtime/pkg/hypervisors"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/api"
 	exp "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/experimental"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist"
@@ -315,7 +316,7 @@ func (c *Container) loadContState(cs persistapi.ContainerState) {
 	}
 }
 
-func (s *Sandbox) loadHypervisor(hs persistapi.HypervisorState) {
+func (s *Sandbox) loadHypervisor(hs hv.HypervisorState) {
 	s.hypervisor.Load(hs)
 }
 

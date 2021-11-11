@@ -31,11 +31,11 @@ import (
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
 
+	hv "github.com/kata-containers/kata-containers/src/runtime/pkg/hypervisors"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils/katatrace"
 	pkgUtils "github.com/kata-containers/kata-containers/src/runtime/pkg/utils"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/uuid"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
-	persistapi "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist/api"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	vcTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
@@ -67,18 +67,12 @@ type qmpChannel struct {
 	sync.Mutex
 }
 
-// CPUDevice represents a CPU device which was hot-added in a running VM
-type CPUDevice struct {
-	// ID is used to identify this CPU in the hypervisor options.
-	ID string
-}
-
 // QemuState keeps Qemu's state
 type QemuState struct {
 	UUID    string
 	Bridges []types.Bridge
 	// HotpluggedCPUs is the list of CPUs that were hot-added
-	HotpluggedVCPUs      []CPUDevice
+	HotpluggedVCPUs      []hv.CPUDevice
 	HotpluggedMemory     int
 	VirtiofsdPid         int
 	PCIeRootPort         int
@@ -91,8 +85,6 @@ type qemu struct {
 	arch qemuArch
 
 	virtiofsd Virtiofsd
-
-	store persistapi.PersistDriver
 
 	ctx context.Context
 
@@ -276,7 +268,7 @@ func (q *qemu) setup(ctx context.Context, id string, hypervisorConfig *Hyperviso
 
 		// The path might already exist, but in case of VM templating,
 		// we have to create it since the sandbox has not created it yet.
-		if err = utils.MkdirAllWithInheritedOwner(filepath.Join(q.store.RunStoragePath(), id), DirMode); err != nil {
+		if err = utils.MkdirAllWithInheritedOwner(filepath.Join(q.config.RunStorePath, id), DirMode); err != nil {
 			return err
 		}
 	}
@@ -331,7 +323,7 @@ func (q *qemu) memoryTopology() (govmmQemu.Memory, error) {
 }
 
 func (q *qemu) qmpSocketPath(id string) (string, error) {
-	return utils.BuildSocketPath(q.store.RunVMStoragePath(), id, qmpSocket)
+	return utils.BuildSocketPath(q.config.VMStorePath, id, qmpSocket)
 }
 
 func (q *qemu) getQemuMachine() (govmmQemu.Machine, error) {
@@ -618,7 +610,7 @@ func (q *qemu) CreateVM(ctx context.Context, id string, networkNS NetworkNamespa
 		GlobalParam: "kvm-pit.lost_tick_policy=discard",
 		Bios:        firmwarePath,
 		PFlash:      pflash,
-		PidFile:     filepath.Join(q.store.RunVMStoragePath(), q.id, "pid"),
+		PidFile:     filepath.Join(q.config.VMStorePath, q.id, "pid"),
 	}
 
 	qemuConfig.Devices, qemuConfig.Bios, err = q.arch.appendProtectionDevice(qemuConfig.Devices, firmwarePath)
@@ -666,7 +658,7 @@ func (q *qemu) CreateVM(ctx context.Context, id string, networkNS NetworkNamespa
 }
 
 func (q *qemu) vhostFSSocketPath(id string) (string, error) {
-	return utils.BuildSocketPath(q.store.RunVMStoragePath(), id, vhostFSSocket)
+	return utils.BuildSocketPath(q.config.VMStorePath, id, vhostFSSocket)
 }
 
 func (q *qemu) setupVirtiofsd(ctx context.Context) (err error) {
@@ -795,7 +787,7 @@ func (q *qemu) StartVM(ctx context.Context, timeout int) error {
 		q.fds = []*os.File{}
 	}()
 
-	vmPath := filepath.Join(q.store.RunVMStoragePath(), q.id)
+	vmPath := filepath.Join(q.config.VMStorePath, q.id)
 	err := utils.MkdirAllWithInheritedOwner(vmPath, DirMode)
 	if err != nil {
 		return err
@@ -1002,7 +994,7 @@ func (q *qemu) StopVM(ctx context.Context, waitOnly bool) error {
 func (q *qemu) cleanupVM() error {
 
 	// Cleanup vm path
-	dir := filepath.Join(q.store.RunVMStoragePath(), q.id)
+	dir := filepath.Join(q.config.VMStorePath, q.id)
 
 	// If it's a symlink, remove both dir and the target.
 	// This can happen when vm template links a sandbox to a vm.
@@ -1023,7 +1015,7 @@ func (q *qemu) cleanupVM() error {
 	}
 
 	if q.config.VMid != "" {
-		dir = filepath.Join(q.store.RunStoragePath(), q.config.VMid)
+		dir = filepath.Join(q.config.RunStorePath, q.config.VMid)
 		if err := os.RemoveAll(dir); err != nil {
 			q.Logger().WithError(err).WithField("path", dir).Warnf("failed to remove vm path")
 		}
@@ -1149,7 +1141,7 @@ func (q *qemu) dumpSandboxMetaInfo(dumpSavePath string) {
 	dumpStatePath := filepath.Join(dumpSavePath, "state")
 
 	// copy state from /run/vc/sbs to memory dump directory
-	statePath := filepath.Join(q.store.RunStoragePath(), q.id)
+	statePath := filepath.Join(q.config.RunStorePath, q.id)
 	command := []string{"/bin/cp", "-ar", statePath, dumpStatePath}
 	q.Logger().WithField("command", command).Info("try to Save sandbox state")
 	if output, err := pkgUtils.RunCommandFull(command, true); err != nil {
@@ -1822,7 +1814,7 @@ func (q *qemu) hotplugAddCPUs(amount uint32) (uint32, error) {
 		}
 
 		// a new vCPU was added, update list of hotplugged vCPUs and Check if all vCPUs were added
-		q.state.HotpluggedVCPUs = append(q.state.HotpluggedVCPUs, CPUDevice{cpuID})
+		q.state.HotpluggedVCPUs = append(q.state.HotpluggedVCPUs, hv.CPUDevice{ID: cpuID})
 		hotpluggedVCPUs++
 		if hotpluggedVCPUs == amount {
 			// All vCPUs were hotplugged
@@ -2030,7 +2022,7 @@ func (q *qemu) GetVMConsole(ctx context.Context, id string) (string, string, err
 	span, _ := katatrace.Trace(ctx, q.Logger(), "GetVMConsole", qemuTracingTags, map[string]string{"sandbox_id": q.id})
 	defer span.End()
 
-	consoleURL, err := utils.BuildSocketPath(q.store.RunVMStoragePath(), id, consoleSocket)
+	consoleURL, err := utils.BuildSocketPath(q.config.VMStorePath, id, consoleSocket)
 	if err != nil {
 		return consoleProtoUnix, "", err
 	}
@@ -2469,7 +2461,7 @@ func (q *qemu) toGrpc(ctx context.Context) ([]byte, error) {
 	return json.Marshal(&qp)
 }
 
-func (q *qemu) Save() (s persistapi.HypervisorState) {
+func (q *qemu) Save() (s hv.HypervisorState) {
 
 	// If QEMU isn't even running, there isn't any state to Save
 	if q.stopped {
@@ -2488,7 +2480,7 @@ func (q *qemu) Save() (s persistapi.HypervisorState) {
 	s.PCIeRootPort = q.state.PCIeRootPort
 
 	for _, bridge := range q.arch.getBridges() {
-		s.Bridges = append(s.Bridges, persistapi.Bridge{
+		s.Bridges = append(s.Bridges, hv.Bridge{
 			DeviceAddr: bridge.Devices,
 			Type:       string(bridge.Type),
 			ID:         bridge.ID,
@@ -2497,14 +2489,14 @@ func (q *qemu) Save() (s persistapi.HypervisorState) {
 	}
 
 	for _, cpu := range q.state.HotpluggedVCPUs {
-		s.HotpluggedVCPUs = append(s.HotpluggedVCPUs, persistapi.CPUDevice{
+		s.HotpluggedVCPUs = append(s.HotpluggedVCPUs, hv.CPUDevice{
 			ID: cpu.ID,
 		})
 	}
 	return
 }
 
-func (q *qemu) Load(s persistapi.HypervisorState) {
+func (q *qemu) Load(s hv.HypervisorState) {
 	q.state.UUID = s.UUID
 	q.state.HotpluggedMemory = s.HotpluggedMemory
 	q.state.HotplugVFIOOnRootBus = s.HotplugVFIOOnRootBus
@@ -2516,7 +2508,7 @@ func (q *qemu) Load(s persistapi.HypervisorState) {
 	}
 
 	for _, cpu := range s.HotpluggedVCPUs {
-		q.state.HotpluggedVCPUs = append(q.state.HotpluggedVCPUs, CPUDevice{
+		q.state.HotpluggedVCPUs = append(q.state.HotpluggedVCPUs, hv.CPUDevice{
 			ID: cpu.ID,
 		})
 	}
@@ -2543,7 +2535,7 @@ func (q *qemu) Check() error {
 }
 
 func (q *qemu) GenerateSocket(id string) (interface{}, error) {
-	return generateVMSocket(id, q.store.RunVMStoragePath())
+	return generateVMSocket(id, q.config.VMStorePath)
 }
 
 func (q *qemu) IsRateLimiterBuiltin() bool {
