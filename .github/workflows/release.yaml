@@ -158,13 +158,14 @@ jobs:
       - name: download-and-upload-tarball
         env:
           GITHUB_TOKEN: ${{ secrets.GIT_UPLOAD_TOKEN }}
+          GOPATH: ${HOME}/go
         run: |
           pushd $GITHUB_WORKSPACE
           ./ci/install_yq.sh
           tag=$(echo $GITHUB_REF | cut -d/ -f3-)
           versions_yaml="versions.yaml"
-          version=$(yq read ${versions_yaml} "externals.libseccomp.version")
-          repo_url=$(yq read ${versions_yaml} "externals.libseccomp.url")
+          version=$(${GOPATH}/bin/yq read ${versions_yaml} "externals.libseccomp.version")
+          repo_url=$(${GOPATH}/bin/yq read ${versions_yaml} "externals.libseccomp.url")
           download_url="${repo_url}/releases/download/v${version}"
           tarball="libseccomp-${version}.tar.gz"
           asc="${tarball}.asc"
