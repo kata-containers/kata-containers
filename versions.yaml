@@ -253,7 +253,7 @@ languages:
       description: |
         'newest-version' is the latest version known to work when
         building Kata
-      newest-version: "1.16.5"
+      newest-version: "1.17.3"
 
   rust:
     description: "Rust language"
