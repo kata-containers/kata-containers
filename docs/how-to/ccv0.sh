@@ -39,7 +39,7 @@ fi
 export tests_repo_dir="${GOPATH}/src/${tests_repo}"
 export katacontainers_repo_dir="${GOPATH}/src/${katacontainers_repo}"
 export ROOTFS_DIR="${katacontainers_repo_dir}/tools/osbuilder/rootfs-builder/rootfs"
-export PULL_IMAGE="${PULL_IMAGE:-registry.fedoraproject.org/fedora:latest}" # Doesn't need authentication
+export PULL_IMAGE="${PULL_IMAGE:-quay.io/kata-containers/confidential-containers:signed}" # Doesn't need authentication
 export CONTAINER_ID="${CONTAINER_ID:-0123456789}"
 
 debug_output() {
@@ -185,6 +185,8 @@ build_and_install_kata_runtime() {
 configure() {
     debug_function configure_kata_to_use_rootfs
     debug_function enable_full_debug
+    # Temp PoC verify code: Inject policy path config parameter
+    sudo sed -i -e 's%^kernel_params = "\(.*\)"%kernel_params = "\1 agent.container_policy_file=/etc/containers/quay_verification/quay_policy.json"%g' /etc/kata-containers/configuration.toml
     sudo systemctl restart containerd # Ensure containerd picks up debug configuration
 }
 
