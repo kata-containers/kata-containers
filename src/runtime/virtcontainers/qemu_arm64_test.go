@@ -170,3 +170,46 @@ func TestQemuArm64WithInitrd(t *testing.T) {
 
 	assert.NotContains(arm64.machine().Options, qemuNvdimmOption)
 }
+
+func TestQemuArm64AppendProtectionDevice(t *testing.T) {
+	assert := assert.New(t)
+	arm64 := newTestQemu(assert, QemuVirt)
+
+	var devices []govmmQemu.Device
+	var bios, firmware string
+	var err error
+
+	// no protection
+	devices, bios, err = arm64.appendProtectionDevice(devices, firmware)
+	assert.Empty(devices)
+	assert.Empty(bios)
+	assert.NoError(err)
+
+	// PEF protection
+	arm64.(*qemuArm64).protection = pefProtection
+	devices, bios, err = arm64.appendProtectionDevice(devices, firmware)
+	assert.Empty(devices)
+	assert.Empty(bios)
+	assert.NoError(err)
+
+	// Secure Execution protection
+	arm64.(*qemuArm64).protection = seProtection
+	devices, bios, err = arm64.appendProtectionDevice(devices, firmware)
+	assert.Empty(devices)
+	assert.Empty(bios)
+	assert.NoError(err)
+
+	// SEV protection
+	arm64.(*qemuArm64).protection = sevProtection
+	devices, bios, err = arm64.appendProtectionDevice(devices, firmware)
+	assert.Empty(devices)
+	assert.Empty(bios)
+	assert.NoError(err)
+
+	// TDX protection
+	arm64.(*qemuArm64).protection = tdxProtection
+	devices, bios, err = arm64.appendProtectionDevice(devices, firmware)
+	assert.Empty(devices)
+	assert.Empty(bios)
+	assert.NoError(err)
+}
