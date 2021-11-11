@@ -193,3 +193,9 @@ To add additional packages, use one of the following methods:
 
 Once the rootfs directory is created, you can add and remove files as
 needed. Changes affect the files included in the final guest image.
+
+#### Confidential containers support
+
+When building the rootfs for confidential containers if `SKOPEO_UMOCI=yes` is set then the `skopeo` and `umoci`
+packages are built and added into the rootfs. It also adds the signature verification proof of concept files.
+For more info on these, see [the documentation](signed-container-artifacts/README.md).

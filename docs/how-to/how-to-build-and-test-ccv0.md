@@ -22,8 +22,8 @@ more functionality is added I'm hoping that this script can grow and expand to h
 
 ## Basic demo How-to
 
-In order to build, and demo the CCv0 functionality, these are the steps I take (*Note: I've only tested this script*
-*running as root*):
+In order to build, and demo the CCv0 functionality, these are the steps I take:
+> **Note**: I've only tested this script running as root
 - Provision a new VM
     - *I choose a Ubuntu 20.04 8GB VM for this as I had one available. There are some dependences on apt-get installed*
     *packages, so these will need re-working to be compatible with other platforms.*
@@ -121,10 +121,10 @@ Issuing command 'ctr --namespace k8s.io shim --id 4cabb081a0d90e0d041e433eebf315
         - If the container registry for the image requires authentication then this can be set with an environment
           variable `SOURCE_CREDS`. For example to use `docker.io` as an authenticated user first run 
           `export SOURCE_CREDS="<dockerhub username>:<dockerhub api key>"`
-            - *Note: the credentials support on the agent request is a tactical solution for the short-term*
-              *proof of concept to allow more images to be pulled and tested. Once we have support for getting*
-              *keys into the kata guest using the attestation-agent and/or KBS I'd expect container registry*
-              *credentials to be looked up using that mechanism.*
+            > **Note**: the credentials support on the agent request is a tactical solution for the short-term
+              proof of concept to allow more images to be pulled and tested. Once we have support for getting
+              keys into the kata guest using the attestation-agent and/or KBS I'd expect container registry
+              credentials to be looked up using that mechanism.
     - Run the pull image agent endpoint with `~/ccv0.sh -d agent_pull_image`: 
         - *For reasons, we think are related to the disk space remaining when unpacking the image bundle,*
           *sometimes the* 
@@ -245,9 +245,94 @@ $ ~/ccv0.sh -d delete_kata_pod
 pod "nginx-kata" deleted
 ```
 
+## Verifying signed images
+
+> **Note**: the current proof of concept signature validation code involves hard-coding to protect a specific container 
+repository and is only a temporary to demonstrate the function. After the attestation agent is able to pass through
+trusted information and the [image management crate](https://github.com/confidential-containers/image-rs) is
+implemented and integrated this code will be replaced.
+
+For the proof of concept the ability to verify images is limited to a pre-created selection of test images in our test
+repository [`quay.io/kata-containers/confidential-containers`](https://quay.io/repository/kata-containers/confidential-containers?tab=tags).
+For pulling images not in this test repository (called an *unprotected* registry below), we can not currently get the GPG keys, or signatures used for signed images, so for compatibility we fall back to the behaviour of not enforcing signatures.
+
+
+In our test repository there are three tagged images:
+
+| Test Image | Base Image used | Signature status | GPG key status |
+| --- | --- | --- | --- |
+| `quay.io/kata-containers/confidential-containers:signed` | `busybox:1.33.1` | [signature](./../../tools/osbuilder/rootfs-builder/signed-container-artifacts/signatures.tar) embedded in kata rootfs |  [public key](./../../tools/osbuilder/rootfs-builder/signed-container-artifacts/public.gpg) embedded in kata rootfs |
+| `quay.io/kata-containers/confidential-containers:unsigned` | `busybox:1.33.1` | not signed | not signed |
+| `quay.io/kata-containers/confidential-containers:other_signed` | `nginx:1.21.3` | [signature](./../../tools/osbuilder/rootfs-builder/signed-container-artifacts/signatures.tar) embedded in kata rootfs | GPG key not kept |
+
+Using a standard unsigned `busybox` image that can be pulled from `docker.io` we can test a few scenarios.
+
+From this temporary proof of concept, along with the public GPG key and signature files, a container policy file is
+created in the rootfs which specifies that any container image from `quay.io/kata-containers`
+must be signed with the embedded GPG key. In order to enable this a new agent configuration parameter called
+`policy_path` must been provided to the agent which specifies the location of the policy file to use inside the image. The `ccv0.sh`
+script sets this up automatically by appending `agent.container_policy_file=/etc/containers/quay_verification/quay_policy.json`
+to the `kernel_params` entry in `/etc/kata-containers/configuration.toml`.
+
+With this policy parameter set a few tests of image verification can be done to test different scenarios
+> **Note**: at the time of writing the `ctr shim` command has a [bug](https://github.com/kata-containers/kata-containers/issues/3020), so I'm using the agent commands directly through `agent-ctl` to drive the tests
+- To test the fallback behaviour works using an unsigned image on an *unprotected* registry we can pull the `busybox`
+image by running:
+  ```bash
+  export CONTAINER_ID="unprotected-unsigned"
+  export PULL_IMAGE="docker.io/library/busybox:latest"
+  ~/ccv0.sh -d agent_pull_image
+  ```
+  - This finishes with a return `Ok()` and after creating a shell into the Kata sandbox we can see that the container
+  image was successfully unpacked to the correct place:
+  ```
+  # ls /run/kata-containers/unprotected-unsigned/
+  config.json
+  rootfs
+  sha256_824b88c5c38e2b931cfd471061a576a2ac1c165ef7adeae6662687031b9f9e07.mtree
+  umoci.json
+  ```
+- To test that an unsigned image from our *protected* test container registry is rejected we can run:
+  ```bash
+  export CONTAINER_ID="protected-unsigned"
+  export PULL_IMAGE="quay.io/kata-containers/confidential-containers:unsigned"
+  ~/ccv0.sh -d agent_pull_image
+  ```
+  - This results in an `ERROR: API failed` message from `agent_ctl` and the Kata sandbox console log shows the correct
+  cause that the signature we has was not valid for the unsigned image:
+  ```text
+  FATA[0001] Source image rejected: Signature for identity quay.io/kata-containers/confidential-containers:signed is not accepted
+  ```
+- To test that the signed image our *protected* test container registry is accepted we can run:
+  ```bash
+  export CONTAINER_ID="protected-signed"
+  export PULL_IMAGE="quay.io/kata-containers/confidential-containers:signed"
+  ~/ccv0.sh -d agent_pull_image
+  ```
+  - This finishes with a return `Ok()` and again, creating a shell into the Kata sandbox we can see that the container
+  image was successfully unpacked to the correct place:
+  ```
+  # ls /run/kata-containers/protected-signed/
+  config.json
+  rootfs
+  sha256_ebf391d3f0ba36d4b64999ebbeadc878d229faec8839254a1c2264cf47735841.mtree
+  umoci.json
+  ```
+- Finally to check the image with a valid signature, but invalid GPG key (the real trusted piece of information we really
+want to protect with the attestation agent in future) fails we can run: 
+  ```bash
+  export CONTAINER_ID="protected-wrong-key"
+  export PULL_IMAGE="quay.io/kata-containers/confidential-containers:other_signed"
+  ~/ccv0.sh -d agent_pull_image
+  ```
+  - Again this results in an `ERROR: API failed` message from `agent_ctl` and the Kata sandbox console log shows a
+  slightly different error:
+  ```text
+  FATA[0001] Source image rejected: Invalid GPG signature...
+  ```
 ## Additional script usage
 
-As well as being able to use the script as above to build all of kata-containers from scratch it can be used to just
+As well as being able to use the script as above to build all of `kata-containers` from scratch it can be used to just
 re-build bits of it by running the script with different parameters. For example after the first build you will often
 not need to re-install the dependencies, QEMU or the Guest kernel, but just test code changes made to the runtime and
 agent. This can be done by running `. ~/ccv0.sh -d rebuild_and_install_kata`. (*Note this does a hard checkout*
