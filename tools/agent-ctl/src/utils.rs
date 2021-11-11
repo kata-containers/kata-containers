@@ -23,8 +23,10 @@ use protocols::oci::{
     User as ttrpcUser,
 };
 use rand::Rng;
+use serde::de::DeserializeOwned;
 use slog::{debug, warn};
 use std::collections::HashMap;
+use std::fs::File;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
@@ -86,7 +88,7 @@ lazy_static! {
 }
 
 pub fn signame_to_signum(name: &str) -> Result<u8> {
-    if name == "" {
+    if name.is_empty() {
         return Err(anyhow!("invalid signal"));
     }
 
@@ -121,7 +123,7 @@ pub fn signame_to_signum(name: &str) -> Result<u8> {
 // Convert a human time fornat (like "2s") into the equivalent number
 // of nano seconds.
 pub fn human_time_to_ns(human_time: &str) -> Result<i64> {
-    if human_time == "" || human_time == "0" {
+    if human_time.is_empty() || human_time.eq("0") {
         return Ok(0);
     }
 
@@ -143,17 +145,17 @@ pub fn human_time_to_ns(human_time: &str) -> Result<i64> {
 // - All other options values default to an empty string.
 // - All options are saved in the global hash before being returned for future
 //   use.
-pub fn get_option(name: &str, options: &mut Options, args: &str) -> String {
+pub fn get_option(name: &str, options: &mut Options, args: &str) -> Result<String> {
     let words: Vec<&str> = args.split_whitespace().collect();
 
     for word in words {
-        let fields: Vec<String> = word.split("=").map(|s| s.to_string()).collect();
+        let fields: Vec<String> = word.split('=').map(|s| s.to_string()).collect();
 
         if fields.len() < 2 {
             continue;
         }
 
-        if fields[0] == "" {
+        if fields[0].is_empty() {
             continue;
         }
 
@@ -162,17 +164,10 @@ pub fn get_option(name: &str, options: &mut Options, args: &str) -> String {
         let mut value = fields[1..].join("=");
 
         // Expand "spec=file:///some/where/config.json"
-        if key == "spec" && value.starts_with(FILE_URI) {
-            let spec_file = match uri_to_filename(&value) {
-                Ok(file) => file,
-                Err(e) => {
-                    warn!(sl!(), "failed to handle spec file URI: {:}", e);
+        if key.eq("spec") && value.starts_with(FILE_URI) {
+            let (_, spec_file) = split_uri(&value)?;
 
-                    "".to_string()
-                }
-            };
-
-            if spec_file != "" {
+            if !spec_file.is_empty() {
                 value = match spec_file_to_string(spec_file) {
                     Ok(s) => s,
                     Err(e) => {
@@ -197,7 +192,7 @@ pub fn get_option(name: &str, options: &mut Options, args: &str) -> String {
     if let Some(value) = options.get(name) {
         debug!(sl!(), "using option {:?}={:?} ({})", name, value, msg);
 
-        return value.to_string();
+        return Ok(value.into());
     }
 
     msg = "generated";
@@ -210,14 +205,14 @@ pub fn get_option(name: &str, options: &mut Options, args: &str) -> String {
         // Default to CID
         "exec_id" => {
             msg = "derived";
-            //derived = true;
 
             match options.get("cid") {
-                Some(value) => value.to_string(),
-                None => "".to_string(),
+                Some(value) => value,
+                None => "",
             }
+            .into()
         }
-        _ => "".to_string(),
+        _ => "".into(),
     };
 
     debug!(sl!(), "using option {:?}={:?} ({})", name, value, msg);
@@ -225,7 +220,7 @@ pub fn get_option(name: &str, options: &mut Options, args: &str) -> String {
     // Store auto-generated value
     options.insert(name.to_string(), value.to_string());
 
-    value
+    Ok(value)
 }
 
 pub fn generate_random_hex_string(len: u32) -> String {
@@ -252,7 +247,7 @@ pub fn random_container_id() -> String {
 }
 
 fn config_file_from_bundle_dir(bundle_dir: &str) -> Result<String> {
-    if bundle_dir == "" {
+    if bundle_dir.is_empty() {
         return Err(anyhow!("missing bundle directory"));
     }
 
@@ -739,18 +734,20 @@ fn oci_to_ttrpc(bundle_dir: &str, cid: &str, oci: &ociSpec) -> Result<ttrpcSpec>
     Ok(ttrpc_spec)
 }
 
-fn uri_to_filename(uri: &str) -> Result<String> {
-    if !uri.starts_with(FILE_URI) {
-        return Err(anyhow!(format!("invalid URI: {:?}", uri)));
-    }
+// Split a URI and return a tuple comprising the scheme and the data.
+//
+// Note that we have to use our own parsing since "json://" is not
+// an official schema ;(
+fn split_uri(uri: &str) -> Result<(String, String)> {
+    const URI_DELIMITER: &str = "://";
 
-    let fields: Vec<&str> = uri.split(FILE_URI).collect();
+    let fields: Vec<&str> = uri.split(URI_DELIMITER).collect();
 
     if fields.len() != 2 {
-        return Err(anyhow!(format!("invalid URI: {:?}", uri)));
+        return Err(anyhow!("invalid URI: {:?}", uri));
     }
 
-    Ok(fields[1].to_string())
+    Ok((fields[0].into(), fields[1].into()))
 }
 
 pub fn spec_file_to_string(spec_file: String) -> Result<String> {
@@ -766,9 +763,9 @@ pub fn get_oci_spec_json(cfg: &Config) -> Result<String> {
 }
 
 pub fn get_ttrpc_spec(options: &mut Options, cid: &str) -> Result<ttrpcSpec> {
-    let bundle_dir = get_option("bundle-dir", options, "");
+    let bundle_dir = get_option("bundle-dir", options, "")?;
 
-    let json_spec = get_option("spec", options, "");
+    let json_spec = get_option("spec", options, "")?;
     assert_ne!(json_spec, "");
 
     let oci_spec: ociSpec = serde_json::from_str(&json_spec).map_err(|e| anyhow!(e))?;
@@ -787,5 +784,69 @@ pub fn str_to_bytes(s: &str) -> Result<Vec<u8>> {
         Ok(decoded)
     } else {
         Ok(s.as_bytes().to_vec())
+    }
+}
+
+// Returns a request object of the type requested.
+//
+// Call as:
+//
+// ```rust
+// let req1: SomeType = make_request(args)?;
+// let req2: AnotherType = make_request(args)?;
+// ```
+//
+// The args string can take a number of forms:
+//
+// - A file URI:
+//
+//   The string is expected to start with 'file://' with the full path to
+//   a local file containing a complete or partial JSON document.
+//
+//   Example: 'file:///some/where/foo.json'
+//
+// - A JSON URI:
+//
+//   This invented 'json://{ ...}' URI allows either a complete JSON document
+//   or a partial JSON fragment to be specified. The JSON takes the form of
+//   the JSON serialised protocol buffers files that specify the Kata Agent
+//   API.
+//
+//   - If the complete document for the specified type is provided, the values
+//     specified are deserialised into the returned
+//     type.
+//
+//   - If a partial document is provided, the values specified are
+//     deserialised into the returned type and all remaining elements take their
+//     default values.
+//
+//   - If no values are specified, all returned type will be created as
+//     if TypeName::default() had been specified instead.
+//
+//   Example 1 (Complete and valid empty JSON document): 'json://{}'
+//   Example 2 (Valid partial JSON document): 'json://{"foo": true, "bar": "hello"}'
+//   Example 3 (GetGuestDetails API example):
+//
+//     let args = r#"json://{"mem_block_size": true, "mem_hotplug_probe": true}"#;
+//
+//     let req: GetGuestDetailsRequest = make_request(args)?;
+//
+pub fn make_request<T: Default + DeserializeOwned>(args: &str) -> Result<T> {
+    if args.is_empty() {
+        return Ok(Default::default());
+    }
+
+    let (scheme, data) = split_uri(args)?;
+
+    match scheme.as_str() {
+        "json" => Ok(serde_json::from_str(&data)?),
+        "file" => {
+            let file = File::open(data)?;
+
+            Ok(serde_json::from_reader(file)?)
+        }
+        // Don't error since the args may contain key=value pairs which
+        // are not handled by this functionz.
+        _ => Ok(Default::default()),
     }
 }
