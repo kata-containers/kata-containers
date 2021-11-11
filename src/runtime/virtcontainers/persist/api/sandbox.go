@@ -6,6 +6,10 @@
 
 package persistapi
 
+import (
+	hv "github.com/kata-containers/kata-containers/src/runtime/pkg/hypervisors"
+)
+
 // ============= sandbox level resources =============
 
 // AgentState save agent state data
@@ -38,7 +42,7 @@ type SandboxState struct {
 	OverheadCgroupPath string
 
 	// HypervisorState saves hypervisor specific data
-	HypervisorState HypervisorState
+	HypervisorState hv.HypervisorState
 
 	// AgentState saves state data of agent
 	AgentState AgentState

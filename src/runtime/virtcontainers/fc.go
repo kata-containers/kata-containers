@@ -22,9 +22,9 @@ import (
 	"syscall"
 	"time"
 
+	hv "github.com/kata-containers/kata-containers/src/runtime/pkg/hypervisors"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils/katatrace"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
-	persistapi "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist/api"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/firecracker/client"
 	models "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/firecracker/client/models"
 	ops "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/firecracker/client/operations"
@@ -1226,13 +1226,13 @@ func (fc *firecracker) toGrpc(ctx context.Context) ([]byte, error) {
 	return nil, errors.New("firecracker is not supported by VM cache")
 }
 
-func (fc *firecracker) Save() (s persistapi.HypervisorState) {
+func (fc *firecracker) Save() (s hv.HypervisorState) {
 	s.Pid = fc.info.PID
 	s.Type = string(FirecrackerHypervisor)
 	return
 }
 
-func (fc *firecracker) Load(s persistapi.HypervisorState) {
+func (fc *firecracker) Load(s hv.HypervisorState) {
 	fc.info.PID = s.Pid
 }
 

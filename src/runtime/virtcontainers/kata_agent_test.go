@@ -1158,7 +1158,7 @@ func TestSandboxBindMount(t *testing.T) {
 	assert.Nil(err)
 	defer os.RemoveAll(dir)
 
-	sharePath := getSharePath(sandbox.id)
+	sharePath := GetSharePath(sandbox.id)
 	mountPath := getMountPath(sandbox.id)
 
 	err = os.MkdirAll(sharePath, DirMode)

@@ -199,11 +199,15 @@ func TestAcrnGetSandboxConsole(t *testing.T) {
 	assert.NoError(err)
 
 	a := &Acrn{
-		ctx:   context.Background(),
+		ctx: context.Background(),
+		config: HypervisorConfig{
+			VMStorePath:  store.RunVMStoragePath(),
+			RunStorePath: store.RunStoragePath(),
+		},
 		store: store,
 	}
 	sandboxID := "testSandboxID"
-	expected := filepath.Join(a.store.RunVMStoragePath(), sandboxID, consoleSocket)
+	expected := filepath.Join(store.RunVMStoragePath(), sandboxID, consoleSocket)
 
 	proto, result, err := a.GetVMConsole(a.ctx, sandboxID)
 	assert.NoError(err)
@@ -219,6 +223,10 @@ func TestAcrnCreateVM(t *testing.T) {
 
 	a := &Acrn{
 		store: store,
+		config: HypervisorConfig{
+			VMStorePath:  store.RunVMStoragePath(),
+			RunStorePath: store.RunStoragePath(),
+		},
 	}
 
 	sandbox := &Sandbox{

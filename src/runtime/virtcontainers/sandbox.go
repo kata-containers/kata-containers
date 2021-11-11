@@ -530,13 +530,15 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 	if s.store, err = persist.GetDriver(); err != nil || s.store == nil {
 		return nil, fmt.Errorf("failed to get fs persist driver: %v", err)
 	}
-
 	defer func() {
 		if retErr != nil {
 			s.Logger().WithError(retErr).Error("Create new sandbox failed")
 			s.store.Destroy(s.id)
 		}
 	}()
+
+	sandboxConfig.HypervisorConfig.VMStorePath = s.store.RunVMStoragePath()
+	sandboxConfig.HypervisorConfig.RunStorePath = s.store.RunStoragePath()
 
 	spec := s.GetPatchedOCISpec()
 	if spec != nil && spec.Process.SelinuxLabel != "" {

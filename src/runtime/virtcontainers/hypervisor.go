@@ -14,9 +14,8 @@ import (
 	"strconv"
 	"strings"
 
+	hv "github.com/kata-containers/kata-containers/src/runtime/pkg/hypervisors"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
-	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist"
-	persistapi "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist/api"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
 )
@@ -185,28 +184,18 @@ func (hType *HypervisorType) String() string {
 	}
 }
 
-// NewHypervisor returns an hypervisor from and hypervisor type.
+// NewHypervisor returns an hypervisor from a hypervisor type.
 func NewHypervisor(hType HypervisorType) (Hypervisor, error) {
-	store, err := persist.GetDriver()
-	if err != nil {
-		return nil, err
-	}
 
 	switch hType {
 	case QemuHypervisor:
-		return &qemu{
-			store: store,
-		}, nil
+		return &qemu{}, nil
 	case FirecrackerHypervisor:
 		return &firecracker{}, nil
 	case AcrnHypervisor:
-		return &Acrn{
-			store: store,
-		}, nil
+		return &Acrn{}, nil
 	case ClhHypervisor:
-		return &cloudHypervisor{
-			store: store,
-		}, nil
+		return &cloudHypervisor{}, nil
 	case MockHypervisor:
 		return &mockHypervisor{}, nil
 	default:
@@ -344,6 +333,12 @@ type HypervisorConfig struct {
 	// VMid is the id of the VM that create the hypervisor if the VM is created by the factory.
 	// VMid is "" if the hypervisor is not created by the factory.
 	VMid string
+
+	// VMStorePath is the location on disk where VM information will persist
+	VMStorePath string
+
+	// VMStorePath is the location on disk where runtime information will persist
+	RunStorePath string
 
 	// SELinux label for the VM
 	SELinuxProcessLabel string
@@ -934,8 +929,8 @@ type Hypervisor interface {
 	toGrpc(ctx context.Context) ([]byte, error)
 	Check() error
 
-	Save() persistapi.HypervisorState
-	Load(persistapi.HypervisorState)
+	Save() hv.HypervisorState
+	Load(hv.HypervisorState)
 
 	// generate the socket to communicate the host and guest
 	GenerateSocket(id string) (interface{}, error)
