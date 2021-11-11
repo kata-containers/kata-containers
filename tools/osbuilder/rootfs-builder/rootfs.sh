@@ -652,6 +652,23 @@ EOT
 		make
 		install -o root -g root -m 0755 umoci "${ROOTFS_DIR}/usr/local/bin/"
 		popd
+
+		# Temp PoC code: Add image signature verification artifacts into rootfs
+		rootfs_quay_verification_directory="/etc/containers/quay_verification"
+		dev_verification_directory="${script_dir}/signed-container-artifacts"
+		mkdir -p "${ROOTFS_DIR}${rootfs_quay_verification_directory}/signatures"
+		install -o root -g root -m 0644 "${dev_verification_directory}/public.gpg" "${ROOTFS_DIR}${rootfs_quay_verification_directory}/public.gpg"
+		install -o root -g root -m 0644 "${dev_verification_directory}/quay_policy.json" "${ROOTFS_DIR}${rootfs_quay_verification_directory}/quay_policy.json"
+		tar -zvxf "${dev_verification_directory}/signatures.tar" -C "${ROOTFS_DIR}${rootfs_quay_verification_directory}/signatures"
+
+		container_registries_dir="${ROOTFS_DIR}/etc/containers/registries.d"
+		mkdir -p ${container_registries_dir}
+	cat << EOT | tee ${container_registries_dir}/quay.io.yaml
+docker:
+    quay.io/kata-containers/confidential-containers:
+        sigstore: file://${rootfs_quay_verification_directory}/signatures
+        sigstore-staging: file://${rootfs_quay_verification_directory}/signatures
+EOT
 	fi
 
 	if [ -n "${AA_KBC}" ]; then
