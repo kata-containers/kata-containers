@@ -18,6 +18,8 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
+
+	"github.com/sirupsen/logrus"
 )
 
 // HypervisorType describes an hypervisor type.
@@ -45,14 +47,10 @@ const (
 
 	// MockHypervisor is a mock hypervisor for testing purposes
 	MockHypervisor HypervisorType = "mock"
-)
 
-const (
 	procMemInfo = "/proc/meminfo"
 	procCPUInfo = "/proc/cpuinfo"
-)
 
-const (
 	defaultVCPUs = 1
 	// 2 GiB
 	defaultMemSzMiB = 2048
@@ -71,6 +69,10 @@ const (
 
 	// MinHypervisorMemory is the minimum memory required for a VM.
 	MinHypervisorMemory = 256
+)
+
+var (
+	hvLogger = logrus.WithField("source", "virtcontainers/hypervisor")
 )
 
 // In some architectures the maximum number of vCPUs depends on the number of physical cores.
@@ -141,6 +143,12 @@ type MemoryDevice struct {
 	SizeMB int
 	Addr   uint64
 	Probe  bool
+}
+
+// SetHypervisorLogger sets up a logger for the hypervisor part of this pkg
+func SetHypervisorLogger(logger *logrus.Entry) {
+	fields := hvLogger.Data
+	hvLogger = logger.WithFields(fields)
 }
 
 // Set sets an hypervisor type based on the input string.
@@ -604,7 +612,7 @@ func (conf *HypervisorConfig) AddCustomAsset(a *types.Asset) error {
 		return fmt.Errorf("Invalid %s at %s", a.Type(), a.Path())
 	}
 
-	virtLog.Debugf("Using custom %v asset %s", a.Type(), a.Path())
+	hvLogger.Debugf("Using custom %v asset %s", a.Type(), a.Path())
 
 	if conf.customAssets == nil {
 		conf.customAssets = make(map[types.AssetType]*types.Asset)
@@ -872,7 +880,7 @@ func RunningOnVMM(cpuInfoPath string) (bool, error) {
 		return flags["hypervisor"], nil
 	}
 
-	virtLog.WithField("arch", runtime.GOARCH).Info("Unable to know if the system is running inside a VM")
+	hvLogger.WithField("arch", runtime.GOARCH).Info("Unable to know if the system is running inside a VM")
 	return false, nil
 }
 

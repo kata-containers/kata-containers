@@ -51,7 +51,7 @@ var supportedQemuMachine = govmmQemu.Machine{
 
 // Logger returns a logrus logger appropriate for logging qemu messages
 func (q *qemuPPC64le) Logger() *logrus.Entry {
-	return virtLog.WithField("subsystem", "qemuPPC64le")
+	return hvLogger.WithField("subsystem", "qemuPPC64le")
 }
 
 // MaxQemuVCPUs returns the maximum number of vCPUs supported
@@ -141,7 +141,7 @@ func (q *qemuPPC64le) enableProtection() error {
 			q.qemuMachine.Options += ","
 		}
 		q.qemuMachine.Options += fmt.Sprintf("confidential-guest-support=%s", pefID)
-		virtLog.WithFields(logrus.Fields{
+		hvLogger.WithFields(logrus.Fields{
 			"subsystem":     "qemuPPC64le",
 			"machine":       q.qemuMachine,
 			"kernel-params": q.kernelParams,

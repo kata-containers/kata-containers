@@ -813,7 +813,7 @@ func (clh *cloudHypervisor) AddDevice(ctx context.Context, devInfo interface{}, 
 //###########################################################################
 
 func (clh *cloudHypervisor) Logger() *log.Entry {
-	return virtLog.WithField("subsystem", "cloudHypervisor")
+	return hvLogger.WithField("subsystem", "cloudHypervisor")
 }
 
 // Adds all capabilities supported by cloudHypervisor implementation of hypervisor interface
