@@ -149,6 +149,3 @@ func (m *mockHypervisor) GenerateSocket(id string) (interface{}, error) {
 func (m *mockHypervisor) IsRateLimiterBuiltin() bool {
 	return false
 }
-
-func (m *mockHypervisor) setSandbox(sandbox *Sandbox) {
-}

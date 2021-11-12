@@ -2541,6 +2541,3 @@ func (q *qemu) GenerateSocket(id string) (interface{}, error) {
 func (q *qemu) IsRateLimiterBuiltin() bool {
 	return false
 }
-
-func (q *qemu) setSandbox(sandbox *Sandbox) {
-}
