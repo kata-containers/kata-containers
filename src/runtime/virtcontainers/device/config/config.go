@@ -15,7 +15,7 @@ import (
 	"strings"
 
 	"github.com/go-ini/ini"
-	vcTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/types"
+	vcTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	"golang.org/x/sys/unix"
 )
 
