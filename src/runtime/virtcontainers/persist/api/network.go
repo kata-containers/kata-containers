@@ -7,7 +7,7 @@
 package persistapi
 
 import (
-	vcTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/types"
+	vcTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	"github.com/vishvananda/netlink"
 )
 
