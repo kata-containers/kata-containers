@@ -13,6 +13,7 @@ fn main() {
         "protos/health.proto",
         "protos/google/protobuf/empty.proto",
         "protos/oci.proto",
+        "protos/image.proto",
     ];
 
     Codegen::new()
