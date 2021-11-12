@@ -141,7 +141,7 @@ type qmpLogger struct {
 
 func newQMPLogger() qmpLogger {
 	return qmpLogger{
-		logger: virtLog.WithField("subsystem", "qmp"),
+		logger: hvLogger.WithField("subsystem", "qmp"),
 	}
 }
 
@@ -163,7 +163,7 @@ func (l qmpLogger) Errorf(format string, v ...interface{}) {
 
 // Logger returns a logrus logger appropriate for logging qemu messages
 func (q *qemu) Logger() *logrus.Entry {
-	return virtLog.WithField("subsystem", "qemu")
+	return hvLogger.WithField("subsystem", "qemu")
 }
 
 func (q *qemu) kernelParameters() string {

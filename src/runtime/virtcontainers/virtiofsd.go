@@ -216,7 +216,7 @@ func (v *virtiofsd) valid() error {
 }
 
 func (v *virtiofsd) Logger() *log.Entry {
-	return virtLog.WithField("subsystem", "virtiofsd")
+	return hvLogger.WithField("subsystem", "virtiofsd")
 }
 
 func (v *virtiofsd) kill(ctx context.Context) (err error) {

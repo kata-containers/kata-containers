@@ -324,7 +324,7 @@ func (q *qemuS390x) enableProtection() error {
 		q.qemuMachine.Options += ","
 	}
 	q.qemuMachine.Options += fmt.Sprintf("confidential-guest-support=%s", secExecID)
-	virtLog.WithFields(logrus.Fields{
+	hvLogger.WithFields(logrus.Fields{
 		"subsystem": logSubsystem,
 		"machine":   q.qemuMachine}).
 		Info("Enabling guest protection with Secure Execution")
