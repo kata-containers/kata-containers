@@ -945,6 +945,4 @@ type Hypervisor interface {
 
 	// check if hypervisor supports built-in rate limiter.
 	IsRateLimiterBuiltin() bool
-
-	setSandbox(sandbox *Sandbox)
 }

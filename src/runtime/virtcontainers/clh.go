@@ -1271,6 +1271,3 @@ func (clh *cloudHypervisor) vmInfo() (chclient.VmInfo, error) {
 func (clh *cloudHypervisor) IsRateLimiterBuiltin() bool {
 	return false
 }
-
-func (clh *cloudHypervisor) setSandbox(sandbox *Sandbox) {
-}

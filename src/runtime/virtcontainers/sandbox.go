@@ -525,8 +525,6 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 		swapDevices:     []*config.BlockDrive{},
 	}
 
-	hypervisor.setSandbox(s)
-
 	if s.store, err = persist.GetDriver(); err != nil || s.store == nil {
 		return nil, fmt.Errorf("failed to get fs persist driver: %v", err)
 	}
