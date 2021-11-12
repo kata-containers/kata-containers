@@ -60,6 +60,49 @@ $ mkdir -p "$rootfs_dir" && (cd "$bundle_dir" && runc spec)
 $ sudo docker export $(sudo docker create "$image") | tar -C "$rootfs_dir" -xvf -
 ```
 
+
+### Specify API commands to run
+
+The tool allows one or more API commands to be specified using the `-c` or
+`--cmd` command-line options. At their simplest, these are just the name of
+the API commands, which will make the API command using default values
+(generally blank or empty) where possible. However, some API calls require
+some basic value to be specified such as a sandbox ID or container ID. For
+these calls, the tool will generate a value by default unless told not to.
+
+If the user wishes to, they may specify these values as part of the command
+using `name=value` syntax.
+
+In addition to this, it is possible to specify either a complete or partial
+set of values for the API call using JSON syntax, either directly on the
+command-line or via a file URI.
+
+The table below summarises the possible ways of specifying an API call to
+make.
+
+| CLI values | API Query |
+|-|-|
+| `-c 'SomeAPIName' -n` | Calls the API using the default values for all request options |
+| `-c 'SomeAPIName'` | Calls the API specifying some values automatically if possible |
+| `-c 'SomeAPIName foo=bar baz="hello world" x=3 y="a cat"'` | Calls the API specifying various values in name/value form |
+| `-c 'SomeAPIName json://{}' -n` | Calls the API specifying empty values via an empty JSON document |
+| `-c 'SomeAPIName json://{"foo": true, "bar": "hello world"}' -n` | Calls the API specifying _some_ values in JSON syntax |
+| `-c 'SomeAPIName file:///foo.json' -n` | Calls the API passing the JSON values from the specified file |
+
+#### JSON Example
+
+An example showing how to specify the messages fields for an API call
+(`GetGuestDetails`):
+
+```sh
+$ cargo run -- -l debug connect --server-address "unix://@/tmp/foo.socket" --bundle-dir "$bundle_dir" -c Check -c 'GetGuestDetails json://{"mem_block_size": true, "mem_hotplug_probe": true}'
+```
+
+> **Note:**
+>
+> For details of the names of the APIs to call and the available fields
+> in each API, see the [Code Summary](#code-summary) section.
+
 ### Connect to a real Kata Container
 
 The method used to connect to Kata Containers agent depends on the configured

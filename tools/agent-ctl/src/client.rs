@@ -27,6 +27,23 @@ use std::time::Duration;
 use ttrpc;
 use ttrpc::context::Context;
 
+// Run the specified closure to set an automatic value if the ttRPC Context
+// does not contain the special values requesting automatic values be
+// suppressed.
+macro_rules! run_if_auto_values {
+    ($ctx:expr, $closure:expr) => {{
+        let cfg = $ctx.metadata.get(METADATA_CFG_NS);
+
+        if let Some(v) = cfg {
+            if v.contains(&NO_AUTO_VALUES_CFG_NAME.to_string()) {
+                debug!(sl!(), "Running closure to generate values");
+
+                $closure()?;
+            }
+        }
+    }};
+}
+
 // Hack until the actual Context type supports this.
 fn clone_context(ctx: &Context) -> Context {
     Context {
@@ -85,6 +102,13 @@ const CMD_REPEAT: &'static str = "repeat";
 const DEFAULT_PROC_SIGNAL: &'static str = "SIGKILL";
 
 const ERR_API_FAILED: &str = "API failed";
+
+// Value used as a "namespace" in the ttRPC Context's metadata.
+const METADATA_CFG_NS: &str = "agent-ctl-cfg";
+
+// Special value which if found means do not generate any values
+// automatically.
+const NO_AUTO_VALUES_CFG_NAME: &str = "no-auto-values";
 
 static AGENT_CMDS: &'static [AgentCmd] = &[
     AgentCmd {
@@ -218,19 +242,9 @@ static AGENT_CMDS: &'static [AgentCmd] = &[
         fp: agent_cmd_container_start,
     },
     AgentCmd {
-        name: "StartTracing",
-        st: ServiceType::Agent,
-        fp: agent_cmd_sandbox_tracing_start,
-    },
-    AgentCmd {
         name: "StatsContainer",
         st: ServiceType::Agent,
         fp: agent_cmd_container_stats,
-    },
-    AgentCmd {
-        name: "StopTracing",
-        st: ServiceType::Agent,
-        fp: agent_cmd_sandbox_tracing_stop,
     },
     AgentCmd {
         name: "TtyWinResize",
@@ -331,7 +345,7 @@ fn get_agent_cmd_details() -> Vec<String> {
 
 fn get_agent_cmd_func(name: &str) -> Result<AgentCmdFp> {
     for cmd in AGENT_CMDS {
-        if cmd.name == name {
+        if cmd.name.eq(name) {
             return Ok(cmd.fp);
         }
     }
@@ -359,7 +373,7 @@ fn get_all_cmd_details() -> Vec<String> {
 
 fn get_builtin_cmd_func(name: &str) -> Result<BuiltinCmdFp> {
     for cmd in BUILTIN_CMDS {
-        if cmd.name == name {
+        if cmd.name.eq(name) {
             return Ok(cmd.fp);
         }
     }
@@ -436,7 +450,7 @@ fn create_ttrpc_client(
     hybrid_vsock_port: u64,
     hybrid_vsock: bool,
 ) -> Result<ttrpc::Client> {
-    if server_address == "" {
+    if server_address.is_empty() {
         return Err(anyhow!("server address cannot be blank"));
     }
 
@@ -583,7 +597,7 @@ fn announce(cfg: &Config) {
 }
 
 pub fn client(cfg: &Config, commands: Vec<&str>) -> Result<()> {
-    if commands.len() == 1 && commands[0] == "list" {
+    if commands.len() == 1 && commands[0].eq("list") {
         println!("Built-in commands:\n");
 
         let mut builtin_cmds = get_builtin_cmd_details();
@@ -626,7 +640,16 @@ pub fn client(cfg: &Config, commands: Vec<&str>) -> Result<()> {
 
     let mut options = Options::new();
 
-    let ttrpc_ctx = ttrpc::context::with_timeout(cfg.timeout_nano);
+    let mut ttrpc_ctx = ttrpc::context::with_timeout(cfg.timeout_nano);
+
+    // Allow the commands to change their behaviour based on the value
+    // of this option.
+
+    if !cfg.no_auto_values {
+        ttrpc_ctx.add(METADATA_CFG_NS.into(), NO_AUTO_VALUES_CFG_NAME.to_string());
+
+        debug!(sl!(), "Automatic value generation disabled");
+    }
 
     // Special-case loading the OCI config file so it is accessible
     // to all commands.
@@ -691,7 +714,7 @@ fn handle_cmd(
 
     let cmd = fields[0];
 
-    if cmd == "" {
+    if cmd.is_empty() {
         // Ignore empty commands
         return (Ok(()), false);
     }
@@ -792,7 +815,7 @@ fn handle_agent_cmd(
         return (result, false);
     }
 
-    let shutdown = cmd == SHUTDOWN_CMD;
+    let shutdown = cmd.eq(SHUTDOWN_CMD);
 
     (Ok(()), shutdown)
 }
@@ -816,7 +839,7 @@ fn interactive_client_loop(
         let cmdline =
             readline("Enter command").map_err(|e| anyhow!(e).context("failed to read line"))?;
 
-        if cmdline == "" {
+        if cmdline.is_empty() {
             continue;
         }
 
@@ -873,14 +896,11 @@ fn agent_cmd_health_check(
     health: &HealthClient,
     _image: &ImageClient,
     _options: &mut Options,
-    _args: &str,
+    args: &str,
 ) -> Result<()> {
-    let mut req = CheckRequest::default();
+    let req: CheckRequest = utils::make_request(args)?;
 
     let ctx = clone_context(ctx);
-
-    // value unused
-    req.set_service("".to_string());
 
     debug!(sl!(), "sending request"; "request" => format!("{:?}", req));
 
@@ -900,15 +920,12 @@ fn agent_cmd_health_version(
     health: &HealthClient,
     _image: &ImageClient,
     _options: &mut Options,
-    _args: &str,
+    args: &str,
 ) -> Result<()> {
     // XXX: Yes, the API is actually broken!
-    let mut req = CheckRequest::default();
+    let req: CheckRequest = utils::make_request(args)?;
 
     let ctx = clone_context(ctx);
-
-    // value unused
-    req.set_service("".to_string());
 
     debug!(sl!(), "sending request"; "request" => format!("{:?}", req));
 
@@ -930,12 +947,16 @@ fn agent_cmd_sandbox_create(
     options: &mut Options,
     args: &str,
 ) -> Result<()> {
-    let mut req = CreateSandboxRequest::default();
+    let mut req: CreateSandboxRequest = utils::make_request(args)?;
 
     let ctx = clone_context(ctx);
 
-    let sid = utils::get_option("sid", options, args);
-    req.set_sandbox_id(sid);
+    run_if_auto_values!(ctx, || -> Result<()> {
+        let sid = utils::get_option("sid", options, args)?;
+        req.set_sandbox_id(sid);
+
+        Ok(())
+    });
 
     debug!(sl!(), "sending request"; "request" => format!("{:?}", req));
 
@@ -955,9 +976,9 @@ fn agent_cmd_sandbox_destroy(
     _health: &HealthClient,
     _image: &ImageClient,
     _options: &mut Options,
-    _args: &str,
+    args: &str,
 ) -> Result<()> {
-    let req = DestroySandboxRequest::default();
+    let req: DestroySandboxRequest = utils::make_request(args)?;
 
     let ctx = clone_context(ctx);
 
@@ -981,20 +1002,23 @@ fn agent_cmd_container_create(
     options: &mut Options,
     args: &str,
 ) -> Result<()> {
-    let mut req = CreateContainerRequest::default();
+    let mut req: CreateContainerRequest = utils::make_request(args)?;
 
     let ctx = clone_context(ctx);
 
-    let cid = utils::get_option("cid", options, args);
-    let exec_id = utils::get_option("exec_id", options, args);
-
     // FIXME: container create: add back "spec=file:///" support
 
-    let ttrpc_spec = utils::get_ttrpc_spec(options, &cid).map_err(|e| anyhow!(e))?;
+    run_if_auto_values!(ctx, || -> Result<()> {
+        let cid = utils::get_option("cid", options, args)?;
+        let exec_id = utils::get_option("exec_id", options, args)?;
+        let ttrpc_spec = utils::get_ttrpc_spec(options, &cid).map_err(|e| anyhow!(e))?;
 
-    req.set_container_id(cid);
-    req.set_exec_id(exec_id);
-    req.set_OCI(ttrpc_spec);
+        req.set_container_id(cid);
+        req.set_exec_id(exec_id);
+        req.set_OCI(ttrpc_spec);
+
+        Ok(())
+    });
 
     debug!(sl!(), "sending request"; "request" => format!("{:?}", req));
 
@@ -1016,13 +1040,15 @@ fn agent_cmd_container_remove(
     options: &mut Options,
     args: &str,
 ) -> Result<()> {
-    let mut req = RemoveContainerRequest::default();
-
-    let cid = utils::get_option("cid", options, args);
+    let mut req: RemoveContainerRequest = utils::make_request(args)?;
 
     let ctx = clone_context(ctx);
 
-    req.set_container_id(cid);
+    run_if_auto_values!(ctx, || -> Result<()> {
+        let cid = utils::get_option("cid", options, args)?;
+        req.set_container_id(cid);
+        Ok(())
+    });
 
     debug!(sl!(), "sending request"; "request" => format!("{:?}", req));
 
@@ -1044,32 +1070,36 @@ fn agent_cmd_container_exec(
     options: &mut Options,
     args: &str,
 ) -> Result<()> {
-    let mut req = ExecProcessRequest::default();
+    let mut req: ExecProcessRequest = utils::make_request(args)?;
 
     let ctx = clone_context(ctx);
 
-    let cid = utils::get_option("cid", options, args);
-    let exec_id = utils::get_option("exec_id", options, args);
+    run_if_auto_values!(ctx, || -> Result<()> {
+        let cid = utils::get_option("cid", options, args)?;
+        let exec_id = utils::get_option("exec_id", options, args)?;
 
-    let ttrpc_spec = utils::get_ttrpc_spec(options, &cid).map_err(|e| anyhow!(e))?;
+        let ttrpc_spec = utils::get_ttrpc_spec(options, &cid).map_err(|e| anyhow!(e))?;
 
-    let bundle_dir = options
-        .get("bundle-dir")
-        .ok_or("BUG: bundle-dir missing")
-        .map_err(|e| anyhow!(e))?;
+        let bundle_dir = options
+            .get("bundle-dir")
+            .ok_or("BUG: bundle-dir missing")
+            .map_err(|e| anyhow!(e))?;
 
-    let process = ttrpc_spec
-        .Process
-        .into_option()
-        .ok_or(format!(
-            "failed to get process from OCI spec: {}",
-            bundle_dir,
-        ))
-        .map_err(|e| anyhow!(e))?;
+        let process = ttrpc_spec
+            .Process
+            .into_option()
+            .ok_or(format!(
+                "failed to get process from OCI spec: {}",
+                bundle_dir,
+            ))
+            .map_err(|e| anyhow!(e))?;
 
-    req.set_container_id(cid);
-    req.set_exec_id(exec_id);
-    req.set_process(process);
+        req.set_container_id(cid);
+        req.set_exec_id(exec_id);
+        req.set_process(process);
+
+        Ok(())
+    });
 
     debug!(sl!(), "sending request"; "request" => format!("{:?}", req));
 
@@ -1091,13 +1121,16 @@ fn agent_cmd_container_stats(
     options: &mut Options,
     args: &str,
 ) -> Result<()> {
-    let mut req = StatsContainerRequest::default();
+    let mut req: StatsContainerRequest = utils::make_request(args)?;
 
     let ctx = clone_context(ctx);
 
-    let cid = utils::get_option("cid", options, args);
+    run_if_auto_values!(ctx, || -> Result<()> {
+        let cid = utils::get_option("cid", options, args)?;
 
-    req.set_container_id(cid);
+        req.set_container_id(cid);
+        Ok(())
+    });
 
     debug!(sl!(), "sending request"; "request" => format!("{:?}", req));
 
@@ -1119,13 +1152,16 @@ fn agent_cmd_container_pause(
     options: &mut Options,
     args: &str,
 ) -> Result<()> {
-    let mut req = PauseContainerRequest::default();
+    let mut req: PauseContainerRequest = utils::make_request(args)?;
 
     let ctx = clone_context(ctx);
 
-    let cid = utils::get_option("cid", options, args);
+    run_if_auto_values!(ctx, || -> Result<()> {
+        let cid = utils::get_option("cid", options, args)?;
 
-    req.set_container_id(cid);
+        req.set_container_id(cid);
+        Ok(())
+    });
 
     debug!(sl!(), "sending request"; "request" => format!("{:?}", req));
 
@@ -1147,13 +1183,16 @@ fn agent_cmd_container_resume(
     options: &mut Options,
     args: &str,
 ) -> Result<()> {
-    let mut req = ResumeContainerRequest::default();
-
-    let cid = utils::get_option("cid", options, args);
+    let mut req: ResumeContainerRequest = utils::make_request(args)?;
 
     let ctx = clone_context(ctx);
 
-    req.set_container_id(cid);
+    run_if_auto_values!(ctx, || -> Result<()> {
+        let cid = utils::get_option("cid", options, args)?;
+
+        req.set_container_id(cid);
+        Ok(())
+    });
 
     debug!(sl!(), "sending request"; "request" => format!("{:?}", req));
 
@@ -1175,13 +1214,16 @@ fn agent_cmd_container_start(
     options: &mut Options,
     args: &str,
 ) -> Result<()> {
-    let mut req = StartContainerRequest::default();
+    let mut req: StartContainerRequest = utils::make_request(args)?;
 
     let ctx = clone_context(ctx);
 
-    let cid = utils::get_option("cid", options, args);
+    run_if_auto_values!(ctx, || -> Result<()> {
+        let cid = utils::get_option("cid", options, args)?;
 
-    req.set_container_id(cid);
+        req.set_container_id(cid);
+        Ok(())
+    });
 
     debug!(sl!(), "sending request"; "request" => format!("{:?}", req));
 
@@ -1201,13 +1243,18 @@ fn agent_cmd_sandbox_get_guest_details(
     _health: &HealthClient,
     _image: &ImageClient,
     _options: &mut Options,
-    _args: &str,
+    args: &str,
 ) -> Result<()> {
-    let mut req = GuestDetailsRequest::default();
+    let mut req: GuestDetailsRequest = utils::make_request(args)?;
 
     let ctx = clone_context(ctx);
 
-    req.set_mem_block_size(true);
+    run_if_auto_values!(ctx, || -> Result<()> {
+        req.set_mem_block_size(true);
+        req.set_mem_hotplug_probe(true);
+
+        Ok(())
+    });
 
     debug!(sl!(), "sending request"; "request" => format!("{:?}", req));
 
@@ -1229,15 +1276,19 @@ fn agent_cmd_container_wait_process(
     options: &mut Options,
     args: &str,
 ) -> Result<()> {
-    let mut req = WaitProcessRequest::default();
+    let mut req: WaitProcessRequest = utils::make_request(args)?;
 
     let ctx = clone_context(ctx);
 
-    let cid = utils::get_option("cid", options, args);
-    let exec_id = utils::get_option("exec_id", options, args);
+    run_if_auto_values!(ctx, || -> Result<()> {
+        let cid = utils::get_option("cid", options, args)?;
+        let exec_id = utils::get_option("exec_id", options, args)?;
 
-    req.set_container_id(cid);
-    req.set_exec_id(exec_id);
+        req.set_container_id(cid);
+        req.set_exec_id(exec_id);
+
+        Ok(())
+    });
 
     debug!(sl!(), "sending request"; "request" => format!("{:?}", req));
 
@@ -1259,78 +1310,34 @@ fn agent_cmd_container_signal_process(
     options: &mut Options,
     args: &str,
 ) -> Result<()> {
-    let mut req = SignalProcessRequest::default();
+    let mut req: SignalProcessRequest = utils::make_request(args)?;
 
     let ctx = clone_context(ctx);
 
-    let cid = utils::get_option("cid", options, args);
-    let exec_id = utils::get_option("exec_id", options, args);
+    run_if_auto_values!(ctx, || -> Result<()> {
+        let cid = utils::get_option("cid", options, args)?;
+        let exec_id = utils::get_option("exec_id", options, args)?;
 
-    let mut sigstr = utils::get_option("signal", options, args);
+        let mut sigstr = utils::get_option("signal", options, args)?;
 
-    // Convert to a numeric
-    if sigstr == "" {
-        sigstr = DEFAULT_PROC_SIGNAL.to_string();
-    }
+        // Convert to a numeric
+        if sigstr.is_empty() {
+            sigstr = DEFAULT_PROC_SIGNAL.to_string();
+        }
 
-    let signum = utils::signame_to_signum(&sigstr).map_err(|e| anyhow!(e))?;
+        let signum = utils::signame_to_signum(&sigstr).map_err(|e| anyhow!(e))?;
 
-    req.set_container_id(cid);
-    req.set_exec_id(exec_id);
-    req.set_signal(signum as u32);
+        req.set_container_id(cid);
+        req.set_exec_id(exec_id);
+        req.set_signal(signum as u32);
+
+        Ok(())
+    });
 
     debug!(sl!(), "sending request"; "request" => format!("{:?}", req));
 
     let reply = client
         .signal_process(ctx, &req)
-        .map_err(|e| anyhow!("{:?}", e).context(ERR_API_FAILED))?;
-
-    info!(sl!(), "response received";
-        "response" => format!("{:?}", reply));
-
-    Ok(())
-}
-
-fn agent_cmd_sandbox_tracing_start(
-    ctx: &Context,
-    client: &AgentServiceClient,
-    _health: &HealthClient,
-    _image: &ImageClient,
-    _options: &mut Options,
-    _args: &str,
-) -> Result<()> {
-    let req = StartTracingRequest::default();
-
-    let ctx = clone_context(ctx);
-
-    debug!(sl!(), "sending request"; "request" => format!("{:?}", req));
-
-    let reply = client
-        .start_tracing(ctx, &req)
-        .map_err(|e| anyhow!("{:?}", e).context(ERR_API_FAILED))?;
-
-    info!(sl!(), "response received";
-        "response" => format!("{:?}", reply));
-
-    Ok(())
-}
-
-fn agent_cmd_sandbox_tracing_stop(
-    ctx: &Context,
-    client: &AgentServiceClient,
-    _health: &HealthClient,
-    _image: &ImageClient,
-    _options: &mut Options,
-    _args: &str,
-) -> Result<()> {
-    let req = StopTracingRequest::default();
-
-    let ctx = clone_context(ctx);
-
-    debug!(sl!(), "sending request"; "request" => format!("{:?}", req));
-
-    let reply = client
-        .stop_tracing(ctx, &req)
         .map_err(|e| anyhow!("{:?}", e).context(ERR_API_FAILED))?;
 
     info!(sl!(), "response received";
@@ -1345,9 +1352,9 @@ fn agent_cmd_sandbox_update_interface(
     _health: &HealthClient,
     _image: &ImageClient,
     _options: &mut Options,
-    _args: &str,
+    args: &str,
 ) -> Result<()> {
-    let req = UpdateInterfaceRequest::default();
+    let req: UpdateInterfaceRequest = utils::make_request(args)?;
 
     let ctx = clone_context(ctx);
 
@@ -1371,9 +1378,9 @@ fn agent_cmd_sandbox_update_routes(
     _health: &HealthClient,
     _image: &ImageClient,
     _options: &mut Options,
-    _args: &str,
+    args: &str,
 ) -> Result<()> {
-    let req = UpdateRoutesRequest::default();
+    let req: UpdateRoutesRequest = utils::make_request(args)?;
 
     let ctx = clone_context(ctx);
 
@@ -1398,9 +1405,9 @@ fn agent_cmd_sandbox_list_interfaces(
     _health: &HealthClient,
     _image: &ImageClient,
     _options: &mut Options,
-    _args: &str,
+    args: &str,
 ) -> Result<()> {
-    let req = ListInterfacesRequest::default();
+    let req: ListInterfacesRequest = utils::make_request(args)?;
 
     let ctx = clone_context(ctx);
 
@@ -1422,9 +1429,9 @@ fn agent_cmd_sandbox_list_routes(
     _health: &HealthClient,
     _image: &ImageClient,
     _options: &mut Options,
-    _args: &str,
+    args: &str,
 ) -> Result<()> {
-    let req = ListRoutesRequest::default();
+    let req: ListRoutesRequest = utils::make_request(args)?;
 
     let ctx = clone_context(ctx);
 
@@ -1448,34 +1455,38 @@ fn agent_cmd_container_tty_win_resize(
     options: &mut Options,
     args: &str,
 ) -> Result<()> {
-    let mut req = TtyWinResizeRequest::default();
+    let mut req: TtyWinResizeRequest = utils::make_request(args)?;
 
     let ctx = clone_context(ctx);
 
-    let cid = utils::get_option("cid", options, args);
-    let exec_id = utils::get_option("exec_id", options, args);
+    run_if_auto_values!(ctx, || -> Result<()> {
+        let cid = utils::get_option("cid", options, args)?;
+        let exec_id = utils::get_option("exec_id", options, args)?;
 
-    req.set_container_id(cid);
-    req.set_exec_id(exec_id);
+        req.set_container_id(cid);
+        req.set_exec_id(exec_id);
 
-    let rows_str = utils::get_option("row", options, args);
+        let rows_str = utils::get_option("row", options, args)?;
 
-    if rows_str != "" {
-        let rows = rows_str
-            .parse::<u32>()
-            .map_err(|e| anyhow!(e).context("invalid row size"))?;
-        req.set_row(rows);
-    }
+        if rows_str != "" {
+            let rows = rows_str
+                .parse::<u32>()
+                .map_err(|e| anyhow!(e).context("invalid row size"))?;
+            req.set_row(rows);
+        }
 
-    let cols_str = utils::get_option("column", options, args);
+        let cols_str = utils::get_option("column", options, args)?;
 
-    if cols_str != "" {
-        let cols = cols_str
-            .parse::<u32>()
-            .map_err(|e| anyhow!(e).context("invalid column size"))?;
+        if cols_str != "" {
+            let cols = cols_str
+                .parse::<u32>()
+                .map_err(|e| anyhow!(e).context("invalid column size"))?;
 
-        req.set_column(cols);
-    }
+            req.set_column(cols);
+        }
+
+        Ok(())
+    });
 
     debug!(sl!(), "sending request"; "request" => format!("{:?}", req));
 
@@ -1497,15 +1508,19 @@ fn agent_cmd_container_close_stdin(
     options: &mut Options,
     args: &str,
 ) -> Result<()> {
-    let mut req = CloseStdinRequest::default();
+    let mut req: CloseStdinRequest = utils::make_request(args)?;
 
     let ctx = clone_context(ctx);
 
-    let cid = utils::get_option("cid", options, args);
-    let exec_id = utils::get_option("exec_id", options, args);
+    run_if_auto_values!(ctx, || -> Result<()> {
+        let cid = utils::get_option("cid", options, args)?;
+        let exec_id = utils::get_option("exec_id", options, args)?;
 
-    req.set_container_id(cid);
-    req.set_exec_id(exec_id);
+        req.set_container_id(cid);
+        req.set_exec_id(exec_id);
+
+        Ok(())
+    });
 
     debug!(sl!(), "sending request"; "request" => format!("{:?}", req));
 
@@ -1527,24 +1542,28 @@ fn agent_cmd_container_read_stdout(
     options: &mut Options,
     args: &str,
 ) -> Result<()> {
-    let mut req = ReadStreamRequest::default();
+    let mut req: ReadStreamRequest = utils::make_request(args)?;
 
     let ctx = clone_context(ctx);
 
-    let cid = utils::get_option("cid", options, args);
-    let exec_id = utils::get_option("exec_id", options, args);
+    run_if_auto_values!(ctx, || -> Result<()> {
+        let cid = utils::get_option("cid", options, args)?;
+        let exec_id = utils::get_option("exec_id", options, args)?;
 
-    req.set_container_id(cid);
-    req.set_exec_id(exec_id);
+        req.set_container_id(cid);
+        req.set_exec_id(exec_id);
 
-    let length_str = utils::get_option("len", options, args);
+        let length_str = utils::get_option("len", options, args)?;
 
-    if length_str != "" {
-        let length = length_str
-            .parse::<u32>()
-            .map_err(|e| anyhow!(e).context("invalid length"))?;
-        req.set_len(length);
-    }
+        if length_str != "" {
+            let length = length_str
+                .parse::<u32>()
+                .map_err(|e| anyhow!(e).context("invalid length"))?;
+            req.set_len(length);
+        }
+
+        Ok(())
+    });
 
     debug!(sl!(), "sending request"; "request" => format!("{:?}", req));
 
@@ -1566,24 +1585,28 @@ fn agent_cmd_container_read_stderr(
     options: &mut Options,
     args: &str,
 ) -> Result<()> {
-    let mut req = ReadStreamRequest::default();
+    let mut req: ReadStreamRequest = utils::make_request(args)?;
 
     let ctx = clone_context(ctx);
 
-    let cid = utils::get_option("cid", options, args);
-    let exec_id = utils::get_option("exec_id", options, args);
+    run_if_auto_values!(ctx, || -> Result<()> {
+        let cid = utils::get_option("cid", options, args)?;
+        let exec_id = utils::get_option("exec_id", options, args)?;
 
-    req.set_container_id(cid);
-    req.set_exec_id(exec_id);
+        req.set_container_id(cid);
+        req.set_exec_id(exec_id);
 
-    let length_str = utils::get_option("len", options, args);
+        let length_str = utils::get_option("len", options, args)?;
 
-    if length_str != "" {
-        let length = length_str
-            .parse::<u32>()
-            .map_err(|e| anyhow!(e).context("invalid length"))?;
-        req.set_len(length);
-    }
+        if length_str != "" {
+            let length = length_str
+                .parse::<u32>()
+                .map_err(|e| anyhow!(e).context("invalid length"))?;
+            req.set_len(length);
+        }
+
+        Ok(())
+    });
 
     debug!(sl!(), "sending request"; "request" => format!("{:?}", req));
 
@@ -1605,19 +1628,23 @@ fn agent_cmd_container_write_stdin(
     options: &mut Options,
     args: &str,
 ) -> Result<()> {
-    let mut req = WriteStreamRequest::default();
+    let mut req: WriteStreamRequest = utils::make_request(args)?;
 
     let ctx = clone_context(ctx);
 
-    let cid = utils::get_option("cid", options, args);
-    let exec_id = utils::get_option("exec_id", options, args);
+    run_if_auto_values!(ctx, || -> Result<()> {
+        let cid = utils::get_option("cid", options, args)?;
+        let exec_id = utils::get_option("exec_id", options, args)?;
 
-    let str_data = utils::get_option("data", options, args);
-    let data = utils::str_to_bytes(&str_data)?;
+        let str_data = utils::get_option("data", options, args)?;
+        let data = utils::str_to_bytes(&str_data)?;
 
-    req.set_container_id(cid);
-    req.set_exec_id(exec_id);
-    req.set_data(data.to_vec());
+        req.set_container_id(cid);
+        req.set_exec_id(exec_id);
+        req.set_data(data.to_vec());
+
+        Ok(())
+    });
 
     debug!(sl!(), "sending request"; "request" => format!("{:?}", req));
 
@@ -1637,9 +1664,9 @@ fn agent_cmd_sandbox_get_metrics(
     _health: &HealthClient,
     _image: &ImageClient,
     _options: &mut Options,
-    _args: &str,
+    args: &str,
 ) -> Result<()> {
-    let req = GetMetricsRequest::default();
+    let req: GetMetricsRequest = utils::make_request(args)?;
 
     let ctx = clone_context(ctx);
 
@@ -1661,9 +1688,9 @@ fn agent_cmd_sandbox_get_oom_event(
     _health: &HealthClient,
     _image: &ImageClient,
     _options: &mut Options,
-    _args: &str,
+    args: &str,
 ) -> Result<()> {
-    let req = GetOOMEventRequest::default();
+    let req: GetOOMEventRequest = utils::make_request(args)?;
 
     let ctx = clone_context(ctx);
 
@@ -1687,78 +1714,82 @@ fn agent_cmd_sandbox_copy_file(
     options: &mut Options,
     args: &str,
 ) -> Result<()> {
-    let mut req = CopyFileRequest::default();
+    let mut req: CopyFileRequest = utils::make_request(args)?;
 
     let ctx = clone_context(ctx);
 
-    let path = utils::get_option("path", options, args);
-    if path != "" {
-        req.set_path(path);
-    }
+    run_if_auto_values!(ctx, || -> Result<()> {
+        let path = utils::get_option("path", options, args)?;
+        if path != "" {
+            req.set_path(path);
+        }
 
-    let file_size_str = utils::get_option("file_size", options, args);
+        let file_size_str = utils::get_option("file_size", options, args)?;
 
-    if file_size_str != "" {
-        let file_size = file_size_str
-            .parse::<i64>()
-            .map_err(|e| anyhow!(e).context("invalid file_size"))?;
+        if file_size_str != "" {
+            let file_size = file_size_str
+                .parse::<i64>()
+                .map_err(|e| anyhow!(e).context("invalid file_size"))?;
 
-        req.set_file_size(file_size);
-    }
+            req.set_file_size(file_size);
+        }
 
-    let file_mode_str = utils::get_option("file_mode", options, args);
+        let file_mode_str = utils::get_option("file_mode", options, args)?;
 
-    if file_mode_str != "" {
-        let file_mode = file_mode_str
-            .parse::<u32>()
-            .map_err(|e| anyhow!(e).context("invalid file_mode"))?;
+        if file_mode_str != "" {
+            let file_mode = file_mode_str
+                .parse::<u32>()
+                .map_err(|e| anyhow!(e).context("invalid file_mode"))?;
 
-        req.set_file_mode(file_mode);
-    }
+            req.set_file_mode(file_mode);
+        }
 
-    let dir_mode_str = utils::get_option("dir_mode", options, args);
+        let dir_mode_str = utils::get_option("dir_mode", options, args)?;
 
-    if dir_mode_str != "" {
-        let dir_mode = dir_mode_str
-            .parse::<u32>()
-            .map_err(|e| anyhow!(e).context("invalid dir_mode"))?;
+        if dir_mode_str != "" {
+            let dir_mode = dir_mode_str
+                .parse::<u32>()
+                .map_err(|e| anyhow!(e).context("invalid dir_mode"))?;
 
-        req.set_dir_mode(dir_mode);
-    }
+            req.set_dir_mode(dir_mode);
+        }
 
-    let uid_str = utils::get_option("uid", options, args);
+        let uid_str = utils::get_option("uid", options, args)?;
 
-    if uid_str != "" {
-        let uid = uid_str
-            .parse::<i32>()
-            .map_err(|e| anyhow!(e).context("invalid uid"))?;
+        if uid_str != "" {
+            let uid = uid_str
+                .parse::<i32>()
+                .map_err(|e| anyhow!(e).context("invalid uid"))?;
 
-        req.set_uid(uid);
-    }
+            req.set_uid(uid);
+        }
 
-    let gid_str = utils::get_option("gid", options, args);
+        let gid_str = utils::get_option("gid", options, args)?;
 
-    if gid_str != "" {
-        let gid = gid_str
-            .parse::<i32>()
-            .map_err(|e| anyhow!(e).context("invalid gid"))?;
-        req.set_gid(gid);
-    }
+        if gid_str != "" {
+            let gid = gid_str
+                .parse::<i32>()
+                .map_err(|e| anyhow!(e).context("invalid gid"))?;
+            req.set_gid(gid);
+        }
 
-    let offset_str = utils::get_option("offset", options, args);
+        let offset_str = utils::get_option("offset", options, args)?;
 
-    if offset_str != "" {
-        let offset = offset_str
-            .parse::<i64>()
-            .map_err(|e| anyhow!(e).context("invalid offset"))?;
-        req.set_offset(offset);
-    }
+        if offset_str != "" {
+            let offset = offset_str
+                .parse::<i64>()
+                .map_err(|e| anyhow!(e).context("invalid offset"))?;
+            req.set_offset(offset);
+        }
 
-    let data_str = utils::get_option("data", options, args);
-    if data_str != "" {
-        let data = utils::str_to_bytes(&data_str)?;
-        req.set_data(data.to_vec());
-    }
+        let data_str = utils::get_option("data", options, args)?;
+        if data_str != "" {
+            let data = utils::str_to_bytes(&data_str)?;
+            req.set_data(data.to_vec());
+        }
+
+        Ok(())
+    });
 
     debug!(sl!(), "sending request"; "request" => format!("{:?}", req));
 
@@ -1780,14 +1811,18 @@ fn agent_cmd_sandbox_reseed_random_dev(
     options: &mut Options,
     args: &str,
 ) -> Result<()> {
-    let mut req = ReseedRandomDevRequest::default();
+    let mut req: ReseedRandomDevRequest = utils::make_request(args)?;
 
     let ctx = clone_context(ctx);
 
-    let str_data = utils::get_option("data", options, args);
-    let data = utils::str_to_bytes(&str_data)?;
+    run_if_auto_values!(ctx, || -> Result<()> {
+        let str_data = utils::get_option("data", options, args)?;
+        let data = utils::str_to_bytes(&str_data)?;
 
-    req.set_data(data.to_vec());
+        req.set_data(data.to_vec());
+
+        Ok(())
+    });
 
     debug!(sl!(), "sending request"; "request" => format!("{:?}", req));
 
@@ -1809,39 +1844,43 @@ fn agent_cmd_sandbox_online_cpu_mem(
     options: &mut Options,
     args: &str,
 ) -> Result<()> {
-    let mut req = OnlineCPUMemRequest::default();
+    let mut req: OnlineCPUMemRequest = utils::make_request(args)?;
 
     let ctx = clone_context(ctx);
 
-    let wait_str = utils::get_option("wait", options, args);
+    run_if_auto_values!(ctx, || -> Result<()> {
+        let wait_str = utils::get_option("wait", options, args)?;
 
-    if wait_str != "" {
-        let wait = wait_str
-            .parse::<bool>()
-            .map_err(|e| anyhow!(e).context("invalid wait bool"))?;
+        if wait_str != "" {
+            let wait = wait_str
+                .parse::<bool>()
+                .map_err(|e| anyhow!(e).context("invalid wait bool"))?;
 
-        req.set_wait(wait);
-    }
+            req.set_wait(wait);
+        }
 
-    let nb_cpus_str = utils::get_option("nb_cpus", options, args);
+        let nb_cpus_str = utils::get_option("nb_cpus", options, args)?;
 
-    if nb_cpus_str != "" {
-        let nb_cpus = nb_cpus_str
-            .parse::<u32>()
-            .map_err(|e| anyhow!(e).context("invalid nb_cpus value"))?;
+        if nb_cpus_str != "" {
+            let nb_cpus = nb_cpus_str
+                .parse::<u32>()
+                .map_err(|e| anyhow!(e).context("invalid nb_cpus value"))?;
 
-        req.set_nb_cpus(nb_cpus);
-    }
+            req.set_nb_cpus(nb_cpus);
+        }
 
-    let cpu_only_str = utils::get_option("cpu_only", options, args);
+        let cpu_only_str = utils::get_option("cpu_only", options, args)?;
 
-    if cpu_only_str != "" {
-        let cpu_only = cpu_only_str
-            .parse::<bool>()
-            .map_err(|e| anyhow!(e).context("invalid cpu_only bool"))?;
+        if cpu_only_str != "" {
+            let cpu_only = cpu_only_str
+                .parse::<bool>()
+                .map_err(|e| anyhow!(e).context("invalid cpu_only bool"))?;
 
-        req.set_cpu_only(cpu_only);
-    }
+            req.set_cpu_only(cpu_only);
+        }
+
+        Ok(())
+    });
 
     debug!(sl!(), "sending request"; "request" => format!("{:?}", req));
 
@@ -1863,29 +1902,33 @@ fn agent_cmd_sandbox_set_guest_date_time(
     options: &mut Options,
     args: &str,
 ) -> Result<()> {
-    let mut req = SetGuestDateTimeRequest::default();
+    let mut req: SetGuestDateTimeRequest = utils::make_request(args)?;
 
     let ctx = clone_context(ctx);
 
-    let secs_str = utils::get_option("sec", options, args);
+    run_if_auto_values!(ctx, || -> Result<()> {
+        let secs_str = utils::get_option("sec", options, args)?;
 
-    if secs_str != "" {
-        let secs = secs_str
-            .parse::<i64>()
-            .map_err(|e| anyhow!(e).context("invalid seconds"))?;
+        if secs_str != "" {
+            let secs = secs_str
+                .parse::<i64>()
+                .map_err(|e| anyhow!(e).context("invalid seconds"))?;
 
-        req.set_Sec(secs);
-    }
+            req.set_Sec(secs);
+        }
 
-    let usecs_str = utils::get_option("usec", options, args);
+        let usecs_str = utils::get_option("usec", options, args)?;
 
-    if usecs_str != "" {
-        let usecs = usecs_str
-            .parse::<i64>()
-            .map_err(|e| anyhow!(e).context("invalid useconds"))?;
+        if usecs_str != "" {
+            let usecs = usecs_str
+                .parse::<i64>()
+                .map_err(|e| anyhow!(e).context("invalid useconds"))?;
 
-        req.set_Usec(usecs);
-    }
+            req.set_Usec(usecs);
+        }
+
+        Ok(())
+    });
 
     debug!(sl!(), "sending request"; "request" => format!("{:?}", req));
 
@@ -1905,9 +1948,9 @@ fn agent_cmd_sandbox_add_arp_neighbors(
     _health: &HealthClient,
     _image: &ImageClient,
     _options: &mut Options,
-    _args: &str,
+    args: &str,
 ) -> Result<()> {
-    let req = AddARPNeighborsRequest::default();
+    let req: AddARPNeighborsRequest = utils::make_request(args)?;
 
     let ctx = clone_context(ctx);
 
@@ -1934,13 +1977,17 @@ fn agent_cmd_sandbox_update_container(
     options: &mut Options,
     args: &str,
 ) -> Result<()> {
-    let mut req = UpdateContainerRequest::default();
+    let mut req: UpdateContainerRequest = utils::make_request(args)?;
 
     let ctx = clone_context(ctx);
 
-    let cid = utils::get_option("cid", options, args);
+    run_if_auto_values!(ctx, || -> Result<()> {
+        let cid = utils::get_option("cid", options, args)?;
 
-    req.set_container_id(cid);
+        req.set_container_id(cid);
+
+        Ok(())
+    });
 
     // FIXME: Implement fully
     eprintln!("FIXME: 'UpdateContainer' not fully implemented");
@@ -1965,32 +2012,36 @@ fn agent_cmd_sandbox_mem_hotplug_by_probe(
     options: &mut Options,
     args: &str,
 ) -> Result<()> {
-    let mut req = MemHotplugByProbeRequest::default();
+    let mut req: MemHotplugByProbeRequest = utils::make_request(args)?;
 
     let ctx = clone_context(ctx);
 
     // Expected to be a comma separated list of hex addresses
-    let addr_list = utils::get_option("memHotplugProbeAddr", options, args);
+    let addr_list = utils::get_option("memHotplugProbeAddr", options, args)?;
 
-    if addr_list != "" {
-        let addrs: Vec<u64> = addr_list
-            // Convert into a list of string values.
-            .split(",")
-            // Convert each string element into a u8 array of bytes, ignoring
-            // those elements that fail the conversion.
-            .filter_map(|s| hex::decode(s.trim_start_matches("0x")).ok())
-            // "Stretch" the u8 byte slice into one of length 8
-            // (to allow each 8 byte chunk to be converted into a u64).
-            .map(|mut v| -> Vec<u8> {
-                v.resize(8, 0x0);
-                v
-            })
-            // Convert the slice of u8 bytes into a u64
-            .map(|b| byteorder::LittleEndian::read_u64(&b))
-            .collect();
+    run_if_auto_values!(ctx, || -> Result<()> {
+        if !addr_list.is_empty() {
+            let addrs: Vec<u64> = addr_list
+                // Convert into a list of string values.
+                .split(",")
+                // Convert each string element into a u8 array of bytes, ignoring
+                // those elements that fail the conversion.
+                .filter_map(|s| hex::decode(s.trim_start_matches("0x")).ok())
+                // "Stretch" the u8 byte slice into one of length 8
+                // (to allow each 8 byte chunk to be converted into a u64).
+                .map(|mut v| -> Vec<u8> {
+                    v.resize(8, 0x0);
+                    v
+                })
+                // Convert the slice of u8 bytes into a u64
+                .map(|b| byteorder::LittleEndian::read_u64(&b))
+                .collect();
 
-        req.set_memHotplugProbeAddr(addrs);
-    }
+            req.set_memHotplugProbeAddr(addrs);
+        }
+
+        Ok(())
+    });
 
     debug!(sl!(), "sending request"; "request" => format!("{:?}", req));
 

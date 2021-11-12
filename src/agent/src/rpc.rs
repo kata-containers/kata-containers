@@ -943,25 +943,6 @@ impl protocols::agent_ttrpc::AgentService for AgentService {
         })
     }
 
-    async fn start_tracing(
-        &self,
-        _ctx: &TtrpcContext,
-        req: protocols::agent::StartTracingRequest,
-    ) -> ttrpc::Result<Empty> {
-        info!(sl!(), "start_tracing {:?}", req);
-        is_allowed!(req);
-        Ok(Empty::new())
-    }
-
-    async fn stop_tracing(
-        &self,
-        _ctx: &TtrpcContext,
-        req: protocols::agent::StopTracingRequest,
-    ) -> ttrpc::Result<Empty> {
-        is_allowed!(req);
-        Ok(Empty::new())
-    }
-
     async fn create_sandbox(
         &self,
         ctx: &TtrpcContext,
