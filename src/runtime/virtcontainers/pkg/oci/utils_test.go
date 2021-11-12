@@ -188,52 +188,6 @@ func TestMinimalSandboxConfig(t *testing.T) {
 	assert.NoError(os.Remove(configPath))
 }
 
-func TestEnvVars(t *testing.T) {
-	assert := assert.New(t)
-	envVars := []string{"foo=bar", "TERM=xterm", "HOME=/home/foo", "TERM=\"bar\"", "foo=\"\""}
-	expectecVcEnvVars := []types.EnvVar{
-		{
-			Var:   "foo",
-			Value: "bar",
-		},
-		{
-			Var:   "TERM",
-			Value: "xterm",
-		},
-		{
-			Var:   "HOME",
-			Value: "/home/foo",
-		},
-		{
-			Var:   "TERM",
-			Value: "\"bar\"",
-		},
-		{
-			Var:   "foo",
-			Value: "\"\"",
-		},
-	}
-
-	vcEnvVars, err := EnvVars(envVars)
-	assert.NoError(err)
-	assert.Exactly(vcEnvVars, expectecVcEnvVars)
-}
-
-func TestMalformedEnvVars(t *testing.T) {
-	assert := assert.New(t)
-	envVars := []string{"foo"}
-	_, err := EnvVars(envVars)
-	assert.Error(err)
-
-	envVars = []string{"=foo"}
-	_, err = EnvVars(envVars)
-	assert.Error(err)
-
-	envVars = []string{"=foo="}
-	_, err = EnvVars(envVars)
-	assert.Error(err)
-}
-
 func testGetContainerTypeSuccessful(t *testing.T, annotations map[string]string, expected vc.ContainerType) {
 	assert := assert.New(t)
 	containerType, err := GetContainerType(annotations)
