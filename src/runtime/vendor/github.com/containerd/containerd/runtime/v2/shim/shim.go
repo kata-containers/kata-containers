@@ -103,12 +103,13 @@ type ttrpcService interface {
 	RegisterTTRPC(*ttrpc.Server) error
 }
 
-type taskService struct {
-	local shimapi.TaskService
+// Implement TaskService
+type TaskService struct {
+	Local shimapi.TaskService
 }
 
-func (t *taskService) RegisterTTRPC(server *ttrpc.Server) error {
-	shimapi.RegisterTaskService(server, t.local)
+func (t *TaskService) RegisterTTRPC(server *ttrpc.Server) error {
+	shimapi.RegisterTaskService(server, t.Local)
 	return nil
 }
 
@@ -355,7 +356,7 @@ func run(ctx context.Context, manager Manager, initFunc Init, name string, confi
 			Type: plugin.TTRPCPlugin,
 			ID:   "task",
 			InitFn: func(ic *plugin.InitContext) (interface{}, error) {
-				return &taskService{ts}, nil
+				return &TaskService{ts}, nil
 			},
 		})
 	}

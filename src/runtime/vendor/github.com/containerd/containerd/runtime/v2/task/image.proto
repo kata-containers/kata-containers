@@ -13,22 +13,25 @@
    See the License for the specific language governing permissions and
    limitations under the License.
 */
+syntax = "proto3";
 
-package version
+package containerd.task.v2;
 
-import "runtime"
+option go_package = "github.com/containerd/containerd/runtime/v2/task;task";
 
-var (
-	// Package is filled at linking time
-	Package = "github.com/containerd/containerd"
+// Image defines the public APIs for managing images.
+service Image {
+    // PullImage pulls an image with authentication config.
+    rpc PullImage(PullImageRequest) returns (PullImageResponse) {}
+}
 
-	// Version holds the complete version number. Filled in at linking time.
-	Version = "1.6.0-beta.1+unknown"
+message PullImageRequest {
+    // Name of the image.
+    string image = 1;
+}
 
-	// Revision is filled with the VCS (e.g. git) revision being used to build
-	// the program at linking time.
-	Revision = ""
-
-	// GoVersion is Go tree's version.
-	GoVersion = runtime.Version()
-)
+message PullImageResponse {
+    // Reference to the image in use. For most runtimes, this should be an
+    // image ID or digest.
+    string image_ref = 1;
+}

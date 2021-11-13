@@ -119,33 +119,23 @@ func (m *Monitor) Wait(c *exec.Cmd, ec chan runc.Exit) (int, error) {
 
 // WaitTimeout is used to skip the blocked command and kill the left process.
 func (m *Monitor) WaitTimeout(c *exec.Cmd, ec chan runc.Exit, timeout time.Duration) (int, error) {
-	type exitStatusWrapper struct {
-		status int
-		err    error
-	}
-
-	// capacity can make sure that the following goroutine will not be
-	// blocked if there is no receiver when timeout.
-	waitCh := make(chan *exitStatusWrapper, 1)
+	sch := make(chan int)
+	ech := make(chan error)
 	go func() {
-		defer close(waitCh)
-
 		status, err := m.Wait(c, ec)
-		waitCh <- &exitStatusWrapper{
-			status: status,
-			err:    err,
+		sch <- status
+		if err != nil {
+			ech <- err
 		}
 	}()
-
-	timer := time.NewTimer(timeout)
-	defer timer.Stop()
-
 	select {
-	case <-timer.C:
+	case <-time.After(timeout):
 		syscall.Kill(c.Process.Pid, syscall.SIGKILL)
-		return 0, errors.Errorf("timeout %v for cmd(pid=%d): %s, %s", timeout, c.Process.Pid, c.Path, c.Args)
-	case res := <-waitCh:
-		return res.status, res.err
+		return 0, errors.Errorf("timeout %ds for cmd(pid=%d): %s, %s", timeout/time.Second, c.Process.Pid, c.Path, c.Args)
+	case status := <-sch:
+		return status, nil
+	case err := <-ech:
+		return -1, err
 	}
 }
 

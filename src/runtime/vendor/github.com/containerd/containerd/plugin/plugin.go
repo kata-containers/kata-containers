@@ -57,8 +57,6 @@ const (
 	RuntimePlugin Type = "io.containerd.runtime.v1"
 	// RuntimePluginV2 implements a runtime v2
 	RuntimePluginV2 Type = "io.containerd.runtime.v2"
-	// RuntimeShimPlugin implements the shim manager for runtime v2.
-	RuntimeShimPlugin Type = "io.containerd.runtime-shim.v2"
 	// ServicePlugin implements a internal service
 	ServicePlugin Type = "io.containerd.service.v1"
 	// GRPCPlugin implements a grpc service
@@ -81,6 +79,10 @@ const (
 	EventPlugin Type = "io.containerd.event.v1"
 	// TracingProcessorPlugin implements a open telemetry span processor
 	TracingProcessorPlugin Type = "io.containerd.tracing.processor.v1"
+	// CRIServicePlugin implements cri needed service
+	CRIServicePlugin Type = "io.containerd.cri.service.v1"
+	// CRIPlugin implements different cri implementations
+	CRIPlugin Type = "io.containerd.cri.v1"
 )
 
 const (

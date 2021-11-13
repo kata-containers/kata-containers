@@ -1,4 +1,3 @@
-//go:build (freebsd && cgo) || (openbsd && cgo) || (darwin && cgo)
 // +build freebsd,cgo openbsd,cgo darwin,cgo
 
 package mountinfo
@@ -56,10 +55,6 @@ func parseMountTable(filter FilterFunc) ([]*Info, error) {
 }
 
 func mounted(path string) (bool, error) {
-	path, err := normalizePath(path)
-	if err != nil {
-		return false, err
-	}
 	// Fast path: compare st.st_dev fields.
 	// This should always work for FreeBSD and OpenBSD.
 	mounted, err := mountedByStat(path)

@@ -12,6 +12,7 @@ import (
 
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/api"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/image"
 	pbTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
@@ -55,7 +56,6 @@ type VCSandbox interface {
 	StatsContainer(ctx context.Context, containerID string) (ContainerStats, error)
 	PauseContainer(ctx context.Context, containerID string) error
 	ResumeContainer(ctx context.Context, containerID string) error
-	PullImage(ctx context.Context, image string, newContainerID string) error
 	EnterContainer(ctx context.Context, containerID string, cmd types.Cmd) (VCContainer, *Process, error)
 	UpdateContainer(ctx context.Context, containerID string, resources specs.LinuxResources) error
 	WaitProcess(ctx context.Context, containerID, processID string) (int32, error)
@@ -77,6 +77,9 @@ type VCSandbox interface {
 	UpdateRuntimeMetrics() error
 	GetAgentMetrics(ctx context.Context) (string, error)
 	GetAgentURL() (string, error)
+
+	// Image management inside Sandbox
+	image.ImageService
 }
 
 // VCContainer is the Container interface

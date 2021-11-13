@@ -751,32 +751,6 @@ func (s *service) Resume(ctx context.Context, r *taskAPI.ResumeRequest) (_ *ptyp
 	return empty, err
 }
 
-// Pull image and unbundle ready for container creation
-func (s *service) PullImage(ctx context.Context, r *taskAPI.PullImageRequest) (_ *ptypes.Empty, err error) {
-	shimLog.WithField("id", r.ID).Debug("PullImage() start")
-	defer shimLog.WithField("id", r.ID).Debug("PullImage() end")
-	span, spanCtx := katatrace.Trace(s.rootCtx, shimLog, "PullImage", shimTracingTags)
-	defer span.End()
-
-	start := time.Now()
-	defer func() {
-		err = toGRPC(err)
-		rpcDurationsHistogram.WithLabelValues("pullimage").Observe(float64(time.Since(start).Nanoseconds() / int64(time.Millisecond)))
-	}()
-
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	shimLog.WithFields(logrus.Fields{
-		"image":            r.Image,
-		"new_container_id": r.NewContainerID,
-	}).Debug("Making image pull request")
-
-	err = s.sandbox.PullImage(spanCtx, r.Image, r.NewContainerID)
-
-	return empty, err
-}
-
 // Kill a process with the provided signal
 func (s *service) Kill(ctx context.Context, r *taskAPI.KillRequest) (_ *ptypes.Empty, err error) {
 	shimLog.WithField("container", r.ID).Debug("Kill() start")
