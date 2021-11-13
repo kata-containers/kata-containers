@@ -26,8 +26,9 @@
 package ethtool
 
 import (
-	"syscall"
 	"unsafe"
+
+	"golang.org/x/sys/unix"
 )
 
 type ethtoolValue struct { /* ethtool.c: struct ethtool_value */
@@ -49,10 +50,10 @@ func (e *Ethtool) MsglvlGet(intf string) (uint32, error) {
 		ifr_data: uintptr(unsafe.Pointer(&edata)),
 	}
 
-	_, _, ep := syscall.Syscall(syscall.SYS_IOCTL, uintptr(e.fd),
+	_, _, ep := unix.Syscall(unix.SYS_IOCTL, uintptr(e.fd),
 		SIOCETHTOOL, uintptr(unsafe.Pointer(&ifr)))
 	if ep != 0 {
-		return 0, syscall.Errno(ep)
+		return 0, ep
 	}
 
 	return edata.data, nil
@@ -72,10 +73,10 @@ func (e *Ethtool) MsglvlSet(intf string, valset uint32) (uint32, uint32, error) 
 		ifr_data: uintptr(unsafe.Pointer(&edata)),
 	}
 
-	_, _, ep := syscall.Syscall(syscall.SYS_IOCTL, uintptr(e.fd),
+	_, _, ep := unix.Syscall(unix.SYS_IOCTL, uintptr(e.fd),
 		SIOCETHTOOL, uintptr(unsafe.Pointer(&ifr)))
 	if ep != 0 {
-		return 0, 0, syscall.Errno(ep)
+		return 0, 0, ep
 	}
 
 	readval := edata.data
@@ -83,10 +84,10 @@ func (e *Ethtool) MsglvlSet(intf string, valset uint32) (uint32, uint32, error) 
 	edata.cmd = ETHTOOL_SMSGLVL
 	edata.data = valset
 
-	_, _, ep = syscall.Syscall(syscall.SYS_IOCTL, uintptr(e.fd),
+	_, _, ep = unix.Syscall(unix.SYS_IOCTL, uintptr(e.fd),
 		SIOCETHTOOL, uintptr(unsafe.Pointer(&ifr)))
 	if ep != 0 {
-		return 0, 0, syscall.Errno(ep)
+		return 0, 0, ep
 	}
 
 	return readval, edata.data, nil
