@@ -1588,17 +1588,6 @@ func (s *Sandbox) ResumeContainer(ctx context.Context, containerID string) error
 	return nil
 }
 
-// PullImage pulls an image on a sandbox.
-func (s *Sandbox) PullImage(ctx context.Context, imageName string, containerID string) error {
-	req := &image.PullImageReq{
-		Image: imageName,
-	}
-	if _, err := s.agent.PullImage(ctx, req); err != nil {
-		return err
-	}
-	return nil
-}
-
 // createContainers registers all containers, create the
 // containers in the guest and starts one shim per container.
 func (s *Sandbox) createContainers(ctx context.Context) error {
@@ -2326,4 +2315,9 @@ func (s *Sandbox) fetchContainers(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+// PullImage pulls an image on a sandbox.
+func (s *Sandbox) PullImage(ctx context.Context, req *image.PullImageReq) (*image.PullImageResp, error) {
+	return s.agent.PullImage(ctx, req)
 }
