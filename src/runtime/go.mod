@@ -57,7 +57,7 @@ require (
 )
 
 replace (
-	github.com/containerd/containerd => github.com/containerd/containerd v1.6.0-beta.2
+	github.com/containerd/containerd => github.com/confidential-containers/containerd v1.6.0-beta.0.0.20211116180256-99bbe62c8989
 	github.com/opencontainers/runc => github.com/opencontainers/runc v1.0.1
 	github.com/uber-go/atomic => go.uber.org/atomic v1.5.1
 	google.golang.org/genproto => google.golang.org/genproto v0.0.0-20180817151627-c66870c02cf8

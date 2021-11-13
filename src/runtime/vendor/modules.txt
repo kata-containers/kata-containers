@@ -6,7 +6,7 @@ github.com/Microsoft/go-winio
 github.com/Microsoft/go-winio/pkg/guid
 github.com/Microsoft/go-winio/pkg/security
 github.com/Microsoft/go-winio/vhd
-# github.com/Microsoft/hcsshim v0.9.1
+# github.com/Microsoft/hcsshim v0.9.0
 github.com/Microsoft/hcsshim
 github.com/Microsoft/hcsshim/computestorage
 github.com/Microsoft/hcsshim/internal/cow
@@ -52,7 +52,7 @@ github.com/containerd/cgroups/stats/v1
 # github.com/containerd/console v1.0.3
 ## explicit
 github.com/containerd/console
-# github.com/containerd/containerd v1.6.0-beta.2 => github.com/containerd/containerd v1.6.0-beta.2
+# github.com/containerd/containerd v1.6.0-beta.2 => github.com/confidential-containers/containerd v1.6.0-beta.0.0.20211116180256-99bbe62c8989
 ## explicit
 github.com/containerd/containerd/defaults
 github.com/containerd/containerd/errdefs
@@ -208,7 +208,7 @@ github.com/matttproud/golang_protobuf_extensions/pbutil
 github.com/mdlayher/vsock
 # github.com/mitchellh/mapstructure v1.1.2
 github.com/mitchellh/mapstructure
-# github.com/moby/sys/mountinfo v0.5.0
+# github.com/moby/sys/mountinfo v0.4.2-0.20211022201527-95edfa939201
 github.com/moby/sys/mountinfo
 # github.com/opencontainers/go-digest v1.0.0
 github.com/opencontainers/go-digest
@@ -437,7 +437,7 @@ k8s.io/apimachinery/pkg/api/resource
 # k8s.io/cri-api v0.23.0-alpha.4
 ## explicit
 k8s.io/cri-api/pkg/apis/runtime/v1alpha2
-# github.com/containerd/containerd => github.com/containerd/containerd v1.6.0-beta.2
+# github.com/containerd/containerd => github.com/confidential-containers/containerd v1.6.0-beta.0.0.20211116180256-99bbe62c8989
 # github.com/opencontainers/runc => github.com/opencontainers/runc v1.0.1
 # github.com/uber-go/atomic => go.uber.org/atomic v1.5.1
 # google.golang.org/genproto => google.golang.org/genproto v0.0.0-20180817151627-c66870c02cf8

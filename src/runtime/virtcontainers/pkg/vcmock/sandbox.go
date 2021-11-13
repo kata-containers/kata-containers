@@ -14,6 +14,7 @@ import (
 	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/api"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/image"
 	pbTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
@@ -255,6 +256,6 @@ func (s *Sandbox) GetHypervisorPid() (int, error) {
 	return 0, nil
 }
 
-func (s *Sandbox) PullImage(ctx context.Context, image string, newContainerID string) error {
-	return nil
+func (s *Sandbox) PullImage(ctx context.Context, req *image.PullImageReq) (*image.PullImageResp, error) {
+	return nil, nil
 }
