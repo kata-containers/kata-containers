@@ -43,7 +43,7 @@ replace go.opentelemetry.io/otel/trace => ./
 require (
 	github.com/google/go-cmp v0.5.6
 	github.com/stretchr/testify v1.7.0
-	go.opentelemetry.io/otel v1.0.0
+	go.opentelemetry.io/otel v1.0.1
 )
 
 replace go.opentelemetry.io/otel/example/passthrough => ../example/passthrough

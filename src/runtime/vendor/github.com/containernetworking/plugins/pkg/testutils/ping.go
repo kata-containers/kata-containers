@@ -17,23 +17,29 @@ package testutils
 import (
 	"bytes"
 	"fmt"
+	"net"
 	"os/exec"
 	"strconv"
 	"syscall"
 )
 
 // Ping shells out to the `ping` command. Returns nil if successful.
-func Ping(saddr, daddr string, isV6 bool, timeoutSec int) error {
+func Ping(saddr, daddr string, timeoutSec int) error {
+	ip := net.ParseIP(saddr)
+	if ip == nil {
+		return fmt.Errorf("failed to parse IP %q", saddr)
+	}
+
+	bin := "ping6"
+	if ip.To4() != nil {
+		bin = "ping"
+	}
+
 	args := []string{
 		"-c", "1",
 		"-W", strconv.Itoa(timeoutSec),
 		"-I", saddr,
 		daddr,
-	}
-
-	bin := "ping"
-	if isV6 {
-		bin = "ping6"
 	}
 
 	cmd := exec.Command(bin, args...)

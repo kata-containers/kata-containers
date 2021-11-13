@@ -43,7 +43,6 @@ service Task {
 	rpc Kill(KillRequest) returns (google.protobuf.Empty);
 	rpc Exec(ExecProcessRequest) returns (google.protobuf.Empty);
 	rpc ResizePty(ResizePtyRequest) returns (google.protobuf.Empty);
-	rpc PullImage(PullImageRequest) returns (google.protobuf.Empty);
 	rpc CloseIO(CloseIORequest) returns (google.protobuf.Empty);
 	rpc Update(UpdateTaskRequest) returns (google.protobuf.Empty);
 	rpc Wait(WaitRequest) returns (WaitResponse);
@@ -98,12 +97,6 @@ message ResizePtyRequest {
 	string exec_id = 2;
 	uint32 width = 3;
 	uint32 height = 4;
-}
-
-message PullImageRequest {
-	string id = 1; // Unique image identifier, used to avoid duplication when unpacking the image layers.
-	string image = 2; // Image name (e.g. docker.io/library/busybox:latest).
-	string new_container_id = 3; // The id of the container that will run from this image.
 }
 
 message StateRequest {
