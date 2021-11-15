@@ -636,8 +636,6 @@ test_dracut()
 	local rootfs_path="${tmp_rootfs}/dracut_rootfs"
 	local overlay_path="${tmp_rootfs}/dracut_overlay"
 
-	detect_go_version ||
-		die "Could not detect the required Go version for AGENT_VERSION='${AGENT_VERSION:-master}'."
 	detect_rust_version ||
 		die "Could not detect the required rust version for AGENT_VERSION='${AGENT_VERSION:-master}'."
 	detect_musl_version ||
