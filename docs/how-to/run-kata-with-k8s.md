@@ -22,7 +22,7 @@ An equivalent shim implementation for CRI-O is planned.
 ### CRI-O
 For CRI-O installation instructions, refer to the [CRI-O Tutorial](https://github.com/cri-o/cri-o/blob/main/tutorial.md) page.
 
-The following sections show how to set up the CRI-O configuration file (default path: `/etc/crio/crio.conf`) for Kata.
+The following sections show how to set up the CRI-O snippet configuration file (default path: `/etc/crio/crio.conf`) for Kata.
 
 Unless otherwise stated, all the following settings are specific to the `crio.runtime` table:
 ```toml
@@ -40,23 +40,16 @@ A comprehensive documentation of the configuration file can be found [here](http
 #### Kubernetes Runtime Class (CRI-O v1.12+)
 The [Kubernetes Runtime Class](https://kubernetes.io/docs/concepts/containers/runtime-class/)
 is the preferred way of specifying the container runtime configuration to run a Pod's containers.
-To use this feature, Kata must added as a runtime handler with:
+To use this feature, Kata must added as a runtime handler. This can be done by
+dropping a `50-kata` snippet file into `/etc/crio/crio.conf.d`, with the
+content shown below:
 
 ```toml
-[crio.runtime.runtimes.kata-runtime]
-  runtime_path = "/usr/bin/kata-runtime"
-  runtime_type = "oci"
-```
-
-You can also add multiple entries to specify alternatives hypervisors, e.g.:
-```toml
-[crio.runtime.runtimes.kata-qemu]
-  runtime_path = "/usr/bin/kata-runtime"
-  runtime_type = "oci"
-
-[crio.runtime.runtimes.kata-fc]
-  runtime_path = "/usr/bin/kata-runtime"
-  runtime_type = "oci"
+[crio.runtime.runtimes.kata]
+	runtime_path = "/usr/bin/containerd-shim-kata-v2"
+	runtime_type = "vm"
+	runtime_root = "/run/vc"
+	privileged_without_host_devices = true
 ```
 
 
