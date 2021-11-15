@@ -361,10 +361,9 @@ get_package_version_from_kata_yaml()
 	[ "$?" == "0" ] && [ "$PKG_VERSION" != "null" ] && echo "$PKG_VERSION" || echo ""
 }
 
-detect_rust_version()
+get_kata_rust_version()
 {
-	info "Detecting agent rust version"
-    local yq_path="languages.rust.meta.newest-version"
+	local yq_path="languages.rust.meta.newest-version"
 
 	info "Get rust version from ${kata_versions_file}"
 	RUST_VERSION="$(get_package_version_from_kata_yaml "$yq_path")"
@@ -372,10 +371,9 @@ detect_rust_version()
 	[ -n "$RUST_VERSION" ]
 }
 
-detect_musl_version()
+get_kata_musl_version()
 {
-	info "Detecting musl version"
-    local yq_path="externals.musl.version"
+	local yq_path="externals.musl.version"
 
 	info "Get musl version from ${kata_versions_file}"
 	MUSL_VERSION="$(get_package_version_from_kata_yaml "$yq_path")"

@@ -339,12 +339,12 @@ build_rootfs_distro()
 	fi
 
 	# need to detect rustc's version too?
-	detect_rust_version ||
+	get_kata_rust_version ||
 		die "Could not detect the required rust version for AGENT_VERSION='${AGENT_VERSION:-main}'."
 
 	echo "Required rust version: $RUST_VERSION"
 
-	detect_musl_version ||
+	get_kata_musl_version ||
 		die "Could not detect the required musl version for AGENT_VERSION='${AGENT_VERSION:-main}'."
 
 	echo "Required musl version: $MUSL_VERSION"
@@ -560,7 +560,7 @@ EOT
 		# rust agent needs ${arch}-unknown-linux-${LIBC}
 		if ! (rustup show | grep -v linux-${LIBC} > /dev/null); then
 			if [ "$RUST_VERSION" == "null" ]; then
-				detect_rust_version || \
+				get_kata_rust_version || \
 					die "Could not detect the required rust version for AGENT_VERSION='${AGENT_VERSION:-main}'."
 			fi
 			bash ${script_dir}/../../../ci/install_rust.sh ${RUST_VERSION}
