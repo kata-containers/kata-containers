@@ -20,7 +20,7 @@ required to spawn pods and containers, and this is the preferred way to run Kata
 An equivalent shim implementation for CRI-O is planned.
 
 ### CRI-O
-For CRI-O installation instructions, refer to the [CRI-O Tutorial](https://github.com/kubernetes-incubator/cri-o/blob/master/tutorial.md) page.
+For CRI-O installation instructions, refer to the [CRI-O Tutorial](https://github.com/cri-o/cri-o/blob/main/tutorial.md) page.
 
 The following sections show how to set up the CRI-O configuration file (default path: `/etc/crio/crio.conf`) for Kata.
 
@@ -30,7 +30,7 @@ Unless otherwise stated, all the following settings are specific to the `crio.ru
 # runtime used and options for how to set up and manage the OCI runtime.
 [crio.runtime]
 ```
-A comprehensive documentation of the configuration file can be found [here](https://github.com/cri-o/cri-o/blob/master/docs/crio.conf.5.md).
+A comprehensive documentation of the configuration file can be found [here](https://github.com/cri-o/cri-o/blob/main/docs/crio.conf.5.md).
 
 > **Note**: After any change to this file, the CRI-O daemon have to be restarted with:
 >````
