@@ -1607,10 +1607,13 @@ async fn do_add_swap(sandbox: &Arc<Mutex<Sandbox>>, req: &AddSwapRequest) -> Res
 // - container rootfs bind mounted at /<CONTAINER_BASE>/<cid>/rootfs
 // - modify container spec root to point to /<CONTAINER_BASE>/<cid>/rootfs
 fn setup_bundle(cid: &str, spec: &mut Spec) -> Result<PathBuf> {
-    if spec.root.is_none() {
+    let spec_root = if let Some(sr) = &spec.root {
+        sr
+    } else {
         return Err(nix::Error::Sys(Errno::EINVAL).into());
-    }
-    let spec_root = spec.root.as_ref().unwrap();
+    };
+
+    let spec_root_path = Path::new(&spec_root.path);
 
     let bundle_path = Path::new(CONTAINER_BASE).join(cid);
     let config_path = bundle_path.join("config.json");
@@ -1618,15 +1621,21 @@ fn setup_bundle(cid: &str, spec: &mut Spec) -> Result<PathBuf> {
 
     fs::create_dir_all(&rootfs_path)?;
     baremount(
-        &spec_root.path,
-        rootfs_path.to_str().unwrap(),
+        spec_root_path,
+        &rootfs_path,
         "bind",
         MsFlags::MS_BIND,
         "",
         &sl!(),
     )?;
+
+    let rootfs_path_name = rootfs_path
+        .to_str()
+        .ok_or_else(|| anyhow!("failed to convert rootfs to unicode"))?
+        .to_string();
+
     spec.root = Some(Root {
-        path: rootfs_path.to_str().unwrap().to_owned(),
+        path: rootfs_path_name,
         readonly: spec_root.readonly,
     });
 
