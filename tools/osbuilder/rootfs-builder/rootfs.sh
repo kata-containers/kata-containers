@@ -552,12 +552,11 @@ EOT
 			LIBC=gnu
 			echo "WARNING: Forcing LIBC=gnu because $ARCH has no musl Rust target"
 		fi
-		[ "$LIBC" == "musl" ] && bash ${script_dir}/../../../ci/install_musl.sh
 		# rust agent needs ${arch}-unknown-linux-${LIBC}
-		if ! (rustup show | grep -v linux-${LIBC} > /dev/null); then
-			bash ${script_dir}/../../../ci/install_rust.sh ${RUST_VERSION}
-		fi
 		test -r "${HOME}/.cargo/env" && source "${HOME}/.cargo/env"
+		if ! (rustup show | grep -v linux-${LIBC} > /dev/null); then
+			die "Rust target linux-${LIBC} not installed"
+		fi
 		[ "$ARCH" == "aarch64" ] && OLD_PATH=$PATH && export PATH=$PATH:/usr/local/musl/bin
 
 		agent_dir="${script_dir}/../../../src/agent/"
