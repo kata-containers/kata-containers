@@ -111,11 +111,18 @@ pub struct AgentService {
 //     ^[a-zA-Z0-9][a-zA-Z0-9_.-]+$
 //
 fn verify_cid(id: &str) -> Result<()> {
-    let valid = id.len() > 1
-        && id.chars().next().unwrap().is_alphanumeric()
-        && id
-            .chars()
-            .all(|c| (c.is_alphanumeric() || ['.', '-', '_'].contains(&c)));
+    let mut chars = id.chars();
+
+    let valid = match chars.next() {
+        Some(first)
+            if first.is_alphanumeric()
+                && id.len() > 1
+                && chars.all(|c| c.is_alphanumeric() || ['.', '-', '_'].contains(&c)) =>
+        {
+            true
+        }
+        _ => false,
+    };
 
     match valid {
         true => Ok(()),
