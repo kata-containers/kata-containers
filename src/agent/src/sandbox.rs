@@ -458,10 +458,14 @@ mod tests {
     use slog::Logger;
     use std::fs::{self, File};
     use std::os::unix::fs::PermissionsExt;
+    use std::path::Path;
     use tempfile::Builder;
 
     fn bind_mount(src: &str, dst: &str, logger: &Logger) -> Result<(), Error> {
-        baremount(src, dst, "bind", MsFlags::MS_BIND, "", logger)
+        let src_path = Path::new(src);
+        let dst_path = Path::new(dst);
+
+        baremount(src_path, dst_path, "bind", MsFlags::MS_BIND, "", logger)
     }
 
     use serial_test::serial;
