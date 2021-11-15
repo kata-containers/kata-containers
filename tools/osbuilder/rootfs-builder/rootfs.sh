@@ -13,8 +13,6 @@ set -o errtrace
 script_name="${0##*/}"
 script_dir="$(dirname $(readlink -f $0))"
 AGENT_VERSION=${AGENT_VERSION:-}
-RUST_VERSION="null"
-MUSL_VERSION=${MUSL_VERSION:-"null"}
 AGENT_BIN=${AGENT_BIN:-kata-agent}
 AGENT_INIT=${AGENT_INIT:-no}
 KERNEL_MODULES_DIR=${KERNEL_MODULES_DIR:-""}
@@ -41,6 +39,12 @@ trap 'handle_error $LINENO' ERR
 
 # Default architecture
 ARCH=$(uname -m)
+
+# Default Rust & MUSL versions
+get_kata_rust_version ||
+    die "Could not detect the required rust version for AGENT_VERSION='${AGENT_VERSION:-main}'."
+get_kata_musl_version ||
+    die "Could not detect the required musl version for AGENT_VERSION='${AGENT_VERSION:-main}'."
 
 # distro-specific config file
 typeset -r CONFIG_SH="config.sh"
@@ -338,15 +342,7 @@ build_rootfs_distro()
 		mkdir -p ${ROOTFS_DIR}
 	fi
 
-	# need to detect rustc's version too?
-	get_kata_rust_version ||
-		die "Could not detect the required rust version for AGENT_VERSION='${AGENT_VERSION:-main}'."
-
 	echo "Required rust version: $RUST_VERSION"
-
-	get_kata_musl_version ||
-		die "Could not detect the required musl version for AGENT_VERSION='${AGENT_VERSION:-main}'."
-
 	echo "Required musl version: $MUSL_VERSION"
 
 	if [ -z "${USE_DOCKER}" ] && [ -z "${USE_PODMAN}" ]; then
@@ -559,10 +555,6 @@ EOT
 		[ "$LIBC" == "musl" ] && bash ${script_dir}/../../../ci/install_musl.sh
 		# rust agent needs ${arch}-unknown-linux-${LIBC}
 		if ! (rustup show | grep -v linux-${LIBC} > /dev/null); then
-			if [ "$RUST_VERSION" == "null" ]; then
-				get_kata_rust_version || \
-					die "Could not detect the required rust version for AGENT_VERSION='${AGENT_VERSION:-main}'."
-			fi
 			bash ${script_dir}/../../../ci/install_rust.sh ${RUST_VERSION}
 		fi
 		test -r "${HOME}/.cargo/env" && source "${HOME}/.cargo/env"
