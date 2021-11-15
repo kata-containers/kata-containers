@@ -20,26 +20,6 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-// prepend a kata specific string to oci cgroup path to
-// form a different cgroup path, thus cAdvisor couldn't
-// find kata containers cgroup path on host to prevent it
-// from grabbing the stats data.
-const CgroupKataPrefix = "kata"
-
-// DefaultCgroupPath runtime-determined location in the cgroups hierarchy.
-const DefaultCgroupPath = "/vc"
-
-func RenameCgroupPath(path string) (string, error) {
-	if path == "" {
-		path = DefaultCgroupPath
-	}
-
-	cgroupPathDir := filepath.Dir(path)
-	cgroupPathName := fmt.Sprintf("%s_%s", CgroupKataPrefix, filepath.Base(path))
-	return filepath.Join(cgroupPathDir, cgroupPathName), nil
-
-}
-
 // validCgroupPath returns a valid cgroup path.
 // see https://github.com/opencontainers/runtime-spec/blob/master/config-linux.md#cgroups-path
 func ValidCgroupPath(path string, systemdCgroup bool) (string, error) {

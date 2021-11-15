@@ -199,8 +199,8 @@ type Sandbox struct {
 	config          *SandboxConfig
 	annotationsLock *sync.RWMutex
 	wg              *sync.WaitGroup
-	sandboxCgroup   *cgroups.Cgroup
-	overheadCgroup  *cgroups.Cgroup
+	sandboxCgroup   cgroups.Cgroup
+	overheadCgroup  cgroups.Cgroup
 	cw              *consoleWatcher
 
 	containers map[string]*Container
@@ -1752,9 +1752,11 @@ func (s *Sandbox) HotplugAddDevice(ctx context.Context, device api.Device, devTy
 	span, ctx := katatrace.Trace(ctx, s.Logger(), "HotplugAddDevice", sandboxTracingTags, map[string]string{"sandbox_id": s.id})
 	defer span.End()
 
-	if err := s.sandboxCgroup.AddDevice(device.GetHostPath()); err != nil {
-		s.Logger().WithError(err).WithField("device", device).
-			Warn("Could not add device to cgroup")
+	if s.sandboxCgroup != nil {
+		if err := s.sandboxCgroup.AddDevice(device.GetHostPath()); err != nil {
+			s.Logger().WithError(err).WithField("device", device).
+				Warn("Could not add device to cgroup")
+		}
 	}
 
 	switch devType {
@@ -1801,10 +1803,12 @@ func (s *Sandbox) HotplugAddDevice(ctx context.Context, device api.Device, devTy
 // HotplugRemoveDevice is used for removing a device from sandbox
 // Sandbox implement DeviceReceiver interface from device/api/interface.go
 func (s *Sandbox) HotplugRemoveDevice(ctx context.Context, device api.Device, devType config.DeviceType) error {
-	defer func() {
-		if err := s.sandboxCgroup.RemoveDevice(device.GetHostPath()); err != nil {
-			s.Logger().WithError(err).WithField("device", device).
-				Warn("Could not add device to cgroup")
+	defer func() {		
+		if s.sandboxCgroup != nil {
+			if err := s.sandboxCgroup.RemoveDevice(device.GetHostPath()); err != nil {
+				s.Logger().WithError(err).WithField("device", device).
+					Warn("Could not add device to cgroup")
+			}
 		}
 	}()
 
@@ -2127,7 +2131,7 @@ func (s *Sandbox) cgroupsDelete() error {
 		return nil
 	}
 
-	sandboxCgroup, err := cgroups.Load(s.state.SandboxCgroupPath)
+	sandboxCgroup, err := cgroups.LoadCgroup(s.state.SandboxCgroupPath)
 	if err != nil {
 		return err
 	}
@@ -2141,7 +2145,7 @@ func (s *Sandbox) cgroupsDelete() error {
 	}
 
 	if s.state.OverheadCgroupPath != "" {
-		overheadCgroup, err := cgroups.Load(s.state.OverheadCgroupPath)
+		overheadCgroup, err := cgroups.LoadCgroup(s.state.OverheadCgroupPath)
 		if err != nil {
 			return err
 		}
