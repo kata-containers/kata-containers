@@ -71,8 +71,8 @@ func GenerateRandomBytes(n int) ([]byte, error) {
 	return b, nil
 }
 
-// ReverseString reverses whole string
-func ReverseString(s string) string {
+// reverseString reverses whole string
+func reverseString(s string) string {
 	r := []rune(s)
 
 	length := len(r)
@@ -160,7 +160,7 @@ func GetVirtDriveName(index int) (string, error) {
 		return "", fmt.Errorf("Index not supported")
 	}
 
-	diskName := prefix + ReverseString(string(diskLetters[:i]))
+	diskName := prefix + reverseString(string(diskLetters[:i]))
 	return diskName, nil
 }
 

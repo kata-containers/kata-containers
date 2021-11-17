@@ -8,7 +8,6 @@ package virtcontainers
 import (
 	"context"
 	cryptoRand "crypto/rand"
-	"encoding/json"
 	"fmt"
 	"math/rand"
 	"net"
@@ -26,9 +25,9 @@ import (
 	"golang.org/x/sys/unix"
 
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils/katatrace"
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/uuid"
 	pbTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/rootless"
-	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/uuid"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
 )
 
@@ -195,132 +194,6 @@ type NetworkNamespace struct {
 	Endpoints    []Endpoint
 	NetNsCreated bool
 	NetmonPID    int
-}
-
-// TypedJSONEndpoint is used as an intermediate representation for
-// marshalling and unmarshalling Endpoint objects.
-type TypedJSONEndpoint struct {
-	Type EndpointType
-	Data json.RawMessage
-}
-
-// MarshalJSON is the custom NetworkNamespace JSON marshalling routine.
-// This is needed to properly marshall Endpoints array.
-func (n NetworkNamespace) MarshalJSON() ([]byte, error) {
-	// We need a shadow structure in order to prevent json from
-	// entering a recursive loop when only calling json.Marshal().
-	type shadow struct {
-		NetNsPath    string
-		Endpoints    []TypedJSONEndpoint
-		NetNsCreated bool
-	}
-
-	s := &shadow{
-		NetNsPath:    n.NetNsPath,
-		NetNsCreated: n.NetNsCreated,
-	}
-
-	var typedEndpoints []TypedJSONEndpoint
-	for _, endpoint := range n.Endpoints {
-		tempJSON, _ := json.Marshal(endpoint)
-
-		t := TypedJSONEndpoint{
-			Type: endpoint.Type(),
-			Data: tempJSON,
-		}
-
-		typedEndpoints = append(typedEndpoints, t)
-	}
-
-	s.Endpoints = typedEndpoints
-
-	b, err := json.Marshal(s)
-	return b, err
-}
-
-func generateEndpoints(typedEndpoints []TypedJSONEndpoint) ([]Endpoint, error) {
-	var endpoints []Endpoint
-
-	for _, e := range typedEndpoints {
-		var endpointInf Endpoint
-		switch e.Type {
-		case PhysicalEndpointType:
-			var endpoint PhysicalEndpoint
-			endpointInf = &endpoint
-
-		case VethEndpointType:
-			var endpoint VethEndpoint
-			endpointInf = &endpoint
-
-		case VhostUserEndpointType:
-			var endpoint VhostUserEndpoint
-			endpointInf = &endpoint
-
-		case MacvlanEndpointType:
-			var endpoint MacvlanEndpoint
-			endpointInf = &endpoint
-
-		case MacvtapEndpointType:
-			var endpoint MacvtapEndpoint
-			endpointInf = &endpoint
-
-		case TapEndpointType:
-			var endpoint TapEndpoint
-			endpointInf = &endpoint
-
-		case IPVlanEndpointType:
-			var endpoint IPVlanEndpoint
-			endpointInf = &endpoint
-
-		case TuntapEndpointType:
-			var endpoint TuntapEndpoint
-			endpointInf = &endpoint
-
-		default:
-			networkLogger().WithField("endpoint-type", e.Type).Error("Ignoring unknown endpoint type")
-		}
-
-		err := json.Unmarshal(e.Data, endpointInf)
-		if err != nil {
-			return nil, err
-		}
-
-		endpoints = append(endpoints, endpointInf)
-		networkLogger().WithFields(logrus.Fields{
-			"endpoint":      endpointInf,
-			"endpoint-type": e.Type,
-		}).Info("endpoint unmarshalled")
-	}
-	return endpoints, nil
-}
-
-// UnmarshalJSON is the custom NetworkNamespace unmarshalling routine.
-// This is needed for unmarshalling the Endpoints interfaces array.
-func (n *NetworkNamespace) UnmarshalJSON(b []byte) error {
-	var s struct {
-		NetNsPath    string
-		Endpoints    json.RawMessage
-		NetNsCreated bool
-	}
-
-	if err := json.Unmarshal(b, &s); err != nil {
-		return err
-	}
-
-	(*n).NetNsPath = s.NetNsPath
-	(*n).NetNsCreated = s.NetNsCreated
-
-	var typedEndpoints []TypedJSONEndpoint
-	if err := json.Unmarshal([]byte(string(s.Endpoints)), &typedEndpoints); err != nil {
-		return err
-	}
-	endpoints, err := generateEndpoints(typedEndpoints)
-	if err != nil {
-		return err
-	}
-
-	(*n).Endpoints = endpoints
-	return nil
 }
 
 func createLink(netHandle *netlink.Handle, name string, expectedLink netlink.Link, queues int) (netlink.Link, []*os.File, error) {
