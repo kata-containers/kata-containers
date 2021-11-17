@@ -7,7 +7,6 @@ package virtcontainers
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -20,6 +19,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 
+	hv "github.com/kata-containers/kata-containers/src/runtime/pkg/hypervisors"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils/katatrace"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/uuid"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
@@ -39,11 +39,13 @@ var acrnTracingTags = map[string]string{
 
 // Since ACRN is using the store in a quite abnormal way, let's first draw it back from store to here
 
+/*
 // UUIDPathSuffix is the suffix used for uuid storage
 const (
 	UUIDPathSuffix = "uuid"
 	uuidFile       = "uuid.json"
 )
+*/
 
 // ACRN currently supports only known UUIDs for security
 // reasons (FuSa). When launching VM, only these pre-defined
@@ -312,7 +314,7 @@ func (a *Acrn) setup(ctx context.Context, id string, hypervisorConfig *Hyperviso
 
 		// The path might already exist, but in case of VM templating,
 		// we have to create it since the sandbox has not created it yet.
-		if err = os.MkdirAll(filepath.Join(a.store.RunStoragePath(), id), DirMode); err != nil {
+		if err = os.MkdirAll(filepath.Join(a.config.RunStorePath, id), DirMode); err != nil {
 			return err
 		}
 
@@ -438,7 +440,7 @@ func (a *Acrn) StartVM(ctx context.Context, timeoutSecs int) error {
 		a.Logger().WithField("default-kernel-parameters", formatted).Debug()
 	}
 
-	vmPath := filepath.Join(a.store.RunVMStoragePath(), a.id)
+	vmPath := filepath.Join(a.config.VMStorePath, a.id)
 	err := os.MkdirAll(vmPath, DirMode)
 	if err != nil {
 		return err
@@ -634,7 +636,7 @@ func (a *Acrn) GetVMConsole(ctx context.Context, id string) (string, string, err
 	span, _ := katatrace.Trace(ctx, a.Logger(), "GetVMConsole", acrnTracingTags, map[string]string{"sandbox_id": a.id})
 	defer span.End()
 
-	consoleURL, err := utils.BuildSocketPath(a.store.RunVMStoragePath(), id, acrnConsoleSocket)
+	consoleURL, err := utils.BuildSocketPath(a.config.VMStorePath, id, acrnConsoleSocket)
 	if err != nil {
 		return consoleProtoUnix, "", err
 	}
@@ -698,14 +700,14 @@ func (a *Acrn) toGrpc(ctx context.Context) ([]byte, error) {
 	return nil, errors.New("acrn is not supported by VM cache")
 }
 
-func (a *Acrn) Save() (s persistapi.HypervisorState) {
+func (a *Acrn) Save() (s hv.HypervisorState) {
 	s.Pid = a.state.PID
 	s.Type = string(AcrnHypervisor)
 	s.UUID = a.state.UUID
 	return
 }
 
-func (a *Acrn) Load(s persistapi.HypervisorState) {
+func (a *Acrn) Load(s hv.HypervisorState) {
 	a.state.PID = s.Pid
 	a.state.UUID = s.UUID
 }
@@ -719,7 +721,7 @@ func (a *Acrn) Check() error {
 }
 
 func (a *Acrn) GenerateSocket(id string) (interface{}, error) {
-	return generateVMSocket(id, a.store.RunVMStoragePath())
+	return generateVMSocket(id, a.config.VMStorePath)
 }
 
 // GetACRNUUIDBytes returns UUID bytes that is used for VM creation
@@ -782,38 +784,36 @@ func (a *Acrn) GetMaxSupportedACRNVM() (uint8, error) {
 }
 
 func (a *Acrn) storeInfo() error {
-	relPath := filepath.Join(UUIDPathSuffix, uuidFile)
+	/*
+		relPath := filepath.Join(UUIDPathSuffix, uuidFile)
 
-	jsonOut, err := json.Marshal(a.info)
-	if err != nil {
-		return fmt.Errorf("Could not marshal data: %s", err)
-	}
+		jsonOut, err := json.Marshal(a.info)
+		if err != nil {
+			return fmt.Errorf("Could not marshal data: %s", err)
+		}
 
-	if err := a.store.GlobalWrite(relPath, jsonOut); err != nil {
-		return fmt.Errorf("failed to write uuid to file: %v", err)
-	}
+		if err := a.store.GlobalWrite(relPath, jsonOut); err != nil {
+			return fmt.Errorf("failed to write uuid to file: %v", err)
+		}*/
 
 	return nil
 }
 
 func (a *Acrn) loadInfo() error {
-	relPath := filepath.Join(UUIDPathSuffix, uuidFile)
+	/*
+		relPath := filepath.Join(UUIDPathSuffix, uuidFile)
+			data, err := a.store.GlobalRead(relPath)
+			if err != nil {
+				return fmt.Errorf("failed to read uuid from file: %v", err)
+			}
 
-	data, err := a.store.GlobalRead(relPath)
-	if err != nil {
-		return fmt.Errorf("failed to read uuid from file: %v", err)
-	}
+			if err := json.Unmarshal(data, &a.info); err != nil {
+				return fmt.Errorf("failed to unmarshal uuid info: %v", err)
+			}*/
 
-	if err := json.Unmarshal(data, &a.info); err != nil {
-		return fmt.Errorf("failed to unmarshal uuid info: %v", err)
-	}
 	return nil
 }
 
 func (a *Acrn) IsRateLimiterBuiltin() bool {
 	return false
-}
-
-func (a *Acrn) setSandbox(sandbox *Sandbox) {
-	a.sandbox = sandbox
 }
