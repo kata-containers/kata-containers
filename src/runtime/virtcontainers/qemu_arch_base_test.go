@@ -490,7 +490,7 @@ func TestQemuArchBaseAppendNetwork(t *testing.T) {
 
 	macAddr := net.HardwareAddr{0x02, 0x00, 0xCA, 0xFE, 0x00, 0x04}
 
-	macvlanEp := &BridgedMacvlanEndpoint{
+	macvlanEp := &MacvlanEndpoint{
 		NetPair: NetworkInterfacePair{
 			TapInterface: TapInterface{
 				ID:   "uniqueTestID-4",
@@ -505,7 +505,7 @@ func TestQemuArchBaseAppendNetwork(t *testing.T) {
 			},
 			NetInterworkingModel: DefaultNetInterworkingModel,
 		},
-		EndpointType: BridgedMacvlanEndpointType,
+		EndpointType: MacvlanEndpointType,
 	}
 
 	macvtapEp := &MacvtapEndpoint{
