@@ -30,8 +30,9 @@ import (
 	"encoding/hex"
 	"fmt"
 	"strings"
-	"syscall"
 	"unsafe"
+
+	"golang.org/x/sys/unix"
 )
 
 // Maximum size of an interface name
@@ -53,12 +54,15 @@ const (
 	ETHTOOL_GSTRINGS = 0x0000001b
 	ETHTOOL_GSTATS   = 0x0000001d
 	// other CMDs from ethtool-copy.h of ethtool-3.5 package
-	ETHTOOL_GSET          = 0x00000001 /* Get settings. */
-	ETHTOOL_SSET          = 0x00000002 /* Set settings. */
-	ETHTOOL_GMSGLVL       = 0x00000007 /* Get driver message level */
-	ETHTOOL_SMSGLVL       = 0x00000008 /* Set driver msg level. */
+	ETHTOOL_GSET      = 0x00000001 /* Get settings. */
+	ETHTOOL_SSET      = 0x00000002 /* Set settings. */
+	ETHTOOL_GMSGLVL   = 0x00000007 /* Get driver message level */
+	ETHTOOL_SMSGLVL   = 0x00000008 /* Set driver msg level. */
+	ETHTOOL_GCHANNELS = 0x0000003c /* Get no of channels */
+	ETHTOOL_SCHANNELS = 0x0000003d /* Set no of channels */
+	ETHTOOL_GCOALESCE = 0x0000000e /* Get coalesce config */
 	/* Get link status for host, i.e. whether the interface *and* the
- * physical port (if there is one) are up (ethtool_value). */
+	 * physical port (if there is one) are up (ethtool_value). */
 	ETHTOOL_GLINK         = 0x0000000a
 	ETHTOOL_GMODULEINFO   = 0x00000042 /* Get plug-in module information */
 	ETHTOOL_GMODULEEEPROM = 0x00000043 /* Get plug-in module eeprom */
@@ -72,7 +76,7 @@ const (
 // MAX_GSTRINGS maximum number of stats entries that ethtool can
 // retrieve currently.
 const (
-	MAX_GSTRINGS       = 1000
+	MAX_GSTRINGS       = 16384
 	MAX_FEATURE_BLOCKS = (MAX_GSTRINGS + 32 - 1) / 32
 	EEPROM_LEN         = 640
 	PERMADDR_LEN       = 32
@@ -130,6 +134,63 @@ type ethtoolDrvInfo struct {
 	regdump_len  uint32
 }
 
+// DrvInfo contains driver information
+// ethtool.h v3.5: struct ethtool_drvinfo
+type DrvInfo struct {
+	Cmd         uint32
+	Driver      string
+	Version     string
+	FwVersion   string
+	BusInfo     string
+	EromVersion string
+	Reserved2   string
+	NPrivFlags  uint32
+	NStats      uint32
+	TestInfoLen uint32
+	EedumpLen   uint32
+	RegdumpLen  uint32
+}
+
+// Channels contains the number of channels for a given interface.
+type Channels struct {
+	Cmd           uint32
+	MaxRx         uint32
+	MaxTx         uint32
+	MaxOther      uint32
+	MaxCombined   uint32
+	RxCount       uint32
+	TxCount       uint32
+	OtherCount    uint32
+	CombinedCount uint32
+}
+
+// Coalesce is a coalesce config for an interface
+type Coalesce struct {
+	Cmd                      uint32
+	RxCoalesceUsecs          uint32
+	RxMaxCoalescedFrames     uint32
+	RxCoalesceUsecsIrq       uint32
+	RxMaxCoalescedFramesIrq  uint32
+	TxCoalesceUsecs          uint32
+	TxMaxCoalescedFrames     uint32
+	TxCoalesceUsecsIrq       uint32
+	TxMaxCoalescedFramesIrq  uint32
+	StatsBlockCoalesceUsecs  uint32
+	UseAdaptiveRxCoalesce    uint32
+	UseAdaptiveTxCoalesce    uint32
+	PktRateLow               uint32
+	RxCoalesceUsecsLow       uint32
+	RxMaxCoalescedFramesLow  uint32
+	TxCoalesceUsecsLow       uint32
+	TxMaxCoalescedFramesLow  uint32
+	PktRateHigh              uint32
+	RxCoalesceUsecsHigh      uint32
+	RxMaxCoalescedFramesHigh uint32
+	TxCoalesceUsecsHigh      uint32
+	TxMaxCoalescedFramesHigh uint32
+	RateSampleInterval       uint32
+}
+
 type ethtoolGStrings struct {
 	cmd        uint32
 	string_set uint32
@@ -159,8 +220,8 @@ type ethtoolModInfo struct {
 }
 
 type ethtoolLink struct {
-	cmd        uint32
-	data       uint32
+	cmd  uint32
+	data uint32
 }
 
 type ethtoolPermAddr struct {
@@ -212,13 +273,58 @@ func (e *Ethtool) ModuleEepromHex(intf string) (string, error) {
 }
 
 // DriverInfo returns driver information of the given interface name.
-func (e *Ethtool) DriverInfo(intf string) (ethtoolDrvInfo, error) {
-	drvInfo, err := e.getDriverInfo(intf)
+func (e *Ethtool) DriverInfo(intf string) (DrvInfo, error) {
+	i, err := e.getDriverInfo(intf)
 	if err != nil {
-		return ethtoolDrvInfo{}, err
+		return DrvInfo{}, err
+	}
+
+	drvInfo := DrvInfo{
+		Cmd:         i.cmd,
+		Driver:      string(bytes.Trim(i.driver[:], "\x00")),
+		Version:     string(bytes.Trim(i.version[:], "\x00")),
+		FwVersion:   string(bytes.Trim(i.fw_version[:], "\x00")),
+		BusInfo:     string(bytes.Trim(i.bus_info[:], "\x00")),
+		EromVersion: string(bytes.Trim(i.erom_version[:], "\x00")),
+		Reserved2:   string(bytes.Trim(i.reserved2[:], "\x00")),
+		NPrivFlags:  i.n_priv_flags,
+		NStats:      i.n_stats,
+		TestInfoLen: i.testinfo_len,
+		EedumpLen:   i.eedump_len,
+		RegdumpLen:  i.regdump_len,
 	}
 
 	return drvInfo, nil
+}
+
+// GetChannels returns the number of channels for the given interface name.
+func (e *Ethtool) GetChannels(intf string) (Channels, error) {
+	channels, err := e.getChannels(intf)
+	if err != nil {
+		return Channels{}, err
+	}
+
+	return channels, nil
+}
+
+// SetChannels sets the number of channels for the given interface name and
+// returns the new number of channels.
+func (e *Ethtool) SetChannels(intf string, channels Channels) (Channels, error) {
+	channels, err := e.setChannels(intf, channels)
+	if err != nil {
+		return Channels{}, err
+	}
+
+	return channels, nil
+}
+
+// GetCoalesce returns the coalesce config for the given interface name.
+func (e *Ethtool) GetCoalesce(intf string) (Coalesce, error) {
+	coalesce, err := e.getCoalesce(intf)
+	if err != nil {
+		return Coalesce{}, err
+	}
+	return coalesce, nil
 }
 
 // PermAddr returns permanent address of the given interface name.
@@ -253,9 +359,9 @@ func (e *Ethtool) ioctl(intf string, data uintptr) error {
 		ifr_data: data,
 	}
 
-	_, _, ep := syscall.Syscall(syscall.SYS_IOCTL, uintptr(e.fd), SIOCETHTOOL, uintptr(unsafe.Pointer(&ifr)))
+	_, _, ep := unix.Syscall(unix.SYS_IOCTL, uintptr(e.fd), SIOCETHTOOL, uintptr(unsafe.Pointer(&ifr)))
 	if ep != 0 {
-		return syscall.Errno(ep)
+		return ep
 	}
 
 	return nil
@@ -271,6 +377,40 @@ func (e *Ethtool) getDriverInfo(intf string) (ethtoolDrvInfo, error) {
 	}
 
 	return drvinfo, nil
+}
+
+func (e *Ethtool) getChannels(intf string) (Channels, error) {
+	channels := Channels{
+		Cmd: ETHTOOL_GCHANNELS,
+	}
+
+	if err := e.ioctl(intf, uintptr(unsafe.Pointer(&channels))); err != nil {
+		return Channels{}, err
+	}
+
+	return channels, nil
+}
+
+func (e *Ethtool) setChannels(intf string, channels Channels) (Channels, error) {
+	channels.Cmd = ETHTOOL_SCHANNELS
+
+	if err := e.ioctl(intf, uintptr(unsafe.Pointer(&channels))); err != nil {
+		return Channels{}, err
+	}
+
+	return channels, nil
+}
+
+func (e *Ethtool) getCoalesce(intf string) (Coalesce, error) {
+	coalesce := Coalesce{
+		Cmd: ETHTOOL_GCOALESCE,
+	}
+
+	if err := e.ioctl(intf, uintptr(unsafe.Pointer(&coalesce))); err != nil {
+		return Coalesce{}, err
+	}
+
+	return coalesce, nil
 }
 
 func (e *Ethtool) getPermAddr(intf string) (ethtoolPermAddr, error) {
@@ -423,7 +563,7 @@ func (e *Ethtool) Change(intf string, config map[string]bool) error {
 	return e.ioctl(intf, uintptr(unsafe.Pointer(&features)))
 }
 
-// Get state of a link. 
+// Get state of a link.
 func (e *Ethtool) LinkState(intf string) (uint32, error) {
 	x := ethtoolLink{
 		cmd: ETHTOOL_GLINK,
@@ -474,7 +614,11 @@ func (e *Ethtool) Stats(intf string) (map[string]uint64, error) {
 	var result = make(map[string]uint64)
 	for i := 0; i != int(drvinfo.n_stats); i++ {
 		b := gstrings.data[i*ETH_GSTRING_LEN : i*ETH_GSTRING_LEN+ETH_GSTRING_LEN]
-		key := string(b[:strings.Index(string(b), "\x00")])
+		strEnd := strings.Index(string(b), "\x00")
+		if strEnd == -1 {
+			strEnd = ETH_GSTRING_LEN
+		}
+		key := string(b[:strEnd])
 		if len(key) != 0 {
 			result[key] = stats.data[i]
 		}
@@ -485,12 +629,12 @@ func (e *Ethtool) Stats(intf string) (map[string]uint64, error) {
 
 // Close closes the ethool handler
 func (e *Ethtool) Close() {
-	syscall.Close(e.fd)
+	unix.Close(e.fd)
 }
 
 // NewEthtool returns a new ethtool handler
 func NewEthtool() (*Ethtool, error) {
-	fd, err := syscall.Socket(syscall.AF_INET, syscall.SOCK_DGRAM, syscall.IPPROTO_IP)
+	fd, err := unix.Socket(unix.AF_INET, unix.SOCK_DGRAM, unix.IPPROTO_IP)
 	if err != nil {
 		return nil, err
 	}

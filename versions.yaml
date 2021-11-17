@@ -166,7 +166,7 @@ externals:
   cni-plugins:
     description: "CNI network plugins"
     url: "https://github.com/containernetworking/plugins"
-    commit: "485be65581341430f9106a194a98f0f2412245fb"
+    commit: "189d0c06aa6da0c4f052d3831b091e6ea79e6675"
 
   conmon:
     description: "An OCI container runtime monitor"
@@ -187,7 +187,7 @@ externals:
     # containerd from v1.5.0 used the path unix socket
     # instead of abstract socket, thus kata wouldn's support the containerd's
     # version older than them.
-    version: "v1.5.2"
+    version: "v1.6.0-beta.2"
 
   critools:
     description: "CLI tool for Container Runtime Interface (CRI)"

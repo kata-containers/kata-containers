@@ -1,3 +1,4 @@
+//go:build !windows
 // +build !windows
 
 /*
@@ -29,8 +30,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/containerd/containerd/defaults"
 	"github.com/containerd/containerd/namespaces"
-	"github.com/containerd/containerd/pkg/dialer"
 	"github.com/containerd/containerd/sys"
 	"github.com/pkg/errors"
 )
@@ -62,7 +63,7 @@ func AdjustOOMScore(pid int) error {
 	return nil
 }
 
-const socketRoot = "/run/containerd"
+const socketRoot = defaults.DefaultStateDir
 
 // SocketAddress returns a socket address
 func SocketAddress(ctx context.Context, socketPath, id string) (string, error) {
@@ -76,7 +77,7 @@ func SocketAddress(ctx context.Context, socketPath, id string) (string, error) {
 
 // AnonDialer returns a dialer for a socket
 func AnonDialer(address string, timeout time.Duration) (net.Conn, error) {
-	return dialer.Dialer(socket(address).path(), timeout)
+	return net.DialTimeout("unix", socket(address).path(), timeout)
 }
 
 // AnonReconnectDialer returns a dialer for an existing socket on reconnection
@@ -90,7 +91,10 @@ func NewSocket(address string) (*net.UnixListener, error) {
 		sock = socket(address)
 		path = sock.path()
 	)
-	if !sock.isAbstract() {
+
+	isAbstract := sock.isAbstract()
+
+	if !isAbstract {
 		if err := os.MkdirAll(filepath.Dir(path), 0600); err != nil {
 			return nil, errors.Wrapf(err, "%s", path)
 		}
@@ -99,10 +103,13 @@ func NewSocket(address string) (*net.UnixListener, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := os.Chmod(path, 0600); err != nil {
-		os.Remove(sock.path())
-		l.Close()
-		return nil, err
+
+	if !isAbstract {
+		if err := os.Chmod(path, 0600); err != nil {
+			os.Remove(sock.path())
+			l.Close()
+			return nil, err
+		}
 	}
 	return l.(*net.UnixListener), nil
 }
