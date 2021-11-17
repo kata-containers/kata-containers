@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils/katatrace"
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/uuid"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/api"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
 	persistapi "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist/api"
@@ -28,7 +29,6 @@ import (
 	vcAnnotations "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/annotations"
 	vccgroups "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/cgroups"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/rootless"
-	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/uuid"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	vcTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 

@@ -21,9 +21,9 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils/katatrace"
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/uuid"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
 	persistapi "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist/api"
-	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/uuid"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	vcTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
