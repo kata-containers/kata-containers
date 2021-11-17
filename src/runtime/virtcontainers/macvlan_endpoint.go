@@ -14,10 +14,10 @@ import (
 	vcTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 )
 
-var macvlanTrace = getNetworkTrace(BridgedMacvlanEndpointType)
+var macvlanTrace = getNetworkTrace(MacvlanEndpointType)
 
-// BridgedMacvlanEndpoint represents a macvlan endpoint that is bridged to the VM
-type BridgedMacvlanEndpoint struct {
+// MacvlanEndpoint represents a macvlan endpoint that is bridged to the VM
+type MacvlanEndpoint struct {
 	EndpointType       EndpointType
 	PCIPath            vcTypes.PciPath
 	EndpointProperties NetworkInfo
@@ -26,9 +26,9 @@ type BridgedMacvlanEndpoint struct {
 	TxRateLimiter      bool
 }
 
-func createBridgedMacvlanNetworkEndpoint(idx int, ifName string, interworkingModel NetInterworkingModel) (*BridgedMacvlanEndpoint, error) {
+func createMacvlanNetworkEndpoint(idx int, ifName string, interworkingModel NetInterworkingModel) (*MacvlanEndpoint, error) {
 	if idx < 0 {
-		return &BridgedMacvlanEndpoint{}, fmt.Errorf("invalid network endpoint index: %d", idx)
+		return &MacvlanEndpoint{}, fmt.Errorf("invalid network endpoint index: %d", idx)
 	}
 
 	netPair, err := createNetworkInterfacePair(idx, ifName, interworkingModel)
@@ -36,9 +36,9 @@ func createBridgedMacvlanNetworkEndpoint(idx int, ifName string, interworkingMod
 		return nil, err
 	}
 
-	endpoint := &BridgedMacvlanEndpoint{
+	endpoint := &MacvlanEndpoint{
 		NetPair:      netPair,
-		EndpointType: BridgedMacvlanEndpointType,
+		EndpointType: MacvlanEndpointType,
 	}
 	if ifName != "" {
 		endpoint.NetPair.VirtIface.Name = ifName
@@ -48,49 +48,49 @@ func createBridgedMacvlanNetworkEndpoint(idx int, ifName string, interworkingMod
 }
 
 // Properties returns properties of the interface.
-func (endpoint *BridgedMacvlanEndpoint) Properties() NetworkInfo {
+func (endpoint *MacvlanEndpoint) Properties() NetworkInfo {
 	return endpoint.EndpointProperties
 }
 
 // Name returns name of the veth interface in the network pair.
-func (endpoint *BridgedMacvlanEndpoint) Name() string {
+func (endpoint *MacvlanEndpoint) Name() string {
 	return endpoint.NetPair.VirtIface.Name
 }
 
 // HardwareAddr returns the mac address that is assigned to the tap interface
 // in th network pair.
-func (endpoint *BridgedMacvlanEndpoint) HardwareAddr() string {
+func (endpoint *MacvlanEndpoint) HardwareAddr() string {
 	return endpoint.NetPair.TAPIface.HardAddr
 }
 
 // Type identifies the endpoint as a bridged macvlan endpoint.
-func (endpoint *BridgedMacvlanEndpoint) Type() EndpointType {
+func (endpoint *MacvlanEndpoint) Type() EndpointType {
 	return endpoint.EndpointType
 }
 
 // SetProperties sets the properties for the endpoint.
-func (endpoint *BridgedMacvlanEndpoint) SetProperties(properties NetworkInfo) {
+func (endpoint *MacvlanEndpoint) SetProperties(properties NetworkInfo) {
 	endpoint.EndpointProperties = properties
 }
 
 // PciPath returns the PCI path of the endpoint.
-func (endpoint *BridgedMacvlanEndpoint) PciPath() vcTypes.PciPath {
+func (endpoint *MacvlanEndpoint) PciPath() vcTypes.PciPath {
 	return endpoint.PCIPath
 }
 
 // SetPciPath sets the PCI path of the endpoint.
-func (endpoint *BridgedMacvlanEndpoint) SetPciPath(pciPath vcTypes.PciPath) {
+func (endpoint *MacvlanEndpoint) SetPciPath(pciPath vcTypes.PciPath) {
 	endpoint.PCIPath = pciPath
 }
 
 // NetworkPair returns the network pair of the endpoint.
-func (endpoint *BridgedMacvlanEndpoint) NetworkPair() *NetworkInterfacePair {
+func (endpoint *MacvlanEndpoint) NetworkPair() *NetworkInterfacePair {
 	return &endpoint.NetPair
 }
 
 // Attach for virtual endpoint bridges the network pair and adds the
 // tap interface of the network pair to the hypervisor.
-func (endpoint *BridgedMacvlanEndpoint) Attach(ctx context.Context, s *Sandbox) error {
+func (endpoint *MacvlanEndpoint) Attach(ctx context.Context, s *Sandbox) error {
 	span, ctx := macvlanTrace(ctx, "Attach", endpoint)
 	defer span.End()
 
@@ -105,7 +105,7 @@ func (endpoint *BridgedMacvlanEndpoint) Attach(ctx context.Context, s *Sandbox) 
 
 // Detach for the virtual endpoint tears down the tap and bridge
 // created for the veth interface.
-func (endpoint *BridgedMacvlanEndpoint) Detach(ctx context.Context, netNsCreated bool, netNsPath string) error {
+func (endpoint *MacvlanEndpoint) Detach(ctx context.Context, netNsCreated bool, netNsPath string) error {
 	// The network namespace would have been deleted at this point
 	// if it has not been created by virtcontainers.
 	if !netNsCreated {
@@ -121,49 +121,49 @@ func (endpoint *BridgedMacvlanEndpoint) Detach(ctx context.Context, netNsCreated
 }
 
 // HotAttach for bridged macvlan endpoint not supported yet
-func (endpoint *BridgedMacvlanEndpoint) HotAttach(ctx context.Context, h Hypervisor) error {
-	return fmt.Errorf("BridgedMacvlanEndpoint does not support Hot attach")
+func (endpoint *MacvlanEndpoint) HotAttach(ctx context.Context, h Hypervisor) error {
+	return fmt.Errorf("MacvlanEndpoint does not support Hot attach")
 }
 
 // HotDetach for bridged macvlan endpoint not supported yet
-func (endpoint *BridgedMacvlanEndpoint) HotDetach(ctx context.Context, h Hypervisor, netNsCreated bool, netNsPath string) error {
-	return fmt.Errorf("BridgedMacvlanEndpoint does not support Hot detach")
+func (endpoint *MacvlanEndpoint) HotDetach(ctx context.Context, h Hypervisor, netNsCreated bool, netNsPath string) error {
+	return fmt.Errorf("MacvlanEndpoint does not support Hot detach")
 }
 
-func (endpoint *BridgedMacvlanEndpoint) save() persistapi.NetworkEndpoint {
+func (endpoint *MacvlanEndpoint) save() persistapi.NetworkEndpoint {
 	netpair := saveNetIfPair(&endpoint.NetPair)
 
 	return persistapi.NetworkEndpoint{
 		Type: string(endpoint.Type()),
-		BridgedMacvlan: &persistapi.BridgedMacvlanEndpoint{
+		Macvlan: &persistapi.MacvlanEndpoint{
 			NetPair: *netpair,
 		},
 	}
 }
 
-func (endpoint *BridgedMacvlanEndpoint) load(s persistapi.NetworkEndpoint) {
-	endpoint.EndpointType = BridgedMacvlanEndpointType
+func (endpoint *MacvlanEndpoint) load(s persistapi.NetworkEndpoint) {
+	endpoint.EndpointType = MacvlanEndpointType
 
-	if s.BridgedMacvlan != nil {
-		netpair := loadNetIfPair(&s.BridgedMacvlan.NetPair)
+	if s.Macvlan != nil {
+		netpair := loadNetIfPair(&s.Macvlan.NetPair)
 		endpoint.NetPair = *netpair
 	}
 }
 
-func (endpoint *BridgedMacvlanEndpoint) GetRxRateLimiter() bool {
+func (endpoint *MacvlanEndpoint) GetRxRateLimiter() bool {
 	return endpoint.RxRateLimiter
 }
 
-func (endpoint *BridgedMacvlanEndpoint) SetRxRateLimiter() error {
+func (endpoint *MacvlanEndpoint) SetRxRateLimiter() error {
 	endpoint.RxRateLimiter = true
 	return nil
 }
 
-func (endpoint *BridgedMacvlanEndpoint) GetTxRateLimiter() bool {
+func (endpoint *MacvlanEndpoint) GetTxRateLimiter() bool {
 	return endpoint.TxRateLimiter
 }
 
-func (endpoint *BridgedMacvlanEndpoint) SetTxRateLimiter() error {
+func (endpoint *MacvlanEndpoint) SetTxRateLimiter() error {
 	endpoint.TxRateLimiter = true
 	return nil
 }
