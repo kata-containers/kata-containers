@@ -5,46 +5,91 @@ on:
 name: test-kata-deploy
 
 jobs:
-  create-and-test-container:
-    if: |
-      github.event.issue.pull_request
-      && github.event_name == 'issue_comment'
-      && github.event.action == 'created'
-      && startsWith(github.event.comment.body, '/test_kata_deploy')
+  build-asset:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        asset:
+          - cloud-hypervisor
+          - firecracker
+          - kernel
+          - qemu
+          - rootfs-image
+          - rootfs-initrd
+          - shim-v2
+    steps:
+      - uses: actions/checkout@v2
+      - name: Install docker
+        run: |
+          curl -fsSL https://test.docker.com -o test-docker.sh
+          sh test-docker.sh
+
+      - name: Build ${{ matrix.asset }}
+        run: |
+          make "${KATA_ASSET}-tarball"
+          build_dir=$(readlink -f build)
+          # store-artifact does not work with symlink
+          sudo cp -r "${build_dir}" "kata-build"
+        env:
+          KATA_ASSET: ${{ matrix.asset }}
+          TAR_OUTPUT: ${{ matrix.asset }}.tar.gz
+
+      - name: store-artifact ${{ matrix.asset }}
+        uses: actions/upload-artifact@v2
+        with:
+          name: kata-artifacts
+          path: kata-build/kata-static-${{ matrix.asset }}.tar.xz
+          if-no-files-found: error
+
+  create-kata-tarball:
+    runs-on: ubuntu-latest
+    needs: build-asset
+    steps:
+      - uses: actions/checkout@v2
+      - name: get-artifacts
+        uses: actions/download-artifact@v2
+        with:
+          name: kata-artifacts
+          path: kata-artifacts
+      - name: merge-artifacts
+        run: |
+          ./tools/packaging/kata-deploy/local-build/kata-deploy-merge-builds.sh kata-artifacts
+      - name: store-artifacts
+        uses: actions/upload-artifact@v2
+        with:
+          name: kata-static-tarball
+          path: kata-static.tar.xz
+
+  kata-deploy:
+    needs: create-kata-tarball
     runs-on: ubuntu-latest
     steps:
-      - name: get-PR-ref
-        id: get-PR-ref
-        run: |
-            ref=$(cat $GITHUB_EVENT_PATH | jq -r '.issue.pull_request.url' | sed  's#^.*\/pulls#refs\/pull#' | sed 's#$#\/merge#')
-            echo "reference for PR: " ${ref}
-            echo "##[set-output name=pr-ref;]${ref}"
-
-      - name: check out
-        uses: actions/checkout@v2
+      - uses: actions/checkout@v2
+      - name: get-kata-tarball
+        uses: actions/download-artifact@v2
         with:
-           ref: ${{ steps.get-PR-ref.outputs.pr-ref }}
-
-      - name: build-container-image
-        id: build-container-image
+          name: kata-static-tarball
+      - name: build-and-push-kata-deploy-ci
+        id: build-and-push-kata-deploy-ci
         run: |
-            PR_SHA=$(git log --format=format:%H -n1)
-            VERSION="2.0.0"
-            ARTIFACT_URL="https://github.com/kata-containers/kata-containers/releases/download/${VERSION}/kata-static-${VERSION}-x86_64.tar.xz"
-            wget "${ARTIFACT_URL}" -O tools/packaging/kata-deploy/kata-static.tar.xz
-            docker build --build-arg KATA_ARTIFACTS=kata-static.tar.xz -t katadocker/kata-deploy-ci:${PR_SHA} -t quay.io/kata-containers/kata-deploy-ci:${PR_SHA} ./tools/packaging/kata-deploy
-            docker login -u ${{ secrets.DOCKER_USERNAME }} -p ${{ secrets.DOCKER_PASSWORD }}
-            docker push katadocker/kata-deploy-ci:$PR_SHA
-            docker login -u ${{ secrets.QUAY_DEPLOYER_USERNAME }} -p ${{ secrets.QUAY_DEPLOYER_PASSWORD }} quay.io
-            docker push quay.io/kata-containers/kata-deploy-ci:$PR_SHA
-            echo "##[set-output name=pr-sha;]${PR_SHA}"
-
+          tag=$(echo $GITHUB_REF | cut -d/ -f3-)
+          pushd $GITHUB_WORKSPACE
+          git checkout $tag
+          pkg_sha=$(git rev-parse HEAD)
+          popd
+          mv kata-static.tar.xz $GITHUB_WORKSPACE/tools/packaging/kata-deploy/kata-static.tar.xz
+          docker build --build-arg KATA_ARTIFACTS=kata-static.tar.xz -t quay.io/kata-containers/kata-deploy-ci:$pkg_sha $GITHUB_WORKSPACE/tools/packaging/kata-deploy
+          docker login -u ${{ secrets.QUAY_DEPLOYER_USERNAME }} -p ${{ secrets.QUAY_DEPLOYER_PASSWORD }} quay.io
+          docker push quay.io/kata-containers/kata-deploy-ci:$pkg_sha
+          mkdir -p packaging/kata-deploy
+          ln -s $GITHUB_WORKSPACE/tools/packaging/kata-deploy/action packaging/kata-deploy/action
+          echo "::set-output name=PKG_SHA::${pkg_sha}"
       - name: test-kata-deploy-ci-in-aks
-        uses: ./tools/packaging/kata-deploy/action
+        uses: ./packaging/kata-deploy/action
         with:
-          packaging-sha: ${{ steps.build-container-image.outputs.pr-sha }}
+          packaging-sha: ${{steps.build-and-push-kata-deploy-ci.outputs.PKG_SHA}}
         env:
-          PKG_SHA: ${{ steps.build-container-image.outputs.pr-sha }}
+          PKG_SHA: ${{steps.build-and-push-kata-deploy-ci.outputs.PKG_SHA}}
           AZ_APPID: ${{ secrets.AZ_APPID }}
           AZ_PASSWORD: ${{ secrets.AZ_PASSWORD }}
           AZ_SUBSCRIPTION_ID: ${{ secrets.AZ_SUBSCRIPTION_ID }}
