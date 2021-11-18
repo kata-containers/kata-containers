@@ -281,7 +281,7 @@ languages:
       description: |
         'newest-version' is the latest version known to work when
         building Kata
-      newest-version: "1.54.0"
+      newest-version: "1.56.0"
 
 specs:
   description: "Details of important specifications"
