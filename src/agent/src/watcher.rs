@@ -660,6 +660,9 @@ mod tests {
             ..Default::default()
         };
 
+        // delay 20 ms between writes to files in order to ensure filesystem timestamps are unique
+        thread::sleep(Duration::from_millis(20));
+
         entries
             .add(std::iter::once(storage0), &logger)
             .await
@@ -729,6 +732,9 @@ mod tests {
             fs::read_to_string(&entries.0[0].target_mount_point.as_path().join("1.txt")).unwrap(),
             "updated"
         );
+
+        // delay 20 ms between writes to files in order to ensure filesystem timestamps are unique
+        thread::sleep(Duration::from_millis(20));
 
         //
         // Prepare for second check: update mount sources
@@ -970,19 +976,26 @@ mod tests {
         let sym_dir = source_dir.path().join("..data");
         let sym_file = source_dir.path().join("file.txt");
 
+        let relative_to_dir = PathBuf::from("..2021_10_29_03_10_48.161654083");
+
         // create backing file/path
         fs::create_dir_all(&actual_dir).unwrap();
         fs::write(&actual_file, "two").unwrap();
 
-        // create indirection symlink directory tha points to actual_dir:
-        tokio::fs::symlink(&actual_dir, &sym_dir).await.unwrap();
+        // create indirection symlink directory that points to the directory that holds the actual file:
+        tokio::fs::symlink(&relative_to_dir, &sym_dir)
+            .await
+            .unwrap();
 
         // create presented data file symlink:
-        tokio::fs::symlink(sym_dir.join("file.txt"), sym_file)
+        tokio::fs::symlink(PathBuf::from("..data/file.txt"), sym_file)
             .await
             .unwrap();
 
         let dest_dir = tempfile::tempdir().unwrap();
+
+        // delay 20 ms between writes to files in order to ensure filesystem timestamps are unique
+        thread::sleep(Duration::from_millis(20));
 
         let mut entry = Storage::new(protos::Storage {
             source: source_dir.path().display().to_string(),
@@ -1001,8 +1014,12 @@ mod tests {
 
         // now what, what is updated?
         fs::write(actual_file, "updated").unwrap();
-        thread::sleep(Duration::from_secs(1));
+
+        // delay 20 ms between writes to files in order to ensure filesystem timestamps are unique
+        thread::sleep(Duration::from_millis(20));
+
         assert_eq!(entry.scan(&logger).await.unwrap(), 1);
+
         assert_eq!(
             fs::read_to_string(dest_dir.path().join("file.txt")).unwrap(),
             "updated"
@@ -1031,13 +1048,15 @@ mod tests {
         //  - create a new actual dir/file,
         //  - update the symlink directory to point to this one
         //  - remove old dir/file
-        let new_actual_dir = source_dir.path().join("..2021_10_31_03_10_48.161654083");
+        let new_actual_dir = source_dir.path().join("..2021_10_31");
         let new_actual_file = new_actual_dir.join("file.txt");
         fs::create_dir_all(&new_actual_dir).unwrap();
         fs::write(&new_actual_file, "new configmap").unwrap();
 
         tokio::fs::remove_file(&sym_dir).await.unwrap();
-        tokio::fs::symlink(&new_actual_dir, &sym_dir).await.unwrap();
+        tokio::fs::symlink(PathBuf::from("..2021_10_31"), &sym_dir)
+            .await
+            .unwrap();
         tokio::fs::remove_dir_all(&actual_dir).await.unwrap();
 
         assert_eq!(entry.scan(&logger).await.unwrap(), 3); // file, file-dir, symlink
@@ -1057,6 +1076,9 @@ mod tests {
         fs::create_dir_all(source_dir.path().join("A/B")).unwrap();
         fs::write(source_dir.path().join("A/B/1.txt"), "two").unwrap();
 
+        // delay 20 ms between writes to files in order to ensure filesystem timestamps are unique
+        thread::sleep(Duration::from_millis(20));
+
         let dest_dir = tempfile::tempdir().unwrap();
 
         let mut entry = Storage::new(protos::Storage {
@@ -1074,14 +1096,15 @@ mod tests {
         // Should copy no files since nothing is changed since last check
         assert_eq!(entry.scan(&logger).await.unwrap(), 0);
 
-        // Should copy 1 file
-        thread::sleep(Duration::from_secs(1));
         fs::write(source_dir.path().join("A/B/1.txt"), "updated").unwrap();
         assert_eq!(entry.scan(&logger).await.unwrap(), 1);
         assert_eq!(
             fs::read_to_string(dest_dir.path().join("A/B/1.txt")).unwrap(),
             "updated"
         );
+
+        // delay 20 ms between writes to files in order to ensure filesystem timestamps are unique
+        thread::sleep(Duration::from_millis(20));
 
         // Should copy no new files after copy happened
         assert_eq!(entry.scan(&logger).await.unwrap(), 0);
@@ -1113,7 +1136,9 @@ mod tests {
 
         assert_eq!(entry.scan(&logger).await.unwrap(), 1);
 
-        thread::sleep(Duration::from_secs(1));
+        // delay 20 ms between writes to files in order to ensure filesystem timestamps are unique
+        thread::sleep(Duration::from_millis(20));
+
         fs::write(&source_file, "two").unwrap();
         assert_eq!(entry.scan(&logger).await.unwrap(), 1);
         assert_eq!(fs::read_to_string(&dest_file).unwrap(), "two");
@@ -1196,6 +1221,8 @@ mod tests {
 
         watcher.mount(&logger).await.unwrap();
         assert!(is_mounted(WATCH_MOUNT_POINT_PATH).unwrap());
+
+        thread::sleep(Duration::from_millis(20));
 
         watcher.cleanup();
         assert!(!is_mounted(WATCH_MOUNT_POINT_PATH).unwrap());
