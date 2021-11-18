@@ -11,7 +11,7 @@ require (
 	github.com/containerd/containerd v1.5.7
 	github.com/containerd/cri-containerd v1.11.1-0.20190125013620-4dd6735020f5
 	github.com/containerd/fifo v1.0.0
-	github.com/containerd/ttrpc v1.0.2
+	github.com/containerd/ttrpc v1.1.0
 	github.com/containerd/typeurl v1.0.2
 	github.com/containernetworking/plugins v0.9.1
 	github.com/coreos/go-systemd/v22 v22.3.2
@@ -61,7 +61,7 @@ require (
 )
 
 replace (
-	github.com/containerd/containerd => github.com/containerd/containerd v1.5.7
+	github.com/containerd/containerd => github.com/containerd/containerd v1.5.8
 	github.com/opencontainers/runc => github.com/opencontainers/runc v1.0.1
 	github.com/uber-go/atomic => go.uber.org/atomic v1.5.1
 	google.golang.org/genproto => google.golang.org/genproto v0.0.0-20180817151627-c66870c02cf8
