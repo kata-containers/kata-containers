@@ -244,6 +244,7 @@ func (c *Cgroup) MoveToParent() error {
 }
 
 func (c *Cgroup) AddDevice(deviceHostPath string) error {
+	// FIXME hostPath may be socket address
 	deviceResource, err := DeviceToLinuxDevice(deviceHostPath)
 	if err != nil {
 		return err

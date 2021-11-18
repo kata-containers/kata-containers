@@ -291,6 +291,9 @@ const (
 
 	// ContainerResourcesSwapInBytes is a container annotation to specify the Resources.Memory.Swap
 	ContainerResourcesSwapInBytes = kataAnnotContainerResourcePrefix + "swap_in_bytes"
+
+	// ContainerResourcesDevices is a container annotation to specify the devices
+	ContainerResourcesDevices = kataAnnotContainerPrefix + "devices"
 )
 
 const (

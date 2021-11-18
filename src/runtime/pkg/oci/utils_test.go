@@ -1014,3 +1014,68 @@ func TestParseAnnotationBoolConfiguration(t *testing.T) {
 		}
 	}
 }
+
+func TestParseLinuxDevice(t *testing.T) {
+	assert := assert.New(t)
+
+	type parseResult struct {
+		hostPath      string
+		containerPath string
+		permissions   string
+	}
+
+	testCases := []struct {
+		annotaionValue string
+		err            bool
+		result         parseResult
+	}{
+		{
+			annotaionValue: "",
+			err:            true,
+			result:         parseResult{},
+		},
+		{
+			annotaionValue: "/dev/vda",
+			err:            false,
+			result: parseResult{
+				hostPath:      "/dev/vda",
+				containerPath: "/dev/vda",
+				permissions:   defaultDevicePermissions,
+			},
+		},
+		{
+			annotaionValue: "/dev/vda:/dev/vdb",
+			err:            false,
+			result: parseResult{
+				hostPath:      "/dev/vda",
+				containerPath: "/dev/vdb",
+				permissions:   defaultDevicePermissions,
+			},
+		},
+		{
+			annotaionValue: "/dev/vda:/dev/vdb:rm",
+			err:            false,
+			result: parseResult{
+				hostPath:      "/dev/vda",
+				containerPath: "/dev/vdb",
+				permissions:   "rm",
+			},
+		},
+		{
+			// invalid permissions
+			annotaionValue: "/dev/vda:/dev/vdb:c",
+			err:            true,
+			result:         parseResult{},
+		},
+	}
+
+	for i := range testCases {
+		testCase := testCases[i]
+		hostPath, containerPath, permissions, err := parseLinuxDevice(testCase.annotaionValue)
+
+		assert.Equal(testCase.err, err != nil, "test case %d check return error", (i + 1))
+		assert.Equal(testCase.result.hostPath, hostPath, "test case %d check hostPath", (i + 1))
+		assert.Equal(testCase.result.containerPath, containerPath, "test case %d check containerPath", (i + 1))
+		assert.Equal(testCase.result.permissions, permissions, "test case %d check permissions", (i + 1))
+	}
+}

@@ -1386,6 +1386,9 @@ func (q *qemu) hotplugAddVhostUserBlkDevice(ctx context.Context, vAttr *config.V
 		return err
 	}
 	vAttr.PCIPath, err = vcTypes.PciPathFromSlots(bridgeSlot, devSlot)
+	if err != nil {
+		return err
+	}
 
 	if err = q.qmpMonitorCh.qmp.ExecutePCIVhostUserDevAdd(q.qmpMonitorCh.ctx, driver, devID, vAttr.DevID, addr, bridge.ID); err != nil {
 		return err

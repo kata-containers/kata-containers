@@ -19,6 +19,7 @@ import (
 
 	criContainerdAnnotations "github.com/containerd/cri-containerd/pkg/annotations"
 	crioAnnotations "github.com/cri-o/cri-o/pkg/annotations"
+	dockerOCI "github.com/docker/docker/oci"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -360,6 +361,91 @@ func SandboxID(spec specs.Spec) (string, error) {
 	}
 
 	return "", fmt.Errorf("Could not find sandbox ID")
+}
+
+func addContainerAnnotations(ocispec specs.Spec, _config *vc.ContainerConfig) error {
+	if deviceString, ok := ocispec.Annotations[vcAnnotations.ContainerResourcesDevices]; ok && deviceString != "" {
+		// found devices from annotation
+		devices := strings.Split(deviceString, ",")
+
+		for _, device := range devices {
+			hostPath, containerPath, permissions, err := parseLinuxDevice(device)
+			if err != nil {
+				return err
+			}
+
+			devs, devCgroups, err := dockerOCI.DevicesFromPath(hostPath, containerPath, permissions)
+			if err != nil {
+				return err
+			}
+
+			ocispec.Linux.Devices = append(ocispec.Linux.Devices, devs...)
+			ocispec.Linux.Resources.Devices = append(ocispec.Linux.Resources.Devices, devCgroups...)
+		}
+	}
+
+	return nil
+}
+
+const defaultDevicePermissions = "rwm"
+
+// parseLinuxDevice parses a device mapping string, return host path, guest path, and permissions
+// reference https://github.com/docker/cli/blob/3fb4fb83dfb5db0c0753a8316f21aea54dab32c5/cli/command/container/opts.go#L907-L941
+func parseLinuxDevice(device string) (string, string, string, error) {
+	if device == "" {
+		return "", "", "", fmt.Errorf("invalid device(empty string)")
+	}
+
+	src := ""
+	dst := ""
+	permissions := defaultDevicePermissions
+	arr := strings.Split(device, ":")
+	switch len(arr) {
+	case 3:
+		permissions = arr[2]
+		fallthrough
+	case 2:
+		if validDeviceMode(arr[1]) {
+			permissions = arr[1]
+		} else {
+			dst = arr[1]
+		}
+		fallthrough
+	case 1:
+		src = arr[0]
+	default:
+		return "", "", "", fmt.Errorf("invalid device specification: %s", device)
+	}
+
+	if dst == "" {
+		dst = src
+	}
+
+	if !validDeviceMode(permissions) {
+		return "", "", "", fmt.Errorf("invalid device permissions: %s", permissions)
+	}
+
+	return src, dst, permissions, nil
+}
+
+// validDeviceMode checks if the mode for device is valid or not.
+// Valid mode is a composition of r (read), w (write), and m (mknod).
+func validDeviceMode(mode string) bool {
+	var legalDeviceMode = map[rune]bool{
+		'r': true,
+		'w': true,
+		'm': true,
+	}
+	if mode == "" {
+		return false
+	}
+	for _, c := range mode {
+		if !legalDeviceMode[c] {
+			return false
+		}
+		legalDeviceMode[c] = false
+	}
+	return true
 }
 
 func addAnnotations(ocispec specs.Spec, config *vc.SandboxConfig, runtime RuntimeConfig) error {
@@ -901,9 +987,6 @@ func SandboxConfig(ocispec specs.Spec, runtime RuntimeConfig, bundlePath, cid, c
 
 		DisableGuestSeccomp: runtime.DisableGuestSeccomp,
 
-		// Q: Is this really necessary? @weizhang555
-		// Spec: &ocispec,
-
 		Experimental: runtime.Experimental,
 	}
 
@@ -941,11 +1024,6 @@ func ContainerConfig(ocispec specs.Spec, bundlePath, cid, console string, detach
 		cmd.SupplementaryGroups = append(cmd.SupplementaryGroups, strconv.FormatUint(uint64(gid), 10))
 	}
 
-	deviceInfos, err := containerDeviceInfos(ocispec)
-	if err != nil {
-		return vc.ContainerConfig{}, err
-	}
-
 	if ocispec.Process != nil {
 		cmd.Capabilities = ocispec.Process.Capabilities
 	}
@@ -957,7 +1035,6 @@ func ContainerConfig(ocispec specs.Spec, bundlePath, cid, console string, detach
 		Cmd:            cmd,
 		Annotations:    ocispec.Annotations,
 		Mounts:         containerMounts(ocispec),
-		DeviceInfos:    deviceInfos,
 		Resources:      *ocispec.Linux.Resources,
 
 		// This is a custom OCI spec modified at SetEphemeralStorageType()
@@ -978,6 +1055,18 @@ func ContainerConfig(ocispec specs.Spec, bundlePath, cid, console string, detach
 	}
 
 	containerConfig.Annotations[vcAnnotations.ContainerTypeKey] = string(cType)
+
+	if err := addContainerAnnotations(ocispec, &containerConfig); err != nil {
+		return vc.ContainerConfig{}, err
+	}
+
+	// containerDeviceInfos must be called after addContainerAnnotations
+	// because it depends on the devices.
+	deviceInfos, err := containerDeviceInfos(ocispec)
+	if err != nil {
+		return vc.ContainerConfig{}, err
+	}
+	containerConfig.DeviceInfos = deviceInfos
 
 	return containerConfig, nil
 }

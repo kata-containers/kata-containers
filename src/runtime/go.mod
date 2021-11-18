@@ -16,6 +16,8 @@ require (
 	github.com/containernetworking/plugins v0.9.1
 	github.com/coreos/go-systemd/v22 v22.3.2
 	github.com/cri-o/cri-o v1.0.0-rc2.0.20170928185954-3394b3b2d6af
+	github.com/docker/distribution v2.7.1+incompatible // indirect
+	github.com/docker/docker v20.10.3-0.20211118000955-a17f288e65b4+incompatible
 	github.com/fsnotify/fsnotify v1.4.9
 	github.com/go-ini/ini v1.28.2
 	github.com/go-openapi/errors v0.18.0

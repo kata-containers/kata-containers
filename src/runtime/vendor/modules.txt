@@ -71,6 +71,7 @@ github.com/containerd/containerd/identifiers
 github.com/containerd/containerd/log
 github.com/containerd/containerd/mount
 github.com/containerd/containerd/namespaces
+github.com/containerd/containerd/pkg/cap
 github.com/containerd/containerd/pkg/dialer
 github.com/containerd/containerd/pkg/runtimeoptions/v1
 github.com/containerd/containerd/pkg/ttrpcutil
@@ -121,6 +122,14 @@ github.com/cri-o/cri-o/pkg/annotations
 github.com/cyphar/filepath-securejoin
 # github.com/davecgh/go-spew v1.1.1
 github.com/davecgh/go-spew/spew
+# github.com/docker/distribution v2.7.1+incompatible
+## explicit
+github.com/docker/distribution/registry/api/errcode
+# github.com/docker/docker v20.10.3-0.20211118000955-a17f288e65b4+incompatible
+## explicit
+github.com/docker/docker/errdefs
+github.com/docker/docker/oci
+github.com/docker/docker/oci/caps
 # github.com/docker/go-units v0.4.0
 github.com/docker/go-units
 # github.com/fsnotify/fsnotify v1.4.9
