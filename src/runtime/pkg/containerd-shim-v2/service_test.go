@@ -36,8 +36,9 @@ func newService(id string) (*service, error) {
 }
 
 func TestServiceCreate(t *testing.T) {
-	const badCIDErrorPrefix = "invalid container/sandbox ID"
-	const blankCIDError = "ID cannot be blank"
+	const serviceErrorPrefix = "Cause: "
+	const badCIDErrorPrefix = serviceErrorPrefix + "invalid container/sandbox ID"
+	const blankCIDError = serviceErrorPrefix + "ID cannot be blank"
 
 	assert := assert.New(t)
 
@@ -65,10 +66,17 @@ func TestServiceCreate(t *testing.T) {
 		_, err = s.Create(ctx, &task)
 		assert.Error(err, msg)
 
+		var expectedErrorPrefix string
+
 		if d.ID == "" {
-			assert.Equal(err.Error(), blankCIDError, msg)
+			expectedErrorPrefix = blankCIDError
 		} else {
-			assert.True(strings.HasPrefix(err.Error(), badCIDErrorPrefix), msg)
+			expectedErrorPrefix = badCIDErrorPrefix
 		}
+		msg += "\nerror has not prefix:\n'"
+		msg += expectedErrorPrefix
+		msg += "'\nbut has:\n'"
+		msg += err.Error() + "'"
+		assert.True(strings.HasPrefix(err.Error(), expectedErrorPrefix), msg)
 	}
 }
