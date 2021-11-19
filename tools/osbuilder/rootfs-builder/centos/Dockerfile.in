@@ -32,7 +32,8 @@ RUN yum -y update && yum install -y \
     sed \
     tar \
     vim \
-    which
+    which && \
+    yum clean all
 
 # This will install the proper packages to build Kata components
 @INSTALL_MUSL@
