@@ -14,9 +14,9 @@ import (
 	"strings"
 
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils/katatrace"
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/oci"
 	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
 	vf "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/factory"
-	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/oci"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 )
 

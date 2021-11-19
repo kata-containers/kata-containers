@@ -97,7 +97,7 @@ func TestGenerateRandomBytes(t *testing.T) {
 func TestRevereString(t *testing.T) {
 	assert := assert.New(t)
 	str := "Teststr"
-	reversed := ReverseString(str)
+	reversed := reverseString(str)
 	assert.Equal(reversed, "rtstseT")
 }
 

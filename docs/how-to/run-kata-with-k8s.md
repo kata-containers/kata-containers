@@ -20,9 +20,9 @@ required to spawn pods and containers, and this is the preferred way to run Kata
 An equivalent shim implementation for CRI-O is planned.
 
 ### CRI-O
-For CRI-O installation instructions, refer to the [CRI-O Tutorial](https://github.com/kubernetes-incubator/cri-o/blob/master/tutorial.md) page.
+For CRI-O installation instructions, refer to the [CRI-O Tutorial](https://github.com/cri-o/cri-o/blob/main/tutorial.md) page.
 
-The following sections show how to set up the CRI-O configuration file (default path: `/etc/crio/crio.conf`) for Kata.
+The following sections show how to set up the CRI-O snippet configuration file (default path: `/etc/crio/crio.conf`) for Kata.
 
 Unless otherwise stated, all the following settings are specific to the `crio.runtime` table:
 ```toml
@@ -30,7 +30,7 @@ Unless otherwise stated, all the following settings are specific to the `crio.ru
 # runtime used and options for how to set up and manage the OCI runtime.
 [crio.runtime]
 ```
-A comprehensive documentation of the configuration file can be found [here](https://github.com/cri-o/cri-o/blob/master/docs/crio.conf.5.md).
+A comprehensive documentation of the configuration file can be found [here](https://github.com/cri-o/cri-o/blob/main/docs/crio.conf.5.md).
 
 > **Note**: After any change to this file, the CRI-O daemon have to be restarted with:
 >````
@@ -40,74 +40,16 @@ A comprehensive documentation of the configuration file can be found [here](http
 #### Kubernetes Runtime Class (CRI-O v1.12+)
 The [Kubernetes Runtime Class](https://kubernetes.io/docs/concepts/containers/runtime-class/)
 is the preferred way of specifying the container runtime configuration to run a Pod's containers.
-To use this feature, Kata must added as a runtime handler with:
+To use this feature, Kata must added as a runtime handler. This can be done by
+dropping a `50-kata` snippet file into `/etc/crio/crio.conf.d`, with the
+content shown below:
 
 ```toml
-[crio.runtime.runtimes.kata-runtime]
-  runtime_path = "/usr/bin/kata-runtime"
-  runtime_type = "oci"
-```
-
-You can also add multiple entries to specify alternatives hypervisors, e.g.:
-```toml
-[crio.runtime.runtimes.kata-qemu]
-  runtime_path = "/usr/bin/kata-runtime"
-  runtime_type = "oci"
-
-[crio.runtime.runtimes.kata-fc]
-  runtime_path = "/usr/bin/kata-runtime"
-  runtime_type = "oci"
-```
-
-#### Untrusted annotation (until CRI-O v1.12)
-The untrusted annotation is used to specify a runtime for __untrusted__ workloads, i.e.
-a runtime to be used when the workload cannot be trusted and a higher level of security
-is required. An additional flag can be used to let CRI-O know if a workload
-should be considered _trusted_ or _untrusted_ by default.
-For further details, see the documentation
-[here](../design/architecture.md#mixing-vm-based-and-namespace-based-runtimes).
-
-```toml
-# runtime is the OCI compatible runtime used for trusted container workloads.
-# This is a mandatory setting as this runtime will be the default one
-# and will also be used for untrusted container workloads if
-# runtime_untrusted_workload is not set.
-runtime = "/usr/bin/runc"
-
-# runtime_untrusted_workload is the OCI compatible runtime used for untrusted
-# container workloads. This is an optional setting, except if
-# default_container_trust is set to "untrusted".
-runtime_untrusted_workload = "/usr/bin/kata-runtime"
-
-# default_workload_trust is the default level of trust crio puts in container
-# workloads. It can either be "trusted" or "untrusted", and the default
-# is "trusted".
-# Containers can be run through different container runtimes, depending on
-# the trust hints we receive from kubelet:
-# - If kubelet tags a container workload as untrusted, crio will try first to
-# run it through the untrusted container workload runtime. If it is not set,
-# crio will use the trusted runtime.
-# - If kubelet does not provide any information about the container workload trust
-# level, the selected runtime will depend on the default_container_trust setting.
-# If it is set to "untrusted", then all containers except for the host privileged
-# ones, will be run by the runtime_untrusted_workload runtime. Host privileged
-# containers are by definition trusted and will always use the trusted container
-# runtime. If default_container_trust is set to "trusted", crio will use the trusted
-# container runtime for all containers.
-default_workload_trust = "untrusted"
-```
-
-#### Network namespace management
-To enable networking for the workloads run by Kata, CRI-O needs to be configured to
-manage network namespaces, by setting the following key to `true`.
-
-In CRI-O v1.16:
-```toml
-manage_network_ns_lifecycle = true
-```
-In CRI-O v1.17+:
-```toml
-manage_ns_lifecycle = true
+[crio.runtime.runtimes.kata]
+	runtime_path = "/usr/bin/containerd-shim-kata-v2"
+	runtime_type = "vm"
+	runtime_root = "/run/vc"
+	privileged_without_host_devices = true
 ```
 
 

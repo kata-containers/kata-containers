@@ -34,9 +34,9 @@ import (
 
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils/katatrace"
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/oci"
 	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/compatoci"
-	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/oci"
 )
 
 type startManagementServerFunc func(s *service, ctx context.Context, ociSpec *specs.Spec)

@@ -16,9 +16,9 @@ import (
 	"github.com/containerd/containerd/mount"
 	cdshim "github.com/containerd/containerd/runtime/v2/shim"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils"
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/oci"
 	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/compatoci"
-	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/oci"
 )
 
 func cReap(s *service, status int, id, execid string, exitat time.Time) {

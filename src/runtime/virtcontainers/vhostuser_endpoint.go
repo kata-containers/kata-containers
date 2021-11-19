@@ -13,7 +13,7 @@ import (
 
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
 	persistapi "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist/api"
-	vcTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/types"
+	vcTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
 )
 

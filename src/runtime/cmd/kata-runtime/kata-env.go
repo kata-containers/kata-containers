@@ -18,10 +18,10 @@ import (
 	"github.com/urfave/cli"
 
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils"
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/oci"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/utils"
 	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
 	exp "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/experimental"
-	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/oci"
 	vcUtils "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
 )
 

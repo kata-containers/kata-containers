@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	defaultCheckInterval = 1 * time.Second
+	defaultCheckInterval = 5 * time.Second
 	watcherChannelSize   = 128
 )
 

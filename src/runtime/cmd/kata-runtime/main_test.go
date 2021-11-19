@@ -21,8 +21,8 @@ import (
 
 	ktu "github.com/kata-containers/kata-containers/src/runtime/pkg/katatestutils"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils"
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/oci"
 	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
-	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/oci"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/vcmock"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/stretchr/testify/assert"

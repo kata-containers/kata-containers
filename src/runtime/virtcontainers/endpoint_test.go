@@ -35,8 +35,8 @@ func TestVhostUserEndpointTypeSet(t *testing.T) {
 	testEndpointTypeSet(t, "vhost-user", VhostUserEndpointType)
 }
 
-func TestBridgedMacvlanEndpointTypeSet(t *testing.T) {
-	testEndpointTypeSet(t, "macvlan", BridgedMacvlanEndpointType)
+func TestMacvlanEndpointTypeSet(t *testing.T) {
+	testEndpointTypeSet(t, "macvlan", MacvlanEndpointType)
 }
 
 func TestMacvtapEndpointTypeSet(t *testing.T) {
@@ -69,9 +69,9 @@ func TestVhostUserEndpointTypeString(t *testing.T) {
 	testEndpointTypeString(t, &endpointType, string(VhostUserEndpointType))
 }
 
-func TestBridgedMacvlanEndpointTypeString(t *testing.T) {
-	endpointType := BridgedMacvlanEndpointType
-	testEndpointTypeString(t, &endpointType, string(BridgedMacvlanEndpointType))
+func TestMacvlanEndpointTypeString(t *testing.T) {
+	endpointType := MacvlanEndpointType
+	testEndpointTypeString(t, &endpointType, string(MacvlanEndpointType))
 }
 
 func TestMacvtapEndpointTypeString(t *testing.T) {

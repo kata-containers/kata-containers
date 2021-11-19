@@ -1,4 +1,6 @@
+//go:build linux
 // +build linux
+
 // Copyright (c) 2016 Intel Corporation
 // Copyright (c) 2014,2015,2016,2017 Docker, Inc.
 // SPDX-License-Identifier: Apache-2.0
@@ -22,8 +24,8 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/manager"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols/grpc"
 	vcAnnotations "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/annotations"
-	vcTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/types"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
+	vcTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
 
 	specs "github.com/opencontainers/runtime-spec/specs-go"

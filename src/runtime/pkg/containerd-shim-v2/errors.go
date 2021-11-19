@@ -13,7 +13,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/types"
+	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 )
 
 // toGRPC maps the virtcontainers error into a grpc error,
