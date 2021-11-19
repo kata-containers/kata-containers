@@ -184,11 +184,8 @@ type HypervisorConfig struct {
 	// VirtioMem is used to enable/disable virtio-mem
 	VirtioMem bool
 
-	// Realtime Used to enable/disable realtime
-	Realtime bool
-
-	// Mlock is used to control memory locking when Realtime is enabled
-	// Realtime=true and Mlock=false, allows for swapping out of VM memory
+	// Mlock is used to control memory locking
+	// Mlock=false, allows for swapping out of VM memory
 	// enabling higher density
 	Mlock bool
 
