@@ -6,17 +6,19 @@ FROM ubuntu:20.04
 ENV DEBIAN_FRONTEND=noninteractive
 ENV INSTALL_IN_GOPATH=false
 
-ADD install_yq.sh /usr/bin/install_yq.sh
+COPY install_yq.sh /usr/bin/install_yq.sh
 
 
-# yq installer deps
-RUN apt update && apt-get install -y curl sudo
-
-# Install yq
-RUN install_yq.sh
-
-RUN curl -fsSL https://get.docker.com -o get-docker.sh
-RUN sh get-docker.sh
+# Install yq and docker
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        ca-certificates \
+        curl \
+        sudo && \
+    apt-get clean && rm -rf /var/lib/apt/lists/ && \
+    install_yq.sh && \
+    curl -fsSL https://get.docker.com -o get-docker.sh && \
+    sh get-docker.sh
 
 ARG IMG_USER=kata-builder
 ARG UID=1000
@@ -27,12 +29,14 @@ RUN sh -c "echo '${IMG_USER} ALL=NOPASSWD: ALL' >> /etc/sudoers"
 
 #FIXME: gcc is required as agent is build out of a container build.
 RUN apt-get update && \
-    apt install --no-install-recommends -y \
-    cpio \
-    gcc \
-    git \
-    make \
-    xz-utils
+  apt-get install --no-install-recommends -y \
+  build-essential \
+  cpio \
+  gcc \
+  git \
+  make \
+  xz-utils && \
+  apt-get clean && rm -rf /var/lib/apt/lists
 
 ENV USER ${IMG_USER}
 USER ${UID}:${GID}
