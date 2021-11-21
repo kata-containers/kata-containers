@@ -62,6 +62,26 @@ get_changes() {
 	git log --oneline "${current_version}..HEAD" --no-merges
 }
 
+generate_kata_deploy_commit() {
+       local new_version=$1
+       [ -n "$new_version" ] || die "no new version"
+
+       printf "release: Adapt kata-deploy for %s" "${new_version}"
+
+       printf "\n
+kata-deploy files must be adapted to a new release.  The cases where it
+happens are when the release goes from -> to:
+* main -> stable:
+  * kata-deploy / kata-cleanup: change from \"latest\" to \"rc0\"
+  * kata-deploy-stable / kata-cleanup-stable: are removed
+
+* stable -> stable:
+  * kata-deploy / kata-cleanup: bump the release to the new one.
+
+There are no changes when doing an alpha release, as the files on the
+\"main\" branch always point to the \"latest\" and \"stable\" tags."
+}
+
 generate_commit() {
 	local new_version=$1
 	local current_version=$2
@@ -184,6 +204,10 @@ bump_repo() {
 
 			git add "${kata_deploy_yaml}"
 			git add "${kata_cleanup_yaml}"
+
+			info "Creating the commit with the kata-deploy changes"
+			local commit_msg="$(generate_kata_deploy_commit $new_version)"
+			git commit -s -m "${commit_msg}"
 		fi
 	fi
 
