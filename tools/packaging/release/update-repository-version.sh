@@ -82,6 +82,18 @@ There are no changes when doing an alpha release, as the files on the
 \"main\" branch always point to the \"latest\" and \"stable\" tags."
 }
 
+generate_revert_kata_deploy_commit() {
+       local new_version=$1
+       [ -n "$new_version" ] || die "no new version"
+
+       printf "release: Revert kata-deploy changes after %s release" "${new_version}"
+
+       printf "\n
+As %s has been released, let's switch the kata-deploy / kata-cleanup
+tags back to \"latest\", and re-add the kata-deploy-stable and the
+kata-cleanup-stable files." "${new_version}"
+}
+
 generate_commit() {
 	local new_version=$1
 	local current_version=$2
@@ -208,6 +220,7 @@ bump_repo() {
 			info "Creating the commit with the kata-deploy changes"
 			local commit_msg="$(generate_kata_deploy_commit $new_version)"
 			git commit -s -m "${commit_msg}"
+			local kata_deploy_commit="$(git rev-parse HEAD)"
 		fi
 	fi
 
@@ -244,6 +257,29 @@ EOT
 		out=""
 		out=$("${hub_bin}" pull-request -b "${target_branch}" -F "${notes_file}" 2>&1) || echo "$out" | grep "A pull request already exists"
 	fi
+
+	if [ "${repo}" == "kata-containers" ] && [ "${target_branch}" == "main" ] && [[ "${new_version}" =~ "rc" ]]; then
+		reverting_kata_deploy_changes_branch="revert-kata-deploy-changes-after-${new_version}-release"
+		git checkout -b "${reverting_kata_deploy_changes_branch}"
+
+		git revert --no-edit ${kata_deploy_commit} >>/dev/null
+		commit_msg="$(generate_revert_kata_deploy_commit $new_version)"
+		info "Creating the commit message reverting the kata-deploy changes"
+		git commit --amend -s -m "${commit_msg}"
+
+		echo "${commit_msg}" >"${notes_file}"
+		echo "" >>"${notes_file}"
+		echo "Only merge this commit after ${new_version} release is successfully tagged!" >>"${notes_file}"
+
+		if [[ ${PUSH} == "true" ]]; then
+			info "Push \"${reverting_kata_deploy_changes_branch}\" to fork"
+			${hub_bin} push fork -f "${reverting_kata_deploy_changes_branch}"
+			info "Create \"${reverting_kata_deploy_changes_branch}\" PR"
+			out=""
+			out=$("${hub_bin}" pull-request -b "${target_branch}" -F "${notes_file}" 2>&1) || echo "$out" | grep "A pull request already exists"
+		fi
+	fi
+
 	popd >>/dev/null
 }
 
