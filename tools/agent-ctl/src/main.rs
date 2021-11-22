@@ -153,8 +153,9 @@ fn connect(name: &str, global_args: clap::ArgMatches) -> Result<()> {
             .collect();
     }
 
-    // Cannot fail as a default has been specified
-    let log_level_name = global_args.value_of("log-level").unwrap();
+    let log_level_name = global_args
+        .value_of("log-level")
+        .ok_or_else(|| anyhow!("cannot get log level"))?;
 
     let log_level = logging::level_name_to_slog_level(log_level_name).map_err(|e| anyhow!(e))?;
 
@@ -166,10 +167,10 @@ fn connect(name: &str, global_args: clap::ArgMatches) -> Result<()> {
         None => 0,
     };
 
-    let hybrid_vsock_port: u64 = args
+    let hybrid_vsock_port = args
         .value_of("hybrid-vsock-port")
-        .ok_or("Need Hybrid VSOCK port number")
-        .map(|p| p.parse::<u64>().unwrap())
+        .ok_or_else(|| anyhow!("Need Hybrid VSOCK port number"))?
+        .parse::<u64>()
         .map_err(|e| anyhow!("VSOCK port number must be an integer: {:?}", e))?;
 
     let bundle_dir = args.value_of("bundle-dir").unwrap_or("").to_string();
@@ -215,7 +216,7 @@ fn real_main() -> Result<()> {
                 .long("log-level")
                 .short("l")
                 .help("specific log level")
-                .default_value(logging::slog_level_to_level_name(DEFAULT_LOG_LEVEL).unwrap())
+                .default_value(logging::slog_level_to_level_name(DEFAULT_LOG_LEVEL).map_err(|e| anyhow!(e))?)
                 .possible_values(&logging::get_log_levels())
                 .takes_value(true)
                 .required(false),
