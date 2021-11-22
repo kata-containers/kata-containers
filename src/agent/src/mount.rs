@@ -628,8 +628,7 @@ pub fn get_mount_fs_type_from_file(mount_file: &str, mount_point: &str) -> Resul
     let file = File::open(mount_file)?;
     let reader = BufReader::new(file);
 
-    let re = Regex::new(format!("device .+ mounted on {} with fstype (.+)", mount_point).as_str())
-        .unwrap();
+    let re = Regex::new(format!("device .+ mounted on {} with fstype (.+)", mount_point).as_str())?;
 
     // Read the file line by line using the lines() iterator from std::io::BufRead.
     for (_index, line) in reader.lines().enumerate() {
@@ -707,20 +706,21 @@ pub fn get_cgroup_mounts(
             }
         }
 
-        if fields[0].is_empty() {
+        let subsystem_name = fields[0];
+
+        if subsystem_name.is_empty() {
             continue;
         }
 
-        if fields[0] == "devices" {
+        if subsystem_name == "devices" {
             has_device_cgroup = true;
         }
 
-        if let Some(value) = CGROUPS.get(&fields[0]) {
-            let key = CGROUPS.keys().find(|&&f| f == fields[0]).unwrap();
+        if let Some((key, value)) = CGROUPS.get_key_value(subsystem_name) {
             cg_mounts.push(InitMount {
                 fstype: "cgroup",
                 src: "cgroup",
-                dest: *value,
+                dest: value,
                 options: vec!["nosuid", "nodev", "noexec", "relatime", key],
             });
         }
@@ -773,10 +773,9 @@ fn ensure_destination_file_exists(path: &Path) -> Result<()> {
         return Err(anyhow!("{:?} exists but is not a regular file", path));
     }
 
-    // The only way parent() can return None is if the path is /,
-    // which always exists, so the test above will already have caught
-    // it, thus the unwrap() is safe
-    let dir = path.parent().unwrap();
+    let dir = path
+        .parent()
+        .ok_or_else(|| anyhow!("failed to find parent path for {:?}", path))?;
 
     fs::create_dir_all(dir).context(format!("create_dir_all {:?}", dir))?;
 

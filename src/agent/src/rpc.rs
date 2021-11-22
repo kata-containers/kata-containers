@@ -183,7 +183,7 @@ impl AgentService {
         update_device_cgroup(&mut oci)?;
 
         // Append guest hooks
-        append_guest_hooks(&s, &mut oci);
+        append_guest_hooks(&s, &mut oci)?;
 
         // write spec to bundle path, hooks might
         // read ocispec
@@ -205,21 +205,14 @@ impl AgentService {
             LinuxContainer::new(cid.as_str(), CONTAINER_BASE, opts, &sl!())?;
 
         let pipe_size = AGENT_CONFIG.read().await.container_pipe_size;
-        let p = if oci.process.is_some() {
-            Process::new(
-                &sl!(),
-                oci.process.as_ref().unwrap(),
-                cid.as_str(),
-                true,
-                pipe_size,
-            )?
+
+        let p = if let Some(p) = oci.process {
+            Process::new(&sl!(), &p, cid.as_str(), true, pipe_size)?
         } else {
             info!(sl!(), "no process configurations!");
             return Err(anyhow!(nix::Error::from_errno(nix::errno::Errno::EINVAL)));
         };
-
         ctr.start(p).await?;
-
         s.update_shared_pidns(&ctr)?;
         s.add_container(ctr);
         info!(sl!(), "created container!");
@@ -241,11 +234,17 @@ impl AgentService {
 
         ctr.exec()?;
 
+        if sid == cid {
+            return Ok(());
+        }
+
         // start oom event loop
-        if sid != cid && ctr.cgroup_manager.is_some() {
-            let cg_path = ctr.cgroup_manager.as_ref().unwrap().get_cg_path("memory");
-            if cg_path.is_some() {
-                let rx = notifier::notify_oom(cid.as_str(), cg_path.unwrap()).await?;
+        if let Some(ref ctr) = ctr.cgroup_manager {
+            let cg_path = ctr.get_cg_path("memory");
+
+            if let Some(cg_path) = cg_path {
+                let rx = notifier::notify_oom(cid.as_str(), cg_path.to_string()).await?;
+
                 s.run_oom_event_monitor(rx, cid.clone()).await;
             }
         }
@@ -345,14 +344,13 @@ impl AgentService {
         let s = self.sandbox.clone();
         let mut sandbox = s.lock().await;
 
-        let process = if req.process.is_some() {
-            req.process.as_ref().unwrap()
-        } else {
-            return Err(anyhow!(nix::Error::from_errno(nix::errno::Errno::EINVAL)));
-        };
+        let process = req
+            .process
+            .into_option()
+            .ok_or_else(|| anyhow!(nix::Error::from_errno(nix::errno::Errno::EINVAL)))?;
 
         let pipe_size = AGENT_CONFIG.read().await.container_pipe_size;
-        let ocip = rustjail::process_grpc_to_oci(process);
+        let ocip = rustjail::process_grpc_to_oci(&process);
         let p = Process::new(&sl!(), &ocip, exec_id.as_str(), false, pipe_size)?;
 
         let ctr = sandbox
@@ -385,7 +383,12 @@ impl AgentService {
 
         let p = find_process(&mut sandbox, cid.as_str(), eid.as_str(), init)?;
 
-        let mut signal = Signal::try_from(req.signal as i32).unwrap();
+        let mut signal = Signal::try_from(req.signal as i32).map_err(|e| {
+            anyhow!(e).context(format!(
+                "failed to convert {:?} to signal (container-id: {}, exec-id: {})",
+                req.signal, cid, eid
+            ))
+        })?;
 
         // For container initProcess, if it hasn't installed handler for "SIGTERM" signal,
         // it will ignore the "SIGTERM" signal sent to it, thus send it "SIGKILL" signal
@@ -444,7 +447,11 @@ impl AgentService {
             Some(p) => p,
             None => {
                 // Lost race, pick up exit code from channel
-                resp.status = exit_recv.recv().await.unwrap();
+                resp.status = exit_recv
+                    .recv()
+                    .await
+                    .ok_or_else(|| anyhow!("Failed to receive exit code"))?;
+
                 return Ok(resp);
             }
         };
@@ -486,7 +493,7 @@ impl AgentService {
             }
         };
 
-        let writer = writer.unwrap();
+        let writer = writer.ok_or_else(|| anyhow!("cannot get writer"))?;
         writer.lock().await.write_all(req.data.as_slice()).await?;
 
         let mut resp = WriteStreamResponse::new();
@@ -528,7 +535,7 @@ impl AgentService {
             return Err(anyhow!(nix::Error::from_errno(nix::errno::Errno::EINVAL)));
         }
 
-        let reader = reader.unwrap();
+        let reader = reader.ok_or_else(|| anyhow!("cannot get stream reader"))?;
 
         tokio::select! {
             _ = term_exit_notifier.notified() => {
@@ -646,8 +653,8 @@ impl protocols::agent_ttrpc::AgentService for AgentService {
 
         let resp = Empty::new();
 
-        if res.is_some() {
-            let oci_res = rustjail::resources_grpc_to_oci(&res.unwrap());
+        if let Some(res) = res.as_ref() {
+            let oci_res = rustjail::resources_grpc_to_oci(res);
             match ctr.set(oci_res) {
                 Err(e) => {
                     return Err(ttrpc_error(ttrpc::Code::INTERNAL, e.to_string()));
@@ -807,23 +814,22 @@ impl protocols::agent_ttrpc::AgentService for AgentService {
             )
         })?;
 
-        if p.term_master.is_none() {
+        if let Some(fd) = p.term_master {
+            unsafe {
+                let win = winsize {
+                    ws_row: req.row as c_ushort,
+                    ws_col: req.column as c_ushort,
+                    ws_xpixel: 0,
+                    ws_ypixel: 0,
+                };
+
+                let err = libc::ioctl(fd, TIOCSWINSZ, &win);
+                Errno::result(err).map(drop).map_err(|e| {
+                    ttrpc_error(ttrpc::Code::INTERNAL, format!("ioctl error: {:?}", e))
+                })?;
+            }
+        } else {
             return Err(ttrpc_error(ttrpc::Code::UNAVAILABLE, "no tty".to_string()));
-        }
-
-        let fd = p.term_master.unwrap();
-        unsafe {
-            let win = winsize {
-                ws_row: req.row as c_ushort,
-                ws_col: req.column as c_ushort,
-                ws_xpixel: 0,
-                ws_ypixel: 0,
-            };
-
-            let err = libc::ioctl(fd, TIOCSWINSZ, &win);
-            Errno::result(err)
-                .map(drop)
-                .map_err(|e| ttrpc_error(ttrpc::Code::INTERNAL, format!("ioctl error: {:?}", e)))?;
         }
 
         Ok(Empty::new())
@@ -1027,12 +1033,25 @@ impl protocols::agent_ttrpc::AgentService for AgentService {
         let mut sandbox = s.lock().await;
         // destroy all containers, clean up, notify agent to exit
         // etc.
-        sandbox.destroy().await.unwrap();
+        sandbox
+            .destroy()
+            .await
+            .map_err(|e| ttrpc_error(ttrpc::Code::INTERNAL, e.to_string()))?;
         // Close get_oom_event connection,
         // otherwise it will block the shutdown of ttrpc.
         sandbox.event_tx.take();
 
-        sandbox.sender.take().unwrap().send(1).unwrap();
+        sandbox
+            .sender
+            .take()
+            .ok_or_else(|| {
+                ttrpc_error(
+                    ttrpc::Code::INTERNAL,
+                    "failed to get sandbox sender channel".to_string(),
+                )
+            })?
+            .send(1)
+            .map_err(|e| ttrpc_error(ttrpc::Code::INTERNAL, e.to_string()))?;
 
         Ok(Empty::new())
     }
@@ -1291,11 +1310,7 @@ fn get_memory_info(block_size: bool, hotplug: bool) -> Result<(u64, bool)> {
         match stat::stat(SYSFS_MEMORY_HOTPLUG_PROBE_PATH) {
             Ok(_) => plug = true,
             Err(e) => {
-                info!(
-                    sl!(),
-                    "hotplug memory error: {}",
-                    e.as_errno().unwrap().desc()
-                );
+                info!(sl!(), "hotplug memory error: {:?}", e);
                 match e {
                     nix::Error::Sys(errno) => match errno {
                         Errno::ENOENT => plug = false,
@@ -1371,7 +1386,7 @@ fn find_process<'a>(
     ctr.get_process(eid).map_err(|_| anyhow!("Invalid exec id"))
 }
 
-pub fn start(s: Arc<Mutex<Sandbox>>, server_address: &str) -> TtrpcServer {
+pub fn start(s: Arc<Mutex<Sandbox>>, server_address: &str) -> Result<TtrpcServer> {
     let agent_service = Box::new(AgentService { sandbox: s })
         as Box<dyn protocols::agent_ttrpc::AgentService + Send + Sync>;
 
@@ -1386,14 +1401,13 @@ pub fn start(s: Arc<Mutex<Sandbox>>, server_address: &str) -> TtrpcServer {
     let hservice = protocols::health_ttrpc::create_health(health_worker);
 
     let server = TtrpcServer::new()
-        .bind(server_address)
-        .unwrap()
+        .bind(server_address)?
         .register_service(aservice)
         .register_service(hservice);
 
     info!(sl!(), "ttRPC server started"; "address" => server_address);
 
-    server
+    Ok(server)
 }
 
 // This function updates the container namespaces configuration based on the
@@ -1438,24 +1452,28 @@ fn update_container_namespaces(
     // the create_sandbox request or create_container request.
     // Else set this to empty string so that a new pid namespace is
     // created for the container.
-    if sandbox_pidns && sandbox.sandbox_pidns.is_some() {
-        pid_ns.path = String::from(sandbox.sandbox_pidns.as_ref().unwrap().path.as_str());
+    if sandbox_pidns {
+        if let Some(ref pidns) = &sandbox.sandbox_pidns {
+            pid_ns.path = String::from(pidns.path.as_str());
+        } else {
+            return Err(anyhow!("failed to get sandbox pidns"));
+        }
     }
 
     linux.namespaces.push(pid_ns);
     Ok(())
 }
 
-fn append_guest_hooks(s: &Sandbox, oci: &mut Spec) {
-    if s.hooks.is_none() {
-        return;
+fn append_guest_hooks(s: &Sandbox, oci: &mut Spec) -> Result<()> {
+    if let Some(ref guest_hooks) = s.hooks {
+        let mut hooks = oci.hooks.take().unwrap_or_default();
+        hooks.prestart.append(&mut guest_hooks.prestart.clone());
+        hooks.poststart.append(&mut guest_hooks.poststart.clone());
+        hooks.poststop.append(&mut guest_hooks.poststop.clone());
+        oci.hooks = Some(hooks);
     }
-    let guest_hooks = s.hooks.as_ref().unwrap();
-    let mut hooks = oci.hooks.take().unwrap_or_default();
-    hooks.prestart.append(&mut guest_hooks.prestart.clone());
-    hooks.poststart.append(&mut guest_hooks.poststart.clone());
-    hooks.poststop.append(&mut guest_hooks.poststop.clone());
-    oci.hooks = Some(hooks);
+
+    Ok(())
 }
 
 // Check is the container process installed the
@@ -1545,7 +1563,7 @@ fn do_copy_file(req: &CopyFileRequest) -> Result<()> {
         PathBuf::from("/")
     };
 
-    fs::create_dir_all(dir.to_str().unwrap()).or_else(|e| {
+    fs::create_dir_all(&dir).or_else(|e| {
         if e.kind() != std::io::ErrorKind::AlreadyExists {
             return Err(e);
         }
@@ -1553,10 +1571,7 @@ fn do_copy_file(req: &CopyFileRequest) -> Result<()> {
         Ok(())
     })?;
 
-    std::fs::set_permissions(
-        dir.to_str().unwrap(),
-        std::fs::Permissions::from_mode(req.dir_mode),
-    )?;
+    std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(req.dir_mode))?;
 
     let mut tmpfile = path.clone();
     tmpfile.set_extension("tmp");
@@ -1565,10 +1580,10 @@ fn do_copy_file(req: &CopyFileRequest) -> Result<()> {
         .write(true)
         .create(true)
         .truncate(false)
-        .open(tmpfile.to_str().unwrap())?;
+        .open(&tmpfile)?;
 
     file.write_all_at(req.data.as_slice(), req.offset as u64)?;
-    let st = stat::stat(tmpfile.to_str().unwrap())?;
+    let st = stat::stat(&tmpfile)?;
 
     if st.st_size != req.file_size {
         return Ok(());
@@ -1577,7 +1592,7 @@ fn do_copy_file(req: &CopyFileRequest) -> Result<()> {
     file.set_permissions(std::fs::Permissions::from_mode(req.file_mode))?;
 
     unistd::chown(
-        tmpfile.to_str().unwrap(),
+        &tmpfile,
         Some(Uid::from_raw(req.uid as u32)),
         Some(Gid::from_raw(req.gid as u32)),
     )?;
@@ -1646,10 +1661,18 @@ fn setup_bundle(cid: &str, spec: &mut Spec) -> Result<PathBuf> {
         readonly: spec_root.readonly,
     });
 
-    let _ = spec.save(config_path.to_str().unwrap());
+    let _ = spec.save(
+        config_path
+            .to_str()
+            .ok_or_else(|| anyhow!("cannot convert path to unicode"))?,
+    );
 
     let olddir = unistd::getcwd().context("cannot getcwd")?;
-    unistd::chdir(bundle_path.to_str().unwrap())?;
+    unistd::chdir(
+        bundle_path
+            .to_str()
+            .ok_or_else(|| anyhow!("cannot convert bundle path to unicode"))?,
+    )?;
 
     Ok(olddir)
 }
@@ -1682,8 +1705,8 @@ fn load_kernel_module(module: &protocols::agent::KernelModule) -> Result<()> {
 
     match status.code() {
         Some(code) => {
-            let std_out: String = String::from_utf8(output.stdout).unwrap();
-            let std_err: String = String::from_utf8(output.stderr).unwrap();
+            let std_out = String::from_utf8_lossy(&output.stdout);
+            let std_err = String::from_utf8_lossy(&output.stderr);
             let msg = format!(
                 "load_kernel_module return code: {} stdout:{} stderr:{}",
                 code, std_out, std_err
@@ -1746,7 +1769,7 @@ mod tests {
         let mut oci = Spec {
             ..Default::default()
         };
-        append_guest_hooks(&s, &mut oci);
+        append_guest_hooks(&s, &mut oci).unwrap();
         assert_eq!(s.hooks, oci.hooks);
     }
 
