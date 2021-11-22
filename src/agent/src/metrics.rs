@@ -8,6 +8,7 @@ extern crate procfs;
 use prometheus::{Encoder, Gauge, GaugeVec, IntCounter, TextEncoder};
 
 use anyhow::Result;
+use slog::warn;
 use tracing::instrument;
 
 const NAMESPACE_KATA_AGENT: &str = "kata_agent";
@@ -74,7 +75,7 @@ pub fn get_metrics(_: &protocols::agent::GetMetricsRequest) -> Result<String> {
     AGENT_SCRAPE_COUNT.inc();
 
     // update agent process metrics
-    update_agent_metrics();
+    update_agent_metrics()?;
 
     // update guest os metrics
     update_guest_metrics();
@@ -84,23 +85,26 @@ pub fn get_metrics(_: &protocols::agent::GetMetricsRequest) -> Result<String> {
 
     let mut buffer = Vec::new();
     let encoder = TextEncoder::new();
-    encoder.encode(&metric_families, &mut buffer).unwrap();
+    encoder.encode(&metric_families, &mut buffer)?;
 
-    Ok(String::from_utf8(buffer).unwrap())
+    Ok(String::from_utf8(buffer)?)
 }
 
 #[instrument]
-fn update_agent_metrics() {
+fn update_agent_metrics() -> Result<()> {
     let me = procfs::process::Process::myself();
 
-    if let Err(err) = me {
-        error!(sl!(), "failed to create process instance: {:?}", err);
-        return;
-    }
+    let me = match me {
+        Ok(p) => p,
+        Err(e) => {
+            // FIXME: return Ok for all errors?
+            warn!(sl!(), "failed to create process instance: {:?}", e);
 
-    let me = me.unwrap();
+            return Ok(());
+        }
+    };
 
-    let tps = procfs::ticks_per_second().unwrap();
+    let tps = procfs::ticks_per_second()?;
 
     // process total time
     AGENT_TOTAL_TIME.set((me.stat.utime + me.stat.stime) as f64 / (tps as f64));
@@ -109,7 +113,7 @@ fn update_agent_metrics() {
     AGENT_TOTAL_VM.set(me.stat.vsize as f64);
 
     // Total resident set
-    let page_size = procfs::page_size().unwrap() as f64;
+    let page_size = procfs::page_size()? as f64;
     AGENT_TOTAL_RSS.set(me.stat.rss as f64 * page_size);
 
     // io
@@ -132,11 +136,11 @@ fn update_agent_metrics() {
     }
 
     match me.status() {
-        Err(err) => {
-            info!(sl!(), "failed to get process status: {:?}", err);
-        }
+        Err(err) => error!(sl!(), "failed to get process status: {:?}", err),
         Ok(status) => set_gauge_vec_proc_status(&AGENT_PROC_STATUS, &status),
     }
+
+    return Ok(());
 }
 
 #[instrument]
