@@ -953,6 +953,12 @@ func (s *service) Shutdown(ctx context.Context, r *taskAPI.ShutdownRequest) (_ *
 	// exited when shimv2 terminated. Thus here to do the last cleanup of the hypervisor.
 	syscall.Kill(int(s.hpid), syscall.SIGKILL)
 
+	// os.Exit() will terminate program immediately, the defer functions won't be executed,
+	// so we add defer functions again before os.Exit().
+	// Refer to https://pkg.go.dev/os#Exit
+	shimLog.WithField("container", r.ID).Debug("Shutdown() end")
+	rpcDurationsHistogram.WithLabelValues("shutdown").Observe(float64(time.Since(start).Nanoseconds() / int64(time.Millisecond)))
+
 	os.Exit(0)
 
 	// This will never be called, but this is only there to make sure the
