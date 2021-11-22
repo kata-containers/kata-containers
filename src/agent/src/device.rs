@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use libc::{c_uint, major, minor};
 use nix::sys::stat;
 use regex::Regex;
 use std::collections::HashMap;
@@ -23,7 +22,7 @@ use crate::linux_abi::*;
 use crate::pci;
 use crate::sandbox::Sandbox;
 use crate::uevent::{wait_for_uevent, Uevent, UeventMatcher};
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use oci::{LinuxDeviceCgroup, LinuxResources, Spec};
 use protocols::agent::Device;
 use tracing::instrument;
@@ -52,15 +51,6 @@ pub const DRIVER_VFIO_GK_TYPE: &str = "vfio-gk";
 // VFIO device to be bound to vfio-pci and made available inside the
 // container as a VFIO device node
 pub const DRIVER_VFIO_TYPE: &str = "vfio";
-
-#[derive(Debug)]
-struct DevIndexEntry {
-    idx: usize,
-    residx: Vec<usize>,
-}
-
-#[derive(Debug)]
-struct DevIndex(HashMap<String, DevIndexEntry>);
 
 #[instrument]
 pub fn online_device(path: &str) -> Result<()> {
@@ -436,91 +426,201 @@ fn scan_scsi_bus(scsi_addr: &str) -> Result<()> {
     Ok(())
 }
 
-// update_spec_device updates the device list in the OCI spec to make
-// it include details appropriate for the VM, instead of the host.  It
-// is given the host path to the device (to locate the device in the
-// original OCI spec) and the VM path which it uses to determine the
-// VM major/minor numbers, and the final path with which to present
-// the device in the (inner) container
-#[instrument]
-fn update_spec_device(
-    spec: &mut Spec,
-    devidx: &DevIndex,
-    host_path: &str,
-    vm_path: &str,
-    final_path: &str,
-) -> Result<()> {
-    let major_id: c_uint;
-    let minor_id: c_uint;
+#[derive(Debug, Clone)]
+struct DevNumUpdate {
+    // the major and minor numbers for the device within the guest
+    guest_major: i64,
+    guest_minor: i64,
+}
 
-    // If no container_path is provided, we won't be able to match and
-    // update the device in the OCI spec device list. This is an error.
-    if host_path.is_empty() {
-        return Err(anyhow!("Host path cannot empty for device"));
+impl DevNumUpdate {
+    fn from_vm_path<T: AsRef<Path>>(vm_path: T) -> Result<Self> {
+        let vm_path = vm_path.as_ref();
+
+        if !vm_path.exists() {
+            return Err(anyhow!("VM device path {:?} doesn't exist", vm_path));
+        }
+
+        let devid = fs::metadata(vm_path)?.rdev();
+        let guest_major = stat::major(devid) as i64;
+        let guest_minor = stat::minor(devid) as i64;
+
+        Ok(DevNumUpdate {
+            guest_major,
+            guest_minor,
+        })
     }
+}
 
+// Represents the device-node and resource related updates to the OCI
+// spec needed for a particular device
+#[derive(Debug, Clone)]
+struct DevUpdate {
+    num: DevNumUpdate,
+    // an optional new path to update the device to in the "inner" container
+    // specification
+    final_path: Option<String>,
+}
+
+impl DevUpdate {
+    fn from_vm_path<T: AsRef<Path>>(vm_path: T, final_path: String) -> Result<Self> {
+        Ok(DevUpdate {
+            final_path: Some(final_path),
+            ..DevNumUpdate::from_vm_path(vm_path)?.into()
+        })
+    }
+}
+
+impl From<DevNumUpdate> for DevUpdate {
+    fn from(num: DevNumUpdate) -> Self {
+        DevUpdate {
+            num,
+            final_path: None,
+        }
+    }
+}
+
+// Represents the updates to the OCI spec needed for a particular device
+#[derive(Debug, Clone, Default)]
+struct SpecUpdate {
+    dev: Option<DevUpdate>,
+    // optional corrections for PCI addresses
+    pci: Vec<(pci::Address, pci::Address)>,
+}
+
+impl<T: Into<DevUpdate>> From<T> for SpecUpdate {
+    fn from(dev: T) -> Self {
+        SpecUpdate {
+            dev: Some(dev.into()),
+            pci: Vec::new(),
+        }
+    }
+}
+
+// update_spec_devices updates the device list in the OCI spec to make
+// it include details appropriate for the VM, instead of the host.  It
+// is given a map of (container_path => update) where:
+//     container_path: the path to the device in the original OCI spec
+//     update: information on changes to make to the device
+#[instrument]
+fn update_spec_devices(spec: &mut Spec, mut updates: HashMap<&str, DevUpdate>) -> Result<()> {
     let linux = spec
         .linux
         .as_mut()
-        .ok_or_else(|| anyhow!("Spec didn't container linux field"))?;
+        .ok_or_else(|| anyhow!("Spec didn't contain linux field"))?;
+    let mut res_updates = HashMap::<(&str, i64, i64), DevNumUpdate>::with_capacity(updates.len());
 
-    if !Path::new(vm_path).exists() {
-        return Err(anyhow!("vm_path:{} doesn't exist", vm_path));
-    }
-
-    let meta = fs::metadata(vm_path)?;
-    let dev_id = meta.rdev();
-    unsafe {
-        major_id = major(dev_id);
-        minor_id = minor(dev_id);
-    }
-
-    info!(
-        sl!(),
-        "update_spec_device(): vm_path={}, major: {}, minor: {}\n", vm_path, major_id, minor_id
-    );
-
-    if let Some(idxdata) = devidx.0.get(host_path) {
-        let dev = &mut linux.devices[idxdata.idx];
-        let host_major = dev.major;
-        let host_minor = dev.minor;
-
-        dev.major = major_id as i64;
-        dev.minor = minor_id as i64;
-        dev.path = final_path.to_string();
-
-        info!(
-            sl!(),
-            "change the device from path: {} major: {} minor: {} to vm device path: {} major: {} minor: {}",
-            host_path,
-            host_major,
-            host_minor,
-            dev.path,
-            dev.major,
-            dev.minor,
-        );
-
-        // Resources must be updated since they are used to identify
-        // the device in the devices cgroup.
-        for ridx in &idxdata.residx {
-            // unwrap is safe, because residx would be empty if there
-            // were no resources
-            let res = &mut linux.resources.as_mut().unwrap().devices[*ridx];
-            res.major = Some(major_id as i64);
-            res.minor = Some(minor_id as i64);
+    for specdev in &mut linux.devices {
+        if let Some(update) = updates.remove(specdev.path.as_str()) {
+            let host_major = specdev.major;
+            let host_minor = specdev.minor;
 
             info!(
                 sl!(),
-                "set resources for device major: {} minor: {}\n", major_id, minor_id
+                "update_spec_devices() updating device";
+                "container_path" => &specdev.path,
+                "type" => &specdev.r#type,
+                "host_major" => host_major,
+                "host_minor" => host_minor,
+                "guest_major" => update.num.guest_major,
+                "guest_minor" => update.num.guest_minor,
+                "final_path" => update.final_path.as_ref(),
             );
+
+            specdev.major = update.num.guest_major;
+            specdev.minor = update.num.guest_minor;
+            if let Some(final_path) = update.final_path {
+                specdev.path = final_path;
+            }
+
+            if res_updates
+                .insert(
+                    (specdev.r#type.as_str(), host_major, host_minor),
+                    update.num,
+                )
+                .is_some()
+            {
+                return Err(anyhow!(
+                    "Conflicting resource updates for host_major={} host_minor={}",
+                    host_major,
+                    host_minor
+                ));
+            }
         }
-        Ok(())
-    } else {
-        Err(anyhow!(
-            "Should have found a matching device {} in the spec",
-            vm_path
-        ))
     }
+
+    // Make sure we applied all of our updates
+    if !updates.is_empty() {
+        return Err(anyhow!(
+            "Missing devices in OCI spec: {:?}",
+            updates
+                .keys()
+                .map(|d| format!("{:?}", d))
+                .collect::<Vec<_>>()
+                .join(" ")
+        ));
+    }
+
+    if let Some(resources) = linux.resources.as_mut() {
+        for r in &mut resources.devices {
+            if let (Some(host_major), Some(host_minor)) = (r.major, r.minor) {
+                if let Some(update) = res_updates.get(&(r.r#type.as_str(), host_major, host_minor))
+                {
+                    info!(
+                        sl!(),
+                        "update_spec_devices() updating resource";
+                        "type" => &r.r#type,
+                        "host_major" => host_major,
+                        "host_minor" => host_minor,
+                        "guest_major" => update.guest_major,
+                        "guest_minor" => update.guest_minor,
+                    );
+
+                    r.major = Some(update.guest_major);
+                    r.minor = Some(update.guest_minor);
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
+// update_spec_pci PCI addresses in the OCI spec to be guest addresses
+// instead of host addresses.  It is given a map of (host address =>
+// guest address)
+#[instrument]
+fn update_spec_pci(spec: &mut Spec, updates: HashMap<pci::Address, pci::Address>) -> Result<()> {
+    // Correct PCI addresses in the environment
+    if let Some(process) = spec.process.as_mut() {
+        for envvar in process.env.iter_mut() {
+            let eqpos = envvar
+                .find('=')
+                .ok_or_else(|| anyhow!("Malformed OCI env entry {:?}", envvar))?;
+
+            let (name, eqval) = envvar.split_at(eqpos);
+            let val = &eqval[1..];
+
+            if !name.starts_with("PCIDEVICE_") {
+                continue;
+            }
+
+            let mut guest_addrs = Vec::<String>::new();
+
+            for host_addr in val.split(',') {
+                let host_addr = pci::Address::from_str(host_addr)
+                    .with_context(|| format!("Can't parse {} environment variable", name))?;
+                let guest_addr = updates
+                    .get(&host_addr)
+                    .ok_or_else(|| anyhow!("Unable to translate host PCI address {}", host_addr))?;
+                guest_addrs.push(format!("{}", guest_addr));
+            }
+
+            envvar.replace_range(eqpos + 1.., guest_addrs.join(",").as_str());
+        }
+    }
+
+    Ok(())
 }
 
 // device.Id should be the predicted device name (vda, vdb, ...)
@@ -528,43 +628,25 @@ fn update_spec_device(
 #[instrument]
 async fn virtiommio_blk_device_handler(
     device: &Device,
-    spec: &mut Spec,
     _sandbox: &Arc<Mutex<Sandbox>>,
-    devidx: &DevIndex,
-) -> Result<()> {
+) -> Result<SpecUpdate> {
     if device.vm_path.is_empty() {
         return Err(anyhow!("Invalid path for virtio mmio blk device"));
     }
 
-    update_spec_device(
-        spec,
-        devidx,
-        &device.container_path,
-        &device.vm_path,
-        &device.container_path,
-    )
+    Ok(DevNumUpdate::from_vm_path(&device.vm_path)?.into())
 }
 
 // device.Id should be a PCI path string
 #[instrument]
 async fn virtio_blk_device_handler(
     device: &Device,
-    spec: &mut Spec,
     sandbox: &Arc<Mutex<Sandbox>>,
-    devidx: &DevIndex,
-) -> Result<()> {
-    let mut dev = device.clone();
+) -> Result<SpecUpdate> {
     let pcipath = pci::Path::from_str(&device.id)?;
+    let vm_path = get_virtio_blk_pci_device_name(sandbox, &pcipath).await?;
 
-    dev.vm_path = get_virtio_blk_pci_device_name(sandbox, &pcipath).await?;
-
-    update_spec_device(
-        spec,
-        devidx,
-        &dev.container_path,
-        &dev.vm_path,
-        &dev.container_path,
-    )
+    Ok(DevNumUpdate::from_vm_path(vm_path)?.into())
 }
 
 // device.id should be a CCW path string
@@ -572,30 +654,17 @@ async fn virtio_blk_device_handler(
 #[instrument]
 async fn virtio_blk_ccw_device_handler(
     device: &Device,
-    spec: &mut Spec,
     sandbox: &Arc<Mutex<Sandbox>>,
-    devidx: &DevIndex,
-) -> Result<()> {
-    let mut dev = device.clone();
+) -> Result<SpecUpdate> {
     let ccw_device = ccw::Device::from_str(&device.id)?;
-    dev.vm_path = get_virtio_blk_ccw_device_name(sandbox, &ccw_device).await?;
-    update_spec_device(
-        spec,
-        devidx,
-        &dev.container_path,
-        &dev.vm_path,
-        &dev.container_path,
-    )
+    let vm_path = get_virtio_blk_ccw_device_name(sandbox, &ccw_device).await?;
+
+    Ok(DevNumUpdate::from_vm_path(vm_path)?.into())
 }
 
 #[cfg(not(target_arch = "s390x"))]
 #[instrument]
-async fn virtio_blk_ccw_device_handler(
-    _: &Device,
-    _: &mut Spec,
-    _: &Arc<Mutex<Sandbox>>,
-    _: &DevIndex,
-) -> Result<()> {
+async fn virtio_blk_ccw_device_handler(_: &Device, _: &Arc<Mutex<Sandbox>>) -> Result<SpecUpdate> {
     Err(anyhow!("CCW is only supported on s390x"))
 }
 
@@ -603,39 +672,23 @@ async fn virtio_blk_ccw_device_handler(
 #[instrument]
 async fn virtio_scsi_device_handler(
     device: &Device,
-    spec: &mut Spec,
     sandbox: &Arc<Mutex<Sandbox>>,
-    devidx: &DevIndex,
-) -> Result<()> {
-    let mut dev = device.clone();
-    dev.vm_path = get_scsi_device_name(sandbox, &device.id).await?;
-    update_spec_device(
-        spec,
-        devidx,
-        &dev.container_path,
-        &dev.vm_path,
-        &dev.container_path,
-    )
+) -> Result<SpecUpdate> {
+    let vm_path = get_scsi_device_name(sandbox, &device.id).await?;
+
+    Ok(DevNumUpdate::from_vm_path(vm_path)?.into())
 }
 
 #[instrument]
 async fn virtio_nvdimm_device_handler(
     device: &Device,
-    spec: &mut Spec,
     _sandbox: &Arc<Mutex<Sandbox>>,
-    devidx: &DevIndex,
-) -> Result<()> {
+) -> Result<SpecUpdate> {
     if device.vm_path.is_empty() {
         return Err(anyhow!("Invalid path for nvdimm device"));
     }
 
-    update_spec_device(
-        spec,
-        devidx,
-        &device.container_path,
-        &device.vm_path,
-        &device.container_path,
-    )
+    Ok(DevNumUpdate::from_vm_path(&device.vm_path)?.into())
 }
 
 fn split_vfio_option(opt: &str) -> Option<(&str, &str)> {
@@ -653,18 +706,16 @@ fn split_vfio_option(opt: &str) -> Option<(&str, &str)> {
 // Each option should have the form "DDDD:BB:DD.F=<pcipath>"
 //     DDDD:BB:DD.F is the device's PCI address in the host
 //     <pcipath> is a PCI path to the device in the guest (see pci.rs)
-async fn vfio_device_handler(
-    device: &Device,
-    spec: &mut Spec,
-    sandbox: &Arc<Mutex<Sandbox>>,
-    devidx: &DevIndex,
-) -> Result<()> {
+async fn vfio_device_handler(device: &Device, sandbox: &Arc<Mutex<Sandbox>>) -> Result<SpecUpdate> {
     let vfio_in_guest = device.field_type != DRIVER_VFIO_GK_TYPE;
+    let mut pci_fixups = Vec::<(pci::Address, pci::Address)>::new();
     let mut group = None;
 
     for opt in device.options.iter() {
-        let (_, pcipath) =
+        let (host, pcipath) =
             split_vfio_option(opt).ok_or_else(|| anyhow!("Malformed VFIO option {:?}", opt))?;
+        let host =
+            pci::Address::from_str(host).context("Bad host PCI address in VFIO option {:?}")?;
         let pcipath = pci::Path::from_str(pcipath)?;
 
         let guestdev = wait_for_pci_device(sandbox, &pcipath).await?;
@@ -690,43 +741,25 @@ async fn vfio_device_handler(
             }
 
             group = devgroup;
+
+            pci_fixups.push((host, guestdev));
         }
     }
 
-    if vfio_in_guest {
+    let dev_update = if vfio_in_guest {
         // If there are any devices at all, logic above ensures that group is not None
         let group = group.unwrap();
-        let vmpath = get_vfio_device_name(sandbox, group).await?;
+        let vm_path = get_vfio_device_name(sandbox, group).await?;
 
-        update_spec_device(spec, devidx, &device.container_path, &vmpath, &vmpath)?;
-    }
+        Some(DevUpdate::from_vm_path(&vm_path, vm_path.clone())?)
+    } else {
+        None
+    };
 
-    Ok(())
-}
-
-impl DevIndex {
-    fn new(spec: &Spec) -> DevIndex {
-        let mut map = HashMap::new();
-
-        if let Some(linux) = spec.linux.as_ref() {
-            for (i, d) in linux.devices.iter().enumerate() {
-                let mut residx = Vec::new();
-
-                if let Some(linuxres) = linux.resources.as_ref() {
-                    for (j, r) in linuxres.devices.iter().enumerate() {
-                        if r.r#type == d.r#type
-                            && r.major == Some(d.major)
-                            && r.minor == Some(d.minor)
-                        {
-                            residx.push(j);
-                        }
-                    }
-                }
-                map.insert(d.path.clone(), DevIndexEntry { idx: i, residx });
-            }
-        }
-        DevIndex(map)
-    }
+    Ok(SpecUpdate {
+        dev: dev_update,
+        pci: pci_fixups,
+    })
 }
 
 #[instrument]
@@ -735,22 +768,40 @@ pub async fn add_devices(
     spec: &mut Spec,
     sandbox: &Arc<Mutex<Sandbox>>,
 ) -> Result<()> {
-    let devidx = DevIndex::new(spec);
+    let mut dev_updates = HashMap::<&str, DevUpdate>::with_capacity(devices.len());
+    let mut pci_updates = HashMap::<pci::Address, pci::Address>::new();
 
     for device in devices.iter() {
-        add_device(device, spec, sandbox, &devidx).await?;
+        let update = add_device(device, sandbox).await?;
+        if let Some(dev_update) = update.dev {
+            if dev_updates
+                .insert(&device.container_path, dev_update)
+                .is_some()
+            {
+                return Err(anyhow!(
+                    "Conflicting device updates for {}",
+                    &device.container_path
+                ));
+            }
+
+            for (host, guest) in update.pci {
+                if let Some(other_guest) = pci_updates.insert(host, guest) {
+                    return Err(anyhow!(
+                        "Conflicting guest address for host device {} ({} versus {})",
+                        host,
+                        guest,
+                        other_guest
+                    ));
+                }
+            }
+        }
     }
 
-    Ok(())
+    update_spec_devices(spec, dev_updates)
 }
 
 #[instrument]
-async fn add_device(
-    device: &Device,
-    spec: &mut Spec,
-    sandbox: &Arc<Mutex<Sandbox>>,
-    devidx: &DevIndex,
-) -> Result<()> {
+async fn add_device(device: &Device, sandbox: &Arc<Mutex<Sandbox>>) -> Result<SpecUpdate> {
     // log before validation to help with debugging gRPC protocol version differences.
     info!(sl!(), "device-id: {}, device-type: {}, device-vm-path: {}, device-container-path: {}, device-options: {:?}",
           device.id, device.field_type, device.vm_path, device.container_path, device.options);
@@ -768,14 +819,12 @@ async fn add_device(
     }
 
     match device.field_type.as_str() {
-        DRIVER_BLK_TYPE => virtio_blk_device_handler(device, spec, sandbox, devidx).await,
-        DRIVER_BLK_CCW_TYPE => virtio_blk_ccw_device_handler(device, spec, sandbox, devidx).await,
-        DRIVER_MMIO_BLK_TYPE => virtiommio_blk_device_handler(device, spec, sandbox, devidx).await,
-        DRIVER_NVDIMM_TYPE => virtio_nvdimm_device_handler(device, spec, sandbox, devidx).await,
-        DRIVER_SCSI_TYPE => virtio_scsi_device_handler(device, spec, sandbox, devidx).await,
-        DRIVER_VFIO_GK_TYPE | DRIVER_VFIO_TYPE => {
-            vfio_device_handler(device, spec, sandbox, devidx).await
-        }
+        DRIVER_BLK_TYPE => virtio_blk_device_handler(device, sandbox).await,
+        DRIVER_BLK_CCW_TYPE => virtio_blk_ccw_device_handler(device, sandbox).await,
+        DRIVER_MMIO_BLK_TYPE => virtiommio_blk_device_handler(device, sandbox).await,
+        DRIVER_NVDIMM_TYPE => virtio_nvdimm_device_handler(device, sandbox).await,
+        DRIVER_SCSI_TYPE => virtio_scsi_device_handler(device, sandbox).await,
+        DRIVER_VFIO_GK_TYPE | DRIVER_VFIO_TYPE => vfio_device_handler(device, sandbox).await,
         _ => Err(anyhow!("Unknown device type {}", device.field_type)),
     }
 }
@@ -815,7 +864,8 @@ pub fn update_device_cgroup(spec: &mut Spec) -> Result<()> {
 mod tests {
     use super::*;
     use crate::uevent::spawn_test_watcher;
-    use oci::Linux;
+    use oci::{Linux, Process};
+    use std::iter::FromIterator;
     use tempfile::tempdir;
 
     #[test]
@@ -840,28 +890,36 @@ mod tests {
     }
 
     #[test]
-    fn test_update_spec_device() {
+    fn test_update_spec_devices() {
         let (major, minor) = (7, 2);
         let mut spec = Spec::default();
 
-        // container_path empty
-        let container_path = "";
-        let vm_path = "";
-        let devidx = DevIndex::new(&spec);
-        let res = update_spec_device(&mut spec, &devidx, container_path, vm_path, container_path);
-        assert!(res.is_err());
+        // vm_path empty
+        let update = DevNumUpdate::from_vm_path("");
+        assert!(update.is_err());
 
         // linux is empty
         let container_path = "/dev/null";
-        let devidx = DevIndex::new(&spec);
-        let res = update_spec_device(&mut spec, &devidx, container_path, vm_path, container_path);
+        let vm_path = "/dev/null";
+        let res = update_spec_devices(
+            &mut spec,
+            HashMap::from_iter(vec![(
+                container_path,
+                DevNumUpdate::from_vm_path(vm_path).unwrap().into(),
+            )]),
+        );
         assert!(res.is_err());
 
         spec.linux = Some(Linux::default());
 
-        // linux.devices is empty
-        let devidx = DevIndex::new(&spec);
-        let res = update_spec_device(&mut spec, &devidx, container_path, vm_path, container_path);
+        // linux.devices doesn't contain the updated device
+        let res = update_spec_devices(
+            &mut spec,
+            HashMap::from_iter(vec![(
+                container_path,
+                DevNumUpdate::from_vm_path(vm_path).unwrap().into(),
+            )]),
+        );
         assert!(res.is_err());
 
         spec.linux.as_mut().unwrap().devices = vec![oci::LinuxDevice {
@@ -871,16 +929,14 @@ mod tests {
             ..oci::LinuxDevice::default()
         }];
 
-        // vm_path empty
-        let devidx = DevIndex::new(&spec);
-        let res = update_spec_device(&mut spec, &devidx, container_path, vm_path, container_path);
-        assert!(res.is_err());
-
-        let vm_path = "/dev/null";
-
         // guest and host path are not the same
-        let devidx = DevIndex::new(&spec);
-        let res = update_spec_device(&mut spec, &devidx, container_path, vm_path, container_path);
+        let res = update_spec_devices(
+            &mut spec,
+            HashMap::from_iter(vec![(
+                container_path,
+                DevNumUpdate::from_vm_path(vm_path).unwrap().into(),
+            )]),
+        );
         assert!(
             res.is_err(),
             "container_path={:?} vm_path={:?} spec={:?}",
@@ -892,8 +948,13 @@ mod tests {
         spec.linux.as_mut().unwrap().devices[0].path = container_path.to_string();
 
         // spec.linux.resources is empty
-        let devidx = DevIndex::new(&spec);
-        let res = update_spec_device(&mut spec, &devidx, container_path, vm_path, container_path);
+        let res = update_spec_devices(
+            &mut spec,
+            HashMap::from_iter(vec![(
+                container_path,
+                DevNumUpdate::from_vm_path(vm_path).unwrap().into(),
+            )]),
+        );
         assert!(res.is_ok());
 
         // update both devices and cgroup lists
@@ -913,13 +974,18 @@ mod tests {
             ..oci::LinuxResources::default()
         });
 
-        let devidx = DevIndex::new(&spec);
-        let res = update_spec_device(&mut spec, &devidx, container_path, vm_path, container_path);
+        let res = update_spec_devices(
+            &mut spec,
+            HashMap::from_iter(vec![(
+                container_path,
+                DevNumUpdate::from_vm_path(vm_path).unwrap().into(),
+            )]),
+        );
         assert!(res.is_ok());
     }
 
     #[test]
-    fn test_update_spec_device_guest_host_conflict() {
+    fn test_update_spec_devices_guest_host_conflict() {
         let null_rdev = fs::metadata("/dev/null").unwrap().rdev();
         let zero_rdev = fs::metadata("/dev/zero").unwrap().rdev();
         let full_rdev = fs::metadata("/dev/full").unwrap().rdev();
@@ -968,7 +1034,6 @@ mod tests {
             }),
             ..Spec::default()
         };
-        let devidx = DevIndex::new(&spec);
 
         let container_path_a = "/dev/a";
         let vm_path_a = "/dev/zero";
@@ -994,34 +1059,17 @@ mod tests {
         assert_eq!(Some(host_major_b), specresources.devices[1].major);
         assert_eq!(Some(host_minor_b), specresources.devices[1].minor);
 
-        let res = update_spec_device(
-            &mut spec,
-            &devidx,
-            container_path_a,
-            vm_path_a,
-            container_path_a,
-        );
-        assert!(res.is_ok());
-
-        let specdevices = &spec.linux.as_ref().unwrap().devices;
-        assert_eq!(guest_major_a, specdevices[0].major);
-        assert_eq!(guest_minor_a, specdevices[0].minor);
-        assert_eq!(host_major_b, specdevices[1].major);
-        assert_eq!(host_minor_b, specdevices[1].minor);
-
-        let specresources = spec.linux.as_ref().unwrap().resources.as_ref().unwrap();
-        assert_eq!(Some(guest_major_a), specresources.devices[0].major);
-        assert_eq!(Some(guest_minor_a), specresources.devices[0].minor);
-        assert_eq!(Some(host_major_b), specresources.devices[1].major);
-        assert_eq!(Some(host_minor_b), specresources.devices[1].minor);
-
-        let res = update_spec_device(
-            &mut spec,
-            &devidx,
-            container_path_b,
-            vm_path_b,
-            container_path_b,
-        );
+        let updates = HashMap::from_iter(vec![
+            (
+                container_path_a,
+                DevNumUpdate::from_vm_path(vm_path_a).unwrap().into(),
+            ),
+            (
+                container_path_b,
+                DevNumUpdate::from_vm_path(vm_path_b).unwrap().into(),
+            ),
+        ]);
+        let res = update_spec_devices(&mut spec, updates);
         assert!(res.is_ok());
 
         let specdevices = &spec.linux.as_ref().unwrap().devices;
@@ -1038,7 +1086,7 @@ mod tests {
     }
 
     #[test]
-    fn test_update_spec_device_char_block_conflict() {
+    fn test_update_spec_devices_char_block_conflict() {
         let null_rdev = fs::metadata("/dev/null").unwrap().rdev();
 
         let guest_major = stat::major(null_rdev) as i64;
@@ -1085,7 +1133,6 @@ mod tests {
             }),
             ..Spec::default()
         };
-        let devidx = DevIndex::new(&spec);
 
         let container_path = "/dev/char";
         let vm_path = "/dev/null";
@@ -1096,7 +1143,13 @@ mod tests {
         assert_eq!(Some(host_major), specresources.devices[1].major);
         assert_eq!(Some(host_minor), specresources.devices[1].minor);
 
-        let res = update_spec_device(&mut spec, &devidx, container_path, vm_path, container_path);
+        let res = update_spec_devices(
+            &mut spec,
+            HashMap::from_iter(vec![(
+                container_path,
+                DevNumUpdate::from_vm_path(vm_path).unwrap().into(),
+            )]),
+        );
         assert!(res.is_ok());
 
         // Only the char device, not the block device should be updated
@@ -1108,19 +1161,19 @@ mod tests {
     }
 
     #[test]
-    fn test_update_spec_device_final_path() {
+    fn test_update_spec_devices_final_path() {
         let null_rdev = fs::metadata("/dev/null").unwrap().rdev();
         let guest_major = stat::major(null_rdev) as i64;
         let guest_minor = stat::minor(null_rdev) as i64;
 
-        let host_path = "/dev/host";
+        let container_path = "/dev/original";
         let host_major: i64 = 99;
         let host_minor: i64 = 99;
 
         let mut spec = Spec {
             linux: Some(Linux {
                 devices: vec![oci::LinuxDevice {
-                    path: host_path.to_string(),
+                    path: container_path.to_string(),
                     r#type: "c".to_string(),
                     major: host_major,
                     minor: host_minor,
@@ -1130,18 +1183,65 @@ mod tests {
             }),
             ..Spec::default()
         };
-        let devidx = DevIndex::new(&spec);
 
         let vm_path = "/dev/null";
-        let final_path = "/dev/final";
+        let final_path = "/dev/new";
 
-        let res = update_spec_device(&mut spec, &devidx, host_path, vm_path, final_path);
+        let res = update_spec_devices(
+            &mut spec,
+            HashMap::from_iter(vec![(
+                container_path,
+                DevUpdate::from_vm_path(vm_path, final_path.to_string()).unwrap(),
+            )]),
+        );
         assert!(res.is_ok());
 
         let specdevices = &spec.linux.as_ref().unwrap().devices;
         assert_eq!(guest_major, specdevices[0].major);
         assert_eq!(guest_minor, specdevices[0].minor);
         assert_eq!(final_path, specdevices[0].path);
+    }
+
+    #[test]
+    fn test_update_spec_pci() {
+        let example_map = [
+            // Each is a host,guest pair of pci addresses
+            ("0000:1a:01.0", "0000:01:01.0"),
+            ("0000:1b:02.0", "0000:01:02.0"),
+            // This one has the same host address as guest address
+            // above, to test that we're not double-translating
+            ("0000:01:01.0", "ffff:02:1f.7"),
+        ];
+
+        let mut spec = Spec {
+            process: Some(Process {
+                env: vec![
+                    "PCIDEVICE_x=0000:1a:01.0,0000:1b:02.0".to_string(),
+                    "PCIDEVICE_y=0000:01:01.0".to_string(),
+                    "NOTAPCIDEVICE_blah=abcd:ef:01.0".to_string(),
+                ],
+                ..Process::default()
+            }),
+            ..Spec::default()
+        };
+
+        let pci_fixups = example_map
+            .iter()
+            .map(|(h, g)| {
+                (
+                    pci::Address::from_str(h).unwrap(),
+                    pci::Address::from_str(g).unwrap(),
+                )
+            })
+            .collect();
+
+        let res = update_spec_pci(&mut spec, pci_fixups);
+        assert!(res.is_ok());
+
+        let env = &spec.process.as_ref().unwrap().env;
+        assert_eq!(env[0], "PCIDEVICE_x=0000:01:01.0,0000:01:02.0");
+        assert_eq!(env[1], "PCIDEVICE_y=ffff:02:1f.7");
+        assert_eq!(env[2], "NOTAPCIDEVICE_blah=abcd:ef:01.0");
     }
 
     #[test]
