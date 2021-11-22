@@ -6,6 +6,11 @@ name: test-kata-deploy
 
 jobs:
   build-asset:
+    if: |
+      github.event.issue.pull_request
+      && github.event_name == 'issue_comment'
+      && github.event.action == 'created'
+      && startsWith(github.event.comment.body, '/test_kata_deploy')
     runs-on: ubuntu-latest
     strategy:
       matrix:
