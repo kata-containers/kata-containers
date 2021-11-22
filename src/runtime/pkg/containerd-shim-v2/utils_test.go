@@ -16,8 +16,8 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	ktu "github.com/kata-containers/kata-containers/src/runtime/pkg/katatestutils"
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/oci"
 	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
-	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/oci"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/vcmock"
 	"github.com/pkg/errors"
 )

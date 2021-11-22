@@ -6,6 +6,7 @@
 package cgroups
 
 import (
+	"os"
 	"path/filepath"
 	"sync"
 
@@ -53,9 +54,10 @@ func sandboxDevices() []specs.LinuxDeviceCgroup {
 	// In order to run Virtual Machines and create virtqueues, hypervisors
 	// need access to certain character devices in the host, like kvm and vhost-net.
 	hypervisorDevices := []string{
-		"/dev/kvm",       // To run virtual machines
-		"/dev/vhost-net", // To create virtqueues
-		"/dev/vfio/vfio", // To access VFIO devices
+		"/dev/kvm",         // To run virtual machines
+		"/dev/vhost-net",   // To create virtqueues
+		"/dev/vfio/vfio",   // To access VFIO devices
+		"/dev/vhost-vsock", // To interact with vsock if
 	}
 
 	defaultDevices = append(defaultDevices, hypervisorDevices...)
@@ -135,15 +137,58 @@ func NewCgroup(path string, resources *specs.LinuxResources) (*Cgroup, error) {
 	}, nil
 }
 
-func NewSandboxCgroup(path string, resources *specs.LinuxResources) (*Cgroup, error) {
+func NewSandboxCgroup(path string, resources *specs.LinuxResources, sandboxCgroupOnly bool) (*Cgroup, error) {
+	var cgroup cgroups.Cgroup
 	sandboxResources := *resources
 	sandboxResources.Devices = append(sandboxResources.Devices, sandboxDevices()...)
 
-	return NewCgroup(path, &sandboxResources)
+	// Currently we know to handle systemd cgroup path only when it's the only cgroup (no overhead group), hence,
+	// if sandboxCgroupOnly is not true we treat it as cgroupfs path as it used to be, although it may be incorrect
+	if !IsSystemdCgroup(path) || !sandboxCgroupOnly {
+		return NewCgroup(path, &sandboxResources)
+	}
+
+	slice, unit, err := getSliceAndUnit(path)
+	if err != nil {
+		return nil, err
+	}
+	// github.com/containerd/cgroups doesn't support creating a scope unit with
+	// v1 cgroups against systemd, the following interacts directly with systemd
+	// to create the cgroup and then load it using containerd's api
+	err = createCgroupsSystemd(slice, unit, uint32(os.Getpid())) // adding runtime process, it makes calling setupCgroups redundant
+	if err != nil {
+		return nil, err
+	}
+
+	cgHierarchy, cgPath, err := cgroupHierarchy(path)
+	if err != nil {
+		return nil, err
+	}
+
+	// load created cgroup and update with resources
+	if cgroup, err = cgroups.Load(cgHierarchy, cgPath); err == nil {
+		err = cgroup.Update(&sandboxResources)
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &Cgroup{
+		path:    path,
+		devices: sandboxResources.Devices,
+		cpusets: sandboxResources.CPU,
+		cgroup:  cgroup,
+	}, nil
 }
 
 func Load(path string) (*Cgroup, error) {
-	cgroup, err := cgroups.Load(cgroups.V1, cgroups.StaticPath(path))
+	cgHierarchy, cgPath, err := cgroupHierarchy(path)
+	if err != nil {
+		return nil, err
+	}
+
+	cgroup, err := cgroups.Load(cgHierarchy, cgPath)
 	if err != nil {
 		return nil, err
 	}
@@ -179,7 +224,12 @@ func (c *Cgroup) Update(resources *specs.LinuxResources) error {
 }
 
 func (c *Cgroup) MoveTo(path string) error {
-	newCgroup, err := cgroups.Load(cgroups.V1, cgroups.StaticPath(path))
+	cgHierarchy, cgPath, err := cgroupHierarchy(path)
+	if err != nil {
+		return err
+	}
+
+	newCgroup, err := cgroups.Load(cgHierarchy, cgPath)
 	if err != nil {
 		return err
 	}

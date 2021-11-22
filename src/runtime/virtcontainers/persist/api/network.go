@@ -7,7 +7,7 @@
 package persistapi
 
 import (
-	vcTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/types"
+	vcTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	"github.com/vishvananda/netlink"
 )
 
@@ -60,7 +60,7 @@ type TuntapEndpoint struct {
 	TuntapInterface TuntapInterface
 }
 
-type BridgedMacvlanEndpoint struct {
+type MacvlanEndpoint struct {
 	NetPair NetworkInterfacePair
 }
 
@@ -82,14 +82,14 @@ type VhostUserEndpoint struct {
 // NetworkEndpoint contains network interface information
 type NetworkEndpoint struct {
 	// One and only one of these below are not nil according to Type.
-	Physical       *PhysicalEndpoint       `json:",omitempty"`
-	Veth           *VethEndpoint           `json:",omitempty"`
-	VhostUser      *VhostUserEndpoint      `json:",omitempty"`
-	BridgedMacvlan *BridgedMacvlanEndpoint `json:",omitempty"`
-	Macvtap        *MacvtapEndpoint        `json:",omitempty"`
-	Tap            *TapEndpoint            `json:",omitempty"`
-	IPVlan         *IPVlanEndpoint         `json:",omitempty"`
-	Tuntap         *TuntapEndpoint         `json:",omitempty"`
+	Physical  *PhysicalEndpoint  `json:",omitempty"`
+	Veth      *VethEndpoint      `json:",omitempty"`
+	VhostUser *VhostUserEndpoint `json:",omitempty"`
+	Macvlan   *MacvlanEndpoint   `json:",omitempty"`
+	Macvtap   *MacvtapEndpoint   `json:",omitempty"`
+	Tap       *TapEndpoint       `json:",omitempty"`
+	IPVlan    *IPVlanEndpoint    `json:",omitempty"`
+	Tuntap    *TuntapEndpoint    `json:",omitempty"`
 
 	Type string
 }

@@ -380,8 +380,8 @@ func (s *Sandbox) loadNetwork(netInfo persistapi.NetworkInfo) {
 			ep = &VethEndpoint{}
 		case VhostUserEndpointType:
 			ep = &VhostUserEndpoint{}
-		case BridgedMacvlanEndpointType:
-			ep = &BridgedMacvlanEndpoint{}
+		case MacvlanEndpointType:
+			ep = &MacvlanEndpoint{}
 		case MacvtapEndpointType:
 			ep = &MacvtapEndpoint{}
 		case TapEndpointType:

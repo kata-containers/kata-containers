@@ -28,8 +28,8 @@ import (
 
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils/katatrace"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
-	vcTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/types"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
+	vcTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
 )
 
@@ -761,12 +761,18 @@ func (clh *cloudHypervisor) Load(s persistapi.HypervisorState) {
 	clh.state.apiSocket = s.APISocket
 }
 
-func (clh *cloudHypervisor) Check() error {
-	cl := clh.client()
-	ctx, cancel := context.WithTimeout(context.Background(), clhAPITimeout*time.Second)
-	defer cancel()
+// Check is the implementation of Check from the Hypervisor interface.
+// Check if the VMM API is working.
 
-	_, _, err := cl.VmmPingGet(ctx)
+func (clh *cloudHypervisor) Check() error {
+	// Use a long timeout to check if the VMM is running:
+	// Check is used by the monitor thread(a background thread). If the
+	// monitor thread calls Check() during the Container boot, it will take
+	// longer than usual specially if there is a hot-plug request in progress.
+	running, err := clh.isClhRunning(10)
+	if !running {
+		return fmt.Errorf("clh is not running: %s", err)
+	}
 	return err
 }
 
@@ -1034,8 +1040,6 @@ func (clh *cloudHypervisor) isClhRunning(timeout uint) (bool, error) {
 
 	pid := clh.state.PID
 
-	// Check if clh process is running, in case it is not, let's
-	// return from here.
 	if err := syscall.Kill(pid, syscall.Signal(0)); err != nil {
 		return false, nil
 	}
@@ -1048,6 +1052,8 @@ func (clh *cloudHypervisor) isClhRunning(timeout uint) (bool, error) {
 		_, _, err := cl.VmmPingGet(ctx)
 		if err == nil {
 			return true, nil
+		} else {
+			clh.Logger().WithError(err).Warning("clh.VmmPingGet API call failed")
 		}
 
 		if time.Since(timeStart).Seconds() > float64(timeout) {

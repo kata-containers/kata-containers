@@ -10,7 +10,7 @@ import (
 	"fmt"
 
 	persistapi "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist/api"
-	vcTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/types"
+	vcTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 )
 
 // Endpoint represents a physical or virtual network interface.
@@ -51,8 +51,8 @@ const (
 	// VhostUserEndpointType is the vhostuser network interface.
 	VhostUserEndpointType EndpointType = "vhost-user"
 
-	// BridgedMacvlanEndpointType is macvlan network interface.
-	BridgedMacvlanEndpointType EndpointType = "macvlan"
+	// MacvlanEndpointType is macvlan network interface.
+	MacvlanEndpointType EndpointType = "macvlan"
 
 	// MacvtapEndpointType is macvtap network interface.
 	MacvtapEndpointType EndpointType = "macvtap"
@@ -80,7 +80,7 @@ func (endpointType *EndpointType) Set(value string) error {
 		*endpointType = VhostUserEndpointType
 		return nil
 	case "macvlan":
-		*endpointType = BridgedMacvlanEndpointType
+		*endpointType = MacvlanEndpointType
 		return nil
 	case "macvtap":
 		*endpointType = MacvtapEndpointType
@@ -108,8 +108,8 @@ func (endpointType *EndpointType) String() string {
 		return string(VethEndpointType)
 	case VhostUserEndpointType:
 		return string(VhostUserEndpointType)
-	case BridgedMacvlanEndpointType:
-		return string(BridgedMacvlanEndpointType)
+	case MacvlanEndpointType:
+		return string(MacvlanEndpointType)
 	case MacvtapEndpointType:
 		return string(MacvtapEndpointType)
 	case TapEndpointType:
