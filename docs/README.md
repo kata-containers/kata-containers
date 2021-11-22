@@ -52,6 +52,10 @@ Documents that help to understand and contribute to Kata Containers.
 * [How to contribute to Kata Containers](https://github.com/kata-containers/community/blob/master/CONTRIBUTING.md)
 * [Code of Conduct](../CODE_OF_CONDUCT.md)
 
+## Help Improving the Documents
+
+* [Documentation Requirements](Documentation-Requirements.md)
+
 ### Code Licensing
 
 * [Licensing](Licensing-strategy.md): About the licensing strategy of Kata Containers.
@@ -60,10 +64,6 @@ Documents that help to understand and contribute to Kata Containers.
 
 * [Release strategy](Stable-Branch-Strategy.md)
 * [Release Process](Release-Process.md)
-
-## Help Improving the Documents
-
-* [Documentation Requirements](Documentation-Requirements.md)
 
 ## Website Changes
 
