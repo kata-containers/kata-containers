@@ -262,24 +262,11 @@ parts:
       kata_dir=${GOPATH}/src/github.com/${SNAPCRAFT_PROJECT_NAME}/${SNAPCRAFT_PROJECT_NAME}
 
       versions_file="${kata_dir}/versions.yaml"
-      # arch-specific definition
-      case "$(uname -m)" in
-        "aarch64")
-          branch="$(${yq} r ${versions_file} assets.hypervisor.qemu.architecture.aarch64.version)"
-          url="$(${yq} r ${versions_file} assets.hypervisor.qemu.url)"
-          commit="$(${yq} r ${versions_file} assets.hypervisor.qemu.architecture.aarch64.commit)"
-          patches_dir="${kata_dir}/tools/packaging/qemu/patches/$(echo ${branch} | sed -e 's/.[[:digit:]]*$//' -e 's/^v//').x"
-          patches_version_dir="${kata_dir}/tools/packaging/qemu/patches/tag_patches/${branch}"
-        ;;
-
-        *)
-          branch="$(${yq} r ${versions_file} assets.hypervisor.qemu.version)"
-          url="$(${yq} r ${versions_file} assets.hypervisor.qemu.url)"
-          commit=""
-          patches_dir="${kata_dir}/tools/packaging/qemu/patches/$(echo ${branch} | sed -e 's/.[[:digit:]]*$//' -e 's/^v//').x"
-          patches_version_dir="${kata_dir}/tools/packaging/qemu/patches/tag_patches/${branch}"
-        ;;
-      esac
+      branch="$(${yq} r ${versions_file} assets.hypervisor.qemu.version)"
+      url="$(${yq} r ${versions_file} assets.hypervisor.qemu.url)"
+      commit=""
+      patches_dir="${kata_dir}/tools/packaging/qemu/patches/$(echo ${branch} | sed -e 's/.[[:digit:]]*$//' -e 's/^v//').x"
+      patches_version_dir="${kata_dir}/tools/packaging/qemu/patches/tag_patches/${branch}"
 
       # download source
       qemu_dir=${SNAPCRAFT_STAGE}/qemu
