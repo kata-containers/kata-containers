@@ -20,7 +20,7 @@ const FUNCTION_MAX: u8 = (1 << FUNCTION_BITS) - 1;
 
 // Represents a PCI function's slot (a.k.a. device) and function
 // numbers, giving its location on a single logical bus
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct SlotFn(u8);
 
 impl SlotFn {
@@ -94,7 +94,7 @@ impl fmt::Display for SlotFn {
     }
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Address {
     domain: u16,
     bus: u8,
