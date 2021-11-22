@@ -230,6 +230,7 @@ pub async fn watch_uevents(
 
 // Used in the device module unit tests
 #[cfg(test)]
+#[allow(clippy::needless_return)]
 pub(crate) fn spawn_test_watcher(sandbox: Arc<Mutex<Sandbox>>, uev: Uevent) {
     tokio::spawn(async move {
         loop {
