@@ -6,24 +6,13 @@
 #
 
 export GOPATH=${GOPATH:-${HOME}/go}
-export tests_repo="${tests_repo:-github.com/kata-containers/tests}"
-export tests_repo_dir="$GOPATH/src/$tests_repo"
 
 this_script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${this_script_dir}/../../../ci/lib.sh"
 
 short_commit_length=10
 
 hub_bin="hub-bin"
-
-clone_tests_repo() {
-	# KATA_CI_NO_NETWORK is (has to be) ignored if there is
-	# no existing clone.
-	if [ -d "${tests_repo_dir}" ] && [ -n "${KATA_CI_NO_NETWORK:-}" ]; then
-		return
-	fi
-
-	go get -d -u "$tests_repo" || true
-}
 
 install_yq() {
 	clone_tests_repo
@@ -35,6 +24,8 @@ install_yq() {
 get_from_kata_deps() {
 	local dependency="$1"
 	versions_file="${this_script_dir}/../../../versions.yaml"
+
+	install_yq >/dev/null
 
 	result=$("yq" read -X "$versions_file" "$dependency")
 	[ "$result" = "null" ] && result=""
