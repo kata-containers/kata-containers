@@ -324,11 +324,8 @@ fn real_main() -> Result<()> {
 }
 
 fn main() {
-    match real_main() {
-        Err(e) => {
-            eprintln!("ERROR: {}", e);
-            exit(1);
-        }
-        _ => (),
-    };
+    if let Err(e) = real_main() {
+        eprintln!("ERROR: {}", e);
+        exit(1);
+    }
 }
