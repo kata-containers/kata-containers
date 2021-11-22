@@ -86,6 +86,6 @@ jobs:
       uses: tim-actions/commit-message-checker-with-regex@v0.3.1
       with:
         commits: ${{ steps.get-pr-commits.outputs.commits }}
-        pattern: '^[\s\t]*[^:\s\t]+[\s\t]*:'
+        pattern: '^[\s\t]*[^:\s\t]+[\s\t]*:|^Merge pull request (?:kata-containers)?#[\d]+ from.*'
         error: 'Failed to find subsystem in subject'
         post_error: ${{ env.error_msg }}
