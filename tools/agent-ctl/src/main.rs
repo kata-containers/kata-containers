@@ -134,16 +134,14 @@ fn make_examples_text(program_name: &str) -> String {
 fn connect(name: &str, global_args: clap::ArgMatches) -> Result<()> {
     let args = global_args
         .subcommand_matches("connect")
-        .ok_or("BUG: missing sub-command arguments".to_string())
-        .map_err(|e| anyhow!(e))?;
+        .ok_or_else(|| anyhow!("BUG: missing sub-command arguments"))?;
 
     let interactive = args.is_present("interactive");
     let ignore_errors = args.is_present("ignore-errors");
 
     let server_address = args
         .value_of("server-address")
-        .ok_or("need server adddress".to_string())
-        .map_err(|e| anyhow!(e))?
+        .ok_or_else(|| anyhow!("need server adddress"))?
         .to_string();
 
     let mut commands: Vec<&str> = Vec::new();
@@ -151,8 +149,7 @@ fn connect(name: &str, global_args: clap::ArgMatches) -> Result<()> {
     if !interactive {
         commands = args
             .values_of("cmd")
-            .ok_or("need commands to send to the server".to_string())
-            .map_err(|e| anyhow!(e))?
+            .ok_or_else(|| anyhow!("need commands to send to the server"))?
             .collect();
     }
 
@@ -304,8 +301,7 @@ fn real_main() -> Result<()> {
 
     let subcmd = args
         .subcommand_name()
-        .ok_or("need sub-command".to_string())
-        .map_err(|e| anyhow!(e))?;
+        .ok_or_else(|| anyhow!("need sub-command"))?;
 
     match subcmd {
         "generate-cid" => {
