@@ -306,19 +306,17 @@ fn real_main() -> Result<()> {
     match subcmd {
         "generate-cid" => {
             println!("{}", utils::random_container_id());
-            return Ok(());
+            Ok(())
         }
         "generate-sid" => {
             println!("{}", utils::random_sandbox_id());
-            return Ok(());
+            Ok(())
         }
         "examples" => {
             println!("{}", make_examples_text(name));
-            return Ok(());
+            Ok(())
         }
-        "connect" => {
-            return connect(name, args);
-        }
+        "connect" => connect(name, args),
         _ => return Err(anyhow!(format!("invalid sub-command: {:?}", subcmd))),
     }
 }
