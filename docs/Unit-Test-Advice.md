@@ -5,6 +5,67 @@
 This document offers advice on writing a Unit Test (UT) in
 [Golang](https://golang.org) and [Rust](https://www.rust-lang.org).
 
+## General advice
+
+### Unit test strategies
+
+#### Positive and negative tests
+
+Always add positive tests (where success is expected) *and* negative
+tests (where failure is expected).
+
+#### Boundary condition tests
+
+Try to add unit tests that exercise boundary conditions such as:
+
+- Missing values (`null` or `None`).
+- Empty strings and huge strings.
+- Empty (or uninitialised) complex data structures
+  (such as lists, vectors and hash tables).
+- Common numeric values (such as `-1`, `0`, `1` and the minimum and
+  maximum values).
+
+#### Test unusual values
+
+Also always consider "unusual" input values such as:
+
+- String values containing spaces, Unicode characters, special
+  characters, escaped characters or null bytes.
+
+  > **Note:** Consider these unusual values in prefix, infix and
+  > suffix position.
+
+- String values that cannot be converted into numeric values or which
+  contain invalid structured data (such as invalid JSON).
+
+#### Other types of tests
+
+If the code requires other forms of testing (such as stress testing,
+fuzz testing and integration testing), raise a GitHub issue and
+reference it on the issue you are using for the main work. This
+ensures the test team are aware that a new test is required.
+
+### Test environment
+
+#### Create unique files and directories
+
+Ensure your tests do not write to a fixed file or directory. This can
+cause problems when running multiple tests simultaneously and also
+when running tests after a previous test run failure.
+
+#### Assume parallel testing
+
+Always assume your tests will be run *in parallel*. If this is
+problematic for a test, force it to run in isolation using the
+`serial_test` crate for Rust code for example.
+
+### Running
+
+Ensure you run the unit tests and they all pass before raising a PR.
+Ideally do this on different distributions on different architectures
+to maximise coverage (and so minimise surprises when your code runs in
+the CI).
+
 ## Assertions
 
 ### Golang assertions
