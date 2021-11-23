@@ -255,7 +255,7 @@ EOT
 		${hub_bin} push fork -f "${branch}"
 		info "Create PR"
 		out=""
-		out=$("${hub_bin}" pull-request -b "${target_branch}" -F "${notes_file}" 2>&1) || echo "$out" | grep "A pull request already exists"
+		out=$(LC_ALL=C LANG=C "${hub_bin}" pull-request -b "${target_branch}" -F "${notes_file}" 2>&1) || echo "$out" | grep "A pull request already exists"
 	fi
 
 	if [ "${repo}" == "kata-containers" ] && [ "${target_branch}" == "main" ] && [[ "${new_version}" =~ "rc" ]]; then
@@ -276,7 +276,7 @@ EOT
 			${hub_bin} push fork -f "${reverting_kata_deploy_changes_branch}"
 			info "Create \"${reverting_kata_deploy_changes_branch}\" PR"
 			out=""
-			out=$("${hub_bin}" pull-request -b "${target_branch}" -F "${notes_file}" 2>&1) || echo "$out" | grep "A pull request already exists"
+			out=$(LC_ALL=C LANG=C "${hub_bin}" pull-request -b "${target_branch}" -F "${notes_file}" 2>&1) || echo "$out" | grep "A pull request already exists"
 		fi
 	fi
 
