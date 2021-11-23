@@ -12,8 +12,8 @@ Containers.
 
 Packaged installation methods uses your distribution's native package format (such as RPM or DEB).
 
-*Note:* We encourage installation methods that provides automatic updates, it ensures security updates and bug fixes are
-easily applied.
+> **Note:** We encourage installation methods that provides automatic updates, it ensures security updates and bug fixes are
+> easily applied.
 
 | Installation method                                  | Description                                                         | Automatic updates | Use case                                                 |
 |------------------------------------------------------|---------------------------------------------------------------------|-------------------|----------------------------------------------------------|
@@ -48,9 +48,9 @@ Follow the [containerd installation guide](container-manager/containerd/containe
 
 ## Build from source installation
 
-*Note:* Power users who decide to build from sources should be aware of the
-implications of using an unpackaged system which will not be automatically
-updated as new [releases](../Stable-Branch-Strategy.md) are made available.
+> **Note:** Power users who decide to build from sources should be aware of the
+> implications of using an unpackaged system which will not be automatically
+> updated as new [releases](../Stable-Branch-Strategy.md) are made available.
 
 [Building from sources](../Developer-Guide.md#initial-setup)  allows power users
 who are comfortable building software from source to use the latest component
