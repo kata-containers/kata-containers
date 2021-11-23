@@ -581,7 +581,7 @@ func TestSandboxAttachDevicesVFIO(t *testing.T) {
 
 	containers[c.id].sandbox = &sandbox
 
-	err = containers[c.id].attachDevices(context.Background(), c.devices)
+	err = containers[c.id].attachDevices(context.Background())
 	assert.Nil(t, err, "Error while attaching devices %s", err)
 
 	err = containers[c.id].detachDevices(context.Background())
@@ -676,7 +676,7 @@ func TestSandboxAttachDevicesVhostUserBlk(t *testing.T) {
 
 	containers[c.id].sandbox = &sandbox
 
-	err = containers[c.id].attachDevices(context.Background(), c.devices)
+	err = containers[c.id].attachDevices(context.Background())
 	assert.Nil(t, err, "Error while attaching vhost-user-blk devices %s", err)
 
 	err = containers[c.id].detachDevices(context.Background())
