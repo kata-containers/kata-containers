@@ -257,7 +257,7 @@ mod tests {
 
 ```
 
-## User running the test
+## Test user
 
 [Unit tests are run *twice*](https://github.com/kata-containers/tests/blob/main/.ci/go-test.sh):
 
@@ -273,13 +273,13 @@ Some repositories already provide utility functions to skip a test:
 - if running as `root`
 - if not running as `root`
 
-### running Golang tests as a different user
+### Run Golang tests as a different user
 
 The main repository has the most comprehensive set of skip abilities. See:
 
 - https://github.com/kata-containers/kata-containers/tree/main/src/runtime/pkg/katatestutils
 
-### running Rust tests as a different user
+### Run Rust tests as a different user
 
 One method is to use the `nix` crate along with some custom macros:
 
