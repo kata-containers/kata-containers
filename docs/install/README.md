@@ -12,16 +12,26 @@ Containers.
 
 Packaged installation methods uses your distribution's native package format (such as RPM or DEB).
 
-*Note:* We encourage installation methods that provides automatic updates, it ensures security updates and bug fixes are
-easily applied.
+> **Note:** We encourage installation methods that provides automatic updates, it ensures security updates and bug fixes are
+> easily applied.
 
-| Installation method                                  | Description                                                         | Automatic updates | Use case                                                 |
-|------------------------------------------------------|---------------------------------------------------------------------|-------------------|----------------------------------------------------------|
-| [Using official distro packages](#official-packages) | Kata packages provided by Linux distributions official repositories | yes               | Recommended for most users.                              |
-| [Using snap](#snap-installation)                     | Easy to install                                                     | yes               | Good alternative to official distro packages.            |
-| [Automatic](#automatic-installation)                 | Run a single command to install a full system                       | **No!**           | For those wanting the latest release quickly.            |
-| [Manual](#manual-installation)                       | Follow a guide step-by-step to install a working system             | **No!**           | For those who want the latest release with more control. |
-| [Build from source](#build-from-source-installation) | Build the software components manually                              | **No!**           | Power users and developers only.                         |
+| Installation method                                  | Description                                                                                  | Automatic updates | Use case                                                                                      |
+|------------------------------------------------------|----------------------------------------------------------------------------------------------|-------------------|-----------------------------------------------------------------------------------------------|
+| [Using kata-deploy](#kata-deploy-installation)       | The preferred way to deploy the Kata Containers distributed binaries on a Kubernetes cluster | **No!**           | Best way to give it a try on kata-containers on an already up and running Kubernetes cluster. | 
+| [Using official distro packages](#official-packages) | Kata packages provided by Linux distributions official repositories                          | yes               | Recommended for most users.                                                                   |
+| [Using snap](#snap-installation)                     | Easy to install                                                                              | yes               | Good alternative to official distro packages.                                                 |
+| [Automatic](#automatic-installation)                 | Run a single command to install a full system                                                | **No!**           | For those wanting the latest release quickly.                                                 |
+| [Manual](#manual-installation)                       | Follow a guide step-by-step to install a working system                                      | **No!**           | For those who want the latest release with more control.                                      |
+| [Build from source](#build-from-source-installation) | Build the software components manually                                                       | **No!**           | Power users and developers only.                                                              |
+
+### Kata Deploy Installation
+
+Kata Deploy provides a Dockerfile, which contains all of the binaries and
+artifacts required to run Kata Containers, as well as reference DaemonSets,
+which can be utilized to install Kata Containers on a running Kubernetes
+cluster.
+
+[Use Kata Deploy](/tools/packaging/kata-deploy/README.md) to install Kata Containers on a Kubernetes Cluster.
 
 ### Official packages
 
@@ -48,9 +58,9 @@ Follow the [containerd installation guide](container-manager/containerd/containe
 
 ## Build from source installation
 
-*Note:* Power users who decide to build from sources should be aware of the
-implications of using an unpackaged system which will not be automatically
-updated as new [releases](../Stable-Branch-Strategy.md) are made available.
+> **Note:** Power users who decide to build from sources should be aware of the
+> implications of using an unpackaged system which will not be automatically
+> updated as new [releases](../Stable-Branch-Strategy.md) are made available.
 
 [Building from sources](../Developer-Guide.md#initial-setup)  allows power users
 who are comfortable building software from source to use the latest component
