@@ -120,6 +120,8 @@ Assume the following function:
 ```rust
 // Convenience type to allow Result return types to only specify the type
 // for the true case; failures are specified as static strings.
+// XXX: This is an example. In real code use the "anyhow" and
+// XXX: "thiserror" crates.
 pub type Result<T> = std::result::Result<T, &'static str>;
 
 // The function under test.
