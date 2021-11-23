@@ -904,38 +904,11 @@ func (c *Container) create(ctx context.Context) (err error) {
 		}
 	}
 
-	var (
-		machineType        = c.sandbox.config.HypervisorConfig.HypervisorMachineType
-		normalAttachedDevs []ContainerDevice //for q35: normally attached devices
-		delayAttachedDevs  []ContainerDevice //for q35: delay attached devices, for example, large bar space device
-	)
-	// Fix: https://github.com/kata-containers/runtime/issues/2460
-	if machineType == QemuQ35 {
-		// add Large Bar space device to delayAttachedDevs
-		for _, device := range c.devices {
-			var isLargeBarSpace bool
-			isLargeBarSpace, err = manager.IsVFIOLargeBarSpaceDevice(device.ContainerPath)
-			if err != nil {
-				return
-			}
-			if isLargeBarSpace {
-				delayAttachedDevs = append(delayAttachedDevs, device)
-			} else {
-				normalAttachedDevs = append(normalAttachedDevs, device)
-			}
-		}
-	} else {
-		normalAttachedDevs = c.devices
-	}
-
 	c.Logger().WithFields(logrus.Fields{
-		"machine_type": machineType,
-		"devices":      normalAttachedDevs,
-	}).Info("normal attach devices")
-	if len(normalAttachedDevs) > 0 {
-		if err = c.attachDevices(ctx, normalAttachedDevs); err != nil {
-			return
-		}
+		"devices": c.devices,
+	}).Info("Attach devices")
+	if err = c.attachDevices(ctx); err != nil {
+		return
 	}
 
 	// Deduce additional system mount info that should be handled by the agent
@@ -947,17 +920,6 @@ func (c *Container) create(ctx context.Context) (err error) {
 		return err
 	}
 	c.process = *process
-
-	// lazy attach device after createContainer for q35
-	if machineType == QemuQ35 && len(delayAttachedDevs) > 0 {
-		c.Logger().WithFields(logrus.Fields{
-			"machine_type": machineType,
-			"devices":      delayAttachedDevs,
-		}).Info("lazy attach devices")
-		if err = c.attachDevices(ctx, delayAttachedDevs); err != nil {
-			return
-		}
-	}
 
 	if err = c.setContainerState(types.StateReady); err != nil {
 		return
@@ -1398,7 +1360,7 @@ func (c *Container) removeDrive(ctx context.Context) (err error) {
 	return nil
 }
 
-func (c *Container) attachDevices(ctx context.Context, devices []ContainerDevice) error {
+func (c *Container) attachDevices(ctx context.Context) error {
 	// there's no need to do rollback when error happens,
 	// because if attachDevices fails, container creation will fail too,
 	// and rollbackFailingContainerCreation could do all the rollbacks
@@ -1406,7 +1368,7 @@ func (c *Container) attachDevices(ctx context.Context, devices []ContainerDevice
 	// since devices with large bar space require delayed attachment,
 	// the devices need to be split into two lists, normalAttachedDevs and delayAttachedDevs.
 	// so c.device is not used here. See issue https://github.com/kata-containers/runtime/issues/2460.
-	for _, dev := range devices {
+	for _, dev := range c.devices {
 		if err := c.sandbox.devManager.AttachDevice(ctx, dev.ID, c.sandbox); err != nil {
 			return err
 		}
