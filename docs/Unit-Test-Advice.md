@@ -268,12 +268,9 @@ mod tests {
 
 When writing a test consider which user should run it; even if the code the
 test is exercising runs as `root`, it may be necessary to *only* run the test
-as a non-`root` for the test to be meaningful.
-
-Some repositories already provide utility functions to skip a test:
-
-- if running as `root`
-- if not running as `root`
+as a non-`root` for the test to be meaningful. Add appropriate skip
+guards around code that requires `root` and non-`root` so that the test
+will run if the correct type of user is detected and skipped if not.
 
 ### Run Golang tests as a different user
 
