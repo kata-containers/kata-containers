@@ -157,6 +157,8 @@ bump_repo() {
 		#  kata-deploy-stable | NON-EXISTENT   | NON-EXISTENT   |
 		#  -------------------+----------------+----------------+
 
+		local registry="quay.io/kata-containers/kata-deploy"
+
 		info "Updating kata-deploy / kata-cleanup image tags"
 		local version_to_replace="${current_version}"
 		local replacement="${new_version}"
@@ -175,8 +177,8 @@ bump_repo() {
 
 		if [ "${version_to_replace}" != "${replacement}" ]; then
 			## this covers case 2) and 3), as on both of them we have changes on kata-deploy / kata-cleanup  files
-			sed -i "s#quay.io/kata-containers/kata-deploy:${version_to_replace}#quay.io/kata-containers/kata-deploy:${new_version}#g" "${kata_deploy_yaml}"
-			sed -i "s#quay.io/kata-containers/kata-deploy:${version_to_replace}#quay.io/kata-containers/kata-deploy:${new_version}#g" "${kata_cleanup_yaml}"
+			sed -i "s#${registry}:${version_to_replace}#${registry}:${new_version}#g" "${kata_deploy_yaml}"
+			sed -i "s#${registry}:${version_to_replace}#${registry}:${new_version}#g" "${kata_cleanup_yaml}"
 
 			git diff
 
