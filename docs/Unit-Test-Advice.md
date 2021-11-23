@@ -129,7 +129,7 @@ pub type Result<T> = std::result::Result<T, &'static str>;
 // Accepts a string and an integer and returns the
 // result of sticking them together separated by a dash as a string.
 fn join_params_with_dash(str: &str, num: i32) -> Result<String> {
-    if str == "" {
+    if str.is_empty() {
         return Err("string cannot be blank");
     }
 
