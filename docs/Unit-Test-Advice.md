@@ -275,7 +275,7 @@ Some repositories already provide utility functions to skip a test:
 
 ### running Golang tests as a different user
 
-The runtime repository has the most comprehensive set of skip abilities. See:
+The main repository has the most comprehensive set of skip abilities. See:
 
 - https://github.com/kata-containers/kata-containers/tree/main/src/runtime/pkg/katatestutils
 
