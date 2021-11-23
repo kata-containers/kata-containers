@@ -3,11 +3,11 @@
 ## Overview
 
 This document offers advice on writing a Unit Test (UT) in
-[`golang`](https://golang.org) and [`rust`](https://www.rust-lang.org).
+[Golang](https://golang.org) and [Rust](https://www.rust-lang.org).
 
 ## Assertions
 
-### golang assertions
+### Golang assertions
 
 Use the `testify` assertions package to create a new assertion object as this
 keeps the test code free from distracting `if` tests:
@@ -21,7 +21,7 @@ func TestSomething(t *testing.T) {
 }
 ```
 
-### rust assertions
+### Rust assertions
 
 Use the standard set of `assert!()` macros.
 
@@ -32,7 +32,7 @@ the logic into a compact table (rather than spreading the tests across
 multiple test functions). It also makes it easy to cover all the
 interesting boundary conditions:
 
-### golang table driven tests
+### Golang table driven tests
 
 Assume the following function:
 
@@ -113,7 +113,7 @@ func TestJoinParamsWithDash(t *testing.T) {
 }
 ```
 
-### rust table driven tests
+### Rust table driven tests
 
 Assume the following function:
 
@@ -216,7 +216,7 @@ mod tests {
 
 Always delete temporary files on success.
 
-### golang temporary files
+### Golang temporary files
 
 ```go
 func TestSomething(t *testing.T) {
@@ -233,7 +233,7 @@ func TestSomething(t *testing.T) {
 }
 ```
 
-### rust temporary files
+### Rust temporary files
 
 Use the `tempfile` crate which allows files and directories to be deleted
 automatically:
@@ -273,13 +273,13 @@ Some repositories already provide utility functions to skip a test:
 - if running as `root`
 - if not running as `root`
 
-### running golang tests as different users
+### running Golang tests as a different user
 
 The runtime repository has the most comprehensive set of skip abilities. See:
 
 - https://github.com/kata-containers/kata-containers/tree/main/src/runtime/pkg/katatestutils
 
-### running rust tests as different users
+### running Rust tests as a different user
 
 One method is to use the `nix` crate along with some custom macros:
 
