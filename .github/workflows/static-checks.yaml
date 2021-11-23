@@ -79,7 +79,7 @@ jobs:
     - name: Check vendored code
       if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
       run: |
-        cd ${GOPATH}/src/github.com/${{ github.repository }} && make vendor
+        cd ${GOPATH}/src/github.com/${{ github.repository }} && CARGO_HOME="/tmp/.cargo" make vendor
     - name: Static Checks
       if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
       run: |
