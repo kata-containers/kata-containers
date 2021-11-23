@@ -1,19 +1,5 @@
 # Unit Test Advice
 
-* [Overview](#overview)
-* [Assertions](#assertions)
-    * [golang assertions](#golang-assertions)
-    * [rust assertions](#rust-assertions)
-* [Table driven tests](#table-driven-tests)
-    * [golang table driven tests](#golang-table-driven-tests)
-    * [rust table driven tests](#rust-table-driven-tests)
-* [Temporary files](#temporary-files)
-    * [golang temporary files](#golang-temporary-files)
-    * [rust temporary files](#rust-temporary-files)
-* [User running the test](#user-running-the-test)
-    * [running golang tests as different users](#running-golang-tests-as-different-users)
-    * [running rust tests as different users](#running-rust-tests-as-different-users)
-
 ## Overview
 
 This document offers advice on writing a Unit Test (UT) in
