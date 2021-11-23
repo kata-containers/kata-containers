@@ -90,6 +90,14 @@ bump_repo() {
 
 	pushd "${repo}" >>/dev/null
 
+	local kata_deploy_dir="tools/packaging/kata-deploy"
+	local kata_deploy_base="${kata_deploy_dir}/kata-deploy/base"
+	local kata_cleanup_base="${kata_deploy_dir}/kata-cleanup/base"
+	local kata_deploy_yaml="${kata_deploy_base}/kata-deploy.yaml"
+	local kata_cleanup_yaml="${kata_cleanup_base}/kata-cleanup.yaml"
+	local kata_deploy_stable_yaml="${kata_deploy_base}/kata-deploy-stable.yaml"
+	local kata_cleanup_stable_yaml="${kata_cleanup_base}/kata-cleanup-stable.yaml"
+
 	branch="${new_version}-branch-bump"
 	git fetch origin "${target_branch}"
 	git checkout "origin/${target_branch}" -b "${branch}"
@@ -155,25 +163,25 @@ bump_repo() {
 		if [ "${target_branch}" == "main" ]; then
 			if [[ "${new_version}" =~ "rc" ]]; then
 				## this is the case 2) where we remove te kata-deploy / kata-cleanup stable files
-				git rm tools/packaging/kata-deploy/kata-deploy/base/kata-deploy-stable.yaml
-				git rm tools/packaging/kata-deploy/kata-cleanup/base/kata-cleanup-stable.yaml
+				git rm "${kata_deploy_stable_yaml}"
+				git rm "${kata_cleanup_stable_yaml}"
+
 			else
 				## this is the case 1) where we just do nothing
 				replacement="latest"
 			fi
-
 			version_to_replace="latest"
 		fi
 
 		if [ "${version_to_replace}" != "${replacement}" ]; then
 			## this covers case 2) and 3), as on both of them we have changes on kata-deploy / kata-cleanup  files
-			sed -i "s#quay.io/kata-containers/kata-deploy:${version_to_replace}#quay.io/kata-containers/kata-deploy:${replacement}#g" tools/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml
-			sed -i "s#quay.io/kata-containers/kata-deploy:${version_to_replace}#quay.io/kata-containers/kata-deploy:${replacement}#g" tools/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml
+			sed -i "s#quay.io/kata-containers/kata-deploy:${version_to_replace}#quay.io/kata-containers/kata-deploy:${new_version}#g" "${kata_deploy_yaml}"
+			sed -i "s#quay.io/kata-containers/kata-deploy:${version_to_replace}#quay.io/kata-containers/kata-deploy:${new_version}#g" "${kata_cleanup_yaml}"
 
 			git diff
 
-			git add tools/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml
-			git add tools/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml
+			git add "${kata_deploy_yaml}"
+			git add "${kata_cleanup_yaml}"
 		fi
 	fi
 
