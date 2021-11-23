@@ -7,7 +7,6 @@
 package manager
 
 import (
-	"os"
 	"testing"
 
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
@@ -102,48 +101,5 @@ func TestIsVhostUserSCSI(t *testing.T) {
 				Major:   d.major,
 			})
 		assert.Equal(t, d.expected, isVhostUserSCSI)
-	}
-}
-
-func TestIsLargeBarSpace(t *testing.T) {
-	assert := assert.New(t)
-
-	// File not exist
-	bs, err := isLargeBarSpace("/abc/xyz/123/rgb")
-	assert.Error(err)
-	assert.False(bs)
-
-	f, err := os.CreateTemp("", "pci")
-	assert.NoError(err)
-	defer f.Close()
-	defer os.RemoveAll(f.Name())
-
-	type testData struct {
-		resourceInfo string
-		error        bool
-		result       bool
-	}
-
-	for _, d := range []testData{
-		{"", false, false},
-		{"\t\n\t  ", false, false},
-		{"abc zyx", false, false},
-		{"abc zyx rgb", false, false},
-		{"abc\t       zyx     \trgb", false, false},
-		{"0x00015\n0x0013", false, false},
-		{"0x00000000c6000000 0x00000000c6ffffff 0x0000000000040200", false, false},
-		{"0x0000383bffffffff 0x0000383800000000", false, false}, // start greater than end
-		{"0x0000383800000000 0x0000383bffffffff", false, true},
-		{"0x0000383800000000 0x0000383bffffffff 0x000000000014220c", false, true},
-	} {
-		f.WriteAt([]byte(d.resourceInfo), 0)
-		bs, err = isLargeBarSpace(f.Name())
-		assert.NoError(f.Truncate(0))
-		if d.error {
-			assert.Error(err, d.resourceInfo)
-		} else {
-			assert.NoError(err, d.resourceInfo)
-		}
-		assert.Equal(d.result, bs, d.resourceInfo)
 	}
 }
