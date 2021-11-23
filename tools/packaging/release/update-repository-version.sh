@@ -34,7 +34,7 @@ handle_error() {
 trap 'handle_error $LINENO' ERR
 
 get_changes() {
-	local current_version=$1
+	local current_version="$1"
 	[ -n "${current_version}" ] || die "current version not provided"
 
 	# If for some reason there is not a tag this could fail
@@ -59,7 +59,7 @@ get_changes() {
 }
 
 generate_kata_deploy_commit() {
-       local new_version=$1
+       local new_version="$1"
        [ -n "$new_version" ] || die "no new version"
 
        printf "release: Adapt kata-deploy for %s" "${new_version}"
@@ -79,7 +79,7 @@ There are no changes when doing an alpha release, as the files on the
 }
 
 generate_revert_kata_deploy_commit() {
-       local new_version=$1
+       local new_version="$1"
        [ -n "$new_version" ] || die "no new version"
 
        printf "release: Revert kata-deploy changes after %s release" "${new_version}"
@@ -91,8 +91,8 @@ kata-cleanup-stable files." "${new_version}"
 }
 
 generate_commit() {
-	local new_version=$1
-	local current_version=$2
+	local new_version="$1"
+	local current_version="$2"
 
 	[ -n "$new_version" ] || die "no new version"
 	[ -n "$current_version" ] || die "no current version"
@@ -305,8 +305,8 @@ main(){
 	shift $((OPTIND - 1))
 
 
-	new_version=${1:-}
-	target_branch=${2:-}
+	new_version="${1:-}"
+	target_branch="${2:-}"
 	[ -n "${new_version}" ] || { echo "ERROR: no new version" && usage 1; }
 	[ -n "${target_branch}" ] || die "no target branch"
 	for repo in "${repos[@]}"
