@@ -36,10 +36,6 @@ trap 'handle_error $LINENO' ERR
 get_changes() {
 	local current_version=$1
 	[ -n "${current_version}" ] || die "current version not provided"
-	if [ "${current_version}" == "new" ];then
-		echo "Starting to version this repository"
-		return
-	fi
 
 	# If for some reason there is not a tag this could fail
 	# better fail and write the error in the PR
@@ -134,20 +130,13 @@ bump_repo() {
 	git fetch origin "${target_branch}"
 	git checkout "origin/${target_branch}" -b "${branch}"
 
-	# All repos we build should have a VERSION file
-	if [ ! -f "VERSION" ]; then
-		current_version="new"
-		echo "${new_version}" >VERSION
-	else
-		current_version="$(grep -v '#' ./VERSION)"
+	local current_version="$(egrep -v '^(#|$)' ./VERSION)"
 
-		info "Updating VERSION file"
-		echo "${new_version}" >VERSION
-		if git diff --exit-code; then
-			info "${repo} already in version ${new_version}"
-			cat VERSION
-			return 0
-		fi
+	info "Updating VERSION file"
+	echo "${new_version}" >VERSION
+	if git diff --exit-code; then
+		info "${repo} already in version ${new_version}"
+		return 0
 	fi
 
 	if [ "${repo}" == "kata-containers" ]; then
