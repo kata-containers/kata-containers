@@ -15,9 +15,6 @@ import (
 	systemdDbus "github.com/coreos/go-systemd/v22/dbus"
 	"github.com/godbus/dbus/v5"
 	"github.com/opencontainers/runc/libcontainer/cgroups/systemd"
-	"github.com/opencontainers/runc/libcontainer/devices"
-	"github.com/opencontainers/runtime-spec/specs-go"
-	"golang.org/x/sys/unix"
 )
 
 // validCgroupPath returns a valid cgroup path.
@@ -128,49 +125,4 @@ func getSliceAndUnit(cgroupPath string) (string, string, error) {
 	}
 
 	return "", "", fmt.Errorf("Path: %s is not valid systemd's cgroups path", cgroupPath)
-}
-
-func DeviceToCgroupDeviceRule(device string) (*devices.Rule, error) {
-	var st unix.Stat_t
-	deviceRule := devices.Rule{
-		Allow:       true,
-		Permissions: "rwm",
-	}
-
-	if err := unix.Stat(device, &st); err != nil {
-		return nil, err
-	}
-
-	devType := st.Mode & unix.S_IFMT
-
-	switch devType {
-	case unix.S_IFCHR:
-		deviceRule.Type = 'c'
-	case unix.S_IFBLK:
-		deviceRule.Type = 'b'
-	default:
-		return nil, fmt.Errorf("unsupported device type: %v", devType)
-	}
-
-	major := int64(unix.Major(st.Rdev))
-	minor := int64(unix.Minor(st.Rdev))
-	deviceRule.Major = major
-	deviceRule.Minor = minor
-
-	return &deviceRule, nil
-}
-
-func DeviceToLinuxDevice(device string) (specs.LinuxDeviceCgroup, error) {
-	dev, err := DeviceToCgroupDeviceRule(device)
-	if err != nil {
-		return specs.LinuxDeviceCgroup{}, err
-	}
-
-	return specs.LinuxDeviceCgroup{
-		Allow:  dev.Allow,
-		Type:   string(dev.Type),
-		Major:  &dev.Major,
-		Minor:  &dev.Minor,
-		Access: string(dev.Permissions),
-	}, nil
 }
