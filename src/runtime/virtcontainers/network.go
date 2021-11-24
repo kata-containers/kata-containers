@@ -249,13 +249,13 @@ func generateVCNetworkStructures(ctx context.Context, network Network) ([]*pbTyp
 
 			netMask, _ := addr.Mask.Size()
 			ipAddress := pbTypes.IPAddress{
-				Family:  utils.ConvertNetlinkFamily(netlink.FAMILY_V4),
+				Family:  pbTypes.IPFamily_v4,
 				Address: addr.IP.String(),
 				Mask:    fmt.Sprintf("%d", netMask),
 			}
 
 			if addr.IP.To4() == nil {
-				ipAddress.Family = utils.ConvertNetlinkFamily(netlink.FAMILY_V6)
+				ipAddress.Family = pbTypes.IPFamily_v6
 			}
 			ipAddresses = append(ipAddresses, &ipAddress)
 		}
@@ -275,7 +275,7 @@ func generateVCNetworkStructures(ctx context.Context, network Network) ([]*pbTyp
 		for _, route := range endpoint.Properties().Routes {
 			var r pbTypes.Route
 
-			if route.Protocol == unix.RTPROT_KERNEL {
+			if !validGuestRoute(route) {
 				continue
 			}
 
@@ -294,15 +294,14 @@ func generateVCNetworkStructures(ctx context.Context, network Network) ([]*pbTyp
 
 			r.Device = endpoint.Name()
 			r.Scope = uint32(route.Scope)
-			r.Family = utils.ConvertNetlinkFamily((int32)(route.Family))
+			r.Family = utils.ConvertAddressFamily((int32)(route.Family))
 			routes = append(routes, &r)
 		}
 
 		for _, neigh := range endpoint.Properties().Neighbors {
 			var n pbTypes.ARPNeighbor
 
-			// We add only static ARP entries
-			if neigh.State != netlink.NUD_PERMANENT {
+			if !validGuestNeighbor(neigh) {
 				continue
 			}
 
@@ -315,11 +314,11 @@ func generateVCNetworkStructures(ctx context.Context, network Network) ([]*pbTyp
 			}
 
 			n.ToIPAddress = &pbTypes.IPAddress{
-				Family:  utils.ConvertNetlinkFamily(netlink.FAMILY_V4),
+				Family:  pbTypes.IPFamily_v4,
 				Address: neigh.IP.String(),
 			}
 			if neigh.IP.To4() == nil {
-				n.ToIPAddress.Family = netlink.FAMILY_V6
+				n.ToIPAddress.Family = pbTypes.IPFamily_v6
 			}
 
 			neighs = append(neighs, &n)
