@@ -368,7 +368,6 @@ impl AgentService {
         let eid = req.exec_id.clone();
         let s = self.sandbox.clone();
         let mut sandbox = s.lock().await;
-        let mut init = false;
 
         info!(
             sl!(),
@@ -377,11 +376,7 @@ impl AgentService {
             "exec-id" => eid.clone(),
         );
 
-        if eid.is_empty() {
-            init = true;
-        }
-
-        let p = find_process(&mut sandbox, cid.as_str(), eid.as_str(), init)?;
+        let p = sandbox.find_container_process(cid.as_str(), eid.as_str())?;
 
         let mut signal = Signal::try_from(req.signal as i32).map_err(|e| {
             anyhow!(e).context(format!(
@@ -424,7 +419,7 @@ impl AgentService {
 
         let exit_rx = {
             let mut sandbox = s.lock().await;
-            let p = find_process(&mut sandbox, cid.as_str(), eid.as_str(), false)?;
+            let p = sandbox.find_container_process(cid.as_str(), eid.as_str())?;
 
             p.exit_watchers.push(exit_send);
             pid = p.pid;
@@ -482,7 +477,7 @@ impl AgentService {
         let writer = {
             let s = self.sandbox.clone();
             let mut sandbox = s.lock().await;
-            let p = find_process(&mut sandbox, cid.as_str(), eid.as_str(), false)?;
+            let p = sandbox.find_container_process(cid.as_str(), eid.as_str())?;
 
             // use ptmx io
             if p.term_master.is_some() {
@@ -515,7 +510,7 @@ impl AgentService {
             let s = self.sandbox.clone();
             let mut sandbox = s.lock().await;
 
-            let p = find_process(&mut sandbox, cid.as_str(), eid.as_str(), false)?;
+            let p = sandbox.find_container_process(cid.as_str(), eid.as_str())?;
 
             if p.term_master.is_some() {
                 term_exit_notifier = p.term_exit_notifier.clone();
@@ -783,12 +778,14 @@ impl protocols::agent_ttrpc::AgentService for AgentService {
         let s = Arc::clone(&self.sandbox);
         let mut sandbox = s.lock().await;
 
-        let p = find_process(&mut sandbox, cid.as_str(), eid.as_str(), false).map_err(|e| {
-            ttrpc_error(
-                ttrpc::Code::INVALID_ARGUMENT,
-                format!("invalid argument: {:?}", e),
-            )
-        })?;
+        let p = sandbox
+            .find_container_process(cid.as_str(), eid.as_str())
+            .map_err(|e| {
+                ttrpc_error(
+                    ttrpc::Code::INVALID_ARGUMENT,
+                    format!("invalid argument: {:?}", e),
+                )
+            })?;
 
         p.close_stdin();
 
@@ -807,12 +804,14 @@ impl protocols::agent_ttrpc::AgentService for AgentService {
         let eid = req.exec_id.clone();
         let s = Arc::clone(&self.sandbox);
         let mut sandbox = s.lock().await;
-        let p = find_process(&mut sandbox, cid.as_str(), eid.as_str(), false).map_err(|e| {
-            ttrpc_error(
-                ttrpc::Code::UNAVAILABLE,
-                format!("invalid argument: {:?}", e),
-            )
-        })?;
+        let p = sandbox
+            .find_container_process(cid.as_str(), eid.as_str())
+            .map_err(|e| {
+                ttrpc_error(
+                    ttrpc::Code::UNAVAILABLE,
+                    format!("invalid argument: {:?}", e),
+                )
+            })?;
 
         if let Some(fd) = p.term_master {
             unsafe {
@@ -1364,26 +1363,6 @@ async fn read_stream(reader: Arc<Mutex<ReadHalf<PipeStream>>>, l: usize) -> Resu
     }
 
     Ok(content)
-}
-
-fn find_process<'a>(
-    sandbox: &'a mut Sandbox,
-    cid: &'a str,
-    eid: &'a str,
-    init: bool,
-) -> Result<&'a mut Process> {
-    let ctr = sandbox
-        .get_container(cid)
-        .ok_or_else(|| anyhow!("Invalid container id"))?;
-
-    if init || eid.is_empty() {
-        return ctr
-            .processes
-            .get_mut(&ctr.init_process_pid)
-            .ok_or_else(|| anyhow!("cannot find init process!"));
-    }
-
-    ctr.get_process(eid).map_err(|_| anyhow!("Invalid exec id"))
 }
 
 pub fn start(s: Arc<Mutex<Sandbox>>, server_address: &str) -> Result<TtrpcServer> {
