@@ -458,21 +458,6 @@ kernel_modules=[]
 # (default: 30)
 #dial_timeout = 30
 
-[netmon]
-# If enabled, the network monitoring process gets started when the
-# sandbox is created. This allows for the detection of some additional
-# network being added to the existing network namespace, after the
-# sandbox has been created.
-# (default: disabled)
-#enable_netmon = true
-
-# Specify the path to the netmon binary.
-path = "@NETMONPATH@"
-
-# If enabled, netmon messages will be sent to the system log
-# (default: disabled)
-#enable_debug = true
-
 [runtime]
 # If enabled, the runtime will log additional debug messages to the
 # system log
@@ -521,7 +506,6 @@ disable_guest_seccomp=@DEFDISABLEGUESTSECCOMP@
 
 # If enabled, the runtime will not create a network namespace for shim and hypervisor processes.
 # This option may have some potential impacts to your host. It should only be used when you know what you're doing.
-# `disable_new_netns` conflicts with `enable_netmon`
 # `disable_new_netns` conflicts with `internetworking_model=tcfilter` and `internetworking_model=macvtap`. It works only
 # with `internetworking_model=none`. The tap device will be in the host network namespace and can connect to a bridge
 # (like OVS) directly.

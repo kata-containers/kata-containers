@@ -11,7 +11,6 @@ config-generated.go
 /pkg/containerd-shim-v2/monitor_address
 /data/kata-collect-data.sh
 /kata-monitor
-/kata-netmon
 /kata-runtime
 /pkg/katautils/config-settings.go
 /virtcontainers/hack/virtc/virtc

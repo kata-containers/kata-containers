@@ -97,5 +97,3 @@ const defaultVMCacheEndpoint string = "/var/run/kata-containers/cache.sock"
 
 // Default config file used by stateless systems.
 var defaultRuntimeConfiguration = "@CONFIG_PATH@"
-
-var defaultNetmonPath = "/usr/libexec/kata-containers/kata-netmon"
