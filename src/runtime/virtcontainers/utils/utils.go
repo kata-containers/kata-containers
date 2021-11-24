@@ -16,7 +16,7 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
-	"github.com/vishvananda/netlink"
+	"golang.org/x/sys/unix"
 
 	pbTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols"
 )
@@ -290,11 +290,11 @@ const (
 	GiB          = MiB << 10
 )
 
-func ConvertNetlinkFamily(netlinkFamily int32) pbTypes.IPFamily {
-	switch netlinkFamily {
-	case netlink.FAMILY_V6:
+func ConvertAddressFamily(family int32) pbTypes.IPFamily {
+	switch family {
+	case unix.AF_INET6:
 		return pbTypes.IPFamily_v6
-	case netlink.FAMILY_V4:
+	case unix.AF_INET:
 		fallthrough
 	default:
 		return pbTypes.IPFamily_v4
