@@ -54,11 +54,6 @@ func (q *qemuPPC64le) Logger() *logrus.Entry {
 	return hvLogger.WithField("subsystem", "qemuPPC64le")
 }
 
-// MaxQemuVCPUs returns the maximum number of vCPUs supported
-func MaxQemuVCPUs() uint32 {
-	return uint32(128)
-}
-
 func newQemuArch(config HypervisorConfig) (qemuArch, error) {
 	machineType := config.HypervisorMachineType
 	if machineType == "" {

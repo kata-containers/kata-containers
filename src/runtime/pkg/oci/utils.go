@@ -23,6 +23,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/api/resource"
 
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/govmm"
 	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
 
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
@@ -637,8 +638,8 @@ func addHypervisorCPUOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig) e
 			return fmt.Errorf("Number of cpus %d in annotation default_maxvcpus is greater than the number of CPUs %d on the system", max, numCPUs)
 		}
 
-		if sbConfig.HypervisorType == vc.QemuHypervisor && max > vc.MaxQemuVCPUs() {
-			return fmt.Errorf("Number of cpus %d in annotation default_maxvcpus is greater than max no of CPUs %d supported for qemu", max, vc.MaxQemuVCPUs())
+		if sbConfig.HypervisorType == vc.QemuHypervisor && max > govmm.MaxVCPUs() {
+			return fmt.Errorf("Number of cpus %d in annotation default_maxvcpus is greater than max no of CPUs %d supported for qemu", max, govmm.MaxVCPUs())
 		}
 		sbConfig.HypervisorConfig.DefaultMaxVCPUs = max
 		return nil

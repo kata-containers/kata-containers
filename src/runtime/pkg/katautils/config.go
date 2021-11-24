@@ -15,6 +15,7 @@ import (
 	"strings"
 
 	"github.com/BurntSushi/toml"
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/govmm"
 	govmmQemu "github.com/kata-containers/kata-containers/src/runtime/pkg/govmm/qemu"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils/katatrace"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/oci"
@@ -343,7 +344,7 @@ func (h hypervisor) defaultVCPUs() uint32 {
 
 func (h hypervisor) defaultMaxVCPUs() uint32 {
 	numcpus := uint32(goruntime.NumCPU())
-	maxvcpus := vc.MaxQemuVCPUs()
+	maxvcpus := govmm.MaxVCPUs()
 	reqVCPUs := h.DefaultMaxVCPUs
 
 	//don't exceed the number of physical CPUs. If a default is not provided, use the
