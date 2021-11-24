@@ -83,9 +83,9 @@ func TestGenerateInterfacesAndRoutes(t *testing.T) {
 	// Build expected results:
 	//
 	expectedAddresses := []*pbTypes.IPAddress{
-		{Family: utils.ConvertNetlinkFamily(netlink.FAMILY_V4), Address: "172.17.0.2", Mask: "16"},
-		{Family: utils.ConvertNetlinkFamily(netlink.FAMILY_V4), Address: "182.17.0.2", Mask: "16"},
-		{Family: utils.ConvertNetlinkFamily(netlink.FAMILY_V6), Address: "2001:db8:1::242:ac11:2", Mask: "64"},
+		{Family: utils.ConvertAddressFamily(netlink.FAMILY_V4), Address: "172.17.0.2", Mask: "16"},
+		{Family: utils.ConvertAddressFamily(netlink.FAMILY_V4), Address: "182.17.0.2", Mask: "16"},
+		{Family: utils.ConvertAddressFamily(netlink.FAMILY_V6), Address: "2001:db8:1::242:ac11:2", Mask: "64"},
 	}
 
 	expectedInterfaces := []*pbTypes.Interface{
@@ -104,7 +104,7 @@ func TestGenerateInterfacesAndRoutes(t *testing.T) {
 			Device:      "eth0",
 			State:       netlink.NUD_PERMANENT,
 			Lladdr:      "6a:92:3a:59:70:aa",
-			ToIPAddress: &pbTypes.IPAddress{Address: "192.168.0.101", Family: utils.ConvertNetlinkFamily(netlink.FAMILY_V4)},
+			ToIPAddress: &pbTypes.IPAddress{Address: "192.168.0.101", Family: utils.ConvertAddressFamily(netlink.FAMILY_V4)},
 		},
 	}
 

@@ -1397,3 +1397,12 @@ func removeTxRateLimiter(endpoint Endpoint, networkNSPath string) error {
 
 	return nil
 }
+
+func validGuestRoute(route netlink.Route) bool {
+	return route.Protocol != unix.RTPROT_KERNEL
+}
+
+func validGuestNeighbor(neigh netlink.Neigh) bool {
+	// We add only static ARP entries
+	return neigh.State == netlink.NUD_PERMANENT
+}
