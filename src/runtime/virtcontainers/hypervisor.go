@@ -908,6 +908,57 @@ func generateVMSocket(id string, vmStogarePath string) (interface{}, error) {
 	}, nil
 }
 
+// Kind of guest protection
+type guestProtection uint8
+
+const (
+	noneProtection guestProtection = iota
+
+	//Intel Trust Domain Extensions
+	//https://software.intel.com/content/www/us/en/develop/articles/intel-trust-domain-extensions.html
+	// Exclude from lint checking for it won't be used on arm64 code
+	tdxProtection
+
+	// AMD Secure Encrypted Virtualization
+	// https://developer.amd.com/sev/
+	// Exclude from lint checking for it won't be used on arm64 code
+	sevProtection
+
+	// IBM POWER 9 Protected Execution Facility
+	// https://www.kernel.org/doc/html/latest/powerpc/ultravisor.html
+	// Exclude from lint checking for it won't be used on arm64 code
+	pefProtection
+
+	// IBM Secure Execution (IBM Z & LinuxONE)
+	// https://www.kernel.org/doc/html/latest/virt/kvm/s390-pv.html
+	// Exclude from lint checking for it won't be used on arm64 code
+	seProtection
+)
+
+var guestProtectionStr = [...]string{
+	noneProtection: "none",
+	pefProtection:  "pef",
+	seProtection:   "se",
+	sevProtection:  "sev",
+	tdxProtection:  "tdx",
+}
+
+func (gp guestProtection) String() string {
+	return guestProtectionStr[gp]
+}
+
+func genericAvailableGuestProtections() (protections []string) {
+	return
+}
+
+func AvailableGuestProtections() (protections []string) {
+	gp, err := availableGuestProtection()
+	if err != nil || gp == noneProtection {
+		return genericAvailableGuestProtections()
+	}
+	return []string{gp.String()}
+}
+
 // hypervisor is the virtcontainers hypervisor interface.
 // The default hypervisor implementation is Qemu.
 type Hypervisor interface {

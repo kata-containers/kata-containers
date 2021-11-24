@@ -36,12 +36,6 @@ const (
 	defaultQemuMachineOptions = "accel=kvm,kernel_irqchip=on"
 
 	qmpMigrationWaitTimeout = 5 * time.Second
-
-	tdxSysFirmwareDir = "/sys/firmware/tdx_seam/"
-
-	tdxCPUFlag = "tdx"
-
-	sevKvmParameterPath = "/sys/module/kvm_amd/parameters/sev"
 )
 
 var qemuPaths = map[string]string{
