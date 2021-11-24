@@ -56,7 +56,6 @@ type tomlConfig struct {
 	Agent      map[string]agent
 	Runtime    runtime
 	Image      image
-	Netmon     netmon
 	Factory    factory
 }
 
@@ -160,12 +159,6 @@ type agent struct {
 	Tracing             bool     `toml:"enable_tracing"`
 	DebugConsoleEnabled bool     `toml:"debug_console_enabled"`
 	DialTimeout         uint32   `toml:"dial_timeout"`
-}
-
-type netmon struct {
-	Path   string `toml:"path"`
-	Debug  bool   `toml:"enable_debug"`
-	Enable bool   `toml:"enable_netmon"`
 }
 
 func (h hypervisor) path() (string, error) {
@@ -504,22 +497,6 @@ func (a agent) trace() bool {
 
 func (a agent) kernelModules() []string {
 	return a.KernelModules
-}
-
-func (n netmon) enable() bool {
-	return n.Enable
-}
-
-func (n netmon) path() string {
-	if n.Path == "" {
-		return defaultNetmonPath
-	}
-
-	return n.Path
-}
-
-func (n netmon) debug() bool {
-	return n.Debug
 }
 
 func newFirecrackerHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
@@ -1014,12 +991,6 @@ func updateRuntimeConfig(configPath string, tomlConf tomlConfig, config *oci.Run
 	}
 	config.FactoryConfig = fConfig
 
-	config.NetmonConfig = vc.NetmonConfig{
-		Path:   tomlConf.Netmon.path(),
-		Debug:  tomlConf.Netmon.debug(),
-		Enable: tomlConf.Netmon.enable(),
-	}
-
 	err = SetKernelParams(config)
 	if err != nil {
 		return err
@@ -1262,9 +1233,6 @@ func checkConfig(config oci.RuntimeConfig) error {
 // Because it is an expert option and conflicts with some other common configs.
 func checkNetNsConfig(config oci.RuntimeConfig) error {
 	if config.DisableNewNetNs {
-		if config.NetmonConfig.Enable {
-			return fmt.Errorf("config disable_new_netns conflicts with enable_netmon")
-		}
 		if config.InterNetworkModel != vc.NetXConnectNoneModel {
 			return fmt.Errorf("config disable_new_netns only works with 'none' internetworking_model")
 		}

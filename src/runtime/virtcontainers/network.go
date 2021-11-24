@@ -178,7 +178,6 @@ type NetworkInterfacePair struct {
 // NetworkConfig is the network configuration related to a network.
 type NetworkConfig struct {
 	NetNSPath         string
-	NetmonConfig      NetmonConfig
 	InterworkingModel NetInterworkingModel
 	NetNsCreated      bool
 	DisableNewNetNs   bool
@@ -193,7 +192,6 @@ type NetworkNamespace struct {
 	NetNsPath    string
 	Endpoints    []Endpoint
 	NetNsCreated bool
-	NetmonPID    int
 }
 
 func createLink(netHandle *netlink.Handle, name string, expectedLink netlink.Link, queues int) (netlink.Link, []*os.File, error) {

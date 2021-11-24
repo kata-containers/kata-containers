@@ -109,7 +109,6 @@ type RuntimeConfig struct {
 
 	FactoryConfig    FactoryConfig
 	HypervisorConfig vc.HypervisorConfig
-	NetmonConfig     vc.NetmonConfig
 	AgentConfig      vc.KataAgentConfig
 
 	//Determines how the VM should be connected to the
@@ -313,12 +312,6 @@ func networkConfig(ocispec specs.Spec, config RuntimeConfig) (vc.NetworkConfig, 
 	}
 	netConf.InterworkingModel = config.InterNetworkModel
 	netConf.DisableNewNetNs = config.DisableNewNetNs
-
-	netConf.NetmonConfig = vc.NetmonConfig{
-		Path:   config.NetmonConfig.Path,
-		Debug:  config.NetmonConfig.Debug,
-		Enable: config.NetmonConfig.Enable,
-	}
 
 	return netConf, nil
 }
