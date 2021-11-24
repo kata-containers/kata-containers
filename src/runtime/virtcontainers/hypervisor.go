@@ -14,6 +14,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/pkg/errors"
+
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/govmm"
 	hv "github.com/kata-containers/kata-containers/src/runtime/pkg/hypervisors"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
@@ -70,10 +72,13 @@ const (
 
 	// MinHypervisorMemory is the minimum memory required for a VM.
 	MinHypervisorMemory = 256
+
+	defaultMsize9p = 8192
 )
 
 var (
-	hvLogger = logrus.WithField("source", "virtcontainers/hypervisor")
+	hvLogger                   = logrus.WithField("source", "virtcontainers/hypervisor")
+	noGuestMemHotplugErr error = errors.New("guest memory hotplug not supported")
 )
 
 // In some architectures the maximum number of vCPUs depends on the number of physical cores.
