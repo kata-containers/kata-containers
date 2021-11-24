@@ -81,11 +81,6 @@ var supportedQemuMachines = []govmmQemu.Machine{
 	},
 }
 
-// MaxQemuVCPUs returns the maximum number of vCPUs supported
-func MaxQemuVCPUs() uint32 {
-	return uint32(240)
-}
-
 func newQemuArch(config HypervisorConfig) (qemuArch, error) {
 	machineType := config.HypervisorMachineType
 	if machineType == "" {

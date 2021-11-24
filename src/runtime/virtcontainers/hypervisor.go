@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/govmm"
 	hv "github.com/kata-containers/kata-containers/src/runtime/pkg/hypervisors"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
@@ -76,7 +77,7 @@ var (
 )
 
 // In some architectures the maximum number of vCPUs depends on the number of physical cores.
-var defaultMaxQemuVCPUs = MaxQemuVCPUs()
+var defaultMaxVCPUs = govmm.MaxVCPUs()
 
 // agnostic list of kernel root parameters for NVDIMM
 var commonNvdimmKernelRootParams = []Param{ //nolint: unused, deadcode, varcheck
@@ -574,8 +575,8 @@ func (conf *HypervisorConfig) Valid() error {
 		conf.BlockDeviceDriver = config.VirtioBlockCCW
 	}
 
-	if conf.DefaultMaxVCPUs == 0 || conf.DefaultMaxVCPUs > defaultMaxQemuVCPUs {
-		conf.DefaultMaxVCPUs = defaultMaxQemuVCPUs
+	if conf.DefaultMaxVCPUs == 0 || conf.DefaultMaxVCPUs > defaultMaxVCPUs {
+		conf.DefaultMaxVCPUs = defaultMaxVCPUs
 	}
 
 	if conf.Msize9p == 0 && conf.SharedFS != config.VirtioFS {

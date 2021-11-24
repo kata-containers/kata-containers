@@ -11,6 +11,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/govmm"
 	govmmQemu "github.com/kata-containers/kata-containers/src/runtime/pkg/govmm/qemu"
 	"github.com/stretchr/testify/assert"
 )
@@ -54,10 +55,10 @@ func TestQemuArm64MemoryTopology(t *testing.T) {
 	assert.Equal(expectedMemory, m)
 }
 
-func TestMaxQemuVCPUs(t *testing.T) {
+func TestMaxVCPUs(t *testing.T) {
 	assert := assert.New(t)
 
-	vCPUs := MaxQemuVCPUs()
+	vCPUs := govmm.MaxVCPUs()
 	assert.Equal(uint32(123), vCPUs)
 }
 
