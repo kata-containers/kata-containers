@@ -175,7 +175,6 @@ const (
 	defaultBridgeBus          = "pcie.0"
 	defaultPCBridgeBus        = "pci.0"
 	maxDevIDSize              = 31
-	defaultMsize9p            = 8192
 	pcieRootPortPrefix        = "rp"
 )
 

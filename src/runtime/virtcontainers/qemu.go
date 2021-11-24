@@ -128,8 +128,6 @@ const (
 	qemuStopSandboxTimeoutSecs = 15
 )
 
-var noGuestMemHotplugErr error = errors.New("guest memory hotplug not supported")
-
 // agnostic list of kernel parameters
 var defaultKernelParameters = []Param{
 	{"panic", "1"},
