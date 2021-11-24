@@ -140,7 +140,7 @@ fn update_agent_metrics() -> Result<()> {
         Ok(status) => set_gauge_vec_proc_status(&AGENT_PROC_STATUS, &status),
     }
 
-    return Ok(());
+    Ok(())
 }
 
 #[instrument]
