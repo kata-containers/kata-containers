@@ -222,7 +222,7 @@ mod tests {
             num: i32,
             result: Result<String>,
         }
-    
+
         // The tests can now be specified as a set of inputs and outputs
         let tests = &[
             // Failure scenarios
@@ -249,24 +249,24 @@ mod tests {
                 result: Ok("--1".to_string()),
             },
         ];
-    
+
         // Run the tests
         for (i, d) in tests.iter().enumerate() {
             // Create a string containing details of the test
             let msg = format!("test[{}]: {:?}", i, d);
-    
+
             // Call the function under test
             let result = join_params_with_dash(d.str, d.num);
-    
+
             // Update the test details string with the results of the call
             let msg = format!("{}, result: {:?}", msg, result);
-    
+
             // Perform the checks
             if d.result.is_ok() {
                 assert!(result == d.result, msg);
                 continue;
             }
-    
+
             let expected_error = format!("{}", d.result.as_ref().unwrap_err());
             let actual_error = format!("{}", result.unwrap_err());
             assert!(actual_error == expected_error, msg);
