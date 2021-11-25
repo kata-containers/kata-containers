@@ -11,14 +11,14 @@ COPY install_yq.sh /usr/bin/install_yq.sh
 
 # Install yq and docker
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-        ca-certificates \
-        curl \
-        sudo && \
-    apt-get clean && rm -rf /var/lib/apt/lists/ && \
-    install_yq.sh && \
-    curl -fsSL https://get.docker.com -o get-docker.sh && \
-    sh get-docker.sh
+  apt-get install -y --no-install-recommends \
+  ca-certificates \
+  curl \
+  sudo && \
+  apt-get clean && rm -rf /var/lib/apt/lists/ && \
+  install_yq.sh && \
+  curl -fsSL https://get.docker.com -o get-docker.sh && \
+  sh get-docker.sh
 
 ARG IMG_USER=kata-builder
 ARG UID=1000

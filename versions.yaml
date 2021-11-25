@@ -132,10 +132,8 @@ assets:
     url: "https://github.com/kata-containers/kata-containers/tools/osbuilder"
     architecture:
       aarch64:
-        name: &default-initrd-name "alpine"
-        version: &default-initrd-version "3.15"
-      # Do not use Alpine on ppc64le & s390x, the agent cannot use musl because
-      # there is no such Rust target
+        name: &default-initrd-name "ubuntu"
+        version: &default-initrd-version "20.04"
       ppc64le:
         name: &glibc-initrd-name "ubuntu"
         version: &glibc-initrd-version "20.04"
