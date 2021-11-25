@@ -32,7 +32,6 @@ import (
 )
 
 var (
-	testNetmonVersion     = "netmon version 0.1"
 	testHypervisorVersion = "QEMU emulator version 2.7.0+git.741f430a96-6.1, Copyright (c) 2003-2016 Fabrice Bellard and the QEMU Project developers"
 )
 
@@ -41,7 +40,6 @@ var (
 	enableVirtioFS  = false
 	runtimeDebug    = false
 	runtimeTrace    = false
-	netmonDebug     = false
 	agentDebug      = false
 	agentTrace      = false
 )
@@ -83,7 +81,6 @@ func makeRuntimeConfig(prefixDir string) (configFile string, config oci.RuntimeC
 	imagePath := filepath.Join(prefixDir, "image")
 	kernelParams := "foo=bar xyz"
 	machineType := "machineType"
-	netmonPath := filepath.Join(prefixDir, "netmon")
 	disableBlock := true
 	blockStorageDriver := "virtio-scsi"
 	enableIOThreads := true
@@ -107,11 +104,6 @@ func makeRuntimeConfig(prefixDir string) (configFile string, config oci.RuntimeC
 		}
 	}
 
-	err = makeVersionBinary(netmonPath, testNetmonVersion)
-	if err != nil {
-		return "", oci.RuntimeConfig{}, err
-	}
-
 	err = makeVersionBinary(hypervisorPath, testHypervisorVersion)
 	if err != nil {
 		return "", oci.RuntimeConfig{}, err
@@ -130,7 +122,6 @@ func makeRuntimeConfig(prefixDir string) (configFile string, config oci.RuntimeC
 		ImagePath:            imagePath,
 		KernelParams:         kernelParams,
 		MachineType:          machineType,
-		NetmonPath:           netmonPath,
 		LogPath:              logPath,
 		DefaultGuestHookPath: hypConfig.GuestHookPath,
 		DisableBlock:         disableBlock,
@@ -146,7 +137,6 @@ func makeRuntimeConfig(prefixDir string) (configFile string, config oci.RuntimeC
 		HypervisorDebug:      hypervisorDebug,
 		RuntimeDebug:         runtimeDebug,
 		RuntimeTrace:         runtimeTrace,
-		NetmonDebug:          netmonDebug,
 		AgentDebug:           agentDebug,
 		AgentTrace:           agentTrace,
 		SharedFS:             sharedFS,
@@ -167,15 +157,6 @@ func makeRuntimeConfig(prefixDir string) (configFile string, config oci.RuntimeC
 	}
 
 	return configFile, config, nil
-}
-
-func getExpectedNetmonDetails(config oci.RuntimeConfig) (NetmonInfo, error) {
-	return NetmonInfo{
-		Version: constructVersionInfo(testNetmonVersion),
-		Path:    config.NetmonConfig.Path,
-		Debug:   config.NetmonConfig.Debug,
-		Enable:  config.NetmonConfig.Enable,
-	}, nil
 }
 
 func getExpectedAgentDetails(config oci.RuntimeConfig) (AgentInfo, error) {
@@ -352,11 +333,6 @@ func getExpectedSettings(config oci.RuntimeConfig, tmpdir, configFile string) (E
 		return EnvInfo{}, err
 	}
 
-	netmon, err := getExpectedNetmonDetails(config)
-	if err != nil {
-		return EnvInfo{}, err
-	}
-
 	hypervisor := getExpectedHypervisor(config)
 	kernel := getExpectedKernel(config)
 	image := getExpectedImage(config)
@@ -369,7 +345,6 @@ func getExpectedSettings(config oci.RuntimeConfig, tmpdir, configFile string) (E
 		Kernel:     kernel,
 		Agent:      agent,
 		Host:       host,
-		Netmon:     netmon,
 	}
 
 	return env, nil
@@ -610,50 +585,6 @@ func TestEnvGetRuntimeInfo(t *testing.T) {
 	runtime := getRuntimeInfo(configFile, config)
 
 	assert.Equal(t, expectedRuntime, runtime)
-}
-
-func TestEnvGetNetmonInfo(t *testing.T) {
-	tmpdir, err := ioutil.TempDir("", "")
-	if err != nil {
-		panic(err)
-	}
-	defer os.RemoveAll(tmpdir)
-
-	_, config, err := makeRuntimeConfig(tmpdir)
-	assert.NoError(t, err)
-
-	expectedNetmon, err := getExpectedNetmonDetails(config)
-	assert.NoError(t, err)
-
-	netmon := getNetmonInfo(config)
-	assert.NoError(t, err)
-
-	assert.Equal(t, expectedNetmon, netmon)
-}
-
-func TestEnvGetNetmonInfoNoVersion(t *testing.T) {
-	tmpdir, err := ioutil.TempDir("", "")
-	if err != nil {
-		panic(err)
-	}
-	defer os.RemoveAll(tmpdir)
-
-	_, config, err := makeRuntimeConfig(tmpdir)
-	assert.NoError(t, err)
-
-	expectedNetmon, err := getExpectedNetmonDetails(config)
-	assert.NoError(t, err)
-
-	// remove the netmon ensuring its version cannot be queried
-	err = os.Remove(config.NetmonConfig.Path)
-	assert.NoError(t, err)
-
-	expectedNetmon.Version = unknownVersionInfo
-
-	netmon := getNetmonInfo(config)
-	assert.NoError(t, err)
-
-	assert.Equal(t, expectedNetmon, netmon)
 }
 
 func TestEnvGetAgentInfo(t *testing.T) {
