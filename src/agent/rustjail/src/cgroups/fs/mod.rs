@@ -22,7 +22,6 @@ use crate::cgroups::Manager as CgroupManager;
 use crate::container::DEFAULT_DEVICES;
 use anyhow::{anyhow, Context, Result};
 use libc::{self, pid_t};
-use nix::errno::Errno;
 use oci::{
     LinuxBlockIo, LinuxCpu, LinuxDevice, LinuxDeviceCgroup, LinuxHugepageLimit, LinuxMemory,
     LinuxNetwork, LinuxPids, LinuxResources,
@@ -175,7 +174,7 @@ impl CgroupManager for Manager {
                 freezer_controller.freeze()?;
             }
             _ => {
-                return Err(nix::Error::Sys(Errno::EINVAL).into());
+                return Err(nix::Error::EINVAL.into());
             }
         }
 

@@ -150,7 +150,7 @@ impl AgentService {
             Some(spec) => rustjail::grpc_to_oci(spec),
             None => {
                 error!(sl!(), "no oci spec in the create container request!");
-                return Err(anyhow!(nix::Error::from_errno(nix::errno::Errno::EINVAL)));
+                return Err(anyhow!(nix::Error::EINVAL));
             }
         };
 
@@ -210,7 +210,7 @@ impl AgentService {
             Process::new(&sl!(), &p, cid.as_str(), true, pipe_size)?
         } else {
             info!(sl!(), "no process configurations!");
-            return Err(anyhow!(nix::Error::from_errno(nix::errno::Errno::EINVAL)));
+            return Err(anyhow!(nix::Error::EINVAL));
         };
         ctr.start(p).await?;
         s.update_shared_pidns(&ctr)?;
@@ -317,13 +317,11 @@ impl AgentService {
             .await
             .is_err()
         {
-            return Err(anyhow!(nix::Error::from_errno(nix::errno::Errno::ETIME)));
+            return Err(anyhow!(nix::Error::ETIME));
         }
 
         if handle.await.is_err() {
-            return Err(anyhow!(nix::Error::from_errno(
-                nix::errno::Errno::UnknownErrno
-            )));
+            return Err(anyhow!(nix::Error::UnknownErrno));
         }
 
         let s = self.sandbox.clone();
@@ -347,7 +345,7 @@ impl AgentService {
         let process = req
             .process
             .into_option()
-            .ok_or_else(|| anyhow!(nix::Error::from_errno(nix::errno::Errno::EINVAL)))?;
+            .ok_or_else(|| anyhow!(nix::Error::EINVAL))?;
 
         let pipe_size = AGENT_CONFIG.read().await.container_pipe_size;
         let ocip = rustjail::process_grpc_to_oci(&process);
@@ -527,7 +525,7 @@ impl AgentService {
         };
 
         if reader.is_none() {
-            return Err(anyhow!(nix::Error::from_errno(nix::errno::Errno::EINVAL)));
+            return Err(anyhow!(nix::Error::EINVAL));
         }
 
         let reader = reader.ok_or_else(|| anyhow!("cannot get stream reader"))?;
@@ -1311,10 +1309,7 @@ fn get_memory_info(block_size: bool, hotplug: bool) -> Result<(u64, bool)> {
             Err(e) => {
                 info!(sl!(), "hotplug memory error: {:?}", e);
                 match e {
-                    nix::Error::Sys(errno) => match errno {
-                        Errno::ENOENT => plug = false,
-                        _ => return Err(anyhow!(e)),
-                    },
+                    nix::Error::ENOENT => plug = false,
                     _ => return Err(anyhow!(e)),
                 }
             }
@@ -1531,7 +1526,7 @@ fn do_copy_file(req: &CopyFileRequest) -> Result<()> {
     let path = PathBuf::from(req.path.as_str());
 
     if !path.starts_with(CONTAINER_BASE) {
-        return Err(nix::Error::Sys(Errno::EINVAL).into());
+        return Err(nix::Error::EINVAL.into());
     }
 
     let parent = path.parent();
@@ -1611,7 +1606,7 @@ fn setup_bundle(cid: &str, spec: &mut Spec) -> Result<PathBuf> {
     let spec_root = if let Some(sr) = &spec.root {
         sr
     } else {
-        return Err(nix::Error::Sys(Errno::EINVAL).into());
+        return Err(nix::Error::EINVAL.into());
     };
 
     let spec_root_path = Path::new(&spec_root.path);
