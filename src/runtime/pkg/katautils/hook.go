@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils/katatrace"
+	syscallWrapper "github.com/kata-containers/kata-containers/src/runtime/pkg/syscall"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/sirupsen/logrus"
 )
@@ -38,7 +39,7 @@ func runHook(ctx context.Context, spec specs.Spec, hook specs.Hook, cid, bundleP
 	katatrace.AddTags(span, "path", hook.Path, "args", hook.Args)
 
 	state := specs.State{
-		Pid:         syscall.Gettid(),
+		Pid:         syscallWrapper.Gettid(),
 		Bundle:      bundlePath,
 		ID:          cid,
 		Annotations: spec.Annotations,
