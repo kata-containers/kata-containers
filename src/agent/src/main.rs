@@ -113,10 +113,10 @@ async fn create_logger_task(rfd: RawFd, vsock_port: u32, shutdown: Receiver<bool
         )?;
 
         let addr = SockAddr::new_vsock(libc::VMADDR_CID_ANY, vsock_port);
-        socket::bind(listenfd, &addr).unwrap();
-        socket::listen(listenfd, 1).unwrap();
+        socket::bind(listenfd, &addr)?;
+        socket::listen(listenfd, 1)?;
 
-        writer = Box::new(util::get_vsock_stream(listenfd).await.unwrap());
+        writer = Box::new(util::get_vsock_stream(listenfd).await?);
     } else {
         writer = Box::new(tokio::io::stdout());
     }
@@ -326,7 +326,7 @@ async fn start_sandbox(
     sandbox.lock().await.sender = Some(tx);
 
     // vsock:///dev/vsock, port
-    let mut server = rpc::start(sandbox.clone(), config.server_addr.as_str());
+    let mut server = rpc::start(sandbox.clone(), config.server_addr.as_str())?;
     server.start().await?;
 
     rx.await?;
