@@ -138,8 +138,8 @@ assets:
     url: "https://github.com/kata-containers/kata-containers/tools/osbuilder"
     architecture:
       aarch64:
-        name: &default-initrd-name "alpine"
-        version: &default-initrd-version "3.13.5"
+        name: &default-initrd-name "ubuntu"
+        version: &default-initrd-version "20.04"
       ppc64le:
         name: *default-initrd-name
         version: *default-initrd-version

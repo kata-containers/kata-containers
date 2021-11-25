@@ -28,6 +28,7 @@ RUN sh -c "echo '${IMG_USER} ALL=NOPASSWD: ALL' >> /etc/sudoers"
 #FIXME: gcc is required as agent is build out of a container build.
 RUN apt-get update && \
   apt install -y \
+  cpio \
   gcc \
   git \
   make \
