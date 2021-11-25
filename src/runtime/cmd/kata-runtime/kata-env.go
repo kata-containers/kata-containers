@@ -140,14 +140,6 @@ type HostInfo struct {
 	SupportVSocks             bool
 }
 
-// NetmonInfo stores netmon details
-type NetmonInfo struct {
-	Path    string
-	Version VersionInfo
-	Debug   bool
-	Enable  bool
-}
-
 // EnvInfo collects all information that will be displayed by the
 // env command.
 //
@@ -159,7 +151,6 @@ type EnvInfo struct {
 	Initrd     InitrdInfo
 	Hypervisor HypervisorInfo
 	Runtime    RuntimeInfo
-	Netmon     NetmonInfo
 	Host       HostInfo
 	Agent      AgentInfo
 }
@@ -276,26 +267,6 @@ func getMemoryInfo() MemoryInfo {
 	}
 }
 
-func getNetmonInfo(config oci.RuntimeConfig) NetmonInfo {
-	netmonConfig := config.NetmonConfig
-
-	var netmonVersionInfo VersionInfo
-	if version, err := getCommandVersion(netmonConfig.Path); err != nil {
-		netmonVersionInfo = unknownVersionInfo
-	} else {
-		netmonVersionInfo = constructVersionInfo(version)
-	}
-
-	netmon := NetmonInfo{
-		Version: netmonVersionInfo,
-		Path:    netmonConfig.Path,
-		Debug:   netmonConfig.Debug,
-		Enable:  netmonConfig.Enable,
-	}
-
-	return netmon
-}
-
 func getCommandVersion(cmd string) (string, error) {
 	return utils.RunCommand([]string{cmd, "--version"})
 }
@@ -364,8 +335,6 @@ func getEnvInfo(configFile string, config oci.RuntimeConfig) (env EnvInfo, err e
 		return EnvInfo{}, err
 	}
 
-	netmon := getNetmonInfo(config)
-
 	agent, err := getAgentInfo(config)
 	if err != nil {
 		return EnvInfo{}, err
@@ -398,7 +367,6 @@ func getEnvInfo(configFile string, config oci.RuntimeConfig) (env EnvInfo, err e
 		Initrd:     initrd,
 		Agent:      agent,
 		Host:       host,
-		Netmon:     netmon,
 	}
 
 	return env, nil

@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
-	"os/exec"
 	"path"
 	"path/filepath"
 	"strings"
@@ -1298,33 +1297,6 @@ func TestGetNetNs(t *testing.T) {
 
 	netNs = s.GetNetNs()
 	assert.Equal(t, netNs, expected)
-}
-
-func TestStartNetworkMonitor(t *testing.T) {
-	if os.Getuid() != 0 {
-		t.Skip("Test disabled as requires root user")
-	}
-	trueBinPath, err := exec.LookPath("true")
-	assert.Nil(t, err)
-	assert.NotEmpty(t, trueBinPath)
-
-	s := &Sandbox{
-		id: testSandboxID,
-		config: &SandboxConfig{
-			NetworkConfig: NetworkConfig{
-				NetmonConfig: NetmonConfig{
-					Path: trueBinPath,
-				},
-			},
-		},
-		networkNS: NetworkNamespace{
-			NetNsPath: fmt.Sprintf("/proc/%d/task/%d/ns/net", os.Getpid(), unix.Gettid()),
-		},
-		ctx: context.Background(),
-	}
-
-	err = s.startNetworkMonitor(context.Background())
-	assert.Nil(t, err)
 }
 
 func TestSandboxStopStopped(t *testing.T) {
