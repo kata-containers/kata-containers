@@ -18,7 +18,7 @@ serde_json = "1.0.39"
 scan_fmt = "0.2.3"
 scopeguard = "1.0.0"
 thiserror = "1.0.26"
-regex = "1"
+regex = "1.5.4"
 serial_test = "0.5.1"
 
 # Async helpers
@@ -27,7 +27,7 @@ async-recursion = "0.3.2"
 futures = "0.3.12"
 
 # Async runtime
-tokio = { version = "1", features = ["full"] }
+tokio = { version = "1.14.0", features = ["full"] }
 tokio-vsock = "0.3.1"
 
 netlink-sys = { version = "0.7.0", features = ["tokio_socket",]}
