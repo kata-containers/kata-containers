@@ -5,13 +5,12 @@
 
 use crate::container::Config;
 use anyhow::{anyhow, Context, Error, Result};
-use nix::errno::Errno;
 use oci::{Linux, LinuxIdMapping, LinuxNamespace, Spec};
 use std::collections::HashMap;
 use std::path::{Component, PathBuf};
 
 fn einval() -> Error {
-    anyhow!(nix::Error::from_errno(Errno::EINVAL))
+    anyhow!(nix::Error::EINVAL)
 }
 
 fn get_linux(oci: &Spec) -> Result<&Linux> {
