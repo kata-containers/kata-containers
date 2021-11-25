@@ -20,7 +20,6 @@ import (
 	hv "github.com/kata-containers/kata-containers/src/runtime/pkg/hypervisors"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
-	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
 
 	"github.com/sirupsen/logrus"
 )
@@ -195,25 +194,6 @@ func (hType *HypervisorType) String() string {
 		return string(MockHypervisor)
 	default:
 		return ""
-	}
-}
-
-// NewHypervisor returns an hypervisor from a hypervisor type.
-func NewHypervisor(hType HypervisorType) (Hypervisor, error) {
-
-	switch hType {
-	case QemuHypervisor:
-		return &qemu{}, nil
-	case FirecrackerHypervisor:
-		return &firecracker{}, nil
-	case AcrnHypervisor:
-		return &Acrn{}, nil
-	case ClhHypervisor:
-		return &cloudHypervisor{}, nil
-	case MockHypervisor:
-		return &mockHypervisor{}, nil
-	default:
-		return nil, fmt.Errorf("Unknown hypervisor type %s", hType)
 	}
 }
 
@@ -898,19 +878,6 @@ func GetHypervisorPid(h Hypervisor) int {
 		return 0
 	}
 	return pids[0]
-}
-
-func generateVMSocket(id string, vmStogarePath string) (interface{}, error) {
-	vhostFd, contextID, err := utils.FindContextID()
-	if err != nil {
-		return nil, err
-	}
-
-	return types.VSock{
-		VhostFd:   vhostFd,
-		ContextID: contextID,
-		Port:      uint32(vSockPort),
-	}, nil
 }
 
 // Kind of guest protection

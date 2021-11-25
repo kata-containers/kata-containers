@@ -4,7 +4,7 @@
 
 package virtcontainers
 
-//Returns pefProtection if the firmware directory exists
+// Guest protection is not supported on ARM64.
 func availableGuestProtection() (guestProtection, error) {
 	return noneProtection, nil
 }
