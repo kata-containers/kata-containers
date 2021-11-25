@@ -26,13 +26,17 @@ build_initrd() {
 	info "Build initrd"
 	info "initrd os: $initrd_distro"
 	info "initrd os version: $initrd_os_version"
-	sudo -E PATH="$PATH" make initrd \
-		DISTRO="$initrd_distro" \
-		DEBUG="${DEBUG:-}" \
-		OS_VERSION="${initrd_os_version}" \
-		ROOTFS_BUILD_DEST="${builddir}/initrd-image" \
-		USE_DOCKER=1 \
-		AGENT_INIT="yes"
+	local rootfs_build_dest="${builddir}/initrd-image"
+	export DISTRO="$initrd_distro"
+	export OS_VERSION="${initrd_os_version}"
+	export USE_DOCKER=1
+	export AGENT_INIT="yes"
+	# ROOTFS_BUILD_DEST is a Make variable
+	sudo -E PATH="$PATH" make rootfs ROOTFS_BUILD_DEST="${rootfs_build_dest}"
+	if [ -n "${INCLUDE_ROOTFS:-}" ]; then
+		sudo cp -RL --preserve=mode "${INCLUDE_ROOTFS}/." "${rootfs_build_dest}/${initrd_distro}_rootfs/"
+	fi
+	sudo -E PATH="$PATH" make initrd ROOTFS_BUILD_DEST="${rootfs_build_dest}"
 	mv "kata-containers-initrd.img" "${install_dir}/${initrd_name}"
 	(
 		cd "${install_dir}"
@@ -44,6 +48,9 @@ build_image() {
 	info "Build image"
 	info "image os: $img_distro"
 	info "image os version: $img_os_version"
+	# CCv0 on image is currently unsupported, do not pass
+	unset SKOPEO_UMOCI
+	unset AA_KBC
 	sudo -E PATH="${PATH}" make image \
 		DISTRO="${img_distro}" \
 		DEBUG="${DEBUG:-}" \
