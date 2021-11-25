@@ -33,3 +33,12 @@ ARCH_EXCLUDE_LIST=()
 
 [ "$SECCOMP" = "yes" ] && PACKAGES+=" libseccomp2" || true
 [ -n "$SKOPEO_UMOCI" ] && PACKAGES+=" ca-certificates libgpgme11" || true
+
+if [ "${AA_KBC}" == "eaa_kbc" ] && [ "${ARCH}" == "x86_64" ]; then
+    AA_KBC_EXTRAS="
+RUN echo 'deb [arch=amd64] http://mirrors.openanolis.cn/inclavare-containers/ubuntu20.04 bionic main' \| tee /etc/apt/sources.list.d/inclavare-containers.list; \
+    wget -qO - http://mirrors.openanolis.cn/inclavare-containers/ubuntu20.04/DEB-GPG-KEY.key  \| apt-key add -; \
+    apt-get update; \
+    apt-get install -y rats-tls
+"
+fi

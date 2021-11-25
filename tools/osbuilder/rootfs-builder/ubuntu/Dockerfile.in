@@ -48,3 +48,4 @@ RUN apt-get update && apt-get --no-install-recommends install -y \
 
 # This will install the proper packages to build Kata components
 @INSTALL_RUST@
+@INSTALL_AA_KBC@
