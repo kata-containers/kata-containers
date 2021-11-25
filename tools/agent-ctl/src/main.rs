@@ -134,16 +134,14 @@ fn make_examples_text(program_name: &str) -> String {
 fn connect(name: &str, global_args: clap::ArgMatches) -> Result<()> {
     let args = global_args
         .subcommand_matches("connect")
-        .ok_or("BUG: missing sub-command arguments".to_string())
-        .map_err(|e| anyhow!(e))?;
+        .ok_or_else(|| anyhow!("BUG: missing sub-command arguments"))?;
 
     let interactive = args.is_present("interactive");
     let ignore_errors = args.is_present("ignore-errors");
 
     let server_address = args
         .value_of("server-address")
-        .ok_or("need server adddress".to_string())
-        .map_err(|e| anyhow!(e))?
+        .ok_or_else(|| anyhow!("need server adddress"))?
         .to_string();
 
     let mut commands: Vec<&str> = Vec::new();
@@ -151,13 +149,13 @@ fn connect(name: &str, global_args: clap::ArgMatches) -> Result<()> {
     if !interactive {
         commands = args
             .values_of("cmd")
-            .ok_or("need commands to send to the server".to_string())
-            .map_err(|e| anyhow!(e))?
+            .ok_or_else(|| anyhow!("need commands to send to the server"))?
             .collect();
     }
 
-    // Cannot fail as a default has been specified
-    let log_level_name = global_args.value_of("log-level").unwrap();
+    let log_level_name = global_args
+        .value_of("log-level")
+        .ok_or_else(|| anyhow!("cannot get log level"))?;
 
     let log_level = logging::level_name_to_slog_level(log_level_name).map_err(|e| anyhow!(e))?;
 
@@ -169,10 +167,10 @@ fn connect(name: &str, global_args: clap::ArgMatches) -> Result<()> {
         None => 0,
     };
 
-    let hybrid_vsock_port: u64 = args
+    let hybrid_vsock_port = args
         .value_of("hybrid-vsock-port")
-        .ok_or("Need Hybrid VSOCK port number")
-        .map(|p| p.parse::<u64>().unwrap())
+        .ok_or_else(|| anyhow!("Need Hybrid VSOCK port number"))?
+        .parse::<u64>()
         .map_err(|e| anyhow!("VSOCK port number must be an integer: {:?}", e))?;
 
     let bundle_dir = args.value_of("bundle-dir").unwrap_or("").to_string();
@@ -218,7 +216,7 @@ fn real_main() -> Result<()> {
                 .long("log-level")
                 .short("l")
                 .help("specific log level")
-                .default_value(logging::slog_level_to_level_name(DEFAULT_LOG_LEVEL).unwrap())
+                .default_value(logging::slog_level_to_level_name(DEFAULT_LOG_LEVEL).map_err(|e| anyhow!(e))?)
                 .possible_values(&logging::get_log_levels())
                 .takes_value(true)
                 .required(false),
@@ -304,35 +302,29 @@ fn real_main() -> Result<()> {
 
     let subcmd = args
         .subcommand_name()
-        .ok_or("need sub-command".to_string())
-        .map_err(|e| anyhow!(e))?;
+        .ok_or_else(|| anyhow!("need sub-command"))?;
 
     match subcmd {
         "generate-cid" => {
             println!("{}", utils::random_container_id());
-            return Ok(());
+            Ok(())
         }
         "generate-sid" => {
             println!("{}", utils::random_sandbox_id());
-            return Ok(());
+            Ok(())
         }
         "examples" => {
             println!("{}", make_examples_text(name));
-            return Ok(());
+            Ok(())
         }
-        "connect" => {
-            return connect(name, args);
-        }
+        "connect" => connect(name, args),
         _ => return Err(anyhow!(format!("invalid sub-command: {:?}", subcmd))),
     }
 }
 
 fn main() {
-    match real_main() {
-        Err(e) => {
-            eprintln!("ERROR: {}", e);
-            exit(1);
-        }
-        _ => (),
-    };
+    if let Err(e) = real_main() {
+        eprintln!("ERROR: {}", e);
+        exit(1);
+    }
 }

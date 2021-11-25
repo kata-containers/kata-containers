@@ -366,8 +366,8 @@ impl SandboxStorages {
                         }
 
                         match baremount(
-                            entry.source_mount_point.to_str().unwrap(),
-                            entry.target_mount_point.to_str().unwrap(),
+                            entry.source_mount_point.as_path(),
+                            entry.target_mount_point.as_path(),
                             "bind",
                             MsFlags::MS_BIND,
                             "bind",
@@ -477,8 +477,8 @@ impl BindWatcher {
         fs::create_dir_all(WATCH_MOUNT_POINT_PATH).await?;
 
         baremount(
-            "tmpfs",
-            WATCH_MOUNT_POINT_PATH,
+            Path::new("tmpfs"),
+            Path::new(WATCH_MOUNT_POINT_PATH),
             "tmpfs",
             MsFlags::empty(),
             "",

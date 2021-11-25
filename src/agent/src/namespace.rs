@@ -104,7 +104,10 @@ impl Namespace {
             if let Err(err) = || -> Result<()> {
                 let origin_ns_path = get_current_thread_ns_path(ns_type.get());
 
-                File::open(Path::new(&origin_ns_path))?;
+                let source = Path::new(&origin_ns_path);
+                let destination = new_ns_path.as_path();
+
+                File::open(&source)?;
 
                 // Create a new netns on the current thread.
                 let cf = ns_type.get_flags();
@@ -115,8 +118,6 @@ impl Namespace {
                     nix::unistd::sethostname(hostname.unwrap())?;
                 }
                 // Bind mount the new namespace from the current thread onto the mount point to persist it.
-                let source: &str = origin_ns_path.as_str();
-                let destination: &str = new_ns_path.as_path().to_str().unwrap_or("none");
 
                 let mut flags = MsFlags::empty();
 
@@ -131,7 +132,7 @@ impl Namespace {
 
                 baremount(source, destination, "none", flags, "", &logger).map_err(|e| {
                     anyhow!(
-                        "Failed to mount {} to {} with err:{:?}",
+                        "Failed to mount {:?} to {:?} with err:{:?}",
                         source,
                         destination,
                         e

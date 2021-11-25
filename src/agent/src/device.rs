@@ -11,7 +11,7 @@ use std::fmt;
 use std::fs;
 use std::os::unix::ffi::OsStrExt;
 use std::os::unix::fs::MetadataExt;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -157,20 +157,22 @@ pub fn pcipath_to_sysfs(root_bus_sysfs: &str, pcipath: &pci::Path) -> Result<Str
         let bridgebuspath = format!("{}{}/pci_bus", root_bus_sysfs, relpath);
         let mut files: Vec<_> = fs::read_dir(&bridgebuspath)?.collect();
 
-        if files.len() != 1 {
-            return Err(anyhow!(
-                "Expected exactly one PCI bus in {}, got {} instead",
-                bridgebuspath,
-                files.len()
-            ));
-        }
-
-        // unwrap is safe, because of the length test above
-        let busfile = files.pop().unwrap()?;
-        bus = busfile
-            .file_name()
-            .into_string()
-            .map_err(|e| anyhow!("Bad filename under {}: {:?}", &bridgebuspath, e))?;
+        match files.pop() {
+            Some(busfile) if files.is_empty() => {
+                bus = busfile?
+                    .file_name()
+                    .into_string()
+                    .map_err(|e| anyhow!("Bad filename under {}: {:?}", &bridgebuspath, e))?;
+            }
+            _ => {
+                return Err(anyhow!(
+                    "Expected exactly one PCI bus in {}, got {} instead",
+                    bridgebuspath,
+                    // Adjust to original value as we've already popped
+                    files.len() + 1
+                ));
+            }
+        };
     }
 
     Ok(relpath)
@@ -218,8 +220,9 @@ impl VirtioBlkPciMatcher {
     fn new(relpath: &str) -> VirtioBlkPciMatcher {
         let root_bus = create_pci_root_bus_path();
         let re = format!(r"^{}{}/virtio[0-9]+/block/", root_bus, relpath);
+
         VirtioBlkPciMatcher {
-            rex: Regex::new(&re).unwrap(),
+            rex: Regex::new(&re).expect("BUG: failed to compile VirtioBlkPciMatcher regex"),
         }
     }
 }
@@ -257,7 +260,7 @@ impl VirtioBlkCCWMatcher {
             root_bus_path, device
         );
         VirtioBlkCCWMatcher {
-            rex: Regex::new(&re).unwrap(),
+            rex: Regex::new(&re).expect("BUG: failed to compile VirtioBlkCCWMatcher regex"),
         }
     }
 }
@@ -413,12 +416,15 @@ fn scan_scsi_bus(scsi_addr: &str) -> Result<()> {
 
     for entry in fs::read_dir(SYSFS_SCSI_HOST_PATH)? {
         let host = entry?.file_name();
-        let scan_path = format!(
-            "{}/{}/{}",
-            SYSFS_SCSI_HOST_PATH,
-            host.to_str().unwrap(),
-            "scan"
-        );
+
+        let host_str = host.to_str().ok_or_else(|| {
+            anyhow!(
+                "failed to convert directory entry to unicode for file {:?}",
+                host
+            )
+        })?;
+
+        let scan_path = PathBuf::from(&format!("{}/{}/{}", SYSFS_SCSI_HOST_PATH, host_str, "scan"));
 
         fs::write(scan_path, &scan_data)?;
     }
@@ -722,25 +728,17 @@ async fn vfio_device_handler(device: &Device, sandbox: &Arc<Mutex<Sandbox>>) -> 
         if vfio_in_guest {
             pci_driver_override(SYSFS_BUS_PCI_PATH, guestdev, "vfio-pci")?;
 
-            let devgroup = pci_iommu_group(SYSFS_BUS_PCI_PATH, guestdev)?;
-            if devgroup.is_none() {
-                // Devices must have an IOMMU group to be usable via VFIO
-                return Err(anyhow!("{} has no IOMMU group", guestdev));
+            // Devices must have an IOMMU group to be usable via VFIO
+            let devgroup = pci_iommu_group(SYSFS_BUS_PCI_PATH, guestdev)?
+                .ok_or_else(|| anyhow!("{} has no IOMMU group", guestdev))?;
+
+            if let Some(g) = group {
+                if g != devgroup {
+                    return Err(anyhow!("{} is not in guest IOMMU group {}", guestdev, g));
+                }
             }
 
-            if group.is_some() && group != devgroup {
-                // If PCI devices associated with the same VFIO device
-                // (and therefore group) in the host don't end up in
-                // the same group in the guest, something has gone
-                // horribly wrong
-                return Err(anyhow!(
-                    "{} is not in guest IOMMU group {}",
-                    guestdev,
-                    group.unwrap()
-                ));
-            }
-
-            group = devgroup;
+            group = Some(devgroup);
 
             pci_fixups.push((host, guestdev));
         }
@@ -748,7 +746,8 @@ async fn vfio_device_handler(device: &Device, sandbox: &Arc<Mutex<Sandbox>>) -> 
 
     let dev_update = if vfio_in_guest {
         // If there are any devices at all, logic above ensures that group is not None
-        let group = group.unwrap();
+        let group = group.ok_or_else(|| anyhow!("failed to get VFIO group: {:?}"))?;
+
         let vm_path = get_vfio_device_name(sandbox, group).await?;
 
         Some(DevUpdate::from_vm_path(&vm_path, vm_path.clone())?)
@@ -844,11 +843,8 @@ pub fn update_device_cgroup(spec: &mut Spec) -> Result<()> {
         .as_mut()
         .ok_or_else(|| anyhow!("Spec didn't container linux field"))?;
 
-    if linux.resources.is_none() {
-        linux.resources = Some(LinuxResources::default());
-    }
+    let resources = linux.resources.get_or_insert(LinuxResources::default());
 
-    let resources = linux.resources.as_mut().unwrap();
     resources.devices.push(LinuxDeviceCgroup {
         allow: false,
         major: Some(major),
