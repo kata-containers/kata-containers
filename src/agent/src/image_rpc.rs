@@ -405,19 +405,20 @@ impl ImageService {
         env::set_var("OCICRYPT_KEYPROVIDER_CONFIG", OCICRYPT_CONFIG_PATH);
 
         let image = req.get_image();
-        let mut cid = req.get_container_id();
+        let mut cid = req.get_container_id().to_string();
 
         let aa_kbc_params = &AGENT_CONFIG.read().await.aa_kbc_params;
 
         if cid.is_empty() {
             let v: Vec<&str> = image.rsplit('/').collect();
             if !v[0].is_empty() {
-                cid = v[0]
+                // ':' have special meaning for umoci during upack
+                cid = v[0].replace(":", "_");
             } else {
                 return Err(anyhow!("Invalid image name. {}", image));
             }
         } else {
-            verify_cid(cid)?;
+            verify_cid(&cid)?;
         }
 
         if !aa_kbc_params.is_empty() {
@@ -439,7 +440,13 @@ impl ImageService {
             let config_policy_path = &AGENT_CONFIG.read().await.container_policy_path;
             let policy_path = (!config_policy_path.is_empty()).then(|| config_policy_path);
 
-            Self::pull_image_from_registry(image, cid, &source_creds, &policy_path, aa_kbc_params)?;
+            Self::pull_image_from_registry(
+                image,
+                &cid,
+                &source_creds,
+                &policy_path,
+                aa_kbc_params,
+            )?;
         } else {
             let image = image.to_string();
             let cid = cid.to_string();
@@ -458,7 +465,7 @@ impl ImageService {
             .await?;
         }
 
-        Self::unpack_image(cid)?;
+        Self::unpack_image(&cid)?;
 
         let mut sandbox = self.sandbox.lock().await;
         sandbox.images.insert(String::from(image), cid.to_string());
