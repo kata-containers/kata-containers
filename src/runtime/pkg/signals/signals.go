@@ -23,21 +23,6 @@ var signalLog = logrus.WithField("default-signal-logger", true)
 // or a fatal signal is received.
 var CrashOnError = false
 
-// List of handled signals.
-//
-// The value is true if receiving the signal should be fatal.
-var handledSignalsMap = map[syscall.Signal]bool{
-	syscall.SIGABRT:   true,
-	syscall.SIGBUS:    true,
-	syscall.SIGILL:    true,
-	syscall.SIGQUIT:   true,
-	syscall.SIGSEGV:   true,
-	syscall.SIGSTKFLT: true,
-	syscall.SIGSYS:    true,
-	syscall.SIGTRAP:   true,
-	syscall.SIGUSR1:   false,
-}
-
 // DieCb is the callback function type that needs to be defined for every call
 // into the Die() function. This callback will be run as the first function of
 // the Die() implementation.
