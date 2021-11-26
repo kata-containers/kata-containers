@@ -196,6 +196,7 @@ needed. Changes affect the files included in the final guest image.
 
 #### Confidential containers support
 
-When building the rootfs for confidential containers if `SKOPEO_UMOCI=yes` is set then the `skopeo` and `umoci`
-packages are built and added into the rootfs. It also adds the signature verification proof of concept files.
+When building the rootfs for confidential containers if `SKOPEO=yes` is set then the `skopeo`
+package is built and added into the rootfs. It also adds the signature verification proof of concept files.
+If `UMOCI=yes` is set then the `umoci` package is built and added into the rootfs.
 For more info on these, see [the documentation](signed-container-artifacts/README.md).
