@@ -22,7 +22,7 @@ use crate::AGENT_CONFIG;
 
 const SKOPEO_PATH: &str = "/usr/bin/skopeo";
 const UMOCI_PATH: &str = "/usr/local/bin/umoci";
-const IMAGE_OCI: &str = "image_oci:latest";
+const IMAGE_OCI: &str = "image_oci";
 const AA_PATH: &str = "/usr/local/bin/attestation-agent";
 const AA_PORT: &str = "127.0.0.1:50000";
 const OCICRYPT_CONFIG_PATH: &str = "/tmp/ocicrypt_config.json";
@@ -58,7 +58,7 @@ impl ImageService {
 
         let tmp_cid_path = Path::new("/tmp/").join(cid);
         let oci_path = tmp_cid_path.join(IMAGE_OCI);
-        let target_path_oci = format!("oci://{}", oci_path.to_string_lossy());
+        let target_path_oci = format!("oci://{}:latest", oci_path.to_string_lossy());
 
         fs::create_dir_all(&oci_path)?;
 
