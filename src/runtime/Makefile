@@ -32,6 +32,8 @@ ALL_ARCHES = $(patsubst $(ARCH_DIR)/%$(ARCH_FILE_SUFFIX),%,$(ARCH_FILES))
 # Build as safely as possible
 export CGO_CPPFLAGS = -D_FORTIFY_SOURCE=2 -fstack-protector
 
+HOST_OS := $(shell uname)
+
 ifeq (,$(realpath $(ARCH_FILE)))
     $(error "ERROR: invalid architecture: '$(ARCH)'")
 else
@@ -51,7 +53,6 @@ SCRIPTS :=
 
 # list of binaries to install
 BINLIST :=
-BINLIBEXECLIST :=
 
 BIN_PREFIX = $(PROJECT_TYPE)
 PROJECT_DIR = $(PROJECT_TAG)
@@ -104,6 +105,7 @@ BASH_COMPLETIONS := data/completions/bash/kata-runtime
 BASH_COMPLETIONSDIR := $(SHAREDIR)/bash-completion/completions
 
 PKGDATADIR := $(PREFIXDEPS)/share/$(PROJECT_DIR)
+PKGDATADIR_DARWIN := $(PREFIX)/local/share/$(PROJECT_DIR)
 PKGRUNDIR := $(LOCALSTATEDIR)/run/$(PROJECT_DIR)
 PKGLIBEXECDIR := $(LIBEXECDIR)/$(PROJECT_DIR)
 
@@ -217,6 +219,7 @@ MONITOR = kata-monitor
 MONITOR_OUTPUT = $(CURDIR)/$(MONITOR)
 MONITOR_DIR = $(CLI_DIR)/kata-monitor
 
+RUNTIME_TARGETS := runtime containerd-shim-v2 monitor
 
 SOURCES := $(shell find . 2>&1 | grep -E '.*\.(c|h|go)$$')
 VERSION := ${shell cat ./VERSION}
@@ -393,6 +396,7 @@ USER_VARS += FCVALIDJAILERPATHS
 USER_VARS += SYSCONFIG
 USER_VARS += IMAGENAME
 USER_VARS += IMAGEPATH
+USER_VARS += IMAGEPATH_VFW
 USER_VARS += MACHINETYPE
 USER_VARS += KERNELDIR
 USER_VARS += KERNELTYPE
@@ -413,6 +417,7 @@ USER_VARS += KERNELPARAMS
 USER_VARS += LIBEXECDIR
 USER_VARS += LOCALSTATEDIR
 USER_VARS += PKGDATADIR
+USER_VARS += PKGDATADIR_DARWIN
 USER_VARS += PKGLIBEXECDIR
 USER_VARS += PKGRUNDIR
 USER_VARS += PREFIX
@@ -442,6 +447,7 @@ USER_VARS += DEFNETWORKMODEL_ACRN
 USER_VARS += DEFNETWORKMODEL_CLH
 USER_VARS += DEFNETWORKMODEL_FC
 USER_VARS += DEFNETWORKMODEL_QEMU
+USER_VARS += DEFNETWORKMODEL_VFW
 USER_VARS += DEFDISABLEGUESTEMPTYDIR
 USER_VARS += DEFDISABLEGUESTSECCOMP
 USER_VARS += DEFDISABLESELINUX
@@ -508,7 +514,17 @@ define SHOW_ARCH
   $(shell printf "\\t%s%s\\\n" "$(1)" $(if $(filter $(ARCH),$(1))," (default)",""))
 endef
 
-all: runtime containerd-shim-v2 monitor
+
+all: $(RUNTIME_TARGETS)
+
+ifeq ($(HOST_OS),Linux)
+    READLINK = readlink
+endif
+
+ifeq ($(HOST_OS),Darwin)
+    READLINK = greadlink
+endif
+
 
 # Targets that depend on .git-commit can use $(shell cat .git-commit) to get a
 # git revision string.  They will only be rebuilt if the revision string
@@ -641,9 +657,6 @@ install-containerd-shim-v2: $(SHIMV2)
 install-monitor: $(MONITOR)
 	$(QUIET_INST)$(call INSTALL_EXEC,$<,$(BINDIR))
 
-install-bin-libexec: $(BINLIBEXECLIST)
-	$(QUIET_INST)$(foreach f,$(BINLIBEXECLIST),$(call INSTALL_EXEC,$f,$(PKGLIBEXECDIR)))
-
 install-configs: $(CONFIGS)
 	$(QUIET_INST)$(foreach f,$(CONFIGS),$(call INSTALL_CONFIG,$f,$(dir $(CONFIG_PATH))))
 	$(QUIET_INST)ln -sf $(DEFAULT_HYPERVISOR_CONFIG) $(DESTDIR)/$(CONFIG_PATH)
@@ -749,15 +762,13 @@ endif
 	@printf "\tbinary installation path (BINDIR) : %s\n" $(abspath $(BINDIR))
 	@printf "\tbinaries to install :\n"
 	@printf \
-          "$(foreach b,$(sort $(BINLIST)),$(shell printf "\\t - $(shell readlink -m $(DESTDIR)/$(BINDIR)/$(b))\\\n"))"
+          "$(foreach b,$(sort $(BINLIST)),$(shell printf "\\t - $(shell $(READLINK) -m $(DESTDIR)/$(BINDIR)/$(b))\\\n"))"
 	@printf \
-          "$(foreach b,$(sort $(SHIMV2)),$(shell printf "\\t - $(shell readlink -m $(DESTDIR)/$(BINDIR)/$(b))\\\n"))"
+          "$(foreach b,$(sort $(SHIMV2)),$(shell printf "\\t - $(shell $(READLINK) -m $(DESTDIR)/$(BINDIR)/$(b))\\\n"))"
 	@printf \
-          "$(foreach b,$(sort $(MONITOR)),$(shell printf "\\t - $(shell readlink -m $(DESTDIR)/$(BINDIR)/$(b))\\\n"))"
+          "$(foreach b,$(sort $(MONITOR)),$(shell printf "\\t - $(shell $(READLINK) -m $(DESTDIR)/$(BINDIR)/$(b))\\\n"))"
 	@printf \
-          "$(foreach b,$(sort $(BINLIBEXECLIST)),$(shell printf "\\t - $(shell readlink -m $(DESTDIR)/$(PKGLIBEXECDIR)/$(b))\\\n"))"
-	@printf \
-          "$(foreach s,$(sort $(SCRIPTS)),$(shell printf "\\t - $(shell readlink -m $(DESTDIR)/$(BINDIR)/$(s))\\\n"))"
+          "$(foreach s,$(sort $(SCRIPTS)),$(shell printf "\\t - $(shell $(READLINK) -m $(DESTDIR)/$(BINDIR)/$(s))\\\n"))"
 	@printf "\tconfigs to install (CONFIGS) :\n"
 	@printf \
 	  "$(foreach c,$(sort $(CONFIGS)),$(shell printf "\\t - $(c)\\\n"))"
