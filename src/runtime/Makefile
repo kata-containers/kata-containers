@@ -535,7 +535,7 @@ endef
 
 all: runtime containerd-shim-v2 monitor
 
-# Targets that depend on .git-commit can use $(shell cat .git-commit) to get a
+# Targets that depend on .git-commit can use $(shell git rev-parse HEAD) to get a
 # git revision string.  They will only be rebuilt if the revision string
 # actually changes.
 .PHONY: .git-commit.tmp
@@ -590,7 +590,7 @@ $(SHIMV2_OUTPUT): $(SOURCES) $(GENERATED_FILES) $(MAKEFILE_LIST)
 
 $(MONITOR_OUTPUT): $(SOURCES) $(GENERATED_FILES) $(MAKEFILE_LIST) .git-commit
 	$(QUIET_BUILD)(cd $(MONITOR_DIR)/ && go build \
-		--ldflags "-X main.GitCommit=$(shell cat .git-commit)" $(BUILDFLAGS) -o $@ .)
+		--ldflags "-X main.GitCommit=$(shell git rev-parse HEAD)" $(BUILDFLAGS) -o $@ .)
 
 .PHONY: \
 	check \
@@ -611,7 +611,7 @@ GENERATED_FILES += $(CONFIGS)
 
 $(GENERATED_FILES): %: %.in $(MAKEFILE_LIST) VERSION .git-commit
 	$(QUIET_GENERATE)$(SED) \
-		-e "s|@COMMIT@|$(shell cat .git-commit)|g" \
+		-e "s|@COMMIT@|$(shell git rev-parse HEAD)|g" \
 		$(foreach v,$(GENERATED_VARS),-e "s|@$v@|$($v)|g") \
 		$< > $@
 
@@ -738,7 +738,7 @@ show-variables:
 	@printf "\n"
 
 show-header: .git-commit
-	@printf "%s - version %s (commit %s)\n\n" $(TARGET) $(VERSION) $(shell cat .git-commit)
+	@printf "%s - version %s (commit %s)\n\n" $(TARGET) $(VERSION) $(shell git rev-parse HEAD)
 
 show-arches: show-header
 	@printf "Supported architectures (possible values for ARCH variable):\n\n"
