@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use futures::StreamExt;
 use std::io;
 use std::io::ErrorKind;
@@ -64,8 +64,12 @@ pub fn get_vsock_incoming(fd: RawFd) -> Incoming {
 
 #[instrument]
 pub async fn get_vsock_stream(fd: RawFd) -> Result<VsockStream> {
-    let stream = get_vsock_incoming(fd).next().await.unwrap()?;
-    Ok(stream)
+    let stream = get_vsock_incoming(fd)
+        .next()
+        .await
+        .ok_or_else(|| anyhow!("cannot handle incoming vsock connection"))?;
+
+    Ok(stream?)
 }
 
 #[cfg(test)]
@@ -124,7 +128,9 @@ mod tests {
 
             let mut vec_locked = vec_ref.lock();
 
-            let v = vec_locked.as_deref_mut().unwrap();
+            let v = vec_locked
+                .as_deref_mut()
+                .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
 
             std::io::Write::flush(v)
         }

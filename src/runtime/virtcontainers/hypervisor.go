@@ -14,11 +14,12 @@ import (
 	"strconv"
 	"strings"
 
+	hv "github.com/kata-containers/kata-containers/src/runtime/pkg/hypervisors"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
-	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist"
-	persistapi "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist/api"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
+
+	"github.com/sirupsen/logrus"
 )
 
 // HypervisorType describes an hypervisor type.
@@ -46,14 +47,10 @@ const (
 
 	// MockHypervisor is a mock hypervisor for testing purposes
 	MockHypervisor HypervisorType = "mock"
-)
 
-const (
 	procMemInfo = "/proc/meminfo"
 	procCPUInfo = "/proc/cpuinfo"
-)
 
-const (
 	defaultVCPUs = 1
 	// 2 GiB
 	defaultMemSzMiB = 2048
@@ -72,6 +69,10 @@ const (
 
 	// MinHypervisorMemory is the minimum memory required for a VM.
 	MinHypervisorMemory = 256
+)
+
+var (
+	hvLogger = logrus.WithField("source", "virtcontainers/hypervisor")
 )
 
 // In some architectures the maximum number of vCPUs depends on the number of physical cores.
@@ -144,6 +145,12 @@ type MemoryDevice struct {
 	Probe  bool
 }
 
+// SetHypervisorLogger sets up a logger for the hypervisor part of this pkg
+func SetHypervisorLogger(logger *logrus.Entry) {
+	fields := hvLogger.Data
+	hvLogger = logger.WithFields(fields)
+}
+
 // Set sets an hypervisor type based on the input string.
 func (hType *HypervisorType) Set(value string) error {
 	switch value {
@@ -185,28 +192,18 @@ func (hType *HypervisorType) String() string {
 	}
 }
 
-// NewHypervisor returns an hypervisor from and hypervisor type.
+// NewHypervisor returns an hypervisor from a hypervisor type.
 func NewHypervisor(hType HypervisorType) (Hypervisor, error) {
-	store, err := persist.GetDriver()
-	if err != nil {
-		return nil, err
-	}
 
 	switch hType {
 	case QemuHypervisor:
-		return &qemu{
-			store: store,
-		}, nil
+		return &qemu{}, nil
 	case FirecrackerHypervisor:
 		return &firecracker{}, nil
 	case AcrnHypervisor:
-		return &Acrn{
-			store: store,
-		}, nil
+		return &Acrn{}, nil
 	case ClhHypervisor:
-		return &cloudHypervisor{
-			store: store,
-		}, nil
+		return &cloudHypervisor{}, nil
 	case MockHypervisor:
 		return &mockHypervisor{}, nil
 	default:
@@ -315,12 +312,18 @@ type HypervisorConfig struct {
 	EntropySource string
 
 	// Shared file system type:
-	//   - virtio-9p (default)
-	//   - virtio-fs
+	//   - virtio-9p
+	//   - virtio-fs (default)
 	SharedFS string
+
+	// Path for filesystem sharing
+	SharedPath string
 
 	// VirtioFSDaemon is the virtio-fs vhost-user daemon path
 	VirtioFSDaemon string
+
+	// VirtioFSCache cache mode for fs version cache or "none"
+	VirtioFSCache string
 
 	// File based memory backend root directory
 	FileBackedMemRootDir string
@@ -339,11 +342,14 @@ type HypervisorConfig struct {
 	// VMid is "" if the hypervisor is not created by the factory.
 	VMid string
 
+	// VMStorePath is the location on disk where VM information will persist
+	VMStorePath string
+
+	// VMStorePath is the location on disk where runtime information will persist
+	RunStorePath string
+
 	// SELinux label for the VM
 	SELinuxProcessLabel string
-
-	// VirtioFSCache cache mode for fs version cache or "none"
-	VirtioFSCache string
 
 	// HypervisorPathList is the list of hypervisor paths names allowed in annotations
 	HypervisorPathList []string
@@ -606,7 +612,7 @@ func (conf *HypervisorConfig) AddCustomAsset(a *types.Asset) error {
 		return fmt.Errorf("Invalid %s at %s", a.Type(), a.Path())
 	}
 
-	virtLog.Debugf("Using custom %v asset %s", a.Type(), a.Path())
+	hvLogger.Debugf("Using custom %v asset %s", a.Type(), a.Path())
 
 	if conf.customAssets == nil {
 		conf.customAssets = make(map[types.AssetType]*types.Asset)
@@ -874,7 +880,7 @@ func RunningOnVMM(cpuInfoPath string) (bool, error) {
 		return flags["hypervisor"], nil
 	}
 
-	virtLog.WithField("arch", runtime.GOARCH).Info("Unable to know if the system is running inside a VM")
+	hvLogger.WithField("arch", runtime.GOARCH).Info("Unable to know if the system is running inside a VM")
 	return false, nil
 }
 
@@ -931,14 +937,12 @@ type Hypervisor interface {
 	toGrpc(ctx context.Context) ([]byte, error)
 	Check() error
 
-	Save() persistapi.HypervisorState
-	Load(persistapi.HypervisorState)
+	Save() hv.HypervisorState
+	Load(hv.HypervisorState)
 
 	// generate the socket to communicate the host and guest
 	GenerateSocket(id string) (interface{}, error)
 
 	// check if hypervisor supports built-in rate limiter.
 	IsRateLimiterBuiltin() bool
-
-	setSandbox(sandbox *Sandbox)
 }

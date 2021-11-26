@@ -112,6 +112,7 @@ lazy_static! {
 }
 
 #[inline(always)]
+#[cfg(not(test))]
 pub fn mount<
     P1: ?Sized + NixPath,
     P2: ?Sized + NixPath,
@@ -124,21 +125,42 @@ pub fn mount<
     flags: MsFlags,
     data: Option<&P4>,
 ) -> std::result::Result<(), nix::Error> {
-    #[cfg(not(test))]
-    return mount::mount(source, target, fstype, flags, data);
-    #[cfg(test)]
-    return Ok(());
+    mount::mount(source, target, fstype, flags, data)
 }
 
 #[inline(always)]
+#[cfg(test)]
+pub fn mount<
+    P1: ?Sized + NixPath,
+    P2: ?Sized + NixPath,
+    P3: ?Sized + NixPath,
+    P4: ?Sized + NixPath,
+>(
+    _source: Option<&P1>,
+    _target: &P2,
+    _fstype: Option<&P3>,
+    _flags: MsFlags,
+    _data: Option<&P4>,
+) -> std::result::Result<(), nix::Error> {
+    Ok(())
+}
+
+#[inline(always)]
+#[cfg(not(test))]
 pub fn umount2<P: ?Sized + NixPath>(
     target: &P,
     flags: MntFlags,
 ) -> std::result::Result<(), nix::Error> {
-    #[cfg(not(test))]
-    return mount::umount2(target, flags);
-    #[cfg(test)]
-    return Ok(());
+    mount::umount2(target, flags)
+}
+
+#[inline(always)]
+#[cfg(test)]
+pub fn umount2<P: ?Sized + NixPath>(
+    _target: &P,
+    _flags: MntFlags,
+) -> std::result::Result<(), nix::Error> {
+    Ok(())
 }
 
 pub fn init_rootfs(
@@ -450,14 +472,20 @@ fn mount_cgroups(
     Ok(())
 }
 
+#[cfg(not(test))]
 fn pivot_root<P1: ?Sized + NixPath, P2: ?Sized + NixPath>(
     new_root: &P1,
     put_old: &P2,
 ) -> anyhow::Result<(), nix::Error> {
-    #[cfg(not(test))]
-    return unistd::pivot_root(new_root, put_old);
-    #[cfg(test)]
-    return Ok(());
+    unistd::pivot_root(new_root, put_old)
+}
+
+#[cfg(test)]
+fn pivot_root<P1: ?Sized + NixPath, P2: ?Sized + NixPath>(
+    _new_root: &P1,
+    _put_old: &P2,
+) -> anyhow::Result<(), nix::Error> {
+    Ok(())
 }
 
 pub fn pivot_rootfs<P: ?Sized + NixPath + std::fmt::Debug>(path: &P) -> Result<()> {
@@ -582,11 +610,15 @@ fn parse_mount_table() -> Result<Vec<Info>> {
 }
 
 #[inline(always)]
+#[cfg(not(test))]
 fn chroot<P: ?Sized + NixPath>(path: &P) -> Result<(), nix::Error> {
-    #[cfg(not(test))]
-    return unistd::chroot(path);
-    #[cfg(test)]
-    return Ok(());
+    unistd::chroot(path)
+}
+
+#[inline(always)]
+#[cfg(test)]
+fn chroot<P: ?Sized + NixPath>(_path: &P) -> Result<(), nix::Error> {
+    Ok(())
 }
 
 pub fn ms_move_root(rootfs: &str) -> Result<bool> {

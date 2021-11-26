@@ -29,7 +29,6 @@ var (
 	hypervisorDebug = false
 	runtimeDebug    = false
 	runtimeTrace    = false
-	netmonDebug     = false
 	agentDebug      = false
 	agentTrace      = false
 	enablePprof     = true
@@ -74,7 +73,6 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (config testRuntimeConf
 	kernelPath := path.Join(dir, "kernel")
 	kernelParams := "foo=bar xyz"
 	imagePath := path.Join(dir, "image")
-	netmonPath := path.Join(dir, "netmon")
 	logDir := path.Join(dir, "logs")
 	logPath := path.Join(logDir, "runtime.log")
 	machineType := "machineType"
@@ -95,7 +93,6 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (config testRuntimeConf
 		ImagePath:            imagePath,
 		KernelParams:         kernelParams,
 		MachineType:          machineType,
-		NetmonPath:           netmonPath,
 		LogPath:              logPath,
 		DefaultGuestHookPath: defaultGuestHookPath,
 		DisableBlock:         disableBlockDevice,
@@ -111,7 +108,6 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (config testRuntimeConf
 		HypervisorDebug:      hypervisorDebug,
 		RuntimeDebug:         runtimeDebug,
 		RuntimeTrace:         runtimeTrace,
-		NetmonDebug:          netmonDebug,
 		AgentDebug:           agentDebug,
 		AgentTrace:           agentTrace,
 		SharedFS:             sharedFS,
@@ -180,12 +176,6 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (config testRuntimeConf
 		LongLiveConn: true,
 	}
 
-	netmonConfig := vc.NetmonConfig{
-		Path:   netmonPath,
-		Debug:  false,
-		Enable: false,
-	}
-
 	factoryConfig := oci.FactoryConfig{
 		TemplatePath:    defaultTemplatePath,
 		VMCacheEndpoint: defaultVMCacheEndpoint,
@@ -197,7 +187,6 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (config testRuntimeConf
 
 		AgentConfig: agentConfig,
 
-		NetmonConfig:    netmonConfig,
 		DisableNewNetNs: disableNewNetNs,
 		EnablePprof:     enablePprof,
 		JaegerEndpoint:  jaegerEndpoint,
@@ -493,7 +482,6 @@ func TestMinimalRuntimeConfig(t *testing.T) {
 	defaultHypervisorPath = hypervisorPath
 	jailerPath := path.Join(dir, "jailer")
 	defaultJailerPath = jailerPath
-	netmonPath := path.Join(dir, "netmon")
 
 	imagePath := path.Join(dir, "image.img")
 	initrdPath := path.Join(dir, "initrd.img")
@@ -535,8 +523,6 @@ func TestMinimalRuntimeConfig(t *testing.T) {
 	[agent.kata]
 	debug_console_enabled=true
 	kernel_modules=["a", "b", "c"]
-	[netmon]
-	path = "` + netmonPath + `"
 `
 
 	orgVHostVSockDevicePath := utils.VHostVSockDevicePath
@@ -557,11 +543,6 @@ func TestMinimalRuntimeConfig(t *testing.T) {
 	}
 
 	err = createEmptyFile(jailerPath)
-	if err != nil {
-		t.Error(err)
-	}
-
-	err = createEmptyFile(netmonPath)
 	if err != nil {
 		t.Error(err)
 	}
@@ -597,12 +578,6 @@ func TestMinimalRuntimeConfig(t *testing.T) {
 		KernelModules:      []string{"a", "b", "c"},
 	}
 
-	expectedNetmonConfig := vc.NetmonConfig{
-		Path:   netmonPath,
-		Debug:  false,
-		Enable: false,
-	}
-
 	expectedFactoryConfig := oci.FactoryConfig{
 		TemplatePath:    defaultTemplatePath,
 		VMCacheEndpoint: defaultVMCacheEndpoint,
@@ -613,8 +588,6 @@ func TestMinimalRuntimeConfig(t *testing.T) {
 		HypervisorConfig: expectedHypervisorConfig,
 
 		AgentConfig: expectedAgentConfig,
-
-		NetmonConfig: expectedNetmonConfig,
 
 		FactoryConfig: expectedFactoryConfig,
 	}
@@ -1553,9 +1526,6 @@ func TestCheckNetNsConfig(t *testing.T) {
 
 	config := oci.RuntimeConfig{
 		DisableNewNetNs: true,
-		NetmonConfig: vc.NetmonConfig{
-			Enable: true,
-		},
 	}
 	err := checkNetNsConfig(config)
 	assert.Error(err)

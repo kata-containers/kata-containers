@@ -55,11 +55,6 @@ RUNTIME_OUTPUT = $(CURDIR)/$(TARGET)
 RUNTIME_DIR = $(CLI_DIR)/$(TARGET)
 BINLIST += $(TARGET)
 
-NETMON_DIR = $(CLI_DIR)/netmon
-NETMON_TARGET = $(PROJECT_TYPE)-netmon
-NETMON_RUNTIME_OUTPUT = $(CURDIR)/$(NETMON_TARGET)
-BINLIBEXECLIST += $(NETMON_TARGET)
-
 DESTDIR ?= /
 
 ifeq ($(PREFIX),)
@@ -141,9 +136,6 @@ ACRNPATH := $(ACRNBINDIR)/$(ACRNCMD)
 ACRNVALIDHYPERVISORPATHS := [\"$(ACRNPATH)\"]
 ACRNCTLPATH := $(ACRNBINDIR)/$(ACRNCTLCMD)
 ACRNVALIDCTLPATHS := [\"$(ACRNCTLPATH)\"]
-
-NETMONCMD := $(BIN_PREFIX)-netmon
-NETMONPATH := $(PKGLIBEXECDIR)/$(NETMONCMD)
 
 # Default number of vCPUs
 DEFVCPUS := 1
@@ -416,7 +408,6 @@ USER_VARS += PROJECT_PREFIX
 USER_VARS += PROJECT_TAG
 USER_VARS += PROJECT_TYPE
 USER_VARS += PROJECT_URL
-USER_VARS += NETMONPATH
 USER_VARS += QEMUBINDIR
 USER_VARS += QEMUCMD
 USER_VARS += QEMUPATH
@@ -509,7 +500,7 @@ define SHOW_ARCH
   $(shell printf "\\t%s%s\\\n" "$(1)" $(if $(filter $(ARCH),$(1))," (default)",""))
 endef
 
-all: runtime containerd-shim-v2 netmon monitor
+all: runtime containerd-shim-v2 monitor
 
 # Targets that depend on .git-commit can use $(shell cat .git-commit) to get a
 # git revision string.  They will only be rebuilt if the revision string
@@ -524,11 +515,6 @@ all: runtime containerd-shim-v2 netmon monitor
 containerd-shim-v2: $(SHIMV2_OUTPUT)
 
 monitor: $(MONITOR_OUTPUT)
-
-netmon: $(NETMON_RUNTIME_OUTPUT)
-
-$(NETMON_RUNTIME_OUTPUT): $(SOURCES) VERSION
-	$(QUIET_BUILD)(cd $(NETMON_DIR) && go build $(BUILDFLAGS) -o $@ -ldflags "-X main.version=$(VERSION)" $(KATA_LDFLAGS))
 
 runtime: $(RUNTIME_OUTPUT) $(CONFIGS)
 .DEFAULT: default
@@ -638,14 +624,12 @@ coverage:
 	go test -v -mod=vendor -covermode=atomic -coverprofile=coverage.txt ./...
 	go tool cover -html=coverage.txt -o coverage.html
 
-install: all install-runtime install-containerd-shim-v2 install-monitor install-netmon
+install: all install-runtime install-containerd-shim-v2 install-monitor
 
 install-bin: $(BINLIST)
 	$(QUIET_INST)$(foreach f,$(BINLIST),$(call INSTALL_EXEC,$f,$(BINDIR)))
 
 install-runtime: runtime install-scripts install-completions install-configs install-bin
-
-install-netmon: install-bin-libexec
 
 install-containerd-shim-v2: $(SHIMV2)
 	$(QUIET_INST)$(call INSTALL_EXEC,$<,$(BINDIR))
@@ -678,7 +662,6 @@ clean:
 	$(QUIET_CLEAN)rm -f \
 		$(CONFIGS) \
 		$(GENERATED_FILES) \
-		$(NETMON_TARGET) \
 		$(MONITOR) \
 		$(SHIMV2) \
 		$(TARGET) \
@@ -706,9 +689,7 @@ show-usage: show-header
 	@printf "\tgenerate-config            : create configuration file.\n"
 	@printf "\tinstall                    : install everything.\n"
 	@printf "\tinstall-containerd-shim-v2 : only install containerd shim v2 files.\n"
-	@printf "\tinstall-netmon             : only install netmon files.\n"
 	@printf "\tinstall-runtime            : only install runtime files.\n"
-	@printf "\tnetmon                     : only build netmon.\n"
 	@printf "\truntime                    : only build runtime.\n"
 	@printf "\tshow-arches                : show supported architectures (ARCH variable values).\n"
 	@printf "\tshow-summary               : show install locations.\n"

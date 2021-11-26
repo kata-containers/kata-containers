@@ -169,7 +169,7 @@ func (q *qemuAmd64) cpuModel() string {
 	// VMX is not migratable yet.
 	// issue: https://github.com/kata-containers/runtime/issues/1750
 	if q.vmFactory {
-		virtLog.WithField("subsystem", "qemuAmd64").Warn("VMX is not migratable yet: turning it off")
+		hvLogger.WithField("subsystem", "qemuAmd64").Warn("VMX is not migratable yet: turning it off")
 		cpuModel += ",vmx=off"
 	}
 
@@ -200,7 +200,7 @@ func (q *qemuAmd64) enableProtection() error {
 	if err != nil {
 		return err
 	}
-	logger := virtLog.WithFields(logrus.Fields{
+	logger := hvLogger.WithFields(logrus.Fields{
 		"subsystem":               "qemuAmd64",
 		"machine":                 q.qemuMachine,
 		"kernel-params-debug":     q.kernelParamsDebug,

@@ -8,6 +8,7 @@ package virtcontainers
 import (
 	"errors"
 
+	hv "github.com/kata-containers/kata-containers/src/runtime/pkg/hypervisors"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/api"
 	exp "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/experimental"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist"
@@ -164,7 +165,6 @@ func (s *Sandbox) dumpAgent(ss *persistapi.SandboxState) {
 func (s *Sandbox) dumpNetwork(ss *persistapi.SandboxState) {
 	ss.Network = persistapi.NetworkInfo{
 		NetNsPath:    s.networkNS.NetNsPath,
-		NetmonPID:    s.networkNS.NetmonPID,
 		NetNsCreated: s.networkNS.NetNsCreated,
 	}
 	for _, e := range s.networkNS.Endpoints {
@@ -315,7 +315,7 @@ func (c *Container) loadContState(cs persistapi.ContainerState) {
 	}
 }
 
-func (s *Sandbox) loadHypervisor(hs persistapi.HypervisorState) {
+func (s *Sandbox) loadHypervisor(hs hv.HypervisorState) {
 	s.hypervisor.Load(hs)
 }
 
@@ -367,7 +367,6 @@ func (c *Container) loadContProcess(cs persistapi.ContainerState) {
 func (s *Sandbox) loadNetwork(netInfo persistapi.NetworkInfo) {
 	s.networkNS = NetworkNamespace{
 		NetNsPath:    netInfo.NetNsPath,
-		NetmonPID:    netInfo.NetmonPID,
 		NetNsCreated: netInfo.NetNsCreated,
 	}
 

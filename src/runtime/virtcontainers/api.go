@@ -35,7 +35,7 @@ var virtLog = logrus.WithField("source", "virtcontainers")
 func SetLogger(ctx context.Context, logger *logrus.Entry) {
 	fields := virtLog.Data
 	virtLog = logger.WithFields(fields)
-
+	SetHypervisorLogger(virtLog) // TODO: this will move to hypervisors pkg
 	deviceApi.SetLogger(virtLog)
 	compatoci.SetLogger(virtLog)
 	deviceConfig.SetLogger(virtLog)

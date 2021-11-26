@@ -215,7 +215,6 @@ type RuntimeConfigOptions struct {
 	KernelParams         string
 	MachineType          string
 	ShimPath             string
-	NetmonPath           string
 	LogPath              string
 	BlockDeviceDriver    string
 	SharedFS             string
@@ -237,7 +236,6 @@ type RuntimeConfigOptions struct {
 	RuntimeDebug         bool
 	RuntimeTrace         bool
 	ShimDebug            bool
-	NetmonDebug          bool
 	AgentDebug           bool
 	AgentTrace           bool
 	EnablePprof          bool
@@ -330,10 +328,6 @@ func MakeRuntimeConfigFileData(config RuntimeConfigOptions) string {
 	[agent.kata]
 	enable_debug = ` + strconv.FormatBool(config.AgentDebug) + `
 	enable_tracing = ` + strconv.FormatBool(config.AgentTrace) + `
-
-	[netmon]
-	path = "` + config.NetmonPath + `"
-	enable_debug = ` + strconv.FormatBool(config.NetmonDebug) + `
 
 	[runtime]
 	enable_debug = ` + strconv.FormatBool(config.RuntimeDebug) + `
