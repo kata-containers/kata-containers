@@ -219,11 +219,16 @@ ${extra}
 	  agent-is-init-daemon: "${AGENT_INIT}"
 EOT
 
-	if [ "${SKOPEO_UMOCI}" = "yes" ]; then
+	if [ "${SKOPEO}" = "yes" ]; then
 		cat >> "${file}" <<-EOF
 	skopeo:
 	  url: "${skopeo_url}"
 	  version: "${skopeo_branch}"
+EOF
+	fi
+
+	if [ "${UMOCI}" = "yes" ]; then
+		cat >> "${file}" <<-EOF
 	umoci:
 	  url: "${umoci_url}"
 	  version: "${umoci_tag}"
