@@ -983,11 +983,13 @@ func TestGetHypervisorInfoSocket(t *testing.T) {
 		{vc.QemuHypervisor, false},
 	}
 
+	config.HypervisorConfig.VMStorePath = "/foo"
+	config.HypervisorConfig.RunStorePath = "/bar"
+
 	for i, details := range hypervisors {
 		msg := fmt.Sprintf("hypervisor[%d]: %+v", i, details)
 
 		config.HypervisorType = details.hType
-
 		info, err := getHypervisorInfo(config)
 		assert.NoError(err, msg)
 

@@ -171,6 +171,6 @@ func (q *qemuArm64) enableProtection() error {
 
 func (q *qemuArm64) appendProtectionDevice(devices []govmmQemu.Device, firmware string) ([]govmmQemu.Device, string, error) {
 	err := q.enableProtection()
-	virtLog.WithField("arch", runtime.GOARCH).Warnf("%v", err)
+	hvLogger.WithField("arch", runtime.GOARCH).Warnf("%v", err)
 	return devices, firmware, err
 }

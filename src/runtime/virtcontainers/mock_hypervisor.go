@@ -10,7 +10,7 @@ import (
 	"errors"
 	"os"
 
-	persistapi "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist/api"
+	hv "github.com/kata-containers/kata-containers/src/runtime/pkg/hypervisors"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 )
 
@@ -130,11 +130,11 @@ func (m *mockHypervisor) toGrpc(ctx context.Context) ([]byte, error) {
 	return nil, errors.New("mockHypervisor is not supported by VM cache")
 }
 
-func (m *mockHypervisor) Save() (s persistapi.HypervisorState) {
+func (m *mockHypervisor) Save() (s hv.HypervisorState) {
 	return
 }
 
-func (m *mockHypervisor) Load(s persistapi.HypervisorState) {}
+func (m *mockHypervisor) Load(s hv.HypervisorState) {}
 
 func (m *mockHypervisor) Check() error {
 	return nil
@@ -148,7 +148,4 @@ func (m *mockHypervisor) GenerateSocket(id string) (interface{}, error) {
 
 func (m *mockHypervisor) IsRateLimiterBuiltin() bool {
 	return false
-}
-
-func (m *mockHypervisor) setSandbox(sandbox *Sandbox) {
 }

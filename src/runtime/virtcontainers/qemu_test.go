@@ -78,7 +78,10 @@ func TestQemuCreateVM(t *testing.T) {
 	store, err := persist.GetDriver()
 	assert.NoError(err)
 	q := &qemu{
-		store: store,
+		config: HypervisorConfig{
+			VMStorePath:  store.RunVMStoragePath(),
+			RunStorePath: store.RunStoragePath(),
+		},
 	}
 	sandbox := &Sandbox{
 		ctx: context.Background(),
@@ -94,7 +97,7 @@ func TestQemuCreateVM(t *testing.T) {
 	assert.NoError(err)
 
 	// Create parent dir path for hypervisor.json
-	parentDir := filepath.Join(q.store.RunStoragePath(), sandbox.id)
+	parentDir := filepath.Join(store.RunStoragePath(), sandbox.id)
 	assert.NoError(os.MkdirAll(parentDir, DirMode))
 
 	err = q.CreateVM(context.Background(), sandbox.id, NetworkNamespace{}, &sandbox.config.HypervisorConfig)
@@ -110,7 +113,10 @@ func TestQemuCreateVMMissingParentDirFail(t *testing.T) {
 	store, err := persist.GetDriver()
 	assert.NoError(err)
 	q := &qemu{
-		store: store,
+		config: HypervisorConfig{
+			VMStorePath:  store.RunVMStoragePath(),
+			RunStorePath: store.RunStoragePath(),
+		},
 	}
 	sandbox := &Sandbox{
 		ctx: context.Background(),
@@ -126,7 +132,7 @@ func TestQemuCreateVMMissingParentDirFail(t *testing.T) {
 	assert.NoError(err)
 
 	// Ensure parent dir path for hypervisor.json does not exist.
-	parentDir := filepath.Join(q.store.RunStoragePath(), sandbox.id)
+	parentDir := filepath.Join(store.RunStoragePath(), sandbox.id)
 	assert.NoError(os.RemoveAll(parentDir))
 
 	err = q.CreateVM(context.Background(), sandbox.id, NetworkNamespace{}, &sandbox.config.HypervisorConfig)
@@ -192,7 +198,10 @@ func TestQemuKnobs(t *testing.T) {
 	assert.NoError(err)
 
 	q := &qemu{
-		store: sandbox.store,
+		config: HypervisorConfig{
+			VMStorePath:  sandbox.store.RunVMStoragePath(),
+			RunStorePath: sandbox.store.RunStoragePath(),
+		},
 	}
 	err = q.CreateVM(context.Background(), sandbox.id, NetworkNamespace{}, &sandbox.config.HypervisorConfig)
 	assert.NoError(err)
@@ -325,11 +334,14 @@ func TestQemuGetSandboxConsole(t *testing.T) {
 	store, err := persist.GetDriver()
 	assert.NoError(err)
 	q := &qemu{
-		ctx:   context.Background(),
-		store: store,
+		ctx: context.Background(),
+		config: HypervisorConfig{
+			VMStorePath:  store.RunVMStoragePath(),
+			RunStorePath: store.RunStoragePath(),
+		},
 	}
 	sandboxID := "testSandboxID"
-	expected := filepath.Join(q.store.RunVMStoragePath(), sandboxID, consoleSocket)
+	expected := filepath.Join(store.RunVMStoragePath(), sandboxID, consoleSocket)
 
 	proto, result, err := q.GetVMConsole(q.ctx, sandboxID)
 	assert.NoError(err)
@@ -460,7 +472,10 @@ func TestQemuFileBackedMem(t *testing.T) {
 	assert.NoError(err)
 
 	q := &qemu{
-		store: sandbox.store,
+		config: HypervisorConfig{
+			VMStorePath:  sandbox.store.RunVMStoragePath(),
+			RunStorePath: sandbox.store.RunStoragePath(),
+		},
 	}
 	sandbox.config.HypervisorConfig.SharedFS = config.VirtioFS
 	err = q.CreateVM(context.Background(), sandbox.id, NetworkNamespace{}, &sandbox.config.HypervisorConfig)
@@ -475,7 +490,10 @@ func TestQemuFileBackedMem(t *testing.T) {
 	assert.NoError(err)
 
 	q = &qemu{
-		store: sandbox.store,
+		config: HypervisorConfig{
+			VMStorePath:  sandbox.store.RunVMStoragePath(),
+			RunStorePath: sandbox.store.RunStoragePath(),
+		},
 	}
 	sandbox.config.HypervisorConfig.BootToBeTemplate = true
 	sandbox.config.HypervisorConfig.SharedFS = config.VirtioFS
@@ -491,7 +509,10 @@ func TestQemuFileBackedMem(t *testing.T) {
 	assert.NoError(err)
 
 	q = &qemu{
-		store: sandbox.store,
+		config: HypervisorConfig{
+			VMStorePath:  sandbox.store.RunVMStoragePath(),
+			RunStorePath: sandbox.store.RunStoragePath(),
+		},
 	}
 	sandbox.config.HypervisorConfig.FileBackedMemRootDir = "/tmp/xyzabc"
 	err = q.CreateVM(context.Background(), sandbox.id, NetworkNamespace{}, &sandbox.config.HypervisorConfig)
@@ -505,7 +526,10 @@ func TestQemuFileBackedMem(t *testing.T) {
 	assert.NoError(err)
 
 	q = &qemu{
-		store: sandbox.store,
+		config: HypervisorConfig{
+			VMStorePath:  sandbox.store.RunVMStoragePath(),
+			RunStorePath: sandbox.store.RunStoragePath(),
+		},
 	}
 	sandbox.config.HypervisorConfig.EnableVhostUserStore = true
 	sandbox.config.HypervisorConfig.HugePages = true
@@ -518,7 +542,10 @@ func TestQemuFileBackedMem(t *testing.T) {
 	assert.NoError(err)
 
 	q = &qemu{
-		store: sandbox.store,
+		config: HypervisorConfig{
+			VMStorePath:  sandbox.store.RunVMStoragePath(),
+			RunStorePath: sandbox.store.RunStoragePath(),
+		},
 	}
 	sandbox.config.HypervisorConfig.EnableVhostUserStore = true
 	sandbox.config.HypervisorConfig.HugePages = false

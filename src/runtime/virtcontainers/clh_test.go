@@ -203,7 +203,10 @@ func TestCloudHypervisorCleanupVM(t *testing.T) {
 	assert.NoError(err, "persist.GetDriver() unexpected error")
 
 	clh := &cloudHypervisor{
-		store: store,
+		config: HypervisorConfig{
+			VMStorePath:  store.RunVMStoragePath(),
+			RunStorePath: store.RunStoragePath(),
+		},
 	}
 
 	err = clh.cleanupVM(true)
@@ -214,7 +217,7 @@ func TestCloudHypervisorCleanupVM(t *testing.T) {
 	err = clh.cleanupVM(true)
 	assert.NoError(err, "persist.GetDriver() unexpected error")
 
-	dir := filepath.Join(clh.store.RunVMStoragePath(), clh.id)
+	dir := filepath.Join(store.RunVMStoragePath(), clh.id)
 	os.MkdirAll(dir, os.ModePerm)
 
 	err = clh.cleanupVM(false)
@@ -235,9 +238,11 @@ func TestClhCreateVM(t *testing.T) {
 	store, err := persist.GetDriver()
 	assert.NoError(err)
 
+	clhConfig.VMStorePath = store.RunVMStoragePath()
+	clhConfig.RunStorePath = store.RunStoragePath()
+
 	clh := &cloudHypervisor{
 		config: clhConfig,
-		store:  store,
 	}
 
 	sandbox := &Sandbox{
@@ -261,11 +266,13 @@ func TestClooudHypervisorStartSandbox(t *testing.T) {
 	store, err := persist.GetDriver()
 	assert.NoError(err)
 
+	clhConfig.VMStorePath = store.RunVMStoragePath()
+	clhConfig.RunStorePath = store.RunStoragePath()
+
 	clh := &cloudHypervisor{
 		config:    clhConfig,
 		APIClient: &clhClientMock{},
 		virtiofsd: &virtiofsdMock{},
-		store:     store,
 	}
 
 	err = clh.StartVM(context.Background(), 10)
@@ -379,6 +386,11 @@ func TestClhGenerateSocket(t *testing.T) {
 	clh, ok := hypervisor.(*cloudHypervisor)
 	assert.True(ok)
 
+	clh.config = HypervisorConfig{
+		VMStorePath:  "/foo",
+		RunStorePath: "/bar",
+	}
+
 	clh.addVSock(1, "path")
 
 	s, err := clh.GenerateSocket("c")
@@ -391,7 +403,7 @@ func TestClhGenerateSocket(t *testing.T) {
 	assert.NotEmpty(hvsock.UdsPath)
 
 	// Path must be absolute
-	assert.True(strings.HasPrefix(hvsock.UdsPath, "/"))
+	assert.True(strings.HasPrefix(hvsock.UdsPath, "/"), "failed: socket path: %s", hvsock.UdsPath)
 
 	assert.NotZero(hvsock.Port)
 }

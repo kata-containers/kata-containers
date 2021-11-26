@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-package persistapi
+package hypervisors
 
 // Bridge is a bridge where devices can be hot plugged
 type Bridge struct {
