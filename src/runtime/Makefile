@@ -571,7 +571,7 @@ $(SHIMV2_OUTPUT): $(SOURCES) $(GENERATED_FILES) $(MAKEFILE_LIST)
 
 $(MONITOR_OUTPUT): $(SOURCES) $(GENERATED_FILES) $(MAKEFILE_LIST) .git-commit
 	$(QUIET_BUILD)(cd $(MONITOR_DIR)/ && go build \
-		--ldflags "-X main.GitCommit=$(shell cat .git-commit)" $(BUILDFLAGS) -o $@ .)
+		--ldflags "-X main.GitCommit=$(shell git rev-parse HEAD)" $(BUILDFLAGS) -o $@ .)
 
 .PHONY: \
 	check \
