@@ -239,7 +239,6 @@ pub(crate) fn spawn_test_watcher(sandbox: Arc<Mutex<Sandbox>>, uev: Uevent) {
                     if matcher.is_match(&uev) {
                         let (_, sender) = watch.take().unwrap();
                         let _ = sender.send(uev.clone());
-                        return;
                     }
                 }
             });
