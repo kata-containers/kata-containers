@@ -120,6 +120,9 @@ func CreateSandbox(ctx context.Context, vci vc.VC, ociSpec specs.Spec, runtimeCo
 		return nil, vc.Process{}, err
 	}
 
+	// setup shared path in hypervisor config:
+	sandboxConfig.HypervisorConfig.SharedPath = vc.GetSharePath(containerID)
+
 	if err := checkForFIPS(&sandboxConfig); err != nil {
 		return nil, vc.Process{}, err
 	}

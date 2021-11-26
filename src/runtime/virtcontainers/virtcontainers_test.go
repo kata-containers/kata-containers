@@ -60,7 +60,7 @@ var testHyperstartTtySocket = ""
 func cleanUp() {
 	os.RemoveAll(fs.MockRunStoragePath())
 	os.RemoveAll(fs.MockRunVMStoragePath())
-	syscall.Unmount(getSharePath(testSandboxID), syscall.MNT_DETACH|UmountNoFollow)
+	syscall.Unmount(GetSharePath(testSandboxID), syscall.MNT_DETACH|UmountNoFollow)
 	os.RemoveAll(testDir)
 	os.MkdirAll(testDir, DirMode)
 
