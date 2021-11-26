@@ -226,6 +226,21 @@ impl Sandbox {
         None
     }
 
+    pub fn find_container_process(&mut self, cid: &str, eid: &str) -> Result<&mut Process> {
+        let ctr = self
+            .get_container(cid)
+            .ok_or_else(|| anyhow!("Invalid container id"))?;
+
+        if eid.is_empty() {
+            return ctr
+                .processes
+                .get_mut(&ctr.init_process_pid)
+                .ok_or_else(|| anyhow!("cannot find init process!"));
+        }
+
+        ctr.get_process(eid).map_err(|_| anyhow!("Invalid exec id"))
+    }
+
     #[instrument]
     pub async fn destroy(&mut self) -> Result<()> {
         for ctr in self.containers.values_mut() {
@@ -454,6 +469,7 @@ mod tests {
     use nix::mount::MsFlags;
     use oci::{Linux, Root, Spec};
     use rustjail::container::LinuxContainer;
+    use rustjail::process::Process;
     use rustjail::specconv::CreateOpts;
     use slog::Logger;
     use std::fs::{self, File};
@@ -784,5 +800,51 @@ mod tests {
         let mut s = Sandbox::new(&logger).unwrap();
         let ret = s.destroy().await;
         assert!(ret.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_find_container_process() {
+        skip_if_not_root!();
+        let logger = slog::Logger::root(slog::Discard, o!());
+        let mut s = Sandbox::new(&logger).unwrap();
+        let cid = "container-123";
+
+        let mut linux_container = create_linuxcontainer();
+        linux_container.init_process_pid = 1;
+        linux_container.id = cid.to_string();
+        // add init process
+        linux_container.processes.insert(
+            1,
+            Process::new(&logger, &oci::Process::default(), "1", true, 1).unwrap(),
+        );
+        // add exec process
+        linux_container.processes.insert(
+            123,
+            Process::new(&logger, &oci::Process::default(), "exec-123", false, 1).unwrap(),
+        );
+
+        s.add_container(linux_container);
+
+        // empty exec-id will return init process
+        let p = s.find_container_process(cid, "");
+        assert!(p.is_ok(), "Expecting Ok, Got {:?}", p);
+        let p = p.unwrap();
+        assert_eq!("1", p.exec_id, "exec_id should be 1");
+        assert!(p.init, "init flag should be true");
+
+        // get exist exec-id will return the exec process
+        let p = s.find_container_process(cid, "exec-123");
+        assert!(p.is_ok(), "Expecting Ok, Got {:?}", p);
+        let p = p.unwrap();
+        assert_eq!("exec-123", p.exec_id, "exec_id should be exec-123");
+        assert!(!p.init, "init flag should be false");
+
+        // get not exist exec-id will return error
+        let p = s.find_container_process(cid, "exec-456");
+        assert!(p.is_err(), "Expecting Error, Got {:?}", p);
+
+        // container does not exist
+        let p = s.find_container_process("not-exist-cid", "");
+        assert!(p.is_err(), "Expecting Error, Got {:?}", p);
     }
 }
