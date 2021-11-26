@@ -1,4 +1,3 @@
-//
 // Copyright (c) 2018 HyperHQ Inc.
 //
 // SPDX-License-Identifier: Apache-2.0
@@ -17,6 +16,7 @@ import (
 	pb "github.com/kata-containers/kata-containers/src/runtime/protocols/cache"
 	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/factory/base"
+	"github.com/sirupsen/logrus"
 )
 
 type template struct {
