@@ -61,6 +61,13 @@ vsock-exporter = { path = "vsock-exporter" }
 serde = { version = "1.0.129", features = ["derive"] }
 toml = "0.5.8"
 
+# Image pull/decrypt
+oci-distribution = "0.7.0"
+ocicrypt-rs = { git = "https://github.com/containers/ocicrypt-rs" }
+sha2 = "0.9.8"
+# "vendored" feature for openssl is required by musl build
+openssl = { version = "0.10.38", features = ["vendored"] }
+
 [dev-dependencies]
 tempfile = "3.1.0"
 
