@@ -30,7 +30,11 @@ RUN dnf -y update && dnf install -y \
     libstdc++-static \
     m4 \
     make \
+    openssl-devel \
+    perl \
+    perl-IPC-Cmd \
     pkgconfig \
+    protobuf-compiler \
     sed \
     systemd \
     tar \

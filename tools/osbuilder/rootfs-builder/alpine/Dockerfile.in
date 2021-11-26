@@ -26,4 +26,9 @@ RUN apk update && apk add \
     make \
     musl \
     musl-dev \
+    openssl-dev \
+    perl \
+    perl-module-build \
+    pkgconfig \
+    protoc \
     tar
