@@ -35,6 +35,9 @@ In order to build, and demo the CCv0 functionality, these are the steps I take:
       If you want to build and run these you can export the `katacontainers_repo`, `katacontainers_branch`, `tests_repo`
       and `tests_branch` variables e.g. `export katacontainers_repo=github.com/stevenhorsman/kata-containers && export katacontainers_branch=stevenh/agent-pull-image-endpoint && export tests_repo=github.com/stevenhorsman/tests && export tests_branch=stevenh/add-ccvo-changes-to-build`
       before running the script.
+    - By default `ccv0.sh` enables the agent to use the rust implementation to pull container images on the guest. If
+      you wish to instead build and include the `skopeo` package for this then set `export SKOPEO=yes`. `skopeo` is
+      required for verifying container image signatures of pulled images.
 - Run the full build process with `. ~/ccv0.sh -d build_and_install_all`
     - *I run this script sourced just so that the required installed components are accessible on the `PATH` to the rest*
       *of the process without having to reload the session.*
