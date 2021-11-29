@@ -12,7 +12,7 @@ OS_VERSION=${OS_VERSION:-20.04}
 OS_NAME=${OS_NAME:-"focal"}
 
 # packages to be installed by default
-PACKAGES="systemd iptables init kmod"
+PACKAGES="systemd coreutils init kmod"
 EXTRA_PKGS+=" chrony"
 
 DEBOOTSTRAP=${PACKAGE_MANAGER:-"debootstrap"}
