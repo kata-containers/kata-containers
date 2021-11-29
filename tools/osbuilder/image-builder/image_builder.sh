@@ -4,9 +4,11 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-set -e
+[ -z "${DEBUG}" ] || set -x
 
-[ -n "${DEBUG}" ] && set -x
+set -o errexit
+# set -o nounset
+set -o pipefail
 
 DOCKER_RUNTIME=${DOCKER_RUNTIME:-runc}
 
