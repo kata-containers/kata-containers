@@ -22,7 +22,7 @@ GPG_KEY_URL="https://www.centos.org/keys/RPM-GPG-KEY-CentOS-7"
 
 GPG_KEY_FILE="RPM-GPG-KEY-CentOS-7"
 
-PACKAGES="iptables chrony"
+PACKAGES="coreutils chrony"
 
 #Optional packages:
 # systemd: An init system that will start kata-agent if kata-agent
