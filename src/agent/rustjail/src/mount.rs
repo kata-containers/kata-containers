@@ -999,7 +999,7 @@ pub fn finish_rootfs(cfd_log: RawFd, spec: &Spec, process: &Process) -> Result<(
 
 fn mask_path(path: &str) -> Result<()> {
     if !path.starts_with('/') || path.contains("..") {
-        return Err(nix::Error::EINVAL.into());
+        return Err(anyhow!(nix::Error::EINVAL));
     }
 
     match mount(
@@ -1019,7 +1019,7 @@ fn mask_path(path: &str) -> Result<()> {
 
 fn readonly_path(path: &str) -> Result<()> {
     if !path.starts_with('/') || path.contains("..") {
-        return Err(nix::Error::EINVAL.into());
+        return Err(anyhow!(nix::Error::EINVAL));
     }
 
     if let Err(e) = mount(

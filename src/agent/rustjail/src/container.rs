@@ -1388,13 +1388,13 @@ impl LinuxContainer {
         .context(format!("cannot change onwer of container {} root", id))?;
 
         if config.spec.is_none() {
-            return Err(nix::Error::EINVAL.into());
+            return Err(anyhow!(nix::Error::EINVAL));
         }
 
         let spec = config.spec.as_ref().unwrap();
 
         if spec.linux.is_none() {
-            return Err(nix::Error::EINVAL.into());
+            return Err(anyhow!(nix::Error::EINVAL));
         }
 
         let linux = spec.linux.as_ref().unwrap();
