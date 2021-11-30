@@ -174,7 +174,7 @@ impl CgroupManager for Manager {
                 freezer_controller.freeze()?;
             }
             _ => {
-                return Err(nix::Error::EINVAL.into());
+                return Err(anyhow!(nix::Error::EINVAL));
             }
         }
 
