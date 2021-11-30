@@ -1526,7 +1526,7 @@ fn do_copy_file(req: &CopyFileRequest) -> Result<()> {
     let path = PathBuf::from(req.path.as_str());
 
     if !path.starts_with(CONTAINER_BASE) {
-        return Err(nix::Error::EINVAL.into());
+        return Err(anyhow!(nix::Error::EINVAL));
     }
 
     let parent = path.parent();
@@ -1606,7 +1606,7 @@ fn setup_bundle(cid: &str, spec: &mut Spec) -> Result<PathBuf> {
     let spec_root = if let Some(sr) = &spec.root {
         sr
     } else {
-        return Err(nix::Error::EINVAL.into());
+        return Err(anyhow!(nix::Error::EINVAL));
     };
 
     let spec_root_path = Path::new(&spec_root.path);
