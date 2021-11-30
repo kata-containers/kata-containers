@@ -10,7 +10,6 @@ to use. The following rootfs OS's have been tested with this Dockerfile.
 
 * CentOS
 * Clear Linux
-* Debian
 * Fedora
 * SUSE
 * Ubuntu 
@@ -75,7 +74,7 @@ latest stable version of Kata Containers.
 | `QAT_CONFIGURE_OPTIONS` | `configure` options for QAT driver | `--enable-icp-sriov=guest` |
 | `QAT_DRIVER_URL` | URL to curl QAT driver from | `https://01.org/sites/default/files/downloads/${QAT_DRIVER_VER}` |
 | `QAT_DRIVER_VER` | QAT driver version to use | `qat1.7.l.4.9.0-00008.tar.gz` |
-| `ROOTFS_OS` | Operating system to use for the rootfs | `debian` |
+| `ROOTFS_OS` | Operating system to use for the rootfs | `ubuntu` |
 
 Variables can be set on the `docker run` commandline, for example:
 
