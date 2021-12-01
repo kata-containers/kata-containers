@@ -328,7 +328,6 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (config string, err err
 	kernelParams := "foo=bar xyz"
 	imagePath := path.Join(dir, "image")
 	shimPath := path.Join(dir, "shim")
-	netmonPath := path.Join(dir, "netmon")
 	logDir := path.Join(dir, "logs")
 	logPath := path.Join(logDir, "runtime.log")
 	machineType := "machineType"
@@ -349,7 +348,6 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (config string, err err
 		KernelParams:         kernelParams,
 		MachineType:          machineType,
 		ShimPath:             shimPath,
-		NetmonPath:           netmonPath,
 		LogPath:              logPath,
 		DisableBlock:         disableBlockDevice,
 		BlockDeviceDriver:    blockDeviceDriver,

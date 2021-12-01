@@ -164,7 +164,7 @@ var kataHostSharedDir = func() string {
 // 2. /run/kata-containers/shared/sandboxes/$sbx_id/mounts/ is bind mounted readonly to /run/kata-containers/shared/sandboxes/$sbx_id/shared/, so guest cannot modify it
 //
 // 3. host-guest shared files/directories are mounted one-level under /run/kata-containers/shared/sandboxes/$sbx_id/mounts/ and thus present to guest at one level under /run/kata-containers/shared/sandboxes/$sbx_id/shared/
-func getSharePath(id string) string {
+func GetSharePath(id string) string {
 	return filepath.Join(kataHostSharedDir(), id, "shared")
 }
 
@@ -358,7 +358,7 @@ func (k *kataAgent) setupSandboxBindMounts(ctx context.Context, sandbox *Sandbox
 
 	// Create subdirectory in host shared path for sandbox mounts
 	sandboxMountDir := filepath.Join(getMountPath(sandbox.id), sandboxMountsDir)
-	sandboxShareDir := filepath.Join(getSharePath(sandbox.id), sandboxMountsDir)
+	sandboxShareDir := filepath.Join(GetSharePath(sandbox.id), sandboxMountsDir)
 	if err := os.MkdirAll(sandboxMountDir, DirMode); err != nil {
 		return fmt.Errorf("Creating sandbox shared mount directory: %v: %w", sandboxMountDir, err)
 	}
@@ -475,7 +475,7 @@ func (k *kataAgent) setupSharedPath(ctx context.Context, sandbox *Sandbox) (err 
 	defer span.End()
 
 	// create shared path structure
-	sharePath := getSharePath(sandbox.id)
+	sharePath := GetSharePath(sandbox.id)
 	mountPath := getMountPath(sandbox.id)
 	if err := os.MkdirAll(sharePath, sharedDirMode); err != nil {
 		return err
@@ -511,7 +511,7 @@ func (k *kataAgent) createSandbox(ctx context.Context, sandbox *Sandbox) error {
 	if err := k.setupSharedPath(ctx, sandbox); err != nil {
 		return err
 	}
-	return k.configure(ctx, sandbox.hypervisor, sandbox.id, getSharePath(sandbox.id), sandbox.config.AgentConfig)
+	return k.configure(ctx, sandbox.hypervisor, sandbox.id, GetSharePath(sandbox.id), sandbox.config.AgentConfig)
 }
 
 func cmdToKataProcess(cmd types.Cmd) (process *grpc.Process, err error) {
@@ -2208,7 +2208,7 @@ func (k *kataAgent) cleanup(ctx context.Context, s *Sandbox) {
 	}
 
 	// Unmount shared path
-	path := getSharePath(s.id)
+	path := GetSharePath(s.id)
 	k.Logger().WithField("path", path).Infof("Cleanup agent")
 	if err := syscall.Unmount(path, syscall.MNT_DETACH|UmountNoFollow); err != nil {
 		k.Logger().WithError(err).Errorf("failed to unmount vm share path %s", path)

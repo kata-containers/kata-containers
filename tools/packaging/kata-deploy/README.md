@@ -4,8 +4,8 @@
 and artifacts required to run Kata Containers, as well as reference DaemonSets, which can
 be utilized to install Kata Containers on a running Kubernetes cluster.
 
-Note, installation through DaemonSets successfully installs `katacontainers.io/kata-runtime` on
-a node only if it uses either containerd or CRI-O CRI-shims.
+> **Note**: installation through DaemonSets successfully installs `katacontainers.io/kata-runtime`
+> on a node only if it uses either containerd or CRI-O CRI-shims.
 
 ## Kubernetes quick start
 
@@ -24,8 +24,8 @@ $ kubectl apply -f https://raw.githubusercontent.com/kata-containers/kata-contai
 
 The stable image refers to the last stable releases content.
 
-Note that if you use a tagged version of the repo, the stable image does match that version.
-For instance, if you use the 2.2.1 tagged version of the kata-deploy.yaml file, then the version 2.2.1 of the kata runtime will be deployed.
+> **Note:** if you use a tagged version of the repo, the stable image does match that version.
+> For instance, if you use the 2.2.1 tagged version of the kata-deploy.yaml file, then the version 2.2.1 of the kata runtime will be deployed.
 
 ```sh
 $ kubectl apply -f https://raw.githubusercontent.com/kata-containers/kata-containers/main/tools/packaging/kata-deploy/kata-rbac/base/kata-rbac.yaml
@@ -165,7 +165,7 @@ This image contains all the necessary artifacts for running Kata Containers, all
 from the [Kata Containers release page](https://github.com/kata-containers/kata-containers/releases).
 
 Host artifacts:
-* `cloud-hypervisor`, `firecracker`, `qemu-system-x86_64`, and supporting binaries
+* `cloud-hypervisor`, `firecracker`, `qemu`, and supporting binaries
 * `containerd-shim-kata-v2`
 * `kata-collect-data.sh`
 * `kata-runtime`

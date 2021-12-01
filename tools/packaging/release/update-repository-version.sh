@@ -34,12 +34,8 @@ handle_error() {
 trap 'handle_error $LINENO' ERR
 
 get_changes() {
-	local current_version=$1
+	local current_version="$1"
 	[ -n "${current_version}" ] || die "current version not provided"
-	if [ "${current_version}" == "new" ];then
-		echo "Starting to version this repository"
-		return
-	fi
 
 	# If for some reason there is not a tag this could fail
 	# better fail and write the error in the PR
@@ -62,9 +58,41 @@ get_changes() {
 	git log --oneline "${current_version}..HEAD" --no-merges
 }
 
+generate_kata_deploy_commit() {
+       local new_version="$1"
+       [ -n "$new_version" ] || die "no new version"
+
+       printf "release: Adapt kata-deploy for %s" "${new_version}"
+
+       printf "\n
+kata-deploy files must be adapted to a new release.  The cases where it
+happens are when the release goes from -> to:
+* main -> stable:
+  * kata-deploy / kata-cleanup: change from \"latest\" to \"rc0\"
+  * kata-deploy-stable / kata-cleanup-stable: are removed
+
+* stable -> stable:
+  * kata-deploy / kata-cleanup: bump the release to the new one.
+
+There are no changes when doing an alpha release, as the files on the
+\"main\" branch always point to the \"latest\" and \"stable\" tags."
+}
+
+generate_revert_kata_deploy_commit() {
+       local new_version="$1"
+       [ -n "$new_version" ] || die "no new version"
+
+       printf "release: Revert kata-deploy changes after %s release" "${new_version}"
+
+       printf "\n
+As %s has been released, let's switch the kata-deploy / kata-cleanup
+tags back to \"latest\", and re-add the kata-deploy-stable and the
+kata-cleanup-stable files." "${new_version}"
+}
+
 generate_commit() {
-	local new_version=$1
-	local current_version=$2
+	local new_version="$1"
+	local current_version="$2"
 
 	[ -n "$new_version" ] || die "no new version"
 	[ -n "$current_version" ] || die "no current version"
@@ -90,24 +118,25 @@ bump_repo() {
 
 	pushd "${repo}" >>/dev/null
 
+	local kata_deploy_dir="tools/packaging/kata-deploy"
+	local kata_deploy_base="${kata_deploy_dir}/kata-deploy/base"
+	local kata_cleanup_base="${kata_deploy_dir}/kata-cleanup/base"
+	local kata_deploy_yaml="${kata_deploy_base}/kata-deploy.yaml"
+	local kata_cleanup_yaml="${kata_cleanup_base}/kata-cleanup.yaml"
+	local kata_deploy_stable_yaml="${kata_deploy_base}/kata-deploy-stable.yaml"
+	local kata_cleanup_stable_yaml="${kata_cleanup_base}/kata-cleanup-stable.yaml"
+
 	branch="${new_version}-branch-bump"
 	git fetch origin "${target_branch}"
 	git checkout "origin/${target_branch}" -b "${branch}"
 
-	# All repos we build should have a VERSION file
-	if [ ! -f "VERSION" ]; then
-		current_version="new"
-		echo "${new_version}" >VERSION
-	else
-		current_version="$(grep -v '#' ./VERSION)"
+	local current_version="$(egrep -v '^(#|$)' ./VERSION)"
 
-		info "Updating VERSION file"
-		echo "${new_version}" >VERSION
-		if git diff --exit-code; then
-			info "${repo} already in version ${new_version}"
-			cat VERSION
-			return 0
-		fi
+	info "Updating VERSION file"
+	echo "${new_version}" >VERSION
+	if git diff --exit-code; then
+		info "${repo} already in version ${new_version}"
+		return 0
 	fi
 
 	if [ "${repo}" == "kata-containers" ]; then
@@ -117,61 +146,70 @@ bump_repo() {
 		# 1) [main] ------> [main]        NO-OP
 		#   "alpha0"       "alpha1"
 		#
-		#                   +----------------+----------------+
-		#                   |      from      |       to       |
-		#  -----------------+----------------+----------------+
-		#  kata-deploy      | "latest"       | "latest"       |
-		#  -----------------+----------------+----------------+
-		#  kata-deploy-base | "stable        | "stable"       |
-		#  -----------------+----------------+----------------+
+		#                     +----------------+----------------+
+		#                     |      from      |       to       |
+		#  -------------------+----------------+----------------+
+		#  kata-deploy        | "latest"       | "latest"       |
+		#  -------------------+----------------+----------------+
+		#  kata-deploy-stable | "stable        | "stable"       |
+		#  -------------------+----------------+----------------+
 		#
 		#
 		# 2) [main] ------> [stable]  Update kata-deploy and
-		#   "alpha2"         "rc0"    get rid of kata-deploy-base
+		#   "alpha2"         "rc0"    get rid of kata-deploy-stable
 		#
-		#                   +----------------+----------------+
-		#                   |      from      |       to       |
-		#  -----------------+----------------+----------------+
-		#  kata-deploy      | "latest"       | "rc0"          |
-		#  -----------------+----------------+----------------+
-		#  kata-deploy-base | "stable"       | REMOVED        |
-		#  -----------------+----------------+----------------+
+		#                     +----------------+----------------+
+		#                     |      from      |       to       |
+		#  -------------------+----------------+----------------+
+		#  kata-deploy        | "latest"       | "rc0"          |
+		#  -------------------+----------------+----------------+
+		#  kata-deploy-stable | "stable"       | REMOVED        |
+		#  -------------------+----------------+----------------+
 		#
 		#
 		# 3) [stable] ------> [stable]    Update kata-deploy
 		#    "x.y.z"         "x.y.(z+1)"
 		#
-		#                   +----------------+----------------+
-		#                   |      from      |       to       |
-		#  -----------------+----------------+----------------+
-		#  kata-deploy      | "x.y.z"        | "x.y.(z+1)"    |
-		#  -----------------+----------------+----------------+
-		#  kata-deploy-base | NON-EXISTENT   | NON-EXISTENT   |
-		#  -----------------+----------------+----------------+
+		#                     +----------------+----------------+
+		#                     |      from      |       to       |
+		#  -------------------+----------------+----------------+
+		#  kata-deploy        | "x.y.z"        | "x.y.(z+1)"    |
+		#  -------------------+----------------+----------------+
+		#  kata-deploy-stable | NON-EXISTENT   | NON-EXISTENT   |
+		#  -------------------+----------------+----------------+
+
+		local registry="quay.io/kata-containers/kata-deploy"
 
 		info "Updating kata-deploy / kata-cleanup image tags"
-		if [ "${target_branch}" == "main" ] && [[ "${new_version}" =~ "rc" ]]; then
-			# case 2)
-			## change the "latest" tag to the "#{new_version}" one
-			sed -i "s#quay.io/kata-containers/kata-deploy:latest#quay.io/kata-containers/kata-deploy:${new_version}#g" tools/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml
-			sed -i "s#quay.io/kata-containers/kata-deploy:latest#quay.io/kata-containers/kata-deploy:${new_version}#g" tools/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml
+		local version_to_replace="${current_version}"
+		local replacement="${new_version}"
+		if [ "${target_branch}" == "main" ]; then
+			if [[ "${new_version}" =~ "rc" ]]; then
+				## this is the case 2) where we remove te kata-deploy / kata-cleanup stable files
+				git rm "${kata_deploy_stable_yaml}"
+				git rm "${kata_cleanup_stable_yaml}"
+
+			else
+				## this is the case 1) where we just do nothing
+				replacement="latest"
+			fi
+			version_to_replace="latest"
+		fi
+
+		if [ "${version_to_replace}" != "${replacement}" ]; then
+			## this covers case 2) and 3), as on both of them we have changes on kata-deploy / kata-cleanup  files
+			sed -i "s#${registry}:${version_to_replace}#${registry}:${new_version}#g" "${kata_deploy_yaml}"
+			sed -i "s#${registry}:${version_to_replace}#${registry}:${new_version}#g" "${kata_cleanup_yaml}"
 
 			git diff
 
-			git add tools/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml
-			git add tools/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml
+			git add "${kata_deploy_yaml}"
+			git add "${kata_cleanup_yaml}"
 
-			## and remove the kata-deploy & kata-cleanup stable yaml files
-			git rm tools/packaging/kata-deploy/kata-deploy/base/kata-deploy-stable.yaml
-			git rm tools/packaging/kata-deploy/kata-cleanup/base/kata-cleanup-stable.yaml
-		elif [[ "${target_branch}" =~ "stable" ]]; then
-			# case 3)
-			sed -i "s#quay.io/kata-containers/kata-deploy:${current_version}#quay.io/kata-containers/kata-deploy:${new_version}#g" tools/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml
-			sed -i "s#quay.io/kata-containers/kata-deploy:${current_version}#quay.io/kata-containers/kata-deploy:${new_version}#g" tools/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml
-			git diff
-
-			git add tools/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml
-			git add tools/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml
+			info "Creating the commit with the kata-deploy changes"
+			local commit_msg="$(generate_kata_deploy_commit $new_version)"
+			git commit -s -m "${commit_msg}"
+			local kata_deploy_commit="$(git rev-parse HEAD)"
 		fi
 	fi
 
@@ -206,8 +244,31 @@ EOT
 		${hub_bin} push fork -f "${branch}"
 		info "Create PR"
 		out=""
-		out=$("${hub_bin}" pull-request -b "${target_branch}" -F "${notes_file}" 2>&1) || echo "$out" | grep "A pull request already exists"
+		out=$(LC_ALL=C LANG=C "${hub_bin}" pull-request -b "${target_branch}" -F "${notes_file}" 2>&1) || echo "$out" | grep "A pull request already exists"
 	fi
+
+	if [ "${repo}" == "kata-containers" ] && [ "${target_branch}" == "main" ] && [[ "${new_version}" =~ "rc" ]]; then
+		reverting_kata_deploy_changes_branch="revert-kata-deploy-changes-after-${new_version}-release"
+		git checkout -b "${reverting_kata_deploy_changes_branch}"
+
+		git revert --no-edit ${kata_deploy_commit} >>/dev/null
+		commit_msg="$(generate_revert_kata_deploy_commit $new_version)"
+		info "Creating the commit message reverting the kata-deploy changes"
+		git commit --amend -s -m "${commit_msg}"
+
+		echo "${commit_msg}" >"${notes_file}"
+		echo "" >>"${notes_file}"
+		echo "Only merge this commit after ${new_version} release is successfully tagged!" >>"${notes_file}"
+
+		if [[ ${PUSH} == "true" ]]; then
+			info "Push \"${reverting_kata_deploy_changes_branch}\" to fork"
+			${hub_bin} push fork -f "${reverting_kata_deploy_changes_branch}"
+			info "Create \"${reverting_kata_deploy_changes_branch}\" PR"
+			out=""
+			out=$(LC_ALL=C LANG=C "${hub_bin}" pull-request -b "${target_branch}" -F "${notes_file}" 2>&1) || echo "$out" | grep "A pull request already exists"
+		fi
+	fi
+
 	popd >>/dev/null
 }
 
@@ -244,8 +305,8 @@ main(){
 	shift $((OPTIND - 1))
 
 
-	new_version=${1:-}
-	target_branch=${2:-}
+	new_version="${1:-}"
+	target_branch="${2:-}"
 	[ -n "${new_version}" ] || { echo "ERROR: no new version" && usage 1; }
 	[ -n "${target_branch}" ] || die "no target branch"
 	for repo in "${repos[@]}"

@@ -529,18 +529,18 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 		swapDevices:     []*config.BlockDrive{},
 	}
 
-	hypervisor.setSandbox(s)
-
 	if s.store, err = persist.GetDriver(); err != nil || s.store == nil {
 		return nil, fmt.Errorf("failed to get fs persist driver: %v", err)
 	}
-
 	defer func() {
 		if retErr != nil {
 			s.Logger().WithError(retErr).Error("Create new sandbox failed")
 			s.store.Destroy(s.id)
 		}
 	}()
+
+	sandboxConfig.HypervisorConfig.VMStorePath = s.store.RunVMStoragePath()
+	sandboxConfig.HypervisorConfig.RunStorePath = s.store.RunStoragePath()
 
 	spec := s.GetPatchedOCISpec()
 	if spec != nil && spec.Process.SelinuxLabel != "" {
@@ -782,40 +782,6 @@ func (s *Sandbox) Delete(ctx context.Context) error {
 	return s.store.Destroy(s.id)
 }
 
-func (s *Sandbox) startNetworkMonitor(ctx context.Context) error {
-	span, ctx := katatrace.Trace(ctx, s.Logger(), "startNetworkMonitor", sandboxTracingTags, map[string]string{"sandbox_id": s.id})
-	defer span.End()
-
-	binPath, err := os.Executable()
-	if err != nil {
-		return err
-	}
-
-	logLevel := "info"
-	if s.config.NetworkConfig.NetmonConfig.Debug {
-		logLevel = "debug"
-	}
-
-	params := netmonParams{
-		netmonPath: s.config.NetworkConfig.NetmonConfig.Path,
-		debug:      s.config.NetworkConfig.NetmonConfig.Debug,
-		logLevel:   logLevel,
-		runtime:    binPath,
-		sandboxID:  s.id,
-	}
-
-	return s.network.Run(ctx, s.networkNS.NetNsPath, func() error {
-		pid, err := startNetmon(params)
-		if err != nil {
-			return err
-		}
-
-		s.networkNS.NetmonPID = pid
-
-		return nil
-	})
-}
-
 func (s *Sandbox) createNetwork(ctx context.Context) error {
 	if s.config.NetworkConfig.DisableNewNetNs ||
 		s.config.NetworkConfig.NetNSPath == "" {
@@ -842,30 +808,17 @@ func (s *Sandbox) createNetwork(ctx context.Context) error {
 		}
 
 		s.networkNS.Endpoints = endpoints
-
-		if s.config.NetworkConfig.NetmonConfig.Enable {
-			if err := s.startNetworkMonitor(ctx); err != nil {
-				return err
-			}
-		}
 	}
 	return nil
 }
 
 func (s *Sandbox) postCreatedNetwork(ctx context.Context) error {
-
 	return s.network.PostAdd(ctx, &s.networkNS, s.factory != nil)
 }
 
 func (s *Sandbox) removeNetwork(ctx context.Context) error {
 	span, ctx := katatrace.Trace(ctx, s.Logger(), "removeNetwork", sandboxTracingTags, map[string]string{"sandbox_id": s.id})
 	defer span.End()
-
-	if s.config.NetworkConfig.NetmonConfig.Enable {
-		if err := stopNetmon(s.networkNS.NetmonPID); err != nil {
-			return err
-		}
-	}
 
 	return s.network.Remove(ctx, &s.networkNS, s.hypervisor)
 }
@@ -1222,12 +1175,6 @@ func (s *Sandbox) startVM(ctx context.Context) (err error) {
 		}
 
 		s.networkNS.Endpoints = endpoints
-
-		if s.config.NetworkConfig.NetmonConfig.Enable {
-			if err := s.startNetworkMonitor(ctx); err != nil {
-				return err
-			}
-		}
 	}
 
 	s.Logger().Info("VM started")

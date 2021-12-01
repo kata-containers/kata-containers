@@ -139,8 +139,8 @@ pub const STORAGE_HANDLER_LIST: &[&str] = &[
 
 #[instrument]
 pub fn baremount(
-    source: &str,
-    destination: &str,
+    source: &Path,
+    destination: &Path,
     fs_type: &str,
     flags: MsFlags,
     options: &str,
@@ -148,11 +148,11 @@ pub fn baremount(
 ) -> Result<()> {
     let logger = logger.new(o!("subsystem" => "baremount"));
 
-    if source.is_empty() {
+    if source.as_os_str().is_empty() {
         return Err(anyhow!("need mount source"));
     }
 
-    if destination.is_empty() {
+    if destination.as_os_str().is_empty() {
         return Err(anyhow!("need mount destination"));
     }
 
@@ -444,16 +444,19 @@ fn mount_storage(logger: &Logger, storage: &Storage) -> Result<()> {
     let options_vec = options_vec.iter().map(String::as_str).collect();
     let (flags, options) = parse_mount_flags_and_options(options_vec);
 
+    let source = Path::new(&storage.source);
+    let mount_point = Path::new(&storage.mount_point);
+
     info!(logger, "mounting storage";
-    "mount-source:" => storage.source.as_str(),
-    "mount-destination" => storage.mount_point.as_str(),
+    "mount-source" => source.display(),
+    "mount-destination" => mount_point.display(),
     "mount-fstype"  => storage.fstype.as_str(),
     "mount-options" => options.as_str(),
     );
 
     baremount(
-        storage.source.as_str(),
-        storage.mount_point.as_str(),
+        source,
+        mount_point,
         storage.fstype.as_str(),
         flags,
         options.as_str(),
@@ -579,7 +582,10 @@ fn mount_to_rootfs(logger: &Logger, m: &InitMount) -> Result<()> {
 
     fs::create_dir_all(Path::new(m.dest)).context("could not create directory")?;
 
-    baremount(m.src, m.dest, m.fstype, flags, &options, logger).or_else(|e| {
+    let source = Path::new(m.src);
+    let dest = Path::new(m.dest);
+
+    baremount(source, dest, m.fstype, flags, &options, logger).or_else(|e| {
         if m.src != "dev" {
             return Err(e);
         }
@@ -622,8 +628,7 @@ pub fn get_mount_fs_type_from_file(mount_file: &str, mount_point: &str) -> Resul
     let file = File::open(mount_file)?;
     let reader = BufReader::new(file);
 
-    let re = Regex::new(format!("device .+ mounted on {} with fstype (.+)", mount_point).as_str())
-        .unwrap();
+    let re = Regex::new(format!("device .+ mounted on {} with fstype (.+)", mount_point).as_str())?;
 
     // Read the file line by line using the lines() iterator from std::io::BufRead.
     for (_index, line) in reader.lines().enumerate() {
@@ -701,20 +706,21 @@ pub fn get_cgroup_mounts(
             }
         }
 
-        if fields[0].is_empty() {
+        let subsystem_name = fields[0];
+
+        if subsystem_name.is_empty() {
             continue;
         }
 
-        if fields[0] == "devices" {
+        if subsystem_name == "devices" {
             has_device_cgroup = true;
         }
 
-        if let Some(value) = CGROUPS.get(&fields[0]) {
-            let key = CGROUPS.keys().find(|&&f| f == fields[0]).unwrap();
+        if let Some((key, value)) = CGROUPS.get_key_value(subsystem_name) {
             cg_mounts.push(InitMount {
                 fstype: "cgroup",
                 src: "cgroup",
-                dest: *value,
+                dest: value,
                 options: vec!["nosuid", "nodev", "noexec", "relatime", key],
             });
         }
@@ -767,10 +773,9 @@ fn ensure_destination_file_exists(path: &Path) -> Result<()> {
         return Err(anyhow!("{:?} exists but is not a regular file", path));
     }
 
-    // The only way parent() can return None is if the path is /,
-    // which always exists, so the test above will already have caught
-    // it, thus the unwrap() is safe
-    let dir = path.parent().unwrap();
+    let dir = path
+        .parent()
+        .ok_or_else(|| anyhow!("failed to find parent path for {:?}", path))?;
 
     fs::create_dir_all(dir).context(format!("create_dir_all {:?}", dir))?;
 
@@ -937,14 +942,10 @@ mod tests {
                 std::fs::create_dir_all(d).expect("failed to created directory");
             }
 
-            let result = baremount(
-                &src_filename,
-                &dest_filename,
-                d.fs_type,
-                d.flags,
-                d.options,
-                &logger,
-            );
+            let src = Path::new(&src_filename);
+            let dest = Path::new(&dest_filename);
+
+            let result = baremount(src, dest, d.fs_type, d.flags, d.options, &logger);
 
             let msg = format!("{}: result: {:?}", msg, result);
 
@@ -1021,15 +1022,11 @@ mod tests {
                 .unwrap_or_else(|_| panic!("failed to create directory {}", d));
         }
 
+        let src = Path::new(mnt_src_filename);
+        let dest = Path::new(mnt_dest_filename);
+
         // Create an actual mount
-        let result = baremount(
-            mnt_src_filename,
-            mnt_dest_filename,
-            "bind",
-            MsFlags::MS_BIND,
-            "",
-            &logger,
-        );
+        let result = baremount(src, dest, "bind", MsFlags::MS_BIND, "", &logger);
         assert!(result.is_ok(), "mount for test setup failed");
 
         let tests = &[

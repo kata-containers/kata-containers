@@ -20,12 +20,12 @@ import (
 	"time"
 
 	"github.com/containerd/console"
-	persistapi "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist/api"
 	chclient "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/cloud-hypervisor/client"
 	"github.com/opencontainers/selinux/go-selinux/label"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 
+	hv "github.com/kata-containers/kata-containers/src/runtime/pkg/hypervisors"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils/katatrace"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
@@ -157,7 +157,6 @@ func (s *CloudHypervisorState) reset() {
 }
 
 type cloudHypervisor struct {
-	store     persistapi.PersistDriver
 	console   console.Console
 	virtiofsd Virtiofsd
 	APIClient clhClient
@@ -226,7 +225,7 @@ func (clh *cloudHypervisor) CreateVM(ctx context.Context, id string, networkNS N
 		clh.Logger().WithField("function", "CreateVM").Info("Sandbox already exist, loading from state")
 		clh.virtiofsd = &virtiofsd{
 			PID:        clh.state.VirtiofsdPID,
-			sourcePath: filepath.Join(getSharePath(clh.id)),
+			sourcePath: hypervisorConfig.SharedPath,
 			debug:      clh.config.Debug,
 			socketPath: virtiofsdSocketPath,
 		}
@@ -342,7 +341,7 @@ func (clh *cloudHypervisor) CreateVM(ctx context.Context, id string, networkNS N
 
 	clh.virtiofsd = &virtiofsd{
 		path:       clh.config.VirtioFSDaemon,
-		sourcePath: filepath.Join(getSharePath(clh.id)),
+		sourcePath: filepath.Join(GetSharePath(clh.id)),
 		socketPath: virtiofsdSocketPath,
 		extraArgs:  clh.config.VirtioFSExtraArgs,
 		debug:      clh.config.Debug,
@@ -374,7 +373,7 @@ func (clh *cloudHypervisor) StartVM(ctx context.Context, timeout int) error {
 
 	clh.Logger().WithField("function", "StartVM").Info("starting Sandbox")
 
-	vmPath := filepath.Join(clh.store.RunVMStoragePath(), clh.id)
+	vmPath := filepath.Join(clh.config.VMStorePath, clh.id)
 	err := os.MkdirAll(vmPath, DirMode)
 	if err != nil {
 		return err
@@ -747,7 +746,7 @@ func (clh *cloudHypervisor) toGrpc(ctx context.Context) ([]byte, error) {
 	return nil, errors.New("cloudHypervisor is not supported by VM cache")
 }
 
-func (clh *cloudHypervisor) Save() (s persistapi.HypervisorState) {
+func (clh *cloudHypervisor) Save() (s hv.HypervisorState) {
 	s.Pid = clh.state.PID
 	s.Type = string(ClhHypervisor)
 	s.VirtiofsdPid = clh.state.VirtiofsdPID
@@ -755,7 +754,7 @@ func (clh *cloudHypervisor) Save() (s persistapi.HypervisorState) {
 	return
 }
 
-func (clh *cloudHypervisor) Load(s persistapi.HypervisorState) {
+func (clh *cloudHypervisor) Load(s hv.HypervisorState) {
 	clh.state.PID = s.Pid
 	clh.state.VirtiofsdPID = s.VirtiofsdPid
 	clh.state.apiSocket = s.APISocket
@@ -814,7 +813,7 @@ func (clh *cloudHypervisor) AddDevice(ctx context.Context, devInfo interface{}, 
 //###########################################################################
 
 func (clh *cloudHypervisor) Logger() *log.Entry {
-	return virtLog.WithField("subsystem", "cloudHypervisor")
+	return hvLogger.WithField("subsystem", "cloudHypervisor")
 }
 
 // Adds all capabilities supported by cloudHypervisor implementation of hypervisor interface
@@ -893,15 +892,15 @@ func (clh *cloudHypervisor) GenerateSocket(id string) (interface{}, error) {
 }
 
 func (clh *cloudHypervisor) virtioFsSocketPath(id string) (string, error) {
-	return utils.BuildSocketPath(clh.store.RunVMStoragePath(), id, virtioFsSocket)
+	return utils.BuildSocketPath(clh.config.VMStorePath, id, virtioFsSocket)
 }
 
 func (clh *cloudHypervisor) vsockSocketPath(id string) (string, error) {
-	return utils.BuildSocketPath(clh.store.RunVMStoragePath(), id, clhSocket)
+	return utils.BuildSocketPath(clh.config.VMStorePath, id, clhSocket)
 }
 
 func (clh *cloudHypervisor) apiSocketPath(id string) (string, error) {
-	return utils.BuildSocketPath(clh.store.RunVMStoragePath(), id, clhAPISocket)
+	return utils.BuildSocketPath(clh.config.VMStorePath, id, clhAPISocket)
 }
 
 func (clh *cloudHypervisor) waitVMM(timeout uint) error {
@@ -1213,7 +1212,7 @@ func (clh *cloudHypervisor) cleanupVM(force bool) error {
 	}
 
 	// Cleanup vm path
-	dir := filepath.Join(clh.store.RunVMStoragePath(), clh.id)
+	dir := filepath.Join(clh.config.VMStorePath, clh.id)
 
 	// If it's a symlink, remove both dir and the target.
 	link, err := filepath.EvalSymlinks(dir)
@@ -1242,7 +1241,7 @@ func (clh *cloudHypervisor) cleanupVM(force bool) error {
 	}
 
 	if clh.config.VMid != "" {
-		dir = filepath.Join(clh.store.RunStoragePath(), clh.config.VMid)
+		dir = filepath.Join(clh.config.VMStorePath, clh.config.VMid)
 		if err := os.RemoveAll(dir); err != nil {
 			if !force {
 				return err
@@ -1271,7 +1270,4 @@ func (clh *cloudHypervisor) vmInfo() (chclient.VmInfo, error) {
 
 func (clh *cloudHypervisor) IsRateLimiterBuiltin() bool {
 	return false
-}
-
-func (clh *cloudHypervisor) setSandbox(sandbox *Sandbox) {
 }

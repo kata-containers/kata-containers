@@ -98,6 +98,5 @@ type NetworkEndpoint struct {
 type NetworkInfo struct {
 	NetNsPath    string
 	Endpoints    []NetworkEndpoint
-	NetmonPID    int
 	NetNsCreated bool
 }
