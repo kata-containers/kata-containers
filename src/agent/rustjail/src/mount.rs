@@ -5,7 +5,6 @@
 
 use anyhow::{anyhow, Context, Result};
 use libc::uid_t;
-use nix::errno::Errno;
 use nix::fcntl::{self, OFlag};
 #[cfg(not(test))]
 use nix::mount;
@@ -655,7 +654,7 @@ pub fn ms_move_root(rootfs: &str) -> Result<bool> {
             None::<&str>,
         )?;
         umount2(abs_mount_point, MntFlags::MNT_DETACH).or_else(|e| {
-            if e.ne(&nix::Error::from(Errno::EINVAL)) && e.ne(&nix::Error::from(Errno::EPERM)) {
+            if e.ne(&nix::Error::EINVAL) && e.ne(&nix::Error::EPERM) {
                 return Err(anyhow!(e));
             }
 
@@ -798,14 +797,8 @@ fn mount_from(
         }
     };
 
-    let _ = stat::stat(dest.as_str()).map_err(|e| {
-        log_child!(
-            cfd_log,
-            "dest stat error. {}: {:?}",
-            dest.as_str(),
-            e.as_errno()
-        )
-    });
+    let _ = stat::stat(dest.as_str())
+        .map_err(|e| log_child!(cfd_log, "dest stat error. {}: {:?}", dest.as_str(), e));
 
     mount(
         Some(src.as_str()),
@@ -815,7 +808,7 @@ fn mount_from(
         Some(d.as_str()),
     )
     .map_err(|e| {
-        log_child!(cfd_log, "mount error: {:?}", e.as_errno());
+        log_child!(cfd_log, "mount error: {:?}", e);
         e
     })?;
 
@@ -837,7 +830,7 @@ fn mount_from(
             None::<&str>,
         )
         .map_err(|e| {
-            log_child!(cfd_log, "remout {}: {:?}", dest.as_str(), e.as_errno());
+            log_child!(cfd_log, "remout {}: {:?}", dest.as_str(), e);
             e
         })?;
     }
@@ -1006,7 +999,7 @@ pub fn finish_rootfs(cfd_log: RawFd, spec: &Spec, process: &Process) -> Result<(
 
 fn mask_path(path: &str) -> Result<()> {
     if !path.starts_with('/') || path.contains("..") {
-        return Err(nix::Error::Sys(Errno::EINVAL).into());
+        return Err(anyhow!(nix::Error::EINVAL));
     }
 
     match mount(
@@ -1016,49 +1009,30 @@ fn mask_path(path: &str) -> Result<()> {
         MsFlags::MS_BIND,
         None::<&str>,
     ) {
-        Err(nix::Error::Sys(e)) => {
-            if e != Errno::ENOENT && e != Errno::ENOTDIR {
-                //info!("{}: {}", path, e.desc());
-                return Err(nix::Error::Sys(e).into());
-            }
-        }
-
-        Err(e) => {
-            return Err(e.into());
-        }
-
-        Ok(_) => {}
+        Err(e) => match e {
+            nix::Error::ENOENT | nix::Error::ENOTDIR => Ok(()),
+            _ => Err(e.into()),
+        },
+        Ok(_) => Ok(()),
     }
-
-    Ok(())
 }
 
 fn readonly_path(path: &str) -> Result<()> {
     if !path.starts_with('/') || path.contains("..") {
-        return Err(nix::Error::Sys(Errno::EINVAL).into());
+        return Err(anyhow!(nix::Error::EINVAL));
     }
 
-    match mount(
+    if let Err(e) = mount(
         Some(&path[1..]),
         path,
         None::<&str>,
         MsFlags::MS_BIND | MsFlags::MS_REC,
         None::<&str>,
     ) {
-        Err(nix::Error::Sys(e)) => {
-            if e == Errno::ENOENT {
-                return Ok(());
-            } else {
-                //info!("{}: {}", path, e.desc());
-                return Err(nix::Error::Sys(e).into());
-            }
-        }
-
-        Err(e) => {
-            return Err(e.into());
-        }
-
-        Ok(_) => {}
+        match e {
+            nix::Error::ENOENT => return Ok(()),
+            _ => return Err(e.into()),
+        };
     }
 
     mount(
