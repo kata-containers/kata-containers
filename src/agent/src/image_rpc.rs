@@ -82,7 +82,7 @@ impl ImageService {
         } else {
             info!(
                 sl!(),
-                "No policy path was supplied, so revert to allow all images to be pulled."
+                "No policy path was supplied, so allow all images to be pulled."
             );
             pull_command.arg("--insecure-policy");
         }
