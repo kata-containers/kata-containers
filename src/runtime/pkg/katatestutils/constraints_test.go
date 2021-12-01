@@ -43,7 +43,6 @@ type testDataDistro struct {
 var distros = []string{
 	"centos",
 	"clear-linux-os",
-	"debian",
 	"fedora",
 	"opensuse",
 	"rhel",
