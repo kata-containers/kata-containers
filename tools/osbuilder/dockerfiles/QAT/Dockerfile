@@ -16,7 +16,7 @@ ENV QAT_DRIVER_URL "https://downloadmirror.intel.com/649693/${QAT_DRIVER_VER}"
 ENV QAT_CONFIGURE_OPTIONS "--enable-icp-sriov=guest"
 ENV KATA_REPO_VERSION "main"
 ENV AGENT_VERSION ""
-ENV ROOTFS_OS "debian"
+ENV ROOTFS_OS "ubuntu"
 ENV OUTPUT_DIR "/output"
 
 RUN dnf install -y \
