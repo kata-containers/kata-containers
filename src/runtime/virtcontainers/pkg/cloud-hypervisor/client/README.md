@@ -108,6 +108,7 @@ Class | Method | HTTP request | Description
  - [BalloonConfig](docs/BalloonConfig.md)
  - [CmdLineConfig](docs/CmdLineConfig.md)
  - [ConsoleConfig](docs/ConsoleConfig.md)
+ - [CpuAffinity](docs/CpuAffinity.md)
  - [CpuTopology](docs/CpuTopology.md)
  - [CpusConfig](docs/CpusConfig.md)
  - [DeviceConfig](docs/DeviceConfig.md)
