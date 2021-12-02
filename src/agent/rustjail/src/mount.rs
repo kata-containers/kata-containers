@@ -776,7 +776,7 @@ fn mount_from(
         let _ = fs::create_dir_all(&dir).map_err(|e| {
             log_child!(
                 cfd_log,
-                "creat dir {}: {}",
+                "create dir {}: {}",
                 dir.to_str().unwrap(),
                 e.to_string()
             )
