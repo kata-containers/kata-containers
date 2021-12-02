@@ -16,10 +16,11 @@ import (
 
 // CpusConfig struct for CpusConfig
 type CpusConfig struct {
-	BootVcpus   int32        `json:"boot_vcpus"`
-	MaxVcpus    int32        `json:"max_vcpus"`
-	Topology    *CpuTopology `json:"topology,omitempty"`
-	MaxPhysBits *int32       `json:"max_phys_bits,omitempty"`
+	BootVcpus   int32          `json:"boot_vcpus"`
+	MaxVcpus    int32          `json:"max_vcpus"`
+	Topology    *CpuTopology   `json:"topology,omitempty"`
+	MaxPhysBits *int32         `json:"max_phys_bits,omitempty"`
+	Affinity    *[]CpuAffinity `json:"affinity,omitempty"`
 }
 
 // NewCpusConfig instantiates a new CpusConfig object
@@ -157,6 +158,38 @@ func (o *CpusConfig) SetMaxPhysBits(v int32) {
 	o.MaxPhysBits = &v
 }
 
+// GetAffinity returns the Affinity field value if set, zero value otherwise.
+func (o *CpusConfig) GetAffinity() []CpuAffinity {
+	if o == nil || o.Affinity == nil {
+		var ret []CpuAffinity
+		return ret
+	}
+	return *o.Affinity
+}
+
+// GetAffinityOk returns a tuple with the Affinity field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *CpusConfig) GetAffinityOk() (*[]CpuAffinity, bool) {
+	if o == nil || o.Affinity == nil {
+		return nil, false
+	}
+	return o.Affinity, true
+}
+
+// HasAffinity returns a boolean if a field has been set.
+func (o *CpusConfig) HasAffinity() bool {
+	if o != nil && o.Affinity != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetAffinity gets a reference to the given []CpuAffinity and assigns it to the Affinity field.
+func (o *CpusConfig) SetAffinity(v []CpuAffinity) {
+	o.Affinity = &v
+}
+
 func (o CpusConfig) MarshalJSON() ([]byte, error) {
 	toSerialize := map[string]interface{}{}
 	if true {
@@ -170,6 +203,9 @@ func (o CpusConfig) MarshalJSON() ([]byte, error) {
 	}
 	if o.MaxPhysBits != nil {
 		toSerialize["max_phys_bits"] = o.MaxPhysBits
+	}
+	if o.Affinity != nil {
+		toSerialize["affinity"] = o.Affinity
 	}
 	return json.Marshal(toSerialize)
 }
