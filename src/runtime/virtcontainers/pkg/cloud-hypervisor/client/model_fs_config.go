@@ -16,13 +16,14 @@ import (
 
 // FsConfig struct for FsConfig
 type FsConfig struct {
-	Tag       string  `json:"tag"`
-	Socket    string  `json:"socket"`
-	NumQueues int32   `json:"num_queues"`
-	QueueSize int32   `json:"queue_size"`
-	Dax       bool    `json:"dax"`
-	CacheSize int64   `json:"cache_size"`
-	Id        *string `json:"id,omitempty"`
+	Tag        string  `json:"tag"`
+	Socket     string  `json:"socket"`
+	NumQueues  int32   `json:"num_queues"`
+	QueueSize  int32   `json:"queue_size"`
+	Dax        bool    `json:"dax"`
+	CacheSize  int64   `json:"cache_size"`
+	PciSegment *int32  `json:"pci_segment,omitempty"`
+	Id         *string `json:"id,omitempty"`
 }
 
 // NewFsConfig instantiates a new FsConfig object
@@ -198,6 +199,38 @@ func (o *FsConfig) SetCacheSize(v int64) {
 	o.CacheSize = v
 }
 
+// GetPciSegment returns the PciSegment field value if set, zero value otherwise.
+func (o *FsConfig) GetPciSegment() int32 {
+	if o == nil || o.PciSegment == nil {
+		var ret int32
+		return ret
+	}
+	return *o.PciSegment
+}
+
+// GetPciSegmentOk returns a tuple with the PciSegment field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *FsConfig) GetPciSegmentOk() (*int32, bool) {
+	if o == nil || o.PciSegment == nil {
+		return nil, false
+	}
+	return o.PciSegment, true
+}
+
+// HasPciSegment returns a boolean if a field has been set.
+func (o *FsConfig) HasPciSegment() bool {
+	if o != nil && o.PciSegment != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetPciSegment gets a reference to the given int32 and assigns it to the PciSegment field.
+func (o *FsConfig) SetPciSegment(v int32) {
+	o.PciSegment = &v
+}
+
 // GetId returns the Id field value if set, zero value otherwise.
 func (o *FsConfig) GetId() string {
 	if o == nil || o.Id == nil {
@@ -249,6 +282,9 @@ func (o FsConfig) MarshalJSON() ([]byte, error) {
 	}
 	if true {
 		toSerialize["cache_size"] = o.CacheSize
+	}
+	if o.PciSegment != nil {
+		toSerialize["pci_segment"] = o.PciSegment
 	}
 	if o.Id != nil {
 		toSerialize["id"] = o.Id
