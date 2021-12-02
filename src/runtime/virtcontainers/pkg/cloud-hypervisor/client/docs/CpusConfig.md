@@ -8,6 +8,7 @@ Name | Type | Description | Notes
 **MaxVcpus** | **int32** |  | [default to 1]
 **Topology** | Pointer to [**CpuTopology**](CpuTopology.md) |  | [optional] 
 **MaxPhysBits** | Pointer to **int32** |  | [optional] 
+**Affinity** | Pointer to [**[]CpuAffinity**](CpuAffinity.md) |  | [optional] 
 
 ## Methods
 
@@ -117,6 +118,31 @@ SetMaxPhysBits sets MaxPhysBits field to given value.
 `func (o *CpusConfig) HasMaxPhysBits() bool`
 
 HasMaxPhysBits returns a boolean if a field has been set.
+
+### GetAffinity
+
+`func (o *CpusConfig) GetAffinity() []CpuAffinity`
+
+GetAffinity returns the Affinity field if non-nil, zero value otherwise.
+
+### GetAffinityOk
+
+`func (o *CpusConfig) GetAffinityOk() (*[]CpuAffinity, bool)`
+
+GetAffinityOk returns a tuple with the Affinity field if it's non-nil, zero value otherwise
+and a boolean to check if the value has been set.
+
+### SetAffinity
+
+`func (o *CpusConfig) SetAffinity(v []CpuAffinity)`
+
+SetAffinity sets Affinity field to given value.
+
+### HasAffinity
+
+`func (o *CpusConfig) HasAffinity() bool`
+
+HasAffinity returns a boolean if a field has been set.
 
 
 [[Back to Model list]](../README.md#documentation-for-models) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to README]](../README.md)

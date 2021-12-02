@@ -7,6 +7,7 @@ Name | Type | Description | Notes
 **Cid** | **int64** | Guest Vsock CID | 
 **Socket** | **string** | Path to UNIX domain socket, used to proxy vsock connections. | 
 **Iommu** | Pointer to **bool** |  | [optional] [default to false]
+**PciSegment** | Pointer to **int32** |  | [optional] 
 **Id** | Pointer to **string** |  | [optional] 
 
 ## Methods
@@ -92,6 +93,31 @@ SetIommu sets Iommu field to given value.
 `func (o *VsockConfig) HasIommu() bool`
 
 HasIommu returns a boolean if a field has been set.
+
+### GetPciSegment
+
+`func (o *VsockConfig) GetPciSegment() int32`
+
+GetPciSegment returns the PciSegment field if non-nil, zero value otherwise.
+
+### GetPciSegmentOk
+
+`func (o *VsockConfig) GetPciSegmentOk() (*int32, bool)`
+
+GetPciSegmentOk returns a tuple with the PciSegment field if it's non-nil, zero value otherwise
+and a boolean to check if the value has been set.
+
+### SetPciSegment
+
+`func (o *VsockConfig) SetPciSegment(v int32)`
+
+SetPciSegment sets PciSegment field to given value.
+
+### HasPciSegment
+
+`func (o *VsockConfig) HasPciSegment() bool`
+
+HasPciSegment returns a boolean if a field has been set.
 
 ### GetId
 

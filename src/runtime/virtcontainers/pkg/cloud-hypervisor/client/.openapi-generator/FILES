@@ -9,6 +9,7 @@ configuration.go
 docs/BalloonConfig.md
 docs/CmdLineConfig.md
 docs/ConsoleConfig.md
+docs/CpuAffinity.md
 docs/CpuTopology.md
 docs/CpusConfig.md
 docs/DefaultApi.md
@@ -45,6 +46,7 @@ go.sum
 model_balloon_config.go
 model_cmd_line_config.go
 model_console_config.go
+model_cpu_affinity.go
 model_cpu_topology.go
 model_cpus_config.go
 model_device_config.go
