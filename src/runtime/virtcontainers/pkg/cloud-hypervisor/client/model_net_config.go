@@ -28,6 +28,7 @@ type NetConfig struct {
 	VhostMode         *string            `json:"vhost_mode,omitempty"`
 	Id                *string            `json:"id,omitempty"`
 	Fd                *[]int32           `json:"fd,omitempty"`
+	PciSegment        *int32             `json:"pci_segment,omitempty"`
 	RateLimiterConfig *RateLimiterConfig `json:"rate_limiter_config,omitempty"`
 }
 
@@ -464,6 +465,38 @@ func (o *NetConfig) SetFd(v []int32) {
 	o.Fd = &v
 }
 
+// GetPciSegment returns the PciSegment field value if set, zero value otherwise.
+func (o *NetConfig) GetPciSegment() int32 {
+	if o == nil || o.PciSegment == nil {
+		var ret int32
+		return ret
+	}
+	return *o.PciSegment
+}
+
+// GetPciSegmentOk returns a tuple with the PciSegment field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *NetConfig) GetPciSegmentOk() (*int32, bool) {
+	if o == nil || o.PciSegment == nil {
+		return nil, false
+	}
+	return o.PciSegment, true
+}
+
+// HasPciSegment returns a boolean if a field has been set.
+func (o *NetConfig) HasPciSegment() bool {
+	if o != nil && o.PciSegment != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetPciSegment gets a reference to the given int32 and assigns it to the PciSegment field.
+func (o *NetConfig) SetPciSegment(v int32) {
+	o.PciSegment = &v
+}
+
 // GetRateLimiterConfig returns the RateLimiterConfig field value if set, zero value otherwise.
 func (o *NetConfig) GetRateLimiterConfig() RateLimiterConfig {
 	if o == nil || o.RateLimiterConfig == nil {
@@ -533,6 +566,9 @@ func (o NetConfig) MarshalJSON() ([]byte, error) {
 	}
 	if o.Fd != nil {
 		toSerialize["fd"] = o.Fd
+	}
+	if o.PciSegment != nil {
+		toSerialize["pci_segment"] = o.PciSegment
 	}
 	if o.RateLimiterConfig != nil {
 		toSerialize["rate_limiter_config"] = o.RateLimiterConfig
