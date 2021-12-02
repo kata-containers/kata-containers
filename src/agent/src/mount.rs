@@ -405,14 +405,18 @@ async fn bind_watcher_storage_handler(
     logger: &Logger,
     storage: &Storage,
     sandbox: Arc<Mutex<Sandbox>>,
+    cid: Option<String>,
 ) -> Result<()> {
     let mut locked = sandbox.lock().await;
-    let container_id = locked.id.clone();
 
-    locked
-        .bind_watcher
-        .add_container(container_id, iter::once(storage.clone()), logger)
-        .await
+    if let Some(cid) = cid {
+        locked
+            .bind_watcher
+            .add_container(cid, iter::once(storage.clone()), logger)
+            .await
+    } else {
+        Ok(())
+    }
 }
 
 // mount_storage performs the mount described by the storage structure.
@@ -521,6 +525,7 @@ pub async fn add_storages(
     logger: Logger,
     storages: Vec<Storage>,
     sandbox: Arc<Mutex<Sandbox>>,
+    cid: Option<String>,
 ) -> Result<Vec<String>> {
     let mut mount_list = Vec::new();
 
@@ -551,7 +556,8 @@ pub async fn add_storages(
             }
             DRIVER_NVDIMM_TYPE => nvdimm_storage_handler(&logger, &storage, sandbox.clone()).await,
             DRIVER_WATCHABLE_BIND_TYPE => {
-                bind_watcher_storage_handler(&logger, &storage, sandbox.clone()).await?;
+                bind_watcher_storage_handler(&logger, &storage, sandbox.clone(), cid.clone())
+                    .await?;
                 // Don't register watch mounts, they're handled separately by the watcher.
                 Ok(String::new())
             }
