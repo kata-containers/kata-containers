@@ -1,0 +1,126 @@
+on:
+  issue_comment:
+    types: [created, edited]
+
+name: deploy-ccv0-demo
+
+jobs:
+  check-comment-and-membership:
+    runs-on: ubuntu-latest
+    if: |
+      github.event.issue.pull_request
+      && github.event_name == 'issue_comment'
+      && github.event.action == 'created'
+      && startsWith(github.event.comment.body, '/deploy-ccv0-demo')
+    steps:
+      - name: Check membership
+        uses: kata-containers/is-organization-member@1.0.1
+        id: is_organization_member
+        with:
+          organization: kata-containers
+          username: ${{ github.event.comment.user.login }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Fail if not member
+        run: |
+          result=${{ steps.is_organization_member.outputs.result }}
+          if [ $result == false ]; then
+              user=${{ github.event.comment.user.login }}
+              echo Either ${user} is not part of the kata-containers organization
+              echo or ${user} has its Organization Visibility set to Private at
+              echo https://github.com/orgs/kata-containers/people?query=${user}
+              echo 
+              echo Ensure you change your Organization Visibility to Public and
+              echo trigger the test again.
+              exit 1
+          fi
+
+  build-asset:
+    runs-on: ubuntu-latest
+    needs: check-comment-and-membership
+    strategy:
+      matrix:
+        asset:
+          - cloud-hypervisor
+          - firecracker
+          - kernel
+          - qemu
+          - rootfs-image
+          - rootfs-initrd
+          - shim-v2
+    steps:
+      - uses: actions/checkout@v2
+      - name: Install docker
+        run: |
+          curl -fsSL https://test.docker.com -o test-docker.sh
+          sh test-docker.sh
+
+      - name: Prepare confidential container rootfs
+        if: ${{ matrix.asset == 'rootfs-initrd' }}
+        run: |
+          wget -P include_rootfs/etc/ https://raw.githubusercontent.com/confidential-containers/documentation/main/demos/ssh-demo/aa-offline_fs_kbc-keys.json
+          envsubst < docs/how-to/data/confidential-agent-config.toml.in > include_rootfs/etc/kata-config.toml
+        env:
+          AA_KBC_PARAMS: offline_fs_kbc::null
+
+      - name: Build ${{ matrix.asset }}
+        run: |
+          make "${KATA_ASSET}-tarball"
+          build_dir=$(readlink -f build)
+          # store-artifact does not work with symlink
+          sudo cp -r "${build_dir}" "kata-build"
+        env:
+          AA_KBC: offline_fs_kbc
+          INCLUDE_ROOTFS: include_rootfs
+          KATA_ASSET: ${{ matrix.asset }}
+          TAR_OUTPUT: ${{ matrix.asset }}.tar.gz
+
+      - name: store-artifact ${{ matrix.asset }}
+        uses: actions/upload-artifact@v2
+        with:
+          name: kata-artifacts
+          path: kata-build/kata-static-${{ matrix.asset }}.tar.xz
+          if-no-files-found: error
+
+  create-kata-tarball:
+    runs-on: ubuntu-latest
+    needs: build-asset
+    steps:
+      - uses: actions/checkout@v2
+      - name: get-artifacts
+        uses: actions/download-artifact@v2
+        with:
+          name: kata-artifacts
+          path: kata-artifacts
+      - name: merge-artifacts
+        run: |
+          ./tools/packaging/kata-deploy/local-build/kata-deploy-merge-builds.sh kata-artifacts
+      - name: store-artifacts
+        uses: actions/upload-artifact@v2
+        with:
+          name: kata-static-tarball
+          path: kata-static.tar.xz
+
+  kata-deploy:
+    needs: create-kata-tarball
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: get-kata-tarball
+        uses: actions/download-artifact@v2
+        with:
+          name: kata-static-tarball
+      - name: build-and-push-kata-deploy-ci
+        id: build-and-push-kata-deploy-ci
+        run: |
+          tag=$(echo $GITHUB_REF | cut -d/ -f3-)
+          pushd $GITHUB_WORKSPACE
+          git checkout $tag
+          pkg_sha=$(git rev-parse HEAD)
+          popd
+          mv kata-static.tar.xz $GITHUB_WORKSPACE/tools/packaging/kata-deploy/kata-static.tar.xz
+          docker build --build-arg KATA_ARTIFACTS=kata-static.tar.xz -t quay.io/confidential-containers/kata-demo:$pkg_sha $GITHUB_WORKSPACE/tools/packaging/kata-deploy
+          docker login -u ${{ secrets.QUAY_DEPLOYER_USERNAME }} -p ${{ secrets.QUAY_DEPLOYER_PASSWORD }} quay.io
+          docker push quay.io/confidential-containers/kata-demo:$pkg_sha
+          mkdir -p packaging/kata-deploy
+          ln -s $GITHUB_WORKSPACE/tools/packaging/kata-deploy/action packaging/kata-deploy/action
+          echo "::set-output name=PKG_SHA::${pkg_sha}"
