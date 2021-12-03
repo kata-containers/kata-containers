@@ -51,8 +51,8 @@ impl Args {
             ))));
         }
 
-        validate::verify_cid(&self.id).context("verify cid")?;
-        validate::verify_cid(&self.namespace).context("verify namespace")?;
+        validate::verify_id(&self.id).context("verify container id")?;
+        validate::verify_id(&self.namespace).context("verify namespace")?;
 
         // Ensure `address` is a valid path.
         let path = PathBuf::from(self.address.clone())

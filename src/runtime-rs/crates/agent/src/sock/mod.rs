@@ -120,12 +120,12 @@ fn parse(address: &str, port: u32) -> Result<SockType> {
     let url = Url::parse(address).context("parse url")?;
     match url.scheme() {
         VSOCK_SCHEME => {
-            let cid = url
+            let vsock_cid = url
                 .host_str()
                 .unwrap_or_default()
                 .parse::<u32>()
-                .context("parse cid")?;
-            Ok(SockType::Vsock(Vsock::new(cid, port)))
+                .context("parse vsock cid")?;
+            Ok(SockType::Vsock(Vsock::new(vsock_cid, port)))
         }
         HYBRID_VSOCK_SCHEME => {
             let path: Vec<&str> = url.path().split(':').collect();
