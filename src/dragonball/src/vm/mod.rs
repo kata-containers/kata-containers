@@ -728,6 +728,7 @@ impl Vm {
 
 #[cfg(feature = "hotplug")]
 impl Vm {
+    #[cfg(feature = "dbs-upcall")]
     /// initialize upcall client for guest os
     #[cfg(feature = "dbs-upcall")]
     fn new_upcall(&mut self) -> std::result::Result<(), StartMicroVmError> {
@@ -769,6 +770,7 @@ impl Vm {
         }
     }
 
+    #[cfg(feature = "dbs-upcall")]
     /// Get upcall client.
     #[cfg(feature = "dbs-upcall")]
     pub fn upcall_client(&self) -> &Option<Arc<UpcallClient<DevMgrService>>> {

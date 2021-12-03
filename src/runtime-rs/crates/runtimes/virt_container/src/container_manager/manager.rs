@@ -96,10 +96,11 @@ impl ContainerManager for VirtContainerManager {
                 let c = containers
                     .get(container_id)
                     .ok_or_else(|| Error::ContainerNotFound(container_id.to_string()))?;
+                let state = c.state_process(process).await.context("state process");
                 c.delete_exec_process(process)
                     .await
                     .context("delete process")?;
-                c.state_process(process).await.context("state process")
+                return state;
             }
         }
     }

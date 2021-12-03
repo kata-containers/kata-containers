@@ -58,10 +58,7 @@ impl RootFsResource {
                 // Safe as single_layer_rootfs must have one layer
                 let layer = &mounts_vec[0];
 
-                let rootfs = if let Some(_dev_id) = get_block_device(&layer.source) {
-                    // block rootfs
-                    unimplemented!()
-                } else if let Some(share_fs) = share_fs {
+                let rootfs = if let Some(share_fs) = share_fs {
                     // share fs rootfs
                     let share_fs_mount = share_fs.get_share_fs_mount();
                     share_fs_rootfs::ShareFsRootfs::new(&share_fs_mount, cid, bundle_path, layer)
@@ -102,6 +99,7 @@ fn is_single_layer_rootfs(rootfs_mounts: &[Mount]) -> bool {
     rootfs_mounts.len() == 1
 }
 
+#[allow(dead_code)]
 fn get_block_device(file_path: &str) -> Option<u64> {
     if file_path.is_empty() {
         return None;

@@ -53,9 +53,9 @@ pub(crate) fn get_host_rw_shared_path(id: &str) -> PathBuf {
 fn do_get_guest_any_path(target: &str, cid: &str, is_volume: bool, is_virtiofs: bool) -> String {
     let dir = PASSTHROUGH_FS_DIR;
     let guest_share_dir = if is_virtiofs {
-        Path::new("/")
+        Path::new("/").to_path_buf()
     } else {
-        Path::new(KATA_GUEST_SHARE_DIR)
+        Path::new(KATA_GUEST_SHARE_DIR).to_path_buf()
     };
 
     let path = if is_volume && !is_virtiofs {

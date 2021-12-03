@@ -196,6 +196,8 @@ async fn create_endpoint(
             .context("network info from link")?,
     );
 
+    info!(sl!(), "network info {:?}", network_info);
+
     Ok((endpoint, network_info))
 }
 

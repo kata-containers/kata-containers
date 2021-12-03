@@ -7,6 +7,7 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use async_trait::async_trait;
+use kata_types::config::TomlConfig;
 use tokio::sync::mpsc::Sender;
 
 use crate::{message::Message, ContainerManager, Sandbox};
@@ -31,8 +32,12 @@ pub trait RuntimeHandler: Send + Sync {
     where
         Self: Sized;
 
-    async fn new_instance(&self, sid: &str, msg_sender: Sender<Message>)
-        -> Result<RuntimeInstance>;
+    async fn new_instance(
+        &self,
+        sid: &str,
+        msg_sender: Sender<Message>,
+        config: &TomlConfig,
+    ) -> Result<RuntimeInstance>;
 
     fn cleanup(&self, id: &str) -> Result<()>;
 }
