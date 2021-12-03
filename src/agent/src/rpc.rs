@@ -155,6 +155,10 @@ impl AgentService {
         };
 
         info!(sl!(), "receive createcontainer, spec: {:?}", &oci);
+        info!(
+            sl!(),
+            "receive createcontainer, storages: {:?}", &req.storages
+        );
 
         // Some devices need some extra processing (the ones invoked with
         // --device for instance), and that's what this call is doing. It
@@ -170,7 +174,13 @@ impl AgentService {
         // After all those storages have been processed, no matter the order
         // here, the agent will rely on rustjail (using the oci.Mounts
         // list) to bind mount all of them inside the container.
-        let m = add_storages(sl!(), req.storages.to_vec(), self.sandbox.clone()).await?;
+        let m = add_storages(
+            sl!(),
+            req.storages.to_vec(),
+            self.sandbox.clone(),
+            Some(req.container_id.clone()),
+        )
+        .await?;
         {
             sandbox = self.sandbox.clone();
             s = sandbox.lock().await;
@@ -580,6 +590,7 @@ impl protocols::agent_ttrpc::AgentService for AgentService {
     ) -> ttrpc::Result<Empty> {
         trace_rpc_call!(ctx, "remove_container", req);
         is_allowed!(req);
+
         match self.do_remove_container(req).await {
             Err(e) => Err(ttrpc_error(ttrpc::Code::INTERNAL, e.to_string())),
             Ok(_) => Ok(Empty::new()),
@@ -993,7 +1004,7 @@ impl protocols::agent_ttrpc::AgentService for AgentService {
                 .map_err(|e| ttrpc_error(ttrpc::Code::INTERNAL, e.to_string()))?;
         }
 
-        match add_storages(sl!(), req.storages.to_vec(), self.sandbox.clone()).await {
+        match add_storages(sl!(), req.storages.to_vec(), self.sandbox.clone(), None).await {
             Ok(m) => {
                 let sandbox = self.sandbox.clone();
                 let mut s = sandbox.lock().await;
