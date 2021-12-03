@@ -1,0 +1,40 @@
+# Copyright (c) 2021 IBM Corp.
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+
+aa_kbc_params = "$AA_KBC_PARAMS"
+[endpoints]
+allowed = [
+"AddARPNeighborsRequest",
+"AddSwapRequest",
+"CloseStdinRequest",
+"CopyFileRequest",
+"CreateContainerRequest",
+"CreateSandboxRequest",
+"DestroySandboxRequest",
+"GetMetricsRequest",
+"GetOOMEventRequest",
+"GuestDetailsRequest",
+"ListInterfacesRequest",
+"ListRoutesRequest",
+"MemHotplugByProbeRequest",
+"OnlineCPUMemRequest",
+"PauseContainerRequest",
+"PullImageRequest",
+"ReadStreamRequest",
+"RemoveContainerRequest",
+"ResumeContainerRequest",
+"SetGuestDateTimeRequest",
+"SignalProcessRequest",
+"StartContainerRequest",
+"StartTracingRequest",
+"StatsContainerRequest",
+"StopTracingRequest",
+"TtyWinResizeRequest",
+"UpdateContainerRequest",
+"UpdateInterfaceRequest",
+"UpdateRoutesRequest",
+"WaitProcessRequest",
+"WriteStreamRequest"
+]
