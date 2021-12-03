@@ -5,17 +5,25 @@
 
 # ARM 64 settings
 
-MACHINETYPE := virt
 KERNELPARAMS :=
 MACHINEACCELERATORS :=
 CPUFEATURES := pmu=off
 
-QEMUCMD := qemu-system-aarch64
+ifeq ($(HOST_OS),Linux)
+       MACHINETYPE := virt
 
-# Firecracker binary name
-FCCMD := firecracker
-# Firecracker's jailer binary name
-FCJAILERCMD := jailer
+       QEMUCMD := qemu-system-aarch64
 
-# cloud-hypervisor binary name
-CLHCMD := cloud-hypervisor
+       # Firecracker binary name
+       FCCMD := firecracker
+       # Firecracker's jailer binary name
+       FCJAILERCMD := jailer
+
+       # cloud-hypervisor binary name
+       CLHCMD := cloud-hypervisor
+endif
+
+# Virtualization.framework
+ifeq ($(HOST_OS),Darwin)
+       VFW := true
+endif

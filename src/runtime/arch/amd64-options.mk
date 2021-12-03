@@ -3,23 +3,33 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
+HOST_OS := $(shell uname)
+
 # Intel x86-64 settings
 
-MACHINETYPE := q35
 KERNELPARAMS :=
 MACHINEACCELERATORS :=
 CPUFEATURES := pmu=off
 
-QEMUCMD := qemu-system-x86_64
+ifeq ($(HOST_OS),Linux)
+       MACHINETYPE := q35
 
-# Firecracker binary name
-FCCMD := firecracker
-# Firecracker's jailer binary name
-FCJAILERCMD := jailer
+       QEMUCMD := qemu-system-x86_64
 
-#ACRN binary name
-ACRNCMD := acrn-dm
-ACRNCTLCMD := acrnctl
+       # Firecracker binary name
+       FCCMD := firecracker
+       # Firecracker's jailer binary name
+       FCJAILERCMD := jailer
 
-# cloud-hypervisor binary name
-CLHCMD := cloud-hypervisor
+       #ACRN binary name
+       ACRNCMD := acrn-dm
+       ACRNCTLCMD := acrnctl
+
+       # cloud-hypervisor binary name
+       CLHCMD := cloud-hypervisor
+endif
+
+# Virtualization.framework
+ifeq ($(HOST_OS),Darwin)
+       VFW := true
+endif
