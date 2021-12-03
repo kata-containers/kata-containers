@@ -153,15 +153,15 @@ By default, all pods are created with the default runtime configured in CRI cont
 From Kubernetes v1.12, users can use [`RuntimeClass`](https://kubernetes.io/docs/concepts/containers/runtime-class/#runtime-class) to specify a different runtime for Pods.
 
 ```bash
-$ cat > runtime.yaml <<EOF
-apiVersion: node.k8s.io/v1beta1
+$ cat > kata-runtimeclass.yaml <<EOF
+apiVersion: node.k8s.io/v1
 kind: RuntimeClass
 metadata:
   name: kata
 handler: kata
 EOF
 
-$ sudo -E kubectl apply -f runtime.yaml
+$ sudo -E kubectl apply -f kata-runtimeclass.yaml
 ```
 
 ## Run pod in Kata Containers
