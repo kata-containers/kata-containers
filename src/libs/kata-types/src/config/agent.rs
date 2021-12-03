@@ -33,9 +33,29 @@ pub struct Agent {
     #[serde(default)]
     pub debug_console_enabled: bool,
 
-    /// Agent connection dialing timeout value in seconds
+    /// Agent server port
     #[serde(default)]
-    pub dial_timeout: u32,
+    pub server_port: u32,
+
+    /// Agent log port
+    #[serde(default)]
+    pub log_port: u32,
+
+    /// Agent connection dialing timeout value in millisecond
+    #[serde(default = "default_dial_timeout")]
+    pub dial_timeout_ms: u32,
+
+    /// Agent reconnect timeout value in millisecond
+    #[serde(default = "default_reconnect_timeout")]
+    pub reconnect_timeout_ms: u32,
+
+    /// Agent request timeout value in millisecond
+    #[serde(default = "default_request_timeout")]
+    pub request_timeout_ms: u32,
+
+    /// Agent health check request timeout value in millisecond
+    #[serde(default = "default_health_check_timeout")]
+    pub health_check_request_timeout_ms: u32,
 
     /// Comma separated list of kernel modules and their parameters.
     ///
@@ -53,6 +73,26 @@ pub struct Agent {
 
     /// container pipe size
     pub container_pipe_size: u32,
+}
+
+fn default_dial_timeout() -> u32 {
+    // 10ms
+    10
+}
+
+fn default_reconnect_timeout() -> u32 {
+    // 3s
+    3_000
+}
+
+fn default_request_timeout() -> u32 {
+    // 30s
+    30_000
+}
+
+fn default_health_check_timeout() -> u32 {
+    // 90s
+    90_000
 }
 
 impl ConfigOps for Agent {
