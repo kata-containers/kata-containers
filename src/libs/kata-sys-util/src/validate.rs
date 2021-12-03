@@ -10,11 +10,11 @@ pub enum Error {
     InvalidContainerID(String),
 }
 
-// A container ID must match this regex:
+// A container ID or exec ID must match this regex:
 //
 //     ^[a-zA-Z0-9][a-zA-Z0-9_.-]+$
 //
-pub fn verify_cid(id: &str) -> Result<(), Error> {
+pub fn verify_id(id: &str) -> Result<(), Error> {
     let mut chars = id.chars();
 
     let valid = match chars.next() {
@@ -253,7 +253,7 @@ mod tests {
         for (i, d) in tests.iter().enumerate() {
             let msg = format!("test[{}]: {:?}", i, d);
 
-            let result = verify_cid(d.id);
+            let result = verify_id(d.id);
 
             let msg = format!("{}, result: {:?}", msg, result);
 

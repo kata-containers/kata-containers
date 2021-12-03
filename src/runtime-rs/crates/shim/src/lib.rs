@@ -7,11 +7,7 @@
 #[macro_use]
 extern crate slog;
 
-macro_rules! sl {
-    () => {
-            slog_scope::logger().new(slog::o!("subsystem" => "shim"))
-    };
-}
+logging::logger_with_subsystem!(sl, "shim");
 
 mod args;
 pub use args::Args;

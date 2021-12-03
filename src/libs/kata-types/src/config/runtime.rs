@@ -13,6 +13,10 @@ use crate::{eother, resolve_path, validate_path};
 /// Kata runtime configuration information.
 #[derive(Debug, Default, Deserialize, Serialize)]
 pub struct Runtime {
+    /// Runtime name: Plan to support virt-container, linux-container, wasm-container
+    #[serde(default)]
+    pub name: String,
+
     /// If enabled, the runtime will log additional debug messages to the system log.
     #[serde(default, rename = "enable_debug")]
     pub debug: bool,
@@ -238,6 +242,7 @@ vfio_mode = "guest_kernel"
     fn test_config() {
         let content = r#"
 [runtime]
+name = "virt-container"
 enable_debug = true
 experimental = ["a", "b"]
 internetworking_model = "macvtap"
@@ -255,6 +260,7 @@ field_should_be_ignored = true
 "#;
         let config: TomlConfig = TomlConfig::load(content).unwrap();
         config.validate().unwrap();
+        assert_eq!(&config.runtime.name, "virt-container");
         assert!(config.runtime.debug);
         assert_eq!(config.runtime.experimental.len(), 2);
         assert_eq!(&config.runtime.experimental[0], "a");
