@@ -20,9 +20,7 @@ pub struct Network {
 
 impl Network {
     pub fn new() -> Network {
-        Network {
-            dns: Vec::new(),
-        }
+        Network { dns: Vec::new() }
     }
 
     pub fn set_dns(&mut self, dns: String) {
