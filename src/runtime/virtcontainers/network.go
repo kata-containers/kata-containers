@@ -27,7 +27,6 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils/katatrace"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/uuid"
 	pbTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols"
-	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/rootless"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
 )
 
@@ -311,12 +310,7 @@ func xConnectVMNetwork(ctx context.Context, endpoint Endpoint, h Hypervisor) err
 		queues = int(h.HypervisorConfig().NumVCPUs)
 	}
 
-	var disableVhostNet bool
-	if rootless.IsRootless() {
-		disableVhostNet = true
-	} else {
-		disableVhostNet = h.HypervisorConfig().DisableVhostNet
-	}
+	disableVhostNet := h.HypervisorConfig().DisableVhostNet
 
 	if netPair.NetInterworkingModel == NetXConnectDefaultModel {
 		netPair.NetInterworkingModel = DefaultNetInterworkingModel
