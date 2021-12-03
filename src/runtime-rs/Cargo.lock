@@ -157,7 +157,7 @@ checksum = "cdae996d9638ba03253ffa1c93345a585974a97abbdeab9176c77922f3efc1e8"
 dependencies = [
  "libc",
  "log",
- "nix 0.23.1",
+ "nix",
  "regex",
 ]
 
@@ -172,6 +172,28 @@ dependencies = [
  "num-traits",
  "time 0.1.43",
  "winapi",
+]
+
+[[package]]
+name = "common"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "containerd-shim-protos",
+ "kata-sys-util",
+ "kata-types",
+ "lazy_static",
+ "nix",
+ "oci",
+ "protobuf",
+ "serde_json",
+ "slog",
+ "slog-scope",
+ "strum",
+ "thiserror",
+ "tokio",
+ "ttrpc",
 ]
 
 [[package]]
@@ -477,6 +499,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "heck"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2540771e65fc8cb83cd6e8a237f70c319bd5c29f78ed1084ba5d50eeac86f7f9"
+
+[[package]]
 name = "hermit-abi"
 version = "0.1.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -559,7 +587,7 @@ dependencies = [
  "kata-types",
  "lazy_static",
  "libc",
- "nix 0.23.1",
+ "nix",
  "oci",
  "once_cell",
  "serde_json",
@@ -620,6 +648,16 @@ dependencies = [
  "libc",
  "pkg-config",
  "vcpkg",
+]
+
+[[package]]
+name = "linux_container"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "common",
+ "tokio",
 ]
 
 [[package]]
@@ -710,19 +748,6 @@ name = "multimap"
 version = "0.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e5ce46fe64a9d73be07dcbe690a38ce1b293be448fd8ce1e6c1b8062c9f72c6a"
-
-[[package]]
-name = "nix"
-version = "0.16.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dd0eaf8df8bab402257e0a5c17a254e4cc1f72a93588a1ddfb5d356c801aa7cb"
-dependencies = [
- "bitflags",
- "cc",
- "cfg-if 0.1.10",
- "libc",
- "void",
-]
 
 [[package]]
 name = "nix"
@@ -930,7 +955,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "355f634b43cdd80724ee7848f95770e7e70eefa6dcf14fea676216573b8fd603"
 dependencies = [
  "bytes 1.1.0",
- "heck",
+ "heck 0.3.3",
  "itertools",
  "log",
  "multimap",
@@ -1079,6 +1104,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "runtimes"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "common",
+ "kata-types",
+ "lazy_static",
+ "linux_container",
+ "logging",
+ "oci",
+ "slog",
+ "slog-scope",
+ "tokio",
+ "virt_container",
+ "wasm_container",
+]
+
+[[package]]
 name = "rustc-demangle"
 version = "0.1.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1171,6 +1214,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "service"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "common",
+ "containerd-shim-protos",
+ "logging",
+ "runtimes",
+ "slog",
+ "slog-scope",
+ "tokio",
+ "ttrpc",
+]
+
+[[package]]
 name = "sha2"
 version = "0.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1196,10 +1255,12 @@ dependencies = [
  "libc",
  "log",
  "logging",
- "nix 0.16.1",
+ "nix",
  "oci",
  "protobuf",
+ "rand",
  "serial_test",
+ "service",
  "sha2",
  "slog",
  "slog-async",
@@ -1211,6 +1272,15 @@ dependencies = [
  "tokio",
  "unix_socket2",
  "vergen",
+]
+
+[[package]]
+name = "signal-hook-registry"
+version = "1.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e51e73328dc4ac0c7ccbda3a494dfa03df1de2f46018127f60c693f2648455b0"
+dependencies = [
+ "libc",
 ]
 
 [[package]]
@@ -1285,6 +1355,28 @@ checksum = "66d72b759436ae32898a2af0a14218dbf55efde3feeb170eb623637db85ee1e0"
 dependencies = [
  "libc",
  "winapi",
+]
+
+[[package]]
+name = "strum"
+version = "0.24.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e96acfc1b70604b8b2f1ffa4c57e59176c7dbb05d556c71ecd2f5498a1dee7f8"
+dependencies = [
+ "strum_macros",
+]
+
+[[package]]
+name = "strum_macros"
+version = "0.24.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6878079b17446e4d3eba6192bb0a2950d5b14f0ed8424b852310e5a94345d0ef"
+dependencies = [
+ "heck 0.4.0",
+ "proc-macro2",
+ "quote",
+ "rustversion",
+ "syn",
 ]
 
 [[package]]
@@ -1411,7 +1503,9 @@ dependencies = [
  "memchr",
  "mio",
  "num_cpus",
+ "once_cell",
  "pin-project-lite",
+ "signal-hook-registry",
  "socket2",
  "tokio-macros",
  "winapi",
@@ -1461,7 +1555,7 @@ dependencies = [
  "futures 0.3.21",
  "libc",
  "log",
- "nix 0.23.1",
+ "nix",
  "protobuf",
  "protobuf-codegen-pure",
  "thiserror",
@@ -1580,10 +1674,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "49874b5167b65d7193b8aba1567f5c7d93d001cafc34600cee003eda787e483f"
 
 [[package]]
-name = "void"
-version = "1.0.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6a02e4885ed3bc0f2de90ea6dd45ebcbb66dacffe03547fadbb0eeae2770887d"
+name = "virt_container"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "common",
+ "kata-types",
+ "tokio",
+]
 
 [[package]]
 name = "vsock"
@@ -1592,7 +1691,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e32675ee2b3ce5df274c0ab52d19b28789632406277ca26bffee79a8e27dc133"
 dependencies = [
  "libc",
- "nix 0.23.1",
+ "nix",
 ]
 
 [[package]]
@@ -1606,6 +1705,16 @@ name = "wasi"
 version = "0.11.0+wasi-snapshot-preview1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9c8d87e72b64a3b4db28d11ce29237c246188f4f51057d65a7eab63b7987e423"
+
+[[package]]
+name = "wasm_container"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "common",
+ "tokio",
+]
 
 [[package]]
 name = "which"

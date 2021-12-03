@@ -38,8 +38,11 @@ impl ShimExecutor {
         info!(sl!(), "start to run");
         self.args.validate(false).context("validata")?;
 
-        let _server_fd = get_server_fd().context("get server fd")?;
-        // TODO: implement run
+        let server_fd = get_server_fd().context("get server fd")?;
+        let mut service_manager = service::ServiceManager::new(&self.args.id, server_fd)
+            .await
+            .context("new runtime server")?;
+        service_manager.run().await.context("run")?;
 
         Ok(())
     }
