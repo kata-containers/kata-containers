@@ -232,7 +232,7 @@ create_a_local_rootfs() {
     cd ${katacontainers_repo_dir}/tools/osbuilder/rootfs-builder
     export distro="ubuntu"
     [[ -z "${USE_PODMAN:-}" ]] && use_docker="${use_docker:-1}"
-    sudo -E OS_VERSION="${OS_VERSION:-}" GOPATH=$GOPATH DEBUG="${DEBUG}" USE_DOCKER="${use_docker:-}" SKOPEO_UMOCI=yes SECCOMP=yes ./rootfs.sh -r ${ROOTFS_DIR} ${distro}
+    sudo -E OS_VERSION="${OS_VERSION:-}" GOPATH=$GOPATH DEBUG="${DEBUG}" USE_DOCKER="${use_docker:-}" SKOPEO=${SKOPEO:-} UMOCI=yes SECCOMP=yes ./rootfs.sh -r ${ROOTFS_DIR} ${distro}
 
     # During the ./rootfs.sh call the kata agent is built as root, so we need to update the permissions, so we can rebuild it
     sudo chown -R ${USER}:${USER} "${katacontainers_repo_dir}/src/agent/"

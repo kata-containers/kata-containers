@@ -12,7 +12,9 @@ OS_VERSION=${OS_VERSION:-20.04}
 OS_NAME=${OS_NAME:-"focal"}
 
 # packages to be installed by default
-PACKAGES="systemd iptables init kmod"
+# Note: ca-certificates is required for confidential containers
+# to pull the container image on the guest
+PACKAGES="systemd iptables init kmod ca-certificates"
 EXTRA_PKGS+=" chrony"
 
 DEBOOTSTRAP=${PACKAGE_MANAGER:-"debootstrap"}
@@ -32,7 +34,7 @@ INIT_PROCESS=systemd
 ARCH_EXCLUDE_LIST=()
 
 [ "$SECCOMP" = "yes" ] && PACKAGES+=" libseccomp2" || true
-[ -n "$SKOPEO_UMOCI" ] && PACKAGES+=" ca-certificates libgpgme11" || true
+[ "$SKOPEO" = "yes" ] && PACKAGES+=" libgpgme11" || true
 
 if [ "${AA_KBC}" == "eaa_kbc" ] && [ "${ARCH}" == "x86_64" ]; then
     AA_KBC_EXTRAS="
