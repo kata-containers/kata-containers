@@ -681,7 +681,12 @@ EOT
 		pushd attestation-agent
 		source "${HOME}/.cargo/env"
 		target="${ARCH}-unknown-linux-${LIBC}"
-		cargo build --release --target "${target}" --no-default-features --features "${AA_KBC}"
+		if [ "${AA_KBC}" == "eaa_kbc" ] && [ "${ARCH}" == "x86_64" ]; then
+			AA_RUSTFLAG="-C link-args=-Wl,-rpath,/usr/local/lib/rats-tls"
+			# Currently eaa_kbc module only support this specific platform
+			target="x86_64-unknown-linux-gnu"
+		fi
+		RUSTFLAGS=${AA_RUSTFLAG} cargo build --release --target "${target}" --no-default-features --features "${AA_KBC}"
 		install -o root -g root -m 0755 "target/${target}/release/attestation-agent" "${ROOTFS_DIR}/usr/local/bin/"
 		popd
 	fi

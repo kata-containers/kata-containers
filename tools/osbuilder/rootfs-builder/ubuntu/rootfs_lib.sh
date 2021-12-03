@@ -75,4 +75,13 @@ build_rootfs() {
     # Reduce image size and memory footprint
     # removing not needed files and directories.
     chroot $ROOTFS_DIR rm -rf /usr/share/{bash-completion,bug,doc,info,lintian,locale,man,menu,misc,pixmaps,terminfo,zoneinfo,zsh}
+
+ 	if [ "${AA_KBC}" == "eaa_kbc" ] && [ "${ARCH}" == "x86_64" ]; then
+		wget -qO - http://mirrors.openanolis.cn/inclavare-containers/ubuntu20.04/DEB-GPG-KEY.key  | chroot $ROOTFS_DIR apt-key add -
+		cat << EOF | chroot $ROOTFS_DIR
+echo 'deb [arch=amd64] http://mirrors.openanolis.cn/inclavare-containers/ubuntu20.04 bionic main' | tee /etc/apt/sources.list.d/inclavare-containers.list
+apt-get update
+apt-get install -y rats-tls
+EOF
+	fi
 }
