@@ -34,17 +34,9 @@ use crate::log_child;
 // struct is populated from the content in the /proc/<pid>/mountinfo file.
 #[derive(std::fmt::Debug)]
 pub struct Info {
-    id: i32,
-    parent: i32,
-    major: i32,
-    minor: i32,
-    root: String,
     mount_point: String,
-    opts: String,
     optional: String,
     fstype: String,
-    source: String,
-    vfs_opts: String,
 }
 
 const MOUNTINFOFORMAT: &str = "{d} {d} {d}:{d} {} {} {} {}";
@@ -562,7 +554,20 @@ fn parse_mount_table() -> Result<Vec<Info>> {
     for (_index, line) in reader.lines().enumerate() {
         let line = line?;
 
-        let (id, parent, major, minor, root, mount_point, opts, optional) = scan_fmt!(
+        //Example mountinfo format:
+        // id
+        // |  / parent
+        // |  |   / major:minor
+        // |  |   |   / root
+        // |  |   |   |  / mount_point
+        // |  |   |   |  |        / opts
+        // |  |   |   |  |        |                           / optional
+        // |  |   |   |  |        |                           |          / fstype
+        // |  |   |   |  |        |                           |          |     / source
+        // |  |   |   |  |        |                           |          |     |      / vfs_opts
+        // 22 96 0:21 / /sys rw,nosuid,nodev,noexec,relatime shared:2 - sysfs sysfs rw,seclabel
+
+        let (_id, _parent, _major, _minor, _root, mount_point, _opts, optional) = scan_fmt!(
             &line,
             MOUNTINFOFORMAT,
             i32,
@@ -577,7 +582,7 @@ fn parse_mount_table() -> Result<Vec<Info>> {
 
         let fields: Vec<&str> = line.split(" - ").collect();
         if fields.len() == 2 {
-            let (fstype, source, vfs_opts) =
+            let (fstype, _source, _vfs_opts) =
                 scan_fmt!(fields[1], "{} {} {}", String, String, String)?;
 
             let mut optional_new = String::new();
@@ -586,17 +591,9 @@ fn parse_mount_table() -> Result<Vec<Info>> {
             }
 
             let info = Info {
-                id,
-                parent,
-                major,
-                minor,
-                root,
                 mount_point,
-                opts,
                 optional: optional_new,
                 fstype,
-                source,
-                vfs_opts,
             };
 
             infos.push(info);
