@@ -41,6 +41,8 @@ ${script_name}
 
 Options
 -d <path> : destination path, path where go will be installed.
+-f        : enable force install, remove existent go pkg before installation.
+-h        : display this help.
 EOT
 
 	exit "$exit_code"
@@ -50,7 +52,7 @@ trap finish EXIT
 
 pushd "${tmp_dir}"
 
-while getopts "d:fhp" opt
+while getopts "d:fh" opt
 do
 	case $opt in
 		d)	install_dest="${OPTARG}" ;;
