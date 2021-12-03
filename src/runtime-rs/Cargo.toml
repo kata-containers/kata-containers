@@ -1,8 +1,12 @@
 [workspace]
 members = [
     "crates/shim",
-    # TODO: current only for check, delete after use the agent crate
-    "crates/agent",
-    # TODO: current only for check, delete after use the resource crate
-    "crates/resource",
 ]
+
+[patch.'crates-io']
+dbs-device = { git = "https://github.com/openanolis/dragonball-sandbox.git", rev = "84eee5737cc7d85f9921c94a93e6b9dc4ae24a39" }
+dbs-utils = { git = "https://github.com/openanolis/dragonball-sandbox.git", rev = "84eee5737cc7d85f9921c94a93e6b9dc4ae24a39" }
+dbs-interrupt = { git = "https://github.com/openanolis/dragonball-sandbox.git", rev = "84eee5737cc7d85f9921c94a93e6b9dc4ae24a39" }
+dbs-legacy-devices = { git = "https://github.com/openanolis/dragonball-sandbox.git", rev = "84eee5737cc7d85f9921c94a93e6b9dc4ae24a39" }
+dbs-virtio-devices = { git = "https://github.com/openanolis/dragonball-sandbox.git", rev = "84eee5737cc7d85f9921c94a93e6b9dc4ae24a39" }
+dbs-upcall = { git = "https://github.com/openanolis/dragonball-sandbox.git", rev = "84eee5737cc7d85f9921c94a93e6b9dc4ae24a39" }

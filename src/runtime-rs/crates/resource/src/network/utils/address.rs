@@ -41,19 +41,13 @@ impl TryFrom<AddressMessage> for Address {
             valid_ltf: 0,
         };
 
-        let mut local = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
-        let mut dst = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
-
         for nla in nlas.into_iter() {
             match nla {
                 Nla::Address(a) => {
-                    dst = parse_ip(a, header.family)?;
-                }
-                Nla::Local(a) => {
-                    local = parse_ip(a, header.family)?;
+                    addr.addr = parse_ip(&a, header.family)?;
                 }
                 Nla::Broadcast(b) => {
-                    addr.broadcast = parse_ip(b, header.family)?;
+                    addr.broadcast = parse_ip(&b, header.family)?;
                 }
                 Nla::Label(l) => {
                     addr.label = l;
@@ -66,27 +60,11 @@ impl TryFrom<AddressMessage> for Address {
             }
         }
 
-        // IPv6 sends the local address as IFA_ADDRESS with no
-        // IFA_LOCAL, IPv4 sends both IFA_LOCAL and IFA_ADDRESS
-        // with IFA_ADDRESS being the peer address if they differ
-        //
-        // But obviously, as there are IPv6 PtP addresses, too,
-        // IFA_LOCAL should also be handled for IPv6.
-        if local.is_unspecified() {
-            if header.family == AF_INET as u8 && local == dst {
-                addr.addr = dst;
-            } else {
-                addr.addr = local;
-                addr.peer = dst;
-            }
-        } else {
-            addr.addr = dst;
-        }
         Ok(addr)
     }
 }
 
-fn parse_ip(ip: Vec<u8>, family: u8) -> Result<IpAddr> {
+pub(crate) fn parse_ip(ip: &Vec<u8>, family: u8) -> Result<IpAddr> {
     let support_len = if family as u16 == AF_INET { 4 } else { 16 };
     if ip.len() != support_len {
         return Err(anyhow!(

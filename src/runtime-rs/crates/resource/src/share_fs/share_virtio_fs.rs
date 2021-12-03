@@ -15,7 +15,7 @@ use super::utils;
 pub(crate) const MOUNT_GUEST_TAG: &str = "kataShared";
 pub(crate) const PASSTHROUGH_FS_DIR: &str = "passthrough";
 
-pub(crate) const FS_TYPE_VIRTIO_FS: &str = "virtio_fs";
+pub(crate) const FS_TYPE_VIRTIO_FS: &str = "virtiofs";
 pub(crate) const KATA_VIRTIO_FS_DEV_TYPE: &str = "virtio-fs";
 
 const VIRTIO_FS_SOCKET: &str = "virtiofsd.sock";

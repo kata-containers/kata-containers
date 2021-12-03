@@ -11,6 +11,10 @@ logging::logger_with_subsystem!(sl, "hypervisor");
 
 pub mod device;
 pub use device::*;
+pub mod dragonball;
+mod kernel_param;
+pub use kernel_param::Param;
+mod utils;
 
 use std::collections::HashMap;
 
@@ -18,9 +22,20 @@ use anyhow::Result;
 use async_trait::async_trait;
 use kata_types::config::hypervisor::Hypervisor as HypervisorConfig;
 
+// Config which driver to use as vm root dev
+const VM_ROOTFS_DRIVER_BLK: &str = "virtio-blk";
+const VM_ROOTFS_DRIVER_PMEM: &str = "virtio-pmem";
+
+#[derive(PartialEq)]
+pub(crate) enum VmmState {
+    NotReady,
+    VmmServerReady,
+    VmRunning,
+}
+
+// vcpu mapping from vcpu number to thread number
 #[derive(Debug)]
 pub struct VcpuThreadIds {
-    /// List of tids of vcpu threads (vcpu index, tid)
     pub vcpus: HashMap<u32, u32>,
 }
 

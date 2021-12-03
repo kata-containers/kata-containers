@@ -16,7 +16,10 @@ use common::{
 use containerd_shim_protos::events::task::TaskOOM;
 use hypervisor::Hypervisor;
 use kata_types::config::TomlConfig;
-use resource::{ResourceConfig, ResourceManager};
+use resource::{
+    network::{NetworkConfig, NetworkWithNetNsConfig},
+    ResourceConfig, ResourceManager,
+};
 use tokio::sync::{mpsc::Sender, Mutex, RwLock};
 
 use crate::health_check::HealthCheck;
@@ -68,19 +71,32 @@ impl VirtSandbox {
             agent,
             hypervisor,
             resource_manager,
-            monitor: Arc::new(HealthCheck::new(true, true)),
+            monitor: Arc::new(HealthCheck::new(true, false)),
         })
     }
 
     async fn prepare_for_start_sandbox(
         &self,
+        _id: &str,
         netns: Option<String>,
-        _config: &TomlConfig,
+        config: &TomlConfig,
     ) -> Result<Vec<ResourceConfig>> {
         let mut resource_configs = vec![];
 
-        if let Some(_netns_path) = netns {
-            // TODO: support network
+        if let Some(netns_path) = netns {
+            let network_config = ResourceConfig::Network(NetworkConfig::NetworkResourceWithNetNs(
+                NetworkWithNetNsConfig {
+                    network_model: config.runtime.internetworking_model.clone(),
+                    netns_path,
+                    queues: self
+                        .hypervisor
+                        .hypervisor_config()
+                        .await
+                        .network_info
+                        .network_queues as usize,
+                },
+            ));
+            resource_configs.push(network_config);
         }
 
         let hypervisor_config = self.hypervisor.hypervisor_config().await;
@@ -111,7 +127,7 @@ impl Sandbox for VirtSandbox {
 
         // generate device and setup before start vm
         // should after hypervisor.prepare_vm
-        let resources = self.prepare_for_start_sandbox(netns, config).await?;
+        let resources = self.prepare_for_start_sandbox(id, netns, config).await?;
         self.resource_manager
             .prepare_before_start_vm(resources)
             .await
