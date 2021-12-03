@@ -38,7 +38,8 @@ docker run ${TTY_OPT} \
 	-v /var/run/docker.sock:/var/run/docker.sock \
 	--user ${uid}:${gid} \
 	--env USER=${USER} \
-	--env SKOPEO_UMOCI="${SKOPEO_UMOCI:-}" \
+	--env SKOPEO="${SKOPEO:-}" \
+	--env UMOCI="${UMOCI:-}" \
 	--env AA_KBC="${AA_KBC:-}" \
 	--env INCLUDE_ROOTFS="${INCLUDE_ROOTFS:-}" \
 	-v "${kata_dir}:${kata_dir}" \

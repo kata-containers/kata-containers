@@ -49,7 +49,8 @@ build_image() {
 	info "image os: $img_distro"
 	info "image os version: $img_os_version"
 	# CCv0 on image is currently unsupported, do not pass
-	unset SKOPEO_UMOCI
+	unset SKOPEO
+	unset UMOCI
 	unset AA_KBC
 	sudo -E PATH="${PATH}" make image \
 		DISTRO="${img_distro}" \
