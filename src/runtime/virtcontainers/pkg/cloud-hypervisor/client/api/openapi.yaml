@@ -344,7 +344,7 @@ components:
     VmInfo:
       description: Virtual Machine information
       example:
-        memory_actual_size: 3
+        memory_actual_size: 7
         state: Created
         config:
           console:
@@ -352,16 +352,16 @@ components:
             file: file
             iommu: false
           balloon:
-            size: 9
+            size: 1
             deflate_on_oom: false
           memory:
             hugepages: false
             shared: false
-            hugepage_size: 4
+            hugepage_size: 1
             prefault: false
             mergeable: false
-            size: 9
-            hotplugged_size: 2
+            size: 2
+            hotplugged_size: 7
             zones:
             - hugepages: false
               shared: false
@@ -369,30 +369,31 @@ components:
               prefault: false
               mergeable: false
               file: file
-              size: 7
-              hotplugged_size: 6
-              host_numa_node: 1
+              size: 1
+              hotplugged_size: 1
+              host_numa_node: 6
               id: id
-              hotplug_size: 1
+              hotplug_size: 7
             - hugepages: false
               shared: false
               hugepage_size: 1
               prefault: false
               mergeable: false
               file: file
-              size: 7
-              hotplugged_size: 6
-              host_numa_node: 1
+              size: 1
+              hotplugged_size: 1
+              host_numa_node: 6
               id: id
-              hotplug_size: 1
-            hotplug_size: 3
+              hotplug_size: 7
+            hotplug_size: 4
             hotplug_method: Acpi
           disks:
-          - path: path
-            num_queues: 7
+          - pci_segment: 8
+            path: path
+            num_queues: 4
             readonly: false
             iommu: false
-            queue_size: 1
+            queue_size: 5
             vhost_socket: vhost_socket
             vhost_user: false
             direct: false
@@ -407,11 +408,12 @@ components:
                 one_time_burst: 0
                 refill_time: 0
             id: id
-          - path: path
-            num_queues: 7
+          - pci_segment: 8
+            path: path
+            num_queues: 4
             readonly: false
             iommu: false
-            queue_size: 1
+            queue_size: 5
             vhost_socket: vhost_socket
             vhost_user: false
             direct: false
@@ -435,24 +437,35 @@ components:
             max_phys_bits: 7
             boot_vcpus: 1
             max_vcpus: 1
+            affinity:
+            - vcpu: 9
+              host_cpus:
+              - 3
+              - 3
+            - vcpu: 9
+              host_cpus:
+              - 3
+              - 3
           devices:
-          - path: path
+          - pci_segment: 3
+            path: path
             iommu: false
             id: id
-          - path: path
+          - pci_segment: 3
+            path: path
             iommu: false
             id: id
           kernel:
             path: path
           numa:
           - distances:
-            - distance: 3
-              destination: 6
-            - distance: 3
-              destination: 6
+            - distance: 8
+              destination: 4
+            - distance: 8
+              destination: 4
             cpus:
-            - 5
-            - 5
+            - 0
+            - 0
             sgx_epc_sections:
             - sgx_epc_sections
             - sgx_epc_sections
@@ -461,13 +474,13 @@ components:
             - memory_zones
             guest_numa_id: 6
           - distances:
-            - distance: 3
-              destination: 6
-            - distance: 3
-              destination: 6
+            - distance: 8
+              destination: 4
+            - distance: 8
+              destination: 4
             cpus:
-            - 5
-            - 5
+            - 0
+            - 0
             sgx_epc_sections:
             - sgx_epc_sections
             - sgx_epc_sections
@@ -480,41 +493,46 @@ components:
             src: /dev/urandom
           sgx_epc:
           - prefault: false
-            size: 6
+            size: 7
             id: id
           - prefault: false
-            size: 6
+            size: 7
             id: id
           fs:
-          - num_queues: 6
-            queue_size: 3
+          - pci_segment: 5
+            num_queues: 2
+            queue_size: 6
             cache_size: 6
             dax: true
             tag: tag
             socket: socket
             id: id
-          - num_queues: 6
-            queue_size: 3
+          - pci_segment: 5
+            num_queues: 2
+            queue_size: 6
             cache_size: 6
             dax: true
             tag: tag
             socket: socket
             id: id
           vsock:
+            pci_segment: 0
             iommu: false
             socket: socket
             id: id
             cid: 3
           pmem:
-          - mergeable: false
+          - pci_segment: 3
+            mergeable: false
             file: file
-            size: 1
+            size: 6
             iommu: false
             id: id
             discard_writes: false
-          - mergeable: false
+          - pci_segment: 3
+            mergeable: false
             file: file
-            size: 1
+            size: 6
             iommu: false
             id: id
             discard_writes: false
@@ -543,14 +561,15 @@ components:
                 one_time_burst: 0
                 refill_time: 0
             mac: mac
+            pci_segment: 6
             vhost_mode: Client
             iommu: false
             vhost_socket: vhost_socket
             vhost_user: false
             id: id
             fd:
-            - 8
-            - 8
+            - 3
+            - 3
             mask: 255.255.255.0
           - tap: tap
             num_queues: 9
@@ -566,21 +585,22 @@ components:
                 one_time_burst: 0
                 refill_time: 0
             mac: mac
+            pci_segment: 6
             vhost_mode: Client
             iommu: false
             vhost_socket: vhost_socket
             vhost_user: false
             id: id
             fd:
-            - 8
-            - 8
+            - 3
+            - 3
             mask: 255.255.255.0
         device_tree:
           key:
             children:
             - children
             - children
-            pci_bdf: 7
+            pci_bdf: 3
             resources:
             - '{}'
             - '{}'
@@ -611,7 +631,7 @@ components:
         children:
         - children
         - children
-        pci_bdf: 7
+        pci_bdf: 3
         resources:
         - '{}'
         - '{}'
@@ -660,16 +680,16 @@ components:
           file: file
           iommu: false
         balloon:
-          size: 9
+          size: 1
           deflate_on_oom: false
         memory:
           hugepages: false
           shared: false
-          hugepage_size: 4
+          hugepage_size: 1
           prefault: false
           mergeable: false
-          size: 9
-          hotplugged_size: 2
+          size: 2
+          hotplugged_size: 7
           zones:
           - hugepages: false
             shared: false
@@ -677,30 +697,31 @@ components:
             prefault: false
             mergeable: false
             file: file
-            size: 7
-            hotplugged_size: 6
-            host_numa_node: 1
+            size: 1
+            hotplugged_size: 1
+            host_numa_node: 6
             id: id
-            hotplug_size: 1
+            hotplug_size: 7
           - hugepages: false
             shared: false
             hugepage_size: 1
             prefault: false
             mergeable: false
             file: file
-            size: 7
-            hotplugged_size: 6
-            host_numa_node: 1
+            size: 1
+            hotplugged_size: 1
+            host_numa_node: 6
             id: id
-            hotplug_size: 1
-          hotplug_size: 3
+            hotplug_size: 7
+          hotplug_size: 4
           hotplug_method: Acpi
         disks:
-        - path: path
-          num_queues: 7
+        - pci_segment: 8
+          path: path
+          num_queues: 4
           readonly: false
           iommu: false
-          queue_size: 1
+          queue_size: 5
           vhost_socket: vhost_socket
           vhost_user: false
           direct: false
@@ -715,11 +736,12 @@ components:
               one_time_burst: 0
               refill_time: 0
           id: id
-        - path: path
-          num_queues: 7
+        - pci_segment: 8
+          path: path
+          num_queues: 4
           readonly: false
           iommu: false
-          queue_size: 1
+          queue_size: 5
           vhost_socket: vhost_socket
           vhost_user: false
           direct: false
@@ -743,24 +765,35 @@ components:
           max_phys_bits: 7
           boot_vcpus: 1
           max_vcpus: 1
+          affinity:
+          - vcpu: 9
+            host_cpus:
+            - 3
+            - 3
+          - vcpu: 9
+            host_cpus:
+            - 3
+            - 3
         devices:
-        - path: path
+        - pci_segment: 3
+          path: path
           iommu: false
           id: id
-        - path: path
+        - pci_segment: 3
+          path: path
           iommu: false
           id: id
         kernel:
           path: path
         numa:
         - distances:
-          - distance: 3
-            destination: 6
-          - distance: 3
-            destination: 6
+          - distance: 8
+            destination: 4
+          - distance: 8
+            destination: 4
           cpus:
-          - 5
-          - 5
+          - 0
+          - 0
           sgx_epc_sections:
           - sgx_epc_sections
           - sgx_epc_sections
@@ -769,13 +802,13 @@ components:
           - memory_zones
           guest_numa_id: 6
         - distances:
-          - distance: 3
-            destination: 6
-          - distance: 3
-            destination: 6
+          - distance: 8
+            destination: 4
+          - distance: 8
+            destination: 4
           cpus:
-          - 5
-          - 5
+          - 0
+          - 0
           sgx_epc_sections:
           - sgx_epc_sections
           - sgx_epc_sections
@@ -788,41 +821,46 @@ components:
           src: /dev/urandom
         sgx_epc:
         - prefault: false
-          size: 6
+          size: 7
           id: id
         - prefault: false
-          size: 6
+          size: 7
           id: id
         fs:
-        - num_queues: 6
-          queue_size: 3
+        - pci_segment: 5
+          num_queues: 2
+          queue_size: 6
           cache_size: 6
           dax: true
           tag: tag
           socket: socket
           id: id
-        - num_queues: 6
-          queue_size: 3
+        - pci_segment: 5
+          num_queues: 2
+          queue_size: 6
           cache_size: 6
           dax: true
           tag: tag
           socket: socket
           id: id
         vsock:
+          pci_segment: 0
           iommu: false
           socket: socket
           id: id
           cid: 3
         pmem:
-        - mergeable: false
+        - pci_segment: 3
+          mergeable: false
           file: file
-          size: 1
+          size: 6
           iommu: false
           id: id
           discard_writes: false
-        - mergeable: false
+        - pci_segment: 3
+          mergeable: false
           file: file
-          size: 1
+          size: 6
           iommu: false
           id: id
           discard_writes: false
@@ -851,14 +889,15 @@ components:
               one_time_burst: 0
               refill_time: 0
           mac: mac
+          pci_segment: 6
           vhost_mode: Client
           iommu: false
           vhost_socket: vhost_socket
           vhost_user: false
           id: id
           fd:
-          - 8
-          - 8
+          - 3
+          - 3
           mask: 255.255.255.0
         - tap: tap
           num_queues: 9
@@ -874,14 +913,15 @@ components:
               one_time_burst: 0
               refill_time: 0
           mac: mac
+          pci_segment: 6
           vhost_mode: Client
           iommu: false
           vhost_socket: vhost_socket
           vhost_user: false
           id: id
           fd:
-          - 8
-          - 8
+          - 3
+          - 3
           mask: 255.255.255.0
       properties:
         cpus:
@@ -941,6 +981,20 @@ components:
       required:
       - kernel
       type: object
+    CpuAffinity:
+      example:
+        vcpu: 9
+        host_cpus:
+        - 3
+        - 3
+      properties:
+        vcpu:
+          type: integer
+        host_cpus:
+          items:
+            type: integer
+          type: array
+      type: object
     CpuTopology:
       example:
         dies_per_package: 5
@@ -967,6 +1021,15 @@ components:
         max_phys_bits: 7
         boot_vcpus: 1
         max_vcpus: 1
+        affinity:
+        - vcpu: 9
+          host_cpus:
+          - 3
+          - 3
+        - vcpu: 9
+          host_cpus:
+          - 3
+          - 3
       properties:
         boot_vcpus:
           default: 1
@@ -980,6 +1043,10 @@ components:
           $ref: '#/components/schemas/CpuTopology'
         max_phys_bits:
           type: integer
+        affinity:
+          items:
+            $ref: '#/components/schemas/CpuAffinity'
+          type: array
       required:
       - boot_vcpus
       - max_vcpus
@@ -992,11 +1059,11 @@ components:
         prefault: false
         mergeable: false
         file: file
-        size: 7
-        hotplugged_size: 6
-        host_numa_node: 1
+        size: 1
+        hotplugged_size: 1
+        host_numa_node: 6
         id: id
-        hotplug_size: 1
+        hotplug_size: 7
       properties:
         id:
           type: string
@@ -1037,11 +1104,11 @@ components:
       example:
         hugepages: false
         shared: false
-        hugepage_size: 4
+        hugepage_size: 1
         prefault: false
         mergeable: false
-        size: 9
-        hotplugged_size: 2
+        size: 2
+        hotplugged_size: 7
         zones:
         - hugepages: false
           shared: false
@@ -1049,23 +1116,23 @@ components:
           prefault: false
           mergeable: false
           file: file
-          size: 7
-          hotplugged_size: 6
-          host_numa_node: 1
+          size: 1
+          hotplugged_size: 1
+          host_numa_node: 6
           id: id
-          hotplug_size: 1
+          hotplug_size: 7
         - hugepages: false
           shared: false
           hugepage_size: 1
           prefault: false
           mergeable: false
           file: file
-          size: 7
-          hotplugged_size: 6
-          host_numa_node: 1
+          size: 1
+          hotplugged_size: 1
+          host_numa_node: 6
           id: id
-          hotplug_size: 1
-        hotplug_size: 3
+          hotplug_size: 7
+        hotplug_size: 4
         hotplug_method: Acpi
       properties:
         size:
@@ -1184,11 +1251,12 @@ components:
       type: object
     DiskConfig:
       example:
+        pci_segment: 8
         path: path
-        num_queues: 7
+        num_queues: 4
         readonly: false
         iommu: false
-        queue_size: 1
+        queue_size: 5
         vhost_socket: vhost_socket
         vhost_user: false
         direct: false
@@ -1231,6 +1299,9 @@ components:
           type: boolean
         rate_limiter_config:
           $ref: '#/components/schemas/RateLimiterConfig'
+        pci_segment:
+          format: int16
+          type: integer
         id:
           type: string
       required:
@@ -1252,14 +1323,15 @@ components:
             one_time_burst: 0
             refill_time: 0
         mac: mac
+        pci_segment: 6
         vhost_mode: Client
         iommu: false
         vhost_socket: vhost_socket
         vhost_user: false
         id: id
         fd:
-        - 8
-        - 8
+        - 3
+        - 3
         mask: 255.255.255.0
       properties:
         tap:
@@ -1297,6 +1369,9 @@ components:
             format: int32
             type: integer
           type: array
+        pci_segment:
+          format: int16
+          type: integer
         rate_limiter_config:
           $ref: '#/components/schemas/RateLimiterConfig'
       type: object
@@ -1316,7 +1391,7 @@ components:
       type: object
     BalloonConfig:
       example:
-        size: 9
+        size: 1
         deflate_on_oom: false
       properties:
         size:
@@ -1332,8 +1407,9 @@ components:
       type: object
     FsConfig:
       example:
-        num_queues: 6
-        queue_size: 3
+        pci_segment: 5
+        num_queues: 2
+        queue_size: 6
         cache_size: 6
         dax: true
         tag: tag
@@ -1356,6 +1432,9 @@ components:
         cache_size:
           format: int64
           type: integer
+        pci_segment:
+          format: int16
+          type: integer
         id:
           type: string
       required:
@@ -1368,9 +1447,10 @@ components:
       type: object
     PmemConfig:
       example:
+        pci_segment: 3
         mergeable: false
         file: file
-        size: 1
+        size: 6
         iommu: false
         id: id
         discard_writes: false
@@ -1389,6 +1469,9 @@ components:
         discard_writes:
           default: false
           type: boolean
+        pci_segment:
+          format: int16
+          type: integer
         id:
           type: string
       required:
@@ -1418,6 +1501,7 @@ components:
       type: object
     DeviceConfig:
       example:
+        pci_segment: 3
         path: path
         iommu: false
         id: id
@@ -1427,6 +1511,9 @@ components:
         iommu:
           default: false
           type: boolean
+        pci_segment:
+          format: int16
+          type: integer
         id:
           type: string
       required:
@@ -1434,6 +1521,7 @@ components:
       type: object
     VsockConfig:
       example:
+        pci_segment: 0
         iommu: false
         socket: socket
         id: id
@@ -1450,6 +1538,9 @@ components:
         iommu:
           default: false
           type: boolean
+        pci_segment:
+          format: int16
+          type: integer
         id:
           type: string
       required:
@@ -1459,7 +1550,7 @@ components:
     SgxEpcConfig:
       example:
         prefault: false
-        size: 6
+        size: 7
         id: id
       properties:
         id:
@@ -1476,8 +1567,8 @@ components:
       type: object
     NumaDistance:
       example:
-        distance: 3
-        destination: 6
+        distance: 8
+        destination: 4
       properties:
         destination:
           format: int32
@@ -1492,13 +1583,13 @@ components:
     NumaConfig:
       example:
         distances:
-        - distance: 3
-          destination: 6
-        - distance: 3
-          destination: 6
+        - distance: 8
+          destination: 4
+        - distance: 8
+          destination: 4
         cpus:
-        - 5
-        - 5
+        - 0
+        - 0
         sgx_epc_sections:
         - sgx_epc_sections
         - sgx_epc_sections

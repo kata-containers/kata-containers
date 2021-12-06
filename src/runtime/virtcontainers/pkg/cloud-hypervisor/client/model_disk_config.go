@@ -26,6 +26,7 @@ type DiskConfig struct {
 	VhostSocket       *string            `json:"vhost_socket,omitempty"`
 	PollQueue         *bool              `json:"poll_queue,omitempty"`
 	RateLimiterConfig *RateLimiterConfig `json:"rate_limiter_config,omitempty"`
+	PciSegment        *int32             `json:"pci_segment,omitempty"`
 	Id                *string            `json:"id,omitempty"`
 }
 
@@ -387,6 +388,38 @@ func (o *DiskConfig) SetRateLimiterConfig(v RateLimiterConfig) {
 	o.RateLimiterConfig = &v
 }
 
+// GetPciSegment returns the PciSegment field value if set, zero value otherwise.
+func (o *DiskConfig) GetPciSegment() int32 {
+	if o == nil || o.PciSegment == nil {
+		var ret int32
+		return ret
+	}
+	return *o.PciSegment
+}
+
+// GetPciSegmentOk returns a tuple with the PciSegment field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *DiskConfig) GetPciSegmentOk() (*int32, bool) {
+	if o == nil || o.PciSegment == nil {
+		return nil, false
+	}
+	return o.PciSegment, true
+}
+
+// HasPciSegment returns a boolean if a field has been set.
+func (o *DiskConfig) HasPciSegment() bool {
+	if o != nil && o.PciSegment != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetPciSegment gets a reference to the given int32 and assigns it to the PciSegment field.
+func (o *DiskConfig) SetPciSegment(v int32) {
+	o.PciSegment = &v
+}
+
 // GetId returns the Id field value if set, zero value otherwise.
 func (o *DiskConfig) GetId() string {
 	if o == nil || o.Id == nil {
@@ -450,6 +483,9 @@ func (o DiskConfig) MarshalJSON() ([]byte, error) {
 	}
 	if o.RateLimiterConfig != nil {
 		toSerialize["rate_limiter_config"] = o.RateLimiterConfig
+	}
+	if o.PciSegment != nil {
+		toSerialize["pci_segment"] = o.PciSegment
 	}
 	if o.Id != nil {
 		toSerialize["id"] = o.Id

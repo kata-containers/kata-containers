@@ -122,7 +122,7 @@ setup()
 
 	case "$distro" in
 		centos|rhel) $chronic sudo -E yum -y install "$pkg" ;;
-		debian|ubuntu) $chronic sudo -E apt-get --no-install-recommends install -y "$pkg" ;;
+		ubuntu) $chronic sudo -E apt-get --no-install-recommends install -y "$pkg" ;;
 		fedora) $chronic sudo -E dnf -y install "$pkg" ;;
 		opensuse|sles) $chronic sudo -E zypper -y install "$pkg" ;;
 		*) die "do not know how to install command $pkg' for distro '$distro'" ;;

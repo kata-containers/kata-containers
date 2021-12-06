@@ -5,7 +5,6 @@
 
 use anyhow::{anyhow, Context, Result};
 use libc::uid_t;
-use nix::errno::Errno;
 use nix::fcntl::{self, OFlag};
 #[cfg(not(test))]
 use nix::mount;
@@ -35,17 +34,9 @@ use crate::log_child;
 // struct is populated from the content in the /proc/<pid>/mountinfo file.
 #[derive(std::fmt::Debug)]
 pub struct Info {
-    id: i32,
-    parent: i32,
-    major: i32,
-    minor: i32,
-    root: String,
     mount_point: String,
-    opts: String,
     optional: String,
     fstype: String,
-    source: String,
-    vfs_opts: String,
 }
 
 const MOUNTINFOFORMAT: &str = "{d} {d} {d}:{d} {} {} {} {}";
@@ -563,7 +554,20 @@ fn parse_mount_table() -> Result<Vec<Info>> {
     for (_index, line) in reader.lines().enumerate() {
         let line = line?;
 
-        let (id, parent, major, minor, root, mount_point, opts, optional) = scan_fmt!(
+        //Example mountinfo format:
+        // id
+        // |  / parent
+        // |  |   / major:minor
+        // |  |   |   / root
+        // |  |   |   |  / mount_point
+        // |  |   |   |  |        / opts
+        // |  |   |   |  |        |                           / optional
+        // |  |   |   |  |        |                           |          / fstype
+        // |  |   |   |  |        |                           |          |     / source
+        // |  |   |   |  |        |                           |          |     |      / vfs_opts
+        // 22 96 0:21 / /sys rw,nosuid,nodev,noexec,relatime shared:2 - sysfs sysfs rw,seclabel
+
+        let (_id, _parent, _major, _minor, _root, mount_point, _opts, optional) = scan_fmt!(
             &line,
             MOUNTINFOFORMAT,
             i32,
@@ -578,7 +582,7 @@ fn parse_mount_table() -> Result<Vec<Info>> {
 
         let fields: Vec<&str> = line.split(" - ").collect();
         if fields.len() == 2 {
-            let (fstype, source, vfs_opts) =
+            let (fstype, _source, _vfs_opts) =
                 scan_fmt!(fields[1], "{} {} {}", String, String, String)?;
 
             let mut optional_new = String::new();
@@ -587,17 +591,9 @@ fn parse_mount_table() -> Result<Vec<Info>> {
             }
 
             let info = Info {
-                id,
-                parent,
-                major,
-                minor,
-                root,
                 mount_point,
-                opts,
                 optional: optional_new,
                 fstype,
-                source,
-                vfs_opts,
             };
 
             infos.push(info);
@@ -655,7 +651,7 @@ pub fn ms_move_root(rootfs: &str) -> Result<bool> {
             None::<&str>,
         )?;
         umount2(abs_mount_point, MntFlags::MNT_DETACH).or_else(|e| {
-            if e.ne(&nix::Error::from(Errno::EINVAL)) && e.ne(&nix::Error::from(Errno::EPERM)) {
+            if e.ne(&nix::Error::EINVAL) && e.ne(&nix::Error::EPERM) {
                 return Err(anyhow!(e));
             }
 
@@ -777,7 +773,7 @@ fn mount_from(
         let _ = fs::create_dir_all(&dir).map_err(|e| {
             log_child!(
                 cfd_log,
-                "creat dir {}: {}",
+                "create dir {}: {}",
                 dir.to_str().unwrap(),
                 e.to_string()
             )
@@ -798,14 +794,8 @@ fn mount_from(
         }
     };
 
-    let _ = stat::stat(dest.as_str()).map_err(|e| {
-        log_child!(
-            cfd_log,
-            "dest stat error. {}: {:?}",
-            dest.as_str(),
-            e.as_errno()
-        )
-    });
+    let _ = stat::stat(dest.as_str())
+        .map_err(|e| log_child!(cfd_log, "dest stat error. {}: {:?}", dest.as_str(), e));
 
     mount(
         Some(src.as_str()),
@@ -815,7 +805,7 @@ fn mount_from(
         Some(d.as_str()),
     )
     .map_err(|e| {
-        log_child!(cfd_log, "mount error: {:?}", e.as_errno());
+        log_child!(cfd_log, "mount error: {:?}", e);
         e
     })?;
 
@@ -837,7 +827,7 @@ fn mount_from(
             None::<&str>,
         )
         .map_err(|e| {
-            log_child!(cfd_log, "remout {}: {:?}", dest.as_str(), e.as_errno());
+            log_child!(cfd_log, "remout {}: {:?}", dest.as_str(), e);
             e
         })?;
     }
@@ -1006,7 +996,7 @@ pub fn finish_rootfs(cfd_log: RawFd, spec: &Spec, process: &Process) -> Result<(
 
 fn mask_path(path: &str) -> Result<()> {
     if !path.starts_with('/') || path.contains("..") {
-        return Err(nix::Error::Sys(Errno::EINVAL).into());
+        return Err(anyhow!(nix::Error::EINVAL));
     }
 
     match mount(
@@ -1016,49 +1006,30 @@ fn mask_path(path: &str) -> Result<()> {
         MsFlags::MS_BIND,
         None::<&str>,
     ) {
-        Err(nix::Error::Sys(e)) => {
-            if e != Errno::ENOENT && e != Errno::ENOTDIR {
-                //info!("{}: {}", path, e.desc());
-                return Err(nix::Error::Sys(e).into());
-            }
-        }
-
-        Err(e) => {
-            return Err(e.into());
-        }
-
-        Ok(_) => {}
+        Err(e) => match e {
+            nix::Error::ENOENT | nix::Error::ENOTDIR => Ok(()),
+            _ => Err(e.into()),
+        },
+        Ok(_) => Ok(()),
     }
-
-    Ok(())
 }
 
 fn readonly_path(path: &str) -> Result<()> {
     if !path.starts_with('/') || path.contains("..") {
-        return Err(nix::Error::Sys(Errno::EINVAL).into());
+        return Err(anyhow!(nix::Error::EINVAL));
     }
 
-    match mount(
+    if let Err(e) = mount(
         Some(&path[1..]),
         path,
         None::<&str>,
         MsFlags::MS_BIND | MsFlags::MS_REC,
         None::<&str>,
     ) {
-        Err(nix::Error::Sys(e)) => {
-            if e == Errno::ENOENT {
-                return Ok(());
-            } else {
-                //info!("{}: {}", path, e.desc());
-                return Err(nix::Error::Sys(e).into());
-            }
-        }
-
-        Err(e) => {
-            return Err(e.into());
-        }
-
-        Ok(_) => {}
+        match e {
+            nix::Error::ENOENT => return Ok(()),
+            _ => return Err(e.into()),
+        };
     }
 
     mount(

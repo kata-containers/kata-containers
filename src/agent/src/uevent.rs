@@ -11,7 +11,6 @@ use slog::Logger;
 
 use anyhow::{anyhow, Result};
 use netlink_sys::{protocols, SocketAddr, TokioSocket};
-use nix::errno::Errno;
 use std::fmt::Debug;
 use std::os::unix::io::FromRawFd;
 use std::sync::Arc;
@@ -203,7 +202,7 @@ pub async fn watch_uevents(
                     Ok((buf, addr)) => {
                         if addr.port_number() != 0 {
                             // not our netlink message
-                            let err_msg = format!("{:?}", nix::Error::Sys(Errno::EBADMSG));
+                            let err_msg = format!("{:?}", nix::Error::EBADMSG);
                             error!(logger, "receive uevent message failed"; "error" => err_msg);
                             continue;
                         }

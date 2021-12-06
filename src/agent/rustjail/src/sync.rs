@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use nix::errno::Errno;
 use nix::unistd;
 use std::mem;
 use std::os::unix::io::RawFd;
@@ -41,7 +40,7 @@ pub fn write_count(fd: RawFd, buf: &[u8], count: usize) -> Result<usize> {
             }
 
             Err(e) => {
-                if e != nix::Error::from_errno(Errno::EINTR) {
+                if e != nix::Error::EINTR {
                     return Err(e.into());
                 }
             }
@@ -65,7 +64,7 @@ fn read_count(fd: RawFd, count: usize) -> Result<Vec<u8>> {
             }
 
             Err(e) => {
-                if e != nix::Error::from_errno(Errno::EINTR) {
+                if e != nix::Error::EINTR {
                     return Err(e.into());
                 }
             }

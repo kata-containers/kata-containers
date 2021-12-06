@@ -5,13 +5,38 @@ on:
 name: test-kata-deploy
 
 jobs:
-  build-asset:
+  check-comment-and-membership:
+    runs-on: ubuntu-latest
     if: |
       github.event.issue.pull_request
       && github.event_name == 'issue_comment'
       && github.event.action == 'created'
       && startsWith(github.event.comment.body, '/test_kata_deploy')
+    steps:
+      - name: Check membership
+        uses: kata-containers/is-organization-member@1.0.1
+        id: is_organization_member
+        with:
+          organization: kata-containers
+          username: ${{ github.event.comment.user.login }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Fail if not member
+        run: |
+          result=${{ steps.is_organization_member.outputs.result }}
+          if [ $result == false ]; then
+              user=${{ github.event.comment.user.login }}
+              echo Either ${user} is not part of the kata-containers organization
+              echo or ${user} has its Organization Visibility set to Private at
+              echo https://github.com/orgs/kata-containers/people?query=${user}
+              echo 
+              echo Ensure you change your Organization Visibility to Public and
+              echo trigger the test again.
+              exit 1
+          fi
+
+  build-asset:
     runs-on: ubuntu-latest
+    needs: check-comment-and-membership
     strategy:
       matrix:
         asset:

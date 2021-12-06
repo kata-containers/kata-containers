@@ -14,7 +14,7 @@ OS_NAME=${OS_NAME:-"focal"}
 # packages to be installed by default
 # Note: ca-certificates is required for confidential containers
 # to pull the container image on the guest
-PACKAGES="systemd iptables init kmod ca-certificates"
+PACKAGES="systemd coreutils init kmod ca-certificates"
 EXTRA_PKGS+=" chrony"
 
 DEBOOTSTRAP=${PACKAGE_MANAGER:-"debootstrap"}

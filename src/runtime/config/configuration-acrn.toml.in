@@ -214,7 +214,7 @@ disable_guest_seccomp=@DEFDISABLEGUESTSECCOMP@
 # The runtime caller is free to restrict or collect cgroup stats of the overall Kata sandbox.
 # The sandbox cgroup path is the parent cgroup of a container with the PodSandbox annotation.
 # The sandbox cgroup is constrained if there is no container type annotation.
-# See: https://godoc.org/github.com/kata-containers/runtime/virtcontainers#ContainerType
+# See: https://pkg.go.dev/github.com/kata-containers/kata-containers/src/runtime/virtcontainers#ContainerType
 sandbox_cgroup_only=@DEFSANDBOXCGROUPONLY@
 
 # Enabled experimental feature list, format: ["a", "b"].

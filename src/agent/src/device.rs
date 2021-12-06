@@ -746,7 +746,7 @@ async fn vfio_device_handler(device: &Device, sandbox: &Arc<Mutex<Sandbox>>) -> 
 
     let dev_update = if vfio_in_guest {
         // If there are any devices at all, logic above ensures that group is not None
-        let group = group.ok_or_else(|| anyhow!("failed to get VFIO group: {:?}"))?;
+        let group = group.ok_or_else(|| anyhow!("failed to get VFIO group"))?;
 
         let vm_path = get_vfio_device_name(sandbox, group).await?;
 

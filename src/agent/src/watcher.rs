@@ -109,11 +109,12 @@ impl Storage {
 
         // if we are creating a directory: just create it, nothing more to do
         if source_file_path.symlink_metadata()?.file_type().is_dir() {
-            fs::create_dir_all(source_file_path)
+            let dest_file_path = self.make_target_path(&source_file_path)?;
+
+            fs::create_dir_all(&dest_file_path)
                 .await
-                .with_context(|| {
-                    format!("Unable to mkdir all for {}", source_file_path.display())
-                })?
+                .with_context(|| format!("Unable to mkdir all for {}", dest_file_path.display()))?;
+            return Ok(());
         }
 
         // Assume we are dealing with either a file or a symlink now:
@@ -922,7 +923,7 @@ mod tests {
             .file_type()
             .is_symlink());
         assert_eq!(fs::read_link(&dst_symlink_file).unwrap(), src_file);
-        assert_eq!(fs::read_to_string(&dst_symlink_file).unwrap(), "foo")
+        assert_eq!(fs::read_to_string(&dst_symlink_file).unwrap(), "foo");
     }
 
     #[tokio::test]
@@ -1076,6 +1077,10 @@ mod tests {
         fs::create_dir_all(source_dir.path().join("A/B")).unwrap();
         fs::write(source_dir.path().join("A/B/1.txt"), "two").unwrap();
 
+        // A/C is an empty directory
+        let empty_dir = "A/C";
+        fs::create_dir_all(source_dir.path().join(empty_dir)).unwrap();
+
         // delay 20 ms between writes to files in order to ensure filesystem timestamps are unique
         thread::sleep(Duration::from_millis(20));
 
@@ -1091,7 +1096,10 @@ mod tests {
 
         let logger = slog::Logger::root(slog::Discard, o!());
 
-        assert_eq!(entry.scan(&logger).await.unwrap(), 5);
+        assert_eq!(entry.scan(&logger).await.unwrap(), 6);
+
+        // check empty directory
+        assert!(dest_dir.path().join(empty_dir).exists());
 
         // Should copy no files since nothing is changed since last check
         assert_eq!(entry.scan(&logger).await.unwrap(), 0);
@@ -1112,6 +1120,12 @@ mod tests {
         // Update another file
         fs::write(source_dir.path().join("1.txt"), "updated").unwrap();
         assert_eq!(entry.scan(&logger).await.unwrap(), 1);
+
+        // create another empty directory A/C/D
+        let empty_dir = "A/C/D";
+        fs::create_dir_all(source_dir.path().join(empty_dir)).unwrap();
+        assert_eq!(entry.scan(&logger).await.unwrap(), 1);
+        assert!(dest_dir.path().join(empty_dir).exists());
     }
 
     #[tokio::test]

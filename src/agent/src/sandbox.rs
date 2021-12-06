@@ -467,7 +467,7 @@ fn online_memory(logger: &Logger) -> Result<()> {
 mod tests {
     use super::Sandbox;
     use crate::{mount::baremount, skip_if_not_root};
-    use anyhow::Error;
+    use anyhow::{anyhow, Error};
     use nix::mount::MsFlags;
     use oci::{Linux, Root, Spec};
     use rustjail::container::LinuxContainer;
@@ -477,7 +477,7 @@ mod tests {
     use std::fs::{self, File};
     use std::os::unix::fs::PermissionsExt;
     use std::path::Path;
-    use tempfile::Builder;
+    use tempfile::{tempdir, Builder, TempDir};
 
     fn bind_mount(src: &str, dst: &str, logger: &Logger) -> Result<(), Error> {
         let src_path = Path::new(src);
@@ -706,23 +706,31 @@ mod tests {
         }
     }
 
-    fn create_linuxcontainer() -> LinuxContainer {
-        LinuxContainer::new(
-            "some_id",
-            "/run/agent",
-            create_dummy_opts(),
-            &slog_scope::logger(),
+    fn create_linuxcontainer() -> (LinuxContainer, TempDir) {
+        // Create a temporal directory
+        let dir = tempdir()
+            .map_err(|e| anyhow!(e).context("tempdir failed"))
+            .unwrap();
+
+        // Create a new container
+        (
+            LinuxContainer::new(
+                "some_id",
+                dir.path().join("rootfs").to_str().unwrap(),
+                create_dummy_opts(),
+                &slog_scope::logger(),
+            )
+            .unwrap(),
+            dir,
         )
-        .unwrap()
     }
 
     #[tokio::test]
     #[serial]
     async fn get_container_entry_exist() {
-        skip_if_not_root!();
         let logger = slog::Logger::root(slog::Discard, o!());
         let mut s = Sandbox::new(&logger).unwrap();
-        let linux_container = create_linuxcontainer();
+        let (linux_container, _root) = create_linuxcontainer();
 
         s.containers
             .insert("testContainerID".to_string(), linux_container);
@@ -743,10 +751,9 @@ mod tests {
     #[tokio::test]
     #[serial]
     async fn add_and_get_container() {
-        skip_if_not_root!();
         let logger = slog::Logger::root(slog::Discard, o!());
         let mut s = Sandbox::new(&logger).unwrap();
-        let linux_container = create_linuxcontainer();
+        let (linux_container, _root) = create_linuxcontainer();
 
         s.add_container(linux_container);
         assert!(s.get_container("some_id").is_some());
@@ -755,12 +762,11 @@ mod tests {
     #[tokio::test]
     #[serial]
     async fn update_shared_pidns() {
-        skip_if_not_root!();
         let logger = slog::Logger::root(slog::Discard, o!());
         let mut s = Sandbox::new(&logger).unwrap();
         let test_pid = 9999;
 
-        let mut linux_container = create_linuxcontainer();
+        let (mut linux_container, _root) = create_linuxcontainer();
         linux_container.init_process_pid = test_pid;
 
         s.update_shared_pidns(&linux_container).unwrap();
@@ -806,12 +812,11 @@ mod tests {
 
     #[tokio::test]
     async fn test_find_container_process() {
-        skip_if_not_root!();
         let logger = slog::Logger::root(slog::Discard, o!());
         let mut s = Sandbox::new(&logger).unwrap();
         let cid = "container-123";
 
-        let mut linux_container = create_linuxcontainer();
+        let (mut linux_container, _root) = create_linuxcontainer();
         linux_container.init_process_pid = 1;
         linux_container.id = cid.to_string();
         // add init process

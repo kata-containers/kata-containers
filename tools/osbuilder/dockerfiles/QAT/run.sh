@@ -71,7 +71,7 @@ build_rootfs()
     # This should only be done for Ubuntu and Debian based OS's. Other OS 
     # distributions had issues if building the rootfs from /proc
 
-    if [ "${ROOTFS_OS}" == "debian" ] || [ "${ROOTFS_OS}" == "ubuntu" ]; then 
+    if [ "${ROOTFS_OS}" == "ubuntu" ]; then 
         cd /proc
     fi
     /bin/echo -e "\n\e[1;42mDownload ${ROOTFS_OS} based rootfs\e[0m"

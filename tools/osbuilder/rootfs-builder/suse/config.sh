@@ -12,7 +12,7 @@ OS_VERSION=${OS_VERSION:-15.0}
 OS_IDENTIFIER="$OS_DISTRO${OS_VERSION:+:$OS_VERSION}"
 
 # Extra packages to install in the rootfs
-PACKAGES="systemd iptables libudev1"
+PACKAGES="systemd coreutils libudev1"
 
 #  http or https
 REPO_TRANSPORT="https"
