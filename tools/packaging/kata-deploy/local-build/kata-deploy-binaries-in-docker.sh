@@ -41,7 +41,7 @@ docker run ${TTY_OPT} \
 	--env SKOPEO="${SKOPEO:-}" \
 	--env UMOCI="${UMOCI:-}" \
 	--env AA_KBC="${AA_KBC:-}" \
-	--env INCLUDE_ROOTFS="${INCLUDE_ROOTFS:-}" \
+	--env INCLUDE_ROOTFS="$(realpath "${INCLUDE_ROOTFS:-}" 2> /dev/null || true)" \
 	-v "${kata_dir}:${kata_dir}" \
 	--rm \
 	-w ${script_dir} \
