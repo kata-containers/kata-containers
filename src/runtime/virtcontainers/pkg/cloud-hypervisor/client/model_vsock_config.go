@@ -19,9 +19,10 @@ type VsockConfig struct {
 	// Guest Vsock CID
 	Cid int64 `json:"cid"`
 	// Path to UNIX domain socket, used to proxy vsock connections.
-	Socket string  `json:"socket"`
-	Iommu  *bool   `json:"iommu,omitempty"`
-	Id     *string `json:"id,omitempty"`
+	Socket     string  `json:"socket"`
+	Iommu      *bool   `json:"iommu,omitempty"`
+	PciSegment *int32  `json:"pci_segment,omitempty"`
+	Id         *string `json:"id,omitempty"`
 }
 
 // NewVsockConfig instantiates a new VsockConfig object
@@ -127,6 +128,38 @@ func (o *VsockConfig) SetIommu(v bool) {
 	o.Iommu = &v
 }
 
+// GetPciSegment returns the PciSegment field value if set, zero value otherwise.
+func (o *VsockConfig) GetPciSegment() int32 {
+	if o == nil || o.PciSegment == nil {
+		var ret int32
+		return ret
+	}
+	return *o.PciSegment
+}
+
+// GetPciSegmentOk returns a tuple with the PciSegment field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *VsockConfig) GetPciSegmentOk() (*int32, bool) {
+	if o == nil || o.PciSegment == nil {
+		return nil, false
+	}
+	return o.PciSegment, true
+}
+
+// HasPciSegment returns a boolean if a field has been set.
+func (o *VsockConfig) HasPciSegment() bool {
+	if o != nil && o.PciSegment != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetPciSegment gets a reference to the given int32 and assigns it to the PciSegment field.
+func (o *VsockConfig) SetPciSegment(v int32) {
+	o.PciSegment = &v
+}
+
 // GetId returns the Id field value if set, zero value otherwise.
 func (o *VsockConfig) GetId() string {
 	if o == nil || o.Id == nil {
@@ -169,6 +202,9 @@ func (o VsockConfig) MarshalJSON() ([]byte, error) {
 	}
 	if o.Iommu != nil {
 		toSerialize["iommu"] = o.Iommu
+	}
+	if o.PciSegment != nil {
+		toSerialize["pci_segment"] = o.PciSegment
 	}
 	if o.Id != nil {
 		toSerialize["id"] = o.Id

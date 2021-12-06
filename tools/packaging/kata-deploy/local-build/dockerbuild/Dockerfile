@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-FROM ubuntu
+FROM ubuntu:20.04
 ENV DEBIAN_FRONTEND=noninteractive
 ENV INSTALL_IN_GOPATH=false
 
@@ -27,7 +27,7 @@ RUN sh -c "echo '${IMG_USER} ALL=NOPASSWD: ALL' >> /etc/sudoers"
 
 #FIXME: gcc is required as agent is build out of a container build.
 RUN apt-get update && \
-  apt install -y \
+  apt install --no-install-recommends -y \
   cpio \
   gcc \
   git \

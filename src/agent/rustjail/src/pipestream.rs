@@ -30,7 +30,7 @@ impl io::Read for &StreamFd {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         match unistd::read(self.0, buf) {
             Ok(l) => Ok(l),
-            Err(e) => Err(e.as_errno().unwrap().into()),
+            Err(e) => Err(e.into()),
         }
     }
 }
@@ -39,7 +39,7 @@ impl io::Write for &StreamFd {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
         match unistd::write(self.0, buf) {
             Ok(l) => Ok(l),
-            Err(e) => Err(e.as_errno().unwrap().into()),
+            Err(e) => Err(e.into()),
         }
     }
 
@@ -52,7 +52,7 @@ impl StreamFd {
     fn close(&mut self) -> io::Result<()> {
         match unistd::close(self.0) {
             Ok(()) => Ok(()),
-            Err(e) => Err(e.as_errno().unwrap().into()),
+            Err(e) => Err(e.into()),
         }
     }
 }

@@ -21,6 +21,7 @@ type PmemConfig struct {
 	Iommu         *bool   `json:"iommu,omitempty"`
 	Mergeable     *bool   `json:"mergeable,omitempty"`
 	DiscardWrites *bool   `json:"discard_writes,omitempty"`
+	PciSegment    *int32  `json:"pci_segment,omitempty"`
 	Id            *string `json:"id,omitempty"`
 }
 
@@ -206,6 +207,38 @@ func (o *PmemConfig) SetDiscardWrites(v bool) {
 	o.DiscardWrites = &v
 }
 
+// GetPciSegment returns the PciSegment field value if set, zero value otherwise.
+func (o *PmemConfig) GetPciSegment() int32 {
+	if o == nil || o.PciSegment == nil {
+		var ret int32
+		return ret
+	}
+	return *o.PciSegment
+}
+
+// GetPciSegmentOk returns a tuple with the PciSegment field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *PmemConfig) GetPciSegmentOk() (*int32, bool) {
+	if o == nil || o.PciSegment == nil {
+		return nil, false
+	}
+	return o.PciSegment, true
+}
+
+// HasPciSegment returns a boolean if a field has been set.
+func (o *PmemConfig) HasPciSegment() bool {
+	if o != nil && o.PciSegment != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetPciSegment gets a reference to the given int32 and assigns it to the PciSegment field.
+func (o *PmemConfig) SetPciSegment(v int32) {
+	o.PciSegment = &v
+}
+
 // GetId returns the Id field value if set, zero value otherwise.
 func (o *PmemConfig) GetId() string {
 	if o == nil || o.Id == nil {
@@ -254,6 +287,9 @@ func (o PmemConfig) MarshalJSON() ([]byte, error) {
 	}
 	if o.DiscardWrites != nil {
 		toSerialize["discard_writes"] = o.DiscardWrites
+	}
+	if o.PciSegment != nil {
+		toSerialize["pci_segment"] = o.PciSegment
 	}
 	if o.Id != nil {
 		toSerialize["id"] = o.Id

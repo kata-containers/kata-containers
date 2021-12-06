@@ -235,7 +235,7 @@ then [Kata-deploy](https://github.com/kata-containers/kata-containers/tree/main/
 is use to install Kata. This will make sure that the correct `agent` version 
 is installed into the rootfs in the steps below.
 
-The following instructions use Debian as the root filesystem with systemd as 
+The following instructions use Ubuntu as the root filesystem with systemd as 
 the init and will add in the `kmod` binary, which is not a standard binary in 
 a Kata rootfs image. The `kmod` binary is necessary to load the Intel® QAT 
 kernel modules when the virtual machine rootfs boots. 
@@ -257,7 +257,7 @@ $ cd $GOPATH
 $ export AGENT_VERSION=$(kata-runtime version | head -n 1 | grep -o "[0-9.]\+")
 $ cd ${OSBUILDER}/rootfs-builder
 $ sudo rm -rf ${ROOTFS_DIR}
-$ script -fec 'sudo -E GOPATH=$GOPATH USE_DOCKER=true SECCOMP=no ./rootfs.sh debian'
+$ script -fec 'sudo -E GOPATH=$GOPATH USE_DOCKER=true SECCOMP=no ./rootfs.sh ubuntu'
 ```
 
 ### Compile Intel® QAT drivers for Kata Containers kernel and add to Kata Containers rootfs

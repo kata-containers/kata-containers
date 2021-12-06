@@ -213,7 +213,7 @@ docker_extra_args()
 		args+=" -v ${gentoo_local_portage_dir}:/usr/portage/packages"
 		args+=" --volumes-from ${gentoo_portage_container}"
 		;;
-        debian | ubuntu | suse)
+	ubuntu | suse)
 		source /etc/os-release
 
 		case "$ID" in
@@ -543,8 +543,8 @@ EOT
 			chrony_conf_file="${ROOTFS_DIR}/etc/chrony/chrony.conf"
 			chrony_systemd_service="${ROOTFS_DIR}/lib/systemd/system/chronyd.service"
 			;;
-		"ubuntu" | "debian")
-			echo "I am ubuntu or debian"
+		"ubuntu")
+			echo "I am ubuntu"
 			chrony_conf_file="${ROOTFS_DIR}/etc/chrony/chrony.conf"
 			chrony_systemd_service="${ROOTFS_DIR}/lib/systemd/system/chrony.service"
 			;;

@@ -419,7 +419,7 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
                         ns.r#type.clone(),
                         ns.path.clone()
                     );
-                    log_child!(cfd_log, "error is : {:?}", e.as_errno());
+                    log_child!(cfd_log, "error is : {:?}", e);
                     e
                 })?;
 
@@ -496,7 +496,7 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
         log_child!(cfd_log, "join namespace {:?}", s);
         sched::setns(fd, s).or_else(|e| {
             if s == CloneFlags::CLONE_NEWUSER {
-                if e.as_errno().unwrap() != Errno::EINVAL {
+                if e != Errno::EINVAL {
                     let _ = write_sync(cwfd, SYNC_FAILED, format!("{:?}", e).as_str());
                     return Err(e);
                 }
@@ -1108,10 +1108,8 @@ fn do_exec(args: &[String]) -> ! {
         .collect();
 
     let _ = unistd::execvp(p.as_c_str(), &sa).map_err(|e| match e {
-        nix::Error::Sys(errno) => {
-            std::process::exit(errno as i32);
-        }
-        _ => std::process::exit(-2),
+        nix::Error::UnknownErrno => std::process::exit(-2),
+        _ => std::process::exit(e as i32),
     });
 
     unreachable!()
@@ -1157,7 +1155,7 @@ fn get_pid_namespace(logger: &Logger, linux: &Linux) -> Result<Option<RawFd>> {
                         ns.r#type.clone(),
                         ns.path.clone()
                     );
-                    error!(logger, "error is : {:?}", e.as_errno());
+                    error!(logger, "error is : {:?}", e);
 
                     e
                 })?;
@@ -1390,13 +1388,13 @@ impl LinuxContainer {
         .context(format!("cannot change onwer of container {} root", id))?;
 
         if config.spec.is_none() {
-            return Err(nix::Error::Sys(Errno::EINVAL).into());
+            return Err(anyhow!(nix::Error::EINVAL));
         }
 
         let spec = config.spec.as_ref().unwrap();
 
         if spec.linux.is_none() {
-            return Err(nix::Error::Sys(Errno::EINVAL).into());
+            return Err(anyhow!(nix::Error::EINVAL));
         }
 
         let linux = spec.linux.as_ref().unwrap();
@@ -1473,7 +1471,7 @@ async fn execute_hook(logger: &Logger, h: &Hook, st: &OCIState) -> Result<()> {
     let binary = PathBuf::from(h.path.as_str());
     let path = binary.canonicalize()?;
     if !path.exists() {
-        return Err(anyhow!(nix::Error::from_errno(Errno::EINVAL)));
+        return Err(anyhow!(nix::Error::EINVAL));
     }
 
     let args = h.args.clone();
@@ -1542,7 +1540,7 @@ async fn execute_hook(logger: &Logger, h: &Hook, st: &OCIState) -> Result<()> {
 
                 if code != 0 {
                     error!(logger, "hook {} exit status is {}", &path, code);
-                    return Err(anyhow!(nix::Error::from_errno(Errno::UnknownErrno)));
+                    return Err(anyhow!(nix::Error::UnknownErrno));
                 }
 
                 debug!(logger, "hook {} exit status is 0", &path);
@@ -1558,7 +1556,7 @@ async fn execute_hook(logger: &Logger, h: &Hook, st: &OCIState) -> Result<()> {
 
     match tokio::time::timeout(Duration::new(timeout, 0), join_handle).await {
         Ok(r) => r.unwrap(),
-        Err(_) => Err(anyhow!(nix::Error::from_errno(Errno::ETIMEDOUT))),
+        Err(_) => Err(anyhow!(nix::Error::ETIMEDOUT)),
     }
 }
 
@@ -1664,7 +1662,7 @@ mod tests {
         )
         .await;
 
-        let expected_err = nix::Error::from_errno(Errno::ETIMEDOUT);
+        let expected_err = nix::Error::ETIMEDOUT;
         assert_eq!(
             res.unwrap_err().downcast::<nix::Error>().unwrap(),
             expected_err

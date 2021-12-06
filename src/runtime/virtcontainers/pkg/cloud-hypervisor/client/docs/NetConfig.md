@@ -16,6 +16,7 @@ Name | Type | Description | Notes
 **VhostMode** | Pointer to **string** |  | [optional] [default to "Client"]
 **Id** | Pointer to **string** |  | [optional] 
 **Fd** | Pointer to **[]int32** |  | [optional] 
+**PciSegment** | Pointer to **int32** |  | [optional] 
 **RateLimiterConfig** | Pointer to [**RateLimiterConfig**](RateLimiterConfig.md) |  | [optional] 
 
 ## Methods
@@ -336,6 +337,31 @@ SetFd sets Fd field to given value.
 `func (o *NetConfig) HasFd() bool`
 
 HasFd returns a boolean if a field has been set.
+
+### GetPciSegment
+
+`func (o *NetConfig) GetPciSegment() int32`
+
+GetPciSegment returns the PciSegment field if non-nil, zero value otherwise.
+
+### GetPciSegmentOk
+
+`func (o *NetConfig) GetPciSegmentOk() (*int32, bool)`
+
+GetPciSegmentOk returns a tuple with the PciSegment field if it's non-nil, zero value otherwise
+and a boolean to check if the value has been set.
+
+### SetPciSegment
+
+`func (o *NetConfig) SetPciSegment(v int32)`
+
+SetPciSegment sets PciSegment field to given value.
+
+### HasPciSegment
+
+`func (o *NetConfig) HasPciSegment() bool`
+
+HasPciSegment returns a boolean if a field has been set.
 
 ### GetRateLimiterConfig
 

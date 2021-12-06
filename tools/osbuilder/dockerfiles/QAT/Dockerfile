@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 # Kata osbuilder 'works best' on Fedora
-FROM fedora:latest
+FROM fedora:34
 
 # Version of the Dockerfile - update if you change this file to avoid 'stale'
 # images being pulled from the registry.
@@ -16,7 +16,7 @@ ENV QAT_DRIVER_URL "https://downloadmirror.intel.com/649693/${QAT_DRIVER_VER}"
 ENV QAT_CONFIGURE_OPTIONS "--enable-icp-sriov=guest"
 ENV KATA_REPO_VERSION "main"
 ENV AGENT_VERSION ""
-ENV ROOTFS_OS "debian"
+ENV ROOTFS_OS "ubuntu"
 ENV OUTPUT_DIR "/output"
 
 RUN dnf install -y \
