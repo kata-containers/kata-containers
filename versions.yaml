@@ -140,12 +140,14 @@ assets:
       aarch64:
         name: &default-initrd-name "alpine"
         version: &default-initrd-version "3.13.5"
+      # Do not use Alpine on ppc64le & s390x, the agent cannot use musl because
+      # there is no such Rust target
       ppc64le:
-        name: *default-initrd-name
-        version: *default-initrd-version
+        name: &glibc-initrd-name "ubuntu"
+        version: &glibc-initrd-version "20.04"
       s390x:
-        name: *default-initrd-name
-        version: *default-initrd-version
+        name: *glibc-initrd-name
+        version: *glibc-initrd-version
       x86_64:
         name: *default-initrd-name
         version: *default-initrd-version
