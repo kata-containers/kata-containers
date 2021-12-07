@@ -10,6 +10,7 @@ Name | Type | Description | Notes
 **QueueSize** | **int32** |  | [default to 1024]
 **Dax** | **bool** |  | [default to true]
 **CacheSize** | **int64** |  | 
+**PciSegment** | Pointer to **int32** |  | [optional] 
 **Id** | Pointer to **string** |  | [optional] 
 
 ## Methods
@@ -150,6 +151,31 @@ and a boolean to check if the value has been set.
 
 SetCacheSize sets CacheSize field to given value.
 
+
+### GetPciSegment
+
+`func (o *FsConfig) GetPciSegment() int32`
+
+GetPciSegment returns the PciSegment field if non-nil, zero value otherwise.
+
+### GetPciSegmentOk
+
+`func (o *FsConfig) GetPciSegmentOk() (*int32, bool)`
+
+GetPciSegmentOk returns a tuple with the PciSegment field if it's non-nil, zero value otherwise
+and a boolean to check if the value has been set.
+
+### SetPciSegment
+
+`func (o *FsConfig) SetPciSegment(v int32)`
+
+SetPciSegment sets PciSegment field to given value.
+
+### HasPciSegment
+
+`func (o *FsConfig) HasPciSegment() bool`
+
+HasPciSegment returns a boolean if a field has been set.
 
 ### GetId
 

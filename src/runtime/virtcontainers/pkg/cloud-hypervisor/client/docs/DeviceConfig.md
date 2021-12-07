@@ -6,6 +6,7 @@ Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
 **Path** | **string** |  | 
 **Iommu** | Pointer to **bool** |  | [optional] [default to false]
+**PciSegment** | Pointer to **int32** |  | [optional] 
 **Id** | Pointer to **string** |  | [optional] 
 
 ## Methods
@@ -71,6 +72,31 @@ SetIommu sets Iommu field to given value.
 `func (o *DeviceConfig) HasIommu() bool`
 
 HasIommu returns a boolean if a field has been set.
+
+### GetPciSegment
+
+`func (o *DeviceConfig) GetPciSegment() int32`
+
+GetPciSegment returns the PciSegment field if non-nil, zero value otherwise.
+
+### GetPciSegmentOk
+
+`func (o *DeviceConfig) GetPciSegmentOk() (*int32, bool)`
+
+GetPciSegmentOk returns a tuple with the PciSegment field if it's non-nil, zero value otherwise
+and a boolean to check if the value has been set.
+
+### SetPciSegment
+
+`func (o *DeviceConfig) SetPciSegment(v int32)`
+
+SetPciSegment sets PciSegment field to given value.
+
+### HasPciSegment
+
+`func (o *DeviceConfig) HasPciSegment() bool`
+
+HasPciSegment returns a boolean if a field has been set.
 
 ### GetId
 
