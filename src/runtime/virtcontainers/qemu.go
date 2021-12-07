@@ -984,8 +984,10 @@ func (q *qemu) StopVM(ctx context.Context, waitOnly bool) error {
 		}
 	}
 
-	if err := q.stopVirtiofsd(ctx); err != nil {
-		return err
+	if q.config.SharedFS == config.VirtioFS {
+		if err := q.stopVirtiofsd(ctx); err != nil {
+			return err
+		}
 	}
 
 	return nil
