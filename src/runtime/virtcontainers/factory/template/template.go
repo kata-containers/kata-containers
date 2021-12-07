@@ -163,6 +163,10 @@ func (t *template) createFromTemplateVM(ctx context.Context, c vc.VMConfig) (*vc
 	config.HypervisorConfig.BootFromTemplate = true
 	config.HypervisorConfig.MemoryPath = t.statePath + "/memory"
 	config.HypervisorConfig.DevicesStatePath = t.statePath + "/state"
+	config.HypervisorConfig.SharedPath = c.HypervisorConfig.SharedPath
+	config.HypervisorConfig.VMStorePath = c.HypervisorConfig.VMStorePath
+	config.HypervisorConfig.RunStorePath = c.HypervisorConfig.RunStorePath
+
 	return vc.NewVM(ctx, config)
 }
 
