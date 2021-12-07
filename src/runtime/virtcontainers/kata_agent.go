@@ -908,7 +908,7 @@ func setupStorages(ctx context.Context, sandbox *Sandbox) []*grpc.Storage {
 }
 
 func (k *kataAgent) stopSandbox(ctx context.Context, sandbox *Sandbox) error {
-	span, ctx := katatrace.Trace(ctx, k.Logger(), "StopVM", kataAgentTracingTags)
+	span, ctx := katatrace.Trace(ctx, k.Logger(), "stopSandbox", kataAgentTracingTags)
 	defer span.End()
 
 	req := &grpc.DestroySandboxRequest{}
