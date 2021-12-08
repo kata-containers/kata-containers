@@ -2,5 +2,6 @@
 members = [
     "logging",
     "kata-types",
+    "kata-sys-util",
 ]
 resolver = "2"
