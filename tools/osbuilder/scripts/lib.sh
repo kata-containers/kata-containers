@@ -345,6 +345,7 @@ RUN ln -sf /usr/bin/g++ /bin/musl-g++
 			-e "s|@INSTALL_MUSL@||g" \
 			-e "s|@INSTALL_RUST@|${install_rust//$'\n'/\\n}|g" \
 			-e "s|@SET_PROXY@|${set_proxy:-}|g" \
+			-e "s|@INSTALL_AA_KBC@|${AA_KBC_EXTRAS//$'\n'/\\n}|g" \
 			"${dockerfile_template}" > Dockerfile
 	else
 		sed \
