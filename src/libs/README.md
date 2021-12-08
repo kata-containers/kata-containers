@@ -7,4 +7,5 @@ Currently it provides following library crates:
 | Library | Description |
 |-|-|-|
 | [logging](logging/) | Facilities to setup logging subsystem based slog. |
+| [system utilities](sys-util-rs/) | A collection of facilities and helpers to access system services. |
 | [types](types-rs/) | A collection of constants and data types shared by multiple Kata components. |

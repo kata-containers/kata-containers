@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "logging",
+    "sys-util-rs",
     "types-rs",
 ]
 resolver = "2"
