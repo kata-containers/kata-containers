@@ -210,7 +210,7 @@ github.com/mitchellh/mapstructure
 github.com/moby/sys/mountinfo
 # github.com/opencontainers/go-digest v1.0.0
 github.com/opencontainers/go-digest
-# github.com/opencontainers/runc v1.0.2 => github.com/opencontainers/runc v1.0.1
+# github.com/opencontainers/runc v1.0.3
 ## explicit
 github.com/opencontainers/runc/libcontainer/cgroups
 github.com/opencontainers/runc/libcontainer/cgroups/devices
@@ -444,6 +444,5 @@ k8s.io/apimachinery/pkg/api/resource
 ## explicit
 k8s.io/cri-api/pkg/apis/runtime/v1alpha2
 # github.com/containerd/containerd => github.com/containerd/containerd v1.5.8
-# github.com/opencontainers/runc => github.com/opencontainers/runc v1.0.1
 # github.com/uber-go/atomic => go.uber.org/atomic v1.5.1
 # google.golang.org/genproto => google.golang.org/genproto v0.0.0-20180817151627-c66870c02cf8
