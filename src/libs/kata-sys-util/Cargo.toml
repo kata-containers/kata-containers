@@ -1,0 +1,13 @@
+[package]
+name = "kata-sys-util"
+version = "0.1.0"
+description = "System Utilities for Kata Containers"
+keywords = ["kata", "container", "runtime"]
+authors = ["The Kata Containers community <kata-dev@lists.katacontainers.io>"]
+repository = "https://github.com/kata-containers/kata-containers.git"
+homepage = "https://katacontainers.io/"
+readme = "README.md"
+license = "Apache-2.0"
+edition = "2018"
+
+[dependencies]
