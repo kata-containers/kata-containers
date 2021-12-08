@@ -11,3 +11,14 @@ license = "Apache-2.0"
 edition = "2018"
 
 [dependencies]
+fail = "0.5.0"
+lazy_static = "1.4.0"
+nix = "0.23.0"
+slog = "2.5.2"
+slog-scope = "4.4.0"
+thiserror = "1.0.30"
+
+kata-types = { path = "../types-rs" }
+
+[dev-dependencies]
+tempfile = "3.2.0"
