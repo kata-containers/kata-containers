@@ -17,7 +17,6 @@ import (
 	eventstypes "github.com/containerd/containerd/api/events"
 	"github.com/containerd/containerd/api/types/task"
 	"github.com/containerd/containerd/errdefs"
-	"github.com/containerd/containerd/events"
 	"github.com/containerd/containerd/namespaces"
 	cdruntime "github.com/containerd/containerd/runtime"
 	cdshim "github.com/containerd/containerd/runtime/v2/shim"
@@ -256,15 +255,14 @@ func (s *service) StartShim(ctx context.Context, opts cdshim.StartOpts) (_ strin
 	return address, nil
 }
 
-func (s *service) forward(ctx context.Context, publisher events.Publisher) {
+func (s *service) forward(ctx context.Context, publisher cdshim.Publisher) {
 	for e := range s.events {
-		ctx, cancel := context.WithTimeout(ctx, timeOut)
 		err := publisher.Publish(ctx, getTopic(e), e)
-		cancel()
 		if err != nil {
 			shimLog.WithError(err).Error("post event")
 		}
 	}
+	publisher.Close()
 }
 
 func (s *service) send(evt interface{}) {
@@ -947,6 +945,7 @@ func (s *service) Shutdown(ctx context.Context, r *taskAPI.ShutdownRequest) (_ *
 	katatrace.StopTracing(s.rootCtx)
 
 	s.cancel()
+	close(s.events)
 
 	// Since we only send an shutdown qmp command to qemu when do stopSandbox, and
 	// didn't wait until qemu process's exit, thus we'd better to make sure it had
