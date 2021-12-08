@@ -21,7 +21,7 @@ func availableGuestProtection() (guestProtection, error) {
 	}
 	// SEV is supported and enabled when the kvm module `sev` parameter is set to `1`
 	if _, err := os.Stat(sevKvmParameterPath); err == nil {
-		if c, err := ioutil.ReadFile(sevKvmParameterPath); err == nil && len(c) > 0 && c[0] == '1' {
+		if c, err := ioutil.ReadFile(sevKvmParameterPath); err == nil && len(c) > 0 && (c[0] == '1' || c[0] == 'Y') {
 			return sevProtection, nil
 		}
 	}
