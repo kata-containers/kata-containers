@@ -62,3 +62,8 @@ install-tarball:
 
 image: kata-tarball
 	$(MK_DIR)kata-deploy-build-and-upload-image.sh $(CURDIR)/kata-static.tar.xz
+
+secure-execution-tarballs: kernel-tarball qemu-tarball rootfs-initrd-tarball shim-v2-tarball
+
+secure-execution: secure-execution-tarballs-parallel
+	$(MK_DIR)/kata-deploy-secure-execution.sh
