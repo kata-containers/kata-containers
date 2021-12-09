@@ -29,6 +29,16 @@ pub mod k8s;
 /// Constants and data types related to mount point.
 pub mod mount;
 
+pub(crate) mod utils;
+
+/// Common error codes.
+#[derive(thiserror::Error, Debug)]
+pub enum Error {
+    /// Invalid configuration list.
+    #[error("invalid list {0}")]
+    InvalidList(String),
+}
+
 /// Convenience macro to obtain the scoped logger
 #[macro_export]
 macro_rules! sl {
