@@ -209,5 +209,5 @@ network accessible to the collector.
 - The trace collection proposals are still being considered.
 
 [kata-1x-tracing]: https://github.com/kata-containers/agent/blob/master/TRACING.md
-[trace-forwarder]: /src/trace-forwarder
+[trace-forwarder]: /src/tools/trace-forwarder
 [tracing-doc-pr]: https://github.com/kata-containers/kata-containers/pull/1937

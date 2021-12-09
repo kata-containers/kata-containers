@@ -8,12 +8,12 @@ COMPONENTS =
 
 COMPONENTS += agent
 COMPONENTS += runtime
-COMPONENTS += trace-forwarder
 
 # List of available tools
 TOOLS =
 
 TOOLS += agent-ctl
+TOOLS += trace-forwarder
 
 STANDARD_TARGETS = build check clean install test vendor
 
@@ -22,7 +22,7 @@ default: all
 all: logging-crate-tests build
 
 logging-crate-tests:
-	make -C pkg/logging
+	make -C src/libs/logging
 
 include utils.mk
 include ./tools/packaging/kata-deploy/local-build/Makefile

@@ -70,8 +70,8 @@ The table below lists the remaining parts of the project:
 | [packaging](tools/packaging) | infrastructure | Scripts and metadata for producing packaged binaries<br/>(components, hypervisors, kernel and rootfs). |
 | [kernel](https://www.kernel.org) | kernel | Linux kernel used by the hypervisor to boot the guest image. Patches are stored [here](tools/packaging/kernel). |
 | [osbuilder](tools/osbuilder) | infrastructure | Tool to create "mini O/S" rootfs and initrd images and kernel for the hypervisor. |
-| [`agent-ctl`](tools/agent-ctl) | utility | Tool that provides low-level access for testing the agent. |
-| [`trace-forwarder`](src/trace-forwarder) | utility | Agent tracing helper. |
+| [`agent-ctl`](src/tools/agent-ctl) | utility | Tool that provides low-level access for testing the agent. |
+| [`trace-forwarder`](src/tools/trace-forwarder) | utility | Agent tracing helper. |
 | [`ci`](https://github.com/kata-containers/ci) | CI | Continuous Integration configuration files and scripts. |
 | [`katacontainers.io`](https://github.com/kata-containers/www.katacontainers.io) | Source for the [`katacontainers.io`](https://www.katacontainers.io) site. |
 

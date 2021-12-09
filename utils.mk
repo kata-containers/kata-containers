@@ -64,7 +64,7 @@ endef
 # $1 - name of tool
 
 define make_tool_rules
-$(eval $(call make_rules,tools,$(1)))
+$(eval $(call make_rules,src/tools,$(1)))
 endef
 
 # Create a "${target}-all" alias which will cause each component/tool
