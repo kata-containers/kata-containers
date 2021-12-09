@@ -152,7 +152,7 @@ For further information on how to run the trace forwarder, run:
 $ cargo run -- --help
 ```
 
-[agent-tracing]: ../../docs/tracing.md
+[agent-tracing]: /docs/tracing.md
 [jaeger-tracing]: https://www.jaegertracing.io
 [opentelemetry]: https://opentelemetry.io
 [vsock]: https://wiki.qemu.org/Features/VirtioVsock
