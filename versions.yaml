@@ -139,7 +139,7 @@ assets:
     architecture:
       aarch64:
         name: &default-initrd-name "alpine"
-        version: &default-initrd-version "3.13.5"
+        version: &default-initrd-version "3.13"
       # Do not use Alpine on ppc64le & s390x, the agent cannot use musl because
       # there is no such Rust target
       ppc64le:
