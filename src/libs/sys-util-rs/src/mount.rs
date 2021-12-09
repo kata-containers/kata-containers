@@ -497,44 +497,23 @@ fn get_longest_common_prefix(opts: &[String]) -> String {
     if opts.is_empty() {
         return String::new();
     }
-    if opts.len() == 1 {
-        return opts[0].clone();
+
+    let mut paths = Vec::with_capacity(opts.len());
+    for opt in opts.iter() {
+        match Path::new(opt).parent() {
+            None => return "/".to_string(),
+            Some(v) => paths.push(v),
+        }
     }
 
-    // FIXME: get prefix
-    let strs = opts[0].clone();
-    let split_l: Vec<&str> = strs.split('/').collect();
-
-    //let mut prefix = &split_l[..1].join("/");
-    let mut prefix = "/".to_string();
-    let mut idx: usize = 0;
-    for i in 1..split_l.len() {
-        let tmp_l = &split_l[..i];
-        let tmp_ll = tmp_l.join("/");
-        if !tmp_ll.is_empty() {
-            prefix = tmp_ll.to_string();
-        }
-
-        let contain = || -> bool {
-            for opt in opts.iter() {
-                if !opt.contains(&prefix) {
-                    return false;
-                }
-            }
-            true
-        };
-
-        if !contain() {
-            break;
-        }
-        idx = i;
+    let mut res = match common_path::common_path_all(paths) {
+        None => "/".to_string(),
+        Some(v) => v.to_str().unwrap_or("/").to_owned(),
+    };
+    if res != "/" {
+        res += "/"
     }
-
-    let tmp_l = &split_l[..idx];
-    let tmp_ll = tmp_l.join("/");
-    prefix = tmp_ll + "/";
-
-    prefix
+    res
 }
 
 /// Umount a mountpoint with timeout.
