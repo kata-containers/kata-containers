@@ -11,10 +11,13 @@ license = "Apache-2.0"
 edition = "2018"
 
 [dependencies]
+cgroups = { package = "cgroups-rs", version = "0.2.7" }
+chrono = "0.4.0"
 common-path = "=1.0.0"
 fail = "0.5.0"
 lazy_static = "1.4.0"
 nix = "0.23.0"
+once_cell = "1.9.0"
 slog = "2.5.2"
 slog-scope = "4.4.0"
 thiserror = "1.0.30"
@@ -23,3 +26,5 @@ kata-types = { path = "../types-rs" }
 
 [dev-dependencies]
 tempfile = "3.2.0"
+serial_test = "0.5.1"
+libc = "0.2.100"
