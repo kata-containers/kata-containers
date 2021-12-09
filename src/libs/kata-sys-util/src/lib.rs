@@ -6,6 +6,7 @@
 #[macro_use]
 extern crate slog;
 
+pub mod cgroup;
 pub mod fs;
 pub mod mount;
 
