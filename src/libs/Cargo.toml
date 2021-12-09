@@ -1,5 +1,6 @@
 [workspace]
 members = [
     "logging",
+    "types-rs",
 ]
 resolver = "2"
