@@ -5,5 +5,6 @@ or published to [`crates.io`](https://crates.io/index.html).
 Currently it provides following library crates:
 
 | Library | Description |
-|-|-|-|
-| [logging](logging/) | Facilities to setup logging subsystem based slog. |
+|-|-|
+| [logging](logging/) | Facilities to setup logging subsystem based on slog. |
+| [types](kata-types/) | Collection of constants and data types shared by multiple Kata Containers components. |
