@@ -165,7 +165,7 @@ Ensure any new trace spans added to the code are completed.
 Where possible, code changes should be accompanied by unit tests.
 
 Consider using the standard
-[table-based approach](https://github.com/kata-containers/tests/blob/main/Unit-Test-Advice.md)
+[table-based approach](Unit-Test-Advice.md)
 as it encourages you to make functions small and simple, and also
 allows you to think about what types of value to test.
 
