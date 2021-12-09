@@ -104,7 +104,7 @@ default: $(TARGET) show-header
 $(TARGET): $(GENERATED_CODE) logging-crate-tests $(TARGET_PATH)
 
 logging-crate-tests:
-	make -C $(CWD)/../../pkg/logging
+	make -C $(CWD)/../libs/logging
 
 $(TARGET_PATH): $(SOURCES) | show-summary
 	@RUSTFLAGS="$(EXTRA_RUSTFLAGS) --deny warnings" cargo build --target $(TRIPLE) --$(BUILD_TYPE) $(EXTRA_RUSTFEATURES)
