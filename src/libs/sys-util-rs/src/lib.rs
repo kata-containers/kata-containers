@@ -10,6 +10,7 @@ pub mod cgroup;
 pub mod cpu;
 pub mod fs;
 pub mod mount;
+pub mod numa;
 
 // Convenience macro to obtain the scoped logger
 #[macro_export]
