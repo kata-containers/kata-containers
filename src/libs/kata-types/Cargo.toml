@@ -1,0 +1,19 @@
+[package]
+name = "kata-types"
+version = "0.1.0"
+description = "Constants and data types shared by Kata Containers components"
+keywords = ["kata", "container", "runtime"]
+authors = ["The Kata Containers community <kata-dev@lists.katacontainers.io>"]
+repository = "https://github.com/kata-containers/kata-containers.git"
+homepage = "https://katacontainers.io/"
+readme = "README.md"
+license = "Apache-2.0"
+edition = "2018"
+
+[dependencies]
+serde = { version = "1.0.100", features = ["derive"] }
+thiserror = "1.0"
+
+oci = { path = "../../agent/oci" }
+
+[dev-dependencies]
