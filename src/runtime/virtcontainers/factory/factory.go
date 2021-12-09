@@ -113,20 +113,23 @@ func resetHypervisorConfig(config *vc.VMConfig) {
 	config.HypervisorConfig.BootFromTemplate = false
 	config.HypervisorConfig.MemoryPath = ""
 	config.HypervisorConfig.DevicesStatePath = ""
+	config.HypervisorConfig.SharedPath = ""
+	config.HypervisorConfig.VMStorePath = ""
+	config.HypervisorConfig.RunStorePath = ""
 }
 
 // It's important that baseConfig and newConfig are passed by value!
-func checkVMConfig(config1, config2 vc.VMConfig) error {
-	if config1.HypervisorType != config2.HypervisorType {
-		return fmt.Errorf("hypervisor type does not match: %s vs. %s", config1.HypervisorType, config2.HypervisorType)
+func checkVMConfig(baseConfig, newConfig vc.VMConfig) error {
+	if baseConfig.HypervisorType != newConfig.HypervisorType {
+		return fmt.Errorf("hypervisor type does not match: %s vs. %s", baseConfig.HypervisorType, newConfig.HypervisorType)
 	}
 
 	// check hypervisor config details
-	resetHypervisorConfig(&config1)
-	resetHypervisorConfig(&config2)
+	resetHypervisorConfig(&baseConfig)
+	resetHypervisorConfig(&newConfig)
 
-	if !utils.DeepCompare(config1, config2) {
-		return fmt.Errorf("hypervisor config does not match, base: %+v. new: %+v", config1, config2)
+	if !utils.DeepCompare(baseConfig, newConfig) {
+		return fmt.Errorf("hypervisor config does not match, base: %+v. new: %+v", baseConfig, newConfig)
 	}
 
 	return nil
