@@ -28,12 +28,12 @@ func toGRPC(err error) error {
 		return err
 	}
 
-	err = errors.Cause(err)
+	causeErr := errors.Cause(err)
 	switch {
-	case isInvalidArgument(err):
-		return status.Errorf(codes.InvalidArgument, err.Error())
-	case isNotFound(err):
-		return status.Errorf(codes.NotFound, err.Error())
+	case isInvalidArgument(causeErr):
+		return status.Errorf(codes.InvalidArgument, causeErr.Error())
+	case isNotFound(causeErr):
+		return status.Errorf(codes.NotFound, causeErr.Error())
 	}
 
 	return err
