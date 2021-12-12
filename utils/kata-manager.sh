@@ -143,11 +143,6 @@ github_get_release_file_url()
 	[ "$download_url" = null ] && download_url=""
 	[ -z "$download_url" ] && die "Cannot determine download URL for version $version ($url)"
 
-	local arch=$(uname -m)
-
-	[ "$arch" = x86_64 ] && arch="($arch|amd64)"
-	echo "$download_url" | egrep -q "$arch" || die "No release for '$arch architecture ($url)"
-
 	echo "$download_url"
 }
 
