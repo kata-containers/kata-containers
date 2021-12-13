@@ -441,7 +441,7 @@ build_rootfs_distro()
 	fi
 }
 
-# Used to create a minimal directory tree where the agent can be instaleld.
+# Used to create a minimal directory tree where the agent can be installed.
 # This is used when a distro is not specified.
 prepare_overlay()
 {
@@ -624,6 +624,8 @@ EOT
 
 parse_arguments()
 {
+	[ "$#" -eq 0 ] && usage && return 0
+
 	while getopts a:hlo:r:t: opt
 	do
 		case $opt in
