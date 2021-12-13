@@ -16,7 +16,11 @@ import (
 
 func deleteContainer(ctx context.Context, s *service, c *container) error {
 	if !c.cType.IsSandbox() {
-		if c.status != task.StatusStopped {
+		cstatus, errStatus := c.status.Get()
+		if errStatus != nil {
+			shimLog.WithError(errStatus).Warn("Found failure on container status, but continue deleting")
+		}
+		if cstatus != task.StatusStopped {
 			if _, err := s.sandbox.StopContainer(ctx, c.id, false); err != nil && !isNotFound(err) {
 				return err
 			}

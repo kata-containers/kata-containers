@@ -43,12 +43,13 @@ func wait(ctx context.Context, s *service, c *container, execID string) (int32, 
 		processID = execs.id
 	}
 
-	ret, err := s.sandbox.WaitProcess(ctx, c.id, processID)
-	if err != nil {
-		shimLog.WithError(err).WithFields(logrus.Fields{
+	ret, exitErr := s.sandbox.WaitProcess(ctx, c.id, processID)
+	if exitErr != nil {
+		shimLog.WithError(exitErr).WithFields(logrus.Fields{
 			"container": c.id,
 			"pid":       processID,
 		}).Error("Wait for process failed")
+		c.status.SetError(exitErr)
 	}
 
 	timeStamp := time.Now()
@@ -77,11 +78,14 @@ func wait(ctx context.Context, s *service, c *container, execID string) (int32, 
 				shimLog.WithError(err).WithField("container", c.id).Warn("stop container failed")
 			}
 		}
-		c.status = task.StatusStopped
 		c.exit = uint32(ret)
 		c.exitTime = timeStamp
 
-		c.exitCh <- uint32(ret)
+		c.exitCh <- containerExit{
+			code: c.exit,
+			err:  exitErr,
+		}
+		c.status.Set(task.StatusStopped)
 
 	} else {
 		execs.status = task.StatusStopped
