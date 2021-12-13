@@ -403,7 +403,7 @@ func (s *service) Create(ctx context.Context, r *taskAPI.CreateTaskRequest) (_ *
 			return nil, res.err
 		}
 		container := res.container
-		container.status = task.StatusCreated
+		container.status.Set(task.StatusCreated)
 
 		s.containers[r.ID] = container
 
@@ -633,7 +633,12 @@ func (s *service) State(ctx context.Context, r *taskAPI.StateRequest) (_ *taskAP
 
 	c, err := s.getContainer(r.ID)
 	if err != nil {
-		return nil, err
+		return
+	}
+	cStatus, errStatus := c.status.Get()
+	if errStatus != nil {
+		err = errStatus
+		return
 	}
 
 	if r.ExecID == "" {
@@ -641,7 +646,7 @@ func (s *service) State(ctx context.Context, r *taskAPI.StateRequest) (_ *taskAP
 			ID:         c.id,
 			Bundle:     c.bundle,
 			Pid:        s.hpid,
-			Status:     c.status,
+			Status:     cStatus,
 			Stdin:      c.stdin,
 			Stdout:     c.stdout,
 			Stderr:     c.stderr,
@@ -692,11 +697,11 @@ func (s *service) Pause(ctx context.Context, r *taskAPI.PauseRequest) (_ *ptypes
 		return nil, err
 	}
 
-	c.status = task.StatusPausing
+	c.status.Set(task.StatusPausing)
 
 	err = s.sandbox.PauseContainer(spanCtx, r.ID)
 	if err == nil {
-		c.status = task.StatusPaused
+		c.status.Set(task.StatusPaused)
 		s.send(&eventstypes.TaskPaused{
 			ContainerID: c.id,
 		})
@@ -704,9 +709,10 @@ func (s *service) Pause(ctx context.Context, r *taskAPI.PauseRequest) (_ *ptypes
 	}
 
 	if status, err := s.getContainerStatus(c.id); err != nil {
-		c.status = task.StatusUnknown
+		c.status.Set(task.StatusUnknown)
+
 	} else {
-		c.status = status
+		c.status.Set(status)
 	}
 
 	return empty, err
@@ -735,7 +741,7 @@ func (s *service) Resume(ctx context.Context, r *taskAPI.ResumeRequest) (_ *ptyp
 
 	err = s.sandbox.ResumeContainer(spanCtx, c.id)
 	if err == nil {
-		c.status = task.StatusRunning
+		c.status.Set(task.StatusRunning)
 		s.send(&eventstypes.TaskResumed{
 			ContainerID: c.id,
 		})
@@ -743,9 +749,10 @@ func (s *service) Resume(ctx context.Context, r *taskAPI.ResumeRequest) (_ *ptyp
 	}
 
 	if status, err := s.getContainerStatus(c.id); err != nil {
-		c.status = task.StatusUnknown
+		c.status.Set(task.StatusUnknown)
+
 	} else {
-		c.status = status
+		c.status.Set(status)
 	}
 
 	return empty, err
@@ -774,7 +781,6 @@ func (s *service) Kill(ctx context.Context, r *taskAPI.KillRequest) (_ *ptypes.E
 		return nil, err
 	}
 
-	processStatus := c.status
 	processID := c.id
 	if r.ExecID != "" {
 		execs, err := c.getExec(r.ExecID)
@@ -790,9 +796,19 @@ func (s *service) Kill(ctx context.Context, r *taskAPI.KillRequest) (_ *ptypes.E
 			}).Debug("Id of exec process to be signalled is empty")
 			return empty, errors.New("The exec process does not exist")
 		}
-		processStatus = execs.status
+		if execs.status == task.StatusStopped {
+			//TODO exec  is  kill is not handled
+			shimLog.Debug("Exec alrady stopped")
+			return empty, nil
+
+		}
 	}
 
+	pstatus, errStatus := c.status.Get()
+	if errStatus != nil {
+		err = errStatus
+		return
+	}
 	// According to CRI specs, kubelet will call StopPodSandbox()
 	// at least once before calling RemovePodSandbox, and this call
 	// is idempotent, and must not return an error if all relevant
@@ -800,7 +816,7 @@ func (s *service) Kill(ctx context.Context, r *taskAPI.KillRequest) (_ *ptypes.E
 	// send a SIGKILL signal first to try to stop the container, thus
 	// once the container has terminated, here should ignore this signal
 	// and return directly.
-	if (signum == syscall.SIGKILL || signum == syscall.SIGTERM) && processStatus == task.StatusStopped {
+	if (signum == syscall.SIGKILL || signum == syscall.SIGTERM) && pstatus == task.StatusStopped {
 		shimLog.WithFields(logrus.Fields{
 			"sandbox":   s.sandbox.ID(),
 			"container": c.id,
@@ -1055,11 +1071,17 @@ func (s *service) Wait(ctx context.Context, r *taskAPI.WaitRequest) (_ *taskAPI.
 
 	//wait for container
 	if r.ExecID == "" {
-		ret = <-c.exitCh
+		exitMsg := <-c.exitCh
+		ret = exitMsg.code
 
 		// refill the exitCh with the container process's exit code in case
 		// there were other waits on this process.
-		c.exitCh <- ret
+		c.exitCh <- exitMsg
+		if exitMsg.err != nil {
+			c.status.SetError(exitMsg.err)
+			err = exitMsg.err
+			return
+		}
 	} else { //wait for exec
 		execs, err := c.getExec(r.ExecID)
 		if err != nil {

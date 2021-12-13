@@ -7,6 +7,7 @@ package containerdshim
 
 import (
 	"io"
+	"sync"
 	"time"
 
 	"github.com/containerd/containerd/api/types/task"
@@ -26,17 +27,46 @@ type container struct {
 	exitIOch    chan struct{}
 	stdinPipe   io.WriteCloser
 	stdinCloser chan struct{}
-	exitCh      chan uint32
+	exitCh      chan containerExit
 	id          string
 	stdin       string
 	stdout      string
 	stderr      string
 	bundle      string
 	cType       vc.ContainerType
+	status      containerStatusMutex
 	exit        uint32
-	status      task.Status
 	terminal    bool
 	mounted     bool
+}
+
+type containerStatusMutex struct {
+	_err    error
+	_mutex  sync.Mutex
+	_status task.Status
+}
+
+func (s *containerStatusMutex) Get() (task.Status, error) {
+	s._mutex.Lock()
+	defer s._mutex.Unlock()
+	return s._status, s._err
+}
+
+func (s *containerStatusMutex) Set(status task.Status) {
+	s._mutex.Lock()
+	defer s._mutex.Unlock()
+	s._status = status
+}
+
+func (s *containerStatusMutex) SetError(err error) {
+	s._mutex.Lock()
+	defer s._mutex.Unlock()
+	s._err = err
+}
+
+type containerExit struct {
+	err  error
+	code uint32
 }
 
 func newContainer(s *service, r *taskAPI.CreateTaskRequest, containerType vc.ContainerType, spec *specs.Spec, mounted bool) (*container, error) {
@@ -60,11 +90,11 @@ func newContainer(s *service, r *taskAPI.CreateTaskRequest, containerType vc.Con
 		terminal:    r.Terminal,
 		cType:       containerType,
 		execs:       make(map[string]*exec),
-		status:      task.StatusCreated,
 		exitIOch:    make(chan struct{}),
-		exitCh:      make(chan uint32, 1),
+		exitCh:      make(chan containerExit, 1),
 		stdinCloser: make(chan struct{}),
 		mounted:     mounted,
 	}
+	c.status.Set(task.StatusCreated)
 	return c, nil
 }

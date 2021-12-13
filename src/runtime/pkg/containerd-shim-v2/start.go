@@ -17,7 +17,10 @@ func startContainer(ctx context.Context, s *service, c *container) (retErr error
 	defer func() {
 		if retErr != nil {
 			// notify the wait goroutine to continue
-			c.exitCh <- exitCode255
+			c.exitCh <- containerExit{
+				code: exitCode255,
+				err:  retErr,
+			}
 		}
 	}()
 	// start a container
@@ -63,7 +66,7 @@ func startContainer(ctx context.Context, s *service, c *container) (retErr error
 		shimLog.WithError(err).Warn("Failed to run post-start hooks")
 	}
 
-	c.status = task.StatusRunning
+	c.status.Set(task.StatusRunning)
 
 	stdin, stdout, stderr, err := s.sandbox.IOStream(c.id, c.id)
 	if err != nil {
