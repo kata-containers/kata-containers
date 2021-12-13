@@ -266,6 +266,11 @@ function main() {
 
 		containerd_conf_file="${containerd_conf_tmpl_file}"
 		containerd_conf_file_backup="${containerd_conf_file}.bak"
+	else
+		# runtime == containerd
+		if [ ! -f "$containerd_conf_file" ]; then
+			containerd config default > "$containerd_conf_file"
+		fi
 	fi
 
 	action=${1:-}
