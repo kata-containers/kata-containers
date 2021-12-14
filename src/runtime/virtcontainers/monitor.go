@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/pkg/errors"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/errors"
 )
 
 const (
@@ -72,7 +72,8 @@ func (m *monitor) newWatcher(ctx context.Context) (chan error, error) {
 }
 
 func (m *monitor) notify(ctx context.Context, err error) {
-	m.sandbox.agent.markDead(ctx)
+	errors.ErrorContext(&err, "Monitor marked the agent as dead")
+	m.sandbox.agent.markDead(ctx, err)
 
 	m.Lock()
 	defer m.Unlock()

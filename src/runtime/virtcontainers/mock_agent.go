@@ -221,7 +221,7 @@ func (n *mockAgent) addSwap(ctx context.Context, PCIPath vcTypes.PciPath) error 
 	return nil
 }
 
-func (n *mockAgent) markDead(ctx context.Context) {
+func (n *mockAgent) markDead(ctx context.Context, err error) {
 }
 
 func (n *mockAgent) cleanup(ctx context.Context, s *Sandbox) {

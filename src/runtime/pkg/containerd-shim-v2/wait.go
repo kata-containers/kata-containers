@@ -9,6 +9,7 @@ import (
 	"context"
 	"os"
 	"path"
+	"strings"
 	"time"
 
 	"github.com/containerd/containerd/api/events"
@@ -18,6 +19,7 @@ import (
 	"google.golang.org/grpc/codes"
 
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/oci"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
 )
 
 const defaultCheckInterval = 1 * time.Second
@@ -153,7 +155,8 @@ func watchOOMEvents(ctx context.Context, s *service) {
 				// If the GetOOMEvent call is not implemented, then the agent is most likely an older version,
 				// stop attempting to get OOM events.
 				// for rust agent, the response code is not found
-				if isGRPCErrorCode(codes.NotFound, err) || err.Error() == "Dead agent" {
+				//There is not way to unwrap errors and with a defined type, so we just check the error message
+				if isGRPCErrorCode(codes.NotFound, err) || strings.Contains(err.Error(), virtcontainers.DeadAgentError.Error()) {
 					return
 				}
 				time.Sleep(defaultCheckInterval)
