@@ -8,7 +8,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"os"
 	"strconv"
 	"time"
@@ -55,7 +55,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	stateBuf, err := ioutil.ReadAll(os.Stdin)
+	stateBuf, err := io.ReadAll(os.Stdin)
 	if err != nil {
 		fmt.Fprintf(f, "Could not read on stdin: %s\n", err)
 		os.Exit(1)

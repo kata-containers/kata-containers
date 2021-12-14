@@ -9,7 +9,6 @@ package containerdshim
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path"
 	"testing"
@@ -362,7 +361,7 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (config string, err err
 	runtimeConfigFileData := ktu.MakeRuntimeConfigFileData(configFileOptions)
 
 	configPath := path.Join(dir, "runtime.toml")
-	err = ioutil.WriteFile(configPath, []byte(runtimeConfigFileData), os.FileMode(0640))
+	err = os.WriteFile(configPath, []byte(runtimeConfigFileData), os.FileMode(0640))
 	if err != nil {
 		return "", err
 	}
@@ -371,7 +370,7 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (config string, err err
 
 	for _, file := range files {
 		// create the resource (which must be >0 bytes)
-		err := ioutil.WriteFile(file, []byte("foo"), os.FileMode(0640))
+		err := os.WriteFile(file, []byte("foo"), os.FileMode(0640))
 		if err != nil {
 			return "", err
 		}
@@ -383,7 +382,7 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (config string, err err
 func TestCreateLoadRuntimeConfig(t *testing.T) {
 	assert := assert.New(t)
 
-	tmpdir, err := ioutil.TempDir("", "")
+	tmpdir, err := os.MkdirTemp("", "")
 	assert.NoError(err)
 	defer os.RemoveAll(tmpdir)
 

@@ -7,7 +7,6 @@ package utils
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path"
@@ -27,12 +26,12 @@ func TestFileCopySuccessful(t *testing.T) {
 	assert := assert.New(t)
 	fileContent := "testContent"
 
-	srcFile, err := ioutil.TempFile("", "test_src_copy")
+	srcFile, err := os.CreateTemp("", "test_src_copy")
 	assert.NoError(err)
 	defer os.Remove(srcFile.Name())
 	defer srcFile.Close()
 
-	dstFile, err := ioutil.TempFile("", "test_dst_copy")
+	dstFile, err := os.CreateTemp("", "test_dst_copy")
 	assert.NoError(err)
 	defer os.Remove(dstFile.Name())
 
@@ -46,7 +45,7 @@ func TestFileCopySuccessful(t *testing.T) {
 	err = FileCopy(srcFile.Name(), dstPath)
 	assert.NoError(err)
 
-	dstContent, err := ioutil.ReadFile(dstPath)
+	dstContent, err := os.ReadFile(dstPath)
 	assert.NoError(err)
 	assert.Equal(string(dstContent), fileContent)
 
@@ -75,7 +74,7 @@ func TestFileCopyDestinationEmptyFailure(t *testing.T) {
 
 func TestFileCopySourceNotExistFailure(t *testing.T) {
 	assert := assert.New(t)
-	srcFile, err := ioutil.TempFile("", "test_src_copy")
+	srcFile, err := os.CreateTemp("", "test_src_copy")
 	assert.NoError(err)
 
 	srcPath := srcFile.Name()
@@ -104,7 +103,7 @@ func TestRevereString(t *testing.T) {
 func TestCleanupFds(t *testing.T) {
 	assert := assert.New(t)
 
-	tmpFile, err := ioutil.TempFile("", "testFds1")
+	tmpFile, err := os.CreateTemp("", "testFds1")
 	assert.NoError(err)
 	filename := tmpFile.Name()
 	defer os.Remove(filename)
@@ -129,7 +128,7 @@ func TestWriteToFile(t *testing.T) {
 	err := WriteToFile("/file-does-not-exist", []byte("test-data"))
 	assert.NotNil(err)
 
-	tmpFile, err := ioutil.TempFile("", "test_append_file")
+	tmpFile, err := os.CreateTemp("", "test_append_file")
 	assert.NoError(err)
 
 	filename := tmpFile.Name()
@@ -141,7 +140,7 @@ func TestWriteToFile(t *testing.T) {
 	err = WriteToFile(filename, testData)
 	assert.NoError(err)
 
-	data, err := ioutil.ReadFile(filename)
+	data, err := os.ReadFile(filename)
 	assert.NoError(err)
 
 	assert.True(reflect.DeepEqual(testData, data))
@@ -319,7 +318,7 @@ func TestSupportsVsocks(t *testing.T) {
 	VHostVSockDevicePath = "/abc/xyz/123"
 	assert.False(SupportsVsocks())
 
-	vHostVSockFile, err := ioutil.TempFile("", "vhost-vsock")
+	vHostVSockFile, err := os.CreateTemp("", "vhost-vsock")
 	assert.NoError(err)
 	defer os.Remove(vHostVSockFile.Name())
 	defer vHostVSockFile.Close()
@@ -459,10 +458,10 @@ func TestMkdirAllWithInheritedOwnerSuccessful(t *testing.T) {
 		t.Skip("Test disabled as requires root user")
 	}
 	assert := assert.New(t)
-	tmpDir1, err := ioutil.TempDir("", "test")
+	tmpDir1, err := os.MkdirTemp("", "test")
 	assert.NoError(err)
 	defer os.RemoveAll(tmpDir1)
-	tmpDir2, err := ioutil.TempDir("", "test")
+	tmpDir2, err := os.MkdirTemp("", "test")
 	assert.NoError(err)
 	defer os.RemoveAll(tmpDir2)
 
@@ -521,7 +520,7 @@ func TestChownToParent(t *testing.T) {
 		t.Skip("Test disabled as requires root user")
 	}
 	assert := assert.New(t)
-	rootDir, err := ioutil.TempDir("", "root")
+	rootDir, err := os.MkdirTemp("", "root")
 	assert.NoError(err)
 	defer os.RemoveAll(rootDir)
 	uid := 1234

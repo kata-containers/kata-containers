@@ -9,11 +9,12 @@ package fs
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
-	"io/ioutil"
+	"io"
 	"os"
 	"path/filepath"
 	"syscall"
+
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
 
 	persistapi "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist/api"
 	"github.com/sirupsen/logrus"
@@ -142,7 +143,7 @@ func (fs *FS) ToDisk(ss persistapi.SandboxState, cs map[string]persistapi.Contai
 	}
 
 	// Walk sandbox dir and find container.
-	files, err := ioutil.ReadDir(sandboxDir)
+	files, err := os.ReadDir(sandboxDir)
 	if err != nil {
 		return err
 	}
@@ -190,7 +191,7 @@ func (fs *FS) FromDisk(sid string) (persistapi.SandboxState, map[string]persista
 	}
 
 	// walk sandbox dir and find container
-	files, err := ioutil.ReadDir(sandboxDir)
+	files, err := os.ReadDir(sandboxDir)
 	if err != nil {
 		return ss, nil, err
 	}
@@ -325,7 +326,7 @@ func (fs *FS) GlobalRead(relativePath string) ([]byte, error) {
 	}
 	defer f.Close()
 
-	data, err := ioutil.ReadAll(f)
+	data, err := io.ReadAll(f)
 	if err != nil {
 		fs.Logger().WithError(err).WithField("file", path).Error("failed to read file")
 		return nil, err

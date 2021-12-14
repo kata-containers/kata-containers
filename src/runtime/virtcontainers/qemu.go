@@ -11,7 +11,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"math"
 	"os"
 	"os/user"
@@ -834,7 +833,7 @@ func (q *qemu) StartVM(ctx context.Context, timeout int) error {
 	strErr, err = govmmQemu.LaunchQemu(q.qemuConfig, newQMPLogger())
 	if err != nil {
 		if q.config.Debug && q.qemuConfig.LogFile != "" {
-			b, err := ioutil.ReadFile(q.qemuConfig.LogFile)
+			b, err := os.ReadFile(q.qemuConfig.LogFile)
 			if err == nil {
 				strErr += string(b)
 			}
@@ -1152,7 +1151,7 @@ func (q *qemu) dumpSandboxMetaInfo(dumpSavePath string) {
 	// Save hypervisor meta information
 	fileName := filepath.Join(dumpSavePath, "hypervisor.conf")
 	data, _ := json.MarshalIndent(q.config, "", " ")
-	if err := ioutil.WriteFile(fileName, data, defaultFilePerms); err != nil {
+	if err := os.WriteFile(fileName, data, defaultFilePerms); err != nil {
 		q.Logger().WithError(err).WithField("hypervisor.conf", data).Error("write to hypervisor.conf file failed")
 	}
 
@@ -1163,7 +1162,7 @@ func (q *qemu) dumpSandboxMetaInfo(dumpSavePath string) {
 	}
 
 	fileName = filepath.Join(dumpSavePath, "hypervisor.version")
-	if err := ioutil.WriteFile(fileName, []byte(hyperVisorVersion), defaultFilePerms); err != nil {
+	if err := os.WriteFile(fileName, []byte(hyperVisorVersion), defaultFilePerms); err != nil {
 		q.Logger().WithError(err).WithField("hypervisor.version", data).Error("write to hypervisor.version file failed")
 	}
 }
@@ -2384,7 +2383,7 @@ func (q *qemu) Cleanup(ctx context.Context) error {
 }
 
 func (q *qemu) GetPids() []int {
-	data, err := ioutil.ReadFile(q.qemuConfig.PidFile)
+	data, err := os.ReadFile(q.qemuConfig.PidFile)
 	if err != nil {
 		q.Logger().WithError(err).Error("Could not read qemu pid file")
 		return []int{0}

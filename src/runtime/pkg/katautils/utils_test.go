@@ -8,7 +8,6 @@ package katautils
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path"
 	"path/filepath"
@@ -32,11 +31,11 @@ var (
 )
 
 func createFile(file, contents string) error {
-	return ioutil.WriteFile(file, []byte(contents), testFileMode)
+	return os.WriteFile(file, []byte(contents), testFileMode)
 }
 
 func createEmptyFile(path string) (err error) {
-	return ioutil.WriteFile(path, []byte(""), testFileMode)
+	return os.WriteFile(path, []byte(""), testFileMode)
 }
 
 func TestUtilsResolvePathEmptyPath(t *testing.T) {
@@ -45,7 +44,7 @@ func TestUtilsResolvePathEmptyPath(t *testing.T) {
 }
 
 func TestUtilsResolvePathValidPath(t *testing.T) {
-	dir, err := ioutil.TempDir("", "")
+	dir, err := os.MkdirTemp("", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -77,7 +76,7 @@ func TestUtilsResolvePathValidPath(t *testing.T) {
 }
 
 func TestUtilsResolvePathENOENT(t *testing.T) {
-	dir, err := ioutil.TempDir("", "")
+	dir, err := os.MkdirTemp("", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -112,7 +111,7 @@ func TestUtilsResolvePathENOENT(t *testing.T) {
 func TestFileSize(t *testing.T) {
 	assert := assert.New(t)
 
-	dir, err := ioutil.TempDir(testDir, "")
+	dir, err := os.MkdirTemp(testDir, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -153,7 +152,7 @@ func TestWriteFileErrWriteFail(t *testing.T) {
 func TestWriteFileErrNoPath(t *testing.T) {
 	assert := assert.New(t)
 
-	dir, err := ioutil.TempDir(testDir, "")
+	dir, err := os.MkdirTemp(testDir, "")
 	assert.NoError(err)
 	defer os.RemoveAll(dir)
 
@@ -178,7 +177,7 @@ func TestGetFileContents(t *testing.T) {
 		{"processor   : 0\nvendor_id   : GenuineIntel\n"},
 	}
 
-	dir, err := ioutil.TempDir(testDir, "")
+	dir, err := os.MkdirTemp(testDir, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -192,7 +191,7 @@ func TestGetFileContents(t *testing.T) {
 
 	for _, d := range data {
 		// create the file
-		err = ioutil.WriteFile(file, []byte(d.contents), testFileMode)
+		err = os.WriteFile(file, []byte(d.contents), testFileMode)
 		if err != nil {
 			t.Fatal(err)
 		}

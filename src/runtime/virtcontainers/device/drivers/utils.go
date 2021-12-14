@@ -8,7 +8,6 @@ package drivers
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -85,7 +84,7 @@ func readPCIProperty(propertyPath string) (string, error) {
 		buf []byte
 		err error
 	)
-	if buf, err = ioutil.ReadFile(propertyPath); err != nil {
+	if buf, err = os.ReadFile(propertyPath); err != nil {
 		return "", fmt.Errorf("failed to read pci sysfs %v, error:%v", propertyPath, err)
 	}
 	return strings.Split(string(buf), "\n")[0], nil

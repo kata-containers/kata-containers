@@ -9,7 +9,7 @@ import (
 	"crypto/sha512"
 	"encoding/hex"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"path/filepath"
 
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/annotations"
@@ -132,7 +132,7 @@ func (a *Asset) Hash(hashType string) (string, error) {
 	var hash string
 
 	// We read the actual asset content
-	bytes, err := ioutil.ReadFile(a.path)
+	bytes, err := os.ReadFile(a.path)
 	if err != nil {
 		return "", err
 	}

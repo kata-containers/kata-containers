@@ -6,7 +6,7 @@
 package utils
 
 import (
-	"io/ioutil"
+	"os"
 	"path/filepath"
 	"strconv"
 
@@ -32,7 +32,7 @@ func NewProc(pid int) (*Proc, error) {
 // We should try to upstream this but let's keep it until upstream supports it.
 func (p *Proc) Children() ([]*Proc, error) {
 	parent := strconv.Itoa(p.PID)
-	infos, err := ioutil.ReadDir(filepath.Join(procfs.DefaultMountPoint, parent, taskPath))
+	infos, err := os.ReadDir(filepath.Join(procfs.DefaultMountPoint, parent, taskPath))
 	if err != nil {
 		return nil, errors.Wrapf(err, "Fail to read pid %v proc task dir", p.PID)
 	}

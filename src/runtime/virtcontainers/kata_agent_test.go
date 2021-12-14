@@ -9,7 +9,6 @@ import (
 	"bufio"
 	"context"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path"
 	"path/filepath"
@@ -740,7 +739,7 @@ func TestHandlePidNamespace(t *testing.T) {
 func TestAgentConfigure(t *testing.T) {
 	assert := assert.New(t)
 
-	dir, err := ioutil.TempDir("", "kata-agent-test")
+	dir, err := os.MkdirTemp("", "kata-agent-test")
 	assert.Nil(err)
 	defer os.RemoveAll(dir)
 
@@ -856,7 +855,7 @@ func TestAgentCreateContainer(t *testing.T) {
 		},
 	}
 
-	dir, err := ioutil.TempDir("", "kata-agent-test")
+	dir, err := os.MkdirTemp("", "kata-agent-test")
 	assert.Nil(err)
 	defer os.RemoveAll(dir)
 
@@ -937,7 +936,7 @@ func TestKataCopyFile(t *testing.T) {
 	err = k.copyFile(context.Background(), "/abc/xyz/123", "/tmp")
 	assert.Error(err)
 
-	src, err := ioutil.TempFile("", "src")
+	src, err := os.CreateTemp("", "src")
 	assert.NoError(err)
 	defer os.Remove(src.Name())
 
@@ -946,7 +945,7 @@ func TestKataCopyFile(t *testing.T) {
 	assert.NoError(err)
 	assert.NoError(src.Close())
 
-	dst, err := ioutil.TempFile("", "dst")
+	dst, err := os.CreateTemp("", "dst")
 	assert.NoError(err)
 	assert.NoError(dst.Close())
 	defer os.Remove(dst.Name())
@@ -966,7 +965,7 @@ func TestKataCleanupSandbox(t *testing.T) {
 
 	kataHostSharedDirSaved := kataHostSharedDir
 	kataHostSharedDir = func() string {
-		td, _ := ioutil.TempDir("", "kata-Cleanup")
+		td, _ := os.MkdirTemp("", "kata-Cleanup")
 		return td
 	}
 	defer func() {
@@ -1117,13 +1116,13 @@ func TestSandboxBindMount(t *testing.T) {
 
 	assert := assert.New(t)
 	// create temporary files to mount:
-	testMountPath, err := ioutil.TempDir("", "sandbox-test")
+	testMountPath, err := os.MkdirTemp("", "sandbox-test")
 	assert.NoError(err)
 	defer os.RemoveAll(testMountPath)
 
 	// create a new shared directory for our test:
 	kataHostSharedDirSaved := kataHostSharedDir
-	testHostDir, err := ioutil.TempDir("", "kata-Cleanup")
+	testHostDir, err := os.MkdirTemp("", "kata-Cleanup")
 	assert.NoError(err)
 	kataHostSharedDir = func() string {
 		return testHostDir

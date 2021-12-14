@@ -9,7 +9,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -121,7 +120,7 @@ func TestMain(m *testing.M) {
 	}
 	SetLogger(context.Background(), logger)
 
-	testDir, err = ioutil.TempDir("", "vc-tmp-")
+	testDir, err = os.MkdirTemp("", "vc-tmp-")
 	if err != nil {
 		panic(err)
 	}

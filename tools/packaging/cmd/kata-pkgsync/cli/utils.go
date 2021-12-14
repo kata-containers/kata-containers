@@ -7,14 +7,14 @@ package main
 
 import (
 	"fmt"
-	"io/ioutil"
+	"os"
 
 	"github.com/pkg/errors"
 	"gopkg.in/yaml.v2"
 )
 
 func yamlUnmarshal(yamlFile string, cfg interface{}) error {
-	source, err := ioutil.ReadFile(yamlFile)
+	source, err := os.ReadFile(yamlFile)
 	if err != nil {
 		return err
 	}

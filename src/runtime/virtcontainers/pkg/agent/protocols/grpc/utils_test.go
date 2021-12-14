@@ -8,7 +8,7 @@ package grpc
 
 import (
 	"encoding/json"
-	"io/ioutil"
+	"os"
 	"reflect"
 	"testing"
 
@@ -82,7 +82,7 @@ func TestOCItoGRPC(t *testing.T) {
 	assert := assert.New(t)
 	var ociSpec specs.Spec
 
-	configJSONBytes, err := ioutil.ReadFile(ociConfigFile)
+	configJSONBytes, err := os.ReadFile(ociConfigFile)
 	assert.NoError(err, "Could not open OCI config file")
 
 	err = json.Unmarshal(configJSONBytes, &ociSpec)
@@ -97,7 +97,7 @@ func TestProcessOCItoGRPC(t *testing.T) {
 	assert := assert.New(t)
 	var ociSpec specs.Spec
 
-	configJSONBytes, err := ioutil.ReadFile(ociConfigFile)
+	configJSONBytes, err := os.ReadFile(ociConfigFile)
 	assert.NoError(err, "Could not open OCI config file")
 
 	err = json.Unmarshal(configJSONBytes, &ociSpec)
@@ -113,7 +113,7 @@ func TestProcessGRPCtoOCI(t *testing.T) {
 
 	var ociSpec specs.Spec
 
-	configJSONBytes, err := ioutil.ReadFile(ociConfigFile)
+	configJSONBytes, err := os.ReadFile(ociConfigFile)
 	assert.NoError(err, "Could not open OCI config file")
 
 	err = json.Unmarshal(configJSONBytes, &ociSpec)

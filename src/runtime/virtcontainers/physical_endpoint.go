@@ -8,7 +8,6 @@ package virtcontainers
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -185,7 +184,7 @@ func createPhysicalEndpoint(netInfo NetworkInfo) (*PhysicalEndpoint, error) {
 	// Get vendor and device id from pci space (sys/bus/pci/devices/$bdf)
 
 	ifaceDevicePath := filepath.Join(sysPCIDevicesPath, bdf, "device")
-	contents, err := ioutil.ReadFile(ifaceDevicePath)
+	contents, err := os.ReadFile(ifaceDevicePath)
 	if err != nil {
 		return nil, err
 	}
@@ -194,7 +193,7 @@ func createPhysicalEndpoint(netInfo NetworkInfo) (*PhysicalEndpoint, error) {
 
 	// Vendor id
 	ifaceVendorPath := filepath.Join(sysPCIDevicesPath, bdf, "vendor")
-	contents, err = ioutil.ReadFile(ifaceVendorPath)
+	contents, err = os.ReadFile(ifaceVendorPath)
 	if err != nil {
 		return nil, err
 	}
