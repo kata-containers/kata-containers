@@ -61,8 +61,16 @@ func (m *monitor) newWatcher(ctx context.Context) (chan error, error) {
 					m.wg.Done()
 					return
 				case <-tick.C:
-					m.watchHypervisor(ctx)
-					m.watchAgent(ctx)
+					if err := m.watchHypervisor(ctx); err != nil {
+						virtLog.Errorf("Monitor failed watching hypervisor: %s", err)
+						m.wg.Done()
+						return
+					}
+					if err := m.watchAgent(ctx); err != nil {
+						virtLog.Errorf("Monitor failed watching agent: %s", err)
+						m.wg.Done()
+						return
+					}
 				}
 			}
 		}()
@@ -132,18 +140,19 @@ func (m *monitor) stop() {
 	}
 }
 
-func (m *monitor) watchAgent(ctx context.Context) {
-	err := m.sandbox.agent.check(ctx)
+func (m *monitor) watchAgent(ctx context.Context) (err error) {
+	err = m.sandbox.agent.check(ctx)
 	if err != nil {
-		// TODO: define and export error types
-		m.notify(ctx, errors.Wrapf(err, "failed to ping agent"))
+		errors.ErrorContext(&err, "Monitor has failed to watch agent")
+		m.notify(ctx, err)
 	}
+	return
 }
 
-func (m *monitor) watchHypervisor(ctx context.Context) error {
-	if err := m.sandbox.hypervisor.Check(); err != nil {
-		m.notify(ctx, errors.Wrapf(err, "failed to ping hypervisor process"))
-		return err
+func (m *monitor) watchHypervisor(ctx context.Context) (err error) {
+	if err = m.sandbox.hypervisor.Check(); err != nil {
+		errors.ErrorContext(&err, "Monitor has failed to watch hypervisor")
+		m.notify(ctx, err)
 	}
-	return nil
+	return
 }

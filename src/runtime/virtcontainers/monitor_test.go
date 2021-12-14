@@ -8,6 +8,7 @@ package virtcontainers
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -32,7 +33,7 @@ func TestMonitorSuccess(t *testing.T) {
 	fakeErr := errors.New("foobar error")
 	m.notify(context.Background(), fakeErr)
 	resultErr := <-ch
-	assert.True(resultErr == fakeErr, "monitor notification mismatch %v vs. %v", resultErr, fakeErr)
+	assert.True(strings.Contains(resultErr.Error(), fakeErr.Error()), "monitor notification mismatch %v does not contain %v", resultErr, fakeErr)
 
 	m.stop()
 }
