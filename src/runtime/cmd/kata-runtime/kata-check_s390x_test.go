@@ -7,7 +7,6 @@ package main
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
@@ -118,7 +117,7 @@ func TestArchKernelParamHandler(t *testing.T) {
 func TestKvmIsUsable(t *testing.T) {
 	assert := assert.New(t)
 
-	dir, err := ioutil.TempDir("", "")
+	dir, err := os.MkdirTemp("", "")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -9,7 +9,6 @@ package drivers
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -75,7 +74,7 @@ func (device *VFIODevice) Attach(ctx context.Context, devReceiver api.DeviceRece
 	vfioGroup := filepath.Base(device.DeviceInfo.HostPath)
 	iommuDevicesPath := filepath.Join(config.SysIOMMUPath, vfioGroup, "devices")
 
-	deviceFiles, err := ioutil.ReadDir(iommuDevicesPath)
+	deviceFiles, err := os.ReadDir(iommuDevicesPath)
 	if err != nil {
 		return err
 	}

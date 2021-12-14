@@ -8,7 +8,6 @@ package virtcontainers
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path"
 	"path/filepath"
@@ -255,7 +254,7 @@ func writeContainerConfig() (string, error) {
 	}
 }`
 
-	configDir, err := ioutil.TempDir("", "vc-tmp-")
+	configDir, err := os.MkdirTemp("", "vc-tmp-")
 	if err != nil {
 		return "", err
 	}
@@ -266,7 +265,7 @@ func writeContainerConfig() (string, error) {
 	}
 
 	configFilePath := filepath.Join(configDir, "config.json")
-	err = ioutil.WriteFile(configFilePath, []byte(basicSpec), 0644)
+	err = os.WriteFile(configFilePath, []byte(basicSpec), 0644)
 	if err != nil {
 		return "", err
 	}
@@ -512,7 +511,7 @@ func TestContainerStateSetFstype(t *testing.T) {
 }
 
 func TestSandboxAttachDevicesVFIO(t *testing.T) {
-	tmpDir, err := ioutil.TempDir("", "")
+	tmpDir, err := os.MkdirTemp("", "")
 	assert.Nil(t, err)
 	os.RemoveAll(tmpDir)
 
@@ -582,7 +581,7 @@ func TestSandboxAttachDevicesVhostUserBlk(t *testing.T) {
 		rootEnabled = false
 	}
 
-	tmpDir, err := ioutil.TempDir("", "")
+	tmpDir, err := os.MkdirTemp("", "")
 	assert.Nil(t, err)
 	os.RemoveAll(tmpDir)
 	dm := manager.NewDeviceManager(manager.VirtioSCSI, true, tmpDir, nil)
@@ -683,7 +682,7 @@ func TestSandboxCreateAssets(t *testing.T) {
 		annotations map[string]string
 	}
 
-	tmpfile, err := ioutil.TempFile("", "virtcontainers-test-")
+	tmpfile, err := os.CreateTemp("", "virtcontainers-test-")
 	assert.Nil(err)
 
 	filename := tmpfile.Name()

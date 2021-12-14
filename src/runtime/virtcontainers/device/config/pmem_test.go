@@ -6,7 +6,6 @@
 package config
 
 import (
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
@@ -33,7 +32,7 @@ func TestHasPFNSignature(t *testing.T) {
 	b := hasPFNSignature("/abc/xyz/123/sw")
 	assert.False(b)
 
-	f, err := ioutil.TempFile("", "pfn")
+	f, err := os.CreateTemp("", "pfn")
 	assert.NoError(err)
 	f.Close()
 	defer os.Remove(f.Name())

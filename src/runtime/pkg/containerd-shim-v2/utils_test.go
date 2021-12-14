@@ -8,7 +8,6 @@ package containerdshim
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path"
 	"testing"
@@ -60,7 +59,7 @@ func init() {
 }
 
 func createEmptyFile(path string) (err error) {
-	return ioutil.WriteFile(path, []byte(""), testFileMode)
+	return os.WriteFile(path, []byte(""), testFileMode)
 }
 
 // newTestHypervisorConfig creaets a new virtcontainers

@@ -8,7 +8,6 @@ package virtcontainers
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"testing"
 
@@ -97,7 +96,7 @@ func TestQemuArm64AppendImage(t *testing.T) {
 	var devices []govmmQemu.Device
 	assert := assert.New(t)
 
-	f, err := ioutil.TempFile("", "img")
+	f, err := os.CreateTemp("", "img")
 	assert.NoError(err)
 	defer func() { _ = f.Close() }()
 	defer func() { _ = os.Remove(f.Name()) }()
@@ -131,7 +130,7 @@ func TestQemuArm64AppendNvdimmImage(t *testing.T) {
 	var devices []govmmQemu.Device
 	assert := assert.New(t)
 
-	f, err := ioutil.TempFile("", "img")
+	f, err := os.CreateTemp("", "img")
 	assert.NoError(err)
 	defer func() { _ = f.Close() }()
 	defer func() { _ = os.Remove(f.Name()) }()

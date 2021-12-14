@@ -9,7 +9,6 @@ package katautils
 import (
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -99,7 +98,7 @@ func WriteFile(filePath string, data string, fileMode os.FileMode) error {
 		return fmt.Errorf("no such file for %s", filePath)
 	}
 
-	if err := ioutil.WriteFile(filePath, []byte(data), fileMode); err != nil {
+	if err := os.WriteFile(filePath, []byte(data), fileMode); err != nil {
 		return fmt.Errorf("failed to write %v to %v: %v", data, filePath, err)
 	}
 
@@ -108,7 +107,7 @@ func WriteFile(filePath string, data string, fileMode os.FileMode) error {
 
 // GetFileContents return the file contents as a string.
 func GetFileContents(file string) (string, error) {
-	bytes, err := ioutil.ReadFile(file)
+	bytes, err := os.ReadFile(file)
 	if err != nil {
 		return "", err
 	}

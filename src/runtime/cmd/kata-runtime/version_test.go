@@ -7,7 +7,6 @@ package main
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"testing"
 
@@ -38,7 +37,7 @@ func TestVersion(t *testing.T) {
 	fn, ok := versionCLICommand.Action.(func(context *cli.Context) error)
 	assert.True(t, ok)
 
-	tmpfile, err := ioutil.TempFile("", "")
+	tmpfile, err := os.CreateTemp("", "")
 	assert.NoError(t, err)
 	defer os.Remove(tmpfile.Name())
 

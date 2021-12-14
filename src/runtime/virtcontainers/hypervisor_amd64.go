@@ -6,7 +6,6 @@
 package virtcontainers
 
 import "os"
-import "io/ioutil"
 
 // Implementation of this function is architecture specific
 func availableGuestProtection() (guestProtection, error) {
@@ -21,7 +20,7 @@ func availableGuestProtection() (guestProtection, error) {
 	}
 	// SEV is supported and enabled when the kvm module `sev` parameter is set to `1`
 	if _, err := os.Stat(sevKvmParameterPath); err == nil {
-		if c, err := ioutil.ReadFile(sevKvmParameterPath); err == nil && len(c) > 0 && c[0] == '1' {
+		if c, err := os.ReadFile(sevKvmParameterPath); err == nil && len(c) > 0 && c[0] == '1' {
 			return sevProtection, nil
 		}
 	}
