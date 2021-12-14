@@ -22,6 +22,7 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils/katatrace"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/manager"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/errors"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols/grpc"
 	vcAnnotations "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/annotations"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
@@ -29,7 +30,6 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
 
 	specs "github.com/opencontainers/runtime-spec/specs-go"
-	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
 )
@@ -881,6 +881,7 @@ func (c *Container) checkBlockDeviceSupport(ctx context.Context) bool {
 // create creates and starts a container inside a Sandbox. It has to be
 // called only when a new container, not known by the sandbox, has to be created.
 func (c *Container) create(ctx context.Context) (err error) {
+	defer errors.ErrorContext(&err, "Failed to create container")
 	// In case the container creation fails, the following takes care
 	// of rolling back all the actions previously performed.
 	defer func() {
@@ -1122,14 +1123,19 @@ func (c *Container) enter(ctx context.Context, cmd types.Cmd) (*Process, error) 
 	return process, nil
 }
 
-func (c *Container) wait(ctx context.Context, processID string) (int32, error) {
+func (c *Container) wait(ctx context.Context, processID string) (_ int32, err error) {
+	defer errors.ErrorContext(&err, "Container.wait")
 	if c.state.State != types.StateReady &&
 		c.state.State != types.StateRunning {
 		return 0, fmt.Errorf("Container not ready or running, " +
 			"impossible to wait")
 	}
 
-	return c.sandbox.agent.waitProcess(ctx, c, processID)
+	exitCode, err := c.sandbox.agent.waitProcess(ctx, c, processID)
+	if err != nil {
+		return 0, err
+	}
+	return exitCode, nil
 }
 
 func (c *Container) kill(ctx context.Context, signal syscall.Signal, all bool) error {

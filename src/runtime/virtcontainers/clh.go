@@ -22,12 +22,12 @@ import (
 	"github.com/containerd/console"
 	chclient "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/cloud-hypervisor/client"
 	"github.com/opencontainers/selinux/go-selinux/label"
-	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 
 	hv "github.com/kata-containers/kata-containers/src/runtime/pkg/hypervisors"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils/katatrace"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/errors"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	vcTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
@@ -763,16 +763,17 @@ func (clh *cloudHypervisor) Load(s hv.HypervisorState) {
 // Check is the implementation of Check from the Hypervisor interface.
 // Check if the VMM API is working.
 
-func (clh *cloudHypervisor) Check() error {
+func (clh *cloudHypervisor) Check() (err error) {
+	defer errors.ErrorContext(&err, "Failed to check if Cloud Hypervisor is working")
 	// Use a long timeout to check if the VMM is running:
 	// Check is used by the monitor thread(a background thread). If the
 	// monitor thread calls Check() during the Container boot, it will take
 	// longer than usual specially if there is a hot-plug request in progress.
 	running, err := clh.isClhRunning(10)
 	if !running {
-		return fmt.Errorf("clh is not running: %s", err)
+		err = errors.Errorf("clh is not running: %s", err)
 	}
-	return err
+	return
 }
 
 func (clh *cloudHypervisor) GetPids() []int {
@@ -1035,12 +1036,14 @@ func kernelParamsToString(params []Param) string {
 //****************************************
 // API calls
 //****************************************
-func (clh *cloudHypervisor) isClhRunning(timeout uint) (bool, error) {
+func (clh *cloudHypervisor) isClhRunning(timeout uint) (isRunning bool, err error) {
+	defer errors.ErrorContext(&err, "Failed to check if Cloud Hypervisor is running")
+	isRunning = false
 
 	pid := clh.state.PID
 
-	if err := syscall.Kill(pid, syscall.Signal(0)); err != nil {
-		return false, nil
+	if err = syscall.Kill(pid, syscall.Signal(0)); err != nil {
+		return
 	}
 
 	timeStart := time.Now()
@@ -1048,15 +1051,17 @@ func (clh *cloudHypervisor) isClhRunning(timeout uint) (bool, error) {
 	for {
 		ctx, cancel := context.WithTimeout(context.Background(), clhAPITimeout*time.Second)
 		defer cancel()
-		_, _, err := cl.VmmPingGet(ctx)
+		_, _, err = cl.VmmPingGet(ctx)
 		if err == nil {
-			return true, nil
+			isRunning = true
+			return
 		} else {
 			clh.Logger().WithError(err).Warning("clh.VmmPingGet API call failed")
 		}
 
 		if time.Since(timeStart).Seconds() > float64(timeout) {
-			return false, fmt.Errorf("Failed to connect to API (timeout %ds): %s", timeout, openAPIClientError(err))
+			err = errors.Errorf("Failed to connect to API (timeout %ds): %s", timeout, openAPIClientError(err))
+			return
 		}
 
 		time.Sleep(time.Duration(10) * time.Millisecond)

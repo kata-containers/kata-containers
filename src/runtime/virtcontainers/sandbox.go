@@ -22,7 +22,6 @@ import (
 
 	"github.com/containernetworking/plugins/pkg/ns"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
-	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 
@@ -31,6 +30,7 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/drivers"
 	deviceManager "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/manager"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/errors"
 	exp "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/experimental"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist"
 	persistapi "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist/api"
@@ -1244,11 +1244,10 @@ func (s *Sandbox) addContainer(c *Container) error {
 // CreateContainer creates a new container in the sandbox
 // This should be called only when the sandbox is already created.
 // It will add new container config to sandbox.config.Containers
-func (s *Sandbox) CreateContainer(ctx context.Context, contConfig ContainerConfig) (VCContainer, error) {
+func (s *Sandbox) CreateContainer(ctx context.Context, contConfig ContainerConfig) (_ VCContainer, err error) {
+	defer errors.ErrorContext(&err, "Failed to create container in sandbox")
 	// Update sandbox config to include the new container's config
 	s.config.Containers = append(s.config.Containers, contConfig)
-
-	var err error
 
 	defer func() {
 		if err != nil {
@@ -1553,7 +1552,8 @@ func (s *Sandbox) ResumeContainer(ctx context.Context, containerID string) error
 
 // createContainers registers all containers, create the
 // containers in the guest and starts one shim per container.
-func (s *Sandbox) createContainers(ctx context.Context) error {
+func (s *Sandbox) createContainers(ctx context.Context) (err error) {
+	defer errors.ErrorContext(&err, "sandbox.createContainers")
 	span, ctx := katatrace.Trace(ctx, s.Logger(), "createContainers", sandboxTracingTags, map[string]string{"sandbox_id": s.id})
 	defer span.End()
 

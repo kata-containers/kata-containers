@@ -7,7 +7,6 @@ package virtcontainers
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -21,6 +20,7 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/uuid"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/api"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/errors"
 	persistapi "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist/api"
 	pbTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols"
 	kataclient "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols/client"
@@ -1299,6 +1299,7 @@ func (k *kataAgent) buildContainerRootfs(ctx context.Context, sandbox *Sandbox, 
 }
 
 func (k *kataAgent) createContainer(ctx context.Context, sandbox *Sandbox, c *Container) (p *Process, err error) {
+	defer errors.ErrorContext(&err, "Agent failed to create container")
 	span, ctx := katatrace.Trace(ctx, k.Logger(), "createContainer", kataAgentTracingTags)
 	defer span.End()
 
@@ -1323,7 +1324,7 @@ func (k *kataAgent) createContainer(ctx context.Context, sandbox *Sandbox, c *Co
 	// the block device for the rootfs, which us utilized for mounting in the guest. This'll be handled
 	// already for non-block based rootfs
 	if rootfs, err = k.buildContainerRootfs(ctx, sandbox, c, rootPathParent); err != nil {
-		return nil, err
+		return
 	}
 
 	if rootfs != nil {
@@ -1336,7 +1337,8 @@ func (k *kataAgent) createContainer(ctx context.Context, sandbox *Sandbox, c *Co
 
 	ociSpec := c.GetPatchedOCISpec()
 	if ociSpec == nil {
-		return nil, errorMissingOCISpec
+		err = errorMissingOCISpec
+		return
 	}
 
 	// Handle container mounts
@@ -1345,7 +1347,7 @@ func (k *kataAgent) createContainer(ctx context.Context, sandbox *Sandbox, c *Co
 
 	shareStorages, err := c.mountSharedDirMounts(ctx, sharedDirMounts, ignoredMounts)
 	if err != nil {
-		return nil, err
+		return
 	}
 	ctrStorages = append(ctrStorages, shareStorages...)
 
@@ -1353,14 +1355,14 @@ func (k *kataAgent) createContainer(ctx context.Context, sandbox *Sandbox, c *Co
 
 	epheStorages, err := k.handleEphemeralStorage(ociSpec.Mounts)
 	if err != nil {
-		return nil, err
+		return
 	}
 
 	ctrStorages = append(ctrStorages, epheStorages...)
 
 	localStorages, err := k.handleLocalStorage(ociSpec.Mounts, sandbox.id, c.rootfsSuffix)
 	if err != nil {
-		return nil, err
+		return
 	}
 
 	ctrStorages = append(ctrStorages, localStorages...)
@@ -1368,12 +1370,12 @@ func (k *kataAgent) createContainer(ctx context.Context, sandbox *Sandbox, c *Co
 	// We replace all OCI mount sources that match our container mount
 	// with the right source path (The guest one).
 	if err = k.replaceOCIMountSource(ociSpec, sharedDirMounts); err != nil {
-		return nil, err
+		return
 	}
 
 	// Remove all mounts that should be ignored from the spec
 	if err = k.removeIgnoredOCIMount(ociSpec, ignoredMounts); err != nil {
-		return nil, err
+		return
 	}
 
 	// Append container devices for block devices passed with --device.
@@ -1385,18 +1387,18 @@ func (k *kataAgent) createContainer(ctx context.Context, sandbox *Sandbox, c *Co
 	// after devices passed with --device are handled.
 	volumeStorages, err := k.handleBlockVolumes(c)
 	if err != nil {
-		return nil, err
+		return
 	}
 
-	if err := k.replaceOCIMountsForStorages(ociSpec, volumeStorages); err != nil {
-		return nil, err
+	if err = k.replaceOCIMountsForStorages(ociSpec, volumeStorages); err != nil {
+		return
 	}
 
 	ctrStorages = append(ctrStorages, volumeStorages...)
 
 	grpcSpec, err := grpc.OCItoGRPC(ociSpec)
 	if err != nil {
-		return nil, err
+		return
 	}
 
 	// We need to give the OCI spec our absolute rootfs path in the guest.
@@ -1405,7 +1407,8 @@ func (k *kataAgent) createContainer(ctx context.Context, sandbox *Sandbox, c *Co
 	sharedPidNs := k.handlePidNamespace(grpcSpec, sandbox)
 
 	if !sandbox.config.DisableGuestSeccomp && !sandbox.seccompSupported {
-		return nil, fmt.Errorf("Seccomp profiles are passed to the virtual machine, but the Kata agent does not support seccomp")
+		err = errors.Errorf("Seccomp profiles are passed to the virtual machine, but the Kata agent does not support seccomp")
+		return
 	}
 
 	passSeccomp := !sandbox.config.DisableGuestSeccomp && sandbox.seccompSupported
@@ -1424,10 +1427,11 @@ func (k *kataAgent) createContainer(ctx context.Context, sandbox *Sandbox, c *Co
 	}
 
 	if _, err = k.sendReq(ctx, req); err != nil {
-		return nil, err
+		return
 	}
 
-	return buildProcessFromExecID(req.ExecId)
+	p, err = buildProcessFromExecID(req.ExecId)
+	return
 }
 
 func buildProcessFromExecID(token string) (*Process, error) {
@@ -1815,7 +1819,8 @@ func (k *kataAgent) statsContainer(ctx context.Context, sandbox *Sandbox, c Cont
 	return containerStats, nil
 }
 
-func (k *kataAgent) connect(ctx context.Context) error {
+func (k *kataAgent) connect(ctx context.Context) (err error) {
+	defer errors.ErrorContext(&err, "Failed to connect to agent")
 	if k.dead {
 		return errors.New("Dead agent")
 	}
@@ -1877,7 +1882,8 @@ func (k *kataAgent) check(ctx context.Context) error {
 	return err
 }
 
-func (k *kataAgent) waitProcess(ctx context.Context, c *Container, processID string) (int32, error) {
+func (k *kataAgent) waitProcess(ctx context.Context, c *Container, processID string) (res int32, err error) {
+	defer errors.ErrorContext(&err, "Failed to wait for process from agent")
 	span, ctx := katatrace.Trace(ctx, k.Logger(), "waitProcess", kataAgentTracingTags)
 	defer span.End()
 
@@ -1889,7 +1895,8 @@ func (k *kataAgent) waitProcess(ctx context.Context, c *Container, processID str
 		return 0, err
 	}
 
-	return resp.(*grpc.WaitProcessResponse).Status, nil
+	res = resp.(*grpc.WaitProcessResponse).Status
+	return
 }
 
 func (k *kataAgent) writeProcessStdin(ctx context.Context, c *Container, ProcessID string, data []byte) (int, error) {
@@ -2033,17 +2040,18 @@ func (k *kataAgent) getReqContext(ctx context.Context, reqName string) (newCtx c
 	return newCtx, cancel
 }
 
-func (k *kataAgent) sendReq(spanCtx context.Context, request interface{}) (interface{}, error) {
+func (k *kataAgent) sendReq(spanCtx context.Context, request interface{}) (resp interface{}, err error) {
+	msgName := proto.MessageName(request.(proto.Message))
+	defer errors.ErrorContext(&err, "Failed to send request "+msgName)
+
 	start := time.Now()
 
-	if err := k.connect(spanCtx); err != nil {
-		return nil, err
+	if err = k.connect(spanCtx); err != nil {
+		return
 	}
 	if !k.keepConn {
 		defer k.disconnect(spanCtx)
 	}
-
-	msgName := proto.MessageName(request.(proto.Message))
 
 	k.Lock()
 
@@ -2052,11 +2060,18 @@ func (k *kataAgent) sendReq(spanCtx context.Context, request interface{}) (inter
 	}
 
 	handler := k.reqHandlers[msgName]
-	if msgName == "" || handler == nil {
-		return nil, errors.New("Invalid request type")
+
+	if handler == nil {
+		err = errors.Errorf("No handler for request: %s", msgName)
+		return
 	}
 
 	k.Unlock()
+
+	if msgName == "" {
+		err = errors.Errorf("Invalid request type msgName is empty")
+		return
+	}
 
 	message := request.(proto.Message)
 	ctx, cancel := k.getReqContext(spanCtx, msgName)
@@ -2068,7 +2083,8 @@ func (k *kataAgent) sendReq(spanCtx context.Context, request interface{}) (inter
 	defer func() {
 		agentRPCDurationsHistogram.WithLabelValues(msgName).Observe(float64(time.Since(start).Nanoseconds() / int64(time.Millisecond)))
 	}()
-	return handler(ctx, request)
+	resp, err = handler(ctx, request)
+	return
 }
 
 // readStdout and readStderr are special that we cannot differentiate them with the request types...

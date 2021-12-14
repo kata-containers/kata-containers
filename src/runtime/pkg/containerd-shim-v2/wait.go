@@ -22,7 +22,7 @@ import (
 
 const defaultCheckInterval = 1 * time.Second
 
-func wait(ctx context.Context, s *service, c *container, execID string) (int32, error) {
+func wait(ctx context.Context, s *service, c *container, execID string) {
 	var execs *exec
 	var err error
 
@@ -34,7 +34,7 @@ func wait(ctx context.Context, s *service, c *container, execID string) (int32, 
 	} else {
 		execs, err = c.getExec(execID)
 		if err != nil {
-			return exitCode255, err
+			return
 		}
 		<-execs.exitIOch
 		//This wait could be triggered before exec start which
@@ -97,8 +97,6 @@ func wait(ctx context.Context, s *service, c *container, execID string) (int32, 
 	s.mu.Unlock()
 
 	go cReap(s, int(ret), c.id, execID, timeStamp)
-
-	return ret, nil
 }
 
 func watchSandbox(ctx context.Context, s *service) {
