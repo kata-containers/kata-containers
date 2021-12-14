@@ -1219,7 +1219,7 @@ func (blkdev BlockDevice) QemuParams(config *Config) []string {
 	blkParams = append(blkParams, fmt.Sprintf("if=%s", blkdev.Interface))
 
 	if blkdev.ReadOnly {
-		blkParams = append(blkParams, "readonly")
+		blkParams = append(blkParams, "readonly=on")
 	}
 
 	qemuParams = append(qemuParams, "-device")
