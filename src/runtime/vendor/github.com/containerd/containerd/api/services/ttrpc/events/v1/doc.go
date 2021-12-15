@@ -14,5 +14,5 @@
    limitations under the License.
 */
 
-// Package events defines the event pushing and subscription service.
+// Package events defines the ttrpc event service.
 package events

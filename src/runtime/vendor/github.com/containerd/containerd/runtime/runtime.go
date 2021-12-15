@@ -46,7 +46,8 @@ type CreateOpts struct {
 	RuntimeOptions *types.Any
 	// TaskOptions received for the task
 	TaskOptions *types.Any
-	// Runtime to use
+	// Runtime name to use (e.g. `io.containerd.NAME.VERSION`).
+	// As an alternative full abs path to binary may be specified instead.
 	Runtime string
 }
 
@@ -69,8 +70,6 @@ type PlatformRuntime interface {
 	// Tasks returns all the current tasks for the runtime.
 	// Any container runs at most one task at a time.
 	Tasks(ctx context.Context, all bool) ([]Task, error)
-	// Add adds a task into runtime.
-	Add(ctx context.Context, task Task) error
 	// Delete remove a task.
-	Delete(ctx context.Context, taskID string)
+	Delete(ctx context.Context, taskID string) (*Exit, error)
 }
