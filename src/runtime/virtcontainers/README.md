@@ -135,7 +135,7 @@ There are three drawbacks about using CNM instead of CNI:
 
 # Storage
 
-See [Kata Containers Architecture](../../../docs/design/architecture.md#storage).
+See [Kata Containers Architecture](../../../docs/design/architecture/README.md#storage).
 
 # Devices
 

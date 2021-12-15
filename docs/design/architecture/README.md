@@ -9,8 +9,8 @@ stronger [workload](#workload) isolation using hardware
 [virtualization](#virtualization) technology as a second layer of
 defence.
 
-Kata Containers runs on [multiple architectures](../../src/runtime/README.md#platform-support)
-and supports [multiple hypervisors](../hypervisors.md).
+Kata Containers runs on [multiple architectures](../../../src/runtime/README.md#platform-support)
+and supports [multiple hypervisors](../../hypervisors.md).
 
 This document is a summary of the Kata Containers architecture.
 
@@ -19,11 +19,11 @@ This document is a summary of the Kata Containers architecture.
 For details on how Kata Containers maps container concepts to VM
 technologies, and how this is realized in the multiple hypervisors and
 VMMs that Kata supports see the
-[virtualization documentation](./virtualization.md).
+[virtualization documentation](../virtualization.md).
 
 ## Compatibility
 
-The [Kata Containers runtime](../../src/runtime) is compatible with
+The [Kata Containers runtime](../../../src/runtime) is compatible with
 the [OCI](https://github.com/opencontainers)
 [runtime specification](https://github.com/opencontainers/runtime-spec)
 and therefore works seamlessly with the
@@ -104,7 +104,7 @@ available.
 The diagram below shows how the original architecture was simplified
 with the advent of shimv2.
 
-![Kubernetes integration with shimv2](arch-images/shimv2.svg)
+![Kubernetes integration with shimv2](../arch-images/shimv2.svg)
 
 ## Root filesystem
 
@@ -370,14 +370,14 @@ runtime cleans up the environment (which includes terminating the
 
 > **Note:**
 >
-> When [agent tracing is enabled](../tracing.md#agent-shutdown-behaviour),
+> When [agent tracing is enabled](../../tracing.md#agent-shutdown-behaviour),
 > the shutdown behaviour is different.
 
 #### Container manager requested shutdown
 
 If the container manager requests the container be deleted, the
 [runtime](#runtime) will signal the agent by sending it a
-`DestroySandbox` [ttRPC API](../../src/agent/protocols/protos/agent.proto) request.
+`DestroySandbox` [ttRPC API](../../../src/agent/protocols/protos/agent.proto) request.
 
 ## Guest assets
 
@@ -388,7 +388,7 @@ small root filesystem image to boot the VM.
 
 ### Guest kernel
 
-The [guest kernel](../../tools/packaging/kernel)
+The [guest kernel](../../../tools/packaging/kernel)
 is passed to the hypervisor and used to boot the VM.
 The default kernel provided in Kata Containers is highly optimized for
 kernel boot time and minimal memory footprint, providing only those
@@ -400,9 +400,9 @@ Linux LTS (Long Term Support) [kernel](https://www.kernel.org).
 The hypervisor uses an image file which provides a minimal root
 filesystem used by the guest kernel to boot the VM and host the Kata
 Container. Kata Containers supports both initrd and rootfs based
-minimal guest images. The [default packages](../install/) provide both
+minimal guest images. The [default packages](../../install/) provide both
 an image and an initrd, both of which are created using the
-[`osbuilder`](../../tools/osbuilder) tool.
+[`osbuilder`](../../../tools/osbuilder) tool.
 
 > **Notes:**
 >
@@ -419,12 +419,12 @@ an image and an initrd, both of which are created using the
 >   Fedora or any other distribution potentially.
 >
 >   The `osbuilder` tool provides
->   [configurations for various common Linux distributions](../../tools/osbuilder/rootfs-builder)
+>   [configurations for various common Linux distributions](../../../tools/osbuilder/rootfs-builder)
 >   which can be built into either initrd or rootfs guest images.
 >
 > - If you are using a [packaged version of Kata
->   Containers](../install), you can see image details by running the
->   [`kata-collect-data.sh`](../../src/runtime/data/kata-collect-data.sh.in)
+>   Containers](../../install), you can see image details by running the
+>   [`kata-collect-data.sh`](../../../src/runtime/data/kata-collect-data.sh.in)
 >   script as `root` and looking at the "Image details" section of the
 >   output.
 
@@ -468,7 +468,7 @@ See also the [process overview](#process-overview).
 > - The container workload is running inside a full container
 >   environment which itself is running within a VM environment.
 >
-> - See the [configuration files for the `osbuilder` tool](../../tools/osbuilder/rootfs-builder)
+> - See the [configuration files for the `osbuilder` tool](../../../tools/osbuilder/rootfs-builder)
 >   for details of the default distribution for platforms other than
 >   Intel x86_64.
 
@@ -520,18 +520,18 @@ See also the [process overview](#process-overview).
 
 See also:
 
-- The [osbuilder](../../tools/osbuilder) tool
+- The [osbuilder](../../../tools/osbuilder) tool
 
   This is used to build all default image types.
 
-- The [versions database](../../versions.yaml)
+- The [versions database](../../../versions.yaml)
 
   The `default-image-name` and `default-initrd-name` options specify
   the default distributions for each image type.
 
 ## Hypervisor
 
-The [hypervisor](../hypervisors.md) specified in the
+The [hypervisor](../../hypervisors.md) specified in the
 [configuration file](#configuration) creates a VM to host the
 [agent](#agent) and the [workload](#workload) inside the
 [container environment](#environments).
@@ -548,7 +548,7 @@ The [hypervisor](../hypervisors.md) specified in the
 
 ## Agent
 
-The Kata Containers agent ([`kata-agent`](../../src/agent)), written
+The Kata Containers agent ([`kata-agent`](../../../src/agent)), written
 in the [Rust programming language](https://www.rust-lang.org), is a
 long running process that runs inside the VM. It acts as the
 supervisor for managing the containers and the [workload](#workload)
@@ -560,7 +560,7 @@ for each VM created.
 The agent communicates with the other Kata components (primarily the
 [runtime](#runtime)) using a
 [`ttRPC`](https://github.com/containerd/ttrpc-rust) based
-[protocol](../../src/agent/protocols/protos).
+[protocol](../../../src/agent/protocols/protos).
 
 > **Note:**
 >
@@ -572,7 +572,7 @@ The agent communicates with the other Kata components (primarily the
 
 ## Runtime
 
-The Kata Containers runtime (the [`containerd-shim-kata-v2`](../../src/runtime/cmd/containerd-shim-kata-v2
+The Kata Containers runtime (the [`containerd-shim-kata-v2`](../../../src/runtime/cmd/containerd-shim-kata-v2
 ) binary) is a [shimv2](#shim-v2-architecture) compatible runtime.
 
 > **Note:**
@@ -583,7 +583,7 @@ The Kata Containers runtime (the [`containerd-shim-kata-v2`](../../src/runtime/c
 > shim v2 API.
 
 The runtime makes heavy use of the [`virtcontainers`
-package](../../src/runtime/virtcontainers), which provides a generic,
+package](../../../src/runtime/virtcontainers), which provides a generic,
 runtime-specification agnostic, hardware-virtualized containers
 library.
 
@@ -616,13 +616,13 @@ The `exec` command allows an administrator or developer to enter the
 [VM root environment](#environments) which is not accessible by the container
 [workload](#workload).
 
-See [the developer guide](../Developer-Guide.md#connect-to-debug-console) for further details.
+See [the developer guide](../../Developer-Guide.md#connect-to-debug-console) for further details.
 
 ### Configuration
 
-See the [configuration file details](../../src/runtime/README.md#configuration).
+See the [configuration file details](../../../src/runtime/README.md#configuration).
 
-The configuration file is also used to enable runtime [debug output](../Developer-Guide.md#enable-full-debug).
+The configuration file is also used to enable runtime [debug output](../../Developer-Guide.md#enable-full-debug).
 
 ## Process overview
 
@@ -656,7 +656,7 @@ To overcome incompatibility between typical container engines expectations
 and virtual machines, Kata Containers networking transparently connects `veth`
 interfaces with `TAP` ones using Traffic Control:
 
-![Kata Containers networking](arch-images/network.png)
+![Kata Containers networking](../arch-images/network.png)
 
 With a TC filter in place, a redirection is created between the container network and the
 virtual machine. As an example, the CNI may create a device, `eth0`, in the container's network
@@ -681,7 +681,7 @@ remove a guest network endpoint and to manipulate the guest route table.
 
 The following diagram illustrates the Kata Containers network hotplug workflow.
 
-![Network Hotplug](arch-images/kata-containers-network-hotplug.png)
+![Network Hotplug](../arch-images/kata-containers-network-hotplug.png)
 
 ## Storage
 
@@ -761,8 +761,8 @@ Kata Containers is an officially supported CRI-O and containerd
 runtime. Refer to the following guides on how to set up Kata
 Containers with Kubernetes:
 
-- [How to use Kata Containers and containerd](../how-to/containerd-kata.md)
-- [Run Kata Containers with Kubernetes](../how-to/run-kata-with-k8s.md)
+- [How to use Kata Containers and containerd](../../how-to/containerd-kata.md)
+- [Run Kata Containers with Kubernetes](../../how-to/run-kata-with-k8s.md)
 
 ####  OCI annotations
 
@@ -792,11 +792,11 @@ with a Kubernetes pod:
 With `RuntimeClass`, users can define Kata Containers as a
 `RuntimeClass` and then explicitly specify that a pod must be created
 as a Kata Containers pod. For details, please refer to [How to use
-Kata Containers and containerd](../../docs/how-to/containerd-kata.md).
+Kata Containers and containerd](../../../docs/how-to/containerd-kata.md).
 
 ## Tracing
 
-The [tracing document](../tracing.md) provides details on the tracing
+The [tracing document](../../tracing.md) provides details on the tracing
 architecture.
 
 # Appendices
@@ -846,19 +846,19 @@ more traditional VM file and device mapping mechanisms:
 - Utilizing `mmap(2)`'s `MAP_SHARED` shared memory option on the host
   allows the host to efficiently share pages.
 
-![DAX](arch-images/DAX.png)
+![DAX](../arch-images/DAX.png)
 
 For further details of the use of NVDIMM with QEMU, see the [QEMU
 project documentation](https://www.qemu.org).
 
 ## Agent control tool
 
-The [agent control tool](../../src/tools/agent-ctl) is a test and
+The [agent control tool](../../../src/tools/agent-ctl) is a test and
 development tool that can be used to learn more about a Kata
 Containers system.
 
 ## Terminology
 
-See the [project glossary](../../Glossary.md).
+See the [project glossary](../../../Glossary.md).
 
-[debug-console]: ../Developer-Guide.md#connect-to-debug-console
+[debug-console]: ../../Developer-Guide.md#connect-to-debug-console

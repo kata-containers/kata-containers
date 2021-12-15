@@ -6,14 +6,14 @@ The Kata agent is a long running process that runs inside the Virtual Machine
 (VM) (also known as the "pod" or "sandbox").
 
 The agent is packaged inside the Kata Containers
-[guest image](../../docs/design/architecture.md#guest-image)
+[guest image](../../docs/design/architecture/README.md#guest-image)
 which is used to boot the VM. Once the runtime has launched the configured
 [hypervisor](../../docs/hypervisors.md) to create a new VM, the agent is
 started. From this point on, the agent is responsible for creating and
 managing the life cycle of the containers inside the VM.
 
 For further details, see the
-[architecture document](../../docs/design/architecture.md).
+[architecture document](../../docs/design/architecture).
 
 ## Audience
 
