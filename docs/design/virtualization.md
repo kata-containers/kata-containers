@@ -41,7 +41,7 @@ Kata Containers with QEMU has complete compatibility with Kubernetes.
 Depending on the host architecture, Kata Containers supports various machine types,
 for example `pc` and `q35` on x86 systems, `virt` on ARM systems and `pseries` on IBM Power systems. The default Kata Containers
 machine type is `pc`. The machine type and its [`Machine accelerators`](#machine-accelerators) can
-be changed by editing the runtime [`configuration`](./architecture.md/#configuration) file.
+be changed by editing the runtime [`configuration`](architecture/README.md#configuration) file.
 
 Devices and features used:
 - virtio VSOCK or virtio serial

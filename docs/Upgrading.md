@@ -114,7 +114,7 @@ with containerd.
 > kernel or image.
 
 If you are using custom
-[guest assets](design/architecture.md#guest-assets),
+[guest assets](design/architecture/README.md#guest-assets),
 you must upgrade them to work with Kata Containers 2.x since Kata
 Containers 1.x assets will **not** work.
 

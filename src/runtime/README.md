@@ -70,7 +70,7 @@ See the
 
 ## Architecture overview
 
-See the [architecture overview](../../docs/design/architecture.md)
+See the [architecture overview](../../docs/design/architecture)
 for details on the Kata Containers design.
 
 ## Configuration
