@@ -9,7 +9,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -748,7 +747,7 @@ func (k *kataAgent) getDNS(sandbox *Sandbox) ([]string, error) {
 
 	for _, m := range ociMounts {
 		if m.Destination == GuestDNSFile {
-			content, err := ioutil.ReadFile(m.Source)
+			content, err := os.ReadFile(m.Source)
 			if err != nil {
 				return nil, fmt.Errorf("Could not read file %s: %s", m.Source, err)
 			}
@@ -2127,7 +2126,7 @@ func (k *kataAgent) copyFile(ctx context.Context, src, dst string) error {
 		return fmt.Errorf("Could not get file %s information: %v", src, err)
 	}
 
-	b, err := ioutil.ReadFile(src)
+	b, err := os.ReadFile(src)
 	if err != nil {
 		return fmt.Errorf("Could not read file %s: %v", src, err)
 	}

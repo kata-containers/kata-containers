@@ -9,7 +9,6 @@ package katautils
 import (
 	"bytes"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path"
 	"path/filepath"
@@ -49,7 +48,7 @@ type testRuntimeConfig struct {
 
 func createConfig(configPath string, fileData string) error {
 
-	err := ioutil.WriteFile(configPath, []byte(fileData), testFileMode)
+	err := os.WriteFile(configPath, []byte(fileData), testFileMode)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Unable to create config file %s %v\n", configPath, err)
 		return err
@@ -280,7 +279,7 @@ func testLoadConfiguration(t *testing.T, dir string,
 }
 
 func TestConfigLoadConfiguration(t *testing.T) {
-	tmpdir, err := ioutil.TempDir(testDir, "load-config-")
+	tmpdir, err := os.MkdirTemp(testDir, "load-config-")
 	assert.NoError(t, err)
 	defer os.RemoveAll(tmpdir)
 
@@ -288,7 +287,7 @@ func TestConfigLoadConfiguration(t *testing.T) {
 }
 
 func TestConfigLoadConfigurationFailBrokenSymLink(t *testing.T) {
-	tmpdir, err := ioutil.TempDir(testDir, "runtime-config-")
+	tmpdir, err := os.MkdirTemp(testDir, "runtime-config-")
 	assert.NoError(t, err)
 	defer os.RemoveAll(tmpdir)
 
@@ -311,7 +310,7 @@ func TestConfigLoadConfigurationFailBrokenSymLink(t *testing.T) {
 }
 
 func TestConfigLoadConfigurationFailSymLinkLoop(t *testing.T) {
-	tmpdir, err := ioutil.TempDir(testDir, "runtime-config-")
+	tmpdir, err := os.MkdirTemp(testDir, "runtime-config-")
 	assert.NoError(t, err)
 	defer os.RemoveAll(tmpdir)
 
@@ -340,7 +339,7 @@ func TestConfigLoadConfigurationFailSymLinkLoop(t *testing.T) {
 }
 
 func TestConfigLoadConfigurationFailMissingHypervisor(t *testing.T) {
-	tmpdir, err := ioutil.TempDir(testDir, "runtime-config-")
+	tmpdir, err := os.MkdirTemp(testDir, "runtime-config-")
 	assert.NoError(t, err)
 	defer os.RemoveAll(tmpdir)
 
@@ -358,7 +357,7 @@ func TestConfigLoadConfigurationFailMissingHypervisor(t *testing.T) {
 }
 
 func TestConfigLoadConfigurationFailMissingImage(t *testing.T) {
-	tmpdir, err := ioutil.TempDir(testDir, "runtime-config-")
+	tmpdir, err := os.MkdirTemp(testDir, "runtime-config-")
 	assert.NoError(t, err)
 	defer os.RemoveAll(tmpdir)
 
@@ -376,7 +375,7 @@ func TestConfigLoadConfigurationFailMissingImage(t *testing.T) {
 }
 
 func TestConfigLoadConfigurationFailMissingKernel(t *testing.T) {
-	tmpdir, err := ioutil.TempDir(testDir, "runtime-config-")
+	tmpdir, err := os.MkdirTemp(testDir, "runtime-config-")
 	assert.NoError(t, err)
 	defer os.RemoveAll(tmpdir)
 
@@ -398,7 +397,7 @@ func TestConfigLoadConfigurationFailUnreadableConfig(t *testing.T) {
 		t.Skip(ktu.TestDisabledNeedNonRoot)
 	}
 
-	tmpdir, err := ioutil.TempDir(testDir, "runtime-config-")
+	tmpdir, err := os.MkdirTemp(testDir, "runtime-config-")
 	assert.NoError(t, err)
 	defer os.RemoveAll(tmpdir)
 
@@ -421,7 +420,7 @@ func TestConfigLoadConfigurationFailTOMLConfigFileInvalidContents(t *testing.T) 
 		t.Skip(ktu.TestDisabledNeedNonRoot)
 	}
 
-	tmpdir, err := ioutil.TempDir(testDir, "runtime-config-")
+	tmpdir, err := os.MkdirTemp(testDir, "runtime-config-")
 	assert.NoError(t, err)
 	defer os.RemoveAll(tmpdir)
 
@@ -447,7 +446,7 @@ func TestConfigLoadConfigurationFailTOMLConfigFileDuplicatedData(t *testing.T) {
 		t.Skip(ktu.TestDisabledNeedNonRoot)
 	}
 
-	tmpdir, err := ioutil.TempDir(testDir, "runtime-config-")
+	tmpdir, err := os.MkdirTemp(testDir, "runtime-config-")
 	assert.NoError(t, err)
 	defer os.RemoveAll(tmpdir)
 
@@ -472,7 +471,7 @@ func TestConfigLoadConfigurationFailTOMLConfigFileDuplicatedData(t *testing.T) {
 }
 
 func TestMinimalRuntimeConfig(t *testing.T) {
-	dir, err := ioutil.TempDir(testDir, "minimal-runtime-config-")
+	dir, err := os.MkdirTemp(testDir, "minimal-runtime-config-")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -602,7 +601,7 @@ func TestMinimalRuntimeConfig(t *testing.T) {
 }
 
 func TestNewQemuHypervisorConfig(t *testing.T) {
-	dir, err := ioutil.TempDir(testDir, "hypervisor-config-")
+	dir, err := os.MkdirTemp(testDir, "hypervisor-config-")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -699,7 +698,7 @@ func TestNewQemuHypervisorConfig(t *testing.T) {
 }
 
 func TestNewFirecrackerHypervisorConfig(t *testing.T) {
-	dir, err := ioutil.TempDir(testDir, "hypervisor-config-")
+	dir, err := os.MkdirTemp(testDir, "hypervisor-config-")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -794,7 +793,7 @@ func TestNewFirecrackerHypervisorConfig(t *testing.T) {
 func TestNewQemuHypervisorConfigImageAndInitrd(t *testing.T) {
 	assert := assert.New(t)
 
-	tmpdir, err := ioutil.TempDir(testDir, "")
+	tmpdir, err := os.MkdirTemp(testDir, "")
 	assert.NoError(err)
 	defer os.RemoveAll(tmpdir)
 
@@ -836,7 +835,7 @@ func TestNewClhHypervisorConfig(t *testing.T) {
 
 	assert := assert.New(t)
 
-	tmpdir, err := ioutil.TempDir(testDir, "")
+	tmpdir, err := os.MkdirTemp(testDir, "")
 	assert.NoError(err)
 	defer os.RemoveAll(tmpdir)
 
@@ -931,7 +930,7 @@ func TestHypervisorDefaults(t *testing.T) {
 func TestHypervisorDefaultsHypervisor(t *testing.T) {
 	assert := assert.New(t)
 
-	tmpdir, err := ioutil.TempDir(testDir, "")
+	tmpdir, err := os.MkdirTemp(testDir, "")
 	assert.NoError(err)
 	defer os.RemoveAll(tmpdir)
 
@@ -967,7 +966,7 @@ func TestHypervisorDefaultsHypervisor(t *testing.T) {
 func TestHypervisorDefaultsKernel(t *testing.T) {
 	assert := assert.New(t)
 
-	tmpdir, err := ioutil.TempDir(testDir, "")
+	tmpdir, err := os.MkdirTemp(testDir, "")
 	assert.NoError(err)
 	defer os.RemoveAll(tmpdir)
 
@@ -1010,7 +1009,7 @@ func TestHypervisorDefaultsKernel(t *testing.T) {
 func TestHypervisorDefaultsInitrd(t *testing.T) {
 	assert := assert.New(t)
 
-	tmpdir, err := ioutil.TempDir(testDir, "")
+	tmpdir, err := os.MkdirTemp(testDir, "")
 	assert.NoError(err)
 	defer os.RemoveAll(tmpdir)
 
@@ -1047,7 +1046,7 @@ func TestHypervisorDefaultsInitrd(t *testing.T) {
 func TestHypervisorDefaultsImage(t *testing.T) {
 	assert := assert.New(t)
 
-	tmpdir, err := ioutil.TempDir(testDir, "")
+	tmpdir, err := os.MkdirTemp(testDir, "")
 	assert.NoError(err)
 	defer os.RemoveAll(tmpdir)
 
@@ -1142,7 +1141,7 @@ func TestGetDefaultConfigFilePaths(t *testing.T) {
 func TestGetDefaultConfigFile(t *testing.T) {
 	assert := assert.New(t)
 
-	tmpdir, err := ioutil.TempDir(testDir, "")
+	tmpdir, err := os.MkdirTemp(testDir, "")
 	assert.NoError(err)
 	defer os.RemoveAll(tmpdir)
 
@@ -1232,7 +1231,7 @@ func TestDefaultFirmware(t *testing.T) {
 	// save default firmware path
 	oldDefaultFirmwarePath := defaultFirmwarePath
 
-	f, err := ioutil.TempFile(os.TempDir(), "qboot.bin")
+	f, err := os.CreateTemp(os.TempDir(), "qboot.bin")
 	assert.NoError(err)
 	assert.NoError(f.Close())
 	defer os.RemoveAll(f.Name())
@@ -1420,7 +1419,7 @@ func TestUpdateRuntimeConfigurationInvalidKernelParams(t *testing.T) {
 func TestCheckHypervisorConfig(t *testing.T) {
 	assert := assert.New(t)
 
-	dir, err := ioutil.TempDir(testDir, "")
+	dir, err := os.MkdirTemp(testDir, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1583,11 +1582,11 @@ func TestCheckFactoryConfig(t *testing.T) {
 func TestValidateBindMounts(t *testing.T) {
 	assert := assert.New(t)
 
-	tmpdir1, err := ioutil.TempDir(testDir, "tmp1-")
+	tmpdir1, err := os.MkdirTemp(testDir, "tmp1-")
 	assert.NoError(err)
 	defer os.RemoveAll(tmpdir1)
 
-	tmpdir2, err := ioutil.TempDir(testDir, "tmp2-")
+	tmpdir2, err := os.MkdirTemp(testDir, "tmp2-")
 	assert.NoError(err)
 	defer os.RemoveAll(tmpdir2)
 
@@ -1595,13 +1594,13 @@ func TestValidateBindMounts(t *testing.T) {
 	duplicate2 := filepath.Join(tmpdir2, "cat.txt")
 	unique := filepath.Join(tmpdir1, "foobar.txt")
 
-	err = ioutil.WriteFile(duplicate1, []byte("kibble-monster"), 0644)
+	err = os.WriteFile(duplicate1, []byte("kibble-monster"), 0644)
 	assert.NoError(err)
 
-	err = ioutil.WriteFile(duplicate2, []byte("furbag"), 0644)
+	err = os.WriteFile(duplicate2, []byte("furbag"), 0644)
 	assert.NoError(err)
 
-	err = ioutil.WriteFile(unique, []byte("fuzzball"), 0644)
+	err = os.WriteFile(unique, []byte("fuzzball"), 0644)
 	assert.NoError(err)
 
 	type testData struct {

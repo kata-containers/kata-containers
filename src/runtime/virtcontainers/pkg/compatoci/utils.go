@@ -8,7 +8,7 @@ package compatoci
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"path/filepath"
 
 	specs "github.com/opencontainers/runtime-spec/specs-go"
@@ -126,7 +126,7 @@ func ParseConfigJSON(bundlePath string) (specs.Spec, error) {
 	configPath := getConfigPath(bundlePath)
 	ociLog.Debugf("converting %s", configPath)
 
-	configByte, err := ioutil.ReadFile(configPath)
+	configByte, err := os.ReadFile(configPath)
 	if err != nil {
 		return specs.Spec{}, err
 	}

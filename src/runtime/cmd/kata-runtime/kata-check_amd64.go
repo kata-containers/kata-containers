@@ -7,7 +7,7 @@ package main
 
 import (
 	"fmt"
-	"io/ioutil"
+	"os"
 	"strings"
 	"syscall"
 	"unsafe"
@@ -212,7 +212,7 @@ func setCPUtype(hypervisorType vc.HypervisorType) error {
 }
 
 func getCPUtype() int {
-	content, err := ioutil.ReadFile("/proc/cpuinfo")
+	content, err := os.ReadFile("/proc/cpuinfo")
 	if err != nil {
 		kataLog.WithError(err).Error("failed to read file")
 		return cpuTypeUnknown

@@ -8,7 +8,6 @@ package containerdshim
 import (
 	"context"
 	"io"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"syscall"
@@ -26,11 +25,11 @@ func TestNewTtyIOFifoReopen(t *testing.T) {
 	assert := assert.New(t)
 	ctx := context.TODO()
 
-	testDir, err := ioutil.TempDir("", "kata-")
+	testDir, err := os.MkdirTemp("", "kata-")
 	assert.NoError(err)
 	defer os.RemoveAll(testDir)
 
-	fifoPath, err := ioutil.TempDir(testDir, "fifo-path-")
+	fifoPath, err := os.MkdirTemp(testDir, "fifo-path-")
 	assert.NoError(err)
 	stdout := filepath.Join(fifoPath, "stdout")
 	stderr := filepath.Join(fifoPath, "stderr")
@@ -104,11 +103,11 @@ func TestIoCopy(t *testing.T) {
 	testBytes2 := []byte("Test2")
 	testBytes3 := []byte("Test3")
 
-	testDir, err := ioutil.TempDir("", "kata-")
+	testDir, err := os.MkdirTemp("", "kata-")
 	assert.NoError(err)
 	defer os.RemoveAll(testDir)
 
-	fifoPath, err := ioutil.TempDir(testDir, "fifo-path-")
+	fifoPath, err := os.MkdirTemp(testDir, "fifo-path-")
 	assert.NoError(err)
 	dstStdoutPath := filepath.Join(fifoPath, "dststdout")
 	dstStderrPath := filepath.Join(fifoPath, "dststderr")
