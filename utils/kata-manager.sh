@@ -136,17 +136,16 @@ github_get_release_file_url()
 	local url="${1:-}"
 	local version="${2:-}"
 
-	download_url=$(curl -sL "$url" |\
+	download_urls=$(curl -sL "$url" |\
 		jq --arg version "$version" \
-		-r '.[] | select(.tag_name == $version) | .assets[0].browser_download_url' || true)
+		-r '.[] | select(.tag_name == $version) | .assets[].browser_download_url' |\
+		grep static)
 
-	[ "$download_url" = null ] && download_url=""
-	[ -z "$download_url" ] && die "Cannot determine download URL for version $version ($url)"
+	[ -z "$download_urls" ] && die "Cannot determine download URL for version $version ($url)"
 
 	local arch=$(uname -m)
-
-	[ "$arch" = x86_64 ] && arch="($arch|amd64)"
-	echo "$download_url" | egrep -q "$arch" || die "No release for '$arch architecture ($url)"
+	local download_url=$(grep "$arch" <<< "$download_urls")
+	[ -z "$download_url" ] && die "No release for architecture '$arch' ($url)"
 
 	echo "$download_url"
 }
