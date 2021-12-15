@@ -77,7 +77,7 @@ func newBasicTestCmd() types.Cmd {
 func newTestSandboxConfigNoop() SandboxConfig {
 	bundlePath := filepath.Join(testDir, testBundle)
 	containerAnnotations[annotations.BundlePathKey] = bundlePath
-	// containerAnnotations["com.github.containers.virtcontainers.pkg.oci.container_type"] = "pod_sandbox"
+	containerAnnotations[annotations.ContainerTypeKey] = "pod_sandbox"
 
 	emptySpec := newEmptySpec()
 
