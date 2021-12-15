@@ -8,7 +8,6 @@ package main
 import (
 	"context"
 	"flag"
-	"io/ioutil"
 	"os"
 	"testing"
 
@@ -44,7 +43,7 @@ func TestFactoryCLIFunctionNoRuntimeConfig(t *testing.T) {
 func TestFactoryCLIFunctionInit(t *testing.T) {
 	assert := assert.New(t)
 
-	tmpdir, err := ioutil.TempDir("", "")
+	tmpdir, err := os.MkdirTemp("", "")
 	assert.NoError(err)
 	defer os.RemoveAll(tmpdir)
 
@@ -93,7 +92,7 @@ func TestFactoryCLIFunctionInit(t *testing.T) {
 func TestFactoryCLIFunctionDestroy(t *testing.T) {
 	assert := assert.New(t)
 
-	tmpdir, err := ioutil.TempDir("", "")
+	tmpdir, err := os.MkdirTemp("", "")
 	assert.NoError(err)
 	defer os.RemoveAll(tmpdir)
 
@@ -127,7 +126,7 @@ func TestFactoryCLIFunctionDestroy(t *testing.T) {
 func TestFactoryCLIFunctionStatus(t *testing.T) {
 	assert := assert.New(t)
 
-	tmpdir, err := ioutil.TempDir("", "")
+	tmpdir, err := os.MkdirTemp("", "")
 	assert.NoError(err)
 	defer os.RemoveAll(tmpdir)
 

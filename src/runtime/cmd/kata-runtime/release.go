@@ -10,7 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"os"
 	"strings"
@@ -279,7 +279,7 @@ func getReleases(releaseURL string, includeAll bool) ([]semver.Version, map[stri
 
 	releasesArray := []map[string]interface{}{}
 
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to read release details: %v", err)
 	} else if resp.StatusCode == http.StatusForbidden && bytes.Contains(body, []byte("limit exceeded")) {

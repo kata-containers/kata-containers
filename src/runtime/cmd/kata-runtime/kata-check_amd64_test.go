@@ -8,7 +8,6 @@ package main
 import (
 	"bytes"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -72,7 +71,7 @@ func TestCCCheckCLIFunction(t *testing.T) {
 func TestCheckCheckKernelModulesNoNesting(t *testing.T) {
 	assert := assert.New(t)
 
-	dir, err := ioutil.TempDir("", "")
+	dir, err := os.MkdirTemp("", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -157,7 +156,7 @@ func TestCheckCheckKernelModulesNoNesting(t *testing.T) {
 func TestCheckCheckKernelModulesNoUnrestrictedGuest(t *testing.T) {
 	assert := assert.New(t)
 
-	dir, err := ioutil.TempDir("", "")
+	dir, err := os.MkdirTemp("", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -256,7 +255,7 @@ func TestCheckHostIsVMContainerCapable(t *testing.T) {
 
 	assert := assert.New(t)
 
-	dir, err := ioutil.TempDir("", "")
+	dir, err := os.MkdirTemp("", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -406,7 +405,7 @@ func TestArchKernelParamHandler(t *testing.T) {
 func TestKvmIsUsable(t *testing.T) {
 	assert := assert.New(t)
 
-	dir, err := ioutil.TempDir("", "")
+	dir, err := os.MkdirTemp("", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -458,7 +457,7 @@ foo     : bar
 func TestSetCPUtype(t *testing.T) {
 	assert := assert.New(t)
 
-	tmpdir, err := ioutil.TempDir("", "")
+	tmpdir, err := os.MkdirTemp("", "")
 	assert.NoError(err)
 	defer os.RemoveAll(tmpdir)
 

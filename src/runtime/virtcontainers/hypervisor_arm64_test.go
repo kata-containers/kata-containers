@@ -6,7 +6,6 @@
 package virtcontainers
 
 import (
-	"io/ioutil"
 	"os"
 	"testing"
 
@@ -17,7 +16,7 @@ func TestRunningOnVMM(t *testing.T) {
 	assert := assert.New(t)
 	expectedOutput := false
 
-	f, err := ioutil.TempFile("", "cpuinfo")
+	f, err := os.CreateTemp("", "cpuinfo")
 	assert.NoError(err)
 	defer os.Remove(f.Name())
 	defer f.Close()

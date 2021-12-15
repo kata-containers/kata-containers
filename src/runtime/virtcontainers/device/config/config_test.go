@@ -7,7 +7,6 @@ package config
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
@@ -18,7 +17,7 @@ import (
 func TestGetBackingFile(t *testing.T) {
 	assert := assert.New(t)
 
-	dir, err := ioutil.TempDir("", "backing")
+	dir, err := os.MkdirTemp("", "backing")
 	assert.NoError(err)
 	defer os.RemoveAll(dir)
 
@@ -39,7 +38,7 @@ func TestGetBackingFile(t *testing.T) {
 
 	backingFile := "/fake-img"
 
-	err = ioutil.WriteFile(filepath.Join(loopDir, "backing_file"), []byte(backingFile), os.FileMode(0755))
+	err = os.WriteFile(filepath.Join(loopDir, "backing_file"), []byte(backingFile), os.FileMode(0755))
 	assert.NoError(err)
 
 	path, err = getBackingFile(info)

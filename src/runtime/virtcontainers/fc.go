@@ -10,7 +10,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"net"
 	"net/http"
 	"os"
@@ -778,7 +777,7 @@ func (fc *firecracker) StartVM(ctx context.Context, timeout int) error {
 		return errJSON
 	}
 
-	if err := ioutil.WriteFile(fc.fcConfigPath, data, 0640); err != nil {
+	if err := os.WriteFile(fc.fcConfigPath, data, 0640); err != nil {
 		return err
 	}
 

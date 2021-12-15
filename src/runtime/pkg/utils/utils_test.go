@@ -7,7 +7,6 @@ package utils
 
 import (
 	"fmt"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"path"
@@ -52,7 +51,7 @@ func TestGzipAccepted(t *testing.T) {
 
 func TestEnsureDir(t *testing.T) {
 	const testMode = 0755
-	tmpdir, err := ioutil.TempDir("", "TestEnsureDir")
+	tmpdir, err := os.MkdirTemp("", "TestEnsureDir")
 	assert := assert.New(t)
 
 	assert.NoError(err)
@@ -121,7 +120,7 @@ func TestEnsureDir(t *testing.T) {
 
 func TestFirstValidExecutable(t *testing.T) {
 	assert := assert.New(t)
-	tmpdir, err := ioutil.TempDir("", "TestFirstValidPath")
+	tmpdir, err := os.MkdirTemp("", "TestFirstValidPath")
 	assert.NoError(err)
 	defer os.RemoveAll(tmpdir)
 
@@ -145,7 +144,7 @@ func TestFirstValidExecutable(t *testing.T) {
 				err := os.MkdirAll(path.Join(tmpdir, "a", "b"), 0755)
 				assert.NoError(err)
 				// create a non-executable file
-				err = ioutil.WriteFile(path.Join(tmpdir, "a", "b", "c"), []byte("test\n"), 0644)
+				err = os.WriteFile(path.Join(tmpdir, "a", "b", "c"), []byte("test\n"), 0644)
 				assert.NoError(err)
 			},
 			paths:     []string{path.Join(tmpdir, "a", "b", "c"), "c/d"},
@@ -158,7 +157,7 @@ func TestFirstValidExecutable(t *testing.T) {
 				err := os.MkdirAll(path.Join(tmpdir, "d", "e"), 0755)
 				assert.NoError(err)
 				// create an executable file
-				err = ioutil.WriteFile(path.Join(tmpdir, "d", "e", "f"), []byte("test\n"), 0755)
+				err = os.WriteFile(path.Join(tmpdir, "d", "e", "f"), []byte("test\n"), 0755)
 				assert.NoError(err)
 			},
 			paths:     []string{path.Join(tmpdir, "d", "e", "f"), "c/d"},
@@ -171,7 +170,7 @@ func TestFirstValidExecutable(t *testing.T) {
 				err := os.MkdirAll(path.Join(tmpdir, "g", "h"), 0755)
 				assert.NoError(err)
 				// create an executable file
-				err = ioutil.WriteFile(path.Join(tmpdir, "g", "h", "i"), []byte("test\n"), 0755)
+				err = os.WriteFile(path.Join(tmpdir, "g", "h", "i"), []byte("test\n"), 0755)
 				assert.NoError(err)
 			},
 			paths:     []string{"c/d", path.Join(tmpdir, "g", "h", "i")},

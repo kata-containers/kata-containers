@@ -6,7 +6,6 @@
 package virtcontainers
 
 import (
-	"io/ioutil"
 	"net"
 	"os"
 	"reflect"
@@ -87,7 +86,7 @@ func TestIncorrectEndpointTypeString(t *testing.T) {
 func TestSaveLoadIfPair(t *testing.T) {
 	macAddr := net.HardwareAddr{0x02, 0x00, 0xCA, 0xFE, 0x00, 0x04}
 
-	tmpfile, err := ioutil.TempFile("", "vc-Save-Load-net-")
+	tmpfile, err := os.CreateTemp("", "vc-Save-Load-net-")
 	assert.Nil(t, err)
 	defer os.Remove(tmpfile.Name())
 

@@ -7,7 +7,6 @@ package virtcontainers
 
 import (
 	"context"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -131,7 +130,7 @@ func TestUnmountHostMountsRemoveBindHostPath(t *testing.T) {
 	}
 
 	createFakeMountDir := func(t *testing.T, dir, prefix string) string {
-		name, err := ioutil.TempDir(dir, "test-mnt-"+prefix+"-")
+		name, err := os.MkdirTemp(dir, "test-mnt-"+prefix+"-")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -139,7 +138,7 @@ func TestUnmountHostMountsRemoveBindHostPath(t *testing.T) {
 	}
 
 	createFakeMountFile := func(t *testing.T, dir, prefix string) string {
-		f, err := ioutil.TempFile(dir, "test-mnt-"+prefix+"-")
+		f, err := os.CreateTemp(dir, "test-mnt-"+prefix+"-")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -245,7 +244,7 @@ func testSetupFakeRootfs(t *testing.T) (testRawFile, loopDev, mntDir string, err
 		t.Skip(testDisabledAsNonRoot)
 	}
 
-	tmpDir, err := ioutil.TempDir("", "")
+	tmpDir, err := os.MkdirTemp("", "")
 	assert.NoError(err)
 
 	testRawFile = filepath.Join(tmpDir, "raw.img")
@@ -556,13 +555,13 @@ func TestMountSharedDirMounts(t *testing.T) {
 
 	assert := assert.New(t)
 
-	testMountPath, err := ioutil.TempDir("", "sandbox-test")
+	testMountPath, err := os.MkdirTemp("", "sandbox-test")
 	assert.NoError(err)
 	defer os.RemoveAll(testMountPath)
 
 	// create a new shared directory for our test:
 	kataHostSharedDirSaved := kataHostSharedDir
-	testHostDir, err := ioutil.TempDir("", "kata-Cleanup")
+	testHostDir, err := os.MkdirTemp("", "kata-Cleanup")
 	assert.NoError(err)
 	kataHostSharedDir = func() string {
 		return testHostDir

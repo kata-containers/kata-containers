@@ -7,7 +7,6 @@ package main
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
@@ -18,7 +17,7 @@ import (
 )
 
 func TestFileExists(t *testing.T) {
-	dir, err := ioutil.TempDir("", "katatest")
+	dir, err := os.MkdirTemp("", "katatest")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -55,7 +54,7 @@ func TestGetKernelVersion(t *testing.T) {
 		{validContents, validVersion, false},
 	}
 
-	tmpdir, err := ioutil.TempDir("", "")
+	tmpdir, err := os.MkdirTemp("", "")
 	if err != nil {
 		panic(err)
 	}
@@ -104,7 +103,7 @@ func TestGetDistroDetails(t *testing.T) {
 
 	const unknown = "<<unknown>>"
 
-	tmpdir, err := ioutil.TempDir("", "")
+	tmpdir, err := os.MkdirTemp("", "")
 	if err != nil {
 		panic(err)
 	}

@@ -7,7 +7,6 @@ package oci
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path"
 	"path/filepath"
@@ -44,7 +43,7 @@ var (
 func createConfig(fileName string, fileData string) (string, error) {
 	configPath := path.Join(tempBundlePath, fileName)
 
-	err := ioutil.WriteFile(configPath, []byte(fileData), fileMode)
+	err := os.WriteFile(configPath, []byte(fileData), fileMode)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Unable to create config file %s %v\n", configPath, err)
 		return "", err
@@ -361,7 +360,7 @@ func TestGetShmSizeBindMounted(t *testing.T) {
 		t.Skip("Test disabled as requires root privileges")
 	}
 
-	dir, err := ioutil.TempDir("", "")
+	dir, err := os.MkdirTemp("", "")
 	assert.Nil(t, err)
 	defer os.RemoveAll(dir)
 
@@ -399,7 +398,7 @@ func TestGetShmSizeBindMounted(t *testing.T) {
 
 func TestMain(m *testing.M) {
 	var err error
-	tempRoot, err = ioutil.TempDir("", "virtc-")
+	tempRoot, err = os.MkdirTemp("", "virtc-")
 	if err != nil {
 		panic(err)
 	}
@@ -424,7 +423,7 @@ func TestMain(m *testing.M) {
 func TestAddAssetAnnotations(t *testing.T) {
 	assert := assert.New(t)
 
-	tmpdir, err := ioutil.TempDir("", "")
+	tmpdir, err := os.MkdirTemp("", "")
 	assert.NoError(err)
 	defer os.RemoveAll(tmpdir)
 
@@ -432,7 +431,7 @@ func TestAddAssetAnnotations(t *testing.T) {
 	// (required since the existence of binary asset annotations is verified).
 	fakeAssetFile := filepath.Join(tmpdir, "fake-binary")
 
-	err = ioutil.WriteFile(fakeAssetFile, []byte(""), fileMode)
+	err = os.WriteFile(fakeAssetFile, []byte(""), fileMode)
 	assert.NoError(err)
 
 	expectedAnnotations := map[string]string{

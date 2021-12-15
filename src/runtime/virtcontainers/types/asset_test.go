@@ -7,7 +7,6 @@ package types
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"testing"
 
@@ -22,7 +21,7 @@ var assetContentWrongHash = "92549f8d2018a95a294d28a65e795ed7d1a9d150009a28cea10
 func TestAssetWrongHashType(t *testing.T) {
 	assert := assert.New(t)
 
-	tmpfile, err := ioutil.TempFile("", "virtcontainers-test-")
+	tmpfile, err := os.CreateTemp("", "virtcontainers-test-")
 	assert.Nil(err)
 
 	defer func() {
@@ -45,7 +44,7 @@ func TestAssetWrongHashType(t *testing.T) {
 func TestAssetHash(t *testing.T) {
 	assert := assert.New(t)
 
-	tmpfile, err := ioutil.TempFile("", "virtcontainers-test-")
+	tmpfile, err := os.CreateTemp("", "virtcontainers-test-")
 	assert.Nil(err)
 
 	defer func() {
@@ -90,7 +89,7 @@ func testValid(t *testing.T, a *Asset, msg string) {
 func TestAssetNew(t *testing.T) {
 	assert := assert.New(t)
 
-	tmpfile, err := ioutil.TempFile("", "virtcontainers-test-")
+	tmpfile, err := os.CreateTemp("", "virtcontainers-test-")
 	assert.Nil(err)
 
 	defer func() {
