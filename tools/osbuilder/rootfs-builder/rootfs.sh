@@ -373,23 +373,24 @@ build_rootfs_distro()
 		info "build directly"
 		build_rootfs ${ROOTFS_DIR}
 	else
+		engine_build_args=""
 		if [ -n "${USE_DOCKER}" ]; then
 			container_engine="docker"
 		elif [ -n "${USE_PODMAN}" ]; then
 			container_engine="podman"
+			engine_build_args+=" --runtime ${DOCKER_RUNTIME}"
 		fi
 
 		image_name="${distro}-rootfs-osbuilder"
 
-		REGISTRY_ARG=""
 		if [ -n "${IMAGE_REGISTRY}" ]; then
-			REGISTRY_ARG="--build-arg IMAGE_REGISTRY=${IMAGE_REGISTRY}"
+			engine_build_args+=" --build-arg IMAGE_REGISTRY=${IMAGE_REGISTRY}"
 		fi
 
 		# setup to install rust here
 		generate_dockerfile "${distro_config_dir}"
 		"$container_engine" build  \
-			${REGISTRY_ARG} \
+			${engine_build_args} \
 			--build-arg http_proxy="${http_proxy}" \
 			--build-arg https_proxy="${https_proxy}" \
 			-t "${image_name}" "${distro_config_dir}"
@@ -397,21 +398,21 @@ build_rootfs_distro()
 		# fake mapping if KERNEL_MODULES_DIR is unset
 		kernel_mod_dir=${KERNEL_MODULES_DIR:-${ROOTFS_DIR}}
 
-		docker_run_args=""
-		docker_run_args+=" --rm"
+		engine_run_args=""
+		engine_run_args+=" --rm"
 		# apt sync scans all possible fds in order to close them, incredibly slow on VMs
-		docker_run_args+=" --ulimit nofile=262144:262144"
-		docker_run_args+=" --runtime ${DOCKER_RUNTIME}"
+		engine_run_args+=" --ulimit nofile=262144:262144"
+		engine_run_args+=" --runtime ${DOCKER_RUNTIME}"
 
 		if [ -z "${AGENT_SOURCE_BIN}" ] ; then
-			docker_run_args+=" -v ${GOPATH_LOCAL}:${GOPATH_LOCAL} --env GOPATH=${GOPATH_LOCAL}"
+			engine_run_args+=" -v ${GOPATH_LOCAL}:${GOPATH_LOCAL} --env GOPATH=${GOPATH_LOCAL}"
 		else
-			docker_run_args+=" --env AGENT_SOURCE_BIN=${AGENT_SOURCE_BIN}"
-			docker_run_args+=" -v ${AGENT_SOURCE_BIN}:${AGENT_SOURCE_BIN}"
-			docker_run_args+=" -v ${GOPATH_LOCAL}:${GOPATH_LOCAL} --env GOPATH=${GOPATH_LOCAL}"
+			engine_run_args+=" --env AGENT_SOURCE_BIN=${AGENT_SOURCE_BIN}"
+			engine_run_args+=" -v ${AGENT_SOURCE_BIN}:${AGENT_SOURCE_BIN}"
+			engine_run_args+=" -v ${GOPATH_LOCAL}:${GOPATH_LOCAL} --env GOPATH=${GOPATH_LOCAL}"
 		fi
 
-		docker_run_args+=" $(docker_extra_args $distro)"
+		engine_run_args+=" $(docker_extra_args $distro)"
 
 		# Relabel volumes so SELinux allows access (see docker-run(1))
 		if command -v selinuxenabled > /dev/null && selinuxenabled ; then
@@ -456,7 +457,7 @@ build_rootfs_distro()
 			-v "${ROOTFS_DIR}":"/rootfs" \
 			-v "${script_dir}/../scripts":"/scripts" \
 			-v "${kernel_mod_dir}":"${kernel_mod_dir}" \
-			$docker_run_args \
+			$engine_run_args \
 			${image_name} \
 			bash /kata-containers/tools/osbuilder/rootfs-builder/rootfs.sh "${distro}"
 

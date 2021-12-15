@@ -118,18 +118,19 @@ parts:
       export AGENT_INIT=yes
       export USE_DOCKER=1
       export DEBUG=1
-      case "$(uname -m)" in
-        aarch64)
-          sudo -E PATH=$PATH make initrd DISTRO=alpine
-        ;;
-        ppc64le|s390x)
-          # Cannot use alpine on ppc64le/s390x because it would require a musl agent
-          sudo -E PATH=$PATH make initrd DISTRO=ubuntu
-        ;;
+      arch="$(uname -m)"
+      initrd_distro=$(${yq} r -X ${kata_dir}/versions.yaml assets.initrd.architecture.${arch}.name)
+      image_distro=$(${yq} r -X ${kata_dir}/versions.yaml assets.image.architecture.${arch}.name)
+      case "$arch" in
         x86_64)
           # In some build systems it's impossible to build a rootfs image, try with the initrd image
-          sudo -E PATH=$PATH make image DISTRO=clearlinux || sudo -E PATH=$PATH make initrd DISTRO=alpine
+          sudo -E PATH=$PATH make image DISTRO=${image_distro} || sudo -E PATH=$PATH make initrd DISTRO=${initrd_distro}
         ;;
+
+        aarch64|ppc64le|s390x)
+          sudo -E PATH=$PATH make initrd DISTRO=${initrd_distro}
+        ;;
+
         *) echo "unsupported architecture: $(uname -m)"; exit 1;;
       esac
 

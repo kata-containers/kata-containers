@@ -141,11 +141,11 @@ assets:
         name: &default-initrd-name "ubuntu"
         version: &default-initrd-version "20.04"
       ppc64le:
-        name: *default-initrd-name
-        version: *default-initrd-version
+        name: &glibc-initrd-name "ubuntu"
+        version: &glibc-initrd-version "20.04"
       s390x:
-        name: *default-initrd-name
-        version: *default-initrd-version
+        name: *glibc-initrd-name
+        version: *glibc-initrd-version
       x86_64:
         name: *default-initrd-name
         version: *default-initrd-version

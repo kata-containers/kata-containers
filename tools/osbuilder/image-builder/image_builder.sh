@@ -79,14 +79,15 @@ Usage: ${script_name} [options] <rootfs-dir>
 
 Options:
 	-h Show this help
-	-o path to generate image file ENV: IMAGE
-	-r Free space of the root partition in MB ENV: ROOT_FREE_SPACE
+	-o Path to generate image file. ENV: IMAGE
+	-r Free space of the root partition in MB. ENV: ROOT_FREE_SPACE
+	-f Filesystem type to use, only xfs and ext4 are supported. ENV: FS_TYPE
 
 Extra environment variables:
 	AGENT_BIN:      Use it to change the expected agent binary name
 	AGENT_INIT:     Use kata agent as init process
+	BLOCK_SIZE:     Use to specify the size of blocks in bytes. DEFAULT: 4096
 	IMAGE_REGISTRY: Hostname for the image registry used to pull down the rootfs build image.
-	FS_TYPE:        Filesystem type to use. Only xfs and ext4 are supported.
 	NSDAX_BIN:      Use to specify path to pre-compiled 'nsdax' tool.
 	USE_DOCKER:     If set will build image in a Docker Container (requries docker)
 	                DEFAULT: not set
@@ -137,13 +138,16 @@ build_with_container() {
 	image_dir=$(readlink -f "$(dirname "${image}")")
 	image_name=$(basename "${image}")
 
-	REGISTRY_ARG=""
+	engine_build_args=""
 	if [ -n "${IMAGE_REGISTRY}" ]; then
-		REGISTRY_ARG="--build-arg IMAGE_REGISTRY=${IMAGE_REGISTRY}"
+		engine_build_args+=" --build-arg IMAGE_REGISTRY=${IMAGE_REGISTRY}"
+	fi
+	if [ -n "${USE_PODMAN}" ]; then
+		engine_build_args+=" --runtime ${DOCKER_RUNTIME}"
 	fi
 
 	"${container_engine}" build  \
-		   ${REGISTRY_ARG} \
+		   ${engine_build_args} \
 		   --build-arg http_proxy="${http_proxy}" \
 		   --build-arg https_proxy="${https_proxy}" \
 		   -t "${container_image_name}" "${script_dir}"
