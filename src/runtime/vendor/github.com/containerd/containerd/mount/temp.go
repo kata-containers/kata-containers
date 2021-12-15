@@ -18,7 +18,6 @@ package mount
 
 import (
 	"context"
-	"io/ioutil"
 	"os"
 
 	"github.com/containerd/containerd/log"
@@ -31,7 +30,7 @@ var tempMountLocation = getTempDir()
 // The mounts are valid during the call to the f.
 // Finally we will unmount and remove the temp dir regardless of the result of f.
 func WithTempMount(ctx context.Context, mounts []Mount, f func(root string) error) (err error) {
-	root, uerr := ioutil.TempDir(tempMountLocation, "containerd-mount")
+	root, uerr := os.MkdirTemp(tempMountLocation, "containerd-mount")
 	if uerr != nil {
 		return errors.Wrapf(uerr, "failed to create temp dir")
 	}
@@ -44,7 +43,7 @@ func WithTempMount(ctx context.Context, mounts []Mount, f func(root string) erro
 	// For details, please refer to #1868 #1785.
 	defer func() {
 		if uerr = os.Remove(root); uerr != nil {
-			log.G(ctx).WithError(uerr).WithField("dir", root).Errorf("failed to remove mount temp dir")
+			log.G(ctx).WithError(uerr).WithField("dir", root).Error("failed to remove mount temp dir")
 		}
 	}()
 
