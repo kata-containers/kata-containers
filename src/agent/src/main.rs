@@ -80,7 +80,7 @@ const NAME: &str = "kata-agent";
 
 lazy_static! {
     static ref AGENT_CONFIG: Arc<RwLock<AgentConfig>> = Arc::new(RwLock::new(
-        AgentConfig::from_cmdline("/proc/cmdline").unwrap()
+        AgentConfig::from_cmdline("/proc/cmdline", env::args().collect()).unwrap()
     ));
 }
 
