@@ -194,7 +194,17 @@ impl FromStr for AgentConfig {
 
 impl AgentConfig {
     #[instrument]
-    pub fn from_cmdline(file: &str) -> Result<AgentConfig> {
+    pub fn from_cmdline(file: &str, args: Vec<String>) -> Result<AgentConfig> {
+        // If config file specified in the args, generate our config from it
+        let config_position = args.iter().position(|a| a == "--config" || a == "-c");
+        if let Some(config_position) = config_position {
+            if let Some(config_file) = args.get(config_position + 1) {
+                return AgentConfig::from_config_file(config_file);
+            } else {
+                panic!("The config argument wasn't formed properly: {:?}", args);
+            }
+        }
+
         let mut config: AgentConfig = Default::default();
         let cmdline = fs::read_to_string(file)?;
         let params: Vec<&str> = cmdline.split_ascii_whitespace().collect();
@@ -896,7 +906,8 @@ mod tests {
                 vars_to_unset.push(name);
             }
 
-            let config = AgentConfig::from_cmdline(filename).expect("Failed to parse command line");
+            let config =
+                AgentConfig::from_cmdline(filename, vec![]).expect("Failed to parse command line");
 
             assert_eq!(d.debug_console, config.debug_console, "{}", msg);
             assert_eq!(d.dev_mode, config.dev_mode, "{}", msg);
@@ -915,6 +926,40 @@ mod tests {
                 env::remove_var(v);
             }
         }
+    }
+
+    #[test]
+    fn test_from_cmdline_with_args_overwrites() {
+        let expected = AgentConfig {
+            dev_mode: true,
+            server_addr: "unix://@/tmp/foo.socket".to_string(),
+            ..Default::default()
+        };
+
+        let example_config_file_contents =
+            "dev_mode = true\nserver_addr = 'unix://@/tmp/foo.socket'";
+        let dir = tempdir().expect("failed to create tmpdir");
+        let file_path = dir.path().join("config.toml");
+        let filename = file_path.to_str().expect("failed to create filename");
+        let mut file = File::create(filename).unwrap_or_else(|_| panic!("failed to create file"));
+        file.write_all(example_config_file_contents.as_bytes())
+            .unwrap_or_else(|_| panic!("failed to write file contents"));
+
+        let config =
+            AgentConfig::from_cmdline("", vec!["--config".to_string(), filename.to_string()])
+                .expect("Failed to parse command line");
+
+        assert_eq!(expected.debug_console, config.debug_console);
+        assert_eq!(expected.dev_mode, config.dev_mode);
+        assert_eq!(
+            expected.unified_cgroup_hierarchy,
+            config.unified_cgroup_hierarchy,
+        );
+        assert_eq!(expected.log_level, config.log_level);
+        assert_eq!(expected.hotplug_timeout, config.hotplug_timeout);
+        assert_eq!(expected.container_pipe_size, config.container_pipe_size);
+        assert_eq!(expected.server_addr, config.server_addr);
+        assert_eq!(expected.tracing, config.tracing);
     }
 
     #[test]
