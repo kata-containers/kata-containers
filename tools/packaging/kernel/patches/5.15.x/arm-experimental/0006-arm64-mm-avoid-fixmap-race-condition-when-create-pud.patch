@@ -1,0 +1,69 @@
+From e3a11f2f7ccb0dbbb8cf95944e89b34fd928107a Mon Sep 17 00:00:00 2001
+From: Jianyong Wu <jianyong.wu@arm.com>
+Date: Mon, 6 Dec 2021 10:52:37 +0800
+Subject: [PATCH 6/7] arm64/mm: avoid fixmap race condition when create pud
+ mapping
+
+The 'fixmap' is a global resource and is used recursively by
+create pud mapping(), leading to a potential race condition in the
+presence of a concurrent call to alloc_init_pud():
+
+kernel_init thread                          virtio-mem workqueue thread
+==================                          ===========================
+
+  alloc_init_pud(...)                       alloc_init_pud(...)
+  pudp = pud_set_fixmap_offset(...)         pudp = pud_set_fixmap_offset(...)
+  READ_ONCE(*pudp)
+  pud_clear_fixmap(...)
+                                            READ_ONCE(*pudp) // CRASH!
+
+As kernel may sleep during creating pud mapping, introduce a mutex lock to
+serialise use of the fixmap entries by alloc_init_pud(). However, there is
+no need for locking in early boot stage and it doesn't work well with
+KASLR enabled when early boot. So, enable lock when system_state doesn't
+equal to "SYSTEM_BOOTING".
+
+Signed-off-by: Jianyong Wu <jianyong.wu@arm.com>
+Reviewed-by: Catalin Marinas <catalin.marinas@arm.com>
+Fixes: f4710445458c ("arm64: mm: use fixmap when creating page tables")
+Link: https://lore.kernel.org/r/20220201114400.56885-1-jianyong.wu@arm.com
+Signed-off-by: Will Deacon <will@kernel.org>
+---
+ arch/arm64/mm/mmu.c | 7 +++++++
+ 1 file changed, 7 insertions(+)
+
+diff --git a/arch/arm64/mm/mmu.c b/arch/arm64/mm/mmu.c
+index cfd9deb347c3..432fab4ce2b4 100644
+--- a/arch/arm64/mm/mmu.c
++++ b/arch/arm64/mm/mmu.c
+@@ -63,6 +63,7 @@ static pmd_t bm_pmd[PTRS_PER_PMD] __page_aligned_bss __maybe_unused;
+ static pud_t bm_pud[PTRS_PER_PUD] __page_aligned_bss __maybe_unused;
+ 
+ static DEFINE_SPINLOCK(swapper_pgdir_lock);
++static DEFINE_SPINLOCK(fixmap_lock);
+ 
+ void set_swapper_pgd(pgd_t *pgdp, pgd_t pgd)
+ {
+@@ -328,6 +329,11 @@ static void alloc_init_pud(pgd_t *pgdp, unsigned long addr, unsigned long end,
+ 	}
+ 	BUG_ON(p4d_bad(p4d));
+ 
++	/*
++	 * We only have one fixmap entry per page-table level, so take
++	 * the fixmap lock until we're done.
++	 */
++	spin_lock(&fixmap_lock);
+ 	pudp = pud_set_fixmap_offset(p4dp, addr);
+ 	do {
+ 		pud_t old_pud = READ_ONCE(*pudp);
+@@ -358,6 +364,7 @@ static void alloc_init_pud(pgd_t *pgdp, unsigned long addr, unsigned long end,
+ 	} while (pudp++, addr = next, addr != end);
+ 
+ 	pud_clear_fixmap();
++	spin_unlock(&fixmap_lock);
+ }
+ 
+ static void __create_pgd_mapping(pgd_t *pgdir, phys_addr_t phys,
+-- 
+2.17.1
+

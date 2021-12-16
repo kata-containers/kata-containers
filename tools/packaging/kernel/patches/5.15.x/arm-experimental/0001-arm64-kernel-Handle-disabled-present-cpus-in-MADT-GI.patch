@@ -1,0 +1,145 @@
+From 790af0565140c9df7394c195c22960d92f117c30 Mon Sep 17 00:00:00 2001
+From: Salil Mehta <salil.mehta@huawei.com>
+Date: Wed, 1 Dec 2021 14:58:33 +0800
+Subject: [PATCH 1/7] arm64: kernel: Handle disabled[(+)present] cpus in
+ MADT/GICC during init
+
+With ACPI enabled, cpus get identified by the presence of the GICC
+entry in the MADT Table. Each GICC entry part of MADT presents cpu as
+enabled or disabled. As of now, the disabled cpus are skipped as
+physical cpu hotplug is not supported. These remain disabled even after
+the kernel has booted.
+
+To support virtual cpu hotplug(in which case disabled vcpus could be
+hotplugged even after kernel has booted), QEMU will populate MADT Table
+with appropriate details of GICC entry for each possible(present+disabled)
+vcpu. Now, during the init time vcpus will be identified as present or
+disabled. To achieve this, below changes have been made with respect to
+the present/possible vcpu handling along with the mentioned reasoning:
+
+1. Identify all possible(present+disabled) vcpus at boot/init time
+   and set their present mask and possible mask. In the existing code,
+   cpus are being marked present quite late within smp_prepare_cpus()
+   function, which gets called in context to the kernel thread. Since
+   the cpu hotplug is not supported, present cpus are always equal to
+   the possible cpus. But with cpu hotplug enabled, this assumption is
+   not true. Hence, present cpus should be marked while MADT GICC entries
+   are bring parsed for each vcpu.
+2. Set possible cpus to include disabled. This needs to be done now
+   while parsing MADT GICC entries corresponding to each vcpu as the
+   disabled vcpu info is available only at this point as for hotplug
+   case possible vcpus is not equal to present vcpus.
+3. We will store the parsed madt/gicc entry even for the disabled vcpus
+   during init time. This is needed as some modules like PMU registers
+   IRQs for each possible vcpus during init time. Therefore, a valid
+   entry of the MADT GICC should be present for all possible vcpus.
+4. Refactoring related to DT/OF is also done to align it with the init
+   changes to support vcpu hotplug.
+
+Signed-off-by: Salil Mehta <salil.mehta@huawei.com>
+Signed-off-by: Xiongfeng Wang <wangxiongfeng2@huawei.com>
+---
+ arch/arm64/kernel/smp.c | 28 +++++++++++++++++++++-------
+ 1 file changed, 21 insertions(+), 7 deletions(-)
+
+diff --git a/arch/arm64/kernel/smp.c b/arch/arm64/kernel/smp.c
+index 6f6ff072acbd..4b317e71b1c4 100644
+--- a/arch/arm64/kernel/smp.c
++++ b/arch/arm64/kernel/smp.c
+@@ -524,13 +524,12 @@ static int __init smp_cpu_setup(int cpu)
+ 	if (ops->cpu_init(cpu))
+ 		return -ENODEV;
+ 
+-	set_cpu_possible(cpu, true);
+-
+ 	return 0;
+ }
+ 
+ static bool bootcpu_valid __initdata;
+ static unsigned int cpu_count = 1;
++static unsigned int disabled_cpu_count;
+ 
+ #ifdef CONFIG_ACPI
+ static struct acpi_madt_generic_interrupt cpu_madt_gicc[NR_CPUS];
+@@ -549,10 +548,17 @@ struct acpi_madt_generic_interrupt *acpi_cpu_get_madt_gicc(int cpu)
+ static void __init
+ acpi_map_gic_cpu_interface(struct acpi_madt_generic_interrupt *processor)
+ {
++	unsigned int total_cpu_count = disabled_cpu_count + cpu_count;
+ 	u64 hwid = processor->arm_mpidr;
+ 
+ 	if (!(processor->flags & ACPI_MADT_ENABLED)) {
++#ifndef CONFIG_ACPI_HOTPLUG_CPU
+ 		pr_debug("skipping disabled CPU entry with 0x%llx MPIDR\n", hwid);
++#else
++		cpu_madt_gicc[total_cpu_count] = *processor;
++		set_cpu_possible(total_cpu_count, true);
++		disabled_cpu_count++;
++#endif
+ 		return;
+ 	}
+ 
+@@ -561,7 +567,7 @@ acpi_map_gic_cpu_interface(struct acpi_madt_generic_interrupt *processor)
+ 		return;
+ 	}
+ 
+-	if (is_mpidr_duplicate(cpu_count, hwid)) {
++	if (is_mpidr_duplicate(total_cpu_count, hwid)) {
+ 		pr_err("duplicate CPU MPIDR 0x%llx in MADT\n", hwid);
+ 		return;
+ 	}
+@@ -582,9 +588,9 @@ acpi_map_gic_cpu_interface(struct acpi_madt_generic_interrupt *processor)
+ 		return;
+ 
+ 	/* map the logical cpu id to cpu MPIDR */
+-	set_cpu_logical_map(cpu_count, hwid);
++	set_cpu_logical_map(total_cpu_count, hwid);
+ 
+-	cpu_madt_gicc[cpu_count] = *processor;
++	cpu_madt_gicc[total_cpu_count] = *processor;
+ 
+ 	/*
+ 	 * Set-up the ACPI parking protocol cpu entries
+@@ -595,7 +601,10 @@ acpi_map_gic_cpu_interface(struct acpi_madt_generic_interrupt *processor)
+ 	 * initialize the cpu if the parking protocol is
+ 	 * the only available enable method).
+ 	 */
+-	acpi_set_mailbox_entry(cpu_count, processor);
++	acpi_set_mailbox_entry(total_cpu_count, processor);
++
++	set_cpu_possible(total_cpu_count, true);
++	set_cpu_present(total_cpu_count, true);
+ 
+ 	cpu_count++;
+ }
+@@ -629,6 +638,9 @@ static void __init acpi_parse_and_init_cpus(void)
+ 	acpi_table_parse_madt(ACPI_MADT_TYPE_GENERIC_INTERRUPT,
+ 				      acpi_parse_gic_cpu_interface, 0);
+ 
++	pr_debug("possible cpus(%u) present cpus(%u) disabled cpus(%u)\n",
++		 cpu_count+disabled_cpu_count, cpu_count, disabled_cpu_count);
++
+ 	/*
+ 	 * In ACPI, SMP and CPU NUMA information is provided in separate
+ 	 * static tables, namely the MADT and the SRAT.
+@@ -699,6 +711,9 @@ static void __init of_parse_and_init_cpus(void)
+ 		set_cpu_logical_map(cpu_count, hwid);
+ 
+ 		early_map_cpu_to_node(cpu_count, of_node_to_nid(dn));
++
++		set_cpu_possible(cpu_count, true);
++		set_cpu_present(cpu_count, true);
+ next:
+ 		cpu_count++;
+ 	}
+@@ -783,7 +798,6 @@ void __init smp_prepare_cpus(unsigned int max_cpus)
+ 		if (err)
+ 			continue;
+ 
+-		set_cpu_present(cpu, true);
+ 		numa_store_cpu_info(cpu);
+ 	}
+ }
+-- 
+2.17.1
+
