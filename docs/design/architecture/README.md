@@ -117,7 +117,7 @@ to study this table closely to make sense of what follows:
 | Type | Name | Virtualized | Containerized | rootfs | Rootfs device type | Mount type | Description |
 |-|-|-|-|-|-|-|-|
 | Host | Host | no `[1]` | no | Host specific | Host specific | Host specific | The environment provided by a standard, physical non virtualized system. |
-| VM root | Guest VM | yes | no | rootfs inside the [guest image](#guest-image) | Hypervisor specific `[2]` | `ext4` | The first (or top) level VM environment created on a host system. |
+| VM root | Guest VM | yes | no | rootfs inside the [guest image](guest-assets.md#guest-image) | Hypervisor specific `[2]` | `ext4` | The first (or top) level VM environment created on a host system. |
 | VM container root | Container | yes | yes | rootfs type requested by user ([`ubuntu` in the example](example-command.md)) | `kataShared` | [virtio FS](storage.md#virtio-fs) | The first (or top) level container environment created inside the VM. Based on the [OCI bundle](background.md#oci-bundle). |
 
 **Key:**
@@ -158,9 +158,10 @@ created using the containerd container manager:
 1. The container manager calls a set of shimv2 API functions on the runtime.
 1. The Kata runtime launches the configured [hypervisor](#hypervisor).
 1. The hypervisor creates and starts (_boots_) a VM using the
-   [guest assets](#guest-assets):
+   [guest assets](guest-assets.md#guest-assets):
 
-   - The hypervisor [DAX](#dax) shares the [guest image](#guest-image)
+   - The hypervisor [DAX](#dax) shares the
+     [guest image](guest-assets.md#guest-image)
      into the VM to become the VM [rootfs](background.md#root-filesystem) (mounted on a `/dev/pmem*` device),
      which is known as the [VM root environment](#environments).
    - The hypervisor mounts the [OCI bundle](background.md#oci-bundle), using [virtio FS](storage.md#virtio-fs),
@@ -189,13 +190,13 @@ created using the containerd container manager:
    >   a container environment created by the
    >   [`runc`](https://github.com/opencontainers/runc) OCI runtime;
    >   Linux cgroups and namespaces are created inside the VM by the
-   >   [guest kernel](#guest-kernel) to isolate the workload from the
-   >   VM environment the container is created in. See the
-   >   [Environments](#environments) section for an explanation of why
-   >   this is done.
+   >   [guest kernel](guest-assets.md#guest-kernel) to isolate the
+   >   workload from the VM environment the container is created in.
+   >   See the [Environments](#environments) section for an
+   >   explanation of why this is done.
    >
-   > - See the [guest image](#guest-image) section for details of
-   >   exactly how the agent is started.
+   > - See the [guest image](guest-assets.md#guest-image) section for
+   >   details of exactly how the agent is started.
 
 1. The container manager returns control of the container to the
    user running the `ctr` command.
@@ -253,153 +254,11 @@ If the container manager requests the container be deleted, the
 
 ## Guest assets
 
-Kata Containers creates a VM in which to run one or more containers. It
-does this by launching a [hypervisor](#hypervisor) to create the VM.
-The hypervisor needs two assets for this task: a Linux kernel and a
-small root filesystem image to boot the VM.
+The guest assets comprise a guest image and a guest kernel that are
+used by the [hypervisor](#hypervisor).
 
-### Guest kernel
-
-The [guest kernel](../../../tools/packaging/kernel)
-is passed to the hypervisor and used to boot the VM.
-The default kernel provided in Kata Containers is highly optimized for
-kernel boot time and minimal memory footprint, providing only those
-services required by a container workload. It is based on the latest
-Linux LTS (Long Term Support) [kernel](https://www.kernel.org).
-
-### Guest image
-
-The hypervisor uses an image file which provides a minimal root
-filesystem used by the guest kernel to boot the VM and host the Kata
-Container. Kata Containers supports both initrd and rootfs based
-minimal guest images. The [default packages](../../install/) provide both
-an image and an initrd, both of which are created using the
-[`osbuilder`](../../../tools/osbuilder) tool.
-
-> **Notes:**
->
-> - Although initrd and rootfs based images are supported, not all
->   [hypervisors](#hypervisor) support both types of image.
->
-> - The guest image is *unrelated* to the image used in a container
->   workload.
->
->   For example, if a user creates a container that runs a shell in a
->   BusyBox image, they will run that shell in a BusyBox environment.
->   However, the guest image running inside the VM that is used to
->   *host* that BusyBox image could be running Clear Linux, Ubuntu,
->   Fedora or any other distribution potentially.
->
->   The `osbuilder` tool provides
->   [configurations for various common Linux distributions](../../../tools/osbuilder/rootfs-builder)
->   which can be built into either initrd or rootfs guest images.
->
-> - If you are using a [packaged version of Kata
->   Containers](../../install), you can see image details by running the
->   [`kata-collect-data.sh`](../../../src/runtime/data/kata-collect-data.sh.in)
->   script as `root` and looking at the "Image details" section of the
->   output.
-
-#### Root filesystem image
-
-The default packaged rootfs image, sometimes referred to as the _mini
-O/S_, is a highly optimized container bootstrap system.
-
-If this image type is [configured](#configuration), when the user runs
-the [example command](example-command.md):
-
-- The [runtime](#runtime) will launch the configured [hypervisor](#hypervisor).
-- The hypervisor will boot the mini-OS image using the [guest kernel](#guest-kernel).
-- The kernel will start the init daemon as PID 1 (`systemd`) inside the VM root environment.
-- `systemd`, running inside the mini-OS context, will launch the [agent](#agent)
-  in the root context of the VM.
-- The agent will create a new container environment, setting its root
-  filesystem to that requested by the user (Ubuntu in [the example](example-command.md)).
-- The agent will then execute the command (`sh(1)` in [the example](example-command.md))
-  inside the new container.
-
-The table below summarises the default mini O/S showing the
-environments that are created, the services running in those
-environments (for all platforms) and the root filesystem used by
-each service:
-
-| Process | Environment | systemd service? | rootfs | User accessible | Notes |
-|-|-|-|-|-|-|
-| systemd | VM root | n/a | [VM guest image](#guest-image)| [debug console][debug-console] | The init daemon, running as PID 1 |
-| [Agent](#agent) | VM root | yes | [VM guest image](#guest-image)| [debug console][debug-console] | Runs as a systemd service |
-| `chronyd` | VM root | yes | [VM guest image](#guest-image)| [debug console][debug-console] | Used to synchronise the time with the host |
-| container workload (`sh(1)` in [the example](example-command.md)) | VM container | no | User specified (Ubuntu in [the example](example-command.md)) | [exec command](#exec-command) | Managed by the agent |
-
-See also the [process overview](#process-overview).
-
-> **Notes:**
->
-> - The "User accessible" column shows how an administrator can access
->   the environment.
->
-> - The container workload is running inside a full container
->   environment which itself is running within a VM environment.
->
-> - See the [configuration files for the `osbuilder` tool](../../../tools/osbuilder/rootfs-builder)
->   for details of the default distribution for platforms other than
->   Intel x86_64.
-
-#### Initrd image
-
-The initrd image is a compressed `cpio(1)` archive, created from a
-rootfs which is loaded into memory and used as part of the Linux
-startup process. During startup, the kernel unpacks it into a special
-instance of a `tmpfs` mount that becomes the initial root filesystem.
-
-If this image type is [configured](#configuration), when the user runs
-the [example command](example-command.md):
-
-- The [runtime](#runtime) will launch the configured [hypervisor](#hypervisor).
-- The hypervisor will boot the mini-OS image using the [guest kernel](#guest-kernel).
-- The kernel will start the init daemon as PID 1 (the [agent](#agent))
-  inside the VM root environment.
-- The [agent](#agent) will create a new container environment, setting its root
-  filesystem to that requested by the user (`ubuntu` in
-  [the example](example-command.md)).
-- The agent will then execute the command (`sh(1)` in [the example](example-command.md))
-  inside the new container.
-
-The table below summarises the default mini O/S showing the environments that are created,
-the processes running in those environments (for all platforms) and
-the root filesystem used by each service:
-
-| Process | Environment | rootfs | User accessible | Notes |
-|-|-|-|-|-|
-| [Agent](#agent) | VM root | [VM guest image](#guest-image) | [debug console][debug-console] | Runs as the init daemon (PID 1) |
-| container workload | VM container | User specified (Ubuntu in this example) | [exec command](#exec-command) | Managed by the agent |
-
-> **Notes:**
->
-> - The "User accessible" column shows how an administrator can access
->   the environment.
->
-> - It is possible to use a standard init daemon such as systemd with
->   an initrd image if this is desirable.
-
-See also the [process overview](#process-overview).
-
-#### Image summary
-
-| Image type | Default distro | Init daemon | Reason | Notes |
-|-|-|-|-|-|
-| [image](background.md#root-filesystem-image) | [Clear Linux](https://clearlinux.org) (for x86_64 systems)| systemd | Minimal and highly optimized | systemd offers flexibility |
-| [initrd](#initrd-image) | [Alpine Linux](https://alpinelinux.org) | Kata [agent](#agent) (as no systemd support) | Security hardened and tiny C library |
-
-See also:
-
-- The [osbuilder](../../../tools/osbuilder) tool
-
-  This is used to build all default image types.
-
-- The [versions database](../../../versions.yaml)
-
-  The `default-image-name` and `default-initrd-name` options specify
-  the default distributions for each image type.
+See the [guest assets](guest-assets.md) document for further
+information.
 
 ## Hypervisor
 
@@ -561,7 +420,7 @@ architecture.
 
 Kata Containers utilizes the Linux kernel DAX
 [(Direct Access filesystem)](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/Documentation/filesystems/dax.rst?h=v5.14)
-feature to efficiently map the [guest image](#guest-image) in the
+feature to efficiently map the [guest image](guest-assets.md#guest-image) in the
 [host environment](#environments) into the
 [guest VM environment](#environments) to become the VM's
 [rootfs](background.md#root-filesystem).
@@ -581,7 +440,7 @@ virtual device which is used to DAX map the VM's
 address space.
 
 The VM is then booted, specifying the `root=` kernel parameter to make
-the [guest kernel](#guest-kernel) use the appropriate emulated device
+the [guest kernel](guest-assets.md#guest-kernel) use the appropriate emulated device
 as its rootfs.
 
 ### DAX advantages
@@ -591,7 +450,7 @@ more traditional VM file and device mapping mechanisms:
 
 - Mapping as a direct access device allows the guest to directly
   access the host memory pages (such as via Execute In Place (XIP)),
-  bypassing the [guest kernel](#guest-kernel)'s page cache. This
+  bypassing the [guest kernel](guest-assets.md#guest-kernel)'s page cache. This
   zero copy provides both time and space optimizations.
 
 - Mapping as a direct access device inside the VM allows pages from the
