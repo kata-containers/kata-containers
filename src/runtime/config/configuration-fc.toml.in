@@ -332,7 +332,7 @@ disable_guest_seccomp=@DEFDISABLEGUESTSECCOMP@
 # (default: false)
 #disable_new_netns = true
 
-# if enable, the runtime will add all the kata processes inside one dedicated cgroup.
+# if enabled, the runtime will add all the kata processes inside one dedicated cgroup.
 # The container cgroups in the host are not created, just one single cgroup per sandbox.
 # The runtime caller is free to restrict or collect cgroup stats of the overall Kata sandbox.
 # The sandbox cgroup path is the parent cgroup of a container with the PodSandbox annotation.
