@@ -29,7 +29,7 @@ tracing-subscriber = "0.2.18"
 
 # Note: this crate sets the slog 'max_*' features which allows the log level
 # to be modified at runtime.
-logging = { path = "../../pkg/logging" }
+logging = { path = "../../libs/logging" }
 slog = "2.5.2"
 
 privdrop = "0.5.1"

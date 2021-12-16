@@ -75,7 +75,7 @@ assets:
       url: "https://github.com/cloud-hypervisor/cloud-hypervisor"
       uscan-url: >-
         https://github.com/cloud-hypervisor/cloud-hypervisor/tags.*/v?(\d\S+)\.tar\.gz
-      version: "v20.0"
+      version: "v20.1"
 
     firecracker:
       description: "Firecracker micro-VMM"
@@ -139,7 +139,7 @@ assets:
     architecture:
       aarch64:
         name: &default-initrd-name "alpine"
-        version: &default-initrd-version "3.13.5"
+        version: &default-initrd-version "3.15"
       # Do not use Alpine on ppc64le & s390x, the agent cannot use musl because
       # there is no such Rust target
       ppc64le:
