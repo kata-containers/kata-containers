@@ -7,11 +7,11 @@ include ../../../utils.mk
 
 default: build
 
-build: logging-crate-tests
+build: libs-crate-tests
 	@RUSTFLAGS="$(EXTRA_RUSTFLAGS) --deny warnings" cargo build --target $(TRIPLE) --$(BUILD_TYPE)
 
-logging-crate-tests:
-	make -C $(CWD)/../../libs/logging
+libs-crate-tests:
+	make -C $(CWD)/../../libs
 
 clean:
 	cargo clean
@@ -31,6 +31,6 @@ check:
 	check \
 	clean \
 	install \
-	logging-crate-tests \
+	libs-crate-tests \
 	test \
 	vendor
