@@ -21,10 +21,10 @@ STANDARD_TARGETS = build check clean install test vendor
 
 default: all
 
-all: logging-crate-tests build
+all: libs-crate-tests build
 
-logging-crate-tests:
-	make -C src/libs/logging
+libs-crate-tests:
+	make -C src/libs
 
 include utils.mk
 include ./tools/packaging/kata-deploy/local-build/Makefile
@@ -49,7 +49,7 @@ docs-url-alive-check:
 	binary-tarball \
 	default \
 	install-binary-tarball \
-	logging-crate-tests \
+	libs-crate-tests \
 	static-checks \
 	docs-url-alive-check
 
