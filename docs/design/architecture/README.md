@@ -118,7 +118,7 @@ to study this table closely to make sense of what follows:
 |-|-|-|-|-|-|-|-|
 | Host | Host | no `[1]` | no | Host specific | Host specific | Host specific | The environment provided by a standard, physical non virtualized system. |
 | VM root | Guest VM | yes | no | rootfs inside the [guest image](#guest-image) | Hypervisor specific `[2]` | `ext4` | The first (or top) level VM environment created on a host system. |
-| VM container root | Container | yes | yes | rootfs type requested by user ([`ubuntu` in the example](example-command.md)) | `kataShared` | [virtio FS](#virtio-fs) | The first (or top) level container environment created inside the VM. Based on the [OCI bundle](background.md#oci-bundle). |
+| VM container root | Container | yes | yes | rootfs type requested by user ([`ubuntu` in the example](example-command.md)) | `kataShared` | [virtio FS](storage.md#virtio-fs) | The first (or top) level container environment created inside the VM. Based on the [OCI bundle](background.md#oci-bundle). |
 
 **Key:**
 
@@ -163,7 +163,7 @@ created using the containerd container manager:
    - The hypervisor [DAX](#dax) shares the [guest image](#guest-image)
      into the VM to become the VM [rootfs](background.md#root-filesystem) (mounted on a `/dev/pmem*` device),
      which is known as the [VM root environment](#environments).
-   - The hypervisor mounts the [OCI bundle](background.md#oci-bundle), using [virtio FS](#virtio-fs),
+   - The hypervisor mounts the [OCI bundle](background.md#oci-bundle), using [virtio FS](storage.md#virtio-fs),
      into a container specific directory inside the VM's rootfs.
 
      This container specific directory will become the
@@ -505,7 +505,7 @@ created with containerd using our [example command](example-command.md):
 | Description | Host | VM root environment | VM container environment |
 |-|-|-|-|
 | Container manager | `containerd` | |
-| Kata Containers | [runtime](#runtime), [`virtiofsd`](#virtio-fs), [hypervisor](#hypervisor) | [agent](#agent) |
+| Kata Containers | [runtime](#runtime), [`virtiofsd`](storage.md#virtio-fs), [hypervisor](#hypervisor) | [agent](#agent) |
 | User [workload](#workload) | | | [`ubuntu sh`](example-command.md) |
 
 ## Networking
@@ -557,48 +557,7 @@ The following diagram illustrates the Kata Containers network hotplug workflow.
 
 ## Storage
 
-### virtio SCSI
-
-If a block-based graph driver is [configured](#configuration),
-`virtio-scsi` is used to _share_ the workload image (such as
-`busybox:latest`) into the container's environment inside the VM.
-
-### virtio FS
-
-If a block-based graph driver is _not_ [configured](#configuration), a
-[`virtio-fs`](https://virtio-fs.gitlab.io) (`VIRTIO`) overlay
-filesystem mount point is used to _share_ the workload image instead. The
-[agent](#agent) uses this mount point as the root filesystem for the
-container processes.
-
-For virtio-fs, the [runtime](#runtime) starts one `virtiofsd` daemon
-(that runs in the host context) for each VM created.
-
-### Devicemapper
-
-The
-[devicemapper `snapshotter`](https://github.com/containerd/containerd/tree/master/snapshots/devmapper)
-is a special case. The `snapshotter` uses dedicated block devices
-rather than formatted filesystems, and operates at the block level
-rather than the file level. This knowledge is used to directly use the
-underlying block device instead of the overlay file system for the
-container root file system. The block device maps to the top
-read-write layer for the overlay. This approach gives much better I/O
-performance compared to using `virtio-fs` to share the container file
-system.
-
-#### Hot plug and unplug
-
-Kata Containers has the ability to hot plug add and hot plug remove
-block devices. This makes it possible to use block devices for
-containers started after the VM has been launched.
-
-Users can check to see if the container uses the `devicemapper` block
-device as its rootfs by calling `mount(8)` within the container. If
-the `devicemapper` block device is used, the root filesystem (`/`)
-will be mounted from `/dev/vda`. Users can disable direct mounting of
-the underlying block device through the runtime
-[configuration](#configuration).
+See the [storage document](storage.md).
 
 ## Kubernetes support
 
