@@ -99,6 +99,17 @@ type SandboxStats struct {
 	Cpus        int
 }
 
+type SandboxResourceSizing struct {
+	// The number of CPUs required for the sandbox workload(s)
+	WorkloadCPUs uint32
+	// The base number of CPUs for the VM that are assigned as overhead
+	BaseCPUs uint32
+	// The amount of memory required for the sandbox workload(s)
+	WorkloadMemMB uint32
+	// The base amount of memory required for that VM that is assigned as overhead
+	BaseMemMB uint32
+}
+
 // SandboxConfig is a Sandbox configuration.
 type SandboxConfig struct {
 	// Volumes is a list of shared volumes between the host and the Sandbox.
@@ -131,6 +142,11 @@ type SandboxConfig struct {
 	NetworkConfig NetworkConfig
 
 	HypervisorConfig HypervisorConfig
+
+	SandboxResources SandboxResourceSizing
+
+	// StaticResourceMgmt indicates if the shim should rely on statically sizing the sandbox (VM)
+	StaticResourceMgmt bool
 
 	ShmSize uint64
 
@@ -1573,7 +1589,7 @@ func (s *Sandbox) createContainers(ctx context.Context) error {
 	}
 
 	// Update resources after having added containers to the sandbox, since
-	// container status is requiered to know if more resources should be added.
+	// container status is required to know if more resources should be added.
 	if err := s.updateResources(ctx); err != nil {
 		return err
 	}
@@ -1909,6 +1925,10 @@ func (s *Sandbox) updateResources(ctx context.Context) error {
 		return fmt.Errorf("sandbox config is nil")
 	}
 
+	if s.config.StaticResourceMgmt {
+		s.Logger().Debug("no resources updated: static resource management is set")
+		return nil
+	}
 	sandboxVCPUs, err := s.calculateSandboxCPUs()
 	if err != nil {
 		return err

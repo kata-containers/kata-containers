@@ -137,19 +137,20 @@ type hypervisor struct {
 }
 
 type runtime struct {
-	InterNetworkModel   string   `toml:"internetworking_model"`
-	JaegerEndpoint      string   `toml:"jaeger_endpoint"`
-	JaegerUser          string   `toml:"jaeger_user"`
-	JaegerPassword      string   `toml:"jaeger_password"`
-	VfioMode            string   `toml:"vfio_mode"`
-	SandboxBindMounts   []string `toml:"sandbox_bind_mounts"`
-	Experimental        []string `toml:"experimental"`
-	Debug               bool     `toml:"enable_debug"`
-	Tracing             bool     `toml:"enable_tracing"`
-	DisableNewNetNs     bool     `toml:"disable_new_netns"`
-	DisableGuestSeccomp bool     `toml:"disable_guest_seccomp"`
-	SandboxCgroupOnly   bool     `toml:"sandbox_cgroup_only"`
-	EnablePprof         bool     `toml:"enable_pprof"`
+	InterNetworkModel         string   `toml:"internetworking_model"`
+	JaegerEndpoint            string   `toml:"jaeger_endpoint"`
+	JaegerUser                string   `toml:"jaeger_user"`
+	JaegerPassword            string   `toml:"jaeger_password"`
+	VfioMode                  string   `toml:"vfio_mode"`
+	SandboxBindMounts         []string `toml:"sandbox_bind_mounts"`
+	Experimental              []string `toml:"experimental"`
+	Debug                     bool     `toml:"enable_debug"`
+	Tracing                   bool     `toml:"enable_tracing"`
+	DisableNewNetNs           bool     `toml:"disable_new_netns"`
+	DisableGuestSeccomp       bool     `toml:"disable_guest_seccomp"`
+	SandboxCgroupOnly         bool     `toml:"sandbox_cgroup_only"`
+	StaticSandboxResourceMgmt bool     `toml:"static_sandbox_resource_mgmt"`
+	EnablePprof               bool     `toml:"enable_pprof"`
 }
 
 type agent struct {
@@ -1125,6 +1126,7 @@ func LoadConfiguration(configPath string, ignoreLogging bool) (resolvedConfigPat
 
 	config.DisableGuestSeccomp = tomlConf.Runtime.DisableGuestSeccomp
 
+	config.StaticSandboxResourceMgmt = tomlConf.Runtime.StaticSandboxResourceMgmt
 	config.SandboxCgroupOnly = tomlConf.Runtime.SandboxCgroupOnly
 	config.DisableNewNetNs = tomlConf.Runtime.DisableNewNetNs
 	config.EnablePprof = tomlConf.Runtime.EnablePprof
