@@ -52,12 +52,12 @@ RUN [ "$(uname -m)" != "s390x" ] && apt-get install -y libpmem-dev || true
 
 ARG QEMU_REPO
 
-RUN cd  .. && git clone "${QEMU_REPO}" qemu
+RUN cd  .. && git clone --depth=1 "${QEMU_REPO}" qemu
 
 # commit/tag/branch
 ARG QEMU_VERSION
 
-RUN git checkout "${QEMU_VERSION}"
+RUN git fetch --depth=1 origin "${QEMU_VERSION}" && git checkout FETCH_HEAD
 RUN git clone https://github.com/qemu/capstone.git capstone
 RUN git clone https://github.com/qemu/keycodemapdb.git ui/keycodemapdb
 RUN git clone https://github.com/qemu/meson.git meson
