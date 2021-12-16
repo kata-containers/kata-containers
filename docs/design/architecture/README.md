@@ -14,6 +14,18 @@ and supports [multiple hypervisors](../../hypervisors.md).
 
 This document is a summary of the Kata Containers architecture.
 
+## Background knowledge
+
+This document assumes the reader understands a number of concepts
+related to containers and file systems. The
+[background](background.md) document explains these concepts.
+
+## Example command
+
+This document makes use of a particular [example
+command](example-command.md) throughout the text to illustrate certain
+concepts.
+
 ## Virtualization
 
 For details on how Kata Containers maps container concepts to VM
@@ -74,126 +86,18 @@ launch both Pod and OCI compatible containers with a single
 alone `kata-proxy` process is required, even if VSOCK is not
 available.
 
-## Root filesystem
-
-This document uses the term _rootfs_ to refer to a root filesystem
-which is mounted as the top-level directory ("`/`") and often referred
-to as _slash_.
-
-It is important to understand this term since the overall system uses
-multiple different rootfs's (as explained in the
-[Environments](#environments) section.
-
-## Example command
-
-The following containerd command creates a container. It is referred
-to throughout this document to help explain various points:
-
-```bash
-$ sudo ctr run --runtime "io.containerd.kata.v2" --rm -t "quay.io/libpod/ubuntu:latest" foo sh
-```
-
-This command requests that containerd:
-
-- Create a container (`ctr run`).
-- Use the Kata [shimv2](#shim-v2-architecture) runtime (`--runtime "io.containerd.kata.v2"`).
-- Delete the container when it [exits](#workload-exit) (`--rm`).
-- Attach the container to the user's terminal (`-t`).
-- Use the Ubuntu Linux [container image](#container-image)
-  to create the container [rootfs](#root-filesystem) that will become
-  the [container environment](#environments)
-  (`quay.io/libpod/ubuntu:latest`).
-- Create the container with the name "`foo`".
-- Run the `sh(1)` command in the Ubuntu rootfs based container
-  environment.
-
-  The command specified here is referred to as the [workload](#workload).
-
-> **Note:**
->
-> For the purposes of this document and to keep explanations
-> simpler, we assume the user is running this command in the
-> [host environment](#environments).
-
-## Container image
-
-In the [example command](#example-command) the user has specified the
-type of container they wish to run via the container image name:
-`ubuntu`. This image name corresponds to a _container image_ that can
-be used to create a container with an Ubuntu Linux environment. Hence,
-in our [example](#example-command), the `sh(1)` command will be run
-inside a container which has an Ubuntu rootfs.
-
-> **Note:**
->
-> The term _container image_ is confusing since the image in question
-> is **not** a container: it is simply a set of files (_an image_)
-> that can be used to _create_ a container. The term _container
-> template_ would be more accurate but the term _container image_ is
-> commonly used so this document uses the standard term.
-
-For the purposes of this document, the most important part of the
-[example command line](#example-command) is the container image the
-user has requested. Normally, the container manager will _pull_
-(download) a container image from a remote site and store a copy
-locally. This local container image is used by the container manager
-to create an [OCI bundle](#oci-bundle) which will form the environment
-the container will run in. After creating the OCI bundle, the
-container manager launches a [runtime](#runtime) which will create the
-container using the provided OCI bundle.
-
-## OCI bundle
-
-To understand what follows, it is important to know at a high level
-how an OCI ([Open Containers Initiative](https://opencontainers.org)) compatible container is created.
-
-An OCI compatible container is created by taking a
-[container image](#container-image) and converting the embedded rootfs
-into an
-[OCI rootfs bundle](https://github.com/opencontainers/runtime-spec/blob/main/bundle.md),
-or more simply, an _OCI bundle_.
-
-An OCI bundle is a `tar(1)` archive normally created by a container
-manager which is passed to an OCI [runtime](#runtime) which converts
-it into a full container rootfs. The bundle contains two assets:
-
-- A container image [rootfs](#root-filesystem)
-
-  This is simply a directory of files that will be used to represent
-  the rootfs for the container.
-
-  For the [example command](#example-command), the directory will
-  contain the files necessary to create a minimal Ubuntu root
-  filesystem.
-
-- An [OCI configuration file](https://github.com/opencontainers/runtime-spec/blob/main/config.md)
-
-  This is a JSON file called `config.json`.
-
-  The container manager will create this file so that:
-
-  - The `root.path` value is set to the full path of the specified
-    container rootfs.
-
-    In [the example](#example-command) this value will be `ubuntu`.
-
-  - The `process.args` array specifies the list of commands the user
-    wishes to run. This is known as the [workload](#workload).
-
-    In [the example](#example-command) the workload is `sh(1)`.
-
 ## Workload
 
 The workload is the command the user requested to run in the
-container and is specified in the [OCI bundle](#oci-bundle)'s
+container and is specified in the [OCI bundle](background.md#oci-bundle)'s
 configuration file.
 
-In our [example](#example-command), the workload is the `sh(1)` command.
+In our [example](example-command.md), the workload is the `sh(1)` command.
 
 ### Workload root filesystem
 
 For details of how the [runtime](#runtime) makes the
-[container image](#container-image) chosen by the user available to
+[container image](background.md#container-image) chosen by the user available to
 the workload process, see the
 [Container creation](#container-creation) and [storage](#storage) sections.
 
@@ -214,7 +118,7 @@ to study this table closely to make sense of what follows:
 |-|-|-|-|-|-|-|-|
 | Host | Host | no `[1]` | no | Host specific | Host specific | Host specific | The environment provided by a standard, physical non virtualized system. |
 | VM root | Guest VM | yes | no | rootfs inside the [guest image](#guest-image) | Hypervisor specific `[2]` | `ext4` | The first (or top) level VM environment created on a host system. |
-| VM container root | Container | yes | yes | rootfs type requested by user ([`ubuntu` in the example](#example-command)) | `kataShared` | [virtio FS](#virtio-fs) | The first (or top) level container environment created inside the VM. Based on the [OCI bundle](#oci-bundle). |
+| VM container root | Container | yes | yes | rootfs type requested by user ([`ubuntu` in the example](example-command.md)) | `kataShared` | [virtio FS](#virtio-fs) | The first (or top) level container environment created inside the VM. Based on the [OCI bundle](background.md#oci-bundle). |
 
 **Key:**
 
@@ -226,7 +130,7 @@ to study this table closely to make sense of what follows:
 > **Notes:**
 >
 > - The word "root" is used to mean _top level_ here in a similar
->   manner to the term [rootfs](#root-filesystem).
+>   manner to the term [rootfs](background.md#root-filesystem).
 >
 > - The term "first level" prefix used above is important since it implies
 >   that it is possible to create multi level systems. However, they do
@@ -247,7 +151,7 @@ The steps below show at a high level how a Kata Containers container is
 created using the containerd container manager:
 
 1. The user requests the creation of a container by running a command
-   like the [example command](#example-command).
+   like the [example command](example-command.md).
 1. The container manager daemon runs a single instance of the Kata
    [runtime](#runtime).
 1. The Kata runtime loads its [configuration file](#configuration).
@@ -257,9 +161,9 @@ created using the containerd container manager:
    [guest assets](#guest-assets):
 
    - The hypervisor [DAX](#dax) shares the [guest image](#guest-image)
-     into the VM to become the VM [rootfs](#root-filesystem) (mounted on a `/dev/pmem*` device),
+     into the VM to become the VM [rootfs](background.md#root-filesystem) (mounted on a `/dev/pmem*` device),
      which is known as the [VM root environment](#environments).
-   - The hypervisor mounts the [OCI bundle](#oci-bundle), using [virtio FS](#virtio-fs),
+   - The hypervisor mounts the [OCI bundle](background.md#oci-bundle), using [virtio FS](#virtio-fs),
      into a container specific directory inside the VM's rootfs.
 
      This container specific directory will become the
@@ -300,10 +204,10 @@ created using the containerd container manager:
 >
 > At this point, the container is running and:
 >
-> - The [workload](#workload) process ([`sh(1)` in the example](#example-command))
+> - The [workload](#workload) process ([`sh(1)` in the example](example-command.md))
 >   is running in the [container environment](#environments).
 > - The user is now able to interact with the workload
->   (using the [`ctr` command in the example](#example-command)).
+>   (using the [`ctr` command in the example](example-command.md)).
 > - The [agent](#agent), running inside the VM is monitoring the
 >   [workload](#workload) process.
 > - The [runtime](#runtime) is waiting for the agent's `WaitProcess` API
@@ -402,7 +306,7 @@ The default packaged rootfs image, sometimes referred to as the _mini
 O/S_, is a highly optimized container bootstrap system.
 
 If this image type is [configured](#configuration), when the user runs
-the [example command](#example-command):
+the [example command](example-command.md):
 
 - The [runtime](#runtime) will launch the configured [hypervisor](#hypervisor).
 - The hypervisor will boot the mini-OS image using the [guest kernel](#guest-kernel).
@@ -410,8 +314,8 @@ the [example command](#example-command):
 - `systemd`, running inside the mini-OS context, will launch the [agent](#agent)
   in the root context of the VM.
 - The agent will create a new container environment, setting its root
-  filesystem to that requested by the user (Ubuntu in [the example](#example-command)).
-- The agent will then execute the command (`sh(1)` in [the example](#example-command))
+  filesystem to that requested by the user (Ubuntu in [the example](example-command.md)).
+- The agent will then execute the command (`sh(1)` in [the example](example-command.md))
   inside the new container.
 
 The table below summarises the default mini O/S showing the
@@ -424,7 +328,7 @@ each service:
 | systemd | VM root | n/a | [VM guest image](#guest-image)| [debug console][debug-console] | The init daemon, running as PID 1 |
 | [Agent](#agent) | VM root | yes | [VM guest image](#guest-image)| [debug console][debug-console] | Runs as a systemd service |
 | `chronyd` | VM root | yes | [VM guest image](#guest-image)| [debug console][debug-console] | Used to synchronise the time with the host |
-| container workload (`sh(1)` in [the example](#example-command)) | VM container | no | User specified (Ubuntu in [the example](#example-command)) | [exec command](#exec-command) | Managed by the agent |
+| container workload (`sh(1)` in [the example](example-command.md)) | VM container | no | User specified (Ubuntu in [the example](example-command.md)) | [exec command](#exec-command) | Managed by the agent |
 
 See also the [process overview](#process-overview).
 
@@ -448,7 +352,7 @@ startup process. During startup, the kernel unpacks it into a special
 instance of a `tmpfs` mount that becomes the initial root filesystem.
 
 If this image type is [configured](#configuration), when the user runs
-the [example command](#example-command):
+the [example command](example-command.md):
 
 - The [runtime](#runtime) will launch the configured [hypervisor](#hypervisor).
 - The hypervisor will boot the mini-OS image using the [guest kernel](#guest-kernel).
@@ -456,8 +360,8 @@ the [example command](#example-command):
   inside the VM root environment.
 - The [agent](#agent) will create a new container environment, setting its root
   filesystem to that requested by the user (`ubuntu` in
-  [the example](#example-command)).
-- The agent will then execute the command (`sh(1)` in [the example](#example-command))
+  [the example](example-command.md)).
+- The agent will then execute the command (`sh(1)` in [the example](example-command.md))
   inside the new container.
 
 The table below summarises the default mini O/S showing the environments that are created,
@@ -483,7 +387,7 @@ See also the [process overview](#process-overview).
 
 | Image type | Default distro | Init daemon | Reason | Notes |
 |-|-|-|-|-|
-| [image](#root-filesystem-image) | [Clear Linux](https://clearlinux.org) (for x86_64 systems)| systemd | Minimal and highly optimized | systemd offers flexibility |
+| [image](background.md#root-filesystem-image) | [Clear Linux](https://clearlinux.org) (for x86_64 systems)| systemd | Minimal and highly optimized | systemd offers flexibility |
 | [initrd](#initrd-image) | [Alpine Linux](https://alpinelinux.org) | Kata [agent](#agent) (as no systemd support) | Security hardened and tiny C library |
 
 See also:
@@ -596,13 +500,13 @@ The configuration file is also used to enable runtime [debug output](../../Devel
 
 The table below shows an example of the main processes running in the
 different [environments](#environments) when a Kata Container is
-created with containerd using our [example command](#example-command):
+created with containerd using our [example command](example-command.md):
 
 | Description | Host | VM root environment | VM container environment |
 |-|-|-|-|
 | Container manager | `containerd` | |
 | Kata Containers | [runtime](#runtime), [`virtiofsd`](#virtio-fs), [hypervisor](#hypervisor) | [agent](#agent) |
-| User [workload](#workload) | | | [`ubuntu sh`](#example-command) |
+| User [workload](#workload) | | | [`ubuntu sh`](example-command.md) |
 
 ## Networking
 
@@ -776,7 +680,7 @@ Kata Containers utilizes the Linux kernel DAX
 feature to efficiently map the [guest image](#guest-image) in the
 [host environment](#environments) into the
 [guest VM environment](#environments) to become the VM's
-[rootfs](#root-filesystem).
+[rootfs](background.md#root-filesystem).
 
 If the [configured](#configuration) [hypervisor](#hypervisor) is set
 to either QEMU or Cloud Hypervisor, DAX is used with the feature shown
@@ -789,7 +693,7 @@ in the table below:
 
 The features in the table above are equivalent in that they provide a memory-mapped
 virtual device which is used to DAX map the VM's
-[rootfs](#root-filesystem) into the [VM guest](#environments) memory
+[rootfs](background.md#root-filesystem) into the [VM guest](#environments) memory
 address space.
 
 The VM is then booted, specifying the `root=` kernel parameter to make
