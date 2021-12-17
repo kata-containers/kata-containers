@@ -370,7 +370,7 @@ build_bundle_dir_if_necessary() {
 }
 
 build_agent_ctl() {
-    cd ${GOPATH}/src/${katacontainers_repo}/tools/agent-ctl/
+    cd ${GOPATH}/src/${katacontainers_repo}/src/tools/agent-ctl/
     sudo chown -R ${USER}:${USER} "${HOME}/.cargo/registry"
     make
     cd "./target/x86_64-unknown-linux-musl/release"
