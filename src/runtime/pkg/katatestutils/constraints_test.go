@@ -8,7 +8,6 @@ package katatestutils
 import (
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -316,7 +315,7 @@ func testGetDistro() (name, version string, err error) {
 func testGetKernelVersion() (version string, err error) {
 	const file = "/proc/version"
 
-	bytes, err := ioutil.ReadFile(file)
+	bytes, err := os.ReadFile(file)
 	if err != nil {
 		return "", err
 	}
@@ -416,7 +415,7 @@ func TestGetFileContents(t *testing.T) {
 		{"foo\nbar"},
 	}
 
-	dir, err := ioutil.TempDir("", "")
+	dir, err := os.MkdirTemp("", "")
 	assert.NoError(err)
 	defer os.RemoveAll(dir)
 
@@ -428,7 +427,7 @@ func TestGetFileContents(t *testing.T) {
 
 	for _, d := range data {
 		// create the file
-		err = ioutil.WriteFile(file, []byte(d.contents), testFileMode)
+		err = os.WriteFile(file, []byte(d.contents), testFileMode)
 		assert.NoError(err)
 		defer os.Remove(file)
 

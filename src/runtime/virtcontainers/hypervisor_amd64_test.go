@@ -6,7 +6,6 @@
 package virtcontainers
 
 import (
-	"io/ioutil"
 	"os"
 	"testing"
 
@@ -70,7 +69,7 @@ func TestRunningOnVMM(t *testing.T) {
 }
 
 func TestRunningOnVMMNotExistingCPUInfoPathFailure(t *testing.T) {
-	f, err := ioutil.TempFile("", "cpuinfo")
+	f, err := os.CreateTemp("", "cpuinfo")
 	assert.NoError(t, err)
 
 	filePath := f.Name()

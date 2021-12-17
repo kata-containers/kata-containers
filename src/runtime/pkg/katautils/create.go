@@ -9,7 +9,7 @@ package katautils
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"strconv"
 	"strings"
 
@@ -183,7 +183,7 @@ func CreateSandbox(ctx context.Context, vci vc.VC, ociSpec specs.Spec, runtimeCo
 var procFIPS = "/proc/sys/crypto/fips_enabled"
 
 func checkForFIPS(sandboxConfig *vc.SandboxConfig) error {
-	content, err := ioutil.ReadFile(procFIPS)
+	content, err := os.ReadFile(procFIPS)
 	if err != nil {
 		// In case file cannot be found or read, simply return
 		return nil

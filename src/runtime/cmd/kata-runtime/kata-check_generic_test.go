@@ -9,7 +9,6 @@
 package main
 
 import (
-	"io/ioutil"
 	"os"
 	"testing"
 
@@ -19,7 +18,7 @@ import (
 func testSetCPUTypeGeneric(t *testing.T) {
 	assert := assert.New(t)
 
-	tmpdir, err := ioutil.TempDir("", "")
+	tmpdir, err := os.MkdirTemp("", "")
 	assert.NoError(err)
 	defer os.RemoveAll(tmpdir)
 

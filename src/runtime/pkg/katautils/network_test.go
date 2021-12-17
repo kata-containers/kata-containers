@@ -7,7 +7,6 @@ package katautils
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"syscall"
@@ -24,7 +23,7 @@ import (
 func TestGetNetNsFromBindMount(t *testing.T) {
 	assert := assert.New(t)
 
-	tmpdir, err := ioutil.TempDir("", "")
+	tmpdir, err := os.MkdirTemp("", "")
 	assert.NoError(err)
 	defer os.RemoveAll(tmpdir)
 
@@ -53,7 +52,7 @@ func TestGetNetNsFromBindMount(t *testing.T) {
 	}
 
 	for i, d := range data {
-		err := ioutil.WriteFile(mountFile, []byte(d.contents), 0640)
+		err := os.WriteFile(mountFile, []byte(d.contents), 0640)
 		assert.NoError(err)
 
 		path, err := getNetNsFromBindMount(tmpNSPath, mountFile)
@@ -86,7 +85,7 @@ func TestHostNetworkingRequested(t *testing.T) {
 	assert.Error(err)
 
 	// Bind-mounted Netns
-	tmpdir, err := ioutil.TempDir("", "")
+	tmpdir, err := os.MkdirTemp("", "")
 	assert.NoError(err)
 	defer os.RemoveAll(tmpdir)
 

@@ -8,7 +8,6 @@ package virtcontainers
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"net"
 	"os"
 	"path/filepath"
@@ -264,7 +263,7 @@ func TestQemuArchBaseAppendImage(t *testing.T) {
 	assert := assert.New(t)
 	qemuArchBase := newQemuArchBase()
 
-	image, err := ioutil.TempFile("", "img")
+	image, err := os.CreateTemp("", "img")
 	assert.NoError(err)
 	defer os.Remove(image.Name())
 	err = image.Close()

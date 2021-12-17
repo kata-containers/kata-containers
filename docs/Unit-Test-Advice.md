@@ -286,8 +286,8 @@ func TestSomething(t *testing.T) {
     assert := assert.New(t)
 
     // Create a temporary directory
-    tmpdir, err := ioutil.TempDir("", "")    
-    assert.NoError(err)             
+    tmpdir, err := os.MkdirTemp("", "")
+    assert.NoError(err)
 
     // Delete it at the end of the test
     defer os.RemoveAll(tmpdir) 

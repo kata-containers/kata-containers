@@ -7,7 +7,7 @@ package katamonitor
 
 import (
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net"
 	"net/http"
 	"os"
@@ -90,7 +90,7 @@ func doGet(sandboxID string, timeoutInSeconds time.Duration, urlPath string) ([]
 		resp.Body.Close()
 	}()
 
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
 	}

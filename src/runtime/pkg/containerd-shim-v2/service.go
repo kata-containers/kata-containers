@@ -7,7 +7,7 @@ package containerdshim
 
 import (
 	"context"
-	"io/ioutil"
+	"io"
 	"os"
 	sysexec "os/exec"
 	"sync"
@@ -80,7 +80,7 @@ func New(ctx context.Context, id string, publisher cdshim.Publisher, shutdown fu
 	// Discard the log before shim init its log output. Otherwise
 	// it will output into stdio, from which containerd would like
 	// to get the shim's socket address.
-	logrus.SetOutput(ioutil.Discard)
+	logrus.SetOutput(io.Discard)
 	opts := ctx.Value(cdshim.OptsKey{}).(cdshim.Opts)
 	if !opts.Debug {
 		logrus.SetLevel(logrus.WarnLevel)
@@ -345,7 +345,7 @@ func (s *service) Cleanup(ctx context.Context) (_ *taskAPI.DeleteResponse, err e
 	}
 
 	switch containerType {
-	case vc.PodSandbox:
+	case vc.PodSandbox, vc.SingleContainer:
 		err = cleanupContainer(spanCtx, s.id, s.id, path)
 		if err != nil {
 			return nil, err

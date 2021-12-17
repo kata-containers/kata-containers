@@ -7,7 +7,6 @@ package main
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
@@ -68,7 +67,7 @@ foo     : bar
 		{validContents, validNormalizeVendorName, validNormalizeModelName, false},
 	}
 
-	tmpdir, err := ioutil.TempDir("", "")
+	tmpdir, err := os.MkdirTemp("", "")
 	if err != nil {
 		panic(err)
 	}

@@ -7,7 +7,6 @@ package virtcontainers
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
@@ -391,7 +390,7 @@ func TestGetHostMemorySizeKb(t *testing.T) {
 		},
 	}
 
-	dir, err := ioutil.TempDir("", "")
+	dir, err := os.MkdirTemp("", "")
 	assert.NoError(err)
 	defer os.RemoveAll(dir)
 
@@ -400,7 +399,7 @@ func TestGetHostMemorySizeKb(t *testing.T) {
 	assert.Error(err)
 
 	for _, d := range data {
-		err = ioutil.WriteFile(file, []byte(d.contents), os.FileMode(0640))
+		err = os.WriteFile(file, []byte(d.contents), os.FileMode(0640))
 		assert.NoError(err)
 		defer os.Remove(file)
 
@@ -415,7 +414,7 @@ func TestGetHostMemorySizeKb(t *testing.T) {
 func TestCheckCmdline(t *testing.T) {
 	assert := assert.New(t)
 
-	cmdlineFp, err := ioutil.TempFile("", "")
+	cmdlineFp, err := os.CreateTemp("", "")
 	assert.NoError(err)
 	_, err = cmdlineFp.WriteString("quiet root=/dev/sda2")
 	assert.NoError(err)
@@ -438,7 +437,7 @@ type testNestedVMMData struct {
 func genericTestRunningOnVMM(t *testing.T, data []testNestedVMMData) {
 	assert := assert.New(t)
 	for _, d := range data {
-		f, err := ioutil.TempFile("", "cpuinfo")
+		f, err := os.CreateTemp("", "cpuinfo")
 		assert.NoError(err)
 		defer os.Remove(f.Name())
 		defer f.Close()

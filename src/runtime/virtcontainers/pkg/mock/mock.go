@@ -8,9 +8,9 @@ package mock
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"net"
 	"net/url"
+	"os"
 
 	"github.com/containerd/ttrpc"
 	gpb "github.com/gogo/protobuf/types"
@@ -21,7 +21,7 @@ import (
 var testKataMockHybridVSockURLTempl = "mock://%s/kata-mock-hybrid-vsock.sock"
 
 func GenerateKataMockHybridVSock() (string, error) {
-	dir, err := ioutil.TempDir("", "kata-mock-hybrid-vsock-test")
+	dir, err := os.MkdirTemp("", "kata-mock-hybrid-vsock-test")
 	if err != nil {
 		return "", err
 	}

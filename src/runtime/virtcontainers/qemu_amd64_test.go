@@ -8,7 +8,6 @@ package virtcontainers
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"testing"
 
@@ -111,7 +110,7 @@ func TestQemuAmd64MemoryTopology(t *testing.T) {
 func TestQemuAmd64AppendImage(t *testing.T) {
 	assert := assert.New(t)
 
-	f, err := ioutil.TempFile("", "img")
+	f, err := os.CreateTemp("", "img")
 	assert.NoError(err)
 	defer func() { _ = f.Close() }()
 	defer func() { _ = os.Remove(f.Name()) }()

@@ -7,7 +7,6 @@
 package manager
 
 import (
-	"io/ioutil"
 	"os"
 	"testing"
 
@@ -114,7 +113,7 @@ func TestIsLargeBarSpace(t *testing.T) {
 	assert.Error(err)
 	assert.False(bs)
 
-	f, err := ioutil.TempFile("", "pci")
+	f, err := os.CreateTemp("", "pci")
 	assert.NoError(err)
 	defer f.Close()
 	defer os.RemoveAll(f.Name())

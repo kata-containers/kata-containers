@@ -41,9 +41,9 @@ the agent protocol and the client and server implementations.
 
 | Description | File | Example RPC or function | Example summary |
 |-|-|-|-|
-| Protocol buffers definition of the Kata Containers Agent API protocol | [`agent.proto`](../../src/agent/protocols/protos/agent.proto) | `CreateContainer` | API to create a Kata container. |
+| Protocol buffers definition of the Kata Containers Agent API protocol | [`agent.proto`](../../agent/protocols/protos/agent.proto) | `CreateContainer` | API to create a Kata container. |
 | Agent Control (client) API calls | [`src/client.rs`](src/client.rs) | `agent_cmd_container_create()` | Agent Control tool function that calls the `CreateContainer` API. |
-| Agent (server) API implementations | [`rpc.rs`](../../src/agent/src/rpc.rs) | `create_container()` | Server function that implements the `CreateContainers` API. |
+| Agent (server) API implementations | [`rpc.rs`](../../agent/src/rpc.rs) | `create_container()` | Server function that implements the `CreateContainers` API. |
 
 ## Run the tool
 

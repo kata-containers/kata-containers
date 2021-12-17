@@ -9,7 +9,6 @@ package katatestutils
 import (
 	"encoding/json"
 	"errors"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -347,7 +346,7 @@ func IsInGitHubActions() bool {
 func SetupOCIConfigFile(t *testing.T) (rootPath string, bundlePath, ociConfigFile string) {
 	assert := assert.New(t)
 
-	tmpdir, err := ioutil.TempDir("", "katatest-")
+	tmpdir, err := os.MkdirTemp("", "katatest-")
 	assert.NoError(err)
 
 	bundlePath = filepath.Join(tmpdir, "bundle")
@@ -355,7 +354,7 @@ func SetupOCIConfigFile(t *testing.T) (rootPath string, bundlePath, ociConfigFil
 	assert.NoError(err)
 
 	ociConfigFile = filepath.Join(bundlePath, "config.json")
-	err = ioutil.WriteFile(ociConfigFile, []byte(busyboxConfigJson), testFileMode)
+	err = os.WriteFile(ociConfigFile, []byte(busyboxConfigJson), testFileMode)
 	assert.NoError(err)
 
 	return tmpdir, bundlePath, ociConfigFile
@@ -372,5 +371,5 @@ func WriteOCIConfigFile(spec specs.Spec, configPath string) error {
 		return err
 	}
 
-	return ioutil.WriteFile(configPath, bytes, testFileMode)
+	return os.WriteFile(configPath, bytes, testFileMode)
 }
