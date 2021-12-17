@@ -130,7 +130,7 @@ func Trace(parent context.Context, logger *logrus.Entry, name string, tags ...ma
 		if logger == nil {
 			logger = kataTraceLogger
 		}
-		logger.WithField("type", "bug").Error("trace called before context set")
+		logger.WithField("type", "bug").WithField("name", name).Error("trace called before context set")
 		parent = context.Background()
 	}
 
