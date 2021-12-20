@@ -11,7 +11,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path"
 	"path/filepath"
@@ -100,7 +99,7 @@ func TestMain(m *testing.M) {
 }
 
 func createEmptyFile(path string) (err error) {
-	return ioutil.WriteFile(path, []byte(""), testFileMode)
+	return os.WriteFile(path, []byte(""), testFileMode)
 }
 
 func grep(pattern, file string) error {
@@ -108,7 +107,7 @@ func grep(pattern, file string) error {
 		return errors.New("need file")
 	}
 
-	bytes, err := ioutil.ReadFile(file)
+	bytes, err := os.ReadFile(file)
 	if err != nil {
 		return err
 	}
@@ -259,7 +258,7 @@ func TestMainBeforeSubCommands(t *testing.T) {
 func TestMainBeforeSubCommandsInvalidLogFile(t *testing.T) {
 	assert := assert.New(t)
 
-	tmpdir, err := ioutil.TempDir("", "katatest")
+	tmpdir, err := os.MkdirTemp("", "katatest")
 	assert.NoError(err)
 	defer os.RemoveAll(tmpdir)
 
@@ -282,7 +281,7 @@ func TestMainBeforeSubCommandsInvalidLogFile(t *testing.T) {
 func TestMainBeforeSubCommandsInvalidLogFormat(t *testing.T) {
 	assert := assert.New(t)
 
-	tmpdir, err := ioutil.TempDir("", "katatest")
+	tmpdir, err := os.MkdirTemp("", "katatest")
 	assert.NoError(err)
 	defer os.RemoveAll(tmpdir)
 
@@ -311,7 +310,7 @@ func TestMainBeforeSubCommandsInvalidLogFormat(t *testing.T) {
 func TestMainBeforeSubCommandsLoadConfigurationFail(t *testing.T) {
 	assert := assert.New(t)
 
-	tmpdir, err := ioutil.TempDir("", "katatest")
+	tmpdir, err := os.MkdirTemp("", "katatest")
 	assert.NoError(err)
 	defer os.RemoveAll(tmpdir)
 
@@ -346,7 +345,7 @@ func TestMainBeforeSubCommandsLoadConfigurationFail(t *testing.T) {
 func TestMainBeforeSubCommandsShowCCConfigPaths(t *testing.T) {
 	assert := assert.New(t)
 
-	tmpdir, err := ioutil.TempDir("", "katatest")
+	tmpdir, err := os.MkdirTemp("", "katatest")
 	assert.NoError(err)
 	defer os.RemoveAll(tmpdir)
 
@@ -410,7 +409,7 @@ func TestMainBeforeSubCommandsShowCCConfigPaths(t *testing.T) {
 func TestMainFatal(t *testing.T) {
 	assert := assert.New(t)
 
-	tmpdir, err := ioutil.TempDir("", "katatest")
+	tmpdir, err := os.MkdirTemp("", "katatest")
 	assert.NoError(err)
 	defer os.RemoveAll(tmpdir)
 
@@ -634,7 +633,7 @@ func TestMainCreateRuntime(t *testing.T) {
 func TestMainVersionPrinter(t *testing.T) {
 	assert := assert.New(t)
 
-	tmpdir, err := ioutil.TempDir("", "katatest")
+	tmpdir, err := os.MkdirTemp("", "katatest")
 	assert.NoError(err)
 	defer os.RemoveAll(tmpdir)
 

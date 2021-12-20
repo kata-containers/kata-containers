@@ -6,7 +6,6 @@
 package cgroups
 
 import (
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -110,7 +109,7 @@ func TestValidCgroupPath(t *testing.T) {
 func TestDeviceToCgroupDeviceRule(t *testing.T) {
 	assert := assert.New(t)
 
-	f, err := ioutil.TempFile("", "device")
+	f, err := os.CreateTemp("", "device")
 	assert.NoError(err)
 	f.Close()
 

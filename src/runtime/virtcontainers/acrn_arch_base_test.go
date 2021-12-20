@@ -7,7 +7,6 @@ package virtcontainers
 
 import (
 	"fmt"
-	"io/ioutil"
 	"net"
 	"os"
 	"path/filepath"
@@ -127,7 +126,7 @@ func TestAcrnArchBaseAppendImage(t *testing.T) {
 	assert := assert.New(t)
 	acrnArchBase := newAcrnArchBase()
 
-	image, err := ioutil.TempFile("", "img")
+	image, err := os.CreateTemp("", "img")
 	assert.NoError(err)
 	defer os.Remove(image.Name())
 	err = image.Close()

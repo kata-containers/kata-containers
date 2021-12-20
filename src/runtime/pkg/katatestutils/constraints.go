@@ -8,7 +8,6 @@ package katatestutils
 import (
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"strconv"
 	"strings"
@@ -63,7 +62,7 @@ type Result struct {
 
 // GetFileContents return the file contents as a string.
 func getFileContents(file string) (string, error) {
-	bytes, err := ioutil.ReadFile(file)
+	bytes, err := os.ReadFile(file)
 	if err != nil {
 		return "", err
 	}

@@ -70,7 +70,7 @@ func create(ctx context.Context, s *service, r *taskAPI.CreateTaskRequest) (*con
 	rootfs := filepath.Join(r.Bundle, "rootfs")
 
 	switch containerType {
-	case vc.PodSandbox:
+	case vc.PodSandbox, vc.SingleContainer:
 		if s.sandbox != nil {
 			return nil, fmt.Errorf("cannot create another sandbox in sandbox: %s", s.sandbox.ID())
 		}

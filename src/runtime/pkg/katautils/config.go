@@ -9,7 +9,7 @@ package katautils
 import (
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"path/filepath"
 	goruntime "runtime"
 	"strings"
@@ -1200,7 +1200,7 @@ func decodeConfig(configPath string) (tomlConfig, string, error) {
 		return tomlConf, "", fmt.Errorf("Cannot find usable config file (%v)", err)
 	}
 
-	configData, err := ioutil.ReadFile(resolved)
+	configData, err := os.ReadFile(resolved)
 	if err != nil {
 		return tomlConf, resolved, err
 	}

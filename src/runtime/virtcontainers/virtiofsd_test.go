@@ -7,7 +7,6 @@ package virtcontainers
 
 import (
 	"context"
-	"io/ioutil"
 	"os"
 	"path"
 	"strings"
@@ -30,11 +29,11 @@ func TestVirtiofsdStart(t *testing.T) {
 		ctx        context.Context
 	}
 
-	sourcePath, err := ioutil.TempDir("", "")
+	sourcePath, err := os.MkdirTemp("", "")
 	assert.NoError(err)
 	defer os.RemoveAll(sourcePath)
 
-	socketDir, err := ioutil.TempDir("", "")
+	socketDir, err := os.MkdirTemp("", "")
 	assert.NoError(err)
 	defer os.RemoveAll(socketDir)
 
@@ -104,11 +103,11 @@ func TestVirtiofsdArgs(t *testing.T) {
 func TestValid(t *testing.T) {
 	assert := assert.New(t)
 
-	sourcePath, err := ioutil.TempDir("", "")
+	sourcePath, err := os.MkdirTemp("", "")
 	assert.NoError(err)
 	defer os.RemoveAll(sourcePath)
 
-	socketDir, err := ioutil.TempDir("", "")
+	socketDir, err := os.MkdirTemp("", "")
 	assert.NoError(err)
 	defer os.RemoveAll(socketDir)
 

@@ -10,7 +10,6 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path"
 	"path/filepath"
@@ -65,7 +64,7 @@ func makeVersionBinary(file, version string) error {
 
 func createConfig(configPath string, fileData string) error {
 
-	err := ioutil.WriteFile(configPath, []byte(fileData), testFileMode)
+	err := os.WriteFile(configPath, []byte(fileData), testFileMode)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Unable to create config file %s %v\n", configPath, err)
 		return err
@@ -365,7 +364,7 @@ func TestEnvGetMetaInfo(t *testing.T) {
 }
 
 func TestEnvGetHostInfo(t *testing.T) {
-	tmpdir, err := ioutil.TempDir("", "")
+	tmpdir, err := os.MkdirTemp("", "")
 	if err != nil {
 		panic(err)
 	}
@@ -390,7 +389,7 @@ func TestEnvGetHostInfo(t *testing.T) {
 }
 
 func TestEnvGetHostInfoNoProcCPUInfo(t *testing.T) {
-	tmpdir, err := ioutil.TempDir("", "")
+	tmpdir, err := os.MkdirTemp("", "")
 	if err != nil {
 		panic(err)
 	}
@@ -407,7 +406,7 @@ func TestEnvGetHostInfoNoProcCPUInfo(t *testing.T) {
 }
 
 func TestEnvGetHostInfoNoOSRelease(t *testing.T) {
-	tmpdir, err := ioutil.TempDir("", "")
+	tmpdir, err := os.MkdirTemp("", "")
 	if err != nil {
 		panic(err)
 	}
@@ -424,7 +423,7 @@ func TestEnvGetHostInfoNoOSRelease(t *testing.T) {
 }
 
 func TestEnvGetHostInfoNoProcVersion(t *testing.T) {
-	tmpdir, err := ioutil.TempDir("", "")
+	tmpdir, err := os.MkdirTemp("", "")
 	if err != nil {
 		panic(err)
 	}
@@ -441,7 +440,7 @@ func TestEnvGetHostInfoNoProcVersion(t *testing.T) {
 }
 
 func TestEnvGetEnvInfo(t *testing.T) {
-	tmpdir, err := ioutil.TempDir("", "")
+	tmpdir, err := os.MkdirTemp("", "")
 	if err != nil {
 		panic(err)
 	}
@@ -475,7 +474,7 @@ func TestEnvGetEnvInfo(t *testing.T) {
 func TestEnvGetEnvInfoNoHypervisorVersion(t *testing.T) {
 	assert := assert.New(t)
 
-	tmpdir, err := ioutil.TempDir("", "")
+	tmpdir, err := os.MkdirTemp("", "")
 	assert.NoError(err)
 	defer os.RemoveAll(tmpdir)
 
@@ -502,7 +501,7 @@ func TestEnvGetEnvInfoNoHypervisorVersion(t *testing.T) {
 func TestEnvGetEnvInfoAgentError(t *testing.T) {
 	assert := assert.New(t)
 
-	tmpdir, err := ioutil.TempDir("", "")
+	tmpdir, err := os.MkdirTemp("", "")
 	assert.NoError(err)
 	defer os.RemoveAll(tmpdir)
 
@@ -511,7 +510,7 @@ func TestEnvGetEnvInfoAgentError(t *testing.T) {
 }
 
 func TestEnvGetEnvInfoNoOSRelease(t *testing.T) {
-	tmpdir, err := ioutil.TempDir("", "")
+	tmpdir, err := os.MkdirTemp("", "")
 	if err != nil {
 		panic(err)
 	}
@@ -531,7 +530,7 @@ func TestEnvGetEnvInfoNoOSRelease(t *testing.T) {
 }
 
 func TestEnvGetEnvInfoNoProcCPUInfo(t *testing.T) {
-	tmpdir, err := ioutil.TempDir("", "")
+	tmpdir, err := os.MkdirTemp("", "")
 	if err != nil {
 		panic(err)
 	}
@@ -551,7 +550,7 @@ func TestEnvGetEnvInfoNoProcCPUInfo(t *testing.T) {
 }
 
 func TestEnvGetEnvInfoNoProcVersion(t *testing.T) {
-	tmpdir, err := ioutil.TempDir("", "")
+	tmpdir, err := os.MkdirTemp("", "")
 	if err != nil {
 		panic(err)
 	}
@@ -571,7 +570,7 @@ func TestEnvGetEnvInfoNoProcVersion(t *testing.T) {
 }
 
 func TestEnvGetRuntimeInfo(t *testing.T) {
-	tmpdir, err := ioutil.TempDir("", "")
+	tmpdir, err := os.MkdirTemp("", "")
 	if err != nil {
 		panic(err)
 	}
@@ -588,7 +587,7 @@ func TestEnvGetRuntimeInfo(t *testing.T) {
 }
 
 func TestEnvGetAgentInfo(t *testing.T) {
-	tmpdir, err := ioutil.TempDir("", "")
+	tmpdir, err := os.MkdirTemp("", "")
 	if err != nil {
 		panic(err)
 	}
@@ -727,13 +726,13 @@ func testEnvShowJSONSettings(t *testing.T, tmpdir string, tmpfile *os.File) erro
 }
 
 func TestEnvShowSettings(t *testing.T) {
-	tmpdir, err := ioutil.TempDir("", "")
+	tmpdir, err := os.MkdirTemp("", "")
 	if err != nil {
 		panic(err)
 	}
 	defer os.RemoveAll(tmpdir)
 
-	tmpfile, err := ioutil.TempFile("", "envShowSettings-")
+	tmpfile, err := os.CreateTemp("", "envShowSettings-")
 	assert.NoError(t, err)
 	defer os.Remove(tmpfile.Name())
 
@@ -748,13 +747,13 @@ func TestEnvShowSettings(t *testing.T) {
 }
 
 func TestEnvShowSettingsInvalidFile(t *testing.T) {
-	tmpdir, err := ioutil.TempDir("", "")
+	tmpdir, err := os.MkdirTemp("", "")
 	if err != nil {
 		panic(err)
 	}
 	defer os.RemoveAll(tmpdir)
 
-	tmpfile, err := ioutil.TempFile("", "envShowSettings-")
+	tmpfile, err := os.CreateTemp("", "envShowSettings-")
 	assert.NoError(t, err)
 	defer os.Remove(tmpfile.Name())
 
@@ -772,7 +771,7 @@ func TestEnvShowSettingsInvalidFile(t *testing.T) {
 }
 
 func TestEnvHandleSettings(t *testing.T) {
-	tmpdir, err := ioutil.TempDir("", "")
+	tmpdir, err := os.MkdirTemp("", "")
 	if err != nil {
 		panic(err)
 	}
@@ -790,7 +789,7 @@ func TestEnvHandleSettings(t *testing.T) {
 	ctx.App.Metadata["configFile"] = configFile
 	ctx.App.Metadata["runtimeConfig"] = config
 
-	tmpfile, err := ioutil.TempFile("", "")
+	tmpfile, err := os.CreateTemp("", "")
 	assert.NoError(t, err)
 	defer os.Remove(tmpfile.Name())
 
@@ -806,7 +805,7 @@ func TestEnvHandleSettings(t *testing.T) {
 func TestEnvHandleSettingsInvalidParams(t *testing.T) {
 	assert := assert.New(t)
 
-	tmpdir, err := ioutil.TempDir("", "")
+	tmpdir, err := os.MkdirTemp("", "")
 	assert.NoError(err)
 	defer os.RemoveAll(tmpdir)
 
@@ -860,7 +859,7 @@ func TestEnvHandleSettingsInvalidRuntimeConfigType(t *testing.T) {
 }
 
 func TestEnvCLIFunction(t *testing.T) {
-	tmpdir, err := ioutil.TempDir("", "")
+	tmpdir, err := os.MkdirTemp("", "")
 	if err != nil {
 		panic(err)
 	}
@@ -905,7 +904,7 @@ func TestEnvCLIFunction(t *testing.T) {
 }
 
 func TestEnvCLIFunctionFail(t *testing.T) {
-	tmpdir, err := ioutil.TempDir("", "")
+	tmpdir, err := os.MkdirTemp("", "")
 	if err != nil {
 		panic(err)
 	}
@@ -941,7 +940,7 @@ func TestEnvCLIFunctionFail(t *testing.T) {
 func TestGetHypervisorInfo(t *testing.T) {
 	assert := assert.New(t)
 
-	tmpdir, err := ioutil.TempDir("", "")
+	tmpdir, err := os.MkdirTemp("", "")
 	assert.NoError(err)
 	defer os.RemoveAll(tmpdir)
 
@@ -963,7 +962,7 @@ func TestGetHypervisorInfo(t *testing.T) {
 func TestGetHypervisorInfoSocket(t *testing.T) {
 	assert := assert.New(t)
 
-	tmpdir, err := ioutil.TempDir("", "")
+	tmpdir, err := os.MkdirTemp("", "")
 	assert.NoError(err)
 	defer os.RemoveAll(tmpdir)
 

@@ -474,6 +474,7 @@ set_dax_header() {
 
 main() {
 	[ "$(id -u)" -eq 0 ] || die "$0: must be run as root"
+	[ "$#" -eq 0 ] && usage && return 0
 
 	# variables that can be overwritten by environment variables
 	local agent_bin="${AGENT_BIN:-kata-agent}"

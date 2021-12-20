@@ -75,7 +75,7 @@ assets:
       url: "https://github.com/cloud-hypervisor/cloud-hypervisor"
       uscan-url: >-
         https://github.com/cloud-hypervisor/cloud-hypervisor/tags.*/v?(\d\S+)\.tar\.gz
-      version: "v20.0"
+      version: "v20.1"
 
     firecracker:
       description: "Firecracker micro-VMM"
@@ -266,7 +266,7 @@ languages:
     issue: "https://github.com/golang/go/issues/20676"
     uscan-url: >-
       https://github.com/golang/go/tags .*/go?([\d\.]+)\.tar\.gz
-    version: "1.11.10"
+    version: "1.16.10"
     meta:
       description: |
         'newest-version' is the latest version known to work when

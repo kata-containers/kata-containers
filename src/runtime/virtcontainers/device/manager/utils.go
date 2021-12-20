@@ -8,7 +8,7 @@ package manager
 
 import (
 	"fmt"
-	"io/ioutil"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -49,7 +49,7 @@ func IsVFIOLargeBarSpaceDevice(hostPath string) (bool, error) {
 	}
 
 	iommuDevicesPath := filepath.Join(config.SysIOMMUPath, filepath.Base(hostPath), "devices")
-	deviceFiles, err := ioutil.ReadDir(iommuDevicesPath)
+	deviceFiles, err := os.ReadDir(iommuDevicesPath)
 	if err != nil {
 		return false, err
 	}
@@ -89,7 +89,7 @@ func IsVFIOLargeBarSpaceDevice(hostPath string) (bool, error) {
 }
 
 func isLargeBarSpace(resourcePath string) (bool, error) {
-	buf, err := ioutil.ReadFile(resourcePath)
+	buf, err := os.ReadFile(resourcePath)
 	if err != nil {
 		return false, fmt.Errorf("failed to read sysfs resource: %v", err)
 	}

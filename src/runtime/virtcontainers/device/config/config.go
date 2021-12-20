@@ -8,7 +8,6 @@ package config
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -353,7 +352,7 @@ func GetHostPath(devInfo DeviceInfo, vhostUserStoreEnabled bool, vhostUserStoreP
 // getBackingFile is used to fetch the backing file for the device.
 func getBackingFile(devInfo DeviceInfo) (string, error) {
 	backingFilePath := filepath.Join(getSysDevPath(devInfo), "loop", "backing_file")
-	data, err := ioutil.ReadFile(backingFilePath)
+	data, err := os.ReadFile(backingFilePath)
 	if err != nil {
 		return "", err
 	}
@@ -409,7 +408,7 @@ func GetVhostUserNodeStat(devNodePath string, devNodeStat *unix.Stat_t) (err err
 
 // Filter out name of the device node whose device type is Major:Minor from directory
 func getVhostUserDevName(dirname string, majorNum, minorNum uint32) (string, error) {
-	files, err := ioutil.ReadDir(dirname)
+	files, err := os.ReadDir(dirname)
 	if err != nil {
 		return "", err
 	}

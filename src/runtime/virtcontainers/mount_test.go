@@ -9,7 +9,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -241,7 +240,7 @@ func TestIsEphemeralStorage(t *testing.T) {
 		t.Skip(ktu.TestDisabledNeedRoot)
 	}
 
-	dir, err := ioutil.TempDir(testDir, "foo")
+	dir, err := os.MkdirTemp(testDir, "foo")
 	assert.NoError(err)
 	defer os.RemoveAll(dir)
 
@@ -319,7 +318,7 @@ func TestIsWatchable(t *testing.T) {
 	result = isWatchableMount(path)
 	assert.False(result)
 
-	testPath, err := ioutil.TempDir("", "")
+	testPath, err := os.MkdirTemp("", "")
 	assert.NoError(err)
 	defer os.RemoveAll(testPath)
 

@@ -8,7 +8,6 @@ package virtcontainers
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
@@ -299,7 +298,7 @@ func TestQemuAddDeviceSerialPortDev(t *testing.T) {
 func TestQemuAddDeviceKataVSOCK(t *testing.T) {
 	assert := assert.New(t)
 
-	dir, err := ioutil.TempDir("", "")
+	dir, err := os.MkdirTemp("", "")
 	assert.NoError(err)
 	defer os.RemoveAll(dir)
 
@@ -363,7 +362,7 @@ func TestQemuCapabilities(t *testing.T) {
 func TestQemuQemuPath(t *testing.T) {
 	assert := assert.New(t)
 
-	f, err := ioutil.TempFile("", "qemu")
+	f, err := os.CreateTemp("", "qemu")
 	assert.NoError(err)
 	defer func() { _ = f.Close() }()
 	defer func() { _ = os.Remove(f.Name()) }()
@@ -588,7 +587,7 @@ func TestQemuGetpids(t *testing.T) {
 	q = &qemu{
 		config: qemuConfig,
 	}
-	f, err := ioutil.TempFile("", "qemu-test-")
+	f, err := os.CreateTemp("", "qemu-test-")
 	assert.Nil(err)
 	tmpfile := f.Name()
 	f.Close()
@@ -599,7 +598,7 @@ func TestQemuGetpids(t *testing.T) {
 	assert.True(len(pids) == 1)
 	assert.True(pids[0] == 0)
 
-	err = ioutil.WriteFile(tmpfile, []byte("100"), 0)
+	err = os.WriteFile(tmpfile, []byte("100"), 0)
 	assert.Nil(err)
 	pids = q.GetPids()
 	assert.True(len(pids) == 1)

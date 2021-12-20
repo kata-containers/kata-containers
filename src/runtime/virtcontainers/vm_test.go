@@ -7,7 +7,6 @@ package virtcontainers
 
 import (
 	"context"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
@@ -19,7 +18,7 @@ import (
 func TestNewVM(t *testing.T) {
 	assert := assert.New(t)
 
-	testDir, err := ioutil.TempDir("", "vmfactory-tmp-")
+	testDir, err := os.MkdirTemp("", "vmfactory-tmp-")
 	assert.Nil(err)
 	defer os.RemoveAll(testDir)
 
@@ -66,12 +65,12 @@ func TestNewVM(t *testing.T) {
 	defer func() {
 		urandomDev = savedUrandomDev
 	}()
-	tmpdir, err := ioutil.TempDir("", "")
+	tmpdir, err := os.MkdirTemp("", "")
 	assert.NoError(err)
 	defer os.RemoveAll(tmpdir)
 	urandomDev = filepath.Join(tmpdir, "urandom")
 	data := make([]byte, 512)
-	err = ioutil.WriteFile(urandomDev, data, os.FileMode(0640))
+	err = os.WriteFile(urandomDev, data, os.FileMode(0640))
 	assert.NoError(err)
 
 	err = vm.ReseedRNG(context.Background())
@@ -99,7 +98,7 @@ func TestVMConfigValid(t *testing.T) {
 	err := config.Valid()
 	assert.Error(err)
 
-	testDir, err := ioutil.TempDir("", "vmfactory-tmp-")
+	testDir, err := os.MkdirTemp("", "vmfactory-tmp-")
 	assert.Nil(err)
 	defer os.RemoveAll(testDir)
 

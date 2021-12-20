@@ -9,7 +9,6 @@ package manager
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -39,7 +38,7 @@ func TestNewDevice(t *testing.T) {
 	major := int64(252)
 	minor := int64(3)
 
-	tmpDir, err := ioutil.TempDir("", "")
+	tmpDir, err := os.MkdirTemp("", "")
 	assert.Nil(t, err)
 
 	config.SysDevPrefix = tmpDir
@@ -75,14 +74,14 @@ func TestNewDevice(t *testing.T) {
 
 	// Should return error for bad data in uevent file
 	content := []byte("nonkeyvaluedata")
-	err = ioutil.WriteFile(ueventPath, content, fileMode0640)
+	err = os.WriteFile(ueventPath, content, fileMode0640)
 	assert.Nil(t, err)
 
 	_, err = dm.NewDevice(deviceInfo)
 	assert.NotNil(t, err)
 
 	content = []byte("MAJOR=252\nMINOR=3\nDEVNAME=vfio/2")
-	err = ioutil.WriteFile(ueventPath, content, fileMode0640)
+	err = os.WriteFile(ueventPath, content, fileMode0640)
 	assert.Nil(t, err)
 
 	device, err := dm.NewDevice(deviceInfo)
@@ -104,7 +103,7 @@ func TestAttachVFIODevice(t *testing.T) {
 		blockDriver: VirtioBlock,
 		devices:     make(map[string]api.Device),
 	}
-	tmpDir, err := ioutil.TempDir("", "")
+	tmpDir, err := os.MkdirTemp("", "")
 	assert.Nil(t, err)
 	defer os.RemoveAll(tmpDir)
 
@@ -225,7 +224,7 @@ func TestAttachVhostUserBlkDevice(t *testing.T) {
 		rootEnabled = false
 	}
 
-	tmpDir, err := ioutil.TempDir("", "")
+	tmpDir, err := os.MkdirTemp("", "")
 	dm := &deviceManager{
 		blockDriver:           VirtioBlock,
 		devices:               make(map[string]api.Device),

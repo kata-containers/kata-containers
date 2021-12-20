@@ -10,7 +10,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path"
 	"path/filepath"
@@ -124,7 +123,7 @@ func TestSetEphemeralStorageType(t *testing.T) {
 
 	assert := assert.New(t)
 
-	dir, err := ioutil.TempDir(testDir, "foo")
+	dir, err := os.MkdirTemp(testDir, "foo")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -268,7 +267,7 @@ func TestCreateSandboxFail(t *testing.T) {
 func TestCheckForFips(t *testing.T) {
 	assert := assert.New(t)
 
-	path, err := ioutil.TempDir("", "")
+	path, err := os.MkdirTemp("", "")
 	assert.NoError(err)
 	defer os.RemoveAll(path)
 
@@ -278,7 +277,7 @@ func TestCheckForFips(t *testing.T) {
 		procFIPS = val
 	}()
 
-	err = ioutil.WriteFile(procFIPS, []byte("1"), 0644)
+	err = os.WriteFile(procFIPS, []byte("1"), 0644)
 	assert.NoError(err)
 
 	hconfig := vc.HypervisorConfig{
@@ -297,7 +296,7 @@ func TestCheckForFips(t *testing.T) {
 	assert.Equal(params[1].Value, "1")
 
 	config.HypervisorConfig = hconfig
-	err = ioutil.WriteFile(procFIPS, []byte("unexpected contents"), 0644)
+	err = os.WriteFile(procFIPS, []byte("unexpected contents"), 0644)
 	assert.NoError(err)
 	assert.NoError(checkForFIPS(&config))
 	assert.Equal(config.HypervisorConfig, hconfig)
