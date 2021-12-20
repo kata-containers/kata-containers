@@ -475,5 +475,3 @@ Containers system.
 ## Terminology
 
 See the [project glossary](../../../Glossary.md).
-
-[debug-console]: ../../Developer-Guide.md#connect-to-debug-console
