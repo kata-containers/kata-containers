@@ -148,3 +148,5 @@ See also:
 
   The `default-image-name` and `default-initrd-name` options specify
   the default distributions for each image type.
+
+[debug-console]: ../../Developer-Guide.md#connect-to-debug-console
