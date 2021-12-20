@@ -41,7 +41,8 @@ cflags="-O2"
 # gperf_version=$(get_version "externals.gperf.version")
 # gperf_url=$(get_version "externals.gperf.url")
 gperf_version="3.1"
-gperf_url="https://ftp.gnu.org/gnu/gperf"
+# XXX: gnu.org currently unavailable - see https://github.com/kata-containers/kata-containers/issues/3314
+gperf_url="https://www.mirrorservice.org/sites/ftp.gnu.org/gnu/gperf"
 gperf_tarball="gperf-${gperf_version}.tar.gz"
 gperf_tarball_url="${gperf_url}/${gperf_tarball}"
 
