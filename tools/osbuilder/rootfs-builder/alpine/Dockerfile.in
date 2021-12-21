@@ -26,4 +26,5 @@ RUN apk update && apk add \
     make \
     musl \
     musl-dev \
+    protoc \
     tar
