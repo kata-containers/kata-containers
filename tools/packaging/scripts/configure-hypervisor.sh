@@ -310,9 +310,10 @@ generate_qemu_options() {
 	qemu_options+=(size:--disable-qom-cast-debug)
 	qemu_options+=(size:--disable-tcmalloc)
 
-	# Disable libudev for static build
+	# Disable libudev since it is only needed for qemu-pr-helper and USB,
+	# none of which are used with Kata
 	if gt_eq "${qemu_version}" "5.2.0" ; then
-		[ "${static}" == "true" ] && qemu_options+=(size:--disable-libudev)
+		qemu_options+=(size:--disable-libudev)
 	fi
 
 	# Disallow network downloads
