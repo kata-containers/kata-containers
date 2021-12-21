@@ -52,17 +52,13 @@ RUN [ "$(uname -m)" != "s390x" ] && apt-get install -y libpmem-dev || true
 
 ARG QEMU_REPO
 
-RUN cd  .. && git clone "${QEMU_REPO}" qemu
+RUN cd  .. && git clone --depth=1 "${QEMU_REPO}" qemu
 
 # commit/tag/branch
 ARG QEMU_VERSION
 
-RUN git checkout "${QEMU_VERSION}"
-RUN git clone https://github.com/qemu/capstone.git capstone
-RUN git clone https://github.com/qemu/keycodemapdb.git ui/keycodemapdb
-RUN git clone https://github.com/qemu/meson.git meson
-RUN git clone https://github.com/qemu/berkeley-softfloat-3.git tests/fp/berkeley-softfloat-3
-RUN git clone https://github.com/qemu/berkeley-testfloat-3.git tests/fp/berkeley-testfloat-3
+RUN git fetch --depth=1 origin "${QEMU_VERSION}" && git checkout FETCH_HEAD
+RUN scripts/git-submodule.sh update meson capstone
 
 ADD scripts/configure-hypervisor.sh /root/configure-hypervisor.sh
 ADD qemu /root/kata_qemu
