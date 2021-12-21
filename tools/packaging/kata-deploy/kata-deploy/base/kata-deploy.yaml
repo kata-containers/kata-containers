@@ -28,6 +28,8 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: spec.nodeName
+        - name: CONFIGURE_CC
+          value: "yes"
         securityContext:
           privileged: false
         volumeMounts:
