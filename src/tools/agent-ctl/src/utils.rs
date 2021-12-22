@@ -229,7 +229,7 @@ pub fn generate_random_hex_string(len: u32) -> String {
 
     let str: String = (0..len)
         .map(|_| {
-            let idx = rng.gen_range(0, CHARSET.len());
+            let idx = rng.gen_range(0..CHARSET.len());
             CHARSET[idx] as char
         })
         .collect();
