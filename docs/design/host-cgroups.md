@@ -242,8 +242,8 @@ On the other hand, running all non vCPU threads under a dedicated overhead cgrou
 accurate metrics on the actual Kata Container pod overhead, allowing for tuning the overhead
 cgroup size and constraints accordingly.
 
-[linux-config]: https://github.com/opencontainers/runtime-spec/blob/master/config-linux.md
-[cgroupspath]: https://github.com/opencontainers/runtime-spec/blob/master/config-linux.md#cgroups-path
+[linux-config]: https://github.com/opencontainers/runtime-spec/blob/main/config-linux.md
+[cgroupspath]: https://github.com/opencontainers/runtime-spec/blob/main/config-linux.md#cgroups-path
 
 # Supported cgroups
 
