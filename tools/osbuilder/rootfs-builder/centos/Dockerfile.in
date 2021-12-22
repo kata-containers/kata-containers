@@ -1,0 +1,18 @@
+# Copyright (c) 2018 Intel Corporation, 2021 IBM Corp.
+#
+# SPDX-License-Identifier: Apache-2.0
+
+FROM quay.io/centos/centos:@OS_VERSION@
+@SET_PROXY@
+
+RUN dnf -y update && \
+    dnf -y install dnf-plugins-core && \
+    dnf config-manager --set-enabled crb && \
+    dnf -y install \
+    diffutils \
+    file \
+    g++ \
+    git \
+    protobuf-compiler
+
+@INSTALL_RUST@

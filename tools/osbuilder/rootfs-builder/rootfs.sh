@@ -45,9 +45,6 @@ ARCH=$(uname -m)
 # distro-specific config file
 typeset -r CONFIG_SH="config.sh"
 
-# optional arch-specific config file
-typeset -r CONFIG_ARCH_SH="config_${ARCH}.sh"
-
 # Name of an optional distro-specific file which, if it exists, must implement the
 # build_rootfs() function.
 typeset -r LIB_SH="rootfs_lib.sh"
@@ -307,12 +304,6 @@ build_rootfs_distro()
 	# Source config.sh from distro
 	rootfs_config="${distro_config_dir}/${CONFIG_SH}"
 	source "${rootfs_config}"
-
-	# Source arch-specific config file
-	rootfs_arch_config="${distro_config_dir}/${CONFIG_ARCH_SH}"
-	if [ -f "${rootfs_arch_config}" ]; then
-		source "${rootfs_arch_config}"
-	fi
 
 	if [ -z "$ROOTFS_DIR" ]; then
 		 ROOTFS_DIR="${script_dir}/rootfs-${OS_NAME}"
