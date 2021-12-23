@@ -52,6 +52,7 @@ pub const DRIVER_VFIO_GK_TYPE: &str = "vfio-gk";
 // container as a VFIO device node
 pub const DRIVER_VFIO_TYPE: &str = "vfio";
 pub const DRIVER_OVERLAYFS_TYPE: &str = "overlayfs";
+pub const FS_TYPE_HUGETLB: &str = "hugetlbfs";
 
 #[instrument]
 pub fn online_device(path: &str) -> Result<()> {
