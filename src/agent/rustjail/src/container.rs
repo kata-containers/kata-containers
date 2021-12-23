@@ -600,6 +600,14 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
         capctl::prctl::set_no_new_privs().map_err(|_| anyhow!("cannot set no new privileges"))?;
     }
 
+    // Log unknown seccomp system calls in advance before the log file descriptor closes.
+    #[cfg(feature = "seccomp")]
+    if let Some(ref scmp) = linux.seccomp {
+        if let Some(syscalls) = seccomp::get_unknown_syscalls(scmp) {
+            log_child!(cfd_log, "unknown seccomp system calls: {:?}", syscalls);
+        }
+    }
+
     // Without NoNewPrivileges, we need to set seccomp
     // before dropping capabilities because the calling thread
     // must have the CAP_SYS_ADMIN.
