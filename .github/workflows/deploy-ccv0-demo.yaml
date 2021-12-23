@@ -118,9 +118,9 @@ jobs:
           pkg_sha=$(git rev-parse HEAD)
           popd
           mv kata-static.tar.xz $GITHUB_WORKSPACE/tools/packaging/kata-deploy/kata-static.tar.xz
-          docker build --build-arg KATA_ARTIFACTS=kata-static.tar.xz -t quay.io/confidential-containers/kata-demo:$pkg_sha $GITHUB_WORKSPACE/tools/packaging/kata-deploy
+          docker build --build-arg KATA_ARTIFACTS=kata-static.tar.xz -t quay.io/confidential-containers/runtime-payload:$pkg_sha $GITHUB_WORKSPACE/tools/packaging/kata-deploy
           docker login -u ${{ secrets.QUAY_DEPLOYER_USERNAME }} -p ${{ secrets.QUAY_DEPLOYER_PASSWORD }} quay.io
-          docker push quay.io/confidential-containers/kata-demo:$pkg_sha
+          docker push quay.io/confidential-containers/runtime-payload:$pkg_sha
           mkdir -p packaging/kata-deploy
           ln -s $GITHUB_WORKSPACE/tools/packaging/kata-deploy/action packaging/kata-deploy/action
           echo "::set-output name=PKG_SHA::${pkg_sha}"
