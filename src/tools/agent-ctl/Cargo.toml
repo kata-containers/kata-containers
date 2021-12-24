@@ -12,7 +12,7 @@ edition = "2018"
 [dependencies]
 protocols = { path = "../../agent/protocols", features = ["with-serde"] }
 rustjail = { path = "../../agent/rustjail" }
-oci = { path = "../../agent/oci" }
+oci = { path = "../../libs/oci" }
 
 clap = "2.33.0"
 lazy_static = "1.4.0"
