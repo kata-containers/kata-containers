@@ -164,6 +164,7 @@ dependencies = [
  "libc",
  "nix",
  "num_cpus",
+ "oci",
  "once_cell",
  "serial_test",
  "slog",
