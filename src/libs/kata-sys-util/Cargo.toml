@@ -24,6 +24,7 @@ slog-scope = "4.4.0"
 thiserror = "1.0.30"
 
 kata-types = { path = "../kata-types" }
+oci = { path = "../../agent/oci" }
 
 [dev-dependencies]
 num_cpus = "1.13.1"
