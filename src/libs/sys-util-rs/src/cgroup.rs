@@ -392,7 +392,7 @@ mod tests {
         assert_eq!(c.subsystems().len(), 0);
         assert!(!c.v2());
 
-        let c = V1Customized::new(vec![Controllers::Cpu, Controllers::Mem]);
+        let c = V1Customized::new(vec![Controllers::Cpu, Controllers::CpuSet]);
         assert_eq!(c.subsystems().len(), 2);
         assert!(!c.v2());
     }
@@ -638,7 +638,7 @@ mod tests {
         clean_cgroup_v1(cg_path_2);
 
         // check customized cgroup
-        let controllers_1 = vec![Controllers::BlkIo, Controllers::Mem];
+        let controllers_1 = vec![Controllers::Cpu];
         let controllers_2 = vec![Controllers::Cpu, Controllers::CpuSet, Controllers::CpuAcct];
         let cg_1 = Cgroup::new(get_hierarchy(controllers_1.clone()), cg_path_1);
         let cg_2 = Cgroup::new(get_hierarchy(controllers_2.clone()), cg_path_2);
@@ -674,7 +674,7 @@ mod tests {
         clean_cgroup_v1(cg_path_1);
         clean_cgroup_v1(cg_path_2);
 
-        let controllers = vec![Controllers::BlkIo, Controllers::Mem];
+        let controllers = vec![Controllers::Cpu];
         let cg_1 = Cgroup::new(get_hierarchy(controllers.clone()), cg_path_1);
         let cg_2 = Cgroup::new(get_hierarchy(controllers.clone()), cg_path_2);
 

@@ -606,12 +606,13 @@ mod tests {
         let tmpdir = tempfile::tempdir().unwrap();
         let tmpdir2 = tempfile::tempdir().unwrap();
         tmpdir.path().canonicalize().unwrap();
-        bind_mount(tmpdir2.path(), tmpdir.path(), true).unwrap();
-        bind_remount_read_only(tmpdir.path()).unwrap();
-        umount_timeout(tmpdir.path().to_str().unwrap(), 0).unwrap();
 
         bind_remount_read_only(&PathBuf::from("")).unwrap_err();
         bind_remount_read_only(&PathBuf::from("../______doesn't____exist____nnn")).unwrap_err();
+
+        bind_mount(tmpdir2.path(), tmpdir.path(), true).unwrap();
+        bind_remount_read_only(tmpdir.path()).unwrap();
+        umount_timeout(tmpdir.path().to_str().unwrap(), 0).unwrap();
     }
 
     #[test]
@@ -625,11 +626,12 @@ mod tests {
 
         bind_mount(Path::new(""), Path::new(""), false).unwrap_err();
         bind_mount(tmpdir2.path(), Path::new(""), false).unwrap_err();
+        bind_mount(Path::new("/tmp"), Path::new("/"), false).unwrap_err();
+
         bind_mount(tmpdir2.path(), &dst, true).unwrap();
         umount_timeout(dst.to_str().unwrap(), 0).unwrap();
         bind_mount(&src, &dst, false).unwrap();
         umount_timeout(dst.to_str().unwrap(), 0).unwrap();
-        bind_mount(Path::new("/tmp"), Path::new("/"), false).unwrap_err();
     }
 
     #[test]
