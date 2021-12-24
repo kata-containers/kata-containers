@@ -1482,7 +1482,12 @@ async fn execute_hook(logger: &Logger, h: &Hook, st: &OCIState) -> Result<()> {
         return Err(anyhow!(nix::Error::EINVAL));
     }
 
-    let args = h.args.clone();
+    let mut args = h.args.clone();
+    // the hook.args[0] is the hook binary name which shouldn't be included
+    // in the Command.args
+    if args.len() > 1 {
+        args.remove(0);
+    }
     let env: HashMap<String, String> = h
         .env
         .iter()
@@ -1529,7 +1534,7 @@ async fn execute_hook(logger: &Logger, h: &Hook, st: &OCIState) -> Result<()> {
         // Close stdin so that hook program could receive EOF
         child.stdin.take();
 
-        // read something from stdout for debug
+        // read something from stdout and stderr for debug
         let mut out = String::new();
         child
             .stdout
@@ -1540,6 +1545,16 @@ async fn execute_hook(logger: &Logger, h: &Hook, st: &OCIState) -> Result<()> {
             .unwrap();
         info!(logger, "child stdout: {}", out.as_str());
 
+        let mut err = String::new();
+        child
+            .stderr
+            .as_mut()
+            .unwrap()
+            .read_to_string(&mut err)
+            .await
+            .unwrap();
+        info!(logger, "child stderr: {}", err.as_str());
+
         match child.wait().await {
             Ok(exit) => {
                 let code = exit
@@ -1547,7 +1562,10 @@ async fn execute_hook(logger: &Logger, h: &Hook, st: &OCIState) -> Result<()> {
                     .ok_or_else(|| anyhow!("hook exit status has no status code"))?;
 
                 if code != 0 {
-                    error!(logger, "hook {} exit status is {}", &path, code);
+                    error!(
+                        logger,
+                        "hook {} exit status is {}, error message is {}", &path, code, err
+                    );
                     return Err(anyhow!(nix::Error::UnknownErrno));
                 }
 
@@ -1624,13 +1642,44 @@ mod tests {
 
     #[tokio::test]
     async fn test_execute_hook() {
-        let xargs = which("xargs").await;
+        let temp_file = "/tmp/test_execute_hook";
+
+        let touch = which("touch").await;
+
+        defer!(fs::remove_file(temp_file).unwrap(););
 
         execute_hook(
             &slog_scope::logger(),
             &Hook {
-                path: xargs,
-                args: vec![],
+                path: touch,
+                args: vec!["touch".to_string(), temp_file.to_string()],
+                env: vec![],
+                timeout: Some(10),
+            },
+            &OCIState {
+                version: "1.2.3".to_string(),
+                id: "321".to_string(),
+                status: ContainerState::Running,
+                pid: 2,
+                bundle: "".to_string(),
+                annotations: Default::default(),
+            },
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(Path::new(&temp_file).exists(), true);
+    }
+
+    #[tokio::test]
+    async fn test_execute_hook_with_error() {
+        let ls = which("ls").await;
+
+        let res = execute_hook(
+            &slog_scope::logger(),
+            &Hook {
+                path: ls,
+                args: vec!["ls".to_string(), "/tmp/not-exist".to_string()],
                 env: vec![],
                 timeout: None,
             },
@@ -1643,8 +1692,13 @@ mod tests {
                 annotations: Default::default(),
             },
         )
-        .await
-        .unwrap()
+        .await;
+
+        let expected_err = nix::Error::UnknownErrno;
+        assert_eq!(
+            res.unwrap_err().downcast::<nix::Error>().unwrap(),
+            expected_err
+        );
     }
 
     #[tokio::test]
@@ -1655,7 +1709,7 @@ mod tests {
             &slog_scope::logger(),
             &Hook {
                 path: sleep,
-                args: vec!["2".to_string()],
+                args: vec!["sleep".to_string(), "2".to_string()],
                 env: vec![],
                 timeout: Some(1),
             },
