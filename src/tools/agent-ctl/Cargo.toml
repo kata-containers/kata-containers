@@ -10,7 +10,7 @@ authors = ["The Kata Containers community <kata-dev@lists.katacontainers.io>"]
 edition = "2018"
 
 [dependencies]
-protocols = { path = "../../agent/protocols", features = ["with-serde"] }
+protocols = { path = "../../libs/protocols", features = ["with-serde"] }
 rustjail = { path = "../../agent/rustjail" }
 oci = { path = "../../libs/oci" }
 
