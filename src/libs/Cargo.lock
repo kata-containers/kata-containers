@@ -166,9 +166,11 @@ dependencies = [
  "num_cpus",
  "oci",
  "once_cell",
+ "serde_json",
  "serial_test",
  "slog",
  "slog-scope",
+ "subprocess",
  "tempfile",
  "thiserror",
 ]
@@ -530,6 +532,16 @@ name = "smallvec"
 version = "1.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f2dd574626839106c320a323308629dcb1acfc96e32a8cba364ddc61ac23ee83"
+
+[[package]]
+name = "subprocess"
+version = "0.2.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "055cf3ebc2981ad8f0a5a17ef6652f652d87831f79fddcba2ac57bcb9a0aa407"
+dependencies = [
+ "libc",
+ "winapi",
+]
 
 [[package]]
 name = "syn"
