@@ -176,6 +176,7 @@ dependencies = [
  "oci",
  "regex",
  "serde",
+ "serde_json",
  "slog",
  "slog-scope",
  "thiserror",
