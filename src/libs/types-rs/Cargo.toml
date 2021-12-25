@@ -23,12 +23,15 @@ serde = { version = "1.0.100", features = ["derive"] }
 slog = "2.5.2"
 slog-scope = "4.4.0"
 serde_json = "1.0.73"
+<<<<<<< HEAD
 =======
 lazy_static = "1.4.0"
 serde = { version = "1.0.100", features = ["derive"] }
 slog = "2.5.2"
 slog-scope = "4.4.0"
 >>>>>>> a13f31c9 (libs/types: support load Kata runtime configuration from file)
+=======
+>>>>>>> 65a31d44 (libs/types: define annotation keys for Kata)
 thiserror = "1.0"
 toml = "0.5.8"
 

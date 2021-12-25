@@ -16,7 +16,6 @@ use crate::config::KataConfig;
 use crate::config::TomlConfig;
 
 use crate::{eother, sl};
-
 /// CRI-containerd specific annotations.
 pub mod cri_containerd;
 
@@ -455,12 +454,6 @@ impl Annotation {
             }
         }
     }
-    /*
-    /// add annotation for config
-    pub fn add_annotation() -> Reuslt<()>{
-
-    }
-    */
 }
 
 // Miscellaneous annotations.
