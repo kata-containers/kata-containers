@@ -39,7 +39,7 @@ pub fn container_type(spec: &oci::Spec) -> ContainerType {
     for k in [
         annotations::crio::CONTAINER_TYPE_LABEL_KEY,
         annotations::cri_containerd::CONTAINER_TYPE_LABEL_KEY,
-        annotations::dockershim::CONTAINER_TYPE_LABEL_KEY,
+        annotations::dockershim::CONTAINER_TYPE_LABLE_KEY,
     ]
     .iter()
     {
@@ -63,7 +63,7 @@ pub fn sandbox_id(spec: &oci::Spec) -> Result<Option<String>, String> {
     for k in [
         annotations::crio::SANDBOX_ID_LABEL_KEY,
         annotations::cri_containerd::SANDBOX_ID_LABEL_KEY,
-        annotations::dockershim::SANDBOX_ID_LABEL_KEY,
+        annotations::dockershim::SANDBOX_ID_LABLE_KEY,
     ]
     .iter()
     {
