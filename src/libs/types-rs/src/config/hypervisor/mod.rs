@@ -32,9 +32,13 @@ use regex::RegexSet;
 
 use super::{default, ConfigOps, ConfigPlugin, TomlConfig};
 <<<<<<< HEAD
+<<<<<<< HEAD
 use crate::annotations::KATA_ANNO_CONF_HYPERVISOR_PREFIX;
 =======
 >>>>>>> f74edc28 (libs/types: support load Kata hypervisor configuration from file)
+=======
+use crate::annotations::KATA_ANNO_CONF_HYPERVISOR_PREFIX;
+>>>>>>> 65a31d44 (libs/types: define annotation keys for Kata)
 use crate::{eother, resolve_path, validate_path};
 
 mod dragonball;
@@ -701,6 +705,7 @@ impl SecurityInfo {
     /// Check whether annotation key is enabled or not.
     pub fn is_annotation_enabled(&self, path: &str) -> bool {
 <<<<<<< HEAD
+<<<<<<< HEAD
         if !path.starts_with(KATA_ANNO_CONF_HYPERVISOR_PREFIX) {
             return false;
         }
@@ -712,9 +717,12 @@ impl SecurityInfo {
             println!("hello world");
 =======
         if !path.starts_with("io.katacontainers.config.hypervisor.") {
+=======
+        if !path.starts_with(KATA_ANNO_CONF_HYPERVISOR_PREFIX) {
+>>>>>>> 65a31d44 (libs/types: define annotation keys for Kata)
             return false;
         }
-        let pos = "io.katacontainers.config.hypervisor.".len();
+        let pos = KATA_ANNO_CONF_HYPERVISOR_PREFIX.len();
         let key = &path[pos..];
         if let Ok(set) = RegexSet::new(&self.enable_annotations) {
 >>>>>>> f74edc28 (libs/types: support load Kata hypervisor configuration from file)
@@ -1059,12 +1067,17 @@ mod vendor {
 mod vendor;
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 pub use self::vendor::HypervisorVendor;
 use crate::config::validate_path_pattern;
 =======
 use crate::config::validate_path_pattern;
 pub use vendor::HypervisorVendor;
 >>>>>>> f74edc28 (libs/types: support load Kata hypervisor configuration from file)
+=======
+pub use self::vendor::HypervisorVendor;
+use crate::config::validate_path_pattern;
+>>>>>>> 65a31d44 (libs/types: define annotation keys for Kata)
 
 #[cfg(test)]
 mod tests {

@@ -7,6 +7,7 @@
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::{self, BufReader, Result};
+<<<<<<< HEAD
 use std::u32;
 
 use serde::Deserialize;
@@ -18,6 +19,14 @@ use crate::validate_path;
 use crate::{eother, sl};
 use std::path::Path;
 use std::sync::Arc;
+=======
+
+use serde::Deserialize;
+
+use crate::config::KataConfig;
+use crate::{eother, sl};
+
+>>>>>>> 65a31d44 (libs/types: define annotation keys for Kata)
 /// CRI-containerd specific annotations.
 pub mod cri_containerd;
 
@@ -30,6 +39,7 @@ pub mod dockershim;
 /// Third-party annotations.
 pub mod thirdparty;
 
+<<<<<<< HEAD
 macro_rules! change_hypervisor_config {
     ($result:expr,$var:expr) => {
         match ($result, &mut $var) {
@@ -46,6 +56,8 @@ macro_rules! change_hypervisor_config {
         }
     };
 }
+=======
+>>>>>>> 65a31d44 (libs/types: define annotation keys for Kata)
 // Common section
 /// Prefix for Kata specific annotations
 pub const KATA_ANNO_PREFIX: &str = "io.katacontainers.";
@@ -456,12 +468,15 @@ impl Annotation {
             }
         }
     }
+<<<<<<< HEAD
     /*
     /// add annotation for config
     pub fn add_annotation() -> Reuslt<()>{
 
     }
     */
+=======
+>>>>>>> 65a31d44 (libs/types: define annotation keys for Kata)
 }
 
 // Miscellaneous annotations.
@@ -513,6 +528,7 @@ impl Annotation {
     pub fn get_agent_container_pipe_size(&self) -> Option<u32> {
         self.get_u32(KATA_ANNO_CONF_AGENT_CONTAINER_PIPE_SIZE)
     }
+<<<<<<< HEAD
 
     /// add annotation kernel modules of agent to config
     pub fn add_agent_annotation(&self, config: &mut TomlConfig, agent_name: &String) {
@@ -548,6 +564,8 @@ impl Annotation {
             None => (),
         }
     }
+=======
+>>>>>>> 65a31d44 (libs/types: define annotation keys for Kata)
 }
 
 /// Generic hypervisor related annotations.
@@ -567,7 +585,11 @@ impl Annotation {
 
     /// Get and validate the annotation for `config.hypervisor.path`.
     pub fn get_hypervisor_path(&self) -> Result<Option<String>> {
+<<<<<<< HEAD
         self.check_allowed_hypervisor_annotation(KATA_ANNO_CONF_HYPERVISOR_PATH)?;
+=======
+        self.check_allowed_hypervisor_annotation("path")?;
+>>>>>>> 65a31d44 (libs/types: define annotation keys for Kata)
         match self.annotations.get(KATA_ANNO_CONF_HYPERVISOR_PATH) {
             None => Ok(None),
             Some(v) => KataConfig::get_default_config()
@@ -585,7 +607,11 @@ impl Annotation {
 
     /// Get and validate the annotation for "config.hypervisor.ctlpath`.
     pub fn get_hypervisor_ctlpath(&self) -> Result<Option<String>> {
+<<<<<<< HEAD
         self.check_allowed_hypervisor_annotation(KATA_ANNO_CONF_HYPERVISOR_CTLPATH)?;
+=======
+        self.check_allowed_hypervisor_annotation("ctlpath")?;
+>>>>>>> 65a31d44 (libs/types: define annotation keys for Kata)
         match self.annotations.get(KATA_ANNO_CONF_HYPERVISOR_CTLPATH) {
             None => Ok(None),
             Some(v) => KataConfig::get_default_config()
@@ -603,7 +629,11 @@ impl Annotation {
 
     /// Get and validate the annotation for `config.hypervisor.jailer_path`.
     pub fn get_jailer_path(&self) -> Result<Option<String>> {
+<<<<<<< HEAD
         self.check_allowed_hypervisor_annotation(KATA_ANNO_CONF_HYPERVISOR_JAILER_PATH)?;
+=======
+        self.check_allowed_hypervisor_annotation("jailer_path")?;
+>>>>>>> 65a31d44 (libs/types: define annotation keys for Kata)
         match self.annotations.get(KATA_ANNO_CONF_HYPERVISOR_JAILER_PATH) {
             None => Ok(None),
             Some(v) => KataConfig::get_default_config()
@@ -621,7 +651,11 @@ impl Annotation {
 
     /// Get the annotation for `config.hypervisor.enable_io_threads`.
     pub fn get_enable_io_threads(&self) -> Result<Option<bool>> {
+<<<<<<< HEAD
         self.check_allowed_hypervisor_annotation(KATA_ANNO_CONF_HYPERVISOR_ENABLE_IO_THREADS)?;
+=======
+        self.check_allowed_hypervisor_annotation("enable_io_threads")?;
+>>>>>>> 65a31d44 (libs/types: define annotation keys for Kata)
         Ok(self.get_bool(KATA_ANNO_CONF_HYPERVISOR_ENABLE_IO_THREADS))
     }
 
@@ -629,6 +663,7 @@ impl Annotation {
     pub fn get_asset_hash_type(&self) -> Option<String> {
         self.get(KATA_ANNO_CONF_HYPERVISOR_ASSET_HASH_TYPE)
     }
+<<<<<<< HEAD
 
     /// add the annotation for `config.hypervisor.enable_io_threads`.
     pub fn add_enable_io_threads(
@@ -723,6 +758,8 @@ impl Annotation {
             Err(e) => Err(e),
         }
     }
+=======
+>>>>>>> 65a31d44 (libs/types: define annotation keys for Kata)
 }
 
 // Hypervisor block storage related annotations.
@@ -867,6 +904,7 @@ impl Annotation {
     }
 }
 
+<<<<<<< HEAD
 // Vm device related annotation
 impl Annotation {
     ///Get the annotatoin for "config.hypervisor.DeviceInfo.hotplug_vfio_on_root_bus".
@@ -1128,6 +1166,9 @@ impl Annotation {
 
 // VM Network related annotations.
 
+=======
+// VM Network related annotations.
+>>>>>>> 65a31d44 (libs/types: define annotation keys for Kata)
 impl Annotation {
     /// Get the annotation for `config.hypervisor.disable_vhost_net`.
     pub fn get_disable_vhost_net(&self) -> Result<Option<bool>> {

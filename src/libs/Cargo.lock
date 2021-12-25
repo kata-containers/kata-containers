@@ -203,9 +203,13 @@ dependencies = [
  "regex",
  "serde",
 <<<<<<< HEAD
+<<<<<<< HEAD
  "serde_json",
 =======
 >>>>>>> a13f31c9 (libs/types: support load Kata runtime configuration from file)
+=======
+ "serde_json",
+>>>>>>> 65a31d44 (libs/types: define annotation keys for Kata)
  "slog",
  "slog-scope",
  "thiserror",
