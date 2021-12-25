@@ -603,6 +603,12 @@ mod tests {
 
     #[test]
     fn test_bind_remount_read_only() {
+        // test need root permission
+        if !nix::unistd::getuid().is_root() {
+            println!("test need root premisson");
+            return;
+        }
+
         let tmpdir = tempfile::tempdir().unwrap();
         let tmpdir2 = tempfile::tempdir().unwrap();
         tmpdir.path().canonicalize().unwrap();
@@ -617,6 +623,12 @@ mod tests {
 
     #[test]
     fn test_bind_mount() {
+        // test need root permission
+        if !nix::unistd::getuid().is_root() {
+            println!("test need root premisson");
+            return;
+        }
+
         let tmpdir = tempfile::tempdir().unwrap();
         let tmpdir2 = tempfile::tempdir().unwrap();
         let mut src = tmpdir.path().to_owned();

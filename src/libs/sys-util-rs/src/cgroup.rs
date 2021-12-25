@@ -514,13 +514,13 @@ mod tests {
 
         let test_path = gen_test_path();
         let cg_path = test_path.as_str();
-        assert_eq!(false, is_cgroup_exist(cg_path));
+        assert!(!is_cgroup_exist(cg_path));
 
         // new cgroup
         let cgroup = create_or_load_cgroup(cg_path).unwrap();
         let cpus: &cgroups::cpuset::CpuSetController = cgroup.controller_of().unwrap();
         cpus.set_cpus("0-1").unwrap();
-        assert_eq!(true, is_cgroup_exist(cg_path));
+        assert!(is_cgroup_exist(cg_path));
 
         // current cgroup
         let current_cgroup = create_or_load_cgroup(cg_path).unwrap();
