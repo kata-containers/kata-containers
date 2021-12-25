@@ -360,10 +360,13 @@ dependencies = [
  "libc",
  "nix 0.23.1",
  "num_cpus",
+ "oci",
  "once_cell",
+ "serde_json",
  "serial_test",
  "slog",
  "slog-scope",
+ "subprocess",
  "tempfile",
  "thiserror",
 ]
@@ -911,6 +914,16 @@ name = "socket2"
 version = "0.4.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "66d72b759436ae32898a2af0a14218dbf55efde3feeb170eb623637db85ee1e0"
+dependencies = [
+ "libc",
+ "winapi",
+]
+
+[[package]]
+name = "subprocess"
+version = "0.2.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0c2e86926081dda636c546d8c5e641661049d7562a68f5488be4a1f7f66f6086"
 dependencies = [
  "libc",
  "winapi",
