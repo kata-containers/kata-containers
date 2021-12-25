@@ -9,17 +9,12 @@
 use lazy_static::lazy_static;
 
 lazy_static! {
-    /// Default configuration file paths.
+    /// Default configuration file paths, vendor may extend the list
     pub static ref DEFAULT_RUNTIME_CONFIGURATIONS: Vec::<&'static str> = vec![
-        "/etc/kata-containers2/configuration.toml",
-        "/usr/share/defaults/kata-containers2/configuration.toml",
-        "/etc/kata-containers/configuration_v2.toml",
-        "/usr/share/defaults/kata-containers/configuration_v2.toml",
         "/etc/kata-containers/configuration.toml",
         "/usr/share/defaults/kata-containers/configuration.toml",
     ];
 }
-
 pub const DEFAULT_AGENT_NAME: &str = "kata";
 
 pub const DEFAULT_INTERNETWORKING_MODEL: &str = "tcfilter";
@@ -46,7 +41,7 @@ pub const DEFAULT_DB_ENTROPY_SOURCE: &str = "/dev/urandom";
 pub const DEFAULT_DB_MEMORY_SIZE: u32 = 128;
 pub const DEFAULT_DB_MEMORY_SLOTS: u32 = 128;
 pub const MAX_DB_VCPUS: u32 = 256;
-
+pub const MIN_DB_MEMORY_SIZE: u32 = 64;
 // Default configuration for qemu
 pub const DEFAULT_QEMU_BINARY_PATH: &str = "qemu";
 pub const DEFAULT_QEMU_CONTROL_PATH: &str = "";
@@ -60,3 +55,4 @@ pub const DEFAULT_QEMU_MEMORY_SLOTS: u32 = 128;
 pub const DEFAULT_QEMU_PCI_BRIDGES: u32 = 2;
 pub const MAX_QEMU_PCI_BRIDGES: u32 = 5;
 pub const MAX_QEMU_VCPUS: u32 = 256;
+pub const MIN_QEMU_MEMORY_SIZE: u32 = 64;
