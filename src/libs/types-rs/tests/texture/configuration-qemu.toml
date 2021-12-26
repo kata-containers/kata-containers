@@ -1,4 +1,7 @@
+<<<<<<< HEAD
 [hypervisors]
+=======
+>>>>>>> f74edc28 (libs/types: support load Kata hypervisor configuration from file)
 [hypervisor.qemu]
 path = "/usr/bin/ls"
 valid_hypervisor_paths = ["/usr/bin/qemu*", "/opt/qemu?"]
@@ -63,7 +66,11 @@ guest_memory_dump_paging = true
 enable_guest_swap = true
 
 [runtime]
+<<<<<<< HEAD
 enable_debug = false
+=======
+enable_debug = true
+>>>>>>> f74edc28 (libs/types: support load Kata hypervisor configuration from file)
 internetworking_model="macvtap"
 disable_guest_seccomp=true
 enable_tracing = true

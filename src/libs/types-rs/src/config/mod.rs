@@ -4,7 +4,6 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-<<<<<<< HEAD
 use std::collections::HashMap;
 use std::fs;
 use std::io::{self, Result};
@@ -15,34 +14,31 @@ use std::u32;
 use lazy_static::lazy_static;
 
 use crate::{eother, sl};
-=======
+use std::collections::HashMap;
 use std::fs;
 use std::io::{self, Result};
 use std::path::{Path, PathBuf};
 
-use crate::sl;
->>>>>>> a13f31c9 (libs/types: support load Kata runtime configuration from file)
+use crate::{eother, sl};
 
 /// Default configuration values.
 pub mod default;
 
-<<<<<<< HEAD
 mod agent;
 pub use self::agent::{Agent, AgentVendor};
 
 pub mod hypervisor;
+
 pub use self::hypervisor::{
     BootInfo, DragonballConfig, Hypervisor, QemuConfig, HYPERVISOR_NAME_DRAGONBALL,
     HYPERVISOR_NAME_QEMU,
 };
 
-=======
->>>>>>> a13f31c9 (libs/types: support load Kata runtime configuration from file)
 mod runtime;
 pub use self::runtime::{Runtime, RuntimeVendor};
 
 /// Trait to manipulate global Kata configuration information.
-<<<<<<< HEAD
+
 pub trait ConfigPlugin: Send + Sync {
     /// Get the plugin name.
     fn name(&self) -> &str;
@@ -59,8 +55,9 @@ pub trait ConfigPlugin: Send + Sync {
 }
 
 /// Trait to manipulate Kata configuration information.
-=======
->>>>>>> a13f31c9 (libs/types: support load Kata runtime configuration from file)
+}
+
+/// Trait to manipulate Kata configuration information.
 pub trait ConfigOps {
     /// Adjust the configuration information after loading from configuration file.
     fn adjust_configuration(_conf: &mut TomlConfig) -> Result<()> {
@@ -89,15 +86,12 @@ pub trait ConfigObjectOps {
 /// Kata configuration information.
 #[derive(Debug, Default, Deserialize, Serialize)]
 pub struct TomlConfig {
-<<<<<<< HEAD
     /// Configuration information for agents.
     #[serde(default)]
     pub agent: HashMap<String, Agent>,
     /// Configuration information for hypervisors.
     #[serde(default)]
     pub hypervisor: HashMap<String, Hypervisor>,
-=======
->>>>>>> a13f31c9 (libs/types: support load Kata runtime configuration from file)
     /// Kata runtime configuration information.
     #[serde(default)]
     pub runtime: Runtime,
@@ -151,30 +145,23 @@ impl TomlConfig {
     /// Load Kata configuration information from string.
     pub fn load(content: &str) -> Result<TomlConfig> {
         let mut config: TomlConfig = toml::from_str(content)?;
-<<<<<<< HEAD
         Hypervisor::adjust_configuration(&mut config)?;
         Runtime::adjust_configuration(&mut config)?;
         Agent::adjust_configuration(&mut config)?;
         info!(sl!(), "get kata config: {:?}", config);
-=======
 
+        Hypervisor::adjust_configuration(&mut config)?;
         Runtime::adjust_configuration(&mut config)?;
         info!(sl!(), "get kata config: {:?}", config);
 
->>>>>>> a13f31c9 (libs/types: support load Kata runtime configuration from file)
         Ok(config)
     }
 
     /// Validate Kata configuration information.
     pub fn validate(&self) -> Result<()> {
-<<<<<<< HEAD
         Hypervisor::validate(self)?;
         Runtime::validate(self)?;
         Agent::validate(self)?;
-=======
-        Runtime::validate(self)?;
->>>>>>> a13f31c9 (libs/types: support load Kata runtime configuration from file)
-
         Ok(())
     }
 
@@ -189,7 +176,6 @@ impl TomlConfig {
         Err(io::Error::from(io::ErrorKind::NotFound))
     }
 }
-<<<<<<< HEAD
 
 /// Validate the `path` matches one of the pattern in `patterns`.
 ///
@@ -209,6 +195,7 @@ pub fn validate_path_pattern<P: AsRef<Path>>(patterns: &[String], path: P) -> Re
 
     Err(eother!("Path {} is not permitted", path))
 }
+
 
 /// Kata configuration information.
 pub struct KataConfig {
@@ -302,6 +289,7 @@ lazy_static! {
     };
 }
 
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -327,5 +315,4 @@ mod tests {
         validate_path_pattern(&patterns, "/bin/ls").unwrap();
     }
 }
-=======
->>>>>>> a13f31c9 (libs/types: support load Kata runtime configuration from file)
+

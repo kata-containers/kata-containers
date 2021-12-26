@@ -31,7 +31,6 @@ use lazy_static::lazy_static;
 use regex::RegexSet;
 
 use super::{default, ConfigOps, ConfigPlugin, TomlConfig};
-use crate::annotations::KATA_ANNO_CONF_HYPERVISOR_PREFIX;
 use crate::{eother, resolve_path, validate_path};
 
 mod dragonball;
@@ -693,15 +692,12 @@ impl SecurityInfo {
 
     /// Check whether annotation key is enabled or not.
     pub fn is_annotation_enabled(&self, path: &str) -> bool {
-        if !path.starts_with(KATA_ANNO_CONF_HYPERVISOR_PREFIX) {
+        if !path.starts_with("io.katacontainers.config.hypervisor.") {
             return false;
         }
-
-        let pos = KATA_ANNO_CONF_HYPERVISOR_PREFIX.len();
+        let pos = "io.katacontainers.config.hypervisor.".len();
         let key = &path[pos..];
-        println!("{:?}", &key);
         if let Ok(set) = RegexSet::new(&self.enable_annotations) {
-            println!("hello world");
             return set.is_match(key);
         }
 
@@ -977,10 +973,7 @@ impl ConfigOps for Hypervisor {
                 hv.security_info.adjust_configuration()?;
                 hv.shared_fs.adjust_configuration()?;
             } else {
-                return Err(eother!(
-                    "Can Can not find plugin for hypervisor {}",
-                    hypervisor
-                ));
+                return Err(eother!("Can not find plugin for hypervisor {}", hypervisor));
             }
         }
 
@@ -1034,8 +1027,8 @@ mod vendor {
 #[path = "vendor.rs"]
 mod vendor;
 
-pub use self::vendor::HypervisorVendor;
 use crate::config::validate_path_pattern;
+pub use vendor::HypervisorVendor;
 
 #[cfg(test)]
 mod tests {

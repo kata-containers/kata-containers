@@ -6,10 +6,8 @@
 use std::io::Result;
 use std::path::Path;
 use std::sync::Arc;
-use std::u32;
 
 use super::{default, register_hypervisor_plugin};
-use crate::config::default::MIN_DB_MEMORY_SIZE;
 use crate::config::hypervisor::{
     VIRTIO_BLK, VIRTIO_BLK_MMIO, VIRTIO_FS, VIRTIO_FS_INLINE, VIRTIO_PMEM,
 };
