@@ -89,6 +89,64 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1aab8fc367588b89dcee83ab0fd66b72b50b72fa1904d7095045ace2b0c81c35"
 
 [[package]]
+<<<<<<< HEAD
+=======
+name = "kata-sys-util"
+version = "0.1.0"
+dependencies = [
+ "cgroups-rs",
+ "chrono",
+ "common-path",
+ "fail",
+ "kata-types",
+ "lazy_static",
+ "libc",
+ "nix",
+<<<<<<< HEAD
+<<<<<<< HEAD
+ "num_cpus",
+=======
+>>>>>>> 09c70a50 (libs/sys-util: add function to detect and update K8s emptyDir volume)
+=======
+ "num_cpus",
+>>>>>>> 5d59a31f (libs/sys-util: provide functions to execute hooks)
+ "oci",
+ "once_cell",
+ "serde_json",
+ "serial_test",
+ "slog",
+ "slog-scope",
+ "subprocess",
+ "tempfile",
+ "thiserror",
+]
+
+[[package]]
+name = "kata-types"
+version = "0.1.0"
+dependencies = [
+<<<<<<< HEAD
+ "glob",
+ "lazy_static",
+ "num_cpus",
+=======
+ "lazy_static",
+>>>>>>> a13f31c9 (libs/types: support load Kata runtime configuration from file)
+ "oci",
+ "regex",
+ "serde",
+<<<<<<< HEAD
+ "serde_json",
+=======
+>>>>>>> a13f31c9 (libs/types: support load Kata runtime configuration from file)
+ "slog",
+ "slog-scope",
+ "thiserror",
+ "toml",
+]
+
+[[package]]
+>>>>>>> 94bfe5f4 (libs/types: support load Kata runtime configuration from file)
 name = "lazy_static"
 version = "1.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
