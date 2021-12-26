@@ -12,6 +12,9 @@ edition = "2018"
 
 [dependencies]
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> f74edc28 (libs/types: support load Kata hypervisor configuration from file)
 glob = "0.3.0"
 lazy_static = "1.4.0"
 num_cpus = "1.13.1"

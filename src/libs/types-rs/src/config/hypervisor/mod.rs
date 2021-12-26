@@ -31,7 +31,10 @@ use lazy_static::lazy_static;
 use regex::RegexSet;
 
 use super::{default, ConfigOps, ConfigPlugin, TomlConfig};
+<<<<<<< HEAD
 use crate::annotations::KATA_ANNO_CONF_HYPERVISOR_PREFIX;
+=======
+>>>>>>> f74edc28 (libs/types: support load Kata hypervisor configuration from file)
 use crate::{eother, resolve_path, validate_path};
 
 mod dragonball;
@@ -520,7 +523,10 @@ pub struct MemoryInfo {
     #[serde(default)]
     pub enable_mem_prealloc: bool,
 
+<<<<<<< HEAD
 
+=======
+>>>>>>> f74edc28 (libs/types: support load Kata hypervisor configuration from file)
     /// Enable huge pages for VM RAM, default false
     ///
     /// Enabling this will result in the VM memory being allocated using huge pages. This is useful
@@ -694,6 +700,7 @@ impl SecurityInfo {
 
     /// Check whether annotation key is enabled or not.
     pub fn is_annotation_enabled(&self, path: &str) -> bool {
+<<<<<<< HEAD
         if !path.starts_with(KATA_ANNO_CONF_HYPERVISOR_PREFIX) {
             return false;
         }
@@ -703,6 +710,14 @@ impl SecurityInfo {
         println!("{:?}",&key);
         if let Ok(set) = RegexSet::new(&self.enable_annotations) {
             println!("hello world");
+=======
+        if !path.starts_with("io.katacontainers.config.hypervisor.") {
+            return false;
+        }
+        let pos = "io.katacontainers.config.hypervisor.".len();
+        let key = &path[pos..];
+        if let Ok(set) = RegexSet::new(&self.enable_annotations) {
+>>>>>>> f74edc28 (libs/types: support load Kata hypervisor configuration from file)
             return set.is_match(key);
         }
 
@@ -960,6 +975,10 @@ impl Hypervisor {
 impl ConfigOps for Hypervisor {
     fn adjust_configuration(conf: &mut TomlConfig) -> Result<()> {
         HypervisorVendor::adjust_configuration(conf)?;
+<<<<<<< HEAD
+=======
+
+>>>>>>> f74edc28 (libs/types: support load Kata hypervisor configuration from file)
         let hypervisors: Vec<String> = conf.hypervisor.keys().cloned().collect();
         for hypervisor in hypervisors.iter() {
             if let Some(plugin) = get_hypervisor_plugin(hypervisor) {
@@ -978,10 +997,14 @@ impl ConfigOps for Hypervisor {
                 hv.security_info.adjust_configuration()?;
                 hv.shared_fs.adjust_configuration()?;
             } else {
+<<<<<<< HEAD
                 return Err(eother!(
                     "Can Can not find plugin for hypervisor {}",
                     hypervisor
                 ));
+=======
+                return Err(eother!("Can not find plugin for hypervisor {}", hypervisor));
+>>>>>>> f74edc28 (libs/types: support load Kata hypervisor configuration from file)
             }
         }
 
@@ -1035,8 +1058,13 @@ mod vendor {
 #[path = "vendor.rs"]
 mod vendor;
 
+<<<<<<< HEAD
 pub use self::vendor::HypervisorVendor;
 use crate::config::validate_path_pattern;
+=======
+use crate::config::validate_path_pattern;
+pub use vendor::HypervisorVendor;
+>>>>>>> f74edc28 (libs/types: support load Kata hypervisor configuration from file)
 
 #[cfg(test)]
 mod tests {
