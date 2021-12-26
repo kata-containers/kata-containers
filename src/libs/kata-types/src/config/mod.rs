@@ -4,19 +4,38 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
+use std::collections::HashMap;
 use std::fs;
 use std::io::{self, Result};
 use std::path::{Path, PathBuf};
 
-use crate::sl;
+use crate::{eother, sl};
 
 /// Default configuration values.
 pub mod default;
+
+mod hypervisor;
+pub use self::hypervisor::{
+    BootInfo, DragonballConfig, Hypervisor, QemuConfig, HYPERVISOR_NAME_DRAGONBALL,
+    HYPERVISOR_NAME_QEMU,
+};
 
 mod runtime;
 pub use self::runtime::{Runtime, RuntimeVendor};
 
 /// Trait to manipulate global Kata configuration information.
+pub trait ConfigPlugin: Send + Sync {
+    /// Get the plugin name.
+    fn name(&self) -> &str;
+
+    /// Adjust the configuration information after loading from configuration file.
+    fn adjust_configuration(&self, _conf: &mut TomlConfig) -> Result<()>;
+
+    /// Validate the configuration information.
+    fn validate(&self, _conf: &TomlConfig) -> Result<()>;
+}
+
+/// Trait to manipulate Kata configuration information.
 pub trait ConfigOps {
     /// Adjust the configuration information after loading from configuration file.
     fn adjust_configuration(_conf: &mut TomlConfig) -> Result<()> {
@@ -45,6 +64,9 @@ pub trait ConfigObjectOps {
 /// Kata configuration information.
 #[derive(Debug, Default, Deserialize, Serialize)]
 pub struct TomlConfig {
+    /// Configuration information for hypervisors.
+    #[serde(default)]
+    pub hypervisor: HashMap<String, Hypervisor>,
     /// Kata runtime configuration information.
     #[serde(default)]
     pub runtime: Runtime,
@@ -99,6 +121,7 @@ impl TomlConfig {
     pub fn load(content: &str) -> Result<TomlConfig> {
         let mut config: TomlConfig = toml::from_str(content)?;
 
+        Hypervisor::adjust_configuration(&mut config)?;
         Runtime::adjust_configuration(&mut config)?;
         info!(sl!(), "get kata config: {:?}", config);
 
@@ -107,6 +130,7 @@ impl TomlConfig {
 
     /// Validate Kata configuration information.
     pub fn validate(&self) -> Result<()> {
+        Hypervisor::validate(self)?;
         Runtime::validate(self)?;
 
         Ok(())
@@ -121,5 +145,51 @@ impl TomlConfig {
         }
 
         Err(io::Error::from(io::ErrorKind::NotFound))
+    }
+}
+
+/// Validate the `path` matches one of the pattern in `patterns`.
+///
+/// Each member in `patterns` is a path pattern as described by glob(3)
+pub fn validate_path_pattern<P: AsRef<Path>>(patterns: &[String], path: P) -> Result<()> {
+    let path = path
+        .as_ref()
+        .to_str()
+        .ok_or_else(|| eother!("Invalid path {}", path.as_ref().to_string_lossy()))?;
+
+    for p in patterns.iter() {
+        if let Ok(glob) = glob::Pattern::new(p) {
+            if glob.matches(path) {
+                return Ok(());
+            }
+        }
+    }
+
+    Err(eother!("Path {} is not permitted", path))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_validate_path_pattern() {
+        let patterns = [];
+        validate_path_pattern(&patterns, "/bin/ls").unwrap_err();
+
+        let patterns = ["/bin".to_string()];
+        validate_path_pattern(&patterns, "/bin/ls").unwrap_err();
+
+        let patterns = ["/bin/*/ls".to_string()];
+        validate_path_pattern(&patterns, "/bin/ls").unwrap_err();
+
+        let patterns = ["/bin/*".to_string()];
+        validate_path_pattern(&patterns, "/bin/ls").unwrap();
+
+        let patterns = ["/*".to_string()];
+        validate_path_pattern(&patterns, "/bin/ls").unwrap();
+
+        let patterns = ["/usr/share".to_string(), "/bin/*".to_string()];
+        validate_path_pattern(&patterns, "/bin/ls").unwrap();
     }
 }
