@@ -166,9 +166,13 @@ dependencies = [
 name = "kata-types"
 version = "0.1.0"
 dependencies = [
+ "lazy_static",
  "oci",
  "serde",
+ "slog",
+ "slog-scope",
  "thiserror",
+ "toml",
 ]
 
 [[package]]
@@ -600,6 +604,15 @@ checksum = "ca8a50ef2360fbd1eeb0ecd46795a87a19024eb4b53c5dc916ca1fd95fe62438"
 dependencies = [
  "libc",
  "winapi",
+]
+
+[[package]]
+name = "toml"
+version = "0.5.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a31142970826733df8241ef35dc040ef98c679ab14d7c3e54d827099b3acecaa"
+dependencies = [
+ "serde",
 ]
 
 [[package]]
