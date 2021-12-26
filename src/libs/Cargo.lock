@@ -182,13 +182,20 @@ dependencies = [
 name = "kata-types"
 version = "0.1.0"
 dependencies = [
+<<<<<<< HEAD
  "glob",
  "lazy_static",
  "num_cpus",
+=======
+ "lazy_static",
+>>>>>>> a13f31c9 (libs/types: support load Kata runtime configuration from file)
  "oci",
  "regex",
  "serde",
+<<<<<<< HEAD
  "serde_json",
+=======
+>>>>>>> a13f31c9 (libs/types: support load Kata runtime configuration from file)
  "slog",
  "slog-scope",
  "thiserror",
