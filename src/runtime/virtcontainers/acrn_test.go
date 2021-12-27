@@ -243,9 +243,7 @@ func TestAcrnCreateVM(t *testing.T) {
 
 	a.sandbox = sandbox
 
-	//set PID to 1 to ignore hypercall to get UUID and set a random UUID
 	a.state.PID = 1
-	a.state.UUID = "f81d4fae-7dec-11d0-a765-00a0c91e6bf6"
 	network, err := NewNetwork()
 	assert.NoError(err)
 	err = a.CreateVM(context.Background(), sandbox.id, network, &sandbox.config.HypervisorConfig)
