@@ -12,8 +12,8 @@ WORKDIR /root/qemu
 ARG CACHE_TIMEOUT
 RUN echo "$CACHE_TIMEOUT"
 
-RUN apt-get update && apt-get upgrade -y
-RUN apt-get --no-install-recommends install -y \
+RUN apt-get update && apt-get upgrade -y && \
+    apt-get --no-install-recommends install -y \
 	    apt-utils \
 	    autoconf \
 	    automake \
@@ -46,36 +46,33 @@ RUN apt-get --no-install-recommends install -y \
 	    python \
 	    python-dev \
 	    rsync \
-	    zlib1g-dev
-
-RUN [ "$(uname -m)" != "s390x" ] && apt-get install -y libpmem-dev || true
+	    zlib1g-dev && \
+    if [ "$(uname -m)" != "s390x" ]; then apt-get install -y --no-install-recommends libpmem-dev; fi && \
+    apt-get clean && rm -rf /var/lib/apt/lists/
 
 ARG QEMU_REPO
-
-RUN cd  .. && git clone --depth=1 "${QEMU_REPO}" qemu
-
 # commit/tag/branch
 ARG QEMU_VERSION
-
-RUN git fetch --depth=1 origin "${QEMU_VERSION}" && git checkout FETCH_HEAD
-RUN scripts/git-submodule.sh update meson capstone
-
-ADD scripts/configure-hypervisor.sh /root/configure-hypervisor.sh
-ADD qemu /root/kata_qemu
-ADD scripts/apply_patches.sh /root/apply_patches.sh
-ADD scripts/patch_qemu.sh /root/patch_qemu.sh
-
-RUN /root/patch_qemu.sh "${QEMU_VERSION}" "/root/kata_qemu/patches"
-
 ARG PREFIX
 ARG BUILD_SUFFIX
-RUN PREFIX="${PREFIX}" /root/configure-hypervisor.sh -s "kata-qemu${BUILD_SUFFIX}" | xargs ./configure \
-	--with-pkgversion="kata-static${BUILD_SUFFIX}"
-
-RUN make -j$(nproc)
 ARG QEMU_DESTDIR
-RUN make install DESTDIR="${QEMU_DESTDIR}"
 ARG QEMU_TARBALL
-ADD static-build/scripts/qemu-build-post.sh /root/static-build/scripts/qemu-build-post.sh
-ADD static-build/qemu.blacklist /root/static-build/qemu.blacklist
-RUN /root/static-build/scripts/qemu-build-post.sh
+
+COPY scripts/configure-hypervisor.sh /root/configure-hypervisor.sh
+COPY qemu /root/kata_qemu
+COPY scripts/apply_patches.sh /root/apply_patches.sh
+COPY scripts/patch_qemu.sh /root/patch_qemu.sh
+COPY static-build/scripts/qemu-build-post.sh /root/static-build/scripts/qemu-build-post.sh
+COPY static-build/qemu.blacklist /root/static-build/qemu.blacklist
+
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+RUN git clone --depth=1 "${QEMU_REPO}" qemu && \
+    cd qemu && \
+    git fetch --depth=1 origin "${QEMU_VERSION}" && git checkout FETCH_HEAD && \
+    scripts/git-submodule.sh update meson capstone && \
+    /root/patch_qemu.sh "${QEMU_VERSION}" "/root/kata_qemu/patches" && \
+    (PREFIX="${PREFIX}" /root/configure-hypervisor.sh -s "kata-qemu${BUILD_SUFFIX}" | xargs ./configure \
+	--with-pkgversion="kata-static${BUILD_SUFFIX}") && \
+    make -j"$(nproc)" && \
+    make install DESTDIR="${QEMU_DESTDIR}" && \
+    /root/static-build/scripts/qemu-build-post.sh
