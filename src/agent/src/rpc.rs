@@ -1720,6 +1720,7 @@ mod tests {
             fd: -1,
             mh: MessageHeader::default(),
             metadata: std::collections::HashMap::new(),
+            timeout_nano: 0,
         }
     }
 
