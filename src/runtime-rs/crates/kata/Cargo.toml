@@ -15,10 +15,17 @@ path = "src/bin/containerd-shim-kata-v2.rs"
 [dependencies]
 go-flag = "0.1.0"
 thiserror = "1.0.30"
+protobuf = "=2.14.0"
+libc = "0.2.108"
+
+shim-proto = { path = "../../../libs/shim-proto" }
+virtcontainers = { path = "../virtcontainers" }
 
 
 [dev-dependencies]
 tempfile = "3.2.0"
+rand = "0.8.4"
+serial_test = "0.5.1"
 
 
 [build-dependencies]

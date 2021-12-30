@@ -4,13 +4,21 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
+use protobuf::well_known_types::Timestamp;
 use std::os::unix::fs::FileTypeExt;
 use std::path::PathBuf;
+use std::time::SystemTime;
+
+mod delete;
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
     #[error("invalid argument")]
     InvalidArgument,
+    #[error("failed to get system time: {0}")]
+    SystemTime(#[source] std::time::SystemTimeError),
+    #[error("error from sandbox: {0}")]
+    Sandbox(#[source] virtcontainers::Error),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -113,13 +121,20 @@ impl ShimExecutor {
     // implement start subcommand
     pub fn start(&mut self) {}
 
-    // implement delete subcommand
-    pub fn delete(&mut self) {}
-
     // implement rpc call from containerd
     pub fn run(&mut self) {}
 }
 
+fn to_timestamp(time: SystemTime) -> Result<Timestamp> {
+    match time.duration_since(SystemTime::UNIX_EPOCH) {
+        Err(e) => Err(Error::SystemTime(e)),
+        Ok(n) => Ok(Timestamp {
+            seconds: n.as_secs() as i64,
+            nanos: n.subsec_nanos() as i32,
+            ..Default::default()
+        }),
+    }
+}
 #[cfg(test)]
 mod tests {
     use super::*;
