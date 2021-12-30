@@ -50,9 +50,12 @@ pub struct Agent {
     ///    requirements, like architecture and version.
     #[serde(default)]
     pub kernel_modules: Vec<String>,
+<<<<<<< HEAD
 
     /// contianer pipe size
     pub container_pipe_size: u32,
+=======
+>>>>>>> 98560180 (libs/types: support load Kata agent configuration from file)
 }
 
 impl ConfigOps for Agent {

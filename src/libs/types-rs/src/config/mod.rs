@@ -24,11 +24,15 @@ use crate::{eother, sl};
 /// Default configuration values.
 pub mod default;
 
+<
 mod agent;
 pub use self::agent::{Agent, AgentVendor};
 
 pub mod hypervisor;
+mod agent;
+pub use self::agent::{Agent, AgentVendor};
 
+mod hypervisor;
 pub use self::hypervisor::{
     BootInfo, DragonballConfig, Hypervisor, QemuConfig, HYPERVISOR_NAME_DRAGONBALL,
     HYPERVISOR_NAME_QEMU,
@@ -86,6 +90,13 @@ pub trait ConfigObjectOps {
 /// Kata configuration information.
 #[derive(Debug, Default, Deserialize, Serialize)]
 pub struct TomlConfig {
+    /// Configuration information for agents.
+    #[serde(default)]
+    pub agent: HashMap<String, Agent>,
+    /// Configuration information for hypervisors.
+    #[serde(default)]
+    pub hypervisor: HashMap<String, Hypervisor>,
+
     /// Configuration information for agents.
     #[serde(default)]
     pub agent: HashMap<String, Agent>,
@@ -152,6 +163,7 @@ impl TomlConfig {
 
         Hypervisor::adjust_configuration(&mut config)?;
         Runtime::adjust_configuration(&mut config)?;
+        Agent::adjust_configuration(&mut config)?;
         info!(sl!(), "get kata config: {:?}", config);
 
         Ok(config)
