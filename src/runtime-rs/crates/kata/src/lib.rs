@@ -10,10 +10,11 @@ use std::os::unix::fs::FileTypeExt;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
-#[allow(dead_code)]
 mod config;
 mod delete;
+mod run;
 mod start;
+mod task_service;
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
@@ -43,6 +44,18 @@ pub enum Error {
     BindSocket(#[source] std::io::Error, PathBuf),
     #[error("failed to get self exec: {0}")]
     SelfExec(#[source] std::io::Error),
+    #[error("error from config: {0}")]
+    Config(#[source] config::ConfigError),
+    #[error("failed to set logger")]
+    Logger,
+    #[error("failed to start ttrpc server: {0}")]
+    StartServer(#[source] ttrpc::error::Error),
+    #[error("failed to wait ttrpc server when {0}")]
+    WaitServer(String),
+    #[error("failed to get env variable: {0}")]
+    EnvVar(#[source] std::env::VarError),
+    #[error("failed to parse server fd {0}")]
+    ServerFd(String),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -144,9 +157,6 @@ impl ShimExecutor {
     pub fn new(args: ShimArgs) -> Self {
         ShimExecutor { args }
     }
-
-    // implement rpc call from containerd
-    pub fn run(&mut self) {}
 
     fn get_bundle_path(&self) -> Result<PathBuf> {
         std::env::current_dir().map_err(Error::BundlePath)
