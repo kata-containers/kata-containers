@@ -10,6 +10,8 @@ use std::os::unix::fs::FileTypeExt;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
+#[allow(dead_code)]
+mod config;
 mod delete;
 mod start;
 

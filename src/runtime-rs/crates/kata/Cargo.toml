@@ -19,6 +19,7 @@ protobuf = "=2.14.0"
 libc = "0.2.108"
 unix_socket2 = "0.5.4"
 oci-spec = "0.5.2"
+toml = "0.5.8"
 
 shim-proto = { path = "../../../libs/shim-proto" }
 virtcontainers = { path = "../virtcontainers" }
@@ -28,6 +29,7 @@ virtcontainers = { path = "../virtcontainers" }
 tempfile = "3.2.0"
 rand = "0.8.4"
 serial_test = "0.5.1"
+tests_utils = { path = "../../tests/utils"}
 
 
 [build-dependencies]
