@@ -261,12 +261,14 @@ version = "0.1.0"
 dependencies = [
  "go-flag",
  "libc",
+ "oci-spec",
  "protobuf",
  "rand",
  "serial_test",
  "shim-proto",
  "tempfile",
  "thiserror",
+ "unix_socket2",
  "vergen",
  "virtcontainers",
 ]
@@ -777,6 +779,15 @@ name = "unicode-xid"
 version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8ccb82d61f80a663efe1f787a51b16b5a51e3314d6ac365b08639f52387b33f3"
+
+[[package]]
+name = "unix_socket2"
+version = "0.5.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b57c6eace16c00eccb98a28e85db3370eab0685bdd5e13831d59e2bcb49a1d8a"
+dependencies = [
+ "libc",
+]
 
 [[package]]
 name = "url"

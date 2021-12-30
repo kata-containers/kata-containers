@@ -5,11 +5,13 @@
 //
 
 use protobuf::well_known_types::Timestamp;
+use std::os::unix::ffi::OsStrExt;
 use std::os::unix::fs::FileTypeExt;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
 mod delete;
+mod start;
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
@@ -19,9 +21,33 @@ pub enum Error {
     SystemTime(#[source] std::time::SystemTimeError),
     #[error("error from sandbox: {0}")]
     Sandbox(#[source] virtcontainers::Error),
+    #[error("failed to get bundle path: {0}")]
+    BundlePath(#[source] std::io::Error),
+    #[error("failed to load oci spec: {0}")]
+    OciSpec(#[source] oci_spec::OciSpecError),
+    #[error("failed to open file {1} with error: {0}")]
+    OpenFile(#[source] std::io::Error, std::path::PathBuf),
+    #[error("failed to get metadata of file {1} with error: {0}")]
+    QueryFile(#[source] std::io::Error, std::path::PathBuf),
+    #[error("failed to write file {1} with error: {0}")]
+    WriteFile(#[source] std::io::Error, std::path::PathBuf),
+    #[error("empty sandbox id")]
+    EmptySandboxId,
+    #[error("failed to extract oci spec information: {0}")]
+    OciSpecInfo(#[source] virtcontainers::spec_info::OciSpecInfoError),
+    #[error("failed to spawn child: {0}")]
+    SpawnChild(#[source] std::io::Error),
+    #[error("failed to bind socket at {1} with error: {0}")]
+    BindSocket(#[source] std::io::Error, PathBuf),
+    #[error("failed to get self exec: {0}")]
+    SelfExec(#[source] std::io::Error),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
+
+const SOCKET_ROOT: &str = "/run/containerd";
+const SHIM_SOCKET: &str = "shim.sock";
+const KATA_BIND_FD: &str = "KATA_BIND_FD";
 
 /// Received commandline arguments or environment arguments.
 ///
@@ -107,7 +133,6 @@ impl ShimArgs {
 }
 
 /// Command executor for shim.
-#[allow(dead_code)]
 pub struct ShimExecutor {
     args: ShimArgs,
 }
@@ -118,11 +143,58 @@ impl ShimExecutor {
         ShimExecutor { args }
     }
 
-    // implement start subcommand
-    pub fn start(&mut self) {}
-
     // implement rpc call from containerd
     pub fn run(&mut self) {}
+
+    fn get_bundle_path(&self) -> Result<PathBuf> {
+        std::env::current_dir().map_err(Error::BundlePath)
+    }
+
+    fn load_image_spec(&self) -> Result<oci_spec::runtime::Spec> {
+        let bundle_path = self.get_bundle_path()?;
+        let spec_file = bundle_path.join("config.json");
+
+        oci_spec::runtime::Spec::load(spec_file).map_err(Error::OciSpec)
+    }
+
+    fn write_address(&self, address: &Path) -> Result<()> {
+        let dir = self.get_bundle_path()?;
+        let file_path = &dir.join("address");
+        std::fs::write(file_path, address.as_os_str().as_bytes())
+            .map_err(|e| Error::WriteFile(e, file_path.clone()))
+    }
+
+    fn write_pid_file(&self, pid: &str) -> Result<()> {
+        let dir = self.get_bundle_path()?;
+        let file_path = &dir.join("shim.pid");
+        std::fs::write(file_path, pid.as_bytes())
+            .map_err(|e| Error::WriteFile(e, file_path.clone()))
+    }
+
+    fn socket_address(&self, id: &str) -> Result<PathBuf> {
+        if id.is_empty() {
+            return Err(Error::EmptySandboxId);
+        }
+        Ok(PathBuf::from(SOCKET_ROOT)
+            .join(&self.args.namespace)
+            .join(id)
+            .join(SHIM_SOCKET))
+    }
+
+    fn read_pid_file(&self, bundle_path: &Path) -> Result<String> {
+        let file_path = bundle_path.join("shim.pid");
+        // Limit the size of content to read in.
+        let size = file_path
+            .metadata()
+            .map_err(|e| Error::QueryFile(e, file_path.clone()))?
+            .len();
+        // 20 is the maximum number of decimal digits for u64
+        if size > 20 {
+            return Err(Error::InvalidArgument);
+        }
+
+        std::fs::read_to_string(&file_path).map_err(|e| Error::OpenFile(e, file_path.clone()))
+    }
 }
 
 fn to_timestamp(time: SystemTime) -> Result<Timestamp> {
