@@ -11,7 +11,12 @@ use std::fs;
 use std::io::{self, Result};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
+<<<<<<< HEAD
 use std::u32;
+=======
+
+use lazy_static::lazy_static;
+>>>>>>> db85ddbf (libs/types: implement KataConfig to wrap TomlConfig)
 
 use lazy_static::__Deref;
 use lazy_static::lazy_static;
@@ -270,6 +275,9 @@ pub fn validate_path_pattern<P: AsRef<Path>>(patterns: &[String], path: P) -> Re
 }
 
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> db85ddbf (libs/types: implement KataConfig to wrap TomlConfig)
 /// Kata configuration information.
 pub struct KataConfig {
     config: TomlConfig,
@@ -317,11 +325,16 @@ impl KataConfig {
     pub fn get_active_config() -> Arc<KataConfig> {
         KATA_ACTIVE_CONFIG.lock().unwrap().clone()
     }
+<<<<<<< HEAD
     /// Get the config in use
     pub fn get_config(&self) -> &TomlConfig {
         &self.config
     }
     /// Get the agent mut configuration in use
+=======
+
+    /// Get the agent configuration in use.
+>>>>>>> db85ddbf (libs/types: implement KataConfig to wrap TomlConfig)
     pub fn get_agent(&self) -> Option<&Agent> {
         if !self.agent.is_empty() {
             self.config.agent.get(&self.agent)
@@ -348,7 +361,10 @@ lazy_static! {
             agent: String::new(),
             hypervisor: String::new(),
         };
+<<<<<<< HEAD
 
+=======
+>>>>>>> db85ddbf (libs/types: implement KataConfig to wrap TomlConfig)
         Mutex::new(Arc::new(kata))
     };
     static ref KATA_ACTIVE_CONFIG: Mutex<Arc<KataConfig>> = {
@@ -362,8 +378,11 @@ lazy_static! {
     };
 }
 
+<<<<<<< HEAD
 =======
 >>>>>>> f74edc28 (libs/types: support load Kata hypervisor configuration from file)
+=======
+>>>>>>> db85ddbf (libs/types: implement KataConfig to wrap TomlConfig)
 #[cfg(test)]
 mod tests {
     use super::*;
