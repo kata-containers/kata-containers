@@ -20,6 +20,8 @@ lazy_static! {
     ];
 }
 
+pub const DEFAULT_AGENT_NAME: &str = "kata";
+
 pub const DEFAULT_INTERNETWORKING_MODEL: &str = "tcfilter";
 
 pub const DEFAULT_BLOCK_DEVICE_TYPE: &str = "virtio-blk";
