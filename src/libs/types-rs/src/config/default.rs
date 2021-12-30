@@ -21,6 +21,7 @@ lazy_static! {
 }
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 pub const DEFAULT_AGENT_NAME: &str = "kata";
 
 pub const DEFAULT_INTERNETWORKING_MODEL: &str = "tcfilter";
@@ -64,6 +65,10 @@ pub const MAX_QEMU_PCI_BRIDGES: u32 = 5;
 pub const MAX_QEMU_VCPUS: u32 = 256;
 pub const MIN_QEMU_MEMORY_SIZE: u32 = 64;
 =======
+=======
+pub const DEFAULT_AGENT_NAME: &str = "kata";
+
+>>>>>>> 98560180 (libs/types: support load Kata agent configuration from file)
 pub const DEFAULT_INTERNETWORKING_MODEL: &str = "tcfilter";
 <<<<<<< HEAD
 >>>>>>> a13f31c9 (libs/types: support load Kata runtime configuration from file)

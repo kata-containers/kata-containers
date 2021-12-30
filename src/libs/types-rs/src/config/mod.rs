@@ -38,11 +38,17 @@ pub mod default;
 
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
 mod agent;
 pub use self::agent::{Agent, AgentVendor};
 
 pub mod hypervisor;
 =======
+=======
+mod agent;
+pub use self::agent::{Agent, AgentVendor};
+
+>>>>>>> 98560180 (libs/types: support load Kata agent configuration from file)
 mod hypervisor;
 >>>>>>> f74edc28 (libs/types: support load Kata hypervisor configuration from file)
 pub use self::hypervisor::{
@@ -117,6 +123,7 @@ pub trait ConfigObjectOps {
 pub struct TomlConfig {
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
     /// Configuration information for agents.
     #[serde(default)]
     pub agent: HashMap<String, Agent>,
@@ -126,6 +133,11 @@ pub struct TomlConfig {
 =======
 >>>>>>> a13f31c9 (libs/types: support load Kata runtime configuration from file)
 =======
+=======
+    /// Configuration information for agents.
+    #[serde(default)]
+    pub agent: HashMap<String, Agent>,
+>>>>>>> 98560180 (libs/types: support load Kata agent configuration from file)
     /// Configuration information for hypervisors.
     #[serde(default)]
     pub hypervisor: HashMap<String, Hypervisor>,
@@ -192,6 +204,7 @@ impl TomlConfig {
 
         Hypervisor::adjust_configuration(&mut config)?;
         Runtime::adjust_configuration(&mut config)?;
+        Agent::adjust_configuration(&mut config)?;
         info!(sl!(), "get kata config: {:?}", config);
 
 >>>>>>> a13f31c9 (libs/types: support load Kata runtime configuration from file)
@@ -207,9 +220,12 @@ impl TomlConfig {
         Hypervisor::validate(self)?;
         Runtime::validate(self)?;
         Agent::validate(self)?;
+<<<<<<< HEAD
 =======
         Runtime::validate(self)?;
 >>>>>>> a13f31c9 (libs/types: support load Kata runtime configuration from file)
+=======
+>>>>>>> 98560180 (libs/types: support load Kata agent configuration from file)
 
         Ok(())
     }

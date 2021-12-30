@@ -1,8 +1,12 @@
 <<<<<<< HEAD
+<<<<<<< HEAD
 // Copyright (c) 2021 Alibaba Cloud
 =======
 // Copyright (c) 2019-2021 Alibaba Cloud
 >>>>>>> a13f31c9 (libs/types: support load Kata runtime configuration from file)
+=======
+// Copyright (c) 2021 Alibaba Cloud
+>>>>>>> 98560180 (libs/types: support load Kata agent configuration from file)
 //
 // SPDX-License-Identifier: Apache-2.0
 //
