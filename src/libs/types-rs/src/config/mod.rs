@@ -9,7 +9,6 @@ use std::fs;
 use std::io::{self, Result};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
-use std::u32;
 
 use lazy_static::lazy_static;
 
@@ -24,7 +23,6 @@ use crate::{eother, sl};
 /// Default configuration values.
 pub mod default;
 
-<
 mod agent;
 pub use self::agent::{Agent, AgentVendor};
 
@@ -58,8 +56,6 @@ pub trait ConfigPlugin: Send + Sync {
     fn get_min_memory(&self) -> u32;
 }
 
-/// Trait to manipulate Kata configuration information.
-}
 
 /// Trait to manipulate Kata configuration information.
 pub trait ConfigOps {
@@ -208,7 +204,6 @@ pub fn validate_path_pattern<P: AsRef<Path>>(patterns: &[String], path: P) -> Re
     Err(eother!("Path {} is not permitted", path))
 }
 
-
 /// Kata configuration information.
 pub struct KataConfig {
     config: TomlConfig,
@@ -256,11 +251,8 @@ impl KataConfig {
     pub fn get_active_config() -> Arc<KataConfig> {
         KATA_ACTIVE_CONFIG.lock().unwrap().clone()
     }
-    /// Get the config in use
-    pub fn get_config(&self) -> &TomlConfig {
-        &self.config
-    }
-    /// Get the agent mut configuration in use
+
+    /// Get the agent configuration in use.
     pub fn get_agent(&self) -> Option<&Agent> {
         if !self.agent.is_empty() {
             self.config.agent.get(&self.agent)
@@ -287,7 +279,6 @@ lazy_static! {
             agent: String::new(),
             hypervisor: String::new(),
         };
-
         Mutex::new(Arc::new(kata))
     };
     static ref KATA_ACTIVE_CONFIG: Mutex<Arc<KataConfig>> = {
@@ -300,7 +291,6 @@ lazy_static! {
         Mutex::new(Arc::new(kata))
     };
 }
-
 
 #[cfg(test)]
 mod tests {
