@@ -8,6 +8,9 @@ use std::collections::HashMap;
 use std::fs;
 use std::io::{self, Result};
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex};
+
+use lazy_static::lazy_static;
 
 use crate::{eother, sl};
 
@@ -174,6 +177,94 @@ pub fn validate_path_pattern<P: AsRef<Path>>(patterns: &[String], path: P) -> Re
     }
 
     Err(eother!("Path {} is not permitted", path))
+}
+
+/// Kata configuration information.
+pub struct KataConfig {
+    config: TomlConfig,
+    agent: String,
+    hypervisor: String,
+}
+
+impl KataConfig {
+    /// Set the default Kata configuration object.
+    ///
+    /// The default Kata configuration information is loaded from system configuration file.
+    pub fn set_default_config(config: TomlConfig, hypervisor: &str, agent: &str) {
+        let kata = KataConfig {
+            config,
+            agent: agent.to_string(),
+            hypervisor: hypervisor.to_string(),
+        };
+        *KATA_DEFAULT_CONFIG.lock().unwrap() = Arc::new(kata);
+    }
+
+    /// Get the default Kata configuration object.
+    ///
+    /// The default Kata configuration information is loaded from system configuration file.
+    pub fn get_default_config() -> Arc<KataConfig> {
+        KATA_DEFAULT_CONFIG.lock().unwrap().clone()
+    }
+
+    /// Set the active Kata configuration object.
+    ///
+    /// The active Kata configuration information is default configuration information patched
+    /// with tunable configuration information from annotations.
+    pub fn set_active_config(config: TomlConfig, hypervisor: &str, agent: &str) {
+        let kata = KataConfig {
+            config,
+            agent: agent.to_string(),
+            hypervisor: hypervisor.to_string(),
+        };
+        *KATA_ACTIVE_CONFIG.lock().unwrap() = Arc::new(kata);
+    }
+
+    /// Get the active Kata configuration object.
+    ///
+    /// The active Kata configuration information is default configuration information patched
+    /// with tunable configuration information from annotations.
+    pub fn get_active_config() -> Arc<KataConfig> {
+        KATA_ACTIVE_CONFIG.lock().unwrap().clone()
+    }
+
+    /// Get the agent configuration in use.
+    pub fn get_agent(&self) -> Option<&Agent> {
+        if !self.agent.is_empty() {
+            self.config.agent.get(&self.agent)
+        } else {
+            None
+        }
+    }
+
+    /// Get the hypervisor configuration in use.
+    pub fn get_hypervisor(&self) -> Option<&Hypervisor> {
+        if !self.hypervisor.is_empty() {
+            self.config.hypervisor.get(&self.hypervisor)
+        } else {
+            None
+        }
+    }
+}
+
+lazy_static! {
+    static ref KATA_DEFAULT_CONFIG: Mutex<Arc<KataConfig>> = {
+        let config = TomlConfig::load("").unwrap();
+        let kata = KataConfig {
+            config,
+            agent: String::new(),
+            hypervisor: String::new(),
+        };
+        Mutex::new(Arc::new(kata))
+    };
+    static ref KATA_ACTIVE_CONFIG: Mutex<Arc<KataConfig>> = {
+        let config = TomlConfig::load("").unwrap();
+        let kata = KataConfig {
+            config,
+            agent: String::new(),
+            hypervisor: String::new(),
+        };
+        Mutex::new(Arc::new(kata))
+    };
 }
 
 #[cfg(test)]
