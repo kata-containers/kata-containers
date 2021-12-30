@@ -7,7 +7,6 @@
 use std::convert::TryFrom;
 use std::sync::mpsc::Sender;
 use std::sync::{Arc, Mutex, RwLock};
-use std::time::SystemTime;
 
 use nix::sys::signal::Signal;
 use protobuf::well_known_types::Timestamp;
@@ -850,17 +849,6 @@ fn to_status(state: virtcontainers::container::State) -> shim_proto::task::Statu
     }
 }
 
-fn to_timestamp(time: SystemTime) -> Option<Timestamp> {
-    match time.duration_since(SystemTime::UNIX_EPOCH) {
-        Err(_) => None,
-        Ok(n) => Some(Timestamp {
-            seconds: n.as_secs() as i64,
-            nanos: n.subsec_nanos() as i32,
-            ..Default::default()
-        }),
-    }
-}
-
 fn to_memory_entry(memory_data: MemoryData) -> metrics::MemoryEntry {
     metrics::MemoryEntry {
         usage: memory_data.usage,
@@ -875,5 +863,8 @@ fn exit_info(
     exist_status: Arc<RwLock<virtcontainers::container::ExitStatus>>,
 ) -> (u32, Option<Timestamp>) {
     let status = exist_status.read().expect("poisoned exit status lock");
-    (status.exit_code as u32, to_timestamp(status.exit_time))
+    (
+        status.exit_code as u32,
+        crate::to_timestamp(status.exit_time).ok(),
+    )
 }

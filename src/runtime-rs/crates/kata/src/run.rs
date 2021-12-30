@@ -12,10 +12,12 @@ use std::sync::{Arc, Mutex};
 
 use ttrpc::server::Server;
 
+use agent_client::Agent;
 use shim_proto::shim_ttrpc;
 use virtcontainers::{Sandbox, TomlConfig};
 
 use crate::config::load_configuration;
+use crate::event_publisher::EventPublisher;
 use crate::task_service::TaskService;
 use crate::{Error, Result, ShimExecutor, KATA_BIND_FD};
 
@@ -41,9 +43,11 @@ impl ShimExecutor {
         let toml_config = load_configuration(&bundle_path).map_err(Error::Config)?;
         let server_fd = get_server_fd()?;
         let sandbox = self.start_sandbox(toml_config, &bundle_path)?;
+        let agent = sandbox.get_agent();
         let sandbox = Arc::new(Mutex::new(sandbox));
         let (tx, rx) = channel::<ServerMessage>();
 
+        self.start_event_publisher(agent);
         let server = self.start_ttrpc_server(server_fd, sandbox, tx)?;
 
         Self::handle_messages(server, rx)
@@ -91,6 +95,15 @@ impl ShimExecutor {
         sandbox.start().map_err(Error::Sandbox)?;
 
         Ok(sandbox)
+    }
+
+    fn start_event_publisher(&mut self, agent: Arc<dyn Agent>) {
+        let event_publisher = EventPublisher::new(
+            &self.args.publish_binary,
+            &self.args.address,
+            &self.args.namespace,
+        );
+        event_publisher.start(agent);
     }
 
     fn start_ttrpc_server(

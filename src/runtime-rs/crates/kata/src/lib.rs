@@ -12,6 +12,7 @@ use std::time::SystemTime;
 
 mod config;
 mod delete;
+mod event_publisher;
 mod run;
 mod start;
 mod task_service;
