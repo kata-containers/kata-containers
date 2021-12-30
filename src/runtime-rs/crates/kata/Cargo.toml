@@ -1,0 +1,25 @@
+[package]
+name = "kata"
+version = "0.1.0"
+authors = ["The Kata Containers community <kata-dev@lists.katacontainers.io>"]
+description = "Containerd shim v2 runtime for Kata Containers"
+keywords = ["kata containers", "shimv2"]
+repository = "https://github.com/kata-containers/kata-containers.git"
+license = "Apache-2.0"
+edition = "2018"
+
+[[bin]]
+name = "containerd-shim-kata-v2"
+path = "src/bin/containerd-shim-kata-v2.rs"
+
+[dependencies]
+go-flag = "0.1.0"
+thiserror = "1.0.30"
+
+
+[dev-dependencies]
+tempfile = "3.2.0"
+
+
+[build-dependencies]
+vergen = { version = "6", default-features = false, features = ["build", "git", "rustc"] }
