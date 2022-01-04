@@ -102,7 +102,7 @@ first
 [install the latest release](#determine-latest-version).
 
 See the
-[manual installation installation documentation](install/README.md#manual-installation)
+[manual installation documentation](install/README.md#manual-installation)
 for details on how to automatically install and configuration a static release
 with containerd.
 
