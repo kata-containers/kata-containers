@@ -137,13 +137,16 @@ build_with_container() {
 	image_dir=$(readlink -f "$(dirname "${image}")")
 	image_name=$(basename "${image}")
 
-	REGISTRY_ARG=""
+	engine_build_args=""
 	if [ -n "${IMAGE_REGISTRY}" ]; then
-		REGISTRY_ARG="--build-arg IMAGE_REGISTRY=${IMAGE_REGISTRY}"
+		engine_build_args+=" --build-arg IMAGE_REGISTRY=${IMAGE_REGISTRY}"
+	fi
+	if [ -n "${USE_PODMAN}" ]; then
+		engine_build_args+=" --runtime ${DOCKER_RUNTIME}"
 	fi
 
 	"${container_engine}" build  \
-		   ${REGISTRY_ARG} \
+		   ${engine_build_args} \
 		   --build-arg http_proxy="${http_proxy}" \
 		   --build-arg https_proxy="${https_proxy}" \
 		   -t "${container_image_name}" "${script_dir}"

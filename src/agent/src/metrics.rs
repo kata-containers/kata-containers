@@ -23,50 +23,50 @@ macro_rules! sl {
 lazy_static! {
 
     static ref     AGENT_SCRAPE_COUNT: IntCounter =
-    prometheus::register_int_counter!(format!("{}_{}",NAMESPACE_KATA_AGENT,"scrape_count").as_ref(), "Metrics scrape count").unwrap();
+    prometheus::register_int_counter!(format!("{}_{}",NAMESPACE_KATA_AGENT,"scrape_count"), "Metrics scrape count").unwrap();
 
     static ref     AGENT_THREADS: Gauge =
-    prometheus::register_gauge!(format!("{}_{}",NAMESPACE_KATA_AGENT,"threads").as_ref(), "Agent process threads").unwrap();
+    prometheus::register_gauge!(format!("{}_{}",NAMESPACE_KATA_AGENT,"threads"), "Agent process threads").unwrap();
 
     static ref     AGENT_TOTAL_TIME: Gauge =
-    prometheus::register_gauge!(format!("{}_{}",NAMESPACE_KATA_AGENT,"total_time").as_ref(), "Agent process total time").unwrap();
+    prometheus::register_gauge!(format!("{}_{}",NAMESPACE_KATA_AGENT,"total_time"), "Agent process total time").unwrap();
 
     static ref     AGENT_TOTAL_VM: Gauge =
-    prometheus::register_gauge!(format!("{}_{}",NAMESPACE_KATA_AGENT,"total_vm").as_ref(), "Agent process total VM size").unwrap();
+    prometheus::register_gauge!(format!("{}_{}",NAMESPACE_KATA_AGENT,"total_vm"), "Agent process total VM size").unwrap();
 
     static ref     AGENT_TOTAL_RSS: Gauge =
-    prometheus::register_gauge!(format!("{}_{}",NAMESPACE_KATA_AGENT,"total_rss").as_ref(), "Agent process total RSS size").unwrap();
+    prometheus::register_gauge!(format!("{}_{}",NAMESPACE_KATA_AGENT,"total_rss"), "Agent process total RSS size").unwrap();
 
     static ref     AGENT_PROC_STATUS: GaugeVec =
-    prometheus::register_gauge_vec!(format!("{}_{}",NAMESPACE_KATA_AGENT,"proc_status").as_ref(), "Agent process status.", &["item"]).unwrap();
+    prometheus::register_gauge_vec!(format!("{}_{}",NAMESPACE_KATA_AGENT,"proc_status"), "Agent process status.", &["item"]).unwrap();
 
     static ref     AGENT_IO_STAT: GaugeVec =
-    prometheus::register_gauge_vec!(format!("{}_{}",NAMESPACE_KATA_AGENT,"io_stat").as_ref(), "Agent process IO statistics.", &["item"]).unwrap();
+    prometheus::register_gauge_vec!(format!("{}_{}",NAMESPACE_KATA_AGENT,"io_stat"), "Agent process IO statistics.", &["item"]).unwrap();
 
     static ref     AGENT_PROC_STAT: GaugeVec =
-    prometheus::register_gauge_vec!(format!("{}_{}",NAMESPACE_KATA_AGENT,"proc_stat").as_ref(), "Agent process statistics.", &["item"]).unwrap();
+    prometheus::register_gauge_vec!(format!("{}_{}",NAMESPACE_KATA_AGENT,"proc_stat"), "Agent process statistics.", &["item"]).unwrap();
 
     // guest os metrics
     static ref     GUEST_LOAD: GaugeVec =
-    prometheus::register_gauge_vec!(format!("{}_{}",NAMESPACE_KATA_GUEST,"load").as_ref() , "Guest system load.", &["item"]).unwrap();
+    prometheus::register_gauge_vec!(format!("{}_{}",NAMESPACE_KATA_GUEST,"load") , "Guest system load.", &["item"]).unwrap();
 
     static ref     GUEST_TASKS: GaugeVec =
-    prometheus::register_gauge_vec!(format!("{}_{}",NAMESPACE_KATA_GUEST,"tasks").as_ref() , "Guest system load.", &["item"]).unwrap();
+    prometheus::register_gauge_vec!(format!("{}_{}",NAMESPACE_KATA_GUEST,"tasks") , "Guest system load.", &["item"]).unwrap();
 
     static ref     GUEST_CPU_TIME: GaugeVec =
-    prometheus::register_gauge_vec!(format!("{}_{}",NAMESPACE_KATA_GUEST,"cpu_time").as_ref() , "Guest CPU statistics.", &["cpu","item"]).unwrap();
+    prometheus::register_gauge_vec!(format!("{}_{}",NAMESPACE_KATA_GUEST,"cpu_time") , "Guest CPU statistics.", &["cpu","item"]).unwrap();
 
     static ref     GUEST_VM_STAT: GaugeVec =
-    prometheus::register_gauge_vec!(format!("{}_{}",NAMESPACE_KATA_GUEST,"vm_stat").as_ref() , "Guest virtual memory statistics.", &["item"]).unwrap();
+    prometheus::register_gauge_vec!(format!("{}_{}",NAMESPACE_KATA_GUEST,"vm_stat") , "Guest virtual memory statistics.", &["item"]).unwrap();
 
     static ref     GUEST_NETDEV_STAT: GaugeVec =
-    prometheus::register_gauge_vec!(format!("{}_{}",NAMESPACE_KATA_GUEST,"netdev_stat").as_ref() , "Guest net devices statistics.", &["interface","item"]).unwrap();
+    prometheus::register_gauge_vec!(format!("{}_{}",NAMESPACE_KATA_GUEST,"netdev_stat") , "Guest net devices statistics.", &["interface","item"]).unwrap();
 
     static ref     GUEST_DISKSTAT: GaugeVec =
-    prometheus::register_gauge_vec!(format!("{}_{}",NAMESPACE_KATA_GUEST,"diskstat").as_ref() , "Disks statistics in system.", &["disk","item"]).unwrap();
+    prometheus::register_gauge_vec!(format!("{}_{}",NAMESPACE_KATA_GUEST,"diskstat") , "Disks statistics in system.", &["disk","item"]).unwrap();
 
     static ref     GUEST_MEMINFO: GaugeVec =
-    prometheus::register_gauge_vec!(format!("{}_{}",NAMESPACE_KATA_GUEST,"meminfo").as_ref() , "Statistics about memory usage in the system.", &["item"]).unwrap();
+    prometheus::register_gauge_vec!(format!("{}_{}",NAMESPACE_KATA_GUEST,"meminfo") , "Statistics about memory usage in the system.", &["item"]).unwrap();
 }
 
 #[instrument]
@@ -348,17 +348,17 @@ fn set_gauge_vec_cpu_time(gv: &prometheus::GaugeVec, cpu: &str, cpu_time: &procf
     gv.with_label_values(&[cpu, "idle"])
         .set(cpu_time.idle as f64);
     gv.with_label_values(&[cpu, "iowait"])
-        .set(cpu_time.iowait.unwrap_or(0.0) as f64);
+        .set(cpu_time.iowait.unwrap_or(0) as f64);
     gv.with_label_values(&[cpu, "irq"])
-        .set(cpu_time.irq.unwrap_or(0.0) as f64);
+        .set(cpu_time.irq.unwrap_or(0) as f64);
     gv.with_label_values(&[cpu, "softirq"])
-        .set(cpu_time.softirq.unwrap_or(0.0) as f64);
+        .set(cpu_time.softirq.unwrap_or(0) as f64);
     gv.with_label_values(&[cpu, "steal"])
-        .set(cpu_time.steal.unwrap_or(0.0) as f64);
+        .set(cpu_time.steal.unwrap_or(0) as f64);
     gv.with_label_values(&[cpu, "guest"])
-        .set(cpu_time.guest.unwrap_or(0.0) as f64);
+        .set(cpu_time.guest.unwrap_or(0) as f64);
     gv.with_label_values(&[cpu, "guest_nice"])
-        .set(cpu_time.guest_nice.unwrap_or(0.0) as f64);
+        .set(cpu_time.guest_nice.unwrap_or(0) as f64);
 }
 
 #[instrument]
@@ -470,7 +470,7 @@ fn set_gauge_vec_proc_status(gv: &prometheus::GaugeVec, status: &procfs::process
     gv.with_label_values(&["vmswap"])
         .set(status.vmswap.unwrap_or(0) as f64);
     gv.with_label_values(&["hugetlbpages"])
-        .set(status.hugetblpages.unwrap_or(0) as f64);
+        .set(status.hugetlbpages.unwrap_or(0) as f64);
     gv.with_label_values(&["voluntary_ctxt_switches"])
         .set(status.voluntary_ctxt_switches.unwrap_or(0) as f64);
     gv.with_label_values(&["nonvoluntary_ctxt_switches"])
