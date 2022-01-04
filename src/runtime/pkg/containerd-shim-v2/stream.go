@@ -36,6 +36,7 @@ func (tty *ttyIO) close() {
 
 	if tty.Stdin != nil {
 		tty.Stdin.Close()
+		tty.Stdin = nil
 	}
 	cf := func(w io.Writer) {
 		if w == nil {
@@ -111,7 +112,6 @@ func ioCopy(exitch, stdinCloser chan struct{}, tty *ttyIO, stdinPipe io.WriteClo
 			if tty.Stdin != nil {
 				// close stdin to make the other routine stop
 				tty.Stdin.Close()
-				tty.Stdin = nil
 			}
 		}()
 	}

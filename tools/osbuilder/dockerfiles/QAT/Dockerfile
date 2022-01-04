@@ -42,7 +42,8 @@ RUN dnf install -y \
     systemd-devel \
     sudo \
     xz \
-    yasm
+    yasm && \
+    dnf clean all
 
 # Add in non-privileged user
 RUN useradd qatbuilder -p "" && \

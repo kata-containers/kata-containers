@@ -120,7 +120,7 @@ stable and main. While this is not in place currently, it should be considered i
 
 ### Patch releases
 
-Releases are made every three weeks, which include a GitHub release as
+Releases are made every four weeks, which include a GitHub release as
 well as binary packages. These patch releases are made for both stable branches, and a "release candidate"
 for the next `MAJOR` or `MINOR` is created from main. If there are no changes across all the repositories, no
 release is created and an announcement is made on the developer mailing list to highlight this.
@@ -136,8 +136,7 @@ The process followed for making a release can be found at [Release Process](Rele
 
 ###  Frequency
 Minor releases are less frequent in order to provide a more stable baseline for users. They are currently
-running on a twelve week cadence. As the Kata Containers code base has reached a certain level of 
-maturity, we have increased the cadence from six weeks to twelve weeks. The release schedule can be seen on the
+running on a sixteen weeks cadence. The release schedule can be seen on the
 [release rotation wiki page](https://github.com/kata-containers/community/wiki/Release-Team-Rota).
 
 ### Compatibility

@@ -5,7 +5,7 @@ authors = ["The Kata Containers community <kata-dev@lists.katacontainers.io>"]
 edition = "2018"
 
 [dependencies]
-serde = "1.0.91"
-serde_derive = "1.0.91"
-serde_json = "1.0.39"
-libc = "0.2.58"
+serde = "1.0.131"
+serde_derive = "1.0.131"
+serde_json = "1.0.73"
+libc = "0.2.112"

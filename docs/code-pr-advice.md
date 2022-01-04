@@ -198,6 +198,7 @@ The table below lists the small number of cases where use of
 | `defer!()` | Similar to golang's `defer()` but doesn't allow the use of `?`. |
 | `tokio::spawn(async move {})` | Cannot currently return a `Result` from an `async move` closure. |
 | If an explicit test is performed before the `unwrap()` / `expect()` | *"Just about acceptable"*, but not ideal `[*]` |
+| `Mutex.lock()` | Almost unrecoverable if failed in the lock acquisition |
 
 
 `[*]` - There can lead to bad *future* code: consider what would

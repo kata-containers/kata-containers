@@ -449,18 +449,17 @@ fn mount_storage(logger: &Logger, storage: &Storage) -> Result<()> {
     let (flags, options) = parse_mount_flags_and_options(options_vec);
 
     let source = Path::new(&storage.source);
-    let mount_point = Path::new(&storage.mount_point);
 
     info!(logger, "mounting storage";
     "mount-source" => source.display(),
-    "mount-destination" => mount_point.display(),
+    "mount-destination" => mount_path.display(),
     "mount-fstype"  => storage.fstype.as_str(),
     "mount-options" => options.as_str(),
     );
 
     baremount(
         source,
-        mount_point,
+        mount_path,
         storage.fstype.as_str(),
         flags,
         options.as_str(),
