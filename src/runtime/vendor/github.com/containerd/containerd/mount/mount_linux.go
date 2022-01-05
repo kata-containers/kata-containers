@@ -19,13 +19,12 @@ package mount
 import (
 	"fmt"
 	"os"
-	"os/exec"
 	"path"
 	"strings"
 	"time"
 
-	"github.com/containerd/containerd/sys"
 	"github.com/pkg/errors"
+	exec "golang.org/x/sys/execabs"
 	"golang.org/x/sys/unix"
 )
 
@@ -64,7 +63,7 @@ func (m *Mount) Mount(target string) (err error) {
 
 	flags, data, losetup := parseMountOptions(options)
 	if len(data) > pagesize {
-		return errors.Errorf("mount options is too long")
+		return errors.New("mount options is too long")
 	}
 
 	// propagation types.
@@ -378,7 +377,7 @@ func mountAt(chdir string, source, target, fstype string, flags uintptr, data st
 	if !fs.IsDir() {
 		return errors.Wrap(errors.Errorf("%s is not dir", chdir), "failed to mountat")
 	}
-	return errors.Wrap(sys.FMountat(f.Fd(), source, target, fstype, flags, data), "failed to mountat")
+	return errors.Wrap(fMountat(f.Fd(), source, target, fstype, flags, data), "failed to mountat")
 }
 
 func (m *Mount) mountWithHelper(helperBinary, typePrefix, target string) error {
