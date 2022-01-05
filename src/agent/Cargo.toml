@@ -60,6 +60,7 @@ vsock-exporter = { path = "vsock-exporter" }
 # Configuration
 serde = { version = "1.0.129", features = ["derive"] }
 toml = "0.5.8"
+clap = { version = "3.0.1", features = ["derive"] }
 
 [dev-dependencies]
 tempfile = "3.1.0"
