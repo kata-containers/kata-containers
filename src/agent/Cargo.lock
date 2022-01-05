@@ -1104,8 +1104,6 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "protobuf",
- "serde",
- "serde_json",
  "ttrpc",
  "ttrpc-codegen",
 ]
