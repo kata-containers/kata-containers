@@ -70,9 +70,6 @@ const (
 	genericCPUFlagsTag    = "flags"      // nolint: varcheck, unused, deadcode
 	genericCPUVendorField = "vendor_id"  // nolint: varcheck, unused, deadcode
 	genericCPUModelField  = "model name" // nolint: varcheck, unused, deadcode
-
-	// If set, do not perform any network checks
-	noNetworkEnvVar = "KATA_CHECK_NO_NETWORK"
 )
 
 // variables rather than consts to allow tests to modify them
@@ -324,10 +321,6 @@ var kataCheckCLICommand = cli.Command{
 			Usage: "Don't filter out pre-release release versions",
 		},
 		cli.BoolFlag{
-			Name:  "no-network-checks, n",
-			Usage: "Do not run any checks using the network",
-		},
-		cli.BoolFlag{
 			Name:  "only-list-releases",
 			Usage: "Only list newer available releases (non-root only)",
 		},
@@ -340,21 +333,13 @@ var kataCheckCLICommand = cli.Command{
 			Usage: "display the list of checks performed",
 		},
 	},
-	Description: fmt.Sprintf(`tests if system can run %s and version is current.
-
-ENVIRONMENT VARIABLES:
-
-- %s: If set to any value, act as if "--no-network-checks" was specified.
+	Description: fmt.Sprintf(`Tests if system can run %s and version is current (need network access).
 
 EXAMPLES:
 
 - Perform basic checks:
 
   $ %s check
-
-- Local basic checks only:
-
-  $ %s check --no-network-checks
 
 - Perform further checks:
 
@@ -373,8 +358,6 @@ EXAMPLES:
   $ %s check --only-list-releases --include-all-releases
 `,
 		katautils.PROJECT,
-		noNetworkEnvVar,
-		katautils.NAME,
 		katautils.NAME,
 		katautils.NAME,
 		katautils.NAME,
@@ -388,25 +371,18 @@ EXAMPLES:
 			kataLog.Logger.SetLevel(logrus.InfoLevel)
 		}
 
-		if !context.Bool("no-network-checks") && os.Getenv(noNetworkEnvVar) == "" {
-			cmd := RelCmdCheck
+		if context.Bool("check-version-only") || context.Bool("only-list-releases") {
+			if os.Geteuid() == 0 {
+				kataLog.Warn("Not running network checks as super user")
+				return nil
+			}
 
+			cmd := RelCmdCheck
 			if context.Bool("only-list-releases") {
 				cmd = RelCmdList
 			}
 
-			if os.Geteuid() == 0 {
-				kataLog.Warn("Not running network checks as super user")
-			} else {
-				err := HandleReleaseVersions(cmd, katautils.VERSION, context.Bool("include-all-releases"))
-				if err != nil {
-					return err
-				}
-			}
-		}
-
-		if context.Bool("check-version-only") || context.Bool("only-list-releases") {
-			return nil
+			return HandleReleaseVersions(cmd, katautils.VERSION, context.Bool("include-all-releases"))
 		}
 
 		runtimeConfig, ok := context.App.Metadata["runtimeConfig"].(oci.RuntimeConfig)
