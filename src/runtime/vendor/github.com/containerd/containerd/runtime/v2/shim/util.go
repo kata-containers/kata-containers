@@ -20,25 +20,31 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"io/ioutil"
 	"net"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/containerd/containerd/namespaces"
 	"github.com/gogo/protobuf/proto"
 	"github.com/gogo/protobuf/types"
 	"github.com/pkg/errors"
+	exec "golang.org/x/sys/execabs"
 )
 
-var runtimePaths sync.Map
+type CommandConfig struct {
+	Runtime      string
+	Address      string
+	TTRPCAddress string
+	Path         string
+	SchedCore    bool
+	Args         []string
+	Opts         *types.Any
+}
 
 // Command returns the shim command with the provided args and configuration
-func Command(ctx context.Context, runtime, containerdAddress, containerdTTRPCAddress, path string, opts *types.Any, cmdArgs ...string) (*exec.Cmd, error) {
+func Command(ctx context.Context, config *CommandConfig) (*exec.Cmd, error) {
 	ns, err := namespaces.NamespaceRequired(ctx)
 	if err != nil {
 		return nil, err
@@ -49,67 +55,23 @@ func Command(ctx context.Context, runtime, containerdAddress, containerdTTRPCAdd
 	}
 	args := []string{
 		"-namespace", ns,
-		"-address", containerdAddress,
+		"-address", config.Address,
 		"-publish-binary", self,
 	}
-	args = append(args, cmdArgs...)
-	name := BinaryName(runtime)
-	if name == "" {
-		return nil, fmt.Errorf("invalid runtime name %s, correct runtime name should format like io.containerd.runc.v1", runtime)
-	}
-
-	var cmdPath string
-	cmdPathI, cmdPathFound := runtimePaths.Load(name)
-	if cmdPathFound {
-		cmdPath = cmdPathI.(string)
-	} else {
-		var lerr error
-		binaryPath := BinaryPath(runtime)
-		if _, serr := os.Stat(binaryPath); serr == nil {
-			cmdPath = binaryPath
-		}
-
-		if cmdPath == "" {
-			if cmdPath, lerr = exec.LookPath(name); lerr != nil {
-				if eerr, ok := lerr.(*exec.Error); ok {
-					if eerr.Err == exec.ErrNotFound {
-						// LookPath only finds current directory matches based on
-						// the callers current directory but the caller is not
-						// likely in the same directory as the containerd
-						// executables. Instead match the calling binaries path
-						// (containerd) and see if they are side by side. If so
-						// execute the shim found there.
-						testPath := filepath.Join(filepath.Dir(self), name)
-						if _, serr := os.Stat(testPath); serr == nil {
-							cmdPath = testPath
-						}
-						if cmdPath == "" {
-							return nil, errors.Wrapf(os.ErrNotExist, "runtime %q binary not installed %q", runtime, name)
-						}
-					}
-				}
-			}
-		}
-		cmdPath, err = filepath.Abs(cmdPath)
-		if err != nil {
-			return nil, err
-		}
-		if cmdPathI, cmdPathFound = runtimePaths.LoadOrStore(name, cmdPath); cmdPathFound {
-			// We didn't store cmdPath we loaded an already cached value. Use it.
-			cmdPath = cmdPathI.(string)
-		}
-	}
-
-	cmd := exec.Command(cmdPath, args...)
-	cmd.Dir = path
+	args = append(args, config.Args...)
+	cmd := exec.CommandContext(ctx, config.Runtime, args...)
+	cmd.Dir = config.Path
 	cmd.Env = append(
 		os.Environ(),
 		"GOMAXPROCS=2",
-		fmt.Sprintf("%s=%s", ttrpcAddressEnv, containerdTTRPCAddress),
+		fmt.Sprintf("%s=%s", ttrpcAddressEnv, config.TTRPCAddress),
 	)
+	if config.SchedCore {
+		cmd.Env = append(cmd.Env, "SCHED_CORE=1")
+	}
 	cmd.SysProcAttr = getSysProcAttr()
-	if opts != nil {
-		d, err := proto.Marshal(opts)
+	if config.Opts != nil {
+		d, err := proto.Marshal(config.Opts)
 		if err != nil {
 			return nil, err
 		}
@@ -196,7 +158,7 @@ func ReadAddress(path string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	data, err := ioutil.ReadFile(path)
+	data, err := os.ReadFile(path)
 	if err != nil {
 		return "", err
 	}
