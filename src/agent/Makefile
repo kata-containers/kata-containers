@@ -101,10 +101,10 @@ endef
 ##TARGET default: build code
 default: $(TARGET) show-header
 
-$(TARGET): $(GENERATED_CODE) logging-crate-tests $(TARGET_PATH)
+$(TARGET): $(GENERATED_CODE) libs-crate-tests $(TARGET_PATH)
 
-logging-crate-tests:
-	make -C $(CWD)/../libs/logging
+libs-crate-tests:
+	make -C $(CWD)/../libs
 
 $(TARGET_PATH): $(SOURCES) | show-summary
 	@RUSTFLAGS="$(EXTRA_RUSTFLAGS) --deny warnings" cargo build --target $(TRIPLE) --$(BUILD_TYPE) $(EXTRA_RUSTFEATURES)
@@ -208,7 +208,7 @@ codecov-html: check_tarpaulin
 
 .PHONY: \
 	help \
-	logging-crate-tests \
+	libs-crate-tests \
 	optimize \
 	show-header \
 	show-summary \

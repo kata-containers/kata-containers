@@ -11,6 +11,12 @@ use std::process;
 use std::result;
 use std::sync::Mutex;
 
+mod file_rotate;
+mod log_writer;
+
+pub use file_rotate::FileRotator;
+pub use log_writer::LogWriter;
+
 const LOG_LEVELS: &[(&str, slog::Level)] = &[
     ("trace", slog::Level::Trace),
     ("debug", slog::Level::Debug),

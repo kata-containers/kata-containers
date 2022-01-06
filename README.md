@@ -58,6 +58,7 @@ The table below lists the core parts of the project:
 |-|-|-|
 | [runtime](src/runtime) | core | Main component run by a container manager and providing a containerd shimv2 runtime implementation. |
 | [agent](src/agent) | core | Management process running inside the virtual machine / POD that sets up the container environment. |
+| [libraries](src/libs) | core | Library crates shared by multiple Kata Container components or published to [`crates.io`](https://crates.io/index.html) |
 | [documentation](docs) | documentation | Documentation common to all components (such as design and install documentation). |
 | [tests](https://github.com/kata-containers/tests) | tests | Excludes unit tests which live with the main code. |
 
