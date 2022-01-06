@@ -3,16 +3,40 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
-# It is not necessary to have a build target as this crate is built
-# automatically by the consumers of it.
-#
-# However, it is essential that the crate be tested.
-default: test
+EXTRA_RUSTFEATURES :=
+
+EXTRA_TEST_FLAGS :=
+USERID=$(shell id -u)
+ifeq ($(USERID), 0)
+    override EXTRA_TEST_FLAGS = --ignored
+endif
+
+default: build
+
+build:
+	cargo build --all-features
+
+check: clippy format
+
+clippy:
+	@echo "INFO: cargo clippy..."
+	cargo clippy --all-targets --all-features --release \
+		-- \
+		-D warnings
+
+format:
+	@echo "INFO: cargo fmt..."
+	cargo fmt -- --check
+
+clean:
+	cargo clean
 
 # It is essential to run these tests using *both* build profiles.
 # See the `test_logger_levels()` test for further information.
 test:
-	@echo "INFO: testing log levels for development build"
-	@cargo test
-	@echo "INFO: testing log levels for release build"
-	@cargo test --release
+	@echo "INFO: testing libraries for development build"
+	cargo test --all $(EXTRA_RUSTFEATURES) -- --nocapture $(EXTRA_TEST_FLAGS)
+	@echo "INFO: testing libraries for release build"
+	cargo test --release --all $(EXTRA_RUSTFEATURES) -- --nocapture $(EXTRA_TEST_FLAGS)
+
+.PHONY: install vendor

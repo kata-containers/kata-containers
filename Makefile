@@ -6,6 +6,7 @@
 # List of available components
 COMPONENTS =
 
+COMPONENTS += libs
 COMPONENTS += agent
 COMPONENTS += runtime
 
@@ -20,11 +21,6 @@ TOOLS += log-parser
 STANDARD_TARGETS = build check clean install test vendor
 
 default: all
-
-all: libs-crate-tests build
-
-libs-crate-tests:
-	make -C src/libs
 
 include utils.mk
 include ./tools/packaging/kata-deploy/local-build/Makefile
@@ -49,7 +45,6 @@ docs-url-alive-check:
 	binary-tarball \
 	default \
 	install-binary-tarball \
-	libs-crate-tests \
 	static-checks \
 	docs-url-alive-check
 
