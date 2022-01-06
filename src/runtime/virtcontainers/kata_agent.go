@@ -2316,10 +2316,24 @@ func checkReq(handlerId string, k *kataAgent, req interface{}) (err error) {
 
 //
 func (k *kataAgent) addReqHandler(handlerId string, f reqFunc) {
-	k._reqHandlers[handlerId] = func(ctx context.Context, req interface{}) (interface{}, error) {
-		if err := checkReq(handlerId, k, req); err != nil {
-			return nil, err
+	k._reqHandlers[handlerId] = func(ctx context.Context, req interface{}) (resp interface{}, err error) {
+		// On error if the agent is dead, include the  dead error
+		defer func() {
+			if err == nil {
+				return
+			}
+
+			if k.deadErr != nil {
+				context := err.Error()
+				err = k.deadErr
+				errors.ErrorContext(&err, context)
+			}
+		}()
+		if err = checkReq(handlerId, k, req); err != nil {
+			return
 		}
-		return f(ctx, req)
+		resp, err = f(ctx, req)
+
+		return
 	}
 }
