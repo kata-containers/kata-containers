@@ -250,7 +250,7 @@ runtime cleans up the environment (which includes terminating the
 
 If the container manager requests the container be deleted, the
 [runtime](#runtime) will signal the agent by sending it a
-`DestroySandbox` [ttRPC API](../../../src/agent/protocols/protos/agent.proto) request.
+`DestroySandbox` [ttRPC API](../../../src/libs/protocols/protos/agent.proto) request.
 
 ## Guest assets
 
@@ -291,7 +291,7 @@ for each VM created.
 The agent communicates with the other Kata components (primarily the
 [runtime](#runtime)) using a
 [`ttRPC`](https://github.com/containerd/ttrpc-rust) based
-[protocol](../../../src/agent/protocols/protos).
+[protocol](../../../src/libs/protocols/protos).
 
 > **Note:**
 >
