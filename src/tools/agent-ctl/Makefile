@@ -8,11 +8,8 @@ include ../../../utils.mk
 .DEFAULT_GOAL := default
 default: build
 
-build: libs-crate-tests
+build:
 	@RUSTFLAGS="$(EXTRA_RUSTFLAGS) --deny warnings" cargo build --target $(TRIPLE) --$(BUILD_TYPE)
-
-libs-crate-tests:
-	make -C $(CWD)/../../libs
 
 clean:
 	cargo clean
@@ -32,6 +29,5 @@ check: standard_rust_check
 	check \
 	clean \
 	install \
-	libs-crate-tests \
 	test \
 	vendor
