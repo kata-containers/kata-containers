@@ -80,10 +80,17 @@ jobs:
       if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
       run: |
         cd ${GOPATH}/src/github.com/${{ github.repository }} && make vendor
-    - name: Static Checks
-      if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
-      run: |
-        cd ${GOPATH}/src/github.com/${{ github.repository }} && make static-checks
+#    - name: Check rust libraries
+#      run:
+#        make -C ${{ runner.workspace }}/kata-containers/src/github.com/${{ github.repository }}/src/libs check
+#    - name: Run unit tests for rust libraries
+#      run:
+#        make -C ${{ runner.workspace }}/kata-containers/src/github.com/${{ github.repository }}/src/libs test
+#        sudo -E PATH="$PATH" make -C ${{ runner.workspace }}/kata-containers/src/github.com/${{ github.repository }}/src/libs test
+#    - name: Static Checks
+#      if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
+#      run: |
+#        cd ${GOPATH}/src/github.com/${{ github.repository }} && make static-checks
     - name: Run Compiler Checks
       if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
       run: |

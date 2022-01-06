@@ -6,6 +6,7 @@
 # List of available components
 COMPONENTS =
 
+COMPONENTS += libs
 COMPONENTS += agent
 COMPONENTS += runtime
 
@@ -18,11 +19,6 @@ TOOLS += trace-forwarder
 STANDARD_TARGETS = build check clean install test vendor
 
 default: all
-
-all: libs-crate-tests build
-
-libs-crate-tests:
-	make -C src/libs
 
 include utils.mk
 include ./tools/packaging/kata-deploy/local-build/Makefile
@@ -44,5 +40,4 @@ static-checks: build
 	binary-tarball \
 	default \
 	install-binary-tarball \
-	libs-crate-tests \
 	static-checks
