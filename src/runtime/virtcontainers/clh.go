@@ -31,6 +31,8 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	vcTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
+
+	"golang.org/x/sys/unix"
 )
 
 // clhTracingTags defines tags for the trace span
@@ -1147,19 +1149,40 @@ func (clh *cloudHypervisor) addNet(e Endpoint) error {
 		return errors.New("net Pair to be added is nil, needed to get TAP path")
 	}
 
-	tapPath := netPair.TapInterface.TAPIface.Name
-	if tapPath == "" {
-		return errors.New("TAP path in network pair is empty")
+	fds := make([]int32, 0)
+	for _, f := range netPair.TapInterface.VMFds {
+		fd := f.Fd()
+		flags, err := unix.FcntlInt(fd, unix.F_GETFD, 0)
+		if err != nil {
+			return err
+		}
+
+		// Let's remove the FD_CLOEXEC flag from the file descriptor,
+		// so it doesn't get closed when executing cloud-hypervisor.
+		//
+		// This is a workaround discussed with the cloud-hypervisor
+		// team, and we should keep it while they can't support file
+		// descriptors being passed down using syscall.UnixRights() /
+		// unix.UnixRights(), as done for QEMU.
+		flags &^= unix.FD_CLOEXEC
+		_, err = unix.FcntlInt(fd, unix.F_SETFD, flags)
+		if err != nil {
+			return err
+		}
+
+		fds = append(fds, int32(fd))
+	}
+	if len(fds) == 0 {
+		return errors.New("TAP fds are not present in network pair")
 	}
 
 	clh.Logger().WithFields(log.Fields{
 		"mac": mac,
-		"tap": tapPath,
 	}).Info("Adding Net")
 
 	net := chclient.NewNetConfig()
 	net.Mac = &mac
-	net.Tap = &tapPath
+	net.Fds = &fds
 	if clh.vmconfig.Net != nil {
 		*clh.vmconfig.Net = append(*clh.vmconfig.Net, *net)
 	} else {
