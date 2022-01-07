@@ -534,13 +534,13 @@ mod tests {
             let msg = format!("test[{}]", i);
 
             // Create a writer for the logger drain to use
-            let writer =
-                NamedTempFile::new().expect(&format!("{:}: failed to create tempfile", msg));
+            let writer = NamedTempFile::new()
+                .unwrap_or_else(|_| panic!("{:}: failed to create tempfile", msg));
 
             // Used to check file contents before the temp file is unlinked
             let mut writer_ref = writer
                 .reopen()
-                .expect(&format!("{:?}: failed to clone tempfile", msg));
+                .unwrap_or_else(|e| panic!("{:?}: failed to clone tempfile, {}", msg, e));
 
             let (logger, logger_guard) = create_logger(name, source, d.slog_level, writer);
 
@@ -554,52 +554,52 @@ mod tests {
             let mut contents = String::new();
             writer_ref
                 .read_to_string(&mut contents)
-                .expect(&format!("{:?}: failed to read tempfile contents", msg));
+                .unwrap_or_else(|e| panic!("{:?}: failed to read tempfile contents, {}", msg, e));
 
             // Convert file to JSON
             let fields: Value = serde_json::from_str(&contents)
-                .expect(&format!("{:?}: failed to convert logfile to json", msg));
+                .unwrap_or_else(|e| panic!("{:?}: failed to convert logfile to json, {}", msg, e));
 
             // Check the expected JSON fields
 
             let field_ts = fields
                 .get("ts")
-                .expect(&format!("{:?}: failed to find timestamp field", msg));
+                .unwrap_or_else(|| panic!("{:?}: failed to find timestamp field", msg));
             assert_ne!(field_ts, "", "{}", msg);
 
             let field_version = fields
                 .get("version")
-                .expect(&format!("{:?}: failed to find version field", msg));
+                .unwrap_or_else(|| panic!("{:?}: failed to find version field", msg));
             assert_eq!(field_version, env!("CARGO_PKG_VERSION"), "{}", msg);
 
             let field_pid = fields
                 .get("pid")
-                .expect(&format!("{:?}: failed to find pid field", msg));
+                .unwrap_or_else(|| panic!("{:?}: failed to find pid field", msg));
             assert_ne!(field_pid, "", "{}", msg);
 
             let field_level = fields
                 .get("level")
-                .expect(&format!("{:?}: failed to find level field", msg));
+                .unwrap_or_else(|| panic!("{:?}: failed to find level field", msg));
             assert_eq!(field_level, d.slog_level_tag, "{}", msg);
 
             let field_msg = fields
                 .get("msg")
-                .expect(&format!("{:?}: failed to find msg field", msg));
+                .unwrap_or_else(|| panic!("{:?}: failed to find msg field", msg));
             assert_eq!(field_msg, &json!(d.msg), "{}", msg);
 
             let field_name = fields
                 .get("name")
-                .expect(&format!("{:?}: failed to find name field", msg));
+                .unwrap_or_else(|| panic!("{:?}: failed to find name field", msg));
             assert_eq!(field_name, name, "{}", msg);
 
             let field_source = fields
                 .get("source")
-                .expect(&format!("{:?}: failed to find source field", msg));
+                .unwrap_or_else(|| panic!("{:?}: failed to find source field", msg));
             assert_eq!(field_source, source, "{}", msg);
 
             let field_subsystem = fields
                 .get("subsystem")
-                .expect(&format!("{:?}: failed to find subsystem field", msg));
+                .unwrap_or_else(|| panic!("{:?}: failed to find subsystem field", msg));
 
             // No explicit subsystem, so should be the default
             assert_eq!(field_subsystem, &json!(DEFAULT_SUBSYSTEM), "{}", msg);
