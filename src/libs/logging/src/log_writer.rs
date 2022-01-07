@@ -54,9 +54,9 @@ mod tests {
         let (logger, guard) = create_logger("test", "hi", slog::Level::Info, rotator);
         let mut writer = LogWriter::new(logger);
 
-        writer.write("test1\nblabla".as_bytes()).unwrap();
+        writer.write_all("test1\nblabla".as_bytes()).unwrap();
         writer.flush().unwrap();
-        writer.write("test2".as_bytes()).unwrap();
+        writer.write_all("test2".as_bytes()).unwrap();
         writer.flush().unwrap();
         drop(guard);
 

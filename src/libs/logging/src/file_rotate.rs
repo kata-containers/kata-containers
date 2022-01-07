@@ -264,13 +264,13 @@ mod tests {
         rotator.rotate_count(1);
         assert_eq!(rotator.rotate_size, 4);
         assert_eq!(rotator.rotate_keep, 1);
-        assert_eq!(rotator.truncate, false);
+        assert!(!rotator.truncate);
 
-        rotator.write("test".as_bytes()).unwrap();
+        rotator.write_all("test".as_bytes()).unwrap();
         rotator.flush().unwrap();
-        rotator.write("test1".as_bytes()).unwrap();
+        rotator.write_all("test1".as_bytes()).unwrap();
         rotator.flush().unwrap();
-        rotator.write("t2".as_bytes()).unwrap();
+        rotator.write_all("t2".as_bytes()).unwrap();
         rotator.flush().unwrap();
 
         let content = fs::read_to_string(path).unwrap();
@@ -298,16 +298,16 @@ mod tests {
         rotator.rotate_count(1);
         rotator.fail_rename = true;
 
-        rotator.write("test".as_bytes()).unwrap();
+        rotator.write_all("test".as_bytes()).unwrap();
         rotator.flush().unwrap();
         let size1 = path.metadata().unwrap().size();
 
-        rotator.write("test1".as_bytes()).unwrap();
+        rotator.write_all("test1".as_bytes()).unwrap();
         rotator.flush().unwrap();
         let size2 = path.metadata().unwrap().size();
         assert!(size2 > size1);
 
-        rotator.write("test2".as_bytes()).unwrap();
+        rotator.write_all("test2".as_bytes()).unwrap();
         rotator.flush().unwrap();
         let size3 = path.metadata().unwrap().size();
         assert!(size3 > size2);
