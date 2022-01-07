@@ -14,6 +14,7 @@ export branch="${target_branch:-main}"
 # If the clone exists and `CI` is exported then it does nothing. Otherwise
 # it will clone the repository or `git pull` the latest code.
 #
+echo "Dummy"
 clone_tests_repo()
 {
 	if [ -d "$tests_repo_dir" ]; then
