@@ -22,9 +22,9 @@ import (
 	taskAPI "github.com/containerd/containerd/runtime/v2/task"
 	"github.com/containerd/typeurl"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/utils"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/errors"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/rootless"
 	"github.com/opencontainers/runtime-spec/specs-go"
-	"github.com/pkg/errors"
 
 	// only register the proto type
 	crioption "github.com/containerd/containerd/pkg/runtimeoptions/v1"
@@ -46,7 +46,8 @@ var defaultStartManagementServerFunc startManagementServerFunc = func(s *service
 	shimLog.Info("management server started")
 }
 
-func create(ctx context.Context, s *service, r *taskAPI.CreateTaskRequest) (*container, error) {
+func create(ctx context.Context, s *service, r *taskAPI.CreateTaskRequest) (c *container, err error) {
+	defer errors.ErrorContext(&err, "shimv2 create failed")
 	rootFs := vc.RootFs{}
 	if len(r.Rootfs) == 1 {
 		m := r.Rootfs[0]
@@ -90,7 +91,7 @@ func create(ctx context.Context, s *service, r *taskAPI.CreateTaskRequest) (*con
 		}
 		_, err = katatrace.CreateTracer("kata", jaegerConfig)
 		if err != nil {
-			return nil, err
+			return
 		}
 
 		// create root span
@@ -118,7 +119,7 @@ func create(ctx context.Context, s *service, r *taskAPI.CreateTaskRequest) (*con
 		}
 
 		if rootFs.Mounted, err = checkAndMount(s, r); err != nil {
-			return nil, err
+			return
 		}
 
 		defer func() {
@@ -141,14 +142,16 @@ func create(ctx context.Context, s *service, r *taskAPI.CreateTaskRequest) (*con
 		// ctx will be canceled after this rpc service call, but the sandbox will live
 		// across multiple rpc service calls.
 		//
-		sandbox, _, err := katautils.CreateSandbox(s.ctx, vci, *ociSpec, *s.config, rootFs, r.ID, bundlePath, "", disableOutput, false)
+		var sandbox vc.VCSandbox
+		sandbox, _, err = katautils.CreateSandbox(s.ctx, vci, *ociSpec, *s.config, rootFs, r.ID, bundlePath, "", disableOutput, false)
 		if err != nil {
-			return nil, err
+			return
 		}
 		s.sandbox = sandbox
-		pid, err := s.sandbox.GetHypervisorPid()
+		var pid int
+		pid, err = s.sandbox.GetHypervisorPid()
 		if err != nil {
-			return nil, err
+			return
 		}
 		s.hpid = uint32(pid)
 
@@ -165,7 +168,7 @@ func create(ctx context.Context, s *service, r *taskAPI.CreateTaskRequest) (*con
 		}
 
 		if rootFs.Mounted, err = checkAndMount(s, r); err != nil {
-			return nil, err
+			return
 		}
 
 		defer func() {
@@ -178,13 +181,13 @@ func create(ctx context.Context, s *service, r *taskAPI.CreateTaskRequest) (*con
 
 		_, err = katautils.CreateContainer(ctx, s.sandbox, *ociSpec, rootFs, r.ID, bundlePath, "", disableOutput)
 		if err != nil {
-			return nil, err
+			return
 		}
 	}
 
 	container, err := newContainer(s, r, containerType, ociSpec, rootFs.Mounted)
 	if err != nil {
-		return nil, err
+		return
 	}
 
 	return container, nil
