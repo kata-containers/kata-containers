@@ -194,7 +194,13 @@ func TestCreateGetTunTapLink(t *testing.T) {
 	assert.NoError(err)
 
 	tapName := "testtap0"
-	tapLink, fds, err := createLink(netHandle, tapName, &netlink.Tuntap{}, 1)
+	tapLink, fds, err := createLink(netHandle, tapName, &netlink.Tuntap{}, 0)
+	assert.NoError(err)
+	assert.NotNil(tapLink)
+	assert.NotZero(len(fds))
+
+	tapName = "testtap1"
+	tapLink, fds, err = createLink(netHandle, tapName, &netlink.Tuntap{}, 1)
 	assert.NoError(err)
 	assert.NotNil(tapLink)
 	assert.NotZero(len(fds))
