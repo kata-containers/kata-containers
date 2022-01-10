@@ -16,6 +16,7 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils/katatrace"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/oci"
 	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/errors"
 	vf "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/factory"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 )
@@ -111,6 +112,7 @@ func SetEphemeralStorageType(ociSpec specs.Spec) specs.Spec {
 // CreateSandbox create a sandbox container
 func CreateSandbox(ctx context.Context, vci vc.VC, ociSpec specs.Spec, runtimeConfig oci.RuntimeConfig, rootFs vc.RootFs,
 	containerID, bundlePath, console string, disableOutput, systemdCgroup bool) (_ vc.VCSandbox, _ vc.Process, err error) {
+	defer errors.ErrorContext(&err, "Failed to to katautils CreateSandbox")
 	span, ctx := katatrace.Trace(ctx, nil, "CreateSandbox", createTracingTags)
 	katatrace.AddTags(span, "container_id", containerID)
 	defer span.End()
@@ -162,8 +164,8 @@ func CreateSandbox(ctx context.Context, vci vc.VC, ociSpec specs.Spec, runtimeCo
 	if err != nil {
 		return nil, vc.Process{}, err
 	}
-
-	sandbox, err := vci.CreateSandbox(ctx, sandboxConfig)
+	var sandbox vc.VCSandbox
+	sandbox, err = vci.CreateSandbox(ctx, sandboxConfig)
 	if err != nil {
 		return nil, vc.Process{}, err
 	}
