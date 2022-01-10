@@ -27,6 +27,7 @@ if [ ${arch} = "ppc64le" ]; then
 fi
 
 sudo docker run --rm -i -v "${repo_root_dir}:${repo_root_dir}" \
+	--env GOCACHE=${repo_root_dir} \
 	-w "${repo_root_dir}/src/runtime" \
 	"${container_image}" \
 	bash -c "make PREFIX=${PREFIX} QEMUCMD=qemu-system-${arch}"

@@ -187,10 +187,10 @@ handle_build() {
 		;;
 	esac
 
-	tarball_name="${workdir}/kata-static-${build_target}.tar.xz"
+	tarball_name="${workdir}/kata-static-${build_target}.tar"
 	(
 		cd "${destdir}"
-		sudo tar cvfJ "${tarball_name}" "."
+		sudo tar cvf "${tarball_name}" "."
 	)
 	tar tvf "${tarball_name}"
 }

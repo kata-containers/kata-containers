@@ -36,7 +36,7 @@ jobs:
         uses: actions/upload-artifact@v2
         with:
           name: kata-artifacts
-          path: kata-build/kata-static-${{ matrix.asset }}.tar.xz
+          path: kata-build/kata-static-${{ matrix.asset }}.tar
           if-no-files-found: error
 
   create-kata-tarball:
