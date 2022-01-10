@@ -1,0 +1,6 @@
+[workspace]
+members = [
+    "logging",
+    "safe-path",
+]
+resolver = "2"
