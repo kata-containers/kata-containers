@@ -111,8 +111,12 @@ func (c *clhClientApi) ShutdownVMM(ctx context.Context) (*http.Response, error) 
 	return c.ApiInternal.ShutdownVMM(ctx).Execute()
 }
 
-func (c *clhClientApi) CreateVM(ctx context.Context, vmConfig chclient.VmConfig) (*http.Response, error) {
-	return c.ApiInternal.CreateVM(ctx).VmConfig(vmConfig).Execute()
+func (c *clhClientApi) CreateVM(ctx context.Context, vmConfig chclient.VmConfig) (resp *http.Response, err error) {
+	resp, err = c.ApiInternal.CreateVM(ctx).VmConfig(vmConfig).Execute()
+	if err != nil {
+		errors.ErrorContext(&err, "Cloud hypervisor API failed on CreateVM")
+	}
+	return
 }
 
 //nolint:golint
@@ -120,8 +124,12 @@ func (c *clhClientApi) VmInfoGet(ctx context.Context) (chclient.VmInfo, *http.Re
 	return c.ApiInternal.VmInfoGet(ctx).Execute()
 }
 
-func (c *clhClientApi) BootVM(ctx context.Context) (*http.Response, error) {
-	return c.ApiInternal.BootVM(ctx).Execute()
+func (c *clhClientApi) BootVM(ctx context.Context) (resp *http.Response, err error) {
+	resp, err = c.ApiInternal.BootVM(ctx).Execute()
+	if err != nil {
+		errors.ErrorContext(&err, "Cloud hypervisor API failed on BootVM")
+	}
+	return
 }
 
 func (c *clhClientApi) VmResizePut(ctx context.Context, vmResize chclient.VmResize) (*http.Response, error) {
