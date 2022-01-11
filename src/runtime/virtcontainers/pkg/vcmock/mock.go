@@ -23,9 +23,9 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-// mockErrorPrefix is a string that all errors returned by the mock
-// implementation itself will contain as a prefix.
-const mockErrorPrefix = "vcmock forced failure"
+// mockErrorMsg is a string that all errors returned by the mock
+// implementation itself will contain.
+const mockErrorMsg = "vcmock forced failure"
 
 // SetLogger implements the VC function of the same name.
 func (m *VCMock) SetLogger(ctx context.Context, logger *logrus.Entry) {
@@ -47,12 +47,12 @@ func (m *VCMock) CreateSandbox(ctx context.Context, sandboxConfig vc.SandboxConf
 		return m.CreateSandboxFunc(ctx, sandboxConfig)
 	}
 
-	return nil, fmt.Errorf("%s: %s (%+v): sandboxConfig: %v", mockErrorPrefix, getSelf(), m, sandboxConfig)
+	return nil, fmt.Errorf("%s: %s (%+v): sandboxConfig: %v", mockErrorMsg, getSelf(), m, sandboxConfig)
 }
 
 func (m *VCMock) CleanupContainer(ctx context.Context, sandboxID, containerID string, force bool) error {
 	if m.CleanupContainerFunc != nil {
 		return m.CleanupContainerFunc(ctx, sandboxID, containerID, true)
 	}
-	return fmt.Errorf("%s: %s (%+v): sandboxID: %v", mockErrorPrefix, getSelf(), m, sandboxID)
+	return fmt.Errorf("%s: %s (%+v): sandboxID: %v", mockErrorMsg, getSelf(), m, sandboxID)
 }

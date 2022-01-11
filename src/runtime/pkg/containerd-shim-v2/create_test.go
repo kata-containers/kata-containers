@@ -126,7 +126,7 @@ func TestCreateSandboxFail(t *testing.T) {
 	ctx := namespaces.WithNamespace(context.Background(), "UnitTest")
 	_, err = s.Create(ctx, req)
 	assert.Error(err)
-	assert.True(vcmock.IsMockError(err))
+	assert.True(vcmock.IsMockError(err), "Error is not a mock error %v", err)
 }
 
 func TestCreateSandboxConfigFail(t *testing.T) {

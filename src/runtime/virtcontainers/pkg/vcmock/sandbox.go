@@ -100,7 +100,7 @@ func (s *Sandbox) CreateContainer(ctx context.Context, conf vc.ContainerConfig) 
 	if s.CreateContainerFunc != nil {
 		return s.CreateContainerFunc(conf)
 	}
-	return nil, fmt.Errorf("%s: %s (%+v): sandboxID: %v, containerConfig: %v", mockErrorPrefix, getSelf(), s, s.MockID, conf)
+	return nil, fmt.Errorf("%s: %s (%+v): sandboxID: %v, containerConfig: %v", mockErrorMsg, getSelf(), s, s.MockID, conf)
 }
 
 // DeleteContainer implements the VCSandbox function of the same name.

@@ -27,5 +27,5 @@ func IsMockError(err error) bool {
 	if err == nil {
 		return false
 	}
-	return strings.HasPrefix(err.Error(), mockErrorPrefix)
+	return strings.Contains(err.Error(), mockErrorMsg)
 }
