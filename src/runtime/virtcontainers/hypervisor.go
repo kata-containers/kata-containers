@@ -544,11 +544,13 @@ func (conf *HypervisorConfig) Valid() error {
 		return fmt.Errorf("Missing kernel path")
 	}
 
-	if conf.ImagePath == "" && conf.InitrdPath == "" {
+	if conf.ConfidentialGuest && conf.HypervisorMachineType == QemuCCWVirtio {
+		if conf.ImagePath != "" || conf.InitrdPath != "" {
+			return fmt.Errorf("Neither the image or initrd path may be set for Secure Execution")
+		}
+	} else if conf.ImagePath == "" && conf.InitrdPath == "" {
 		return fmt.Errorf("Missing image and initrd path")
-	}
-
-	if conf.ImagePath != "" && conf.InitrdPath != "" {
+	} else if conf.ImagePath != "" && conf.InitrdPath != "" {
 		return fmt.Errorf("Image and initrd path cannot be both set")
 	}
 
@@ -570,7 +572,7 @@ func (conf *HypervisorConfig) Valid() error {
 
 	if conf.BlockDeviceDriver == "" {
 		conf.BlockDeviceDriver = defaultBlockDriver
-	} else if conf.BlockDeviceDriver == config.VirtioBlock && conf.HypervisorMachineType == "s390-ccw-virtio" {
+	} else if conf.BlockDeviceDriver == config.VirtioBlock && conf.HypervisorMachineType == QemuCCWVirtio {
 		conf.BlockDeviceDriver = config.VirtioBlockCCW
 	}
 
