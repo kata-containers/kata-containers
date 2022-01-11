@@ -9,6 +9,7 @@ to use the agent as the init. Because of this, alpine is not a valid base OS ima
 to use. The following rootfs OS's have been tested with this Dockerfile.
 
 * Clear Linux
+* Debian
 * Ubuntu 
 
 The generated files will need to be copied and configured into your Kata Containers
