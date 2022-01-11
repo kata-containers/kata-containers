@@ -39,12 +39,6 @@ func toGRPC(err error) error {
 	return err
 }
 
-// toGRPCf maps the error to grpc error codes, assembling the formatting string
-// and combining it with the target error string.
-func toGRPCf(err error, format string, args ...interface{}) error {
-	return toGRPC(errors.Wrapf(err, format, args...))
-}
-
 func isGRPCError(err error) bool {
 	_, ok := status.FromError(err)
 	return ok
