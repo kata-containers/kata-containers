@@ -12,6 +12,8 @@ crio_drop_in_conf_dir="/etc/crio/crio.conf.d/"
 crio_drop_in_conf_file="${crio_drop_in_conf_dir}/99-kata-deploy"
 containerd_conf_file="/etc/containerd/config.toml"
 containerd_conf_file_backup="${containerd_conf_file}.bak"
+kata_share_dir="/opt/kata/share/kata-containers"
+kata_defaults_dir="/opt/kata/share/defaults/kata-containers"
 
 shims=(
 	"fc"
@@ -97,7 +99,7 @@ function configure_different_shims_base() {
 
 		cat << EOT | tee "$shim_file"
 #!/usr/bin/env bash
-KATA_CONF_FILE=/opt/kata/share/defaults/kata-containers/configuration-${shim}.toml /opt/kata/bin/containerd-shim-kata-v2 "\$@"
+KATA_CONF_FILE=$kata_defaults_dir/configuration-${shim}.toml /opt/kata/bin/containerd-shim-kata-v2 "\$@"
 EOT
 		chmod +x "$shim_file"
 
@@ -174,7 +176,7 @@ function configure_containerd_runtime() {
 	local runtime_table="plugins.${pluginid}.containerd.runtimes.$runtime"
 	local runtime_type="io.containerd.$runtime.v2"
 	local options_table="$runtime_table.options"
-	local config_path="/opt/kata/share/defaults/kata-containers/$configuration.toml"
+	local config_path="$kata_defaults_dir/$configuration.toml"
 	if grep -q "\[$runtime_table\]" $containerd_conf_file; then
 		echo "Configuration exists for $runtime_table, overwriting"
 		sed -i "/\[$runtime_table\]/,+1s#runtime_type.*#runtime_type = \"${runtime_type}\"#" $containerd_conf_file
@@ -220,12 +222,23 @@ function configure_containerd() {
 
 function configure_kata() {
 	if [ "${CONFIGURE_CC:-}" == "yes" ]; then
+		cc_config="$kata_defaults_dir/configuration-cc.toml"
 		sed -E \
-			-e 's#^image = .+#initrd = "/opt/kata/share/kata-containers/kata-containers-initrd.img"#' \
-			-e 's#^(kernel_params = .+)"#\1 agent.config_file=/etc/kata-containers/agent.toml"#' \
-			-e 's#.*service_offload = .+#service_offload = true#' \
-			"/opt/kata/share/defaults/kata-containers/configuration-qemu.toml" > \
-			"/opt/kata/share/defaults/kata-containers/configuration-cc.toml"
+			-e 's|^(kernel_params = .+)"|\1 agent.config_file=/etc/kata-containers/agent.toml"|' \
+			-e 's|^[# ]*(service_offload = ).+|\1true|' \
+			"$kata_defaults_dir/configuration-qemu.toml" > \
+			"$cc_config"
+		if [ "$(uname -m)" == "s390x" ]; then
+			sed -Ei \
+				-e "s|^(kernel = ).+|\\1\"$kata_share_dir/kata-containers-secure.img\"|" \
+				-e '/^image = .+/d' \
+				-e 's|^[# ]*(confidential_guest = ).+|\1true|' \
+				-e 's|^(shared_fs = ).+|\1"virtio-9p"|' \
+				"$cc_config"
+				# TODO remove 9p workaround once https://lists.nongnu.org/archive/html/qemu-devel/2022-01/msg03456.html is resolved
+		else
+			sed -Ei "s|^image = .+|initrd = \"$kata_share_dir/kata-containers-initrd.img\"|" "$cc_config"
+		fi
 	fi
 }
 
