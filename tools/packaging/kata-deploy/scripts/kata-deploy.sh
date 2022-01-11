@@ -222,7 +222,7 @@ function configure_kata() {
 	if [ "${CONFIGURE_CC:-}" == "yes" ]; then
 		sed -E \
 			-e 's#^image = .+#initrd = "/opt/kata/share/kata-containers/kata-containers-initrd.img"#' \
-			-e 's#^(kernel_params = .+)"#\1 agent.config_file=/etc/kata-config.toml"#' \
+			-e 's#^(kernel_params = .+)"#\1 agent.config_file=/etc/kata-containers/agent.toml"#' \
 			-e 's#.*service_offload = .+#service_offload = true#' \
 			"/opt/kata/share/defaults/kata-containers/configuration-qemu.toml" > \
 			"/opt/kata/share/defaults/kata-containers/configuration-cc.toml"
