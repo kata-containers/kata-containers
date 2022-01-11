@@ -869,15 +869,28 @@ func (s *Sandbox) AddInterface(ctx context.Context, inf *pbTypes.Interface) (*pb
 		return nil, err
 	}
 
-	// Update the sandbox storage
-	s.networkNS.Endpoints = append(s.networkNS.Endpoints, endpoint)
-	if err := s.Save(); err != nil {
-		return nil, err
-	}
+	defer func() {
+		if err != nil {
+			if errDetach := endpoint.HotDetach(ctx, s.hypervisor, s.networkNS.NetNsCreated, s.networkNS.NetNsPath); errDetach != nil {
+				s.Logger().WithField("endpoint-type", endpoint.Type()).WithError(errDetach).Error("rollback hot attaching endpoint failed")
+			}
+		}
+	}()
 
 	// Add network for vm
 	inf.PciPath = endpoint.PciPath().String()
-	return s.agent.updateInterface(ctx, inf)
+	result, err := s.agent.updateInterface(ctx, inf)
+	if err != nil {
+		return nil, err
+	}
+
+	// Update the sandbox storage
+	s.networkNS.Endpoints = append(s.networkNS.Endpoints, endpoint)
+	if err = s.Save(); err != nil {
+		return nil, err
+	}
+
+	return result, nil
 }
 
 // RemoveInterface removes a nic of the sandbox.
