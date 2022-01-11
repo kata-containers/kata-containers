@@ -19,14 +19,19 @@ import (
 func TestToGRPC(t *testing.T) {
 	assert := assert.New(t)
 
-	for _, err := range []error{vc.ErrNeedSandbox, vc.ErrNeedSandboxID,
-		vc.ErrNeedContainerID, vc.ErrNeedState, syscall.EINVAL, vc.ErrNoSuchContainer, syscall.ENOENT} {
+	for _, err := range []error{
+		vc.ErrNeedSandbox,
+		vc.ErrNeedSandboxID,
+		vc.ErrNeedContainerID,
+		vc.ErrNeedState,
+		syscall.EINVAL,
+		vc.ErrNoSuchContainer,
+		syscall.ENOENT,
+	} {
 		assert.False(isGRPCError(err))
 		err = toGRPC(err)
 		assert.True(isGRPCError(err))
 		err = toGRPC(err)
-		assert.True(isGRPCError(err))
-		err = toGRPCf(err, "appending")
 		assert.True(isGRPCError(err))
 	}
 }
