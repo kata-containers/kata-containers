@@ -9,7 +9,6 @@ to use the agent as the init. Because of this, alpine is not a valid base OS ima
 to use. The following rootfs OS's have been tested with this Dockerfile.
 
 * Clear Linux
-* Fedora
 * SUSE
 * Ubuntu 
 
