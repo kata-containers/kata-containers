@@ -268,7 +268,8 @@ function main() {
 		containerd_conf_file_backup="${containerd_conf_file}.bak"
 	else
 		# runtime == containerd
-		if [ ! -f "$containerd_conf_file" ]; then
+		if [ ! -f "$containerd_conf_file" ] && [ -d $(dirname "$containerd_conf_file") ] && \
+			[ -x $(command -v containerd) ]; then
 			containerd config default > "$containerd_conf_file"
 		fi
 	fi
