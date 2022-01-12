@@ -355,10 +355,10 @@ this small script so that it redirects to be able to use either QEMU or
 Cloud Hypervisor with Kata.
 
 ```bash
-$ echo '#!/bin/bash' | sudo tee /usr/local/bin/containerd-shim-kata-qemu-v2
+$ echo '#!/usr/bin/env bash' | sudo tee /usr/local/bin/containerd-shim-kata-qemu-v2
 $ echo 'KATA_CONF_FILE=/opt/kata/share/defaults/kata-containers/configuration-qemu.toml /opt/kata/bin/containerd-shim-kata-v2 $@' | sudo tee -a /usr/local/bin/containerd-shim-kata-qemu-v2
 $ sudo chmod +x /usr/local/bin/containerd-shim-kata-qemu-v2
-$ echo '#!/bin/bash' | sudo tee /usr/local/bin/containerd-shim-kata-clh-v2
+$ echo '#!/usr/bin/env bash' | sudo tee /usr/local/bin/containerd-shim-kata-clh-v2
 $ echo 'KATA_CONF_FILE=/opt/kata/share/defaults/kata-containers/configuration-clh.toml /opt/kata/bin/containerd-shim-kata-v2 $@' | sudo tee -a /usr/local/bin/containerd-shim-kata-clh-v2
 $ sudo chmod +x /usr/local/bin/containerd-shim-kata-clh-v2
 ```
