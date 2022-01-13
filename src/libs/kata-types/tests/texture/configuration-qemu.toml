@@ -1,4 +1,3 @@
-[hypervisors]
 [hypervisor.qemu]
 path = "/usr/bin/ls"
 valid_hypervisor_paths = ["/usr/bin/qemu*", "/opt/qemu?"]
