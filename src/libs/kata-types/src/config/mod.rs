@@ -19,9 +19,9 @@ use crate::{eother, sl};
 pub mod default;
 
 mod agent;
-pub use self::agent::{Agent, AgentVendor};
-
 pub mod hypervisor;
+
+use self::agent::Agent;
 pub use self::hypervisor::{
     BootInfo, DragonballConfig, Hypervisor, QemuConfig, HYPERVISOR_NAME_DRAGONBALL,
     HYPERVISOR_NAME_QEMU,
@@ -41,9 +41,11 @@ pub trait ConfigPlugin: Send + Sync {
     /// Validate the configuration information.
     fn validate(&self, _conf: &TomlConfig) -> Result<()>;
 
-    /// get min mem
-
+    /// Get the minmum memory for hypervisor
     fn get_min_memory(&self) -> u32;
+
+    /// Get the max defualt cpus
+    fn get_max_cpus(&self) -> u32;
 }
 
 /// Trait to manipulate Kata configuration information.
@@ -232,7 +234,8 @@ impl KataConfig {
     pub fn get_config(&self) -> &TomlConfig {
         &self.config
     }
-    /// Get the agent mut configuration in use
+
+    /// Get the agent configuration in use.
     pub fn get_agent(&self) -> Option<&Agent> {
         if !self.agent.is_empty() {
             self.config.agent.get(&self.agent)
