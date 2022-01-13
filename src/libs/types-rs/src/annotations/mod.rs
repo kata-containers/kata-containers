@@ -5,13 +5,17 @@
 //
 
 use std::collections::HashMap;
+use std::convert::TryInto;
 use std::fs::File;
 use std::io::{self, BufReader, Result};
 <<<<<<< HEAD
 use std::u32;
 
+use num_cpus::get;
+use serde::de::value::StringDeserializer;
 use serde::Deserialize;
 
+use crate::config::hypervisor;
 use crate::config::hypervisor::get_hypervisor_plugin;
 use crate::config::KataConfig;
 use crate::config::TomlConfig;
@@ -21,12 +25,15 @@ use std::path::Path;
 use std::sync::Arc;
 =======
 
+<<<<<<< HEAD
 use serde::Deserialize;
 
 use crate::config::KataConfig;
 use crate::{eother, sl};
 
 >>>>>>> 65a31d44 (libs/types: define annotation keys for Kata)
+=======
+>>>>>>> 32fd6cde (add functionalities to modify config info of hypervisor and agent)
 /// CRI-containerd specific annotations.
 pub mod cri_containerd;
 
@@ -685,10 +692,7 @@ impl Annotation {
                 }
                 None => Ok(()),
             },
-            Err(e) => {
-                println!("{}", e);
-                Err(e)
-            }
+            Err(e) => Err(e),
         }
     }
 
@@ -892,15 +896,54 @@ impl Annotation {
     }
 
     /// Get the annotation for "config.hypervisor.default_vcpus".
-    pub fn get_default_vcpus(&self) -> Result<Option<i32>> {
-        self.check_allowed_hypervisor_annotation("default_vcpus")?;
-        Ok(self.get_i32(KATA_ANNO_CONF_HYPERVISOR_DEFAULT_VCPUS))
+    pub fn get_default_vcpus(&self, hypervisor_name: &String) -> Result<Option<i32>> {
+        self.check_allowed_hypervisor_annotation(KATA_ANNO_CONF_HYPERVISOR_DEFAULT_VCPUS)?;
+        match self.get_i32(KATA_ANNO_CONF_HYPERVISOR_DEFAULT_VCPUS) {
+            None => Ok(None),
+            Some(v) => {
+                if v > get_hypervisor_plugin(hypervisor_name)
+                    .unwrap()
+                    .get_max_cpus() as i32
+                {
+                    Err(io::Error::new(
+                        io::ErrorKind::PermissionDenied,
+                        format!(
+                            "Vcpus specified in annotation {} is more than maximum limitation {}",
+                            v,
+                            get_hypervisor_plugin(hypervisor_name)
+                                .unwrap()
+                                .get_max_cpus()
+                        ),
+                    ))
+                } else {
+                    Ok(Some(v))
+                }
+            }
+        }
     }
 
     /// Get the annotation for "config.hypervisor.default_max_vcpus".
     pub fn get_default_max_vcpus(&self) -> Result<Option<u32>> {
         self.check_allowed_hypervisor_annotation("default_max_vcpus")?;
         Ok(self.get_u32(KATA_ANNO_CONF_HYPERVISOR_DEFAULT_MAX_VCPUS))
+    }
+
+    /// add hypervisor defualt vcpus annotation
+    pub fn add_hypervisor_defualt_vcpus(
+        &self,
+        config: &mut TomlConfig,
+        hypervisor_name: &String,
+        agent_name: &String,
+    ) -> Result<()> {
+        change_hypervisor_config!(
+            self.get_default_vcpus(hypervisor_name),
+            config
+                .hypervisor
+                .get_mut(hypervisor_name)
+                .unwrap()
+                .cpu_info
+                .default_vcpus
+        )
     }
 }
 
@@ -934,6 +977,20 @@ impl Annotation {
     }
 }
 
+// VM Machine related annotations
+impl Annotation {
+    ///Get the annotation for "config.hypervisor.MachineInfo.machine_type"
+    pub fn get_machine_type(&self) -> Result<Option<String>> {
+        self.check_allowed_hypervisor_annotation(KATA_ANNO_CONF_HYPERVISOR_MACHINE_TYPE)?;
+        Ok(self.get(KATA_ANNO_CONF_HYPERVISOR_MACHINE_TYPE))
+    }
+
+    ///Get the annotation for "config.hypervisor.MachineInfo.accelerators"
+    pub fn get_machine_acclereates(&self) -> Result<Option<String>> {
+        self.check_allowed_hypervisor_annotation(KATA_ANNO_CONF_HYPERVISOR_MACHINE_ACCELERATORS)?;
+        Ok(self.get(KATA_ANNO_CONF_HYPERVISOR_MACHINE_ACCELERATORS))
+    }
+}
 // VM Memory related annotations
 impl Annotation {
     ///Get the annotaion for "config.hypervisor.MemoryInfo.default_memory"
@@ -1073,22 +1130,15 @@ impl Annotation {
         hypervisor_name: &String,
         agent_name: &String,
     ) -> Result<()> {
-        let memory_prealloc_result = self.get_enable_mem_prealloc();
-        match memory_prealloc_result {
-            Err(e) => Err(e),
-            Ok(memory_prealloc) => match memory_prealloc {
-                Some(v) => {
-                    config
-                        .hypervisor
-                        .get_mut(hypervisor_name)
-                        .unwrap()
-                        .memory_info
-                        .enable_mem_prealloc = v;
-                    Ok(())
-                }
-                None => Ok(()),
-            },
-        }
+        change_hypervisor_config!(
+            self.get_enable_mem_prealloc(),
+            config
+                .hypervisor
+                .get_mut(hypervisor_name)
+                .unwrap()
+                .memory_info
+                .enable_mem_prealloc
+        )
     }
 
     /// add hypervisor huge pages
@@ -1162,6 +1212,24 @@ impl Annotation {
                 .enable_swap
         )
     }
+
+    /// add hypervisor enable guest swap
+    pub fn add_hypervisor_enable_guest_swap(
+        &self,
+        config: &mut TomlConfig,
+        hypervisor_name: &String,
+        agent_name: &String,
+    ) -> Result<()> {
+        change_hypervisor_config!(
+            self.get_enable_guest_swap(),
+            config
+                .hypervisor
+                .get_mut(hypervisor_name)
+                .unwrap()
+                .memory_info
+                .enable_guest_swap
+        )
+    }
 }
 
 // VM Network related annotations.
@@ -1224,5 +1292,116 @@ impl Annotation {
                 .map(|_| Some(v.to_string())),
         }
     }
+
+    /// Get the file share system type
+    pub fn get_share_fs(&self) -> Result<Option<String>> {
+        self.check_allowed_hypervisor_annotation(KATA_ANNO_CONF_HYPERVISOR_SHARED_FS)?;
+        Ok(self.get(KATA_ANNO_CONF_HYPERVISOR_SHARED_FS))
+    }
+
+    /// Get the virtio fs daemon path
+    pub fn get_virtio_fs_daemon(&self) -> Result<Option<String>> {
+        self.check_allowed_hypervisor_annotation(KATA_ANNO_CONF_HYPERVISOR_VIRTIO_FS_DAEMON)?;
+        match self
+            .annotations
+            .get(KATA_ANNO_CONF_HYPERVISOR_VIRTIO_FS_DAEMON)
+        {
+            None => Ok(None),
+            Some(v) => KataConfig::get_default_config()
+                .get_hypervisor()
+                .ok_or_else(|| eother!("No active hypervisor configuration"))?
+                .shared_fs
+                .validate_virtiofs_daemon_path(v)
+                .map(|_| Some(v.to_string())),
+        }
+    }
+
+    /// Get the virtio fs cache
+    pub fn get_virtio_fs_cache(&self) -> Result<Option<String>> {
+        self.check_allowed_hypervisor_annotation(KATA_ANNO_CONF_HYPERVISOR_VIRTIO_FS_CACHE)?;
+        Ok(self.get(KATA_ANNO_CONF_HYPERVISOR_VIRTIO_FS_CACHE))
+    }
+
+    /// Get the virtio fs ncache size
+    pub fn get_virtio_fs_cache_size(&self) -> Result<Option<u32>> {
+        self.check_allowed_hypervisor_annotation(KATA_ANNO_CONF_HYPERVISOR_VIRTIO_FS_CACHE_SIZE)?;
+        Ok(self.get_u32(KATA_ANNO_CONF_HYPERVISOR_VIRTIO_FS_CACHE_SIZE))
+    }
+
+    /// Get the virtio fs extra args
+    pub fn get_virtio_fs_extra_args(&self) -> Result<Option<String>> {
+        self.check_allowed_hypervisor_annotation(KATA_ANNO_CONF_HYPERVISOR_VIRTIO_FS_EXTRA_ARGS)?;
+        Ok(self.get(KATA_ANNO_CONF_HYPERVISOR_VIRTIO_FS_EXTRA_ARGS))
+    }
+
+    /// Get the hypervisor msize 9p
+    pub fn get_hypervisor_msize_9p(&self) -> Result<Option<u32>> {
+        self.check_allowed_hypervisor_annotation(KATA_ANNO_CONF_HYPERVISOR_MSIZE_9P)?;
+        Ok(self.get_u32(KATA_ANNO_CONF_HYPERVISOR_MSIZE_9P))
+    }
+    /// add hypervisor virtio fs extra args
+    pub fn add_virtio_fs_extra_args(
+        &self,
+        config: &mut TomlConfig,
+        hypervisor_name: &String,
+    ) -> Result<()> {
+        match self.get_virtio_fs_extra_args() {
+            Err(e) => Err(e),
+            Ok(a) => match a {
+                Some(j) => {
+                    let args: Vec<String> = j.split(',').map(str::to_string).collect();
+                    for arg in args {
+                        config
+                            .hypervisor
+                            .get_mut(hypervisor_name)
+                            .unwrap()
+                            .shared_fs
+                            .virtio_fs_extra_args
+                            .push(arg.to_string());
+                    }
+                    Ok(())
+                }
+                None => Ok(()),
+            },
+        }
+    }
     //>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+}
+
+//  add annotations
+impl Annotation {
+    /// add annotaion information to config
+    pub fn add_config_annotation(
+        &self,
+        config: &mut TomlConfig,
+        hypervisor_name: &String,
+        agent_name: &String,
+    ) -> Result<()> {
+        // add agent annotaion
+        self.add_agent_annotation(config, agent_name);
+        self.add_agent_enable_trace(config, agent_name);
+        self.add_agent_container_pipe_size(config, agent_name);
+        // add hypervisor annotaion
+        let hv = config.hypervisor.get_mut(hypervisor_name).unwrap();
+        if change_hypervisor_config!(self.get_enable_io_threads(), hv.enable_iothreads).is_err() {
+            return Err(io::Error::new(
+                io::ErrorKind::PermissionDenied,
+                format!("enable io threads is not allowed"),
+            ));
+        }
+        if change_hypervisor_config!(self.get_hypervisor_path(), hv.path).is_err() {
+            return Err(io::Error::new(
+                io::ErrorKind::PermissionDenied,
+                format!("hypervisor path is not allowed"),
+            ));
+        }
+        if change_hypervisor_config!(self.get_jailer_path(), hv.jailer_path).is_err() {
+            return Err(io::Error::new(
+                io::ErrorKind::PermissionDenied,
+                format!("hypervisor jailer path is not allowed"),
+            ));
+        }
+
+        Ok(())
+    }
 }

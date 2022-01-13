@@ -528,9 +528,12 @@ pub struct MemoryInfo {
     pub enable_mem_prealloc: bool,
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 
 =======
 >>>>>>> f74edc28 (libs/types: support load Kata hypervisor configuration from file)
+=======
+>>>>>>> 32fd6cde (add functionalities to modify config info of hypervisor and agent)
     /// Enable huge pages for VM RAM, default false
     ///
     /// Enabling this will result in the VM memory being allocated using huge pages. This is useful
@@ -712,8 +715,8 @@ impl SecurityInfo {
 
         let pos = KATA_ANNO_CONF_HYPERVISOR_PREFIX.len();
         let key = &path[pos..];
-        println!("{:?}",&key);
         if let Ok(set) = RegexSet::new(&self.enable_annotations) {
+<<<<<<< HEAD
             println!("hello world");
 =======
         if !path.starts_with("io.katacontainers.config.hypervisor.") {
@@ -726,6 +729,8 @@ impl SecurityInfo {
         let key = &path[pos..];
         if let Ok(set) = RegexSet::new(&self.enable_annotations) {
 >>>>>>> f74edc28 (libs/types: support load Kata hypervisor configuration from file)
+=======
+>>>>>>> 32fd6cde (add functionalities to modify config info of hypervisor and agent)
             return set.is_match(key);
         }
 
@@ -983,10 +988,11 @@ impl Hypervisor {
 impl ConfigOps for Hypervisor {
     fn adjust_configuration(conf: &mut TomlConfig) -> Result<()> {
         HypervisorVendor::adjust_configuration(conf)?;
-<<<<<<< HEAD
-=======
 
+<<<<<<< HEAD
 >>>>>>> f74edc28 (libs/types: support load Kata hypervisor configuration from file)
+=======
+>>>>>>> 32fd6cde (add functionalities to modify config info of hypervisor and agent)
         let hypervisors: Vec<String> = conf.hypervisor.keys().cloned().collect();
         for hypervisor in hypervisors.iter() {
             if let Some(plugin) = get_hypervisor_plugin(hypervisor) {
@@ -1005,14 +1011,16 @@ impl ConfigOps for Hypervisor {
                 hv.security_info.adjust_configuration()?;
                 hv.shared_fs.adjust_configuration()?;
             } else {
-<<<<<<< HEAD
                 return Err(eother!(
                     "Can Can not find plugin for hypervisor {}",
                     hypervisor
                 ));
+<<<<<<< HEAD
 =======
                 return Err(eother!("Can not find plugin for hypervisor {}", hypervisor));
 >>>>>>> f74edc28 (libs/types: support load Kata hypervisor configuration from file)
+=======
+>>>>>>> 32fd6cde (add functionalities to modify config info of hypervisor and agent)
             }
         }
 

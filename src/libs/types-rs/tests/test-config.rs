@@ -4,18 +4,20 @@ mod tests {
     use kata_types::annotations::{
         Annotation, KATA_ANNO_CONF_AGENT_CONTAINER_PIPE_SIZE, KATA_ANNO_CONF_AGENT_TRACE,
         KATA_ANNO_CONF_HYPERVISOR_CTLHASH, KATA_ANNO_CONF_HYPERVISOR_CTLPATH,
-        KATA_ANNO_CONF_HYPERVISOR_DEFAULT_MEMORY, KATA_ANNO_CONF_HYPERVISOR_ENABLE_IO_THREADS,
-        KATA_ANNO_CONF_HYPERVISOR_ENABLE_VHOSTUSER_STORE,
+        KATA_ANNO_CONF_HYPERVISOR_DEFAULT_MEMORY, KATA_ANNO_CONF_HYPERVISOR_DEFAULT_VCPUS,
+        KATA_ANNO_CONF_HYPERVISOR_ENABLE_GUEST_SWAP, KATA_ANNO_CONF_HYPERVISOR_ENABLE_IO_THREADS,
+        KATA_ANNO_CONF_HYPERVISOR_ENABLE_SWAP, KATA_ANNO_CONF_HYPERVISOR_ENABLE_VHOSTUSER_STORE,
         KATA_ANNO_CONF_HYPERVISOR_FILE_BACKED_MEM_ROOT_DIR, KATA_ANNO_CONF_HYPERVISOR_HUGE_PAGES,
         KATA_ANNO_CONF_HYPERVISOR_JAILER_PATH, KATA_ANNO_CONF_HYPERVISOR_MEMORY_PREALLOC,
         KATA_ANNO_CONF_HYPERVISOR_MEMORY_SLOTS, KATA_ANNO_CONF_HYPERVISOR_PATH,
-        KATA_ANNO_CONF_HYPERVISOR_VIRTIO_MEM, KATA_ANNO_CONF_KERNEL_MODULES,
+        KATA_ANNO_CONF_HYPERVISOR_VIRTIO_FS_EXTRA_ARGS, KATA_ANNO_CONF_HYPERVISOR_VIRTIO_MEM,
+        KATA_ANNO_CONF_KERNEL_MODULES,
     };
     use kata_types::config::{DragonballConfig, KataConfig};
     use kata_types::config::{QemuConfig, TomlConfig, HYPERVISOR_NAME_QEMU};
     use std::collections::HashMap;
-    use std::fs;
     use std::path::Path;
+    use std::{fs, u32};
     /*
     #[test]
     fn test_load_qemu_config() {
@@ -655,6 +657,8 @@ mod tests {
                 .enable_virtio_mem
         );
     }
+<<<<<<< HEAD
+<<<<<<< HEAD
 =======
 use kata_types::config::{QemuConfig, TomlConfig, HYPERVISOR_NAME_QEMU};
 use std::fs;
@@ -697,4 +701,326 @@ fn test_load_qemu_config() {
     assert_eq!(qemu.cpu_info.default_vcpus, 2);
     assert_eq!(qemu.cpu_info.default_maxvcpus, 64);
 >>>>>>> f74edc28 (libs/types: support load Kata hypervisor configuration from file)
+=======
+    /*
+    use kata_types::config::{QemuConfig, TomlConfig, HYPERVISOR_NAME_QEMU};
+    use std::fs;
+    use std::path::Path;
+=======
+>>>>>>> 430c6603 (keep adding functinalities for modify config)
+
+    #[test]
+    fn test_fail_to_change_enable_guest_virtio_mem() {
+        let path = env!("CARGO_MANIFEST_DIR");
+        let path = Path::new(path).join("tests/texture/configuration-anno1.toml");
+        let content = fs::read_to_string(&path).unwrap();
+
+        let qemu = QemuConfig::new();
+        qemu.register();
+
+        let config = TomlConfig::load(&content).unwrap();
+        KataConfig::set_active_config(config, &"qemu", &"agent0");
+
+        let mut anno_hash = HashMap::new();
+        anno_hash.insert(
+            KATA_ANNO_CONF_HYPERVISOR_VIRTIO_MEM.to_string(),
+            "false".to_string(),
+        );
+        let anno = Annotation::new(anno_hash);
+        let mut config = TomlConfig::load(&content).unwrap();
+
+        assert!(anno
+            .add_hypervisor_virtio_mem(&mut config, &"qemu".to_string(), &"agent0".to_string())
+            .is_err());
+    }
+
+    #[test]
+    fn test_change_enable_swap() {
+        let path = env!("CARGO_MANIFEST_DIR");
+        let path = Path::new(path).join("tests/texture/configuration-anno.toml");
+        let content = fs::read_to_string(&path).unwrap();
+
+        let qemu = QemuConfig::new();
+        qemu.register();
+
+        let config = TomlConfig::load(&content).unwrap();
+        KataConfig::set_active_config(config, &"qemu", &"agent0");
+
+        let mut anno_hash = HashMap::new();
+        anno_hash.insert(
+            KATA_ANNO_CONF_HYPERVISOR_ENABLE_SWAP.to_string(),
+            "false".to_string(),
+        );
+        let anno = Annotation::new(anno_hash);
+        let mut config = TomlConfig::load(&content).unwrap();
+
+        assert!(anno
+            .add_hypervisor_enable_swap(&mut config, &"qemu".to_string(), &"agent0".to_string())
+            .is_ok());
+        KataConfig::set_active_config(config, "qemu", "agent0");
+        assert!(
+            !KataConfig::get_active_config()
+                .get_hypervisor()
+                .unwrap()
+                .memory_info
+                .enable_swap
+        );
+    }
+
+    #[test]
+    fn test_fail_to_change_enable_swap() {
+        let path = env!("CARGO_MANIFEST_DIR");
+        let path = Path::new(path).join("tests/texture/configuration-anno1.toml");
+        let content = fs::read_to_string(&path).unwrap();
+
+        let qemu = QemuConfig::new();
+        qemu.register();
+
+        let config = TomlConfig::load(&content).unwrap();
+        KataConfig::set_active_config(config, &"qemu", &"agent0");
+
+        let mut anno_hash = HashMap::new();
+        anno_hash.insert(
+            KATA_ANNO_CONF_HYPERVISOR_ENABLE_SWAP.to_string(),
+            "false".to_string(),
+        );
+        let anno = Annotation::new(anno_hash);
+        let mut config = TomlConfig::load(&content).unwrap();
+
+        assert!(anno
+            .add_hypervisor_enable_swap(&mut config, &"qemu".to_string(), &"agent0".to_string())
+            .is_err());
+    }
+
+    #[test]
+    fn test_change_enable_guest_swap() {
+        let path = env!("CARGO_MANIFEST_DIR");
+        let path = Path::new(path).join("tests/texture/configuration-anno.toml");
+        let content = fs::read_to_string(&path).unwrap();
+
+        let qemu = QemuConfig::new();
+        qemu.register();
+
+        let config = TomlConfig::load(&content).unwrap();
+        KataConfig::set_active_config(config, &"qemu", &"agent0");
+
+        let mut anno_hash = HashMap::new();
+        anno_hash.insert(
+            KATA_ANNO_CONF_HYPERVISOR_ENABLE_GUEST_SWAP.to_string(),
+            "false".to_string(),
+        );
+        let anno = Annotation::new(anno_hash);
+        let mut config = TomlConfig::load(&content).unwrap();
+
+        assert!(anno
+            .add_hypervisor_enable_guest_swap(
+                &mut config,
+                &"qemu".to_string(),
+                &"agent0".to_string()
+            )
+            .is_ok());
+        KataConfig::set_active_config(config, "qemu", "agent0");
+        assert!(
+            !KataConfig::get_active_config()
+                .get_hypervisor()
+                .unwrap()
+                .memory_info
+                .enable_guest_swap
+        );
+    }
+
+    #[test]
+    fn test_fail_to_change_enable_guest_swap() {
+        let path = env!("CARGO_MANIFEST_DIR");
+        let path = Path::new(path).join("tests/texture/configuration-anno1.toml");
+        let content = fs::read_to_string(&path).unwrap();
+
+        let qemu = QemuConfig::new();
+        qemu.register();
+
+        let config = TomlConfig::load(&content).unwrap();
+        KataConfig::set_active_config(config, &"qemu", &"agent0");
+
+        let mut anno_hash = HashMap::new();
+        anno_hash.insert(
+            KATA_ANNO_CONF_HYPERVISOR_ENABLE_GUEST_SWAP.to_string(),
+            "false".to_string(),
+        );
+        let anno = Annotation::new(anno_hash);
+        let mut config = TomlConfig::load(&content).unwrap();
+
+        assert!(anno
+            .add_hypervisor_enable_guest_swap(
+                &mut config,
+                &"qemu".to_string(),
+                &"agent0".to_string()
+            )
+            .is_err());
+    }
+
+    #[test]
+    fn test_change_default_vcpus() {
+        let path = env!("CARGO_MANIFEST_DIR");
+        let path = Path::new(path).join("tests/texture/configuration-anno.toml");
+        let content = fs::read_to_string(&path).unwrap();
+
+        let qemu = QemuConfig::new();
+        qemu.register();
+
+        let config = TomlConfig::load(&content).unwrap();
+        KataConfig::set_active_config(config, &"qemu", &"agent0");
+
+        let mut anno_hash = HashMap::new();
+        anno_hash.insert(
+            KATA_ANNO_CONF_HYPERVISOR_DEFAULT_VCPUS.to_string(),
+            "12".to_string(),
+        );
+        let anno = Annotation::new(anno_hash);
+        let mut config = TomlConfig::load(&content).unwrap();
+
+        assert!(anno
+            .add_hypervisor_defualt_vcpus(&mut config, &"qemu".to_string(), &"agent0".to_string())
+            .is_ok());
+        KataConfig::set_active_config(config, "qemu", "agent0");
+        assert_eq!(
+            KataConfig::get_active_config()
+                .get_hypervisor()
+                .unwrap()
+                .cpu_info
+                .default_vcpus,
+            12
+        );
+    }
+<<<<<<< HEAD
+<<<<<<< HEAD
+    */
+>>>>>>> 32fd6cde (add functionalities to modify config info of hypervisor and agent)
+=======
+>>>>>>> 430c6603 (keep adding functinalities for modify config)
+=======
+
+    #[test]
+    fn test_fail_to_change_default_vcpus() {
+        let path = env!("CARGO_MANIFEST_DIR");
+        let path = Path::new(path).join("tests/texture/configuration-anno.toml");
+        let content = fs::read_to_string(&path).unwrap();
+
+        let qemu = QemuConfig::new();
+        qemu.register();
+
+        let config = TomlConfig::load(&content).unwrap();
+        KataConfig::set_active_config(config, &"qemu", &"agent0");
+
+        let mut anno_hash = HashMap::new();
+        anno_hash.insert(
+            KATA_ANNO_CONF_HYPERVISOR_DEFAULT_VCPUS.to_string(),
+            "400".to_string(),
+        );
+        let anno = Annotation::new(anno_hash);
+        let mut config = TomlConfig::load(&content).unwrap();
+
+        assert!(anno
+            .add_hypervisor_defualt_vcpus(&mut config, &"qemu".to_string(), &"agent0".to_string())
+            .is_err());
+    }
+
+    #[test]
+    fn test_change_virtio_fs_extra_args() {
+        let path = env!("CARGO_MANIFEST_DIR");
+        let path = Path::new(path).join("tests/texture/configuration-anno.toml");
+        let content = fs::read_to_string(&path).unwrap();
+
+        let qemu = QemuConfig::new();
+        qemu.register();
+
+        let config = TomlConfig::load(&content).unwrap();
+        KataConfig::set_active_config(config, &"qemu", &"agent0");
+
+        let mut anno_hash = HashMap::new();
+        anno_hash.insert(
+            KATA_ANNO_CONF_HYPERVISOR_VIRTIO_FS_EXTRA_ARGS.to_string(),
+            "rr,dg,er".to_string(),
+        );
+        let anno = Annotation::new(anno_hash);
+        let mut config = TomlConfig::load(&content).unwrap();
+
+        assert!(anno
+            .add_virtio_fs_extra_args(&mut config, &"qemu".to_string())
+            .is_ok());
+        KataConfig::set_active_config(config, "qemu", "agent0");
+        assert_eq!(
+            KataConfig::get_active_config()
+                .get_hypervisor()
+                .unwrap()
+                .shared_fs
+                .virtio_fs_extra_args[5],
+            "rr"
+        );
+
+        assert_eq!(
+            KataConfig::get_active_config()
+                .get_hypervisor()
+                .unwrap()
+                .shared_fs
+                .virtio_fs_extra_args[6],
+            "dg"
+        );
+
+        assert_eq!(
+            KataConfig::get_active_config()
+                .get_hypervisor()
+                .unwrap()
+                .shared_fs
+                .virtio_fs_extra_args[7],
+            "er"
+        );
+
+    }
+
+    #[test]
+    fn test_change_config_annotation() {
+        let path = env!("CARGO_MANIFEST_DIR");
+        let path = Path::new(path).join("tests/texture/configuration-anno.toml");
+        let content = fs::read_to_string(&path).unwrap();
+
+        let qemu = QemuConfig::new();
+        qemu.register();
+
+        let config = TomlConfig::load(&content).unwrap();
+        KataConfig::set_active_config(config, &"qemu", &"agent0");
+
+        let mut anno_hash = HashMap::new();
+
+        anno_hash.insert(
+            KATA_ANNO_CONF_KERNEL_MODULES.to_string(),
+            "j465 aaa=1;r33w".to_string(),
+        );
+        anno_hash.insert(KATA_ANNO_CONF_AGENT_TRACE.to_string(), "false".to_string());
+        anno_hash.insert(
+            KATA_ANNO_CONF_HYPERVISOR_PATH.to_string(),
+            "/usr/bin/lsns".to_string(),
+        );
+
+        let anno = Annotation::new(anno_hash);
+        let mut config = TomlConfig::load(&content).unwrap();
+        assert!(anno
+            .add_config_annotation(&mut config, &"qemu".to_string(), &"agent0".to_string())
+            .is_ok());
+        KataConfig::set_active_config(config, &"qemu", &"agnet0");
+        if let Some(ag) = KataConfig::get_default_config().get_agent() {
+            assert_eq!(
+                ag.kernel_modules[0],
+                "e1000e InterruptThrottleRate=3000,3000,3000 EEE=1"
+            );
+
+            assert_eq!(ag.kernel_modules[1], "i915_enabled_ppgtt=0");
+            assert_eq!(ag.kernel_modules[2], "j465 aaa=1");
+            assert_eq!(ag.kernel_modules[3], "r33w");
+            assert!(!ag.enable_tracing);
+        }
+        if let Some(hv) = KataConfig::get_default_config().get_hypervisor() {
+            assert_eq!(hv.path, "/usr/bin/lsns".to_string());
+        }
+    }
+>>>>>>> fc71be33 (add more tests to handle some edge cases)
 }

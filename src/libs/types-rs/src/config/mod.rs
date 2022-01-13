@@ -32,9 +32,12 @@ use std::io::{self, Result};
 use std::path::{Path, PathBuf};
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 use crate::sl;
 >>>>>>> a13f31c9 (libs/types: support load Kata runtime configuration from file)
 =======
+=======
+>>>>>>> 32fd6cde (add functionalities to modify config info of hypervisor and agent)
 use crate::{eother, sl};
 >>>>>>> f74edc28 (libs/types: support load Kata hypervisor configuration from file)
 
@@ -85,9 +88,11 @@ pub trait ConfigPlugin: Send + Sync {
     fn validate(&self, _conf: &TomlConfig) -> Result<()>;
 <<<<<<< HEAD
 
-    /// get min mem
-
+    /// Get the minmum memory for hypervisor
     fn get_min_memory(&self) -> u32;
+
+    /// Get the max defualt cpus
+    fn get_max_cpus(&self) -> u32;
 }
 
 /// Trait to manipulate Kata configuration information.
@@ -361,10 +366,12 @@ lazy_static! {
             agent: String::new(),
             hypervisor: String::new(),
         };
-<<<<<<< HEAD
 
+<<<<<<< HEAD
 =======
 >>>>>>> db85ddbf (libs/types: implement KataConfig to wrap TomlConfig)
+=======
+>>>>>>> 32fd6cde (add functionalities to modify config info of hypervisor and agent)
         Mutex::new(Arc::new(kata))
     };
     static ref KATA_ACTIVE_CONFIG: Mutex<Arc<KataConfig>> = {

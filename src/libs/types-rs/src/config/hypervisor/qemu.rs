@@ -9,6 +9,11 @@ use std::sync::Arc;
 
 use super::{default, register_hypervisor_plugin};
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+
+use crate::config::default::MAX_QEMU_VCPUS;
+>>>>>>> 430c6603 (keep adding functinalities for modify config)
 use crate::config::default::MIN_DB_MEMORY_SIZE;
 use crate::config::default::MIN_QEMU_MEMORY_SIZE;
 =======
@@ -39,7 +44,13 @@ impl QemuConfig {
 
 impl ConfigPlugin for QemuConfig {
 <<<<<<< HEAD
+<<<<<<< HEAD
 
+=======
+    fn get_max_cpus(&self) -> u32 {
+        MAX_QEMU_VCPUS
+    }
+>>>>>>> 430c6603 (keep adding functinalities for modify config)
     fn get_min_memory(&self) -> u32 {
         MIN_QEMU_MEMORY_SIZE
     }
