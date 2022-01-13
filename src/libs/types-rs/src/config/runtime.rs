@@ -1,12 +1,4 @@
-<<<<<<< HEAD
-<<<<<<< HEAD
 // Copyright (c) 2021 Alibaba Cloud
-=======
-// Copyright (c) 2019-2021 Alibaba Cloud
->>>>>>> a13f31c9 (libs/types: support load Kata runtime configuration from file)
-=======
-// Copyright (c) 2021 Alibaba Cloud
->>>>>>> 98560180 (libs/types: support load Kata agent configuration from file)
 //
 // SPDX-License-Identifier: Apache-2.0
 //
@@ -123,10 +115,6 @@ pub struct Runtime {
 impl ConfigOps for Runtime {
     fn adjust_configuration(conf: &mut TomlConfig) -> Result<()> {
         RuntimeVendor::adjust_configuration(conf)?;
-<<<<<<< HEAD
-=======
-
->>>>>>> a13f31c9 (libs/types: support load Kata runtime configuration from file)
         if conf.runtime.internetworking_model.is_empty() {
             conf.runtime.internetworking_model = default::DEFAULT_INTERNETWORKING_MODEL.to_owned();
         }

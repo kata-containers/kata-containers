@@ -9,14 +9,9 @@ use std::fs;
 use std::io::{self, Result};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
+use std::u32;
 
 use lazy_static::lazy_static;
-
-use crate::{eother, sl};
-use std::collections::HashMap;
-use std::fs;
-use std::io::{self, Result};
-use std::path::{Path, PathBuf};
 
 use crate::{eother, sl};
 
@@ -24,13 +19,9 @@ use crate::{eother, sl};
 pub mod default;
 
 mod agent;
-pub use self::agent::{Agent, AgentVendor};
-
 pub mod hypervisor;
-mod agent;
-pub use self::agent::{Agent, AgentVendor};
 
-mod hypervisor;
+use self::agent::Agent;
 pub use self::hypervisor::{
     BootInfo, DragonballConfig, Hypervisor, QemuConfig, HYPERVISOR_NAME_DRAGONBALL,
     HYPERVISOR_NAME_QEMU,
@@ -40,7 +31,6 @@ mod runtime;
 pub use self::runtime::{Runtime, RuntimeVendor};
 
 /// Trait to manipulate global Kata configuration information.
-
 pub trait ConfigPlugin: Send + Sync {
     /// Get the plugin name.
     fn name(&self) -> &str;
@@ -51,11 +41,12 @@ pub trait ConfigPlugin: Send + Sync {
     /// Validate the configuration information.
     fn validate(&self, _conf: &TomlConfig) -> Result<()>;
 
-    /// get min mem
-
+    /// Get the minmum memory for hypervisor
     fn get_min_memory(&self) -> u32;
-}
 
+    /// Get the max defualt cpus
+    fn get_max_cpus(&self) -> u32;
+}
 
 /// Trait to manipulate Kata configuration information.
 pub trait ConfigOps {
@@ -86,13 +77,6 @@ pub trait ConfigObjectOps {
 /// Kata configuration information.
 #[derive(Debug, Default, Deserialize, Serialize)]
 pub struct TomlConfig {
-    /// Configuration information for agents.
-    #[serde(default)]
-    pub agent: HashMap<String, Agent>,
-    /// Configuration information for hypervisors.
-    #[serde(default)]
-    pub hypervisor: HashMap<String, Hypervisor>,
-
     /// Configuration information for agents.
     #[serde(default)]
     pub agent: HashMap<String, Agent>,
@@ -152,10 +136,6 @@ impl TomlConfig {
     /// Load Kata configuration information from string.
     pub fn load(content: &str) -> Result<TomlConfig> {
         let mut config: TomlConfig = toml::from_str(content)?;
-        Hypervisor::adjust_configuration(&mut config)?;
-        Runtime::adjust_configuration(&mut config)?;
-        Agent::adjust_configuration(&mut config)?;
-        info!(sl!(), "get kata config: {:?}", config);
 
         Hypervisor::adjust_configuration(&mut config)?;
         Runtime::adjust_configuration(&mut config)?;
@@ -252,6 +232,11 @@ impl KataConfig {
         KATA_ACTIVE_CONFIG.lock().unwrap().clone()
     }
 
+    /// Get the config in use
+    pub fn get_config(&self) -> &TomlConfig {
+        &self.config
+    }
+
     /// Get the agent configuration in use.
     pub fn get_agent(&self) -> Option<&Agent> {
         if !self.agent.is_empty() {
@@ -317,4 +302,3 @@ mod tests {
         validate_path_pattern(&patterns, "/bin/ls").unwrap();
     }
 }
-

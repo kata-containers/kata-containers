@@ -233,6 +233,12 @@ impl BootInfo {
         }
         Ok(())
     }
+
+    /// Validate guest kernel image annotaion
+    pub fn validate_boot_path(&self, path: &str) -> Result<()> {
+        validate_path!(path, "path {} is invalid{}")?;
+        Ok(())
+    }
 }
 
 /// Virtual CPU configuration information.
@@ -696,22 +702,18 @@ impl SecurityInfo {
         if !path.starts_with(KATA_ANNO_CONF_HYPERVISOR_PREFIX) {
             return false;
         }
-
-        let pos = KATA_ANNO_CONF_HYPERVISOR_PREFIX.len();
-        let key = &path[pos..];
-        println!("{:?}",&key);
-        if let Ok(set) = RegexSet::new(&self.enable_annotations) {
-            println!("hello world");
-        if !path.starts_with(KATA_ANNO_CONF_HYPERVISOR_PREFIX) {
-            return false;
-        }
         let pos = KATA_ANNO_CONF_HYPERVISOR_PREFIX.len();
         let key = &path[pos..];
         if let Ok(set) = RegexSet::new(&self.enable_annotations) {
             return set.is_match(key);
         }
-
         false
+    }
+
+    /// Validate path
+    pub fn validate_path(&self, path: &str) -> Result<()> {
+        validate_path!(path, "path {} is invalid{}")?;
+        Ok(())
     }
 }
 
@@ -969,7 +971,6 @@ impl ConfigOps for Hypervisor {
         for hypervisor in hypervisors.iter() {
             if let Some(plugin) = get_hypervisor_plugin(hypervisor) {
                 plugin.adjust_configuration(conf)?;
-
                 // Safe to unwrap() because `hypervisor` is a valid key in the hash map.
                 let hv = conf.hypervisor.get_mut(hypervisor).unwrap();
                 hv.blockdev_info.adjust_configuration()?;
@@ -983,7 +984,10 @@ impl ConfigOps for Hypervisor {
                 hv.security_info.adjust_configuration()?;
                 hv.shared_fs.adjust_configuration()?;
             } else {
-                return Err(eother!("Can not find plugin for hypervisor {}", hypervisor));
+                return Err(eother!(
+                    "Can Can not find plugin for hypervisor {}",
+                    hypervisor
+                ));
             }
         }
 
@@ -1037,12 +1041,8 @@ mod vendor {
 #[path = "vendor.rs"]
 mod vendor;
 
-use crate::config::validate_path_pattern;
-pub use vendor::HypervisorVendor;
-
 pub use self::vendor::HypervisorVendor;
 use crate::config::validate_path_pattern;
-
 #[cfg(test)]
 mod tests {
     use super::*;
