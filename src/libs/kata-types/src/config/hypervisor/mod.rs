@@ -696,9 +696,12 @@ impl SecurityInfo {
         if !path.starts_with(KATA_ANNO_CONF_HYPERVISOR_PREFIX) {
             return false;
         }
+
         let pos = KATA_ANNO_CONF_HYPERVISOR_PREFIX.len();
         let key = &path[pos..];
+        println!("{:?}", &key);
         if let Ok(set) = RegexSet::new(&self.enable_annotations) {
+            println!("hello world");
             return set.is_match(key);
         }
 
@@ -956,7 +959,6 @@ impl Hypervisor {
 impl ConfigOps for Hypervisor {
     fn adjust_configuration(conf: &mut TomlConfig) -> Result<()> {
         HypervisorVendor::adjust_configuration(conf)?;
-
         let hypervisors: Vec<String> = conf.hypervisor.keys().cloned().collect();
         for hypervisor in hypervisors.iter() {
             if let Some(plugin) = get_hypervisor_plugin(hypervisor) {
@@ -975,7 +977,10 @@ impl ConfigOps for Hypervisor {
                 hv.security_info.adjust_configuration()?;
                 hv.shared_fs.adjust_configuration()?;
             } else {
-                return Err(eother!("Can not find plugin for hypervisor {}", hypervisor));
+                return Err(eother!(
+                    "Can Can not find plugin for hypervisor {}",
+                    hypervisor
+                ));
             }
         }
 

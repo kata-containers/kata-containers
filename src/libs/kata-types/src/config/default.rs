@@ -46,6 +46,7 @@ pub const DEFAULT_DB_ENTROPY_SOURCE: &str = "/dev/urandom";
 pub const DEFAULT_DB_MEMORY_SIZE: u32 = 128;
 pub const DEFAULT_DB_MEMORY_SLOTS: u32 = 128;
 pub const MAX_DB_VCPUS: u32 = 256;
+pub const MIN_DB_MEMORY_SIZE: u32 = 64;
 
 // Default configuration for qemu
 pub const DEFAULT_QEMU_BINARY_PATH: &str = "qemu";
@@ -60,3 +61,4 @@ pub const DEFAULT_QEMU_MEMORY_SLOTS: u32 = 128;
 pub const DEFAULT_QEMU_PCI_BRIDGES: u32 = 2;
 pub const MAX_QEMU_PCI_BRIDGES: u32 = 5;
 pub const MAX_QEMU_VCPUS: u32 = 256;
+pub const MIN_QEMU_MEMORY_SIZE: u32 = 64;
