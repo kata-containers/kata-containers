@@ -2068,10 +2068,20 @@ func (k *kataAgent) sendReq(spanCtx context.Context, request interface{}) (inter
 	}
 
 	msgName := proto.MessageName(request.(proto.Message))
+
+	k.Lock()
+
+	if k.reqHandlers == nil {
+		return nil, errors.New("Client has already disconnected")
+	}
+
 	handler := k.reqHandlers[msgName]
 	if msgName == "" || handler == nil {
 		return nil, errors.New("Invalid request type")
 	}
+
+	k.Unlock()
+
 	message := request.(proto.Message)
 	ctx, cancel := k.getReqContext(spanCtx, msgName)
 	if cancel != nil {
