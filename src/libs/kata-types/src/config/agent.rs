@@ -50,6 +50,9 @@ pub struct Agent {
     ///    requirements, like architecture and version.
     #[serde(default)]
     pub kernel_modules: Vec<String>,
+
+    /// contianer pipe size
+    pub container_pipe_size: u32,
 }
 
 impl ConfigOps for Agent {
