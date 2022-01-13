@@ -8,7 +8,10 @@ use std::path::Path;
 use std::sync::Arc;
 
 use super::{default, register_hypervisor_plugin};
+
+use crate::config::default::MAX_QEMU_VCPUS;
 use crate::config::default::MIN_QEMU_MEMORY_SIZE;
+
 use crate::config::hypervisor::VIRTIO_BLK_MMIO;
 use crate::config::{ConfigPlugin, TomlConfig};
 use crate::{eother, resolve_path, validate_path};
@@ -34,6 +37,10 @@ impl QemuConfig {
 }
 
 impl ConfigPlugin for QemuConfig {
+    fn get_max_cpus(&self) -> u32 {
+        MAX_QEMU_VCPUS
+    }
+
     fn get_min_memory(&self) -> u32 {
         MIN_QEMU_MEMORY_SIZE
     }
