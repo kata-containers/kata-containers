@@ -9,9 +9,12 @@ use std::fs;
 use std::io::{self, Result};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
+use std::u32;
 
+use lazy_static::__Deref;
 use lazy_static::lazy_static;
 
+use crate::annotations::Annotation;
 use crate::{eother, sl};
 
 /// Default configuration values.
@@ -20,7 +23,7 @@ pub mod default;
 mod agent;
 pub use self::agent::{Agent, AgentVendor};
 
-mod hypervisor;
+pub mod hypervisor;
 pub use self::hypervisor::{
     BootInfo, DragonballConfig, Hypervisor, QemuConfig, HYPERVISOR_NAME_DRAGONBALL,
     HYPERVISOR_NAME_QEMU,
@@ -39,6 +42,10 @@ pub trait ConfigPlugin: Send + Sync {
 
     /// Validate the configuration information.
     fn validate(&self, _conf: &TomlConfig) -> Result<()>;
+
+    /// get min mem
+
+    fn get_min_memory(&self) -> u32;
 }
 
 /// Trait to manipulate Kata configuration information.
@@ -129,12 +136,10 @@ impl TomlConfig {
     /// Load Kata configuration information from string.
     pub fn load(content: &str) -> Result<TomlConfig> {
         let mut config: TomlConfig = toml::from_str(content)?;
-
         Hypervisor::adjust_configuration(&mut config)?;
         Runtime::adjust_configuration(&mut config)?;
         Agent::adjust_configuration(&mut config)?;
         info!(sl!(), "get kata config: {:?}", config);
-
         Ok(config)
     }
 
@@ -167,7 +172,6 @@ pub fn validate_path_pattern<P: AsRef<Path>>(patterns: &[String], path: P) -> Re
         .as_ref()
         .to_str()
         .ok_or_else(|| eother!("Invalid path {}", path.as_ref().to_string_lossy()))?;
-
     for p in patterns.iter() {
         if let Ok(glob) = glob::Pattern::new(p) {
             if glob.matches(path) {
@@ -226,8 +230,11 @@ impl KataConfig {
     pub fn get_active_config() -> Arc<KataConfig> {
         KATA_ACTIVE_CONFIG.lock().unwrap().clone()
     }
-
-    /// Get the agent configuration in use.
+    /// Get the config in use
+    pub fn get_config(&self) -> &TomlConfig {
+        &self.config
+    }
+    /// Get the agent mut configuration in use
     pub fn get_agent(&self) -> Option<&Agent> {
         if !self.agent.is_empty() {
             self.config.agent.get(&self.agent)
@@ -254,6 +261,7 @@ lazy_static! {
             agent: String::new(),
             hypervisor: String::new(),
         };
+
         Mutex::new(Arc::new(kata))
     };
     static ref KATA_ACTIVE_CONFIG: Mutex<Arc<KataConfig>> = {
