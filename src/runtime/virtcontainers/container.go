@@ -853,6 +853,8 @@ func (c *Container) create(ctx context.Context) (err error) {
 	c.Logger().WithFields(logrus.Fields{
 		"devices": c.devices,
 	}).Info("Attach devices")
+
+	// Attach devices
 	if err = c.attachDevices(ctx); err != nil {
 		return
 	}

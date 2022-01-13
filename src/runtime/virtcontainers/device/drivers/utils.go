@@ -89,19 +89,3 @@ func readPCIProperty(propertyPath string) (string, error) {
 	}
 	return strings.Split(string(buf), "\n")[0], nil
 }
-
-func GetVFIODeviceType(deviceFileName string) config.VFIODeviceType {
-	//For example, 0000:04:00.0
-	tokens := strings.Split(deviceFileName, ":")
-	vfioDeviceType := config.VFIODeviceErrorType
-	if len(tokens) == 3 {
-		vfioDeviceType = config.VFIODeviceNormalType
-	} else {
-		//For example, 83b8f4f2-509f-382f-3c1e-e6bfe0fa1001
-		tokens = strings.Split(deviceFileName, "-")
-		if len(tokens) == 5 {
-			vfioDeviceType = config.VFIODeviceMediatedType
-		}
-	}
-	return vfioDeviceType
-}
