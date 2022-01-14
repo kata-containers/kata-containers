@@ -15,6 +15,7 @@ import (
 	"syscall"
 	"time"
 
+	volume "github.com/kata-containers/kata-containers/src/runtime/pkg/direct-volume"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils/katatrace"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/manager"
@@ -609,6 +610,28 @@ func (c *Container) createBlockDevices(ctx context.Context) error {
 		if m.Type != "bind" {
 			// We only handle for bind-mounts
 			continue
+		}
+
+		// Handle directly assigned volume. Update the mount info based on the mount info json.
+		mntInfo, e := volume.VolumeMountInfo(m.Source)
+		if e != nil && !os.IsNotExist(e) {
+			c.Logger().WithError(e).WithField("mount-source", m.Source).
+				Error("failed to parse the mount info file for a direct assigned volume")
+			continue
+		}
+
+		if mntInfo != nil {
+			// Write out sandbox info file on the mount source to allow CSI to communicate with the runtime
+			if err := volume.RecordSandboxId(c.sandboxID, m.Source); err != nil {
+				c.Logger().WithError(err).Error("error writing sandbox info")
+			}
+
+			c.mounts[i].Source = mntInfo.Device
+			c.mounts[i].Type = mntInfo.FsType
+			c.mounts[i].Options = mntInfo.Options
+			m.Source = mntInfo.Device
+			m.Type = mntInfo.FsType
+			m.Options = mntInfo.Options
 		}
 
 		var stat unix.Stat_t
