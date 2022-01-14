@@ -144,6 +144,19 @@ func TestAppendDeviceNVDIMM(t *testing.T) {
 	testAppend(object, deviceNVDIMMString, t)
 }
 
+var objectEPCString = "-object memory-backend-epc,id=epc0,size=65536,prealloc=on"
+
+func TestAppendEPCObject(t *testing.T) {
+	object := Object{
+		Type:     MemoryBackendEPC,
+		ID:       "epc0",
+		Size:     1 << 16,
+		Prealloc: true,
+	}
+
+	testAppend(object, objectEPCString, t)
+}
+
 func TestAppendDeviceFS(t *testing.T) {
 	fsdev := FSDevice{
 		Driver:        Virtio9P,

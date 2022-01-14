@@ -234,6 +234,9 @@ const (
 	// MemoryBackendFile represents a guest memory mapped file.
 	MemoryBackendFile ObjectType = "memory-backend-file"
 
+	// MemoryBackendEPC represents a guest memory backend EPC for SGX.
+	MemoryBackendEPC ObjectType = "memory-backend-epc"
+
 	// TDXGuest represents a TDX object
 	TDXGuest ObjectType = "tdx-guest"
 
@@ -283,6 +286,9 @@ type Object struct {
 
 	// ReadOnly specifies whether `MemPath` is opened read-only or read/write (default)
 	ReadOnly bool
+
+	// Prealloc enables memory preallocation
+	Prealloc bool
 }
 
 // Valid returns true if the Object structure is valid and complete.
@@ -290,6 +296,8 @@ func (object Object) Valid() bool {
 	switch object.Type {
 	case MemoryBackendFile:
 		return object.ID != "" && object.MemPath != "" && object.Size != 0
+	case MemoryBackendEPC:
+		return object.ID != "" && object.Size != 0
 	case TDXGuest:
 		return object.ID != "" && object.File != "" && object.DeviceID != ""
 	case SEVGuest:
@@ -326,6 +334,14 @@ func (object Object) QemuParams(config *Config) []string {
 			objectParams = append(objectParams, "readonly=on")
 			deviceParams = append(deviceParams, "unarmed=on")
 		}
+	case MemoryBackendEPC:
+		objectParams = append(objectParams, string(object.Type))
+		objectParams = append(objectParams, fmt.Sprintf("id=%s", object.ID))
+		objectParams = append(objectParams, fmt.Sprintf("size=%d", object.Size))
+		if object.Prealloc {
+			objectParams = append(objectParams, "prealloc=on")
+		}
+
 	case TDXGuest:
 		objectParams = append(objectParams, string(object.Type))
 		objectParams = append(objectParams, fmt.Sprintf("id=%s", object.ID))
