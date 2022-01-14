@@ -1,0 +1,67 @@
+From 323ce9267470a6e0bf22c9b19399f12804524d78 Mon Sep 17 00:00:00 2001
+From: Salil Mehta <salil.mehta@huawei.com>
+Date: Thu, 25 Nov 2021 17:52:12 +0800
+Subject: [PATCH 12/28] arm/cpuhp: MADT Tbl change to size the guest with
+ possible vcpus
+
+Changes required during building of MADT Table by QEMU to accomodate disabled
+possible vcpus. This info shall be used by the guest kernel to size up its
+resources during boot time. This pre-sizing of the guest kernel done on
+possible vcpus will facilitate hotplug of the disabled vcpus.
+
+Co-developed-by: Keqian Zhu <zhukeqian1@huawei.com>
+Signed-off-by: Salil Mehta <salil.mehta@huawei.com>
+Signed-off-by: Huang Shijie <shijie8@gmail.com>
+---
+ hw/arm/virt-acpi-build.c | 18 +++++++++++-------
+ 1 file changed, 11 insertions(+), 7 deletions(-)
+
+diff --git a/hw/arm/virt-acpi-build.c b/hw/arm/virt-acpi-build.c
+index 95a3c3b31b..416b43c9f8 100644
+--- a/hw/arm/virt-acpi-build.c
++++ b/hw/arm/virt-acpi-build.c
+@@ -573,6 +573,8 @@ build_madt(GArray *table_data, BIOSLinker *linker, VirtMachineState *vms)
+     const int *irqmap = vms->irqmap;
+     AcpiMadtGenericDistributor *gicd;
+     AcpiMadtGenericMsiFrame *gic_msi;
++    MachineState *ms = &vms->parent;
++    CPUArchIdList *possible_cpus = ms->possible_cpus;
+     int i;
+ 
+     acpi_data_push(table_data, sizeof(AcpiMultipleApicTable));
+@@ -583,11 +585,10 @@ build_madt(GArray *table_data, BIOSLinker *linker, VirtMachineState *vms)
+     gicd->base_address = cpu_to_le64(memmap[VIRT_GIC_DIST].base);
+     gicd->version = vms->gic_version;
+ 
+-    for (i = 0; i < MACHINE(vms)->smp.cpus; i++) {
++    for (i = 0; i < MACHINE(vms)->smp.max_cpus; i++) {
+         AcpiMadtGenericCpuInterface *gicc = acpi_data_push(table_data,
+                                                            sizeof(*gicc));
+-        ARMCPU *armcpu = ARM_CPU(qemu_get_cpu(i));
+-
++        ARMCPU *cpu = ARM_CPU(qemu_get_possible_cpu(i));
+         gicc->type = ACPI_APIC_GENERIC_CPU_INTERFACE;
+         gicc->length = sizeof(*gicc);
+         if (vms->gic_version == 2) {
+@@ -596,11 +597,14 @@ build_madt(GArray *table_data, BIOSLinker *linker, VirtMachineState *vms)
+             gicc->gicv_base_address = cpu_to_le64(memmap[VIRT_GIC_VCPU].base);
+         }
+         gicc->cpu_interface_number = cpu_to_le32(i);
+-        gicc->arm_mpidr = cpu_to_le64(armcpu->mp_affinity);
++	gicc->arm_mpidr = possible_cpus->cpus[i].arch_id;
+         gicc->uid = cpu_to_le32(i);
+-        gicc->flags = cpu_to_le32(ACPI_MADT_GICC_ENABLED);
+-
+-        if (arm_feature(&armcpu->env, ARM_FEATURE_PMU)) {
++        if ( i < MACHINE(vms)->smp.cpus ) {
++            gicc->flags = cpu_to_le32(ACPI_MADT_GICC_ENABLED);
++        } else {
++            gicc->flags = cpu_to_le32(0);
++        }
++        if ((cpu && arm_feature(&cpu->env, ARM_FEATURE_PMU)) || vms->pmu) {
+             gicc->performance_interrupt = cpu_to_le32(PPI(VIRTUAL_PMU_IRQ));
+         }
+         if (vms->virt) {
+-- 
+2.30.2
+

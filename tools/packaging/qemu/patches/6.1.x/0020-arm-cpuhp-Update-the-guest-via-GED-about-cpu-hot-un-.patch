@@ -1,0 +1,115 @@
+From 740d5e7968376d6007fcc71008f277b8ea94a2fb Mon Sep 17 00:00:00 2001
+From: Salil Mehta <salil.mehta@huawei.com>
+Date: Sat, 27 Nov 2021 17:07:55 +0800
+Subject: [PATCH 20/28] arm/cpuhp: Update the guest(via GED) about cpu
+ hot-(un)plug events
+
+During any vcpu hot-(un)plug, running guest VM needs to be intimated about the
+new vcpu being added or request the deletion of the vcpu which is already part
+of the guest VM. This is done using the ACPI GED event which eventually gets
+demultiplexed to a CPU hotplug event and further to specific hot-(un)plug event
+of a particular vcpu.
+
+This change adds the ACPI calls to the existing hot-(un)plug hooks to trigger
+ACPI GED events from QEMU to guest VM.
+
+Co-developed-by: Keqian Zhu <zhukeqian1@huawei.com>
+Signed-off-by: Salil Mehta <salil.mehta@huawei.com>
+Signed-off-by: Huang Shijie <shijie8@gmail.com>
+---
+ hw/arm/virt.c | 31 +++++++++++++++++++++++++++----
+ 1 file changed, 27 insertions(+), 4 deletions(-)
+
+diff --git a/hw/arm/virt.c b/hw/arm/virt.c
+index 15595611a3..c3073d6755 100644
+--- a/hw/arm/virt.c
++++ b/hw/arm/virt.c
+@@ -2794,17 +2794,25 @@ static void virt_cpu_plug(HotplugHandler *hotplug_dev, DeviceState *dev,
+     ARMCPU *cpu = ARM_CPU(dev);
+     CPUState *cs = CPU(dev);
+     CPUArchId *cpu_slot;
++    Error *local_err = NULL;
+ 
+     /* insert the cold/hot-plugged vcpu in the slot */
+     cpu_slot = virt_find_cpu_slot(ms, cpu->core_id);
+     cpu_slot->cpu = OBJECT(dev);
+ 
+     if (dev->hotplugged) {
++	HotplugHandlerClass *hhc;
+         wire_gic_cpu_irqs(vms, cs);
+-        /* TODO: update acpi hotplug state and send cpu hotplug event to guest */
++	/* update acpi hotplug state and send cpu hotplug event to guest */
++        hhc = HOTPLUG_HANDLER_GET_CLASS(vms->acpi_dev);
++        hhc->plug(HOTPLUG_HANDLER(vms->acpi_dev), dev, &local_err);
++        if (local_err)
++            goto fail;
+         /* TODO: register this cpu for reset & update F/W info for the next boot */
+     }
+     cs->disabled = false;
++fail:
++    error_propagate(errp, local_err);
+     return;
+ }
+ 
+@@ -2812,7 +2820,9 @@ static void virt_cpu_unplug_request(HotplugHandler *hotplug_dev,
+                                     DeviceState *dev, Error **errp)
+ {
+     VirtMachineState *vms = VIRT_MACHINE(hotplug_dev);
++    HotplugHandlerClass *hhc;
+     CPUState *cs = CPU(dev);
++    Error *local_err = NULL;
+ 
+     if (!vms->acpi_dev || !dev->realized) {
+         error_setg(errp, "GED does not exists or device is not realized!");
+@@ -2832,8 +2842,13 @@ static void virt_cpu_unplug_request(HotplugHandler *hotplug_dev,
+         return;
+     }
+ 
+-    /* TODO: request cpu hotplug from guest */
+-
++    /* request cpu hotplug from guest */
++    hhc = HOTPLUG_HANDLER_GET_CLASS(vms->acpi_dev);
++    hhc->unplug_request(HOTPLUG_HANDLER(vms->acpi_dev), dev, &local_err);
++    if (local_err)
++        goto fail;
++fail:
++    error_propagate(errp, local_err);
+     return;
+ }
+ 
+@@ -2842,8 +2857,10 @@ static void virt_cpu_unplug(HotplugHandler *hotplug_dev, DeviceState *dev,
+ {
+     VirtMachineState *vms = VIRT_MACHINE(hotplug_dev);
+     MachineState *ms = MACHINE(hotplug_dev);
++    HotplugHandlerClass *hhc;
+     CPUState *cs = CPU(dev);
+     CPUArchId *cpu_slot;
++    Error *local_err = NULL;
+ 
+     if (!vms->acpi_dev || !dev->realized) {
+         error_setg(errp, "GED does not exists or device is not realized!");
+@@ -2852,7 +2869,11 @@ static void virt_cpu_unplug(HotplugHandler *hotplug_dev, DeviceState *dev,
+ 
+     cpu_slot = virt_find_cpu_slot(ms, ARM_CPU(cs)->core_id);
+ 
+-    /* TODO: update the acpi cpu hotplug state for cpu hot-unplug */
++    /* update the acpi cpu hotplug state for cpu hot-unplug */
++    hhc = HOTPLUG_HANDLER_GET_CLASS(vms->acpi_dev);
++    hhc->unplug(HOTPLUG_HANDLER(vms->acpi_dev), dev, &local_err);
++    if (local_err)
++        goto fail;
+ 
+     unwire_gic_cpu_irqs(vms, cs);
+     virt_update_gic(vms, cs);
+@@ -2865,6 +2886,8 @@ static void virt_cpu_unplug(HotplugHandler *hotplug_dev, DeviceState *dev,
+     cpu_slot->cpu = NULL;
+     cs->disabled = true;
+     return;
++fail:
++    error_propagate(errp, local_err);
+ }
+ 
+ static void virt_machine_device_pre_plug_cb(HotplugHandler *hotplug_dev,
+-- 
+2.30.2
+

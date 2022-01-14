@@ -1,0 +1,232 @@
+From 8ee7755e469b3e8d1a4edb0fd703d33a163092f5 Mon Sep 17 00:00:00 2001
+From: Salil Mehta <salil.mehta@huawei.com>
+Date: Sat, 27 Nov 2021 15:19:39 +0800
+Subject: [PATCH 17/28] arm/cpuhp: Changes to (un)wire GICC<->VCPU IRQs during
+ hot-(un)plug
+
+Refactors the existing gic create code to extract common code to wire the
+vcpu<->gic interrupts. This function could be used with cold-plug case and also
+used when vcpu is hot-plugged. It also introduces a new function to unwire the
+vcpu>->gic interrupts for the vcpu hot-unplug cases.
+
+Co-developed-by: Keqian Zhu <zhukeqian1@huawei.com>
+Signed-off-by: Salil Mehta <salil.mehta@huawei.com>
+Signed-off-by: Huang Shijie <shijie8@gmail.com>
+---
+ hw/arm/virt.c          | 144 +++++++++++++++++++++++++++++------------
+ hw/core/qdev.c         |   2 +-
+ include/hw/qdev-core.h |   2 +
+ 3 files changed, 104 insertions(+), 44 deletions(-)
+
+diff --git a/hw/arm/virt.c b/hw/arm/virt.c
+index ce34fb019a..b0429cdf8c 100644
+--- a/hw/arm/virt.c
++++ b/hw/arm/virt.c
+@@ -625,6 +625,103 @@ static void create_v2m(VirtMachineState *vms)
+     vms->msi_controller = VIRT_MSI_CTRL_GICV2M;
+ }
+ 
++static void unwire_gic_cpu_irqs(VirtMachineState *vms, CPUState *cs)
++{
++    unsigned int max_cpus = vms->max_cpus;
++    DeviceState *cpudev = DEVICE(cs);
++    DeviceState *gicdev = vms->gic;
++    int cpu = CPU(cs)->cpu_index;
++    int type = vms->gic_version;
++    int irq;
++
++    /* Mapping from the output timer irq lines from the CPU to the
++     * GIC PPI inputs we use for the virt board.
++     */
++    const int timer_irq[] = {
++        [GTIMER_PHYS] = ARCH_TIMER_NS_EL1_IRQ,
++        [GTIMER_VIRT] = ARCH_TIMER_VIRT_IRQ,
++        [GTIMER_HYP]  = ARCH_TIMER_NS_EL2_IRQ,
++        [GTIMER_SEC]  = ARCH_TIMER_S_EL1_IRQ,
++    };
++
++    for (irq = 0; irq < ARRAY_SIZE(timer_irq); irq++) {
++        qdev_disconnect_gpio_out_named(cpudev, NULL, irq);
++    }
++
++    if (type == 3) {
++        qdev_disconnect_gpio_out_named(cpudev, "gicv3-maintenance-interrupt", 0);
++    } else if (vms->virt) {
++        qdev_disconnect_gpio_out_named(gicdev, SYSBUS_DEVICE_GPIO_IRQ, cpu + 4 * max_cpus);
++    }
++
++    /*
++     * RFC: Question: This currently does not takes care of intimating the devices
++     * which might be sitting on system bus. Do we need a sysbus_disconnect_irq()
++     * which also does the job of notification beside disconnection?
++     */
++    qdev_disconnect_gpio_out_named(cpudev, "pmu-interrupt", 0);
++    qdev_disconnect_gpio_out_named(gicdev, SYSBUS_DEVICE_GPIO_IRQ, cpu);
++    qdev_disconnect_gpio_out_named(gicdev,
++                                   SYSBUS_DEVICE_GPIO_IRQ, cpu + max_cpus);
++    qdev_disconnect_gpio_out_named(gicdev, SYSBUS_DEVICE_GPIO_IRQ,
++                                   cpu + 2 * max_cpus);
++    qdev_disconnect_gpio_out_named(gicdev, SYSBUS_DEVICE_GPIO_IRQ,
++                                   cpu + 3 * max_cpus);
++}
++
++static void wire_gic_cpu_irqs(VirtMachineState *vms, CPUState *cs)
++{
++    unsigned int max_cpus = vms->max_cpus;
++    DeviceState *cpudev = DEVICE(cs);
++    DeviceState *gicdev = vms->gic;
++    int cpu = CPU(cs)->cpu_index;
++    int type = vms->gic_version;
++    SysBusDevice *gicbusdev;
++    int ppibase;
++    int irq;
++
++    ppibase = NUM_IRQS + cpu * GIC_INTERNAL + GIC_NR_SGIS;
++
++    /* Mapping from the output timer irq lines from the CPU to the
++     * GIC PPI inputs we use for the virt board.
++     */
++    const int timer_irq[] = {
++        [GTIMER_PHYS] = ARCH_TIMER_NS_EL1_IRQ,
++        [GTIMER_VIRT] = ARCH_TIMER_VIRT_IRQ,
++        [GTIMER_HYP]  = ARCH_TIMER_NS_EL2_IRQ,
++        [GTIMER_SEC]  = ARCH_TIMER_S_EL1_IRQ,
++    };
++
++    for (irq = 0; irq < ARRAY_SIZE(timer_irq); irq++) {
++        qdev_connect_gpio_out(cpudev, irq,
++                              qdev_get_gpio_in(gicdev,
++                                               ppibase + timer_irq[irq]));
++    }
++
++    gicbusdev = SYS_BUS_DEVICE(gicdev);
++    if (type == 3) {
++        qemu_irq irq = qdev_get_gpio_in(gicdev,
++                                        ppibase + ARCH_GIC_MAINT_IRQ);
++        qdev_connect_gpio_out_named(cpudev, "gicv3-maintenance-interrupt",
++                                    0, irq);
++    } else if (vms->virt) {
++        qemu_irq irq = qdev_get_gpio_in(gicdev,
++                                        ppibase + ARCH_GIC_MAINT_IRQ);
++        sysbus_connect_irq(gicbusdev, cpu + 4 * max_cpus, irq);
++    }
++
++    qdev_connect_gpio_out_named(cpudev, "pmu-interrupt", 0,
++                                qdev_get_gpio_in(gicdev,
++                                                 ppibase + VIRTUAL_PMU_IRQ));
++    sysbus_connect_irq(gicbusdev, cpu, qdev_get_gpio_in(cpudev, ARM_CPU_IRQ));
++    sysbus_connect_irq(gicbusdev, cpu + max_cpus,
++                       qdev_get_gpio_in(cpudev, ARM_CPU_FIQ));
++    sysbus_connect_irq(gicbusdev, cpu + 2 * max_cpus,
++                       qdev_get_gpio_in(cpudev, ARM_CPU_VIRQ));
++    sysbus_connect_irq(gicbusdev, cpu + 3 * max_cpus,
++                       qdev_get_gpio_in(cpudev, ARM_CPU_VFIQ));
++}
++
+ static void create_gic(VirtMachineState *vms)
+ {
+     MachineState *ms = MACHINE(vms);
+@@ -695,47 +792,7 @@ static void create_gic(VirtMachineState *vms)
+      * and the GIC's IRQ/FIQ/VIRQ/VFIQ interrupt outputs to the CPU's inputs.
+      */
+     for (i = 0; i < smp_cpus; i++) {
+-        DeviceState *cpudev = DEVICE(qemu_get_cpu(i));
+-        int ppibase = NUM_IRQS + i * GIC_INTERNAL + GIC_NR_SGIS;
+-        int irq;
+-        /* Mapping from the output timer irq lines from the CPU to the
+-         * GIC PPI inputs we use for the virt board.
+-         */
+-        const int timer_irq[] = {
+-            [GTIMER_PHYS] = ARCH_TIMER_NS_EL1_IRQ,
+-            [GTIMER_VIRT] = ARCH_TIMER_VIRT_IRQ,
+-            [GTIMER_HYP]  = ARCH_TIMER_NS_EL2_IRQ,
+-            [GTIMER_SEC]  = ARCH_TIMER_S_EL1_IRQ,
+-        };
+-
+-        for (irq = 0; irq < ARRAY_SIZE(timer_irq); irq++) {
+-            qdev_connect_gpio_out(cpudev, irq,
+-                                  qdev_get_gpio_in(vms->gic,
+-                                                   ppibase + timer_irq[irq]));
+-        }
+-
+-        if (type == 3) {
+-            qemu_irq irq = qdev_get_gpio_in(vms->gic,
+-                                            ppibase + ARCH_GIC_MAINT_IRQ);
+-            qdev_connect_gpio_out_named(cpudev, "gicv3-maintenance-interrupt",
+-                                        0, irq);
+-        } else if (vms->virt) {
+-            qemu_irq irq = qdev_get_gpio_in(vms->gic,
+-                                            ppibase + ARCH_GIC_MAINT_IRQ);
+-            sysbus_connect_irq(gicbusdev, i + 4 * max_cpus, irq);
+-        }
+-
+-        qdev_connect_gpio_out_named(cpudev, "pmu-interrupt", 0,
+-                                    qdev_get_gpio_in(vms->gic, ppibase
+-                                                     + VIRTUAL_PMU_IRQ));
+-
+-        sysbus_connect_irq(gicbusdev, i, qdev_get_gpio_in(cpudev, ARM_CPU_IRQ));
+-        sysbus_connect_irq(gicbusdev, i + max_cpus,
+-                           qdev_get_gpio_in(cpudev, ARM_CPU_FIQ));
+-        sysbus_connect_irq(gicbusdev, i + 2 * max_cpus,
+-                           qdev_get_gpio_in(cpudev, ARM_CPU_VIRQ));
+-        sysbus_connect_irq(gicbusdev, i + 3 * max_cpus,
+-                           qdev_get_gpio_in(cpudev, ARM_CPU_VFIQ));
++	wire_gic_cpu_irqs(vms, qemu_get_cpu(i));
+     }
+ 
+     fdt_add_gic_node(vms);
+@@ -2724,6 +2781,7 @@ static void virt_cpu_pre_plug(HotplugHandler *hotplug_dev, DeviceState *dev,
+ static void virt_cpu_plug(HotplugHandler *hotplug_dev, DeviceState *dev,
+                           Error **errp)
+ {
++    VirtMachineState *vms = VIRT_MACHINE(hotplug_dev);
+     MachineState *ms = MACHINE(hotplug_dev);
+     ARMCPU *cpu = ARM_CPU(dev);
+     CPUState *cs = CPU(dev);
+@@ -2734,7 +2792,7 @@ static void virt_cpu_plug(HotplugHandler *hotplug_dev, DeviceState *dev,
+     cpu_slot->cpu = OBJECT(dev);
+ 
+     if (dev->hotplugged) {
+-        /* TODO: wire the gic-cpu irqs */
++        wire_gic_cpu_irqs(vms, cs);
+         /* TODO: update acpi hotplug state and send cpu hotplug event to guest */
+         /* TODO: register this cpu for reset & update F/W info for the next boot */
+     }
+@@ -2788,7 +2846,7 @@ static void virt_cpu_unplug(HotplugHandler *hotplug_dev, DeviceState *dev,
+ 
+     /* TODO: update the acpi cpu hotplug state for cpu hot-unplug */
+ 
+-    /* TODO: unwire the gic-cpu irqs here */
++    unwire_gic_cpu_irqs(vms, cs);
+     /* TODO: update the GIC about this hot unplug change */
+ 
+     /* TODO: unregister this cpu for reset & update F/W info for the next boot */
+diff --git a/hw/core/qdev.c b/hw/core/qdev.c
+index cefc5eaa0a..bb3dfc06da 100644
+--- a/hw/core/qdev.c
++++ b/hw/core/qdev.c
+@@ -552,7 +552,7 @@ qemu_irq qdev_get_gpio_out_connector(DeviceState *dev, const char *name, int n)
+ 
+ /* disconnect a GPIO output, returning the disconnected input (if any) */
+ 
+-static qemu_irq qdev_disconnect_gpio_out_named(DeviceState *dev,
++qemu_irq qdev_disconnect_gpio_out_named(DeviceState *dev,
+                                                const char *name, int n)
+ {
+     char *propname = g_strdup_printf("%s[%d]",
+diff --git a/include/hw/qdev-core.h b/include/hw/qdev-core.h
+index bafc311bfa..ea29e7a7af 100644
+--- a/include/hw/qdev-core.h
++++ b/include/hw/qdev-core.h
+@@ -553,6 +553,8 @@ qemu_irq qdev_get_gpio_out_connector(DeviceState *dev, const char *name, int n);
+ qemu_irq qdev_intercept_gpio_out(DeviceState *dev, qemu_irq icpt,
+                                  const char *name, int n);
+ 
++qemu_irq qdev_disconnect_gpio_out_named(DeviceState *dev,
++                                        const char *name, int n);
+ BusState *qdev_get_child_bus(DeviceState *dev, const char *name);
+ 
+ /*** Device API.  ***/
+-- 
+2.30.2
+
