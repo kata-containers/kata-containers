@@ -254,3 +254,10 @@ func (s *Sandbox) GetAgentURL() (string, error) {
 func (s *Sandbox) GetHypervisorPid() (int, error) {
 	return 0, nil
 }
+
+func (s *Sandbox) GuestVolumeStats(ctx context.Context, path string) ([]byte, error) {
+	return nil, nil
+}
+func (s *Sandbox) ResizeGuestVolume(ctx context.Context, path string, size uint64) error {
+	return nil
+}
