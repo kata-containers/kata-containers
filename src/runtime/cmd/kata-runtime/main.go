@@ -124,6 +124,7 @@ var runtimeCommands = []cli.Command{
 	kataExecCLICommand,
 	kataMetricsCLICommand,
 	factoryCLICommand,
+	kataVolumeCommand,
 }
 
 // runtimeBeforeSubcommands is the function to run before command-line
