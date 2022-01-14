@@ -218,3 +218,11 @@ func (p *HybridVSockTTRPCMockImp) GetMetrics(ctx context.Context, req *pb.GetMet
 func (p *HybridVSockTTRPCMockImp) AddSwap(ctx context.Context, req *pb.AddSwapRequest) (*gpb.Empty, error) {
 	return &gpb.Empty{}, nil
 }
+
+func (p *HybridVSockTTRPCMockImp) GetVolumeStats(ctx context.Context, req *pb.VolumeStatsRequest) (*pb.VolumeStatsResponse, error) {
+	return &pb.VolumeStatsResponse{}, nil
+}
+
+func (p *HybridVSockTTRPCMockImp) ResizeVolume(ctx context.Context, req *pb.ResizeVolumeRequest) (*gpb.Empty, error) {
+	return &gpb.Empty{}, nil
+}
