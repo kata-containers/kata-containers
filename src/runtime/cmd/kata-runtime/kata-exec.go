@@ -19,8 +19,8 @@ import (
 	"time"
 
 	"github.com/containerd/console"
-	kataMonitor "github.com/kata-containers/kata-containers/src/runtime/pkg/kata-monitor"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils"
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/utils/shimclient"
 	clientUtils "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols/client"
 	"github.com/pkg/errors"
 	"github.com/urfave/cli"
@@ -154,7 +154,7 @@ func (s *iostream) Read(data []byte) (n int, err error) {
 }
 
 func getConn(sandboxID string, port uint64) (net.Conn, error) {
-	client, err := kataMonitor.BuildShimClient(sandboxID, defaultTimeout)
+	client, err := shimclient.BuildShimClient(sandboxID, defaultTimeout)
 	if err != nil {
 		return nil, err
 	}
