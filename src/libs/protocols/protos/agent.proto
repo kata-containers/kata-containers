@@ -12,6 +12,7 @@ option go_package = "github.com/kata-containers/kata-containers/src/runtime/virt
 package grpc;
 
 import "oci.proto";
+import "csi.proto";
 import "types.proto";
 
 import "google/protobuf/empty.proto";
@@ -65,6 +66,8 @@ service AgentService {
 	rpc CopyFile(CopyFileRequest) returns (google.protobuf.Empty);
 	rpc GetOOMEvent(GetOOMEventRequest) returns (OOMEvent);
 	rpc AddSwap(AddSwapRequest) returns (google.protobuf.Empty);
+	rpc GetVolumeStats(VolumeStatsRequest) returns (VolumeStatsResponse);
+	rpc ResizeVolume(ResizeVolumeRequest) returns (google.protobuf.Empty);
 }
 
 message CreateContainerRequest {
@@ -504,4 +507,15 @@ message GetMetricsRequest {}
 
 message Metrics {
 	string metrics = 1;
+}
+
+message VolumeStatsRequest {
+	// The volume path on the guest outside the container
+	string volume_guest_path = 1;
+}
+
+message ResizeVolumeRequest {
+	// Full VM guest path of the volume (outside the container)
+	string volume_guest_path = 1;
+	uint64 size = 2;
 }
