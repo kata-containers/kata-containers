@@ -1,0 +1,97 @@
+From cf832166791bddea562ba9372795db04ea41a581 Mon Sep 17 00:00:00 2001
+From: Salil Mehta <salil.mehta@huawei.com>
+Date: Tue, 23 Nov 2021 15:22:27 +0800
+Subject: [PATCH 03/28] arm/cpuhp: Add common cpu utility for possible vcpus
+
+Adds various utility functions which might be required to fetch or check the
+state of the possible vcpus. This also introduces concept of *disabled* vcpus,
+which are part of the *possible* vcpus but are not part of the *present* vcpu.
+This state shall be used during machine init time to check the presence of
+vcpus.
+
+Co-developed-by: Keqian Zhu <zhukeqian1@huawei.com>
+Signed-off-by: Salil Mehta <salil.mehta@huawei.com>
+---
+ cpus-common.c         | 19 +++++++++++++++++++
+ include/hw/core/cpu.h | 21 +++++++++++++++++++++
+ 2 files changed, 40 insertions(+)
+
+diff --git a/cpus-common.c b/cpus-common.c
+index 6e73d3e58d..4f0fa42a2e 100644
+--- a/cpus-common.c
++++ b/cpus-common.c
+@@ -23,6 +23,7 @@
+ #include "hw/core/cpu.h"
+ #include "sysemu/cpus.h"
+ #include "qemu/lockable.h"
++#include "hw/boards.h"
+ 
+ static QemuMutex qemu_cpu_list_lock;
+ static QemuCond exclusive_cond;
+@@ -86,6 +87,24 @@ void cpu_list_add(CPUState *cpu)
+     QTAILQ_INSERT_TAIL_RCU(&cpus, cpu, node);
+ }
+ 
++CPUState *qemu_get_possible_cpu(int index)
++{
++    MachineState *ms = MACHINE(qdev_get_machine());
++    const CPUArchIdList *possible_cpus = ms->possible_cpus;
++    CPUState *cpu;
++
++    assert((index >= 0) && (index < possible_cpus->len));
++
++    cpu = CPU(possible_cpus->cpus[index].cpu);
++
++    return cpu;
++}
++
++bool qemu_present_cpu(CPUState *cpu)
++{
++    return (cpu && !cpu->disabled);
++}
++
+ void cpu_list_remove(CPUState *cpu)
+ {
+     QEMU_LOCK_GUARD(&qemu_cpu_list_lock);
+diff --git a/include/hw/core/cpu.h b/include/hw/core/cpu.h
+index bc864564ce..5a2571af3e 100644
+--- a/include/hw/core/cpu.h
++++ b/include/hw/core/cpu.h
+@@ -391,6 +391,7 @@ struct CPUState {
+     SavedIOTLB saved_iotlb;
+ #endif
+ 
++    bool disabled;
+     /* TODO Move common fields from CPUArchState here. */
+     int cpu_index;
+     int cluster_index;
+@@ -749,6 +750,26 @@ static inline bool cpu_in_exclusive_context(const CPUState *cpu)
+  */
+ CPUState *qemu_get_cpu(int index);
+ 
++/**
++ * qemu_get_possible_cpu:
++ * @index: The CPUState@cpu_index value of the CPU to obtain.
++ *
++ * Gets a CPU matching @index.
++ *
++ * Returns: The possible CPU or %NULL if there is no matching CPU.
++ */
++CPUState *qemu_get_possible_cpu(int index);
++
++/**
++ * qemu_present_cpu:
++ * @cpu: The vCPU to check
++ *
++ * Checks if the vcpu is amongst the present possible vcpus.
++ *
++ * Returns: True if it is present possible vcpu else false
++ */
++bool qemu_present_cpu(CPUState *cpu);
++
+ /**
+  * cpu_exists:
+  * @id: Guest-exposed CPU ID to lookup.
+-- 
+2.30.2
+

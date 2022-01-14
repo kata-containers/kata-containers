@@ -1,0 +1,101 @@
+From a24ce04b7c2e958a0730f19e6f54e6570a075b20 Mon Sep 17 00:00:00 2001
+From: Salil Mehta <salil.mehta@huawei.com>
+Date: Tue, 23 Nov 2021 15:08:45 +0800
+Subject: [PATCH 02/28] arm/cpuhp: Add new ARMCPU core-id property
+
+This shall be used to store user specified core index and shall be directly
+used as slot-index during hot{plug|unplug} of vcpu.
+
+For now, we are not taking into account of other topology info like thread-id,
+socket-id to derive mp-affinity. Host KVM uses vcpu-id to derive the mpidr for
+the vcpu of the guest. This is not in exact corroboration with the ARM spec
+view of the MPIDR. Hence, the concept of threads or SMT bit present as part of
+the MPIDR_EL1 also gets lost.
+
+Also, we need ACPI PPTT Table support in QEMU to be able to export this
+topology info to the guest VM and the info should be consistent with what host
+cpu supports if accel=kvm is being used.
+
+Perhaps some comments on this will help? @Andrew/drjones@redhat.com
+
+Co-developed-by: Keqian Zhu <zhukeqian1@huawei.com>
+Signed-off-by: Salil Mehta <salil.mehta@huawei.com>
+Signed-off-by: Huang Shijie <shijie8@gmail.com>
+---
+ hw/arm/virt.c    | 5 +++++
+ target/arm/cpu.c | 5 +++++
+ target/arm/cpu.h | 1 +
+ 3 files changed, 11 insertions(+)
+
+diff --git a/hw/arm/virt.c b/hw/arm/virt.c
+index 99d59fada2..86e1470925 100644
+--- a/hw/arm/virt.c
++++ b/hw/arm/virt.c
+@@ -1944,6 +1944,7 @@ static void machvirt_init(MachineState *machine)
+                           &error_fatal);
+ 
+         aarch64 &= object_property_get_bool(cpuobj, "aarch64", NULL);
++	object_property_set_int(cpuobj, "core-id", n, NULL);
+ 
+         if (!vms->secure) {
+             object_property_set_bool(cpuobj, "has_el3", false, NULL);
+@@ -2357,6 +2358,7 @@ static const CPUArchIdList *virt_possible_cpu_arch_ids(MachineState *ms)
+ {
+     int n;
+     unsigned int max_cpus = ms->smp.max_cpus;
++    unsigned int smp_threads = ms->smp.threads;
+     VirtMachineState *vms = VIRT_MACHINE(ms);
+ 
+     if (ms->possible_cpus) {
+@@ -2369,10 +2371,13 @@ static const CPUArchIdList *virt_possible_cpu_arch_ids(MachineState *ms)
+     ms->possible_cpus->len = max_cpus;
+     for (n = 0; n < ms->possible_cpus->len; n++) {
+         ms->possible_cpus->cpus[n].type = ms->cpu_type;
++	ms->possible_cpus->cpus[n].vcpus_count = smp_threads;
+         ms->possible_cpus->cpus[n].arch_id =
+             virt_cpu_mp_affinity(vms, n);
+         ms->possible_cpus->cpus[n].props.has_thread_id = true;
+         ms->possible_cpus->cpus[n].props.thread_id = n;
++	ms->possible_cpus->cpus[n].props.has_core_id = true;
++	ms->possible_cpus->cpus[n].props.core_id = n;
+     }
+     return ms->possible_cpus;
+ }
+diff --git a/target/arm/cpu.c b/target/arm/cpu.c
+index 2866dd7658..5dc3fa6c3a 100644
+--- a/target/arm/cpu.c
++++ b/target/arm/cpu.c
+@@ -1130,6 +1130,9 @@ static Property arm_cpu_has_dsp_property =
+ static Property arm_cpu_has_mpu_property =
+             DEFINE_PROP_BOOL("has-mpu", ARMCPU, has_mpu, true);
+ 
++static Property arm_cpu_coreid_property =
++            DEFINE_PROP_INT32("core-id", ARMCPU, core_id, -1);
++
+ /* This is like DEFINE_PROP_UINT32 but it doesn't set the default value,
+  * because the CPU initfn will have already set cpu->pmsav7_dregion to
+  * the right value for that particular CPU type, and we don't want
+@@ -1303,6 +1306,8 @@ void arm_cpu_post_init(Object *obj)
+         kvm_arm_add_vcpu_properties(obj);
+     }
+ 
++    qdev_property_add_static(DEVICE(obj), &arm_cpu_coreid_property);
++
+ #ifndef CONFIG_USER_ONLY
+     if (arm_feature(&cpu->env, ARM_FEATURE_AARCH64) &&
+         cpu_isar_feature(aa64_mte, cpu)) {
+diff --git a/target/arm/cpu.h b/target/arm/cpu.h
+index 9f0a5f84d5..ba11468ab5 100644
+--- a/target/arm/cpu.h
++++ b/target/arm/cpu.h
+@@ -999,6 +999,7 @@ struct ARMCPU {
+     QLIST_HEAD(, ARMELChangeHook) el_change_hooks;
+ 
+     int32_t node_id; /* NUMA node this CPU belongs to */
++    int32_t core_id; /* core-id of this ARM VCPU */
+ 
+     /* Used to synchronize KVM and QEMU in-kernel device levels */
+     uint8_t device_irq_level;
+-- 
+2.30.2
+
