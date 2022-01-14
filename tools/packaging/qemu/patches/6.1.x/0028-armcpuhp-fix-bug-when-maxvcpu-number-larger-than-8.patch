@@ -1,0 +1,230 @@
+From e9ec5f6617c1811f244618e3a23c29ea2fb27c6a Mon Sep 17 00:00:00 2001
+From: Huang Shijie <shijie8@gmail.com>
+Date: Thu, 16 Dec 2021 11:36:25 +0800
+Subject: [PATCH 28/28] armcpuhp: fix bug when maxvcpu number larger than 8
+
+The gic version finalized after the use the gic version in
+virt_cpu_mp_affinity. But VIRT_GICVERSION_HOST must be determined before
+used it. So, must call finalize_gic_version before used gic_version.
+
+For now cpu socket and thread is not supported, thus we need set thread
+and socket to 1 if they are larger than 1.
+
+Signed-off-by: Huang Shijie <shijie8@gmail.com>
+Signed-off-by: Huang Shijie <shijie8@gmail.com>
+---
+ hw/arm/virt.c | 183 ++++++++++++++++++++++++++++----------------------
+ 1 file changed, 102 insertions(+), 81 deletions(-)
+
+diff --git a/hw/arm/virt.c b/hw/arm/virt.c
+index 5c04abb352..23dd2337f6 100644
+--- a/hw/arm/virt.c
++++ b/hw/arm/virt.c
+@@ -1661,85 +1661,6 @@ void virt_machine_done(Notifier *notifier, void *data)
+      virt_remove_disabled_cpus(vms);
+ }
+ 
+-static uint64_t virt_cpu_mp_affinity(VirtMachineState *vms, int idx)
+-{
+-    uint8_t clustersz = ARM_DEFAULT_CPUS_PER_CLUSTER;
+-    VirtMachineClass *vmc = VIRT_MACHINE_GET_CLASS(vms);
+-
+-    if (!vmc->disallow_affinity_adjustment) {
+-        /* Adjust MPIDR like 64-bit KVM hosts, which incorporate the
+-         * GIC's target-list limitations. 32-bit KVM hosts currently
+-         * always create clusters of 4 CPUs, but that is expected to
+-         * change when they gain support for gicv3. When KVM is enabled
+-         * it will override the changes we make here, therefore our
+-         * purposes are to make TCG consistent (with 64-bit KVM hosts)
+-         * and to improve SGI efficiency.
+-         */
+-        if (vms->gic_version == VIRT_GIC_VERSION_3) {
+-            clustersz = GICV3_TARGETLIST_BITS;
+-        } else {
+-            clustersz = GIC_TARGETLIST_BITS;
+-        }
+-    }
+-    return arm_cpu_mp_affinity(idx, clustersz);
+-}
+-
+-static void virt_set_memmap(VirtMachineState *vms)
+-{
+-    MachineState *ms = MACHINE(vms);
+-    hwaddr base, device_memory_base, device_memory_size;
+-    int i;
+-
+-    vms->memmap = extended_memmap;
+-
+-    for (i = 0; i < ARRAY_SIZE(base_memmap); i++) {
+-        vms->memmap[i] = base_memmap[i];
+-    }
+-
+-    if (ms->ram_slots > ACPI_MAX_RAM_SLOTS) {
+-        error_report("unsupported number of memory slots: %"PRIu64,
+-                     ms->ram_slots);
+-        exit(EXIT_FAILURE);
+-    }
+-
+-    /*
+-     * We compute the base of the high IO region depending on the
+-     * amount of initial and device memory. The device memory start/size
+-     * is aligned on 1GiB. We never put the high IO region below 256GiB
+-     * so that if maxram_size is < 255GiB we keep the legacy memory map.
+-     * The device region size assumes 1GiB page max alignment per slot.
+-     */
+-    device_memory_base =
+-        ROUND_UP(vms->memmap[VIRT_MEM].base + ms->ram_size, GiB);
+-    device_memory_size = ms->maxram_size - ms->ram_size + ms->ram_slots * GiB;
+-
+-    /* Base address of the high IO region */
+-    base = device_memory_base + ROUND_UP(device_memory_size, GiB);
+-    if (base < device_memory_base) {
+-        error_report("maxmem/slots too huge");
+-        exit(EXIT_FAILURE);
+-    }
+-    if (base < vms->memmap[VIRT_MEM].base + LEGACY_RAMLIMIT_BYTES) {
+-        base = vms->memmap[VIRT_MEM].base + LEGACY_RAMLIMIT_BYTES;
+-    }
+-
+-    for (i = VIRT_LOWMEMMAP_LAST; i < ARRAY_SIZE(extended_memmap); i++) {
+-        hwaddr size = extended_memmap[i].size;
+-
+-        base = ROUND_UP(base, size);
+-        vms->memmap[i].base = base;
+-        vms->memmap[i].size = size;
+-        base += size;
+-    }
+-    vms->highest_gpa = base - 1;
+-    if (device_memory_size > 0) {
+-        ms->device_memory = g_malloc0(sizeof(*ms->device_memory));
+-        ms->device_memory->base = device_memory_base;
+-        memory_region_init(&ms->device_memory->mr, OBJECT(vms),
+-                           "device-memory", device_memory_size);
+-    }
+-}
+-
+ /*
+  * finalize_gic_version - Determines the final gic_version
+  * according to the gic-version property
+@@ -1839,6 +1760,88 @@ static void finalize_gic_version(VirtMachineState *vms)
+     }
+ }
+ 
++static uint64_t virt_cpu_mp_affinity(VirtMachineState *vms, int idx)
++{
++    uint8_t clustersz = ARM_DEFAULT_CPUS_PER_CLUSTER;
++    VirtMachineClass *vmc = VIRT_MACHINE_GET_CLASS(vms);
++
++    if(vms->gic_version == VIRT_GIC_VERSION_HOST)
++       finalize_gic_version(vms);
++
++    if (!vmc->disallow_affinity_adjustment) {
++        /* Adjust MPIDR like 64-bit KVM hosts, which incorporate the
++         * GIC's target-list limitations. 32-bit KVM hosts currently
++         * always create clusters of 4 CPUs, but that is expected to
++         * change when they gain support for gicv3. When KVM is enabled
++         * it will override the changes we make here, therefore our
++         * purposes are to make TCG consistent (with 64-bit KVM hosts)
++         * and to improve SGI efficiency.
++         */
++        if (vms->gic_version == VIRT_GIC_VERSION_3) {
++            clustersz = GICV3_TARGETLIST_BITS;
++        } else {
++            clustersz = GIC_TARGETLIST_BITS;
++        }
++    }
++    return arm_cpu_mp_affinity(idx, clustersz);
++}
++
++static void virt_set_memmap(VirtMachineState *vms)
++{
++    MachineState *ms = MACHINE(vms);
++    hwaddr base, device_memory_base, device_memory_size;
++    int i;
++
++    vms->memmap = extended_memmap;
++
++    for (i = 0; i < ARRAY_SIZE(base_memmap); i++) {
++        vms->memmap[i] = base_memmap[i];
++    }
++
++    if (ms->ram_slots > ACPI_MAX_RAM_SLOTS) {
++        error_report("unsupported number of memory slots: %"PRIu64,
++                     ms->ram_slots);
++        exit(EXIT_FAILURE);
++    }
++
++    /*
++     * We compute the base of the high IO region depending on the
++     * amount of initial and device memory. The device memory start/size
++     * is aligned on 1GiB. We never put the high IO region below 256GiB
++     * so that if maxram_size is < 255GiB we keep the legacy memory map.
++     * The device region size assumes 1GiB page max alignment per slot.
++     */
++    device_memory_base =
++        ROUND_UP(vms->memmap[VIRT_MEM].base + ms->ram_size, GiB);
++    device_memory_size = ms->maxram_size - ms->ram_size + ms->ram_slots * GiB;
++
++    /* Base address of the high IO region */
++    base = device_memory_base + ROUND_UP(device_memory_size, GiB);
++    if (base < device_memory_base) {
++        error_report("maxmem/slots too huge");
++        exit(EXIT_FAILURE);
++    }
++    if (base < vms->memmap[VIRT_MEM].base + LEGACY_RAMLIMIT_BYTES) {
++        base = vms->memmap[VIRT_MEM].base + LEGACY_RAMLIMIT_BYTES;
++    }
++
++    for (i = VIRT_LOWMEMMAP_LAST; i < ARRAY_SIZE(extended_memmap); i++) {
++        hwaddr size = extended_memmap[i].size;
++
++        base = ROUND_UP(base, size);
++        vms->memmap[i].base = base;
++        vms->memmap[i].size = size;
++        base += size;
++    }
++    vms->highest_gpa = base - 1;
++    if (device_memory_size > 0) {
++        ms->device_memory = g_malloc0(sizeof(*ms->device_memory));
++        ms->device_memory->base = device_memory_base;
++        memory_region_init(&ms->device_memory->mr, OBJECT(vms),
++                           "device-memory", device_memory_size);
++    }
++}
++
+ static void virt_cpu_set_properties(Object *cpuobj, const CPUArchId *cpu_slot)
+ {
+     MachineState *ms = MACHINE(qdev_get_machine());
+@@ -2928,9 +2931,27 @@ static void virt_smp_parse(MachineState *ms, SMPConfiguration *config, Error **e
+         unsigned threads = config->has_threads ? config->threads: 1;
+         unsigned int max_cpus;
+ 
++	if(config->has_cores) {
++	   config->cores = cpus;
++	   cores = cpus;
++	}
+         if (sockets > 1 || threads > 1) {
+-            error_report("does not support more than one socket or thread");
+-            exit(1);
++            printf("does not support more than one socket or thread, will put sockets and threads to cores");
++	    if(config->has_cores) {
++		    if(config->has_sockets && config->has_threads) {
++			threads = 1;
++			sockets = 1;
++			config->sockets = 1;
++			config->threads = 1;
++		    } else if (config->has_sockets) {
++			    sockets = 1;
++                            config->sockets = 1;
++		    } else {
++			    config->threads = 1;
++			    threads = 1;
++		    }
++	    } else
++                    exit(1);
+         }
+ 
+         if (cores != cpus) {
+-- 
+2.30.2
+

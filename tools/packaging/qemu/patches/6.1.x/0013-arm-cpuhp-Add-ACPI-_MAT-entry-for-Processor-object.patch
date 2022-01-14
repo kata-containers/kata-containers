@@ -1,0 +1,95 @@
+From 22e597ca7364c7787bd9abd3da27b7aaa92f3337 Mon Sep 17 00:00:00 2001
+From: Salil Mehta <salil.mehta@huawei.com>
+Date: Thu, 25 Nov 2021 17:59:22 +0800
+Subject: [PATCH 13/28] arm/cpuhp: Add ACPI _MAT entry for Processor object
+
+Adds a function which builds the ACPI _MAT entry for processor objects. This
+shall be called from the cpus AML for all possible vcpus.
+
+The entry is passed to the guest kernel with ACPI_MADT_GICC_ENABLED flag when
+it evaluates _MAT object. OSPM evaluates _MAT object in context to the cpu
+hotplug event.
+
+Co-developed-by: Keqian Zhu <zhukeqian1@huawei.com>
+Signed-off-by: Salil Mehta <salil.mehta@huawei.com>
+Signed-off-by: Huang Shijie <shijie8@gmail.com>
+---
+ hw/acpi/cpu.c            |  5 +++++
+ hw/arm/virt-acpi-build.c | 25 +++++++++++++++++++++++--
+ include/hw/arm/virt.h    |  1 +
+ 3 files changed, 29 insertions(+), 2 deletions(-)
+
+diff --git a/hw/acpi/cpu.c b/hw/acpi/cpu.c
+index 98657ad28b..7b6765d5dd 100644
+--- a/hw/acpi/cpu.c
++++ b/hw/acpi/cpu.c
+@@ -691,6 +691,11 @@ void build_cpus_aml(Aml *table, MachineState *machine, CPUHotplugFeatures opts,
+                 apic->flags = cpu_to_le32(1);
+                 break;
+             }
++            case ACPI_APIC_GENERIC_CPU_INTERFACE: {
++                AcpiMadtGenericCpuInterface *gicc = (void *)madt_buf->data;
++                gicc->flags = cpu_to_le32(1);
++                break;
++            }
+             default:
+                 assert(0);
+             }
+diff --git a/hw/arm/virt-acpi-build.c b/hw/arm/virt-acpi-build.c
+index 416b43c9f8..48b34d50a2 100644
+--- a/hw/arm/virt-acpi-build.c
++++ b/hw/arm/virt-acpi-build.c
+@@ -563,6 +563,22 @@ build_gtdt(GArray *table_data, BIOSLinker *linker, VirtMachineState *vms)
+                  vms->oem_table_id);
+ }
+ 
++static void
++build_mat_entry(AcpiDeviceIf *adev, int uid, const CPUArchIdList *arch_ids,
++                    GArray *entry)
++{
++    AcpiMadtGenericCpuInterface *gicc = acpi_data_push(entry,sizeof(*gicc));
++    MachineState *ms = MACHINE(qdev_get_machine());
++    CPUArchIdList *possible_cpus = ms->possible_cpus;
++
++    /* fill the relevant fields of _MAT entry for GICC */
++    gicc->type = ACPI_APIC_GENERIC_CPU_INTERFACE;
++    gicc->length = sizeof(*gicc);
++    gicc->cpu_interface_number = cpu_to_le32(uid);
++    gicc->arm_mpidr = possible_cpus->cpus[uid].arch_id;
++    gicc->uid = cpu_to_le32(uid);
++}
++
+ /* MADT */
+ static void
+ build_madt(GArray *table_data, BIOSLinker *linker, VirtMachineState *vms)
+@@ -713,8 +729,13 @@ build_dsdt(GArray *table_data, BIOSLinker *linker, VirtMachineState *vms)
+              .acpi_1_compatible = false,
+              .has_legacy_cphp = false
+         };
+-
+-        build_cpus_aml(scope, ms, opts, memmap[VIRT_CPUHP_ACPI].base,
++        
++	AcpiDeviceIfClass *adevc;
++        /* _MAT entry shall be used within cpus aml */
++        adevc = ACPI_DEVICE_IF_CLASS(DEVICE_GET_CLASS(vms->acpi_dev));
++        adevc->madt_cpu = build_mat_entry;
++        
++	build_cpus_aml(scope, ms, opts, memmap[VIRT_CPUHP_ACPI].base,
+                        "\\_SB", NULL, AML_SYSTEM_MEMORY);
+     } else {
+         acpi_dsdt_add_cpus(scope, vms);
+diff --git a/include/hw/arm/virt.h b/include/hw/arm/virt.h
+index 8954b78c27..491eeddca4 100644
+--- a/include/hw/arm/virt.h
++++ b/include/hw/arm/virt.h
+@@ -37,6 +37,7 @@
+ #include "hw/block/flash.h"
+ #include "sysemu/kvm.h"
+ #include "hw/intc/arm_gicv3_common.h"
++#include "hw/acpi/acpi_dev_interface.h"
+ #include "qom/object.h"
+ 
+ #define NUM_GICV2M_SPIS       64
+-- 
+2.30.2
+

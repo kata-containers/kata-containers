@@ -1,0 +1,268 @@
+From 44cdfa821bf310d3adab8885127ff30a2c23157f Mon Sep 17 00:00:00 2001
+From: Salil Mehta <salil.mehta@huawei.com>
+Date: Sat, 27 Nov 2021 17:00:11 +0800
+Subject: [PATCH 19/28] arm/cpuhp: Changes required to (re)init the vcpu
+ register info
+
+VCPU register info needs to be re-initialized each time vcpu is hot-plugged.
+This has to be done both for emulation/TCG and KVM case. This is done in
+context to the GIC update notification for any vcpu hot-(un)plug events. This
+change adds that support and re-factors existing to maximize the code re-use.
+
+Co-developed-by: Keqian Zhu <zhukeqian1@huawei.com>
+Signed-off-by: Salil Mehta <salil.mehta@huawei.com>
+Signed-off-by: Huang Shijie <shijie8@gmail.com>
+---
+ hw/intc/arm_gicv3.c                |   1 +
+ hw/intc/arm_gicv3_common.c         |   7 +-
+ hw/intc/arm_gicv3_cpuif.c          | 131 +++++++++++++++--------------
+ hw/intc/arm_gicv3_kvm.c            |   7 +-
+ hw/intc/gicv3_internal.h           |   1 +
+ include/hw/intc/arm_gicv3_common.h |   1 +
+ 6 files changed, 84 insertions(+), 64 deletions(-)
+
+diff --git a/hw/intc/arm_gicv3.c b/hw/intc/arm_gicv3.c
+index d63f8af604..21a50161df 100644
+--- a/hw/intc/arm_gicv3.c
++++ b/hw/intc/arm_gicv3.c
+@@ -395,6 +395,7 @@ static void arm_gicv3_class_init(ObjectClass *klass, void *data)
+     ARMGICv3Class *agc = ARM_GICV3_CLASS(klass);
+ 
+     agcc->post_load = arm_gicv3_post_load;
++    agcc->init_cpu_reginfo = gicv3_init_cpu_reginfo;
+     device_class_set_parent_realize(dc, arm_gic_realize, &agc->parent_realize);
+ }
+ 
+diff --git a/hw/intc/arm_gicv3_common.c b/hw/intc/arm_gicv3_common.c
+index aed9906ace..c1307895c8 100644
+--- a/hw/intc/arm_gicv3_common.c
++++ b/hw/intc/arm_gicv3_common.c
+@@ -330,6 +330,7 @@ static void arm_gicv3_cpu_update_notifier(Notifier * notifier, void * data)
+     VirtMachineState *vms = VIRT_MACHINE(qdev_get_machine());
+     GICv3State *s = ARM_GICV3_COMMON(vms->gic);
+     CPUState *cpu = (CPUState *)data;
++    ARMGICv3CommonClass *c = ARM_GICV3_COMMON_GET_CLASS(s);
+     int gic_cpuif_num;
+ 
+     /* this shall get us mapped gicv3 cpuif corresponding to mpidr */
+@@ -349,8 +350,10 @@ static void arm_gicv3_cpu_update_notifier(Notifier * notifier, void * data)
+     /* re-stitch the gic cpuif to this new cpu */
+     gicv3_set_gicv3state(cpu, &s->cpu[gic_cpuif_num]);
+     gicv3_set_cpustate(&s->cpu[gic_cpuif_num], cpu);
+-
+-    /* TODO: initialize the registers info for this newly added cpu */
++    /* initialize the registers info for this newly added cpu */
++    if (c->init_cpu_reginfo) {
++        c->init_cpu_reginfo(cpu);
++    }
+ }
+ 
+ static void arm_gicv3_common_realize(DeviceState *dev, Error **errp)
+diff --git a/hw/intc/arm_gicv3_cpuif.c b/hw/intc/arm_gicv3_cpuif.c
+index f4a0a1c2ab..96f1637f83 100644
+--- a/hw/intc/arm_gicv3_cpuif.c
++++ b/hw/intc/arm_gicv3_cpuif.c
+@@ -2625,6 +2625,72 @@ static const ARMCPRegInfo gicv3_cpuif_ich_apxr23_reginfo[] = {
+     REGINFO_SENTINEL
+ };
+ 
++void gicv3_init_cpu_reginfo(CPUState *cs)
++{
++    ARMCPU *cpu = ARM_CPU(cs);
++    GICv3CPUState *gcs = icc_cs_from_env(&cpu->env);
++
++    /* Note that we can't just use the GICv3CPUState as an opaque pointer
++     * in define_arm_cp_regs_with_opaque(), because when we're called back
++     * it might be with code translated by CPU 0 but run by CPU 1, in
++     * which case we'd get the wrong value.
++     * So instead we define the regs with no ri->opaque info, and
++     * get back to the GICv3CPUState from the CPUARMState.
++     */
++    define_arm_cp_regs(cpu, gicv3_cpuif_reginfo);
++    if (arm_feature(&cpu->env, ARM_FEATURE_EL2)
++        && cpu->gic_num_lrs) {
++        int j;
++
++        gcs->num_list_regs = cpu->gic_num_lrs;
++        gcs->vpribits = cpu->gic_vpribits;
++        gcs->vprebits = cpu->gic_vprebits;
++
++        /* Check against architectural constraints: getting these
++         * wrong would be a bug in the CPU code defining these,
++         * and the implementation relies on them holding.
++         */
++        g_assert(gcs->vprebits <= gcs->vpribits);
++        g_assert(gcs->vprebits >= 5 && gcs->vprebits <= 7);
++        g_assert(gcs->vpribits >= 5 && gcs->vpribits <= 8);
++
++        define_arm_cp_regs(cpu, gicv3_cpuif_hcr_reginfo);
++
++        for (j = 0; j < gcs->num_list_regs; j++) {
++            /* Note that the AArch64 LRs are 64-bit; the AArch32 LRs
++             * are split into two cp15 regs, LR (the low part, with the
++             * same encoding as the AArch64 LR) and LRC (the high part).
++             */
++            ARMCPRegInfo lr_regset[] = {
++                { .name = "ICH_LRn_EL2", .state = ARM_CP_STATE_BOTH,
++                  .opc0 = 3, .opc1 = 4, .crn = 12,
++                  .crm = 12 + (j >> 3), .opc2 = j & 7,
++                  .type = ARM_CP_IO | ARM_CP_NO_RAW,
++                  .access = PL2_RW,
++                  .readfn = ich_lr_read,
++                  .writefn = ich_lr_write,
++                },
++                { .name = "ICH_LRCn_EL2", .state = ARM_CP_STATE_AA32,
++                  .cp = 15, .opc1 = 4, .crn = 12,
++                  .crm = 14 + (j >> 3), .opc2 = j & 7,
++                  .type = ARM_CP_IO | ARM_CP_NO_RAW,
++                  .access = PL2_RW,
++                  .readfn = ich_lr_read,
++                  .writefn = ich_lr_write,
++                },
++                REGINFO_SENTINEL
++            };
++            define_arm_cp_regs(cpu, lr_regset);
++        }
++        if (gcs->vprebits >= 6) {
++            define_arm_cp_regs(cpu, gicv3_cpuif_ich_apxr1_reginfo);
++        }
++        if (gcs->vprebits == 7) {
++            define_arm_cp_regs(cpu, gicv3_cpuif_ich_apxr23_reginfo);
++        }
++    }
++}
++
+ static void gicv3_cpuif_el_change_hook(ARMCPU *cpu, void *opaque)
+ {
+     GICv3CPUState *cs = opaque;
+@@ -2641,67 +2707,10 @@ void gicv3_init_cpuif(GICv3State *s)
+ 
+     for (i = 0; i < s->num_cpu; i++) {
+         ARMCPU *cpu = ARM_CPU(qemu_get_cpu(i));
+-        GICv3CPUState *cs = &s->cpu[i];
+-
+-        /* Note that we can't just use the GICv3CPUState as an opaque pointer
+-         * in define_arm_cp_regs_with_opaque(), because when we're called back
+-         * it might be with code translated by CPU 0 but run by CPU 1, in
+-         * which case we'd get the wrong value.
+-         * So instead we define the regs with no ri->opaque info, and
+-         * get back to the GICv3CPUState from the CPUARMState.
+-         */
+-        define_arm_cp_regs(cpu, gicv3_cpuif_reginfo);
+-        if (arm_feature(&cpu->env, ARM_FEATURE_EL2)
+-            && cpu->gic_num_lrs) {
+-            int j;
+-
+-            cs->num_list_regs = cpu->gic_num_lrs;
+-            cs->vpribits = cpu->gic_vpribits;
+-            cs->vprebits = cpu->gic_vprebits;
+-
+-            /* Check against architectural constraints: getting these
+-             * wrong would be a bug in the CPU code defining these,
+-             * and the implementation relies on them holding.
+-             */
+-            g_assert(cs->vprebits <= cs->vpribits);
+-            g_assert(cs->vprebits >= 5 && cs->vprebits <= 7);
+-            g_assert(cs->vpribits >= 5 && cs->vpribits <= 8);
+-
+-            define_arm_cp_regs(cpu, gicv3_cpuif_hcr_reginfo);
+-
+-            for (j = 0; j < cs->num_list_regs; j++) {
+-                /* Note that the AArch64 LRs are 64-bit; the AArch32 LRs
+-                 * are split into two cp15 regs, LR (the low part, with the
+-                 * same encoding as the AArch64 LR) and LRC (the high part).
+-                 */
+-                ARMCPRegInfo lr_regset[] = {
+-                    { .name = "ICH_LRn_EL2", .state = ARM_CP_STATE_BOTH,
+-                      .opc0 = 3, .opc1 = 4, .crn = 12,
+-                      .crm = 12 + (j >> 3), .opc2 = j & 7,
+-                      .type = ARM_CP_IO | ARM_CP_NO_RAW,
+-                      .access = PL2_RW,
+-                      .readfn = ich_lr_read,
+-                      .writefn = ich_lr_write,
+-                    },
+-                    { .name = "ICH_LRCn_EL2", .state = ARM_CP_STATE_AA32,
+-                      .cp = 15, .opc1 = 4, .crn = 12,
+-                      .crm = 14 + (j >> 3), .opc2 = j & 7,
+-                      .type = ARM_CP_IO | ARM_CP_NO_RAW,
+-                      .access = PL2_RW,
+-                      .readfn = ich_lr_read,
+-                      .writefn = ich_lr_write,
+-                    },
+-                    REGINFO_SENTINEL
+-                };
+-                define_arm_cp_regs(cpu, lr_regset);
+-            }
+-            if (cs->vprebits >= 6) {
+-                define_arm_cp_regs(cpu, gicv3_cpuif_ich_apxr1_reginfo);
+-            }
+-            if (cs->vprebits == 7) {
+-                define_arm_cp_regs(cpu, gicv3_cpuif_ich_apxr23_reginfo);
+-            }
++	if (qemu_present_cpu(CPU(cpu))) {
++            GICv3CPUState *cs = icc_cs_from_env(&cpu->env);
++            gicv3_init_cpu_reginfo(CPU(cpu));
++            arm_register_el_change_hook(cpu, gicv3_cpuif_el_change_hook, cs);
+         }
+-        arm_register_el_change_hook(cpu, gicv3_cpuif_el_change_hook, cs);
+     }
+ }
+diff --git a/hw/intc/arm_gicv3_kvm.c b/hw/intc/arm_gicv3_kvm.c
+index 4e7bb4ac1f..65ac3d5a88 100644
+--- a/hw/intc/arm_gicv3_kvm.c
++++ b/hw/intc/arm_gicv3_kvm.c
+@@ -789,6 +789,10 @@ static void vm_change_state_handler(void *opaque, bool running,
+     }
+ }
+ 
++static void kvm_gicv3_init_cpu_reginfo(CPUState *cs)
++{
++    define_arm_cp_regs(ARM_CPU(cs), gicv3_cpuif_reginfo);
++}
+ 
+ static void kvm_arm_gicv3_realize(DeviceState *dev, Error **errp)
+ {
+@@ -821,7 +825,7 @@ static void kvm_arm_gicv3_realize(DeviceState *dev, Error **errp)
+     for (i = 0; i < s->num_cpu; i++) {
+        CPUState *cs = qemu_get_cpu(i);
+         if (qemu_present_cpu(cs))
+-            define_arm_cp_regs(ARM_CPU(cs), gicv3_cpuif_reginfo);
++	    kvm_gicv3_init_cpu_reginfo(cs);
+     }
+ 
+     /* Try to create the device via the device control API */
+@@ -908,6 +912,7 @@ static void kvm_arm_gicv3_class_init(ObjectClass *klass, void *data)
+ 
+     agcc->pre_save = kvm_arm_gicv3_get;
+     agcc->post_load = kvm_arm_gicv3_put;
++    agcc->init_cpu_reginfo = kvm_gicv3_init_cpu_reginfo;
+     device_class_set_parent_realize(dc, kvm_arm_gicv3_realize,
+                                     &kgc->parent_realize);
+     device_class_set_parent_reset(dc, kvm_arm_gicv3_reset, &kgc->parent_reset);
+diff --git a/hw/intc/gicv3_internal.h b/hw/intc/gicv3_internal.h
+index 6e14a7a6cd..66eec3c3fc 100644
+--- a/hw/intc/gicv3_internal.h
++++ b/hw/intc/gicv3_internal.h
+@@ -298,6 +298,7 @@ void gicv3_dist_set_irq(GICv3State *s, int irq, int level);
+ void gicv3_redist_set_irq(GICv3CPUState *cs, int irq, int level);
+ void gicv3_redist_send_sgi(GICv3CPUState *cs, int grp, int irq, bool ns);
+ void gicv3_init_cpuif(GICv3State *s);
++void gicv3_init_cpu_reginfo(CPUState *cs);
+ 
+ /**
+  * gicv3_cpuif_update:
+diff --git a/include/hw/intc/arm_gicv3_common.h b/include/hw/intc/arm_gicv3_common.h
+index b36f98a413..b2457cbcb8 100644
+--- a/include/hw/intc/arm_gicv3_common.h
++++ b/include/hw/intc/arm_gicv3_common.h
+@@ -291,6 +291,7 @@ struct ARMGICv3CommonClass {
+ 
+     void (*pre_save)(GICv3State *s);
+     void (*post_load)(GICv3State *s);
++    void (*init_cpu_reginfo)(CPUState *cs);
+ };
+ 
+ void gicv3_init_irqs_and_mmio(GICv3State *s, qemu_irq_handler handler,
+-- 
+2.30.2
+

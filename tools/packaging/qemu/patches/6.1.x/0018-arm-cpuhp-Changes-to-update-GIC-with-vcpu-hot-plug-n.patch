@@ -1,0 +1,211 @@
+From f2ce0fea29008de9c95800044e0e508ba682554d Mon Sep 17 00:00:00 2001
+From: Salil Mehta <salil.mehta@huawei.com>
+Date: Sat, 27 Nov 2021 16:06:48 +0800
+Subject: [PATCH 18/28] arm/cpuhp: Changes to update GIC with vcpu hot-plug
+ notification
+
+Adds the notification support about vcpu hot-(un)plug required to update the
+GIC so that it can update its vcpu to GIC cpu interface association.
+
+NOTE: This is using 'struct VirtMachineState' inside the notifier function.
+      Question:  Not sure if it is right to use machine related data structure
+      inside GIC related files? Its design looks to be pretty much abstracted
+      from any machine related stuff. @Peter Maydell
+
+Co-developed-by: Keqian Zhu <zhukeqian1@huawei.com>
+Signed-off-by: Salil Mehta <salil.mehta@huawei.com>
+Signed-off-by: Huang Shijie <shijie8@gmail.com>
+---
+ hw/arm/virt.c                      | 12 +++++--
+ hw/intc/arm_gicv3_common.c         | 54 +++++++++++++++++++++++++++++-
+ hw/intc/arm_gicv3_cpuif.c          |  5 +++
+ hw/intc/gicv3_internal.h           |  1 +
+ include/hw/arm/virt.h              |  1 +
+ include/hw/intc/arm_gicv3_common.h |  1 +
+ 6 files changed, 71 insertions(+), 3 deletions(-)
+
+diff --git a/hw/arm/virt.c b/hw/arm/virt.c
+index b0429cdf8c..15595611a3 100644
+--- a/hw/arm/virt.c
++++ b/hw/arm/virt.c
+@@ -2109,6 +2109,8 @@ static void machvirt_init(MachineState *machine)
+ 
+     create_fdt(vms);
+ 
++    notifier_list_init(&vms->cpuhp_notifiers);
++
+     possible_cpus = mc->possible_cpu_arch_ids(machine);
+     assert(possible_cpus->len == max_cpus);
+     for (n = 0; n < possible_cpus->len; n++) {
+@@ -2722,6 +2724,12 @@ static void virt_memory_plug(HotplugHandler *hotplug_dev,
+                          dev, &error_abort);
+ }
+ 
++static void virt_update_gic(VirtMachineState *vms, CPUState *cs)
++{
++    /* notify gic to stitch GICC to this new cpu */
++    notifier_list_notify(&vms->cpuhp_notifiers, cs);
++}
++
+ static void virt_cpu_pre_plug(HotplugHandler *hotplug_dev, DeviceState *dev,
+                               Error **errp)
+ {
+@@ -2774,7 +2782,7 @@ static void virt_cpu_pre_plug(HotplugHandler *hotplug_dev, DeviceState *dev,
+     }
+     virt_cpu_set_properties(OBJECT(cs), cpu_slot);
+     if (dev->hotplugged) {
+-        /* TODO: update GIC about this hotplug change here */
++        virt_update_gic(vms, cs);
+     }
+ }
+ 
+@@ -2847,7 +2855,7 @@ static void virt_cpu_unplug(HotplugHandler *hotplug_dev, DeviceState *dev,
+     /* TODO: update the acpi cpu hotplug state for cpu hot-unplug */
+ 
+     unwire_gic_cpu_irqs(vms, cs);
+-    /* TODO: update the GIC about this hot unplug change */
++    virt_update_gic(vms, cs);
+ 
+     /* TODO: unregister this cpu for reset & update F/W info for the next boot */
+ 
+diff --git a/hw/intc/arm_gicv3_common.c b/hw/intc/arm_gicv3_common.c
+index cfc112e43e..aed9906ace 100644
+--- a/hw/intc/arm_gicv3_common.c
++++ b/hw/intc/arm_gicv3_common.c
+@@ -31,7 +31,7 @@
+ #include "gicv3_internal.h"
+ #include "hw/arm/linux-boot-if.h"
+ #include "sysemu/kvm.h"
+-
++#include "hw/arm/virt.h"
+ 
+ static void gicv3_gicd_no_migration_shift_bug_post_load(GICv3State *cs)
+ {
+@@ -305,8 +305,57 @@ void gicv3_init_irqs_and_mmio(GICv3State *s, qemu_irq_handler handler,
+     }
+ }
+ 
++static int arm_gicv3_get_proc_num(GICv3State *s, CPUState *cpu)
++{
++    uint64_t mp_affinity;
++    uint64_t gicr_typer;
++    uint64_t cpu_affid;
++    int i;
++
++    mp_affinity = object_property_get_uint(OBJECT(cpu), "mp-affinity", NULL);
++    /* match the cpu mp-affinity to get the gic cpuif number */
++    for (i = 0; i < s->num_cpu; i++) {
++        gicr_typer = s->cpu[i].gicr_typer;
++        cpu_affid = (gicr_typer >> 32) & 0xFFFFFF;
++        if (cpu_affid == mp_affinity) {
++            return i;
++        }
++    }
++
++    return -1;
++}
++
++static void arm_gicv3_cpu_update_notifier(Notifier * notifier, void * data)
++{
++    VirtMachineState *vms = VIRT_MACHINE(qdev_get_machine());
++    GICv3State *s = ARM_GICV3_COMMON(vms->gic);
++    CPUState *cpu = (CPUState *)data;
++    int gic_cpuif_num;
++
++    /* this shall get us mapped gicv3 cpuif corresponding to mpidr */
++    gic_cpuif_num = arm_gicv3_get_proc_num(s, cpu);
++    if (gic_cpuif_num < 0) {
++        error_report("Failed to associate cpu %d with any GIC cpuif",
++                     cpu->cpu_index);
++        abort();
++    }
++
++    /* check if update is for vcpu hot-unplug */
++    if (qemu_present_cpu(cpu)) {
++        s->cpu[gic_cpuif_num].cpu = NULL;
++        return;
++    }
++
++    /* re-stitch the gic cpuif to this new cpu */
++    gicv3_set_gicv3state(cpu, &s->cpu[gic_cpuif_num]);
++    gicv3_set_cpustate(&s->cpu[gic_cpuif_num], cpu);
++
++    /* TODO: initialize the registers info for this newly added cpu */
++}
++
+ static void arm_gicv3_common_realize(DeviceState *dev, Error **errp)
+ {
++    VirtMachineState *vms = VIRT_MACHINE(qdev_get_machine());
+     GICv3State *s = ARM_GICV3_COMMON(dev);
+     int i;
+ 
+@@ -386,12 +435,15 @@ static void arm_gicv3_common_realize(DeviceState *dev, Error **errp)
+             (i << 8) |
+             (last << 4);
+     }
++    s->cpu_update_notifier.notify = arm_gicv3_cpu_update_notifier;
++    notifier_list_add(&vms->cpuhp_notifiers, &s->cpu_update_notifier);
+ }
+ 
+ static void arm_gicv3_finalize(Object *obj)
+ {
+     GICv3State *s = ARM_GICV3_COMMON(obj);
+ 
++    notifier_remove(&s->cpu_update_notifier);
+     g_free(s->redist_region_count);
+ }
+ 
+diff --git a/hw/intc/arm_gicv3_cpuif.c b/hw/intc/arm_gicv3_cpuif.c
+index 819c032ec5..f4a0a1c2ab 100644
+--- a/hw/intc/arm_gicv3_cpuif.c
++++ b/hw/intc/arm_gicv3_cpuif.c
+@@ -21,6 +21,11 @@
+ #include "hw/irq.h"
+ #include "cpu.h"
+ 
++void gicv3_set_cpustate(GICv3CPUState *s, CPUState *cpu)
++{
++    s->cpu = cpu;
++}
++
+ void gicv3_set_gicv3state(CPUState *cpu, GICv3CPUState *s)
+ {
+     ARMCPU *arm_cpu = ARM_CPU(cpu);
+diff --git a/hw/intc/gicv3_internal.h b/hw/intc/gicv3_internal.h
+index 05303a55c8..6e14a7a6cd 100644
+--- a/hw/intc/gicv3_internal.h
++++ b/hw/intc/gicv3_internal.h
+@@ -409,5 +409,6 @@ static inline void gicv3_cache_all_target_cpustates(GICv3State *s)
+ }
+ 
+ void gicv3_set_gicv3state(CPUState *cpu, GICv3CPUState *s);
++void gicv3_set_cpustate(GICv3CPUState *s, CPUState *cpu);
+ 
+ #endif /* QEMU_ARM_GICV3_INTERNAL_H */
+diff --git a/include/hw/arm/virt.h b/include/hw/arm/virt.h
+index 491eeddca4..b91249201a 100644
+--- a/include/hw/arm/virt.h
++++ b/include/hw/arm/virt.h
+@@ -169,6 +169,7 @@ struct VirtMachineState {
+     DeviceState *gic;
+     DeviceState *acpi_dev;
+     Notifier powerdown_notifier;
++    NotifierList cpuhp_notifiers;
+     PCIBus *bus;
+     char *oem_id;
+     char *oem_table_id;
+diff --git a/include/hw/intc/arm_gicv3_common.h b/include/hw/intc/arm_gicv3_common.h
+index 91491a2f66..b36f98a413 100644
+--- a/include/hw/intc/arm_gicv3_common.h
++++ b/include/hw/intc/arm_gicv3_common.h
+@@ -248,6 +248,7 @@ struct GICv3State {
+     GICv3CPUState *gicd_irouter_target[GICV3_MAXIRQ];
+     uint32_t gicd_nsacr[DIV_ROUND_UP(GICV3_MAXIRQ, 16)];
+ 
++    Notifier cpu_update_notifier;
+     GICv3CPUState *cpu;
+ };
+ 
+-- 
+2.30.2
+
