@@ -8,10 +8,8 @@ To properly load the driver modules, systemd init must be used. It is not adequa
 to use the agent as the init. Because of this, alpine is not a valid base OS image
 to use. The following rootfs OS's have been tested with this Dockerfile.
 
-* CentOS
 * Clear Linux
-* Fedora
-* SUSE
+* Debian
 * Ubuntu 
 
 The generated files will need to be copied and configured into your Kata Containers

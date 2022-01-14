@@ -120,7 +120,7 @@ assets:
         name: "ubuntu"
         version: "latest"
       ppc64le:
-        name: "centos"
+        name: "ubuntu"
         version: "latest"
       s390x:
         name: "ubuntu"
