@@ -7,32 +7,44 @@ package containerdshim
 
 import (
 	"context"
+	"encoding/json"
 	"expvar"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"net/http"
 	"net/http/pprof"
+	"net/url"
 	"path/filepath"
 	"strconv"
 	"strings"
 
+	"google.golang.org/grpc/codes"
+
 	cdshim "github.com/containerd/containerd/runtime/v2/shim"
+	mutils "github.com/kata-containers/kata-containers/src/runtime/pkg/utils"
 	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
 	vcAnnotations "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/annotations"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/prometheus/client_golang/prometheus"
 	dto "github.com/prometheus/client_model/go"
 	"github.com/prometheus/common/expfmt"
+)
 
-	"google.golang.org/grpc/codes"
-
-	mutils "github.com/kata-containers/kata-containers/src/runtime/pkg/utils"
+const (
+	DirectVolumeStatUrl   = "/direct-volume/stats"
+	DirectVolumeResizeUrl = "/direct-volume/resize"
 )
 
 var (
 	ifSupportAgentMetricsAPI = true
 	shimMgtLog               = shimLog.WithField("subsystem", "shim-management")
 )
+
+type ResizeRequest struct {
+	VolumePath string
+	Size       uint64
+}
 
 // agentURL returns URL for agent
 func (s *service) agentURL(w http.ResponseWriter, r *http.Request) {
@@ -126,6 +138,52 @@ func decodeAgentMetrics(body string) []*dto.MetricFamily {
 	return list
 }
 
+func (s *service) serveVolumeStats(w http.ResponseWriter, r *http.Request) {
+	volumePath, err := url.PathUnescape(strings.TrimPrefix(r.URL.Path, DirectVolumeStatUrl))
+	if err != nil {
+		shimMgtLog.WithError(err).Error("failed to unescape the volume stat url path")
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(err.Error()))
+		return
+	}
+
+	buf, err := s.sandbox.GuestVolumeStats(context.Background(), volumePath)
+	if err != nil {
+		shimMgtLog.WithError(err).WithField("volume-path", volumePath).Error("failed to get volume stats")
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(err.Error()))
+		return
+	}
+	w.Write(buf)
+}
+
+func (s *service) serveVolumeResize(w http.ResponseWriter, r *http.Request) {
+	body, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		shimMgtLog.WithError(err).Error("failed to read request body")
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(err.Error()))
+		return
+	}
+	var resizeReq ResizeRequest
+	err = json.Unmarshal(body, &resizeReq)
+	if err != nil {
+		shimMgtLog.WithError(err).Error("failed to unmarshal the http request body")
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(err.Error()))
+		return
+	}
+
+	err = s.sandbox.ResizeGuestVolume(context.Background(), resizeReq.VolumePath, resizeReq.Size)
+	if err != nil {
+		shimMgtLog.WithError(err).WithField("volume-path", resizeReq.VolumePath).Error("failed to resize the volume")
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(err.Error()))
+		return
+	}
+	w.Write([]byte(""))
+}
+
 func (s *service) startManagementServer(ctx context.Context, ociSpec *specs.Spec) {
 	// metrics socket will under sandbox's bundle path
 	metricsAddress := SocketAddress(s.id)
@@ -148,6 +206,8 @@ func (s *service) startManagementServer(ctx context.Context, ociSpec *specs.Spec
 	m := http.NewServeMux()
 	m.Handle("/metrics", http.HandlerFunc(s.serveMetrics))
 	m.Handle("/agent-url", http.HandlerFunc(s.agentURL))
+	m.Handle(DirectVolumeStatUrl, http.HandlerFunc(s.serveVolumeStats))
+	m.Handle(DirectVolumeResizeUrl, http.HandlerFunc(s.serveVolumeResize))
 	s.mountPprofHandle(m, ociSpec)
 
 	// register shim metrics
