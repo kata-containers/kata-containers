@@ -138,6 +138,8 @@ const (
 	grpcGetOOMEventRequest       = "grpc.GetOOMEventRequest"
 	grpcGetMetricsRequest        = "grpc.GetMetricsRequest"
 	grpcAddSwapRequest           = "grpc.AddSwapRequest"
+	grpcVolumeStatsRequest       = "grpc.VolumeStatsRequest"
+	grpcResizeVolumeRequest      = "grpc.ResizeVolumeRequest"
 )
 
 // newKataAgent returns an agent from an agent type.
@@ -1952,6 +1954,12 @@ func (k *kataAgent) installReqFunc(c *kataclient.AgentClient) {
 	k.reqHandlers[grpcAddSwapRequest] = func(ctx context.Context, req interface{}) (interface{}, error) {
 		return k.client.AgentServiceClient.AddSwap(ctx, req.(*grpc.AddSwapRequest))
 	}
+	k.reqHandlers[grpcVolumeStatsRequest] = func(ctx context.Context, req interface{}) (interface{}, error) {
+		return k.client.AgentServiceClient.GetVolumeStats(ctx, req.(*grpc.VolumeStatsRequest))
+	}
+	k.reqHandlers[grpcResizeVolumeRequest] = func(ctx context.Context, req interface{}) (interface{}, error) {
+		return k.client.AgentServiceClient.ResizeVolume(ctx, req.(*grpc.ResizeVolumeRequest))
+	}
 }
 
 func (k *kataAgent) getReqContext(ctx context.Context, reqName string) (newCtx context.Context, cancel context.CancelFunc) {
@@ -2168,4 +2176,23 @@ func (k *kataAgent) getAgentMetrics(ctx context.Context, req *grpc.GetMetricsReq
 	}
 
 	return resp.(*grpc.Metrics), nil
+}
+
+func (k *kataAgent) getGuestVolumeStats(ctx context.Context, volumeGuestPath string) ([]byte, error) {
+	result, err := k.sendReq(ctx, &grpc.VolumeStatsRequest{VolumeGuestPath: volumeGuestPath})
+	if err != nil {
+		return nil, err
+	}
+
+	buf, err := json.Marshal(result.(*grpc.VolumeStatsResponse))
+	if err != nil {
+		return nil, err
+	}
+
+	return buf, nil
+}
+
+func (k *kataAgent) resizeGuestVolume(ctx context.Context, volumeGuestPath string, size uint64) error {
+	_, err := k.sendReq(ctx, &grpc.ResizeVolumeRequest{VolumeGuestPath: volumeGuestPath, Size_: size})
+	return err
 }

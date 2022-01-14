@@ -190,4 +190,10 @@ type agent interface {
 
 	// getAgentMetrics get metrics of agent and guest through agent
 	getAgentMetrics(context.Context, *grpc.GetMetricsRequest) (*grpc.Metrics, error)
+
+	//getGuestVolumeStats get the filesystem stats of a volume specified by the volume mount path on the guest.
+	getGuestVolumeStats(ctx context.Context, volumeGuestPath string) ([]byte, error)
+
+	// resizeGuestVolume resizes a volume specified by the volume mount path on the guest.
+	resizeGuestVolume(ctx context.Context, volumeGuestPath string, size uint64) error
 }
