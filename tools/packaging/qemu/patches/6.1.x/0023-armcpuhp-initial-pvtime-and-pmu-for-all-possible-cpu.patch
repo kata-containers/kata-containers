@@ -1,0 +1,38 @@
+From 5864b2046f2481772bb1f28aa4e4bbc5258ad1f1 Mon Sep 17 00:00:00 2001
+From: Huang Shijie <shijie8@gmail.com>
+Date: Wed, 8 Dec 2021 13:35:28 +0800
+Subject: [PATCH 23/28] armcpuhp: initial pvtime and pmu for all possible cpu
+
+initial pvtime and pmu for all possible cpus when machvirt init.
+
+Signed-off-by: Huang Shijie <shijie8@gmail.com>
+Signed-off-by: Huang Shijie <shijie8@gmail.com>
+---
+ hw/arm/virt.c | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/hw/arm/virt.c b/hw/arm/virt.c
+index ab35bd51af..3f4763367a 100644
+--- a/hw/arm/virt.c
++++ b/hw/arm/virt.c
+@@ -1933,6 +1933,7 @@ static void virt_cpu_set_properties(Object *cpuobj, const CPUArchId *cpu_slot)
+  */
+ static void virt_cpu_post_init(VirtMachineState *vms, MemoryRegion *sysmem)
+ {
++    CPUArchIdList *possible_cpus = vms->parent.possible_cpus;
+     int max_cpus = MACHINE(vms)->smp.max_cpus;
+     bool aarch64, pmu, steal_time;
+     CPUState *cpu;
+@@ -1965,7 +1966,8 @@ static void virt_cpu_post_init(VirtMachineState *vms, MemoryRegion *sysmem)
+             memory_region_add_subregion(sysmem, pvtime_reg_base, pvtime);
+         }
+ 
+-        CPU_FOREACH(cpu) {
++	for (int n = 0; n < possible_cpus->len; n++) {
++             cpu = qemu_get_possible_cpu(n);
+             if (pmu) {
+                 assert(arm_feature(&ARM_CPU(cpu)->env, ARM_FEATURE_PMU));
+                 if (kvm_irqchip_in_kernel()) {
+-- 
+2.30.2
+

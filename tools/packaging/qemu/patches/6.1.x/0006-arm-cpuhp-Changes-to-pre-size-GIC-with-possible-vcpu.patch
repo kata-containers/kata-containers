@@ -1,0 +1,220 @@
+From b588545bf1bb168eb0853ae36525d5407657eb7b Mon Sep 17 00:00:00 2001
+From: Salil Mehta <salil.mehta@huawei.com>
+Date: Wed, 24 Nov 2021 16:09:08 +0800
+Subject: [PATCH 06/28] arm/cpuhp: Changes to pre-size GIC with possible vcpus
+ @machine init
+
+GIC needs to be pre-sized with possible vcpus at the initialization time. This
+is necessary because Memory regions and resources associated with GICC/GICR
+etc cannot be changed (add/del/modified) after VM has inited. Also, GIC_TYPER
+needs to be initialized with mp_affinity and cpu interface number association.
+This cannot be changed after GIC has initialized.
+
+Once all the cpu interfaces of the GIC has been inited it needs to be ensured
+that any updations to the GICC during reset only takes place for the present
+vcpus and not the disabled ones. Therefore, proper checks are required at
+various places.
+
+Co-developed-by: Keqian Zhu <zhukeqian1@huawei.com>
+Signed-off-by: Salil Mehta <salil.mehta@huawei.com>
+Signed-off-by: Huang Shijie <shijie8@gmail.com>
+---
+ hw/arm/virt.c              | 15 ++++++++-------
+ hw/intc/arm_gicv3_common.c |  8 ++++++--
+ hw/intc/arm_gicv3_cpuif.c  |  6 ++++++
+ hw/intc/arm_gicv3_kvm.c    | 31 ++++++++++++++++++++++++++++---
+ include/hw/arm/virt.h      |  2 +-
+ 5 files changed, 49 insertions(+), 13 deletions(-)
+
+diff --git a/hw/arm/virt.c b/hw/arm/virt.c
+index 853288b34a..1b28687883 100644
+--- a/hw/arm/virt.c
++++ b/hw/arm/virt.c
+@@ -630,13 +630,14 @@ static void create_gic(VirtMachineState *vms)
+     const char *gictype;
+     int type = vms->gic_version, i;
+     unsigned int smp_cpus = ms->smp.cpus;
++    unsigned int max_cpus = vms->max_cpus;
+     uint32_t nb_redist_regions = 0;
+ 
+     gictype = (type == 3) ? gicv3_class_name() : gic_class_name();
+ 
+     vms->gic = qdev_new(gictype);
+     qdev_prop_set_uint32(vms->gic, "revision", type);
+-    qdev_prop_set_uint32(vms->gic, "num-cpu", smp_cpus);
++    qdev_prop_set_uint32(vms->gic, "num-cpu", max_cpus);
+     /* Note that the num-irq property counts both internal and external
+      * interrupts; there are always 32 of the former (mandated by GIC spec).
+      */
+@@ -648,7 +649,7 @@ static void create_gic(VirtMachineState *vms)
+     if (type == 3) {
+         uint32_t redist0_capacity =
+                     vms->memmap[VIRT_GIC_REDIST].size / GICV3_REDIST_SIZE;
+-        uint32_t redist0_count = MIN(smp_cpus, redist0_capacity);
++        uint32_t redist0_count = MIN(max_cpus, redist0_capacity);
+ 
+         nb_redist_regions = virt_gicv3_redist_region_count(vms);
+ 
+@@ -661,7 +662,7 @@ static void create_gic(VirtMachineState *vms)
+                     vms->memmap[VIRT_HIGH_GIC_REDIST2].size / GICV3_REDIST_SIZE;
+ 
+             qdev_prop_set_uint32(vms->gic, "redist-region-count[1]",
+-                MIN(smp_cpus - redist0_count, redist1_capacity));
++                MIN(max_cpus - redist0_count, redist1_capacity));
+         }
+     } else {
+         if (!kvm_irqchip_in_kernel()) {
+@@ -718,7 +719,7 @@ static void create_gic(VirtMachineState *vms)
+         } else if (vms->virt) {
+             qemu_irq irq = qdev_get_gpio_in(vms->gic,
+                                             ppibase + ARCH_GIC_MAINT_IRQ);
+-            sysbus_connect_irq(gicbusdev, i + 4 * smp_cpus, irq);
++            sysbus_connect_irq(gicbusdev, i + 4 * max_cpus, irq);
+         }
+ 
+         qdev_connect_gpio_out_named(cpudev, "pmu-interrupt", 0,
+@@ -726,11 +727,11 @@ static void create_gic(VirtMachineState *vms)
+                                                      + VIRTUAL_PMU_IRQ));
+ 
+         sysbus_connect_irq(gicbusdev, i, qdev_get_gpio_in(cpudev, ARM_CPU_IRQ));
+-        sysbus_connect_irq(gicbusdev, i + smp_cpus,
++        sysbus_connect_irq(gicbusdev, i + max_cpus,
+                            qdev_get_gpio_in(cpudev, ARM_CPU_FIQ));
+-        sysbus_connect_irq(gicbusdev, i + 2 * smp_cpus,
++        sysbus_connect_irq(gicbusdev, i + 2 * max_cpus,
+                            qdev_get_gpio_in(cpudev, ARM_CPU_VIRQ));
+-        sysbus_connect_irq(gicbusdev, i + 3 * smp_cpus,
++        sysbus_connect_irq(gicbusdev, i + 3 * max_cpus,
+                            qdev_get_gpio_in(cpudev, ARM_CPU_VFIQ));
+     }
+ 
+diff --git a/hw/intc/arm_gicv3_common.c b/hw/intc/arm_gicv3_common.c
+index 58ef65f589..cfc112e43e 100644
+--- a/hw/intc/arm_gicv3_common.c
++++ b/hw/intc/arm_gicv3_common.c
+@@ -348,11 +348,15 @@ static void arm_gicv3_common_realize(DeviceState *dev, Error **errp)
+     s->cpu = g_new0(GICv3CPUState, s->num_cpu);
+ 
+     for (i = 0; i < s->num_cpu; i++) {
+-        CPUState *cpu = qemu_get_cpu(i);
++        CPUState *cpu = qemu_get_possible_cpu(i);
+         uint64_t cpu_affid;
+         int last;
+ 
+-        s->cpu[i].cpu = cpu;
++	if (qemu_present_cpu(cpu))
++            s->cpu[i].cpu = cpu;
++        else
++            s->cpu[i].cpu = NULL;
++
+         s->cpu[i].gic = s;
+         /* Store GICv3CPUState in CPUARMState gicv3state pointer */
+         gicv3_set_gicv3state(cpu, &s->cpu[i]);
+diff --git a/hw/intc/arm_gicv3_cpuif.c b/hw/intc/arm_gicv3_cpuif.c
+index a032d505f5..819c032ec5 100644
+--- a/hw/intc/arm_gicv3_cpuif.c
++++ b/hw/intc/arm_gicv3_cpuif.c
+@@ -781,6 +781,9 @@ void gicv3_cpuif_update(GICv3CPUState *cs)
+     ARMCPU *cpu = ARM_CPU(cs->cpu);
+     CPUARMState *env = &cpu->env;
+ 
++    if (!qemu_present_cpu(cs->cpu))
++        return;
++
+     g_assert(qemu_mutex_iothread_locked());
+ 
+     trace_gicv3_cpuif_update(gicv3_redist_affid(cs), cs->hppi.irq,
+@@ -1674,6 +1677,9 @@ static void icc_generate_sgi(CPUARMState *env, GICv3CPUState *cs,
+     for (i = 0; i < s->num_cpu; i++) {
+         GICv3CPUState *ocs = &s->cpu[i];
+ 
++	if (!qemu_present_cpu(ocs->cpu))
++            continue;
++
+         if (irm) {
+             /* IRM == 1 : route to all CPUs except self */
+             if (cs == ocs) {
+diff --git a/hw/intc/arm_gicv3_kvm.c b/hw/intc/arm_gicv3_kvm.c
+index 5c09f00dec..4e7bb4ac1f 100644
+--- a/hw/intc/arm_gicv3_kvm.c
++++ b/hw/intc/arm_gicv3_kvm.c
+@@ -24,6 +24,7 @@
+ #include "hw/intc/arm_gicv3_common.h"
+ #include "qemu/error-report.h"
+ #include "qemu/module.h"
++#include "sysemu/cpus.h"
+ #include "sysemu/kvm.h"
+ #include "sysemu/runstate.h"
+ #include "kvm_arm.h"
+@@ -456,6 +457,17 @@ static void kvm_arm_gicv3_put(GICv3State *s)
+         GICv3CPUState *c = &s->cpu[ncpu];
+         int num_pri_bits;
+ 
++	/*
++         * To support hotplug of vcpus we need to make sure all gic cpuif/GICC
++         * are initialized at machvirt init time. Once the init is done we
++         * release the ARMCPU object for disabled vcpus but this leg could hit
++         * during reset of GICC later as well i.e. after init has happened and
++         * all of the cases we want to make sure we dont acess the GICC for
++         * the disabled VCPUs.
++         */
++        if (!qemu_present_cpu(c->cpu))
++            continue;
++
+         kvm_gicc_access(s, ICC_SRE_EL1, ncpu, &c->icc_sre_el1, true);
+         kvm_gicc_access(s, ICC_CTLR_EL1, ncpu,
+                         &c->icc_ctlr_el1[GICV3_NS], true);
+@@ -683,11 +695,24 @@ static void arm_gicv3_icc_reset(CPUARMState *env, const ARMCPRegInfo *ri)
+         return;
+     }
+ 
++    /*
++     * This shall be called even when vcpu is being hotplugged and other vcpus
++     * might be running. Host kernel KVM code to handle device access of IOCTLs
++     * KVM_{GET|SET}_DEVICE_ATTR might fail due to inability to grab vcpu locks
++     * for all the vcpus. Hence, we need to pause all vcpus to facilitate
++     * locking within host.
++     */
++    if (!qemu_present_cpu(c->cpu))
++        pause_all_vcpus();
++
+     /* Initialize to actual HW supported configuration */
+     kvm_device_access(s->dev_fd, KVM_DEV_ARM_VGIC_GRP_CPU_SYSREGS,
+                       KVM_VGIC_ATTR(ICC_CTLR_EL1, c->gicr_typer),
+                       &c->icc_ctlr_el1[GICV3_NS], false, &error_abort);
+ 
++    if (!qemu_present_cpu(c->cpu))
++        resume_all_vcpus();
++
+     c->icc_ctlr_el1[GICV3_S] = c->icc_ctlr_el1[GICV3_NS];
+ }
+ 
+@@ -794,9 +819,9 @@ static void kvm_arm_gicv3_realize(DeviceState *dev, Error **errp)
+     }
+ 
+     for (i = 0; i < s->num_cpu; i++) {
+-        ARMCPU *cpu = ARM_CPU(qemu_get_cpu(i));
+-
+-        define_arm_cp_regs(cpu, gicv3_cpuif_reginfo);
++       CPUState *cs = qemu_get_cpu(i);
++        if (qemu_present_cpu(cs))
++            define_arm_cp_regs(ARM_CPU(cs), gicv3_cpuif_reginfo);
+     }
+ 
+     /* Try to create the device via the device control API */
+diff --git a/include/hw/arm/virt.h b/include/hw/arm/virt.h
+index 960812c66e..6233be9590 100644
+--- a/include/hw/arm/virt.h
++++ b/include/hw/arm/virt.h
+@@ -187,7 +187,7 @@ static inline int virt_gicv3_redist_region_count(VirtMachineState *vms)
+ 
+     assert(vms->gic_version == VIRT_GIC_VERSION_3);
+ 
+-    return MACHINE(vms)->smp.cpus > redist0_capacity ? 2 : 1;
++    return vms->max_cpus > redist0_capacity ? 2 : 1;
+ }
+ 
+ #endif /* QEMU_ARM_VIRT_H */
+-- 
+2.30.2
+

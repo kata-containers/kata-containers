@@ -1,0 +1,95 @@
+From b885e6d6e6a1199a6db17fb5753df2ca63c611b5 Mon Sep 17 00:00:00 2001
+From: Salil Mehta <salil.mehta@huawei.com>
+Date: Wed, 24 Nov 2021 16:21:39 +0800
+Subject: [PATCH 07/28] arm/cpuhp: Init PMU at host for all possible vcpus
+
+PMU for all possible vcpus must be initialized at the virt machine
+initialization time. This patch refactors existing code to accomodate possible
+vcpus. This also assumes that all processor being used are identical at least
+for now but does not affect the normal scanarios where they might not be in
+future. This assumption only affects the future hotplug scenarios if ever there
+exists any hetergenous processors. In such a case PMU might not be enabled on
+some vcpus. Is it acceptable and doable tradeoff for now?
+
+This perhaps needs more discussion. please check below link,
+Link: https://lists.gnu.org/archive/html/qemu-devel/2020-06/msg00131.html
+
+Co-developed-by: Keqian Zhu <zhukeqian1@huawei.com>
+Signed-off-by: Salil Mehta <salil.mehta@huawei.com>
+Signed-off-by: Huang Shijie <shijie8@gmail.com>
+---
+ hw/arm/virt.c         | 38 ++++++++++++++++++++++++++++++++++++--
+ include/hw/arm/virt.h |  1 +
+ 2 files changed, 37 insertions(+), 2 deletions(-)
+
+diff --git a/hw/arm/virt.c b/hw/arm/virt.c
+index 1b28687883..61fc431d20 100644
+--- a/hw/arm/virt.c
++++ b/hw/arm/virt.c
+@@ -1502,6 +1502,38 @@ static void create_secure_ram(VirtMachineState *vms,
+     g_free(nodename);
+ }
+ 
++/*static bool virt_pmu_init(VirtMachineState *vms)
++{
++    CPUArchIdList *possible_cpus = vms->parent.possible_cpus;
++    ARMCPU *armcpu;
++    int n; */
++
++    /*
++     * As of now KVM ensures that within the host all the vcpus have same
++     * features configured. This cannot be changed later and cannot be diferent
++     * for new vcpus being plugged in. Also, -cpu option/virt machine cpu-type
++     * ensures all the vcpus are identical.
++     */
++/*    for (n = 0; n < possible_cpus->len; n++) {
++        CPUState *cpu = qemu_get_possible_cpu(n);
++        armcpu = ARM_CPU(cpu);
++
++        if (!arm_feature(&armcpu->env, ARM_FEATURE_PMU)) {
++            warn_report("Not all vcpus might have PMU initialized");
++            return false;
++        }
++
++        if (kvm_enabled()) {
++            if (kvm_irqchip_in_kernel()) {
++               kvm_arm_pmu_set_irq(cpu, PPI(VIRTUAL_PMU_IRQ));
++            }
++            kvm_arm_pmu_init(cpu);
++        }
++    }
++
++    return true;
++}*/
++
+ static void *machvirt_dtb(const struct arm_boot_info *binfo, int *fdt_size)
+ {
+     const VirtMachineState *board = container_of(binfo, VirtMachineState,
+@@ -2161,8 +2193,10 @@ static void machvirt_init(MachineState *machine)
+ 
+     virt_cpu_post_init(vms, sysmem);
+ 
+-    fdt_add_pmu_nodes(vms);
+-
++//    if (!vmc->no_pmu && virt_pmu_init(vms)) {
++//        vms->pmu = true;
++        fdt_add_pmu_nodes(vms);
++//    }
+     create_uart(vms, VIRT_UART, sysmem, serial_hd(0));
+ 
+     if (vms->secure) {
+diff --git a/include/hw/arm/virt.h b/include/hw/arm/virt.h
+index 6233be9590..a568420303 100644
+--- a/include/hw/arm/virt.h
++++ b/include/hw/arm/virt.h
+@@ -144,6 +144,7 @@ struct VirtMachineState {
+     bool its;
+     bool virt;
+     bool ras;
++    bool pmu;
+     bool mte;
+     OnOffAuto acpi;
+     VirtGICType gic_version;
+-- 
+2.30.2
+
