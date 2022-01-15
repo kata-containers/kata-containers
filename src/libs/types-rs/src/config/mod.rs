@@ -18,9 +18,9 @@ use std::u32;
 use lazy_static::lazy_static;
 >>>>>>> db85ddbf (libs/types: implement KataConfig to wrap TomlConfig)
 
-use lazy_static::__Deref;
 use lazy_static::lazy_static;
 
+<<<<<<< HEAD
 use crate::annotations::Annotation;
 use crate::{eother, sl};
 =======
@@ -38,6 +38,8 @@ use crate::sl;
 =======
 =======
 >>>>>>> 32fd6cde (add functionalities to modify config info of hypervisor and agent)
+=======
+>>>>>>> 4fd1f433 (add more branch for hypervisor annotation)
 use crate::{eother, sl};
 >>>>>>> f74edc28 (libs/types: support load Kata hypervisor configuration from file)
 

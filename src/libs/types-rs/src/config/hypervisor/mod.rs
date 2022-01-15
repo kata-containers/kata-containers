@@ -240,6 +240,12 @@ impl BootInfo {
         }
         Ok(())
     }
+
+    /// Validate guest kernel image annotaion
+    pub fn validate_boot_path(&self, path: &String) -> Result<()> {
+        validate_path!(path, "path {} is invalid{}")?;
+        Ok(())
+    }
 }
 
 /// Virtual CPU configuration information.
@@ -735,6 +741,12 @@ impl SecurityInfo {
         }
 
         false
+    }
+
+    /// Validate path 
+     pub fn validate_path(&self, path: &String) -> Result<()> {
+        validate_path!(path, "path {} is invalid{}")?;
+        Ok(())
     }
 }
 

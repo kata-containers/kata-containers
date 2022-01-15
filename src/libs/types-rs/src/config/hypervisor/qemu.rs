@@ -13,8 +13,11 @@ use super::{default, register_hypervisor_plugin};
 =======
 
 use crate::config::default::MAX_QEMU_VCPUS;
+<<<<<<< HEAD
 >>>>>>> 430c6603 (keep adding functinalities for modify config)
 use crate::config::default::MIN_DB_MEMORY_SIZE;
+=======
+>>>>>>> 4fd1f433 (add more branch for hypervisor annotation)
 use crate::config::default::MIN_QEMU_MEMORY_SIZE;
 =======
 >>>>>>> f74edc28 (libs/types: support load Kata hypervisor configuration from file)

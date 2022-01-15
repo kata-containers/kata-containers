@@ -3,21 +3,24 @@
 mod tests {
     use kata_types::annotations::{
         Annotation, KATA_ANNO_CONF_AGENT_CONTAINER_PIPE_SIZE, KATA_ANNO_CONF_AGENT_TRACE,
-        KATA_ANNO_CONF_HYPERVISOR_CTLHASH, KATA_ANNO_CONF_HYPERVISOR_CTLPATH,
+        KATA_ANNO_CONF_DISABLE_GUEST_SECCOMP, KATA_ANNO_CONF_ENABLE_PPROF,
+        KATA_ANNO_CONF_EXPERIMENTAL, KATA_ANNO_CONF_HYPERVISOR_BLOCK_DEVICE_CACHE_NOFLUSH,
+        KATA_ANNO_CONF_HYPERVISOR_BLOCK_DEVICE_DRIVER, KATA_ANNO_CONF_HYPERVISOR_CTLPATH,
         KATA_ANNO_CONF_HYPERVISOR_DEFAULT_MEMORY, KATA_ANNO_CONF_HYPERVISOR_DEFAULT_VCPUS,
         KATA_ANNO_CONF_HYPERVISOR_ENABLE_GUEST_SWAP, KATA_ANNO_CONF_HYPERVISOR_ENABLE_IO_THREADS,
-        KATA_ANNO_CONF_HYPERVISOR_ENABLE_SWAP, KATA_ANNO_CONF_HYPERVISOR_ENABLE_VHOSTUSER_STORE,
-        KATA_ANNO_CONF_HYPERVISOR_FILE_BACKED_MEM_ROOT_DIR, KATA_ANNO_CONF_HYPERVISOR_HUGE_PAGES,
-        KATA_ANNO_CONF_HYPERVISOR_JAILER_PATH, KATA_ANNO_CONF_HYPERVISOR_MEMORY_PREALLOC,
-        KATA_ANNO_CONF_HYPERVISOR_MEMORY_SLOTS, KATA_ANNO_CONF_HYPERVISOR_PATH,
+        KATA_ANNO_CONF_HYPERVISOR_ENABLE_SWAP, KATA_ANNO_CONF_HYPERVISOR_FILE_BACKED_MEM_ROOT_DIR,
+        KATA_ANNO_CONF_HYPERVISOR_GUEST_HOOK_PATH, KATA_ANNO_CONF_HYPERVISOR_HUGE_PAGES,
+        KATA_ANNO_CONF_HYPERVISOR_JAILER_PATH, KATA_ANNO_CONF_HYPERVISOR_KERNEL_PATH,
+        KATA_ANNO_CONF_HYPERVISOR_MEMORY_PREALLOC, KATA_ANNO_CONF_HYPERVISOR_MEMORY_SLOTS,
+        KATA_ANNO_CONF_HYPERVISOR_PATH, KATA_ANNO_CONF_HYPERVISOR_VHOSTUSER_STORE_PATH,
         KATA_ANNO_CONF_HYPERVISOR_VIRTIO_FS_EXTRA_ARGS, KATA_ANNO_CONF_HYPERVISOR_VIRTIO_MEM,
         KATA_ANNO_CONF_KERNEL_MODULES,
     };
-    use kata_types::config::{DragonballConfig, KataConfig};
-    use kata_types::config::{QemuConfig, TomlConfig, HYPERVISOR_NAME_QEMU};
+    use kata_types::config::KataConfig;
+    use kata_types::config::{QemuConfig, TomlConfig};
     use std::collections::HashMap;
+    use std::fs;
     use std::path::Path;
-    use std::{fs, u32};
     /*
     #[test]
     fn test_load_qemu_config() {
@@ -158,7 +161,7 @@ mod tests {
         let content = fs::read_to_string(&path).unwrap();
         let mut config = TomlConfig::load(&content).unwrap();
         assert!(anno
-            .add_hypervisor_path(&mut config, &"qemu".to_string(), &"agent0".to_string())
+            .add_hypervisor_path(&mut config, &"qemu".to_string())
             .is_ok());
         KataConfig::set_active_config(config, &"qemu", &"agent");
         if let Some(hv) = KataConfig::get_default_config().get_hypervisor() {
@@ -190,7 +193,7 @@ mod tests {
         let content = fs::read_to_string(&path).unwrap();
         let mut config = TomlConfig::load(&content).unwrap();
         assert!(anno
-            .add_hypervisor_path(&mut config, &"qemu".to_string(), &"agent0".to_string())
+            .add_hypervisor_path(&mut config, &"qemu".to_string())
             .is_err());
     }
 
@@ -217,7 +220,7 @@ mod tests {
         let mut config = TomlConfig::load(&content).unwrap();
 
         assert!(anno
-            .add_hypervisor_jailer_path(&mut config, &"qemu".to_string(), &"agent0".to_string())
+            .add_hypervisor_jailer_path(&mut config, &"qemu".to_string())
             .is_ok());
         KataConfig::set_active_config(config, &"qemu", &"agent0");
         if let Some(hv) = KataConfig::get_default_config().get_hypervisor() {
@@ -247,7 +250,7 @@ mod tests {
         let mut config = TomlConfig::load(&content).unwrap();
 
         assert!(anno
-            .add_hypervisor_jailer_path(&mut config, &"qemu".to_string(), &"agent0".to_string())
+            .add_hypervisor_jailer_path(&mut config, &"qemu".to_string())
             .is_err());
     }
 
@@ -274,7 +277,7 @@ mod tests {
         let mut config = TomlConfig::load(&content).unwrap();
 
         assert!(anno
-            .add_hypervisor_ctlpath(&mut config, &"qemu".to_string(), &"agent0".to_string())
+            .add_hypervisor_ctlpath(&mut config, &"qemu".to_string())
             .is_ok());
         KataConfig::set_active_config(config, &"qemu", &"agent0");
         if let Some(hv) = KataConfig::get_default_config().get_hypervisor() {
@@ -305,7 +308,7 @@ mod tests {
         let mut config = TomlConfig::load(&content).unwrap();
 
         assert!(anno
-            .add_hypervisor_ctlpath(&mut config, &"qemu".to_string(), &"agent0".to_string())
+            .add_hypervisor_ctlpath(&mut config, &"qemu".to_string())
             .is_err());
     }
 
@@ -332,7 +335,7 @@ mod tests {
         let mut config = TomlConfig::load(&content).unwrap();
 
         assert!(anno
-            .add_enable_io_threads(&mut config, &"qemu".to_string(), &"agent0".to_string())
+            .add_enable_io_threads(&mut config, &"qemu".to_string())
             .is_ok());
         KataConfig::set_active_config(config, &"qemu", &"agent0");
         if let Some(hv) = KataConfig::get_default_config().get_hypervisor() {
@@ -360,7 +363,7 @@ mod tests {
         let mut config = TomlConfig::load(&content).unwrap();
 
         assert!(anno
-            .add_enable_io_threads(&mut config, &"qemu".to_string(), &"agent0".to_string())
+            .add_enable_io_threads(&mut config, &"qemu".to_string())
             .is_err());
     }
 
@@ -385,7 +388,7 @@ mod tests {
         let mut config = TomlConfig::load(&content).unwrap();
 
         assert!(anno
-            .add_hypervisor_default_memory(&mut config, &"qemu".to_string(), &"agent0".to_string(),)
+            .add_hypervisor_default_memory(&mut config, &"qemu".to_string())
             .is_ok(),);
 
         KataConfig::set_active_config(config, &"qemu", &"agent0");
@@ -415,7 +418,7 @@ mod tests {
         let mut config = TomlConfig::load(&content).unwrap();
 
         assert!(anno
-            .add_hypervisor_default_memory(&mut config, &"qemu".to_string(), &"agent0".to_string())
+            .add_hypervisor_default_memory(&mut config, &"qemu".to_string())
             .is_err());
     }
 
@@ -440,7 +443,7 @@ mod tests {
         let mut config = TomlConfig::load(&content).unwrap();
 
         assert!(anno
-            .add_hypervisor_mem_slots(&mut config, &"qemu".to_string(), &"agent0".to_string())
+            .add_hypervisor_mem_slots(&mut config, &"qemu".to_string())
             .is_ok());
         KataConfig::set_active_config(config, &"qemu", &"agent0");
         if let Some(hv) = KataConfig::get_default_config().get_hypervisor() {
@@ -468,7 +471,7 @@ mod tests {
         let mut config = TomlConfig::load(&content).unwrap();
 
         assert!(anno
-            .add_hypervisor_mem_slots(&mut config, &"qemu".to_string(), &"agent0".to_string())
+            .add_hypervisor_mem_slots(&mut config, &"qemu".to_string())
             .is_err());
     }
 
@@ -492,14 +495,9 @@ mod tests {
         let anno = Annotation::new(anno_hash);
         let mut config = TomlConfig::load(&content).unwrap();
 
-        assert!(
-            anno.add_hypervisor_memory_prealloc(
-                &mut config,
-                &"qemu".to_string(),
-                &"agent0".to_string(),
-            )
-            .is_ok()
-        );
+        assert!(anno
+            .add_hypervisor_memory_prealloc(&mut config, &"qemu".to_string(),)
+            .is_ok());
         KataConfig::set_active_config(config, &"qemu", &"agent0");
         if let Some(hv) = KataConfig::get_default_config().get_hypervisor() {
             assert!(!hv.memory_info.enable_mem_prealloc);
@@ -527,7 +525,7 @@ mod tests {
         let mut config = TomlConfig::load(&content).unwrap();
 
         assert!(anno
-            .add_hypervisor_memory_prealloc(&mut config, &"qemu".to_string(), &"agent0".to_string())
+            .add_hypervisor_memory_prealloc(&mut config, &"qemu".to_string())
             .is_err());
     }
 
@@ -552,11 +550,7 @@ mod tests {
         let mut config = TomlConfig::load(&content).unwrap();
 
         assert!(anno
-            .add_hypervisor_enable_hugepages(
-                &mut config,
-                &"qemu".to_string(),
-                &"agent0".to_string(),
-            )
+            .add_hypervisor_enable_hugepages(&mut config, &"qemu".to_string(),)
             .is_ok());
         KataConfig::set_active_config(config, &"qemu", &"agent0");
         if let Some(hv) = KataConfig::get_default_config().get_hypervisor() {
@@ -585,11 +579,7 @@ mod tests {
         let mut config = TomlConfig::load(&content).unwrap();
 
         assert!(anno
-            .add_hypervisor_enable_hugepages(
-                &mut config,
-                &"qemu".to_string(),
-                &"agent0".to_string()
-            )
+            .add_hypervisor_enable_hugepages(&mut config, &"qemu".to_string())
             .is_err());
     }
 
@@ -613,11 +603,7 @@ mod tests {
         let mut config = TomlConfig::load(&content).unwrap();
 
         assert!(anno
-            .add_hypervisor_file_mem_backend(
-                &mut config,
-                &"qemu".to_string(),
-                &"agent0".to_string(),
-            )
+            .add_hypervisor_file_mem_backend(&mut config, &"qemu".to_string(),)
             .is_ok());
         KataConfig::set_active_config(config, &"qemu", &"agent0");
         if let Some(hv) = KataConfig::get_default_config().get_hypervisor() {
@@ -646,7 +632,7 @@ mod tests {
         let mut config = TomlConfig::load(&content).unwrap();
 
         assert!(anno
-            .add_hypervisor_virtio_mem(&mut config, &"qemu".to_string(), &"agent0".to_string())
+            .add_hypervisor_virtio_mem(&mut config, &"qemu".to_string())
             .is_ok());
         KataConfig::set_active_config(config, "qemu", "agent0");
         assert!(
@@ -730,7 +716,7 @@ fn test_load_qemu_config() {
         let mut config = TomlConfig::load(&content).unwrap();
 
         assert!(anno
-            .add_hypervisor_virtio_mem(&mut config, &"qemu".to_string(), &"agent0".to_string())
+            .add_hypervisor_virtio_mem(&mut config, &"qemu".to_string())
             .is_err());
     }
 
@@ -755,7 +741,7 @@ fn test_load_qemu_config() {
         let mut config = TomlConfig::load(&content).unwrap();
 
         assert!(anno
-            .add_hypervisor_enable_swap(&mut config, &"qemu".to_string(), &"agent0".to_string())
+            .add_hypervisor_enable_swap(&mut config, &"qemu".to_string())
             .is_ok());
         KataConfig::set_active_config(config, "qemu", "agent0");
         assert!(
@@ -788,7 +774,7 @@ fn test_load_qemu_config() {
         let mut config = TomlConfig::load(&content).unwrap();
 
         assert!(anno
-            .add_hypervisor_enable_swap(&mut config, &"qemu".to_string(), &"agent0".to_string())
+            .add_hypervisor_enable_swap(&mut config, &"qemu".to_string())
             .is_err());
     }
 
@@ -813,11 +799,7 @@ fn test_load_qemu_config() {
         let mut config = TomlConfig::load(&content).unwrap();
 
         assert!(anno
-            .add_hypervisor_enable_guest_swap(
-                &mut config,
-                &"qemu".to_string(),
-                &"agent0".to_string()
-            )
+            .add_hypervisor_enable_guest_swap(&mut config, &"qemu".to_string())
             .is_ok());
         KataConfig::set_active_config(config, "qemu", "agent0");
         assert!(
@@ -850,11 +832,7 @@ fn test_load_qemu_config() {
         let mut config = TomlConfig::load(&content).unwrap();
 
         assert!(anno
-            .add_hypervisor_enable_guest_swap(
-                &mut config,
-                &"qemu".to_string(),
-                &"agent0".to_string()
-            )
+            .add_hypervisor_enable_guest_swap(&mut config, &"qemu".to_string())
             .is_err());
     }
 
@@ -879,7 +857,7 @@ fn test_load_qemu_config() {
         let mut config = TomlConfig::load(&content).unwrap();
 
         assert!(anno
-            .add_hypervisor_defualt_vcpus(&mut config, &"qemu".to_string(), &"agent0".to_string())
+            .add_hypervisor_defualt_vcpus(&mut config, &"qemu".to_string())
             .is_ok());
         KataConfig::set_active_config(config, "qemu", "agent0");
         assert_eq!(
@@ -920,7 +898,7 @@ fn test_load_qemu_config() {
         let mut config = TomlConfig::load(&content).unwrap();
 
         assert!(anno
-            .add_hypervisor_defualt_vcpus(&mut config, &"qemu".to_string(), &"agent0".to_string())
+            .add_hypervisor_defualt_vcpus(&mut config, &"qemu".to_string())
             .is_err());
     }
 
@@ -974,7 +952,65 @@ fn test_load_qemu_config() {
                 .virtio_fs_extra_args[7],
             "er"
         );
+    }
 
+    #[test]
+    fn test_change_kernel_path() {
+        let path = env!("CARGO_MANIFEST_DIR");
+        let path = Path::new(path).join("tests/texture/configuration-anno.toml");
+        let content = fs::read_to_string(&path).unwrap();
+
+        let qemu = QemuConfig::new();
+        qemu.register();
+
+        let config = TomlConfig::load(&content).unwrap();
+        KataConfig::set_active_config(config, &"qemu", &"agent0");
+
+        let mut anno_hash = HashMap::new();
+        anno_hash.insert(
+            KATA_ANNO_CONF_HYPERVISOR_KERNEL_PATH.to_string(),
+            "/dev/char".to_string(),
+        );
+        let anno = Annotation::new(anno_hash);
+        let mut config = TomlConfig::load(&content).unwrap();
+
+        assert!(anno
+            .add_annotation_kernel_path(&mut config, &"qemu".to_string())
+            .is_ok());
+        KataConfig::set_active_config(config, "qemu", "agent0");
+        assert_eq!(
+            KataConfig::get_active_config()
+                .get_hypervisor()
+                .unwrap()
+                .boot_info
+                .kernel,
+            "/dev/char"
+        );
+    }
+
+    #[test]
+    fn test_fail_to_change_kernel_path() {
+        let path = env!("CARGO_MANIFEST_DIR");
+        let path = Path::new(path).join("tests/texture/configuration-anno.toml");
+        let content = fs::read_to_string(&path).unwrap();
+
+        let qemu = QemuConfig::new();
+        qemu.register();
+
+        let config = TomlConfig::load(&content).unwrap();
+        KataConfig::set_active_config(config, &"qemu", &"agent0");
+
+        let mut anno_hash = HashMap::new();
+        anno_hash.insert(
+            KATA_ANNO_CONF_HYPERVISOR_KERNEL_PATH.to_string(),
+            "/usr/bin/cdcd".to_string(),
+        );
+        let anno = Annotation::new(anno_hash);
+        let mut config = TomlConfig::load(&content).unwrap();
+
+        assert!(anno
+            .add_annotation_kernel_path(&mut config, &"qemu".to_string())
+            .is_err());
     }
 
     #[test]
@@ -1000,9 +1036,36 @@ fn test_load_qemu_config() {
             KATA_ANNO_CONF_HYPERVISOR_PATH.to_string(),
             "/usr/bin/lsns".to_string(),
         );
-
+        anno_hash.insert(
+            KATA_ANNO_CONF_HYPERVISOR_BLOCK_DEVICE_DRIVER.to_string(),
+            "device".to_string(),
+        );
+        anno_hash.insert(
+            KATA_ANNO_CONF_HYPERVISOR_BLOCK_DEVICE_CACHE_NOFLUSH.to_string(),
+            "false".to_string(),
+        );
+        anno_hash.insert(
+            KATA_ANNO_CONF_HYPERVISOR_VHOSTUSER_STORE_PATH.to_string(),
+            "/var/tmp".to_string(),
+        );
+        anno_hash.insert(
+            KATA_ANNO_CONF_DISABLE_GUEST_SECCOMP.to_string(),
+            "true".to_string(),
+        );
+        anno_hash.insert(
+            KATA_ANNO_CONF_HYPERVISOR_GUEST_HOOK_PATH.to_string(),
+            "/usr/share/busybox".to_string(),
+        );
+        anno_hash.insert(KATA_ANNO_CONF_ENABLE_PPROF.to_string(), "false".to_string());
         let anno = Annotation::new(anno_hash);
         let mut config = TomlConfig::load(&content).unwrap();
+        /*
+            match anno.add_config_annotation(&mut config, &"qemu".to_string(), &"agent0".to_string())
+            {
+                Err(e) => println!("{:?}",e),
+                Ok(a) => println!("{:?}",a),
+        }*/
+
         assert!(anno
             .add_config_annotation(&mut config, &"qemu".to_string(), &"agent0".to_string())
             .is_ok());
@@ -1020,7 +1083,65 @@ fn test_load_qemu_config() {
         }
         if let Some(hv) = KataConfig::get_default_config().get_hypervisor() {
             assert_eq!(hv.path, "/usr/bin/lsns".to_string());
+            assert_eq!(hv.blockdev_info.block_device_driver, "device");
+            assert!(!hv.blockdev_info.block_device_cache_noflush);
+            assert!(hv.blockdev_info.block_device_cache_set);
+            assert_eq!(hv.blockdev_info.vhost_user_store_path, "/var/tmp");
+            assert_eq!(hv.security_info.guest_hook_path, "/usr/share/busybox");
         }
+
+        assert!(
+            KataConfig::get_active_config()
+                .get_config()
+                .runtime
+                .disable_guest_seccomp
+        );
+
+        assert!(
+            !KataConfig::get_active_config()
+                .get_config()
+                .runtime
+                .enable_pprof
+        );
     }
+<<<<<<< HEAD
+<<<<<<< HEAD
 >>>>>>> fc71be33 (add more tests to handle some edge cases)
+=======
+    /*
+=======
+
+>>>>>>> 8607143a (add more tests:)
+    #[test]
+    fn test_change_runtime_experimental_annotation() {
+        let path = env!("CARGO_MANIFEST_DIR");
+        let path = Path::new(path).join("tests/texture/configuration-anno.toml");
+        let content = fs::read_to_string(&path).unwrap();
+
+        let qemu = QemuConfig::new();
+        qemu.register();
+
+        let config = TomlConfig::load(&content).unwrap();
+        KataConfig::set_active_config(config, &"qemu", &"agent0");
+
+        let mut anno_hash = HashMap::new();
+        anno_hash.insert(KATA_ANNO_CONF_EXPERIMENTAL.to_string(), "c,d,e".to_string());
+        let anno = Annotation::new(anno_hash);
+        let mut config = TomlConfig::load(&content).unwrap();
+
+        anno.add_annotation_experimental(&mut config);
+        KataConfig::set_active_config(config, "qemu", "agent0");
+        assert_eq!(
+            KataConfig::get_active_config()
+                .get_config()
+                .runtime
+                .experimental,
+            ["a", "b", "c", "d", "e"]
+        );
+    }
+<<<<<<< HEAD
+    */
+>>>>>>> 8cba8f93 (add runtime anno:)
+=======
+>>>>>>> 8607143a (add more tests:)
 }
