@@ -154,7 +154,7 @@ From Kubernetes v1.12, users can use [`RuntimeClass`](https://kubernetes.io/docs
 
 ```bash
 $ cat > runtime.yaml <<EOF
-apiVersion: node.k8s.io/v1beta1
+apiVersion: node.k8s.io/v1
 kind: RuntimeClass
 metadata:
   name: kata
