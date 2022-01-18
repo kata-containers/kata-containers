@@ -566,15 +566,6 @@ func addHypervisorMemoryOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig
 		return err
 	}
 
-	if value, ok := ocispec.Annotations[vcAnnotations.EnableSwap]; ok {
-		enableSwap, err := strconv.ParseBool(value)
-		if err != nil {
-			return fmt.Errorf("Error parsing annotation for enable_swap: Please specify boolean value 'true|false'")
-		}
-
-		sbConfig.HypervisorConfig.Mlock = !enableSwap
-	}
-
 	if value, ok := ocispec.Annotations[vcAnnotations.FileBackedMemRootDir]; ok {
 		if !checkPathIsInGlobs(runtime.HypervisorConfig.FileBackedMemRootList, value) {
 			return fmt.Errorf("file_mem_backend value %v required from annotation is not valid", value)

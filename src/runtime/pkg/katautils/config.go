@@ -123,7 +123,6 @@ type hypervisor struct {
 	VirtioMem               bool     `toml:"enable_virtio_mem"`
 	IOMMU                   bool     `toml:"enable_iommu"`
 	IOMMUPlatform           bool     `toml:"enable_iommu_platform"`
-	Swap                    bool     `toml:"enable_swap"`
 	Debug                   bool     `toml:"enable_debug"`
 	DisableNestingChecks    bool     `toml:"disable_nesting_checks"`
 	EnableIOThreads         bool     `toml:"enable_iothreads"`
@@ -554,7 +553,6 @@ func newFirecrackerHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		DefaultBridges:        h.defaultBridges(),
 		DisableBlockDeviceUse: h.DisableBlockDeviceUse,
 		HugePages:             h.HugePages,
-		Mlock:                 !h.Swap,
 		Debug:                 h.Debug,
 		DisableNestingChecks:  h.DisableNestingChecks,
 		BlockDeviceDriver:     blockDriver,
@@ -672,7 +670,6 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		IOMMUPlatform:           h.getIOMMUPlatform(),
 		FileBackedMemRootDir:    h.FileBackedMemRootDir,
 		FileBackedMemRootList:   h.FileBackedMemRootList,
-		Mlock:                   !h.Swap,
 		Debug:                   h.Debug,
 		DisableNestingChecks:    h.DisableNestingChecks,
 		BlockDeviceDriver:       blockDriver,
@@ -755,7 +752,6 @@ func newAcrnHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		EntropySourceList:     h.EntropySourceList,
 		DefaultBridges:        h.defaultBridges(),
 		HugePages:             h.HugePages,
-		Mlock:                 !h.Swap,
 		Debug:                 h.Debug,
 		DisableNestingChecks:  h.DisableNestingChecks,
 		BlockDeviceDriver:     blockDriver,
@@ -841,7 +837,6 @@ func newClhHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		HugePages:               h.HugePages,
 		FileBackedMemRootDir:    h.FileBackedMemRootDir,
 		FileBackedMemRootList:   h.FileBackedMemRootList,
-		Mlock:                   !h.Swap,
 		Debug:                   h.Debug,
 		DisableNestingChecks:    h.DisableNestingChecks,
 		BlockDeviceDriver:       blockDriver,
@@ -1022,7 +1017,6 @@ func GetDefaultHypervisorConfig() vc.HypervisorConfig {
 		IOMMU:                   defaultEnableIOMMU,
 		IOMMUPlatform:           defaultEnableIOMMUPlatform,
 		FileBackedMemRootDir:    defaultFileBackedMemRootDir,
-		Mlock:                   !defaultEnableSwap,
 		Debug:                   defaultEnableDebug,
 		DisableNestingChecks:    defaultDisableNestingChecks,
 		BlockDeviceDriver:       defaultBlockDeviceDriver,

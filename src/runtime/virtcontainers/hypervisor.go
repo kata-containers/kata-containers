@@ -469,14 +469,6 @@ type HypervisorConfig struct {
 	// IOMMUPlatform is used to indicate if IOMMU_PLATFORM is enabled for supported devices
 	IOMMUPlatform bool
 
-	// Realtime Used to enable/disable realtime
-	Realtime bool
-
-	// Mlock is used to control memory locking when Realtime is enabled
-	// Realtime=true and Mlock=false, allows for swapping out of VM memory
-	// enabling higher density
-	Mlock bool
-
 	// DisableNestingChecks is used to override customizations performed
 	// when running on top of another VMM.
 	DisableNestingChecks bool

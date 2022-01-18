@@ -500,8 +500,6 @@ func (q *qemu) CreateVM(ctx context.Context, id string, networkNS NetworkNamespa
 		Daemonize:     true,
 		MemPrealloc:   q.config.MemPrealloc,
 		HugePages:     q.config.HugePages,
-		Realtime:      q.config.Realtime,
-		Mlock:         q.config.Mlock,
 		IOMMUPlatform: q.config.IOMMUPlatform,
 	}
 
