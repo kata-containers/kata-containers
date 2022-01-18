@@ -631,11 +631,14 @@ func (s *service) ResizePty(ctx context.Context, r *taskAPI.ResizePtyRequest) (_
 
 // State returns runtime state information for a process
 func (s *service) State(ctx context.Context, r *taskAPI.StateRequest) (resp *taskAPI.StateResponse, err error) {
+	shimLog.WithField("container", r.ID).Debug("State() start")
+	defer shimLog.WithField("container", r.ID).Debug("State() end")
+
 	defer func() {
 		err = errors.ErrorReport(err)
 	}()
-	shimLog.WithField("container", r.ID).Debug("State() start")
-	defer shimLog.WithField("container", r.ID).Debug("State() end")
+	defer errors.ErrorContext(&err, "Endpoint State() from service failed")
+
 	span, _ := katatrace.Trace(s.rootCtx, shimLog, "State", shimTracingTags)
 	defer span.End()
 
@@ -655,6 +658,7 @@ func (s *service) State(ctx context.Context, r *taskAPI.StateRequest) (resp *tas
 	cStatus, errStatus := c.status.Get()
 	if errStatus != nil {
 		err = errStatus
+		errors.ErrorContext(&err, "Failed to get container status")
 		return
 	}
 

@@ -358,17 +358,21 @@ func (s *Sandbox) Monitor(ctx context.Context) (chan error, error) {
 }
 
 // WaitProcess waits on a container process and return its exit code
-func (s *Sandbox) WaitProcess(ctx context.Context, containerID, processID string) (int32, error) {
+func (s *Sandbox) WaitProcess(ctx context.Context, containerID, processID string) (code int32, err error) {
+	defer errors.ErrorContext(&err, "Sandbox failed to Wait for Process")
 	if s.state.State != types.StateRunning {
-		return 0, errSandboxNotRunning
+		err = errSandboxNotRunning
+		return
 	}
 
-	c, err := s.findContainer(containerID)
+	var c *Container
+	c, err = s.findContainer(containerID)
 	if err != nil {
-		return 0, err
+		return
 	}
 
-	return c.wait(ctx, processID)
+	code, err = c.wait(ctx, processID)
+	return
 }
 
 // SignalProcess sends a signal to a process of a container when all is false.
