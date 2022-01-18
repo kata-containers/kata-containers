@@ -263,7 +263,6 @@ func TestFactoryGetVM(t *testing.T) {
 	assert.Nil(err)
 
 	// checkConfig fall back
-	vmConfig.HypervisorConfig.Mlock = true
 	vm, err = f.GetVM(ctx, vmConfig)
 	assert.Nil(err)
 
