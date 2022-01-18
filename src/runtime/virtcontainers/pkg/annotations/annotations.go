@@ -152,10 +152,6 @@ const (
 	// MemPrealloc is a sandbox annotation that specifies the memory space used for nvdimm device by the hypervisor.
 	MemPrealloc = kataAnnotHypervisorPrefix + "enable_mem_prealloc"
 
-	// EnableSwap is a sandbox annotation to enable swap of vm memory.
-	// The behaviour is undefined if mem_prealloc is also set to true
-	EnableSwap = kataAnnotHypervisorPrefix + "enable_swap"
-
 	// HugePages is a sandbox annotation to specify if the memory should be pre-allocated from huge pages
 	HugePages = kataAnnotHypervisorPrefix + "enable_hugepages"
 
