@@ -48,6 +48,9 @@ jobs:
           - rootfs-initrd
           - shim-v2
     steps:
+      - name: chown file access
+        run: |
+          sudo chown -R $USER:$USER /home/github/CI/actions-runner/_work/kata-containers
       - uses: actions/checkout@v2
       - name: Install docker
         run: |
@@ -75,6 +78,9 @@ jobs:
     runs-on: ubuntu-latest
     needs: build-asset
     steps:
+      - name: chown file access
+        run: |
+          sudo chown -R $USER:$USER /home/github/CI/actions-runner/_work/kata-containers
       - uses: actions/checkout@v2
       - name: get-artifacts
         uses: actions/download-artifact@v2
@@ -94,6 +100,9 @@ jobs:
     needs: create-kata-tarball
     runs-on: ubuntu-latest
     steps:
+      - name: chown file access
+        run: |
+          sudo chown -R $USER:$USER /home/github/CI/actions-runner/_work/kata-containers
       - uses: actions/checkout@v2
       - name: get-kata-tarball
         uses: actions/download-artifact@v2

@@ -43,6 +43,9 @@ jobs:
       run: |
         echo "GOPATH=${{ github.workspace }}" >> $GITHUB_ENV
         echo "${{ github.workspace }}/bin" >> $GITHUB_PATH
+    - name: chown file access
+      run: |
+        sudo chown -R $USER:$USER /home/github/CI/actions-runner/_work/kata-containers
     - name: Checkout code
       if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
       uses: actions/checkout@v2

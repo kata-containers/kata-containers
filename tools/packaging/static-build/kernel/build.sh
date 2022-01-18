@@ -17,7 +17,10 @@ DESTDIR=${DESTDIR:-${PWD}}
 PREFIX=${PREFIX:-/opt/kata}
 container_image="kata-kernel-builder"
 
-sudo docker build -t "${container_image}" "${script_dir}"
+sudo docker build \
+        --build-arg http_proxy="${http_proxy}" \
+        --build-arg https_proxy="${https_proxy}" \
+        -t "${container_image}" "${script_dir}"
 
 sudo docker run --rm -i -v "${repo_root_dir}:${repo_root_dir}" \
 	-w "${PWD}" \

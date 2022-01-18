@@ -19,7 +19,7 @@ DESTDIR=${DESTDIR:-${PWD}}
 PREFIX=${PREFIX:-/opt/kata}
 container_image="shim-v2-builder"
 
-sudo docker build  --build-arg GO_VERSION="${GO_VERSION}" -t "${container_image}" "${script_dir}"
+sudo -E docker build  --build-arg GO_VERSION="${GO_VERSION}" -t "${container_image}" "${script_dir}"
 
 arch=$(uname -m)
 if [ ${arch} = "ppc64le" ]; then
