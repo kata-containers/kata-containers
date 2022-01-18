@@ -1,5 +1,14 @@
 name: snap CI
-on: ["pull_request"]
+on:
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - edited
+      - labeled
+      - unlabeled
+
 jobs:
   test:
     runs-on: ubuntu-20.04
