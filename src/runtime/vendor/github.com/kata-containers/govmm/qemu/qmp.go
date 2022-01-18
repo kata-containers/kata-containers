@@ -761,7 +761,7 @@ func (q *QMP) ExecuteCont(ctx context.Context) error {
 // This function will block until the SHUTDOWN event is received.
 func (q *QMP) ExecuteSystemPowerdown(ctx context.Context) error {
 	filter := &qmpEventFilter{
-		eventName: "SHUTDOWN",
+		eventName: "POWERDOWN",
 	}
 	return q.executeCommand(ctx, "system_powerdown", nil, filter)
 }
@@ -1518,20 +1518,26 @@ func (q *QMP) ExecuteGetFD(ctx context.Context, fdname string, fd *os.File) erro
 // id is an identifier for the device, path specifies the local path of the unix socket,
 // wait is to block waiting for a client to connect, server specifies that the socket is a listening socket.
 func (q *QMP) ExecuteCharDevUnixSocketAdd(ctx context.Context, id, path string, wait, server bool) error {
+	data := map[string]interface{}{
+		"server": server,
+		"addr": map[string]interface{}{
+			"type": "unix",
+			"data": map[string]interface{}{
+				"path": path,
+			},
+		},
+	}
+
+	// wait is only valid for server mode
+	if server {
+		data["wait"] = wait
+	}
+
 	args := map[string]interface{}{
 		"id": id,
 		"backend": map[string]interface{}{
 			"type": "socket",
-			"data": map[string]interface{}{
-				"wait":   wait,
-				"server": server,
-				"addr": map[string]interface{}{
-					"type": "unix",
-					"data": map[string]interface{}{
-						"path": path,
-					},
-				},
-			},
+			"data": data,
 		},
 	}
 	return q.executeCommand(ctx, "chardev-add", args, nil)

@@ -71,7 +71,6 @@ const defaultEnableHugePages bool = false
 const defaultEnableIOMMU bool = false
 const defaultEnableIOMMUPlatform bool = false
 const defaultFileBackedMemRootDir string = ""
-const defaultEnableSwap bool = false
 const defaultEnableDebug bool = false
 const defaultDisableNestingChecks bool = false
 const defaultMsize9p uint32 = 8192
