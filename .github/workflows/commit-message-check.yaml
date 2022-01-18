@@ -5,6 +5,8 @@ on:
       - opened
       - reopened
       - synchronize
+      - labeled
+      - unlabeled
 
 env:
   error_msg: |+
@@ -18,24 +20,26 @@ jobs:
     name: Commit Message Check
     steps:
     - name: Get PR Commits
+      if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
       id: 'get-pr-commits'
       uses: tim-actions/get-pr-commits@v1.0.0
       with:
         token: ${{ secrets.GITHUB_TOKEN }}
 
     - name: DCO Check
+      if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
       uses: tim-actions/dco@2fd0504dc0d27b33f542867c300c60840c6dcb20
       with:
         commits: ${{ steps.get-pr-commits.outputs.commits }}
 
     - name: Commit Body Missing Check
-      if: ${{ success() || failure() }}
+      if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') && ( success() || failure() ) }}
       uses: tim-actions/commit-body-check@v1.0.2
       with:
         commits: ${{ steps.get-pr-commits.outputs.commits }}
 
     - name: Check Subject Line Length
-      if: ${{ success() || failure() }}
+      if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') && ( success() || failure() ) }}
       uses: tim-actions/commit-message-checker-with-regex@v0.3.1
       with:
         commits: ${{ steps.get-pr-commits.outputs.commits }}
@@ -44,7 +48,7 @@ jobs:
         post_error: ${{ env.error_msg }}
 
     - name: Check Body Line Length
-      if: ${{ success() || failure() }}
+      if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') && ( success() || failure() ) }}
       uses: tim-actions/commit-message-checker-with-regex@v0.3.1
       with:
         commits: ${{ steps.get-pr-commits.outputs.commits }}
@@ -71,7 +75,7 @@ jobs:
         post_error: ${{ env.error_msg }}
 
     - name: Check Fixes
-      if: ${{ success() || failure() }}
+      if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') && ( success() || failure() ) }}
       uses: tim-actions/commit-message-checker-with-regex@v0.3.1
       with:
         commits: ${{ steps.get-pr-commits.outputs.commits }}
@@ -82,7 +86,7 @@ jobs:
         one_pass_all_pass: 'true'
 
     - name: Check Subsystem
-      if: ${{ success() || failure() }}
+      if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') && ( success() || failure() ) }}
       uses: tim-actions/commit-message-checker-with-regex@v0.3.1
       with:
         commits: ${{ steps.get-pr-commits.outputs.commits }}
