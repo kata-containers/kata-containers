@@ -48,7 +48,18 @@ jobs:
           - rootfs-initrd
           - shim-v2
     steps:
+      # As Github action event `issue_comment` does not provide the right ref
+      # (commit/branch) to be tested, let's use this third part action to work
+      # this limitation around.
+      - name: resolve pr refs
+        id: refs
+        uses: kata-containers/resolve-pr-refs@v0.0.3
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
       - uses: actions/checkout@v2
+        with:
+          ref: ${{ steps.refs.outputs.head_ref }}
       - name: Install docker
         run: |
           curl -fsSL https://test.docker.com -o test-docker.sh
@@ -75,7 +86,17 @@ jobs:
     runs-on: ubuntu-latest
     needs: build-asset
     steps:
+      # As Github action event `issue_comment` does not provide the right ref
+      # (commit/branch) to be tested, let's use this third part action to work
+      # this limitation around.
+      - name: resolve pr refs
+        id: refs
+        uses: kata-containers/resolve-pr-refs@v0.0.3
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
       - uses: actions/checkout@v2
+        with:
+          ref: ${{ steps.refs.outputs.head_ref }}
       - name: get-artifacts
         uses: actions/download-artifact@v2
         with:
@@ -94,7 +115,17 @@ jobs:
     needs: create-kata-tarball
     runs-on: ubuntu-latest
     steps:
+      # As Github action event `issue_comment` does not provide the right ref
+      # (commit/branch) to be tested, let's use this third part action to work
+      # this limitation around.
+      - name: resolve pr refs
+        id: refs
+        uses: kata-containers/resolve-pr-refs@v0.0.3
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
       - uses: actions/checkout@v2
+        with:
+          ref: ${{ steps.refs.outputs.head_ref }}
       - name: get-kata-tarball
         uses: actions/download-artifact@v2
         with:
