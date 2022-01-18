@@ -5,6 +5,8 @@ on:
       - opened
       - reopened
       - synchronize
+      - labeled
+      - unlabeled
 
 env:
   error_msg: |+

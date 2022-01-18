@@ -1,6 +1,15 @@
 name: kata deploy build
 
-on: [push, pull_request]
+on: 
+  pull_request:
+    types:
+      - opened
+      - edited
+      - reopened
+      - synchronize
+      - labeled
+      - unlabeled
+  push
 
 jobs:
   build-asset:
