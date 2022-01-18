@@ -487,7 +487,11 @@ BUILDFLAGS := -buildmode=pie -mod=vendor ${BUILDTAGS}
 
 # whether stipping the binary
 ifeq ($(STRIP),yes)
-       KATA_LDFLAGS := -ldflags "-w -s"
+       KATA_LDFLAGS = -w -s
+endif
+
+ifeq ($(ARCH),s390x)
+    KATA_LDFLAGS += -extldflags=-Wl,--s390-pgste
 endif
 
 # Return non-empty string if specified directory exists
@@ -550,10 +554,10 @@ endef
 GENERATED_FILES += pkg/katautils/config-settings.go
 
 $(RUNTIME_OUTPUT): $(SOURCES) $(GENERATED_FILES) $(MAKEFILE_LIST) | show-summary
-	$(QUIET_BUILD)(cd $(RUNTIME_DIR) && go build $(KATA_LDFLAGS) $(BUILDFLAGS) -o $@ .)
+	$(QUIET_BUILD)(cd $(RUNTIME_DIR) && go build -ldflags $(KATA_LDFLAGS) $(BUILDFLAGS) -o $@ .)
 
 $(SHIMV2_OUTPUT): $(SOURCES) $(GENERATED_FILES) $(MAKEFILE_LIST)
-	$(QUIET_BUILD)(cd $(SHIMV2_DIR)/ && go build $(KATA_LDFLAGS) $(BUILDFLAGS) -o $@ .)
+	$(QUIET_BUILD)(cd $(SHIMV2_DIR)/ && go build -ldflags $(KATA_LDFLAGS) $(BUILDFLAGS) -o $@ .)
 
 $(MONITOR_OUTPUT): $(SOURCES) $(GENERATED_FILES) $(MAKEFILE_LIST) .git-commit
 	$(QUIET_BUILD)(cd $(MONITOR_DIR)/ && CGO_ENABLED=0 go build \
