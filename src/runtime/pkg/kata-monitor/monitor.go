@@ -126,13 +126,14 @@ func (km *KataMonitor) startPodCacheUpdater() {
 				"cache update timer fires in %d secs", podCacheRefreshDelaySeconds)
 
 		case <-cacheUpdateTimer.C:
+			monitorLog.Debugf("sync sandbox cache with the container engine")
 			sandboxes, err := km.getSandboxes(km.sandboxCache.getAllSandboxes())
 			if err != nil {
 				monitorLog.WithError(err).Error("failed to get sandboxes")
 				continue
 			}
 			monitorLog.WithField("count", len(sandboxes)).Info("synced sandbox cache with the container engine")
-			monitorLog.WithField("sandboxes", sandboxes).Debug("dump sandbox cache")
+			monitorLog.WithField("sandboxes", sandboxes).Trace("dump sandbox cache")
 			km.sandboxCache.set(sandboxes)
 		}
 	}

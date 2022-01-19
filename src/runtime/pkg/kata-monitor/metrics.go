@@ -156,7 +156,7 @@ func (km *KataMonitor) aggregateSandboxMetrics(encoder expfmt.Encoder) error {
 	// used to receive response
 	results := make(chan []*dto.MetricFamily, len(sandboxes))
 
-	monitorLog.WithField("sandbox_count", len(sandboxes)).Debugf("sandboxes count")
+	monitorLog.WithField("sandboxes count", len(sandboxes)).Debugf("aggregate sandbox metrics")
 
 	// get metrics from sandbox's shim
 	for _, sandboxID := range sandboxes {
