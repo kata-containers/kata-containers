@@ -227,7 +227,7 @@ github.com/opencontainers/go-digest
 # github.com/opencontainers/image-spec v1.0.2-0.20211117181255-693428a734f5
 github.com/opencontainers/image-spec/specs-go
 github.com/opencontainers/image-spec/specs-go/v1
-# github.com/opencontainers/runc v1.0.3 => github.com/opencontainers/runc v1.0.1
+# github.com/opencontainers/runc v1.0.3
 ## explicit
 github.com/opencontainers/runc/libcontainer/cgroups
 github.com/opencontainers/runc/libcontainer/cgroups/devices
@@ -460,6 +460,5 @@ k8s.io/apimachinery/pkg/api/resource
 # k8s.io/cri-api v0.23.0-alpha.4
 ## explicit
 k8s.io/cri-api/pkg/apis/runtime/v1alpha2
-# github.com/opencontainers/runc => github.com/opencontainers/runc v1.0.1
 # github.com/uber-go/atomic => go.uber.org/atomic v1.5.1
 # google.golang.org/genproto => google.golang.org/genproto v0.0.0-20180817151627-c66870c02cf8

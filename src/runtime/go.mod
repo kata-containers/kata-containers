@@ -59,7 +59,6 @@ require (
 )
 
 replace (
-	github.com/opencontainers/runc => github.com/opencontainers/runc v1.0.1
 	github.com/uber-go/atomic => go.uber.org/atomic v1.5.1
 	google.golang.org/genproto => google.golang.org/genproto v0.0.0-20180817151627-c66870c02cf8
 )
