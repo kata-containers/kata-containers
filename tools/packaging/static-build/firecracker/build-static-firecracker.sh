@@ -36,7 +36,7 @@ info "Build ${firecracker_repo} version: ${firecracker_version}"
 cd "${firecracker_dir}"
 git fetch
 git checkout ${firecracker_version}
-sudo ./tools/devtool --unattended build --release
+sudo -E ./tools/devtool --unattended build --release
 
 ln -sf ./build/cargo_target/x86_64-unknown-linux-musl/release/firecracker ./firecracker-static
 ln -sf ./build/cargo_target/x86_64-unknown-linux-musl/release/jailer ./jailer-static

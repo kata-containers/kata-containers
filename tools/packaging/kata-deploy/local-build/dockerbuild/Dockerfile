@@ -6,6 +6,9 @@ FROM ubuntu:20.04
 ENV DEBIAN_FRONTEND=noninteractive
 ENV INSTALL_IN_GOPATH=false
 
+ARG http_proxy
+ARG https_proxy
+
 COPY install_yq.sh /usr/bin/install_yq.sh
 
 
@@ -40,3 +43,17 @@ RUN apt-get update && \
 
 ENV USER ${IMG_USER}
 USER ${UID}:${GID}
+
+RUN mkdir ~/.docker/
+RUN sh -c "echo ' \
+{ \
+ \"proxies\": \
+ { \
+   \"default\": \
+   { \
+     \"httpProxy\": \"${http_proxy}\", \
+     \"httpsProxy\": \"${https_proxy}\", \
+     \"noProxy\": \"localhost,127.0.0.1\" \
+   } \
+ } \
+}' > ~/.docker/config.json"

@@ -56,7 +56,9 @@ jobs:
         uses: kata-containers/resolve-pr-refs@v0.0.3
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-
+      - name: chown file access
+        run: |
+          sudo chown -R $USER:$USER $GITHUB_WORKSPACE
       - uses: actions/checkout@v2
         with:
           ref: ${{ steps.refs.outputs.head_ref }}
@@ -94,6 +96,9 @@ jobs:
         uses: kata-containers/resolve-pr-refs@v0.0.3
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+      - name: chown file access
+        run: |
+          sudo chown -R $USER:$USER $GITHUB_WORKSPACE
       - uses: actions/checkout@v2
         with:
           ref: ${{ steps.refs.outputs.head_ref }}
@@ -123,6 +128,9 @@ jobs:
         uses: kata-containers/resolve-pr-refs@v0.0.3
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+      - name: chown file access
+        run: |
+          sudo chown -R $USER:$USER $GITHUB_WORKSPACE
       - uses: actions/checkout@v2
         with:
           ref: ${{ steps.refs.outputs.head_ref }}

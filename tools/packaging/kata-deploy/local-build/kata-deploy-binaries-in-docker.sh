@@ -32,6 +32,8 @@ docker build -q -t build-kata-deploy \
 	--build-arg IMG_USER="${USER}" \
 	--build-arg UID=${uid} \
 	--build-arg GID=${gid} \
+	--build-arg http_proxy=${http_proxy} \
+	--build-arg https_proxy=${https_proxy} \
 	"${script_dir}/dockerbuild/"
 
 docker run ${TTY_OPT} \

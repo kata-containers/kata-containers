@@ -5,6 +5,10 @@
 FROM ubuntu:20.04
 ENV DEBIAN_FRONTEND=noninteractive
 
+ARG http_proxy
+ARG https_proxy
+ENV http_proxy ${http_proxy}
+ENV https_proxy ${https_proxy}
 # kernel deps
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \

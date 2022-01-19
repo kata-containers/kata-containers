@@ -29,7 +29,9 @@ jobs:
             "https://github.com/github/hub/releases/download/v${HUB_VER}/hub-linux-${HUB_ARCH}-${HUB_VER}.tgz" |\
           tar xz --strip-components=2 --wildcards '*/bin/hub' && \
           sudo install hub /usr/local/bin
-
+      - name: chown file access
+        run: |
+          sudo chown -R $USER:$USER $GITHUB_WORKSPACE
       - name: Checkout code to allow hub to communicate with the project
         if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
         uses: actions/checkout@v2
