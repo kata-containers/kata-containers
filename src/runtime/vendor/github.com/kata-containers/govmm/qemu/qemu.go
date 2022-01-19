@@ -66,6 +66,9 @@ type Device interface {
 type DeviceDriver string
 
 const (
+	// LegacySerial is the legacy serial device driver
+	LegacySerial DeviceDriver = "serial"
+
 	// NVDIMM is the Non Volatile DIMM device driver.
 	NVDIMM DeviceDriver = "nvdimm"
 
@@ -231,6 +234,9 @@ const (
 	// MemoryBackendFile represents a guest memory mapped file.
 	MemoryBackendFile ObjectType = "memory-backend-file"
 
+	// MemoryBackendEPC represents a guest memory backend EPC for SGX.
+	MemoryBackendEPC ObjectType = "memory-backend-epc"
+
 	// TDXGuest represents a TDX object
 	TDXGuest ObjectType = "tdx-guest"
 
@@ -280,6 +286,9 @@ type Object struct {
 
 	// ReadOnly specifies whether `MemPath` is opened read-only or read/write (default)
 	ReadOnly bool
+
+	// Prealloc enables memory preallocation
+	Prealloc bool
 }
 
 // Valid returns true if the Object structure is valid and complete.
@@ -287,6 +296,8 @@ func (object Object) Valid() bool {
 	switch object.Type {
 	case MemoryBackendFile:
 		return object.ID != "" && object.MemPath != "" && object.Size != 0
+	case MemoryBackendEPC:
+		return object.ID != "" && object.Size != 0
 	case TDXGuest:
 		return object.ID != "" && object.File != "" && object.DeviceID != ""
 	case SEVGuest:
@@ -323,6 +334,14 @@ func (object Object) QemuParams(config *Config) []string {
 			objectParams = append(objectParams, "readonly=on")
 			deviceParams = append(deviceParams, "unarmed=on")
 		}
+	case MemoryBackendEPC:
+		objectParams = append(objectParams, string(object.Type))
+		objectParams = append(objectParams, fmt.Sprintf("id=%s", object.ID))
+		objectParams = append(objectParams, fmt.Sprintf("size=%d", object.Size))
+		if object.Prealloc {
+			objectParams = append(objectParams, "prealloc=on")
+		}
+
 	case TDXGuest:
 		objectParams = append(objectParams, string(object.Type))
 		objectParams = append(objectParams, fmt.Sprintf("id=%s", object.ID))
@@ -549,6 +568,9 @@ const (
 
 	// PTY creates a new pseudo-terminal on the host and connect to it.
 	PTY CharDeviceBackend = "pty"
+
+	// File sends traffic from the guest to a file on the host.
+	File CharDeviceBackend = "file"
 )
 
 // CharDevice represents a qemu character device.
@@ -637,8 +659,11 @@ func (cdev CharDevice) QemuParams(config *Config) []string {
 		cdevParams = append(cdevParams, fmt.Sprintf("path=%s", cdev.Path))
 	}
 
-	qemuParams = append(qemuParams, "-device")
-	qemuParams = append(qemuParams, strings.Join(deviceParams, ","))
+	// Legacy serial is special. It does not follow the device + driver model
+	if cdev.Driver != LegacySerial {
+		qemuParams = append(qemuParams, "-device")
+		qemuParams = append(qemuParams, strings.Join(deviceParams, ","))
+	}
 
 	qemuParams = append(qemuParams, "-chardev")
 	qemuParams = append(qemuParams, strings.Join(cdevParams, ","))
@@ -978,6 +1003,43 @@ func (netdev NetDevice) QemuParams(config *Config) []string {
 	return qemuParams
 }
 
+// LegacySerialDevice represents a qemu legacy serial device.
+type LegacySerialDevice struct {
+	// ID is the serial device identifier.
+	// This maps to the char dev associated with the device
+	// as serial does not have a notion of id
+	// e.g:
+	// -chardev stdio,id=char0,mux=on,logfile=serial.log,signal=off -serial chardev:char0
+	// -chardev file,id=char0,path=serial.log -serial chardev:char0
+	Chardev string
+}
+
+// Valid returns true if the LegacySerialDevice structure is valid and complete.
+func (dev LegacySerialDevice) Valid() bool {
+	return dev.Chardev != ""
+}
+
+// QemuParams returns the qemu parameters built out of this serial device.
+func (dev LegacySerialDevice) QemuParams(config *Config) []string {
+	var deviceParam string
+	var qemuParams []string
+
+	deviceParam = fmt.Sprintf("chardev:%s", dev.Chardev)
+
+	qemuParams = append(qemuParams, "-serial")
+	qemuParams = append(qemuParams, deviceParam)
+
+	return qemuParams
+}
+
+/* Not used currently
+// deviceName returns the QEMU device name for the current combination of
+// driver and transport.
+func (dev LegacySerialDevice) deviceName(config *Config) string {
+	return dev.Chardev
+}
+*/
+
 // SerialDevice represents a qemu serial device.
 type SerialDevice struct {
 	// Driver is the qemu device driver
@@ -1173,7 +1235,7 @@ func (blkdev BlockDevice) QemuParams(config *Config) []string {
 	blkParams = append(blkParams, fmt.Sprintf("if=%s", blkdev.Interface))
 
 	if blkdev.ReadOnly {
-		blkParams = append(blkParams, "readonly")
+		blkParams = append(blkParams, "readonly=on")
 	}
 
 	qemuParams = append(qemuParams, "-device")
@@ -2411,17 +2473,17 @@ type Knobs struct {
 	MemShared bool
 
 	// Mlock will control locking of memory
-	// Only active when Realtime is set to true
 	Mlock bool
 
 	// Stopped will not start guest CPU at startup
 	Stopped bool
 
-	// Realtime will enable realtime QEMU
-	Realtime bool
-
 	// Exit instead of rebooting
+	// Prevents QEMU from rebooting in the event of a Triple Fault.
 	NoReboot bool
+
+	// Don’t exit QEMU on guest shutdown, but instead only stop the emulation.
+	NoShutdown bool
 
 	// IOMMUPlatform will enable IOMMU for supported devices
 	IOMMUPlatform bool
@@ -2795,30 +2857,19 @@ func (config *Config) appendKnobs() {
 		config.qemuParams = append(config.qemuParams, "--no-reboot")
 	}
 
+	if config.Knobs.NoShutdown {
+		config.qemuParams = append(config.qemuParams, "--no-shutdown")
+	}
+
 	if config.Knobs.Daemonize {
 		config.qemuParams = append(config.qemuParams, "-daemonize")
 	}
 
 	config.appendMemoryKnobs()
 
-	if config.Knobs.Realtime {
-		config.qemuParams = append(config.qemuParams, "-realtime")
-		// This path is redundant as the default behaviour is locked memory
-		// Realtime today does not control any other feature even though
-		// other features may be added in the future
-		// https://lists.gnu.org/archive/html/qemu-devel/2012-12/msg03330.html
-		if config.Knobs.Mlock {
-			config.qemuParams = append(config.qemuParams, "mlock=on")
-		} else {
-			config.qemuParams = append(config.qemuParams, "mlock=off")
-		}
-	} else {
-		// In order to turn mlock off we need the -realtime option as well
-		if !config.Knobs.Mlock {
-			//Enable realtime anyway just to get the right swapping behaviour
-			config.qemuParams = append(config.qemuParams, "-realtime")
-			config.qemuParams = append(config.qemuParams, "mlock=off")
-		}
+	if config.Knobs.Mlock {
+		config.qemuParams = append(config.qemuParams, "-overcommit")
+		config.qemuParams = append(config.qemuParams, "mem-lock=on")
 	}
 
 	if config.Knobs.Stopped {

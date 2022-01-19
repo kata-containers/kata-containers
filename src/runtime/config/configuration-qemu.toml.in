@@ -250,10 +250,6 @@ valid_vhost_user_store_paths = @DEFVALIDVHOSTUSERSTOREPATHS@
 # Your distribution recommends: @DEFVALIDFILEMEMBACKENDS@
 valid_file_mem_backends = @DEFVALIDFILEMEMBACKENDS@
 
-# Enable swap of vm memory. Default false.
-# The behaviour is undefined if mem_prealloc is also set to true
-#enable_swap = true
-
 # -pflash can add image file to VM. The arguments of it should be in format
 # of ["/path/to/flash0.img", "/path/to/flash1.img"]
 pflashes = []
