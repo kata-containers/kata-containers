@@ -60,4 +60,5 @@ require (
 	k8s.io/cri-api v0.20.6
 )
 
+// genproto replacement has to stay while https://github.com/containerd/ttrpc/issues/62 is not solved
 replace google.golang.org/genproto => google.golang.org/genproto v0.0.0-20180817151627-c66870c02cf8
