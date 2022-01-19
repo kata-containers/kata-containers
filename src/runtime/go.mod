@@ -58,7 +58,4 @@ require (
 	k8s.io/cri-api v0.23.0-alpha.4
 )
 
-replace (
-	github.com/uber-go/atomic => go.uber.org/atomic v1.5.1
-	google.golang.org/genproto => google.golang.org/genproto v0.0.0-20180817151627-c66870c02cf8
-)
+replace google.golang.org/genproto => google.golang.org/genproto v0.0.0-20180817151627-c66870c02cf8
