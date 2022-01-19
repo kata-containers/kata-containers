@@ -114,16 +114,16 @@ Kata Containers ${runtime_version} support the OCI Runtime Specification [${oci_
 Kata Containers ${runtime_version} is compatible with Kubernetes ${kubernetes_version}
 
 ## Libseccomp Notices
-The `kata-agent` binaries inside the Kata Containers images provided with this release are
+The \`kata-agent\` binaries inside the Kata Containers images provided with this release are
 statically linked with the following [GNU LGPL-2.1][lgpl-2.1] licensed libseccomp library.
 
-* [`libseccomp`][libseccomp]
+* [\`libseccomp\`][libseccomp]
 
-The `kata-agent` uses the libseccomp v${libseccomp_version} which is not modified from the upstream version.
+The \`kata-agent\` uses the libseccomp v${libseccomp_version} which is not modified from the upstream version.
 However, in order to comply with the LGPL-2.1 (§6(a)), we attach the complete source code for the library.
 
-If you want to use the `kata-agent` which is not statically linked with the library, you can build
-a custom `kata-agent` that does not use the library from sources.
+If you want to use the \`kata-agent\` which is not statically linked with the library, you can build
+a custom \`kata-agent\` that does not use the library from sources.
 For the details, please check the [developer guide][custom-agent-doc].
 
 ## Kata Linux Containers image
