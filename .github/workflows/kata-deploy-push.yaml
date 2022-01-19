@@ -9,7 +9,7 @@ on:
       - synchronize
       - labeled
       - unlabeled
-  push
+  push:
 
 jobs:
   build-asset:
