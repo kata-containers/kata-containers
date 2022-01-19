@@ -10,6 +10,7 @@ import (
 	"io/ioutil"
 	"os"
 	"reflect"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -331,6 +332,10 @@ func TestAppendDeviceSerialPort(t *testing.T) {
 }
 
 func TestAppendDeviceBlock(t *testing.T) {
+	if runtime.GOARCH == "s390x" {
+		t.Skip("Skipping on s390x due to: https://github.com/kata-containers/kata-containers/issues/3500")
+	}
+
 	blkdev := BlockDevice{
 		Driver:        VirtioBlock,
 		ID:            "hd0",
@@ -511,6 +516,9 @@ func TestAppendPCIBridgeDevice(t *testing.T) {
 }
 
 func TestAppendPCIBridgeDeviceWithReservations(t *testing.T) {
+	if runtime.GOARCH == "s390x" {
+		t.Skip("Skipping on s390x due to: https://github.com/kata-containers/kata-containers/issues/3500")
+	}
 
 	bridge := BridgeDevice{
 		Type:          PCIBridge,
