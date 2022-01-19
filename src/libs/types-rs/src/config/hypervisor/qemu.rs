@@ -8,19 +8,10 @@ use std::path::Path;
 use std::sync::Arc;
 
 use super::{default, register_hypervisor_plugin};
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
 
 use crate::config::default::MAX_QEMU_VCPUS;
-<<<<<<< HEAD
->>>>>>> 430c6603 (keep adding functinalities for modify config)
-use crate::config::default::MIN_DB_MEMORY_SIZE;
-=======
->>>>>>> 4fd1f433 (add more branch for hypervisor annotation)
 use crate::config::default::MIN_QEMU_MEMORY_SIZE;
-=======
->>>>>>> f74edc28 (libs/types: support load Kata hypervisor configuration from file)
+
 use crate::config::hypervisor::VIRTIO_BLK_MMIO;
 use crate::config::{ConfigPlugin, TomlConfig};
 use crate::{eother, resolve_path, validate_path};
@@ -46,19 +37,15 @@ impl QemuConfig {
 }
 
 impl ConfigPlugin for QemuConfig {
-<<<<<<< HEAD
-<<<<<<< HEAD
 
-=======
     fn get_max_cpus(&self) -> u32 {
         MAX_QEMU_VCPUS
     }
->>>>>>> 430c6603 (keep adding functinalities for modify config)
+
     fn get_min_memory(&self) -> u32 {
         MIN_QEMU_MEMORY_SIZE
     }
-=======
->>>>>>> f74edc28 (libs/types: support load Kata hypervisor configuration from file)
+
     fn name(&self) -> &str {
         HYPERVISOR_NAME_QEMU
     }

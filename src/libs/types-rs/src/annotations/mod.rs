@@ -7,7 +7,7 @@
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::{self, BufReader, Result};
-<<<<<<< HEAD
+
 use std::u32;
 
 use serde::Deserialize;
@@ -16,22 +16,7 @@ use crate::config::hypervisor::get_hypervisor_plugin;
 use crate::config::KataConfig;
 use crate::config::TomlConfig;
 use crate::{eother, sl};
-<<<<<<< HEAD
-use std::path::Path;
-use std::sync::Arc;
-=======
 
-<<<<<<< HEAD
-use serde::Deserialize;
-=======
->>>>>>> 4fd1f433 (add more branch for hypervisor annotation)
-
-use crate::config::KataConfig;
-use crate::{eother, sl};
-
->>>>>>> 65a31d44 (libs/types: define annotation keys for Kata)
-=======
->>>>>>> 32fd6cde (add functionalities to modify config info of hypervisor and agent)
 /// CRI-containerd specific annotations.
 pub mod cri_containerd;
 
@@ -44,7 +29,6 @@ pub mod dockershim;
 /// Third-party annotations.
 pub mod thirdparty;
 
-<<<<<<< HEAD
 macro_rules! change_hypervisor_config {
     ($result:expr,$var:expr) => {
         match ($result, &mut $var) {
@@ -61,10 +45,6 @@ macro_rules! change_hypervisor_config {
         }
     };
 }
-<<<<<<< HEAD
-=======
->>>>>>> 65a31d44 (libs/types: define annotation keys for Kata)
-=======
 
 macro_rules! change_runtime_config {
     ($result:expr,$var:expr) => {
@@ -79,7 +59,6 @@ macro_rules! change_runtime_config {
     };
 }
 
->>>>>>> 8cba8f93 (add runtime anno:)
 // Common section
 /// Prefix for Kata specific annotations
 pub const KATA_ANNO_PREFIX: &str = "io.katacontainers.";
@@ -236,7 +215,6 @@ pub const KATA_ANNO_CONF_HYPERVISOR_DEFAULT_VCPUS: &str =
 pub const KATA_ANNO_CONF_HYPERVISOR_DEFAULT_MAX_VCPUS: &str =
     "io.katacontainers.config.hypervisor.default_max_vcpus";
 
-//<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 //	Hypervisor Device related annotations
 /// A sandbox annotation used to indicate if devices need to be hotplugged on the root bus instead
 /// of a bridge.
@@ -289,7 +267,6 @@ pub const KATA_ANNO_CONF_HYPERVISOR_ENABLE_SWAP: &str =
 /// A sandbox annotation to enable swap in the guest.
 pub const KATA_ANNO_CONF_HYPERVISOR_ENABLE_GUEST_SWAP: &str =
     "io.katacontainers.config.hypervisor.enable_guest_swap";
-//>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
 //	Hypervisor Network related annotations
 /// A sandbox annotation to specify if vhost-net is not available on the host.
@@ -302,7 +279,6 @@ pub const KATA_ANNO_CONF_HYPERVISOR_RX_RATE_LIMITER_MAX_RATE: &str =
 pub const KATA_ANNO_CONF_HYPERVISOR_TX_RATE_LIMITER_MAX_RATE: &str =
     "io.katacontainers.config.hypervisor.tx_rate_limiter_max_rate";
 
-//<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 //	Hypervisor Security related annotations
 /// A sandbox annotation to specify the path within the VM that will be used for 'drop-in' hooks.
 pub const KATA_ANNO_CONF_HYPERVISOR_GUEST_HOOK_PATH: &str =
@@ -352,7 +328,6 @@ pub const KATA_ANNO_CONF_DISABLE_NEW_NETNS: &str =
     "io.katacontainers.config.runtime.disable_new_netns";
 /// A sandbox annotation to specify how attached VFIO devices should be treated.
 pub const KATA_ANNO_CONF_VFIO_MODE: &str = "io.katacontainers.config.runtime.vfio_mode";
-//>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
 /// A helper structure to query configuration information by check annotations.
 #[derive(Debug, Default, Deserialize)]
@@ -490,15 +465,13 @@ impl Annotation {
             }
         }
     }
-<<<<<<< HEAD
+
     /*
     /// add annotation for config
     pub fn add_annotation() -> Reuslt<()>{
 
     }
     */
-=======
->>>>>>> 65a31d44 (libs/types: define annotation keys for Kata)
 }
 
 // Miscellaneous annotations.
@@ -550,7 +523,6 @@ impl Annotation {
     pub fn get_agent_container_pipe_size(&self) -> Option<u32> {
         self.get_u32(KATA_ANNO_CONF_AGENT_CONTAINER_PIPE_SIZE)
     }
-<<<<<<< HEAD
 
     /// add annotation kernel modules of agent to config
     pub fn add_agent_annotation(&self, config: &mut TomlConfig, agent_name: &String) {
@@ -586,23 +558,14 @@ impl Annotation {
             None => (),
         }
     }
-=======
->>>>>>> 65a31d44 (libs/types: define annotation keys for Kata)
 }
 
 /// Generic hypervisor related annotations.
 impl Annotation {
     fn check_allowed_hypervisor_annotation(&self, id: &str) -> Result<()> {
         if let Some(hv) = KataConfig::get_default_config().get_hypervisor() {
-            match self.get(id) {
-                Some(_a) => {
-                    if hv.security_info.is_annotation_enabled(id) {
-                        return Ok(());
-                    }
-                }
-                None => {
-                    return Ok(());
-                }
+            if hv.security_info.is_annotation_enabled(id) {
+                return Ok(());
             }
         }
         Err(io::Error::new(
@@ -613,11 +576,8 @@ impl Annotation {
 
     /// Get and validate the annotation for `config.hypervisor.path`.
     pub fn get_hypervisor_path(&self) -> Result<Option<String>> {
-<<<<<<< HEAD
         self.check_allowed_hypervisor_annotation(KATA_ANNO_CONF_HYPERVISOR_PATH)?;
-=======
-        self.check_allowed_hypervisor_annotation("path")?;
->>>>>>> 65a31d44 (libs/types: define annotation keys for Kata)
+
         match self.annotations.get(KATA_ANNO_CONF_HYPERVISOR_PATH) {
             None => Ok(None),
             Some(v) => KataConfig::get_default_config()
@@ -635,11 +595,8 @@ impl Annotation {
 
     /// Get and validate the annotation for "config.hypervisor.ctlpath`.
     pub fn get_hypervisor_ctlpath(&self) -> Result<Option<String>> {
-<<<<<<< HEAD
         self.check_allowed_hypervisor_annotation(KATA_ANNO_CONF_HYPERVISOR_CTLPATH)?;
-=======
-        self.check_allowed_hypervisor_annotation("ctlpath")?;
->>>>>>> 65a31d44 (libs/types: define annotation keys for Kata)
+
         match self.annotations.get(KATA_ANNO_CONF_HYPERVISOR_CTLPATH) {
             None => Ok(None),
             Some(v) => KataConfig::get_default_config()
@@ -657,11 +614,8 @@ impl Annotation {
 
     /// Get and validate the annotation for `config.hypervisor.jailer_path`.
     pub fn get_jailer_path(&self) -> Result<Option<String>> {
-<<<<<<< HEAD
         self.check_allowed_hypervisor_annotation(KATA_ANNO_CONF_HYPERVISOR_JAILER_PATH)?;
-=======
-        self.check_allowed_hypervisor_annotation("jailer_path")?;
->>>>>>> 65a31d44 (libs/types: define annotation keys for Kata)
+
         match self.annotations.get(KATA_ANNO_CONF_HYPERVISOR_JAILER_PATH) {
             None => Ok(None),
             Some(v) => KataConfig::get_default_config()
@@ -679,11 +633,8 @@ impl Annotation {
 
     /// Get the annotation for `config.hypervisor.enable_io_threads`.
     pub fn get_enable_io_threads(&self) -> Result<Option<bool>> {
-<<<<<<< HEAD
         self.check_allowed_hypervisor_annotation(KATA_ANNO_CONF_HYPERVISOR_ENABLE_IO_THREADS)?;
-=======
-        self.check_allowed_hypervisor_annotation("enable_io_threads")?;
->>>>>>> 65a31d44 (libs/types: define annotation keys for Kata)
+
         Ok(self.get_bool(KATA_ANNO_CONF_HYPERVISOR_ENABLE_IO_THREADS))
     }
 
@@ -691,93 +642,6 @@ impl Annotation {
     pub fn get_asset_hash_type(&self) -> Option<String> {
         self.get(KATA_ANNO_CONF_HYPERVISOR_ASSET_HASH_TYPE)
     }
-<<<<<<< HEAD
-
-    /// add the annotation for `config.hypervisor.enable_io_threads`.
-    pub fn add_enable_io_threads(
-        &self,
-        config: &mut TomlConfig,
-        hypervisor_name: &String,
-    ) -> Result<()> {
-        let enable_io_threads_option = self.get_enable_io_threads();
-        match enable_io_threads_option {
-            Ok(enable_io_threads) => match enable_io_threads {
-                Some(j) => {
-                    config
-                        .hypervisor
-                        .get_mut(hypervisor_name)
-                        .unwrap()
-                        .enable_iothreads = j;
-                    Ok(())
-                }
-                None => Ok(()),
-            },
-            Err(e) => Err(e),
-        }
-    }
-
-    /// add hypervisor path annotation
-    pub fn add_hypervisor_path(
-        &self,
-        config: &mut TomlConfig,
-        hypervisor_name: &String,
-    ) -> Result<()> {
-        let path_option = self.get_hypervisor_path();
-        match path_option {
-            Ok(path) => match path {
-                Some(s) => {
-                    config.hypervisor.get_mut(hypervisor_name).unwrap().path = s;
-                    Ok(())
-                }
-                None => Ok(()),
-            },
-            Err(e) => Err(e),
-        }
-    }
-
-    /// add hypervisor ctlpath annotation
-    pub fn add_hypervisor_ctlpath(
-        &self,
-        config: &mut TomlConfig,
-        hypervisor_name: &String,
-    ) -> Result<()> {
-        let ctlpath_option = self.get_hypervisor_ctlpath();
-        match ctlpath_option {
-            Ok(ctlpath) => match ctlpath {
-                Some(j) => {
-                    config.hypervisor.get_mut(hypervisor_name).unwrap().ctlpath = j;
-                    Ok(())
-                }
-                None => Ok(()),
-            },
-            Err(e) => Err(e),
-        }
-    }
-
-    /// add hypervisor jailer path
-    pub fn add_hypervisor_jailer_path(
-        &self,
-        config: &mut TomlConfig,
-        hypervisor_name: &String,
-    ) -> Result<()> {
-        let jailer_path_option = self.get_jailer_path();
-        match jailer_path_option {
-            Ok(jailer_path) => match jailer_path {
-                Some(j) => {
-                    config
-                        .hypervisor
-                        .get_mut(hypervisor_name)
-                        .unwrap()
-                        .jailer_path = j;
-                    Ok(())
-                }
-                None => Ok(()),
-            },
-            Err(e) => Err(e),
-        }
-    }
-=======
->>>>>>> 65a31d44 (libs/types: define annotation keys for Kata)
 }
 
 // Hypervisor block storage related annotations.
@@ -812,7 +676,7 @@ impl Annotation {
 
     /// Get the annotation for `config.hypervisor.block_device_cache_noflush`
     pub fn get_block_device_cache_noflush(&self) -> Result<Option<bool>> {
-        self.check_allowed_hypervisor_annotation("block_device_cache_direct")?;
+        self.check_allowed_hypervisor_annotation(KATA_ANNO_CONF_HYPERVISOR_BLOCK_DEVICE_CACHE_NOFLUSH)?;
         Ok(self.get_bool(KATA_ANNO_CONF_HYPERVISOR_BLOCK_DEVICE_CACHE_NOFLUSH))
     }
 
@@ -949,23 +813,6 @@ impl Annotation {
     pub fn get_firmware_hash(&self) -> Option<String> {
         self.get(KATA_ANNO_CONF_HYPERVISOR_FIRMWARE_HASH)
     }
-
-    /// kernel path
-    pub fn add_annotation_kernel_path(
-        &self,
-        config: &mut TomlConfig,
-        hypervisor_name: &String,
-    ) -> Result<()> {
-        change_hypervisor_config!(
-            self.get_kernel(),
-            config
-                .hypervisor
-                .get_mut(hypervisor_name)
-                .unwrap()
-                .boot_info
-                .kernel
-        )
-    }
 }
 
 // VM CPU related annotations.
@@ -1008,26 +855,8 @@ impl Annotation {
         self.check_allowed_hypervisor_annotation(KATA_ANNO_CONF_HYPERVISOR_DEFAULT_MAX_VCPUS)?;
         Ok(self.get_u32(KATA_ANNO_CONF_HYPERVISOR_DEFAULT_MAX_VCPUS))
     }
-
-    /// add hypervisor defualt vcpus annotation
-    pub fn add_hypervisor_defualt_vcpus(
-        &self,
-        config: &mut TomlConfig,
-        hypervisor_name: &String,
-    ) -> Result<()> {
-        change_hypervisor_config!(
-            self.get_default_vcpus(hypervisor_name),
-            config
-                .hypervisor
-                .get_mut(hypervisor_name)
-                .unwrap()
-                .cpu_info
-                .default_vcpus
-        )
-    }
 }
 
-<<<<<<< HEAD
 // Vm device related annotation
 impl Annotation {
     ///Get the annotatoin for "config.hypervisor.DeviceInfo.hotplug_vfio_on_root_bus".
@@ -1166,149 +995,10 @@ impl Annotation {
         self.check_allowed_hypervisor_annotation(KATA_ANNO_CONF_HYPERVISOR_ENABLE_GUEST_SWAP)?;
         Ok(self.get_bool(KATA_ANNO_CONF_HYPERVISOR_ENABLE_GUEST_SWAP))
     }
-
-    /// add hypervisor default memory annotaion
-    pub fn add_hypervisor_default_memory(
-        &self,
-        config: &mut TomlConfig,
-        hypervisor_name: &String,
-    ) -> Result<()> {
-        change_hypervisor_config!(
-            self.get_default_memory(hypervisor_name),
-            config
-                .hypervisor
-                .get_mut(hypervisor_name)
-                .unwrap()
-                .memory_info
-                .default_memory
-        )
-    }
-
-    /// add hypervisor member slots
-    pub fn add_hypervisor_mem_slots(
-        &self,
-        config: &mut TomlConfig,
-        hypervisor_name: &String,
-    ) -> Result<()> {
-        change_hypervisor_config!(
-            self.get_memory_slots(),
-            config
-                .hypervisor
-                .get_mut(hypervisor_name)
-                .unwrap()
-                .memory_info
-                .memory_slots
-        )
-    }
-
-    /// add hypervisor memory prealloc
-    pub fn add_hypervisor_memory_prealloc(
-        &self,
-        config: &mut TomlConfig,
-        hypervisor_name: &String,
-    ) -> Result<()> {
-        change_hypervisor_config!(
-            self.get_enable_mem_prealloc(),
-            config
-                .hypervisor
-                .get_mut(hypervisor_name)
-                .unwrap()
-                .memory_info
-                .enable_mem_prealloc
-        )
-    }
-
-    /// add hypervisor huge pages
-    pub fn add_hypervisor_enable_hugepages(
-        &self,
-        config: &mut TomlConfig,
-        hypervisor_name: &String,
-    ) -> Result<()> {
-        change_hypervisor_config!(
-            self.get_enable_hugepages(),
-            config
-                .hypervisor
-                .get_mut(hypervisor_name)
-                .unwrap()
-                .memory_info
-                .enable_hugepages
-        )
-    }
-
-    /// add hypervisor file mem backend
-    pub fn add_hypervisor_file_mem_backend(
-        &self,
-        config: &mut TomlConfig,
-        hypervisor_name: &String,
-    ) -> Result<()> {
-        change_hypervisor_config!(
-            self.get_file_mem_backend(),
-            config
-                .hypervisor
-                .get_mut(hypervisor_name)
-                .unwrap()
-                .memory_info
-                .file_mem_backend
-        )
-    }
-
-    /// add hypervisor enable virtio member
-    pub fn add_hypervisor_virtio_mem(
-        &self,
-        config: &mut TomlConfig,
-        hypervisor_name: &String,
-    ) -> Result<()> {
-        change_hypervisor_config!(
-            self.get_enable_virtio_mem(),
-            config
-                .hypervisor
-                .get_mut(hypervisor_name)
-                .unwrap()
-                .memory_info
-                .enable_virtio_mem
-        )
-    }
-
-    /// add hypervisor enable swap
-    pub fn add_hypervisor_enable_swap(
-        &self,
-        config: &mut TomlConfig,
-        hypervisor_name: &String,
-    ) -> Result<()> {
-        change_hypervisor_config!(
-            self.get_enable_swap(),
-            config
-                .hypervisor
-                .get_mut(hypervisor_name)
-                .unwrap()
-                .memory_info
-                .enable_swap
-        )
-    }
-
-    /// add hypervisor enable guest swap
-    pub fn add_hypervisor_enable_guest_swap(
-        &self,
-        config: &mut TomlConfig,
-        hypervisor_name: &String,
-    ) -> Result<()> {
-        change_hypervisor_config!(
-            self.get_enable_guest_swap(),
-            config
-                .hypervisor
-                .get_mut(hypervisor_name)
-                .unwrap()
-                .memory_info
-                .enable_guest_swap
-        )
-    }
 }
 
 // VM Network related annotations.
 
-=======
-// VM Network related annotations.
->>>>>>> 65a31d44 (libs/types: define annotation keys for Kata)
 impl Annotation {
     /// Get the annotation for `config.hypervisor.disable_vhost_net`.
     pub fn get_disable_vhost_net(&self) -> Result<Option<bool>> {
@@ -1357,7 +1047,6 @@ impl Annotation {
     }
 }
 impl Annotation {
-    //<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
     /// Get and validate annotation for entropy source.
     pub fn get_entropy_source(&self) -> Result<Option<String>> {
         self.check_allowed_hypervisor_annotation(KATA_ANNO_CONF_HYPERVISOR_ENTROPY_SOURCE)?;
@@ -1479,7 +1168,6 @@ impl Annotation {
             },
         }
     }
-    //>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 }
 
 // runtime
@@ -1525,483 +1213,469 @@ impl Annotation {
         }
     }
 }
-//  add annotations
 impl Annotation {
-    /// add annotaion information to config
-    pub fn add_config_annotation(
+    /// update config info by annotation
+    pub fn update_config_by_annotation(
         &self,
         config: &mut TomlConfig,
         hypervisor_name: &String,
         agent_name: &String,
     ) -> Result<()> {
-        // add agent annotaion
-        self.add_agent_annotation(config, agent_name);
-        self.add_agent_enable_trace(config, agent_name);
-        self.add_agent_container_pipe_size(config, agent_name);
-        // add hypervisor annotaion
-        if self.add_share_fs(config, hypervisor_name).is_err() {
-            return Err(io::Error::new(
-                io::ErrorKind::PermissionDenied,
-                format!("hypervisor get share fs is not allowed"),
-            ));
-        }
+        for (key, _value) in self.get_annotation() {
+            match key.as_str() {
+                // update agent config
+                KATA_ANNO_CONF_KERNEL_MODULES => self.add_agent_annotation(config, agent_name),
+                KATA_ANNO_CONF_AGENT_TRACE => self.add_agent_enable_trace(config, agent_name),
+                KATA_ANNO_CONF_AGENT_CONTAINER_PIPE_SIZE => {
+                    self.add_agent_container_pipe_size(config, agent_name)
+                }
+                // update hypervisor config
+                //	Hypervisor related annotations
+                KATA_ANNO_CONF_HYPERVISOR_PATH => change_hypervisor_config!(
+                    self.get_hypervisor_path(),
+                    config
+                        .hypervisor
+                        .get_mut(hypervisor_name)
+                        .unwrap()
+                        .path
+                )?,
+                KATA_ANNO_CONF_HYPERVISOR_CTLPATH => change_hypervisor_config!(
+                    self.get_hypervisor_ctlpath(),
+                    config.hypervisor.get_mut(hypervisor_name).unwrap().ctlpath
+                )?,
 
-        if self
-            .add_virtio_fs_extra_args(config, hypervisor_name)
-            .is_err()
-        {
-            return Err(io::Error::new(
-                io::ErrorKind::PermissionDenied,
-                format!("hypervisor virtio fs extra args is not allowed"),
-            ));
-        }
+                KATA_ANNO_CONF_HYPERVISOR_JAILER_PATH => change_hypervisor_config!(
+                    self.get_jailer_path(),
+                    config
+                        .hypervisor
+                        .get_mut(hypervisor_name)
+                        .unwrap()
+                        .jailer_path
+                )?,
+                KATA_ANNO_CONF_HYPERVISOR_ENABLE_IO_THREADS => change_hypervisor_config!(
+                    self.get_enable_io_threads(),
+                    config
+                        .hypervisor
+                        .get_mut(hypervisor_name)
+                        .unwrap()
+                        .enable_iothreads
+                )?,
+                //	Hypervisor Block Device related annotations
+                KATA_ANNO_CONF_HYPERVISOR_BLOCK_DEVICE_DRIVER => change_hypervisor_config!(
+                    self.get_block_device_driver(),
+                    config
+                        .hypervisor
+                        .get_mut(hypervisor_name)
+                        .unwrap()
+                        .blockdev_info
+                        .block_device_driver
+                )?,
+                KATA_ANNO_CONF_HYPERVISOR_DISABLE_BLOCK_DEVICE_USE => change_hypervisor_config!(
+                    self.get_disable_block_device_use(),
+                    config
+                        .hypervisor
+                        .get_mut(hypervisor_name)
+                        .unwrap()
+                        .blockdev_info
+                        .disable_block_device_use
+                )?,
+                KATA_ANNO_CONF_HYPERVISOR_BLOCK_DEVICE_CACHE_SET => change_hypervisor_config!(
+                    self.get_block_device_cache_set(),
+                    config
+                        .hypervisor
+                        .get_mut(hypervisor_name)
+                        .unwrap()
+                        .blockdev_info
+                        .block_device_cache_set
+                )?,
+                KATA_ANNO_CONF_HYPERVISOR_BLOCK_DEVICE_CACHE_DIRECT => change_hypervisor_config!(
+                    self.get_block_device_cache_direct(),
+                    config
+                        .hypervisor
+                        .get_mut(hypervisor_name)
+                        .unwrap()
+                        .blockdev_info
+                        .block_device_cache_direct
+                )?,
+                KATA_ANNO_CONF_HYPERVISOR_BLOCK_DEVICE_CACHE_NOFLUSH => change_hypervisor_config!(
+                    self.get_block_device_cache_noflush(),
+                    config
+                        .hypervisor
+                        .get_mut(hypervisor_name)
+                        .unwrap()
+                        .blockdev_info
+                        .block_device_cache_noflush
+                )?,
+                KATA_ANNO_CONF_HYPERVISOR_DISABLE_IMAGE_NVDIMM => change_hypervisor_config!(
+                    self.get_disable_image_nvdimm(),
+                    config
+                        .hypervisor
+                        .get_mut(hypervisor_name)
+                        .unwrap()
+                        .blockdev_info
+                        .disable_image_nvdimm
+                )?,
+                KATA_ANNO_CONF_HYPERVISOR_MEMORY_OFFSET => change_hypervisor_config!(
+                    self.get_memory_offset(),
+                    config
+                        .hypervisor
+                        .get_mut(hypervisor_name)
+                        .unwrap()
+                        .blockdev_info
+                        .memory_offset
+                )?,
+                KATA_ANNO_CONF_HYPERVISOR_ENABLE_VHOSTUSER_STORE => change_hypervisor_config!(
+                    self.get_enable_vhost_user_store(),
+                    config
+                        .hypervisor
+                        .get_mut(hypervisor_name)
+                        .unwrap()
+                        .blockdev_info
+                        .enable_vhost_user_store
+                )?,
+                KATA_ANNO_CONF_HYPERVISOR_VHOSTUSER_STORE_PATH => change_hypervisor_config!(
+                    self.get_vhost_user_store_path(),
+                    config
+                        .hypervisor
+                        .get_mut(hypervisor_name)
+                        .unwrap()
+                        .blockdev_info
+                        .vhost_user_store_path
+                )?,
+                // Hypervisor Guest Boot related annotations
+                KATA_ANNO_CONF_HYPERVISOR_KERNEL_PATH => change_hypervisor_config!(
+                    self.get_kernel(),
+                    config
+                        .hypervisor
+                        .get_mut(hypervisor_name)
+                        .unwrap()
+                        .boot_info
+                        .kernel
+                )?,
+                KATA_ANNO_CONF_HYPERVISOR_KERNEL_PARAMS => change_hypervisor_config!(
+                    self.get_kernel_params(),
+                    config
+                        .hypervisor
+                        .get_mut(hypervisor_name)
+                        .unwrap()
+                        .boot_info
+                        .kernel_params
+                )?,
+                KATA_ANNO_CONF_HYPERVISOR_IMAGE_PATH => change_hypervisor_config!(
+                    self.get_image(),
+                    config
+                        .hypervisor
+                        .get_mut(hypervisor_name)
+                        .unwrap()
+                        .boot_info
+                        .image
+                )?,
+                KATA_ANNO_CONF_HYPERVISOR_INITRD_PATH => change_hypervisor_config!(
+                    self.get_initrd(),
+                    config
+                        .hypervisor
+                        .get_mut(hypervisor_name)
+                        .unwrap()
+                        .boot_info
+                        .initrd
+                )?,
+                KATA_ANNO_CONF_HYPERVISOR_FIRMWARE_PATH => change_hypervisor_config!(
+                    self.get_firmware(),
+                    config
+                        .hypervisor
+                        .get_mut(hypervisor_name)
+                        .unwrap()
+                        .boot_info
+                        .firmware
+                )?,
+                //	Hypervisor CPU related annotations
+                KATA_ANNO_CONF_HYPERVISOR_CPU_FEATURES => change_hypervisor_config!(
+                    self.get_cpu_features(),
+                    config
+                        .hypervisor
+                        .get_mut(hypervisor_name)
+                        .unwrap()
+                        .cpu_info
+                        .cpu_features
+                )?,
+                KATA_ANNO_CONF_HYPERVISOR_DEFAULT_VCPUS => change_hypervisor_config!(
+                    self.get_default_vcpus(hypervisor_name),
+                    config
+                        .hypervisor
+                        .get_mut(hypervisor_name)
+                        .unwrap()
+                        .cpu_info
+                        .default_vcpus
+                )?,
+                KATA_ANNO_CONF_HYPERVISOR_DEFAULT_MAX_VCPUS => change_hypervisor_config!(
+                    self.get_default_max_vcpus(),
+                    config
+                        .hypervisor
+                        .get_mut(hypervisor_name)
+                        .unwrap()
+                        .cpu_info
+                        .default_maxvcpus
+                )?,
+                //	Hypervisor Device related annotations
+                KATA_ANNO_CONF_HYPERVISOR_HOTPLUG_VFIO_ON_ROOT_BUS => change_hypervisor_config!(
+                    self.get_hotplug_vfio_on_root_bus(),
+                    config
+                        .hypervisor
+                        .get_mut(hypervisor_name)
+                        .unwrap()
+                        .device_info
+                        .hotplug_vfio_on_root_bus
+                )?,
+                KATA_ANNO_CONF_HYPERVISOR_PCIE_ROOT_PORT => change_hypervisor_config!(
+                    self.get_pice_root_port(),
+                    config
+                        .hypervisor
+                        .get_mut(hypervisor_name)
+                        .unwrap()
+                        .device_info
+                        .pcie_root_port
+                )?,
+                KATA_ANNO_CONF_HYPERVISOR_IOMMU => change_hypervisor_config!(
+                    self.get_enable_iommu(),
+                    config
+                        .hypervisor
+                        .get_mut(hypervisor_name)
+                        .unwrap()
+                        .device_info
+                        .enable_iommu
+                )?,
+                KATA_ANNO_CONF_HYPERVISOR_IOMMU_PLATFORM => change_hypervisor_config!(
+                    self.get_enable_iommu_platform(),
+                    config
+                        .hypervisor
+                        .get_mut(hypervisor_name)
+                        .unwrap()
+                        .device_info
+                        .enable_iommu_platform
+                )?,
+                //	Hypervisor Machine related annotations
+                KATA_ANNO_CONF_HYPERVISOR_MACHINE_TYPE => change_hypervisor_config!(
+                    self.get_machine_type(),
+                    config
+                        .hypervisor
+                        .get_mut(hypervisor_name)
+                        .unwrap()
+                        .machine_info
+                        .machine_type
+                )?,
+                KATA_ANNO_CONF_HYPERVISOR_MACHINE_ACCELERATORS => change_hypervisor_config!(
+                    self.get_machine_acclereates(),
+                    config
+                        .hypervisor
+                        .get_mut(hypervisor_name)
+                        .unwrap()
+                        .machine_info
+                        .machine_accelerators
+                )?,
+                KATA_ANNO_CONF_HYPERVISOR_ENTROPY_SOURCE => change_hypervisor_config!(
+                    self.get_entropy_source(),
+                    config
+                        .hypervisor
+                        .get_mut(hypervisor_name)
+                        .unwrap()
+                        .machine_info
+                        .entropy_source
+                )?,
+                //	Hypervisor Memory related annotations
+                KATA_ANNO_CONF_HYPERVISOR_DEFAULT_MEMORY => change_hypervisor_config!(
+                    self.get_default_memory(hypervisor_name),
+                    config
+                        .hypervisor
+                        .get_mut(hypervisor_name)
+                        .unwrap()
+                        .memory_info
+                        .default_memory
+                )?,
+                KATA_ANNO_CONF_HYPERVISOR_MEMORY_SLOTS => change_hypervisor_config!(
+                    self.get_memory_slots(),
+                    config
+                        .hypervisor
+                        .get_mut(hypervisor_name)
+                        .unwrap()
+                        .memory_info
+                        .memory_slots
+                )?,
+                KATA_ANNO_CONF_HYPERVISOR_MEMORY_PREALLOC => change_hypervisor_config!(
+                    self.get_enable_mem_prealloc(),
+                    config
+                        .hypervisor
+                        .get_mut(hypervisor_name)
+                        .unwrap()
+                        .memory_info
+                        .enable_mem_prealloc
+                )?,
+                KATA_ANNO_CONF_HYPERVISOR_HUGE_PAGES => change_hypervisor_config!(
+                    self.get_enable_hugepages(),
+                    config
+                        .hypervisor
+                        .get_mut(hypervisor_name)
+                        .unwrap()
+                        .memory_info
+                        .enable_hugepages
+                )?,
+                KATA_ANNO_CONF_HYPERVISOR_FILE_BACKED_MEM_ROOT_DIR => change_hypervisor_config!(
+                    self.get_file_mem_backend(),
+                    config
+                        .hypervisor
+                        .get_mut(hypervisor_name)
+                        .unwrap()
+                        .memory_info
+                        .file_mem_backend
+                )?,
+                KATA_ANNO_CONF_HYPERVISOR_VIRTIO_MEM => change_hypervisor_config!(
+                    self.get_enable_virtio_mem(),
+                    config
+                        .hypervisor
+                        .get_mut(hypervisor_name)
+                        .unwrap()
+                        .memory_info
+                        .enable_virtio_mem
+                )?,
+                KATA_ANNO_CONF_HYPERVISOR_ENABLE_SWAP => change_hypervisor_config!(
+                    self.get_enable_swap(),
+                    config
+                        .hypervisor
+                        .get_mut(hypervisor_name)
+                        .unwrap()
+                        .memory_info
+                        .enable_swap
+                )?,
+                KATA_ANNO_CONF_HYPERVISOR_ENABLE_GUEST_SWAP => change_hypervisor_config!(
+                    self.get_enable_guest_swap(),
+                    config
+                        .hypervisor
+                        .get_mut(hypervisor_name)
+                        .unwrap()
+                        .memory_info
+                        .enable_guest_swap
+                )?,
+                //	Hypervisor Network related annotations
+                KATA_ANNO_CONF_HYPERVISOR_DISABLE_VHOST_NET => change_hypervisor_config!(
+                    self.get_disable_vhost_net(),
+                    config
+                        .hypervisor
+                        .get_mut(hypervisor_name)
+                        .unwrap()
+                        .network_info
+                        .disable_vhost_net
+                )?,
+                KATA_ANNO_CONF_HYPERVISOR_RX_RATE_LIMITER_MAX_RATE => change_hypervisor_config!(
+                    self.get_rx_rate_limiter_max_rate(),
+                    config
+                        .hypervisor
+                        .get_mut(hypervisor_name)
+                        .unwrap()
+                        .network_info
+                        .rx_rate_limiter_max_rate
+                )?,
+                KATA_ANNO_CONF_HYPERVISOR_TX_RATE_LIMITER_MAX_RATE => change_hypervisor_config!(
+                    self.get_tx_rate_limiter_max_rate(),
+                    config
+                        .hypervisor
+                        .get_mut(hypervisor_name)
+                        .unwrap()
+                        .network_info
+                        .tx_rate_limiter_max_rate
+                )?,
+                //	Hypervisor Security related annotations
+                KATA_ANNO_CONF_HYPERVISOR_GUEST_HOOK_PATH => change_hypervisor_config!(
+                    self.get_guest_hook_path(),
+                    config
+                        .hypervisor
+                        .get_mut(hypervisor_name)
+                        .unwrap()
+                        .security_info
+                        .guest_hook_path
+                )?,
+                KATA_ANNO_CONF_HYPERVISOR_ENABLE_ROOTLESS_HYPERVISOR => change_hypervisor_config!(
+                    self.get_enable_rootless_hypervisor(),
+                    config
+                        .hypervisor
+                        .get_mut(hypervisor_name)
+                        .unwrap()
+                        .security_info
+                        .rootless
+                )?,
+                //	Hypervisor Shared File System related annotations
+                KATA_ANNO_CONF_HYPERVISOR_SHARED_FS => {
+                    self.add_share_fs(config, hypervisor_name)?
+                }
 
-        let hv = config.hypervisor.get_mut(hypervisor_name).unwrap();
-        if change_hypervisor_config!(self.get_enable_io_threads(), hv.enable_iothreads).is_err() {
-            return Err(io::Error::new(
-                io::ErrorKind::PermissionDenied,
-                format!("enable io threads is not allowed"),
-            ));
-        }
-        if change_hypervisor_config!(self.get_hypervisor_path(), hv.path).is_err() {
-            return Err(io::Error::new(
-                io::ErrorKind::PermissionDenied,
-                format!("hypervisor path is not allowed"),
-            ));
-        }
-        if change_hypervisor_config!(self.get_jailer_path(), hv.jailer_path).is_err() {
-            return Err(io::Error::new(
-                io::ErrorKind::PermissionDenied,
-                format!("hypervisor jailer path is not allowed"),
-            ));
-        }
-        if change_hypervisor_config!(self.get_hypervisor_ctlpath(), hv.ctlpath).is_err() {
-            return Err(io::Error::new(
-                io::ErrorKind::PermissionDenied,
-                format!("hypervisor ctl path is not allowed"),
-            ));
-        }
-        // add hypervisor block device related annotations
-        if change_hypervisor_config!(
-            self.get_block_device_driver(),
-            hv.blockdev_info.block_device_driver
-        )
-        .is_err()
-        {
-            return Err(io::Error::new(
-                io::ErrorKind::PermissionDenied,
-                format!("hypervisor block device driver is not allowed"),
-            ));
-        }
+                KATA_ANNO_CONF_HYPERVISOR_VIRTIO_FS_DAEMON => change_hypervisor_config!(
+                    self.get_virtio_fs_daemon(),
+                    config
+                        .hypervisor
+                        .get_mut(hypervisor_name)
+                        .unwrap()
+                        .shared_fs
+                        .virtio_fs_daemon
+                )?,
 
-        if change_hypervisor_config!(
-            self.get_disable_block_device_use(),
-            hv.blockdev_info.disable_block_device_use
-        )
-        .is_err()
-        {
-            return Err(io::Error::new(
-                io::ErrorKind::PermissionDenied,
-                format!("hypervisor disable block device use is not allowed"),
-            ));
+                KATA_ANNO_CONF_HYPERVISOR_VIRTIO_FS_CACHE => change_hypervisor_config!(
+                    self.get_virtio_fs_cache(),
+                    config
+                        .hypervisor
+                        .get_mut(hypervisor_name)
+                        .unwrap()
+                        .shared_fs
+                        .virtio_fs_cache
+                )?,
+                KATA_ANNO_CONF_HYPERVISOR_VIRTIO_FS_CACHE_SIZE => change_hypervisor_config!(
+                    self.get_virtio_fs_cache_size(),
+                    config
+                        .hypervisor
+                        .get_mut(hypervisor_name)
+                        .unwrap()
+                        .shared_fs
+                        .virtio_fs_cache_size
+                )?,
+                KATA_ANNO_CONF_HYPERVISOR_VIRTIO_FS_EXTRA_ARGS => {
+                    self.add_virtio_fs_extra_args(config, hypervisor_name)?
+                }
+                KATA_ANNO_CONF_HYPERVISOR_MSIZE_9P => change_hypervisor_config!(
+                    self.get_hypervisor_msize_9p(),
+                    config
+                        .hypervisor
+                        .get_mut(hypervisor_name)
+                        .unwrap()
+                        .shared_fs
+                        .msize_9p
+                )?,
+                KATA_ANNO_CONF_DISABLE_GUEST_SECCOMP => change_runtime_config!(
+                    self.get_disable_guest_seccomp(),
+                    config.runtime.disable_guest_seccomp
+                ),
+                KATA_ANNO_CONF_ENABLE_PPROF => {
+                    change_runtime_config!(self.get_enable_pprof(), config.runtime.enable_pprof)
+                }
+                KATA_ANNO_CONF_INTER_NETWORK_MODEL => change_runtime_config!(
+                    self.get_network_model(),
+                    config.runtime.internetworking_model
+                ),
+                KATA_ANNO_CONF_SANDBOX_CGROUP_ONLY => change_runtime_config!(
+                    self.get_sandbox_cgroup_only(),
+                    config.runtime.disable_new_netns
+                ),
+                KATA_ANNO_CONF_DISABLE_NEW_NETNS => change_runtime_config!(
+                    self.get_disable_new_netns(),
+                    config.runtime.disable_new_netns
+                ),
+                KATA_ANNO_CONF_VFIO_MODE => {
+                    change_runtime_config!(self.get_vfio_mode(), config.runtime.vfio_mode)
+                }
+                _ => {
+                    return Err(io::Error::new(
+                        io::ErrorKind::PermissionDenied,
+                        format!("Invalid Annotation Type"),
+                    ));
+                }
+            }
         }
-
-        if change_hypervisor_config!(
-            self.get_block_device_cache_direct(),
-            hv.blockdev_info.block_device_cache_direct
-        )
-        .is_err()
-        {
-            return Err(io::Error::new(
-                io::ErrorKind::PermissionDenied,
-                format!("hypervisor block device cache direct is not allowed"),
-            ));
-        }
-
-        if change_hypervisor_config!(
-            self.get_block_device_cache_noflush(),
-            hv.blockdev_info.block_device_cache_noflush
-        )
-        .is_err()
-        {
-            return Err(io::Error::new(
-                io::ErrorKind::PermissionDenied,
-                format!("hypervisor block device cache no flush is not allowed"),
-            ));
-        }
-
-        if change_hypervisor_config!(
-            self.get_disable_image_nvdimm(),
-            hv.blockdev_info.disable_image_nvdimm
-        )
-        .is_err()
-        {
-            return Err(io::Error::new(
-                io::ErrorKind::PermissionDenied,
-                format!("hypervisor block device disable image nvdimm is not allowed"),
-            ));
-        }
-
-        if change_hypervisor_config!(self.get_memory_offset(), hv.blockdev_info.memory_offset)
-            .is_err()
-        {
-            return Err(io::Error::new(
-                io::ErrorKind::PermissionDenied,
-                format!("hypervisor block device memory offset is not allowed"),
-            ));
-        }
-
-        if change_hypervisor_config!(
-            self.get_enable_vhost_user_store(),
-            hv.blockdev_info.enable_vhost_user_store
-        )
-        .is_err()
-        {
-            return Err(io::Error::new(
-                io::ErrorKind::PermissionDenied,
-                format!("hypervisor block device enable vhost user store is not allowed"),
-            ));
-        }
-
-        if change_hypervisor_config!(
-            self.get_vhost_user_store_path(),
-            hv.blockdev_info.vhost_user_store_path
-        )
-        .is_err()
-        {
-            return Err(io::Error::new(
-                io::ErrorKind::PermissionDenied,
-                format!("hypervisor block device vhost user store path is not allowed"),
-            ));
-        }
-
-        // add hypervisor boot related annotations
-        if change_hypervisor_config!(self.get_kernel(), hv.boot_info.kernel).is_err() {
-            return Err(io::Error::new(
-                io::ErrorKind::PermissionDenied,
-                format!("hypervisor boot info kernel is not allowed"),
-            ));
-        }
-
-        if change_hypervisor_config!(self.get_kernel_params(), hv.boot_info.kernel_params).is_err()
-        {
-            return Err(io::Error::new(
-                io::ErrorKind::PermissionDenied,
-                format!("hypervisor boot info kernel params is not allowed"),
-            ));
-        }
-
-        if change_hypervisor_config!(self.get_image(), hv.boot_info.image).is_err() {
-            return Err(io::Error::new(
-                io::ErrorKind::PermissionDenied,
-                format!("hypervisor boot info image is not allowed"),
-            ));
-        }
-
-        if change_hypervisor_config!(self.get_initrd(), hv.boot_info.initrd).is_err() {
-            return Err(io::Error::new(
-                io::ErrorKind::PermissionDenied,
-                format!("hypervisor boot info initrd is not allowed"),
-            ));
-        }
-
-        if change_hypervisor_config!(self.get_firmware(), hv.boot_info.firmware).is_err() {
-            return Err(io::Error::new(
-                io::ErrorKind::PermissionDenied,
-                format!("hypervisor boot info firmware is not allowed"),
-            ));
-        }
-
-        // add hypervisor cpu related annotaion
-        if change_hypervisor_config!(self.get_cpu_features(), hv.cpu_info.cpu_features).is_err() {
-            return Err(io::Error::new(
-                io::ErrorKind::PermissionDenied,
-                format!("hypervisor cpu features is not allowed"),
-            ));
-        }
-
-        if change_hypervisor_config!(
-            self.get_default_vcpus(hypervisor_name),
-            hv.cpu_info.default_vcpus
-        )
-        .is_err()
-        {
-            return Err(io::Error::new(
-                io::ErrorKind::PermissionDenied,
-                format!("hypervisor defualt cpus is not allowed"),
-            ));
-        }
-
-        if change_hypervisor_config!(self.get_default_max_vcpus(), hv.cpu_info.default_maxvcpus)
-            .is_err()
-        {
-            return Err(io::Error::new(
-                io::ErrorKind::PermissionDenied,
-                format!("hypervisor defualt max cpus is not allowed"),
-            ));
-        }
-
-        // add hypervisor device realted annotaion
-        if change_hypervisor_config!(
-            self.get_hotplug_vfio_on_root_bus(),
-            hv.device_info.hotplug_vfio_on_root_bus
-        )
-        .is_err()
-        {
-            return Err(io::Error::new(
-                io::ErrorKind::PermissionDenied,
-                format!("hypervisor hotplug cfio on root bus is not allowed"),
-            ));
-        }
-
-        if change_hypervisor_config!(self.get_pice_root_port(), hv.device_info.pcie_root_port)
-            .is_err()
-        {
-            return Err(io::Error::new(
-                io::ErrorKind::PermissionDenied,
-                format!("hypervisor pice root port is not allowed"),
-            ));
-        }
-
-        if change_hypervisor_config!(self.get_enable_iommu(), hv.device_info.enable_iommu).is_err()
-        {
-            return Err(io::Error::new(
-                io::ErrorKind::PermissionDenied,
-                format!("hypervisor enable iommu is not allowed"),
-            ));
-        }
-
-        if change_hypervisor_config!(
-            self.get_enable_iommu_platform(),
-            hv.device_info.enable_iommu_platform
-        )
-        .is_err()
-        {
-            return Err(io::Error::new(
-                io::ErrorKind::PermissionDenied,
-                format!("hypervisor enable iommu platform is not allowed"),
-            ));
-        }
-
-        // add hypervisor machine related annotation
-        if change_hypervisor_config!(self.get_machine_type(), hv.machine_info.machine_type).is_err()
-        {
-            return Err(io::Error::new(
-                io::ErrorKind::PermissionDenied,
-                format!("hypervisor machine type is not allowed"),
-            ));
-        }
-
-        if change_hypervisor_config!(
-            self.get_machine_acclereates(),
-            hv.machine_info.machine_accelerators
-        )
-        .is_err()
-        {
-            return Err(io::Error::new(
-                io::ErrorKind::PermissionDenied,
-                format!("hypervisor machine accelerators is not allowed"),
-            ));
-        }
-
-        if change_hypervisor_config!(self.get_entropy_source(), hv.machine_info.entropy_source)
-            .is_err()
-        {
-            return Err(io::Error::new(
-                io::ErrorKind::PermissionDenied,
-                format!("hypervisor entropy source is not allowed"),
-            ));
-        }
-
-        // add memory related annotaion
-        if change_hypervisor_config!(
-            self.get_default_memory(hypervisor_name),
-            hv.memory_info.default_memory
-        )
-        .is_err()
-        {
-            return Err(io::Error::new(
-                io::ErrorKind::PermissionDenied,
-                format!("hypervisor defualt memory is not allowed"),
-            ));
-        }
-
-        if change_hypervisor_config!(self.get_memory_slots(), hv.memory_info.memory_slots).is_err()
-        {
-            return Err(io::Error::new(
-                io::ErrorKind::PermissionDenied,
-                format!("hypervisor memory slot is not allowed"),
-            ));
-        }
-
-        if change_hypervisor_config!(
-            self.get_enable_mem_prealloc(),
-            hv.memory_info.enable_mem_prealloc
-        )
-        .is_err()
-        {
-            return Err(io::Error::new(
-                io::ErrorKind::PermissionDenied,
-                format!("hypervisor enable memory prealloc is not allowed"),
-            ));
-        }
-
-        if change_hypervisor_config!(self.get_enable_hugepages(), hv.memory_info.enable_hugepages)
-            .is_err()
-        {
-            return Err(io::Error::new(
-                io::ErrorKind::PermissionDenied,
-                format!("hypervisor enable huge page is not allowed"),
-            ));
-        }
-
-        if change_hypervisor_config!(self.get_file_mem_backend(), hv.memory_info.file_mem_backend)
-            .is_err()
-        {
-            return Err(io::Error::new(
-                io::ErrorKind::PermissionDenied,
-                format!("hypervisor memory backend is not allowed"),
-            ));
-        }
-
-        if change_hypervisor_config!(
-            self.get_enable_virtio_mem(),
-            hv.memory_info.enable_virtio_mem
-        )
-        .is_err()
-        {
-            return Err(io::Error::new(
-                io::ErrorKind::PermissionDenied,
-                format!("hypervisor enable virtio mem is not allowed"),
-            ));
-        }
-
-        if change_hypervisor_config!(self.get_enable_swap(), hv.memory_info.enable_swap).is_err() {
-            return Err(io::Error::new(
-                io::ErrorKind::PermissionDenied,
-                format!("hypervisor enable swap is not allowed"),
-            ));
-        }
-
-        if change_hypervisor_config!(
-            self.get_enable_guest_swap(),
-            hv.memory_info.enable_guest_swap
-        )
-        .is_err()
-        {
-            return Err(io::Error::new(
-                io::ErrorKind::PermissionDenied,
-                format!("hypervisor enable guest swap is not allowed"),
-            ));
-        }
-
-        // add hypervisor network related annotation
-        if change_hypervisor_config!(
-            self.get_disable_vhost_net(),
-            hv.network_info.disable_vhost_net
-        )
-        .is_err()
-        {
-            return Err(io::Error::new(
-                io::ErrorKind::PermissionDenied,
-                format!("hypervisor disable vhost net is not allowed"),
-            ));
-        }
-
-        if change_hypervisor_config!(
-            self.get_rx_rate_limiter_max_rate(),
-            hv.network_info.rx_rate_limiter_max_rate
-        )
-        .is_err()
-        {
-            return Err(io::Error::new(
-                io::ErrorKind::PermissionDenied,
-                format!("hypervisor rx rate limiter max rate is not allowed"),
-            ));
-        }
-
-        if change_hypervisor_config!(
-            self.get_tx_rate_limiter_max_rate(),
-            hv.network_info.tx_rate_limiter_max_rate
-        )
-        .is_err()
-        {
-            return Err(io::Error::new(
-                io::ErrorKind::PermissionDenied,
-                format!("hypervisor tx rate limiter max rate is not allowed"),
-            ));
-        }
-        // add hypervisor security info related annotation
-        if change_hypervisor_config!(self.get_guest_hook_path(), hv.security_info.guest_hook_path)
-            .is_err()
-        {
-            return Err(io::Error::new(
-                io::ErrorKind::PermissionDenied,
-                format!("hypervisor guest hook path is not allowed"),
-            ));
-        }
-
-        if change_hypervisor_config!(
-            self.get_enable_rootless_hypervisor(),
-            hv.security_info.rootless
-        )
-        .is_err()
-        {
-            return Err(io::Error::new(
-                io::ErrorKind::PermissionDenied,
-                format!("hypervisor enable rootless hypervisor is not allowed"),
-            ));
-        }
-
-        // add hypervisor shared file system related annotaion
-
-        if change_hypervisor_config!(self.get_virtio_fs_daemon(), hv.shared_fs.virtio_fs_daemon)
-            .is_err()
-        {
-            return Err(io::Error::new(
-                io::ErrorKind::PermissionDenied,
-                format!("hypervisor get share fs is not allowed"),
-            ));
-        }
-
-        if change_hypervisor_config!(self.get_virtio_fs_cache(), hv.shared_fs.virtio_fs_cache)
-            .is_err()
-        {
-            return Err(io::Error::new(
-                io::ErrorKind::PermissionDenied,
-                format!("hypervisor virtio fs cache is not allowed"),
-            ));
-        }
-
-        if change_hypervisor_config!(
-            self.get_virtio_fs_cache_size(),
-            hv.shared_fs.virtio_fs_cache_size
-        )
-        .is_err()
-        {
-            return Err(io::Error::new(
-                io::ErrorKind::PermissionDenied,
-                format!("hypervisor virtio fs cache size is not allowed"),
-            ));
-        }
-
-        if change_hypervisor_config!(self.get_hypervisor_msize_9p(), hv.shared_fs.msize_9p).is_err()
-        {
-            return Err(io::Error::new(
-                io::ErrorKind::PermissionDenied,
-                format!("hypervisor virtio fs cache size is not allowed"),
-            ));
-        }
-
-        // add runtime annotation
-        let rt = &mut config.runtime;
-        change_runtime_config!(self.get_disable_guest_seccomp(), rt.disable_guest_seccomp);
-        change_runtime_config!(self.get_enable_pprof(), rt.enable_pprof);
-        change_runtime_config!(self.get_network_model(), rt.internetworking_model);
-        change_runtime_config!(self.get_sandbox_cgroup_only(), rt.disable_new_netns);
-        change_runtime_config!(self.get_disable_new_netns(), rt.disable_new_netns);
-        change_runtime_config!(self.get_vfio_mode(), rt.vfio_mode);
-        self.add_annotation_experimental(config);
         Ok(())
     }
 }

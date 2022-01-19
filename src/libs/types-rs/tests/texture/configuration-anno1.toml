@@ -2,7 +2,7 @@
 path = "/usr/bin/lsns"
 valid_hypervisor_paths = ["/usr/bin/qemu*", "/opt/qemu?","/usr/bin/lsns"]
 valid_jailer_paths = ["/usr/lib/rust"]
-ctlpath = "/usr/bin/qemu-ga"
+ctlpath = "/usr/bin/qemu-io"
 disable_nesting_checks = true
 enable_iothreads = true
 jailer_path = "/usr/local"

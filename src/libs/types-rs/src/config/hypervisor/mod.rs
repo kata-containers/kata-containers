@@ -31,14 +31,7 @@ use lazy_static::lazy_static;
 use regex::RegexSet;
 
 use super::{default, ConfigOps, ConfigPlugin, TomlConfig};
-<<<<<<< HEAD
-<<<<<<< HEAD
 use crate::annotations::KATA_ANNO_CONF_HYPERVISOR_PREFIX;
-=======
->>>>>>> f74edc28 (libs/types: support load Kata hypervisor configuration from file)
-=======
-use crate::annotations::KATA_ANNO_CONF_HYPERVISOR_PREFIX;
->>>>>>> 65a31d44 (libs/types: define annotation keys for Kata)
 use crate::{eother, resolve_path, validate_path};
 
 mod dragonball;
@@ -533,13 +526,6 @@ pub struct MemoryInfo {
     #[serde(default)]
     pub enable_mem_prealloc: bool,
 
-<<<<<<< HEAD
-<<<<<<< HEAD
-
-=======
->>>>>>> f74edc28 (libs/types: support load Kata hypervisor configuration from file)
-=======
->>>>>>> 32fd6cde (add functionalities to modify config info of hypervisor and agent)
     /// Enable huge pages for VM RAM, default false
     ///
     /// Enabling this will result in the VM memory being allocated using huge pages. This is useful
@@ -713,33 +699,14 @@ impl SecurityInfo {
 
     /// Check whether annotation key is enabled or not.
     pub fn is_annotation_enabled(&self, path: &str) -> bool {
-<<<<<<< HEAD
-<<<<<<< HEAD
         if !path.starts_with(KATA_ANNO_CONF_HYPERVISOR_PREFIX) {
-            return false;
-        }
-
-        let pos = KATA_ANNO_CONF_HYPERVISOR_PREFIX.len();
-        let key = &path[pos..];
-        if let Ok(set) = RegexSet::new(&self.enable_annotations) {
-<<<<<<< HEAD
-            println!("hello world");
-=======
-        if !path.starts_with("io.katacontainers.config.hypervisor.") {
-=======
-        if !path.starts_with(KATA_ANNO_CONF_HYPERVISOR_PREFIX) {
->>>>>>> 65a31d44 (libs/types: define annotation keys for Kata)
             return false;
         }
         let pos = KATA_ANNO_CONF_HYPERVISOR_PREFIX.len();
         let key = &path[pos..];
         if let Ok(set) = RegexSet::new(&self.enable_annotations) {
->>>>>>> f74edc28 (libs/types: support load Kata hypervisor configuration from file)
-=======
->>>>>>> 32fd6cde (add functionalities to modify config info of hypervisor and agent)
             return set.is_match(key);
         }
-
         false
     }
 
@@ -1000,16 +967,10 @@ impl Hypervisor {
 impl ConfigOps for Hypervisor {
     fn adjust_configuration(conf: &mut TomlConfig) -> Result<()> {
         HypervisorVendor::adjust_configuration(conf)?;
-
-<<<<<<< HEAD
->>>>>>> f74edc28 (libs/types: support load Kata hypervisor configuration from file)
-=======
->>>>>>> 32fd6cde (add functionalities to modify config info of hypervisor and agent)
         let hypervisors: Vec<String> = conf.hypervisor.keys().cloned().collect();
         for hypervisor in hypervisors.iter() {
             if let Some(plugin) = get_hypervisor_plugin(hypervisor) {
                 plugin.adjust_configuration(conf)?;
-
                 // Safe to unwrap() because `hypervisor` is a valid key in the hash map.
                 let hv = conf.hypervisor.get_mut(hypervisor).unwrap();
                 hv.blockdev_info.adjust_configuration()?;
@@ -1027,12 +988,6 @@ impl ConfigOps for Hypervisor {
                     "Can Can not find plugin for hypervisor {}",
                     hypervisor
                 ));
-<<<<<<< HEAD
-=======
-                return Err(eother!("Can not find plugin for hypervisor {}", hypervisor));
->>>>>>> f74edc28 (libs/types: support load Kata hypervisor configuration from file)
-=======
->>>>>>> 32fd6cde (add functionalities to modify config info of hypervisor and agent)
             }
         }
 
@@ -1086,19 +1041,8 @@ mod vendor {
 #[path = "vendor.rs"]
 mod vendor;
 
-<<<<<<< HEAD
-<<<<<<< HEAD
 pub use self::vendor::HypervisorVendor;
 use crate::config::validate_path_pattern;
-=======
-use crate::config::validate_path_pattern;
-pub use vendor::HypervisorVendor;
->>>>>>> f74edc28 (libs/types: support load Kata hypervisor configuration from file)
-=======
-pub use self::vendor::HypervisorVendor;
-use crate::config::validate_path_pattern;
->>>>>>> 65a31d44 (libs/types: define annotation keys for Kata)
-
 #[cfg(test)]
 mod tests {
     use super::*;

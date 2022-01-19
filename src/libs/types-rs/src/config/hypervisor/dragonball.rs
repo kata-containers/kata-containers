@@ -6,19 +6,12 @@
 use std::io::Result;
 use std::path::Path;
 use std::sync::Arc;
-<<<<<<< HEAD
 use std::u32;
 
 use super::{default, register_hypervisor_plugin};
 use crate::config::default::MAX_DB_VCPUS;
 use crate::config::default::MIN_DB_MEMORY_SIZE;
-=======
 
-<<<<<<< HEAD
-use super::{default, register_hypervisor_plugin};
->>>>>>> f74edc28 (libs/types: support load Kata hypervisor configuration from file)
-=======
->>>>>>> 32fd6cde (add functionalities to modify config info of hypervisor and agent)
 use crate::config::hypervisor::{
     VIRTIO_BLK, VIRTIO_BLK_MMIO, VIRTIO_FS, VIRTIO_FS_INLINE, VIRTIO_PMEM,
 };
@@ -46,20 +39,12 @@ impl DragonballConfig {
 }
 
 impl ConfigPlugin for DragonballConfig {
-<<<<<<< HEAD
-<<<<<<< HEAD
-
-=======
     fn get_max_cpus(&self) -> u32 {
         MAX_DB_VCPUS
     }
->>>>>>> 430c6603 (keep adding functinalities for modify config)
     fn get_min_memory(&self) -> u32 {
         MIN_DB_MEMORY_SIZE
     }
-    
-=======
->>>>>>> f74edc28 (libs/types: support load Kata hypervisor configuration from file)
     fn name(&self) -> &str {
         HYPERVISOR_NAME_DRAGONBALL
     }
