@@ -19,8 +19,6 @@ RUN apk update && apk add \
     gcc \
     git \
     libc-dev \
-    libseccomp \
-    libseccomp-dev \
     linux-headers \
     m4 \
     make \
