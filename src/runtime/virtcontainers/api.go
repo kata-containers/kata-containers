@@ -8,6 +8,7 @@ package virtcontainers
 import (
 	"context"
 	"runtime"
+	"time"
 
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils/katatrace"
 	resCtrl "github.com/kata-containers/kata-containers/src/runtime/pkg/resourcecontrol"
@@ -104,6 +105,9 @@ func createSandboxFromConfig(ctx context.Context, sandboxConfig SandboxConfig, f
 	if err = s.getAndStoreGuestDetails(ctx); err != nil {
 		return nil, err
 	}
+
+	// draft: waiting for device link up ?
+	time.Sleep(2 * time.Second)
 
 	// Create Containers
 	if err = s.createContainers(ctx); err != nil {
