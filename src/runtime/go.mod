@@ -28,7 +28,6 @@ require (
 	github.com/gogo/protobuf v1.3.2
 	github.com/hashicorp/go-multierror v1.0.0
 	github.com/intel-go/cpuid v0.0.0-20210602155658-5747e5cec0d9
-	github.com/kata-containers/govmm v0.0.0-20220117131932-0781a21804ee
 	github.com/mdlayher/vsock v0.0.0-20191108225356-d9c65923cb8f
 	github.com/opencontainers/runc v1.0.3
 	github.com/opencontainers/runtime-spec v1.0.3-0.20210326190908-1c3f411f0417

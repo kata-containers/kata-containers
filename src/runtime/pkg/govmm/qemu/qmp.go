@@ -1,18 +1,7 @@
-/*
 // Copyright contributors to the Virtual Machine Manager for Go project
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
+// SPDX-License-Identifier: Apache-2.0
 //
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-*/
 
 package qemu
 
@@ -96,6 +85,7 @@ type qmpEventFilter struct {
 }
 
 // QMPEvent contains a single QMP event, sent on the QMPConfig.EventCh channel.
+// nolint: govet
 type QMPEvent struct {
 	// The name of the event, e.g., DEVICE_DELETED
 	Name string
@@ -118,6 +108,7 @@ type qmpResult struct {
 	err      error
 }
 
+// nolint: govet
 type qmpCommand struct {
 	ctx            context.Context
 	res            chan qmpResult
@@ -130,6 +121,7 @@ type qmpCommand struct {
 
 // QMP is a structure that contains the internal state used by startQMPLoop and
 // the go routines it spwans.  All the contents of this structure are private.
+// nolint: govet
 type QMP struct {
 	cmdCh          chan qmpCommand
 	conn           io.ReadWriteCloser
@@ -141,6 +133,7 @@ type QMP struct {
 
 // QMPVersion contains the version number and the capabailities of a QEMU
 // instance, as reported in the QMP greeting message.
+// nolint: govet
 type QMPVersion struct {
 	Major        int
 	Minor        int
@@ -158,6 +151,7 @@ type CPUProperties struct {
 }
 
 // HotpluggableCPU represents a hotpluggable CPU
+// nolint: govet
 type HotpluggableCPU struct {
 	Type       string        `json:"type"`
 	VcpusCount int           `json:"vcpus-count"`
@@ -166,6 +160,7 @@ type HotpluggableCPU struct {
 }
 
 // MemoryDevicesData cotains the data describes a memory device
+// nolint: govet
 type MemoryDevicesData struct {
 	Slot         int    `json:"slot"`
 	Node         int    `json:"node"`
@@ -178,12 +173,14 @@ type MemoryDevicesData struct {
 }
 
 // MemoryDevices represents memory devices of vm
+// nolint: govet
 type MemoryDevices struct {
 	Data MemoryDevicesData `json:"data"`
 	Type string            `json:"type"`
 }
 
 // CPUInfo represents information about each virtual CPU
+// nolint: govet
 type CPUInfo struct {
 	CPU      int           `json:"CPU"`
 	Current  bool          `json:"current"`
@@ -196,6 +193,7 @@ type CPUInfo struct {
 }
 
 // CPUInfoFast represents information about each virtual CPU
+// nolint: govet
 type CPUInfoFast struct {
 	CPUIndex int           `json:"cpu-index"`
 	QomPath  string        `json:"qom-path"`
@@ -252,6 +250,7 @@ type SchemaInfo struct {
 }
 
 // StatusInfo represents guest running status
+// nolint: govet
 type StatusInfo struct {
 	Running    bool   `json:"running"`
 	SingleStep bool   `json:"singlestep"`

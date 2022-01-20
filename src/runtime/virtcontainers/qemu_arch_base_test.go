@@ -13,7 +13,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	govmmQemu "github.com/kata-containers/govmm/qemu"
+	govmmQemu "github.com/kata-containers/kata-containers/src/runtime/pkg/govmm/qemu"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
