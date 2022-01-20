@@ -113,9 +113,6 @@ func (km *KataMonitor) startPodCacheUpdater() {
 						"REMOVE event but pod was missing from the sandbox cache")
 				}
 				monitorLog.WithField("pod", id).Info("sandbox cache: removed pod")
-
-			default:
-				monitorLog.WithField("event", event).Warn("got unexpected fs event")
 			}
 
 			// While we process fs events directly to update the sandbox cache we need to sync with the
