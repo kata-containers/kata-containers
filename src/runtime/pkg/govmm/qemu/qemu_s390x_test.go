@@ -1,5 +1,3 @@
-// +build s390x
-
 // Copyright contributors to the Virtual Machine Manager for Go project
 //
 // SPDX-License-Identifier: Apache-2.0
@@ -22,8 +20,6 @@ var (
 	deviceSCSIControllerStr        = "-device virtio-scsi-ccw,id=foo,devno=" + DevNo
 	deviceSCSIControllerBusAddrStr = "-device virtio-scsi-ccw,id=foo,bus=pci.0,addr=00:04.0,iothread=iothread1,devno=" + DevNo
 	deviceBlockString              = "-device virtio-blk-ccw,drive=hd0,scsi=off,config-wce=off,devno=" + DevNo + ",share-rw=on,serial=hd0 -drive id=hd0,file=/var/lib/vm.img,aio=threads,format=qcow2,if=none,readonly"
-	devicePCIBridgeString          = "-device pci-bridge,bus=/pci-bus/pcie.0,id=mybridge,chassis_nr=5,shpc=on,addr=ff"
-	devicePCIEBridgeString         = "-device pcie-pci-bridge,bus=/pci-bus/pcie.0,id=mybridge,addr=ff"
 	romfile                        = ""
 )
 
