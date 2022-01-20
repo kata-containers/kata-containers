@@ -17,11 +17,6 @@ import (
 const agentUUID = "4cb19522-1e18-439a-883a-f9b2a3a95f5e"
 const volumeUUID = "67d86208-b46c-4465-9018-e14187d4010"
 
-var (
-	deviceNetworkPCIString   = "-netdev tap,id=tap0,vhost=on,ifname=ceth0,downscript=no,script=no -device driver=virtio-net-pci,netdev=tap0,mac=01:02:de:ad:be:ef,bus=/pci-bus/pcie.0,addr=ff,disable-modern=true,romfile=efi-virtio.rom"
-	deviceNetworkPCIStringMq = "-netdev tap,id=tap0,vhost=on,fds=3:4 -device driver=virtio-net-pci,netdev=tap0,mac=01:02:de:ad:be:ef,bus=/pci-bus/pcie.0,addr=ff,disable-modern=true,mq=on,vectors=6,romfile=efi-virtio.rom"
-)
-
 const DevNo = "fe.1.1234"
 
 func testAppend(structure interface{}, expected string, t *testing.T) {
@@ -177,10 +172,13 @@ func TestAppendDeviceNetwork(t *testing.T) {
 		VHost:         true,
 		MACAddress:    "01:02:de:ad:be:ef",
 		DisableModern: true,
-		ROMFile:       "efi-virtio.rom",
+		ROMFile:       romfile,
 	}
 
-	if netdev.Transport.isVirtioCCW(nil) {
+	if netdev.Transport.isVirtioPCI(nil) {
+		netdev.Bus = "/pci-bus/pcie.0"
+		netdev.Addr = "255"
+	} else if netdev.Transport.isVirtioCCW(nil) {
 		netdev.DevNo = DevNo
 	}
 
@@ -209,71 +207,17 @@ func TestAppendDeviceNetworkMq(t *testing.T) {
 		VHost:         true,
 		MACAddress:    "01:02:de:ad:be:ef",
 		DisableModern: true,
-		ROMFile:       "efi-virtio.rom",
+		ROMFile:       romfile,
 	}
-	if netdev.Transport.isVirtioCCW(nil) {
+
+	if netdev.Transport.isVirtioPCI(nil) {
+		netdev.Bus = "/pci-bus/pcie.0"
+		netdev.Addr = "255"
+	} else if netdev.Transport.isVirtioCCW(nil) {
 		netdev.DevNo = DevNo
 	}
 
 	testAppend(netdev, deviceNetworkStringMq, t)
-}
-
-func TestAppendDeviceNetworkPCI(t *testing.T) {
-
-	netdev := NetDevice{
-		Driver:        VirtioNet,
-		Type:          TAP,
-		ID:            "tap0",
-		IFName:        "ceth0",
-		Bus:           "/pci-bus/pcie.0",
-		Addr:          "255",
-		Script:        "no",
-		DownScript:    "no",
-		VHost:         true,
-		MACAddress:    "01:02:de:ad:be:ef",
-		DisableModern: true,
-		ROMFile:       romfile,
-	}
-
-	if !netdev.Transport.isVirtioPCI(nil) {
-		t.Skip("Test valid only for PCI devices")
-	}
-
-	testAppend(netdev, deviceNetworkPCIString, t)
-}
-
-func TestAppendDeviceNetworkPCIMq(t *testing.T) {
-	foo, _ := ioutil.TempFile(os.TempDir(), "govmm-qemu-test")
-	bar, _ := ioutil.TempFile(os.TempDir(), "govmm-qemu-test")
-
-	defer func() {
-		_ = foo.Close()
-		_ = bar.Close()
-		_ = os.Remove(foo.Name())
-		_ = os.Remove(bar.Name())
-	}()
-
-	netdev := NetDevice{
-		Driver:        VirtioNet,
-		Type:          TAP,
-		ID:            "tap0",
-		IFName:        "ceth0",
-		Bus:           "/pci-bus/pcie.0",
-		Addr:          "255",
-		Script:        "no",
-		DownScript:    "no",
-		FDs:           []*os.File{foo, bar},
-		VHost:         true,
-		MACAddress:    "01:02:de:ad:be:ef",
-		DisableModern: true,
-		ROMFile:       romfile,
-	}
-
-	if !netdev.Transport.isVirtioPCI(nil) {
-		t.Skip("Test valid only for PCI devices")
-	}
-
-	testAppend(netdev, deviceNetworkPCIStringMq, t)
 }
 
 var deviceLegacySerialString = "-serial chardev:tlserial0"
