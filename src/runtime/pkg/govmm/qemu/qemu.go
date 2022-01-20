@@ -1,18 +1,7 @@
-/*
 // Copyright contributors to the Virtual Machine Manager for Go project
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
+// SPDX-License-Identifier: Apache-2.0
 //
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-*/
 
 // Package qemu provides methods and types for launching and managing QEMU
 // instances.  Instances can be launched with the LaunchQemu function and
@@ -250,6 +239,7 @@ const (
 )
 
 // Object is a qemu object representation.
+// nolint: govet
 type Object struct {
 	// Driver is the qemu device driver
 	Driver DeviceDriver
@@ -439,6 +429,7 @@ const (
 )
 
 // FSDevice represents a qemu filesystem configuration.
+// nolint: govet
 type FSDevice struct {
 	// Driver is the qemu device driver
 	Driver DeviceDriver
@@ -574,6 +565,7 @@ const (
 )
 
 // CharDevice represents a qemu character device.
+// nolint: govet
 type CharDevice struct {
 	Backend CharDeviceBackend
 
@@ -784,6 +776,7 @@ func (n NetDeviceType) QemuDeviceParam(netdev *NetDevice, config *Config) Device
 }
 
 // NetDevice represents a guest networking device
+// nolint: govet
 type NetDevice struct {
 	// Type is the netdev type (e.g. tap).
 	Type NetDeviceType
@@ -1041,6 +1034,7 @@ func (dev LegacySerialDevice) deviceName(config *Config) string {
 */
 
 // SerialDevice represents a qemu serial device.
+// nolint: govet
 type SerialDevice struct {
 	// Driver is the qemu device driver
 	Driver DeviceDriver
@@ -1149,6 +1143,7 @@ const (
 )
 
 // BlockDevice represents a qemu block device.
+// nolint: govet
 type BlockDevice struct {
 	Driver    DeviceDriver
 	ID        string
@@ -1316,6 +1311,7 @@ func (dev LoaderDevice) QemuParams(config *Config) []string {
 
 // VhostUserDevice represents a qemu vhost-user device meant to be passed
 // in to the guest
+// nolint: govet
 type VhostUserDevice struct {
 	SocketPath     string //path to vhostuser socket on host
 	CharDevID      string
@@ -1567,6 +1563,7 @@ func (vhostuserDev VhostUserDevice) deviceName(config *Config) string {
 }
 
 // PCIeRootPortDevice represents a memory balloon device.
+// nolint: govet
 type PCIeRootPortDevice struct {
 	ID string // format: rp{n}, n>=0
 
@@ -1747,6 +1744,7 @@ func (vfioDev VFIODevice) deviceName(config *Config) string {
 }
 
 // SCSIController represents a SCSI controller device.
+// nolint: govet
 type SCSIController struct {
 	ID string
 
@@ -1843,6 +1841,7 @@ const (
 )
 
 // BridgeDevice represents a qemu bridge device like pci-bridge, pxb, etc.
+// nolint: govet
 type BridgeDevice struct {
 	// Type of the bridge
 	Type BridgeType
@@ -1940,6 +1939,7 @@ func (bridgeDev BridgeDevice) QemuParams(config *Config) []string {
 }
 
 // VSOCKDevice represents a AF_VSOCK socket.
+// nolint: govet
 type VSOCKDevice struct {
 	ID string
 
@@ -2036,6 +2036,7 @@ func (vsock VSOCKDevice) deviceName(config *Config) string {
 }
 
 // RngDevice represents a random number generator device.
+// nolint: govet
 type RngDevice struct {
 	// ID is the device ID
 	ID string
@@ -2124,6 +2125,7 @@ func (v RngDevice) deviceName(config *Config) string {
 }
 
 // BalloonDevice represents a memory balloon device.
+// nolint: govet
 type BalloonDevice struct {
 	DeflateOnOOM  bool
 	DisableModern bool
@@ -2358,6 +2360,7 @@ type SMP struct {
 }
 
 // Memory is the guest memory configuration structure.
+// nolint: govet
 type Memory struct {
 	// Size is the amount of memory made available to the guest.
 	// It should be suffixed with M or G for sizes in megabytes or
@@ -2505,6 +2508,7 @@ const (
 )
 
 // Incoming controls migration source preparation
+// nolint: govet
 type Incoming struct {
 	// Possible values are MigrationFD, MigrationExec
 	MigrationType int
@@ -2516,6 +2520,7 @@ type Incoming struct {
 
 // Config is the qemu configuration structure.
 // It allows for passing custom settings and parameters to the qemu API.
+// nolint: govet
 type Config struct {
 	// Path is the qemu binary path.
 	Path string

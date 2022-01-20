@@ -206,9 +206,6 @@ github.com/hashicorp/go-multierror
 github.com/intel-go/cpuid
 # github.com/josharian/intern v1.0.0
 github.com/josharian/intern
-# github.com/kata-containers/govmm v0.0.0-20220117131932-0781a21804ee
-## explicit
-github.com/kata-containers/govmm/qemu
 # github.com/mailru/easyjson v0.7.6
 github.com/mailru/easyjson/buffer
 github.com/mailru/easyjson/jlexer
