@@ -54,4 +54,4 @@ sudo "${container_engine}" run \
 	-v "${PWD}":/share qemu-static \
 	mv "${qemu_destdir}/${qemu_tar}" /share/
 
-sudo chown ${USER}:${USER} "${PWD}/${qemu_tar}"
+sudo chown ${USER}:$(id -gn ${USER}) "${PWD}/${qemu_tar}"
