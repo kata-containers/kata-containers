@@ -20,7 +20,7 @@ export CRI_CONTAINERD=${CRI_CONTAINERD:-"yes"}
 export CRI_RUNTIME=${CRI_RUNTIME:-"containerd"}
 export CRIO=${CRIO:-"no"}
 export KATA_HYPERVISOR="${KATA_HYPERVISOR:-qemu}"
-export KUBERNETES=${KUBERNETES:-"yes"}
+export KUBERNETES=${KUBERNETES:-"no"}
 export AGENT_INIT="${AGENT_INIT:-${TEST_INITRD:-no}}"
 
 # Allow the user to overwrite the default repo and branch names if they want to build from a fork
@@ -82,6 +82,9 @@ Commands:
 - install_guest_kernel:         Setup, build and install the guest kernel
 - build_qemu:                   Checkout, patch, build and install QEMU
 - init_kubernetes:              initialize a Kubernetes cluster on this system
+- crictl_create_cc_pod          Use crictl to create a new kata cc pod
+- crictl_create_cc_container    Use crictl to create a new busybox container in the kata cc pod
+- crictl_delete_cc              Use crictl to delete the kata cc pod sandbox and container in it
 - create_kata_pod:              Create a kata runtime nginx pod in Kubernetes
 - delete_kata_pod:              Delete a kata runtime nginx pod in Kubernetes
 - restart_kata_pod:             Delete the kata nginx pod, then re-create it
@@ -110,7 +113,6 @@ build_and_install_all() {
     install_guest_kernel_image
     build_qemu
     build_bundle_dir_if_necessary
-    build_agent_ctl
     check_kata_runtime
     if [ "${KUBERNETES}" == "yes" ]; then
         init_kubernetes
@@ -187,6 +189,21 @@ configure() {
     debug_function enable_full_debug
     # Temp PoC verify code: Inject policy path config parameter
     sudo sed -i -e 's%^kernel_params = "\(.*\)"%kernel_params = "\1 agent.container_policy_file=/etc/containers/quay_verification/quay_policy.json"%g' /etc/kata-containers/configuration.toml
+
+    # K8s doesn't fully work with kata cc in this enviornment yet issues #3511
+    if [ "${KUBERNETES}" != "yes" ]; then
+        # insert the cri_handler = "cc" into the [plugins.cri.containerd.runtimes.kata] section
+        sudo sed -z -i 's/\([[:blank:]]*\)\(runtime_type = "io.containerd.kata.v2"\)/\1\2\n\1cri_handler = "cc"/' /etc/containerd/config.toml
+    fi
+    
+    # Add cni directory to containerd config
+    echo "    [plugins.cri.cni]
+      # conf_dir is the directory in which the admin places a CNI conf.
+      conf_dir = \"/etc/cni/net.d\"" >> /etc/containerd/config.toml
+    
+    # Switch image offload to true in kata config
+    sudo sed -i -e 's/^# *\(service_offload\).*=.*$/\1 = true/g' /etc/kata-containers/configuration.toml
+
     sudo systemctl restart containerd # Ensure containerd picks up debug configuration
 }
 
@@ -233,6 +250,11 @@ create_a_local_rootfs() {
     export distro="ubuntu"
     [[ -z "${USE_PODMAN:-}" ]] && use_docker="${use_docker:-1}"
     sudo -E OS_VERSION="${OS_VERSION:-}" GOPATH=$GOPATH DEBUG="${DEBUG}" USE_DOCKER="${use_docker:-}" SKOPEO=${SKOPEO:-} UMOCI=yes SECCOMP=yes ./rootfs.sh -r ${ROOTFS_DIR} ${distro}
+
+     # Install_rust.sh during rootfs.sh switches us to the main branch of the tests repo, so switch back now
+    pushd "${tests_repo_dir}"
+    git checkout ${tests_branch}
+    popd
 
     # During the ./rootfs.sh call the kata agent is built as root, so we need to update the permissions, so we can rebuild it
     sudo chown -R ${USER}:${USER} "${katacontainers_repo_dir}/src/agent/"
@@ -309,6 +331,51 @@ spec:
 EOT
 }
 
+crictl_sandbox_name=kata-cc-busybox-sandbox
+crictl_create_cc_pod() {
+    # Update iptables to allow forwarding to the cni0 bridge avoiding issues caused by the docker0 bridge
+    sudo iptables -P FORWARD ACCEPT
+    
+    # Create crictl pod config
+cat << EOF > ~/pod-config.yaml
+metadata:
+  name: ${crictl_sandbox_name}
+EOF
+
+    # If already exists then delete and re-create
+    if [ -n "$(crictl pods --name ${crictl_sandbox_name} -q)" ]; then
+        crictl_delete_cc_pod
+    fi
+
+    pod_id=$(sudo crictl runp -r kata ~/pod-config.yaml)
+    sudo crictl pods
+}
+
+crictl_create_cc_container() {
+    # Create container configuration yaml based on our test copy of busybox
+    cat << EOF > ~/container-config.yaml
+metadata:
+  name: kata-cc-busybox
+image:
+  image: quay.io/kata-containers/confidential-containers:signed
+command:
+- top
+log_path: kata-cc.0.log
+EOF
+
+    pod_id=$(crictl pods --name ${crictl_sandbox_name} -q)
+    container_id=$(sudo crictl create -with-pull ${pod_id} ~/container-config.yaml ~/pod-config.yaml)
+    sudo crictl start ${container_id}
+    sudo crictl ps -a
+}
+
+crictl_delete_cc() {
+    pod_id=$(crictl pods --name ${crictl_sandbox_name} -q)
+    container_id=$(crictl ps --pod ${pod_id} -q)
+    sudo crictl stop ${container_id} && sudo crictl rm ${container_id}
+    sudo crictl stopp ${pod_id} && sudo crictl rmp ${pod_id}
+}
+
 create_kata_pod() {
     kubectl apply -f ~/nginx-kata.yaml
     kubectl get pods
@@ -371,7 +438,9 @@ build_bundle_dir_if_necessary() {
 
 build_agent_ctl() {
     cd ${GOPATH}/src/${katacontainers_repo}/src/tools/agent-ctl/
-    sudo chown -R ${USER}:${USER} "${HOME}/.cargo/registry"
+    if [ -e "${HOME}/.cargo/registry" ]; then
+        sudo chown -R ${USER}:${USER} "${HOME}/.cargo/registry"
+    fi
     make
     cd "./target/x86_64-unknown-linux-musl/release"
 }
@@ -461,6 +530,15 @@ main() {
             ;;
         init_kubernetes)
             init_kubernetes
+            ;;
+        crictl_create_cc_pod)
+            crictl_create_cc_pod
+            ;;
+        crictl_create_cc_container)
+            crictl_create_cc_container
+            ;;
+        crictl_delete_cc)
+            crictl_delete_cc
             ;;
         create_kata_pod)
             create_kata_pod
