@@ -8,19 +8,18 @@ SKIP_GO_VERSION_CHECK=
 include golang.mk
 
 #Get ARCH.
-ifneq (,$(golang_version_raw))
-    GOARCH=$(shell go env GOARCH)
-    ifeq ($(ARCH),)
-        ARCH = $(GOARCH)
+ifeq ($(ARCH),)
+    ifneq (,$(golang_version_raw))
+        override ARCH = $(shell go env GOARCH)
+    else
+        override ARCH = $(shell uname -m)
     endif
-else
-    ARCH = $(shell uname -m)
-    ifeq ($(ARCH),x86_64)
-        ARCH = amd64
-    endif
-    ifeq ($(ARCH),aarch64)
-        ARCH = arm64
-    endif
+endif
+ifeq ($(ARCH),x86_64)
+    override ARCH = amd64
+endif
+ifeq ($(ARCH),aarch64)
+    override ARCH = arm64
 endif
 
 ARCH_DIR = arch
@@ -29,8 +28,12 @@ ARCH_FILE = $(ARCH_DIR)/$(ARCH)$(ARCH_FILE_SUFFIX)
 ARCH_FILES = $(wildcard arch/*$(ARCH_FILE_SUFFIX))
 ALL_ARCHES = $(patsubst $(ARCH_DIR)/%$(ARCH_FILE_SUFFIX),%,$(ARCH_FILES))
 
-# Load architecture-dependent settings
-include $(ARCH_FILE)
+ifeq (,$(realpath $(ARCH_FILE)))
+    $(error "ERROR: invalid architecture: '$(ARCH)'")
+else
+    # Load architecture-dependent settings
+    include $(ARCH_FILE)
+endif
 
 PROJECT_TYPE = kata
 PROJECT_NAME = Kata Containers
