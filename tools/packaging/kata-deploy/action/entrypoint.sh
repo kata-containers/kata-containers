@@ -8,6 +8,8 @@ set -o errexit
 set -o pipefail
 set -o nounset
 
+# Does nothing ... just to test kata-deploy
+
 # This entrypoint expects an environment variable, PKG_SHA, to be
 # within the container runtime. A default is provided in the Dockerfile,
 # but we expect the caller to pass this into the container run (ie docker run -e PKG_SHA=foo ...)
