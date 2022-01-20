@@ -495,52 +495,6 @@ func TestAppendDeviceSCSIController(t *testing.T) {
 	testAppend(scsiCon, deviceSCSIControllerBusAddrStr, t)
 }
 
-func TestAppendPCIBridgeDevice(t *testing.T) {
-
-	bridge := BridgeDevice{
-		Type:    PCIBridge,
-		ID:      "mybridge",
-		Bus:     "/pci-bus/pcie.0",
-		Addr:    "255",
-		Chassis: 5,
-		SHPC:    true,
-		ROMFile: romfile,
-	}
-
-	testAppend(bridge, devicePCIBridgeString, t)
-}
-
-func TestAppendPCIBridgeDeviceWithReservations(t *testing.T) {
-
-	bridge := BridgeDevice{
-		Type:          PCIBridge,
-		ID:            "mybridge",
-		Bus:           "/pci-bus/pcie.0",
-		Addr:          "255",
-		Chassis:       5,
-		SHPC:          false,
-		ROMFile:       romfile,
-		IOReserve:     "4k",
-		MemReserve:    "1m",
-		Pref64Reserve: "1m",
-	}
-
-	testAppend(bridge, devicePCIBridgeStringReserved, t)
-}
-
-func TestAppendPCIEBridgeDevice(t *testing.T) {
-
-	bridge := BridgeDevice{
-		Type:    PCIEBridge,
-		ID:      "mybridge",
-		Bus:     "/pci-bus/pcie.0",
-		Addr:    "255",
-		ROMFile: "efi-virtio.rom",
-	}
-
-	testAppend(bridge, devicePCIEBridgeString, t)
-}
-
 func TestAppendEmptyDevice(t *testing.T) {
 	device := SerialDevice{}
 
