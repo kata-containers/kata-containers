@@ -31,7 +31,4 @@ snap: $(YQ)
 	fi
 	snapcraft -d
 
-cmd-kata-pkgsync:
-	@make -C $(MK_DIR)/cmd/kata-pkgsync
-
-.PHONY: test-static-build snap cmd-kata-pkgsync
+.PHONY: test-static-build snap
