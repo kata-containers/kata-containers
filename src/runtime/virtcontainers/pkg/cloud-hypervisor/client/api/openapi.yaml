@@ -329,6 +329,36 @@ paths:
           description: The VM instance could not be restored because it is already
             created.
       summary: Restore a VM from a snapshot.
+  /vm.receive-migration:
+    put:
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReceiveMigrationData'
+        description: The URL for the reception of migration state
+        required: true
+      responses:
+        "204":
+          description: The VM migration was successfully received.
+        "500":
+          description: The VM migration could not be received.
+      summary: Receive a VM migration from URL
+  /vm.send-migration:
+    put:
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SendMigrationData'
+        description: The URL for sending the migration state
+        required: true
+      responses:
+        "204":
+          description: The VM migration was successfully sent.
+        "500":
+          description: The VM migration could not be sent.
+      summary: Send a VM migration to URL
 components:
   schemas:
     VmmPingResponse:
@@ -564,12 +594,12 @@ components:
             pci_segment: 6
             vhost_mode: Client
             iommu: false
+            fds:
+            - 3
+            - 3
             vhost_socket: vhost_socket
             vhost_user: false
             id: id
-            fd:
-            - 3
-            - 3
             mask: 255.255.255.0
           - tap: tap
             num_queues: 9
@@ -588,12 +618,12 @@ components:
             pci_segment: 6
             vhost_mode: Client
             iommu: false
+            fds:
+            - 3
+            - 3
             vhost_socket: vhost_socket
             vhost_user: false
             id: id
-            fd:
-            - 3
-            - 3
             mask: 255.255.255.0
         device_tree:
           key:
@@ -892,12 +922,12 @@ components:
           pci_segment: 6
           vhost_mode: Client
           iommu: false
+          fds:
+          - 3
+          - 3
           vhost_socket: vhost_socket
           vhost_user: false
           id: id
-          fd:
-          - 3
-          - 3
           mask: 255.255.255.0
         - tap: tap
           num_queues: 9
@@ -916,12 +946,12 @@ components:
           pci_segment: 6
           vhost_mode: Client
           iommu: false
+          fds:
+          - 3
+          - 3
           vhost_socket: vhost_socket
           vhost_user: false
           id: id
-          fd:
-          - 3
-          - 3
           mask: 255.255.255.0
       properties:
         cpus:
@@ -1326,16 +1356,15 @@ components:
         pci_segment: 6
         vhost_mode: Client
         iommu: false
+        fds:
+        - 3
+        - 3
         vhost_socket: vhost_socket
         vhost_user: false
         id: id
-        fd:
-        - 3
-        - 3
         mask: 255.255.255.0
       properties:
         tap:
-          default: ""
           type: string
         ip:
           default: 192.168.249.1
@@ -1364,7 +1393,7 @@ components:
           type: string
         id:
           type: string
-        fd:
+        fds:
           items:
             format: int32
             type: integer
@@ -1690,4 +1719,21 @@ components:
           type: boolean
       required:
       - source_url
+      type: object
+    ReceiveMigrationData:
+      example:
+        receiver_url: receiver_url
+      properties:
+        receiver_url:
+          type: string
+      type: object
+    SendMigrationData:
+      example:
+        destination_url: destination_url
+        local: true
+      properties:
+        destination_url:
+          type: string
+        local:
+          type: boolean
       type: object
