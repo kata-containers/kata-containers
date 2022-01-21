@@ -28,7 +28,6 @@ pub struct Mount {
     /// Mount options for the mountpoint.
     pub options: Vec<String>,
     /// Device id for device associated with the mountpoint.
-
     pub device_id: String,
     /// Host side bind mount path for the mountpoint.
     pub host_path: Option<String>,

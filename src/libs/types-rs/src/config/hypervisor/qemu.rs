@@ -37,7 +37,6 @@ impl QemuConfig {
 }
 
 impl ConfigPlugin for QemuConfig {
-
     fn get_max_cpus(&self) -> u32 {
         MAX_QEMU_VCPUS
     }

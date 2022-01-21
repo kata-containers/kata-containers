@@ -11,10 +11,6 @@ use lazy_static::lazy_static;
 lazy_static! {
     /// Default configuration file paths.
     pub static ref DEFAULT_RUNTIME_CONFIGURATIONS: Vec::<&'static str> = vec![
-        "/etc/kata-containers2/configuration.toml",
-        "/usr/share/defaults/kata-containers2/configuration.toml",
-        "/etc/kata-containers/configuration_v2.toml",
-        "/usr/share/defaults/kata-containers/configuration_v2.toml",
         "/etc/kata-containers/configuration.toml",
         "/usr/share/defaults/kata-containers/configuration.toml",
     ];
@@ -60,4 +56,3 @@ pub const DEFAULT_QEMU_PCI_BRIDGES: u32 = 2;
 pub const MAX_QEMU_PCI_BRIDGES: u32 = 5;
 pub const MAX_QEMU_VCPUS: u32 = 256;
 pub const MIN_QEMU_MEMORY_SIZE: u32 = 64;
-

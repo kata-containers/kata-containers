@@ -235,7 +235,7 @@ impl BootInfo {
     }
 
     /// Validate guest kernel image annotaion
-    pub fn validate_boot_path(&self, path: &String) -> Result<()> {
+    pub fn validate_boot_path(&self, path: &str) -> Result<()> {
         validate_path!(path, "path {} is invalid{}")?;
         Ok(())
     }
@@ -710,8 +710,8 @@ impl SecurityInfo {
         false
     }
 
-    /// Validate path 
-     pub fn validate_path(&self, path: &String) -> Result<()> {
+    /// Validate path
+    pub fn validate_path(&self, path: &str) -> Result<()> {
         validate_path!(path, "path {} is invalid{}")?;
         Ok(())
     }

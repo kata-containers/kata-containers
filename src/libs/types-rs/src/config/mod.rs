@@ -4,7 +4,6 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-
 use std::collections::HashMap;
 use std::fs;
 use std::io::{self, Result};
@@ -14,9 +13,7 @@ use std::u32;
 
 use lazy_static::lazy_static;
 
-
 use crate::{eother, sl};
-
 
 /// Default configuration values.
 pub mod default;
@@ -25,7 +22,6 @@ mod agent;
 pub use self::agent::{Agent, AgentVendor};
 
 pub mod hypervisor;
-
 
 pub use self::hypervisor::{
     BootInfo, DragonballConfig, Hypervisor, QemuConfig, HYPERVISOR_NAME_DRAGONBALL,

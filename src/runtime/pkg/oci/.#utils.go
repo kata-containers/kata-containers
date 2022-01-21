@@ -1,1 +1,0 @@
-root@gentoo.localdomain.14967:1642063452

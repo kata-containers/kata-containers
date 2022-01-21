@@ -10,14 +10,7 @@ pub mod cgroup;
 pub mod cpu;
 pub mod device;
 pub mod fs;
-<<<<<<< HEAD
-<<<<<<< HEAD
 pub mod hooks;
-=======
->>>>>>> 09c70a50 (libs/sys-util: add function to detect and update K8s emptyDir volume)
-=======
-pub mod hooks;
->>>>>>> 5d59a31f (libs/sys-util: provide functions to execute hooks)
 pub mod k8s;
 pub mod mount;
 pub mod numa;
