@@ -1385,7 +1385,7 @@ mod tests {
 
         for (i, t) in tests.iter().enumerate() {
             // Create a string containing details of the test
-            let msg = format!("test[{}]: {:?}", i, t);
+            let msg = format!("test[{}]: {:?}", i, t.name);
 
             // if is_symlink, then should be prepare the softlink environment
             if t.symlink_path != "" {
