@@ -15,7 +15,7 @@ path = "src/bin/containerd-shim-kata-v2.rs"
 [dependencies]
 go-flag = "0.1.0"
 thiserror = "1.0.30"
-protobuf = "=2.14.0"
+protobuf = "2.25.2"
 libc = "0.2.108"
 unix_socket2 = "0.5.4"
 oci-spec = "0.5.2"
@@ -28,8 +28,8 @@ serde_json = "1.0.72"
 slog-stdlog = "4.1.0"
 log = "0.4.14"
 slog-async = "2.7.0"
+containerd-shim-protos = "0.1"
 
-shim-proto = { path = "../../../libs/shim-proto" }
 virtcontainers = { path = "../virtcontainers" }
 agent_client = { path = "../agent_client" }
 logging = { path = "../../../libs/logging"}

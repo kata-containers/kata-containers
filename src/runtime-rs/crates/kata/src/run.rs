@@ -10,10 +10,10 @@ use std::path::Path;
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::{Arc, Mutex};
 
+use containerd_shim_protos::shim::shim_ttrpc;
 use ttrpc::server::Server;
 
 use agent_client::Agent;
-use shim_proto::shim_ttrpc;
 use virtcontainers::{Sandbox, TomlConfig};
 
 use crate::config::load_configuration;

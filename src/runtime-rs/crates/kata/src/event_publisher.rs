@@ -9,11 +9,11 @@ use std::process::{Command, Stdio};
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::Arc;
 
+use containerd_shim_protos::events::task::TaskOOM;
 use protobuf::Message;
 use slog::{debug, error, info, warn};
 
 use agent_client::Agent;
-use shim_proto::events_task::TaskOOM;
 
 const TASK_OOMEVENT_TOPIC: &str = "/tasks/oom";
 
@@ -194,10 +194,10 @@ mod tests {
         assert_eq!(ev.topic, TASK_OOMEVENT_TOPIC);
 
         let any_message: protobuf::well_known_types::Any =
-            protobuf::parse_from_bytes(ev.data.as_slice()).unwrap();
+            Message::parse_from_bytes(ev.data.as_slice()).unwrap();
         assert_eq!(any_message.get_type_url(), "containerd.events.TaskOOM");
 
-        let oom_event: TaskOOM = protobuf::parse_from_bytes(any_message.get_value()).unwrap();
+        let oom_event: TaskOOM = Message::parse_from_bytes(any_message.get_value()).unwrap();
         assert_eq!(oom_event.get_container_id(), container_id);
     }
 }

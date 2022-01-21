@@ -8,6 +8,11 @@ use std::convert::TryFrom;
 use std::sync::mpsc::Sender;
 use std::sync::{Arc, Mutex, RwLock};
 
+use containerd_shim_protos::cgroups::metrics;
+use containerd_shim_protos::shim::empty::Empty;
+use containerd_shim_protos::shim::shim;
+use containerd_shim_protos::shim::shim_ttrpc::Task;
+use containerd_shim_protos::shim::task::{ProcessInfo, Status};
 use nix::sys::signal::Signal;
 use protobuf::well_known_types::Timestamp;
 use protobuf::Message;
@@ -16,8 +21,7 @@ use ttrpc::error::get_rpc_status;
 use ttrpc::{Code, Result, TtrpcContext};
 
 use agent_client::{BlkioStatsEntry, MemoryData, StatsContainerResponse};
-use shim_proto::task::{ProcessInfo, Status};
-use shim_proto::{empty::Empty, metrics, shim, shim_ttrpc::Task};
+
 use virtcontainers::container::State;
 use virtcontainers::spec_info::ContainerType;
 use virtcontainers::Sandbox;
@@ -840,7 +844,7 @@ fn to_blkio_entries(entry: Vec<BlkioStatsEntry>) -> ::protobuf::RepeatedField<me
         .collect()
 }
 
-fn to_status(state: virtcontainers::container::State) -> shim_proto::task::Status {
+fn to_status(state: virtcontainers::container::State) -> Status {
     match state {
         State::Ready => Status::CREATED,
         State::Running => Status::RUNNING,

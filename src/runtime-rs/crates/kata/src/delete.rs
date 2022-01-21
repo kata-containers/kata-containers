@@ -4,8 +4,8 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
+use containerd_shim_protos::shim::shim::DeleteResponse;
 use protobuf::Message;
-use shim_proto::shim::DeleteResponse;
 use virtcontainers::Sandbox;
 
 use crate::{to_timestamp, Error, Result, ShimExecutor};
