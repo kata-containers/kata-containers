@@ -1,6 +1,6 @@
 #!/bin/bash -e
 #
-# Copyright (c) 2021 IBM Corporation
+# Copyright (c) 2021, 2022 IBM Corporation
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -8,7 +8,8 @@
 # Disclaimer: This script is work in progress for supporting the CCv0 prototype
 # It shouldn't be considered supported by the Kata Containers community, or anyone else
 
-# Based on https://github.com/kata-containers/kata-containers/blob/main/docs/Developer-Guide.md, but with elements of the tests/.ci scripts used
+# Based on https://github.com/kata-containers/kata-containers/blob/main/docs/Developer-Guide.md,
+# but with elements of the tests/.ci scripts used
 
 readonly script_name="$(basename "${BASH_SOURCE[0]}")"
 
@@ -31,8 +32,14 @@ export tests_repo="${tests_repo:-github.com/kata-containers/tests}"
 export tests_branch="${tests_branch:-CCv0}"
 export target_branch=${tests_branch} # kata-containers/ci/lib.sh uses target branch var to check out tests repo
 
+# if .bash_profile exists then use it, otherwise fall back to .profile
+export PROFILE="${HOME}/.profile"
+if [ -r "${HOME}/.bash_profile" ]; then
+    export PROFILE="${HOME}/.bash_profile"
+fi
+
 # Create a bunch of common, derived values up front so we don't need to create them in all the different functions
-. "$HOME/.profile"
+. ${PROFILE}
 if [ -z ${GOPATH} ]; then
     export GOPATH=${HOME}/go
 fi
@@ -41,6 +48,8 @@ export katacontainers_repo_dir="${GOPATH}/src/${katacontainers_repo}"
 export ROOTFS_DIR="${katacontainers_repo_dir}/tools/osbuilder/rootfs-builder/rootfs"
 export PULL_IMAGE="${PULL_IMAGE:-quay.io/kata-containers/confidential-containers:signed}" # Doesn't need authentication
 export CONTAINER_ID="${CONTAINER_ID:-0123456789}"
+source /etc/os-release || source /usr/lib/os-release
+grep -Eq "\<fedora\>" /etc/os-release 2> /dev/null && export USE_PODMAN=true
 
 debug_output() {
     if [ -n "${DEBUG}" ]
@@ -65,7 +74,7 @@ usage() {
 Overview:
     Build and test kata containers from source
     Optionally set kata-containers and tests repo and branch as exported variables before running
-    e.g. export katacontainers_repo=github.com/stevenhorsman/kata-containers && export katacontainers_branch=kata-ci-from-fork && export tests_repo=github.com/stevenhorsman/tests && export tests_branch=kata-ci-from-fork && . ~/${script_name} -d build_and_install_all
+    e.g. export katacontainers_repo=github.com/stevenhorsman/kata-containers && export katacontainers_branch=kata-ci-from-fork && export tests_repo=github.com/stevenhorsman/tests && export tests_branch=kata-ci-from-fork && ~/${script_name} build_and_install_all
 Usage:
     ${script_name} [options] <command>
 Commands:
@@ -129,26 +138,30 @@ rebuild_and_install_kata() {
 
 # Based on the jenkins_job_build.sh script in kata-containers/tests/.ci - checks out source code and installs dependencies
 initialize() {
-    # We need git to checkout and bootstrap the ci scripts
-    sudo apt-get update && sudo apt-get install -y git socat qemu-utils 
+    # We need git to checkout and bootstrap the ci scripts and some other packages used in testing
+    sudo apt-get update && sudo apt-get install -y curl git socat qemu-utils
     
     PROFILE="${HOME}/.profile"
     grep -qxF "export GOPATH=\${HOME}/go" "${PROFILE}" || echo "export GOPATH=\${HOME}/go" >> "${PROFILE}"
     grep -qxF "export GOROOT=/usr/local/go" "${PROFILE}" || echo "export GOROOT=/usr/local/go" >> "${PROFILE}"
-    grep -qxF "export PATH=\${GOPATH}/bin:/usr/local/go/bin:/usr/sbin:/sbin:\${PATH}" "${PROFILE}" || echo "export PATH=\${GOPATH}/bin:/usr/local/go/bin:/usr/sbin:/sbin:\${PATH}" >> "${PROFILE}"
-    . "${HOME}/.profile"
+    grep -qxF "export PATH=\${GOPATH}/bin:/usr/local/go/bin:\${PATH}" "${PROFILE}" || echo "export PATH=\${GOPATH}/bin:/usr/local/go/bin:\${PATH}" >> "${PROFILE}"
+    
+    # Load the new go and PATH parameters from the profile
+    . ${PROFILE}
     mkdir -p "${GOPATH}"
 
     check_out_repos
 
     pushd "${tests_repo_dir}"
     ci_dir_name=".ci"
-    "${ci_dir_name}/install_go.sh" -p -f
-    "${ci_dir_name}/install_rust.sh"
+    sudo -E PATH=$PATH -s "${ci_dir_name}/install_go.sh" -p -f
+    sudo -E PATH=$PATH -s "${ci_dir_name}/install_rust.sh"
 
     # Run setup, but don't install kata as we will build it ourselves in locations matching the developer guide
     export INSTALL_KATA="no"
-    ${ci_dir_name}/setup.sh
+    sudo -E PATH=$PATH -s ${ci_dir_name}/setup.sh
+    # Reload the profile to pick up installed dependencies
+    . ${PROFILE}
     popd
 }
 
@@ -177,11 +190,12 @@ check_out_repos() {
 }
 
 build_and_install_kata_runtime() {
-    cd ${katacontainers_repo_dir}/src/runtime
+    pushd ${katacontainers_repo_dir}/src/runtime
     make clean && make && sudo -E PATH=$PATH make install
     debug_output "We should have created Kata runtime binaries:: /usr/local/bin/kata-runtime and /usr/local/bin/containerd-shim-kata-v2"
     debug_output "We should have made the Kata configuration file: /usr/share/defaults/kata-containers/configuration.toml"
     debug_output "kata-runtime version: $(kata-runtime version)"
+    popd
 }
 
 configure() {
@@ -195,11 +209,11 @@ configure() {
         # insert the cri_handler = "cc" into the [plugins.cri.containerd.runtimes.kata] section
         sudo sed -z -i 's/\([[:blank:]]*\)\(runtime_type = "io.containerd.kata.v2"\)/\1\2\n\1cri_handler = "cc"/' /etc/containerd/config.toml
     fi
-    
+
     # Add cni directory to containerd config
     echo "    [plugins.cri.cni]
       # conf_dir is the directory in which the admin places a CNI conf.
-      conf_dir = \"/etc/cni/net.d\"" >> /etc/containerd/config.toml
+      conf_dir = \"/etc/cni/net.d\"" | sudo tee -a /etc/containerd/config.toml
     
     # Switch image offload to true in kata config
     sudo sed -i -e 's/^# *\(service_offload\).*=.*$/\1 = true/g' /etc/kata-containers/configuration.toml
@@ -232,21 +246,23 @@ build_and_add_agent_to_rootfs() {
 }
 
 build_a_custom_kata_agent() {
-    if [[ ! -L /bin/musl-g++ ]]
-    then
-        rustup target add x86_64-unknown-linux-musl
-        sudo ln -s /usr/bin/g++ /bin/musl-g++
-    fi
     . "$HOME/.cargo/env"
-    cd ${katacontainers_repo_dir}/src/agent && make
-    debug_output "Kata agent built: $(ls -al ${katacontainers_repo_dir}/src/agent/target/x86_64-unknown-linux-musl/release/kata-agent)"
+    pushd ${katacontainers_repo_dir}/src/agent
+    sudo -E PATH=$PATH make
+
+    ARCH=$(uname -m)
+    [ ${ARCH} == "ppc64le" ] || [ ${ARCH} == "s390x" ] && export LIBC=gnu || export LIBC=musl
+    [ ${ARCH} == "ppc64le" ] && export ARCH=powerpc64le
+
+    debug_output "Kata agent built: $(ls -al ${katacontainers_repo_dir}/src/agent/target/${ARCH}-unknown-linux-${LIBC}/release/kata-agent)"
     # Run a make install into the rootfs directory in order to create the kata-agent.service file which is required when we add to the rootfs
     sudo -E PATH=$PATH make install DESTDIR="${ROOTFS}"
+    popd
 }
 
 create_a_local_rootfs() {
     sudo rm -rf "${ROOTFS_DIR}"
-    cd ${katacontainers_repo_dir}/tools/osbuilder/rootfs-builder
+    pushd ${katacontainers_repo_dir}/tools/osbuilder/rootfs-builder
     export distro="ubuntu"
     [[ -z "${USE_PODMAN:-}" ]] && use_docker="${use_docker:-1}"
     sudo -E OS_VERSION="${OS_VERSION:-}" GOPATH=$GOPATH DEBUG="${DEBUG}" USE_DOCKER="${use_docker:-}" SKOPEO=${SKOPEO:-} UMOCI=yes SECCOMP=yes ./rootfs.sh -r ${ROOTFS_DIR} ${distro}
@@ -255,17 +271,23 @@ create_a_local_rootfs() {
     pushd "${tests_repo_dir}"
     git checkout ${tests_branch}
     popd
-
     # During the ./rootfs.sh call the kata agent is built as root, so we need to update the permissions, so we can rebuild it
     sudo chown -R ${USER}:${USER} "${katacontainers_repo_dir}/src/agent/"
+    popd
 }
 
 add_custom_agent_to_rootfs() {
-    cd ${katacontainers_repo_dir}/tools/osbuilder/rootfs-builder
-    sudo install -o root -g root -m 0550 -t ${ROOTFS_DIR}/usr/bin ../../../src/agent/target/x86_64-unknown-linux-musl/release/kata-agent
+    pushd ${katacontainers_repo_dir}/tools/osbuilder/rootfs-builder
+
+    ARCH=$(uname -m)
+    [ ${ARCH} == "ppc64le" ] || [ ${ARCH} == "s390x" ] && export LIBC=gnu || export LIBC=musl
+    [ ${ARCH} == "ppc64le" ] && export ARCH=powerpc64le
+
+    sudo install -o root -g root -m 0550 -t ${ROOTFS_DIR}/usr/bin ${katacontainers_repo_dir}/src/agent/target/${ARCH}-unknown-linux-${LIBC}/release/kata-agent
     sudo install -o root -g root -m 0440 ../../../src/agent/kata-agent.service ${ROOTFS_DIR}/usr/lib/systemd/system/
     sudo install -o root -g root -m 0440 ../../../src/agent/kata-containers.target ${ROOTFS_DIR}/usr/lib/systemd/system/
     debug_output "Added kata agent to rootfs: $(ls -al ${ROOTFS_DIR}/usr/bin/kata-agent)"
+    popd
 }
 
 build_and_install_rootfs() {
@@ -274,12 +296,15 @@ build_and_install_rootfs() {
 }
 
 build_rootfs_image() {
-    cd ${katacontainers_repo_dir}/tools/osbuilder/image-builder
-    script -fec 'sudo -E USE_DOCKER=true ./image_builder.sh ${ROOTFS_DIR}'
+    pushd ${katacontainers_repo_dir}/tools/osbuilder/image-builder
+    # Logic from install_kata_image.sh - if we aren't using podman (ie on a fedora like), then use docker
+    [[ -z "${USE_PODMAN:-}" ]] && use_docker="${use_docker:-1}"
+    sudo -E USE_DOCKER="${use_docker:-}" ./image_builder.sh ${ROOTFS_DIR}
+    popd
 }
 
 install_rootfs_image() {
-    cd ${katacontainers_repo_dir}/tools/osbuilder/image-builder
+    pushd ${katacontainers_repo_dir}/tools/osbuilder/image-builder
     commit=$(git log --format=%h -1 HEAD)
     date=$(date +%Y-%m-%d-%T.%N%z)
     image="kata-containers-${date}-${commit}"
@@ -287,15 +312,17 @@ install_rootfs_image() {
     (cd /usr/share/kata-containers && sudo ln -sf "$image" kata-containers.img)
     echo "Built Rootfs from ${ROOTFS_DIR} to /usr/share/kata-containers/${image}"
     ls -al /usr/share/kata-containers/
+    popd
 }
 
 install_guest_kernel_image() {
-    cd ${katacontainers_repo_dir}/tools/packaging/kernel
-    ./build-kernel.sh setup
-    ./build-kernel.sh build
-    sudo chmod 777 /usr/share/kata-containers/ # Give user permission to install kernel
-    ./build-kernel.sh install
+    pushd ${katacontainers_repo_dir}/tools/packaging/kernel
+    sudo -E PATH=$PATH ./build-kernel.sh setup
+    sudo -E PATH=$PATH ./build-kernel.sh build
+    sudo chmod u+wrx /usr/share/kata-containers/ # Give user permission to install kernel
+    sudo -E PATH=$PATH ./build-kernel.sh install
     debug_output "New kernel installed to $(ls -al /usr/share/kata-containers/vmlinux*)"
+    popd
 }
 
 build_qemu() {
@@ -307,17 +334,29 @@ check_kata_runtime() {
 }
 
 init_kubernetes() {
-    # If kubernetes init has previous run we need to clean it by removing the image and resetting k8s
-    cid=$(docker ps -a -q -f name=^/kata-registry$)
-    if [ -n "${cid}" ]; then
-        docker stop ${cid} && docker rm ${cid}
-    fi
-    k8s_nodes=$(kubectl get nodes -o name)
-    if [ -n "${k8s_nodes}" ]; then
-        kubeadm reset -f
+
+    # Check that kubeadm was installed and install it otherwise
+    if ! [ -x "$(command -v kubeadm)" ]; then
+        pushd "${tests_repo_dir}/.ci"
+        sudo -E PATH=$PATH -s install_kubernetes.sh
+        if [ "${CRI_CONTAINERD}" == "yes" ]; then
+            sudo -E PATH=$PATH -s "configure_containerd_for_kubernetes.sh"
+        fi
+        popd
     fi
 
-    export CI="true" && ${tests_repo_dir}/integration/kubernetes/init.sh
+    # If kubernetes init has previously run we need to clean it by removing the image and resetting k8s
+    cid=$(sudo docker ps -a -q -f name=^/kata-registry$)
+    if [ -n "${cid}" ]; then
+        sudo docker stop ${cid} && sudo docker rm ${cid}
+    fi
+    k8s_nodes=$(kubectl get nodes -o name 2>/dev/null || true)
+    if [ -n "${k8s_nodes}" ]; then
+        sudo kubeadm reset -f
+    fi
+
+    export CI="true" && sudo -E PATH=$PATH -s ${tests_repo_dir}/integration/kubernetes/init.sh
+    sudo chown ${USER}:$(id -g -n ${USER}) "$HOME/.kube/config"
     cat << EOT | tee ~/nginx-kata.yaml
 apiVersion: v1
 kind: Pod
@@ -343,8 +382,8 @@ metadata:
 EOF
 
     # If already exists then delete and re-create
-    if [ -n "$(crictl pods --name ${crictl_sandbox_name} -q)" ]; then
-        crictl_delete_cc_pod
+    if [ -n "$(sudo crictl pods --name ${crictl_sandbox_name} -q)" ]; then
+        crictl_delete_cc
     fi
 
     pod_id=$(sudo crictl runp -r kata ~/pod-config.yaml)
@@ -363,16 +402,18 @@ command:
 log_path: kata-cc.0.log
 EOF
 
-    pod_id=$(crictl pods --name ${crictl_sandbox_name} -q)
+    pod_id=$(sudo crictl pods --name ${crictl_sandbox_name} -q)
     container_id=$(sudo crictl create -with-pull ${pod_id} ~/container-config.yaml ~/pod-config.yaml)
     sudo crictl start ${container_id}
     sudo crictl ps -a
 }
 
 crictl_delete_cc() {
-    pod_id=$(crictl pods --name ${crictl_sandbox_name} -q)
-    container_id=$(crictl ps --pod ${pod_id} -q)
-    sudo crictl stop ${container_id} && sudo crictl rm ${container_id}
+    pod_id=$(sudo crictl pods --name ${crictl_sandbox_name} -q)
+    container_id=$(sudo crictl ps --pod ${pod_id} -q)
+    if [ -n "${container_id}" ]; then
+        sudo crictl stop ${container_id} && sudo crictl rm ${container_id}
+    fi
     sudo crictl stopp ${pod_id} && sudo crictl rmp ${pod_id}
 }
 
@@ -393,8 +434,11 @@ restart_kata_pod() {
 test_kata_runtime() {
     echo "Running ctr with the kata runtime..."
     test_image="docker.io/library/busybox:latest"
-    sudo ctr image pull "${test_image}"
-    # If you hit too many requests run `sudo ctr image pull "docker.io/library/busybox:latest" -u <dockerhub username>` command and retry
+    if [ -z $(ctr images ls -q name=="${test_image}") ]; then
+        sudo ctr image pull "${test_image}"
+        # If you hit too many requests run 
+        # `sudo ctr image pull "docker.io/library/busybox:latest" -u <dockerhub username>` command and retry
+    fi
     sudo ctr run --runtime "io.containerd.kata.v2" --rm -t "${test_image}" test-kata uname -a
 }
 
@@ -411,7 +455,8 @@ run_kata_and_capture_logs() {
 }
 
 get_ids() {
-    guest_cid=$(ps -ef | grep qemu-system-x86_64 | egrep -o "guest-cid=[0-9]*" | cut -d= -f2) && sandbox_id=$(ps -ef | grep qemu | egrep -o "sandbox-[^,][^,]*" | sed 's/sandbox-//g' | awk '{print $1}')
+    guest_cid=$(sudo ss -H --vsock | awk '{print $6}' | cut -d: -f1)
+    sandbox_id=$(ps -ef | grep qemu | egrep -o "sandbox-[^,][^,]*" | sed 's/sandbox-//g' | awk '{print $1}')
 }
 
 open_kata_console() {
@@ -421,7 +466,7 @@ open_kata_console() {
 
 open_kata_shell() {
     get_ids
-    sudo kata-runtime exec ${sandbox_id}
+    sudo -E "PATH=$PATH" kata-runtime exec ${sandbox_id}
 }
 
 build_bundle_dir_if_necessary() {
@@ -441,8 +486,11 @@ build_agent_ctl() {
     if [ -e "${HOME}/.cargo/registry" ]; then
         sudo chown -R ${USER}:${USER} "${HOME}/.cargo/registry"
     fi
-    make
-    cd "./target/x86_64-unknown-linux-musl/release"
+    sudo -E PATH=$PATH -s  make
+    ARCH=$(uname -m)
+    [ ${ARCH} == "ppc64le" ] || [ ${ARCH} == "s390x" ] && export LIBC=gnu || export LIBC=musl
+    [ ${ARCH} == "ppc64le" ] && export ARCH=powerpc64le
+    cd "./target/${ARCH}-unknown-linux-${LIBC}/release/"
 }
 
 run_agent_ctl_command() {
@@ -466,7 +514,7 @@ agent_create_container() {
 
 shim_pull_image() {
     get_ids
-    ctr_shim_command="ctr --namespace k8s.io shim --id ${sandbox_id} pull-image ${PULL_IMAGE} ${CONTAINER_ID}"
+    ctr_shim_command="sudo ctr --namespace k8s.io shim --id ${sandbox_id} pull-image ${PULL_IMAGE} ${CONTAINER_ID}"
     echo "Issuing command '${ctr_shim_command}'"
     ${ctr_shim_command}
 }
@@ -476,6 +524,7 @@ main() {
         case "$opt" in
             d) 
                 DEBUG="-d"
+                set -x
                 ;;
             h) 
                 usage 0
@@ -564,11 +613,11 @@ main() {
         agent_pull_image)
             agent_pull_image
             ;;
+        shim_pull_image)
+            shim_pull_image
+            ;;
         agent_create_container)
             agent_create_container
-            ;;
-	shim_pull_image)
-            shim_pull_image
             ;;
         *)
             usage 1
