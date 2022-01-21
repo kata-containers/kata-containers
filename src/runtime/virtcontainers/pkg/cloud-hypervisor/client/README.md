@@ -95,10 +95,12 @@ Class | Method | HTTP request | Description
 *DefaultApi* | [**VmAddVsockPut**](docs/DefaultApi.md#vmaddvsockput) | **Put** /vm.add-vsock | Add a new vsock device to the VM
 *DefaultApi* | [**VmCountersGet**](docs/DefaultApi.md#vmcountersget) | **Get** /vm.counters | Get counters from the VM
 *DefaultApi* | [**VmInfoGet**](docs/DefaultApi.md#vminfoget) | **Get** /vm.info | Returns general information about the cloud-hypervisor Virtual Machine (VM) instance.
+*DefaultApi* | [**VmReceiveMigrationPut**](docs/DefaultApi.md#vmreceivemigrationput) | **Put** /vm.receive-migration | Receive a VM migration from URL
 *DefaultApi* | [**VmRemoveDevicePut**](docs/DefaultApi.md#vmremovedeviceput) | **Put** /vm.remove-device | Remove a device from the VM
 *DefaultApi* | [**VmResizePut**](docs/DefaultApi.md#vmresizeput) | **Put** /vm.resize | Resize the VM
 *DefaultApi* | [**VmResizeZonePut**](docs/DefaultApi.md#vmresizezoneput) | **Put** /vm.resize-zone | Resize a memory zone
 *DefaultApi* | [**VmRestorePut**](docs/DefaultApi.md#vmrestoreput) | **Put** /vm.restore | Restore a VM from a snapshot.
+*DefaultApi* | [**VmSendMigrationPut**](docs/DefaultApi.md#vmsendmigrationput) | **Put** /vm.send-migration | Send a VM migration to URL
 *DefaultApi* | [**VmSnapshotPut**](docs/DefaultApi.md#vmsnapshotput) | **Put** /vm.snapshot | Returns a VM snapshot.
 *DefaultApi* | [**VmmPingGet**](docs/DefaultApi.md#vmmpingget) | **Get** /vmm.ping | Ping the VMM to check for API server availability
 
@@ -125,8 +127,10 @@ Class | Method | HTTP request | Description
  - [PciDeviceInfo](docs/PciDeviceInfo.md)
  - [PmemConfig](docs/PmemConfig.md)
  - [RateLimiterConfig](docs/RateLimiterConfig.md)
+ - [ReceiveMigrationData](docs/ReceiveMigrationData.md)
  - [RestoreConfig](docs/RestoreConfig.md)
  - [RngConfig](docs/RngConfig.md)
+ - [SendMigrationData](docs/SendMigrationData.md)
  - [SgxEpcConfig](docs/SgxEpcConfig.md)
  - [TokenBucket](docs/TokenBucket.md)
  - [VmAddDevice](docs/VmAddDevice.md)
