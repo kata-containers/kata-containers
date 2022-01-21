@@ -24,8 +24,6 @@ RUN dnf -y update && dnf install -y \
     glibc-headers \
     glibc-static \
     glibc-utils \
-    libseccomp \
-    libseccomp-devel \
     libstdc++-devel \
     libstdc++-static \
     m4 \
