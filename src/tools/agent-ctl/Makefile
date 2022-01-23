@@ -7,11 +7,8 @@ include ../../../utils.mk
 
 default: build
 
-build: libs-crate-tests
+build:
 	@RUSTFLAGS="$(EXTRA_RUSTFLAGS) --deny warnings" cargo build --target $(TRIPLE) --$(BUILD_TYPE)
-
-libs-crate-tests:
-	make -C $(CWD)/../../libs
 
 clean:
 	cargo clean
@@ -31,6 +28,5 @@ check:
 	check \
 	clean \
 	install \
-	libs-crate-tests \
 	test \
 	vendor
