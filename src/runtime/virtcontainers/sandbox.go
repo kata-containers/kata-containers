@@ -1989,7 +1989,7 @@ func (s *Sandbox) calculateSandboxMemory() (int64, bool, int64) {
 
 		if m := c.Resources.Memory; m != nil {
 			currentLimit := int64(0)
-			if m.Limit != nil {
+			if m.Limit != nil && *m.Limit > 0 {
 				currentLimit = *m.Limit
 				memorySandbox += currentLimit
 			}
