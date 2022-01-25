@@ -36,7 +36,7 @@ run_static_checks()
 	# Make sure we have the targeting branch
 	git remote set-branches --add origin "${branch}"
 	git fetch -a
-	bash "$tests_repo_dir/.ci/static-checks.sh" "github.com/kata-containers/kata-containers"
+	bash "$tests_repo_dir/.ci/static-checks.sh" "$@"
 }
 
 run_go_test()
