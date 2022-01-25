@@ -141,7 +141,7 @@ func encodeMetricFamily(mfs []*dto.MetricFamily, encoder expfmt.Encoder) error {
 // aggregateSandboxMetrics will get metrics from one sandbox and do some process
 func (km *KataMonitor) aggregateSandboxMetrics(encoder expfmt.Encoder) error {
 	// get all kata sandboxes from cache
-	sandboxes := km.sandboxCache.getKataSandboxes()
+	sandboxes := km.sandboxCache.getSandboxList()
 	// save running kata pods as a metrics.
 	runningShimCount.Set(float64(len(sandboxes)))
 
