@@ -20,12 +20,6 @@ type sandboxCache struct {
 	sandboxes map[string]sandboxKubeData
 }
 
-func (sc *sandboxCache) getSandboxes() map[string]sandboxKubeData {
-	sc.Lock()
-	defer sc.Unlock()
-	return sc.sandboxes
-}
-
 func (sc *sandboxCache) getSandboxList() []string {
 	sc.Lock()
 	defer sc.Unlock()
@@ -67,10 +61,4 @@ func (sc *sandboxCache) setMetadata(id string, value sandboxKubeData) {
 	defer sc.Unlock()
 
 	sc.sandboxes[id] = value
-}
-
-func (sc *sandboxCache) set(sandboxes map[string]sandboxKubeData) {
-	sc.Lock()
-	defer sc.Unlock()
-	sc.sandboxes = sandboxes
 }
