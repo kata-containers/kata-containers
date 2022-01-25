@@ -62,3 +62,11 @@ func (sc *sandboxCache) setMetadata(id string, value sandboxKubeData) {
 
 	sc.sandboxes[id] = value
 }
+
+func (sc *sandboxCache) getMetadata(id string) (sandboxKubeData, bool) {
+	sc.Lock()
+	defer sc.Unlock()
+
+	metadata, ok := sc.sandboxes[id]
+	return metadata, ok
+}
