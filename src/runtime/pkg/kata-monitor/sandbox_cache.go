@@ -9,28 +9,31 @@ import (
 	"sync"
 )
 
+type sandboxKubeData struct {
+	uid       string
+	name      string
+	namespace string
+}
 type sandboxCache struct {
 	*sync.Mutex
-	// the bool value tracks if the pod is a kata one (true) or not (false)
-	sandboxes map[string]bool
+	// the sandboxKubeData links the sandbox id from the container manager to the pod metadata of kubernetes
+	sandboxes map[string]sandboxKubeData
 }
 
-func (sc *sandboxCache) getAllSandboxes() map[string]bool {
+func (sc *sandboxCache) getSandboxes() map[string]sandboxKubeData {
 	sc.Lock()
 	defer sc.Unlock()
 	return sc.sandboxes
 }
 
-func (sc *sandboxCache) getKataSandboxes() []string {
+func (sc *sandboxCache) getSandboxList() []string {
 	sc.Lock()
 	defer sc.Unlock()
-	var katasandboxes []string
-	for id, isKata := range sc.sandboxes {
-		if isKata {
-			katasandboxes = append(katasandboxes, id)
-		}
+	var sandboxList []string
+	for id := range sc.sandboxes {
+		sandboxList = append(sandboxList, id)
 	}
-	return katasandboxes
+	return sandboxList
 }
 
 func (sc *sandboxCache) deleteIfExists(id string) bool {
@@ -46,7 +49,7 @@ func (sc *sandboxCache) deleteIfExists(id string) bool {
 	return false
 }
 
-func (sc *sandboxCache) putIfNotExists(id string, value bool) bool {
+func (sc *sandboxCache) putIfNotExists(id string, value sandboxKubeData) bool {
 	sc.Lock()
 	defer sc.Unlock()
 
@@ -59,7 +62,14 @@ func (sc *sandboxCache) putIfNotExists(id string, value bool) bool {
 	return false
 }
 
-func (sc *sandboxCache) set(sandboxes map[string]bool) {
+func (sc *sandboxCache) setMetadata(id string, value sandboxKubeData) {
+	sc.Lock()
+	defer sc.Unlock()
+
+	sc.sandboxes[id] = value
+}
+
+func (sc *sandboxCache) set(sandboxes map[string]sandboxKubeData) {
 	sc.Lock()
 	defer sc.Unlock()
 	sc.sandboxes = sandboxes
