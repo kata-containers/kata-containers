@@ -500,7 +500,7 @@ func (fsdev FSDevice) QemuParams(config *Config) []string {
 	}
 	if fsdev.Transport.isVirtioCCW(config) {
 		if config.Knobs.IOMMUPlatform {
-			deviceParams = append(deviceParams, ",iommu_platform=on")
+			deviceParams = append(deviceParams, "iommu_platform=on")
 		}
 		deviceParams = append(deviceParams, fmt.Sprintf("devno=%s", fsdev.DevNo))
 	}
