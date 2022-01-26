@@ -185,7 +185,7 @@ pub fn validate_path_pattern<P: AsRef<Path>>(patterns: &[String], path: P) -> Re
 
 /// Kata configuration information.
 pub struct KataConfig {
-    config: TomlConfig,
+    config: Option<TomlConfig>,
     agent: String,
     hypervisor: String,
 }
@@ -194,7 +194,7 @@ impl KataConfig {
     /// Set the default Kata configuration object.
     ///
     /// The default Kata configuration information is loaded from system configuration file.
-    pub fn set_default_config(config: TomlConfig, hypervisor: &str, agent: &str) {
+    pub fn set_default_config(config: Option<TomlConfig>, hypervisor: &str, agent: &str) {
         let kata = KataConfig {
             config,
             agent: agent.to_string(),
@@ -214,7 +214,7 @@ impl KataConfig {
     ///
     /// The active Kata configuration information is default configuration information patched
     /// with tunable configuration information from annotations.
-    pub fn set_active_config(config: TomlConfig, hypervisor: &str, agent: &str) {
+    pub fn set_active_config(config: Option<TomlConfig>, hypervisor: &str, agent: &str) {
         let kata = KataConfig {
             config,
             agent: agent.to_string(),
@@ -232,13 +232,13 @@ impl KataConfig {
     }
     /// Get the config in use
     pub fn get_config(&self) -> &TomlConfig {
-        &self.config
+        self.config.as_ref().unwrap()
     }
 
     /// Get the agent configuration in use.
     pub fn get_agent(&self) -> Option<&Agent> {
         if !self.agent.is_empty() {
-            self.config.agent.get(&self.agent)
+            self.config.as_ref().unwrap().agent.get(&self.agent)
         } else {
             None
         }
@@ -247,7 +247,11 @@ impl KataConfig {
     /// Get the hypervisor configuration in use.
     pub fn get_hypervisor(&self) -> Option<&Hypervisor> {
         if !self.hypervisor.is_empty() {
-            self.config.hypervisor.get(&self.hypervisor)
+            self.config
+                .as_ref()
+                .unwrap()
+                .hypervisor
+                .get(&self.hypervisor)
         } else {
             None
         }
@@ -256,7 +260,7 @@ impl KataConfig {
 
 lazy_static! {
     static ref KATA_DEFAULT_CONFIG: Mutex<Arc<KataConfig>> = {
-        let config = TomlConfig::load("").unwrap();
+        let config = Some(TomlConfig::load("").unwrap());
         let kata = KataConfig {
             config,
             agent: String::new(),
@@ -266,7 +270,7 @@ lazy_static! {
         Mutex::new(Arc::new(kata))
     };
     static ref KATA_ACTIVE_CONFIG: Mutex<Arc<KataConfig>> = {
-        let config = TomlConfig::load("").unwrap();
+        let config = Some(TomlConfig::load("").unwrap());
         let kata = KataConfig {
             config,
             agent: String::new(),
