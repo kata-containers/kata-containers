@@ -34,7 +34,7 @@ mod tests {
         qemu.register();
 
         let config = TomlConfig::load(&content).unwrap();
-        KataConfig::set_active_config(config, "qemu", "agent0");
+        KataConfig::set_active_config(Some(config), "qemu", "agent0");
 
         std::process::Command::new("mkdir")
             .arg("./hypervisor_path")
@@ -175,7 +175,7 @@ mod tests {
         assert!(anno
             .update_config_by_annotation(&mut config, "qemu", "agent0")
             .is_ok());
-        KataConfig::set_active_config(config, "qemu", "agnet0");
+        KataConfig::set_active_config(Some(config), "qemu", "agnet0");
         if let Some(ag) = KataConfig::get_default_config().get_agent() {
             assert_eq!(
                 ag.kernel_modules[0],
@@ -287,7 +287,7 @@ mod tests {
         qemu.register();
 
         let config = TomlConfig::load(&content).unwrap();
-        KataConfig::set_active_config(config, "qemu", "agent0");
+        KataConfig::set_active_config(Some(config), "qemu", "agent0");
 
         let mut anno_hash = HashMap::new();
         anno_hash.insert(
@@ -312,7 +312,7 @@ mod tests {
         qemu.register();
 
         let config = TomlConfig::load(&content).unwrap();
-        KataConfig::set_active_config(config, "qemu", "agent0");
+        KataConfig::set_active_config(Some(config), "qemu", "agent0");
 
         let mut anno_hash = HashMap::new();
         anno_hash.insert(
@@ -337,7 +337,7 @@ mod tests {
         qemu.register();
 
         let config = TomlConfig::load(&content).unwrap();
-        KataConfig::set_active_config(config, "qemu", "agent0");
+        KataConfig::set_active_config(Some(config), "qemu", "agent0");
 
         let mut anno_hash = HashMap::new();
         anno_hash.insert(
@@ -365,7 +365,7 @@ mod tests {
         qemu.register();
 
         let config = TomlConfig::load(&content).unwrap();
-        KataConfig::set_active_config(config, "qemu", "agent0");
+        KataConfig::set_active_config(Some(config), "qemu", "agent0");
 
         let mut anno_hash = HashMap::new();
         anno_hash.insert(
@@ -386,7 +386,7 @@ mod tests {
         let path = Path::new(path).join("tests/texture/configuration-anno-0.toml");
         let content = fs::read_to_string(&path).unwrap();
         let config = TomlConfig::load(&content).unwrap();
-        KataConfig::set_active_config(config, "qemu", "agent0");
+        KataConfig::set_active_config(Some(config), "qemu", "agent0");
 
         let qemu = QemuConfig::new();
         qemu.register();
@@ -414,7 +414,7 @@ mod tests {
         qemu.register();
 
         let config = TomlConfig::load(&content).unwrap();
-        KataConfig::set_active_config(config, "qemu", "agent0");
+        KataConfig::set_active_config(Some(config), "qemu", "agent0");
 
         let mut anno_hash = HashMap::new();
         anno_hash.insert(
@@ -439,7 +439,7 @@ mod tests {
         qemu.register();
 
         let config = TomlConfig::load(&content).unwrap();
-        KataConfig::set_active_config(config, "qemu", "agent0");
+        KataConfig::set_active_config(Some(config), "qemu", "agent0");
 
         let mut anno_hash = HashMap::new();
         anno_hash.insert(
