@@ -5,30 +5,22 @@
 
 use anyhow::{anyhow, Result};
 use nix::mount::{self, MsFlags};
-use protocols::types::{Interface, Route};
 use slog::Logger;
-use std::collections::HashMap;
 use std::fs;
 
 const KATA_GUEST_SANDBOX_DNS_FILE: &str = "/run/kata-containers/sandbox/resolv.conf";
 const GUEST_DNS_FILE: &str = "/etc/resolv.conf";
 
-// Network fully describes a sandbox network with its interfaces, routes and dns
+// Network describes a sandbox network, includings its dns
 // related information.
 #[derive(Debug, Default)]
 pub struct Network {
-    ifaces: HashMap<String, Interface>,
-    routes: Vec<Route>,
     dns: Vec<String>,
 }
 
 impl Network {
     pub fn new() -> Network {
-        Network {
-            ifaces: HashMap::new(),
-            routes: Vec::new(),
-            dns: Vec::new(),
-        }
+        Network { dns: Vec::new() }
     }
 
     pub fn set_dns(&mut self, dns: String) {

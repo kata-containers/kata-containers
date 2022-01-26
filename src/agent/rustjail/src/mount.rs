@@ -35,17 +35,9 @@ use crate::log_child;
 // struct is populated from the content in the /proc/<pid>/mountinfo file.
 #[derive(std::fmt::Debug)]
 pub struct Info {
-    id: i32,
-    parent: i32,
-    major: i32,
-    minor: i32,
-    root: String,
     mount_point: String,
-    opts: String,
     optional: String,
     fstype: String,
-    source: String,
-    vfs_opts: String,
 }
 
 const MOUNTINFOFORMAT: &str = "{d} {d} {d}:{d} {} {} {} {}";
@@ -112,6 +104,7 @@ lazy_static! {
 }
 
 #[inline(always)]
+#[cfg(not(test))]
 pub fn mount<
     P1: ?Sized + NixPath,
     P2: ?Sized + NixPath,
@@ -124,21 +117,42 @@ pub fn mount<
     flags: MsFlags,
     data: Option<&P4>,
 ) -> std::result::Result<(), nix::Error> {
-    #[cfg(not(test))]
-    return mount::mount(source, target, fstype, flags, data);
-    #[cfg(test)]
-    return Ok(());
+    mount::mount(source, target, fstype, flags, data)
 }
 
 #[inline(always)]
+#[cfg(test)]
+pub fn mount<
+    P1: ?Sized + NixPath,
+    P2: ?Sized + NixPath,
+    P3: ?Sized + NixPath,
+    P4: ?Sized + NixPath,
+>(
+    _source: Option<&P1>,
+    _target: &P2,
+    _fstype: Option<&P3>,
+    _flags: MsFlags,
+    _data: Option<&P4>,
+) -> std::result::Result<(), nix::Error> {
+    Ok(())
+}
+
+#[inline(always)]
+#[cfg(not(test))]
 pub fn umount2<P: ?Sized + NixPath>(
     target: &P,
     flags: MntFlags,
 ) -> std::result::Result<(), nix::Error> {
-    #[cfg(not(test))]
-    return mount::umount2(target, flags);
-    #[cfg(test)]
-    return Ok(());
+    mount::umount2(target, flags)
+}
+
+#[inline(always)]
+#[cfg(test)]
+pub fn umount2<P: ?Sized + NixPath>(
+    _target: &P,
+    _flags: MntFlags,
+) -> std::result::Result<(), nix::Error> {
+    Ok(())
 }
 
 pub fn init_rootfs(
@@ -450,14 +464,20 @@ fn mount_cgroups(
     Ok(())
 }
 
+#[cfg(not(test))]
 fn pivot_root<P1: ?Sized + NixPath, P2: ?Sized + NixPath>(
     new_root: &P1,
     put_old: &P2,
 ) -> anyhow::Result<(), nix::Error> {
-    #[cfg(not(test))]
-    return unistd::pivot_root(new_root, put_old);
-    #[cfg(test)]
-    return Ok(());
+    unistd::pivot_root(new_root, put_old)
+}
+
+#[cfg(test)]
+fn pivot_root<P1: ?Sized + NixPath, P2: ?Sized + NixPath>(
+    _new_root: &P1,
+    _put_old: &P2,
+) -> anyhow::Result<(), nix::Error> {
+    Ok(())
 }
 
 pub fn pivot_rootfs<P: ?Sized + NixPath + std::fmt::Debug>(path: &P) -> Result<()> {
@@ -535,7 +555,20 @@ fn parse_mount_table() -> Result<Vec<Info>> {
     for (_index, line) in reader.lines().enumerate() {
         let line = line?;
 
-        let (id, parent, major, minor, root, mount_point, opts, optional) = scan_fmt!(
+        //Example mountinfo format:
+        // id
+        // |  / parent
+        // |  |   / major:minor
+        // |  |   |   / root
+        // |  |   |   |  / mount_point
+        // |  |   |   |  |        / opts
+        // |  |   |   |  |        |                           / optional
+        // |  |   |   |  |        |                           |          / fstype
+        // |  |   |   |  |        |                           |          |     / source
+        // |  |   |   |  |        |                           |          |     |      / vfs_opts
+        // 22 96 0:21 / /sys rw,nosuid,nodev,noexec,relatime shared:2 - sysfs sysfs rw,seclabel
+
+        let (_id, _parent, _major, _minor, _root, mount_point, _opts, optional) = scan_fmt!(
             &line,
             MOUNTINFOFORMAT,
             i32,
@@ -550,7 +583,7 @@ fn parse_mount_table() -> Result<Vec<Info>> {
 
         let fields: Vec<&str> = line.split(" - ").collect();
         if fields.len() == 2 {
-            let (fstype, source, vfs_opts) =
+            let (fstype, _source, _vfs_opts) =
                 scan_fmt!(fields[1], "{} {} {}", String, String, String)?;
 
             let mut optional_new = String::new();
@@ -559,17 +592,9 @@ fn parse_mount_table() -> Result<Vec<Info>> {
             }
 
             let info = Info {
-                id,
-                parent,
-                major,
-                minor,
-                root,
                 mount_point,
-                opts,
                 optional: optional_new,
                 fstype,
-                source,
-                vfs_opts,
             };
 
             infos.push(info);
@@ -582,11 +607,15 @@ fn parse_mount_table() -> Result<Vec<Info>> {
 }
 
 #[inline(always)]
+#[cfg(not(test))]
 fn chroot<P: ?Sized + NixPath>(path: &P) -> Result<(), nix::Error> {
-    #[cfg(not(test))]
-    return unistd::chroot(path);
-    #[cfg(test)]
-    return Ok(());
+    unistd::chroot(path)
+}
+
+#[inline(always)]
+#[cfg(test)]
+fn chroot<P: ?Sized + NixPath>(_path: &P) -> Result<(), nix::Error> {
+    Ok(())
 }
 
 pub fn ms_move_root(rootfs: &str) -> Result<bool> {
@@ -1382,7 +1411,7 @@ mod tests {
 
         for (i, t) in tests.iter().enumerate() {
             // Create a string containing details of the test
-            let msg = format!("test[{}]: {:?}", i, t);
+            let msg = format!("test[{}]: {:?}", i, t.name);
 
             // if is_symlink, then should be prepare the softlink environment
             if t.symlink_path != "" {
