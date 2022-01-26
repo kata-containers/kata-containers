@@ -1,5 +1,3 @@
-// +build s390x
-
 // Copyright contributors to the Virtual Machine Manager for Go project
 //
 // SPDX-License-Identifier: Apache-2.0
@@ -13,7 +11,7 @@ import "testing"
 // See https://wiki.qemu.org/Documentation/Platforms/S390X
 var (
 	deviceFSString                 = "-device virtio-9p-ccw,fsdev=workload9p,mount_tag=rootfs,devno=" + DevNo + " -fsdev local,id=workload9p,path=/var/lib/docker/devicemapper/mnt/e31ebda2,security_model=none,multidevs=remap"
-	deviceFSIOMMUString            = "-device virtio-9p-ccw,fsdev=workload9p,mount_tag=rootfs,iommu_platform=on,devno=" + DevNo + " -fsdev local,id=workload9p,path=/var/lib/docker/devicemapper/mnt/e31ebda2,security_model=none,multidevs=remap" //nolint
+	deviceFSIOMMUString            = "-device virtio-9p-ccw,fsdev=workload9p,mount_tag=rootfs,iommu_platform=on,devno=" + DevNo + " -fsdev local,id=workload9p,path=/var/lib/docker/devicemapper/mnt/e31ebda2,security_model=none,multidevs=remap"
 	deviceNetworkString            = "-netdev tap,id=tap0,vhost=on,ifname=ceth0,downscript=no,script=no -device driver=virtio-net-ccw,netdev=tap0,mac=01:02:de:ad:be:ef,devno=" + DevNo
 	deviceNetworkStringMq          = "-netdev tap,id=tap0,vhost=on,fds=3:4 -device driver=virtio-net-ccw,netdev=tap0,mac=01:02:de:ad:be:ef,mq=on,devno=" + DevNo
 	deviceSerialString             = "-device virtio-serial-ccw,id=serial0,devno=" + DevNo
@@ -21,10 +19,7 @@ var (
 	deviceVFIOString               = "-device vfio-ccw,host=02:10.0,devno=" + DevNo
 	deviceSCSIControllerStr        = "-device virtio-scsi-ccw,id=foo,devno=" + DevNo
 	deviceSCSIControllerBusAddrStr = "-device virtio-scsi-ccw,id=foo,bus=pci.0,addr=00:04.0,iothread=iothread1,devno=" + DevNo
-	deviceBlockString              = "-device virtio-blk-ccw,drive=hd0,scsi=off,config-wce=off,devno=" + DevNo + ",share-rw=on,serial=hd0 -drive id=hd0,file=/var/lib/vm.img,aio=threads,format=qcow2,if=none,readonly"
-	devicePCIBridgeString          = "-device pci-bridge,bus=/pci-bus/pcie.0,id=mybridge,chassis_nr=5,shpc=on,addr=ff"
-	devicePCIBridgeStringReserved  = "-device pci-bridge,bus=/pci-bus/pcie.0,id=mybridge,chassis_nr=5,shpc=on,addr=ff,io-reserve=4k,mem-reserve=1m,pref64-reserve=1m"
-	devicePCIEBridgeString         = "-device pcie-pci-bridge,bus=/pci-bus/pcie.0,id=mybridge,addr=ff"
+	deviceBlockString              = "-device virtio-blk-ccw,drive=hd0,scsi=off,config-wce=off,devno=" + DevNo + ",share-rw=on,serial=hd0 -drive id=hd0,file=/var/lib/vm.img,aio=threads,format=qcow2,if=none,readonly=on"
 	romfile                        = ""
 )
 
@@ -72,8 +67,6 @@ func TestAppendDeviceFSCCW(t *testing.T) {
 }
 
 func TestAppendDeviceFSCCWIOMMU(t *testing.T) {
-	t.Skip("Skipping on due to: https://github.com/kata-containers/kata-containers/issues/3500")
-
 	defaultKnobs := Knobs{
 		NoUserConfig:  true,
 		IOMMUPlatform: true,

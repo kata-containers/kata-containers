@@ -1,4 +1,3 @@
-//go:build !s390x
 // +build !s390x
 
 // Copyright contributors to the Virtual Machine Manager for Go project
@@ -12,8 +11,8 @@ import "testing"
 
 var (
 	deviceFSString                 = "-device virtio-9p-pci,disable-modern=true,fsdev=workload9p,mount_tag=rootfs,romfile=efi-virtio.rom -fsdev local,id=workload9p,path=/var/lib/docker/devicemapper/mnt/e31ebda2,security_model=none,multidevs=remap"
-	deviceNetworkString            = "-netdev tap,id=tap0,vhost=on,ifname=ceth0,downscript=no,script=no -device driver=virtio-net-pci,netdev=tap0,mac=01:02:de:ad:be:ef,disable-modern=true,romfile=efi-virtio.rom"
-	deviceNetworkStringMq          = "-netdev tap,id=tap0,vhost=on,fds=3:4 -device driver=virtio-net-pci,netdev=tap0,mac=01:02:de:ad:be:ef,disable-modern=true,mq=on,vectors=6,romfile=efi-virtio.rom"
+	deviceNetworkString            = "-netdev tap,id=tap0,vhost=on,ifname=ceth0,downscript=no,script=no -device driver=virtio-net-pci,netdev=tap0,mac=01:02:de:ad:be:ef,bus=/pci-bus/pcie.0,addr=ff,disable-modern=true,romfile=efi-virtio.rom"
+	deviceNetworkStringMq          = "-netdev tap,id=tap0,vhost=on,fds=3:4 -device driver=virtio-net-pci,netdev=tap0,mac=01:02:de:ad:be:ef,bus=/pci-bus/pcie.0,addr=ff,disable-modern=true,mq=on,vectors=6,romfile=efi-virtio.rom"
 	deviceSerialString             = "-device virtio-serial-pci,disable-modern=true,id=serial0,romfile=efi-virtio.rom,max_ports=2"
 	deviceVhostUserNetString       = "-chardev socket,id=char1,path=/tmp/nonexistentsocket.socket -netdev type=vhost-user,id=net1,chardev=char1,vhostforce -device virtio-net-pci,netdev=net1,mac=00:11:22:33:44:55,romfile=efi-virtio.rom"
 	deviceVSOCKString              = "-device vhost-vsock-pci,disable-modern=true,id=vhost-vsock-pci0,guest-cid=4,romfile=efi-virtio.rom"
@@ -89,6 +88,52 @@ func TestAppendVirtioBalloon(t *testing.T) {
 	balloonDevice.DisableModern = true
 	testAppend(balloonDevice, deviceString+OnDeflateOnOMM+OnDisableModern, t)
 
+}
+
+func TestAppendPCIBridgeDevice(t *testing.T) {
+
+	bridge := BridgeDevice{
+		Type:    PCIBridge,
+		ID:      "mybridge",
+		Bus:     "/pci-bus/pcie.0",
+		Addr:    "255",
+		Chassis: 5,
+		SHPC:    true,
+		ROMFile: romfile,
+	}
+
+	testAppend(bridge, devicePCIBridgeString, t)
+}
+
+func TestAppendPCIBridgeDeviceWithReservations(t *testing.T) {
+
+	bridge := BridgeDevice{
+		Type:          PCIBridge,
+		ID:            "mybridge",
+		Bus:           "/pci-bus/pcie.0",
+		Addr:          "255",
+		Chassis:       5,
+		SHPC:          false,
+		ROMFile:       romfile,
+		IOReserve:     "4k",
+		MemReserve:    "1m",
+		Pref64Reserve: "1m",
+	}
+
+	testAppend(bridge, devicePCIBridgeStringReserved, t)
+}
+
+func TestAppendPCIEBridgeDevice(t *testing.T) {
+
+	bridge := BridgeDevice{
+		Type:    PCIEBridge,
+		ID:      "mybridge",
+		Bus:     "/pci-bus/pcie.0",
+		Addr:    "255",
+		ROMFile: "efi-virtio.rom",
+	}
+
+	testAppend(bridge, devicePCIEBridgeString, t)
 }
 
 func TestAppendDevicePCIeRootPort(t *testing.T) {
