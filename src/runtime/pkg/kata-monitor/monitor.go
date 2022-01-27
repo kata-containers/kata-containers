@@ -24,7 +24,7 @@ const (
 	RuntimeContainerd           = "containerd"
 	RuntimeCRIO                 = "cri-o"
 	fsMonitorRetryDelaySeconds  = 60
-	podCacheRefreshDelaySeconds = 5
+	podCacheRefreshDelaySeconds = 60
 )
 
 // SetLogger sets the logger for katamonitor package.
@@ -85,7 +85,7 @@ func (km *KataMonitor) startPodCacheUpdater() {
 		break
 	}
 	// we refresh the pod cache once if we get multiple add/delete pod events in a short time (< podCacheRefreshDelaySeconds)
-	cacheUpdateTimer := time.NewTimer(podCacheRefreshDelaySeconds * time.Second)
+	cacheUpdateTimer := time.NewTimer(5 * time.Second)
 	cacheUpdateTimerWasSet := false
 	for {
 		select {
