@@ -830,7 +830,14 @@ func (s *service) Kill(ctx context.Context, r *taskAPI.KillRequest) (_ *ptypes.E
 	pstatus, errStatus := c.status.Get()
 	if errStatus != nil {
 		err = errStatus
-		return
+		if pstatus != task.StatusStopped {
+			// The status includes an error
+			// Kill must continue but  make sure the
+			// state is unknown.
+			// If there was an error we dont reall know the current state
+			pstatus = task.StatusUnknown
+
+		}
 	}
 	// According to CRI specs, kubelet will call StopPodSandbox()
 	// at least once before calling RemovePodSandbox, and this call
