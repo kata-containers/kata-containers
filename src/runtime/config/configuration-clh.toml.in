@@ -180,13 +180,6 @@ block_device_driver = "virtio-blk"
 # the container network interface
 # Options:
 #
-#   - bridged (Deprecated)
-#     Uses a linux bridge to interconnect the container interface to
-#     the VM. Works for most cases except macvlan and ipvlan.
-#     ***NOTE: This feature has been deprecated with plans to remove this
-#     feature in the future. Please use other network models listed below.
-#
-#
 #   - macvtap
 #     Used when the Container network interface can be bridged using
 #     macvtap.
@@ -224,7 +217,7 @@ disable_guest_seccomp=@DEFDISABLEGUESTSECCOMP@
 
 # If enabled, the runtime will not create a network namespace for shim and hypervisor processes.
 # This option may have some potential impacts to your host. It should only be used when you know what you're doing.
-# `disable_new_netns` conflicts with `internetworking_model=bridged` and `internetworking_model=macvtap`. It works only
+# `disable_new_netns` conflicts with `internetworking_model=tcfilter` and `internetworking_model=macvtap`. It works only
 # with `internetworking_model=none`. The tap device will be in the host network namespace and can connect to a bridge
 # (like OVS) directly.
 # (default: false)
@@ -237,6 +230,15 @@ disable_guest_seccomp=@DEFDISABLEGUESTSECCOMP@
 # The sandbox cgroup is constrained if there is no container type annotation.
 # See: https://pkg.go.dev/github.com/kata-containers/kata-containers/src/runtime/virtcontainers#ContainerType
 sandbox_cgroup_only=@DEFSANDBOXCGROUPONLY@
+
+# If enabled, the runtime will attempt to determine appropriate sandbox size (memory, CPU) before booting the virtual machine. In
+# this case, the runtime will not dynamically update the amount of memory and CPU in the virtual machine. This is generally helpful
+# when a hardware architecture or hypervisor solutions is utilized which does not support CPU and/or memory hotplug.
+# Compatibility for determining appropriate sandbox (VM) size:
+# - When running with pods, sandbox sizing information will only be available if using Kubernetes >= 1.23 and containerd >= 1.6. CRI-O
+#   does not yet support sandbox sizing annotations.
+# - When running single containers using a tool like ctr, container sizing information will be available.
+static_sandbox_resource_mgmt=@DEFSTATICRESOURCEMGMT@
 
 # If specified, sandbox_bind_mounts identifieds host paths to be mounted (ro) into the sandboxes shared path.
 # This is only valid if filesystem sharing is utilized. The provided path(s) will be bindmounted into the shared fs directory.
