@@ -1302,7 +1302,7 @@ dependencies = [
 [[package]]
 name = "ocicrypt-rs"
 version = "0.1.0"
-source = "git+https://github.com/containers/ocicrypt-rs#9af596112a64326828416806e049cf0e0ffc9320"
+source = "git+https://github.com/containers/ocicrypt-rs#c4e1505a7bb2f1f556b653b180fef972fa12ae79"
 dependencies = [
  "aes",
  "aes-gcm",
