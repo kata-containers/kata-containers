@@ -22,9 +22,15 @@ jobs:
     - name: Get PR Commits
       if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
       id: 'get-pr-commits'
-      uses: tim-actions/get-pr-commits@v1.0.0
+      uses: tim-actions/get-pr-commits@v1.2.0
       with:
         token: ${{ secrets.GITHUB_TOKEN }}
+        # Filter out revert commits
+        # The format of a revert commit is as follows:
+        #
+        # Revert "<original-subject-line>"
+        #
+        filter_out_pattern: '^Revert "'
 
     - name: DCO Check
       if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
