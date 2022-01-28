@@ -44,6 +44,7 @@ var testQemuImagePath = ""
 var testQemuPath = ""
 var testClhKernelPath = ""
 var testClhImagePath = ""
+var testClhInitrdPath = ""
 var testClhPath = ""
 var testAcrnKernelPath = ""
 var testAcrnImagePath = ""
@@ -157,6 +158,7 @@ func TestMain(m *testing.M) {
 	testVirtiofsdPath = filepath.Join(testDir, testBundle, testVirtiofsd)
 	testClhKernelPath = filepath.Join(testDir, testBundle, testKernel)
 	testClhImagePath = filepath.Join(testDir, testBundle, testImage)
+	testClhInitrdPath = filepath.Join(testDir, testBundle, testInitrd)
 	testClhPath = filepath.Join(testDir, testBundle, testHypervisor)
 
 	setupClh()
