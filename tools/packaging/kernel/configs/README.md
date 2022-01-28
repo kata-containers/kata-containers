@@ -7,7 +7,7 @@ Containers VM kernels.
 
 This directory holds config files for the Kata Linux Kernel in two forms:
 
-- A tree of config file 'fragments' in the `fragments` sub-folder, that are
+- A tree of config file `fragments` in the `fragments` sub-folder, that are
   constructed into a complete config file using the kernel
   `scripts/kconfig/merge_config.sh` script.
 - As complete config files that can be used as-is.
@@ -56,7 +56,7 @@ Example of valid exclusion:
 # !s390x !ppc64le
 ```
 
-The fragment gathering tool perfoms some basic sanity checks, and the `build-kernel.sh` will
+The fragment gathering tool performs some basic sanity checks, and the `build-kernel.sh` will
 fail and report the error in the cases of:
 
 - A duplicate `CONFIG` symbol appearing.

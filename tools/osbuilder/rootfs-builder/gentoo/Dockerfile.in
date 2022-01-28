@@ -4,6 +4,8 @@
 # SPDX-License-Identifier: Apache-2.0
 
 ARG IMAGE_REGISTRY=docker.io
+# stage3-amd64 image has only 'latest' tag so ignore DL3006 rule.
+# hadolint ignore=DL3007
 FROM ${IMAGE_REGISTRY}/gentoo/stage3-amd64:latest
 
 # This dockerfile needs to provide all the componets need to build a rootfs

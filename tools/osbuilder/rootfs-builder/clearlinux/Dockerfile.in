@@ -39,7 +39,8 @@ RUN dnf -y update && dnf install -y \
     systemd \
     tar \
     vim \
-    which
+    which && \
+    dnf clean all
 
 # This will install the proper packages to build Kata components
 @INSTALL_MUSL@
