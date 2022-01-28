@@ -37,15 +37,20 @@ $ chmod u+x ccv0.sh
       $ export tests_branch=stevenh/add-ccv0-changes-to-build
       ```
       before running the script.
-    - By default `ccv0.sh` enables the agent to use the rust implementation to pull container images on the guest. If
-      you wish to instead build and include the `skopeo` package for this then run
+    - By default `ccv0.sh` enables the agent to use the rust implementation to pull container images on the guest.
+      If you wish to instead build and include the `skopeo` package for this then run:
       ```bash
       $ export SKOPEO=yes
       ```
       `skopeo` is
       required for passing source credentials and verifying container image signatures using the kata agent.
 
-### Using `crictl` to do end-to-end testing of provisioning a container with the unencrypted image pulled on the guest
+- At this point you can provision a Kata confidential containers pod and container with either
+  [`crictl`](#using-crictl-for-end-to-end-provisioning-of-a-kata-confidential-containers-pod-with-an-unencrypted-image),
+  or [Kubernetes](#using-kubernetes-for-end-to-end-provisioning-of-a-kata-confidential-containers-pod-with-an-unencrypted-image)
+  and then test and use it. 
+
+### Using `crictl` for end-to-end provisioning of a Kata confidential containers pod with an unencrypted image
 
 - Run the full build process with Kubernetes off, so it's configure doesn't interfere with `crictl` using:
   ```bash
@@ -61,7 +66,7 @@ $ chmod u+x ccv0.sh
         - Use the `tests/.ci` scripts to install the build dependencies
         - Build and install the Kata runtime
         - Configure Kata to use containerd and for debug and confidential containers features to be enabled (including
-          enabling console access to the kata-runtime, which should only be done in development)
+          enabling console access to the Kata guest shell, which should only be done in development)
         - Create, build and install a rootfs for the Kata hypervisor to use. For 'CCv0' this is currently based on Ubuntu
         20.04 and has extra packages like `umoci` added.
         - Build the Kata guest kernel
@@ -70,7 +75,7 @@ $ chmod u+x ccv0.sh
     during matching `ERROR: toomanyrequests: Too Many Requests`. To get past
     this, login into Docker Hub and pull the images used with:
   >  ```bash
-  >  $ docker login
+  >  $ sudo docker login
   >  $ sudo docker pull ubuntu
   >  ```
   >  then re-run the command.
@@ -78,18 +83,78 @@ $ chmod u+x ccv0.sh
       installed and they can be further cut down by not running all the above steps 
       [see "Additional script usage" below](#additional-script-usage)
    
-- Create a new kata sandbox pod using `crictl` with:
+- Create a new Kata sandbox pod using `crictl` with:
   ```bash
   $ ~/ccv0.sh crictl_create_cc_pod
   ```
     - This creates a pod configuration file, creates the pod from this using 
     `sudo crictl runp -r kata ~/pod-config.yaml` and runs `sudo crictl pods` to show the pod
-- Create a new kata confidential container with:
+- Create a new Kata confidential container with:
   ```bash
   $ ~/ccv0.sh crictl_create_cc_container
   ```
-    - This creates a container (based on `busybox:1.33.1`) in the kata cc sandbox and prints a list of containers.
-      This will have been created based on an image pulled in the kata pod sandbox/guest, not on the host machine.
+    - This creates a container (based on `busybox:1.33.1`) in the Kata cc sandbox and prints a list of containers.
+      This will have been created based on an image pulled in the Kata pod sandbox/guest, not on the host machine.
+
+As this point you should have a `crictl` pod and container that is using the Kata confidential containers runtime.
+You can [validate that the container image was pulled on the guest](#validate-that-the-container-image-was-pulled-on-the-guest)
+or [using the Kata pod sandbox for testing with `agent-ctl` or `ctr shim`](#using-a-kata-pod-sandbox-for-testing-with-agent-ctl-or-ctr-shim)
+
+#### Clean up the `crictl` pod sandbox and container
+- When the testing is complete you can delete the container and pod by running:
+  ```bash
+  $ ~/ccv0.sh crictl_delete_cc
+  ```
+### Using Kubernetes for end-to-end provisioning of a Kata confidential containers pod with an unencrypted image
+
+- Run the full build process with the Kubernetes environment variable set to `"yes"`, so the Kubernetes cluster is configured and created using the VM
+  as a single node cluster: 
+  ```bash
+  $ export KUBERNETES="yes"
+  $ ~/ccv0.sh build_and_install_all
+  ```
+    > **Note**: Depending on how where your VMs are hosted and how IPs are shared you might get an error from docker
+    during matching `ERROR: toomanyrequests: Too Many Requests`. To get past
+    this, login into Docker Hub and pull the images used with:
+  >  ```bash
+  >  $ sudo docker login
+  >  $ sudo docker pull registry:2
+  >  $ sudo docker pull ubuntu:20.04
+  >  ```
+  >  then re-run the command.
+- Check that your Kubernetes cluster has been correctly set-up by running : 
+  ```bash
+  $ kubectl get nodes
+  ```
+  and checking that you see a single node e.g.
+  ```text
+  NAME                             STATUS   ROLES                  AGE   VERSION
+  stevenh-ccv0-k8s1.fyre.ibm.com   Ready    control-plane,master   43s   v1.22.0
+  ```
+- Create a Kata confidential containers pod by running:
+  ```bash
+  $ ~/ccv0.sh kubernetes_create_cc_pod
+  ```
+- Wait a few seconds for pod to start then check that the pod's status is `Running` with 
+  ```bash
+  $ kubectl get pods
+  ```
+  which should show something like:
+  ```text
+  NAME         READY   STATUS    RESTARTS   AGE
+  busybox-cc   1/1     Running   0          54s
+  ```
+
+- As this point you should have a Kubernetes pod and container running, that is using the Kata 
+confidential containers runtime.
+You can [validate that the container image was pulled on the guest](#validate-that-the-container-image-was-pulled-on-the-guest)
+or [using the Kata pod sandbox for testing with `agent-ctl` or `ctr shim`](#using-a-kata-pod-sandbox-for-testing-with-agent-ctl-or-ctr-shim)
+
+#### Clean up the Kubernetes pod sandbox and container
+- When the testing is complete you can delete the container and pod by running:
+  ```bash
+  $ ~/ccv0.sh kubernetes_delete_cc_pod
+  ```
 
 ### Validate that the container image was pulled on the guest
 
@@ -97,7 +162,7 @@ There are a couple of ways we can check that the container pull image action was
 the guest's file system for the unpacked bundle and checking the host's directories to ensure it wasn't also pulled
 there.
 - To check the guest's file system:
-    - Open a shell into the sandbox with:
+    - Open a shell into the Kata guest with:
       ```bash
       $ ~/ccv0.sh open_kata_shell
       ```
@@ -114,7 +179,7 @@ there.
         drwxr-xr-x 12 root root   240 Jan 20 10:03 rootfs
         ```
         which shows how the image has been pulled and then unbundled on the guest.
-    - Leave the kata shell by running:
+    - Leave the Kata guest shell by running:
       ```bash
       $ exit
       ```
@@ -125,14 +190,13 @@ there.
       ```bash
       $ pod_id=$(ps -ef | grep qemu | egrep -o "sandbox-[^,][^,]*" | sed 's/sandbox-//g' | awk '{print $1}')
       $ sudo find /run/kata-containers/shared/sandboxes/${pod_id}/shared -name rootfs
-      ./e89596e9de45ef2a154a5164554c9816293ab757cfd7a53d593fa144192a9964/rootfs
       ```
       which should only show a single `rootfs` directory if the container image was pulled on the guest, not the host
     - Looking that `rootfs` directory with
       ```bash
       $ sudo ls -ltr $(sudo find /run/kata-containers/shared/sandboxes/${pod_id}/shared -name rootfs)
       ```
-      prints something similar to
+      shows something similar to
       ```
       total 668
       -rwxr-xr-x 1 root root 682696 Aug 25 13:58 pause
@@ -141,71 +205,17 @@ there.
       drwxr-xr-x 2 root root      6 Jan 20 02:01 sys
       drwxr-xr-x 2 root root     25 Jan 20 02:01 etc
       ```
-      which is clearly the pause container indicating that the `busybox` based container image if not exposed to the host.
+      which is clearly the pause container indicating that the `busybox` based container image is not exposed to the host.
 
-#### Clean up `crictl` pod sandbox and container
-- When the testing is complete you can either continue on with different tests (mentioned below) using the pod sandbox, or delete the container and pod by running:
-  ```bash
-  $ ~/ccv0.sh crictl_delete_cc
-  ```
-
-### Setting up Kubernetes
-
-The documentation for end-to-end testing of a confidential container created through Kubernetes 
-[is not completed yet](https://github.com/kata-containers/kata-containers/issues/3511),
-but Kubernetes can be used to create a non-confidential kata pod using `ccv0.sh`.
-
-- Run the full build process with the Kubernetes environment variable set to `"yes"`, so the Kubernetes cluster is configured and created using the VM
-  as a single node cluster: 
-  ```bash
-  $ export KUBERNETES="yes"
-  $ ~/ccv0.sh build_and_install_all
-  ```
-    > **Note**: Depending on how where your VMs are hosted and how IPs are shared you might get an error from docker
-    during matching `ERROR: toomanyrequests: Too Many Requests`. To get past
-    this, login into Docker Hub and pull the images used with:
-  >  ```bash
-  >  $ docker login
-  >  $ sudo docker pull registry:2
-  >  $ sudo docker pull nginx
-  >  $ sudo docker pull ubuntu
-  >  ```
-  >  then re-run the command.
-- Check that your Kubernetes cluster has been correctly set-up: 
-```
-$ kubectl get nodes
-NAME                              STATUS   ROLES                  AGE     VERSION
-stevenh-ccv0-demo1.fyre.ibm.com   Ready    control-plane,master   3m33s   v1.21.1
-```
-- Create a kata pod:
-```
-$ ~/ccv0.sh create_kata_pod
-pod/nginx-kata created
-NAME         READY   STATUS              RESTARTS   AGE
-nginx-kata   0/1     ContainerCreating   0          5s
-```
-- Wait a few seconds for pod to start
-```
-$ kubectl get pods
-NAME         READY   STATUS    RESTARTS   AGE
-nginx-kata   1/1     Running   0          29s
-```
-- This Kubernetes pod can now be used for further testing (mentioned below) using the created kata pod sandbox, or deleted
-  by running
-  ```bash
-  $ ~/ccv0.sh delete_kata_pod
-  ```
-
-
-### Using a kata pod sandbox for testing with `agent-ctl` or `ctr shim`
+### Using a Kata pod sandbox for testing with `agent-ctl` or `ctr shim`
 
 Once you have a kata pod sandbox created as described above, either using 
-[`crictl`](#using-crictl-to-do-end-to-end-testing-of-provisioning-a-container-with-the-unencrypted-image-pulled-on-the-guest)
-or [Kubernetes](#setting-up-kubernetes), you can use this to test specific components of the kata confidential
+[`crictl`](#using-crictl-for-end-to-end-provisioning-of-a-kata-confidential-containers-pod-with-an-unencrypted-image), or [Kubernetes](#using-kubernetes-for-end-to-end-provisioning-of-a-kata-confidential-containers-pod-with-an-unencrypted-image)
+, you can use this to test specific components of the Kata confidential
 containers architecture. This can be useful for development and debugging to isolate and test features
 that aren't broadly supported end-to-end. Here are some examples:
 
-- For debugging purposed you can optionally create a new terminal on the VM and connect to the kata guest's console log:
+- For debugging purposed you can optionally create a new terminal on the VM and connect to the Kata guest's console log:
   ```bash
   $ ~/ccv0.sh open_kata_console
   ```
@@ -229,7 +239,7 @@ the `ccv0.sh` script to automatically fill in the variables:
     $ ~/ccv0.sh shim_pull_image
     ```
     which we print the `ctr shim` command for reference
-- Alternatively you can issue the command directly to the kata-agent pull image endpoint, which also supports
+- Alternatively you can issue the command directly to the `kata-agent` pull image endpoint, which also supports
   credentials in order to pull from an authenticated registry:
     - Optionally set up some environment variables to set the image and credentials used:
         - Set the `PULL_IMAGE` environment variable e.g. `export PULL_IMAGE="docker.io/library/busybox:latest"`
@@ -239,7 +249,7 @@ the `ccv0.sh` script to automatically fill in the variables:
           `export SOURCE_CREDS="<dockerhub username>:<dockerhub api key>"`
             > **Note**: the credentials support on the agent request is a tactical solution for the short-term
               proof of concept to allow more images to be pulled and tested. Once we have support for getting
-              keys into the kata guest using the attestation-agent and/or KBS I'd expect container registry
+              keys into the Kata guest image using the attestation-agent and/or KBS I'd expect container registry
               credentials to be looked up using that mechanism.
             
             > **Note**: the native rust implementation doesn't current flow credentials at the moment, so use
@@ -260,7 +270,7 @@ the `ccv0.sh` script to automatically fill in the variables:
       ```
       > **Note**: The first time that `~/ccv0.sh agent_pull_image` is run, the `agent-ctl` tool will be built
       which may take a few minutes.
-- To validate that the image pull was successful, you can open a shell into the kata pod with:
+- To validate that the image pull was successful, you can open a shell into the Kata guest with:
   ```bash
   $ ~/ccv0.sh open_kata_shell
   ```
@@ -277,7 +287,7 @@ the `ccv0.sh` script to automatically fill in the variables:
   -rw-r--r--  1 root root   372 Jan 20 16:45 umoci.json
   -rw-r--r--  1 root root 63584 Jan 20 16:45 sha256_be9faa75035c20288cde7d2cdeb6cd1f5f4dbcd845d3f86f7feab61c4eff9eb5.mtree
   ```
-- Leave the kata shell by running:
+- Leave the Kata shell by running:
   ```bash
   $ exit
   ```
@@ -312,9 +322,9 @@ to the `kernel_params` entry in `/etc/kata-containers/configuration.toml`.
 
 With this policy parameter set a few tests of image verification can be done to test different scenarios
 > **Note**: at the time of writing the `ctr shim` command has a [bug](https://github.com/kata-containers/kata-containers/issues/3020), so I'm using the agent commands directly through `agent-ctl` to drive the tests
-- If you don't already have a kata pod sandbox created, follow the instructions above to create one either using
- [`crictl`](#using-crictl-to-do-end-to-end-testing-of-provisioning-a-container-with-the-unencrypted-image-pulled-on-the-guest)
-  or [Kubernetes](#setting-up-kubernetes)
+- If you don't already have a Kata pod sandbox created, follow the instructions above to create one either using
+ [`crictl`](#using-crictl-for-end-to-end-provisioning-of-a-kata-confidential-containers-pod-with-an-unencrypted-image)
+  or [Kubernetes](#using-kubernetes-for-end-to-end-provisioning-of-a-kata-confidential-containers-pod-with-an-unencrypted-image)
 - To test the fallback behaviour works using an unsigned image on an *unprotected* registry we can pull the `busybox`
 image by running:
   ```bash
@@ -354,7 +364,7 @@ want to protect with the attestation agent in future) fails we can run:
   FATA[0001] Source image rejected: Invalid GPG signature...
 
   ```
-- To confirm that the first and third tests create the image bundles correct we can open a shell into the kata pod with:
+- To confirm that the first and third tests create the image bundles correct we can open a shell into the Kata pod with:
   ```bash
   $ ~/ccv0.sh open_kata_shell
   ```
@@ -398,7 +408,7 @@ $ ~/ccv0.sh help
 Overview:
     Build and test kata containers from source
     Optionally set kata-containers and tests repo and branch as exported variables before running
-    e.g. export katacontainers_repo=github.com/stevenhorsman/kata-containers && export katacontainers_branch=kata-ci-from-fork && export tests_repo=github.com/stevenhorsman/tests && export tests_branch=kata-ci-from-fork && . ~/ccv0.sh -d build_and_install_all
+    e.g. export katacontainers_repo=github.com/stevenhorsman/kata-containers && export katacontainers_branch=kata-ci-from-fork && export tests_repo=github.com/stevenhorsman/tests && export tests_branch=kata-ci-from-fork && ~/ccv0.sh build_and_install_all
 Usage:
     ccv0.sh [options] <command>
 Commands:
@@ -418,9 +428,8 @@ Commands:
 - crictl_create_cc_pod          Use crictl to create a new kata cc pod
 - crictl_create_cc_container    Use crictl to create a new busybox container in the kata cc pod
 - crictl_delete_cc              Use crictl to delete the kata cc pod sandbox and container in it
-- create_kata_pod:              Create a kata runtime nginx pod in Kubernetes
-- delete_kata_pod:              Delete a kata runtime nginx pod in Kubernetes
-- restart_kata_pod:             Delete the kata nginx pod, then re-create it
+- kubernetes_create_cc_pod:     Create a Kata CC runtime busybox-based pod in Kubernetes
+- kubernetes_delete_cc_pod:     Delete the Kata CC runtime busybox-based pod in Kubernetes
 - open_kata_console:            Stream the kata runtime's console
 - open_kata_shell:              Open a shell into the kata runtime
 - agent_pull_image:             Run PullImage command against the agent with agent-ctl

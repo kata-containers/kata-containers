@@ -94,9 +94,8 @@ Commands:
 - crictl_create_cc_pod          Use crictl to create a new kata cc pod
 - crictl_create_cc_container    Use crictl to create a new busybox container in the kata cc pod
 - crictl_delete_cc              Use crictl to delete the kata cc pod sandbox and container in it
-- create_kata_pod:              Create a kata runtime nginx pod in Kubernetes
-- delete_kata_pod:              Delete a kata runtime nginx pod in Kubernetes
-- restart_kata_pod:             Delete the kata nginx pod, then re-create it
+- kubernetes_create_cc_pod:     Create a Kata CC runtime busybox-based pod in Kubernetes
+- kubernetes_delete_cc_pod:     Delete the Kata CC runtime busybox-based pod in Kubernetes
 - open_kata_console:            Stream the kata runtime's console
 - open_kata_shell:              Open a shell into the kata runtime
 - agent_pull_image:             Run PullImage command against the agent with agent-ctl
@@ -121,7 +120,6 @@ build_and_install_all() {
     build_and_install_rootfs
     install_guest_kernel_image
     build_qemu
-    build_bundle_dir_if_necessary
     check_kata_runtime
     if [ "${KUBERNETES}" == "yes" ]; then
         init_kubernetes
@@ -204,11 +202,8 @@ configure() {
     # Temp PoC verify code: Inject policy path config parameter
     sudo sed -i -e 's%^kernel_params = "\(.*\)"%kernel_params = "\1 agent.container_policy_file=/etc/containers/quay_verification/quay_policy.json"%g' /etc/kata-containers/configuration.toml
 
-    # K8s doesn't fully work with kata cc in this enviornment yet issues #3511
-    if [ "${KUBERNETES}" != "yes" ]; then
-        # insert the cri_handler = "cc" into the [plugins.cri.containerd.runtimes.kata] section
-        sudo sed -z -i 's/\([[:blank:]]*\)\(runtime_type = "io.containerd.kata.v2"\)/\1\2\n\1cri_handler = "cc"/' /etc/containerd/config.toml
-    fi
+    # insert the cri_handler = "cc" into the [plugins.cri.containerd.runtimes.kata] section
+    sudo sed -z -i 's/\([[:blank:]]*\)\(runtime_type = "io.containerd.kata.v2"\)/\1\2\n\1cri_handler = "cc"/' /etc/containerd/config.toml
 
     # Add cni directory to containerd config
     echo "    [plugins.cri.cni]
@@ -333,8 +328,8 @@ check_kata_runtime() {
     sudo kata-runtime check
 }
 
+k8s_pod_file="${HOME}/busybox-cc.yaml"
 init_kubernetes() {
-
     # Check that kubeadm was installed and install it otherwise
     if ! [ -x "$(command -v kubeadm)" ]; then
         pushd "${tests_repo_dir}/.ci"
@@ -357,17 +352,27 @@ init_kubernetes() {
 
     export CI="true" && sudo -E PATH=$PATH -s ${tests_repo_dir}/integration/kubernetes/init.sh
     sudo chown ${USER}:$(id -g -n ${USER}) "$HOME/.kube/config"
-    cat << EOT | tee ~/nginx-kata.yaml
+    cat << EOF > ${k8s_pod_file}
 apiVersion: v1
 kind: Pod
 metadata:
-  name: nginx-kata
+  name: busybox-cc
 spec:
   runtimeClassName: kata
   containers:
   - name: nginx
-    image: nginx
-EOT
+    image: quay.io/kata-containers/confidential-containers:signed
+    imagePullPolicy: Always  
+EOF
+}
+
+kubernetes_create_cc_pod() {
+    kubectl apply -f ${k8s_pod_file}
+    kubectl get pods
+}
+
+kubernetes_delete_cc_pod() {
+    kubectl delete -f ${k8s_pod_file}
 }
 
 crictl_sandbox_name=kata-cc-busybox-sandbox
@@ -376,7 +381,7 @@ crictl_create_cc_pod() {
     sudo iptables -P FORWARD ACCEPT
     
     # Create crictl pod config
-cat << EOF > ~/pod-config.yaml
+cat << EOF > ${HOME}/pod-config.yaml
 metadata:
   name: ${crictl_sandbox_name}
 EOF
@@ -386,13 +391,13 @@ EOF
         crictl_delete_cc
     fi
 
-    pod_id=$(sudo crictl runp -r kata ~/pod-config.yaml)
+    pod_id=$(sudo crictl runp -r kata ${HOME}/pod-config.yaml)
     sudo crictl pods
 }
 
 crictl_create_cc_container() {
     # Create container configuration yaml based on our test copy of busybox
-    cat << EOF > ~/container-config.yaml
+    cat << EOF > ${HOME}/container-config.yaml
 metadata:
   name: kata-cc-busybox
 image:
@@ -403,7 +408,7 @@ log_path: kata-cc.0.log
 EOF
 
     pod_id=$(sudo crictl pods --name ${crictl_sandbox_name} -q)
-    container_id=$(sudo crictl create -with-pull ${pod_id} ~/container-config.yaml ~/pod-config.yaml)
+    container_id=$(sudo crictl create -with-pull ${pod_id} ${HOME}/container-config.yaml ${HOME}/pod-config.yaml)
     sudo crictl start ${container_id}
     sudo crictl ps -a
 }
@@ -417,27 +422,11 @@ crictl_delete_cc() {
     sudo crictl stopp ${pod_id} && sudo crictl rmp ${pod_id}
 }
 
-create_kata_pod() {
-    kubectl apply -f ~/nginx-kata.yaml
-    kubectl get pods
-}
-
-delete_kata_pod() {
-    kubectl delete -f ~/nginx-kata.yaml
-}
-
-restart_kata_pod() {
-    delete_kata_pod
-    create_kata_pod
-}
-
 test_kata_runtime() {
     echo "Running ctr with the kata runtime..."
-    test_image="docker.io/library/busybox:latest"
+    test_image="quay.io/kata-containers/confidential-containers:signed"
     if [ -z $(ctr images ls -q name=="${test_image}") ]; then
         sudo ctr image pull "${test_image}"
-        # If you hit too many requests run 
-        # `sudo ctr image pull "docker.io/library/busybox:latest" -u <dockerhub username>` command and retry
     fi
     sudo ctr run --runtime "io.containerd.kata.v2" --rm -t "${test_image}" test-kata uname -a
 }
@@ -449,9 +438,9 @@ run_kata_and_capture_logs() {
     sudo systemctl start systemd-journald
     test_kata_runtime
     echo "Collecting logs..."
-    sudo journalctl -q -o cat -a -t kata-runtime > ~/kata-runtime.log
-    sudo journalctl -q -o cat -a -t kata > ~/shimv2.log
-    echo "Logs output to ~/kata-runtime.log and ~/shimv2.log"
+    sudo journalctl -q -o cat -a -t kata-runtime > ${HOME}/kata-runtime.log
+    sudo journalctl -q -o cat -a -t kata > ${HOME}/shimv2.log
+    echo "Logs output to ${HOME}/kata-runtime.log and ${HOME}/shimv2.log"
 }
 
 get_ids() {
@@ -473,7 +462,7 @@ build_bundle_dir_if_necessary() {
     bundle_dir="/tmp/bundle"
     if [ ! -d "${bundle_dir}" ]; then
         rootfs_dir="$bundle_dir/rootfs"
-        image="busybox"
+        image="quay.io/kata-containers/confidential-containers:signed"
         mkdir -p "$rootfs_dir" && (cd "$bundle_dir" && runc spec)
         sudo docker export $(sudo docker create "$image") | tar -C "$rootfs_dir" -xvf -
     fi
@@ -589,14 +578,11 @@ main() {
         crictl_delete_cc)
             crictl_delete_cc
             ;;
-        create_kata_pod)
-            create_kata_pod
+        kubernetes_create_cc_pod)
+            kubernetes_create_cc_pod
             ;;
-        delete_kata_pod)
-            delete_kata_pod
-            ;;
-        restart_kata_pod)
-            restart_kata_pod
+        kubernetes_delete_cc_pod)
+            kubernetes_delete_cc_pod
             ;;
         test)
             test_kata_runtime
