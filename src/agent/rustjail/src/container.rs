@@ -685,8 +685,8 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
             Mode::from_bits_truncate(0),
         )?;
         unistd::close(fifofd)?;
-        let mut buf: &mut [u8] = &mut [0];
-        unistd::read(fd, &mut buf)?;
+        let buf: &mut [u8] = &mut [0];
+        unistd::read(fd, buf)?;
     }
 
     // With NoNewPrivileges, we should set seccomp as close to

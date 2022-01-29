@@ -728,7 +728,7 @@ fn secure_join(rootfs: &str, unsafe_path: &str) -> String {
         path.push(it);
         if let Ok(v) = path.read_link() {
             if v.is_absolute() {
-                path = PathBuf::from(format!("{}{}", rootfs, v.to_str().unwrap().to_string()));
+                path = PathBuf::from(format!("{}{}", rootfs, v.to_str().unwrap()));
             } else {
                 path.pop();
                 for it in v.iter() {

@@ -284,7 +284,7 @@ impl Storage {
             .with_context(|| {
                 format!(
                     "Failed to strip prefix: {} - {}",
-                    source_file_path.as_ref().display().to_string(),
+                    source_file_path.as_ref().display(),
                     &self.source_mount_point.display()
                 )
             })?;

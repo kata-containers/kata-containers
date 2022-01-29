@@ -436,11 +436,8 @@ fn online_cpus(logger: &Logger, num: i32) -> Result<i32> {
             r"cpu[0-9]+",
             num - onlined_count,
         );
-        if r.is_err() {
-            return r;
-        }
 
-        onlined_count += r.unwrap();
+        onlined_count += r?;
         if onlined_count == num {
             info!(logger, "online {} CPU(s) after {} retries", num, i);
             return Ok(num);
