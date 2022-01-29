@@ -284,16 +284,26 @@ func (clh *cloudHypervisor) CreateVM(ctx context.Context, id string, networkNS N
 		return err
 	}
 
-	if imagePath == "" {
-		return errors.New("image path is empty")
+	initrdPath, err := clh.config.InitrdAssetPath()
+	if err != nil {
+		return err
 	}
 
-	pmem := chclient.NewPmemConfig(imagePath)
-	*pmem.DiscardWrites = true
-	if clh.vmconfig.Pmem != nil {
-		*clh.vmconfig.Pmem = append(*clh.vmconfig.Pmem, *pmem)
+	if imagePath != "" {
+		pmem := chclient.NewPmemConfig(imagePath)
+		*pmem.DiscardWrites = true
+
+		if clh.vmconfig.Pmem != nil {
+			*clh.vmconfig.Pmem = append(*clh.vmconfig.Pmem, *pmem)
+		} else {
+			clh.vmconfig.Pmem = &[]chclient.PmemConfig{*pmem}
+		}
+	} else if initrdPath != "" {
+		initrd := chclient.NewInitramfsConfig(initrdPath)
+
+		clh.vmconfig.SetInitramfs(*initrd)
 	} else {
-		clh.vmconfig.Pmem = &[]chclient.PmemConfig{*pmem}
+		return errors.New("no image or initrd specified")
 	}
 
 	// Use serial port as the guest console only in debug mode,

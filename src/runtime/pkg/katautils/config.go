@@ -778,14 +778,9 @@ func newClhHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		return vc.HypervisorConfig{}, err
 	}
 
-	if initrd != "" {
+	if image == "" && initrd == "" {
 		return vc.HypervisorConfig{},
-			errors.New("having an initrd defined in the configuration file is not supported")
-	}
-
-	if image == "" {
-		return vc.HypervisorConfig{},
-			errors.New("image must be defined in the configuration file")
+			errors.New("image or initrd must be defined in the configuration file")
 	}
 
 	firmware, err := h.firmware()
