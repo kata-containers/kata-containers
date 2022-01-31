@@ -325,12 +325,12 @@ impl Annotation {
     }
 
     /// Get an immutable reference to the annotation hashmap.
-    pub fn get_annotation(&self) -> &HashMap<String, String> {
+    pub fn get_annotations(&self) -> &HashMap<String, String> {
         &self.annotations
     }
 
     /// Get a mutable reference to the annotation hashmap.
-    pub fn get_annotation_mut(&mut self) -> &mut HashMap<String, String> {
+    pub fn get_annotations_mut(&mut self) -> &mut HashMap<String, String> {
         &mut self.annotations
     }
 
@@ -609,7 +609,7 @@ impl Annotation {
                             return Err(io::Error::new(
                                 io::ErrorKind::InvalidData,
                                 format!(
-                                    "Memory specified in annotation {} is less than minmum required {}",
+                                    "Memory specified in annotation {} is less than minimum required {}",
                                     mem,
                                     get_hypervisor_plugin(hypervisor_name)
                                         .unwrap()
@@ -627,7 +627,7 @@ impl Annotation {
                         None => {
                             return Err(io::Error::new(
                                 io::ErrorKind::InvalidData,
-                                format!("{}in annotation is less than zero", key),
+                                format!("{} in annotation is less than zero", key),
                             ));
                         }
                     },
@@ -715,7 +715,7 @@ impl Annotation {
                     _ => {
                         return Err(io::Error::new(
                             io::ErrorKind::InvalidInput,
-                            format!("Invalid Annotation Type {}", key),
+                            format!("Invalid annotation type {}", key),
                         ));
                     }
                 }
