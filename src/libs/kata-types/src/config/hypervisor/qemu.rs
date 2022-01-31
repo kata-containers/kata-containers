@@ -61,11 +61,11 @@ impl ConfigPlugin for QemuConfig {
             resolve_path!(qemu.ctlpath, "Qemu ctlpath `{}` is invalid: {}")?;
 
             if qemu.boot_info.kernel.is_empty() {
-                qemu.boot_info.kernel = default::DEFAULT_QEMU_GUEST_KENREL_IMAGE.to_string();
+                qemu.boot_info.kernel = default::DEFAULT_QEMU_GUEST_KERNEL_IMAGE.to_string();
             }
             if qemu.boot_info.kernel_params.is_empty() {
                 qemu.boot_info.kernel_params =
-                    default::DEFAULT_QEMU_GUEST_KENREL_PARAMS.to_string();
+                    default::DEFAULT_QEMU_GUEST_KERNEL_PARAMS.to_string();
             }
             if qemu.boot_info.firmware.is_empty() {
                 qemu.boot_info.firmware = default::DEFAULT_QEMU_FIRMWARE_PATH.to_string();
@@ -99,10 +99,10 @@ impl ConfigPlugin for QemuConfig {
     /// Validate the configuration information.
     fn validate(&self, conf: &TomlConfig) -> Result<()> {
         if let Some(qemu) = conf.hypervisor.get(HYPERVISOR_NAME_QEMU) {
-            validate_path!(qemu.path, "Qemu binary path `{}` is invalid: {}")?;
-            validate_path!(qemu.ctlpath, "Qemu control path `{}` is invalid: {}")?;
+            validate_path!(qemu.path, "QEMU binary path `{}` is invalid: {}")?;
+            validate_path!(qemu.ctlpath, "QEMU control path `{}` is invalid: {}")?;
             if !qemu.jailer_path.is_empty() {
-                return Err(eother!("Path for Qemu jailer should be empty"));
+                return Err(eother!("Path for QEMU jailer should be empty"));
             }
             if !qemu.valid_jailer_paths.is_empty() {
                 return Err(eother!("Valid Qemu jailer path list should be empty"));

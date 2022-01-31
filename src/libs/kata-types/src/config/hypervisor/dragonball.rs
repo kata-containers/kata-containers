@@ -54,10 +54,10 @@ impl ConfigPlugin for DragonballConfig {
             resolve_path!(db.jailer_path, "Dragonball jailer path {} is invalid: {}")?;
 
             if db.boot_info.kernel.is_empty() {
-                db.boot_info.kernel = default::DEFAULT_DB_GUEST_KENREL_IMAGE.to_string();
+                db.boot_info.kernel = default::DEFAULT_DB_GUEST_KERNEL_IMAGE.to_string();
             }
             if db.boot_info.kernel_params.is_empty() {
-                db.boot_info.kernel_params = default::DEFAULT_DB_GUEST_KENREL_PARAMS.to_string();
+                db.boot_info.kernel_params = default::DEFAULT_DB_GUEST_KERNEL_PARAMS.to_string();
             }
 
             if db.cpu_info.default_maxvcpus > default::MAX_DB_VCPUS {

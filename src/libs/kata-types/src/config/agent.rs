@@ -51,7 +51,7 @@ pub struct Agent {
     #[serde(default)]
     pub kernel_modules: Vec<String>,
 
-    /// contianer pipe size
+    /// container pipe size
     pub container_pipe_size: u32,
 }
 

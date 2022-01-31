@@ -336,7 +336,7 @@ pub struct DebugInfo {
     /// exist. The dumped file(also called vmcore) can be processed with crash or gdb.
     ///
     /// # WARNING:
-    ///  Dump guest’s memory can take very long depending on the amount of guest memory and use
+    ///  Dump guest's memory can take very long depending on the amount of guest memory and use
     /// much disk space.
     #[serde(default)]
     pub guest_memory_dump_path: String,
@@ -415,7 +415,7 @@ impl DeviceInfo {
     pub fn validate(&self) -> Result<()> {
         if self.default_bridges > 5 {
             return Err(eother!(
-                "The configured PCI bridges {} is too big",
+                "The configured PCI bridges {} are too many",
                 self.default_bridges
             ));
         }
@@ -479,7 +479,7 @@ impl MachineInfo {
     /// Validate the configuration information.
     pub fn validate(&self) -> Result<()> {
         for pflash in self.pflashes.iter() {
-            validate_path!(*pflash, "Flash image file {} is invalide: {}")?;
+            validate_path!(*pflash, "Flash image file {} is invalid: {}")?;
         }
         validate_path!(self.entropy_source, "Entropy source {} is invalid: {}")?;
         Ok(())
@@ -578,10 +578,10 @@ impl MemoryInfo {
             "Memory backend file {} is invalid: {}"
         )?;
         if self.default_memory == 0 {
-            return Err(eother!("Configured memory size for guest vm is zero"));
+            return Err(eother!("Configured memory size for guest VM is zero"));
         }
         if self.memory_slots == 0 {
-            return Err(eother!("Configured memory slots for guest vm is zero"));
+            return Err(eother!("Configured memory slots for guest VM are zero"));
         }
 
         Ok(())
