@@ -265,7 +265,7 @@ create_a_local_rootfs() {
     pushd ${katacontainers_repo_dir}/tools/osbuilder/rootfs-builder
     export distro="ubuntu"
     [[ -z "${USE_PODMAN:-}" ]] && use_docker="${use_docker:-1}"
-    sudo -E OS_VERSION="${OS_VERSION:-}" GOPATH=$GOPATH DEBUG="${DEBUG}" USE_DOCKER="${use_docker:-}" SKOPEO=${SKOPEO:-} UMOCI=yes SECCOMP=yes ./rootfs.sh -r ${ROOTFS_DIR} ${distro}
+    sudo -E OS_VERSION="${OS_VERSION:-}" GOPATH=$GOPATH EXTRA_PKGS="vim iputils-ping net-tools" DEBUG="${DEBUG}" USE_DOCKER="${use_docker:-}" SKOPEO=${SKOPEO:-} UMOCI=yes SECCOMP=yes ./rootfs.sh -r ${ROOTFS_DIR} ${distro}
 
      # Install_rust.sh during rootfs.sh switches us to the main branch of the tests repo, so switch back now
     pushd "${tests_repo_dir}"
