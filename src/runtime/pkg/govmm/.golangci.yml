@@ -1,0 +1,35 @@
+# Copyright (c) 2021 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+
+run:
+  concurrency: 4
+  deadline: 600s
+  skip-dirs:
+    - vendor
+# Ignore auto-generated protobuf code.
+  skip-files:
+    - ".*\\.pb\\.go$"
+
+linters:
+  disable-all: true
+  enable:
+    - deadcode
+    - gocyclo
+    - gofmt
+    - gosimple
+    - govet
+    - ineffassign
+    - misspell
+    - staticcheck
+    - structcheck
+    - typecheck
+    - unconvert
+    - unused
+    - varcheck
+
+linters-settings:
+  gocyclo:
+    min_complexity: 15
+  unused:
+    check-exported: true

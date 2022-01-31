@@ -1,0 +1,26 @@
+language: go
+
+go:
+    - "1.10"
+    - "1.11"
+    - tip
+arch:
+    - s390x
+
+go_import_path: github.com/kata-containers/govmm
+
+matrix:
+  allow_failures:
+  - go: tip
+
+before_install:
+  - go get github.com/alecthomas/gometalinter
+  - gometalinter --install
+  - go get github.com/mattn/goveralls
+
+script:
+   - go env
+   - gometalinter --tests --vendor --disable-all --enable=misspell --enable=vet --enable=ineffassign --enable=gofmt --enable=gocyclo --cyclo-over=15 --enable=golint --enable=errcheck --enable=deadcode --enable=staticcheck -enable=gas ./...
+
+after_success:
+   - $GOPATH/bin/goveralls -repotoken $COVERALLS_TOKEN -v -service=travis-ci

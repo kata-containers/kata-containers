@@ -157,6 +157,32 @@ docker run --cpus 4 -ti debian bash -c "nproc; cat /sys/fs/cgroup/cpu,cpuacct/cp
 400000  # cfs quota
 ```
 
+## Virtual CPU handling without hotplug
+
+In some cases, the hardware and/or software architecture being utilized does not support
+hotplug. For example, Firecracker VMM does not support CPU or memory hotplug. Similarly,
+the current Linux Kernel for aarch64 does not support CPU or memory hotplug. To appropriately
+size the virtual machine for the workload within the container or pod, we provide a `static_sandbox_resource_mgmt`
+flag within the Kata Containers configuration. When this is set, the runtime will:
+ - Size the VM based on the workload requirements as well as the `default_vcpus` option specified in the configuration.
+ - Not resize the virtual machine after it has been launched.
+
+VM size determination varies depending on the type of container being run, and may not always
+be available. If workload sizing information is not available, the virtual machine will be started with the
+`default_vcpus`.
+
+In the case of a pod, the initial sandbox container (pause container) typically doesn't contain any resource
+information in its runtime `spec`. It is possible that the upper layer runtime
+(i.e. containerd or CRI-O) may pass sandbox sizing annotations within the pause container's
+`spec`. If these are provided, we will use this to appropriately size the VM. In particular,
+we'll calculate the number of CPUs required for the workload and augment this by `default_vcpus`
+configuration option, and use this for the virtual machine size.
+
+In the case of a single container (i.e., not a pod), if the container specifies resource requirements,
+the container's `spec` will provide the sizing information directly. If these are set, we will
+calculate the number of CPUs required for the workload and augment this by `default_vcpus`
+configuration option, and use this for the virtual machine size.
+
 
 [1]: https://docs.docker.com/config/containers/resource_constraints/#cpu
 [2]: https://kubernetes.io/docs/tasks/configure-pod-container/assign-cpu-resource

@@ -264,7 +264,7 @@ At the same time, we will add the `--log=/var/log/kata-runtime.log` argument to 
 own file (rather than into the system journal).
 
 ```bash
-#!/bin/bash
+#!/usr/bin/env bash
 /opt/kata/bin/kata-runtime --config "/opt/kata/share/defaults/kata-containers/configuration-qemu.toml" --log-format=json --log=/var/log/kata-runtime.log $@
 ```
 

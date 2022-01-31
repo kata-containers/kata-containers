@@ -606,33 +606,44 @@ func (c *Container) unmountHostMounts(ctx context.Context) error {
 	span, ctx := katatrace.Trace(ctx, c.Logger(), "unmountHostMounts", containerTracingTags, map[string]string{"container_id": c.id})
 	defer span.End()
 
+	unmountFunc := func(m Mount) (err error) {
+		span, _ := katatrace.Trace(ctx, c.Logger(), "unmount", containerTracingTags, map[string]string{"container_id": c.id, "host-path": m.HostPath})
+		defer func() {
+			if err != nil {
+				katatrace.AddTags(span, "error", err)
+			}
+			span.End()
+		}()
+
+		if err = syscall.Unmount(m.HostPath, syscall.MNT_DETACH|UmountNoFollow); err != nil {
+			c.Logger().WithFields(logrus.Fields{
+				"host-path": m.HostPath,
+				"error":     err,
+			}).Warn("Could not umount")
+			return err
+		}
+
+		if m.Type == "bind" {
+			s, err := os.Stat(m.HostPath)
+			if err != nil {
+				return errors.Wrapf(err, "Could not stat host-path %v", m.HostPath)
+			}
+			// Remove the empty file or directory
+			if s.Mode().IsRegular() && s.Size() == 0 {
+				os.Remove(m.HostPath)
+			}
+			if s.Mode().IsDir() {
+				syscall.Rmdir(m.HostPath)
+			}
+		}
+		return nil
+	}
+
 	for _, m := range c.mounts {
 		if m.HostPath != "" {
-			span, _ := katatrace.Trace(ctx, c.Logger(), "unmount", containerTracingTags, map[string]string{"container_id": c.id, "host-path": m.HostPath})
-
-			if err := syscall.Unmount(m.HostPath, syscall.MNT_DETACH|UmountNoFollow); err != nil {
-				c.Logger().WithFields(logrus.Fields{
-					"host-path": m.HostPath,
-					"error":     err,
-				}).Warn("Could not umount")
+			if err := unmountFunc(m); err != nil {
 				return err
 			}
-
-			if m.Type == "bind" {
-				s, err := os.Stat(m.HostPath)
-				if err != nil {
-					return errors.Wrapf(err, "Could not stat host-path %v", m.HostPath)
-				}
-				// Remove the empty file or directory
-				if s.Mode().IsRegular() && s.Size() == 0 {
-					os.Remove(m.HostPath)
-				}
-				if s.Mode().IsDir() {
-					syscall.Rmdir(m.HostPath)
-				}
-			}
-
-			span.End()
 		}
 	}
 

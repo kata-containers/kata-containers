@@ -24,7 +24,7 @@ import (
 
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/rootless"
 
-	govmmQemu "github.com/kata-containers/govmm/qemu"
+	govmmQemu "github.com/kata-containers/kata-containers/src/runtime/pkg/govmm/qemu"
 	"github.com/opencontainers/selinux/go-selinux/label"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -500,8 +500,6 @@ func (q *qemu) CreateVM(ctx context.Context, id string, networkNS NetworkNamespa
 		Daemonize:     true,
 		MemPrealloc:   q.config.MemPrealloc,
 		HugePages:     q.config.HugePages,
-		Realtime:      q.config.Realtime,
-		Mlock:         q.config.Mlock,
 		IOMMUPlatform: q.config.IOMMUPlatform,
 	}
 

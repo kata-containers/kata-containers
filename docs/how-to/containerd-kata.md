@@ -188,7 +188,7 @@ If you use Containerd older than v1.2.4 or a version of Kata older than v1.6.0  
 shell script with the following:
 
 ```bash
-#!/bin/bash
+#!/usr/bin/env bash
 KATA_CONF_FILE=/etc/kata-containers/firecracker.toml containerd-shim-kata-v2 $@
 ```
 

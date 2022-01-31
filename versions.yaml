@@ -75,7 +75,7 @@ assets:
       url: "https://github.com/cloud-hypervisor/cloud-hypervisor"
       uscan-url: >-
         https://github.com/cloud-hypervisor/cloud-hypervisor/tags.*/v?(\d\S+)\.tar\.gz
-      version: "v20.1"
+      version: "v20.2"
 
     firecracker:
       description: "Firecracker micro-VMM"
@@ -120,7 +120,7 @@ assets:
         name: "ubuntu"
         version: "latest"
       ppc64le:
-        name: "centos"
+        name: "ubuntu"
         version: "latest"
       s390x:
         name: "ubuntu"
@@ -215,7 +215,7 @@ externals:
     uscan-url: >-
       https://github.com/kubernetes/kubernetes/tags
       .*/v?([\d\.]+)\.tar\.gz
-    version: "1.22.0-00"
+    version: "1.23.1-00"
 
   libseccomp:
     description: "High level interface to Linux seccomp filter"

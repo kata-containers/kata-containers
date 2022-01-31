@@ -1,0 +1,109 @@
+From e9301ff546d27cf5f6acc677d19e7c89c693d6ea Mon Sep 17 00:00:00 2001
+From: Salil Mehta <salil.mehta@huawei.com>
+Date: Sat, 27 Nov 2021 17:14:45 +0800
+Subject: [PATCH 21/28] arm/cpuhp: Changes required for reset and to support
+ next boot
+
+Updates the firmware config with the next boot cpus information and also
+registers the reset callback to be called when guest reboots to reset the cpu.
+
+Co-developed-by: Keqian Zhu <zhukeqian1@huawei.com>
+Signed-off-by: Salil Mehta <salil.mehta@huawei.com>
+Signed-off-by: Huang Shijie <shijie8@gmail.com>
+---
+ hw/arm/boot.c         |  2 +-
+ hw/arm/virt.c         | 17 +++++++++++++----
+ include/hw/arm/boot.h |  2 ++
+ include/hw/arm/virt.h |  1 +
+ 4 files changed, 17 insertions(+), 5 deletions(-)
+
+diff --git a/hw/arm/boot.c b/hw/arm/boot.c
+index 57efb61ee4..e966d8e032 100644
+--- a/hw/arm/boot.c
++++ b/hw/arm/boot.c
+@@ -675,7 +675,7 @@ fail:
+     return -1;
+ }
+ 
+-static void do_cpu_reset(void *opaque)
++void do_cpu_reset(void *opaque)
+ {
+     ARMCPU *cpu = opaque;
+     CPUState *cs = CPU(cpu);
+diff --git a/hw/arm/virt.c b/hw/arm/virt.c
+index c3073d6755..ab35bd51af 100644
+--- a/hw/arm/virt.c
++++ b/hw/arm/virt.c
+@@ -48,6 +48,7 @@
+ #include "sysemu/numa.h"
+ #include "sysemu/runstate.h"
+ #include "sysemu/tpm.h"
++#include "sysemu/reset.h"
+ #include "sysemu/kvm.h"
+ #include "hw/loader.h"
+ #include "qapi/error.h"
+@@ -1236,7 +1237,7 @@ static FWCfgState *create_fw_cfg(const VirtMachineState *vms, AddressSpace *as)
+     char *nodename;
+ 
+     fw_cfg = fw_cfg_init_mem_wide(base + 8, base, 8, base + 16, as);
+-    fw_cfg_add_i16(fw_cfg, FW_CFG_NB_CPUS, (uint16_t)ms->smp.cpus);
++    fw_cfg_add_i16(fw_cfg, FW_CFG_NB_CPUS, vms->boot_cpus);
+ 
+     nodename = g_strdup_printf("/fw-cfg@%" PRIx64, base);
+     qemu_fdt_add_subnode(ms->fdt, nodename);
+@@ -2808,7 +2809,12 @@ static void virt_cpu_plug(HotplugHandler *hotplug_dev, DeviceState *dev,
+         hhc->plug(HOTPLUG_HANDLER(vms->acpi_dev), dev, &local_err);
+         if (local_err)
+             goto fail;
+-        /* TODO: register this cpu for reset & update F/W info for the next boot */
++        /* register this cpu for reset & update F/W info for the next boot */
++        qemu_register_reset(do_cpu_reset, ARM_CPU(cs));
++        vms->boot_cpus++;
++        if (vms->fw_cfg) {
++            fw_cfg_modify_i16(vms->fw_cfg, FW_CFG_NB_CPUS, vms->boot_cpus);
++        }
+     }
+     cs->disabled = false;
+ fail:
+@@ -2878,8 +2884,11 @@ static void virt_cpu_unplug(HotplugHandler *hotplug_dev, DeviceState *dev,
+     unwire_gic_cpu_irqs(vms, cs);
+     virt_update_gic(vms, cs);
+ 
+-    /* TODO: unregister this cpu for reset & update F/W info for the next boot */
+-
++    qemu_unregister_reset(do_cpu_reset, ARM_CPU(cs));
++    vms->boot_cpus--;
++    if (vms->fw_cfg) {
++        fw_cfg_modify_i16(vms->fw_cfg, FW_CFG_NB_CPUS, vms->boot_cpus);
++    }
+     qemu_opts_del(dev->opts);
+     dev->opts = NULL;
+ 
+diff --git a/include/hw/arm/boot.h b/include/hw/arm/boot.h
+index ce2b48b88b..aa156967af 100644
+--- a/include/hw/arm/boot.h
++++ b/include/hw/arm/boot.h
+@@ -163,6 +163,8 @@ AddressSpace *arm_boot_address_space(ARMCPU *cpu,
+ int arm_load_dtb(hwaddr addr, const struct arm_boot_info *binfo,
+                  hwaddr addr_limit, AddressSpace *as, MachineState *ms);
+ 
++void do_cpu_reset(void *opaque);
++
+ /* Write a secure board setup routine with a dummy handler for SMCs */
+ void arm_write_secure_board_setup_dummy_smc(ARMCPU *cpu,
+                                             const struct arm_boot_info *info,
+diff --git a/include/hw/arm/virt.h b/include/hw/arm/virt.h
+index b91249201a..f18d797245 100644
+--- a/include/hw/arm/virt.h
++++ b/include/hw/arm/virt.h
+@@ -160,6 +160,7 @@ struct VirtMachineState {
+     const int *irqmap;
+     int fdt_size;
+     int max_cpus;
++    uint16_t boot_cpus;
+     uint32_t clock_phandle;
+     uint32_t gic_phandle;
+     uint32_t msi_phandle;
+-- 
+2.30.2
+

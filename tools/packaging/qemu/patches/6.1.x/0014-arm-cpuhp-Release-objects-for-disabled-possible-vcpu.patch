@@ -1,0 +1,86 @@
+From 435c926d8739b1ad4ffbfeabe83aabbda2d3ec22 Mon Sep 17 00:00:00 2001
+From: Salil Mehta <salil.mehta@huawei.com>
+Date: Wed, 1 Dec 2021 12:38:03 +0800
+Subject: [PATCH 14/28] arm/cpuhp: Release objects for *disabled* possible
+ vcpus after init
+
+During machvirt_init(), ARMCPU objects are pre-created along with the
+corresponding KVM vcpus in the host. Disabled possible KVM vcpus are then
+parked at the per-virt-machine list "kvm_parked_vcpus".
+
+Prime purpose to pre-create ARMCPU objects for the disabled vcpus is to
+facilitate the GIC initialization (pre-sized with possible vcpus). GIC
+requires all vcpus corresponding to its GICC(GIC CPU Interface) to be
+initialized and present during its own initialization.
+
+After initialization of the machine is complete we release the ARMCPU objects
+for the disabled vcpus(which shall be re-created at the time when vcpu is hot
+plugged again. This newly created ARMCPU object is then attached with
+corresponding parked KVM VCPU).
+
+We have few options after the machine init where the disabled ARMCPU object
+could be released:
+1. Release in context to the virt_machine_done() notifier.(This is also our
+   current approach)
+2. Defer the release till a new vcpu object is hot plugged. Then release the
+   object in context to the pre_plug() phase.
+3. Never release and keep on reusing them and release once at VM exit. This
+   will require some modifications within the interface of qdevice_add() to
+   get old ARMCPU object instead of creating a new one for the hotplug request.
+
+Each of the above approaches come with their own pros and cons. This prototype
+uses the 1st approach.(suggestions are welcome!)
+
+Co-developed-by: Keqian Zhu <zhukeqian1@huawei.com>
+Signed-off-by: Salil Mehta <salil.mehta@huawei.com>
+Signed-off-by: Huang Shijie <shijie8@gmail.com>
+---
+ hw/arm/virt.c | 25 +++++++++++++++++++++++++
+ 1 file changed, 25 insertions(+)
+
+diff --git a/hw/arm/virt.c b/hw/arm/virt.c
+index 47db084183..a0b6393f76 100644
+--- a/hw/arm/virt.c
++++ b/hw/arm/virt.c
+@@ -1505,6 +1505,28 @@ static void create_secure_ram(VirtMachineState *vms,
+     g_free(nodename);
+ }
+ 
++static void virt_remove_disabled_cpus(VirtMachineState *vms)
++{
++    MachineState *ms = MACHINE(vms);
++    int n;
++
++    /*
++     * RFC: Question: Other approach could have been to keep them forever
++     * and release it only once when qemu exits as part o finalize or when
++     * new vcpu is hotplugged. In the later old could be released for the
++     * newly created object for the same vcpu?
++     */
++    for (n = MACHINE(vms)->smp.cpus; n < MACHINE(vms)->smp.max_cpus; n++) {
++        CPUState *cs = qemu_get_possible_cpu(n);
++        if (!qemu_present_cpu(cs)) {
++            CPUArchId *cpu_slot;
++            cpu_slot = virt_find_cpu_slot(ms, cs->cpu_index);
++            cpu_slot->cpu = NULL;
++            object_unref(OBJECT(cs));
++        }
++    }
++}
++
+ /*static bool virt_pmu_init(VirtMachineState *vms)
+ {
+     CPUArchIdList *possible_cpus = vms->parent.possible_cpus;
+@@ -1608,6 +1630,9 @@ void virt_machine_done(Notifier *notifier, void *data)
+ 
+     virt_acpi_setup(vms);
+     virt_build_smbios(vms);
++
++    /* release the disabled ARMCPU objects used during init for pre-sizing */
++     virt_remove_disabled_cpus(vms);
+ }
+ 
+ static uint64_t virt_cpu_mp_affinity(VirtMachineState *vms, int idx)
+-- 
+2.30.2
+

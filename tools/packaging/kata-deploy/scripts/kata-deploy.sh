@@ -94,7 +94,7 @@ function configure_different_shims_base() {
 		fi
 
 		cat << EOT | tee "$shim_file"
-#!/bin/bash
+#!/usr/bin/env bash
 KATA_CONF_FILE=/opt/kata/share/defaults/kata-containers/configuration-${shim}.toml /opt/kata/bin/containerd-shim-kata-v2 "\$@"
 EOT
 		chmod +x "$shim_file"
@@ -281,7 +281,8 @@ function main() {
 		containerd_conf_file_backup="${containerd_conf_file}.bak"
 	else
 		# runtime == containerd
-		if [ ! -f "$containerd_conf_file" ]; then
+		if [ ! -f "$containerd_conf_file" ] && [ -d $(dirname "$containerd_conf_file") ] && \
+			[ -x $(command -v containerd) ]; then
 			containerd config default > "$containerd_conf_file"
 		fi
 	fi

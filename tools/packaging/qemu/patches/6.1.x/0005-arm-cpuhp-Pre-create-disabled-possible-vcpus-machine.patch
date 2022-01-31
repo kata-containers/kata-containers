@@ -1,0 +1,243 @@
+From 1d9605a449833e464bd0388bb658d31a84ad4c7d Mon Sep 17 00:00:00 2001
+From: Salil Mehta <salil.mehta@huawei.com>
+Date: Wed, 24 Nov 2021 15:30:20 +0800
+Subject: [PATCH 05/28] arm/cpuhp: Pre-create disabled possible vcpus @machine
+ init
+
+In ARMv8 architecture, GIC needs all the vcpus to be created and present when
+it is initialized. This is because:
+1. GICC and MPIDR association must be fixed at the VM initialization time.
+   This is represented by register GIC_TYPER(mp_afffinity, proc_num)
+2. GICC(cpu interfaces), GICR(redistributors) etc all must be initialized
+   at the boot time as well.
+3. Memory regions associated with GICR etc. cannot be changed(add/del/mod)
+   after VM has inited.
+
+This patch adds the support to pre-create all such possible vcpus within the
+host using the KVM interface as part of the virt machine initialization. These
+vcpus could later be attached to QOM/ACPI while they are actually hot plugged
+and made present.
+
+NOTE: There is some refactoring related to the kvm_destroy_vcpu/kvm_get_vcpu
+      (to make use of the common code) has been intentionaly left out in RFC
+      version to avoid obscuring the framework change of the cpu hotplug. The
+      existing code being presented in this patch could further be optimized
+      later.
+
+Co-developed-by: Keqian Zhu <zhukeqian1@huawei.com>
+Signed-off-by: Salil Mehta <salil.mehta@huawei.com>
+Signed-off-by: Huang Shijie <shijie8@gmail.com>
+---
+ accel/kvm/kvm-all.c  | 31 +++++++++++++++++++++++++++
+ accel/kvm/kvm-cpus.h |  2 ++
+ hw/arm/virt.c        | 50 +++++++++++++++++++++++++++++++++++++++++---
+ target/arm/kvm.c     | 33 +++++++++++++++++++++++++++++
+ target/arm/kvm_arm.h | 11 ++++++++++
+ 5 files changed, 124 insertions(+), 3 deletions(-)
+
+diff --git a/accel/kvm/kvm-all.c b/accel/kvm/kvm-all.c
+index 0125c17edb..46717dad14 100644
+--- a/accel/kvm/kvm-all.c
++++ b/accel/kvm/kvm-all.c
+@@ -425,6 +425,37 @@ err:
+     return ret;
+ }
+ 
++void kvm_park_vcpu(CPUState *cs)
++{
++    unsigned long vcpu_id = cs->cpu_index;
++    struct KVMParkedVcpu *vcpu;
++
++    vcpu = g_malloc0(sizeof(*vcpu));
++    vcpu->vcpu_id = vcpu_id;
++    vcpu->kvm_fd = cs->kvm_fd;
++    QLIST_INSERT_HEAD(&kvm_state->kvm_parked_vcpus, vcpu, node);
++}
++
++int kvm_create_vcpu(CPUState *cpu)
++{
++    unsigned long vcpu_id = cpu->cpu_index;
++    KVMState *s = kvm_state;
++    int ret = 0;
++
++    DPRINTF("kvm_create_vcpu\n");
++
++    ret = kvm_vm_ioctl(s, KVM_CREATE_VCPU, (void *)vcpu_id);
++    if (ret < 0) {
++        goto err;
++    }
++    cpu->kvm_fd = ret;
++    cpu->kvm_state = s;
++    cpu->vcpu_dirty = true;
++
++err:
++    return ret;
++}
++
+ void kvm_destroy_vcpu(CPUState *cpu)
+ {
+     if (do_kvm_destroy_vcpu(cpu) < 0) {
+diff --git a/accel/kvm/kvm-cpus.h b/accel/kvm/kvm-cpus.h
+index bf0bd1bee4..54a4fd19cf 100644
+--- a/accel/kvm/kvm-cpus.h
++++ b/accel/kvm/kvm-cpus.h
+@@ -14,6 +14,8 @@
+ 
+ int kvm_init_vcpu(CPUState *cpu, Error **errp);
+ int kvm_cpu_exec(CPUState *cpu);
++int kvm_create_vcpu(CPUState *cpu);
++void kvm_park_vcpu(CPUState *cs);
+ void kvm_destroy_vcpu(CPUState *cpu);
+ void kvm_cpu_synchronize_post_reset(CPUState *cpu);
+ void kvm_cpu_synchronize_post_init(CPUState *cpu);
+diff --git a/hw/arm/virt.c b/hw/arm/virt.c
+index 81219d1d5a..853288b34a 100644
+--- a/hw/arm/virt.c
++++ b/hw/arm/virt.c
+@@ -1995,13 +1995,14 @@ static void machvirt_init(MachineState *machine)
+     assert(possible_cpus->len == max_cpus);
+     for (n = 0; n < possible_cpus->len; n++) {
+         Object *cpuobj;
+-/*        CPUState *cs;
++        CPUState *cs;
+ 
+-        if (n >= smp_cpus) {
++/*        if (n >= smp_cpus) {
+             break;
+         }
+ */
+         cpuobj = object_new(possible_cpus->cpus[n].type);
++	cs = CPU(cpuobj);
+ /*        object_property_set_int(cpuobj, "mp-affinity",
+                                 possible_cpus->cpus[n].arch_id, NULL);
+ 
+@@ -2096,9 +2097,52 @@ static void machvirt_init(MachineState *machine)
+                                          &error_abort);
+             }
+         }
+-*/
++
+         qdev_realize(DEVICE(cpuobj), NULL, &error_fatal);
+         object_unref(cpuobj);
++*/
++	if (n < smp_cpus) {
++            char *core_id = g_strdup_printf("core%d", n);
++            qdev_set_id(DEVICE(cpuobj),core_id);
++            object_property_set_bool(cpuobj, "realized", true, &error_fatal);
++            g_free(core_id);
++            object_unref(OBJECT(cs));
++        } else {
++            CPUArchId *cpu_slot;
++            /* handling for vcpus which are yet to be hot-plugged */
++            cs->cpu_index = n; cs->disabled=true;
++            /* ARM host vcpu features need to be fixed at the boot time */
++            virt_cpu_set_properties(cpuobj, &possible_cpus->cpus[n]);
++            /*
++             * For KVM, we shall be pre-creating the now disabled/un-plugged
++             * possbile host vcpus and park them till the time they are
++             * actually hot plugged. This is required to pre-size the host
++             * GICC and GICR with the all possible vcpus for this VM.
++             */
++            if (kvm_enabled()) {
++               kvm_arm_create_host_vcpu(ARM_CPU(cs));
++            }
++            /*
++             * Add disabled vcpu to cpu slot during the init phase of the virt machine.
++             * 1. We need this ARMCPU object during the GIC init. This object
++             *    will facilitate in pre-realizing the gic. Any info like
++             *    mp-affinity(required to derive gicr_type) etc could still be
++             *    fetched while preserving QOM abstraction akin to realized
++             *    vcpus.
++             * 2. Now, after initialization of the virt machine is complete we could use
++             *    two approaches to deal with this ARMCPU object:
++             *    (i) re-use this ARMCPU object during hotplug of this vcpu.
++             *                             OR
++             *    (ii) defer release this ARMCPU object after gic has been
++             *         initialized or during pre-plug phase when a vcpu is
++             *         hotplugged.
++             *
++             *    We will use the (ii) approach and release the ARMCPU objects after GIC
++             *    and machine has been initialized in machine_init_done() phase
++             */
++             cpu_slot = virt_find_cpu_slot(machine, cs->cpu_index);
++             cpu_slot->cpu = OBJECT(cs);
++        }
+     }
+     fdt_add_timer_nodes(vms);
+     fdt_add_cpu_nodes(vms);
+diff --git a/target/arm/kvm.c b/target/arm/kvm.c
+index d8381ba224..bb75beec9d 100644
+--- a/target/arm/kvm.c
++++ b/target/arm/kvm.c
+@@ -32,6 +32,7 @@
+ #include "hw/boards.h"
+ #include "hw/irq.h"
+ #include "qemu/log.h"
++#include "accel/kvm/kvm-cpus.h"
+ 
+ const KVMCapabilityInfo kvm_arch_required_capabilities[] = {
+     KVM_CAP_LAST_INFO
+@@ -627,6 +628,38 @@ void kvm_arm_reset_vcpu(ARMCPU *cpu)
+     write_list_to_cpustate(cpu);
+ }
+ 
++void kvm_arm_create_host_vcpu(ARMCPU *cpu)
++{
++    CPUState *cs = CPU(cpu);
++    unsigned long vcpu_id = cs->cpu_index;
++    int ret;
++
++    ret = kvm_create_vcpu(cs);
++    if (ret < 0) {
++        error_report("Failed to create host vcpu %ld", vcpu_id);
++        abort();
++    }
++
++    /*
++     * Initialize the vcpu in the host. This will reset the sys regs
++     * for this vcpu and related registers like MPIDR_EL1 etc. also
++     * gets programmed during this call to host. These are referred
++     * later while setting device attributes of the GICR during GICv3
++     * reset
++     */
++    ret = kvm_arch_init_vcpu(cs);
++    if (ret < 0) {
++        error_report("Failed to initialize host vcpu %ld", vcpu_id);
++        abort();
++    }
++
++    /*
++     * park the created vcpu. shall be used during kvm_get_vcpu() when
++     * threads are created during realization of ARM vcpus
++     */
++    kvm_park_vcpu(cs);
++}
++
+ /*
+  * Update KVM's MP_STATE based on what QEMU thinks it is
+  */
+diff --git a/target/arm/kvm_arm.h b/target/arm/kvm_arm.h
+index 34f8daa377..e0490c97b5 100644
+--- a/target/arm/kvm_arm.h
++++ b/target/arm/kvm_arm.h
+@@ -155,6 +155,17 @@ void kvm_arm_cpu_post_load(ARMCPU *cpu);
+  */
+ void kvm_arm_reset_vcpu(ARMCPU *cpu);
+ 
++/**
++ * kvm_arm_create_host_vcpu:
++ * @cpu: ARMCPU
++ *
++ * Called at to pre create all possible kvm vcpus within the the host at the
++ * virt machine init time. This will also init this pre-created vcpu and
++ * hence result in vcpu reset at host. These pre created and inited vcpus
++ * shall be parked for use when ARM vcpus are actually realized.
++ */
++void kvm_arm_create_host_vcpu(ARMCPU *cpu);
++
+ /**
+  * kvm_arm_init_serror_injection:
+  * @cs: CPUState
+-- 
+2.30.2
+

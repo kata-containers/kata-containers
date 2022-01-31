@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 #
 # Copyright (c) 2017-2020 Intel Corporation
 #
@@ -714,7 +714,7 @@ unmount_partition()
 {
 	local mountpoint="$1"
 	[ -n "$mountpoint" ] || die "need mountpoint"
-	[ -n "$mountpoint" ] || die "mountpoint does not exist: $mountpoint"
+	[ -e "$mountpoint" ] || die "mountpoint does not exist: $mountpoint"
 
 	umount "$mountpoint"
 }

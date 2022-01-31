@@ -216,4 +216,4 @@ codecov-html: check_tarpaulin
 
 ##TARGET generate-protocols: generate/update grpc agent protocols
 generate-protocols:
-	protocols/hack/update-generated-proto.sh all
+	../libs/protocols/hack/update-generated-proto.sh all
