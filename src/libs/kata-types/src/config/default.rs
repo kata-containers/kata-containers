@@ -35,8 +35,8 @@ pub const DEFAULT_GUEST_HOOK_PATH: &str = "/opt";
 pub const DEFAULT_GUEST_VCPUS: u32 = 1;
 
 // Default configuration for Dragonball
-pub const DEFAULT_DB_GUEST_KENREL_IMAGE: &str = "vmlinuz";
-pub const DEFAULT_DB_GUEST_KENREL_PARAMS: &str = "";
+pub const DEFAULT_DB_GUEST_KERNEL_IMAGE: &str = "vmlinuz";
+pub const DEFAULT_DB_GUEST_KERNEL_PARAMS: &str = "";
 pub const DEFAULT_DB_ENTROPY_SOURCE: &str = "/dev/urandom";
 pub const DEFAULT_DB_MEMORY_SIZE: u32 = 128;
 pub const DEFAULT_DB_MEMORY_SLOTS: u32 = 128;
@@ -47,8 +47,8 @@ pub const DEFAULT_QEMU_BINARY_PATH: &str = "qemu";
 pub const DEFAULT_QEMU_CONTROL_PATH: &str = "";
 pub const DEFAULT_QEMU_MACHINE_TYPE: &str = "q35";
 pub const DEFAULT_QEMU_ENTROPY_SOURCE: &str = "/dev/urandom";
-pub const DEFAULT_QEMU_GUEST_KENREL_IMAGE: &str = "vmlinuz";
-pub const DEFAULT_QEMU_GUEST_KENREL_PARAMS: &str = "";
+pub const DEFAULT_QEMU_GUEST_KERNEL_IMAGE: &str = "vmlinuz";
+pub const DEFAULT_QEMU_GUEST_KERNEL_PARAMS: &str = "";
 pub const DEFAULT_QEMU_FIRMWARE_PATH: &str = "";
 pub const DEFAULT_QEMU_MEMORY_SIZE: u32 = 128;
 pub const DEFAULT_QEMU_MEMORY_SLOTS: u32 = 128;
