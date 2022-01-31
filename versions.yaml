@@ -155,7 +155,7 @@ assets:
   kernel:
     description: "Linux kernel optimised for virtual machines"
     url: "https://cdn.kernel.org/pub/linux/kernel/v5.x/"
-    version: "v5.10.25"
+    version: "v5.15.19"
 
   kernel-experimental:
     description: "Linux kernel with virtio-fs support"
