@@ -165,12 +165,14 @@ impl BlockDeviceInfo {
         if self.disable_block_device_use {
             return Ok(());
         }
-        if self.block_device_driver != VIRTIO_BLK
-            && self.block_device_driver != VIRTIO_BLK_CCW
-            && self.block_device_driver != VIRTIO_BLK_MMIO
-            && self.block_device_driver != VIRTIO_SCSI
-            && self.block_device_driver != VIRTIO_PMEM
-        {
+        let l = [
+            VIRTIO_BLK,
+            VIRTIO_BLK_CCW,
+            VIRTIO_BLK_MMIO,
+            VIRTIO_SCSI,
+            VIRTIO_PMEM,
+        ];
+        if !l.contains(&self.block_device_driver.as_str()) {
             return Err(eother!(
                 "{} is unsupported block device type.",
                 self.block_device_driver
