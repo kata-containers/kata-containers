@@ -149,7 +149,7 @@ assets:
   kernel:
     description: "Linux kernel optimised for virtual machines"
     url: "https://cdn.kernel.org/pub/linux/kernel/v5.x/"
-    version: "v5.10.25"
+    version: "v5.15.23"
     tdx:
       description: "Linux kernel that supports TDX"
       url: "https://github.com/intel/tdx/archive/refs/tags"
