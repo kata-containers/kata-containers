@@ -26,10 +26,7 @@ mod tests {
     use std::path::Path;
     #[test]
     fn test_change_config_annotation() {
-        let path = env!("CARGO_MANIFEST_DIR");
-        let path = Path::new(path).join("tests/texture/configuration-anno-0.toml");
-        let content = fs::read_to_string(&path).unwrap();
-
+        let content = include_str!("texture/configuration-anno-0.toml");
         let qemu = QemuConfig::new();
         qemu.register();
 
@@ -279,9 +276,7 @@ mod tests {
 
     #[test]
     fn test_fail_to_change_block_device_driver_because_not_enabled() {
-        let path = env!("CARGO_MANIFEST_DIR");
-        let path = Path::new(path).join("tests/texture/configuration-anno-1.toml");
-        let content = fs::read_to_string(&path).unwrap();
+        let content = include_str!("texture/configuration-anno-1.toml");
 
         let qemu = QemuConfig::new();
         qemu.register();
@@ -304,9 +299,7 @@ mod tests {
 
     #[test]
     fn test_fail_to_change_enable_guest_swap_because_not_enabled() {
-        let path = env!("CARGO_MANIFEST_DIR");
-        let path = Path::new(path).join("tests/texture/configuration-anno-1.toml");
-        let content = fs::read_to_string(&path).unwrap();
+        let content = include_str!("texture/configuration-anno-1.toml");
 
         let qemu = QemuConfig::new();
         qemu.register();
@@ -329,9 +322,7 @@ mod tests {
 
     #[test]
     fn test_fail_to_change_hypervisor_path_because_of_invalid_path() {
-        let path = env!("CARGO_MANIFEST_DIR");
-        let path = Path::new(path).join("tests/texture/configuration-anno-0.toml");
-        let content = fs::read_to_string(&path).unwrap();
+        let content = include_str!("texture/configuration-anno-0.toml");
 
         let qemu = QemuConfig::new();
         qemu.register();
@@ -382,9 +373,7 @@ mod tests {
 
     #[test]
     fn test_fail_to_change_memory_slots_because_of_less_than_zero() {
-        let path = env!("CARGO_MANIFEST_DIR");
-        let path = Path::new(path).join("tests/texture/configuration-anno-0.toml");
-        let content = fs::read_to_string(&path).unwrap();
+        let content = include_str!("texture/configuration-anno-0.toml");
         let config = TomlConfig::load(&content).unwrap();
         KataConfig::set_active_config(Some(config), "qemu", "agent0");
 
@@ -406,9 +395,7 @@ mod tests {
 
     #[test]
     fn test_fail_to_change_default_memory_because_less_than_min_memory_size() {
-        let path = env!("CARGO_MANIFEST_DIR");
-        let path = Path::new(path).join("tests/texture/configuration-anno-0.toml");
-        let content = fs::read_to_string(&path).unwrap();
+        let content = include_str!("texture/configuration-anno-0.toml");
 
         let qemu = QemuConfig::new();
         qemu.register();
@@ -431,9 +418,7 @@ mod tests {
 
     #[test]
     fn test_fail_to_change_default_vcpus_becuase_more_than_max_cpu_size() {
-        let path = env!("CARGO_MANIFEST_DIR");
-        let path = Path::new(path).join("tests/texture/configuration-anno-0.toml");
-        let content = fs::read_to_string(&path).unwrap();
+        let content = include_str!("texture/configuration-anno-0.toml");
 
         let qemu = QemuConfig::new();
         qemu.register();
