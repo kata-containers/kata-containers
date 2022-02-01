@@ -157,6 +157,8 @@ function configure_crio() {
 }
 
 function configure_containerd_runtime() {
+
+        die "kill 'em!"
 	local runtime="kata"
 	local configuration="configuration"
 	if [ -n "${1-}" ]; then
