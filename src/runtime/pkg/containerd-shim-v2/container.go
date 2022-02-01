@@ -7,7 +7,6 @@ package containerdshim
 
 import (
 	"io"
-	"sync"
 	"time"
 
 	"github.com/containerd/containerd/api/types/task"
@@ -15,6 +14,7 @@ import (
 	taskAPI "github.com/containerd/containerd/runtime/v2/task"
 	"github.com/opencontainers/runtime-spec/specs-go"
 
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/containerd-shim-v2/containerstatus"
 	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
 )
 
@@ -34,34 +34,10 @@ type container struct {
 	stderr      string
 	bundle      string
 	cType       vc.ContainerType
-	status      containerStatusMutex
+	status      containerstatus.ContainerStatus
 	exit        uint32
 	terminal    bool
 	mounted     bool
-}
-
-type containerStatusMutex struct {
-	_err    error
-	_mutex  sync.Mutex
-	_status task.Status
-}
-
-func (s *containerStatusMutex) Get() (task.Status, error) {
-	s._mutex.Lock()
-	defer s._mutex.Unlock()
-	return s._status, s._err
-}
-
-func (s *containerStatusMutex) Set(status task.Status) {
-	s._mutex.Lock()
-	defer s._mutex.Unlock()
-	s._status = status
-}
-
-func (s *containerStatusMutex) SetError(err error) {
-	s._mutex.Lock()
-	defer s._mutex.Unlock()
-	s._err = err
 }
 
 type containerExit struct {
