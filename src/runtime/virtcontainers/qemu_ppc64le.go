@@ -154,7 +154,7 @@ func (q *qemuPPC64le) enableProtection() error {
 }
 
 // append protection device
-func (q *qemuPPC64le) appendProtectionDevice(devices []govmmQemu.Device, firmware string) ([]govmmQemu.Device, string, error) {
+func (q *qemuPPC64le) appendProtectionDevice(devices []govmmQemu.Device, firmware, firmwareVolume string) ([]govmmQemu.Device, string, error) {
 	switch q.protection {
 	case pefProtection:
 		return append(devices,

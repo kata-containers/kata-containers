@@ -232,19 +232,20 @@ func (q *qemuAmd64) enableProtection() error {
 }
 
 // append protection device
-func (q *qemuAmd64) appendProtectionDevice(devices []govmmQemu.Device, firmware string) ([]govmmQemu.Device, string, error) {
+func (q *qemuAmd64) appendProtectionDevice(devices []govmmQemu.Device, firmware, firmwareVolume string) ([]govmmQemu.Device, string, error) {
 	switch q.protection {
 	case tdxProtection:
 		id := q.devLoadersCount
 		q.devLoadersCount += 1
 		return append(devices,
 			govmmQemu.Object{
-				Driver:   govmmQemu.Loader,
-				Type:     govmmQemu.TDXGuest,
-				ID:       "tdx",
-				DeviceID: fmt.Sprintf("fd%d", id),
-				Debug:    false,
-				File:     firmware,
+				Driver:         govmmQemu.Loader,
+				Type:           govmmQemu.TDXGuest,
+				ID:             "tdx",
+				DeviceID:       fmt.Sprintf("fd%d", id),
+				Debug:          false,
+				File:           firmware,
+				FirmwareVolume: firmwareVolume,
 			}), "", nil
 	case sevProtection:
 		return append(devices,

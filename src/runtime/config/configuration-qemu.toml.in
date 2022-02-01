@@ -56,6 +56,12 @@ kernel_params = "@KERNELPARAMS@"
 # If you want that qemu uses the default firmware leave this option empty
 firmware = "@FIRMWAREPATH@"
 
+# Path to the firmware volume.
+# firmware TDVF or OVMF can be split into FIRMWARE_VARS.fd (UEFI variables
+# as configuration) and FIRMWARE_CODE.fd (UEFI program image). UEFI variables
+# can be customized per each user while UEFI code is kept same.
+firmware_volume = "@FIRMWAREVOLUMEPATH@"
+
 # Machine accelerators
 # comma-separated list of machine accelerators to pass to the hypervisor.
 # For example, `machine_accelerators = "nosmm,nosmbus,nosata,nopit,static-prt,nofw"`

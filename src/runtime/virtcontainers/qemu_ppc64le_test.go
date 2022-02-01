@@ -58,7 +58,7 @@ func TestQemuPPC64leAppendProtectionDevice(t *testing.T) {
 	var devices []govmmQemu.Device
 	var bios, firmware string
 	var err error
-	devices, bios, err = ppc64le.appendProtectionDevice(devices, firmware)
+	devices, bios, err = ppc64le.appendProtectionDevice(devices, firmware, "")
 	assert.NoError(err)
 
 	//no protection
@@ -66,25 +66,25 @@ func TestQemuPPC64leAppendProtectionDevice(t *testing.T) {
 
 	//Secure Execution protection
 	ppc64le.(*qemuPPC64le).protection = seProtection
-	devices, bios, err = ppc64le.appendProtectionDevice(devices, firmware)
+	devices, bios, err = ppc64le.appendProtectionDevice(devices, firmware, "")
 	assert.Error(err)
 	assert.Empty(bios)
 
 	//SEV protection
 	ppc64le.(*qemuPPC64le).protection = sevProtection
-	devices, bios, err = ppc64le.appendProtectionDevice(devices, firmware)
+	devices, bios, err = ppc64le.appendProtectionDevice(devices, firmware, "")
 	assert.Error(err)
 	assert.Empty(bios)
 
 	//TDX protection
 	ppc64le.(*qemuPPC64le).protection = tdxProtection
-	devices, bios, err = ppc64le.appendProtectionDevice(devices, firmware)
+	devices, bios, err = ppc64le.appendProtectionDevice(devices, firmware, "")
 	assert.Error(err)
 	assert.Empty(bios)
 
 	//PEF protection
 	ppc64le.(*qemuPPC64le).protection = pefProtection
-	devices, bios, err = ppc64le.appendProtectionDevice(devices, firmware)
+	devices, bios, err = ppc64le.appendProtectionDevice(devices, firmware, "")
 	assert.NoError(err)
 	assert.Empty(bios)
 

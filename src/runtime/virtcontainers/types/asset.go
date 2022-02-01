@@ -39,6 +39,8 @@ const (
 
 	// FirmwareAsset is a firmware asset.
 	FirmwareAsset AssetType = "firmware"
+
+	FirmwareVolumeAsset AssetType = "firmware_volume"
 )
 
 // AssetTypes returns a list of all known asset types.
@@ -47,6 +49,7 @@ const (
 func AssetTypes() []AssetType {
 	return []AssetType{
 		FirmwareAsset,
+		FirmwareVolumeAsset,
 		HypervisorAsset,
 		HypervisorCtlAsset,
 		ImageAsset,
@@ -89,6 +92,8 @@ func (t AssetType) Annotations() (string, string, error) {
 		return annotations.JailerPath, annotations.JailerHash, nil
 	case FirmwareAsset:
 		return annotations.FirmwarePath, annotations.FirmwareHash, nil
+	case FirmwareVolumeAsset:
+		return annotations.FirmwareVolumePath, annotations.FirmwareVolumeHash, nil
 	}
 
 	return "", "", fmt.Errorf("Wrong asset type %s", t)
