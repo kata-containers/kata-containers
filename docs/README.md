@@ -28,7 +28,6 @@ See the [howto documentation](how-to).
 ## Kata Use-Cases
 
 * [GPU Passthrough with Kata](./use-cases/GPU-passthrough-and-Kata.md)
-* [OpenStack Zun with Kata Containers](./use-cases/zun_kata.md)
 * [SR-IOV with Kata](./use-cases/using-SRIOV-and-kata.md)
 * [Intel QAT with Kata](./use-cases/using-Intel-QAT-and-kata.md)
 * [VPP with Kata](./use-cases/using-vpp-and-kata.md)
