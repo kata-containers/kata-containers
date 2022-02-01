@@ -59,7 +59,7 @@ jobs:
 
       - uses: actions/checkout@v2
         with:
-          ref: ${{ steps.refs.outputs.head_ref }}
+          ref: ${{ steps.refs.outputs.base_ref }}
       - name: Install docker
         run: |
           curl -fsSL https://test.docker.com -o test-docker.sh
@@ -96,7 +96,7 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
       - uses: actions/checkout@v2
         with:
-          ref: ${{ steps.refs.outputs.head_ref }}
+          ref: ${{ steps.refs.outputs.base_ref }}
       - name: get-artifacts
         uses: actions/download-artifact@v2
         with:
@@ -125,7 +125,7 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
       - uses: actions/checkout@v2
         with:
-          ref: ${{ steps.refs.outputs.head_ref }}
+          ref: ${{ steps.refs.outputs.base_ref }}
       - name: get-kata-tarball
         uses: actions/download-artifact@v2
         with:
