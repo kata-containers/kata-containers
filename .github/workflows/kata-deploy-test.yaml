@@ -51,6 +51,7 @@ jobs:
       - name: get-PR-ref
         id: get-PR-ref
         run: |
+            echo "foo my bar!"
             ref=$(cat $GITHUB_EVENT_PATH | jq -r '.issue.pull_request.url' | sed  's#^.*\/pulls#refs\/pull#' | sed 's#$#\/merge#')
             echo "reference for PR: " ${ref}
             echo "##[set-output name=pr-ref;]${ref}"
