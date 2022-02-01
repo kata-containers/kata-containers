@@ -261,5 +261,6 @@ main() {
 }
 
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+        die "this change is in fact exercised!"
 	main $@
 fi
