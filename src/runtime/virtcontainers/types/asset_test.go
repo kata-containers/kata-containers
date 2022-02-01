@@ -118,6 +118,7 @@ func TestAssetNew(t *testing.T) {
 		{annotations.HypervisorCtlPath, annotations.HypervisorCtlHash, HypervisorCtlAsset, assetContentHash, false, false},
 		{annotations.JailerPath, annotations.JailerHash, JailerAsset, assetContentHash, false, false},
 		{annotations.FirmwarePath, annotations.FirmwareHash, FirmwareAsset, assetContentHash, false, false},
+		{annotations.FirmwareVolumePath, annotations.FirmwareVolumeHash, FirmwareVolumeAsset, assetContentHash, false, false},
 
 		// Failure with incorrect hash
 		{annotations.KernelPath, annotations.KernelHash, KernelAsset, assetContentWrongHash, true, false},
@@ -127,6 +128,7 @@ func TestAssetNew(t *testing.T) {
 		{annotations.HypervisorCtlPath, annotations.HypervisorCtlHash, HypervisorCtlAsset, assetContentWrongHash, true, false},
 		{annotations.JailerPath, annotations.JailerHash, JailerAsset, assetContentWrongHash, true, false},
 		{annotations.FirmwarePath, annotations.FirmwareHash, FirmwareAsset, assetContentWrongHash, true, false},
+		{annotations.FirmwareVolumePath, annotations.FirmwareVolumeHash, FirmwareVolumeAsset, assetContentWrongHash, true, false},
 
 		// Other failures
 		{annotations.KernelPath, annotations.KernelHash, ImageAsset, assetContentHash, false, true},
