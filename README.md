@@ -2,7 +2,7 @@
 
 # Kata Containers
 
-Welcome to Kata Containers, this is a test, and yet another one!
+Welcome to Kata Containers, this is a test, and yet another one ... and yet another one ...!
 
 This repository is the home of the Kata Containers code for the 2.0 and newer
 releases.
