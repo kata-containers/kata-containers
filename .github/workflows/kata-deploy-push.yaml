@@ -1,7 +1,7 @@
 name: kata deploy build
 
 on: 
-  pull_request:
+  pull_request_target:
     types:
       - opened
       - edited
@@ -9,6 +9,8 @@ on:
       - synchronize
       - labeled
       - unlabeled
+    paths:
+      - tools/**
   push:
 
 jobs:
