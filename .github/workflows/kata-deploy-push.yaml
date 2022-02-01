@@ -9,7 +9,8 @@ on:
       - synchronize
       - labeled
       - unlabeled
-  push:
+    paths:
+      - tools/**
 
 jobs:
   build-asset:
