@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-package cgroups
+package resourcecontrol
 
 import (
 	v1 "github.com/containerd/cgroups/stats/v1"
@@ -12,7 +12,7 @@ import (
 )
 
 var (
-	controllerLogger = logrus.WithField("source", "virtcontainers/pkg/cgroups")
+	controllerLogger = logrus.WithField("source", "virtcontainers/pkg/resourcecontrol")
 )
 
 // SetLogger sets up a logger for this pkg
