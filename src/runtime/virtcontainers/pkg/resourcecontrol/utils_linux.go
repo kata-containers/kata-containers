@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-package cgroups
+package resourcecontrol
 
 import (
 	"context"
@@ -16,6 +16,9 @@ import (
 	"github.com/godbus/dbus/v5"
 	"github.com/opencontainers/runc/libcontainer/cgroups/systemd"
 )
+
+// DefaultResourceControllerID runtime-determined location in the cgroups hierarchy.
+const DefaultResourceControllerID = "/vc"
 
 // validCgroupPath returns a valid cgroup path.
 // see https://github.com/opencontainers/runtime-spec/blob/master/config-linux.md#cgroups-path
@@ -36,8 +39,8 @@ func ValidCgroupPath(path string, systemdCgroup bool) (string, error) {
 
 	// In the case of a relative path (not starting with /), the runtime MAY
 	// interpret the path relative to a runtime-determined location in the cgroups hierarchy.
-	// clean up path and return a new path relative to DefaultCgroupPath
-	return filepath.Join(DefaultCgroupPath, filepath.Clean("/"+path)), nil
+	// clean up path and return a new path relative to DefaultResourceControllerID
+	return filepath.Join(DefaultResourceControllerID, filepath.Clean("/"+path)), nil
 }
 
 func IsSystemdCgroup(cgroupPath string) bool {
