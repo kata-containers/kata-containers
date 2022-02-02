@@ -199,8 +199,8 @@ type Sandbox struct {
 	config          *SandboxConfig
 	annotationsLock *sync.RWMutex
 	wg              *sync.WaitGroup
-	sandboxCgroup   cgroups.Cgroup
-	overheadCgroup  cgroups.Cgroup
+	sandboxCgroup   cgroups.ResourceController
+	overheadCgroup  cgroups.ResourceController
 	cw              *consoleWatcher
 
 	containers map[string]*Container
@@ -672,13 +672,13 @@ func (s *Sandbox) createCgroups() error {
 	// Depending on the SandboxCgroupOnly value, this cgroup
 	// will either hold all the pod threads (SandboxCgroupOnly is true)
 	// or only the virtual CPU ones (SandboxCgroupOnly is false).
-	s.sandboxCgroup, err = cgroups.NewSandboxCgroup(cgroupPath, &resources, s.config.SandboxCgroupOnly)
+	s.sandboxCgroup, err = cgroups.NewSandboxResourceController(cgroupPath, &resources, s.config.SandboxCgroupOnly)
 	if err != nil {
 		return fmt.Errorf("Could not create the sandbox cgroup %v", err)
 	}
 
 	// Now that the sandbox cgroup is created, we can set the state cgroup root paths.
-	s.state.SandboxCgroupPath = s.sandboxCgroup.Path()
+	s.state.SandboxCgroupPath = s.sandboxCgroup.ID()
 	s.state.OverheadCgroupPath = ""
 
 	if s.config.SandboxCgroupOnly {
@@ -688,14 +688,14 @@ func (s *Sandbox) createCgroups() error {
 		// into the sandbox cgroup.
 		// We're creating an overhead cgroup, with no constraints. Everything but
 		// the vCPU threads will eventually make it there.
-		overheadCgroup, err := cgroups.NewCgroup(fmt.Sprintf("/%s/%s", cgroupKataOverheadPath, s.id), &specs.LinuxResources{})
+		overheadCgroup, err := cgroups.NewResourceController(fmt.Sprintf("/%s/%s", cgroupKataOverheadPath, s.id), &specs.LinuxResources{})
 		// TODO: support systemd cgroups overhead cgroup
 		// https://github.com/kata-containers/kata-containers/issues/2963
 		if err != nil {
 			return err
 		}
 		s.overheadCgroup = overheadCgroup
-		s.state.OverheadCgroupPath = s.overheadCgroup.Path()
+		s.state.OverheadCgroupPath = s.overheadCgroup.ID()
 	}
 
 	return nil
@@ -2131,12 +2131,13 @@ func (s *Sandbox) cgroupsDelete() error {
 		return nil
 	}
 
-	sandboxCgroup, err := cgroups.LoadCgroup(s.state.SandboxCgroupPath)
+	sandboxCgroup, err := cgroups.LoadResourceController(s.state.SandboxCgroupPath)
 	if err != nil {
 		return err
 	}
 
-	if err := sandboxCgroup.MoveToParent(); err != nil {
+	resCtrlParent := sandboxCgroup.Parent()
+	if err := sandboxCgroup.MoveTo(resCtrlParent); err != nil {
 		return err
 	}
 
@@ -2145,12 +2146,13 @@ func (s *Sandbox) cgroupsDelete() error {
 	}
 
 	if s.state.OverheadCgroupPath != "" {
-		overheadCgroup, err := cgroups.LoadCgroup(s.state.OverheadCgroupPath)
+		overheadCgroup, err := cgroups.LoadResourceController(s.state.OverheadCgroupPath)
 		if err != nil {
 			return err
 		}
 
-		if err := s.overheadCgroup.MoveToParent(); err != nil {
+		resCtrlParent := overheadCgroup.Parent()
+		if err := s.overheadCgroup.MoveTo(resCtrlParent); err != nil {
 			return err
 		}
 
@@ -2171,7 +2173,7 @@ func (s *Sandbox) constrainHypervisor(ctx context.Context) error {
 
 	// All vCPU threads move to the sandbox cgroup.
 	for _, i := range tids.vcpus {
-		if err := s.sandboxCgroup.AddTask(i); err != nil {
+		if err := s.sandboxCgroup.AddThread(i); err != nil {
 			return err
 		}
 	}
