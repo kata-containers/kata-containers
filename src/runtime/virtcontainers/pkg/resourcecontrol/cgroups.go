@@ -5,7 +5,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-package cgroups
+package resourcecontrol
 
 import (
 	"fmt"
@@ -25,12 +25,9 @@ import (
 // from grabbing the stats data.
 const CgroupKataPrefix = "kata"
 
-// DefaultCgroupPath runtime-determined location in the cgroups hierarchy.
-const DefaultCgroupPath = "/vc"
-
 func RenameCgroupPath(path string) (string, error) {
 	if path == "" {
-		path = DefaultCgroupPath
+		path = DefaultResourceControllerID
 	}
 
 	cgroupPathDir := filepath.Dir(path)

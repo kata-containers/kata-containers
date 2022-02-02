@@ -17,7 +17,7 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/drivers"
 	persistapi "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist/api"
-	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/cgroups"
+	resCtrl "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/resourcecontrol"
 	vcTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	"github.com/safchain/ethtool"
 )
@@ -89,7 +89,7 @@ func (endpoint *PhysicalEndpoint) Attach(ctx context.Context, s *Sandbox) error 
 		return err
 	}
 
-	c, err := cgroups.DeviceToCgroupDeviceRule(vfioPath)
+	c, err := resCtrl.DeviceToCgroupDeviceRule(vfioPath)
 	if err != nil {
 		return err
 	}
