@@ -1249,6 +1249,32 @@ func TestDefaultFirmware(t *testing.T) {
 	defaultFirmwarePath = oldDefaultFirmwarePath
 }
 
+func TestDefaultFirmwareVolume(t *testing.T) {
+	assert := assert.New(t)
+
+	// save default firmware path
+	oldDefaultFirmwareVolumePath := defaultFirmwareVolumePath
+
+	f, err := os.CreateTemp(os.TempDir(), "vol")
+	assert.NoError(err)
+	assert.NoError(f.Close())
+	defer os.RemoveAll(f.Name())
+
+	h := hypervisor{}
+	defaultFirmwareVolumePath = ""
+	p, err := h.firmwareVolume()
+	assert.NoError(err)
+	assert.Empty(p)
+
+	defaultFirmwareVolumePath = f.Name()
+	p, err = h.firmwareVolume()
+	assert.NoError(err)
+	assert.NotEmpty(p)
+
+	// restore default firmware volume path
+	defaultFirmwarePath = oldDefaultFirmwareVolumePath
+}
+
 func TestDefaultMachineAccelerators(t *testing.T) {
 	assert := assert.New(t)
 	machineAccelerators := "abc,123,rgb"
@@ -1355,12 +1381,13 @@ func TestUpdateRuntimeConfigurationVMConfig(t *testing.T) {
 	tomlConf := tomlConfig{
 		Hypervisor: map[string]hypervisor{
 			qemuHypervisorTableType: {
-				NumVCPUs:   int32(vcpus),
-				MemorySize: mem,
-				Path:       "/",
-				Kernel:     "/",
-				Image:      "/",
-				Firmware:   "/",
+				NumVCPUs:       int32(vcpus),
+				MemorySize:     mem,
+				Path:           "/",
+				Kernel:         "/",
+				Image:          "/",
+				Firmware:       "/",
+				FirmwareVolume: "/",
 			},
 		},
 	}
