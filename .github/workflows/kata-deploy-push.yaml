@@ -7,8 +7,6 @@ on:
       - edited
       - reopened
       - synchronize
-      - labeled
-      - unlabeled
     paths:
       - tools/**
       - versions.yaml
