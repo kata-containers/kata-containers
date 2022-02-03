@@ -4,7 +4,7 @@
 
 This document describes how to import Kata Containers logs into [Fluentd](https://www.fluentd.org/),
 typically for importing into an
-Elastic/Fluentd/Kibana([EFK](https://github.com/kubernetes/kubernetes/tree/master/cluster/addons/fluentd-elasticsearch#running-efk-stack-in-production))
+Elastic/Fluentd/Kibana([EFK](https://github.com/kubernetes-sigs/instrumentation-addons/tree/master/fluentd-elasticsearch#running-efk-stack-in-production))
 or Elastic/Logstash/Kibana([ELK](https://www.elastic.co/elastic-stack)) stack.
 
 The majority of this document focusses on CRI-O based (classic) Kata runtime. Much of that information
