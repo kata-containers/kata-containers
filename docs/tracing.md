@@ -203,11 +203,11 @@ is highly recommended. For working with the agent, you may also wish to
 [enable a debug console][setup-debug-console]
 to allow you to access the VM environment.
 
-[enable-full-debug]: https://github.com/kata-containers/kata-containers/blob/main/docs/Developer-Guide.md#enable-full-debug
+[enable-full-debug]: ./Developer-Guide.md#enable-full-debug
 [jaeger-all-in-one]: https://www.jaegertracing.io/docs/getting-started/
 [jaeger-tracing]: https://www.jaegertracing.io
 [opentelemetry]: https://opentelemetry.io
-[osbuilder]: https://github.com/kata-containers/kata-containers/blob/main/tools/osbuilder
-[setup-debug-console]: https://github.com/kata-containers/kata-containers/blob/main/docs/Developer-Guide.md#set-up-a-debug-console
+[osbuilder]: ../tools/osbuilder
+[setup-debug-console]: ./Developer-Guide.md#set-up-a-debug-console
 [trace-forwarder]: /src/tools/trace-forwarder
 [vsock]: https://wiki.qemu.org/Features/VirtioVsock

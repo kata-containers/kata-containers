@@ -154,7 +154,7 @@ func testFoo() error {
 ### Tracing
 
 Consider if the code needs to create a new
-[trace span](https://github.com/kata-containers/kata-containers/blob/main/docs/tracing.md).
+[trace span](./tracing.md).
 
 Ensure any new trace spans added to the code are completed.
 
