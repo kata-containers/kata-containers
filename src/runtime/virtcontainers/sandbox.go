@@ -804,24 +804,19 @@ func (s *Sandbox) createNetwork(ctx context.Context) error {
 
 	span, ctx := katatrace.Trace(ctx, s.Logger(), "createNetwork", sandboxTracingTags, map[string]string{"sandbox_id": s.id})
 	defer span.End()
-
-	network, err := NewNetwork(&s.config.NetworkConfig)
-	if err != nil {
-		return err
-	}
-
-	s.network = network
-
 	katatrace.AddTags(span, "network", s.network, "NetworkConfig", s.config.NetworkConfig)
 
 	// In case there is a factory, network interfaces are hotplugged
-	// after vm is started.
-	if s.factory == nil {
-		// Add the network
-		if _, err := s.network.AddEndpoints(ctx, s, nil, false); err != nil {
-			return err
-		}
+	// after the vm is started.
+	if s.factory != nil {
+		return nil
 	}
+
+	// Add all the networking endpoints.
+	if _, err := s.network.AddEndpoints(ctx, s, nil, false); err != nil {
+		return err
+	}
+
 	return nil
 }
 
