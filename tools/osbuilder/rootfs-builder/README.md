@@ -33,7 +33,7 @@ $ ./rootfs.sh -r "$PWD/kata-overlay"
 
 The rootfs must provide at least the following components:
 
-- [Kata agent](https://github.com/kata-containers/kata-containers/tree/main/src/agent)
+- [Kata agent](../../../src/agent)
 
   Path: `/bin/kata-agent` - Kata Containers guest.
 

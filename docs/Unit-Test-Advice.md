@@ -337,7 +337,7 @@ will run if the correct type of user is detected and skipped if not.
 
 The main repository has the most comprehensive set of skip abilities. See:
 
-- https://github.com/kata-containers/kata-containers/tree/main/src/runtime/pkg/katatestutils
+- [`katatestutils`](../src/runtime/pkg/katatestutils)
 
 ### Run Rust tests as a different user
 
