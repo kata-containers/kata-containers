@@ -488,8 +488,9 @@ func TestAssetPath(t *testing.T) {
 		ImagePath:  "/" + "io.katacontainers.config.hypervisor.image",
 		InitrdPath: "/" + "io.katacontainers.config.hypervisor.initrd",
 
-		FirmwarePath: "/" + "io.katacontainers.config.hypervisor.firmware",
-		JailerPath:   "/" + "io.katacontainers.config.hypervisor.jailer_path",
+		FirmwarePath:       "/" + "io.katacontainers.config.hypervisor.firmware",
+		FirmwareVolumePath: "/" + "io.katacontainers.config.hypervisor.firmware_volume",
+		JailerPath:         "/" + "io.katacontainers.config.hypervisor.jailer_path",
 	}
 
 	for _, asset := range types.AssetTypes() {

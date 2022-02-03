@@ -276,6 +276,9 @@ type HypervisorConfig struct {
 	// FirmwarePath is the bios host path
 	FirmwarePath string
 
+	// FirmwareVolumePath is the configuration volume path for the firmware
+	FirmwareVolumePath string
+
 	// MachineAccelerators are machine specific accelerators
 	MachineAccelerators string
 
@@ -639,6 +642,8 @@ func (conf *HypervisorConfig) assetPath(t types.AssetType) (string, error) {
 		return conf.JailerPath, nil
 	case types.FirmwareAsset:
 		return conf.FirmwarePath, nil
+	case types.FirmwareVolumeAsset:
+		return conf.FirmwareVolumePath, nil
 	default:
 		return "", fmt.Errorf("Unknown asset type %v", t)
 	}
@@ -701,6 +706,11 @@ func (conf *HypervisorConfig) CustomHypervisorAsset() bool {
 // FirmwareAssetPath returns the guest firmware path
 func (conf *HypervisorConfig) FirmwareAssetPath() (string, error) {
 	return conf.assetPath(types.FirmwareAsset)
+}
+
+// FirmwareVolumeAssetPath returns the guest firmware volume path
+func (conf *HypervisorConfig) FirmwareVolumeAssetPath() (string, error) {
+	return conf.assetPath(types.FirmwareVolumeAsset)
 }
 
 func appendParam(params []Param, parameter string, value string) []Param {

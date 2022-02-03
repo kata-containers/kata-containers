@@ -575,6 +575,11 @@ func (q *qemu) CreateVM(ctx context.Context, id string, networkNS NetworkNamespa
 		return err
 	}
 
+	firmwareVolumePath, err := q.config.FirmwareVolumeAssetPath()
+	if err != nil {
+		return err
+	}
+
 	pflash, err := q.arch.getPFlash()
 	if err != nil {
 		return err
@@ -610,7 +615,7 @@ func (q *qemu) CreateVM(ctx context.Context, id string, networkNS NetworkNamespa
 		PidFile:     filepath.Join(q.config.VMStorePath, q.id, "pid"),
 	}
 
-	qemuConfig.Devices, qemuConfig.Bios, err = q.arch.appendProtectionDevice(qemuConfig.Devices, firmwarePath)
+	qemuConfig.Devices, qemuConfig.Bios, err = q.arch.appendProtectionDevice(qemuConfig.Devices, firmwarePath, firmwareVolumePath)
 	if err != nil {
 		return err
 	}

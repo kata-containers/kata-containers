@@ -62,6 +62,8 @@ There are several kinds of Kata configurations and they are listed below.
 | `io.katacontainers.config.hypervisor.file_mem_backend` (R) | string | file based memory backend root directory |
 | `io.katacontainers.config.hypervisor.firmware_hash` | string | container firmware SHA-512 hash value |
 | `io.katacontainers.config.hypervisor.firmware` | string | the guest firmware that will run the container VM |
+| `io.katacontainers.config.hypervisor.firmware_volume_hash` | string | container firmware volume SHA-512 hash value |
+| `io.katacontainers.config.hypervisor.firmware_volume` | string | the guest firmware volume that will be passed to the container VM |
 | `io.katacontainers.config.hypervisor.guest_hook_path` | string | the path within the VM that will be used for drop in hooks |
 | `io.katacontainers.config.hypervisor.hotplug_vfio_on_root_bus` | `boolean` | indicate if devices need to be hotplugged on the root bus instead of a bridge|
 | `io.katacontainers.config.hypervisor.hypervisor_hash` | string | container hypervisor binary SHA-512 hash value |
