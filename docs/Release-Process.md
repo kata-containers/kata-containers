@@ -48,6 +48,7 @@
 ### Merge all bump version Pull requests
 
   - The above step will create a GitHub pull request in the Kata projects. Trigger the CI using `/test` command on each bump Pull request.
+  - Trigger the test-kata-deploy workflow on the kata-containers repository bump Pull request using `/test_kata_deploy` (monitor under the "action" tab).
   - Check any failures and fix if needed.
   - Work with the Kata approvers to verify that the CI works and the pull requests are merged.
 
