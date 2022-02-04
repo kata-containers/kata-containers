@@ -224,7 +224,7 @@ func (n *mockAgent) addSwap(ctx context.Context, PCIPath vcTypes.PciPath) error 
 func (n *mockAgent) markDead(ctx context.Context) {
 }
 
-func (n *mockAgent) cleanup(ctx context.Context, s *Sandbox) {
+func (n *mockAgent) cleanup(ctx context.Context) {
 }
 
 // save is the Noop agent state saver. It does nothing.

@@ -63,16 +63,12 @@ const (
 	// path to vfio devices
 	vfioPath = "/dev/vfio/"
 
-	sandboxMountsDir = "sandbox-mounts"
-
 	NydusRootFSType = "fuse.nydus-overlayfs"
+
 	// enable debug console
 	kernelParamDebugConsole           = "agent.debug_console"
 	kernelParamDebugConsoleVPort      = "agent.debug_console_vport"
 	kernelParamDebugConsoleVPortValue = "1026"
-
-	// Restricted permission for shared directory managed by virtiofs
-	sharedDirMode = os.FileMode(0700) | os.ModeDir
 )
 
 var (
@@ -387,79 +383,6 @@ func (k *kataAgent) internalConfigure(ctx context.Context, h Hypervisor, id stri
 	return nil
 }
 
-func (k *kataAgent) setupSandboxBindMounts(ctx context.Context, sandbox *Sandbox) (err error) {
-	span, ctx := katatrace.Trace(ctx, k.Logger(), "setupSandboxBindMounts", kataAgentTracingTags)
-	defer span.End()
-
-	if len(sandbox.config.SandboxBindMounts) == 0 {
-		return nil
-	}
-
-	// Create subdirectory in host shared path for sandbox mounts
-	sandboxMountDir := filepath.Join(getMountPath(sandbox.id), sandboxMountsDir)
-	sandboxShareDir := filepath.Join(GetSharePath(sandbox.id), sandboxMountsDir)
-	if err := os.MkdirAll(sandboxMountDir, DirMode); err != nil {
-		return fmt.Errorf("Creating sandbox shared mount directory: %v: %w", sandboxMountDir, err)
-	}
-	var mountedList []string
-	defer func() {
-		if err != nil {
-			for _, mnt := range mountedList {
-				if derr := syscall.Unmount(mnt, syscall.MNT_DETACH|UmountNoFollow); derr != nil {
-					k.Logger().WithError(derr).Errorf("Cleanup: couldn't unmount %s", mnt)
-				}
-			}
-			if derr := os.RemoveAll(sandboxMountDir); derr != nil {
-				k.Logger().WithError(derr).Errorf("Cleanup: failed to remove %s", sandboxMountDir)
-			}
-
-		}
-	}()
-
-	for _, m := range sandbox.config.SandboxBindMounts {
-		mountDest := filepath.Join(sandboxMountDir, filepath.Base(m))
-		// bind-mount each sandbox mount that's defined into the sandbox mounts dir
-		if err := bindMount(ctx, m, mountDest, true, "private"); err != nil {
-			return fmt.Errorf("Mounting sandbox directory: %v to %v: %w", m, mountDest, err)
-		}
-		mountedList = append(mountedList, mountDest)
-
-		mountDest = filepath.Join(sandboxShareDir, filepath.Base(m))
-		if err := remountRo(ctx, mountDest); err != nil {
-			return fmt.Errorf("remount sandbox directory: %v to %v: %w", m, mountDest, err)
-		}
-
-	}
-
-	return nil
-}
-
-func (k *kataAgent) cleanupSandboxBindMounts(sandbox *Sandbox) error {
-	if sandbox.config == nil || len(sandbox.config.SandboxBindMounts) == 0 {
-		return nil
-	}
-
-	var retErr error
-	bindmountShareDir := filepath.Join(getMountPath(sandbox.id), sandboxMountsDir)
-	for _, m := range sandbox.config.SandboxBindMounts {
-		mountPath := filepath.Join(bindmountShareDir, filepath.Base(m))
-		if err := syscall.Unmount(mountPath, syscall.MNT_DETACH|UmountNoFollow); err != nil {
-			if retErr == nil {
-				retErr = err
-			}
-			k.Logger().WithError(err).Errorf("Failed to unmount sandbox bindmount: %v", mountPath)
-		}
-	}
-	if err := os.RemoveAll(bindmountShareDir); err != nil {
-		if retErr == nil {
-			retErr = err
-		}
-		k.Logger().WithError(err).Errorf("Failed to remove sandbox bindmount directory: %s", bindmountShareDir)
-	}
-
-	return retErr
-}
-
 func (k *kataAgent) configure(ctx context.Context, h Hypervisor, id, sharePath string, config KataAgentConfig) error {
 	span, ctx := katatrace.Trace(ctx, k.Logger(), "configure", kataAgentTracingTags)
 	defer span.End()
@@ -509,47 +432,10 @@ func (k *kataAgent) configureFromGrpc(ctx context.Context, h Hypervisor, id stri
 	return k.internalConfigure(ctx, h, id, config)
 }
 
-func (k *kataAgent) setupSharedPath(ctx context.Context, sandbox *Sandbox) (err error) {
-	span, ctx := katatrace.Trace(ctx, k.Logger(), "setupSharedPath", kataAgentTracingTags)
-	defer span.End()
-
-	// create shared path structure
-	sharePath := GetSharePath(sandbox.id)
-	mountPath := getMountPath(sandbox.id)
-	if err := os.MkdirAll(sharePath, sharedDirMode); err != nil {
-		return err
-	}
-	if err := os.MkdirAll(mountPath, DirMode); err != nil {
-		return err
-	}
-
-	// slave mount so that future mountpoints under mountPath are shown in sharePath as well
-	if err := bindMount(ctx, mountPath, sharePath, true, "slave"); err != nil {
-		return err
-	}
-	defer func() {
-		if err != nil {
-			if umountErr := syscall.Unmount(sharePath, syscall.MNT_DETACH|UmountNoFollow); umountErr != nil {
-				k.Logger().WithError(umountErr).Errorf("failed to unmount vm share path %s", sharePath)
-			}
-		}
-	}()
-
-	// Setup sandbox bindmounts, if specified:
-	if err = k.setupSandboxBindMounts(ctx, sandbox); err != nil {
-		return err
-	}
-
-	return nil
-}
-
 func (k *kataAgent) createSandbox(ctx context.Context, sandbox *Sandbox) error {
 	span, ctx := katatrace.Trace(ctx, k.Logger(), "createSandbox", kataAgentTracingTags)
 	defer span.End()
 
-	if err := k.setupSharedPath(ctx, sandbox); err != nil {
-		return err
-	}
 	return k.configure(ctx, sandbox.hypervisor, sandbox.id, GetSharePath(sandbox.id), sandbox.config.AgentConfig)
 }
 
@@ -2388,26 +2274,7 @@ func (k *kataAgent) markDead(ctx context.Context) {
 	k.disconnect(ctx)
 }
 
-func (k *kataAgent) cleanup(ctx context.Context, s *Sandbox) {
-	if err := k.cleanupSandboxBindMounts(s); err != nil {
-		k.Logger().WithError(err).Errorf("failed to Cleanup sandbox bindmounts")
-	}
-
-	// Unmount shared path
-	path := GetSharePath(s.id)
-	k.Logger().WithField("path", path).Infof("Cleanup agent")
-	if err := syscall.Unmount(path, syscall.MNT_DETACH|UmountNoFollow); err != nil {
-		k.Logger().WithError(err).Errorf("failed to unmount vm share path %s", path)
-	}
-
-	// Unmount mount path
-	path = getMountPath(s.id)
-	if err := bindUnmountAllRootfs(ctx, path, s); err != nil {
-		k.Logger().WithError(err).Errorf("failed to unmount vm mount path %s", path)
-	}
-	if err := os.RemoveAll(getSandboxPath(s.id)); err != nil {
-		k.Logger().WithError(err).Errorf("failed to Cleanup vm path %s", getSandboxPath(s.id))
-	}
+func (k *kataAgent) cleanup(ctx context.Context) {
 }
 
 func (k *kataAgent) save() persistapi.AgentState {
