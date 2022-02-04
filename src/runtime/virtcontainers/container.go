@@ -10,7 +10,6 @@ package virtcontainers
 
 import (
 	"context"
-	"encoding/hex"
 	"fmt"
 	"io"
 	"os"
@@ -29,7 +28,6 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
 
 	specs "github.com/opencontainers/runtime-spec/specs-go"
-	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
 )
@@ -423,72 +421,6 @@ func (c *Container) setContainerState(state types.StateString) error {
 	return nil
 }
 
-func (c *Container) shareFiles(ctx context.Context, m Mount, idx int) (string, bool, error) {
-	randBytes, err := utils.GenerateRandomBytes(8)
-	if err != nil {
-		return "", false, err
-	}
-
-	filename := fmt.Sprintf("%s-%s-%s", c.id, hex.EncodeToString(randBytes), filepath.Base(m.Destination))
-	guestDest := filepath.Join(kataGuestSharedDir(), filename)
-
-	// copy file to contaier's rootfs if filesystem sharing is not supported, otherwise
-	// bind mount it in the shared directory.
-	caps := c.sandbox.hypervisor.Capabilities(ctx)
-	if !caps.IsFsSharingSupported() {
-		c.Logger().Debug("filesystem sharing is not supported, files will be copied")
-
-		fileInfo, err := os.Stat(m.Source)
-		if err != nil {
-			return "", false, err
-		}
-
-		// Ignore the mount if this is not a regular file (excludes
-		// directory, socket, device, ...) as it cannot be handled by
-		// a simple copy. But this should not be treated as an error,
-		// only as a limitation.
-		if !fileInfo.Mode().IsRegular() {
-			c.Logger().WithField("ignored-file", m.Source).Debug("Ignoring non-regular file as FS sharing not supported")
-			return "", true, nil
-		}
-
-		if err := c.sandbox.agent.copyFile(ctx, m.Source, guestDest); err != nil {
-			return "", false, err
-		}
-	} else {
-		// These mounts are created in the shared dir
-		mountDest := filepath.Join(getMountPath(c.sandboxID), filename)
-		if !m.ReadOnly {
-			if err := bindMount(c.ctx, m.Source, mountDest, false, "private"); err != nil {
-				return "", false, err
-			}
-		} else {
-			// For RO mounts, bindmount remount event is not propagated to mount subtrees,
-			// and it doesn't present in the virtiofsd standalone mount namespace either.
-			// So we end up a bit tricky:
-			// 1. make a private ro bind mount to the mount source
-			// 2. duplicate the ro mount we create in step 1 to mountDest, by making a bind mount. No need to remount with MS_RDONLY here.
-			// 3. umount the private bind mount created in step 1
-			privateDest := filepath.Join(getPrivatePath(c.sandboxID), filename)
-
-			if err := bindMount(c.ctx, m.Source, privateDest, true, "private"); err != nil {
-				return "", false, err
-			}
-			defer func() {
-				syscall.Unmount(privateDest, syscall.MNT_DETACH|UmountNoFollow)
-			}()
-
-			if err := bindMount(c.ctx, privateDest, mountDest, false, "private"); err != nil {
-				return "", false, err
-			}
-		}
-		// Save HostPath mount value into the mount list of the container.
-		c.mounts[idx].HostPath = mountDest
-	}
-
-	return guestDest, false, nil
-}
-
 // mountSharedDirMounts handles bind-mounts by bindmounting to the host shared
 // directory which is mounted through virtiofs/9pfs in the VM.
 // It also updates the container mount list with the HostPath info, and store
@@ -503,6 +435,7 @@ func (c *Container) mountSharedDirMounts(ctx context.Context, sharedDirMounts, i
 			}
 		}
 	}()
+
 	for idx, m := range c.mounts {
 		// Skip mounting certain system paths from the source on the host side
 		// into the container as it does not make sense to do so.
@@ -541,20 +474,18 @@ func (c *Container) mountSharedDirMounts(ctx context.Context, sharedDirMounts, i
 			continue
 		}
 
-		var ignore bool
-		var guestDest string
-		guestDest, ignore, err = c.shareFiles(ctx, m, idx)
+		sharedFile, err := c.sandbox.fsShare.ShareFile(ctx, c, &c.mounts[idx])
 		if err != nil {
 			return storages, err
 		}
 
 		// Expand the list of mounts to ignore.
-		if ignore {
+		if sharedFile == nil {
 			ignoredMounts[m.Source] = Mount{Source: m.Source}
 			continue
 		}
 		sharedDirMount := Mount{
-			Source:      guestDest,
+			Source:      sharedFile.guestPath,
 			Destination: m.Destination,
 			Type:        m.Type,
 			Options:     m.Options,
@@ -581,11 +512,11 @@ func (c *Container) mountSharedDirMounts(ctx context.Context, sharedDirMounts, i
 				return storages, fmt.Errorf("unable to create watchable path: %s: %v", watchableHostPath, err)
 			}
 
-			watchableGuestMount := filepath.Join(kataGuestSharedDir(), "watchable", filepath.Base(guestDest))
+			watchableGuestMount := filepath.Join(kataGuestSharedDir(), "watchable", filepath.Base(sharedFile.guestPath))
 
 			storage := &grpc.Storage{
 				Driver:     kataWatchableBindDevType,
-				Source:     guestDest,
+				Source:     sharedFile.guestPath,
 				Fstype:     "bind",
 				MountPoint: watchableGuestMount,
 				Options:    m.Options,
@@ -616,7 +547,7 @@ func (c *Container) unmountHostMounts(ctx context.Context) error {
 			span.End()
 		}()
 
-		if err = syscall.Unmount(m.HostPath, syscall.MNT_DETACH|UmountNoFollow); err != nil {
+		if err = c.sandbox.fsShare.UnshareFile(ctx, c, &m); err != nil {
 			c.Logger().WithFields(logrus.Fields{
 				"host-path": m.HostPath,
 				"error":     err,
@@ -624,19 +555,6 @@ func (c *Container) unmountHostMounts(ctx context.Context) error {
 			return err
 		}
 
-		if m.Type == "bind" {
-			s, err := os.Stat(m.HostPath)
-			if err != nil {
-				return errors.Wrapf(err, "Could not stat host-path %v", m.HostPath)
-			}
-			// Remove the empty file or directory
-			if s.Mode().IsRegular() && s.Size() == 0 {
-				os.Remove(m.HostPath)
-			}
-			if s.Mode().IsDir() {
-				syscall.Rmdir(m.HostPath)
-			}
-		}
 		return nil
 	}
 
@@ -867,8 +785,8 @@ func (c *Container) rollbackFailingContainerCreation(ctx context.Context) {
 			c.Logger().WithError(err).Error("rollback failed nydusContainerCleanup()")
 		}
 	} else {
-		if err := bindUnmountContainerRootfs(ctx, getMountPath(c.sandbox.id), c.id); err != nil {
-			c.Logger().WithError(err).Error("rollback failed bindUnmountContainerRootfs()")
+		if err := c.sandbox.fsShare.UnshareRootFilesystem(ctx, c); err != nil {
+			c.Logger().WithError(err).Error("rollback failed UnshareRootFilesystem()")
 		}
 	}
 }
@@ -1051,7 +969,7 @@ func (c *Container) stop(ctx context.Context, force bool) error {
 			return err
 		}
 	} else {
-		if err := bindUnmountContainerRootfs(ctx, getMountPath(c.sandbox.id), c.id); err != nil && !force {
+		if err := c.sandbox.fsShare.UnshareRootFilesystem(ctx, c); err != nil && !force {
 			return err
 		}
 	}
@@ -1062,11 +980,6 @@ func (c *Container) stop(ctx context.Context, force bool) error {
 
 	if err := c.removeDrive(ctx); err != nil && !force {
 		return err
-	}
-
-	shareDir := filepath.Join(getMountPath(c.sandbox.id), c.id)
-	if err := syscall.Rmdir(shareDir); err != nil {
-		c.Logger().WithError(err).WithField("share-dir", shareDir).Warn("Could not remove container share dir")
 	}
 
 	// container was killed by force, container MUST change its state

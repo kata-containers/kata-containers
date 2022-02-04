@@ -146,7 +146,7 @@ func TestUnmountHostMountsRemoveBindHostPath(t *testing.T) {
 		return f.Name()
 	}
 
-	doUnmountCheck := func(src, dest, hostPath, nonEmptyHostpath, devPath string) {
+	doUnmountCheck := func(s *Sandbox, src, dest, hostPath, nonEmptyHostpath, devPath string) {
 		mounts := []Mount{
 			{
 				Source:      src,
@@ -169,8 +169,10 @@ func TestUnmountHostMountsRemoveBindHostPath(t *testing.T) {
 		}
 
 		c := Container{
-			mounts: mounts,
-			ctx:    context.Background(),
+			mounts:  mounts,
+			ctx:     context.Background(),
+			id:      "fooabr",
+			sandbox: s,
 		}
 
 		if err := bindMount(c.ctx, src, hostPath, false, "private"); err != nil {
@@ -221,8 +223,21 @@ func TestUnmountHostMountsRemoveBindHostPath(t *testing.T) {
 	hostPath := createFakeMountDir(t, testDir, "host-path")
 	nonEmptyHostpath := createFakeMountDir(t, testDir, "non-empty-host-path")
 	devPath := createFakeMountDir(t, testDir, "dev-hostpath")
+	// create sandbox for mounting into
+	sandbox := &Sandbox{
+		ctx:    context.Background(),
+		id:     "foobar",
+		config: &SandboxConfig{},
+	}
+
+	fsShare, err := NewFilesystemShare(sandbox)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sandbox.fsShare = fsShare
+
 	createFakeMountDir(t, nonEmptyHostpath, "nop")
-	doUnmountCheck(src, dest, hostPath, nonEmptyHostpath, devPath)
+	doUnmountCheck(sandbox, src, dest, hostPath, nonEmptyHostpath, devPath)
 
 	src = createFakeMountFile(t, testDir, "src")
 	dest = createFakeMountFile(t, testDir, "dest")
@@ -235,7 +250,7 @@ func TestUnmountHostMountsRemoveBindHostPath(t *testing.T) {
 	}
 	f.WriteString("nop\n")
 	f.Close()
-	doUnmountCheck(src, dest, hostPath, nonEmptyHostpath, devPath)
+	doUnmountCheck(sandbox, src, dest, hostPath, nonEmptyHostpath, devPath)
 }
 
 func testSetupFakeRootfs(t *testing.T) (testRawFile, loopDev, mntDir string, err error) {
@@ -584,8 +599,14 @@ func TestMountSharedDirMounts(t *testing.T) {
 			},
 		},
 	}
+
+	fsShare, err := NewFilesystemShare(sandbox)
+	assert.Nil(err)
+	sandbox.fsShare = fsShare
+
 	// setup the shared mounts:
-	k.setupSharedPath(k.ctx, sandbox)
+	err = sandbox.fsShare.Prepare(sandbox.ctx)
+	assert.NoError(err)
 
 	//
 	// Create the mounts that we'll test with
