@@ -1158,146 +1158,10 @@ func (k *kataAgent) rollbackFailingContainerCreation(ctx context.Context, c *Con
 			k.Logger().WithError(err2).Error("rollback failed unmountHostMounts()")
 		}
 
-		if c.rootFs.Type == NydusRootFSType {
-			if err2 := nydusContainerCleanup(ctx, getMountPath(c.sandbox.id), c); err2 != nil {
-				k.Logger().WithError(err2).Error("rollback failed nydusContainerCleanup")
-			}
-		} else {
-			if err2 := bindUnmountContainerRootfs(ctx, getMountPath(c.sandbox.id), c.id); err2 != nil {
-				k.Logger().WithError(err2).Error("rollback failed bindUnmountContainerRootfs()")
-			}
+		if err2 := c.sandbox.fsShare.UnshareRootFilesystem(ctx, c); err2 != nil {
+			k.Logger().WithError(err2).Error("rollback failed UnshareRootfs()")
 		}
 	}
-}
-
-func getVirtiofsDaemonForNydus(sandbox *Sandbox) (VirtiofsDaemon, error) {
-	var virtiofsDaemon VirtiofsDaemon
-	switch sandbox.GetHypervisorType() {
-	case string(QemuHypervisor):
-		virtiofsDaemon = sandbox.hypervisor.(*qemu).virtiofsDaemon
-	case string(ClhHypervisor):
-		virtiofsDaemon = sandbox.hypervisor.(*cloudHypervisor).virtiofsDaemon
-	default:
-		return nil, errNydusdNotSupport
-	}
-	return virtiofsDaemon, nil
-}
-
-func (k *kataAgent) buildContainerRootfsWithNydus(sandbox *Sandbox, c *Container, rootPathParent string) (*grpc.Storage, error) {
-	virtiofsDaemon, err := getVirtiofsDaemonForNydus(sandbox)
-	if err != nil {
-		return nil, err
-	}
-	extraOption, err := parseExtraOption(c.rootFs.Options)
-	if err != nil {
-		return nil, err
-	}
-	mountOpt := &MountOption{
-		mountpoint: rafsMountPath(c.id),
-		source:     extraOption.Source,
-		config:     extraOption.Config,
-	}
-	k.Logger().Infof("nydus option: %v", extraOption)
-	// mount lowerdir to guest /run/kata-containers/shared/images/<cid>/lowerdir
-	if err := virtiofsDaemon.Mount(*mountOpt); err != nil {
-		return nil, err
-	}
-	rootfs := &grpc.Storage{}
-	containerShareDir := filepath.Join(getMountPath(c.sandbox.id), c.id)
-
-	// mkdir rootfs, guest at /run/kata-containers/shared/containers/<cid>/rootfs
-	rootfsDir := filepath.Join(containerShareDir, c.rootfsSuffix)
-	if err := os.MkdirAll(rootfsDir, DirMode); err != nil {
-		return nil, err
-	}
-	// bindmount snapshot dir which snapshotter allocated
-	// to guest /run/kata-containers/shared/containers/<cid>/snapshotdir
-	snapshotShareDir := filepath.Join(containerShareDir, snapshotDir)
-	if err := bindMount(k.ctx, extraOption.Snapshotdir, snapshotShareDir, true, "slave"); err != nil {
-		return nil, err
-	}
-
-	// so rootfs = overlay(upperdir, workerdir, lowerdir)
-	rootfs.MountPoint = filepath.Join(rootPathParent, c.rootfsSuffix)
-	rootfs.Source = typeOverlayFS
-	rootfs.Fstype = typeOverlayFS
-	rootfs.Driver = kataOverlayDevType
-	rootfs.Options = append(rootfs.Options, fmt.Sprintf("%s=%s", upperDir, filepath.Join(kataGuestSharedDir(), c.id, snapshotDir, "fs")))
-	rootfs.Options = append(rootfs.Options, fmt.Sprintf("%s=%s", workDir, filepath.Join(kataGuestSharedDir(), c.id, snapshotDir, "work")))
-	rootfs.Options = append(rootfs.Options, fmt.Sprintf("%s=%s", lowerDir, filepath.Join(kataGuestNydusImageDir(), c.id, lowerDir)))
-	rootfs.Options = append(rootfs.Options, "index=off")
-	k.Logger().Infof("rootfs info: %#v\n", rootfs)
-	return rootfs, nil
-}
-
-func (k *kataAgent) buildContainerRootfs(ctx context.Context, sandbox *Sandbox, c *Container, rootPathParent string) (*grpc.Storage, error) {
-	if c.rootFs.Type == NydusRootFSType {
-		return k.buildContainerRootfsWithNydus(sandbox, c, rootPathParent)
-	}
-	if c.state.Fstype != "" && c.state.BlockDeviceID != "" {
-		// The rootfs storage volume represents the container rootfs
-		// mount point inside the guest.
-		// It can be a block based device (when using block based container
-		// overlay on the host) mount or a 9pfs one (for all other overlay
-		// implementations).
-		rootfs := &grpc.Storage{}
-
-		// This is a block based device rootfs.
-		device := sandbox.devManager.GetDeviceByID(c.state.BlockDeviceID)
-		if device == nil {
-			k.Logger().WithField("device", c.state.BlockDeviceID).Error("failed to find device by id")
-			return nil, fmt.Errorf("failed to find device by id %q", c.state.BlockDeviceID)
-		}
-
-		blockDrive, ok := device.GetDeviceInfo().(*config.BlockDrive)
-		if !ok || blockDrive == nil {
-			k.Logger().Error("malformed block drive")
-			return nil, fmt.Errorf("malformed block drive")
-		}
-		switch {
-		case sandbox.config.HypervisorConfig.BlockDeviceDriver == config.VirtioMmio:
-			rootfs.Driver = kataMmioBlkDevType
-			rootfs.Source = blockDrive.VirtPath
-		case sandbox.config.HypervisorConfig.BlockDeviceDriver == config.VirtioBlockCCW:
-			rootfs.Driver = kataBlkCCWDevType
-			rootfs.Source = blockDrive.DevNo
-		case sandbox.config.HypervisorConfig.BlockDeviceDriver == config.VirtioBlock:
-			rootfs.Driver = kataBlkDevType
-			rootfs.Source = blockDrive.PCIPath.String()
-		case sandbox.config.HypervisorConfig.BlockDeviceDriver == config.VirtioSCSI:
-			rootfs.Driver = kataSCSIDevType
-			rootfs.Source = blockDrive.SCSIAddr
-		default:
-			return nil, fmt.Errorf("Unknown block device driver: %s", sandbox.config.HypervisorConfig.BlockDeviceDriver)
-		}
-
-		rootfs.MountPoint = rootPathParent
-		rootfs.Fstype = c.state.Fstype
-
-		if c.state.Fstype == "xfs" {
-			rootfs.Options = []string{"nouuid"}
-		}
-
-		// Ensure container mount destination exists
-		// TODO: remove dependency on shared fs path. shared fs is just one kind of storage source.
-		// we should not always use shared fs path for all kinds of storage. Instead, all storage
-		// should be bind mounted to a tmpfs path for containers to use.
-		if err := os.MkdirAll(filepath.Join(getMountPath(c.sandbox.id), c.id, c.rootfsSuffix), DirMode); err != nil {
-			return nil, err
-		}
-		return rootfs, nil
-	}
-
-	// This is not a block based device rootfs. We are going to bind mount it into the shared drive
-	// between the host and the guest.
-	// With virtiofs/9pfs we don't need to ask the agent to mount the rootfs as the shared directory
-	// (kataGuestSharedDir) is already mounted in the guest. We only need to mount the rootfs from
-	// the host and it will show up in the guest.
-	if err := bindMountContainerRootfs(ctx, getMountPath(sandbox.id), c.id, c.rootFs.Target, false); err != nil {
-		return nil, err
-	}
-
-	return nil, nil
 }
 
 func (k *kataAgent) createContainer(ctx context.Context, sandbox *Sandbox, c *Container) (p *Process, err error) {
@@ -1305,11 +1169,7 @@ func (k *kataAgent) createContainer(ctx context.Context, sandbox *Sandbox, c *Co
 	defer span.End()
 	var ctrStorages []*grpc.Storage
 	var ctrDevices []*grpc.Device
-	var rootfs *grpc.Storage
-
-	// This is the guest absolute root path for that container.
-	rootPathParent := filepath.Join(kataGuestSharedDir(), c.id)
-	rootPath := filepath.Join(rootPathParent, c.rootfsSuffix)
+	var sharedRootfs *SharedFile
 
 	// In case the container creation fails, the following defer statement
 	// takes care of rolling back actions previously performed.
@@ -1320,19 +1180,19 @@ func (k *kataAgent) createContainer(ctx context.Context, sandbox *Sandbox, c *Co
 		}
 	}()
 
-	// setup rootfs -- if its block based, we'll receive a non-nil storage object representing
+	// Share the container rootfs -- if its block based, we'll receive a non-nil storage object representing
 	// the block device for the rootfs, which us utilized for mounting in the guest. This'll be handled
 	// already for non-block based rootfs
-	if rootfs, err = k.buildContainerRootfs(ctx, sandbox, c, rootPathParent); err != nil {
+	if sharedRootfs, err = sandbox.fsShare.ShareRootFilesystem(ctx, c); err != nil {
 		return nil, err
 	}
 
-	if rootfs != nil {
+	if sharedRootfs.storage != nil {
 		// Add rootfs to the list of container storage.
 		// We only need to do this for block based rootfs, as we
 		// want the agent to mount it into the right location
 		// (kataGuestSharedDir/ctrID/
-		ctrStorages = append(ctrStorages, rootfs)
+		ctrStorages = append(ctrStorages, sharedRootfs.storage)
 	}
 
 	ociSpec := c.GetPatchedOCISpec()
@@ -1408,7 +1268,7 @@ func (k *kataAgent) createContainer(ctx context.Context, sandbox *Sandbox, c *Co
 	}
 
 	// We need to give the OCI spec our absolute rootfs path in the guest.
-	grpcSpec.Root.Path = rootPath
+	grpcSpec.Root.Path = sharedRootfs.guestPath
 
 	sharedPidNs := k.handlePidNamespace(grpcSpec, sandbox)
 

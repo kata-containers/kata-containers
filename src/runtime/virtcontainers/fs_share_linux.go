@@ -317,10 +317,9 @@ func (f *FilesystemShare) UnshareFile(ctx context.Context, c *Container, m *Moun
 
 func (f *FilesystemShare) shareRootFilesystemWithNydus(ctx context.Context, c *Container) (*SharedFile, error) {
 	rootfsGuestPath := filepath.Join(kataGuestSharedDir(), c.id, c.rootfsSuffix)
-	if f.sandbox.GetHypervisorType() != string(QemuHypervisor) {
-		// qemu is supported first, other hypervisors will next
-		// https://github.com/kata-containers/kata-containers/issues/2724
-		return nil, errNydusdNotSupport
+	virtiofsDaemon, err := getVirtiofsDaemonForNydus(f.sandbox)
+	if err != nil {
+		return nil, err
 	}
 	extraOption, err := parseExtraOption(c.rootFs.Options)
 	if err != nil {
@@ -333,9 +332,8 @@ func (f *FilesystemShare) shareRootFilesystemWithNydus(ctx context.Context, c *C
 		config:     extraOption.Config,
 	}
 
-	q, _ := f.sandbox.hypervisor.(*qemu)
 	// mount lowerdir to guest /run/kata-containers/shared/images/<cid>/lowerdir
-	if err := q.virtiofsDaemon.Mount(*mountOpt); err != nil {
+	if err := virtiofsDaemon.Mount(*mountOpt); err != nil {
 		return nil, err
 	}
 	rootfs := &grpc.Storage{}
