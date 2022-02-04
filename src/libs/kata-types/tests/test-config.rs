@@ -438,4 +438,50 @@ mod tests {
             .update_config_by_annotation(&mut config, "qemu", "agent0")
             .is_err());
     }
+
+    #[test]
+    fn test_fail_to_change_enable_guest_swap_because_invalid_input() {
+        let content = include_str!("texture/configuration-anno-0.toml");
+
+        let qemu = QemuConfig::new();
+        qemu.register();
+
+        let config = TomlConfig::load(&content).unwrap();
+        KataConfig::set_active_config(Some(config), "qemu", "agent0");
+
+        let mut anno_hash = HashMap::new();
+        anno_hash.insert(
+            KATA_ANNO_CONF_HYPERVISOR_ENABLE_GUEST_SWAP.to_string(),
+            "false1".to_string(),
+        );
+        let anno = Annotation::new(anno_hash);
+        let mut config = TomlConfig::load(&content).unwrap();
+
+        assert!(anno
+            .update_config_by_annotation(&mut config, "qemu", "agent0")
+            .is_err());
+    }
+
+    #[test]
+    fn test_fail_to_change_default_vcpus_becuase_invalid_input() {
+        let content = include_str!("texture/configuration-anno-0.toml");
+
+        let qemu = QemuConfig::new();
+        qemu.register();
+
+        let config = TomlConfig::load(&content).unwrap();
+        KataConfig::set_active_config(Some(config), "qemu", "agent0");
+
+        let mut anno_hash = HashMap::new();
+        anno_hash.insert(
+            KATA_ANNO_CONF_HYPERVISOR_DEFAULT_VCPUS.to_string(),
+            "ddc".to_string(),
+        );
+        let anno = Annotation::new(anno_hash);
+        let mut config = TomlConfig::load(&content).unwrap();
+
+        assert!(anno
+            .update_config_by_annotation(&mut config, "qemu", "agent0")
+            .is_err());
+    }
 }
