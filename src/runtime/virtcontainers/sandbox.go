@@ -71,6 +71,11 @@ const (
 	// /sys/fs/cgroup/memory/kata_overhead/$CGPATH where $CGPATH is
 	// defined by the orchestrator.
 	resCtrlKataOverheadID = "/kata_overhead/"
+
+	sandboxMountsDir = "sandbox-mounts"
+
+	// Restricted permission for shared directory managed by virtiofs
+	sharedDirMode = os.FileMode(0700) | os.ModeDir
 )
 
 var (
@@ -191,6 +196,7 @@ type Sandbox struct {
 	hypervisor Hypervisor
 	agent      agent
 	store      persistapi.PersistDriver
+	fsShare    FilesystemSharer
 
 	swapDevices []*config.BlockDrive
 	volumes     []types.Volume
@@ -490,7 +496,13 @@ func createSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Fac
 		return s, nil
 	}
 
-	// Below code path is called only during create, because of earlier Check.
+	// The code below only gets called when initially creating a sandbox, not when restoring or
+	// re-creating it. The above check for the sandbox state enforces that.
+
+	if err := s.fsShare.Prepare(ctx); err != nil {
+		return nil, err
+	}
+
 	if err := s.agent.createSandbox(ctx, s); err != nil {
 		return nil, err
 	}
@@ -543,6 +555,12 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 		swapSizeBytes:   0,
 		swapDevices:     []*config.BlockDrive{},
 	}
+
+	fsShare, err := NewFilesystemShare(s)
+	if err != nil {
+		return nil, err
+	}
+	s.fsShare = fsShare
 
 	if s.store, err = persist.GetDriver(); err != nil || s.store == nil {
 		return nil, fmt.Errorf("failed to get fs persist driver: %v", err)
@@ -791,7 +809,9 @@ func (s *Sandbox) Delete(ctx context.Context) error {
 		s.Logger().WithError(err).Error("failed to Cleanup hypervisor")
 	}
 
-	s.agent.cleanup(ctx, s)
+	if err := s.fsShare.Cleanup(ctx); err != nil {
+		s.Logger().WithError(err).Error("failed to cleanup share files")
+	}
 
 	return s.store.Destroy(s.id)
 }
