@@ -13,7 +13,6 @@ use serde::Deserialize;
 
 use crate::config::hypervisor::get_hypervisor_plugin;
 use crate::config::TomlConfig;
-use crate::sl;
 
 /// CRI-containerd specific annotations.
 pub mod cri_containerd;
@@ -336,79 +335,71 @@ impl Annotation {
 
     /// Get the value of annotation with `key` as string.
     pub fn get(&self, key: &str) -> Option<String> {
-        let v = self.annotations.get(key)?;
-        let value = v.trim();
-
-        if !value.is_empty() {
-            Some(String::from(value))
-        } else {
-            None
-        }
+        self.annotations.get(key).map(|v| String::from(v.trim()))
     }
 
     /// Get the value of annotation with `key` as bool.
-    pub fn get_bool(&self, key: &str) -> Option<bool> {
+    pub fn get_bool(&self, key: &str) -> Result<Option<bool>> {
         if let Some(value) = self.get(key) {
-            let value = value.trim();
-            if value.parse::<bool>().is_err() {
-                warn!(sl!(), "failed to parse bool value from {}", value);
-            } else {
-                return Some(value.parse::<bool>().unwrap());
-            }
+            return value
+                .parse::<bool>()
+                .map_err(|_| {
+                    io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        format!("Invalid input {} for bool", key),
+                    )
+                })
+                .map(Some);
         }
-
-        None
+        Ok(None)
     }
 
     /// Get the value of annotation with `key` as u32.
-    pub fn get_u32(&self, key: &str) -> Option<u32> {
-        let s = self.get(key)?;
-        match s.parse::<u32>() {
-            Ok(nums) => {
-                if nums > 0 {
-                    Some(nums)
-                } else {
-                    None
-                }
-            }
-
-            Err(e) => {
-                warn!(
-                    sl!(),
-                    "failed to parse u32 value from {}, error: {:?}", s, e
-                );
-                None
-            }
+    pub fn get_u32(&self, key: &str) -> Result<Option<u32>> {
+        if let Some(value) = self.get(key) {
+            return value
+                .parse::<u32>()
+                .map_err(|_| {
+                    io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        format!("Invalid input {} for u32", key),
+                    )
+                })
+                .map(Some);
         }
+        Ok(None)
     }
 
     /// Get the value of annotation with `key` as i32.
-    pub fn get_i32(&self, key: &str) -> Option<i32> {
-        let s = self.get(key)?;
-        s.parse::<i32>()
-            .map_or(None, |x| if x < 0 { None } else { Some(x) })
+    pub fn get_i32(&self, key: &str) -> Result<Option<i32>> {
+        if let Some(value) = self.get(key) {
+            return value
+                .parse::<i32>()
+                .map_err(|_| {
+                    io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        format!("Invalid input {} for i32", key),
+                    )
+                })
+                .map(Some);
+        }
+        Ok(None)
     }
 
     /// Get the value of annotation with `key` as u64.
-    pub fn get_u64(&self, key: &str) -> Option<u64> {
-        let s = self.get(key)?;
-        match s.parse::<u64>() {
-            Ok(nums) => {
-                if nums > 0 {
-                    Some(nums)
-                } else {
-                    None
-                }
-            }
-
-            Err(e) => {
-                warn!(
-                    sl!(),
-                    "failed to parse u64 value from {}, error: {:?}", s, e
-                );
-                None
-            }
+    pub fn get_u64(&self, key: &str) -> Result<Option<u64>> {
+        if let Some(value) = self.get(key) {
+            return value
+                .parse::<u64>()
+                .map_err(|_| {
+                    io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        format!("Invalid input {} for u64", key),
+                    )
+                })
+                .map(Some);
         }
+        Ok(None)
     }
 }
 
@@ -430,12 +421,19 @@ impl Annotation {
     }
 
     /// Get the annotation to specify the Resources.Memory.Swappiness.
-    pub fn get_container_resource_swappiness(&self) -> Option<u32> {
-        let v = self.get_u32(KATA_ANNO_CONTAINER_RESOURCE_SWAPPINESS)?;
-        if v > 100 {
-            None
-        } else {
-            Some(v)
+    pub fn get_container_resource_swappiness(&self) -> Result<Option<u32>> {
+        match self.get_u32(KATA_ANNO_CONTAINER_RESOURCE_SWAPPINESS) {
+            Ok(r) => {
+                if r.unwrap_or_default() > 100 {
+                    return Err(io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        format!("{} greater than 100", r.unwrap_or_default()),
+                    ));
+                } else {
+                    Ok(r)
+                }
+            }
+            Err(e) => Err(e),
         }
     }
 
@@ -486,40 +484,79 @@ impl Annotation {
                         hv.validate_jailer_path(value)?;
                         hv.jailer_path = value.to_string();
                     }
-                    KATA_ANNO_CONF_HYPERVISOR_ENABLE_IO_THREADS => {
-                        hv.enable_iothreads = self.get_bool(key).unwrap_or_default();
-                    }
+                    KATA_ANNO_CONF_HYPERVISOR_ENABLE_IO_THREADS => match self.get_bool(key) {
+                        Ok(r) => {
+                            hv.enable_iothreads = r.unwrap_or_default();
+                        }
+                        Err(e) => {
+                            return Err(e);
+                        }
+                    },
                     //	Hypervisor Block Device related annotations
                     KATA_ANNO_CONF_HYPERVISOR_BLOCK_DEVICE_DRIVER => {
                         hv.blockdev_info.block_device_driver = value.to_string();
                     }
                     KATA_ANNO_CONF_HYPERVISOR_DISABLE_BLOCK_DEVICE_USE => {
-                        hv.blockdev_info.disable_block_device_use =
-                            self.get_bool(key).unwrap_or_default();
+                        match self.get_bool(key) {
+                            Ok(r) => {
+                                hv.blockdev_info.disable_block_device_use = r.unwrap_or_default();
+                            }
+                            Err(e) => {
+                                return Err(e);
+                            }
+                        }
                     }
-                    KATA_ANNO_CONF_HYPERVISOR_BLOCK_DEVICE_CACHE_SET => {
-                        hv.blockdev_info.block_device_cache_set =
-                            self.get_bool(key).unwrap_or_default();
-                    }
-                    KATA_ANNO_CONF_HYPERVISOR_BLOCK_DEVICE_CACHE_DIRECT => {
-                        hv.blockdev_info.block_device_cache_direct =
-                            self.get_bool(key).unwrap_or_default();
-                    }
+                    KATA_ANNO_CONF_HYPERVISOR_BLOCK_DEVICE_CACHE_SET => match self.get_bool(key) {
+                        Ok(r) => {
+                            hv.blockdev_info.block_device_cache_set = r.unwrap_or_default();
+                        }
+                        Err(e) => {
+                            return Err(e);
+                        }
+                    },
+                    KATA_ANNO_CONF_HYPERVISOR_BLOCK_DEVICE_CACHE_DIRECT => match self.get_bool(key)
+                    {
+                        Ok(r) => {
+                            hv.blockdev_info.block_device_cache_direct = r.unwrap_or_default();
+                        }
+                        Err(e) => {
+                            return Err(e);
+                        }
+                    },
                     KATA_ANNO_CONF_HYPERVISOR_BLOCK_DEVICE_CACHE_NOFLUSH => {
-                        hv.blockdev_info.block_device_cache_noflush =
-                            self.get_bool(key).unwrap_or_default();
+                        match self.get_bool(key) {
+                            Ok(r) => {
+                                hv.blockdev_info.block_device_cache_noflush = r.unwrap_or_default();
+                            }
+                            Err(e) => {
+                                return Err(e);
+                            }
+                        }
                     }
-                    KATA_ANNO_CONF_HYPERVISOR_DISABLE_IMAGE_NVDIMM => {
-                        hv.blockdev_info.disable_image_nvdimm =
-                            self.get_bool(key).unwrap_or_default();
-                    }
-                    KATA_ANNO_CONF_HYPERVISOR_MEMORY_OFFSET => {
-                        hv.blockdev_info.memory_offset = self.get_u64(key).unwrap_or_default();
-                    }
-                    KATA_ANNO_CONF_HYPERVISOR_ENABLE_VHOSTUSER_STORE => {
-                        hv.blockdev_info.enable_vhost_user_store =
-                            self.get_bool(key).unwrap_or_default();
-                    }
+                    KATA_ANNO_CONF_HYPERVISOR_DISABLE_IMAGE_NVDIMM => match self.get_bool(key) {
+                        Ok(r) => {
+                            hv.blockdev_info.disable_image_nvdimm = r.unwrap_or_default();
+                        }
+                        Err(e) => {
+                            return Err(e);
+                        }
+                    },
+                    KATA_ANNO_CONF_HYPERVISOR_MEMORY_OFFSET => match self.get_u64(key) {
+                        Ok(r) => {
+                            hv.blockdev_info.memory_offset = r.unwrap_or_default();
+                        }
+                        Err(e) => {
+                            return Err(e);
+                        }
+                    },
+                    KATA_ANNO_CONF_HYPERVISOR_ENABLE_VHOSTUSER_STORE => match self.get_bool(key) {
+                        Ok(r) => {
+                            hv.blockdev_info.enable_vhost_user_store = r.unwrap_or_default();
+                        }
+                        Err(e) => {
+                            return Err(e);
+                        }
+                    },
                     KATA_ANNO_CONF_HYPERVISOR_VHOSTUSER_STORE_PATH => {
                         hv.blockdev_info.validate_vhost_user_store_path(value)?;
                         hv.blockdev_info.vhost_user_store_path = value.to_string();
@@ -548,45 +585,75 @@ impl Annotation {
                     KATA_ANNO_CONF_HYPERVISOR_CPU_FEATURES => {
                         hv.cpu_info.cpu_features = value.to_string();
                     }
-                    KATA_ANNO_CONF_HYPERVISOR_DEFAULT_VCPUS => {
-                        let num_cpus = self.get_i32(key).unwrap_or_default();
-                        if num_cpus
-                            > get_hypervisor_plugin(hypervisor_name)
-                                .unwrap()
-                                .get_max_cpus() as i32
-                        {
-                            return Err(io::Error::new(
-                                io::ErrorKind::InvalidData,
-                                format!(
-                                    "Vcpus specified in annotation {} is more than maximum limitation {}",
-                                    num_cpus,
-                                    get_hypervisor_plugin(hypervisor_name)
-                                        .unwrap()
-                                        .get_max_cpus()
-                                ),
-                            ));
-                        } else {
-                            hv.cpu_info.default_vcpus = num_cpus;
+                    KATA_ANNO_CONF_HYPERVISOR_DEFAULT_VCPUS => match self.get_i32(key) {
+                        Ok(num_cpus) => {
+                            let num_cpus = num_cpus.unwrap_or_default();
+                            if num_cpus
+                                > get_hypervisor_plugin(hypervisor_name)
+                                    .unwrap()
+                                    .get_max_cpus() as i32
+                            {
+                                return Err(io::Error::new(
+                                    io::ErrorKind::InvalidData,
+                                    format!(
+                                        "Vcpus specified in annotation {} is more than maximum limitation {}",
+                                        num_cpus,
+                                        get_hypervisor_plugin(hypervisor_name)
+                                            .unwrap()
+                                            .get_max_cpus()
+                                    ),
+                                ));
+                            } else {
+                                hv.cpu_info.default_vcpus = num_cpus;
+                            }
                         }
-                    }
-                    KATA_ANNO_CONF_HYPERVISOR_DEFAULT_MAX_VCPUS => {
-                        hv.cpu_info.default_maxvcpus = self.get_u32(key).unwrap_or_default();
-                    }
+                        Err(e) => {
+                            return Err(e);
+                        }
+                    },
+                    KATA_ANNO_CONF_HYPERVISOR_DEFAULT_MAX_VCPUS => match self.get_u32(key) {
+                        Ok(r) => {
+                            hv.cpu_info.default_maxvcpus = r.unwrap_or_default();
+                        }
+                        Err(e) => {
+                            return Err(e);
+                        }
+                    },
                     //	Hypervisor Device related annotations
                     KATA_ANNO_CONF_HYPERVISOR_HOTPLUG_VFIO_ON_ROOT_BUS => {
-                        hv.device_info.hotplug_vfio_on_root_bus =
-                            self.get_bool(key).unwrap_or_default();
+                        match self.get_bool(key) {
+                            Ok(r) => {
+                                hv.device_info.hotplug_vfio_on_root_bus = r.unwrap_or_default();
+                            }
+                            Err(e) => {
+                                return Err(e);
+                            }
+                        }
                     }
-                    KATA_ANNO_CONF_HYPERVISOR_PCIE_ROOT_PORT => {
-                        hv.device_info.pcie_root_port = self.get_u32(key).unwrap_or_default();
-                    }
-                    KATA_ANNO_CONF_HYPERVISOR_IOMMU => {
-                        hv.device_info.enable_iommu = self.get_bool(key).unwrap_or_default();
-                    }
-                    KATA_ANNO_CONF_HYPERVISOR_IOMMU_PLATFORM => {
-                        hv.device_info.enable_iommu_platform =
-                            self.get_bool(key).unwrap_or_default();
-                    }
+                    KATA_ANNO_CONF_HYPERVISOR_PCIE_ROOT_PORT => match self.get_u32(key) {
+                        Ok(r) => {
+                            hv.device_info.pcie_root_port = r.unwrap_or_default();
+                        }
+                        Err(e) => {
+                            return Err(e);
+                        }
+                    },
+                    KATA_ANNO_CONF_HYPERVISOR_IOMMU => match self.get_bool(key) {
+                        Ok(r) => {
+                            hv.device_info.enable_iommu = r.unwrap_or_default();
+                        }
+                        Err(e) => {
+                            return Err(e);
+                        }
+                    },
+                    KATA_ANNO_CONF_HYPERVISOR_IOMMU_PLATFORM => match self.get_bool(key) {
+                        Ok(r) => {
+                            hv.device_info.enable_iommu_platform = r.unwrap_or_default();
+                        }
+                        Err(e) => {
+                            return Err(e);
+                        }
+                    },
                     //	Hypervisor Machine related annotations
                     KATA_ANNO_CONF_HYPERVISOR_MACHINE_TYPE => {
                         hv.machine_info.machine_type = value.to_string();
@@ -599,82 +666,108 @@ impl Annotation {
                         hv.machine_info.entropy_source = value.to_string();
                     }
                     //	Hypervisor Memory related annotations
-                    KATA_ANNO_CONF_HYPERVISOR_DEFAULT_MEMORY => {
-                        let mem = self.get_u32(key).unwrap_or_default();
-                        if mem
-                            < get_hypervisor_plugin(hypervisor_name)
-                                .unwrap()
-                                .get_min_memory()
-                        {
-                            return Err(io::Error::new(
-                                io::ErrorKind::InvalidData,
-                                format!(
-                                    "Memory specified in annotation {} is less than minimum required {}",
-                                    mem,
-                                    get_hypervisor_plugin(hypervisor_name)
-                                        .unwrap()
-                                        .get_min_memory()
-                                ),
-                            ));
-                        } else {
-                            hv.memory_info.default_memory = mem;
+                    KATA_ANNO_CONF_HYPERVISOR_DEFAULT_MEMORY => match self.get_u32(key) {
+                        Ok(r) => {
+                            let mem = r.unwrap_or_default();
+                            if mem
+                                < get_hypervisor_plugin(hypervisor_name)
+                                    .unwrap()
+                                    .get_min_memory()
+                            {
+                                return Err(io::Error::new(
+                                    io::ErrorKind::InvalidData,
+                                    format!(
+                                        "Memory specified in annotation {} is less than minimum required {}",
+                                        mem,
+                                        get_hypervisor_plugin(hypervisor_name)
+                                            .unwrap()
+                                            .get_min_memory()
+                                    ),
+                                ));
+                            } else {
+                                hv.memory_info.default_memory = mem;
+                            }
                         }
-                    }
+                        Err(e) => {
+                            return Err(e);
+                        }
+                    },
                     KATA_ANNO_CONF_HYPERVISOR_MEMORY_SLOTS => match self.get_u32(key) {
-                        Some(v) => {
-                            hv.memory_info.memory_slots = v;
+                        Ok(v) => {
+                            hv.memory_info.memory_slots = v.unwrap_or_default();
                         }
-                        None => {
-                            return Err(io::Error::new(
-                                io::ErrorKind::InvalidData,
-                                format!("{} in annotation is less than zero", key),
-                            ));
+                        Err(e) => {
+                            return Err(e);
                         }
                     },
 
-                    KATA_ANNO_CONF_HYPERVISOR_MEMORY_PREALLOC => {
-                        hv.memory_info.enable_mem_prealloc = self.get_bool(key).unwrap_or_default();
-                    }
-                    KATA_ANNO_CONF_HYPERVISOR_HUGE_PAGES => {
-                        hv.memory_info.enable_hugepages = self.get_bool(key).unwrap_or_default();
-                    }
+                    KATA_ANNO_CONF_HYPERVISOR_MEMORY_PREALLOC => match self.get_bool(key) {
+                        Ok(r) => {
+                            hv.memory_info.enable_mem_prealloc = r.unwrap_or_default();
+                        }
+                        Err(e) => {
+                            return Err(e);
+                        }
+                    },
+                    KATA_ANNO_CONF_HYPERVISOR_HUGE_PAGES => match self.get_bool(key) {
+                        Ok(r) => {
+                            hv.memory_info.enable_hugepages = r.unwrap_or_default();
+                        }
+                        Err(e) => {
+                            return Err(e);
+                        }
+                    },
                     KATA_ANNO_CONF_HYPERVISOR_FILE_BACKED_MEM_ROOT_DIR => {
                         hv.memory_info.validate_memory_backend_path(value)?;
                         hv.memory_info.file_mem_backend = value.to_string();
                     }
-                    KATA_ANNO_CONF_HYPERVISOR_VIRTIO_MEM => {
-                        hv.memory_info.enable_virtio_mem = self.get_bool(key).unwrap_or_default();
-                    }
-                    KATA_ANNO_CONF_HYPERVISOR_ENABLE_SWAP => {
-                        hv.memory_info.enable_swap = self.get_bool(key).unwrap_or_default();
-                    }
-                    KATA_ANNO_CONF_HYPERVISOR_ENABLE_GUEST_SWAP => {
-                        hv.memory_info.enable_guest_swap = self.get_bool(key).unwrap_or_default();
-                    }
-                    //	Hypervisor Network related annotations
-                    KATA_ANNO_CONF_HYPERVISOR_DISABLE_VHOST_NET => {
-                        hv.network_info.disable_vhost_net = self.get_bool(key).unwrap_or_default();
-                    }
-                    KATA_ANNO_CONF_HYPERVISOR_RX_RATE_LIMITER_MAX_RATE => match self.get_u64(key) {
-                        Some(v) => {
-                            hv.network_info.rx_rate_limiter_max_rate = v;
+                    KATA_ANNO_CONF_HYPERVISOR_VIRTIO_MEM => match self.get_bool(key) {
+                        Ok(r) => {
+                            hv.memory_info.enable_virtio_mem = r.unwrap_or_default();
                         }
-                        None => {
-                            return Err(io::Error::new(
-                                io::ErrorKind::InvalidData,
-                                format!("{} in annotation is less than zero", key),
-                            ));
+                        Err(e) => {
+                            return Err(e);
+                        }
+                    },
+                    KATA_ANNO_CONF_HYPERVISOR_ENABLE_SWAP => match self.get_bool(key) {
+                        Ok(r) => {
+                            hv.memory_info.enable_swap = r.unwrap_or_default();
+                        }
+                        Err(e) => {
+                            return Err(e);
+                        }
+                    },
+                    KATA_ANNO_CONF_HYPERVISOR_ENABLE_GUEST_SWAP => match self.get_bool(key) {
+                        Ok(r) => {
+                            hv.memory_info.enable_guest_swap = r.unwrap_or_default();
+                        }
+                        Err(e) => {
+                            return Err(e);
+                        }
+                    },
+                    //	Hypervisor Network related annotations
+                    KATA_ANNO_CONF_HYPERVISOR_DISABLE_VHOST_NET => match self.get_bool(key) {
+                        Ok(r) => {
+                            hv.network_info.disable_vhost_net = r.unwrap_or_default();
+                        }
+                        Err(e) => {
+                            return Err(e);
+                        }
+                    },
+                    KATA_ANNO_CONF_HYPERVISOR_RX_RATE_LIMITER_MAX_RATE => match self.get_u64(key) {
+                        Ok(r) => {
+                            hv.network_info.rx_rate_limiter_max_rate = r.unwrap_or_default();
+                        }
+                        Err(e) => {
+                            return Err(e);
                         }
                     },
                     KATA_ANNO_CONF_HYPERVISOR_TX_RATE_LIMITER_MAX_RATE => match self.get_u64(key) {
-                        Some(v) => {
-                            hv.network_info.tx_rate_limiter_max_rate = v;
+                        Ok(r) => {
+                            hv.network_info.tx_rate_limiter_max_rate = r.unwrap_or_default();
                         }
-                        None => {
-                            return Err(io::Error::new(
-                                io::ErrorKind::InvalidData,
-                                format!("{} in annotation is less than zero", key),
-                            ));
+                        Err(e) => {
+                            return Err(e);
                         }
                     },
                     //	Hypervisor Security related annotations
@@ -683,7 +776,14 @@ impl Annotation {
                         hv.security_info.guest_hook_path = value.to_string();
                     }
                     KATA_ANNO_CONF_HYPERVISOR_ENABLE_ROOTLESS_HYPERVISOR => {
-                        hv.security_info.rootless = self.get_bool(key).unwrap_or_default();
+                        match self.get_bool(key) {
+                            Ok(r) => {
+                                hv.security_info.rootless = r.unwrap_or_default();
+                            }
+                            Err(e) => {
+                                return Err(e);
+                            }
+                        }
                     }
                     //	Hypervisor Shared File System related annotations
                     KATA_ANNO_CONF_HYPERVISOR_SHARED_FS => {
@@ -698,9 +798,14 @@ impl Annotation {
                     KATA_ANNO_CONF_HYPERVISOR_VIRTIO_FS_CACHE => {
                         hv.shared_fs.virtio_fs_cache = value.to_string();
                     }
-                    KATA_ANNO_CONF_HYPERVISOR_VIRTIO_FS_CACHE_SIZE => {
-                        hv.shared_fs.virtio_fs_cache_size = self.get_u32(key).unwrap_or_default();
-                    }
+                    KATA_ANNO_CONF_HYPERVISOR_VIRTIO_FS_CACHE_SIZE => match self.get_u32(key) {
+                        Ok(r) => {
+                            hv.shared_fs.virtio_fs_cache_size = r.unwrap_or_default();
+                        }
+                        Err(e) => {
+                            return Err(e);
+                        }
+                    },
                     KATA_ANNO_CONF_HYPERVISOR_VIRTIO_FS_EXTRA_ARGS => {
                         let args: Vec<String> =
                             value.to_string().split(',').map(str::to_string).collect();
@@ -708,9 +813,14 @@ impl Annotation {
                             hv.shared_fs.virtio_fs_extra_args.push(arg.to_string());
                         }
                     }
-                    KATA_ANNO_CONF_HYPERVISOR_MSIZE_9P => {
-                        hv.shared_fs.msize_9p = self.get_u32(key).unwrap_or_default();
-                    }
+                    KATA_ANNO_CONF_HYPERVISOR_MSIZE_9P => match self.get_u32(key) {
+                        Ok(v) => {
+                            hv.shared_fs.msize_9p = v.unwrap_or_default();
+                        }
+                        Err(e) => {
+                            return Err(e);
+                        }
+                    },
 
                     _ => {
                         return Err(io::Error::new(
@@ -729,20 +839,39 @@ impl Annotation {
                             ag.kernel_modules.push(modules.to_string());
                         }
                     }
-                    KATA_ANNO_CONF_AGENT_TRACE => {
-                        ag.enable_tracing = self.get_bool(key).unwrap_or_default();
-                    }
-                    KATA_ANNO_CONF_AGENT_CONTAINER_PIPE_SIZE => {
-                        ag.container_pipe_size = self.get_u32(key).unwrap_or_default();
-                    }
+                    KATA_ANNO_CONF_AGENT_TRACE => match self.get_bool(key) {
+                        Ok(r) => {
+                            ag.enable_tracing = r.unwrap_or_default();
+                        }
+                        Err(e) => {
+                            return Err(e);
+                        }
+                    },
+                    KATA_ANNO_CONF_AGENT_CONTAINER_PIPE_SIZE => match self.get_u32(key) {
+                        Ok(v) => {
+                            ag.container_pipe_size = v.unwrap_or_default();
+                        }
+                        Err(e) => {
+                            return Err(e);
+                        }
+                    },
                     //update runtume config
-                    KATA_ANNO_CONF_DISABLE_GUEST_SECCOMP => {
-                        config.runtime.disable_guest_seccomp =
-                            self.get_bool(key).unwrap_or_default();
-                    }
-                    KATA_ANNO_CONF_ENABLE_PPROF => {
-                        config.runtime.enable_pprof = self.get_bool(key).unwrap_or_default();
-                    }
+                    KATA_ANNO_CONF_DISABLE_GUEST_SECCOMP => match self.get_bool(key) {
+                        Ok(r) => {
+                            config.runtime.disable_guest_seccomp = r.unwrap_or_default();
+                        }
+                        Err(e) => {
+                            return Err(e);
+                        }
+                    },
+                    KATA_ANNO_CONF_ENABLE_PPROF => match self.get_bool(key) {
+                        Ok(r) => {
+                            config.runtime.enable_pprof = r.unwrap_or_default();
+                        }
+                        Err(e) => {
+                            return Err(e);
+                        }
+                    },
                     KATA_ANNO_CONF_EXPERIMENTAL => {
                         let args: Vec<String> =
                             value.to_string().split(',').map(str::to_string).collect();
@@ -753,12 +882,22 @@ impl Annotation {
                     KATA_ANNO_CONF_INTER_NETWORK_MODEL => {
                         config.runtime.internetworking_model = value.to_string();
                     }
-                    KATA_ANNO_CONF_SANDBOX_CGROUP_ONLY => {
-                        config.runtime.disable_new_netns = self.get_bool(key).unwrap_or_default();
-                    }
-                    KATA_ANNO_CONF_DISABLE_NEW_NETNS => {
-                        config.runtime.disable_new_netns = self.get_bool(key).unwrap_or_default();
-                    }
+                    KATA_ANNO_CONF_SANDBOX_CGROUP_ONLY => match self.get_bool(key) {
+                        Ok(r) => {
+                            config.runtime.sandbox_cgroup_only = r.unwrap_or_default();
+                        }
+                        Err(e) => {
+                            return Err(e);
+                        }
+                    },
+                    KATA_ANNO_CONF_DISABLE_NEW_NETNS => match self.get_bool(key) {
+                        Ok(r) => {
+                            config.runtime.disable_new_netns = r.unwrap_or_default();
+                        }
+                        Err(e) => {
+                            return Err(e);
+                        }
+                    },
                     KATA_ANNO_CONF_VFIO_MODE => {
                         config.runtime.vfio_mode = value.to_string();
                     }
