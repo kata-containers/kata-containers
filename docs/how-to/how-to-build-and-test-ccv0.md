@@ -107,7 +107,8 @@ or [using the Kata pod sandbox for testing with `agent-ctl` or `ctr shim`](#usin
   ```
 ### Using Kubernetes for end-to-end provisioning of a Kata confidential containers pod with an unencrypted image
 
-- Run the full build process with the Kubernetes environment variable set to `"yes"`, so the Kubernetes cluster is configured and created using the VM
+- Run the full build process with the Kubernetes environment variable set to `"yes"`, so the Kubernetes cluster is
+  configured and created using the VM
   as a single node cluster: 
   ```bash
   $ export KUBERNETES="yes"
@@ -391,6 +392,72 @@ want to protect with the attestation agent in future) fails we can run:
   -rw-r--r--  1 root root  2977 Jan 26 16:07 config.json
   -rw-r--r--  1 root root   372 Jan 26 16:07 umoci.json
   -rw-r--r--  1 root root 63568 Jan 26 16:07 sha256_ebf391d3f0ba36d4b64999ebbeadc878d229faec8839254a1c2264cf47735841.mtree
+  ```
+
+### Using Kubernetes to create a Kata confidential containers pod from the encrypted ssh demo sample image
+
+The [ssh-demo](https://github.com/confidential-containers/documentation/tree/main/demos/ssh-demo) explains how to
+demonstrate creating a Kata confidential containers pod from an encrypted image with the runtime created by the
+[confidential-containers operator](https://github.com/confidential-containers/documentation/blob/main/demos/operator-demo).
+To be fully confidential, this should be run on a Trusted Execution Environment, but it can be tested on generic
+hardware as well.
+
+If you wish to build the Kata confidential containers runtime to do this yourself, then you can using the following
+steps:
+
+- Run the full build process with the Kubernetes environment variable set to `"yes"`, so the Kubernetes cluster is
+  configured and created using the VM as a single node cluster and with `AA_KBC` set to `offline_fs_kbc`. 
+  ```bash
+  $ export KUBERNETES="yes"
+  $ export AA_KBC=offline_fs_kbc
+  $ ~/ccv0.sh build_and_install_all
+  ```
+    - The `AA_KBC=offline_fs_kbc` mode will ensure that, when creating the rootfs of the Kata guest, the 
+      [attestation-agent](https://github.com/confidential-containers/attestation-agent) will be added along with the
+      [sample offline KBC](https://github.com/confidential-containers/documentation/blob/main/demos/ssh-demo/aa-offline_fs_kbc-keys.json)
+      and an agent configuration file
+    > **Note**: Depending on how where your VMs are hosted and how IPs are shared you might get an error from docker
+    during matching `ERROR: toomanyrequests: Too Many Requests`. To get past
+    this, login into Docker Hub and pull the images used with:
+  >  ```bash
+  >  $ sudo docker login
+  >  $ sudo docker pull registry:2
+  >  $ sudo docker pull ubuntu:20.04
+  >  ```
+  >  then re-run the command.
+- Check that your Kubernetes cluster has been correctly set-up by running : 
+  ```bash
+  $ kubectl get nodes
+  ```
+  and checking that you see a single node e.g.
+  ```text
+  NAME                             STATUS   ROLES                  AGE   VERSION
+  stevenh-ccv0-k8s1.fyre.ibm.com   Ready    control-plane,master   43s   v1.22.0
+  ```
+- Create a sample Kata confidential containers ssh pod by running:
+  ```bash
+  $ ~/ccv0.sh kubernetes_create_ssh_demo_pod
+  ```
+- As this point you should have a Kubernetes pod running the Kata confidential containers runtime that has pulled
+the [sample image](https://hub.docker.com/r/katadocker/ccv0-ssh) which was encrypted by the key file that we included
+in the rootfs.
+During the pod deployment the image was pulled and then decrypted using the key file, on the Kata guest image, without
+it ever being available to the host.
+
+- To validate that the container is working you, can connect to the image via SSH by running:
+  ```bash
+  $ ~/ccv0.sh connect_to_ssh_demo_pod
+  ```
+  - During this connection the host key fingerprint is shown and should match:
+    `ED25519 key fingerprint is SHA256:wK7uOpqpYQczcgV00fGCh+X97sJL3f6G1Ku4rvlwtR0.`
+  - After you are finished connecting then run:
+    ```bash
+    $ exit
+    ```
+  
+- To delete the sample SSH demo pod run:
+  ```bash
+  $ ~/ccv0.sh kubernetes_delete_ssh_demo_pod
   ```
 
 ## Additional script usage
