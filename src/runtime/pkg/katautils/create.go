@@ -155,10 +155,26 @@ func CreateSandbox(ctx context.Context, vci vc.VC, ociSpec specs.Spec, runtimeCo
 		}
 	}()
 
-	// Run pre-start OCI hooks.
-	err = EnterNetNS(sandboxConfig.NetworkConfig.NetNSPath, func() error {
+	// FIXME workaround
+	if sandboxConfig.NetworkConfig.NetNsCreated {
+		annotations := ociSpec.Annotations
+		annotations["kata-netns-path"] = sandboxConfig.NetworkConfig.NetNSPath
+	}
+
+	hooksFunc := func() error {
+		if err := CreateRuntimeHooks(ctx, ociSpec, containerID, bundlePath); err != nil {
+			return err
+		}
 		return PreStartHooks(ctx, ociSpec, containerID, bundlePath)
-	})
+	}
+
+	// Run pre-start/createRuntime OCI hooks.
+	// if sandboxConfig.NetworkConfig.NetNsCreated {
+	// network namespace created by kata, hooks run in host namespace.
+	err = hooksFunc()
+	// } else {
+	// err = EnterNetNS(sandboxConfig.NetworkConfig.NetNSPath, hooksFunc)
+	// }
 	if err != nil {
 		return nil, vc.Process{}, err
 	}
@@ -247,10 +263,22 @@ func CreateContainer(ctx context.Context, sandbox vc.VCSandbox, ociSpec specs.Sp
 		return vc.Process{}, err
 	}
 
-	// Run pre-start OCI hooks.
-	err = EnterNetNS(sandbox.GetNetNs(), func() error {
+	hooksFunc := func() error {
+		if err := CreateRuntimeHooks(ctx, ociSpec, containerID, bundlePath); err != nil {
+			return err
+		}
 		return PreStartHooks(ctx, ociSpec, containerID, bundlePath)
-	})
+	}
+
+	netNs := sandbox.GetNetworkNamespace()
+	// Run pre-start/createRuntime OCI hooks.
+	if netNs.NetNsCreated {
+		// network namespace created by kata, hooks run in host namespace.
+		err = hooksFunc()
+	} else {
+		err = EnterNetNS(netNs.NetNsPath, hooksFunc)
+	}
+
 	if err != nil {
 		return vc.Process{}, err
 	}

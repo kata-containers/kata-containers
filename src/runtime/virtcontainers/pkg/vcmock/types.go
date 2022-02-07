@@ -32,7 +32,7 @@ type Sandbox struct {
 	AnnotationsFunc          func(key string) (string, error)
 	SetAnnotationsFunc       func(annotations map[string]string) error
 	GetAnnotationsFunc       func() map[string]string
-	GetNetNsFunc             func() string
+	GetNetworkNamespaceFunc  func() vc.NetworkNamespace
 	GetAllContainersFunc     func() []vc.VCContainer
 	GetContainerFunc         func(containerID string) vc.VCContainer
 	ReleaseFunc              func() error

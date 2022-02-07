@@ -270,9 +270,9 @@ func (s *Sandbox) GetAnnotations() map[string]string {
 	return s.config.Annotations
 }
 
-// GetNetNs returns the network namespace of the current sandbox.
-func (s *Sandbox) GetNetNs() string {
-	return s.networkNS.NetNsPath
+// GetNetworkNamespace returns the network namespace of the current sandbox.
+func (s *Sandbox) GetNetworkNamespace() NetworkNamespace {
+	return s.networkNS
 }
 
 // GetHypervisorPid returns the hypervisor's pid.

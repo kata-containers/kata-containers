@@ -1296,20 +1296,23 @@ func TestPreAddDevice(t *testing.T) {
 		"ignoreMounts should contain nothing because it only contains a block device")
 }
 
-func TestGetNetNs(t *testing.T) {
+func TestGetNetworkNamespace(t *testing.T) {
 	s := Sandbox{}
 
 	expected := ""
-	netNs := s.GetNetNs()
-	assert.Equal(t, netNs, expected)
+	netNs := s.GetNetworkNamespace()
+	assert.Equal(t, netNs.NetNsPath, expected)
+	assert.Equal(t, netNs.NetNsCreated, false)
 
 	expected = "/foo/bar/ns/net"
 	s.networkNS = NetworkNamespace{
-		NetNsPath: expected,
+		NetNsPath:    expected,
+		NetNsCreated: true,
 	}
 
-	netNs = s.GetNetNs()
-	assert.Equal(t, netNs, expected)
+	netNs = s.GetNetworkNamespace()
+	assert.Equal(t, netNs.NetNsPath, expected)
+	assert.Equal(t, netNs.NetNsCreated, true)
 }
 
 func TestSandboxStopStopped(t *testing.T) {

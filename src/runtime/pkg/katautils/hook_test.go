@@ -205,3 +205,45 @@ func TestPostStopHooks(t *testing.T) {
 	err = PostStopHooks(ctx, spec, testSandboxID, testBundlePath)
 	assert.Error(err)
 }
+
+func TestCreateRuntimeHooks(t *testing.T) {
+	if tc.NotValid(ktu.NeedRoot()) {
+		t.Skip(ktu.TestDisabledNeedRoot)
+	}
+
+	assert := assert.New(t)
+
+	ctx := context.Background()
+
+	// Hooks field is nil
+	spec := specs.Spec{}
+	err := CreateRuntimeHooks(ctx, spec, "", "")
+	assert.NoError(err)
+
+	// Hooks list is empty
+	spec = specs.Spec{
+		Hooks: &specs.Hooks{},
+	}
+	err = CreateRuntimeHooks(ctx, spec, "", "")
+	assert.NoError(err)
+
+	// Run with timeout 0
+	hook := createHook(0)
+	spec = specs.Spec{
+		Hooks: &specs.Hooks{
+			CreateRuntime: []specs.Hook{hook},
+		},
+	}
+	err = CreateRuntimeHooks(ctx, spec, testSandboxID, testBundlePath)
+	assert.NoError(err)
+
+	// Failure due to wrong hook
+	hook = createWrongHook()
+	spec = specs.Spec{
+		Hooks: &specs.Hooks{
+			CreateRuntime: []specs.Hook{hook},
+		},
+	}
+	err = CreateRuntimeHooks(ctx, spec, testSandboxID, testBundlePath)
+	assert.Error(err)
+}

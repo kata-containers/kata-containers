@@ -39,9 +39,11 @@ func (s *Sandbox) GetAnnotations() map[string]string {
 	return s.MockAnnotations
 }
 
-// GetNetNs returns the network namespace of the current sandbox.
-func (s *Sandbox) GetNetNs() string {
-	return s.MockNetNs
+// GetNetworkNamespace returns the network namespace of the current sandbox.
+func (s *Sandbox) GetNetworkNamespace() vc.NetworkNamespace {
+	return vc.NetworkNamespace{
+		NetNsPath: s.MockNetNs,
+	}
 }
 
 // GetAllContainers implements the VCSandbox function of the same name.

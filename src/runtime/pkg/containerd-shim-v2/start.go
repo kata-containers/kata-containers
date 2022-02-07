@@ -53,10 +53,20 @@ func startContainer(ctx context.Context, s *service, c *container) (retErr error
 		}
 	}
 
-	// Run post-start OCI hooks.
-	err := katautils.EnterNetNS(s.sandbox.GetNetNs(), func() error {
+	hooksFunc := func() error {
 		return katautils.PostStartHooks(ctx, *c.spec, s.sandbox.ID(), c.bundle)
-	})
+	}
+
+	var err error
+	netNs := s.sandbox.GetNetworkNamespace()
+	// Run post-start OCI hooks.
+	if netNs.NetNsCreated {
+		// network namespace created by kata, hooks run in host namespace.
+		err = hooksFunc()
+	} else {
+		err = katautils.EnterNetNS(netNs.NetNsPath, hooksFunc)
+	}
+
 	if err != nil {
 		// log warning and continue, as defined in oci runtime spec
 		// https://github.com/opencontainers/runtime-spec/blob/master/runtime.md#lifecycle
