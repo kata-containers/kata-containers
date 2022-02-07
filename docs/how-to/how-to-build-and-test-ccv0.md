@@ -18,8 +18,6 @@ we have working.
 ### Basic script set-up and optional environment variables
 
 In order to build, configure and demo the CCv0 functionality, these are the set-up steps I take:
-> **Note**: I've only tested this script running as root. I hope to fix this under 
-  [issue #2879](https://github.com/kata-containers/kata-containers/issues/2879)
 - Provision a new VM
     - *I choose a Ubuntu 20.04 8GB VM for this as I had one available. There are some dependences on apt-get installed*
     *packages, so these will need re-working to be compatible with other platforms.*
@@ -45,15 +43,16 @@ $ chmod u+x ccv0.sh
       $ export SKOPEO=yes
       ```
       `skopeo` is
-      required for verifying container image signatures of pulled images.
+      required for passing source credentials and verifying container image signatures using the kata agent.
 
 ### Using `crictl` to do end-to-end testing of provisioning a container with the unencrypted image pulled on the guest
 
 - Run the full build process with Kubernetes off, so it's configure doesn't interfere with `crictl` using:
   ```bash
   $ export KUBERNETES="no"
-  $ . ~/ccv0.sh -d build_and_install_all
+  $ ~/ccv0.sh -d build_and_install_all
   ```
+    > **Note**: Much of this script has to be run as `sudo`, so you are likely to get prompted for your password.
     - *I run this script sourced just so that the required installed components are accessible on the `PATH` to the rest*
       *of the process without having to reload the session.*
     - The steps that `build_and_install_all` takes is:
@@ -67,19 +66,27 @@ $ chmod u+x ccv0.sh
         20.04 and has extra packages like `umoci` added.
         - Build the Kata guest kernel
         - Install QEMU
+    > **Note**: Depending on how where your VMs are hosted and how IPs are shared you might get an error from docker
+    during matching `ERROR: toomanyrequests: Too Many Requests`. To get past
+    this, login into Docker Hub and pull the images used with:
+  >  ```bash
+  >  $ docker login
+  >  $ sudo docker pull ubuntu
+  >  ```
+  >  then re-run the command.
     - The first time this runs it may take a while, but subsequent runs will be quicker as more things are already
       installed and they can be further cut down by not running all the above steps 
       [see "Additional script usage" below](#additional-script-usage)
    
 - Create a new kata sandbox pod using `crictl` with:
   ```bash
-  $ . ~/ccv0.sh crictl_create_cc_pod
+  $ ~/ccv0.sh crictl_create_cc_pod
   ```
     - This creates a pod configuration file, creates the pod from this using 
     `sudo crictl runp -r kata ~/pod-config.yaml` and runs `sudo crictl pods` to show the pod
 - Create a new kata confidential container with:
   ```bash
-  $ . ~/ccv0.sh crictl_create_cc_container
+  $ ~/ccv0.sh crictl_create_cc_container
   ```
     - This creates a container (based on `busybox:1.33.1`) in the kata cc sandbox and prints a list of containers.
       This will have been created based on an image pulled in the kata pod sandbox/guest, not on the host machine.
@@ -114,19 +121,16 @@ there.
 - To verify that the image wasn't pulled on the host system we can look at the shared sandbox on the host and we
   should only see a single bundle for the pause container as the `busybox` based container image should have been
   pulled on the guest:
-    - Change to the pod's shared directory with:
+    - Find all the `rootfs` directories under in the pod's shared directory with:
       ```bash
-      $ cd /run/kata-containers/shared/sandboxes/${pod_id}/shared
-      ```
-    - Find all the `rootfs` directories under this with: 
-      ```bash
-      $ find . -name rootfs
+      $ pod_id=$(ps -ef | grep qemu | egrep -o "sandbox-[^,][^,]*" | sed 's/sandbox-//g' | awk '{print $1}')
+      $ sudo find /run/kata-containers/shared/sandboxes/${pod_id}/shared -name rootfs
       ./e89596e9de45ef2a154a5164554c9816293ab757cfd7a53d593fa144192a9964/rootfs
       ```
       which should only show a single `rootfs` directory if the container image was pulled on the guest, not the host
     - Looking that `rootfs` directory with
       ```bash
-      $ ls -ltr ./e89596e9de45ef2a154a5164554c9816293ab757cfd7a53d593fa144192a9964/rootfs/
+      $ sudo ls -ltr $(sudo find /run/kata-containers/shared/sandboxes/${pod_id}/shared -name rootfs)
       ```
       prints something similar to
       ```
@@ -155,11 +159,18 @@ but Kubernetes can be used to create a non-confidential kata pod using `ccv0.sh`
   as a single node cluster: 
   ```bash
   $ export KUBERNETES="yes"
-  $ . ~/ccv0.sh -d build_and_install_all
+  $ ~/ccv0.sh build_and_install_all
   ```
-  > **Note**: Depending on how where your VMs are hosted and how IPs are shared you might get an error from docker
-    during "Store custom stress image in registry"  matching `ERROR: toomanyrequests: Too Many Requests`. To get past
-    this, log into docker hub with `docker login` and re-run the step with `. ~/ccv0.sh -d init_kubernetes`.
+    > **Note**: Depending on how where your VMs are hosted and how IPs are shared you might get an error from docker
+    during matching `ERROR: toomanyrequests: Too Many Requests`. To get past
+    this, login into Docker Hub and pull the images used with:
+  >  ```bash
+  >  $ docker login
+  >  $ sudo docker pull registry:2
+  >  $ sudo docker pull nginx
+  >  $ sudo docker pull ubuntu
+  >  ```
+  >  then re-run the command.
 - Check that your Kubernetes cluster has been correctly set-up: 
 ```
 $ kubectl get nodes
@@ -168,7 +179,7 @@ stevenh-ccv0-demo1.fyre.ibm.com   Ready    control-plane,master   3m33s   v1.21.
 ```
 - Create a kata pod:
 ```
-$ ~/ccv0.sh -d create_kata_pod
+$ ~/ccv0.sh create_kata_pod
 pod/nginx-kata created
 NAME         READY   STATUS              RESTARTS   AGE
 nginx-kata   0/1     ContainerCreating   0          5s
@@ -196,7 +207,7 @@ that aren't broadly supported end-to-end. Here are some examples:
 
 - For debugging purposed you can optionally create a new terminal on the VM and connect to the kata guest's console log:
   ```bash
-  $ ~/ccv0.sh -d open_kata_console
+  $ ~/ccv0.sh open_kata_console
   ```
 - In the first terminal run the pull image on guest command against the Kata agent, via the shim (`containerd-shim-kata-v2`).
 This can be achieved using the [containerd](https://github.com/containerd/containerd) CLI tool, `ctr`, which can be used to
@@ -215,7 +226,7 @@ the `ccv0.sh` script to automatically fill in the variables:
       below steps to run the pull image command against the agent directly.
   - Run the pull image agent endpoint with:
     ```bash
-    $ ~/ccv0.sh -d shim_pull_image
+    $ ~/ccv0.sh shim_pull_image
     ```
     which we print the `ctr shim` command for reference
 - Alternatively you can issue the command directly to the kata-agent pull image endpoint, which also supports
@@ -230,9 +241,12 @@ the `ccv0.sh` script to automatically fill in the variables:
               proof of concept to allow more images to be pulled and tested. Once we have support for getting
               keys into the kata guest using the attestation-agent and/or KBS I'd expect container registry
               credentials to be looked up using that mechanism.
+            
+            > **Note**: the native rust implementation doesn't current flow credentials at the moment, so use
+            the `skopeo` based implementation if they are needed now.
     - Run the pull image agent endpoint with
       ```bash
-      $ ~/ccv0.sh -d agent_pull_image
+      $ ~/ccv0.sh agent_pull_image
       ```
       and you should see output which includes `Command PullImage (1 of 1) returned (Ok(()), false)` to indicate
       that the `PullImage` request was successful e.g.
@@ -244,11 +258,11 @@ the `ccv0.sh` script to automatically fill in the variables:
       {"msg":"response received","level":"INFO","ts":"2021-09-15T08:40:43.828200633-07:00","source":"kata-agent-ctl","name":"kata-agent-ctl","subsystem":"rpc","version":"0.1.0","pid":"830920","response":""}
       {"msg":"Command PullImage (1 of 1) returned (Ok(()), false)","level":"INFO","ts":"2021-09-15T08:40:43.828261708-07:00","subsystem":"rpc","pid":"830920","source":"kata-agent-ctl","version":"0.1.0","name":"kata-agent-ctl"}
       ```
-      > **Note**: The first time that `~/ccv0.sh -d agent_pull_image` is run, the `agent-ctl` tool with be complied
+      > **Note**: The first time that `~/ccv0.sh agent_pull_image` is run, the `agent-ctl` tool will be built
       which may take a few minutes.
 - To validate that the image pull was successful, you can open a shell into the kata pod with:
   ```bash
-  $ ~/ccv0.sh -d open_kata_shell
+  $ ~/ccv0.sh open_kata_shell
   ```
 - Check the `/run/kata-containers/` directory to verify that the container image bundle has been created in a directory
   named either `01234556789` (for the container id), or the container image name, e.g.
@@ -264,9 +278,9 @@ the `ccv0.sh` script to automatically fill in the variables:
   -rw-r--r--  1 root root 63584 Jan 20 16:45 sha256_be9faa75035c20288cde7d2cdeb6cd1f5f4dbcd845d3f86f7feab61c4eff9eb5.mtree
   ```
 - Leave the kata shell by running:
-      ```bash
-      $ exit
-      ```
+  ```bash
+  $ exit
+  ```
 
 ## Verifying signed images
 
@@ -306,14 +320,14 @@ image by running:
   ```bash
   $ export CONTAINER_ID="unprotected-unsigned"
   $ export PULL_IMAGE="docker.io/library/busybox:latest"
-  $ ~/ccv0.sh -d agent_pull_image
+  $ ~/ccv0.sh agent_pull_image
   ```
   - This finishes with a return `Ok()`
 - To test that an unsigned image from our *protected* test container registry is rejected we can run:
   ```bash
   $ export CONTAINER_ID="protected-unsigned"
   $ export PULL_IMAGE="quay.io/kata-containers/confidential-containers:unsigned"
-  $ ~/ccv0.sh -d agent_pull_image
+  $ ~/ccv0.sh agent_pull_image
   ```
   - This results in an `ERROR: API failed` message from `agent_ctl` and the Kata sandbox console log shows the correct
   cause that the signature we has was not valid for the unsigned image:
@@ -324,7 +338,7 @@ image by running:
   ```bash
   $ export CONTAINER_ID="protected-signed"
   $ export PULL_IMAGE="quay.io/kata-containers/confidential-containers:signed"
-  $ ~/ccv0.sh -d agent_pull_image
+  $ ~/ccv0.sh agent_pull_image
   ```
   - This finishes with a return `Ok()`
 - Finally to check the image with a valid signature, but invalid GPG key (the real trusted piece of information we really
@@ -332,7 +346,7 @@ want to protect with the attestation agent in future) fails we can run:
   ```bash
   $ export CONTAINER_ID="protected-wrong-key"
   $ export PULL_IMAGE="quay.io/kata-containers/confidential-containers:other_signed"
-  $ ~/ccv0.sh -d agent_pull_image
+  $ ~/ccv0.sh agent_pull_image
   ```
   - Again this results in an `ERROR: API failed` message from `agent_ctl` and the Kata sandbox console log shows a
   slightly different error:
@@ -342,29 +356,31 @@ want to protect with the attestation agent in future) fails we can run:
   ```
 - To confirm that the first and third tests create the image bundles correct we can open a shell into the kata pod with:
   ```bash
-  $ ~/ccv0.sh -d open_kata_shell
+  $ ~/ccv0.sh open_kata_shell
   ```
 - In the pod we can check the directories the images bundles were unpacked to:
   ```bash
-  $ ls /run/kata-containers/unprotected-unsigned/
+  $ ls -ltr /run/kata-containers/unprotected-unsigned/
   ```
   should show something like
   ```
-  config.json
-  rootfs
-  sha256_824b88c5c38e2b931cfd471061a576a2ac1c165ef7adeae6662687031b9f9e07.mtree
-  umoci.json
+  total 72
+  drwxr-xr-x 10 root root   200 Jan  1  1970 rootfs
+  -rw-r--r--  1 root root  2977 Jan 26 16:06 config.json
+  -rw-r--r--  1 root root   372 Jan 26 16:06 umoci.json
+  -rw-r--r--  1 root root 63724 Jan 26 16:06 sha256_1612e16ff3f6b0d09eefdc4e9d5c5c0624f63032743e016585b095b958778016.mtree
   ```
   and
   ```bash
-  $ ls /run/kata-containers/protected-signed/
+  $ ls -ltr /run/kata-containers/protected-signed/
   ```
   should show something like
   ```
-  config.json
-  rootfs
-  sha256_ebf391d3f0ba36d4b64999ebbeadc878d229faec8839254a1c2264cf47735841.mtree
-  umoci.json
+  total 72
+  drwxr-xr-x 10 root root   200 Jan  1  1970 rootfs
+  -rw-r--r--  1 root root  2977 Jan 26 16:07 config.json
+  -rw-r--r--  1 root root   372 Jan 26 16:07 umoci.json
+  -rw-r--r--  1 root root 63568 Jan 26 16:07 sha256_ebf391d3f0ba36d4b64999ebbeadc878d229faec8839254a1c2264cf47735841.mtree
   ```
 
 ## Additional script usage
@@ -372,9 +388,9 @@ want to protect with the attestation agent in future) fails we can run:
 As well as being able to use the script as above to build all of `kata-containers` from scratch it can be used to just
 re-build bits of it by running the script with different parameters. For example after the first build you will often
 not need to re-install the dependencies, QEMU or the Guest kernel, but just test code changes made to the runtime and
-agent. This can be done by running `. ~/ccv0.sh -d rebuild_and_install_kata`. (*Note this does a hard checkout*
+agent. This can be done by running `~/ccv0.sh rebuild_and_install_kata`. (*Note this does a hard checkout*
 *from git, so if your changes are only made locally it is better to do the individual steps e.g.* 
-`. ~/ccv0.sh -d build_kata_runtime && . ~/ccv0.sh -d build_and_add_agent_to_rootfs && . ~/ccv0.sh -d build_and_install_rootfs`).
+`~/ccv0.sh build_kata_runtime && ~/ccv0.sh build_and_add_agent_to_rootfs && ~/ccv0.sh build_and_install_rootfs`).
 There are commands for a lot of steps in building, setting up and testing and the full list can be seen by running
 `~/ccv0.sh help`:
 ```
