@@ -32,19 +32,23 @@ func hookLogger() *logrus.Entry {
 	return kataUtilsLogger.WithField("subsystem", "hook")
 }
 
-func runHook(ctx context.Context, hook specs.Hook, cid, bundlePath string, spec specs.Spec) error {
+func runHook(ctx context.Context, hook specs.Hook, cid, bundlePath string, spec specs.Spec, pid int) error {
 	span, _ := katatrace.Trace(ctx, hookLogger(), "runHook", hookTracingTags)
 	defer span.End()
 	katatrace.AddTags(span, "path", hook.Path, "args", hook.Args)
 
 	state := specs.State{
 		Version: spec.Version,
-		Pid:     syscall.Gettid(),
+		Pid:     pid,
 		Bundle:  bundlePath,
 		ID:      cid,
 		// FIXME: this status should passed in or retrieve from somewhere
 		Status:      specs.StateCreated,
 		Annotations: spec.Annotations,
+	}
+
+	if state.Pid <= 0 {
+		state.Pid = syscall.Gettid()
 	}
 	stateJSON, err := json.Marshal(state)
 	if err != nil {
@@ -93,13 +97,13 @@ func runHook(ctx context.Context, hook specs.Hook, cid, bundlePath string, spec 
 	return nil
 }
 
-func runHooks(ctx context.Context, hooks []specs.Hook, cid, bundlePath, hookType string, spec specs.Spec) error {
+func runHooks(ctx context.Context, hooks []specs.Hook, cid, bundlePath, hookType string, spec specs.Spec, pid int) error {
 	span, ctx := katatrace.Trace(ctx, hookLogger(), "runHooks", hookTracingTags)
 	katatrace.AddTags(span, "type", hookType)
 	defer span.End()
 
 	for _, hook := range hooks {
-		if err := runHook(ctx, hook, cid, bundlePath, spec); err != nil {
+		if err := runHook(ctx, hook, cid, bundlePath, spec, pid); err != nil {
 			hookLogger().WithFields(logrus.Fields{
 				"hook-type": hookType,
 				"error":     err,
@@ -113,13 +117,13 @@ func runHooks(ctx context.Context, hooks []specs.Hook, cid, bundlePath, hookType
 }
 
 // CreateRuntimeHooks run the hooks before createRuntime
-func CreateRuntimeHooks(ctx context.Context, spec specs.Spec, cid, bundlePath string) error {
+func CreateRuntimeHooks(ctx context.Context, spec specs.Spec, cid, bundlePath string, pid int) error {
 	// If no hook available, nothing needs to be done.
 	if spec.Hooks == nil {
 		return nil
 	}
 
-	return runHooks(ctx, spec.Hooks.CreateRuntime, cid, bundlePath, "createRuntime", spec)
+	return runHooks(ctx, spec.Hooks.CreateRuntime, cid, bundlePath, "createRuntime", spec, pid)
 }
 
 // PreStartHooks run the hooks before start container
@@ -129,7 +133,7 @@ func PreStartHooks(ctx context.Context, spec specs.Spec, cid, bundlePath string)
 		return nil
 	}
 
-	return runHooks(ctx, spec.Hooks.Prestart, cid, bundlePath, "pre-start", spec)
+	return runHooks(ctx, spec.Hooks.Prestart, cid, bundlePath, "pre-start", spec, -1)
 }
 
 // PostStartHooks run the hooks just after start container
@@ -139,7 +143,7 @@ func PostStartHooks(ctx context.Context, spec specs.Spec, cid, bundlePath string
 		return nil
 	}
 
-	return runHooks(ctx, spec.Hooks.Poststart, cid, bundlePath, "post-start", spec)
+	return runHooks(ctx, spec.Hooks.Poststart, cid, bundlePath, "post-start", spec, -1)
 }
 
 // PostStopHooks run the hooks after stop container
@@ -149,5 +153,5 @@ func PostStopHooks(ctx context.Context, spec specs.Spec, cid, bundlePath string)
 		return nil
 	}
 
-	return runHooks(ctx, spec.Hooks.Poststop, cid, bundlePath, "post-stop", spec)
+	return runHooks(ctx, spec.Hooks.Poststop, cid, bundlePath, "post-stop", spec, -1)
 }

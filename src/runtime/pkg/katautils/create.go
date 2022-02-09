@@ -10,6 +10,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/exec"
 	"strconv"
 	"strings"
 
@@ -155,27 +156,43 @@ func CreateSandbox(ctx context.Context, vci vc.VC, ociSpec specs.Spec, runtimeCo
 		}
 	}()
 
-	// FIXME workaround
-	if sandboxConfig.NetworkConfig.NetNsCreated {
-		annotations := ociSpec.Annotations
-		annotations["kata-netns-path"] = sandboxConfig.NetworkConfig.NetNSPath
+	// this pid will bound to the network namespace.
+	var pid int = -1
+
+	var cmd *exec.Cmd
+	tmpProcess := func() error {
+		cmd = exec.Command("sleep", "3600")
+		if err := cmd.Start(); err != nil {
+			kataUtilsLogger.WithError(err).Error("failed to start temp process for running hooks")
+			return err
+		}
+		pid = cmd.Process.Pid
+		return nil
 	}
 
-	hooksFunc := func() error {
-		if err := CreateRuntimeHooks(ctx, ociSpec, containerID, bundlePath); err != nil {
+	defer func() {
+		if err := cmd.Process.Kill(); err != nil {
+			kataUtilsLogger.WithError(err).Error("failed to kill temp process")
+		}
+		if err := cmd.Wait(); err != nil {
+			kataUtilsLogger.WithError(err).Error("failed to kill temp process")
+		}
+	}()
+
+	// run tmp process in the network namespace and pass the pid of this
+	// process to hooks to let hooks get the correct network namespace
+	if err = EnterNetNS(sandboxConfig.NetworkConfig.NetNSPath, tmpProcess); err != nil {
+		kataUtilsLogger.WithError(err).Error("failed to run temp process in network namespace")
+		return nil, vc.Process{}, err
+	}
+
+	if err = func() error {
+		if err := CreateRuntimeHooks(ctx, ociSpec, containerID, bundlePath, pid); err != nil {
 			return err
 		}
 		return PreStartHooks(ctx, ociSpec, containerID, bundlePath)
-	}
-
-	// Run pre-start/createRuntime OCI hooks.
-	// if sandboxConfig.NetworkConfig.NetNsCreated {
-	// network namespace created by kata, hooks run in host namespace.
-	err = hooksFunc()
-	// } else {
-	// err = EnterNetNS(sandboxConfig.NetworkConfig.NetNSPath, hooksFunc)
-	// }
-	if err != nil {
+	}(); err != nil {
+		kataUtilsLogger.WithError(err).Error("failed to run hooks")
 		return nil, vc.Process{}, err
 	}
 
@@ -264,9 +281,6 @@ func CreateContainer(ctx context.Context, sandbox vc.VCSandbox, ociSpec specs.Sp
 	}
 
 	hooksFunc := func() error {
-		if err := CreateRuntimeHooks(ctx, ociSpec, containerID, bundlePath); err != nil {
-			return err
-		}
 		return PreStartHooks(ctx, ociSpec, containerID, bundlePath)
 	}
 
