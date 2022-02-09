@@ -191,9 +191,9 @@ externals:
     # containerd from v1.5.0 used the path unix socket
     # instead of abstract socket, thus kata wouldn's support the containerd's
     # version older than them.
-    version: "v1.6.0-beta.2"
+    version: "v1.6.0-rc.4.0"
     # CCv0 needs to build a branch from our fork to install containerd
-    branch: "ali-CCv0"
+    branch: "CC-main"
 
   critools:
     description: "CLI tool for Container Runtime Interface (CRI)"
