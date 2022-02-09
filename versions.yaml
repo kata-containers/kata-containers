@@ -188,14 +188,14 @@ externals:
     description: |
       Containerd for Kubernetes Container Runtime Interface.
     # CCv0 is using our fork of containerd as the changes can't be merged yet
-    url: "github.com/confidential-containers/containerd"
+    url: "github.com/wllenyj/containerd"
     tarball_url: "https://github.com/containerd/containerd/releases/download"
     # containerd from v1.5.0 used the path unix socket
     # instead of abstract socket, thus kata wouldn's support the containerd's
     # version older than them.
-    version: "v1.6.0-beta.2"
+    version: "v1.6.0-rc.3"
     # CCv0 needs to build a branch from our fork to install containerd
-    branch: "ali-CCv0"
+    branch: "CCv0-rebase"
 
   critools:
     description: "CLI tool for Container Runtime Interface (CRI)"
