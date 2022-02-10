@@ -24,6 +24,7 @@ import (
 	"github.com/urfave/cli"
 	"golang.org/x/sys/unix"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
 var factorySubCmds = []cli.Command{
@@ -235,7 +236,7 @@ var destroyFactoryCommand = cli.Command{
 		}
 
 		if runtimeConfig.FactoryConfig.VMCacheNumber > 0 {
-			conn, err := grpc.Dial(fmt.Sprintf("unix://%s", runtimeConfig.FactoryConfig.VMCacheEndpoint), grpc.WithInsecure())
+			conn, err := grpc.Dial(fmt.Sprintf("unix://%s", runtimeConfig.FactoryConfig.VMCacheEndpoint), grpc.WithTransportCredentials(insecure.NewCredentials()))
 			if err != nil {
 				return errors.Wrapf(err, "failed to connect %q", runtimeConfig.FactoryConfig.VMCacheEndpoint)
 			}
@@ -285,7 +286,7 @@ var statusFactoryCommand = cli.Command{
 		}
 
 		if runtimeConfig.FactoryConfig.VMCacheNumber > 0 {
-			conn, err := grpc.Dial(fmt.Sprintf("unix://%s", runtimeConfig.FactoryConfig.VMCacheEndpoint), grpc.WithInsecure())
+			conn, err := grpc.Dial(fmt.Sprintf("unix://%s", runtimeConfig.FactoryConfig.VMCacheEndpoint), grpc.WithTransportCredentials(insecure.NewCredentials()))
 			if err != nil {
 				fmt.Fprintln(defaultOutputFile, errors.Wrapf(err, "failed to connect %q", runtimeConfig.FactoryConfig.VMCacheEndpoint))
 			} else {
