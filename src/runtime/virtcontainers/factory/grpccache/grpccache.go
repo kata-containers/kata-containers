@@ -16,6 +16,7 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/factory/base"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
 type grpccache struct {
@@ -25,7 +26,7 @@ type grpccache struct {
 
 // New returns a new direct vm factory.
 func New(ctx context.Context, endpoint string) (base.FactoryBase, error) {
-	conn, err := grpc.Dial(fmt.Sprintf("unix://%s", endpoint), grpc.WithInsecure())
+	conn, err := grpc.Dial(fmt.Sprintf("unix://%s", endpoint), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to connect %q", endpoint)
 	}
