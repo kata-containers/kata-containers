@@ -592,38 +592,35 @@ fn update_spec_devices(spec: &mut Spec, mut updates: HashMap<&str, DevUpdate>) -
     Ok(())
 }
 
-// update_spec_pci PCI addresses in the OCI spec to be guest addresses
-// instead of host addresses.  It is given a map of (host address =>
-// guest address)
+// update_env_pci alters PCI addresses in a set of environment
+// variables to be correct for the VM instead of the host.  It is
+// given a map of (host address => guest address)
 #[instrument]
-fn update_spec_pci(spec: &mut Spec, updates: HashMap<pci::Address, pci::Address>) -> Result<()> {
-    // Correct PCI addresses in the environment
-    if let Some(process) = spec.process.as_mut() {
-        for envvar in process.env.iter_mut() {
-            let eqpos = envvar
-                .find('=')
-                .ok_or_else(|| anyhow!("Malformed OCI env entry {:?}", envvar))?;
+fn update_env_pci(env: &mut [String], pcimap: &HashMap<pci::Address, pci::Address>) -> Result<()> {
+    for envvar in env {
+        let eqpos = envvar
+            .find('=')
+            .ok_or_else(|| anyhow!("Malformed OCI env entry {:?}", envvar))?;
 
-            let (name, eqval) = envvar.split_at(eqpos);
-            let val = &eqval[1..];
+        let (name, eqval) = envvar.split_at(eqpos);
+        let val = &eqval[1..];
 
-            if !name.starts_with("PCIDEVICE_") {
-                continue;
-            }
-
-            let mut guest_addrs = Vec::<String>::new();
-
-            for host_addr in val.split(',') {
-                let host_addr = pci::Address::from_str(host_addr)
-                    .with_context(|| format!("Can't parse {} environment variable", name))?;
-                let guest_addr = updates
-                    .get(&host_addr)
-                    .ok_or_else(|| anyhow!("Unable to translate host PCI address {}", host_addr))?;
-                guest_addrs.push(format!("{}", guest_addr));
-            }
-
-            envvar.replace_range(eqpos + 1.., guest_addrs.join(",").as_str());
+        if !name.starts_with("PCIDEVICE_") {
+            continue;
         }
+
+        let mut guest_addrs = Vec::<String>::new();
+
+        for host_addr in val.split(',') {
+            let host_addr = pci::Address::from_str(host_addr)
+                .with_context(|| format!("Can't parse {} environment variable", name))?;
+            let guest_addr = pcimap
+                .get(&host_addr)
+                .ok_or_else(|| anyhow!("Unable to translate host PCI address {}", host_addr))?;
+            guest_addrs.push(format!("{}", guest_addr));
+        }
+
+        envvar.replace_range(eqpos + 1.., guest_addrs.join(",").as_str());
     }
 
     Ok(())
@@ -860,7 +857,7 @@ pub fn update_device_cgroup(spec: &mut Spec) -> Result<()> {
 mod tests {
     use super::*;
     use crate::uevent::spawn_test_watcher;
-    use oci::{Linux, Process};
+    use oci::Linux;
     use std::iter::FromIterator;
     use tempfile::tempdir;
 
@@ -1199,7 +1196,7 @@ mod tests {
     }
 
     #[test]
-    fn test_update_spec_pci() {
+    fn test_update_env_pci() {
         let example_map = [
             // Each is a host,guest pair of pci addresses
             ("0000:1a:01.0", "0000:01:01.0"),
@@ -1209,17 +1206,11 @@ mod tests {
             ("0000:01:01.0", "ffff:02:1f.7"),
         ];
 
-        let mut spec = Spec {
-            process: Some(Process {
-                env: vec![
-                    "PCIDEVICE_x=0000:1a:01.0,0000:1b:02.0".to_string(),
-                    "PCIDEVICE_y=0000:01:01.0".to_string(),
-                    "NOTAPCIDEVICE_blah=abcd:ef:01.0".to_string(),
-                ],
-                ..Process::default()
-            }),
-            ..Spec::default()
-        };
+        let mut env = vec![
+            "PCIDEVICE_x=0000:1a:01.0,0000:1b:02.0".to_string(),
+            "PCIDEVICE_y=0000:01:01.0".to_string(),
+            "NOTAPCIDEVICE_blah=abcd:ef:01.0".to_string(),
+        ];
 
         let pci_fixups = example_map
             .iter()
@@ -1231,10 +1222,9 @@ mod tests {
             })
             .collect();
 
-        let res = update_spec_pci(&mut spec, pci_fixups);
+        let res = update_env_pci(&mut env, &pci_fixups);
         assert!(res.is_ok());
 
-        let env = &spec.process.as_ref().unwrap().env;
         assert_eq!(env[0], "PCIDEVICE_x=0000:01:01.0,0000:01:02.0");
         assert_eq!(env[1], "PCIDEVICE_y=ffff:02:1f.7");
         assert_eq!(env[2], "NOTAPCIDEVICE_blah=abcd:ef:01.0");
