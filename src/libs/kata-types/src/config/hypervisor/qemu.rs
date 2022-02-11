@@ -73,9 +73,6 @@ impl ConfigPlugin for QemuConfig {
 
             if qemu.device_info.default_bridges == 0 {
                 qemu.device_info.default_bridges = default::DEFAULT_QEMU_PCI_BRIDGES;
-                if qemu.device_info.default_bridges > default::MAX_QEMU_PCI_BRIDGES {
-                    qemu.device_info.default_bridges = default::MAX_QEMU_PCI_BRIDGES;
-                }
             }
 
             if qemu.machine_info.machine_type.is_empty() {

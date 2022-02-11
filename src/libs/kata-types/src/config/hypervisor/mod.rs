@@ -31,7 +31,7 @@ use lazy_static::lazy_static;
 use regex::RegexSet;
 
 use super::{default, ConfigOps, ConfigPlugin, TomlConfig};
-use crate::annotations::KATA_ANNO_CONF_HYPERVISOR_PREFIX;
+use crate::annotations::KATA_ANNO_CFG_HYPERVISOR_PREFIX;
 use crate::{eother, resolve_path, validate_path};
 
 mod dragonball;
@@ -48,6 +48,7 @@ const VIRTIO_PMEM: &str = "nvdimm";
 const VIRTIO_9P: &str = "virtio-9p";
 const VIRTIO_FS: &str = "virtio-fs";
 const VIRTIO_FS_INLINE: &str = "inline-virtio-fs";
+const MAX_BRIDGE_SIZE: u32 = 5;
 
 lazy_static! {
     static ref HYPERVISOR_PLUGINS: Mutex<HashMap<String, Arc<dyn ConfigPlugin>>> =
@@ -169,8 +170,8 @@ impl BlockDeviceInfo {
             VIRTIO_BLK,
             VIRTIO_BLK_CCW,
             VIRTIO_BLK_MMIO,
-            VIRTIO_SCSI,
             VIRTIO_PMEM,
+            VIRTIO_SCSI,
         ];
         if !l.contains(&self.block_device_driver.as_str()) {
             return Err(eother!(
@@ -406,8 +407,8 @@ pub struct DeviceInfo {
 impl DeviceInfo {
     /// Adjust the configuration information after loading from configuration file.
     pub fn adjust_configuration(&mut self) -> Result<()> {
-        if self.default_bridges > 5 {
-            self.default_bridges = 5;
+        if self.default_bridges > MAX_BRIDGE_SIZE {
+            self.default_bridges = MAX_BRIDGE_SIZE;
         }
 
         Ok(())
@@ -415,7 +416,7 @@ impl DeviceInfo {
 
     /// Validate the configuration information.
     pub fn validate(&self) -> Result<()> {
-        if self.default_bridges > 5 {
+        if self.default_bridges > MAX_BRIDGE_SIZE {
             return Err(eother!(
                 "The configured PCI bridges {} are too many",
                 self.default_bridges
@@ -701,10 +702,10 @@ impl SecurityInfo {
 
     /// Check whether annotation key is enabled or not.
     pub fn is_annotation_enabled(&self, path: &str) -> bool {
-        if !path.starts_with(KATA_ANNO_CONF_HYPERVISOR_PREFIX) {
+        if !path.starts_with(KATA_ANNO_CFG_HYPERVISOR_PREFIX) {
             return false;
         }
-        let pos = KATA_ANNO_CONF_HYPERVISOR_PREFIX.len();
+        let pos = KATA_ANNO_CFG_HYPERVISOR_PREFIX.len();
         let key = &path[pos..];
         if let Ok(set) = RegexSet::new(&self.enable_annotations) {
             return set.is_match(key);
@@ -798,8 +799,8 @@ impl SharedFsInfo {
                     || self.msize_9p > default::MAX_SHARED_9PFS_SIZE
                 {
                     return Err(eother!(
-                        "Invalid 9p configuration msize 0x{:x}",
-                        self.msize_9p
+                        "Invalid 9p configuration msize 0x{:x}, min value is 0x{:x}, max value is 0x{:x}",
+                        self.msize_9p,default::MIN_SHARED_9PFS_SIZE, default::MAX_SHARED_9PFS_SIZE
                     ));
                 }
                 Ok(())
@@ -842,10 +843,9 @@ impl SharedFsInfo {
             "Virtio-fs daemon path {} is invalid: {}"
         )?;
 
-        if self.virtio_fs_cache != "none"
-            && self.virtio_fs_cache != "auto"
-            && self.virtio_fs_cache != "always"
-        {
+        let l = ["none", "auto", "always"];
+
+        if !l.contains(&self.virtio_fs_cache.as_str()) {
             return Err(eother!(
                 "Invalid virtio-fs cache mode: {}",
                 &self.virtio_fs_cache
