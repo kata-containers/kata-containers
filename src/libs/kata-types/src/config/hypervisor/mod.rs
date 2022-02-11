@@ -23,7 +23,7 @@
 //! hypervisors, so let's contain it...
 
 use std::collections::HashMap;
-use std::io::Result;
+use std::io::{self, Result};
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 
@@ -974,7 +974,9 @@ impl ConfigOps for Hypervisor {
             if let Some(plugin) = get_hypervisor_plugin(hypervisor) {
                 plugin.adjust_configuration(conf)?;
                 // Safe to unwrap() because `hypervisor` is a valid key in the hash map.
-                let hv = conf.hypervisor.get_mut(hypervisor).unwrap();
+                let hv = conf.hypervisor.get_mut(hypervisor).ok_or_else(|| {
+                    io::Error::new(io::ErrorKind::NotFound, "hypervisor not found".to_string())
+                })?;
                 hv.blockdev_info.adjust_configuration()?;
                 hv.boot_info.adjust_configuration()?;
                 hv.cpu_info.adjust_configuration()?;
