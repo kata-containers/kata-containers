@@ -5,19 +5,19 @@
 #[cfg(test)]
 mod tests {
     use kata_types::annotations::{
-        Annotation, KATA_ANNO_CONF_AGENT_CONTAINER_PIPE_SIZE, KATA_ANNO_CONF_AGENT_TRACE,
-        KATA_ANNO_CONF_DISABLE_GUEST_SECCOMP, KATA_ANNO_CONF_ENABLE_PPROF,
-        KATA_ANNO_CONF_EXPERIMENTAL, KATA_ANNO_CONF_HYPERVISOR_BLOCK_DEVICE_CACHE_NOFLUSH,
-        KATA_ANNO_CONF_HYPERVISOR_BLOCK_DEVICE_DRIVER, KATA_ANNO_CONF_HYPERVISOR_CTLPATH,
-        KATA_ANNO_CONF_HYPERVISOR_DEFAULT_MEMORY, KATA_ANNO_CONF_HYPERVISOR_DEFAULT_VCPUS,
-        KATA_ANNO_CONF_HYPERVISOR_ENABLE_GUEST_SWAP, KATA_ANNO_CONF_HYPERVISOR_ENABLE_IO_THREADS,
-        KATA_ANNO_CONF_HYPERVISOR_ENABLE_SWAP, KATA_ANNO_CONF_HYPERVISOR_FILE_BACKED_MEM_ROOT_DIR,
-        KATA_ANNO_CONF_HYPERVISOR_GUEST_HOOK_PATH, KATA_ANNO_CONF_HYPERVISOR_HUGE_PAGES,
-        KATA_ANNO_CONF_HYPERVISOR_JAILER_PATH, KATA_ANNO_CONF_HYPERVISOR_KERNEL_PATH,
-        KATA_ANNO_CONF_HYPERVISOR_MEMORY_PREALLOC, KATA_ANNO_CONF_HYPERVISOR_MEMORY_SLOTS,
-        KATA_ANNO_CONF_HYPERVISOR_PATH, KATA_ANNO_CONF_HYPERVISOR_VHOSTUSER_STORE_PATH,
-        KATA_ANNO_CONF_HYPERVISOR_VIRTIO_FS_DAEMON, KATA_ANNO_CONF_HYPERVISOR_VIRTIO_FS_EXTRA_ARGS,
-        KATA_ANNO_CONF_HYPERVISOR_VIRTIO_MEM, KATA_ANNO_CONF_KERNEL_MODULES,
+        Annotation, KATA_ANNO_CFG_AGENT_CONTAINER_PIPE_SIZE, KATA_ANNO_CFG_AGENT_TRACE,
+        KATA_ANNO_CFG_DISABLE_GUEST_SECCOMP, KATA_ANNO_CFG_ENABLE_PPROF,
+        KATA_ANNO_CFG_EXPERIMENTAL, KATA_ANNO_CFG_HYPERVISOR_BLOCK_DEV_CACHE_NOFLUSH,
+        KATA_ANNO_CFG_HYPERVISOR_BLOCK_DEV_DRIVER, KATA_ANNO_CFG_HYPERVISOR_CTLPATH,
+        KATA_ANNO_CFG_HYPERVISOR_DEFAULT_MEMORY, KATA_ANNO_CFG_HYPERVISOR_DEFAULT_VCPUS,
+        KATA_ANNO_CFG_HYPERVISOR_ENABLE_GUEST_SWAP, KATA_ANNO_CFG_HYPERVISOR_ENABLE_IO_THREADS,
+        KATA_ANNO_CFG_HYPERVISOR_ENABLE_SWAP, KATA_ANNO_CFG_HYPERVISOR_FILE_BACKED_MEM_ROOT_DIR,
+        KATA_ANNO_CFG_HYPERVISOR_GUEST_HOOK_PATH, KATA_ANNO_CFG_HYPERVISOR_HUGE_PAGES,
+        KATA_ANNO_CFG_HYPERVISOR_JAILER_PATH, KATA_ANNO_CFG_HYPERVISOR_KERNEL_PATH,
+        KATA_ANNO_CFG_HYPERVISOR_MEMORY_PREALLOC, KATA_ANNO_CFG_HYPERVISOR_MEMORY_SLOTS,
+        KATA_ANNO_CFG_HYPERVISOR_PATH, KATA_ANNO_CFG_HYPERVISOR_VHOSTUSER_STORE_PATH,
+        KATA_ANNO_CFG_HYPERVISOR_VIRTIO_FS_DAEMON, KATA_ANNO_CFG_HYPERVISOR_VIRTIO_FS_EXTRA_ARGS,
+        KATA_ANNO_CFG_HYPERVISOR_VIRTIO_MEM, KATA_ANNO_CFG_KERNEL_MODULES,
     };
     use kata_types::config::KataConfig;
     use kata_types::config::{QemuConfig, TomlConfig};
@@ -67,104 +67,104 @@ mod tests {
             .expect("failed to execute process");
         let mut anno_hash = HashMap::new();
         anno_hash.insert(
-            KATA_ANNO_CONF_KERNEL_MODULES.to_string(),
+            KATA_ANNO_CFG_KERNEL_MODULES.to_string(),
             "j465 aaa=1;r33w".to_string(),
         );
-        anno_hash.insert(KATA_ANNO_CONF_AGENT_TRACE.to_string(), "false".to_string());
+        anno_hash.insert(KATA_ANNO_CFG_AGENT_TRACE.to_string(), "false".to_string());
         anno_hash.insert(
-            KATA_ANNO_CONF_AGENT_CONTAINER_PIPE_SIZE.to_string(),
+            KATA_ANNO_CFG_AGENT_CONTAINER_PIPE_SIZE.to_string(),
             "3".to_string(),
         );
         anno_hash.insert(
-            KATA_ANNO_CONF_HYPERVISOR_PATH.to_string(),
+            KATA_ANNO_CFG_HYPERVISOR_PATH.to_string(),
             "./hypervisor_path".to_string(),
         );
         anno_hash.insert(
-            KATA_ANNO_CONF_HYPERVISOR_BLOCK_DEVICE_DRIVER.to_string(),
+            KATA_ANNO_CFG_HYPERVISOR_BLOCK_DEV_DRIVER.to_string(),
             "device".to_string(),
         );
         anno_hash.insert(
-            KATA_ANNO_CONF_HYPERVISOR_BLOCK_DEVICE_CACHE_NOFLUSH.to_string(),
+            KATA_ANNO_CFG_HYPERVISOR_BLOCK_DEV_CACHE_NOFLUSH.to_string(),
             "false".to_string(),
         );
         anno_hash.insert(
-            KATA_ANNO_CONF_HYPERVISOR_VHOSTUSER_STORE_PATH.to_string(),
+            KATA_ANNO_CFG_HYPERVISOR_VHOSTUSER_STORE_PATH.to_string(),
             "./store_path".to_string(),
         );
         anno_hash.insert(
-            KATA_ANNO_CONF_DISABLE_GUEST_SECCOMP.to_string(),
+            KATA_ANNO_CFG_DISABLE_GUEST_SECCOMP.to_string(),
             "true".to_string(),
         );
         anno_hash.insert(
-            KATA_ANNO_CONF_HYPERVISOR_GUEST_HOOK_PATH.to_string(),
+            KATA_ANNO_CFG_HYPERVISOR_GUEST_HOOK_PATH.to_string(),
             "./test_hypervisor_hook_path".to_string(),
         );
         anno_hash.insert(
-            KATA_ANNO_CONF_HYPERVISOR_MEMORY_PREALLOC.to_string(),
+            KATA_ANNO_CFG_HYPERVISOR_MEMORY_PREALLOC.to_string(),
             "false".to_string(),
         );
         anno_hash.insert(
-            KATA_ANNO_CONF_HYPERVISOR_CTLPATH.to_string(),
+            KATA_ANNO_CFG_HYPERVISOR_CTLPATH.to_string(),
             "./jvm".to_string(),
         );
         anno_hash.insert(
-            KATA_ANNO_CONF_HYPERVISOR_DEFAULT_VCPUS.to_string(),
+            KATA_ANNO_CFG_HYPERVISOR_DEFAULT_VCPUS.to_string(),
             "12".to_string(),
         );
-        anno_hash.insert(KATA_ANNO_CONF_ENABLE_PPROF.to_string(), "false".to_string());
+        anno_hash.insert(KATA_ANNO_CFG_ENABLE_PPROF.to_string(), "false".to_string());
         anno_hash.insert(
-            KATA_ANNO_CONF_HYPERVISOR_ENABLE_GUEST_SWAP.to_string(),
+            KATA_ANNO_CFG_HYPERVISOR_ENABLE_GUEST_SWAP.to_string(),
             "false".to_string(),
         );
         anno_hash.insert(
-            KATA_ANNO_CONF_HYPERVISOR_DEFAULT_MEMORY.to_string(),
+            KATA_ANNO_CFG_HYPERVISOR_DEFAULT_MEMORY.to_string(),
             "100".to_string(),
         );
         anno_hash.insert(
-            KATA_ANNO_CONF_HYPERVISOR_ENABLE_IO_THREADS.to_string(),
+            KATA_ANNO_CFG_HYPERVISOR_ENABLE_IO_THREADS.to_string(),
             "false".to_string(),
         );
         anno_hash.insert(
-            KATA_ANNO_CONF_HYPERVISOR_ENABLE_IO_THREADS.to_string(),
+            KATA_ANNO_CFG_HYPERVISOR_ENABLE_IO_THREADS.to_string(),
             "false".to_string(),
         );
         anno_hash.insert(
-            KATA_ANNO_CONF_HYPERVISOR_ENABLE_SWAP.to_string(),
+            KATA_ANNO_CFG_HYPERVISOR_ENABLE_SWAP.to_string(),
             "false".to_string(),
         );
         anno_hash.insert(
-            KATA_ANNO_CONF_HYPERVISOR_FILE_BACKED_MEM_ROOT_DIR.to_string(),
+            KATA_ANNO_CFG_HYPERVISOR_FILE_BACKED_MEM_ROOT_DIR.to_string(),
             "./test_file_backend_mem_root".to_string(),
         );
         anno_hash.insert(
-            KATA_ANNO_CONF_HYPERVISOR_HUGE_PAGES.to_string(),
+            KATA_ANNO_CFG_HYPERVISOR_HUGE_PAGES.to_string(),
             "false".to_string(),
         );
         anno_hash.insert(
-            KATA_ANNO_CONF_HYPERVISOR_JAILER_PATH.to_string(),
+            KATA_ANNO_CFG_HYPERVISOR_JAILER_PATH.to_string(),
             "./test_jailer_path".to_string(),
         );
         anno_hash.insert(
-            KATA_ANNO_CONF_HYPERVISOR_KERNEL_PATH.to_string(),
+            KATA_ANNO_CFG_HYPERVISOR_KERNEL_PATH.to_string(),
             "./test_kernel_path".to_string(),
         );
         anno_hash.insert(
-            KATA_ANNO_CONF_HYPERVISOR_MEMORY_SLOTS.to_string(),
+            KATA_ANNO_CFG_HYPERVISOR_MEMORY_SLOTS.to_string(),
             "100".to_string(),
         );
         anno_hash.insert(
-            KATA_ANNO_CONF_HYPERVISOR_VIRTIO_FS_EXTRA_ARGS.to_string(),
+            KATA_ANNO_CFG_HYPERVISOR_VIRTIO_FS_EXTRA_ARGS.to_string(),
             "rr,dg,er".to_string(),
         );
         anno_hash.insert(
-            KATA_ANNO_CONF_HYPERVISOR_VIRTIO_MEM.to_string(),
+            KATA_ANNO_CFG_HYPERVISOR_VIRTIO_MEM.to_string(),
             "false".to_string(),
         );
         anno_hash.insert(
-            KATA_ANNO_CONF_HYPERVISOR_VIRTIO_FS_DAEMON.to_string(),
+            KATA_ANNO_CFG_HYPERVISOR_VIRTIO_FS_DAEMON.to_string(),
             "./virtio_fs".to_string(),
         );
-        anno_hash.insert(KATA_ANNO_CONF_EXPERIMENTAL.to_string(), "c,d,e".to_string());
+        anno_hash.insert(KATA_ANNO_CFG_EXPERIMENTAL.to_string(), "c,d,e".to_string());
 
         let anno = Annotation::new(anno_hash);
         let mut config = TomlConfig::load(&content).unwrap();
@@ -286,7 +286,7 @@ mod tests {
 
         let mut anno_hash = HashMap::new();
         anno_hash.insert(
-            KATA_ANNO_CONF_HYPERVISOR_BLOCK_DEVICE_DRIVER.to_string(),
+            KATA_ANNO_CFG_HYPERVISOR_BLOCK_DEV_DRIVER.to_string(),
             "fvfvfvfvf".to_string(),
         );
         let anno = Annotation::new(anno_hash);
@@ -309,7 +309,7 @@ mod tests {
 
         let mut anno_hash = HashMap::new();
         anno_hash.insert(
-            KATA_ANNO_CONF_HYPERVISOR_ENABLE_GUEST_SWAP.to_string(),
+            KATA_ANNO_CFG_HYPERVISOR_ENABLE_GUEST_SWAP.to_string(),
             "false".to_string(),
         );
         let anno = Annotation::new(anno_hash);
@@ -332,7 +332,7 @@ mod tests {
 
         let mut anno_hash = HashMap::new();
         anno_hash.insert(
-            KATA_ANNO_CONF_HYPERVISOR_PATH.to_string(),
+            KATA_ANNO_CFG_HYPERVISOR_PATH.to_string(),
             "/usr/bin/nle".to_string(),
         );
         let anno = Annotation::new(anno_hash);
@@ -360,7 +360,7 @@ mod tests {
 
         let mut anno_hash = HashMap::new();
         anno_hash.insert(
-            KATA_ANNO_CONF_HYPERVISOR_KERNEL_PATH.to_string(),
+            KATA_ANNO_CFG_HYPERVISOR_KERNEL_PATH.to_string(),
             "/usr/bin/cdcd".to_string(),
         );
         let anno = Annotation::new(anno_hash);
@@ -382,7 +382,7 @@ mod tests {
 
         let mut anno_hash = HashMap::new();
         anno_hash.insert(
-            KATA_ANNO_CONF_HYPERVISOR_MEMORY_SLOTS.to_string(),
+            KATA_ANNO_CFG_HYPERVISOR_MEMORY_SLOTS.to_string(),
             "-1".to_string(),
         );
         let anno = Annotation::new(anno_hash);
@@ -405,7 +405,7 @@ mod tests {
 
         let mut anno_hash = HashMap::new();
         anno_hash.insert(
-            KATA_ANNO_CONF_HYPERVISOR_DEFAULT_MEMORY.to_string(),
+            KATA_ANNO_CFG_HYPERVISOR_DEFAULT_MEMORY.to_string(),
             "10".to_string(),
         );
         let anno = Annotation::new(anno_hash);
@@ -428,7 +428,7 @@ mod tests {
 
         let mut anno_hash = HashMap::new();
         anno_hash.insert(
-            KATA_ANNO_CONF_HYPERVISOR_DEFAULT_VCPUS.to_string(),
+            KATA_ANNO_CFG_HYPERVISOR_DEFAULT_VCPUS.to_string(),
             "400".to_string(),
         );
         let anno = Annotation::new(anno_hash);
@@ -451,7 +451,7 @@ mod tests {
 
         let mut anno_hash = HashMap::new();
         anno_hash.insert(
-            KATA_ANNO_CONF_HYPERVISOR_ENABLE_GUEST_SWAP.to_string(),
+            KATA_ANNO_CFG_HYPERVISOR_ENABLE_GUEST_SWAP.to_string(),
             "false1".to_string(),
         );
         let anno = Annotation::new(anno_hash);
@@ -474,7 +474,7 @@ mod tests {
 
         let mut anno_hash = HashMap::new();
         anno_hash.insert(
-            KATA_ANNO_CONF_HYPERVISOR_DEFAULT_VCPUS.to_string(),
+            KATA_ANNO_CFG_HYPERVISOR_DEFAULT_VCPUS.to_string(),
             "ddc".to_string(),
         );
         let anno = Annotation::new(anno_hash);
