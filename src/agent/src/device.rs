@@ -596,7 +596,10 @@ fn update_spec_devices(spec: &mut Spec, mut updates: HashMap<&str, DevUpdate>) -
 // variables to be correct for the VM instead of the host.  It is
 // given a map of (host address => guest address)
 #[instrument]
-fn update_env_pci(env: &mut [String], pcimap: &HashMap<pci::Address, pci::Address>) -> Result<()> {
+pub fn update_env_pci(
+    env: &mut [String],
+    pcimap: &HashMap<pci::Address, pci::Address>,
+) -> Result<()> {
     for envvar in env {
         let eqpos = envvar
             .find('=')
@@ -793,6 +796,9 @@ pub async fn add_devices(
         }
     }
 
+    if let Some(process) = spec.process.as_mut() {
+        update_env_pci(&mut process.env, &sandbox.lock().await.pcimap)?
+    }
     update_spec_devices(spec, dev_updates)
 }
 
