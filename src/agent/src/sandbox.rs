@@ -8,6 +8,7 @@ use crate::mount::{get_mount_fs_type, remove_mounts, TYPE_ROOTFS};
 use crate::namespace::Namespace;
 use crate::netlink::Handle;
 use crate::network::Network;
+use crate::pci;
 use crate::uevent::{Uevent, UeventMatcher};
 use crate::watcher::BindWatcher;
 use anyhow::{anyhow, Context, Result};
@@ -56,6 +57,7 @@ pub struct Sandbox {
     pub event_rx: Arc<Mutex<Receiver<String>>>,
     pub event_tx: Option<Sender<String>>,
     pub bind_watcher: BindWatcher,
+    pub pcimap: HashMap<pci::Address, pci::Address>,
 }
 
 impl Sandbox {
@@ -88,6 +90,7 @@ impl Sandbox {
             event_rx,
             event_tx: Some(tx),
             bind_watcher: BindWatcher::new(),
+            pcimap: HashMap::new(),
         })
     }
 

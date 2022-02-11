@@ -43,7 +43,9 @@ use nix::sys::stat;
 use nix::unistd::{self, Pid};
 use rustjail::process::ProcessOperations;
 
-use crate::device::{add_devices, get_virtio_blk_pci_device_name, update_device_cgroup};
+use crate::device::{
+    add_devices, get_virtio_blk_pci_device_name, update_device_cgroup, update_env_pci,
+};
 use crate::linux_abi::*;
 use crate::metrics::get_metrics;
 use crate::mount::{add_storages, baremount, remove_mounts, STORAGE_HANDLER_LIST};
@@ -359,10 +361,13 @@ impl AgentService {
         let s = self.sandbox.clone();
         let mut sandbox = s.lock().await;
 
-        let process = req
+        let mut process = req
             .process
             .into_option()
             .ok_or_else(|| anyhow!(nix::Error::EINVAL))?;
+
+        // Apply any necessary corrections for PCI addresses
+        update_env_pci(&mut process.Env, &sandbox.pcimap)?;
 
         let pipe_size = AGENT_CONFIG.read().await.container_pipe_size;
         let ocip = rustjail::process_grpc_to_oci(&process);
