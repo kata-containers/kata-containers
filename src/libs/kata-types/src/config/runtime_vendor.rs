@@ -32,10 +32,6 @@ impl ConfigOps for RuntimeVendor {
     /// Validate the configuration information.
     fn validate(conf: &TomlConfig) -> Result<()> {
         if conf.runtime.vendor.log_level > 10 {
-            warn!(
-                sl!(),
-                "log level {} in configuration file is invalid", conf.runtime.vendor.log_level
-            );
             return Err(eother!(
                 "log level {} in configuration file is invalid",
                 conf.runtime.vendor.log_level
