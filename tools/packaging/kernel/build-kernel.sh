@@ -53,6 +53,8 @@ hypervisor_target=""
 arch_target=""
 #
 kernel_config_path=""
+#
+skip_config_checks="false"
 # destdir
 DESTDIR="${DESTDIR:-/}"
 #PREFIX=
@@ -92,6 +94,7 @@ Options:
 	-h          	: Display this help.
 	-k <path>   	: Path to kernel to build.
 	-p <path>   	: Path to a directory with patches to apply to kernel.
+	-s          	: Skip .config checks
 	-t <hypervisor>	: Hypervisor_target.
 	-v <version>	: Kernel version to use if kernel path not provided.
 	-x <type>	: Confidential guest protection type, such as sev
@@ -232,6 +235,8 @@ get_kernel_frag_path() {
 	results=$(grep "${not_in_string}" <<< "$results")
 	# Do not care about options that are in whitelist
 	results=$(grep -v -f ${default_config_whitelist} <<< "$results")
+
+	[[ "${skip_config_checks}" == "true" ]] && echo "${config_path}" && return
 
 	# Did we request any entries that did not make it?
 	local missing=$(echo $results | grep -v -q "${not_in_string}"; echo $?)
@@ -438,7 +443,7 @@ install_kata() {
 }
 
 main() {
-	while getopts "a:b:c:defg:hk:p:t:v:x:" opt; do
+	while getopts "a:b:c:defg:hk:p:st:v:x:" opt; do
 		case "$opt" in
 			a)
 				arch_target="${OPTARG}"
@@ -471,6 +476,9 @@ main() {
 				;;
 			p)
 				patches_path="${OPTARG}"
+				;;
+			s)
+				skip_config_checks="true"
 				;;
 			t)
 				hypervisor_target="${OPTARG}"
