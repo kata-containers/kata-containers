@@ -1642,17 +1642,13 @@ mod tests {
 
     #[tokio::test]
     async fn test_execute_hook() {
-        let temp_file = "/tmp/test_execute_hook";
+        let sh = which("sh").await;
 
-        let touch = which("touch").await;
-
-        defer!(fs::remove_file(temp_file).unwrap(););
-
-        execute_hook(
+        let res = execute_hook(
             &slog_scope::logger(),
             &Hook {
-                path: touch,
-                args: vec!["touch".to_string(), temp_file.to_string()],
+                path: sh,
+                args: vec!["sh".to_string(), "-c".to_string(), "sleep 1".to_string()],
                 env: vec![],
                 timeout: Some(10),
             },
@@ -1665,21 +1661,24 @@ mod tests {
                 annotations: Default::default(),
             },
         )
-        .await
-        .unwrap();
+        .await;
 
-        assert_eq!(Path::new(&temp_file).exists(), true);
+        assert!(res.is_ok());
     }
 
     #[tokio::test]
     async fn test_execute_hook_with_error() {
-        let ls = which("ls").await;
+        let sh = which("sh").await;
 
         let res = execute_hook(
             &slog_scope::logger(),
             &Hook {
-                path: ls,
-                args: vec!["ls".to_string(), "/tmp/not-exist".to_string()],
+                path: sh,
+                args: vec![
+                    "sh".to_string(),
+                    "-c".to_string(),
+                    "sleep 1 && exit 1".to_string(),
+                ],
                 env: vec![],
                 timeout: None,
             },
