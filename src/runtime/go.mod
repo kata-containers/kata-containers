@@ -9,7 +9,6 @@ require (
 	github.com/containerd/cgroups v1.0.3
 	github.com/containerd/console v1.0.3
 	github.com/containerd/containerd v1.6.0-beta.3
-	github.com/containerd/containerd/api v1.6.0-beta.3
 	github.com/containerd/cri-containerd v1.11.1-0.20190125013620-4dd6735020f5
 	github.com/containerd/fifo v1.0.0
 	github.com/containerd/ttrpc v1.1.0
@@ -44,7 +43,6 @@ require (
 	github.com/urfave/cli v1.22.2
 	github.com/vishvananda/netlink v1.1.1-0.20210924202909-187053b97868
 	github.com/vishvananda/netns v0.0.0-20210104183010-2eb08e3e575f
-	go.opencensus.io v0.23.0 // indirect
 	go.opentelemetry.io/otel v1.3.0
 	go.opentelemetry.io/otel/exporters/jaeger v1.0.0
 	go.opentelemetry.io/otel/sdk v1.3.0
@@ -52,13 +50,13 @@ require (
 	golang.org/x/net v0.0.0-20211216030914-fe4d6282115f
 	golang.org/x/oauth2 v0.0.0-20210819190943-2bc19b11175f
 	golang.org/x/sys v0.0.0-20211216021012-1d35b9e2eb4e
-	google.golang.org/appengine v1.6.7 // indirect
 	google.golang.org/grpc v1.43.0
 	k8s.io/apimachinery v0.22.5
 	k8s.io/cri-api v0.23.1
 )
 
 replace (
+	github.com/containerd/containerd => github.com/wllenyj/containerd v1.6.0-rc.4.0
 	github.com/opencontainers/runc => github.com/opencontainers/runc v1.0.1
 	github.com/uber-go/atomic => go.uber.org/atomic v1.5.1
 	google.golang.org/genproto => google.golang.org/genproto v0.0.0-20180817151627-c66870c02cf8
