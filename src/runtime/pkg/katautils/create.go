@@ -155,11 +155,8 @@ func CreateSandbox(ctx context.Context, vci vc.VC, ociSpec specs.Spec, runtimeCo
 		}
 	}()
 
-	// Run pre-start OCI hooks.
-	err = EnterNetNS(sandboxConfig.NetworkConfig.NetworkID, func() error {
-		return PreStartHooks(ctx, ociSpec, containerID, bundlePath)
-	})
-	if err != nil {
+	// Run pre-start OCI hooks, in the runtime namespace.
+	if err := PreStartHooks(ctx, ociSpec, containerID, bundlePath); err != nil {
 		return nil, vc.Process{}, err
 	}
 
