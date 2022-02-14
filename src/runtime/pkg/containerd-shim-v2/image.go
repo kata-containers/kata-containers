@@ -38,7 +38,7 @@ func initImageService(ic *plugin.InitContext) (interface{}, error) {
 	if err != nil {
 		return nil, errors.Errorf("get task plugin error. %v", err)
 	}
-	task := i.(*shim.TaskService)
+	task := i.(shim.TaskService)
 	s := task.TaskService.(*service)
 	is := &ImageService{s: s}
 	return is, nil
