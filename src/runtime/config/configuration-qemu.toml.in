@@ -141,6 +141,7 @@ disable_block_device_use = @DEFDISABLEBLOCK@
 # Shared file system type:
 #   - virtio-fs (default)
 #   - virtio-9p
+#   - virtio-fs-nydus
 shared_fs = "@DEFSHAREDFS_QEMU_VIRTIOFS@"
 
 # Path to vhost-user-fs daemon.

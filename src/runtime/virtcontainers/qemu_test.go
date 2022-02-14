@@ -613,7 +613,7 @@ func TestQemuGetpids(t *testing.T) {
 	assert.True(len(pids) == 1)
 	assert.True(pids[0] == 100)
 
-	q.state.VirtiofsdPid = 200
+	q.state.VirtiofsDaemonPid = 200
 	pids = q.GetPids()
 	assert.True(len(pids) == 2)
 	assert.True(pids[0] == 100)
