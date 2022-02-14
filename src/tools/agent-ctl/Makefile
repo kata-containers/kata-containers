@@ -5,6 +5,7 @@
 
 include ../../../utils.mk
 
+.DEFAULT_GOAL := default
 default: build
 
 build: logging-crate-tests
