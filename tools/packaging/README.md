@@ -28,10 +28,6 @@ See [the kernel documentation](kernel).
 
 See [the QEMU documentation](qemu).
 
-## Test Kata using ccloudvm
-
-See [the ccloudvm documentation](ccloudvm).
-
 ## Create a Kata Containers release
 
 See [the release documentation](release).
@@ -39,10 +35,6 @@ See [the release documentation](release).
 ## Packaging scripts
 
 See the [scripts documentation](scripts).
-
-## Sync packages
-
-See [the `kata-pkgsync` documentation](cmd/kata-pkgsync).
 
 ## Credits
 

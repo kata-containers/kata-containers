@@ -1,0 +1,101 @@
+From d184f34dbfc972b0a27be189ce8c1a75e400c920 Mon Sep 17 00:00:00 2001
+From: Salil Mehta <salil.mehta@huawei.com>
+Date: Thu, 25 Nov 2021 16:31:07 +0800
+Subject: [PATCH 09/28] arm/cpuhp: Init GED framework with cpu hotplug events
+
+ACPI GED(as described in the ACPI 6.2 spec) can be used to generate ACPI events
+when OSPM/guest receives an interrupt listed in the _CRS object of GED. OSPM
+then maps or demultiplexes the event by evaluating _EVT method.
+
+This change adds the support of cpu hotplug event initialization in the
+existing GED framework.
+
+Co-developed-by: Keqian Zhu <zhukeqian1@huawei.com>
+Signed-off-by: Salil Mehta <salil.mehta@huawei.com>
+Signed-off-by: Huang Shijie <shijie8@gmail.com>
+---
+ hw/acpi/generic_event_device.c         | 8 ++++++++
+ hw/arm/virt.c                          | 3 ++-
+ include/hw/acpi/generic_event_device.h | 5 +++++
+ 3 files changed, 15 insertions(+), 1 deletion(-)
+
+diff --git a/hw/acpi/generic_event_device.c b/hw/acpi/generic_event_device.c
+index e28457a7d1..1ed7623907 100644
+--- a/hw/acpi/generic_event_device.c
++++ b/hw/acpi/generic_event_device.c
+@@ -25,6 +25,7 @@ static const uint32_t ged_supported_events[] = {
+     ACPI_GED_MEM_HOTPLUG_EVT,
+     ACPI_GED_PWR_DOWN_EVT,
+     ACPI_GED_NVDIMM_HOTPLUG_EVT,
++    ACPI_GED_CPU_HOTPLUG_EVT,
+ };
+ 
+ /*
+@@ -390,6 +391,13 @@ static void acpi_ged_initfn(Object *obj)
+      acpi_memory_hotplug_init(&s->container_memhp, OBJECT(dev),
+                               &s->memhp_state, 0);
+ 
++     s->cpuhp.device = OBJECT(s);
++     memory_region_init(&s->container_cpuhp, OBJECT(dev), "cpuhp container",
++                        ACPI_CPU_HOTPLUG_REG_LEN);
++     sysbus_init_mmio(SYS_BUS_DEVICE(dev), &s->container_cpuhp);
++     cpu_hotplug_hw_init(&s->container_cpuhp, OBJECT(dev),
++                         &s->cpuhp_state, 0);
++
+     memory_region_init_io(&ged_st->regs, obj, &ged_regs_ops, ged_st,
+                           TYPE_ACPI_GED "-regs", ACPI_GED_REG_COUNT);
+     sysbus_init_mmio(sbd, &ged_st->regs);
+diff --git a/hw/arm/virt.c b/hw/arm/virt.c
+index 4265c0e2e8..47db084183 100644
+--- a/hw/arm/virt.c
++++ b/hw/arm/virt.c
+@@ -560,7 +560,7 @@ static inline DeviceState *create_acpi_ged(VirtMachineState *vms)
+     DeviceState *dev;
+     MachineState *ms = MACHINE(vms);
+     int irq = vms->irqmap[VIRT_ACPI_GED];
+-    uint32_t event = ACPI_GED_PWR_DOWN_EVT;
++    uint32_t event = ACPI_GED_PWR_DOWN_EVT | ACPI_GED_CPU_HOTPLUG_EVT;
+ 
+     if (ms->ram_slots) {
+         event |= ACPI_GED_MEM_HOTPLUG_EVT;
+@@ -575,6 +575,7 @@ static inline DeviceState *create_acpi_ged(VirtMachineState *vms)
+ 
+     sysbus_mmio_map(SYS_BUS_DEVICE(dev), 0, vms->memmap[VIRT_ACPI_GED].base);
+     sysbus_mmio_map(SYS_BUS_DEVICE(dev), 1, vms->memmap[VIRT_PCDIMM_ACPI].base);
++    sysbus_mmio_map(SYS_BUS_DEVICE(dev), 2, vms->memmap[VIRT_CPUHP_ACPI].base);
+     sysbus_connect_irq(SYS_BUS_DEVICE(dev), 0, qdev_get_gpio_in(vms->gic, irq));
+ 
+     sysbus_realize_and_unref(SYS_BUS_DEVICE(dev), &error_fatal);
+diff --git a/include/hw/acpi/generic_event_device.h b/include/hw/acpi/generic_event_device.h
+index 6bed92e8fc..454bf08da2 100644
+--- a/include/hw/acpi/generic_event_device.h
++++ b/include/hw/acpi/generic_event_device.h
+@@ -63,6 +63,7 @@
+ #include "hw/acpi/memory_hotplug.h"
+ #include "hw/acpi/ghes.h"
+ #include "qom/object.h"
++#include "hw/acpi/cpu_hotplug.h"
+ 
+ #define ACPI_POWER_BUTTON_DEVICE "PWRB"
+ 
+@@ -75,6 +76,7 @@ OBJECT_DECLARE_SIMPLE_TYPE(AcpiGedState, ACPI_GED)
+ 
+ #define ACPI_GED_EVT_SEL_OFFSET    0x0
+ #define ACPI_GED_EVT_SEL_LEN       0x4
++#define ACPI_GED_CPU_HOTPLUG_EVT    0x8
+ 
+ #define ACPI_GED_REG_SLEEP_CTL     0x00
+ #define ACPI_GED_REG_SLEEP_STS     0x01
+@@ -110,6 +112,9 @@ struct AcpiGedState {
+     SysBusDevice parent_obj;
+     MemHotplugState memhp_state;
+     MemoryRegion container_memhp;
++    CPUHotplugState cpuhp_state;
++    MemoryRegion container_cpuhp;
++    AcpiCpuHotplug cpuhp;
+     GEDState ged_state;
+     uint32_t ged_event_bitmap;
+     qemu_irq irq;
+-- 
+2.30.2
+

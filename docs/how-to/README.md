@@ -37,6 +37,7 @@
 - [How to setup swap devices in guest kernel](how-to-setup-swap-devices-in-guest-kernel.md)
 - [How to run rootless vmm](how-to-run-rootless-vmm.md)
 - [How to run Docker with Kata Containers](how-to-run-docker-with-kata.md)
+- [How to run Kata Containers with `nydus`](how-to-use-virtio-fs-nydus-with-kata.md)
 
 ## Confidential Containers
 - [How to use build and test the Confidential Containers `CCv0` proof of concept](how-to-build-and-test-ccv0.md)

@@ -231,7 +231,7 @@ $ cp ${GOPATH}/${LINUX_VER}/vmlinux ${KATA_KERNEL_LOCATION}/${KATA_KERNEL_NAME}
 These instructions build upon the OS builder instructions located in the 
 [Developer Guide](../Developer-Guide.md). At this point it is recommended that
 [Docker](https://docs.docker.com/engine/install/ubuntu/) is installed first, and
-then [Kata-deploy](https://github.com/kata-containers/kata-containers/tree/main/tools/packaging/kata-deploy)
+then [Kata-deploy](../../tools/packaging/kata-deploy)
 is use to install Kata. This will make sure that the correct `agent` version 
 is installed into the rootfs in the steps below.
 
@@ -355,10 +355,10 @@ this small script so that it redirects to be able to use either QEMU or
 Cloud Hypervisor with Kata.
 
 ```bash
-$ echo '#!/bin/bash' | sudo tee /usr/local/bin/containerd-shim-kata-qemu-v2
+$ echo '#!/usr/bin/env bash' | sudo tee /usr/local/bin/containerd-shim-kata-qemu-v2
 $ echo 'KATA_CONF_FILE=/opt/kata/share/defaults/kata-containers/configuration-qemu.toml /opt/kata/bin/containerd-shim-kata-v2 $@' | sudo tee -a /usr/local/bin/containerd-shim-kata-qemu-v2
 $ sudo chmod +x /usr/local/bin/containerd-shim-kata-qemu-v2
-$ echo '#!/bin/bash' | sudo tee /usr/local/bin/containerd-shim-kata-clh-v2
+$ echo '#!/usr/bin/env bash' | sudo tee /usr/local/bin/containerd-shim-kata-clh-v2
 $ echo 'KATA_CONF_FILE=/opt/kata/share/defaults/kata-containers/configuration-clh.toml /opt/kata/bin/containerd-shim-kata-v2 $@' | sudo tee -a /usr/local/bin/containerd-shim-kata-clh-v2
 $ sudo chmod +x /usr/local/bin/containerd-shim-kata-clh-v2
 ```
@@ -419,11 +419,11 @@ You might need to disable Docker before initializing Kubernetes. Be aware
 that the OpenSSL container image built above will need to be exported from
 Docker and imported into containerd.
 
-If Kata is installed through [`kata-deploy`](https://github.com/kata-containers/kata-containers/blob/stable-2.0/tools/packaging/kata-deploy/README.md)
+If Kata is installed through [`kata-deploy`](../../tools/packaging/kata-deploy/README.md)
 there will be multiple `configuration.toml` files associated with different 
 hypervisors. Rather than add in the custom Kata kernel, Kata rootfs, and 
 kernel modules to each `configuration.toml` as the default, instead use
-[annotations](https://github.com/kata-containers/kata-containers/blob/stable-2.0/docs/how-to/how-to-load-kernel-modules-with-kata.md)
+[annotations](../how-to/how-to-load-kernel-modules-with-kata.md)
 in the Kubernetes YAML file to tell Kata which kernel and rootfs to use. The 
 easy way to do this is to use `kata-deploy` which will install the Kata binaries
 to `/opt` and properly configure the `/etc/containerd/config.toml` with annotation 

@@ -17,7 +17,7 @@ CONFIG_X86_SGX_KVM=y
 ```
 
 * Kubernetes cluster configured with:
-   * [`kata-deploy`](https://github.com/kata-containers/kata-containers/tree/main/tools/packaging/kata-deploy) based Kata Containers installation
+   * [`kata-deploy`](../../tools/packaging/kata-deploy) based Kata Containers installation
    * [Intel SGX Kubernetes device plugin](https://github.com/intel/intel-device-plugins-for-kubernetes/tree/main/cmd/sgx_plugin#deploying-with-pre-built-images)
 
 > Note: Kata Containers supports creating VM sandboxes with Intel® SGX enabled

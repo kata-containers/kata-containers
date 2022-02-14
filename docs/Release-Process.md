@@ -48,6 +48,7 @@
 ### Merge all bump version Pull requests
 
   - The above step will create a GitHub pull request in the Kata projects. Trigger the CI using `/test` command on each bump Pull request.
+  - Trigger the test-kata-deploy workflow on the kata-containers repository bump Pull request using `/test_kata_deploy` (monitor under the "action" tab).
   - Check any failures and fix if needed.
   - Work with the Kata approvers to verify that the CI works and the pull requests are merged.
 
@@ -64,7 +65,7 @@
 
 ### Check Git-hub Actions
 
-  We make use of [GitHub actions](https://github.com/features/actions) in this [file](https://github.com/kata-containers/kata-containers/blob/main/.github/workflows/release.yaml) in the `kata-containers/kata-containers` repository to build and upload release artifacts. This action is auto triggered with the above step when a new tag is pushed to the `kata-containers/kata-containers` repository.
+  We make use of [GitHub actions](https://github.com/features/actions) in this [file](../.github/workflows/release.yaml) in the `kata-containers/kata-containers` repository to build and upload release artifacts. This action is auto triggered with the above step when a new tag is pushed to the `kata-containers/kata-containers` repository.
 
   Check the [actions status page](https://github.com/kata-containers/kata-containers/actions) to verify all steps in the actions workflow have completed successfully. On success, a static tarball containing Kata release artifacts will be uploaded to the [Release page](https://github.com/kata-containers/kata-containers/releases).
 

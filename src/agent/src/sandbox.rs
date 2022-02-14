@@ -8,6 +8,7 @@ use crate::mount::{get_mount_fs_type, remove_mounts, TYPE_ROOTFS};
 use crate::namespace::Namespace;
 use crate::netlink::Handle;
 use crate::network::Network;
+use crate::pci;
 use crate::uevent::{Uevent, UeventMatcher};
 use crate::watcher::BindWatcher;
 use anyhow::{anyhow, Context, Result};
@@ -56,6 +57,7 @@ pub struct Sandbox {
     pub event_rx: Arc<Mutex<Receiver<String>>>,
     pub event_tx: Option<Sender<String>>,
     pub bind_watcher: BindWatcher,
+    pub pcimap: HashMap<pci::Address, pci::Address>,
     pub images: HashMap<String, String>,
 }
 
@@ -89,6 +91,7 @@ impl Sandbox {
             event_rx,
             event_tx: Some(tx),
             bind_watcher: BindWatcher::new(),
+            pcimap: HashMap::new(),
             images: HashMap::new(),
         })
     }
@@ -438,11 +441,8 @@ fn online_cpus(logger: &Logger, num: i32) -> Result<i32> {
             r"cpu[0-9]+",
             num - onlined_count,
         );
-        if r.is_err() {
-            return r;
-        }
 
-        onlined_count += r.unwrap();
+        onlined_count += r?;
         if onlined_count == num {
             info!(logger, "online {} CPU(s) after {} retries", num, i);
             return Ok(num);

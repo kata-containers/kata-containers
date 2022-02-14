@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 #
 # Copyright (c) 2018 Intel Corporation
 #
@@ -213,7 +213,7 @@ docker_extra_args()
 		args+=" -v ${gentoo_local_portage_dir}:/usr/portage/packages"
 		args+=" --volumes-from ${gentoo_portage_container}"
 		;;
-	ubuntu | suse)
+        debian | ubuntu | suse)
 		source /etc/os-release
 
 		case "$ID" in
@@ -540,12 +540,8 @@ EOT
 	mkdir -p "${ROOTFS_DIR}/etc"
 
 	case "${distro}" in
-		"gentoo")
-			chrony_conf_file="${ROOTFS_DIR}/etc/chrony/chrony.conf"
-			chrony_systemd_service="${ROOTFS_DIR}/lib/systemd/system/chronyd.service"
-			;;
-		"ubuntu")
-			echo "I am ubuntu"
+		"ubuntu" | "debian")
+			echo "I am ubuntu or debian"
 			chrony_conf_file="${ROOTFS_DIR}/etc/chrony/chrony.conf"
 			chrony_systemd_service="${ROOTFS_DIR}/lib/systemd/system/chrony.service"
 			;;

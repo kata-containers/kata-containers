@@ -1,17 +1,27 @@
 name: snap CI
-on: ["pull_request"]
+on:
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - edited
+
 jobs:
   test:
     runs-on: ubuntu-20.04
     steps:
       - name: Check out
+        if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
         uses: actions/checkout@v2
         with:
           fetch-depth: 0
 
       - name: Install Snapcraft
+        if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
         uses: samuelmeuli/action-snapcraft@v1
 
       - name: Build snap
+        if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
         run: |
           snapcraft -d snap --destructive-mode

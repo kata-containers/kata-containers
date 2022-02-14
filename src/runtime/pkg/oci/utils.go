@@ -24,11 +24,13 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 
 	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
+
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
 	exp "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/experimental"
 	vcAnnotations "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/annotations"
 	dockershimAnnotations "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/annotations/dockershim"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
+	vcutils "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
 )
 
 type annotationContainerType struct {
@@ -125,7 +127,16 @@ type RuntimeConfig struct {
 	//Determines if seccomp should be applied inside guest
 	DisableGuestSeccomp bool
 
-	//Determines if create a netns for hypervisor process
+	// Sandbox sizing information which, if provided, indicates the size of
+	// the sandbox needed for the workload(s)
+	SandboxCPUs  uint32
+	SandboxMemMB uint32
+
+	// Determines if we should attempt to size the VM at boot time and skip
+	// any later resource updates.
+	StaticSandboxResourceMgmt bool
+
+	// Determines if create a netns for hypervisor process
 	DisableNewNetNs bool
 
 	//Determines kata processes are managed only in sandbox cgroup
@@ -310,11 +321,11 @@ func networkConfig(ocispec specs.Spec, config RuntimeConfig) (vc.NetworkConfig, 
 		}
 
 		if n.Path != "" {
-			netConf.NetNSPath = n.Path
+			netConf.NetworkID = n.Path
 		}
 	}
 	netConf.InterworkingModel = config.InterNetworkModel
-	netConf.DisableNewNetNs = config.DisableNewNetNs
+	netConf.DisableNewNetwork = config.DisableNewNetNs
 
 	return netConf, nil
 }
@@ -569,15 +580,6 @@ func addHypervisorMemoryOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig
 		return err
 	}
 
-	if value, ok := ocispec.Annotations[vcAnnotations.EnableSwap]; ok {
-		enableSwap, err := strconv.ParseBool(value)
-		if err != nil {
-			return fmt.Errorf("Error parsing annotation for enable_swap: Please specify boolean value 'true|false'")
-		}
-
-		sbConfig.HypervisorConfig.Mlock = !enableSwap
-	}
-
 	if value, ok := ocispec.Annotations[vcAnnotations.FileBackedMemRootDir]; ok {
 		if !checkPathIsInGlobs(runtime.HypervisorConfig.FileBackedMemRootList, value) {
 			return fmt.Errorf("file_mem_backend value %v required from annotation is not valid", value)
@@ -799,7 +801,7 @@ func addRuntimeConfigOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig, r
 	}
 
 	if err := newAnnotationConfiguration(ocispec, vcAnnotations.DisableNewNetNs).setBool(func(disableNewNetNs bool) {
-		sbConfig.NetworkConfig.DisableNewNetNs = disableNewNetNs
+		sbConfig.NetworkConfig.DisableNewNetwork = disableNewNetNs
 	}); err != nil {
 		return err
 	}
@@ -885,6 +887,13 @@ func SandboxConfig(ocispec specs.Spec, runtime RuntimeConfig, bundlePath, cid, c
 			vcAnnotations.BundlePathKey: bundlePath,
 		},
 
+		SandboxResources: vc.SandboxResourceSizing{
+			WorkloadCPUs:  runtime.SandboxCPUs,
+			WorkloadMemMB: runtime.SandboxMemMB,
+		},
+
+		StaticResourceMgmt: runtime.StaticSandboxResourceMgmt,
+
 		ShmSize: shmSize,
 
 		VfioMode: runtime.VfioMode,
@@ -906,6 +915,25 @@ func SandboxConfig(ocispec specs.Spec, runtime RuntimeConfig, bundlePath, cid, c
 
 	if err := addAnnotations(ocispec, &sandboxConfig, runtime); err != nil {
 		return vc.SandboxConfig{}, err
+	}
+
+	// If we are utilizing static resource management for the sandbox, ensure that the hypervisor is started
+	// with the base number of CPU/memory (which is equal to the default CPU/memory specified for the runtime
+	// configuration or annotations) as well as any specified workload resources.
+	if sandboxConfig.StaticResourceMgmt {
+		sandboxConfig.SandboxResources.BaseCPUs = sandboxConfig.HypervisorConfig.NumVCPUs
+		sandboxConfig.SandboxResources.BaseMemMB = sandboxConfig.HypervisorConfig.MemorySize
+
+		sandboxConfig.HypervisorConfig.NumVCPUs += sandboxConfig.SandboxResources.WorkloadCPUs
+		sandboxConfig.HypervisorConfig.MemorySize += sandboxConfig.SandboxResources.WorkloadMemMB
+
+		ociLog.WithFields(logrus.Fields{
+			"workload cpu":       sandboxConfig.SandboxResources.WorkloadCPUs,
+			"default cpu":        sandboxConfig.SandboxResources.BaseCPUs,
+			"workload mem in MB": sandboxConfig.SandboxResources.WorkloadMemMB,
+			"default mem":        sandboxConfig.SandboxResources.BaseMemMB,
+		}).Debugf("static resources set")
+
 	}
 
 	return sandboxConfig, nil
@@ -1059,4 +1087,90 @@ func (a *annotationConfiguration) setUintWithCheck(f func(uint64) error) error {
 		return f(uintValue)
 	}
 	return nil
+}
+
+// CalculateSandboxSizing will calculate the number of CPUs and amount of Memory that should
+// be added to the VM if sandbox annotations are provided with this sizing details
+func CalculateSandboxSizing(spec *specs.Spec) (numCPU, memSizeMB uint32) {
+	var memory, quota int64
+	var period uint64
+	var err error
+
+	if spec == nil || spec.Annotations == nil {
+		return 0, 0
+	}
+
+	// For each annotation, if it isn't defined, or if there's an error in parsing, we'll log
+	// a warning and continue the calculation with 0 value. We expect values like,
+	//  Annotations[SandboxMem] = "1048576"
+	//  Annotations[SandboxCPUPeriod] = "100000"
+	//  Annotations[SandboxCPUQuota] = "220000"
+	// ... to result in VM resources of 1 (MB) for memory, and 3 for CPU (2200 mCPU rounded up to 3).
+	annotation, ok := spec.Annotations[ctrAnnotations.SandboxCPUPeriod]
+	if ok {
+		period, err = strconv.ParseUint(annotation, 10, 32)
+		if err != nil {
+			ociLog.Warningf("sandbox-sizing: failure to parse SandboxCPUPeriod: %s", annotation)
+			period = 0
+		}
+	}
+
+	annotation, ok = spec.Annotations[ctrAnnotations.SandboxCPUQuota]
+	if ok {
+		quota, err = strconv.ParseInt(annotation, 10, 32)
+		if err != nil {
+			ociLog.Warningf("sandbox-sizing: failure to parse SandboxCPUQuota: %s", annotation)
+			quota = 0
+		}
+	}
+
+	annotation, ok = spec.Annotations[ctrAnnotations.SandboxMem]
+	if ok {
+		memory, err = strconv.ParseInt(annotation, 10, 32)
+		if err != nil {
+			ociLog.Warningf("sandbox-sizing: failure to parse SandboxMem: %s", annotation)
+			memory = 0
+		}
+	}
+
+	return calculateVMResources(period, quota, memory)
+}
+
+// CalculateContainerSizing will calculate the number of CPUs and amount of memory that is needed
+// based on the provided LinuxResources
+func CalculateContainerSizing(spec *specs.Spec) (numCPU, memSizeMB uint32) {
+	var memory, quota int64
+	var period uint64
+
+	if spec == nil || spec.Linux == nil || spec.Linux.Resources == nil {
+		return 0, 0
+	}
+
+	resources := spec.Linux.Resources
+
+	if resources.CPU != nil && resources.CPU.Quota != nil && resources.CPU.Period != nil {
+		quota = *resources.CPU.Quota
+		period = *resources.CPU.Period
+	}
+
+	if resources.Memory != nil && resources.Memory.Limit != nil {
+		memory = *resources.Memory.Limit
+	}
+
+	return calculateVMResources(period, quota, memory)
+}
+
+func calculateVMResources(period uint64, quota int64, memory int64) (numCPU, memSizeMB uint32) {
+	numCPU = vcutils.CalculateVCpusFromMilliCpus(vcutils.CalculateMilliCPUs(quota, period))
+
+	if memory < 0 {
+		// While spec allows for a negative value to indicate unconstrained, we don't
+		// see this in practice. Since we rely only on default memory if the workload
+		// is unconstrained, we will treat as 0 for VM resource accounting.
+		ociLog.Infof("memory limit provided < 0, treating as 0 MB for VM sizing: %d", memory)
+		memSizeMB = 0
+	} else {
+		memSizeMB = uint32(memory / 1024 / 1024)
+	}
+	return numCPU, memSizeMB
 }

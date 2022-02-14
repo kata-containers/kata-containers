@@ -1,0 +1,47 @@
+From b165fbe697c6f029973fffea151e384247639829 Mon Sep 17 00:00:00 2001
+From: Huang Shijie <shijie8@gmail.com>
+Date: Wed, 8 Dec 2021 16:15:33 +0800
+Subject: [PATCH 24/28] armcpuhp: add cpu hotunplug frame work in acpi device
+ handle
+
+Signed-off-by: Huang Shijie <shijie8@gmail.com>
+Signed-off-by: Huang Shijie <shijie8@gmail.com>
+---
+ hw/acpi/generic_event_device.c | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/hw/acpi/generic_event_device.c b/hw/acpi/generic_event_device.c
+index 815f4a91ce..22a3fb348b 100644
+--- a/hw/acpi/generic_event_device.c
++++ b/hw/acpi/generic_event_device.c
+@@ -12,7 +12,9 @@
+ #include "qemu/osdep.h"
+ #include "qapi/error.h"
+ #include "hw/acpi/acpi.h"
++#include "hw/acpi/cpu.h"
+ #include "hw/acpi/generic_event_device.h"
++#include "hw/arm/virt.h"
+ #include "hw/irq.h"
+ #include "hw/mem/pc-dimm.h"
+ #include "hw/mem/nvdimm.h"
+@@ -288,6 +290,8 @@ static void acpi_ged_unplug_request_cb(HotplugHandler *hotplug_dev,
+     if ((object_dynamic_cast(OBJECT(dev), TYPE_PC_DIMM) &&
+                        !(object_dynamic_cast(OBJECT(dev), TYPE_NVDIMM)))) {
+         acpi_memory_unplug_request_cb(hotplug_dev, &s->memhp_state, dev, errp);
++    } else if (object_dynamic_cast(OBJECT(dev), TYPE_CPU)) {
++        acpi_cpu_unplug_request_cb(hotplug_dev, &s->cpuhp_state, dev, errp);
+     } else {
+         error_setg(errp, "acpi: device unplug request for unsupported device"
+                    " type: %s", object_get_typename(OBJECT(dev)));
+@@ -301,6 +305,8 @@ static void acpi_ged_unplug_cb(HotplugHandler *hotplug_dev,
+ 
+     if (object_dynamic_cast(OBJECT(dev), TYPE_PC_DIMM)) {
+         acpi_memory_unplug_cb(&s->memhp_state, dev, errp);
++    } else if (object_dynamic_cast(OBJECT(dev), TYPE_CPU)) {
++        acpi_cpu_unplug_cb(&s->cpuhp_state, dev, errp);
+     } else {
+         error_setg(errp, "acpi: device unplug for unsupported device"
+                    " type: %s", object_get_typename(OBJECT(dev)));
+-- 
+2.30.2
+

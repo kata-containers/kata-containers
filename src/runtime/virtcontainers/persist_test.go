@@ -26,11 +26,15 @@ func TestSandboxRestore(t *testing.T) {
 	container := make(map[string]*Container)
 	container["test-exp"] = &Container{}
 
+	network, err := NewNetwork()
+	assert.NoError(err)
+
 	sandbox := Sandbox{
 		id:         "test-exp",
 		containers: container,
 		devManager: manager.NewDeviceManager(manager.VirtioSCSI, false, "", nil),
 		hypervisor: &mockHypervisor{},
+		network:    network,
 		ctx:        context.Background(),
 		config:     &sconfig,
 		state:      types.SandboxState{BlockIndexMap: make(map[int]struct{})},

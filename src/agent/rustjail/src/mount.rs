@@ -728,7 +728,7 @@ fn secure_join(rootfs: &str, unsafe_path: &str) -> String {
         path.push(it);
         if let Ok(v) = path.read_link() {
             if v.is_absolute() {
-                path = PathBuf::from(format!("{}{}", rootfs, v.to_str().unwrap().to_string()));
+                path = PathBuf::from(format!("{}{}", rootfs, v.to_str().unwrap()));
             } else {
                 path.pop();
                 for it in v.iter() {
@@ -1385,7 +1385,7 @@ mod tests {
 
         for (i, t) in tests.iter().enumerate() {
             // Create a string containing details of the test
-            let msg = format!("test[{}]: {:?}", i, t);
+            let msg = format!("test[{}]: {:?}", i, t.name);
 
             // if is_symlink, then should be prepare the softlink environment
             if t.symlink_path != "" {

@@ -148,15 +148,15 @@ func CreateSandbox(ctx context.Context, vci vc.VC, ociSpec specs.Spec, runtimeCo
 	defer func() {
 		// cleanup netns if kata creates it
 		ns := sandboxConfig.NetworkConfig
-		if err != nil && ns.NetNsCreated {
-			if ex := cleanupNetNS(ns.NetNSPath); ex != nil {
-				kataUtilsLogger.WithField("path", ns.NetNSPath).WithError(ex).Warn("failed to cleanup netns")
+		if err != nil && ns.NetworkCreated {
+			if ex := cleanupNetNS(ns.NetworkID); ex != nil {
+				kataUtilsLogger.WithField("id", ns.NetworkID).WithError(ex).Warn("failed to cleanup network")
 			}
 		}
 	}()
 
 	// Run pre-start OCI hooks.
-	err = EnterNetNS(sandboxConfig.NetworkConfig.NetNSPath, func() error {
+	err = EnterNetNS(sandboxConfig.NetworkConfig.NetworkID, func() error {
 		return PreStartHooks(ctx, ociSpec, containerID, bundlePath)
 	})
 	if err != nil {
@@ -225,7 +225,7 @@ func CreateContainer(ctx context.Context, sandbox vc.VCSandbox, ociSpec specs.Sp
 	}
 
 	if !rootFs.Mounted {
-		if rootFs.Source != "" {
+		if rootFs.Source != "" && rootFs.Type != vc.NydusRootFSType {
 			realPath, err := ResolvePath(rootFs.Source)
 			if err != nil {
 				return vc.Process{}, err
@@ -234,7 +234,6 @@ func CreateContainer(ctx context.Context, sandbox vc.VCSandbox, ociSpec specs.Sp
 		}
 		contConfig.RootFs = rootFs
 	}
-
 	sandboxID, err := oci.SandboxID(ociSpec)
 	if err != nil {
 		return vc.Process{}, err

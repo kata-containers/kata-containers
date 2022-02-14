@@ -20,6 +20,7 @@ extern crate scopeguard;
 extern crate slog;
 
 use anyhow::{anyhow, Context, Result};
+use clap::{AppSettings, Parser};
 use nix::fcntl::OFlag;
 use nix::sys::socket::{self, AddressFamily, SockAddr, SockFlag, SockType};
 use nix::unistd::{self, dup, Pid};
@@ -81,8 +82,30 @@ const NAME: &str = "kata-agent";
 
 lazy_static! {
     static ref AGENT_CONFIG: Arc<RwLock<AgentConfig>> = Arc::new(RwLock::new(
+        // Note: We can't do AgentOpts.parse() here to send through the processed arguments to AgentConfig
+        // clap::Parser::parse() greedily process all command line input including cargo test parameters,
+        // so should only be used inside main.
         AgentConfig::from_cmdline("/proc/cmdline", env::args().collect()).unwrap()
     ));
+}
+
+#[derive(Parser)]
+// The default clap version info doesn't match our form, so we need to override it
+#[clap(global_setting(AppSettings::DisableVersionFlag))]
+struct AgentOpts {
+    /// Print the version information
+    #[clap(short, long)]
+    version: bool,
+    #[clap(subcommand)]
+    subcmd: Option<SubCommand>,
+    /// Specify a custom agent config file
+    #[clap(short, long)]
+    config: Option<String>,
+}
+
+#[derive(Parser)]
+enum SubCommand {
+    Init {},
 }
 
 #[instrument]
@@ -256,9 +279,9 @@ async fn real_main() -> std::result::Result<(), Box<dyn std::error::Error>> {
 }
 
 fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
-    let args: Vec<String> = env::args().collect();
+    let args = AgentOpts::parse();
 
-    if args.len() == 2 && args[1] == "--version" {
+    if args.version {
         println!(
             "{} version {} (api version: {}, commit version: {}, type: rust)",
             NAME,
@@ -266,11 +289,10 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
             version::API_VERSION,
             version::VERSION_COMMIT,
         );
-
         exit(0);
     }
 
-    if args.len() == 2 && args[1] == "init" {
+    if let Some(SubCommand::Init {}) = args.subcmd {
         reset_sigpipe();
         rustjail::container::init_child();
         exit(0);

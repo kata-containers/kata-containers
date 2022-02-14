@@ -21,10 +21,12 @@ Method | HTTP request | Description
 [**VmAddVsockPut**](DefaultApi.md#VmAddVsockPut) | **Put** /vm.add-vsock | Add a new vsock device to the VM
 [**VmCountersGet**](DefaultApi.md#VmCountersGet) | **Get** /vm.counters | Get counters from the VM
 [**VmInfoGet**](DefaultApi.md#VmInfoGet) | **Get** /vm.info | Returns general information about the cloud-hypervisor Virtual Machine (VM) instance.
+[**VmReceiveMigrationPut**](DefaultApi.md#VmReceiveMigrationPut) | **Put** /vm.receive-migration | Receive a VM migration from URL
 [**VmRemoveDevicePut**](DefaultApi.md#VmRemoveDevicePut) | **Put** /vm.remove-device | Remove a device from the VM
 [**VmResizePut**](DefaultApi.md#VmResizePut) | **Put** /vm.resize | Resize the VM
 [**VmResizeZonePut**](DefaultApi.md#VmResizeZonePut) | **Put** /vm.resize-zone | Resize a memory zone
 [**VmRestorePut**](DefaultApi.md#VmRestorePut) | **Put** /vm.restore | Restore a VM from a snapshot.
+[**VmSendMigrationPut**](DefaultApi.md#VmSendMigrationPut) | **Put** /vm.send-migration | Send a VM migration to URL
 [**VmSnapshotPut**](DefaultApi.md#VmSnapshotPut) | **Put** /vm.snapshot | Returns a VM snapshot.
 [**VmmPingGet**](DefaultApi.md#VmmPingGet) | **Get** /vmm.ping | Ping the VMM to check for API server availability
 
@@ -1050,6 +1052,68 @@ No authorization required
 [[Back to README]](../README.md)
 
 
+## VmReceiveMigrationPut
+
+> VmReceiveMigrationPut(ctx).ReceiveMigrationData(receiveMigrationData).Execute()
+
+Receive a VM migration from URL
+
+### Example
+
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+    "os"
+    openapiclient "./openapi"
+)
+
+func main() {
+    receiveMigrationData := *openapiclient.NewReceiveMigrationData() // ReceiveMigrationData | The URL for the reception of migration state
+
+    configuration := openapiclient.NewConfiguration()
+    api_client := openapiclient.NewAPIClient(configuration)
+    resp, r, err := api_client.DefaultApi.VmReceiveMigrationPut(context.Background()).ReceiveMigrationData(receiveMigrationData).Execute()
+    if err != nil {
+        fmt.Fprintf(os.Stderr, "Error when calling `DefaultApi.VmReceiveMigrationPut``: %v\n", err)
+        fmt.Fprintf(os.Stderr, "Full HTTP response: %v\n", r)
+    }
+}
+```
+
+### Path Parameters
+
+
+
+### Other Parameters
+
+Other parameters are passed through a pointer to a apiVmReceiveMigrationPutRequest struct via the builder pattern
+
+
+Name | Type | Description  | Notes
+------------- | ------------- | ------------- | -------------
+ **receiveMigrationData** | [**ReceiveMigrationData**](ReceiveMigrationData.md) | The URL for the reception of migration state | 
+
+### Return type
+
+ (empty response body)
+
+### Authorization
+
+No authorization required
+
+### HTTP request headers
+
+- **Content-Type**: application/json
+- **Accept**: Not defined
+
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints)
+[[Back to Model list]](../README.md#documentation-for-models)
+[[Back to README]](../README.md)
+
+
 ## VmRemoveDevicePut
 
 > VmRemoveDevicePut(ctx).VmRemoveDevice(vmRemoveDevice).Execute()
@@ -1279,6 +1343,68 @@ Other parameters are passed through a pointer to a apiVmRestorePutRequest struct
 Name | Type | Description  | Notes
 ------------- | ------------- | ------------- | -------------
  **restoreConfig** | [**RestoreConfig**](RestoreConfig.md) | The restore configuration | 
+
+### Return type
+
+ (empty response body)
+
+### Authorization
+
+No authorization required
+
+### HTTP request headers
+
+- **Content-Type**: application/json
+- **Accept**: Not defined
+
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints)
+[[Back to Model list]](../README.md#documentation-for-models)
+[[Back to README]](../README.md)
+
+
+## VmSendMigrationPut
+
+> VmSendMigrationPut(ctx).SendMigrationData(sendMigrationData).Execute()
+
+Send a VM migration to URL
+
+### Example
+
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+    "os"
+    openapiclient "./openapi"
+)
+
+func main() {
+    sendMigrationData := *openapiclient.NewSendMigrationData() // SendMigrationData | The URL for sending the migration state
+
+    configuration := openapiclient.NewConfiguration()
+    api_client := openapiclient.NewAPIClient(configuration)
+    resp, r, err := api_client.DefaultApi.VmSendMigrationPut(context.Background()).SendMigrationData(sendMigrationData).Execute()
+    if err != nil {
+        fmt.Fprintf(os.Stderr, "Error when calling `DefaultApi.VmSendMigrationPut``: %v\n", err)
+        fmt.Fprintf(os.Stderr, "Full HTTP response: %v\n", r)
+    }
+}
+```
+
+### Path Parameters
+
+
+
+### Other Parameters
+
+Other parameters are passed through a pointer to a apiVmSendMigrationPutRequest struct via the builder pattern
+
+
+Name | Type | Description  | Notes
+------------- | ------------- | ------------- | -------------
+ **sendMigrationData** | [**SendMigrationData**](SendMigrationData.md) | The URL for sending the migration state | 
 
 ### Return type
 

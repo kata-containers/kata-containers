@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Copyright (c) 2020 Ant Group
 #
 # SPDX-License-Identifier: Apache-2.0

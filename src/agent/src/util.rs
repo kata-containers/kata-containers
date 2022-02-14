@@ -90,7 +90,6 @@ mod tests {
     #[derive(Debug, Default, Clone)]
     struct BufWriter {
         data: Arc<Mutex<Vec<u8>>>,
-        slow_write: bool,
         write_delay: Duration,
     }
 
@@ -98,7 +97,6 @@ mod tests {
         fn new() -> Self {
             BufWriter {
                 data: Arc::new(Mutex::new(Vec::<u8>::new())),
-                slow_write: false,
                 write_delay: Duration::new(0, 0),
             }
         }
@@ -179,45 +177,35 @@ mod tests {
         #[derive(Debug)]
         struct TestData {
             reader_value: String,
-            result: io::Result<u64>,
         }
 
         let tests = &[
             TestData {
                 reader_value: "".into(),
-                result: Ok(0),
             },
             TestData {
                 reader_value: "a".into(),
-                result: Ok(1),
             },
             TestData {
                 reader_value: "foo".into(),
-                result: Ok(3),
             },
             TestData {
                 reader_value: "b".repeat(BUF_SIZE - 1),
-                result: Ok((BUF_SIZE - 1) as u64),
             },
             TestData {
                 reader_value: "c".repeat(BUF_SIZE),
-                result: Ok((BUF_SIZE) as u64),
             },
             TestData {
                 reader_value: "d".repeat(BUF_SIZE + 1),
-                result: Ok((BUF_SIZE + 1) as u64),
             },
             TestData {
                 reader_value: "e".repeat((2 * BUF_SIZE) - 1),
-                result: Ok(((2 * BUF_SIZE) - 1) as u64),
             },
             TestData {
                 reader_value: "f".repeat(2 * BUF_SIZE),
-                result: Ok((2 * BUF_SIZE) as u64),
             },
             TestData {
                 reader_value: "g".repeat((2 * BUF_SIZE) + 1),
-                result: Ok(((2 * BUF_SIZE) + 1) as u64),
             },
         ];
 

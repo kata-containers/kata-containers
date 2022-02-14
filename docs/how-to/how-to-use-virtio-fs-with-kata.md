@@ -6,4 +6,4 @@ Container deployments utilize explicit or implicit file sharing between host fil
 
 As of the 2.0 release of Kata Containers, [virtio-fs](https://virtio-fs.gitlab.io/) is the default filesystem sharing mechanism.
 
-virtio-fs support works out of the box for `cloud-hypervisor` and `qemu`, when Kata Containers is deployed using `kata-deploy`. Learn more about `kata-deploy` and how to use `kata-deploy` in Kubernetes [here](https://github.com/kata-containers/kata-containers/tree/main/tools/packaging/kata-deploy#kubernetes-quick-start).
+virtio-fs support works out of the box for `cloud-hypervisor` and `qemu`, when Kata Containers is deployed using `kata-deploy`. Learn more about `kata-deploy` and how to use `kata-deploy` in Kubernetes [here](../../tools/packaging/kata-deploy/README.md#kubernetes-quick-start).

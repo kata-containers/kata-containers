@@ -19,7 +19,7 @@ Cgroups are hierarchical, and this can be seen with the following pod example:
   - Container 2: `cgroupsPath=/kubepods/pod1/container2`
 
 - Pod 2: `cgroupsPath=/kubepods/pod2`
-  - Container 1: `cgroupsPath=/kubepods/pod2/container2`
+  - Container 1: `cgroupsPath=/kubepods/pod2/container1`
   - Container 2: `cgroupsPath=/kubepods/pod2/container2`
 
 Depending on the upper-level orchestration layers, the cgroup under which the pod is placed is

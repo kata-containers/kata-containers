@@ -205,7 +205,6 @@ disable_guest_seccomp=@DEFDISABLEGUESTSECCOMP@
 # `disable_new_netns` conflicts with `internetworking_model=bridged` and `internetworking_model=macvtap`. It works only
 # with `internetworking_model=none`. The tap device will be in the host network namespace and can connect to a bridge
 # (like OVS) directly.
-# If you are using docker, `disable_new_netns` only works with `docker run --net=none`
 # (default: false)
 #disable_new_netns = true
 

@@ -75,7 +75,7 @@ assets:
       url: "https://github.com/cloud-hypervisor/cloud-hypervisor"
       uscan-url: >-
         https://github.com/cloud-hypervisor/cloud-hypervisor/tags.*/v?(\d\S+)\.tar\.gz
-      version: "v20.1"
+      version: "v21.0"
 
     firecracker:
       description: "Firecracker micro-VMM"
@@ -98,12 +98,6 @@ assets:
       uscan-url: >-
         https://github.com/qemu/qemu/tags
         .*/v?(\d\S+)\.tar\.gz
-      architecture:
-        aarch64:
-          version: "v5.1.0"
-          branch: "master"
-          tag: "v5.1.0"
-          commit: "d0ed6a69d399ae193959225cdeaa9382746c91cc"
 
     qemu-experimental:
       description: "QEMU with virtiofs support"
@@ -120,7 +114,7 @@ assets:
         name: "ubuntu"
         version: "latest"
       ppc64le:
-        name: "centos"
+        name: "ubuntu"
         version: "latest"
       s390x:
         name: "ubuntu"
@@ -154,6 +148,10 @@ assets:
     description: "Linux kernel optimised for virtual machines"
     url: "https://cdn.kernel.org/pub/linux/kernel/v5.x/"
     version: "v5.10.25"
+    tdx:
+      description: "Linux kernel that supports TDX"
+      url: "https://github.com/intel/tdx/archive/refs/tags"
+      tag: "tdx-guest-v5.15-4"
 
   kernel-experimental:
     description: "Linux kernel with virtio-fs support"
@@ -182,7 +180,7 @@ externals:
     description: |
       OCI-based Kubernetes Container Runtime Interface implementation
     url: "https://github.com/cri-o/cri-o"
-    branch: "release-1.22"
+    branch: "release-1.23"
 
   containerd:
     description: |
@@ -200,7 +198,7 @@ externals:
   critools:
     description: "CLI tool for Container Runtime Interface (CRI)"
     url: "https://github.com/kubernetes-sigs/cri-tools"
-    version: "1.22.0"
+    version: "1.23.0"
 
   gperf:
     description: "GNU gperf is a perfect hash function generator"
@@ -215,7 +213,7 @@ externals:
     uscan-url: >-
       https://github.com/kubernetes/kubernetes/tags
       .*/v?([\d\.]+)\.tar\.gz
-    version: "1.22.0-00"
+    version: "1.23.1-00"
 
   libseccomp:
     description: "High level interface to Linux seccomp filter"
@@ -255,6 +253,11 @@ externals:
         'newest-version' is the latest version known to work.
       newest-version: "1.1.23"
 
+  nydus:
+    description: "Nydus image acceleration service"
+    url: "https://github.com/dragonflyoss/image-service"
+    version: "v1.1.2"
+
 languages:
   description: |
     Details of programming languages required to build system
@@ -276,12 +279,12 @@ languages:
   rust:
     description: "Rust language"
     notes: "'version' is the default minimum version used by this project."
-    version: "1.45.0"
+    version: "1.58.1"
     meta:
       description: |
         'newest-version' is the latest version known to work when
         building Kata
-      newest-version: "1.56.0"
+      newest-version: "1.58.1"
 
 specs:
   description: "Details of important specifications"

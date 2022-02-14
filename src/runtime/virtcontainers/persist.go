@@ -164,10 +164,10 @@ func (s *Sandbox) dumpAgent(ss *persistapi.SandboxState) {
 
 func (s *Sandbox) dumpNetwork(ss *persistapi.SandboxState) {
 	ss.Network = persistapi.NetworkInfo{
-		NetNsPath:    s.networkNS.NetNsPath,
-		NetNsCreated: s.networkNS.NetNsCreated,
+		NetworkID:      s.network.NetworkID(),
+		NetworkCreated: s.network.NetworkCreated(),
 	}
-	for _, e := range s.networkNS.Endpoints {
+	for _, e := range s.network.Endpoints() {
 		ss.Network.Endpoints = append(ss.Network.Endpoints, e.save())
 	}
 }
@@ -177,9 +177,9 @@ func (s *Sandbox) dumpConfig(ss *persistapi.SandboxState) {
 	ss.Config = persistapi.SandboxConfig{
 		HypervisorType: string(sconfig.HypervisorType),
 		NetworkConfig: persistapi.NetworkConfig{
-			NetNSPath:         sconfig.NetworkConfig.NetNSPath,
-			NetNsCreated:      sconfig.NetworkConfig.NetNsCreated,
-			DisableNewNetNs:   sconfig.NetworkConfig.DisableNewNetNs,
+			NetworkID:         sconfig.NetworkConfig.NetworkID,
+			NetworkCreated:    sconfig.NetworkConfig.NetworkCreated,
+			DisableNewNetwork: sconfig.NetworkConfig.DisableNewNetwork,
 			InterworkingModel: int(sconfig.NetworkConfig.InterworkingModel),
 		},
 
@@ -239,8 +239,6 @@ func (s *Sandbox) dumpConfig(ss *persistapi.SandboxState) {
 		HugePages:               sconfig.HypervisorConfig.HugePages,
 		FileBackedMemRootDir:    sconfig.HypervisorConfig.FileBackedMemRootDir,
 		FileBackedMemRootList:   sconfig.HypervisorConfig.FileBackedMemRootList,
-		Realtime:                sconfig.HypervisorConfig.Realtime,
-		Mlock:                   sconfig.HypervisorConfig.Mlock,
 		DisableNestingChecks:    sconfig.HypervisorConfig.DisableNestingChecks,
 		DisableImageNvdimm:      sconfig.HypervisorConfig.DisableImageNvdimm,
 		HotplugVFIOOnRootBus:    sconfig.HypervisorConfig.HotplugVFIOOnRootBus,
@@ -365,35 +363,7 @@ func (c *Container) loadContProcess(cs persistapi.ContainerState) {
 }
 
 func (s *Sandbox) loadNetwork(netInfo persistapi.NetworkInfo) {
-	s.networkNS = NetworkNamespace{
-		NetNsPath:    netInfo.NetNsPath,
-		NetNsCreated: netInfo.NetNsCreated,
-	}
-
-	for _, e := range netInfo.Endpoints {
-		var ep Endpoint
-		switch EndpointType(e.Type) {
-		case PhysicalEndpointType:
-			ep = &PhysicalEndpoint{}
-		case VethEndpointType:
-			ep = &VethEndpoint{}
-		case VhostUserEndpointType:
-			ep = &VhostUserEndpoint{}
-		case MacvlanEndpointType:
-			ep = &MacvlanEndpoint{}
-		case MacvtapEndpointType:
-			ep = &MacvtapEndpoint{}
-		case TapEndpointType:
-			ep = &TapEndpoint{}
-		case IPVlanEndpointType:
-			ep = &IPVlanEndpoint{}
-		default:
-			s.Logger().WithField("endpoint-type", e.Type).Error("unknown endpoint type")
-			continue
-		}
-		ep.load(e)
-		s.networkNS.Endpoints = append(s.networkNS.Endpoints, ep)
-	}
+	s.network = LoadNetwork(netInfo)
 }
 
 // Restore will restore sandbox data from persist file on disk
@@ -446,9 +416,9 @@ func loadSandboxConfig(id string) (*SandboxConfig, error) {
 		ID:             id,
 		HypervisorType: HypervisorType(savedConf.HypervisorType),
 		NetworkConfig: NetworkConfig{
-			NetNSPath:         savedConf.NetworkConfig.NetNSPath,
-			NetNsCreated:      savedConf.NetworkConfig.NetNsCreated,
-			DisableNewNetNs:   savedConf.NetworkConfig.DisableNewNetNs,
+			NetworkID:         savedConf.NetworkConfig.NetworkID,
+			NetworkCreated:    savedConf.NetworkConfig.NetworkCreated,
+			DisableNewNetwork: savedConf.NetworkConfig.DisableNewNetwork,
 			InterworkingModel: NetInterworkingModel(savedConf.NetworkConfig.InterworkingModel),
 		},
 
@@ -508,8 +478,6 @@ func loadSandboxConfig(id string) (*SandboxConfig, error) {
 		HugePages:               hconf.HugePages,
 		FileBackedMemRootDir:    hconf.FileBackedMemRootDir,
 		FileBackedMemRootList:   hconf.FileBackedMemRootList,
-		Realtime:                hconf.Realtime,
-		Mlock:                   hconf.Mlock,
 		DisableNestingChecks:    hconf.DisableNestingChecks,
 		DisableImageNvdimm:      hconf.DisableImageNvdimm,
 		HotplugVFIOOnRootBus:    hconf.HotplugVFIOOnRootBus,

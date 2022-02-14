@@ -1,0 +1,139 @@
+From f7b9c727b0da0bec444d85bd1bf7bd5bfb9d3e4f Mon Sep 17 00:00:00 2001
+From: Salil Mehta <salil.mehta@huawei.com>
+Date: Thu, 25 Nov 2021 16:54:49 +0800
+Subject: [PATCH 10/28] arm/cpuhp: Update CPUs AML with cpu-(ctrl)dev change
+
+CPUs Control device(\\_SB.PCI0) register interface for the x86 arch is based on
+PCI and is IO port based and hence existing cpus AML code assumes _CRS objects
+would evaluate to a system resource which describes IO Port address. But on ARM
+arch CPUs control device(\\_SB.PRES) register interface is memory-mapped hence
+_CRS object should evaluate to system resource which describes memory-mapped
+base address.
+
+This cpus AML code change updates the existing inerface of the build cpus AML
+function to accept both IO/MEMORY type regions and update the _CRS object
+correspondingly.
+
+NOTE: Beside above CPU scan shall be triggered when OSPM evaluates _EVT method
+      part of the GED framework which is covered in subsequent patch.
+
+Co-developed-by: Keqian Zhu <zhukeqian1@huawei.com>
+Signed-off-by: Salil Mehta <salil.mehta@huawei.com>
+Signed-off-by: Huang Shijie <shijie8@gmail.com>
+---
+ hw/acpi/cpu.c            | 23 +++++++++++++++--------
+ hw/arm/virt-acpi-build.c | 13 ++++++++++++-
+ hw/i386/acpi-build.c     |  2 +-
+ include/hw/acpi/cpu.h    |  5 +++--
+ 4 files changed, 31 insertions(+), 12 deletions(-)
+
+diff --git a/hw/acpi/cpu.c b/hw/acpi/cpu.c
+index cf07a6c30c..98657ad28b 100644
+--- a/hw/acpi/cpu.c
++++ b/hw/acpi/cpu.c
+@@ -345,9 +345,10 @@ const VMStateDescription vmstate_cpu_hotplug = {
+ #define CPU_FW_EJECT_EVENT "CEJF"
+ 
+ void build_cpus_aml(Aml *table, MachineState *machine, CPUHotplugFeatures opts,
+-                    hwaddr io_base,
++		    hwaddr mmap_io_base,
+                     const char *res_root,
+-                    const char *event_handler_method)
++		    const char *event_handler_method,
++                    AmlRegionSpace rs)
+ {
+     Aml *ifctx;
+     Aml *field;
+@@ -375,13 +376,18 @@ void build_cpus_aml(Aml *table, MachineState *machine, CPUHotplugFeatures opts,
+         aml_append(cpu_ctrl_dev, aml_mutex(CPU_LOCK, 0));
+ 
+         crs = aml_resource_template();
+-        aml_append(crs, aml_io(AML_DECODE16, io_base, io_base, 1,
++	if (rs == AML_SYSTEM_IO) {
++            aml_append(crs, aml_io(AML_DECODE16, mmap_io_base, mmap_io_base, 1,
+                                ACPI_CPU_HOTPLUG_REG_LEN));
++        } else {
++            aml_append(crs, aml_memory32_fixed(mmap_io_base,
++                               ACPI_CPU_HOTPLUG_REG_LEN, AML_READ_WRITE));
++        }
+         aml_append(cpu_ctrl_dev, aml_name_decl("_CRS", crs));
+ 
+         /* declare CPU hotplug MMIO region with related access fields */
+         aml_append(cpu_ctrl_dev,
+-            aml_operation_region("PRST", AML_SYSTEM_IO, aml_int(io_base),
++	           aml_operation_region("PRST", rs, aml_int(mmap_io_base),
+                                  ACPI_CPU_HOTPLUG_REG_LEN));
+ 
+         field = aml_field("PRST", AML_BYTE_ACC, AML_NOLOCK,
+@@ -720,9 +726,10 @@ void build_cpus_aml(Aml *table, MachineState *machine, CPUHotplugFeatures opts,
+     aml_append(sb_scope, cpus_dev);
+     aml_append(table, sb_scope);
+ 
+-    method = aml_method(event_handler_method, 0, AML_NOTSERIALIZED);
+-    aml_append(method, aml_call0("\\_SB.CPUS." CPU_SCAN_METHOD));
+-    aml_append(table, method);
+-
++    if (event_handler_method) {
++        method = aml_method(event_handler_method, 0, AML_NOTSERIALIZED);
++        aml_append(method, aml_call0("\\_SB.CPUS." CPU_SCAN_METHOD));
++        aml_append(table, method);
++    }
+     g_free(cphp_res_path);
+ }
+diff --git a/hw/arm/virt-acpi-build.c b/hw/arm/virt-acpi-build.c
+index 037cc1fd82..95a3c3b31b 100644
+--- a/hw/arm/virt-acpi-build.c
++++ b/hw/arm/virt-acpi-build.c
+@@ -703,7 +703,18 @@ build_dsdt(GArray *table_data, BIOSLinker *linker, VirtMachineState *vms)
+      * the RTC ACPI device at all when using UEFI.
+      */
+     scope = aml_scope("\\_SB");
+-    acpi_dsdt_add_cpus(scope, vms);
++    /* if GED is enabled then cpus AML shall be added as part build_cpus_aml */
++    if (vms->acpi_dev) {
++        CPUHotplugFeatures opts = {
++             .acpi_1_compatible = false,
++             .has_legacy_cphp = false
++        };
++
++        build_cpus_aml(scope, ms, opts, memmap[VIRT_CPUHP_ACPI].base,
++                       "\\_SB", NULL, AML_SYSTEM_MEMORY);
++    } else {
++        acpi_dsdt_add_cpus(scope, vms);
++    }
+     acpi_dsdt_add_uart(scope, &memmap[VIRT_UART],
+                        (irqmap[VIRT_UART] + ARM_SPI_BASE));
+     if (vmc->acpi_expose_flash) {
+diff --git a/hw/i386/acpi-build.c b/hw/i386/acpi-build.c
+index a33ac8b91e..fa7a5ed79d 100644
+--- a/hw/i386/acpi-build.c
++++ b/hw/i386/acpi-build.c
+@@ -1503,7 +1503,7 @@ build_dsdt(GArray *table_data, BIOSLinker *linker,
+             .fw_unplugs_cpu = pm->smi_on_cpu_unplug,
+         };
+         build_cpus_aml(dsdt, machine, opts, pm->cpu_hp_io_base,
+-                       "\\_SB.PCI0", "\\_GPE._E02");
++			"\\_SB.PCI0", "\\_GPE._E02", AML_SYSTEM_IO);
+     }
+ 
+     if (pcms->memhp_io_base && nr_mem) {
+diff --git a/include/hw/acpi/cpu.h b/include/hw/acpi/cpu.h
+index 999caaf510..ead8f1d1cc 100644
+--- a/include/hw/acpi/cpu.h
++++ b/include/hw/acpi/cpu.h
+@@ -56,9 +56,10 @@ typedef struct CPUHotplugFeatures {
+ } CPUHotplugFeatures;
+ 
+ void build_cpus_aml(Aml *table, MachineState *machine, CPUHotplugFeatures opts,
+-                    hwaddr io_base,
++		    hwaddr mmap_io_base,
+                     const char *res_root,
+-                    const char *event_handler_method);
++		    const char *event_handler_method,
++                    AmlRegionSpace rs);
+ 
+ void acpi_cpu_ospm_status(CPUHotplugState *cpu_st, ACPIOSTInfoList ***list);
+ 
+-- 
+2.30.2
+
