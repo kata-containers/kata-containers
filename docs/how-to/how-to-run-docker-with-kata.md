@@ -22,7 +22,7 @@ You can learn more about about Docker-in-Docker at the following links:
 - [`docker` image Docker Hub page](https://hub.docker.com/_/docker/) (this page lists the `-dind` releases)
 
 While normally DinD refers to running `docker` from inside a Docker container,
-Kata Containers 2.x allows only supported runtimes (such as [`containerd`](../install/container-manager/containerd/containerd-install.md)).
+Kata Containers 2.x allows only [supported runtimes][kata-2.x-supported-runtimes] (such as [`containerd`](../install/container-manager/containerd/containerd-install.md)).
 
 Running `docker` in a Kata Container implies creating Docker containers from inside a container managed by `containerd` (or another supported container manager), as illustrated below:
 
@@ -37,7 +37,7 @@ container manager -> Kata Containers shim     -> Docker Daemon -> Docker contain
 
 [OverlayFS]: https://www.kernel.org/doc/html/latest/filesystems/overlayfs.html
 [v2.0.0]: https://github.com/kata-containers/kata-containers/releases/tag/2.0.0
-[kata-2.x-supported-runtimes]: https://github.com/kata-containers/kata-containers/blob/5737b36a3513f4da11a9dc7301b0c97ea22a51cf/docs/install/container-manager/containerd/containerd-install.md
+[kata-2.x-supported-runtimes]: ../install/container-manager/containerd/containerd-install.md
 
 ## Why Docker in Kata Containers 2.x requires special measures
 

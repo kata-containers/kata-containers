@@ -257,7 +257,7 @@ go directly to a full Kata specific JSON format logfile test.
 
 Kata runtime has the ability to generate JSON logs directly, rather than its default `logfmt` format. Passing
 the `--log-format=json` argument to the Kata runtime enables this. The easiest way to pass in this extra
-parameter from a [Kata deploy](https://github.com/kata-containers/kata-containers/tree/main/tools/packaging/kata-deploy) installation
+parameter from a [Kata deploy](../../tools/packaging/kata-deploy) installation
 is to edit the `/opt/kata/bin/kata-qemu` shell script.
 
 At the same time, we will add the `--log=/var/log/kata-runtime.log` argument to store the Kata logs in their
