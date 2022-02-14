@@ -264,6 +264,46 @@ func TestCreateSandboxFail(t *testing.T) {
 	assert.True(vcmock.IsMockError(err))
 }
 
+func TestCreateSandboxAnnotations(t *testing.T) {
+	if tc.NotValid(ktu.NeedRoot()) {
+		t.Skip(ktu.TestDisabledNeedRoot)
+	}
+
+	assert := assert.New(t)
+
+	tmpdir, bundlePath, _ := ktu.SetupOCIConfigFile(t)
+	defer os.RemoveAll(tmpdir)
+
+	runtimeConfig, err := newTestRuntimeConfig(tmpdir, testConsole, true)
+	assert.NoError(err)
+
+	spec, err := compatoci.ParseConfigJSON(bundlePath)
+	assert.NoError(err)
+
+	rootFs := vc.RootFs{Mounted: true}
+
+	testingImpl.CreateSandboxFunc = func(ctx context.Context, sandboxConfig vc.SandboxConfig) (vc.VCSandbox, error) {
+		return &vcmock.Sandbox{
+			MockID: testSandboxID,
+			MockContainers: []*vcmock.Container{
+				{MockID: testContainerID},
+			},
+			MockAnnotations: sandboxConfig.Annotations,
+		}, nil
+	}
+
+	defer func() {
+		testingImpl.CreateSandboxFunc = nil
+	}()
+
+	sandbox, _, err := CreateSandbox(context.Background(), testingImpl, spec, runtimeConfig, rootFs, testContainerID, bundlePath, testConsole, true, true)
+	assert.NoError(err)
+
+	netNsPath, err := sandbox.Annotations("nerdctl/network-namespace")
+	assert.NoError(err)
+	assert.Equal(path.Dir(netNsPath), "/var/run/netns")
+}
+
 func TestCheckForFips(t *testing.T) {
 	assert := assert.New(t)
 
