@@ -46,6 +46,7 @@ use rustjail::process::ProcessOperations;
 use crate::device::{
     add_devices, get_virtio_blk_pci_device_name, update_device_cgroup, update_env_pci,
 };
+use crate::image_rpc;
 use crate::linux_abi::*;
 use crate::metrics::get_metrics;
 use crate::mount::{add_storages, baremount, remove_mounts, STORAGE_HANDLER_LIST};
