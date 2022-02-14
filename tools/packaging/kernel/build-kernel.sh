@@ -376,7 +376,7 @@ setup_kernel() {
 	${packaging_scripts_dir}/apply_patches.sh "${patches_dir_for_version}"
 
 	# Apply version specific patches for build_type build
-	if [ "${build_type}" == "true" ] ;then
+	if [ "${build_type}" != "" ] ;then
 		info "Apply build_type patches from ${build_type_patches_dir}"
 		${packaging_scripts_dir}/apply_patches.sh "${build_type_patches_dir}"
 	fi
