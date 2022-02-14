@@ -15,7 +15,6 @@ Name | Type | Description | Notes
 **VhostSocket** | Pointer to **string** |  | [optional] 
 **VhostMode** | Pointer to **string** |  | [optional] [default to "Client"]
 **Id** | Pointer to **string** |  | [optional] 
-**Fds** | Pointer to **[]int32** |  | [optional] 
 **PciSegment** | Pointer to **int32** |  | [optional] 
 **RateLimiterConfig** | Pointer to [**RateLimiterConfig**](RateLimiterConfig.md) |  | [optional] 
 
@@ -312,31 +311,6 @@ SetId sets Id field to given value.
 `func (o *NetConfig) HasId() bool`
 
 HasId returns a boolean if a field has been set.
-
-### GetFds
-
-`func (o *NetConfig) GetFds() []int32`
-
-GetFds returns the Fds field if non-nil, zero value otherwise.
-
-### GetFdsOk
-
-`func (o *NetConfig) GetFdsOk() (*[]int32, bool)`
-
-GetFdsOk returns a tuple with the Fds field if it's non-nil, zero value otherwise
-and a boolean to check if the value has been set.
-
-### SetFds
-
-`func (o *NetConfig) SetFds(v []int32)`
-
-SetFds sets Fds field to given value.
-
-### HasFds
-
-`func (o *NetConfig) HasFds() bool`
-
-HasFds returns a boolean if a field has been set.
 
 ### GetPciSegment
 
