@@ -94,10 +94,14 @@ func SetupNetworkNamespace(config *vc.NetworkConfig) error {
 	return nil
 }
 
+const (
+	netNsMountType    = "nsfs"
+	mountTypeFieldIdx = 8
+	mountDestIdx      = 4
+)
+
 // getNetNsFromBindMount returns the network namespace for the bind-mounted path
 func getNetNsFromBindMount(nsPath string, procMountFile string) (string, error) {
-	netNsMountType := "nsfs"
-
 	// Resolve all symlinks in the path as the mountinfo file contains
 	// resolved paths.
 	nsPath, err := filepath.EvalSymlinks(nsPath)
@@ -129,14 +133,12 @@ func getNetNsFromBindMount(nsPath string, procMountFile string) (string, error) 
 		}
 
 		// We check here if the mount type is a network namespace mount type, namely "nsfs"
-		mountTypeFieldIdx := 8
 		if fields[mountTypeFieldIdx] != netNsMountType {
 			continue
 		}
 
 		// This is the mount point/destination for the mount
-		mntDestIdx := 4
-		if fields[mntDestIdx] != nsPath {
+		if fields[mountDestIdx] != nsPath {
 			continue
 		}
 
