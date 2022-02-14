@@ -27,7 +27,6 @@ type NetConfig struct {
 	VhostSocket       *string            `json:"vhost_socket,omitempty"`
 	VhostMode         *string            `json:"vhost_mode,omitempty"`
 	Id                *string            `json:"id,omitempty"`
-	Fds               *[]int32           `json:"fds,omitempty"`
 	PciSegment        *int32             `json:"pci_segment,omitempty"`
 	RateLimiterConfig *RateLimiterConfig `json:"rate_limiter_config,omitempty"`
 }
@@ -429,38 +428,6 @@ func (o *NetConfig) SetId(v string) {
 	o.Id = &v
 }
 
-// GetFds returns the Fds field value if set, zero value otherwise.
-func (o *NetConfig) GetFds() []int32 {
-	if o == nil || o.Fds == nil {
-		var ret []int32
-		return ret
-	}
-	return *o.Fds
-}
-
-// GetFdsOk returns a tuple with the Fds field value if set, nil otherwise
-// and a boolean to check if the value has been set.
-func (o *NetConfig) GetFdsOk() (*[]int32, bool) {
-	if o == nil || o.Fds == nil {
-		return nil, false
-	}
-	return o.Fds, true
-}
-
-// HasFds returns a boolean if a field has been set.
-func (o *NetConfig) HasFds() bool {
-	if o != nil && o.Fds != nil {
-		return true
-	}
-
-	return false
-}
-
-// SetFds gets a reference to the given []int32 and assigns it to the Fds field.
-func (o *NetConfig) SetFds(v []int32) {
-	o.Fds = &v
-}
-
 // GetPciSegment returns the PciSegment field value if set, zero value otherwise.
 func (o *NetConfig) GetPciSegment() int32 {
 	if o == nil || o.PciSegment == nil {
@@ -559,9 +526,6 @@ func (o NetConfig) MarshalJSON() ([]byte, error) {
 	}
 	if o.Id != nil {
 		toSerialize["id"] = o.Id
-	}
-	if o.Fds != nil {
-		toSerialize["fds"] = o.Fds
 	}
 	if o.PciSegment != nil {
 		toSerialize["pci_segment"] = o.PciSegment
