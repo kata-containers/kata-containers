@@ -191,11 +191,7 @@ fn connect(name: &str, global_args: clap::ArgMatches) -> Result<()> {
 
     let result = rpc::run(&logger, &cfg, commands);
 
-    if result.is_err() {
-        return result;
-    }
-
-    Ok(())
+    result.map_err(|e| anyhow!(e))
 }
 
 fn real_main() -> Result<()> {

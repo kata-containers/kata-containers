@@ -25,7 +25,7 @@ test:
 install:
 	@RUSTFLAGS="$(EXTRA_RUSTFLAGS) --deny warnings" cargo install --target $(TRIPLE) --path .
 
-check:
+check: standard_rust_check
 
 .PHONY: \
 	build \
