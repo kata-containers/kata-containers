@@ -160,6 +160,11 @@ func CreateSandbox(ctx context.Context, vci vc.VC, ociSpec specs.Spec, runtimeCo
 		return nil, vc.Process{}, err
 	}
 
+	// Run create runtime OCI hooks, in the runtime namespace.
+	if err := CreateRuntimeHooks(ctx, ociSpec, containerID, bundlePath); err != nil {
+		return nil, vc.Process{}, err
+	}
+
 	sandbox, err := vci.CreateSandbox(ctx, sandboxConfig)
 	if err != nil {
 		return nil, vc.Process{}, err
