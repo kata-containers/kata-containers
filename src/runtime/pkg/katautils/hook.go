@@ -110,6 +110,15 @@ func runHooks(ctx context.Context, spec specs.Spec, hooks []specs.Hook, cid, bun
 	return nil
 }
 
+func CreateRuntimeHooks(ctx context.Context, spec specs.Spec, cid, bundlePath string) error {
+	// If no hook available, nothing needs to be done.
+	if spec.Hooks == nil {
+		return nil
+	}
+
+	return runHooks(ctx, spec, spec.Hooks.CreateRuntime, cid, bundlePath, "createRuntime")
+}
+
 // PreStartHooks run the hooks before start container
 func PreStartHooks(ctx context.Context, spec specs.Spec, cid, bundlePath string) error {
 	// If no hook available, nothing needs to be done.
