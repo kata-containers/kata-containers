@@ -423,7 +423,7 @@ func (h hypervisor) blockDeviceDriver() (string, error) {
 }
 
 func (h hypervisor) sharedFS() (string, error) {
-	supportedSharedFS := []string{config.Virtio9P, config.VirtioFS}
+	supportedSharedFS := []string{config.Virtio9P, config.VirtioFS, config.VirtioFSNydus}
 
 	if h.SharedFS == "" {
 		return config.Virtio9P, nil
@@ -647,6 +647,11 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 	if sharedFS == config.VirtioFS && h.VirtioFSDaemon == "" {
 		return vc.HypervisorConfig{},
 			errors.New("cannot enable virtio-fs without daemon path in configuration file")
+	}
+
+	if sharedFS == config.VirtioFSNydus && h.VirtioFSDaemon == "" {
+		return vc.HypervisorConfig{},
+			errors.New("cannot enable virtio nydus without nydusd daemon path in configuration file")
 	}
 
 	if vSock, err := utils.SupportsVsocks(); !vSock {

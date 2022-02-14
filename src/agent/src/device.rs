@@ -51,6 +51,7 @@ pub const DRIVER_VFIO_GK_TYPE: &str = "vfio-gk";
 // VFIO device to be bound to vfio-pci and made available inside the
 // container as a VFIO device node
 pub const DRIVER_VFIO_TYPE: &str = "vfio";
+pub const DRIVER_OVERLAYFS_TYPE: &str = "overlayfs";
 
 #[instrument]
 pub fn online_device(path: &str) -> Result<()> {
