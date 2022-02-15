@@ -15,6 +15,7 @@ ARCH=$(uname -m)
 
 script_dir=$(dirname $(readlink -f "$0"))
 kata_version="${kata_version:-}"
+force_build_from_source="${force_build_from_source:-false}"
 
 source "${script_dir}/../../scripts/lib.sh"
 
@@ -55,7 +56,15 @@ build_clh_from_source() {
     popd
 }
 
-if [ ${ARCH} == "aarch64" ] || ! pull_clh_released_binary; then
-    info "arch is aarch64 or failed to pull cloud-hypervisor released binary on x86_64, trying to build from source"
+if [ "${ARCH}" == "aarch64" ]; then
+    info "aarch64 binaries are not distributed as part of the Cloud Hypervisor releases, forcing to build from source"
+    force_build_from_source="true"
+fi
+
+if [ "${force_build_from_source}" == "true" ]; then
+    info "Build cloud-hypervisor from source as it's been request via the force_build_from_source flag"
     build_clh_from_source
+else
+    pull_clh_released_binary || 
+        (info "Failed to pull cloud-hypervisor released binary, trying to build from source" && build_clh_from_source)
 fi
