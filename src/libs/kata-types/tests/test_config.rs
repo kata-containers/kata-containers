@@ -30,7 +30,7 @@ mod tests {
         let qemu = QemuConfig::new();
         qemu.register();
 
-        let config = TomlConfig::load(&content).unwrap();
+        let config = TomlConfig::load(content).unwrap();
         KataConfig::set_active_config(Some(config), "qemu", "agent0");
 
         std::process::Command::new("mkdir")
@@ -167,7 +167,7 @@ mod tests {
         anno_hash.insert(KATA_ANNO_CFG_EXPERIMENTAL.to_string(), "c,d,e".to_string());
 
         let anno = Annotation::new(anno_hash);
-        let mut config = TomlConfig::load(&content).unwrap();
+        let mut config = TomlConfig::load(content).unwrap();
 
         assert!(anno
             .update_config_by_annotation(&mut config, "qemu", "agent0")
@@ -281,7 +281,7 @@ mod tests {
         let qemu = QemuConfig::new();
         qemu.register();
 
-        let config = TomlConfig::load(&content).unwrap();
+        let config = TomlConfig::load(content).unwrap();
         KataConfig::set_active_config(Some(config), "qemu", "agent0");
 
         let mut anno_hash = HashMap::new();
@@ -290,7 +290,7 @@ mod tests {
             "fvfvfvfvf".to_string(),
         );
         let anno = Annotation::new(anno_hash);
-        let mut config = TomlConfig::load(&content).unwrap();
+        let mut config = TomlConfig::load(content).unwrap();
 
         assert!(anno
             .update_config_by_annotation(&mut config, "qemu", "agent0")
@@ -304,7 +304,7 @@ mod tests {
         let qemu = QemuConfig::new();
         qemu.register();
 
-        let config = TomlConfig::load(&content).unwrap();
+        let config = TomlConfig::load(content).unwrap();
         KataConfig::set_active_config(Some(config), "qemu", "agent0");
 
         let mut anno_hash = HashMap::new();
@@ -313,7 +313,7 @@ mod tests {
             "false".to_string(),
         );
         let anno = Annotation::new(anno_hash);
-        let mut config = TomlConfig::load(&content).unwrap();
+        let mut config = TomlConfig::load(content).unwrap();
 
         assert!(anno
             .update_config_by_annotation(&mut config, "qemu", "agent0")
@@ -327,7 +327,7 @@ mod tests {
         let qemu = QemuConfig::new();
         qemu.register();
 
-        let config = TomlConfig::load(&content).unwrap();
+        let config = TomlConfig::load(content).unwrap();
         KataConfig::set_active_config(Some(config), "qemu", "agent0");
 
         let mut anno_hash = HashMap::new();
@@ -374,7 +374,7 @@ mod tests {
     #[test]
     fn test_fail_to_change_memory_slots_because_of_less_than_zero() {
         let content = include_str!("texture/configuration-anno-0.toml");
-        let config = TomlConfig::load(&content).unwrap();
+        let config = TomlConfig::load(content).unwrap();
         KataConfig::set_active_config(Some(config), "qemu", "agent0");
 
         let qemu = QemuConfig::new();
@@ -386,7 +386,7 @@ mod tests {
             "-1".to_string(),
         );
         let anno = Annotation::new(anno_hash);
-        let mut config = TomlConfig::load(&content).unwrap();
+        let mut config = TomlConfig::load(content).unwrap();
 
         assert!(anno
             .update_config_by_annotation(&mut config, "qemu", "agent0")
@@ -400,7 +400,7 @@ mod tests {
         let qemu = QemuConfig::new();
         qemu.register();
 
-        let config = TomlConfig::load(&content).unwrap();
+        let config = TomlConfig::load(content).unwrap();
         KataConfig::set_active_config(Some(config), "qemu", "agent0");
 
         let mut anno_hash = HashMap::new();
@@ -409,7 +409,7 @@ mod tests {
             "10".to_string(),
         );
         let anno = Annotation::new(anno_hash);
-        let mut config = TomlConfig::load(&content).unwrap();
+        let mut config = TomlConfig::load(content).unwrap();
 
         assert!(anno
             .update_config_by_annotation(&mut config, "qemu", "agent0")
@@ -423,7 +423,7 @@ mod tests {
         let qemu = QemuConfig::new();
         qemu.register();
 
-        let config = TomlConfig::load(&content).unwrap();
+        let config = TomlConfig::load(content).unwrap();
         KataConfig::set_active_config(Some(config), "qemu", "agent0");
 
         let mut anno_hash = HashMap::new();
@@ -432,7 +432,7 @@ mod tests {
             "400".to_string(),
         );
         let anno = Annotation::new(anno_hash);
-        let mut config = TomlConfig::load(&content).unwrap();
+        let mut config = TomlConfig::load(content).unwrap();
 
         assert!(anno
             .update_config_by_annotation(&mut config, "qemu", "agent0")
@@ -446,7 +446,7 @@ mod tests {
         let qemu = QemuConfig::new();
         qemu.register();
 
-        let config = TomlConfig::load(&content).unwrap();
+        let config = TomlConfig::load(content).unwrap();
         KataConfig::set_active_config(Some(config), "qemu", "agent0");
 
         let mut anno_hash = HashMap::new();
@@ -455,7 +455,7 @@ mod tests {
             "false1".to_string(),
         );
         let anno = Annotation::new(anno_hash);
-        let mut config = TomlConfig::load(&content).unwrap();
+        let mut config = TomlConfig::load(content).unwrap();
 
         assert!(anno
             .update_config_by_annotation(&mut config, "qemu", "agent0")
@@ -469,7 +469,7 @@ mod tests {
         let qemu = QemuConfig::new();
         qemu.register();
 
-        let config = TomlConfig::load(&content).unwrap();
+        let config = TomlConfig::load(content).unwrap();
         KataConfig::set_active_config(Some(config), "qemu", "agent0");
 
         let mut anno_hash = HashMap::new();
@@ -478,7 +478,7 @@ mod tests {
             "ddc".to_string(),
         );
         let anno = Annotation::new(anno_hash);
-        let mut config = TomlConfig::load(&content).unwrap();
+        let mut config = TomlConfig::load(content).unwrap();
 
         assert!(anno
             .update_config_by_annotation(&mut config, "qemu", "agent0")
