@@ -14,6 +14,7 @@ require (
 	github.com/containerd/ttrpc v1.1.0
 	github.com/containerd/typeurl v1.0.2
 	github.com/containernetworking/plugins v1.0.1
+	github.com/coreos/go-systemd/v22 v22.3.2
 	github.com/cri-o/cri-o v1.0.0-rc2.0.20170928185954-3394b3b2d6af
 	github.com/fsnotify/fsnotify v1.4.9
 	github.com/go-ini/ini v1.28.2
@@ -56,7 +57,8 @@ require (
 
 replace (
 	github.com/containerd/containerd => github.com/confidential-containers/containerd v1.6.0-beta.0.0.20220209074753-e5287e3a54ad
-	github.com/opencontainers/runc => github.com/opencontainers/runc v1.0.1
+	github.com/opencontainers/image-spec => github.com/opencontainers/image-spec v1.0.2
+	github.com/opencontainers/runc => github.com/opencontainers/runc v1.0.3
 	github.com/uber-go/atomic => go.uber.org/atomic v1.5.1
 	google.golang.org/genproto => google.golang.org/genproto v0.0.0-20180817151627-c66870c02cf8
 )

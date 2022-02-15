@@ -99,6 +99,7 @@ fn real_main() -> Result<(), std::io::Error> {
         "protos/health.proto",
         "protos/oci.proto",
         "protos/types.proto",
+        "protos/image.proto",
     ];
 
     // Tell Cargo that if the .proto files changed, to rerun this build script.

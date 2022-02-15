@@ -122,7 +122,7 @@ pub struct AgentService {
 //
 //     ^[a-zA-Z0-9][a-zA-Z0-9_.-]+$
 //
-fn verify_cid(id: &str) -> Result<()> {
+pub fn verify_cid(id: &str) -> Result<()> {
     let mut chars = id.chars();
 
     let valid = match chars.next() {
@@ -1450,7 +1450,7 @@ async fn read_stream(reader: Arc<Mutex<ReadHalf<PipeStream>>>, l: usize) -> Resu
 }
 
 pub fn start(s: Arc<Mutex<Sandbox>>, server_address: &str) -> Result<TtrpcServer> {
-    let agent_service = Box::new(AgentService { sandbox: s })
+    let agent_service = Box::new(AgentService { sandbox: s.clone() })
         as Box<dyn protocols::agent_ttrpc::AgentService + Send + Sync>;
 
     let agent_worker = Arc::new(agent_service);
@@ -1719,14 +1719,20 @@ fn setup_bundle(cid: &str, spec: &mut Spec) -> Result<PathBuf> {
     if !rootfs_exists {
         fs::create_dir_all(&rootfs_path)?;
         baremount(
-            &spec_root.path,
-            rootfs_path.to_str().unwrap(),
+            spec_root_path,
+            &rootfs_path,
             "bind",
             MsFlags::MS_BIND,
             "",
             &sl!(),
         )?;
     }
+
+    let rootfs_path_name = rootfs_path
+        .to_str()
+        .ok_or_else(|| anyhow!("failed to convert rootfs to unicode"))?
+        .to_string();
+
     spec.root = Some(Root {
         path: rootfs_path_name,
         readonly: spec_root.readonly,
