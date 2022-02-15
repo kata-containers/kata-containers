@@ -41,6 +41,7 @@ pull_clh_released_binary() {
     curl --fail -L ${cloud_hypervisor_binary} -o cloud-hypervisor-static || return 1
     mkdir -p cloud-hypervisor
     mv -f cloud-hypervisor-static cloud-hypervisor/cloud-hypervisor
+    chmod +x cloud_hypervisor/cloud-hypervisor
 }
 
 build_clh_from_source() {
