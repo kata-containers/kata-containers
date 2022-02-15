@@ -1484,14 +1484,9 @@ async fn execute_hook(logger: &Logger, h: &Hook, st: &OCIState) -> Result<()> {
     if args.len() > 1 {
         args.remove(0);
     }
-    let env: HashMap<String, String> = h
-        .env
-        .iter()
-        .map(|e| {
-            let v: Vec<&str> = e.split('=').collect();
-            (v[0].to_string(), v[1].to_string())
-        })
-        .collect();
+
+    // all invalid envs will be ommit, only valid envs will be passed to hook.
+    let env: HashMap<&str, &str> = h.env.iter().filter_map(|e| valid_env(e)).collect();
 
     // Avoid the exit signal to be reaped by the global reaper.
     let _wait_locker = WAIT_PID_LOCKER.lock().await;
@@ -1502,8 +1497,7 @@ async fn execute_hook(logger: &Logger, h: &Hook, st: &OCIState) -> Result<()> {
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
-        .spawn()
-        .unwrap();
+        .spawn()?;
 
     // default timeout 10s
     let mut timeout: u64 = 10;
@@ -1643,13 +1637,16 @@ mod tests {
         let touch = which("touch").await;
 
         defer!(fs::remove_file(temp_file).unwrap(););
+        let invalid_str = vec![97, b'\0', 98];
+        let invalid_string = std::str::from_utf8(&invalid_str).unwrap();
+        let invalid_env = format!("{}=value", invalid_string);
 
         execute_hook(
             &slog_scope::logger(),
             &Hook {
                 path: touch,
                 args: vec!["touch".to_string(), temp_file.to_string()],
-                env: vec![],
+                env: vec![invalid_env],
                 timeout: Some(10),
             },
             &OCIState {
