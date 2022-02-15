@@ -191,7 +191,9 @@ Description: Install $kata_project [1] and $containerd_project [2] from GitHub r
 
 Options:
 
- -h : Show this help statement.
+ -c <version> : Specify containerd version.
+ -h           : Show this help statement.
+ -k <version> : Specify Kata Containers version.
 
 Notes:
 
@@ -562,17 +564,22 @@ handle_args()
 {
 	local opt
 
-	while getopts "h" opt "$@"
+	local kata_version=""
+	local containerd_version=""
+
+	while getopts "c:hk:" opt "$@"
 	do
 		case "$opt" in
+			c) containerd_version="$OPTARG" ;;
 			h) usage; exit 0 ;;
+			k) kata_version="$OPTARG" ;;
 		esac
 	done
 
 	shift $[$OPTIND-1]
 
-	local kata_version="${1:-}"
-	local containerd_version="${2:-}"
+	[ -z "$kata_version" ] && kata_version="${1:-}" || true
+	[ -z "$containerd_version" ] && containerd_version="${2:-}" || true
 
 	handle_installation \
 		"$kata_version" \
