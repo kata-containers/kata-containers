@@ -6,7 +6,6 @@
 //! A sample for vendor to customize the runtime implementation.
 
 use super::*;
-use crate::{eother, sl};
 use slog::Level;
 /// Vendor customization runtime configuration.
 #[derive(Debug, Default, Deserialize, Serialize)]

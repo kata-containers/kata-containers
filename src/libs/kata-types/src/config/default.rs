@@ -15,7 +15,7 @@ lazy_static! {
         "/usr/share/defaults/kata-containers/configuration.toml",
     ];
 }
-pub const DEFAULT_AGENT_NAME: &str = "kata";
+pub const DEFAULT_AGENT_NAME: &str = "kata-agent";
 
 pub const DEFAULT_INTERNETWORKING_MODEL: &str = "tcfilter";
 
@@ -35,13 +35,13 @@ pub const DEFAULT_GUEST_HOOK_PATH: &str = "/opt";
 pub const DEFAULT_GUEST_VCPUS: u32 = 1;
 
 // Default configuration for Dragonball
-pub const DEFAULT_DB_GUEST_KERNEL_IMAGE: &str = "vmlinuz";
-pub const DEFAULT_DB_GUEST_KERNEL_PARAMS: &str = "";
-pub const DEFAULT_DB_ENTROPY_SOURCE: &str = "/dev/urandom";
-pub const DEFAULT_DB_MEMORY_SIZE: u32 = 128;
-pub const DEFAULT_DB_MEMORY_SLOTS: u32 = 128;
-pub const MAX_DB_VCPUS: u32 = 256;
-pub const MIN_DB_MEMORY_SIZE: u32 = 64;
+pub const DEFAULT_DRAGONBALL_GUEST_KERNEL_IMAGE: &str = "vmlinuz";
+pub const DEFAULT_DRAGONBALL_GUEST_KERNEL_PARAMS: &str = "";
+pub const DEFAULT_DRAGONBALL_ENTROPY_SOURCE: &str = "/dev/urandom";
+pub const DEFAULT_DRAGONBALL_MEMORY_SIZE: u32 = 128;
+pub const DEFAULT_DRAGONBALL_MEMORY_SLOTS: u32 = 128;
+pub const MAX_DRAGONBALL_VCPUS: u32 = 256;
+pub const MIN_DRAGONBALL_MEMORY_SIZE: u32 = 64;
 // Default configuration for qemu
 pub const DEFAULT_QEMU_BINARY_PATH: &str = "qemu";
 pub const DEFAULT_QEMU_CONTROL_PATH: &str = "";

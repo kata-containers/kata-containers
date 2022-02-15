@@ -9,4 +9,4 @@
 /// Annotation to enable SGX.
 ///
 /// Hardware-based isolation and memory encryption.
-pub const SGXEPC: &str = "sgx.intel.com/epc";
+pub const SGX_EPC: &str = "sgx.intel.com/epc";
