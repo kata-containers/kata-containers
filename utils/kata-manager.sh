@@ -378,7 +378,7 @@ install_containerd()
 
 	sudo tar -C /usr/local -xvf "${file}"
 
-	sudo ln -s /usr/local/bin/ctr "${link_dir}"
+	sudo ln -sf /usr/local/bin/ctr "${link_dir}"
 
 	info "$project installed\n"
 }
