@@ -16,13 +16,12 @@ use std::str::FromStr;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
-#[cfg(target_arch = "s390x")]
-use crate::ccw;
 use crate::linux_abi::*;
 use crate::pci;
 use crate::sandbox::Sandbox;
 use crate::uevent::{wait_for_uevent, Uevent, UeventMatcher};
 use anyhow::{anyhow, Context, Result};
+use cfg_if::cfg_if;
 use oci::{LinuxDeviceCgroup, LinuxResources, Spec};
 use protocols::agent::Device;
 use tracing::instrument;
@@ -53,6 +52,12 @@ pub const DRIVER_VFIO_GK_TYPE: &str = "vfio-gk";
 pub const DRIVER_VFIO_TYPE: &str = "vfio";
 pub const DRIVER_OVERLAYFS_TYPE: &str = "overlayfs";
 pub const FS_TYPE_HUGETLB: &str = "hugetlbfs";
+
+cfg_if! {
+    if #[cfg(target_arch = "s390x")] {
+        use crate::ccw;
+    }
+}
 
 #[instrument]
 pub fn online_device(path: &str) -> Result<()> {
