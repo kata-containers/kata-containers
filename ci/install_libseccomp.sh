@@ -19,7 +19,7 @@ source "${tests_repo_dir}/.ci/lib.sh"
 # fail. So let's ensure they are unset here.
 unset PREFIX DESTDIR
 
-arch=$(uname -m)
+arch=${ARCH:-$(uname -m)}
 workdir="$(mktemp -d --tmpdir build-libseccomp.XXXXX)"
 
 # Variables for libseccomp
@@ -70,7 +70,9 @@ build_and_install_gperf() {
     curl -sLO "${gperf_tarball_url}"
     tar -xf "${gperf_tarball}"
     pushd "gperf-${gperf_version}"
-    ./configure --prefix="${gperf_install_dir}"
+    # gperf is a build time dependency of libseccomp and not to be used in the target.
+    # Unset $CC since that might point to a cross compiler.
+    CC= ./configure --prefix="${gperf_install_dir}"
     make
     make install
     export PATH=$PATH:"${gperf_install_dir}"/bin
@@ -84,7 +86,7 @@ build_and_install_libseccomp() {
     curl -sLO "${libseccomp_tarball_url}"
     tar -xf "${libseccomp_tarball}"
     pushd "libseccomp-${libseccomp_version}"
-    ./configure --prefix="${libseccomp_install_dir}" CFLAGS="${cflags}" --enable-static
+    ./configure --prefix="${libseccomp_install_dir}" CFLAGS="${cflags}" --enable-static --host="${arch}"
     make
     make install
     popd

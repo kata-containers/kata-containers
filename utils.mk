@@ -112,8 +112,9 @@ endef
 ##VAR BUILD_TYPE=release|debug type of rust build
 BUILD_TYPE = release
 
+HOST_ARCH = $(shell uname -m)
 ##VAR ARCH=arch target to build (format: uname -m)
-ARCH = $(shell uname -m)
+ARCH ?= $(HOST_ARCH)
 ##VAR LIBC=musl|gnu
 LIBC ?= musl
 ifneq ($(LIBC),musl)
@@ -140,6 +141,14 @@ EXTRA_RUSTFLAGS :=
 ifeq ($(ARCH), aarch64)
     override EXTRA_RUSTFLAGS = -C link-arg=-lgcc
     $(warning "WARNING: aarch64-musl needs extra symbols from libgcc")
+endif
+
+ifneq ($(HOST_ARCH),$(ARCH))
+    ifeq ($(CC),)
+         CC = gcc
+         $(warning "WARNING: A foreign ARCH was passed, but no CC alternative. Using $(CC).")
+    endif
+    override EXTRA_RUSTFLAGS += -C linker=$(CC)
 endif
 
 TRIPLE = $(ARCH)-unknown-linux-$(LIBC)
