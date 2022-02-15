@@ -136,16 +136,31 @@ github_get_release_file_url()
 	local url="${1:-}"
 	local version="${2:-}"
 
-	download_urls=$(curl -sL "$url" |\
+	local arch=$(uname -m)
+
+	local regex=""
+
+	case "$url" in
+		*kata*)
+			regex="kata-static-.*-${arch}.tar.xz"
+			;;
+
+		*containerd*)
+			[ "$arch" = "x86_64" ] && arch="amd64"
+			regex="containerd-.*-linux-${arch}.tar.gz"
+			;;
+
+		*) die "invalid url: '$url'" ;;
+	esac
+
+	local download_url
+
+	download_url=$(curl -sL "$url" |\
 		jq --arg version "$version" \
 		-r '.[] | select(.tag_name == $version) | .assets[].browser_download_url' |\
-		grep static)
+		grep "/${regex}$")
 
-	[ -z "$download_urls" ] && die "Cannot determine download URL for version $version ($url)"
-
-	local arch=$(uname -m)
-	local download_url=$(grep "$arch" <<< "$download_urls")
-	[ -z "$download_url" ] && die "No release for architecture '$arch' ($url)"
+	[ -z "$download_url" ] && die "Cannot determine download URL for version $version ($url)"
 
 	echo "$download_url"
 }
