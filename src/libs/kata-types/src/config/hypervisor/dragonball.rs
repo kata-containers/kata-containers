@@ -9,8 +9,8 @@ use std::sync::Arc;
 use std::u32;
 
 use super::{default, register_hypervisor_plugin};
-use crate::config::default::MAX_DB_VCPUS;
-use crate::config::default::MIN_DB_MEMORY_SIZE;
+use crate::config::default::MAX_DRAGONBALL_VCPUS;
+use crate::config::default::MIN_DRAGONBALL_MEMORY_SIZE;
 use crate::config::hypervisor::{
     VIRTIO_BLK, VIRTIO_BLK_MMIO, VIRTIO_FS, VIRTIO_FS_INLINE, VIRTIO_PMEM,
 };
@@ -39,10 +39,10 @@ impl DragonballConfig {
 
 impl ConfigPlugin for DragonballConfig {
     fn get_max_cpus(&self) -> u32 {
-        MAX_DB_VCPUS
+        MAX_DRAGONBALL_VCPUS
     }
     fn get_min_memory(&self) -> u32 {
-        MIN_DB_MEMORY_SIZE
+        MIN_DRAGONBALL_MEMORY_SIZE
     }
     fn name(&self) -> &str {
         HYPERVISOR_NAME_DRAGONBALL
@@ -54,25 +54,27 @@ impl ConfigPlugin for DragonballConfig {
             resolve_path!(db.jailer_path, "Dragonball jailer path {} is invalid: {}")?;
 
             if db.boot_info.kernel.is_empty() {
-                db.boot_info.kernel = default::DEFAULT_DB_GUEST_KERNEL_IMAGE.to_string();
+                db.boot_info.kernel = default::DEFAULT_DRAGONBALL_GUEST_KERNEL_IMAGE.to_string();
             }
             if db.boot_info.kernel_params.is_empty() {
-                db.boot_info.kernel_params = default::DEFAULT_DB_GUEST_KERNEL_PARAMS.to_string();
+                db.boot_info.kernel_params =
+                    default::DEFAULT_DRAGONBALL_GUEST_KERNEL_PARAMS.to_string();
             }
 
-            if db.cpu_info.default_maxvcpus > default::MAX_DB_VCPUS {
-                db.cpu_info.default_maxvcpus = default::MAX_DB_VCPUS;
+            if db.cpu_info.default_maxvcpus > default::MAX_DRAGONBALL_VCPUS {
+                db.cpu_info.default_maxvcpus = default::MAX_DRAGONBALL_VCPUS;
             }
 
             if db.machine_info.entropy_source.is_empty() {
-                db.machine_info.entropy_source = default::DEFAULT_DB_ENTROPY_SOURCE.to_string();
+                db.machine_info.entropy_source =
+                    default::DEFAULT_DRAGONBALL_ENTROPY_SOURCE.to_string();
             }
 
             if db.memory_info.default_memory == 0 {
-                db.memory_info.default_memory = default::DEFAULT_DB_MEMORY_SIZE;
+                db.memory_info.default_memory = default::DEFAULT_DRAGONBALL_MEMORY_SIZE;
             }
             if db.memory_info.memory_slots == 0 {
-                db.memory_info.memory_slots = default::DEFAULT_DB_MEMORY_SLOTS;
+                db.memory_info.memory_slots = default::DEFAULT_DRAGONBALL_MEMORY_SLOTS;
             }
         }
         Ok(())
@@ -131,8 +133,8 @@ impl ConfigPlugin for DragonballConfig {
             }
 
             if (db.cpu_info.default_vcpus > 0
-                && db.cpu_info.default_vcpus as u32 > default::MAX_DB_VCPUS)
-                || db.cpu_info.default_maxvcpus > default::MAX_DB_VCPUS
+                && db.cpu_info.default_vcpus as u32 > default::MAX_DRAGONBALL_VCPUS)
+                || db.cpu_info.default_maxvcpus > default::MAX_DRAGONBALL_VCPUS
             {
                 return Err(eother!(
                     "Dragonball hypervisor can not support {} vCPUs",
