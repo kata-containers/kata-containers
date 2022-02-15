@@ -202,13 +202,17 @@ usage()
 	cat <<EOT
 Usage: $script_name [options] [<kata-version> [<containerd-version>]]
 
-Description: Install $kata_project [1] and $containerd_project [2] from GitHub release binaries.
+Description: Install $kata_project [1] (and optionally $containerd_project [2])
+  from GitHub release binaries.
 
 Options:
 
  -c <version> : Specify containerd version.
+ -f           : Force installation (use with care).
  -h           : Show this help statement.
  -k <version> : Specify Kata Containers version.
+ -o           : Only install Kata Containers.
+ -r           : Don't cleanup on failure (retain files).
 
 Notes:
 
@@ -248,6 +252,18 @@ only_supports_cgroups_v2()
 	return 0
 }
 
+# Return 0 if containerd is already installed, else return 1.
+containerd_installed()
+{
+	command -v containerd &>/dev/null && return 0
+
+	systemctl list-unit-files --type service |\
+		egrep -q "^${containerd_service_name}\>" \
+		&& return 0
+
+	return 1
+}
+
 pre_checks()
 {
 	info "Running pre-checks"
@@ -255,12 +271,11 @@ pre_checks()
 	command -v "${kata_shim_v2}" &>/dev/null \
 		&& die "Please remove existing $kata_project installation"
 
-	command -v containerd &>/dev/null \
-		&& die "$containerd_project already installed"
+	local ret
 
-	systemctl list-unit-files --type service |\
-		egrep -q "^${containerd_service_name}\>" \
-		&& die "$containerd_project already installed"
+	{ containerd_installed; ret=$?; } || true
+
+	[ "$ret" -eq 0 ] && die "$containerd_project already installed"
 
 	local cgroups_v2_only=$(only_supports_cgroups_v2 || true)
 
@@ -315,8 +330,17 @@ check_deps()
 
 setup()
 {
-	trap cleanup EXIT
+	local cleanup="${1:-}"
+	[ -z "$cleanup" ] && die "no cleanup value"
+
+	local force="${2:-}"
+	[ -z "$force" ] && die "no force value"
+
+	[ "$cleanup" = "true" ] && trap cleanup EXIT
+
 	source /etc/os-release || source /usr/lib/os-release
+
+	[ "$force" = "true" ] && return 0
 
 	pre_checks
 	check_deps
@@ -529,7 +553,24 @@ handle_containerd()
 {
 	local version="${1:-}"
 
-	install_containerd "$version"
+	local force="${2:-}"
+	[ -z "$force" ] && die "need force value"
+
+	local ret
+
+	if [ "$force" = "true" ]
+	then
+		install_containerd "$version"
+	else
+		{ containerd_installed; ret=$?; } || true
+
+		if [ "$ret" -eq 0 ]
+		then
+			info "Using existing containerd installation"
+		else
+			install_containerd "$version"
+		fi
+	fi
 
 	configure_containerd
 
@@ -567,34 +608,60 @@ test_installation()
 
 handle_installation()
 {
-	local kata_version="${1:-}"
-	local containerd_version="${2:-}"
+	local cleanup="${1:-}"
+	[ -z "$cleanup" ] && die "no cleanup value"
 
-	setup
+	local force="${2:-}"
+	[ -z "$force" ] && die "no force value"
+
+	local only_kata="${3:-}"
+	[ -z "$only_kata" ] && die "no only Kata value"
+
+	# These params can be blank
+	local kata_version="${4:-}"
+	local containerd_version="${5:-}"
+
+	setup "$cleanup" "$force"
 
 	handle_kata "$kata_version"
-	handle_containerd "$containerd_version"
+
+	[ "$only_kata" = "false" ] && \
+		handle_containerd \
+		"$containerd_version" \
+		"$force"
 
 	test_installation
 
-	info "$kata_project and $containerd_project are now installed"
+	if [ "$only_kata" = "true" ]
+	then
+		info "$kata_project is now installed"
+	else
+		info "$kata_project and $containerd_project are now installed"
+	fi
 
 	echo -e "\n${warnings}\n"
 }
 
 handle_args()
 {
+	local cleanup="true"
+	local force="false"
+	local only_kata="false"
+
 	local opt
 
 	local kata_version=""
 	local containerd_version=""
 
-	while getopts "c:hk:" opt "$@"
+	while getopts "c:fhk:or" opt "$@"
 	do
 		case "$opt" in
 			c) containerd_version="$OPTARG" ;;
+			f) force="true" ;;
 			h) usage; exit 0 ;;
 			k) kata_version="$OPTARG" ;;
+			o) only_kata="true" ;;
+			r) cleanup="false" ;;
 		esac
 	done
 
@@ -604,6 +671,9 @@ handle_args()
 	[ -z "$containerd_version" ] && containerd_version="${2:-}" || true
 
 	handle_installation \
+		"$cleanup" \
+		"$force" \
+		"$only_kata" \
 		"$kata_version" \
 		"$containerd_version"
 }
