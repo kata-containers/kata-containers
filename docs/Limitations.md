@@ -97,13 +97,6 @@ See issue https://github.com/clearcontainers/runtime/issues/341 and [the constra
 For CPUs resource management see
 [CPU constraints](design/vcpu-handling.md).
 
-### docker run and shared memory
-
-The runtime does not implement the `docker run --shm-size` command to
-set the size of the `/dev/shm tmpfs` within the container. It is possible to pass this configuration value into the VM container so the appropriate mount command happens at launch time.
-
-See issue https://github.com/kata-containers/kata-containers/issues/21 for more information.
-
 # Architectural limitations
 
 This section lists items that might not be fixed due to fundamental
