@@ -134,7 +134,7 @@ pub struct BlockDeviceInfo {
 
 impl BlockDeviceInfo {
     /// Adjust the configuration information after loading from configuration file.
-    pub fn adjust_configuration(&mut self) -> Result<()> {
+    pub fn adjust_config(&mut self) -> Result<()> {
         if self.disable_block_device_use {
             self.block_device_driver = "".to_string();
             self.enable_vhost_user_store = false;
@@ -217,7 +217,7 @@ pub struct BootInfo {
 
 impl BootInfo {
     /// Adjust the configuration information after loading from configuration file.
-    pub fn adjust_configuration(&mut self) -> Result<()> {
+    pub fn adjust_config(&mut self) -> Result<()> {
         resolve_path!(self.kernel, "guest kernel image file {} is invalid: {}")?;
         resolve_path!(self.image, "guest boot image file {} is invalid: {}")?;
         resolve_path!(self.initrd, "guest initrd image file {} is invalid: {}")?;
@@ -286,7 +286,7 @@ pub struct CpuInfo {
 
 impl CpuInfo {
     /// Adjust the configuration information after loading from configuration file.
-    pub fn adjust_configuration(&mut self) -> Result<()> {
+    pub fn adjust_config(&mut self) -> Result<()> {
         let features: Vec<&str> = self.cpu_features.split(',').map(|v| v.trim()).collect();
         self.cpu_features = features.join(",");
         Ok(())
@@ -347,7 +347,7 @@ pub struct DebugInfo {
 
 impl DebugInfo {
     /// Adjust the configuration information after loading from configuration file.
-    pub fn adjust_configuration(&mut self) -> Result<()> {
+    pub fn adjust_config(&mut self) -> Result<()> {
         Ok(())
     }
 
@@ -406,7 +406,7 @@ pub struct DeviceInfo {
 
 impl DeviceInfo {
     /// Adjust the configuration information after loading from configuration file.
-    pub fn adjust_configuration(&mut self) -> Result<()> {
+    pub fn adjust_config(&mut self) -> Result<()> {
         if self.default_bridges > MAX_BRIDGE_SIZE {
             self.default_bridges = MAX_BRIDGE_SIZE;
         }
@@ -463,7 +463,7 @@ pub struct MachineInfo {
 
 impl MachineInfo {
     /// Adjust the configuration information after loading from configuration file.
-    pub fn adjust_configuration(&mut self) -> Result<()> {
+    pub fn adjust_config(&mut self) -> Result<()> {
         let accelerators: Vec<&str> = self
             .machine_accelerators
             .split(',')
@@ -566,7 +566,7 @@ pub struct MemoryInfo {
 
 impl MemoryInfo {
     /// Adjust the configuration information after loading from configuration file.
-    pub fn adjust_configuration(&mut self) -> Result<()> {
+    pub fn adjust_config(&mut self) -> Result<()> {
         resolve_path!(
             self.file_mem_backend,
             "Memory backend file {} is invalid: {}"
@@ -624,7 +624,7 @@ pub struct NetworkInfo {
 
 impl NetworkInfo {
     /// Adjust the configuration information after loading from configuration file.
-    pub fn adjust_configuration(&mut self) -> Result<()> {
+    pub fn adjust_config(&mut self) -> Result<()> {
         Ok(())
     }
 
@@ -688,7 +688,7 @@ pub struct SecurityInfo {
 
 impl SecurityInfo {
     /// Adjust the configuration information after loading from configuration file.
-    pub fn adjust_configuration(&mut self) -> Result<()> {
+    pub fn adjust_config(&mut self) -> Result<()> {
         if self.guest_hook_path.is_empty() {
             self.guest_hook_path = default::DEFAULT_GUEST_HOOK_PATH.to_string();
         }
@@ -770,7 +770,7 @@ pub struct SharedFsInfo {
 
 impl SharedFsInfo {
     /// Adjust the configuration information after loading from configuration file.
-    pub fn adjust_configuration(&mut self) -> Result<()> {
+    pub fn adjust_config(&mut self) -> Result<()> {
         if self.shared_fs.as_deref() == Some("") {
             self.shared_fs = Some(default::DEFAULT_SHARED_FS_TYPE.to_string());
         }
@@ -779,7 +779,7 @@ impl SharedFsInfo {
             Some(VIRTIO_FS_INLINE) => self.adjust_virtio_fs(true)?,
             Some(VIRTIO_9P) => {
                 if self.msize_9p == 0 {
-                    self.msize_9p = default::DEFAULT_SHARED_9PFS_SIZE;
+                    self.msize_9p = default::DEFAULT_SHARED_9PFS_SIZE_MB;
                 }
             }
             _ => {}
@@ -795,12 +795,12 @@ impl SharedFsInfo {
             Some(VIRTIO_FS) => self.validate_virtio_fs(false),
             Some(VIRTIO_FS_INLINE) => self.validate_virtio_fs(true),
             Some(VIRTIO_9P) => {
-                if self.msize_9p < default::MIN_SHARED_9PFS_SIZE
-                    || self.msize_9p > default::MAX_SHARED_9PFS_SIZE
+                if self.msize_9p < default::MIN_SHARED_9PFS_SIZE_MB
+                    || self.msize_9p > default::MAX_SHARED_9PFS_SIZE_MB
                 {
                     return Err(eother!(
                         "Invalid 9p configuration msize 0x{:x}, min value is 0x{:x}, max value is 0x{:x}",
-                        self.msize_9p,default::MIN_SHARED_9PFS_SIZE, default::MAX_SHARED_9PFS_SIZE
+                        self.msize_9p,default::MIN_SHARED_9PFS_SIZE_MB, default::MAX_SHARED_9PFS_SIZE_MB
                     ));
                 }
                 Ok(())
@@ -967,26 +967,26 @@ impl Hypervisor {
 }
 
 impl ConfigOps for Hypervisor {
-    fn adjust_configuration(conf: &mut TomlConfig) -> Result<()> {
-        HypervisorVendor::adjust_configuration(conf)?;
+    fn adjust_config(conf: &mut TomlConfig) -> Result<()> {
+        HypervisorVendor::adjust_config(conf)?;
         let hypervisors: Vec<String> = conf.hypervisor.keys().cloned().collect();
         for hypervisor in hypervisors.iter() {
             if let Some(plugin) = get_hypervisor_plugin(hypervisor) {
-                plugin.adjust_configuration(conf)?;
+                plugin.adjust_config(conf)?;
                 // Safe to unwrap() because `hypervisor` is a valid key in the hash map.
                 let hv = conf.hypervisor.get_mut(hypervisor).ok_or_else(|| {
                     io::Error::new(io::ErrorKind::NotFound, "hypervisor not found".to_string())
                 })?;
-                hv.blockdev_info.adjust_configuration()?;
-                hv.boot_info.adjust_configuration()?;
-                hv.cpu_info.adjust_configuration()?;
-                hv.debug_info.adjust_configuration()?;
-                hv.device_info.adjust_configuration()?;
-                hv.machine_info.adjust_configuration()?;
-                hv.memory_info.adjust_configuration()?;
-                hv.network_info.adjust_configuration()?;
-                hv.security_info.adjust_configuration()?;
-                hv.shared_fs.adjust_configuration()?;
+                hv.blockdev_info.adjust_config()?;
+                hv.boot_info.adjust_config()?;
+                hv.cpu_info.adjust_config()?;
+                hv.debug_info.adjust_config()?;
+                hv.device_info.adjust_config()?;
+                hv.machine_info.adjust_config()?;
+                hv.memory_info.adjust_config()?;
+                hv.network_info.adjust_config()?;
+                hv.security_info.adjust_config()?;
+                hv.shared_fs.adjust_config()?;
             } else {
                 return Err(eother!("Can not find plugin for hypervisor {}", hypervisor));
             }

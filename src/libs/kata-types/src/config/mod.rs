@@ -36,7 +36,7 @@ pub trait ConfigPlugin: Send + Sync {
     fn name(&self) -> &str;
 
     /// Adjust the configuration information after loading from configuration file.
-    fn adjust_configuration(&self, _conf: &mut TomlConfig) -> Result<()>;
+    fn adjust_config(&self, _conf: &mut TomlConfig) -> Result<()>;
 
     /// Validate the configuration information.
     fn validate(&self, _conf: &TomlConfig) -> Result<()>;
@@ -51,7 +51,7 @@ pub trait ConfigPlugin: Send + Sync {
 /// Trait to manipulate Kata configuration information.
 pub trait ConfigOps {
     /// Adjust the configuration information after loading from configuration file.
-    fn adjust_configuration(_conf: &mut TomlConfig) -> Result<()> {
+    fn adjust_config(_conf: &mut TomlConfig) -> Result<()> {
         Ok(())
     }
 
@@ -64,7 +64,7 @@ pub trait ConfigOps {
 /// Trait to manipulate global Kata configuration information.
 pub trait ConfigObjectOps {
     /// Adjust the configuration information after loading from configuration file.
-    fn adjust_configuration(&mut self) -> Result<()> {
+    fn adjust_config(&mut self) -> Result<()> {
         Ok(())
     }
 
@@ -136,9 +136,9 @@ impl TomlConfig {
     /// Load Kata configuration information from string.
     pub fn load(content: &str) -> Result<TomlConfig> {
         let mut config: TomlConfig = toml::from_str(content)?;
-        Hypervisor::adjust_configuration(&mut config)?;
-        Runtime::adjust_configuration(&mut config)?;
-        Agent::adjust_configuration(&mut config)?;
+        Hypervisor::adjust_config(&mut config)?;
+        Runtime::adjust_config(&mut config)?;
+        Agent::adjust_config(&mut config)?;
         info!(sl!(), "get kata config: {:?}", config);
         Ok(config)
     }

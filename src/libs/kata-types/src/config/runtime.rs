@@ -113,8 +113,8 @@ pub struct Runtime {
 }
 
 impl ConfigOps for Runtime {
-    fn adjust_configuration(conf: &mut TomlConfig) -> Result<()> {
-        RuntimeVendor::adjust_configuration(conf)?;
+    fn adjust_config(conf: &mut TomlConfig) -> Result<()> {
+        RuntimeVendor::adjust_config(conf)?;
         if conf.runtime.internetworking_model.is_empty() {
             conf.runtime.internetworking_model = default::DEFAULT_INTERNETWORKING_MODEL.to_owned();
         }
