@@ -10,7 +10,7 @@ use std::sync::Arc;
 use super::{default, register_hypervisor_plugin};
 
 use crate::config::default::MAX_QEMU_VCPUS;
-use crate::config::default::MIN_QEMU_MEMORY_SIZE;
+use crate::config::default::MIN_QEMU_MEMORY_SIZE_MB;
 
 use crate::config::hypervisor::VIRTIO_BLK_MMIO;
 use crate::config::{ConfigPlugin, TomlConfig};
@@ -42,14 +42,14 @@ impl ConfigPlugin for QemuConfig {
     }
 
     fn get_min_memory(&self) -> u32 {
-        MIN_QEMU_MEMORY_SIZE
+        MIN_QEMU_MEMORY_SIZE_MB
     }
     fn name(&self) -> &str {
         HYPERVISOR_NAME_QEMU
     }
 
     /// Adjust the configuration information after loading from configuration file.
-    fn adjust_configuration(&self, conf: &mut TomlConfig) -> Result<()> {
+    fn adjust_config(&self, conf: &mut TomlConfig) -> Result<()> {
         if let Some(qemu) = conf.hypervisor.get_mut(HYPERVISOR_NAME_QEMU) {
             if qemu.path.is_empty() {
                 qemu.path = default::DEFAULT_QEMU_BINARY_PATH.to_string();
@@ -83,7 +83,7 @@ impl ConfigPlugin for QemuConfig {
             }
 
             if qemu.memory_info.default_memory == 0 {
-                qemu.memory_info.default_memory = default::DEFAULT_QEMU_MEMORY_SIZE;
+                qemu.memory_info.default_memory = default::DEFAULT_QEMU_MEMORY_SIZE_MB;
             }
             if qemu.memory_info.memory_slots == 0 {
                 qemu.memory_info.memory_slots = default::DEFAULT_QEMU_MEMORY_SLOTS;
@@ -134,6 +134,13 @@ impl ConfigPlugin for QemuConfig {
                 return Err(eother!(
                     "Qemu hypervisor can not support {} PCI bridges",
                     qemu.device_info.default_bridges
+                ));
+            }
+
+            if qemu.memory_info.default_memory < MIN_QEMU_MEMORY_SIZE_MB {
+                return Err(eother!(
+                    "Qemu hypervisor has minimal memory limitation {}",
+                    MIN_QEMU_MEMORY_SIZE_MB
                 ));
             }
         }

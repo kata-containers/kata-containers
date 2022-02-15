@@ -20,7 +20,7 @@ pub struct RuntimeVendor {
 }
 
 impl ConfigOps for RuntimeVendor {
-    fn adjust_configuration(conf: &mut TomlConfig) -> Result<()> {
+    fn adjust_config(conf: &mut TomlConfig) -> Result<()> {
         if conf.runtime.vendor.log_level > Level::Debug as u32 {
             conf.runtime.debug = true;
         }
