@@ -330,6 +330,8 @@ github_download_package()
 {
 	local releases_url="${1:-}"
 	local requested_version="${2:-}"
+
+	# Only used for error message
 	local project="${3:-}"
 
 	[ -z "$releases_url" ] && die "need releases URL"
@@ -337,7 +339,7 @@ github_download_package()
 
 	local version=$(github_resolve_version_to_download \
 		"$releases_url" \
-		"$version" || true)
+		"$requested_version" || true)
 
 	[ -z "$version" ] && die "Unable to determine $project version to download"
 
