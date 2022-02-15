@@ -473,7 +473,7 @@ install_kata()
 	# Since we're unpacking to the root directory, perform a sanity check
 	# on the archive first.
 	local unexpected=$(tar -tf "${file}" |\
-		egrep -v "^(\./opt/$|\.${kata_install_dir}/)" || true)
+		egrep -v "^(\./$|\./opt/$|\.${kata_install_dir}/)" || true)
 
 	[ -n "$unexpected" ] && die "File '$file' contains unexpected paths: '$unexpected'"
 
