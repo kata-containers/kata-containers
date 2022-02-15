@@ -560,9 +560,16 @@ handle_installation()
 
 handle_args()
 {
-	case "${1:-}" in
-		-h|--help|help) usage; exit 0;;
-	esac
+	local opt
+
+	while getopts "h" opt "$@"
+	do
+		case "$opt" in
+			h) usage; exit 0 ;;
+		esac
+	done
+
+	shift $[$OPTIND-1]
 
 	local kata_version="${1:-}"
 	local containerd_version="${2:-}"
