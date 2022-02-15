@@ -56,8 +56,8 @@ pub struct Agent {
 }
 
 impl ConfigOps for Agent {
-    fn adjust_configuration(conf: &mut TomlConfig) -> Result<()> {
-        AgentVendor::adjust_configuration(conf)?;
+    fn adjust_config(conf: &mut TomlConfig) -> Result<()> {
+        AgentVendor::adjust_config(conf)?;
         Ok(())
     }
 
