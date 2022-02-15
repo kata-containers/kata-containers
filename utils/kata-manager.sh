@@ -391,31 +391,35 @@ configure_containerd()
 
 	local cfg="/etc/containerd/config.toml"
 
-	pushd "$tmpdir" >/dev/null
-
-	local service_url=$(printf "%s/%s/%s/%s" \
-		"https://raw.githubusercontent.com" \
-		"${containerd_slug}" \
-		"master" \
-		"${containerd_service_name}")
-
-	curl -LO "$service_url"
-
-	printf "# %s: Service installed for Kata Containers\n" \
-		"$(date -Iseconds)" |\
-		tee -a "$containerd_service_name"
-
 	local systemd_unit_dir="/etc/systemd/system"
 	sudo mkdir -p "$systemd_unit_dir"
 
 	local dest="${systemd_unit_dir}/${containerd_service_name}"
 
-	sudo cp "${containerd_service_name}" "${dest}"
-	sudo systemctl daemon-reload
+	if [ ! -f "$dest" ]
+	then
+		pushd "$tmpdir" >/dev/null
 
-	info "Installed ${dest}"
+		local service_url=$(printf "%s/%s/%s/%s" \
+			"https://raw.githubusercontent.com" \
+			"${containerd_slug}" \
+			"main" \
+			"${containerd_service_name}")
 
-	popd >/dev/null
+		curl -LO "$service_url"
+
+		printf "# %s: Service installed for Kata Containers\n" \
+			"$(date -Iseconds)" |\
+			tee -a "$containerd_service_name"
+
+
+		sudo cp "${containerd_service_name}" "${dest}"
+		sudo systemctl daemon-reload
+
+		info "Installed ${dest}"
+
+		popd >/dev/null
+	fi
 
 	# Backup the original containerd configuration:
 	sudo mkdir -p "$(dirname $cfg)"
@@ -448,6 +452,7 @@ EOT
 		info "Modified $cfg"
 	}
 
+	sudo systemctl enable containerd
 	sudo systemctl start containerd
 
 	info "Configured $project\n"
