@@ -16,6 +16,7 @@ ARCH=$(uname -m)
 script_dir=$(dirname $(readlink -f "$0"))
 kata_version="${kata_version:-}"
 force_build_from_source="${force_build_from_source:-false}"
+extra_build_args="${extra_build_args:-}"
 
 source "${script_dir}/../../scripts/lib.sh"
 
@@ -50,7 +51,12 @@ build_clh_from_source() {
     pushd "${repo_dir}"
     git fetch || true
     git checkout "${cloud_hypervisor_version}"
-    ./scripts/dev_cli.sh build --release --libc musl
+    if [ -n "${extra_build_args}" ]; then
+        info "Build cloud-hypervisor with extra args: ${extra_build_args}"
+        ./scripts/dev_cli.sh build --release --libc musl -- ${extra_build_args}
+    else
+        ./scripts/dev_cli.sh build --release --libc musl
+    fi
     rm -f cloud-hypervisor
     cp build/cargo_target/$(uname -m)-unknown-linux-musl/release/cloud-hypervisor .
     popd
@@ -58,6 +64,11 @@ build_clh_from_source() {
 
 if [ "${ARCH}" == "aarch64" ]; then
     info "aarch64 binaries are not distributed as part of the Cloud Hypervisor releases, forcing to build from source"
+    force_build_from_source="true"
+fi
+
+if [ -n "${extra_build_args}" ]; then
+    info "As an extra build argument has been passed to the script, forcing to build from source"
     force_build_from_source="true"
 fi
 
