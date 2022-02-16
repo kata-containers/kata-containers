@@ -2,7 +2,7 @@
 
 ## Introduction
 
-Refer to [kata-`nydus`-design](../design/kata-nydus-design.md)
+Refer to [kata-`nydus`-design](../design/kata-nydus-design.md) for introduction and `nydus` has supported Kata Containers with hypervisor `QEMU` and `CLH` currently.
 
 ## How to
 
@@ -16,7 +16,7 @@ You can use Kata Containers with `nydus` as follows,
 
 4. Use [kata-containers](https://github.com/kata-containers/kata-containers) `latest` branch to compile and build `kata-containers.img`;
 
-5. Update `configuration-qemu.toml` to include:
+5. Update `configuration-qemu.toml` or `configuration-clh.toml`to include:
 
 ```toml
 shared_fs = "virtio-fs-nydus"
@@ -24,7 +24,7 @@ virtio_fs_daemon = "<nydusd binary path>"
 virtio_fs_extra_args = []
 ```
 
-6. run `crictl run -r kata-qemu nydus-container.yaml nydus-sandbox.yaml`;
+6. run `crictl run -r kata nydus-container.yaml nydus-sandbox.yaml`;
 
 The `nydus-sandbox.yaml` looks like below:
 

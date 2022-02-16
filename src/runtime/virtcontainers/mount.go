@@ -390,13 +390,11 @@ func bindUnmountContainerSnapshotDir(ctx context.Context, sharedDir, cID string)
 
 func nydusContainerCleanup(ctx context.Context, sharedDir string, c *Container) error {
 	sandbox := c.sandbox
-	if sandbox.GetHypervisorType() != string(QemuHypervisor) {
-		// qemu is supported first, other hypervisors will next
-		// https://github.com/kata-containers/kata-containers/issues/2724
-		return errNydusdNotSupport
+	virtiofsDaemon, err := getVirtiofsDaemonForNydus(sandbox)
+	if err != nil {
+		return err
 	}
-	q, _ := sandbox.hypervisor.(*qemu)
-	if err := q.virtiofsDaemon.Umount(rafsMountPath(c.id)); err != nil {
+	if err := virtiofsDaemon.Umount(rafsMountPath(c.id)); err != nil {
 		return errors.Wrap(err, "umount rafs failed")
 	}
 	if err := bindUnmountContainerSnapshotDir(ctx, sharedDir, c.id); err != nil {

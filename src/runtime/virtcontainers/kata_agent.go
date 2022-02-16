@@ -1272,13 +1272,24 @@ func (k *kataAgent) rollbackFailingContainerCreation(ctx context.Context, c *Con
 	}
 }
 
-func (k *kataAgent) buildContainerRootfsWithNydus(sandbox *Sandbox, c *Container, rootPathParent string) (*grpc.Storage, error) {
-	if sandbox.GetHypervisorType() != string(QemuHypervisor) {
-		// qemu is supported first, other hypervisors will next
-		// https://github.com/kata-containers/kata-containers/issues/2724
+func getVirtiofsDaemonForNydus(sandbox *Sandbox) (VirtiofsDaemon, error) {
+	var virtiofsDaemon VirtiofsDaemon
+	switch sandbox.GetHypervisorType() {
+	case string(QemuHypervisor):
+		virtiofsDaemon = sandbox.hypervisor.(*qemu).virtiofsDaemon
+	case string(ClhHypervisor):
+		virtiofsDaemon = sandbox.hypervisor.(*cloudHypervisor).virtiofsDaemon
+	default:
 		return nil, errNydusdNotSupport
 	}
-	q, _ := sandbox.hypervisor.(*qemu)
+	return virtiofsDaemon, nil
+}
+
+func (k *kataAgent) buildContainerRootfsWithNydus(sandbox *Sandbox, c *Container, rootPathParent string) (*grpc.Storage, error) {
+	virtiofsDaemon, err := getVirtiofsDaemonForNydus(sandbox)
+	if err != nil {
+		return nil, err
+	}
 	extraOption, err := parseExtraOption(c.rootFs.Options)
 	if err != nil {
 		return nil, err
@@ -1290,7 +1301,7 @@ func (k *kataAgent) buildContainerRootfsWithNydus(sandbox *Sandbox, c *Container
 	}
 	k.Logger().Infof("nydus option: %v", extraOption)
 	// mount lowerdir to guest /run/kata-containers/shared/images/<cid>/lowerdir
-	if err := q.virtiofsDaemon.Mount(*mountOpt); err != nil {
+	if err := virtiofsDaemon.Mount(*mountOpt); err != nil {
 		return nil, err
 	}
 	rootfs := &grpc.Storage{}

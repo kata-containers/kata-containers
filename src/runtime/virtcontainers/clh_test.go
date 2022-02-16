@@ -296,7 +296,7 @@ func TestClhCreateVM(t *testing.T) {
 	assert.Exactly(clhConfig, clh.config)
 }
 
-func TestClooudHypervisorStartSandbox(t *testing.T) {
+func TestCloudHypervisorStartSandbox(t *testing.T) {
 	assert := assert.New(t)
 	clhConfig, err := newClhConfig()
 	assert.NoError(err)
@@ -308,9 +308,9 @@ func TestClooudHypervisorStartSandbox(t *testing.T) {
 	clhConfig.RunStorePath = store.RunStoragePath()
 
 	clh := &cloudHypervisor{
-		config:    clhConfig,
-		APIClient: &clhClientMock{},
-		virtiofsd: &virtiofsdMock{},
+		config:         clhConfig,
+		APIClient:      &clhClientMock{},
+		virtiofsDaemon: &virtiofsdMock{},
 	}
 
 	err = clh.StartVM(context.Background(), 10)
