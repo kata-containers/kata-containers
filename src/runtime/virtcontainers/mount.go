@@ -470,7 +470,7 @@ func IsEphemeralStorage(path string) bool {
 		return false
 	}
 
-	if _, fsType, _ := utils.GetDevicePathAndFsType(path); fsType == "tmpfs" {
+	if _, fsType, _, _ := utils.GetDevicePathAndFsTypeOptions(path); fsType == "tmpfs" {
 		return true
 	}
 
@@ -485,7 +485,7 @@ func Isk8sHostEmptyDir(path string) bool {
 		return false
 	}
 
-	if _, fsType, _ := utils.GetDevicePathAndFsType(path); fsType != "tmpfs" {
+	if _, fsType, _, _ := utils.GetDevicePathAndFsTypeOptions(path); fsType != "tmpfs" {
 		return true
 	}
 	return false

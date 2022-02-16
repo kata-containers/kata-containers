@@ -75,7 +75,7 @@ func PmemDeviceInfo(source, destination string) (*DeviceInfo, error) {
 		return nil, fmt.Errorf("backing file %v has not PFN signature", device.HostPath)
 	}
 
-	_, fstype, err := utils.GetDevicePathAndFsType(source)
+	_, fstype, _, err := utils.GetDevicePathAndFsTypeOptions(source)
 	if err != nil {
 		pmemLog.WithError(err).WithField("mount-point", source).Warn("failed to get fstype: using ext4")
 		fstype = "ext4"
