@@ -280,7 +280,7 @@ pub async fn get_virtio_blk_ccw_device_name(
     sandbox: &Arc<Mutex<Sandbox>>,
     device: &ccw::Device,
 ) -> Result<String> {
-    let matcher = VirtioBlkCCWMatcher::new(&create_ccw_root_bus_path(), device);
+    let matcher = VirtioBlkCCWMatcher::new(CCW_ROOT_BUS_PATH, device);
     let uev = wait_for_uevent(sandbox, matcher).await?;
     let devname = uev.devname;
     return match Path::new(SYSTEM_DEV_PATH).join(&devname).to_str() {
@@ -1378,7 +1378,7 @@ mod tests {
     #[cfg(target_arch = "s390x")]
     #[tokio::test]
     async fn test_virtio_blk_ccw_matcher() {
-        let root_bus = create_ccw_root_bus_path();
+        let root_bus = CCW_ROOT_BUS_PATH;
         let subsystem = "block";
         let devname = "vda";
         let relpath = "0.0.0002";
