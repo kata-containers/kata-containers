@@ -40,7 +40,7 @@ if [ -d "$patches_dir" ]; then
 	echo "INFO: Found ${#patches[@]} patches"
 	for patch in ${patches[@]}; do
 		echo "INFO: Apply $patch"
-		git apply "$patch" || \
+		patch -p1 < "$patch" || \
 			{ echo >&2 "ERROR: Not applied. Exiting..."; exit 1; }
 	done
 else
