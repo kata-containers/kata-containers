@@ -9,6 +9,7 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"path"
 	"path/filepath"
@@ -597,7 +598,7 @@ func TestConstrainGRPCSpec(t *testing.T) {
 	assert.NotNil(g.Linux.Resources.Memory)
 	assert.Nil(g.Linux.Resources.Pids)
 	assert.Nil(g.Linux.Resources.BlockIO)
-	assert.Nil(g.Linux.Resources.HugepageLimits)
+	assert.Len(g.Linux.Resources.HugepageLimits, 0)
 	assert.Nil(g.Linux.Resources.Network)
 	assert.NotNil(g.Linux.Resources.CPU)
 	assert.Equal(g.Process.SelinuxLabel, "")
@@ -1228,5 +1229,59 @@ func TestSandboxBindMount(t *testing.T) {
 	err = syscall.Stat(mount2CheckPath, &stat)
 	assert.Error(err)
 	assert.True(os.IsNotExist(err))
+
+}
+
+func TestHandleHugepages(t *testing.T) {
+	if os.Getuid() != 0 {
+		t.Skip("Test disabled as requires root user")
+	}
+
+	assert := assert.New(t)
+
+	dir, err := ioutil.TempDir("", "hugepages-test")
+	assert.Nil(err)
+	defer os.RemoveAll(dir)
+
+	k := kataAgent{}
+	var mounts []specs.Mount
+	var hugepageLimits []specs.LinuxHugepageLimit
+
+	hugepageDirs := [2]string{"hugepages-1Gi", "hugepages-2Mi"}
+	options := [2]string{"pagesize=1024M", "pagesize=2M"}
+
+	for i := 0; i < 2; i++ {
+		target := path.Join(dir, hugepageDirs[i])
+		err := os.MkdirAll(target, 0777)
+		assert.NoError(err, "Unable to create dir %s", target)
+
+		err = syscall.Mount("nodev", target, "hugetlbfs", uintptr(0), options[i])
+		assert.NoError(err, "Unable to mount %s", target)
+
+		defer syscall.Unmount(target, 0)
+		defer os.RemoveAll(target)
+		mount := specs.Mount{
+			Type:   KataLocalDevType,
+			Source: target,
+		}
+		mounts = append(mounts, mount)
+	}
+
+	hugepageLimits = []specs.LinuxHugepageLimit{
+		{
+			Pagesize: "1GB",
+			Limit:    1073741824,
+		},
+		{
+			Pagesize: "2MB",
+			Limit:    134217728,
+		},
+	}
+
+	hugepages, err := k.handleHugepages(mounts, hugepageLimits)
+
+	assert.NoError(err, "Unable to handle hugepages %v", hugepageLimits)
+	assert.NotNil(hugepages)
+	assert.Equal(len(hugepages), 2)
 
 }
