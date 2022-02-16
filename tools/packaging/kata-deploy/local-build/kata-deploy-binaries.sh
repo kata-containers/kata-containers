@@ -130,6 +130,7 @@ install_clh() {
 
 	cloud_hypervisor_repo="$(yq r $versions_yaml assets.hypervisor.cloud_hypervisor.url)"
 	cloud_hypervisor_version="$(yq r $versions_yaml assets.hypervisor.cloud_hypervisor.version)"
+	export extra_build_args="--features tdx"
 
 	info "build static cloud-hypervisor"
 	"${clh_builder}"
