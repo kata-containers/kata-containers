@@ -43,6 +43,7 @@ RUN apt-get update && apt-get upgrade -y && \
 	    pkg-config \
 	    libseccomp-dev \
 	    libseccomp2 \
+	    patch \
 	    python \
 	    python-dev \
 	    rsync \
