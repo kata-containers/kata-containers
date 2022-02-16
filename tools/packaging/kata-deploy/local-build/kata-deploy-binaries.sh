@@ -125,11 +125,6 @@ install_firecracker() {
 
 # Install static cloud-hypervisor asset
 install_clh() {
-	local cloud_hypervisor_repo
-	local cloud_hypervisor_version
-
-	cloud_hypervisor_repo="$(yq r $versions_yaml assets.hypervisor.cloud_hypervisor.url)"
-	cloud_hypervisor_version="$(yq r $versions_yaml assets.hypervisor.cloud_hypervisor.version)"
 	export extra_build_args="--features tdx"
 
 	info "build static cloud-hypervisor"
