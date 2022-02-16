@@ -5,8 +5,8 @@
 
 use std::collections::HashMap;
 use std::fs;
-use std::fs::File;
-use std::io::{BufRead, BufReader};
+use std::fs::{File, OpenOptions};
+use std::io::{BufRead, BufReader, Write};
 use std::iter;
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::path::Path;
@@ -24,7 +24,7 @@ use crate::device::{
     get_scsi_device_name, get_virtio_blk_pci_device_name, online_device, wait_for_pmem_device,
     DRIVER_9P_TYPE, DRIVER_BLK_CCW_TYPE, DRIVER_BLK_TYPE, DRIVER_EPHEMERAL_TYPE, DRIVER_LOCAL_TYPE,
     DRIVER_MMIO_BLK_TYPE, DRIVER_NVDIMM_TYPE, DRIVER_OVERLAYFS_TYPE, DRIVER_SCSI_TYPE,
-    DRIVER_VIRTIOFS_TYPE, DRIVER_WATCHABLE_BIND_TYPE,
+    DRIVER_VIRTIOFS_TYPE, DRIVER_WATCHABLE_BIND_TYPE, FS_TYPE_HUGETLB,
 };
 use crate::linux_abi::*;
 use crate::pci;
@@ -37,7 +37,7 @@ use slog::Logger;
 use tracing::instrument;
 
 pub const TYPE_ROOTFS: &str = "rootfs";
-
+const SYS_FS_HUGEPAGES_PREFIX: &str = "/sys/kernel/mm/hugepages";
 pub const MOUNT_GUEST_TAG: &str = "kataShared";
 
 // Allocating an FSGroup that owns the pod's volumes
@@ -200,6 +200,12 @@ async fn ephemeral_storage_handler(
         return Ok("".to_string());
     }
 
+    // hugetlbfs
+    if storage.fstype == FS_TYPE_HUGETLB {
+        return handle_hugetlbfs_storage(logger, storage).await;
+    }
+
+    // normal ephemeral storage
     fs::create_dir_all(Path::new(&storage.mount_point))?;
 
     // By now we only support one option field: "fsGroup" which
@@ -297,6 +303,97 @@ async fn virtio9p_storage_handler(
     _sandbox: Arc<Mutex<Sandbox>>,
 ) -> Result<String> {
     common_storage_handler(logger, storage)
+}
+
+#[instrument]
+async fn handle_hugetlbfs_storage(logger: &Logger, storage: &Storage) -> Result<String> {
+    info!(logger, "handle hugetlbfs storage");
+    // Allocate hugepages before mount
+    // /sys/kernel/mm/hugepages/hugepages-1048576kB/nr_hugepages
+    // /sys/kernel/mm/hugepages/hugepages-2048kB/nr_hugepages
+    // options eg "pagesize=2097152,size=524288000"(2M, 500M)
+    allocate_hugepages(logger, &storage.options.to_vec()).context("allocate hugepages")?;
+
+    common_storage_handler(logger, storage)?;
+
+    // hugetlbfs return empty string as ephemeral_storage_handler do.
+    // this is a sandbox level storage, but not a container-level mount.
+    Ok("".to_string())
+}
+
+// Allocate hugepages by writing to sysfs
+fn allocate_hugepages(logger: &Logger, options: &[String]) -> Result<()> {
+    info!(logger, "mounting hugePages storage options: {:?}", options);
+
+    let (pagesize, size) = get_pagesize_and_size_from_option(options)
+        .context(format!("parse mount options: {:?}", &options))?;
+
+    info!(
+        logger,
+        "allocate hugepages. pageSize: {}, size: {}", pagesize, size
+    );
+
+    // sysfs entry is always of the form hugepages-${pagesize}kB
+    // Ref: https://www.kernel.org/doc/Documentation/vm/hugetlbpage.txt
+    let path = Path::new(SYS_FS_HUGEPAGES_PREFIX).join(format!("hugepages-{}kB", pagesize / 1024));
+
+    if !path.exists() {
+        fs::create_dir_all(&path).context("create hugepages-size directory")?;
+    }
+
+    // write numpages to nr_hugepages file.
+    let path = path.join("nr_hugepages");
+    let numpages = format!("{}", size / pagesize);
+    info!(logger, "write {} pages to {:?}", &numpages, &path);
+
+    let mut file = OpenOptions::new()
+        .write(true)
+        .create(true)
+        .open(&path)
+        .context(format!("open nr_hugepages directory {:?}", &path))?;
+
+    file.write_all(numpages.as_bytes())
+        .context(format!("write nr_hugepages failed: {:?}", &path))?;
+
+    Ok(())
+}
+
+// Parse filesystem options string to retrieve hugepage details
+// options eg "pagesize=2048,size=107374182"
+fn get_pagesize_and_size_from_option(options: &[String]) -> Result<(u64, u64)> {
+    let mut pagesize_str: Option<&str> = None;
+    let mut size_str: Option<&str> = None;
+
+    for option in options {
+        let vars: Vec<&str> = option.trim().split(',').collect();
+
+        for var in vars {
+            if let Some(stripped) = var.strip_prefix("pagesize=") {
+                pagesize_str = Some(stripped);
+            } else if let Some(stripped) = var.strip_prefix("size=") {
+                size_str = Some(stripped);
+            }
+
+            if pagesize_str.is_some() && size_str.is_some() {
+                break;
+            }
+        }
+    }
+
+    if pagesize_str.is_none() || size_str.is_none() {
+        return Err(anyhow!("no pagesize/size options found"));
+    }
+
+    let pagesize = pagesize_str
+        .unwrap()
+        .parse::<u64>()
+        .context(format!("parse pagesize: {:?}", &pagesize_str))?;
+    let size = size_str
+        .unwrap()
+        .parse::<u64>()
+        .context(format!("parse size: {:?}", &pagesize_str))?;
+
+    Ok((pagesize, size))
 }
 
 // virtiommio_blk_storage_handler handles the storage for mmio blk driver.
@@ -1391,5 +1488,61 @@ mod tests {
         assert!(result.is_ok());
 
         assert!(testfile.is_file());
+    }
+
+    #[test]
+    fn test_get_pagesize_and_size_from_option() {
+        let expected_pagesize = 2048;
+        let expected_size = 107374182;
+        let expected = (expected_pagesize, expected_size);
+
+        let data = vec![
+            // (input, expected, is_ok)
+            ("size-1=107374182,pagesize-1=2048", expected, false),
+            ("size-1=107374182,pagesize=2048", expected, false),
+            ("size=107374182,pagesize-1=2048", expected, false),
+            ("size=107374182,pagesize=abc", expected, false),
+            ("size=abc,pagesize=2048", expected, false),
+            ("size=,pagesize=2048", expected, false),
+            ("size=107374182,pagesize=", expected, false),
+            ("size=107374182,pagesize=2048", expected, true),
+            ("pagesize=2048,size=107374182", expected, true),
+            ("foo=bar,pagesize=2048,size=107374182", expected, true),
+            (
+                "foo=bar,pagesize=2048,foo1=bar1,size=107374182",
+                expected,
+                true,
+            ),
+            (
+                "pagesize=2048,foo1=bar1,foo=bar,size=107374182",
+                expected,
+                true,
+            ),
+            (
+                "foo=bar,pagesize=2048,foo1=bar1,size=107374182,foo2=bar2",
+                expected,
+                true,
+            ),
+            (
+                "foo=bar,size=107374182,foo1=bar1,pagesize=2048",
+                expected,
+                true,
+            ),
+        ];
+
+        for case in data {
+            let input = case.0;
+            let r = get_pagesize_and_size_from_option(&[input.to_string()]);
+
+            let is_ok = case.2;
+            if is_ok {
+                let expected = case.1;
+                let (pagesize, size) = r.unwrap();
+                assert_eq!(expected.0, pagesize);
+                assert_eq!(expected.1, size);
+            } else {
+                assert!(r.is_err());
+            }
+        }
     }
 }
