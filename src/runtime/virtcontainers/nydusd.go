@@ -68,7 +68,7 @@ var (
 	errNydusdSockPathInvalid    = errors.New("nydusd sock path is invalid")
 	errNydusdAPISockPathInvalid = errors.New("nydusd api sock path is invalid")
 	errNydusdSourcePathInvalid  = errors.New("nydusd resource path is invalid")
-	errNydusdNotSupport         = errors.New("nydusd only supports the QEMU hypervisor currently (see https://github.com/kata-containers/kata-containers/issues/2724)")
+	errNydusdNotSupport         = errors.New("nydusd only supports the QEMU/CLH hypervisor currently (see https://github.com/kata-containers/kata-containers/issues/3654)")
 )
 
 type nydusd struct {

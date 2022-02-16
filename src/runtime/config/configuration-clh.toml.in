@@ -70,6 +70,11 @@ default_memory = @DEFMEMSZ@
 # This is will determine the times that memory will be hotadded to sandbox/VM.
 #memory_slots = @DEFMEMSLOTS@
 
+# Shared file system type:
+#   - virtio-fs (default)
+#   - virtio-fs-nydus
+shared_fs = "@DEFSHAREDFS_CLH_VIRTIOFS@"
+
 # Path to vhost-user-fs daemon.
 virtio_fs_daemon = "@DEFVIRTIOFSDAEMON@"
 
