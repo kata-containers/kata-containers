@@ -9,25 +9,26 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/mdlayher/socket"
 )
 
 const (
 	// Hypervisor specifies that a socket should communicate with the hypervisor
-	// process.
+	// process. Note that this is _not_ the same as a socket owned by a process
+	// running on the hypervisor. Most users should probably use Host instead.
 	Hypervisor = 0x0
 
+	// Local specifies that a socket should communicate with a matching socket
+	// on the same machine. This provides an alternative to UNIX sockets or
+	// similar and may be useful in testing VM sockets applications.
+	Local = 0x1
+
 	// Host specifies that a socket should communicate with processes other than
-	// the hypervisor on the host machine.
+	// the hypervisor on the host machine. This is the correct choice to
+	// communicate with a process running on a hypervisor using a socket dialed
+	// from a guest.
 	Host = 0x2
-
-	// cidReserved is a reserved context ID that is no longer in use,
-	// and cannot be used for socket communications.
-	cidReserved = 0x1
-
-	// shutRd and shutWr are arguments for unix.Shutdown, copied here to avoid
-	// importing x/sys/unix in cross-platform code.
-	shutRd = 0 // unix.SHUT_RD
-	shutWr = 1 // unix.SHUT_WR
 
 	// Error numbers we recognize, copied here to avoid importing x/sys/unix in
 	// cross-platform code.
@@ -55,27 +56,66 @@ const (
 	opWrite       = "write"
 )
 
+// TODO(mdlayher): plumb through socket.Config.NetNS if it makes sense.
+
+// Config contains options for a Conn or Listener.
+type Config struct{}
+
 // Listen opens a connection-oriented net.Listener for incoming VM sockets
-// connections. The port parameter specifies the port for the Listener.
+// connections. The port parameter specifies the port for the Listener. Config
+// specifies optional configuration for the Listener. If config is nil, a
+// default configuration will be used.
 //
-// To allow the server to assign a port automatically, specify 0 for port.
-// The address of the server can be retrieved using the Addr method.
+// To allow the server to assign a port automatically, specify 0 for port. The
+// address of the server can be retrieved using the Addr method.
 //
-// When the Listener is no longer needed, Close must be called to free resources.
-func Listen(port uint32) (*Listener, error) {
+// Listen automatically infers the appropriate context ID for this machine by
+// calling ContextID and passing that value to ListenContextID. Callers with
+// advanced use cases (such as using the Local context ID) may wish to use
+// ListenContextID directly.
+//
+// When the Listener is no longer needed, Close must be called to free
+// resources.
+func Listen(port uint32, cfg *Config) (*Listener, error) {
 	cid, err := ContextID()
 	if err != nil {
 		// No addresses available.
 		return nil, opError(opListen, err, nil, nil)
 	}
 
-	l, err := listen(cid, port)
+	return ListenContextID(cid, port, cfg)
+}
+
+// ListenContextID is the same as Listen, but also accepts an explicit context
+// ID parameter. This function is intended for advanced use cases and most
+// callers should use Listen instead.
+//
+// See the documentation of Listen for more details.
+func ListenContextID(contextID, port uint32, cfg *Config) (*Listener, error) {
+	l, err := listen(contextID, port, cfg)
 	if err != nil {
 		// No remote address available.
 		return nil, opError(opListen, err, &Addr{
-			ContextID: cid,
+			ContextID: contextID,
 			Port:      port,
 		}, nil)
+	}
+
+	return l, nil
+}
+
+// FileListener returns a copy of the network listener corresponding to an open
+// os.File. It is the caller's responsibility to close the Listener when
+// finished. Closing the Listener does not affect the os.File, and closing the
+// os.File does not affect the Listener.
+//
+// This function is intended for advanced use cases and most callers should use
+// Listen instead.
+func FileListener(f *os.File) (*Listener, error) {
+	l, err := fileListener(f)
+	if err != nil {
+		// No addresses available.
+		return nil, opError(opListen, err, nil, nil)
 	}
 
 	return l, nil
@@ -112,8 +152,6 @@ func (l *Listener) Close() error {
 
 // SetDeadline sets the deadline associated with the listener. A zero time value
 // disables the deadline.
-//
-// SetDeadline only works with Go 1.12+.
 func (l *Listener) SetDeadline(t time.Time) error {
 	return l.opError(opSet, l.l.SetDeadline(t))
 }
@@ -125,8 +163,10 @@ func (l *Listener) opError(op string, err error) error {
 	return opError(op, err, l.Addr(), nil)
 }
 
-// Dial dials a connection-oriented net.Conn to a VM sockets server.
-// The contextID and port parameters specify the address of the server.
+// Dial dials a connection-oriented net.Conn to a VM sockets listener. The
+// context ID and port parameters specify the address of the listener. Config
+// specifies optional configuration for the Conn. If config is nil, a default
+// configuration will be used.
 //
 // If dialing a connection from the hypervisor to a virtual machine, the VM's
 // context ID should be specified.
@@ -135,9 +175,10 @@ func (l *Listener) opError(op string, err error) error {
 // communicate with the hypervisor process, or Host should be used to
 // communicate with other processes on the host machine.
 //
-// When the connection is no longer needed, Close must be called to free resources.
-func Dial(contextID, port uint32) (*Conn, error) {
-	c, err := dial(contextID, port)
+// When the connection is no longer needed, Close must be called to free
+// resources.
+func Dial(contextID, port uint32, cfg *Config) (*Conn, error) {
+	c, err := dial(contextID, port, cfg)
 	if err != nil {
 		// No local address, but we have a remote address we can return.
 		return nil, opError(opDial, err, nil, &Addr{
@@ -149,35 +190,33 @@ func Dial(contextID, port uint32) (*Conn, error) {
 	return c, nil
 }
 
-var _ net.Conn = &Conn{}
-var _ syscall.Conn = &Conn{}
+var (
+	_ net.Conn     = &Conn{}
+	_ syscall.Conn = &Conn{}
+)
 
 // A Conn is a VM sockets implementation of a net.Conn.
 type Conn struct {
-	fd     connFD
+	c      *socket.Conn
 	local  *Addr
 	remote *Addr
 }
 
 // Close closes the connection.
 func (c *Conn) Close() error {
-	return c.opError(opClose, c.fd.Close())
+	return c.opError(opClose, c.c.Close())
 }
 
 // CloseRead shuts down the reading side of the VM sockets connection. Most
 // callers should just use Close.
-//
-// CloseRead only works with Go 1.12+.
 func (c *Conn) CloseRead() error {
-	return c.opError(opClose, c.fd.Shutdown(shutRd))
+	return c.opError(opClose, c.c.CloseRead())
 }
 
 // CloseWrite shuts down the writing side of the VM sockets connection. Most
 // callers should just use Close.
-//
-// CloseWrite only works with Go 1.12+.
 func (c *Conn) CloseWrite() error {
-	return c.opError(opClose, c.fd.Shutdown(shutWr))
+	return c.opError(opClose, c.c.CloseWrite())
 }
 
 // LocalAddr returns the local network address. The Addr returned is shared by
@@ -190,7 +229,7 @@ func (c *Conn) RemoteAddr() net.Addr { return c.remote }
 
 // Read implements the net.Conn Read method.
 func (c *Conn) Read(b []byte) (int, error) {
-	n, err := c.fd.Read(b)
+	n, err := c.c.Read(b)
 	if err != nil {
 		return n, c.opError(opRead, err)
 	}
@@ -200,7 +239,7 @@ func (c *Conn) Read(b []byte) (int, error) {
 
 // Write implements the net.Conn Write method.
 func (c *Conn) Write(b []byte) (int, error) {
-	n, err := c.fd.Write(b)
+	n, err := c.c.Write(b)
 	if err != nil {
 		return n, c.opError(opWrite, err)
 	}
@@ -208,35 +247,25 @@ func (c *Conn) Write(b []byte) (int, error) {
 	return n, nil
 }
 
-// A deadlineType specifies the type of deadline to set for a Conn.
-type deadlineType int
-
-// Possible deadlineType values.
-const (
-	deadline deadlineType = iota
-	readDeadline
-	writeDeadline
-)
-
 // SetDeadline implements the net.Conn SetDeadline method.
 func (c *Conn) SetDeadline(t time.Time) error {
-	return c.opError(opSet, c.fd.SetDeadline(t, deadline))
+	return c.opError(opSet, c.c.SetDeadline(t))
 }
 
 // SetReadDeadline implements the net.Conn SetReadDeadline method.
 func (c *Conn) SetReadDeadline(t time.Time) error {
-	return c.opError(opSet, c.fd.SetDeadline(t, readDeadline))
+	return c.opError(opSet, c.c.SetReadDeadline(t))
 }
 
 // SetWriteDeadline implements the net.Conn SetWriteDeadline method.
 func (c *Conn) SetWriteDeadline(t time.Time) error {
-	return c.opError(opSet, c.fd.SetDeadline(t, writeDeadline))
+	return c.opError(opSet, c.c.SetWriteDeadline(t))
 }
 
 // SyscallConn returns a raw network connection. This implements the
 // syscall.Conn interface.
 func (c *Conn) SyscallConn() (syscall.RawConn, error) {
-	rc, err := c.fd.SyscallConn()
+	rc, err := c.c.SyscallConn()
 	if err != nil {
 		return nil, c.opError(opSyscallConn, err)
 	}
@@ -254,14 +283,17 @@ func (c *Conn) opError(op string, err error) error {
 	return opError(op, err, c.local, c.remote)
 }
 
+// TODO(mdlayher): see if we can port smarter net.OpError with local/remote
+// address error logic into socket.Conn's SyscallConn type to avoid the need for
+// this wrapper.
+
 var _ syscall.RawConn = &rawConn{}
 
 // A rawConn is a syscall.RawConn that wraps an internal syscall.RawConn in order
 // to produce net.OpError error values.
 type rawConn struct {
-	rc     syscall.RawConn
-	local  *Addr
-	remote *Addr
+	rc            syscall.RawConn
+	local, remote *Addr
 }
 
 // Control implements the syscall.RawConn Control method.
@@ -289,8 +321,7 @@ var _ net.Addr = &Addr{}
 
 // An Addr is the address of a VM sockets endpoint.
 type Addr struct {
-	ContextID uint32
-	Port      uint32
+	ContextID, Port uint32
 }
 
 // Network returns the address's network name, "vsock".
@@ -304,8 +335,8 @@ func (a *Addr) String() string {
 	switch a.ContextID {
 	case Hypervisor:
 		host = fmt.Sprintf("hypervisor(%d)", a.ContextID)
-	case cidReserved:
-		host = fmt.Sprintf("reserved(%d)", a.ContextID)
+	case Local:
+		host = fmt.Sprintf("local(%d)", a.ContextID)
 	case Host:
 		host = fmt.Sprintf("host(%d)", a.ContextID)
 	default:
@@ -337,6 +368,13 @@ func opError(op string, err error, local, remote net.Addr) error {
 	if err == nil {
 		return nil
 	}
+
+	// TODO(mdlayher): this entire function is suspect and should probably be
+	// looked at carefully, especially with Go 1.13+ error wrapping.
+	//
+	// Eventually this *net.OpError logic should probably be ported into
+	// mdlayher/socket because similar checks are necessary to comply with
+	// nettest.TestConn.
 
 	// Unwrap inner errors from error types.
 	//

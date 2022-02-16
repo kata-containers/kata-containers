@@ -359,7 +359,7 @@ func VsockDialer(sock string, timeout time.Duration) (net.Conn, error) {
 	}
 
 	dialFunc := func() (net.Conn, error) {
-		return vsock.Dial(cid, port)
+		return vsock.Dial(cid, port, nil)
 	}
 
 	timeoutErr := grpcStatus.Errorf(codes.DeadlineExceeded, "timed out connecting to vsock %d:%d", cid, port)
