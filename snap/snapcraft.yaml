@@ -204,14 +204,7 @@ parts:
       kernel_dir_prefix="kata-linux-"
 
       # Setup and build kernel
-      if [ "$(uname -m)" = "x86_64" ]; then
-        kernel_version="$(${yq} r $versions_file assets.kernel-experimental.tag)"
-        kernel_version=${kernel_version#v}
-        kernel_dir_prefix="kata-linux-experimental-"
-        ./build-kernel.sh -e -v ${kernel_version} -d setup
-      else
-        ./build-kernel.sh -v ${kernel_version} -d setup
-      fi
+      ./build-kernel.sh -v ${kernel_version} -d setup
       cd ${kernel_dir_prefix}*
       make -j $(($(nproc)-1)) EXTRAVERSION=".container"
 
