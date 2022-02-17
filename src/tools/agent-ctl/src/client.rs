@@ -22,7 +22,6 @@ use std::os::unix::io::{IntoRawFd, RawFd};
 use std::os::unix::net::UnixStream;
 use std::thread::sleep;
 use std::time::Duration;
-use ttrpc;
 use ttrpc::context::Context;
 
 // Run the specified closure to set an automatic value if the ttRPC Context
@@ -89,13 +88,13 @@ struct BuiltinCmd {
 }
 
 // Command that causes the agent to exit (iff tracing is enabled)
-const SHUTDOWN_CMD: &'static str = "DestroySandbox";
+const SHUTDOWN_CMD: &str = "DestroySandbox";
 
 // Command that requests this program ends
-const CMD_QUIT: &'static str = "quit";
-const CMD_REPEAT: &'static str = "repeat";
+const CMD_QUIT: &str = "quit";
+const CMD_REPEAT: &str = "repeat";
 
-const DEFAULT_PROC_SIGNAL: &'static str = "SIGKILL";
+const DEFAULT_PROC_SIGNAL: &str = "SIGKILL";
 
 const ERR_API_FAILED: &str = "API failed";
 
@@ -106,7 +105,7 @@ const METADATA_CFG_NS: &str = "agent-ctl-cfg";
 // automatically.
 const NO_AUTO_VALUES_CFG_NAME: &str = "no-auto-values";
 
-static AGENT_CMDS: &'static [AgentCmd] = &[
+static AGENT_CMDS: &[AgentCmd] = &[
     AgentCmd {
         name: "AddARPNeighbors",
         st: ServiceType::Agent,
@@ -274,7 +273,7 @@ static AGENT_CMDS: &'static [AgentCmd] = &[
     },
 ];
 
-static BUILTIN_CMDS: &'static [BuiltinCmd] = &[
+static BUILTIN_CMDS: & [BuiltinCmd] = &[
     BuiltinCmd {
         name: "echo",
         descr: "Display the arguments",
@@ -638,7 +637,7 @@ pub fn client(cfg: &Config, commands: Vec<&str>) -> Result<()> {
         "server-address" => cfg.server_address.to_string());
 
     if cfg.interactive {
-        return interactive_client_loop(&cfg, &mut options, &client, &health, &ttrpc_ctx);
+        return interactive_client_loop(cfg, &mut options, &client, &health, &ttrpc_ctx);
     }
 
     let mut repeat_count = 1;
@@ -650,17 +649,16 @@ pub fn client(cfg: &Config, commands: Vec<&str>) -> Result<()> {
         }
 
         let (result, shutdown) = handle_cmd(
-            &cfg,
+            cfg,
             &client,
             &health,
             &ttrpc_ctx,
             repeat_count,
             &mut options,
-            &cmd,
+            cmd,
         );
-        if result.is_err() {
-            return result;
-        }
+
+        result.map_err(|e| anyhow!(e))?;
 
         if shutdown {
             break;
@@ -692,7 +690,7 @@ fn handle_cmd(
         return (Ok(()), false);
     }
 
-    let first = match cmd.chars().nth(0) {
+    let first = match cmd.chars().next() {
         Some(c) => c,
         None => return (Err(anyhow!("failed to check command name")), false),
     };
@@ -759,12 +757,12 @@ fn handle_cmd(
 }
 
 fn handle_builtin_cmd(cmd: &str, args: &str) -> (Result<()>, bool) {
-    let f = match get_builtin_cmd_func(&cmd) {
+    let f = match get_builtin_cmd_func(cmd) {
         Ok(fp) => fp,
         Err(e) => return (Err(e), false),
     };
 
-    f(&args)
+    f(args)
 }
 
 // Execute the ttRPC specified by the first field of "line". Return a result
@@ -777,12 +775,12 @@ fn handle_agent_cmd(
     cmd: &str,
     args: &str,
 ) -> (Result<()>, bool) {
-    let f = match get_agent_cmd_func(&cmd) {
+    let f = match get_agent_cmd_func(cmd) {
         Ok(fp) => fp,
         Err(e) => return (Err(e), false),
     };
 
-    let result = f(ctx, client, health, options, &args);
+    let result = f(ctx, client, health, options, args);
     if result.is_err() {
         return (result, false);
     }
@@ -821,9 +819,8 @@ fn interactive_client_loop(
 
         let (result, shutdown) =
             handle_cmd(cfg, client, health, ctx, repeat_count, options, &cmdline);
-        if result.is_err() {
-            return result;
-        }
+
+        result.map_err(|e| anyhow!(e))?;
 
         if shutdown {
             break;
@@ -1412,7 +1409,7 @@ fn agent_cmd_container_tty_win_resize(
 
         let rows_str = utils::get_option("row", options, args)?;
 
-        if rows_str != "" {
+        if !rows_str.is_empty() {
             let rows = rows_str
                 .parse::<u32>()
                 .map_err(|e| anyhow!(e).context("invalid row size"))?;
@@ -1421,7 +1418,7 @@ fn agent_cmd_container_tty_win_resize(
 
         let cols_str = utils::get_option("column", options, args)?;
 
-        if cols_str != "" {
+        if !cols_str.is_empty() {
             let cols = cols_str
                 .parse::<u32>()
                 .map_err(|e| anyhow!(e).context("invalid column size"))?;
@@ -1497,7 +1494,7 @@ fn agent_cmd_container_read_stdout(
 
         let length_str = utils::get_option("len", options, args)?;
 
-        if length_str != "" {
+        if !length_str.is_empty() {
             let length = length_str
                 .parse::<u32>()
                 .map_err(|e| anyhow!(e).context("invalid length"))?;
@@ -1539,7 +1536,7 @@ fn agent_cmd_container_read_stderr(
 
         let length_str = utils::get_option("len", options, args)?;
 
-        if length_str != "" {
+        if !length_str.is_empty() {
             let length = length_str
                 .parse::<u32>()
                 .map_err(|e| anyhow!(e).context("invalid length"))?;
@@ -1657,13 +1654,13 @@ fn agent_cmd_sandbox_copy_file(
 
     run_if_auto_values!(ctx, || -> Result<()> {
         let path = utils::get_option("path", options, args)?;
-        if path != "" {
+        if !path.is_empty() {
             req.set_path(path);
         }
 
         let file_size_str = utils::get_option("file_size", options, args)?;
 
-        if file_size_str != "" {
+        if !file_size_str.is_empty() {
             let file_size = file_size_str
                 .parse::<i64>()
                 .map_err(|e| anyhow!(e).context("invalid file_size"))?;
@@ -1673,7 +1670,7 @@ fn agent_cmd_sandbox_copy_file(
 
         let file_mode_str = utils::get_option("file_mode", options, args)?;
 
-        if file_mode_str != "" {
+        if !file_mode_str.is_empty() {
             let file_mode = file_mode_str
                 .parse::<u32>()
                 .map_err(|e| anyhow!(e).context("invalid file_mode"))?;
@@ -1683,7 +1680,7 @@ fn agent_cmd_sandbox_copy_file(
 
         let dir_mode_str = utils::get_option("dir_mode", options, args)?;
 
-        if dir_mode_str != "" {
+        if !dir_mode_str.is_empty() {
             let dir_mode = dir_mode_str
                 .parse::<u32>()
                 .map_err(|e| anyhow!(e).context("invalid dir_mode"))?;
@@ -1693,7 +1690,7 @@ fn agent_cmd_sandbox_copy_file(
 
         let uid_str = utils::get_option("uid", options, args)?;
 
-        if uid_str != "" {
+        if !uid_str.is_empty() {
             let uid = uid_str
                 .parse::<i32>()
                 .map_err(|e| anyhow!(e).context("invalid uid"))?;
@@ -1703,7 +1700,7 @@ fn agent_cmd_sandbox_copy_file(
 
         let gid_str = utils::get_option("gid", options, args)?;
 
-        if gid_str != "" {
+        if !gid_str.is_empty() {
             let gid = gid_str
                 .parse::<i32>()
                 .map_err(|e| anyhow!(e).context("invalid gid"))?;
@@ -1712,7 +1709,7 @@ fn agent_cmd_sandbox_copy_file(
 
         let offset_str = utils::get_option("offset", options, args)?;
 
-        if offset_str != "" {
+        if !offset_str.is_empty() {
             let offset = offset_str
                 .parse::<i64>()
                 .map_err(|e| anyhow!(e).context("invalid offset"))?;
@@ -1720,7 +1717,7 @@ fn agent_cmd_sandbox_copy_file(
         }
 
         let data_str = utils::get_option("data", options, args)?;
-        if data_str != "" {
+        if !data_str.is_empty() {
             let data = utils::str_to_bytes(&data_str)?;
             req.set_data(data.to_vec());
         }
@@ -1786,7 +1783,7 @@ fn agent_cmd_sandbox_online_cpu_mem(
     run_if_auto_values!(ctx, || -> Result<()> {
         let wait_str = utils::get_option("wait", options, args)?;
 
-        if wait_str != "" {
+        if !wait_str.is_empty() {
             let wait = wait_str
                 .parse::<bool>()
                 .map_err(|e| anyhow!(e).context("invalid wait bool"))?;
@@ -1796,7 +1793,7 @@ fn agent_cmd_sandbox_online_cpu_mem(
 
         let nb_cpus_str = utils::get_option("nb_cpus", options, args)?;
 
-        if nb_cpus_str != "" {
+        if !nb_cpus_str.is_empty() {
             let nb_cpus = nb_cpus_str
                 .parse::<u32>()
                 .map_err(|e| anyhow!(e).context("invalid nb_cpus value"))?;
@@ -1806,7 +1803,7 @@ fn agent_cmd_sandbox_online_cpu_mem(
 
         let cpu_only_str = utils::get_option("cpu_only", options, args)?;
 
-        if cpu_only_str != "" {
+        if !cpu_only_str.is_empty() {
             let cpu_only = cpu_only_str
                 .parse::<bool>()
                 .map_err(|e| anyhow!(e).context("invalid cpu_only bool"))?;
@@ -1843,7 +1840,7 @@ fn agent_cmd_sandbox_set_guest_date_time(
     run_if_auto_values!(ctx, || -> Result<()> {
         let secs_str = utils::get_option("sec", options, args)?;
 
-        if secs_str != "" {
+        if !secs_str.is_empty() {
             let secs = secs_str
                 .parse::<i64>()
                 .map_err(|e| anyhow!(e).context("invalid seconds"))?;
@@ -1853,7 +1850,7 @@ fn agent_cmd_sandbox_set_guest_date_time(
 
         let usecs_str = utils::get_option("usec", options, args)?;
 
-        if usecs_str != "" {
+        if !usecs_str.is_empty() {
             let usecs = usecs_str
                 .parse::<i64>()
                 .map_err(|e| anyhow!(e).context("invalid useconds"))?;
@@ -1954,7 +1951,7 @@ fn agent_cmd_sandbox_mem_hotplug_by_probe(
         if !addr_list.is_empty() {
             let addrs: Vec<u64> = addr_list
                 // Convert into a list of string values.
-                .split(",")
+                .split(',')
                 // Convert each string element into a u8 array of bytes, ignoring
                 // those elements that fail the conversion.
                 .filter_map(|s| hex::decode(s.trim_start_matches("0x")).ok())
@@ -2025,7 +2022,7 @@ fn builtin_cmd_list(_args: &str) -> (Result<()>, bool) {
 
     cmds.iter().for_each(|n| println!(" - {}", n));
 
-    println!("");
+    println!();
 
     (Ok(()), false)
 }
@@ -2046,8 +2043,8 @@ fn get_repeat_count(cmdline: &str) -> i64 {
     let count = fields[1];
 
     match count.parse::<i64>() {
-        Ok(n) => return n,
-        Err(_) => return default_repeat_count,
+        Ok(n) => n,
+        Err(_) => default_repeat_count,
     }
 }
 
