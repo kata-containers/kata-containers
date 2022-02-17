@@ -78,31 +78,34 @@ Overview:
 Usage:
     ${script_name} [options] <command>
 Commands:
-- help:                         Display this help
-- all:                          Build and install everything, test kata with containerd and capture the logs
-- build_and_install_all:        Build and install everything
-- initialize:                   Install dependencies and check out kata-containers source
-- rebuild_and_install_kata:     Rebuild the kata runtime and agent and build and install the image
-- build_kata_runtime:           Build and install the kata runtime
-- configure:                    Configure Kata to use rootfs and enable debug
-- create_rootfs:                Create a local rootfs
-- build_and_add_agent_to_rootfs:Builds the kata-agent and adds it to the rootfs
-- build_and_install_rootfs:     Builds and installs the rootfs image
-- install_guest_kernel:         Setup, build and install the guest kernel
-- build_qemu:                   Checkout, patch, build and install QEMU
-- init_kubernetes:              initialize a Kubernetes cluster on this system
-- crictl_create_cc_pod          Use crictl to create a new kata cc pod
-- crictl_create_cc_container    Use crictl to create a new busybox container in the kata cc pod
-- crictl_delete_cc              Use crictl to delete the kata cc pod sandbox and container in it
-- kubernetes_create_cc_pod:     Create a Kata CC runtime busybox-based pod in Kubernetes
-- kubernetes_delete_cc_pod:     Delete the Kata CC runtime busybox-based pod in Kubernetes
-- open_kata_console:            Stream the kata runtime's console
-- open_kata_shell:              Open a shell into the kata runtime
-- agent_pull_image:             Run PullImage command against the agent with agent-ctl
-- shim_pull_image:              Run PullImage command against the shim with ctr
-- agent_create_container:       Run CreateContainer command against the agent with agent-ctl
-- test:                         Test using kata with containerd
-- test_capture_logs:            Test using kata with containerd and capture the logs in the user's home directory
+- agent_create_container:           Run CreateContainer command against the agent with agent-ctl
+- agent_pull_image:                 Run PullImage command against the agent with agent-ctl
+- all:                              Build and install everything, test kata with containerd and capture the logs
+- build_and_add_agent_to_rootfs:    Builds the kata-agent and adds it to the rootfs
+- build_and_install_all:            Build and install everything
+- build_and_install_rootfs:         Builds and installs the rootfs image
+- build_kata_runtime:               Build and install the kata runtime
+- build_qemu:                       Checkout, patch, build and install QEMU
+- configure:                        Configure Kata to use rootfs and enable debug
+- connect_to_ssh_demo_pod:          Ssh into the ssh demo pod, showing that the decryption succeeded
+- create_rootfs:                    Create a local rootfs
+- crictl_create_cc_container        Use crictl to create a new busybox container in the kata cc pod
+- crictl_create_cc_pod              Use crictl to create a new kata cc pod
+- crictl_delete_cc                  Use crictl to delete the kata cc pod sandbox and container in it
+- help:                             Display this help
+- init_kubernetes:                  initialize a Kubernetes cluster on this system
+- initialize:                       Install dependencies and check out kata-containers source
+- install_guest_kernel:             Setup, build and install the guest kernel
+- kubernetes_create_cc_pod:         Create a Kata CC runtime busybox-based pod in Kubernetes
+- kubernetes_create_ssh_demo_pod:   Create a Kata CC runtime pod based on the ssh demo
+- kubernetes_delete_cc_pod:         Delete the Kata CC runtime busybox-based pod in Kubernetes
+- kubernetes_delete_ssh_demo_pod:   Delete the Kata CC runtime pod based on the ssh demo
+- open_kata_console:                Stream the kata runtime's console
+- open_kata_shell:                  Open a shell into the kata runtime
+- rebuild_and_install_kata:         Rebuild the kata runtime and agent and build and install the image
+- shim_pull_image:                  Run PullImage command against the shim with ctr
+- test_capture_logs:                Test using kata with containerd and capture the logs in the user's home directory
+- test:                             Test using kata with containerd
 
 Options:
     -d: Enable debug
@@ -139,7 +142,6 @@ initialize() {
     # We need git to checkout and bootstrap the ci scripts and some other packages used in testing
     sudo apt-get update && sudo apt-get install -y curl git socat qemu-utils
     
-    PROFILE="${HOME}/.profile"
     grep -qxF "export GOPATH=\${HOME}/go" "${PROFILE}" || echo "export GOPATH=\${HOME}/go" >> "${PROFILE}"
     grep -qxF "export GOROOT=/usr/local/go" "${PROFILE}" || echo "export GOROOT=/usr/local/go" >> "${PROFILE}"
     grep -qxF "export PATH=\${GOPATH}/bin:/usr/local/go/bin:\${PATH}" "${PROFILE}" || echo "export PATH=\${GOPATH}/bin:/usr/local/go/bin:\${PATH}" >> "${PROFILE}"
@@ -151,7 +153,7 @@ initialize() {
     check_out_repos
 
     pushd "${tests_repo_dir}"
-    ci_dir_name=".ci"
+    local ci_dir_name=".ci"
     sudo -E PATH=$PATH -s "${ci_dir_name}/install_go.sh" -p -f
     sudo -E PATH=$PATH -s "${ci_dir_name}/install_rust.sh"
 
@@ -201,6 +203,11 @@ configure() {
     debug_function enable_full_debug
     # Temp PoC verify code: Inject policy path config parameter
     sudo sed -i -e 's%^kernel_params = "\(.*\)"%kernel_params = "\1 agent.container_policy_file=/etc/containers/quay_verification/quay_policy.json"%g' /etc/kata-containers/configuration.toml
+
+    # If using AA then need to add the agent_config
+    if [ "${AA_KBC}" == "offline_fs_kbc" ]; then
+        sudo sed -i -e 's%^kernel_params = "\(.*\)"%kernel_params = "\1 agent.config_file=/etc/agent-config.toml"%g' /etc/kata-containers/configuration.toml
+    fi
 
     # insert the cri_handler = "cc" into the [plugins.cri.containerd.runtimes.kata] section
     sudo sed -z -i 's/\([[:blank:]]*\)\(runtime_type = "io.containerd.kata.v2"\)/\1\2\n\1cri_handler = "cc"/' /etc/containerd/config.toml
@@ -260,7 +267,7 @@ create_a_local_rootfs() {
     pushd ${katacontainers_repo_dir}/tools/osbuilder/rootfs-builder
     export distro="ubuntu"
     [[ -z "${USE_PODMAN:-}" ]] && use_docker="${use_docker:-1}"
-    sudo -E OS_VERSION="${OS_VERSION:-}" GOPATH=$GOPATH EXTRA_PKGS="vim iputils-ping net-tools" DEBUG="${DEBUG}" USE_DOCKER="${use_docker:-}" SKOPEO=${SKOPEO:-} UMOCI=yes SECCOMP=yes ./rootfs.sh -r ${ROOTFS_DIR} ${distro}
+    sudo -E OS_VERSION="${OS_VERSION:-}" GOPATH=$GOPATH EXTRA_PKGS="vim iputils-ping net-tools" DEBUG="${DEBUG}" USE_DOCKER="${use_docker:-}" SKOPEO=${SKOPEO:-} AA_KBC=${AA_KBC:-} UMOCI=yes SECCOMP=yes ./rootfs.sh -r ${ROOTFS_DIR} ${distro}
 
      # Install_rust.sh during rootfs.sh switches us to the main branch of the tests repo, so switch back now
     pushd "${tests_repo_dir}"
@@ -268,6 +275,16 @@ create_a_local_rootfs() {
     popd
     # During the ./rootfs.sh call the kata agent is built as root, so we need to update the permissions, so we can rebuild it
     sudo chown -R ${USER}:${USER} "${katacontainers_repo_dir}/src/agent/"
+
+    # If offline key broker set then include ssh-demo keys and config from
+    # https://github.com/confidential-containers/documentation/tree/main/demos/ssh-demo
+    if [ "${AA_KBC}" == "offline_fs_kbc" ]; then
+        curl -Lo "${HOME}/aa-offline_fs_kbc-keys.json" https://raw.githubusercontent.com/confidential-containers/documentation/main/demos/ssh-demo/aa-offline_fs_kbc-keys.json
+        sudo mv "${HOME}/aa-offline_fs_kbc-keys.json" "${ROOTFS_DIR}/etc/aa-offline_fs_kbc-keys.json"
+        local rootfs_agent_config="${ROOTFS_DIR}/etc/agent-config.toml"
+        sudo -E AA_KBC_PARAMS="offline_fs_kbc::null" envsubst < ${katacontainers_repo_dir}/docs/how-to/data/confidential-agent-config.toml.in | sudo tee ${rootfs_agent_config}
+    fi
+
     popd
 }
 
@@ -300,9 +317,9 @@ build_rootfs_image() {
 
 install_rootfs_image() {
     pushd ${katacontainers_repo_dir}/tools/osbuilder/image-builder
-    commit=$(git log --format=%h -1 HEAD)
-    date=$(date +%Y-%m-%d-%T.%N%z)
-    image="kata-containers-${date}-${commit}"
+    local commit=$(git log --format=%h -1 HEAD)
+    local date=$(date +%Y-%m-%d-%T.%N%z)
+    local image="kata-containers-${date}-${commit}"
     sudo install -o root -g root -m 0640 -D kata-containers.img "/usr/share/kata-containers/${image}"
     (cd /usr/share/kata-containers && sudo ln -sf "$image" kata-containers.img)
     echo "Built Rootfs from ${ROOTFS_DIR} to /usr/share/kata-containers/${image}"
@@ -341,11 +358,11 @@ init_kubernetes() {
     fi
 
     # If kubernetes init has previously run we need to clean it by removing the image and resetting k8s
-    cid=$(sudo docker ps -a -q -f name=^/kata-registry$)
+    local cid=$(sudo docker ps -a -q -f name=^/kata-registry$)
     if [ -n "${cid}" ]; then
         sudo docker stop ${cid} && sudo docker rm ${cid}
     fi
-    k8s_nodes=$(kubectl get nodes -o name 2>/dev/null || true)
+    local k8s_nodes=$(kubectl get nodes -o name 2>/dev/null || true)
     if [ -n "${k8s_nodes}" ]; then
         sudo kubeadm reset -f
     fi
@@ -367,12 +384,49 @@ EOF
 }
 
 kubernetes_create_cc_pod() {
-    kubectl apply -f ${k8s_pod_file}
-    kubectl get pods
+    kubectl apply -f ${k8s_pod_file} && pod=$(kubectl get pods -o jsonpath='{.items..metadata.name}') && kubectl wait --for=condition=ready pods/$pod
+    kubectl get pod $pod
 }
 
 kubernetes_delete_cc_pod() {
     kubectl delete -f ${k8s_pod_file}
+}
+
+# Check out the doc repo if required and pushd
+pushd_ssh_demo() {
+    local doc_repo=github.com/confidential-containers/documentation
+    local doc_repo_dir="${GOPATH}/src/${doc_repo}"
+    mkdir -p $(dirname ${doc_repo_dir}) && sudo chown -R ${USER}:${USER} $(dirname ${doc_repo_dir})
+    if [ ! -d "${doc_repo_dir}" ]; then
+        git clone https://${doc_repo} "${doc_repo_dir}"
+        pushd "${doc_repo_dir}/demos/ssh-demo"
+        # Update runtimeClassName from kata-cc to kata
+        sudo sed -i -e 's/\([[:blank:]]*runtimeClassName: \).*/\1kata/g' "${doc_repo_dir}/demos/ssh-demo/k8s-cc-ssh.yaml"
+        chmod 600 ccv0-ssh
+    else 
+        pushd "${doc_repo_dir}/demos/ssh-demo"
+    fi
+}
+
+kubernetes_create_ssh_demo_pod() {
+    pushd_ssh_demo
+    kubectl apply -f k8s-cc-ssh.yaml && pod=$(kubectl get pods -o jsonpath='{.items..metadata.name}') && kubectl wait --for=condition=ready pods/$pod
+    kubectl get pod $pod
+    popd
+}
+
+connect_to_ssh_demo_pod() {
+    local doc_repo=github.com/confidential-containers/documentation
+    local doc_repo_dir="${GOPATH}/src/${doc_repo}"
+    local ssh_command="ssh -i ${doc_repo_dir}/demos/ssh-demo/ccv0-ssh root@$(kubectl get service ccv0-ssh -o jsonpath="{.spec.clusterIP}")"
+    echo "Issuing command '${ssh_command}'"
+    ${ssh_command}
+}
+
+kubernetes_delete_ssh_demo_pod() {
+    pushd_ssh_demo
+    kubectl delete -f k8s-cc-ssh.yaml
+    popd
 }
 
 crictl_sandbox_name=kata-cc-busybox-sandbox
@@ -391,7 +445,7 @@ EOF
         crictl_delete_cc
     fi
 
-    pod_id=$(sudo crictl runp -r kata ${HOME}/pod-config.yaml)
+    $(sudo crictl runp -r kata ${HOME}/pod-config.yaml)
     sudo crictl pods
 }
 
@@ -407,15 +461,15 @@ command:
 log_path: kata-cc.0.log
 EOF
 
-    pod_id=$(sudo crictl pods --name ${crictl_sandbox_name} -q)
-    container_id=$(sudo crictl create -with-pull ${pod_id} ${HOME}/container-config.yaml ${HOME}/pod-config.yaml)
+    local pod_id=$(sudo crictl pods --name ${crictl_sandbox_name} -q)
+    local container_id=$(sudo crictl create -with-pull ${pod_id} ${HOME}/container-config.yaml ${HOME}/pod-config.yaml)
     sudo crictl start ${container_id}
     sudo crictl ps -a
 }
 
 crictl_delete_cc() {
-    pod_id=$(sudo crictl pods --name ${crictl_sandbox_name} -q)
-    container_id=$(sudo crictl ps --pod ${pod_id} -q)
+    local pod_id=$(sudo crictl pods --name ${crictl_sandbox_name} -q)
+    local container_id=$(sudo crictl ps --pod ${pod_id} -q)
     if [ -n "${container_id}" ]; then
         sudo crictl stop ${container_id} && sudo crictl rm ${container_id}
     fi
@@ -424,7 +478,7 @@ crictl_delete_cc() {
 
 test_kata_runtime() {
     echo "Running ctr with the kata runtime..."
-    test_image="quay.io/kata-containers/confidential-containers:signed"
+    local test_image="quay.io/kata-containers/confidential-containers:signed"
     if [ -z $(ctr images ls -q name=="${test_image}") ]; then
         sudo ctr image pull "${test_image}"
     fi
@@ -503,7 +557,7 @@ agent_create_container() {
 
 shim_pull_image() {
     get_ids
-    ctr_shim_command="sudo ctr --namespace k8s.io shim --id ${sandbox_id} pull-image ${PULL_IMAGE} ${CONTAINER_ID}"
+    local ctr_shim_command="sudo ctr --namespace k8s.io shim --id ${sandbox_id} pull-image ${PULL_IMAGE} ${CONTAINER_ID}"
     echo "Issuing command '${ctr_shim_command}'"
     ${ctr_shim_command}
 }
@@ -583,6 +637,15 @@ main() {
             ;;
         kubernetes_delete_cc_pod)
             kubernetes_delete_cc_pod
+            ;;
+        kubernetes_create_ssh_demo_pod)
+            kubernetes_create_ssh_demo_pod
+            ;;
+        connect_to_ssh_demo_pod)
+            connect_to_ssh_demo_pod
+            ;;
+        kubernetes_delete_ssh_demo_pod)
+            kubernetes_delete_ssh_demo_pod
             ;;
         test)
             test_kata_runtime
