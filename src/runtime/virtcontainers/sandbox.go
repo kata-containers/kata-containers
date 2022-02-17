@@ -27,6 +27,8 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 
+	cri "github.com/containerd/containerd/pkg/cri/annotations"
+	crio "github.com/containers/podman/v4/pkg/annotations"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/api"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/drivers"
@@ -590,6 +592,21 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 
 	if err := validateHypervisorConfig(&sandboxConfig.HypervisorConfig); err != nil {
 		return nil, err
+	}
+
+	if len(sandboxConfig.Containers) > 0 {
+		// These values are required by remove hypervisor
+		for _, a := range []string{cri.SandboxName, crio.SandboxName} {
+			if value, ok := sandboxConfig.Containers[0].Annotations[a]; ok {
+				sandboxConfig.HypervisorConfig.SandboxName = value
+			}
+		}
+
+		for _, a := range []string{cri.SandboxNamespace, crio.Namespace} {
+			if value, ok := sandboxConfig.Containers[0].Annotations[a]; ok {
+				sandboxConfig.HypervisorConfig.SandboxNamespace = value
+			}
+		}
 	}
 
 	// store doesn't require hypervisor to be stored immediately

@@ -61,6 +61,9 @@ func setCPUtype(hypervisorType vc.HypervisorType) error {
 }
 
 func archHostCanCreateVMContainer(hypervisorType vc.HypervisorType) error {
+	if hypervisorType == "remote" {
+		return nil
+	}
 	return kvmIsUsable()
 }
 

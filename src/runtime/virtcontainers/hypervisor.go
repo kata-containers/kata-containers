@@ -49,6 +49,9 @@ const (
 	// DragonballHypervisor is the Dragonball hypervisor.
 	DragonballHypervisor HypervisorType = "dragonball"
 
+	// RemoteHypervisor is the Remote hypervisor.
+	RemoteHypervisor HypervisorType = "remote"
+
 	// MockHypervisor is a mock hypervisor for testing purposes
 	MockHypervisor HypervisorType = "mock"
 
@@ -175,6 +178,9 @@ func (hType *HypervisorType) Set(value string) error {
 	case "dragonball":
 		*hType = DragonballHypervisor
 		return nil
+	case "remote":
+		*hType = RemoteHypervisor
+		return nil
 	case "mock":
 		*hType = MockHypervisor
 		return nil
@@ -194,6 +200,8 @@ func (hType *HypervisorType) String() string {
 		return string(AcrnHypervisor)
 	case ClhHypervisor:
 		return string(ClhHypervisor)
+	case RemoteHypervisor:
+		return string(RemoteHypervisor)
 	case MockHypervisor:
 		return string(MockHypervisor)
 	default:
@@ -279,6 +287,9 @@ type HypervisorConfig struct {
 	GuestPreAttestationSecretType  string
 	SEVCertChainPath               string
 	BlockDeviceAIO                 string
+	RemoteHypervisorSocket         string
+	SandboxName                    string
+	SandboxNamespace               string
 	JailerPathList                 []string
 	EntropySourceList              []string
 	VirtioFSDaemonList             []string
@@ -316,6 +327,7 @@ type HypervisorConfig struct {
 	SEVGuestPolicy                 uint32
 	PCIeRootPort                   uint32
 	NumVCPUs                       uint32
+	RemoteHypervisorTimeout        uint32
 	IOMMUPlatform                  bool
 	EnableIOThreads                bool
 	Debug                          bool
