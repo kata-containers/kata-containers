@@ -178,38 +178,32 @@ func (n *LinuxNetwork) addSingleEndpoint(ctx context.Context, s *Sandbox, netInf
 
 	endpoint.SetProperties(netInfo)
 
-	if err := doNetNS(n.netNSPath, func(_ ns.NetNS) error {
-		networkLogger().WithField("endpoint-type", endpoint.Type()).WithField("hotplug", hotplug).Info("Attaching endpoint")
-		if hotplug {
-			if err := endpoint.HotAttach(ctx, s.hypervisor); err != nil {
-				return err
-			}
-		} else {
-			if err := endpoint.Attach(ctx, s); err != nil {
-				return err
+	networkLogger().WithField("endpoint-type", endpoint.Type()).WithField("hotplug", hotplug).Info("Attaching endpoint")
+	if hotplug {
+		if err := endpoint.HotAttach(ctx, s.hypervisor); err != nil {
+			return nil, err
+		}
+	} else {
+		if err := endpoint.Attach(ctx, s); err != nil {
+			return nil, err
+		}
+	}
+
+	if !s.hypervisor.IsRateLimiterBuiltin() {
+		rxRateLimiterMaxRate := s.hypervisor.HypervisorConfig().RxRateLimiterMaxRate
+		if rxRateLimiterMaxRate > 0 {
+			networkLogger().Info("Add Rx Rate Limiter")
+			if err := addRxRateLimiter(endpoint, rxRateLimiterMaxRate); err != nil {
+				return nil, err
 			}
 		}
-
-		if !s.hypervisor.IsRateLimiterBuiltin() {
-			rxRateLimiterMaxRate := s.hypervisor.HypervisorConfig().RxRateLimiterMaxRate
-			if rxRateLimiterMaxRate > 0 {
-				networkLogger().Info("Add Rx Rate Limiter")
-				if err := addRxRateLimiter(endpoint, rxRateLimiterMaxRate); err != nil {
-					return err
-				}
-			}
-			txRateLimiterMaxRate := s.hypervisor.HypervisorConfig().TxRateLimiterMaxRate
-			if txRateLimiterMaxRate > 0 {
-				networkLogger().Info("Add Tx Rate Limiter")
-				if err := addTxRateLimiter(endpoint, txRateLimiterMaxRate); err != nil {
-					return err
-				}
+		txRateLimiterMaxRate := s.hypervisor.HypervisorConfig().TxRateLimiterMaxRate
+		if txRateLimiterMaxRate > 0 {
+			networkLogger().Info("Add Tx Rate Limiter")
+			if err := addTxRateLimiter(endpoint, txRateLimiterMaxRate); err != nil {
+				return nil, err
 			}
 		}
-
-		return nil
-	}); err != nil {
-		return nil, err
 	}
 
 	n.eps = append(n.eps, endpoint)
@@ -298,10 +292,13 @@ func (n *LinuxNetwork) addAllEndpoints(ctx context.Context, s *Sandbox, hotplug 
 			continue
 		}
 
-		_, err = n.addSingleEndpoint(ctx, s, netInfo, hotplug)
-		if err != nil {
+		if err := doNetNS(n.netNSPath, func(_ ns.NetNS) error {
+			_, err = n.addSingleEndpoint(ctx, s, netInfo, hotplug)
+			return err
+		}); err != nil {
 			return err
 		}
+
 	}
 
 	sort.Slice(n.eps, func(i, j int) bool {
@@ -335,8 +332,14 @@ func (n *LinuxNetwork) AddEndpoints(ctx context.Context, s *Sandbox, endpointsIn
 		}
 	} else {
 		for _, ep := range endpointsInfo {
-			if _, err := n.addSingleEndpoint(ctx, s, ep, hotplug); err != nil {
-				n.eps = nil
+			if err := doNetNS(n.netNSPath, func(_ ns.NetNS) error {
+				if _, err := n.addSingleEndpoint(ctx, s, ep, hotplug); err != nil {
+					n.eps = nil
+					return err
+				}
+
+				return nil
+			}); err != nil {
 				return nil, err
 			}
 		}
