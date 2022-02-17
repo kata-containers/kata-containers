@@ -98,6 +98,10 @@ assets:
       uscan-url: >-
         https://github.com/qemu/qemu/tags
         .*/v?(\d\S+)\.tar\.gz
+      tdx:
+        description: "VMM that uses KVM and supports TDX"
+        url: "https://github.com/intel/qemu-tdx"
+        tag: "tdx-qemu-2021.11.29-v6.0.0-rc1-mvp"
 
     qemu-experimental:
       description: "QEMU with virtiofs support"
