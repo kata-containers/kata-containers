@@ -21,7 +21,6 @@ CMD ["/usr/sbin/init"]
 
 FROM base
 
-ARG KUBE_ARCH=amd64
 ARG KATA_ARTIFACTS=./kata-static.tar.xz
 ARG DESTINATION=/opt/kata-artifacts
 
@@ -37,6 +36,7 @@ tar xvf ${KATA_ARTIFACTS} -C ${DESTINATION}/ && \
 chown -R root:root ${DESTINATION}/
 
 RUN \
+KUBE_ARCH=$(uname -m | sed s/x86_64/amd64/ | sed s/aarch64/arm64/) && \
 curl -Lso /bin/kubectl "https://storage.googleapis.com/kubernetes-release/release/$(curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)/bin/linux/${KUBE_ARCH}/kubectl" && \
 chmod +x /bin/kubectl
 
