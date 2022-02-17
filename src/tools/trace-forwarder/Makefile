@@ -5,6 +5,7 @@
 
 include ../../../utils.mk
 
+.DEFAULT_GOAL := default
 default: build
 
 build: logging-crate-tests
@@ -24,7 +25,7 @@ test:
 
 install:
 
-check:
+check: standard_rust_check
 
 .PHONY: \
 	build \
