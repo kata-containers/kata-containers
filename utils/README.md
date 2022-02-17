@@ -38,18 +38,36 @@ If you still wish to continue, but prefer a manual installation, see
 
 ## Install a minimal Kata Containers system
 
+By default, the script will attempt to install Kata Containers and
+containerd, and then configure containerd to use Kata Containers. However,
+the script provides a number of options to allow you to change its
+behaviour.
+
+> **Note:**
+>
+> Before running the script to install Kata Containers, we recommend
+> that you [review the available options](#show-available-options).
+
+### Show available options
+
+To show the available options without installing anything, run:
+
+```sh
+$ bash -c "$(curl -fsSL https://raw.githubusercontent.com/kata-containers/kata-containers/main/utils/kata-manager.sh) -h"
+```
+
+### To install Kata Containers only
+
+If your system already has containerd installed, to install Kata Containers and only configure containerd, run:
+
+```sh
+$ bash -c "$(curl -fsSL https://raw.githubusercontent.com/kata-containers/kata-containers/main/utils/kata-manager.sh) -o"
+```
+
+### To install Kata Containers and containerd
+
 To install and configure a system with Kata Containers and containerd, run:
 
 ```bash
 $ bash -c "$(curl -fsSL https://raw.githubusercontent.com/kata-containers/kata-containers/main/utils/kata-manager.sh)"
 ```
-
-> **Notes:**
->
-> - The script must be run on a system that does not have Kata Containers or
->   containerd already installed on it.
->
-> - The script accepts up to two parameters which can be used to test
->   pre-release versions (a Kata Containers version, and a containerd
->   version). If either version is unspecified or specified as `""`, the
->   latest official version will be installed.
