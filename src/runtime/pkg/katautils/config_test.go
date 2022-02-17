@@ -1564,6 +1564,17 @@ func TestCheckHypervisorConfig(t *testing.T) {
 		// reset logger
 		kataUtilsLogger.Logger.Out = savedOut
 	}
+
+	// Check remote hypervisor doesn't error with missing unnescessary config
+	remoteConfig := vc.HypervisorConfig{
+		RemoteHypervisorSocket: "dummy_socket",
+		ImagePath:              "",
+		InitrdPath:             "",
+		MemorySize:             0,
+	}
+
+	err := checkHypervisorConfig(remoteConfig)
+	assert.NoError(err, "remote hypervisor config")
 }
 
 func TestCheckNetNsConfig(t *testing.T) {

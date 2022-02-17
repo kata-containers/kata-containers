@@ -6,6 +6,8 @@
 package types
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -161,6 +163,78 @@ func TestVolumesStringSuccessful(t *testing.T) {
 
 	result := volumes.String()
 	assert.Equal(t, result, expected)
+}
+
+func TestStringFromVSock(t *testing.T) {
+	assert := assert.New(t)
+
+	dir := t.TempDir()
+
+	contextID := uint64(16187)
+	port := uint32(1024)
+	vsockFilename := filepath.Join(dir, "vsock")
+
+	vsockFile, err := os.Create(vsockFilename)
+	assert.NoError(err)
+	defer vsockFile.Close()
+
+	vsock := VSock{
+		ContextID: contextID,
+		Port:      port,
+		VhostFd:   vsockFile,
+	}
+
+	expected := "vsock://16187:1024"
+
+	assert.Equal(vsock.String(), expected)
+}
+
+func TestStringFromHybridVSock(t *testing.T) {
+	assert := assert.New(t)
+
+	udsPath := "udspath"
+	contextID := uint64(16187)
+	port := uint32(1024)
+
+	sock := HybridVSock{
+		UdsPath:   udsPath,
+		ContextID: contextID,
+		Port:      port,
+	}
+
+	expected := "hvsock://udspath:1024"
+
+	assert.Equal(sock.String(), expected)
+}
+
+func TestStringFromRemoteSock(t *testing.T) {
+	assert := assert.New(t)
+
+	sandboxID := "sandboxID"
+	tunnelSockerPath := "tunnelSocketPath"
+
+	sock := RemoteSock{
+		SandboxID:        sandboxID,
+		TunnelSocketPath: tunnelSockerPath,
+	}
+
+	expected := "remote://tunnelSocketPath"
+
+	assert.Equal(sock.String(), expected)
+}
+
+func TestStringFromMockHybridVSock(t *testing.T) {
+	assert := assert.New(t)
+
+	udsPath := "udspath"
+
+	sock := MockHybridVSock{
+		UdsPath: udsPath,
+	}
+
+	expected := "mock://udspath"
+
+	assert.Equal(sock.String(), expected)
 }
 
 func TestSocketsSetSuccessful(t *testing.T) {
