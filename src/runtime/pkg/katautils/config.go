@@ -1,4 +1,4 @@
-// Copyright (c) 2018-2021 Intel Corporation
+// Copyright (c) 2018-2022 Intel Corporation
 // Copyright (c) 2018 HyperHQ Inc.
 //
 // SPDX-License-Identifier: Apache-2.0
@@ -15,7 +15,7 @@ import (
 	"strings"
 
 	"github.com/BurntSushi/toml"
-	govmmQemu "github.com/kata-containers/govmm/qemu"
+	govmmQemu "github.com/kata-containers/kata-containers/src/runtime/pkg/govmm/qemu"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils/katatrace"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/oci"
 	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
@@ -79,6 +79,7 @@ type hypervisor struct {
 	Initrd                  string   `toml:"initrd"`
 	Image                   string   `toml:"image"`
 	Firmware                string   `toml:"firmware"`
+	FirmwareVolume          string   `toml:"firmware_volume"`
 	MachineAccelerators     string   `toml:"machine_accelerators"`
 	CPUFeatures             string   `toml:"cpu_features"`
 	KernelParams            string   `toml:"kernel_params"`
@@ -123,7 +124,6 @@ type hypervisor struct {
 	VirtioMem               bool     `toml:"enable_virtio_mem"`
 	IOMMU                   bool     `toml:"enable_iommu"`
 	IOMMUPlatform           bool     `toml:"enable_iommu_platform"`
-	Swap                    bool     `toml:"enable_swap"`
 	Debug                   bool     `toml:"enable_debug"`
 	DisableNestingChecks    bool     `toml:"disable_nesting_checks"`
 	EnableIOThreads         bool     `toml:"enable_iothreads"`
@@ -138,19 +138,20 @@ type hypervisor struct {
 }
 
 type runtime struct {
-	InterNetworkModel   string   `toml:"internetworking_model"`
-	JaegerEndpoint      string   `toml:"jaeger_endpoint"`
-	JaegerUser          string   `toml:"jaeger_user"`
-	JaegerPassword      string   `toml:"jaeger_password"`
-	VfioMode            string   `toml:"vfio_mode"`
-	SandboxBindMounts   []string `toml:"sandbox_bind_mounts"`
-	Experimental        []string `toml:"experimental"`
-	Debug               bool     `toml:"enable_debug"`
-	Tracing             bool     `toml:"enable_tracing"`
-	DisableNewNetNs     bool     `toml:"disable_new_netns"`
-	DisableGuestSeccomp bool     `toml:"disable_guest_seccomp"`
-	SandboxCgroupOnly   bool     `toml:"sandbox_cgroup_only"`
-	EnablePprof         bool     `toml:"enable_pprof"`
+	InterNetworkModel         string   `toml:"internetworking_model"`
+	JaegerEndpoint            string   `toml:"jaeger_endpoint"`
+	JaegerUser                string   `toml:"jaeger_user"`
+	JaegerPassword            string   `toml:"jaeger_password"`
+	VfioMode                  string   `toml:"vfio_mode"`
+	SandboxBindMounts         []string `toml:"sandbox_bind_mounts"`
+	Experimental              []string `toml:"experimental"`
+	Debug                     bool     `toml:"enable_debug"`
+	Tracing                   bool     `toml:"enable_tracing"`
+	DisableNewNetNs           bool     `toml:"disable_new_netns"`
+	DisableGuestSeccomp       bool     `toml:"disable_guest_seccomp"`
+	SandboxCgroupOnly         bool     `toml:"sandbox_cgroup_only"`
+	StaticSandboxResourceMgmt bool     `toml:"static_sandbox_resource_mgmt"`
+	EnablePprof               bool     `toml:"enable_pprof"`
 }
 
 type agent struct {
@@ -229,6 +230,19 @@ func (h hypervisor) firmware() (string, error) {
 			return "", nil
 		}
 		p = defaultFirmwarePath
+	}
+
+	return ResolvePath(p)
+}
+
+func (h hypervisor) firmwareVolume() (string, error) {
+	p := h.FirmwareVolume
+
+	if p == "" {
+		if defaultFirmwareVolumePath == "" {
+			return "", nil
+		}
+		p = defaultFirmwareVolumePath
 	}
 
 	return ResolvePath(p)
@@ -409,7 +423,7 @@ func (h hypervisor) blockDeviceDriver() (string, error) {
 }
 
 func (h hypervisor) sharedFS() (string, error) {
-	supportedSharedFS := []string{config.Virtio9P, config.VirtioFS}
+	supportedSharedFS := []string{config.Virtio9P, config.VirtioFS, config.VirtioFSNydus}
 
 	if h.SharedFS == "" {
 		return config.Virtio9P, nil
@@ -554,7 +568,6 @@ func newFirecrackerHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		DefaultBridges:        h.defaultBridges(),
 		DisableBlockDeviceUse: h.DisableBlockDeviceUse,
 		HugePages:             h.HugePages,
-		Mlock:                 !h.Swap,
 		Debug:                 h.Debug,
 		DisableNestingChecks:  h.DisableNestingChecks,
 		BlockDeviceDriver:     blockDriver,
@@ -603,6 +616,11 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		return vc.HypervisorConfig{}, err
 	}
 
+	firmwareVolume, err := h.firmwareVolume()
+	if err != nil {
+		return vc.HypervisorConfig{}, err
+	}
+
 	machineAccelerators := h.machineAccelerators()
 	cpuFeatures := h.cpuFeatures()
 	kernelParams := h.kernelParams()
@@ -631,6 +649,11 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 			errors.New("cannot enable virtio-fs without daemon path in configuration file")
 	}
 
+	if sharedFS == config.VirtioFSNydus && h.VirtioFSDaemon == "" {
+		return vc.HypervisorConfig{},
+			errors.New("cannot enable virtio nydus without nydusd daemon path in configuration file")
+	}
+
 	if vSock, err := utils.SupportsVsocks(); !vSock {
 		return vc.HypervisorConfig{}, err
 	}
@@ -645,6 +668,7 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		InitrdPath:              initrd,
 		ImagePath:               image,
 		FirmwarePath:            firmware,
+		FirmwareVolumePath:      firmwareVolume,
 		PFlash:                  pflashes,
 		MachineAccelerators:     machineAccelerators,
 		CPUFeatures:             cpuFeatures,
@@ -672,7 +696,6 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		IOMMUPlatform:           h.getIOMMUPlatform(),
 		FileBackedMemRootDir:    h.FileBackedMemRootDir,
 		FileBackedMemRootList:   h.FileBackedMemRootList,
-		Mlock:                   !h.Swap,
 		Debug:                   h.Debug,
 		DisableNestingChecks:    h.DisableNestingChecks,
 		BlockDeviceDriver:       blockDriver,
@@ -755,7 +778,6 @@ func newAcrnHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		EntropySourceList:     h.EntropySourceList,
 		DefaultBridges:        h.defaultBridges(),
 		HugePages:             h.HugePages,
-		Mlock:                 !h.Swap,
 		Debug:                 h.Debug,
 		DisableNestingChecks:  h.DisableNestingChecks,
 		BlockDeviceDriver:     blockDriver,
@@ -781,14 +803,9 @@ func newClhHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		return vc.HypervisorConfig{}, err
 	}
 
-	if initrd != "" {
+	if image == "" && initrd == "" {
 		return vc.HypervisorConfig{},
-			errors.New("having an initrd defined in the configuration file is not supported")
-	}
-
-	if image == "" {
-		return vc.HypervisorConfig{},
-			errors.New("image must be defined in the configuration file")
+			errors.New("image or initrd must be defined in the configuration file")
 	}
 
 	firmware, err := h.firmware()
@@ -841,7 +858,6 @@ func newClhHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		HugePages:               h.HugePages,
 		FileBackedMemRootDir:    h.FileBackedMemRootDir,
 		FileBackedMemRootList:   h.FileBackedMemRootList,
-		Mlock:                   !h.Swap,
 		Debug:                   h.Debug,
 		DisableNestingChecks:    h.DisableNestingChecks,
 		BlockDeviceDriver:       blockDriver,
@@ -1007,6 +1023,7 @@ func GetDefaultHypervisorConfig() vc.HypervisorConfig {
 		ImagePath:               defaultImagePath,
 		InitrdPath:              defaultInitrdPath,
 		FirmwarePath:            defaultFirmwarePath,
+		FirmwareVolumePath:      defaultFirmwareVolumePath,
 		MachineAccelerators:     defaultMachineAccelerators,
 		CPUFeatures:             defaultCPUFeatures,
 		HypervisorMachineType:   defaultMachineType,
@@ -1022,7 +1039,6 @@ func GetDefaultHypervisorConfig() vc.HypervisorConfig {
 		IOMMU:                   defaultEnableIOMMU,
 		IOMMUPlatform:           defaultEnableIOMMUPlatform,
 		FileBackedMemRootDir:    defaultFileBackedMemRootDir,
-		Mlock:                   !defaultEnableSwap,
 		Debug:                   defaultEnableDebug,
 		DisableNestingChecks:    defaultDisableNestingChecks,
 		BlockDeviceDriver:       defaultBlockDeviceDriver,
@@ -1131,6 +1147,7 @@ func LoadConfiguration(configPath string, ignoreLogging bool) (resolvedConfigPat
 
 	config.DisableGuestSeccomp = tomlConf.Runtime.DisableGuestSeccomp
 
+	config.StaticSandboxResourceMgmt = tomlConf.Runtime.StaticSandboxResourceMgmt
 	config.SandboxCgroupOnly = tomlConf.Runtime.SandboxCgroupOnly
 	config.DisableNewNetNs = tomlConf.Runtime.DisableNewNetNs
 	config.EnablePprof = tomlConf.Runtime.EnablePprof

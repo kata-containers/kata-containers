@@ -96,7 +96,7 @@ type NetworkEndpoint struct {
 
 // NetworkInfo contains network information of sandbox
 type NetworkInfo struct {
-	NetNsPath    string
-	Endpoints    []NetworkEndpoint
-	NetNsCreated bool
+	NetworkID      string
+	Endpoints      []NetworkEndpoint
+	NetworkCreated bool
 }

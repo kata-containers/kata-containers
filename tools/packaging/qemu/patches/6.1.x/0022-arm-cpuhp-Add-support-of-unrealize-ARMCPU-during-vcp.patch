@@ -1,0 +1,415 @@
+From 71102726bd7434d8fd635be0f1c067fdb795efe3 Mon Sep 17 00:00:00 2001
+From: Salil Mehta <salil.mehta@huawei.com>
+Date: Sat, 27 Nov 2021 17:37:22 +0800
+Subject: [PATCH 22/28] arm/cpuhp: Add support of *unrealize* ARMCPU during
+ vcpu hot-unplug
+
+During vcpu hot-unplug ARM cpu unrealization shall happen which should do away
+with all the vcpu thread creations, allocations, registrations which happened
+as part of the realization process of the ARM cpu. This change introduces the
+ARM cpu unrealize function taking care of exactly that.
+
+Note, initialized vcpus are not destroyed at host KVM but are rather parked in
+the QEMU/KVM layer. These are later reused once vcpu is hotplugged again.
+
+Co-developed-by: Keqian Zhu <zhukeqian1@huawei.com>
+Signed-off-by: Salil Mehta <salil.mehta@huawei.com>
+Signed-off-by: Huang Shijie <shijie8@gmail.com>
+---
+ gdbstub.c               | 13 +++++++
+ include/exec/exec-all.h |  8 ++++
+ include/exec/gdbstub.h  |  1 +
+ include/hw/core/cpu.h   |  2 +
+ softmmu/physmem.c       | 24 ++++++++++++
+ target/arm/cpu-qom.h    |  3 ++
+ target/arm/cpu.c        | 86 +++++++++++++++++++++++++++++++++++++++++
+ target/arm/cpu.h        | 14 +++++++
+ target/arm/helper.c     | 31 +++++++++++++++
+ target/arm/internals.h  |  1 +
+ target/arm/kvm64.c      |  6 ++-
+ 11 files changed, 188 insertions(+), 1 deletion(-)
+
+diff --git a/gdbstub.c b/gdbstub.c
+index 52bde5bdc9..d5fb3cb9ae 100644
+--- a/gdbstub.c
++++ b/gdbstub.c
+@@ -1005,6 +1005,19 @@ void gdb_register_coprocessor(CPUState *cpu,
+     }
+ }
+ 
++void gdb_unregister_coprocessor_all(CPUState *cpu)
++{
++    GDBRegisterState *s, *p;
++
++    p = cpu->gdb_regs;
++    while (p) {
++        s = p;
++        p = p->next;
++        g_free(s);
++    }
++    cpu->gdb_regs = NULL;
++}
++
+ #ifndef CONFIG_USER_ONLY
+ /* Translate GDB watchpoint type to a flags value for cpu_watchpoint_* */
+ static inline int xlat_gdb_type(CPUState *cpu, int gdbtype)
+diff --git a/include/exec/exec-all.h b/include/exec/exec-all.h
+index 5d1b6d80fb..1fbe9aee0c 100644
+--- a/include/exec/exec-all.h
++++ b/include/exec/exec-all.h
+@@ -106,6 +106,14 @@ void cpu_reloading_memory_map(void);
+  */
+ void cpu_address_space_init(CPUState *cpu, int asidx,
+                             const char *prefix, MemoryRegion *mr);
++/**
++ * cpu_address_space_destroy:
++ * @cpu: CPU for which address space needs to be destroyed
++ * @asidx: integer index of this address space
++ *
++ * Note that with KVM only one address space is supported.
++ */
++void cpu_address_space_destroy(CPUState *cpu, int asidx);
+ #endif
+ 
+ #if !defined(CONFIG_USER_ONLY) && defined(CONFIG_TCG)
+diff --git a/include/exec/gdbstub.h b/include/exec/gdbstub.h
+index a024a0350d..1a2100d014 100644
+--- a/include/exec/gdbstub.h
++++ b/include/exec/gdbstub.h
+@@ -84,6 +84,7 @@ void gdb_register_coprocessor(CPUState *cpu,
+                               gdb_get_reg_cb get_reg, gdb_set_reg_cb set_reg,
+                               int num_regs, const char *xml, int g_pos);
+ 
++void gdb_unregister_coprocessor_all(CPUState *cpu);
+ /*
+  * The GDB remote protocol transfers values in target byte order. As
+  * the gdbstub may be batching up several register values we always
+diff --git a/include/hw/core/cpu.h b/include/hw/core/cpu.h
+index 5a2571af3e..e50c13f889 100644
+--- a/include/hw/core/cpu.h
++++ b/include/hw/core/cpu.h
+@@ -344,6 +344,7 @@ struct CPUState {
+     QSIMPLEQ_HEAD(, qemu_work_item) work_list;
+ 
+     CPUAddressSpace *cpu_ases;
++    int cpu_ases_ref_count;
+     int num_ases;
+     AddressSpace *as;
+     MemoryRegion *memory;
+@@ -376,6 +377,7 @@ struct CPUState {
+     int kvm_fd;
+     struct KVMState *kvm_state;
+     struct kvm_run *kvm_run;
++    VMChangeStateEntry *vmcse;
+     struct kvm_dirty_gfn *kvm_dirty_gfns;
+     uint32_t kvm_fetch_index;
+ 
+diff --git a/softmmu/physmem.c b/softmmu/physmem.c
+index 2e18947598..75a50fa1b7 100644
+--- a/softmmu/physmem.c
++++ b/softmmu/physmem.c
+@@ -748,6 +748,7 @@ void cpu_address_space_init(CPUState *cpu, int asidx,
+ 
+     if (!cpu->cpu_ases) {
+         cpu->cpu_ases = g_new0(CPUAddressSpace, cpu->num_ases);
++	cpu->cpu_ases_ref_count = cpu->num_ases;
+     }
+ 
+     newas = &cpu->cpu_ases[asidx];
+@@ -760,6 +761,29 @@ void cpu_address_space_init(CPUState *cpu, int asidx,
+     }
+ }
+ 
++void cpu_address_space_destroy(CPUState *cpu, int asidx)
++{
++    CPUAddressSpace *cpuas;
++
++    assert(asidx < cpu->num_ases);
++    assert(asidx == 0 || !kvm_enabled());
++    assert(cpu->cpu_ases);
++
++    cpuas = &cpu->cpu_ases[asidx];
++    if (tcg_enabled()) {
++        memory_listener_unregister(&cpuas->tcg_as_listener);
++    }
++
++    address_space_destroy(cpuas->as);
++
++    if(cpu->cpu_ases_ref_count == 1) {
++        g_free(cpu->cpu_ases);
++        cpu->cpu_ases = NULL;
++    }
++
++    cpu->cpu_ases_ref_count--;
++}
++
+ AddressSpace *cpu_get_address_space(CPUState *cpu, int asidx)
+ {
+     /* Return the AddressSpace corresponding to the specified index */
+diff --git a/target/arm/cpu-qom.h b/target/arm/cpu-qom.h
+index a22bd506d0..ef83507121 100644
+--- a/target/arm/cpu-qom.h
++++ b/target/arm/cpu-qom.h
+@@ -55,6 +55,7 @@ struct ARMCPUClass {
+ 
+     const ARMCPUInfo *info;
+     DeviceRealize parent_realize;
++    DeviceUnrealize parent_unrealize;
+     DeviceReset parent_reset;
+ };
+ 
+@@ -71,7 +72,9 @@ struct AArch64CPUClass {
+ };
+ 
+ void register_cp_regs_for_features(ARMCPU *cpu);
++void unregister_cp_regs_for_features(ARMCPU *cpu);
+ void init_cpreg_list(ARMCPU *cpu);
++void destroy_cpreg_list(ARMCPU *cpu);
+ 
+ /* Callback functions for the generic timer's timers. */
+ void arm_gt_ptimer_cb(void *opaque);
+diff --git a/target/arm/cpu.c b/target/arm/cpu.c
+index ff827d56b7..455ad5aa9e 100644
+--- a/target/arm/cpu.c
++++ b/target/arm/cpu.c
+@@ -97,6 +97,16 @@ void arm_register_pre_el_change_hook(ARMCPU *cpu, ARMELChangeHookFn *hook,
+     QLIST_INSERT_HEAD(&cpu->pre_el_change_hooks, entry, node);
+ }
+ 
++void arm_unregister_pre_el_change_hooks(ARMCPU *cpu)
++{
++    ARMELChangeHook *entry, *next;
++
++    QLIST_FOREACH_SAFE(entry, &cpu->pre_el_change_hooks, node, next) {
++        QLIST_REMOVE(entry, node);
++        g_free(entry);
++    }
++}
++
+ void arm_register_el_change_hook(ARMCPU *cpu, ARMELChangeHookFn *hook,
+                                  void *opaque)
+ {
+@@ -108,6 +118,16 @@ void arm_register_el_change_hook(ARMCPU *cpu, ARMELChangeHookFn *hook,
+     QLIST_INSERT_HEAD(&cpu->el_change_hooks, entry, node);
+ }
+ 
++void arm_unregister_el_change_hooks(ARMCPU *cpu)
++{
++    ARMELChangeHook *entry, *next;
++
++    QLIST_FOREACH_SAFE(entry, &cpu->el_change_hooks, node, next) {
++        QLIST_REMOVE(entry, node);
++        g_free(entry);
++    }
++}
++
+ static void cp_reg_reset(gpointer key, gpointer value, gpointer opaque)
+ {
+     /* Reset a single ARMCPRegInfo register */
+@@ -139,6 +159,70 @@ static void cp_reg_reset(gpointer key, gpointer value, gpointer opaque)
+     }
+ }
+ 
++static void arm_cpu_unrealizefn(DeviceState *dev)
++{
++    ARMCPUClass *acc = ARM_CPU_GET_CLASS(dev);
++    ARMCPU *cpu = ARM_CPU(dev);
++    CPUARMState *env = &cpu->env;
++    CPUState *cs = CPU(dev);
++
++    /* rock 'n' un-roll, whatever happened in the arm_cpu_realizefn cleanly */
++    if (cpu->has_el3 || arm_feature(env, ARM_FEATURE_M_SECURITY)) {
++        cpu_address_space_destroy(cs, ARMASIdx_S);
++    }
++    cpu_address_space_destroy(cs, ARMASIdx_NS);
++
++    destroy_cpreg_list(cpu);
++    arm_cpu_unregister_gdb_regs(cpu);
++    unregister_cp_regs_for_features(cpu);
++
++    if (cpu->sau_sregion && arm_feature(env, ARM_FEATURE_M_SECURITY)) {
++           g_free(env->sau.rbar);
++           g_free(env->sau.rlar);
++    }
++
++    if (arm_feature(env, ARM_FEATURE_PMSA) &&
++        arm_feature(env, ARM_FEATURE_V7) &&
++        cpu->pmsav7_dregion) {
++        if (arm_feature(env, ARM_FEATURE_V8)) {
++            g_free(env->pmsav8.rbar[M_REG_NS]);
++            g_free(env->pmsav8.rlar[M_REG_NS]);
++            if (arm_feature(env, ARM_FEATURE_M_SECURITY)) {
++                g_free(env->pmsav8.rbar[M_REG_S]);
++                g_free(env->pmsav8.rlar[M_REG_S]);
++            }
++        } else {
++            g_free(env->pmsav7.drbar);
++            g_free(env->pmsav7.drsr);
++            g_free(env->pmsav7.dracr);
++        }
++    }
++
++    if (arm_feature(env, ARM_FEATURE_PMU)) {
++        if (!kvm_enabled()) {
++            arm_unregister_pre_el_change_hooks(cpu);
++            arm_unregister_el_change_hooks(cpu);
++        }
++
++#ifndef CONFIG_USER_ONLY
++        if (cpu->pmu_timer) {
++            timer_del(cpu->pmu_timer);
++        }
++#endif
++    }
++
++    cpu_remove_sync(CPU(dev));
++    acc->parent_unrealize(dev);
++
++#ifndef CONFIG_USER_ONLY
++    timer_del(cpu->gt_timer[GTIMER_PHYS]);
++    timer_del(cpu->gt_timer[GTIMER_VIRT]);
++    timer_del(cpu->gt_timer[GTIMER_HYP]);
++    timer_del(cpu->gt_timer[GTIMER_SEC]);
++    timer_del(cpu->gt_timer[GTIMER_HYPVIRT]);
++#endif
++}
++
+ static void cp_reg_check_reset(gpointer key, gpointer value,  gpointer opaque)
+ {
+     /* Purely an assertion check: we've already done reset once,
+@@ -2021,6 +2105,8 @@ static void arm_cpu_class_init(ObjectClass *oc, void *data)
+ 
+     device_class_set_props(dc, arm_cpu_properties);
+     device_class_set_parent_reset(dc, arm_cpu_reset, &acc->parent_reset);
++    device_class_set_parent_unrealize(dc, arm_cpu_unrealizefn,
++				      &acc->parent_unrealize);
+ 
+     cc->class_by_name = arm_cpu_class_by_name;
+     cc->has_work = arm_cpu_has_work;
+diff --git a/target/arm/cpu.h b/target/arm/cpu.h
+index ba11468ab5..f7f3308c42 100644
+--- a/target/arm/cpu.h
++++ b/target/arm/cpu.h
+@@ -1144,6 +1144,13 @@ void arm_pmu_timer_cb(void *opaque);
+  * Functions to register as EL change hooks for PMU mode filtering
+  */
+ void pmu_pre_el_change(ARMCPU *cpu, void *ignored);
++
++/**
++ * arm_unregister_pre_el_change_hook:
++ * unregister all pre EL change hook functions. Generally called during
++ * unrealize'ing leg
++ */
++void arm_unregister_pre_el_change_hooks(ARMCPU *cpu);
+ void pmu_post_el_change(ARMCPU *cpu, void *ignored);
+ 
+ /*
+@@ -3616,6 +3623,13 @@ void arm_register_pre_el_change_hook(ARMCPU *cpu, ARMELChangeHookFn *hook,
+ void arm_register_el_change_hook(ARMCPU *cpu, ARMELChangeHookFn *hook, void
+         *opaque);
+ 
++/**
++ * arm_unregister_el_change_hook:
++ * unregister all EL change hook functions.  Generally called during
++ * unrealize'ing leg
++ */
++void arm_unregister_el_change_hooks(ARMCPU *cpu);
++
+ /**
+  * arm_rebuild_hflags:
+  * Rebuild the cached TBFLAGS for arbitrary changed processor state.
+diff --git a/target/arm/helper.c b/target/arm/helper.c
+index 155d8bf239..3c61b16b56 100644
+--- a/target/arm/helper.c
++++ b/target/arm/helper.c
+@@ -507,6 +507,19 @@ void init_cpreg_list(ARMCPU *cpu)
+     g_list_free(keys);
+ }
+ 
++void destroy_cpreg_list(ARMCPU *cpu)
++{
++    assert(cpu->cpreg_indexes);
++    assert(cpu->cpreg_values);
++    assert(cpu->cpreg_vmstate_indexes);
++    assert(cpu->cpreg_vmstate_values);
++
++    g_free(cpu->cpreg_indexes);
++    g_free(cpu->cpreg_values);
++    g_free(cpu->cpreg_vmstate_indexes);
++    g_free(cpu->cpreg_vmstate_values);
++}
++
+ /*
+  * Some registers are not accessible from AArch32 EL3 if SCR.NS == 0.
+  */
+@@ -8671,6 +8684,18 @@ void register_cp_regs_for_features(ARMCPU *cpu)
+ #endif
+ }
+ 
++void unregister_cp_regs_for_features(ARMCPU *cpu)
++{
++    CPUARMState *env = &cpu->env;
++    if (arm_feature(env, ARM_FEATURE_M)) {
++        /* M profile has no coprocessor registers */
++        return;
++    }
++
++    /* empty it all. unregister all the coprocessor registers */
++    g_hash_table_remove_all(cpu->cp_regs);
++}
++
+ void arm_cpu_register_gdb_regs_for_features(ARMCPU *cpu)
+ {
+     CPUState *cs = CPU(cpu);
+@@ -8709,6 +8734,12 @@ void arm_cpu_register_gdb_regs_for_features(ARMCPU *cpu)
+ 
+ }
+ 
++void arm_cpu_unregister_gdb_regs(ARMCPU *cpu)
++{
++    CPUState *cs = CPU(cpu);
++    gdb_unregister_coprocessor_all(cs);
++}
++
+ /* Sort alphabetically by type name, except for "any". */
+ static gint arm_cpu_list_compare(gconstpointer a, gconstpointer b)
+ {
+diff --git a/target/arm/internals.h b/target/arm/internals.h
+index cd2ea8a388..fbdc3f2eab 100644
+--- a/target/arm/internals.h
++++ b/target/arm/internals.h
+@@ -173,6 +173,7 @@ static inline int r14_bank_number(int mode)
+ void arm_cpu_register_gdb_regs_for_features(ARMCPU *cpu);
+ void arm_translate_init(void);
+ 
++void arm_cpu_unregister_gdb_regs(ARMCPU *cpu);
+ #ifdef CONFIG_TCG
+ void arm_cpu_synchronize_from_tb(CPUState *cs, const TranslationBlock *tb);
+ #endif /* CONFIG_TCG */
+diff --git a/target/arm/kvm64.c b/target/arm/kvm64.c
+index 59982d470d..19d3eac253 100644
+--- a/target/arm/kvm64.c
++++ b/target/arm/kvm64.c
+@@ -839,7 +839,9 @@ int kvm_arch_init_vcpu(CPUState *cs)
+         return -EINVAL;
+     }
+ 
+-    qemu_add_vm_change_state_handler(kvm_arm_vm_state_change, cs);
++    if (qemu_present_cpu(cs))
++        cs->vmcse = qemu_add_vm_change_state_handler(kvm_arm_vm_state_change,
++                                                    cs);
+ 
+     /* Determine init features for this CPU */
+     memset(cpu->kvm_init_features, 0, sizeof(cpu->kvm_init_features));
+@@ -904,6 +906,8 @@ int kvm_arch_init_vcpu(CPUState *cs)
+ 
+ int kvm_arch_destroy_vcpu(CPUState *cs)
+ {
++    if (qemu_present_cpu(cs))
++        qemu_del_vm_change_state_handler(cs->vmcse);
+     return 0;
+ }
+ 
+-- 
+2.30.2
+

@@ -184,14 +184,6 @@ type HypervisorConfig struct {
 	// VirtioMem is used to enable/disable virtio-mem
 	VirtioMem bool
 
-	// Realtime Used to enable/disable realtime
-	Realtime bool
-
-	// Mlock is used to control memory locking when Realtime is enabled
-	// Realtime=true and Mlock=false, allows for swapping out of VM memory
-	// enabling higher density
-	Mlock bool
-
 	// DisableNestingChecks is used to override customizations performed
 	// when running on top of another VMM.
 	DisableNestingChecks bool
@@ -231,9 +223,9 @@ type ShimConfig struct {
 
 // NetworkConfig is the network configuration related to a network.
 type NetworkConfig struct {
-	NetNSPath         string
-	NetNsCreated      bool
-	DisableNewNetNs   bool
+	NetworkID         string
+	NetworkCreated    bool
+	DisableNewNetwork bool
 	InterworkingModel int
 }
 

@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 #
 # Copyright (c) 2017-2018 Intel Corporation
 #
@@ -9,4 +9,4 @@ set -e
 cidir=$(dirname "$0")
 source "${cidir}/lib.sh"
 
-run_static_checks
+run_static_checks "${@:-github.com/kata-containers/kata-containers}"

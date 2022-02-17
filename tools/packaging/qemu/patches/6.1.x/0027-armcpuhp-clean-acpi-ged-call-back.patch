@@ -1,0 +1,63 @@
+From e9376db8e4113e2222543a9a4cdc68a40b78b69c Mon Sep 17 00:00:00 2001
+From: Huang Shijie <shijie8@gmail.com>
+Date: Fri, 10 Dec 2021 15:51:51 +0800
+Subject: [PATCH 27/28] armcpuhp: clean acpi ged call back
+
+The new qemu edition has add acpi ged call back and should clean the
+related patch before.
+
+Signed-off-by: Huang Shijie <shijie8@gmail.com>
+Signed-off-by: Huang Shijie <shijie8@gmail.com>
+---
+ hw/acpi/generic_event_device.c | 28 ----------------------------
+ 1 file changed, 28 deletions(-)
+
+diff --git a/hw/acpi/generic_event_device.c b/hw/acpi/generic_event_device.c
+index 22a3fb348b..928593ab2c 100644
+--- a/hw/acpi/generic_event_device.c
++++ b/hw/acpi/generic_event_device.c
+@@ -249,32 +249,6 @@ static void acpi_ged_device_plug_cb(HotplugHandler *hotplug_dev,
+     }
+ }
+ 
+-static void acpi_ged_device_unplug_request_cb(HotplugHandler *hotplug_dev,
+-                                    DeviceState *dev, Error **errp)
+-{
+-    AcpiGedState *s = ACPI_GED(hotplug_dev);
+-
+-    if (object_dynamic_cast(OBJECT(dev), TYPE_CPU)) {
+-            acpi_cpu_unplug_request_cb(hotplug_dev, &s->cpuhp_state, dev, errp);
+-    } else {
+-        error_setg(errp, "virt: device unplug request for the unsupported device"
+-                   " type: %s", object_get_typename(OBJECT(dev)));
+-    }
+-}
+-
+-static void acpi_ged_device_unplug_cb(HotplugHandler *hotplug_dev,
+-                                      DeviceState *dev, Error **errp)
+-{
+-    AcpiGedState *s = ACPI_GED(hotplug_dev);
+-
+-    if (object_dynamic_cast(OBJECT(dev), TYPE_CPU)) {
+-            acpi_cpu_unplug_cb(&s->cpuhp_state, dev, errp);
+-     } else {
+-         error_setg(errp, "virt: device plug request for unsupported device"
+-                    " type: %s", object_get_typename(OBJECT(dev)));
+-     }
+-}
+-
+ static void acpi_ged_ospm_status(AcpiDeviceIf *adev, ACPIOSTInfoList ***list)
+ {
+     AcpiGedState *s = ACPI_GED(adev);
+@@ -461,8 +435,6 @@ static void acpi_ged_class_init(ObjectClass *class, void *data)
+     dc->vmsd = &vmstate_acpi_ged;
+ 
+     hc->plug = acpi_ged_device_plug_cb;
+-    hc->unplug_request = acpi_ged_device_unplug_request_cb;
+-    hc->unplug = acpi_ged_device_unplug_cb;
+     hc->unplug_request = acpi_ged_unplug_request_cb;
+     hc->unplug = acpi_ged_unplug_cb;
+ 
+-- 
+2.30.2
+

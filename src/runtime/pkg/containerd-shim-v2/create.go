@@ -103,6 +103,20 @@ func create(ctx context.Context, s *service, r *taskAPI.CreateTaskRequest) (*con
 		s.ctx = newCtx
 		defer span.End()
 
+		// Sandbox sizing information *may* be provided in two scenarios:
+		//   1. The upper layer runtime (ie, containerd or crio) provide sandbox sizing information as an annotation
+		//	in the 'sandbox container's' spec. This would typically be a scenario where as part of a create sandbox
+		//	request the upper layer runtime receives this information as part of a pod, and makes it available to us
+		//	for sizing purposes.
+		//   2. If this is not a sandbox infrastructure container, but instead a standalone single container (analogous to "docker run..."),
+		//	then the container spec itself will contain appropriate sizing information for the entire sandbox (since it is
+		//	a single container.
+		if containerType == vc.PodSandbox {
+			s.config.SandboxCPUs, s.config.SandboxMemMB = oci.CalculateSandboxSizing(ociSpec)
+		} else {
+			s.config.SandboxCPUs, s.config.SandboxMemMB = oci.CalculateContainerSizing(ociSpec)
+		}
+
 		if rootFs.Mounted, err = checkAndMount(s, r); err != nil {
 			return nil, err
 		}
@@ -252,6 +266,10 @@ func checkAndMount(s *service, r *taskAPI.CreateTaskRequest) (bool, error) {
 
 		// Plug the block backed rootfs directly instead of mounting it.
 		if katautils.IsBlockDevice(m.Source) && !s.config.HypervisorConfig.DisableBlockDeviceUse {
+			return false, nil
+		}
+		if m.Type == vc.NydusRootFSType {
+			// if kata + nydus, do not mount
 			return false, nil
 		}
 	}

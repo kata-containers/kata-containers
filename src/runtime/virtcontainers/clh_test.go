@@ -229,17 +229,22 @@ func TestCloudHypervisorCleanupVM(t *testing.T) {
 	assert.True(os.IsNotExist(err), "persist.GetDriver() unexpected error")
 }
 
-func TestClhCreateVM(t *testing.T) {
+func TestClhCreateVMWithInitrd(t *testing.T) {
 	assert := assert.New(t)
 
 	clhConfig, err := newClhConfig()
 	assert.NoError(err)
+	clhConfig.ImagePath = ""
+	clhConfig.InitrdPath = testClhInitrdPath
 
 	store, err := persist.GetDriver()
 	assert.NoError(err)
 
 	clhConfig.VMStorePath = store.RunVMStoragePath()
 	clhConfig.RunStorePath = store.RunStoragePath()
+
+	network, err := NewNetwork()
+	assert.NoError(err)
 
 	clh := &cloudHypervisor{
 		config: clhConfig,
@@ -253,7 +258,40 @@ func TestClhCreateVM(t *testing.T) {
 		},
 	}
 
-	err = clh.CreateVM(context.Background(), sandbox.id, NetworkNamespace{}, &sandbox.config.HypervisorConfig)
+	err = clh.CreateVM(context.Background(), sandbox.id, network, &sandbox.config.HypervisorConfig)
+	assert.NoError(err)
+	assert.Exactly(clhConfig, clh.config)
+}
+
+func TestClhCreateVM(t *testing.T) {
+	assert := assert.New(t)
+
+	clhConfig, err := newClhConfig()
+	assert.NoError(err)
+	assert.NotEmpty(clhConfig.ImagePath)
+
+	store, err := persist.GetDriver()
+	assert.NoError(err)
+
+	clhConfig.VMStorePath = store.RunVMStoragePath()
+	clhConfig.RunStorePath = store.RunStoragePath()
+
+	network, err := NewNetwork()
+	assert.NoError(err)
+
+	clh := &cloudHypervisor{
+		config: clhConfig,
+	}
+
+	sandbox := &Sandbox{
+		ctx: context.Background(),
+		id:  "testSandbox",
+		config: &SandboxConfig{
+			HypervisorConfig: clhConfig,
+		},
+	}
+
+	err = clh.CreateVM(context.Background(), sandbox.id, network, &sandbox.config.HypervisorConfig)
 	assert.NoError(err)
 	assert.Exactly(clhConfig, clh.config)
 }

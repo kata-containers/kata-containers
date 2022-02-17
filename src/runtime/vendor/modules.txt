@@ -209,9 +209,6 @@ github.com/hashicorp/go-multierror
 github.com/intel-go/cpuid
 # github.com/josharian/intern v1.0.0
 github.com/josharian/intern
-# github.com/kata-containers/govmm v0.0.0-20210909155007-1b60b536f3c7
-## explicit
-github.com/kata-containers/govmm/qemu
 # github.com/mailru/easyjson v0.7.6
 github.com/mailru/easyjson/buffer
 github.com/mailru/easyjson/jlexer
@@ -227,10 +224,11 @@ github.com/mitchellh/mapstructure
 github.com/moby/sys/mountinfo
 # github.com/opencontainers/go-digest v1.0.0
 github.com/opencontainers/go-digest
-# github.com/opencontainers/image-spec v1.0.2-0.20211117181255-693428a734f5
+# github.com/opencontainers/image-spec v1.0.2 => github.com/opencontainers/image-spec v1.0.2
+## explicit
 github.com/opencontainers/image-spec/specs-go
 github.com/opencontainers/image-spec/specs-go/v1
-# github.com/opencontainers/runc v1.1.0 => github.com/opencontainers/runc v1.0.1
+# github.com/opencontainers/runc v1.1.0 => github.com/opencontainers/runc v1.0.3
 ## explicit
 github.com/opencontainers/runc/libcontainer/cgroups
 github.com/opencontainers/runc/libcontainer/cgroups/devices
@@ -464,6 +462,7 @@ k8s.io/apimachinery/pkg/api/resource
 ## explicit
 k8s.io/cri-api/pkg/apis/runtime/v1alpha2
 # github.com/containerd/containerd => github.com/confidential-containers/containerd v1.6.0-beta.0.0.20220209074753-e5287e3a54ad
-# github.com/opencontainers/runc => github.com/opencontainers/runc v1.0.1
+# github.com/opencontainers/image-spec => github.com/opencontainers/image-spec v1.0.2
+# github.com/opencontainers/runc => github.com/opencontainers/runc v1.0.3
 # github.com/uber-go/atomic => go.uber.org/atomic v1.5.1
 # google.golang.org/genproto => google.golang.org/genproto v0.0.0-20180817151627-c66870c02cf8

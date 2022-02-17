@@ -1,0 +1,65 @@
+From 0e3ad502669659822083fd9fde80220e5a9af0ed Mon Sep 17 00:00:00 2001
+From: Huang Shijie <shijie8@gmail.com>
+Date: Fri, 10 Dec 2021 15:49:06 +0800
+Subject: [PATCH 26/28] armcpuhp: set cpu->disabled to true when initialize cpu
+
+The new qemu edition remove the instance init fn of arm cpu. revert is
+back and set cpu->disabled to true in it.
+
+Signed-off-by: Huang Shijie <shijie8@gmail.com>
+Signed-off-by: Huang Shijie <shijie8@gmail.com>
+---
+ target/arm/cpu64.c | 16 ++++++++++------
+ 1 file changed, 10 insertions(+), 6 deletions(-)
+
+diff --git a/target/arm/cpu64.c b/target/arm/cpu64.c
+index 2134be0b67..249dc24849 100644
+--- a/target/arm/cpu64.c
++++ b/target/arm/cpu64.c
+@@ -895,7 +895,6 @@ static void aarch64_cpu_class_init(ObjectClass *oc, void *data)
+ {
+     CPUClass *cc = CPU_CLASS(oc);
+     DeviceClass *dc = DEVICE_CLASS(oc);
+-    CPUState *cs = CPU(oc);
+ 
+     dc->user_creatable = true;
+     cc->gdb_read_register = aarch64_cpu_gdb_read_register;
+@@ -909,11 +908,6 @@ static void aarch64_cpu_class_init(ObjectClass *oc, void *data)
+     object_class_property_set_description(oc, "aarch64",
+                                           "Set on/off to enable/disable aarch64 "
+                                           "execution state ");
+-    /*
+-     * we start every ARM64 vcpu as disabled possible vcpu. It needs to be
+-     * enabled explicitly
+-     */
+-    cs->disabled = true;
+ }
+ 
+ static void aarch64_cpu_instance_init(Object *obj)
+@@ -924,6 +918,15 @@ static void aarch64_cpu_instance_init(Object *obj)
+     arm_cpu_post_init(obj);
+ }
+ 
++static void aarch64_cpu_initfn(Object *obj)
++{
++    CPUState *cs = CPU(obj);
++    /*
++     * we start every ARM64 vcpu as disabled possible vcpu. It needs to be
++     * enabled explicitly
++     */
++    cs->disabled = true;
++}
+ static void cpu_register_class_init(ObjectClass *oc, void *data)
+ {
+     ARMCPUClass *acc = ARM_CPU_CLASS(oc);
+@@ -952,6 +955,7 @@ static const TypeInfo aarch64_cpu_type_info = {
+     .parent = TYPE_ARM_CPU,
+     .instance_size = sizeof(ARMCPU),
+     .instance_finalize = aarch64_cpu_finalizefn,
++    .instance_init = aarch64_cpu_initfn,
+     .abstract = true,
+     .class_size = sizeof(AArch64CPUClass),
+     .class_init = aarch64_cpu_class_init,
+-- 
+2.30.2
+

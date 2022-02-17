@@ -48,7 +48,16 @@ jobs:
           - rootfs-initrd
           - shim-v2
     steps:
+      - name: get-PR-ref
+        id: get-PR-ref
+        run: |
+            ref=$(cat $GITHUB_EVENT_PATH | jq -r '.issue.pull_request.url' | sed  's#^.*\/pulls#refs\/pull#' | sed 's#$#\/merge#')
+            echo "reference for PR: " ${ref}
+            echo "##[set-output name=pr-ref;]${ref}"
       - uses: actions/checkout@v2
+        with:
+          ref: ${{ steps.get-PR-ref.outputs.pr-ref }}
+
       - name: Install docker
         run: |
           curl -fsSL https://test.docker.com -o test-docker.sh
@@ -75,7 +84,15 @@ jobs:
     runs-on: ubuntu-latest
     needs: build-asset
     steps:
+      - name: get-PR-ref
+        id: get-PR-ref
+        run: |
+            ref=$(cat $GITHUB_EVENT_PATH | jq -r '.issue.pull_request.url' | sed  's#^.*\/pulls#refs\/pull#' | sed 's#$#\/merge#')
+            echo "reference for PR: " ${ref}
+            echo "##[set-output name=pr-ref;]${ref}"
       - uses: actions/checkout@v2
+        with:
+          ref: ${{ steps.get-PR-ref.outputs.pr-ref }}
       - name: get-artifacts
         uses: actions/download-artifact@v2
         with:
@@ -94,7 +111,15 @@ jobs:
     needs: create-kata-tarball
     runs-on: ubuntu-latest
     steps:
+      - name: get-PR-ref
+        id: get-PR-ref
+        run: |
+            ref=$(cat $GITHUB_EVENT_PATH | jq -r '.issue.pull_request.url' | sed  's#^.*\/pulls#refs\/pull#' | sed 's#$#\/merge#')
+            echo "reference for PR: " ${ref}
+            echo "##[set-output name=pr-ref;]${ref}"
       - uses: actions/checkout@v2
+        with:
+          ref: ${{ steps.get-PR-ref.outputs.pr-ref }}
       - name: get-kata-tarball
         uses: actions/download-artifact@v2
         with:
@@ -102,18 +127,14 @@ jobs:
       - name: build-and-push-kata-deploy-ci
         id: build-and-push-kata-deploy-ci
         run: |
-          tag=$(echo $GITHUB_REF | cut -d/ -f3-)
-          pushd $GITHUB_WORKSPACE
-          git checkout $tag
-          pkg_sha=$(git rev-parse HEAD)
-          popd
+          PR_SHA=$(git log --format=format:%H -n1)
           mv kata-static.tar.xz $GITHUB_WORKSPACE/tools/packaging/kata-deploy/kata-static.tar.xz
-          docker build --build-arg KATA_ARTIFACTS=kata-static.tar.xz -t quay.io/kata-containers/kata-deploy-ci:$pkg_sha $GITHUB_WORKSPACE/tools/packaging/kata-deploy
+          docker build --build-arg KATA_ARTIFACTS=kata-static.tar.xz -t quay.io/kata-containers/kata-deploy-ci:$PR_SHA $GITHUB_WORKSPACE/tools/packaging/kata-deploy
           docker login -u ${{ secrets.QUAY_DEPLOYER_USERNAME }} -p ${{ secrets.QUAY_DEPLOYER_PASSWORD }} quay.io
-          docker push quay.io/kata-containers/kata-deploy-ci:$pkg_sha
+          docker push quay.io/kata-containers/kata-deploy-ci:$PR_SHA
           mkdir -p packaging/kata-deploy
           ln -s $GITHUB_WORKSPACE/tools/packaging/kata-deploy/action packaging/kata-deploy/action
-          echo "::set-output name=PKG_SHA::${pkg_sha}"
+          echo "::set-output name=PKG_SHA::${PR_SHA}"
       - name: test-kata-deploy-ci-in-aks
         uses: ./packaging/kata-deploy/action
         with:

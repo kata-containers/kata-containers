@@ -178,6 +178,20 @@ func TestCalculateSandboxMem(t *testing.T) {
 	}
 }
 
+func TestCalculateSandboxMemHandlesNegativeLimits(t *testing.T) {
+	sandbox := &Sandbox{}
+	sandbox.config = &SandboxConfig{}
+	container := newTestContainerConfigNoop("cont-00001")
+	limit := int64(-1)
+	container.Resources.Memory = &specs.LinuxMemory{Limit: &limit}
+
+	sandbox.config.Containers = []ContainerConfig{container}
+	mem, needSwap, swap := sandbox.calculateSandboxMemory()
+	assert.Equal(t, mem, int64(0))
+	assert.Equal(t, needSwap, false)
+	assert.Equal(t, swap, int64(0))
+}
+
 func TestCreateSandboxEmptyID(t *testing.T) {
 	hConfig := newHypervisorConfig(nil, nil)
 	_, err := testCreateSandbox(t, "", MockHypervisor, hConfig, NetworkConfig{}, nil, nil)
@@ -1285,16 +1299,12 @@ func TestPreAddDevice(t *testing.T) {
 func TestGetNetNs(t *testing.T) {
 	s := Sandbox{}
 
-	expected := ""
+	expected := "/foo/bar/ns/net"
+	network, err := NewNetwork(&NetworkConfig{NetworkID: expected})
+	assert.Nil(t, err)
+
+	s.network = network
 	netNs := s.GetNetNs()
-	assert.Equal(t, netNs, expected)
-
-	expected = "/foo/bar/ns/net"
-	s.networkNS = NetworkNamespace{
-		NetNsPath: expected,
-	}
-
-	netNs = s.GetNetNs()
 	assert.Equal(t, netNs, expected)
 }
 

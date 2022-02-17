@@ -33,7 +33,7 @@ $ ./rootfs.sh -r "$PWD/kata-overlay"
 
 The rootfs must provide at least the following components:
 
-- [Kata agent](https://github.com/kata-containers/kata-containers/tree/main/src/agent)
+- [Kata agent](../../../src/agent)
 
   Path: `/bin/kata-agent` - Kata Containers guest.
 
@@ -99,10 +99,10 @@ must be met:
    Example:
    ```
    $ export USE_DOCKER=true
-   $ # build guest O/S rootfs based on fedora
-   $ ./rootfs-builder/rootfs.sh -r "${PWD}/fedora_rootfs" fedora
+   $ # build guest O/S rootfs based on debian
+   $ ./rootfs-builder/rootfs.sh -r "${PWD}/debian_rootfs" debian
    $ # build image based rootfs created above
-   $ ./image-builder/image_builder.sh "${PWD}/fedora_rootfs"
+   $ ./image-builder/image_builder.sh "${PWD}/debian_rootfs"
    ```
 
 ## Adding support for a new guest OS
@@ -180,7 +180,7 @@ To add additional packages, use one of the following methods:
   Example:
 
   ```
-  $ EXTRA_PKGS="vim emacs" ./rootfs-builder/rootfs.sh -r ${PWD}/myrootfs fedora
+  $ EXTRA_PKGS="vim emacs" ./rootfs-builder/rootfs.sh -r ${PWD}/myrootfs debian
   ```
 
 - Modify the variable `PACKAGES` in `rootfs-builder/<distro>/config.sh`.

@@ -28,10 +28,13 @@ func TestMockHypervisorCreateVM(t *testing.T) {
 		},
 	}
 
+	network, err := NewNetwork()
+	assert.NoError(err)
+
 	ctx := context.Background()
 
 	// wrong config
-	err := m.CreateVM(ctx, sandbox.config.ID, NetworkNamespace{}, &sandbox.config.HypervisorConfig)
+	err = m.CreateVM(ctx, sandbox.config.ID, network, &sandbox.config.HypervisorConfig)
 	assert.Error(err)
 
 	sandbox.config.HypervisorConfig = HypervisorConfig{
@@ -40,7 +43,7 @@ func TestMockHypervisorCreateVM(t *testing.T) {
 		HypervisorPath: fmt.Sprintf("%s/%s", testDir, testHypervisor),
 	}
 
-	err = m.CreateVM(ctx, sandbox.config.ID, NetworkNamespace{}, &sandbox.config.HypervisorConfig)
+	err = m.CreateVM(ctx, sandbox.config.ID, network, &sandbox.config.HypervisorConfig)
 	assert.NoError(err)
 }
 

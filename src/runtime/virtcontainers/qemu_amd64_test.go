@@ -12,7 +12,7 @@ import (
 	"testing"
 
 	"github.com/intel-go/cpuid"
-	govmmQemu "github.com/kata-containers/govmm/qemu"
+	govmmQemu "github.com/kata-containers/kata-containers/src/runtime/pkg/govmm/qemu"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	"github.com/stretchr/testify/assert"
 )
@@ -252,7 +252,7 @@ func TestQemuAmd64AppendProtectionDevice(t *testing.T) {
 	firmware := "tdvf.fd"
 	var bios string
 	var err error
-	devices, bios, err = amd64.appendProtectionDevice(devices, firmware)
+	devices, bios, err = amd64.appendProtectionDevice(devices, firmware, "")
 	assert.NoError(err)
 
 	// non-protection
@@ -260,20 +260,20 @@ func TestQemuAmd64AppendProtectionDevice(t *testing.T) {
 
 	// pef protection
 	amd64.(*qemuAmd64).protection = pefProtection
-	devices, bios, err = amd64.appendProtectionDevice(devices, firmware)
+	devices, bios, err = amd64.appendProtectionDevice(devices, firmware, "")
 	assert.Error(err)
 	assert.Empty(bios)
 
 	// Secure Execution protection
 	amd64.(*qemuAmd64).protection = seProtection
-	devices, bios, err = amd64.appendProtectionDevice(devices, firmware)
+	devices, bios, err = amd64.appendProtectionDevice(devices, firmware, "")
 	assert.Error(err)
 	assert.Empty(bios)
 
 	// sev protection
 	amd64.(*qemuAmd64).protection = sevProtection
 
-	devices, bios, err = amd64.appendProtectionDevice(devices, firmware)
+	devices, bios, err = amd64.appendProtectionDevice(devices, firmware, "")
 	assert.NoError(err)
 	assert.Empty(bios)
 
@@ -293,7 +293,7 @@ func TestQemuAmd64AppendProtectionDevice(t *testing.T) {
 	// tdxProtection
 	amd64.(*qemuAmd64).protection = tdxProtection
 
-	devices, bios, err = amd64.appendProtectionDevice(devices, firmware)
+	devices, bios, err = amd64.appendProtectionDevice(devices, firmware, "")
 	assert.NoError(err)
 	assert.Empty(bios)
 

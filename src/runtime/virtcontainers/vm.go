@@ -90,6 +90,11 @@ func NewVM(ctx context.Context, config VMConfig) (*VM, error) {
 		return nil, err
 	}
 
+	network, err := NewNetwork()
+	if err != nil {
+		return nil, err
+	}
+
 	if err = config.Valid(); err != nil {
 		return nil, err
 	}
@@ -111,7 +116,7 @@ func NewVM(ctx context.Context, config VMConfig) (*VM, error) {
 		}
 	}()
 
-	if err = hypervisor.CreateVM(ctx, id, NetworkNamespace{}, &config.HypervisorConfig); err != nil {
+	if err = hypervisor.CreateVM(ctx, id, network, &config.HypervisorConfig); err != nil {
 		return nil, err
 	}
 

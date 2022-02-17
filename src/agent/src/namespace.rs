@@ -23,12 +23,7 @@ pub const NSTYPEPID: &str = "pid";
 
 #[instrument]
 pub fn get_current_thread_ns_path(ns_type: &str) -> String {
-    format!(
-        "/proc/{}/task/{}/ns/{}",
-        getpid().to_string(),
-        gettid().to_string(),
-        ns_type
-    )
+    format!("/proc/{}/task/{}/ns/{}", getpid(), gettid(), ns_type)
 }
 
 #[derive(Debug)]
@@ -100,7 +95,7 @@ impl Namespace {
         self.path = new_ns_path.clone().into_os_string().into_string().unwrap();
         let hostname = self.hostname.clone();
 
-        let new_thread = tokio::spawn(async move {
+        let new_thread = std::thread::spawn(move || {
             if let Err(err) = || -> Result<()> {
                 let origin_ns_path = get_current_thread_ns_path(ns_type.get());
 
@@ -148,7 +143,7 @@ impl Namespace {
         });
 
         new_thread
-            .await
+            .join()
             .map_err(|e| anyhow!("Failed to join thread {:?}!", e))??;
 
         Ok(self)

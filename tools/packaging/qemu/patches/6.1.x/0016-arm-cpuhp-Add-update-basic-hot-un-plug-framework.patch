@@ -1,0 +1,171 @@
+From 2010227bc3f326b0755ec3878476c2f0616ea407 Mon Sep 17 00:00:00 2001
+From: Salil Mehta <salil.mehta@huawei.com>
+Date: Sat, 27 Nov 2021 15:03:17 +0800
+Subject: [PATCH 16/28] arm/cpuhp: Add/update basic hot-(un)plug framework
+
+Adds the new cpu hot-unplug hooks and updates the existing hotplug hooks with
+sanity checks.
+
+Note, Functional contents of the hooks(now left with TODO comment) shall be
+gradually filled in the subsequent patches in an incremental approach to patch
+and logic building which would be roughly as follows:
+1. (Un-)wiring of interrupts between vcpu<->gic
+2. Sending events to Guest for hot-(un)plug so that guest can take appropriate
+   actions.
+3. Notifying GIC about hot-(un)plug action so that vcpu could be (un-)stitched
+   to the GIC CPU interface.
+4. Updating the Guest with Next boot info for this vcpu in the firmware.
+
+Co-developed-by: Keqian Zhu <zhukeqian1@huawei.com>
+Signed-off-by: Salil Mehta <salil.mehta@huawei.com>
+Signed-off-by: Huang Shijie <shijie8@gmail.com>
+---
+ hw/arm/virt.c | 87 +++++++++++++++++++++++++++++++++++++++++++++++++--
+ 1 file changed, 85 insertions(+), 2 deletions(-)
+
+diff --git a/hw/arm/virt.c b/hw/arm/virt.c
+index a0b6393f76..ce34fb019a 100644
+--- a/hw/arm/virt.c
++++ b/hw/arm/virt.c
+@@ -2668,11 +2668,22 @@ static void virt_memory_plug(HotplugHandler *hotplug_dev,
+ static void virt_cpu_pre_plug(HotplugHandler *hotplug_dev, DeviceState *dev,
+                               Error **errp)
+ {
++    VirtMachineState *vms = VIRT_MACHINE(hotplug_dev);
+     MachineState *ms = MACHINE(hotplug_dev);
+     ARMCPU *cpu = ARM_CPU(dev);
+     CPUState *cs = CPU(dev);
+     CPUArchId *cpu_slot;
+ 
++    if (dev->hotplugged && !vms->acpi_dev) {
++        error_setg(errp, "GED acpi device does not exists");
++        return;
++    }
++
++    if (dev->hotplugged && (vms->gic_version < VIRT_GIC_VERSION_3)) {
++        error_setg(errp, "CPU hotplug not supported with GICv%d, use GICv3 or "
++                   "later", vms->gic_version);
++        return;
++    }
+     /* sanity check the cpu */
+     if (!object_dynamic_cast(OBJECT(cpu), ms->cpu_type)) {
+         error_setg(errp, "Invalid CPU type, expected cpu type: '%s'",
+@@ -2705,6 +2716,9 @@ static void virt_cpu_pre_plug(HotplugHandler *hotplug_dev, DeviceState *dev,
+         return;
+     }
+     virt_cpu_set_properties(OBJECT(cs), cpu_slot);
++    if (dev->hotplugged) {
++        /* TODO: update GIC about this hotplug change here */
++    }
+ }
+ 
+ static void virt_cpu_plug(HotplugHandler *hotplug_dev, DeviceState *dev,
+@@ -2719,10 +2733,74 @@ static void virt_cpu_plug(HotplugHandler *hotplug_dev, DeviceState *dev,
+     cpu_slot = virt_find_cpu_slot(ms, cpu->core_id);
+     cpu_slot->cpu = OBJECT(dev);
+ 
++    if (dev->hotplugged) {
++        /* TODO: wire the gic-cpu irqs */
++        /* TODO: update acpi hotplug state and send cpu hotplug event to guest */
++        /* TODO: register this cpu for reset & update F/W info for the next boot */
++    }
+     cs->disabled = false;
+     return;
+ }
+ 
++static void virt_cpu_unplug_request(HotplugHandler *hotplug_dev,
++                                    DeviceState *dev, Error **errp)
++{
++    VirtMachineState *vms = VIRT_MACHINE(hotplug_dev);
++    CPUState *cs = CPU(dev);
++
++    if (!vms->acpi_dev || !dev->realized) {
++        error_setg(errp, "GED does not exists or device is not realized!");
++        return;
++    }
++
++    if (vms->gic_version < VIRT_GIC_VERSION_3) {
++        error_setg(errp, "CPU hot-unplug not supported with GICv%d",
++                   vms->gic_version);
++        return;
++    }
++
++    if (cs->cpu_index == first_cpu->cpu_index)
++    {
++        error_setg(errp, "hot-unplug of ARM boot vcpu %d not supported",
++                   first_cpu->cpu_index);
++        return;
++    }
++
++    /* TODO: request cpu hotplug from guest */
++
++    return;
++}
++
++static void virt_cpu_unplug(HotplugHandler *hotplug_dev, DeviceState *dev,
++                            Error **errp)
++{
++    VirtMachineState *vms = VIRT_MACHINE(hotplug_dev);
++    MachineState *ms = MACHINE(hotplug_dev);
++    CPUState *cs = CPU(dev);
++    CPUArchId *cpu_slot;
++
++    if (!vms->acpi_dev || !dev->realized) {
++        error_setg(errp, "GED does not exists or device is not realized!");
++        return;
++    }
++
++    cpu_slot = virt_find_cpu_slot(ms, ARM_CPU(cs)->core_id);
++
++    /* TODO: update the acpi cpu hotplug state for cpu hot-unplug */
++
++    /* TODO: unwire the gic-cpu irqs here */
++    /* TODO: update the GIC about this hot unplug change */
++
++    /* TODO: unregister this cpu for reset & update F/W info for the next boot */
++
++    qemu_opts_del(dev->opts);
++    dev->opts = NULL;
++
++    cpu_slot->cpu = NULL;
++    cs->disabled = true;
++    return;
++}
++
+ static void virt_machine_device_pre_plug_cb(HotplugHandler *hotplug_dev,
+                                             DeviceState *dev, Error **errp)
+ {
+@@ -2835,9 +2913,11 @@ static void virt_machine_device_unplug_request_cb(HotplugHandler *hotplug_dev,
+ {
+     if (object_dynamic_cast(OBJECT(dev), TYPE_PC_DIMM)) {
+         virt_dimm_unplug_request(hotplug_dev, dev, errp);
++    } else if (object_dynamic_cast(OBJECT(dev), TYPE_CPU)) {
++        virt_cpu_unplug_request(hotplug_dev, dev, errp);
+     } else {
+-        error_setg(errp, "device unplug request for unsupported device"
+-                   " type: %s", object_get_typename(OBJECT(dev)));
++        error_setg(errp, "device unplug request for unsupported type: %s",
++                   object_get_typename(OBJECT(dev)));
+     }
+ }
+ 
+@@ -2846,6 +2926,8 @@ static void virt_machine_device_unplug_cb(HotplugHandler *hotplug_dev,
+ {
+     if (object_dynamic_cast(OBJECT(dev), TYPE_PC_DIMM)) {
+         virt_dimm_unplug(hotplug_dev, dev, errp);
++    } else if (object_dynamic_cast(OBJECT(dev), TYPE_CPU)) {
++	virt_cpu_unplug(hotplug_dev, dev, errp);
+     } else {
+         error_setg(errp, "virt: device unplug for unsupported device"
+                    " type: %s", object_get_typename(OBJECT(dev)));
+@@ -2977,6 +3059,7 @@ static void virt_machine_class_init(ObjectClass *oc, void *data)
+     mc->default_cpu_type = ARM_CPU_TYPE_NAME("cortex-a15");
+     mc->get_default_cpu_node_id = virt_get_default_cpu_node_id;
+     mc->kvm_type = virt_kvm_type;
++    mc->has_hotpluggable_cpus = true;
+     assert(!mc->get_hotplug_handler);
+     mc->get_hotplug_handler = virt_machine_get_hotplug_handler;
+     hc->pre_plug = virt_machine_device_pre_plug_cb;
+-- 
+2.30.2
+

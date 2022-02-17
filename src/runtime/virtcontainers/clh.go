@@ -158,7 +158,7 @@ func (s *CloudHypervisorState) reset() {
 
 type cloudHypervisor struct {
 	console   console.Console
-	virtiofsd Virtiofsd
+	virtiofsd VirtiofsDaemon
 	APIClient clhClient
 	ctx       context.Context
 	id        string
@@ -200,7 +200,7 @@ func (clh *cloudHypervisor) setConfig(config *HypervisorConfig) error {
 
 // For cloudHypervisor this call only sets the internal structure up.
 // The VM will be created and started through StartVM().
-func (clh *cloudHypervisor) CreateVM(ctx context.Context, id string, networkNS NetworkNamespace, hypervisorConfig *HypervisorConfig) error {
+func (clh *cloudHypervisor) CreateVM(ctx context.Context, id string, network Network, hypervisorConfig *HypervisorConfig) error {
 	clh.ctx = ctx
 
 	span, newCtx := katatrace.Trace(clh.ctx, clh.Logger(), "CreateVM", clhTracingTags, map[string]string{"sandbox_id": clh.id})
@@ -284,16 +284,26 @@ func (clh *cloudHypervisor) CreateVM(ctx context.Context, id string, networkNS N
 		return err
 	}
 
-	if imagePath == "" {
-		return errors.New("image path is empty")
+	initrdPath, err := clh.config.InitrdAssetPath()
+	if err != nil {
+		return err
 	}
 
-	pmem := chclient.NewPmemConfig(imagePath)
-	*pmem.DiscardWrites = true
-	if clh.vmconfig.Pmem != nil {
-		*clh.vmconfig.Pmem = append(*clh.vmconfig.Pmem, *pmem)
+	if imagePath != "" {
+		pmem := chclient.NewPmemConfig(imagePath)
+		*pmem.DiscardWrites = true
+
+		if clh.vmconfig.Pmem != nil {
+			*clh.vmconfig.Pmem = append(*clh.vmconfig.Pmem, *pmem)
+		} else {
+			clh.vmconfig.Pmem = &[]chclient.PmemConfig{*pmem}
+		}
+	} else if initrdPath != "" {
+		initrd := chclient.NewInitramfsConfig(initrdPath)
+
+		clh.vmconfig.SetInitramfs(*initrd)
 	} else {
-		clh.vmconfig.Pmem = &[]chclient.PmemConfig{*pmem}
+		return errors.New("no image or initrd specified")
 	}
 
 	// Use serial port as the guest console only in debug mode,
@@ -749,14 +759,14 @@ func (clh *cloudHypervisor) toGrpc(ctx context.Context) ([]byte, error) {
 func (clh *cloudHypervisor) Save() (s hv.HypervisorState) {
 	s.Pid = clh.state.PID
 	s.Type = string(ClhHypervisor)
-	s.VirtiofsdPid = clh.state.VirtiofsdPID
+	s.VirtiofsDaemonPid = clh.state.VirtiofsdPID
 	s.APISocket = clh.state.apiSocket
 	return
 }
 
 func (clh *cloudHypervisor) Load(s hv.HypervisorState) {
 	clh.state.PID = s.Pid
-	clh.state.VirtiofsdPID = s.VirtiofsdPid
+	clh.state.VirtiofsdPID = s.VirtiofsDaemonPid
 	clh.state.apiSocket = s.APISocket
 }
 

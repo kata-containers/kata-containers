@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 #
 # Copyright (c) 2020 Intel Corporation
 #
@@ -289,7 +289,7 @@ check_deps()
 
 	case "$ID" in
 		centos|rhel) sudo yum -y install $packages ;;
-		ubuntu) sudo apt-get -y install $packages ;;
+		debian|ubuntu) sudo apt-get -y install $packages ;;
 		fedora) sudo dnf -y install $packages ;;
 		opensuse*|sles) sudo zypper install -y $packages ;;
 		*) die "Unsupported distro: $ID"

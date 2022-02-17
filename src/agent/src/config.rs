@@ -973,6 +973,11 @@ mod tests {
             assert_eq!(d.container_pipe_size, config.container_pipe_size, "{}", msg);
             assert_eq!(d.server_addr, config.server_addr, "{}", msg);
             assert_eq!(d.tracing, config.tracing, "{}", msg);
+            assert_eq!(
+                d.container_policy_path, config.container_policy_path,
+                "{}",
+                msg
+            );
 
             for v in vars_to_unset {
                 env::remove_var(v);
