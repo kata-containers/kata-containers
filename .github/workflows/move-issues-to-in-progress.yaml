@@ -55,7 +55,7 @@ jobs:
             exit 1
           }
 
-          project_name="Issue backlog"
+          project_name="runtime-rs"
           project_type="org"
           project_column="In progress"
 
