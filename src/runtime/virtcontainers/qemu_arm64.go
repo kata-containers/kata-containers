@@ -12,7 +12,7 @@ import (
 	"runtime"
 	"time"
 
-	govmmQemu "github.com/kata-containers/govmm/qemu"
+	govmmQemu "github.com/kata-containers/kata-containers/src/runtime/pkg/govmm/qemu"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 )
 
@@ -169,7 +169,7 @@ func (q *qemuArm64) enableProtection() error {
 	return nil
 }
 
-func (q *qemuArm64) appendProtectionDevice(devices []govmmQemu.Device, firmware string) ([]govmmQemu.Device, string, error) {
+func (q *qemuArm64) appendProtectionDevice(devices []govmmQemu.Device, firmware, firmwareVolume string) ([]govmmQemu.Device, string, error) {
 	err := q.enableProtection()
 	hvLogger.WithField("arch", runtime.GOARCH).Warnf("%v", err)
 	return devices, firmware, err

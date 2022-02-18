@@ -36,10 +36,6 @@ See [the release documentation](release).
 
 See the [scripts documentation](scripts).
 
-## Sync packages
-
-See [the `kata-pkgsync` documentation](cmd/kata-pkgsync).
-
 ## Credits
 
 Kata Containers packaging uses [packagecloud](https://packagecloud.io) for

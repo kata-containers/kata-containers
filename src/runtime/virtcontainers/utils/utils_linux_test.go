@@ -6,7 +6,10 @@
 package utils
 
 import (
+	"bytes"
 	"errors"
+	"os/exec"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -34,20 +37,31 @@ func TestFindContextID(t *testing.T) {
 	assert.Error(err)
 }
 
-func TestGetDevicePathAndFsTypeEmptyMount(t *testing.T) {
+func TestGetDevicePathAndFsTypeOptionsEmptyMount(t *testing.T) {
 	assert := assert.New(t)
-	_, _, err := GetDevicePathAndFsType("")
+	_, _, _, err := GetDevicePathAndFsTypeOptions("")
 	assert.Error(err)
 }
 
-func TestGetDevicePathAndFsTypeSuccessful(t *testing.T) {
+func TestGetDevicePathAndFsTypeOptionsSuccessful(t *testing.T) {
 	assert := assert.New(t)
 
-	path, fstype, err := GetDevicePathAndFsType("/proc")
+	cmdStr := "grep ^proc  /proc/mounts"
+	cmd := exec.Command("sh", "-c", cmdStr)
+	output, err := cmd.Output()
+	assert.NoError(err)
+
+	data := bytes.Split(output, []byte(" "))
+	fstypeOut := string(data[2])
+	optsOut := strings.Split(string(data[3]), ",")
+
+	path, fstype, fsOptions, err := GetDevicePathAndFsTypeOptions("/proc")
 	assert.NoError(err)
 
 	assert.Equal(path, "proc")
 	assert.Equal(fstype, "proc")
+	assert.Equal(fstype, fstypeOut)
+	assert.Equal(fsOptions, optsOut)
 }
 
 func TestIsAPVFIOMediatedDeviceFalse(t *testing.T) {

@@ -10,7 +10,7 @@ import (
 	"fmt"
 	"time"
 
-	govmmQemu "github.com/kata-containers/govmm/qemu"
+	govmmQemu "github.com/kata-containers/kata-containers/src/runtime/pkg/govmm/qemu"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
@@ -333,7 +333,7 @@ func (q *qemuS390x) enableProtection() error {
 
 // appendProtectionDevice appends a QEMU object for Secure Execution.
 // Takes devices and returns updated version. Takes BIOS and returns it (no modification on s390x).
-func (q *qemuS390x) appendProtectionDevice(devices []govmmQemu.Device, firmware string) ([]govmmQemu.Device, string, error) {
+func (q *qemuS390x) appendProtectionDevice(devices []govmmQemu.Device, firmware, firmwareVolume string) ([]govmmQemu.Device, string, error) {
 	switch q.protection {
 	case seProtection:
 		return append(devices,

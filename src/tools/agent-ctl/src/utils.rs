@@ -92,12 +92,10 @@ pub fn signame_to_signum(name: &str) -> Result<u8> {
         return Err(anyhow!("invalid signal"));
     }
 
-    match name.parse::<u8>() {
-        Ok(n) => return Ok(n),
-
-        // "fall through" on error as we assume the name is not a number, but
-        // a signal name.
-        Err(_) => (),
+    // "fall through" on error as we assume the name is not a number, but
+    // a signal name.
+    if let Ok(n) = name.parse::<u8>() {
+        return Ok(n);
     }
 
     let mut search_term: String;
@@ -129,8 +127,7 @@ pub fn human_time_to_ns(human_time: &str) -> Result<i64> {
 
     let d: humantime::Duration = human_time
         .parse::<humantime::Duration>()
-        .map_err(|e| anyhow!(e))?
-        .into();
+        .map_err(|e| anyhow!(e))?;
 
     Ok(d.as_nanos() as i64)
 }
@@ -262,8 +259,8 @@ fn config_file_from_bundle_dir(bundle_dir: &str) -> Result<String> {
 fn root_oci_to_ttrpc(bundle_dir: &str, root: &ociRoot) -> Result<ttrpcRoot> {
     let root_dir = root.path.clone();
 
-    let path = if root_dir.starts_with("/") {
-        root_dir.clone()
+    let path = if root_dir.starts_with('/') {
+        root_dir
     } else {
         // Expand the root directory into an absolute value
         let abs_root_dir = PathBuf::from(&bundle_dir).join(&root_dir);
@@ -685,13 +682,13 @@ fn linux_oci_to_ttrpc(l: &ociLinux) -> ttrpcLinux {
 
 fn oci_to_ttrpc(bundle_dir: &str, cid: &str, oci: &ociSpec) -> Result<ttrpcSpec> {
     let process = match &oci.process {
-        Some(p) => protobuf::SingularPtrField::some(process_oci_to_ttrpc(&p)),
+        Some(p) => protobuf::SingularPtrField::some(process_oci_to_ttrpc(p)),
         None => protobuf::SingularPtrField::none(),
     };
 
     let root = match &oci.root {
         Some(r) => {
-            let ttrpc_root = root_oci_to_ttrpc(bundle_dir, &r).map_err(|e| e)?;
+            let ttrpc_root = root_oci_to_ttrpc(bundle_dir, r).map_err(|e| e)?;
 
             protobuf::SingularPtrField::some(ttrpc_root)
         }
@@ -700,7 +697,7 @@ fn oci_to_ttrpc(bundle_dir: &str, cid: &str, oci: &ociSpec) -> Result<ttrpcSpec>
 
     let mut mounts = protobuf::RepeatedField::new();
     for m in &oci.mounts {
-        mounts.push(mount_oci_to_ttrpc(&m));
+        mounts.push(mount_oci_to_ttrpc(m));
     }
 
     let linux = match &oci.linux {
@@ -770,7 +767,7 @@ pub fn get_ttrpc_spec(options: &mut Options, cid: &str) -> Result<ttrpcSpec> {
 
     let oci_spec: ociSpec = serde_json::from_str(&json_spec).map_err(|e| anyhow!(e))?;
 
-    Ok(oci_to_ttrpc(&bundle_dir, cid, &oci_spec)?)
+    oci_to_ttrpc(&bundle_dir, cid, &oci_spec)
 }
 
 pub fn str_to_bytes(s: &str) -> Result<Vec<u8>> {

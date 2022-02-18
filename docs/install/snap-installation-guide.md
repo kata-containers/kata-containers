@@ -39,8 +39,8 @@ can be used as runtime.
 
 Read the following documents to know how to run Kata Containers 2.x with `containerd`.
 
-* [How to use Kata Containers and Containerd](https://github.com/kata-containers/kata-containers/blob/main/docs/how-to/containerd-kata.md)
-* [Install Kata Containers with containerd](https://github.com/kata-containers/kata-containers/blob/main/docs/install/container-manager/containerd/containerd-install.md)
+* [How to use Kata Containers and Containerd](../how-to/containerd-kata.md)
+* [Install Kata Containers with containerd](./container-manager/containerd/containerd-install.md)
 
 
 ## Remove Kata Containers snap package

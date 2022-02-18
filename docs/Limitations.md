@@ -97,38 +97,6 @@ See issue https://github.com/clearcontainers/runtime/issues/341 and [the constra
 For CPUs resource management see
 [CPU constraints](design/vcpu-handling.md).
 
-### docker run and shared memory
-
-The runtime does not implement the `docker run --shm-size` command to
-set the size of the `/dev/shm tmpfs` within the container. It is possible to pass this configuration value into the VM container so the appropriate mount command happens at launch time.
-
-See issue https://github.com/kata-containers/kata-containers/issues/21 for more information.
-
-### docker run and sysctl
-
-The `docker run --sysctl` feature is not implemented. At the runtime
-level, this equates to the `linux.sysctl` OCI configuration. Docker
-allows configuring the sysctl settings that support namespacing. From a security and isolation point of view, it might make sense to set them in the VM, which isolates sysctl settings. Also, given that each Kata Container has its own kernel, we can support setting of sysctl settings that are not namespaced. In some cases, we might need to support configuring some of the settings on both the host side Kata Container namespace and the Kata Containers kernel.
-
-See issue https://github.com/kata-containers/runtime/issues/185 for more information.
-
-## Docker daemon features
-
-Some features enabled or implemented via the
-[`dockerd` daemon](https://docs.docker.com/config/daemon/) configuration are not yet
-implemented.
-
-### SELinux support
-
-The `dockerd` configuration option `"selinux-enabled": true` is not presently implemented
-in Kata Containers. Enabling this option causes an OCI runtime error.
-
-See issue https://github.com/kata-containers/runtime/issues/784 for more information.
-
-The consequence of this is that the [Docker --security-opt is only partially supported](#docker---security-opt-option-partially-supported).
-
-Kubernetes [SELinux labels](https://kubernetes.io/docs/tasks/configure-pod-container/security-context/#assign-selinux-labels-to-a-container) will also not be applied.
-
 # Architectural limitations
 
 This section lists items that might not be fixed due to fundamental

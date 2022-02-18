@@ -20,7 +20,6 @@ import (
 	"sync"
 	"syscall"
 
-	"github.com/containernetworking/plugins/pkg/ns"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -99,6 +98,17 @@ type SandboxStats struct {
 	Cpus        int
 }
 
+type SandboxResourceSizing struct {
+	// The number of CPUs required for the sandbox workload(s)
+	WorkloadCPUs uint32
+	// The base number of CPUs for the VM that are assigned as overhead
+	BaseCPUs uint32
+	// The amount of memory required for the sandbox workload(s)
+	WorkloadMemMB uint32
+	// The base amount of memory required for that VM that is assigned as overhead
+	BaseMemMB uint32
+}
+
 // SandboxConfig is a Sandbox configuration.
 type SandboxConfig struct {
 	// Volumes is a list of shared volumes between the host and the Sandbox.
@@ -131,6 +141,11 @@ type SandboxConfig struct {
 	NetworkConfig NetworkConfig
 
 	HypervisorConfig HypervisorConfig
+
+	SandboxResources SandboxResourceSizing
+
+	// StaticResourceMgmt indicates if the shim should rely on statically sizing the sandbox (VM)
+	StaticResourceMgmt bool
 
 	ShmSize uint64
 
@@ -196,8 +211,6 @@ type Sandbox struct {
 
 	state types.SandboxState
 
-	networkNS NetworkNamespace
-
 	sync.Mutex
 
 	swapSizeBytes int64
@@ -256,7 +269,7 @@ func (s *Sandbox) GetAnnotations() map[string]string {
 
 // GetNetNs returns the network namespace of the current sandbox.
 func (s *Sandbox) GetNetNs() string {
-	return s.networkNS.NetNsPath
+	return s.network.NetworkID()
 }
 
 // GetHypervisorPid returns the hypervisor's pid.
@@ -505,6 +518,11 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 		return nil, err
 	}
 
+	network, err := NewNetwork(&sandboxConfig.NetworkConfig)
+	if err != nil {
+		return nil, err
+	}
+
 	s := &Sandbox{
 		id:              sandboxConfig.ID,
 		factory:         factory,
@@ -518,7 +536,7 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 		wg:              &sync.WaitGroup{},
 		shmSize:         sandboxConfig.ShmSize,
 		sharePidNs:      sandboxConfig.SharePidNs,
-		networkNS:       NetworkNamespace{NetNsPath: sandboxConfig.NetworkConfig.NetNSPath},
+		network:         network,
 		ctx:             ctx,
 		swapDeviceNum:   0,
 		swapSizeBytes:   0,
@@ -558,7 +576,7 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 	}
 
 	// store doesn't require hypervisor to be stored immediately
-	if err = s.hypervisor.CreateVM(ctx, s.id, s.networkNS, &sandboxConfig.HypervisorConfig); err != nil {
+	if err = s.hypervisor.CreateVM(ctx, s.id, s.network, &sandboxConfig.HypervisorConfig); err != nil {
 		return nil, err
 	}
 
@@ -779,44 +797,58 @@ func (s *Sandbox) Delete(ctx context.Context) error {
 }
 
 func (s *Sandbox) createNetwork(ctx context.Context) error {
-	if s.config.NetworkConfig.DisableNewNetNs ||
-		s.config.NetworkConfig.NetNSPath == "" {
+	if s.config.NetworkConfig.DisableNewNetwork ||
+		s.config.NetworkConfig.NetworkID == "" {
 		return nil
 	}
 
 	span, ctx := katatrace.Trace(ctx, s.Logger(), "createNetwork", sandboxTracingTags, map[string]string{"sandbox_id": s.id})
 	defer span.End()
-
-	s.networkNS = NetworkNamespace{
-		NetNsPath:    s.config.NetworkConfig.NetNSPath,
-		NetNsCreated: s.config.NetworkConfig.NetNsCreated,
-	}
-
-	katatrace.AddTags(span, "networkNS", s.networkNS, "NetworkConfig", s.config.NetworkConfig)
+	katatrace.AddTags(span, "network", s.network, "NetworkConfig", s.config.NetworkConfig)
 
 	// In case there is a factory, network interfaces are hotplugged
-	// after vm is started.
-	if s.factory == nil {
-		// Add the network
-		endpoints, err := s.network.Add(ctx, &s.config.NetworkConfig, s, false)
-		if err != nil {
-			return err
-		}
-
-		s.networkNS.Endpoints = endpoints
+	// after the vm is started.
+	if s.factory != nil {
+		return nil
 	}
+
+	// Add all the networking endpoints.
+	if _, err := s.network.AddEndpoints(ctx, s, nil, false); err != nil {
+		return err
+	}
+
 	return nil
 }
 
 func (s *Sandbox) postCreatedNetwork(ctx context.Context) error {
-	return s.network.PostAdd(ctx, &s.networkNS, s.factory != nil)
+	if s.factory != nil {
+		return nil
+	}
+
+	if s.network.Endpoints() == nil {
+		return nil
+	}
+
+	for _, endpoint := range s.network.Endpoints() {
+		netPair := endpoint.NetworkPair()
+		if netPair == nil {
+			continue
+		}
+		if netPair.VhostFds != nil {
+			for _, VhostFd := range netPair.VhostFds {
+				VhostFd.Close()
+			}
+		}
+	}
+
+	return nil
 }
 
 func (s *Sandbox) removeNetwork(ctx context.Context) error {
 	span, ctx := katatrace.Trace(ctx, s.Logger(), "removeNetwork", sandboxTracingTags, map[string]string{"sandbox_id": s.id})
 	defer span.End()
 
-	return s.network.Remove(ctx, &s.networkNS, s.hypervisor)
+	return s.network.RemoveEndpoints(ctx, s, nil, false)
 }
 
 func (s *Sandbox) generateNetInfo(inf *pbTypes.Interface) (NetworkInfo, error) {
@@ -856,36 +888,30 @@ func (s *Sandbox) AddInterface(ctx context.Context, inf *pbTypes.Interface) (*pb
 		return nil, err
 	}
 
-	endpoint, err := createEndpoint(netInfo, len(s.networkNS.Endpoints), s.config.NetworkConfig.InterworkingModel, nil)
+	endpoints, err := s.network.AddEndpoints(ctx, s, []NetworkInfo{netInfo}, true)
 	if err != nil {
-		return nil, err
-	}
-
-	endpoint.SetProperties(netInfo)
-	if err := doNetNS(s.networkNS.NetNsPath, func(_ ns.NetNS) error {
-		s.Logger().WithField("endpoint-type", endpoint.Type()).Info("Hot attaching endpoint")
-		return endpoint.HotAttach(ctx, s.hypervisor)
-	}); err != nil {
 		return nil, err
 	}
 
 	defer func() {
 		if err != nil {
-			if errDetach := endpoint.HotDetach(ctx, s.hypervisor, s.networkNS.NetNsCreated, s.networkNS.NetNsPath); errDetach != nil {
-				s.Logger().WithField("endpoint-type", endpoint.Type()).WithError(errDetach).Error("rollback hot attaching endpoint failed")
+			eps := s.network.Endpoints()
+			// The newly added endpoint is last.
+			added_ep := eps[len(eps)-1]
+			if errDetach := s.network.RemoveEndpoints(ctx, s, []Endpoint{added_ep}, true); err != nil {
+				s.Logger().WithField("endpoint-type", added_ep.Type()).WithError(errDetach).Error("rollback hot attaching endpoint failed")
 			}
 		}
 	}()
 
 	// Add network for vm
-	inf.PciPath = endpoint.PciPath().String()
+	inf.PciPath = endpoints[0].PciPath().String()
 	result, err := s.agent.updateInterface(ctx, inf)
 	if err != nil {
 		return nil, err
 	}
 
 	// Update the sandbox storage
-	s.networkNS.Endpoints = append(s.networkNS.Endpoints, endpoint)
 	if err = s.Save(); err != nil {
 		return nil, err
 	}
@@ -895,13 +921,12 @@ func (s *Sandbox) AddInterface(ctx context.Context, inf *pbTypes.Interface) (*pb
 
 // RemoveInterface removes a nic of the sandbox.
 func (s *Sandbox) RemoveInterface(ctx context.Context, inf *pbTypes.Interface) (*pbTypes.Interface, error) {
-	for i, endpoint := range s.networkNS.Endpoints {
+	for _, endpoint := range s.network.Endpoints() {
 		if endpoint.HardwareAddr() == inf.HwAddr {
 			s.Logger().WithField("endpoint-type", endpoint.Type()).Info("Hot detaching endpoint")
-			if err := endpoint.HotDetach(ctx, s.hypervisor, s.networkNS.NetNsCreated, s.networkNS.NetNsPath); err != nil {
+			if err := s.network.RemoveEndpoints(ctx, s, []Endpoint{endpoint}, true); err != nil {
 				return inf, err
 			}
-			s.networkNS.Endpoints = append(s.networkNS.Endpoints[:i], s.networkNS.Endpoints[i+1:]...)
 
 			if err := s.Save(); err != nil {
 				return inf, err
@@ -1156,7 +1181,7 @@ func (s *Sandbox) startVM(ctx context.Context) (err error) {
 		}
 	}()
 
-	if err := s.network.Run(ctx, s.networkNS.NetNsPath, func() error {
+	if err := s.network.Run(ctx, func() error {
 		if s.factory != nil {
 			vm, err := s.factory.GetVM(ctx, VMConfig{
 				HypervisorType:   s.config.HypervisorType,
@@ -1178,12 +1203,9 @@ func (s *Sandbox) startVM(ctx context.Context) (err error) {
 	// In case of vm factory, network interfaces are hotplugged
 	// after vm is started.
 	if s.factory != nil {
-		endpoints, err := s.network.Add(ctx, &s.config.NetworkConfig, s, true)
-		if err != nil {
+		if _, err := s.network.AddEndpoints(ctx, s, nil, true); err != nil {
 			return err
 		}
-
-		s.networkNS.Endpoints = endpoints
 	}
 
 	s.Logger().Info("VM started")
@@ -1264,7 +1286,6 @@ func (s *Sandbox) CreateContainer(ctx context.Context, contConfig ContainerConfi
 	if err != nil {
 		return nil, err
 	}
-
 	// create and start the container
 	if err = c.create(ctx); err != nil {
 		return nil, err
@@ -1573,7 +1594,7 @@ func (s *Sandbox) createContainers(ctx context.Context) error {
 	}
 
 	// Update resources after having added containers to the sandbox, since
-	// container status is requiered to know if more resources should be added.
+	// container status is required to know if more resources should be added.
 	if err := s.updateResources(ctx); err != nil {
 		return err
 	}
@@ -1909,6 +1930,10 @@ func (s *Sandbox) updateResources(ctx context.Context) error {
 		return fmt.Errorf("sandbox config is nil")
 	}
 
+	if s.config.StaticResourceMgmt {
+		s.Logger().Debug("no resources updated: static resource management is set")
+		return nil
+	}
 	sandboxVCPUs, err := s.calculateSandboxCPUs()
 	if err != nil {
 		return err
@@ -1917,11 +1942,13 @@ func (s *Sandbox) updateResources(ctx context.Context) error {
 	sandboxVCPUs += s.hypervisor.HypervisorConfig().NumVCPUs
 
 	sandboxMemoryByte, sandboxneedPodSwap, sandboxSwapByte := s.calculateSandboxMemory()
+
 	// Add default / rsvd memory for sandbox.
-	hypervisorMemoryByte := int64(s.hypervisor.HypervisorConfig().MemorySize) << utils.MibToBytesShift
+	hypervisorMemoryByteI64 := int64(s.hypervisor.HypervisorConfig().MemorySize) << utils.MibToBytesShift
+	hypervisorMemoryByte := uint64(hypervisorMemoryByteI64)
 	sandboxMemoryByte += hypervisorMemoryByte
 	if sandboxneedPodSwap {
-		sandboxSwapByte += hypervisorMemoryByte
+		sandboxSwapByte += hypervisorMemoryByteI64
 	}
 	s.Logger().WithField("sandboxMemoryByte", sandboxMemoryByte).WithField("sandboxneedPodSwap", sandboxneedPodSwap).WithField("sandboxSwapByte", sandboxSwapByte).Debugf("updateResources: after calculateSandboxMemory")
 
@@ -1953,7 +1980,8 @@ func (s *Sandbox) updateResources(ctx context.Context) error {
 
 	// Update Memory
 	s.Logger().WithField("memory-sandbox-size-byte", sandboxMemoryByte).Debugf("Request to hypervisor to update memory")
-	newMemory, updatedMemoryDevice, err := s.hypervisor.ResizeMemory(ctx, uint32(sandboxMemoryByte>>utils.MibToBytesShift), s.state.GuestMemoryBlockSizeMB, s.state.GuestMemoryHotplugProbe)
+	newMemoryMB := uint32(sandboxMemoryByte >> utils.MibToBytesShift)
+	newMemory, updatedMemoryDevice, err := s.hypervisor.ResizeMemory(ctx, newMemoryMB, s.state.GuestMemoryBlockSizeMB, s.state.GuestMemoryHotplugProbe)
 	if err != nil {
 		if err == noGuestMemHotplugErr {
 			s.Logger().Warnf("%s, memory specifications cannot be guaranteed", err)
@@ -1976,8 +2004,8 @@ func (s *Sandbox) updateResources(ctx context.Context) error {
 	return nil
 }
 
-func (s *Sandbox) calculateSandboxMemory() (int64, bool, int64) {
-	memorySandbox := int64(0)
+func (s *Sandbox) calculateSandboxMemory() (uint64, bool, int64) {
+	memorySandbox := uint64(0)
 	needPodSwap := false
 	swapSandbox := int64(0)
 	for _, c := range s.config.Containers {
@@ -1989,10 +2017,19 @@ func (s *Sandbox) calculateSandboxMemory() (int64, bool, int64) {
 
 		if m := c.Resources.Memory; m != nil {
 			currentLimit := int64(0)
-			if m.Limit != nil {
+			if m.Limit != nil && *m.Limit > 0 {
 				currentLimit = *m.Limit
-				memorySandbox += currentLimit
+				memorySandbox += uint64(currentLimit)
+				s.Logger().WithField("memory limit", memorySandbox).Info("Memory Sandbox + Memory Limit ")
 			}
+
+			// Add hugepages memory
+			// HugepageLimit is uint64 - https://github.com/opencontainers/runtime-spec/blob/master/specs-go/config.go#L242
+			for _, l := range c.Resources.HugepageLimits {
+				memorySandbox += l.Limit
+			}
+
+			// Add swap
 			if s.config.HypervisorConfig.GuestSwap && m.Swappiness != nil && *m.Swappiness > 0 {
 				currentSwap := int64(0)
 				if m.Swap != nil {
@@ -2010,6 +2047,7 @@ func (s *Sandbox) calculateSandboxMemory() (int64, bool, int64) {
 			}
 		}
 	}
+
 	return memorySandbox, needPodSwap, swapSandbox
 }
 

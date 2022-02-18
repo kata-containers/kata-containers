@@ -55,6 +55,10 @@ const (
 	// FirmwarePath is a sandbox annotation for passing a per container path pointing at the guest firmware that will run the container VM.
 	FirmwarePath = kataAnnotHypervisorPrefix + "firmware"
 
+	// FirmwareVolumePath is a sandbox annotation for passing a per container path pointing at the guest firmware volume
+	// that will be passed to the container VM.
+	FirmwareVolumePath = kataAnnotHypervisorPrefix + "firmware_volume"
+
 	// KernelHash is a sandbox annotation for passing a container kernel image SHA-512 hash value.
 	KernelHash = kataAnnotHypervisorPrefix + "kernel_hash"
 
@@ -75,6 +79,9 @@ const (
 
 	// FirmwareHash is an sandbox annotation for passing a container guest firmware SHA-512 hash value.
 	FirmwareHash = kataAnnotHypervisorPrefix + "firmware_hash"
+
+	// FirmwareVolumeHash is an sandbox annotation for passing a container guest firmware volume SHA-512 hash value.
+	FirmwareVolumeHash = kataAnnotHypervisorPrefix + "firmware_volume_hash"
 
 	// AssetHashType is the hash type used for assets verification
 	AssetHashType = kataAnnotationsPrefix + "asset_hash_type"

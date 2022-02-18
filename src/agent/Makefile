@@ -98,6 +98,8 @@ define INSTALL_FILE
 	install -D -m 644 $1 $(DESTDIR)$2/$1 || exit 1;
 endef
 
+.DEFAULT_GOAL := default
+
 ##TARGET default: build code
 default: $(TARGET) show-header
 
@@ -115,17 +117,6 @@ $(GENERATED_FILES): %: %.in
 ##TARGET optimize: optimized  build
 optimize: $(SOURCES) | show-summary show-header
 	@RUSTFLAGS="-C link-arg=-s $(EXTRA_RUSTFLAGS) --deny warnings" cargo build --target $(TRIPLE) --$(BUILD_TYPE) $(EXTRA_RUSTFEATURES)
-
-##TARGET clippy: run clippy linter
-clippy: $(GENERATED_CODE)
-	cargo clippy --all-targets --all-features --release \
-		-- \
-		-Aclippy::redundant_allocation \
-		-D warnings
-
-format:
-	cargo fmt -- --check
-
 
 ##TARGET install: install agent
 install: install-services
@@ -146,7 +137,7 @@ test:
 	@cargo test --all --target $(TRIPLE) $(EXTRA_RUSTFEATURES) -- --nocapture
 
 ##TARGET check: run test
-check: clippy format
+check: $(GENERATED_FILES) standard_rust_check
 
 ##TARGET run: build and run agent
 run:

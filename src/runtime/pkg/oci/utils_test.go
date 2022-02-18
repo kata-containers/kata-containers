@@ -822,7 +822,7 @@ func TestAddRuntimeAnnotations(t *testing.T) {
 	addAnnotations(ocispec, &config, runtimeConfig)
 	assert.Equal(config.DisableGuestSeccomp, true)
 	assert.Equal(config.SandboxCgroupOnly, true)
-	assert.Equal(config.NetworkConfig.DisableNewNetNs, true)
+	assert.Equal(config.NetworkConfig.DisableNewNetwork, true)
 	assert.Equal(config.NetworkConfig.InterworkingModel, vc.NetXConnectMacVtapModel)
 }
 
@@ -1059,5 +1059,151 @@ func TestParseAnnotationBoolConfiguration(t *testing.T) {
 				assert.Equal(tc.expected, val, "test case %d check parsed result", (i + 1))
 			}
 		}
+	}
+}
+
+func getCtrResourceSpec(memory, quota int64, period uint64) *specs.Spec {
+	return &specs.Spec{
+		Linux: &specs.Linux{
+			Resources: &specs.LinuxResources{
+				CPU: &specs.LinuxCPU{
+					Quota:  &quota,
+					Period: &period,
+				},
+				Memory: &specs.LinuxMemory{
+					Limit: &memory,
+				},
+			},
+		},
+	}
+
+}
+
+func makeSizingAnnotations(memory, quota, period string) *specs.Spec {
+	spec := specs.Spec{
+		Annotations: make(map[string]string),
+	}
+	spec.Annotations[ctrAnnotations.SandboxCPUPeriod] = period
+	spec.Annotations[ctrAnnotations.SandboxCPUQuota] = quota
+	spec.Annotations[ctrAnnotations.SandboxMem] = memory
+
+	return &spec
+}
+
+func TestCalculateContainerSizing(t *testing.T) {
+	assert := assert.New(t)
+
+	testCases := []struct {
+		spec        *specs.Spec
+		expectedCPU uint32
+		expectedMem uint32
+	}{
+		{
+			spec:        nil,
+			expectedCPU: 0,
+			expectedMem: 0,
+		},
+		{
+			spec:        &specs.Spec{},
+			expectedCPU: 0,
+			expectedMem: 0,
+		},
+		{
+			spec: &specs.Spec{
+				Linux: &specs.Linux{
+					Resources: &specs.LinuxResources{
+						CPU:    &specs.LinuxCPU{},
+						Memory: &specs.LinuxMemory{},
+					},
+				},
+			},
+			expectedCPU: 0,
+			expectedMem: 0,
+		},
+		{
+			spec:        getCtrResourceSpec(1024*1024, 200, 100),
+			expectedCPU: 2,
+			expectedMem: 1,
+		},
+		{
+			spec:        getCtrResourceSpec(1024*1024*1024, 200, 1),
+			expectedCPU: 200,
+			expectedMem: 1024,
+		},
+		{
+			spec:        getCtrResourceSpec(-1*1024*1024*1024, 200, 1),
+			expectedCPU: 200,
+			expectedMem: 0,
+		},
+		{
+			spec:        getCtrResourceSpec(0, 10, 0),
+			expectedCPU: 0,
+			expectedMem: 0,
+		},
+		{
+			spec:        getCtrResourceSpec(-1, 10, 1),
+			expectedCPU: 10,
+			expectedMem: 0,
+		},
+	}
+
+	for _, tt := range testCases {
+
+		cpu, mem := CalculateContainerSizing(tt.spec)
+		assert.Equal(tt.expectedCPU, cpu, "unexpected CPU")
+		assert.Equal(tt.expectedMem, mem, "unexpected memory")
+	}
+}
+
+func TestCalculateSandboxSizing(t *testing.T) {
+	assert := assert.New(t)
+
+	testCases := []struct {
+		spec        *specs.Spec
+		expectedCPU uint32
+		expectedMem uint32
+	}{
+		{
+			spec:        nil,
+			expectedCPU: 0,
+			expectedMem: 0,
+		},
+		{
+			spec:        &specs.Spec{},
+			expectedCPU: 0,
+			expectedMem: 0,
+		},
+		{
+			spec:        makeSizingAnnotations("1048576", "200", "100"),
+			expectedCPU: 2,
+			expectedMem: 1,
+		},
+		{
+			spec:        makeSizingAnnotations("1024", "200", "1"),
+			expectedCPU: 200,
+			expectedMem: 0,
+		},
+		{
+			spec:        makeSizingAnnotations("foobar", "200", "spaghetti"),
+			expectedCPU: 0,
+			expectedMem: 0,
+		},
+		{
+			spec:        makeSizingAnnotations("-1048576", "-100", "1"),
+			expectedCPU: 0,
+			expectedMem: 0,
+		},
+		{
+			spec:        makeSizingAnnotations("-1", "100", "1"),
+			expectedCPU: 100,
+			expectedMem: 0,
+		},
+	}
+
+	for _, tt := range testCases {
+
+		cpu, mem := CalculateSandboxSizing(tt.spec)
+		assert.Equal(tt.expectedCPU, cpu, "unexpected CPU")
+		assert.Equal(tt.expectedMem, mem, "unexpected memory")
 	}
 }

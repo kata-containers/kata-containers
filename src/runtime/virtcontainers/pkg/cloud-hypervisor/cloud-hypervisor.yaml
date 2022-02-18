@@ -349,6 +349,38 @@ paths:
         404:
           description: The VM instance could not be restored because it is already created.
 
+  /vm.receive-migration:
+    put:
+      summary: Receive a VM migration from URL
+      requestBody:
+        description: The URL for the reception of migration state
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReceiveMigrationData'
+        required: true
+      responses:
+        204:
+          description: The VM migration was successfully received.
+        500:
+          description: The VM migration could not be received.
+
+  /vm.send-migration:
+    put:
+      summary: Send a VM migration to URL
+      requestBody:
+        description: The URL for sending the migration state
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SendMigrationData'
+        required: true
+      responses:
+        204:
+          description: The VM migration was successfully sent.
+        500:
+          description: The VM migration could not be sent.
+
 components:
   schemas:
 
@@ -468,6 +500,8 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/SgxEpcConfig'
+        tdx:
+          $ref: '#/components/schemas/TdxConfig'
         numa:
           type: array
           items:
@@ -478,6 +512,8 @@ components:
         watchdog:
           type: boolean
           default: false
+        platform:
+          $ref: '#/components/schemas/PlatformConfig'
       description: Virtual machine configuration
 
     CpuAffinity:
@@ -524,6 +560,18 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/CpuAffinity'
+
+    PlatformConfig:
+      type: object
+      properties:
+        num_pci_segments:
+          type: integer
+          format: int16
+        iommu_segments:
+          type: array
+          items:
+            type: integer
+            format: int16
 
     MemoryZoneConfig:
       required:
@@ -712,7 +760,6 @@ components:
       properties:
         tap:
           type: string
-          default: ""
         ip:
           type: string
           default: "192.168.249.1"
@@ -740,11 +787,6 @@ components:
           default: "Client"
         id:
           type: string
-        fd:
-          type: array
-          items:
-            type: integer
-            format: int32
         pci_segment:
           type: integer
           format: int16
@@ -774,7 +816,11 @@ components:
         deflate_on_oom:
           type: boolean
           default: false
-          description: Whether the balloon should deflate when the guest is under memory pressure.
+          description: Deflate balloon when the guest is under memory pressure.
+        free_page_reporting:
+          type: boolean
+          default: false
+          description: Enable guest to report free pages.
 
     FsConfig:
       required:
@@ -902,6 +948,15 @@ components:
           type: boolean
           default: false
 
+    TdxConfig:
+      required:
+      - firmware
+      type: object
+      properties:
+        firmware:
+          type: string
+          description: Path to the firmware that will be used to boot the TDx guest up.
+
     NumaDistance:
       required:
       - destination
@@ -997,4 +1052,18 @@ components:
         source_url:
           type: string
         prefault:
+          type: boolean
+
+    ReceiveMigrationData:
+      type: object
+      properties:
+        receiver_url:
+          type: string
+
+    SendMigrationData:
+      type: object
+      properties:
+        destination_url:
+          type: string
+        local:
           type: boolean

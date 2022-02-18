@@ -99,6 +99,14 @@ function test_kata() {
 
     YAMLPATH="./tools/packaging/kata-deploy/"
     VERSION=$(cat ./VERSION)
+    # kata-deploy.yaml and kata-cleanup.yaml do not have tags for the non-stable releases, thus
+    # in this cases, let's ensure we use "latest" as version.
+    # For more details, please, see:
+    # https://github.com/kata-containers/kata-containers/blob/f7c7dc8d33288e588b284ae4820df342aa8e2d74/tools/packaging/release/update-repository-version.sh#L143-L179
+    if [[ $VERSION =~ "alpha"|"rc" ]];
+    then
+	    VERSION="latest"
+    fi
 
     # This action could be called in two contexts:
     #  1. Packaging workflows: testing in packaging repository, where we assume yaml/packaging

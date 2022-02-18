@@ -136,16 +136,31 @@ github_get_release_file_url()
 	local url="${1:-}"
 	local version="${2:-}"
 
-	download_urls=$(curl -sL "$url" |\
+	local arch=$(uname -m)
+
+	local regex=""
+
+	case "$url" in
+		*kata*)
+			regex="kata-static-.*-${arch}.tar.xz"
+			;;
+
+		*containerd*)
+			[ "$arch" = "x86_64" ] && arch="amd64"
+			regex="containerd-.*-linux-${arch}.tar.gz"
+			;;
+
+		*) die "invalid url: '$url'" ;;
+	esac
+
+	local download_url
+
+	download_url=$(curl -sL "$url" |\
 		jq --arg version "$version" \
 		-r '.[] | select(.tag_name == $version) | .assets[].browser_download_url' |\
-		grep static)
+		grep "/${regex}$")
 
-	[ -z "$download_urls" ] && die "Cannot determine download URL for version $version ($url)"
-
-	local arch=$(uname -m)
-	local download_url=$(grep "$arch" <<< "$download_urls")
-	[ -z "$download_url" ] && die "No release for architecture '$arch' ($url)"
+	[ -z "$download_url" ] && die "Cannot determine download URL for version $version ($url)"
 
 	echo "$download_url"
 }
@@ -187,11 +202,17 @@ usage()
 	cat <<EOT
 Usage: $script_name [options] [<kata-version> [<containerd-version>]]
 
-Description: Install $kata_project [1] and $containerd_project [2] from GitHub release binaries.
+Description: Install $kata_project [1] (and optionally $containerd_project [2])
+  from GitHub release binaries.
 
 Options:
 
- -h : Show this help statement.
+ -c <version> : Specify containerd version.
+ -f           : Force installation (use with care).
+ -h           : Show this help statement.
+ -k <version> : Specify Kata Containers version.
+ -o           : Only install Kata Containers.
+ -r           : Don't cleanup on failure (retain files).
 
 Notes:
 
@@ -231,6 +252,18 @@ only_supports_cgroups_v2()
 	return 0
 }
 
+# Return 0 if containerd is already installed, else return 1.
+containerd_installed()
+{
+	command -v containerd &>/dev/null && return 0
+
+	systemctl list-unit-files --type service |\
+		egrep -q "^${containerd_service_name}\>" \
+		&& return 0
+
+	return 1
+}
+
 pre_checks()
 {
 	info "Running pre-checks"
@@ -238,12 +271,11 @@ pre_checks()
 	command -v "${kata_shim_v2}" &>/dev/null \
 		&& die "Please remove existing $kata_project installation"
 
-	command -v containerd &>/dev/null \
-		&& die "$containerd_project already installed"
+	local ret
 
-	systemctl list-unit-files --type service |\
-		egrep -q "^${containerd_service_name}\>" \
-		&& die "$containerd_project already installed"
+	{ containerd_installed; ret=$?; } || true
+
+	[ "$ret" -eq 0 ] && die "$containerd_project already installed"
 
 	local cgroups_v2_only=$(only_supports_cgroups_v2 || true)
 
@@ -298,8 +330,17 @@ check_deps()
 
 setup()
 {
-	trap cleanup EXIT
+	local cleanup="${1:-}"
+	[ -z "$cleanup" ] && die "no cleanup value"
+
+	local force="${2:-}"
+	[ -z "$force" ] && die "no force value"
+
+	[ "$cleanup" = "true" ] && trap cleanup EXIT
+
 	source /etc/os-release || source /usr/lib/os-release
+
+	[ "$force" = "true" ] && return 0
 
 	pre_checks
 	check_deps
@@ -313,6 +354,8 @@ github_download_package()
 {
 	local releases_url="${1:-}"
 	local requested_version="${2:-}"
+
+	# Only used for error message
 	local project="${3:-}"
 
 	[ -z "$releases_url" ] && die "need releases URL"
@@ -320,7 +363,7 @@ github_download_package()
 
 	local version=$(github_resolve_version_to_download \
 		"$releases_url" \
-		"$version" || true)
+		"$requested_version" || true)
 
 	[ -z "$version" ] && die "Unable to determine $project version to download"
 
@@ -359,7 +402,7 @@ install_containerd()
 
 	sudo tar -C /usr/local -xvf "${file}"
 
-	sudo ln -s /usr/local/bin/ctr "${link_dir}"
+	sudo ln -sf /usr/local/bin/ctr "${link_dir}"
 
 	info "$project installed\n"
 }
@@ -372,31 +415,35 @@ configure_containerd()
 
 	local cfg="/etc/containerd/config.toml"
 
-	pushd "$tmpdir" >/dev/null
-
-	local service_url=$(printf "%s/%s/%s/%s" \
-		"https://raw.githubusercontent.com" \
-		"${containerd_slug}" \
-		"master" \
-		"${containerd_service_name}")
-
-	curl -LO "$service_url"
-
-	printf "# %s: Service installed for Kata Containers\n" \
-		"$(date -Iseconds)" |\
-		tee -a "$containerd_service_name"
-
 	local systemd_unit_dir="/etc/systemd/system"
 	sudo mkdir -p "$systemd_unit_dir"
 
 	local dest="${systemd_unit_dir}/${containerd_service_name}"
 
-	sudo cp "${containerd_service_name}" "${dest}"
-	sudo systemctl daemon-reload
+	if [ ! -f "$dest" ]
+	then
+		pushd "$tmpdir" >/dev/null
 
-	info "Installed ${dest}"
+		local service_url=$(printf "%s/%s/%s/%s" \
+			"https://raw.githubusercontent.com" \
+			"${containerd_slug}" \
+			"main" \
+			"${containerd_service_name}")
 
-	popd >/dev/null
+		curl -LO "$service_url"
+
+		printf "# %s: Service installed for Kata Containers\n" \
+			"$(date -Iseconds)" |\
+			tee -a "$containerd_service_name"
+
+
+		sudo cp "${containerd_service_name}" "${dest}"
+		sudo systemctl daemon-reload
+
+		info "Installed ${dest}"
+
+		popd >/dev/null
+	fi
 
 	# Backup the original containerd configuration:
 	sudo mkdir -p "$(dirname $cfg)"
@@ -429,6 +476,7 @@ EOT
 		info "Modified $cfg"
 	}
 
+	sudo systemctl enable containerd
 	sudo systemctl start containerd
 
 	info "Configured $project\n"
@@ -471,7 +519,7 @@ install_kata()
 	# Since we're unpacking to the root directory, perform a sanity check
 	# on the archive first.
 	local unexpected=$(tar -tf "${file}" |\
-		egrep -v "^(\./opt/$|\.${kata_install_dir}/)" || true)
+		egrep -v "^(\./$|\./opt/$|\.${kata_install_dir}/)" || true)
 
 	[ -n "$unexpected" ] && die "File '$file' contains unexpected paths: '$unexpected'"
 
@@ -505,7 +553,24 @@ handle_containerd()
 {
 	local version="${1:-}"
 
-	install_containerd "$version"
+	local force="${2:-}"
+	[ -z "$force" ] && die "need force value"
+
+	local ret
+
+	if [ "$force" = "true" ]
+	then
+		install_containerd "$version"
+	else
+		{ containerd_installed; ret=$?; } || true
+
+		if [ "$ret" -eq 0 ]
+		then
+			info "Using existing containerd installation"
+		else
+			install_containerd "$version"
+		fi
+	fi
 
 	configure_containerd
 
@@ -543,31 +608,72 @@ test_installation()
 
 handle_installation()
 {
-	local kata_version="${1:-}"
-	local containerd_version="${2:-}"
+	local cleanup="${1:-}"
+	[ -z "$cleanup" ] && die "no cleanup value"
 
-	setup
+	local force="${2:-}"
+	[ -z "$force" ] && die "no force value"
+
+	local only_kata="${3:-}"
+	[ -z "$only_kata" ] && die "no only Kata value"
+
+	# These params can be blank
+	local kata_version="${4:-}"
+	local containerd_version="${5:-}"
+
+	setup "$cleanup" "$force"
 
 	handle_kata "$kata_version"
-	handle_containerd "$containerd_version"
+
+	[ "$only_kata" = "false" ] && \
+		handle_containerd \
+		"$containerd_version" \
+		"$force"
 
 	test_installation
 
-	info "$kata_project and $containerd_project are now installed"
+	if [ "$only_kata" = "true" ]
+	then
+		info "$kata_project is now installed"
+	else
+		info "$kata_project and $containerd_project are now installed"
+	fi
 
 	echo -e "\n${warnings}\n"
 }
 
 handle_args()
 {
-	case "${1:-}" in
-		-h|--help|help) usage; exit 0;;
-	esac
+	local cleanup="true"
+	local force="false"
+	local only_kata="false"
 
-	local kata_version="${1:-}"
-	local containerd_version="${2:-}"
+	local opt
+
+	local kata_version=""
+	local containerd_version=""
+
+	while getopts "c:fhk:or" opt "$@"
+	do
+		case "$opt" in
+			c) containerd_version="$OPTARG" ;;
+			f) force="true" ;;
+			h) usage; exit 0 ;;
+			k) kata_version="$OPTARG" ;;
+			o) only_kata="true" ;;
+			r) cleanup="false" ;;
+		esac
+	done
+
+	shift $[$OPTIND-1]
+
+	[ -z "$kata_version" ] && kata_version="${1:-}" || true
+	[ -z "$containerd_version" ] && containerd_version="${2:-}" || true
 
 	handle_installation \
+		"$cleanup" \
+		"$force" \
+		"$only_kata" \
 		"$kata_version" \
 		"$containerd_version"
 }

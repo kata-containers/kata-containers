@@ -9,6 +9,7 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"path"
 	"path/filepath"
@@ -1095,18 +1096,27 @@ func TestKataAgentDirs(t *testing.T) {
 	uidmap := strings.Fields(string(line))
 	expectedRootless := (uidmap[0] == "0" && uidmap[1] != "0")
 	assert.Equal(expectedRootless, rootless.IsRootless())
-
 	if expectedRootless {
 		assert.Equal(kataHostSharedDir(), os.Getenv("XDG_RUNTIME_DIR")+defaultKataHostSharedDir)
 		assert.Equal(kataGuestSharedDir(), os.Getenv("XDG_RUNTIME_DIR")+defaultKataGuestSharedDir)
 		assert.Equal(kataGuestSandboxDir(), os.Getenv("XDG_RUNTIME_DIR")+defaultKataGuestSandboxDir)
 		assert.Equal(ephemeralPath(), os.Getenv("XDG_RUNTIME_DIR")+defaultEphemeralPath)
+		assert.Equal(kataGuestNydusRootDir(), os.Getenv("XDG_RUNTIME_DIR")+defaultKataGuestNydusRootDir)
+		assert.Equal(kataGuestNydusImageDir(), os.Getenv("XDG_RUNTIME_DIR")+defaultKataGuestNydusRootDir+"images"+"/")
+		assert.Equal(kataGuestSharedDir(), os.Getenv("XDG_RUNTIME_DIR")+defaultKataGuestNydusRootDir+"containers"+"/")
 	} else {
 		assert.Equal(kataHostSharedDir(), defaultKataHostSharedDir)
 		assert.Equal(kataGuestSharedDir(), defaultKataGuestSharedDir)
 		assert.Equal(kataGuestSandboxDir(), defaultKataGuestSandboxDir)
 		assert.Equal(ephemeralPath(), defaultEphemeralPath)
+		assert.Equal(kataGuestNydusRootDir(), defaultKataGuestNydusRootDir)
+		assert.Equal(kataGuestNydusImageDir(), defaultKataGuestNydusRootDir+"rafs"+"/")
+		assert.Equal(kataGuestSharedDir(), defaultKataGuestNydusRootDir+"containers"+"/")
 	}
+
+	cid := "123"
+	expected := "/rafs/123/lowerdir"
+	assert.Equal(rafsMountPath(cid), expected)
 }
 
 func TestSandboxBindMount(t *testing.T) {
@@ -1219,5 +1229,59 @@ func TestSandboxBindMount(t *testing.T) {
 	err = syscall.Stat(mount2CheckPath, &stat)
 	assert.Error(err)
 	assert.True(os.IsNotExist(err))
+
+}
+
+func TestHandleHugepages(t *testing.T) {
+	if os.Getuid() != 0 {
+		t.Skip("Test disabled as requires root user")
+	}
+
+	assert := assert.New(t)
+
+	dir, err := ioutil.TempDir("", "hugepages-test")
+	assert.Nil(err)
+	defer os.RemoveAll(dir)
+
+	k := kataAgent{}
+	var mounts []specs.Mount
+	var hugepageLimits []specs.LinuxHugepageLimit
+
+	hugepageDirs := [2]string{"hugepages-1Gi", "hugepages-2Mi"}
+	options := [2]string{"pagesize=1024M", "pagesize=2M"}
+
+	for i := 0; i < 2; i++ {
+		target := path.Join(dir, hugepageDirs[i])
+		err := os.MkdirAll(target, 0777)
+		assert.NoError(err, "Unable to create dir %s", target)
+
+		err = syscall.Mount("nodev", target, "hugetlbfs", uintptr(0), options[i])
+		assert.NoError(err, "Unable to mount %s", target)
+
+		defer syscall.Unmount(target, 0)
+		defer os.RemoveAll(target)
+		mount := specs.Mount{
+			Type:   KataLocalDevType,
+			Source: target,
+		}
+		mounts = append(mounts, mount)
+	}
+
+	hugepageLimits = []specs.LinuxHugepageLimit{
+		{
+			Pagesize: "1GB",
+			Limit:    1073741824,
+		},
+		{
+			Pagesize: "2MB",
+			Limit:    134217728,
+		},
+	}
+
+	hugepages, err := k.handleHugepages(mounts, hugepageLimits)
+
+	assert.NoError(err, "Unable to handle hugepages %v", hugepageLimits)
+	assert.NotNil(hugepages)
+	assert.Equal(len(hugepages), 2)
 
 }

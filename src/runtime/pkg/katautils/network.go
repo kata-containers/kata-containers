@@ -26,8 +26,8 @@ const procMountInfoFile = "/proc/self/mountinfo"
 // EnterNetNS is free from any call to a go routine, and it calls
 // into runtime.LockOSThread(), meaning it won't be executed in a
 // different thread than the one expected by the caller.
-func EnterNetNS(netNSPath string, cb func() error) error {
-	if netNSPath == "" {
+func EnterNetNS(networkID string, cb func() error) error {
+	if networkID == "" {
 		return cb()
 	}
 
@@ -40,7 +40,7 @@ func EnterNetNS(netNSPath string, cb func() error) error {
 	}
 	defer currentNS.Close()
 
-	targetNS, err := ns.GetNS(netNSPath)
+	targetNS, err := ns.GetNS(networkID)
 	if err != nil {
 		return err
 	}
@@ -55,7 +55,7 @@ func EnterNetNS(netNSPath string, cb func() error) error {
 
 // SetupNetworkNamespace create a network namespace
 func SetupNetworkNamespace(config *vc.NetworkConfig) error {
-	if config.DisableNewNetNs {
+	if config.DisableNewNetwork {
 		kataUtilsLogger.Info("DisableNewNetNs is on, shim and hypervisor are running in the host netns")
 		return nil
 	}
@@ -63,7 +63,7 @@ func SetupNetworkNamespace(config *vc.NetworkConfig) error {
 	var err error
 	var n ns.NetNS
 
-	if config.NetNSPath == "" {
+	if config.NetworkID == "" {
 		if rootless.IsRootless() {
 			n, err = rootless.NewNS()
 			if err != nil {
@@ -76,14 +76,14 @@ func SetupNetworkNamespace(config *vc.NetworkConfig) error {
 			}
 		}
 
-		config.NetNSPath = n.Path()
-		config.NetNsCreated = true
+		config.NetworkID = n.Path()
+		config.NetworkCreated = true
 		kataUtilsLogger.WithField("netns", n.Path()).Info("create netns")
 
 		return nil
 	}
 
-	isHostNs, err := hostNetworkingRequested(config.NetNSPath)
+	isHostNs, err := hostNetworkingRequested(config.NetworkID)
 	if err != nil {
 		return err
 	}
@@ -94,10 +94,14 @@ func SetupNetworkNamespace(config *vc.NetworkConfig) error {
 	return nil
 }
 
+const (
+	netNsMountType    = "nsfs"
+	mountTypeFieldIdx = 8
+	mountDestIdx      = 4
+)
+
 // getNetNsFromBindMount returns the network namespace for the bind-mounted path
 func getNetNsFromBindMount(nsPath string, procMountFile string) (string, error) {
-	netNsMountType := "nsfs"
-
 	// Resolve all symlinks in the path as the mountinfo file contains
 	// resolved paths.
 	nsPath, err := filepath.EvalSymlinks(nsPath)
@@ -129,14 +133,12 @@ func getNetNsFromBindMount(nsPath string, procMountFile string) (string, error) 
 		}
 
 		// We check here if the mount type is a network namespace mount type, namely "nsfs"
-		mountTypeFieldIdx := 8
 		if fields[mountTypeFieldIdx] != netNsMountType {
 			continue
 		}
 
 		// This is the mount point/destination for the mount
-		mntDestIdx := 4
-		if fields[mntDestIdx] != nsPath {
+		if fields[mountDestIdx] != nsPath {
 			continue
 		}
 

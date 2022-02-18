@@ -4,7 +4,7 @@
 
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
-**Tap** | Pointer to **string** |  | [optional] [default to ""]
+**Tap** | Pointer to **string** |  | [optional] 
 **Ip** | Pointer to **string** |  | [optional] [default to "192.168.249.1"]
 **Mask** | Pointer to **string** |  | [optional] [default to "255.255.255.0"]
 **Mac** | Pointer to **string** |  | [optional] 
@@ -15,7 +15,6 @@ Name | Type | Description | Notes
 **VhostSocket** | Pointer to **string** |  | [optional] 
 **VhostMode** | Pointer to **string** |  | [optional] [default to "Client"]
 **Id** | Pointer to **string** |  | [optional] 
-**Fd** | Pointer to **[]int32** |  | [optional] 
 **PciSegment** | Pointer to **int32** |  | [optional] 
 **RateLimiterConfig** | Pointer to [**RateLimiterConfig**](RateLimiterConfig.md) |  | [optional] 
 
@@ -312,31 +311,6 @@ SetId sets Id field to given value.
 `func (o *NetConfig) HasId() bool`
 
 HasId returns a boolean if a field has been set.
-
-### GetFd
-
-`func (o *NetConfig) GetFd() []int32`
-
-GetFd returns the Fd field if non-nil, zero value otherwise.
-
-### GetFdOk
-
-`func (o *NetConfig) GetFdOk() (*[]int32, bool)`
-
-GetFdOk returns a tuple with the Fd field if it's non-nil, zero value otherwise
-and a boolean to check if the value has been set.
-
-### SetFd
-
-`func (o *NetConfig) SetFd(v []int32)`
-
-SetFd sets Fd field to given value.
-
-### HasFd
-
-`func (o *NetConfig) HasFd() bool`
-
-HasFd returns a boolean if a field has been set.
 
 ### GetPciSegment
 

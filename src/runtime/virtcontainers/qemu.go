@@ -24,7 +24,7 @@ import (
 
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/rootless"
 
-	govmmQemu "github.com/kata-containers/govmm/qemu"
+	govmmQemu "github.com/kata-containers/kata-containers/src/runtime/pkg/govmm/qemu"
 	"github.com/opencontainers/selinux/go-selinux/label"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -73,7 +73,7 @@ type QemuState struct {
 	// HotpluggedCPUs is the list of CPUs that were hot-added
 	HotpluggedVCPUs      []hv.CPUDevice
 	HotpluggedMemory     int
-	VirtiofsdPid         int
+	VirtiofsDaemonPid    int
 	PCIeRootPort         int
 	HotplugVFIOOnRootBus bool
 }
@@ -83,7 +83,7 @@ type QemuState struct {
 type qemu struct {
 	arch qemuArch
 
-	virtiofsd Virtiofsd
+	virtiofsDaemon VirtiofsDaemon
 
 	ctx context.Context
 
@@ -113,6 +113,7 @@ const (
 	consoleSocket = "console.sock"
 	qmpSocket     = "qmp.sock"
 	vhostFSSocket = "vhost-fs.sock"
+	nydusdAPISock = "nydusd-api.sock"
 
 	// memory dump format will be set to elf
 	memoryDumpFormat = "elf"
@@ -467,8 +468,43 @@ func (q *qemu) setConfig(config *HypervisorConfig) error {
 	return nil
 }
 
+func (q *qemu) createVirtiofsDaemon(sharedPath string) (VirtiofsDaemon, error) {
+	virtiofsdSocketPath, err := q.vhostFSSocketPath(q.id)
+	if err != nil {
+		return nil, err
+	}
+
+	if q.config.SharedFS == config.VirtioFSNydus {
+		apiSockPath, err := q.nydusdAPISocketPath(q.id)
+		if err != nil {
+			return nil, err
+		}
+		nd := &nydusd{
+			path:        q.config.VirtioFSDaemon,
+			sockPath:    virtiofsdSocketPath,
+			apiSockPath: apiSockPath,
+			sourcePath:  sharedPath,
+			debug:       q.config.Debug,
+			extraArgs:   q.config.VirtioFSExtraArgs,
+			startFn:     startInShimNS,
+		}
+		nd.setupShareDirFn = nd.setupPassthroughFS
+		return nd, nil
+	}
+
+	// default use virtiofsd
+	return &virtiofsd{
+		path:       q.config.VirtioFSDaemon,
+		sourcePath: sharedPath,
+		socketPath: virtiofsdSocketPath,
+		extraArgs:  q.config.VirtioFSExtraArgs,
+		debug:      q.config.Debug,
+		cache:      q.config.VirtioFSCache,
+	}, nil
+}
+
 // CreateVM is the Hypervisor VM creation implementation for govmmQemu.
-func (q *qemu) CreateVM(ctx context.Context, id string, networkNS NetworkNamespace, hypervisorConfig *HypervisorConfig) error {
+func (q *qemu) CreateVM(ctx context.Context, id string, network Network, hypervisorConfig *HypervisorConfig) error {
 	// Save the tracing context
 	q.ctx = ctx
 
@@ -527,7 +563,8 @@ func (q *qemu) CreateVM(ctx context.Context, id string, networkNS NetworkNamespa
 	// builds the first VM with file-backed memory and shared=on and the
 	// subsequent ones with shared=off. virtio-fs always requires shared=on for
 	// memory.
-	if q.config.SharedFS == config.VirtioFS || q.config.FileBackedMemRootDir != "" {
+	if q.config.SharedFS == config.VirtioFS || q.config.SharedFS == config.VirtioFSNydus ||
+		q.config.FileBackedMemRootDir != "" {
 		if !(q.config.BootToBeTemplate || q.config.BootFromTemplate) {
 			q.setupFileBackedMem(&knobs, &memory)
 		} else {
@@ -575,6 +612,11 @@ func (q *qemu) CreateVM(ctx context.Context, id string, networkNS NetworkNamespa
 		return err
 	}
 
+	firmwareVolumePath, err := q.config.FirmwareVolumeAssetPath()
+	if err != nil {
+		return err
+	}
+
 	pflash, err := q.arch.getPFlash()
 	if err != nil {
 		return err
@@ -610,7 +652,7 @@ func (q *qemu) CreateVM(ctx context.Context, id string, networkNS NetworkNamespa
 		PidFile:     filepath.Join(q.config.VMStorePath, q.id, "pid"),
 	}
 
-	qemuConfig.Devices, qemuConfig.Bios, err = q.arch.appendProtectionDevice(qemuConfig.Devices, firmwarePath)
+	qemuConfig.Devices, qemuConfig.Bios, err = q.arch.appendProtectionDevice(qemuConfig.Devices, firmwarePath, firmwareVolumePath)
 	if err != nil {
 		return err
 	}
@@ -637,50 +679,41 @@ func (q *qemu) CreateVM(ctx context.Context, id string, networkNS NetworkNamespa
 
 	q.qemuConfig = qemuConfig
 
-	virtiofsdSocketPath, err := q.vhostFSSocketPath(q.id)
-	if err != nil {
-		return err
-	}
-
-	q.virtiofsd = &virtiofsd{
-		path:       q.config.VirtioFSDaemon,
-		sourcePath: hypervisorConfig.SharedPath,
-		socketPath: virtiofsdSocketPath,
-		extraArgs:  q.config.VirtioFSExtraArgs,
-		debug:      q.config.Debug,
-		cache:      q.config.VirtioFSCache,
-	}
-
-	return nil
+	q.virtiofsDaemon, err = q.createVirtiofsDaemon(hypervisorConfig.SharedPath)
+	return err
 }
 
 func (q *qemu) vhostFSSocketPath(id string) (string, error) {
 	return utils.BuildSocketPath(q.config.VMStorePath, id, vhostFSSocket)
 }
 
-func (q *qemu) setupVirtiofsd(ctx context.Context) (err error) {
-	pid, err := q.virtiofsd.Start(ctx, func() {
+func (q *qemu) nydusdAPISocketPath(id string) (string, error) {
+	return utils.BuildSocketPath(q.config.VMStorePath, id, nydusdAPISock)
+}
+
+func (q *qemu) setupVirtiofsDaemon(ctx context.Context) (err error) {
+	pid, err := q.virtiofsDaemon.Start(ctx, func() {
 		q.StopVM(ctx, false)
 	})
 	if err != nil {
 		return err
 	}
-	q.state.VirtiofsdPid = pid
+	q.state.VirtiofsDaemonPid = pid
 
 	return nil
 }
 
-func (q *qemu) stopVirtiofsd(ctx context.Context) (err error) {
-	if q.state.VirtiofsdPid == 0 {
+func (q *qemu) stopVirtiofsDaemon(ctx context.Context) (err error) {
+	if q.state.VirtiofsDaemonPid == 0 {
 		q.Logger().Warn("The virtiofsd had stopped")
 		return nil
 	}
 
-	err = q.virtiofsd.Stop(ctx)
+	err = q.virtiofsDaemon.Stop(ctx)
 	if err != nil {
 		return err
 	}
-	q.state.VirtiofsdPid = 0
+	q.state.VirtiofsDaemonPid = 0
 	return nil
 }
 
@@ -702,7 +735,8 @@ func (q *qemu) getMemArgs() (bool, string, string, error) {
 			return share, target, "", fmt.Errorf("Vhost-user-blk/scsi requires hugepage memory")
 		}
 
-		if q.config.SharedFS == config.VirtioFS || q.config.FileBackedMemRootDir != "" {
+		if q.config.SharedFS == config.VirtioFS || q.config.SharedFS == config.VirtioFSNydus ||
+			q.config.FileBackedMemRootDir != "" {
 			target = q.qemuConfig.Memory.Path
 			memoryBack = "memory-backend-file"
 		}
@@ -812,15 +846,15 @@ func (q *qemu) StartVM(ctx context.Context, timeout int) error {
 	}
 	defer label.SetProcessLabel("")
 
-	if q.config.SharedFS == config.VirtioFS {
-		err = q.setupVirtiofsd(ctx)
+	if q.config.SharedFS == config.VirtioFS || q.config.SharedFS == config.VirtioFSNydus {
+		err = q.setupVirtiofsDaemon(ctx)
 		if err != nil {
 			return err
 		}
 		defer func() {
 			if err != nil {
-				if shutdownErr := q.stopVirtiofsd(ctx); shutdownErr != nil {
-					q.Logger().WithError(shutdownErr).Warn("failed to stop virtiofsd")
+				if shutdownErr := q.stopVirtiofsDaemon(ctx); shutdownErr != nil {
+					q.Logger().WithError(shutdownErr).Warn("failed to stop virtiofsDaemon")
 				}
 			}
 		}()
@@ -981,8 +1015,8 @@ func (q *qemu) StopVM(ctx context.Context, waitOnly bool) error {
 		}
 	}
 
-	if q.config.SharedFS == config.VirtioFS {
-		if err := q.stopVirtiofsd(ctx); err != nil {
+	if q.config.SharedFS == config.VirtioFS || q.config.SharedFS == config.VirtioFSNydus {
+		if err := q.stopVirtiofsDaemon(ctx); err != nil {
 			return err
 		}
 	}
@@ -1965,7 +1999,7 @@ func (q *qemu) AddDevice(ctx context.Context, devInfo interface{}, devType Devic
 
 	switch v := devInfo.(type) {
 	case types.Volume:
-		if q.config.SharedFS == config.VirtioFS {
+		if q.config.SharedFS == config.VirtioFS || q.config.SharedFS == config.VirtioFSNydus {
 			q.Logger().WithField("volume-type", "virtio-fs").Info("adding volume")
 
 			var randBytes []byte
@@ -2394,15 +2428,15 @@ func (q *qemu) GetPids() []int {
 	}
 
 	pids := []int{pid}
-	if q.state.VirtiofsdPid != 0 {
-		pids = append(pids, q.state.VirtiofsdPid)
+	if q.state.VirtiofsDaemonPid != 0 {
+		pids = append(pids, q.state.VirtiofsDaemonPid)
 	}
 
 	return pids
 }
 
 func (q *qemu) GetVirtioFsPid() *int {
-	return &q.state.VirtiofsdPid
+	return &q.state.VirtiofsDaemonPid
 }
 
 type qemuGrpc struct {
@@ -2471,7 +2505,7 @@ func (q *qemu) Save() (s hv.HypervisorState) {
 	if len(pids) != 0 {
 		s.Pid = pids[0]
 	}
-	s.VirtiofsdPid = q.state.VirtiofsdPid
+	s.VirtiofsDaemonPid = q.state.VirtiofsDaemonPid
 	s.Type = string(QemuHypervisor)
 	s.UUID = q.state.UUID
 	s.HotpluggedMemory = q.state.HotpluggedMemory
@@ -2499,7 +2533,7 @@ func (q *qemu) Load(s hv.HypervisorState) {
 	q.state.UUID = s.UUID
 	q.state.HotpluggedMemory = s.HotpluggedMemory
 	q.state.HotplugVFIOOnRootBus = s.HotplugVFIOOnRootBus
-	q.state.VirtiofsdPid = s.VirtiofsdPid
+	q.state.VirtiofsDaemonPid = s.VirtiofsDaemonPid
 	q.state.PCIeRootPort = s.PCIeRootPort
 
 	for _, bridge := range s.Bridges {

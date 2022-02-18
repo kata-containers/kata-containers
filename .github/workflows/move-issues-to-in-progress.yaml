@@ -10,8 +10,6 @@ on:
     types:
       - opened
       - reopened
-      - labeled
-      - unlabeled
 
 jobs:
   move-linked-issues-to-in-progress:

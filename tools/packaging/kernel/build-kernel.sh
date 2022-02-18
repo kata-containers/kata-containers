@@ -53,6 +53,8 @@ hypervisor_target=""
 arch_target=""
 #
 kernel_config_path=""
+#
+skip_config_checks="false"
 # destdir
 DESTDIR="${DESTDIR:-/}"
 #PREFIX=
@@ -92,9 +94,10 @@ Options:
 	-h          	: Display this help.
 	-k <path>   	: Path to kernel to build.
 	-p <path>   	: Path to a directory with patches to apply to kernel.
+	-s          	: Skip .config checks
 	-t <hypervisor>	: Hypervisor_target.
 	-v <version>	: Kernel version to use if kernel path not provided.
-	-x <type>	: Confidential guest protection type, such as sev
+	-x <type>	: Confidential guest protection type, such as sev and tdx
 EOT
 	exit "$exit_code"
 }
@@ -112,6 +115,22 @@ arch_to_kernel() {
 	esac
 }
 
+get_tdx_kernel() {
+	local version="${1}"
+	local kernel_path=${2}
+
+	mkdir -p ${kernel_path}
+
+	kernel_url=$(get_from_kata_deps "assets.kernel.tdx.url")
+	kernel_tarball="${version}.tar.gz"
+
+	if [ ! -f "${kernel_tarball}" ]; then
+	   curl --fail -OL "${kernel_url}/${kernel_tarball}"
+	fi
+
+	tar --strip-components=1 -xf ${kernel_tarball} -C ${kernel_path}
+}
+
 get_kernel() {
 	local version="${1:-}"
 
@@ -119,7 +138,10 @@ get_kernel() {
 	[ -n "${kernel_path}" ] || die "kernel_path not provided"
 	[ ! -d "${kernel_path}" ] || die "kernel_path already exist"
 
-
+	if [ "${conf_guest}" == "tdx" ]; then
+		get_tdx_kernel ${version} ${kernel_path}
+		return
+	fi
 
 		#Remove extra 'v'
 		version=${version#v}
@@ -232,6 +254,8 @@ get_kernel_frag_path() {
 	results=$(grep "${not_in_string}" <<< "$results")
 	# Do not care about options that are in whitelist
 	results=$(grep -v -f ${default_config_whitelist} <<< "$results")
+
+	[[ "${skip_config_checks}" == "true" ]] && echo "${config_path}" && return
 
 	# Did we request any entries that did not make it?
 	local missing=$(echo $results | grep -v -q "${not_in_string}"; echo $?)
@@ -352,7 +376,7 @@ setup_kernel() {
 	${packaging_scripts_dir}/apply_patches.sh "${patches_dir_for_version}"
 
 	# Apply version specific patches for build_type build
-	if [ "${build_type}" == "true" ] ;then
+	if [ "${build_type}" != "" ] ;then
 		info "Apply build_type patches from ${build_type_patches_dir}"
 		${packaging_scripts_dir}/apply_patches.sh "${build_type_patches_dir}"
 	fi
@@ -438,7 +462,7 @@ install_kata() {
 }
 
 main() {
-	while getopts "a:b:c:defg:hk:p:t:v:x:" opt; do
+	while getopts "a:b:c:defg:hk:p:st:v:x:" opt; do
 		case "$opt" in
 			a)
 				arch_target="${OPTARG}"
@@ -467,10 +491,13 @@ main() {
 				usage 0
 				;;
 			k)
-				kernel_path="${OPTARG}"
+				kernel_path="$(realpath ${OPTARG})"
 				;;
 			p)
 				patches_path="${OPTARG}"
+				;;
+			s)
+				skip_config_checks="true"
 				;;
 			t)
 				hypervisor_target="${OPTARG}"
@@ -481,7 +508,7 @@ main() {
 			x)
 				conf_guest="${OPTARG}"
 				case "$conf_guest" in
-					sev) ;;
+					sev|tdx) ;;
 					*) die "Confidential guest type '$conf_guest' not supported" ;;
 				esac
 				;;
@@ -498,6 +525,8 @@ main() {
 	if [ -z "$kernel_version" ]; then
 		if [[ ${build_type} == "experimental" ]]; then
 			kernel_version=$(get_from_kata_deps "assets.kernel-experimental.tag")
+		elif [[ "${conf_guest}" == "tdx" ]]; then
+			 kernel_version=$(get_from_kata_deps "assets.kernel.tdx.tag")
 		else
 			kernel_version=$(get_from_kata_deps "assets.kernel.version")
 		fi

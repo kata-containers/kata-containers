@@ -152,13 +152,14 @@ func TestCalculateSandboxMem(t *testing.T) {
 	sandbox.config = &SandboxConfig{}
 	unconstrained := newTestContainerConfigNoop("cont-00001")
 	constrained := newTestContainerConfigNoop("cont-00001")
-	limit := int64(4000)
-	constrained.Resources.Memory = &specs.LinuxMemory{Limit: &limit}
+	mlimit := int64(4000)
+	limit := uint64(4000)
+	constrained.Resources.Memory = &specs.LinuxMemory{Limit: &mlimit}
 
 	tests := []struct {
 		name       string
 		containers []ContainerConfig
-		want       int64
+		want       uint64
 	}{
 		{"1-unconstrained", []ContainerConfig{unconstrained}, 0},
 		{"2-unconstrained", []ContainerConfig{unconstrained, unconstrained}, 0},
@@ -176,6 +177,20 @@ func TestCalculateSandboxMem(t *testing.T) {
 			assert.Equal(t, swap, int64(0))
 		})
 	}
+}
+
+func TestCalculateSandboxMemHandlesNegativeLimits(t *testing.T) {
+	sandbox := &Sandbox{}
+	sandbox.config = &SandboxConfig{}
+	container := newTestContainerConfigNoop("cont-00001")
+	limit := int64(-1)
+	container.Resources.Memory = &specs.LinuxMemory{Limit: &limit}
+
+	sandbox.config.Containers = []ContainerConfig{container}
+	mem, needSwap, swap := sandbox.calculateSandboxMemory()
+	assert.Equal(t, mem, uint64(0))
+	assert.Equal(t, needSwap, false)
+	assert.Equal(t, swap, int64(0))
 }
 
 func TestCreateSandboxEmptyID(t *testing.T) {
@@ -567,7 +582,7 @@ func TestSandboxAttachDevicesVFIO(t *testing.T) {
 
 	containers[c.id].sandbox = &sandbox
 
-	err = containers[c.id].attachDevices(context.Background(), c.devices)
+	err = containers[c.id].attachDevices(context.Background())
 	assert.Nil(t, err, "Error while attaching devices %s", err)
 
 	err = containers[c.id].detachDevices(context.Background())
@@ -662,7 +677,7 @@ func TestSandboxAttachDevicesVhostUserBlk(t *testing.T) {
 
 	containers[c.id].sandbox = &sandbox
 
-	err = containers[c.id].attachDevices(context.Background(), c.devices)
+	err = containers[c.id].attachDevices(context.Background())
 	assert.Nil(t, err, "Error while attaching vhost-user-blk devices %s", err)
 
 	err = containers[c.id].detachDevices(context.Background())
@@ -1285,16 +1300,12 @@ func TestPreAddDevice(t *testing.T) {
 func TestGetNetNs(t *testing.T) {
 	s := Sandbox{}
 
-	expected := ""
+	expected := "/foo/bar/ns/net"
+	network, err := NewNetwork(&NetworkConfig{NetworkID: expected})
+	assert.Nil(t, err)
+
+	s.network = network
 	netNs := s.GetNetNs()
-	assert.Equal(t, netNs, expected)
-
-	expected = "/foo/bar/ns/net"
-	s.networkNS = NetworkNamespace{
-		NetNsPath: expected,
-	}
-
-	netNs = s.GetNetNs()
 	assert.Equal(t, netNs, expected)
 }
 
@@ -1628,4 +1639,42 @@ func TestGetSandboxCpuSet(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestSandboxHugepageLimit(t *testing.T) {
+	contConfig1 := newTestContainerConfigNoop("cont-00001")
+	contConfig2 := newTestContainerConfigNoop("cont-00002")
+	limit := int64(4000)
+	contConfig1.Resources.Memory = &specs.LinuxMemory{Limit: &limit}
+	contConfig2.Resources.Memory = &specs.LinuxMemory{Limit: &limit}
+	hConfig := newHypervisorConfig(nil, nil)
+
+	defer cleanUp()
+	// create a sandbox
+	s, err := testCreateSandbox(t,
+		testSandboxID,
+		MockHypervisor,
+		hConfig,
+		NetworkConfig{},
+		[]ContainerConfig{contConfig1, contConfig2},
+		nil)
+
+	assert.NoError(t, err)
+
+	hugepageLimits := []specs.LinuxHugepageLimit{
+		{
+			Pagesize: "1GB",
+			Limit:    322122547,
+		},
+		{
+			Pagesize: "2MB",
+			Limit:    134217728,
+		},
+	}
+
+	for i := range s.config.Containers {
+		s.config.Containers[i].Resources.HugepageLimits = hugepageLimits
+	}
+	err = s.updateResources(context.Background())
+	assert.NoError(t, err)
 }

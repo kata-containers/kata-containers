@@ -17,6 +17,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/docker/go-units"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils/katatrace"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/uuid"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/api"
@@ -30,6 +31,7 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/rootless"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	vcTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
 
 	"github.com/gogo/protobuf/proto"
 	"github.com/opencontainers/runtime-spec/specs-go"
@@ -63,6 +65,7 @@ const (
 
 	sandboxMountsDir = "sandbox-mounts"
 
+	NydusRootFSType = "fuse.nydus-overlayfs"
 	// enable debug console
 	kernelParamDebugConsole           = "agent.debug_console"
 	kernelParamDebugConsoleVPort      = "agent.debug_console_vport"
@@ -73,36 +76,39 @@ const (
 )
 
 var (
-	checkRequestTimeout         = 30 * time.Second
-	defaultRequestTimeout       = 60 * time.Second
-	errorMissingOCISpec         = errors.New("Missing OCI specification")
-	defaultKataHostSharedDir    = "/run/kata-containers/shared/sandboxes/"
-	defaultKataGuestSharedDir   = "/run/kata-containers/shared/containers/"
-	mountGuestTag               = "kataShared"
-	defaultKataGuestSandboxDir  = "/run/kata-containers/sandbox/"
-	type9pFs                    = "9p"
-	typeVirtioFS                = "virtiofs"
-	typeVirtioFSNoCache         = "none"
-	kata9pDevType               = "9p"
-	kataMmioBlkDevType          = "mmioblk"
-	kataBlkDevType              = "blk"
-	kataBlkCCWDevType           = "blk-ccw"
-	kataSCSIDevType             = "scsi"
-	kataNvdimmDevType           = "nvdimm"
-	kataVirtioFSDevType         = "virtio-fs"
-	kataWatchableBindDevType    = "watchable-bind"
-	kataVfioDevType             = "vfio"    // VFIO device to used as VFIO in the container
-	kataVfioGuestKernelDevType  = "vfio-gk" // VFIO device for consumption by the guest kernel
-	sharedDir9pOptions          = []string{"trans=virtio,version=9p2000.L,cache=mmap", "nodev"}
-	sharedDirVirtioFSOptions    = []string{}
-	sharedDirVirtioFSDaxOptions = "dax"
-	shmDir                      = "shm"
-	kataEphemeralDevType        = "ephemeral"
-	defaultEphemeralPath        = filepath.Join(defaultKataGuestSandboxDir, kataEphemeralDevType)
-	grpcMaxDataSize             = int64(1024 * 1024)
-	localDirOptions             = []string{"mode=0777"}
-	maxHostnameLen              = 64
-	GuestDNSFile                = "/etc/resolv.conf"
+	checkRequestTimeout          = 30 * time.Second
+	defaultRequestTimeout        = 60 * time.Second
+	errorMissingOCISpec          = errors.New("Missing OCI specification")
+	defaultKataHostSharedDir     = "/run/kata-containers/shared/sandboxes/"
+	defaultKataGuestSharedDir    = "/run/kata-containers/shared/containers/"
+	defaultKataGuestNydusRootDir = "/run/kata-containers/shared/"
+	mountGuestTag                = "kataShared"
+	defaultKataGuestSandboxDir   = "/run/kata-containers/sandbox/"
+	type9pFs                     = "9p"
+	typeVirtioFS                 = "virtiofs"
+	typeOverlayFS                = "overlay"
+	typeVirtioFSNoCache          = "none"
+	kata9pDevType                = "9p"
+	kataMmioBlkDevType           = "mmioblk"
+	kataBlkDevType               = "blk"
+	kataBlkCCWDevType            = "blk-ccw"
+	kataSCSIDevType              = "scsi"
+	kataNvdimmDevType            = "nvdimm"
+	kataVirtioFSDevType          = "virtio-fs"
+	kataOverlayDevType           = "overlayfs"
+	kataWatchableBindDevType     = "watchable-bind"
+	kataVfioDevType              = "vfio"    // VFIO device to used as VFIO in the container
+	kataVfioGuestKernelDevType   = "vfio-gk" // VFIO device for consumption by the guest kernel
+	sharedDir9pOptions           = []string{"trans=virtio,version=9p2000.L,cache=mmap", "nodev"}
+	sharedDirVirtioFSOptions     = []string{}
+	sharedDirVirtioFSDaxOptions  = "dax"
+	shmDir                       = "shm"
+	kataEphemeralDevType         = "ephemeral"
+	defaultEphemeralPath         = filepath.Join(defaultKataGuestSandboxDir, kataEphemeralDevType)
+	grpcMaxDataSize              = int64(1024 * 1024)
+	localDirOptions              = []string{"mode=0777"}
+	maxHostnameLen               = 64
+	GuestDNSFile                 = "/etc/resolv.conf"
 )
 
 const (
@@ -152,6 +158,16 @@ var kataHostSharedDir = func() string {
 	return defaultKataHostSharedDir
 }
 
+func getPagesizeFromOpt(fsOpts []string) string {
+	// example options array: "rw", "relatime", "seclabel", "pagesize=2M"
+	for _, opt := range fsOpts {
+		if strings.HasPrefix(opt, "pagesize=") {
+			return strings.TrimPrefix(opt, "pagesize=")
+		}
+	}
+	return ""
+}
+
 // Shared path handling:
 // 1. create three directories for each sandbox:
 // -. /run/kata-containers/shared/sandboxes/$sbx_id/mounts/, a directory to hold all host/guest shared mounts
@@ -175,6 +191,32 @@ func getPrivatePath(id string) string {
 
 func getSandboxPath(id string) string {
 	return filepath.Join(kataHostSharedDir(), id)
+}
+
+// Use in nydus case, guest shared dir is compatible with virtiofsd sharedir
+// nydus images are presented in kataGuestNydusImageDir
+//
+// virtiofs mountpoint: "/run/kata-containers/shared/"
+// kataGuestSharedDir: "/run/kata-containers/shared/containers"
+// kataGuestNydusImageDir: "/run/kata-containers/shared/rafs"
+var kataGuestNydusRootDir = func() string {
+	if rootless.IsRootless() {
+		// filepath.Join removes trailing slashes, but it is necessary for mounting
+		return filepath.Join(rootless.GetRootlessDir(), defaultKataGuestNydusRootDir) + "/"
+	}
+	return defaultKataGuestNydusRootDir
+}
+
+var rafsMountPath = func(cid string) string {
+	return filepath.Join("/", nydusRafs, cid, lowerDir)
+}
+
+var kataGuestNydusImageDir = func() string {
+	if rootless.IsRootless() {
+		// filepath.Join removes trailing slashes, but it is necessary for mounting
+		return filepath.Join(rootless.GetRootlessDir(), defaultKataGuestNydusRootDir, nydusRafs) + "/"
+	}
+	return filepath.Join(defaultKataGuestNydusRootDir, nydusRafs) + "/"
 }
 
 // The function is declared this way for mocking in unit tests
@@ -784,7 +826,7 @@ func (k *kataAgent) startSandbox(ctx context.Context, sandbox *Sandbox) error {
 	}
 
 	// Setup network interfaces and routes
-	interfaces, routes, neighs, err := generateVCNetworkStructures(ctx, sandbox.networkNS)
+	interfaces, routes, neighs, err := generateVCNetworkStructures(ctx, sandbox.network)
 	if err != nil {
 		return err
 	}
@@ -852,7 +894,8 @@ func setupStorages(ctx context.Context, sandbox *Sandbox) []*grpc.Storage {
 		// This is where at least some of the host config files
 		// (resolv.conf, etc...) and potentially all container
 		// rootfs will reside.
-		if sandbox.config.HypervisorConfig.SharedFS == config.VirtioFS {
+		sharedFS := sandbox.config.HypervisorConfig.SharedFS
+		if sharedFS == config.VirtioFS || sharedFS == config.VirtioFSNydus {
 			// If virtio-fs uses either of the two cache options 'auto, always',
 			// the guest directory can be mounted with option 'dax' allowing it to
 			// directly map contents from the host. When set to 'none', the mount
@@ -864,10 +907,14 @@ func setupStorages(ctx context.Context, sandbox *Sandbox) []*grpc.Storage {
 					sharedDirVirtioFSOptions = append(sharedDirVirtioFSOptions, sharedDirVirtioFSDaxOptions)
 				}
 			}
+			mountPoint := kataGuestSharedDir()
+			if sharedFS == config.VirtioFSNydus {
+				mountPoint = kataGuestNydusRootDir()
+			}
 			sharedVolume := &grpc.Storage{
 				Driver:     kataVirtioFSDevType,
 				Source:     mountGuestTag,
-				MountPoint: kataGuestSharedDir(),
+				MountPoint: mountPoint,
 				Fstype:     typeVirtioFS,
 				Options:    sharedDirVirtioFSOptions,
 			}
@@ -1225,13 +1272,71 @@ func (k *kataAgent) rollbackFailingContainerCreation(ctx context.Context, c *Con
 			k.Logger().WithError(err2).Error("rollback failed unmountHostMounts()")
 		}
 
-		if err2 := bindUnmountContainerRootfs(ctx, getMountPath(c.sandbox.id), c.id); err2 != nil {
-			k.Logger().WithError(err2).Error("rollback failed bindUnmountContainerRootfs()")
+		if c.rootFs.Type == NydusRootFSType {
+			if err2 := nydusContainerCleanup(ctx, getMountPath(c.sandbox.id), c); err2 != nil {
+				k.Logger().WithError(err2).Error("rollback failed nydusContainerCleanup")
+			}
+		} else {
+			if err2 := bindUnmountContainerRootfs(ctx, getMountPath(c.sandbox.id), c.id); err2 != nil {
+				k.Logger().WithError(err2).Error("rollback failed bindUnmountContainerRootfs()")
+			}
 		}
 	}
 }
 
+func (k *kataAgent) buildContainerRootfsWithNydus(sandbox *Sandbox, c *Container, rootPathParent string) (*grpc.Storage, error) {
+	if sandbox.GetHypervisorType() != string(QemuHypervisor) {
+		// qemu is supported first, other hypervisors will next
+		// https://github.com/kata-containers/kata-containers/issues/2724
+		return nil, errNydusdNotSupport
+	}
+	q, _ := sandbox.hypervisor.(*qemu)
+	extraOption, err := parseExtraOption(c.rootFs.Options)
+	if err != nil {
+		return nil, err
+	}
+	mountOpt := &MountOption{
+		mountpoint: rafsMountPath(c.id),
+		source:     extraOption.Source,
+		config:     extraOption.Config,
+	}
+	k.Logger().Infof("nydus option: %v", extraOption)
+	// mount lowerdir to guest /run/kata-containers/shared/images/<cid>/lowerdir
+	if err := q.virtiofsDaemon.Mount(*mountOpt); err != nil {
+		return nil, err
+	}
+	rootfs := &grpc.Storage{}
+	containerShareDir := filepath.Join(getMountPath(c.sandbox.id), c.id)
+
+	// mkdir rootfs, guest at /run/kata-containers/shared/containers/<cid>/rootfs
+	rootfsDir := filepath.Join(containerShareDir, c.rootfsSuffix)
+	if err := os.MkdirAll(rootfsDir, DirMode); err != nil {
+		return nil, err
+	}
+	// bindmount snapshot dir which snapshotter allocated
+	// to guest /run/kata-containers/shared/containers/<cid>/snapshotdir
+	snapshotShareDir := filepath.Join(containerShareDir, snapshotDir)
+	if err := bindMount(k.ctx, extraOption.Snapshotdir, snapshotShareDir, true, "slave"); err != nil {
+		return nil, err
+	}
+
+	// so rootfs = overlay(upperdir, workerdir, lowerdir)
+	rootfs.MountPoint = filepath.Join(rootPathParent, c.rootfsSuffix)
+	rootfs.Source = typeOverlayFS
+	rootfs.Fstype = typeOverlayFS
+	rootfs.Driver = kataOverlayDevType
+	rootfs.Options = append(rootfs.Options, fmt.Sprintf("%s=%s", upperDir, filepath.Join(kataGuestSharedDir(), c.id, snapshotDir, "fs")))
+	rootfs.Options = append(rootfs.Options, fmt.Sprintf("%s=%s", workDir, filepath.Join(kataGuestSharedDir(), c.id, snapshotDir, "work")))
+	rootfs.Options = append(rootfs.Options, fmt.Sprintf("%s=%s", lowerDir, filepath.Join(kataGuestNydusImageDir(), c.id, lowerDir)))
+	rootfs.Options = append(rootfs.Options, "index=off")
+	k.Logger().Infof("rootfs info: %#v\n", rootfs)
+	return rootfs, nil
+}
+
 func (k *kataAgent) buildContainerRootfs(ctx context.Context, sandbox *Sandbox, c *Container, rootPathParent string) (*grpc.Storage, error) {
+	if c.rootFs.Type == NydusRootFSType {
+		return k.buildContainerRootfsWithNydus(sandbox, c, rootPathParent)
+	}
 	if c.state.Fstype != "" && c.state.BlockDeviceID != "" {
 		// The rootfs storage volume represents the container rootfs
 		// mount point inside the guest.
@@ -1301,7 +1406,6 @@ func (k *kataAgent) buildContainerRootfs(ctx context.Context, sandbox *Sandbox, 
 func (k *kataAgent) createContainer(ctx context.Context, sandbox *Sandbox, c *Container) (p *Process, err error) {
 	span, ctx := katatrace.Trace(ctx, k.Logger(), "createContainer", kataAgentTracingTags)
 	defer span.End()
-
 	var ctrStorages []*grpc.Storage
 	var ctrDevices []*grpc.Device
 	var rootfs *grpc.Storage
@@ -1357,6 +1461,13 @@ func (k *kataAgent) createContainer(ctx context.Context, sandbox *Sandbox, c *Co
 	}
 
 	ctrStorages = append(ctrStorages, epheStorages...)
+
+	k.Logger().WithField("ociSpec Hugepage Resources", ociSpec.Linux.Resources.HugepageLimits).Debug("ociSpec HugepageLimit")
+	hugepages, err := k.handleHugepages(ociSpec.Mounts, ociSpec.Linux.Resources.HugepageLimits)
+	if err != nil {
+		return nil, err
+	}
+	ctrStorages = append(ctrStorages, hugepages...)
 
 	localStorages, err := k.handleLocalStorage(ociSpec.Mounts, sandbox.id, c.rootfsSuffix)
 	if err != nil {
@@ -1436,6 +1547,71 @@ func buildProcessFromExecID(token string) (*Process, error) {
 		StartTime: time.Now().UTC(),
 		Pid:       -1,
 	}, nil
+}
+
+// handleHugePages handles hugepages storage by
+// creating a Storage from corresponding source of the mount point
+func (k *kataAgent) handleHugepages(mounts []specs.Mount, hugepageLimits []specs.LinuxHugepageLimit) ([]*grpc.Storage, error) {
+	//Map to hold the total memory of each type of hugepages
+	optionsMap := make(map[int64]string)
+
+	for _, hp := range hugepageLimits {
+		if hp.Limit != 0 {
+			k.Logger().WithFields(logrus.Fields{
+				"Pagesize": hp.Pagesize,
+				"Limit":    hp.Limit,
+			}).Info("hugepage request")
+			//example Pagesize 2MB, 1GB etc. The Limit are in Bytes
+			pageSize, err := units.RAMInBytes(hp.Pagesize)
+			if err != nil {
+				k.Logger().Error("Unable to convert pagesize to bytes")
+				return nil, err
+			}
+			totalHpSizeStr := strconv.FormatUint(hp.Limit, 10)
+			optionsMap[pageSize] = totalHpSizeStr
+		}
+	}
+
+	var hugepages []*grpc.Storage
+	for idx, mnt := range mounts {
+		if mnt.Type != KataLocalDevType {
+			continue
+		}
+		//HugePages mount Type is Local
+		if _, fsType, fsOptions, _ := utils.GetDevicePathAndFsTypeOptions(mnt.Source); fsType == "hugetlbfs" {
+			k.Logger().WithField("fsOptions", fsOptions).Debug("hugepage mount options")
+			//Find the pagesize from the mountpoint options
+			pagesizeOpt := getPagesizeFromOpt(fsOptions)
+			if pagesizeOpt == "" {
+				return nil, fmt.Errorf("No pagesize option found in filesystem mount options")
+			}
+			pageSize, err := units.RAMInBytes(pagesizeOpt)
+			if err != nil {
+				k.Logger().Error("Unable to convert pagesize from fs mount options to bytes")
+				return nil, err
+			}
+			//Create mount option string
+			options := fmt.Sprintf("pagesize=%s,size=%s", strconv.FormatInt(pageSize, 10), optionsMap[pageSize])
+			k.Logger().WithField("Hugepage options string", options).Debug("hugepage mount options")
+			// Set the mount source path to a path that resides inside the VM
+			mounts[idx].Source = filepath.Join(ephemeralPath(), filepath.Base(mnt.Source))
+			// Set the mount type to "bind"
+			mounts[idx].Type = "bind"
+
+			// Create a storage struct so that kata agent is able to create
+			// hugetlbfs backed volume inside the VM
+			hugepage := &grpc.Storage{
+				Driver:     KataEphemeralDevType,
+				Source:     "nodev",
+				Fstype:     "hugetlbfs",
+				MountPoint: mounts[idx].Source,
+				Options:    []string{options},
+			}
+			hugepages = append(hugepages, hugepage)
+		}
+
+	}
+	return hugepages, nil
 }
 
 // handleEphemeralStorage handles ephemeral storages by

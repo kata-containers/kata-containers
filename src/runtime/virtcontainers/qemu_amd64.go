@@ -14,7 +14,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/intel-go/cpuid"
-	govmmQemu "github.com/kata-containers/govmm/qemu"
+	govmmQemu "github.com/kata-containers/kata-containers/src/runtime/pkg/govmm/qemu"
 )
 
 type qemuAmd64 struct {
@@ -24,6 +24,8 @@ type qemuAmd64 struct {
 	vmFactory bool
 
 	devLoadersCount uint32
+
+	sgxEPCSize int64
 }
 
 const (
@@ -140,6 +142,17 @@ func newQemuArch(config HypervisorConfig) (qemuArch, error) {
 		}
 	}
 
+	if config.SGXEPCSize != 0 {
+		q.sgxEPCSize = config.SGXEPCSize
+		if q.qemuMachine.Options != "" {
+			q.qemuMachine.Options += ","
+		}
+		// qemu sandboxes will only support one EPC per sandbox
+		// this is because there is only one annotation (sgx.intel.com/epc)
+		// to specify the size of the EPC.
+		q.qemuMachine.Options += "sgx-epc.0.memdev=epc0,sgx-epc.0.node=0"
+	}
+
 	q.handleImagePath(config)
 
 	return q, nil
@@ -232,19 +245,30 @@ func (q *qemuAmd64) enableProtection() error {
 }
 
 // append protection device
-func (q *qemuAmd64) appendProtectionDevice(devices []govmmQemu.Device, firmware string) ([]govmmQemu.Device, string, error) {
+func (q *qemuAmd64) appendProtectionDevice(devices []govmmQemu.Device, firmware, firmwareVolume string) ([]govmmQemu.Device, string, error) {
+	if q.sgxEPCSize != 0 {
+		devices = append(devices,
+			govmmQemu.Object{
+				Type:     govmmQemu.MemoryBackendEPC,
+				ID:       "epc0",
+				Prealloc: true,
+				Size:     uint64(q.sgxEPCSize),
+			})
+	}
+
 	switch q.protection {
 	case tdxProtection:
 		id := q.devLoadersCount
 		q.devLoadersCount += 1
 		return append(devices,
 			govmmQemu.Object{
-				Driver:   govmmQemu.Loader,
-				Type:     govmmQemu.TDXGuest,
-				ID:       "tdx",
-				DeviceID: fmt.Sprintf("fd%d", id),
-				Debug:    false,
-				File:     firmware,
+				Driver:         govmmQemu.Loader,
+				Type:           govmmQemu.TDXGuest,
+				ID:             "tdx",
+				DeviceID:       fmt.Sprintf("fd%d", id),
+				Debug:          false,
+				File:           firmware,
+				FirmwareVolume: firmwareVolume,
 			}), "", nil
 	case sevProtection:
 		return append(devices,
