@@ -246,6 +246,11 @@ externals:
     url: "https://github.com/dragonflyoss/image-service"
     version: "v1.1.2"
 
+  nydus-snapshotter:
+    description: "Snapshotter for Nydus image acceleration service"
+    url: "https://github.com/containerd/nydus-snapshotter"
+    version: "v0.1.0"
+
 languages:
   description: |
     Details of programming languages required to build system
