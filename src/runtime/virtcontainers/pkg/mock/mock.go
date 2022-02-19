@@ -16,9 +16,13 @@ import (
 	gpb "github.com/gogo/protobuf/types"
 	aTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols"
 	pb "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols/grpc"
+	"path"
+	"strings"
 )
 
-var testKataMockHybridVSockURLTempl = "mock://%s/kata-mock-hybrid-vsock.sock"
+const VSockPrefix = "mock://"
+
+var testKataMockHybridVSockURLTempl = VSockPrefix + "%s/kata-mock-hybrid-vsock.sock"
 
 func GenerateKataMockHybridVSock() (string, error) {
 	dir, err := os.MkdirTemp("", "kata-mock-hybrid-vsock-test")
@@ -27,6 +31,15 @@ func GenerateKataMockHybridVSock() (string, error) {
 	}
 
 	return fmt.Sprintf(testKataMockHybridVSockURLTempl, dir), nil
+}
+
+func RemoveKataMockHybridVSock(sockAddress string) error {
+	if !strings.HasPrefix(sockAddress, VSockPrefix) {
+		return fmt.Errorf("Invalid socket address: %s", sockAddress)
+	}
+
+	sockPath := strings.TrimPrefix(sockAddress, VSockPrefix)
+	return os.RemoveAll(path.Dir(sockPath))
 }
 
 // HybridVSockTTRPCMock is the ttrpc-based mock hybrid-vsock backend implementation
