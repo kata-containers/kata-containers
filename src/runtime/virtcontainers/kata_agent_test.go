@@ -50,6 +50,7 @@ func TestKataAgentConnect(t *testing.T) {
 
 	url, err := mock.GenerateKataMockHybridVSock()
 	assert.NoError(err)
+	defer mock.RemoveKataMockHybridVSock(url)
 
 	hybridVSockTTRPCMock := mock.HybridVSockTTRPCMock{}
 	err = hybridVSockTTRPCMock.Start(url)
@@ -73,6 +74,7 @@ func TestKataAgentDisconnect(t *testing.T) {
 
 	url, err := mock.GenerateKataMockHybridVSock()
 	assert.NoError(err)
+	defer mock.RemoveKataMockHybridVSock(url)
 
 	hybridVSockTTRPCMock := mock.HybridVSockTTRPCMock{}
 	err = hybridVSockTTRPCMock.Start(url)
@@ -110,6 +112,7 @@ func TestKataAgentSendReq(t *testing.T) {
 
 	url, err := mock.GenerateKataMockHybridVSock()
 	assert.NoError(err)
+	defer mock.RemoveKataMockHybridVSock(url)
 
 	hybridVSockTTRPCMock := mock.HybridVSockTTRPCMock{}
 	err = hybridVSockTTRPCMock.Start(url)
@@ -843,6 +846,7 @@ func TestAgentCreateContainer(t *testing.T) {
 
 	url, err := mock.GenerateKataMockHybridVSock()
 	assert.NoError(err)
+	defer mock.RemoveKataMockHybridVSock(url)
 
 	hybridVSockTTRPCMock := mock.HybridVSockTTRPCMock{}
 	err = hybridVSockTTRPCMock.Start(url)
@@ -873,6 +877,7 @@ func TestAgentNetworkOperation(t *testing.T) {
 
 	url, err := mock.GenerateKataMockHybridVSock()
 	assert.NoError(err)
+	defer mock.RemoveKataMockHybridVSock(url)
 
 	hybridVSockTTRPCMock := mock.HybridVSockTTRPCMock{}
 	err = hybridVSockTTRPCMock.Start(url)
@@ -921,6 +926,7 @@ func TestKataCopyFile(t *testing.T) {
 
 	url, err := mock.GenerateKataMockHybridVSock()
 	assert.NoError(err)
+	defer mock.RemoveKataMockHybridVSock(url)
 
 	hybridVSockTTRPCMock := mock.HybridVSockTTRPCMock{}
 	err = hybridVSockTTRPCMock.Start(url)
