@@ -11,6 +11,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"golang.org/x/sys/unix"
 	"io"
 	"math"
 	"net"
@@ -2096,14 +2097,45 @@ func (s *Sandbox) GetHypervisorType() string {
 // constraints by moving the potentially new vCPU threads back to the sandbox
 // cgroup.
 func (s *Sandbox) cgroupsUpdate(ctx context.Context) error {
-	cpuset, memset, err := s.getSandboxCPUSet()
+	cpu, mem, err := s.getSandboxCPUSet()
 	if err != nil {
 		return err
 	}
 
 	// We update the sandbox cgroup with potentially new virtual CPUs.
-	if err := s.sandboxCgroup.UpdateCpuSet(cpuset, memset); err != nil {
+	if err := s.sandboxCgroup.UpdateCpuSet(cpu, mem); err != nil {
 		return err
+	}
+
+	// The vCPU threads should only be pinned to the cores that are exclusive used by the sandbox,
+	// Otherwise multiple sandboxes might be pinned to the same set of CPU cores and worsen the performance.
+	// In the case of Kubernetes as the CO, if the static cpu manager policy is enabled,
+	// the Guaranteed QOS Pods get their exclusive core, but it seems there doesn't exist a reasonable approach
+	// for the runtime to check whether the sandbox cgroup cpuset is exclusive or shared. It's up to the users
+	// to make sure the cpuset is exclusive before this flag is enabled.
+	if s.config.HypervisorConfig.EnableVCPUsPinning {
+		set, err := cpuset.Parse(cpu)
+		if err != nil {
+			return err
+		}
+
+		cpus := set.ToSlice()
+		tids, err := s.hypervisor.GetThreadIDs(ctx)
+		if err != nil {
+			return err
+		}
+
+		// the size of the cgroup cpuset is always smaller than the vcpus passed to QEMU because of the default vcpu cannot be zero.
+		// so we only pin the vcpus up to the size of the cpuset.
+		for i, tid := range tids.vcpus {
+			if i < len(cpus) {
+				var cpuSet unix.CPUSet
+				cpuSet.Set(cpus[i])
+				if err := unix.SchedSetaffinity(tid, &cpuSet); err != nil {
+					return err
+				}
+			}
+		}
 	}
 
 	if s.overheadCgroup != nil {

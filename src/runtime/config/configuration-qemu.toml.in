@@ -79,6 +79,11 @@ cpu_features="@CPUFEATURES@"
 # > number of physical cores      --> will be set to the actual number of physical cores
 default_vcpus = 1
 
+# Specify whether enabling pinning kvm vcpu threads to L1 cpu cores.
+# If true, then each kvm vcpu thread is pinned to a cpu core if eligible.
+#
+# enable_vcpus_pinning = false
+
 # Default maximum number of vCPUs per SB/VM:
 # unspecified or == 0             --> will be set to the actual number of physical cores or to the maximum number
 #                                     of vCPUs supported by KVM if that number is exceeded

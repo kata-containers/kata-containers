@@ -229,6 +229,8 @@ const (
 
 	// EnableRootlessHypervisor is a sandbox annotation to enable rootless hypervisor (only supported in QEMU currently).
 	EnableRootlessHypervisor = kataAnnotHypervisorPrefix + "rootless"
+
+	EnableVCPUsPinning = kataAnnotHypervisorPrefix + "enable_vcpus_pinning"
 )
 
 // Runtime related annotations

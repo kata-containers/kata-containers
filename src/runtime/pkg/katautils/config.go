@@ -135,6 +135,7 @@ type hypervisor struct {
 	GuestSwap               bool     `toml:"enable_guest_swap"`
 	Rootless                bool     `toml:"rootless"`
 	DisableSeccomp          bool     `toml:"disable_seccomp"`
+	EnableVCPUsPinning      bool     `toml:"enable_vcpus_pinning"`
 }
 
 type runtime struct {
@@ -720,6 +721,7 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		ConfidentialGuest:       h.ConfidentialGuest,
 		GuestSwap:               h.GuestSwap,
 		Rootless:                h.Rootless,
+		EnableVCPUsPinning:      h.EnableVCPUsPinning,
 	}, nil
 }
 
