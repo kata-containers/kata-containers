@@ -10,8 +10,6 @@ import (
 	"io"
 	"net"
 	"net/http"
-	"os"
-	"path/filepath"
 	"time"
 
 	cdshim "github.com/containerd/containerd/runtime/v2/shim"
@@ -41,13 +39,6 @@ func getSandboxIDFromReq(r *http.Request) (string, error) {
 
 func getSandboxFS() string {
 	return shim.GetSandboxesStoragePath()
-}
-
-func checkSandboxFSExists(sandboxID string) bool {
-	sbsPath := filepath.Join(string(filepath.Separator), getSandboxFS(), sandboxID)
-	_, err := os.Stat(sbsPath)
-
-	return !os.IsNotExist(err)
 }
 
 // BuildShimClient builds and returns an http client for communicating with the provided sandbox

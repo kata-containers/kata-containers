@@ -73,8 +73,7 @@ async fn handle_trace_data<'a>(
 
         let payload_len: u64 = NetworkEndian::read_u64(&header);
 
-        let mut encoded_payload = Vec::with_capacity(payload_len as usize);
-        encoded_payload.resize(payload_len as usize, 0);
+        let mut encoded_payload = vec![0; payload_len as usize];
 
         reader
             .read_exact(&mut encoded_payload)

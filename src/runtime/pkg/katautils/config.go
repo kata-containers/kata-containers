@@ -426,7 +426,7 @@ func (h hypervisor) sharedFS() (string, error) {
 	supportedSharedFS := []string{config.Virtio9P, config.VirtioFS, config.VirtioFSNydus}
 
 	if h.SharedFS == "" {
-		return config.Virtio9P, nil
+		return config.VirtioFS, nil
 	}
 
 	for _, fs := range supportedSharedFS {
@@ -644,14 +644,9 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		return vc.HypervisorConfig{}, err
 	}
 
-	if sharedFS == config.VirtioFS && h.VirtioFSDaemon == "" {
+	if (sharedFS == config.VirtioFS || sharedFS == config.VirtioFSNydus) && h.VirtioFSDaemon == "" {
 		return vc.HypervisorConfig{},
-			errors.New("cannot enable virtio-fs without daemon path in configuration file")
-	}
-
-	if sharedFS == config.VirtioFSNydus && h.VirtioFSDaemon == "" {
-		return vc.HypervisorConfig{},
-			errors.New("cannot enable virtio nydus without nydusd daemon path in configuration file")
+			fmt.Errorf("cannot enable %s without daemon path in configuration file", sharedFS)
 	}
 
 	if vSock, err := utils.SupportsVsocks(); !vSock {
@@ -822,11 +817,18 @@ func newClhHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		return vc.HypervisorConfig{}, err
 	}
 
-	sharedFS := config.VirtioFS
+	sharedFS, err := h.sharedFS()
+	if err != nil {
+		return vc.HypervisorConfig{}, err
+	}
+
+	if sharedFS != config.VirtioFS && sharedFS != config.VirtioFSNydus {
+		return vc.HypervisorConfig{}, errors.New("clh only support virtio-fs or virtio-fs-nydus")
+	}
 
 	if h.VirtioFSDaemon == "" {
 		return vc.HypervisorConfig{},
-			errors.New("virtio-fs daemon path is missing in configuration file")
+			fmt.Errorf("cannot enable %s without daemon path in configuration file", sharedFS)
 	}
 
 	return vc.HypervisorConfig{

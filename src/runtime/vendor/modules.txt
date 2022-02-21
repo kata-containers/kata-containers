@@ -132,6 +132,7 @@ github.com/davecgh/go-spew/spew
 # github.com/docker/go-events v0.0.0-20190806004212-e31b211e4f1c
 github.com/docker/go-events
 # github.com/docker/go-units v0.4.0
+## explicit
 github.com/docker/go-units
 # github.com/fsnotify/fsnotify v1.4.9
 ## explicit
@@ -215,7 +216,9 @@ github.com/mailru/easyjson/jlexer
 github.com/mailru/easyjson/jwriter
 # github.com/matttproud/golang_protobuf_extensions v1.0.2-0.20181231171920-c182affec369
 github.com/matttproud/golang_protobuf_extensions/pbutil
-# github.com/mdlayher/vsock v0.0.0-20191108225356-d9c65923cb8f
+# github.com/mdlayher/socket v0.2.0
+github.com/mdlayher/socket
+# github.com/mdlayher/vsock v1.1.0
 ## explicit
 github.com/mdlayher/vsock
 # github.com/mitchellh/mapstructure v1.1.2
@@ -332,8 +335,9 @@ go.opentelemetry.io/otel/sdk/trace
 # go.opentelemetry.io/otel/trace v1.3.0
 ## explicit
 go.opentelemetry.io/otel/trace
-# golang.org/x/net v0.0.0-20211216030914-fe4d6282115f
+# golang.org/x/net v0.0.0-20220127200216-cd36cc0744dd
 ## explicit
+golang.org/x/net/bpf
 golang.org/x/net/context
 golang.org/x/net/context/ctxhttp
 golang.org/x/net/http/httpguts
@@ -348,7 +352,7 @@ golang.org/x/oauth2
 golang.org/x/oauth2/internal
 # golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
 golang.org/x/sync/errgroup
-# golang.org/x/sys v0.0.0-20211216021012-1d35b9e2eb4e
+# golang.org/x/sys v0.0.0-20220204135822-1c1b9b1eba6a
 ## explicit
 golang.org/x/sys/execabs
 golang.org/x/sys/internal/unsafeheader

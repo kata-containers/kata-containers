@@ -17,8 +17,10 @@ import (
 // BalloonConfig struct for BalloonConfig
 type BalloonConfig struct {
 	Size int64 `json:"size"`
-	// Whether the balloon should deflate when the guest is under memory pressure.
+	// Deflate balloon when the guest is under memory pressure.
 	DeflateOnOom *bool `json:"deflate_on_oom,omitempty"`
+	// Enable guest to report free pages.
+	FreePageReporting *bool `json:"free_page_reporting,omitempty"`
 }
 
 // NewBalloonConfig instantiates a new BalloonConfig object
@@ -30,6 +32,8 @@ func NewBalloonConfig(size int64) *BalloonConfig {
 	this.Size = size
 	var deflateOnOom bool = false
 	this.DeflateOnOom = &deflateOnOom
+	var freePageReporting bool = false
+	this.FreePageReporting = &freePageReporting
 	return &this
 }
 
@@ -40,6 +44,8 @@ func NewBalloonConfigWithDefaults() *BalloonConfig {
 	this := BalloonConfig{}
 	var deflateOnOom bool = false
 	this.DeflateOnOom = &deflateOnOom
+	var freePageReporting bool = false
+	this.FreePageReporting = &freePageReporting
 	return &this
 }
 
@@ -99,6 +105,38 @@ func (o *BalloonConfig) SetDeflateOnOom(v bool) {
 	o.DeflateOnOom = &v
 }
 
+// GetFreePageReporting returns the FreePageReporting field value if set, zero value otherwise.
+func (o *BalloonConfig) GetFreePageReporting() bool {
+	if o == nil || o.FreePageReporting == nil {
+		var ret bool
+		return ret
+	}
+	return *o.FreePageReporting
+}
+
+// GetFreePageReportingOk returns a tuple with the FreePageReporting field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *BalloonConfig) GetFreePageReportingOk() (*bool, bool) {
+	if o == nil || o.FreePageReporting == nil {
+		return nil, false
+	}
+	return o.FreePageReporting, true
+}
+
+// HasFreePageReporting returns a boolean if a field has been set.
+func (o *BalloonConfig) HasFreePageReporting() bool {
+	if o != nil && o.FreePageReporting != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetFreePageReporting gets a reference to the given bool and assigns it to the FreePageReporting field.
+func (o *BalloonConfig) SetFreePageReporting(v bool) {
+	o.FreePageReporting = &v
+}
+
 func (o BalloonConfig) MarshalJSON() ([]byte, error) {
 	toSerialize := map[string]interface{}{}
 	if true {
@@ -106,6 +144,9 @@ func (o BalloonConfig) MarshalJSON() ([]byte, error) {
 	}
 	if o.DeflateOnOom != nil {
 		toSerialize["deflate_on_oom"] = o.DeflateOnOom
+	}
+	if o.FreePageReporting != nil {
+		toSerialize["free_page_reporting"] = o.FreePageReporting
 	}
 	return json.Marshal(toSerialize)
 }

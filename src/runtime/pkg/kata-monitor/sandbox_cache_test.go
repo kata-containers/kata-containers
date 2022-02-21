@@ -16,31 +16,26 @@ func TestSandboxCache(t *testing.T) {
 	assert := assert.New(t)
 	sc := &sandboxCache{
 		Mutex:     &sync.Mutex{},
-		sandboxes: make(map[string]bool),
+		sandboxes: map[string]sandboxKubeData{"111": {"1-2-3", "test-name", "test-namespace"}},
 	}
 
-	scMap := map[string]bool{"111": true}
-
-	sc.set(scMap)
-
-	scMap = sc.getAllSandboxes()
-	assert.Equal(1, len(scMap))
+	assert.Equal(1, len(sc.getSandboxList()))
 
 	// put new item
 	id := "new-id"
-	b := sc.putIfNotExists(id, true)
+	b := sc.putIfNotExists(id, sandboxKubeData{})
 	assert.Equal(true, b)
-	assert.Equal(2, len(scMap))
+	assert.Equal(2, len(sc.getSandboxList()))
 
 	// put key that alreay exists
-	b = sc.putIfNotExists(id, true)
+	b = sc.putIfNotExists(id, sandboxKubeData{})
 	assert.Equal(false, b)
 
 	b = sc.deleteIfExists(id)
 	assert.Equal(true, b)
-	assert.Equal(1, len(scMap))
+	assert.Equal(1, len(sc.getSandboxList()))
 
 	b = sc.deleteIfExists(id)
 	assert.Equal(false, b)
-	assert.Equal(1, len(scMap))
+	assert.Equal(1, len(sc.getSandboxList()))
 }

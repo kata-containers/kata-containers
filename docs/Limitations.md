@@ -57,6 +57,13 @@ for advice on which repository to raise the issue against.
 
 This section lists items that might be possible to fix.
 
+## OCI CLI commands
+
+### Docker and Podman support
+Currently Kata Containers does not support Docker or Podman.
+
+See issue https://github.com/kata-containers/kata-containers/issues/722 for more information.
+
 ## Runtime commands
 
 ### checkpoint and restore
@@ -97,56 +104,11 @@ See issue https://github.com/clearcontainers/runtime/issues/341 and [the constra
 For CPUs resource management see
 [CPU constraints](design/vcpu-handling.md).
 
-### docker run and shared memory
-
-The runtime does not implement the `docker run --shm-size` command to
-set the size of the `/dev/shm tmpfs` within the container. It is possible to pass this configuration value into the VM container so the appropriate mount command happens at launch time.
-
-See issue https://github.com/kata-containers/kata-containers/issues/21 for more information.
-
 # Architectural limitations
 
 This section lists items that might not be fixed due to fundamental
 architectural differences between "soft containers" (i.e. traditional Linux*
 containers) and those based on VMs.
-
-## Networking limitations
-
-### Support for joining an existing VM network
-
-Docker supports the ability for containers to join another containers
-namespace with the `docker run --net=containers` syntax. This allows
-multiple containers to share a common network namespace and the network
-interfaces placed in the network namespace.  Kata Containers does not
-support network namespace sharing. If a Kata Container is setup to
-share the network namespace of a `runc` container, the runtime
-effectively takes over all the network interfaces assigned to the
-namespace and binds them to the VM. Consequently, the `runc` container loses
-its network connectivity.
-
-### docker --net=host
-
-Docker host network support (`docker --net=host run`) is not supported.
-It is not possible to directly access the host networking configuration
-from within the VM.
-
-The `--net=host` option can still be used with `runc` containers and
-inter-mixed with running Kata Containers, thus enabling use of `--net=host`
-when necessary.
-
-It should be noted, currently passing the `--net=host` option into a
-Kata Container may result in the Kata Container networking setup
-modifying, re-configuring and therefore possibly breaking the host
-networking setup. Do not use `--net=host` with Kata Containers.
-
-### docker run --link
-
-The runtime does not support the `docker run --link` command. This
-command is now deprecated by docker and we have no intention of adding support.
-Equivalent functionality can be achieved with the newer docker networking commands.
-
-See more documentation at
-[docs.docker.com](https://docs.docker.com/engine/userguide/networking/default_network/dockerlinks/).
 
 ## Storage limitations
 
@@ -158,15 +120,11 @@ moment.
 See [this issue](https://github.com/kata-containers/runtime/issues/2812) for more details.
 [Another issue](https://github.com/kata-containers/kata-containers/issues/1728) focuses on the case of `emptyDir`.
 
-
 ## Host resource sharing
 
-### docker run --privileged
+### Privileged containers
 
 Privileged support in Kata is essentially different from `runc` containers.
-Kata does support `docker run --privileged` command, but in this case full access
-to the guest VM is provided in addition to some host access.
-
 The container runs with elevated capabilities within the guest and is granted
 access to guest devices instead of the host devices.
 This is also true with using `securityContext privileged=true` with Kubernetes.
@@ -176,17 +134,6 @@ The container may also be granted full access to a subset of host devices
 
 See [Privileged Kata Containers](how-to/privileged.md) for how to configure some of this behavior.
 
-# Miscellaneous
-
-This section lists limitations where the possible solutions are uncertain.
-
-## Docker --security-opt option partially supported
-
-The `--security-opt=` option used by Docker is partially supported.
-We only support `--security-opt=no-new-privileges` and `--security-opt seccomp=/path/to/seccomp/profile.json`
-option as of today.
-
-Note: The `--security-opt apparmor=your_profile` is not yet supported. See https://github.com/kata-containers/runtime/issues/707.
 # Appendices
 
 ## The constraints challenge

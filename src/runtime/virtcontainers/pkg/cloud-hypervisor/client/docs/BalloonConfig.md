@@ -5,7 +5,8 @@
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
 **Size** | **int64** |  | 
-**DeflateOnOom** | Pointer to **bool** | Whether the balloon should deflate when the guest is under memory pressure. | [optional] [default to false]
+**DeflateOnOom** | Pointer to **bool** | Deflate balloon when the guest is under memory pressure. | [optional] [default to false]
+**FreePageReporting** | Pointer to **bool** | Enable guest to report free pages. | [optional] [default to false]
 
 ## Methods
 
@@ -70,6 +71,31 @@ SetDeflateOnOom sets DeflateOnOom field to given value.
 `func (o *BalloonConfig) HasDeflateOnOom() bool`
 
 HasDeflateOnOom returns a boolean if a field has been set.
+
+### GetFreePageReporting
+
+`func (o *BalloonConfig) GetFreePageReporting() bool`
+
+GetFreePageReporting returns the FreePageReporting field if non-nil, zero value otherwise.
+
+### GetFreePageReportingOk
+
+`func (o *BalloonConfig) GetFreePageReportingOk() (*bool, bool)`
+
+GetFreePageReportingOk returns a tuple with the FreePageReporting field if it's non-nil, zero value otherwise
+and a boolean to check if the value has been set.
+
+### SetFreePageReporting
+
+`func (o *BalloonConfig) SetFreePageReporting(v bool)`
+
+SetFreePageReporting sets FreePageReporting field to given value.
+
+### HasFreePageReporting
+
+`func (o *BalloonConfig) HasFreePageReporting() bool`
+
+HasFreePageReporting returns a boolean if a field has been set.
 
 
 [[Back to Model list]](../README.md#documentation-for-models) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to README]](../README.md)

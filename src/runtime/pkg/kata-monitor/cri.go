@@ -40,7 +40,6 @@ func getAddressAndDialer(endpoint string) (string, func(ctx context.Context, add
 
 func getConnection(endPoint string) (*grpc.ClientConn, error) {
 	var conn *grpc.ClientConn
-	monitorLog.Debugf("connect using endpoint '%s' with '%s' timeout", endPoint, defaultTimeout)
 	addr, dialer, err := getAddressAndDialer(endPoint)
 	if err != nil {
 		return nil, err
@@ -52,7 +51,7 @@ func getConnection(endPoint string) (*grpc.ClientConn, error) {
 		errMsg := errors.Wrapf(err, "connect endpoint '%s', make sure you are running as root and the endpoint has been started", endPoint)
 		return nil, errMsg
 	}
-	monitorLog.Debugf("connected successfully using endpoint: %s", endPoint)
+	monitorLog.Tracef("connected successfully using endpoint: %s", endPoint)
 	return conn, nil
 }
 
@@ -115,15 +114,15 @@ func parseEndpoint(endpoint string) (string, string, error) {
 	}
 }
 
-// getSandboxes gets ready sandboxes from the container engine and returns an updated sandboxMap
-func (km *KataMonitor) getSandboxes(sandboxMap map[string]bool) (map[string]bool, error) {
-	newMap := make(map[string]bool)
+// syncSandboxes gets pods metadata from the container manager and updates the sandbox cache.
+func (km *KataMonitor) syncSandboxes(sandboxList []string) ([]string, error) {
 	runtimeClient, runtimeConn, err := getRuntimeClient(km.runtimeEndpoint)
 	if err != nil {
-		return newMap, err
+		return sandboxList, err
 	}
 	defer closeConnection(runtimeConn)
 
+	// TODO: if len(sandboxList) is 1, better we just runtimeClient.PodSandboxStatus(...) targeting the single sandbox
 	filter := &pb.PodSandboxFilter{
 		State: &pb.PodSandboxStateValue{
 			State: pb.PodSandboxState_SANDBOX_READY,
@@ -133,29 +132,35 @@ func (km *KataMonitor) getSandboxes(sandboxMap map[string]bool) (map[string]bool
 	request := &pb.ListPodSandboxRequest{
 		Filter: filter,
 	}
-	monitorLog.Debugf("ListPodSandboxRequest: %v", request)
+	monitorLog.Tracef("ListPodSandboxRequest: %v", request)
 	r, err := runtimeClient.ListPodSandbox(context.Background(), request)
 	if err != nil {
-		return newMap, err
+		return sandboxList, err
 	}
-	monitorLog.Debugf("ListPodSandboxResponse: %v", r)
+	monitorLog.Tracef("ListPodSandboxResponse: %v", r)
 
 	for _, pod := range r.Items {
-		// Use the cached data if available
-		if isKata, ok := sandboxMap[pod.Id]; ok {
-			newMap[pod.Id] = isKata
-			continue
+		for _, sandbox := range sandboxList {
+			if pod.Id == sandbox {
+				km.sandboxCache.setMetadata(sandbox, sandboxKubeData{
+					uid:       pod.Metadata.Uid,
+					name:      pod.Metadata.Name,
+					namespace: pod.Metadata.Namespace,
+				})
+
+				sandboxList = removeFromSandboxList(sandboxList, sandbox)
+
+				monitorLog.WithFields(logrus.Fields{
+					"Pod Name":      pod.Metadata.Name,
+					"Pod Namespace": pod.Metadata.Namespace,
+					"Pod UID":       pod.Metadata.Uid,
+				}).Debugf("Synced KATA POD %s", pod.Id)
+
+				break
+			}
 		}
-
-		// Check if a directory associated with the POD ID exist on the kata fs:
-		// if so we know that the POD is a kata one.
-		newMap[pod.Id] = checkSandboxFSExists(pod.Id)
-		monitorLog.WithFields(logrus.Fields{
-			"id":      pod.Id,
-			"is kata": newMap[pod.Id],
-			"pod":     pod,
-		}).Debug("")
 	}
-
-	return newMap, nil
+	// TODO: here we should mark the sandboxes we failed to retrieve info from: we should try a finite number of times
+	// to retrieve their metadata: if we fail resign and remove them from the sanbox cache (with a Warning log).
+	return sandboxList, nil
 }
