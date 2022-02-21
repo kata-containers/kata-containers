@@ -17,7 +17,6 @@ import (
 	eventstypes "github.com/containerd/containerd/api/events"
 	"github.com/containerd/containerd/api/types/task"
 	"github.com/containerd/containerd/errdefs"
-	"github.com/containerd/containerd/events"
 	"github.com/containerd/containerd/namespaces"
 	cdruntime "github.com/containerd/containerd/runtime"
 	cdshim "github.com/containerd/containerd/runtime/v2/shim"
@@ -51,10 +50,6 @@ const (
 
 	chSize      = 128
 	exitCode255 = 255
-
-	// A time span used to wait for publish a containerd event,
-	// once it costs a longer time than timeOut, it will be canceld.
-	timeOut = 5 * time.Second
 )
 
 var (
@@ -100,7 +95,8 @@ func New(ctx context.Context, id string, publisher cdshim.Publisher, shutdown fu
 
 	go s.processExits()
 
-	go s.forward(ctx, publisher)
+	forwarder := s.newEventsForwarder(ctx, publisher)
+	go forwarder.forward()
 
 	return s, nil
 }
@@ -254,17 +250,6 @@ func (s *service) StartShim(ctx context.Context, opts cdshim.StartOpts) (_ strin
 		return "", err
 	}
 	return address, nil
-}
-
-func (s *service) forward(ctx context.Context, publisher events.Publisher) {
-	for e := range s.events {
-		ctx, cancel := context.WithTimeout(ctx, timeOut)
-		err := publisher.Publish(ctx, getTopic(e), e)
-		cancel()
-		if err != nil {
-			shimLog.WithError(err).Error("post event")
-		}
-	}
 }
 
 func (s *service) send(evt interface{}) {
