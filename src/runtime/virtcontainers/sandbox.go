@@ -148,6 +148,9 @@ type SandboxConfig struct {
 	// StaticResourceMgmt indicates if the shim should rely on statically sizing the sandbox (VM)
 	StaticResourceMgmt bool
 
+	// Offload the CRI image management service to the Kata agent.
+	ServiceOffload bool
+
 	ShmSize uint64
 
 	VfioMode config.VFIOModeType
@@ -162,9 +165,6 @@ type SandboxConfig struct {
 	SandboxCgroupOnly bool
 
 	DisableGuestSeccomp bool
-
-	// Offload the CRI image management service to the Kata agent.
-	ServiceOffload bool
 }
 
 // valid checks that the sandbox configuration is valid.
