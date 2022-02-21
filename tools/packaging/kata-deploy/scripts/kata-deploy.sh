@@ -19,6 +19,8 @@ shims=(
 	"clh"
 )
 
+default_shim="qemu"
+
 # If we fail for any reason a message will be displayed
 die() {
         msg="$*"
@@ -97,6 +99,11 @@ function configure_different_shims_base() {
 KATA_CONF_FILE=/opt/kata/share/defaults/kata-containers/configuration-${shim}.toml /opt/kata/bin/containerd-shim-kata-v2 "\$@"
 EOT
 		chmod +x "$shim_file"
+
+		if [ "${shim}" == "${default_shim}" ]; then
+			echo "Creating the default shim-v2 binary"
+			ln -sf "${shim_file}" /usr/local/bin/containerd-shim-kata-v2
+		fi
 	done
 }
 
@@ -112,6 +119,8 @@ function cleanup_different_shims_base() {
 			mv "$shim_backup" "$shim_file"
 		fi
 	done
+
+	rm /usr/local/bin/containerd-shim-kata-v2
 }
 
 function configure_crio_runtime() {
