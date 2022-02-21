@@ -698,6 +698,7 @@ pub fn client(cfg: &Config, commands: Vec<&str>) -> Result<()> {
 }
 
 // Handle internal and agent API commands.
+#[allow(clippy::too_many_arguments)]
 fn handle_cmd(
     cfg: &Config,
     client: &AgentServiceClient,
