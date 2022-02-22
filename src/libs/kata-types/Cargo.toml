@@ -22,7 +22,7 @@ serde_json = "1.0.73"
 thiserror = "1.0"
 toml = "0.5.8"
 
-oci = { path = "../../agent/oci" }
+oci = { path = "../oci" }
 
 [dev-dependencies]
 
