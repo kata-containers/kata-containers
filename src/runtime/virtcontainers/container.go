@@ -354,6 +354,7 @@ func (c *Container) Logger() *logrus.Entry {
 	return virtLog.WithFields(logrus.Fields{
 		"subsystem": "container",
 		"sandbox":   c.sandboxID,
+		"container": c.id,
 	})
 }
 
