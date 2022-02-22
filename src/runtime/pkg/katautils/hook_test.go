@@ -57,26 +57,27 @@ func TestRunHook(t *testing.T) {
 	assert := assert.New(t)
 
 	ctx := context.Background()
+	spec := specs.Spec{}
 
 	// Run with timeout 0
 	hook := createHook(0)
-	err := runHook(ctx, hook, testSandboxID, testBundlePath)
+	err := runHook(ctx, spec, hook, testSandboxID, testBundlePath)
 	assert.NoError(err)
 
 	// Run with timeout 1
 	hook = createHook(1)
-	err = runHook(ctx, hook, testSandboxID, testBundlePath)
+	err = runHook(ctx, spec, hook, testSandboxID, testBundlePath)
 	assert.NoError(err)
 
 	// Run timeout failure
 	hook = createHook(1)
 	hook.Args = append(hook.Args, "2")
-	err = runHook(ctx, hook, testSandboxID, testBundlePath)
+	err = runHook(ctx, spec, hook, testSandboxID, testBundlePath)
 	assert.Error(err)
 
 	// Failure due to wrong hook
 	hook = createWrongHook()
-	err = runHook(ctx, hook, testSandboxID, testBundlePath)
+	err = runHook(ctx, spec, hook, testSandboxID, testBundlePath)
 	assert.Error(err)
 }
 

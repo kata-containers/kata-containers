@@ -155,11 +155,19 @@ func CreateSandbox(ctx context.Context, vci vc.VC, ociSpec specs.Spec, runtimeCo
 		}
 	}()
 
-	// Run pre-start OCI hooks.
-	err = EnterNetNS(sandboxConfig.NetworkConfig.NetworkID, func() error {
-		return PreStartHooks(ctx, ociSpec, containerID, bundlePath)
-	})
-	if err != nil {
+	if ociSpec.Annotations == nil {
+		ociSpec.Annotations = make(map[string]string)
+	}
+	ociSpec.Annotations["nerdctl/network-namespace"] = sandboxConfig.NetworkConfig.NetworkID
+	sandboxConfig.Annotations["nerdctl/network-namespace"] = ociSpec.Annotations["nerdctl/network-namespace"]
+
+	// Run pre-start OCI hooks, in the runtime namespace.
+	if err := PreStartHooks(ctx, ociSpec, containerID, bundlePath); err != nil {
+		return nil, vc.Process{}, err
+	}
+
+	// Run create runtime OCI hooks, in the runtime namespace.
+	if err := CreateRuntimeHooks(ctx, ociSpec, containerID, bundlePath); err != nil {
 		return nil, vc.Process{}, err
 	}
 
