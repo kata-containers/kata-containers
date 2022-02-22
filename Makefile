@@ -9,6 +9,7 @@ COMPONENTS =
 COMPONENTS += libs
 COMPONENTS += agent
 COMPONENTS += runtime
+COMPONENTS += runtime-rs
 
 # List of available tools
 TOOLS =
