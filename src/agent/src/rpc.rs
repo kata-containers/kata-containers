@@ -34,6 +34,7 @@ use protocols::health::{
     HealthCheckResponse, HealthCheckResponse_ServingStatus, VersionCheckResponse,
 };
 use protocols::types::Interface;
+use protocols::{agent_ttrpc_async as agent_ttrpc, health_ttrpc_async as health_ttrpc};
 use rustjail::cgroups::notifier;
 use rustjail::container::{BaseContainer, Container, LinuxContainer};
 use rustjail::process::Process;
@@ -650,7 +651,7 @@ impl AgentService {
 }
 
 #[async_trait]
-impl protocols::agent_ttrpc::AgentService for AgentService {
+impl agent_ttrpc::AgentService for AgentService {
     async fn create_container(
         &self,
         ctx: &TtrpcContext,
@@ -1536,7 +1537,7 @@ impl protocols::agent_ttrpc::AgentService for AgentService {
 struct HealthService;
 
 #[async_trait]
-impl protocols::health_ttrpc::Health for HealthService {
+impl health_ttrpc::Health for HealthService {
     async fn check(
         &self,
         _ctx: &TtrpcContext,
@@ -1675,18 +1676,17 @@ async fn read_stream(reader: Arc<Mutex<ReadHalf<PipeStream>>>, l: usize) -> Resu
 }
 
 pub fn start(s: Arc<Mutex<Sandbox>>, server_address: &str) -> Result<TtrpcServer> {
-    let agent_service = Box::new(AgentService { sandbox: s })
-        as Box<dyn protocols::agent_ttrpc::AgentService + Send + Sync>;
+    let agent_service =
+        Box::new(AgentService { sandbox: s }) as Box<dyn agent_ttrpc::AgentService + Send + Sync>;
 
     let agent_worker = Arc::new(agent_service);
 
-    let health_service =
-        Box::new(HealthService {}) as Box<dyn protocols::health_ttrpc::Health + Send + Sync>;
+    let health_service = Box::new(HealthService {}) as Box<dyn health_ttrpc::Health + Send + Sync>;
     let health_worker = Arc::new(health_service);
 
-    let aservice = protocols::agent_ttrpc::create_agent_service(agent_worker);
+    let aservice = agent_ttrpc::create_agent_service(agent_worker);
 
-    let hservice = protocols::health_ttrpc::create_health(health_worker);
+    let hservice = health_ttrpc::create_health(health_worker);
 
     let server = TtrpcServer::new()
         .bind(server_address)?
@@ -2021,7 +2021,7 @@ fn load_kernel_module(module: &protocols::agent::KernelModule) -> Result<()> {
 mod tests {
     use super::*;
     use crate::{
-        assert_result, namespace::Namespace, protocols::agent_ttrpc::AgentService as _,
+        assert_result, namespace::Namespace, protocols::agent_ttrpc_async::AgentService as _,
         skip_if_not_root,
     };
     use nix::mount;

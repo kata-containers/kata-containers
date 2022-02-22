@@ -561,7 +561,7 @@ fn create_ttrpc_client(
         }
     };
 
-    Ok(ttrpc::client::Client::new(fd))
+    Ok(ttrpc::Client::new(fd))
 }
 
 fn kata_service_agent(
