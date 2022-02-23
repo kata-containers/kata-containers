@@ -8,7 +8,7 @@
 #
 set -e
 
-source "${BATS_TEST_DIRNAME}/../../lib/common.bash"
+source "${BATS_TEST_DIRNAME}/../../../lib/common.bash"
 FIXTURES_DIR="${BATS_TEST_DIRNAME}/fixtures"
 
 # Delete the containers alongside the Pod.

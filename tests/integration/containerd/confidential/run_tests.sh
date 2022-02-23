@@ -8,7 +8,7 @@
 set -e
 
 script_dir=$(dirname "$(readlink -f "$0")")
-cidir="${script_dir}/../../.ci"
+cidir="${script_dir}/../../../.ci"
 source "${cidir}/lib.sh"
 
 main() {
