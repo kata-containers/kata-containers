@@ -104,6 +104,10 @@ func (km *KataMonitor) startPodCacheUpdater() {
 		monitorLog.WithError(err).Fatal("cannot read sandboxes fs")
 		os.Exit(1)
 	}
+	for _, sandbox := range sandboxList {
+		km.sandboxCache.putIfNotExists(sandbox, sandboxKubeData{})
+	}
+
 	monitorLog.Debug("initial sync of sbs directory completed")
 	monitorLog.Tracef("pod list from sbs: %v", sandboxList)
 
