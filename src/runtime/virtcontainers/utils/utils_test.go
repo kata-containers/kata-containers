@@ -297,9 +297,9 @@ func TestBuildSocketPath(t *testing.T) {
 		msg := fmt.Sprintf("test[%d]: %+v", i, d)
 
 		if d.valid {
-			assert.NoErrorf(err, "test %d, data %+v", i, d, msg)
+			assert.NoError(err, msg)
 		} else {
-			assert.Errorf(err, "test %d, data %+v", i, d, msg)
+			assert.Error(err, msg)
 		}
 
 		assert.NotNil(result, msg)

@@ -53,7 +53,7 @@ func NewKataMonitor(runtimeEndpoint string) (*KataMonitor, error) {
 		runtimeEndpoint: runtimeEndpoint,
 		sandboxCache: &sandboxCache{
 			Mutex:     &sync.Mutex{},
-			sandboxes: make(map[string]bool),
+			sandboxes: make(map[string]sandboxKubeData),
 		},
 	}
 
@@ -63,6 +63,15 @@ func NewKataMonitor(runtimeEndpoint string) (*KataMonitor, error) {
 	go km.startPodCacheUpdater()
 
 	return km, nil
+}
+
+func removeFromSandboxList(sandboxList []string, sandboxToRemove string) []string {
+	for i, sandbox := range sandboxList {
+		if sandbox == sandboxToRemove {
+			return append(sandboxList[:i], sandboxList[i+1:]...)
+		}
+	}
+	return sandboxList
 }
 
 // startPodCacheUpdater will boot a thread to manage sandbox cache
@@ -84,9 +93,24 @@ func (km *KataMonitor) startPodCacheUpdater() {
 		monitorLog.Debugf("started fs monitoring @%s", getSandboxFS())
 		break
 	}
-	// we refresh the pod cache once if we get multiple add/delete pod events in a short time (< podCacheRefreshDelaySeconds)
+	// Initial sync with the kata sandboxes already running
+	sbsFile, err := os.Open(getSandboxFS())
+	if err != nil {
+		monitorLog.WithError(err).Fatal("cannot open sandboxes fs")
+		os.Exit(1)
+	}
+	sandboxList, err := sbsFile.Readdirnames(0)
+	if err != nil {
+		monitorLog.WithError(err).Fatal("cannot read sandboxes fs")
+		os.Exit(1)
+	}
+	monitorLog.Debug("initial sync of sbs directory completed")
+	monitorLog.Tracef("pod list from sbs: %v", sandboxList)
+
+	// We should get kubernetes metadata from the container manager for each new kata sandbox we detect.
+	// It may take a while for data to be available, so we always wait podCacheRefreshDelaySeconds before checking.
 	cacheUpdateTimer := time.NewTimer(podCacheRefreshDelaySeconds * time.Second)
-	cacheUpdateTimerWasSet := false
+	cacheUpdateTimerIsSet := true
 	for {
 		select {
 		case event, ok := <-sbsWatcher.Events:
@@ -99,11 +123,18 @@ func (km *KataMonitor) startPodCacheUpdater() {
 			case fsnotify.Create:
 				splitPath := strings.Split(event.Name, string(os.PathSeparator))
 				id := splitPath[len(splitPath)-1]
-				if !km.sandboxCache.putIfNotExists(id, true) {
+				if !km.sandboxCache.putIfNotExists(id, sandboxKubeData{}) {
 					monitorLog.WithField("pod", id).Warn(
 						"CREATE event but pod already present in the sandbox cache")
 				}
+				sandboxList = append(sandboxList, id)
 				monitorLog.WithField("pod", id).Info("sandbox cache: added pod")
+				if !cacheUpdateTimerIsSet {
+					cacheUpdateTimer.Reset(podCacheRefreshDelaySeconds * time.Second)
+					cacheUpdateTimerIsSet = true
+					monitorLog.Debugf(
+						"cache update timer fires in %d secs", podCacheRefreshDelaySeconds)
+				}
 
 			case fsnotify.Remove:
 				splitPath := strings.Split(event.Name, string(os.PathSeparator))
@@ -112,28 +143,27 @@ func (km *KataMonitor) startPodCacheUpdater() {
 					monitorLog.WithField("pod", id).Warn(
 						"REMOVE event but pod was missing from the sandbox cache")
 				}
+				sandboxList = removeFromSandboxList(sandboxList, id)
 				monitorLog.WithField("pod", id).Info("sandbox cache: removed pod")
-
-			default:
-				monitorLog.WithField("event", event).Warn("got unexpected fs event")
 			}
-
-			// While we process fs events directly to update the sandbox cache we need to sync with the
-			// container engine to ensure we are on sync with it: we can get out of sync in environments
-			// where kata workloads can be started by other processes than the container engine.
-			cacheUpdateTimerWasSet = cacheUpdateTimer.Reset(podCacheRefreshDelaySeconds * time.Second)
-			monitorLog.WithField("was reset", cacheUpdateTimerWasSet).Debugf(
-				"cache update timer fires in %d secs", podCacheRefreshDelaySeconds)
 
 		case <-cacheUpdateTimer.C:
-			sandboxes, err := km.getSandboxes(km.sandboxCache.getAllSandboxes())
+			cacheUpdateTimerIsSet = false
+			monitorLog.WithField("pod list", sandboxList).Debugf(
+				"retrieve pods metadata from the container manager")
+			sandboxList, err = km.syncSandboxes(sandboxList)
 			if err != nil {
-				monitorLog.WithError(err).Error("failed to get sandboxes")
+				monitorLog.WithError(err).Error("failed to get sandboxes metadata")
 				continue
 			}
-			monitorLog.WithField("count", len(sandboxes)).Info("synced sandbox cache with the container engine")
-			monitorLog.WithField("sandboxes", sandboxes).Debug("dump sandbox cache")
-			km.sandboxCache.set(sandboxes)
+			if len(sandboxList) > 0 {
+				monitorLog.WithField("sandboxes", sandboxList).Debugf(
+					"%d sandboxes still miss metadata", len(sandboxList))
+				cacheUpdateTimer.Reset(podCacheRefreshDelaySeconds * time.Second)
+				cacheUpdateTimerIsSet = true
+			}
+
+			monitorLog.WithField("sandboxes", km.sandboxCache.getSandboxList()).Trace("dump sandbox cache")
 		}
 	}
 }
@@ -157,7 +187,7 @@ func (km *KataMonitor) GetAgentURL(w http.ResponseWriter, r *http.Request) {
 
 // ListSandboxes list all sandboxes running in Kata
 func (km *KataMonitor) ListSandboxes(w http.ResponseWriter, r *http.Request) {
-	sandboxes := km.sandboxCache.getKataSandboxes()
+	sandboxes := km.sandboxCache.getSandboxList()
 	for _, s := range sandboxes {
 		w.Write([]byte(fmt.Sprintf("%s\n", s)))
 	}

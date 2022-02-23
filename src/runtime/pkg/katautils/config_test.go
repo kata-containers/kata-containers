@@ -633,6 +633,8 @@ func TestNewQemuHypervisorConfig(t *testing.T) {
 		PCIeRootPort:          pcieRootPort,
 		RxRateLimiterMaxRate:  rxRateLimiterMaxRate,
 		TxRateLimiterMaxRate:  txRateLimiterMaxRate,
+		SharedFS:              "virtio-fs",
+		VirtioFSDaemon:        filepath.Join(dir, "virtiofsd"),
 	}
 
 	files := []string{hypervisorPath, kernelPath, imagePath}
@@ -1388,6 +1390,8 @@ func TestUpdateRuntimeConfigurationVMConfig(t *testing.T) {
 				Image:          "/",
 				Firmware:       "/",
 				FirmwareVolume: "/",
+				SharedFS:       "virtio-fs",
+				VirtioFSDaemon: "/usr/libexec/kata-qemu/virtiofsd",
 			},
 		},
 	}

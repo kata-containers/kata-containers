@@ -148,6 +148,9 @@ type SandboxConfig struct {
 	// StaticResourceMgmt indicates if the shim should rely on statically sizing the sandbox (VM)
 	StaticResourceMgmt bool
 
+	// Offload the CRI image management service to the Kata agent.
+	ServiceOffload bool
+
 	ShmSize uint64
 
 	VfioMode config.VFIOModeType
@@ -162,9 +165,6 @@ type SandboxConfig struct {
 	SandboxCgroupOnly bool
 
 	DisableGuestSeccomp bool
-
-	// Offload the CRI image management service to the Kata agent.
-	ServiceOffload bool
 }
 
 // valid checks that the sandbox configuration is valid.
@@ -1946,11 +1946,13 @@ func (s *Sandbox) updateResources(ctx context.Context) error {
 	sandboxVCPUs += s.hypervisor.HypervisorConfig().NumVCPUs
 
 	sandboxMemoryByte, sandboxneedPodSwap, sandboxSwapByte := s.calculateSandboxMemory()
+
 	// Add default / rsvd memory for sandbox.
-	hypervisorMemoryByte := int64(s.hypervisor.HypervisorConfig().MemorySize) << utils.MibToBytesShift
+	hypervisorMemoryByteI64 := int64(s.hypervisor.HypervisorConfig().MemorySize) << utils.MibToBytesShift
+	hypervisorMemoryByte := uint64(hypervisorMemoryByteI64)
 	sandboxMemoryByte += hypervisorMemoryByte
 	if sandboxneedPodSwap {
-		sandboxSwapByte += hypervisorMemoryByte
+		sandboxSwapByte += hypervisorMemoryByteI64
 	}
 	s.Logger().WithField("sandboxMemoryByte", sandboxMemoryByte).WithField("sandboxneedPodSwap", sandboxneedPodSwap).WithField("sandboxSwapByte", sandboxSwapByte).Debugf("updateResources: after calculateSandboxMemory")
 
@@ -1982,7 +1984,8 @@ func (s *Sandbox) updateResources(ctx context.Context) error {
 
 	// Update Memory
 	s.Logger().WithField("memory-sandbox-size-byte", sandboxMemoryByte).Debugf("Request to hypervisor to update memory")
-	newMemory, updatedMemoryDevice, err := s.hypervisor.ResizeMemory(ctx, uint32(sandboxMemoryByte>>utils.MibToBytesShift), s.state.GuestMemoryBlockSizeMB, s.state.GuestMemoryHotplugProbe)
+	newMemoryMB := uint32(sandboxMemoryByte >> utils.MibToBytesShift)
+	newMemory, updatedMemoryDevice, err := s.hypervisor.ResizeMemory(ctx, newMemoryMB, s.state.GuestMemoryBlockSizeMB, s.state.GuestMemoryHotplugProbe)
 	if err != nil {
 		if err == noGuestMemHotplugErr {
 			s.Logger().Warnf("%s, memory specifications cannot be guaranteed", err)
@@ -2005,8 +2008,8 @@ func (s *Sandbox) updateResources(ctx context.Context) error {
 	return nil
 }
 
-func (s *Sandbox) calculateSandboxMemory() (int64, bool, int64) {
-	memorySandbox := int64(0)
+func (s *Sandbox) calculateSandboxMemory() (uint64, bool, int64) {
+	memorySandbox := uint64(0)
 	needPodSwap := false
 	swapSandbox := int64(0)
 	for _, c := range s.config.Containers {
@@ -2020,8 +2023,17 @@ func (s *Sandbox) calculateSandboxMemory() (int64, bool, int64) {
 			currentLimit := int64(0)
 			if m.Limit != nil && *m.Limit > 0 {
 				currentLimit = *m.Limit
-				memorySandbox += currentLimit
+				memorySandbox += uint64(currentLimit)
+				s.Logger().WithField("memory limit", memorySandbox).Info("Memory Sandbox + Memory Limit ")
 			}
+
+			// Add hugepages memory
+			// HugepageLimit is uint64 - https://github.com/opencontainers/runtime-spec/blob/master/specs-go/config.go#L242
+			for _, l := range c.Resources.HugepageLimits {
+				memorySandbox += l.Limit
+			}
+
+			// Add swap
 			if s.config.HypervisorConfig.GuestSwap && m.Swappiness != nil && *m.Swappiness > 0 {
 				currentSwap := int64(0)
 				if m.Swap != nil {
@@ -2039,6 +2051,7 @@ func (s *Sandbox) calculateSandboxMemory() (int64, bool, int64) {
 			}
 		}
 	}
+
 	return memorySandbox, needPodSwap, swapSandbox
 }
 

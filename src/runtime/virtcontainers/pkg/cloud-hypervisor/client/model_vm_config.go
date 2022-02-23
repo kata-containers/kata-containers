@@ -32,9 +32,11 @@ type VmConfig struct {
 	Devices   *[]DeviceConfig         `json:"devices,omitempty"`
 	Vsock     *VsockConfig            `json:"vsock,omitempty"`
 	SgxEpc    *[]SgxEpcConfig         `json:"sgx_epc,omitempty"`
+	Tdx       *TdxConfig              `json:"tdx,omitempty"`
 	Numa      *[]NumaConfig           `json:"numa,omitempty"`
 	Iommu     *bool                   `json:"iommu,omitempty"`
 	Watchdog  *bool                   `json:"watchdog,omitempty"`
+	Platform  *PlatformConfig         `json:"platform,omitempty"`
 }
 
 // NewVmConfig instantiates a new VmConfig object
@@ -578,6 +580,38 @@ func (o *VmConfig) SetSgxEpc(v []SgxEpcConfig) {
 	o.SgxEpc = &v
 }
 
+// GetTdx returns the Tdx field value if set, zero value otherwise.
+func (o *VmConfig) GetTdx() TdxConfig {
+	if o == nil || o.Tdx == nil {
+		var ret TdxConfig
+		return ret
+	}
+	return *o.Tdx
+}
+
+// GetTdxOk returns a tuple with the Tdx field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *VmConfig) GetTdxOk() (*TdxConfig, bool) {
+	if o == nil || o.Tdx == nil {
+		return nil, false
+	}
+	return o.Tdx, true
+}
+
+// HasTdx returns a boolean if a field has been set.
+func (o *VmConfig) HasTdx() bool {
+	if o != nil && o.Tdx != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetTdx gets a reference to the given TdxConfig and assigns it to the Tdx field.
+func (o *VmConfig) SetTdx(v TdxConfig) {
+	o.Tdx = &v
+}
+
 // GetNuma returns the Numa field value if set, zero value otherwise.
 func (o *VmConfig) GetNuma() []NumaConfig {
 	if o == nil || o.Numa == nil {
@@ -674,6 +708,38 @@ func (o *VmConfig) SetWatchdog(v bool) {
 	o.Watchdog = &v
 }
 
+// GetPlatform returns the Platform field value if set, zero value otherwise.
+func (o *VmConfig) GetPlatform() PlatformConfig {
+	if o == nil || o.Platform == nil {
+		var ret PlatformConfig
+		return ret
+	}
+	return *o.Platform
+}
+
+// GetPlatformOk returns a tuple with the Platform field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *VmConfig) GetPlatformOk() (*PlatformConfig, bool) {
+	if o == nil || o.Platform == nil {
+		return nil, false
+	}
+	return o.Platform, true
+}
+
+// HasPlatform returns a boolean if a field has been set.
+func (o *VmConfig) HasPlatform() bool {
+	if o != nil && o.Platform != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetPlatform gets a reference to the given PlatformConfig and assigns it to the Platform field.
+func (o *VmConfig) SetPlatform(v PlatformConfig) {
+	o.Platform = &v
+}
+
 func (o VmConfig) MarshalJSON() ([]byte, error) {
 	toSerialize := map[string]interface{}{}
 	if o.Cpus != nil {
@@ -724,6 +790,9 @@ func (o VmConfig) MarshalJSON() ([]byte, error) {
 	if o.SgxEpc != nil {
 		toSerialize["sgx_epc"] = o.SgxEpc
 	}
+	if o.Tdx != nil {
+		toSerialize["tdx"] = o.Tdx
+	}
 	if o.Numa != nil {
 		toSerialize["numa"] = o.Numa
 	}
@@ -732,6 +801,9 @@ func (o VmConfig) MarshalJSON() ([]byte, error) {
 	}
 	if o.Watchdog != nil {
 		toSerialize["watchdog"] = o.Watchdog
+	}
+	if o.Platform != nil {
+		toSerialize["platform"] = o.Platform
 	}
 	return json.Marshal(toSerialize)
 }

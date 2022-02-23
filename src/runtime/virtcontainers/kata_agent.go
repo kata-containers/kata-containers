@@ -17,6 +17,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/docker/go-units"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils/katatrace"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/uuid"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/api"
@@ -31,6 +32,7 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/rootless"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	vcTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
 
 	"github.com/gogo/protobuf/proto"
 	"github.com/opencontainers/runtime-spec/specs-go"
@@ -156,6 +158,16 @@ var kataHostSharedDir = func() string {
 		return filepath.Join(rootless.GetRootlessDir(), defaultKataHostSharedDir) + "/"
 	}
 	return defaultKataHostSharedDir
+}
+
+func getPagesizeFromOpt(fsOpts []string) string {
+	// example options array: "rw", "relatime", "seclabel", "pagesize=2M"
+	for _, opt := range fsOpts {
+		if strings.HasPrefix(opt, "pagesize=") {
+			return strings.TrimPrefix(opt, "pagesize=")
+		}
+	}
+	return ""
 }
 
 // Shared path handling:
@@ -1274,13 +1286,24 @@ func (k *kataAgent) rollbackFailingContainerCreation(ctx context.Context, c *Con
 	}
 }
 
-func (k *kataAgent) buildContainerRootfsWithNydus(sandbox *Sandbox, c *Container, rootPathParent string) (*grpc.Storage, error) {
-	if sandbox.GetHypervisorType() != string(QemuHypervisor) {
-		// qemu is supported first, other hypervisors will next
-		// https://github.com/kata-containers/kata-containers/issues/2724
+func getVirtiofsDaemonForNydus(sandbox *Sandbox) (VirtiofsDaemon, error) {
+	var virtiofsDaemon VirtiofsDaemon
+	switch sandbox.GetHypervisorType() {
+	case string(QemuHypervisor):
+		virtiofsDaemon = sandbox.hypervisor.(*qemu).virtiofsDaemon
+	case string(ClhHypervisor):
+		virtiofsDaemon = sandbox.hypervisor.(*cloudHypervisor).virtiofsDaemon
+	default:
 		return nil, errNydusdNotSupport
 	}
-	q, _ := sandbox.hypervisor.(*qemu)
+	return virtiofsDaemon, nil
+}
+
+func (k *kataAgent) buildContainerRootfsWithNydus(sandbox *Sandbox, c *Container, rootPathParent string) (*grpc.Storage, error) {
+	virtiofsDaemon, err := getVirtiofsDaemonForNydus(sandbox)
+	if err != nil {
+		return nil, err
+	}
 	extraOption, err := parseExtraOption(c.rootFs.Options)
 	if err != nil {
 		return nil, err
@@ -1292,7 +1315,7 @@ func (k *kataAgent) buildContainerRootfsWithNydus(sandbox *Sandbox, c *Container
 	}
 	k.Logger().Infof("nydus option: %v", extraOption)
 	// mount lowerdir to guest /run/kata-containers/shared/images/<cid>/lowerdir
-	if err := q.virtiofsDaemon.Mount(*mountOpt); err != nil {
+	if err := virtiofsDaemon.Mount(*mountOpt); err != nil {
 		return nil, err
 	}
 	rootfs := &grpc.Storage{}
@@ -1457,6 +1480,13 @@ func (k *kataAgent) createContainer(ctx context.Context, sandbox *Sandbox, c *Co
 
 	ctrStorages = append(ctrStorages, epheStorages...)
 
+	k.Logger().WithField("ociSpec Hugepage Resources", ociSpec.Linux.Resources.HugepageLimits).Debug("ociSpec HugepageLimit")
+	hugepages, err := k.handleHugepages(ociSpec.Mounts, ociSpec.Linux.Resources.HugepageLimits)
+	if err != nil {
+		return nil, err
+	}
+	ctrStorages = append(ctrStorages, hugepages...)
+
 	localStorages, err := k.handleLocalStorage(ociSpec.Mounts, sandbox.id, c.rootfsSuffix)
 	if err != nil {
 		return nil, err
@@ -1535,6 +1565,71 @@ func buildProcessFromExecID(token string) (*Process, error) {
 		StartTime: time.Now().UTC(),
 		Pid:       -1,
 	}, nil
+}
+
+// handleHugePages handles hugepages storage by
+// creating a Storage from corresponding source of the mount point
+func (k *kataAgent) handleHugepages(mounts []specs.Mount, hugepageLimits []specs.LinuxHugepageLimit) ([]*grpc.Storage, error) {
+	//Map to hold the total memory of each type of hugepages
+	optionsMap := make(map[int64]string)
+
+	for _, hp := range hugepageLimits {
+		if hp.Limit != 0 {
+			k.Logger().WithFields(logrus.Fields{
+				"Pagesize": hp.Pagesize,
+				"Limit":    hp.Limit,
+			}).Info("hugepage request")
+			//example Pagesize 2MB, 1GB etc. The Limit are in Bytes
+			pageSize, err := units.RAMInBytes(hp.Pagesize)
+			if err != nil {
+				k.Logger().Error("Unable to convert pagesize to bytes")
+				return nil, err
+			}
+			totalHpSizeStr := strconv.FormatUint(hp.Limit, 10)
+			optionsMap[pageSize] = totalHpSizeStr
+		}
+	}
+
+	var hugepages []*grpc.Storage
+	for idx, mnt := range mounts {
+		if mnt.Type != KataLocalDevType {
+			continue
+		}
+		//HugePages mount Type is Local
+		if _, fsType, fsOptions, _ := utils.GetDevicePathAndFsTypeOptions(mnt.Source); fsType == "hugetlbfs" {
+			k.Logger().WithField("fsOptions", fsOptions).Debug("hugepage mount options")
+			//Find the pagesize from the mountpoint options
+			pagesizeOpt := getPagesizeFromOpt(fsOptions)
+			if pagesizeOpt == "" {
+				return nil, fmt.Errorf("No pagesize option found in filesystem mount options")
+			}
+			pageSize, err := units.RAMInBytes(pagesizeOpt)
+			if err != nil {
+				k.Logger().Error("Unable to convert pagesize from fs mount options to bytes")
+				return nil, err
+			}
+			//Create mount option string
+			options := fmt.Sprintf("pagesize=%s,size=%s", strconv.FormatInt(pageSize, 10), optionsMap[pageSize])
+			k.Logger().WithField("Hugepage options string", options).Debug("hugepage mount options")
+			// Set the mount source path to a path that resides inside the VM
+			mounts[idx].Source = filepath.Join(ephemeralPath(), filepath.Base(mnt.Source))
+			// Set the mount type to "bind"
+			mounts[idx].Type = "bind"
+
+			// Create a storage struct so that kata agent is able to create
+			// hugetlbfs backed volume inside the VM
+			hugepage := &grpc.Storage{
+				Driver:     KataEphemeralDevType,
+				Source:     "nodev",
+				Fstype:     "hugetlbfs",
+				MountPoint: mounts[idx].Source,
+				Options:    []string{options},
+			}
+			hugepages = append(hugepages, hugepage)
+		}
+
+	}
+	return hugepages, nil
 }
 
 // handleEphemeralStorage handles ephemeral storages by

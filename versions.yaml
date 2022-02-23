@@ -75,7 +75,7 @@ assets:
       url: "https://github.com/cloud-hypervisor/cloud-hypervisor"
       uscan-url: >-
         https://github.com/cloud-hypervisor/cloud-hypervisor/tags.*/v?(\d\S+)\.tar\.gz
-      version: "v21.0"
+      version: "55479a64d237d4c757dba19a696abefd27ec74fd"
 
     firecracker:
       description: "Firecracker micro-VMM"
@@ -98,6 +98,10 @@ assets:
       uscan-url: >-
         https://github.com/qemu/qemu/tags
         .*/v?(\d\S+)\.tar\.gz
+      tdx:
+        description: "VMM that uses KVM and supports TDX"
+        url: "https://github.com/intel/qemu-tdx"
+        tag: "tdx-qemu-2021.11.29-v6.0.0-rc1-mvp"
 
     qemu-experimental:
       description: "QEMU with virtiofs support"
@@ -147,7 +151,7 @@ assets:
   kernel:
     description: "Linux kernel optimised for virtual machines"
     url: "https://cdn.kernel.org/pub/linux/kernel/v5.x/"
-    version: "v5.10.25"
+    version: "v5.15.23"
     tdx:
       description: "Linux kernel that supports TDX"
       url: "https://github.com/intel/tdx/archive/refs/tags"
@@ -257,6 +261,11 @@ externals:
     description: "Nydus image acceleration service"
     url: "https://github.com/dragonflyoss/image-service"
     version: "v1.1.2"
+
+  nydus-snapshotter:
+    description: "Snapshotter for Nydus image acceleration service"
+    url: "https://github.com/containerd/nydus-snapshotter"
+    version: "v0.1.0"
 
 languages:
   description: |

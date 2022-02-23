@@ -1,31 +1,29 @@
-# vsock [![builds.sr.ht status](https://builds.sr.ht/~mdlayher/vsock.svg)](https://builds.sr.ht/~mdlayher/vsock?) [![GoDoc](https://godoc.org/github.com/mdlayher/vsock?status.svg)](https://godoc.org/github.com/mdlayher/vsock) [![Go Report Card](https://goreportcard.com/badge/github.com/mdlayher/vsock)](https://goreportcard.com/report/github.com/mdlayher/vsock)
+# vsock [![Test Status](https://github.com/mdlayher/vsock/workflows/Linux%20Test/badge.svg)](https://github.com/mdlayher/vsock/actions) [![Go Reference](https://pkg.go.dev/badge/github.com/mdlayher/vsock.svg)](https://pkg.go.dev/github.com/mdlayher/vsock)  [![Go Report Card](https://goreportcard.com/badge/github.com/mdlayher/vsock)](https://goreportcard.com/report/github.com/mdlayher/vsock)
 
 Package `vsock` provides access to Linux VM sockets (`AF_VSOCK`) for
 communication between a hypervisor and its virtual machines.  MIT Licensed.
 
 For more information about VM sockets, check out my blog about
-[Linux VM sockets in Go](https://medium.com/@mdlayher/linux-vm-sockets-in-go-ea11768e9e67).
-
-## Go version support
-
-This package supports varying levels of functionality depending on the version
-of Go used during compilation. The `Listener` and `Conn` types produced by this
-package are backed by non-blocking I/O, in order to integrate with Go's runtime
-network poller in Go 1.11+. Additional functionality is available starting in Go
-1.12+. The older Go 1.10 is only supported in a blocking-only mode.
-
-A comprehensive list of functionality for supported Go versions can be found on
-[package vsock's GoDoc page](https://godoc.org/github.com/mdlayher/vsock#hdr-Go_version_support).
+[Linux VM sockets in Go](https://mdlayher.com/blog/linux-vm-sockets-in-go/).
 
 ## Stability
 
-At this time, package `vsock` is in a pre-v1.0.0 state. Changes are being made
-which may impact the exported API of this package and others in its ecosystem.
+See the [CHANGELOG](./CHANGELOG.md) file for a description of changes between
+releases.
 
-**If you depend on this package in your application, please use Go modules when
-building your application.**
+This package has a stable v1 API and any future breaking changes will prompt
+the release of a new major version. Features and bug fixes will continue to
+occur in the v1.x.x series.
+
+In order to reduce the maintenance burden, this package is only supported on
+Go 1.12+. Older versions of Go lack critical features and APIs which are
+necessary for this package to function correctly.
+
+**If you depend on this package in your applications, please use Go modules.**
 
 ## Requirements
+
+**It's possible these requirements are out of date. PRs are welcome.**
 
 To make use of VM sockets with QEMU and virtio-vsock, you must have:
 
@@ -53,10 +51,3 @@ Check out the
 [QEMU wiki page on virtio-vsock](http://wiki.qemu-project.org/Features/VirtioVsock)
 for more details.  More detail on setting up this environment will be provided
 in the future.
-
-## Usage
-
-To try out VM sockets and see an example of how they work, see
-[cmd/vscp](https://github.com/mdlayher/vsock/tree/master/cmd/vscp).
-This command shows usage of the `vsock.ListenStream` and `vsock.DialStream`
-APIs, and allows users to easily test VM sockets on their systems.
