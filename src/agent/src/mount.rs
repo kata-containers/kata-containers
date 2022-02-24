@@ -321,20 +321,16 @@ fn allocate_hugepages(logger: &Logger, options: &[String]) -> Result<()> {
 
     // sysfs entry is always of the form hugepages-${pagesize}kB
     // Ref: https://www.kernel.org/doc/Documentation/vm/hugetlbpage.txt
-    let path = Path::new(SYS_FS_HUGEPAGES_PREFIX).join(format!("hugepages-{}kB", pagesize / 1024));
-
-    if !path.exists() {
-        fs::create_dir_all(&path).context("create hugepages-size directory")?;
-    }
+    let path = Path::new(SYS_FS_HUGEPAGES_PREFIX)
+        .join(format!("hugepages-{}kB", pagesize / 1024))
+        .join("nr_hugepages");
 
     // write numpages to nr_hugepages file.
-    let path = path.join("nr_hugepages");
     let numpages = format!("{}", size / pagesize);
     info!(logger, "write {} pages to {:?}", &numpages, &path);
 
     let mut file = OpenOptions::new()
         .write(true)
-        .create(true)
         .open(&path)
         .context(format!("open nr_hugepages directory {:?}", &path))?;
 
