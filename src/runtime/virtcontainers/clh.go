@@ -589,6 +589,10 @@ func (clh *cloudHypervisor) HotplugAddDevice(ctx context.Context, devInfo interf
 	span, _ := katatrace.Trace(ctx, clh.Logger(), "HotplugAddDevice", clhTracingTags, map[string]string{"sandbox_id": clh.id})
 	defer span.End()
 
+	if clh.config.ConfidentialGuest {
+		return nil, errors.New("Device hotplug addition is not supported in confidential mode")
+	}
+
 	switch devType {
 	case BlockDev:
 		drive := devInfo.(*config.BlockDrive)
@@ -605,6 +609,10 @@ func (clh *cloudHypervisor) HotplugAddDevice(ctx context.Context, devInfo interf
 func (clh *cloudHypervisor) HotplugRemoveDevice(ctx context.Context, devInfo interface{}, devType DeviceType) (interface{}, error) {
 	span, _ := katatrace.Trace(ctx, clh.Logger(), "HotplugRemoveDevice", clhTracingTags, map[string]string{"sandbox_id": clh.id})
 	defer span.End()
+
+	if clh.config.ConfidentialGuest {
+		return nil, errors.New("Device hotplug addition is not supported in confidential mode")
+	}
 
 	var deviceID string
 
@@ -860,7 +868,9 @@ func (clh *cloudHypervisor) Capabilities(ctx context.Context) types.Capabilities
 	clh.Logger().WithField("function", "Capabilities").Info("get Capabilities")
 	var caps types.Capabilities
 	caps.SetFsSharingSupport()
-	caps.SetBlockDeviceHotplugSupport()
+	if !clh.config.ConfidentialGuest {
+		caps.SetBlockDeviceHotplugSupport()
+	}
 	return caps
 }
 

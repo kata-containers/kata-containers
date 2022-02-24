@@ -153,8 +153,9 @@ func newQemuArch(config HypervisorConfig) (qemuArch, error) {
 func (q *qemuAmd64) capabilities() types.Capabilities {
 	var caps types.Capabilities
 
-	if q.qemuMachine.Type == QemuQ35 ||
-		q.qemuMachine.Type == QemuVirt {
+	if (q.qemuMachine.Type == QemuQ35 ||
+		q.qemuMachine.Type == QemuVirt) &&
+		q.protection == noneProtection {
 		caps.SetBlockDeviceHotplugSupport()
 	}
 
