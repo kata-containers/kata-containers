@@ -26,7 +26,7 @@ subprocess = "0.2.8"
 thiserror = "1.0.30"
 
 kata-types = { path = "../kata-types" }
-oci = { path = "../../agent/oci" }
+oci = { path = "../oci" }
 
 [dev-dependencies]
 num_cpus = "1.13.1"

@@ -74,16 +74,6 @@ checksum = "14c189c53d098945499cdfa7ecc63567cf3886b3332b312a5b4585d8d3a6a610"
 
 [[package]]
 name = "bytes"
-version = "0.4.12"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "206fdffcfa2df7cbe15601ef46c813fce0965eb3286db6b56c583b814b51c81c"
-dependencies = [
- "byteorder",
- "iovec",
-]
-
-[[package]]
-name = "bytes"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c4872d67bab6358e59559027aa3b9157c53d9358c51423c17554809a8858e0f8"
@@ -129,7 +119,7 @@ checksum = "1b827f9d9f6c2fff719d25f5d44cbc8d2ef6df1ef00d055c5c14d5dc25529579"
 dependencies = [
  "libc",
  "log",
- "nix 0.23.1",
+ "nix",
  "regex",
 ]
 
@@ -399,15 +389,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "iovec"
-version = "0.1.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b2b3ea6ff95e175473f8ffe6a7eb7c00d054240321b84c57051175fe3c1e075e"
-dependencies = [
- "libc",
-]
-
-[[package]]
 name = "itertools"
 version = "0.10.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -434,7 +415,7 @@ dependencies = [
  "lazy_static",
  "libc",
  "logging",
- "nix 0.23.1",
+ "nix",
  "oci",
  "protobuf",
  "protocols",
@@ -521,19 +502,6 @@ name = "multimap"
 version = "0.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e5ce46fe64a9d73be07dcbe690a38ce1b293be448fd8ce1e6c1b8062c9f72c6a"
-
-[[package]]
-name = "nix"
-version = "0.20.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f5e06129fb611568ef4e868c14b326274959aa70ff7776e9d55323531c374945"
-dependencies = [
- "bitflags",
- "cc",
- "cfg-if",
- "libc",
- "memoffset",
-]
 
 [[package]]
 name = "nix"
@@ -666,7 +634,7 @@ version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "de5e2533f59d08fcf364fd374ebda0692a70bd6d7e66ef97f306f45c6c5d8020"
 dependencies = [
- "bytes 1.1.0",
+ "bytes",
  "prost-derive",
 ]
 
@@ -676,7 +644,7 @@ version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "355f634b43cdd80724ee7848f95770e7e70eefa6dcf14fea676216573b8fd603"
 dependencies = [
- "bytes 1.1.0",
+ "bytes",
  "heck",
  "itertools",
  "log",
@@ -707,15 +675,15 @@ version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "603bbd6394701d13f3f25aada59c7de9d35a6a5887cfc156181234a44002771b"
 dependencies = [
- "bytes 1.1.0",
+ "bytes",
  "prost",
 ]
 
 [[package]]
 name = "protobuf"
-version = "2.14.0"
+version = "2.27.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8e86d370532557ae7573551a1ec8235a0f8d6cb276c7c9e6aa490b511c447485"
+checksum = "cf7e6d18738ecd0902d30d1ad232c9125985a3422929b16c65517b38adc14f96"
 dependencies = [
  "serde",
  "serde_derive",
@@ -723,18 +691,18 @@ dependencies = [
 
 [[package]]
 name = "protobuf-codegen"
-version = "2.14.0"
+version = "2.27.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "de113bba758ccf2c1ef816b127c958001b7831136c9bc3f8e9ec695ac4e82b0c"
+checksum = "aec1632b7c8f2e620343439a7dfd1f3c47b18906c4be58982079911482b5d707"
 dependencies = [
  "protobuf",
 ]
 
 [[package]]
 name = "protobuf-codegen-pure"
-version = "2.14.0"
+version = "2.27.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2d1a4febc73bf0cada1d77c459a0c8e5973179f1cfd5b0f1ab789d45b17b6440"
+checksum = "9f8122fdb18e55190c796b088a16bdb70cd7acdcd48f7a8b796b58c62e532cc6"
 dependencies = [
  "protobuf",
  "protobuf-codegen",
@@ -744,7 +712,7 @@ dependencies = [
 name = "protocols"
 version = "0.1.0"
 dependencies = [
- "async-trait",
+ "oci",
  "protobuf",
  "serde",
  "serde_json",
@@ -858,7 +826,7 @@ dependencies = [
  "inotify",
  "lazy_static",
  "libc",
- "nix 0.23.1",
+ "nix",
  "oci",
  "path-absolutize",
  "protobuf",
@@ -1080,7 +1048,7 @@ version = "1.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fbbf1c778ec206785635ce8ad57fe52b3009ae9e0c9f574a728f3049d3e55838"
 dependencies = [
- "bytes 1.1.0",
+ "bytes",
  "libc",
  "memchr",
  "mio",
@@ -1103,35 +1071,18 @@ dependencies = [
 ]
 
 [[package]]
-name = "tokio-vsock"
-version = "0.3.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9e0723fc001950a3b018947b05eeb45014fd2b7c6e8f292502193ab74486bdb6"
-dependencies = [
- "bytes 0.4.12",
- "futures",
- "libc",
- "tokio",
- "vsock",
-]
-
-[[package]]
 name = "ttrpc"
-version = "0.5.2"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "66a973ce6d5eaa20c173635b29ffb660dafbc7ef109172c0015ba44e47a23711"
+checksum = "0c7d6c992964a013c17814c08d31708d577b0aae44ebadb58755659dd824c2d1"
 dependencies = [
- "async-trait",
  "byteorder",
- "futures",
  "libc",
  "log",
- "nix 0.20.2",
+ "nix",
  "protobuf",
  "protobuf-codegen-pure",
  "thiserror",
- "tokio",
- "tokio-vsock",
 ]
 
 [[package]]
@@ -1184,16 +1135,6 @@ name = "vec_map"
 version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f1bddf1187be692e79c5ffeab891132dfb0f236ed36a43c7ed39f1165ee20191"
-
-[[package]]
-name = "vsock"
-version = "0.2.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e32675ee2b3ce5df274c0ab52d19b28789632406277ca26bffee79a8e27dc133"
-dependencies = [
- "libc",
- "nix 0.23.1",
-]
 
 [[package]]
 name = "wasi"
