@@ -15,6 +15,14 @@ path = "@CLHPATH@"
 kernel = "@KERNELPATH_CLH@"
 image = "@IMAGEPATH@"
 
+# Enable confidential guest support.
+# Toggling that setting may trigger different hardware features, ranging
+# from memory encryption to both memory and CPU-state encryption and integrity.
+# The Kata Containers runtime dynamically detects the available feature set and
+# aims at enabling the largest possible one.
+# Default false
+# confidential_guest = true
+
 # List of valid annotation names for the hypervisor
 # Each member of the list is a regular expression, which is the base name
 # of the annotation, e.g. "path" for io.katacontainers.config.hypervisor.path"
