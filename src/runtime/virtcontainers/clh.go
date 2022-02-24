@@ -171,12 +171,9 @@ type cloudHypervisor struct {
 }
 
 var clhKernelParams = []Param{
-	{"root", "/dev/pmem0p1"},
 	{"panic", "1"},         // upon kernel panic wait 1 second before reboot
 	{"no_timer_check", ""}, // do not Check broken timer IRQ resources
 	{"noreplace-smp", ""},  // do not replace SMP instructions
-	{"rootflags", "dax,data=ordered,errors=remount-ro ro"}, // mount the root filesystem as readonly
-	{"rootfstype", "ext4"},
 }
 
 var clhDebugKernelParams = []Param{
@@ -267,7 +264,8 @@ func (clh *cloudHypervisor) CreateVM(ctx context.Context, id string, network Net
 	clh.vmconfig.Cpus = chclient.NewCpusConfig(int32(clh.config.NumVCPUs), int32(clh.config.DefaultMaxVCPUs))
 
 	// First take the default parameters defined by this driver
-	params := clhKernelParams
+	params := commonNvdimmKernelRootParams
+	params = append(params, clhKernelParams...)
 
 	// Followed by extra debug parameters if debug enabled in configuration file
 	if clh.config.Debug {
