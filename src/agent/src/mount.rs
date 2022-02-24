@@ -337,6 +337,23 @@ fn allocate_hugepages(logger: &Logger, options: &[String]) -> Result<()> {
     file.write_all(numpages.as_bytes())
         .context(format!("write nr_hugepages failed: {:?}", &path))?;
 
+    // Even if the write succeeds, the kernel isn't guaranteed to be
+    // able to allocate all the pages we requested.  Verify that it
+    // did.
+    let verify = fs::read_to_string(&path).context(format!("reading {:?}", &path))?;
+    let allocated = verify
+        .trim_end()
+        .parse::<u64>()
+        .map_err(|_| anyhow!("Unexpected text {:?} in {:?}", &verify, &path))?;
+    if allocated != size / pagesize {
+        return Err(anyhow!(
+            "Only allocated {} of {} hugepages of size {}",
+            allocated,
+            numpages,
+            pagesize
+        ));
+    }
+
     Ok(())
 }
 
