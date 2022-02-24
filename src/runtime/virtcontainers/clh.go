@@ -202,6 +202,34 @@ func (clh *cloudHypervisor) nydusdAPISocketPath(id string) (string, error) {
 	return utils.BuildSocketPath(clh.config.VMStorePath, id, nydusdAPISock)
 }
 
+func (clh *cloudHypervisor) enableProtection() error {
+	protection, err := availableGuestProtection()
+	if err != nil {
+		return err
+	}
+
+	switch protection {
+	case tdxProtection:
+		firmwarePath, err := clh.config.FirmwareAssetPath()
+		if err != nil {
+			return err
+		}
+
+		if firmwarePath == "" {
+			return errors.New("Firmware path is not specified")
+		}
+
+		clh.vmconfig.Tdx = chclient.NewTdxConfig(firmwarePath)
+		return nil
+
+	case sevProtection:
+		return errors.New("SEV protection is not supported by Cloud Hypervisor")
+
+	default:
+		return errors.New("This system doesn't support Confidentian Computing (Guest Protection)")
+	}
+}
+
 // For cloudHypervisor this call only sets the internal structure up.
 // The VM will be created and started through StartVM().
 func (clh *cloudHypervisor) CreateVM(ctx context.Context, id string, network Network, hypervisorConfig *HypervisorConfig) error {
@@ -213,10 +241,6 @@ func (clh *cloudHypervisor) CreateVM(ctx context.Context, id string, network Net
 
 	if err := clh.setConfig(hypervisorConfig); err != nil {
 		return err
-	}
-
-	if clh.config.ConfidentialGuest {
-		return errors.New("confidential guest is not yet supported with Cloud Hypervisor")
 	}
 
 	clh.id = id
@@ -251,6 +275,12 @@ func (clh *cloudHypervisor) CreateVM(ctx context.Context, id string, network Net
 	}
 	// Create the VM config via the constructor to ensure default values are properly assigned
 	clh.vmconfig = *chclient.NewVmConfig(*chclient.NewKernelConfig(kernelPath))
+
+	if clh.config.ConfidentialGuest {
+		if err := clh.enableProtection(); err != nil {
+			return err
+		}
+	}
 
 	// Create the VM memory config via the constructor to ensure default values are properly assigned
 	clh.vmconfig.Memory = chclient.NewMemoryConfig(int64((utils.MemUnit(clh.config.MemorySize) * utils.MiB).ToBytes()))
