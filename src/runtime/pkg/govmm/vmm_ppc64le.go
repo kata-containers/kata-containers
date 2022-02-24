@@ -4,7 +4,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-package qemu
+package govmm
 
 // MaxVCPUs returns the maximum number of vCPUs supported
 func MaxVCPUs() uint32 {
