@@ -83,6 +83,11 @@ func newQemuArch(config HypervisorConfig) (qemuArch, error) {
 		if err := q.enableProtection(); err != nil {
 			return nil, err
 		}
+
+		if !q.qemuArchBase.disableNvdimm {
+			hvLogger.WithField("subsystem", "qemuPPC64le").Warn("Nvdimm is not supported with confidential guest, disabling it.")
+			q.qemuArchBase.disableNvdimm = true
+		}
 	}
 
 	q.handleImagePath(config)
