@@ -215,6 +215,10 @@ func (clh *cloudHypervisor) CreateVM(ctx context.Context, id string, network Net
 		return err
 	}
 
+	if clh.config.ConfidentialGuest {
+		return errors.New("confidential guest is not yet supported with Cloud Hypervisor")
+	}
+
 	clh.id = id
 	clh.state.state = clhNotReady
 
