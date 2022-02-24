@@ -1,3 +1,6 @@
+//go:build linux
+// +build linux
+//
 // Copyright (c) 2018 Intel Corporation
 //
 // SPDX-License-Identifier: Apache-2.0
@@ -173,13 +176,13 @@ func TestQemuArchBaseCPUTopology(t *testing.T) {
 
 	expectedSMP := govmmQemu.SMP{
 		CPUs:    vcpus,
-		Sockets: defaultMaxQemuVCPUs,
+		Sockets: defaultMaxVCPUs,
 		Cores:   defaultCores,
 		Threads: defaultThreads,
-		MaxCPUs: defaultMaxQemuVCPUs,
+		MaxCPUs: defaultMaxVCPUs,
 	}
 
-	smp := qemuArchBase.cpuTopology(vcpus, defaultMaxQemuVCPUs)
+	smp := qemuArchBase.cpuTopology(vcpus, defaultMaxVCPUs)
 	assert.Equal(expectedSMP, smp)
 }
 

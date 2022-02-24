@@ -185,7 +185,7 @@ func TestHypervisorConfigDefaults(t *testing.T) {
 		MemorySize:        defaultMemSzMiB,
 		DefaultBridges:    defaultBridges,
 		BlockDeviceDriver: defaultBlockDriver,
-		DefaultMaxVCPUs:   defaultMaxQemuVCPUs,
+		DefaultMaxVCPUs:   defaultMaxVCPUs,
 		Msize9p:           defaultMsize9p,
 	}
 
