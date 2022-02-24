@@ -189,7 +189,11 @@ func (q *qemuAmd64) memoryTopology(memoryMb, hostMemoryMb uint64, slots uint8) g
 // Is Memory Hotplug supported by this architecture/machine type combination?
 func (q *qemuAmd64) supportGuestMemoryHotplug() bool {
 	// true for all amd64 machine types except for microvm.
-	return q.qemuMachine.Type != govmmQemu.MachineTypeMicrovm
+	if q.qemuMachine.Type == govmmQemu.MachineTypeMicrovm {
+		return false
+	}
+
+	return q.protection == noneProtection
 }
 
 func (q *qemuAmd64) appendImage(ctx context.Context, devices []govmmQemu.Device, path string) ([]govmmQemu.Device, error) {

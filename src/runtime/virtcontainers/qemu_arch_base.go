@@ -692,7 +692,7 @@ func (q *qemuArchBase) handleImagePath(config HypervisorConfig) {
 }
 
 func (q *qemuArchBase) supportGuestMemoryHotplug() bool {
-	return true
+	return q.protection == noneProtection
 }
 
 func (q *qemuArchBase) setIgnoreSharedMemoryMigrationCaps(ctx context.Context, qmp *govmmQemu.QMP) error {
