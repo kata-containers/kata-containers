@@ -96,7 +96,8 @@ func (q *qemuPPC64le) capabilities() types.Capabilities {
 	var caps types.Capabilities
 
 	// pseries machine type supports hotplugging drives
-	if q.qemuMachine.Type == QemuPseries {
+	if q.qemuMachine.Type == QemuPseries &&
+		q.protection == noneProtection {
 		caps.SetBlockDeviceHotplugSupport()
 	}
 

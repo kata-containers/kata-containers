@@ -277,7 +277,9 @@ func (q *qemuArchBase) kernelParameters(debug bool) []Param {
 
 func (q *qemuArchBase) capabilities() types.Capabilities {
 	var caps types.Capabilities
-	caps.SetBlockDeviceHotplugSupport()
+	if q.protection == noneProtection {
+		caps.SetBlockDeviceHotplugSupport()
+	}
 	caps.SetMultiQueueSupport()
 	caps.SetFsSharingSupport()
 	return caps
