@@ -258,12 +258,14 @@ func (clh *cloudHypervisor) CreateVM(ctx context.Context, id string, network Net
 	clh.vmconfig.Memory.Shared = func(b bool) *bool { return &b }(true)
 	// Enable hugepages if needed
 	clh.vmconfig.Memory.Hugepages = func(b bool) *bool { return &b }(clh.config.HugePages)
-	hostMemKb, err := GetHostMemorySizeKb(procMemInfo)
-	if err != nil {
-		return nil
+	if !clh.config.ConfidentialGuest {
+		hostMemKb, err := GetHostMemorySizeKb(procMemInfo)
+		if err != nil {
+			return nil
+		}
+		// OpenAPI only supports int64 values
+		clh.vmconfig.Memory.HotplugSize = func(i int64) *int64 { return &i }(int64((utils.MemUnit(hostMemKb) * utils.KiB).ToBytes()))
 	}
-	// OpenAPI only supports int64 values
-	clh.vmconfig.Memory.HotplugSize = func(i int64) *int64 { return &i }(int64((utils.MemUnit(hostMemKb) * utils.KiB).ToBytes()))
 	// Set initial amount of cpu's for the virtual machine
 	clh.vmconfig.Cpus = chclient.NewCpusConfig(int32(clh.config.NumVCPUs), int32(clh.config.DefaultMaxVCPUs))
 

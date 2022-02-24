@@ -25,6 +25,7 @@ image = "@IMAGEPATH@"
 # * Does not work by design:
 #   - CPU Hotplug 
 #   - Device Hotplug
+#   - Memory Hotplug
 #
 # Default false
 # confidential_guest = true
