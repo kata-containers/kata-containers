@@ -31,6 +31,17 @@ image = "@IMAGEPATH@"
 # Default false
 # confidential_guest = true
 
+# Path to the firmware.
+# If you want Cloud Hypervisor to use a specific firmware, set its path below.
+# This is option is only used when confidential_guest is enabled.
+#
+# For more information about firmwared that can be used with specific TEEs,
+# please, refer to:
+# * TDX:
+#   - td-shim: https://github.com/confidential-containers/td-shim
+#
+# firmware = "@FIRMWAREPATH@"
+
 # List of valid annotation names for the hypervisor
 # Each member of the list is a regular expression, which is the base name
 # of the annotation, e.g. "path" for io.katacontainers.config.hypervisor.path"
