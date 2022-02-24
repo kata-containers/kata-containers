@@ -1,3 +1,6 @@
+//go:build linux
+// +build linux
+//
 // Copyright (c) 2018 IBM
 //
 // SPDX-License-Identifier: Apache-2.0
@@ -45,14 +48,6 @@ var ccwbridge = types.NewBridge(types.CCW, "", make(map[uint32]string, types.CCW
 var supportedQemuMachine = govmmQemu.Machine{
 	Type:    QemuCCWVirtio,
 	Options: defaultQemuMachineOptions,
-}
-
-// MaxQemuVCPUs returns the maximum number of vCPUs supported
-func MaxQemuVCPUs() uint32 {
-	// Max number of virtual Cpu defined in qemu. See
-	// https://github.com/qemu/qemu/blob/80422b00196a7af4c6efb628fae0ad8b644e98af/target/s390x/cpu.h#L55
-	// #define S390_MAX_CPUS 248
-	return uint32(248)
 }
 
 func newQemuArch(config HypervisorConfig) (qemuArch, error) {

@@ -1,3 +1,6 @@
+//go:build linux
+// +build linux
+//
 // Copyright (c) 2016 Intel Corporation
 //
 // SPDX-License-Identifier: Apache-2.0
@@ -127,8 +130,6 @@ const (
 
 	qemuStopSandboxTimeoutSecs = 15
 )
-
-var noGuestMemHotplugErr error = errors.New("guest memory hotplug not supported")
 
 // agnostic list of kernel parameters
 var defaultKernelParameters = []Param{

@@ -14,10 +14,12 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/pkg/errors"
+
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/govmm"
 	hv "github.com/kata-containers/kata-containers/src/runtime/pkg/hypervisors"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
-	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
 
 	"github.com/sirupsen/logrus"
 )
@@ -69,14 +71,17 @@ const (
 
 	// MinHypervisorMemory is the minimum memory required for a VM.
 	MinHypervisorMemory = 256
+
+	defaultMsize9p = 8192
 )
 
 var (
-	hvLogger = logrus.WithField("source", "virtcontainers/hypervisor")
+	hvLogger                   = logrus.WithField("source", "virtcontainers/hypervisor")
+	noGuestMemHotplugErr error = errors.New("guest memory hotplug not supported")
 )
 
 // In some architectures the maximum number of vCPUs depends on the number of physical cores.
-var defaultMaxQemuVCPUs = MaxQemuVCPUs()
+var defaultMaxVCPUs = govmm.MaxVCPUs()
 
 // agnostic list of kernel root parameters for NVDIMM
 var commonNvdimmKernelRootParams = []Param{ //nolint: unused, deadcode, varcheck
@@ -189,25 +194,6 @@ func (hType *HypervisorType) String() string {
 		return string(MockHypervisor)
 	default:
 		return ""
-	}
-}
-
-// NewHypervisor returns an hypervisor from a hypervisor type.
-func NewHypervisor(hType HypervisorType) (Hypervisor, error) {
-
-	switch hType {
-	case QemuHypervisor:
-		return &qemu{}, nil
-	case FirecrackerHypervisor:
-		return &firecracker{}, nil
-	case AcrnHypervisor:
-		return &Acrn{}, nil
-	case ClhHypervisor:
-		return &cloudHypervisor{}, nil
-	case MockHypervisor:
-		return &mockHypervisor{}, nil
-	default:
-		return nil, fmt.Errorf("Unknown hypervisor type %s", hType)
 	}
 }
 
@@ -574,8 +560,8 @@ func (conf *HypervisorConfig) Valid() error {
 		conf.BlockDeviceDriver = config.VirtioBlockCCW
 	}
 
-	if conf.DefaultMaxVCPUs == 0 || conf.DefaultMaxVCPUs > defaultMaxQemuVCPUs {
-		conf.DefaultMaxVCPUs = defaultMaxQemuVCPUs
+	if conf.DefaultMaxVCPUs == 0 || conf.DefaultMaxVCPUs > defaultMaxVCPUs {
+		conf.DefaultMaxVCPUs = defaultMaxVCPUs
 	}
 
 	if conf.Msize9p == 0 && conf.SharedFS != config.VirtioFS {
@@ -894,17 +880,55 @@ func GetHypervisorPid(h Hypervisor) int {
 	return pids[0]
 }
 
-func generateVMSocket(id string, vmStogarePath string) (interface{}, error) {
-	vhostFd, contextID, err := utils.FindContextID()
-	if err != nil {
-		return nil, err
-	}
+// Kind of guest protection
+type guestProtection uint8
 
-	return types.VSock{
-		VhostFd:   vhostFd,
-		ContextID: contextID,
-		Port:      uint32(vSockPort),
-	}, nil
+const (
+	noneProtection guestProtection = iota
+
+	//Intel Trust Domain Extensions
+	//https://software.intel.com/content/www/us/en/develop/articles/intel-trust-domain-extensions.html
+	// Exclude from lint checking for it won't be used on arm64 code
+	tdxProtection
+
+	// AMD Secure Encrypted Virtualization
+	// https://developer.amd.com/sev/
+	// Exclude from lint checking for it won't be used on arm64 code
+	sevProtection
+
+	// IBM POWER 9 Protected Execution Facility
+	// https://www.kernel.org/doc/html/latest/powerpc/ultravisor.html
+	// Exclude from lint checking for it won't be used on arm64 code
+	pefProtection
+
+	// IBM Secure Execution (IBM Z & LinuxONE)
+	// https://www.kernel.org/doc/html/latest/virt/kvm/s390-pv.html
+	// Exclude from lint checking for it won't be used on arm64 code
+	seProtection
+)
+
+var guestProtectionStr = [...]string{
+	noneProtection: "none",
+	pefProtection:  "pef",
+	seProtection:   "se",
+	sevProtection:  "sev",
+	tdxProtection:  "tdx",
+}
+
+func (gp guestProtection) String() string {
+	return guestProtectionStr[gp]
+}
+
+func genericAvailableGuestProtections() (protections []string) {
+	return
+}
+
+func AvailableGuestProtections() (protections []string) {
+	gp, err := availableGuestProtection()
+	if err != nil || gp == noneProtection {
+		return genericAvailableGuestProtections()
+	}
+	return []string{gp.String()}
 }
 
 // hypervisor is the virtcontainers hypervisor interface.

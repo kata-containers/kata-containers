@@ -1,3 +1,6 @@
+//go:build linux
+// +build linux
+//
 // Copyright (c) 2018 Intel Corporation
 //
 // SPDX-License-Identifier: Apache-2.0
@@ -36,12 +39,6 @@ const (
 	defaultQemuMachineOptions = "accel=kvm,kernel_irqchip=on"
 
 	qmpMigrationWaitTimeout = 5 * time.Second
-
-	tdxSysFirmwareDir = "/sys/firmware/tdx_seam/"
-
-	tdxCPUFlag = "tdx"
-
-	sevKvmParameterPath = "/sys/module/kvm_amd/parameters/sev"
 )
 
 var qemuPaths = map[string]string{
@@ -79,11 +76,6 @@ var supportedQemuMachines = []govmmQemu.Machine{
 		Type:    QemuMicrovm,
 		Options: defaultQemuMachineOptions,
 	},
-}
-
-// MaxQemuVCPUs returns the maximum number of vCPUs supported
-func MaxQemuVCPUs() uint32 {
-	return uint32(240)
 }
 
 func newQemuArch(config HypervisorConfig) (qemuArch, error) {
