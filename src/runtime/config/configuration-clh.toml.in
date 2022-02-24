@@ -26,6 +26,7 @@ image = "@IMAGEPATH@"
 #   - CPU Hotplug 
 #   - Device Hotplug
 #   - Memory Hotplug
+#   - NVDIMM devices
 #
 # Default false
 # confidential_guest = true

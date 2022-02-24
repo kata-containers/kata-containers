@@ -271,6 +271,9 @@ func (clh *cloudHypervisor) CreateVM(ctx context.Context, id string, network Net
 
 	// First take the default parameters defined by this driver
 	params := commonNvdimmKernelRootParams
+	if clh.config.ConfidentialGuest {
+		params = commonVirtioblkKernelRootParams
+	}
 	params = append(params, clhKernelParams...)
 
 	// Followed by extra debug parameters if debug enabled in configuration file
@@ -296,13 +299,24 @@ func (clh *cloudHypervisor) CreateVM(ctx context.Context, id string, network Net
 	}
 
 	if imagePath != "" {
-		pmem := chclient.NewPmemConfig(imagePath)
-		*pmem.DiscardWrites = true
+		if clh.config.ConfidentialGuest {
+			disk := chclient.NewDiskConfig(imagePath)
+			disk.SetReadonly(true)
 
-		if clh.vmconfig.Pmem != nil {
-			*clh.vmconfig.Pmem = append(*clh.vmconfig.Pmem, *pmem)
+			if clh.vmconfig.Disks != nil {
+				*clh.vmconfig.Disks = append(*clh.vmconfig.Disks, *disk)
+			} else {
+				clh.vmconfig.Disks = &[]chclient.DiskConfig{*disk}
+			}
 		} else {
-			clh.vmconfig.Pmem = &[]chclient.PmemConfig{*pmem}
+			pmem := chclient.NewPmemConfig(imagePath)
+			*pmem.DiscardWrites = true
+
+			if clh.vmconfig.Pmem != nil {
+				*clh.vmconfig.Pmem = append(*clh.vmconfig.Pmem, *pmem)
+			} else {
+				clh.vmconfig.Pmem = &[]chclient.PmemConfig{*pmem}
+			}
 		}
 	} else {
 		initrdPath, err := clh.config.InitrdAssetPath()
