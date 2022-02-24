@@ -7,7 +7,7 @@ Name | Type | Description | Notes
 **Id** | Pointer to **string** |  | [optional] 
 **Resources** | Pointer to **[]map[string]interface{}** |  | [optional] 
 **Children** | Pointer to **[]string** |  | [optional] 
-**PciBdf** | Pointer to **int32** |  | [optional] 
+**PciBdf** | Pointer to **string** |  | [optional] 
 
 ## Methods
 
@@ -105,20 +105,20 @@ HasChildren returns a boolean if a field has been set.
 
 ### GetPciBdf
 
-`func (o *DeviceNode) GetPciBdf() int32`
+`func (o *DeviceNode) GetPciBdf() string`
 
 GetPciBdf returns the PciBdf field if non-nil, zero value otherwise.
 
 ### GetPciBdfOk
 
-`func (o *DeviceNode) GetPciBdfOk() (*int32, bool)`
+`func (o *DeviceNode) GetPciBdfOk() (*string, bool)`
 
 GetPciBdfOk returns a tuple with the PciBdf field if it's non-nil, zero value otherwise
 and a boolean to check if the value has been set.
 
 ### SetPciBdf
 
-`func (o *DeviceNode) SetPciBdf(v int32)`
+`func (o *DeviceNode) SetPciBdf(v string)`
 
 SetPciBdf sets PciBdf field to given value.
 
