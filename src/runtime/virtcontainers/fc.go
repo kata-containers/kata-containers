@@ -1,5 +1,6 @@
 //go:build linux
 // +build linux
+
 //
 // Copyright (c) 2018 Intel Corporation
 //
@@ -795,10 +796,13 @@ func (fc *firecracker) StartVM(ctx context.Context, timeout int) error {
 	// are executed by kata-runtime after this call, run with the SELinux
 	// label. If these processes require privileged, we do not want to run
 	// them under confinement.
-	if err := label.SetProcessLabel(fc.config.SELinuxProcessLabel); err != nil {
-		return err
+	if !fc.config.DisableSeLinux {
+
+		if err := label.SetProcessLabel(fc.config.SELinuxProcessLabel); err != nil {
+			return err
+		}
+		defer label.SetProcessLabel("")
 	}
-	defer label.SetProcessLabel("")
 
 	err = fc.fcInit(ctx, fcTimeout)
 	if err != nil {
