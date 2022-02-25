@@ -657,7 +657,7 @@ func (clh *cloudHypervisor) HotplugRemoveDevice(ctx context.Context, devInfo int
 	defer span.End()
 
 	if clh.config.ConfidentialGuest {
-		return nil, errors.New("Device hotplug addition is not supported in confidential mode")
+		return nil, errors.New("Device hotplug removal is not supported in confidential mode")
 	}
 
 	var deviceID string
