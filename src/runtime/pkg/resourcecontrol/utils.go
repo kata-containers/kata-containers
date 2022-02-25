@@ -35,8 +35,8 @@ func DeviceToCgroupDeviceRule(device string) (*devices.Rule, error) {
 		return nil, fmt.Errorf("unsupported device type: %v", devType)
 	}
 
-	major := int64(unix.Major(st.Rdev))
-	minor := int64(unix.Minor(st.Rdev))
+	major := int64(unix.Major(uint64(st.Rdev)))
+	minor := int64(unix.Minor(uint64(st.Rdev)))
 	deviceRule.Major = major
 	deviceRule.Minor = minor
 
