@@ -136,6 +136,7 @@ type hypervisor struct {
 	GuestSwap               bool     `toml:"enable_guest_swap"`
 	Rootless                bool     `toml:"rootless"`
 	DisableSeccomp          bool     `toml:"disable_seccomp"`
+	DisableSeLinux          bool     `toml:"disable_selinux"`
 }
 
 type runtime struct {
@@ -881,6 +882,7 @@ func newClhHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		SGXEPCSize:              defaultSGXEPCSize,
 		EnableAnnotations:       h.EnableAnnotations,
 		DisableSeccomp:          h.DisableSeccomp,
+		DisableSeLinux:          h.DisableSeLinux,
 	}, nil
 }
 

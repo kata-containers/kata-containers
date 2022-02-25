@@ -388,10 +388,13 @@ func (clh *cloudHypervisor) StartVM(ctx context.Context, timeout int) error {
 	// virtiofsd are executed by kata-runtime after this call, run with
 	// the SELinux label. If these processes require privileged, we do
 	// notwant to run them under confinement.
-	if err := label.SetProcessLabel(clh.config.SELinuxProcessLabel); err != nil {
-		return err
+	if !clh.config.DisableSeLinux {
+
+		if err := label.SetProcessLabel(clh.config.SELinuxProcessLabel); err != nil {
+			return err
+		}
+		defer label.SetProcessLabel("")
 	}
-	defer label.SetProcessLabel("")
 
 	if clh.config.SharedFS == config.VirtioFS {
 		clh.Logger().WithField("function", "StartVM").Info("Starting virtiofsd")
