@@ -83,6 +83,11 @@ func newQemuArch(config HypervisorConfig) (qemuArch, error) {
 		if err := q.enableProtection(); err != nil {
 			return nil, err
 		}
+
+		if !q.qemuArchBase.disableNvdimm {
+			hvLogger.WithField("subsystem", "qemuPPC64le").Warn("Nvdimm is not supported with confidential guest, disabling it.")
+			q.qemuArchBase.disableNvdimm = true
+		}
 	}
 
 	q.handleImagePath(config)
@@ -96,7 +101,8 @@ func (q *qemuPPC64le) capabilities() types.Capabilities {
 	var caps types.Capabilities
 
 	// pseries machine type supports hotplugging drives
-	if q.qemuMachine.Type == QemuPseries {
+	if q.qemuMachine.Type == QemuPseries &&
+		q.protection == noneProtection {
 		caps.SetBlockDeviceHotplugSupport()
 	}
 

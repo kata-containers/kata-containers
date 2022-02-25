@@ -277,7 +277,9 @@ func (q *qemuArchBase) kernelParameters(debug bool) []Param {
 
 func (q *qemuArchBase) capabilities() types.Capabilities {
 	var caps types.Capabilities
-	caps.SetBlockDeviceHotplugSupport()
+	if q.protection == noneProtection {
+		caps.SetBlockDeviceHotplugSupport()
+	}
 	caps.SetMultiQueueSupport()
 	caps.SetFsSharingSupport()
 	return caps
@@ -690,7 +692,7 @@ func (q *qemuArchBase) handleImagePath(config HypervisorConfig) {
 }
 
 func (q *qemuArchBase) supportGuestMemoryHotplug() bool {
-	return true
+	return q.protection == noneProtection
 }
 
 func (q *qemuArchBase) setIgnoreSharedMemoryMigrationCaps(ctx context.Context, qmp *govmmQemu.QMP) error {

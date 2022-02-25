@@ -21,6 +21,14 @@ machine_type = "@MACHINETYPE@"
 # from memory encryption to both memory and CPU-state encryption and integrity.
 # The Kata Containers runtime dynamically detects the available feature set and
 # aims at enabling the largest possible one.
+#
+# Known limitations:
+# * Does not work by design:
+#   - CPU Hotplug 
+#   - Device Hotplug
+#   - Memory Hotplug
+#   - NVDIMM devices
+#
 # Default false
 # confidential_guest = true
 
@@ -279,6 +287,9 @@ pflashes = []
 
 # If false and nvdimm is supported, use nvdimm device to plug guest image.
 # Otherwise virtio-block device is used.
+#
+# nvdimm is not supported when `confidential_guest = true`.
+#
 # Default is false
 #disable_image_nvdimm = true
 

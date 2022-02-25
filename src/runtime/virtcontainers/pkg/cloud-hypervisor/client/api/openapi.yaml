@@ -181,6 +181,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/PciDeviceInfo'
           description: The new device was successfully added to the VM instance.
+        "204":
+          description: The new device was successfully (cold) added to the VM instance.
         "404":
           description: The new device could not be added to the VM instance.
       summary: Add a new device to the VM
@@ -215,6 +217,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/PciDeviceInfo'
           description: The new disk was successfully added to the VM instance.
+        "204":
+          description: The new disk was successfully (cold) added to the VM instance.
         "500":
           description: The new disk could not be added to the VM instance.
       summary: Add a new disk to the VM
@@ -234,6 +238,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/PciDeviceInfo'
           description: The new device was successfully added to the VM instance.
+        "204":
+          description: The new device was successfully (cold) added to the VM instance.
         "500":
           description: The new device could not be added to the VM instance.
       summary: Add a new virtio-fs device to the VM
@@ -253,6 +259,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/PciDeviceInfo'
           description: The new device was successfully added to the VM instance.
+        "204":
+          description: The new device was successfully (cold) added to the VM instance.
         "500":
           description: The new device could not be added to the VM instance.
       summary: Add a new pmem device to the VM
@@ -272,6 +280,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/PciDeviceInfo'
           description: The new device was successfully added to the VM instance.
+        "204":
+          description: The new device was successfully (cold) added to the VM instance.
         "500":
           description: The new device could not be added to the VM instance.
       summary: Add a new network device to the VM
@@ -291,6 +301,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/PciDeviceInfo'
           description: The new device was successfully added to the VM instance.
+        "204":
+          description: The new device was successfully (cold) added to the VM instance.
         "500":
           description: The new device could not be added to the VM instance.
       summary: Add a new vsock device to the VM
@@ -632,7 +644,7 @@ components:
             children:
             - children
             - children
-            pci_bdf: 3
+            pci_bdf: pci_bdf
             resources:
             - '{}'
             - '{}'
@@ -663,7 +675,7 @@ components:
         children:
         - children
         - children
-        pci_bdf: 3
+        pci_bdf: pci_bdf
         resources:
         - '{}'
         - '{}'
@@ -680,8 +692,7 @@ components:
             type: string
           type: array
         pci_bdf:
-          format: int32
-          type: integer
+          type: string
       type: object
     VmCounters:
       additionalProperties:
@@ -1757,6 +1768,8 @@ components:
       properties:
         receiver_url:
           type: string
+      required:
+      - receiver_url
       type: object
     SendMigrationData:
       example:
@@ -1767,4 +1780,6 @@ components:
           type: string
         local:
           type: boolean
+      required:
+      - destination_url
       type: object

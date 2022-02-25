@@ -132,6 +132,11 @@ func newQemuArch(config HypervisorConfig) (qemuArch, error) {
 		if err := q.enableProtection(); err != nil {
 			return nil, err
 		}
+
+		if !q.qemuArchBase.disableNvdimm {
+			hvLogger.WithField("subsystem", "qemuAmd64").Warn("Nvdimm is not supported with confidential guest, disabling it.")
+			q.qemuArchBase.disableNvdimm = true
+		}
 	}
 
 	if config.SGXEPCSize != 0 {
@@ -153,8 +158,9 @@ func newQemuArch(config HypervisorConfig) (qemuArch, error) {
 func (q *qemuAmd64) capabilities() types.Capabilities {
 	var caps types.Capabilities
 
-	if q.qemuMachine.Type == QemuQ35 ||
-		q.qemuMachine.Type == QemuVirt {
+	if (q.qemuMachine.Type == QemuQ35 ||
+		q.qemuMachine.Type == QemuVirt) &&
+		q.protection == noneProtection {
 		caps.SetBlockDeviceHotplugSupport()
 	}
 
@@ -188,7 +194,11 @@ func (q *qemuAmd64) memoryTopology(memoryMb, hostMemoryMb uint64, slots uint8) g
 // Is Memory Hotplug supported by this architecture/machine type combination?
 func (q *qemuAmd64) supportGuestMemoryHotplug() bool {
 	// true for all amd64 machine types except for microvm.
-	return q.qemuMachine.Type != govmmQemu.MachineTypeMicrovm
+	if q.qemuMachine.Type == govmmQemu.MachineTypeMicrovm {
+		return false
+	}
+
+	return q.protection == noneProtection
 }
 
 func (q *qemuAmd64) appendImage(ctx context.Context, devices []govmmQemu.Device, path string) ([]govmmQemu.Device, error) {

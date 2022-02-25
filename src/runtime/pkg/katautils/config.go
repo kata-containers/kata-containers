@@ -877,6 +877,7 @@ func newClhHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		SGXEPCSize:              defaultSGXEPCSize,
 		EnableAnnotations:       h.EnableAnnotations,
 		DisableSeccomp:          h.DisableSeccomp,
+		ConfidentialGuest:       h.ConfidentialGuest,
 	}, nil
 }
 

@@ -16,15 +16,16 @@ import (
 
 // ReceiveMigrationData struct for ReceiveMigrationData
 type ReceiveMigrationData struct {
-	ReceiverUrl *string `json:"receiver_url,omitempty"`
+	ReceiverUrl string `json:"receiver_url"`
 }
 
 // NewReceiveMigrationData instantiates a new ReceiveMigrationData object
 // This constructor will assign default values to properties that have it defined,
 // and makes sure properties required by API are set, but the set of arguments
 // will change when the set of required properties is changed
-func NewReceiveMigrationData() *ReceiveMigrationData {
+func NewReceiveMigrationData(receiverUrl string) *ReceiveMigrationData {
 	this := ReceiveMigrationData{}
+	this.ReceiverUrl = receiverUrl
 	return &this
 }
 
@@ -36,41 +37,33 @@ func NewReceiveMigrationDataWithDefaults() *ReceiveMigrationData {
 	return &this
 }
 
-// GetReceiverUrl returns the ReceiverUrl field value if set, zero value otherwise.
+// GetReceiverUrl returns the ReceiverUrl field value
 func (o *ReceiveMigrationData) GetReceiverUrl() string {
-	if o == nil || o.ReceiverUrl == nil {
+	if o == nil {
 		var ret string
 		return ret
 	}
-	return *o.ReceiverUrl
+
+	return o.ReceiverUrl
 }
 
-// GetReceiverUrlOk returns a tuple with the ReceiverUrl field value if set, nil otherwise
+// GetReceiverUrlOk returns a tuple with the ReceiverUrl field value
 // and a boolean to check if the value has been set.
 func (o *ReceiveMigrationData) GetReceiverUrlOk() (*string, bool) {
-	if o == nil || o.ReceiverUrl == nil {
+	if o == nil {
 		return nil, false
 	}
-	return o.ReceiverUrl, true
+	return &o.ReceiverUrl, true
 }
 
-// HasReceiverUrl returns a boolean if a field has been set.
-func (o *ReceiveMigrationData) HasReceiverUrl() bool {
-	if o != nil && o.ReceiverUrl != nil {
-		return true
-	}
-
-	return false
-}
-
-// SetReceiverUrl gets a reference to the given string and assigns it to the ReceiverUrl field.
+// SetReceiverUrl sets field value
 func (o *ReceiveMigrationData) SetReceiverUrl(v string) {
-	o.ReceiverUrl = &v
+	o.ReceiverUrl = v
 }
 
 func (o ReceiveMigrationData) MarshalJSON() ([]byte, error) {
 	toSerialize := map[string]interface{}{}
-	if o.ReceiverUrl != nil {
+	if true {
 		toSerialize["receiver_url"] = o.ReceiverUrl
 	}
 	return json.Marshal(toSerialize)
