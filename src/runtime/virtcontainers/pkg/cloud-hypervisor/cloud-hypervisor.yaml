@@ -195,6 +195,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PciDeviceInfo'
+        204:
+          description: The new device was successfully (cold) added to the VM instance.
         404:
           description: The new device could not be added to the VM instance.
 
@@ -231,6 +233,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PciDeviceInfo'
+        204:
+          description: The new disk was successfully (cold) added to the VM instance.
         500:
           description: The new disk could not be added to the VM instance.
 
@@ -251,6 +255,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PciDeviceInfo'
+        204:
+          description: The new device was successfully (cold) added to the VM instance.
         500:
           description: The new device could not be added to the VM instance.
 
@@ -271,6 +277,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PciDeviceInfo'
+        204:
+          description: The new device was successfully (cold) added to the VM instance.
         500:
           description: The new device could not be added to the VM instance.
 
@@ -291,6 +299,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PciDeviceInfo'
+        204:
+          description: The new device was successfully (cold) added to the VM instance.
         500:
           description: The new device could not be added to the VM instance.
 
@@ -311,6 +321,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PciDeviceInfo'
+        204:
+          description: The new device was successfully (cold) added to the VM instance.
         500:
           description: The new device could not be added to the VM instance.
 
@@ -428,8 +440,7 @@ components:
           items:
             type: string
         pci_bdf:
-          type: integer
-          format: int32
+          type: string
 
     VmCounters:
       type: object
@@ -1055,12 +1066,16 @@ components:
           type: boolean
 
     ReceiveMigrationData:
+      required:
+      - receiver_url
       type: object
       properties:
         receiver_url:
           type: string
 
     SendMigrationData:
+      required:
+      - destination_url
       type: object
       properties:
         destination_url:

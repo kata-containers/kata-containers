@@ -52,9 +52,9 @@ build_clh_from_source() {
     pushd "${repo_dir}"
     git fetch || true
     git checkout "${cloud_hypervisor_version}"
-    if [ -n "${extra_build_args}" ]; then
-        info "Build cloud-hypervisor with extra args: ${extra_build_args}"
-        ./scripts/dev_cli.sh build --release --libc musl -- ${extra_build_args}
+    if [ -n "${features}" ]; then
+        info "Build cloud-hypervisor enabling the following features: ${features}"
+        ./scripts/dev_cli.sh build --release --libc musl --features "${features}"
     else
         ./scripts/dev_cli.sh build --release --libc musl
     fi

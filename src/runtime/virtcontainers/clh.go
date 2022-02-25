@@ -171,12 +171,9 @@ type cloudHypervisor struct {
 }
 
 var clhKernelParams = []Param{
-	{"root", "/dev/pmem0p1"},
 	{"panic", "1"},         // upon kernel panic wait 1 second before reboot
 	{"no_timer_check", ""}, // do not Check broken timer IRQ resources
 	{"noreplace-smp", ""},  // do not replace SMP instructions
-	{"rootflags", "dax,data=ordered,errors=remount-ro ro"}, // mount the root filesystem as readonly
-	{"rootfstype", "ext4"},
 }
 
 var clhDebugKernelParams = []Param{
@@ -203,6 +200,34 @@ func (clh *cloudHypervisor) setConfig(config *HypervisorConfig) error {
 
 func (clh *cloudHypervisor) nydusdAPISocketPath(id string) (string, error) {
 	return utils.BuildSocketPath(clh.config.VMStorePath, id, nydusdAPISock)
+}
+
+func (clh *cloudHypervisor) enableProtection() error {
+	protection, err := availableGuestProtection()
+	if err != nil {
+		return err
+	}
+
+	switch protection {
+	case tdxProtection:
+		firmwarePath, err := clh.config.FirmwareAssetPath()
+		if err != nil {
+			return err
+		}
+
+		if firmwarePath == "" {
+			return errors.New("Firmware path is not specified")
+		}
+
+		clh.vmconfig.Tdx = chclient.NewTdxConfig(firmwarePath)
+		return nil
+
+	case sevProtection:
+		return errors.New("SEV protection is not supported by Cloud Hypervisor")
+
+	default:
+		return errors.New("This system doesn't support Confidentian Computing (Guest Protection)")
+	}
 }
 
 // For cloudHypervisor this call only sets the internal structure up.
@@ -251,23 +276,35 @@ func (clh *cloudHypervisor) CreateVM(ctx context.Context, id string, network Net
 	// Create the VM config via the constructor to ensure default values are properly assigned
 	clh.vmconfig = *chclient.NewVmConfig(*chclient.NewKernelConfig(kernelPath))
 
+	if clh.config.ConfidentialGuest {
+		if err := clh.enableProtection(); err != nil {
+			return err
+		}
+	}
+
 	// Create the VM memory config via the constructor to ensure default values are properly assigned
 	clh.vmconfig.Memory = chclient.NewMemoryConfig(int64((utils.MemUnit(clh.config.MemorySize) * utils.MiB).ToBytes()))
 	// shared memory should be enabled if using vhost-user(kata uses virtiofsd)
 	clh.vmconfig.Memory.Shared = func(b bool) *bool { return &b }(true)
 	// Enable hugepages if needed
 	clh.vmconfig.Memory.Hugepages = func(b bool) *bool { return &b }(clh.config.HugePages)
-	hostMemKb, err := GetHostMemorySizeKb(procMemInfo)
-	if err != nil {
-		return nil
+	if !clh.config.ConfidentialGuest {
+		hostMemKb, err := GetHostMemorySizeKb(procMemInfo)
+		if err != nil {
+			return nil
+		}
+		// OpenAPI only supports int64 values
+		clh.vmconfig.Memory.HotplugSize = func(i int64) *int64 { return &i }(int64((utils.MemUnit(hostMemKb) * utils.KiB).ToBytes()))
 	}
-	// OpenAPI only supports int64 values
-	clh.vmconfig.Memory.HotplugSize = func(i int64) *int64 { return &i }(int64((utils.MemUnit(hostMemKb) * utils.KiB).ToBytes()))
 	// Set initial amount of cpu's for the virtual machine
 	clh.vmconfig.Cpus = chclient.NewCpusConfig(int32(clh.config.NumVCPUs), int32(clh.config.DefaultMaxVCPUs))
 
 	// First take the default parameters defined by this driver
-	params := clhKernelParams
+	params := commonNvdimmKernelRootParams
+	if clh.config.ConfidentialGuest {
+		params = commonVirtioblkKernelRootParams
+	}
+	params = append(params, clhKernelParams...)
 
 	// Followed by extra debug parameters if debug enabled in configuration file
 	if clh.config.Debug {
@@ -291,26 +328,35 @@ func (clh *cloudHypervisor) CreateVM(ctx context.Context, id string, network Net
 		return err
 	}
 
-	initrdPath, err := clh.config.InitrdAssetPath()
-	if err != nil {
-		return err
-	}
-
 	if imagePath != "" {
-		pmem := chclient.NewPmemConfig(imagePath)
-		*pmem.DiscardWrites = true
+		if clh.config.ConfidentialGuest {
+			disk := chclient.NewDiskConfig(imagePath)
+			disk.SetReadonly(true)
 
-		if clh.vmconfig.Pmem != nil {
-			*clh.vmconfig.Pmem = append(*clh.vmconfig.Pmem, *pmem)
+			if clh.vmconfig.Disks != nil {
+				*clh.vmconfig.Disks = append(*clh.vmconfig.Disks, *disk)
+			} else {
+				clh.vmconfig.Disks = &[]chclient.DiskConfig{*disk}
+			}
 		} else {
-			clh.vmconfig.Pmem = &[]chclient.PmemConfig{*pmem}
+			pmem := chclient.NewPmemConfig(imagePath)
+			*pmem.DiscardWrites = true
+
+			if clh.vmconfig.Pmem != nil {
+				*clh.vmconfig.Pmem = append(*clh.vmconfig.Pmem, *pmem)
+			} else {
+				clh.vmconfig.Pmem = &[]chclient.PmemConfig{*pmem}
+			}
 		}
-	} else if initrdPath != "" {
+	} else {
+		initrdPath, err := clh.config.InitrdAssetPath()
+		if err != nil {
+			return err
+		}
+
 		initrd := chclient.NewInitramfsConfig(initrdPath)
 
 		clh.vmconfig.SetInitramfs(*initrd)
-	} else {
-		return errors.New("no image or initrd specified")
 	}
 
 	// Use serial port as the guest console only in debug mode,
@@ -589,6 +635,10 @@ func (clh *cloudHypervisor) HotplugAddDevice(ctx context.Context, devInfo interf
 	span, _ := katatrace.Trace(ctx, clh.Logger(), "HotplugAddDevice", clhTracingTags, map[string]string{"sandbox_id": clh.id})
 	defer span.End()
 
+	if clh.config.ConfidentialGuest {
+		return nil, errors.New("Device hotplug addition is not supported in confidential mode")
+	}
+
 	switch devType {
 	case BlockDev:
 		drive := devInfo.(*config.BlockDrive)
@@ -605,6 +655,10 @@ func (clh *cloudHypervisor) HotplugAddDevice(ctx context.Context, devInfo interf
 func (clh *cloudHypervisor) HotplugRemoveDevice(ctx context.Context, devInfo interface{}, devType DeviceType) (interface{}, error) {
 	span, _ := katatrace.Trace(ctx, clh.Logger(), "HotplugRemoveDevice", clhTracingTags, map[string]string{"sandbox_id": clh.id})
 	defer span.End()
+
+	if clh.config.ConfidentialGuest {
+		return nil, errors.New("Device hotplug addition is not supported in confidential mode")
+	}
 
 	var deviceID string
 
@@ -860,7 +914,9 @@ func (clh *cloudHypervisor) Capabilities(ctx context.Context) types.Capabilities
 	clh.Logger().WithField("function", "Capabilities").Info("get Capabilities")
 	var caps types.Capabilities
 	caps.SetFsSharingSupport()
-	caps.SetBlockDeviceHotplugSupport()
+	if !clh.config.ConfidentialGuest {
+		caps.SetBlockDeviceHotplugSupport()
+	}
 	return caps
 }
 
