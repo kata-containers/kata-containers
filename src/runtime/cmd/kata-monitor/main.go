@@ -26,7 +26,7 @@ var logLevel = flag.String("log-level", "info", "Log level of logrus(trace/debug
 var (
 	appName = "kata-monitor"
 	// version is the kata monitor version.
-	version = "0.2.0"
+	version = "0.3.0"
 
 	GitCommit = "unknown-commit"
 )

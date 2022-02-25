@@ -160,12 +160,12 @@ func (km *KataMonitor) aggregateSandboxMetrics(encoder expfmt.Encoder) error {
 
 	// get metrics from sandbox's shim
 	for _, sandboxID := range sandboxes {
-		sandboxMetadata, ok := km.sandboxCache.getMetadata(sandboxID)
+		sandboxMetadata, ok := km.sandboxCache.getCRIMetadata(sandboxID)
 		if !ok { // likely the sandbox has been just removed
 			continue
 		}
 		wg.Add(1)
-		go func(sandboxID string, sandboxMetadata sandboxKubeData, results chan<- []*dto.MetricFamily) {
+		go func(sandboxID string, sandboxMetadata sandboxCRIMetadata, results chan<- []*dto.MetricFamily) {
 			sandboxMetrics, err := getParsedMetrics(sandboxID, sandboxMetadata)
 			if err != nil {
 				monitorLog.WithError(err).WithField("sandbox_id", sandboxID).Errorf("failed to get metrics for sandbox")
@@ -223,7 +223,7 @@ func (km *KataMonitor) aggregateSandboxMetrics(encoder expfmt.Encoder) error {
 
 }
 
-func getParsedMetrics(sandboxID string, sandboxMetadata sandboxKubeData) ([]*dto.MetricFamily, error) {
+func getParsedMetrics(sandboxID string, sandboxMetadata sandboxCRIMetadata) ([]*dto.MetricFamily, error) {
 	body, err := doGet(sandboxID, defaultTimeout, "metrics")
 	if err != nil {
 		return nil, err
@@ -244,7 +244,7 @@ func GetSandboxMetrics(sandboxID string) (string, error) {
 
 // parsePrometheusMetrics will decode metrics from Prometheus text format
 // and return array of *dto.MetricFamily with an ASC order
-func parsePrometheusMetrics(sandboxID string, sandboxMetadata sandboxKubeData, body []byte) ([]*dto.MetricFamily, error) {
+func parsePrometheusMetrics(sandboxID string, sandboxMetadata sandboxCRIMetadata, body []byte) ([]*dto.MetricFamily, error) {
 	reader := bytes.NewReader(body)
 	decoder := expfmt.NewDecoder(reader, expfmt.FmtText)
 
@@ -268,15 +268,15 @@ func parsePrometheusMetrics(sandboxID string, sandboxMetadata sandboxKubeData, b
 					Value: mutils.String2Pointer(sandboxID),
 				},
 				&dto.LabelPair{
-					Name:  mutils.String2Pointer("kube_uid"),
+					Name:  mutils.String2Pointer("cri_uid"),
 					Value: mutils.String2Pointer(sandboxMetadata.uid),
 				},
 				&dto.LabelPair{
-					Name:  mutils.String2Pointer("kube_name"),
+					Name:  mutils.String2Pointer("cri_name"),
 					Value: mutils.String2Pointer(sandboxMetadata.name),
 				},
 				&dto.LabelPair{
-					Name:  mutils.String2Pointer("kube_namespace"),
+					Name:  mutils.String2Pointer("cri_namespace"),
 					Value: mutils.String2Pointer(sandboxMetadata.namespace),
 				},
 			)
