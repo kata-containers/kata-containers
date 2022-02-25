@@ -16,7 +16,7 @@ ARCH=$(uname -m)
 script_dir=$(dirname $(readlink -f "$0"))
 kata_version="${kata_version:-}"
 force_build_from_source="${force_build_from_source:-false}"
-extra_build_args="${extra_build_args:-}"
+features="${features:-}"
 
 source "${script_dir}/../../scripts/lib.sh"
 
@@ -68,7 +68,7 @@ if [ "${ARCH}" == "aarch64" ]; then
     force_build_from_source="true"
 fi
 
-if [ -n "${extra_build_args}" ]; then
+if [ -n "${features}" ]; then
     info "As an extra build argument has been passed to the script, forcing to build from source"
     force_build_from_source="true"
 fi
