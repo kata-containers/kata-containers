@@ -1,7 +1,6 @@
 //go:build linux
 // +build linux
 
-//
 // Copyright (c) 2019 Ericsson Eurolab Deutschland GmbH
 //
 // SPDX-License-Identifier: Apache-2.0
