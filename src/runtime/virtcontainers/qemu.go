@@ -662,13 +662,16 @@ func (q *qemu) CreateVM(ctx context.Context, id string, network Network, hypervi
 		qemuConfig.IOThreads = []govmmQemu.IOThread{*ioThread}
 	}
 	// Add RNG device to hypervisor
-	rngDev := config.RNGDev{
-		ID:       rngID,
-		Filename: q.config.EntropySource,
-	}
-	qemuConfig.Devices, err = q.arch.appendRNGDevice(ctx, qemuConfig.Devices, rngDev)
-	if err != nil {
-		return err
+	// Skip for s390x as CPACF is used
+	if machine.Type != QemuCCWVirtio {
+		rngDev := config.RNGDev{
+			ID:       rngID,
+			Filename: q.config.EntropySource,
+		}
+		qemuConfig.Devices, err = q.arch.appendRNGDevice(ctx, qemuConfig.Devices, rngDev)
+		if err != nil {
+			return err
+		}
 	}
 
 	// Add PCIe Root Port devices to hypervisor
