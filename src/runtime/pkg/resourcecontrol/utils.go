@@ -7,6 +7,7 @@ package resourcecontrol
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/opencontainers/runc/libcontainer/devices"
 	"github.com/opencontainers/runtime-spec/specs-go"
@@ -56,4 +57,21 @@ func DeviceToLinuxDevice(device string) (specs.LinuxDeviceCgroup, error) {
 		Minor:  &dev.Minor,
 		Access: string(dev.Permissions),
 	}, nil
+}
+
+func IsSystemdCgroup(cgroupPath string) bool {
+
+	// If we are utilizing systemd to manage cgroups, we expect to receive a path
+	// in the format slice:scopeprefix:name. A typical example would be:
+	//
+	// system.slice:docker:6b4c4a4d0cc2a12c529dcb13a2b8e438dfb3b2a6af34d548d7d
+	//
+	// Based on this, let's split by the ':' delimiter and verify that the first
+	// section has .slice as a suffix.
+	parts := strings.Split(cgroupPath, ":")
+	if len(parts) == 3 && strings.HasSuffix(parts[0], ".slice") {
+		return true
+	}
+
+	return false
 }
