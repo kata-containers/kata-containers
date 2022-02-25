@@ -53,7 +53,7 @@ func NewKataMonitor(runtimeEndpoint string) (*KataMonitor, error) {
 		runtimeEndpoint: runtimeEndpoint,
 		sandboxCache: &sandboxCache{
 			Mutex:     &sync.Mutex{},
-			sandboxes: make(map[string]sandboxKubeData),
+			sandboxes: make(map[string]sandboxCRIMetadata),
 		},
 	}
 
@@ -104,10 +104,14 @@ func (km *KataMonitor) startPodCacheUpdater() {
 		monitorLog.WithError(err).Fatal("cannot read sandboxes fs")
 		os.Exit(1)
 	}
+	for _, sandbox := range sandboxList {
+		km.sandboxCache.putIfNotExists(sandbox, sandboxCRIMetadata{})
+	}
+
 	monitorLog.Debug("initial sync of sbs directory completed")
 	monitorLog.Tracef("pod list from sbs: %v", sandboxList)
 
-	// We should get kubernetes metadata from the container manager for each new kata sandbox we detect.
+	// We try to get CRI (kubernetes) metadata from the container manager for each new kata sandbox we detect.
 	// It may take a while for data to be available, so we always wait podCacheRefreshDelaySeconds before checking.
 	cacheUpdateTimer := time.NewTimer(podCacheRefreshDelaySeconds * time.Second)
 	cacheUpdateTimerIsSet := true
@@ -123,7 +127,7 @@ func (km *KataMonitor) startPodCacheUpdater() {
 			case fsnotify.Create:
 				splitPath := strings.Split(event.Name, string(os.PathSeparator))
 				id := splitPath[len(splitPath)-1]
-				if !km.sandboxCache.putIfNotExists(id, sandboxKubeData{}) {
+				if !km.sandboxCache.putIfNotExists(id, sandboxCRIMetadata{}) {
 					monitorLog.WithField("pod", id).Warn(
 						"CREATE event but pod already present in the sandbox cache")
 				}
