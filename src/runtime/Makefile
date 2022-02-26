@@ -158,6 +158,8 @@ DEFDISABLEGUESTSECCOMP := true
 #Default experimental features enabled
 DEFAULTEXPFEATURES := []
 
+DEFDISABLESELINUX := false
+
 #Default entropy source
 DEFENTROPYSOURCE := /dev/urandom
 DEFVALIDENTROPYSOURCES := [\"/dev/urandom\",\"/dev/random\",\"\"]
@@ -192,9 +194,6 @@ DEFSANDBOXCGROUPONLY ?= false
 DEFSTATICRESOURCEMGMT ?= false
 
 DEFBINDMOUNTS := []
-
-# Features
-FEATURE_SELINUX ?= check
 
 SED = sed
 
@@ -433,6 +432,7 @@ USER_VARS += DEFNETWORKMODEL_CLH
 USER_VARS += DEFNETWORKMODEL_FC
 USER_VARS += DEFNETWORKMODEL_QEMU
 USER_VARS += DEFDISABLEGUESTSECCOMP
+USER_VARS += DEFDISABLESELINUX
 USER_VARS += DEFAULTEXPFEATURES
 USER_VARS += DEFDISABLEBLOCK
 USER_VARS += DEFBLOCKSTORAGEDRIVER_ACRN
@@ -460,7 +460,6 @@ USER_VARS += DEFSTATICRESOURCEMGMT
 USER_VARS += DEFSTATICRESOURCEMGMT_FC
 USER_VARS += DEFBINDMOUNTS
 USER_VARS += DEFVFIOMODE
-USER_VARS += FEATURE_SELINUX
 USER_VARS += BUILDFLAGS
 
 
@@ -474,21 +473,6 @@ QUIET_INST     = $(Q:@=@echo    '     INSTALL  '$@;)
 QUIET_TEST     = $(Q:@=@echo    '     TEST     '$@;)
 
 BUILDTAGS :=
-
-ifneq ($(FEATURE_SELINUX),no)
-    SELINUXTAG := $(shell ./hack/selinux_tag.sh)
-
-    ifneq ($(SELINUXTAG),)
-        override FEATURE_SELINUX = yes
-        BUILDTAGS += --tags "$(SELINUXTAG)"
-    else
-        ifeq ($(FEATURE_SELINUX),yes)
-            $(error "ERROR: SELinux support requested, but libselinux is not available")
-        endif
-
-        override FEATURE_SELINUX = no
-    endif
-endif
 
 # go build common flags
 BUILDFLAGS := -buildmode=pie -mod=vendor ${BUILDTAGS}
@@ -748,9 +732,6 @@ endif
 	@printf "\tDefault: $(DEFAULT_HYPERVISOR)\n"
 	@printf "\tKnown: $(sort $(HYPERVISORS))\n"
 	@printf "\tAvailable for this architecture: $(sort $(KNOWN_HYPERVISORS))\n"
-	@printf "\n"
-	@printf "• Features:\n"
-	@printf "\tSELinux (FEATURE_SELINUX): $(FEATURE_SELINUX)\n"
 	@printf "\n"
 	@printf "• Summary:\n"
 	@printf "\n"

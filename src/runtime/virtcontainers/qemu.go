@@ -1,5 +1,6 @@
 //go:build linux
 // +build linux
+
 //
 // Copyright (c) 2016 Intel Corporation
 //
@@ -845,11 +846,13 @@ func (q *qemu) StartVM(ctx context.Context, timeout int) error {
 	// virtiofsd are executed by kata-runtime after this call, run with
 	// the SELinux label. If these processes require privileged, we do
 	// notwant to run them under confinement.
-	if err := label.SetProcessLabel(q.config.SELinuxProcessLabel); err != nil {
-		return err
-	}
-	defer label.SetProcessLabel("")
+	if !q.config.DisableSeLinux {
 
+		if err := label.SetProcessLabel(q.config.SELinuxProcessLabel); err != nil {
+			return err
+		}
+		defer label.SetProcessLabel("")
+	}
 	if q.config.SharedFS == config.VirtioFS || q.config.SharedFS == config.VirtioFSNydus {
 		err = q.setupVirtiofsDaemon(ctx)
 		if err != nil {
