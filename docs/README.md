@@ -58,6 +58,7 @@ Documents that help to understand and contribute to Kata Containers.
 ## Help Writing Unit Tests
 
 * [Unit Test Advice](Unit-Test-Advice.md)
+* [Unit testing presentation](presentations/unit-testing/kata-containers-unit-testing.md)
 
 ## Help Improving the Documents
 
@@ -71,6 +72,10 @@ Documents that help to understand and contribute to Kata Containers.
 
 * [Release strategy](Stable-Branch-Strategy.md)
 * [Release Process](Release-Process.md)
+
+## Presentations
+
+* [Presentations](presentations)
 
 ## Website Changes
 
