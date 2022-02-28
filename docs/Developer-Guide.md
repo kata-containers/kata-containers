@@ -212,11 +212,13 @@ $ sudo systemctl restart systemd-journald
 >
 > - You should only do this step if you are testing with the latest version of the agent.
 
-The rust-agent is built with a static linked `musl.` To configure this:
+The agent is built with a statically linked `musl.` The default `libc` used is `musl`, but on `ppc64le` and `s390x`, `gnu` should be used. To configure this:
 
 ```
-rustup target add x86_64-unknown-linux-musl
-sudo ln -s /usr/bin/g++ /bin/musl-g++
+$ export ARCH=$(uname -m)
+$ if [ "$ARCH" = "ppc64le" -o "$ARCH" = "s390x" ]; then export LIBC=gnu; else export LIBC=musl; fi
+$ [ ${ARCH} == "ppc64le" ] && export ARCH=powerpc64le
+$ rustup target add ${ARCH}-unknown-linux-${LIBC}
 ```
 
 To build the agent:
