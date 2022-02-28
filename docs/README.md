@@ -21,9 +21,9 @@ See the [tracing documentation](tracing.md).
 * [Limitations](Limitations.md): differences and limitations compared with the default [Docker](https://www.docker.com/) runtime,
 [`runc`](https://github.com/opencontainers/runc).
 
-### Howto guides
+### How-to guides
 
-See the [howto documentation](how-to).
+See the [how-to documentation](how-to).
 
 ## Kata Use-Cases
 
@@ -48,7 +48,7 @@ Documents that help to understand and contribute to Kata Containers.
 ### How to Contribute
 
 * [Developer Guide](Developer-Guide.md): Setup the Kata Containers developing environments
-* [How to contribute to Kata Containers](https://github.com/kata-containers/community/blob/master/CONTRIBUTING.md)
+* [How to contribute to Kata Containers](https://github.com/kata-containers/community/blob/main/CONTRIBUTING.md)
 * [Code of Conduct](../CODE_OF_CONDUCT.md)
 
 ## Help Writing a Code PR
