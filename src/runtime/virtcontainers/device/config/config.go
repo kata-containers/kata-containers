@@ -425,8 +425,8 @@ func getVhostUserDevName(dirname string, majorNum, minorNum uint32) (string, err
 			return "", err
 		}
 
-		devMajor := unix.Major(devStat.Rdev)
-		devMinor := unix.Minor(devStat.Rdev)
+		devMajor := unix.Major(uint64(devStat.Rdev))
+		devMinor := unix.Minor(uint64(devStat.Rdev))
 		if devMajor == majorNum && devMinor == minorNum {
 			return file.Name(), nil
 		}

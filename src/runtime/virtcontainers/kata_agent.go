@@ -2084,7 +2084,7 @@ func (k *kataAgent) copyFile(ctx context.Context, src, dst string) error {
 	cpReq := &grpc.CopyFileRequest{
 		Path:     dst,
 		DirMode:  uint32(DirMode),
-		FileMode: st.Mode,
+		FileMode: uint32(st.Mode),
 		FileSize: fileSize,
 		Uid:      int32(st.Uid),
 		Gid:      int32(st.Gid),
