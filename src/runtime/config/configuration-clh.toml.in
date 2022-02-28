@@ -19,7 +19,8 @@ image = "@IMAGEPATH@"
 # Toggling that setting may trigger different hardware features, ranging
 # from memory encryption to both memory and CPU-state encryption and integrity.
 # The Kata Containers runtime dynamically detects the available feature set and
-# aims at enabling the largest possible one.
+# aims at enabling the largest possible one, returning an error if none is
+# available, or none is supported by the hypervisor.
 #
 # Known limitations:
 # * Does not work by design:
