@@ -104,12 +104,13 @@ func (nd *nydusd) Start(ctx context.Context, onQuit onQuitFunc) (int, error) {
 		return pid, err
 	}
 	cmd := exec.Command(nd.path, args...)
-	r, w, err := os.Pipe()
+	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return pid, err
 	}
-	cmd.Stdout = w
-	cmd.Stderr = w
+
+	cmd.Stderr = cmd.Stdout
+
 	fields := logrus.Fields{
 		"path": nd.path,
 		"args": strings.Join(args, " "),
@@ -120,7 +121,7 @@ func (nd *nydusd) Start(ctx context.Context, onQuit onQuitFunc) (int, error) {
 	}
 	// Monitor nydusd's stdout/stderr and stop sandbox if nydusd quits
 	go func() {
-		scanner := bufio.NewScanner(r)
+		scanner := bufio.NewScanner(stdout)
 		for scanner.Scan() {
 			nd.Logger().Info(scanner.Text())
 		}
