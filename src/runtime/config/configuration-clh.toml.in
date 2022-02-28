@@ -40,7 +40,7 @@ image = "@IMAGEPATH@"
 #
 # For more information about firmwared that can be used with specific TEEs,
 # please, refer to:
-# * TDX:
+# * Intel TDX:
 #   - td-shim: https://github.com/confidential-containers/td-shim
 #
 # firmware = "@FIRMWAREPATH@"
