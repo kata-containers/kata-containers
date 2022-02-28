@@ -1,6 +1,3 @@
-//go:build linux
-// +build linux
-
 // Copyright (c) 2016 Intel Corporation
 // Copyright (c) 2014,2015,2016,2017 Docker, Inc.
 // SPDX-License-Identifier: Apache-2.0
@@ -629,8 +626,8 @@ func (c *Container) createBlockDevices(ctx context.Context) error {
 				HostPath:      m.Source,
 				ContainerPath: m.Destination,
 				DevType:       "b",
-				Major:         int64(unix.Major(stat.Rdev)),
-				Minor:         int64(unix.Minor(stat.Rdev)),
+				Major:         int64(unix.Major(uint64(stat.Rdev))),
+				Minor:         int64(unix.Minor(uint64(stat.Rdev))),
 				ReadOnly:      m.ReadOnly,
 			}
 			// Check whether source can be used as a pmem device
@@ -1226,8 +1223,8 @@ func (c *Container) plugDevice(ctx context.Context, devicePath string) error {
 			HostPath:      devicePath,
 			ContainerPath: filepath.Join(kataGuestSharedDir(), c.id),
 			DevType:       "b",
-			Major:         int64(unix.Major(stat.Rdev)),
-			Minor:         int64(unix.Minor(stat.Rdev)),
+			Major:         int64(unix.Major(uint64(stat.Rdev))),
+			Minor:         int64(unix.Minor(uint64(stat.Rdev))),
 		})
 		if err != nil {
 			return fmt.Errorf("device manager failed to create rootfs device for %q: %v", devicePath, err)
