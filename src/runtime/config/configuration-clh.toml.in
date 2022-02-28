@@ -28,6 +28,9 @@ image = "@IMAGEPATH@"
 #   - Memory Hotplug
 #   - NVDIMM devices
 #
+# Supported TEEs:
+# * Intel TDX
+#
 # Default false
 # confidential_guest = true
 
