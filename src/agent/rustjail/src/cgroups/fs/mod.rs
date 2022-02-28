@@ -905,13 +905,7 @@ pub fn get_paths() -> Result<HashMap<String, String>> {
 
         let keys: Vec<&str> = fl[1].split(',').collect();
         for key in &keys {
-            // this is a workaround, cgroup file are using `name=systemd`,
-            // but if file system the name is `systemd`
-            if *key == "name=systemd" {
-                m.insert("systemd".to_string(), fl[2].to_string());
-            } else {
-                m.insert(key.to_string(), fl[2].to_string());
-            }
+            m.insert(key.to_string(), fl[2].to_string());
         }
     }
     Ok(m)
