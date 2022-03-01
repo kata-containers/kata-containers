@@ -14,6 +14,7 @@ import (
 	"path"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 	"syscall"
 	"testing"
@@ -21,6 +22,7 @@ import (
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/stretchr/testify/assert"
 
+	"code.cloudfoundry.org/bytefmt"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/api"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/drivers"
@@ -34,6 +36,8 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	vcTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 )
+
+const sysHugepagesDir = "/sys/kernel/mm/hugepages"
 
 var (
 	testBlkDriveFormat     = "testBlkDriveFormat"
@@ -1135,18 +1139,36 @@ func TestHandleHugepages(t *testing.T) {
 	defer os.RemoveAll(dir)
 
 	k := kataAgent{}
+	var formattedSizes []string
 	var mounts []specs.Mount
 	var hugepageLimits []specs.LinuxHugepageLimit
 
-	hugepageDirs := [2]string{"hugepages-1Gi", "hugepages-2Mi"}
-	options := [2]string{"pagesize=1024M", "pagesize=2M"}
+	// On s390x, hugepage sizes must be set at boot and cannot be created ad hoc. Use any that
+	// are present (default is 1M, can only be changed on LPAR). See
+	// https://www.ibm.com/docs/en/linuxonibm/pdf/lku5dd05.pdf, p. 345 for more information.
+	if runtime.GOARCH == "s390x" {
+		dirs, err := ioutil.ReadDir(sysHugepagesDir)
+		assert.Nil(err)
+		for _, dir := range dirs {
+			formattedSizes = append(formattedSizes, strings.TrimPrefix(dir.Name(), "hugepages-"))
+		}
+	} else {
+		formattedSizes = []string{"1G", "2M"}
+	}
 
-	for i := 0; i < 2; i++ {
-		target := path.Join(dir, hugepageDirs[i])
-		err := os.MkdirAll(target, 0777)
+	for _, formattedSize := range formattedSizes {
+		bytes, err := bytefmt.ToBytes(formattedSize)
+		assert.Nil(err)
+		hugepageLimits = append(hugepageLimits, specs.LinuxHugepageLimit{
+			Pagesize: formattedSize,
+			Limit:    1_000_000 * bytes,
+		})
+
+		target := path.Join(dir, fmt.Sprintf("hugepages-%s", formattedSize))
+		err = os.MkdirAll(target, 0777)
 		assert.NoError(err, "Unable to create dir %s", target)
 
-		err = syscall.Mount("nodev", target, "hugetlbfs", uintptr(0), options[i])
+		err = syscall.Mount("nodev", target, "hugetlbfs", uintptr(0), fmt.Sprintf("pagesize=%s", formattedSize))
 		assert.NoError(err, "Unable to mount %s", target)
 
 		defer syscall.Unmount(target, 0)
@@ -1158,21 +1180,10 @@ func TestHandleHugepages(t *testing.T) {
 		mounts = append(mounts, mount)
 	}
 
-	hugepageLimits = []specs.LinuxHugepageLimit{
-		{
-			Pagesize: "1GB",
-			Limit:    1073741824,
-		},
-		{
-			Pagesize: "2MB",
-			Limit:    134217728,
-		},
-	}
-
 	hugepages, err := k.handleHugepages(mounts, hugepageLimits)
 
 	assert.NoError(err, "Unable to handle hugepages %v", hugepageLimits)
 	assert.NotNil(hugepages)
-	assert.Equal(len(hugepages), 2)
+	assert.Equal(len(hugepages), len(formattedSizes))
 
 }
