@@ -23,18 +23,17 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/rootless"
-
-	govmmQemu "github.com/kata-containers/govmm/qemu"
 	"github.com/opencontainers/selinux/go-selinux/label"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
 
+	govmmQemu "github.com/kata-containers/govmm/qemu"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils/katatrace"
 	pkgUtils "github.com/kata-containers/kata-containers/src/runtime/pkg/utils"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
 	persistapi "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist/api"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/rootless"
 	vcTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/types"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/uuid"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
@@ -818,10 +817,12 @@ func (q *qemu) StartVM(ctx context.Context, timeout int) error {
 	// virtiofsd are executed by kata-runtime after this call, run with
 	// the SELinux label. If these processes require privileged, we do
 	// notwant to run them under confinement.
-	if err := label.SetProcessLabel(q.config.SELinuxProcessLabel); err != nil {
-		return err
+	if !q.config.DisableSeLinux {
+		if err := label.SetProcessLabel(q.config.SELinuxProcessLabel); err != nil {
+			return err
+		}
+		defer label.SetProcessLabel("")
 	}
-	defer label.SetProcessLabel("")
 
 	if q.config.SharedFS == config.VirtioFS {
 		err = q.setupVirtiofsd(ctx)
@@ -835,7 +836,6 @@ func (q *qemu) StartVM(ctx context.Context, timeout int) error {
 				}
 			}
 		}()
-
 	}
 
 	var strErr string

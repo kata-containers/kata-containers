@@ -511,6 +511,9 @@ type HypervisorConfig struct {
 
 	// Disable seccomp from the hypervisor process
 	DisableSeccomp bool
+
+	// Disable selinux from the hypervisor process
+	DisableSeLinux bool
 }
 
 // vcpu mapping from vcpu number to thread number

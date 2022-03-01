@@ -223,6 +223,9 @@ internetworking_model="@DEFNETWORKMODEL_CLH@"
 # (default: true)
 disable_guest_seccomp=@DEFDISABLEGUESTSECCOMP@
 
+# disable applying SELinux on the VMM process (default false)
+disable_selinux=@DEFDISABLESELINUX@
+
 # If enabled, the runtime will create opentracing.io traces and spans.
 # (See https://www.jaegertracing.io/docs/getting-started).
 # (default: disabled)
