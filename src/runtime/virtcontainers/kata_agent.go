@@ -6,6 +6,7 @@
 package virtcontainers
 
 import (
+	b64 "encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -1545,11 +1546,14 @@ func (k *kataAgent) handleBlkOCIMounts(c *Container, spec *specs.Spec) ([]*grpc.
 			return nil, err
 		}
 
-		// The device will be mounted at a unique location within the VM. Mounting
+		// Each device will be mounted at a unique location within the VM only once. Mounting
 		// to the container specific location is handled within the OCI spec. Let's ensure that
-		// the storage mount point is unique, and that this is utilized as the source in the OCI
-		// spec.
-		filename := fmt.Sprintf("%s-%s", uuid.Generate().String(), filepath.Base(vol.MountPoint))
+		// the storage mount point is unique for each device. This is then utilized as the source
+		// in the OCI spec. If multiple containers mount the same block device, it's refcounted inside
+		// the guest by Kata agent.
+		filename := b64.StdEncoding.EncodeToString([]byte(vol.Source))
+		// Make the base64 encoding path safe.
+		filename = strings.ReplaceAll(filename, "/", "_")
 		path := filepath.Join(kataGuestSandboxStorageDir(), filename)
 
 		// Update applicable OCI mount source

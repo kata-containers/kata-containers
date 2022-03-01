@@ -626,12 +626,22 @@ func (c *Container) createBlockDevices(ctx context.Context) error {
 				c.Logger().WithError(err).Error("error writing sandbox info")
 			}
 
+			readonly := false
+			for _, flag := range mntInfo.Options {
+				if flag == "ro" {
+					readonly = true
+					break
+				}
+			}
+
 			c.mounts[i].Source = mntInfo.Device
 			c.mounts[i].Type = mntInfo.FsType
 			c.mounts[i].Options = mntInfo.Options
+			c.mounts[i].ReadOnly = readonly
 			m.Source = mntInfo.Device
 			m.Type = mntInfo.FsType
 			m.Options = mntInfo.Options
+			m.ReadOnly = readonly
 		}
 
 		var stat unix.Stat_t
