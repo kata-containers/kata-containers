@@ -264,12 +264,12 @@ parts:
       # download source
       qemu_dir=${SNAPCRAFT_STAGE}/qemu
       rm -rf "${qemu_dir}"
-      git clone --branch ${branch} --single-branch ${url} "${qemu_dir}"
+      git clone --depth 1 --branch ${branch} --single-branch ${url} "${qemu_dir}"
       cd ${qemu_dir}
       [ -z "${commit}" ] || git checkout ${commit}
 
-      [ -n "$(ls -A ui/keycodemapdb)" ] || git clone https://github.com/qemu/keycodemapdb ui/keycodemapdb/
-      [ -n "$(ls -A capstone)" ] || git clone https://github.com/qemu/capstone capstone
+      [ -n "$(ls -A ui/keycodemapdb)" ] || git clone --depth 1 https://github.com/qemu/keycodemapdb ui/keycodemapdb/
+      [ -n "$(ls -A capstone)" ] || git clone --depth 1 https://github.com/qemu/capstone capstone
 
       # Apply branch patches
       [ -d "${patches_version_dir}" ] || mkdir "${patches_version_dir}"
