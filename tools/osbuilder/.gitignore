@@ -3,7 +3,7 @@ dracut/Dockerfile
 dracut/dracut.conf.d/15-extra-libs.conf
 /.*.done
 /*_rootfs
-/kata-Centos-dnf.conf
+/kata-centos-dnf.conf
 /kata-containers-initrd.img
 /kata-containers.img
 rootfs-builder/centos/RPM-GPG-KEY-*

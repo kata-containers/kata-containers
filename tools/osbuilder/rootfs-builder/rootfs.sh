@@ -45,9 +45,6 @@ ARCH=$(uname -m)
 # distro-specific config file
 typeset -r CONFIG_SH="config.sh"
 
-# optional arch-specific config file
-typeset -r CONFIG_ARCH_SH="config_${ARCH}.sh"
-
 # Name of an optional distro-specific file which, if it exists, must implement the
 # build_rootfs() function.
 typeset -r LIB_SH="rootfs_lib.sh"
@@ -308,12 +305,6 @@ build_rootfs_distro()
 	rootfs_config="${distro_config_dir}/${CONFIG_SH}"
 	source "${rootfs_config}"
 
-	# Source arch-specific config file
-	rootfs_arch_config="${distro_config_dir}/${CONFIG_ARCH_SH}"
-	if [ -f "${rootfs_arch_config}" ]; then
-		source "${rootfs_arch_config}"
-	fi
-
 	if [ -z "$ROOTFS_DIR" ]; then
 		 ROOTFS_DIR="${script_dir}/rootfs-${OS_NAME}"
 	fi
@@ -554,6 +545,7 @@ EOT
 			echo "WARNING: Forcing LIBC=gnu because $ARCH has no musl Rust target"
 		fi
 		[ "$LIBC" == "musl" ] && bash ${script_dir}/../../../ci/install_musl.sh
+		test -r "${HOME}/.cargo/env" && source "${HOME}/.cargo/env"
 		# rust agent needs ${arch}-unknown-linux-${LIBC}
 		if ! (rustup show | grep -v linux-${LIBC} > /dev/null); then
 			if [ "$RUST_VERSION" == "null" ]; then
