@@ -51,7 +51,7 @@ use crate::device::{
 };
 use crate::linux_abi::*;
 use crate::metrics::get_metrics;
-use crate::mount::{add_storages, baremount, remove_mounts, STORAGE_HANDLER_LIST};
+use crate::mount::{add_storages, baremount, STORAGE_HANDLER_LIST};
 use crate::namespace::{NSTYPEIPC, NSTYPEPID, NSTYPEUTS};
 use crate::network::setup_guest_dns;
 use crate::pci;
@@ -287,8 +287,6 @@ impl AgentService {
             // Find the sandbox storage used by this container
             let mounts = sandbox.container_mounts.get(&cid);
             if let Some(mounts) = mounts {
-                remove_mounts(mounts)?;
-
                 for m in mounts.iter() {
                     if sandbox.storages.get(m).is_some() {
                         cmounts.push(m.to_string());
