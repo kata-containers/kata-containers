@@ -124,6 +124,9 @@ KERNEL_MODULES_DIR  Path to a directory containing kernel modules to include in
                     the rootfs.
                     Default value: <empty>
 
+LIBC                libc the agent is built against (gnu or musl).
+                    Default value: ${LIBC} (varies with architecture)
+
 ROOTFS_DIR          Path to the directory that is populated with the rootfs.
                     Default value: <${script_name} path>/rootfs-<DISTRO-name>
 
@@ -407,6 +410,7 @@ build_rootfs_distro()
 			--env AGENT_INIT="${AGENT_INIT}" \
 			--env CI="${CI}" \
 			--env KERNEL_MODULES_DIR="${KERNEL_MODULES_DIR}" \
+			--env LIBC="${LIBC}" \
 			--env EXTRA_PKGS="${EXTRA_PKGS}" \
 			--env OSBUILDER_VERSION="${OSBUILDER_VERSION}" \
 			--env OS_VERSION="${OS_VERSION}" \
