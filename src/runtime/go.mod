@@ -3,6 +3,7 @@ module github.com/kata-containers/kata-containers/src/runtime
 go 1.14
 
 require (
+	code.cloudfoundry.org/bytefmt v0.0.0-20211005130812-5bb3c17173e5
 	github.com/BurntSushi/toml v0.3.1
 	github.com/blang/semver v3.5.1+incompatible
 	github.com/blang/semver/v4 v4.0.0
