@@ -222,11 +222,6 @@ generate_qemu_options() {
 
 	# Disabled options
 
-	# Disable sheepdog block driver support (deprecated in 5.2.0)
-	if ! gt_eq ${qemu_version} 5.2.0 ; then
-		qemu_options+=(size:--disable-sheepdog)
-	fi
-
 	# Disable block migration in the main migration stream
 	qemu_options+=(size:--disable-live-block-migration)
 
@@ -312,9 +307,7 @@ generate_qemu_options() {
 
 	# Disable libudev since it is only needed for qemu-pr-helper and USB,
 	# none of which are used with Kata
-	if gt_eq "${qemu_version}" "5.2.0" ; then
-		qemu_options+=(size:--disable-libudev)
-	fi
+	qemu_options+=(size:--disable-libudev)
 
 	# Disallow network downloads
 	qemu_options+=(security:--disable-curl)
@@ -331,10 +324,8 @@ generate_qemu_options() {
 	# But since QEMU 5.2 the daemon is built as part of the tools set
 	# (disabled with --disable-tools) thus it needs to be explicitely
 	# enabled.
-	if gt_eq "${qemu_version}" "5.2.0" ; then
-		qemu_options+=(functionality:--enable-virtiofsd)
-		qemu_options+=(functionality:--enable-virtfs)
-	fi
+	qemu_options+=(functionality:--enable-virtiofsd)
+	qemu_options+=(functionality:--enable-virtfs)
 
 	# Don't build linux-user bsd-user
 	qemu_options+=(size:--disable-bsd-user)
@@ -384,12 +375,6 @@ generate_qemu_options() {
 	qemu_options+=(size:--disable-cloop)
 	qemu_options+=(size:--disable-dmg)
 	qemu_options+=(size:--disable-parallels)
-
-	# vxhs was deprecated on QEMU 5.1 so it doesn't need to be
-	# explicitly disabled.
-	if ! gt_eq "${qemu_version}" "5.1.0" ; then
-	    qemu_options+=(size:--disable-vxhs)
-	fi
 
 	#---------------------------------------------------------------------
 	# Enabled options
@@ -449,11 +434,7 @@ generate_qemu_options() {
 
 	# compile with high level of optimisation
 	# On version 5.2.0 onward the Meson build system warns to not use -O3
-	if ! gt_eq "${qemu_version}" "5.2.0" ; then
-		_qemu_cflags+=" -O3"
-	else
-		_qemu_cflags+=" -O2"
-	fi
+	_qemu_cflags+=" -O2"
 
 	# Improve code quality by assuming identical semantics for interposed
 	# synmbols.
@@ -544,8 +525,8 @@ main() {
 	[ -n "${qemu_version}" ] ||
 		die "cannot determine qemu version from file $qemu_version_file"
 
-	if ! gt_eq "${qemu_version}" "5.0.0" ; then
-	    die "Kata requires QEMU >= 5.0.0"
+	if ! gt_eq "${qemu_version}" "6.1.0" ; then
+	    die "Kata requires QEMU >= 6.1.0"
 	fi
 
 	local gcc_version_major=$(gcc -dumpversion | cut -f1 -d.)
