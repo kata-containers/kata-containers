@@ -25,7 +25,6 @@ image = "@IMAGEPATH@"
 # Known limitations:
 # * Does not work by design:
 #   - CPU Hotplug 
-#   - Device Hotplug
 #   - Memory Hotplug
 #   - NVDIMM devices
 #
