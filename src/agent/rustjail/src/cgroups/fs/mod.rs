@@ -932,8 +932,14 @@ pub fn get_mounts() -> Result<HashMap<String, String>> {
         let names: Vec<&str> = post[2].split(',').collect();
 
         for name in &names {
-            if paths.contains_key(*name) {
-                m.insert(name.to_string(), pre[4].to_string());
+            if *name == "name=systemd" {
+                if paths.contains_key("systemd") {
+                    m.insert("systemd".to_string(), pre[4].to_string());
+                }
+            } else {
+                if paths.contains_key(*name) {
+                    m.insert(name.to_string(), pre[4].to_string());
+                }
             }
         }
     }
