@@ -371,15 +371,20 @@ func (f *FilesystemShare) shareRootFilesystemWithNydus(ctx context.Context, c *C
 
 //func (c *Container) shareRootfs(ctx context.Context) (*grpc.Storage, string, error) {
 func (f *FilesystemShare) ShareRootFilesystem(ctx context.Context, c *Container) (*SharedFile, error) {
+	rootfsGuestPath := filepath.Join(kataGuestSharedDir(), c.id, c.rootfsSuffix)
+
 	// In the confidential computing, there is no Image information on the host,
 	// so there is no Rootfs.Target.
 	if f.sandbox.config.ServiceOffload && c.rootFs.Target == "" {
-		return nil, nil
+		return &SharedFile{
+			storage:   nil,
+			guestPath: rootfsGuestPath,
+		}, nil
 	}
+
 	if c.rootFs.Type == NydusRootFSType {
 		return f.shareRootFilesystemWithNydus(ctx, c)
 	}
-	rootfsGuestPath := filepath.Join(kataGuestSharedDir(), c.id, c.rootfsSuffix)
 
 	if c.state.Fstype != "" && c.state.BlockDeviceID != "" {
 		// The rootfs storage volume represents the container rootfs
