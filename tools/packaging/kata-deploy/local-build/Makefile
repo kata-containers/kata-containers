@@ -16,7 +16,7 @@ endef
 kata-tarball: | all-parallel merge-builds
 
 all-parallel:
-	${MAKE} -f $(MK_PATH) all -j$$(( $$(nproc) - 1  )) NO_TTY="true" V=
+	${MAKE} -f $(MK_PATH) all -j$$(( $$(nproc) - 1  )) V=
 
 all: cloud-hypervisor-tarball \
 	firecracker-tarball \
