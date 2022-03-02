@@ -1,3 +1,6 @@
+//go:build linux
+// +build linux
+
 // Copyright (c) 2020 Ant Group
 //
 // SPDX-License-Identifier: Apache-2.0

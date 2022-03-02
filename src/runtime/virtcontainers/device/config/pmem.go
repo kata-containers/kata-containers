@@ -51,8 +51,8 @@ func PmemDeviceInfo(source, destination string) (*DeviceInfo, error) {
 	device := &DeviceInfo{
 		ContainerPath: destination,
 		DevType:       "b",
-		Major:         int64(unix.Major(stat.Dev)),
-		Minor:         int64(unix.Minor(stat.Dev)),
+		Major:         int64(unix.Major(uint64(stat.Dev))),
+		Minor:         int64(unix.Minor(uint64(stat.Dev))),
 		Pmem:          true,
 		DriverOptions: make(map[string]string),
 	}

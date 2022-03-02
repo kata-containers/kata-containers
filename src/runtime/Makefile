@@ -8,19 +8,18 @@ SKIP_GO_VERSION_CHECK=
 include golang.mk
 
 #Get ARCH.
-ifneq (,$(golang_version_raw))
-    GOARCH=$(shell go env GOARCH)
-    ifeq ($(ARCH),)
-        ARCH = $(GOARCH)
+ifeq ($(ARCH),)
+    ifneq (,$(golang_version_raw))
+        override ARCH = $(shell go env GOARCH)
+    else
+        override ARCH = $(shell uname -m)
     endif
-else
-    ARCH = $(shell uname -m)
-    ifeq ($(ARCH),x86_64)
-        ARCH = amd64
-    endif
-    ifeq ($(ARCH),aarch64)
-        ARCH = arm64
-    endif
+endif
+ifeq ($(ARCH),x86_64)
+    override ARCH = amd64
+endif
+ifeq ($(ARCH),aarch64)
+    override ARCH = arm64
 endif
 
 ARCH_DIR = arch
@@ -29,8 +28,12 @@ ARCH_FILE = $(ARCH_DIR)/$(ARCH)$(ARCH_FILE_SUFFIX)
 ARCH_FILES = $(wildcard arch/*$(ARCH_FILE_SUFFIX))
 ALL_ARCHES = $(patsubst $(ARCH_DIR)/%$(ARCH_FILE_SUFFIX),%,$(ARCH_FILES))
 
-# Load architecture-dependent settings
-include $(ARCH_FILE)
+ifeq (,$(realpath $(ARCH_FILE)))
+    $(error "ERROR: invalid architecture: '$(ARCH)'")
+else
+    # Load architecture-dependent settings
+    include $(ARCH_FILE)
+endif
 
 PROJECT_TYPE = kata
 PROJECT_NAME = Kata Containers
@@ -158,6 +161,8 @@ DEFDISABLEGUESTSECCOMP := true
 #Default experimental features enabled
 DEFAULTEXPFEATURES := []
 
+DEFDISABLESELINUX := false
+
 #Default entropy source
 DEFENTROPYSOURCE := /dev/urandom
 DEFVALIDENTROPYSOURCES := [\"/dev/urandom\",\"/dev/random\",\"\"]
@@ -192,9 +197,6 @@ DEFSANDBOXCGROUPONLY ?= false
 DEFSTATICRESOURCEMGMT ?= false
 
 DEFBINDMOUNTS := []
-
-# Features
-FEATURE_SELINUX ?= check
 
 SED = sed
 
@@ -433,6 +435,7 @@ USER_VARS += DEFNETWORKMODEL_CLH
 USER_VARS += DEFNETWORKMODEL_FC
 USER_VARS += DEFNETWORKMODEL_QEMU
 USER_VARS += DEFDISABLEGUESTSECCOMP
+USER_VARS += DEFDISABLESELINUX
 USER_VARS += DEFAULTEXPFEATURES
 USER_VARS += DEFDISABLEBLOCK
 USER_VARS += DEFBLOCKSTORAGEDRIVER_ACRN
@@ -460,7 +463,6 @@ USER_VARS += DEFSTATICRESOURCEMGMT
 USER_VARS += DEFSTATICRESOURCEMGMT_FC
 USER_VARS += DEFBINDMOUNTS
 USER_VARS += DEFVFIOMODE
-USER_VARS += FEATURE_SELINUX
 USER_VARS += BUILDFLAGS
 
 
@@ -474,21 +476,6 @@ QUIET_INST     = $(Q:@=@echo    '     INSTALL  '$@;)
 QUIET_TEST     = $(Q:@=@echo    '     TEST     '$@;)
 
 BUILDTAGS :=
-
-ifneq ($(FEATURE_SELINUX),no)
-    SELINUXTAG := $(shell ./hack/selinux_tag.sh)
-
-    ifneq ($(SELINUXTAG),)
-        override FEATURE_SELINUX = yes
-        BUILDTAGS += --tags "$(SELINUXTAG)"
-    else
-        ifeq ($(FEATURE_SELINUX),yes)
-            $(error "ERROR: SELinux support requested, but libselinux is not available")
-        endif
-
-        override FEATURE_SELINUX = no
-    endif
-endif
 
 # go build common flags
 BUILDFLAGS := -buildmode=pie -mod=vendor ${BUILDTAGS}
@@ -568,8 +555,8 @@ $(SHIMV2_OUTPUT): $(SOURCES) $(GENERATED_FILES) $(MAKEFILE_LIST)
 	$(QUIET_BUILD)(cd $(SHIMV2_DIR)/ && go build -ldflags "$(KATA_LDFLAGS)" $(BUILDFLAGS) -o $@ .)
 
 $(MONITOR_OUTPUT): $(SOURCES) $(GENERATED_FILES) $(MAKEFILE_LIST) .git-commit
-	$(QUIET_BUILD)(cd $(MONITOR_DIR)/ && CGO_ENABLED=0 go build \
-		--ldflags "-X main.GitCommit=$(shell cat .git-commit)" $(BUILDFLAGS) -buildmode=exe -o $@ .)
+	$(QUIET_BUILD)(cd $(MONITOR_DIR)/ && go build \
+		--ldflags "-X main.GitCommit=$(shell cat .git-commit)" $(BUILDFLAGS) -o $@ .)
 
 .PHONY: \
 	check \
@@ -748,9 +735,6 @@ endif
 	@printf "\tDefault: $(DEFAULT_HYPERVISOR)\n"
 	@printf "\tKnown: $(sort $(HYPERVISORS))\n"
 	@printf "\tAvailable for this architecture: $(sort $(KNOWN_HYPERVISORS))\n"
-	@printf "\n"
-	@printf "• Features:\n"
-	@printf "\tSELinux (FEATURE_SELINUX): $(FEATURE_SELINUX)\n"
 	@printf "\n"
 	@printf "• Summary:\n"
 	@printf "\n"

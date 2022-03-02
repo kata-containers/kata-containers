@@ -1502,14 +1502,14 @@ func TestSandbox_Cgroups(t *testing.T) {
 		}
 
 		t.Run(tt.name, func(t *testing.T) {
-			err := tt.s.createCgroups()
+			err := tt.s.createResourceController()
 			t.Logf("create groups error %v", err)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Sandbox.CreateCgroups() error = %v, wantErr %v", err, tt.wantErr)
 			}
 
 			if err == nil {
-				if err := tt.s.setupCgroups(); (err != nil) != tt.wantErr {
+				if err := tt.s.setupResourceController(); (err != nil) != tt.wantErr {
 					t.Errorf("Sandbox.SetupCgroups() error = %v, wantErr %v", err, tt.wantErr)
 				}
 			}

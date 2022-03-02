@@ -40,7 +40,7 @@ ttt 999
 func TestParsePrometheusMetrics(t *testing.T) {
 	assert := assert.New(t)
 	sandboxID := "sandboxID-abc"
-	sandboxMetadata := sandboxKubeData{"123", "pod-name", "pod-namespace"}
+	sandboxMetadata := sandboxCRIMetadata{"123", "pod-name", "pod-namespace"}
 
 	// parse metrics
 	list, err := parsePrometheusMetrics(sandboxID, sandboxMetadata, []byte(shimMetricBody))
@@ -60,12 +60,12 @@ func TestParsePrometheusMetrics(t *testing.T) {
 	assert.Equal(4, len(m.Label), "should have 4 labels")
 	assert.Equal("sandbox_id", *m.Label[0].Name, "label name should be sandbox_id")
 	assert.Equal(sandboxID, *m.Label[0].Value, "label value should be", sandboxID)
-	assert.Equal("kube_uid", *m.Label[1].Name, "label name should be kube_uid")
+	assert.Equal("cri_uid", *m.Label[1].Name, "label name should be cri_uid")
 	assert.Equal(sandboxMetadata.uid, *m.Label[1].Value, "label value should be", sandboxMetadata.uid)
 
-	assert.Equal("kube_name", *m.Label[2].Name, "label name should be kube_name")
+	assert.Equal("cri_name", *m.Label[2].Name, "label name should be cri_name")
 	assert.Equal(sandboxMetadata.name, *m.Label[2].Value, "label value should be", sandboxMetadata.name)
-	assert.Equal("kube_namespace", *m.Label[3].Name, "label name should be kube_namespace")
+	assert.Equal("cri_namespace", *m.Label[3].Name, "label name should be cri_namespace")
 	assert.Equal(sandboxMetadata.namespace, *m.Label[3].Value, "label value should be", sandboxMetadata.namespace)
 
 	summary := m.Summary

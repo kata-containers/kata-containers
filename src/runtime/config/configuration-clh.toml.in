@@ -15,6 +15,37 @@ path = "@CLHPATH@"
 kernel = "@KERNELPATH_CLH@"
 image = "@IMAGEPATH@"
 
+# Enable confidential guest support.
+# Toggling that setting may trigger different hardware features, ranging
+# from memory encryption to both memory and CPU-state encryption and integrity.
+# The Kata Containers runtime dynamically detects the available feature set and
+# aims at enabling the largest possible one, returning an error if none is
+# available, or none is supported by the hypervisor.
+#
+# Known limitations:
+# * Does not work by design:
+#   - CPU Hotplug 
+#   - Device Hotplug
+#   - Memory Hotplug
+#   - NVDIMM devices
+#
+# Supported TEEs:
+# * Intel TDX
+#
+# Default false
+# confidential_guest = true
+
+# Path to the firmware.
+# If you want Cloud Hypervisor to use a specific firmware, set its path below.
+# This is option is only used when confidential_guest is enabled.
+#
+# For more information about firmwared that can be used with specific TEEs,
+# please, refer to:
+# * Intel TDX:
+#   - td-shim: https://github.com/confidential-containers/td-shim
+#
+# firmware = "@FIRMWAREPATH@"
+
 # List of valid annotation names for the hypervisor
 # Each member of the list is a regular expression, which is the base name
 # of the annotation, e.g. "path" for io.katacontainers.config.hypervisor.path"
@@ -204,6 +235,9 @@ internetworking_model="@DEFNETWORKMODEL_CLH@"
 # within the guest
 # (default: true)
 disable_guest_seccomp=@DEFDISABLEGUESTSECCOMP@
+
+# disable applying SELinux on the VMM process (default false)
+disable_selinux=@DEFDISABLESELINUX@
 
 # If enabled, the runtime will create opentracing.io traces and spans.
 # (See https://www.jaegertracing.io/docs/getting-started).

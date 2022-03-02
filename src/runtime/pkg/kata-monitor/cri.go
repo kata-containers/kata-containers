@@ -142,7 +142,7 @@ func (km *KataMonitor) syncSandboxes(sandboxList []string) ([]string, error) {
 	for _, pod := range r.Items {
 		for _, sandbox := range sandboxList {
 			if pod.Id == sandbox {
-				km.sandboxCache.setMetadata(sandbox, sandboxKubeData{
+				km.sandboxCache.setCRIMetadata(sandbox, sandboxCRIMetadata{
 					uid:       pod.Metadata.Uid,
 					name:      pod.Metadata.Name,
 					namespace: pod.Metadata.Namespace,
@@ -151,9 +151,9 @@ func (km *KataMonitor) syncSandboxes(sandboxList []string) ([]string, error) {
 				sandboxList = removeFromSandboxList(sandboxList, sandbox)
 
 				monitorLog.WithFields(logrus.Fields{
-					"Pod Name":      pod.Metadata.Name,
-					"Pod Namespace": pod.Metadata.Namespace,
-					"Pod UID":       pod.Metadata.Uid,
+					"cri-name":      pod.Metadata.Name,
+					"cri-namespace": pod.Metadata.Namespace,
+					"cri-uid":       pod.Metadata.Uid,
 				}).Debugf("Synced KATA POD %s", pod.Id)
 
 				break

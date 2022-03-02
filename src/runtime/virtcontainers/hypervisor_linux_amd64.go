@@ -7,6 +7,14 @@ package virtcontainers
 
 import "os"
 
+const (
+	tdxSysFirmwareDir = "/sys/firmware/tdx_seam/"
+
+	tdxCPUFlag = "tdx"
+
+	sevKvmParameterPath = "/sys/module/kvm_amd/parameters/sev"
+)
+
 // Implementation of this function is architecture specific
 func availableGuestProtection() (guestProtection, error) {
 	flags, err := CPUFlags(procCPUInfo)

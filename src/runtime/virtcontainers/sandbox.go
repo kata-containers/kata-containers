@@ -26,6 +26,7 @@ import (
 	"github.com/vishvananda/netlink"
 
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils/katatrace"
+	resCtrl "github.com/kata-containers/kata-containers/src/runtime/pkg/resourcecontrol"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/api"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/drivers"
@@ -37,7 +38,6 @@ import (
 	pbTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols/grpc"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/annotations"
-	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/cgroups"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/compatoci"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/cpuset"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/rootless"
@@ -65,13 +65,18 @@ const (
 	rwm        = "rwm"
 
 	// When the Kata overhead threads (I/O, VMM, etc) are not
-	// placed in the sandbox cgroup, they are moved to a specific,
-	// unconstrained cgroup hierarchy.
-	// Assuming the cgroup mount point is at /sys/fs/cgroup/, on a
-	// cgroup v1 system, the Kata overhead memory cgroup will be at
+	// placed in the sandbox resource controller (A cgroup on Linux),
+	// they are moved to a specific, unconstrained resource controller.
+	// On Linux, assuming the cgroup mount point is at /sys/fs/cgroup/,
+	// on a cgroup v1 system, the Kata overhead memory cgroup will be at
 	// /sys/fs/cgroup/memory/kata_overhead/$CGPATH where $CGPATH is
 	// defined by the orchestrator.
-	cgroupKataOverheadPath = "/kata_overhead/"
+	resCtrlKataOverheadID = "/kata_overhead/"
+
+	sandboxMountsDir = "sandbox-mounts"
+
+	// Restricted permission for shared directory managed by virtiofs
+	sharedDirMode = os.FileMode(0700) | os.ModeDir
 )
 
 var (
@@ -195,6 +200,7 @@ type Sandbox struct {
 	hypervisor Hypervisor
 	agent      agent
 	store      persistapi.PersistDriver
+	fsShare    FilesystemSharer
 
 	swapDevices []*config.BlockDrive
 	volumes     []types.Volume
@@ -203,9 +209,10 @@ type Sandbox struct {
 	config          *SandboxConfig
 	annotationsLock *sync.RWMutex
 	wg              *sync.WaitGroup
-	sandboxCgroup   *cgroups.Cgroup
-	overheadCgroup  *cgroups.Cgroup
 	cw              *consoleWatcher
+
+	sandboxController  resCtrl.ResourceController
+	overheadController resCtrl.ResourceController
 
 	containers map[string]*Container
 
@@ -493,7 +500,13 @@ func createSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Fac
 		return s, nil
 	}
 
-	// Below code path is called only during create, because of earlier Check.
+	// The code below only gets called when initially creating a sandbox, not when restoring or
+	// re-creating it. The above check for the sandbox state enforces that.
+
+	if err := s.fsShare.Prepare(ctx); err != nil {
+		return nil, err
+	}
+
 	if err := s.agent.createSandbox(ctx, s); err != nil {
 		return nil, err
 	}
@@ -547,6 +560,12 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 		swapDevices:     []*config.BlockDrive{},
 	}
 
+	fsShare, err := NewFilesystemShare(s)
+	if err != nil {
+		return nil, err
+	}
+	s.fsShare = fsShare
+
 	if s.store, err = persist.GetDriver(); err != nil || s.store == nil {
 		return nil, fmt.Errorf("failed to get fs persist driver: %v", err)
 	}
@@ -569,8 +588,8 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 		sandboxConfig.HypervisorConfig.EnableVhostUserStore,
 		sandboxConfig.HypervisorConfig.VhostUserStorePath, nil)
 
-	// Create the sandbox cgroups
-	if err := s.createCgroups(); err != nil {
+	// Create the sandbox resource controllers.
+	if err := s.createResourceController(); err != nil {
 		return nil, err
 	}
 
@@ -591,7 +610,7 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 	return s, nil
 }
 
-func (s *Sandbox) createCgroups() error {
+func (s *Sandbox) createResourceController() error {
 	var err error
 	cgroupPath := ""
 
@@ -600,20 +619,19 @@ func (s *Sandbox) createCgroups() error {
 	resources := specs.LinuxResources{}
 
 	if s.config == nil {
-		return fmt.Errorf("Could not create cgroup manager: empty sandbox configuration")
+		return fmt.Errorf("Could not create %s resource controller manager: empty sandbox configuration", s.sandboxController)
 	}
 
 	spec := s.GetPatchedOCISpec()
 	if spec != nil && spec.Linux != nil {
 		cgroupPath = spec.Linux.CgroupsPath
 
-		// Kata relies on the cgroup parent created and configured by the container
-		// engine by default. The exception is for devices whitelist as well as sandbox-level
-		// CPUSet.
-		// For the sandbox cgroups we create and manage, rename the base of the cgroup path to
+		// Kata relies on the resource controller (cgroups on Linux) parent created and configured by the
+		// container engine by default. The exception is for devices whitelist as well as sandbox-level CPUSet.
+		// For the sandbox controllers we create and manage, rename the base of the controller ID to
 		// include "kata_"
-		if !cgroups.IsSystemdCgroup(cgroupPath) { // don't add prefix when cgroups are managed by systemd
-			cgroupPath, err = cgroups.RenameCgroupPath(cgroupPath)
+		if !resCtrl.IsSystemdCgroup(cgroupPath) { // don't add prefix when cgroups are managed by systemd
+			cgroupPath, err = resCtrl.RenameCgroupPath(cgroupPath)
 			if err != nil {
 				return err
 			}
@@ -663,7 +681,7 @@ func (s *Sandbox) createCgroups() error {
 
 	if s.devManager != nil {
 		for _, d := range s.devManager.GetAllDevices() {
-			dev, err := cgroups.DeviceToLinuxDevice(d.GetHostPath())
+			dev, err := resCtrl.DeviceToLinuxDevice(d.GetHostPath())
 			if err != nil {
 				s.Logger().WithError(err).WithField("device", d.GetHostPath()).Warn("Could not add device to sandbox resources")
 				continue
@@ -672,34 +690,34 @@ func (s *Sandbox) createCgroups() error {
 		}
 	}
 
-	// Create the sandbox cgroup.
+	// Create the sandbox resource controller (cgroups on Linux).
 	// Depending on the SandboxCgroupOnly value, this cgroup
 	// will either hold all the pod threads (SandboxCgroupOnly is true)
 	// or only the virtual CPU ones (SandboxCgroupOnly is false).
-	s.sandboxCgroup, err = cgroups.NewSandboxCgroup(cgroupPath, &resources, s.config.SandboxCgroupOnly)
+	s.sandboxController, err = resCtrl.NewSandboxResourceController(cgroupPath, &resources, s.config.SandboxCgroupOnly)
 	if err != nil {
-		return fmt.Errorf("Could not create the sandbox cgroup %v", err)
+		return fmt.Errorf("Could not create the sandbox resource controller %v", err)
 	}
 
-	// Now that the sandbox cgroup is created, we can set the state cgroup root paths.
-	s.state.SandboxCgroupPath = s.sandboxCgroup.Path()
+	// Now that the sandbox resource controller is created, we can set the state controller paths..
+	s.state.SandboxCgroupPath = s.sandboxController.ID()
 	s.state.OverheadCgroupPath = ""
 
 	if s.config.SandboxCgroupOnly {
-		s.overheadCgroup = nil
+		s.overheadController = nil
 	} else {
 		// The shim configuration is requesting that we do not put all threads
-		// into the sandbox cgroup.
-		// We're creating an overhead cgroup, with no constraints. Everything but
+		// into the sandbox resource controller.
+		// We're creating an overhead controller, with no constraints. Everything but
 		// the vCPU threads will eventually make it there.
-		overheadCgroup, err := cgroups.NewCgroup(fmt.Sprintf("/%s/%s", cgroupKataOverheadPath, s.id), &specs.LinuxResources{})
+		overheadController, err := resCtrl.NewResourceController(fmt.Sprintf("/%s/%s", resCtrlKataOverheadID, s.id), &specs.LinuxResources{})
 		// TODO: support systemd cgroups overhead cgroup
 		// https://github.com/kata-containers/kata-containers/issues/2963
 		if err != nil {
 			return err
 		}
-		s.overheadCgroup = overheadCgroup
-		s.state.OverheadCgroupPath = s.overheadCgroup.Path()
+		s.overheadController = overheadController
+		s.state.OverheadCgroupPath = s.overheadController.ID()
 	}
 
 	return nil
@@ -782,8 +800,8 @@ func (s *Sandbox) Delete(ctx context.Context) error {
 	}
 
 	if !rootless.IsRootless() {
-		if err := s.cgroupsDelete(); err != nil {
-			s.Logger().WithError(err).Error("failed to Cleanup cgroups")
+		if err := s.resourceControllerDelete(); err != nil {
+			s.Logger().WithError(err).Errorf("failed to cleanup the %s resource controllers", s.sandboxController)
 		}
 	}
 
@@ -795,7 +813,9 @@ func (s *Sandbox) Delete(ctx context.Context) error {
 		s.Logger().WithError(err).Error("failed to Cleanup hypervisor")
 	}
 
-	s.agent.cleanup(ctx, s)
+	if err := s.fsShare.Cleanup(ctx); err != nil {
+		s.Logger().WithError(err).Error("failed to cleanup share files")
+	}
 
 	return s.store.Destroy(s.id)
 }
@@ -1322,7 +1342,7 @@ func (s *Sandbox) CreateContainer(ctx context.Context, contConfig ContainerConfi
 		return nil, err
 	}
 
-	if err = s.cgroupsUpdate(ctx); err != nil {
+	if err = s.resourceControllerUpdate(ctx); err != nil {
 		return nil, err
 	}
 
@@ -1425,8 +1445,8 @@ func (s *Sandbox) DeleteContainer(ctx context.Context, containerID string) (VCCo
 		}
 	}
 
-	// update the sandbox cgroup
-	if err = s.cgroupsUpdate(ctx); err != nil {
+	// update the sandbox resource controller
+	if err = s.resourceControllerUpdate(ctx); err != nil {
 		return nil, err
 	}
 
@@ -1491,7 +1511,7 @@ func (s *Sandbox) UpdateContainer(ctx context.Context, containerID string, resou
 		return err
 	}
 
-	if err := s.cgroupsUpdate(ctx); err != nil {
+	if err := s.resourceControllerUpdate(ctx); err != nil {
 		return err
 	}
 
@@ -1519,7 +1539,7 @@ func (s *Sandbox) StatsContainer(ctx context.Context, containerID string) (Conta
 // Stats returns the stats of a running sandbox
 func (s *Sandbox) Stats(ctx context.Context) (SandboxStats, error) {
 
-	metrics, err := s.sandboxCgroup.Stat()
+	metrics, err := s.sandboxController.Stat()
 	if err != nil {
 		return SandboxStats{}, err
 	}
@@ -1603,7 +1623,7 @@ func (s *Sandbox) createContainers(ctx context.Context) error {
 		return err
 	}
 
-	if err := s.cgroupsUpdate(ctx); err != nil {
+	if err := s.resourceControllerUpdate(ctx); err != nil {
 		return err
 	}
 	if err := s.storeSandbox(ctx); err != nil {
@@ -1756,9 +1776,11 @@ func (s *Sandbox) HotplugAddDevice(ctx context.Context, device api.Device, devTy
 	span, ctx := katatrace.Trace(ctx, s.Logger(), "HotplugAddDevice", sandboxTracingTags, map[string]string{"sandbox_id": s.id})
 	defer span.End()
 
-	if err := s.sandboxCgroup.AddDevice(device.GetHostPath()); err != nil {
-		s.Logger().WithError(err).WithField("device", device).
-			Warn("Could not add device to cgroup")
+	if s.sandboxController != nil {
+		if err := s.sandboxController.AddDevice(device.GetHostPath()); err != nil {
+			s.Logger().WithError(err).WithField("device", device).
+				Warnf("Could not add device to the %s controller", s.sandboxController)
+		}
 	}
 
 	switch devType {
@@ -1806,9 +1828,11 @@ func (s *Sandbox) HotplugAddDevice(ctx context.Context, device api.Device, devTy
 // Sandbox implement DeviceReceiver interface from device/api/interface.go
 func (s *Sandbox) HotplugRemoveDevice(ctx context.Context, device api.Device, devType config.DeviceType) error {
 	defer func() {
-		if err := s.sandboxCgroup.RemoveDevice(device.GetHostPath()); err != nil {
-			s.Logger().WithError(err).WithField("device", device).
-				Warn("Could not add device to cgroup")
+		if s.sandboxController != nil {
+			if err := s.sandboxController.RemoveDevice(device.GetHostPath()); err != nil {
+				s.Logger().WithError(err).WithField("device", device).
+					Warnf("Could not add device to the %s controller", s.sandboxController)
+			}
 		}
 	}()
 
@@ -2095,25 +2119,26 @@ func (s *Sandbox) GetHypervisorType() string {
 	return string(s.config.HypervisorType)
 }
 
-// cgroupsUpdate updates the sandbox cpuset cgroup subsystem.
-// Also, if the sandbox has an overhead cgroup, it updates the hypervisor
+// resourceControllerUpdate updates the sandbox cpuset resource controller
+// (Linux cgroup) subsystem.
+// Also, if the sandbox has an overhead controller, it updates the hypervisor
 // constraints by moving the potentially new vCPU threads back to the sandbox
-// cgroup.
-func (s *Sandbox) cgroupsUpdate(ctx context.Context) error {
+// controller.
+func (s *Sandbox) resourceControllerUpdate(ctx context.Context) error {
 	cpuset, memset, err := s.getSandboxCPUSet()
 	if err != nil {
 		return err
 	}
 
-	// We update the sandbox cgroup with potentially new virtual CPUs.
-	if err := s.sandboxCgroup.UpdateCpuSet(cpuset, memset); err != nil {
+	// We update the sandbox controller with potentially new virtual CPUs.
+	if err := s.sandboxController.UpdateCpuSet(cpuset, memset); err != nil {
 		return err
 	}
 
-	if s.overheadCgroup != nil {
-		// If we have an overhead cgroup, new vCPU threads would start there,
+	if s.overheadController != nil {
+		// If we have an overhead controller, new vCPU threads would start there,
 		// as being children of the VMM PID.
-		// We need to constrain them by moving them into the sandbox cgroup.
+		// We need to constrain them by moving them into the sandbox controller.
 		if err := s.constrainHypervisor(ctx); err != nil {
 			return err
 		}
@@ -2122,39 +2147,41 @@ func (s *Sandbox) cgroupsUpdate(ctx context.Context) error {
 	return nil
 }
 
-// cgroupsDelete will move the running processes in the sandbox cgroup
-// to the parent and then delete the sandbox cgroup
-func (s *Sandbox) cgroupsDelete() error {
-	s.Logger().Debug("Deleting sandbox cgroup")
+// resourceControllerDelete will move the running processes in the sandbox resource
+// cvontroller to the parent and then delete the sandbox controller.
+func (s *Sandbox) resourceControllerDelete() error {
+	s.Logger().Debugf("Deleting sandbox %s resource controler", s.sandboxController)
 	if s.state.SandboxCgroupPath == "" {
-		s.Logger().Warnf("sandbox cgroup path is empty")
+		s.Logger().Warnf("sandbox %s resource controler path is empty", s.sandboxController)
 		return nil
 	}
 
-	sandboxCgroup, err := cgroups.Load(s.state.SandboxCgroupPath)
+	sandboxController, err := resCtrl.LoadResourceController(s.state.SandboxCgroupPath)
 	if err != nil {
 		return err
 	}
 
-	if err := sandboxCgroup.MoveToParent(); err != nil {
+	resCtrlParent := sandboxController.Parent()
+	if err := sandboxController.MoveTo(resCtrlParent); err != nil {
 		return err
 	}
 
-	if err := sandboxCgroup.Delete(); err != nil {
+	if err := sandboxController.Delete(); err != nil {
 		return err
 	}
 
 	if s.state.OverheadCgroupPath != "" {
-		overheadCgroup, err := cgroups.Load(s.state.OverheadCgroupPath)
+		overheadController, err := resCtrl.LoadResourceController(s.state.OverheadCgroupPath)
 		if err != nil {
 			return err
 		}
 
-		if err := s.overheadCgroup.MoveToParent(); err != nil {
+		resCtrlParent := overheadController.Parent()
+		if err := s.overheadController.MoveTo(resCtrlParent); err != nil {
 			return err
 		}
 
-		if err := overheadCgroup.Delete(); err != nil {
+		if err := overheadController.Delete(); err != nil {
 			return err
 		}
 	}
@@ -2162,16 +2189,16 @@ func (s *Sandbox) cgroupsDelete() error {
 	return nil
 }
 
-// constrainHypervisor will place the VMM and vCPU threads into cgroups.
+// constrainHypervisor will place the VMM and vCPU threads into resource controllers (cgroups on Linux).
 func (s *Sandbox) constrainHypervisor(ctx context.Context) error {
 	tids, err := s.hypervisor.GetThreadIDs(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get thread ids from hypervisor: %v", err)
 	}
 
-	// All vCPU threads move to the sandbox cgroup.
+	// All vCPU threads move to the sandbox controller.
 	for _, i := range tids.vcpus {
-		if err := s.sandboxCgroup.AddTask(i); err != nil {
+		if err := s.sandboxController.AddThread(i); err != nil {
 			return err
 		}
 	}
@@ -2179,22 +2206,22 @@ func (s *Sandbox) constrainHypervisor(ctx context.Context) error {
 	return nil
 }
 
-// setupCgroups adds the runtime process to either the sandbox cgroup or the  overhead one,
-// depending on the sandbox_cgroup_only configuration setting.
-func (s *Sandbox) setupCgroups() error {
-	vmmCgroup := s.sandboxCgroup
-	if s.overheadCgroup != nil {
-		vmmCgroup = s.overheadCgroup
+// setupResourceController adds the runtime process to either the sandbox resource controller or the
+// overhead one, depending on the sandbox_cgroup_only configuration setting.
+func (s *Sandbox) setupResourceController() error {
+	vmmController := s.sandboxController
+	if s.overheadController != nil {
+		vmmController = s.overheadController
 	}
 
-	// By adding the runtime process to either the sandbox or overhead cgroup, we are making
+	// By adding the runtime process to either the sandbox or overhead controller, we are making
 	// sure that any child process of the runtime (i.e. *all* processes serving a Kata pod)
-	// will initially live in this cgroup. Depending on the sandbox_cgroup settings, we will
-	// then move the vCPU threads between cgroups.
+	// will initially live in this controller. Depending on the sandbox_cgroup settings, we will
+	// then move the vCPU threads between resource controllers.
 	runtimePid := os.Getpid()
-	// Add the runtime to the VMM sandbox cgroup
-	if err := vmmCgroup.AddProcess(runtimePid); err != nil {
-		return fmt.Errorf("Could not add runtime PID %d to sandbox cgroup: %v", runtimePid, err)
+	// Add the runtime to the VMM sandbox resource controller
+	if err := vmmController.AddProcess(runtimePid); err != nil {
+		return fmt.Errorf("Could not add runtime PID %d to the sandbox %s resource controller: %v", runtimePid, s.sandboxController, err)
 	}
 
 	return nil
@@ -2215,8 +2242,8 @@ func (s *Sandbox) GetPatchedOCISpec() *specs.Spec {
 	}
 
 	// get the container associated with the PodSandbox annotation. In Kubernetes, this
-	// represents the pause container. In Docker, this is the container. We derive the
-	// cgroup path from this container.
+	// represents the pause container. In Docker, this is the container.
+	// On Linux, we derive the group path from this container.
 	for _, cConfig := range s.config.Containers {
 		if cConfig.Annotations[annotations.ContainerTypeKey] == string(PodSandbox) {
 			return cConfig.CustomSpec

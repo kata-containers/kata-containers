@@ -1,3 +1,6 @@
+//go:build linux
+// +build linux
+
 // Copyright (c) 2018 IBM
 //
 // SPDX-License-Identifier: Apache-2.0
@@ -54,11 +57,6 @@ func (q *qemuPPC64le) Logger() *logrus.Entry {
 	return hvLogger.WithField("subsystem", "qemuPPC64le")
 }
 
-// MaxQemuVCPUs returns the maximum number of vCPUs supported
-func MaxQemuVCPUs() uint32 {
-	return uint32(128)
-}
-
 func newQemuArch(config HypervisorConfig) (qemuArch, error) {
 	machineType := config.HypervisorMachineType
 	if machineType == "" {
@@ -85,6 +83,11 @@ func newQemuArch(config HypervisorConfig) (qemuArch, error) {
 		if err := q.enableProtection(); err != nil {
 			return nil, err
 		}
+
+		if !q.qemuArchBase.disableNvdimm {
+			hvLogger.WithField("subsystem", "qemuPPC64le").Warn("Nvdimm is not supported with confidential guest, disabling it.")
+			q.qemuArchBase.disableNvdimm = true
+		}
 	}
 
 	q.handleImagePath(config)
@@ -98,7 +101,8 @@ func (q *qemuPPC64le) capabilities() types.Capabilities {
 	var caps types.Capabilities
 
 	// pseries machine type supports hotplugging drives
-	if q.qemuMachine.Type == QemuPseries {
+	if q.qemuMachine.Type == QemuPseries &&
+		q.protection == noneProtection {
 		caps.SetBlockDeviceHotplugSupport()
 	}
 

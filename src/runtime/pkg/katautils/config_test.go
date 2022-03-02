@@ -17,6 +17,7 @@ import (
 	"syscall"
 	"testing"
 
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/govmm"
 	ktu "github.com/kata-containers/kata-containers/src/runtime/pkg/katatestutils"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/oci"
 	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
@@ -919,7 +920,7 @@ func TestHypervisorDefaults(t *testing.T) {
 	h.DefaultMaxVCPUs = numCPUs + 1
 	assert.Equal(h.defaultMaxVCPUs(), numCPUs, "default max vCPU number is wrong")
 
-	maxvcpus := vc.MaxQemuVCPUs()
+	maxvcpus := govmm.MaxVCPUs()
 	h.DefaultMaxVCPUs = maxvcpus + 1
 	assert.Equal(h.defaultMaxVCPUs(), numCPUs, "default max vCPU number is wrong")
 

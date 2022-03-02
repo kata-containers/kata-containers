@@ -16,16 +16,17 @@ import (
 
 // SendMigrationData struct for SendMigrationData
 type SendMigrationData struct {
-	DestinationUrl *string `json:"destination_url,omitempty"`
-	Local          *bool   `json:"local,omitempty"`
+	DestinationUrl string `json:"destination_url"`
+	Local          *bool  `json:"local,omitempty"`
 }
 
 // NewSendMigrationData instantiates a new SendMigrationData object
 // This constructor will assign default values to properties that have it defined,
 // and makes sure properties required by API are set, but the set of arguments
 // will change when the set of required properties is changed
-func NewSendMigrationData() *SendMigrationData {
+func NewSendMigrationData(destinationUrl string) *SendMigrationData {
 	this := SendMigrationData{}
+	this.DestinationUrl = destinationUrl
 	return &this
 }
 
@@ -37,36 +38,28 @@ func NewSendMigrationDataWithDefaults() *SendMigrationData {
 	return &this
 }
 
-// GetDestinationUrl returns the DestinationUrl field value if set, zero value otherwise.
+// GetDestinationUrl returns the DestinationUrl field value
 func (o *SendMigrationData) GetDestinationUrl() string {
-	if o == nil || o.DestinationUrl == nil {
+	if o == nil {
 		var ret string
 		return ret
 	}
-	return *o.DestinationUrl
+
+	return o.DestinationUrl
 }
 
-// GetDestinationUrlOk returns a tuple with the DestinationUrl field value if set, nil otherwise
+// GetDestinationUrlOk returns a tuple with the DestinationUrl field value
 // and a boolean to check if the value has been set.
 func (o *SendMigrationData) GetDestinationUrlOk() (*string, bool) {
-	if o == nil || o.DestinationUrl == nil {
+	if o == nil {
 		return nil, false
 	}
-	return o.DestinationUrl, true
+	return &o.DestinationUrl, true
 }
 
-// HasDestinationUrl returns a boolean if a field has been set.
-func (o *SendMigrationData) HasDestinationUrl() bool {
-	if o != nil && o.DestinationUrl != nil {
-		return true
-	}
-
-	return false
-}
-
-// SetDestinationUrl gets a reference to the given string and assigns it to the DestinationUrl field.
+// SetDestinationUrl sets field value
 func (o *SendMigrationData) SetDestinationUrl(v string) {
-	o.DestinationUrl = &v
+	o.DestinationUrl = v
 }
 
 // GetLocal returns the Local field value if set, zero value otherwise.
@@ -103,7 +96,7 @@ func (o *SendMigrationData) SetLocal(v bool) {
 
 func (o SendMigrationData) MarshalJSON() ([]byte, error) {
 	toSerialize := map[string]interface{}{}
-	if o.DestinationUrl != nil {
+	if true {
 		toSerialize["destination_url"] = o.DestinationUrl
 	}
 	if o.Local != nil {

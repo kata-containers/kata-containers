@@ -28,6 +28,8 @@ readonly shimv2_builder="${static_build_dir}/shim-v2/build.sh"
 
 readonly rootfs_builder="${repo_root_dir}/tools/packaging/guest-image/build_image.sh"
 
+ARCH=$(uname -m)
+
 workdir="${WORKDIR:-$PWD}"
 
 destdir="${workdir}/kata-static"
@@ -125,7 +127,9 @@ install_firecracker() {
 
 # Install static cloud-hypervisor asset
 install_clh() {
-	export extra_build_args="--features tdx"
+	if [[ "${ARCH}" == "x86_64" ]]; then
+		export features="tdx"
+	fi
 
 	info "build static cloud-hypervisor"
 	"${clh_builder}"

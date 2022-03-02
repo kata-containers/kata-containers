@@ -15,9 +15,9 @@ import (
 	"testing"
 
 	ktu "github.com/kata-containers/kata-containers/src/runtime/pkg/katatestutils"
+	resCtrl "github.com/kata-containers/kata-containers/src/runtime/pkg/resourcecontrol"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist/fs"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/annotations"
-	vccgroups "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/cgroups"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/mock"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/rootless"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
@@ -49,7 +49,7 @@ func newEmptySpec() *specs.Spec {
 	return &specs.Spec{
 		Linux: &specs.Linux{
 			Resources:   &specs.LinuxResources{},
-			CgroupsPath: vccgroups.DefaultCgroupPath,
+			CgroupsPath: resCtrl.DefaultResourceControllerID,
 		},
 		Process: &specs.Process{
 			Capabilities: &specs.LinuxCapabilities{},
@@ -170,10 +170,10 @@ func TestCreateSandboxKataAgentSuccessful(t *testing.T) {
 
 	url, err := mock.GenerateKataMockHybridVSock()
 	assert.NoError(err)
-	MockHybridVSockPath = url
+	defer mock.RemoveKataMockHybridVSock(url)
 
 	hybridVSockTTRPCMock := mock.HybridVSockTTRPCMock{}
-	err = hybridVSockTTRPCMock.Start(fmt.Sprintf("mock://%s", url))
+	err = hybridVSockTTRPCMock.Start(url)
 	assert.NoError(err)
 	defer hybridVSockTTRPCMock.Stop()
 
