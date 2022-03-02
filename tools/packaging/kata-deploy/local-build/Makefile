@@ -13,10 +13,10 @@ define BUILD
 	$(MK_DIR)/kata-deploy-binaries-in-docker.sh $(if $(V),,-s) --build=$1
 endef
 
-kata-tarball: | all-parallel merge-builds
+kata-tarball: | make-builds merge-builds
 
-all-parallel:
-	${MAKE} -f $(MK_PATH) all -j$$(( $$(nproc) - 1  )) V=
+make-builds:
+	${MAKE} -f $(MK_PATH) all V=
 
 all: cloud-hypervisor-tarball \
 	firecracker-tarball \
