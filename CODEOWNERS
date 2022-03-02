@@ -9,4 +9,55 @@
 # Order in this file is important. Only the last match will be
 # used. See https://help.github.com/articles/about-code-owners/
 
-*.md    @kata-containers/documentation
+VERSION				@kata-containers/release
+
+# The versions database needs careful handling
+versions.yaml			@kata-containers/ci @kata-containers/release @kata-containers/tests
+
+# Documentation related files could also appear anywhere
+# else in the repo.
+*.drawio			@kata-containers/documentation
+*.jpg				@kata-containers/documentation
+*.md				@kata-containers/documentation
+*.png				@kata-containers/documentation
+*.svg				@kata-containers/documentation
+
+# FIXME: need to create the "makefile" team
+Makefile*			@kata-containers/makefile
+*.mak				@kata-containers/makefile
+*.mk				@kata-containers/makefile
+
+# FIXME: need to create the "platforms" team (arch is too similar to the AC!)
+**/arch/			@kata-containers/platforms
+
+# FIXME: need to create the "shell" team
+*.bash				@kata-containers/shell
+*.sh				@kata-containers/shell
+**/completions/			@kata-containers/shell
+
+# FIXME: need to create the "docker" team
+Dockerfile*			@kata-containers/docker
+
+# FIXME: Maybe a new "protocol" team would be better?
+# All protocol changes must be reviewed.
+# Note, we include all subdirs, including the vendor dir, as at present there are no .proto files
+# in the vendor dir. Later we may have to extend this matching rule if that changes.
+/src/libs/protocols/*.proto	@kata-containers/architecture-committee @kata-containers/builder @kata-containers/packaging
+
+# GitHub Actions
+/.github/workflows/		@kata-containers/action-admins @kata-containers/ci
+
+/ci/				@kata-containers/ci @kata-containers/tests
+/docs/				@kata-containers/documentation
+
+/snap/				@kata-containers/release    # FIXME: need to create the "release" team
+
+/src/agent/			@kata-containers/agent
+/src/runtime*/			@kata-containers/runtime
+/src/tools/			@kata-containers/tools    # FIXME: need to create the "tools" team
+
+/tools/osbuilder/		@kata-containers/builder
+/tools/packaging/		@kata-containers/packaging
+/tools/packaging/kernel/	@kata-containers/kernel
+/tools/packaging/qemu/		@kata-containers/qemu
+/tools/packaging/release/	@kata-containers/release    # FIXME: need to create the "release" team
