@@ -568,7 +568,7 @@ func newFirecrackerHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		EntropySource:         h.GetEntropySource(),
 		EntropySourceList:     h.EntropySourceList,
 		DefaultBridges:        h.defaultBridges(),
-		DisableBlockDeviceUse: h.DisableBlockDeviceUse,
+		DisableBlockDeviceUse: false, // shared fs is not supported in Firecracker,
 		HugePages:             h.HugePages,
 		Debug:                 h.Debug,
 		DisableNestingChecks:  h.DisableNestingChecks,
