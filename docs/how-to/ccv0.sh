@@ -445,8 +445,8 @@ EOF
         crictl_delete_cc
     fi
 
-    $(sudo crictl runp -r kata ${HOME}/pod-config.yaml)
-    sudo crictl pods
+    local pod_id=$(sudo crictl runp -r kata ${HOME}/pod-config.yaml)
+    sudo crictl pods ${pod_id}
 }
 
 crictl_create_cc_container() {
