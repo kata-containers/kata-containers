@@ -51,10 +51,11 @@ func TestTemplateFactory(t *testing.T) {
 
 	url, err := mock.GenerateKataMockHybridVSock()
 	assert.NoError(err)
+	defer mock.RemoveKataMockHybridVSock(url)
 	vc.MockHybridVSockPath = url
 
 	hybridVSockTTRPCMock := mock.HybridVSockTTRPCMock{}
-	err = hybridVSockTTRPCMock.Start(fmt.Sprintf("mock://%s", url))
+	err = hybridVSockTTRPCMock.Start(url)
 	assert.NoError(err)
 	defer hybridVSockTTRPCMock.Stop()
 
