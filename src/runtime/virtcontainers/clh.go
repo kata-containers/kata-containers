@@ -405,15 +405,20 @@ func (clh *cloudHypervisor) StartVM(ctx context.Context, timeout int) error {
 			return err
 		}
 		clh.state.VirtiofsdPID = pid
+
+		defer func() {
+			if err != nil {
+				if shutdownErr := clh.virtiofsd.Stop(ctx); shutdownErr != nil {
+					clh.Logger().WithError(shutdownErr).Warn("error shutting down VirtiofsDaemon")
+				}
+			}
+		}()
 	} else {
 		return errors.New("cloud-hypervisor only supports virtio based file sharing")
 	}
 
 	pid, err := clh.launchClh()
 	if err != nil {
-		if shutdownErr := clh.virtiofsd.Stop(ctx); shutdownErr != nil {
-			clh.Logger().WithError(shutdownErr).Warn("error shutting down Virtiofsd")
-		}
 		return fmt.Errorf("failed to launch cloud-hypervisor: %q", err)
 	}
 	clh.state.PID = pid
