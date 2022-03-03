@@ -13,6 +13,7 @@ pub mod hooks;
 pub mod k8s;
 pub mod mount;
 pub mod numa;
+pub mod validate;
 
 // Convenience macro to obtain the scoped logger
 #[macro_export]

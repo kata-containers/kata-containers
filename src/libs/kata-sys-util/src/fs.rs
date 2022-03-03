@@ -13,8 +13,16 @@ use std::process::Command;
 
 use crate::{eother, sl};
 
+// nix filesystem_type for different target_os
+#[cfg(all(target_os = "linux", target_env = "musl"))]
+type FsType = libc::c_ulong;
+#[cfg(all(target_os = "linux", not(any(target_env = "musl"))))]
+type FsType = libc::__fsword_t;
+
 // from linux.git/fs/fuse/inode.c: #define FUSE_SUPER_MAGIC 0x65735546
-const FUSE_SUPER_MAGIC: u32 = 0x65735546;
+const FUSE_SUPER_MAGIC: FsType = 0x65735546;
+// from linux.git/include/uapi/linux/magic.h
+const OVERLAYFS_SUPER_MAGIC: FsType = 0x794c7630;
 
 /// Get bundle path (current working directory).
 pub fn get_bundle_path() -> Result<PathBuf> {
@@ -35,7 +43,7 @@ pub fn get_base_name<P: AsRef<Path>>(src: P) -> Result<OsString> {
 /// Check whether `path` is on a fuse filesystem.
 pub fn is_fuse_fs<P: AsRef<Path>>(path: P) -> bool {
     if let Ok(st) = nix::sys::statfs::statfs(path.as_ref()) {
-        if st.filesystem_type().0 == FUSE_SUPER_MAGIC as i64 {
+        if st.filesystem_type().0 == FUSE_SUPER_MAGIC {
             return true;
         }
     }
@@ -45,7 +53,7 @@ pub fn is_fuse_fs<P: AsRef<Path>>(path: P) -> bool {
 /// Check whether `path` is on a overlay filesystem.
 pub fn is_overlay_fs<P: AsRef<Path>>(path: P) -> bool {
     if let Ok(st) = nix::sys::statfs::statfs(path.as_ref()) {
-        if st.filesystem_type() == nix::sys::statfs::OVERLAYFS_SUPER_MAGIC {
+        if st.filesystem_type().0 == OVERLAYFS_SUPER_MAGIC {
             return true;
         }
     }
