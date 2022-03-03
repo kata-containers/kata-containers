@@ -234,6 +234,29 @@ func (clh *cloudHypervisor) createVirtiofsDaemon(sharedPath string) (VirtiofsDae
 	}, nil
 }
 
+func (clh *cloudHypervisor) setupVirtiofsDaemon(ctx context.Context) error {
+	if clh.config.SharedFS == config.Virtio9P {
+		return errors.New("cloud-hypervisor only supports virtio based file sharing")
+	}
+
+	// virtioFS or virtioFsNydus
+	clh.Logger().WithField("function", "setupVirtiofsDaemon").Info("Starting virtiofsDaemon")
+
+	if clh.virtiofsDaemon == nil {
+		return errors.New("Missing virtiofsDaemon configuration")
+	}
+
+	pid, err := clh.virtiofsDaemon.Start(ctx, func() {
+		clh.StopVM(ctx, false)
+	})
+	if err != nil {
+		return err
+	}
+	clh.state.VirtiofsDaemonPid = pid
+
+	return nil
+}
+
 func (clh *cloudHypervisor) nydusdAPISocketPath(id string) (string, error) {
 	return utils.BuildSocketPath(clh.config.VMStorePath, id, nydusdAPISock)
 }
@@ -474,10 +497,6 @@ func (clh *cloudHypervisor) StartVM(ctx context.Context, timeout int) error {
 		return err
 	}
 
-	if clh.virtiofsDaemon == nil {
-		return errors.New("Missing virtiofsDaemon configuration")
-	}
-
 	// This needs to be done as late as possible, just before launching
 	// virtiofsd are executed by kata-runtime after this call, run with
 	// the SELinux label. If these processes require privileged, we do
@@ -490,17 +509,9 @@ func (clh *cloudHypervisor) StartVM(ctx context.Context, timeout int) error {
 		defer label.SetProcessLabel("")
 	}
 
-	if clh.config.SharedFS == config.VirtioFS || clh.config.SharedFS == config.VirtioFSNydus {
-		clh.Logger().WithField("function", "StartVM").Info("Starting virtiofsDaemon")
-		pid, err := clh.virtiofsDaemon.Start(ctx, func() {
-			clh.StopVM(ctx, false)
-		})
-		if err != nil {
-			return err
-		}
-		clh.state.VirtiofsDaemonPid = pid
-	} else {
-		return errors.New("cloud-hypervisor only supports virtio based file sharing")
+	err = clh.setupVirtiofsDaemon(ctx)
+	if err != nil {
+		return err
 	}
 
 	pid, err := clh.launchClh()
