@@ -257,6 +257,22 @@ func (clh *cloudHypervisor) setupVirtiofsDaemon(ctx context.Context) error {
 	return nil
 }
 
+func (clh *cloudHypervisor) stopVirtiofsDaemon(ctx context.Context) (err error) {
+	if clh.state.VirtiofsDaemonPid == 0 {
+		clh.Logger().Warn("The virtiofsd had stopped")
+		return nil
+	}
+
+	err = clh.virtiofsDaemon.Stop(ctx)
+	if err != nil {
+		return err
+	}
+
+	clh.state.VirtiofsDaemonPid = 0
+
+	return nil
+}
+
 func (clh *cloudHypervisor) nydusdAPISocketPath(id string) (string, error) {
 	return utils.BuildSocketPath(clh.config.VMStorePath, id, nydusdAPISock)
 }
@@ -516,7 +532,7 @@ func (clh *cloudHypervisor) StartVM(ctx context.Context, timeout int) error {
 
 	pid, err := clh.launchClh()
 	if err != nil {
-		if shutdownErr := clh.virtiofsDaemon.Stop(ctx); shutdownErr != nil {
+		if shutdownErr := clh.stopVirtiofsDaemon(ctx); shutdownErr != nil {
 			clh.Logger().WithError(shutdownErr).Warn("error shutting down VirtiofsDaemon")
 		}
 		return fmt.Errorf("failed to launch cloud-hypervisor: %q", err)
@@ -971,12 +987,9 @@ func (clh *cloudHypervisor) terminate(ctx context.Context, waitOnly bool) (err e
 		return err
 	}
 
-	if clh.virtiofsDaemon == nil {
-		return errors.New("virtiofsDaemon config is nil, failed to stop it")
-	}
-
 	clh.Logger().Debug("stop virtiofsDaemon")
-	if err = clh.virtiofsDaemon.Stop(ctx); err != nil {
+
+	if err = clh.stopVirtiofsDaemon(ctx); err != nil {
 		clh.Logger().WithError(err).Error("failed to stop virtiofsDaemon")
 	}
 
