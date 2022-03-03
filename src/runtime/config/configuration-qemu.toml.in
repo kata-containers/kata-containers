@@ -143,7 +143,7 @@ default_memory = @DEFMEMSZ@
 # root file system is backed by a block device, the block device is passed
 # directly to the hypervisor for performance reasons.
 # This flag prevents the block device from being passed to the hypervisor,
-# 9pfs is used instead to pass the rootfs.
+# virtio-fs is used instead to pass the rootfs.
 disable_block_device_use = @DEFDISABLEBLOCK@
 
 # Shared file system type:

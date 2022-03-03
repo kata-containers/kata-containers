@@ -103,14 +103,6 @@ default_memory = @DEFMEMSZ@
 # Default 0
 #memory_offset = 0
 
-# Disable block device from being used for a container's rootfs.
-# In case of a storage driver like devicemapper where a container's
-# root file system is backed by a block device, the block device is passed
-# directly to the hypervisor for performance reasons.
-# This flag prevents the block device from being passed to the hypervisor,
-# 9pfs is used instead to pass the rootfs.
-disable_block_device_use = @DEFDISABLEBLOCK@
-
 # Block storage driver to be used for the hypervisor in case the container
 # rootfs is backed by a block device. This is virtio-scsi, virtio-blk
 # or nvdimm.
