@@ -198,6 +198,42 @@ func (clh *cloudHypervisor) setConfig(config *HypervisorConfig) error {
 	return nil
 }
 
+func (clh *cloudHypervisor) createVirtiofsDaemon(sharedPath string) (VirtiofsDaemon, error) {
+	virtiofsdSocketPath, err := clh.virtioFsSocketPath(clh.id)
+	if err != nil {
+		return nil, err
+	}
+
+	if clh.config.SharedFS == config.VirtioFSNydus {
+		apiSockPath, err := clh.nydusdAPISocketPath(clh.id)
+		if err != nil {
+			clh.Logger().WithError(err).Error("Invalid api socket path for nydusd")
+			return nil, err
+		}
+		nd := &nydusd{
+			path:        clh.config.VirtioFSDaemon,
+			sockPath:    virtiofsdSocketPath,
+			apiSockPath: apiSockPath,
+			sourcePath:  sharedPath,
+			debug:       clh.config.Debug,
+			extraArgs:   clh.config.VirtioFSExtraArgs,
+			startFn:     startInShimNS,
+		}
+		nd.setupShareDirFn = nd.setupPassthroughFS
+		return nd, nil
+	}
+
+	// default: use virtiofsd
+	return &virtiofsd{
+		path:       clh.config.VirtioFSDaemon,
+		sourcePath: sharedPath,
+		socketPath: virtiofsdSocketPath,
+		extraArgs:  clh.config.VirtioFSExtraArgs,
+		debug:      clh.config.Debug,
+		cache:      clh.config.VirtioFSCache,
+	}, nil
+}
+
 func (clh *cloudHypervisor) nydusdAPISocketPath(id string) (string, error) {
 	return utils.BuildSocketPath(clh.config.VMStorePath, id, nydusdAPISock)
 }
@@ -402,32 +438,9 @@ func (clh *cloudHypervisor) CreateVM(ctx context.Context, id string, network Net
 		ApiInternal: chclient.NewAPIClient(cfg).DefaultApi,
 	}
 
-	clh.virtiofsDaemon = &virtiofsd{
-		path:       clh.config.VirtioFSDaemon,
-		sourcePath: filepath.Join(GetSharePath(clh.id)),
-		socketPath: virtiofsdSocketPath,
-		extraArgs:  clh.config.VirtioFSExtraArgs,
-		debug:      clh.config.Debug,
-		cache:      clh.config.VirtioFSCache,
-	}
-
-	if clh.config.SharedFS == config.VirtioFSNydus {
-		apiSockPath, err := clh.nydusdAPISocketPath(clh.id)
-		if err != nil {
-			clh.Logger().WithError(err).Error("Invalid api socket path for nydusd")
-			return err
-		}
-		nd := &nydusd{
-			path:        clh.config.VirtioFSDaemon,
-			sockPath:    virtiofsdSocketPath,
-			apiSockPath: apiSockPath,
-			sourcePath:  filepath.Join(GetSharePath(clh.id)),
-			debug:       clh.config.Debug,
-			extraArgs:   clh.config.VirtioFSExtraArgs,
-			startFn:     startInShimNS,
-		}
-		nd.setupShareDirFn = nd.setupPassthroughFS
-		clh.virtiofsDaemon = nd
+	clh.virtiofsDaemon, err = clh.createVirtiofsDaemon(filepath.Join(GetSharePath(clh.id)))
+	if err != nil {
+		return err
 	}
 
 	if clh.config.SGXEPCSize > 0 {
