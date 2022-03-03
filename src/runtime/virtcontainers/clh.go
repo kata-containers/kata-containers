@@ -565,12 +565,16 @@ func (clh *cloudHypervisor) StartVM(ctx context.Context, timeout int) error {
 	if err != nil {
 		return err
 	}
+	defer func() {
+		if err != nil {
+			if shutdownErr := clh.stopVirtiofsDaemon(ctx); shutdownErr != nil {
+				clh.Logger().WithError(shutdownErr).Warn("error shutting down VirtiofsDaemon")
+			}
+		}
+	}()
 
 	pid, err := clh.launchClh()
 	if err != nil {
-		if shutdownErr := clh.stopVirtiofsDaemon(ctx); shutdownErr != nil {
-			clh.Logger().WithError(shutdownErr).Warn("error shutting down VirtiofsDaemon")
-		}
 		return fmt.Errorf("failed to launch cloud-hypervisor: %q", err)
 	}
 	clh.state.PID = pid
