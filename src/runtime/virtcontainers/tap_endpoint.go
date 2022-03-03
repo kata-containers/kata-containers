@@ -1,5 +1,6 @@
+//go:build linux
 // +build linux
-//
+
 // Copyright (c) 2018 Huawei Corporation
 //
 // SPDX-License-Identifier: Apache-2.0

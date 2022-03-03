@@ -20,7 +20,16 @@ machine_type = "@MACHINETYPE@"
 # Toggling that setting may trigger different hardware features, ranging
 # from memory encryption to both memory and CPU-state encryption and integrity.
 # The Kata Containers runtime dynamically detects the available feature set and
-# aims at enabling the largest possible one.
+# aims at enabling the largest possible one, returning an error if none is
+# available, or none is supported by the hypervisor.
+#
+# Known limitations:
+# * Does not work by design:
+#   - CPU Hotplug 
+#   - Device Hotplug
+#   - Memory Hotplug
+#   - NVDIMM devices
+#
 # Default false
 # confidential_guest = true
 
@@ -279,6 +288,9 @@ pflashes = []
 
 # If false and nvdimm is supported, use nvdimm device to plug guest image.
 # Otherwise virtio-block device is used.
+#
+# nvdimm is not supported when `confidential_guest = true`.
+#
 # Default is false
 #disable_image_nvdimm = true
 
@@ -491,6 +503,9 @@ internetworking_model="@DEFNETWORKMODEL_QEMU@"
 # within the guest
 # (default: true)
 disable_guest_seccomp=@DEFDISABLEGUESTSECCOMP@
+
+# disable applying SELinux on the VMM process (default false)
+disable_selinux=@DEFDISABLESELINUX@
 
 # If enabled, the runtime will create opentracing.io traces and spans.
 # (See https://www.jaegertracing.io/docs/getting-started).

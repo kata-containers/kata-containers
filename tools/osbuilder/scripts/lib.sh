@@ -57,36 +57,18 @@ check_root()
 
 generate_dnf_config()
 {
-	REPO_NAME=${REPO_NAME:-"base"}
-	CACHE_DIR=${CACHE_DIR:-"/var/cache/dnf"}
 	cat > "${DNF_CONF}" << EOF
 [main]
-cachedir=${CACHE_DIR}
-logfile=${LOG_FILE}
-keepcache=0
-debuglevel=2
-exactarch=1
-obsoletes=1
-plugins=0
-installonly_limit=3
 reposdir=/root/mash
-retries=5
+
+[base]
+name=${OS_NAME}-${OS_VERSION} base
+releasever=${OS_VERSION}
 EOF
 	if [ "$BASE_URL" != "" ]; then
-		cat >> "${DNF_CONF}" << EOF
-[base]
-name=${OS_NAME}-${OS_VERSION} ${REPO_NAME}
-failovermethod=priority
-baseurl=${BASE_URL}
-enabled=1
-EOF
-	elif [ "$MIRROR_LIST" != "" ]; then
-		cat >> "${DNF_CONF}" << EOF
-[base]
-name=${OS_NAME}-${OS_VERSION} ${REPO_NAME}
-mirrorlist=${MIRROR_LIST}
-enabled=1
-EOF
+		echo "baseurl=$BASE_URL" >> "$DNF_CONF"
+	elif [ "$METALINK" != "" ]; then
+		echo "metalink=$METALINK" >> "$DNF_CONF"
 	fi
 
 	if [ -n "$GPG_KEY_URL" ]; then
@@ -96,15 +78,6 @@ EOF
 		cat >> "${DNF_CONF}" << EOF
 gpgcheck=1
 gpgkey=file://${CONFIG_DIR}/${GPG_KEY_FILE}
-EOF
-	fi
-
-	if [ -n "$GPG_KEY_ARCH_URL" ]; then
-		if [ ! -f "${CONFIG_DIR}/${GPG_KEY_ARCH_FILE}" ]; then
-			 curl -L "${GPG_KEY_ARCH_URL}" -o "${CONFIG_DIR}/${GPG_KEY_ARCH_FILE}"
-		fi
-		cat >> "${DNF_CONF}" << EOF
-       file://${CONFIG_DIR}/${GPG_KEY_ARCH_FILE}
 EOF
 	fi
 
@@ -151,6 +124,8 @@ build_rootfs()
 
 	info "install packages for rootfs"
 	$DNF install ${EXTRA_PKGS} ${PACKAGES}
+
+	rm -rf ${ROOTFS_DIR}/usr/share/{bash-completion,cracklib,doc,info,locale,man,misc,pixmaps,terminfo,zoneinfo,zsh}
 }
 
 # Create a YAML metadata file inside the rootfs.

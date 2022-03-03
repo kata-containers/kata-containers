@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-package cgroups
+package resourcecontrol
 
 import (
 	"os"
@@ -99,8 +99,8 @@ func TestValidCgroupPath(t *testing.T) {
 			assert.Equal(t.path, path)
 		} else {
 			assert.True(
-				strings.HasPrefix(path, DefaultCgroupPath),
-				"%v should have prefix /%v", path, DefaultCgroupPath)
+				strings.HasPrefix(path, DefaultResourceControllerID),
+				"%v should have prefix /%v", path, DefaultResourceControllerID)
 		}
 	}
 

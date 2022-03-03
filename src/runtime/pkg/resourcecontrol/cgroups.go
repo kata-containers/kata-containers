@@ -1,11 +1,15 @@
-// Copyright (c) 2021 Apple Inc.
+//go:build linux
+// +build linux
+
+// Copyright (c) 2021-2022 Apple Inc.
 //
 // SPDX-License-Identifier: Apache-2.0
 //
 
-package cgroups
+package resourcecontrol
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
@@ -16,24 +20,30 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-type Cgroup struct {
+// prepend a kata specific string to oci cgroup path to
+// form a different cgroup path, thus cAdvisor couldn't
+// find kata containers cgroup path on host to prevent it
+// from grabbing the stats data.
+const CgroupKataPrefix = "kata"
+
+func RenameCgroupPath(path string) (string, error) {
+	if path == "" {
+		path = DefaultResourceControllerID
+	}
+
+	cgroupPathDir := filepath.Dir(path)
+	cgroupPathName := fmt.Sprintf("%s_%s", CgroupKataPrefix, filepath.Base(path))
+	return filepath.Join(cgroupPathDir, cgroupPathName), nil
+
+}
+
+type LinuxCgroup struct {
 	cgroup  cgroups.Cgroup
 	path    string
 	cpusets *specs.LinuxCPU
 	devices []specs.LinuxDeviceCgroup
 
 	sync.Mutex
-}
-
-var (
-	cgroupsLogger = logrus.WithField("source", "virtcontainers/pkg/cgroups")
-)
-
-// SetLogger sets up a logger for this pkg
-func SetLogger(logger *logrus.Entry) {
-	fields := cgroupsLogger.Data
-
-	cgroupsLogger = logger.WithFields(fields)
 }
 
 func sandboxDevices() []specs.LinuxDeviceCgroup {
@@ -65,7 +75,7 @@ func sandboxDevices() []specs.LinuxDeviceCgroup {
 	for _, device := range defaultDevices {
 		ldevice, err := DeviceToLinuxDevice(device)
 		if err != nil {
-			cgroupsLogger.WithField("source", "cgroups").Warnf("Could not add %s to the devices cgroup", device)
+			controllerLogger.WithField("source", "cgroups").Warnf("Could not add %s to the devices cgroup", device)
 			continue
 		}
 		devices = append(devices, ldevice)
@@ -116,7 +126,7 @@ func sandboxDevices() []specs.LinuxDeviceCgroup {
 	return devices
 }
 
-func NewCgroup(path string, resources *specs.LinuxResources) (*Cgroup, error) {
+func NewResourceController(path string, resources *specs.LinuxResources) (ResourceController, error) {
 	var err error
 
 	cgroupPath, err := ValidCgroupPath(path, IsSystemdCgroup(path))
@@ -129,7 +139,7 @@ func NewCgroup(path string, resources *specs.LinuxResources) (*Cgroup, error) {
 		return nil, err
 	}
 
-	return &Cgroup{
+	return &LinuxCgroup{
 		path:    cgroupPath,
 		devices: resources.Devices,
 		cpusets: resources.CPU,
@@ -137,7 +147,7 @@ func NewCgroup(path string, resources *specs.LinuxResources) (*Cgroup, error) {
 	}, nil
 }
 
-func NewSandboxCgroup(path string, resources *specs.LinuxResources, sandboxCgroupOnly bool) (*Cgroup, error) {
+func NewSandboxResourceController(path string, resources *specs.LinuxResources, sandboxCgroupOnly bool) (ResourceController, error) {
 	var cgroup cgroups.Cgroup
 	sandboxResources := *resources
 	sandboxResources.Devices = append(sandboxResources.Devices, sandboxDevices()...)
@@ -145,7 +155,7 @@ func NewSandboxCgroup(path string, resources *specs.LinuxResources, sandboxCgrou
 	// Currently we know to handle systemd cgroup path only when it's the only cgroup (no overhead group), hence,
 	// if sandboxCgroupOnly is not true we treat it as cgroupfs path as it used to be, although it may be incorrect
 	if !IsSystemdCgroup(path) || !sandboxCgroupOnly {
-		return NewCgroup(path, &sandboxResources)
+		return NewResourceController(path, &sandboxResources)
 	}
 
 	slice, unit, err := getSliceAndUnit(path)
@@ -174,7 +184,7 @@ func NewSandboxCgroup(path string, resources *specs.LinuxResources, sandboxCgrou
 		return nil, err
 	}
 
-	return &Cgroup{
+	return &LinuxCgroup{
 		path:    path,
 		devices: sandboxResources.Devices,
 		cpusets: sandboxResources.CPU,
@@ -182,7 +192,7 @@ func NewSandboxCgroup(path string, resources *specs.LinuxResources, sandboxCgrou
 	}, nil
 }
 
-func Load(path string) (*Cgroup, error) {
+func LoadResourceController(path string) (ResourceController, error) {
 	cgHierarchy, cgPath, err := cgroupHierarchy(path)
 	if err != nil {
 		return nil, err
@@ -193,37 +203,37 @@ func Load(path string) (*Cgroup, error) {
 		return nil, err
 	}
 
-	return &Cgroup{
+	return &LinuxCgroup{
 		path:   path,
 		cgroup: cgroup,
 	}, nil
 }
 
-func (c *Cgroup) Logger() *logrus.Entry {
-	return cgroupsLogger.WithField("source", "cgroups")
+func (c *LinuxCgroup) Logger() *logrus.Entry {
+	return controllerLogger.WithField("source", "cgroups")
 }
 
-func (c *Cgroup) Delete() error {
+func (c *LinuxCgroup) Delete() error {
 	return c.cgroup.Delete()
 }
 
-func (c *Cgroup) Stat() (*v1.Metrics, error) {
+func (c *LinuxCgroup) Stat() (*v1.Metrics, error) {
 	return c.cgroup.Stat(cgroups.ErrorHandler(cgroups.IgnoreNotExist))
 }
 
-func (c *Cgroup) AddProcess(pid int, subsystems ...string) error {
+func (c *LinuxCgroup) AddProcess(pid int, subsystems ...string) error {
 	return c.cgroup.Add(cgroups.Process{Pid: pid})
 }
 
-func (c *Cgroup) AddTask(pid int, subsystems ...string) error {
+func (c *LinuxCgroup) AddThread(pid int, subsystems ...string) error {
 	return c.cgroup.AddTask(cgroups.Process{Pid: pid})
 }
 
-func (c *Cgroup) Update(resources *specs.LinuxResources) error {
+func (c *LinuxCgroup) Update(resources *specs.LinuxResources) error {
 	return c.cgroup.Update(resources)
 }
 
-func (c *Cgroup) MoveTo(path string) error {
+func (c *LinuxCgroup) MoveTo(path string) error {
 	cgHierarchy, cgPath, err := cgroupHierarchy(path)
 	if err != nil {
 		return err
@@ -237,13 +247,7 @@ func (c *Cgroup) MoveTo(path string) error {
 	return c.cgroup.MoveTo(newCgroup)
 }
 
-func (c *Cgroup) MoveToParent() error {
-	parentPath := filepath.Dir(c.path)
-
-	return c.MoveTo(parentPath)
-}
-
-func (c *Cgroup) AddDevice(deviceHostPath string) error {
+func (c *LinuxCgroup) AddDevice(deviceHostPath string) error {
 	deviceResource, err := DeviceToLinuxDevice(deviceHostPath)
 	if err != nil {
 		return err
@@ -263,7 +267,7 @@ func (c *Cgroup) AddDevice(deviceHostPath string) error {
 	return nil
 }
 
-func (c *Cgroup) RemoveDevice(deviceHostPath string) error {
+func (c *LinuxCgroup) RemoveDevice(deviceHostPath string) error {
 	deviceResource, err := DeviceToLinuxDevice(deviceHostPath)
 	if err != nil {
 		return err
@@ -289,7 +293,7 @@ func (c *Cgroup) RemoveDevice(deviceHostPath string) error {
 	return nil
 }
 
-func (c *Cgroup) UpdateCpuSet(cpuset, memset string) error {
+func (c *LinuxCgroup) UpdateCpuSet(cpuset, memset string) error {
 	c.Lock()
 	defer c.Unlock()
 
@@ -316,6 +320,14 @@ func (c *Cgroup) UpdateCpuSet(cpuset, memset string) error {
 	})
 }
 
-func (c *Cgroup) Path() string {
+func (c *LinuxCgroup) Type() ResourceControllerType {
+	return LinuxCgroups
+}
+
+func (c *LinuxCgroup) ID() string {
 	return c.path
+}
+
+func (c *LinuxCgroup) Parent() string {
+	return filepath.Dir(c.path)
 }

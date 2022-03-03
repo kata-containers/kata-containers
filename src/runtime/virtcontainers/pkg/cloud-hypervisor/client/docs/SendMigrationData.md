@@ -4,14 +4,14 @@
 
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
-**DestinationUrl** | Pointer to **string** |  | [optional] 
+**DestinationUrl** | **string** |  | 
 **Local** | Pointer to **bool** |  | [optional] 
 
 ## Methods
 
 ### NewSendMigrationData
 
-`func NewSendMigrationData() *SendMigrationData`
+`func NewSendMigrationData(destinationUrl string, ) *SendMigrationData`
 
 NewSendMigrationData instantiates a new SendMigrationData object
 This constructor will assign default values to properties that have it defined,
@@ -45,11 +45,6 @@ and a boolean to check if the value has been set.
 
 SetDestinationUrl sets DestinationUrl field to given value.
 
-### HasDestinationUrl
-
-`func (o *SendMigrationData) HasDestinationUrl() bool`
-
-HasDestinationUrl returns a boolean if a field has been set.
 
 ### GetLocal
 

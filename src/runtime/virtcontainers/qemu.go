@@ -1,3 +1,6 @@
+//go:build linux
+// +build linux
+
 // Copyright (c) 2016 Intel Corporation
 //
 // SPDX-License-Identifier: Apache-2.0
@@ -127,8 +130,6 @@ const (
 
 	qemuStopSandboxTimeoutSecs = 15
 )
-
-var noGuestMemHotplugErr error = errors.New("guest memory hotplug not supported")
 
 // agnostic list of kernel parameters
 var defaultKernelParameters = []Param{
@@ -661,13 +662,16 @@ func (q *qemu) CreateVM(ctx context.Context, id string, network Network, hypervi
 		qemuConfig.IOThreads = []govmmQemu.IOThread{*ioThread}
 	}
 	// Add RNG device to hypervisor
-	rngDev := config.RNGDev{
-		ID:       rngID,
-		Filename: q.config.EntropySource,
-	}
-	qemuConfig.Devices, err = q.arch.appendRNGDevice(ctx, qemuConfig.Devices, rngDev)
-	if err != nil {
-		return err
+	// Skip for s390x as CPACF is used
+	if machine.Type != QemuCCWVirtio {
+		rngDev := config.RNGDev{
+			ID:       rngID,
+			Filename: q.config.EntropySource,
+		}
+		qemuConfig.Devices, err = q.arch.appendRNGDevice(ctx, qemuConfig.Devices, rngDev)
+		if err != nil {
+			return err
+		}
 	}
 
 	// Add PCIe Root Port devices to hypervisor
@@ -841,11 +845,13 @@ func (q *qemu) StartVM(ctx context.Context, timeout int) error {
 	// virtiofsd are executed by kata-runtime after this call, run with
 	// the SELinux label. If these processes require privileged, we do
 	// notwant to run them under confinement.
-	if err := label.SetProcessLabel(q.config.SELinuxProcessLabel); err != nil {
-		return err
-	}
-	defer label.SetProcessLabel("")
+	if !q.config.DisableSeLinux {
 
+		if err := label.SetProcessLabel(q.config.SELinuxProcessLabel); err != nil {
+			return err
+		}
+		defer label.SetProcessLabel("")
+	}
 	if q.config.SharedFS == config.VirtioFS || q.config.SharedFS == config.VirtioFSNydus {
 		err = q.setupVirtiofsDaemon(ctx)
 		if err != nil {

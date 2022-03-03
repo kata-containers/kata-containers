@@ -1,3 +1,6 @@
+//go:build linux
+// +build linux
+
 // Copyright (c) 2018 Intel Corporation
 //
 // SPDX-License-Identifier: Apache-2.0
@@ -150,57 +153,6 @@ type qemuArch interface {
 	appendProtectionDevice(devices []govmmQemu.Device, firmware, firmwareVolume string) ([]govmmQemu.Device, string, error)
 }
 
-// Kind of guest protection
-type guestProtection uint8
-
-const (
-	noneProtection guestProtection = iota
-
-	//Intel Trust Domain Extensions
-	//https://software.intel.com/content/www/us/en/develop/articles/intel-trust-domain-extensions.html
-	// Exclude from lint checking for it won't be used on arm64 code
-	tdxProtection
-
-	// AMD Secure Encrypted Virtualization
-	// https://developer.amd.com/sev/
-	// Exclude from lint checking for it won't be used on arm64 code
-	sevProtection
-
-	// IBM POWER 9 Protected Execution Facility
-	// https://www.kernel.org/doc/html/latest/powerpc/ultravisor.html
-	// Exclude from lint checking for it won't be used on arm64 code
-	pefProtection
-
-	// IBM Secure Execution (IBM Z & LinuxONE)
-	// https://www.kernel.org/doc/html/latest/virt/kvm/s390-pv.html
-	// Exclude from lint checking for it won't be used on arm64 code
-	seProtection
-)
-
-var guestProtectionStr = [...]string{
-	noneProtection: "none",
-	pefProtection:  "pef",
-	seProtection:   "se",
-	sevProtection:  "sev",
-	tdxProtection:  "tdx",
-}
-
-func (gp guestProtection) String() string {
-	return guestProtectionStr[gp]
-}
-
-func genericAvailableGuestProtections() (protections []string) {
-	return
-}
-
-func AvailableGuestProtections() (protections []string) {
-	gp, err := availableGuestProtection()
-	if err != nil || gp == noneProtection {
-		return genericAvailableGuestProtections()
-	}
-	return []string{gp.String()}
-}
-
 type qemuArchBase struct {
 	qemuExePath          string
 	qemuMachine          govmmQemu.Machine
@@ -226,7 +178,6 @@ const (
 	defaultBridgeBus          = "pcie.0"
 	defaultPCBridgeBus        = "pci.0"
 	maxDevIDSize              = 31
-	defaultMsize9p            = 8192
 	pcieRootPortPrefix        = "rp"
 )
 
@@ -326,7 +277,9 @@ func (q *qemuArchBase) kernelParameters(debug bool) []Param {
 
 func (q *qemuArchBase) capabilities() types.Capabilities {
 	var caps types.Capabilities
-	caps.SetBlockDeviceHotplugSupport()
+	if q.protection == noneProtection {
+		caps.SetBlockDeviceHotplugSupport()
+	}
 	caps.SetMultiQueueSupport()
 	caps.SetFsSharingSupport()
 	return caps
@@ -739,7 +692,7 @@ func (q *qemuArchBase) handleImagePath(config HypervisorConfig) {
 }
 
 func (q *qemuArchBase) supportGuestMemoryHotplug() bool {
-	return true
+	return q.protection == noneProtection
 }
 
 func (q *qemuArchBase) setIgnoreSharedMemoryMigrationCaps(ctx context.Context, qmp *govmmQemu.QMP) error {

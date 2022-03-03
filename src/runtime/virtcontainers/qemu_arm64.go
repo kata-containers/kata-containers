@@ -1,3 +1,6 @@
+//go:build linux
+// +build linux
+
 // Copyright (c) 2018 Intel Corporation
 //
 // SPDX-License-Identifier: Apache-2.0
@@ -29,8 +32,6 @@ const qmpMigrationWaitTimeout = 10 * time.Second
 
 const defaultQemuMachineOptions = "usb=off,accel=kvm,gic-version=host"
 
-var defaultGICVersion = uint32(3)
-
 var kernelParams = []Param{
 	{"console", "hvc0"},
 	{"console", "hvc1"},
@@ -40,22 +41,6 @@ var kernelParams = []Param{
 var supportedQemuMachine = govmmQemu.Machine{
 	Type:    QemuVirt,
 	Options: defaultQemuMachineOptions,
-}
-
-//In qemu, maximum number of vCPUs depends on the GIC version, or on how
-//many redistributors we can fit into the memory map.
-//related codes are under github.com/qemu/qemu/hw/arm/virt.c(Line 135 and 1306 in stable-2.11)
-//for now, qemu only supports v2 and v3, we treat v4 as v3 based on
-//backward compatibility.
-var gicList = map[uint32]uint32{
-	uint32(2): uint32(8),
-	uint32(3): uint32(123),
-	uint32(4): uint32(123),
-}
-
-// MaxQemuVCPUs returns the maximum number of vCPUs supported
-func MaxQemuVCPUs() uint32 {
-	return gicList[defaultGICVersion]
 }
 
 func newQemuArch(config HypervisorConfig) (qemuArch, error) {

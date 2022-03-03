@@ -4,13 +4,13 @@
 
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
-**ReceiverUrl** | Pointer to **string** |  | [optional] 
+**ReceiverUrl** | **string** |  | 
 
 ## Methods
 
 ### NewReceiveMigrationData
 
-`func NewReceiveMigrationData() *ReceiveMigrationData`
+`func NewReceiveMigrationData(receiverUrl string, ) *ReceiveMigrationData`
 
 NewReceiveMigrationData instantiates a new ReceiveMigrationData object
 This constructor will assign default values to properties that have it defined,
@@ -44,11 +44,6 @@ and a boolean to check if the value has been set.
 
 SetReceiverUrl sets ReceiverUrl field to given value.
 
-### HasReceiverUrl
-
-`func (o *ReceiveMigrationData) HasReceiverUrl() bool`
-
-HasReceiverUrl returns a boolean if a field has been set.
 
 
 [[Back to Model list]](../README.md#documentation-for-models) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to README]](../README.md)

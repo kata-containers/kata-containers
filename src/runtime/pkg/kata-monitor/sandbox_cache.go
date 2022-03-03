@@ -9,15 +9,15 @@ import (
 	"sync"
 )
 
-type sandboxKubeData struct {
+type sandboxCRIMetadata struct {
 	uid       string
 	name      string
 	namespace string
 }
 type sandboxCache struct {
 	*sync.Mutex
-	// the sandboxKubeData links the sandbox id from the container manager to the pod metadata of kubernetes
-	sandboxes map[string]sandboxKubeData
+	// the sandboxCRIMetadata links the sandbox id from the container manager to the pod metadata of kubernetes
+	sandboxes map[string]sandboxCRIMetadata
 }
 
 func (sc *sandboxCache) getSandboxList() []string {
@@ -43,7 +43,7 @@ func (sc *sandboxCache) deleteIfExists(id string) bool {
 	return false
 }
 
-func (sc *sandboxCache) putIfNotExists(id string, value sandboxKubeData) bool {
+func (sc *sandboxCache) putIfNotExists(id string, value sandboxCRIMetadata) bool {
 	sc.Lock()
 	defer sc.Unlock()
 
@@ -56,14 +56,14 @@ func (sc *sandboxCache) putIfNotExists(id string, value sandboxKubeData) bool {
 	return false
 }
 
-func (sc *sandboxCache) setMetadata(id string, value sandboxKubeData) {
+func (sc *sandboxCache) setCRIMetadata(id string, value sandboxCRIMetadata) {
 	sc.Lock()
 	defer sc.Unlock()
 
 	sc.sandboxes[id] = value
 }
 
-func (sc *sandboxCache) getMetadata(id string) (sandboxKubeData, bool) {
+func (sc *sandboxCache) getCRIMetadata(id string) (sandboxCRIMetadata, bool) {
 	sc.Lock()
 	defer sc.Unlock()
 

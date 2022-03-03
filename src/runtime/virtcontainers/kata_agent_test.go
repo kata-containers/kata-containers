@@ -14,6 +14,7 @@ import (
 	"path"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 	"syscall"
 	"testing"
@@ -21,6 +22,7 @@ import (
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/stretchr/testify/assert"
 
+	"code.cloudfoundry.org/bytefmt"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/api"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/drivers"
@@ -34,6 +36,8 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	vcTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 )
+
+const sysHugepagesDir = "/sys/kernel/mm/hugepages"
 
 var (
 	testBlkDriveFormat     = "testBlkDriveFormat"
@@ -50,6 +54,7 @@ func TestKataAgentConnect(t *testing.T) {
 
 	url, err := mock.GenerateKataMockHybridVSock()
 	assert.NoError(err)
+	defer mock.RemoveKataMockHybridVSock(url)
 
 	hybridVSockTTRPCMock := mock.HybridVSockTTRPCMock{}
 	err = hybridVSockTTRPCMock.Start(url)
@@ -73,6 +78,7 @@ func TestKataAgentDisconnect(t *testing.T) {
 
 	url, err := mock.GenerateKataMockHybridVSock()
 	assert.NoError(err)
+	defer mock.RemoveKataMockHybridVSock(url)
 
 	hybridVSockTTRPCMock := mock.HybridVSockTTRPCMock{}
 	err = hybridVSockTTRPCMock.Start(url)
@@ -110,6 +116,7 @@ func TestKataAgentSendReq(t *testing.T) {
 
 	url, err := mock.GenerateKataMockHybridVSock()
 	assert.NoError(err)
+	defer mock.RemoveKataMockHybridVSock(url)
 
 	hybridVSockTTRPCMock := mock.HybridVSockTTRPCMock{}
 	err = hybridVSockTTRPCMock.Start(url)
@@ -822,6 +829,10 @@ func TestAgentCreateContainer(t *testing.T) {
 		hypervisor: &mockHypervisor{},
 	}
 
+	fsShare, err := NewFilesystemShare(sandbox)
+	assert.Nil(err)
+	sandbox.fsShare = fsShare
+
 	store, err := persist.GetDriver()
 	assert.NoError(err)
 	assert.NotNil(store)
@@ -843,6 +854,7 @@ func TestAgentCreateContainer(t *testing.T) {
 
 	url, err := mock.GenerateKataMockHybridVSock()
 	assert.NoError(err)
+	defer mock.RemoveKataMockHybridVSock(url)
 
 	hybridVSockTTRPCMock := mock.HybridVSockTTRPCMock{}
 	err = hybridVSockTTRPCMock.Start(url)
@@ -873,6 +885,7 @@ func TestAgentNetworkOperation(t *testing.T) {
 
 	url, err := mock.GenerateKataMockHybridVSock()
 	assert.NoError(err)
+	defer mock.RemoveKataMockHybridVSock(url)
 
 	hybridVSockTTRPCMock := mock.HybridVSockTTRPCMock{}
 	err = hybridVSockTTRPCMock.Start(url)
@@ -921,6 +934,7 @@ func TestKataCopyFile(t *testing.T) {
 
 	url, err := mock.GenerateKataMockHybridVSock()
 	assert.NoError(err)
+	defer mock.RemoveKataMockHybridVSock(url)
 
 	hybridVSockTTRPCMock := mock.HybridVSockTTRPCMock{}
 	err = hybridVSockTTRPCMock.Start(url)
@@ -983,7 +997,7 @@ func TestKataCleanupSandbox(t *testing.T) {
 	assert.Nil(err)
 
 	k := &kataAgent{ctx: context.Background()}
-	k.cleanup(context.Background(), &s)
+	k.cleanup(context.Background())
 
 	_, err = os.Stat(dir)
 	assert.False(os.IsExist(err))
@@ -1119,119 +1133,6 @@ func TestKataAgentDirs(t *testing.T) {
 	assert.Equal(rafsMountPath(cid), expected)
 }
 
-func TestSandboxBindMount(t *testing.T) {
-	if os.Getuid() != 0 {
-		t.Skip("Test disabled as requires root user")
-	}
-
-	assert := assert.New(t)
-	// create temporary files to mount:
-	testMountPath, err := os.MkdirTemp("", "sandbox-test")
-	assert.NoError(err)
-	defer os.RemoveAll(testMountPath)
-
-	// create a new shared directory for our test:
-	kataHostSharedDirSaved := kataHostSharedDir
-	testHostDir, err := os.MkdirTemp("", "kata-Cleanup")
-	assert.NoError(err)
-	kataHostSharedDir = func() string {
-		return testHostDir
-	}
-	defer func() {
-		kataHostSharedDir = kataHostSharedDirSaved
-	}()
-
-	m1Path := filepath.Join(testMountPath, "foo.txt")
-	f1, err := os.Create(m1Path)
-	assert.NoError(err)
-	defer f1.Close()
-
-	m2Path := filepath.Join(testMountPath, "bar.txt")
-	f2, err := os.Create(m2Path)
-	assert.NoError(err)
-	defer f2.Close()
-
-	// create sandbox for mounting into
-	sandbox := &Sandbox{
-		ctx: context.Background(),
-		id:  "foobar",
-		config: &SandboxConfig{
-			SandboxBindMounts: []string{m1Path, m2Path},
-		},
-	}
-	k := &kataAgent{ctx: context.Background()}
-
-	// make the shared directory for our test:
-	dir := kataHostSharedDir()
-	err = os.MkdirAll(path.Join(dir, sandbox.id), 0777)
-	assert.Nil(err)
-	defer os.RemoveAll(dir)
-
-	sharePath := GetSharePath(sandbox.id)
-	mountPath := getMountPath(sandbox.id)
-
-	err = os.MkdirAll(sharePath, DirMode)
-	assert.Nil(err)
-	err = os.MkdirAll(mountPath, DirMode)
-	assert.Nil(err)
-
-	// setup the expeted slave mount:
-	err = bindMount(sandbox.ctx, mountPath, sharePath, true, "slave")
-	assert.Nil(err)
-	defer syscall.Unmount(sharePath, syscall.MNT_DETACH|UmountNoFollow)
-
-	// Test the function. We expect it to succeed and for the mount to exist
-	err = k.setupSandboxBindMounts(context.Background(), sandbox)
-	assert.NoError(err)
-
-	// Test the Cleanup function. We expect it to succeed for the mount to be removed.
-	err = k.cleanupSandboxBindMounts(sandbox)
-	assert.NoError(err)
-
-	// After successful Cleanup, verify there are not any mounts left behind.
-	stat := syscall.Stat_t{}
-	mount1CheckPath := filepath.Join(getMountPath(sandbox.id), sandboxMountsDir, filepath.Base(m1Path))
-	err = syscall.Stat(mount1CheckPath, &stat)
-	assert.Error(err)
-	assert.True(os.IsNotExist(err))
-
-	mount2CheckPath := filepath.Join(getMountPath(sandbox.id), sandboxMountsDir, filepath.Base(m2Path))
-	err = syscall.Stat(mount2CheckPath, &stat)
-	assert.Error(err)
-	assert.True(os.IsNotExist(err))
-
-	// Now, let's setup the Cleanup to fail. Setup the sandbox bind mount twice, which will result in
-	// extra mounts being present that the sandbox description doesn't account for (ie, duplicate mounts).
-	// We expect Cleanup to fail on the first time, since it cannot remove the sandbox-bindmount directory because
-	// there are leftover mounts.   If we run it a second time, however, it should succeed since it'll remove the
-	// second set of mounts:
-	err = k.setupSandboxBindMounts(context.Background(), sandbox)
-	assert.NoError(err)
-	err = k.setupSandboxBindMounts(context.Background(), sandbox)
-	assert.NoError(err)
-	// Test the Cleanup function. We expect it to succeed for the mount to be removed.
-	err = k.cleanupSandboxBindMounts(sandbox)
-	assert.Error(err)
-	err = k.cleanupSandboxBindMounts(sandbox)
-	assert.NoError(err)
-
-	//
-	// Now, let's setup the sandbox bindmount to fail, and verify that no mounts are left behind
-	//
-	sandbox.config.SandboxBindMounts = append(sandbox.config.SandboxBindMounts, "oh-nos")
-	err = k.setupSandboxBindMounts(context.Background(), sandbox)
-	assert.Error(err)
-	// Verify there aren't any mounts left behind
-	stat = syscall.Stat_t{}
-	err = syscall.Stat(mount1CheckPath, &stat)
-	assert.Error(err)
-	assert.True(os.IsNotExist(err))
-	err = syscall.Stat(mount2CheckPath, &stat)
-	assert.Error(err)
-	assert.True(os.IsNotExist(err))
-
-}
-
 func TestHandleHugepages(t *testing.T) {
 	if os.Getuid() != 0 {
 		t.Skip("Test disabled as requires root user")
@@ -1244,18 +1145,36 @@ func TestHandleHugepages(t *testing.T) {
 	defer os.RemoveAll(dir)
 
 	k := kataAgent{}
+	var formattedSizes []string
 	var mounts []specs.Mount
 	var hugepageLimits []specs.LinuxHugepageLimit
 
-	hugepageDirs := [2]string{"hugepages-1Gi", "hugepages-2Mi"}
-	options := [2]string{"pagesize=1024M", "pagesize=2M"}
+	// On s390x, hugepage sizes must be set at boot and cannot be created ad hoc. Use any that
+	// are present (default is 1M, can only be changed on LPAR). See
+	// https://www.ibm.com/docs/en/linuxonibm/pdf/lku5dd05.pdf, p. 345 for more information.
+	if runtime.GOARCH == "s390x" {
+		dirs, err := ioutil.ReadDir(sysHugepagesDir)
+		assert.Nil(err)
+		for _, dir := range dirs {
+			formattedSizes = append(formattedSizes, strings.TrimPrefix(dir.Name(), "hugepages-"))
+		}
+	} else {
+		formattedSizes = []string{"1G", "2M"}
+	}
 
-	for i := 0; i < 2; i++ {
-		target := path.Join(dir, hugepageDirs[i])
-		err := os.MkdirAll(target, 0777)
+	for _, formattedSize := range formattedSizes {
+		bytes, err := bytefmt.ToBytes(formattedSize)
+		assert.Nil(err)
+		hugepageLimits = append(hugepageLimits, specs.LinuxHugepageLimit{
+			Pagesize: formattedSize,
+			Limit:    1_000_000 * bytes,
+		})
+
+		target := path.Join(dir, fmt.Sprintf("hugepages-%s", formattedSize))
+		err = os.MkdirAll(target, 0777)
 		assert.NoError(err, "Unable to create dir %s", target)
 
-		err = syscall.Mount("nodev", target, "hugetlbfs", uintptr(0), options[i])
+		err = syscall.Mount("nodev", target, "hugetlbfs", uintptr(0), fmt.Sprintf("pagesize=%s", formattedSize))
 		assert.NoError(err, "Unable to mount %s", target)
 
 		defer syscall.Unmount(target, 0)
@@ -1267,21 +1186,10 @@ func TestHandleHugepages(t *testing.T) {
 		mounts = append(mounts, mount)
 	}
 
-	hugepageLimits = []specs.LinuxHugepageLimit{
-		{
-			Pagesize: "1GB",
-			Limit:    1073741824,
-		},
-		{
-			Pagesize: "2MB",
-			Limit:    134217728,
-		},
-	}
-
 	hugepages, err := k.handleHugepages(mounts, hugepageLimits)
 
 	assert.NoError(err, "Unable to handle hugepages %v", hugepageLimits)
 	assert.NotNil(hugepages)
-	assert.Equal(len(hugepages), 2)
+	assert.Equal(len(hugepages), len(formattedSizes))
 
 }

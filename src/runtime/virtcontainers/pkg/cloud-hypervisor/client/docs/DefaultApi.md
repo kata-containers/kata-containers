@@ -1071,7 +1071,7 @@ import (
 )
 
 func main() {
-    receiveMigrationData := *openapiclient.NewReceiveMigrationData() // ReceiveMigrationData | The URL for the reception of migration state
+    receiveMigrationData := *openapiclient.NewReceiveMigrationData("ReceiverUrl_example") // ReceiveMigrationData | The URL for the reception of migration state
 
     configuration := openapiclient.NewConfiguration()
     api_client := openapiclient.NewAPIClient(configuration)
@@ -1381,7 +1381,7 @@ import (
 )
 
 func main() {
-    sendMigrationData := *openapiclient.NewSendMigrationData() // SendMigrationData | The URL for sending the migration state
+    sendMigrationData := *openapiclient.NewSendMigrationData("DestinationUrl_example") // SendMigrationData | The URL for sending the migration state
 
     configuration := openapiclient.NewConfiguration()
     api_client := openapiclient.NewAPIClient(configuration)

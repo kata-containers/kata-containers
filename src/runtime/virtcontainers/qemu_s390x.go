@@ -1,3 +1,6 @@
+//go:build linux
+// +build linux
+
 // Copyright (c) 2018 IBM
 //
 // SPDX-License-Identifier: Apache-2.0
@@ -47,14 +50,6 @@ var supportedQemuMachine = govmmQemu.Machine{
 	Options: defaultQemuMachineOptions,
 }
 
-// MaxQemuVCPUs returns the maximum number of vCPUs supported
-func MaxQemuVCPUs() uint32 {
-	// Max number of virtual Cpu defined in qemu. See
-	// https://github.com/qemu/qemu/blob/80422b00196a7af4c6efb628fae0ad8b644e98af/target/s390x/cpu.h#L55
-	// #define S390_MAX_CPUS 248
-	return uint32(248)
-}
-
 func newQemuArch(config HypervisorConfig) (qemuArch, error) {
 	machineType := config.HypervisorMachineType
 	if machineType == "" {
@@ -81,6 +76,11 @@ func newQemuArch(config HypervisorConfig) (qemuArch, error) {
 	if config.ConfidentialGuest {
 		if err := q.enableProtection(); err != nil {
 			return nil, err
+		}
+
+		if !q.qemuArchBase.disableNvdimm {
+			hvLogger.WithField("subsystem", "qemuS390x").Warn("Nvdimm is not supported with confidential guest, disabling it.")
+			q.qemuArchBase.disableNvdimm = true
 		}
 	}
 

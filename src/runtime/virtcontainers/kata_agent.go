@@ -19,6 +19,7 @@ import (
 
 	"github.com/docker/go-units"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils/katatrace"
+	resCtrl "github.com/kata-containers/kata-containers/src/runtime/pkg/resourcecontrol"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/uuid"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/api"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
@@ -28,7 +29,6 @@ import (
 	kataclient "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols/client"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols/grpc"
 	vcAnnotations "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/annotations"
-	vccgroups "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/cgroups"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/rootless"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	vcTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
@@ -64,16 +64,12 @@ const (
 	// path to vfio devices
 	vfioPath = "/dev/vfio/"
 
-	sandboxMountsDir = "sandbox-mounts"
-
 	NydusRootFSType = "fuse.nydus-overlayfs"
+
 	// enable debug console
 	kernelParamDebugConsole           = "agent.debug_console"
 	kernelParamDebugConsoleVPort      = "agent.debug_console_vport"
 	kernelParamDebugConsoleVPortValue = "1026"
-
-	// Restricted permission for shared directory managed by virtiofs
-	sharedDirMode = os.FileMode(0700) | os.ModeDir
 )
 
 var (
@@ -389,79 +385,6 @@ func (k *kataAgent) internalConfigure(ctx context.Context, h Hypervisor, id stri
 	return nil
 }
 
-func (k *kataAgent) setupSandboxBindMounts(ctx context.Context, sandbox *Sandbox) (err error) {
-	span, ctx := katatrace.Trace(ctx, k.Logger(), "setupSandboxBindMounts", kataAgentTracingTags)
-	defer span.End()
-
-	if len(sandbox.config.SandboxBindMounts) == 0 {
-		return nil
-	}
-
-	// Create subdirectory in host shared path for sandbox mounts
-	sandboxMountDir := filepath.Join(getMountPath(sandbox.id), sandboxMountsDir)
-	sandboxShareDir := filepath.Join(GetSharePath(sandbox.id), sandboxMountsDir)
-	if err := os.MkdirAll(sandboxMountDir, DirMode); err != nil {
-		return fmt.Errorf("Creating sandbox shared mount directory: %v: %w", sandboxMountDir, err)
-	}
-	var mountedList []string
-	defer func() {
-		if err != nil {
-			for _, mnt := range mountedList {
-				if derr := syscall.Unmount(mnt, syscall.MNT_DETACH|UmountNoFollow); derr != nil {
-					k.Logger().WithError(derr).Errorf("Cleanup: couldn't unmount %s", mnt)
-				}
-			}
-			if derr := os.RemoveAll(sandboxMountDir); derr != nil {
-				k.Logger().WithError(derr).Errorf("Cleanup: failed to remove %s", sandboxMountDir)
-			}
-
-		}
-	}()
-
-	for _, m := range sandbox.config.SandboxBindMounts {
-		mountDest := filepath.Join(sandboxMountDir, filepath.Base(m))
-		// bind-mount each sandbox mount that's defined into the sandbox mounts dir
-		if err := bindMount(ctx, m, mountDest, true, "private"); err != nil {
-			return fmt.Errorf("Mounting sandbox directory: %v to %v: %w", m, mountDest, err)
-		}
-		mountedList = append(mountedList, mountDest)
-
-		mountDest = filepath.Join(sandboxShareDir, filepath.Base(m))
-		if err := remountRo(ctx, mountDest); err != nil {
-			return fmt.Errorf("remount sandbox directory: %v to %v: %w", m, mountDest, err)
-		}
-
-	}
-
-	return nil
-}
-
-func (k *kataAgent) cleanupSandboxBindMounts(sandbox *Sandbox) error {
-	if sandbox.config == nil || len(sandbox.config.SandboxBindMounts) == 0 {
-		return nil
-	}
-
-	var retErr error
-	bindmountShareDir := filepath.Join(getMountPath(sandbox.id), sandboxMountsDir)
-	for _, m := range sandbox.config.SandboxBindMounts {
-		mountPath := filepath.Join(bindmountShareDir, filepath.Base(m))
-		if err := syscall.Unmount(mountPath, syscall.MNT_DETACH|UmountNoFollow); err != nil {
-			if retErr == nil {
-				retErr = err
-			}
-			k.Logger().WithError(err).Errorf("Failed to unmount sandbox bindmount: %v", mountPath)
-		}
-	}
-	if err := os.RemoveAll(bindmountShareDir); err != nil {
-		if retErr == nil {
-			retErr = err
-		}
-		k.Logger().WithError(err).Errorf("Failed to remove sandbox bindmount directory: %s", bindmountShareDir)
-	}
-
-	return retErr
-}
-
 func (k *kataAgent) configure(ctx context.Context, h Hypervisor, id, sharePath string, config KataAgentConfig) error {
 	span, ctx := katatrace.Trace(ctx, k.Logger(), "configure", kataAgentTracingTags)
 	defer span.End()
@@ -511,47 +434,10 @@ func (k *kataAgent) configureFromGrpc(ctx context.Context, h Hypervisor, id stri
 	return k.internalConfigure(ctx, h, id, config)
 }
 
-func (k *kataAgent) setupSharedPath(ctx context.Context, sandbox *Sandbox) (err error) {
-	span, ctx := katatrace.Trace(ctx, k.Logger(), "setupSharedPath", kataAgentTracingTags)
-	defer span.End()
-
-	// create shared path structure
-	sharePath := GetSharePath(sandbox.id)
-	mountPath := getMountPath(sandbox.id)
-	if err := os.MkdirAll(sharePath, sharedDirMode); err != nil {
-		return err
-	}
-	if err := os.MkdirAll(mountPath, DirMode); err != nil {
-		return err
-	}
-
-	// slave mount so that future mountpoints under mountPath are shown in sharePath as well
-	if err := bindMount(ctx, mountPath, sharePath, true, "slave"); err != nil {
-		return err
-	}
-	defer func() {
-		if err != nil {
-			if umountErr := syscall.Unmount(sharePath, syscall.MNT_DETACH|UmountNoFollow); umountErr != nil {
-				k.Logger().WithError(umountErr).Errorf("failed to unmount vm share path %s", sharePath)
-			}
-		}
-	}()
-
-	// Setup sandbox bindmounts, if specified:
-	if err = k.setupSandboxBindMounts(ctx, sandbox); err != nil {
-		return err
-	}
-
-	return nil
-}
-
 func (k *kataAgent) createSandbox(ctx context.Context, sandbox *Sandbox) error {
 	span, ctx := katatrace.Trace(ctx, k.Logger(), "createSandbox", kataAgentTracingTags)
 	defer span.End()
 
-	if err := k.setupSharedPath(ctx, sandbox); err != nil {
-		return err
-	}
 	return k.configure(ctx, sandbox.hypervisor, sandbox.id, GetSharePath(sandbox.id), sandbox.config.AgentConfig)
 }
 
@@ -1063,7 +949,7 @@ func (k *kataAgent) constrainGRPCSpec(grpcSpec *grpc.Spec, passSeccomp bool, str
 	// - Initrd image doesn't have systemd.
 	// - Nobody will be able to modify the resources of a specific container by using systemctl set-property.
 	// - docker is not running in the VM.
-	if vccgroups.IsSystemdCgroup(grpcSpec.Linux.CgroupsPath) {
+	if resCtrl.IsSystemdCgroup(grpcSpec.Linux.CgroupsPath) {
 		// Convert systemd cgroup to cgroupfs
 		slice := strings.Split(grpcSpec.Linux.CgroupsPath, ":")
 		// 0 - slice: system.slice
@@ -1274,151 +1160,10 @@ func (k *kataAgent) rollbackFailingContainerCreation(ctx context.Context, c *Con
 			k.Logger().WithError(err2).Error("rollback failed unmountHostMounts()")
 		}
 
-		if c.rootFs.Type == NydusRootFSType {
-			if err2 := nydusContainerCleanup(ctx, getMountPath(c.sandbox.id), c); err2 != nil {
-				k.Logger().WithError(err2).Error("rollback failed nydusContainerCleanup")
-			}
-		} else {
-			if err2 := bindUnmountContainerRootfs(ctx, getMountPath(c.sandbox.id), c.id); err2 != nil {
-				k.Logger().WithError(err2).Error("rollback failed bindUnmountContainerRootfs()")
-			}
+		if err2 := c.sandbox.fsShare.UnshareRootFilesystem(ctx, c); err2 != nil {
+			k.Logger().WithError(err2).Error("rollback failed UnshareRootfs()")
 		}
 	}
-}
-
-func getVirtiofsDaemonForNydus(sandbox *Sandbox) (VirtiofsDaemon, error) {
-	var virtiofsDaemon VirtiofsDaemon
-	switch sandbox.GetHypervisorType() {
-	case string(QemuHypervisor):
-		virtiofsDaemon = sandbox.hypervisor.(*qemu).virtiofsDaemon
-	case string(ClhHypervisor):
-		virtiofsDaemon = sandbox.hypervisor.(*cloudHypervisor).virtiofsDaemon
-	default:
-		return nil, errNydusdNotSupport
-	}
-	return virtiofsDaemon, nil
-}
-
-func (k *kataAgent) buildContainerRootfsWithNydus(sandbox *Sandbox, c *Container, rootPathParent string) (*grpc.Storage, error) {
-	virtiofsDaemon, err := getVirtiofsDaemonForNydus(sandbox)
-	if err != nil {
-		return nil, err
-	}
-	extraOption, err := parseExtraOption(c.rootFs.Options)
-	if err != nil {
-		return nil, err
-	}
-	mountOpt := &MountOption{
-		mountpoint: rafsMountPath(c.id),
-		source:     extraOption.Source,
-		config:     extraOption.Config,
-	}
-	k.Logger().Infof("nydus option: %v", extraOption)
-	// mount lowerdir to guest /run/kata-containers/shared/images/<cid>/lowerdir
-	if err := virtiofsDaemon.Mount(*mountOpt); err != nil {
-		return nil, err
-	}
-	rootfs := &grpc.Storage{}
-	containerShareDir := filepath.Join(getMountPath(c.sandbox.id), c.id)
-
-	// mkdir rootfs, guest at /run/kata-containers/shared/containers/<cid>/rootfs
-	rootfsDir := filepath.Join(containerShareDir, c.rootfsSuffix)
-	if err := os.MkdirAll(rootfsDir, DirMode); err != nil {
-		return nil, err
-	}
-	// bindmount snapshot dir which snapshotter allocated
-	// to guest /run/kata-containers/shared/containers/<cid>/snapshotdir
-	snapshotShareDir := filepath.Join(containerShareDir, snapshotDir)
-	if err := bindMount(k.ctx, extraOption.Snapshotdir, snapshotShareDir, true, "slave"); err != nil {
-		return nil, err
-	}
-
-	// so rootfs = overlay(upperdir, workerdir, lowerdir)
-	rootfs.MountPoint = filepath.Join(rootPathParent, c.rootfsSuffix)
-	rootfs.Source = typeOverlayFS
-	rootfs.Fstype = typeOverlayFS
-	rootfs.Driver = kataOverlayDevType
-	rootfs.Options = append(rootfs.Options, fmt.Sprintf("%s=%s", upperDir, filepath.Join(kataGuestSharedDir(), c.id, snapshotDir, "fs")))
-	rootfs.Options = append(rootfs.Options, fmt.Sprintf("%s=%s", workDir, filepath.Join(kataGuestSharedDir(), c.id, snapshotDir, "work")))
-	rootfs.Options = append(rootfs.Options, fmt.Sprintf("%s=%s", lowerDir, filepath.Join(kataGuestNydusImageDir(), c.id, lowerDir)))
-	rootfs.Options = append(rootfs.Options, "index=off")
-	k.Logger().Infof("rootfs info: %#v\n", rootfs)
-	return rootfs, nil
-}
-
-func (k *kataAgent) buildContainerRootfs(ctx context.Context, sandbox *Sandbox, c *Container, rootPathParent string) (*grpc.Storage, error) {
-	// In the confidential computing, there is no Image information on the host,
-	// so there is no Rootfs.Target.
-	if sandbox.config.ServiceOffload && c.rootFs.Target == "" {
-		return nil, nil
-	}
-	if c.rootFs.Type == NydusRootFSType {
-		return k.buildContainerRootfsWithNydus(sandbox, c, rootPathParent)
-	}
-	if c.state.Fstype != "" && c.state.BlockDeviceID != "" {
-		// The rootfs storage volume represents the container rootfs
-		// mount point inside the guest.
-		// It can be a block based device (when using block based container
-		// overlay on the host) mount or a 9pfs one (for all other overlay
-		// implementations).
-		rootfs := &grpc.Storage{}
-
-		// This is a block based device rootfs.
-		device := sandbox.devManager.GetDeviceByID(c.state.BlockDeviceID)
-		if device == nil {
-			k.Logger().WithField("device", c.state.BlockDeviceID).Error("failed to find device by id")
-			return nil, fmt.Errorf("failed to find device by id %q", c.state.BlockDeviceID)
-		}
-
-		blockDrive, ok := device.GetDeviceInfo().(*config.BlockDrive)
-		if !ok || blockDrive == nil {
-			k.Logger().Error("malformed block drive")
-			return nil, fmt.Errorf("malformed block drive")
-		}
-		switch {
-		case sandbox.config.HypervisorConfig.BlockDeviceDriver == config.VirtioMmio:
-			rootfs.Driver = kataMmioBlkDevType
-			rootfs.Source = blockDrive.VirtPath
-		case sandbox.config.HypervisorConfig.BlockDeviceDriver == config.VirtioBlockCCW:
-			rootfs.Driver = kataBlkCCWDevType
-			rootfs.Source = blockDrive.DevNo
-		case sandbox.config.HypervisorConfig.BlockDeviceDriver == config.VirtioBlock:
-			rootfs.Driver = kataBlkDevType
-			rootfs.Source = blockDrive.PCIPath.String()
-		case sandbox.config.HypervisorConfig.BlockDeviceDriver == config.VirtioSCSI:
-			rootfs.Driver = kataSCSIDevType
-			rootfs.Source = blockDrive.SCSIAddr
-		default:
-			return nil, fmt.Errorf("Unknown block device driver: %s", sandbox.config.HypervisorConfig.BlockDeviceDriver)
-		}
-
-		rootfs.MountPoint = rootPathParent
-		rootfs.Fstype = c.state.Fstype
-
-		if c.state.Fstype == "xfs" {
-			rootfs.Options = []string{"nouuid"}
-		}
-
-		// Ensure container mount destination exists
-		// TODO: remove dependency on shared fs path. shared fs is just one kind of storage source.
-		// we should not always use shared fs path for all kinds of storage. Instead, all storage
-		// should be bind mounted to a tmpfs path for containers to use.
-		if err := os.MkdirAll(filepath.Join(getMountPath(c.sandbox.id), c.id, c.rootfsSuffix), DirMode); err != nil {
-			return nil, err
-		}
-		return rootfs, nil
-	}
-
-	// This is not a block based device rootfs. We are going to bind mount it into the shared drive
-	// between the host and the guest.
-	// With virtiofs/9pfs we don't need to ask the agent to mount the rootfs as the shared directory
-	// (kataGuestSharedDir) is already mounted in the guest. We only need to mount the rootfs from
-	// the host and it will show up in the guest.
-	if err := bindMountContainerRootfs(ctx, getMountPath(sandbox.id), c.id, c.rootFs.Target, false); err != nil {
-		return nil, err
-	}
-
-	return nil, nil
 }
 
 func (k *kataAgent) createContainer(ctx context.Context, sandbox *Sandbox, c *Container) (p *Process, err error) {
@@ -1426,11 +1171,7 @@ func (k *kataAgent) createContainer(ctx context.Context, sandbox *Sandbox, c *Co
 	defer span.End()
 	var ctrStorages []*grpc.Storage
 	var ctrDevices []*grpc.Device
-	var rootfs *grpc.Storage
-
-	// This is the guest absolute root path for that container.
-	rootPathParent := filepath.Join(kataGuestSharedDir(), c.id)
-	rootPath := filepath.Join(rootPathParent, c.rootfsSuffix)
+	var sharedRootfs *SharedFile
 
 	// In case the container creation fails, the following defer statement
 	// takes care of rolling back actions previously performed.
@@ -1441,19 +1182,19 @@ func (k *kataAgent) createContainer(ctx context.Context, sandbox *Sandbox, c *Co
 		}
 	}()
 
-	// setup rootfs -- if its block based, we'll receive a non-nil storage object representing
+	// Share the container rootfs -- if its block based, we'll receive a non-nil storage object representing
 	// the block device for the rootfs, which us utilized for mounting in the guest. This'll be handled
 	// already for non-block based rootfs
-	if rootfs, err = k.buildContainerRootfs(ctx, sandbox, c, rootPathParent); err != nil {
+	if sharedRootfs, err = sandbox.fsShare.ShareRootFilesystem(ctx, c); err != nil {
 		return nil, err
 	}
 
-	if rootfs != nil {
+	if sharedRootfs.storage != nil {
 		// Add rootfs to the list of container storage.
 		// We only need to do this for block based rootfs, as we
 		// want the agent to mount it into the right location
 		// (kataGuestSharedDir/ctrID/
-		ctrStorages = append(ctrStorages, rootfs)
+		ctrStorages = append(ctrStorages, sharedRootfs.storage)
 	}
 
 	ociSpec := c.GetPatchedOCISpec()
@@ -1529,7 +1270,7 @@ func (k *kataAgent) createContainer(ctx context.Context, sandbox *Sandbox, c *Co
 	}
 
 	// We need to give the OCI spec our absolute rootfs path in the guest.
-	grpcSpec.Root.Path = rootPath
+	grpcSpec.Root.Path = sharedRootfs.guestPath
 
 	sharedPidNs := k.handlePidNamespace(grpcSpec, sandbox)
 
@@ -2348,7 +2089,7 @@ func (k *kataAgent) copyFile(ctx context.Context, src, dst string) error {
 	cpReq := &grpc.CopyFileRequest{
 		Path:     dst,
 		DirMode:  uint32(DirMode),
-		FileMode: st.Mode,
+		FileMode: uint32(st.Mode),
 		FileSize: fileSize,
 		Uid:      int32(st.Uid),
 		Gid:      int32(st.Gid),
@@ -2398,26 +2139,7 @@ func (k *kataAgent) markDead(ctx context.Context) {
 	k.disconnect(ctx)
 }
 
-func (k *kataAgent) cleanup(ctx context.Context, s *Sandbox) {
-	if err := k.cleanupSandboxBindMounts(s); err != nil {
-		k.Logger().WithError(err).Errorf("failed to Cleanup sandbox bindmounts")
-	}
-
-	// Unmount shared path
-	path := GetSharePath(s.id)
-	k.Logger().WithField("path", path).Infof("Cleanup agent")
-	if err := syscall.Unmount(path, syscall.MNT_DETACH|UmountNoFollow); err != nil {
-		k.Logger().WithError(err).Errorf("failed to unmount vm share path %s", path)
-	}
-
-	// Unmount mount path
-	path = getMountPath(s.id)
-	if err := bindUnmountAllRootfs(ctx, path, s); err != nil {
-		k.Logger().WithError(err).Errorf("failed to unmount vm mount path %s", path)
-	}
-	if err := os.RemoveAll(getSandboxPath(s.id)); err != nil {
-		k.Logger().WithError(err).Errorf("failed to Cleanup vm path %s", getSandboxPath(s.id))
-	}
+func (k *kataAgent) cleanup(ctx context.Context) {
 }
 
 func (k *kataAgent) save() persistapi.AgentState {

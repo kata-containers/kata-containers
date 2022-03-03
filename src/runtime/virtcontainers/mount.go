@@ -144,8 +144,8 @@ func getDeviceForPath(path string) (device, error) {
 
 	if isHostDevice(path) {
 		// stat.Rdev describes the device that this file (inode) represents.
-		devMajor = major(stat.Rdev)
-		devMinor = minor(stat.Rdev)
+		devMajor = major(uint64(stat.Rdev))
+		devMinor = minor(uint64(stat.Rdev))
 
 		return device{
 			major:      devMajor,
@@ -154,8 +154,8 @@ func getDeviceForPath(path string) (device, error) {
 		}, nil
 	}
 	// stat.Dev points to the underlying device containing the file
-	devMajor = major(stat.Dev)
-	devMinor = minor(stat.Dev)
+	devMajor = major(uint64(stat.Dev))
+	devMinor = minor(uint64(stat.Dev))
 
 	path, err = filepath.Abs(path)
 	if err != nil {
@@ -386,6 +386,19 @@ func bindUnmountContainerSnapshotDir(ctx context.Context, sharedDir, cID string)
 	defer span.End()
 	span.SetAttributes(otelLabel.String("shared-dir", sharedDir), otelLabel.String("container-id", cID))
 	return bindUnmountContainerShareDir(ctx, sharedDir, cID, snapshotDir)
+}
+
+func getVirtiofsDaemonForNydus(sandbox *Sandbox) (VirtiofsDaemon, error) {
+	var virtiofsDaemon VirtiofsDaemon
+	switch sandbox.GetHypervisorType() {
+	case string(QemuHypervisor):
+		virtiofsDaemon = sandbox.hypervisor.(*qemu).virtiofsDaemon
+	case string(ClhHypervisor):
+		virtiofsDaemon = sandbox.hypervisor.(*cloudHypervisor).virtiofsDaemon
+	default:
+		return nil, errNydusdNotSupport
+	}
+	return virtiofsDaemon, nil
 }
 
 func nydusContainerCleanup(ctx context.Context, sharedDir string, c *Container) error {

@@ -15,6 +15,7 @@ import (
 	"strings"
 
 	"github.com/BurntSushi/toml"
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/govmm"
 	govmmQemu "github.com/kata-containers/kata-containers/src/runtime/pkg/govmm/qemu"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils/katatrace"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/oci"
@@ -135,6 +136,7 @@ type hypervisor struct {
 	GuestSwap               bool     `toml:"enable_guest_swap"`
 	Rootless                bool     `toml:"rootless"`
 	DisableSeccomp          bool     `toml:"disable_seccomp"`
+	DisableSeLinux          bool     `toml:"disable_selinux"`
 }
 
 type runtime struct {
@@ -343,7 +345,7 @@ func (h hypervisor) defaultVCPUs() uint32 {
 
 func (h hypervisor) defaultMaxVCPUs() uint32 {
 	numcpus := uint32(goruntime.NumCPU())
-	maxvcpus := vc.MaxQemuVCPUs()
+	maxvcpus := govmm.MaxVCPUs()
 	reqVCPUs := h.DefaultMaxVCPUs
 
 	//don't exceed the number of physical CPUs. If a default is not provided, use the
@@ -876,6 +878,8 @@ func newClhHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		SGXEPCSize:              defaultSGXEPCSize,
 		EnableAnnotations:       h.EnableAnnotations,
 		DisableSeccomp:          h.DisableSeccomp,
+		ConfidentialGuest:       h.ConfidentialGuest,
+		DisableSeLinux:          h.DisableSeLinux,
 	}, nil
 }
 
