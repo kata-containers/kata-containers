@@ -28,6 +28,9 @@ ARCH_FILE = $(ARCH_DIR)/$(ARCH)$(ARCH_FILE_SUFFIX)
 ARCH_FILES = $(wildcard arch/*$(ARCH_FILE_SUFFIX))
 ALL_ARCHES = $(patsubst $(ARCH_DIR)/%$(ARCH_FILE_SUFFIX),%,$(ARCH_FILES))
 
+# Build as safely as possible
+export CGO_CPPFLAGS = -D_FORTIFY_SOURCE=2 -fstack-protector
+
 ifeq (,$(realpath $(ARCH_FILE)))
     $(error "ERROR: invalid architecture: '$(ARCH)'")
 else
