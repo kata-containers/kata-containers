@@ -273,6 +273,20 @@ func (clh *cloudHypervisor) stopVirtiofsDaemon(ctx context.Context) (err error) 
 	return nil
 }
 
+func (clh *cloudHypervisor) loadVirtiofsDaemon(sharedPath string) (VirtiofsDaemon, error) {
+	virtiofsdSocketPath, err := clh.virtioFsSocketPath(clh.id)
+	if err != nil {
+		return nil, err
+	}
+
+	return &virtiofsd{
+		PID:        clh.state.VirtiofsDaemonPid,
+		sourcePath: sharedPath,
+		debug:      clh.config.Debug,
+		socketPath: virtiofsdSocketPath,
+	}, nil
+}
+
 func (clh *cloudHypervisor) nydusdAPISocketPath(id string) (string, error) {
 	return utils.BuildSocketPath(clh.config.VMStorePath, id, nydusdAPISock)
 }
@@ -323,19 +337,15 @@ func (clh *cloudHypervisor) CreateVM(ctx context.Context, id string, network Net
 
 	clh.Logger().WithField("function", "CreateVM").Info("creating Sandbox")
 
-	virtiofsdSocketPath, err := clh.virtioFsSocketPath(clh.id)
-	if err != nil {
-		return nil
-	}
-
 	if clh.state.PID > 0 {
 		clh.Logger().WithField("function", "CreateVM").Info("Sandbox already exist, loading from state")
-		clh.virtiofsDaemon = &virtiofsd{
-			PID:        clh.state.VirtiofsDaemonPid,
-			sourcePath: hypervisorConfig.SharedPath,
-			debug:      clh.config.Debug,
-			socketPath: virtiofsdSocketPath,
+
+		virtiofsDaemon, err := clh.loadVirtiofsDaemon(hypervisorConfig.SharedFS)
+		if err != nil {
+			return err
 		}
+		clh.virtiofsDaemon = virtiofsDaemon
+
 		return nil
 	}
 
