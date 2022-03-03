@@ -7,11 +7,17 @@
 use std::fmt::{Display, Formatter};
 use std::str::FromStr;
 
-const CONTAINER: &str = "container";
-const SANDBOX: &str = "sandbox";
-const POD_CONTAINER: &str = "pod_container";
-const POD_SANDBOX: &str = "pod_sandbox";
-const POD_SANDBOX2: &str = "podsandbox";
+// a container running within a pod
+pub(crate) const POD_CONTAINER: &str = "pod_container";
+// cri containerd/crio/docker: a container running within a pod
+pub(crate) const CONTAINER: &str = "container";
+
+// a pod sandbox container
+pub(crate) const POD_SANDBOX: &str = "pod_sandbox";
+// cri containerd/crio: a pod sandbox container
+pub(crate) const SANDBOX: &str = "sandbox";
+// docker: a sandbox sandbox container
+pub(crate) const PODSANDBOX: &str = "podsandbox";
 
 const STATE_READY: &str = "ready";
 const STATE_RUNNING: &str = "running";
@@ -68,7 +74,7 @@ impl FromStr for ContainerType {
     fn from_str(value: &str) -> Result<Self, Self::Err> {
         match value {
             POD_CONTAINER | CONTAINER => Ok(ContainerType::PodContainer),
-            POD_SANDBOX | POD_SANDBOX2 | SANDBOX => Ok(ContainerType::PodSandbox),
+            POD_SANDBOX | PODSANDBOX | SANDBOX => Ok(ContainerType::PodSandbox),
             _ => Err(Error::InvalidContainerType(value.to_owned())),
         }
     }

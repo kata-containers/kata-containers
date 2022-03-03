@@ -215,6 +215,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "common-path"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2382f75942f4b3be3690fe4f86365e9c853c1587d6ee58212cebf6e2a9ccd101"
+
+[[package]]
 name = "core-foundation-sys"
 version = "0.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -309,6 +315,17 @@ checksum = "aa68f1b12764fab894d2755d2518754e71b4fd80ecfb822714a1206c2aab39bf"
 dependencies = [
  "cc",
  "libc",
+]
+
+[[package]]
+name = "fail"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ec3245a0ca564e7f3c797d20d833a6870f57a728ac967d5225b3ffdef4465011"
+dependencies = [
+ "lazy_static",
+ "log",
+ "rand",
 ]
 
 [[package]]
@@ -441,6 +458,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "glob"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9b919933a397b79c37e33b77bb2aa3dc8eb6e165ad809e58ff75bc7db2e34574"
+
+[[package]]
 name = "hashbrown"
 version = "0.11.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -571,6 +594,7 @@ dependencies = [
  "clap",
  "futures",
  "ipnetwork",
+ "kata-sys-util",
  "lazy_static",
  "libc",
  "log",
@@ -606,6 +630,44 @@ dependencies = [
  "tracing-subscriber",
  "ttrpc",
  "vsock-exporter",
+]
+
+[[package]]
+name = "kata-sys-util"
+version = "0.1.0"
+dependencies = [
+ "cgroups-rs",
+ "chrono",
+ "common-path",
+ "fail",
+ "kata-types",
+ "lazy_static",
+ "libc",
+ "nix 0.23.1",
+ "oci",
+ "once_cell",
+ "serde_json",
+ "slog",
+ "slog-scope",
+ "subprocess",
+ "thiserror",
+]
+
+[[package]]
+name = "kata-types"
+version = "0.1.0"
+dependencies = [
+ "glob",
+ "lazy_static",
+ "num_cpus",
+ "oci",
+ "regex",
+ "serde",
+ "serde_json",
+ "slog",
+ "slog-scope",
+ "thiserror",
+ "toml",
 ]
 
 [[package]]
@@ -863,9 +925,9 @@ dependencies = [
 
 [[package]]
 name = "num_cpus"
-version = "1.13.0"
+version = "1.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "05499f3756671c15885fee9034446956fff3f243d6077b91e5767df161f766b3"
+checksum = "19e64526ebdee182341572e50e9ad03965aa510cd94427a4549448f285e957a1"
 dependencies = [
  "hermit-abi",
  "libc",
@@ -1551,6 +1613,16 @@ name = "strsim"
 version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "73473c0e59e6d5812c5dfe2a064a6444949f089e20eec9a2e5506596494e4623"
+
+[[package]]
+name = "subprocess"
+version = "0.2.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "055cf3ebc2981ad8f0a5a17ef6652f652d87831f79fddcba2ac57bcb9a0aa407"
+dependencies = [
+ "libc",
+ "winapi",
+]
 
 [[package]]
 name = "syn"
