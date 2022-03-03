@@ -18,6 +18,7 @@ package shim
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -36,7 +37,6 @@ import (
 	"github.com/containerd/containerd/version"
 	"github.com/containerd/ttrpc"
 	"github.com/gogo/protobuf/proto"
-	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
 
@@ -305,7 +305,7 @@ func run(ctx context.Context, manager Manager, initFunc Init, name string, confi
 			"pid":       os.Getpid(),
 			"namespace": namespaceFlag,
 		})
-		go handleSignals(ctx, logger, signals)
+		go reap(ctx, logger, signals)
 		ss, err := manager.Stop(ctx, id)
 		if err != nil {
 			return err
@@ -398,7 +398,7 @@ func run(ctx context.Context, manager Manager, initFunc Init, name string, confi
 
 		result := p.Init(initContext)
 		if err := initialized.Add(result); err != nil {
-			return errors.Wrapf(err, "could not add plugin result to plugin set")
+			return fmt.Errorf("could not add plugin result to plugin set: %w", err)
 		}
 
 		instance, err := result.Instance()
@@ -419,16 +419,16 @@ func run(ctx context.Context, manager Manager, initFunc Init, name string, confi
 
 	server, err := newServer()
 	if err != nil {
-		return errors.Wrap(err, "failed creating server")
+		return fmt.Errorf("failed creating server: %w", err)
 	}
 
 	for _, srv := range ttrpcServices {
 		if err := srv.RegisterTTRPC(server); err != nil {
-			return errors.Wrap(err, "failed to register service")
+			return fmt.Errorf("failed to register service: %w", err)
 		}
 	}
 
-	if err := serve(ctx, server, signals); err != nil {
+	if err := serve(ctx, server, signals, sd.Shutdown); err != nil {
 		if err != shutdown.ErrShutdown {
 			return err
 		}
@@ -450,7 +450,7 @@ func run(ctx context.Context, manager Manager, initFunc Init, name string, confi
 
 // serve serves the ttrpc API over a unix socket in the current working directory
 // and blocks until the context is canceled
-func serve(ctx context.Context, server *ttrpc.Server, signals chan os.Signal) error {
+func serve(ctx context.Context, server *ttrpc.Server, signals chan os.Signal, shutdown func()) error {
 	dump := make(chan os.Signal, 32)
 	setupDumpStacks(dump)
 
@@ -480,7 +480,9 @@ func serve(ctx context.Context, server *ttrpc.Server, signals chan os.Signal) er
 			dumpStacks(logger)
 		}
 	}()
-	return handleSignals(ctx, logger, signals)
+
+	go handleExitSignals(ctx, logger, shutdown)
+	return reap(ctx, logger, signals)
 }
 
 func dumpStacks(logger *logrus.Entry) {
