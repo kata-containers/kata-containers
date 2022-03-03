@@ -199,6 +199,11 @@ func (clh *cloudHypervisor) setConfig(config *HypervisorConfig) error {
 }
 
 func (clh *cloudHypervisor) createVirtiofsDaemon(sharedPath string) (VirtiofsDaemon, error) {
+	if !clh.supportsSharedFS() {
+		clh.Logger().Info("SharedFS is not supported")
+		return nil, nil
+	}
+
 	virtiofsdSocketPath, err := clh.virtioFsSocketPath(clh.id)
 	if err != nil {
 		return nil, err
@@ -235,6 +240,11 @@ func (clh *cloudHypervisor) createVirtiofsDaemon(sharedPath string) (VirtiofsDae
 }
 
 func (clh *cloudHypervisor) setupVirtiofsDaemon(ctx context.Context) error {
+	if !clh.supportsSharedFS() {
+		clh.Logger().Info("SharedFS is not supported")
+		return nil
+	}
+
 	if clh.config.SharedFS == config.Virtio9P {
 		return errors.New("cloud-hypervisor only supports virtio based file sharing")
 	}
@@ -258,6 +268,11 @@ func (clh *cloudHypervisor) setupVirtiofsDaemon(ctx context.Context) error {
 }
 
 func (clh *cloudHypervisor) stopVirtiofsDaemon(ctx context.Context) (err error) {
+	if !clh.supportsSharedFS() {
+		clh.Logger().Info("SharedFS is not supported")
+		return nil
+	}
+
 	if clh.state.VirtiofsDaemonPid == 0 {
 		clh.Logger().Warn("The virtiofsd had stopped")
 		return nil
@@ -274,6 +289,11 @@ func (clh *cloudHypervisor) stopVirtiofsDaemon(ctx context.Context) (err error) 
 }
 
 func (clh *cloudHypervisor) loadVirtiofsDaemon(sharedPath string) (VirtiofsDaemon, error) {
+	if !clh.supportsSharedFS() {
+		clh.Logger().Info("SharedFS is not supported")
+		return nil, nil
+	}
+
 	virtiofsdSocketPath, err := clh.virtioFsSocketPath(clh.id)
 	if err != nil {
 		return nil, err
@@ -289,6 +309,12 @@ func (clh *cloudHypervisor) loadVirtiofsDaemon(sharedPath string) (VirtiofsDaemo
 
 func (clh *cloudHypervisor) nydusdAPISocketPath(id string) (string, error) {
 	return utils.BuildSocketPath(clh.config.VMStorePath, id, nydusdAPISock)
+}
+
+func (clh *cloudHypervisor) supportsSharedFS() bool {
+	caps := clh.Capabilities(clh.ctx)
+
+	return caps.IsFsSharingSupported()
 }
 
 func (clh *cloudHypervisor) enableProtection() error {
