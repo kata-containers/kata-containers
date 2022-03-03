@@ -958,6 +958,10 @@ func (clh *cloudHypervisor) AddDevice(ctx context.Context, devInfo interface{}, 
 	case types.HybridVSock:
 		clh.addVSock(defaultGuestVSockCID, v.UdsPath)
 	case types.Volume:
+		if !clh.supportsSharedFS() {
+			return fmt.Errorf("SharedFS is not supported")
+		}
+
 		err = clh.addVolume(v)
 	default:
 		clh.Logger().WithField("function", "AddDevice").Warnf("Add device of type %v is not supported.", v)
