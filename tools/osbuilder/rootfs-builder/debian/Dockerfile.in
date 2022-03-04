@@ -27,14 +27,14 @@ RUN apt-get update && apt-get --no-install-recommends install -y \
     libstdc++-8-dev \
     m4 \
     make \
-    musl \
-    musl-dev \
     musl-tools \
     sed \
     systemd \
     tar \
     vim \
     wget
+# aarch64 requires this name -- link for all
+RUN ln -s /usr/bin/musl-gcc "/usr/bin/$(uname -m)-linux-musl-gcc"
 
 # This will install the proper packages to build Kata components
 @INSTALL_RUST@
