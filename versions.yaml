@@ -192,10 +192,7 @@ externals:
     # CCv0 is using our fork of containerd as the changes can't be merged yet
     url: "github.com/confidential-containers/containerd"
     tarball_url: "https://github.com/containerd/containerd/releases/download"
-    # containerd from v1.5.0 used the path unix socket
-    # instead of abstract socket, thus kata wouldn's support the containerd's
-    # version older than them.
-    version: "v1.6.0-rc.4.0"
+    version: "v1.6.1"
     # CCv0 needs to build a branch from our fork to install containerd
     branch: "CC-main"
 
