@@ -1,0 +1,116 @@
+From 58ceaa003bab7d2613f01ec58925a75e1f731240 Mon Sep 17 00:00:00 2001
+From: Salil Mehta <salil.mehta@huawei.com>
+Date: Thu, 2 Dec 2021 13:57:51 +0800
+Subject: [PATCH 3/7] arm64: kernel: Init cpu operations for all possible vcpus
+
+Currently, cpu-operations are only initialized for the cpus which
+already have logical cpuid to hwid assoication established. And this
+only happens for the cpus which are present during boot time.
+
+To support virtual cpu hotplug, we shall initialze the cpu-operations
+for all possible(present+disabled) vcpus. This means logical cpuid to
+hwid/mpidr association might not exists(i.e. might be INVALID_HWID)
+during init. Later, when the vcpu is actually hotplugged logical cpuid
+is allocated and associated with the hwid/mpidr.
+
+This patch does some refactoring to support above change.
+
+Signed-off-by: Salil Mehta <salil.mehta@huawei.com>
+Signed-off-by: Xiongfeng Wang <wangxiongfeng2@huawei.com>
+---
+ arch/arm64/kernel/smp.c | 39 +++++++++++++++------------------------
+ 1 file changed, 15 insertions(+), 24 deletions(-)
+
+diff --git a/arch/arm64/kernel/smp.c b/arch/arm64/kernel/smp.c
+index 18a0576f2721..fed4415e8cfe 100644
+--- a/arch/arm64/kernel/smp.c
++++ b/arch/arm64/kernel/smp.c
+@@ -518,13 +518,16 @@ static int __init smp_cpu_setup(int cpu)
+ 	const struct cpu_operations *ops;
+ 
+ 	if (init_cpu_ops(cpu))
+-		return -ENODEV;
++		goto out;
+ 
+ 	ops = get_cpu_ops(cpu);
+ 	if (ops->cpu_init(cpu))
+-		return -ENODEV;
++		goto out;
+ 
+ 	return 0;
++out:
++	__cpu_logical_map[cpu] = INVALID_HWID;
++	return -ENODEV;
+ }
+ 
+ static bool bootcpu_valid __initdata;
+@@ -562,7 +565,8 @@ acpi_map_gic_cpu_interface(struct acpi_madt_generic_interrupt *processor)
+ 		pr_debug("skipping disabled CPU entry with 0x%llx MPIDR\n", hwid);
+ #else
+ 		cpu_madt_gicc[total_cpu_count] = *processor;
+-		set_cpu_possible(total_cpu_count, true);
++		if (!smp_cpu_setup(total_cpu_count))
++			set_cpu_possible(total_cpu_count, true);
+ 		disabled_cpu_count++;
+ #endif
+ 		return;
+@@ -606,9 +610,10 @@ acpi_map_gic_cpu_interface(struct acpi_madt_generic_interrupt *processor)
+ 	 */
+ 	acpi_set_mailbox_entry(total_cpu_count, processor);
+ 
+-	set_cpu_possible(total_cpu_count, true);
+-	set_cpu_present(total_cpu_count, true);
+-
++	if (!smp_cpu_setup(total_cpu_count)) {
++		set_cpu_possible(total_cpu_count, true);
++		set_cpu_present(total_cpu_count, true);
++	}
+ 	cpu_count++;
+ }
+ 
+@@ -716,9 +721,10 @@ static void __init of_parse_and_init_cpus(void)
+ 		set_cpu_logical_map(cpu_count, hwid);
+ 
+ 		early_map_cpu_to_node(cpu_count, of_node_to_nid(dn));
+-
+-		set_cpu_possible(cpu_count, true);
+-		set_cpu_present(cpu_count, true);
++		if (!smp_cpu_setup(cpu_count)) {
++			set_cpu_possible(cpu_count, true);
++			set_cpu_present(cpu_count, true);
++		}
+ next:
+ 		cpu_count++;
+ 	}
+@@ -732,7 +738,6 @@ static void __init of_parse_and_init_cpus(void)
+ void __init smp_init_cpus(void)
+ {
+ 	unsigned int total_cpu_count = disabled_cpu_count + cpu_count;
+-	int i;
+ 
+ 	if (acpi_disabled)
+ 		of_parse_and_init_cpus();
+@@ -747,20 +752,6 @@ void __init smp_init_cpus(void)
+ 		pr_err("missing boot CPU MPIDR, not enabling secondaries\n");
+ 		return;
+ 	}
+-
+-	/*
+-	 * We need to set the cpu_logical_map entries before enabling
+-	 * the cpus so that cpu processor description entries (DT cpu nodes
+-	 * and ACPI MADT entries) can be retrieved by matching the cpu hwid
+-	 * with entries in cpu_logical_map while initializing the cpus.
+-	 * If the cpu set-up fails, invalidate the cpu_logical_map entry.
+-	 */
+-	for (i = 1; i < nr_cpu_ids; i++) {
+-		if (cpu_logical_map(i) != INVALID_HWID) {
+-			if (smp_cpu_setup(i))
+-				set_cpu_logical_map(i, INVALID_HWID);
+-		}
+-	}
+ }
+ 
+ void __init smp_prepare_cpus(unsigned int max_cpus)
+-- 
+2.17.1
+
