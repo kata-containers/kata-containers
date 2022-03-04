@@ -233,19 +233,6 @@ externals:
       .*/v?(\d\S+)\.tar\.gz
     version: "v1.0.1"
 
-  musl:
-    description: |
-      The musl library is used to build the rust agent.
-    url: "https://www.musl-libc.org/"
-    uscan-url: >-
-      https://www.musl-libc.org/releases/
-      musl-([\d\.]+)\.tar\.gz
-    version: "1.1.23"
-    meta:
-      description: |
-        'newest-version' is the latest version known to work.
-      newest-version: "1.1.23"
-
   nydus:
     description: "Nydus image acceleration service"
     url: "https://github.com/dragonflyoss/image-service"
