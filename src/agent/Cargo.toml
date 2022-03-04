@@ -20,6 +20,7 @@ scopeguard = "1.0.0"
 thiserror = "1.0.26"
 regex = "1.5.4"
 serial_test = "0.5.1"
+sysinfo = "0.23.0"
 
 # Async helpers
 async-trait = "0.1.42"

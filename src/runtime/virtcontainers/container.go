@@ -15,6 +15,7 @@ import (
 	"syscall"
 	"time"
 
+	volume "github.com/kata-containers/kata-containers/src/runtime/pkg/direct-volume"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils/katatrace"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/manager"
@@ -598,22 +599,50 @@ func (c *Container) createBlockDevices(ctx context.Context) error {
 	}
 
 	// iterate all mounts and create block device if it's block based.
-	for i, m := range c.mounts {
-		if len(m.BlockDeviceID) > 0 {
+	for i := range c.mounts {
+		if len(c.mounts[i].BlockDeviceID) > 0 {
 			// Non-empty m.BlockDeviceID indicates there's already one device
 			// associated with the mount,so no need to create a new device for it
 			// and we only create block device for bind mount
 			continue
 		}
 
-		if m.Type != "bind" {
+		if c.mounts[i].Type != "bind" {
 			// We only handle for bind-mounts
 			continue
 		}
 
+		// Handle directly assigned volume. Update the mount info based on the mount info json.
+		mntInfo, e := volume.VolumeMountInfo(c.mounts[i].Source)
+		if e != nil && !os.IsNotExist(e) {
+			c.Logger().WithError(e).WithField("mount-source", c.mounts[i].Source).
+				Error("failed to parse the mount info file for a direct assigned volume")
+			continue
+		}
+
+		if mntInfo != nil {
+			// Write out sandbox info file on the mount source to allow CSI to communicate with the runtime
+			if err := volume.RecordSandboxId(c.sandboxID, c.mounts[i].Source); err != nil {
+				c.Logger().WithError(err).Error("error writing sandbox info")
+			}
+
+			readonly := false
+			for _, flag := range mntInfo.Options {
+				if flag == "ro" {
+					readonly = true
+					break
+				}
+			}
+
+			c.mounts[i].Source = mntInfo.Device
+			c.mounts[i].Type = mntInfo.FsType
+			c.mounts[i].Options = mntInfo.Options
+			c.mounts[i].ReadOnly = readonly
+		}
+
 		var stat unix.Stat_t
-		if err := unix.Stat(m.Source, &stat); err != nil {
-			return fmt.Errorf("stat %q failed: %v", m.Source, err)
+		if err := unix.Stat(c.mounts[i].Source, &stat); err != nil {
+			return fmt.Errorf("stat %q failed: %v", c.mounts[i].Source, err)
 		}
 
 		var di *config.DeviceInfo
@@ -623,17 +652,17 @@ func (c *Container) createBlockDevices(ctx context.Context) error {
 		// instead of passing this as a shared mount.
 		if stat.Mode&unix.S_IFBLK == unix.S_IFBLK {
 			di = &config.DeviceInfo{
-				HostPath:      m.Source,
-				ContainerPath: m.Destination,
+				HostPath:      c.mounts[i].Source,
+				ContainerPath: c.mounts[i].Destination,
 				DevType:       "b",
 				Major:         int64(unix.Major(uint64(stat.Rdev))),
 				Minor:         int64(unix.Minor(uint64(stat.Rdev))),
-				ReadOnly:      m.ReadOnly,
+				ReadOnly:      c.mounts[i].ReadOnly,
 			}
 			// Check whether source can be used as a pmem device
-		} else if di, err = config.PmemDeviceInfo(m.Source, m.Destination); err != nil {
+		} else if di, err = config.PmemDeviceInfo(c.mounts[i].Source, c.mounts[i].Destination); err != nil {
 			c.Logger().WithError(err).
-				WithField("mount-source", m.Source).
+				WithField("mount-source", c.mounts[i].Source).
 				Debug("no loop device")
 		}
 
@@ -642,7 +671,7 @@ func (c *Container) createBlockDevices(ctx context.Context) error {
 			if err != nil {
 				// Do not return an error, try to create
 				// devices for other mounts
-				c.Logger().WithError(err).WithField("mount-source", m.Source).
+				c.Logger().WithError(err).WithField("mount-source", c.mounts[i].Source).
 					Error("device manager failed to create new device")
 				continue
 
