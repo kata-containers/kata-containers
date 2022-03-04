@@ -14,7 +14,6 @@ script_name="${0##*/}"
 script_dir="$(dirname $(readlink -f $0))"
 AGENT_VERSION=${AGENT_VERSION:-}
 RUST_VERSION="null"
-MUSL_VERSION=${MUSL_VERSION:-"null"}
 AGENT_BIN=${AGENT_BIN:-kata-agent}
 AGENT_INIT=${AGENT_INIT:-no}
 KERNEL_MODULES_DIR=${KERNEL_MODULES_DIR:-""}
@@ -335,11 +334,6 @@ build_rootfs_distro()
 
 	echo "Required rust version: $RUST_VERSION"
 
-	detect_musl_version ||
-		die "Could not detect the required musl version for AGENT_VERSION='${AGENT_VERSION:-main}'."
-
-	echo "Required musl version: $MUSL_VERSION"
-
 	if [ -z "${USE_DOCKER}" ] && [ -z "${USE_PODMAN}" ]; then
 		info "build directly"
 		build_rootfs ${ROOTFS_DIR}
@@ -544,7 +538,6 @@ EOT
 			LIBC=gnu
 			echo "WARNING: Forcing LIBC=gnu because $ARCH has no musl Rust target"
 		fi
-		[ "$LIBC" == "musl" ] && bash ${script_dir}/../../../ci/install_musl.sh
 		test -r "${HOME}/.cargo/env" && source "${HOME}/.cargo/env"
 		# rust agent needs ${arch}-unknown-linux-${LIBC}
 		if ! (rustup show | grep -v linux-${LIBC} > /dev/null); then
@@ -555,7 +548,6 @@ EOT
 			bash ${script_dir}/../../../ci/install_rust.sh ${RUST_VERSION}
 		fi
 		test -r "${HOME}/.cargo/env" && source "${HOME}/.cargo/env"
-		[ "$ARCH" == "aarch64" ] && OLD_PATH=$PATH && export PATH=$PATH:/usr/local/musl/bin
 
 		agent_dir="${script_dir}/../../../src/agent/"
 
@@ -577,7 +569,6 @@ EOT
 		make clean
 		make LIBC=${LIBC} INIT=${AGENT_INIT} SECCOMP=${SECCOMP}
 		make install DESTDIR="${ROOTFS_DIR}" LIBC=${LIBC} INIT=${AGENT_INIT}
-		[ "$ARCH" == "aarch64" ] && export PATH=$OLD_PATH && rm -rf /usr/local/musl
 		if [ "${SECCOMP}" == "yes" ]; then
 			rm -rf "${libseccomp_install_dir}" "${gperf_install_dir}"
 		fi
