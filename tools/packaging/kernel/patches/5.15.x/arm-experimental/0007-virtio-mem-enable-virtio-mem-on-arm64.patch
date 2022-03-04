@@ -1,0 +1,67 @@
+From b1a3d86afbccb5485d2a53cc7e4e097a40f9d443 Mon Sep 17 00:00:00 2001
+From: Jianyong Wu <jianyong.wu@arm.com>
+Date: Tue, 14 Dec 2021 14:18:39 +0800
+Subject: [PATCH 7/7] virtio-mem: enable virtio-mem on arm64
+
+It seems that virtio-mem works on arm64 now and can be enabled.
+
+Signed-off-by: Jianyong Wu <jianyong.wu@arm.com>
+---
+ arch/arm64/mm/mmu.c    | 12 +++++++-----
+ drivers/virtio/Kconfig |  2 +-
+ 2 files changed, 8 insertions(+), 6 deletions(-)
+
+diff --git a/arch/arm64/mm/mmu.c b/arch/arm64/mm/mmu.c
+index 432fab4ce2b4..809fe52d3035 100644
+--- a/arch/arm64/mm/mmu.c
++++ b/arch/arm64/mm/mmu.c
+@@ -63,7 +63,7 @@ static pmd_t bm_pmd[PTRS_PER_PMD] __page_aligned_bss __maybe_unused;
+ static pud_t bm_pud[PTRS_PER_PUD] __page_aligned_bss __maybe_unused;
+ 
+ static DEFINE_SPINLOCK(swapper_pgdir_lock);
+-static DEFINE_SPINLOCK(fixmap_lock);
++static DEFINE_MUTEX(fixmap_lock);
+ 
+ void set_swapper_pgd(pgd_t *pgdp, pgd_t pgd)
+ {
+@@ -330,10 +330,11 @@ static void alloc_init_pud(pgd_t *pgdp, unsigned long addr, unsigned long end,
+ 	BUG_ON(p4d_bad(p4d));
+ 
+ 	/*
+-	 * We only have one fixmap entry per page-table level, so take
+-	 * the fixmap lock until we're done.
++	 * No need for locking during early boot. And it doesn't work as
++	 * expected with KASLR enabled.
+ 	 */
+-	spin_lock(&fixmap_lock);
++	if (system_state != SYSTEM_BOOTING)
++		mutex_lock(&fixmap_lock);
+ 	pudp = pud_set_fixmap_offset(p4dp, addr);
+ 	do {
+ 		pud_t old_pud = READ_ONCE(*pudp);
+@@ -364,7 +365,8 @@ static void alloc_init_pud(pgd_t *pgdp, unsigned long addr, unsigned long end,
+ 	} while (pudp++, addr = next, addr != end);
+ 
+ 	pud_clear_fixmap();
+-	spin_unlock(&fixmap_lock);
++	if (system_state != SYSTEM_BOOTING)
++		mutex_unlock(&fixmap_lock);
+ }
+ 
+ static void __create_pgd_mapping(pgd_t *pgdir, phys_addr_t phys,
+diff --git a/drivers/virtio/Kconfig b/drivers/virtio/Kconfig
+index ce1b3f6ec325..ebabff45935c 100644
+--- a/drivers/virtio/Kconfig
++++ b/drivers/virtio/Kconfig
+@@ -96,7 +96,7 @@ config VIRTIO_BALLOON
+ config VIRTIO_MEM
+ 	tristate "Virtio mem driver"
+ 	default m
+-	depends on X86_64
++	depends on X86_64 || ARM64
+ 	depends on VIRTIO
+ 	depends on MEMORY_HOTPLUG_SPARSE
+ 	depends on MEMORY_HOTREMOVE
+-- 
+2.17.1
+
