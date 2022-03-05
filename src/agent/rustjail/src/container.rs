@@ -215,7 +215,6 @@ pub trait BaseContainer {
     async fn start(&mut self, p: Process) -> Result<()>;
     async fn run(&mut self, p: Process) -> Result<()>;
     async fn destroy(&mut self) -> Result<()>;
-    fn signal(&self, sig: Signal, all: bool) -> Result<()>;
     fn exec(&mut self) -> Result<()>;
 }
 
@@ -1054,18 +1053,6 @@ impl BaseContainer for LinuxContainer {
         if let Some(cgm) = self.cgroup_manager.as_mut() {
             cgm.destroy().context("destroy cgroups")?;
         }
-        Ok(())
-    }
-
-    fn signal(&self, sig: Signal, all: bool) -> Result<()> {
-        if all {
-            for pid in self.processes.keys() {
-                signal::kill(Pid::from_raw(*pid), Some(sig))?;
-            }
-        }
-
-        signal::kill(Pid::from_raw(self.init_process_pid), Some(sig))?;
-
         Ok(())
     }
 
@@ -2046,14 +2033,6 @@ mod tests {
         let (c, _dir) = new_linux_container();
 
         let ret = c.unwrap().destroy().await;
-        assert!(ret.is_ok(), "Expecting Ok, Got {:?}", ret);
-    }
-
-    #[test]
-    fn test_linuxcontainer_signal() {
-        let ret = new_linux_container_and_then(|c: LinuxContainer| {
-            c.signal(nix::sys::signal::SIGCONT, true)
-        });
         assert!(ret.is_ok(), "Expecting Ok, Got {:?}", ret);
     }
 
