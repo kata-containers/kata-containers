@@ -9,7 +9,7 @@ require (
 	github.com/blang/semver/v4 v4.0.0
 	github.com/containerd/cgroups v1.0.3
 	github.com/containerd/console v1.0.3
-	github.com/containerd/containerd v1.6.0-beta.4
+	github.com/containerd/containerd v1.6.1
 	github.com/containerd/cri-containerd v1.11.1-0.20190125013620-4dd6735020f5
 	github.com/containerd/fifo v1.0.0
 	github.com/containerd/ttrpc v1.1.0
@@ -18,7 +18,7 @@ require (
 	github.com/coreos/go-systemd/v22 v22.3.2
 	github.com/cri-o/cri-o v1.0.0-rc2.0.20170928185954-3394b3b2d6af
 	github.com/docker/go-units v0.4.0
-	github.com/fsnotify/fsnotify v1.4.9
+	github.com/fsnotify/fsnotify v1.5.1
 	github.com/go-ini/ini v1.28.2
 	github.com/go-openapi/errors v0.18.0
 	github.com/go-openapi/runtime v0.18.0
@@ -58,7 +58,7 @@ require (
 )
 
 replace (
-	github.com/containerd/containerd => github.com/confidential-containers/containerd v1.6.0-beta.0.0.20220209074753-e5287e3a54ad
+	github.com/containerd/containerd => github.com/confidential-containers/containerd v1.6.0-beta.0.0.20220303142103-c8f5e4509dcc
 	github.com/opencontainers/image-spec => github.com/opencontainers/image-spec v1.0.2
 	github.com/opencontainers/runc => github.com/opencontainers/runc v1.0.3
 	github.com/uber-go/atomic => go.uber.org/atomic v1.5.1
