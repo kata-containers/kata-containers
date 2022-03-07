@@ -20,7 +20,7 @@ import (
 // DefaultResourceControllerID runtime-determined location in the cgroups hierarchy.
 const DefaultResourceControllerID = "/vc"
 
-// validCgroupPath returns a valid cgroup path.
+// ValidCgroupPath returns a valid cgroup path.
 // see https://github.com/opencontainers/runtime-spec/blob/master/config-linux.md#cgroups-path
 func ValidCgroupPath(path string, systemdCgroup bool) (string, error) {
 	if IsSystemdCgroup(path) {
