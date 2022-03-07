@@ -193,13 +193,6 @@ async fn ephemeral_storage_handler(
     storage: &Storage,
     sandbox: Arc<Mutex<Sandbox>>,
 ) -> Result<String> {
-    let mut sb = sandbox.lock().await;
-    let new_storage = sb.set_sandbox_storage(&storage.mount_point);
-
-    if !new_storage {
-        return Ok("".to_string());
-    }
-
     // hugetlbfs
     if storage.fstype == FS_TYPE_HUGETLB {
         return handle_hugetlbfs_storage(logger, storage).await;
@@ -255,13 +248,6 @@ async fn local_storage_handler(
     storage: &Storage,
     sandbox: Arc<Mutex<Sandbox>>,
 ) -> Result<String> {
-    let mut sb = sandbox.lock().await;
-    let new_storage = sb.set_sandbox_storage(&storage.mount_point);
-
-    if !new_storage {
-        return Ok("".to_string());
-    }
-
     fs::create_dir_all(&storage.mount_point).context(format!(
         "failed to create dir all {:?}",
         &storage.mount_point
@@ -401,7 +387,7 @@ fn get_pagesize_and_size_from_option(options: &[String]) -> Result<(u64, u64)> {
 async fn virtiommio_blk_storage_handler(
     logger: &Logger,
     storage: &Storage,
-    _sandbox: Arc<Mutex<Sandbox>>,
+    sandbox: Arc<Mutex<Sandbox>>,
 ) -> Result<String> {
     //The source path is VmPath
     common_storage_handler(logger, storage)
@@ -640,6 +626,14 @@ pub async fn add_storages(
         let logger = logger.new(o!(
             "subsystem" => "storage",
             "storage-type" => handler_name.to_owned()));
+
+        {
+            let mut sb = sandbox.lock().await;
+            let new_storage = sb.set_sandbox_storage(&storage.mount_point);
+            if !new_storage {
+                continue;
+            }
+        }
 
         let res = match handler_name.as_str() {
             DRIVER_BLK_TYPE => virtio_blk_storage_handler(&logger, &storage, sandbox.clone()).await,

@@ -198,8 +198,123 @@ func (clh *cloudHypervisor) setConfig(config *HypervisorConfig) error {
 	return nil
 }
 
+func (clh *cloudHypervisor) createVirtiofsDaemon(sharedPath string) (VirtiofsDaemon, error) {
+	if !clh.supportsSharedFS() {
+		clh.Logger().Info("SharedFS is not supported")
+		return nil, nil
+	}
+
+	virtiofsdSocketPath, err := clh.virtioFsSocketPath(clh.id)
+	if err != nil {
+		return nil, err
+	}
+
+	if clh.config.SharedFS == config.VirtioFSNydus {
+		apiSockPath, err := clh.nydusdAPISocketPath(clh.id)
+		if err != nil {
+			clh.Logger().WithError(err).Error("Invalid api socket path for nydusd")
+			return nil, err
+		}
+		nd := &nydusd{
+			path:        clh.config.VirtioFSDaemon,
+			sockPath:    virtiofsdSocketPath,
+			apiSockPath: apiSockPath,
+			sourcePath:  sharedPath,
+			debug:       clh.config.Debug,
+			extraArgs:   clh.config.VirtioFSExtraArgs,
+			startFn:     startInShimNS,
+		}
+		nd.setupShareDirFn = nd.setupPassthroughFS
+		return nd, nil
+	}
+
+	// default: use virtiofsd
+	return &virtiofsd{
+		path:       clh.config.VirtioFSDaemon,
+		sourcePath: sharedPath,
+		socketPath: virtiofsdSocketPath,
+		extraArgs:  clh.config.VirtioFSExtraArgs,
+		debug:      clh.config.Debug,
+		cache:      clh.config.VirtioFSCache,
+	}, nil
+}
+
+func (clh *cloudHypervisor) setupVirtiofsDaemon(ctx context.Context) error {
+	if !clh.supportsSharedFS() {
+		clh.Logger().Info("SharedFS is not supported")
+		return nil
+	}
+
+	if clh.config.SharedFS == config.Virtio9P {
+		return errors.New("cloud-hypervisor only supports virtio based file sharing")
+	}
+
+	// virtioFS or virtioFsNydus
+	clh.Logger().WithField("function", "setupVirtiofsDaemon").Info("Starting virtiofsDaemon")
+
+	if clh.virtiofsDaemon == nil {
+		return errors.New("Missing virtiofsDaemon configuration")
+	}
+
+	pid, err := clh.virtiofsDaemon.Start(ctx, func() {
+		clh.StopVM(ctx, false)
+	})
+	if err != nil {
+		return err
+	}
+	clh.state.VirtiofsDaemonPid = pid
+
+	return nil
+}
+
+func (clh *cloudHypervisor) stopVirtiofsDaemon(ctx context.Context) (err error) {
+	if !clh.supportsSharedFS() {
+		clh.Logger().Info("SharedFS is not supported")
+		return nil
+	}
+
+	if clh.state.VirtiofsDaemonPid == 0 {
+		clh.Logger().Warn("The virtiofsd had stopped")
+		return nil
+	}
+
+	err = clh.virtiofsDaemon.Stop(ctx)
+	if err != nil {
+		return err
+	}
+
+	clh.state.VirtiofsDaemonPid = 0
+
+	return nil
+}
+
+func (clh *cloudHypervisor) loadVirtiofsDaemon(sharedPath string) (VirtiofsDaemon, error) {
+	if !clh.supportsSharedFS() {
+		clh.Logger().Info("SharedFS is not supported")
+		return nil, nil
+	}
+
+	virtiofsdSocketPath, err := clh.virtioFsSocketPath(clh.id)
+	if err != nil {
+		return nil, err
+	}
+
+	return &virtiofsd{
+		PID:        clh.state.VirtiofsDaemonPid,
+		sourcePath: sharedPath,
+		debug:      clh.config.Debug,
+		socketPath: virtiofsdSocketPath,
+	}, nil
+}
+
 func (clh *cloudHypervisor) nydusdAPISocketPath(id string) (string, error) {
 	return utils.BuildSocketPath(clh.config.VMStorePath, id, nydusdAPISock)
+}
+
+func (clh *cloudHypervisor) supportsSharedFS() bool {
+	caps := clh.Capabilities(clh.ctx)
+
+	return caps.IsFsSharingSupported()
 }
 
 func (clh *cloudHypervisor) enableProtection() error {
@@ -248,19 +363,15 @@ func (clh *cloudHypervisor) CreateVM(ctx context.Context, id string, network Net
 
 	clh.Logger().WithField("function", "CreateVM").Info("creating Sandbox")
 
-	virtiofsdSocketPath, err := clh.virtioFsSocketPath(clh.id)
-	if err != nil {
-		return nil
-	}
-
 	if clh.state.PID > 0 {
 		clh.Logger().WithField("function", "CreateVM").Info("Sandbox already exist, loading from state")
-		clh.virtiofsDaemon = &virtiofsd{
-			PID:        clh.state.VirtiofsDaemonPid,
-			sourcePath: hypervisorConfig.SharedPath,
-			debug:      clh.config.Debug,
-			socketPath: virtiofsdSocketPath,
+
+		virtiofsDaemon, err := clh.loadVirtiofsDaemon(hypervisorConfig.SharedFS)
+		if err != nil {
+			return err
 		}
+		clh.virtiofsDaemon = virtiofsDaemon
+
 		return nil
 	}
 
@@ -402,32 +513,9 @@ func (clh *cloudHypervisor) CreateVM(ctx context.Context, id string, network Net
 		ApiInternal: chclient.NewAPIClient(cfg).DefaultApi,
 	}
 
-	clh.virtiofsDaemon = &virtiofsd{
-		path:       clh.config.VirtioFSDaemon,
-		sourcePath: filepath.Join(GetSharePath(clh.id)),
-		socketPath: virtiofsdSocketPath,
-		extraArgs:  clh.config.VirtioFSExtraArgs,
-		debug:      clh.config.Debug,
-		cache:      clh.config.VirtioFSCache,
-	}
-
-	if clh.config.SharedFS == config.VirtioFSNydus {
-		apiSockPath, err := clh.nydusdAPISocketPath(clh.id)
-		if err != nil {
-			clh.Logger().WithError(err).Error("Invalid api socket path for nydusd")
-			return err
-		}
-		nd := &nydusd{
-			path:        clh.config.VirtioFSDaemon,
-			sockPath:    virtiofsdSocketPath,
-			apiSockPath: apiSockPath,
-			sourcePath:  filepath.Join(GetSharePath(clh.id)),
-			debug:       clh.config.Debug,
-			extraArgs:   clh.config.VirtioFSExtraArgs,
-			startFn:     startInShimNS,
-		}
-		nd.setupShareDirFn = nd.setupPassthroughFS
-		clh.virtiofsDaemon = nd
+	clh.virtiofsDaemon, err = clh.createVirtiofsDaemon(filepath.Join(GetSharePath(clh.id)))
+	if err != nil {
+		return err
 	}
 
 	if clh.config.SGXEPCSize > 0 {
@@ -461,10 +549,6 @@ func (clh *cloudHypervisor) StartVM(ctx context.Context, timeout int) error {
 		return err
 	}
 
-	if clh.virtiofsDaemon == nil {
-		return errors.New("Missing virtiofsDaemon configuration")
-	}
-
 	// This needs to be done as late as possible, just before launching
 	// virtiofsd are executed by kata-runtime after this call, run with
 	// the SELinux label. If these processes require privileged, we do
@@ -477,24 +561,20 @@ func (clh *cloudHypervisor) StartVM(ctx context.Context, timeout int) error {
 		defer label.SetProcessLabel("")
 	}
 
-	if clh.config.SharedFS == config.VirtioFS || clh.config.SharedFS == config.VirtioFSNydus {
-		clh.Logger().WithField("function", "StartVM").Info("Starting virtiofsDaemon")
-		pid, err := clh.virtiofsDaemon.Start(ctx, func() {
-			clh.StopVM(ctx, false)
-		})
-		if err != nil {
-			return err
-		}
-		clh.state.VirtiofsDaemonPid = pid
-	} else {
-		return errors.New("cloud-hypervisor only supports virtio based file sharing")
+	err = clh.setupVirtiofsDaemon(ctx)
+	if err != nil {
+		return err
 	}
+	defer func() {
+		if err != nil {
+			if shutdownErr := clh.stopVirtiofsDaemon(ctx); shutdownErr != nil {
+				clh.Logger().WithError(shutdownErr).Warn("error shutting down VirtiofsDaemon")
+			}
+		}
+	}()
 
 	pid, err := clh.launchClh()
 	if err != nil {
-		if shutdownErr := clh.virtiofsDaemon.Stop(ctx); shutdownErr != nil {
-			clh.Logger().WithError(shutdownErr).Warn("error shutting down VirtiofsDaemon")
-		}
 		return fmt.Errorf("failed to launch cloud-hypervisor: %q", err)
 	}
 	clh.state.PID = pid
@@ -638,10 +718,6 @@ func (clh *cloudHypervisor) HotplugAddDevice(ctx context.Context, devInfo interf
 	span, _ := katatrace.Trace(ctx, clh.Logger(), "HotplugAddDevice", clhTracingTags, map[string]string{"sandbox_id": clh.id})
 	defer span.End()
 
-	if clh.config.ConfidentialGuest {
-		return nil, errors.New("Device hotplug addition is not supported in confidential mode")
-	}
-
 	switch devType {
 	case BlockDev:
 		drive := devInfo.(*config.BlockDrive)
@@ -658,10 +734,6 @@ func (clh *cloudHypervisor) HotplugAddDevice(ctx context.Context, devInfo interf
 func (clh *cloudHypervisor) HotplugRemoveDevice(ctx context.Context, devInfo interface{}, devType DeviceType) (interface{}, error) {
 	span, _ := katatrace.Trace(ctx, clh.Logger(), "HotplugRemoveDevice", clhTracingTags, map[string]string{"sandbox_id": clh.id})
 	defer span.End()
-
-	if clh.config.ConfidentialGuest {
-		return nil, errors.New("Device hotplug removal is not supported in confidential mode")
-	}
 
 	var deviceID string
 
@@ -890,6 +962,10 @@ func (clh *cloudHypervisor) AddDevice(ctx context.Context, devInfo interface{}, 
 	case types.HybridVSock:
 		clh.addVSock(defaultGuestVSockCID, v.UdsPath)
 	case types.Volume:
+		if !clh.supportsSharedFS() {
+			return fmt.Errorf("SharedFS is not supported")
+		}
+
 		err = clh.addVolume(v)
 	default:
 		clh.Logger().WithField("function", "AddDevice").Warnf("Add device of type %v is not supported.", v)
@@ -916,10 +992,10 @@ func (clh *cloudHypervisor) Capabilities(ctx context.Context) types.Capabilities
 
 	clh.Logger().WithField("function", "Capabilities").Info("get Capabilities")
 	var caps types.Capabilities
-	caps.SetFsSharingSupport()
 	if !clh.config.ConfidentialGuest {
-		caps.SetBlockDeviceHotplugSupport()
+		caps.SetFsSharingSupport()
 	}
+	caps.SetBlockDeviceHotplugSupport()
 	return caps
 }
 
@@ -957,12 +1033,9 @@ func (clh *cloudHypervisor) terminate(ctx context.Context, waitOnly bool) (err e
 		return err
 	}
 
-	if clh.virtiofsDaemon == nil {
-		return errors.New("virtiofsDaemon config is nil, failed to stop it")
-	}
-
 	clh.Logger().Debug("stop virtiofsDaemon")
-	if err = clh.virtiofsDaemon.Stop(ctx); err != nil {
+
+	if err = clh.stopVirtiofsDaemon(ctx); err != nil {
 		clh.Logger().WithError(err).Error("failed to stop virtiofsDaemon")
 	}
 

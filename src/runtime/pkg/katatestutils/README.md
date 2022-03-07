@@ -102,36 +102,6 @@ func TestOnlyRunWhenNotRoot(t *testing.T) {
 }
 ```
 
-#### Skip tests based on distro
-
-Use the `NeedDistro()` constraint to skip a test unless running on a
-particular Linux distribution:
-
-```go
-func TestOnlyRunOnUbuntu(t *testing.T) {
-
-    if tc.NotValid(ktu.NeedDistro("ubuntu")) {
-        t.Skip("skipping test as not running on ubuntu")
-    }
-
-    // Test code to run on Ubuntu only ...
-}
-```
-
-Use the `NeedDistroNotEquals()` constraint to skip a test unless running
-on a Linux distribution other than the one specified:
-
-```go
-func TestDontRunOnFedora(t *testing.T) {
-
-    if tc.NotValid(ktu.NeedDistroNotEquals("fedora")) {
-        t.Skip("skipping test as running on fedora")
-    }
-
-    // Test code to run on any distro apart from Fedora ...
-}
-```
-
 #### Skip tests based on kernel version
 
 Use the `NeedKernelVersionGE()` constraint to skip a test unless running on a

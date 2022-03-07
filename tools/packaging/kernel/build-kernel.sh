@@ -89,6 +89,7 @@ Options:
 	-c <path>   	: Path to config file to build the kernel.
 	-d          	: Enable bash debug.
 	-e          	: Enable experimental kernel.
+	-E          	: Enable arch-specific experimental kernel, arch info offered by "-a".
 	-f          	: Enable force generate config when setup.
 	-g <vendor> 	: GPU vendor, intel or nvidia.
 	-h          	: Display this help.
@@ -462,7 +463,7 @@ install_kata() {
 }
 
 main() {
-	while getopts "a:b:c:defg:hk:p:st:v:x:" opt; do
+	while getopts "a:b:c:deEfg:hk:p:t:v:x:" opt; do	
 		case "$opt" in
 			a)
 				arch_target="${OPTARG}"
@@ -479,6 +480,9 @@ main() {
 				;;
 			e)
 				build_type="experimental"
+				;;
+			E)
+				build_type="arch-experimental"
 				;;
 			f)
 				force_setup_generate_config="true"
@@ -525,6 +529,17 @@ main() {
 	if [ -z "$kernel_version" ]; then
 		if [[ ${build_type} == "experimental" ]]; then
 			kernel_version=$(get_from_kata_deps "assets.kernel-experimental.tag")
+		elif [[ ${build_type} == "arch-experimental" ]]; then
+			case "${arch_target}" in
+			"aarch64")
+				build_type="arm-experimental"
+				kernel_version=$(get_from_kata_deps "assets.arm-kernel-experimental.version")
+			;;
+			*)
+				info "No arch-specific experimental kernel supported, using experimental one instead"
+				kernel_version=$(get_from_kata_deps "assets.kernel-experimental.tag")
+			;;
+			esac
 		elif [[ "${conf_guest}" == "tdx" ]]; then
 			 kernel_version=$(get_from_kata_deps "assets.kernel.tdx.tag")
 		else

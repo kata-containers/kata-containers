@@ -244,6 +244,14 @@ func (n *mockAgent) getAgentMetrics(ctx context.Context, req *grpc.GetMetricsReq
 	return nil, nil
 }
 
+func (n *mockAgent) getGuestVolumeStats(ctx context.Context, volumeGuestPath string) ([]byte, error) {
+	return nil, nil
+}
+
+func (n *mockAgent) resizeGuestVolume(ctx context.Context, volumeGuestPath string, size uint64) error {
+	return nil
+}
+
 func (k *mockAgent) PullImage(ctx context.Context, req *image.PullImageReq) (*image.PullImageResp, error) {
 	return nil, nil
 }

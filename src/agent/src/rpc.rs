@@ -23,9 +23,10 @@ use oci::{LinuxNamespace, Root, Spec};
 use protobuf::{Message, RepeatedField, SingularPtrField};
 use protocols::agent::{
     AddSwapRequest, AgentDetails, CopyFileRequest, GuestDetailsResponse, Interfaces, Metrics,
-    OOMEvent, ReadStreamResponse, Routes, StatsContainerResponse, WaitProcessResponse,
-    WriteStreamResponse,
+    OOMEvent, ReadStreamResponse, Routes, StatsContainerResponse, VolumeStatsRequest,
+    WaitProcessResponse, WriteStreamResponse,
 };
+use protocols::csi::{VolumeCondition, VolumeStatsResponse, VolumeUsage, VolumeUsage_Unit};
 use protocols::empty::Empty;
 use protocols::health::{
     HealthCheckResponse, HealthCheckResponse_ServingStatus, VersionCheckResponse,
@@ -43,13 +44,15 @@ use nix::sys::stat;
 use nix::unistd::{self, Pid};
 use rustjail::process::ProcessOperations;
 
+use sysinfo::{DiskExt, System, SystemExt};
+
 use crate::device::{
     add_devices, get_virtio_blk_pci_device_name, update_device_cgroup, update_env_pci,
 };
 use crate::image_rpc;
 use crate::linux_abi::*;
 use crate::metrics::get_metrics;
-use crate::mount::{add_storages, baremount, remove_mounts, STORAGE_HANDLER_LIST};
+use crate::mount::{add_storages, baremount, STORAGE_HANDLER_LIST};
 use crate::namespace::{NSTYPEIPC, NSTYPEPID, NSTYPEUTS};
 use crate::network::setup_guest_dns;
 use crate::pci;
@@ -69,6 +72,7 @@ use tracing::instrument;
 use libc::{self, c_char, c_ushort, pid_t, winsize, TIOCSWINSZ};
 use std::convert::TryFrom;
 use std::fs;
+use std::os::unix::fs::MetadataExt;
 use std::os::unix::prelude::PermissionsExt;
 use std::process::{Command, Stdio};
 use std::time::Duration;
@@ -302,8 +306,6 @@ impl AgentService {
             // Find the sandbox storage used by this container
             let mounts = sandbox.container_mounts.get(&cid);
             if let Some(mounts) = mounts {
-                remove_mounts(mounts)?;
-
                 for m in mounts.iter() {
                     if sandbox.storages.get(m).is_some() {
                         cmounts.push(m.to_string());
@@ -1321,6 +1323,47 @@ impl protocols::agent_ttrpc::AgentService for AgentService {
         Err(ttrpc_error!(ttrpc::Code::INTERNAL, ""))
     }
 
+    async fn get_volume_stats(
+        &self,
+        ctx: &TtrpcContext,
+        req: VolumeStatsRequest,
+    ) -> ttrpc::Result<VolumeStatsResponse> {
+        trace_rpc_call!(ctx, "get_volume_stats", req);
+        is_allowed!(req);
+
+        info!(sl!(), "get volume stats!");
+        let mut resp = VolumeStatsResponse::new();
+
+        let mut condition = VolumeCondition::new();
+
+        match File::open(&req.volume_guest_path) {
+            Ok(_) => {
+                condition.abnormal = false;
+                condition.message = String::from("OK");
+            }
+            Err(e) => {
+                info!(sl!(), "failed to open the volume");
+                return Err(ttrpc_error!(ttrpc::Code::INTERNAL, e));
+            }
+        };
+
+        let mut usage_vec = Vec::new();
+
+        // to get volume capacity stats
+        get_volume_capacity_stats(&req.volume_guest_path)
+            .map(|u| usage_vec.push(u))
+            .map_err(|e| ttrpc_error!(ttrpc::Code::INTERNAL, e))?;
+
+        // to get volume inode stats
+        get_volume_inode_stats(&req.volume_guest_path)
+            .map(|u| usage_vec.push(u))
+            .map_err(|e| ttrpc_error!(ttrpc::Code::INTERNAL, e))?;
+
+        resp.usage = RepeatedField::from_vec(usage_vec);
+        resp.volume_condition = SingularPtrField::some(condition);
+        Ok(resp)
+    }
+
     async fn add_swap(
         &self,
         ctx: &TtrpcContext,
@@ -1406,6 +1449,48 @@ fn get_memory_info(block_size: bool, hotplug: bool) -> Result<(u64, bool)> {
     }
 
     Ok((size, plug))
+}
+
+fn get_volume_capacity_stats(path: &str) -> Result<VolumeUsage> {
+    let mut usage = VolumeUsage::new();
+
+    let s = System::new();
+    for disk in s.disks() {
+        if let Some(v) = disk.name().to_str() {
+            if v.to_string().eq(path) {
+                usage.available = disk.available_space();
+                usage.total = disk.total_space();
+                usage.used = usage.total - usage.available;
+                usage.unit = VolumeUsage_Unit::BYTES; // bytes
+                break;
+            }
+        } else {
+            return Err(anyhow!(nix::Error::EINVAL));
+        }
+    }
+
+    Ok(usage)
+}
+
+fn get_volume_inode_stats(path: &str) -> Result<VolumeUsage> {
+    let mut usage = VolumeUsage::new();
+
+    let s = System::new();
+    for disk in s.disks() {
+        if let Some(v) = disk.name().to_str() {
+            if v.to_string().eq(path) {
+                let meta = fs::metadata(disk.mount_point())?;
+                let inode = meta.ino();
+                usage.used = inode;
+                usage.unit = VolumeUsage_Unit::INODES;
+                break;
+            }
+        } else {
+            return Err(anyhow!(nix::Error::EINVAL));
+        }
+    }
+
+    Ok(usage)
 }
 
 pub fn have_seccomp() -> bool {

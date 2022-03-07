@@ -1,0 +1,86 @@
+From 2bd0439913fde8598113cc3959764a877c0bd1ad Mon Sep 17 00:00:00 2001
+From: Salil Mehta <salil.mehta@huawei.com>
+Date: Wed, 1 Dec 2021 16:01:17 +0800
+Subject: [PATCH 2/7] arm64: kernel: Bound the total(present+disabled) cpus
+ with nr_cpu_ids
+
+Bound the total number of identified cpus(including disabled cpus) by
+maximum allowed limit by the kernel. Max value is either specified as
+part of the kernel parameters 'nr_cpus' or specified during compile
+time using CONFIG_NR_CPUS.
+
+Signed-off-by: Salil Mehta <salil.mehta@huawei.com>
+Signed-off-by: Xiongfeng Wang <wangxiongfeng2@huawei.com>
+---
+ arch/arm64/kernel/smp.c | 18 ++++++++++++------
+ 1 file changed, 12 insertions(+), 6 deletions(-)
+
+diff --git a/arch/arm64/kernel/smp.c b/arch/arm64/kernel/smp.c
+index 4b317e71b1c4..18a0576f2721 100644
+--- a/arch/arm64/kernel/smp.c
++++ b/arch/arm64/kernel/smp.c
+@@ -528,6 +528,7 @@ static int __init smp_cpu_setup(int cpu)
+ }
+ 
+ static bool bootcpu_valid __initdata;
++static bool cpus_clipped __initdata = false;
+ static unsigned int cpu_count = 1;
+ static unsigned int disabled_cpu_count;
+ 
+@@ -551,6 +552,11 @@ acpi_map_gic_cpu_interface(struct acpi_madt_generic_interrupt *processor)
+ 	unsigned int total_cpu_count = disabled_cpu_count + cpu_count;
+ 	u64 hwid = processor->arm_mpidr;
+ 
++	if (total_cpu_count > nr_cpu_ids) {
++		cpus_clipped = true;
++		return;
++	}
++
+ 	if (!(processor->flags & ACPI_MADT_ENABLED)) {
+ #ifndef CONFIG_ACPI_HOTPLUG_CPU
+ 		pr_debug("skipping disabled CPU entry with 0x%llx MPIDR\n", hwid);
+@@ -584,9 +590,6 @@ acpi_map_gic_cpu_interface(struct acpi_madt_generic_interrupt *processor)
+ 		return;
+ 	}
+ 
+-	if (cpu_count >= NR_CPUS)
+-		return;
+-
+ 	/* map the logical cpu id to cpu MPIDR */
+ 	set_cpu_logical_map(total_cpu_count, hwid);
+ 
+@@ -704,8 +707,10 @@ static void __init of_parse_and_init_cpus(void)
+ 			continue;
+ 		}
+ 
+-		if (cpu_count >= NR_CPUS)
++		if (cpu_count >= NR_CPUS) {
++			cpus_clipped = true;
+ 			goto next;
++		}
+ 
+ 		pr_debug("cpu logical map 0x%llx\n", hwid);
+ 		set_cpu_logical_map(cpu_count, hwid);
+@@ -726,6 +731,7 @@ static void __init of_parse_and_init_cpus(void)
+  */
+ void __init smp_init_cpus(void)
+ {
++	unsigned int total_cpu_count = disabled_cpu_count + cpu_count;
+ 	int i;
+ 
+ 	if (acpi_disabled)
+@@ -733,9 +739,9 @@ void __init smp_init_cpus(void)
+ 	else
+ 		acpi_parse_and_init_cpus();
+ 
+-	if (cpu_count > nr_cpu_ids)
++	if (cpus_clipped)
+ 		pr_warn("Number of cores (%d) exceeds configured maximum of %u - clipping\n",
+-			cpu_count, nr_cpu_ids);
++			total_cpu_count, nr_cpu_ids);
+ 
+ 	if (!bootcpu_valid) {
+ 		pr_err("missing boot CPU MPIDR, not enabling secondaries\n");
+-- 
+2.17.1
+

@@ -78,6 +78,9 @@ type VCSandbox interface {
 	GetAgentMetrics(ctx context.Context) (string, error)
 	GetAgentURL() (string, error)
 
+	GuestVolumeStats(ctx context.Context, volumePath string) ([]byte, error)
+	ResizeGuestVolume(ctx context.Context, volumePath string, size uint64) error
+
 	// Image management inside Sandbox
 	image.ImageService
 }

@@ -22,14 +22,14 @@ func SetLogger(logger *logrus.Entry) {
 	controllerLogger = logger.WithFields(fields)
 }
 
-// HypervisorType describes an hypervisor type.
+// ResourceControllerType describes a resource controller type.
 type ResourceControllerType string
 
 const (
 	LinuxCgroups ResourceControllerType = "cgroups"
 )
 
-// String converts an hypervisor type to a string.
+// String converts a resource type to a string.
 func (rType *ResourceControllerType) String() string {
 	switch *rType {
 	case LinuxCgroups:

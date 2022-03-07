@@ -264,12 +264,12 @@ parts:
       # download source
       qemu_dir=${SNAPCRAFT_STAGE}/qemu
       rm -rf "${qemu_dir}"
-      git clone --branch ${branch} --single-branch ${url} "${qemu_dir}"
+      git clone --depth 1 --branch ${branch} --single-branch ${url} "${qemu_dir}"
       cd ${qemu_dir}
       [ -z "${commit}" ] || git checkout ${commit}
 
-      [ -n "$(ls -A ui/keycodemapdb)" ] || git clone https://github.com/qemu/keycodemapdb ui/keycodemapdb/
-      [ -n "$(ls -A capstone)" ] || git clone https://github.com/qemu/capstone capstone
+      [ -n "$(ls -A ui/keycodemapdb)" ] || git clone --depth 1 https://github.com/qemu/keycodemapdb ui/keycodemapdb/
+      [ -n "$(ls -A capstone)" ] || git clone --depth 1 https://github.com/qemu/capstone capstone
 
       # Apply branch patches
       [ -d "${patches_version_dir}" ] || mkdir "${patches_version_dir}"
@@ -320,20 +320,23 @@ parts:
     plugin: nil
     after: [godeps]
     override-build: |
-      sudo apt-get -y update
-      sudo apt-get -y install ca-certificates curl gnupg lsb-release
-      curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --batch --yes --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
-      echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-      sudo apt-get -y update
-      sudo apt-get -y install docker-ce docker-ce-cli containerd.io
-      sudo systemctl start docker.socket
+      arch=$(uname -m)
+      if [ "{$arch}" == "aarch64" ] || [ "${arch}" == "x64_64" ]; then 
+          sudo apt-get -y update
+          sudo apt-get -y install ca-certificates curl gnupg lsb-release
+          curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --batch --yes --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+          echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+          sudo apt-get -y update
+          sudo apt-get -y install docker-ce docker-ce-cli containerd.io
+          sudo systemctl start docker.socket
 
-      export GOPATH=${SNAPCRAFT_STAGE}/gopath
-      kata_dir=${GOPATH}/src/github.com/${SNAPCRAFT_PROJECT_NAME}/${SNAPCRAFT_PROJECT_NAME}
-      cd ${kata_dir}
-      sudo -E NO_TTY=true make cloud-hypervisor-tarball
-      tar xvJpf build/kata-static-cloud-hypervisor.tar.xz -C /tmp/
-      install -D /tmp/opt/kata/bin/cloud-hypervisor ${SNAPCRAFT_PART_INSTALL}/usr/bin/cloud-hypervisor
+          export GOPATH=${SNAPCRAFT_STAGE}/gopath
+          kata_dir=${GOPATH}/src/github.com/${SNAPCRAFT_PROJECT_NAME}/${SNAPCRAFT_PROJECT_NAME}
+          cd ${kata_dir}
+          sudo -E NO_TTY=true make cloud-hypervisor-tarball
+          tar xvJpf build/kata-static-cloud-hypervisor.tar.xz -C /tmp/
+          install -D /tmp/opt/kata/bin/cloud-hypervisor ${SNAPCRAFT_PART_INSTALL}/usr/bin/cloud-hypervisor
+      fi
 
 apps:
   runtime:

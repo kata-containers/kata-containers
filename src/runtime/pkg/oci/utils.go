@@ -1,4 +1,5 @@
 // Copyright (c) 2017 Intel Corporation
+// Copyright (c) 2021 Adobe Inc.
 //
 // SPDX-License-Identifier: Apache-2.0
 //
@@ -145,6 +146,9 @@ type RuntimeConfig struct {
 
 	// Determines if enable pprof
 	EnablePprof bool
+
+	// Determines if Kata creates emptyDir on the guest
+	DisableGuestEmptyDir bool
 
 	// Offload the CRI image management service to the Kata agent.
 	ServiceOffload bool
