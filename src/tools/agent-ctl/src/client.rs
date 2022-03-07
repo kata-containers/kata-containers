@@ -176,6 +176,11 @@ static AGENT_CMDS: &[AgentCmd] = &[
         fp: agent_cmd_sandbox_get_oom_event,
     },
     AgentCmd {
+        name: "GetVolumeStats",
+        st: ServiceType::Agent,
+        fp: agent_cmd_sandbox_get_volume_stats,
+    },
+    AgentCmd {
         name: "ListInterfaces",
         st: ServiceType::Agent,
         fp: agent_cmd_sandbox_list_interfaces,
@@ -1696,6 +1701,29 @@ fn agent_cmd_sandbox_get_oom_event(
     let reply = client
         .get_oom_event(ctx, &req)
         .map_err(|e| anyhow!("{:?}", e).context(ERR_API_FAILED))?;
+
+    info!(sl!(), "response received";
+        "response" => format!("{:?}", reply));
+
+    Ok(())
+}
+
+fn agent_cmd_sandbox_get_volume_stats(
+    ctx: &Context,
+    client: &AgentServiceClient,
+    _health: &HealthClient,
+    _options: &mut Options,
+    args: &str,
+) -> Result<()> {
+    let req: VolumeStatsRequest = utils::make_request(args)?;
+
+    let ctx = clone_context(ctx);
+
+    debug!(sl!(), "sending request"; "request" => format!("{:?}", req));
+
+    let reply = client
+        .get_volume_stats(ctx, &req)
+        .map_err(|e| anyhow!(e).context(ERR_API_FAILED))?;
 
     info!(sl!(), "response received";
         "response" => format!("{:?}", reply));

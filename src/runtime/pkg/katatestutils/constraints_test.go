@@ -9,7 +9,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -21,8 +20,6 @@ import (
 
 const (
 	invalidOperator = 1234
-
-	skipUnknownDistroName = "skipping test as cannot determine distro name"
 )
 
 // nolint: govet
@@ -32,36 +29,16 @@ type testDataUID struct {
 	c   Constraints
 }
 
-// nolint: govet
-type testDataDistro struct {
-	distro string
-	op     Operator
-	c      Constraints
-}
+var (
+	thisUID = os.Getuid()
+	rootUID = 0
+)
 
-var distros = []string{
-	"centos",
-	"clear-linux-os",
-	"debian",
-	"fedora",
-	"opensuse",
-	"rhel",
-	"sles",
-	"ubuntu",
-}
-
-var thisUID = os.Getuid()
-var rootUID = 0
-
-// name and version of current distro and kernel version of system tests are
+// name and version of current kernel version of system tests are
 // running on
-var distroName string
-var distroVersion string
 var kernelVersion string
 
-// error saved when attempting to determine distro name+version and kernel
-// version.
-var getDistroErr error
+// error saved when attempting to determine kernel version.
 var getKernelErr error
 
 // true if running as root
@@ -87,49 +64,8 @@ var uidNotEqualsRootData = testDataUID{
 	},
 }
 
-var distroEqualsCurrentData testDataDistro
-var distroNotEqualsCurrentData testDataDistro
-
 func init() {
-	distroName, distroVersion, getDistroErr = testGetDistro()
 	kernelVersion, getKernelErr = testGetKernelVersion()
-
-	distroEqualsCurrentData = testDataDistro{
-		distro: distroName,
-		op:     eqOperator,
-		c: Constraints{
-			DistroName: distroName,
-			Operator:   eqOperator,
-		},
-	}
-
-	distroNotEqualsCurrentData = testDataDistro{
-		distro: distroName,
-		op:     neOperator,
-		c: Constraints{
-			DistroName: distroName,
-			Operator:   neOperator,
-		},
-	}
-}
-
-func fileExists(path string) bool {
-	if _, err := os.Stat(path); os.IsNotExist(err) {
-		return false
-	}
-
-	return true
-}
-
-// getAnotherDistro returns a distro name not equal to the one specified.
-func getAnotherDistro(distro string) string {
-	for _, d := range distros {
-		if d != distro {
-			return d
-		}
-	}
-
-	panic(fmt.Sprintf("failed to find a distro different to %s", distro))
 }
 
 func checkUIDConstraints(assert *assert.Assertions, a, b Constraints, desc string) {
@@ -140,13 +76,6 @@ func checkUIDConstraints(assert *assert.Assertions, a, b Constraints, desc strin
 	assert.Equal(a.UIDSet, b.UIDSet, msg)
 }
 
-func checkDistroConstraints(assert *assert.Assertions, a, b Constraints, desc string) {
-	msg := fmt.Sprintf("%s: a: %+v, b: %+v", desc, a, b)
-
-	assert.Equal(a.DistroName, b.DistroName, msg)
-	assert.Equal(a.Operator, b.Operator, msg)
-}
-
 func checkKernelConstraint(assert *assert.Assertions, f Constraint, version string, op Operator, msg string) {
 	c := Constraints{}
 
@@ -154,19 +83,6 @@ func checkKernelConstraint(assert *assert.Assertions, f Constraint, version stri
 
 	assert.Equal(c.KernelVersion, version, msg)
 	assert.Equal(c.Operator, op, msg)
-}
-
-// runCommand runs a command and returns its output
-func runCommand(args ...string) ([]string, error) {
-	cmd := exec.Command(args[0], args[1:]...)
-	bytes, err := cmd.Output()
-	if err != nil {
-		return []string{}, err
-	}
-
-	output := strings.Split(string(bytes), "\n")
-
-	return output, nil
 }
 
 // semverBumpVersion takes an existing semantic version and increments one or
@@ -263,56 +179,6 @@ func decrementVersion(version string) (string, error) {
 	return changeVersion(version, true)
 }
 
-// testGetDistro is an alternative implementation of getDistroDetails() used
-// for testing.
-func testGetDistro() (name, version string, err error) {
-	files := []string{"/etc/os-release", "/usr/lib/os-release"}
-
-	for _, file := range files {
-		if !fileExists(file) {
-			continue
-		}
-
-		output, err := runCommand("grep", "^ID=", file)
-		if err != nil {
-			return "", "", err
-		}
-
-		line := output[0]
-		fields := strings.Split(line, "=")
-		if name == "" {
-			name = strings.Trim(fields[1], `"`)
-			name = strings.ToLower(name)
-		}
-
-		output, err = runCommand("grep", "^VERSION_ID=", file)
-		if err != nil {
-			return "", "", err
-		}
-
-		line = output[0]
-		fields = strings.Split(line, "=")
-		if version == "" {
-			version = strings.Trim(fields[1], `"`)
-			version = strings.ToLower(version)
-		}
-	}
-
-	if name != "" && version != "" {
-		return name, version, nil
-	}
-
-	if name == "" {
-		return "", "", errUnknownDistroName
-	}
-
-	if version == "" {
-		return "", "", errUnknownDistroVersion
-	}
-
-	return "", "", errors.New("BUG: something bad happened")
-}
-
 func testGetKernelVersion() (version string, err error) {
 	const file = "/proc/version"
 
@@ -360,11 +226,6 @@ func TestOperatorString(t *testing.T) {
 }
 
 func TestNewTestConstraint(t *testing.T) {
-	if getDistroErr != nil {
-		t.Skipf("skipping as unable to determine distro name/version: %v",
-			getDistroErr)
-	}
-
 	if getKernelErr != nil {
 		t.Skipf("skipping as unable to determine kernel version: %v",
 			getKernelErr)
@@ -379,17 +240,11 @@ func TestNewTestConstraint(t *testing.T) {
 
 		assert.Equal(debug, c.Debug, msg)
 
-		assert.Equal(distroName, c.DistroName, msg)
-		assert.Equal(distroVersion, c.DistroVersion, msg)
 		assert.Equal(kernelVersion, c.KernelVersion, msg)
 		assert.Equal(thisUID, c.ActualEUID)
 
 		toCheck := []string{
-			distroName,
-			distroVersion,
 			kernelVersion,
-			c.DistroName,
-			c.DistroVersion,
 			c.KernelVersion,
 		}
 
@@ -438,26 +293,6 @@ func TestGetFileContents(t *testing.T) {
 	}
 }
 
-func TestGetDistroDetails(t *testing.T) {
-	assert := assert.New(t)
-
-	if getDistroErr == errUnknownDistroName {
-		t.Skip(skipUnknownDistroName)
-	}
-
-	assert.NoError(getDistroErr)
-	assert.NotNil(distroName)
-	assert.NotNil(distroVersion)
-
-	name, version, err := getDistroDetails()
-	assert.NoError(err)
-	assert.NotNil(name)
-	assert.NotNil(version)
-
-	assert.Equal(name, distroName)
-	assert.Equal(version, distroVersion)
-}
-
 func TestGetKernelVersion(t *testing.T) {
 	assert := assert.New(t)
 
@@ -469,158 +304,6 @@ func TestGetKernelVersion(t *testing.T) {
 	assert.NotNil(version)
 
 	assert.Equal(version, kernelVersion)
-}
-
-func TestConstraintHandleDistroName(t *testing.T) {
-	assert := assert.New(t)
-
-	// nolint: govet
-	type testData struct {
-		distro      string
-		op          Operator
-		result      Result
-		expectError bool
-	}
-
-	distroName, _, err := testGetDistro()
-	if err != nil && err == errUnknownDistroName {
-		t.Skip(skipUnknownDistroName)
-	}
-
-	// Look for the first distro that is not the same as the distro this
-	// test is currently running on.
-	differentDistro := getAnotherDistro(distroName)
-
-	data := []testData{
-		{"", eqOperator, Result{}, true},
-		{"", neOperator, Result{}, true},
-		{"", invalidOperator, Result{}, true},
-		{distroName, invalidOperator, Result{}, true},
-		{distroName, invalidOperator, Result{}, true},
-
-		{
-			distroName,
-			eqOperator,
-			Result{
-				Description: distroName,
-				Success:     true,
-			},
-			false,
-		},
-		{
-			distroName,
-			neOperator,
-			Result{
-				Description: distroName,
-				Success:     false,
-			},
-			false,
-		},
-		{
-			differentDistro,
-			eqOperator,
-			Result{
-				Description: differentDistro,
-				Success:     false,
-			},
-			false,
-		},
-
-		{
-			differentDistro,
-			neOperator,
-			Result{
-				Description: differentDistro,
-				Success:     true,
-			},
-			false,
-		},
-	}
-
-	for _, debug := range []bool{true, false} {
-		tc := NewTestConstraint(debug)
-
-		for i, d := range data {
-			result, err := tc.handleDistroName(d.distro, d.op)
-
-			msg := fmt.Sprintf("test[%d]: %+v, result: %+v", i, d, result)
-
-			if d.expectError {
-				assert.Error(err, msg)
-				continue
-
-			}
-
-			assert.NoError(err, msg)
-			assert.Equal(result.Success, d.result.Success, msg)
-			assert.NotNil(result.Description, msg)
-		}
-	}
-}
-
-func TestConstraintHandleDistroVersion(t *testing.T) {
-	assert := assert.New(t)
-
-	assert.NotNil(distroVersion)
-
-	// Generate a new distro version for testing purposes. Since we don't
-	// know the format of this particular distros versioning scheme, we
-	// need to calculate it.
-	higherVersion, err := incrementVersion(distroVersion)
-	assert.NoError(err)
-	assert.NotEqual(distroVersion, higherVersion)
-
-	// nolint: govet
-	type testData struct {
-		version     string
-		op          Operator
-		result      Result
-		expectError bool
-	}
-
-	data := []testData{
-		{"", eqOperator, Result{}, true},
-		{"", geOperator, Result{}, true},
-		{"", gtOperator, Result{}, true},
-		{"", leOperator, Result{}, true},
-		{"", ltOperator, Result{}, true},
-		{"", neOperator, Result{}, true},
-
-		{distroVersion, eqOperator, Result{Success: true}, false},
-		{higherVersion, eqOperator, Result{Success: false}, false},
-
-		{distroVersion, gtOperator, Result{Success: false}, false},
-		{higherVersion, gtOperator, Result{Success: false}, false},
-
-		{distroVersion, geOperator, Result{Success: true}, false},
-		{higherVersion, geOperator, Result{Success: false}, false},
-
-		{distroVersion, ltOperator, Result{Success: false}, false},
-		{higherVersion, ltOperator, Result{Success: true}, false},
-
-		{distroVersion, leOperator, Result{Success: true}, false},
-		{higherVersion, leOperator, Result{Success: true}, false},
-
-		{distroVersion, neOperator, Result{Success: false}, false},
-		{higherVersion, neOperator, Result{Success: true}, false},
-	}
-
-	for _, debug := range []bool{true, false} {
-		tc := NewTestConstraint(debug)
-
-		for i, d := range data {
-			result, err := tc.handleDistroVersion(d.version, d.op)
-
-			msg := fmt.Sprintf("test[%d]: %+v, result: %+v", i, d, result)
-
-			if d.expectError {
-				assert.Error(err, msg)
-				continue
-			}
-
-			assert.Equal(d.result.Success, result.Success, msg)
-		}
-	}
 }
 
 func TestConstraintHandleVersionType(t *testing.T) {
@@ -638,7 +321,6 @@ func TestConstraintHandleVersionType(t *testing.T) {
 
 	data := []testData{
 		//----------
-
 		{"", "", eqOperator, "", Result{}, true},
 
 		{"name", "foo", eqOperator, "", Result{}, true},
@@ -960,10 +642,12 @@ func TestNeedUID(t *testing.T) {
 	data := []testDataUID{
 		uidEqualsRootData,
 		uidNotEqualsRootData,
-		{thisUID, eqOperator, Constraints{
-			Operator: eqOperator,
-			UID:      thisUID,
-			UIDSet:   true},
+		{
+			thisUID, eqOperator, Constraints{
+				Operator: eqOperator,
+				UID:      thisUID,
+				UIDSet:   true,
+			},
 		},
 	}
 
@@ -998,62 +682,6 @@ func TestNeedNonRoot(t *testing.T) {
 	f(&c)
 
 	checkUIDConstraints(assert, c, uidNotEqualsRootData.c, "TestNeedNonRoot")
-}
-
-func TestNeedDistroWithOp(t *testing.T) {
-	assert := assert.New(t)
-
-	if getDistroErr == errUnknownDistroName {
-		t.Skip(skipUnknownDistroName)
-	}
-
-	data := []testDataDistro{
-		distroEqualsCurrentData,
-		distroNotEqualsCurrentData,
-
-		// check name provided is lower-cased
-		{
-			strings.ToUpper(distroName),
-			eqOperator,
-			Constraints{
-				DistroName: distroName,
-				Operator:   eqOperator,
-			},
-		},
-	}
-
-	for i, d := range data {
-
-		c := Constraints{}
-
-		f := NeedDistroWithOp(d.distro, d.op)
-		f(&c)
-
-		desc := fmt.Sprintf("test[%d]: %+v, constraints: %+v", i, d, c)
-		checkDistroConstraints(assert, d.c, c, desc)
-	}
-}
-
-func TestNeedDistroEquals(t *testing.T) {
-	assert := assert.New(t)
-
-	c := Constraints{}
-
-	f := NeedDistroEquals(distroName)
-	f(&c)
-
-	checkDistroConstraints(assert, c, distroEqualsCurrentData.c, "TestNeedDistroEquals")
-}
-
-func TestNeedDistroNotEquals(t *testing.T) {
-	assert := assert.New(t)
-
-	c := Constraints{}
-
-	f := NeedDistroNotEquals(distroName)
-	f(&c)
-
-	checkDistroConstraints(assert, c, distroNotEqualsCurrentData.c, "TestNeedDistroNotEquals")
 }
 
 func TestWithIssue(t *testing.T) {
@@ -1171,22 +799,7 @@ func TestConstraintNotValid(t *testing.T) {
 			assert.False(result)
 		}
 
-		// Now test specification of multiple constraints
-		if root {
-			result := tc.NotValid(NeedRoot(), NeedDistro(distroName))
-			assert.False(result)
-
-			result = tc.NotValid(NeedNonRoot(), NeedDistro(distroName))
-			assert.True(result)
-		} else {
-			result := tc.NotValid(NeedRoot(), NeedDistro(distroName))
-			assert.True(result)
-
-			result = tc.NotValid(NeedNonRoot(), NeedDistro(distroName))
-			assert.False(result)
-		}
 	}
-
 }
 
 func TestConstraintNotValidKernelVersion(t *testing.T) {
@@ -1278,62 +891,6 @@ func TestConstraintNotValidKernelVersion(t *testing.T) {
 	}
 }
 
-func TestConstraintNotValidDistroVersion(t *testing.T) {
-	assert := assert.New(t)
-
-	assert.NotNil(distroVersion)
-
-	// Generate new distro versions for testing purposes based on the
-	// current kernel version.
-	higherVersion, err := incrementVersion(distroVersion)
-	assert.NoError(err)
-	assert.NotEqual(distroVersion, higherVersion)
-
-	lowerVersion, err := decrementVersion(distroVersion)
-	assert.NoError(err)
-	assert.NotEqual(distroVersion, lowerVersion)
-
-	for _, debug := range []bool{true, false} {
-		tc := NewTestConstraint(debug)
-
-		result := tc.NotValid(NeedDistroVersionEquals(higherVersion))
-		assert.True(result)
-
-		result = tc.NotValid(NeedDistroVersionEquals(distroVersion))
-		assert.False(result)
-
-		result = tc.NotValid(NeedDistroVersionLE(higherVersion))
-		assert.False(result)
-
-		result = tc.NotValid(NeedDistroVersionLE(distroVersion))
-		assert.False(result)
-
-		result = tc.NotValid(NeedDistroVersionLT(higherVersion))
-		assert.False(result)
-
-		result = tc.NotValid(NeedDistroVersionLT(distroVersion))
-		assert.True(result)
-
-		result = tc.NotValid(NeedDistroVersionGE(higherVersion))
-		assert.True(result)
-
-		result = tc.NotValid(NeedDistroVersionGE(distroVersion))
-		assert.False(result)
-
-		result = tc.NotValid(NeedDistroVersionGT(higherVersion))
-		assert.True(result)
-
-		result = tc.NotValid(NeedDistroVersionGT(distroVersion))
-		assert.True(result)
-
-		result = tc.NotValid(NeedDistroVersionNotEquals(higherVersion))
-		assert.False(result)
-
-		result = tc.NotValid(NeedDistroVersionNotEquals(distroVersion))
-		assert.True(result)
-	}
-}
-
 func TestConstraintConstraintValid(t *testing.T) {
 	assert := assert.New(t)
 
@@ -1351,100 +908,6 @@ func TestConstraintConstraintValid(t *testing.T) {
 			WithIssue(issue),
 			true,
 			TestConstraint{Issue: issue},
-		},
-
-		{
-			NeedDistroWithOp(distroName, eqOperator),
-			true,
-			TestConstraint{
-				Passed: []Result{
-					{Success: true},
-				},
-			},
-		},
-		{
-			NeedDistroWithOp(distroName, neOperator),
-			false,
-			TestConstraint{
-				Failed: []Result{
-					{Success: false},
-				},
-			},
-		},
-		{
-			NeedDistroWithOp(getAnotherDistro(distroName), eqOperator),
-			false,
-			TestConstraint{
-				Failed: []Result{
-					{Success: false},
-				},
-			},
-		},
-		{
-			NeedDistroWithOp(getAnotherDistro(distroName), neOperator),
-			true,
-			TestConstraint{
-				Failed: []Result{
-					{Success: true},
-				},
-			},
-		},
-
-		{
-			NeedDistroEquals(distroName),
-			true,
-			TestConstraint{
-				Passed: []Result{
-					{Success: true},
-				},
-			},
-		},
-		{
-			NeedDistroEquals(getAnotherDistro(distroName)),
-			false,
-			TestConstraint{
-				Failed: []Result{
-					{Success: false},
-				},
-			},
-		},
-
-		{
-			NeedDistroNotEquals(getAnotherDistro(distroName)),
-			true,
-			TestConstraint{
-				Passed: []Result{
-					{Success: true},
-				},
-			},
-		},
-		{
-			NeedDistroNotEquals(distroName),
-			false,
-			TestConstraint{
-				Failed: []Result{
-					{Success: false},
-				},
-			},
-		},
-
-		{
-			NeedDistro(distroName),
-			true,
-			TestConstraint{
-				Passed: []Result{
-					{Success: true},
-				},
-			},
-		},
-		{
-			NeedDistro(getAnotherDistro(distroName)),
-			false,
-			TestConstraint{
-				Failed: []Result{
-					{Success: false},
-				},
-			},
 		},
 	}
 
@@ -1541,7 +1004,6 @@ func TestEvalIntVersion(t *testing.T) {
 
 	data := []testData{
 		//----------
-
 		{"", eqOperator, "", false, true},
 		{"", eqOperator, "1", false, true},
 		{"1", eqOperator, "", false, true},
@@ -1647,7 +1109,6 @@ func TestEvalFloatVersion(t *testing.T) {
 
 	data := []testData{
 		//----------
-
 		{"", eqOperator, "", false, true},
 		{"foo", eqOperator, "", false, true},
 		{"", eqOperator, "foo", false, true},
@@ -1763,7 +1224,6 @@ func TestEvalSemverVersion(t *testing.T) {
 
 	data := []testData{
 		//----------
-
 		{"", eqOperator, "", false, true},
 		{"foo", eqOperator, "", false, true},
 		{"", eqOperator, "foo", false, true},

@@ -75,7 +75,7 @@ assets:
       url: "https://github.com/cloud-hypervisor/cloud-hypervisor"
       uscan-url: >-
         https://github.com/cloud-hypervisor/cloud-hypervisor/tags.*/v?(\d\S+)\.tar\.gz
-      version: "b0324f85571c441f840e9bdeb25410514a00bb74"
+      version: "v22.0"
 
     firecracker:
       description: "Firecracker micro-VMM"
@@ -161,6 +161,11 @@ assets:
     description: "Linux kernel with virtio-fs support"
     url: "https://cdn.kernel.org/pub/linux/kernel/v5.x/"
     tag: "v5.13.10"
+
+  arm-kernel-experimental:
+    description: "Linux kernel with cpu/mem hotplug support on arm64"
+    url: "https://cdn.kernel.org/pub/linux/kernel/v5.x/"
+    version: "v5.15.7"
 
 externals:
   description: "Third-party projects used by the system"

@@ -18,17 +18,9 @@ import (
 const (
 	TestDisabledNeedRoot    = "Test disabled as requires root user"
 	TestDisabledNeedNonRoot = "Test disabled as requires non-root user"
-
-	// See https://www.freedesktop.org/software/systemd/man/os-release.html
-	osRelease            = "/etc/os-release"
-	osReleaseAlternative = "/usr/lib/os-release"
 )
 
-var (
-	errUnknownDistroName      = errors.New("unknown distro name")
-	errUnknownDistroVersion   = errors.New("unknown distro version")
-	errInvalidOpForConstraint = errors.New("invalid operator for constraint type")
-)
+var errInvalidOpForConstraint = errors.New("invalid operator for constraint type")
 
 // String converts the operator to a human-readable value.
 func (o Operator) String() (s string) {
@@ -87,54 +79,6 @@ func getKernelVersion() (string, error) {
 	return fixKernelVersion(fields[2]), nil
 }
 
-// getDistroDetails returns the distributions name and version string.
-// If it is not possible to determine both values an error is
-// returned.
-func getDistroDetails() (name, version string, err error) {
-	files := []string{osRelease, osReleaseAlternative}
-	name = ""
-	version = ""
-
-	for _, file := range files {
-		contents, err := getFileContents(file)
-		if err != nil {
-			if os.IsNotExist(err) {
-				continue
-			}
-
-			return "", "", err
-		}
-
-		lines := strings.Split(contents, "\n")
-
-		for _, line := range lines {
-			if strings.HasPrefix(line, "ID=") && name == "" {
-				fields := strings.Split(line, "=")
-				name = strings.Trim(fields[1], `"`)
-				name = strings.ToLower(name)
-			} else if strings.HasPrefix(line, "VERSION_ID=") && version == "" {
-				fields := strings.Split(line, "=")
-				version = strings.Trim(fields[1], `"`)
-				version = strings.ToLower(version)
-			}
-		}
-
-		if name != "" && version != "" {
-			return name, version, nil
-		}
-	}
-
-	if name == "" {
-		return "", "", errUnknownDistroName
-	}
-
-	if version == "" {
-		return "", "", errUnknownDistroVersion
-	}
-
-	return name, version, nil
-}
-
 // fixKernelVersion replaces underscores with dashes in a version string.
 // This change is primarily for Fedora, RHEL and CentOS version numbers which
 // can contain underscores. By replacing them with dashes, a valid semantic
@@ -155,42 +99,6 @@ func getDistroDetails() (name, version string, err error) {
 func fixKernelVersion(version string) string {
 	version = strings.Replace(version, "_", "-", -1)
 	return strings.Replace(version, "+", "", -1)
-}
-
-// handleDistroName checks that the current distro is compatible with
-// the constraint specified by the arguments.
-func (tc *TestConstraint) handleDistroName(name string, op Operator) (result Result, err error) {
-	if name == "" {
-		return Result{}, fmt.Errorf("distro name cannot be blank")
-	}
-
-	name = strings.ToLower(name)
-
-	var success bool
-
-	switch op {
-	case eqOperator:
-		success = name == tc.DistroName
-	case neOperator:
-		success = name != tc.DistroName
-	default:
-		return Result{}, errInvalidOpForConstraint
-	}
-
-	descr := fmt.Sprintf("need distro %s %q, got distro %q", op, name, tc.DistroName)
-
-	result = Result{
-		Description: descr,
-		Success:     success,
-	}
-
-	return result, nil
-}
-
-// handleDistroVersion checks that the current distro version is compatible with
-// the constraint specified by the arguments.
-func (tc *TestConstraint) handleDistroVersion(version string, op Operator) (result Result, err error) {
-	return handleVersionType("distro", tc.DistroVersion, op, version)
 }
 
 // handleKernelVersion checks that the current kernel version is compatible with
@@ -457,23 +365,6 @@ func (tc *TestConstraint) constraintValid(fn Constraint) bool {
 		if !result.Success {
 			return false
 		}
-	}
-
-	if c.DistroName != "" {
-		result, err := tc.handleDistroName(c.DistroName, c.Operator)
-		tc.handleResults(result, err)
-		if !result.Success {
-			return false
-		}
-	}
-
-	if c.DistroVersion != "" {
-		result, err := tc.handleDistroVersion(c.DistroVersion, c.Operator)
-		tc.handleResults(result, err)
-		if !result.Success {
-			return false
-		}
-
 	}
 
 	if c.KernelVersion != "" {

@@ -1,5 +1,6 @@
 #
 # Copyright (c) 2018-2019 Intel Corporation
+# Copyright (c) 2021 Adobe Inc.
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -27,6 +28,9 @@ ARCH_FILE_SUFFIX = -options.mk
 ARCH_FILE = $(ARCH_DIR)/$(ARCH)$(ARCH_FILE_SUFFIX)
 ARCH_FILES = $(wildcard arch/*$(ARCH_FILE_SUFFIX))
 ALL_ARCHES = $(patsubst $(ARCH_DIR)/%$(ARCH_FILE_SUFFIX),%,$(ARCH_FILES))
+
+# Build as safely as possible
+export CGO_CPPFLAGS = -D_FORTIFY_SOURCE=2 -fstack-protector
 
 ifeq (,$(realpath $(ARCH_FILE)))
     $(error "ERROR: invalid architecture: '$(ARCH)'")
@@ -158,6 +162,7 @@ DEFMEMSLOTS := 10
 DEFBRIDGES := 1
 DEFENABLEANNOTATIONS := []
 DEFDISABLEGUESTSECCOMP := true
+DEFDISABLEGUESTEMPTYDIR := false
 #Default experimental features enabled
 DEFAULTEXPFEATURES := []
 
@@ -434,6 +439,7 @@ USER_VARS += DEFNETWORKMODEL_ACRN
 USER_VARS += DEFNETWORKMODEL_CLH
 USER_VARS += DEFNETWORKMODEL_FC
 USER_VARS += DEFNETWORKMODEL_QEMU
+USER_VARS += DEFDISABLEGUESTEMPTYDIR
 USER_VARS += DEFDISABLEGUESTSECCOMP
 USER_VARS += DEFDISABLESELINUX
 USER_VARS += DEFAULTEXPFEATURES

@@ -1,5 +1,6 @@
 // Copyright (c) 2018-2022 Intel Corporation
 // Copyright (c) 2018 HyperHQ Inc.
+// Copyright (c) 2021 Adobe Inc.
 //
 // SPDX-License-Identifier: Apache-2.0
 //
@@ -154,6 +155,7 @@ type runtime struct {
 	SandboxCgroupOnly         bool     `toml:"sandbox_cgroup_only"`
 	StaticSandboxResourceMgmt bool     `toml:"static_sandbox_resource_mgmt"`
 	EnablePprof               bool     `toml:"enable_pprof"`
+	DisableGuestEmptyDir      bool     `toml:"disable_guest_empty_dir"`
 }
 
 type agent struct {
@@ -568,7 +570,7 @@ func newFirecrackerHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		EntropySource:         h.GetEntropySource(),
 		EntropySourceList:     h.EntropySourceList,
 		DefaultBridges:        h.defaultBridges(),
-		DisableBlockDeviceUse: h.DisableBlockDeviceUse,
+		DisableBlockDeviceUse: false, // shared fs is not supported in Firecracker,
 		HugePages:             h.HugePages,
 		Debug:                 h.Debug,
 		DisableNestingChecks:  h.DisableNestingChecks,
@@ -1173,6 +1175,8 @@ func LoadConfiguration(configPath string, ignoreLogging bool) (resolvedConfigPat
 		return "", config, err
 	}
 	config.SandboxBindMounts = tomlConf.Runtime.SandboxBindMounts
+
+	config.DisableGuestEmptyDir = tomlConf.Runtime.DisableGuestEmptyDir
 
 	if err := checkConfig(config); err != nil {
 		return "", config, err

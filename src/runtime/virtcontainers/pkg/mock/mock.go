@@ -232,6 +232,14 @@ func (p *HybridVSockTTRPCMockImp) AddSwap(ctx context.Context, req *pb.AddSwapRe
 	return &gpb.Empty{}, nil
 }
 
-func (p *HybridVSockTTRPCMockImp) PullImage(ctx context.Context, req *pb.PullImageRequest) (*gpb.Empty, error) {
+func (p *HybridVSockTTRPCMockImp) GetVolumeStats(ctx context.Context, req *pb.VolumeStatsRequest) (*pb.VolumeStatsResponse, error) {
+	return &pb.VolumeStatsResponse{}, nil
+}
+
+func (p *HybridVSockTTRPCMockImp) ResizeVolume(ctx context.Context, req *pb.ResizeVolumeRequest) (*gpb.Empty, error) {
+	return &gpb.Empty{}, nil
+}
+
+func (p *HybridVSockTTRPCMockImp) PullImage(ctx context.Context, req *pb.PullImageRequest) (*gpb.Empty
 	return &gpb.Empty{}, nil
 }
