@@ -1712,6 +1712,7 @@ fn agent_cmd_sandbox_get_volume_stats(
     ctx: &Context,
     client: &AgentServiceClient,
     _health: &HealthClient,
+    _image: &ImageClient,
     _options: &mut Options,
     args: &str,
 ) -> Result<()> {
