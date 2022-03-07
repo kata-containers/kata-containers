@@ -551,7 +551,7 @@ mod tests {
 
         assert!(
             s.remove_sandbox_storage(srcdir_path).is_err(),
-            "Expect Err as the directory i not a mountpoint"
+            "Expect Err as the directory is not a mountpoint"
         );
 
         assert!(s.remove_sandbox_storage("").is_err());
@@ -586,7 +586,6 @@ mod tests {
         let logger = slog::Logger::root(slog::Discard, o!());
         let mut s = Sandbox::new(&logger).unwrap();
 
-        // FIX: This test fails, not sure why yet.
         assert!(
             s.unset_and_remove_sandbox_storage("/tmp/testEphePath")
                 .is_err(),
