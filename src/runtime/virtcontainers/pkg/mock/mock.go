@@ -12,12 +12,13 @@ import (
 	"net/url"
 	"os"
 
+	"path"
+	"strings"
+
 	"github.com/containerd/ttrpc"
 	gpb "github.com/gogo/protobuf/types"
 	aTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols"
 	pb "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols/grpc"
-	"path"
-	"strings"
 )
 
 const VSockPrefix = "mock://"
@@ -240,6 +241,6 @@ func (p *HybridVSockTTRPCMockImp) ResizeVolume(ctx context.Context, req *pb.Resi
 	return &gpb.Empty{}, nil
 }
 
-func (p *HybridVSockTTRPCMockImp) PullImage(ctx context.Context, req *pb.PullImageRequest) (*gpb.Empty
+func (p *HybridVSockTTRPCMockImp) PullImage(ctx context.Context, req *pb.PullImageRequest) (*gpb.Empty, error) {
 	return &gpb.Empty{}, nil
 }

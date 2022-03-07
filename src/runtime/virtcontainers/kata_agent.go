@@ -2204,6 +2204,7 @@ func (k *kataAgent) getGuestVolumeStats(ctx context.Context, volumeGuestPath str
 func (k *kataAgent) resizeGuestVolume(ctx context.Context, volumeGuestPath string, size uint64) error {
 	_, err := k.sendReq(ctx, &grpc.ResizeVolumeRequest{VolumeGuestPath: volumeGuestPath, Size_: size})
 	return err
+}
 
 func (k *kataAgent) PullImage(ctx context.Context, req *image.PullImageReq) (*image.PullImageResp, error) {
 	r := &grpc.PullImageRequest{
