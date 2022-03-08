@@ -1,0 +1,47 @@
+From 8944d05f9bbf910c8b241e29a3de114900e31e42 Mon Sep 17 00:00:00 2001
+From: Harald Freudenberger <freude@linux.ibm.com>
+Date: Wed, 16 Feb 2022 12:30:34 +0100
+Subject: s390/ap: enable sysfs attribute scans to force AP bus rescan
+
+This patch switches the sysfs attribute /sys/bus/ap/scans
+from read-only to read-write. If there is something written
+to this attribute, an AP bus rescan is forced. If an AP
+bus scan is triggered this way a debug feature entry line
+reports this in /sys/kernel/debug/s390dbf/ap/sprintf.
+
+Signed-off-by: Harald Freudenberger <freude@linux.ibm.com>
+Reviewed-by: Jakob Naucke <naucke@linux.ibm.com>
+Reviewed-by: Juergen Christ <jchrist@linux.ibm.com>
+Signed-off-by: Vasily Gorbik <gor@linux.ibm.com>
+---
+ drivers/s390/crypto/ap_bus.c | 12 +++++++++++-
+ 1 file changed, 11 insertions(+), 1 deletion(-)
+
+(limited to 'drivers/s390/crypto/ap_bus.c')
+
+diff --git a/drivers/s390/crypto/ap_bus.c b/drivers/s390/crypto/ap_bus.c
+index f5fae8b62bdf9..555cc3394fe33 100644
+--- a/drivers/s390/crypto/ap_bus.c
++++ b/drivers/s390/crypto/ap_bus.c
+@@ -1472,7 +1472,17 @@ static ssize_t scans_show(struct bus_type *bus, char *buf)
+ 			 atomic64_read(&ap_scan_bus_count));
+ }
+ 
+-static BUS_ATTR_RO(scans);
++static ssize_t scans_store(struct bus_type *bus, const char *buf,
++			   size_t count)
++{
++	AP_DBF_INFO("%s force AP bus rescan\n", __func__);
++
++	ap_bus_force_rescan();
++
++	return count;
++}
++
++static BUS_ATTR_RW(scans);
+ 
+ static ssize_t bindings_show(struct bus_type *bus, char *buf)
+ {
+-- 
+cgit 
+
