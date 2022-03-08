@@ -1743,9 +1743,9 @@ func (q *qemu) hotplugVFIODevice(ctx context.Context, device *config.VFIODev, op
 			}
 
 			switch device.Type {
-			case config.VFIODeviceNormalType:
+			case config.VFIOPCIDeviceNormalType:
 				err = q.qmpMonitorCh.qmp.ExecuteVFIODeviceAdd(q.qmpMonitorCh.ctx, devID, device.BDF, device.Bus, romFile)
-			case config.VFIODeviceMediatedType:
+			case config.VFIOPCIDeviceMediatedType:
 				if utils.IsAPVFIOMediatedDevice(device.SysfsDev) {
 					err = q.qmpMonitorCh.qmp.ExecuteAPVFIOMediatedDeviceAdd(q.qmpMonitorCh.ctx, device.SysfsDev)
 				} else {
@@ -1767,9 +1767,9 @@ func (q *qemu) hotplugVFIODevice(ctx context.Context, device *config.VFIODev, op
 			}()
 
 			switch device.Type {
-			case config.VFIODeviceNormalType:
+			case config.VFIOPCIDeviceNormalType:
 				err = q.qmpMonitorCh.qmp.ExecutePCIVFIODeviceAdd(q.qmpMonitorCh.ctx, devID, device.BDF, addr, bridge.ID, romFile)
-			case config.VFIODeviceMediatedType:
+			case config.VFIOPCIDeviceMediatedType:
 				if utils.IsAPVFIOMediatedDevice(device.SysfsDev) {
 					err = q.qmpMonitorCh.qmp.ExecuteAPVFIOMediatedDeviceAdd(q.qmpMonitorCh.ctx, device.SysfsDev)
 				} else {

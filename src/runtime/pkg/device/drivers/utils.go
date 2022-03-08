@@ -94,12 +94,12 @@ func GetVFIODeviceType(deviceFileName string) config.VFIODeviceType {
 	tokens := strings.Split(deviceFileName, ":")
 	vfioDeviceType := config.VFIODeviceErrorType
 	if len(tokens) == 3 {
-		vfioDeviceType = config.VFIODeviceNormalType
+		vfioDeviceType = config.VFIOPCIDeviceNormalType
 	} else {
 		//For example, 83b8f4f2-509f-382f-3c1e-e6bfe0fa1001
 		tokens = strings.Split(deviceFileName, "-")
 		if len(tokens) == 5 {
-			vfioDeviceType = config.VFIODeviceMediatedType
+			vfioDeviceType = config.VFIOPCIDeviceMediatedType
 		}
 	}
 	return vfioDeviceType
