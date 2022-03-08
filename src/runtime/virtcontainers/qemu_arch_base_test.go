@@ -434,7 +434,7 @@ func TestQemuArchBaseAppendVFIODevice(t *testing.T) {
 		},
 	}
 
-	vfDevice := config.VFIODev{
+	vfDevice := config.VFIOPCIDev{
 		BDF: bdf,
 	}
 
@@ -454,7 +454,7 @@ func TestQemuArchBaseAppendVFIODeviceWithVendorDeviceID(t *testing.T) {
 		},
 	}
 
-	vfDevice := config.VFIODev{
+	vfDevice := config.VFIOPCIDev{
 		BDF:      bdf,
 		VendorID: vendorID,
 		DeviceID: deviceID,
