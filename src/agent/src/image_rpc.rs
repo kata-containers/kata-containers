@@ -41,7 +41,8 @@ const SKOPEO_PATH: &str = "/usr/bin/skopeo";
 const UMOCI_PATH: &str = "/usr/local/bin/umoci";
 const IMAGE_OCI: &str = "image_oci";
 const AA_PATH: &str = "/usr/local/bin/attestation-agent";
-const AA_PORT: &str = "127.0.0.1:50000";
+const AA_KEYPROVIDER_PORT: &str = "127.0.0.1:50000";
+const AA_GETRESOURCE_PORT: &str = "127.0.0.1:50001";
 const OCICRYPT_CONFIG_PATH: &str = "/tmp/ocicrypt_config.json";
 const OCI_ANNOTATION_REF_NAME: &str = "org.opencontainers.image.ref.name";
 const OCI_IMAGE_MANIFEST_NAME: &str = "application/vnd.oci.image.manifest.v1+json";
@@ -383,7 +384,7 @@ impl ImageService {
         let ocicrypt_config = serde_json::json!({
             "key-providers": {
                 "attestation-agent":{
-                    "grpc":AA_PORT
+                    "grpc":AA_KEYPROVIDER_PORT
                 }
             }
         });
@@ -395,8 +396,10 @@ impl ImageService {
 
         // The Attestation Agent will run for the duration of the guest.
         Command::new(AA_PATH)
-            .arg("--grpc_sock")
-            .arg(AA_PORT)
+            .arg("--keyprovider_sock")
+            .arg(AA_KEYPROVIDER_PORT)
+            .arg("--getresource_sock")
+            .arg(AA_GETRESOURCE_PORT)
             .spawn()
             .unwrap();
     }
