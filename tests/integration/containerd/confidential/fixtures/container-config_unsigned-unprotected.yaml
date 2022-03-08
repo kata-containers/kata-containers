@@ -1,0 +1,11 @@
+# Copyright (c) 2022 Red Hat
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+metadata:
+  name: kata-cc-busybox
+image:
+  image: quay.io/prometheus/busybox:latest
+command:
+- top
+log_path: kata-cc.0.log

@@ -131,6 +131,11 @@ crictl_create_cc_container() {
 	container_id=$(crictl create -with-pull "${pod_id}" \
 		"${container_config}" "${pod_config}")
 
+	if [ -z "$container_id" ]; then
+		echo "Failed to create the container"
+		return 1
+	fi
+
 	if ! crictl start ${container_id}; then
 		echo "Failed to start container $container_id"
 		crictl ps -a
@@ -206,6 +211,36 @@ crictl_record_cc_pod_console() {
 		open:${console_file},creat,append >/dev/null &
 	echo $(pidof $pidof_args socat)
 	# Return here.
+}
+
+# Add parameters to the 'kernel_params' property on kata's configuration.toml
+#
+# Parameters:
+#	$1..$N - list of parameters
+#
+# Environment variables:
+#	RUNTIME_CONFIG_PATH - path to kata's configuration.toml. If it is not
+#			      export then it will figure out the path via
+#			      `kata-runtime env` and export its value.
+#
+add_kernel_params() {
+	local params="$@"
+	_load_RUNTIME_CONFIG_PATH
+	sed -i -e 's#^\(kernel_params\) = "\(.*\)"#\1 = "\2 '"$params"'"#g' \
+		"$RUNTIME_CONFIG_PATH"
+}
+
+# Clear the 'kernel_params' property on kata's configuration.toml
+#
+# Environment variables:
+#	RUNTIME_CONFIG_PATH - path to kata's configuration.toml. If it is not
+#			      export then it will figure out the path via
+#			      `kata-runtime env` and export its value.
+#
+clear_kernel_params() {
+	_load_RUNTIME_CONFIG_PATH
+	sed -i -e 's#^\(kernel_params\) = "\(.*\)"#\1 = ""#g' \
+		"$RUNTIME_CONFIG_PATH"
 }
 
 # Toggle agent debug flags on kata's configuration.toml. Also pass the
@@ -309,3 +344,14 @@ configure_cc_containerd() {
 	iptables -P FORWARD ACCEPT
 }
 
+#
+# Internal functions.
+#
+
+# Export the RUNTIME_CONFIG_PATH variable if it not set already.
+#
+_load_RUNTIME_CONFIG_PATH() {
+	if [ -z "$RUNTIME_CONFIG_PATH" ]; then
+		extract_kata_env
+	fi
+}
