@@ -158,7 +158,7 @@ See [the community repository](https://github.com/kata-containers/community).
 
 ### Contact
 
-See [how to reach the community](https://github.com/kata-containers/community/blob/master/CONTRIBUTING.md#contact).
+See [how to reach the community](https://github.com/kata-containers/community/blob/main/CONTRIBUTING.md#contact).
 
 ## Further information
 
