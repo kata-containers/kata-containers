@@ -675,16 +675,17 @@ func (q *qemuArchBase) appendVhostUserDevice(ctx context.Context, devices []govm
 }
 
 func (q *qemuArchBase) appendVFIODevice(devices []govmmQemu.Device, vfioDev config.VFIODev) []govmmQemu.Device {
-	if vfioDev.BDF == "" {
+	pciDevice := vfioDev.(config.VFIOPCIDev)
+	if pciDevice.BDF == "" {
 		return devices
 	}
 
 	devices = append(devices,
 		govmmQemu.VFIODevice{
-			BDF:      vfioDev.BDF,
-			VendorID: vfioDev.VendorID,
-			DeviceID: vfioDev.DeviceID,
-			Bus:      vfioDev.Bus,
+			BDF:      pciDevice.BDF,
+			VendorID: pciDevice.VendorID,
+			DeviceID: pciDevice.DeviceID,
+			Bus:      pciDevice.Bus,
 		},
 	)
 

@@ -624,7 +624,7 @@ func TestCloudHypervisorHotplugRemoveDevice(t *testing.T) {
 	_, err = clh.HotplugRemoveDevice(context.Background(), &config.BlockDrive{}, BlockDev)
 	assert.NoError(err, "Hotplug remove block device expected no error")
 
-	_, err = clh.HotplugRemoveDevice(context.Background(), &config.VFIODev{}, VfioDev)
+	_, err = clh.HotplugRemoveDevice(context.Background(), &config.VFIOPCIDev{}, VfioDev)
 	assert.NoError(err, "Hotplug remove vfio block device expected no error")
 
 	_, err = clh.HotplugRemoveDevice(context.Background(), nil, NetDev)
