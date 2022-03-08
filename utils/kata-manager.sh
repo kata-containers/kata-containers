@@ -441,7 +441,6 @@ configure_containerd()
 			"$(date -Iseconds)" |\
 			tee -a "$containerd_service_name"
 
-
 		sudo cp "${containerd_service_name}" "${dest}"
 		sudo systemctl daemon-reload
 
