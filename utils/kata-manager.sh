@@ -208,6 +208,7 @@ Description: Install $kata_project [1] (and optionally $containerd_project [2])
 Options:
 
  -c <version> : Specify containerd version.
+ -d           : Enable debug for all components.
  -f           : Force installation (use with care).
  -h           : Show this help statement.
  -k <version> : Specify Kata Containers version.
@@ -414,6 +415,9 @@ install_containerd()
 
 configure_containerd()
 {
+	local enable_debug="${1:-}"
+	[ -z "$enable_debug" ] && die "no enable debug value"
+
 	local project="$containerd_project"
 
 	info "Configuring $project"
@@ -464,26 +468,55 @@ configure_containerd()
 		info "Backed up $cfg to $original"
 	}
 
+	local modified="false"
+
 	# Add the Kata Containers configuration details:
+
+	local comment_text
+	comment_text=$(printf "%s: Added by %s\n" \
+		"$(date -Iseconds)" \
+		"$script_name")
 
 	sudo grep -q "$kata_runtime_type" "$cfg" || {
 		cat <<-EOT | sudo tee -a "$cfg"
-[plugins]
-  [plugins."io.containerd.grpc.v1.cri"]
-    [plugins."io.containerd.grpc.v1.cri".containerd]
-      default_runtime_name = "${kata_runtime_name}"
-      [plugins."io.containerd.grpc.v1.cri".containerd.runtimes]
-        [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.${kata_runtime_name}]
-          runtime_type = "${kata_runtime_type}"
-EOT
+		# $comment_text
+		[plugins]
+		  [plugins."io.containerd.grpc.v1.cri"]
+		    [plugins."io.containerd.grpc.v1.cri".containerd]
+		      default_runtime_name = "${kata_runtime_name}"
+		      [plugins."io.containerd.grpc.v1.cri".containerd.runtimes]
+		        [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.${kata_runtime_name}]
+		          runtime_type = "${kata_runtime_type}"
+		EOT
 
-		info "Modified $cfg"
+		modified="true"
 	}
 
+	if [ "$enable_debug" = "true" ]
+	then
+		local debug_enabled
+		debug_enabled=$(awk -v RS='' '/\[debug\]/' "$cfg" |\
+			grep -E "^\s*\<level\>\s*=\s*.*\<debug\>" || true)
+
+		[ -n "$debug_enabled" ] || {
+			cat <<-EOT | sudo tee -a "$cfg"
+			# $comment_text
+			[debug]
+				level = "debug"
+			EOT
+		}
+
+		modified="true"
+	fi
+
+	[ "$modified" = "true" ] && info "Modified $cfg"
 	sudo systemctl enable containerd
 	sudo systemctl start containerd
 
-	info "Configured $project\n"
+	local msg="disabled"
+	[ "$enable_debug" = "true" ] && msg="enabled"
+
+	info "Configured $project (debug $msg)\n"
 }
 
 install_kata()
@@ -544,11 +577,48 @@ install_kata()
 	info "$project installed\n"
 }
 
+configure_kata()
+{
+	local enable_debug="${1:-}"
+	[ -z "$enable_debug" ] && die "no enable debug value"
+
+	[ "$enable_debug" = "false" ] && \
+		info "Using default $kata_project configuration" && \
+		return 0
+
+	local config_file='configuration.toml'
+	local kata_dir='/etc/kata-containers'
+
+	sudo mkdir -p "$kata_dir"
+
+	local cfg_from
+	local cfg_to
+
+	cfg_from="${kata_install_dir}/share/defaults/kata-containers/${config_file}"
+	cfg_to="${kata_dir}/${config_file}"
+
+	[ -e "$cfg_from" ] || die "cannot find $kata_project configuration file"
+
+	sudo install -o root -g root -m 0644 "$cfg_from" "$cfg_to"
+
+	sudo sed -i \
+		-e 's/^# *\(enable_debug\).*=.*$/\1 = true/g' \
+		-e 's/^kernel_params = "\(.*\)"/kernel_params = "\1 agent.log=debug initcall_debug"/g' \
+		"$cfg_to"
+
+	info "Configured $kata_project for full debug (delete $cfg_to to use pristine $kata_project configuration)"
+}
+
 handle_kata()
 {
 	local version="${1:-}"
 
-	install_kata "$version"
+	local enable_debug="${2:-}"
+	[ -z "$enable_debug" ] && die "no enable debug value"
+
+	install_kata "$version" "$enable_debug"
+
+	configure_kata "$enable_debug"
 
 	kata-runtime --version
 }
@@ -559,6 +629,9 @@ handle_containerd()
 
 	local force="${2:-}"
 	[ -z "$force" ] && die "need force value"
+
+	local enable_debug="${3:-}"
+	[ -z "$enable_debug" ] && die "no enable debug value"
 
 	local ret
 
@@ -576,7 +649,7 @@ handle_containerd()
 		fi
 	fi
 
-	configure_containerd
+	configure_containerd "$enable_debug"
 
 	containerd --version
 }
@@ -621,20 +694,22 @@ handle_installation()
 	local only_kata="${3:-}"
 	[ -z "$only_kata" ] && die "no only Kata value"
 
+	local enable_debug="${4:-}"
+	[ -z "$enable_debug" ] && die "no enable debug value"
+
 	# These params can be blank
-	local kata_version="${4:-}"
-	local containerd_version="${5:-}"
+	local kata_version="${5:-}"
+	local containerd_version="${6:-}"
 
 	setup "$cleanup" "$force"
 
-	handle_kata "$kata_version"
+	handle_kata "$kata_version" "$enable_debug"
 
 	[ "$only_kata" = "false" ] && \
 		handle_containerd \
 		"$containerd_version" \
-		"$force"
-
-	test_installation
+		"$force" \
+		"$enable_debug"
 
 	if [ "$only_kata" = "true" ]
 	then
@@ -651,16 +726,18 @@ handle_args()
 	local cleanup="true"
 	local force="false"
 	local only_kata="false"
+	local enable_debug="false"
 
 	local opt
 
 	local kata_version=""
 	local containerd_version=""
 
-	while getopts "c:fhk:or" opt "$@"
+	while getopts "c:dfhk:or" opt "$@"
 	do
 		case "$opt" in
 			c) containerd_version="$OPTARG" ;;
+			d) enable_debug="true" ;;
 			f) force="true" ;;
 			h) usage; exit 0 ;;
 			k) kata_version="$OPTARG" ;;
@@ -678,6 +755,7 @@ handle_args()
 		"$cleanup" \
 		"$force" \
 		"$only_kata" \
+		"$enable_debug" \
 		"$kata_version" \
 		"$containerd_version"
 }
