@@ -85,19 +85,29 @@ func (device *VFIODevice) Attach(ctx context.Context, devReceiver api.DeviceRece
 		if err != nil {
 			return err
 		}
-		vfio := &config.VFIODev{
-			ID:       utils.MakeNameID("vfio", device.DeviceInfo.ID+strconv.Itoa(i), maxDevIDSize),
-			Type:     vfioDeviceType,
-			BDF:      deviceBDF,
-			SysfsDev: deviceSysfsDev,
-			IsPCIe:   isPCIeDevice(deviceBDF),
-			Class:    getPCIDeviceProperty(deviceBDF, PCISysFsDevicesClass),
+		id := utils.MakeNameID("vfio", device.DeviceInfo.ID+strconv.Itoa(i), maxDevIDSize)
+
+		var vfio config.VFIODev
+
+		switch vfioDeviceType {
+		case config.VFIOPCIDeviceNormalType, config.VFIOPCIDeviceMediatedType:
+			isPCIe := isPCIeDevice(deviceBDF)
+			// Do not directly assign to `vfio` -- need to access field still
+			vfioPCI := config.VFIOPCIDev{
+				ID:       id,
+				Type:     vfioDeviceType,
+				BDF:      deviceBDF,
+				SysfsDev: deviceSysfsDev,
+				IsPCIe:   isPCIe,
+				Class:    getPCIDeviceProperty(deviceBDF, PCISysFsDevicesClass),
+			}
+			if isPCIe {
+				vfioPCI.Bus = fmt.Sprintf("%s%d", pcieRootPortPrefix, len(AllPCIeDevs))
+				AllPCIeDevs[deviceBDF] = true
+			}
+			vfio = vfioPCI
 		}
-		device.VfioDevs = append(device.VfioDevs, vfio)
-		if vfio.IsPCIe {
-			vfio.Bus = fmt.Sprintf("%s%d", pcieRootPortPrefix, len(AllPCIeDevs))
-			AllPCIeDevs[vfio.BDF] = true
-		}
+		device.VfioDevs = append(device.VfioDevs, &vfio)
 	}
 
 	coldPlug := device.DeviceInfo.ColdPlug
@@ -180,7 +190,16 @@ func (device *VFIODevice) Save() config.DeviceState {
 	devs := device.VfioDevs
 	for _, dev := range devs {
 		if dev != nil {
-			ds.VFIODevs = append(ds.VFIODevs, dev)
+			bdf := ""
+			if pciDev, ok := (*dev).(config.VFIOPCIDev); ok {
+				bdf = pciDev.BDF
+			}
+			ds.VFIODevs = append(ds.VFIODevs, &persistapi.VFIODev{
+				ID:       *(*dev).GetID(),
+				Type:     uint32((*dev).GetType()),
+				BDF:      bdf,
+				SysfsDev: *(*dev).GetSysfsDev(),
+			})
 		}
 	}
 	return ds
@@ -192,12 +211,13 @@ func (device *VFIODevice) Load(ds config.DeviceState) {
 	device.GenericDevice.Load(ds)
 
 	for _, dev := range ds.VFIODevs {
-		device.VfioDevs = append(device.VfioDevs, &config.VFIODev{
+		var vfioDev config.VFIODev = config.VFIOPCIDev{
 			ID:       dev.ID,
 			Type:     config.VFIODeviceType(dev.Type),
 			BDF:      dev.BDF,
 			SysfsDev: dev.SysfsDev,
-		})
+		}
+		device.VfioDevs = append(device.VfioDevs, &vfioDev)
 	}
 }
 

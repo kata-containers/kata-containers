@@ -89,8 +89,7 @@ func FindContextID() (*os.File, uint64, error) {
 const (
 	procMountsFile = "/proc/mounts"
 
-	fieldsPerLine  = 6
-	vfioAPSysfsDir = "vfio_ap"
+	fieldsPerLine = 6
 )
 
 const (

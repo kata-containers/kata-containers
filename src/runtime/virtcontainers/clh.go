@@ -856,6 +856,11 @@ func (clh *cloudHypervisor) hotPlugVFIODevice(device *config.VFIODev) error {
 	ctx, cancel := context.WithTimeout(context.Background(), clhHotPlugAPITimeout*time.Second)
 	defer cancel()
 
+	pciDevice, ok := (*device).(config.VFIOPCIDev)
+	if !ok {
+		return fmt.Errorf("VFIO device %+v is not PCI, only PCI is supported in Cloud Hypervisor", device)
+	}
+
 	// Create the clh device config via the constructor to ensure default values are properly assigned
 	clhDevice := *chclient.NewDeviceConfig(device.SysfsDev)
 	pciInfo, _, err := cl.VmAddDevicePut(ctx, clhDevice)
@@ -879,7 +884,9 @@ func (clh *cloudHypervisor) hotPlugVFIODevice(device *config.VFIODev) error {
 		return fmt.Errorf("Unexpected PCI address %q from clh hotplug", pciInfo.Bdf)
 	}
 
-	device.GuestPciPath, err = types.PciPathFromString(tokens[0])
+	guestPciPath, err := vcTypes.PciPathFromString(tokens[0])
+	pciDevice.GuestPciPath = guestPciPath
+	*device = pciDevice
 
 	return err
 }
@@ -923,7 +930,7 @@ func (clh *cloudHypervisor) HotplugRemoveDevice(ctx context.Context, devInfo int
 	case BlockDev:
 		deviceID = clhDriveIndexToID(devInfo.(*config.BlockDrive).Index)
 	case VfioDev:
-		deviceID = devInfo.(*config.VFIODev).ID
+		deviceID = *devInfo.(config.VFIODev).GetID()
 	default:
 		clh.Logger().WithFields(log.Fields{"devInfo": devInfo,
 			"deviceType": devType}).Error("HotplugRemoveDevice: unsupported device")

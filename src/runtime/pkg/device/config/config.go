@@ -265,8 +265,14 @@ const (
 	VFIOPCIDeviceMediatedType
 )
 
-// VFIODev represents a VFIO drive used for hotplugging
-type VFIODev struct {
+type VFIODev interface {
+	GetID() *string
+	GetType() VFIODeviceType
+	GetSysfsDev() *string
+}
+
+// VFIOPCIDev represents a VFIO PCI device used for hotplugging
+type VFIOPCIDev struct {
 	// ID is used to identify this drive in the hypervisor options.
 	ID string
 
@@ -296,6 +302,18 @@ type VFIODev struct {
 
 	// IsPCIe specifies device is PCIe or PCI
 	IsPCIe bool
+}
+
+func (d VFIOPCIDev) GetID() *string {
+	return &d.ID
+}
+
+func (d VFIOPCIDev) GetType() VFIODeviceType {
+	return d.Type
+}
+
+func (d VFIOPCIDev) GetSysfsDev() *string {
+	return &d.SysfsDev
 }
 
 // RNGDev represents a random number generator device
