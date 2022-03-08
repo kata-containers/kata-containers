@@ -402,7 +402,12 @@ install_containerd()
 
 	sudo tar -C /usr/local -xvf "${file}"
 
-	sudo ln -sf /usr/local/bin/ctr "${link_dir}"
+	for file in \
+		/usr/local/bin/containerd \
+		/usr/local/bin/ctr
+		do
+			sudo ln -sf "$file" "${link_dir}"
+		done
 
 	info "$project installed\n"
 }
