@@ -77,38 +77,39 @@ const (
 )
 
 var (
-	checkRequestTimeout          = 30 * time.Second
-	defaultRequestTimeout        = 60 * time.Second
-	errorMissingOCISpec          = errors.New("Missing OCI specification")
-	defaultKataHostSharedDir     = "/run/kata-containers/shared/sandboxes/"
-	defaultKataGuestSharedDir    = "/run/kata-containers/shared/containers/"
-	defaultKataGuestNydusRootDir = "/run/kata-containers/shared/"
-	mountGuestTag                = "kataShared"
-	defaultKataGuestSandboxDir   = "/run/kata-containers/sandbox/"
-	type9pFs                     = "9p"
-	typeVirtioFS                 = "virtiofs"
-	typeOverlayFS                = "overlay"
-	kata9pDevType                = "9p"
-	kataMmioBlkDevType           = "mmioblk"
-	kataBlkDevType               = "blk"
-	kataBlkCCWDevType            = "blk-ccw"
-	kataSCSIDevType              = "scsi"
-	kataNvdimmDevType            = "nvdimm"
-	kataVirtioFSDevType          = "virtio-fs"
-	kataOverlayDevType           = "overlayfs"
-	kataWatchableBindDevType     = "watchable-bind"
-	kataVfioDevType              = "vfio"    // VFIO device to used as VFIO in the container
-	kataVfioGuestKernelDevType   = "vfio-gk" // VFIO device for consumption by the guest kernel
-	sharedDir9pOptions           = []string{"trans=virtio,version=9p2000.L,cache=mmap", "nodev"}
-	sharedDirVirtioFSOptions     = []string{}
-	sharedDirVirtioFSDaxOptions  = "dax"
-	shmDir                       = "shm"
-	kataEphemeralDevType         = "ephemeral"
-	defaultEphemeralPath         = filepath.Join(defaultKataGuestSandboxDir, kataEphemeralDevType)
-	grpcMaxDataSize              = int64(1024 * 1024)
-	localDirOptions              = []string{"mode=0777"}
-	maxHostnameLen               = 64
-	GuestDNSFile                 = "/etc/resolv.conf"
+	checkRequestTimeout           = 30 * time.Second
+	defaultRequestTimeout         = 60 * time.Second
+	errorMissingOCISpec           = errors.New("Missing OCI specification")
+	defaultKataHostSharedDir      = "/run/kata-containers/shared/sandboxes/"
+	defaultKataGuestSharedDir     = "/run/kata-containers/shared/containers/"
+	defaultKataGuestNydusRootDir  = "/run/kata-containers/shared/"
+	mountGuestTag                 = "kataShared"
+	defaultKataGuestSandboxDir    = "/run/kata-containers/sandbox/"
+	type9pFs                      = "9p"
+	typeVirtioFS                  = "virtiofs"
+	typeOverlayFS                 = "overlay"
+	kata9pDevType                 = "9p"
+	kataMmioBlkDevType            = "mmioblk"
+	kataBlkDevType                = "blk"
+	kataBlkCCWDevType             = "blk-ccw"
+	kataSCSIDevType               = "scsi"
+	kataNvdimmDevType             = "nvdimm"
+	kataVirtioFSDevType           = "virtio-fs"
+	kataOverlayDevType            = "overlayfs"
+	kataWatchableBindDevType      = "watchable-bind"
+	kataVfioPciDevType            = "vfio-pci"    // VFIO PCI device to used as VFIO in the container
+	kataVfioPciGuestKernelDevType = "vfio-pci-gk" // VFIO PCI device for consumption by the guest kernel
+	kataVfioApDevType             = "vfio-ap"
+	sharedDir9pOptions            = []string{"trans=virtio,version=9p2000.L,cache=mmap", "nodev"}
+	sharedDirVirtioFSOptions      = []string{}
+	sharedDirVirtioFSDaxOptions   = "dax"
+	shmDir                        = "shm"
+	kataEphemeralDevType          = "ephemeral"
+	defaultEphemeralPath          = filepath.Join(defaultKataGuestSandboxDir, kataEphemeralDevType)
+	grpcMaxDataSize               = int64(1024 * 1024)
+	localDirOptions               = []string{"mode=0777"}
+	maxHostnameLen                = 64
+	GuestDNSFile                  = "/etc/resolv.conf"
 )
 
 const (
@@ -1126,6 +1127,11 @@ func (k *kataAgent) appendVfioDevice(dev ContainerDevice, device api.Device, c *
 	// DDDD:BB:DD.F is the device's PCI address on the
 	// *host*. <pcipath> is the device's PCI path in the guest
 	// (see qomGetPciPath() for details).
+	//
+	// For VFIO-AP, one VFIO group could include several queue devices. They are
+	// identified by APQNs (Adjunct Processor Queue Numbers), which do not differ
+	// between host and guest. They are passed as options so they can be awaited
+	// by the agent.
 	kataDevice := &grpc.Device{
 		ContainerPath: dev.ContainerPath,
 		Type:          kataVfioPciDevType,
@@ -1141,10 +1147,15 @@ func (k *kataAgent) appendVfioDevice(dev ContainerDevice, device api.Device, c *
 		kataDevice.Type = kataVfioPciGuestKernelDevType
 	}
 
-	kataDevice.Options = make([]string, len(devList))
-	for i, device := range devList {
-		pciDevice := (*device).(config.VFIOPCIDev)
-		kataDevice.Options[i] = fmt.Sprintf("0000:%s=%s", pciDevice.BDF, pciDevice.GuestPciPath)
+	if (*devList[0]).GetType() == config.VFIOAPDeviceMediatedType {
+		kataDevice.Type = kataVfioApDevType
+		kataDevice.Options = (*devList[0]).(config.VFIOAPDev).APDevices
+	} else {
+		kataDevice.Options = make([]string, len(devList))
+		for i, device := range devList {
+			pciDevice := (*device).(config.VFIOPCIDev)
+			kataDevice.Options[i] = fmt.Sprintf("0000:%s=%s", pciDevice.BDF, pciDevice.GuestPciPath)
+		}
 	}
 
 	return kataDevice

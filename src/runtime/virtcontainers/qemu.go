@@ -1753,6 +1753,8 @@ func (q *qemu) hotplugVFIODevice(ctx context.Context, device *config.VFIODev, op
 				} else {
 					err = q.qmpMonitorCh.qmp.ExecutePCIVFIOMediatedDeviceAdd(q.qmpMonitorCh.ctx, devID, *(*device).GetSysfsDev(), "", pciDevice.Bus, romFile)
 				}
+			case config.VFIOAPDeviceMediatedType:
+				err = q.qmpMonitorCh.qmp.ExecuteAPVFIOMediatedDeviceAdd(q.qmpMonitorCh.ctx, *(*device).GetSysfsDev())
 			}
 		} else {
 			addr, bridge, err := q.arch.addDeviceToBridge(ctx, devID, types.PCI)
@@ -1775,6 +1777,8 @@ func (q *qemu) hotplugVFIODevice(ctx context.Context, device *config.VFIODev, op
 				err = q.qmpMonitorCh.qmp.ExecutePCIVFIODeviceAdd(q.qmpMonitorCh.ctx, devID, pciDevice.BDF, addr, bridge.ID, romFile)
 			case config.VFIOPCIDeviceMediatedType:
 				err = q.qmpMonitorCh.qmp.ExecutePCIVFIOMediatedDeviceAdd(q.qmpMonitorCh.ctx, devID, *(*device).GetSysfsDev(), addr, bridge.ID, romFile)
+			case config.VFIOAPDeviceMediatedType:
+				err = q.qmpMonitorCh.qmp.ExecuteAPVFIOMediatedDeviceAdd(q.qmpMonitorCh.ctx, *(*device).GetSysfsDev())
 			default:
 				return fmt.Errorf("Incorrect VFIO device type found")
 			}

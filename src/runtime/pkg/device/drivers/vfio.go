@@ -30,6 +30,7 @@ const (
 	iommuGroupPath      = "/sys/bus/pci/devices/%s/iommu_group"
 	vfioDevPath         = "/dev/vfio/%s"
 	pcieRootPortPrefix  = "rp"
+	vfioAPSysfsDir      = "/sys/devices/vfio_ap"
 )
 
 var (
@@ -106,6 +107,17 @@ func (device *VFIODevice) Attach(ctx context.Context, devReceiver api.DeviceRece
 				AllPCIeDevs[deviceBDF] = true
 			}
 			vfio = vfioPCI
+		case config.VFIOAPDeviceMediatedType:
+			devices, err := GetAPVFIODevices(deviceSysfsDev)
+			if err != nil {
+				return err
+			}
+			vfio = config.VFIOAPDev{
+				ID:        id,
+				SysfsDev:  deviceSysfsDev,
+				Type:      config.VFIOAPDeviceMediatedType,
+				APDevices: devices,
+			}
 		}
 		device.VfioDevs = append(device.VfioDevs, &vfio)
 	}
@@ -190,16 +202,7 @@ func (device *VFIODevice) Save() config.DeviceState {
 	devs := device.VfioDevs
 	for _, dev := range devs {
 		if dev != nil {
-			bdf := ""
-			if pciDev, ok := (*dev).(config.VFIOPCIDev); ok {
-				bdf = pciDev.BDF
-			}
-			ds.VFIODevs = append(ds.VFIODevs, &persistapi.VFIODev{
-				ID:       *(*dev).GetID(),
-				Type:     uint32((*dev).GetType()),
-				BDF:      bdf,
-				SysfsDev: *(*dev).GetSysfsDev(),
-			})
+			ds.VFIODevs = append(ds.VFIODevs, dev)
 		}
 	}
 	return ds
@@ -211,20 +214,38 @@ func (device *VFIODevice) Load(ds config.DeviceState) {
 	device.GenericDevice.Load(ds)
 
 	for _, dev := range ds.VFIODevs {
-		var vfioDev config.VFIODev = config.VFIOPCIDev{
-			ID:       dev.ID,
-			Type:     config.VFIODeviceType(dev.Type),
-			BDF:      dev.BDF,
-			SysfsDev: dev.SysfsDev,
+		var vfio config.VFIODev
+
+		if (*device.VfioDevs[0]).GetType() == config.VFIOAPDeviceMediatedType {
+			vfio = config.VFIOAPDev{
+				ID:       *(*dev).GetID(),
+				SysfsDev: *(*dev).GetSysfsDev(),
+			}
+		} else {
+			bdf := ""
+			if pciDev, ok := (*dev).(config.VFIOPCIDev); ok {
+				bdf = pciDev.BDF
+			}
+			vfio = config.VFIOPCIDev{
+				ID:       *(*dev).GetID(),
+				Type:     config.VFIODeviceType((*dev).GetType()),
+				BDF:      bdf,
+				SysfsDev: *(*dev).GetSysfsDev(),
+			}
 		}
-		device.VfioDevs = append(device.VfioDevs, &vfioDev)
+
+		device.VfioDevs = append(device.VfioDevs, &vfio)
 	}
 }
 
 // It should implement GetAttachCount() and DeviceID() as api.Device implementation
 // here it shares function from *GenericDevice so we don't need duplicate codes
 func getVFIODetails(deviceFileName, iommuDevicesPath string) (deviceBDF, deviceSysfsDev string, vfioDeviceType config.VFIODeviceType, err error) {
-	vfioDeviceType = GetVFIODeviceType(deviceFileName)
+	sysfsDevStr := filepath.Join(iommuDevicesPath, deviceFileName)
+	vfioDeviceType, err = GetVFIODeviceType(sysfsDevStr)
+	if err != nil {
+		return deviceBDF, deviceSysfsDev, vfioDeviceType, err
+	}
 
 	switch vfioDeviceType {
 	case config.VFIOPCIDeviceNormalType:
@@ -235,8 +256,11 @@ func getVFIODetails(deviceFileName, iommuDevicesPath string) (deviceBDF, deviceS
 	case config.VFIOPCIDeviceMediatedType:
 		// Get sysfsdev of device eg. /sys/devices/pci0000:00/0000:00:02.0/f79944e4-5a3d-11e8-99ce-479cbab002e4
 		sysfsDevStr := filepath.Join(iommuDevicesPath, deviceFileName)
-		deviceSysfsDev, err = getSysfsDev(sysfsDevStr)
+		deviceSysfsDev, err = GetSysfsDev(sysfsDevStr)
 		deviceBDF = getBDF(getMediatedBDF(deviceSysfsDev))
+	case config.VFIOAPDeviceMediatedType:
+		sysfsDevStr := filepath.Join(iommuDevicesPath, deviceFileName)
+		deviceSysfsDev, err = GetSysfsDev(sysfsDevStr)
 	default:
 		err = fmt.Errorf("Incorrect tokens found while parsing vfio details: %s", deviceFileName)
 	}
@@ -262,13 +286,6 @@ func getBDF(deviceSysStr string) string {
 		return ""
 	}
 	return tokens[1]
-}
-
-// getSysfsDev returns the sysfsdev of mediated device
-// Expected input string format is absolute path to the sysfs dev node
-// eg. /sys/kernel/iommu_groups/0/devices/f79944e4-5a3d-11e8-99ce-479cbab002e4
-func getSysfsDev(sysfsDevStr string) (string, error) {
-	return filepath.EvalSymlinks(sysfsDevStr)
 }
 
 // BindDevicetoVFIO binds the device to vfio driver after unbinding from host.

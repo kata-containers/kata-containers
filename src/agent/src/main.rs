@@ -75,6 +75,7 @@ mod tracer;
 
 cfg_if! {
     if #[cfg(target_arch = "s390x")] {
+        mod ap;
         mod ccw;
     }
 }
