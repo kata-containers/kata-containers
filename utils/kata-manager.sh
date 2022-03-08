@@ -214,6 +214,8 @@ Options:
  -k <version> : Specify Kata Containers version.
  -o           : Only install Kata Containers.
  -r           : Don't cleanup on failure (retain files).
+ -t           : Disable self test (don't try to create a container after install).
+ -T           : Only run self test (do not install anything).
 
 Notes:
 
@@ -697,9 +699,17 @@ handle_installation()
 	local enable_debug="${4:-}"
 	[ -z "$enable_debug" ] && die "no enable debug value"
 
+	local disable_test="${5:-}"
+	[ -z "$disable_test" ] && die "no disable test value"
+
+	local only_run_test="${6:-}"
+	[ -z "$only_run_test" ] && die "no only run test value"
+
 	# These params can be blank
-	local kata_version="${5:-}"
-	local containerd_version="${6:-}"
+	local kata_version="${7:-}"
+	local containerd_version="${8:-}"
+
+	[ "$only_run_test" = "true" ] && test_installation && return 0
 
 	setup "$cleanup" "$force"
 
@@ -710,6 +720,8 @@ handle_installation()
 		"$containerd_version" \
 		"$force" \
 		"$enable_debug"
+
+	[ "$disable_test" = "false" ] && test_installation
 
 	if [ "$only_kata" = "true" ]
 	then
@@ -726,6 +738,8 @@ handle_args()
 	local cleanup="true"
 	local force="false"
 	local only_kata="false"
+	local disable_test="false"
+	local only_run_test="false"
 	local enable_debug="false"
 
 	local opt
@@ -733,7 +747,7 @@ handle_args()
 	local kata_version=""
 	local containerd_version=""
 
-	while getopts "c:dfhk:or" opt "$@"
+	while getopts "c:dfhk:ortT" opt "$@"
 	do
 		case "$opt" in
 			c) containerd_version="$OPTARG" ;;
@@ -743,6 +757,8 @@ handle_args()
 			k) kata_version="$OPTARG" ;;
 			o) only_kata="true" ;;
 			r) cleanup="false" ;;
+			t) disable_test="true" ;;
+			T) only_run_test="true" ;;
 		esac
 	done
 
@@ -756,6 +772,8 @@ handle_args()
 		"$force" \
 		"$only_kata" \
 		"$enable_debug" \
+		"$disable_test" \
+		"$only_run_test" \
 		"$kata_version" \
 		"$containerd_version"
 }
