@@ -867,7 +867,7 @@ func (clh *cloudHypervisor) hotPlugVFIODevice(device *config.VFIODev) error {
 	if err != nil {
 		return fmt.Errorf("Failed to hotplug device %+v %s", device, openAPIClientError(err))
 	}
-	clh.devicesIds[device.ID] = pciInfo.GetId()
+	clh.devicesIds[*(*device).GetID()] = pciInfo.GetId()
 
 	// clh doesn't use bridges, so the PCI path is simply the slot
 	// number of the device.  This will break if clh starts using
@@ -884,7 +884,7 @@ func (clh *cloudHypervisor) hotPlugVFIODevice(device *config.VFIODev) error {
 		return fmt.Errorf("Unexpected PCI address %q from clh hotplug", pciInfo.Bdf)
 	}
 
-	guestPciPath, err := vcTypes.PciPathFromString(tokens[0])
+	guestPciPath, err := types.PciPathFromString(tokens[0])
 	pciDevice.GuestPciPath = guestPciPath
 	*device = pciDevice
 
