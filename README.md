@@ -134,13 +134,10 @@ The table below lists the remaining parts of the project:
 | [`ci`](https://github.com/kata-containers/ci) | CI | Continuous Integration configuration files and scripts. |
 | [`katacontainers.io`](https://github.com/kata-containers/www.katacontainers.io) | Source for the [`katacontainers.io`](https://www.katacontainers.io) site. |
 
-### Packaging and releases
-
-Kata Containers is now
-[available natively for most distributions](docs/install/README.md#packaged-installation-methods).
-However, packaging scripts and metadata are still used to generate snap and GitHub releases. See
-the [components](#components) section for further details.
-
 ## Glossary of Terms
 
 See the [glossary of terms](https://github.com/kata-containers/kata-containers/wiki/Glossary) related to Kata Containers.
+
+## Foo
+
+Wobble!
