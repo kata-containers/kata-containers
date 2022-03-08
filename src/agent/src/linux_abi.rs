@@ -69,6 +69,8 @@ pub fn create_pci_root_bus_path() -> String {
 cfg_if! {
     if #[cfg(target_arch = "s390x")] {
         pub const CCW_ROOT_BUS_PATH: &str = "/devices/css0";
+        pub const AP_ROOT_BUS_PATH: &str = "/devices/ap";
+        pub const AP_SCANS_PATH: &str = "/sys/bus/ap/scans";
     }
 }
 

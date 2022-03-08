@@ -241,6 +241,9 @@ const (
 
 	// VFIOPCIDeviceMediatedType is a VFIO PCI mediated device type
 	VFIOPCIDeviceMediatedType
+
+	// VFIOAPDeviceMediatedType is a VFIO AP mediated device type
+	VFIOAPDeviceMediatedType
 )
 
 type VFIODev interface {
@@ -291,6 +294,32 @@ func (d VFIOPCIDev) GetType() VFIODeviceType {
 }
 
 func (d VFIOPCIDev) GetSysfsDev() *string {
+	return &d.SysfsDev
+}
+
+type VFIOAPDev struct {
+	// ID is used to identify this drive in the hypervisor options.
+	ID string
+
+	// sysfsdev of VFIO mediated device
+	SysfsDev string
+
+	// APDevices are the Adjunct Processor devices assigned to the mdev
+	APDevices []string
+
+	// Type of VFIO device
+	Type VFIODeviceType
+}
+
+func (d VFIOAPDev) GetID() *string {
+	return &d.ID
+}
+
+func (d VFIOAPDev) GetType() VFIODeviceType {
+	return d.Type
+}
+
+func (d VFIOAPDev) GetSysfsDev() *string {
 	return &d.SysfsDev
 }
 
