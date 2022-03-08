@@ -45,11 +45,11 @@ pub const DRIVER_NVDIMM_TYPE: &str = "nvdimm";
 pub const DRIVER_EPHEMERAL_TYPE: &str = "ephemeral";
 pub const DRIVER_LOCAL_TYPE: &str = "local";
 pub const DRIVER_WATCHABLE_BIND_TYPE: &str = "watchable-bind";
-// VFIO device to be bound to a guest kernel driver
-pub const DRIVER_VFIO_GK_TYPE: &str = "vfio-gk";
-// VFIO device to be bound to vfio-pci and made available inside the
+// VFIO PCI device to be bound to a guest kernel driver
+pub const DRIVER_VFIO_PCI_GK_TYPE: &str = "vfio-pci-gk";
+// VFIO PCI device to be bound to vfio-pci and made available inside the
 // container as a VFIO device node
-pub const DRIVER_VFIO_TYPE: &str = "vfio";
+pub const DRIVER_VFIO_PCI_TYPE: &str = "vfio-pci";
 pub const DRIVER_OVERLAYFS_TYPE: &str = "overlayfs";
 pub const FS_TYPE_HUGETLB: &str = "hugetlbfs";
 
@@ -704,7 +704,7 @@ async fn virtio_nvdimm_device_handler(
     Ok(DevNumUpdate::from_vm_path(&device.vm_path)?.into())
 }
 
-fn split_vfio_option(opt: &str) -> Option<(&str, &str)> {
+fn split_vfio_pci_option(opt: &str) -> Option<(&str, &str)> {
     let mut tokens = opt.split('=');
     let hostbdf = tokens.next()?;
     let path = tokens.next()?;
@@ -719,14 +719,18 @@ fn split_vfio_option(opt: &str) -> Option<(&str, &str)> {
 // Each option should have the form "DDDD:BB:DD.F=<pcipath>"
 //     DDDD:BB:DD.F is the device's PCI address in the host
 //     <pcipath> is a PCI path to the device in the guest (see pci.rs)
-async fn vfio_device_handler(device: &Device, sandbox: &Arc<Mutex<Sandbox>>) -> Result<SpecUpdate> {
-    let vfio_in_guest = device.field_type != DRIVER_VFIO_GK_TYPE;
+#[instrument]
+async fn vfio_pci_device_handler(
+    device: &Device,
+    sandbox: &Arc<Mutex<Sandbox>>,
+) -> Result<SpecUpdate> {
+    let vfio_in_guest = device.field_type != DRIVER_VFIO_PCI_GK_TYPE;
     let mut pci_fixups = Vec::<(pci::Address, pci::Address)>::new();
     let mut group = None;
 
     for opt in device.options.iter() {
         let (host, pcipath) =
-            split_vfio_option(opt).ok_or_else(|| anyhow!("Malformed VFIO option {:?}", opt))?;
+            split_vfio_pci_option(opt).ok_or_else(|| anyhow!("Malformed VFIO option {:?}", opt))?;
         let host =
             pci::Address::from_str(host).context("Bad host PCI address in VFIO option {:?}")?;
         let pcipath = pci::Path::from_str(pcipath)?;
@@ -833,7 +837,9 @@ async fn add_device(device: &Device, sandbox: &Arc<Mutex<Sandbox>>) -> Result<Sp
         DRIVER_MMIO_BLK_TYPE => virtiommio_blk_device_handler(device, sandbox).await,
         DRIVER_NVDIMM_TYPE => virtio_nvdimm_device_handler(device, sandbox).await,
         DRIVER_SCSI_TYPE => virtio_scsi_device_handler(device, sandbox).await,
-        DRIVER_VFIO_GK_TYPE | DRIVER_VFIO_TYPE => vfio_device_handler(device, sandbox).await,
+        DRIVER_VFIO_PCI_GK_TYPE | DRIVER_VFIO_PCI_TYPE => {
+            vfio_pci_device_handler(device, sandbox).await
+        }
         _ => Err(anyhow!("Unknown device type {}", device.field_type)),
     }
 }
@@ -1492,13 +1498,13 @@ mod tests {
     }
 
     #[test]
-    fn test_split_vfio_option() {
+    fn test_split_vfio_pci_option() {
         assert_eq!(
-            split_vfio_option("0000:01:00.0=02/01"),
+            split_vfio_pci_option("0000:01:00.0=02/01"),
             Some(("0000:01:00.0", "02/01"))
         );
-        assert_eq!(split_vfio_option("0000:01:00.0=02/01=rubbish"), None);
-        assert_eq!(split_vfio_option("0000:01:00.0"), None);
+        assert_eq!(split_vfio_pci_option("0000:01:00.0=02/01=rubbish"), None);
+        assert_eq!(split_vfio_pci_option("0000:01:00.0"), None);
     }
 
     #[test]

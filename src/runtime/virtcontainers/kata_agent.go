@@ -1117,10 +1117,10 @@ func (k *kataAgent) appendVfioDevice(dev ContainerDevice, device api.Device, c *
 
 	groupNum := filepath.Base(dev.ContainerPath)
 
-	// Each /dev/vfio/NN device represents a VFIO group, which
-	// could include several PCI devices.  So we give group
-	// information in the main structure, then list each
-	// individual PCI device in the Options array.
+	// For VFIO-PCI, each /dev/vfio/NN device represents a VFIO group,
+	// which could include several PCI devices. So we give group
+	// information in the main structure, then list each individual PCI
+	// device in the Options array.
 	//
 	// Each option is formatted as "DDDD:BB:DD.F=<pcipath>"
 	// DDDD:BB:DD.F is the device's PCI address on the
@@ -1128,9 +1128,9 @@ func (k *kataAgent) appendVfioDevice(dev ContainerDevice, device api.Device, c *
 	// (see qomGetPciPath() for details).
 	kataDevice := &grpc.Device{
 		ContainerPath: dev.ContainerPath,
-		Type:          kataVfioDevType,
+		Type:          kataVfioPciDevType,
 		Id:            groupNum,
-		Options:       make([]string, len(devList)),
+		Options:       nil,
 	}
 
 	// We always pass the device information to the agent, since
@@ -1138,7 +1138,7 @@ func (k *kataAgent) appendVfioDevice(dev ContainerDevice, device api.Device, c *
 	// on the vfio_mode, we need to use a different device type so
 	// the agent can handle it properly
 	if c.sandbox.config.VfioMode == config.VFIOModeGuestKernel {
-		kataDevice.Type = kataVfioGuestKernelDevType
+		kataDevice.Type = kataVfioPciGuestKernelDevType
 	}
 
 	for i, pciDev := range devList {

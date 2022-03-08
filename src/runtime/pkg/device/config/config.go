@@ -258,11 +258,11 @@ const (
 	// VFIODeviceErrorType is the error type of VFIO device
 	VFIODeviceErrorType VFIODeviceType = iota
 
-	// VFIODeviceNormalType is a normal VFIO device type
-	VFIODeviceNormalType
+	// VFIOPCIDeviceNormalType is a normal VFIO PCI device type
+	VFIOPCIDeviceNormalType
 
-	// VFIODeviceMediatedType is a VFIO mediated device type
-	VFIODeviceMediatedType
+	// VFIOPCIDeviceMediatedType is a VFIO PCI mediated device type
+	VFIOPCIDeviceMediatedType
 )
 
 // VFIODev represents a VFIO drive used for hotplugging
