@@ -2,13 +2,7 @@
 
 # Kata Containers
 
-Welcome to Kata Containers!
-
-This repository is the home of the Kata Containers code for the 2.0 and newer
-releases.
-
-If you want to learn about Kata Containers, visit the main
-[Kata Containers website](https://katacontainers.io).
+Welcome to Wobble!
 
 ## Introduction
 
@@ -141,6 +135,7 @@ Kata Containers is now
 However, packaging scripts and metadata are still used to generate snap and GitHub releases. See
 the [components](#components) section for further details.
 
-## Glossary of Terms
+## Moo
 
-See the [glossary of terms](https://github.com/kata-containers/kata-containers/wiki/Glossary) related to Kata Containers.
+Foo foo bar.
+Testing, testing, 1, 2, 3.
