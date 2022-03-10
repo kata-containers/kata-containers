@@ -28,7 +28,7 @@ die() {
 
 usage() {
 	return_code=${1:-0}
-	cat <<EOT
+	cat <<EOF
 Usage:
 
 ${script_name} [options]  <version>
@@ -41,7 +41,7 @@ options:
 
 -h      : show this help
 -p      : push image to github
-EOT
+EOF
 
 	exit "${return_code}"
 }
