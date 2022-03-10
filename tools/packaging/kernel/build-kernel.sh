@@ -65,7 +65,7 @@ source "${packaging_scripts_dir}/lib.sh"
 
 usage() {
 	exit_code="$1"
-	cat <<EOT
+	cat <<EOF
 Overview:
 
 	Build a kernel for Kata Containers
@@ -99,7 +99,7 @@ Options:
 	-t <hypervisor>	: Hypervisor_target.
 	-v <version>	: Kernel version to use if kernel path not provided.
 	-x <type>	: Confidential guest protection type, such as sev and tdx
-EOT
+EOF
 	exit "$exit_code"
 }
 

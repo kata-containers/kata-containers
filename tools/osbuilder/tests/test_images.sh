@@ -53,7 +53,7 @@ source "${project_dir}/scripts/lib.sh"
 
 usage()
 {
-	cat <<EOT
+	cat <<EOF
 Usage: $script_name [options] [command | <distro>]
 
 Options:
@@ -72,7 +72,7 @@ Otherwise, tests are run on all distros.
 $(basename ${test_config}) includes a list of distros to exclude from testing,
 depending on the detected test environment. However, when a <distro> is specified,
 distro exclusion based on $(basename ${test_config}) is not enforced.
-EOT
+EOF
 }
 
 # Add an entry to the specified stats file

@@ -31,7 +31,7 @@ info() {
 
 usage(){
 	exit_code="$1"
-	cat <<EOT
+	cat <<EOF
 Usage:
 
 ${script_name} [options]
@@ -43,7 +43,7 @@ Options
 -d <path> : destination path, path where go will be installed.
 -f        : enable force install, remove existent go pkg before installation.
 -h        : display this help.
-EOT
+EOF
 
 	exit "$exit_code"
 }

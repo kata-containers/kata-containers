@@ -94,10 +94,10 @@ function configure_different_shims_base() {
 			fi
 		fi
 
-		cat << EOT | tee "$shim_file"
+		cat << EOF | tee "$shim_file"
 #!/usr/bin/env bash
 KATA_CONF_FILE=/opt/kata/share/defaults/kata-containers/configuration-${shim}.toml /opt/kata/bin/containerd-shim-kata-v2 "\$@"
-EOT
+EOF
 		chmod +x "$shim_file"
 
 		if [ "${shim}" == "${default_shim}" ]; then
@@ -132,7 +132,7 @@ function configure_crio_runtime() {
 	local kata_path="/usr/local/bin/containerd-shim-${runtime}-v2"
 	local kata_conf="crio.runtime.runtimes.${runtime}"
 
-	cat <<EOT | tee -a "$crio_drop_in_conf_file"
+	cat <<EOF | tee -a "$crio_drop_in_conf_file"
 
 # Path to the Kata Containers runtime binary that uses the $1
 [$kata_conf]
@@ -140,7 +140,7 @@ function configure_crio_runtime() {
 	runtime_type = "vm"
 	runtime_root = "/run/vc"
 	privileged_without_host_devices = true
-EOT
+EOF
 }
 
 function configure_crio() {
@@ -178,22 +178,22 @@ function configure_containerd_runtime() {
 		echo "Configuration exists for $runtime_table, overwriting"
 		sed -i "/\[$runtime_table\]/,+1s#runtime_type.*#runtime_type = \"${runtime_type}\"#" $containerd_conf_file
 	else
-		cat <<EOT | tee -a "$containerd_conf_file"
+		cat <<EOF | tee -a "$containerd_conf_file"
 [$runtime_table]
   runtime_type = "${runtime_type}"
   privileged_without_host_devices = true
   pod_annotations = ["io.katacontainers.*"]
-EOT
+EOF
 	fi
 
 	if grep -q "\[$options_table\]" $containerd_conf_file; then
 		echo "Configuration exists for $options_table, overwriting"
 		sed -i "/\[$options_table\]/,+1s#ConfigPath.*#ConfigPath = \"${config_path}\"#" $containerd_conf_file
 	else
-		cat <<EOT | tee -a "$containerd_conf_file"
+		cat <<EOF | tee -a "$containerd_conf_file"
   [$options_table]
     ConfigPath = "${config_path}"
-EOT
+EOF
 	fi
 }
 
