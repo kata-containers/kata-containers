@@ -55,7 +55,7 @@ gen_version_file() {
 	# see https://github.com/semver/semver/issues/145
 	kata_version=$(get_kata_version)
 	kata_version=${kata_version/-/\~}
-	cat > "$versions_txt" <<EOT
+	cat > "$versions_txt" <<EOF
 # This is a generated file from ${script_name}
 
 kata_version=${kata_version}
@@ -70,7 +70,7 @@ kernel_version=${kernel_version}
 
 # Golang
 go_version=${golang_version}
-EOT
+EOF
 }
 
 die() {
@@ -85,7 +85,7 @@ die() {
 
 usage() {
 	exit_code=$"${1:-0}"
-	cat <<EOT
+	cat <<EOF
 Usage:
 ${script_name} [--compare | -h | --help] <kata-branch>
 
@@ -98,7 +98,7 @@ Options:
 --compare         Only compare the kata version at branch <kata-branch> with the
                   one in ${versions_txt} and leave the file untouched.
 --head            Use <kata-branch>'s head to generate the versions file.
-EOT
+EOF
 	exit "${exit_code}"
 }
 

@@ -72,7 +72,7 @@ readonly mem_boundary_mb=128
 source "${lib_file}"
 
 usage() {
-	cat <<EOT
+	cat <<EOF
 Usage: ${script_name} [options] <rootfs-dir>
 	This script will create a Kata Containers image file of
 	an adequate size based on the <rootfs-dir> directory.
@@ -117,7 +117,7 @@ Kernels and hypervisors that support DAX/NVDIMM read the MBR #2, otherwise MBR #
 [1] - https://github.com/kata-containers/kata-containers/blob/main/tools/osbuilder/image-builder/nsdax.gpl.c
 [2] - https://github.com/torvalds/linux/blob/master/drivers/nvdimm/pfn.h
 
-EOT
+EOF
 }
 
 
