@@ -43,7 +43,7 @@ readonly link_dir=${link_dir:-/usr/bin}
 
 readonly tmpdir=$(mktemp -d)
 
-readonly warnings=$(cat <<EOT
+readonly warnings=$(cat <<EOF
 WARNINGS:
 
 - Use distro-packages where possible
@@ -63,7 +63,7 @@ WARNINGS:
   and $containerd_project from binary release packages. These versions may
   not have been tested with your distribution version.
 
-EOT
+EOF
 )
 
 die()
@@ -199,7 +199,7 @@ github_download_release()
 
 usage()
 {
-	cat <<EOT
+	cat <<EOF
 Usage: $script_name [options] [<kata-version> [<containerd-version>]]
 
 Description: Install $kata_project [1] (and optionally $containerd_project [2])
@@ -235,7 +235,7 @@ Advice:
 
   $ kata-runtime check --only-list-releases
 
-EOT
+EOF
 }
 
 # Determine if the system only supports cgroups v2.
@@ -480,7 +480,7 @@ configure_containerd()
 		"$script_name")
 
 	sudo grep -q "$kata_runtime_type" "$cfg" || {
-		cat <<-EOT | sudo tee -a "$cfg"
+		cat <<-EOF | sudo tee -a "$cfg"
 		# $comment_text
 		[plugins]
 		  [plugins."io.containerd.grpc.v1.cri"]
@@ -489,7 +489,7 @@ configure_containerd()
 		      [plugins."io.containerd.grpc.v1.cri".containerd.runtimes]
 		        [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.${kata_runtime_name}]
 		          runtime_type = "${kata_runtime_type}"
-		EOT
+		EOF
 
 		modified="true"
 	}
@@ -501,11 +501,11 @@ configure_containerd()
 			grep -E "^\s*\<level\>\s*=\s*.*\<debug\>" || true)
 
 		[ -n "$debug_enabled" ] || {
-			cat <<-EOT | sudo tee -a "$cfg"
+			cat <<-EOF | sudo tee -a "$cfg"
 			# $comment_text
 			[debug]
 				level = "debug"
-			EOT
+			EOF
 		}
 
 		modified="true"
