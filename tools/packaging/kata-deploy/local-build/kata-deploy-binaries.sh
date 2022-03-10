@@ -50,7 +50,7 @@ error() {
 
 usage() {
 	return_code=${1:-0}
-	cat <<EOT
+	cat <<EOF
 This script is used as part of the ${project} release process.
 It is used to create a tarball with static binaries.
 
@@ -74,7 +74,7 @@ options:
 	rootfs-image
 	rootfs-initrd
 	shim-v2
-EOT
+EOF
 
 	exit "${return_code}"
 }
