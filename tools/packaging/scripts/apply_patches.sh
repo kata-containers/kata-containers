@@ -12,7 +12,7 @@ script_dir="$(realpath $(dirname $0))"
 patches_dir="$1"
 
 if [ -z "$patches_dir" ]; then
-	cat <<-EOT
+	cat <<-EOF
 	Apply patches to the sources at the current directory.
 
 	Patches are expected to be named in the standard git-format-patch(1) format where
@@ -30,7 +30,7 @@ if [ -z "$patches_dir" ]; then
 	    $0 PATCHES_DIR
 	Where:
 	    PATCHES_DIR is the directory containing the patches
-	EOT
+	EOF
 	exit 1
 fi
 

@@ -223,12 +223,12 @@ bump_repo() {
 
 	info "Creating PR message"
 	notes_file=notes.md
-	cat <<EOT >"${notes_file}"
+	cat <<EOF >"${notes_file}"
 # Kata Containers ${new_version}
 
 $(get_changes "$current_version")
 
-EOT
+EOF
 	cat "${notes_file}"
 
 	if (echo "${current_version}" | grep "alpha") && (echo "${new_version}" | grep -v "alpha");then
@@ -282,7 +282,7 @@ EOT
 
 usage() {
 	exit_code="$1"
-	cat <<EOT
+	cat <<EOF
 Usage:
 	${script_name} [options] <args>
 Args:
@@ -293,7 +293,7 @@ Example:
 Options
 	-h        : Show this help
 	-p        : create a PR
-EOT
+EOF
 	exit "$exit_code"
 }
 

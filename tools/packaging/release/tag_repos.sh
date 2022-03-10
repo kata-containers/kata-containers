@@ -27,16 +27,16 @@ source "${script_dir}/../scripts/lib.sh"
 
 function usage() {
 
-	cat <<EOT
+	cat <<EOF
 Usage: ${script_name} [options] <args>
 This script creates a new release for ${PROJECT}.
 It tags and create release for:
-EOT
+EOF
 	for r in "${repos[@]}"; do
 		echo "  - ${r}"
 	done
 
-	cat <<EOT
+	cat <<EOF
 
 Args:
 status : Get Current ${PROJECT} tags status
@@ -48,7 +48,7 @@ Options:
 -h         : Show this help
 -p         : push tags
 
-EOT
+EOF
 
 }
 
