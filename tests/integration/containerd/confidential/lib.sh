@@ -261,8 +261,7 @@ clear_kernel_params() {
 enable_agent_debug() {
 	load_RUNTIME_CONFIG_PATH
 
-	sed -i -e 's/^kernel_params = "\(.*\)"/kernel_params = "\1 agent.log=debug initcall_debug"/g' \
-		"$RUNTIME_CONFIG_PATH"
+	add_kernel_params "agent.log=debug" "initcall_debug"
 	# TODO LATER - try and work out why this is so we can replace the 2 lines below and stop it being so brittle sed -i -e 's/^# *\(enable_debug\).*=.*$/\1 = true/g' /etc/kata-containers/configuration.toml
 	sed -z -i 's/\(# If enabled, make the agent display debug-level messages.\)\n\(# (default: disabled)\)\n#\(enable_debug = true\)\n/\1\n\2\n\3\n/' \
 		"$RUNTIME_CONFIG_PATH"
