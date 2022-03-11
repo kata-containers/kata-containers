@@ -312,10 +312,12 @@ To run a container with Kata Containers through the containerd command line, you
 
 ```bash
 $ sudo ctr image pull docker.io/library/busybox:latest
-$ sudo ctr run --runtime io.containerd.run.kata.v2 -t --rm docker.io/library/busybox:latest hello sh
+$ sudo ctr run --cni --runtime io.containerd.run.kata.v2 -t --rm docker.io/library/busybox:latest hello sh
 ```
 
 This launches a BusyBox container named `hello`, and it will be removed by `--rm` after it quits.
+The `--cni` flag enables CNI networking for the container. Without this flag, a container with just a
+loopback interface is created.
 
 ### Launch Pods with `crictl` command line
 
