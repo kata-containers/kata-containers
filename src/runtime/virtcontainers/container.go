@@ -14,6 +14,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -1144,7 +1145,18 @@ func (c *Container) signalProcess(ctx context.Context, processID string, signal 
 		return fmt.Errorf("Container not ready, running or paused, impossible to signal the container")
 	}
 
-	return c.sandbox.agent.signalProcess(ctx, c, processID, signal, all)
+	// kill(2) method can return ESRCH in certain cases, which is not handled by containerd cri server in container_stop.go.
+	// CRIO server also doesn't handle ESRCH. So kata runtime will swallow it here.
+	var err error
+	if err = c.sandbox.agent.signalProcess(ctx, c, processID, signal, all); err != nil &&
+		strings.Contains(err.Error(), "ESRCH: No such process") {
+		c.Logger().WithFields(logrus.Fields{
+			"container":  c.id,
+			"process-id": processID,
+		}).Warn("signal encounters ESRCH, process already finished")
+		return nil
+	}
+	return err
 }
 
 func (c *Container) winsizeProcess(ctx context.Context, processID string, height, width uint32) error {
