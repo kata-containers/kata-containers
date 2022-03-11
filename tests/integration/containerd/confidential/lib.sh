@@ -154,9 +154,14 @@ crictl_create_cc_container() {
 # Parameters:
 #	$1: "on" to activate the service, or "off" to turn it off.
 #
+# Environment variables:
+#	RUNTIME_CONFIG_PATH - path to kata's configuration.toml. If it is not
+#			      export then it will figure out the path via
+#			      `kata-runtime env` and export its value.
+#
 switch_image_service_offload() {
 	# Load the RUNTIME_CONFIG_PATH variable.
-	extract_kata_env
+	load_RUNTIME_CONFIG_PATH
 
 	case "$1" in
 		"on")
@@ -225,7 +230,8 @@ crictl_record_cc_pod_console() {
 #
 add_kernel_params() {
 	local params="$@"
-	_load_RUNTIME_CONFIG_PATH
+	load_RUNTIME_CONFIG_PATH
+
 	sed -i -e 's#^\(kernel_params\) = "\(.*\)"#\1 = "\2 '"$params"'"#g' \
 		"$RUNTIME_CONFIG_PATH"
 }
@@ -238,7 +244,8 @@ add_kernel_params() {
 #			      `kata-runtime env` and export its value.
 #
 clear_kernel_params() {
-	_load_RUNTIME_CONFIG_PATH
+	load_RUNTIME_CONFIG_PATH
+
 	sed -i -e 's#^\(kernel_params\) = "\(.*\)"#\1 = ""#g' \
 		"$RUNTIME_CONFIG_PATH"
 }
@@ -252,9 +259,7 @@ clear_kernel_params() {
 #			      `kata-runtime env` and export its value.
 #
 enable_agent_debug() {
-	if [ -z "$RUNTIME_CONFIG_PATH" ]; then
-		extract_kata_env
-	fi
+	load_RUNTIME_CONFIG_PATH
 
 	sed -i -e 's/^kernel_params = "\(.*\)"/kernel_params = "\1 agent.log=debug initcall_debug"/g' \
 		"$RUNTIME_CONFIG_PATH"
@@ -271,9 +276,8 @@ enable_agent_debug() {
 #			      `kata-runtime env` and export its value.
 #
 enable_agent_console() {
-	if [ -z "$RUNTIME_CONFIG_PATH" ]; then
-		extract_kata_env
-	fi
+	load_RUNTIME_CONFIG_PATH
+
 	sed -i -e 's/^# *\(debug_console_enabled\).*=.*$/\1 = true/g' \
 		"$RUNTIME_CONFIG_PATH"
 }
@@ -286,16 +290,15 @@ enable_agent_console() {
 #                             `kata-runtime env` and export its value.
 #
 enable_runtime_debug() {
-	if [ -z "$RUNTIME_CONFIG_PATH" ]; then
-		extract_kata_env
-	fi
+	load_RUNTIME_CONFIG_PATH
+
 	sed -z -i 's/\(# system log\)\n\(# (default: disabled)\)\n#\(enable_debug = true\)\n/\1\n\2\n\3\n/' \
 		"$RUNTIME_CONFIG_PATH"
 }
 
 enable_full_debug() {
 	# Load the RUNTIME_CONFIG_PATH variable.
-	extract_kata_env
+	load_RUNTIME_CONFIG_PATH
 
 	# Note: if all enable_debug are set to true the agent console doesn't seem to work, so only enable the agent and runtime versions
 	enable_runtime_debug
@@ -345,12 +348,12 @@ configure_cc_containerd() {
 }
 
 #
-# Internal functions.
+# Auxiliar functions.
 #
 
 # Export the RUNTIME_CONFIG_PATH variable if it not set already.
 #
-_load_RUNTIME_CONFIG_PATH() {
+load_RUNTIME_CONFIG_PATH() {
 	if [ -z "$RUNTIME_CONFIG_PATH" ]; then
 		extract_kata_env
 	fi
