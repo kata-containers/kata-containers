@@ -72,7 +72,6 @@ $ command -v containerd
 
 ### Install CNI plugins
 
-> **Note:** You do not need to install CNI plugins if you do not want to use containerd with Kubernetes.
 > If you have installed Kubernetes with `kubeadm`, you might have already installed the CNI plugins.
 
 You can manually install CNI plugins as follows:
