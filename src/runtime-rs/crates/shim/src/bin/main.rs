@@ -16,8 +16,10 @@ use nix::{
 };
 use shim::{config, Args, Error, ShimExecutor};
 
-const DEFAULT_RUNTIME_WORKER_THREADS: usize = 2;
-const ENV_RUNTIME_WORKER_THREADS: &str = "RUNTIME_WORKER_THREADS";
+// default tokio runtime worker threads
+const DEFAULT_TOKIO_RUNTIME_WORKER_THREADS: usize = 2;
+// env to config tokio runtime worker threads
+const ENV_TOKIO_RUNTIME_WORKER_THREADS: &str = "TOKIO_RUNTIME_WORKER_THREADS";
 
 #[derive(Debug)]
 enum Action {
@@ -116,10 +118,10 @@ fn show_version(err: Option<anyhow::Error>) {
 }
 
 fn get_tokio_runtime() -> Result<tokio::runtime::Runtime> {
-    let worker_threads = std::env::var(ENV_RUNTIME_WORKER_THREADS)
+    let worker_threads = std::env::var(ENV_TOKIO_RUNTIME_WORKER_THREADS)
         .unwrap_or_default()
         .parse()
-        .unwrap_or(DEFAULT_RUNTIME_WORKER_THREADS);
+        .unwrap_or(DEFAULT_TOKIO_RUNTIME_WORKER_THREADS);
 
     let rt = tokio::runtime::Builder::new_multi_thread()
         .worker_threads(worker_threads)

@@ -32,7 +32,8 @@ impl ShimExecutor {
     }
 
     fn do_start(&mut self) -> Result<PathBuf> {
-        let spec = self.load_oci_spec()?;
+        let bundle_path = self.get_bundle_path().context("get bundle path")?;
+        let spec = self.load_oci_spec(&bundle_path)?;
         let (container_type, id) = k8s::container_type_with_id(&spec);
 
         match container_type {
@@ -40,8 +41,8 @@ impl ShimExecutor {
                 let address = self.socket_address(&self.args.id)?;
                 let socket = new_listener(&address)?;
                 let child_pid = self.create_shim_process(socket)?;
-                self.write_pid_file(child_pid)?;
-                self.write_address(&address)?;
+                self.write_pid_file(&bundle_path, child_pid)?;
+                self.write_address(&bundle_path, &address)?;
                 Ok(address)
             }
             ContainerType::PodContainer => {
@@ -49,8 +50,8 @@ impl ShimExecutor {
                     .ok_or(Error::InvalidArgument)
                     .context("get sid for container")?;
                 let (address, pid) = self.get_shim_info_from_sandbox(&sid)?;
-                self.write_pid_file(pid)?;
-                self.write_address(&address)?;
+                self.write_pid_file(&bundle_path, pid)?;
+                self.write_address(&bundle_path, &address)?;
                 Ok(address)
             }
         }
@@ -200,8 +201,8 @@ mod tests {
         let executor = ShimExecutor::new(args);
 
         let addr = executor.socket_address(&executor.args.id).unwrap();
-        executor.write_address(&addr).unwrap();
-        executor.write_pid_file(1267).unwrap();
+        executor.write_address(bundle_path, &addr).unwrap();
+        executor.write_pid_file(bundle_path, 1267).unwrap();
 
         let container_id = gen_id(16);
         let bundle_path2 = &dir.path().join(&container_id);
