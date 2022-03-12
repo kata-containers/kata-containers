@@ -30,29 +30,30 @@ impl ShimExecutor {
         ShimExecutor { args }
     }
 
-    pub(crate) fn load_oci_spec(&self) -> Result<oci::Spec> {
-        let bundle_path = self.get_bundle_path()?;
-        let spec_file = bundle_path.join("config.json");
-
+    pub(crate) fn load_oci_spec(&self, path: &Path) -> Result<oci::Spec> {
+        let spec_file = path.join("config.json");
         oci::Spec::load(spec_file.to_str().unwrap_or_default()).context("load spec")
     }
 
-    pub(crate) fn write_address(&self, address: &Path) -> Result<()> {
-        let dir = self.get_bundle_path()?;
-        let file_path = &dir.join("address");
+    pub(crate) fn write_address(&self, path: &Path, address: &Path) -> Result<()> {
+        let file_path = &path.join("address");
         std::fs::write(file_path, address.as_os_str().as_bytes())
             .context(Error::FileWrite(format!("{:?}", &file_path)))
     }
 
-    pub(crate) fn write_pid_file(&self, pid: u32) -> Result<()> {
-        let dir = self.get_bundle_path()?;
-        let file_path = &dir.join(SHIM_PID_FILE);
+    pub(crate) fn write_pid_file(&self, path: &Path, pid: u32) -> Result<()> {
+        let file_path = &path.join(SHIM_PID_FILE);
         std::fs::write(file_path, format!("{}", pid))
             .context(Error::FileWrite(format!("{:?}", &file_path)))
     }
 
-    pub(crate) fn read_pid_file(&self, bundle_path: &Path) -> Result<u32> {
-        let file_path = bundle_path.join(SHIM_PID_FILE);
+    // There may be a multi-container for a Pod, each container has a bundle path, we need to write
+    // the PID to the file for each container in their own bundle path, so we can directly get the
+    // `bundle_path()` and write the PID.
+    // While the real runtime process's PID is stored in the file in the sandbox container's bundle
+    // path, so needs to read from the sandbox container's bundle path.
+    pub(crate) fn read_pid_file(&self, path: &Path) -> Result<u32> {
+        let file_path = path.join(SHIM_PID_FILE);
         let data = std::fs::read_to_string(&file_path)
             .context(Error::FileOpen(format!("{:?}", file_path)))?;
 
@@ -71,6 +72,10 @@ impl ShimExecutor {
         let data = [&self.args.address, &self.args.namespace, id].join("/");
         let mut hasher = sha2::Sha256::new();
         hasher.update(data);
+
+        // Follow
+        // https://github.com/containerd/containerd/blob/main/runtime/v2/shim/util_unix.go#L68 to
+        // generate a shim socket path.
         Ok(PathBuf::from(format!(
             "unix://{}/s/{:X}",
             SOCKET_ROOT,
@@ -103,13 +108,15 @@ mod tests {
 
         let executor = ShimExecutor::new(args);
 
-        executor.write_address(Path::new("12345")).unwrap();
+        executor
+            .write_address(bundle_path, Path::new("12345"))
+            .unwrap();
         let dir = executor.get_bundle_path().unwrap();
         let file_path = &dir.join("address");
         let buf = std::fs::read_to_string(file_path).unwrap();
         assert_eq!(&buf, "12345");
 
-        executor.write_pid_file(1267).unwrap();
+        executor.write_pid_file(&dir, 1267).unwrap();
         let read_pid = executor.read_pid_file(&dir).unwrap();
         assert_eq!(read_pid, 1267);
     }
