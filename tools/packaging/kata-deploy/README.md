@@ -143,7 +143,7 @@ $ kubectl -n kube-system wait --timeout=10m --for=delete -l name=kata-deploy pod
 
 After ensuring kata-deploy has been deleted, cleanup the cluster:
 ```sh
-$ kubectl apply -f https://raw.githubusercontent.com/kata-containers/kata-containers/main/tools/packaging/kata-deploy/kata-cleanup/base/kata-cleanup-stabe.yaml
+$ kubectl apply -f https://raw.githubusercontent.com/kata-containers/kata-containers/main/tools/packaging/kata-deploy/kata-cleanup/base/kata-cleanup-stable.yaml
 ```
 
 The cleanup daemon-set will run a single time, cleaning up the node-label, which makes it difficult to check in an automated fashion.
