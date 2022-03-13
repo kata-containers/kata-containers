@@ -382,7 +382,7 @@ fn devices_oci_to_ttrpc(
         device.set_Major(d.major.unwrap_or(0));
         device.set_Minor(d.minor.unwrap_or(0));
         device.set_Access(d.access.clone());
-        device.set_Type(d.r#type.clone());
+        device.set_Type(d.r#type.as_ref().unwrap_or(&"a".to_string()).clone());
         device.set_Allow(d.allow);
         ttrpc_devices.push(device);
     }

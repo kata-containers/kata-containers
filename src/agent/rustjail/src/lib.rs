@@ -235,6 +235,12 @@ pub fn resources_grpc_to_oci(res: &grpc::LinuxResources) -> oci::LinuxResources 
     let devices = {
         let mut d = Vec::new();
         for dev in res.Devices.iter() {
+            let dev_type = if dev.Type.is_empty() {
+                None
+            } else {
+                Some(dev.Type.clone())
+            };
+
             let major = if dev.Major == -1 {
                 None
             } else {
@@ -248,7 +254,7 @@ pub fn resources_grpc_to_oci(res: &grpc::LinuxResources) -> oci::LinuxResources 
             };
             d.push(oci::LinuxDeviceCgroup {
                 allow: dev.Allow,
-                r#type: dev.Type.clone(),
+                r#type: dev_type,
                 major,
                 minor,
                 access: dev.Access.clone(),
