@@ -321,6 +321,7 @@ func WaitLocalProcess(pid int, timeoutSecs uint, initialSignal syscall.Signal, l
 	if initialSignal != syscall.Signal(0) {
 		if err = syscall.Kill(pid, initialSignal); err != nil {
 			if err == syscall.ESRCH {
+				logger.WithField("pid", pid).Warnf("kill encounters ESRCH, process already finished")
 				return nil
 			}
 
