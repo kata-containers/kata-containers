@@ -13,11 +13,16 @@ use std::process::Command;
 
 use crate::{eother, sl};
 
-// nix filesystem_type for different target_os
+// nix filesystem_type for different libc and architectures
 #[cfg(all(target_os = "linux", target_env = "musl"))]
 type FsType = libc::c_ulong;
-#[cfg(all(target_os = "linux", not(any(target_env = "musl"))))]
+#[cfg(all(
+    target_os = "linux",
+    not(any(target_env = "musl", target_arch = "s390x"))
+))]
 type FsType = libc::__fsword_t;
+#[cfg(all(target_os = "linux", not(target_env = "musl"), target_arch = "s390x"))]
+type FsType = libc::c_uint;
 
 // from linux.git/fs/fuse/inode.c: #define FUSE_SUPER_MAGIC 0x65735546
 const FUSE_SUPER_MAGIC: FsType = 0x65735546;
