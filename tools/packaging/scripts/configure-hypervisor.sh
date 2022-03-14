@@ -72,7 +72,7 @@ die() {
 
 # Display usage to stdout.
 usage() {
-	cat <<EOT
+	cat <<EOF
 Overview:
 
 	Display configure options required to build the specified
@@ -94,7 +94,7 @@ Example:
 
 	$ $script_name qemu
 
-EOT
+EOF
 }
 
 show_tags_header() {
@@ -102,10 +102,10 @@ show_tags_header() {
 	local key
 	local value
 
-	cat <<EOT
+	cat <<EOF
 # Recognised option tags:
 #
-EOT
+EOF
 
 	# sort the tags
 	keys=${!recognised_tags[@]}

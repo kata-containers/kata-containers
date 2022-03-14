@@ -168,7 +168,7 @@ create_summary_file()
 	local -r agentdir="${script_dir}/../../../"
 	local -r agent_version=$(cat ${agentdir}/VERSION)
 
-	cat >"$file"<<-EOT
+	cat >"$file"<<-EOF
 	---
 	osbuilder:
 	  url: "${osbuilder_url}"
@@ -190,7 +190,7 @@ ${extra}
 	  name: "${AGENT_BIN}"
 	  version: "${agent_version}"
 	  agent-is-init-daemon: "${AGENT_INIT}"
-EOT
+EOF
 
 	if [ "${SKOPEO}" = "yes" ]; then
 		cat >> "${file}" <<-EOF

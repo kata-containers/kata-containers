@@ -321,25 +321,38 @@ fn allocate_hugepages(logger: &Logger, options: &[String]) -> Result<()> {
 
     // sysfs entry is always of the form hugepages-${pagesize}kB
     // Ref: https://www.kernel.org/doc/Documentation/vm/hugetlbpage.txt
-    let path = Path::new(SYS_FS_HUGEPAGES_PREFIX).join(format!("hugepages-{}kB", pagesize / 1024));
-
-    if !path.exists() {
-        fs::create_dir_all(&path).context("create hugepages-size directory")?;
-    }
+    let path = Path::new(SYS_FS_HUGEPAGES_PREFIX)
+        .join(format!("hugepages-{}kB", pagesize / 1024))
+        .join("nr_hugepages");
 
     // write numpages to nr_hugepages file.
-    let path = path.join("nr_hugepages");
     let numpages = format!("{}", size / pagesize);
     info!(logger, "write {} pages to {:?}", &numpages, &path);
 
     let mut file = OpenOptions::new()
         .write(true)
-        .create(true)
         .open(&path)
         .context(format!("open nr_hugepages directory {:?}", &path))?;
 
     file.write_all(numpages.as_bytes())
         .context(format!("write nr_hugepages failed: {:?}", &path))?;
+
+    // Even if the write succeeds, the kernel isn't guaranteed to be
+    // able to allocate all the pages we requested.  Verify that it
+    // did.
+    let verify = fs::read_to_string(&path).context(format!("reading {:?}", &path))?;
+    let allocated = verify
+        .trim_end()
+        .parse::<u64>()
+        .map_err(|_| anyhow!("Unexpected text {:?} in {:?}", &verify, &path))?;
+    if allocated != size / pagesize {
+        return Err(anyhow!(
+            "Only allocated {} of {} hugepages of size {}",
+            allocated,
+            numpages,
+            pagesize
+        ));
+    }
 
     Ok(())
 }

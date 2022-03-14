@@ -23,7 +23,7 @@ AGENT_INIT=${AGENT_INIT:-no}
 usage()
 {
 	error="${1:-0}"
-	cat <<EOT
+	cat <<EOF
 Usage: ${script_name} [options] <rootfs-dir>
 	This script creates a Kata Containers initrd image file based on the
 	<rootfs-dir> directory.
@@ -38,7 +38,7 @@ Extra environment variables:
 		    DEFAULT: kata-agent
 	AGENT_INIT: use kata agent as init process
 		    DEFAULT: no
-EOT
+EOF
 exit "${error}"
 }
 

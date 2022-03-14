@@ -63,7 +63,7 @@ typeset init=
 usage()
 {
 	error="${1:-0}"
-	cat <<EOT
+	cat <<EOF
 
 Usage: ${script_name} [options] [DISTRO]
 
@@ -163,7 +163,7 @@ Refer to the Platform-OS Compatibility Matrix for more details on the supported
 architectures:
 https://github.com/kata-containers/kata-containers/tree/main/tools/osbuilder#platform-distro-compatibility-matrix
 
-EOT
+EOF
 exit "${error}"
 }
 
@@ -497,7 +497,7 @@ setup_rootfs()
 		local unitFile="./etc/systemd/system/tmp.mount"
 		info "Install tmp.mount in ./etc/systemd/system"
 		mkdir -p `dirname "$unitFile"`
-		cp ./usr/share/systemd/tmp.mount "$unitFile" || cat > "$unitFile" << EOT
+		cp ./usr/share/systemd/tmp.mount "$unitFile" || cat > "$unitFile" << EOF
 #  This file is part of systemd.
 #
 #  systemd is free software; you can redistribute it and/or modify it
@@ -520,7 +520,7 @@ What=tmpfs
 Where=/tmp
 Type=tmpfs
 Options=mode=1777,strictatime,nosuid,nodev
-EOT
+EOF
 	fi
 
 	popd  >> /dev/null
@@ -543,12 +543,12 @@ EOT
 	esac
 
 	info "Configure chrony file ${chrony_conf_file}"
-	cat >> "${chrony_conf_file}" <<EOT
+	cat >> "${chrony_conf_file}" <<EOF
 refclock PHC /dev/ptp0 poll 3 dpoll -2 offset 0
 # Step the system clock instead of slewing it if the adjustment is larger than
 # one second, at any time
 makestep 1 -1
-EOT
+EOF
 
 	# Comment out ntp sources for chrony to be extra careful
 	# Reference:  https://chrony.tuxfamily.org/doc/3.4/chrony.conf.html
