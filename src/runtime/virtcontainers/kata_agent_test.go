@@ -390,10 +390,10 @@ func TestHandleBlockVolume(t *testing.T) {
 	mounts = append(mounts, vMount, bMount, dMount)
 
 	tmpDir := "/vhost/user/dir"
-	dm := manager.NewDeviceManager(manager.VirtioBlock, true, tmpDir, devices)
+	dm := manager.NewDeviceManager(config.VirtioBlock, true, tmpDir, devices)
 
 	sConfig := SandboxConfig{}
-	sConfig.HypervisorConfig.BlockDeviceDriver = manager.VirtioBlock
+	sConfig.HypervisorConfig.BlockDeviceDriver = config.VirtioBlock
 	sandbox := Sandbox{
 		id:         "100",
 		containers: containers,
