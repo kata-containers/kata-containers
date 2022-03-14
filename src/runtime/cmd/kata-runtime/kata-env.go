@@ -109,6 +109,7 @@ type HypervisorInfo struct {
 	SharedFS             string
 	VirtioFSDaemon       string
 	SocketPath           string
+	QmpSocks             []string
 	Msize9p              uint32
 	MemorySlots          uint32
 	PCIeRootPort         uint32
@@ -317,6 +318,7 @@ func getHypervisorInfo(config oci.RuntimeConfig) (HypervisorInfo, error) {
 		HotplugVFIOOnRootBus: config.HypervisorConfig.HotplugVFIOOnRootBus,
 		PCIeRootPort:         config.HypervisorConfig.PCIeRootPort,
 		SocketPath:           socketPath,
+		QmpSocks:             config.HypervisorConfig.QmpSocks,
 	}, nil
 }
 

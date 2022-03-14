@@ -323,8 +323,27 @@ func (q *qemu) memoryTopology() (govmmQemu.Memory, error) {
 	return q.arch.memoryTopology(memMb, hostMemMb, uint8(q.config.MemSlots)), nil
 }
 
-func (q *qemu) qmpSocketPath(id string) (string, error) {
-	return utils.BuildSocketPath(q.config.VMStorePath, id, qmpSocket)
+func (q *qemu) qmpSocketPaths(id string) ([]string, error) {
+	socks := make([]string, 0)
+
+	tmp, err := utils.BuildSocketPath(q.config.VMStorePath, id, qmpSocket)
+	if err != nil {
+		return nil, err
+	}
+	socks = append(socks, tmp)
+
+	for _, s := range q.config.QmpSocks {
+		if len(s) == 0 {
+			continue
+		}
+		tmp, err = utils.BuildSocketPath(q.config.VMStorePath, id, s)
+		if err != nil {
+			return nil, err
+		}
+		socks = append(socks, tmp)
+	}
+
+	return socks, nil
 }
 
 func (q *qemu) getQemuMachine() (govmmQemu.Machine, error) {
@@ -358,24 +377,29 @@ func (q *qemu) appendImage(ctx context.Context, devices []govmmQemu.Device) ([]g
 }
 
 func (q *qemu) createQmpSocket() ([]govmmQemu.QMPSocket, error) {
-	monitorSockPath, err := q.qmpSocketPath(q.id)
+	qmpPaths, err := q.qmpSocketPaths(q.id)
 	if err != nil {
 		return nil, err
 	}
 
 	q.qmpMonitorCh = qmpChannel{
 		ctx:  q.ctx,
-		path: monitorSockPath,
+		path: qmpPaths[0],
 	}
 
-	return []govmmQemu.QMPSocket{
-		{
-			Type:   "unix",
-			Name:   q.qmpMonitorCh.path,
-			Server: true,
-			NoWait: true,
-		},
-	}, nil
+	qmpSks := []govmmQemu.QMPSocket{}
+
+	for _, s := range qmpPaths {
+		qmpSks = append(qmpSks,
+			govmmQemu.QMPSocket{
+				Type:   "unix",
+				Name:   s,
+				Server: true,
+				NoWait: true,
+			})
+	}
+
+	return qmpSks, nil
 }
 
 func (q *qemu) buildDevices(ctx context.Context, initrdPath string) ([]govmmQemu.Device, *govmmQemu.IOThread, error) {

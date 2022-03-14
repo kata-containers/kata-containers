@@ -138,6 +138,7 @@ type hypervisor struct {
 	Rootless                bool     `toml:"rootless"`
 	DisableSeccomp          bool     `toml:"disable_seccomp"`
 	DisableSeLinux          bool     `toml:"disable_selinux"`
+	QmpSocks                []string `toml:"qmp_socks"`
 }
 
 type runtime struct {
@@ -719,6 +720,7 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		ConfidentialGuest:       h.ConfidentialGuest,
 		GuestSwap:               h.GuestSwap,
 		Rootless:                h.Rootless,
+		QmpSocks:                h.QmpSocks,
 	}, nil
 }
 
