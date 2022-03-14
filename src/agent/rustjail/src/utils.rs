@@ -97,12 +97,13 @@ mod tests {
         let temp_passwd = format!("{}/passwd", tmpdir_path);
 
         let mut tempf = File::create(temp_passwd.as_str()).unwrap();
-        writeln!(tempf, "root:x:0:0:root:/root0:/bin/bash").unwrap();
-        writeln!(tempf, "root:x:1:0:root:/root1:/bin/bash").unwrap();
-        writeln!(tempf, "#root:x:1:0:root:/rootx:/bin/bash").unwrap();
-        writeln!(tempf, "root:x:2:0:root:/root2:/bin/bash").unwrap();
-        writeln!(tempf, "root:x:3:0:root:/root3").unwrap();
-        writeln!(tempf, "root:x:3:0:root:/root3:/bin/bash").unwrap();
+        let passwd_entries = "root:x:0:0:root:/root0:/bin/bash
+root:x:1:0:root:/root1:/bin/bash
+#root:x:1:0:root:/rootx:/bin/bash
+root:x:2:0:root:/root2:/bin/bash
+root:x:3:0:root:/root3
+root:x:3:0:root:/root3:/bin/bash";
+        writeln!(tempf, "{}", passwd_entries).unwrap();
 
         let entry = get_entry_by_uid(0, temp_passwd.as_str()).unwrap();
         assert_eq!(entry.dir.as_str(), "/root0");
