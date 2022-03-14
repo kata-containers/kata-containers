@@ -86,7 +86,7 @@ type VhostUserDeviceAttrs struct {
 // Refs: virtcontainers/device/drivers/generic.go:GenericDevice
 type DeviceState struct {
 	// DriverOptions is specific options for each device driver
-	// for example, for BlockDevice, we can set DriverOptions["blockDriver"]="virtio-blk"
+	// for example, for BlockDevice, we can set DriverOptions["block-driver"]="virtio-blk"
 	DriverOptions map[string]string
 
 	// VhostUserDeviceAttrs is specific for vhost-user device driver

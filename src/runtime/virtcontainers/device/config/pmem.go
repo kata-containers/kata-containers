@@ -81,8 +81,8 @@ func PmemDeviceInfo(source, destination string) (*DeviceInfo, error) {
 		fstype = "ext4"
 	}
 
-	pmemLog.WithField("fstype", fstype).Debug("filesystem for mount point")
-	device.DriverOptions["fstype"] = fstype
+	pmemLog.WithField(FsTypeOpt, fstype).Debug("filesystem for mount point")
+	device.DriverOptions[FsTypeOpt] = fstype
 
 	return device, nil
 }

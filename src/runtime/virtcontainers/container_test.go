@@ -86,7 +86,7 @@ func TestContainerRemoveDrive(t *testing.T) {
 	sandbox := &Sandbox{
 		ctx:        context.Background(),
 		id:         "sandbox",
-		devManager: manager.NewDeviceManager(manager.VirtioSCSI, false, "", nil),
+		devManager: manager.NewDeviceManager(config.VirtioSCSI, false, "", nil),
 		config:     &SandboxConfig{},
 	}
 
@@ -320,7 +320,7 @@ func TestContainerAddDriveDir(t *testing.T) {
 	sandbox := &Sandbox{
 		ctx:        context.Background(),
 		id:         testSandboxID,
-		devManager: manager.NewDeviceManager(manager.VirtioSCSI, false, "", nil),
+		devManager: manager.NewDeviceManager(config.VirtioSCSI, false, "", nil),
 		hypervisor: &mockHypervisor{},
 		agent:      &mockAgent{},
 		config: &SandboxConfig{

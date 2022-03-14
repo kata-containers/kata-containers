@@ -548,7 +548,7 @@ func TestSandboxAttachDevicesVFIO(t *testing.T) {
 		config.SysIOMMUPath = savedIOMMUPath
 	}()
 
-	dm := manager.NewDeviceManager(manager.VirtioSCSI, false, "", nil)
+	dm := manager.NewDeviceManager(config.VirtioSCSI, false, "", nil)
 	path := filepath.Join(vfioPath, testFDIOGroup)
 	deviceInfo := config.DeviceInfo{
 		HostPath:      path,
@@ -599,7 +599,7 @@ func TestSandboxAttachDevicesVhostUserBlk(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "")
 	assert.Nil(t, err)
 	os.RemoveAll(tmpDir)
-	dm := manager.NewDeviceManager(manager.VirtioSCSI, true, tmpDir, nil)
+	dm := manager.NewDeviceManager(config.VirtioSCSI, true, tmpDir, nil)
 
 	vhostUserDevNodePath := filepath.Join(tmpDir, "/block/devices/")
 	vhostUserSockPath := filepath.Join(tmpDir, "/block/sockets/")

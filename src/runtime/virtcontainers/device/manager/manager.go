@@ -21,19 +21,6 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
 )
 
-const (
-	// VirtioMmio indicates block driver is virtio-mmio based
-	VirtioMmio string = "virtio-mmio"
-	// VirtioBlock indicates block driver is virtio-blk based
-	VirtioBlock string = "virtio-blk"
-	// VirtioBlockCCW indicates block driver is virtio-blk-ccw based
-	VirtioBlockCCW string = "virtio-blk-ccw"
-	// VirtioSCSI indicates block driver is virtio-scsi based
-	VirtioSCSI string = "virtio-scsi"
-	// Nvdimm indicates block driver is nvdimm based
-	Nvdimm string = "nvdimm"
-)
-
 var (
 	// ErrIDExhausted represents that devices are too many
 	// and no more IDs can be generated
@@ -69,16 +56,16 @@ func NewDeviceManager(blockDriver string, vhostUserStoreEnabled bool, vhostUserS
 		vhostUserStorePath:    vhostUserStorePath,
 		devices:               make(map[string]api.Device),
 	}
-	if blockDriver == VirtioMmio {
-		dm.blockDriver = VirtioMmio
-	} else if blockDriver == VirtioBlock {
-		dm.blockDriver = VirtioBlock
-	} else if blockDriver == Nvdimm {
-		dm.blockDriver = Nvdimm
-	} else if blockDriver == VirtioBlockCCW {
-		dm.blockDriver = VirtioBlockCCW
+	if blockDriver == config.VirtioMmio {
+		dm.blockDriver = config.VirtioMmio
+	} else if blockDriver == config.VirtioBlock {
+		dm.blockDriver = config.VirtioBlock
+	} else if blockDriver == config.Nvdimm {
+		dm.blockDriver = config.Nvdimm
+	} else if blockDriver == config.VirtioBlockCCW {
+		dm.blockDriver = config.VirtioBlockCCW
 	} else {
-		dm.blockDriver = VirtioSCSI
+		dm.blockDriver = config.VirtioSCSI
 	}
 
 	drivers.AllPCIeDevs = make(map[string]bool)
@@ -132,13 +119,13 @@ func (dm *deviceManager) createDevice(devInfo config.DeviceInfo) (dev api.Device
 		if devInfo.DriverOptions == nil {
 			devInfo.DriverOptions = make(map[string]string)
 		}
-		devInfo.DriverOptions["block-driver"] = dm.blockDriver
+		devInfo.DriverOptions[config.BlockDriverOpt] = dm.blockDriver
 		return drivers.NewVhostUserBlkDevice(&devInfo), nil
 	} else if isBlock(devInfo) {
 		if devInfo.DriverOptions == nil {
 			devInfo.DriverOptions = make(map[string]string)
 		}
-		devInfo.DriverOptions["block-driver"] = dm.blockDriver
+		devInfo.DriverOptions[config.BlockDriverOpt] = dm.blockDriver
 		return drivers.NewBlockDevice(&devInfo), nil
 	} else {
 		deviceLogger().WithField("device", devInfo.HostPath).Info("Device has not been passed to the container")
