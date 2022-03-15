@@ -2486,7 +2486,6 @@ func (q *qemu) fromGrpc(ctx context.Context, hypervisorConfig *HypervisorConfig,
 	q.arch.setBridges(q.state.Bridges)
 
 	vsock := types.VSock{ContextID: qp.ContextID, Port: uint32(vSockPort)}
-	q.arch.appendVSock(ctx, q.qemuConfig.Devices, vsock)
 	q.qemuConfig.Devices, err = q.arch.appendVSock(ctx, q.qemuConfig.Devices, vsock)
 	if err != nil {
 		return err
