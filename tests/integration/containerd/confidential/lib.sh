@@ -165,11 +165,11 @@ switch_image_service_offload() {
 
 	case "$1" in
 		"on")
-			sed -i -e 's/^# *\(service_offload\).*=.*$/\1 = true/g' \
+			sudo sed -i -e 's/^# *\(service_offload\).*=.*$/\1 = true/g' \
 				"$RUNTIME_CONFIG_PATH"
 			;;
 		"off")
-			sed -i -e 's/^\(service_offload\).*=.*$/#\1 = false/g' \
+			sudo sed -i -e 's/^\(service_offload\).*=.*$/#\1 = false/g' \
 				"$RUNTIME_CONFIG_PATH"
 
 			;;
