@@ -197,6 +197,10 @@ func NewVMFromGrpc(ctx context.Context, v *pb.GrpcVM, config VMConfig) (*VM, err
 	newAagentFunc := getNewAgentFunc(ctx)
 	agent := newAagentFunc()
 	agent.configureFromGrpc(ctx, hypervisor, v.Id, config.AgentConfig)
+	err = agent.setAgentURL()
+	if err != nil {
+		return nil, err
+	}
 
 	return &VM{
 		id:         v.Id,

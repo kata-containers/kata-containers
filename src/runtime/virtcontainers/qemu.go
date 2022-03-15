@@ -2456,6 +2456,9 @@ type qemuGrpc struct {
 	// q.qemuConfig.SMP.
 	// So just transport q.qemuConfig.SMP from VM Cache server to runtime.
 	QemuSMP govmmQemu.SMP
+
+	// send vsock contextid to client
+	ContextID uint64
 }
 
 func (q *qemu) fromGrpc(ctx context.Context, hypervisorConfig *HypervisorConfig, j []byte) error {
@@ -2481,6 +2484,15 @@ func (q *qemu) fromGrpc(ctx context.Context, hypervisorConfig *HypervisorConfig,
 	q.qemuConfig.SMP = qp.QemuSMP
 
 	q.arch.setBridges(q.state.Bridges)
+
+	vsock := types.VSock{ContextID: qp.ContextID, Port: uint32(vSockPort)}
+	q.arch.appendVSock(ctx, q.qemuConfig.Devices, vsock)
+	q.qemuConfig.Devices, err = q.arch.appendVSock(ctx, q.qemuConfig.Devices, vsock)
+	if err != nil {
+		return err
+	}
+	q.qemuConfig.PidFile = filepath.Join(q.store.RunVMStoragePath(), q.id, "pid")
+
 	return nil
 }
 
@@ -2495,6 +2507,18 @@ func (q *qemu) toGrpc(ctx context.Context) ([]byte, error) {
 		NvdimmCount:    q.nvdimmCount,
 
 		QemuSMP: q.qemuConfig.SMP,
+	}
+
+	// set vsock contextid
+	for _, device := range q.qemuConfig.Devices {
+		switch device.(type) {
+		case govmmQemu.VSOCKDevice:
+			vsockdev := device.(govmmQemu.VSOCKDevice)
+			qp.ContextID = vsockdev.ContextID
+			break
+		default:
+			continue
+		}
 	}
 
 	return json.Marshal(&qp)
@@ -2574,6 +2598,23 @@ func (q *qemu) Check() error {
 }
 
 func (q *qemu) GenerateSocket(id string) (interface{}, error) {
+	// if vsock already exsist, return it directly
+	// this is for vmcache, because we don't need another random vsock
+	q.Logger().Debugf("GenerateSocket: number of devices = %d", len(q.qemuConfig.Devices))
+	for _, device := range q.qemuConfig.Devices {
+		switch device.(type) {
+		case govmmQemu.VSOCKDevice:
+			vsockdev := device.(govmmQemu.VSOCKDevice)
+			q.Logger().Debugf("GenerateSocket: ContextID = %d", vsockdev.ContextID)
+			return types.VSock{
+				VhostFd:   vsockdev.VHostFD,
+				ContextID: vsockdev.ContextID,
+				Port:      uint32(vSockPort),
+			}, nil
+		default:
+			continue
+		}
+	}
 	return generateVMSocket(id, q.config.VMStorePath)
 }
 
