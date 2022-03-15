@@ -250,7 +250,6 @@ generate_qemu_options() {
 	qemu_options+=(size:--disable-auth-pam)
 
 	# Disable unused filesystem support
-	[ "$arch" == x86_64 ] && qemu_options+=(size:--disable-fdt)
 	qemu_options+=(size:--disable-glusterfs)
 	qemu_options+=(size:--disable-libiscsi)
 	qemu_options+=(size:--disable-libnfs)
@@ -303,7 +302,6 @@ generate_qemu_options() {
 		;;
 	esac
 	qemu_options+=(size:--disable-qom-cast-debug)
-	qemu_options+=(size:--disable-tcmalloc)
 
 	# Disable libudev since it is only needed for qemu-pr-helper and USB,
 	# none of which are used with Kata
