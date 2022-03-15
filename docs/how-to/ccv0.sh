@@ -51,6 +51,12 @@ export CONTAINER_ID="${CONTAINER_ID:-0123456789}"
 source /etc/os-release || source /usr/lib/os-release
 grep -Eq "\<fedora\>" /etc/os-release 2> /dev/null && export USE_PODMAN=true
 
+export BATS_TEST_DIRNAME="${tests_repo_dir}/integration/containerd/confidential"
+# If we've already checked out the test repo then source the confidential scripts
+[ -d "${BATS_TEST_DIRNAME}" ] && source "${BATS_TEST_DIRNAME}/lib.sh"
+
+export RUNTIME_CONFIG_PATH=/etc/kata-containers/configuration.toml
+
 debug_output() {
     if [ -n "${DEBUG}" ]
     then
@@ -70,7 +76,7 @@ debug_function() {
 
 usage() {
     exit_code="$1"
-    cat <<EOT
+    cat <<EOF
 Overview:
     Build and test kata containers from source
     Optionally set kata-containers and tests repo and branch as exported variables before running
@@ -110,7 +116,7 @@ Commands:
 Options:
     -d: Enable debug
     -h: Display this help
-EOT
+EOF
     # if script sourced don't exit as this will exit the main shell, just return instead
     [[ $_ != $0 ]] && return "$exit_code" || exit "$exit_code"
 }
@@ -175,6 +181,9 @@ check_out_repos() {
         git checkout ${tests_branch}
     fi
     git reset --hard origin/${tests_branch}
+
+    source "${BATS_TEST_DIRNAME}/lib.sh"
+
     popd
 
     echo "Creating repo: ${katacontainers_repo} and branch ${katacontainers_branch} into ${katacontainers_repo_dir}..."
@@ -201,45 +210,25 @@ build_and_install_kata_runtime() {
 configure() {
     debug_function configure_kata_to_use_rootfs
     debug_function enable_full_debug
+
+    # Switch image offload to true in kata config
+    switch_image_service_offload "on"
+
     # Temp PoC verify code: Inject policy path config parameter
-    sudo sed -i -e 's%^kernel_params = "\(.*\)"%kernel_params = "\1 agent.container_policy_file=/etc/containers/quay_verification/quay_policy.json"%g' /etc/kata-containers/configuration.toml
+    add_kernel_params "agent.container_policy_file=/etc/containers/quay_verification/quay_policy.json"
 
     # If using AA then need to add the agent_config
     if [ "${AA_KBC}" == "offline_fs_kbc" ]; then
-        sudo sed -i -e 's%^kernel_params = "\(.*\)"%kernel_params = "\1 agent.config_file=/etc/agent-config.toml"%g' /etc/kata-containers/configuration.toml
+        add_kernel_params "agent.config_file=/etc/agent-config.toml"
     fi
 
-    # insert the cri_handler = "cc" into the [plugins.cri.containerd.runtimes.kata] section
-    sudo sed -z -i 's/\([[:blank:]]*\)\(runtime_type = "io.containerd.kata.v2"\)/\1\2\n\1cri_handler = "cc"/' /etc/containerd/config.toml
-
-    # Add cni directory to containerd config
-    echo "    [plugins.cri.cni]
-      # conf_dir is the directory in which the admin places a CNI conf.
-      conf_dir = \"/etc/cni/net.d\"" | sudo tee -a /etc/containerd/config.toml
-    
-    # Switch image offload to true in kata config
-    sudo sed -i -e 's/^# *\(service_offload\).*=.*$/\1 = true/g' /etc/kata-containers/configuration.toml
-
-    sudo systemctl restart containerd # Ensure containerd picks up debug configuration
+    configure_cc_containerd
 }
 
 configure_kata_to_use_rootfs() {
     sudo mkdir -p /etc/kata-containers/
     sudo install -o root -g root -m 0640 /usr/share/defaults/kata-containers/configuration.toml /etc/kata-containers
-    sudo sed -i 's/^\(initrd =.*\)/# \1/g' /etc/kata-containers/configuration.toml
-}
-
-enable_full_debug() {
-    sudo mkdir -p /etc/kata-containers/
-    sudo install -o root -g root -m 0640 /usr/share/defaults/kata-containers/configuration.toml /etc/kata-containers
-    
-    # Note: if all enable_debug are set to true the agent console doesn't seem to work, so only enable the agent and runtime versions
-    # TODO LATER - try and work out why this is so we can replace the 2 lines below and stop it being so brittle sudo sed -i -e 's/^# *\(enable_debug\).*=.*$/\1 = true/g' /etc/kata-containers/configuration.toml
-    sudo sed -z -i 's/\(# If enabled, make the agent display debug-level messages.\)\n\(# (default: disabled)\)\n#\(enable_debug = true\)\n/\1\n\2\n\3\n/' /etc/kata-containers/configuration.toml
-    sudo sed -z -i 's/\(# system log\)\n\(# (default: disabled)\)\n#\(enable_debug = true\)\n/\1\n\2\n\3\n/' /etc/kata-containers/configuration.toml
-
-    sudo sed -i -e 's/^# *\(debug_console_enabled\).*=.*$/\1 = true/g' /etc/kata-containers/configuration.toml
-    sudo sed -i -e 's/^kernel_params = "\(.*\)"/kernel_params = "\1 agent.log=debug initcall_debug"/g' /etc/kata-containers/configuration.toml
+    sudo sed -i 's/^\(initrd =.*\)/# \1/g' ${RUNTIME_CONFIG_PATH}
 }
 
 build_and_add_agent_to_rootfs() {
@@ -430,50 +419,29 @@ kubernetes_delete_ssh_demo_pod() {
 }
 
 crictl_sandbox_name=kata-cc-busybox-sandbox
-crictl_create_cc_pod() {
+call_crictl_create_cc_pod() {
     # Update iptables to allow forwarding to the cni0 bridge avoiding issues caused by the docker0 bridge
     sudo iptables -P FORWARD ACCEPT
     
     # Create crictl pod config
-cat << EOF > ${HOME}/pod-config.yaml
-metadata:
-  name: ${crictl_sandbox_name}
-EOF
+    local pod_config="${FIXTURES_DIR}/pod-config.yaml"
 
-    # If already exists then delete and re-create
-    if [ -n "$(sudo crictl pods --name ${crictl_sandbox_name} -q)" ]; then
-        crictl_delete_cc
-    fi
-
-    local pod_id=$(sudo crictl runp -r kata ${HOME}/pod-config.yaml)
-    sudo crictl pods ${pod_id}
+    crictl_delete_cc_pod_if_exists "${crictl_sandbox_name}"
+    crictl_create_cc_pod "${pod_config}"
+    sudo crictl pods
 }
 
-crictl_create_cc_container() {
+call_crictl_create_cc_container() {
     # Create container configuration yaml based on our test copy of busybox
-    cat << EOF > ${HOME}/container-config.yaml
-metadata:
-  name: kata-cc-busybox
-image:
-  image: quay.io/kata-containers/confidential-containers:signed
-command:
-- top
-log_path: kata-cc.0.log
-EOF
-
-    local pod_id=$(sudo crictl pods --name ${crictl_sandbox_name} -q)
-    local container_id=$(sudo crictl create -with-pull ${pod_id} ${HOME}/container-config.yaml ${HOME}/pod-config.yaml)
-    sudo crictl start ${container_id}
+    local pod_config="${FIXTURES_DIR}/pod-config.yaml"
+    local container_config="${FIXTURES_DIR}/container-config.yaml"
+    local pod_name=${crictl_sandbox_name}
+    crictl_create_cc_container ${pod_name} ${pod_config} ${container_config}
     sudo crictl ps -a
 }
 
 crictl_delete_cc() {
-    local pod_id=$(sudo crictl pods --name ${crictl_sandbox_name} -q)
-    local container_id=$(sudo crictl ps --pod ${pod_id} -q)
-    if [ -n "${container_id}" ]; then
-        sudo crictl stop ${container_id} && sudo crictl rm ${container_id}
-    fi
-    sudo crictl stopp ${pod_id} && sudo crictl rmp ${pod_id}
+    crictl_delete_cc_pod ${crictl_sandbox_name}
 }
 
 test_kata_runtime() {
@@ -624,10 +592,10 @@ main() {
             init_kubernetes
             ;;
         crictl_create_cc_pod)
-            crictl_create_cc_pod
+            call_crictl_create_cc_pod
             ;;
         crictl_create_cc_container)
-            crictl_create_cc_container
+            call_crictl_create_cc_container
             ;;
         crictl_delete_cc)
             crictl_delete_cc
