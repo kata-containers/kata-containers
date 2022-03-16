@@ -18,15 +18,15 @@ FIXTURES_DIR="${BATS_TEST_DIRNAME}/fixtures"
 #
 crictl_delete_cc_pod() {
 	local sandbox_name="$1"
-	local pod_id="$(crictl pods --name ${sandbox_name} -q)"
-	local container_id="$(crictl ps --pod ${pod_id} -q)"
+	local pod_id="$(sudo crictl pods --name ${sandbox_name} -q)"
+	local container_id="$(sudo crictl ps --pod ${pod_id} -q)"
 
 	if [ -n "$container_id" ]; then
-		crictl stop "$container_id"
-		crictl rm "$container_id"
+		sudo crictl stop "$container_id"
+		sudo crictl rm "$container_id"
 	fi
-	crictl stopp "$pod_id"
-	crictl rmp "$pod_id"
+	sudo crictl stopp "$pod_id"
+	sudo crictl rmp "$pod_id"
 }
 
 # Delete the pod if it exists, otherwise just return.
@@ -37,7 +37,7 @@ crictl_delete_cc_pod() {
 crictl_delete_cc_pod_if_exists() {
 	local sandbox_name="$1"
 
-	[ -z "$(crictl pods --name ${sandbox_name} -q)" ] || \
+	[ -z "$(sudo crictl pods --name ${sandbox_name} -q)" ] || \
 		crictl_delete_cc_pod "${sandbox_name}"
 }
 
@@ -53,7 +53,7 @@ crictl_wait_cc_pod_be_ready() {
 	local wait_time="${2:-10}"
 	local sleep_time="${3:-5}"
 
-	local cmd="[ \$(crictl pods --id $pod_id -q --state ready |\
+	local cmd="[ \$(sudo crictl pods --id $pod_id -q --state ready |\
 	       	wc -l) -eq 1 ]"
 	if ! waitForProcess "$wait_time" "$sleep_time" "$cmd"; then
 		echo "Pod ${pod_id} not ready after ${wait_time}s"
@@ -75,7 +75,7 @@ crictl_create_cc_pod() {
 		return 1
 	fi
 
-	if ! pod_id=$(crictl runp -r kata "$config_file"); then
+	if ! pod_id=$(sudo crictl runp -r kata "$config_file"); then
 		echo "Failed to create the pod"
 		return 1
 	fi
@@ -83,7 +83,7 @@ crictl_create_cc_pod() {
 	if ! crictl_wait_cc_pod_be_ready "$pod_id"; then
 		# TODO: run this command for debugging. Maybe it should be
 		#       guarded by DEBUG=true?
-		crictl pods
+		sudo crictl pods
 		return 1
 	fi
 }
@@ -100,7 +100,7 @@ crictl_wait_cc_container_be_running() {
 	local wait_time="${2:-30}"
 	local sleep_time="${3:-10}"
 
-	local cmd="[ \$(crictl ps --id $container_id -q --state running | \
+	local cmd="[ \$(sudo crictl ps --id $container_id -q --state running | \
 		wc -l) -eq 1 ]"
 	if ! waitForProcess "$wait_time" "$sleep_time" "$cmd"; then
 		echo "Container $container_id is not running after ${wait_time}s"
@@ -127,8 +127,8 @@ crictl_create_cc_container() {
 		return 1
 	fi
 
-	pod_id=$(crictl pods --name ${pod_name} -q)
-	container_id=$(crictl create -with-pull "${pod_id}" \
+	pod_id=$(sudo crictl pods --name ${pod_name} -q)
+	container_id=$(sudo crictl create -with-pull "${pod_id}" \
 		"${container_config}" "${pod_config}")
 
 	if [ -z "$container_id" ]; then
@@ -136,14 +136,14 @@ crictl_create_cc_container() {
 		return 1
 	fi
 
-	if ! crictl start ${container_id}; then
+	if ! sudo crictl start ${container_id}; then
 		echo "Failed to start container $container_id"
-		crictl ps -a
+		sudo crictl ps -a
 		return 1
 	fi
 
 	if ! crictl_wait_cc_container_be_running "$container_id"; then
-		crictl ps -a
+		sudo crictl ps -a
 		return 1
 	fi
 }
@@ -198,7 +198,7 @@ switch_image_service_offload() {
 crictl_record_cc_pod_console() {
 	local sandbox_name="$1"
 	local console_file="$2"
-	local pod_id="$(crictl pods --name ${sandbox_name} -q)"
+	local pod_id="$(sudo crictl pods --name ${sandbox_name} -q)"
 	local console_sock="/var/run/vc/vm/${pod_id}/console.sock"
 
 	# Nothing to do if the console socket doesn't exist.
@@ -232,7 +232,7 @@ add_kernel_params() {
 	local params="$@"
 	load_RUNTIME_CONFIG_PATH
 
-	sed -i -e 's#^\(kernel_params\) = "\(.*\)"#\1 = "\2 '"$params"'"#g' \
+	sudo sed -i -e 's#^\(kernel_params\) = "\(.*\)"#\1 = "\2 '"$params"'"#g' \
 		"$RUNTIME_CONFIG_PATH"
 }
 
@@ -246,7 +246,7 @@ add_kernel_params() {
 clear_kernel_params() {
 	load_RUNTIME_CONFIG_PATH
 
-	sed -i -e 's#^\(kernel_params\) = "\(.*\)"#\1 = ""#g' \
+	sudo sed -i -e 's#^\(kernel_params\) = "\(.*\)"#\1 = ""#g' \
 		"$RUNTIME_CONFIG_PATH"
 }
 
@@ -263,7 +263,7 @@ enable_agent_debug() {
 
 	add_kernel_params "agent.log=debug" "initcall_debug"
 	# TODO LATER - try and work out why this is so we can replace the 2 lines below and stop it being so brittle sed -i -e 's/^# *\(enable_debug\).*=.*$/\1 = true/g' /etc/kata-containers/configuration.toml
-	sed -z -i 's/\(# If enabled, make the agent display debug-level messages.\)\n\(# (default: disabled)\)\n#\(enable_debug = true\)\n/\1\n\2\n\3\n/' \
+	sudo sed -z -i 's/\(# If enabled, make the agent display debug-level messages.\)\n\(# (default: disabled)\)\n#\(enable_debug = true\)\n/\1\n\2\n\3\n/' \
 		"$RUNTIME_CONFIG_PATH"
 }
 
@@ -277,7 +277,7 @@ enable_agent_debug() {
 enable_agent_console() {
 	load_RUNTIME_CONFIG_PATH
 
-	sed -i -e 's/^# *\(debug_console_enabled\).*=.*$/\1 = true/g' \
+	sudo sed -i -e 's/^# *\(debug_console_enabled\).*=.*$/\1 = true/g' \
 		"$RUNTIME_CONFIG_PATH"
 }
 
@@ -291,7 +291,7 @@ enable_agent_console() {
 enable_runtime_debug() {
 	load_RUNTIME_CONFIG_PATH
 
-	sed -z -i 's/\(# system log\)\n\(# (default: disabled)\)\n#\(enable_debug = true\)\n/\1\n\2\n\3\n/' \
+	sudo sed -z -i 's/\(# system log\)\n\(# (default: disabled)\)\n#\(enable_debug = true\)\n/\1\n\2\n\3\n/' \
 		"$RUNTIME_CONFIG_PATH"
 }
 
@@ -317,33 +317,33 @@ configure_cc_containerd() {
 
 	# Even if we are not saving the original file it is a good idea to
 	# restart containerd because it might be in an inconsistent state here.
-	systemctl stop containerd
+	sudo systemctl stop containerd
 	sleep 5
 	[ -n "$saved_containerd_conf_file" ] && \
 		cp -f "$containerd_conf_file" "$saved_containerd_conf_file"
-	systemctl start containerd
-	waitForProcess 30 5 "crictl info >/dev/null"
+	sudo systemctl start containerd
+	waitForProcess 30 5 "sudo crictl info >/dev/null"
 
 	# Ensure the cc CRI handler is set.
-	local cri_handler=$(crictl info | \
+	local cri_handler=$(sudo crictl info | \
 		jq '.config.containerd.runtimes.kata.cri_handler')
 	if [[ ! "$cri_handler" =~ cc ]]; then
-		sed -z -i 's/\([[:blank:]]*\)\(runtime_type = "io.containerd.kata.v2"\)/\1\2\n\1cri_handler = "cc"/' \
+		sudo sed -z -i 's/\([[:blank:]]*\)\(runtime_type = "io.containerd.kata.v2"\)/\1\2\n\1cri_handler = "cc"/' \
 			"$containerd_conf_file"
 	fi
 
-	if [ "$(crictl info | jq -r '.config.cni.confDir')" = "null" ]; then
+	if [ "$(sudo crictl info | jq -r '.config.cni.confDir')" = "null" ]; then
 		echo "    [plugins.cri.cni]
 		  # conf_dir is the directory in which the admin places a CNI conf.
 		  conf_dir = \"/etc/cni/net.d\"" | \
 			  sudo tee -a "$containerd_conf_file"
 	fi
 
-	systemctl restart containerd
-	if ! waitForProcess 30 5 "crictl info >/dev/null"; then
+	sudo systemctl restart containerd
+	if ! waitForProcess 30 5 "sudo crictl info >/dev/null"; then
 		die "containerd seems not operational after reconfigured"
 	fi
-	iptables -P FORWARD ACCEPT
+	sudo iptables -P FORWARD ACCEPT
 }
 
 #
