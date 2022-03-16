@@ -492,8 +492,8 @@ pub struct LinuxDevice {
 pub struct LinuxDeviceCgroup {
     #[serde(default)]
     pub allow: bool,
-    #[serde(default, skip_serializing_if = "String::is_empty")]
-    pub r#type: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub r#type: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub major: Option<i64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -1429,21 +1429,21 @@ mod tests {
                     devices: vec![
                         crate::LinuxDeviceCgroup {
                             allow: false,
-                            r#type: "".to_string(),
+                            r#type: None,
                             major: None,
                             minor: None,
                             access: "rwm".to_string(),
                         },
                         crate::LinuxDeviceCgroup {
                             allow: true,
-                            r#type: "c".to_string(),
+                            r#type: Some("c".to_string()),
                             major: Some(10),
                             minor: Some(229),
                             access: "rw".to_string(),
                         },
                         crate::LinuxDeviceCgroup {
                             allow: true,
-                            r#type: "b".to_string(),
+                            r#type: Some("b".to_string()),
                             major: Some(8),
                             minor: Some(0),
                             access: "r".to_string(),

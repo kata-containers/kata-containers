@@ -571,13 +571,15 @@ fn update_spec_devices(spec: &mut Spec, mut updates: HashMap<&str, DevUpdate>) -
 
     if let Some(resources) = linux.resources.as_mut() {
         for r in &mut resources.devices {
-            if let (Some(host_major), Some(host_minor)) = (r.major, r.minor) {
-                if let Some(update) = res_updates.get(&(r.r#type.as_str(), host_major, host_minor))
+            if let (Some(host_type), Some(host_major), Some(host_minor)) =
+                (r.r#type.as_ref(), r.major, r.minor)
+            {
+                if let Some(update) = res_updates.get(&(host_type.as_str(), host_major, host_minor))
                 {
                     info!(
                         sl!(),
                         "update_spec_devices() updating resource";
-                        "type" => &r.r#type,
+                        "type" => &host_type,
                         "host_major" => host_major,
                         "host_minor" => host_minor,
                         "guest_major" => update.guest_major,
@@ -854,7 +856,7 @@ pub fn update_device_cgroup(spec: &mut Spec) -> Result<()> {
         allow: false,
         major: Some(major),
         minor: Some(minor),
-        r#type: String::from("b"),
+        r#type: Some(String::from("b")),
         access: String::from("rw"),
     });
 
@@ -1017,13 +1019,13 @@ mod tests {
                 resources: Some(LinuxResources {
                     devices: vec![
                         oci::LinuxDeviceCgroup {
-                            r#type: "c".to_string(),
+                            r#type: Some("c".to_string()),
                             major: Some(host_major_a),
                             minor: Some(host_minor_a),
                             ..oci::LinuxDeviceCgroup::default()
                         },
                         oci::LinuxDeviceCgroup {
-                            r#type: "c".to_string(),
+                            r#type: Some("c".to_string()),
                             major: Some(host_major_b),
                             minor: Some(host_minor_b),
                             ..oci::LinuxDeviceCgroup::default()
@@ -1116,13 +1118,13 @@ mod tests {
                 resources: Some(LinuxResources {
                     devices: vec![
                         LinuxDeviceCgroup {
-                            r#type: "c".to_string(),
+                            r#type: Some("c".to_string()),
                             major: Some(host_major),
                             minor: Some(host_minor),
                             ..LinuxDeviceCgroup::default()
                         },
                         LinuxDeviceCgroup {
-                            r#type: "b".to_string(),
+                            r#type: Some("b".to_string()),
                             major: Some(host_major),
                             minor: Some(host_minor),
                             ..LinuxDeviceCgroup::default()

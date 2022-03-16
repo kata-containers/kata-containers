@@ -458,8 +458,11 @@ fn linux_device_to_cgroup_device(d: &LinuxDevice) -> Option<DeviceResource> {
 }
 
 fn linux_device_group_to_cgroup_device(d: &LinuxDeviceCgroup) -> Option<DeviceResource> {
-    let dev_type = match DeviceType::from_char(d.r#type.chars().next()) {
-        Some(t) => t,
+    let dev_type = match &d.r#type {
+        Some(t_s) => match DeviceType::from_char(t_s.chars().next()) {
+            Some(t_c) => t_c,
+            None => return None,
+        },
         None => return None,
     };
 
@@ -516,7 +519,7 @@ lazy_static! {
             // all mknod to all char devices
             LinuxDeviceCgroup {
                 allow: true,
-                r#type: "c".to_string(),
+                r#type: Some("c".to_string()),
                 major: Some(WILDCARD),
                 minor: Some(WILDCARD),
                 access: "m".to_string(),
@@ -525,7 +528,7 @@ lazy_static! {
             // all mknod to all block devices
             LinuxDeviceCgroup {
                 allow: true,
-                r#type: "b".to_string(),
+                r#type: Some("b".to_string()),
                 major: Some(WILDCARD),
                 minor: Some(WILDCARD),
                 access: "m".to_string(),
@@ -534,7 +537,7 @@ lazy_static! {
             // all read/write/mknod to char device /dev/console
             LinuxDeviceCgroup {
                 allow: true,
-                r#type: "c".to_string(),
+                r#type: Some("c".to_string()),
                 major: Some(5),
                 minor: Some(1),
                 access: "rwm".to_string(),
@@ -543,7 +546,7 @@ lazy_static! {
             // all read/write/mknod to char device /dev/pts/<N>
             LinuxDeviceCgroup {
                 allow: true,
-                r#type: "c".to_string(),
+                r#type: Some("c".to_string()),
                 major: Some(136),
                 minor: Some(WILDCARD),
                 access: "rwm".to_string(),
@@ -552,7 +555,7 @@ lazy_static! {
             // all read/write/mknod to char device /dev/ptmx
             LinuxDeviceCgroup {
                 allow: true,
-                r#type: "c".to_string(),
+                r#type: Some("c".to_string()),
                 major: Some(5),
                 minor: Some(2),
                 access: "rwm".to_string(),
@@ -561,7 +564,7 @@ lazy_static! {
             // all read/write/mknod to char device /dev/net/tun
             LinuxDeviceCgroup {
                 allow: true,
-                r#type: "c".to_string(),
+                r#type: Some("c".to_string()),
                 major: Some(10),
                 minor: Some(200),
                 access: "rwm".to_string(),
