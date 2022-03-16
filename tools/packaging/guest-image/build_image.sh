@@ -67,7 +67,7 @@ build_image() {
 
 usage() {
 	return_code=${1:-0}
-	cat <<EOT
+	cat <<EOF
 Create image and initrd in a tarball for kata containers.
 Use it to build an image to distribute kata.
 
@@ -78,7 +78,7 @@ Options:
  --imagetype=${image_type}
  --prefix=${prefix}
  --destdir=${destdir}
-EOT
+EOF
 
 	exit "${return_code}"
 }

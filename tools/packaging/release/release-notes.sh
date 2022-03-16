@@ -26,7 +26,7 @@ trap exit_handler EXIT
 
 usage() {
 	return_code=${1:-}
-	cat <<EOT
+	cat <<EOF
 Usage ${script_name} <previous-release> <new_release>
 
 Args:
@@ -37,7 +37,7 @@ new-release:      new release version that will have the
 Example:
 ./${script_name} 1.2.0 1.2.1 > notes.md
 
-EOT
+EOF
 	exit "${return_code}"
 }
 
@@ -81,25 +81,25 @@ changes() {
 }
 
 print_release_notes() {
-	cat <<EOT
+	cat <<EOF
 # Release ${runtime_version}
 
-EOT
+EOF
 
 	for repo in "${repos[@]}"; do
 		git clone -q "https://github.com/${project}/${repo}.git" "${tmp_dir}/${repo}"
 		pushd "${tmp_dir}/${repo}" >>/dev/null
 
-		cat <<EOT
+		cat <<EOF
 ## ${repo} Changes
 $(changes)
 
-EOT
+EOF
 		popd >>/dev/null
 		rm -rf "${tmp_dir}/${repo}"
 	done
 
-	cat <<EOT
+	cat <<EOF
 
 ## Compatibility with CRI-O
 Kata Containers ${runtime_version} is compatible with CRI-O ${crio_version}
@@ -157,7 +157,7 @@ More information [Limitations][limitations]
 [custom-agent-doc]: https://github.com/kata-containers/kata-containers/blob/main/docs/Developer-Guide.md#build-a-custom-kata-agent---optional
 [limitations]: https://github.com/kata-containers/kata-containers/blob/${new_release}/docs/Limitations.md
 [installation]: https://github.com/kata-containers/kata-containers/blob/${new_release}/docs/install
-EOT
+EOF
 }
 
 main() {

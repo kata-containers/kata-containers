@@ -1,0 +1,38 @@
+# Copyright (c) 2022 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+
+name: Add PR sizing label
+
+on:
+  pull_request_target:
+    types:
+      - opened
+      - reopened
+      - synchronize
+
+jobs:
+  add-pr-size-label:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v1
+
+      - name: Install PR sizing label script
+        run: |
+          # Clone into a temporary directory to avoid overwriting
+          # any existing github directory.
+          pushd $(mktemp -d) &>/dev/null
+          git clone --single-branch --depth 1 "https://github.com/kata-containers/.github" && cd .github/scripts
+          sudo install pr-add-size-label.sh /usr/local/bin
+          popd &>/dev/null
+
+      - name: Add PR sizing label
+        env:
+          GITHUB_TOKEN: ${{ secrets.KATA_GITHUB_ACTIONS_PR_SIZE_TOKEN }}
+        run: |
+          pr=${{ github.event.number }}
+          sudo apt -y install diffstat patchutils
+
+          pr-add-size-label.sh -p "$pr"

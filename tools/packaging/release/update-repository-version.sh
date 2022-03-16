@@ -68,7 +68,6 @@ generate_kata_deploy_commit() {
 kata-deploy files must be adapted to a new release.  The cases where it
 happens are when the release goes from -> to:
 * main -> stable:
-  * kata-deploy / kata-cleanup: change from \"latest\" to \"rc0\"
   * kata-deploy-stable / kata-cleanup-stable: are removed
 
 * stable -> stable:
@@ -161,7 +160,7 @@ bump_repo() {
 		#                     +----------------+----------------+
 		#                     |      from      |       to       |
 		#  -------------------+----------------+----------------+
-		#  kata-deploy        | "latest"       | "rc0"          |
+		#  kata-deploy        | "latest"       | "latest"       |
 		#  -------------------+----------------+----------------+
 		#  kata-deploy-stable | "stable"       | REMOVED        |
 		#  -------------------+----------------+----------------+
@@ -183,23 +182,32 @@ bump_repo() {
 		info "Updating kata-deploy / kata-cleanup image tags"
 		local version_to_replace="${current_version}"
 		local replacement="${new_version}"
+		local removed_files=false
 		if [ "${target_branch}" == "main" ]; then
 			if [[ "${new_version}" =~ "rc" ]]; then
 				## this is the case 2) where we remove te kata-deploy / kata-cleanup stable files
 				git rm "${kata_deploy_stable_yaml}"
 				git rm "${kata_cleanup_stable_yaml}"
 
-			else
-				## this is the case 1) where we just do nothing
+				removed_files=true
+			fi
+
+			## these are the cases 1) and 2), where "alpha" and "rc0" are tagged as "latest"
+			version_to_replace="latest"
+			replacement="latest"
+		else
+			if [[ "${new_version}" =~ "rc" ]]; then
+				## we're in a stable branch, coming from "rcX" (tagged as latest) and we're going
+				## to "rcX+1", which should still be tagged as latest.
+				version_to_replace="latest"
 				replacement="latest"
 			fi
-			version_to_replace="latest"
 		fi
 
-		if [ "${version_to_replace}" != "${replacement}" ]; then
-			## this covers case 2) and 3), as on both of them we have changes on kata-deploy / kata-cleanup  files
-			sed -i "s#${registry}:${version_to_replace}#${registry}:${new_version}#g" "${kata_deploy_yaml}"
-			sed -i "s#${registry}:${version_to_replace}#${registry}:${new_version}#g" "${kata_cleanup_yaml}"
+		if [ "${version_to_replace}" != "${replacement}" ] || [ "${removed_files}" == "true" ]; then
+			## this covers case 3), as it has changes on kata-deploy / kata-cleanup  files
+			sed -i "s#${registry}:${version_to_replace}#${registry}:${replacement}#g" "${kata_deploy_yaml}"
+			sed -i "s#${registry}:${version_to_replace}#${registry}:${replacement}#g" "${kata_cleanup_yaml}"
 
 			git diff
 
@@ -215,12 +223,12 @@ bump_repo() {
 
 	info "Creating PR message"
 	notes_file=notes.md
-	cat <<EOT >"${notes_file}"
+	cat <<EOF >"${notes_file}"
 # Kata Containers ${new_version}
 
 $(get_changes "$current_version")
 
-EOT
+EOF
 	cat "${notes_file}"
 
 	if (echo "${current_version}" | grep "alpha") && (echo "${new_version}" | grep -v "alpha");then
@@ -274,7 +282,7 @@ EOT
 
 usage() {
 	exit_code="$1"
-	cat <<EOT
+	cat <<EOF
 Usage:
 	${script_name} [options] <args>
 Args:
@@ -285,7 +293,7 @@ Example:
 Options
 	-h        : Show this help
 	-p        : create a PR
-EOT
+EOF
 	exit "$exit_code"
 }
 
