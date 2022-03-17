@@ -52,5 +52,3 @@ docs-url-alive-check:
 	logging-crate-tests \
 	static-checks \
 	docs-url-alive-check
-
-
