@@ -186,24 +186,14 @@ HELPER_FILES :=
 HELPER_FILES += scripts/lib.sh
 HELPER_FILES += image-builder/nsdax.gpl.c
 
-define INSTALL_FILE
-	echo "Installing $(abspath $2/$1)";
-	install -m 644 -D $1 $2/$1;
-endef
-
-define INSTALL_SCRIPT
-	echo "Installing $(abspath $2/$1)";
-	install -m 755 -D $1 $(abspath $2/$1);
-endef
-
 .PHONY: install-scripts
 install-scripts:
 	@echo "Installing scripts"
-	@$(foreach f,$(SCRIPTS),$(call INSTALL_SCRIPT,$f,$(INSTALL_DIR)))
+	@$(foreach f,$(SCRIPTS),$(call INSTALL_EXEC,$f,$(INSTALL_DIR)))
 	@echo "Installing helper files"
-	@$(foreach f,$(HELPER_FILES),$(call INSTALL_FILE,$f,$(INSTALL_DIR)))
+	@$(foreach f,$(HELPER_FILES),$(call INSTALL_NON_EXEC,$f,$(INSTALL_DIR)))
 	@echo "Installing config files"
-	@$(foreach f,$(DIST_CONFIGS),$(call INSTALL_FILE,$f,$(INSTALL_DIR)))
+	@$(foreach f,$(DIST_CONFIGS),$(call INSTALL_CONFIG,$f,$(INSTALL_DIR)))
 
 .PHONY: clean
 clean:

@@ -97,10 +97,6 @@ define get_toolchain_version
 $(shell printf "%s: %s\\n" "toolchain" "$(or $(shell rustup show active-toolchain 2>/dev/null), (unknown))")
 endef
 
-define INSTALL_FILE
-	install -D -m 644 $1 $(DESTDIR)$2/$1 || exit 1;
-endef
-
 .DEFAULT_GOAL := default
 
 ##TARGET default: build code
@@ -123,7 +119,7 @@ optimize: show-summary show-header
 
 ##TARGET install: install agent
 install: install-services
-	@install -D $(TARGET_PATH) $(DESTDIR)/$(BINDIR)/$(TARGET)
+	$(call INSTALL_EXEC,$(TARGET_PATH),$(BINDIR))
 
 ##TARGET clean: clean build
 clean:
@@ -149,7 +145,7 @@ run:
 install-services: $(GENERATED_FILES)
 ifeq ($(INIT),no)
 	@echo "Installing systemd unit files..."
-	$(foreach f,$(UNIT_FILES),$(call INSTALL_FILE,$f,$(UNIT_DIR)))
+	$(foreach f,$(UNIT_FILES),$(call INSTALL_SERVICE,$f,$(UNIT_DIR)))
 endif
 
 show-header:

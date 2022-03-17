@@ -16,6 +16,30 @@ ifeq ($(INCLUDED_UTILS_MK),)
 ##VAR DESTDIR=<path> is a directory prepended to each installed target file
 DESTDIR ?= /
 
+# Owner for installed files
+export KATA_INSTALL_OWNER     ?= root
+
+# Group for installed files
+export KATA_INSTALL_GROUP     ?= adm
+
+# Permissions for installed executable files
+export KATA_INSTALL_EXE_PERMS ?= 0555
+
+# Permissions for installed configuration files.
+#
+# XXX: Note that the permissions MUST be zero for "other"
+# XXX: in case the configuration file contains secrets.
+export KATA_INSTALL_CFG_PERMS ?= 0640
+
+# Permissions for installed non-executable files
+export KATA_INSTALL_STD_PERMS ?= 0444
+
+# Permissions for installed completion files
+export KATA_INSTALL_CMP_PERMS ?= $(KATA_INSTALL_STD_PERMS)
+
+# Permissions for installed system service
+export KATA_INSTALL_SVC_PERMS ?= $(KATA_INSTALL_STD_PERMS)
+
 # Create a set of standard rules for a project such that:
 #
 # - The component depends on its Makefile.
@@ -120,7 +144,6 @@ $(foreach a,$(3),$(eval $(call make_all_rules,$(a))))
 $(3) : % : %-all
 
 endef
-
 
 ##VAR BUILD_TYPE=release|debug type of rust build
 BUILD_TYPE = release

@@ -393,6 +393,13 @@ USER_VARS += FCVALIDJAILERPATHS
 USER_VARS += SYSCONFIG
 USER_VARS += IMAGENAME
 USER_VARS += IMAGEPATH
+USER_VARS += KATA_INSTALL_CFG_PERMS
+USER_VARS += KATA_INSTALL_CMP_PERMS
+USER_VARS += KATA_INSTALL_EXE_PERMS
+USER_VARS += KATA_INSTALL_GROUP
+USER_VARS += KATA_INSTALL_OWNER
+USER_VARS += KATA_INSTALL_STD_PERMS
+USER_VARS += KATA_INSTALL_SVC_PERMS
 USER_VARS += MACHINETYPE
 USER_VARS += KERNELDIR
 USER_VARS += KERNELTYPE
@@ -531,22 +538,6 @@ runtime: $(RUNTIME_OUTPUT) $(CONFIGS)
 
 build: all
 
-#Install an executable file
-# params:
-# $1 : file to install
-# $2 : directory path where file will be installed
-define INSTALL_EXEC
-	install -D $1 $(DESTDIR)$2/$(notdir $1);
-endef
-
-# Install a configuration file
-# params:
-# $1 : file to install
-# $2 : directory path where file will be installed
-define INSTALL_CONFIG
-	install --mode 0644 -D $1 $(DESTDIR)$2/$(notdir $1);
-endef
-
 # Returns the name of the kernel file to use based on the provided KERNELTYPE.
 # $1 : KERNELTYPE (compressed or uncompressed)
 define MAKE_KERNEL_NAME
@@ -654,7 +645,7 @@ install-scripts: $(SCRIPTS)
 	$(QUIET_INST)$(foreach f,$(SCRIPTS),$(call INSTALL_EXEC,$f,$(SCRIPTS_DIR)))
 
 install-completions:
-	$(QUIET_INST)install --mode 0644 -D  $(BASH_COMPLETIONS) $(DESTDIR)/$(BASH_COMPLETIONSDIR)/$(notdir $(BASH_COMPLETIONS));
+	$(QUIET_INST)install --mode 0644 -D  $(BASH_COMPLETIONS) $(BASH_COMPLETIONSDIR)/$(notdir $(BASH_COMPLETIONS));
 
 handle_vendor:
 	go mod tidy

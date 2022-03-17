@@ -128,7 +128,7 @@ parts:
         SKIP_GO_VERSION_CHECK=1 \
         QEMUCMD="${qemu_cmd}"
 
-      make install \
+      sudo make install \
         PREFIX=/usr \
         DESTDIR="${SNAPCRAFT_PART_INSTALL}" \
         SKIP_GO_VERSION_CHECK=1 \
