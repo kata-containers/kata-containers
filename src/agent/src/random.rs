@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use anyhow::Result;
+use anyhow::{ensure, Result};
 use nix::errno::Errno;
 use nix::fcntl::{self, OFlag};
 use nix::sys::stat::Mode;
@@ -24,6 +24,9 @@ type IoctlRequestType = libc::c_ulong;
 #[instrument]
 pub fn reseed_rng(data: &[u8]) -> Result<()> {
     let len = data.len() as libc::c_long;
+
+    ensure!(len > 0, "missing entropy data");
+
     fs::write(RNGDEV, data)?;
 
     let f = {
@@ -81,5 +84,12 @@ mod tests {
         } else {
             assert!(!ret.is_ok());
         }
+    }
+
+    #[test]
+    fn test_reseed_rng_zero_data() {
+        let seed = [];
+        let ret = reseed_rng(&seed);
+        assert!(!ret.is_ok());
     }
 }
