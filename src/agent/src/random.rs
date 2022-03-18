@@ -66,4 +66,20 @@ mod tests {
         let ret = reseed_rng(&seed);
         assert!(ret.is_ok());
     }
+
+    #[test]
+    fn test_reseed_rng_not_root() {
+        const POOL_SIZE: usize = 512;
+        let mut f = File::open("/dev/urandom").unwrap();
+        let mut seed = [0; POOL_SIZE];
+        let n = f.read(&mut seed).unwrap();
+        // Ensure the buffer was filled.
+        assert!(n == POOL_SIZE);
+        let ret = reseed_rng(&seed);
+        if nix::unistd::Uid::effective().is_root() {
+            assert!(ret.is_ok());
+        } else {
+            assert!(!ret.is_ok());
+        }
+    }
 }
