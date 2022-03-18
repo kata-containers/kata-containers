@@ -13,7 +13,7 @@ use tracing::instrument;
 
 pub const RNGDEV: &str = "/dev/random";
 pub const RNDADDTOENTCNT: libc::c_int = 0x40045201;
-pub const RNDRESEEDRNG: libc::c_int = 0x5207;
+pub const RNDRESEEDCRNG: libc::c_int = 0x5207;
 
 // Handle the differing ioctl(2) request types for different targets
 #[cfg(target_env = "musl")]
@@ -41,7 +41,7 @@ pub fn reseed_rng(data: &[u8]) -> Result<()> {
     };
     Errno::result(ret).map(drop)?;
 
-    let ret = unsafe { libc::ioctl(f.as_raw_fd(), RNDRESEEDRNG as IoctlRequestType, 0) };
+    let ret = unsafe { libc::ioctl(f.as_raw_fd(), RNDRESEEDCRNG as IoctlRequestType, 0) };
     Errno::result(ret).map(drop)?;
 
     Ok(())
