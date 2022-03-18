@@ -21,20 +21,7 @@ CONFIG_X86_SGX_KVM=y
    * [Intel SGX Kubernetes device plugin](https://github.com/intel/intel-device-plugins-for-kubernetes/tree/main/cmd/sgx_plugin#deploying-with-pre-built-images)
 
 > Note: Kata Containers supports creating VM sandboxes with Intel® SGX enabled
-> using [cloud-hypervisor](https://github.com/cloud-hypervisor/cloud-hypervisor/) VMM only. QEMU support is waiting to get the
-> Intel SGX enabled QEMU upstream release.
-
-## Installation
-
-### Kata Containers Guest Kernel
-
-Follow the instructions to [setup](../../tools/packaging/kernel/README.md#setup-kernel-source-code) and [build](../../tools/packaging/kernel/README.md#build-the-kernel) the experimental guest kernel. Then, install as:
-
-```sh
-$ sudo cp kata-linux-experimental-*/vmlinux /opt/kata/share/kata-containers/vmlinux.sgx
-$ sudo sed -i 's|vmlinux.container|vmlinux.sgx|g' \
-  /opt/kata/share/defaults/kata-containers/configuration-clh.toml
-```
+> using [cloud-hypervisor](https://github.com/cloud-hypervisor/cloud-hypervisor/) and [QEMU](https://www.qemu.org/) VMMs only.
 
 ### Kata Containers Configuration
 
@@ -47,6 +34,8 @@ to the `sandbox` are: `["io.katacontainers.*", "sgx.intel.com/epc"]`.
 ## Usage
 
 With the following sample job deployed using `kubectl apply -f`:
+
+> Note: Change the `runtimeClassName` option accordingly, only `kata-clh` and `kata-qemu` support Intel® SGX.
 
 ```yaml
 apiVersion: batch/v1
