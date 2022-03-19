@@ -18,6 +18,7 @@ use ttrpc::{
     r#async::{Server as TtrpcServer, TtrpcContext},
 };
 
+use anyhow::Error;
 use anyhow::{anyhow, Context, Result};
 use oci::{LinuxNamespace, Root, Spec};
 use protobuf::{Message, RepeatedField, SingularPtrField};
@@ -416,9 +417,21 @@ impl AgentService {
             signal = Signal::SIGKILL;
         }
 
-        p.signal(signal)?;
-
-        Ok(())
+        match p.signal(signal) {
+            Ok(_) => Ok(()),
+            Err(e) => {
+                if e == Errno::ESRCH {
+                    warn!(
+                        sl!(),
+                        "ESRCH";
+                        "container-id" => cid.clone(),
+                        "exec-id" => eid.clone(),
+                    );
+                    p.cleanup_process_stream();
+                }
+                Err(Error::from(e))
+            }
+        }
     }
 
     #[instrument]
@@ -1473,7 +1486,7 @@ async fn read_stream(reader: Arc<Mutex<ReadHalf<PipeStream>>>, l: usize) -> Resu
     content.resize(len, 0);
 
     if len == 0 {
-        return Err(anyhow!("read meet eof"));
+        return Err(anyhow!("EOF"));
     }
 
     Ok(content)
