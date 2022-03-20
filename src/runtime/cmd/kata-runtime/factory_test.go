@@ -8,7 +8,6 @@ package main
 import (
 	"context"
 	"flag"
-	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -43,9 +42,7 @@ func TestFactoryCLIFunctionNoRuntimeConfig(t *testing.T) {
 func TestFactoryCLIFunctionInit(t *testing.T) {
 	assert := assert.New(t)
 
-	tmpdir, err := os.MkdirTemp("", "")
-	assert.NoError(err)
-	defer os.RemoveAll(tmpdir)
+	tmpdir := t.TempDir()
 
 	runtimeConfig, err := newTestRuntimeConfig(tmpdir, testConsole, true)
 	assert.NoError(err)
@@ -92,9 +89,7 @@ func TestFactoryCLIFunctionInit(t *testing.T) {
 func TestFactoryCLIFunctionDestroy(t *testing.T) {
 	assert := assert.New(t)
 
-	tmpdir, err := os.MkdirTemp("", "")
-	assert.NoError(err)
-	defer os.RemoveAll(tmpdir)
+	tmpdir := t.TempDir()
 
 	runtimeConfig, err := newTestRuntimeConfig(tmpdir, testConsole, true)
 	assert.NoError(err)
@@ -126,9 +121,7 @@ func TestFactoryCLIFunctionDestroy(t *testing.T) {
 func TestFactoryCLIFunctionStatus(t *testing.T) {
 	assert := assert.New(t)
 
-	tmpdir, err := os.MkdirTemp("", "")
-	assert.NoError(err)
-	defer os.RemoveAll(tmpdir)
+	tmpdir := t.TempDir()
 
 	runtimeConfig, err := newTestRuntimeConfig(tmpdir, testConsole, true)
 	assert.NoError(err)

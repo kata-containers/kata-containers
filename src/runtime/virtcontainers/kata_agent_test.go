@@ -751,9 +751,7 @@ func TestHandlePidNamespace(t *testing.T) {
 func TestAgentConfigure(t *testing.T) {
 	assert := assert.New(t)
 
-	dir, err := os.MkdirTemp("", "kata-agent-test")
-	assert.Nil(err)
-	defer os.RemoveAll(dir)
+	dir := t.TempDir()
 
 	k := &kataAgent{}
 	h := &mockHypervisor{}
@@ -761,7 +759,7 @@ func TestAgentConfigure(t *testing.T) {
 	id := "foobar"
 	ctx := context.Background()
 
-	err = k.configure(ctx, h, id, dir, c)
+	err := k.configure(ctx, h, id, dir, c)
 	assert.Nil(err)
 
 	err = k.configure(ctx, h, id, dir, c)
@@ -872,9 +870,7 @@ func TestAgentCreateContainer(t *testing.T) {
 		},
 	}
 
-	dir, err := os.MkdirTemp("", "kata-agent-test")
-	assert.Nil(err)
-	defer os.RemoveAll(dir)
+	dir := t.TempDir()
 
 	err = k.configure(context.Background(), &mockHypervisor{}, sandbox.id, dir, KataAgentConfig{})
 	assert.Nil(err)
@@ -984,8 +980,7 @@ func TestKataCleanupSandbox(t *testing.T) {
 
 	kataHostSharedDirSaved := kataHostSharedDir
 	kataHostSharedDir = func() string {
-		td, _ := os.MkdirTemp("", "kata-Cleanup")
-		return td
+		return t.TempDir()
 	}
 	defer func() {
 		kataHostSharedDir = kataHostSharedDirSaved
@@ -996,7 +991,6 @@ func TestKataCleanupSandbox(t *testing.T) {
 	}
 
 	dir := kataHostSharedDir()
-	defer os.RemoveAll(dir)
 	err := os.MkdirAll(path.Join(dir, s.id), 0777)
 	assert.Nil(err)
 
@@ -1144,9 +1138,7 @@ func TestHandleHugepages(t *testing.T) {
 
 	assert := assert.New(t)
 
-	dir, err := ioutil.TempDir("", "hugepages-test")
-	assert.Nil(err)
-	defer os.RemoveAll(dir)
+	dir := t.TempDir()
 
 	k := kataAgent{}
 	var formattedSizes []string

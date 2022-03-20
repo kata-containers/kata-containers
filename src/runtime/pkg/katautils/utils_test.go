@@ -26,10 +26,6 @@ const (
 	testContainerID = "1"
 )
 
-var (
-	testDir = ""
-)
-
 func createFile(file, contents string) error {
 	return os.WriteFile(file, []byte(contents), testFileMode)
 }
@@ -44,17 +40,13 @@ func TestUtilsResolvePathEmptyPath(t *testing.T) {
 }
 
 func TestUtilsResolvePathValidPath(t *testing.T) {
-	dir, err := os.MkdirTemp("", "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(dir)
+	dir := t.TempDir()
 
 	target := path.Join(dir, "target")
 	linkDir := path.Join(dir, "a/b/c")
 	linkFile := path.Join(linkDir, "link")
 
-	err = createEmptyFile(target)
+	err := createEmptyFile(target)
 	assert.NoError(t, err)
 
 	absolute, err := filepath.Abs(target)
@@ -76,16 +68,13 @@ func TestUtilsResolvePathValidPath(t *testing.T) {
 }
 
 func TestUtilsResolvePathENOENT(t *testing.T) {
-	dir, err := os.MkdirTemp("", "")
-	if err != nil {
-		t.Fatal(err)
-	}
+	dir := t.TempDir()
 
 	target := path.Join(dir, "target")
 	linkDir := path.Join(dir, "a/b/c")
 	linkFile := path.Join(linkDir, "link")
 
-	err = createEmptyFile(target)
+	err := createEmptyFile(target)
 	assert.NoError(t, err)
 
 	err = os.MkdirAll(linkDir, testDirMode)
@@ -111,16 +100,12 @@ func TestUtilsResolvePathENOENT(t *testing.T) {
 func TestFileSize(t *testing.T) {
 	assert := assert.New(t)
 
-	dir, err := os.MkdirTemp(testDir, "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(dir)
+	dir := t.TempDir()
 
 	file := filepath.Join(dir, "foo")
 
 	// ENOENT
-	_, err = fileSize(file)
+	_, err := fileSize(file)
 	assert.Error(err)
 
 	err = createEmptyFile(file)
@@ -152,12 +137,10 @@ func TestWriteFileErrWriteFail(t *testing.T) {
 func TestWriteFileErrNoPath(t *testing.T) {
 	assert := assert.New(t)
 
-	dir, err := os.MkdirTemp(testDir, "")
-	assert.NoError(err)
-	defer os.RemoveAll(dir)
+	dir := t.TempDir()
 
 	// attempt to write a file over an existing directory
-	err = WriteFile(dir, "", 0000)
+	err := WriteFile(dir, "", 0000)
 	assert.Error(err)
 }
 
@@ -177,16 +160,12 @@ func TestGetFileContents(t *testing.T) {
 		{"processor   : 0\nvendor_id   : GenuineIntel\n"},
 	}
 
-	dir, err := os.MkdirTemp(testDir, "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(dir)
+	dir := t.TempDir()
 
 	file := filepath.Join(dir, "foo")
 
 	// file doesn't exist
-	_, err = GetFileContents(file)
+	_, err := GetFileContents(file)
 	assert.Error(t, err)
 
 	for _, d := range data {

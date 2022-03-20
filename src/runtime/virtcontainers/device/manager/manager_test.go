@@ -34,12 +34,8 @@ func TestNewDevice(t *testing.T) {
 	major := int64(252)
 	minor := int64(3)
 
-	tmpDir, err := os.MkdirTemp("", "")
-	assert.Nil(t, err)
-
-	config.SysDevPrefix = tmpDir
+	config.SysDevPrefix = t.TempDir()
 	defer func() {
-		os.RemoveAll(tmpDir)
 		config.SysDevPrefix = savedSysDevPrefix
 	}()
 
@@ -53,7 +49,7 @@ func TestNewDevice(t *testing.T) {
 		DevType:       "c",
 	}
 
-	_, err = dm.NewDevice(deviceInfo)
+	_, err := dm.NewDevice(deviceInfo)
 	assert.NotNil(t, err)
 
 	format := strconv.FormatInt(major, 10) + ":" + strconv.FormatInt(minor, 10)
@@ -99,15 +95,13 @@ func TestAttachVFIODevice(t *testing.T) {
 		blockDriver: config.VirtioBlock,
 		devices:     make(map[string]api.Device),
 	}
-	tmpDir, err := os.MkdirTemp("", "")
-	assert.Nil(t, err)
-	defer os.RemoveAll(tmpDir)
+	tmpDir := t.TempDir()
 
 	testFDIOGroup := "2"
 	testDeviceBDFPath := "0000:00:1c.0"
 
 	devicesDir := filepath.Join(tmpDir, testFDIOGroup, "devices")
-	err = os.MkdirAll(devicesDir, dirMode)
+	err := os.MkdirAll(devicesDir, dirMode)
 	assert.Nil(t, err)
 
 	deviceBDFDir := filepath.Join(devicesDir, testDeviceBDFPath)
