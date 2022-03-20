@@ -257,8 +257,8 @@ func testCheckContainerOnDiskState(c *Container, containerState types.ContainerS
 
 // writeContainerConfig write config.json to bundle path
 // and return bundle path.
-// NOTE: don't forget to delete the bundle path
-func writeContainerConfig() (string, error) {
+// NOTE: the bundle path is automatically removed by t.Cleanup
+func writeContainerConfig(t *testing.T) (string, error) {
 
 	basicSpec := `
 {
@@ -269,12 +269,9 @@ func writeContainerConfig() (string, error) {
 	}
 }`
 
-	configDir, err := os.MkdirTemp("", "vc-tmp-")
-	if err != nil {
-		return "", err
-	}
+	configDir := t.TempDir()
 
-	err = os.MkdirAll(configDir, DirMode)
+	err := os.MkdirAll(configDir, DirMode)
 	if err != nil {
 		return "", err
 	}
@@ -293,10 +290,7 @@ func TestSandboxSetSandboxAndContainerState(t *testing.T) {
 	contConfig := newTestContainerConfigNoop(contID)
 	assert := assert.New(t)
 
-	configDir, err := writeContainerConfig()
-	if err != nil {
-		os.RemoveAll(configDir)
-	}
+	configDir, err := writeContainerConfig(t)
 	assert.NoError(err)
 
 	// set bundle path annotation, fetchSandbox need this annotation to get containers
@@ -526,15 +520,14 @@ func TestContainerStateSetFstype(t *testing.T) {
 }
 
 func TestSandboxAttachDevicesVFIO(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "")
-	assert.Nil(t, err)
+	tmpDir := t.TempDir()
 	os.RemoveAll(tmpDir)
 
 	testFDIOGroup := "2"
 	testDeviceBDFPath := "0000:00:1c.0"
 
 	devicesDir := filepath.Join(tmpDir, testFDIOGroup, "devices")
-	err = os.MkdirAll(devicesDir, DirMode)
+	err := os.MkdirAll(devicesDir, DirMode)
 	assert.Nil(t, err)
 
 	deviceFile := filepath.Join(devicesDir, testDeviceBDFPath)
@@ -596,8 +589,7 @@ func TestSandboxAttachDevicesVhostUserBlk(t *testing.T) {
 		rootEnabled = false
 	}
 
-	tmpDir, err := os.MkdirTemp("", "")
-	assert.Nil(t, err)
+	tmpDir := t.TempDir()
 	os.RemoveAll(tmpDir)
 	dm := manager.NewDeviceManager(config.VirtioSCSI, true, tmpDir, nil)
 
@@ -606,7 +598,7 @@ func TestSandboxAttachDevicesVhostUserBlk(t *testing.T) {
 	deviceNodePath := filepath.Join(vhostUserDevNodePath, "vhostblk0")
 	deviceSockPath := filepath.Join(vhostUserSockPath, "vhostblk0")
 
-	err = os.MkdirAll(vhostUserDevNodePath, dirMode)
+	err := os.MkdirAll(vhostUserDevNodePath, dirMode)
 	assert.Nil(t, err)
 	err = os.MkdirAll(vhostUserSockPath, dirMode)
 	assert.Nil(t, err)

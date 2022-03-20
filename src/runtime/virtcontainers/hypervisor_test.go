@@ -390,12 +390,10 @@ func TestGetHostMemorySizeKb(t *testing.T) {
 		},
 	}
 
-	dir, err := os.MkdirTemp("", "")
-	assert.NoError(err)
-	defer os.RemoveAll(dir)
+	dir := t.TempDir()
 
 	file := filepath.Join(dir, "meminfo")
-	_, err = GetHostMemorySizeKb(file)
+	_, err := GetHostMemorySizeKb(file)
 	assert.Error(err)
 
 	for _, d := range data {

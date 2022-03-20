@@ -51,11 +51,8 @@ func TestGzipAccepted(t *testing.T) {
 
 func TestEnsureDir(t *testing.T) {
 	const testMode = 0755
-	tmpdir, err := os.MkdirTemp("", "TestEnsureDir")
 	assert := assert.New(t)
-
-	assert.NoError(err)
-	defer os.RemoveAll(tmpdir)
+	tmpdir := t.TempDir()
 
 	// nolint: govet
 	testCases := []struct {
@@ -120,9 +117,7 @@ func TestEnsureDir(t *testing.T) {
 
 func TestFirstValidExecutable(t *testing.T) {
 	assert := assert.New(t)
-	tmpdir, err := os.MkdirTemp("", "TestFirstValidPath")
-	assert.NoError(err)
-	defer os.RemoveAll(tmpdir)
+	tmpdir := t.TempDir()
 
 	// nolint: govet
 	testCases := []struct {

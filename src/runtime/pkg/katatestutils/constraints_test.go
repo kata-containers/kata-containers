@@ -271,14 +271,12 @@ func TestGetFileContents(t *testing.T) {
 		{"foo\nbar"},
 	}
 
-	dir, err := os.MkdirTemp("", "")
-	assert.NoError(err)
-	defer os.RemoveAll(dir)
+	dir := t.TempDir()
 
 	file := filepath.Join(dir, "foo")
 
 	// file doesn't exist
-	_, err = getFileContents(file)
+	_, err := getFileContents(file)
 	assert.Error(err)
 
 	for _, d := range data {

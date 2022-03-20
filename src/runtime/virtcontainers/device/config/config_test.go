@@ -17,9 +17,7 @@ import (
 func TestGetBackingFile(t *testing.T) {
 	assert := assert.New(t)
 
-	dir, err := os.MkdirTemp("", "backing")
-	assert.NoError(err)
-	defer os.RemoveAll(dir)
+	dir := t.TempDir()
 
 	orgGetSysDevPath := getSysDevPath
 	getSysDevPath = func(info DeviceInfo) string {

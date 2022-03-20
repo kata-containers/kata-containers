@@ -259,8 +259,7 @@ func testSetupFakeRootfs(t *testing.T) (testRawFile, loopDev, mntDir string, err
 		t.Skip(testDisabledAsNonRoot)
 	}
 
-	tmpDir, err := os.MkdirTemp("", "")
-	assert.NoError(err)
+	tmpDir := t.TempDir()
 
 	testRawFile = filepath.Join(tmpDir, "raw.img")
 	_, err = os.Stat(testRawFile)
@@ -570,14 +569,9 @@ func TestMountSharedDirMounts(t *testing.T) {
 
 	assert := assert.New(t)
 
-	testMountPath, err := os.MkdirTemp("", "sandbox-test")
-	assert.NoError(err)
-	defer os.RemoveAll(testMountPath)
-
 	// create a new shared directory for our test:
 	kataHostSharedDirSaved := kataHostSharedDir
-	testHostDir, err := os.MkdirTemp("", "kata-Cleanup")
-	assert.NoError(err)
+	testHostDir := t.TempDir()
 	kataHostSharedDir = func() string {
 		return testHostDir
 	}
@@ -611,12 +605,18 @@ func TestMountSharedDirMounts(t *testing.T) {
 	//
 	// Create the mounts that we'll test with
 	//
+	testMountPath := t.TempDir()
 	secretpath := filepath.Join(testMountPath, K8sSecret)
 	err = os.MkdirAll(secretpath, 0777)
 	assert.NoError(err)
 	secret := filepath.Join(secretpath, "super-secret-thing")
-	_, err = os.Create(secret)
+	f, err := os.Create(secret)
 	assert.NoError(err)
+	t.Cleanup(func() {
+		if err := f.Close(); err != nil {
+			t.Fatalf("failed to close file: %v", err)
+		}
+	})
 
 	mountDestination := "/fluffhead/token"
 	//
@@ -655,6 +655,13 @@ func TestMountSharedDirMounts(t *testing.T) {
 	assert.Equal(len(updatedMounts), 1)
 	assert.Equal(updatedMounts[mountDestination].Source, expectedStorageDest)
 	assert.Equal(updatedMounts[mountDestination].Destination, mountDestination)
+
+	// Perform cleanups
+	err = container.unmountHostMounts(k.ctx)
+	assert.NoError(err)
+
+	err = fsShare.Cleanup(k.ctx)
+	assert.NoError(err)
 }
 
 func TestGetContainerId(t *testing.T) {

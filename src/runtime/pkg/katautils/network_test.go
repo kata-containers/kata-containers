@@ -23,15 +23,13 @@ import (
 func TestGetNetNsFromBindMount(t *testing.T) {
 	assert := assert.New(t)
 
-	tmpdir, err := os.MkdirTemp("", "")
-	assert.NoError(err)
-	defer os.RemoveAll(tmpdir)
+	tmpdir := t.TempDir()
 
 	mountFile := filepath.Join(tmpdir, "mountInfo")
 	nsPath := filepath.Join(tmpdir, "ns123")
 
 	// Non-existent namespace path
-	_, err = getNetNsFromBindMount(nsPath, mountFile)
+	_, err := getNetNsFromBindMount(nsPath, mountFile)
 	assert.NotNil(err)
 
 	tmpNSPath := filepath.Join(tmpdir, "testNetNs")
@@ -85,9 +83,7 @@ func TestHostNetworkingRequested(t *testing.T) {
 	assert.Error(err)
 
 	// Bind-mounted Netns
-	tmpdir, err := os.MkdirTemp("", "")
-	assert.NoError(err)
-	defer os.RemoveAll(tmpdir)
+	tmpdir := t.TempDir()
 
 	// Create a bind mount to the current network namespace.
 	tmpFile := filepath.Join(tmpdir, "testNetNs")
