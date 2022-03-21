@@ -44,3 +44,12 @@ run_go_test()
 	clone_tests_repo
 	bash "$tests_repo_dir/.ci/go-test.sh"
 }
+
+run_docs_url_alive_check()
+{
+	clone_tests_repo
+	# Make sure we have the targeting branch
+	git remote set-branches --add origin "${branch}"
+	git fetch -a
+	bash "$tests_repo_dir/.ci/static-checks.sh" --docs --all "github.com/kata-containers/kata-containers"
+}
