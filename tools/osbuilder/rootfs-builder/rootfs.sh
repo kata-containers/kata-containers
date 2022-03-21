@@ -39,7 +39,11 @@ handle_error() {
 trap 'handle_error $LINENO' ERR
 
 # Default architecture
-ARCH=$(uname -m)
+export ARCH=${ARCH:-$(uname -m)}
+if [ "$ARCH" == "ppc64le" ] || [ "$ARCH" == "s390x" ]; then
+	LIBC=gnu
+	echo "WARNING: Forcing LIBC=gnu because $ARCH has no musl Rust target"
+fi
 
 # distro-specific config file
 typeset -r CONFIG_SH="config.sh"
@@ -102,6 +106,11 @@ AGENT_SOURCE_BIN    Path to the directory of agent binary.
 
 AGENT_VERSION       Version of the agent to include in the rootfs.
                     Default value: ${AGENT_VERSION:-<not set>}
+
+ARCH                Target architecture (according to \`uname -m\`).
+                    Foreign bootstraps are currently only supported for Ubuntu
+                    and glibc agents.
+                    Default value: $(uname -m)
 
 DISTRO_REPO         Use host repositories to install guest packages.
                     Default value: <not set>
@@ -428,6 +437,7 @@ build_rootfs_distro()
 			--env ROOTFS_DIR="/rootfs" \
 			--env AGENT_BIN="${AGENT_BIN}" \
 			--env AGENT_INIT="${AGENT_INIT}" \
+			--env ARCH="${ARCH}" \
 			--env CI="${CI}" \
 			--env KERNEL_MODULES_DIR="${KERNEL_MODULES_DIR}" \
 			--env LIBC="${LIBC}" \
@@ -560,11 +570,6 @@ EOF
 	AGENT_DIR="${ROOTFS_DIR}/usr/bin"
 	AGENT_DEST="${AGENT_DIR}/${AGENT_BIN}"
 
-	if [ "$ARCH" == "ppc64le" ] || [ "$ARCH" == "s390x" ]; then
-		LIBC=gnu
-		warning "Forcing LIBC=gnu because $ARCH has no musl Rust target"
-	fi
-
 	if [ -z "${AGENT_SOURCE_BIN}" ] ; then
 		test -r "${HOME}/.cargo/env" && source "${HOME}/.cargo/env"
 		# rust agent needs ${arch}-unknown-linux-${LIBC}
@@ -583,7 +588,7 @@ EOF
 			info "Set up libseccomp"
 			libseccomp_install_dir=$(mktemp -d -t libseccomp.XXXXXXXXXX)
 			gperf_install_dir=$(mktemp -d -t gperf.XXXXXXXXXX)
-			bash ${script_dir}/../../../ci/install_libseccomp.sh "${libseccomp_install_dir}" "${gperf_install_dir}"
+			${script_dir}/../../../ci/install_libseccomp.sh "${libseccomp_install_dir}" "${gperf_install_dir}"
 			echo "Set environment variables for the libseccomp crate to link the libseccomp library statically"
 			export LIBSECCOMP_LINK_TYPE=static
 			export LIBSECCOMP_LIB_PATH="${libseccomp_install_dir}/lib"
@@ -667,16 +672,28 @@ EOF
 		source "${HOME}/.cargo/env"
 		target="${ARCH}-unknown-linux-${LIBC}"
 		if [ "${AA_KBC}" == "eaa_kbc" ] && [ "${ARCH}" == "x86_64" ]; then
-			AA_RUSTFLAG="-C link-args=-Wl,-rpath,/usr/local/lib/rats-tls"
+			RUSTFLAGS="-C link-args=-Wl,-rpath,/usr/local/lib/rats-tls"
 			# Currently eaa_kbc module only support this specific platform
 			target="x86_64-unknown-linux-gnu"
 		fi
-		RUSTFLAGS=${AA_RUSTFLAG} cargo build --release --target "${target}" --no-default-features --features "${AA_KBC}"
-		install -o root -g root -m 0755 "target/${target}/release/attestation-agent" "${ROOTFS_DIR}/usr/local/bin/"
+		if [ "$(uname -m)" != "$ARCH" ]; then
+			RUSTFLAGS+=" -C linker=$CC"
+		fi
+		export RUSTFLAGS
+		# Foreign CC is incompatible with libgit2 -- CC is still handled by `-C linker=...` flag
+		CC= cargo build --release --target "${target}" --no-default-features --features "${AA_KBC}"
+		install -D -o root -g root -m 0755 "target/${target}/release/attestation-agent" -t "${ROOTFS_DIR}/usr/local/bin/"
 		popd
 	fi
 
 	if [ "${UMOCI}" = "yes" ]; then
+		case "$ARCH" in
+			aarch64) GOARCH=arm64;;
+			x86_64) GOARCH=amd64;;
+			*) GOARCH="$ARCH"
+		esac
+		export GOARCH
+
 		umoci_url="$(get_package_version_from_kata_yaml externals.umoci.url)"
 		umoci_tag="$(get_package_version_from_kata_yaml externals.umoci.tag)"
 		info "Install umoci"
