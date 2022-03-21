@@ -547,7 +547,7 @@ type DeviceInfo struct {
 	ID string
 
 	// DriverOptions is specific options for each device driver
-	// for example, for BlockDevice, we can set DriverOptions["blockDriver"]="virtio-blk"
+	// for example, for BlockDevice, we can set DriverOptions["block-driver"]="virtio-blk"
 	DriverOptions map[string]string
 }
 ```
@@ -835,7 +835,7 @@ type DeviceInfo struct {
 	ID string
 
 	// DriverOptions is specific options for each device driver
-	// for example, for BlockDevice, we can set DriverOptions["blockDriver"]="virtio-blk"
+	// for example, for BlockDevice, we can set DriverOptions["block-driver"]="virtio-blk"
 	DriverOptions map[string]string
 }
 ```
