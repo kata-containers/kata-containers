@@ -39,10 +39,16 @@ generate-protocols:
 static-checks: build
 	bash ci/static-checks.sh
 
+docs-url-alive-check:
+	bash ci/docs-url-alive-check.sh
+
 .PHONY: \
 	all \
 	binary-tarball \
 	default \
 	install-binary-tarball \
 	logging-crate-tests \
-	static-checks
+	static-checks \
+	docs-url-alive-check
+
+
