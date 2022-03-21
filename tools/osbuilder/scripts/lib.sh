@@ -7,7 +7,6 @@
 set -e
 
 KATA_REPO=${KATA_REPO:-github.com/kata-containers/kata-containers}
-MUSL_VERSION=${MUSL_VERSION:-"null"}
 # Give preference to variable set by CI
 yq_file="${script_dir}/../../../ci/install_yq.sh"
 kata_versions_file="${script_dir}/../../../versions.yaml"
@@ -204,107 +203,27 @@ generate_dockerfile()
 	dir="$1"
 	[ -d "${dir}" ] || die "${dir}: not a directory"
 
-	local architecture=$(uname -m)
-	local rustarch=${architecture}
-	local muslarch=${architecture}
-	local libc=musl
-	case "$(uname -m)" in
-		"ppc64le")
-			rustarch=powerpc64le
-			muslarch=powerpc64
-			libc=gnu
-			;;
-		"s390x")
-			libc=gnu
-			;;
-
-		*)
-			;;
-	esac
+	local rustarch="$ARCH"
+	[ "$ARCH" = ppc64le ] && rustarch=powerpc64le
 
 	[ -n "${http_proxy:-}" ] && readonly set_proxy="RUN sed -i '$ a proxy="${http_proxy:-}"' /etc/dnf/dnf.conf /etc/yum.conf; true"
 
 	# Rust agent
-	# rust installer should set path apropiately, just in case
-	# install musl for compiling rust-agent
-	local musl_source_url="https://git.zv.io/toolchains/musl-cross-make.git"
-	local musl_source_dir="musl-cross-make"
-	install_musl=
-	if [ "${muslarch}" == "aarch64" ]; then
-		local musl_tar="${muslarch}-linux-musl-native.tgz"
-		local musl_dir="${muslarch}-linux-musl-native"
-		local aarch64_musl_target="aarch64-linux-musl"
-		install_musl="
-RUN cd /tmp; \
-	mkdir -p /usr/local/musl/; \
-	if curl -sLO --fail https://musl.cc/${musl_tar}; then \
-		tar -zxf ${musl_tar}; \
-		cp -r ${musl_dir}/* /usr/local/musl/; \
-	else \
-		git clone ${musl_source_url}; \
-		TARGET=${aarch64_musl_target} make -j$(nproc) -C ${musl_source_dir} install; \
-		cp -r ${musl_source_dir}/output/* /usr/local/musl/; \
-		cp /usr/local/musl/bin/aarch64-linux-musl-g++ /usr/local/musl/bin/g++; \
-	fi
-ENV PATH=\$PATH:/usr/local/musl/bin
-RUN ln -sf /usr/local/musl/bin/g++ /usr/bin/g++
-"
-	else
-		local musl_tar="musl-${MUSL_VERSION}.tar.gz"
-		local musl_dir="musl-${MUSL_VERSION}"
-		install_musl="
-RUN pushd /root; \
-    curl -sLO https://www.musl-libc.org/releases/${musl_tar}; tar -zxf ${musl_tar}; \
-	cd ${musl_dir}; \
-	sed -i \"s/^ARCH = .*/ARCH = ${muslarch}/g\" dist/config.mak; \
-	./configure > /dev/null 2>\&1; \
-	make > /dev/null 2>\&1; \
-	make install > /dev/null 2>\&1; \
-	echo \"/usr/local/musl/lib\" > /etc/ld-musl-${muslarch}.path; \
-	popd
-ENV PATH=\$PATH:/usr/local/musl/bin
-"
-	fi
-
 	readonly install_rust="
-RUN curl --proto '=https' --tlsv1.2 https://sh.rustup.rs -sSLf --output /tmp/rust-init; \
-    chmod a+x /tmp/rust-init; \
-	export http_proxy=${http_proxy:-}; \
-	export https_proxy=${http_proxy:-}; \
-	/tmp/rust-init -y --default-toolchain ${RUST_VERSION}
-RUN . /root/.cargo/env; \
-    export http_proxy=${http_proxy:-}; \
-	export https_proxy=${http_proxy:-}; \
-	cargo install cargo-when; \
-	rustup target install ${rustarch}-unknown-linux-${libc}
-RUN ln -sf /usr/bin/g++ /bin/musl-g++
+ENV http_proxy=${http_proxy:-}
+ENV https_proxy=${http_proxy:-}
+RUN curl --proto '=https' --tlsv1.2 https://sh.rustup.rs -sSLf | \
+    sh -s -- -y --default-toolchain ${RUST_VERSION} -t ${rustarch}-unknown-linux-${LIBC}
+RUN . /root/.cargo/env; cargo install cargo-when
 "
 	pushd "${dir}"
-	dockerfile_template="Dockerfile.in"
-	dockerfile_arch_template="Dockerfile-${architecture}.in"
-	# if arch-specific docker file exists, swap the univesal one with it.
-        if [ -f "${dockerfile_arch_template}" ]; then
-                dockerfile_template="${dockerfile_arch_template}"
-        else
-                [ -f "${dockerfile_template}" ] || die "${dockerfile_template}: file not found"
-        fi
 
-	# ppc64le and s390x have no musl target
-	if [ "${architecture}" == "ppc64le" ] || [ "${architecture}" == "s390x" ]; then
-		sed \
-			-e "s|@OS_VERSION@|${OS_VERSION:-}|g" \
-			-e "s|@INSTALL_MUSL@||g" \
-			-e "s|@INSTALL_RUST@|${install_rust//$'\n'/\\n}|g" \
-			-e "s|@SET_PROXY@|${set_proxy:-}|g" \
-			"${dockerfile_template}" > Dockerfile
-	else
-		sed \
-			-e "s|@OS_VERSION@|${OS_VERSION:-}|g" \
-			-e "s|@INSTALL_MUSL@|${install_musl//$'\n'/\\n}|g" \
-			-e "s|@INSTALL_RUST@|${install_rust//$'\n'/\\n}|g" \
-			-e "s|@SET_PROXY@|${set_proxy:-}|g" \
-			"${dockerfile_template}" > Dockerfile
-	fi
+	sed \
+		-e "s#@OS_VERSION@#${OS_VERSION:-}#g" \
+		-e "s#@ARCH@#$ARCH#g" \
+		-e "s#@INSTALL_RUST@#${install_rust//$'\n'/\\n}#g" \
+		-e "s#@SET_PROXY@#${set_proxy:-}#g" \
+		Dockerfile.in > Dockerfile
 	popd
 }
 
@@ -343,17 +262,6 @@ detect_rust_version()
 	RUST_VERSION="$(get_package_version_from_kata_yaml "$yq_path")"
 
 	[ -n "$RUST_VERSION" ]
-}
-
-detect_musl_version()
-{
-	info "Detecting musl version"
-    local yq_path="externals.musl.version"
-
-	info "Get musl version from ${kata_versions_file}"
-	MUSL_VERSION="$(get_package_version_from_kata_yaml "$yq_path")"
-
-	[ -n "$MUSL_VERSION" ]
 }
 
 before_starting_container() {

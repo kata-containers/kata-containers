@@ -14,7 +14,6 @@ script_name="${0##*/}"
 script_dir="$(dirname $(readlink -f $0))"
 AGENT_VERSION=${AGENT_VERSION:-}
 RUST_VERSION="null"
-MUSL_VERSION=${MUSL_VERSION:-"null"}
 AGENT_BIN=${AGENT_BIN:-kata-agent}
 AGENT_INIT=${AGENT_INIT:-no}
 KERNEL_MODULES_DIR=${KERNEL_MODULES_DIR:-""}
@@ -40,7 +39,11 @@ handle_error() {
 trap 'handle_error $LINENO' ERR
 
 # Default architecture
-ARCH=$(uname -m)
+export ARCH=${ARCH:-$(uname -m)}
+if [ "$ARCH" == "ppc64le" ] || [ "$ARCH" == "s390x" ]; then
+	LIBC=gnu
+	echo "WARNING: Forcing LIBC=gnu because $ARCH has no musl Rust target"
+fi
 
 # distro-specific config file
 typeset -r CONFIG_SH="config.sh"
@@ -104,6 +107,11 @@ AGENT_SOURCE_BIN    Path to the directory of agent binary.
 AGENT_VERSION       Version of the agent to include in the rootfs.
                     Default value: ${AGENT_VERSION:-<not set>}
 
+ARCH                Target architecture (according to \`uname -m\`).
+                    Foreign bootstraps are currently only supported for Ubuntu
+                    and glibc agents.
+                    Default value: $(uname -m)
+
 DISTRO_REPO         Use host repositories to install guest packages.
                     Default value: <not set>
 
@@ -124,6 +132,9 @@ IMAGE_REGISTRY      Hostname for the image registry used to pull down the rootfs
 KERNEL_MODULES_DIR  Path to a directory containing kernel modules to include in
                     the rootfs.
                     Default value: <empty>
+
+LIBC                libc the agent is built against (gnu or musl).
+                    Default value: ${LIBC} (varies with architecture)
 
 ROOTFS_DIR          Path to the directory that is populated with the rootfs.
                     Default value: <${script_name} path>/rootfs-<DISTRO-name>
@@ -335,11 +346,6 @@ build_rootfs_distro()
 
 	echo "Required rust version: $RUST_VERSION"
 
-	detect_musl_version ||
-		die "Could not detect the required musl version for AGENT_VERSION='${AGENT_VERSION:-main}'."
-
-	echo "Required musl version: $MUSL_VERSION"
-
 	if [ -z "${USE_DOCKER}" ] && [ -z "${USE_PODMAN}" ]; then
 		info "build directly"
 		build_rootfs ${ROOTFS_DIR}
@@ -411,8 +417,10 @@ build_rootfs_distro()
 			--env ROOTFS_DIR="/rootfs" \
 			--env AGENT_BIN="${AGENT_BIN}" \
 			--env AGENT_INIT="${AGENT_INIT}" \
+			--env ARCH="${ARCH}" \
 			--env CI="${CI}" \
 			--env KERNEL_MODULES_DIR="${KERNEL_MODULES_DIR}" \
+			--env LIBC="${LIBC}" \
 			--env EXTRA_PKGS="${EXTRA_PKGS}" \
 			--env OSBUILDER_VERSION="${OSBUILDER_VERSION}" \
 			--env OS_VERSION="${OS_VERSION}" \
@@ -540,11 +548,6 @@ EOF
 	AGENT_DEST="${AGENT_DIR}/${AGENT_BIN}"
 
 	if [ -z "${AGENT_SOURCE_BIN}" ] ; then
-		if [ "$ARCH" == "ppc64le" ] || [ "$ARCH" == "s390x" ]; then
-			LIBC=gnu
-			echo "WARNING: Forcing LIBC=gnu because $ARCH has no musl Rust target"
-		fi
-		[ "$LIBC" == "musl" ] && bash ${script_dir}/../../../ci/install_musl.sh
 		test -r "${HOME}/.cargo/env" && source "${HOME}/.cargo/env"
 		# rust agent needs ${arch}-unknown-linux-${LIBC}
 		if ! (rustup show | grep -v linux-${LIBC} > /dev/null); then
@@ -555,7 +558,6 @@ EOF
 			bash ${script_dir}/../../../ci/install_rust.sh ${RUST_VERSION}
 		fi
 		test -r "${HOME}/.cargo/env" && source "${HOME}/.cargo/env"
-		[ "$ARCH" == "aarch64" ] && OLD_PATH=$PATH && export PATH=$PATH:/usr/local/musl/bin
 
 		agent_dir="${script_dir}/../../../src/agent/"
 
@@ -563,7 +565,7 @@ EOF
 			info "Set up libseccomp"
 			libseccomp_install_dir=$(mktemp -d -t libseccomp.XXXXXXXXXX)
 			gperf_install_dir=$(mktemp -d -t gperf.XXXXXXXXXX)
-			bash ${script_dir}/../../../ci/install_libseccomp.sh "${libseccomp_install_dir}" "${gperf_install_dir}"
+			${script_dir}/../../../ci/install_libseccomp.sh "${libseccomp_install_dir}" "${gperf_install_dir}"
 			echo "Set environment variables for the libseccomp crate to link the libseccomp library statically"
 			export LIBSECCOMP_LINK_TYPE=static
 			export LIBSECCOMP_LIB_PATH="${libseccomp_install_dir}/lib"
@@ -577,7 +579,6 @@ EOF
 		make clean
 		make LIBC=${LIBC} INIT=${AGENT_INIT} SECCOMP=${SECCOMP}
 		make install DESTDIR="${ROOTFS_DIR}" LIBC=${LIBC} INIT=${AGENT_INIT}
-		[ "$ARCH" == "aarch64" ] && export PATH=$OLD_PATH && rm -rf /usr/local/musl
 		if [ "${SECCOMP}" == "yes" ]; then
 			rm -rf "${libseccomp_install_dir}" "${gperf_install_dir}"
 		fi

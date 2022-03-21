@@ -6,7 +6,7 @@
 ARG IMAGE_REGISTRY=docker.io
 FROM ${IMAGE_REGISTRY}/alpine:3.15
 
-RUN apk update && apk add \
+RUN apk update && apk add --no-cache \
     apk-tools-static \
     autoconf \
     automake \
@@ -26,3 +26,5 @@ RUN apk update && apk add \
     musl-dev \
     protoc \
     tar
+# aarch64 requires this name -- link for all
+RUN ln -s /usr/bin/gcc "/usr/bin/$(uname -m)-linux-musl-gcc"
