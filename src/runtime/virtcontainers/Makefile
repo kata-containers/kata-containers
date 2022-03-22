@@ -6,8 +6,7 @@
 
 PREFIX := /usr
 BIN_DIR := $(PREFIX)/bin
-VC_BIN_DIR := $(BIN_DIR)/virtcontainers/bin
-TEST_BIN_DIR := $(VC_BIN_DIR)/test
+TEST_BIN_DIR := $(BIN_DIR)/virtcontainers/bin/test
 HOOK_DIR := hook/mock
 HOOK_BIN := hook
 MK_DIR := $(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
@@ -56,7 +55,6 @@ define INSTALL_TEST_EXEC
 endef
 
 install:
-	@mkdir -p $(VC_BIN_DIR)
 	@mkdir -p $(TEST_BIN_DIR)
 	$(call INSTALL_TEST_EXEC,$(HOOK_DIR)/$(HOOK_BIN))
 
