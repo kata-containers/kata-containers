@@ -5,8 +5,6 @@
 #
 
 PREFIX := /usr
-BIN_DIR := $(PREFIX)/bin
-TEST_BIN_DIR := $(BIN_DIR)/virtcontainers/bin/test
 HOOK_DIR := hook/mock
 HOOK_BIN := hook
 MK_DIR := $(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
@@ -47,29 +45,6 @@ check-go-test:
 	bash $(MK_DIR)/../../../ci/go-test.sh
 
 #
-# Install
-#
-
-define INSTALL_TEST_EXEC
-	install -D $1 $(TEST_BIN_DIR)/ || exit 1;
-endef
-
-install:
-	@mkdir -p $(TEST_BIN_DIR)
-	$(call INSTALL_TEST_EXEC,$(HOOK_DIR)/$(HOOK_BIN))
-
-#
-# Uninstall
-#
-
-define UNINSTALL_TEST_EXEC
-	rm -f $(call FILE_SAFE_TO_REMOVE,$(TEST_BIN_DIR)/$1) || exit 1;
-endef
-
-uninstall:
-	$(call UNINSTALL_TEST_EXEC,$(HOOK_BIN))
-
-#
 # Clean
 #
 
@@ -92,6 +67,4 @@ clean:
 	check \
 	check-go-static \
 	check-go-test \
-	install \
-	uninstall \
 	clean
