@@ -48,9 +48,9 @@ Running Docker containers Kata Containers requires care because `VOLUME`s specif
 kataShared on / type virtiofs (rw,relatime,dax)
 ```
 
-`kataShared` mount types are powered by [`virtio-fs`][virtio-fs], a marked improvement over `virtio-9p`, thanks to [PR #1016](https://github.com/kata-containers/runtime/pull/1016). While `virtio-fs` is normally an excellent choice, in the case of DinD workloads `virtio-fs` causes an issue -- [it *cannot* be used as a "upper layer" of `overlayfs` without a custom patch](http://lists.katacontainers.io/pipermail/kata-dev/2020-January/001216.html).
+`kataShared` mount types are powered by [`virtio-fs`](https://virtio-fs.gitlab.io/), a marked improvement over `virtio-9p`, thanks to [PR #1016](https://github.com/kata-containers/runtime/pull/1016). While `virtio-fs` is normally an excellent choice, in the case of DinD workloads `virtio-fs` causes an issue -- [it *cannot* be used as a "upper layer" of `overlayfs` without a custom patch](http://lists.katacontainers.io/pipermail/kata-dev/2020-January/001216.html).
 
-As `/var/lib/docker` is a `VOLUME` specified by DinD (i.e. the `docker` images tagged `*-dind`/`*-dind-rootless`), `docker` fill fail to start (or even worse, silently pick a worse storage driver like `vfs`) when started in a Kata Container. Special measures must be taken when running DinD-powered workloads in Kata Containers.
+As `/var/lib/docker` is a `VOLUME` specified by DinD (i.e. the `docker` images tagged `*-dind`/`*-dind-rootless`), `docker` will fail to start (or even worse, silently pick a worse storage driver like `vfs`) when started in a Kata Container. Special measures must be taken when running DinD-powered workloads in Kata Containers.
 
 ## Workarounds/Solutions
 
@@ -58,7 +58,7 @@ Thanks to various community contributions (see [issue references below](#referen
 
 ### Use a memory backed volume
 
-For small workloads (small container images, without much generated filesystem load), a memory-backed volume is sufficient. Kubernetes supports a variant of  [the `EmptyDir` volume][k8s-emptydir], which allows for memdisk-backed storage -- the [the `medium: Memory` ][k8s-memory-volume-type]. An example of a `Pod` using such a setup [was contributed](https://github.com/kata-containers/runtime/issues/1429#issuecomment-477385283), and is reproduced below:
+For small workloads (small container images, without much generated filesystem load), a memory-backed volume is sufficient. Kubernetes supports a variant of  [the `EmptyDir` volume](https://kubernetes.io/docs/concepts/storage/volumes/#emptydir), which allows for memdisk-backed storage -- the the `medium: Memory`. An example of a `Pod` using such a setup [was contributed](https://github.com/kata-containers/runtime/issues/1429#issuecomment-477385283), and is reproduced below:
 
 ```yaml
 apiVersion: v1
