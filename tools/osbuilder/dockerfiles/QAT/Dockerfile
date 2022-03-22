@@ -1,15 +1,14 @@
-# Copyright (c) 2020 Intel Corporation
+# Copyright (c) 2020-2022 Intel Corporation
 #
 # SPDX-License-Identifier: Apache-2.0
 
-# Kata osbuilder 'works best' on Fedora
-FROM fedora:34
+FROM ubuntu:20.04
 
 # Version of the Dockerfile - update if you change this file to avoid 'stale'
 # images being pulled from the registry.
 # Set AGENT_VERSION as an env variable to specify a specific version of Kata Agent to install
 
-LABEL DOCKERFILE_VERSION="2.3"
+LABEL DOCKERFILE_VERSION="2.4"
 
 ENV QAT_DRIVER_VER "QAT.L.4.15.0-00011.tar.gz"
 ENV QAT_DRIVER_URL "https://downloadmirror.intel.com/649693/${QAT_DRIVER_VER}"
@@ -19,35 +18,40 @@ ENV AGENT_VERSION ""
 ENV ROOTFS_OS "ubuntu"
 ENV OUTPUT_DIR "/output"
 
-RUN dnf install -y \
+RUN apt-get update && \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y \
     bc \
     bison \
+    curl \
     debootstrap \
     diffutils \
     e2fsprogs \
-    elfutils-libelf-devel \
+    libelf-dev \
+    libsystemd-dev \
+    libudev-dev \
     findutils \
     flex \
     gcc \
-    gcc-c++ \
+    g++ \
     git \
-    kiwi \
     kmod \
     openssl \
-    openssl-devel \
+    libssl-dev \
     make \
+    multistrap \
     parted \
     patch \
-    qemu-img \
-    systemd-devel \
+    pkg-config \
+    qemu-utils \
     sudo \
-    xz \
+    xz-utils \
     yasm && \
-    dnf clean all
+    apt autoremove
 
 # Add in non-privileged user
-RUN useradd qatbuilder -p "" && \
-    echo "qatbuilder ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
+RUN useradd -r -G "sudo" -p "" -m qatbuilder && \
+    chown -R qatbuilder:qatbuilder /home/qatbuilder && \
+    echo "qatbuilder ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
 
 # Pull in our local files
 COPY ./run.sh /input/
