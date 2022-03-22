@@ -51,10 +51,6 @@ check-go-test:
 # Install
 #
 
-define INSTALL_EXEC
-	install -D $1 $(VC_BIN_DIR)/ || exit 1;
-endef
-
 define INSTALL_TEST_EXEC
 	install -D $1 $(TEST_BIN_DIR)/ || exit 1;
 endef
@@ -67,10 +63,6 @@ install:
 #
 # Uninstall
 #
-
-define UNINSTALL_EXEC
-	rm -f $(call FILE_SAFE_TO_REMOVE,$(VC_BIN_DIR)/$1) || exit 1;
-endef
 
 define UNINSTALL_TEST_EXEC
 	rm -f $(call FILE_SAFE_TO_REMOVE,$(TEST_BIN_DIR)/$1) || exit 1;
