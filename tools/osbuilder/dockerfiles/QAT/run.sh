@@ -4,7 +4,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-set -u
+set -ux
 
 # NOTE: Some env variables are set in the Dockerfile - those that are
 # intended to be over-rideable.
@@ -21,7 +21,7 @@ tests_repo_path=${GOPATH}/src/${tests_repo}
 
 grab_qat_drivers()
 {
-    /bin/echo -e "\n\e[1;42mDownload and extract the drivers\e[0m" 
+    /bin/echo -e "\n\e[1;42mDownload and extract the drivers\e[0m"
     mkdir -p $QAT_SRC
     cd $QAT_SRC
     wget $QAT_DRIVER_URL
@@ -39,9 +39,9 @@ grab_kata_repos()
     # Check out all the repos we will use now, so we can try and ensure they use the specified branch
     # Only check out the branch needed, and make it shallow and thus space/bandwidth efficient
     # Use a green prompt with white text for easy viewing
-    /bin/echo -e "\n\e[1;42mClone and checkout Kata repos\e[0m" 
-    git clone --single-branch --branch $KATA_REPO_VERSION --depth=1 https://${kata_repo} ${kata_repo_path}
-    git clone --single-branch --branch $KATA_REPO_VERSION --depth=1 https://${tests_repo} ${tests_repo_path}
+    /bin/echo -e "\n\e[1;42mClone and checkout Kata repos\e[0m"
+    [ -d "${kata_repo_path}" ] || git clone --single-branch --branch $KATA_REPO_VERSION --depth=1 https://${kata_repo} ${kata_repo_path}
+    [ -d "${tests_repo_path}" ] || git clone --single-branch --branch $KATA_REPO_VERSION --depth=1 https://${tests_repo} ${tests_repo_path}
 }
 
 configure_kernel()
@@ -60,22 +60,22 @@ build_kernel()
     cd ${kata_repo_path}
     LINUX_VER=$(ls -d kata-linux-*)
     sed -i 's/EXTRAVERSION =/EXTRAVERSION = .qat.container/' $LINUX_VER/Makefile
-    /bin/echo -e "\n\e[1;42mBuild Kata kernel with CRYPTO support\e[0m" 
+    /bin/echo -e "\n\e[1;42mBuild Kata kernel with CRYPTO support\e[0m"
     ./tools/packaging/kernel/build-kernel.sh build
 }
 
 build_rootfs()
 {
     # Due to an issue with debootstrap unmounting /proc when running in a
-    # --privileged container, change into /proc to keep it from being umounted. 
-    # This should only be done for Ubuntu and Debian based OS's. Other OS 
+    # --privileged container, change into /proc to keep it from being umounted.
+    # This should only be done for Ubuntu and Debian based OS's. Other OS
     # distributions had issues if building the rootfs from /proc
 
-    if [ "${ROOTFS_OS}" == "ubuntu" ]; then 
+    if [ "${ROOTFS_OS}" == "ubuntu" ]; then
         cd /proc
     fi
     /bin/echo -e "\n\e[1;42mDownload ${ROOTFS_OS} based rootfs\e[0m"
-    sudo -E SECCOMP=no EXTRA_PKGS='kmod' ${kata_repo_path}/tools/osbuilder/rootfs-builder/rootfs.sh $ROOTFS_OS 
+    sudo -E SECCOMP=no EXTRA_PKGS='kmod' ${kata_repo_path}/tools/osbuilder/rootfs-builder/rootfs.sh $ROOTFS_OS
 }
 
 build_qat_drivers()
@@ -90,7 +90,7 @@ build_qat_drivers()
     KERNEL_ROOTFS_DIR=${KERNEL_MAJOR_VERSION}.${KERNEL_PATHLEVEL}.${KERNEL_SUBLEVEL}${KERNEL_EXTRAVERSION}
     cd $QAT_SRC
     KERNEL_SOURCE_ROOT=${linux_kernel_path} ./configure ${QAT_CONFIGURE_OPTIONS}
-    make all -j$(nproc) 
+    make all -j$(nproc)
 }
 
 add_qat_to_rootfs()
@@ -113,8 +113,8 @@ copy_outputs()
     sudo cp ${linux_kernel_path}/vmlinux $OUTPUT_DIR/vmlinux-${LINUX_VER}_qat
     sudo cp  ${kata_repo_path}/tools/osbuilder/image-builder/kata-containers.img $OUTPUT_DIR
     sudo mkdir -p ${OUTPUT_DIR}/configs || true
-    # Change extension from .conf.vm to just .conf and change the SSL section to 
-    # SHIM so it works with Kata containers 
+    # Change extension from .conf.vm to just .conf and change the SSL section to
+    # SHIM so it works with Kata containers
     for f in $QAT_SRC/quickassist/utilities/adf_ctl/conf_files/*.conf.vm; do
         output_conf_file=$(basename -- "$f" .conf.vm).conf
         sudo cp -- "$f" "${OUTPUT_DIR}/configs/${output_conf_file}"
@@ -164,6 +164,7 @@ main()
 	done
 	shift $((OPTIND-1))
 
+	sudo chown -R qatbuilder:qatbuilder /home/qatbuilder
 	grab_qat_drivers
 	grab_kata_repos
 	configure_kernel
