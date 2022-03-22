@@ -180,44 +180,6 @@ switch_image_service_offload() {
 	esac
 }
 
-# Connect to the Pod's console (if it exists) to log the message into the file.
-#
-# Parameters:
-#       $1 - the pod name.
-#	$2 - file path.
-#
-# Return:
-#	the PID of the logger process. If the pod hasn't console then it
-#	will return empty.
-#
-# Note: use the enable_full_debug() method to ensure the VM's console
-#	will be configured.
-#
-# TODO: does it work with other hypervisors like clh?
-#
-crictl_record_cc_pod_console() {
-	local sandbox_name="$1"
-	local console_file="$2"
-	local pod_id="$(sudo crictl pods --name ${sandbox_name} -q)"
-	local console_sock="/var/run/vc/vm/${pod_id}/console.sock"
-
-	# Nothing to do if the console socket doesn't exist.
-	[ -S "$console_sock" ] || return
-
-	# Any existing socat running instance should be ignored.
-	# TODO: should it be a clever way?
-	local running_socat="$(pidof socat)"
-	local pidof_args=""
-	for pid in $running_socat; do
-		pidof_args+=" -o $pid"
-	done
-
-	socat -u "unix-connect:${console_sock}" \
-		open:${console_file},creat,append >/dev/null &
-	echo $(pidof $pidof_args socat)
-	# Return here.
-}
-
 # Add parameters to the 'kernel_params' property on kata's configuration.toml
 #
 # Parameters:
@@ -250,23 +212,6 @@ clear_kernel_params() {
 		"$RUNTIME_CONFIG_PATH"
 }
 
-# Toggle agent debug flags on kata's configuration.toml. Also pass the
-# initcall debug flags via Kernel parameters.
-#
-# Environment variables:
-#	RUNTIME_CONFIG_PATH - path to kata's configuration.toml. If it is not
-#			      export then it will figure out the path via
-#			      `kata-runtime env` and export its value.
-#
-enable_agent_debug() {
-	load_RUNTIME_CONFIG_PATH
-
-	add_kernel_params "agent.log=debug" "initcall_debug"
-	# TODO LATER - try and work out why this is so we can replace the 2 lines below and stop it being so brittle sed -i -e 's/^# *\(enable_debug\).*=.*$/\1 = true/g' /etc/kata-containers/configuration.toml
-	sudo sed -z -i 's/\(# If enabled, make the agent display debug-level messages.\)\n\(# (default: disabled)\)\n#\(enable_debug = true\)\n/\1\n\2\n\3\n/' \
-		"$RUNTIME_CONFIG_PATH"
-}
-
 # Enable the agent console so that one can open a shell with the guest VM.
 #
 # Environment variables:
@@ -281,28 +226,23 @@ enable_agent_console() {
 		"$RUNTIME_CONFIG_PATH"
 }
 
-# Toggle runtime debug flags on kata's configuration.toml.
-#
-# Environment variables:
-#       RUNTIME_CONFIG_PATH - path to kata's configuration.toml. If it is not
-#                             export then it will figure out the path via
-#                             `kata-runtime env` and export its value.
-#
-enable_runtime_debug() {
-	load_RUNTIME_CONFIG_PATH
-
-	sudo sed -z -i 's/\(# system log\)\n\(# (default: disabled)\)\n#\(enable_debug = true\)\n/\1\n\2\n\3\n/' \
-		"$RUNTIME_CONFIG_PATH"
-}
-
 enable_full_debug() {
 	# Load the RUNTIME_CONFIG_PATH variable.
 	load_RUNTIME_CONFIG_PATH
 
-	# Note: if all enable_debug are set to true the agent console doesn't seem to work, so only enable the agent and runtime versions
-	enable_runtime_debug
-	enable_agent_debug
-	enable_agent_console
+	# Toggle all the debug flags on in kata's configuration.toml to enable full logging.
+	sudo sed -i -e 's/^# *\(enable_debug\).*=.*$/\1 = true/g' "$RUNTIME_CONFIG_PATH"
+
+	# Also pass the initcall debug flags via Kernel parameters.
+	add_kernel_params "agent.log=debug" "initcall_debug"
+}
+
+disable_full_debug() {
+	# Load the RUNTIME_CONFIG_PATH variable.
+	load_RUNTIME_CONFIG_PATH
+
+	# Toggle all the debug flags off in kata's configuration.toml to enable full logging.
+	sudo sed -i -e 's/^# *\(enable_debug\).*=.*$/\1 = false/g' "$RUNTIME_CONFIG_PATH"
 }
 
 # Configure containerd for confidential containers. Among other things, it ensures

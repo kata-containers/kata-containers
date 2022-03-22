@@ -24,27 +24,22 @@ skip_if_skopeo_not_present () {
 
 # Create the test pod.
 #
-# Note: the global $sandbox_name, $pod_config and $console_file should be set
+# Note: the global $sandbox_name, $pod_config should be set
 # 	already. It also relies on $CI and $DEBUG exported by CI scripts or
 # 	the developer, to decide how to set debug flags.
 #
 create_test_pod() {
-	# TODO: add a disable_full_debug to revert the changes on teardown.
 	# On CI mode we only want to enable the agent debug for the case of
 	# the test failure to obtain logs.
 	if [ "${CI:-}" == "true" ]; then
-		enable_runtime_debug
-		enable_agent_debug
+		enable_full_debug
 	elif [ "${DEBUG:-}" == "true" ]; then
 		enable_full_debug
+		enable_agent_console
 	fi
 
 	echo "Create the test sandbox"
 	crictl_create_cc_pod "$pod_config"
-
-	echo "Connect to the sandbox console"
-	console_logger="$(crictl_record_cc_pod_console "$sandbox_name" \
-		"$console_file")"
 }
 
 # Create container and check it is operational.
@@ -83,16 +78,11 @@ assert_container_fail() {
 }
 
 setup() {
+	start_date=$(date +"%Y-%m-%d %H:%M:%S")
+
 	sandbox_name="kata-cc-busybox-sandbox"
 	pod_config="${FIXTURES_DIR}/pod-config.yaml"
 	pod_id=""
-
-	# Save the VM console logs which are useful in case the test fail. Even
-	# if the test doesn't need a pod with console, the file will be created
-	# because it is cheap.
-	console_file="$(mktemp)"
-	# Hold the PID of the process used to record the pod's console.
-	console_logger=""
 
 	echo "Delete any existing ${sandbox_name} pod"
 	crictl_delete_cc_pod_if_exists "$sandbox_name"
@@ -104,6 +94,17 @@ setup() {
 	echo "Reconfigure Kata Containers"
 	switch_image_service_offload on
 	clear_kernel_params
+}
+
+# Check the logged messages on host have a given message.
+# Parameters:
+#      $1 - the message
+#
+# Note: get the logs since the global $start_date.
+#
+assert_logs_contain() {
+	local message="$1"
+    journalctl -x -t kata --since "$start_date" | grep "$message"
 }
 
 @test "[cc][agent][cri][containerd] Test can pull an unencrypted image inside the guest" {
@@ -147,7 +148,8 @@ setup() {
 	create_test_pod
 
 	assert_container_fail "$container_config"
-	grep 'Signature for identity .* is not accepted' "$console_file"
+
+	assert_logs_contain 'Signature for identity .* is not accepted'
 }
 
 @test "[cc][agent][cri][containerd] Test can pull an unencrypted unsigned image from an unprotected registry" {
@@ -172,16 +174,13 @@ setup() {
 	create_test_pod
 
 	assert_container_fail "$container_config"
-	grep "Invalid GPG signature" "$console_file"
+	assert_logs_contain "Invalid GPG signature"
 }
 
 teardown() {
-	# Print the console logs and cleanup resources.
-	if [[ -n "$console_logger" && -d "/proc/${console_logger}" ]]; then
-		echo "-- VM console:"
-		kill -9 "$console_logger" || true
-		cat "$console_file"
-	fi
+	# Print the logs and cleanup resources.
+	echo "-- Kata logs:"
+	sudo journalctl -xe -t kata --since "$start_date"
 
 	# Allow to not destroy the environment if you are developing/debugging
 	# tests.
@@ -190,12 +189,11 @@ teardown() {
 		return
 	fi
 
-	rm -f "$console_file"
-
 	crictl_delete_cc_pod_if_exists "$sandbox_name" || true
 
 	clear_kernel_params
 	switch_image_service_offload off
+	disable_full_debug
 
 	# Restore containerd to pre-test state.
 	if [ -f "$SAVED_CONTAINERD_CONF_FILE" ]; then
