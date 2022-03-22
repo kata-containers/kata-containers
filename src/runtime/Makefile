@@ -592,7 +592,7 @@ generate-config: $(CONFIGS)
 test: hook go-test
 
 hook:
-	make -C virtcontainers hook
+	make -C pkg/katautils/mockhook
 
 go-test: $(GENERATED_FILES)
 	go clean -testcache
