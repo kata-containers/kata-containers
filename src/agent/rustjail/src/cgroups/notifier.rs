@@ -151,12 +151,12 @@ async fn register_memory_event(
     let eventfd = eventfd(0, EfdFlags::EFD_CLOEXEC)?;
 
     let event_control_path = Path::new(&cg_dir).join("cgroup.event_control");
-    let data;
-    if arg.is_empty() {
-        data = format!("{} {}", eventfd, event_file.as_raw_fd());
+
+    let data = if arg.is_empty() {
+        format!("{} {}", eventfd, event_file.as_raw_fd())
     } else {
-        data = format!("{} {} {}", eventfd, event_file.as_raw_fd(), arg);
-    }
+        format!("{} {} {}", eventfd, event_file.as_raw_fd(), arg)
+    };
 
     fs::write(&event_control_path, data)?;
 

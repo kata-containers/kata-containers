@@ -58,17 +58,16 @@ async fn handle_sigchild(logger: Logger, sandbox: Arc<Mutex<Sandbox>>) -> Result
             }
 
             let mut p = process.unwrap();
-            let ret: i32;
 
-            match wait_status {
-                WaitStatus::Exited(_, c) => ret = c,
-                WaitStatus::Signaled(_, sig, _) => ret = sig as i32,
+            let ret: i32 = match wait_status {
+                WaitStatus::Exited(_, c) => c,
+                WaitStatus::Signaled(_, sig, _) => sig as i32,
                 _ => {
                     info!(logger, "got wrong status for process";
                                   "child-status" => format!("{:?}", wait_status));
                     continue;
                 }
-            }
+            };
 
             p.exit_code = ret;
             let _ = p.exit_tx.take();
