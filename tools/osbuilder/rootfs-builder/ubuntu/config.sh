@@ -1,28 +1,34 @@
-# Copyright (c) 2018 Yash Jain, 2022 IBM Corp.
+# This is a configuration file add extra variables to
+#
+# Copyright (c) 2018  Yash Jain
 #
 # SPDX-License-Identifier: Apache-2.0
+# be used by build_rootfs() from rootfs_lib.sh the variables will be
+# loaded just before call the function. For more information see the
+# rootfs-builder/README.md file.
 
-OS_NAME=ubuntu
+OS_VERSION=${OS_VERSION:-20.04}
 # This should be Ubuntu's code name, e.g. "focal" (Focal Fossa) for 20.04
-OS_VERSION=${OS_VERSION:-focal}
-PACKAGES=chrony
-[ "$AGENT_INIT" = no ] && PACKAGES+=" init"
-[ "$SECCOMP" = yes ] && PACKAGES+=" libseccomp2"
-REPO_URL=http://ports.ubuntu.com
+OS_NAME=${OS_NAME:-"focal"}
 
-case "$ARCH" in
-	aarch64) DEB_ARCH=arm64;;
-	ppc64le) DEB_ARCH=ppc64el;;
-	s390x) DEB_ARCH="$ARCH";;
-	x86_64) DEB_ARCH=amd64; REPO_URL=http://archive.ubuntu.com/ubuntu;;
-	*) die "$ARCH not supported"
+# packages to be installed by default
+PACKAGES="systemd coreutils init kmod"
+EXTRA_PKGS+=" chrony"
+
+DEBOOTSTRAP=${PACKAGE_MANAGER:-"debootstrap"}
+
+case $(uname -m) in
+	x86_64) ARCHITECTURE="amd64";;
+	ppc64le) ARCHITECTURE="ppc64el";;
+	aarch64) ARCHITECTURE="arm64";;
+	s390x)	ARCHITECTURE="s390x";;
+	(*) die "$(uname -m) not supported "
 esac
 
-if [ "$(uname -m)" != "$ARCH" ]; then
-	case "$ARCH" in
-		ppc64le) cc_arch=powerpc64le;;
-		x86_64) cc_arch=x86-64;;
-		*) cc_arch="$ARCH"
-	esac
-	export CC="$cc_arch-linux-gnu-gcc"
-fi
+# Init process must be one of {systemd,kata-agent}
+INIT_PROCESS=systemd
+# List of zero or more architectures to exclude from build,
+# as reported by  `uname -m`
+ARCH_EXCLUDE_LIST=()
+
+[ "$SECCOMP" = "yes" ] && PACKAGES+=" libseccomp2" || true

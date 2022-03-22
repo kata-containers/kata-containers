@@ -203,8 +203,8 @@ generate_dockerfile()
 	dir="$1"
 	[ -d "${dir}" ] || die "${dir}: not a directory"
 
-	local rustarch="$ARCH"
-	[ "$ARCH" = ppc64le ] && rustarch=powerpc64le
+	local rustarch=$(uname -m)
+	[ "$rustarch" = ppc64le ] && rustarch=powerpc64le
 
 	[ -n "${http_proxy:-}" ] && readonly set_proxy="RUN sed -i '$ a proxy="${http_proxy:-}"' /etc/dnf/dnf.conf /etc/yum.conf; true"
 
@@ -220,7 +220,6 @@ RUN . /root/.cargo/env; cargo install cargo-when
 
 	sed \
 		-e "s#@OS_VERSION@#${OS_VERSION:-}#g" \
-		-e "s#@ARCH@#$ARCH#g" \
 		-e "s#@INSTALL_RUST@#${install_rust//$'\n'/\\n}#g" \
 		-e "s#@SET_PROXY@#${set_proxy:-}#g" \
 		Dockerfile.in > Dockerfile
