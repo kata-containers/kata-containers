@@ -36,7 +36,4 @@ RUN zypper --non-interactive refresh; \
     zypper --non-interactive clean --all;
 
 
-# This will install the proper golang to build Kata components
-@INSTALL_MUSL@
-@INSTALL_GO@
 @INSTALL_RUST@

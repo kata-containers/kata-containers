@@ -70,13 +70,13 @@ func (device *BlockDevice) Attach(ctx context.Context, devReceiver api.DeviceRec
 		ReadOnly: device.DeviceInfo.ReadOnly,
 	}
 
-	if fs, ok := device.DeviceInfo.DriverOptions["fstype"]; ok {
+	if fs, ok := device.DeviceInfo.DriverOptions[config.FsTypeOpt]; ok {
 		drive.Format = fs
 	}
 
 	customOptions := device.DeviceInfo.DriverOptions
 	if customOptions == nil ||
-		customOptions["block-driver"] == "virtio-scsi" {
+		customOptions[config.BlockDriverOpt] == config.VirtioSCSI {
 		// User has not chosen a specific block device type
 		// Default to SCSI
 		scsiAddr, err := utils.GetSCSIAddress(index)
@@ -85,15 +85,15 @@ func (device *BlockDevice) Attach(ctx context.Context, devReceiver api.DeviceRec
 		}
 
 		drive.SCSIAddr = scsiAddr
-	} else if customOptions["block-driver"] != "nvdimm" {
+	} else if customOptions[config.BlockDriverOpt] != config.Nvdimm {
 		var globalIdx int
 
-		switch customOptions["block-driver"] {
-		case "virtio-blk":
+		switch customOptions[config.BlockDriverOpt] {
+		case config.VirtioBlock:
 			globalIdx = index
-		case "virtio-blk-ccw":
+		case config.VirtioBlockCCW:
 			globalIdx = index
-		case "virtio-mmio":
+		case config.VirtioMmio:
 			//With firecracker the rootfs for the VM itself
 			//sits at /dev/vda and consumes the first index.
 			//Longer term block based VM rootfs should be added
@@ -111,7 +111,7 @@ func (device *BlockDevice) Attach(ctx context.Context, devReceiver api.DeviceRec
 		drive.VirtPath = filepath.Join("/dev", driveName)
 	}
 
-	deviceLogger().WithField("device", device.DeviceInfo.HostPath).WithField("VirtPath", drive.VirtPath).Infof("Attaching %s device", customOptions["block-driver"])
+	deviceLogger().WithField("device", device.DeviceInfo.HostPath).WithField("VirtPath", drive.VirtPath).Infof("Attaching %s device", customOptions[config.BlockDriverOpt])
 	device.BlockDrive = drive
 	if err = devReceiver.HotplugAddDevice(ctx, device, config.DeviceBlock); err != nil {
 		return err
