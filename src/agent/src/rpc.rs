@@ -90,8 +90,6 @@ const CONFIG_JSON: &str = "config.json";
 
 const ERR_INVALID_BLOCK_SIZE: &str = "Invalid block size";
 
-const ERR_INVALID_BLOCK_SIZE: &str = "Invalid block size";
-
 // Convenience macro to obtain the scope logger
 macro_rules! sl {
     () => {

@@ -577,7 +577,6 @@ EOF
 	fi
 
 	if [ -z "${AGENT_SOURCE_BIN}" ] ; then
-		[ "$LIBC" == "musl" ] && bash ${script_dir}/../../../ci/install_musl.sh
 		test -r "${HOME}/.cargo/env" && source "${HOME}/.cargo/env"
 		# rust agent needs ${arch}-unknown-linux-${LIBC}
 		if ! (rustup show | grep -v linux-${LIBC} > /dev/null); then
@@ -657,12 +656,12 @@ EOF
 
 		container_registries_dir="${ROOTFS_DIR}/etc/containers/registries.d"
 		mkdir -p ${container_registries_dir}
-	cat << EOT | tee ${container_registries_dir}/quay.io.yaml
+	cat << EOF | tee ${container_registries_dir}/quay.io.yaml
 docker:
     quay.io/kata-containers/confidential-containers:
         sigstore: file://${rootfs_quay_verification_directory}/signatures
         sigstore-staging: file://${rootfs_quay_verification_directory}/signatures
-EOT
+EOF
 	fi
 
     if [ -n "${AA_KBC}" ]; then

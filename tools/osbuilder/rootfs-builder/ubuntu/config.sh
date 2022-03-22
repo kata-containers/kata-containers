@@ -41,3 +41,4 @@ RUN echo 'deb [arch=amd64] http://mirrors.openanolis.cn/inclavare-containers/ubu
     apt-get update; \
     apt-get install -y rats-tls
 "
+fi
