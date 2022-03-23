@@ -10,11 +10,11 @@ import (
 	"os"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/manager"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestSandboxRestore(t *testing.T) {
@@ -32,7 +32,7 @@ func TestSandboxRestore(t *testing.T) {
 	sandbox := Sandbox{
 		id:         "test-exp",
 		containers: container,
-		devManager: manager.NewDeviceManager(manager.VirtioSCSI, false, "", nil),
+		devManager: manager.NewDeviceManager(config.VirtioSCSI, false, "", nil),
 		hypervisor: &mockHypervisor{},
 		network:    network,
 		ctx:        context.Background(),

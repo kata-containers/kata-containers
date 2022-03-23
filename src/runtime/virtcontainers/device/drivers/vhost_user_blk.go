@@ -100,14 +100,14 @@ func isVirtioBlkBlockDriver(customOptions map[string]string) bool {
 	if customOptions == nil {
 		// User has not chosen a specific block device type
 		// Default to SCSI
-		blockDriverOption = "virtio-scsi"
+		blockDriverOption = config.VirtioSCSI
 	} else {
-		blockDriverOption = customOptions["block-driver"]
+		blockDriverOption = customOptions[config.BlockDriverOpt]
 	}
 
-	if blockDriverOption == "virtio-blk" ||
-		blockDriverOption == "virtio-blk-ccw" ||
-		blockDriverOption == "virtio-mmio" {
+	if blockDriverOption == config.VirtioBlock ||
+		blockDriverOption == config.VirtioBlockCCW ||
+		blockDriverOption == config.VirtioMmio {
 		return true
 	}
 

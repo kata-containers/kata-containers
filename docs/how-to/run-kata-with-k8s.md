@@ -104,26 +104,69 @@ $ sudo kubeadm init --ignore-preflight-errors=all --cri-socket /run/containerd/c
 $ export KUBECONFIG=/etc/kubernetes/admin.conf
 ```
 
-You can force Kubelet to use Kata Containers by adding some `untrusted`
-annotation to your pod configuration. In our case, this ensures Kata
-Containers is the selected runtime to run the described workload.
+### Allow pods to run in the master node
 
-`nginx-untrusted.yaml`
-```yaml
-apiVersion: v1
-kind: Pod
+By default, the cluster will not schedule pods in the master node. To enable master node scheduling:
+```bash
+$ sudo -E kubectl taint nodes --all node-role.kubernetes.io/master-
+```
+
+### Create runtime class for Kata Containers
+
+Users can use [`RuntimeClass`](https://kubernetes.io/docs/concepts/containers/runtime-class/#runtime-class) to specify a different runtime for Pods.
+
+```bash
+$ cat > runtime.yaml <<EOF
+apiVersion: node.k8s.io/v1
+kind: RuntimeClass
 metadata:
-  name: nginx-untrusted
-  annotations:
-    io.kubernetes.cri.untrusted-workload: "true"
-spec:
-  containers:
+  name: kata
+handler: kata
+EOF
+
+$ sudo -E kubectl apply -f runtime.yaml
+```
+
+### Run pod in Kata Containers
+
+If a pod has the `runtimeClassName` set to `kata`, the CRI plugin runs the pod with the
+[Kata Containers runtime](../../src/runtime/README.md).
+
+- Create an pod configuration that using Kata Containers runtime
+
+  ```bash
+  $ cat << EOF | tee nginx-kata.yaml
+  apiVersion: v1
+  kind: Pod
+  metadata:
+    name: nginx-kata
+  spec:
+    runtimeClassName: kata
+    containers:
     - name: nginx
       image: nginx
-```
 
-Next, you run your pod:
-```
-$ sudo -E kubectl apply -f nginx-untrusted.yaml
-```
+  EOF
+  ```
 
+- Create the pod
+  ```bash
+  $ sudo -E kubectl apply -f nginx-kata.yaml
+  ```
+
+- Check pod is running
+
+  ```bash
+  $ sudo -E kubectl get pods
+  ```
+
+- Check hypervisor is running
+  ```bash
+  $ ps aux | grep qemu
+  ```
+
+### Delete created pod
+
+```bash
+$ sudo -E kubectl delete -f nginx-kata.yaml
+```

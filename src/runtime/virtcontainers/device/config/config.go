@@ -51,7 +51,7 @@ const (
 	// VirtioBlock means use virtio-blk for hotplugging drives
 	VirtioBlock = "virtio-blk"
 
-	// VirtioBlockCCW means use virtio-blk for hotplugging drives
+	// VirtioBlockCCW means use virtio-blk-ccw for hotplugging drives
 	VirtioBlockCCW = "virtio-blk-ccw"
 
 	// VirtioSCSI means use virtio-scsi for hotplugging drives
@@ -70,6 +70,12 @@ const (
 
 	// VirtioFSNydus means use nydus for the shared file system
 	VirtioFSNydus = "virtio-fs-nydus"
+)
+
+const (
+	// Define the string key for DriverOptions in DeviceInfo struct
+	FsTypeOpt      = "fstype"
+	BlockDriverOpt = "block-driver"
 )
 
 const (
@@ -97,7 +103,7 @@ var getSysDevPath = getSysDevPathImpl
 // DeviceInfo is an embedded type that contains device data common to all types of devices.
 type DeviceInfo struct {
 	// DriverOptions is specific options for each device driver
-	// for example, for BlockDevice, we can set DriverOptions["blockDriver"]="virtio-blk"
+	// for example, for BlockDevice, we can set DriverOptions["block-driver"]="virtio-blk"
 	DriverOptions map[string]string
 
 	// Hostpath is device path on host

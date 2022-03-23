@@ -651,12 +651,12 @@ EOF
 
 		container_registries_dir="${ROOTFS_DIR}/etc/containers/registries.d"
 		mkdir -p ${container_registries_dir}
-	cat << EOT | tee ${container_registries_dir}/quay.io.yaml
+	cat << EOF | tee ${container_registries_dir}/quay.io.yaml
 docker:
     quay.io/kata-containers/confidential-containers:
         sigstore: file://${rootfs_quay_verification_directory}/signatures
         sigstore-staging: file://${rootfs_quay_verification_directory}/signatures
-EOT
+EOF
 	fi
 
     if [ -n "${AA_KBC}" ]; then
