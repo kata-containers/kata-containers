@@ -54,7 +54,10 @@ var addCommand = cli.Command{
 		},
 	},
 	Action: func(c *cli.Context) error {
-		return volume.Add(volumePath, mountInfo)
+		if err := volume.Add(volumePath, mountInfo); err != nil {
+			return cli.NewExitError(err.Error(), 1)
+		}
+		return nil
 	},
 }
 
@@ -69,7 +72,10 @@ var removeCommand = cli.Command{
 		},
 	},
 	Action: func(c *cli.Context) error {
-		return volume.Remove(volumePath)
+		if err := volume.Remove(volumePath); err != nil {
+			return cli.NewExitError(err.Error(), 1)
+		}
+		return nil
 	},
 }
 
@@ -86,9 +92,8 @@ var statsCommand = cli.Command{
 	Action: func(c *cli.Context) (string, error) {
 		stats, err := Stats(volumePath)
 		if err != nil {
-			return "", err
+			return "", cli.NewExitError(err.Error(), 1)
 		}
-
 		return string(stats), nil
 	},
 }
@@ -109,7 +114,10 @@ var resizeCommand = cli.Command{
 		},
 	},
 	Action: func(c *cli.Context) error {
-		return Resize(volumePath, size)
+		if err := Resize(volumePath, size); err != nil {
+			return cli.NewExitError(err.Error(), 1)
+		}
+		return nil
 	},
 }
 
