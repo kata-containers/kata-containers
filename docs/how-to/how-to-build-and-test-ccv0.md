@@ -216,10 +216,6 @@ Once you have a kata pod sandbox created as described above, either using
 containers architecture. This can be useful for development and debugging to isolate and test features
 that aren't broadly supported end-to-end. Here are some examples:
 
-- For debugging purposed you can optionally create a new terminal on the VM and connect to the Kata guest's console log:
-  ```bash
-  $ ~/ccv0.sh open_kata_console
-  ```
 - In the first terminal run the pull image on guest command against the Kata agent, via the shim (`containerd-shim-kata-v2`).
 This can be achieved using the [containerd](https://github.com/containerd/containerd) CLI tool, `ctr`, which can be used to
 interact with the shim directly. The command takes the form
@@ -340,10 +336,14 @@ image by running:
   $ export PULL_IMAGE="quay.io/kata-containers/confidential-containers:unsigned"
   $ ~/ccv0.sh agent_pull_image
   ```
-  - This results in an `ERROR: API failed` message from `agent_ctl` and the Kata sandbox console log shows the correct
+  - This results in an `ERROR: API failed` message from `agent_ctl` and the Kata log shows the correct
   cause that the signature we has was not valid for the unsigned image:
+  ```bash
+  $ sudo journalctl -xe -t kata --since "1 min ago" | grep "Source image rejected"
+  ```
+  contains:
   ```text
-  FATA[0001] Source image rejected: Signature for identity quay.io/kata-containers/confidential-containers:signed is not accepted
+  vmconsole="\x1b[31mFATA\x1b[0m[0002] Source image rejected: Signature for identity quay.io/kata-containers/confidential-containers:signed is not accepted "
   ```
 - To test that the signed image our *protected* test container registry is accepted we can run:
   ```bash
@@ -359,11 +359,14 @@ want to protect with the attestation agent in future) fails we can run:
   $ export PULL_IMAGE="quay.io/kata-containers/confidential-containers:other_signed"
   $ ~/ccv0.sh agent_pull_image
   ```
-  - Again this results in an `ERROR: API failed` message from `agent_ctl` and the Kata sandbox console log shows a
+  - Again this results in an `ERROR: API failed` message from `agent_ctl` and the Kata log shows a
   slightly different error:
+  ```bash
+  $ sudo journalctl -xe -t kata --since "1 min ago" | grep "Source image rejected"
+  ```
+  contains:
   ```text
-  FATA[0001] Source image rejected: Invalid GPG signature...
-
+  vmconsole="\x1b[31mFATA\x1b[0m[0002] Source image rejected: Signature for identity quay.io/kata-containers/confidential-containers:signed is not accepted "
   ```
 - To confirm that the first and third tests create the image bundles correct we can open a shell into the Kata pod with:
   ```bash
@@ -497,7 +500,6 @@ Commands:
 - crictl_delete_cc              Use crictl to delete the kata cc pod sandbox and container in it
 - kubernetes_create_cc_pod:     Create a Kata CC runtime busybox-based pod in Kubernetes
 - kubernetes_delete_cc_pod:     Delete the Kata CC runtime busybox-based pod in Kubernetes
-- open_kata_console:            Stream the kata runtime's console
 - open_kata_shell:              Open a shell into the kata runtime
 - agent_pull_image:             Run PullImage command against the agent with agent-ctl
 - shim_pull_image:              Run PullImage command against the shim with ctr
