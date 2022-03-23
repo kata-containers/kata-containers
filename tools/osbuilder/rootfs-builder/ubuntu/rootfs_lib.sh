@@ -4,7 +4,7 @@
 
 build_rootfs() {
 	local rootfs_dir=$1
-	local multistrap_conf=multistrap.conf
+	local multistrap_conf=/tmp/multistrap.conf
 
 	# For simplicity's sake, use multistrap for foreign and native bootstraps.
 	cat > "$multistrap_conf" << EOF
