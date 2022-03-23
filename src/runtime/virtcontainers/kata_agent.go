@@ -1549,11 +1549,9 @@ func (k *kataAgent) handleBlkOCIMounts(c *Container, spec *specs.Spec) ([]*grpc.
 		// Each device will be mounted at a unique location within the VM only once. Mounting
 		// to the container specific location is handled within the OCI spec. Let's ensure that
 		// the storage mount point is unique for each device. This is then utilized as the source
-		// in the OCI spec. If multiple containers mount the same block device, it's refcounted inside
+		// in the OCI spec. If multiple containers mount the same block device, it's ref-counted inside
 		// the guest by Kata agent.
-		filename := b64.StdEncoding.EncodeToString([]byte(vol.Source))
-		// Make the base64 encoding path safe.
-		filename = strings.ReplaceAll(filename, "/", "_")
+		filename := b64.URLEncoding.EncodeToString([]byte(vol.Source))
 		path := filepath.Join(kataGuestSandboxStorageDir(), filename)
 
 		// Update applicable OCI mount source

@@ -6,13 +6,13 @@
 package volume
 
 import (
+	b64 "encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
-	"strings"
 )
 
 const (
@@ -37,19 +37,20 @@ type MountInfo struct {
 
 // Add writes the mount info of a direct volume into a filesystem path known to Kata Container.
 func Add(volumePath string, mountInfo string) error {
-	volumeDir := filepath.Join(kataDirectVolumeRootPath, volumePath)
+	volumeDir := filepath.Join(kataDirectVolumeRootPath, b64.URLEncoding.EncodeToString([]byte(volumePath)))
 	stat, err := os.Stat(volumeDir)
-	if err != nil && !errors.Is(err, os.ErrNotExist) {
-		return err
-	}
-	if stat != nil && !stat.IsDir() {
-		return fmt.Errorf("%s should be a directory", volumeDir)
-	}
-	if errors.Is(err, os.ErrNotExist) {
+	if err != nil {
+		if !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
 		if err := os.MkdirAll(volumeDir, 0700); err != nil {
 			return err
 		}
 	}
+	if stat != nil && !stat.IsDir() {
+		return fmt.Errorf("%s should be a directory", volumeDir)
+	}
+
 	var deserialized MountInfo
 	if err := json.Unmarshal([]byte(mountInfo), &deserialized); err != nil {
 		return err
@@ -60,14 +61,12 @@ func Add(volumePath string, mountInfo string) error {
 
 // Remove deletes the direct volume path including all the files inside it.
 func Remove(volumePath string) error {
-	// Find the base of the volume path to delete the whole volume path
-	base := strings.SplitN(volumePath, string(os.PathSeparator), 2)[0]
-	return os.RemoveAll(filepath.Join(kataDirectVolumeRootPath, base))
+	return os.RemoveAll(filepath.Join(kataDirectVolumeRootPath, b64.URLEncoding.EncodeToString([]byte(volumePath))))
 }
 
 // VolumeMountInfo retrieves the mount info of a direct volume.
 func VolumeMountInfo(volumePath string) (*MountInfo, error) {
-	mountInfoFilePath := filepath.Join(kataDirectVolumeRootPath, volumePath, mountInfoFileName)
+	mountInfoFilePath := filepath.Join(kataDirectVolumeRootPath, b64.URLEncoding.EncodeToString([]byte(volumePath)), mountInfoFileName)
 	if _, err := os.Stat(mountInfoFilePath); err != nil {
 		return nil, err
 	}
@@ -84,16 +83,17 @@ func VolumeMountInfo(volumePath string) (*MountInfo, error) {
 
 // RecordSandboxId associates a sandbox id with a direct volume.
 func RecordSandboxId(sandboxId string, volumePath string) error {
-	mountInfoFilePath := filepath.Join(kataDirectVolumeRootPath, volumePath, mountInfoFileName)
+	encodedPath := b64.URLEncoding.EncodeToString([]byte(volumePath))
+	mountInfoFilePath := filepath.Join(kataDirectVolumeRootPath, encodedPath, mountInfoFileName)
 	if _, err := os.Stat(mountInfoFilePath); err != nil {
 		return err
 	}
 
-	return ioutil.WriteFile(filepath.Join(kataDirectVolumeRootPath, volumePath, sandboxId), []byte(""), 0600)
+	return ioutil.WriteFile(filepath.Join(kataDirectVolumeRootPath, encodedPath, sandboxId), []byte(""), 0600)
 }
 
 func GetSandboxIdForVolume(volumePath string) (string, error) {
-	files, err := ioutil.ReadDir(filepath.Join(kataDirectVolumeRootPath, volumePath))
+	files, err := ioutil.ReadDir(filepath.Join(kataDirectVolumeRootPath, b64.URLEncoding.EncodeToString([]byte(volumePath))))
 	if err != nil {
 		return "", err
 	}
