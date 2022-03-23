@@ -6,19 +6,13 @@
 MK_PATH := $(abspath $(lastword $(MAKEFILE_LIST)))
 MK_DIR := $(dir $(MK_PATH))
 
-# Verbose build
-V := 1
-
 define BUILD
 	$(MK_DIR)/kata-deploy-binaries-in-docker.sh $(if $(V),,-s) --build=$1
 endef
 
 kata-tarball: | make-builds merge-builds
 
-make-builds:
-	${MAKE} -f $(MK_PATH) all V=
-
-all: cloud-hypervisor-tarball \
+make-builds: cloud-hypervisor-tarball \
 	firecracker-tarball \
 	kernel-tarball \
 	qemu-tarball \
