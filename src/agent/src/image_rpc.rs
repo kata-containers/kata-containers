@@ -177,6 +177,16 @@ impl ImageService {
     async fn pull_image(&self, req: &image::PullImageRequest) -> Result<String> {
         env::set_var("OCICRYPT_KEYPROVIDER_CONFIG", OCICRYPT_CONFIG_PATH);
 
+        let https_proxy = &AGENT_CONFIG.read().await.https_proxy;
+        if !https_proxy.is_empty() {
+            env::set_var("HTTPS_PROXY", https_proxy);
+        }
+
+        let no_proxy = &AGENT_CONFIG.read().await.no_proxy;
+        if !no_proxy.is_empty() {
+            env::set_var("NO_PROXY", no_proxy);
+        }
+
         let image = req.get_image();
         let mut cid = req.get_container_id().to_string();
 
