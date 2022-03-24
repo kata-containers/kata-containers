@@ -28,6 +28,9 @@ readonly shimv2_builder="${static_build_dir}/shim-v2/build.sh"
 
 readonly rootfs_builder="${repo_root_dir}/tools/packaging/guest-image/build_image.sh"
 
+#is this the right location for this build script?
+readonly ovmf_builder="${static_build_dir}/ovmf/build-ovmf.sh"
+
 ARCH=$(uname -m)
 
 workdir="${WORKDIR:-$PWD}"
@@ -74,6 +77,7 @@ options:
 	rootfs-image
 	rootfs-initrd
 	shim-v2
+	ovmf
 EOF
 
 	exit "${return_code}"
@@ -145,6 +149,11 @@ install_shimv2() {
 	DESTDIR="${destdir}" PREFIX="${prefix}" "${shimv2_builder}"
 }
 
+install_ovmf() {
+	info "build AmdSev ovmf firmware"
+	"${ovmf_builder}"
+}
+
 get_kata_version() {
 	local v
 	v=$(cat "${version_file}")
@@ -164,6 +173,7 @@ handle_build() {
 		install_kernel
 		install_qemu
 		install_shimv2
+		install_ovmf
 		;;
 
 	cloud-hypervisor) install_clh ;;
@@ -181,6 +191,8 @@ handle_build() {
 	rootfs-initrd) install_initrd ;;
 
 	shim-v2) install_shimv2 ;;
+
+	ovmf) install_ovmf ;;
 
 	*)
 		die "Invalid build target ${build_target}"
@@ -207,6 +219,7 @@ main() {
 		rootfs-image
 		rootfs-initrd
 		shim-v2
+		ovmf
 	)
 	silent=false
 	while getopts "hs-:" opt; do

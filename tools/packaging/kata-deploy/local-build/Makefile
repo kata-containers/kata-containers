@@ -54,6 +54,9 @@ rootfs-initrd-tarball:
 shim-v2-tarball:
 	${MAKE} $@-build
 
+ovmf-tarball:
+ 	${MAKE} $@-build
+
 merge-builds:
 	$(MK_DIR)/kata-deploy-merge-builds.sh build
 
@@ -62,3 +65,7 @@ install-tarball:
 
 image: kata-tarball
 	$(MK_DIR)kata-deploy-build-and-upload-image.sh $(CURDIR)/kata-static.tar.xz
+
+sev-tarballs: kernel-tarball qemu-tarball rootfs-initrd-tarball shim-v2-tarball ovmf-tarball
+
+sev: sev-tarballs-parallel merge-builds

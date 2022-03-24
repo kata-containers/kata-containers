@@ -269,6 +269,12 @@ externals:
     url: "https://github.com/containerd/nydus-snapshotter"
     version: "v0.1.0"
 
+  ovmf:
+    description: "Firmware, implementation of UEFI for virtual machines."
+    notes: "The AmdSev build is needed for SEV measured direct boot support."
+    url: "https://github.com/tianocore/edk2"
+    commit: "b24306f15daa2ff8510b06702114724b33895d3c"
+
 languages:
   description: |
     Details of programming languages required to build system
