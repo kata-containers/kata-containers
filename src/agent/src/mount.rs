@@ -207,7 +207,7 @@ async fn ephemeral_storage_handler(
     if storage.options.len() > 0 {
         // ephemeral_storage didn't support mount options except fsGroup.
         let mut new_storage = storage.clone();
-        new_storage.options = protobuf::RepeatedField::default();
+        trim_fsgid(&mut new_storage)?;
         common_storage_handler(logger, &new_storage)?;
 
         let opts_vec: Vec<String> = storage.options.to_vec();
@@ -231,6 +231,18 @@ async fn ephemeral_storage_handler(
     }
 
     Ok("".to_string())
+}
+
+fn trim_fsgid(storage: &mut Storage) -> Result<()>{
+    let options: protobuf::RepeatedField<std::string::String> = storage.options.clone();
+    // TODO: upgrade protobuf to use `retain` function
+    // options.retain(|&x| !x.starts_with("fsgid="));
+
+    let mut vec = options.into_vec();
+    vec.retain(|x| !x.starts_with("fsgid="));
+    storage.options = protobuf::RepeatedField::<std::string::String>::from_vec(vec);
+
+    Ok(())
 }
 
 #[instrument]
