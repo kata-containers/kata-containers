@@ -7,6 +7,7 @@ package containerdshim
 
 import (
 	"context"
+	"github.com/sirupsen/logrus"
 	"io"
 	"os"
 	"path/filepath"
@@ -179,7 +180,7 @@ func TestIoCopy(t *testing.T) {
 		defer tty.close()
 
 		// start the ioCopy threads : copy from src to dst
-		go ioCopy(exitioch, stdinCloser, tty, dstInW, srcOutR, srcErrR)
+		go ioCopy(logrus.WithContext(context.Background()), exitioch, stdinCloser, tty, dstInW, srcOutR, srcErrR)
 
 		var firstW, secondW, thirdW io.WriteCloser
 		var firstR, secondR, thirdR io.Reader
